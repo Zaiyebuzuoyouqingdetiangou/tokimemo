@@ -1,3 +1,4 @@
+import * as storyParticipants from '../core/participants.js';
 import * as core_butterflyContract from '../core/butterflyContract.js';
 import * as core_cache from '../core/cache.js';
 // Heartbeat Memories r35 modular runtime.
@@ -259,11 +260,14 @@ export function projectButterflyProgress({ segments = [], memoryBank, context = 
         }
     }
     if (!nodes.length || nodes[0].id !== 'MAIN') return null;
-    return { kind: core_constants.MODE.BUTTERFLY, title: '平行时空观测终端', subject: context.name2 || memoryBank?.characterName || '',
+    return { kind: core_constants.MODE.BUTTERFLY, title: '平行时空观测终端', subject: butterflySubjectName(memoryBank, context),
         status: 'UNSTABLE', nodes, omegaHistory: [], selected: nodes.length > 1 ? 1 : 0,
         progressPending: nodes.some(node => node.trueEnding) ? [] : ['Ω 观测收尾'] };
 }
 
+export function butterflySubjectName(memoryBank, context) {
+    return storyParticipants.resolveStoryIdentities(memoryBank, context).ownerNames.join('、') || '{{char}}';
+}
 export function normalizeButterfly(data, memoryBank, context = {}, options = {}) {
     const rawNodes = Array.isArray(data?.nodes) ? data.nodes.slice(0, core_constants.MAX_DERIVED_CONTENT_ITEMS) : [];
     if (rawNodes.length < 2) throw new Error('当前观测尚未收尾：需要主线与唯一 Ω，已完成内容仍保留。');
@@ -296,7 +300,7 @@ export function normalizeButterfly(data, memoryBank, context = {}, options = {})
     return {
         kind: core_constants.MODE.BUTTERFLY,
         title: core_text.normalizeText(data?.title, 120) || '平行时空观测终端',
-        subject: core_text.normalizeText(context?.name2, 120) || '{{char}}',
+        subject: butterflySubjectName(memoryBank, context),
         status: 'UNSTABLE',
         nodes: [main, ...normalBranches, ending],
         omegaHistory: [],
@@ -353,9 +357,9 @@ export async function generateButterflyWithRepair(context, memoryBank, origin, t
         const requestIndex = continueLegacyPlan && slot === 'OMEGA' ? legacyPlan.axes.length + 1 : index;
         const prompt = butterflySlotPrompt(context, memoryBank, index, slot, nodes, { readableR62 });
         const node = await request(prompt, '蝴蝶效应 · 节点 ' + (index + 1) + '/' + (index ? slots.length : '待定') + ' · ' + slot,
-            { maxTokens: 4096, temperature: 0.55, context, contextEnvelope, origin, taskKey: requestTaskKey + ':slot:' + requestIndex, mode: core_constants.MODE.BUTTERFLY, background: true,
+            { maxTokens: 4096, context, contextEnvelope, origin, taskKey: requestTaskKey + ':slot:' + requestIndex, mode: core_constants.MODE.BUTTERFLY, background: true,
                 ...(readableR62 ? { recoveryCompatibility: { contract: continueLegacyPlan ? 'butterfly-legacy-plan-r62' : 'butterfly-readable-r62',
-                    legacyPrompts: [legacy_recovery.legacyButterflySlotPrompt(context, memoryBank, requestIndex, nodes)] } } : {}) },
+                    legacyPrompts: [legacy_recovery.legacyButterflySlotPrompt(context, memoryBank, requestIndex, nodes)], legacyTemperatures: [0.55] } } : {}) },
             value => {
                 const raw = value?.node;
                 if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw core_butterflyContract.butterflyValidationError('worldSpec');
@@ -397,7 +401,7 @@ export function butterflyIncrementPrompt(context, memoryBank, previous, sourceMe
         primaryAxis: core_text.normalizeText(item?.primaryAxis || item?.worldSpec?.primaryAxis, 40),
         worldSpec: looseWorldSpec(item),
     }));
-    return `${generation_prompts.promptSafetyBoundary(context, '蝴蝶效应 / 增量分歧')}
+    return `${generation_prompts.promptSafetyBoundary(context, '蝴蝶效应 / 增量分歧', null, memoryBank)}
 ${options.readableR62 ? core_butterflyContract.BUTTERFLY_READABLE_R62_CONTRACT : core_butterflyContract.BUTTERFLY_GENERATION_CONTRACT}
 旧终端节点由本地原样保留。本请求只根据当前档案写确有不同的平行分歧，最多三个是容量上限，不是目标数量。没有新分歧可以只写新观测点 Ω；禁止改写或换措辞复述旧节点。
 UNTRUSTED_INCREMENTAL_TIMELINE_JSON:
@@ -569,10 +573,10 @@ export async function generateButterflyIncrementalWithRepair(context, memoryBank
     const part = await generation_client.requestValidatedSegment(
         butterflyIncrementPrompt(context, memoryBank, previous, sourceMemoryIds, { readableR62 }) + core_incremental.derivedExpansionDirective(previous, memoryBank),
         '蝴蝶效应 · 正在追加新的平行分歧…',
-        { maxTokens: 9000, temperature: 0.55, context, origin, taskKey: `${taskKey}${readableR62 ? '' : NARRATIVE_SLOT_MARKER}:increment`, mode: core_constants.MODE.BUTTERFLY, background: true,
+        { maxTokens: 9000, context, origin, taskKey: `${taskKey}${readableR62 ? '' : NARRATIVE_SLOT_MARKER}:increment`, mode: core_constants.MODE.BUTTERFLY, background: true,
             ...(readableR62 ? { recoveryCompatibility: { contract: 'butterfly-readable-r62', legacyPrompts: [
                 legacy_recovery.legacyButterflyIncrementPrompt(context, memoryBank, previous, sourceMemoryIds) + core_incremental.derivedExpansionDirective(previous, memoryBank),
-            ] } } : {}) },
+            ], legacyTemperatures: [0.55] } } : {}) },
         raw => normalizeButterflyIncrementPart(raw, memoryBank, context),
     );
     const merged = mergeButterflyIncremental(previous, part, sourceMemoryIds);

@@ -21,7 +21,7 @@ export function memoryStateLabel(state, autoSync = false) {
     } else if (state.sourceChanged) {
         pending = '当前聊天内容与上次记录点有修改；编辑不会增加楼层，档案保留已归档版本。';
     }
-    return `已收录 ${memory.memories.length} 条记忆，记录到 ${memory.sourceMessageCount} 条聊天消息${suffix}。${pending}`;
+    return `已收录热位 ${memory.memories.length}/${core_constants.MAX_MEMORY_ITEMS} 条记忆${memory.coldArchive?.length ? `，冷归档 ${memory.coldArchive.length}` : ''}，记录到 ${memory.sourceMessageCount} 条聊天消息${suffix}。${pending}`;
 }
 
 export function currentCharacterAvatar(context = core_context.currentCharacterGuard()) {
@@ -78,8 +78,10 @@ export function resetArchiveOverviewForCharacter(context = core_context.currentC
 export function scheduleChooserRefresh(delay = 40) {
     if (runtimeState.archiveViewLevel !== 'chooser') return;
     if (runtimeState.chooserRefreshTimer) clearTimeout(runtimeState.chooserRefreshTimer);
+    const epoch = runtimeState.chatNavigationEpoch;
     runtimeState.chooserRefreshTimer = setTimeout(() => {
         runtimeState.chooserRefreshTimer = 0;
+        if (runtimeState.chatNavigationEpoch !== epoch) return;
         if (runtimeState.archiveViewLevel !== 'chooser') return;
         if (runtimeState.activeMode || runtimeState.activeSession) return;
         if (runtimeState.activeArchiveSnapshot && runtimeState.archiveViewLevel === 'snapshot') return;
@@ -89,6 +91,7 @@ export function scheduleChooserRefresh(delay = 40) {
         try { context = core_context.currentCharacterGuard(); } catch { ui_overlay.showChooser(); return; }
         const scope = core_cache.cacheScopeFromContext(context);
         void core_cache.ensureCacheHydrated(context).then(() => {
+            if (runtimeState.chatNavigationEpoch !== epoch) return;
             if (runtimeState.archiveViewLevel !== 'chooser') return;
             if (runtimeState.activeMode || runtimeState.activeSession) return;
             if (runtimeState.activeArchiveSnapshot && runtimeState.archiveViewLevel === 'snapshot') return;
@@ -217,6 +220,7 @@ export function modePortalMeta(mode) {
         [core_constants.MODE.ROOM]: { title: '他的房间', subtitle: '随现实时间流动的私人空间', icon: 'fa-house', accent: 'room' },
         [core_constants.MODE.ITEMS]: { title: '他的物品', subtitle: '翻找各种收纳容器与私人物件', icon: 'fa-box-open', accent: 'items' },
         [core_constants.MODE.THEME_SONG]: { title: '角色印象曲', subtitle: '为角色与故事写一首歌', icon: 'fa-music', accent: 'heart' },
+        [core_constants.MODE.BEDTIME]: { title: '睡前故事', subtitle: '一章一章写下自由题材故事', icon: 'fa-moon', accent: 'butterfly' },
         [core_constants.MODE.INBOX]: { title: '你的邮箱', subtitle: '寄给你的信 · 远方明信片', icon: 'fa-envelope', accent: 'album' },
         [core_constants.MODE.PAST_LIVES]: { title: '前世今生', subtitle: '另一段人生 · 旧梦卷宗与今生回响', icon: 'fa-scroll', accent: 'ending' },
         [core_constants.MODE.TIME_ECHO]: { title: '时空回响', subtitle: '另一端的你 · 另一刻的声音', icon: 'fa-wave-square', accent: 'phone' },

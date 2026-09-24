@@ -1,3 +1,6 @@
+import * as expanded_cg_view from './expandedCgView.js';
+import * as storyParticipants from '../core/participants.js';
+import * as heart_mode from '../modes/heart.js';
 import * as cg_format_ui from './cgFormatControl.js';
 import * as heart_reader from './heartReaderState.js';
 import * as ui_workspaceState from './workspaceState.js';
@@ -23,6 +26,7 @@ import * as recovery_view from './recoveryView.js';
 import * as generation_imageGeneration from '../generation/imageGeneration.js';
 import * as ui_overlay from './overlay.js';
 import * as image_viewer from './cgImageViewer.js';
+import * as ui_generationCompletion from './generationCompletion.js';
 
 export function viewHeartStripImage(opener = null) {
     const item = selectedHeartStrip();
@@ -243,15 +247,16 @@ export function renderHeartScriptLines(lines, identity = {}) {
     const page = ['language', 'strips', 'fireflies', 'postending'].includes(route) ? route : runtimeState.activeSession?.selectedSeason;
     const sourceMemory = core_cache.generationPageSourceMemory(runtimeState.activeSession, page,
         core_cache.generationPageSourceMemory(runtimeState.activeSession, 'heart', null));
-    const charName = core_text.normalizeText(identity.characterName ?? sourceMemory?.characterName ?? runtimeState.activeArchiveSnapshot?.characterName ?? core_context.getContext().name2, 120) || '角色';
+    const story = storyParticipants.resolveStoryIdentities(sourceMemory || runtimeState.activeArchiveSnapshot?.memory || null, null, runtimeState.activeSession?.participantSnapshot?.people);
+    const charName = core_text.normalizeText(identity.characterName ?? story.ownerNames[0] ?? sourceMemory?.characterName ?? runtimeState.activeArchiveSnapshot?.characterName ?? core_context.getContext().name2, 120) || '角色';
     const userName = core_text.normalizeText(identity.userName ?? sourceMemory?.userName ?? runtimeState.activeArchiveSnapshot?.memory?.userName ?? core_context.getContext().name1, 120) || '你';
-    return `<div class="rmt-heart-script">${core_dialogue.normalizeDialogueRows(lines, { characterName: charName, userName }).map(line => {
+    return `<div class="rmt-heart-script">${core_dialogue.normalizeDialogueRows(lines, { characterName: charName, userName, characterAliases: identity.characterAliases || story.ownerNames, userAliases: story.userAliases }).map(line => {
         if (line.speaker === 'narrator') return `<div class="rmt-heart-narration">${core_text.esc(line.text)}</div>`;
         const isUser = line.speaker === 'user';
         const isNpc = line.speaker === 'npc';
         const avatar = isNpc ? '' : isUser ? userAvatar : charAvatar;
         const fallback = isUser ? '<i class="fa-solid fa-user"></i>' : '<i class="fa-solid fa-heart"></i>';
-        return `<div class="rmt-heart-line ${isNpc ? 'npc' : isUser ? 'user' : 'char'}"><span class="rmt-heart-line-avatar">${avatar ? `<img src="${core_text.esc(avatar)}" alt="">` : isNpc ? '<i class="fa-solid fa-user"></i>' : fallback}</span><div><small>${core_text.esc(isNpc ? line.speakerName : isUser ? userName : charName)}</small><p>${core_text.esc(line.text)}</p></div></div>`;
+        return `<div class="rmt-heart-line ${isNpc ? 'npc' : isUser ? 'user' : 'char'}"><span class="rmt-heart-line-avatar">${avatar ? `<img src="${core_text.esc(avatar)}" alt="">` : isNpc ? '<i class="fa-solid fa-user"></i>' : fallback}</span><div><small>${core_text.esc(isNpc ? line.speakerName : isUser ? userName : line.speakerName || charName)}</small><p>${core_text.esc(line.text)}</p></div></div>`;
     }).join('')}</div>`;
 }
 
@@ -478,7 +483,10 @@ export function renderHeart() {
       <button type="button" data-rmt-heart-view="seasons" class="${view === 'seasons' ? 'active' : ''}">春夏秋冬 / Drama</button>
       <button type="button" data-rmt-heart-view="fireflies" class="${view === 'fireflies' ? 'active' : ''}">萤火虫栖息地</button>
     </div>`;
-    const generationButton = !canGenerateDerived ? '' : view === 'seasons'
+    const pendingSeasonBatch = selectedHeartSeason !== 'postending' && heart_mode.pendingHeartDramaBatchId(session, selectedHeartSeason);
+    const generationButton = !canGenerateDerived ? '' : view === 'seasons' && (selectedHeartSeasonPartial || pendingSeasonBatch)
+        ? ui_generationCompletion.generationCompletionHtml({ missing: 1, unit: `${heartSeasonLabels[selectedHeartSeason]} Drama`, action: 'heart-generate-season', actionData: { 'data-rmt-heart-season-target': selectedHeartSeason, 'data-rmt-heart-second-step': 'true' }, label: `补全未完成篇 · ${heartSeasonLabels[selectedHeartSeason]}`, readOnly, message: `${heartSeasonLabels[selectedHeartSeason]}有未完成的 Voice 或 Scenario；只补本批缺少的篇章，已保存篇章继续保留。`, className: 'rmt-heart-season-completion' })
+        : view === 'seasons'
         ? `<button type="button" class="rmt-btn" data-rmt-action="heart-generate-season" data-rmt-heart-season-target="${core_text.esc(selectedHeartSeason)}">${selectedHeartSeasonPartial ? '重试未完成篇 · ' : selectedHeartSeasonHasContent ? '追加生成 · ' : '生成首篇 · '}${core_text.esc(heartSeasonLabels[selectedHeartSeason])}</button>`
         : view === 'fireflies'
             ? (() => {
@@ -519,6 +527,7 @@ export function renderHeart() {
               <div class="rmt-heart-drama-head"><div><h2>${core_text.esc(item.title)}</h2><p>${core_text.esc(item.subtitle)}</p></div><span>${core_text.esc(heartSeasonLabels[selectedHeartSeason])}</span></div>
               <div class="rmt-heart-setting">${core_text.esc(item.setting)}</div>
               ${renderHeartScriptLines(item.script)}
+              ${expanded_cg_view.expandedCgHtml(session, { kind: current.type === 'voice' ? 'heart-voice' : 'heart-scenario', containerId: item.id }, !!runtimeState.activeArchiveSnapshot)}
             </section>`;
         } else {
             detail = `<div class="rmt-heart-empty">${readOnly ? '这一季还没有 Drama。' : `点击上方按钮生成${core_text.esc(heartSeasonLabels[selectedHeartSeason])}首篇；之后每次只新增并翻阅一篇。`}</div>`;
@@ -560,7 +569,7 @@ export function renderHeart() {
             const charDisplayName = core_text.normalizeText(runtimeState.activeArchiveSnapshot?.characterName || core_context.getContext().name2, 120) || '角色';
             const userDisplayName = core_text.normalizeText(runtimeState.activeArchiveSnapshot?.memory?.userName || core_context.getContext().name1, 120) || '你';
             const panels = selected.panels.map((panel, index) => `<article class="rmt-heart-panel"><b>${index + 1}</b><div><small>${core_text.esc(panel.caption || `第 ${index + 1} 格`)}</small><p>${core_text.esc(panel.action)}</p>${panel.charLine ? `<div class="rmt-heart-panel-line"><strong>${core_text.esc(charDisplayName)}</strong>${core_text.esc(panel.charLine)}</div>` : ''}${panel.userLine ? `<div class="rmt-heart-panel-line user"><strong>${core_text.esc(userDisplayName)}</strong>${core_text.esc(panel.userLine)}</div>` : ''}</div></article>`).join('');
-            detail = `<div class="rmt-heart-strip-head"><div><h2>${core_text.esc(selected.title)}</h2><p>${core_text.esc(selected.subtitle)}</p></div><span>${selected.panelCount}格</span></div>${image ? `<button type="button" class="rmt-heart-strip-image rmt-heart-strip-image-full" data-rmt-action="view-heart-cg" aria-label="查看完整原图">${generation_imageGeneration.cgImageLayerHtml(selected, { lazy: false })}</button>` : `<div class="rmt-heart-strip-image">${generation_imageGeneration.cgImageLayerHtml(selected, { lazy: false })}</div>`}<div class="rmt-heart-strip-actions">${readOnly ? '' : `<button type="button" class="rmt-btn" data-rmt-action="edit-heart-cg-prompt" ${generation_imageGeneration.isCgImageDrawing(core_constants.MODE.HEART, selected.id) ? 'disabled' : ''}>图片设置</button>`}</div><div class="rmt-heart-panels">${panels}</div>`;
+            detail = `<div class="rmt-heart-strip-head"><div><h2>${core_text.esc(selected.title)}</h2><p>${core_text.esc(selected.subtitle)}</p></div><span>${selected.panelCount}格</span></div>${image ? `<div class="rmt-heart-strip-image rmt-heart-strip-image-full">${generation_imageGeneration.cgImageLayerHtml(selected, { lazy: false })}</div><button type="button" class="rmt-btn" data-rmt-action="view-heart-cg">查看完整原图</button>` : `<div class="rmt-heart-strip-image">${generation_imageGeneration.cgImageLayerHtml(selected, { lazy: false })}</div>`}<div class="rmt-heart-strip-actions">${readOnly ? '' : `<button type="button" class="rmt-btn" data-rmt-action="edit-heart-cg-prompt" ${generation_imageGeneration.isCgImageDrawing(core_constants.MODE.HEART, selected.id) ? 'disabled' : ''}>图片设置</button>`}</div><div class="rmt-heart-panels">${panels}</div>`;
         } else {
             detail = `<div class="rmt-heart-empty">${readOnly ? '日常一格还没有生成。' : '点击上方按钮单独生成日常一格。'}</div>`;
         }

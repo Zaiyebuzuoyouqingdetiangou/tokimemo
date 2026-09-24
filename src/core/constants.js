@@ -64,6 +64,10 @@ export const IMPORT_CHUNK_CHARS = 30000;
 
 export const MAX_MEMORY_ITEMS = 240;
 
+export const MAX_COLD_ARCHIVE_ITEMS = 100;
+
+export const MAX_ROLLING_EVICT_PER_BATCH = 20;
+
 export const MAX_MEMORY_PROMPT_ITEMS = 64;
 
 export const DERIVED_INCREMENTAL_SCHEMA_VERSION = 1;
@@ -72,20 +76,22 @@ export const MAX_DERIVED_CONTENT_ITEMS = MAX_MEMORY_ITEMS;
 
 export const MAX_INCREMENTAL_EXISTING_INDEX_ITEMS = 120;
 
-export const MAX_GENERATION_INPUT_TOKENS = 32000;
+export const MAX_GENERATION_INPUT_TOKENS = 60000;
+
+export const LEGACY_DEFAULT_INPUT_BUDGET_TOKENS = 32000;
 
 // Bounds for the user-adjustable input budget. Values outside this range are refused
 // at save time so a mistyped number cannot run away; per-request cost scales with input.
 export const MIN_USER_INPUT_BUDGET_TOKENS = 8000;
 
-export const MAX_USER_INPUT_BUDGET_TOKENS = 128000;
+export const MAX_USER_INPUT_BUDGET_TOKENS = 200000;
 
 // Legacy per-feature sizing hint only; never clamp the user's output setting to it.
 export const MAX_GENERATION_OUTPUT_TOKENS = 60000;
 
 export const MAX_GENERATION_OUTPUT_CHARS = 600000;
 
-export const MAX_GENERATION_INPUT_CHARS = 96000;
+export const MAX_GENERATION_INPUT_CHARS = 180000;
 
 export const MAX_EXTERNAL_MEMORY_ITEMS = 256;
 
@@ -142,7 +148,7 @@ export const MAX_BANNED_GENERATED_PHRASES = 24;
 
 export const MEMORY_WORLD_INFO_SETTINGS_KEY = 'heartbeatMemoriesMemoryWorldInfoV1';
 
-export const MAX_MEMORY_WORLD_INFO_BOOKS = 8;
+export const MAX_MEMORY_WORLD_INFO_BOOKS = 200;
 
 export const MAX_MEMORY_WORLD_INFO_ENTRIES = 160;
 
@@ -186,7 +192,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
     manualApiStreaming: false,
     chatReadRange: Object.freeze({ mode: 'recent', recent: 50, start: 1, end: 100, includeHidden: false }),
     maxTokens: 60000,
-    inputBudgetTokens: 32000,
+    inputBudgetTokens: 60000,
     temperature: 0.9,
     roomLifeAutoDaily: true,
     useCurrentChatExternalMemory: true,
@@ -195,6 +201,9 @@ export const DEFAULT_SETTINGS = Object.freeze({
     // not exposed through the current context registry. Off by default; when enabled we may use
     // the public executeSlashCommandsWithOptions('/sd quiet=true ...') path with a sanitized prompt.
     imageGenerationManualEnabled: false,
+    autoRetryEnabled: false,
+    autoRetryCount: 1,
+    autoSecondPass: false,
     creativeSupplementEnabled: false,
     creativeSupplement: '',
     imageGenerationProvider: 'baibai-image',
@@ -220,6 +229,7 @@ export const MODE = Object.freeze({
     PHONE: 'phone',
     INBOX: 'inbox',
     THEME_SONG: 'themeSong',
+    BEDTIME: 'bedtime',
     PAST_LIVES: 'pastLives',
     TIME_ECHO: 'timeEcho',
     TRAVEL: 'travel',
@@ -240,6 +250,7 @@ export const MODE_LABEL = Object.freeze({
     [MODE.PHONE]: '他的私人终端',
     [MODE.INBOX]: '你的邮箱',
     [MODE.THEME_SONG]: '角色印象曲',
+    [MODE.BEDTIME]: '睡前故事',
     [MODE.PAST_LIVES]: '前世今生',
     [MODE.TIME_ECHO]: '时空回响',
     [MODE.TRAVEL]: '他的出行路线',
@@ -260,6 +271,7 @@ export const MODE_TOKEN_CAPS = Object.freeze({
     [MODE.PHONE]: MAX_GENERATION_OUTPUT_TOKENS,
     [MODE.INBOX]: 4000,
     [MODE.THEME_SONG]: 6500,
+    [MODE.BEDTIME]: 6500,
     [MODE.PAST_LIVES]: MAX_GENERATION_OUTPUT_TOKENS,
     [MODE.TIME_ECHO]: 12000,
     [MODE.TRAVEL]: 9000,
@@ -270,10 +282,10 @@ export const MODE_TOKEN_CAPS = Object.freeze({
     [MODE.ACHIEVEMENTS]: 6000,
 });
 
-export const ARCHIVE_PORTAL_MODES = Object.freeze([MODE.ALBUM, MODE.ADV, MODE.ROOM, MODE.PHONE, MODE.INBOX, MODE.CABINET, MODE.TRAVEL, MODE.ENDING, MODE.CALENDAR, MODE.RELATIONS, MODE.HEART, MODE.ACHIEVEMENTS, MODE.BUTTERFLY, MODE.PAST_LIVES, MODE.THEME_SONG]);
+export const ARCHIVE_PORTAL_MODES = Object.freeze([MODE.ALBUM, MODE.ADV, MODE.ROOM, MODE.PHONE, MODE.INBOX, MODE.CABINET, MODE.TRAVEL, MODE.ENDING, MODE.CALENDAR, MODE.RELATIONS, MODE.HEART, MODE.ACHIEVEMENTS, MODE.BUTTERFLY, MODE.PAST_LIVES, MODE.THEME_SONG, MODE.BEDTIME]);
 
 export const ROOM_DEEP_MODES = Object.freeze([MODE.ITEMS]);
-export const CREATIVE_EXPANSION_MODES = Object.freeze([MODE.ADV, MODE.BUTTERFLY, MODE.HEART, MODE.ENDING, MODE.ALBUM, MODE.TRAVEL, MODE.PAST_LIVES, MODE.TIME_ECHO, MODE.THEME_SONG]);
+export const CREATIVE_EXPANSION_MODES = Object.freeze([MODE.ADV, MODE.BUTTERFLY, MODE.HEART, MODE.ENDING, MODE.ALBUM, MODE.TRAVEL, MODE.PAST_LIVES, MODE.TIME_ECHO, MODE.THEME_SONG, MODE.BEDTIME]);
 
 export const ARCHIVE_OVERVIEW_CACHE_MS = 60000;
 

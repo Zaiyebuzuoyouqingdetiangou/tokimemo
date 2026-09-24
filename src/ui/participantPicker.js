@@ -84,6 +84,19 @@ const sourceKey = ref => JSON.stringify([ref.world, String(ref.uid)]);
 const copySource = entry => ({ world: entry.world, uid: String(entry.uid), title: entry.title,
     content: entry.content, keys: [...(entry.keys || [])] });
 
+// This is intentionally called only from the visible random-selection button.
+// Re-rendering and confirmation must reuse the selected draft ID, never roll again.
+export function chooseRandomParticipantId(roster, { excludedIds = [], random = Math.random } = {}) {
+    const normalized = people.normalizeParticipantRoster(roster);
+    if (!normalized) return '';
+    const excluded = new Set(excludedIds);
+    const candidates = normalized.people.filter(person => person.identity !== 'user' && !excluded.has(person.id));
+    if (!candidates.length) return '';
+    const value = Number(random());
+    const index = Math.min(candidates.length - 1, Math.max(0, Math.floor((Number.isFinite(value) ? value : 0) * candidates.length)));
+    return candidates[index].id;
+}
+
 // Selection is local until the caller explicitly commits it. Loading books, naming
 // people, toggling checkboxes and closing this dialog never request generation.
 export async function showParticipantPicker({ context = contextApi.currentCharacterGuard(), roster,
@@ -101,9 +114,9 @@ export async function showParticipantPicker({ context = contextApi.currentCharac
       <p>勾选世界书中的人物条目，核对下方姓名。一个条目可以加入多个人物，也可以为同一人物补充多个条目。</p>
       <p>选人、改名不调用生成 API。人物设定不会作为已经发生的剧情写入记忆。</p>
       <label class="rmt-participant-book-label">世界书<select data-rmt-participant-book aria-label="人物来源世界书"><option value="">正在读取世界书列表…</option></select></label>
-      <div class="rmt-participant-entries" data-rmt-participant-entries></div>
-      <h3>人物名单</h3><div data-rmt-participant-people></div>
-      <button type="button" class="rmt-btn" data-rmt-participant-add>手动补充人物</button>
+       <div class="rmt-participant-entries" data-rmt-participant-entries></div>
+       <h3>人物名单</h3><div data-rmt-participant-people></div>
+        <div class="rmt-participant-actions"><button type="button" class="rmt-btn" data-rmt-participant-random>随机加一人</button><button type="button" class="rmt-btn" data-rmt-participant-ensemble>选为群像</button><button type="button" class="rmt-btn" data-rmt-participant-add>手动补充人物</button></div>
       <footer><span data-rmt-participant-count></span><button type="button" class="rmt-btn" data-rmt-participant-confirm>${text.esc(confirmLabel)}</button></footer>`);
     if (!current) return false;
     current.draft = draft;
@@ -174,9 +187,23 @@ export async function showParticipantPicker({ context = contextApi.currentCharac
         }
     });
     current.element.addEventListener('click', event => {
-        const button = event.target?.closest?.('[data-rmt-participant-add], [data-rmt-participant-duplicate]');
+        const button = event.target?.closest?.('[data-rmt-participant-add], [data-rmt-participant-duplicate], [data-rmt-participant-random], [data-rmt-participant-ensemble]');
         if (!button || current.busy || !current.isCurrent()) return;
         event.stopPropagation();
+        if (button.hasAttribute('data-rmt-participant-random')) {
+            const id = chooseRandomParticipantId(draft, { excludedIds: draft.selectedIds });
+            if (!id) { status(current, '没有可随机加入的非用户人物；可先从世界书加入人物或调整现有勾选。', true); return; }
+            setSelected(id, true);
+            changed();
+            status(current, '已随机勾选一人；确认前仍可手动调整。');
+            return;
+        }
+        if (button.hasAttribute('data-rmt-participant-ensemble')) {
+            for (const person of draft.people) if (person.identity !== 'user') setSelected(person.id, true);
+            changed();
+            status(current, '已将现有非用户人物选为群像；确认前仍可手动调整。');
+            return;
+        }
         const index = button.dataset.rmtParticipantDuplicate;
         const person = index === undefined ? addPerson('') : addPerson('', draft.people[Number(index)].sourceRefs);
         changed();

@@ -130,7 +130,15 @@ export async function showArchiveLibrary() {
                 generating: core_requestCoordinator.isModeGenerating(core_constants.MODE.CALENDAR),
             });
         } else {
-            currentQuick = `<section class="rmt-archive-card rmt-current-archive-card" style="margin-top:12px"><div><b>当前聊天还没有档案</b></div><div class="rmt-current-archive-actions"><button type="button" class="rmt-btn" data-rmt-action="current-archive-import">生成当前窗口档案</button></div></section>`;
+            const inheritanceDescriptor = archive_groups.characterDescriptor(ctx, Number(ctx.characterId));
+            const inheritanceAvailable = archive_groups.getArchiveIndex(ctx).some(entry =>
+                core_context.comparableChatId(entry.chatId) !== core_context.comparableChatId(core_context.getChatId(ctx))
+                && Number(entry.characterIndexHint) === Number(ctx.characterId)
+                && !!core_context.currentCharacterAvatar(ctx)
+                && core_context.archiveStoredAvatar(entry) === core_context.currentCharacterAvatar(ctx)
+                && (!entry.characterFingerprint || !inheritanceDescriptor?.fingerprint
+                    || entry.characterFingerprint === inheritanceDescriptor.fingerprint));
+            currentQuick = `<section class="rmt-archive-card rmt-current-archive-card" style="margin-top:12px"><div><b>当前聊天还没有档案</b></div><div class="rmt-current-archive-actions"><button type="button" class="rmt-btn" data-rmt-action="current-archive-import">生成当前窗口档案</button>${inheritanceAvailable ? '<button type="button" class="rmt-btn" data-rmt-action="archive-inheritance-open">从这个角色的旧聊天继承…</button>' : ''}</div></section>`;
         }
     } catch {}
     if (!viewStillCurrent()) return;

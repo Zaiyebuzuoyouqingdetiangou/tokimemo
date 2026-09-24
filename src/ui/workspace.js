@@ -1,3 +1,7 @@
+import * as routePeople from './routeParticipants.js';
+import * as mirrorReader from './mirrorTtsReader.js';
+import * as mirrorCall from './mirrorCallView.js';
+import * as generationStatus from './generationStatus.js';
 import * as cg_format_ui from './cgFormatControl.js';
 // Production workspace: delegates every data operation to the existing module entry points.
 // This file contains no sample records, generation prompts, or alternate persistence path.
@@ -14,10 +18,15 @@ import * as home from './homeView.js';
 import * as bookmark from './navigationBookmark.js';
 import * as cgEditor from './cgPromptEditor.js';
 import { state as state } from '../core/state.js';
+import * as ui_taskCenter from './taskCenter.js';
 import * as ui_workspaceState from './workspaceState.js';
+import * as generation_merged from '../generation/mergedGeneration.js';
 const esc = text.esc;
 const GROUPS = [['memory', '回忆'], ['life', '生活'], ['interaction', '互动'], ['stories', '番外']];
 const ALIAS_META = {
+    journal: {icon:'fa-book-open',accent:'album',subtitle:'整页收录，或挑选已有内容制作'},
+    mirrorCall: {icon:'fa-microphone',accent:'heart',subtitle:'说给 TA 听，也听 TA 回应'},
+    mirrorVoice: {icon:'fa-volume-high',accent:'heart',subtitle:'配置朗读音色，在各页播放'},
     language: { icon: 'fa-comment', accent: 'heart', subtitle: '早晚、生日与特别时刻' },
     fireflies: { icon: 'fa-star', accent: 'heart', subtitle: '那些不经意说出口的心声' },
     strips: { icon: 'fa-images', accent: 'album', subtitle: '两个人的日常片刻' },
@@ -29,6 +38,10 @@ export function syncWorkspaceChrome() {
     if (!host?.querySelectorAll || !host.classList?.add) return;
     ui_workspaceState.loadWorkspacePreferences();
     host.classList.add('rmt-workspace');
+    const voiceSettings = !state.activeMode && state.archiveViewLevel === 'home' ? host.querySelector('[data-rmt-voice-settings]') : null;
+    if (voiceSettings) mirrorReader.showMirrorSettings(voiceSettings);
+    else mirrorReader.parkMirrorSettings();
+    if (ui_workspaceState.workspace.route !== 'mirrorCall') mirrorCall.disposeMirrorCall();
     host.classList.toggle('rmt-workspace-expanded', ui_workspaceState.workspace.expanded);
     const tab = state.activeMode ? 'content' : state.archiveViewLevel === 'home' ? 'settings'
         : ['chooser','snapshot'].includes(state.archiveViewLevel) ? (ui_workspaceState.workspace.tab === 'content' ? 'content' : 'archive') : '';
@@ -72,6 +85,8 @@ export function openWorkspaceTab(tab) {
 }
 export function routeHasContent(key, session) {
     if (!session) return false;
+    if (key === 'bedtime') return !!session.stories?.length;
+    if (key === 'failed-photoshoot') return !!session.photoshoots?.length;
     if (key === 'themeSong') return !!session.songs?.length;
     if (key === 'language') return heartLanguage.heartLanguageStatus(session).hasContent;
     if (key === 'strips') return !!session.dailyStrips?.length;
@@ -82,6 +97,8 @@ export function routeHasContent(key, session) {
 }
 function countStatus(key, session) {
     if (!routeHasContent(key, session)) return '尚未生成 · 可先进入';
+    if (key === 'bedtime') return `已有 ${session.stories.length} 篇故事`;
+    if (key === 'failed-photoshoot') return `已有 ${session.photoshoots?.length || 0} 张写真计划`;
     if (key === 'themeSong') return `已有 ${session.songs.length} 首`;
     if (key === 'language') return `已有 ${heartLanguage.heartLanguageStatus(session).total} 句`;
     if (key === 'heart') return `已有 ${(session.voiceDramas || []).filter(i => i.kind !== 'postending').length + (session.scenarioDramas || []).length} 篇`;
@@ -90,18 +107,37 @@ function countStatus(key, session) {
         : session.entries || session.events || session.letters || session.locations || session.episodes;
     return Array.isArray(collection) ? `已有 ${collection.length} ${key === 'fireflies' ? '颗光' : '项内容'}` : '已有内容';
 }
-export function workspaceCatalogueHtml(portals = [], snapshot = null) {
+export function workspaceCatalogueHtml(portals = [], snapshot = null, { ready: archiveReady = false } = {}) {
     ui_workspaceState.loadWorkspacePreferences();
     const sessionMap = new Map(portals.map(item => [item.mode, item.session]));
+    const canQueue = archiveReady && !snapshot;
     const cards = Object.entries(ui_workspaceState.WORKSPACE_ROUTES).filter(([,spec]) => !spec.deep && spec.group === ui_workspaceState.workspace.group).map(([key,spec]) => {
         const meta = { ...snapshots.modePortalMeta(spec.mode), ...(ALIAS_META[key] || {}) };
         const session = sessionMap.get(spec.mode);
         const running = snapshot ? coordinator.isArchiveTargetModeGenerating(spec.mode, snapshot) : coordinator.isModeGenerating(spec.mode);
         const ready = routeHasContent(key, session);
-        const status = running ? (ready ? '生成中 · 已有内容可读' : '正在生成') : countStatus(key, session);
-        return `<article class="rmt-archive-portal rmt-workspace-card ${ready ? 'ready' : 'empty'} rmt-archive-portal-${esc(meta.accent)}"><button type="button" class="rmt-portal-open" data-rmt-workspace-route="${key}"><span class="rmt-portal-avatar"><i class="fa-solid ${esc(meta.icon)}" aria-hidden="true"></i></span><span class="rmt-portal-title">${esc(spec.title)}</span><span class="rmt-portal-subtitle">${esc(meta.subtitle)}</span><span class="rmt-portal-status">${esc(status)}</span><span class="rmt-workspace-enter" aria-hidden="true">›</span></button></article>`;
+        const progress = generationStatus.routeGenerationStatus(key, spec.mode, session, { running, hasContent: ready, snapshot });
+        const status = spec.manualOnly ? '点击进入' : (progress.state === 'done' || progress.state === 'empty' ? countStatus(key, session) : progress.label)
+            + (generation_merged.MERGEABLE_ROUTES.includes(key) ? ' · 可合并' : '');
+        const queueable = canQueue && spec.mode && !spec.deep && !spec.manualOnly;
+        return `<article class="rmt-archive-portal rmt-workspace-card ${ready ? 'ready' : 'empty'} rmt-archive-portal-${esc(meta.accent)}"><button type="button" class="rmt-portal-open" data-rmt-workspace-route="${key}"><span class="rmt-portal-avatar"><i class="fa-solid ${esc(meta.icon)}" aria-hidden="true"></i></span><span class="rmt-portal-title">${esc(spec.title)}</span><span class="rmt-portal-subtitle">${esc(meta.subtitle)}</span><span class="rmt-portal-status">${esc(status)}</span><span class="rmt-workspace-enter" aria-hidden="true">›</span></button>${queueable ? ui_taskCenter.queuePickHtml(key) + routePeople.routePeopleHtml(key) : ''}</article>`;
     }).join('');
-    return `<section class="rmt-workspace-catalogue"><header class="rmt-workspace-section-head"><div><h2>内容</h2><p>选择你想看的那一页</p></div><div class="rmt-layout-switch" aria-label="目录显示方式">${[['cards','卡片'],['list','列表']].map(([k,t])=>`<button type="button" data-rmt-workspace-layout="${k}" aria-pressed="${ui_workspaceState.workspace.layout === k}" class="${ui_workspaceState.workspace.layout === k ? 'active' : ''}">${t}</button>`).join('')}</div></header><nav class="rmt-workspace-groups" aria-label="内容分组">${GROUPS.map(([k,t])=>`<button type="button" data-rmt-workspace-group="${k}" class="${ui_workspaceState.workspace.group === k ? 'active' : ''}" aria-current="${ui_workspaceState.workspace.group === k ? 'page' : 'false'}">${t}</button>`).join('')}</nav><div class="rmt-archive-portals rmt-workspace-portals" data-rmt-layout="${ui_workspaceState.workspace.layout}">${cards}</div></section>`;
+    let pendingBar = '';
+    if (canQueue) {
+        try {
+            const chatId = context.comparableChatId(context.getChatId());
+            const pending = generation_merged.createPendingStore();
+            const pendingScope = generation_merged.currentPendingScope(context.getContext());
+            const waiting = pending.readForOrigin(pendingScope);
+            if (waiting.length) {
+                pendingBar = `<div class="rmt-queue-bar">${waiting.map(item => `<button type="button" class="rmt-btn" data-rmt-action="${item.kind === 'unsaved' ? 'merged-resave' : 'merged-repair'}" data-rmt-route="${esc(item.route)}" data-rmt-pending-id="${esc(item.id)}">${esc(item.kind === 'unsaved' ? `重新保存${item.label}` : `只补${item.label}`)}</button><button type="button" class="rmt-btn" data-rmt-action="merged-export" data-rmt-pending-id="${esc(item.id)}">导出${esc(item.label)}成果</button>${item.session ? `<details><summary>查看保留的成果</summary><pre style="white-space:pre-wrap;overflow-wrap:anywhere;max-height:300px;overflow:auto">${esc(JSON.stringify(item.session, null, 2))}</pre></details>` : ''}`).join('')}<small>${esc(generation_merged.pendingNote(pendingScope).join('；'))}</small></div>`;
+            }
+            const legacy = pending.readUnattributed(chatId);
+            if (legacy.length) pendingBar += `<div class="rmt-queue-bar"><small>有 ${legacy.length} 条旧暂存记录缺少所属人物，已保留，不会显示为当前人物内容。</small><button type="button" class="rmt-btn" data-rmt-action="merged-export-legacy">导出旧暂存记录</button></div>`;
+        } catch { pendingBar = '<div class="rmt-queue-bar" role="alert">暂存区读取失败，旧数据没有清空。<button type="button" class="rmt-btn" data-rmt-action="merged-export-legacy">导出旧暂存记录</button></div>'; }
+    }
+    const queueBar = canQueue ? `<div class="rmt-queue-bar"><button type="button" class="rmt-btn" data-rmt-action="queue-selected">把勾选的项目排进任务中心</button><button type="button" class="rmt-btn" data-rmt-action="generate-together">一起生成</button><details class="rmt-together-help"><summary aria-label="一起生成说明">?</summary><p>同一请求可合并陈列柜、成就库、邮箱、印象曲和睡前故事。其他页面保留各自生成步骤，安排为独立请求。发送前可查看分组和预计请求数。</p></details></div>${pendingBar}` : '';
+    return `<section class="rmt-workspace-catalogue"><header class="rmt-workspace-section-head"><div><h2>内容</h2><p>选择你想看的那一页</p></div><div class="rmt-layout-switch" aria-label="目录显示方式">${[['cards','卡片'],['list','列表']].map(([k,t])=>`<button type="button" data-rmt-workspace-layout="${k}" aria-pressed="${ui_workspaceState.workspace.layout === k}" class="${ui_workspaceState.workspace.layout === k ? 'active' : ''}">${t}</button>`).join('')}</div></header><nav class="rmt-workspace-groups" aria-label="内容分组">${GROUPS.map(([k,t])=>`<button type="button" data-rmt-workspace-group="${k}" class="${ui_workspaceState.workspace.group === k ? 'active' : ''}" aria-current="${ui_workspaceState.workspace.group === k ? 'page' : 'false'}">${t}</button>`).join('')}</nav>${queueBar}<div class="rmt-archive-portals rmt-workspace-portals" data-rmt-layout="${ui_workspaceState.workspace.layout}">${cards}</div></section>`;
 }
 // Move existing validated markup, never replace the underlying archive or task objects.
 export function arrangeArchiveWorkspace(body, { portals = [], ready = false, snapshot = null } = {}) {
@@ -119,7 +155,7 @@ export function arrangeArchiveWorkspace(body, { portals = [], ready = false, sna
     if (ui_workspaceState.workspace.tab === 'content') {
         const readOnlyControl = gate?.querySelector('.rmt-archive-readonly-control');
         if (readOnlyControl) main.appendChild(readOnlyControl);
-        const section = document.createElement('div'); section.innerHTML = workspaceCatalogueHtml(portals, snapshot);
+        const section = document.createElement('div'); section.innerHTML = workspaceCatalogueHtml(portals, snapshot, { ready });
         main.appendChild(section);
     } else {
         ui_workspaceState.workspace.tab = 'archive';
@@ -173,7 +209,7 @@ export function arrangeSettingsHome(body) {
         const title = document.createElement('summary'); title.textContent = '更多设置'; more.appendChild(title);
         const sectionBody = document.createElement('div'); sectionBody.className = 'rmt-workspace-more-body'; more.appendChild(sectionBody);
         for (const card of [...content.querySelectorAll(':scope > [data-rmt-settings-section]')]) {
-            if (!['api','theme','image','reading'].includes(card.dataset.rmtSettingsSection)) sectionBody.appendChild(card);
+            if (!['api','theme','image','reading','voice'].includes(card.dataset.rmtSettingsSection)) sectionBody.appendChild(card);
         }
         if (sectionBody.children.length) content.appendChild(more);
         const preferences = [...content.querySelectorAll(':scope > .rmt-workspace-preferences')];
@@ -228,7 +264,24 @@ export function handleWorkspaceClick(event) {
     return true;
 }
 export function handleWorkspaceChange(event) {
+    if (routePeople.handleRoutePeopleChange(event)) return true;
     if (event.target?.matches?.('[data-rmt-workspace-startup]')) return ui_workspaceState.setWorkspacePreference('startup', event.target.value);
     if (event.target?.matches?.('[data-rmt-workspace-restore]')) return ui_workspaceState.setWorkspacePreference('restore', !!event.target.checked);
     return false;
+}
+
+export function openVoiceModule(route) {
+    if (route === 'mirrorVoice') return home.showHome({ section: 'voice' });
+    if (route !== 'mirrorCall') return false;
+    const host = globalThis.document?.getElementById(constants.OVERLAY_ID);
+    if (!host) return false;
+    mirrorCall.disposeMirrorCall(); mirrorReader.parkMirrorSettings();
+    state.activeMode = route; state.activeSession = null;
+    ui_workspaceState.workspace.route = route; ui_workspaceState.workspace.tab = 'content'; ui_workspaceState.workspace.empty = null;
+    overlay.setBackVisible(true,'内容'); overlay.setRegenerateVisible(false); overlay.setManageVisible(false);
+    overlay.topTitle(ui_workspaceState.WORKSPACE_ROUTES[route].title);
+    const body = overlay.bodyEl();
+    body.innerHTML = `<section class="rmt-voice-page"><h2>${esc(ui_workspaceState.WORKSPACE_ROUTES[route].title)}</h2><p>文字与语音都可以。连接后点“开始说话”，允许使用麦克风；说完后发送给 TA。</p></section>`;
+    mirrorCall.mountMirrorCall(host, body.firstElementChild);
+    syncWorkspaceChrome(); body.scrollTop = 0; return true;
 }

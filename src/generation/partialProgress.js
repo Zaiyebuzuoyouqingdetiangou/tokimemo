@@ -15,6 +15,7 @@ import * as items from '../modes/items.js';
 import * as cabinet from '../modes/cabinet.js';
 import * as inbox from '../modes/inbox.js';
 import * as themeSong from '../modes/themeSong.js';
+import * as bedtime from '../modes/bedtime.js';
 import * as timeStories from '../modes/timeStories.js';
 import * as travel from '../modes/travel.js';
 import * as calendar from '../modes/calendar.js';
@@ -42,6 +43,7 @@ function projectorFor(mode) {
         room: room.projectRoomProgress, heart: heart.projectHeartProgress,
         items: items.projectItemsProgress, cabinet: cabinet.projectCabinetProgress,
         inbox: inbox.projectInboxProgress, themeSong: themeSong.projectThemeSongProgress,
+        bedtime: bedtime.projectBedtimeProgress,
         timeEcho: timeStories.projectTimeStoriesProgress, travel: travel.projectTravelProgress,
         calendar: calendar.projectCalendarProgress, relations: relations.projectRelationsProgress,
         achievements: achievements.projectAchievementsProgress,

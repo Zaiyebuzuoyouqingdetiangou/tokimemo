@@ -1,4 +1,12 @@
+import * as handJournal from './handJournalView.js';
+import * as expanded_cg_view from './expandedCgView.js';
+import * as archive_inheritance_view from './archiveInheritance.js';
+import * as bedtime_contract from '../core/bedtimeContract.js';
+import * as bedtime_view from './bedtimeView.js';
 import * as cg_format_ui from './cgFormatControl.js';
+import * as generation_status_view from './generationStatus.js';
+import * as mirror_reader from './mirrorTtsReader.js';
+import * as mirror_call from './mirrorCallView.js';
 import * as heart_reader from './heartReaderState.js';
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
@@ -12,6 +20,7 @@ import * as core_archiveCover from '../core/archiveCover.js';
 import * as core_constants from '../core/constants.js';
 import * as core_context from '../core/context.js';
 import * as core_requestCoordinator from '../core/requestCoordinator.js';
+import * as ui_taskCenter from './taskCenter.js';
 import * as core_settings from '../core/settings.js';
 import { state as runtimeState } from '../core/state.js';
 import * as core_text from '../core/text.js';
@@ -62,6 +71,7 @@ import * as ui_styles from './styles.js';
 import * as workspace_ui from './workspace.js';
 import * as language_view from './languageView.js';
 import * as ui_workspaceState from './workspaceState.js';
+import * as toolbarIcons from './toolbarIcons.js';
 
 export function isArchiveMobileViewport() {
     try {
@@ -102,6 +112,7 @@ export function overlayCloseButtonFromEvent(event, overlay) {
 
 export function closeArchiveOverlayFromUser() {
     if (image_viewer.closeCgImageViewer()) return;
+    if (runtimeState.activeMode === 'bedtime' && bedtime_view.closeBedtimeDetail()) return;
     const overlay = document.getElementById(core_constants.OVERLAY_ID);
     if (!overlay || overlay.hidden) return closeOverlay();
     // Closing this reversible view is not cancelling a task. Native confirm may return
@@ -132,8 +143,39 @@ export function bindOverlayCloseFallback(overlay) {
     overlay.dataset.rmtEarlyCloseBound = 'true';
 }
 
+function toolbarMoreMenu(overlay) {
+    return overlay?.querySelector?.('[data-rmt-toolbar-more-menu]') || null;
+}
+function closeToolbarMoreMenu(overlay, { restoreFocus = false } = {}) {
+    const menu = toolbarMoreMenu(overlay);
+    const trigger = overlay?.querySelector?.('[data-rmt-action="toolbar-more"]');
+    if (!menu || menu.hidden) return false;
+    menu.hidden = true;
+    trigger?.setAttribute?.('aria-expanded', 'false');
+    if (restoreFocus) trigger?.focus?.();
+    return true;
+}
+function toggleToolbarMoreMenu(overlay) {
+    const menu = toolbarMoreMenu(overlay);
+    const trigger = overlay?.querySelector?.('[data-rmt-action="toolbar-more"]');
+    if (!menu || !trigger) return;
+    const open = menu.hidden;
+    menu.hidden = !open;
+    trigger.setAttribute('aria-expanded', String(open));
+    if (open) menu.querySelector('button:not([disabled])')?.focus?.();
+}
+function bindToolbarMoreMenu(overlay) {
+    if (!overlay || overlay.dataset.rmtToolbarMenuBound === 'true') return;
+    overlay.addEventListener('keydown', event => {
+        if (event.key !== 'Escape' || !closeToolbarMoreMenu(overlay, { restoreFocus: true })) return;
+        event.preventDefault(); event.stopPropagation();
+    });
+    overlay.dataset.rmtToolbarMenuBound = 'true';
+}
+
 export function revealArchiveOverlay(overlay) {
     if (!overlay) return;
+    try { runtimeState.renderedChatScope = core_context.chatScopeKey(core_context.currentCharacterGuard()); } catch {}
     overlay.hidden = false;
     overlay.removeAttribute('aria-hidden');
     if (typeof globalThis.HTMLDialogElement === 'function' && overlay instanceof globalThis.HTMLDialogElement) {
@@ -162,15 +204,25 @@ export function openOverlay() {
         overlay.innerHTML = `
           <div class="rmt-shell" role="dialog" aria-modal="true" aria-label="心迹回廊">
             <div class="rmt-topbar">
-              <button type="button" data-rmt-action="back" hidden aria-label="返回上级">‹</button>
+              <button type="button" data-rmt-action="back" hidden aria-label="返回上级">${toolbarIcons.toolbarIcon('back')}</button>
               <div class="rmt-topbar-title">心迹回廊</div>
-              <button type="button" data-rmt-action="library-home" aria-label="打开档案室" title="档案室"><i class="fa-regular fa-folder" aria-hidden="true"></i></button>
-              <button type="button" data-rmt-action="workspace-expand" aria-label="展开窗口" title="展开窗口"><i class="fa-solid fa-expand" aria-hidden="true"></i></button>
-              <button type="button" data-rmt-action="regenerate" hidden aria-label="增量追加" title="增量追加">＋</button>
-              <button type="button" data-rmt-action="manage" hidden aria-label="管理" title="管理">⋯</button>
-              <button type="button" data-rmt-action="close" aria-label="关闭档案室">×</button>
+              <div class="rmt-live-tasks" data-rmt-live-tasks hidden></div>
+              <button type="button" data-rmt-action="library-home" aria-label="打开档案室" title="档案室">${toolbarIcons.toolbarIcon('library')}</button>
+              <button type="button" data-rmt-action="workspace-expand" aria-label="展开窗口" title="展开窗口">${toolbarIcons.toolbarIcon('expand')}</button>
+              <button type="button" data-rmt-action="regenerate" hidden aria-label="增量追加" title="增量追加">${toolbarIcons.toolbarIcon('add')}</button>
+              <button type="button" data-rmt-action="manage" hidden aria-label="管理" title="管理">${toolbarIcons.toolbarIcon('manage')}</button>
+              <button type="button" data-rmt-action="tasks" aria-label="任务" title="任务">${toolbarIcons.toolbarIcon('tasks')}<span class="rmt-task-count" data-rmt-task-count hidden>0</span></button>
+              <button type="button" data-rmt-action="toolbar-more" aria-label="更多操作" aria-haspopup="menu" aria-controls="rmt-toolbar-more-menu" aria-expanded="false">${toolbarIcons.toolbarIcon('more')}</button>
+              <div id="rmt-toolbar-more-menu" class="rmt-toolbar-more-menu" data-rmt-toolbar-more-menu role="menu" aria-label="更多操作" hidden>
+<button type="button" data-reader="page" role="menuitem">朗读本页</button><button type="button" data-reader="selection" role="menuitem">朗读选中文字</button><button type="button" data-reader="stop" role="menuitem">停止朗读</button><button type="button" data-rmt-workspace-route="mirrorVoice" role="menuitem">镜译 · 语音设置</button>
+                <button type="button" data-rmt-action="workspace-expand" role="menuitem">${toolbarIcons.toolbarIcon('expand')}<span>展开窗口</span></button>
+                <button type="button" data-rmt-action="regenerate" data-rmt-toolbar-more-item="regenerate" role="menuitem" hidden>${toolbarIcons.toolbarIcon('add')}<span>增量追加</span></button>
+                <button type="button" data-rmt-action="manage" data-rmt-toolbar-more-item="manage" role="menuitem" hidden>${toolbarIcons.toolbarIcon('manage')}<span>管理</span></button>
+              </div>
+              <button type="button" data-rmt-action="close" aria-label="关闭档案室">${toolbarIcons.toolbarIcon('close')}</button>
             </div>
             ${workspace_ui.workspaceNavHtml()}
+            <div class="rmt-task-center" data-rmt-task-center hidden></div>
             <div class="rmt-body"></div>
           </div>`;
         document.body.appendChild(overlay);
@@ -185,21 +237,35 @@ export function openOverlay() {
             });
         }
     }
+    ui_taskCenter.ensureTaskCenterChrome(overlay);
     applyArchiveMobileSafeArea(overlay);
     try { core_theme.applyThemeToElement(overlay, core_settings.getPluginSettings(core_context.getContext())); } catch {}
+    ui_taskCenter.syncTaskCenterChrome();
     bindOverlayCloseFallback(overlay);
+    bindToolbarMoreMenu(overlay);
     revealArchiveOverlay(overlay);
     workspace_ui.syncWorkspaceChrome();
+    mirror_reader.mountMirrorReader(overlay);
+
     return overlay;
 }
 
-export function closeOverlay() {
+export function closeOverlay(options = {}) {
+    archive_inheritance_view.clearArchiveInheritancePreview();
+    mirror_reader.disposeMirrorReader();
+    mirror_call.disposeMirrorCall();
+    const remember = options.remember !== false;
     participant_picker.closeParticipantPicker();
     image_viewer.closeCgImageViewer({ restoreFocus: false });
     const overlay = document.getElementById(core_constants.OVERLAY_ID);
+    closeToolbarMoreMenu(overlay);
+    const focused = document.activeElement;
+    if (focused && overlay?.contains?.(focused)) {
+        try { focused.blur(); } catch {}
+    }
     // Mobile close gestures can deliver both an early event and a click. Only
     // the first close records the page; later events must not replace it.
-    if (overlay && !overlay.hidden) {
+    if (remember && overlay && !overlay.hidden) {
         floating_archive.rememberFloatingArchive();
         navigation_bookmark.rememberReadingPosition();
     }
@@ -207,6 +273,7 @@ export function closeOverlay() {
     cg_editor.closeCgPromptEditor({ restoreFocus: false });
     modes_room.stopRoomClock();
     ui_phoneView.stopPhoneClock();
+    ui_taskCenter.hideTaskCenter();
     ui_endingView.closeEndingEasterEgg({ restoreFocus: false });
     if (overlay) {
         if (typeof globalThis.HTMLDialogElement === 'function' && overlay instanceof globalThis.HTMLDialogElement && overlay.open) {
@@ -220,6 +287,25 @@ export function closeOverlay() {
     runtimeState.activeSession = null;
     runtimeState.contentManagerOpen = false;
     floating_archive.refreshFloatingArchive();
+}
+
+export function invalidateArchiveViewForChatNavigation(nextChatId = '') {
+    const snapshot = runtimeState.activeArchiveSnapshot;
+    const snapshotChat = snapshot ? core_context.comparableChatId(snapshot.chatId) : '';
+    const next = core_context.comparableChatId(nextChatId);
+    closeOverlay({ remember: false });
+    if (!snapshot || snapshotChat !== next) {
+        runtimeState.activeArchiveSnapshot = null;
+        runtimeState.activeArchiveReadOnly = true;
+    }
+    runtimeState.archiveViewLevel = 'chooser';
+    runtimeState.renderedChatScope = '';
+    runtimeState.pendingArchiveEntry = 'chooser';
+    runtimeState.contentManagerOpen = false;
+    if (runtimeState.chooserRefreshTimer) {
+        clearTimeout(runtimeState.chooserRefreshTimer);
+        runtimeState.chooserRefreshTimer = 0;
+    }
 }
 
 export function bodyEl() {
@@ -236,13 +322,14 @@ export function setBackVisible(visible, label = '返回上级') {
     const button = document.querySelector(`#${core_constants.OVERLAY_ID} [data-rmt-action="back"]`);
     if (!button) return;
     button.hidden = !visible;
-    button.textContent = '‹';
+    button.innerHTML = toolbarIcons.toolbarIcon('back');
     button.title = label;
     button.setAttribute('aria-label', label);
 }
 
 export function navigateBack() {
     if (image_viewer.closeCgImageViewer()) return;
+    if (runtimeState.activeMode === 'bedtime' && bedtime_view.closeBedtimeDetail()) return;
     if (runtimeState.activeMode === 'pastLives' && past_lives_view.closePastLivesDetail()) return;
     if (time_stories.isTimeStoryMode(runtimeState.activeMode) && time_stories_view.closeTimeStoryDetail()) return;
     if (runtimeState.activeMode === core_constants.MODE.TIME_ECHO) return openCachedOrGenerate(core_constants.MODE.PHONE);
@@ -280,15 +367,19 @@ export function navigateBack() {
 export function setManageVisible(visible) {
     const button = document.querySelector(`#${core_constants.OVERLAY_ID} [data-rmt-action="manage"]`);
     if (button) button.hidden = !visible;
+    const menuButton = document.querySelector(`#${core_constants.OVERLAY_ID} [data-rmt-toolbar-more-item="manage"]`);
+    if (menuButton) menuButton.hidden = !visible;
 }
 
 export function setRegenerateVisible(visible) {
     const button = document.querySelector(`#${core_constants.OVERLAY_ID} [data-rmt-action="regenerate"]`);
     if (button) {
         button.hidden = !visible;
-        button.textContent = '＋';
+        button.innerHTML = toolbarIcons.toolbarIcon('add');
         button.setAttribute('aria-label', '增量追加');
     }
+    const menuButton = document.querySelector(`#${core_constants.OVERLAY_ID} [data-rmt-toolbar-more-item="regenerate"]`);
+    if (menuButton) menuButton.hidden = !visible;
 }
 
 export function confirmExplicitAction(title, detail, { destructive = false, unavailableFallback = false } = {}) {
@@ -448,7 +539,7 @@ export function participantRegenerationScopes() {
         ['language', '基础语言'], ['spring', '春'], ['summer', '夏'], ['autumn', '秋'], ['winter', '冬'],
         ['strips', '日常一格'], ['fireflies', '萤火虫栖息地'], ['postending', '未来／后日谈'],
         ['ending', 'ENDING'], ['calendar', '两个人的日历'], ['relations', '人际庭园'],
-        ['achievements', '成就库'], ['butterfly', '蝴蝶效应'], ['pastLives', '前世今生'], ['timeEcho', '时空回响'],
+        ['achievements', '成就库'], ['butterfly', '蝴蝶效应'], ['pastLives', '前世今生'], ['timeEcho', '时空回响'], ['bedtime', '睡前故事'],
     ].map(([id, label]) => ({ id, label }));
 }
 
@@ -634,6 +725,33 @@ export function readableModePortals(portals, options = {}) {
     return portals.map(portal => ({ ...portal, session: core_cache.loadSession(portal.mode, { ...options, includePartial: true }) || portal.session }));
 }
 
+function memoryLockPanelHtml(memory, { readOnly = false } = {}) {
+    const hot = Array.isArray(memory?.memories) ? memory.memories : [];
+    if (!hot.length) return '';
+    const cold = Array.isArray(memory?.coldArchive) ? memory.coldArchive.length : 0;
+    const rows = hot.map(item => `<div class="rmt-memory-lock-row" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:6px 0">
+      <button type="button" class="rmt-btn" data-rmt-memory-lock="${core_text.esc(item.id)}" ${readOnly ? 'disabled' : ''} aria-pressed="${item.locked === true}">${item.locked === true ? '已锁定' : '锁定'}</button>
+      <b>${core_text.esc(item.id)}</b>
+      <span>${core_text.esc(item.title || '')}</span>
+      <input type="text" data-rmt-memory-date="${core_text.esc(item.id)}" value="${core_text.esc(item.date || '')}" ${readOnly ? 'disabled' : ''} placeholder="公历 YYYY/MM/DD 或历年" style="min-width:160px;flex:1">
+    </div>`).join('');
+    return `<details class="rmt-memory-lock-panel"><summary>热位记忆 ${hot.length}/${core_constants.MAX_MEMORY_ITEMS}${cold ? ` · 冷归档 ${cold}` : ''}</summary><div style="max-height:240px;overflow:auto">${rows}</div></details>`;
+}
+
+function refreshAfterMemoryPatch() {
+    if (runtimeState.activeMode === core_constants.MODE.ALBUM) return ui_albumView.renderAlbum();
+    if (runtimeState.archiveViewLevel === 'chooser' && !runtimeState.activeMode) return showChooser();
+}
+
+async function applyMemoryPatch(id, patch) {
+    try {
+        await archive_repository.patchImportedMemoryFields(id, patch);
+        refreshAfterMemoryPatch();
+    } catch (error) {
+        globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊');
+    }
+}
+
 export function showChooser({ section = null } = {}) {
     const priorTab = ui_workspaceState.workspace.tab;
     ui_workspaceState.leaveWorkspaceReader();
@@ -713,8 +831,7 @@ export function showChooser({ section = null } = {}) {
         partial: !!calendarPortal.session?.readableProgress, readOnly: false });
     const concurrentLabels = core_requestCoordinator.generationTaskLabels();
     const anyRunning = runtimeState.busy || concurrentLabels.length > 0;
-    topTitle(anyRunning ? `心迹回廊 · 档案室 · ${runtimeState.busy ? '档案整理中' : `${concurrentLabels.length}项生成中`}` : `心迹回廊 · 档案室${ready ? ` · ${archiveName}` : ''}`);
-    const busyBanner = anyRunning ? `<div class="rmt-task-banner"><span class="rmt-task-dot"></span><div><b>${runtimeState.busy ? '档案整理进行中' : `${concurrentLabels.length} 项后台生成中`}</b><small>${core_text.esc(runtimeState.busy ? (runtimeState.activeTaskLabel || '正在整理聊天档案…') : concurrentLabels.join(' · '))}</small></div></div>` : '';
+    topTitle(`心迹回廊 · 档案室${ready ? ` · ${archiveName}` : ''}`);
     const portalHtml = portals.filter(item => item.mode !== core_constants.MODE.CALENDAR).map(({ mode, session, meta }) => {
         const generated = !!session;
         const generating = core_requestCoordinator.isModeGenerating(mode);
@@ -766,12 +883,10 @@ export function showChooser({ section = null } = {}) {
 
     body.innerHTML = `
       <div class="rmt-archive-room">
-        ${busyBanner}
         <div data-rmt-archive-recoveries aria-live="polite">
         <div data-rmt-archive-recoveries>${recovery_view.archiveRecoveryHtml(archive_repository.getCurrentArchiveImportRecoverySummary(context))}
         ${recovery_view.archiveRecoveryHtml(archive_repository.getCurrentArchiveProfileRecoverySummary(context), { profile: true })}</div>
         </div>
-        <div data-rmt-generation-recoveries>${ready ? recovery_view.recoveryBannerHtml(core_cache.getCache(context), memory) : ''}</div>
         <div data-rmt-calendar-quick>${calendarQuick}</div>
         <section class="rmt-memory-gate rmt-archive-card">
           <div class="rmt-memory-gate-text">
@@ -781,6 +896,7 @@ export function showChooser({ section = null } = {}) {
             ${keywords.length ? `<div class="rmt-archive-keywords">${keywords.map(word => `<span>${core_text.esc(word)}</span>`).join('')}</div>` : ''}
             <div class="rmt-memory-status ${pendingClass}">${core_text.esc(archive_snapshots.memoryStateLabel(state, settings.autoUpdates?.archive?.enabled))}</div>
             ${ready ? `<div class="rmt-archive-meta">上次归档：${core_text.esc(formatArchiveTime(memory.updatedAt || memory.createdAt))}</div>` : ''}
+            ${ready ? memoryLockPanelHtml(memory) : ''}
           </div>
           <div class="rmt-current-archive-actions">
             <button type="button" class="rmt-btn" data-rmt-archive-read-drafts>读取已保存草稿（不生成）</button>
@@ -826,11 +942,8 @@ export function showMemoryImportError(message) {
 }
 
 export function updateBackgroundTaskLabel(text) {
-    const label = core_text.normalizeText(text, 240);
-    const title = document.querySelector(`#${core_constants.OVERLAY_ID} .rmt-topbar-title`);
-    if (title && !runtimeState.activeMode) title.textContent = '心迹回廊 · 档案室 · 后台整理中';
-    const banner = document.querySelector(`#${core_constants.OVERLAY_ID} .rmt-task-banner small`);
-    if (banner) banner.textContent = `${label} · 可以关闭档案室继续聊天。`;
+    runtimeState.activeTaskLabel = core_text.normalizeText(text, 240) || runtimeState.activeTaskLabel;
+    ui_taskCenter.syncLiveTaskStrip();
 }
 
 export function setBusyUi(isBusy, text = '') {
@@ -846,10 +959,8 @@ export function setBusyUi(isBusy, text = '') {
         '[data-rmt-action="read-memory-plugins"]',
     ].join(',');
     document.querySelectorAll(requestSelectors).forEach(el => { el.disabled = !!isBusy; });
-    if (isBusy && text) {
-        const title = document.querySelector(`#${core_constants.OVERLAY_ID} .rmt-topbar-title`);
-        if (title && !runtimeState.activeMode) title.textContent = '心迹回廊 · 档案室 · 后台生成中';
-    }
+    if (isBusy && text) runtimeState.activeTaskLabel = core_text.normalizeText(text, 240) || runtimeState.activeTaskLabel;
+    ui_taskCenter.syncLiveTaskStrip();
     ui_settingsPanel.refreshSettingsMemoryStatus();
 }
 
@@ -886,15 +997,34 @@ export function showInlineError(message) {
         detail.prepend(box);
     }
     box.textContent = message;
-    if (runtimeState.activeMode) {
-        const context = core_context.getContext();
-        const snapshot = runtimeState.activeArchiveSnapshot;
-        const bank = snapshot?.memory || archive_repository.getImportedMemory(context);
-        const all = snapshot?.cache || core_cache.getCache(context);
-        const host = document.createElement('div');
-        host.innerHTML = recovery_view.recoveryBannerHtml({ ...all, __generationRecoveryV1: { [runtimeState.activeMode]: all?.__generationRecoveryV1?.[runtimeState.activeMode] } }, bank, { readOnly: snapshot?.backupOnly });
-        box.appendChild(host);
+    refreshVisibleRecoveryHost();
+}
+
+export function showInlinePreflight(summary, detailText, { error = false } = {}) {
+    const detail = document.querySelector(`#${core_constants.OVERLAY_ID} .rmt-event-detail`) || bodyEl();
+    if (!detail) return;
+    let box = detail.querySelector('.rmt-inline-preflight');
+    if (!box) {
+        box = document.createElement('div');
+        box.className = 'rmt-inline-preflight';
+        detail.prepend(box);
     }
+    box.classList.toggle('rmt-inline-error', error === true);
+    box.replaceChildren();
+    const details = document.createElement('details');
+    details.open = error === true;
+    const summaryEl = document.createElement('summary');
+    summaryEl.textContent = summary;
+    const body = document.createElement('pre');
+    body.textContent = detailText || '';
+    details.append(summaryEl, body);
+    box.append(details);
+}
+
+function refreshVisibleRecoveryHost() {
+    // Unfinished generation drafts are handled in the task center. Leaving the
+    // banner in the reader made the same retry card appear twice.
+    document.querySelectorAll(`#${core_constants.OVERLAY_ID} [data-rmt-generation-recoveries]`).forEach(node => node.remove());
 }
 
 function emptyArchiveMode(mode, memory, context, stored) {
@@ -903,6 +1033,7 @@ function emptyArchiveMode(mode, memory, context, stored) {
     // Opening an empty reader is free. An unreadable existing record is not an
     // empty reader and never grants permission to overwrite saved material.
     if (stored?.[mode]) return null;
+    if (mode === 'bedtime') return bedtime_contract.emptyBedtime(memory, context ? core_context.currentCharacterRuntimeKey(context) : '');
     if (mode === core_constants.MODE.THEME_SONG) return song_contract.emptyThemeSongs(memory, context ? core_context.currentCharacterRuntimeKey(context) : '');
     if (mode === core_constants.MODE.HEART) return modes_heart.makeHeartShell(memory);
     if (time_stories.isTimeStoryMode(mode)) return modes_timeStories.emptyTimeStories(mode, memory, context);
@@ -912,6 +1043,8 @@ function emptyArchiveMode(mode, memory, context, stored) {
 
 let heartOpenRequest = 0;
 export function openCachedOrGenerate(mode, options = {}) {
+    if (mode === 'journal') return handJournal.openHandJournal();
+    if (['mirrorCall','mirrorVoice'].includes(mode)) return workspace_ui.openVoiceModule(mode);
     if (!Object.values(core_constants.MODE).includes(mode)) return;
     heart_reader.rememberHeartReader();
     const openRequest = ++heartOpenRequest;
@@ -1149,19 +1282,54 @@ export async function saveActiveSessionEdit(mutator, { select = value => value }
     return committed;
 }
 
+// Refresh only the live saved reader. Drafts and historical views own separate data.
+export function refreshSavedActiveSession() {
+    if (runtimeState.activeArchiveSnapshot || !runtimeState.activeSession || !runtimeState.activeMode
+        || (runtimeState.activeSession.readableProgress && runtimeState.activeSession.readableProgress.complete !== true) || runtimeState.contentManagerOpen) return false;
+    const body = bodyEl();
+    if (!body || body.querySelector('[data-rmt-cg-editor]')) return false;
+    // Never replace an in-progress form edit in order to show a background result.
+    if (body.contains(document.activeElement) && document.activeElement?.matches?.('input,textarea,select,[contenteditable=true]')) return false;
+    const context = core_context.currentCharacterGuard();
+    const memory = archive_repository.getImportedMemory(context);
+    const next = core_cache.loadSession(runtimeState.activeMode, { context, memoryBank: memory, clone: true });
+    if (!next) return false;
+    const position = navigation_bookmark.readingPosition(runtimeState.activeSession);
+    const scroll = body.scrollTop;
+    const controls = [...body.querySelectorAll('input,textarea,select')].map(el => ({
+        id: el.id, name: el.name, type: el.type, value: el.value, checked: el.checked,
+    })).filter(el => el.id || el.name);
+    runtimeState.activeSession = Object.assign(next, position);
+    renderActive();
+    for (const saved of controls) {
+        const control = [...body.querySelectorAll('input,textarea,select')].find(el => saved.id ? el.id === saved.id : el.name === saved.name && el.type === saved.type);
+        if (control) { control.value = saved.value; if ('checked' in control) control.checked = saved.checked; }
+    }
+    body.scrollTop = scroll;
+    return true;
+}
+
 export function renderActive() {
+    const overlay = document.getElementById(core_constants.OVERLAY_ID);
+    if (!overlay || overlay.hidden) return;
+    try {
+        const scope = core_context.chatScopeKey(core_context.currentCharacterGuard());
+        if (runtimeState.renderedChatScope && runtimeState.renderedChatScope !== scope) return;
+    } catch { return; }
+    if (['mirrorCall', 'mirrorVoice', 'journal'].includes(runtimeState.activeMode)) return;
     if (workspace_ui.renderEmptyWorkspace()) return;
     image_viewer.closeCgImageViewer({ restoreFocus: false });
     runtimeState.contentManagerOpen = false;
     if (runtimeState.activeMode !== core_constants.MODE.ENDING) ui_endingView.closeEndingEasterEgg({ restoreFocus: false });
     if (!runtimeState.activeSession || !runtimeState.activeMode) return runtimeState.activeArchiveSnapshot ? archive_library.showIndexedArchiveSnapshot(runtimeState.activeArchiveSnapshot) : showChooser();
-    const supportsTopbarIncrement = !time_stories.isTimeStoryMode(runtimeState.activeMode) && ![core_constants.MODE.INBOX, core_constants.MODE.HEART, core_constants.MODE.THEME_SONG, 'pastLives'].includes(runtimeState.activeMode) && (!core_constants.ROOM_DEEP_MODES.includes(runtimeState.activeMode) || runtimeState.activeMode === core_constants.MODE.PHONE);
+    const supportsTopbarIncrement = !time_stories.isTimeStoryMode(runtimeState.activeMode) && ![core_constants.MODE.INBOX, core_constants.MODE.HEART, core_constants.MODE.THEME_SONG, 'pastLives', 'bedtime'].includes(runtimeState.activeMode) && (!core_constants.ROOM_DEEP_MODES.includes(runtimeState.activeMode) || runtimeState.activeMode === core_constants.MODE.PHONE);
     setRegenerateVisible((!runtimeState.activeArchiveSnapshot || !runtimeState.activeArchiveReadOnly) && supportsTopbarIncrement);
-    setManageVisible(!(runtimeState.activeMode === core_constants.MODE.HEART && ui_workspaceState.workspace.route === 'language') && (!runtimeState.activeArchiveSnapshot || !runtimeState.activeArchiveReadOnly) && !time_stories.isTimeStoryMode(runtimeState.activeMode) && ![core_constants.MODE.RELATIONS, core_constants.MODE.INBOX, core_constants.MODE.THEME_SONG, 'pastLives'].includes(runtimeState.activeMode));
+    setManageVisible(!(runtimeState.activeMode === core_constants.MODE.HEART && ui_workspaceState.workspace.route === 'language') && (!runtimeState.activeArchiveSnapshot || !runtimeState.activeArchiveReadOnly) && !time_stories.isTimeStoryMode(runtimeState.activeMode) && ![core_constants.MODE.RELATIONS, core_constants.MODE.INBOX, core_constants.MODE.THEME_SONG, 'pastLives', 'bedtime'].includes(runtimeState.activeMode));
     setBackVisible(true, runtimeState.activeArchiveSnapshot ? (runtimeState.activeArchiveReadOnly ? '只读档案' : '档案') : core_constants.ROOM_DEEP_MODES.includes(runtimeState.activeMode) ? '他的房间' : '当前档案');
     if (runtimeState.activeMode !== core_constants.MODE.ROOM) modes_room.stopRoomClock();
     if (runtimeState.activeMode !== core_constants.MODE.PHONE) ui_phoneView.stopPhoneClock();
-    if (runtimeState.activeMode === core_constants.MODE.BUTTERFLY) ui_butterflyView.renderButterfly();
+    if (runtimeState.activeMode === 'bedtime') bedtime_view.renderBedtime();
+    else if (runtimeState.activeMode === core_constants.MODE.BUTTERFLY) ui_butterflyView.renderButterfly();
     else if (runtimeState.activeMode === core_constants.MODE.ALBUM) ui_albumView.renderAlbum();
     else if (runtimeState.activeMode === core_constants.MODE.ADV) ui_advEventView.renderAdvMode();
     else if (runtimeState.activeMode === core_constants.MODE.ROOM) modes_room.renderRoom();
@@ -1185,6 +1353,13 @@ export function renderActive() {
         note.setAttribute('role', 'status');
         note.innerHTML = `<b>已生成部分内容 · 本次任务尚未完成</b><p>这里显示已收到的内容。后续失败或关闭页面，不会清除已保存部分；继续生成只补未完成部分。</p>${!runtimeState.activeArchiveSnapshot ? '<button type="button" class="rmt-btn" data-rmt-edit-partial>编辑已生成内容</button>' : ''}`;
         bodyEl().prepend(note);
+    }
+    const pageStatus = generation_status_view.routeGenerationStatus(ui_workspaceState.workspace.route || runtimeState.activeMode, runtimeState.activeMode, runtimeState.activeSession, { snapshot: runtimeState.activeArchiveSnapshot });
+    if (['unsaved', 'failed', 'retry'].includes(pageStatus.state) && bodyEl() && !bodyEl().querySelector('.rmt-generation-completion,.rmt-recovery-status')) {
+        const statusNote = document.createElement('section');
+        statusNote.className = 'rmt-generation-completion';
+        statusNote.innerHTML = `<h3>生成与补全</h3><p role="status">${core_text.esc(pageStatus.label)}</p>${!runtimeState.activeArchiveSnapshot ? '<button type="button" class="rmt-btn" data-rmt-action="tasks">打开任务中心</button>' : ''}`;
+        bodyEl().prepend(statusNote);
     }
     cg_format_ui.mountCgFormatControl(bodyEl(), runtimeState.activeMode, ui_workspaceState.workspace.route, !!runtimeState.activeArchiveSnapshot && runtimeState.activeArchiveReadOnly);
     decorateReadOnlyModeUi();
@@ -1460,6 +1635,18 @@ async function regenerateManagedCategory() {
 }
 
 export function handleOverlayClick(event) {
+    if (event.target.closest?.('[data-rmt-cg-history-step]')) { event.preventDefault(); event.stopPropagation(); return void generation_imageGeneration.handleCgHistorySwitch(event); }
+    const moreTrigger = event.target.closest?.('[data-rmt-action="toolbar-more"]');
+    const overlay = event.currentTarget?.querySelector ? event.currentTarget : document.getElementById(core_constants.OVERLAY_ID);
+    if (moreTrigger) return toggleToolbarMoreMenu(overlay);
+    const moreMenu = toolbarMoreMenu(overlay);
+    if (!moreMenu?.hidden && !event.target.closest?.('[data-rmt-toolbar-more-menu]')) closeToolbarMoreMenu(overlay);
+    else if (!moreMenu?.hidden && event.target.closest?.('[data-rmt-toolbar-more-menu] [data-rmt-action],[data-rmt-toolbar-more-menu] [data-reader],[data-rmt-toolbar-more-menu] [data-rmt-workspace-route]')) closeToolbarMoreMenu(overlay);
+    const lockBtn = event.target.closest?.('[data-rmt-memory-lock]');
+    if (lockBtn) {
+        const pressed = lockBtn.getAttribute('aria-pressed') === 'true';
+        return void applyMemoryPatch(lockBtn.dataset.rmtMemoryLock, { locked: !pressed });
+    }
     if (workspace_ui.handleWorkspaceClick(event) || language_view.handleLanguageClick(event)) return;
     if (event.target.closest?.('[data-rmt-edit-partial]')) return ui_contentManager.renderPartialContentEditor();
     const contentDraftOpen = event.target.closest?.('[data-rmt-content-draft-open]');
@@ -1562,13 +1749,30 @@ export function handleOverlayClick(event) {
     if (archiveRecoveryButton) return void (archiveRecoveryButton.dataset.rmtArchiveRecovery === 'profile'
         ? archive_repository.rewriteCurrentArchiveVerdict({ draftId: archiveRecoveryButton.dataset.rmtArchiveRecoveryDraftId || '' })
         : archive_repository.continueCurrentArchiveImport({ draftId: archiveRecoveryButton.dataset.rmtArchiveRecoveryDraftId || '' })).catch(error => globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊'));
+    const expandedCgButton = event.target.closest?.('[data-rmt-expanded-cg]');
+    if (expandedCgButton) return void expanded_cg_view.handleExpandedCgButton(expandedCgButton);
+    const bedtimeButton = event.target.closest?.('[data-rmt-bedtime]');
+    if (bedtimeButton && !bedtimeButton.disabled) return void bedtime_view.handleBedtimeAction(bedtimeButton.dataset.rmtBedtime, bedtimeButton.dataset.rmtBedtimeId || '');
     const songButton = event.target.closest?.('[data-rmt-song]');
     if (songButton) return void song_view.handleThemeSongAction(songButton.dataset.rmtSong, songButton.dataset.rmtSongId);
     const mailButton = event.target.closest?.('[data-rmt-inbox]');
     if (mailButton) return void ui_inboxView.handleInboxAction(mailButton.dataset.rmtInbox, mailButton.dataset.rmtInboxId);
+    const queuePick = event.target.closest?.('.rmt-queue-pick');
+    if (queuePick) {
+        const input = queuePick.querySelector('[data-rmt-queue-route]');
+        queueMicrotask(() => {
+            if (input) ui_taskCenter.setQueuePick(input.dataset.rmtQueueRoute, input.checked);
+        });
+        return;
+    }
     const generateModeButton = event.target.closest?.('[data-rmt-generate-mode]');
     if (generateModeButton) {
         const mode = generateModeButton.dataset.rmtGenerateMode;
+        const completion = generateModeButton.dataset.rmtCompletion;
+        const completionOptions = completion === 'album-comments' && mode === core_constants.MODE.ALBUM
+            || completion === 'ending-scenes' && mode === core_constants.MODE.ENDING ? { secondStep: true }
+            : completion === 'room-lines' && mode === core_constants.MODE.ROOM ? { fillRoomText: true }
+                : completion === 'items-lines' && mode === core_constants.MODE.ITEMS ? { fillItemsText: true } : {};
         const background = !time_stories.isTimeStoryMode(mode) && generateModeButton.dataset.rmtReaderGeneration !== 'true';
         if (runtimeState.activeArchiveSnapshot) {
             if (runtimeState.activeArchiveSnapshot.backupOnly) {
@@ -1580,16 +1784,16 @@ export function handleOverlayClick(event) {
             void (async () => {
                 try {
                     const targetOptions = archive_library.archiveTargetGenerationOptions(snapshot);
-                    await generation_client.generateMode(mode, { background, ...targetOptions });
+                    await generation_client.generateMode(mode, { workspaceRoute: ui_workspaceState.workspace.route || mode, background, ...targetOptions, ...completionOptions });
                 } catch (error) {
-                    globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊');
+                    if (!error?.notified) globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊');
                 }
             })();
             return;
         }
         if (!archive_library.requireWritableArchiveAction()) return;
         if (generateModeButton.dataset.rmtRegenerate === 'true' && !confirmModeRegeneration(mode)) return;
-        void generation_client.generateMode(mode, { background });
+        void generation_client.generateMode(mode, { workspaceRoute: ui_workspaceState.workspace.route || mode, background, ...completionOptions });
         return;
     }
     const modeButton = event.target.closest?.('[data-rmt-mode]');
@@ -1687,6 +1891,32 @@ export function handleOverlayClick(event) {
     const actionEl = event.target.closest?.('[data-rmt-action]');
     const action = actionEl?.dataset?.rmtAction;
     if (!action) return;
+    if (!action.startsWith('archive-inheritance-')) archive_inheritance_view.clearArchiveInheritancePreview();
+    if (action === 'archive-inheritance-open') {
+        archive_inheritance_view.clearArchiveInheritancePreview();
+        if (bodyEl()) bodyEl().innerHTML = archive_inheritance_view.archiveInheritancePickerHtml();
+        return;
+    }
+    if (action === 'archive-inheritance-preview' || action === 'archive-inheritance-confirm') {
+        return void (async () => {
+        const targetBody = bodyEl(), epoch = ui_workspaceState.workspace.epoch;
+        const scope = core_context.chatScopeKey(core_context.getContext());
+        const stillHere = () => targetBody?.isConnected && bodyEl() === targetBody && ui_workspaceState.workspace.epoch === epoch
+            && core_context.chatScopeKey(core_context.getContext()) === scope && actionEl.isConnected;
+        actionEl.disabled = true;
+        try {
+            if (action === 'archive-inheritance-preview') {
+                const preview = await archive_inheritance_view.prepareArchiveInheritancePreview(actionEl.dataset.rmtInheritanceEntry);
+                if (stillHere()) targetBody.innerHTML = archive_inheritance_view.archiveInheritancePreviewHtml(preview);
+                else archive_inheritance_view.clearArchiveInheritancePreview();
+            } else {
+                await archive_inheritance_view.commitArchiveInheritance();
+                if (stillHere()) showChooser();
+            }
+        } catch (error) { globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心迹回廊'); }
+        finally { if (actionEl.isConnected) actionEl.disabled = false; }
+        })();
+    }
     if (action === 'rewrite-archive-verdict') {
         if (runtimeState.activeArchiveSnapshot && !archive_library.requireWritableArchiveAction()) return;
         if (!confirmExplicitAction('重写这份档案的简介？', '只读取已归档经历，使用当前独立 API；记忆和其他已生成内容保持不变。')) return;
@@ -1701,6 +1931,9 @@ export function handleOverlayClick(event) {
     if (action === 'travel-dialogue-prev') return ui_travelView.travelDialogueStep(-1);
     if (action === 'travel-dialogue-next') return ui_travelView.travelDialogueStep(1);
     if (action === 'travel-dialogue-replay') return ui_travelView.replayTravelDialogue();
+    if (action === 'tasks' || action === 'task-center-close' || action === 'task-cancel' || action === 'task-cancel-current' || action === 'task-open' || action === 'task-second-step' || action === 'task-queue-remove' || action === 'task-clear-done' || action === 'queue-selected' || action === 'generate-together' || action === 'merged-repair' || action === 'merged-resave') {
+        return ui_taskCenter.handleTaskCenterAction(action, actionEl);
+    }
     if (action === 'close') return closeArchiveOverlayFromUser();
     if (action === 'home') {
         if (runtimeState.busy) runtimeState.activeTaskBackgrounded = true;
@@ -1724,7 +1957,7 @@ export function handleOverlayClick(event) {
     if (action === 'heart-generate-language') return void modes_heart.generateHeartSection('dialogues', {
         replaceDialogues: actionEl.dataset.rmtHeartLanguageReplace === '1',
     });
-    if (action === 'heart-generate-season') return void modes_heart.generateHeartSeasonSection(actionEl.dataset.rmtHeartSeasonTarget || 'postending');
+    if (action === 'heart-generate-season') return void modes_heart.generateHeartSeasonSection(actionEl.dataset.rmtHeartSeasonTarget || 'postending', { secondStep: actionEl.dataset.rmtHeartSecondStep === 'true' });
     if (action === 'heart-drama-prev') return ui_heartView.heartStepDrama(-1);
     if (action === 'heart-drama-next') return ui_heartView.heartStepDrama(1);
     if (action === 'heart-firefly-prev') return ui_heartView.heartStepFireflyPage(-1);
@@ -1760,7 +1993,9 @@ export function handleOverlayClick(event) {
         if (!archive_library.requireWritableArchiveAction()) return;
         const mode = action === 'phone-fill-missing' ? core_constants.MODE.PHONE : core_constants.MODE.ROOM;
         const extra = runtimeState.activeArchiveSnapshot ? archive_library.archiveTargetGenerationOptions(runtimeState.activeArchiveSnapshot) : {};
-        return void generation_client.generateMode(mode, { ...extra, background: false, fillMissing: action === 'phone-fill-missing', visualOnly: action === 'room-refresh-figure' }).catch(error => globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊'));
+        return void generation_client.generateMode(mode, { ...extra, background: false, fillMissing: action === 'phone-fill-missing', visualOnly: action === 'room-refresh-figure' }).catch(error => {
+            if (!error?.notified) globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊');
+        });
     }
     if (action === 'memory-worldinfo-picker') return void archive_repository.showMemoryWorldInfoPicker();
     if (action === 'memory-worldinfo-close') {
@@ -1789,6 +2024,12 @@ export function handleOverlayClick(event) {
             archive_library.showArchiveCharacter(groupId);
         }).catch(error => globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心迹回廊 · Character Profile'));
         return;
+    }
+    if (action === 'relation-owner-select') {
+        if (runtimeState.activeMode !== core_constants.MODE.RELATIONS) return;
+        runtimeState.relationSelectedOwner = actionEl.dataset.rmtRelationOwner || '';
+        runtimeState.relationSelectedKey = '';
+        return modes_relations.renderRelations();
     }
     if (action === 'relation-select') {
         const key = core_text.normalizeText(actionEl.dataset.rmtRelationKey, 160);
@@ -1977,6 +2218,8 @@ function refreshMemoryWorldInfoBookControls(context, world, section, expectedSco
 }
 
 export async function handleOverlayChange(event) {
+    const dateInput = event.target.closest?.('[data-rmt-memory-date]');
+    if (dateInput) return void applyMemoryPatch(dateInput.dataset.rmtMemoryDate, { date: dateInput.value });
     if (cg_format_ui.handleCgFormatChange(event)) return;
     if (workspace_ui.handleWorkspaceChange(event) || language_view.handleLanguageChange(event)) return;
     const advSelectEl = event.target.closest?.('[data-rmt-adv-select]');

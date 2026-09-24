@@ -24,8 +24,15 @@ const DIRECT_TEXT = /^(?:我|我们|咱们|你|您|那你|那我|要不|别|嗯|
 
 // One pure boundary for generated scripts and legacy display. No cache mutation,
 // host access or provider calls. Unknown attribution remains neutral.
-export function normalizeDialogueRows(raw, { characterName = '', userName = '', strict = false } = {}) {
-    const identities = [[core_text.normalizeText(characterName, 120), 'char'], [core_text.normalizeText(userName, 120), 'user'], ['{{char}}', 'char'], ['{{user}}', 'user']].filter(([name]) => name);
+export function normalizeDialogueRows(raw, { characterName = '', userName = '', userAliases = [], characterAliases = [], strict = false } = {}) {
+    const identities = [
+        ...(Array.isArray(characterAliases) ? characterAliases : []).map(name => [core_text.normalizeText(name, 120), 'char']),
+        ...(Array.isArray(userAliases) ? userAliases : []).map(name => [core_text.normalizeText(name, 120), 'user']),
+        [core_text.normalizeText(characterName, 120), 'char'],
+        [core_text.normalizeText(userName, 120), 'user'],
+        ['{{char}}', 'char'],
+        ['{{user}}', 'user'],
+    ].filter(([name]) => name);
     const inputs = Array.isArray(raw) ? raw : [];
     const overBudget = () => {
         if (strict) throw new Error('对话拆分后超过 120 行或 50400 字符，请减少脚本长度后重新生成。');
@@ -42,7 +49,7 @@ export function normalizeDialogueRows(raw, { characterName = '', userName = '', 
         if (rows.length >= 120 || chars > 50400) { overflow = true; return; }
         // Preserve the resolved local identity across normalize -> save -> render.
         // Otherwise a stripped name label could be re-attributed on the second pass.
-        const localName = speaker === 'char' ? core_text.normalizeText(characterName, 120) : speaker === 'user'
+        const localName = speaker === 'char' ? (namedOwner(speakerName) === 'char' ? core_text.normalizeText(speakerName, 120) : core_text.normalizeText(characterName, 120)) : speaker === 'user'
             ? core_text.normalizeText(userName, 120) : '';
         const resolvedName = localName && namedOwner(localName) === speaker ? localName : '';
         rows.push({ speaker, text, ...(unresolvedSpeaker ? { unresolvedSpeaker: true } : {}), ...(speaker === 'npc' ? { speakerName }
@@ -125,6 +132,7 @@ export function normalizeDialogueRows(raw, { characterName = '', userName = '', 
         } else if (nameOwner) speaker = nameOwner;
         else if (npcName && speaker !== 'npc') speaker = 'narrator';
         if (speaker === 'npc' && !npcName) speaker = 'narrator';
+        const identifiedCharacter = speaker === 'char' ? (nameOwner === 'char' ? npcName : directOwner === 'char' ? name : '') : '';
         if (speaker !== 'npc') npcName = '';
         const originalText = core_text.normalizeText(line?.text, 50401);
         const action = core_text.normalizeText(line?.action || line?.narration, 50401);
@@ -150,7 +158,7 @@ export function normalizeDialogueRows(raw, { characterName = '', userName = '', 
             const label = match[1].trim();
             const owner = namedOwner(label, npcName)
                 || (['char', 'user', 'narrator'].includes(label.toLowerCase()) ? label.toLowerCase() : '');
-            if (owner) return { speaker: owner, text: match[2] };
+            if (owner) return { speaker: owner, text: match[2], speakerName: namedOwner(label) === 'char' ? label : '' };
             // Speech/action leads with a colon are not unknown speaker labels.
             if (leadIn(`${label}：`, speaker, npcName)) return null;
             if (/^[\p{L}\p{N}_·]{1,12}$/u.test(label) && !/^(?:我|我们|你|您|我的|意思|例如|注意)/.test(label)) return { speaker: 'narrator', text: value };
@@ -165,7 +173,7 @@ export function normalizeDialogueRows(raw, { characterName = '', userName = '', 
             const tagged = hasLabels ? labelled(value) : null;
             const text = (tagged ? tagged.text : value).trim();
             let rowSpeaker = tagged ? tagged.speaker : hasLabels ? 'narrator' : speaker;
-            let rowNpcName = npcName;
+            let rowNpcName = tagged?.speakerName || npcName || identifiedCharacter;
             if (!text) continue;
             const narrative = looksNarrative(text, npcName);
             if (inherited && !tagged && !nameOwner && !directOwner && !npcName && !narrative

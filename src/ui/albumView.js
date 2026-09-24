@@ -7,6 +7,7 @@ import * as ui_albumCategory from './albumCategory.js';
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
 import * as archive_library from '../archive/library.js';
+import * as archive_repository from '../archive/repository.js';
 import * as core_constants from '../core/constants.js';
 import * as core_context from '../core/context.js';
 import { state as runtimeState } from '../core/state.js';
@@ -15,6 +16,7 @@ import * as generation_imageGeneration from '../generation/imageGeneration.js';
 import * as ui_cgPromptEditor from './cgPromptEditor.js';
 import * as ui_overlay from './overlay.js';
 import * as ui_styles from './styles.js';
+import * as ui_generationCompletion from './generationCompletion.js';
 export function filteredAlbumEntries() {
     if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.ALBUM) return [];
     const category = runtimeState.activeSession.category || '全部';
@@ -47,6 +49,7 @@ export function renderAlbum() {
     }
     const unlocked = session.entries.filter(x => x.unlocked).length;
     const readOnlyArchive = !!runtimeState.activeArchiveSnapshot && runtimeState.activeArchiveReadOnly;
+    const pendingComments = ui_generationCompletion.countPendingGenerationItems(session.entries, item => item?.unlocked && item?.progressPending?.includes('共同回忆'));
     const filters = ui_albumCategory.ALBUM_DISPLAY_CATEGORIES.map(cat => `<button type="button" class="rmt-btn ${session.category === cat ? 'active' : ''}" data-rmt-category="${cat}">${cat}</button>`).join('');
     const cards = pageItems.map(item => {
         const drawing = item.unlocked && !readOnlyArchive && generation_imageGeneration.isCgImageDrawing(core_constants.MODE.ALBUM, item.id);
@@ -64,6 +67,14 @@ export function renderAlbum() {
     </article>`;
     }).join('');
     const hint = selected && !selected.unlocked && session.hintVisible ? selected.hintLines.join('\n') : '';
+    const bank = !readOnlyArchive ? archive_repository.getImportedMemory() : null;
+    const sourceLocks = selected?.unlocked && !readOnlyArchive && Array.isArray(selected.sourceMemoryIds)
+        ? selected.sourceMemoryIds.map(id => {
+            const item = (bank?.memories || []).concat(bank?.coldArchive || []).find(row => String(row?.id) === id);
+            const locked = item?.locked === true;
+            return `<button type="button" class="rmt-btn" data-rmt-memory-lock="${core_text.esc(id)}" aria-pressed="${locked}">${core_text.esc(id)} ${locked ? '已锁定' : '锁定'}</button>`;
+        }).join('')
+        : '';
     const categoryEditor = selected && !readOnlyArchive
         ? `<label>分类 <select data-rmt-album-category="${core_text.esc(selected.id)}">${[...core_constants.CATEGORY_VALUES].map(cat => `<option value="${core_text.esc(cat)}"${cat === selected.category ? ' selected' : ''}>${core_text.esc(cat)}</option>`).join('')}</select>${selected.categoryManual === true ? '（手动）' : ''}</label>`
         : '';
@@ -77,11 +88,12 @@ export function renderAlbum() {
         ${selected.unlocked ? '' : '<button type="button" class="rmt-btn" data-rmt-action="show-hint">解锁提示</button>'}
         <button type="button" class="rmt-btn" data-rmt-action="album-cancel">取消选择</button>
       </div>
+      ${sourceLocks ? `<div class="rmt-memory-lock-row" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">${sourceLocks}</div>` : ''}
       <div class="rmt-hint" ${hint ? '' : 'hidden'}>${core_text.esc(hint)}</div>
     </aside>` : '<aside class="rmt-info">当前分类没有条目。</aside>';
     const body = ui_overlay.bodyEl();
     body.innerHTML = `<div class="rmt-album">
-      ${session.readableProgress?.complete === false ? '<p role="status">未完成 · 已生成的画面和对白已保留，可继续阅读。</p>' : ''}
+      ${ui_generationCompletion.generationCompletionHtml({ missing: pendingComments, unit: '组共同回忆对白', generateMode: core_constants.MODE.ALBUM, actionData: { 'data-rmt-completion': 'album-comments' }, label: '补全共同回忆', readOnly: readOnlyArchive, message: `有 ${pendingComments} 张已解锁相簿仍缺少共同回忆对白；已保存画面和对白保持原样。`, className: 'rmt-album-completion' })}${session.readableProgress?.complete === false && !pendingComments ? '<p role="status">未完成 · 已生成的画面和对白已保留，可继续阅读。</p>' : ''}
       <div class="rmt-album-head"><h2>${core_text.esc(session.title)}</h2><span class="rmt-count">已解锁 ${unlocked} / 总数 ${session.entries.length}</span><div class="rmt-filter">${filters}</div></div>
       ${generation_imageGeneration.cgImageProviderBar({ readOnly: readOnlyArchive })}
       <div class="rmt-album-layout">
@@ -256,7 +268,7 @@ export function renderSharedMemory() {
       </div>
       <div class="rmt-memory-caption"><b>${core_text.esc(item.title)}</b><span>${core_text.esc(item.date)}</span><p>${core_text.esc(item.desc)}</p></div>
       <div class="rmt-dialogue">
-        ${item.progressPending?.length ? `<p role="status">共同回忆未完成 · 已生成 ${comments.length} 段对白。</p>` : ''}
+        ${ui_generationCompletion.generationCompletionHtml({ missing: item.progressPending?.includes('共同回忆') ? 1 : 0, unit: '组共同回忆对白', generateMode: core_constants.MODE.ALBUM, actionData: { 'data-rmt-completion': 'album-comments' }, label: '补全这组对白', readOnly, message: `共同回忆尚未完成；已生成 ${comments.length} 段对白。`, className: 'rmt-album-comment-completion' })}
         <div class="rmt-dialogue-speaker">${core_text.esc(charName)}</div>
         ${snapshot && comments.length && !readOnly ? `<label>本句说话人 <select data-rmt-album-speaker="${core_text.esc(item.id)}" data-rmt-dialogue-index="${session.dialogueIndex}"><option value="">未标注人物</option>${snapshot.people.map(person => `<option value="${core_text.esc(person.id)}"${person.id === speaker?.id ? ' selected' : ''}>${core_text.esc(person.name)}</option>`).join('')}</select></label>` : ''}
         <div class="rmt-dialogue-text">${core_text.esc(comments[session.dialogueIndex] || (item.progressPending?.length ? '对白尚未生成，画面描述已保留。' : ''))}</div>

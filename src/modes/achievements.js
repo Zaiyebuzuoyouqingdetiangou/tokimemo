@@ -36,7 +36,7 @@ export function achievementsPrompt(context, memoryBank, previousSession = null, 
     const archiveBlock = previousSession
         ? core_incremental.incrementalArchiveSlice(memoryBank, sourceMemoryIds, core_constants.MAX_MEMORY_PROMPT_ITEMS)
         : generation_prompts.promptArchiveSlice(memoryBank, 48);
-    return `${generation_prompts.promptSafetyBoundary(context, '档案室 / 成就库')}
+    return `${generation_prompts.promptSafetyBoundary(context, '档案室 / 成就库', null, memoryBank)}
 本请求只负责从本次增量档案中补充新的关系与共同经历里程碑。旧成就由本地原样保留；不要重写描述、改名或换措辞复述。
 UNTRUSTED_INCREMENTAL_ACHIEVEMENT_ARCHIVE_JSON:
 ${archiveBlock}
@@ -190,7 +190,7 @@ export async function generateAchievementsWithRepair(context, memoryBank, origin
     const fresh = await generation_client.requestValidatedSegment(
         achievementsPrompt(context, memoryBank, previous, sourceMemoryIds),
         previous ? '成就库 · 正在从新增档案补充里程碑…' : '成就库 · 正在整理已解锁与未解锁里程碑…',
-        { maxTokens: 6000, temperature: 0.4, context, origin, taskKey: `${taskKey}:achievements`, mode: core_constants.MODE.ACHIEVEMENTS, background: true },
+        { maxTokens: 6000, temperatureCeiling: 0.4, context, origin, taskKey: `${taskKey}:achievements`, mode: core_constants.MODE.ACHIEVEMENTS, background: true },
         raw => normalizeAchievements(raw, memoryBank, { allowPartial: !!previous, sourceMemoryIds: previous ? sourceMemoryIds : null }),
     );
     const merged = mergeAchievementsIncremental(previous, fresh, memoryBank);

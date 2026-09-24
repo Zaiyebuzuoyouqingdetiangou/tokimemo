@@ -1,5 +1,5 @@
-const VERSION = '0.8.111';
-const BUILD = '0.8.111-tt-cg-r84.35-cg-history-dupe-role';
+const VERSION = '0.99.14';
+const BUILD = '0.99.14-r84.59-reviewed';
 
 const SETTINGS_ID = 'heartbeat_memories_settings';
 const MENU_ID = 'heartbeat_memories_menu_item';
@@ -81,6 +81,10 @@ function getHeartbeatPerformanceDiagnostic() {
     const memory = metadata[MEMORY_KEY];
     const stored = metadata[CACHE_KEY];
     const memoryCount = Array.isArray(memory?.memories) ? boundedCount(memory.memories.length) : 0;
+    const coldCount = Array.isArray(memory?.coldArchive) ? boundedCount(memory.coldArchive.length) : 0;
+    const lockedCount = Array.isArray(memory?.memories)
+        ? boundedCount(memory.memories.filter(item => item?.locked === true).length) : 0;
+    const inputBudgetTokens = boundedCount(context.extensionSettings?.heartbeatMemories?.inputBudgetTokens);
     const messageCount = Array.isArray(context.chat) ? boundedCount(context.chat.length) : 0;
 
     const compressed = !!stored && typeof stored === 'object'
@@ -109,7 +113,8 @@ function getHeartbeatPerformanceDiagnostic() {
         '心迹回廊性能诊断（不解压缓存）',
         '',
         `聊天消息数组：${messageCount} 条（只读取 length，没有遍历正文）`,
-        `Mxxx 档案：${memoryCount} 条`,
+        `Mxxx 热位：${memoryCount} / 240 条${lockedCount ? ` · 锁定 ${lockedCount}` : ''}${coldCount ? ` · 冷归档 ${coldCount}/100` : ''}`,
+        `输入预算：${inputBudgetTokens || '未读取'} tokens（默认 60000；与最大输出无关）`,
         `派生缓存格式：${storage}`,
         `派生模式：${modes.length ? modes.join(' / ') : '无'}`,
     ];
@@ -137,6 +142,10 @@ function getHeartbeatPerformanceDiagnostic() {
             available: true,
             messageCount,
             memoryCount,
+            memoryCap: 240,
+            coldArchiveCount: coldCount,
+            lockedCount,
+            inputBudgetTokens,
             storage,
             modes,
             sourceChars,

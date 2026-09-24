@@ -55,6 +55,11 @@ export function archiveOpenButtonFromEvent(event) {
 export function safeShowArchiveLibrary(source = 'unknown') {
     try {
         ui_workspaceState.loadWorkspacePreferences();
+        if (runtimeState.pendingArchiveEntry === 'chooser') {
+            runtimeState.pendingArchiveEntry = '';
+            ui_overlay.showChooser();
+            return true;
+        }
         if (ui_workspaceState.workspace.restore && navigation_bookmark.restorePagePosition({ home: showHome, chooser: ui_overlay.showChooser,
             library: archive_library.showArchiveLibrary, character: archive_library.showArchiveCharacter })) return true;
         if (ui_workspaceState.workspace.restore && navigation_bookmark.restoreReadingPosition({ open: ui_overlay.openOverlay, render: ui_overlay.renderActive, stopAutomaticLife: room.stopRoomClock })) return true;
@@ -161,12 +166,29 @@ export function bindDiagnosticCopy() {
 export function bindGenerationNavigationGuards() {
     try { globalThis.__heartbeatMemoriesNavigationGuardCleanup?.(); } catch {}
     const navigationGuard = event => {
-        if (!hostChatNavigationTargetFromEvent(event)) return;
+        const target = hostChatNavigationTargetFromEvent(event);
+        if (!target) return;
         if (!core_requestCoordinator.hasCurrentChatBlockingTask()) return;
-        // Host chat navigation always remains available. Every generated result is now
-        // identity-bound and either commits durably before success or waits in the durable
-        // origin queue, so Heartbeat must never trap the user inside the current chat.
-        runtimeState.activeTaskBackgrounded = true;
+        const tasks = core_requestCoordinator.currentChatBlockingTasks();
+        const confirmed = ui_overlay.confirmExplicitAction(
+            '切换聊天会中止当前任务',
+            `当前聊天还有这些任务：\n${tasks.map(label => `· ${label}`).join('\n')}\n\n继续切换会中止它们。已经确认落盘的成果会保留，未完成部分会停止，不会自动重试。`,
+            { destructive: true },
+        );
+        if (!confirmed) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            return;
+        }
+        let scope = '';
+        try { scope = core_context.chatScopeKey(core_context.currentCharacterGuard()); } catch {}
+        runtimeState.chatNavigationPermit = {
+            scope,
+            at: Date.now(),
+            targetKind: String(target.id || target.className || 'host-nav').slice(0, 80),
+        };
+        core_requestCoordinator.cancelCurrentChatBlockingTasks(null, 'chat-navigation-confirm');
+        ui_overlay.invalidateArchiveViewForChatNavigation('');
     };
 
     const unloadGuard = event => {
@@ -242,6 +264,7 @@ export function bindChatStateEvents() {
         return;
     }
 
+    try { runtimeState.chatNavigationScope = core_context.chatScopeKey(core_context.currentCharacterGuard()); } catch {}
     const chatEvents = [types.CHAT_CHANGED, types.CHAT_LOADED].filter(Boolean);
     const messageEvents = [
         types.MESSAGE_SENT,
@@ -252,27 +275,29 @@ export function bindChatStateEvents() {
     ].filter(Boolean);
 
     const chatHandler = () => {
+        runtimeState.chatNavigationEpoch += 1;
         ui_endingView.closeEndingEasterEgg({ restoreFocus: false });
-        // Chat navigation must not cancel a request that is already running. Results are
-        // bound to their origin chat and are committed when that chat is current again.
-        if (runtimeState.busy) runtimeState.activeTaskBackgrounded = true;
-        runtimeState.activeMode = null;
-        runtimeState.activeSession = null;
-        ui_settingsPanel.refreshSettingsMemoryStatus({ lightweight: true });
-        const overlay = document.getElementById(core_constants.OVERLAY_ID);
+        let nextScope = '';
+        let nextChatId = '';
         try {
             const latest = core_context.currentCharacterGuard();
-            // Keep ordinary chat entry extremely light. Archive overview bookkeeping is only
-            // needed while the Heartbeat UI is visible. IMPORTANT: do not compress, hydrate,
-            // scan or migrate theater caches here; chat startup/navigation must remain inert.
-            if (overlay && !overlay.hidden) {
-                archive_snapshots.resetArchiveOverviewForCharacter(latest);
-                archive_snapshots.syncArchiveOverviewCurrentRow(latest);
-            }
+            nextScope = core_context.chatScopeKey(latest);
+            nextChatId = core_context.comparableChatId(core_context.getChatId(latest));
         } catch {}
-        // SillyTavern emits CHAT_CHANGED and CHAT_LOADED during one navigation. Do not
-        // synchronously rebuild the whole archive UI inside its awaited event path.
-        if (overlay && !overlay.hidden) archive_snapshots.scheduleChooserRefresh(80);
+        const previousScope = runtimeState.chatNavigationScope || '';
+        const permit = runtimeState.chatNavigationPermit;
+        const permitFresh = !!permit && permit.scope === previousScope && Date.now() - permit.at < 8000;
+        runtimeState.chatNavigationPermit = null;
+        if (previousScope && previousScope !== nextScope) {
+            const result = core_requestCoordinator.cancelBlockingTasksForScope(previousScope, 'chat-changed');
+            if (result.cancelled > 0 && !permitFresh) {
+                globalThis.toastr?.warning?.('已切换聊天，原聊天未完成任务已中止。已保存的成果保留，未完成部分不会自动重试。', '心迹回廊');
+            }
+            ui_overlay.invalidateArchiveViewForChatNavigation(nextChatId);
+        }
+        runtimeState.chatNavigationScope = nextScope;
+        ui_settingsPanel.refreshSettingsMemoryStatus({ lightweight: true });
+        // Chat events must not hydrate the new chat or reopen the archive.
         setTimeout(() => {
             void core_cache.flushPendingCompressedCacheForCurrentChat().catch(error => {
                 console.warn('[HeartbeatMemories] pending compressed cache flush failed', core_text.safeErrorDiagnostic(error));

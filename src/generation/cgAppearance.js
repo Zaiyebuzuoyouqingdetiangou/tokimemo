@@ -180,6 +180,7 @@ export function normalizeCgPromptMetadata(value) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
     const promptFormat = format.normalizeCgPromptFormat(value.promptFormat);
     const comicPanels = promptFormat && Number.isInteger(value.comicPanels) && value.comicPanels >= 1 && value.comicPanels <= 4 ? value.comicPanels : 0;
+    const photoshootGrid = value.photoshootGrid === true;
     const sceneTags = plain(value.sceneTags, CG_SCENE_TAG_LIMIT);
     const flatPrompt = plain(value.flatPrompt, CG_FLAT_PROMPT_LIMIT);
     if (Object.hasOwn(value, 'castSnapshot') && value.castSnapshot != null) {
@@ -192,7 +193,7 @@ export function normalizeCgPromptMetadata(value) {
             return tag || nl ? [{ participantId: person.id, name: person.name, tag, nl }] : [];
         });
         return { sceneTags, characters, ...(flatPrompt ? { flatPrompt } : {}), ...(promptFormat ? { promptFormat } : {}),
-            ...(comicPanels ? { comicPanels } : {}), castSnapshot };
+            ...(comicPanels ? { comicPanels } : {}), ...(photoshootGrid ? { photoshootGrid } : {}), castSnapshot };
     }
     const rows = Array.isArray(value.characters) ? value.characters.slice(0, 8) : [];
     const characters = ROLES.flatMap(role => {
@@ -207,7 +208,7 @@ export function normalizeCgPromptMetadata(value) {
     // Do not add an empty field to legacy metadata: it participates in the image
     // signature used by pending writes and redraw conflict detection.
     return sceneTags || characters.length || flatPrompt || promptFormat
-        ? { sceneTags, characters, ...(flatPrompt ? { flatPrompt } : {}), ...(promptFormat ? { promptFormat } : {}), ...(comicPanels ? { comicPanels } : {}) } : null;
+        ? { sceneTags, characters, ...(flatPrompt ? { flatPrompt } : {}), ...(promptFormat ? { promptFormat } : {}), ...(comicPanels ? { comicPanels } : {}), ...(photoshootGrid ? { photoshootGrid } : {}) } : null;
 }
 
 export function normalizeCgPreparedPrompt(raw, evidence) {
@@ -358,6 +359,10 @@ export function formattedCgProviderPrompts(scene, rawMetadata, supportsCharacter
     if (metadata.comicPanels) {
         prompt = format.formatDailyComicPrompt({panelCount: metadata.comicPanels}, prompt, selected);
         if (nl) nl = format.formatDailyComicPrompt({panelCount: metadata.comicPanels}, nl, selected);
+    }
+    if (metadata.photoshootGrid) {
+        prompt = format.formatPhotoshootPrompt(prompt);
+        if (nl) nl = format.formatPhotoshootPrompt(nl);
     }
     if (prompt.length > CG_PREPARED_NL_LIMIT || nl.length > CG_PREPARED_NL_LIMIT) throw text.safeUserError('最终生图提示过长，请缩短后再确认。', 'RMT_CG_PROMPT_INVALID');
     const characters = supportsCharacters && chars.length ? chars.map(({name,tag,nl}) => {

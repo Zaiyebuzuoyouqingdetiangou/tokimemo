@@ -20,6 +20,7 @@ import * as generation_recovery from '../generation/recovery.js';
 import * as ui_overlay from '../ui/overlay.js';
 import * as room_interior from '../ui/roomInterior.js';
 import * as recovery_view from '../ui/recoveryView.js';
+import * as ui_generationCompletion from '../ui/generationCompletion.js';
 
 const ROOM_VISUAL_PROFILE_VERSION = 1;
 const ROOM_VISUAL_VALUES = Object.freeze({
@@ -61,8 +62,14 @@ const ROOM_VISUAL_LEGACY_ALIASES = Object.freeze({
     detail: Object.freeze({ 'pointed-ears': 'pointed_ears', 'animal-ears': 'animal_ears' }),
 });
 
-export function roomNarrativeClaimsSharedHistory(value, userName = '') {
-    return core_narrativeAuthority.narrativeClaimsSharedHistory(value, { userName });
+export function roomNarrativeClaimsSharedHistory(value, userNameOrBank = '', userAliases = []) {
+    if (userNameOrBank && typeof userNameOrBank === 'object') {
+        const story = core_participants.resolveStoryIdentities(userNameOrBank);
+        return core_narrativeAuthority.narrativeClaimsSharedHistory(value, {
+            userName: story.userDisplay, userAliases: story.userAliases,
+        });
+    }
+    return core_narrativeAuthority.narrativeClaimsSharedHistory(value, { userName: userNameOrBank, userAliases });
 }
 
 function roomTextContainsAnchor(value, anchor) {
@@ -431,14 +438,17 @@ export function normalizeRoom(data, memoryBank, options = {}) {
     }
 }
 
-function normalizeRoomSpaceObjects(rawObjects, spaceId, memoryBank, participantSnapshot = null) {
-    const userName = core_text.normalizeText(memoryBank?.userName, 120), usedObjectIds = new Set();
+function normalizeRoomSpaceObjects(rawObjects, spaceId, memoryBank, participantSnapshot = null, structureOnly = false) {
+    const usedObjectIds = new Set();
     return rawObjects.slice(0, 8).map((item, objectIndex) => {
         const basis = core_constants.ROOM_BASIS_VALUES.has(item?.basis) ? item.basis : '设定';
         const label = core_text.normalizeText(item?.label, 60) || `角落 ${objectIndex + 1}`;
-        const description = core_text.normalizeText(item?.description, 1600);
-        const line = core_text.normalizeText(item?.line, 800);
-        if (basis !== '记忆' && [label, description, line].some(field => roomNarrativeClaimsSharedHistory(field, userName))) return null;
+        let description = core_text.normalizeText(item?.description, 1600);
+        let line = core_text.normalizeText(item?.line, 800);
+        if (structureOnly && basis !== '记忆') {
+            if (roomNarrativeClaimsSharedHistory(description, memoryBank)) description = '';
+            if (roomNarrativeClaimsSharedHistory(line, memoryBank)) line = '';
+        } else if (basis !== '记忆' && [label, description, line].some(field => roomNarrativeClaimsSharedHistory(field, memoryBank))) return null;
         const reference = basis === '记忆'
             ? core_evidence.normalizeMemoryReference(item?.sourceMemoryIds, item?.sourceMemoryAnchor, `${item?.label || ''}\n${description}\n${line}`, memoryBank, 1)
             : { sourceMemoryIds: [], sourceMemoryAnchor: '' };
@@ -453,17 +463,16 @@ function normalizeRoomSpaceObjects(rawObjects, spaceId, memoryBank, participantS
             basis, searchable: core_evidence.isSearchableRoomObject(item), description, line,
             ...(participantSnapshot ? { speakerId: roomParticipantId(participantSnapshot, item?.speakerId, !participantSnapshot.people.length) } : {}),
             sourceMemoryIds, sourceMemoryAnchor: reference.sourceMemoryAnchor };
-    }).filter(item => item && item.description && item.line && (item.basis !== '记忆' || (item.sourceMemoryIds.length >= 1 && item.sourceMemoryAnchor)));
+    }).filter(item => item && (structureOnly ? item.label : (item.description && item.line)) && (item.basis !== '记忆' || (item.sourceMemoryIds.length >= 1 && item.sourceMemoryAnchor)));
 }
 
-function normalizeRoomData(data, memoryBank, { identityKey = '', worldPresentation = null, controlledEvidence = null, characterEvidence = null, relaxStructure = false, participantSnapshot = null } = {}) {
+function normalizeRoomData(data, memoryBank, { identityKey = '', worldPresentation = null, controlledEvidence = null, characterEvidence = null, relaxStructure = false, participantSnapshot = null, structureOnly = false } = {}) {
     participantSnapshot = core_participants.normalizeParticipantSnapshot(participantSnapshot);
     // Minimums for the character's own space. Truth-claim checks below ignore this entirely.
     const minObjects = 1;
     const minSpaces = 1;
     const minPresenceLines = 0;
     const rawSpaces = Array.isArray(data?.spaces) ? data.spaces : [];
-    const userName = core_text.normalizeText(memoryBank?.userName, 120);
     const usedSpaceIds = new Set();
     const spaces = rawSpaces.slice(0, 10).map((space, spaceIndex) => {
         const fallbackSpaceId = `SP${String(spaceIndex + 1).padStart(2, '0')}`;
@@ -472,13 +481,13 @@ function normalizeRoomData(data, memoryBank, { identityKey = '', worldPresentati
         while (usedSpaceIds.has(spaceId)) spaceId = `${fallbackSpaceId}_${usedSpaceIds.size + 1}`;
         usedSpaceIds.add(spaceId);
         const rawObjects = Array.isArray(space?.objects) ? space.objects : [];
-        const objects = normalizeRoomSpaceObjects(rawObjects, spaceId, memoryBank, participantSnapshot);
+        const objects = normalizeRoomSpaceObjects(rawObjects, spaceId, memoryBank, participantSnapshot, structureOnly);
         const requestedAtmosphere = core_text.normalizeText(space?.atmosphere, 1800);
         return {
             id: spaceId,
             label: core_text.normalizeText(space?.label, 60) || `空间 ${spaceIndex + 1}`,
             spaceType: core_text.normalizeText(space?.spaceType, 80) || core_text.normalizeText(space?.label, 60) || '私人空间',
-            atmosphere: requestedAtmosphere && !roomNarrativeClaimsSharedHistory(requestedAtmosphere, userName)
+            atmosphere: requestedAtmosphere && !roomNarrativeClaimsSharedHistory(requestedAtmosphere, memoryBank)
                 ? requestedAtmosphere : '这里保留着他长期生活留下的细小痕迹。',
             objects,
         };
@@ -506,25 +515,30 @@ function normalizeRoomData(data, memoryBank, { identityKey = '', worldPresentati
         const raw = data?.dayparts?.[key] || {};
         const rawSpaceId = core_text.safeId(raw?.spaceId, '');
         const space = spaceById.get(rawSpaceId) || spaces[0];
-        const activity = core_text.normalizeText(raw?.activity, 1000);
-        const line = core_text.normalizeText(raw?.line, 800);
+        let activity = core_text.normalizeText(raw?.activity, 1000);
+        let line = core_text.normalizeText(raw?.line, 800);
         const objectIds = new Set(space.objects.map(item => item.id));
         const focusObjectId = objectIds.has(String(raw?.focusObjectId || '')) ? String(raw.focusObjectId) : space.objects[0].id;
-        if (!activity || !line) throw new Error(`“他的房间”缺少 ${key} 时段的生活状态。`);
-        if ([activity, line].some(field => roomNarrativeClaimsSharedHistory(field, userName))) {
-            throw new Error(`“他的房间”${key} 时段混入了没有档案证据的既往共同经历。`);
+        if (structureOnly) {
+            if (!activity || roomNarrativeClaimsSharedHistory(activity, memoryBank)) activity = '在这个空间里';
+            if (!line || roomNarrativeClaimsSharedHistory(line, memoryBank)) line = '……';
+        } else {
+            if (!activity || !line) throw new Error(`“他的房间”缺少 ${key} 时段的生活状态。`);
+            if ([activity, line].some(field => roomNarrativeClaimsSharedHistory(field, memoryBank))) {
+                throw new Error(`“他的房间”${key} 时段混入了没有档案证据的既往共同经历。`);
+            }
         }
         dayparts[key] = { spaceId: space.id, activity, line, focusObjectId };
     }
     const presenceLines = core_text.cleanArray(participantSnapshot ? [] : data?.presenceLines, 12, 900)
-        .filter(line => !roomNarrativeClaimsSharedHistory(line, userName));
+        .filter(line => !roomNarrativeClaimsSharedHistory(line, memoryBank));
     if (presenceLines.length < minPresenceLines) throw new Error(`“他的房间”角色互动台词不足：${presenceLines.length} 句，至少需要 ${minPresenceLines} 句。`);
     const initialDaypart = roomDaypartState();
     const initialSpace = spaceById.get(dayparts[initialDaypart.key]?.spaceId) || spaces[0];
     const title = core_text.normalizeText(data?.title, 100) || '他的房间';
     const homeName = core_text.normalizeText(data?.homeName, 100) || '私人生活空间';
     const requestedHomeSummary = core_text.normalizeText(data?.homeSummary, 2200);
-    const homeSummary = requestedHomeSummary && !roomNarrativeClaimsSharedHistory(requestedHomeSummary, userName)
+    const homeSummary = requestedHomeSummary && !roomNarrativeClaimsSharedHistory(requestedHomeSummary, memoryBank)
         ? requestedHomeSummary : '这些空间拼成了他日常生活真正会经过的路线。';
     const profileSeed = [identityKey, memoryBank?.characterName, memoryBank?.chatId, worldPresentation?.evidenceHash].filter(Boolean).join('|');
     // This normalizer consumes new model output. Legacy session pets are retained by
@@ -557,7 +571,7 @@ function normalizeRoomData(data, memoryBank, { identityKey = '', worldPresentati
 export function roomCandidateRepairSlots(data, memoryBank, options = {}) {
     const slots = [];
     const check = (path, value, history = true) => {
-        if (!core_text.normalizeText(value, 6000) || history && roomNarrativeClaimsSharedHistory(value, memoryBank?.userName)) {
+        if (!core_text.normalizeText(value, 6000) || history && roomNarrativeClaimsSharedHistory(value, memoryBank)) {
             slots.push({ path, reason: !core_text.normalizeText(value, 6000) ? 'missing_text' : 'present_scope_unproven' });
         }
     };
@@ -643,7 +657,7 @@ export function projectRoomProgress({ segments = [], memoryBank, previousSession
             if (!objects.length) continue;
             const old = session.spaces.find(space => space.id === id);
             const space = old || { id, label: core_text.normalizeText(raw.label, 60), spaceType: core_text.normalizeText(raw.spaceType, 80) || core_text.normalizeText(raw.label, 60),
-                atmosphere: segment.has(`${path}/atmosphere`) && !roomNarrativeClaimsSharedHistory(raw.atmosphere, memoryBank.userName) ? core_text.normalizeText(raw.atmosphere, 1800) : '', objects: [] };
+                atmosphere: segment.has(`${path}/atmosphere`) && !roomNarrativeClaimsSharedHistory(raw.atmosphere, memoryBank) ? core_text.normalizeText(raw.atmosphere, 1800) : '', objects: [] };
             for (const item of objects) if (!space.objects.some(saved => saved.id === item.id)) space.objects.push(item);
             if (!old) session.spaces.push(space);
             added = true;
@@ -684,7 +698,8 @@ export async function generateRoomWithRepair(context, memoryBank, origin, taskKe
         : generation_prompts.PROMPTS[core_constants.MODE.ROOM](context, memoryBank))
         + '\nCONTROLLED_WORLD_PRESENTATION_JSON:\n' + JSON.stringify(presentation.profile || {});
     const requestOptions = { maxTokens: core_constants.MODE_TOKEN_CAPS[core_constants.MODE.ROOM], context, contextEnvelope: presentation.contextEnvelope, origin, taskKey, mode: core_constants.MODE.ROOM, background: true };
-    let raw = await request(prompt, '他的房间 · 正在整理空间…', requestOptions, value => {
+    const fillTextNow = options.secondStep === true || options.fillExisting === true || core_settings.getPluginSettings().autoSecondPass === true;
+    let raw = options.fillExisting && options.existingSession ? structuredClone(options.existingSession) : await request(prompt, '他的房间 · 正在整理空间…', requestOptions, value => {
         // This pre-check only decides whether a response is worth normalising at all, so it
         // must not be stricter than the normaliser's own relaxed fallback — otherwise the
         // fallback is unreachable and a slightly thin room is rejected before it is tried.
@@ -695,6 +710,27 @@ export async function generateRoomWithRepair(context, memoryBank, origin, taskKe
         }
         return value;
     });
+    if (!fillTextNow) {
+        try {
+            const session = normalizeRoom(raw, memoryBank, normalizeOptions);
+            core_requestCoordinator.noteSecondStepOffer(origin, null);
+            return session;
+        } catch (error) {
+            try {
+                const session = normalizeRoom(raw, memoryBank, { ...normalizeOptions, structureOnly: true });
+                core_requestCoordinator.noteSecondStepOffer(origin, {
+                    label: '对白和描述',
+                    kind: 'room-lines',
+                    mode: core_constants.MODE.ROOM,
+                    pageId: core_constants.MODE.ROOM,
+                });
+                return session;
+            } catch {
+                throw error;
+            }
+        }
+    }
+    core_requestCoordinator.noteSecondStepOffer(origin, null);
     const slots = roomCandidateRepairSlots(raw, memoryBank, { participantSnapshot });
     // Small fixed groups keep feedback/repair output bounded; good fields are never regenerated.
     for (let offset = 0; offset < slots.length; offset += 6) {
@@ -754,7 +790,7 @@ export function compactRoomExisting(session) {
 }
 
 export function roomIncrementPrompt(context, memoryBank, previous, sourceMemoryIds, { allowPersonaExpansion = false } = {}) {
-    return generation_prompts.promptSafetyBoundary(context, '他的房间 / 增量物件')
+    return generation_prompts.promptSafetyBoundary(context, '他的房间 / 增量物件', null, memoryBank)
         + '\n旧房间由本地原样保留，只输出新增物件 patch，不返回旧描述、dayparts、presenceLines 或完整房间。'
         + '\n严格输出 {"additions":[{"spaceId":"已有空间id","objects":[{"id":"新id","label":"物件名称","basis":"记忆|推演","zone":"中央","description":"物件与生活描述","line":"当下角色对白","sourceMemoryIds":["仅记忆时 Mxxx"],"sourceMemoryAnchor":"仅记忆时精确原文"}]}]}'
         + (allowPersonaExpansion ? '\n可向已有空间追加两类普通生活物件：basis=记忆 时必须由本轮新增记忆明确证明；basis=推演 时可依据明确人设、职业、时代和既有房间生活方式补充合理物件，sourceMemoryIds/sourceMemoryAnchor 留空。推演物件不得声称是 {{user}} 赠送、共同购买或两人过去共同使用过，也不得伪造既往事件。不扩建空间。没有合适新增就 additions=[]。' : '\n本轮只同步历史：新物件必须 basis=记忆 并由新增 Mxxx 证明；无新增则 additions=[]，不补人设推演。')
@@ -778,7 +814,7 @@ export function normalizeRoomIncrementPatch(raw, previous, memoryBank, sourceMem
             if (basis === '推演') {
                 if (options.allowPersonaExpansion !== true) throw core_text.safeUserError('历史同步不能追加推演物件。', 'RMT_ROOM_HISTORY');
                 const visible = [label, description, line].join('\n');
-                if (core_narrativeAuthority.narrativeClaimsSharedHistory(visible, { userName: memoryBank?.userName })) {
+                if (roomNarrativeClaimsSharedHistory(visible, memoryBank)) {
                     throw core_text.safeUserError('人设推演物件不能冒充两人已经发生的共同往事。', 'RMT_ROOM_HISTORY');
                 }
                 return { id: core_text.safeId(item.id, 'NEW'), label, description, line, basis: '推演',
@@ -790,7 +826,7 @@ export function normalizeRoomIncrementPatch(raw, previous, memoryBank, sourceMem
             if (!reference.sourceMemoryIds.length || !reference.sourceMemoryAnchor) throw core_text.safeUserError('记忆物件证据不完整。', 'RMT_ROOM_FIELDS');
             const normalized = { id: core_text.safeId(item.id, 'NEW'), label, description, line, basis: '记忆', ...reference,
                 zone: core_constants.ROOM_ZONE_VALUES.has(item.zone) ? item.zone : '中央', searchable: core_evidence.isSearchableRoomObject(item) };
-            if (!roomObjectSafeForPresentation(normalized, memoryBank, memoryBank?.userName)) throw core_text.safeUserError('物件可见正文缺少精确记忆锚点。', 'RMT_ROOM_HISTORY');
+            if (!roomObjectSafeForPresentation(normalized, memoryBank)) throw core_text.safeUserError('物件可见正文缺少精确记忆锚点。', 'RMT_ROOM_HISTORY');
             return normalized;
         });
         fresh.spaces.push({ id: existing.id, label: existing.label, spaceType: existing.spaceType, atmosphere: existing.atmosphere, objects });
@@ -813,7 +849,7 @@ export function roomObjectAllowedIncrement(item, sourceMemoryIds, memoryBank = n
     if (item?.basis === '推演' && allowPersonaExpansion) {
         if (item?.sourceMemoryIds?.length || item?.sourceMemoryAnchor || !item?.label || !item?.description || !item?.line) return false;
         const visible = [item?.label, item?.description, item?.line].map(value => core_text.normalizeText(value, 1800)).filter(Boolean).join('\n');
-        return !!visible && !core_narrativeAuthority.narrativeClaimsSharedHistory(visible, { userName: memoryBank?.userName });
+        return !!visible && !roomNarrativeClaimsSharedHistory(visible, memoryBank);
     }
     return roomObjectUsesIncrement(item, sourceMemoryIds, memoryBank);
 }
@@ -908,7 +944,7 @@ export async function generateRoomIncrementalWithRepair(context, memoryBank, ori
     const fresh = await generation_client.requestValidatedSegment(
         `${roomIncrementPrompt(context, memoryBank, previous, sourceMemoryIds, options)}\nCONTROLLED_WORLD_PRESENTATION_JSON:\n${JSON.stringify(worldPresentation, null, 2)}`,
         '他的房间 · 正在从新增档案追加生活痕迹…',
-        { maxTokens: core_constants.MODE_TOKEN_CAPS[core_constants.MODE.ROOM], temperature: 0.45, context, contextEnvelope: presentationContext.contextEnvelope, origin, taskKey: `${taskKey}:increment`, mode: core_constants.MODE.ROOM, background: true },
+        { maxTokens: core_constants.MODE_TOKEN_CAPS[core_constants.MODE.ROOM], context, contextEnvelope: presentationContext.contextEnvelope, origin, taskKey: `${taskKey}:increment`, mode: core_constants.MODE.ROOM, background: true },
         raw => normalizeRoomIncrementPatch(raw, previous, memoryBank, sourceMemoryIds, {
             allowPersonaExpansion: options.allowPersonaExpansion === true,
             identityKey: core_context.currentCharacterRuntimeKey(context),
@@ -993,7 +1029,7 @@ export function roomLifePrompt(context, session, memoryBank, date = new Date(), 
         memories: lifeMemories,
         home: roomBlueprintPayload(session),
     }, null, 2);
-    return `${generation_prompts.promptSafetyBoundary(context, '房间今日生活时间线')}
+    return `${generation_prompts.promptSafetyBoundary(context, '房间今日生活时间线', null, memoryBank)}
 本请求只使用 INPUT_JSON 中的固定房间蓝图和少量相关记忆，不发送整份档案。
 任务：为“他的房间”生成【${dateKey} ${weekday}】这一天的私人生活时间线。空间蓝图已经固定，聊天档案也固定；你只负责根据角色长期生活方式，让这一天从清晨到深夜自然流动。
 
@@ -1071,9 +1107,8 @@ function roomLifeNarrativeEvidenceState(beat, memoryBank) {
     const reference = submittedMemoryIds.length
         ? core_evidence.normalizeExactMemoryReference(beat?.sourceMemoryIds, beat?.sourceMemoryAnchor, memoryBank, 1)
         : { sourceMemoryIds: [], sourceMemoryAnchor: '' };
-    const userName = core_text.normalizeText(memoryBank?.userName, 120);
-    const referenceRequired = roomNarrativeClaimsSharedHistory([activity, ambient, trace, ...temporaryObjects], userName)
-        || roomNarrativeClaimsSharedHistory(line, userName);
+    const referenceRequired = roomNarrativeClaimsSharedHistory([activity, ambient, trace, ...temporaryObjects], memoryBank)
+        || roomNarrativeClaimsSharedHistory(line, memoryBank);
     const combinedNarrative = `${historyProbe}\n${line}`;
     const safe = !referenceRequired || (reference.sourceMemoryIds.length >= 1
         && !!reference.sourceMemoryAnchor
@@ -1224,6 +1259,7 @@ export async function ensureRoomLifePlan(options = {}) {
     const logicalTask = core_requestCoordinator.beginLogicalGenerationTask({ kind: 'room-daily-life', mode: core_constants.MODE.ROOM,
         pageId: 'roomLife', context, origin, taskKey: `room-life-operation:${core_context.chatScopeKey(context)}`,
         parentTaskId: options.logicalParentTaskId, label: '今日生活' });
+    if (roomSession.participantSnapshot) logicalTask.participantPromptIndexed = true;
     let result;
     try {
         result = await ensureRoomLifePlanOperation({ ...options, roomSession, logicalTask,
@@ -1318,6 +1354,8 @@ async function ensureRoomLifePlanOperation(options = {}) {
     let origin = targetRuntime?.origin || { ...core_context.captureTaskOrigin(context, archiveRevision), chatId: core_context.comparableChatId(chatId) };
     core_requestCoordinator.bindLogicalGenerationTask(options.logicalTask, origin);
     const archiveEntry = targetRuntime?.archiveTarget || core_cache.archiveBackupEntryForContext(context, memoryBank);
+    const lifeCancel = new AbortController();
+    runtimeState.roomLifeAbortController = lifeCancel;
     runtimeState.roomLifeRefreshOrigin = origin;
     runtimeState.roomLifeRefreshPromise = (async () => {
         try {
@@ -1344,10 +1382,11 @@ async function ensureRoomLifePlanOperation(options = {}) {
             const inputRoom = participantSnapshot
                 ? await generation_recovery.frozenGenerationInput(origin, 'room:daily-blueprint', () => structuredClone(roomSession)) : roomSession;
             if (!quiet) ui_overlay.setInnerLoading(true, `正在生成 ${dateKey} 的生活时间线…`);
+            if (lifeCancel.signal.aborted) throw core_requestCoordinator.createGenerationAbortError();
             const plan = await generation_client.requestValidatedSegment(
                 roomLifePrompt(context, inputRoom, memoryBank, today, { participantSnapshot }),
                 `正在让“他的房间”进入 ${dateKey} 的生活状态…`,
-                { maxTokens: 6144, context, origin, taskKey, mode: core_constants.MODE.ROOM, background: true },
+                { maxTokens: 6144, context, origin, signal: lifeCancel.signal, taskKey, mode: core_constants.MODE.ROOM, background: true },
                 raw => normalizeRoomLifePlan(raw, inputRoom, memoryBank, today, { participantSnapshot }),
             );
             core_requestCoordinator.assertLogicalGenerationTaskCurrent(options.logicalTask);
@@ -1414,6 +1453,7 @@ async function ensureRoomLifePlanOperation(options = {}) {
             generation_recovery.detachGenerationRecovery(origin);
             if (!quiet) ui_overlay.setInnerLoading(false);
             runtimeState.roomLifeRefreshPromise = null;
+            if (runtimeState.roomLifeAbortController === lifeCancel) runtimeState.roomLifeAbortController = null;
             if (runtimeState.roomLifeRefreshOrigin === origin) runtimeState.roomLifeRefreshOrigin = null;
         }
     })();
@@ -1562,9 +1602,8 @@ export function roomCurrentSlot(session = runtimeState.activeSession, date = new
     const state = roomDaypartState(date);
     const stored = session.dayparts?.[state.key] || session.dayparts?.evening || null;
     if (!stored) return null;
-    const userName = core_text.normalizeText(runtimeState.activeArchiveSnapshot?.memory?.userName
-        || core_context.getContext()?.name1, 120);
-    if (![stored.activity, stored.line].some(field => roomNarrativeClaimsSharedHistory(field, userName))) return stored;
+    const memoryBank = runtimeState.activeArchiveSnapshot?.memory || null;
+    if (![stored.activity, stored.line].some(field => roomNarrativeClaimsSharedHistory(field, memoryBank))) return stored;
     return {
         ...stored,
         activity: '按自己的节奏处理此刻的日常。',
@@ -1693,7 +1732,7 @@ export function roomPetSummaryHtml(pet) {
 
 export function roomObjectSafeForPresentation(item, memoryBank, userName) {
     const narrative = [item?.label, item?.description, item?.line];
-    if (!narrative.some(field => roomNarrativeClaimsSharedHistory(field, userName))) return true;
+    if (!narrative.some(field => roomNarrativeClaimsSharedHistory(field, memoryBank || userName))) return true;
     if (item?.basis !== '记忆') return false;
     const reference = core_evidence.normalizeExactMemoryReference(
         item?.sourceMemoryIds,
@@ -1812,15 +1851,14 @@ export function renderRoom() {
     const roomMemoryBank = core_cache.generationPageSourceMemory(session, 'room', runtimeState.activeArchiveSnapshot?.memory || (() => {
         try { return archive_repository.requireArchive(core_context.currentCharacterGuard()); } catch { return null; }
     })());
-    const roomUserName = core_text.normalizeText(roomMemoryBank?.userName || core_context.getContext()?.name1, 120);
     const selectedSpaceRaw = selectedRoomSpace() || presentSpace;
     const selectedSpace = {
         ...selectedSpaceRaw,
-        atmosphere: roomNarrativeClaimsSharedHistory(selectedSpaceRaw?.atmosphere, roomUserName)
+        atmosphere: roomNarrativeClaimsSharedHistory(selectedSpaceRaw?.atmosphere, roomMemoryBank)
             ? '这里保留着他长期生活留下的细小痕迹。'
             : core_text.normalizeText(selectedSpaceRaw?.atmosphere, 1800),
         objects: (Array.isArray(selectedSpaceRaw?.objects) ? selectedSpaceRaw.objects : [])
-            .filter(item => roomObjectSafeForPresentation(item, roomMemoryBank, roomUserName)),
+            .filter(item => roomObjectSafeForPresentation(item, roomMemoryBank)),
     };
     if (!session.selectedSpaceId) session.selectedSpaceId = selectedSpace.id;
     const selected = selectedRoomObject(selectedSpace);
@@ -1856,12 +1894,22 @@ export function renderRoom() {
         ? `档案痕迹：${selected.sourceMemoryIds.join(' · ')}`
         : '来源：角色设定 / 世界观';
     const safePresenceLines = (Array.isArray(session.presenceLines) ? session.presenceLines : [])
-        .filter(line => !roomNarrativeClaimsSharedHistory(line, roomUserName));
+        .filter(line => !roomNarrativeClaimsSharedHistory(line, roomMemoryBank));
     const presenceLine = safePresenceLines[Math.max(0, Number(session.presenceIndex) || 0) % Math.max(1, safePresenceLines.length)] || slot?.line || '';
     const currentLocationText = `${daypart.label} · ${charName} 现在在「${presentSpace.label}」`;
     const deep = roomDeepAvailability();
     const itemsGenerating = core_requestCoordinator.isModeGenerating(core_constants.MODE.ITEMS);
     const readOnlyArchive = !!runtimeState.activeArchiveSnapshot && runtimeState.activeArchiveReadOnly;
+    // A partial/snapshot render can occur before its current source archive is available.
+    // Do not infer missing text without that source, because provenance checks need it.
+    const roomRepairSlots = roomMemoryBank && typeof roomMemoryBank === 'object'
+        ? roomCandidateRepairSlots(session, roomMemoryBank, { participantSnapshot: session.participantSnapshot }) : [];
+    const missingRoomLines = roomRepairSlots.filter(slot => slot.reason === 'missing_text').length;
+    const completionNotice = ui_generationCompletion.generationCompletionHtml({
+        missing: missingRoomLines, unit: '条房间描述或当下台词', generateMode: core_constants.MODE.ROOM,
+        actionData: { 'data-rmt-completion': 'room-lines' }, label: '重新尝试补全房间', readOnly: readOnlyArchive,
+        message: `有 ${missingRoomLines} 条房间描述或当下台词尚未通过校验；现有空间与物件保持可读。`, className: 'rmt-room-completion',
+    });
     const itemActionText = selectedSearchable
         ? (deep.items ? `翻找「${selected.label}」` : readOnlyArchive ? `「${selected.label}」尚未生成物品档案` : itemsGenerating ? '物品生成中…' : `生成并翻找「${selected.label}」`)
         : '先选中盒子 / 抽屉 / 柜子等收纳物';
@@ -1873,7 +1921,7 @@ export function renderRoom() {
     const sceneMotif = roomMotifToken(session, selectedSpace);
     const tempLine = temporaryObjects.length ? `<div class="rmt-room-temp-line">此刻临时物件：${temporaryObjects.map(item => core_text.esc(item)).join(' · ')}</div>` : '';
     const body = ui_overlay.bodyEl();
-    body.innerHTML = `<style data-rmt-room-layout-css>${roomLayoutCss()}</style>${!runtimeState.activeArchiveSnapshot || !runtimeState.activeArchiveReadOnly ? '<button type="button" class="rmt-btn" data-rmt-action="room-refresh-figure">更新人物外形 · 保留房间内容</button>' : ''}<div class="rmt-room-view" data-rmt-room-world="${core_text.esc(visualProfile.worldStyle)}" data-rmt-room-palette="${core_text.esc(visualProfile.palette)}" data-rmt-room-material="${core_text.esc(visualProfile.material)}" data-rmt-room-density="${core_text.esc(visualProfile.density)}" data-rmt-room-motif="${core_text.esc(sceneMotif)}">
+    body.innerHTML = `<style data-rmt-room-layout-css>${roomLayoutCss()}</style>${completionNotice}${!runtimeState.activeArchiveSnapshot || !runtimeState.activeArchiveReadOnly ? '<button type="button" class="rmt-btn" data-rmt-action="room-refresh-figure">更新人物外形 · 保留房间内容</button>' : ''}<div class="rmt-room-view" data-rmt-room-world="${core_text.esc(visualProfile.worldStyle)}" data-rmt-room-palette="${core_text.esc(visualProfile.palette)}" data-rmt-room-material="${core_text.esc(visualProfile.material)}" data-rmt-room-density="${core_text.esc(visualProfile.density)}" data-rmt-room-motif="${core_text.esc(sceneMotif)}">
       <div class="rmt-room-map" aria-label="私人空间地图">${map}</div>
       <div class="rmt-room-location"><div><b>${core_text.esc(currentLocationText)}</b><small>${core_text.esc(session.homeName)} · ${session.spaces.length} 个可观察区域</small></div><div class="rmt-room-location-actions">${!personIsHere ? `<button type="button" class="rmt-room-find" data-rmt-action="room-find-presence">去看看他</button>` : ''}${readOnlyArchive ? '' : `<button type="button" class="rmt-room-find" data-rmt-action="room-life-refresh" ${runtimeState.busy ? 'disabled' : ''}>更新今日生活</button>`}</div></div>
 
@@ -1902,7 +1950,7 @@ export function renderRoom() {
         <section class="rmt-room-card rmt-room-private-life-card">
           <div class="rmt-room-card-kicker">房间介绍</div>
           <div class="rmt-room-atmosphere">${core_text.esc(selectedSpace.atmosphere)}</div>
-          <div class="rmt-room-summary" style="margin-top:9px">${core_text.esc(roomNarrativeClaimsSharedHistory(session.homeSummary, roomUserName) ? '这些空间拼成了他日常生活真正会经过的路线。' : session.homeSummary)}</div>
+          <div class="rmt-room-summary" style="margin-top:9px">${core_text.esc(roomNarrativeClaimsSharedHistory(session.homeSummary, roomMemoryBank) ? '这些空间拼成了他日常生活真正会经过的路线。' : session.homeSummary)}</div>
           ${petNotes ? `<div class="rmt-room-pet-notes" aria-label="这个空间里的宠物">${petNotes}</div>` : ''}
           ${personIsHere ? `<div class="rmt-room-object-line">${core_text.esc(presenceLine)}</div>` : `<div class="rmt-room-object-line">${core_text.esc(charName)} 此刻在「${core_text.esc(presentSpace.label)}」。</div>`}
         </section>
@@ -1912,7 +1960,7 @@ export function renderRoom() {
           <div class="rmt-room-deep-actions">
             <button type="button" class="rmt-btn" data-rmt-action="room-open-items" ${!selectedSearchable || itemsGenerating || (readOnlyArchive && !deep.items) ? 'disabled' : ''}><i class="fa-solid fa-box-open"></i> ${core_text.esc(itemActionText)}</button>
           </div>
-          
+
         </section>
       </div>
     </div>`;
@@ -1984,7 +2032,7 @@ function roomParticipantId(snapshot, value, allowEmpty = false, field = 'spaces'
 
 function roomParticipantText(value, memoryBank) {
     if (typeof value !== 'string' || !value.trim()) throw roomParticipantError('人物当前动作或对白没有写完整。');
-    if (roomNarrativeClaimsSharedHistory(value, memoryBank?.userName)) {
+    if (roomNarrativeClaimsSharedHistory(value, memoryBank)) {
         throw roomParticipantError('人物当前状态混入了没有档案证据的既往共同经历。');
     }
     return value;
@@ -2089,7 +2137,7 @@ async function generateRoomParticipantsIncrement(context, memoryBank, origin, ta
         + '\nEXISTING_ROOM_INDEX_JSON:' + JSON.stringify(compactRoomExisting(previous))
         + '\nUNTRUSTED_INCREMENTAL_ROOM_ARCHIVE_JSON:' + core_incremental.incrementalArchiveSlice(memoryBank, sourceMemoryIds, core_constants.MAX_MEMORY_PROMPT_ITEMS);
     const fresh = await request(prompt, '正在更新共同房间，保留已有内容…', {
-        maxTokens: core_constants.MODE_TOKEN_CAPS[core_constants.MODE.ROOM], temperature: 0.45, context, origin,
+        maxTokens: core_constants.MODE_TOKEN_CAPS[core_constants.MODE.ROOM], context, origin,
         contextEnvelope: presentation.contextEnvelope, taskKey: `${taskKey}:increment`, mode: core_constants.MODE.ROOM, background: true,
     }, raw => {
         const normalized = normalizeRoomIncrementPatch(raw, previous, memoryBank, sourceMemoryIds, options);
@@ -2110,7 +2158,7 @@ async function refreshRoomParticipantFigures(context, memoryBank, origin, taskKe
     const presentation = options.presentationContext || {};
     const request = options.request || generation_client.requestValidatedSegment;
     const figures = await request(`仅更新所选人物各自外形，不生成房间、对白或故事。一次返回 {"residents":[{"participantId":"原id","visualProfile":{"figure":{},"explicitFields":[],"explicitEvidence":{}}}]}。
-${core_participants.participantPromptBlock(snapshot)}
+${core_participants.participantIndexPromptBlock(snapshot)}
 枚举：${JSON.stringify(ROOM_VISUAL_VALUES)}。每人只使用自己的来源设定作外貌证据；explicitEvidence 必须原样复制对应人物所选世界书内容。缺乏证据的外貌用 unspecified，detail 用 none，不借用其他人物或玩家外貌。`,
     '正在更新所选人物外形，保留房间内容…', { context, contextEnvelope: presentation.contextEnvelope, origin,
         taskKey: `${taskKey}:figure`, mode: core_constants.MODE.ROOM, maxTokens: 2500, background: true }, raw => {
@@ -2147,8 +2195,8 @@ function roomParticipantsLifePrompt(context, session, memoryBank, date, snapshot
     const lifeMemories = referencedMemoryIds.length
         ? core_evidence.memoryPayload(memoryBank, referencedMemoryIds, 24)
         : core_evidence.memoryPayload(memoryBank, null, 12);
-    return `${generation_prompts.promptSafetyBoundary(context, '共同房间的今日生活')}
-${core_participants.participantPromptBlock(snapshot)}
+    return `${generation_prompts.promptSafetyBoundary(context, '共同房间的今日生活', null, memoryBank)}
+${core_participants.participantIndexPromptBlock(snapshot)}
 为 ${dateKey} 生成同一住处的共享生活时间线，一次返回所有选定人物。只使用已有空间/物件；各人可以一起活动或分别处在不同空间，不替用户行动或回应。
 INPUT_JSON:
 ${JSON.stringify({ date: dateKey, home: roomBlueprintPayload(session), memories: lifeMemories }, null, 2)}
@@ -2182,7 +2230,7 @@ export function normalizeRoomParticipantsLifePlan(data, session, memoryBank, exp
                 ? core_evidence.normalizeExactMemoryReference(raw.sourceMemoryIds, raw.sourceMemoryAnchor, memoryBank, 1)
                 : { sourceMemoryIds: [], sourceMemoryAnchor: '' };
             const fold = value => String(value).replace(/\s+/gu, '').toLowerCase();
-            if (roomNarrativeClaimsSharedHistory(visible, memoryBank?.userName)
+            if (roomNarrativeClaimsSharedHistory(visible, memoryBank)
                 && (!reference.sourceMemoryIds.length || !reference.sourceMemoryAnchor || !fold(visible.join('\n')).includes(fold(reference.sourceMemoryAnchor)))) {
                 throw roomParticipantError('人物生活节点混入无据既往共同经历。');
             }
@@ -2249,7 +2297,7 @@ export function renderRoomParticipants(session = runtimeState.activeSession) {
     if (!memoryBank) { try { memoryBank = archive_repository.requireArchive(core_context.currentCharacterGuard()); } catch {} }
     memoryBank = core_cache.generationPageSourceMemory(session, 'room', memoryBank);
     const selectedSpace = { ...storedSpace,
-        objects: (storedSpace.objects || []).filter(item => roomObjectSafeForPresentation(item, memoryBank, memoryBank?.userName || '')) };
+        objects: (storedSpace.objects || []).filter(item => roomObjectSafeForPresentation(item, memoryBank)) };
     const selected = selectedRoomObject(selectedSpace);
     const present = slots.filter(slot => slot.spaceId === selectedSpace.id);
     const layout = roomObjectLayout(selectedSpace);
@@ -2274,9 +2322,9 @@ export function renderRoomParticipants(session = runtimeState.activeSession) {
     const body = ui_overlay.bodyEl();
     if (!body) return;
     body.innerHTML = `<style data-rmt-room-layout-css>${roomLayoutCss()}</style><div class="rmt-room-view rmt-room-multi-view" data-rmt-room-world="${e(visual.worldStyle)}" data-rmt-room-palette="${e(visual.palette)}" data-rmt-room-material="${e(visual.material)}" data-rmt-room-density="${e(visual.density)}">
-      <div class="rmt-room-participants" aria-label="本次房间中的人物">${people}</div><div class="rmt-room-map">${locations}</div>
+      <details class="rmt-room-find-person"><summary>找人 · ${slots.length} 人</summary><div class="rmt-room-participants" aria-label="查找人物所在空间">${people}</div></details><nav class="rmt-room-map" aria-label="切换空间">${locations}</nav>
       <div class="rmt-room-location"><b>${e(session.homeName)}</b><span data-rmt-room-clock>${e(roomDaypartState(now).label)} · ${e(roomClockText(now))}</span>${readOnly ? '' : '<button type="button" class="rmt-btn" data-rmt-action="room-refresh-figure">更新人物外形 · 保留房间内容</button><button type="button" class="rmt-btn" data-rmt-action="room-life-refresh">更新今日生活</button>'}</div>
-      <div class="rmt-room-flow"><section class="rmt-room-stage"><div class="rmt-room-stage-head"><b>${e(selectedSpace.label)}</b></div><div class="rmt-room-scene rmt-room-layout-scene" data-rmt-room-beat="${e(current.id)}">
+      <div class="rmt-room-flow"><section class="rmt-room-stage"><div class="rmt-room-stage-head"><b>${e(selectedSpace.label)}</b><small>${e(present.length ? `在场：${present.map(slot => slot.name).join("、")}` : "此刻没有已记录的在场者")}</small></div><div class="rmt-room-scene rmt-room-layout-scene" data-rmt-room-beat="${e(current.id)}">
         ${room_interior.roomInteriorHtml(layout, { selectedId: selected?.id, world: visual.worldStyle, participants: present.map(slot => ({ id: slot.participantId, name: slot.name, figure: slot.visualProfile?.figure || {} })) })}
         ${(session.pets || []).filter(pet => pet.spaceId === selectedSpace.id).map(roomPetNodeHtml).join('')}</div>
         <div class="rmt-room-object-rail">${layout.map(entry => roomObjectLayoutButtonHtml(entry, 'rail', selected?.id)).join('')}</div><div class="rmt-room-participant-states">${lines}</div></section>

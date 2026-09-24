@@ -400,7 +400,7 @@ export async function refreshEndingConfessionReplays() {
             '正在扫描新增档案里的告白 / 关系确认…',
             {
                 maxTokens: 10000,
-                temperature: 0.35,
+                temperatureCeiling: 0.35,
                 context,
                 origin,
                 taskKey: `ending-confessions:${scope}`,

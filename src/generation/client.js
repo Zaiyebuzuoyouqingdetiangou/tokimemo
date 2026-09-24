@@ -1,3 +1,7 @@
+import * as routePeople from '../core/routeParticipants.js';
+import * as composerOptions from '../core/generationOptions.js';
+import * as connection_pool from '../core/connectionPool.js';
+import * as generation_merged from './mergedGeneration.js';
 import * as advanced_generation from '../core/advancedGeneration.js';
 import * as recovery_source from '../core/recoverySourcePolicy.js';
 import * as output_budget from '../core/outputBudget.js';
@@ -12,6 +16,9 @@ import * as archive_repository from '../archive/repository.js';
 import * as archive_snapshots from '../archive/snapshots.js';
 import * as core_cache from '../core/cache.js';
 import * as core_participants from '../core/participants.js';
+import * as core_generationParticipants from '../core/generationParticipants.js';
+import * as core_controlledSources from '../core/controlledSources.js';
+import * as core_inputLedger from '../core/inputLedger.js';
 import * as core_constants from '../core/constants.js';
 import * as core_context from '../core/context.js';
 import * as core_evidence from '../core/evidence.js';
@@ -30,6 +37,8 @@ import * as core_worldPresentation from '../core/worldPresentation.js';
 import * as generation_jsonParser from './jsonParser.js';
 import * as generation_normalizers from './normalizers.js';
 import * as generation_prompts from './prompts.js';
+import * as generation_jsonShapeExamples from './jsonShapeExamples.js';
+import * as generation_requestTemperature from './requestTemperature.js';
 import * as modes_achievements from '../modes/achievements.js';
 import * as modes_advEvent from '../modes/advEvent.js';
 import * as modes_album from '../modes/album.js';
@@ -42,6 +51,8 @@ import * as modes_cabinet from '../modes/cabinet.js';
 import * as modes_phone from '../modes/phone.js';
 import * as modes_song from '../modes/themeSong.js';
 import * as song_contract from '../core/themeSongContract.js';
+import * as modes_bedtime from '../modes/bedtime.js';
+import * as bedtime_contract from '../core/bedtimeContract.js';
 import * as heart_reader from '../ui/heartReaderState.js';
 import * as modes_inbox from '../modes/inbox.js';
 import * as modes_pastLives from '../modes/pastLives.js';
@@ -108,14 +119,7 @@ function captureGenerationContent(context, bank) {
     if (Array.isArray(context.characters)) {
         fields.characters = Array.from(context.characters, (character, index) => {
             if (!character) return null;
-            if (String(index) === String(context.characterId)) return cloneContentField(character);
-            // Other cards are used only for name/avatar and duplicate identity
-            // lookup. Preserve exactly the existing descriptor inputs, without
-            // copying their unrelated world books, extensions or other payloads.
             const data = character.data && typeof character.data === 'object' ? character.data : character;
-            // Keep one following non-space character when truncating: the
-            // descriptor trims before slicing, so a boundary space must survive
-            // its later normalization too. These are identity inputs only.
             const identityInput = (value, length) => {
                 const text = core_text.normalizeText(value, Number.MAX_SAFE_INTEGER);
                 return text.length > length ? text.slice(0, length) + text.slice(length).trimStart().slice(0, 1) : text;
@@ -133,13 +137,44 @@ function captureGenerationContent(context, bank) {
     }
     fields.powerUserSettings = { persona_description: context.powerUserSettings?.persona_description || '' };
     let cardFields = {};
-    try { cardFields = structuredClone(context.getCharacterCardFields?.() || {}); } catch {}
-    // Archive import checkpoints retain their own source material in the original
-    // bank. Derived content needs the archive facts, not another copy of that log.
-    const memoryBank = structuredClone(bank);
-    delete memoryBank.archiveImportProgress;
-    delete memoryBank.archiveImportPaused;
-    delete memoryBank.coveredRanges;
+    try {
+        const rawFields = context.getCharacterCardFields?.() || {};
+        cardFields = Object.fromEntries(['name', 'description', 'personality', 'scenario', 'first_mes', 'mes_example', 'system', 'system_prompt', 'post_history_instructions']
+            .filter(key => rawFields[key] !== undefined)
+            .map(key => [key, core_text.normalizeText(rawFields[key], 5000)]));
+    } catch {}
+    const sourceBank = bank && typeof bank === 'object' ? bank : {};
+    const memoryBank = {
+        version: sourceBank.version,
+        chatId: sourceBank.chatId,
+        characterName: sourceBank.characterName,
+        userName: sourceBank.userName,
+        archiveName: sourceBank.archiveName,
+        archiveRevision: sourceBank.archiveRevision,
+        archiveSummary: core_text.normalizeText(sourceBank.archiveSummary, 2000),
+        archiveKeywords: Array.isArray(sourceBank.archiveKeywords) ? sourceBank.archiveKeywords.slice(0, 16) : [],
+        usedMessageCount: sourceBank.usedMessageCount,
+        usedCharacterCount: sourceBank.usedCharacterCount,
+        sourceMessageCount: sourceBank.sourceMessageCount,
+        sourceFingerprint: sourceBank.sourceFingerprint,
+        memories: (Array.isArray(sourceBank.memories) ? sourceBank.memories : []).map(item => ({
+            id: item?.id,
+            title: core_text.normalizeText(item?.title, 100),
+            date: core_text.normalizeText(item?.date, 100),
+            locked: item?.locked === true,
+            anchors: core_text.cleanArray(item?.anchors, 8, 120),
+            participants: core_text.cleanArray(item?.participants, 8, 80),
+            messageStart: item?.messageStart,
+            messageEnd: item?.messageEnd,
+            sourceKind: core_text.normalizeText(item?.sourceKind, 80),
+            externalSourceIds: core_text.cleanArray(item?.externalSourceIds, 8, 100),
+            summary: core_text.normalizeText(item?.summary, 700),
+        })),
+        coldArchive: (Array.isArray(sourceBank.coldArchive) ? sourceBank.coldArchive : []).map(item => ({
+            id: item?.id, title: core_text.normalizeText(item?.title, 100), date: core_text.normalizeText(item?.date, 100),
+            locked: item?.locked === true, summary: core_text.normalizeText(item?.summary, 200),
+        })),
+    };
     return { version: 1, fields, cardFields, memoryBank,
         contentSettings: generationContentSettings(core_settings.getPluginSettings(context)) };
 }
@@ -278,9 +313,9 @@ async function collectFittingSelectedSetting(context, budget = core_constants.MA
     };
 }
 
-export async function buildWorldPresentationContext(context, memoryBank, mode, origin = null) {
+export async function buildWorldPresentationContext(context, memoryBank, mode, origin = null, participantSnapshot = null) {
     context = generationContentContext(origin, context);
-    return generation_recovery.frozenGenerationInput(origin, `presentation:${mode}`, () => buildWorldPresentationContextFresh(context, memoryBank, mode));
+    return generation_recovery.frozenGenerationInput(origin, `presentation:${mode}`, () => buildWorldPresentationContextFresh(context, memoryBank, mode, participantSnapshot));
 }
 
 export async function captureRoomParticipantSnapshot(context, origin, { existing = null, participantSnapshot } = {}) {
@@ -305,8 +340,87 @@ export async function captureAlbumParticipantSnapshot(context, origin, { existin
     if (!snapshot) return null;
     return generation_recovery.frozenGenerationInput(origin, 'participants:album', () => snapshot);
 }
-async function buildWorldPresentationContextFresh(context, memoryBank, mode) {
-    const wantsSelectedSetting = time_stories.isTimeStoryMode(mode) || [core_constants.MODE.ROOM, core_constants.MODE.TRAVEL, core_constants.MODE.PHONE, core_constants.MODE.INBOX, core_constants.MODE.PAST_LIVES, core_constants.MODE.THEME_SONG].includes(mode);
+
+export async function captureModeParticipantSnapshot(mode, context, origin, { existing = null, participantSnapshot, memoryBank = null } = {}) {
+    if ([core_constants.MODE.ROOM, core_constants.MODE.ALBUM].includes(mode)) return null;
+    const key = 'participants:mode';
+    // An old recovery recipe must remain byte-identical. Absence means the
+    // original request did not have a generic participant selection.
+    if (existing && !Object.hasOwn(existing.frozenInputs || {}, key)) return null;
+    const frozenSnapshot = existing ? JSON.parse(existing.frozenInputs[key])
+        : participantSnapshot !== undefined ? participantSnapshot : undefined;
+    const roster = memoryBank?.[core_participants.PARTICIPANTS_KEY] || core_cache.readParticipantRoster(context);
+    const snapshot = core_generationParticipants.resolveGenerationParticipantSnapshot({ roster, frozenSnapshot });
+    // New work freezes null too. That prevents a later roster edit from turning
+    // a single-person retry into a different prompt, without adding a prompt block.
+    return generation_recovery.frozenGenerationInput(origin, key, () => snapshot);
+}
+async function activatedWorldInfoText(context, mode) {
+    if (core_settings.getPluginSettings(context).useActivatedWorldInfo === false || typeof context.getWorldInfoPrompt !== 'function') return '';
+    try {
+        const result = await context.getWorldInfoPrompt(generationWorldInfoScanTerms(mode, context), Math.max(2048, Math.min(32768, Number(context.maxContext) || 8192)), true, {});
+        const worldText = result?.worldInfoString || [result?.worldInfoBefore, result?.worldInfoAfter].filter(Boolean).join('\n');
+        return core_contextTags.filterContextTags(core_text.normalizeText(worldText, 12000), core_contextTags.tagPolicyForContext(context));
+    } catch (error) {
+        if (error?.name === 'AbortError') throw error;
+        console.warn('[HeartbeatMemories] activated world info unavailable', core_text.safeErrorDiagnostic(error));
+        return '';
+    }
+}
+
+async function collectSelectedSettingEntries(context) {
+    try {
+        const selected = await archive_repository.collectSelectedMemoryWorldInfo(context, core_context.getChatId(context), null, { settingsOnly: true });
+        const excluded = core_contextTags.tagPolicyForContext(context);
+        const entries = [];
+        for (const entry of selected.entries || []) {
+            const content = core_contextTags.filterContextTags(entry.content, excluded);
+            if (!content) continue;
+            entries.push({ ...entry, content });
+        }
+        return { entries, incomplete: selected.coverage?.status !== 'complete', reason: core_text.normalizeText(selected.coverage?.reason, 200) };
+    } catch (error) {
+        if (error?.name === 'AbortError') throw error;
+        console.warn('[HeartbeatMemories] selected setting entries unavailable', core_text.safeErrorDiagnostic(error));
+        return { entries: [], incomplete: true, reason: '本次没能读取所选设定世界书。' };
+    }
+}
+
+async function buildWorldPresentationContextFresh(context, memoryBank, mode, participantSnapshot = null) {
+    const wantsSelectedSetting = time_stories.isTimeStoryMode(mode) || [core_constants.MODE.ROOM, core_constants.MODE.TRAVEL, core_constants.MODE.PHONE, core_constants.MODE.INBOX, core_constants.MODE.PAST_LIVES, core_constants.MODE.THEME_SONG, core_constants.MODE.BEDTIME].includes(mode);
+    if (participantSnapshot?.people?.length) {
+        const selected = wantsSelectedSetting ? await collectSelectedSettingEntries(context) : { entries: [], incomplete: false, reason: '' };
+        const activatedText = selected.entries.length ? '' : await activatedWorldInfoText(context, mode);
+        const assembled = core_controlledSources.assembleControlledSources({
+            participantSnapshot,
+            selectedEntries: selected.entries,
+            activatedText,
+            budgetChars: core_constants.MAX_CONTROLLED_WORLD_TOTAL_CHARS,
+        });
+        const contextEnvelope = await core_cache.buildControlledContextEnvelope(context, {
+            worldInfoScanTerms: generationWorldInfoScanTerms(mode, context),
+            participantSnapshot,
+            controlledWorldText: assembled.worldText,
+        });
+        const notes = [assembled.note, selected.incomplete ? selected.reason : ''].filter(Boolean);
+        return {
+            contextEnvelope,
+            profile: core_worldPresentation.resolveWorldPresentation(contextEnvelope, memoryBank, worldPresentationProfileBinding(context)),
+            settingEvidence: core_worldPresentation.controlledWorldEvidence(contextEnvelope, null),
+            characterEvidence: core_worldPresentation.controlledCharacterEvidence(contextEnvelope),
+            selectedSetting: {
+                text: assembled.worldText,
+                used: assembled.used,
+                total: assembled.total,
+                dropped: assembled.dropped,
+                complete: assembled.complete && !selected.incomplete,
+                note: notes.join('；'),
+                deduplicatedChars: assembled.deduplicatedChars,
+                included: assembled.included,
+                excluded: assembled.excluded,
+            },
+        };
+    }
     let selectedSetting = wantsSelectedSetting
         ? await collectFittingSelectedSetting(context)
         : { text: '', used: 0, total: 0, dropped: 0, complete: true, note: '' };
@@ -380,9 +494,14 @@ export async function requestValidatedSegment(prompt, status, options, validator
     const logicalTask = core_requestCoordinator.logicalGenerationTaskForOrigin(options?.origin);
     core_requestCoordinator.assertLogicalGenerationTaskCurrent(logicalTask);
     if (logicalTask?.participantSnapshot && !options?.participantPromptApplied) {
-        const block = core_participants.participantPromptBlock(logicalTask.participantSnapshot);
-        if (!prompt.includes(block)) prompt += block;
+        const block = logicalTask.participantPromptIndexed
+            ? core_participants.participantIndexPromptBlock(logicalTask.participantSnapshot)
+            : core_participants.participantPromptBlock(logicalTask.participantSnapshot);
+        if (block && !prompt.includes(block)) prompt += block;
         options = { ...options, participantPromptApplied: true };
+    }
+    if (core_requestCoordinator.chatScopeCancellationBlocksOrigin(options?.origin)) {
+        throw core_requestCoordinator.createGenerationAbortError();
     }
     prompt = cg_policy.cgPromptForSegment(prompt, options);
     validator = cg_policy.cgSegmentValidator(validator, options);
@@ -402,12 +521,13 @@ export async function requestValidatedSegment(prompt, status, options, validator
     // failure into minutes of extra billing the user could not stop. Successful segments
     // are already kept by the recovery draft, so the run stops and waits for「续写」.
     const allowAutoRetry = options?.allowAutoRetry === true;
-    const maxAttempts = allowAutoRetry
+    const configuredAttempts = allowAutoRetry
         ? Math.max(1, Math.min(core_requestCoordinator.MAX_RATE_LIMIT_ATTEMPTS, Number(options?.segmentMaxAttempts) || core_requestCoordinator.MAX_RATE_LIMIT_ATTEMPTS))
         : 1;
+    const maxAttempts = Math.max(configuredAttempts, 2);
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
         const retryNote = attempt && lastError
-            ? '\n\n【本地校验反馈】' + (core_butterflyContract.butterflyValidationFeedback(lastError) || core_text.normalizeText(lastError?.repairHint, 600) || (lastError?.code === 'RMT_JSON_NOT_FOUND' || lastError?.code === 'RMT_JSON_INVALID' ? '上一轮你返回的是散文，没有任何可解析的 JSON 对象。本轮只输出一个 JSON 对象：第一个字符必须是 {，最后一个字符必须是 }。不要前言、不要解释、不要引用来源、不要代码围栏。' : String(lastError.code || '').startsWith('RMT_ROOM_') ? core_text.safeErrorSummary(lastError) : '上一轮结构或完整度没有通过。')) + ' 请严格按原硬性要求重新输出完整 JSON，不要解释，也不要引用这条反馈作为内容。'
+            ? '\n\n【本地校验反馈】' + (core_butterflyContract.butterflyValidationFeedback(lastError) || generation_recovery.generationRetryFeedbackText(lastError?.code, lastError) || core_text.normalizeText(lastError?.repairHint, 600) || (String(lastError.code || '').startsWith('RMT_ROOM_') ? core_text.safeErrorSummary(lastError) : '上一轮结构或完整度没有通过。')) + ' 请严格按原硬性要求重新输出完整 JSON，不要解释，也不要引用这条反馈作为内容。'
             : '';
         try {
             const raw = await requestJson(`${prompt}${retryNote}`, `${status}${attempt ? `（重试 ${attempt}/${maxAttempts - 1}）` : ''}`, options);
@@ -418,9 +538,11 @@ export async function requestValidatedSegment(prompt, status, options, validator
             return value;
         } catch (error) {
             if (options.taskTrace?.activeStage === 'validate') core_taskTrace.markStage(options.taskTrace, 'validate', false);
-            if (error?.name === 'AbortError' || error?.code === 'RMT_BANNED_GENERATED_PHRASE') throw error;
+            if (error?.name === 'AbortError' || error?.nonRetryable === true || error?.code === 'RMT_PHONE_NO_CONVERSATION' || error?.code === 'RMT_BANNED_GENERATED_PHRASE' || error?.code === 'RMT_JSON_TRUNCATED') throw error;
             lastError = error;
-            if (attempt + 1 < maxAttempts && core_requestCoordinator.shouldRetrySegmentRequest(error, attempt)) {
+            const emptyReroll = attempt === 0 && ['RMT_JSON_EMPTY_FINAL', 'RMT_JSON_EMPTY_FINAL_WITH_REASONING', 'RMT_JSON_NOT_FOUND'].includes(error?.code);
+            const configuredRetry = attempt + 1 < configuredAttempts && core_requestCoordinator.shouldRetrySegmentRequest(error, attempt);
+            if (attempt + 1 < maxAttempts && (emptyReroll || configuredRetry)) {
                 core_taskTrace.recordRetry(options.taskTrace, error);
                 core_taskTrace.beginStage(options.taskTrace, 'retry');
                 try { await core_requestCoordinator.waitBeforeSegmentRetry(error, attempt); }
@@ -470,6 +592,39 @@ function countPromptTokens(context, prompt, signal, timeoutMs) {
     });
 }
 
+function enrichInputBudgetError(error, logicalTask, prompt) {
+    if (error?.code !== 'RMT_INPUT_BUDGET') return error;
+    const packing = logicalTask?.inputPacking || null;
+    const ledger = core_inputLedger.accountFinalPrompt(prompt, packing);
+    const detail = core_inputLedger.preflightDetailText({ ledger, packing, budget: error.inputBudget });
+    const dropped = packing?.dropped > 0 ? `设定已发送 ${packing.used}/${packing.total}，未送入条目见同一次说明。` : '';
+    const largest = ledger.largest?.chars ? `最大占用段：${ledger.largest.label} ${ledger.largest.chars.toLocaleString()} 字符。` : '';
+    const message = [error.safeUserMessage || error.message, dropped, largest, '可以减少人物、减少设定，或在设置中提高输入预算。'].filter(Boolean).join('');
+    error.message = message;
+    error.safeUserMessage = message;
+    error.preflightDetail = detail;
+    if (logicalTask) logicalTask.preflightNotified = true;
+    return error;
+}
+
+function preflightSurfaceVisible(mode) {
+    const overlay = document.getElementById(core_constants.OVERLAY_ID);
+    return !!overlay && !overlay.hidden && !!mode && runtimeState.activeMode === mode;
+}
+
+function notifyInputPackingOnce(logicalTask, budget, prompt, options) {
+    if (!logicalTask || logicalTask.preflightNotified) return;
+    const packing = logicalTask.inputPacking;
+    if (!packing || !(packing.dropped > 0) || !packing.note) return;
+    logicalTask.preflightNotified = true;
+    const ledger = core_inputLedger.accountFinalPrompt(prompt, packing);
+    const summary = packing.note;
+    const detail = core_inputLedger.preflightDetailText({ ledger, packing, budget });
+    if (options?.automatic === true) return;
+    if (preflightSurfaceVisible(options?.mode) && options?.background !== true) ui_overlay.showInlinePreflight(summary, detail, { error: false });
+    else globalThis.toastr?.info?.(summary, `心迹回廊 · ${core_constants.MODE_LABEL[options?.mode] || '生成'}`);
+}
+
 export async function assertPromptBudget(context, prompt, { skipTokenCount = false, signal = null,
     tokenCountTimeoutMs = TOKEN_COUNT_TIMEOUT_MS, taskTrace = null } = {}) {
     if (signal?.aborted) throw core_requestCoordinator.createGenerationAbortError();
@@ -477,33 +632,46 @@ export async function assertPromptBudget(context, prompt, { skipTokenCount = fal
     try { budgetTokens = core_settings.getPluginSettings(context).inputBudgetTokens; }
     catch { /* fixtures without a settings host keep the default */ }
     budgetTokens = output_budget.normalizeInputBudgetTokens(budgetTokens);
+    const charCap = output_budget.generationInputCharCap(budgetTokens);
     core_taskTrace.recordInput(taskTrace, prompt.length);
-    if (prompt.length > core_constants.MAX_GENERATION_INPUT_CHARS) {
-        throw core_text.safeUserError(`本次心迹回廊输入过大（${prompt.length.toLocaleString()} 字符），已在发送前拦截。请更新/精简档案或减少世界书内容。`, 'RMT_INPUT_BUDGET');
+    const budgetError = (message, tokens = null, tokensKnown = false) => {
+        const error = core_text.safeUserError(message, 'RMT_INPUT_BUDGET');
+        error.inputBudget = { chars: prompt.length, tokens, tokensKnown, budgetTokens, charCap };
+        return error;
+    };
+    if (prompt.length > charCap) {
+        throw budgetError(`本次输入 ${prompt.length.toLocaleString()} 字符，预算 ${budgetTokens.toLocaleString()} tokens，字符顶 ${charCap.toLocaleString()}。tokens 未知，已按字符安全顶判断。已在发送前拦截。`);
     }
+    let tokens = null;
+    let tokensKnown = false;
     if (!skipTokenCount && typeof context.getTokenCountAsync === 'function') {
         core_taskTrace.beginStage(taskTrace, 'token-count');
         try {
             const timeout = Math.max(1, Math.min(TOKEN_COUNT_TIMEOUT_MS, Number(tokenCountTimeoutMs) || TOKEN_COUNT_TIMEOUT_MS));
             const count = await countPromptTokens(context, prompt, signal, timeout);
-            const tokens = (typeof count === 'number' || (typeof count === 'string' && count.trim())) ? Number(count) : NaN;
-            if (!Number.isFinite(tokens) || tokens < 0) {
+            const counted = (typeof count === 'number' || (typeof count === 'string' && count.trim())) ? Number(count) : NaN;
+            if (!Number.isFinite(counted) || counted < 0) {
                 throw core_text.safeUserError('本地计数暂不可用。', 'RMT_TOKEN_COUNT_UNAVAILABLE');
             }
+            tokens = Math.round(counted);
+            tokensKnown = true;
             core_taskTrace.recordInput(taskTrace, prompt.length, tokens);
-            if (Number.isFinite(tokens) && tokens > budgetTokens) {
-                throw core_text.safeUserError(`本次心迹回廊输入约 ${Math.round(tokens).toLocaleString()} tokens，超过当前输入预算 ${budgetTokens.toLocaleString()}，已在发送前拦截。请更新/精简档案或减少世界书内容，或在心迹回廊设置中提高输入预算。`, 'RMT_INPUT_BUDGET');
+            if (tokens > budgetTokens) {
+                throw budgetError(`本次输入 ${prompt.length.toLocaleString()} 字符 / ${tokens.toLocaleString()} tokens，预算 ${budgetTokens.toLocaleString()}。已在发送前拦截。`, tokens, true);
             }
             core_taskTrace.markStage(taskTrace, 'token-count');
         } catch (error) {
             core_taskTrace.markStage(taskTrace, 'token-count', false);
             if (signal?.aborted || error?.name === 'AbortError') throw core_requestCoordinator.createGenerationAbortError();
             if (error?.code === 'RMT_INPUT_BUDGET') throw error;
+            tokens = null;
+            tokensKnown = false;
             core_taskTrace.markStage(taskTrace, 'token-count-fallback');
             console.warn('[HeartbeatMemories] input token count unavailable; using character budget only', core_text.safeErrorDiagnostic(error));
         }
     }
     if (signal?.aborted) throw core_requestCoordinator.createGenerationAbortError();
+    return { chars: prompt.length, tokens, tokensKnown, budgetTokens, charCap };
 }
 
 export const GENERATED_PHRASE_EVIDENCE_KEYS = new Set([
@@ -657,11 +825,16 @@ export async function generateConfiguredJson(prompt, options = {}) {
         else signal.addEventListener('abort', abort, { once: true });
     }
     if (logicalTask.participantSnapshot && !options.participantPromptApplied) {
-        const block = core_participants.participantPromptBlock(logicalTask.participantSnapshot);
-        if (!prompt.includes(block)) prompt += block;
-        if (typeof options.recoveryBasePrompt === 'string' && !options.recoveryBasePrompt.includes(block)) {
+        const block = logicalTask.participantPromptIndexed
+            ? core_participants.participantIndexPromptBlock(logicalTask.participantSnapshot)
+            : core_participants.participantPromptBlock(logicalTask.participantSnapshot);
+        if (block && !prompt.includes(block)) prompt += block;
+        if (typeof options.recoveryBasePrompt === 'string' && block && !options.recoveryBasePrompt.includes(block)) {
             options = { ...options, recoveryBasePrompt: options.recoveryBasePrompt + block };
         }
+    }
+    if (core_requestCoordinator.chatScopeCancellationBlocksOrigin(options.origin)) {
+        throw core_requestCoordinator.createGenerationAbortError();
     }
     try {
         const result = await generateConfiguredJsonOperation(prompt, { ...options, signal: controller.signal });
@@ -670,6 +843,23 @@ export async function generateConfiguredJson(prompt, options = {}) {
     } finally {
         for (const signal of signals) signal.removeEventListener('abort', abort);
     }
+}
+
+// The text that will actually be sent: macros, tag filter, output seal, shape example,
+// shared envelope, creative supplement. Preview and the provider call both use this.
+export function composeOutgoingGenerationPrompt(prompt, context, contentSettings = {}, contextEnvelope = '', { enforceGeneratedPhrasePolicy = false } = {}) {
+    const originalExpanded = core_text.expandSafeRoleMacros(prompt, context);
+    const expandedBody = core_contextTags.filterJsonPromptStrings(originalExpanded, core_contextTags.tagPolicyForSettings(contentSettings));
+    const sealed = /【输出】\n只输出一个 JSON 对象/.test(expandedBody)
+        ? expandedBody
+        : `${expandedBody}\n\n${generation_prompts.jsonOutputSeal()}`;
+    const shapeExample = expandedBody.includes('【最短合法例子】')
+        ? ''
+        : generation_jsonShapeExamples.jsonShapeExampleBlock(expandedBody);
+    const expanded = shapeExample ? `${sealed}\n\n${shapeExample}` : sealed;
+    const phrasePolicy = enforceGeneratedPhrasePolicy === true ? generatedPhrasePolicyText(contentSettings) : '';
+    const creativeSupplement = creative_supplement.creativeSupplementBlock(contentSettings);
+    return `${contextEnvelope}\n${expanded}${creativeSupplement}${phrasePolicy}`;
 }
 
 async function generateConfiguredJsonOperation(prompt, options = {}) {
@@ -681,25 +871,46 @@ async function generateConfiguredJsonOperation(prompt, options = {}) {
     const context = generationContentContext(options.origin, options.context || core_context.currentCharacterGuard());
     const transportContext = contentContextSources.get(context) || context;
     await core_settings.prepareManualCredential(transportContext);
-    const settings = core_settings.getPluginSettings(transportContext);
+    const configuredSettings = core_settings.getPluginSettings(transportContext);
+    // Persist only the selected profile's inert identifier, never credentials.
+    // A reopened recovery origin is a new object, so WeakMap pinning alone
+    // cannot preserve the provider chosen before a browser restart.
+    const frozenConnection = await generation_recovery.frozenGenerationInput(options.origin, 'transport:connection', () => {
+        if (configuredSettings.apiConnectionMode === 'manual' || !configuredSettings.connectionPoolEnabled) return null;
+        const selected = connection_pool.selectConnectionTransport(configuredSettings, options.origin || options);
+        return { id: selected.connectionProfileId, fingerprint: connection_pool.connectionPoolFingerprint(configuredSettings) };
+    });
+    const settings = connection_pool.selectConnectionTransport(configuredSettings, options.origin || options, frozenConnection);
     const savedContent = options.recoveryContentSettings || generation_recovery.generationContentSnapshotForOrigin(options.origin)?.contentSettings;
     let contentSettings = { ...settings, ...(savedContent || {}) };
     const advanced = advanced_generation.parseAdvancedGeneration(settings);
-    const configurationFingerprint = core_independentApi.apiConfigurationFingerprint(settings);
-    const originalExpanded = core_text.expandSafeRoleMacros(options.recoveryBasePrompt ?? prompt, context);
-    const expanded = core_contextTags.filterJsonPromptStrings(originalExpanded, core_contextTags.tagPolicyForSettings(contentSettings));
+    const configurationFingerprint = core_independentApi.apiConfigurationFingerprint(configuredSettings);
     const contextEnvelope = typeof options.contextEnvelope === 'string'
         ? options.contextEnvelope
         : await core_cache.buildControlledContextEnvelope(context, { worldInfoScanTerms: generationWorldInfoScanTerms(options.mode, context) });
-    const phrasePolicy = options.enforceGeneratedPhrasePolicy === true ? generatedPhrasePolicyText(contentSettings) : '';
-    const creativeSupplement = creative_supplement.creativeSupplementBlock(contentSettings);
+    let actualPrompt;
+    if (typeof options.recoveryPreparedPrompt === 'string') actualPrompt = options.recoveryPreparedPrompt;
+    else if (options.recoveryContinuationPartial) {
+        const originalExpanded = core_text.expandSafeRoleMacros(options.recoveryBasePrompt ?? prompt, context);
+        const expandedBody = core_contextTags.filterJsonPromptStrings(originalExpanded, core_contextTags.tagPolicyForSettings(contentSettings));
+        const phrasePolicy = options.enforceGeneratedPhrasePolicy === true ? generatedPhrasePolicyText(contentSettings) : '';
+        actualPrompt = `${contextEnvelope}\n${expandedBody}${creative_supplement.creativeSupplementBlock(contentSettings)}${phrasePolicy}`;
+    } else {
+        actualPrompt = composeOutgoingGenerationPrompt(options.recoveryBasePrompt ?? prompt, context, contentSettings, contextEnvelope, {
+            enforceGeneratedPhrasePolicy: options.enforceGeneratedPhrasePolicy === true,
+        });
+    }
     const prepared = await generation_recovery.freezeRecoveryRequestPayload(options, {
-        actualPrompt: typeof options.recoveryPreparedPrompt === 'string' ? options.recoveryPreparedPrompt : `${contextEnvelope}
-${expanded}${creativeSupplement}${phrasePolicy}`,
+        actualPrompt,
         contentSettings: generationContentSettings(contentSettings),
     });
     contentSettings = { ...settings, ...prepared.contentSettings };
-    const controlledPrompt = generation_recovery.generationContinuationPrompt(prepared.actualPrompt, options.recoveryContinuationPartial);
+    // Feedback is per attempt: preserve the frozen identity, then include the
+    // actual retry note in both the budget measurement and provider request.
+    const controlledPrompt = generation_recovery.generationRetryPrompt(
+        generation_recovery.generationPhoneRetryPrompt(
+            generation_recovery.generationContinuationPrompt(prepared.actualPrompt, options.recoveryContinuationPartial), options.recoveryPhoneRetryContract),
+        options.recoveryRetryFeedback);
     if (options.archiveRequestBudget === true) {
         const budget = await archive_requestBudget.measureArchiveRequest(context, controlledPrompt,
             { signal: options.signal, stamp: options.archiveBudgetStamp,
@@ -708,9 +919,16 @@ ${expanded}${creativeSupplement}${phrasePolicy}`,
         if (taskTrace) taskTrace.archiveBudget = archive_requestBudget.publicBudget(budget);
         archive_requestBudget.assertArchiveRequestBudget(budget);
     } else {
-        await assertPromptBudget(context, controlledPrompt,
-            { skipTokenCount: options.skipTokenCount === true, signal: options.signal,
-                tokenCountTimeoutMs: options.tokenCountTimeoutMs, taskTrace });
+        const logicalTask = core_requestCoordinator.logicalGenerationTaskForOrigin(options.origin);
+        let budget;
+        try {
+            budget = await assertPromptBudget(context, controlledPrompt,
+                { skipTokenCount: options.skipTokenCount === true, signal: options.signal,
+                    tokenCountTimeoutMs: options.tokenCountTimeoutMs, taskTrace });
+        } catch (error) {
+            throw enrichInputBudgetError(error, logicalTask, controlledPrompt);
+        }
+        notifyInputPackingOnce(logicalTask, budget, controlledPrompt, options);
     }
     core_taskTrace.markStage(taskTrace, 'prompt');
     // The value configured in the dedicated secondary-API UI is the actual provider max output.
@@ -720,7 +938,7 @@ ${expanded}${creativeSupplement}${phrasePolicy}`,
     const service = context.ConnectionManagerRequestService;
     let selectedProfileFingerprint = '';
     let overridePayload = {
-        temperature: Number.isFinite(Number(options.temperature)) ? Number(options.temperature) : settings.temperature,
+        temperature: generation_requestTemperature.resolveRequestTemperature(options, settings),
     };
     const modelOverride = core_text.normalizeText(options.model || (connectionMode === 'manual' ? settings.manualApiModel : settings.modelOverride), 240);
     if (modelOverride) overridePayload.model = modelOverride;
@@ -745,7 +963,7 @@ ${expanded}${creativeSupplement}${phrasePolicy}`,
         const latestSettings = core_settings.getPluginSettings(context);
         let latestProfileFingerprint = '';
         if (connectionMode === 'profile') {
-            try { latestProfileFingerprint = await core_settings.resolvedProfileTransportFingerprint(core_settings.rawConnectionProfile(latestSettings.connectionProfileId, context)); }
+            try { latestProfileFingerprint = await core_settings.resolvedProfileTransportFingerprint(core_settings.rawConnectionProfile(settings.connectionProfileId, context)); }
             catch { latestProfileFingerprint = 'missing'; }
         }
         if (core_independentApi.apiConfigurationFingerprint(latestSettings) !== configurationFingerprint
@@ -773,6 +991,7 @@ ${expanded}${creativeSupplement}${phrasePolicy}`,
     try {
         assertRequestCurrent();
         core_taskTrace.beginStage(taskTrace, 'queue');
+        core_requestCoordinator.noteChatTaskPhase('queue', { taskKey: options.taskKey, origin: options.origin });
         releaseProviderPermit = await core_requestCoordinator.acquireProviderRequestPermit(lifecycleController.signal);
         core_taskTrace.markStage(taskTrace, 'queue');
         core_taskTrace.beginStage(taskTrace, 'pacing');
@@ -782,6 +1001,7 @@ ${expanded}${creativeSupplement}${phrasePolicy}`,
         await assertConfigurationCurrent();
         assertRequestCurrent();
         core_taskTrace.beginStage(taskTrace, 'request');
+        core_requestCoordinator.noteChatTaskPhase('request', { taskKey: options.taskKey, origin: options.origin });
         result = await core_requestCoordinator.runGenerationRequestWithTimeout(
             async () => {
                 assertRequestCurrent();
@@ -837,6 +1057,7 @@ ${expanded}${creativeSupplement}${phrasePolicy}`,
         mode: options.mode, settingText: core_worldPresentation.controlledWorldEvidence(contextEnvelope, null),
     });
     core_taskTrace.markStage(taskTrace, 'parse');
+    core_requestCoordinator.noteChatTaskPhase('validate', { taskKey: options.taskKey, origin: options.origin });
     return parsed;
 }
 
@@ -856,6 +1077,7 @@ export async function requestJson(prompt, statusText = '正在根据当前聊天
     const controller = new AbortController();
     const requestContext = options.context || core_context.currentCharacterGuard();
     const origin = options.origin || core_context.captureTaskOrigin(requestContext, archive_repository.getImportedMemory(requestContext)?.archiveRevision || '');
+    if (core_requestCoordinator.chatScopeCancellationBlocksOrigin(origin)) throw core_requestCoordinator.createGenerationAbortError();
     core_context.assertRuntimeLifecycleCurrent(origin.lifecycleEpoch);
     const externalSignal = options.signal || null;
     const forwardAbort = () => {
@@ -867,16 +1089,18 @@ export async function requestJson(prompt, statusText = '正在根据当前聊天
     const displayStatus = targetLabel ? `正在为：${targetLabel} · ${core_text.normalizeText(statusText, 180)}` : statusText;
     runtimeState.activeGenerationTasks.set(taskKey, {
         key: taskKey, controller, origin, label: core_text.normalizeText(displayStatus, 360),
-        mode: core_text.normalizeText(options.mode, 80), parentTaskKey, startedAt: Date.now(),
+        mode: core_text.normalizeText(options.mode, 80), parentTaskKey, startedAt: Date.now(), phase: 'prepare',
     });
+    core_requestCoordinator.noteChatTaskPhase('prepare', { taskKey, origin });
     core_requestCoordinator.refreshConcurrentTaskUi(core_text.normalizeText(options.mode, 80), origin);
     const inheritedTrace = generationTrace(options);
     const taskTrace = inheritedTrace || core_taskTrace.startTaskTrace(taskKey, options.mode);
     if (!inheritedTrace) core_taskTrace.markStage(taskTrace, 'start');
+    let requestOutcome = 'done';
     try {
         core_context.assertRuntimeLifecycleCurrent(origin.lifecycleEpoch);
         const result = await generateConfiguredJson(prompt, {
-            ...options, taskTrace, origin, context: requestContext,
+            ...options, taskKey, taskTrace, origin, context: requestContext,
             signal: controller.signal,
             statusText,
             enforceGeneratedPhrasePolicy: options.enforceGeneratedPhrasePolicy !== false,
@@ -884,6 +1108,7 @@ export async function requestJson(prompt, statusText = '正在根据当前聊天
         if (!inheritedTrace) core_taskTrace.endTaskTrace(taskTrace, 'ok');
         return result;
     } catch (error) {
+        requestOutcome = error?.name === 'AbortError' ? 'cancelled' : 'failed';
         if (!inheritedTrace) core_taskTrace.endTaskTrace(taskTrace, error?.name === 'AbortError' ? 'cancelled' : 'failed', error);
         else if (taskTrace.activeStage) core_taskTrace.markStage(taskTrace, taskTrace.activeStage, false);
         throw error;
@@ -891,6 +1116,11 @@ export async function requestJson(prompt, statusText = '正在根据当前聊天
         try { externalSignal?.removeEventListener?.('abort', forwardAbort); } catch {}
         const current = runtimeState.activeGenerationTasks.get(taskKey);
         if (current?.controller === controller) runtimeState.activeGenerationTasks.delete(taskKey);
+        core_requestCoordinator.rememberStandaloneChatTask({
+            label: core_text.normalizeText(displayStatus, 120),
+            mode: core_text.normalizeText(options.mode, 80),
+            origin, outcome: requestOutcome, kind: 'generation',
+        });
         core_requestCoordinator.refreshConcurrentTaskUi(core_text.normalizeText(options.mode, 80), origin);
     }
 }
@@ -951,11 +1181,15 @@ export async function beginModeRecovery(mode, context, bank, origin, options = {
         }
         partialSeed = { snapshot, frozenInputs: structuredClone(parent.frozenInputs || {}) };
     }
-    const contentSnapshot = generation_recovery.readGenerationContentSnapshot(existing)
+    let contentSnapshot = generation_recovery.readGenerationContentSnapshot(existing)
         || (!existing ? fitGenerationContentSnapshot(snapshotGenerationContent({ ...(partialSeed?.snapshot || captureGenerationContent(context, bank)),
             ...(options.contentInputs ? { contentInputs: { ...(partialSeed?.snapshot?.contentInputs || {}), ...options.contentInputs } } : {}) })) : null);
     const sourceValues = JSON.stringify(recovery_source.recoverySourceValues(context));
     await recovery_source.assertRecoverySourcePolicy(existing, context, origin);
+    if (!contentSnapshot && await recovery_source.hasLegacyConfigurationRestartApproval(existing, context)) {
+        contentSnapshot = fitGenerationContentSnapshot(snapshotGenerationContent({ ...captureGenerationContent(context, bank),
+            ...(options.contentInputs ? { contentInputs: options.contentInputs } : {}) }));
+    }
     const sourcePolicy = await recovery_source.recoverySourcePolicy(context);
     if (!contentSnapshot && JSON.stringify(recovery_source.recoverySourceValues(context)) !== sourceValues) throw new DOMException('Source changed', 'AbortError');
     const operation = cg_policy.cgRecoveryOperation(mode, options.operation || { kind: 'mode', mode }, existing,
@@ -972,7 +1206,9 @@ export async function beginModeRecovery(mode, context, bank, origin, options = {
         contentSnapshot,
         draftId: existing?.draftId || options.draftId || `generation-${globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`}`,
         pageId: existing?.pageId || options.pageId || options.participantRegeneration?.pageId || mode,
-        confirmLegacyRestart: () => ui_overlay.confirmExplicitAction('保留旧失败记录，按当前背景重新尝试？',
+        confirmLegacyRestart: async ({ reason } = {}) => reason === 'configuration'
+            ? recovery_source.consumeLegacyConfigurationRestart(existing, context)
+            : ui_overlay.confirmExplicitAction('保留旧失败记录，按当前背景重新尝试？',
             '旧版失败记录没有可验证的原背景配对，且没有任何成功分段或截断正文。确定会保留原失败记录，按本次已读取的背景重新请求；取消不发送。', { destructive: false }),
         taskScopes: [`${origin.characterKey}|${origin.chatId}`, `archive-target:${options.archiveTarget?.entryId || archiveEntry?.entryId || origin.archiveTargetEntryId || ''}`],
         modeTaskScopes: recoveryModeTaskScopes(mode, context, bank, origin,
@@ -1047,13 +1283,14 @@ export async function continueSavedGeneration(mode, options = {}) {
     const existing = core_cache.loadGenerationRecovery(mode, context, targetOptions.archiveTarget?.cache,
         { ...(options.draftId ? { draftId: options.draftId } : {}), ...(options.pageId ? { pageId: options.pageId } : {}) });
     if (!existing) { globalThis.toastr?.info?.('当前档案没有可继续的草稿，不会发起新请求。', '心迹回廊'); return; }
-    if (!ui_overlay.confirmExplicitAction('继续未完成内容？', '只补原任务未完成的内容，会使用文本生成额度。认证或额度问题需要先在设置里解决；取消不改动草稿。', { destructive: false })) return;
+    if (options.skipConfirm !== true && !ui_overlay.confirmExplicitAction('继续未完成内容？', '只补原任务未完成的内容，会使用文本生成额度。认证或额度问题需要先在设置里解决；取消不改动草稿。', { destructive: false })) return;
     const operation = existing.operation || { kind: 'mode', mode };
     const resumeOptions = { ...options, ...targetOptions, existing, continueRecovery: true,
         ...(operation.participantRegeneration ? { participantRegeneration: operation.participantRegeneration } : {}) };
+    if (operation.kind === 'merged') return generation_merged.resumeMergedGeneration(existing, resumeOptions);
     if (operation.kind === 'mode') return generateMode(mode, { ...resumeOptions,
-        background: !(runtimeState.activeMode === mode && (time_stories.isTimeStoryMode(mode)
-            || mode === core_constants.MODE.THEME_SONG
+        background: options.skipConfirm === true || !(runtimeState.activeMode === mode && (time_stories.isTimeStoryMode(mode)
+            || mode === core_constants.MODE.THEME_SONG || mode === core_constants.MODE.BEDTIME
             || (mode === core_constants.MODE.PHONE && runtimeState.activeSession?._rmtEmptyTerminal === true))) });
     if (operation.kind === 'content-item' && operation.sourceDraftId) return ui_contentManager.resumeContentRegeneration(resumeOptions);
     let session = core_cache.loadSession(mode, { context, memoryBank: bank, cache: targetOptions.archiveTarget?.cache, clone: true });
@@ -1130,6 +1367,10 @@ export async function discardSavedGeneration(mode, options = {}) {
 export async function generateMode(mode, options = {}) {
     if (!Object.values(core_constants.MODE).includes(mode)) return;
     const context = options.context || core_context.currentCharacterGuard();
+    if (!Object.hasOwn(options, 'participantSnapshot') && !options.existing && !options.draftId && !options.participantRegeneration && !options.archiveTarget
+        && !core_cache.loadGenerationRecovery(mode, context)) {
+        options = { ...options, participantSnapshot: routePeople.captureRoutePeople(options.workspaceRoute || mode, context, archive_repository.getImportedMemory(context)) };
+    }
     const origin = core_context.captureTaskOrigin(context, archive_repository.getImportedMemory(context)?.archiveRevision || '');
     let logicalTask;
     try {
@@ -1147,10 +1388,24 @@ export async function generateMode(mode, options = {}) {
         if (options.participantRegeneration && !result) result = { status: 'noop' };
         return result;
     } catch (error) {
-        result = { status: error?.name === 'AbortError' ? 'cancelled' : 'failed' };
+        result = { status: error?.name === 'AbortError' ? 'cancelled' : 'failed', error };
         if (options.participantRegeneration) return { ...result, error };
         throw error;
-    } finally { core_requestCoordinator.finishLogicalGenerationTask(logicalTask, result); }
+    } finally {
+        const autoAdvScripts = logicalTask?.autoAdvScripts === true && result?.status !== 'failed' && result?.status !== 'cancelled';
+        core_requestCoordinator.finishLogicalGenerationTask(logicalTask, result);
+        if (autoAdvScripts) setTimeout(() => { startAdvScriptSecondStep().catch(() => {}); }, 600);
+    }
+}
+
+export async function startAdvScriptSecondStep() {
+    const context = core_context.currentCharacterGuard();
+    const memoryBank = archive_repository.requireArchive(context);
+    const session = core_cache.loadSession(core_constants.MODE.ADV, { context, chatId: core_context.getChatId(context), memoryBank, clone: true });
+    if (!session?.events?.some(event => !event.adv?.paragraphs?.length)) return;
+    runtimeState.activeMode = core_constants.MODE.ADV;
+    runtimeState.activeSession = session;
+    return modes_advEvent.generateAllAdvForSession({ background: true });
 }
 
 async function generateModeOperation(mode, options = {}) {
@@ -1158,12 +1413,12 @@ async function generateModeOperation(mode, options = {}) {
     // Capture once, before any archive/network/storage await. A destroyed invocation must never
     // adopt the next runtime lifetime and re-register itself as a fresh paid task.
     const lifecycleEpoch = runtimeState.runtimeLifecycleEpoch;
-    if (mode === core_constants.MODE.THEME_SONG && options.automatic) return { status: 'noop' };
+    if ([core_constants.MODE.THEME_SONG, core_constants.MODE.BEDTIME].includes(mode) && options.automatic) return { status: 'noop' };
     options = { ...options, cgPromptFormat: options.cgPromptFormat || core_settings.getPluginSettings(options.context || core_context.getContext()).cgPromptFormat };
     // Readers may belong to a historical archive while the host stays in another
     // chat. Only that exact, unchanged reader may receive a foreground result.
     const scopedReaderMode = time_stories.isTimeStoryMode(mode)
-        || mode === core_constants.MODE.THEME_SONG || mode === core_constants.MODE.HEART
+        || mode === core_constants.MODE.THEME_SONG || mode === core_constants.MODE.BEDTIME || mode === core_constants.MODE.HEART
         || (mode === core_constants.MODE.PHONE && runtimeState.activeSession?._rmtEmptyTerminal === true);
     const timeReader = scopedReaderMode && runtimeState.activeMode === mode && runtimeState.activeSession
         ? { session: runtimeState.activeSession, entryId: runtimeState.activeArchiveSnapshot?.entryId || '',
@@ -1180,6 +1435,7 @@ async function generateModeOperation(mode, options = {}) {
         } catch { return false; }
     };
     let themeSongPlan = null;
+    let bedtimePlan = null;
     let inboxDate = mode === core_constants.MODE.INBOX ? new Date() : null;
     core_context.assertRuntimeLifecycleCurrent(lifecycleEpoch);
     const background = options.background === true;
@@ -1187,6 +1443,7 @@ async function generateModeOperation(mode, options = {}) {
     let recoveryHandle = null;
     let recoveryExisting = null;
     if (mode === core_constants.MODE.THEME_SONG && replaceExisting && !options.participantRegeneration) throw song_contract.songError('REPLACE', '印象曲每次追加新作品，不会整册覆盖。');
+    if (mode === core_constants.MODE.BEDTIME && replaceExisting && !options.participantRegeneration) throw bedtime_contract.bedtimeError('REPLACE', '睡前故事只会新建故事或追加章节，不会整册覆盖。');
     if (mode === core_constants.MODE.INBOX && replaceExisting && !options.participantRegeneration) throw new Error('邮箱只追加新信，不支持整箱重新生成。');
     const archiveTarget = options.archiveTarget && typeof options.archiveTarget === 'object' ? options.archiveTarget : null;
     if (archiveTarget?.backupOnly) throw new Error('独立备份是永久只读快照，不能生成或写入派生内容。');
@@ -1217,8 +1474,8 @@ async function generateModeOperation(mode, options = {}) {
     let targetMemoryBank = memoryBank;
     const expectedArchiveRevision = memoryBank.archiveRevision;
     const promptFactory = generation_prompts.PROMPTS[mode];
-    if (!promptFactory && !time_stories.isTimeStoryMode(mode) && ![core_constants.MODE.ACHIEVEMENTS, core_constants.MODE.RELATIONS, core_constants.MODE.TRAVEL, core_constants.MODE.INBOX, core_constants.MODE.PAST_LIVES, core_constants.MODE.THEME_SONG].includes(mode)) return;
-    const segmentedMode = time_stories.isTimeStoryMode(mode) || [core_constants.MODE.ENDING, core_constants.MODE.ALBUM, core_constants.MODE.HEART, core_constants.MODE.PHONE, core_constants.MODE.ACHIEVEMENTS, core_constants.MODE.TRAVEL, core_constants.MODE.INBOX, core_constants.MODE.PAST_LIVES, core_constants.MODE.THEME_SONG].includes(mode);
+    if (!promptFactory && !time_stories.isTimeStoryMode(mode) && ![core_constants.MODE.ACHIEVEMENTS, core_constants.MODE.RELATIONS, core_constants.MODE.TRAVEL, core_constants.MODE.INBOX, core_constants.MODE.PAST_LIVES, core_constants.MODE.THEME_SONG, core_constants.MODE.BEDTIME].includes(mode)) return;
+    const segmentedMode = time_stories.isTimeStoryMode(mode) || [core_constants.MODE.ENDING, core_constants.MODE.ALBUM, core_constants.MODE.HEART, core_constants.MODE.PHONE, core_constants.MODE.ACHIEVEMENTS, core_constants.MODE.TRAVEL, core_constants.MODE.INBOX, core_constants.MODE.PAST_LIVES, core_constants.MODE.THEME_SONG, core_constants.MODE.BEDTIME].includes(mode);
     let calendarCurrentDate = mode === core_constants.MODE.CALENDAR ? modes_calendar.storyCalendarDate(memoryBank) : '';
     let calendarLegacyDate = false;
     let generationPrompt = segmentedMode || mode === core_constants.MODE.RELATIONS
@@ -1404,7 +1661,18 @@ async function generateModeOperation(mode, options = {}) {
             if (!previousSession && stored?.[mode] && !replacementTicket) throw song_contract.songError('SOURCE', '已有印象曲暂不可读取，原作品保留。');
             themeSongPlan = recoveryExisting?.operation?.themeSongPlan
                 ? modes_song.validateThemeSongPlan(recoveryExisting.operation.themeSongPlan, memoryBank)
-                : modes_song.validateThemeSongPlan(modes_song.createThemeSongPlan(options.songOptions, memoryBank, previousSession), memoryBank);
+                : modes_song.validateThemeSongPlan(modes_song.createThemeSongPlan(options.songOptions || composerOptions.readSongOptions(context, memoryBank), memoryBank, previousSession), memoryBank);
+        }
+        if (mode === core_constants.MODE.BEDTIME) {
+            const stored = core_cache.getCache(context);
+            if (!previousSession && stored?.[mode] && !replacementTicket) throw bedtime_contract.bedtimeError('SOURCE', '已有睡前故事暂不可读取，原作品仍保留。');
+            const recoverySnapshot = generation_recovery.readGenerationContentSnapshot(recoveryExisting);
+            const frozenInputs = recoverySnapshot?.contentInputs;
+            const planPrevious = frozenInputs && Object.hasOwn(frozenInputs, 'previousSession') ? frozenInputs.previousSession : previousSession;
+            const planMemory = recoverySnapshot?.memoryBank || memoryBank;
+            bedtimePlan = recoveryExisting?.operation?.bedtimePlan
+                ? modes_bedtime.validateBedtimePlan(recoveryExisting.operation.bedtimePlan, planMemory, planPrevious)
+                : modes_bedtime.validateBedtimePlan(modes_bedtime.createBedtimePlan(options.bedtimeOptions || {}, memoryBank, previousSession), memoryBank, previousSession);
         }
         origin = { ...core_context.captureTaskOrigin(context, expectedArchiveRevision), chatId: core_context.comparableChatId(expectedChatId), archiveTargetEntryId: core_text.normalizeText(archiveTarget?.entryId, 120) };
         core_requestCoordinator.bindLogicalGenerationTask(options.logicalTask, origin);
@@ -1422,7 +1690,7 @@ async function generateModeOperation(mode, options = {}) {
         recoveryHandle = await beginModeRecovery(mode, context, memoryBank, origin, { ...options, archiveTarget, stillCurrent: archiveTargetStillCurrent, existing: recoveryExisting, replaceExisting,
             partialReaderStillCurrent: scopedReaderMode ? () => !background && timeReaderVisible() : null,
             contentInputs: { previousSession, roomSession, focusObject, ...(linkedRoomSession ? { linkedRoomSession } : {}) },
-            operation: recoveryExisting?.operation || { kind: 'mode', mode, ...(themeSongPlan ? { themeSongPlan } : {}), inboxDate: inboxDate?.toISOString() || '', calendarDate: calendarCurrentDate,
+            operation: recoveryExisting?.operation || { kind: 'mode', mode, ...(themeSongPlan ? { themeSongPlan } : {}), ...(bedtimePlan ? { bedtimePlan } : {}), inboxDate: inboxDate?.toISOString() || '', calendarDate: calendarCurrentDate,
                 ...(mode === core_constants.MODE.CALENDAR ? { calendarTimeBasis: 'story' } : {}),
                 allowPersonaExpansion, visualOnly: options.visualOnly === true, fillMissing: options.fillMissing === true, focusObjectId: core_text.normalizeText(options.focusObjectId, 120),
                 ...(replacementTicket ? { participantRegeneration: options.participantRegeneration } : {}) } });
@@ -1433,6 +1701,16 @@ async function generateModeOperation(mode, options = {}) {
             roomSession = recoveryHandle.contentInputs.roomSession;
             focusObject = recoveryHandle.contentInputs.focusObject;
         }
+        let participantSnapshot = null;
+        if (![core_constants.MODE.ROOM, core_constants.MODE.ALBUM].includes(mode)) {
+            participantSnapshot = await captureModeParticipantSnapshot(mode, context, origin, {
+                existing: recoveryExisting,
+                participantSnapshot: options.participantRegeneration?.participantSnapshot ?? options.participantSnapshot,
+                memoryBank,
+            });
+            memoryBank = core_generationParticipants.deriveGenerationParticipantMemoryBank(memoryBank, participantSnapshot);
+            if (participantSnapshot && options.logicalTask) core_requestCoordinator.bindLogicalGenerationTask(options.logicalTask, origin, { participantSnapshot });
+        }
         if (!segmentedMode && mode !== core_constants.MODE.RELATIONS) {
             generationPrompt = core_constants.ROOM_DEEP_MODES.includes(mode) && mode !== core_constants.MODE.PHONE
                 ? generation_prompts.roomDeepGenerationPrompt(mode, context, memoryBank, roomSession, focusObject)
@@ -1441,25 +1719,24 @@ async function generateModeOperation(mode, options = {}) {
                     : promptFactory(context, memoryBank);
         }
         let session;
-        const participantSnapshot = mode === core_constants.MODE.ROOM
+        participantSnapshot = mode === core_constants.MODE.ROOM
             ? await captureRoomParticipantSnapshot(context, origin, { existing: recoveryExisting,
-                participantSnapshot: options.participantRegeneration?.participantSnapshot })
+                participantSnapshot: options.participantRegeneration?.participantSnapshot ?? options.participantSnapshot })
             : mode === core_constants.MODE.ALBUM ? await captureAlbumParticipantSnapshot(context, origin, { existing: recoveryExisting,
-                participantSnapshot: options.participantRegeneration?.participantSnapshot }) : null;
-        if (mode === core_constants.MODE.ALBUM && participantSnapshot) {
+                participantSnapshot: options.participantRegeneration?.participantSnapshot ?? options.participantSnapshot }) : participantSnapshot;
+        if (participantSnapshot && options.logicalTask) {
+            if (mode === core_constants.MODE.ROOM) options.logicalTask.participantPromptIndexed = true;
             core_requestCoordinator.bindLogicalGenerationTask(options.logicalTask, origin, { participantSnapshot });
         }
         let presentationContext = null;
-        if (time_stories.isTimeStoryMode(mode) || (mode === core_constants.MODE.ITEMS && previousSession && allowPersonaExpansion) || [core_constants.MODE.ROOM, core_constants.MODE.PHONE, core_constants.MODE.TRAVEL, core_constants.MODE.INBOX, core_constants.MODE.PAST_LIVES, core_constants.MODE.THEME_SONG].includes(mode)) {
-            presentationContext = await buildWorldPresentationContext(context, memoryBank, mode, origin);
-            // Degrading is fine, degrading silently is not: the user picked these entries
-            // by hand and deserves to know which of them this request could actually carry.
-            if (!options.automatic && presentationContext.selectedSetting?.note) {
-                globalThis.toastr?.info?.(presentationContext.selectedSetting.note, `心迹回廊 · ${core_constants.MODE_LABEL[mode]}`);
-            }
+        if (time_stories.isTimeStoryMode(mode) || (mode === core_constants.MODE.ITEMS && previousSession && allowPersonaExpansion) || [core_constants.MODE.ROOM, core_constants.MODE.PHONE, core_constants.MODE.TRAVEL, core_constants.MODE.INBOX, core_constants.MODE.PAST_LIVES, core_constants.MODE.THEME_SONG, core_constants.MODE.BEDTIME].includes(mode)) {
+            presentationContext = await buildWorldPresentationContext(context, memoryBank, mode, origin, participantSnapshot);
+            if (options.logicalTask && presentationContext.selectedSetting) options.logicalTask.inputPacking = presentationContext.selectedSetting;
         }
         if (mode === core_constants.MODE.THEME_SONG) {
             session = await modes_song.generateThemeSong(context, memoryBank, origin, taskKey, previousSession, { plan: themeSongPlan, presentationContext });
+        } else if (mode === core_constants.MODE.BEDTIME) {
+            session = await modes_bedtime.generateBedtime(context, memoryBank, origin, taskKey, previousSession, { plan: bedtimePlan, presentationContext });
         } else if (mode === core_constants.MODE.INBOX) {
             session = await modes_inbox.generateInbox(context, memoryBank, origin, taskKey, previousSession, { presentationContext, date: inboxDate });
         } else if (time_stories.isTimeStoryMode(mode)) {
@@ -1472,18 +1749,24 @@ async function generateModeOperation(mode, options = {}) {
             session = previousSession
                 ? await modes_butterfly.generateButterflyIncrementalWithRepair(context, memoryBank, origin, taskKey, previousSession)
                 : await modes_butterfly.generateButterflyWithRepair(context, memoryBank, origin, taskKey);
+        } else if (mode === core_constants.MODE.ROOM && options.fillRoomText && previousSession) {
+            session = await modes_room.generateRoomWithRepair(context, memoryBank, origin, taskKey, { presentationContext, participantSnapshot, fillExisting: true, existingSession: previousSession, secondStep: true });
         } else if (mode === core_constants.MODE.ROOM && options.visualOnly && previousSession) {
             session = await modes_room.refreshRoomFigure(context, memoryBank, origin, taskKey, previousSession, { presentationContext, participantSnapshot });
         } else if (mode === core_constants.MODE.ROOM && previousSession) {
             session = await modes_room.generateRoomIncrementalWithRepair(context, memoryBank, origin, taskKey, previousSession, { presentationContext, allowPersonaExpansion, participantSnapshot });
         } else if (mode === core_constants.MODE.ROOM) {
-            session = await modes_room.generateRoomWithRepair(context, memoryBank, origin, taskKey, { presentationContext, participantSnapshot });
+            session = await modes_room.generateRoomWithRepair(context, memoryBank, origin, taskKey, { presentationContext, participantSnapshot, secondStep: options.secondStep === true });
+        } else if (mode === core_constants.MODE.ITEMS && options.fillItemsText && previousSession) {
+            session = await modes_items.fillItemsLines(context, memoryBank, origin, taskKey, previousSession);
         } else if (mode === core_constants.MODE.ITEMS && previousSession) {
             session = await modes_items.generateItemsIncrementalWithRepair(context, memoryBank, roomSession, focusObject, origin, taskKey, previousSession, { presentationContext, allowPersonaExpansion });
+        } else if (mode === core_constants.MODE.ITEMS) {
+            session = await modes_items.generateItemsWithRepair(context, memoryBank, origin, taskKey, generationPrompt, { secondStep: options.secondStep === true });
         } else if (mode === core_constants.MODE.ENDING) {
-            session = await modes_ending.generateEndingWithRepair(context, memoryBank, origin, taskKey, { replaceExisting });
+            session = await modes_ending.generateEndingWithRepair(context, memoryBank, origin, taskKey, { replaceExisting, secondStep: options.secondStep === true });
         } else if (mode === core_constants.MODE.ALBUM) {
-            session = await modes_album.generateAlbumWithRepair(context, memoryBank, origin, taskKey, { replaceExisting, participantSnapshot });
+            session = await modes_album.generateAlbumWithRepair(context, memoryBank, origin, taskKey, { replaceExisting, participantSnapshot, secondStep: options.secondStep === true });
         } else if (mode === core_constants.MODE.HEART) {
             session = await modes_heart.generateHeartWithRepair(context, memoryBank, origin, taskKey, { replaceExisting });
         } else if (mode === core_constants.MODE.PHONE) {
@@ -1498,6 +1781,7 @@ async function generateModeOperation(mode, options = {}) {
                 ? await modes_phone.generatePhoneIncrementalWithRepair(context, memoryBank, origin, taskKey, previousSession, { presentationContext })
                 : await modes_phone.generatePhoneWithRepair(context, memoryBank, origin, taskKey, {
                     continueDraft: options.continueDraft === true,
+                    secondStep: options.secondStep === true,
                     archiveTarget,
                     stillCurrent: archiveTargetStillCurrent,
                     presentationContext,
@@ -1510,14 +1794,24 @@ async function generateModeOperation(mode, options = {}) {
             const settingSelection = modes_relations.fitRelationSettingEntries(selectedBooks.entries, { coverage: selectedBooks.coverage });
             // Same rule as the setting envelope: an unreadable or oversized book means
             // "fewer people to draw from", not "refuse to refresh the garden".
-            if (settingSelection.coverage.status !== 'complete' && !options.automatic) {
-                globalThis.toastr?.info?.(`本次按输入容量整理部分世界书条目；未送出的旧人物仅在来源仍有效时保留。${core_text.normalizeText(settingSelection.coverage?.reason, 160)}`, '心迹回廊 · 人际庭园');
+            if (settingSelection.coverage.status !== 'complete' && options.logicalTask) {
+                const kept = settingSelection.entries?.length || 0;
+                const total = (selectedBooks.entries || []).length;
+                options.logicalTask.inputPacking = {
+                    used: kept,
+                    total,
+                    dropped: Math.max(0, total - kept),
+                    note: `已发送 ${kept}/${total} 条人际设定，未送出的旧人物仅在来源仍有效时保留。${core_text.normalizeText(settingSelection.coverage?.reason, 160)}`,
+                    deduplicatedChars: 0,
+                    included: [],
+                    excluded: [],
+                };
             }
             const settingEntries = settingSelection.entries;
             const raw = await requestValidatedSegment(
                 modes_relations.relationsPrompt(context, memoryBank, settingEntries),
                 '正在整理当前世界线的人际关系…',
-                { maxTokens: core_constants.MODE_TOKEN_CAPS[mode] || 7000, temperature: 0.3, context, origin, taskKey: `${taskKey}:relations`, mode, background: true },
+                { maxTokens: core_constants.MODE_TOKEN_CAPS[mode] || 7000, temperatureCeiling: 0.3, context, origin, taskKey: `${taskKey}:relations`, mode, background: true },
                 value => {
                     if (settingEntries.length && !Array.isArray(value?.settingRelationships)) throw new Error('设定人物列表缺失');
                     modes_relations.normalizeRelations(value, memoryBank, context);
@@ -1600,6 +1894,7 @@ async function generateModeOperation(mode, options = {}) {
         await core_context.yieldToUi();
         core_requestCoordinator.assertLogicalGenerationTaskCurrent(options.logicalTask);
         core_taskTrace.beginStage(taskTrace, 'save');
+        core_requestCoordinator.noteChatTaskPhase('save', { taskKey, origin });
         let committed = false;
         if (archiveTarget) {
             const stillCurrent = archiveTargetStillCurrent;
@@ -1626,7 +1921,7 @@ async function generateModeOperation(mode, options = {}) {
         }
 
         if (committed && recoveryHandle) await core_cache.saveGenerationRecovery(context, memoryBank, mode, null, origin, { archiveTarget, stillCurrent: archiveTargetStillCurrent });
-        if (committed && [core_constants.MODE.INBOX, core_constants.MODE.THEME_SONG].includes(mode)) {
+        if (committed && [core_constants.MODE.INBOX, core_constants.MODE.THEME_SONG, core_constants.MODE.BEDTIME].includes(mode)) {
             session = archiveTarget
                 ? core_cache.loadSession(mode, { chatId: expectedChatId, memoryBank, cache: runtimeState.activeArchiveSnapshot?.entryId === archiveTarget.entryId ? runtimeState.activeArchiveSnapshot.cache : archiveTarget.cache }) || session
                 : core_cache.loadSession(mode) || session;
@@ -1678,11 +1973,24 @@ async function generateModeOperation(mode, options = {}) {
             return { status: error?.name === 'AbortError' ? 'cancelled' : 'failed', error };
         }
         if (recoveryHandle) { try { await generation_recovery.noteGenerationRecoveryFailure(origin, error?.failure || error); } catch {} }
+        if (recoveryHandle && error?.name !== 'AbortError') {
+            try {
+                const summary = generation_recovery.generationRecoverySummary(recoveryHandle.journal);
+                if (summary?.canRetry && !summary.canContinue && !summary.oversized && !summary.blocked) {
+                    core_requestCoordinator.noteRetryableGeneration({
+                        mode,
+                        draftId: recoveryHandle.journal.draftId || '',
+                        pageId: recoveryHandle.journal.pageId || mode,
+                        label: core_constants.MODE_LABEL[mode] || mode,
+                    });
+                }
+            } catch { /* A missed auto-retry leaves the manual button in the task center. */ }
+        }
         if (error?.name === 'AbortError') {
             console.warn('[HeartbeatMemories] generation aborted by extension/task cancellation', { mode });
             return null;
         }
-        const safeError = core_text.safeErrorSummary(error);
+        const safeError = core_text.safeErrorSummary(error, 800);
         console.error('[HeartbeatMemories] generation failed', {
             mode,
             ...core_text.safeErrorDiagnostic(error),
@@ -1699,16 +2007,19 @@ async function generateModeOperation(mode, options = {}) {
                 core_text.toastText(`${archiveTarget.characterName} · ${archiveTarget.archiveName} · ${core_constants.MODE_LABEL[mode]}：${safeError}`),
                 '心迹回廊 · 档案生成失败',
             );
+            error.notified = true;
             return null;
         }
         if (background || document.getElementById(core_constants.OVERLAY_ID)?.hidden || runtimeState.activeMode !== mode
             || (scopedReaderMode && !timeReaderVisible())) {
             const targetPrefix = archiveTarget ? `${archiveTarget.characterName} · ${archiveTarget.archiveName} · ` : '';
             globalThis.toastr?.error?.(core_text.toastText(`${targetPrefix}${safeError}`), `心迹回廊 · ${core_constants.MODE_LABEL[mode]}生成失败`);
+            error.notified = true;
             return null;
         }
-        ui_overlay.showInlineError(safeError);
-        globalThis.toastr?.error?.(core_text.toastText(safeError), '心迹回廊');
+        if (error.preflightDetail) ui_overlay.showInlinePreflight(safeError, error.preflightDetail, { error: true });
+        else ui_overlay.showInlineError(safeError);
+        error.notified = true;
         return null;
     } finally {
         core_taskTrace.endTaskTrace(taskTrace, 'noop');
@@ -1725,3 +2036,25 @@ async function generateModeOperation(mode, options = {}) {
         if (!background && targetVisible && (!scopedReaderMode || timeReaderVisible())) ui_overlay.setInnerLoading(false);
     }
 }
+
+const autoContinuedDrafts = new Set();
+// Recovery is a dependency of this module, but the bundle initializes this file first
+// when the import cycle is cut. Register after the current init turn so the export exists.
+queueMicrotask(() => {
+    if (typeof generation_recovery.setTruncationContinueHandler !== 'function') return;
+    generation_recovery.setTruncationContinueHandler(item => {
+        const key = `${item?.mode || ''}:${item?.draftId || ''}`;
+        if (!item?.mode || !item?.draftId || autoContinuedDrafts.has(key)) return;
+        autoContinuedDrafts.add(key);
+        setTimeout(() => {
+            continueSavedGeneration(item.mode, {
+                draftId: item.draftId,
+                pageId: item.pageId || '',
+                skipConfirm: true,
+                background: true,
+            }).catch(error => {
+                console.warn('[HeartbeatMemories] automatic continuation did not start', error?.code || error?.name || 'failed');
+            });
+        }, 400);
+    });
+});

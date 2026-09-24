@@ -11,7 +11,7 @@ import { state as runtimeState } from '../core/state.js';
 const positions = new Map();
 let restoreSequence = 0;
 const pages = new Set(['home', 'chooser', 'library', 'character']);
-const settingsSections = ['api', 'image', 'creative', 'filter', 'theme', 'auto', 'memory', 'reading'];
+const settingsSections = ['api', 'image', 'creative', 'filter', 'theme', 'auto', 'memory', 'reading', 'voice'];
 function settingsSection(key) {
     return document.querySelector('#' + constants.OVERLAY_ID + ` [data-rmt-settings-section="${key}"]`);
 }
@@ -30,6 +30,10 @@ function restoreScroll(mark) {
 }
 const fields = ['selectedId','selectedSpaceId','selectedObjectId','selectedContainerId','selectedAppId','selectedEntryId','selectedLocationId','selectedLetterId','selectedSeason','selectedVoiceId','selectedScenarioId','selectedDramaKey','selectedStripId','category','page','view','viewMode','sharedMemory','dialogueIndex','paragraphIndex','reading','cgOnly','tab','selectedDate','selectedKey','fireflyPage','pastLivesReadMask','pastLivesDrawn','pastLivesClosing'];
 export function readingPosition(session) {
+    // Chapter cursor is presentation-only, like paragraphIndex in other readers.
+    if (session?.kind === 'bedtime' && Number.isSafeInteger(session.chapterIndex) && session.chapterIndex >= 0) {
+        return {selectedId:session.selectedId,view:session.view,chapterIndex:session.chapterIndex};
+    }
     const result = {};
     for (const key of fields) {
         const value = session?.[key];

@@ -92,6 +92,9 @@ const SAFE_ERROR_CODE_MESSAGES = Object.freeze({
     RMT_CONNECTION_SERVER: '模型服务或代理暂时不可用；请稍后重试。',
     RMT_CONNECTION_NETWORK: '无法连接模型服务；请检查地址、网络、代理与服务状态后重试。',
     RMT_REQUEST_TIMEOUT: '模型请求超时，已停止等待并释放任务位；请稍后重试。',
+    RMT_HEART_INCOMPLETE: '角色互动的条目、剧本句数或字数不完整；旧内容保留。',
+    RMT_PHONE_NO_CONVERSATION: '通讯没有可保存的对话；已完成的其他应用保留。',
+    RMT_RECOVERY_SOURCE_SNAPSHOT_MISSING: '旧草稿缺少完整的冻结来源；请先导出保留草稿，再单独重新生成未完成内容，已完成的其他内容保留。',
     RMT_SEGMENT_VALIDATION: '模型结果没有通过本地完整性校验；旧内容未被覆盖。',
     RMT_PAST_LIVES_STRUCTURE: '前世今生这一段的结构不完整；已保留成功部分，只需重试未完成段。',
     RMT_PAST_LIVES_RELATIONSHIP: '前世今生这一段出现与两人设定冲突的关系表述；已保留成功部分，可重试这一段。',
@@ -115,8 +118,8 @@ const SAFE_ERROR_CODE_MESSAGES = Object.freeze({
     RMT_RECOVERY_VALIDATION_CHANGED: '已保存片段暂未通过当前校验；草稿仍保留，没有重新收费生成。',
     RMT_RECOVERY_STORAGE: '这一段已返回，但浏览器没有保存成功；已停止后续生成，请检查存储后重试。',
     RMT_RECOVERY_LIMIT: '这一段超出草稿保存容量；此前成功部分与旧内容保留。',
-    RMT_RECOVERY_SNAPSHOT_TOO_LARGE: '当前角色档案与卡片资料本身超过续写保护范围，未发送请求，也没有产生草稿；请精简档案内容后重试。',
-    RMT_RECOVERY_OVERSIZED: '这份草稿超出本地可安全续写的范围，不能继续生成；已保留的内容不受影响，请导出未提交草稿后明确放弃。',
+    RMT_RECOVERY_SNAPSHOT_TOO_LARGE: '续写资料包超过 120 万字符兜底，未发送请求。',
+    RMT_RECOVERY_OVERSIZED: '这份未完成草稿不能继续生成，只能导出或放弃。',
     RMT_RECOVERY_UNAVAILABLE: '当前环境无法建立可靠的续写记录；请保留页面与已有内容。',
     RMT_RECOVERY_DATA: '这一段的返回结构无法保存；此前成功部分与旧内容保留。',
     RMT_BUTTERFLY_systemNote: '该节点缺少完整的系统结局判定；旧内容保留，可单独重试。',
@@ -137,7 +140,7 @@ const SAFE_ERROR_CODE_MESSAGES = Object.freeze({
     RMT_LEDGER_UNAVAILABLE: '浏览器来源存储暂时不可用。请退出隐私模式或关闭旧页后重试；不要清除站点数据。',
     RMT_BANNED_GENERATED_PHRASE: '模型新生成内容命中了本地禁用词；本次结果没有保存。',
     RMT_JSON_EMPTY_FINAL: '模型没有返回最终正文 JSON；旧内容未被覆盖。',
-    RMT_JSON_EMPTY_FINAL_WITH_REASONING: '本次响应只有推理字段，没有最终正文 JSON；未采用推理内容，也没有自动重试。可核对渠道支持的推理／流式参数后手动再试，旧内容保留。',
+    RMT_JSON_EMPTY_FINAL_WITH_REASONING: '本次响应只有推理字段，没有最终正文 JSON；未采用推理内容。空回会自动整段重来一次，旧内容保留。',
     RMT_RESPONSE_FORMAT: '当前连接返回了未识别的正文包装；旧内容保留，请导出诊断以核对返回格式。',
     RMT_JSON_NOT_FOUND: '模型最终正文中没有完整 JSON；旧内容未被覆盖。',
     RMT_JSON_TRUNCATED: '模型返回的 JSON 疑似被截断；旧内容未被覆盖。',
@@ -152,7 +155,8 @@ const SAFE_ERROR_CODE_MESSAGES = Object.freeze({
     RMT_ARCHIVE_CHECKPOINT: '建档检查点格式或容量异常，旧成果保留，未自动重建。',
     RMT_ARCHIVE_SOURCE_CAPACITY: '全部来源超过账本容量，未仅截取前半部分冒充完成。',
     RMT_ARCHIVE_RESULT_CAPACITY: '本段结果超过原校验容量，未截取结果或推进完成进度。',
-    RMT_INPUT_BUDGET: '本次输入超过安全预算，已在发送前拦截；请精简档案或减少世界书，或在设置中提高输入预算。',
+    RMT_INPUT_BUDGET: '本次输入超过输入预算，已在发送前拦截。请打开设置 → 输入预算。',
+    RMT_CAPACITY_LOCKED: '热位已满且均为锁定。新结果在待入档，可导出。已有相簿/ADV/房间仍可生成。',
     RMT_TOKEN_COUNT_TIMEOUT: '输入检查超时，本段未发送；旧内容保留，可重试。',
     RMT_TOKEN_COUNT_UNAVAILABLE: '本地计数暂不可用。',
     RMT_JSON_INVALID: '模型没有返回完整、可解析的 JSON；响应正文已隐藏。',
@@ -235,6 +239,15 @@ export function safeErrorSummary(error, max = 520) {
         const b = error.archiveBudget, n = value => Number.isFinite(value) && value >= 0 ? Math.floor(value).toLocaleString() : '未知';
         return `${SAFE_ERROR_CODE_MESSAGES[error.code]} 完整输入 ${n(b.utf16Chars)} 字符（UTF-16）、${n(b.utf8Bytes)} UTF-8 字节；输入 token ${n(b.inputTokens)}（宿主计数估算）、请求最大输出 ${n(b.outputTokens)} token；模型上下文 ${n(b.contextTokens)}。`;
     }
+    if (error?.code === 'RMT_INPUT_BUDGET' && error.inputBudget) {
+        const b = error.inputBudget, n = value => Number.isFinite(value) && value >= 0 ? Math.floor(value).toLocaleString() : '未知';
+        const trusted = sanitizedTrustedErrorMessage(error?.safeUserMessage || error?.message, max);
+        return normalizeText(trusted || `本次输入 ${n(b.chars)} 字符 / ${n(b.tokens)} tokens，预算 ${n(b.budgetTokens)}，字符顶 ${n(b.charCap)}。打开设置 → 输入预算。`, max);
+    }
+    if (error?.code === 'RMT_RECOVERY_SNAPSHOT_TOO_LARGE' && error.snapshotBudget) {
+        const b = error.snapshotBudget, n = value => Number.isFinite(value) && value >= 0 ? Math.floor(value).toLocaleString() : '未知';
+        return normalizeText(`续写资料包 ${n(b.snapshotChars)} / ${n(b.budgetChars)} 字符，未发请求。角色卡 ${n(b.cardChars)}，记忆投影 ${n(b.memoryChars)}。`, max);
+    }
     const raw = normalizeText(error?.message, 12000);
     const status = safeErrorStatus(error);
     const code = safeErrorCode(error);
@@ -257,7 +270,14 @@ export function safeErrorSummary(error, max = 520) {
     const blocked = /cloudflare|sorry,? you have been blocked|attention required|unable to access/i.test(raw);
     const unauthorized = /unauthorized|authentication|invalid api key|\b401\b/i.test(raw) || status === 401;
     const forbidden = /forbidden|\b403\b/i.test(raw) || status === 403;
-    if (code && SAFE_ERROR_CODE_MESSAGES[code]) return normalizeText(SAFE_ERROR_CODE_MESSAGES[code], max);
+    if (code && SAFE_ERROR_CODE_MESSAGES[code] && !['RMT_INPUT_BUDGET', 'RMT_RECOVERY_SNAPSHOT_TOO_LARGE', 'RMT_RECOVERY_OVERSIZED', 'RMT_CAPACITY_LOCKED'].includes(code)) {
+        return normalizeText(SAFE_ERROR_CODE_MESSAGES[code], max);
+    }
+    if (['RMT_INPUT_BUDGET', 'RMT_RECOVERY_SNAPSHOT_TOO_LARGE', 'RMT_RECOVERY_OVERSIZED', 'RMT_CAPACITY_LOCKED'].includes(code)) {
+        const trusted = error?.safeToDisplay === true ? sanitizedTrustedErrorMessage(error?.safeUserMessage || raw, max) : '';
+        if (trusted) return trusted;
+        if (SAFE_ERROR_CODE_MESSAGES[code]) return normalizeText(SAFE_ERROR_CODE_MESSAGES[code], max);
+    }
     if (looksHtml) {
         const details = [];
         if (status) details.push(`HTTP ${status}`);

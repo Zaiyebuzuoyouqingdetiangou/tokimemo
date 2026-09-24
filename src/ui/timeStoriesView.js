@@ -10,6 +10,7 @@ import * as coordinator from '../core/requestCoordinator.js';
 import { state as runtimeState } from '../core/state.js';
 import * as overlay from './overlay.js';
 import * as recoveryView from './recoveryView.js';
+import * as participants from '../core/participants.js';
 
 const esc = text.esc;
 const paragraphs = value => String(value || '').split(/\n+/u).filter(Boolean).map(part => `<p>${esc(part)}</p>`).join('');
@@ -20,6 +21,9 @@ const presentation = value => ['modern', 'classical', 'fantasy', 'scifi', 'neutr
 const palette = value => ['rose', 'blue', 'moss', 'gold', 'plum', 'slate'].includes(value) ? value : 'slate';
 const mediumIcon = value => ({ phone: 'fa-phone', terminal: 'fa-satellite-dish', relic: 'fa-gem', object: 'fa-hourglass-half', voice: 'fa-wave-square' })[value] || 'fa-wave-square';
 const connectLabel = value => ({ phone: '接通', terminal: '接入通讯', relic: '回应回响', object: '倾听回响', voice: '循声回应' })[value] || '倾听回响';
+const savedCharacterNameMatches = (value, memory) => [
+    participants.resolveStoryIdentities(memory).ownerNames.join('、'), memory?.characterName,
+].includes(value);
 
 function echoHtml(session, episode, ui) {
     const ends = episode.ends || [];
@@ -59,7 +63,7 @@ export function timeStoriesHtml(session, { readOnly: locked = false, busy = fals
     } catch { return '<section class="rmt-time-stories"><p role="status">这篇故事暂时无法读取，原内容仍保留。</p></section>'; }
 }
 
-function assertShownTarget() {
+export function assertShownTimeStoryTarget() {
     const shown = runtimeState.activeSession;
     if (!contract.isTimeStoryMode(runtimeState.activeMode) || shown?.kind !== runtimeState.activeMode) throw new Error('故事已经关闭。');
     const snapshot = runtimeState.activeArchiveSnapshot;
@@ -69,7 +73,7 @@ function assertShownTarget() {
     const memory = readingSource.memoryBank, reading = readingSource.session;
     if (!memory || shown.chatId !== currentMemory?.chatId || shown.archiveRevision !== currentMemory?.archiveRevision
         || reading.chatId !== memory.chatId || reading.archiveRevision !== memory.archiveRevision
-        || reading.characterName !== memory.characterName || reading.userName !== memory.userName
+        || !savedCharacterNameMatches(reading.characterName, memory) || reading.userName !== memory.userName
         || (snapshot && shown.chatId !== snapshot.chatId)
         || (!snapshot && !readingSource.source && shown.ownerKey && shown.ownerKey !== contextApi.currentCharacterRuntimeKey(context)))
         throw new Error('档案或角色已经变化，请重新打开对应故事。');
@@ -122,7 +126,7 @@ export function renderTimeStories() {
     const body = overlay.bodyEl();
     if (!body) return;
     try {
-        const { context, memory } = assertShownTarget();
+        const { context, memory } = assertShownTimeStoryTarget();
         const stored = runtimeState.activeArchiveSnapshot?.cache || (context ? cache.getCache(context) : null);
         const recovery = stored ? recoveryView.recoveryBannerHtml({ ...stored, __generationRecoveryV1: { [mode]: stored.__generationRecoveryV1?.[mode] } }, memory, { readOnly: readOnly() }) : '';
         body.innerHTML = recovery + timeStoriesHtml(runtimeState.activeSession, { readOnly: readOnly(), busy: coordinator.isModeGenerating(mode, context) });
@@ -131,7 +135,7 @@ export function renderTimeStories() {
 
 export function closeTimeStoryDetail() {
     if (!contract.isTimeStoryMode(runtimeState.activeMode) || runtimeState.activeSession?.view !== 'story') return false;
-    try { assertShownTarget(); runtimeState.activeSession.view = 'library'; renderTimeStories(); void persistPartialTimeStoryReading(runtimeState.activeSession); return true; } catch { return false; }
+    try { assertShownTimeStoryTarget(); runtimeState.activeSession.view = 'library'; renderTimeStories(); void persistPartialTimeStoryReading(runtimeState.activeSession); return true; } catch { return false; }
 }
 
 // Only scalar reading state changes here. Generation is handled by the existing
@@ -139,7 +143,7 @@ export function closeTimeStoryDetail() {
 export function handleTimeStoryAction(action, id = '') {
     if (!['library', 'open', 'connect', 'prev-line', 'next-line', 'replay'].includes(action)) return false;
     try {
-        assertShownTarget();
+        assertShownTimeStoryTarget();
         const session = runtimeState.activeSession;
         Object.assign(session, contract.timeStoryReadingState(session));
         if (action === 'library') session.view = 'library';

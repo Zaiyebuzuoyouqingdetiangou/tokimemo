@@ -2,11 +2,12 @@ import * as core_constants from '../core/constants.js';
 import * as core_text from '../core/text.js';
 import * as core_evidence from '../core/evidence.js';
 import * as generation_prompts from '../generation/prompts.js';
+import * as core_participants from '../core/participants.js';
 import * as ui_overlay from '../ui/overlay.js';
 import { state as runtimeState } from '../core/state.js';
 
 export function cabinetPrompt(context, memoryBank) {
-    return generation_prompts.promptSafetyBoundary(context, '两个人的陈列柜') + '\n' +
+    return generation_prompts.promptSafetyBoundary(context, '两个人的陈列柜', null, memoryBank) + '\n' +
         generation_prompts.promptArchiveSlice(memoryBank, 64) +
         '\n只收记忆中真实出现、与两个人有关的具体物件，如曾交换的礼物、共同使用的物品、留下的票根。不是他的全部私人物品。不得从世界书推测，不得编造礼物。无证据时返回空 items。最多 12 件。输出 {"items":[{"name":"原文中的物件名","objectEvidence":"从所引记忆 summary/anchors/title 中逐字复制的一句，须含物件名及两人关联","sourceMemoryIds":["M001"],"sourceMemoryAnchor":"原样锚点"}]}。';
 }
@@ -21,10 +22,11 @@ export function normalizeCabinet(raw, memoryBank) {
         const reference = core_evidence.normalizeExactMemoryReference(item?.sourceMemoryIds, item?.sourceMemoryAnchor, memoryBank);
         const memories = (memoryBank?.memories || []).filter(memory => reference.sourceMemoryIds.includes(memory.id));
         const literal = memories.some(memory => [memory.title, memory.summary, ...(memory.anchors || [])].some(text => String(text || '').includes(evidence)));
-        const names = [memoryBank?.characterName, memoryBank?.userName];
-        const pair = names.every(value => value && evidence.includes(value))
+        const names = core_participants.resolveStoryIdentities(memoryBank).ownerNames;
+        const userName = memoryBank?.userName;
+        const pair = names.some(value => value && evidence.includes(value)) && userName && evidence.includes(userName)
             || (/两人|两个人|双方|彼此|我们/.test(evidence) && memories.some(memory =>
-                names.every(name => name && memory.participants?.includes(name)) && memory.participants.length === 2));
+                userName && memory.participants?.includes(userName) && names.some(name => name && memory.participants?.includes(name))));
         if (!name || evidence.length < 6 || !evidence.includes(name) || !literal || !pair || !reference.sourceMemoryAnchor || seen.has(name)) continue;
         seen.add(name);
         items.push({ id: 'KEEP_' + (items.length + 1), name, objectEvidence: evidence, ...reference });

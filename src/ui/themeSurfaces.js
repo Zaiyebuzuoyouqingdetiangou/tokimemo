@@ -5,7 +5,7 @@ export function structuralThemeCss(root) {
         'archive-card','character-card','archive-portal','portal-card','calendar-quick','choice-card','card','info','event-list','event','cg-caption','adv-reader','adv-bulkbar',
         'memory-gate','memory-settings-status','task-banner','external-memory-row','archive-readonly-control','archive-overview-item','archive-group-entry',
         'settings-header','settings-content','settings-card','api-source-card','api-source-panel','api-status','performance-diagnostic-output',
-        'avatar-dialog-card','avatar-dialog-bubble','memory-wi-picker-card','memory-wi-book','memory-wi-entry','loading-card',
+        'avatar-dialog-card','avatar-dialog-bubble','memory-wi-picker-card','memory-wi-book','memory-wi-entry','loading-card','task-center','workspace-empty','cg-format','inline-status',
         'heart-summary','heart-current-line','heart-greeting-group','heart-drama-card','heart-strip-card','heart-single-drama','heart-season-stage','heart-setting','heart-script-bubble','heart-panel','heart-panel-line',
         'ending-summary','ending-route','ending-detail','ending-confession','ending-epilogue','confession-card','ending-confession-stage','ending-confession-bubble','achievement-card',
         'calendar-hero','calendar-paper','calendar-month-head','calendar-day','calendar-pending','calendar-todo','calendar-filter','calendar-sticky-panel','calendar-master-todo','calendar-special-notes','calendar-mood-section','calendar-sticky','calendar-mood-note',
@@ -111,7 +111,7 @@ ${root} :is(.rmt-api-status,.rmt-progress,.rmt-archive-meta,.rmt-api-note){font-
 ${root} :is(input:not([type="checkbox"]):not([type="color"]):not([type="range"]),textarea,select){font-size:16px!important}
 ${root} button:disabled{opacity:.55!important;cursor:default}
 ${root} .rmt-avatar-dialog-close{width:44px;height:44px}
-@media(max-width:700px){${root} .rmt-topbar button[data-rmt-action]{font-size:0!important}}
+@media(max-width:700px){${root} .rmt-topbar button[data-rmt-action]:not(.rmt-live-chip){font-size:0!important}}
 ${root} .rmt-theme-custom-panel{grid-template-columns:repeat(2,minmax(0,1fr))}
 ${root} .rmt-theme-custom-panel label{padding:10px;background:var(--rmt-theme-surface-solid);border-color:var(--rmt-theme-border)}
 ${root} .rmt-theme-custom-panel input[type="color"]{width:100%;height:44px;min-height:44px;padding:3px;border:1px solid var(--rmt-theme-border)}

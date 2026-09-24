@@ -4,6 +4,12 @@ import * as core_deferredCommitStore from './deferredCommitStore.js';
 
 export const state = {
   runtimeLifecycleEpoch: 0,
+  chatNavigationEpoch: 0,
+  chatNavigationPermit: null,
+  chatNavigationScope: '',
+  renderedChatScope: '',
+  pendingArchiveEntry: '',
+  cancelledChatScopeAt: new Map(),
   apiConfigurationEpoch: 0,
   manualApiKey: '',
   busy: false,
@@ -17,6 +23,8 @@ export const state = {
   archiveViewLevel: 'library',
   roomLifeRefreshPromise: null,
   roomLifeRefreshOrigin: null,
+  roomLifeAbortController: null,
+  activeAdvBulkControllers: new Map(),
   activeTaskAbortController: null,
   activeTaskLabel: '',
   activeTaskTrace: null,

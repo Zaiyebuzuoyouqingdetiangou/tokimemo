@@ -20,6 +20,15 @@ import * as overlay from './overlay.js';
 
 let editor = null;
 
+export function portraitCgMetadata(item, raw) {
+    if (!item?.cgPortrait || item.cgImage || !raw) return raw;
+    const value = structuredClone(raw);
+    const userIds = new Set((value.castSnapshot?.people || []).filter(person=>person.identity==='user').map(person=>person.id));
+    if (value.castSnapshot) value.castSnapshot.people = value.castSnapshot.people.filter(person=>person.identity!=='user');
+    value.characters = (value.characters || []).filter(person=>person.role!=='user' && !userIds.has(person.participantId));
+    return appearance.normalizeCgPromptMetadata(value);
+}
+
 function snapshotEditorDraft(current) {
     const metadata = editorMetadata(current);
     return { promptFormat: current.promptFormat, scene: current.element.querySelector('[data-rmt-cg-prompt-input]').value, metadata,
@@ -217,11 +226,12 @@ function fillEditorMetadata(current, raw) {
     updatePreparedPreview(current);
 }
 
-export function openCgPromptEditor({ heartStrip = false } = {}) {
+export function openCgPromptEditor({ heartStrip = false, targetDescriptor = null } = {}) {
     try {
         if (!archive_library.requireWritableArchiveAction()) return;
         const item = heartStrip ? heart.selectedHeartStrip() : null;
-        const rawTarget = heartStrip && item
+        const rawTarget = targetDescriptor ? images.resolveCgImageTargetDescriptor(targetDescriptor)
+            : heartStrip && item
             ? { mode: core_constants.MODE.HEART, session: runtimeState.activeSession, item }
             : images.selectedCgTarget();
         const target = images.captureCgImageTarget(rawTarget);
@@ -239,20 +249,21 @@ export function openCgPromptEditor({ heartStrip = false } = {}) {
         const promptFormat = cg_format.normalizeCgPromptFormat(savedImage?.promptMetadata?.promptFormat, settings.getPluginSettings().cgPromptFormat);
         const draft = images.cgImagePromptForItem(selected, '', promptFormat);
         const context = core_context.currentCharacterGuard();
-        const initialMetadata = appearance.initialCgAppearanceMetadata(selected, context);
+        // Expanded plans carry the participant snapshot captured when the user
+        // saved the plan. Reopening must not substitute today's roster.
+        const initialMetadata = portraitCgMetadata(selected,savedImage?.promptMetadata || selected.__rmtCgPromptMetadata || appearance.initialCgAppearanceMetadata(selected, context));
         const multi = !!initialMetadata?.castSnapshot;
         const currentRoster = cache.readParticipantRoster(context);
-        const roster = multi && !selected.cgImage ? currentRoster : null;
+        const roster = multi && !selected.cgImage && !selected.__rmtCgPromptMetadata ? currentRoster : null;
         const participantLooks = multi ? cast_looks.readParticipantLooks(context) : null;
         const canRetry = images.hasPendingCgImage(target);
-        const historyRows = images.normalizeCgImageHistory(selected.cgImageHistory);
         const element = document.createElement('div');
         element.className = 'rmt-cg-prompt-backdrop';
         element.innerHTML = `<section class="rmt-cg-prompt-dialog" role="dialog" aria-modal="true" aria-labelledby="rmt-cg-prompt-title" aria-describedby="rmt-cg-prompt-help" tabindex="-1">
           <div class="rmt-cg-prompt-head"><h2 id="rmt-cg-prompt-title">图片设置</h2><button type="button" class="rmt-btn" data-rmt-cg-prompt-action="close" aria-label="关闭图片设置">关闭</button></div>
           <p class="rmt-cg-prompt-event">${core_text.esc(selected.title)}</p>
           <label class="rmt-cg-format"><span>生图提示词格式</span><select data-rmt-cg-editor-format aria-label="当前图片提示词格式">${cg_format_ui.cgFormatOptions(promptFormat)}</select><small>只指导重新构思的写法，不限制手动提示；切换不发请求，实际模型在生图插件中选择。</small></label>
-          <details class="rmt-cg-prompt-scene"><summary>查看这条回忆</summary><p>${core_text.esc(selected.cgDesc || selected.desc || selected.subtitle || '')}</p></details>
+          <details class="rmt-cg-prompt-scene"><summary>查看这条回忆</summary><p>${core_text.esc(selected.cgSourceText || selected.cgDesc || selected.desc || selected.subtitle || '')}</p></details>
           <label for="rmt-cg-prompt-input">将发送给生图插件的画面描述</label>
           <textarea id="rmt-cg-prompt-input" data-rmt-cg-prompt-input rows="8" maxlength="${core_constants.MAX_CG_IMAGE_PROMPT_CHARS}" aria-describedby="rmt-cg-prompt-help rmt-cg-prompt-count"></textarea>
           <div id="rmt-cg-prompt-count" data-rmt-cg-prompt-count></div>
@@ -271,7 +282,6 @@ export function openCgPromptEditor({ heartStrip = false } = {}) {
           <button type="button" class="rmt-btn" data-rmt-cg-prompt-action="restore-draft" hidden>还原上次草稿</button>
           ${canRetry ? '<div class="rmt-cg-prompt-secondary"><button type="button" class="rmt-btn" data-rmt-cg-prompt-action="retry">回填已生成图片（不再生图）</button></div>' : ''}
           ${savedImage ? `<div class="rmt-cg-prompt-secondary"><button type="button" class="rmt-btn" data-rmt-cg-prompt-action="view">查看完整原图</button><button type="button" class="rmt-btn" data-rmt-cg-prompt-action="clear">${target.mode === core_constants.MODE.HEART ? '恢复文字版' : '恢复抽象图'}</button><small>仅移除本档案的图片引用，不删除柏宝绘图库文件。</small></div>` : ''}
-          ${historyRows.length ? `<div class="rmt-cg-prompt-secondary"><small>历史版本（${historyRows.length}，v1 最旧）</small><div data-rmt-cg-history-list>${historyRows.map((record, index) => `<span class="rmt-cg-history-item"><button type="button" class="rmt-btn" data-rmt-cg-history-view="${core_text.esc(record.url)}">查看 v${index + 1}</button><button type="button" class="rmt-btn" data-rmt-cg-history-restore="${core_text.esc(record.url)}">恢复 v${index + 1}</button></span>`).join('')}</div><small>恢复只切换档案里的图片引用：当前图片转入历史版本，不重新生图、不删除任何已保存的图片文件。</small></div>` : ''}
         </section>`;
         const cancel = event => {
             event.preventDefault(); event.stopImmediatePropagation();
@@ -344,7 +354,7 @@ export async function handleCgHistoryAction(viewUrl, restoreUrl, sourceEl = null
     }
     if (!restoreUrl || !history.some(row => row.url === restoreUrl)) return;
     busyEditor(true);
-    const committed = await images.restoreSelectedCgImageVersion(restoreUrl);
+    const committed = await images.restoreSelectedCgImageVersion(restoreUrl, current.target);
     if (committed === true) closeCgPromptEditor();
     else busyEditor(false);
 }
@@ -472,8 +482,8 @@ export async function handleCgPromptEditorAction(action) {
         }
         if (action === 'clear') {
             busyEditor(true);
-            if (current.target.mode === core_constants.MODE.HEART) await heart.clearHeartStripImage(current.target.itemId);
-            else await images.clearSelectedCgImage();
+            if (current.target.mode === core_constants.MODE.HEART && !current.target.targetDescriptor) await heart.clearHeartStripImage(current.target.itemId);
+            else await images.clearSelectedCgImage(current.target);
             const item = images.cgItemInSession(current.target.mode, current.target.session, current.target.itemId);
             if (!images.normalizeCgImageRecord(item?.cgImage)) closeCgPromptEditor();
             return;
@@ -521,7 +531,7 @@ export async function handleCgPromptEditorAction(action) {
             // Existing drawing flow owns the explicit cost/replacement confirmation,
             // provider lock and durable commit; this editor never invokes a provider.
             const onAccepted = () => closeCgPromptEditor({ restoreFocus: false });
-            if (current.target.mode === core_constants.MODE.HEART) {
+            if (current.target.mode === core_constants.MODE.HEART && !current.target.targetDescriptor) {
                 await heart.drawHeartStripImage(current.target.itemId, { promptOverride: prompt, promptMetadata, promptFormat: current.promptFormat, expectedTarget: current.target, onAccepted });
             } else await images.drawSelectedCgImage({ promptOverride: prompt, promptMetadata, promptFormat: current.promptFormat, expectedTarget: current.target, onAccepted });
         }

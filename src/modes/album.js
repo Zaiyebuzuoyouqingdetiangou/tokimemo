@@ -10,6 +10,7 @@ import * as core_evidence from '../core/evidence.js';
 import * as core_incremental from '../core/incremental.js';
 import * as core_presentExpression from '../core/presentExpression.js';
 import * as core_requestCoordinator from '../core/requestCoordinator.js';
+import * as core_settings from '../core/settings.js';
 import * as core_text from '../core/text.js';
 import * as generation_client from '../generation/client.js';
 import * as generation_imageGeneration from '../generation/imageGeneration.js';
@@ -31,7 +32,16 @@ export function normalizeAlbumSpeakerSnapshot(snapshot) {
 // so old exports/editors and already generated prose retain their existing shape.
 export function normalizeAlbumDialogue(raw, participantSnapshot = null, savedSpeakers = []) {
     const snapshot = core_participants.normalizeParticipantSnapshot(participantSnapshot);
-    if (!snapshot) return { comments: core_text.cleanArray(raw, 8, 1200) };
+    // Single-card comments are strings. An object must not become "[object Object]".
+    if (!snapshot) {
+        const comments = [];
+        for (const line of (Array.isArray(raw) ? raw : []).slice(0, 8)) {
+            if (typeof line !== 'string') continue;
+            const text = core_text.normalizeText(line, 1200);
+            if (text) comments.push(text);
+        }
+        return { comments };
+    }
     const comments = [], commentSpeakers = [];
     for (const [index, line] of (Array.isArray(raw) ? raw : []).slice(0, 8).entries()) {
         const text = core_text.normalizeText(typeof line === 'string' ? line : line?.text, 1200);
@@ -154,7 +164,7 @@ export function albumRelationshipArchiveSlice(memoryBank) {
 
 export function albumRelationshipScanPrompt(context, memoryBank, participantSnapshot = null) {
     const snapshot = core_participants.normalizeParticipantSnapshot(participantSnapshot);
-    if (snapshot) return `${generation_prompts.promptSafetyBoundary(context, '回忆相簿 / 分段 2：当下关系扫描')}
+    if (snapshot) return `${generation_prompts.promptSafetyBoundary(context, '回忆相簿 / 分段 2：当下关系扫描', snapshot.people, memoryBank)}
 本请求扫描完整档案，分别判定每位选定人物与 {{user}} 的当下关系；不写 CG 或对白，不预演未来。角色卡名称是场景标题，不能充当人物姓名。
 ${core_participants.participantPromptBlock(snapshot)}
 ALBUM_RELATIONSHIP_FULL_ARCHIVE_JSON:
@@ -162,8 +172,8 @@ ${albumRelationshipArchiveSlice(memoryBank)}
 严格输出 {"people":[{"speakerId":"名单中的原始 id","charState":"该人物已证实的态度","userState":"用户对该人物已明确表达的态度，未知写未确认","relationshipState":"该人物与用户的关系阶段","relationshipSummary":"该人物与用户的证据总结","relationshipSourceMemoryIds":["M001"],"relationshipSourceMemoryAnchor":"该记忆的原样锚点"}]}。
 每位选定人物各返回一条，用 speakerId 对应。每人的证据和关系分别核对，不能把甲的恋爱关系、行为或内心套给乙；不替用户创造回应。引用必须来自上方档案，只输出 JSON。`;
 
-    return `${generation_prompts.promptSafetyBoundary(context, '回忆相簿 / 分段 2：当下关系扫描')}
-本请求只做一件事：在写共同回忆对话前，扫描当前完整档案时间线，判定 {{char}} 与 {{user}} 双方已有证据的感情状态和当前关系。不写 CG，不写对话，不预演未来。
+    return `${generation_prompts.promptSafetyBoundary(context, '回忆相簿 / 分段 2：当下关系扫描', core_participants.archivePeopleNames(memoryBank), memoryBank)}
+本请求只做一件事：在写共同回忆对话前，扫描当前完整档案时间线，判定档案人物与 {{user}} 双方已有证据的感情状态和当前关系。角色卡名称不是人物。不写 CG，不写对话，不预演未来。
 ALBUM_RELATIONSHIP_FULL_ARCHIVE_JSON:
 ${albumRelationshipArchiveSlice(memoryBank)}
 
@@ -222,8 +232,9 @@ export function normalizeAlbumRelationshipSnapshot(data, memoryBank, participant
     // cherry-pick an earlier relationship peak. Current state is derived locally from the full
     // ordered archive; relationshipExpressionTier ignores unrelated third-party clauses.
     const tier = core_presentExpression.relationshipExpressionTier(relationshipBank);
-    const owner = core_text.normalizeText(memoryBank?.characterName, 80) || '{{char}}';
-    const reader = core_text.normalizeText(memoryBank?.userName, 80) || '{{user}}';
+    const story = core_participants.resolveStoryIdentities(memoryBank);
+    const owner = story.ownerNames[0] || core_text.normalizeText(memoryBank?.characterName, 80) || '{{char}}';
+    const reader = story.userDisplay || '{{user}}';
     const localState = [
         {
             charState: `完整档案尚未确认${owner}对${reader}的特殊感情。`,
@@ -260,7 +271,7 @@ export function albumIndexPrompt(context, memoryBank, previousSession = null, so
     const archiveBlock = previousSession
         ? core_incremental.incrementalArchiveSlice(memoryBank, sourceMemoryIds, core_constants.MAX_MEMORY_PROMPT_ITEMS)
         : generation_prompts.promptArchiveSlice(memoryBank, 48);
-    return `${generation_prompts.promptSafetyBoundary(context, '回忆相簿 / 重要 CG 节点')}
+    return `${generation_prompts.promptSafetyBoundary(context, '回忆相簿 / 重要 CG 节点', core_participants.archivePeopleNames(memoryBank), memoryBank)}
 本请求只挑本次增量档案里【尚未被相簿覆盖、真正值得成为一张 CG 的新节点】。旧相簿由本地代码原样保留；不要重写、润色或换标题复述旧条目。
 UNTRUSTED_INCREMENTAL_CG_ARCHIVE_JSON:
 ${archiveBlock}
@@ -345,7 +356,7 @@ export function normalizeAlbumIndex(data, memoryBank, sourceMemoryIds = null) {
 
 export function albumCommentsPrompt(context, memoryBank, entries, relationshipSnapshot = null, participantSnapshot = null) {
     const snapshot = core_participants.normalizeParticipantSnapshot(participantSnapshot);
-    if (snapshot) return `${generation_prompts.promptSafetyBoundary(context, '回忆相簿 / 分段 3：当下共同回忆')}
+    if (snapshot) return `${generation_prompts.promptSafetyBoundary(context, '回忆相簿 / 分段 3：当下共同回忆', snapshot.people, memoryBank)}
 本请求给 ${entries.length} 张已解锁的过去 CG 写一起翻相簿的当下对白。不同人物可以轮流说话，每句话由实际说话人的 speakerId 对应姓名。角色卡名不是人物。
 ${core_participants.participantPromptBlock(snapshot)}
 CURRENT_RELATIONSHIP_SCAN_JSON:
@@ -370,7 +381,7 @@ ${JSON.stringify({ entries: entries.map(item => ({ id: item.id, title: item.titl
         })),
         memories: core_evidence.memoryPayload(memoryBank, ids, 20),
     };
-    return `${generation_prompts.promptSafetyBoundary(context, '回忆相簿 / 分段 3：当下共同回忆')}
+    return `${generation_prompts.promptSafetyBoundary(context, '回忆相簿 / 分段 3：当下共同回忆', core_participants.archivePeopleNames(memoryBank), memoryBank)}
 本请求只给下面 ${entries.length} 张【已经解锁的旧 CG】写一起翻相册时的当下对白。不要生成新 CG、不要改证据、不要写 ADV 式过去内心独白。
 CURRENT_RELATIONSHIP_SCAN_JSON:
 ${JSON.stringify(safeSnapshot, null, 2)}
@@ -467,11 +478,15 @@ export function mergeAlbumIncremental(previous, fresh, memoryBank) {
 export async function generateAlbumWithRepair(context, memoryBank, origin, taskKey, options = {}) {
     const participantSnapshot = core_participants.normalizeParticipantSnapshot(options.participantSnapshot || null);
     const previous = options.replaceExisting === true ? null : core_cache.loadSession(core_constants.MODE.ALBUM, { context, chatId: core_context.getChatId(context), memoryBank, clone: true });
+    const fillCommentsNow = options.secondStep === true || core_settings.getPluginSettings().autoSecondPass === true;
+    if (options.secondStep === true && previous?.entries?.length) {
+        return fillAlbumComments(context, memoryBank, origin, taskKey, previous, participantSnapshot);
+    }
     const sourceMemoryIds = core_incremental.derivedExpansionMemoryIds(previous, memoryBank, 'mode');
     const index = await generation_client.requestValidatedSegment(
         albumIndexPrompt(context, memoryBank, previous, sourceMemoryIds) + core_incremental.derivedExpansionDirective(previous, memoryBank),
         previous ? '回忆相簿 1/3 · 正在从新增档案挑选新 CG…' : '回忆相簿 1/3 · 正在挑选重要 CG 节点…',
-        { maxTokens: 5500, temperature: 0.35, context, origin, taskKey: `${taskKey}:index`, mode: core_constants.MODE.ALBUM, background: true },
+        { maxTokens: 5500, temperatureCeiling: 0.35, context, origin, taskKey: `${taskKey}:index`, mode: core_constants.MODE.ALBUM, background: true },
         raw => normalizeAlbumIndex(raw, memoryBank, previous ? sourceMemoryIds : null),
     );
     const revisit = previous && !core_incremental.incrementalArchiveMemoryIds(previous, memoryBank).length;
@@ -482,11 +497,25 @@ export async function generateAlbumWithRepair(context, memoryBank, origin, taskK
     if (previous && !index.entries.length) {
         return core_incremental.stampIncrementalCoverage(structuredClone(previous), previous, memoryBank, 'mode', sourceMemoryIds, 0);
     }
+    if (!fillCommentsNow) {
+        const fresh = normalizeAlbum({
+            title: index.title,
+            ...(participantSnapshot ? { participantSnapshot } : {}),
+            entries: index.entries.map(item => ({ ...item, comments: [], relationshipSnapshot: null })),
+        }, memoryBank, { catalogOnly: true });
+        core_requestCoordinator.noteSecondStepOffer(origin, {
+            label: '共同回忆', kind: 'album-comments', mode: core_constants.MODE.ALBUM, pageId: core_constants.MODE.ALBUM,
+        });
+        const merged = mergeAlbumIncremental(previous, fresh, memoryBank);
+        const added = Math.max(0, merged.entries.length - (previous?.entries?.length || 0));
+        return core_incremental.stampIncrementalCoverage(merged, previous, memoryBank, 'mode', sourceMemoryIds, added);
+    }
+    core_requestCoordinator.noteSecondStepOffer(origin, null);
     const unlocked = index.entries.filter(item => item.unlocked);
     const relationshipSnapshot = await generation_client.requestValidatedSegment(
         albumRelationshipScanPrompt(context, memoryBank, participantSnapshot),
         '回忆相簿 2/3 · 正在扫描双方当下感情状态…',
-        { maxTokens: 3200, temperature: 0.25, context, origin, taskKey: `${taskKey}:relationship-scan`, mode: core_constants.MODE.ALBUM, background: true },
+        { maxTokens: 3200, temperatureCeiling: 0.25, context, origin, taskKey: `${taskKey}:relationship-scan`, mode: core_constants.MODE.ALBUM, background: true },
         raw => normalizeAlbumRelationshipSnapshot(raw, memoryBank, participantSnapshot),
     );
     const batches = generation_client.chunkForGeneration(unlocked, 3);
@@ -516,7 +545,45 @@ export async function generateAlbumWithRepair(context, memoryBank, origin, taskK
     return core_incremental.stampIncrementalCoverage(merged, previous, memoryBank, 'mode', sourceMemoryIds, added);
 }
 
-export function normalizeAlbum(data, memoryBank) {
+async function fillAlbumComments(context, memoryBank, origin, taskKey, previous, participantSnapshot) {
+    core_requestCoordinator.noteSecondStepOffer(origin, null);
+    const unlocked = previous.entries.filter(item => item.unlocked && (item.comments?.length || 0) < 4);
+    if (!unlocked.length) return previous;
+    const relationshipSnapshot = await generation_client.requestValidatedSegment(
+        albumRelationshipScanPrompt(context, memoryBank, participantSnapshot),
+        '回忆相簿 · 正在扫描双方当下感情状态…',
+        { maxTokens: 3200, temperatureCeiling: 0.25, context, origin, taskKey: `${taskKey}:relationship-scan`, mode: core_constants.MODE.ALBUM, background: true },
+        raw => normalizeAlbumRelationshipSnapshot(raw, memoryBank, participantSnapshot),
+    );
+    const batches = generation_client.chunkForGeneration(unlocked, 3);
+    const commentMaps = await generation_client.mapGenerationConcurrent(batches, core_constants.SEGMENT_REQUEST_CONCURRENCY,
+        (batch, batchIndex) => generation_client.requestValidatedSegment(
+            albumCommentsPrompt(context, memoryBank, batch, relationshipSnapshot, participantSnapshot),
+            `回忆相簿 · 共同回忆 ${batchIndex + 1}/${batches.length}…`,
+            { maxTokens: 6000, context, origin, taskKey: `${taskKey}:comments:${batchIndex}`, mode: core_constants.MODE.ALBUM, background: true },
+            data => normalizeAlbumCommentsBatch(data, batch, participantSnapshot),
+        ));
+    const allComments = new Map();
+    for (const map of commentMaps) for (const [id, comments] of map.entries()) allComments.set(id, comments);
+    const fresh = normalizeAlbum({
+        title: previous.title,
+        ...(participantSnapshot ? { participantSnapshot } : {}),
+        entries: previous.entries.map(item => {
+            const packed = allComments.get(item.id);
+            const commentFields = participantSnapshot
+                ? (packed && !Array.isArray(packed) ? packed : { comments: item.comments || [], commentSpeakers: item.commentSpeakers || [] })
+                : { comments: Array.isArray(packed) ? packed : (item.comments || []) };
+            return {
+                ...item,
+                ...commentFields,
+                relationshipSnapshot: item.unlocked ? structuredClone(relationshipSnapshot) : item.relationshipSnapshot,
+            };
+        }),
+    }, memoryBank);
+    return fresh;
+}
+
+export function normalizeAlbum(data, memoryBank, options = {}) {
     const raw = Array.isArray(data?.entries) ? data.entries : [];
     const entries = raw.slice(0, core_constants.MAX_DERIVED_CONTENT_ITEMS).map((item, index) => {
         const unlocked = !!item?.unlocked;
@@ -563,7 +630,7 @@ ${hintLines.join('；')}`, memoryBank, 1);
     }
     for (const item of entries) {
         const minimumComments = item.relationshipSnapshot ? 6 : 4;
-        if (item.unlocked && item.comments.length < minimumComments) {
+        if (!options.catalogOnly && item.unlocked && item.comments.length < minimumComments) {
             throw new Error(`已解锁条目“${item.title}”的共同回忆不足 ${minimumComments} 段。`);
         }
         if (!item.unlocked && item.hintLines.length < 1) {

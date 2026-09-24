@@ -1,15 +1,15 @@
 {
   "display_name": "心迹回廊",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.8.111-tt-cg-r84.35-cg-history-dupe-role",
+  "js": "index.js?heartbeat=0.99.14-r84.59-reviewed",
   "author": "Toto",
-  "version": "0.8.111",
+  "version": "0.99.14",
   "auto_update": true,
   "minimum_client_version": "1.13.0",
   "hooks": {
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r84.32：恢复草稿出口修复——超大草稿可读/可导出/可放弃但不可续写（不再隐形卡死）；档案本身超限时以独立代码如实报错（未发送请求、无草稿）；其余保护与Prompt不变。",
+  "description": "r84.59：镜译移入设置、实时聊天置于互动末尾、独立手帐整页收录与挑选制作。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }

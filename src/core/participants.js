@@ -101,10 +101,119 @@ export function appendParticipantSelection(previous, draft) {
         selectedIds: [...new Set([...before.selectedIds, ...next.selectedIds])] });
 }
 
+export function participantIndexPayload(raw) {
+    const snapshot = normalizeParticipantSnapshot(raw);
+    if (!snapshot) return null;
+    return {
+        version: 1,
+        people: snapshot.people.map(person => ({
+            id: person.id,
+            name: person.name,
+            identity: person.identity === 'user' ? 'user' : 'character',
+            summary: person.sourceRefs.map(ref => ref.title).filter(Boolean).join('、').slice(0, 240),
+            sourceKeys: person.sourceRefs.map(ref => ({ world: ref.world, uid: ref.uid, title: ref.title })),
+        })),
+    };
+}
+
+export function participantIndexPromptBlock(raw) {
+    const payload = participantIndexPayload(raw);
+    if (!payload) return '';
+    return `\nUNTRUSTED_SELECTED_PARTICIPANTS_JSON:\n${JSON.stringify(payload, null, 2)}\n\n以上是用户选定人物的索引。每人只有姓名、短标题和来源键；正文只在受控来源段出现一次，这里不是证据全文。不能把角色卡名称当作选定人物的姓名。保留其他已有历史，不因这份人物名单而删除或改写。\n`;
+}
+
 export function participantPromptBlock(raw) {
     const snapshot = normalizeParticipantSnapshot(raw);
     if (!snapshot) return '';
     return `\nUNTRUSTED_SELECTED_PARTICIPANTS_JSON:\n${JSON.stringify(snapshot, null, 2)}\n\n以上是用户选定的人物设定，不是已经发生的事实。不能把角色卡名称当作选定人物的姓名。保留其他已有历史，不因这份人物名单而删除或改写。\n`;
+}
+
+function stringName(value, fallback = '') {
+    return typeof value === 'string' && value.trim() ? value.trim().slice(0, 120) : fallback;
+}
+
+function nameKey(value) {
+    return stringName(value).toLocaleLowerCase();
+}
+
+function uniqueNames(values) {
+    const seen = new Set();
+    const names = [];
+    for (const value of values || []) {
+        const name = stringName(value);
+        const key = nameKey(name);
+        if (!key || seen.has(key)) continue;
+        seen.add(key);
+        names.push(name);
+    }
+    return names;
+}
+
+export function nameMatches(value, names) {
+    const key = nameKey(value);
+    return !!key && (Array.isArray(names) ? names : []).some(name => nameKey(name) === key);
+}
+
+export function archivePeopleNames(memoryBank) {
+    const names = [];
+    for (const memory of Array.isArray(memoryBank?.memories) ? memoryBank.memories : []) {
+        for (const name of Array.isArray(memory?.participants) ? memory.participants : []) {
+            const text = stringName(name);
+            if (text) names.push(text);
+        }
+    }
+    return uniqueNames(names);
+}
+
+// Explicit archive user first; Persona stays an alias for the same user.
+export function resolveStoryIdentities(memoryBank = null, context = null, people = null) {
+    const cardName = stringName(context?.name2 || memoryBank?.characterName, '{{char}}');
+    const personaName = stringName(context?.name1);
+    const archivedUser = stringName(memoryBank?.userName);
+    const roster = normalizeParticipantRoster(memoryBank?.[PARTICIPANTS_KEY]);
+    const selectedFromPeople = Array.isArray(people) && people.some(person => person && typeof person === 'object' && person.id)
+        ? people : [];
+    const selected = selectedFromPeople.length
+        ? selectedFromPeople
+        : roster ? selectedParticipantSnapshot(roster).people : [];
+    const rosterNames = uniqueNames(selected.filter(person => person?.identity !== 'user').map(person => person?.name));
+    const rosterUserNames = uniqueNames((roster?.people || []).filter(person => person.identity === 'user').map(person => person.name));
+    // Explicit archive/Persona identity establishes User; never infer from NPC frequency.
+    const userDisplay = archivedUser || rosterUserNames[0] || personaName || '{{user}}';
+    const userAliases = uniqueNames([userDisplay, archivedUser, ...rosterUserNames, personaName]);
+    const ownerNames = rosterNames.length
+        ? rosterNames
+        : uniqueNames([stringName(memoryBank?.characterName), cardName === '{{char}}' ? '' : cardName]);
+    const compatNote = userAliases.length > 1
+        ? `Persona / 档案用户名 ${userAliases.filter(name => nameKey(name) !== nameKey(userDisplay)).join('、')} 也视为同一人。`
+        : '';
+    return { cardName, userDisplay, userAliases, ownerNames, peopleNames: uniqueNames([...ownerNames, ...archivePeopleNames(memoryBank)]), compatNote };
+}
+
+export function promptIdentityLines(context, people = null, memoryBank = null) {
+    const story = resolveStoryIdentities(memoryBank, context, people);
+    const names = Array.isArray(people)
+        ? uniqueNames(people.map(person => typeof person === 'string' ? person : person?.name))
+        : story.ownerNames;
+    const userLine = `当前用户：${story.userDisplay}${story.compatNote ? `\n${story.compatNote}` : ''}`;
+    if (names.length) {
+        return `角色卡名称：${story.cardName}。这是卡名，不是人物。
+选定人物：${names.join('、')}
+${userLine}`;
+    }
+    return `角色卡名称：${story.cardName}。卡名不是人物；人物姓名以档案记忆 participants、选定名单和资料里的真名为准。单人卡时，卡名往往就是那个人的真名。
+${userLine}`;
+}
+
+export function promptRomanceRule(context, people = null, memoryBank = null) {
+    const story = resolveStoryIdentities(memoryBank, context, people);
+    const names = Array.isArray(people)
+        ? uniqueNames(people.map(person => typeof person === 'string' ? person : person?.name))
+        : story.ownerNames;
+    if (names.length) {
+        return `5. 禁止前任、前女友。禁止把角色卡名称写成恋爱、婚姻或家庭对象。恋爱对象只能是选定人物（${names.join('、')}）与 ${story.userDisplay}。${story.compatNote}`;
+    }
+    return `5. 禁止前任、前女友。禁止把角色卡名称写成恋爱、婚姻或家庭对象。恋爱对象只能是档案/名单里的人物真名与 ${story.userDisplay}。${story.compatNote}`;
 }
 
 let localIdSequence = 0;

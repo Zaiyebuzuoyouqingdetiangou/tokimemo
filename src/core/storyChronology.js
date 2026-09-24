@@ -28,7 +28,7 @@ function positiveInteger(value) {
 export function comparableStoryDate(value) {
     if (typeof value !== 'string') return null;
     const text = value.trim();
-    const numeric = /^(\d{4,})[-/.](\d{1,2})[-/.](\d{1,2})$/u.exec(text)
+    const numeric = /^(\d{4,})[-/.](\d{1,2})[-/.](\d{1,2})(?:\s+\d{1,2}:\d{2}(?::\d{2})?)?$/u.exec(text)
         || /^(\d{4,})年(\d{1,2})月(\d{1,2})日?$/u.exec(text);
     if (numeric) {
         const [year, month, day] = numeric.slice(1).map(positiveInteger);
@@ -38,11 +38,14 @@ export function comparableStoryDate(value) {
         return { calendar: 'gregorian', parts: [year, month, day] };
     }
     // A named fictional/historical calendar is comparable only with itself.
-    // No conversion, assumed era order, Gregorian month cap or current year.
-    const era = /^([^\d年月日]+?)([零〇一二三四五六七八九十百千两元\d]+)年([零〇一二三四五六七八九十两元\d]+)月(?:初)?([零〇一二三四五六七八九十两\d]+)日?$/u.exec(text);
+    // Month-only era dates keep year/month precision so they still sort in-era.
+    const era = /^([^\d年月日]+?)([零〇一二三四五六七八九十百千两元\d]+)年([零〇一二三四五六七八九十两元\d]+)月(?:初)?([零〇一二三四五六七八九十两\d]+)?日?$/u.exec(text);
     if (!era) return null;
-    const parts = era.slice(2).map(positiveInteger);
-    return parts.every(Boolean) ? { calendar: `era:${era[1].trim()}`, parts } : null;
+    const year = positiveInteger(era[2]);
+    const month = positiveInteger(era[3]);
+    const day = era[4] ? positiveInteger(era[4]) : 0;
+    if (!year || !month) return null;
+    return { calendar: `era:${era[1].trim()}`, parts: [year, month, day || 0] };
 }
 
 export function sortByStoryDate(items) {

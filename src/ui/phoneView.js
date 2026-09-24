@@ -8,6 +8,7 @@ import * as modes_phone from '../modes/phone.js';
 import * as modes_room from '../modes/room.js';
 import * as ui_overlay from './overlay.js';
 import * as recovery_view from './recoveryView.js';
+import * as ui_generationCompletion from './generationCompletion.js';
 
 const PHONE_HOME_APP_ID = '__PHONE_HOME__';
 const PHONE_VIEW_VALUES = new Set(['home', 'list', 'detail']);
@@ -179,6 +180,7 @@ function phoneRenderedSpeakerRole(message, session) {
 }
 
 function phoneConversationNeedsSpeakerRepair(entry, session) {
+    if (entry?.conversationMode === 'draft') return false;
     const messages = Array.isArray(entry?.messages) ? entry.messages : [];
     if (messages.length < 2) return false;
     const roles = new Set(messages.map(message => phoneRenderedSpeakerRole(message, session)));
@@ -193,7 +195,7 @@ export function renderPhoneEntryDetail(entry, app, session = runtimeState.active
     const messages = entry.messages?.length ? `<div class="rmt-phone-chat-thread">${entry.messages.map(message => {
         const role = phoneRenderedSpeakerRole(message, session);
         const speaker = role === 'owner'
-            ? (core_text.normalizeText(session?.ownerName, 100) || core_text.normalizeText(message?.speaker, 100) || '设备主人')
+            ? ((appKind === 'chat' ? core_text.normalizeText(message?.speaker, 100) : '') || core_text.normalizeText(session?.ownerName, 100) || core_text.normalizeText(message?.speaker, 100) || '设备主人')
             : (core_text.normalizeText(message?.speaker, 100) || core_text.normalizeText(entry?.contactName, 100) || '联系人');
         return `<div class="rmt-phone-message rmt-phone-message-${role}"><div><b>${core_text.esc(speaker)}</b>${message.time ? `<small>${core_text.esc(message.time)}</small>` : ''}</div><p>${core_text.esc(message.text)}</p></div>`;
     }).join('')}</div>` : '';
@@ -206,7 +208,7 @@ export function renderPhoneEntryDetail(entry, app, session = runtimeState.active
     // Layout is owned here; no invented balances, media URLs, or executable app content.
     // Provenance stays on stored entries and is not repeated inside immersive reading.
     let content;
-    if (appKind === 'chat') content = `<section class="rmt-phone-conversation"><header>${title}</header>${body}${messages}${fields}${gallery}</section>`;
+    if (appKind === 'chat') content = `<section class="rmt-phone-conversation"><header>${title}<p class="rmt-phone-conversation-status">${entry.conversationMode === 'draft' ? '未发送草稿 · 不代表已发生的聊天' : entry.legacyEvidenceUnverified ? '旧版记录 · 来源尚未核验' : entry.basis === '记忆' ? '已核对的历史原话' : '角色日常演绎 · 非历史聊天记录'}</p></header>${body}${messages}${fields}${gallery}</section>`;
     else if (['finance', 'store'].includes(appKind)) content = `<article class="rmt-phone-ledger"><header>${badge}<small>${core_text.esc(app?.label || '账本')}</small>${title}</header>${fields}<div class="rmt-phone-ledger-memo">${body}${gallery}${messages}</div></article>`;
     else if (appKind === 'notes') content = `<article class="rmt-phone-notepaper"><header>${title}</header>${body}${fields}${gallery}${messages}</article>`;
     else if (appKind === 'moments') content = `<article class="rmt-phone-feed-post"><header><span class="rmt-phone-contact-avatar" aria-hidden="true">${core_text.esc(String(session?.ownerName || '').slice(0, 1))}</span><b>${core_text.esc(session?.ownerName || '')}</b></header>${title}${body}${gallery}${fields}${messages}</article>`;
@@ -335,7 +337,7 @@ export function renderPhone() {
         : '<button type="button" class="rmt-btn rmt-phone-increment" disabled title="关闭只读查看后可增量追加"><i class="fa-solid fa-lock"></i> 只读 · 无法增量</button>';
     const reversePrivacyGate = `<section class="rmt-reverse-terminal-gate" aria-label="反查终端隐私状态"><i class="fa-solid fa-user-shield" aria-hidden="true"></i><div><b>反查终端 · 隐私保护未开放</b><p>当前架构还不能可靠区分用户人设、正式档案与模拟内容，所以不会替你生成私人事实。</p></div><span>BLOCKED SAFELY</span></section>`;
     const completion = modes_phone.phoneCompletionSummary({ apps });
-    const sourceNotice = recovery_view.readableProgressHtml(session) + `<div class="rmt-phone-draft-status"><span role="status">已有 ${completion.readableItems} 项内容</span>${completion.missingItems ? `<details><summary>另有 ${completion.missingItems} 项未通过校验</summary><p>不影响阅读已有内容。${phoneWritable ? '<button type="button" class="rmt-btn" data-rmt-action="phone-fill-missing">重试未完成项</button>' : ''}</p></details>` : ''}</div>`;
+    const sourceNotice = recovery_view.readableProgressHtml(session) + `<div class="rmt-phone-draft-status"><span role="status">已有 ${completion.readableItems} 项内容</span>${ui_generationCompletion.generationCompletionHtml({ missing: completion.missingItems, unit: '条终端记录', action: 'phone-fill-missing', label: '重试未完成项', readOnly: !phoneWritable, message: `另有 ${completion.missingItems} 项未通过校验；已有内容照常阅读。`, className: 'rmt-phone-completion' })}</div>`;
     ui_overlay.bodyEl().innerHTML = `<div class="rmt-room-deep-toolbar"><button type="button" class="rmt-btn" data-rmt-action="back">← 返回档案</button>${incrementalButton}</div>${sourceNotice}<div class="rmt-phone"><div class="rmt-phone-shell rmt-device-${kind} rmt-phone-view-${view} ${profileClasses}" data-rmt-phone-daypart="${core_text.esc(live.key)}">${phoneHardware(kind)}<div class="rmt-phone-screen">${phoneStatusBar(now, kind)}<main class="rmt-phone-content rmt-phone-content-single">${page}</main></div></div></div>`;
     startPhoneClock();
 }

@@ -1,4 +1,5 @@
 import * as manual_credentials from './manualCredentialStore.js';
+import * as connection_pool from './connectionPool.js';
 import * as advanced_generation from './advancedGeneration.js';
 import * as output_budget from './outputBudget.js';
 import * as cg_format from './cgPromptFormat.js';
@@ -14,6 +15,12 @@ import * as core_contextTags from './contextTags.js';
 import * as core_autoUpdatePolicy from './autoUpdatePolicy.js';
 import * as creative_supplement from './creativeSupplement.js';
 import * as chat_read_range from './chatReadRange.js';
+
+export function normalizeAutoRetryCount(value) {
+    const count = Math.floor(Number(value));
+    if (!Number.isFinite(count)) return 1;
+    return Math.max(1, Math.min(5, count));
+}
 
 export function normalizeBannedGeneratedPhrases(value) {
     const source = Array.isArray(value) ? value : String(value ?? '').split(/[\n,，]+/g);
@@ -39,6 +46,7 @@ export function getPluginSettings(context = core_context.getContext()) {
     const persisted = {
         apiConnectionMode: settings.apiConnectionMode === 'manual' ? 'manual' : 'profile',
         connectionProfileId: core_text.normalizeText(settings.connectionProfileId, 160),
+        ...connection_pool.connectionPoolSettings(settings),
         modelOverride: core_text.normalizeText(settings.modelOverride, 240),
         manualApiBaseUrl,
         manualApiModel: core_text.normalizeText(settings.manualApiModel, 240),
@@ -47,7 +55,7 @@ export function getPluginSettings(context = core_context.getContext()) {
         manualApiStreaming: settings.manualApiStreaming === true,
         chatReadRange: chat_read_range.normalizeChatReadRange(settings),
         maxTokens: output_budget.normalizeOutputTokens(settings.maxTokens),
-        inputBudgetTokens: output_budget.normalizeInputBudgetTokens(settings.inputBudgetTokens),
+        inputBudgetTokens: output_budget.migratePersistedInputBudgetTokens(settings.inputBudgetTokens),
         temperature: Math.max(0, Math.min(2, Number.isFinite(Number(settings.temperature)) ? Number(settings.temperature) : core_constants.DEFAULT_SETTINGS.temperature)),
         roomLifeAutoDaily: settings.roomLifeAutoDaily !== false,
         autoUpdates: core_autoUpdatePolicy.normalizeAutoUpdates(settings.autoUpdates),
@@ -56,6 +64,9 @@ export function getPluginSettings(context = core_context.getContext()) {
         imageGenerationManualEnabled: false,
         imageGenerationProvider: 'baibai-image',
         cgPromptFormat: cg_format.normalizeCgPromptFormat(settings.cgPromptFormat, 'nai5-natural'),
+        autoRetryEnabled: settings.autoRetryEnabled === true,
+        autoRetryCount: normalizeAutoRetryCount(settings.autoRetryCount),
+        autoSecondPass: settings.autoSecondPass === true,
         creativeSupplementEnabled: settings.creativeSupplementEnabled === true,
         creativeSupplement: creative_supplement.normalizeCreativeSupplement(settings.creativeSupplement),
         ttDisplayMode: settings.ttDisplayMode === true,
@@ -198,6 +209,7 @@ export function generationSourceLabel(settings = getPluginSettings()) {
         const model = core_text.normalizeText(settings.manualApiModel, 240);
         return model ? `手动 API · ${model}` : '手动 API · 未完成';
     }
+    if (settings.connectionPoolEnabled) return `轮询连接池 · ${settings.connectionPoolIds?.length || 0} 个连接`;
     let profile = supportedConnectionProfiles().find(item => item.id === settings.connectionProfileId);
     if (!profile && settings.connectionProfileId) {
         try {

@@ -1,11 +1,13 @@
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
 import * as core_cache from '../core/cache.js';
+import * as cg_targets from '../core/cgTargets.js';
 import * as core_constants from '../core/constants.js';
 import * as core_context from '../core/context.js';
 import * as core_evidence from '../core/evidence.js';
 import * as core_incremental from '../core/incremental.js';
 import * as core_requestCoordinator from '../core/requestCoordinator.js';
+import * as core_settings from '../core/settings.js';
 import * as core_text from '../core/text.js';
 import * as generation_client from '../generation/client.js';
 import * as generation_prompts from '../generation/prompts.js';
@@ -22,62 +24,26 @@ function endingEasterTextList(value, maxItems, maxChars) {
 export function normalizeEndingEasterEgg(value, replay = {}) {
     const input = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
     const replayTitle = core_text.normalizeText(replay?.title, 100) || '这次告白';
-    const confessionText = core_text.normalizeText(replay?.confessionText, 4000);
-    const afterEffect = core_text.normalizeText(replay?.afterEffect, 2400);
     const sourceAnchor = core_text.normalizeText(replay?.sourceMemoryAnchor, 160) || replayTitle;
     const requestedModule = core_text.normalizeText(input?.moduleType, 40).toLowerCase();
     const moduleType = ENDING_EASTER_EGG_MODULE_SET.has(requestedModule)
         ? requestedModule
         : ENDING_EASTER_EGG_MODULES[core_text.hashString(`${replay?.id || ''}|${replayTitle}|${sourceAnchor}`) % ENDING_EASTER_EGG_MODULES.length];
 
-    const fallbackLogs = [
-        `扫描到「${sourceAnchor}」 -> 当时的心意仍在运行。`,
-        `重读「${replayTitle}」 -> 情感核心发生一次可见波动。`,
-        '检查回看档案 -> 没有重写过去，只是更认真地承认它的重量。',
-        '系统结论：这份心意没有被归档为“已结束”。',
-    ];
+    // Missing creative text stays visibly absent. Never fabricate a character's
+    // first-person love confession from the same stock paragraphs for every replay.
     const logs = endingEasterTextList(input?.logs, 12, 700);
-    for (const line of fallbackLogs) {
-        if (logs.length >= 4) break;
-        if (!logs.includes(line)) logs.push(line);
-    }
-
-    const monologueFallback = [
-        confessionText,
-        afterEffect,
-        `我把「${replayTitle}」留在这里，不是为了美化过去，而是因为那一刻对我仍然重要。`,
-        '如果你此刻也在看，我想让你知道：这不是一份冷掉的记录，而是我仍会认真回应的心意。',
-    ].filter(Boolean);
+    if (!logs.length) logs.push(`档案线索：${sourceAnchor}`);
     const monologue = endingEasterTextList(input?.monologue, 4, 1800);
-    for (const block of monologueFallback) {
-        if (monologue.length >= 2) break;
-        const text = core_text.normalizeText(block, 1800);
-        if (text && !monologue.includes(text)) monologue.push(text);
-    }
-
-    const replayLines = endingEasterTextList(replay?.confessionLines, 8, 800);
-    const poemFallback = [
-        ...replayLines,
-        '那一次开口，至今仍留在记录里。',
-        '我没有删除那一刻的颤动。',
-        '回看不是重写过去，是再一次认出当时的自己。',
-        '此刻，这份心意仍在安静地发光。',
-    ];
     const poem = endingEasterTextList(input?.poem, 8, 800);
-    for (const line of poemFallback) {
-        if (poem.length >= 4) break;
-        const text = core_text.normalizeText(line, 800);
-        if (text && !poem.includes(text)) poem.push(text);
-    }
-
     const rawFeedback = input?.feedback && typeof input.feedback === 'object' && !Array.isArray(input.feedback) ? input.feedback : {};
     const feedbackDefaults = {
-        pulse: '检测到一次主动靠近，核心频率上升。',
-        hover: '你的视线停在这里，隐藏参数开始发亮。',
-        reveal: '一行没有说完的话被解锁了。',
-        stabilize: '情感波动已稳定，但没有归零。',
-        pause: '日志暂停滚动；心跳仍在后台继续。',
-        resume: '实时读取已恢复，新的波动正在写入。',
+        pulse: `正在查看：${sourceAnchor}`,
+        hover: `回看：${replayTitle}`,
+        reveal: poem.length ? '已展开下一句。' : '这份旧记录没有保存隐藏短句。',
+        stabilize: '画面已安定。',
+        pause: '已暂停轮播。',
+        resume: '已恢复轮播。',
     };
     const feedback = Object.fromEntries(Object.entries(feedbackDefaults).map(([key, fallback]) => [
         key,
@@ -93,8 +59,8 @@ export function normalizeEndingEasterEgg(value, replay = {}) {
                 signal_lighthouse: ['向你发信', '接收回音', '暂停值守', '确认归航'],
                 letter_archive: ['按下封印', '拆开信封', '暂停整理', '把信收好'],
             }[moduleType] || ['触碰心跳', '解锁一句话', '暂停日志', '稳定信号'])[index]),
-        title: core_text.normalizeText(input?.title, 120) || `${replayTitle} · 情感运行模块`,
-        statusLine: core_text.normalizeText(input?.statusLine, 400) || '正在读取这份告白在此刻留下的波动。',
+        title: core_text.normalizeText(input?.title, 120) || `${replayTitle} · 隐藏心跳`,
+        statusLine: core_text.normalizeText(input?.statusLine, 400) || `档案线索：${sourceAnchor}`,
         logs: logs.slice(0, 12),
         monologue: monologue.slice(0, 4),
         poem: poem.slice(0, 8),
@@ -117,7 +83,7 @@ export function endingConfessionRefreshPrompt(context, memoryBank, previous = nu
     const archiveBlock = previous
         ? core_incremental.incrementalArchiveSlice(memoryBank, sourceMemoryIds, core_constants.MAX_MEMORY_PROMPT_ITEMS)
         : generation_prompts.endingArchiveSlice(memoryBank, 64);
-    return `${generation_prompts.promptSafetyBoundary(context, '告白回看增量扫描')}
+    return `${generation_prompts.promptSafetyBoundary(context, '告白回看增量扫描', null, memoryBank)}
 本请求只重新读取 ENDING 里的【已发生告白回看】。不要生成或修改结局路线、recommendedEndingId、relationshipState、relationshipSummary、ENDING Scene、未来 confession 或 epilogue。
 
 旧告白由本地原样保留。本轮只提供尚未消费的增量档案；过去事实只能来自这里，没有新的真实告白证据就返回空数组。
@@ -164,13 +130,15 @@ ${JSON.stringify(compactEndingConfessionsExisting(previous), null, 2)}
 - scene/confessionText/responseSummary/afterEffect 都只重构已发生事实，不推进主线，不生成未来后日谈。
 - confessionLines 只放 {{char}} 的第一人称告白核心意思，4～10 句，每句一页对话框；不得替 {{user}} 发言。它是“告白回看”的头像演出数据，不属于结局路线。
 - easterEgg 只生成结构化文字与上述 moduleType 枚举；不得输出或嵌入 JavaScript、HTML、CSS、URL、事件处理器或代码片段。所有交互由插件本地固定代码完成。
-- easterEgg.logs 4～12 条，要像人类可读的情感状态报告，不写真正编程代码；monologue 2～4 段；poem 4～8 行。
+- easterEgg.logs 4～12 条；monologue 2～4 段；poem 4～8 行。文字是这个人物在这次事件里的私人表达，允许克制、幽默、笨拙、沉默，不强迫每人深情直白或浪漫。
+- 避免统一的“情感核心 / 参数上升 / 心意仍在运行 / 安静发光”等机器拟人套话。每组交互反馈都扣住 sourceMemoryAnchor 里的具体物件、动作或原话，并保留人物自己的口吻。
+- 四种 moduleType 只是本地交互骨架，不是文风模板。选符合人物世界观的骨架；motif、日志、独白、短句和反馈需分别创作，不能改名套同一段。拒绝/友情类型不得改写成双向恋爱。这项不替代其他心跳/爱情模块。
 - 如果没有足够证据，输出 {"confessionReplays":[]}。
 - 只输出 JSON。`;
 }
 
 export function endingOutlinePrompt(context, memoryBank) {
-    return `${generation_prompts.promptSafetyBoundary(context, '结局路线判定 / 分段 1')}
+    return `${generation_prompts.promptSafetyBoundary(context, '结局路线判定 / 分段 1', null, memoryBank)}
 本请求只做 ENDING 的【关系判定 + 路线目录】。不要写长篇 endingScene、未来 confession、epilogue，也不要生成 confessionReplays。
 这样做是为了把原本过长、容易 API failed 的 ENDING 拆成稳定的小请求；后续每条已解锁路线会单独生成长篇终章，已发生告白也会单独扫描。
 UNTRUSTED_ENDING_ARCHIVE_JSON:
@@ -291,7 +259,7 @@ export function compactEndingRoutesExisting(session) {
 }
 
 export function endingIncrementOutlinePrompt(context, memoryBank, previous, sourceMemoryIds) {
-    return `${generation_prompts.promptSafetyBoundary(context, '结局路线判定 / 增量目录')}
+    return `${generation_prompts.promptSafetyBoundary(context, '结局路线判定 / 增量目录', null, memoryBank)}
 旧路线、终章、后日谈和旧告白由本地原样保留。本请求只依据新增档案判断关系的新阶段，并提出 0～4 条真正新增的路线变体或刚刚从未解锁变为可观测的路线；禁止改写、润色或换标题复述旧路线。
 UNTRUSTED_INCREMENTAL_ENDING_ARCHIVE_JSON:
 ${core_incremental.incrementalArchiveSlice(memoryBank, sourceMemoryIds, core_constants.MAX_MEMORY_PROMPT_ITEMS)}
@@ -442,7 +410,7 @@ export function mergeEndingConfessions(previousList, freshList) {
     return { items: merged, added };
 }
 
-export function mergeEndingIncremental(previous, outline, detailed, freshConfessions, memoryBank, revisit = false) {
+export function mergeEndingIncremental(previous, outline, detailed, freshConfessions, memoryBank, revisit = false, catalogOnly = false) {
     if (revisit) outline = { ...outline, relationshipState: previous.relationshipState, relationshipSummary: previous.relationshipSummary,
         relationshipSourceMemoryIds: previous.relationshipSourceMemoryIds, relationshipSourceMemoryAnchor: previous.relationshipSourceMemoryAnchor };
     const merged = structuredClone(previous);
@@ -494,7 +462,7 @@ export function mergeEndingIncremental(previous, outline, detailed, freshConfess
     const confessionMerge = mergeEndingConfessions(previous.confessionReplays, freshConfessions);
     merged.confessionReplays = confessionMerge.items;
     merged.recommendedEndingId = recommended;
-    const normalized = normalizeEnding(merged, memoryBank);
+    const normalized = normalizeEnding(merged, memoryBank, { catalogOnly });
     // Expansion identity is local metadata, never authority accepted from model output.
     const localRounds = new Map(merged.endings.map(item => [item.id, item.expansionRound]));
     normalized.endings.forEach(item => { if (localRounds.get(item.id)) item.expansionRound = localRounds.get(item.id); });
@@ -522,7 +490,7 @@ export function endingRouteDetailPrompt(context, memoryBank, outline, route) {
         },
         memories: core_evidence.memoryPayload(memoryBank, ids, 12),
     }, null, 2);
-    return `${generation_prompts.promptSafetyBoundary(context, '结局路线正文 / 分段详情')}
+    return `${generation_prompts.promptSafetyBoundary(context, '结局路线正文 / 分段详情', null, memoryBank)}
 本请求只写【一条已经判定 available=true 的未来结局路线】。路线可用性、关系阶段和证据已经在上一小段请求中确定；不要改 route id/type/available，也不要生成其他路线或过去告白回看。
 UNTRUSTED_ENDING_ROUTE_CONTEXT_JSON:
 ${evidence}
@@ -606,7 +574,7 @@ export function normalizeEndingRouteDetail(data, route) {
         text: core_text.normalizeText(scene?.text, 5000),
     })).filter(scene => scene.text.length >= 90);
     if (scenes.length < 3) throw new Error(`已解锁结局“${route.title}”的后日谈不足 3 段。`);
-    return {
+    return cg_targets.preserveCgSlots(route, {
         ...route,
         endingScene,
         confession: '',
@@ -618,17 +586,66 @@ export function normalizeEndingRouteDetail(data, route) {
             scenes,
             finalLine: core_text.normalizeText(rawEpilogue?.finalLine, 1200),
         },
+    }, { kind: 'ending-ending' });
+}
+
+function endingNeedsScenes(session) {
+    return !!session?.endings?.some(item => item.available && String(item.endingScene || '').length < 320);
+}
+
+async function fillEndingScenes(context, memoryBank, origin, taskKey, previous) {
+    core_requestCoordinator.noteSecondStepOffer(origin, null);
+    const available = previous.endings.filter(item => item.available && String(item.endingScene || '').length < 320);
+    if (!available.length) return previous;
+    const outline = {
+        title: previous.title,
+        relationshipState: previous.relationshipState,
+        relationshipSummary: previous.relationshipSummary,
+        relationshipSourceMemoryIds: previous.relationshipSourceMemoryIds,
+        relationshipSourceMemoryAnchor: previous.relationshipSourceMemoryAnchor,
+        recommendedEndingId: previous.recommendedEndingId,
+        endings: previous.endings,
     };
+    const detailed = await generation_client.mapGenerationConcurrent(available, core_constants.SEGMENT_REQUEST_CONCURRENCY,
+        (route, index) => generation_client.requestValidatedSegment(
+            endingRouteDetailPrompt(context, memoryBank, outline, route),
+            `ENDING · 路线正文 ${index + 1}/${available.length}：${route.title}…`,
+            { maxTokens: 9000, context, origin, taskKey: `${taskKey}:route:${route.id}`, mode: core_constants.MODE.ENDING, background: true },
+            raw => normalizeEndingRouteDetail(raw, route),
+        ));
+    let confessionReplays = previous.confessionReplays || [];
+    try {
+        confessionReplays = await generation_client.requestValidatedSegment(
+            endingConfessionRefreshPrompt(context, memoryBank, previous),
+            'ENDING · 正在扫描已发生告白…',
+            { maxTokens: 8000, temperatureCeiling: 0.35, context, origin, taskKey: `${taskKey}:confession`, mode: core_constants.MODE.ENDING, background: true, segmentMaxAttempts: 1 },
+            raw => normalizeEndingConfessionReplays(raw?.confessionReplays, memoryBank),
+        );
+    } catch (error) {
+        if (error?.name === 'AbortError' || error?.code === 'RMT_BANNED_GENERATED_PHRASE'
+            || error?.code === 'RMT_JSON_TRUNCATED' || String(error?.code || '').startsWith('RMT_RECOVERY_')) throw error;
+        confessionReplays = previous.confessionReplays || [];
+    }
+    const detailedById = new Map(detailed.map(item => [item.id, item]));
+    return normalizeEnding({
+        ...previous,
+        confessionReplays,
+        endings: previous.endings.map(route => detailedById.get(route.id) || route),
+    }, memoryBank);
 }
 
 export async function generateEndingWithRepair(context, memoryBank, origin, taskKey, options = {}) {
     const previous = options.replaceExisting === true ? null : core_cache.loadSession(core_constants.MODE.ENDING, { context, chatId: core_context.getChatId(context), memoryBank, clone: true });
     const sourceMemoryIds = core_incremental.derivedExpansionMemoryIds(previous, memoryBank, 'mode');
+    const fillNow = options.secondStep === true || core_settings.getPluginSettings().autoSecondPass === true;
+    if (options.secondStep === true && endingNeedsScenes(previous)) {
+        return fillEndingScenes(context, memoryBank, origin, taskKey, previous);
+    }
     if (previous) {
         const outline = await generation_client.requestValidatedSegment(
             endingIncrementOutlinePrompt(context, memoryBank, previous, sourceMemoryIds) + core_incremental.derivedExpansionDirective(previous, memoryBank),
             'ENDING · 正在从新增档案判断新路线…',
-            { maxTokens: 5000, temperature: 0.35, context, origin, taskKey: `${taskKey}:increment-outline`, mode: core_constants.MODE.ENDING, background: true },
+            { maxTokens: 5000, temperatureCeiling: 0.35, context, origin, taskKey: `${taskKey}:increment-outline`, mode: core_constants.MODE.ENDING, background: true },
             raw => normalizeEndingIncrementOutline(raw, memoryBank, sourceMemoryIds),
         );
         const usedIds = new Set(previous.endings.map(item => item.id));
@@ -647,6 +664,17 @@ export async function generateEndingWithRepair(context, memoryBank, origin, task
             route.id = core_incremental.uniqueGeneratedId(route.id, usedIds, 'END');
             if (originalRecommended === originalId) outline.recommendedEndingId = route.id;
         }
+        if (!fillNow) {
+            if (!outline.endings.length) {
+                return core_incremental.stampIncrementalCoverage(structuredClone(previous), previous, memoryBank, 'mode', sourceMemoryIds, 0);
+            }
+            const catalog = mergeEndingIncremental(previous, outline, [], [], memoryBank, revisit, true);
+            core_requestCoordinator.noteSecondStepOffer(origin, {
+                label: '路线正文', kind: 'ending-scenes', mode: core_constants.MODE.ENDING, pageId: core_constants.MODE.ENDING,
+            });
+            core_incremental.stampIncrementalCoverage(catalog.session, previous, memoryBank, 'mode', sourceMemoryIds, catalog.added);
+            return catalog.session;
+        }
         const available = outline.endings.filter(item => item.available);
         const detailed = await generation_client.mapGenerationConcurrent(available, core_constants.SEGMENT_REQUEST_CONCURRENCY, async (route, index) => generation_client.requestValidatedSegment(
             endingRouteDetailPrompt(context, memoryBank, outline, route),
@@ -660,7 +688,7 @@ export async function generateEndingWithRepair(context, memoryBank, origin, task
             freshConfessions = revisit ? [] : await generation_client.requestValidatedSegment(
                 endingConfessionRefreshPrompt(context, memoryBank, previous, sourceMemoryIds),
                 'ENDING · 正在从新增档案扫描新告白…',
-                { maxTokens: 8000, temperature: 0.35, context, origin, taskKey: `${taskKey}:increment-confession`, mode: core_constants.MODE.ENDING, background: true, segmentMaxAttempts: 1 },
+                { maxTokens: 8000, temperatureCeiling: 0.35, context, origin, taskKey: `${taskKey}:increment-confession`, mode: core_constants.MODE.ENDING, background: true, segmentMaxAttempts: 1 },
                 raw => normalizeEndingConfessionReplays(raw?.confessionReplays, memoryBank)
                     .filter(item => core_incremental.usesIncrementalMemoryId(item.sourceMemoryIds, sourceMemoryIds)),
             );
@@ -680,9 +708,18 @@ export async function generateEndingWithRepair(context, memoryBank, origin, task
     const outline = await generation_client.requestValidatedSegment(
         endingOutlinePrompt(context, memoryBank),
         'ENDING · 正在判断关系与路线目录…',
-        { maxTokens: 7000, temperature: 0.35, context, origin, taskKey: `${taskKey}:outline`, mode: core_constants.MODE.ENDING, background: true },
+        { maxTokens: 7000, temperatureCeiling: 0.35, context, origin, taskKey: `${taskKey}:outline`, mode: core_constants.MODE.ENDING, background: true },
         raw => normalizeEndingOutline(raw, memoryBank),
     );
+    if (!fillNow) {
+        const normalized = normalizeEnding({ ...outline, confessionReplays: [] }, memoryBank, { catalogOnly: true });
+        core_requestCoordinator.noteSecondStepOffer(origin, {
+            label: '路线正文', kind: 'ending-scenes', mode: core_constants.MODE.ENDING, pageId: core_constants.MODE.ENDING,
+        });
+        core_incremental.stampIncrementalCoverage(normalized, null, memoryBank, 'mode', sourceMemoryIds, normalized.endings.length);
+        return normalized;
+    }
+    core_requestCoordinator.noteSecondStepOffer(origin, null);
     const available = outline.endings.filter(item => item.available);
     const detailed = await generation_client.mapGenerationConcurrent(available, core_constants.SEGMENT_REQUEST_CONCURRENCY,
         (route, index) => generation_client.requestValidatedSegment(
@@ -697,7 +734,7 @@ export async function generateEndingWithRepair(context, memoryBank, origin, task
         confessionReplays = await generation_client.requestValidatedSegment(
             endingConfessionRefreshPrompt(context, memoryBank),
             'ENDING · 正在扫描已发生告白…',
-            { maxTokens: 10000, temperature: 0.35, context, origin, taskKey: `${taskKey}:confession`, mode: core_constants.MODE.ENDING, background: true, segmentMaxAttempts: 1 },
+            { maxTokens: 10000, temperatureCeiling: 0.35, context, origin, taskKey: `${taskKey}:confession`, mode: core_constants.MODE.ENDING, background: true, segmentMaxAttempts: 1 },
             raw => normalizeEndingConfessionReplays(raw?.confessionReplays, memoryBank),
         );
         confessionScanSucceeded = true;
@@ -760,13 +797,14 @@ export function normalizeEndingConfessionReplays(rawList, memoryBank) {
             confessionLines,
             responseSummary,
             afterEffect,
+            ...cg_targets.normalizeLocalCgSlots(item),
         };
         replay.easterEgg = normalizeEndingEasterEgg(item?.easterEgg, replay);
         return replay;
     }).filter(Boolean);
 }
 
-export function normalizeEnding(data, memoryBank) {
+export function normalizeEnding(data, memoryBank, options = {}) {
     const relationshipState = core_text.normalizeText(data?.relationshipState, 120) || '关系仍在发展';
     const relationshipSummary = core_text.normalizeText(data?.relationshipSummary, 2400);
     if (!relationshipSummary) throw new Error('结局档案缺少当前关系摘要。');
@@ -810,10 +848,10 @@ ${relationshipSummary}`,
         const evidenceText = `${relationshipState}\n${relationshipSummary}\n${title}\n${subtitle}\n${unlockHint}\n${endingScene}\n${confession}`;
         const reference = core_evidence.normalizeMemoryReference(item?.sourceMemoryIds, item?.sourceMemoryAnchor, evidenceText, memoryBank, 1);
         if (!reference.sourceMemoryIds.length || !reference.sourceMemoryAnchor) return null;
-        if (available) {
+        if (available && !options.catalogOnly) {
             if (endingScene.length < 320) throw new Error(`已解锁结局“${title}”的终章场景不足 320 字。`);
             if (epilogueScenes.length < 3) throw new Error(`已解锁结局“${title}”的后日谈不足 3 段。`);
-        } else if (!unlockHint) {
+        } else if (!available && !unlockHint) {
             throw new Error(`未解锁结局“${title}”缺少解锁提示。`);
         }
         return {
@@ -830,6 +868,7 @@ ${relationshipSummary}`,
             confessionLines,
             creditsLine,
             epilogue,
+            ...cg_targets.normalizeLocalCgSlots(item),
         };
     }).filter(Boolean);
     if (endings.length < 5) throw new Error(`结局路线不足：得到 ${endings.length} 条，至少需要 5 条。`);

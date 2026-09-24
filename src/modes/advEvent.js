@@ -9,6 +9,7 @@ import * as core_context from '../core/context.js';
 import * as core_evidence from '../core/evidence.js';
 import * as core_incremental from '../core/incremental.js';
 import * as core_requestCoordinator from '../core/requestCoordinator.js';
+import * as core_settings from '../core/settings.js';
 import { state as runtimeState } from '../core/state.js';
 import * as core_text from '../core/text.js';
 import * as generation_client from '../generation/client.js';
@@ -34,7 +35,7 @@ export function advPrompt(context, event, memoryBank) {
         sourceMemoryAnchor: core_text.normalizeText(event?.sourceMemoryAnchor, 120),
         sourceMemories: core_evidence.memoryPayload(memoryBank, sourceIds),
     }, null, 2);
-    return `${generation_prompts.promptSafetyBoundary(context, '单篇 ADV 正文')}
+    return `${generation_prompts.promptSafetyBoundary(context, '单篇 ADV 正文', null, memoryBank)}
 本请求只携带这一条 CG 已引用的 sourceMemories，不发送整份聊天档案。
 任务：为下面这一个已发生的共同回忆，生成 {{char}} 第一人称的长篇 ADV 心情补完。事实只能来自该事件引用的 sourceMemories；可以补充内心活动，但不能新增与记忆冲突的外部事件。
 
@@ -72,7 +73,7 @@ export function advIndexRepairPrompt(context, memoryBank, existingEvents, ordina
         sourceMemoryIds: core_text.cleanArray(item?.sourceMemoryIds, 8, 40),
         sourceMemoryAnchor: core_text.normalizeText(item?.sourceMemoryAnchor, 120),
     })), null, 2);
-    return `${generation_prompts.promptSafetyBoundary(context, 'ADV EVENT 单条索引补齐')}
+    return `${generation_prompts.promptSafetyBoundary(context, 'ADV EVENT 单条索引补齐', null, memoryBank)}
 UNTRUSTED_ADV_REPAIR_ARCHIVE_JSON:
 ${generation_prompts.promptArchiveSlice(memoryBank, 48)}
 
@@ -117,7 +118,7 @@ export function advBatchPrompt(context, events, memoryBank) {
         };
     });
     const memoryPool = core_evidence.memoryPayload(memoryBank, memoryIds, 64);
-    return `${generation_prompts.promptSafetyBoundary(context, '批量 ADV 正文')}
+    return `${generation_prompts.promptSafetyBoundary(context, '批量 ADV 正文', null, memoryBank)}
 本请求把所有事件引用的档案记忆放进一个去重 MEMORY_POOL_JSON；每个事件只能使用自己 sourceMemoryIds 指向的池中记忆，不发送整份聊天档案，也不在每个事件里重复 sourceMemories。
 任务：一次性为下面所有 CG 事件尝试生成 ADV 心情补完。优先把全部事件一次返回；如果模型输出能力不足，插件会保留能校验的结果并把失败项改为单条重试。
 
@@ -330,7 +331,7 @@ export function advImportantIndexPrompt(context, memoryBank, previousSession = n
     const archiveBlock = previousSession
         ? core_incremental.incrementalArchiveSlice(memoryBank, sourceMemoryIds, core_constants.MAX_MEMORY_PROMPT_ITEMS)
         : generation_prompts.promptArchiveSlice(memoryBank, 48);
-    return `${generation_prompts.promptSafetyBoundary(context, 'ADV EVENT 重要事件索引')}
+    return `${generation_prompts.promptSafetyBoundary(context, 'ADV EVENT 重要事件索引', null, memoryBank)}
 本请求${revisit ? '是用户主动扩写：记忆没有更新，请从同一真实事件中选择不同的具体镜头、时刻或心理侧面，最多 3 个。不是新发生的历史，不得重复旧标题/镜头。允许引用相同 Mxxx 和锚点' : '只挑本次增量档案里尚未被旧索引覆盖的新节点'}。旧事件、旧 ADV 正文和旧 CG 图片由本地原样保留。
 UNTRUSTED_INCREMENTAL_ADV_ARCHIVE_JSON:
 ${archiveBlock}
@@ -390,7 +391,7 @@ export async function generateAdvIndexWithRepair(context, memoryBank, origin, ex
     const fresh = await generation_client.requestValidatedSegment(
         advImportantIndexPrompt(context, memoryBank, previous, sourceMemoryIds),
         previous ? 'ADV EVENT · 正在从新增档案挑选新节点…' : 'ADV EVENT · 正在挑选重要节点…',
-        { maxTokens: 5500, temperature: 0.35, context, origin, taskKey: `${taskKey}:index`, mode: core_constants.MODE.ADV, background: true },
+        { maxTokens: 5500, temperatureCeiling: 0.35, context, origin, taskKey: `${taskKey}:index`, mode: core_constants.MODE.ADV, background: true },
         raw => normalizeEventList(raw, memoryBank, { allowPartial: !!previous, sourceMemoryIds: previous ? sourceMemoryIds : null }),
     );
     const revisit = previous && !core_incremental.incrementalArchiveMemoryIds(previous, memoryBank).length;
@@ -405,6 +406,16 @@ export async function generateAdvIndexWithRepair(context, memoryBank, origin, ex
     const added = Math.max(0, merged.events.length - (previous?.events?.length || 0));
     core_incremental.stampIncrementalCoverage(merged, previous, memoryBank, 'mode', sourceMemoryIds, added);
     if (revisit) merged.generationMeta.expansionRound = (Number(previous?.generationMeta?.expansionRound) || 0) + 1;
+    if (merged.events?.some(event => !event.adv?.paragraphs?.length)) {
+        if (core_settings.getPluginSettings().autoSecondPass === true) {
+            const task = core_requestCoordinator.logicalGenerationTaskForOrigin(origin);
+            if (task) task.autoAdvScripts = true;
+        } else {
+            core_requestCoordinator.noteSecondStepOffer(origin, {
+                label: '事件正文', kind: 'adv-scripts', mode: core_constants.MODE.ADV, pageId: core_constants.MODE.ADV,
+            });
+        }
+    }
     return merged;
 }
 
@@ -611,6 +622,7 @@ export async function generateAllAdvForSession(options = {}) {
         return;
     }
     runtimeState.activeAdvBulkScopes.add(scope);
+    const bulkCancel = core_requestCoordinator.openAdvBulkCancellation(scope);
     core_requestCoordinator.registerArchiveTargetReservation(bulkTaskKey, targetRuntime, core_constants.MODE.ADV,
         advTargetMessage(targetRuntime, 'ADV 批量生成中'));
     try {
@@ -642,14 +654,15 @@ export async function generateAllAdvForSession(options = {}) {
     try {
         await startAdvRecovery(targetRuntime, { kind: 'adv-bulk', eventIds: pending.map(event => event.id) }, options, session);
         try {
+            if (bulkCancel.signal.aborted) throw core_requestCoordinator.createGenerationAbortError();
             const batch = await generation_client.requestValidatedSegment(
                 advBatchPrompt(context, pending, memoryBank),
                 `正在生成本批 ${pending.length} 篇 ADV…`,
                 {
                     maxTokens: core_constants.MAX_GENERATION_OUTPUT_TOKENS,
-                    temperature: 0.55,
                     context,
                     origin,
+                    signal: bulkCancel.signal,
                     taskKey: bulkTaskKey,
                     mode: core_constants.MODE.ADV,
                     background: true,
@@ -726,6 +739,7 @@ export async function generateAllAdvForSession(options = {}) {
     } finally {
         generation_recovery.detachGenerationRecovery(origin);
         runtimeState.activeAdvBulkScopes.delete(scope);
+        core_requestCoordinator.closeAdvBulkCancellation(scope, bulkCancel);
         core_requestCoordinator.unregisterArchiveTargetReservation(bulkTaskKey);
         if (advTargetVisible(targetRuntime, origin)) ui_overlay.setInnerLoading(false);
         core_requestCoordinator.refreshConcurrentTaskUi(core_constants.MODE.ADV, origin);
@@ -733,6 +747,7 @@ export async function generateAllAdvForSession(options = {}) {
     }
     } finally {
         runtimeState.activeAdvBulkScopes.delete(scope);
+        core_requestCoordinator.closeAdvBulkCancellation(scope, bulkCancel);
         core_requestCoordinator.unregisterArchiveTargetReservation(bulkTaskKey);
         if (advTargetVisible(targetRuntime, origin)) ui_overlay.setInnerLoading(false);
         refreshAdvArchiveTarget(targetRuntime);
@@ -770,6 +785,7 @@ export async function repairFailedAdvForSession(options = {}) {
 
     const memoryBank = targetRuntime.memoryBank;
     runtimeState.activeAdvBulkScopes.add(scope);
+    const bulkCancel = core_requestCoordinator.openAdvBulkCancellation(scope);
     core_requestCoordinator.registerArchiveTargetReservation(bulkTaskKey, targetRuntime, core_constants.MODE.ADV,
         advTargetMessage(targetRuntime, 'ADV 失败项补完中'));
     try {
@@ -793,6 +809,7 @@ export async function repairFailedAdvForSession(options = {}) {
     try {
         await startAdvRecovery(targetRuntime, { kind: 'adv-repair', eventIds: failed.map(event => event.id) }, options, session);
         for (let i = 0; i < failed.length; i += 1) {
+            if (bulkCancel.signal.aborted) throw core_requestCoordinator.createGenerationAbortError();
             const event = failed[i];
             if (advTargetVisible(targetRuntime, origin)) ui_overlay.setInnerLoading(true, advTargetStatus(targetRuntime, `逐个补完 ${i + 1} / ${failed.length}：${event.title}`));
             let adv;
@@ -802,9 +819,9 @@ export async function repairFailedAdvForSession(options = {}) {
                     `正在补 ADV：${event.title}`,
                     {
                         maxTokens: core_constants.MODE_TOKEN_CAPS[core_constants.MODE.ADV],
-                        temperature: 0.55,
                         context,
                         origin,
+                        signal: bulkCancel.signal,
                         taskKey: `adv-user-repair:${scope}:${core_text.safeId(event.id, String(i + 1))}`,
                         mode: core_constants.MODE.ADV,
                         background: true,
@@ -854,6 +871,7 @@ export async function repairFailedAdvForSession(options = {}) {
     } finally {
         generation_recovery.detachGenerationRecovery(origin);
         runtimeState.activeAdvBulkScopes.delete(scope);
+        core_requestCoordinator.closeAdvBulkCancellation(scope, bulkCancel);
         core_requestCoordinator.unregisterArchiveTargetReservation(bulkTaskKey);
         if (advTargetVisible(targetRuntime, origin)) ui_overlay.setInnerLoading(false);
         core_requestCoordinator.refreshConcurrentTaskUi(core_constants.MODE.ADV, origin);
@@ -861,6 +879,7 @@ export async function repairFailedAdvForSession(options = {}) {
     }
     } finally {
         runtimeState.activeAdvBulkScopes.delete(scope);
+        core_requestCoordinator.closeAdvBulkCancellation(scope, bulkCancel);
         core_requestCoordinator.unregisterArchiveTargetReservation(bulkTaskKey);
         if (advTargetVisible(targetRuntime, origin)) ui_overlay.setInnerLoading(false);
         refreshAdvArchiveTarget(targetRuntime);
@@ -926,7 +945,7 @@ export async function generateAdvForSelected(options = {}) {
         await startAdvRecovery(targetRuntime, { kind: 'adv-single', eventId }, options, session);
         const generatedAdv = await generation_client.requestValidatedSegment(
             advPrompt(context, event, memoryBank), `正在根据当前聊天档案生成「${event.title}」ADV…`,
-            { maxTokens: core_constants.MODE_TOKEN_CAPS[core_constants.MODE.ADV], temperature: 0.55, context, origin, taskKey, mode: core_constants.MODE.ADV, background: true, segmentMaxAttempts: 1 },
+            { maxTokens: core_constants.MODE_TOKEN_CAPS[core_constants.MODE.ADV], context, origin, taskKey, mode: core_constants.MODE.ADV, background: true, segmentMaxAttempts: 1 },
             raw => normalizeAdv(raw),
         );
         const persisted = await persistAdvMutation(targetRuntime, latest => {

@@ -24,7 +24,9 @@ import * as core_contextTags from '../core/contextTags.js';
 import * as core_chatReadRange from '../core/chatReadRange.js';
 import * as ui_archivePortal from './archivePortal.js';
 import * as ui_overlay from './overlay.js';
+import * as ui_scenePicker from './scenePicker.js';
 import * as ui_styles from './styles.js';
+import * as mirrorReader from './mirrorTtsReader.js';
 
 let imageProviderEventCleanup = null;
 let homeSettingsPanel = null;
@@ -34,6 +36,7 @@ let memoryFilePreviewEpoch = 0;
 export const SETTINGS_LAUNCHER_ID = core_constants.SETTINGS_ID + '_launcher';
 
 export function clearHomeSettingsPanel() {
+    mirrorReader.parkMirrorSettings();
     homeSettingsPanel?.remove(); homeSettingsPanel = null; homeSettingsEpoch = -1;
     pendingMemoryFilePreview = null; memoryIngressRequestEpoch += 1; memoryFilePreviewEpoch += 1;
     homeSettingsScope = '';
@@ -49,6 +52,13 @@ export function refreshImageGenerationSettingsUi() {
     const statusNode = panel.querySelector('[data-rmt-image-generation-status]');
     const status = generation_imageGeneration.imageGenerationUiState();
     if (statusNode) statusNode.textContent = status.available ? '柏宝绘已连接 · 公开 API v1' : status.reason || '请单独安装、启用并配置柏宝绘公开 API v1。';
+}
+
+export function voiceSettingsHtml() {
+    return `<details class="rmt-settings-card" data-rmt-settings-section="voice">
+      <summary class="rmt-settings-card-head"><span>VOICE</span><div><b>镜译 · 语音设置</b><small>连接与朗读音色</small></div></summary>
+      <div class="rmt-settings-section-body"><p>在镜译中配置语音服务后，可从各内容页的更多菜单朗读正文或选中文字。</p><div data-rmt-voice-settings></div></div>
+    </details>`;
 }
 
 export function chatReadingSettingsHtml(settings = core_settings.getPluginSettings()) {
@@ -408,6 +418,10 @@ export function refreshGenerationSettingsUi() {
         }
         profile.value = profiles.some(item => item.id === settings.connectionProfileId) ? settings.connectionProfileId : '';
     }
+    const poolEnabled = panel.querySelector('[data-rmt-api-pool-enabled]');
+    if (poolEnabled) poolEnabled.checked = settings.connectionPoolEnabled === true;
+    const poolChoices = panel.querySelector('[data-rmt-api-pool-choices]');
+    if (poolChoices) poolChoices.innerHTML = core_settings.supportedConnectionProfiles().map(item => `<label class="rmt-settings-check"><input type="checkbox" data-rmt-api-pool-profile="${core_text.esc(item.id)}" ${(settings.connectionPoolIds || []).includes(item.id) ? 'checked' : ''}><span>${core_text.esc(item.name)}${item.model ? ` · ${core_text.esc(item.model)}` : ''}</span></label>`).join('') || '<p>先在 Connection Manager 中保存可用连接。</p>';
     if (oneClick) {
         oneClick.classList.toggle('is-active', editorMode === 'profile');
         oneClick.setAttribute('aria-pressed', editorMode === 'profile' ? 'true' : 'false');
@@ -430,7 +444,9 @@ export function refreshGenerationSettingsUi() {
     if (temperature) {
         temperature.value = String(settings.temperature);
         temperature.disabled = false;
-        temperature.title = '覆盖心迹回廊专用连接的温度';
+        temperature.title = '心迹回廊所有生成都使用这个温度';
+        const temperatureNote = panel.querySelector('[data-rmt-temperature-note]');
+        if (temperatureNote) temperatureNote.textContent = '写正文、对白和剧情时使用这里的温度。整理档案、判断关系、逐字核对证据的步骤会自动用更低的温度，以免抄错原文；你调得更低时，这些步骤也会跟着更低。';
     }
     if (roomDaily) roomDaily.checked = settings.roomLifeAutoDaily;
     if (manualStreaming) manualStreaming.checked = settings.manualApiStreaming === true;
@@ -457,9 +473,12 @@ export function refreshGenerationSettingsUi() {
     }
     if (bannedPhrases) bannedPhrases.value = settings.bannedGeneratedPhrases.join('，');
     if (status) {
+        const profileConfigured = settings.connectionPoolEnabled === true
+            ? (settings.connectionPoolIds || []).some(id => core_settings.supportedConnectionProfiles().some(profile => profile.id === id))
+            : !!settings.connectionProfileId;
         let profileCapabilityReady = false;
         let manualConfigurationReady = false;
-        if (connectionMode === 'profile' && settings.connectionProfileId) {
+        if (connectionMode === 'profile' && profileConfigured) {
             try {
                 core_independentApi.assertConnectionManagerProfileSupport(core_context.getContext().ConnectionManagerRequestService);
                 profileCapabilityReady = true;
@@ -473,12 +492,12 @@ export function refreshGenerationSettingsUi() {
         }
         const ready = connectionMode === 'manual'
             ? manualConfigurationReady
-            : !!settings.connectionProfileId && profileCapabilityReady;
+            : profileConfigured && profileCapabilityReady;
         status.classList.toggle('is-ready', ready);
         status.textContent = `${ready ? '●' : '○'} ${ready
             ? core_settings.generationSourceLabel(settings)
             : connectionMode === 'manual' ? '手动配置未完成'
-            : settings.connectionProfileId ? '需凭证绑定能力，可改用手动配置' : '一键连接未配置'}`;
+            : profileConfigured ? '需凭证绑定能力，可改用手动配置' : '一键连接未配置'}`;
     }
     void refreshModelOptions();
     void refreshManualModelOptions();
@@ -488,7 +507,11 @@ export function hydrateSettingsPanel({ memory = false } = {}) {
     const panel = document.getElementById(core_constants.SETTINGS_ID);
     if (!panel) return false;
     refreshSettingsMemoryStatus({ lightweight: true });
-    if (memory) void refreshMemoryIngressUi();
+    if (memory) {
+        void refreshMemoryIngressUi();
+        const picker = panel.querySelector('[data-rmt-scene-picker]');
+        if (picker && !picker.querySelector('[data-rmt-scene-picker-root]')) ui_scenePicker.mountScenePicker(picker);
+    }
     if (panel.dataset.rmtHydrated === '1') return true;
     refreshGenerationSettingsUi();
     panel.dataset.rmtHydrated = '1';
@@ -582,6 +605,7 @@ export function mountSettings({ homeTarget = null } = {}) {
     }
     if (existing) {
         homeTarget.appendChild(existing);
+        mirrorReader.showMirrorSettings(existing.querySelector('[data-rmt-voice-settings]'));
         refreshSettingsMemoryStatus({ lightweight: true });
         if (existing.dataset.rmtHydrated === '1') refreshGenerationSettingsUi();
         return true;
@@ -597,6 +621,7 @@ export function mountSettings({ homeTarget = null } = {}) {
         <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
       </div>
       <div class="inline-drawer-content rmt-settings-content">
+        ${voiceSettingsHtml()}
         <details class="rmt-settings-card rmt-api-box" data-rmt-settings-section="api">
           <summary class="rmt-settings-card-head"><span>API</span><div><b>独立 API</b><small>一键配置 · 手动配置</small></div></summary>
           <div class="rmt-settings-section-body">
@@ -608,6 +633,7 @@ export function mountSettings({ homeTarget = null } = {}) {
           <div class="rmt-api-status" data-rmt-api-status role="status">○ 一键连接未配置</div>
           <div class="rmt-api-source-panel" data-rmt-api-profile-panel>
             <label class="rmt-settings-field"><span>连接配置</span><select class="text_pole" data-rmt-api-profile><option value="">选择 Connection Manager 配置</option></select></label>
+            <details class="rmt-api-pool"><summary>多个连接轮流使用</summary><label class="rmt-settings-check"><input type="checkbox" data-rmt-api-pool-enabled><span>启用轮询连接池</span></label><div data-rmt-api-pool-choices></div><small>新任务依次使用勾选的连接及其模型；本次运行中的重试保持原连接；重新打开后续接会重新分配。可同时运行的任务数量沿用已有并发设置。</small></details>
             <div class="rmt-model-row">
               <label class="rmt-settings-field"><span>模型</span><select class="text_pole" data-rmt-api-model><option value="">请先选择专用连接</option></select></label>
               <button type="button" class="menu_button rmt-model-refresh" data-rmt-api-model-refresh>刷新模型</button>
@@ -627,10 +653,15 @@ export function mountSettings({ homeTarget = null } = {}) {
           </div>
           <div class="rmt-api-grid">
             <label class="rmt-settings-field"><span>最大输出</span><input class="text_pole" data-rmt-api-max-tokens type="number" min="1" step="1" placeholder="默认 60000"></label>
-            <label class="rmt-settings-field"><span>输入预算</span><input class="text_pole" data-rmt-api-input-budget type="number" min="8000" max="128000" step="1" placeholder="默认 32000"></label>
-            <small>输入越大单次请求费用越高；范围 8000–128000，留空为默认 32000。</small>
+            <label class="rmt-settings-field"><span>输入预算</span><input class="text_pole" data-rmt-api-input-budget type="number" min="8000" max="200000" step="1" placeholder="默认 60000"></label>
+            <small>最大输出是模型最多写多长，默认 60000，不拦输入。输入预算是发送前本地保险，默认 60000 tokens，范围 8000–200000，越大越贵；与最大输出无关。</small>
             <label class="rmt-settings-field"><span>温度</span><input class="text_pole" data-rmt-api-temperature type="number" min="0" max="2" step="0.1"></label>
+            <small data-rmt-temperature-note></small>
           </div>
+          <label class="rmt-settings-check"><input type="checkbox" data-rmt-auto-second ${core_settings.getPluginSettings().autoSecondPass ? 'checked' : ''}><span>第一次完成后，自动进行第二次生成</span></label>
+          <label class="rmt-settings-check"><input type="checkbox" data-rmt-auto-retry ${core_settings.getPluginSettings().autoRetryEnabled ? 'checked' : ''}><span>失败后自动重试未完成部分</span></label>
+          <label class="rmt-settings-field"><span>自动重试次数</span><input class="text_pole" data-rmt-auto-retry-count type="number" min="1" max="5" step="1" value="${core_settings.getPluginSettings().autoRetryCount}" ${core_settings.getPluginSettings().autoRetryEnabled ? '' : 'disabled'}></label>
+          <small>默认关闭。打开后，新出现的「重试未完成部分」会自动再试，默认 1 次，可改成 1–5 次。每次都使用生成额度。超限草稿和已经写好、只差继续的草稿不会自动重试。</small>
           <label class="rmt-settings-field"><span>生成禁用词</span><input class="text_pole" data-rmt-banned-generated-phrases type="text" placeholder="用逗号分隔，例如：老子"></label>
           <p>打开房间只读已有内容；“今日生活”由房间里的手动更新按钮触发，不会在进入时自动请求。</p>
           <label class="rmt-settings-check"><input data-rmt-tt-display type="checkbox"><span>TT 顶部安全区</span></label>
@@ -727,6 +758,7 @@ export function mountSettings({ homeTarget = null } = {}) {
             <div data-rmt-memory-source-list>暂无持久化来源。</div>
             <div data-rmt-memory-history-books></div>
           </details>
+          <div data-rmt-scene-picker></div>
           <button type="button" class="menu_button rmt-settings-wide" data-rmt-memory-source-clear>清除当前聊天已导入来源</button>
           <small>只清除心迹回廊自己的来源账本；不会删除聊天、第三方记忆或正式 Mxxx。</small>
           </div>
@@ -737,6 +769,7 @@ export function mountSettings({ homeTarget = null } = {}) {
         </div>
       </div>`;
     mount.appendChild(panel);
+    mirrorReader.showMirrorSettings(panel.querySelector('[data-rmt-voice-settings]'));
     refreshThemeUi();
     const tagDraft = panel.querySelector('[data-rmt-tag-draft]');
     const tagStatus = panel.querySelector('[data-rmt-tag-status]');
@@ -797,6 +830,7 @@ export function mountSettings({ homeTarget = null } = {}) {
     advanced_ui.bindAdvancedGenerationUi(panel);
     bindManualAutosave(panel);
     panel.addEventListener('change', async event => {
+        if (await ui_scenePicker.handleScenePickerEvent(event)) return;
         if (cg_format_ui.handleCgFormatChange(event)) return;
         const target = event.target;
         if (target.matches?.('[data-rmt-tag-name]')) {
@@ -817,6 +851,21 @@ export function mountSettings({ homeTarget = null } = {}) {
         }
         if (target.matches?.('[data-rmt-manual-streaming]')) {
             core_settings.updatePluginSettings({ manualApiStreaming: !!target.checked });
+            return;
+        }
+        if (target.matches?.('[data-rmt-auto-second]')) {
+            core_settings.updatePluginSettings({ autoSecondPass: !!target.checked });
+            return;
+        }
+        if (target.matches?.('[data-rmt-auto-retry]')) {
+            core_settings.updatePluginSettings({ autoRetryEnabled: !!target.checked });
+            const count = panel.querySelector('[data-rmt-auto-retry-count]');
+            if (count) count.disabled = !target.checked;
+            return;
+        }
+        if (target.matches?.('[data-rmt-auto-retry-count]')) {
+            core_settings.updatePluginSettings({ autoRetryCount: target.value });
+            target.value = String(core_settings.getPluginSettings().autoRetryCount);
             return;
         }
         if (target.matches?.('[data-rmt-read-mode], [data-rmt-read-recent], [data-rmt-read-start], [data-rmt-read-end], [data-rmt-read-hidden]')) {
@@ -927,6 +976,12 @@ export function mountSettings({ homeTarget = null } = {}) {
             void refreshModelOptions({ fetchRemote: !!connectionProfileId });
             return;
         }
+        if (target.matches?.('[data-rmt-api-pool-enabled], [data-rmt-api-pool-profile]')) {
+            const connectionPoolIds = [...panel.querySelectorAll('[data-rmt-api-pool-profile]:checked')].map(input => input.dataset.rmtApiPoolProfile);
+            core_settings.updatePluginSettings({connectionPoolEnabled:panel.querySelector('[data-rmt-api-pool-enabled]')?.checked === true,connectionPoolIds});
+            refreshGenerationSettingsUi();
+            return;
+        }
         if (target.matches?.('[data-rmt-api-model]')) {
             panel.dataset.rmtApiEditor = 'profile';
             core_settings.updatePluginSettings({ apiConnectionMode: 'profile', modelOverride: core_text.normalizeText(target.value, 240) });
@@ -945,7 +1000,7 @@ export function mountSettings({ homeTarget = null } = {}) {
         }
         if (target.matches?.('[data-rmt-api-input-budget]')) {
             if (target.validity?.badInput || (target.value.trim() && !output_budget.isValidInputBudgetTokens(target.value))) {
-                globalThis.toastr?.warning?.('输入预算请填写 8000–128000 的整数；原设置未改动。', '心迹回廊');
+                globalThis.toastr?.warning?.('输入预算请填写 8000–200000 的整数；原设置未改动。打开设置 → 输入预算，不是最大输出。', '心迹回廊');
                 target.value = String(core_settings.getPluginSettings().inputBudgetTokens);
                 return;
             }
@@ -1016,6 +1071,10 @@ export function mountSettings({ homeTarget = null } = {}) {
         }
     });
     panel.addEventListener('input', event => {
+        if (event.target.closest?.('[data-rmt-scene-picker-root]')) {
+            void ui_scenePicker.handleScenePickerEvent(event);
+            return;
+        }
         if (event.target === tagDraft) {
             ++tagScanEpoch; tagEdited = true;
             const selected = new Set(core_contextTags.normalizeExcludedTags(tagDraft.value));
@@ -1037,6 +1096,10 @@ export function mountSettings({ homeTarget = null } = {}) {
         }
     });
     panel.addEventListener('click', event => {
+        if (event.target.closest?.('[data-rmt-scene-picker-root]')) {
+            void ui_scenePicker.handleScenePickerEvent(event);
+            return;
+        }
         if (event.target.closest?.('[data-rmt-read-preview]')) {
             const status = panel.querySelector('[data-rmt-read-preview-status]');
             try {
@@ -1107,7 +1170,7 @@ export function mountSettings({ homeTarget = null } = {}) {
             return;
         }
         const settingsSummary = event.target.closest?.('[data-rmt-settings-section] > summary');
-        if (settingsSummary) hydrateSettingsPanel({ memory: settingsSummary.parentElement?.dataset.rmtSettingsSection === 'memory' });
+        if (settingsSummary && settingsSummary.parentElement?.dataset.rmtSettingsSection !== 'voice') hydrateSettingsPanel({ memory: settingsSummary.parentElement?.dataset.rmtSettingsSection === 'memory' });
         const themeReset = event.target.closest?.('[data-rmt-theme-reset]');
         if (themeReset) {
             core_settings.updatePluginSettings({ themeMode: 'default', themeAlpha: core_constants.DEFAULT_SETTINGS.themeAlpha, themeCustom: { ...core_constants.DEFAULT_THEME_PALETTE } });
@@ -1273,6 +1336,7 @@ export function mountSettings({ homeTarget = null } = {}) {
         }
     });
     panel.addEventListener('focusin', event => {
+        if (event.target.closest?.('[data-rmt-settings-section="voice"]')) return;
         if (panel.dataset.rmtHydrated !== '1' && event.target.matches?.('input,select,button,textarea')) hydrateSettingsPanel();
     });
     refreshSettingsMemoryStatus({ lightweight: true });

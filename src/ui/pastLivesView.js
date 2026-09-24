@@ -11,6 +11,8 @@ import { state as runtimeState } from '../core/state.js';
 import * as generation from '../generation/client.js';
 import * as overlay from './overlay.js';
 import * as recoveryView from './recoveryView.js';
+import * as participants from '../core/participants.js';
+import * as pastLivesReadingStyles from './pastLivesReading.css.js';
 
 const MODE = contract.PAST_LIVES_MODE;
 const esc = text.esc;
@@ -18,6 +20,9 @@ const readonly = () => !!runtimeState.activeArchiveSnapshot && (runtimeState.act
 const paragraphs = value => String(value || '').split(/\n{2,}/u).filter(Boolean).map(part => `<p>${esc(part)}</p>`).join('');
 const clueLabel = kind => ({ object: '物证', testimony: '证词', missing: '缺页', note: '旁记' })[kind] || '线索';
 const button = (action, label, id = '', extra = '') => `<button type="button" class="rmt-btn" data-rmt-past-lives="${action}" data-rmt-past-lives-id="${esc(id)}" ${extra}>${esc(label)}</button>`;
+const savedCharacterNameMatches = (value, memory) => [
+    participants.resolveStoryIdentities(memory).ownerNames.join('、'), memory?.characterName,
+].includes(value);
 
 export function pastLivesHtml(value, { readOnly = false, busy = false, notice = '' } = {}) {
     try {
@@ -82,7 +87,7 @@ export function assertShownPastLivesTarget() {
         if (shown.chatId !== snapshot.chatId || shown.archiveRevision !== snapshot.memory?.archiveRevision)
             throw new Error('显示的番外与目标档案不一致，请重新打开。');
         const source = cache.generationPageReadingSource(shown, MODE, snapshot.memory);
-        if (source.session.characterName !== source.memoryBank?.characterName || source.session.userName !== source.memoryBank?.userName)
+        if (!savedCharacterNameMatches(source.session.characterName, source.memoryBank) || source.session.userName !== source.memoryBank?.userName)
             throw new Error('显示的番外与原生成资料不一致，请重新打开。');
         return { memory: source.memoryBank, session: source.session, context: null };
     }
@@ -92,7 +97,7 @@ export function assertShownPastLivesTarget() {
         || (shown.ownerKey && shown.ownerKey !== contextApi.currentCharacterRuntimeKey(context)))
         throw new Error('聊天或角色已切换，请重新打开对应番外。');
     const source = cache.generationPageReadingSource(shown, MODE, memory);
-    if (source.session.characterName !== source.memoryBank?.characterName || source.session.userName !== source.memoryBank?.userName)
+    if (!savedCharacterNameMatches(source.session.characterName, source.memoryBank) || source.session.userName !== source.memoryBank?.userName)
         throw new Error('显示的番外与原生成资料不一致，请重新打开。');
     return { memory: source.memoryBank, session: source.session, context };
 }
@@ -240,6 +245,7 @@ ${root} .rmt-past-notice{padding:12px 16px;border-left:3px solid var(--rmt-theme
 @media(max-width:760px){${root} .rmt-past-reader{grid-template-columns:minmax(0,1fr)}${root} .rmt-past-margin{border-left:0;border-top:1px solid var(--rmt-theme-border);padding:14px 0 0}${root} .rmt-past-library{grid-template-columns:minmax(0,1fr)}${root} .rmt-past-clues{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:390px){${root} .rmt-past-clues{grid-template-columns:minmax(0,1fr)}${root} .rmt-past-cover{padding:18px!important;gap:12px}${root} .rmt-past-tabs>.rmt-btn{flex:1 1 calc(50% - 10px)}}
 @media(prefers-reduced-motion:reduce){${root} .rmt-past-revealed{animation:none}${root} .rmt-past-lives button{transition:none}}
+${pastLivesReadingStyles.pastLivesReadingCss(root)}
 `;
 }
 

@@ -5,6 +5,7 @@ import * as recovery_merge from './recoveryMerge.js';
 import * as json_parser from './jsonParser.js';
 import * as core_constants from '../core/constants.js';
 import * as song_contract from '../core/themeSongContract.js';
+import * as bedtime_contract from '../core/bedtimeContract.js';
 import * as album from '../modes/album.js';
 import * as cabinet from '../modes/cabinet.js';
 import * as achievements from '../modes/achievements.js';
@@ -63,7 +64,7 @@ function inboxSchema({ memoryBank, previousSession, operation = {}, frozenInputs
     return m.recoveryRecord({ title: { accept: m.recoveryText }, letters: m.recoveryList(m.recoveryItemKey('slot'), null, row => {
         const selected = plan.find(item => item.slot === row?.slot);
         return !!selected && m.recoveryCheck(() => inbox.normalizeInboxLetters({ letters: [row] }, memoryBank, [selected], new Date(date),
-            { controlledEvidence: frozenInputs['presentation:inbox']?.settingEvidence || '' }).letters.length);
+            { characterEvidence: inbox.frozenInboxCharacterEvidence(frozenInputs) }).letters.length);
     }) });
 }
 
@@ -178,6 +179,15 @@ function themeSongSchema() {
     }])));
 }
 
+function bedtimeSchema(input) {
+    const m = recovery_merge, L = bedtime_contract.BEDTIME_LIMITS;
+    const field = maximum => ({ accept: value => m.recoveryCheck(() => bedtime_contract.bedtimeText(value, maximum)) });
+    const chapter = m.recoveryRecord({ title: field(L.chapterTitle), text: field(L.chapterText) });
+    return m.recoveryRecord({
+        title: field(L.title), genre: field(L.genre), premise: field(L.premise), chapter,
+    });
+}
+
 function timeStoriesSchema(input) {
     const m = recovery_merge;
     return m.recoveryRecord({ ...Object.fromEntries(['title', 'opening', 'closing', 'message', 'motif'].map(key =>
@@ -203,5 +213,5 @@ export function recoveryProgressSchema(mode, input) {
     return ({ album: albumSchema, cabinet: cabinetSchema, achievements: achievementsSchema, inbox: inboxSchema,
         items: itemsSchema, room: roomSchema, phone: phoneSchema, travel: travelSchema, relations: relationsSchema,
         calendar: calendarSchema, adv: advEventSchema, butterfly: butterflySchema, pastLives: pastLivesSchema,
-        ending: endingSchema, themeSong: themeSongSchema, timeEcho: timeStoriesSchema, heart: heartSchema }[mode])?.(input) || null;
+        ending: endingSchema, themeSong: themeSongSchema, bedtime: bedtimeSchema, timeEcho: timeStoriesSchema, heart: heartSchema }[mode])?.(input) || null;
 }
