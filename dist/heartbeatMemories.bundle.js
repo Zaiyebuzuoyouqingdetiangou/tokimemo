@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 242
-// Source SHA-256: d9f2f91926349d0554267f7d3f93009a2af2b2437df1042231da4546dbdc7d34
+// Source SHA-256: 9c35ba1399973f30e6b5d94290b5115568bdcb105abd2e1af30ddb1b34889dcd
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -2695,10 +2695,16 @@ function cgFieldSegment(mode, taskKey) {
     if (typeof taskKey !== 'string') return false;
     return mode === 'album' && /:(?:index|album)$/u.test(taskKey)
         || mode === 'adv' && /:(?:index|event)$/u.test(taskKey)
-        || mode === 'heart' && /:(?:strip|strips)$/u.test(taskKey);
+        || mode === 'heart' && /:(?:strip|strips|voice|scenario)$/u.test(taskKey)
+        || mode === 'ending' && /:(?:(?:increment-)?route:[^:]+|(?:increment-)?confession)$/u.test(taskKey)
+        || mode === 'bedtime' && taskKey.includes(':bedtime:')
+        || mode === 'pastLives' && taskKey.includes(':past-lives-dossier:')
+        || mode === 'butterfly' && /:(?:slot:\d+|increment|butterfly-prose)$/u.test(taskKey);
 }
 function cgOperationHasImageFields(mode, op) {
-    return ['album', 'adv'].includes(mode) && op?.kind === 'mode'
+    return ['ending', 'bedtime', 'pastLives', 'butterfly'].includes(mode)
+        || mode === 'heart' && ['mode', 'heart-section', 'heart-season'].includes(op?.kind)
+        || ['album', 'adv'].includes(mode) && op?.kind === 'mode'
         || mode === 'heart' && op?.kind === 'heart-section' && op.part === 'strips'
         || op?.kind === 'content-item' && ['album-entry', 'adv-event', 'heart-strip'].includes(op.target?.type);
 }
@@ -4193,9 +4199,9 @@ const backupDiagnostics = __m_core_backupDiagnostics_js;
 
 const DEFERRED_COMMIT_STORE_KEY = 'heartbeat_memories_deferred_commits_v1';
 const DEFERRED_COMMIT_STORE_VERSION = 1;
-const DEFERRED_COMMIT_STORE_MAX_ITEMS = 24;
-const DEFERRED_COMMIT_STORE_MAX_BYTES = 3_500_000;
-const DEFERRED_COMMIT_STORE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+const DEFERRED_COMMIT_STORE_MAX_ITEMS = Infinity;
+const DEFERRED_COMMIT_STORE_MAX_BYTES = Infinity;
+const DEFERRED_COMMIT_STORE_MAX_AGE_MS = Infinity;
 
 const SENSITIVE_FIELD = /^(?:api[_-]?key|authorization|proxy[_-]?password|password|secret|access[_-]?token|refresh[_-]?token|bearer[_-]?token)$/i;
 const UNSAFE_FIELD = /^(?:__proto__|prototype|constructor)$/;
@@ -5343,11 +5349,41 @@ function automaticAppearanceClause(value) {
         || /[:：]\s*$/u.test(clean) ? '' : clean;
 }
 
+// Optional visual fields never decide whether an otherwise valid story is kept.
+function generatedCgSceneFields(item) {
+    const prompt = typeof item?.imagePrompt === 'string' ? visualText(item.imagePrompt, 1800) : '';
+    return { ...(prompt ? { imagePrompt: prompt } : {}), ...generatedCgDraftFields(item) };
+}
+
+function cgStoryVisualInstructions(format, mode) {
+    const places = mode === 'heart' ? '每个 voiceDramas / scenarioDramas 条目'
+        : mode === 'ending' ? 'ending 对象（终章）和每个 epilogue.scenes 条目，以及 confessionReplays 中每个重温条目'
+        : mode === 'bedtime' ? 'chapter 对象'
+        : mode === 'pastLives' ? '当前卷宗 dossier 对象（与 synopsis / clues 同级）'
+        : '每个有正文的 node 对象';
+    return cgInitialVisualInstructions(format, false) + `
+【本模块画面字段位置】把 imagePrompt 与可选 cgPromptDraft 写在${places}，不是独立返回的新顶层对象。
+从本次写出的正文选一个明确瞬间，直接完成可用于绘图的画面描述：人物在画面中的位置、当下动作与视线、实际衣着与可见外貌、发生地点的具体物件、时间与光源方向、前中后景和镜头距离。已知细节充分展开，未知外貌不捏造。不要只写标题、setting 一句话、季节或 soft/clear 气氛词，也不粘贴对白或整篇原文。可参考相簿事件CG的细致程度，但不靠重复形容词凑长度。画面字段随本次正文一起返回，不额外请求，不因为画面字段缺失丢弃正文。`;
+}
+
+// Legacy stories have no authored visual fields. Extract visible narration for
+// the initial editable draft; keep the full source separate for reconception.
+function legacyCgSceneExcerpt(value, context = '') {
+    const lines = String(value || '').split(/\r?\n/u).filter(line => !/^\s*(?:char|user)\s*[:：]/iu.test(line))
+        .map(line => line.replace(/^\s*narrator\s*[:：]\s*/iu, ''));
+    const clauses = lines.join(' ').replace(/[“「][^”」]*[”」]/gu, '').split(/(?<=[。！？.!?])\s*/u);
+    const visible = clauses.filter(line => /(?:窗|灯|光|夜|雨|风|海|树|街|房|手|衣|发|眼|站|坐|走|倚|抱|握|抬|垂|桌|门|船|window|light|hand|hair|stand|sit|hold|room|street)/iu.test(line));
+    return text.normalizeText([context, ...visible.slice(0, 5)].filter(Boolean).join(' '), 1500);
+}
+
 __m_core_cgVisualRules_js.cgComicLayoutInstructions = cgComicLayoutInstructions;
 __m_core_cgVisualRules_js.cgInitialVisualInstructions = cgInitialVisualInstructions;
 __m_core_cgVisualRules_js.normalizeGeneratedCgDraft = normalizeGeneratedCgDraft;
 __m_core_cgVisualRules_js.generatedCgDraftFields = generatedCgDraftFields;
 __m_core_cgVisualRules_js.automaticAppearanceClause = automaticAppearanceClause;
+__m_core_cgVisualRules_js.generatedCgSceneFields = generatedCgSceneFields;
+__m_core_cgVisualRules_js.cgStoryVisualInstructions = cgStoryVisualInstructions;
+__m_core_cgVisualRules_js.legacyCgSceneExcerpt = legacyCgSceneExcerpt;
 __m_core_cgVisualRules_js.CG_VISUAL_AUTHORING_RULES = CG_VISUAL_AUTHORING_RULES;
 }
 
@@ -6054,16 +6090,23 @@ function buildCgAppearanceInstructions(evidence, promptFormat = '') {
 // overwritten merely because a different look has since been saved for the chat.
 function initialCgAppearanceMetadata(item, context) {
     if (item?.cgImage) return normalizeCgPromptMetadata(item.cgImage.promptMetadata);
+    const generated = cg_visual.normalizeGeneratedCgDraft(item?.cgPromptDraft);
     const snapshot = participants.selectedParticipantSnapshot(cache.readParticipantRoster(context));
     if (snapshot) {
         const looks = cast_looks.readParticipantLooks(context);
-        return normalizeCgPromptMetadata({ castSnapshot: snapshot, characters: snapshot.people.map(person => ({
+        return normalizeCgPromptMetadata({ castSnapshot: snapshot,
+            ...(generated && !looks?.characters.some(row => row.tag || row.nl) ? {sceneTags:generated.sceneTags,flatPrompt:generated.flatPrompt} : {}),
+            characters: snapshot.people.map(person => ({
             participantId: person.id, tag: looks?.characters.find(row => row.participantId === person.id)?.tag || '',
             nl: looks?.characters.find(row => row.participantId === person.id)?.nl || '',
         })) });
     }
     const looks = cast_looks.readCastLooks(context);
-    const generated = cg_visual.normalizeGeneratedCgDraft(item?.cgPromptDraft);
+    if (item?.__rmtCgDescriptor?.kind === 'heart-firefly' && looks?.manual !== true) {
+        const char = captureCgAppearanceEvidence(context).characters.find(row => row.role === 'char');
+        const tag = char?.knownTag || cast_looks.lookFromDescription(looks?.char || char?.description);
+        return normalizeCgPromptMetadata({ characters: [{role:'char',name:context?.name2,tag:tag || '',nl:''}] });
+    }
     if (generated) {
         const metadata = normalizeCgPromptMetadata({ ...generated, characters: generated.characters.map(row => ({
             ...row, name: row.role === 'char' ? context?.name2 : context?.name1,
@@ -6365,6 +6408,7 @@ __m_core_photoshootContract_js.PHOTOSHOOT_CAPTURE = PHOTOSHOOT_CAPTURE;
 
 function __init_core_cgTargets_js() {
 // MODULE: core/cgTargets.js
+const cg_visual = __m_core_cgVisualRules_js;
 const constants = __m_core_constants_js;
 const text = __m_core_text_js;
 const photoshoots = __m_core_photoshootContract_js;
@@ -6373,11 +6417,12 @@ const cg_image_patch = __m_core_cgImagePatch_js;
 
 
 
+
 const PREFIX = 'rmtcg2';
-const KINDS = new Set(['heart-voice', 'heart-scenario', 'heart-photoshoot', 'ending-ending', 'ending-epilogue', 'ending-epilogue-scene', 'ending-confession', 'heart-language', 'heart-portrait']);
+const KINDS = new Set(['heart-voice', 'heart-scenario', 'heart-photoshoot', 'ending-ending', 'ending-epilogue', 'ending-epilogue-scene', 'ending-confession', 'heart-language', 'heart-portrait', 'heart-firefly', 'past-life-dossier', 'bedtime-chapter', 'butterfly-node']);
 const SLOT_BY_KIND = Object.freeze({
     'heart-voice': 'voice', 'heart-scenario': 'scenario', 'heart-photoshoot': 'grid', 'ending-ending': 'ending', 'ending-epilogue': 'epilogue', 'heart-language': 'language',
-    'ending-confession': 'confession', 'heart-portrait': 'portrait',
+    'ending-confession': 'confession', 'heart-portrait': 'portrait', 'heart-firefly': 'habitat', 'butterfly-node': 'scene',
 });
 
 function encode(value) { return encodeURIComponent(String(value)); }
@@ -6397,10 +6442,13 @@ function normalizeCgTargetDescriptor(value) {
     const containerId = safeId(value.containerId);
     const slot = normalized(value.slot, 160);
     const expectedSlot = SLOT_BY_KIND[kind];
-    if (!KINDS.has(kind) || !containerId || !slot || (!['heart-language','ending-epilogue-scene'].includes(kind) && slot !== expectedSlot)) return null;
+    if (!KINDS.has(kind) || !containerId || !slot || (!['heart-language','ending-epilogue-scene','past-life-dossier','bedtime-chapter'].includes(kind) && slot !== expectedSlot)) return null;
     if (kind === 'ending-epilogue-scene' && !/^scene:\d+$/.test(slot)) return null;
     if (kind === 'heart-language' && !constants.HEART_GREETING_KEYS.includes(containerId)) return null;
     if (kind === 'heart-portrait' && containerId !== 'language') return null;
+    if (kind === 'heart-firefly' && containerId !== 'habitat') return null;
+    if (kind === 'past-life-dossier' && !/^dossier:D\d+$/.test(slot)) return null;
+    if (kind === 'bedtime-chapter' && !/^chapter:BED_[a-z0-9_-]+-C\d+$/.test(slot)) return null;
     const sourceHash = normalized(value.sourceHash, 120);
     return { version: 1, kind, containerId, slot, ...(sourceHash ? { sourceHash } : {}) };
 }
@@ -6462,11 +6510,12 @@ function attachEndingVisual(owner, slot) {
         },
     };
 }
-function facade({ descriptor, visualRef, sourceHash, title, subtitle = '', scene = '', sourceText = scene, visualSeed = [] }) {
+function facade({ descriptor, visualRef, sourceHash, title, subtitle = '', scene = '', sourceText = scene, visualSeed = [], authored = null }) {
     const saved = visualRef.read();
     const item = { id: cgTargetItemId(descriptor), title: normalized(title, 160), subtitle: normalized(subtitle, 600), desc: sourceText, cgDesc: scene,
         cgSourceText: sourceText,
-        imagePrompt: normalized(saved?.imagePrompt, constants.MAX_CG_IMAGE_PROMPT_CHARS), visualSeed, sourceHash,
+        imagePrompt: normalized(saved?.imagePrompt || authored?.imagePrompt, constants.MAX_CG_IMAGE_PROMPT_CHARS),
+        ...cg_visual.generatedCgDraftFields(authored), visualSeed, sourceHash,
         __rmtCgDescriptor: { ...descriptor, sourceHash } };
     Object.defineProperties(item, {
         cgImage: { enumerable: true, configurable: true, get: () => { const visual = visualRef.read(); return visual.sourceHash === sourceHash ? visual.cgImage : null; }, set: value => { const visual = visualRef.write(); visual.sourceHash = sourceHash; visual.cgImage = value; } },
@@ -6509,7 +6558,7 @@ function cgTargetInSession(mode, session, itemId) {
         if (!owner) return null;
         const sourceHash = hash(sourceForDrama(owner, descriptor.kind));
         return facade({ descriptor, visualRef: attachVisual(owner, 'visual'), sourceHash, title: owner.title, subtitle: owner.subtitle,
-            scene: [normalized(owner.setting, 1800), normalized(owner.visualTone, 600)].filter(Boolean).join('，'),
+            scene: owner.imagePrompt || cg_visual.legacyCgSceneExcerpt(scriptText(owner), normalized(owner.setting, 800)), authored: owner,
             sourceText: `${normalized(owner.setting, 1800)}\n${scriptText(owner)}`, visualSeed: [isVoice ? owner.kind : owner.season, owner.visualTone] });
     }
     if (descriptor.kind === 'heart-photoshoot') {
@@ -6538,9 +6587,48 @@ function cgTargetInSession(mode, session, itemId) {
                 : (owner.epilogue?.scenes || []).map(row => `${row.title || ''}\n${row.text || ''}`).join('\n');
         // The complete prose stays available to the explicit reconceive action.
         // An initial image draft contains only authored visual/context labels.
-        const scene = [owner.title, individual ? individual.title : slot === 'epilogue' ? owner.epilogue?.title : owner.subtitle].filter(Boolean).join('，');
+        const authored = individual || (slot === 'epilogue' ? owner.epilogue : owner);
+        const scene = authored.imagePrompt || cg_visual.legacyCgSceneExcerpt(sourceText, individual?.title || owner.title);
         return facade({ descriptor, visualRef: attachEndingVisual(owner, slot), sourceHash, title: owner.title,
-            subtitle: individual ? individual.title : slot === 'epilogue' ? owner.epilogue?.title || '后日谈' : owner.subtitle, scene, sourceText, visualSeed: [owner.type, slot] });
+            subtitle: individual ? individual.title : slot === 'epilogue' ? owner.epilogue?.title || '后日谈' : owner.subtitle, scene, sourceText, authored, visualSeed: [owner.type, slot] });
+    }
+    if (descriptor.kind === 'heart-firefly') {
+        const scene = '柔和绝美的夏夜，角色独自置身安静的草地与疏林间，萤火虫围绕其手边、发梢和肩侧缓缓飞舞。镜头以角色为清晰主体，前景少量失焦暖金光点，中景有层次的萤光勾勒人物轮廓，远景暗青绿的树影与薄雾。柔和月光与细小暖光交织，细腻夜色、自然景深，宁静而亲密。保留角色资料中明确的外貌与合世界观衣着，不增加其他人物、文字或水印。';
+        const sourceHash = hash('firefly-habitat-v1');
+        const item = facade({ descriptor, visualRef: attachVisual(session, 'fireflyVisual'), sourceHash,
+            title: '萤火虫栖息地', scene, sourceText: scene, visualSeed: ['soft moonlight', 'warm fireflies', 'night portrait'] });
+        item.cgSceneDirection = scene;
+        return item;
+    }
+    if (descriptor.kind === 'past-life-dossier') {
+        if (mode !== constants.MODE.PAST_LIVES) return null;
+        const episode = session?.episodes?.find(row => safeId(row.id) === descriptor.containerId);
+        const owner = episode?.dossiers?.find(row => row.id === descriptor.slot.slice(8));
+        if (!owner?.synopsis) return null;
+        const sourceText = [owner.era, owner.synopsis, ...(owner.clues || []).map(row => row.text)].filter(Boolean).join('\n');
+        const sourceHash = hash(JSON.stringify([episode.id, owner.id, owner.title, sourceText]));
+        return facade({ descriptor, visualRef: attachVisual(owner, 'visual'), sourceHash, title: owner.title,
+            subtitle: episode.title, sourceText, authored: owner,
+            scene: owner.imagePrompt || cg_visual.legacyCgSceneExcerpt(sourceText, owner.era) });
+    }
+    if (descriptor.kind === 'bedtime-chapter') {
+        if (mode !== constants.MODE.BEDTIME) return null;
+        const story = session?.stories?.find(row => safeId(row.id) === descriptor.containerId);
+        const owner = story?.chapters?.find(row => row.id === descriptor.slot.slice(8));
+        if (!owner?.text) return null;
+        const sourceHash = hash(JSON.stringify([story.id, owner.id, owner.title, owner.text]));
+        return facade({ descriptor, visualRef: attachVisual(owner, 'visual'), sourceHash, title: owner.title,
+            subtitle: story.title, sourceText: owner.text, authored: owner,
+            scene: owner.imagePrompt || cg_visual.legacyCgSceneExcerpt(owner.text, story.genre) });
+    }
+    if (descriptor.kind === 'butterfly-node') {
+        if (mode !== constants.MODE.BUTTERFLY) return null;
+        const owner = session?.nodes?.find(row => safeId(row.id) === descriptor.containerId);
+        if (!owner?.monologue) return null;
+        const sourceText = [owner.worldSpec?.era, owner.worldSpec?.location, owner.monologue].filter(Boolean).join('\n');
+        const sourceHash = hash(JSON.stringify([owner.id, owner.label, sourceText]));
+        return facade({ descriptor, visualRef: attachVisual(owner, 'visual'), sourceHash, title: owner.label,
+            sourceText, authored: owner, scene: owner.imagePrompt || cg_visual.legacyCgSceneExcerpt(sourceText, owner.worldSpec?.location) });
     }
     if (descriptor.kind === 'heart-portrait') {
         const owner = object(session?.languagePortrait);
@@ -6561,7 +6649,9 @@ function cgTargetInSession(mode, session, itemId) {
 function resolveCgTargetDescriptor(session, descriptor) {
     const normalizedDescriptor = normalizeCgTargetDescriptor(descriptor);
     if (!normalizedDescriptor) return null;
-    const mode = normalizedDescriptor.kind.startsWith('ending-') ? constants.MODE.ENDING : constants.MODE.HEART;
+    const kind = normalizedDescriptor.kind;
+    const mode = kind.startsWith('ending-') ? constants.MODE.ENDING : kind === 'past-life-dossier' ? constants.MODE.PAST_LIVES
+        : kind === 'bedtime-chapter' ? constants.MODE.BEDTIME : kind === 'butterfly-node' ? constants.MODE.BUTTERFLY : constants.MODE.HEART;
     const item = cgTargetInSession(mode, session, cgTargetItemId(normalizedDescriptor));
     if (!item || (normalizedDescriptor.sourceHash && item.sourceHash !== normalizedDescriptor.sourceHash)) return null;
     return { mode, session, item, descriptor: item.__rmtCgDescriptor };
@@ -6716,7 +6806,7 @@ const cg_targets = __m_core_cgTargets_js;
 
 
 
-const IMAGE_MODES = new Set([constants.MODE.ALBUM, constants.MODE.ADV, constants.MODE.HEART, constants.MODE.ENDING]);
+const IMAGE_MODES = new Set([constants.MODE.ALBUM, constants.MODE.ADV, constants.MODE.HEART, constants.MODE.ENDING, constants.MODE.PAST_LIVES, constants.MODE.BEDTIME, constants.MODE.BUTTERFLY]);
 
 function normalizeCgImageUrl(value) {
     if (typeof value !== 'string' || value.length > 4096 || /[\\\u0000-\u001f\u007f]/.test(value)) return '';
@@ -6774,7 +6864,8 @@ function cgItemInSession(mode, session, itemId) {
 }
 
 function cgItemSignature(item) {
-    const fields = [item?.id, item?.title, item?.date, item?.desc, item?.cgDesc,
+    const compactSource = ['past-life-dossier', 'bedtime-chapter', 'butterfly-node', 'heart-firefly'].includes(item?.__rmtCgDescriptor?.kind);
+    const fields = [item?.id, item?.title, item?.date, compactSource ? item.sourceHash : item?.desc, item?.cgDesc,
         item?.subtitle, item?.imagePrompt, item?.visualSeed, item?.panelCount, item?.panels,
         normalizeCgImageRecord(item?.cgImage)];
     if (item?.sourceHash) fields.push(item.sourceHash);
@@ -7525,7 +7616,7 @@ const line = `${outline} fill="none"`;
 const get = (design, kind) => design.visualFacts.find(row => row.kind === kind)?.value || '';
 const colour = (value, fallback) => colours[value] || fallback;
 
-function sketchBackdrop(kind, tone = '#d4b4ce') {
+function sketchBackdrop(kind, tone = '#d4b4ce', evidence = '') {
     const outside = ['walk','flower','rain'].includes(kind);
     const light = `<ellipse cx="172" cy="153" rx="133" ry="115" fill="${tone}" opacity=".15"/><ellipse cx="172" cy="159" rx="118" ry="108" fill="${tone}" opacity=".09"/>`;
     const frame = ['window','rain','lamp'].includes(kind)
@@ -7533,7 +7624,8 @@ function sketchBackdrop(kind, tone = '#d4b4ce') {
     const rain = kind === 'rain' ? `<g stroke="#8aa7bf" stroke-width="2" opacity=".5"><path d="m230 84 3-7m8 19 3-7m9-13 3-7m-24 63 3-7m26 12 3-7m-16-8 3-7"/></g>` : '';
     const ground = `<path d="M45 244q125 22 252-1" fill="none" stroke="${tone}" stroke-width="3" opacity=".55"/>`;
     const botanical = outside ? `<g ${line} opacity=".55"><path d="M51 230q-8-27 4-57m-1 25q-16-20-20-10q0 12 20 13m-3 14q20-24 23-11q-1 10-23 14M281 236q12-20 8-36"/><path d="M57 178q-15-9-11-18q11-5 15 13q-1-18 10-16q9 9-14 21" fill="#b9cfb2"/></g>` : '';
-    return `<g data-rmt-letter-background="${kind}">${light}${frame}${rain}${ground}${botanical}</g>`;
+    const setting = sketchSceneSetting(kind, evidence);
+    return `<g data-rmt-letter-background="${kind}">${light}${frame}${rain}${ground}${botanical}${setting}</g>`;
 }
 
 function sketchPerson(design) {
@@ -7541,10 +7633,13 @@ function sketchPerson(design) {
     const clothing=get(design,'outfitKind'), clothingColour=get(design,'outfitColor'), eye=get(design,'eyeColor');
     const hairFill=colour(hair,'#b8aca4'), dress=colour(clothingColour,'#e6dfd4');
     const kind=design.scene.kind, markers=design.visualFacts.filter(row=>row.kind==='marker').map(row=>row.value);
-    const seated=['read','write','tea','photo','music','cook'].includes(kind);
+    const musicPose = kind === 'music' ? (/钢琴|鋼琴|琴房|piano/iu.test(design.scene.evidence) ? 'piano' : /唱片|音像|record|vinyl/iu.test(design.scene.evidence) ? 'record' : /吉他|guitar/iu.test(design.scene.evidence) ? 'guitar' : '') : '';
+    const seated=['read','write','tea','photo','cook'].includes(kind) || musicPose === 'piano' || musicPose === 'guitar';
     const turn=kind==='write'?-7:kind==='flower'?7:kind==='window'?5:0;
     const hairBottom=length==='long'?172:length==='medium'?131:91;
     const hairKnown=!!(length||style||hair);
+    // Missing appearance is a pencil study, never an assertion of baldness.
+    const unfinishedHair = !hairKnown ? `<g data-rmt-letter-hair="unspecified-pencil" fill="#c0b8b4" opacity=".65" ${outline}><path d="M107 83q-6-52 45-52q49 0 49 50q-28-8-35-22q-19 20-59 24z"/></g>` : '';
     const tail=style==='ponytail'?`<path d="M186 58q61 5 29 70q-14 27 9 32q-37 12-33-31q7-33-5-53" fill="${hairFill}" ${outline}/>`:'';
     const braid=style==='braid'?`<path d="M193 85q18 20 2 33q-14 12 1 22q15 11-1 24q-8 8 0 16" fill="none" stroke="${hairFill}" stroke-width="15"/><path d="M192 105l12 13m-16 11 14 11m-14 10 13 13" ${line}/>`:'';
     const bun=style==='bun'?`<ellipse cx="137" cy="34" rx="21" ry="18" fill="${hairFill}" ${outline}/><path d="M123 35q8-15 21-4" stroke="#fff" fill="none" opacity=".25" stroke-width="3"/>`:'';
@@ -7561,7 +7656,10 @@ function sketchPerson(design) {
         : clothing==='ruqun'?`<path d="m128 150h44" stroke="${ink}" stroke-width="4"/><path d="M138 162l-7 58m19-58v60m12-60 7 58" ${line} opacity=".45"/>`
         : clothing==='sweater'?`<g ${line} opacity=".35"><path d="M124 159h52m-54 13h57m-59 13h61m-61 14h63"/></g>`
         : ''; // 角色卡没有写明衣服时不画领口和门襟，避免每封信都是同一件外套
-    const arms=kind==='walk'?`<path d="m125 143-16 26-10 24m76-50 11 19 19-13" stroke="${dress}" stroke-width="17" fill="none" stroke-linecap="round"/><path d="m102 190-5 8m106-51 8-5" stroke="${skin}" stroke-width="12" stroke-linecap="round"/>`
+    const arms=musicPose === 'piano' ? `<g data-rmt-letter-gesture="playing-keys"><path d="m124 144 20 32 58 6m-27-37 24 13 33 20" stroke="${dress}" stroke-width="17" fill="none" stroke-linecap="round"/><path d="m202 182 16 0m14-4 15 3" stroke="${skin}" stroke-width="11" stroke-linecap="round"/><path d="m207 182 2 6m5-6 2 6m23-8 0 6m5-5 1 6" ${line} opacity=".55"/></g>`
+        : musicPose === 'record' ? `<g data-rmt-letter-gesture="selecting-record"><path d="m124 144-13 28 41-17m22-10 26-16 13-28" stroke="${dress}" stroke-width="17" fill="none" stroke-linecap="round"/><path d="m152 155 10-2m51-52 3-8" stroke="${skin}" stroke-width="12" stroke-linecap="round"/></g>`
+        : musicPose === 'guitar' ? `<g data-rmt-letter-gesture="holding-guitar"><path d="m124 144-7 26 40 24m18-49 19 15 12-28" stroke="${dress}" stroke-width="17" fill="none" stroke-linecap="round"/><path d="m157 194 11 6m38-68 2-8" stroke="${skin}" stroke-width="12" stroke-linecap="round"/></g>`
+        : kind==='walk'?`<path d="m125 143-16 26-10 24m76-50 11 19 19-13" stroke="${dress}" stroke-width="17" fill="none" stroke-linecap="round"/><path d="m102 190-5 8m106-51 8-5" stroke="${skin}" stroke-width="12" stroke-linecap="round"/>`
         : ['flower','gift'].includes(kind)?`<path d="m124 144-8 31 24 5m34-36 12 27-26 12" stroke="${dress}" stroke-width="17" fill="none" stroke-linecap="round"/><path d="m139 180 13 2m9 1-11 2" stroke="${skin}" stroke-width="12" stroke-linecap="round"/>`
         : kind==='window'?`<path d="m124 144-5 40 20 5m36-45 16 11 5-37" stroke="${dress}" stroke-width="17" fill="none" stroke-linecap="round"/><path d="m195 120 1-11m-57 79 8 0" stroke="${skin}" stroke-width="12" stroke-linecap="round"/>`
         : `<path d="m124 144-15 34 32 14m34-47 14 32-26 14" stroke="${dress}" stroke-width="17" fill="none" stroke-linecap="round"/><path d="m139 190 10 4m13-3-10 3" stroke="${skin}" stroke-width="12" stroke-linecap="round"/>`;
@@ -7580,11 +7678,32 @@ function sketchPerson(design) {
         const body={glasses:`<rect x="117" y="89" width="26" height="21" rx="8"/><rect x="157" y="89" width="26" height="21" rx="8"/><path d="M143 97h14"/>`,freckles:`<path d="m119 110 1 0m6 4 1 0m-7 2 1 0m52-6 1 0m6 4 1 0m-7 2 1 0"/>`,scar:`<path d="m174 89-10 20m5-13 6 2m-9 5 6 2"/>`,earrings:`<circle cx="109" cy="113" r="4"/><circle cx="192" cy="113" r="4"/>`,ribbon:`<path d="M184 51q-25-22-26-3q11 13 26 8q10 15 24 5q8-19-24-10z" fill="#c98d9f"/>`,hat:`<path d="M100 65q49-14 102 1l-13-7-10-25h-54l-12 26z" fill="#b8cbb4"/>`,scarf:`<path d="M124 131q27 12 51-1l2 17q-23 13-54 0zM165 145l7 42 14-6-9-39" fill="#ca98a6"/>`,crown:`<path d="M138 40h24l-3-13h-18z" fill="#d8c27c"/><path d="M132 37h36M150 27v-5"/>`,hairpin:`<path d="M176 52l24-18" stroke-width="3"/><circle cx="202" cy="32" r="4" fill="#c98d9f"/>`,jade:`<path d="M160 188v18"/><circle cx="160" cy="212" r="6" fill="#a9cdb2"/><path d="M157 220l-2 9m5-9v9m3-9 2 9"/>`,fan:`<path d="M101 188l-15-22q17-11 33 0z" fill="#efe3c6"/><path d="M101 188l-8-20m8 20v-22m0 22 8-20"/>`}[value];
         return body?`<g data-rmt-letter-marker="${value}" ${line}>${body}</g>`:'';
     }).join('');
-    return `<g data-rmt-letter-person="true" data-rmt-letter-pose="${kind}" transform="rotate(${turn} 150 170)">${behind}${feet}${body}${details}${back}${face}${fringe}${eyes}${expression}${arms}${marker}</g>`;
+    return `<g data-rmt-letter-person="true" data-rmt-letter-pose="${musicPose||kind}" transform="rotate(${turn} 150 170)">${musicPose === 'piano' ? `<g data-rmt-letter-seat="piano-bench"><path d="M102 218h94v12h-94z" fill="#a395a5"/><path d="M112 230v23m73-23v23" stroke="#756976" stroke-width="5"/></g>` : ''}${behind}${feet}${body}${details}${back}${face}${fringe}${unfinishedHair}${eyes}${expression}${arms}${marker}</g>`;
+}
+
+
+// Detail comes from this letter's scene quote, not the letter ID or random traits.
+function sketchSceneSetting(kind, evidence = '') {
+    const value = String(evidence);
+    if (kind === 'music' && /钢琴|鋼琴|琴房|piano/iu.test(value)) return `<g data-rmt-letter-setting="piano" ${outline}><path d="M181 153h109v76H181z" fill="#b4a4b3"/><path d="M176 181h121v17H176z" fill="#fffaf1"/><path d="M183 198v43m106-43v43M194 182v9m12-9v9m24-9v9m12-9v9m24-9v9m12-9v9" stroke="${ink}" stroke-width="4"/></g>`;
+    if (kind === 'music' && /唱片|音像|record|vinyl/iu.test(value)) return `<g data-rmt-letter-setting="records" ${line}><path d="M211 53h82v123h-82z" fill="#e5d5c7"/><path d="M211 115h82"/><circle cx="251" cy="85" r="24" fill="#665d70"/><circle cx="251" cy="85" r="8" fill="#dcc3ca"/><path d="M224 128h8v36h-8zm13-4h9v40h-9zm17 8h10v32h-10z" fill="#abbdba"/></g>`;
+    if (kind === 'read' || kind === 'write') return `<g data-rmt-letter-setting="desk" ${line}><path d="M93 205h184m-175 0-3 40m167-40 3 40" stroke="#ac9191" stroke-width="5"/></g>`;
+    if (kind === 'tea' || kind === 'cook') return `<g data-rmt-letter-setting="table" ${line}><ellipse cx="205" cy="212" rx="78" ry="15" fill="#e7cfb3"/><path d="M151 223v24m106-24v24"/></g>`;
+    return '';
+}
+
+function sketchSceneForeground(design) {
+    if (design.scene.kind !== 'music') return '';
+    const evidence = design.scene.evidence;
+    if (/唱片|音像|record|vinyl/iu.test(evidence)) return `<g data-rmt-letter-held="record" transform="translate(-17 25) scale(.86)" ${outline}><path d="m145 152 29-8 12 35-32 9z" fill="#c6d5c5"/><circle cx="165" cy="166" r="13" fill="#5c5366"/><circle cx="165" cy="166" r="4" fill="#dcb5c0"/><path d="m152 179 10-3" stroke="${skin}" stroke-width="8" stroke-linecap="round"/></g>`;
+    if (/吉他|guitar/iu.test(evidence)) return `<g data-rmt-letter-held="guitar" transform="translate(-17 25) scale(.86)" ${outline}><g transform="rotate(31 170 194)"><path d="M163 108h10v67q28-3 20 23q24 39-17 45q-41-2-23-39q-9-22 10-29z" fill="#d4ae7e"/><circle cx="170" cy="213" r="10" fill="#776374"/><path d="M168 111v120m4-120v120M159 233h23" ${line}/></g><path d="m157 194 11 6m38-68 2-8" stroke="${skin}" stroke-width="12" stroke-linecap="round"/></g>`;
+    return '';
 }
 
 __m_core_letterSketch_js.sketchBackdrop = sketchBackdrop;
 __m_core_letterSketch_js.sketchPerson = sketchPerson;
+__m_core_letterSketch_js.sketchSceneSetting = sketchSceneSetting;
+__m_core_letterSketch_js.sketchSceneForeground = sketchSceneForeground;
 }
 
 function __init_core_letterIllustrationV2_js() {
@@ -7704,6 +7823,9 @@ function includesToken(text, tokens) {
     return tokens.some(token => folded.includes(token.toLocaleLowerCase()));
 }
 function factSupported(fact) {
+    if (fact.kind === 'hairLength' && /\b(?:short|medium|long)(?:[- ]+[a-z]+){0,3}[- ]+hair\b/iu.test(fact.evidence)) {
+        return new RegExp('\\b' + fact.value + '(?:[- ]+[a-z]+){0,3}[- ]+hair\\b', 'iu').test(fact.evidence);
+    }
     const direct = VALUE_TOKENS[fact.kind]?.[fact.value] || [];
     if (direct.length) return includesToken(fact.evidence, direct);
     if (!['hairColor', 'eyeColor', 'outfitColor'].includes(fact.kind)) return false;
@@ -7845,15 +7967,16 @@ function render(value, { idPrefix = 'rmt-letter', label = '' } = {}) {
     const semantic = named ? `role="img" aria-labelledby="${titleId}"` : 'aria-hidden="true"';
     const signature = fact(design, 'signatureObject');
     const kind = design.scene.kind;
-    const foreground = design.focus === 'person' ? letterSketch.sketchPerson(design)
+    const contextSetting = kind === 'music' && /钢琴|鋼琴|琴房|piano|唱片|音像|record|vinyl|吉他|guitar/iu.test(design.scene.evidence);
+    const foreground = design.focus === 'person' ? (contextSetting ? `<g transform="translate(-17 25) scale(.86)">${letterSketch.sketchPerson(design)}</g>` : letterSketch.sketchPerson(design))
         : `<g transform="translate(-2 18) scale(1.55)">${signatureObject(signature, 110, 85)}</g>`;
     const held = ['read', 'tea', 'photo', 'flower', 'gift', 'write'].includes(kind);
-    const scene = design.focus === 'person'
+    const scene = design.focus === 'person' && !contextSetting
         ? sceneMotif(kind, held ? 151 : 245, held ? 172 : 192) : '';
     const textureId = `${safeId(idPrefix)}-paper-grain`;
     // A faint, fixed local hatch gives the drawing a pencil finish without
     // filters, remote assets, or injecting provider-generated markup.
-    return `<svg class="rmt-letter-illustration" data-rmt-letter-illustration-version="2" data-rmt-letter-focus="${design.focus}" data-rmt-letter-scene="${kind}" width="320" height="280" viewBox="0 0 320 280" preserveAspectRatio="xMidYMid meet" ${semantic}>${title}<defs><pattern id="${textureId}" patternUnits="userSpaceOnUse" width="5" height="5"><path d="m0 4 4-4" stroke="#997b91" stroke-width=".45" opacity=".12"/></pattern></defs>${letterSketch.sketchBackdrop(kind, colour(fact(design, 'outfitColor'), '#c1a5ba'))}${foreground}${scene}<ellipse cx="166" cy="154" rx="137" ry="119" fill="url(#${textureId})" pointer-events="none"/></svg>`;
+    return `<svg class="rmt-letter-illustration" data-rmt-letter-illustration-version="2" data-rmt-letter-focus="${design.focus}" data-rmt-letter-scene="${kind}" width="320" height="280" viewBox="0 0 320 280" preserveAspectRatio="xMidYMid meet" ${semantic}>${title}<defs><pattern id="${textureId}" patternUnits="userSpaceOnUse" width="5" height="5"><path d="m0 4 4-4" stroke="#997b91" stroke-width=".45" opacity=".12"/></pattern></defs>${letterSketch.sketchBackdrop(kind, colour(fact(design, 'outfitColor'), '#c1a5ba'), design.scene.evidence)}${foreground}${letterSketch.sketchSceneForeground(design)}${scene}<ellipse cx="166" cy="154" rx="137" ry="119" fill="url(#${textureId})" pointer-events="none"/></svg>`;
 }
 
 
@@ -8155,6 +8278,22 @@ function requireValue(ok, message = '手帐数据格式不完整，原记录没�
 function string(value) { requireValue(typeof value === 'string'); return value; }
 function freeze(value) { if (value && typeof value === 'object') { Object.values(value).forEach(freeze); Object.freeze(value); } return value; }
 
+const JOURNAL_PALETTES = Object.freeze([
+    {id:'mint',label:'薄荷晨光',paper:'#f0faf5',ink:'#30544b',accent:'#a5d3bf'},
+    {id:'sky',label:'晴空蓝',paper:'#eef7fc',ink:'#354f68',accent:'#a9cfe4'},
+    {id:'peach',label:'白桃汽水',paper:'#fff3ef',ink:'#714d50',accent:'#efc0b4'},
+    {id:'lilac',label:'丁香花笺',paper:'#f5f1fc',ink:'#584c70',accent:'#c9bcdf'},
+    {id:'lemon',label:'柠檬奶油',paper:'#fffceb',ink:'#666044',accent:'#e6d894'},
+    {id:'rose',label:'蔷薇清露',paper:'#fff2f6',ink:'#6d485b',accent:'#e5b5ca'},
+]);
+function journalPalette(value, index = 0) {
+    const fallback = JOURNAL_PALETTES[((index % JOURNAL_PALETTES.length) + JOURNAL_PALETTES.length) % JOURNAL_PALETTES.length];
+    const found = JOURNAL_PALETTES.find(item => item.id === value?.id) || fallback;
+    const result = {id: found.id};
+    for (const key of ['paper','ink','accent']) result[key] = /^#[0-9a-f]{6}$/i.test(value?.[key] || '') ? value[key].toLowerCase() : found[key];
+    return result;
+}
+
 function safeJournalImageUrl(value) {
     if (typeof value !== 'string' || !value || /[\\\u0000-\u001f\u007f]/.test(value)) return '';
     const raw=value.trim();
@@ -8190,16 +8329,16 @@ function normalizeEntry(value) {
 function normalizePage(value) {
     requireValue(object(value) && Array.isArray(value.entries) && typeof value.id === 'string' && value.id.length > 0
         && Number.isFinite(value.createdAt) && value.createdAt >= 0);
-    return { id: value.id, title: string(value.title), createdAt: value.createdAt, entries: value.entries.map(normalizeEntry) };
+    return { id: value.id, title: string(value.title), createdAt: value.createdAt, entries: value.entries.map(normalizeEntry), ...(value.palette ? {palette:journalPalette(value.palette)} : {}) };
 }
 function pages(value) {
     requireValue(Array.isArray(value)); const rows = value.map(normalizePage), ids = new Set();
     for (const row of rows) { requireValue(!ids.has(row.id), '手帐页面标识重复，原记录没有改动。'); ids.add(row.id); }
     return rows;
 }
-function createJournalPage({ title = '', entries, id = globalThis.crypto?.randomUUID?.(), createdAt = Date.now() } = {}) {
+function createJournalPage({ title = '', entries, id = globalThis.crypto?.randomUUID?.(), createdAt = Date.now(), palette } = {}) {
     requireValue(typeof id === 'string' && !!id, '无法创建手帐页面标识，请稍后重试。');
-    return freeze(normalizePage({ id, title, entries, createdAt }));
+    return freeze(normalizePage({ id, title, entries, createdAt, palette }));
 }
 function exportJournal(value) { return JSON.stringify({ format: FORMAT, version: 1, pages: pages(value) }, null, 2); }
 function importJournal(value) {
@@ -8326,7 +8465,7 @@ function createJournalStore({ indexedDB = globalThis.indexedDB, currentScope } =
             return await new Promise((resolve,reject) => {
                 let tx, result, error;
                 try {
-                    const writing = incoming !== null || !!edit?.remove || !!edit?.rename;
+                    const writing = incoming !== null || !!edit?.remove || !!edit?.rename || !!edit?.palette;
                     tx=db.transaction(STORE,writing?'readwrite':'readonly');
                     tx.oncomplete=()=>resolve(freeze(result));
                     tx.onabort=tx.onerror=()=>reject(error || fail('RMT_JOURNAL_STORAGE','手帐保存未完成，原记录保留；请保留未保存页面后重试。'));
@@ -8340,6 +8479,14 @@ function createJournalStore({ indexedDB = globalThis.indexedDB, currentScope } =
                             if (edit?.remove) {
                                 requireValue(result.some(page => page.id === edit.remove), '找不到这一页，原手帐没有改动。');
                                 result = result.filter(page => page.id !== edit.remove);
+                                store.put({scope,version:1,pages:result});
+                                return;
+                            }
+                            if (edit?.palette) {
+                                const index = result.findIndex(page => page.id === edit.palette.id);
+                                requireValue(index >= 0, '找不到这一页，原手帐没有改动。');
+                                result = result.slice();
+                                result[index] = createJournalPage({...result[index], palette:edit.palette.value});
                                 store.put({scope,version:1,pages:result});
                                 return;
                             }
@@ -8370,16 +8517,19 @@ function createJournalStore({ indexedDB = globalThis.indexedDB, currentScope } =
         read:scope=>transact(scope),
         append:(scope,value)=>transact(scope,value),
         rename:(scope,id,title)=>transact(scope,undefined,{rename:{id,title:typeof title==='string'?title:''}}),
+        palette:(scope,id,value)=>transact(scope,undefined,{palette:{id,value}}),
         remove:(scope,id)=>transact(scope,undefined,{remove:id}),
     });
 }
 
+__m_core_handJournal_js.journalPalette = journalPalette;
 __m_core_handJournal_js.safeJournalImageUrl = safeJournalImageUrl;
 __m_core_handJournal_js.createJournalPage = createJournalPage;
 __m_core_handJournal_js.exportJournal = exportJournal;
 __m_core_handJournal_js.importJournal = importJournal;
 __m_core_handJournal_js.extractJournalEntries = extractJournalEntries;
 __m_core_handJournal_js.createJournalStore = createJournalStore;
+__m_core_handJournal_js.JOURNAL_PALETTES = JOURNAL_PALETTES;
 __m_core_handJournal_js.JOURNAL_READING_FIELDS = JOURNAL_READING_FIELDS;
 }
 
@@ -10861,14 +11011,14 @@ function previousExpandedImagesHtml(session, descriptor) {
 }
 
 // savedOnly：只在已经存过图片时才显示（用于已停用的整篇入口，避免旧图凭空消失）。
-function expandedCgHtml(session, input, readOnly = false, { savedOnly = false } = {}) {
+function expandedCgHtml(session, input, readOnly = false, { savedOnly = false, showImage = true, placeholder = '' } = {}) {
     const descriptor = targets.describeExpandedCgTarget(session, input);
     const resolved = descriptor && targets.expandedCgItem(session, descriptor);
     if (!resolved) return '';
     const saved = images.normalizeCgImageRecord(resolved.item.cgImage);
     if (savedOnly && !saved) return '';
     const attrs = `data-rmt-expanded-cg="${text.esc(JSON.stringify(descriptor))}"`;
-    return `<section class="rmt-expanded-cg">${saved ? `<div class="rmt-thumb">${images.cgImageLayerHtml(resolved.item)}</div>` : ''}<div class="rmt-cg-card-actions">${saved ? `<button type="button" class="rmt-btn" ${attrs} data-rmt-expanded-cg-view="1">查看已保存图片</button>` : ''}${readOnly ? '' : `<button type="button" class="rmt-btn" ${attrs}>${saved ? '编辑画面 / 再画一张' : '设置画面并预览生图'}</button>`}</div>${previousExpandedImagesHtml(session, descriptor)}</section>`;
+    return `<section class="rmt-expanded-cg">${saved && showImage ? `<div class="rmt-thumb">${images.cgImageLayerHtml(resolved.item)}</div>` : !saved ? placeholder : ''}<div class="rmt-cg-card-actions">${saved ? `<button type="button" class="rmt-btn" ${attrs} data-rmt-expanded-cg-view="1">查看已保存图片</button>` : ''}${readOnly ? '' : `<button type="button" class="rmt-btn" ${attrs}>${saved ? '编辑画面 / 再画一张' : '设置画面并预览生图'}</button>`}</div>${previousExpandedImagesHtml(session, descriptor)}</section>`;
 }
 
 function handleExpandedCgButton(button) {
@@ -10882,9 +11032,18 @@ function handleExpandedCgButton(button) {
     return editor.openCgPromptEditor({ targetDescriptor: descriptor });
 }
 
+// Place a saved habitat picture under its existing interactive light points.
+function expandedCgBackdropHtml(session, input) {
+    const descriptor = targets.describeExpandedCgTarget(session, input);
+    const resolved = descriptor && targets.expandedCgItem(session, descriptor);
+    if (!resolved || !images.normalizeCgImageRecord(resolved.item.cgImage)) return '';
+    return `<div class="rmt-cg-backdrop" style="position:absolute;inset:0;border-radius:inherit;overflow:hidden">${images.cgImageLayerHtml(resolved.item)}</div>`;
+}
+
 __m_ui_expandedCgView_js.previousExpandedImagesHtml = previousExpandedImagesHtml;
 __m_ui_expandedCgView_js.expandedCgHtml = expandedCgHtml;
 __m_ui_expandedCgView_js.handleExpandedCgButton = handleExpandedCgButton;
+__m_ui_expandedCgView_js.expandedCgBackdropHtml = expandedCgBackdropHtml;
 }
 
 function __init_core_heartLanguage_js() {
@@ -11775,7 +11934,11 @@ function mergeBedtime(latest, incoming) {
         for (const chapter of story.chapters) {
             const prior = chapters.get(chapter.id);
             if (prior) {
-                if (JSON.stringify(prior) !== JSON.stringify(chapter))
+                // A separately saved picture must not block a completed continuation.
+                // Keep the latest local visual while comparing the immutable chapter.
+                const { visual: priorVisual, ...priorText } = prior;
+                const { visual: incomingVisual, ...incomingText } = chapter;
+                if (JSON.stringify(priorText) !== JSON.stringify(incomingText))
                     throw bedtimeError('CONFLICT', '同一章已经变化，本次没有覆盖旧章节。');
                 continue;
             }
@@ -11985,7 +12148,8 @@ ${JSON.stringify(compactAchievementsExisting(previousSession), null, 2)}
 
 function normalizeAchievements(data, memoryBank, { allowPartial = false, sourceMemoryIds = null } = {}) {
     const allowedTiers = new Set(['bronze', 'silver', 'gold', 'hidden']);
-    const raw = Array.isArray(data?.entries) ? data.entries : [];
+    if (!Array.isArray(data?.entries)) throw new Error('成就库缺少条目列表。');
+    const raw = data.entries;
     const entries = raw.slice(0, core_constants.MAX_DERIVED_CONTENT_ITEMS).map((item, index) => {
         const title = core_text.normalizeText(item?.title, 100);
         const description = core_text.normalizeText(item?.description, 900);
@@ -12021,7 +12185,7 @@ function normalizeAchievements(data, memoryBank, { allowPartial = false, sourceM
             hint: unlocked ? '' : (core_text.normalizeText(item?.hint, 500) || '继续积累新的重要回忆。'),
         };
     }).filter(item => item && (!sourceMemoryIds || (item.unlocked && core_incremental.usesIncrementalMemoryId(item.sourceMemoryIds, sourceMemoryIds))));
-    if (!allowPartial && !entries.length) throw new Error('成就库没有生成可用条目。');
+    if (!allowPartial && raw.length && !entries.length) throw new Error('成就库没有生成可用条目。');
     return {
         kind: core_constants.MODE.ACHIEVEMENTS,
         title: core_text.normalizeText(data?.title, 100) || '成就库',
@@ -20000,6 +20164,7 @@ __m_core_diagnosticReport_js.uninstallRuntimeDiagnostic = uninstallRuntimeDiagno
 
 function __init_modes_ending_js() {
 // MODULE: modes/ending.js
+const cg_visual = __m_core_cgVisualRules_js;
 const core_cache = __m_core_cache_js;
 const cg_targets = __m_core_cgTargets_js;
 const core_constants = __m_core_constants_js;
@@ -20011,6 +20176,7 @@ const core_settings = __m_core_settings_js;
 const core_text = __m_core_text_js;
 const generation_client = __m_generation_client_js;
 const generation_prompts = __m_generation_prompts_js;
+
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
 
@@ -20584,11 +20750,13 @@ function normalizeEndingRouteDetail(data, route) {
     const scenes = (Array.isArray(rawEpilogue?.scenes) ? rawEpilogue.scenes : []).slice(0, 6).map((scene, index) => ({
         title: core_text.normalizeText(scene?.title, 120) || `后日谈 ${index + 1}`,
         text: core_text.normalizeText(scene?.text, 5000),
+        ...cg_visual.generatedCgSceneFields(scene),
     })).filter(scene => scene.text.length >= 90);
     if (scenes.length < 3) throw new Error(`已解锁结局“${route.title}”的后日谈不足 3 段。`);
     return cg_targets.preserveCgSlots(route, {
         ...route,
         endingScene,
+        ...cg_visual.generatedCgSceneFields(raw),
         confession: '',
         confessionLines: [],
         creditsLine,
@@ -20809,6 +20977,7 @@ function normalizeEndingConfessionReplays(rawList, memoryBank) {
             confessionLines,
             responseSummary,
             afterEffect,
+            ...cg_visual.generatedCgSceneFields(item),
             ...cg_targets.normalizeLocalCgSlots(item),
         };
         replay.easterEgg = normalizeEndingEasterEgg(item?.easterEgg, replay);
@@ -20849,6 +21018,7 @@ ${relationshipSummary}`,
             ? (Array.isArray(rawEpilogue?.scenes) ? rawEpilogue.scenes : []).slice(0, 6).map((scene, sceneIndex) => ({
                 title: core_text.normalizeText(scene?.title, 120) || `后日谈 ${sceneIndex + 1}`,
                 text: core_text.normalizeText(scene?.text, 5000),
+        ...cg_visual.generatedCgSceneFields(scene),
             })).filter(scene => scene.text.length >= 90)
             : [];
         const epilogue = {
@@ -20880,6 +21050,7 @@ ${relationshipSummary}`,
             confessionLines,
             creditsLine,
             epilogue,
+            ...cg_visual.generatedCgSceneFields(item),
             ...cg_targets.normalizeLocalCgSlots(item),
         };
     }).filter(Boolean);
@@ -21798,6 +21969,10 @@ function phoneConversationNeedsSpeakerRepair(entry, session) {
     return !hasExplicitRole || !roles.has('owner') || !roles.has('contact');
 }
 
+function phoneReadingMeta(value) {
+    return String(value || '').split(/[·|]/).filter(part => !/不代表|非历史|未核验|角色日常演绎|已核对的历史/.test(part)).join(' · ').trim();
+}
+
 function renderPhoneEntryDetail(entry, app, session = runtimeState.activeSession) {
     if (!entry) return '<div class="rmt-phone-detail rmt-phone-detail-empty">选择一条记录查看详情。</div>';
     if (entry.sourceStatus === 'unavailable') return '<div class="rmt-phone-detail rmt-phone-detail-empty"><button type="button" class="rmt-btn" data-rmt-action="phone-entry-back">← 返回列表</button><h3>本条尚未生成</h3><p>已有内容可以正常阅读；需要时可在终端重试本条。</p></div>';
@@ -21818,7 +21993,7 @@ function renderPhoneEntryDetail(entry, app, session = runtimeState.activeSession
     // Layout is owned here; no invented balances, media URLs, or executable app content.
     // Provenance stays on stored entries and is not repeated inside immersive reading.
     let content;
-    if (appKind === 'chat') content = `<section class="rmt-phone-conversation"><header>${title}<p class="rmt-phone-conversation-status">${entry.conversationMode === 'draft' ? '未发送草稿 · 不代表已发生的聊天' : entry.legacyEvidenceUnverified ? '旧版记录 · 来源尚未核验' : entry.basis === '记忆' ? '已核对的历史原话' : '角色日常演绎 · 非历史聊天记录'}</p></header>${body}${messages}${fields}${gallery}</section>`;
+    if (appKind === 'chat') content = `<section class="rmt-phone-conversation"><header>${title}</header>${body}${messages}${fields}${gallery}</section>`;
     else if (['finance', 'store'].includes(appKind)) content = `<article class="rmt-phone-ledger"><header>${badge}<small>${core_text.esc(app?.label || '账本')}</small>${title}</header>${fields}<div class="rmt-phone-ledger-memo">${body}${gallery}${messages}</div></article>`;
     else if (appKind === 'notes') content = `<article class="rmt-phone-notepaper"><header>${title}</header>${body}${fields}${gallery}${messages}</article>`;
     else if (appKind === 'moments') content = `<article class="rmt-phone-feed-post"><header><span class="rmt-phone-contact-avatar" aria-hidden="true">${core_text.esc(String(session?.ownerName || '').slice(0, 1))}</span><b>${core_text.esc(session?.ownerName || '')}</b></header>${title}${body}${gallery}${fields}${messages}</article>`;
@@ -21832,7 +22007,7 @@ function renderPhoneEntryDetail(entry, app, session = runtimeState.activeSession
     else if (['location', 'travel'].includes(appKind)) content = `<article class="rmt-phone-route-journal"><header>${badge}${title}</header>${fields}<div class="rmt-phone-route-entry">${body}${gallery}${messages}</div></article>`;
     else if (['games', 'creative'].includes(appKind)) content = `<article class="rmt-phone-collection-card"><header>${badge}${title}</header>${gallery}${fields}${body}${messages}</article>`;
     else content = `<article class="rmt-phone-record"><header>${badge}${title}</header>${fields}${body}${gallery}${messages}</article>`;
-    return `<div class="rmt-phone-detail rmt-phone-detail-${appKind}"><div class="rmt-phone-detail-toolbar"><button type="button" class="rmt-btn" data-rmt-action="phone-entry-back">← 返回${core_text.esc(app?.label || '列表')}</button><span>${core_text.esc(entry.meta || '')}</span></div>${content}</div>`;
+    return `<div class="rmt-phone-detail rmt-phone-detail-${appKind}"><div class="rmt-phone-detail-toolbar"><button type="button" class="rmt-btn" data-rmt-action="phone-entry-back">← 返回${core_text.esc(app?.label || '列表')}</button><span>${core_text.esc(phoneReadingMeta(entry.meta))}</span></div>${content}</div>`;
 }
 
 function phoneStatusBar(now, kind) {
@@ -21880,7 +22055,7 @@ function renderPhoneHome(session, apps, live, now, kind) {
 
 function phoneEntryKindMarkup(item, kind) {
     const title = core_text.esc(item?.title);
-    const meta = core_text.esc(item?.meta || '');
+    const meta = core_text.esc(phoneReadingMeta(item?.meta));
     const preview = core_text.esc(item?.preview || item?.detail || '');
     const id = core_text.esc(item?.id);
     const messageCount = Array.isArray(item?.messages) ? item.messages.length : 0;
@@ -21910,7 +22085,7 @@ function renderPhoneAppList(app) {
 }
 
 function renderPhoneDetailPage(entry, app) {
-    return `<section class="rmt-phone-page rmt-phone-app-screen rmt-phone-page-detail">${renderPhoneEntryDetail(entry, app)}</section>`;
+    return `<section class="rmt-phone-page rmt-phone-app-screen rmt-phone-page-detail rmt-phone-page-${phonePresentationKind(app)}">${renderPhoneEntryDetail(entry, app)}</section>`;
 }
 
 function renderPhone() {
@@ -24865,10 +25040,12 @@ __m_ui_scenePicker_js.refreshScenePicker = refreshScenePicker;
 
 function __init_modes_bedtime_js() {
 // MODULE: modes/bedtime.js
+const cg_visual = __m_core_cgVisualRules_js;
 const contract = __m_core_bedtimeContract_js;
 const contextApi = __m_core_context_js;
 const text = __m_core_text_js;
 const generation = __m_generation_client_js;
+
 // One bounded text request creates one new story or one continuation chapter.
 
 
@@ -24937,7 +25114,7 @@ function normalizedChapter(raw, plan) {
     const body = contract.bedtimeText(chapter.text, L.chapterText, true);
     if (/^(?:待续内容|此处省略|正文待补|同上|to be written|content here)[。.!！\s]*$/iu.test(body.trim()))
         throw contract.bedtimeError('INCOMPLETE', '这一章尚未完整返回；已收到的草稿可继续恢复。');
-    return { id: plan.chapterId, title, text: body, createdAt: plan.createdAt };
+    return { id: plan.chapterId, title, text: body, createdAt: plan.createdAt, ...cg_visual.generatedCgSceneFields(chapter) };
 }
 
 function normalizeGeneratedBedtime(raw, planValue, memory, previous = null, ownerKey = '') {
@@ -25036,6 +25213,7 @@ __m_modes_bedtime_js.readableBedtimeProgressSession = readableBedtimeProgressSes
 
 function __init_ui_bedtimeView_js() {
 // MODULE: ui/bedtimeView.js
+const expanded_cg_view = __m_ui_expandedCgView_js;
 const contract = __m_core_bedtimeContract_js;
 const bedtimeMode = __m_modes_bedtime_js;
 const contextApi = __m_core_context_js;
@@ -25049,6 +25227,7 @@ const recoveryView = __m_ui_recoveryView_js;
 const overlay = __m_ui_overlay_js;
 const text = __m_core_text_js;
 const coreState = __m_core_state_js;
+
 
 
 
@@ -25087,7 +25266,7 @@ function bedtimeHtml(session, { locked = false, generating = false } = {}) {
             const chapters = selected.chapters || [];
             const chapter = chapters[ui.chapterIndex] || chapters[0];
             const controls = `<div class="rmt-bedtime-page-controls">${button('prev', '上一章', '', ui.chapterIndex <= 0)}<span>${chapters.length ? `${ui.chapterIndex + 1} / ${chapters.length}` : '0 / 0'}</span>${button('next', '下一章', '', ui.chapterIndex >= chapters.length - 1)}</div>`;
-            content = `<article class="rmt-bedtime-reader"><header>${button('library', '返回故事架')}<small>${esc(selected.genre || '题材待完成')} · 睡前故事</small><h2>${esc(selected.title || '未完成的故事')}</h2><p>${esc(selected.premise || '')}</p></header>${storyPartial ? '<p class="rmt-recovery-status" role="status">这一章尚未完成；已收到的正文可以先读，继续会按原草稿补齐，不会重写旧章节。</p>' : ''}${chapter ? `<section class="rmt-bedtime-chapter"><small>第 ${ui.chapterIndex + 1} 章</small><h3>${esc(chapter.title || '本章标题待完成')}</h3>${paragraphs(chapter.text)}</section>${controls}` : '<p role="status">本章正文尚未收到。</p>'}<footer>${locked ? '' : button('continue', generating ? '正在续写…' : '追加下一章', selected.id, generating || storyPartial)}</footer></article>`;
+            content = `<article class="rmt-bedtime-reader"><header>${button('library', '返回故事架')}<small>${esc(selected.genre || '题材待完成')} · 睡前故事</small><h2>${esc(selected.title || '未完成的故事')}</h2><p>${esc(selected.premise || '')}</p></header>${storyPartial ? '<p class="rmt-recovery-status" role="status">这一章尚未完成；已收到的正文可以先读，继续会按原草稿补齐，不会重写旧章节。</p>' : ''}${chapter ? `<section class="rmt-bedtime-chapter"><small>第 ${ui.chapterIndex + 1} 章</small><h3>${esc(chapter.title || '本章标题待完成')}</h3>${paragraphs(chapter.text)}${expanded_cg_view.expandedCgHtml(session, {kind:'bedtime-chapter',containerId:selected.id,slot:'chapter:'+chapter.id}, locked)}</section>${controls}` : '<p role="status">本章正文尚未收到。</p>'}<footer>${locked ? '' : button('continue', generating ? '正在续写…' : '追加下一章', selected.id, generating || storyPartial)}</footer></article>`;
         }
         return `<section class="rmt-bedtime"><header class="rmt-bedtime-head"><div><small>可连续阅读的虚构作品${locked ? ' · 只读' : ''}</small><h2>睡前故事</h2></div>${ui.view === 'story' ? '' : `<small>已保存 ${session.stories.length} 篇</small>`}</header><p class="rmt-bedtime-note">写一个新故事，或接着喜欢的故事读下一章。</p>${composer}${content}</section>`;
     } catch { return '<section class="rmt-bedtime"><p role="status">这份睡前故事暂时无法读取，原内容仍保留。</p></section>'; }
@@ -26009,6 +26188,8 @@ __m_ui_inboxStyles_js.inboxCss = inboxCss;
 
 function __init_modes_pastLives_js() {
 // MODULE: modes/pastLives.js
+const cg_visual = __m_core_cgVisualRules_js;
+const cg_targets = __m_core_cgTargets_js;
 const contract = __m_core_pastLivesContract_js;
 const text = __m_core_text_js;
 const evidence = __m_core_evidence_js;
@@ -26022,6 +26203,8 @@ const prompts = __m_generation_prompts_js;
 const relationshipSafety = __m_core_relationshipSafety_js;
 const requestCoordinator = __m_core_requestCoordinator_js;
 const settings = __m_core_settings_js;
+
+
 
 
 
@@ -26127,6 +26310,7 @@ function normalizePastLivesDossier(value, memory, { id = 'D01', title = '' } = {
     const raw = contract.pastLivesData(value, L.episodeChars);
     return { id, title: fictionalText(title || raw.title, memory, L.title, true), era: fictionalText(raw.era, memory, 240),
         synopsis: fictionalText(raw.synopsis, memory, L.prose, true),
+        ...cg_visual.generatedCgSceneFields(raw), ...cg_targets.normalizeLocalCgSlots(raw),
         clues: list(raw.clues, L.clues).map((clue, index) => {
             if (!contract.PAST_LIVES_CLUE_KINDS.includes(clue.kind)) throw fail('STRUCTURE', '卷宗线索类型无法读取，请使用物证、证词、缺页或旁记。');
             const speaker = ['char', 'user', 'narrator'].includes(clue.speaker) ? clue.speaker : 'narrator';
@@ -26532,6 +26716,7 @@ __m_ui_pastLivesReading_css_js.pastLivesReadingCss = pastLivesReadingCss;
 
 function __init_ui_pastLivesView_js() {
 // MODULE: ui/pastLivesView.js
+const expanded_cg_view = __m_ui_expandedCgView_js;
 const contract = __m_core_pastLivesContract_js;
 const pastLives = __m_modes_pastLives_js;
 const text = __m_core_text_js;
@@ -26547,6 +26732,7 @@ const recoveryView = __m_ui_recoveryView_js;
 const participants = __m_core_participants_js;
 const pastLivesReadingStyles = __m_ui_pastLivesReading_css_js;
 const runtimeState = __m_core_state_js.state;
+
 
 
 
@@ -26602,7 +26788,7 @@ function pastLivesHtml(value, { readOnly = false, busy = false, notice = '' } = 
                 const dossier = selected.dossiers.find(item => item.id === ui.selectedEntryId) || selected.dossiers[0];
                 const chosenClue = dossier?.clues.find(item => item.id === ui.selectedKey);
                 const docket = selected.dossiers.length > 1 ? `<nav class="rmt-past-docket" aria-label="选择卷宗">${selected.dossiers.map(item => button('dossier', item.title, item.id, `aria-pressed="${dossier?.id === item.id}"`)).join('')}</nav>` : '';
-                scene = dossier ? `${docket}<article class="rmt-past-paper"><header><small>虚构卷宗${dossier.era ? ' · ' + esc(dossier.era) : ''}</small><h3>${esc(dossier.title)}</h3></header>${paragraphs(dossier.synopsis)}</article>
+                scene = dossier ? `${docket}<article class="rmt-past-paper"><header><small>虚构卷宗${dossier.era ? ' · ' + esc(dossier.era) : ''}</small><h3>${esc(dossier.title)}</h3></header>${paragraphs(dossier.synopsis)}${expanded_cg_view.expandedCgHtml(session, {kind:'past-life-dossier',containerId:selected.id,slot:'dossier:'+dossier.id}, readOnly)}</article>
                     <div class="rmt-past-clues" aria-label="可阅读的卷宗线索">${dossier.clues.map(clue => `<button type="button" class="rmt-past-clue ${clue.kind === 'missing' ? 'is-missing' : ''}" data-rmt-past-lives="clue" data-rmt-past-lives-id="${esc(clue.id)}" aria-pressed="${chosenClue?.id === clue.id}"><small>${esc(clueLabel(clue.kind))}${readIds.has(clue.id) ? ' · 已读' : ''}</small><b>${esc(clue.title)}</b><span>${clue.kind === 'missing' ? '一处字迹留着空白' : '点开阅读'}</span></button>`).join('')}</div>
                     ${chosenClue ? `<article class="rmt-past-evidence" id="rmt-past-current-evidence"><small>${esc(clueLabel(chosenClue.kind))}${chosenClue.kind === 'testimony' ? ' · ' + esc(chosenClue.speaker === 'char' ? session.characterName : chosenClue.speaker === 'user' ? session.userName : '卷内记述') : ''} · 虚构</small><h3>${esc(chosenClue.title)}</h3>${paragraphs(chosenClue.text)}${chosenClue.kind === 'missing' ? readIds.has(chosenClue.id)
                         ? `<div class="rmt-past-revealed" role="status"><small>字迹已显</small>${paragraphs(chosenClue.revealedText)}</div>`
@@ -28480,6 +28666,13 @@ function phoneMobileCss() {
 .rmt-archive-portal-calendar .rmt-portal-avatar{background:linear-gradient(145deg,#aaa0ca,#8178aa)}
 @media(max-width:720px){.rmt-calendar-quick{grid-template-columns:46px minmax(0,1fr);gap:10px;padding:11px 12px}.rmt-calendar-quick-icon{width:44px;height:44px;border-radius:13px;font-size:18px}.rmt-calendar-quick-actions{grid-column:1/-1;display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));width:100%}.rmt-calendar-quick-actions .rmt-btn{width:100%;justify-content:center}}
 
+
+/* App reading surfaces deliberately own their palette, independently of device wallpaper. */
+.rmt-phone-page{--rmt-app-paper:#f8fafb;--rmt-app-ink:#344958;--rmt-app-accent:#bed0da;background:var(--rmt-app-paper)!important;color:var(--rmt-app-ink)!important;--rmt-screen-soft:var(--rmt-app-paper);--rmt-screen-ink:var(--rmt-app-ink)}
+.rmt-phone-page-chat{--rmt-app-paper:#edf4ee;--rmt-app-ink:#304a3e;--rmt-app-accent:#b8d9bd}.rmt-phone-page-notes{--rmt-app-paper:#fffbea;--rmt-app-ink:#63583c;--rmt-app-accent:#e5d69c}.rmt-phone-page-moments{--rmt-app-paper:#f8f4ed;--rmt-app-ink:#5c5043;--rmt-app-accent:#d8c6af}.rmt-phone-page-music{--rmt-app-paper:#26233a;--rmt-app-ink:#f0e7f5;--rmt-app-accent:#a895cc}.rmt-phone-page-gallery,.rmt-phone-page-camera{--rmt-app-paper:#1f292e;--rmt-app-ink:#f1f5f6;--rmt-app-accent:#9bb6c1}.rmt-phone-page-finance,.rmt-phone-page-store{--rmt-app-paper:#edf5f4;--rmt-app-ink:#315552;--rmt-app-accent:#a4c7c3}.rmt-phone-page-reading,.rmt-phone-page-books{--rmt-app-paper:#faf1e2;--rmt-app-ink:#674f3c;--rmt-app-accent:#d8bc94}.rmt-phone-page-travel,.rmt-phone-page-location{--rmt-app-paper:#eef6fb;--rmt-app-ink:#375c70;--rmt-app-accent:#a5c8dc}.rmt-phone-page-work,.rmt-phone-page-files,.rmt-phone-page-research,.rmt-phone-page-study{--rmt-app-paper:#f1f4fa;--rmt-app-ink:#40526c;--rmt-app-accent:#b0bfd8}
+.rmt-phone-page .rmt-phone-detail,.rmt-phone-page .rmt-phone-list{background:transparent!important;color:inherit!important;border-color:var(--rmt-app-accent)}
+.rmt-phone-page .rmt-phone-message{background:#fff;color:#304a3e;border:1px solid #d5e4d8;max-width:85%;border-radius:14px 14px 14px 3px}.rmt-phone-page .rmt-phone-message-owner{background:#d4eacb;margin-left:auto;border-radius:14px 14px 3px 14px}
+.rmt-phone-notepaper,.rmt-phone-book-page{padding:20px;line-height:1.9;background:repeating-linear-gradient(transparent 0 29px,#c9b88922 29px 30px);border-left:3px solid var(--rmt-app-accent)}.rmt-phone-ledger .rmt-phone-fields>div{border-bottom:1px dashed var(--rmt-app-accent);padding:14px 4px}.rmt-phone-record-art{margin:20px auto;width:150px;height:150px;border-radius:50%;display:grid;place-items:center;font-size:35px;background:repeating-radial-gradient(circle,#201e31 0 5px,#51415f 6px 7px);color:#ead5fa}.rmt-phone-track-card{text-align:center}.rmt-phone-photo-record figure{min-height:150px;display:grid;place-items:center;background:#ffffff0a;border:1px solid #ffffff22;padding:20px}.rmt-phone-feed-post{border-top:3px solid var(--rmt-app-accent);padding:18px 4px}.rmt-phone-document{padding:18px;background:#ffffff88;border-top:5px solid var(--rmt-app-accent)}.rmt-phone-route-entry{border-left:3px dotted var(--rmt-app-accent);padding-left:18px}.rmt-phone-page .rmt-phone-entry{color:inherit!important;background:transparent!important;border-color:var(--rmt-app-accent)!important}.rmt-phone-page-notes .rmt-phone-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px}.rmt-phone-page-notes .rmt-phone-entry{padding:16px!important;border:1px solid #e5d69c!important;box-shadow:2px 3px 0 #e5d69c44}
 `;
 }
 
@@ -28827,7 +29020,7 @@ function ensureSettingsStyles() {
     style.textContent += bedtime_view.bedtimeCss();
     style.textContent += `
 #${core_constants.OVERLAY_ID} .rmt-expanded-cg{margin:16px 0;max-width:100%}
-#${core_constants.OVERLAY_ID} .rmt-expanded-cg .rmt-thumb{height:auto;min-height:160px;max-height:540px;aspect-ratio:3/2;border-radius:16px;overflow:hidden}
+#${core_constants.OVERLAY_ID} .rmt-expanded-cg .rmt-thumb{box-sizing:border-box;width:100%;max-width:100%;min-width:0;height:auto;min-height:120px;max-height:540px;aspect-ratio:16/9;border-radius:16px;overflow:hidden}
 #${core_constants.OVERLAY_ID} .rmt-expanded-cg img{width:100%;height:100%;object-fit:contain}
 #${core_constants.OVERLAY_ID} .rmt-language-scene{padding:16px;margin:12px 0;border:1px solid var(--rmt-theme-border);border-radius:14px}
 #${core_constants.OVERLAY_ID} .rmt-language-scene label{display:grid;gap:8px;margin:12px 0}
@@ -28971,7 +29164,7 @@ function ensureStyles() {
     style.textContent += bedtime_view.bedtimeCss();
     style.textContent += `
 #${core_constants.OVERLAY_ID} .rmt-expanded-cg{margin:16px 0;max-width:100%}
-#${core_constants.OVERLAY_ID} .rmt-expanded-cg .rmt-thumb{height:auto;min-height:160px;max-height:540px;aspect-ratio:3/2;border-radius:16px;overflow:hidden}
+#${core_constants.OVERLAY_ID} .rmt-expanded-cg .rmt-thumb{box-sizing:border-box;width:100%;max-width:100%;min-width:0;height:auto;min-height:120px;max-height:540px;aspect-ratio:16/9;border-radius:16px;overflow:hidden}
 #${core_constants.OVERLAY_ID} .rmt-expanded-cg img{width:100%;height:100%;object-fit:contain}
 #${core_constants.OVERLAY_ID} .rmt-language-scene{padding:16px;margin:12px 0;border:1px solid var(--rmt-theme-border);border-radius:14px}
 #${core_constants.OVERLAY_ID} .rmt-language-scene label{display:grid;gap:8px;margin:12px 0}
@@ -31848,6 +32041,8 @@ __m_core_butterflyLegacyRecovery_js.legacyButterflyIncrementPrompt = legacyButte
 
 function __init_modes_butterfly_js() {
 // MODULE: modes/butterfly.js
+const cg_visual = __m_core_cgVisualRules_js;
+const cg_targets = __m_core_cgTargets_js;
 const storyParticipants = __m_core_participants_js;
 const core_butterflyContract = __m_core_butterflyContract_js;
 const core_cache = __m_core_cache_js;
@@ -31862,6 +32057,8 @@ const generation_client = __m_generation_client_js;
 const generation_prompts = __m_generation_prompts_js;
 const generation_recovery = __m_generation_recovery_js;
 const legacy_recovery = __m_core_butterflyLegacyRecovery_js;
+
+
 
 
 
@@ -32056,6 +32253,7 @@ function normalizeButterflyBranch(node, index, memoryBank, context = {}, options
         monologue: narrative.monologue,
         intervention: narrative.intervention,
         systemNote: narrative.systemNote,
+        ...cg_visual.generatedCgSceneFields(node), ...cg_targets.normalizeLocalCgSlots(node),
     };
 }
 
@@ -32120,6 +32318,7 @@ function normalizedMainNode(node, memoryBank, context) {
         id: 'MAIN', label: narrative.label, code: '> SIMULATION RECORD #MAIN', locked: true, trueEnding: false,
         sourceMemoryIds: reference.sourceMemoryIds, sourceMemoryAnchor: reference.sourceMemoryAnchor,
         monologue: narrative.monologue, intervention: narrative.intervention, systemNote: narrative.systemNote,
+        ...cg_visual.generatedCgSceneFields(node), ...cg_targets.normalizeLocalCgSlots(node),
     };
 }
 
@@ -32267,7 +32466,7 @@ async function fillButterflyProse(context, memoryBank, origin, taskKey, session,
                 if (!node.prosePending) return node;
                 const patch = repairs.get(node.id);
                 if (!patch) return node;
-                const draft = { ...node, monologue: patch.monologue, intervention: patch.intervention, systemNote: patch.systemNote };
+                const draft = { ...node, monologue: patch.monologue, intervention: patch.intervention, systemNote: patch.systemNote, ...cg_visual.generatedCgSceneFields(patch) };
                 delete draft.prosePending;
                 const normalized = node.id === 'MAIN'
                     ? normalizedMainNode(draft, memoryBank, context)
@@ -34823,6 +35022,7 @@ function normalizeVoiceDramaPart(data, expectedKinds, memoryBank = {}) {
             setting: core_text.normalizeText(item?.setting, 1200),
             visualTone: core_constants.HEART_DRAMA_VISUAL_TONES.has(core_text.normalizeText(item?.visualTone, 20).toLowerCase()) ? core_text.normalizeText(item?.visualTone, 20).toLowerCase() : 'soft',
             script,
+            ...cg_visual.generatedCgSceneFields(item),
             ...cg_targets.normalizeLocalCgSlots(item),
         });
     }
@@ -34846,6 +35046,7 @@ function normalizeScenarioDramaPart(data, expectedSeason = '', memoryBank = {}) 
             setting: core_text.normalizeText(item?.setting, 1200),
             visualTone: core_constants.HEART_DRAMA_VISUAL_TONES.has(core_text.normalizeText(item?.visualTone, 20).toLowerCase()) ? core_text.normalizeText(item?.visualTone, 20).toLowerCase() : 'soft',
             script,
+            ...cg_visual.generatedCgSceneFields(item),
             ...cg_targets.normalizeLocalCgSlots(item),
         });
     }
@@ -34982,6 +35183,7 @@ function makeHeartSession(core, existing = null) {
         greetings: core.greetings || {},
         languageVisuals: cg_targets.normalizeLanguageCgVisuals(existing?.languageVisuals),
         languagePortrait: cg_targets.normalizeLanguagePortrait(existing?.languagePortrait),
+        fireflyVisual: cg_targets.normalizeLocalCgSlots({ visual: existing?.fireflyVisual }).visual || null,
         photoshoots: normalizeHeartPhotoshoots(existing?.photoshoots),
         collectionIssues: core_heartLanguage.heartCollectionIssues(existing),
         voiceDramas: Array.isArray(existing?.voiceDramas) ? existing.voiceDramas : [],
@@ -35208,6 +35410,7 @@ function normalizeHeart(data, memoryBank) {
             setting: core_text.normalizeText(item?.setting, 1200),
             visualTone: core_constants.HEART_DRAMA_VISUAL_TONES.has(core_text.normalizeText(item?.visualTone, 20).toLowerCase()) ? core_text.normalizeText(item?.visualTone, 20).toLowerCase() : 'soft',
             script,
+            ...cg_visual.generatedCgSceneFields(item),
             ...cg_targets.normalizeLocalCgSlots(item),
             sourceArchiveMemoryIds: core_text.cleanArray(item?.sourceArchiveMemoryIds, core_constants.MAX_MEMORY_PROMPT_ITEMS, 40),
             incrementBatchId: core_text.normalizeText(item?.incrementBatchId, 80),
@@ -35228,6 +35431,7 @@ function normalizeHeart(data, memoryBank) {
             setting: core_text.normalizeText(item?.setting, 1200),
             visualTone: core_constants.HEART_DRAMA_VISUAL_TONES.has(core_text.normalizeText(item?.visualTone, 20).toLowerCase()) ? core_text.normalizeText(item?.visualTone, 20).toLowerCase() : 'soft',
             script,
+            ...cg_visual.generatedCgSceneFields(item),
             ...cg_targets.normalizeLocalCgSlots(item),
             sourceArchiveMemoryIds: core_text.cleanArray(item?.sourceArchiveMemoryIds, core_constants.MAX_MEMORY_PROMPT_ITEMS, 40),
             incrementBatchId: core_text.normalizeText(item?.incrementBatchId, 80),
@@ -35285,6 +35489,7 @@ function normalizeHeart(data, memoryBank) {
         collectionIssues: core_heartLanguage.heartCollectionIssues(data),
         languageVisuals: cg_targets.normalizeLanguageCgVisuals(data?.languageVisuals),
         languagePortrait: cg_targets.normalizeLanguagePortrait(data?.languagePortrait),
+        fireflyVisual: cg_targets.normalizeLocalCgSlots({ visual: data?.fireflyVisual }).visual || null,
         photoshoots: normalizeHeartPhotoshoots(data?.photoshoots),
         voiceDramas,
         scenarioDramas,
@@ -37750,7 +37955,7 @@ function renderHeart() {
             const paragraphs = thoughts.map(text => `<p>${core_text.esc(text)}</p>`).join('');
             return `<div class="rmt-firefly-whisper ${core_text.esc(selected.color)}"><small>${fireflyMeta(selected.color).icon} ${core_text.esc(fireflyMeta(selected.color).label)}</small><h3>${core_text.esc(selected.title || '旧版心声')}</h3><div class="rmt-firefly-thoughts">${paragraphs}</div></div>`;
         })() : `<div class="rmt-heart-empty">${readOnly ? '这份档案还没有保存萤火虫话题。' : '点亮以后，这里会出现不同颜色的追加约会话题。'}</div>`;
-        content = `<section class="rmt-firefly-shell"><div class="rmt-firefly-head"><div><small>FIREFLY HABITAT</small><h2>萤火虫栖息地</h2></div><span>${voices.length} LIGHTS</span></div><div class="rmt-firefly-field">${points || '<div class="rmt-firefly-empty-stars">✦　·　✧　·　✦</div>'}</div>${pager}<div class="rmt-firefly-legend">${legend}</div>${whisper}</section>`;
+        content = `<section class="rmt-firefly-shell"><div class="rmt-firefly-head"><div><small>FIREFLY HABITAT</small><h2>萤火虫栖息地</h2></div><span>${voices.length} LIGHTS</span></div><div class="rmt-firefly-field">${expanded_cg_view.expandedCgBackdropHtml(session, {kind:'heart-firefly',containerId:'habitat'})}${points || '<div class="rmt-firefly-empty-stars">✦　·　✧　·　✦</div>'}</div>${expanded_cg_view.expandedCgHtml(session, {kind:'heart-firefly',containerId:'habitat'}, readOnly, {showImage:false})}${pager}<div class="rmt-firefly-legend">${legend}</div>${whisper}</section>`;
     } else {
         const selected = selectedHeartStrip();
         if (selected) session.selectedStripId = selected.id;
@@ -37838,7 +38043,7 @@ const runtimeState = __m_core_state_js.state;
 let editor = null;
 
 function portraitCgMetadata(item, raw) {
-    if (!item?.cgPortrait || item.cgImage || !raw) return raw;
+    if (!(item?.cgPortrait || item?.__rmtCgDescriptor?.kind === 'heart-firefly') || item.cgImage || !raw) return raw;
     const value = structuredClone(raw);
     const userIds = new Set((value.castSnapshot?.people || []).filter(person=>person.identity==='user').map(person=>person.id));
     if (value.castSnapshot) value.castSnapshot.people = value.castSnapshot.people.filter(person=>person.identity!=='user');
@@ -38688,6 +38893,9 @@ __m_ui_albumView_js.renderSharedMemory = renderSharedMemory;
 
 function __init_generation_cgImageCore_js() {
 // MODULE: generation/cgImageCore.js
+const past_lives_view = __m_ui_pastLivesView_js;
+const bedtime_view = __m_ui_bedtimeView_js;
+const butterfly_view = __m_ui_butterflyView_js;
 const cg_visual = __m_core_cgVisualRules_js;
 const cg_format = __m_core_cgPromptFormat_js;
 const baibai_image = __m_generation_baibaiImage_js;
@@ -38712,6 +38920,9 @@ const workspace_state = __m_ui_workspaceState_js;
 const ui_overlay = __m_ui_overlay_js;
 const ui_styles = __m_ui_styles_js;
 const runtimeState = __m_core_state_js.state;
+
+
+
 
 
 
@@ -38996,6 +39207,7 @@ function buildCgReconceptPrompt(item, context, mode, appearance = null, promptFo
         title: sanitizeCgVisualText(item?.title, 160),
         date: sanitizeCgVisualText(item?.date, 80),
         description: sanitizeCgVisualText(item?.cgSourceText || item?.cgDesc || item?.desc || item?.subtitle, item?.cgSourceText ? 12000 : 1800),
+        ...(item?.cgSceneDirection ? { sceneDirection: item.cgSceneDirection } : {}),
         characterName: core_text.normalizeText(context?.name2, 120),
         userName: core_text.normalizeText(context?.name1, 120),
     };
@@ -39082,7 +39294,7 @@ function refreshSettledCgImage(taskKey, origin) {
     // After a local cancellation/timeout the UI task is already removed, but the
     // provider may only now have released its key. Re-enable controls read-only.
     if (!runtimeState.activeCgImageTasks.has(taskKey) && core_context.isCurrentTaskOrigin(origin)
-        && [core_constants.MODE.ALBUM, core_constants.MODE.ADV, core_constants.MODE.HEART].includes(runtimeState.activeMode)) ui_overlay.renderActive();
+        && [core_constants.MODE.ALBUM, core_constants.MODE.ADV, core_constants.MODE.HEART, core_constants.MODE.ENDING, core_constants.MODE.PAST_LIVES, core_constants.MODE.BEDTIME, core_constants.MODE.BUTTERFLY].includes(runtimeState.activeMode)) ui_overlay.renderActive();
 }
 
 function refreshCgImageProviderBars() {
@@ -39258,6 +39470,9 @@ function renderCurrentCgMode(mode, session) {
     else if (mode === core_constants.MODE.HEART && workspace_state.workspace.route === 'language') language_view.renderLanguage();
     else if (mode === core_constants.MODE.HEART) ui_heartView.renderHeart();
     else if (mode === core_constants.MODE.ENDING) ui_endingView.renderEnding();
+    else if (mode === core_constants.MODE.PAST_LIVES) past_lives_view.renderPastLives();
+    else if (mode === core_constants.MODE.BEDTIME) bedtime_view.renderBedtime();
+    else if (mode === core_constants.MODE.BUTTERFLY) butterfly_view.renderButterfly();
 }
 
 function renderCapturedCgMode(target) {
@@ -39608,7 +39823,7 @@ async function drawSelectedCgImage({ promptOverride, promptMetadata, promptForma
         mode,
         itemId,
         origin,
-        label: dailyStrip ? '日常一格绘制' : mode === core_constants.MODE.ALBUM ? '相簿 CG 绘制' : 'ADV CG 绘制',
+        label: dailyStrip ? '日常一格绘制' : `${core_constants.MODE_LABEL[mode] || '画面'} · CG 绘制`,
         startedAt: Date.now(),
         phase: 'request',
         controller,
@@ -39670,7 +39885,7 @@ async function drawSelectedCgImage({ promptOverride, promptMetadata, promptForma
     } finally {
         runtimeState.activeCgImageTasks.delete(taskKey);
         core_requestCoordinator.rememberStandaloneChatTask({
-            label: dailyStrip ? '日常一格绘制' : mode === core_constants.MODE.ALBUM ? '相簿 CG 绘制' : 'ADV CG 绘制',
+            label: dailyStrip ? '日常一格绘制' : `${core_constants.MODE_LABEL[mode] || '画面'} · CG 绘制`,
             mode, origin, outcome: imageOutcome, kind: 'cg',
         });
         renderCapturedCgMode(captured);
@@ -39758,7 +39973,7 @@ async function restoreSelectedCgImageVersion(url, expectedTarget = null, { confi
         // （是否在共同回忆大图里、对白读到第几句、所选条目、页码），否则重新渲染会把人
         // 从大图踢回相簿网格。字段与 overlay 保存后刷新会话时保留的一致。
         const next = structuredClone(committed);
-        for (const key of ['selectedId','selectedEntryId','selectedStripId','view','page','dialogueIndex','sharedMemory']) {
+        for (const key of ['selectedId','selectedEntryId','selectedStripId','view','page','dialogueIndex','sharedMemory','selected','chapterIndex','pastLivesReadMask','pastLivesDrawn','pastLivesClosing','selectedFireflyId','heartSubMode']) {
             if (Object.hasOwn(session, key)) next[key] = structuredClone(session[key]);
         }
         Object.assign(session,next);
@@ -41304,6 +41519,7 @@ __m_generation_prompts_js.PROMPTS = PROMPTS;
 
 function __init_generation_mergedGeneration_js() {
 // MODULE: generation/mergedGeneration.js
+const cg_visual = __m_core_cgVisualRules_js;
 const inbox_art = __m_core_letterIllustrationV2_js;
 const generationParticipants = __m_core_generationParticipants_js;
 const participants = __m_core_participants_js;
@@ -41331,6 +41547,7 @@ const ui_overlay = __m_ui_overlay_js;
 const ui_workspaceState = __m_ui_workspaceState_js;
 const routePeople = __m_core_routeParticipants_js;
 const runtimeState = __m_core_state_js.state;
+
 
 
 
@@ -41416,10 +41633,17 @@ function buildMergeTask(route, context, memoryBank, previous = null, date = new 
         const block = participants.participantPromptBlock(participantSnapshot);
         task.singlePrompt += block;
         task.taskText += block;
+        if (route === 'bedtime') {
+            const visualRules = cg_visual.cgStoryVisualInstructions(core_settings.getPluginSettings().cgPromptFormat, 'bedtime');
+            task.singlePrompt += visualRules;
+            task.taskText += visualRules;
+        }
         const accept = task.accept;
         task.acceptOptions = route === 'inbox' ? { characterEvidence: typeof options.characterEvidence === 'string' ? options.characterEvidence : '' } : {};
         task.accept = raw => {
             const result = accept(raw, task.acceptOptions);
+            result.chatId = core_context.comparableChatId(memoryBank.chatId);
+            result.archiveRevision = memoryBank.archiveRevision;
             result.generationSources = { ...(result.generationSources || {}), [task.mode]: { sourceMemory: structuredClone(memoryBank) } };
             return result;
         };
@@ -41615,7 +41839,6 @@ function pendingScopeMatches(row, scopeOrOrigin) {
     return !!scope && !!rowScope
         && scope.chatId === rowScope.chatId
         && scope.characterKey === rowScope.characterKey
-        && scope.archiveRevision === rowScope.archiveRevision
         && scope.archiveTargetEntryId === rowScope.archiveTargetEntryId;
 }
 
@@ -41816,8 +42039,8 @@ async function clearFreshJournals(context, memoryBank, opened) {
 }
 
 function assertMergedSaveIdentity(session, origin, memoryBank) {
-    if (!origin?.characterKey || !origin?.archiveRevision || !origin?.chatId || !origin?.modeWriteFences
-        || session?.chatId !== origin.chatId || session?.archiveRevision !== origin.archiveRevision
+    if (!session || typeof session !== 'object' || !origin?.characterKey || !origin?.archiveRevision || !origin?.chatId || !origin?.modeWriteFences
+        || (session?.chatId && core_context.comparableChatId(session.chatId) !== origin.chatId) || (session?.archiveRevision && session.archiveRevision !== origin.archiveRevision)
         || memoryBank?.chatId !== origin.chatId || memoryBank?.archiveRevision !== origin.archiveRevision) {
         throw core_text.safeUserError('原任务与当前档案不一致，成果仍保留；请回到原档案保存，或导出保留的成果。', 'RMT_MERGED_ORIGIN');
     }
@@ -41835,7 +42058,7 @@ function saveMergedSession(context, memoryBank, origin) {
     return async (mode, session) => {
         assertMergedSaveIdentity(session, origin, memoryBank);
         assertMergedTarget(origin, context, memoryBank, mode);
-        const committed = await core_cache.commitSession(mode, session, origin.chatId, origin);
+        const committed = await core_cache.commitSession(mode, { ...session, chatId: origin.chatId, archiveRevision: origin.archiveRevision }, origin.chatId, origin);
         if (!committed) throw core_text.safeUserError('这一页的结果已经通过校验，但还没有写上。', 'RMT_MERGED_SAVE');
     };
 }
@@ -41927,13 +42150,6 @@ async function startTogether(routes, { confirm = null, date = new Date() } = {})
     for (const route of routes) {
         if (!MERGEABLE_ROUTES.includes(route)) continue;
         const mode = ui_workspaceState.WORKSPACE_ROUTES[route].mode;
-        let openDraft = false;
-        try { openDraft = !!core_cache.loadGenerationRecovery(mode, context); }
-        catch { openDraft = false; }
-        if (openDraft) {
-            held.push({ route, label: routeTitle(route), reason: '这一页还有未提交的生成草稿，先续写或放弃。这次不放进同一次回复，也不会自动另开一项。' });
-            continue;
-        }
         try { tasks.push(buildMergeTask(route, context, memoryBank, previousSession(mode, context, memoryBank), date, frozenOptions[route])); }
         catch (error) { blocked.push({ route, label: routeTitle(route), reason: core_text.safeErrorSummary(error) }); }
     }
@@ -42085,6 +42301,30 @@ async function resumeMergedGeneration(existing, options = {}) {
         core_taskTrace.endTaskTrace(trace, failure ? 'failed' : 'ok', failure); release();
     }
 }
+async function discardPending(route, id) {
+    const context = core_context.currentCharacterGuard();
+    const bank = archive_repository.requireArchive(context), pending = createPendingStore();
+    const scope = currentPendingScope(context);
+    const row = pending.readForOrigin(scope).find(item => item.id === id && item.route === route);
+    if (!row) return false;
+    const draftId = row.origin?.generationRecoveryDraftId || row.id;
+    const origin = core_context.captureTaskOrigin(context, bank.archiveRevision);
+    origin.generationRecoveryDraftId = draftId;
+    const tasks = core_requestCoordinator.queryParticipantGenerationTasks(context, { stableIdentity: true })
+        .filter(task => (task.draftId || task.origin?.generationRecoveryDraftId) === draftId);
+    await core_requestCoordinator.cancelParticipantGenerationTasks(tasks.map(task => task.id));
+    if (!core_context.isCurrentTaskOrigin(origin)) throw new DOMException('Discard owner changed', 'AbortError');
+    const journal = core_cache.loadGenerationRecovery(row.mode, context, undefined, { draftId, intent: 'inspect' });
+    const staged = core_cache.listGenerationTaskResults(context).some(item => item.draftId === draftId && item.status === 'awaiting-choice');
+    if (journal || staged) {
+        const saved = await core_cache.saveGenerationRecovery(context, bank, row.mode, null, origin, { draftId, discardDraft: true });
+        if (!saved) throw core_text.safeUserError('草稿删除尚未保存，原成果仍保留。', 'RMT_RECOVERY_DISCARD_STORAGE');
+        if (journal) generation_recovery.discardGenerationRecoveryHeldReplies(journal.identity, row.mode);
+    }
+    pending.removeForOrigin(scope, id);
+    return true;
+}
+
 async function repairPending(route, id = '') {
     const context = core_context.currentCharacterGuard();
     const memoryBank = archive_repository.requireArchive(context), pending = createPendingStore();
@@ -42105,6 +42345,32 @@ async function repairPending(route, id = '') {
     // Renew only this invocation's volatile lifecycle. Original target, version,
     // draft ID and deletion/write fences are never replaced with current values.
     const origin = { ...structuredClone(item.origin || {}), lifecycleEpoch: runtimeState.runtimeLifecycleEpoch };
+    if (item.kind === 'unsaved') {
+        if (!core_context.deferredCommitOriginMatchesContext(origin, context)
+            || core_cache.archiveBackupEntryForContext(context, memoryBank).entryId !== origin.archiveTargetEntryId) {
+            throw core_text.safeUserError('请回到这份成果所属的聊天保存。', 'RMT_MERGED_ORIGIN');
+        }
+        const draftId = origin.generationRecoveryDraftId || item.id;
+        const journal = core_cache.loadGenerationRecovery(item.mode, context, undefined, { draftId, intent: 'inspect' });
+        const already = core_cache.listGenerationTaskResults(context).find(row => row.draftId === draftId && row.mode === item.mode);
+        if (already && ['applied', 'awaiting-choice'].includes(already.status)) {
+            if (already.status === 'awaiting-choice') await core_cache.resolveGenerationTaskResult(context, draftId, 'apply');
+            pending.removeForOrigin(pendingScope, item.id); return { requested: false };
+        }
+        const source = generation_recovery.readGenerationContentSnapshot(journal);
+        if (journal && source?.memoryBank) {
+            assertMergedSaveIdentity(item.session, origin, source.memoryBank);
+            const currentOrigin = { ...core_context.captureTaskOrigin(context, memoryBank.archiveRevision), generationRecoveryDraftId: draftId };
+            const releaseSave = holdModes(context, [item.mode]);
+            try {
+                await core_cache.saveGenerationTaskResult(context, item.mode, { ...item.session, chatId: origin.chatId, archiveRevision: origin.archiveRevision }, currentOrigin,
+                    { draftId, pageId: item.route, memoryBank, sourceMemory: source.memoryBank });
+                await core_cache.resolveGenerationTaskResult(context, draftId, 'apply');
+                pending.removeForOrigin(pendingScope, item.id);
+                return { requested: false };
+            } finally { releaseSave(); }
+        }
+    }
     assertMergedTarget(origin, context, memoryBank, item.mode);
     const release = holdModes(context, [item.mode]);
     const trace = core_taskTrace.startTaskTrace('', item.mode);
@@ -42148,6 +42414,7 @@ __m_generation_mergedGeneration_js.runMergedBatch = runMergedBatch;
 __m_generation_mergedGeneration_js.runMergedRepair = runMergedRepair;
 __m_generation_mergedGeneration_js.startTogether = startTogether;
 __m_generation_mergedGeneration_js.resumeMergedGeneration = resumeMergedGeneration;
+__m_generation_mergedGeneration_js.discardPending = discardPending;
 __m_generation_mergedGeneration_js.repairPending = repairPending;
 __m_generation_mergedGeneration_js.estimateTokens = estimateTokens;
 __m_generation_mergedGeneration_js.withoutRepeatedBackground = withoutRepeatedBackground;
@@ -42182,6 +42449,13 @@ function bindCgPromptFormat(origin, value, dialect = 'r8420') {
 function cgPromptForSegment(prompt, options) {
     const binding = options?.origin && bindings.get(options.origin);
     if (!binding?.selected || !format.cgFieldSegment(options.mode, options.taskKey)) return prompt;
+    if (binding.dialect === 'r8483') return prompt + (['album', 'adv'].includes(options.mode) || options.mode === 'heart' && /:(?:strip|strips)$/u.test(options.taskKey)
+        ? visual.cgInitialVisualInstructions(binding.selected, options.mode === 'heart') : visual.cgStoryVisualInstructions(binding.selected, options.mode));
+    // Recovery journals created before r84.83 must keep their exact prompt hash.
+    const legacySegment = options.mode === 'album' && /:(?:index|album)$/.test(options.taskKey)
+        || options.mode === 'adv' && /:(?:index|event)$/.test(options.taskKey)
+        || options.mode === 'heart' && /:(?:strip|strips)$/.test(options.taskKey);
+    if (!legacySegment) return prompt;
     if (binding.dialect === 'r8420') return prompt + visual.cgInitialVisualInstructions(binding.selected, options.mode === 'heart');
     return prompt + (binding.dialect === 'r8413' ? format.cgFormatFieldDirective : format.legacyCgFormatFieldDirective)(binding.selected);
 }
@@ -42189,8 +42463,8 @@ function cgRecoveryOperation(mode, operation, existing, selected) {
     if (!format.cgOperationHasImageFields(mode, operation)) return operation;
     const value = existing ? format.normalizeCgPromptFormat(existing.operation?.cgPromptFormat) : format.normalizeCgPromptFormat(selected);
     const { cgPromptFormat: ignored, cgPromptDialect: ignoredDialect, ...base } = operation;
-    const dialect = existing ? existing.operation?.cgPromptDialect : 'r8420';
-    return value ? { ...base, cgPromptFormat: value, ...(['r8413', 'r8420'].includes(dialect) ? { cgPromptDialect: dialect } : {}) } : base;
+    const dialect = existing ? existing.operation?.cgPromptDialect : 'r8483';
+    return value ? { ...base, cgPromptFormat: value, ...(['r8413', 'r8420', 'r8483'].includes(dialect) ? { cgPromptDialect: dialect } : {}) } : base;
 }
 
 function cgSegmentValidator(validator, options) {
@@ -45247,6 +45521,7 @@ __m_generation_generationRequest_js.recoveryModeTaskScopes = recoveryModeTaskSco
 
 function __init_generation_generationSavedActions_js() {
 // MODULE: generation/generationSavedActions.js
+const generation_merged = __m_generation_mergedGeneration_js;
 const recovery_source = __m_core_recoverySourcePolicy_js;
 const cg_policy = __m_generation_cgPromptPolicy_js;
 const archive_library = __m_archive_library_js;
@@ -45269,6 +45544,7 @@ const generationContentContext = __m_generation_generationContext_js.generationC
 const snapshotGenerationContent = __m_generation_generationContext_js.snapshotGenerationContent;
 const recoveryModeTaskScopes = __m_generation_generationRequest_js.recoveryModeTaskScopes;
 const recoverySettingsIdentity = __m_generation_generationRequest_js.recoverySettingsIdentity;
+
 
 
 
@@ -45428,6 +45704,15 @@ async function discardSavedGeneration(mode, options = {}) {
         { ...(options.draftId ? { draftId: options.draftId, intent: 'inspect' } : {}), ...(options.pageId ? { pageId: options.pageId } : {}) });
     if (!retained) throw core_text.safeUserError('这份草稿已不在当前档案，请重新打开任务列表查看。', 'RMT_RECOVERY_NOT_FOUND');
     if (!ui_overlay.confirmExplicitAction('放弃这轮未提交草稿？', '如这项任务还在生成，将先停止它。仅清除此轮分段恢复记录，不删除已保存的模块、正式记忆或图片。未提交的成功分段也会放弃，不能恢复；不会自动重新生成。终端原有的逐 App 草稿另行保留。', { destructive: true })) return;
+    if (!snapshot && retained.operation?.kind === 'merged') {
+        const rows = generation_merged.createPendingStore().readForOrigin(generation_merged.currentPendingScope(context));
+        const pending = rows.find(row => (row.origin?.generationRecoveryDraftId || row.id) === retained.draftId);
+        if (pending) {
+            await generation_merged.discardPending(pending.route, pending.id);
+            ui_overlay.showChooser();
+            return true;
+        }
+    }
     const origin = { ...core_context.captureTaskOrigin(context, bank.archiveRevision), archiveTargetEntryId: opts.archiveTarget?.entryId || '' };
     const owners = core_requestCoordinator.queryParticipantGenerationTasks(context, { stableIdentity: true }).filter(task =>
         task.mode === mode && (task.pageId === retained.pageId || task.pageIds.includes(retained.pageId))
@@ -45755,7 +46040,7 @@ async function generateModeOperation(mode, options = {}) {
     // A no-op must not advance the durable mode fence. In another tab, doing so would cancel a
     // real in-flight build for the same frozen archive even though this invocation never calls a
     // provider. Preflight against the freshly revalidated snapshot, then repeat after the CAS.
-    recoveryExisting = options.existing || core_cache.loadGenerationRecovery(mode, context, archiveTarget?.cache,
+    recoveryExisting = options.newTask === true ? null : options.existing || core_cache.loadGenerationRecovery(mode, context, archiveTarget?.cache,
         { ...(options.draftId ? { draftId: options.draftId } : {}), ...(options.pageId ? { pageId: options.pageId } : {}) });
     // The whole-page entry must not resume the newest one-item child instead
     // of its page. Explicit draft buttons and legacy formal-item recovery keep
@@ -46448,6 +46733,8 @@ const wood = 'var(--rmt-interior-wood)', dark = 'var(--rmt-interior-line)', clot
 const stroke = `fill="none" stroke="${dark}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"`;
 const shadow = '<ellipse cx="0" cy="81" rx="64" ry="12" fill="#00000013"/>';
 const ROOM_OBJECT_DRAWINGS = Object.freeze({
+    bicycle: `${shadow}<g ${stroke} stroke-width="5"><circle cx="-53" cy="40" r="37"/><circle cx="57" cy="40" r="37"/><path d="M-53 40-23-17 18 40h-71l72-56 38 56M18 40-8-29m-17 0h32M40-27h21l-5 15"/></g>`,
+    guitar: `${shadow}<path d="M-9-75h18v83q47-8 39 26q26 45-9 52h-57q-35-7-9-52q-8-34 18-26z" fill="${wood}" stroke="${dark}" stroke-width="3"/><circle cy="39" r="16" fill="${dark}"/><path d="M-3-75v143m6-143v143M-16 70h32" stroke="${paper}" stroke-width="2"/>`,
     petBed: `${shadow}<ellipse cx="0" cy="65" rx="71" ry="20" fill="${wood}"/><path d="M-63 51q0-65 62-65q59 0 61 65l-15 14h-92z" fill="${cloth}" stroke="${dark}" stroke-width="3"/><path d="M-29 54V26q1-28 29-28q29 0 30 28v29z" fill="${dark}"/><ellipse cy="57" rx="46" ry="13" fill="${paper}"/><path d="M-37 56q34-12 73 0m-57-47-6-11m49 11 6-11" ${stroke} opacity=".5"/>`,
     basket: `${shadow}<path d="M-49 15q-5-59 47-59q54 0 51 59" fill="none" stroke="${wood}" stroke-width="10"/><path d="M-58 12q58-20 116 0l-15 62q-43 24-88 0z" fill="${wood}" stroke="${dark}" stroke-width="3"/><ellipse cy="12" rx="59" ry="16" fill="${dark}"/><ellipse cy="10" rx="53" ry="11" fill="${paper}" opacity=".42"/><g ${stroke} opacity=".6"><path d="M-53 30q52 15 105 0m-99 19q47 17 94 0m-89 20q43 16 84 0M-33 23l6 57M-11 26l3 60m20-60-3 60m25-63-7 57"/></g>`,
     mat: `${shadow}<path d="m-79 39 105-24 59 38-105 28z" fill="${wood}" stroke="${dark}" stroke-width="2"/><g ${stroke} stroke-width="1.5" opacity=".5"><path d="m-66 42 48 31m-32-35 48 31m-31-35 48 31m-31-35 48 31m-31-35 48 31M-63 51l105-24M-50 59 55 35m-92 32 105-24"/></g><path d="m-82 39-6 7m64 38 3 7m110-36 7 5" ${stroke}/>` ,
@@ -46474,6 +46761,8 @@ const ROOM_OBJECT_DRAWINGS = Object.freeze({
 });
 
 const kinds = [
+    ['bicycle', /(?:自行车|自行車|单车|單車|山地车|山地車|bicycle|bike)/giu],
+    ['guitar', /(?:吉他|guitar)/giu],
     ['petBed', /(?:猫窝|貓窩|狗窝|狗窩|宠物窝|寵物窩|pet\s*bed|cat\s*bed|dog\s*bed)/giu],
     ['medical', /(?:医疗.{0,8}(?:箱|包)|醫療.{0,8}(?:箱|包)|急救(?:箱|包)|药箱|藥箱|first\s*aid\s*kit|medical\s*kit)/giu],
     ['stairs', /(?:楼梯|樓梯|台阶|臺階|stairs?|staircase)/giu],
@@ -46536,9 +46825,9 @@ const SHAPES = Object.freeze({
 function roomFigureSvg(profile = {}) {
     return pixelFigure.pixelFigureSvg(profile);
 }
-function roomInteriorHtml(layout, { figure = {}, personIsHere = false, charName = '', selectedId = '', world = 'neutral', participants = null } = {}) {
+function roomInteriorHtml(layout, { figure = {}, personIsHere = false, charName = '', selectedId = '', world = 'neutral', participants = null, space = {}, night = false } = {}) {
     if (Array.isArray(participants)) {
-        const interior = roomInteriorHtml(layout, { selectedId, world });
+        const interior = roomInteriorHtml(layout, { selectedId, world, space, night });
         const figures = participants.map(person => `<button type="button" class="rmt-room-resident-figure" data-rmt-action="room-participant" data-rmt-participant-id="${text.esc(person.id)}" aria-label="听${text.esc(person.name)}说话"><svg viewBox="-70 -115 140 220" role="img" aria-label="${text.esc(person.name)}的像素小人">${roomFigureSvg(person.figure)}</svg><b>${text.esc(person.name)}</b></button>`).join('');
         return `<div class="rmt-room-shared-interior">${interior}<div class="rmt-room-resident-figures">${figures}</div></div>`;
     }
@@ -46563,13 +46852,52 @@ function roomInteriorHtml(layout, { figure = {}, personIsHere = false, charName 
             const number = Math.max(1,Math.floor(Number(entry.number)||start+i+1));
             return `<button type="button" class="rmt-interior-hotspot ${entry.id === selectedId ? 'active' : ''}" style="left:${x}%;top:${y}%" data-rmt-room-id="${text.esc(entry.id)}" aria-pressed="${entry.id===selectedId}" aria-controls="heartbeat_memories_overlay_room_object_detail" aria-label="${number}. ${text.esc(label)}"><span>${number}</span><b>${text.esc(label)}</b></button>`;
         }).join('');
-        panels.push(`<div class="rmt-interior" data-rmt-interior-world="${['historical','scifi','fantasy'].includes(world)?world:'neutral'}"><svg viewBox="0 0 900 550" class="rmt-interior-svg" role="img" aria-label="当前房间的内装示意"><path d="M0 0h900v396l-145-95H145L0 396Z" fill="var(--rmt-interior-wall)"/><path d="M145 0h610v301H145Z" fill="var(--rmt-interior-backwall)"/><path d="m0 396 145-95h610l145 95v154H0Z" fill="var(--rmt-interior-floor)"/><path d="M145 0v301L0 396m755-396v301l145 95M102 330h696M37 375h825M0 428h900M0 488h900M315 301 188 550m284-249-16 249m169-249 127 249" fill="none" stroke="var(--rmt-interior-line)" stroke-opacity=".22" stroke-width="3"/><ellipse cx="455" cy="411" rx="263" ry="72" fill="var(--rmt-interior-fabric)" opacity=".12"/>${world==='scifi'?'<path d="M150 26h600m-600 261h600" stroke="var(--rmt-interior-glass)" stroke-width="5"/>':world==='historical'?'<path d="M145 12h610M156 0v292m586-292v292" stroke="var(--rmt-interior-wood)" stroke-width="12"/>':''}${furniture}${personIsHere ? `<g transform="translate(840 326) scale(.82)">${roomFigureSvg(figure)}</g>`:''}</svg>${hits}${personIsHere ? `<button type="button" class="rmt-interior-person" data-rmt-action="room-presence" aria-label="听${text.esc(charName)}说话">${text.esc(charName)}</button>`:''}</div>`);
+        panels.push(`<div class="rmt-interior" data-rmt-room-architecture="${roomArchitectureKind(space)}" data-rmt-interior-world="${['historical','scifi','fantasy'].includes(world)?world:'neutral'}"><svg viewBox="0 0 900 550" class="rmt-interior-svg" role="img" aria-label="当前房间的内装示意">${roomArchitectureSvg(space, world, night)}${furniture}${personIsHere ? `<g transform="translate(840 326) scale(.82)">${roomFigureSvg(figure)}</g>`:''}</svg>${hits}${personIsHere ? `<button type="button" class="rmt-interior-person" data-rmt-action="room-presence" aria-label="听${text.esc(charName)}说话">${text.esc(charName)}</button>`:''}</div>`);
     }
     return panels.join('');
 }
 
+
+// Space names choose local architecture, never generated SVG or coordinates.
+function roomArchitectureKind(space = {}) {
+    const name = `${space.label || ''} ${space.spaceType || ''}`;
+    if (/阳台|陽台|露台|游廊|遊廊|balcony|terrace|veranda/iu.test(name)) return 'balcony';
+    if (/庭院|花园|花園|屋顶|屋頂|院子|garden|courtyard|rooftop/iu.test(name)) return 'garden';
+    if (/厨房|廚房|灶房|kitchen/iu.test(name)) return 'kitchen';
+    if (/浴室|洗手间|洗手間|bathroom/iu.test(name)) return 'bathroom';
+    if (/琴房|练习|練習|music|studio/iu.test(name)) return 'music';
+    if (/书房|書房|study|library|office/iu.test(name)) return 'study';
+    if (/客厅|客廳|会客|會客|living|lounge/iu.test(name)) return 'living';
+    if (/卧室|臥室|寝|寢|bedroom/iu.test(name)) return 'bedroom';
+    return 'interior';
+}
+function roomArchitectureSvg(space = {}, world = 'neutral', night = false) {
+    const kind = roomArchitectureKind(space);
+    const outdoor = ['balcony', 'garden'].includes(kind);
+    const floor = outdoor ? '#c5cfbf' : kind === 'bathroom' ? '#d7e5e5' : kind === 'kitchen' ? '#d9d5c5' : 'var(--rmt-interior-floor)';
+    const shell = outdoor
+        ? '<path d="M0 0h900v550H0z" fill="#cbdde6"/><path d="M0 185q115-82 229 0t225 0t225 0t221 0v201H0z" fill="#aabdaa"/><path d="M0 234q140-63 290 0t310 0t300 0v152H0z" fill="#8fa994"/><circle cx="717" cy="67" r="26" fill="#faf2d7"/>'
+        : '<path d="M0 0h900v396l-145-95H145L0 396Z" fill="var(--rmt-interior-wall)"/><path d="M145 0h610v301H145Z" fill="var(--rmt-interior-backwall)"/>';
+    const litShell = night && outdoor ? shell.replace('#cbdde6', '#273848').replace('#aabdaa', '#3e5a56').replace('#8fa994', '#344b48') : shell;
+    const ground = `<path d="m0 396 145-95h610l145 95v154H0Z" fill="${floor}"/><path d="M102 330h696M37 375h825M0 428h900M0 488h900M315 301 188 550m284-249-16 249m169-249 127 249" fill="none" stroke="var(--rmt-interior-line)" stroke-opacity=".16" stroke-width="3"/>`;
+    const railing = '<g stroke="#edf1e9" fill="none"><path d="M0 246h900M0 318h900" stroke-width="13"/><path d="M40 247v71m82-71v71m82-71v71m82-71v71m82-71v71m82-71v71m82-71v71m82-71v71m82-71v71m82-71v71m82-71v71" stroke-width="7"/></g>';
+    const window = '<rect x="334" y="36" width="220" height="146" rx="4" fill="var(--rmt-interior-glass)" stroke="var(--rmt-interior-wood)" stroke-width="8"/><path d="M444 36v146M334 110h220" stroke="var(--rmt-interior-paper)" stroke-width="5"/>';
+    const wallDetails = kind === 'balcony' ? railing
+        : kind === 'garden' ? '<path d="M48 316V100m0 55q-72-68-29-110q63 4 37 105m3 0q87-91 98-32q-27 51-98 48" fill="#759579" stroke="#6c8269" stroke-width="12"/>'
+        : kind === 'music' ? '<g fill="var(--rmt-interior-wood)" opacity=".65"><path d="M161 24h12v202h-12zm26 0h12v202h-12zm26 0h12v202h-12zm465 0h12v202h-12zm26 0h12v202h-12zm26 0h12v202h-12z"/></g>'+window
+        : kind === 'study' ? window+'<path d="M170 51h112v129H170zM603 51h112v129H603z" fill="var(--rmt-interior-wood)"/><path d="M180 67h90m-90 40h90m-90 40h90m343-80h90m-90 40h90m-90 40h90" stroke="var(--rmt-interior-paper)" stroke-width="15"/>'
+        : kind === 'kitchen' ? '<path d="M163 24h569v94H163zM163 203h569v98H163z" fill="#becaba" stroke="#8c9989" stroke-width="4"/><path d="M163 194h569" stroke="#f4f1e5" stroke-width="19"/><path d="M302 24v94m143-94v94m143-94v94M302 210v91m143-91v91m143-91v91" stroke="#8c9989" stroke-width="3"/>'
+        : kind === 'bathroom' ? '<path d="M145 70h610m-610 70h610m-610 70h610M225 0v301m90-301v301m90-301v301m90-301v301m90-301v301m90-301v301" stroke="#f2f7f5" stroke-width="4"/><ellipse cx="452" cy="126" rx="78" ry="99" fill="#c1dce2" stroke="#f4f6ef" stroke-width="9"/>'
+        : kind === 'living' ? window+'<path d="M285 24h40v177h-40zm281 0h40v177h-40z" fill="var(--rmt-interior-fabric)" opacity=".65"/><ellipse cx="455" cy="411" rx="263" ry="72" fill="var(--rmt-interior-fabric)" opacity=".32"/>'
+        : kind === 'bedroom' ? window+'<path d="M299 27q30 67 9 166m260-166q-27 76-6 166" fill="none" stroke="var(--rmt-interior-fabric)" stroke-width="31" opacity=".6"/>' : window;
+    const trim = !outdoor && world === 'historical' ? '<path d="M145 12h610M156 0v292m586-292v292" stroke="var(--rmt-interior-wood)" stroke-width="12"/>' : !outdoor && world === 'scifi' ? '<path d="M150 26h600m-600 261h600" stroke="var(--rmt-interior-glass)" stroke-width="5"/>' : '';
+    return `<g data-rmt-architecture="${kind}">${litShell}${ground}${wallDetails}${trim}</g>`;
+}
+
 __m_ui_roomInterior_js.roomFigureSvg = roomFigureSvg;
 __m_ui_roomInterior_js.roomInteriorHtml = roomInteriorHtml;
+__m_ui_roomInterior_js.roomArchitectureKind = roomArchitectureKind;
+__m_ui_roomInterior_js.roomArchitectureSvg = roomArchitectureSvg;
 }
 
 function __init_modes_roomProfile_js() {
@@ -49254,7 +49582,7 @@ function renderRoom() {
     const petNodes = selectedPets.map(roomPetNodeHtml).join('');
     const petNotes = selectedPets.map(roomPetSummaryHtml).join('');
     const objectLayout = roomObjectLayout(selectedSpace);
-    const hotspots = room_interior.roomInteriorHtml(objectLayout, { figure: figureProfile, personIsHere, charName, selectedId: selected?.id, world: visualProfile.worldStyle });
+    const hotspots = room_interior.roomInteriorHtml(objectLayout, { space: selectedSpace, night: now.getHours() < 6 || now.getHours() >= 18, figure: figureProfile, personIsHere, charName, selectedId: selected?.id, world: visualProfile.worldStyle });
     const objectRail = objectLayout.map(entry => roomObjectLayoutButtonHtml(entry, 'rail', selected?.id, focusId)).join('');
     const map = session.spaces.map(space => {
         const typeLabel = core_text.normalizeText(space.spaceType, 100);
@@ -49443,7 +49771,7 @@ function renderRoomParticipants(session = runtimeState.activeSession) {
       <details class="rmt-room-find-person"><summary>找人 · ${slots.length} 人</summary><div class="rmt-room-participants" aria-label="查找人物所在空间">${people}</div></details><nav class="rmt-room-map" aria-label="切换空间">${locations}</nav>
       <div class="rmt-room-location"><b>${e(session.homeName)}</b><span data-rmt-room-clock>${e(roomDaypartState(now).label)} · ${e(roomClockText(now))}</span>${readOnly ? '' : '<button type="button" class="rmt-btn" data-rmt-action="room-refresh-figure">更新人物外形 · 保留房间内容</button><button type="button" class="rmt-btn" data-rmt-action="room-life-refresh">更新今日生活</button>'}</div>
       <div class="rmt-room-flow"><section class="rmt-room-stage"><div class="rmt-room-stage-head"><b>${e(selectedSpace.label)}</b><small>${e(present.length ? `在场：${present.map(slot => slot.name).join("、")}` : "此刻没有已记录的在场者")}</small></div><div class="rmt-room-scene rmt-room-layout-scene" data-rmt-room-beat="${e(current.id)}">
-        ${room_interior.roomInteriorHtml(layout, { selectedId: selected?.id, world: visual.worldStyle, participants: present.map(slot => ({ id: slot.participantId, name: slot.name, figure: room_figure_local.localRoomFigure(slot.visualProfile?.figure || {}, { explicitFields: slot.visualProfile?.explicitFields, ...room_figure_local.roomFigureSources(core_context.getContext(), slot.name, () => {
+        ${room_interior.roomInteriorHtml(layout, { space: selectedSpace, night: now.getHours() < 6 || now.getHours() >= 18, selectedId: selected?.id, world: visual.worldStyle, participants: present.map(slot => ({ id: slot.participantId, name: slot.name, figure: room_figure_local.localRoomFigure(slot.visualProfile?.figure || {}, { explicitFields: slot.visualProfile?.explicitFields, ...room_figure_local.roomFigureSources(core_context.getContext(), slot.name, () => {
             if (runtimeState.activeMode === core_constants.MODE.ROOM && runtimeState.activeSession === session) renderRoom();
         }), worldStyle: visual.worldStyle }) })) })}
         ${(session.pets || []).filter(pet => pet.spaceId === selectedSpace.id).map(roomPetNodeHtml).join('')}</div>
@@ -49676,10 +50004,17 @@ function journalSourceRoute(entry, session) {
 function sourceLabel(key) { return routes.WORKSPACE_ROUTES[key]?.title || constants.MODE_LABEL[key] || (key === 'chat' ? '聊天末条回复' : key); }
 const style = `<style>
 .rmt-journal{padding:18px;max-width:900px;margin:auto;min-width:0;overflow-wrap:anywhere}.rmt-journal *{box-sizing:border-box;min-width:0}.rmt-journal h2,.rmt-journal h3{margin:0 0 12px}.rmt-journal-controls,.rmt-journal-actions{display:flex;flex-wrap:wrap;gap:10px;margin:12px 0}.rmt-journal label{display:grid;gap:6px;flex:1}.rmt-journal input:not([type=checkbox]),.rmt-journal select,.rmt-journal textarea{width:100%;max-width:100%;font:inherit;padding:10px;border:1px solid var(--rmt-theme-line,#ddc9d3);border-radius:12px;background:var(--rmt-theme-bg,#fff);color:inherit}.rmt-journal button{min-height:42px;white-space:normal}.rmt-journal [hidden]{display:none!important}.rmt-journal-choices{display:grid;gap:8px;max-height:40vh;overflow:auto;padding:8px 0}.rmt-journal-choices label{display:flex;align-items:start;padding:10px;border:1px solid var(--rmt-theme-line,#ddc9d3);border-radius:12px}.rmt-journal-choices input{flex-shrink:0;margin-top:5px}.rmt-journal-choices small{display:block;opacity:.75}.rmt-journal-page{padding:24px;margin:18px 0;border:1px solid #e1d7c7;border-radius:10px 22px 22px 10px;background:#fffdf3;color:#554653;box-shadow:inset 7px 0 #efe4d5,0 5px 18px #523d4810}.rmt-journal-page:nth-child(3n+2){background:#f4f9f5}.rmt-journal-page:nth-child(3n+3){background:#fff4f6}.rmt-journal-page>header{border-bottom:1px dashed #d5c8c7;margin-bottom:18px;padding-bottom:12px}.rmt-journal-saved{margin:0}.rmt-journal-page-tools{display:flex;flex-wrap:wrap;gap:8px;margin:-8px 0 18px}.rmt-journal-entry{margin-top:22px}.rmt-journal-prose{white-space:pre-wrap;line-height:1.85;margin:10px 0}.rmt-journal figure{margin:16px 0}.rmt-journal img,.rmt-journal svg{display:block;max-width:100%;height:auto;margin:auto}.rmt-journal figcaption,.rmt-journal small{font-size:13px}.rmt-journal-empty{padding:28px 8px;text-align:center;opacity:.7}.rmt-journal-compose{padding:14px;border:1px solid var(--rmt-theme-line,#ddc9d3);border-radius:18px}.rmt-journal-status{white-space:pre-wrap;line-height:1.6}.rmt-journal-status:empty{display:none}@media(max-width:420px){.rmt-journal{padding:12px}.rmt-journal-page{padding:20px 16px 20px 22px}.rmt-journal-controls{display:grid}.rmt-journal-actions button{flex:1}}
+.rmt-journal-palette{display:flex;flex-wrap:wrap;align-items:end;gap:12px;border:1px solid #cdded5;border-radius:14px;margin:12px 0;padding:12px}.rmt-journal-palette label{flex:0 1 auto}.rmt-journal-palette input[type=color]{width:56px;height:40px;padding:3px;cursor:pointer}.rmt-journal-palette legend{font-size:13px}
 </style>`;
 
 function journalPageHtml(page, index = 0) {
-    return `<article class="rmt-journal-page"><header><small>${esc(new Date(page.createdAt).toLocaleDateString())}</small><h3>${esc(page.title)}</h3></header>${page.entries.map((entry, i) => `<section class="rmt-journal-entry"><small>${esc(constants.MODE_LABEL[entry.source?.mode] || (entry.source?.mode==='chat'?'聊天末条回复':'已存内容'))}</small><h4>${esc(entry.title)}</h4>${entry.blocks.map((block, j) => block.type === 'text' ? `<p class="rmt-journal-prose">${block.speaker ? `<b>${esc(block.speaker)}</b>\n` : ''}${esc(block.text)}</p>` : block.type === 'image' ? `<figure><img src="${esc(block.url)}" alt="${esc(block.caption || entry.title)}" loading="lazy"><figcaption>${esc(block.caption || '')}</figcaption></figure>` : block.type === 'letterIllustration' ? `<figure>${letterArt.renderLetterIllustration(block.illustration, {idPrefix:`journal-${page.id}-${index}-${i}-${j}`,label:entry.title})}</figure>` : '').join('')}</section>`).join('')}</article>`;
+    const colors=journal.journalPalette(page.palette,index);
+    return `<article class="rmt-journal-page" style="background:${colors.paper};color:${colors.ink};border-color:${colors.accent};box-shadow:inset 7px 0 ${colors.accent},0 5px 18px #523d4810"><header><small>${esc(new Date(page.createdAt).toLocaleDateString())}</small><h3>${esc(page.title)}</h3></header>${page.entries.map((entry, i) => `<section class="rmt-journal-entry"><small>${esc(constants.MODE_LABEL[entry.source?.mode] || (entry.source?.mode==='chat'?'聊天末条回复':'已存内容'))}</small><h4>${esc(entry.title)}</h4>${entry.blocks.map((block, j) => block.type === 'text' ? `<p class="rmt-journal-prose">${block.speaker ? `<b>${esc(block.speaker)}</b>\n` : ''}${esc(block.text)}</p>` : block.type === 'image' ? `<figure><img src="${esc(block.url)}" alt="${esc(block.caption || entry.title)}" loading="lazy"><figcaption>${esc(block.caption || '')}</figcaption></figure>` : block.type === 'letterIllustration' ? `<figure>${letterArt.renderLetterIllustration(block.illustration, {idPrefix:`journal-${page.id}-${index}-${i}-${j}`,label:entry.title})}</figure>` : '').join('')}</section>`).join('')}</article>`;
+}
+
+function journalPaletteControls(value, pageId = '') {
+    const colors=journal.journalPalette(value);
+    return `<fieldset class="rmt-journal-palette" data-journal-palette="${esc(pageId)}"><legend>信纸配色</legend><label>调色盘<select data-journal-preset>${journal.JOURNAL_PALETTES.map(p=>`<option value="${p.id}" ${p.id===colors.id?'selected':''}>${p.label}</option>`).join('')}</select></label>${[['paper','纸色'],['ink','文字'],['accent','装饰']].map(([key,label])=>`<label>${label}<input type="color" data-journal-color="${key}" value="${colors[key]}" aria-label="${label}"></label>`).join('')}${pageId?'<button type="button" class="rmt-btn" data-journal-color-save>保存配色</button>':''}</fieldset>`;
 }
 
 function downloadJournal(pages) {
@@ -49699,7 +50034,7 @@ async function openHandJournal() {
     routes.workspace.route='journal'; routes.workspace.tab='content'; routes.workspace.empty=null;
     overlay.topTitle('手帐'); overlay.setBackVisible(true,'内容'); overlay.setRegenerateVisible(false); overlay.setManageVisible(false);
     const body=overlay.bodyEl();
-    body.innerHTML=`${style}<main class="rmt-journal"><h2>手帐</h2><p>把想留下的文字和画面，收在属于你们的册子里。</p><p class="rmt-journal-status" role="status" aria-live="polite">正在读取手帐…</p><section class="rmt-journal-compose" hidden><h3>添一页</h3><div class="rmt-journal-controls"><label>内容来源<select data-journal-source aria-label="手帐内容来源"></select></label><label>这一页的标题<input data-journal-title placeholder="给这一页起个名字"></label></div><div class="rmt-journal-actions"><button class="rmt-btn" data-journal-whole>整页导入 · 预览</button><button class="rmt-btn" data-journal-pick>从已有内容选择制作</button></div><div class="rmt-journal-choices" hidden></div><button class="rmt-btn" data-journal-preview hidden>预览所选内容</button><div class="rmt-journal-actions"><button class="rmt-btn" data-journal-save hidden>保存这一页</button><button class="rmt-btn" data-journal-cancel hidden>取消预览</button></div><div data-journal-draft hidden></div></section><div class="rmt-journal-actions"><button class="rmt-btn" data-journal-export disabled>导出手帐备份</button><button class="rmt-btn" data-journal-import disabled>导入手帐备份</button><input type="file" accept=".json,application/json" data-journal-file hidden></div><small>手帐单独保存在本设备浏览器中，可导出备份迁移。收录已有内容不消耗生成次数。</small><div data-journal-pages></div></main>`;
+    body.innerHTML=`${style}<main class="rmt-journal"><h2>手帐</h2><p>把想留下的文字和画面，收在属于你们的册子里。</p><p class="rmt-journal-status" role="status" aria-live="polite">正在读取手帐…</p><section class="rmt-journal-compose" hidden><h3>添一页</h3><div class="rmt-journal-controls"><label>内容来源<select data-journal-source aria-label="手帐内容来源"></select></label><label>这一页的标题<input data-journal-title placeholder="给这一页起个名字"></label></div>${journalPaletteControls()}<div class="rmt-journal-actions"><button class="rmt-btn" data-journal-whole>整页导入 · 预览</button><button class="rmt-btn" data-journal-pick>从已有内容选择制作</button></div><div class="rmt-journal-choices" hidden></div><button class="rmt-btn" data-journal-preview hidden>预览所选内容</button><div class="rmt-journal-actions"><button class="rmt-btn" data-journal-save hidden>保存这一页</button><button class="rmt-btn" data-journal-cancel hidden>取消预览</button></div><div data-journal-draft hidden></div></section><div class="rmt-journal-actions"><button class="rmt-btn" data-journal-export disabled>导出手帐备份</button><button class="rmt-btn" data-journal-import disabled>导入手帐备份</button><input type="file" accept=".json,application/json" data-journal-file hidden></div><small>手帐单独保存在本设备浏览器中，可导出备份迁移。收录已有内容不消耗生成次数。</small><div data-journal-pages></div></main>`;
     const root=body.querySelector('.rmt-journal'), epoch=routes.workspace.epoch;
     const current=()=>{try{return root.isConnected && !host.hidden && state.activeMode==='journal' && state.activeArchiveSnapshot===snapshot && routes.workspace.epoch===epoch && context.chatScopeKey(context.currentCharacterGuard())===liveScope;}catch{return false;}};
     const store=journal.createJournalStore({currentScope:()=>current()?scope:''});
@@ -49715,13 +50050,21 @@ async function openHandJournal() {
         } else { for (const [control, disabled] of disabledBeforeSave) control.disabled = disabled; disabledBeforeSave.clear(); }
     };
     const report=message=>{if(current())status.textContent=message;};
-    const WHOLE_PAGE_LIMIT = 24;
+
     const wholeButton = () => root.querySelector('[data-journal-whole]');
     const refreshWholeLabel = () => { const count = selectedEntries().length; if (wholeButton()) wholeButton().textContent = `整页导入 · 预览（${count} 条）`; };
-    const drawPages=()=>{root.querySelector('[data-journal-pages]').innerHTML=pages.map((page, index) => `<div class="rmt-journal-saved">${journalPageHtml(page, index)}<div class="rmt-journal-page-tools"><button type="button" class="rmt-btn" data-journal-rename="${esc(page.id)}">改标题</button><button type="button" class="rmt-btn" data-journal-delete="${esc(page.id)}">删除这一页</button></div></div>`).join('')||'<p class="rmt-journal-empty">手帐还是空白的，从上面收下第一段回忆吧。</p>';};
+    const drawPages=()=>{root.querySelector('[data-journal-pages]').innerHTML=pages.map((page, index) => `<div class="rmt-journal-saved">${journalPageHtml(page, index)}<details><summary>调整这一页配色</summary>${journalPaletteControls(journal.journalPalette(page.palette,index),page.id)}</details><div class="rmt-journal-page-tools"><button type="button" class="rmt-btn" data-journal-rename="${esc(page.id)}">改标题</button><button type="button" class="rmt-btn" data-journal-delete="${esc(page.id)}">删除这一页</button></div></div>`).join('')||'<p class="rmt-journal-empty">手帐还是空白的，从上面收下第一段回忆吧。</p>';};
     const clearDraft=()=>{pending=null;draft.hidden=true;draft.replaceChildren();for(const key of ['save','cancel'])root.querySelector(`[data-journal-${key}]`).hidden=true;};
     const selectedEntries=()=>entries.filter(entry=>source.value==='*'||(sourceRoutes.get(entry.id)||entry.source.mode)===source.value);
-    const preview=items=>{if(!items.length)return report('先选择想收录的内容。');pending=journal.createJournalPage({title:title.value||`${source.selectedOptions[0]?.textContent || '我们的回忆'}`,entries:items});draft.innerHTML=journalPageHtml(pending);draft.hidden=false;root.querySelector('[data-journal-save]').hidden=false;root.querySelector('[data-journal-cancel]').hidden=false;report(`预览已准备好，这一页有 ${items.length} 条。保存后会新增，不会覆盖旧页。`);};
+    const readPalette=panel=>({id:panel.querySelector('[data-journal-preset]').value,...Object.fromEntries([...panel.querySelectorAll('[data-journal-color]')].map(input=>[input.dataset.journalColor,input.value]))});
+    root.addEventListener('input',event=>{
+        const panel=event.target.closest('[data-journal-palette]');if(!panel||busy)return;
+        if(event.target.hasAttribute('data-journal-preset')){const preset=journal.JOURNAL_PALETTES.find(p=>p.id===event.target.value);for(const input of panel.querySelectorAll('[data-journal-color]'))input.value=preset[input.dataset.journalColor];}
+        const colors=readPalette(panel),id=panel.dataset.journalPalette;
+        if(!id&&pending){pending=journal.createJournalPage({...pending,palette:colors});draft.innerHTML=journalPageHtml(pending);}
+        if(id){const paper=panel.closest('.rmt-journal-saved')?.querySelector('.rmt-journal-page');if(paper){paper.style.background=colors.paper;paper.style.color=colors.ink;paper.style.borderColor=colors.accent;paper.style.boxShadow=`inset 7px 0 ${colors.accent},0 5px 18px #523d4810`;}}
+    });
+    const preview=items=>{if(!items.length)return report('先选择想收录的内容。');pending=journal.createJournalPage({title:title.value||`${source.selectedOptions[0]?.textContent || '我们的回忆'}`,entries:items,palette:readPalette(root.querySelector('[data-journal-palette=""]'))});draft.innerHTML=journalPageHtml(pending);draft.hidden=false;root.querySelector('[data-journal-save]').hidden=false;root.querySelector('[data-journal-cancel]').hidden=false;report(`预览已准备好，这一页有 ${items.length} 条。保存后会新增，不会覆盖旧页。`);};
     const openPicker=()=>{clearDraft();choices.innerHTML=selectedEntries().map(entry=>`<label><input type="checkbox" value="${esc(entry.id)}"><span>${esc(entry.title)}<small>${esc(constants.MODE_LABEL[entry.source.mode] || (entry.source.mode==='chat'?'聊天末条回复':'已存内容'))}</small></span></label>`).join('');choices.hidden=false;root.querySelector('[data-journal-preview]').hidden=false;};
     workspace.syncWorkspaceChrome();
     try {
@@ -49754,7 +50097,8 @@ async function openHandJournal() {
     root.addEventListener('click',async event=>{
         const button=event.target.closest('button');if(!button||busy||!current())return;
         try {
-            if(button.hasAttribute('data-journal-whole')){const items=selectedEntries();if(items.length>WHOLE_PAGE_LIMIT){report(`这一来源有 ${items.length} 条，一次收进一页太多。请只勾选想留下的。`);openPicker();return;}preview(items);}
+            if(button.hasAttribute('data-journal-whole')){const items=selectedEntries();preview(items);}
+            else if(button.hasAttribute('data-journal-color-save')){const panel=button.closest('[data-journal-palette]');setBusy(true);await store.palette(scope,panel.dataset.journalPalette,readPalette(panel));if(!current())return;pages=await store.read(scope);if(!current())return;drawPages();report('已保存这一页的配色。');}
             else if(button.hasAttribute('data-journal-pick'))openPicker();
             else if(button.hasAttribute('data-journal-rename')){const id=button.getAttribute('data-journal-rename');const page=pages.find(item=>item.id===id);if(!page)return;const nextTitle=globalThis.prompt('给这一页换个标题',page.title);if(nextTitle==null)return;setBusy(true);await store.rename(scope,id,nextTitle);if(!current())return;pages=await store.read(scope);if(!current())return;drawPages();report('已改这一页的标题。');}
             else if(button.hasAttribute('data-journal-delete')){const id=button.getAttribute('data-journal-delete');if(!pages.some(item=>item.id===id))return;if(!overlay.confirmExplicitAction('删除这一页手帐？','只删除本机手帐里的这一页，不改原来的档案和内容。',{destructive:true}))return;setBusy(true);await store.remove(scope,id);if(!current())return;pages=await store.read(scope);if(!current())return;drawPages();report('已删除这一页。');}
@@ -49777,6 +50121,7 @@ async function openHandJournal() {
 __m_ui_handJournalView_js.openHandJournal = openHandJournal;
 __m_ui_handJournalView_js.journalSourceRoute = journalSourceRoute;
 __m_ui_handJournalView_js.journalPageHtml = journalPageHtml;
+__m_ui_handJournalView_js.journalPaletteControls = journalPaletteControls;
 }
 
 function __init_archive_backupStore_js() {
@@ -51687,7 +52032,7 @@ function draftCards() {
     let drafts = [];
     try { drafts = core_cache.listGenerationDrafts(); }
     catch { drafts = []; }
-    return drafts.filter(row => row.completed || row.truncated || row.failed || row.failureCode || row.oversized).slice(0, 12).map(row => {
+    return drafts.filter(row => row.completed || row.truncated || row.failed || row.failureCode || row.oversized).map(row => {
         const oversized = row.oversized === true;
         const classified = generation_recovery.generationFailureReason(row);
         const reason = oversized
@@ -51697,6 +52042,8 @@ function draftCards() {
                 : (row.canContinue ? '正文写到一半，可以继续补完' : '已保存成功部分'));
         const attrs = `data-rmt-recovery-draft-id="${core_text.esc(row.draftId)}" data-rmt-recovery-page-id="${core_text.esc(row.pageId || '')}"`;
         const retry = oversized ? '' : `<button type="button" class="rmt-btn" data-rmt-recovery-mode="${core_text.esc(row.mode)}" ${attrs}>${row.canContinue ? '继续生成' : '重试未完成部分'}</button>`;
+        const fresh = !runtimeState.activeArchiveSnapshot && ['mode', 'merged'].includes(row.journal?.operation?.kind || 'mode')
+            ? `<button type="button" class="rmt-btn" data-rmt-action="merged-new" data-rmt-mode="${core_text.esc(row.mode)}" data-rmt-route="${core_text.esc(pageRoute(row.mode, row.pageId, row.mode) || row.mode)}">开始新任务</button>` : '';
         return {
             state: oversized || row.failed || row.failureCode ? 'failed' : 'retry',
             label: taskLabel(row.mode, row.pageId, row.mode),
@@ -51705,7 +52052,7 @@ function draftCards() {
             draftId: row.draftId,
             detail: `已保留 ${Number(row.completed) || 0} 个成功分段 · ${String(reason || '').replace(/[。\s]+$/, '')}`,
             at: Number(row.updatedAt) || Number(row.createdAt) || 0,
-            actions: `${retry}<button type="button" class="rmt-btn" data-rmt-recovery-export="${core_text.esc(row.mode)}" ${attrs}>导出未提交草稿</button><button type="button" class="rmt-btn" data-rmt-recovery-discard="${core_text.esc(row.mode)}" ${attrs}>放弃这份草稿</button>`,
+            actions: `${retry}${fresh}<button type="button" class="rmt-btn" data-rmt-recovery-export="${core_text.esc(row.mode)}" ${attrs}>导出未提交草稿</button><button type="button" class="rmt-btn" data-rmt-recovery-discard="${core_text.esc(row.mode)}" ${attrs}>放弃这份草稿</button>`,
         };
     });
 }
@@ -51731,7 +52078,7 @@ function mergedPendingCards() {
         const attrs = `data-rmt-pending-id="${core_text.esc(row.id)}" data-rmt-route="${core_text.esc(row.route)}"`;
         return { state, label: row.label, mode: row.mode, pageId: row.route, draftId: row.origin?.generationRecoveryDraftId || row.id, at: Number(row.at) || 0,
             detail: state === 'unsaved' ? '正文已生成，仅重新保存；不会再调用模型。' : '原批次仍保留，只补未完成的这一页。',
-            actions: `<button type="button" class="rmt-btn" data-rmt-action="${state === 'unsaved' ? 'merged-resave' : 'merged-repair'}" ${attrs} ${row.origin ? '' : 'disabled'}>${state === 'unsaved' ? '重新保存' : '只补这一页'}</button><button type="button" class="rmt-btn" data-rmt-action="merged-export" ${attrs}>导出成果</button>` };
+            actions: `<button type="button" class="rmt-btn" data-rmt-action="${state === 'unsaved' ? 'merged-resave' : 'merged-repair'}" ${attrs} ${row.origin ? '' : 'disabled'}>${state === 'unsaved' ? '重新保存' : '只补这一页'}</button><button type="button" class="rmt-btn" data-rmt-action="merged-export" ${attrs}>导出成果</button><button type="button" class="rmt-btn" data-rmt-action="merged-new" ${attrs}>开始新任务</button><button type="button" class="rmt-btn" data-rmt-action="merged-discard" ${attrs}>放弃这份成果</button>` };
     });
     let legacy = [];
     try { legacy = statusView.currentUnattributedPendingRows(); } catch { /* The guarded export action remains available through read failure. */ }
@@ -51808,6 +52155,10 @@ function collectTaskCards() {
     return cards.sort((left, right) => (CARD_RANK[left.state] ?? 9) - (CARD_RANK[right.state] ?? 9) || right.at - left.at);
 }
 
+function liveTaskStripHtml(active, waiting) {
+    return !active && !waiting ? '' : `<button type="button" class="rmt-live-chip ${active ? 'rmt-live-run' : ''}" data-rmt-action="tasks" aria-label="打开任务中心"><b>任务</b><em>${active ? `${active} 项进行中` : ''}${active && waiting ? ' · ' : ''}${waiting ? `${waiting} 项待处理` : ''}</em></button>`;
+}
+
 function paintLiveStrip() {
     const host = document.querySelector(`#${core_constants.OVERLAY_ID} [data-rmt-live-tasks]`);
     if (!host) return;
@@ -51838,8 +52189,12 @@ function paintLiveStrip() {
         if (runningLabels.has(card.label)) continue;
         chips.push(`<button type="button" class="rmt-live-chip" data-rmt-action="tasks"><b>${esc(card.label)}</b><em>${esc(CARD_LABEL[card.state])}</em></button>`);
     }
-    host.hidden = chips.length === 0;
-    host.innerHTML = chips.join('');
+    // Keep detailed rows in the task panel; one summary never pushes reading controls away.
+    const active = running.length + (runtimeState.busy && !running.some(row => row.id === 'archive-import' || row.kind === 'archive') ? 1 : 0);
+    const waiting = Math.max(0, chips.length - active);
+    host.hidden = !active && !waiting;
+    host.innerHTML = liveTaskStripHtml(active, waiting);
+
 }
 
 function hideMainRecoveryCards() {
@@ -52050,6 +52405,21 @@ function handleTaskCenterAction(action, actionEl) {
         globalThis.toastr?.info?.(removed || queueRemoved ? '已清空完成的任务。未完成草稿还在。' : '没有可清空的已完成任务。', '心迹回廊');
         return;
     }
+    if (action === 'merged-discard' || action === 'merged-new') {
+        const route = actionEl?.dataset?.rmtRoute || '', id = actionEl?.dataset?.rmtPendingId || '';
+        const mode = ui_workspaceState.WORKSPACE_ROUTES[route]?.mode || actionEl?.dataset?.rmtMode;
+        if (!Object.values(core_constants.MODE).includes(mode)) return;
+        const fresh = action === 'merged-new';
+        if (!ui_overlay.confirmExplicitAction(fresh ? '开始一份新任务？' : '放弃这份未保存成果？', fresh
+            ? '旧成果继续保留，可稍后保存或导出。新任务会使用文本生成额度。'
+            : '仅移除这一份未提交成果及对应草稿，已保存页面、图片和其他任务保留。', { destructive: !fresh })) return;
+        const operation = fresh ? generation_client.generateMode(mode, { newTask: true, background: true, workspaceRoute: route })
+            : generation_merged.discardPending(route, id);
+        void Promise.resolve(operation).catch(error => {
+            if (error?.name !== 'AbortError') globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊');
+        }).finally(refreshTaskCenterView);
+        return;
+    }
     if (action === 'merged-discard-legacy') { discardLegacyPending(); return; }
     if (action === 'merged-export' || action === 'merged-export-legacy') { exportMergedResult(action === 'merged-export-legacy' ? '' : actionEl?.dataset?.rmtPendingId || ''); return; }
     if (action === 'generate-together') {
@@ -52174,6 +52544,7 @@ __m_ui_taskCenter_js.noteRetryableGeneration = noteRetryableGeneration;
 __m_ui_taskCenter_js.enqueueSelectedModes = enqueueSelectedModes;
 __m_ui_taskCenter_js.ensureTaskCenterChrome = ensureTaskCenterChrome;
 __m_ui_taskCenter_js.hideTaskCenter = hideTaskCenter;
+__m_ui_taskCenter_js.liveTaskStripHtml = liveTaskStripHtml;
 __m_ui_taskCenter_js.syncLiveTaskStrip = syncLiveTaskStrip;
 __m_ui_taskCenter_js.syncTaskCenterChrome = syncTaskCenterChrome;
 __m_ui_taskCenter_js.handleTaskCenterAction = handleTaskCenterAction;
@@ -52181,11 +52552,13 @@ __m_ui_taskCenter_js.handleTaskCenterAction = handleTaskCenterAction;
 
 function __init_ui_butterflyView_js() {
 // MODULE: ui/butterflyView.js
+const expanded_cg_view = __m_ui_expandedCgView_js;
 const core_constants = __m_core_constants_js;
 const core_context = __m_core_context_js;
 const core_text = __m_core_text_js;
 const ui_overlay = __m_ui_overlay_js;
 const runtimeState = __m_core_state_js.state;
+
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
 
@@ -52217,7 +52590,7 @@ function renderButterfly() {
         : `<section class="rmt-terminal-block rmt-observation-screen">
             <div class="rmt-terminal-section-title">III. OBSERVATION SCREEN // 平行世界观测</div>
             <div class="rmt-record-code">${core_text.esc(selected.code)}</div>
-            <div class="rmt-signal" data-rmt-signal><div class="rmt-signal-noise"></div><div class="rmt-signal-center">[ SIGNAL LOST: IMAGE DATA CORRUPTED ]</div></div>
+            ${expanded_cg_view.expandedCgHtml(session, {kind:'butterfly-node',containerId:selected.id}, !!runtimeState.activeArchiveSnapshot, {placeholder:'<div class="rmt-signal" data-rmt-signal><div class="rmt-signal-noise"></div><div class="rmt-signal-center">[ 等待记录这一刻的画面 ]</div></div>'})}
             <div class="rmt-mono"><b>PARALLEL SUBJECT // 平行世界 ${observerName} 本人发言</b><br>${core_text.esc(selected.monologue || (selected.prosePending ? '正文待补。世界设定已经留下，可以再补这一段。' : ''))}</div>
           </section>
           <section class="rmt-terminal-block rmt-intervention-block"><div class="rmt-terminal-section-title">IV. CURRENT-WORLD RESPONSE // 现世回应</div><div class="rmt-intervention">${core_text.esc(selected.intervention)}</div></section>
@@ -56496,7 +56869,7 @@ function overlayArchiveActions(actionEl, action) {
     if (action === 'travel-dialogue-prev') return ui_travelView.travelDialogueStep(-1);
     if (action === 'travel-dialogue-next') return ui_travelView.travelDialogueStep(1);
     if (action === 'travel-dialogue-replay') return ui_travelView.replayTravelDialogue();
-    if (action === 'tasks' || action === 'task-center-close' || action === 'task-cancel' || action === 'task-cancel-current' || action === 'task-open' || action === 'task-second-step' || action === 'task-queue-remove' || action === 'task-clear-done' || action === 'queue-selected' || action === 'generate-together' || action === 'merged-repair' || action === 'merged-resave') {
+    if (action === 'tasks' || action === 'task-center-close' || action === 'task-cancel' || action === 'task-cancel-current' || action === 'task-open' || action === 'task-second-step' || action === 'task-queue-remove' || action === 'task-clear-done' || action === 'queue-selected' || action === 'generate-together' || action === 'merged-repair' || action === 'merged-resave' || ['merged-discard', 'merged-new', 'merged-export', 'merged-export-legacy', 'merged-discard-legacy'].includes(action)) {
         return ui_taskCenter.handleTaskCenterAction(action, actionEl);
     }
     if (action === 'close') return closeArchiveOverlayFromUser();
@@ -65964,8 +66337,8 @@ function finishGenerationDraftInCache(cache, mode, draftId, discarded = false) {
     if (!draftId) return false;
     retainLegacyGenerationDraft(cache, mode);
     const records = generationDraftRecords(cache), record = records[draftId];
-    if (!record || (record.journal?.identity?.mode || record.mode) !== mode) return false;
-    if (record.status !== 'open') return true;
+    if (!record || (record.journal?.identity?.mode || record.result?.mode || record.mode) !== mode) return false;
+    if (record.status !== 'open' && !(discarded && record.status === 'awaiting-choice')) return true;
     cache[GENERATION_DRAFTS_CACHE_KEY] = { version: 1, records: { ...records,
         [draftId]: { status: discarded ? 'discarded' : 'complete', mode,
             pageId: record.journal.pageId || recoveryPageForVersion(mode, record.journal.operation), closedAt: Date.now() } } };
@@ -68238,7 +68611,6 @@ async function saveGenerationRecovery(context, bank, mode, journal, origin, opti
         }
         const journals = { ...(cache[generation_recovery.GENERATION_RECOVERY_CACHE_KEY] || {}) };
         journals[mode] = { ...frozenJournal, [core_constants.SESSION_MODE_WRITE_FENCE_KEY]: fence };
-        if (JSON.stringify(journals).length > 6000000) throw new Error('Recovery storage capacity reached');
         cache[generation_recovery.GENERATION_RECOVERY_CACHE_KEY] = journals;
     };
     return serializeArchiveCommitOperation(entry, memoryBank, async () => {
@@ -68697,7 +69069,7 @@ function loadSession(mode, options = {}) {
             session = core_heartLanguage.readableHeartSession(session);
             if (!session) return null;
         }
-        if (mode === core_constants.MODE.ACHIEVEMENTS && (!Array.isArray(session.entries) || (!userManaged && session.entries.length < 1))) return null;
+        if (mode === core_constants.MODE.ACHIEVEMENTS && !Array.isArray(session.entries)) return null;
         return options.clone === false ? session : structuredClone(session);
     } catch {
         return null;

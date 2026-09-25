@@ -144,16 +144,23 @@ export function buildCgAppearanceInstructions(evidence, promptFormat = '') {
 // overwritten merely because a different look has since been saved for the chat.
 export function initialCgAppearanceMetadata(item, context) {
     if (item?.cgImage) return normalizeCgPromptMetadata(item.cgImage.promptMetadata);
+    const generated = cg_visual.normalizeGeneratedCgDraft(item?.cgPromptDraft);
     const snapshot = participants.selectedParticipantSnapshot(cache.readParticipantRoster(context));
     if (snapshot) {
         const looks = cast_looks.readParticipantLooks(context);
-        return normalizeCgPromptMetadata({ castSnapshot: snapshot, characters: snapshot.people.map(person => ({
+        return normalizeCgPromptMetadata({ castSnapshot: snapshot,
+            ...(generated && !looks?.characters.some(row => row.tag || row.nl) ? {sceneTags:generated.sceneTags,flatPrompt:generated.flatPrompt} : {}),
+            characters: snapshot.people.map(person => ({
             participantId: person.id, tag: looks?.characters.find(row => row.participantId === person.id)?.tag || '',
             nl: looks?.characters.find(row => row.participantId === person.id)?.nl || '',
         })) });
     }
     const looks = cast_looks.readCastLooks(context);
-    const generated = cg_visual.normalizeGeneratedCgDraft(item?.cgPromptDraft);
+    if (item?.__rmtCgDescriptor?.kind === 'heart-firefly' && looks?.manual !== true) {
+        const char = captureCgAppearanceEvidence(context).characters.find(row => row.role === 'char');
+        const tag = char?.knownTag || cast_looks.lookFromDescription(looks?.char || char?.description);
+        return normalizeCgPromptMetadata({ characters: [{role:'char',name:context?.name2,tag:tag || '',nl:''}] });
+    }
     if (generated) {
         const metadata = normalizeCgPromptMetadata({ ...generated, characters: generated.characters.map(row => ({
             ...row, name: row.role === 'char' ? context?.name2 : context?.name1,

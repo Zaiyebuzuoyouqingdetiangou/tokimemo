@@ -1,3 +1,4 @@
+import * as generation_merged from './mergedGeneration.js';
 import * as recovery_source from '../core/recoverySourcePolicy.js';
 import * as cg_policy from './cgPromptPolicy.js';
 import * as archive_library from '../archive/library.js';
@@ -160,6 +161,15 @@ export async function discardSavedGeneration(mode, options = {}) {
         { ...(options.draftId ? { draftId: options.draftId, intent: 'inspect' } : {}), ...(options.pageId ? { pageId: options.pageId } : {}) });
     if (!retained) throw core_text.safeUserError('这份草稿已不在当前档案，请重新打开任务列表查看。', 'RMT_RECOVERY_NOT_FOUND');
     if (!ui_overlay.confirmExplicitAction('放弃这轮未提交草稿？', '如这项任务还在生成，将先停止它。仅清除此轮分段恢复记录，不删除已保存的模块、正式记忆或图片。未提交的成功分段也会放弃，不能恢复；不会自动重新生成。终端原有的逐 App 草稿另行保留。', { destructive: true })) return;
+    if (!snapshot && retained.operation?.kind === 'merged') {
+        const rows = generation_merged.createPendingStore().readForOrigin(generation_merged.currentPendingScope(context));
+        const pending = rows.find(row => (row.origin?.generationRecoveryDraftId || row.id) === retained.draftId);
+        if (pending) {
+            await generation_merged.discardPending(pending.route, pending.id);
+            ui_overlay.showChooser();
+            return true;
+        }
+    }
     const origin = { ...core_context.captureTaskOrigin(context, bank.archiveRevision), archiveTargetEntryId: opts.archiveTarget?.entryId || '' };
     const owners = core_requestCoordinator.queryParticipantGenerationTasks(context, { stableIdentity: true }).filter(task =>
         task.mode === mode && (task.pageId === retained.pageId || task.pageIds.includes(retained.pageId))

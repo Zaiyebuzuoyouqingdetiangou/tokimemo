@@ -1,3 +1,4 @@
+import * as cg_visual from '../core/cgVisualRules.js';
 // One bounded text request creates one new story or one continuation chapter.
 import * as contract from '../core/bedtimeContract.js';
 import * as contextApi from '../core/context.js';
@@ -67,7 +68,7 @@ function normalizedChapter(raw, plan) {
     const body = contract.bedtimeText(chapter.text, L.chapterText, true);
     if (/^(?:待续内容|此处省略|正文待补|同上|to be written|content here)[。.!！\s]*$/iu.test(body.trim()))
         throw contract.bedtimeError('INCOMPLETE', '这一章尚未完整返回；已收到的草稿可继续恢复。');
-    return { id: plan.chapterId, title, text: body, createdAt: plan.createdAt };
+    return { id: plan.chapterId, title, text: body, createdAt: plan.createdAt, ...cg_visual.generatedCgSceneFields(chapter) };
 }
 
 export function normalizeGeneratedBedtime(raw, planValue, memory, previous = null, ownerKey = '') {

@@ -1,3 +1,5 @@
+import * as cg_visual from '../core/cgVisualRules.js';
+import * as cg_targets from '../core/cgTargets.js';
 import * as storyParticipants from '../core/participants.js';
 import * as core_butterflyContract from '../core/butterflyContract.js';
 import * as core_cache from '../core/cache.js';
@@ -193,6 +195,7 @@ export function normalizeButterflyBranch(node, index, memoryBank, context = {}, 
         monologue: narrative.monologue,
         intervention: narrative.intervention,
         systemNote: narrative.systemNote,
+        ...cg_visual.generatedCgSceneFields(node), ...cg_targets.normalizeLocalCgSlots(node),
     };
 }
 
@@ -257,6 +260,7 @@ function normalizedMainNode(node, memoryBank, context) {
         id: 'MAIN', label: narrative.label, code: '> SIMULATION RECORD #MAIN', locked: true, trueEnding: false,
         sourceMemoryIds: reference.sourceMemoryIds, sourceMemoryAnchor: reference.sourceMemoryAnchor,
         monologue: narrative.monologue, intervention: narrative.intervention, systemNote: narrative.systemNote,
+        ...cg_visual.generatedCgSceneFields(node), ...cg_targets.normalizeLocalCgSlots(node),
     };
 }
 
@@ -404,7 +408,7 @@ export async function fillButterflyProse(context, memoryBank, origin, taskKey, s
                 if (!node.prosePending) return node;
                 const patch = repairs.get(node.id);
                 if (!patch) return node;
-                const draft = { ...node, monologue: patch.monologue, intervention: patch.intervention, systemNote: patch.systemNote };
+                const draft = { ...node, monologue: patch.monologue, intervention: patch.intervention, systemNote: patch.systemNote, ...cg_visual.generatedCgSceneFields(patch) };
                 delete draft.prosePending;
                 const normalized = node.id === 'MAIN'
                     ? normalizedMainNode(draft, memoryBank, context)

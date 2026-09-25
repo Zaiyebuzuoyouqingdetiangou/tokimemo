@@ -112,6 +112,9 @@ function includesToken(text, tokens) {
     return tokens.some(token => folded.includes(token.toLocaleLowerCase()));
 }
 function factSupported(fact) {
+    if (fact.kind === 'hairLength' && /\b(?:short|medium|long)(?:[- ]+[a-z]+){0,3}[- ]+hair\b/iu.test(fact.evidence)) {
+        return new RegExp('\\b' + fact.value + '(?:[- ]+[a-z]+){0,3}[- ]+hair\\b', 'iu').test(fact.evidence);
+    }
     const direct = VALUE_TOKENS[fact.kind]?.[fact.value] || [];
     if (direct.length) return includesToken(fact.evidence, direct);
     if (!['hairColor', 'eyeColor', 'outfitColor'].includes(fact.kind)) return false;
@@ -253,15 +256,16 @@ export function render(value, { idPrefix = 'rmt-letter', label = '' } = {}) {
     const semantic = named ? `role="img" aria-labelledby="${titleId}"` : 'aria-hidden="true"';
     const signature = fact(design, 'signatureObject');
     const kind = design.scene.kind;
-    const foreground = design.focus === 'person' ? letterSketch.sketchPerson(design)
+    const contextSetting = kind === 'music' && /钢琴|鋼琴|琴房|piano|唱片|音像|record|vinyl|吉他|guitar/iu.test(design.scene.evidence);
+    const foreground = design.focus === 'person' ? (contextSetting ? `<g transform="translate(-17 25) scale(.86)">${letterSketch.sketchPerson(design)}</g>` : letterSketch.sketchPerson(design))
         : `<g transform="translate(-2 18) scale(1.55)">${signatureObject(signature, 110, 85)}</g>`;
     const held = ['read', 'tea', 'photo', 'flower', 'gift', 'write'].includes(kind);
-    const scene = design.focus === 'person'
+    const scene = design.focus === 'person' && !contextSetting
         ? sceneMotif(kind, held ? 151 : 245, held ? 172 : 192) : '';
     const textureId = `${safeId(idPrefix)}-paper-grain`;
     // A faint, fixed local hatch gives the drawing a pencil finish without
     // filters, remote assets, or injecting provider-generated markup.
-    return `<svg class="rmt-letter-illustration" data-rmt-letter-illustration-version="2" data-rmt-letter-focus="${design.focus}" data-rmt-letter-scene="${kind}" width="320" height="280" viewBox="0 0 320 280" preserveAspectRatio="xMidYMid meet" ${semantic}>${title}<defs><pattern id="${textureId}" patternUnits="userSpaceOnUse" width="5" height="5"><path d="m0 4 4-4" stroke="#997b91" stroke-width=".45" opacity=".12"/></pattern></defs>${letterSketch.sketchBackdrop(kind, colour(fact(design, 'outfitColor'), '#c1a5ba'))}${foreground}${scene}<ellipse cx="166" cy="154" rx="137" ry="119" fill="url(#${textureId})" pointer-events="none"/></svg>`;
+    return `<svg class="rmt-letter-illustration" data-rmt-letter-illustration-version="2" data-rmt-letter-focus="${design.focus}" data-rmt-letter-scene="${kind}" width="320" height="280" viewBox="0 0 320 280" preserveAspectRatio="xMidYMid meet" ${semantic}>${title}<defs><pattern id="${textureId}" patternUnits="userSpaceOnUse" width="5" height="5"><path d="m0 4 4-4" stroke="#997b91" stroke-width=".45" opacity=".12"/></pattern></defs>${letterSketch.sketchBackdrop(kind, colour(fact(design, 'outfitColor'), '#c1a5ba'), design.scene.evidence)}${foreground}${letterSketch.sketchSceneForeground(design)}${scene}<ellipse cx="166" cy="154" rx="137" ry="119" fill="url(#${textureId})" pointer-events="none"/></svg>`;
 }
 
 

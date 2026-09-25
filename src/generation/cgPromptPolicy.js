@@ -9,6 +9,13 @@ export function bindCgPromptFormat(origin, value, dialect = 'r8420') {
 export function cgPromptForSegment(prompt, options) {
     const binding = options?.origin && bindings.get(options.origin);
     if (!binding?.selected || !format.cgFieldSegment(options.mode, options.taskKey)) return prompt;
+    if (binding.dialect === 'r8483') return prompt + (['album', 'adv'].includes(options.mode) || options.mode === 'heart' && /:(?:strip|strips)$/u.test(options.taskKey)
+        ? visual.cgInitialVisualInstructions(binding.selected, options.mode === 'heart') : visual.cgStoryVisualInstructions(binding.selected, options.mode));
+    // Recovery journals created before r84.83 must keep their exact prompt hash.
+    const legacySegment = options.mode === 'album' && /:(?:index|album)$/.test(options.taskKey)
+        || options.mode === 'adv' && /:(?:index|event)$/.test(options.taskKey)
+        || options.mode === 'heart' && /:(?:strip|strips)$/.test(options.taskKey);
+    if (!legacySegment) return prompt;
     if (binding.dialect === 'r8420') return prompt + visual.cgInitialVisualInstructions(binding.selected, options.mode === 'heart');
     return prompt + (binding.dialect === 'r8413' ? format.cgFormatFieldDirective : format.legacyCgFormatFieldDirective)(binding.selected);
 }
@@ -16,8 +23,8 @@ export function cgRecoveryOperation(mode, operation, existing, selected) {
     if (!format.cgOperationHasImageFields(mode, operation)) return operation;
     const value = existing ? format.normalizeCgPromptFormat(existing.operation?.cgPromptFormat) : format.normalizeCgPromptFormat(selected);
     const { cgPromptFormat: ignored, cgPromptDialect: ignoredDialect, ...base } = operation;
-    const dialect = existing ? existing.operation?.cgPromptDialect : 'r8420';
-    return value ? { ...base, cgPromptFormat: value, ...(['r8413', 'r8420'].includes(dialect) ? { cgPromptDialect: dialect } : {}) } : base;
+    const dialect = existing ? existing.operation?.cgPromptDialect : 'r8483';
+    return value ? { ...base, cgPromptFormat: value, ...(['r8413', 'r8420', 'r8483'].includes(dialect) ? { cgPromptDialect: dialect } : {}) } : base;
 }
 
 export function cgSegmentValidator(validator, options) {

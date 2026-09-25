@@ -79,3 +79,30 @@ export function automaticAppearanceClause(value) {
     return !clean || AUTO_APPEARANCE_DROP.test(clean) || /[“”「」"()（）]/u.test(clean)
         || /[:：]\s*$/u.test(clean) ? '' : clean;
 }
+
+// Optional visual fields never decide whether an otherwise valid story is kept.
+export function generatedCgSceneFields(item) {
+    const prompt = typeof item?.imagePrompt === 'string' ? visualText(item.imagePrompt, 1800) : '';
+    return { ...(prompt ? { imagePrompt: prompt } : {}), ...generatedCgDraftFields(item) };
+}
+
+export function cgStoryVisualInstructions(format, mode) {
+    const places = mode === 'heart' ? '每个 voiceDramas / scenarioDramas 条目'
+        : mode === 'ending' ? 'ending 对象（终章）和每个 epilogue.scenes 条目，以及 confessionReplays 中每个重温条目'
+        : mode === 'bedtime' ? 'chapter 对象'
+        : mode === 'pastLives' ? '当前卷宗 dossier 对象（与 synopsis / clues 同级）'
+        : '每个有正文的 node 对象';
+    return cgInitialVisualInstructions(format, false) + `
+【本模块画面字段位置】把 imagePrompt 与可选 cgPromptDraft 写在${places}，不是独立返回的新顶层对象。
+从本次写出的正文选一个明确瞬间，直接完成可用于绘图的画面描述：人物在画面中的位置、当下动作与视线、实际衣着与可见外貌、发生地点的具体物件、时间与光源方向、前中后景和镜头距离。已知细节充分展开，未知外貌不捏造。不要只写标题、setting 一句话、季节或 soft/clear 气氛词，也不粘贴对白或整篇原文。可参考相簿事件CG的细致程度，但不靠重复形容词凑长度。画面字段随本次正文一起返回，不额外请求，不因为画面字段缺失丢弃正文。`;
+}
+
+// Legacy stories have no authored visual fields. Extract visible narration for
+// the initial editable draft; keep the full source separate for reconception.
+export function legacyCgSceneExcerpt(value, context = '') {
+    const lines = String(value || '').split(/\r?\n/u).filter(line => !/^\s*(?:char|user)\s*[:：]/iu.test(line))
+        .map(line => line.replace(/^\s*narrator\s*[:：]\s*/iu, ''));
+    const clauses = lines.join(' ').replace(/[“「][^”」]*[”」]/gu, '').split(/(?<=[。！？.!?])\s*/u);
+    const visible = clauses.filter(line => /(?:窗|灯|光|夜|雨|风|海|树|街|房|手|衣|发|眼|站|坐|走|倚|抱|握|抬|垂|桌|门|船|window|light|hand|hair|stand|sit|hold|room|street)/iu.test(line));
+    return text.normalizeText([context, ...visible.slice(0, 5)].filter(Boolean).join(' '), 1500);
+}

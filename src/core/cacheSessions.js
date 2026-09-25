@@ -354,7 +354,7 @@ export function loadSession(mode, options = {}) {
             session = core_heartLanguage.readableHeartSession(session);
             if (!session) return null;
         }
-        if (mode === core_constants.MODE.ACHIEVEMENTS && (!Array.isArray(session.entries) || (!userManaged && session.entries.length < 1))) return null;
+        if (mode === core_constants.MODE.ACHIEVEMENTS && !Array.isArray(session.entries)) return null;
         return options.clone === false ? session : structuredClone(session);
     } catch {
         return null;

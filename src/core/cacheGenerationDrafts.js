@@ -687,7 +687,6 @@ export async function saveGenerationRecovery(context, bank, mode, journal, origi
         }
         const journals = { ...(cache[generation_recovery.GENERATION_RECOVERY_CACHE_KEY] || {}) };
         journals[mode] = { ...frozenJournal, [core_constants.SESSION_MODE_WRITE_FENCE_KEY]: fence };
-        if (JSON.stringify(journals).length > 6000000) throw new Error('Recovery storage capacity reached');
         cache[generation_recovery.GENERATION_RECOVERY_CACHE_KEY] = journals;
     };
     return serializeArchiveCommitOperation(entry, memoryBank, async () => {

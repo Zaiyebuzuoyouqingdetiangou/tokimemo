@@ -1,13 +1,14 @@
+import * as cg_visual from './cgVisualRules.js';
 import * as constants from './constants.js';
 import * as text from './text.js';
 import * as photoshoots from './photoshootContract.js';
 import * as cg_image_patch from './cgImagePatch.js';
 
 const PREFIX = 'rmtcg2';
-const KINDS = new Set(['heart-voice', 'heart-scenario', 'heart-photoshoot', 'ending-ending', 'ending-epilogue', 'ending-epilogue-scene', 'ending-confession', 'heart-language', 'heart-portrait']);
+const KINDS = new Set(['heart-voice', 'heart-scenario', 'heart-photoshoot', 'ending-ending', 'ending-epilogue', 'ending-epilogue-scene', 'ending-confession', 'heart-language', 'heart-portrait', 'heart-firefly', 'past-life-dossier', 'bedtime-chapter', 'butterfly-node']);
 const SLOT_BY_KIND = Object.freeze({
     'heart-voice': 'voice', 'heart-scenario': 'scenario', 'heart-photoshoot': 'grid', 'ending-ending': 'ending', 'ending-epilogue': 'epilogue', 'heart-language': 'language',
-    'ending-confession': 'confession', 'heart-portrait': 'portrait',
+    'ending-confession': 'confession', 'heart-portrait': 'portrait', 'heart-firefly': 'habitat', 'butterfly-node': 'scene',
 });
 
 function encode(value) { return encodeURIComponent(String(value)); }
@@ -27,10 +28,13 @@ export function normalizeCgTargetDescriptor(value) {
     const containerId = safeId(value.containerId);
     const slot = normalized(value.slot, 160);
     const expectedSlot = SLOT_BY_KIND[kind];
-    if (!KINDS.has(kind) || !containerId || !slot || (!['heart-language','ending-epilogue-scene'].includes(kind) && slot !== expectedSlot)) return null;
+    if (!KINDS.has(kind) || !containerId || !slot || (!['heart-language','ending-epilogue-scene','past-life-dossier','bedtime-chapter'].includes(kind) && slot !== expectedSlot)) return null;
     if (kind === 'ending-epilogue-scene' && !/^scene:\d+$/.test(slot)) return null;
     if (kind === 'heart-language' && !constants.HEART_GREETING_KEYS.includes(containerId)) return null;
     if (kind === 'heart-portrait' && containerId !== 'language') return null;
+    if (kind === 'heart-firefly' && containerId !== 'habitat') return null;
+    if (kind === 'past-life-dossier' && !/^dossier:D\d+$/.test(slot)) return null;
+    if (kind === 'bedtime-chapter' && !/^chapter:BED_[a-z0-9_-]+-C\d+$/.test(slot)) return null;
     const sourceHash = normalized(value.sourceHash, 120);
     return { version: 1, kind, containerId, slot, ...(sourceHash ? { sourceHash } : {}) };
 }
@@ -92,11 +96,12 @@ function attachEndingVisual(owner, slot) {
         },
     };
 }
-function facade({ descriptor, visualRef, sourceHash, title, subtitle = '', scene = '', sourceText = scene, visualSeed = [] }) {
+function facade({ descriptor, visualRef, sourceHash, title, subtitle = '', scene = '', sourceText = scene, visualSeed = [], authored = null }) {
     const saved = visualRef.read();
     const item = { id: cgTargetItemId(descriptor), title: normalized(title, 160), subtitle: normalized(subtitle, 600), desc: sourceText, cgDesc: scene,
         cgSourceText: sourceText,
-        imagePrompt: normalized(saved?.imagePrompt, constants.MAX_CG_IMAGE_PROMPT_CHARS), visualSeed, sourceHash,
+        imagePrompt: normalized(saved?.imagePrompt || authored?.imagePrompt, constants.MAX_CG_IMAGE_PROMPT_CHARS),
+        ...cg_visual.generatedCgDraftFields(authored), visualSeed, sourceHash,
         __rmtCgDescriptor: { ...descriptor, sourceHash } };
     Object.defineProperties(item, {
         cgImage: { enumerable: true, configurable: true, get: () => { const visual = visualRef.read(); return visual.sourceHash === sourceHash ? visual.cgImage : null; }, set: value => { const visual = visualRef.write(); visual.sourceHash = sourceHash; visual.cgImage = value; } },
@@ -139,7 +144,7 @@ export function cgTargetInSession(mode, session, itemId) {
         if (!owner) return null;
         const sourceHash = hash(sourceForDrama(owner, descriptor.kind));
         return facade({ descriptor, visualRef: attachVisual(owner, 'visual'), sourceHash, title: owner.title, subtitle: owner.subtitle,
-            scene: [normalized(owner.setting, 1800), normalized(owner.visualTone, 600)].filter(Boolean).join('，'),
+            scene: owner.imagePrompt || cg_visual.legacyCgSceneExcerpt(scriptText(owner), normalized(owner.setting, 800)), authored: owner,
             sourceText: `${normalized(owner.setting, 1800)}\n${scriptText(owner)}`, visualSeed: [isVoice ? owner.kind : owner.season, owner.visualTone] });
     }
     if (descriptor.kind === 'heart-photoshoot') {
@@ -168,9 +173,48 @@ export function cgTargetInSession(mode, session, itemId) {
                 : (owner.epilogue?.scenes || []).map(row => `${row.title || ''}\n${row.text || ''}`).join('\n');
         // The complete prose stays available to the explicit reconceive action.
         // An initial image draft contains only authored visual/context labels.
-        const scene = [owner.title, individual ? individual.title : slot === 'epilogue' ? owner.epilogue?.title : owner.subtitle].filter(Boolean).join('，');
+        const authored = individual || (slot === 'epilogue' ? owner.epilogue : owner);
+        const scene = authored.imagePrompt || cg_visual.legacyCgSceneExcerpt(sourceText, individual?.title || owner.title);
         return facade({ descriptor, visualRef: attachEndingVisual(owner, slot), sourceHash, title: owner.title,
-            subtitle: individual ? individual.title : slot === 'epilogue' ? owner.epilogue?.title || '后日谈' : owner.subtitle, scene, sourceText, visualSeed: [owner.type, slot] });
+            subtitle: individual ? individual.title : slot === 'epilogue' ? owner.epilogue?.title || '后日谈' : owner.subtitle, scene, sourceText, authored, visualSeed: [owner.type, slot] });
+    }
+    if (descriptor.kind === 'heart-firefly') {
+        const scene = '柔和绝美的夏夜，角色独自置身安静的草地与疏林间，萤火虫围绕其手边、发梢和肩侧缓缓飞舞。镜头以角色为清晰主体，前景少量失焦暖金光点，中景有层次的萤光勾勒人物轮廓，远景暗青绿的树影与薄雾。柔和月光与细小暖光交织，细腻夜色、自然景深，宁静而亲密。保留角色资料中明确的外貌与合世界观衣着，不增加其他人物、文字或水印。';
+        const sourceHash = hash('firefly-habitat-v1');
+        const item = facade({ descriptor, visualRef: attachVisual(session, 'fireflyVisual'), sourceHash,
+            title: '萤火虫栖息地', scene, sourceText: scene, visualSeed: ['soft moonlight', 'warm fireflies', 'night portrait'] });
+        item.cgSceneDirection = scene;
+        return item;
+    }
+    if (descriptor.kind === 'past-life-dossier') {
+        if (mode !== constants.MODE.PAST_LIVES) return null;
+        const episode = session?.episodes?.find(row => safeId(row.id) === descriptor.containerId);
+        const owner = episode?.dossiers?.find(row => row.id === descriptor.slot.slice(8));
+        if (!owner?.synopsis) return null;
+        const sourceText = [owner.era, owner.synopsis, ...(owner.clues || []).map(row => row.text)].filter(Boolean).join('\n');
+        const sourceHash = hash(JSON.stringify([episode.id, owner.id, owner.title, sourceText]));
+        return facade({ descriptor, visualRef: attachVisual(owner, 'visual'), sourceHash, title: owner.title,
+            subtitle: episode.title, sourceText, authored: owner,
+            scene: owner.imagePrompt || cg_visual.legacyCgSceneExcerpt(sourceText, owner.era) });
+    }
+    if (descriptor.kind === 'bedtime-chapter') {
+        if (mode !== constants.MODE.BEDTIME) return null;
+        const story = session?.stories?.find(row => safeId(row.id) === descriptor.containerId);
+        const owner = story?.chapters?.find(row => row.id === descriptor.slot.slice(8));
+        if (!owner?.text) return null;
+        const sourceHash = hash(JSON.stringify([story.id, owner.id, owner.title, owner.text]));
+        return facade({ descriptor, visualRef: attachVisual(owner, 'visual'), sourceHash, title: owner.title,
+            subtitle: story.title, sourceText: owner.text, authored: owner,
+            scene: owner.imagePrompt || cg_visual.legacyCgSceneExcerpt(owner.text, story.genre) });
+    }
+    if (descriptor.kind === 'butterfly-node') {
+        if (mode !== constants.MODE.BUTTERFLY) return null;
+        const owner = session?.nodes?.find(row => safeId(row.id) === descriptor.containerId);
+        if (!owner?.monologue) return null;
+        const sourceText = [owner.worldSpec?.era, owner.worldSpec?.location, owner.monologue].filter(Boolean).join('\n');
+        const sourceHash = hash(JSON.stringify([owner.id, owner.label, sourceText]));
+        return facade({ descriptor, visualRef: attachVisual(owner, 'visual'), sourceHash, title: owner.label,
+            sourceText, authored: owner, scene: owner.imagePrompt || cg_visual.legacyCgSceneExcerpt(sourceText, owner.worldSpec?.location) });
     }
     if (descriptor.kind === 'heart-portrait') {
         const owner = object(session?.languagePortrait);
@@ -191,7 +235,9 @@ export function cgTargetInSession(mode, session, itemId) {
 export function resolveCgTargetDescriptor(session, descriptor) {
     const normalizedDescriptor = normalizeCgTargetDescriptor(descriptor);
     if (!normalizedDescriptor) return null;
-    const mode = normalizedDescriptor.kind.startsWith('ending-') ? constants.MODE.ENDING : constants.MODE.HEART;
+    const kind = normalizedDescriptor.kind;
+    const mode = kind.startsWith('ending-') ? constants.MODE.ENDING : kind === 'past-life-dossier' ? constants.MODE.PAST_LIVES
+        : kind === 'bedtime-chapter' ? constants.MODE.BEDTIME : kind === 'butterfly-node' ? constants.MODE.BUTTERFLY : constants.MODE.HEART;
     const item = cgTargetInSession(mode, session, cgTargetItemId(normalizedDescriptor));
     if (!item || (normalizedDescriptor.sourceHash && item.sourceHash !== normalizedDescriptor.sourceHash)) return null;
     return { mode, session, item, descriptor: item.__rmtCgDescriptor };

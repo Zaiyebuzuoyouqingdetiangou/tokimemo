@@ -74,7 +74,7 @@ export function overlayArchiveActions(actionEl, action) {
     if (action === 'travel-dialogue-prev') return ui_travelView.travelDialogueStep(-1);
     if (action === 'travel-dialogue-next') return ui_travelView.travelDialogueStep(1);
     if (action === 'travel-dialogue-replay') return ui_travelView.replayTravelDialogue();
-    if (action === 'tasks' || action === 'task-center-close' || action === 'task-cancel' || action === 'task-cancel-current' || action === 'task-open' || action === 'task-second-step' || action === 'task-queue-remove' || action === 'task-clear-done' || action === 'queue-selected' || action === 'generate-together' || action === 'merged-repair' || action === 'merged-resave') {
+    if (action === 'tasks' || action === 'task-center-close' || action === 'task-cancel' || action === 'task-cancel-current' || action === 'task-open' || action === 'task-second-step' || action === 'task-queue-remove' || action === 'task-clear-done' || action === 'queue-selected' || action === 'generate-together' || action === 'merged-repair' || action === 'merged-resave' || ['merged-discard', 'merged-new', 'merged-export', 'merged-export-legacy', 'merged-discard-legacy'].includes(action)) {
         return ui_taskCenter.handleTaskCenterAction(action, actionEl);
     }
     if (action === 'close') return closeArchiveOverlayFromUser();

@@ -206,7 +206,7 @@ export async function drawSelectedCgImage({ promptOverride, promptMetadata, prom
         mode,
         itemId,
         origin,
-        label: dailyStrip ? '日常一格绘制' : mode === core_constants.MODE.ALBUM ? '相簿 CG 绘制' : 'ADV CG 绘制',
+        label: dailyStrip ? '日常一格绘制' : `${core_constants.MODE_LABEL[mode] || '画面'} · CG 绘制`,
         startedAt: Date.now(),
         phase: 'request',
         controller,
@@ -268,7 +268,7 @@ export async function drawSelectedCgImage({ promptOverride, promptMetadata, prom
     } finally {
         runtimeState.activeCgImageTasks.delete(taskKey);
         core_requestCoordinator.rememberStandaloneChatTask({
-            label: dailyStrip ? '日常一格绘制' : mode === core_constants.MODE.ALBUM ? '相簿 CG 绘制' : 'ADV CG 绘制',
+            label: dailyStrip ? '日常一格绘制' : `${core_constants.MODE_LABEL[mode] || '画面'} · CG 绘制`,
             mode, origin, outcome: imageOutcome, kind: 'cg',
         });
         renderCapturedCgMode(captured);
@@ -356,7 +356,7 @@ export async function restoreSelectedCgImageVersion(url, expectedTarget = null, 
         // （是否在共同回忆大图里、对白读到第几句、所选条目、页码），否则重新渲染会把人
         // 从大图踢回相簿网格。字段与 overlay 保存后刷新会话时保留的一致。
         const next = structuredClone(committed);
-        for (const key of ['selectedId','selectedEntryId','selectedStripId','view','page','dialogueIndex','sharedMemory']) {
+        for (const key of ['selectedId','selectedEntryId','selectedStripId','view','page','dialogueIndex','sharedMemory','selected','chapterIndex','pastLivesReadMask','pastLivesDrawn','pastLivesClosing','selectedFireflyId','heartSubMode']) {
             if (Object.hasOwn(session, key)) next[key] = structuredClone(session[key]);
         }
         Object.assign(session,next);

@@ -1,5 +1,5 @@
-const VERSION = '0.99.31';
-const BUILD = '0.99.31-r84.83-auto-memory-r0';
+const VERSION = '0.99.32';
+const BUILD = '0.99.32-r84.84-scenes-recovery';
 
 const SETTINGS_ID = 'heartbeat_memories_settings';
 const MENU_ID = 'heartbeat_memories_menu_item';

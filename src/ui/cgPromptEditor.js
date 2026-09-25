@@ -21,7 +21,7 @@ import * as overlay from './overlay.js';
 let editor = null;
 
 export function portraitCgMetadata(item, raw) {
-    if (!item?.cgPortrait || item.cgImage || !raw) return raw;
+    if (!(item?.cgPortrait || item?.__rmtCgDescriptor?.kind === 'heart-firefly') || item.cgImage || !raw) return raw;
     const value = structuredClone(raw);
     const userIds = new Set((value.castSnapshot?.people || []).filter(person=>person.identity==='user').map(person=>person.id));
     if (value.castSnapshot) value.castSnapshot.people = value.castSnapshot.people.filter(person=>person.identity!=='user');

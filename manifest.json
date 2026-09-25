@@ -1,15 +1,15 @@
 {
   "display_name": "心迹回廊",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.99.31-r84.83-auto-memory-r0",
+  "js": "index.js?heartbeat=0.99.32-r84.84-scenes-recovery",
   "author": "Toto",
-  "version": "0.99.31",
+  "version": "0.99.32",
   "auto_update": true,
   "minimum_client_version": "1.13.0",
   "hooks": {
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r84.83：自动留忆先补上记录格式和校验。旧的自动更新仍按原来的方式运行。",
+  "description": "r84.84：修复陈列柜与成就库保存及任务恢复；丰富首次生图提示、追加故事与萤火虫配图，改进随信小画、房间、终端与手帐配色。保留 r84.83 自动留忆底层更新。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }

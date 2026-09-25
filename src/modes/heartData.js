@@ -261,6 +261,7 @@ export function normalizeVoiceDramaPart(data, expectedKinds, memoryBank = {}) {
             setting: core_text.normalizeText(item?.setting, 1200),
             visualTone: core_constants.HEART_DRAMA_VISUAL_TONES.has(core_text.normalizeText(item?.visualTone, 20).toLowerCase()) ? core_text.normalizeText(item?.visualTone, 20).toLowerCase() : 'soft',
             script,
+            ...cg_visual.generatedCgSceneFields(item),
             ...cg_targets.normalizeLocalCgSlots(item),
         });
     }
@@ -284,6 +285,7 @@ export function normalizeScenarioDramaPart(data, expectedSeason = '', memoryBank
             setting: core_text.normalizeText(item?.setting, 1200),
             visualTone: core_constants.HEART_DRAMA_VISUAL_TONES.has(core_text.normalizeText(item?.visualTone, 20).toLowerCase()) ? core_text.normalizeText(item?.visualTone, 20).toLowerCase() : 'soft',
             script,
+            ...cg_visual.generatedCgSceneFields(item),
             ...cg_targets.normalizeLocalCgSlots(item),
         });
     }
@@ -420,6 +422,7 @@ export function makeHeartSession(core, existing = null) {
         greetings: core.greetings || {},
         languageVisuals: cg_targets.normalizeLanguageCgVisuals(existing?.languageVisuals),
         languagePortrait: cg_targets.normalizeLanguagePortrait(existing?.languagePortrait),
+        fireflyVisual: cg_targets.normalizeLocalCgSlots({ visual: existing?.fireflyVisual }).visual || null,
         photoshoots: normalizeHeartPhotoshoots(existing?.photoshoots),
         collectionIssues: core_heartLanguage.heartCollectionIssues(existing),
         voiceDramas: Array.isArray(existing?.voiceDramas) ? existing.voiceDramas : [],
@@ -646,6 +649,7 @@ export function normalizeHeart(data, memoryBank) {
             setting: core_text.normalizeText(item?.setting, 1200),
             visualTone: core_constants.HEART_DRAMA_VISUAL_TONES.has(core_text.normalizeText(item?.visualTone, 20).toLowerCase()) ? core_text.normalizeText(item?.visualTone, 20).toLowerCase() : 'soft',
             script,
+            ...cg_visual.generatedCgSceneFields(item),
             ...cg_targets.normalizeLocalCgSlots(item),
             sourceArchiveMemoryIds: core_text.cleanArray(item?.sourceArchiveMemoryIds, core_constants.MAX_MEMORY_PROMPT_ITEMS, 40),
             incrementBatchId: core_text.normalizeText(item?.incrementBatchId, 80),
@@ -666,6 +670,7 @@ export function normalizeHeart(data, memoryBank) {
             setting: core_text.normalizeText(item?.setting, 1200),
             visualTone: core_constants.HEART_DRAMA_VISUAL_TONES.has(core_text.normalizeText(item?.visualTone, 20).toLowerCase()) ? core_text.normalizeText(item?.visualTone, 20).toLowerCase() : 'soft',
             script,
+            ...cg_visual.generatedCgSceneFields(item),
             ...cg_targets.normalizeLocalCgSlots(item),
             sourceArchiveMemoryIds: core_text.cleanArray(item?.sourceArchiveMemoryIds, core_constants.MAX_MEMORY_PROMPT_ITEMS, 40),
             incrementBatchId: core_text.normalizeText(item?.incrementBatchId, 80),
@@ -723,6 +728,7 @@ export function normalizeHeart(data, memoryBank) {
         collectionIssues: core_heartLanguage.heartCollectionIssues(data),
         languageVisuals: cg_targets.normalizeLanguageCgVisuals(data?.languageVisuals),
         languagePortrait: cg_targets.normalizeLanguagePortrait(data?.languagePortrait),
+        fireflyVisual: cg_targets.normalizeLocalCgSlots({ visual: data?.fireflyVisual }).visual || null,
         photoshoots: normalizeHeartPhotoshoots(data?.photoshoots),
         voiceDramas,
         scenarioDramas,

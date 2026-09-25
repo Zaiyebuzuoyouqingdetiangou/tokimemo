@@ -152,7 +152,11 @@ export function mergeBedtime(latest, incoming) {
         for (const chapter of story.chapters) {
             const prior = chapters.get(chapter.id);
             if (prior) {
-                if (JSON.stringify(prior) !== JSON.stringify(chapter))
+                // A separately saved picture must not block a completed continuation.
+                // Keep the latest local visual while comparing the immutable chapter.
+                const { visual: priorVisual, ...priorText } = prior;
+                const { visual: incomingVisual, ...incomingText } = chapter;
+                if (JSON.stringify(priorText) !== JSON.stringify(incomingText))
                     throw bedtimeError('CONFLICT', '同一章已经变化，本次没有覆盖旧章节。');
                 continue;
             }

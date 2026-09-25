@@ -47,8 +47,8 @@ export function finishGenerationDraftInCache(cache, mode, draftId, discarded = f
     if (!draftId) return false;
     retainLegacyGenerationDraft(cache, mode);
     const records = generationDraftRecords(cache), record = records[draftId];
-    if (!record || (record.journal?.identity?.mode || record.mode) !== mode) return false;
-    if (record.status !== 'open') return true;
+    if (!record || (record.journal?.identity?.mode || record.result?.mode || record.mode) !== mode) return false;
+    if (record.status !== 'open' && !(discarded && record.status === 'awaiting-choice')) return true;
     cache[GENERATION_DRAFTS_CACHE_KEY] = { version: 1, records: { ...records,
         [draftId]: { status: discarded ? 'discarded' : 'complete', mode,
             pageId: record.journal.pageId || recoveryPageForVersion(mode, record.journal.operation), closedAt: Date.now() } } };

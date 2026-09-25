@@ -1,3 +1,4 @@
+import * as expanded_cg_view from './expandedCgView.js';
 import * as contract from '../core/bedtimeContract.js';
 import * as bedtimeMode from '../modes/bedtime.js';
 import * as contextApi from '../core/context.js';
@@ -37,7 +38,7 @@ export function bedtimeHtml(session, { locked = false, generating = false } = {}
             const chapters = selected.chapters || [];
             const chapter = chapters[ui.chapterIndex] || chapters[0];
             const controls = `<div class="rmt-bedtime-page-controls">${button('prev', '上一章', '', ui.chapterIndex <= 0)}<span>${chapters.length ? `${ui.chapterIndex + 1} / ${chapters.length}` : '0 / 0'}</span>${button('next', '下一章', '', ui.chapterIndex >= chapters.length - 1)}</div>`;
-            content = `<article class="rmt-bedtime-reader"><header>${button('library', '返回故事架')}<small>${esc(selected.genre || '题材待完成')} · 睡前故事</small><h2>${esc(selected.title || '未完成的故事')}</h2><p>${esc(selected.premise || '')}</p></header>${storyPartial ? '<p class="rmt-recovery-status" role="status">这一章尚未完成；已收到的正文可以先读，继续会按原草稿补齐，不会重写旧章节。</p>' : ''}${chapter ? `<section class="rmt-bedtime-chapter"><small>第 ${ui.chapterIndex + 1} 章</small><h3>${esc(chapter.title || '本章标题待完成')}</h3>${paragraphs(chapter.text)}</section>${controls}` : '<p role="status">本章正文尚未收到。</p>'}<footer>${locked ? '' : button('continue', generating ? '正在续写…' : '追加下一章', selected.id, generating || storyPartial)}</footer></article>`;
+            content = `<article class="rmt-bedtime-reader"><header>${button('library', '返回故事架')}<small>${esc(selected.genre || '题材待完成')} · 睡前故事</small><h2>${esc(selected.title || '未完成的故事')}</h2><p>${esc(selected.premise || '')}</p></header>${storyPartial ? '<p class="rmt-recovery-status" role="status">这一章尚未完成；已收到的正文可以先读，继续会按原草稿补齐，不会重写旧章节。</p>' : ''}${chapter ? `<section class="rmt-bedtime-chapter"><small>第 ${ui.chapterIndex + 1} 章</small><h3>${esc(chapter.title || '本章标题待完成')}</h3>${paragraphs(chapter.text)}${expanded_cg_view.expandedCgHtml(session, {kind:'bedtime-chapter',containerId:selected.id,slot:'chapter:'+chapter.id}, locked)}</section>${controls}` : '<p role="status">本章正文尚未收到。</p>'}<footer>${locked ? '' : button('continue', generating ? '正在续写…' : '追加下一章', selected.id, generating || storyPartial)}</footer></article>`;
         }
         return `<section class="rmt-bedtime"><header class="rmt-bedtime-head"><div><small>可连续阅读的虚构作品${locked ? ' · 只读' : ''}</small><h2>睡前故事</h2></div>${ui.view === 'story' ? '' : `<small>已保存 ${session.stories.length} 篇</small>`}</header><p class="rmt-bedtime-note">写一个新故事，或接着喜欢的故事读下一章。</p>${composer}${content}</section>`;
     } catch { return '<section class="rmt-bedtime"><p role="status">这份睡前故事暂时无法读取，原内容仍保留。</p></section>'; }

@@ -1,3 +1,4 @@
+import * as expanded_cg_view from './expandedCgView.js';
 import * as contract from '../core/pastLivesContract.js';
 import * as pastLives from '../modes/pastLives.js';
 import * as text from '../core/text.js';
@@ -59,7 +60,7 @@ export function pastLivesHtml(value, { readOnly = false, busy = false, notice = 
                 const dossier = selected.dossiers.find(item => item.id === ui.selectedEntryId) || selected.dossiers[0];
                 const chosenClue = dossier?.clues.find(item => item.id === ui.selectedKey);
                 const docket = selected.dossiers.length > 1 ? `<nav class="rmt-past-docket" aria-label="选择卷宗">${selected.dossiers.map(item => button('dossier', item.title, item.id, `aria-pressed="${dossier?.id === item.id}"`)).join('')}</nav>` : '';
-                scene = dossier ? `${docket}<article class="rmt-past-paper"><header><small>虚构卷宗${dossier.era ? ' · ' + esc(dossier.era) : ''}</small><h3>${esc(dossier.title)}</h3></header>${paragraphs(dossier.synopsis)}</article>
+                scene = dossier ? `${docket}<article class="rmt-past-paper"><header><small>虚构卷宗${dossier.era ? ' · ' + esc(dossier.era) : ''}</small><h3>${esc(dossier.title)}</h3></header>${paragraphs(dossier.synopsis)}${expanded_cg_view.expandedCgHtml(session, {kind:'past-life-dossier',containerId:selected.id,slot:'dossier:'+dossier.id}, readOnly)}</article>
                     <div class="rmt-past-clues" aria-label="可阅读的卷宗线索">${dossier.clues.map(clue => `<button type="button" class="rmt-past-clue ${clue.kind === 'missing' ? 'is-missing' : ''}" data-rmt-past-lives="clue" data-rmt-past-lives-id="${esc(clue.id)}" aria-pressed="${chosenClue?.id === clue.id}"><small>${esc(clueLabel(clue.kind))}${readIds.has(clue.id) ? ' · 已读' : ''}</small><b>${esc(clue.title)}</b><span>${clue.kind === 'missing' ? '一处字迹留着空白' : '点开阅读'}</span></button>`).join('')}</div>
                     ${chosenClue ? `<article class="rmt-past-evidence" id="rmt-past-current-evidence"><small>${esc(clueLabel(chosenClue.kind))}${chosenClue.kind === 'testimony' ? ' · ' + esc(chosenClue.speaker === 'char' ? session.characterName : chosenClue.speaker === 'user' ? session.userName : '卷内记述') : ''} · 虚构</small><h3>${esc(chosenClue.title)}</h3>${paragraphs(chosenClue.text)}${chosenClue.kind === 'missing' ? readIds.has(chosenClue.id)
                         ? `<div class="rmt-past-revealed" role="status"><small>字迹已显</small>${paragraphs(chosenClue.revealedText)}</div>`

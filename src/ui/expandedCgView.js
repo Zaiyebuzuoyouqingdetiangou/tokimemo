@@ -21,14 +21,14 @@ export function previousExpandedImagesHtml(session, descriptor) {
 }
 
 // savedOnly：只在已经存过图片时才显示（用于已停用的整篇入口，避免旧图凭空消失）。
-export function expandedCgHtml(session, input, readOnly = false, { savedOnly = false } = {}) {
+export function expandedCgHtml(session, input, readOnly = false, { savedOnly = false, showImage = true, placeholder = '' } = {}) {
     const descriptor = targets.describeExpandedCgTarget(session, input);
     const resolved = descriptor && targets.expandedCgItem(session, descriptor);
     if (!resolved) return '';
     const saved = images.normalizeCgImageRecord(resolved.item.cgImage);
     if (savedOnly && !saved) return '';
     const attrs = `data-rmt-expanded-cg="${text.esc(JSON.stringify(descriptor))}"`;
-    return `<section class="rmt-expanded-cg">${saved ? `<div class="rmt-thumb">${images.cgImageLayerHtml(resolved.item)}</div>` : ''}<div class="rmt-cg-card-actions">${saved ? `<button type="button" class="rmt-btn" ${attrs} data-rmt-expanded-cg-view="1">查看已保存图片</button>` : ''}${readOnly ? '' : `<button type="button" class="rmt-btn" ${attrs}>${saved ? '编辑画面 / 再画一张' : '设置画面并预览生图'}</button>`}</div>${previousExpandedImagesHtml(session, descriptor)}</section>`;
+    return `<section class="rmt-expanded-cg">${saved && showImage ? `<div class="rmt-thumb">${images.cgImageLayerHtml(resolved.item)}</div>` : !saved ? placeholder : ''}<div class="rmt-cg-card-actions">${saved ? `<button type="button" class="rmt-btn" ${attrs} data-rmt-expanded-cg-view="1">查看已保存图片</button>` : ''}${readOnly ? '' : `<button type="button" class="rmt-btn" ${attrs}>${saved ? '编辑画面 / 再画一张' : '设置画面并预览生图'}</button>`}</div>${previousExpandedImagesHtml(session, descriptor)}</section>`;
 }
 
 export function handleExpandedCgButton(button) {
@@ -40,4 +40,12 @@ export function handleExpandedCgButton(button) {
     if (button.dataset.rmtExpandedCgView === '1') return viewer.openCgImageViewer(resolved.item.cgImage, resolved.item.title, { opener: button });
     if (state.state.activeArchiveSnapshot) return false;
     return editor.openCgPromptEditor({ targetDescriptor: descriptor });
+}
+
+// Place a saved habitat picture under its existing interactive light points.
+export function expandedCgBackdropHtml(session, input) {
+    const descriptor = targets.describeExpandedCgTarget(session, input);
+    const resolved = descriptor && targets.expandedCgItem(session, descriptor);
+    if (!resolved || !images.normalizeCgImageRecord(resolved.item.cgImage)) return '';
+    return `<div class="rmt-cg-backdrop" style="position:absolute;inset:0;border-radius:inherit;overflow:hidden">${images.cgImageLayerHtml(resolved.item)}</div>`;
 }

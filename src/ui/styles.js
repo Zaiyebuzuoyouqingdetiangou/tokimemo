@@ -209,7 +209,7 @@ export function ensureSettingsStyles() {
     style.textContent += bedtime_view.bedtimeCss();
     style.textContent += `
 #${core_constants.OVERLAY_ID} .rmt-expanded-cg{margin:16px 0;max-width:100%}
-#${core_constants.OVERLAY_ID} .rmt-expanded-cg .rmt-thumb{height:auto;min-height:160px;max-height:540px;aspect-ratio:3/2;border-radius:16px;overflow:hidden}
+#${core_constants.OVERLAY_ID} .rmt-expanded-cg .rmt-thumb{box-sizing:border-box;width:100%;max-width:100%;min-width:0;height:auto;min-height:120px;max-height:540px;aspect-ratio:16/9;border-radius:16px;overflow:hidden}
 #${core_constants.OVERLAY_ID} .rmt-expanded-cg img{width:100%;height:100%;object-fit:contain}
 #${core_constants.OVERLAY_ID} .rmt-language-scene{padding:16px;margin:12px 0;border:1px solid var(--rmt-theme-border);border-radius:14px}
 #${core_constants.OVERLAY_ID} .rmt-language-scene label{display:grid;gap:8px;margin:12px 0}
@@ -353,7 +353,7 @@ export function ensureStyles() {
     style.textContent += bedtime_view.bedtimeCss();
     style.textContent += `
 #${core_constants.OVERLAY_ID} .rmt-expanded-cg{margin:16px 0;max-width:100%}
-#${core_constants.OVERLAY_ID} .rmt-expanded-cg .rmt-thumb{height:auto;min-height:160px;max-height:540px;aspect-ratio:3/2;border-radius:16px;overflow:hidden}
+#${core_constants.OVERLAY_ID} .rmt-expanded-cg .rmt-thumb{box-sizing:border-box;width:100%;max-width:100%;min-width:0;height:auto;min-height:120px;max-height:540px;aspect-ratio:16/9;border-radius:16px;overflow:hidden}
 #${core_constants.OVERLAY_ID} .rmt-expanded-cg img{width:100%;height:100%;object-fit:contain}
 #${core_constants.OVERLAY_ID} .rmt-language-scene{padding:16px;margin:12px 0;border:1px solid var(--rmt-theme-border);border-radius:14px}
 #${core_constants.OVERLAY_ID} .rmt-language-scene label{display:grid;gap:8px;margin:12px 0}

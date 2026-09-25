@@ -4,9 +4,9 @@ import * as backupDiagnostics from './backupDiagnostics.js';
 
 export const DEFERRED_COMMIT_STORE_KEY = 'heartbeat_memories_deferred_commits_v1';
 export const DEFERRED_COMMIT_STORE_VERSION = 1;
-export const DEFERRED_COMMIT_STORE_MAX_ITEMS = 24;
-export const DEFERRED_COMMIT_STORE_MAX_BYTES = 3_500_000;
-export const DEFERRED_COMMIT_STORE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+export const DEFERRED_COMMIT_STORE_MAX_ITEMS = Infinity;
+export const DEFERRED_COMMIT_STORE_MAX_BYTES = Infinity;
+export const DEFERRED_COMMIT_STORE_MAX_AGE_MS = Infinity;
 
 const SENSITIVE_FIELD = /^(?:api[_-]?key|authorization|proxy[_-]?password|password|secret|access[_-]?token|refresh[_-]?token|bearer[_-]?token)$/i;
 const UNSAFE_FIELD = /^(?:__proto__|prototype|constructor)$/;

@@ -256,7 +256,7 @@ async function generateModeOperation(mode, options = {}) {
     // A no-op must not advance the durable mode fence. In another tab, doing so would cancel a
     // real in-flight build for the same frozen archive even though this invocation never calls a
     // provider. Preflight against the freshly revalidated snapshot, then repeat after the CAS.
-    recoveryExisting = options.existing || core_cache.loadGenerationRecovery(mode, context, archiveTarget?.cache,
+    recoveryExisting = options.newTask === true ? null : options.existing || core_cache.loadGenerationRecovery(mode, context, archiveTarget?.cache,
         { ...(options.draftId ? { draftId: options.draftId } : {}), ...(options.pageId ? { pageId: options.pageId } : {}) });
     // The whole-page entry must not resume the newest one-item child instead
     // of its page. Explicit draft buttons and legacy formal-item recovery keep

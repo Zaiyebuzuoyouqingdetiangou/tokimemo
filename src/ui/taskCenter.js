@@ -399,7 +399,7 @@ function draftCards() {
     let drafts = [];
     try { drafts = core_cache.listGenerationDrafts(); }
     catch { drafts = []; }
-    return drafts.filter(row => row.completed || row.truncated || row.failed || row.failureCode || row.oversized).slice(0, 12).map(row => {
+    return drafts.filter(row => row.completed || row.truncated || row.failed || row.failureCode || row.oversized).map(row => {
         const oversized = row.oversized === true;
         const classified = generation_recovery.generationFailureReason(row);
         const reason = oversized
@@ -409,6 +409,8 @@ function draftCards() {
                 : (row.canContinue ? '正文写到一半，可以继续补完' : '已保存成功部分'));
         const attrs = `data-rmt-recovery-draft-id="${core_text.esc(row.draftId)}" data-rmt-recovery-page-id="${core_text.esc(row.pageId || '')}"`;
         const retry = oversized ? '' : `<button type="button" class="rmt-btn" data-rmt-recovery-mode="${core_text.esc(row.mode)}" ${attrs}>${row.canContinue ? '继续生成' : '重试未完成部分'}</button>`;
+        const fresh = !runtimeState.activeArchiveSnapshot && ['mode', 'merged'].includes(row.journal?.operation?.kind || 'mode')
+            ? `<button type="button" class="rmt-btn" data-rmt-action="merged-new" data-rmt-mode="${core_text.esc(row.mode)}" data-rmt-route="${core_text.esc(pageRoute(row.mode, row.pageId, row.mode) || row.mode)}">开始新任务</button>` : '';
         return {
             state: oversized || row.failed || row.failureCode ? 'failed' : 'retry',
             label: taskLabel(row.mode, row.pageId, row.mode),
@@ -417,7 +419,7 @@ function draftCards() {
             draftId: row.draftId,
             detail: `已保留 ${Number(row.completed) || 0} 个成功分段 · ${String(reason || '').replace(/[。\s]+$/, '')}`,
             at: Number(row.updatedAt) || Number(row.createdAt) || 0,
-            actions: `${retry}<button type="button" class="rmt-btn" data-rmt-recovery-export="${core_text.esc(row.mode)}" ${attrs}>导出未提交草稿</button><button type="button" class="rmt-btn" data-rmt-recovery-discard="${core_text.esc(row.mode)}" ${attrs}>放弃这份草稿</button>`,
+            actions: `${retry}${fresh}<button type="button" class="rmt-btn" data-rmt-recovery-export="${core_text.esc(row.mode)}" ${attrs}>导出未提交草稿</button><button type="button" class="rmt-btn" data-rmt-recovery-discard="${core_text.esc(row.mode)}" ${attrs}>放弃这份草稿</button>`,
         };
     });
 }
@@ -443,7 +445,7 @@ function mergedPendingCards() {
         const attrs = `data-rmt-pending-id="${core_text.esc(row.id)}" data-rmt-route="${core_text.esc(row.route)}"`;
         return { state, label: row.label, mode: row.mode, pageId: row.route, draftId: row.origin?.generationRecoveryDraftId || row.id, at: Number(row.at) || 0,
             detail: state === 'unsaved' ? '正文已生成，仅重新保存；不会再调用模型。' : '原批次仍保留，只补未完成的这一页。',
-            actions: `<button type="button" class="rmt-btn" data-rmt-action="${state === 'unsaved' ? 'merged-resave' : 'merged-repair'}" ${attrs} ${row.origin ? '' : 'disabled'}>${state === 'unsaved' ? '重新保存' : '只补这一页'}</button><button type="button" class="rmt-btn" data-rmt-action="merged-export" ${attrs}>导出成果</button>` };
+            actions: `<button type="button" class="rmt-btn" data-rmt-action="${state === 'unsaved' ? 'merged-resave' : 'merged-repair'}" ${attrs} ${row.origin ? '' : 'disabled'}>${state === 'unsaved' ? '重新保存' : '只补这一页'}</button><button type="button" class="rmt-btn" data-rmt-action="merged-export" ${attrs}>导出成果</button><button type="button" class="rmt-btn" data-rmt-action="merged-new" ${attrs}>开始新任务</button><button type="button" class="rmt-btn" data-rmt-action="merged-discard" ${attrs}>放弃这份成果</button>` };
     });
     let legacy = [];
     try { legacy = statusView.currentUnattributedPendingRows(); } catch { /* The guarded export action remains available through read failure. */ }
@@ -520,6 +522,10 @@ function collectTaskCards() {
     return cards.sort((left, right) => (CARD_RANK[left.state] ?? 9) - (CARD_RANK[right.state] ?? 9) || right.at - left.at);
 }
 
+export function liveTaskStripHtml(active, waiting) {
+    return !active && !waiting ? '' : `<button type="button" class="rmt-live-chip ${active ? 'rmt-live-run' : ''}" data-rmt-action="tasks" aria-label="打开任务中心"><b>任务</b><em>${active ? `${active} 项进行中` : ''}${active && waiting ? ' · ' : ''}${waiting ? `${waiting} 项待处理` : ''}</em></button>`;
+}
+
 function paintLiveStrip() {
     const host = document.querySelector(`#${core_constants.OVERLAY_ID} [data-rmt-live-tasks]`);
     if (!host) return;
@@ -550,8 +556,12 @@ function paintLiveStrip() {
         if (runningLabels.has(card.label)) continue;
         chips.push(`<button type="button" class="rmt-live-chip" data-rmt-action="tasks"><b>${esc(card.label)}</b><em>${esc(CARD_LABEL[card.state])}</em></button>`);
     }
-    host.hidden = chips.length === 0;
-    host.innerHTML = chips.join('');
+    // Keep detailed rows in the task panel; one summary never pushes reading controls away.
+    const active = running.length + (runtimeState.busy && !running.some(row => row.id === 'archive-import' || row.kind === 'archive') ? 1 : 0);
+    const waiting = Math.max(0, chips.length - active);
+    host.hidden = !active && !waiting;
+    host.innerHTML = liveTaskStripHtml(active, waiting);
+
 }
 
 function hideMainRecoveryCards() {
@@ -760,6 +770,21 @@ export function handleTaskCenterAction(action, actionEl) {
         const removed = core_requestCoordinator.clearCompletedChatTasks();
         refreshTaskCenterView();
         globalThis.toastr?.info?.(removed || queueRemoved ? '已清空完成的任务。未完成草稿还在。' : '没有可清空的已完成任务。', '心迹回廊');
+        return;
+    }
+    if (action === 'merged-discard' || action === 'merged-new') {
+        const route = actionEl?.dataset?.rmtRoute || '', id = actionEl?.dataset?.rmtPendingId || '';
+        const mode = ui_workspaceState.WORKSPACE_ROUTES[route]?.mode || actionEl?.dataset?.rmtMode;
+        if (!Object.values(core_constants.MODE).includes(mode)) return;
+        const fresh = action === 'merged-new';
+        if (!ui_overlay.confirmExplicitAction(fresh ? '开始一份新任务？' : '放弃这份未保存成果？', fresh
+            ? '旧成果继续保留，可稍后保存或导出。新任务会使用文本生成额度。'
+            : '仅移除这一份未提交成果及对应草稿，已保存页面、图片和其他任务保留。', { destructive: !fresh })) return;
+        const operation = fresh ? generation_client.generateMode(mode, { newTask: true, background: true, workspaceRoute: route })
+            : generation_merged.discardPending(route, id);
+        void Promise.resolve(operation).catch(error => {
+            if (error?.name !== 'AbortError') globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊');
+        }).finally(refreshTaskCenterView);
         return;
     }
     if (action === 'merged-discard-legacy') { discardLegacyPending(); return; }

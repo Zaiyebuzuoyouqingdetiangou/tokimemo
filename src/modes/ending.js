@@ -1,3 +1,4 @@
+import * as cg_visual from '../core/cgVisualRules.js';
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
 import * as core_cache from '../core/cache.js';
@@ -572,11 +573,13 @@ export function normalizeEndingRouteDetail(data, route) {
     const scenes = (Array.isArray(rawEpilogue?.scenes) ? rawEpilogue.scenes : []).slice(0, 6).map((scene, index) => ({
         title: core_text.normalizeText(scene?.title, 120) || `后日谈 ${index + 1}`,
         text: core_text.normalizeText(scene?.text, 5000),
+        ...cg_visual.generatedCgSceneFields(scene),
     })).filter(scene => scene.text.length >= 90);
     if (scenes.length < 3) throw new Error(`已解锁结局“${route.title}”的后日谈不足 3 段。`);
     return cg_targets.preserveCgSlots(route, {
         ...route,
         endingScene,
+        ...cg_visual.generatedCgSceneFields(raw),
         confession: '',
         confessionLines: [],
         creditsLine,
@@ -797,6 +800,7 @@ export function normalizeEndingConfessionReplays(rawList, memoryBank) {
             confessionLines,
             responseSummary,
             afterEffect,
+            ...cg_visual.generatedCgSceneFields(item),
             ...cg_targets.normalizeLocalCgSlots(item),
         };
         replay.easterEgg = normalizeEndingEasterEgg(item?.easterEgg, replay);
@@ -837,6 +841,7 @@ ${relationshipSummary}`,
             ? (Array.isArray(rawEpilogue?.scenes) ? rawEpilogue.scenes : []).slice(0, 6).map((scene, sceneIndex) => ({
                 title: core_text.normalizeText(scene?.title, 120) || `后日谈 ${sceneIndex + 1}`,
                 text: core_text.normalizeText(scene?.text, 5000),
+        ...cg_visual.generatedCgSceneFields(scene),
             })).filter(scene => scene.text.length >= 90)
             : [];
         const epilogue = {
@@ -868,6 +873,7 @@ ${relationshipSummary}`,
             confessionLines,
             creditsLine,
             epilogue,
+            ...cg_visual.generatedCgSceneFields(item),
             ...cg_targets.normalizeLocalCgSlots(item),
         };
     }).filter(Boolean);

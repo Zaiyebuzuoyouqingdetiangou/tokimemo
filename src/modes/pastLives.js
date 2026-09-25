@@ -1,3 +1,5 @@
+import * as cg_visual from '../core/cgVisualRules.js';
+import * as cg_targets from '../core/cgTargets.js';
 import * as contract from '../core/pastLivesContract.js';
 import * as text from '../core/text.js';
 import * as evidence from '../core/evidence.js';
@@ -104,6 +106,7 @@ export function normalizePastLivesDossier(value, memory, { id = 'D01', title = '
     const raw = contract.pastLivesData(value, L.episodeChars);
     return { id, title: fictionalText(title || raw.title, memory, L.title, true), era: fictionalText(raw.era, memory, 240),
         synopsis: fictionalText(raw.synopsis, memory, L.prose, true),
+        ...cg_visual.generatedCgSceneFields(raw), ...cg_targets.normalizeLocalCgSlots(raw),
         clues: list(raw.clues, L.clues).map((clue, index) => {
             if (!contract.PAST_LIVES_CLUE_KINDS.includes(clue.kind)) throw fail('STRUCTURE', '卷宗线索类型无法读取，请使用物证、证词、缺页或旁记。');
             const speaker = ['char', 'user', 'narrator'].includes(clue.speaker) ? clue.speaker : 'narrator';

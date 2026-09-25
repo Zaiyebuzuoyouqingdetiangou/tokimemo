@@ -1,3 +1,4 @@
+import * as expanded_cg_view from './expandedCgView.js';
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
 import * as core_constants from '../core/constants.js';
@@ -32,7 +33,7 @@ export function renderButterfly() {
         : `<section class="rmt-terminal-block rmt-observation-screen">
             <div class="rmt-terminal-section-title">III. OBSERVATION SCREEN // 平行世界观测</div>
             <div class="rmt-record-code">${core_text.esc(selected.code)}</div>
-            <div class="rmt-signal" data-rmt-signal><div class="rmt-signal-noise"></div><div class="rmt-signal-center">[ SIGNAL LOST: IMAGE DATA CORRUPTED ]</div></div>
+            ${expanded_cg_view.expandedCgHtml(session, {kind:'butterfly-node',containerId:selected.id}, !!runtimeState.activeArchiveSnapshot, {placeholder:'<div class="rmt-signal" data-rmt-signal><div class="rmt-signal-noise"></div><div class="rmt-signal-center">[ 等待记录这一刻的画面 ]</div></div>'})}
             <div class="rmt-mono"><b>PARALLEL SUBJECT // 平行世界 ${observerName} 本人发言</b><br>${core_text.esc(selected.monologue || (selected.prosePending ? '正文待补。世界设定已经留下，可以再补这一段。' : ''))}</div>
           </section>
           <section class="rmt-terminal-block rmt-intervention-block"><div class="rmt-terminal-section-title">IV. CURRENT-WORLD RESPONSE // 现世回应</div><div class="rmt-intervention">${core_text.esc(selected.intervention)}</div></section>

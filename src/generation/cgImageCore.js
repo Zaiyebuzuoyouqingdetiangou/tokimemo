@@ -1,3 +1,6 @@
+import * as past_lives_view from '../ui/pastLivesView.js';
+import * as bedtime_view from '../ui/bedtimeView.js';
+import * as butterfly_view from '../ui/butterflyView.js';
 import * as cg_visual from '../core/cgVisualRules.js';
 import * as cg_format from '../core/cgPromptFormat.js';
 import * as baibai_image from './baibaiImage.js';
@@ -292,6 +295,7 @@ export function buildCgReconceptPrompt(item, context, mode, appearance = null, p
         title: sanitizeCgVisualText(item?.title, 160),
         date: sanitizeCgVisualText(item?.date, 80),
         description: sanitizeCgVisualText(item?.cgSourceText || item?.cgDesc || item?.desc || item?.subtitle, item?.cgSourceText ? 12000 : 1800),
+        ...(item?.cgSceneDirection ? { sceneDirection: item.cgSceneDirection } : {}),
         characterName: core_text.normalizeText(context?.name2, 120),
         userName: core_text.normalizeText(context?.name1, 120),
     };
@@ -378,7 +382,7 @@ export function refreshSettledCgImage(taskKey, origin) {
     // After a local cancellation/timeout the UI task is already removed, but the
     // provider may only now have released its key. Re-enable controls read-only.
     if (!runtimeState.activeCgImageTasks.has(taskKey) && core_context.isCurrentTaskOrigin(origin)
-        && [core_constants.MODE.ALBUM, core_constants.MODE.ADV, core_constants.MODE.HEART].includes(runtimeState.activeMode)) ui_overlay.renderActive();
+        && [core_constants.MODE.ALBUM, core_constants.MODE.ADV, core_constants.MODE.HEART, core_constants.MODE.ENDING, core_constants.MODE.PAST_LIVES, core_constants.MODE.BEDTIME, core_constants.MODE.BUTTERFLY].includes(runtimeState.activeMode)) ui_overlay.renderActive();
 }
 
 export function refreshCgImageProviderBars() {
@@ -554,6 +558,9 @@ export function renderCurrentCgMode(mode, session) {
     else if (mode === core_constants.MODE.HEART && workspace_state.workspace.route === 'language') language_view.renderLanguage();
     else if (mode === core_constants.MODE.HEART) ui_heartView.renderHeart();
     else if (mode === core_constants.MODE.ENDING) ui_endingView.renderEnding();
+    else if (mode === core_constants.MODE.PAST_LIVES) past_lives_view.renderPastLives();
+    else if (mode === core_constants.MODE.BEDTIME) bedtime_view.renderBedtime();
+    else if (mode === core_constants.MODE.BUTTERFLY) butterfly_view.renderButterfly();
 }
 
 export function renderCapturedCgMode(target) {

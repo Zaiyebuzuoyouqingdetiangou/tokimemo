@@ -73,7 +73,8 @@ ${JSON.stringify(compactAchievementsExisting(previousSession), null, 2)}
 
 export function normalizeAchievements(data, memoryBank, { allowPartial = false, sourceMemoryIds = null } = {}) {
     const allowedTiers = new Set(['bronze', 'silver', 'gold', 'hidden']);
-    const raw = Array.isArray(data?.entries) ? data.entries : [];
+    if (!Array.isArray(data?.entries)) throw new Error('成就库缺少条目列表。');
+    const raw = data.entries;
     const entries = raw.slice(0, core_constants.MAX_DERIVED_CONTENT_ITEMS).map((item, index) => {
         const title = core_text.normalizeText(item?.title, 100);
         const description = core_text.normalizeText(item?.description, 900);
@@ -109,7 +110,7 @@ export function normalizeAchievements(data, memoryBank, { allowPartial = false, 
             hint: unlocked ? '' : (core_text.normalizeText(item?.hint, 500) || '继续积累新的重要回忆。'),
         };
     }).filter(item => item && (!sourceMemoryIds || (item.unlocked && core_incremental.usesIncrementalMemoryId(item.sourceMemoryIds, sourceMemoryIds))));
-    if (!allowPartial && !entries.length) throw new Error('成就库没有生成可用条目。');
+    if (!allowPartial && raw.length && !entries.length) throw new Error('成就库没有生成可用条目。');
     return {
         kind: core_constants.MODE.ACHIEVEMENTS,
         title: core_text.normalizeText(data?.title, 100) || '成就库',
