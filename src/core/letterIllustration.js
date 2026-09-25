@@ -164,3 +164,6 @@ export function renderLetterIllustration(value, { idPrefix = 'rmt-letter', label
     const accents = design.accessories.map((item, index) => accessory(item, 30 + index * 75, index % 2 ? 17 : 8, colours)).join('');
     return `<svg class="rmt-letter-illustration" data-rmt-letter-illustration-version="1" data-rmt-letter-palette="${design.palette}" width="220" height="${height}" viewBox="0 0 220 ${height}" preserveAspectRatio="xMidYMid meet" ${semantic}>${title}<path d="M14 ${height - 22} Q54 ${height - 28} 96 ${height - 22} T206 ${height - 23}" fill="none" stroke="${colours[4]}" stroke-width="1.4" opacity=".65"/><path d="M18 ${height - 15} Q62 ${height - 19} 104 ${height - 14} T201 ${height - 15}" fill="none" stroke="${colours[2]}" stroke-width="1" opacity=".38"/>${motif(design.subject, primaryX, 31, colours, design.action)}${companion}${actionDetail(design.action, !!companion, colours, design.subject, primaryX)}${accents}</svg>`;
 }
+
+export function letterRelationshipEvidence(value) { return v2.relationshipEvidence(value); }
+export function letterMissingReason(options = {}) { return v2.missingReason(options); }

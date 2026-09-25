@@ -1,5 +1,0 @@
-<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>心迹回廊 · 修复预览</title>
-<style>body{margin:0;background:#ddd7e2;font:16px system-ui;color:#333}nav{display:flex;gap:12px;padding:14px}button{padding:9px}iframe{display:block;margin:0 auto;width:390px;height:860px;border:0;background:white}</style>
-<nav><button data-size="390">手机 390</button><button data-size="320">手机 320</button><button data-size="900">桌面 900</button><button id="night">切换亮暗</button><button id="reopen">重新打开</button></nav>
-<iframe title="心迹回廊真实组件预览" src="ui-repair-frame.html"></iframe>
-<script>const frame=document.querySelector('iframe');document.querySelectorAll('[data-size]').forEach(b=>b.onclick=()=>frame.style.width=b.dataset.size+'px');document.querySelector('#night').onclick=()=>frame.contentWindow.postMessage('theme',location.origin);document.querySelector('#reopen').onclick=()=>frame.contentWindow.postMessage('reopen',location.origin);</script>

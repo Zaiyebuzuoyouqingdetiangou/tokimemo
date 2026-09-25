@@ -1,0 +1,34 @@
+✔ explicit discard can find the same card owner after edits without selecting another chat or avatar (3.3789ms)
+✔ a selected retry owns its draft from preparation through origin rebinding (0.5974ms)
+✔ explicit discard clears a stale active archive draft and fences its late callback, preserving another chat (31.8754ms)
+✔ failed discard restores the draft but does not reauthorize the old callback; explicit retry can resume it (11.3672ms)
+(node:17360) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ editing the same card keeps canonical legacy mail readable, receivable and favoriteable (64.6971ms)
+✔ same-card fresh and partial mail append after an edit while retaining every old letter (36.5236ms)
+✔ canonical proof does not authorize a stale view from another card, chat, revision or mailbox (18.7297ms)
+✔ new mail captures stable owner identity and another avatar cannot reuse it (4.1254ms)
+✔ an unavailable avatar adds no restriction to the existing canonical same-card mailbox (6.0672ms)
+✔ a mismatched legacy mailbox is rejected before sending a new letter request (5.8042ms)
+✔ local inbox failures keep concrete user-facing reasons (4.9754ms)
+✔ legacy buttons without draft ids stay distinct by page, mode, and chat (1.1403ms)
+✔ repeated taps share one pending operation and one error; next explicit attempt remains available (1.6842ms)
+✔ unrelated draft actions proceed independently and cancellation creates no error toast (0.3396ms)
+(node:12580) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ discard stops only the selected page owner and waits for cleanup; unrelated busy work does not block (654.643ms)
+✔ failed durable discard reports storage failure without claiming success (10.3916ms)
+✔ a completed discard does not navigate another chat opened during persistence (3.9728ms)
+✔ same character card edits do not strand frozen drafts in pool or legacy storage (22.1628ms)
+✔ explicit inspect keeps old drafts exportable and discardable without treating them as resumable (2.8195ms)
+✔ inspection does not revive closed drafts or select a different requested page (1.9672ms)
+✔ card edits never authorize another character, chat, or archive entry (4.8355ms)
+✔ resume after card edits replays saved segments and frozen requests, saves and reopens with source attribution intact (12.031ms)
+ℹ tests 22
+ℹ suites 0
+ℹ pass 22
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 847.3973

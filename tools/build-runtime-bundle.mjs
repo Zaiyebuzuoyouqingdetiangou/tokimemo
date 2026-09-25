@@ -9,7 +9,7 @@ const entry = 'heartbeatMemories.js';
 const outFile = path.join(repoRoot, 'dist', 'heartbeatMemories.bundle.js');
 
 const namespaceImport = /^import\s+\*\s+as\s+([A-Za-z_$][\w$]*)\s+from\s+['"]([^'"]+)['"];?\s*$/gm;
-const stateImport = /^import\s*\{\s*state\s+as\s+([A-Za-z_$][\w$]*)\s*\}\s*from\s*['"]([^'"]+)['"];?\s*$/gm;
+const stateImport = /^import\s*\{\s*([^}]+)\s*\}\s*from\s*['"]([^'"]+)['"];?\s*$/gm;
 const unsupportedImport = /^import\s+/m;
 const exportPatterns = [
     /^export\s+async\s+function\s+([A-Za-z_$][\w$]*)/gm,
@@ -46,7 +46,7 @@ for (const rel of moduleFiles) {
     // produce the same source fingerprint and runtime bytes.
     const source = (await readFile(path.join(sourceRoot, rel), 'utf8')).replace(/\r\n/g, '\n');
     const namespaceImports = [...source.matchAll(namespaceImport)].map(match => ({ local: match[1], specifier: match[2] }));
-    const stateImports = [...source.matchAll(stateImport)].map(match => ({ local: match[1], specifier: match[2] }));
+    const stateImports = [...source.matchAll(stateImport)].flatMap(match => match[1].split(',').map(binding => { const [imported, local = imported] = binding.trim().split(/\s+as\s+/); return { imported, local, specifier: match[2] }; }));
     let importsStripped = source.replace(namespaceImport, '').replace(stateImport, '');
     if (unsupportedImport.test(importsStripped)) throw new Error(`Unsupported import syntax remains in ${rel}`);
     const exports = [];
@@ -89,6 +89,15 @@ function visit(rel) {
     order.push(rel);
 }
 visit(entry);
+// Preserve the established initialization order across the facade refactor.
+// New modules are placed before their first importer.
+const pinnedOrder = JSON.parse(await readFile(path.join(repoRoot, 'tools', 'runtime-module-order.json'), 'utf8'));
+const pinned = pinnedOrder.filter(rel => reachable.has(rel));
+for (const rel of order.filter(rel => !pinned.includes(rel))) {
+    const firstImporter = pinned.findIndex(name => moduleRows.get(name).dependencies.includes(rel));
+    pinned.splice(firstImporter < 0 ? pinned.length : firstImporter, 0, rel);
+}
+order.splice(0, order.length, ...pinned);
 
 const fingerprint = createHash('sha256');
 for (const rel of [...reachable].sort()) {
@@ -110,7 +119,7 @@ for (const rel of order) {
     const row = moduleRows.get(rel);
     const aliases = [];
     for (const item of row.namespaceImports) aliases.push(`const ${item.local} = ${safeName('__m', resolveDependency(rel, item.specifier))};`);
-    for (const item of row.stateImports) aliases.push(`const ${item.local} = ${safeName('__m', resolveDependency(rel, item.specifier))}.state;`);
+    for (const item of row.stateImports) aliases.push(`const ${item.local} = ${safeName('__m', resolveDependency(rel, item.specifier))}.${item.imported};`);
     const assignments = row.exports.map(name => `${safeName('__m', rel)}.${name} = ${name};`).join('\n');
     chunks.push(`function ${safeName('__init', rel)}() {\n// MODULE: ${rel}\n${aliases.join('\n')}\n${row.body}\n${assignments}\n}\n\n`);
 }

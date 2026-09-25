@@ -1,0 +1,17 @@
+{
+  "version": "0.99.28",
+  "build": "0.99.28-r84.80-draft-repair",
+  "baseCommit": "d08e3ee",
+  "syntaxFiles": 278,
+  "syntaxExit": 0,
+  "bundleModules": 239,
+  "bundleSha256": "69163ebaef2f3e5138f1b989aa89618ceae38f603f13a3eef14457c200b9894e",
+  "bundleRebuildIdentical": true,
+  "tests": 22,
+  "pass": 22,
+  "fail": 0,
+  "undefinedNames": 0,
+  "runtimeExports": 5,
+  "testedEnvironment": "Node production modules with host/provider/storage boundaries simulated; local browser at 319px with real IndexedDB and synthetic archive; native confirmation replaced only in fixture. No paid provider or real SillyTavern/iPhone acceptance.",
+  "priorBaseline": "r84.59 passed 221 tests before integrating r84.79. Remote r84.79 removed its test tooling; historical 83-test report was not rerun and is not claimed as current evidence."
+}

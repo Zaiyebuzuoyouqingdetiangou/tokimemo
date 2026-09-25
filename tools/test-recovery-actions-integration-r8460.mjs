@@ -23,8 +23,10 @@ async function fixture({ writeOk = true, switchDuringSave = false } = {}) {
     let current = true;
     const state = { busy: true, activeArchiveSnapshot: null, deferredChatCommits: new Map() };
     const owners = [
-        { id: 'target', mode: 'inbox', pageId: 'inbox', pageIds: [], origin: {} },
+        { id: 'target', mode: 'inbox', pageId: 'inbox', pageIds: [], draftId: 'selected', origin: {} },
+        { id: 'not-bound', mode: 'inbox', pageId: 'inbox', pageIds: [], origin: {} },
         { id: 'unrelated-mode', mode: 'room', pageId: 'room', pageIds: [], origin: {} },
+        { id: 'unrelated-draft', mode: 'inbox', pageId: 'inbox', pageIds: [], origin: { generationRecoveryDraftId: 'another-draft' } },
         { id: 'historical', mode: 'inbox', pageId: 'inbox', pageIds: [], origin: { archiveTargetEntryId: 'old-entry' } },
     ];
     const overrides = {
@@ -47,7 +49,7 @@ async function fixture({ writeOk = true, switchDuringSave = false } = {}) {
         '../ui/overlay.js': { confirmExplicitAction: () => true, showChooser: () => events.push('render') },
     };
     globalThis.toastr = { success: () => events.push('success') };
-    return { api: await load('../src/generation/client.js', overrides), events };
+    return { api: await load('../src/generation/generationSavedActions.js', overrides), events };
 }
 
 test('discard stops only the selected page owner and waits for cleanup; unrelated busy work does not block', async () => {

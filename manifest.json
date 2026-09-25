@@ -1,15 +1,15 @@
 {
   "display_name": "心迹回廊",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.99.14-r84.59-reviewed",
+  "js": "index.js?heartbeat=0.99.28-r84.80-draft-repair",
   "author": "Toto",
-  "version": "0.99.14",
+  "version": "0.99.28",
   "auto_update": true,
   "minimum_client_version": "1.13.0",
   "hooks": {
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r84.59：镜译移入设置、实时聊天置于互动末尾、独立手帐整页收录与挑选制作。",
+  "description": "r84.80：修复草稿重试/放弃与邮箱身份误判，去掉档案列表重复日历，保留 r84.79 更新。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }

@@ -12,6 +12,7 @@ import * as core_requestCoordinator from '../core/requestCoordinator.js';
 import * as core_settings from '../core/settings.js';
 import * as core_text from '../core/text.js';
 import * as generation_client from '../generation/client.js';
+import * as generation_recovery from '../generation/recovery.js';
 import * as generation_merged from '../generation/mergedGeneration.js';
 import * as modes_heart from '../modes/heart.js';
 import { state as runtimeState } from '../core/state.js';
@@ -400,11 +401,12 @@ function draftCards() {
     catch { drafts = []; }
     return drafts.filter(row => row.completed || row.truncated || row.failed || row.failureCode || row.oversized).slice(0, 12).map(row => {
         const oversized = row.oversized === true;
+        const classified = generation_recovery.generationFailureReason(row);
         const reason = oversized
             ? '草稿超出本地保存上限，不能继续生成'
-            : row.failureCode
+            : classified || (row.failureCode
                 ? core_text.safeErrorSummary({ code: row.failureCode, archiveInputCategory: row.failureCategory, recoveryPhase: row.failurePhase })
-                : (row.canContinue ? '正文写到一半，可以继续补完' : (row.failed ? '这次输出没有通过' : '已保存成功部分'));
+                : (row.canContinue ? '正文写到一半，可以继续补完' : '已保存成功部分'));
         const attrs = `data-rmt-recovery-draft-id="${core_text.esc(row.draftId)}" data-rmt-recovery-page-id="${core_text.esc(row.pageId || '')}"`;
         const retry = oversized ? '' : `<button type="button" class="rmt-btn" data-rmt-recovery-mode="${core_text.esc(row.mode)}" ${attrs}>${row.canContinue ? '继续生成' : '重试未完成部分'}</button>`;
         return {
@@ -445,7 +447,7 @@ function mergedPendingCards() {
     });
     let legacy = [];
     try { legacy = statusView.currentUnattributedPendingRows(); } catch { /* The guarded export action remains available through read failure. */ }
-    if (legacy.length) cards.push({ state: 'failed', label: '未归属的旧暂存记录', detail: `有 ${legacy.length} 条旧记录缺少所属人物，已保留且不会显示为当前人物内容。`, actions: '<button type="button" class="rmt-btn" data-rmt-action="merged-export-legacy">导出旧暂存记录</button>', at: 0 });
+    if (legacy.length) cards.push({ state: 'failed', label: '未归属的旧暂存记录', detail: `有 ${legacy.length} 条旧记录缺少所属人物，已保留且不会显示为当前人物内容。`, actions: '<button type="button" class="rmt-btn" data-rmt-action="merged-export-legacy">导出旧暂存记录</button><button type="button" class="rmt-btn" data-rmt-action="merged-discard-legacy">导出并丢弃</button>', at: 0 });
     return cards;
 }
 
@@ -613,6 +615,23 @@ function exportMergedResult(id = '') {
     try { document.body.appendChild(link); link.click(); } finally { link.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000); }
 }
 
+// 旧暂存记录缺少所属人物，无法再重试。先把它们下载成 JSON 文件保存到本机，
+// 再从暂存区删除；删除范围只限于刚导出的这几条。
+function discardLegacyPending() {
+    const pending = generation_merged.createPendingStore();
+    const chatId = core_context.comparableChatId(core_context.getChatId());
+    const ids = pending.readUnattributed(chatId).map(row => row.id).filter(Boolean);
+    if (!ids.length) return false;
+    const ok = ui_overlay.confirmExplicitAction(`导出并清除 ${ids.length} 条旧暂存记录`,
+        '这些记录缺少所属人物，已经无法重试。会先把它们下载为 JSON 文件保存到本机，然后从暂存区删除；删除后只能靠这个文件找回。', { destructive: true });
+    if (!ok) return false;
+    exportMergedResult('');
+    const removed = pending.discardUnattributed(chatId, ids);
+    globalThis.toastr?.success?.(`已导出并清除 ${removed} 条旧暂存记录。`, '心迹回廊');
+    refreshTaskCenterView();
+    return true;
+}
+
 function refreshTaskCenterView() {
     if (painting) return;
     painting = true;
@@ -645,7 +664,8 @@ export function syncLiveTaskStrip() {
     paintLiveStrip();
 }
 
-export function syncTaskCenterChrome() {
+export function syncTaskCenterChrome({ refreshRecovery = false } = {}) {
+    if (refreshRecovery) unfinishedCache.at = 0;
     bindTaskCenterRefresh();
     refreshTaskCenterView();
 }
@@ -742,6 +762,7 @@ export function handleTaskCenterAction(action, actionEl) {
         globalThis.toastr?.info?.(removed || queueRemoved ? '已清空完成的任务。未完成草稿还在。' : '没有可清空的已完成任务。', '心迹回廊');
         return;
     }
+    if (action === 'merged-discard-legacy') { discardLegacyPending(); return; }
     if (action === 'merged-export' || action === 'merged-export-legacy') { exportMergedResult(action === 'merged-export-legacy' ? '' : actionEl?.dataset?.rmtPendingId || ''); return; }
     if (action === 'generate-together') {
         const navigation = mergedNavigationMark();
@@ -839,6 +860,12 @@ export function handleTaskCenterAction(action, actionEl) {
                         ? generation_client.generateMode(core_constants.MODE.ROOM, { fillRoomText: true, background: true })
                         : record.secondStepKind === 'items-lines'
                             ? generation_client.generateMode(core_constants.MODE.ITEMS, { fillItemsText: true, background: true })
+                            : record.secondStepKind === 'travel-prose'
+                                ? generation_client.generateMode(core_constants.MODE.TRAVEL, { fillTravelText: true, background: true })
+                                : record.secondStepKind === 'butterfly-prose'
+                                    ? generation_client.generateMode(core_constants.MODE.BUTTERFLY, { fillButterflyText: true, background: true })
+                                    : record.secondStepKind === 'past-lives-prose'
+                                        ? generation_client.generateMode(core_constants.MODE.PAST_LIVES, { secondStep: true, background: true })
                             : record.secondStepKind === 'ending-scenes'
                                 ? generation_client.generateMode(core_constants.MODE.ENDING, { secondStep: true, background: true })
                                 : record.secondStepKind === 'adv-scripts'

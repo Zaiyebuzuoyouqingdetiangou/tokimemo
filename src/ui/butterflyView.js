@@ -26,14 +26,14 @@ export function renderButterfly() {
             <div class="rmt-terminal-section-title">III. OBSERVATION POINT Ω // 现世终局观测</div>
             <div class="rmt-record-code">${core_text.esc(selected.code || '> OBSERVATION POINT #OMEGA')}</div>
             <div class="rmt-signal rmt-omega-signal"><div class="rmt-signal-noise"></div><div class="rmt-signal-center">[ ALL PARALLEL SUBJECT FEEDS CLOSED ]<br>[ RETURNING TO MAIN WORLDLINE ]</div></div>
-            <div class="rmt-mono rmt-omega-monologue"><b>CURRENT WORLD SUBJECT // 现世 ${observerName} 最终发言</b><br>${core_text.esc(selected.intervention)}</div>
+            <div class="rmt-mono rmt-omega-monologue"><b>CURRENT WORLD SUBJECT // 现世 ${observerName} 最终发言</b><br>${core_text.esc(selected.intervention || (selected.prosePending ? '正文待补。观测点已经留下，可以再补这一段。' : ''))}</div>
           </section>
           <section class="rmt-terminal-block rmt-system-block"><div class="rmt-terminal-section-title">IV. SYSTEM NOTE // 观测完成</div><div class="rmt-system-note">${core_text.esc(selected.systemNote)}</div></section>`
         : `<section class="rmt-terminal-block rmt-observation-screen">
             <div class="rmt-terminal-section-title">III. OBSERVATION SCREEN // 平行世界观测</div>
             <div class="rmt-record-code">${core_text.esc(selected.code)}</div>
             <div class="rmt-signal" data-rmt-signal><div class="rmt-signal-noise"></div><div class="rmt-signal-center">[ SIGNAL LOST: IMAGE DATA CORRUPTED ]</div></div>
-            <div class="rmt-mono"><b>PARALLEL SUBJECT // 平行世界 ${observerName} 本人发言</b><br>${core_text.esc(selected.monologue)}</div>
+            <div class="rmt-mono"><b>PARALLEL SUBJECT // 平行世界 ${observerName} 本人发言</b><br>${core_text.esc(selected.monologue || (selected.prosePending ? '正文待补。世界设定已经留下，可以再补这一段。' : ''))}</div>
           </section>
           <section class="rmt-terminal-block rmt-intervention-block"><div class="rmt-terminal-section-title">IV. CURRENT-WORLD RESPONSE // 现世回应</div><div class="rmt-intervention">${core_text.esc(selected.intervention)}</div></section>
           <section class="rmt-terminal-block rmt-system-block"><div class="rmt-terminal-section-title">V. SYSTEM NOTE // 系统评估</div><div class="rmt-system-note">${core_text.esc(selected.systemNote)}</div></section>`;

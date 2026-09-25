@@ -2,6 +2,10 @@ import * as text from '../core/text.js';
 
 const pending = new Map();
 
+export function recoveryActionKey(action, scope, mode = '', pageId = '', draftId = '') {
+    return JSON.stringify([action, scope, mode, pageId, draftId]);
+}
+
 // Coalesce only the same in-flight action, including buttons replaced by a
 // render. No cooldown or retry quota: settling always makes it available again.
 export function runRecoveryAction(button, key, operation, { label = '处理中…', title = '心迹回廊' } = {}) {

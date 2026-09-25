@@ -36,7 +36,7 @@ async function fixture({ legacy = true } = {}) {
     const state = { activeMode: 'inbox', activeSession: structuredClone(saved), activeArchiveSnapshot: null,
         activeArchiveReadOnly: false, runtimeLifecycleEpoch: 0 };
     const body = { innerHTML: '' }, counts = { receive: 0, requests: 0, mutations: 0 };
-    const errors = [];
+    const errors = [], prompts = [];
     const contextTools = { ...contextApi, currentCharacterGuard: () => context,
         runtimeLifecycleStillCurrent: () => true, isCurrentTaskOrigin: () => true };
     const cacheTools = { ...cache, getCache: () => stored,
@@ -47,8 +47,9 @@ async function fixture({ legacy = true } = {}) {
             return structuredClone(stored.inbox);
         } };
     const generation = { generateMode: async () => { counts.receive++; },
-        requestValidatedSegment: async (_prompt, _status, _options, validate) => {
+        requestValidatedSegment: async (prompt, _status, _options, validate) => {
             counts.requests++;
+            prompts.push(prompt);
             return validate({ letters: [{ slot: 'daily', title: '新信', greeting: '阿宁', body: '新写的信。', closing: '林深' }] });
         } };
     const mode = await loadModule('../src/modes/inbox.js', { '../generation/client.js': generation,
@@ -57,7 +58,7 @@ async function fixture({ legacy = true } = {}) {
         '../core/context.js': contextTools, '../core/state.js': { state }, '../generation/client.js': generation,
         './overlay.js': { topTitle: () => {}, bodyEl: () => body } });
     globalThis.toastr = { error: message => errors.push(message) };
-    return { bank, context, stored, state, saved, mode, ui, counts, errors };
+    return { bank, context, stored, state, saved, mode, ui, counts, errors, prompts };
 }
 
 test('editing the same card keeps canonical legacy mail readable, receivable and favoriteable', async () => {
@@ -80,6 +81,8 @@ test('same-card fresh and partial mail append after an edit while retaining ever
     const previous = structuredClone(f.saved), before = structuredClone(previous), date = new Date('2026-09-25T12:00:00Z');
     const generated = await f.mode.generateInbox(f.context, f.bank, {}, 'inbox:test', previous, { date });
     assert.equal(f.counts.requests, 1);
+    assert.match(f.prompts[0], /RECENT_LETTERS/);
+    assert.match(f.prompts[0], /旧信/);
     assert.equal(generated.letters.length, 2);
     assert.deepEqual(generated.letters[0], before.letters[0]);
     assert.deepEqual(previous, before);
@@ -143,4 +146,7 @@ test('local inbox failures keep concrete user-facing reasons', async () => {
         && /邮箱结构/.test(text.safeErrorSummary(error)));
     assert.throws(() => inbox.normalizeInboxLetters({}, f.bank, inbox.inboxPlan(f.bank)), error => error.code === 'RMT_INBOX_INCOMPLETE'
         && /来信未完整/.test(text.safeErrorSummary(error)));
+    assert.doesNotThrow(() => inbox.normalizeInboxLetters({ letters: [{ slot: 'daily', title: '河畔',
+        greeting: '阿宁', body: '你还记得我们一起在河边散步吗。', closing: '林深' }] }, f.bank, inbox.inboxPlan(f.bank)),
+    'the upstream removal of the fictional letter history check stays in effect');
 });

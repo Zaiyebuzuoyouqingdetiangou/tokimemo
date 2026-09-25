@@ -12,6 +12,8 @@ import * as core_narrativeAuthority from '../core/narrativeAuthority.js';
 import * as core_presentExpression from '../core/presentExpression.js';
 import * as core_text from '../core/text.js';
 import * as core_worldPresentation from '../core/worldPresentation.js';
+import * as core_requestCoordinator from '../core/requestCoordinator.js';
+import * as core_settings from '../core/settings.js';
 import * as generation_client from '../generation/client.js';
 import * as generation_prompts from '../generation/prompts.js';
 
@@ -362,8 +364,7 @@ function normalizeTravelLocation(item, index, memoryBank, mapTheme, sourceMemory
         ...['title', 'mark', 'greeting', 'body', 'closing', 'emblem'].map(key => keepsake?.[key])];
     if (!allowLegacyStored && core_narrativeAuthority.narrativeClaimsSharedHistory(finalNarrative, { userName: memoryBank?.userName })
         && (basis !== '记忆' || !reference.sourceMemoryIds.length || !finalNarrative.filter(Boolean).join('\n').includes(reference.sourceMemoryAnchor))) return null;
-    if (kindRaw === 'near' && !dialogueLines.length) return null;
-    if (kindRaw === 'far' && (!keepsake?.title || !keepsake.body || !keepsake.closing)) return null;
+    const prosePending = !allowLegacyStored && ((kindRaw === 'near' && !dialogueLines.length) || (kindRaw === 'far' && (!keepsake?.title || !keepsake?.body || !keepsake?.closing)));
     return {
         id: core_text.safeId(item?.id, `TR${String(index + 1).padStart(2, '0')}`),
         kind: kindRaw,
@@ -384,6 +385,7 @@ function normalizeTravelLocation(item, index, memoryBank, mapTheme, sourceMemory
         keepsake,
         postcard,
         sceneTheme: kindRaw === 'far' ? resolveTravelSceneTheme({ ...item, name, region, summary }, mapTheme) : '',
+        ...(prosePending ? { prosePending: true } : {}),
     };
 }
 
@@ -586,6 +588,65 @@ export function projectTravelProgress({ segments, memoryBank, previousSession, f
     return merged.session || merged;
 }
 
+function pendingTravelStops(session) {
+    return (session?.locations || []).filter(item => item.prosePending === true);
+}
+
+export async function fillTravelProse(context, memoryBank, origin, taskKey, session, options = {}) {
+    const pending = pendingTravelStops(session);
+    if (!pending.length) {
+        core_requestCoordinator.noteSecondStepOffer(origin, null);
+        return session;
+    }
+    return generation_client.requestValidatedSegment(
+        generation_prompts.promptSafetyBoundary(context, '他的出行路线 / 补正文', null, memoryBank)
+        + '\n只补下面这些地点缺少的对白或纪念文字。不得改 id、name、basis、sourceMemoryIds、sourceMemoryAnchor。'
+        + '\nnear 只写 dialogueLines。far 只写 title、greeting、body、closing。'
+        + '\n只输出 {"repairs":[{"id":"地点id","dialogueLines":["对白"],"title":"题目","greeting":"称呼","body":"正文","closing":"落款"}]}。'
+        + '\nPENDING_STOPS_JSON:\n' + JSON.stringify(pending.map(item => ({
+            id: item.id, kind: item.kind, name: item.name, region: item.region, summary: item.summary, basis: item.basis,
+        }))),
+        '他的出行路线 · 正在补对白和纪念文字…',
+        { maxTokens: 4000, context, contextEnvelope: options.contextEnvelope, origin, taskKey: `${taskKey}:travel-prose`, mode: core_constants.MODE.TRAVEL, background: true },
+        raw => {
+            const repairs = new Map((Array.isArray(raw?.repairs) ? raw.repairs : []).map(row => [core_text.normalizeText(row?.id, 80), row]));
+            const locations = session.locations.map((item, index) => {
+                if (!item.prosePending) return item;
+                const patch = repairs.get(item.id);
+                if (!patch) return item;
+                const draft = { ...item };
+                delete draft.prosePending;
+                if (item.kind === 'near') draft.dialogueLines = patch.dialogueLines;
+                if (item.kind === 'far') draft.keepsake = {
+                    ...(item.keepsake || {}), kind: item.keepsake?.kind || 'letter', tone: item.keepsake?.tone || 'paper',
+                    title: patch.title, greeting: patch.greeting, body: patch.body, closing: patch.closing,
+                };
+                const normalized = normalizeTravelLocation(draft, index, memoryBank, session.mapTheme, null, null, {
+                    controlledEvidence: options.controlledEvidence || '', structuredDesign: true,
+                });
+                return normalized && !normalized.prosePending ? { ...normalized, id: item.id } : item;
+            });
+            if (locations.some(item => item.prosePending)) throw core_text.safeUserError('地点正文仍未补齐。', 'RMT_TRAVEL_LOCATIONS');
+            core_requestCoordinator.noteSecondStepOffer(origin, null);
+            return { ...session, locations };
+        },
+    );
+}
+
+async function settleTravelProse(session, context, memoryBank, origin, taskKey, options) {
+    if (!pendingTravelStops(session).length) {
+        core_requestCoordinator.noteSecondStepOffer(origin, null);
+        return session;
+    }
+    if (options.secondStep === true || core_settings.getPluginSettings().autoSecondPass === true) {
+        return fillTravelProse(context, memoryBank, origin, taskKey, session, options);
+    }
+    core_requestCoordinator.noteSecondStepOffer(origin, {
+        label: '对白和纪念文字', kind: 'travel-prose', mode: core_constants.MODE.TRAVEL, pageId: core_constants.MODE.TRAVEL,
+    });
+    return session;
+}
+
 export async function generateTravelWithRepair(context, memoryBank, origin, taskKey, options = {}) {
     const previous = options.replaceExisting === true ? null : core_cache.loadSession(core_constants.MODE.TRAVEL, {
         context, chatId: core_context.getChatId(context), memoryBank, clone: true,
@@ -620,11 +681,12 @@ export async function generateTravelWithRepair(context, memoryBank, origin, task
             structuredDesign,
         }),
     );
+    const proseOptions = { ...options, contextEnvelope: presentationContext.contextEnvelope, controlledEvidence: presentationContext.settingEvidence || '' };
     if (!previous) {
-        return core_incremental.stampIncrementalCoverage(fresh, null, memoryBank, 'mode', sourceMemoryIds, fresh.locations.length);
+        return settleTravelProse(core_incremental.stampIncrementalCoverage(fresh, null, memoryBank, 'mode', sourceMemoryIds, fresh.locations.length), context, memoryBank, origin, taskKey, proseOptions);
     }
     if (!fresh.locations.length) {
-        return core_incremental.stampIncrementalCoverage(structuredClone(previous), previous, memoryBank, 'mode', sourceMemoryIds, 0);
+        return settleTravelProse(core_incremental.stampIncrementalCoverage(structuredClone(previous), previous, memoryBank, 'mode', sourceMemoryIds, 0), context, memoryBank, origin, taskKey, proseOptions);
     }
     if (!core_incremental.incrementalArchiveMemoryIds(previous, memoryBank).length) {
         const existingTexts = new Set(previous.locations.map(item => JSON.stringify([item.name, item.dialogueLines, item.keepsake?.body])));
@@ -632,7 +694,7 @@ export async function generateTravelWithRepair(context, memoryBank, origin, task
             .map(item => ({ ...item, expansionRound: (Number(previous.generationMeta?.expansionRound) || 0) + 1 }));
     }
     const { session, added } = mergeTravelIncremental(previous, fresh);
-    return core_incremental.stampIncrementalCoverage(session, previous, memoryBank, 'mode', sourceMemoryIds, added);
+    return settleTravelProse(core_incremental.stampIncrementalCoverage(session, previous, memoryBank, 'mode', sourceMemoryIds, added), context, memoryBank, origin, taskKey, proseOptions);
 }
 
 export function travelMarkerPosition(item, index = 0) {

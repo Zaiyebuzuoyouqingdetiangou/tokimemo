@@ -52,7 +52,7 @@ export function pastLivesHtml(value, { readOnly = false, busy = false, notice = 
             let scene;
             if (ui.view === 'draw') {
                 scene = `<section class="rmt-past-draw ${ui.pastLivesDrawn ? 'is-open' : ''}"><span class="rmt-past-seal" aria-hidden="true">${esc(labels.token)}</span><h3>${esc(selected.title)}</h3>${ui.pastLivesDrawn
-                    ? `<article class="rmt-past-slip"><small>${esc(selected.opening.title)}</small><h3>${esc(selected.opening.motif)}</h3>${paragraphs(selected.opening.text)}</article>${button('tab', '翻开卷宗', 'dossier')}`
+                    ? `<article class="rmt-past-slip"><small>${esc(selected.opening.title)}</small><h3>${esc(selected.opening.motif)}</h3>${paragraphs(selected.opening.text || (selected.opening.prosePending ? '正文待补。引子和来源已经留下，可以再补这一段。' : ''))}</article>${button('tab', '翻开卷宗', 'dossier')}`
                     : `<p>一段故事，正从熟悉的意象里醒来。</p>${button('draw', labels.draw)}${button('skip-draw', '直接入卷')}`}
                     <details class="rmt-past-source"><summary>引子的今生来源</summary><p>${esc(selected.opening.sourceMemoryAnchor)}</p><small>${esc(selected.opening.sourceMemoryIds.join(' · '))}</small></details></section>`;
             } else if (ui.view === 'dossier') {

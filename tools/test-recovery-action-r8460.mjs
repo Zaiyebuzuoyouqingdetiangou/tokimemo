@@ -1,6 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { runRecoveryAction } from '../src/ui/recoveryAction.js';
+import { runRecoveryAction, recoveryActionKey } from '../src/ui/recoveryAction.js';
+
+test('legacy buttons without draft ids stay distinct by page, mode, and chat', () => {
+    const key = (...values) => recoveryActionKey('retry', ...values);
+    assert.notEqual(key('chat-a', 'inbox'), key('chat-a', 'pastLives'));
+    assert.notEqual(key('chat-a', 'profile'), key('chat-b', 'profile'));
+    assert.notEqual(key('entry-a', 'inbox', 'page', 'one'), key('entry-a', 'inbox', 'page', 'two'));
+});
 
 test('repeated taps share one pending operation and one error; next explicit attempt remains available', async () => {
     const button = { textContent: '放弃草稿', disabled: false, setAttribute() {}, removeAttribute() {} };
