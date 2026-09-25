@@ -47,6 +47,7 @@ export function collectModuleFacts(moduleId, context, source = {}) {
     if (moduleId === 'butterfly') facts.phase = loadSession('butterfly', context, memory) ? 'increment' : 'first';
     if (moduleId === 'bedtime') facts.bedtime = source.bedtime?.action === 'continue' ? source.bedtime : { action: 'new' };
     if (moduleId === 'themeSong') facts.song = { subject: 'character' };
+    facts.firstGeneration = !loadSession(moduleId, context, memory);
     return facts;
 }
 

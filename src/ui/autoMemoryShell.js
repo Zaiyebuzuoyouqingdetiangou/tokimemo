@@ -103,10 +103,13 @@ function viewFor(context) {
         revealLine: shell_state.revealFace({ userName: context.name1, achievementTitle: '', moduleTitle: item?.title || '' }),
         failureRecoverable: !running && (failedStep || common.state === 'failed' || common.state === 'retry'),
         paused: moduleRow?.phase === 'queue',
+        floor: Array.isArray(context.chat) ? context.chat.length : 0,
+        nextDueFloor: snapshot.plan.nextDueFloor,
     });
 }
 
 function markup(view) {
+    if (view.phase === 'pace') return `<p class="rmt-floor-pace" data-rmt-floor-pace><span>留忆</span><b>${core_text.esc(view.detail)}</b></p>`;
     const pending = view.phase === 'reveal' ? '' : ' data-rmt-pending="1"';
     const status = view.progress ? `<p class="rmt-floor-status">${core_text.esc(view.detail)}</p>` : '';
     const body = view.showReveal
@@ -136,11 +139,13 @@ function paint(context) {
         host = ui_floor.placeAfterMessage(mes);
     }
     if (!host) return;
+    if (view.phase === 'pace' && host.dataset.rmtPhase === 'pace' && host.dataset.rmtPace === view.detail) return;
     const details = host.querySelector('[data-rmt-floor-details]');
     const body = host.querySelector('[data-rmt-floor-body]');
     const sameReveal = host.dataset.rmtPhase === view.phase && host.dataset.rmtReveal === view.revealId && details?.open && body?.childElementCount;
     host.dataset.rmtPhase = view.phase;
     host.dataset.rmtReveal = view.revealId;
+    host.dataset.rmtPace = view.phase === 'pace' ? view.detail : '';
     host.dataset.rmtPending = view.phase === 'reveal' ? '0' : '1';
     if (sameReveal) {
         const title = host.querySelector('summary b');

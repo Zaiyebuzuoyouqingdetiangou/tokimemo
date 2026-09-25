@@ -7,6 +7,7 @@ import * as archive_requestBudget from './requestBudget.js';
 import * as core_cache from '../core/cache.js';
 import * as core_constants from '../core/constants.js';
 import * as cast_looks from '../core/castLooks.js';
+import * as chat_read_range from '../core/chatReadRange.js';
 import * as core_context from '../core/context.js';
 import * as core_requestCoordinator from '../core/requestCoordinator.js';
 import * as core_settings from '../core/settings.js';
@@ -29,7 +30,20 @@ import { generateArchiveImportSegment } from './archiveVerdict.js';
 // 建档主流程：一次建档操作（分批、请求、校验、保存）
 // 从 archive/repository.js 原样搬出（重构阶段 2），声明文本一字未改；archive/repository.js 仍转发原有导出。
 
-export async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic = false, continueRecovery = false, restartImport = false, participantRoster, logicalTask,
+function windowChatMessages(context, floorWindow) {
+    const start = Math.floor(Number(floorWindow?.start));
+    const end = Math.floor(Number(floorWindow?.end));
+    if (start < 1 || end < start) return [];
+    return chat_read_range.selectChatReadRange(context, { mode: 'range', start, end, includeHidden: false }).map(row => ({
+        index: row.index,
+        role: row.message?.is_user === true ? 'user' : 'char',
+        name: core_text.normalizeText(row.message?.name, 120),
+        date: core_text.normalizeText(row.message?.send_date || row.message?.date || '', 80),
+        text: core_text.normalizeText(row.message?.mes, 8000),
+    })).filter(item => item.text);
+}
+
+export async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic = false, continueRecovery = false, restartImport = false, participantRoster, logicalTask, floorWindow = null,
     draftId = '', selectedDraft = null, commitCompletedOnly = false, partialBase = null, independentResult = false, nextIndependentBatch = false, baseMemoryMissing = false, sceneRecords = null } = {}, preparation) {
     const context = preparation.context;
     const existing = Object.hasOwn(preparation, 'sourceExisting') ? preparation.sourceExisting : preparation.existing;
@@ -181,7 +195,12 @@ export async function importCurrentChatMemoryOperation({ fullRebuild = false, au
     const coverageWindow = archive_coverage.runCoverageWindow(snapshot, { incrementalUpdate, rangeChanged, previousMessageCount });
     // Broader/revised choices may explicitly add older selected floors. The merge below
     // deduplicates already archived content and never deletes records outside the range.
-    const chatInput = sceneOnly ? [] : (progress || restartImport ? snapshot.messages : incrementalUpdate && !rangeChanged ? snapshot.incrementalMessages : snapshot.messages);
+    let chatInput = sceneOnly ? [] : (progress || restartImport ? snapshot.messages : incrementalUpdate && !rangeChanged ? snapshot.incrementalMessages : snapshot.messages);
+    // 自动留忆到点时，只读这一窗楼层的正文，不改用户保存的读取范围。
+    if (automatic && floorWindow && !progress && !restartImport && !capturedInput && !sceneOnly) {
+        const scoped = windowChatMessages(context, floorWindow);
+        if (scoped.length) chatInput = scoped;
+    }
     const externalChanged = !!progress || restartImport || !incrementalUpdate || core_text.normalizeText(existing?.externalMemoryFingerprint, 240) !== core_text.normalizeText(external.fingerprint, 240);
     if (!progress && incrementalUpdate && !chatInput.length && !externalChanged) {
         clearMemoryPreflight(context);

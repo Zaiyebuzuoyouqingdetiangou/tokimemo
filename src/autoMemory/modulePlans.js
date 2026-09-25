@@ -46,6 +46,12 @@ function catalog(id) {
     return [step(id, 'catalog', 0)];
 }
 
+// 没生成过时，空增量不能把模块直接拿掉，先做一次目录。
+function firstCatalog(moduleId, known, id) {
+    if (known.firstGeneration !== true) return null;
+    return shell(moduleId, known, catalog(id), 1, null);
+}
+
 function token(value) {
     const text = String(value || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 60);
     return /^[A-Za-z0-9_-]{1,60}$/.test(text) ? text : '';
@@ -75,7 +81,7 @@ export function buildModulePlan(moduleId, facts = {}) {
     const known = facts || {};
     if (moduleId === 'inbox') {
         const letters = count(known.letters);
-        if (letters === 0) return null;
+        if (letters === 0) return firstCatalog(moduleId, known, 'letters');
         return shell(moduleId, known, letters == null ? catalog('letters') : [step('letters', 'letters', 0)], letters ? 1 : 0, 1);
     }
     if (moduleId === 'cabinet' || moduleId === 'calendar' || moduleId === 'relations') {
@@ -101,7 +107,7 @@ export function buildModulePlan(moduleId, facts = {}) {
     }
     if (moduleId === 'album') {
         const steps = albumSteps(known.unlocked);
-        if (known.unlocked === 0) return null;
+        if (known.unlocked === 0) return firstCatalog(moduleId, known, 'index');
         return shell(moduleId, known, steps || catalog('index'), steps ? 2 + batches(known.unlocked, ALBUM_BATCH) : 1, steps ? 2 + batches(known.unlocked, ALBUM_BATCH) : null);
     }
     if (moduleId === 'room') {
@@ -110,21 +116,21 @@ export function buildModulePlan(moduleId, facts = {}) {
     }
     if (moduleId === 'phone') {
         const ids = Array.isArray(known.appIds) ? known.appIds : [];
-        if (known.incremental === true && count(known.updates) === 0) return null;
-        if (known.incremental !== true && count(known.apps) === 0) return null;
+        if (known.incremental === true && count(known.updates) === 0) return firstCatalog(moduleId, known, 'catalog');
+        if (known.incremental !== true && count(known.apps) === 0) return firstCatalog(moduleId, known, 'catalog');
         const steps = ids.length ? phoneSteps(ids, { incremental: known.incremental === true }) : catalog(known.incremental === true ? 'update-plan' : 'catalog');
         const total = ids.length ? ids.length + 1 : 1;
         return shell(moduleId, known, steps, total, ids.length ? total : null);
     }
     if (moduleId === 'adv') {
         const groups = batches(known.events, ADV_BATCH);
-        if (known.events === 0) return null;
+        if (known.events === 0) return firstCatalog(moduleId, known, 'index');
         const steps = groups ? [step('index', 'index', 0), ...numbered('event', groups, 'events', 1)] : catalog('index');
         return shell(moduleId, known, steps, groups ? 1 + groups : 1, groups ? 1 + groups : null);
     }
     if (moduleId === 'ending') {
         const routes = count(known.routes);
-        if (routes === 0) return null;
+        if (routes === 0) return firstCatalog(moduleId, known, 'index');
         const confession = known.confession === true ? 1 : 0;
         const steps = routes ? [step('index', 'index', 0), ...numbered('route', routes, 'route', 1), ...(confession ? [step('confession', 'confession', 0)] : [])] : catalog('index');
         return shell(moduleId, known, steps, routes ? 1 + routes + confession : 1, routes ? 1 + routes + confession : null);
@@ -135,7 +141,7 @@ export function buildModulePlan(moduleId, facts = {}) {
             return shell(moduleId, known, [step('divergences', 'divergences', 0), ...prose], 1 + prose.length, 2);
         }
         const axes = count(known.axes);
-        if (axes === 0) return null;
+        if (axes === 0) return firstCatalog(moduleId, known, 'main');
         const prose = known.prose === 1 || known.prose === true ? [step('prose', 'prose', 0)] : [];
         const steps = axes ? [step('main', 'main', 0), ...numbered('branch', axes, 'branch', 1), step('omega', 'omega', 0), ...prose] : catalog('main');
         return shell(moduleId, known, steps, axes ? 2 + axes + prose.length : 1, axes ? 2 + axes + prose.length : null);

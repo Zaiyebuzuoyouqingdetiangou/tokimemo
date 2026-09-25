@@ -1,5 +1,7 @@
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
+import * as archive_core from '../archive/archiveCore.js';
+import * as auto_memory_lookback from '../autoMemory/achievementLookback.js';
 import * as core_cache from '../core/cache.js';
 import * as core_constants from '../core/constants.js';
 import * as core_context from '../core/context.js';
@@ -199,9 +201,23 @@ export async function generateAchievementsWithRepair(context, memoryBank, origin
     return core_incremental.stampIncrementalCoverage(merged, previous, memoryBank, 'mode', sourceMemoryIds, added);
 }
 
+function lookbackHtml(item, bank) {
+    if (!item.unlocked) return '';
+    const look = auto_memory_lookback.achievementLookback(item, bank?.memories, bank?.coveredRanges);
+    const label = look.kind === 'historical' ? '当时' : '收藏';
+    const period = look.period ? `<small>时期：${core_text.esc(look.period)}</small>` : '';
+    const summary = look.summary ? `<p>${core_text.esc(look.summary)}</p>` : '';
+    const note = look.sourceNote ? `<small>${core_text.esc(look.sourceNote)}</small>` : '';
+    const jump = look.jumpFloor == null ? '' : `<button type="button" class="rmt-btn" data-rmt-action="achievement-jump" data-rmt-floor="${look.jumpFloor}">回到当时</button>`;
+    const floors = look.floors.length > 1 ? `<div>${look.floors.map(floor => `<button type="button" class="rmt-btn" data-rmt-action="achievement-jump" data-rmt-floor="${floor}">#${floor}</button>`).join('')}</div>` : '';
+    return `<div class="rmt-achievement-lookback"><span>${label}</span>${period}${summary}${note}<button type="button" class="rmt-btn" data-rmt-action="achievement-open" data-rmt-achievement-id="${core_text.esc(item.id)}" data-rmt-mode="${core_text.esc(look.moduleId)}">打开这段回忆</button>${jump}${floors}</div>`;
+}
+
 export function renderAchievements() {
     const session = runtimeState.activeSession;
     if (!session || session.kind !== core_constants.MODE.ACHIEVEMENTS) return;
+    let bank = null;
+    try { bank = archive_core.getImportedMemory(core_context.getContext()); } catch { bank = null; }
     const readOnly = !!runtimeState.activeArchiveSnapshot && runtimeState.activeArchiveReadOnly;
     ui_overlay.setBackVisible(true, runtimeState.activeArchiveSnapshot ? (readOnly ? '只读档案' : '档案') : '当前档案');
     ui_overlay.topTitle('成就库');
@@ -221,6 +237,7 @@ export function renderAchievements() {
         <small>${lockedState
             ? core_text.esc(item.hint)
             : `解锁条件：${core_text.esc(achievementUnlockCondition(item))} · 解锁时间：${core_text.esc(item.unlockedAt || '已解锁')}`}</small>
+        ${lockedState ? '' : lookbackHtml(item, bank)}
       </div>
     </article>`).join('');
     ui_overlay.bodyEl().innerHTML = `<div class="rmt-achievements">

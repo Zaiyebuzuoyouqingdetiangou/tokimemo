@@ -30,11 +30,33 @@ import * as modes_advEvent from '../modes/advEvent.js';
 import * as ui_phoneView from './phoneView.js';
 import * as modes_items from '../modes/items.js';
 import { OVERLAY_CLICK_UNHANDLED, deleteManagedCategory, navigateBack, openCachedOrGenerate, requestCurrentArchiveFullRebuild, requestCurrentArchiveImport, showChooser } from './overlayCore.js';
+import * as ui_floor from './chatFloorNav.js';
 // ui/overlayCore.js handleOverlayClick 的分组处理（重构阶段 3）。每个函数是原函数里连续的一段语句，一字未改；
 // 返回 OVERLAY_CLICK_UNHANDLED 表示“这一段没有处理”，原函数接着往下走，和拆分前完全相同。
 
 // 按 data-rmt-action 分发：继承、改写、任务、首页 / 档案室、HEART、头像、当前档案、阅读、终端、记忆、角色档案、关系、管理、重建 / 导入、参与者、重新生成（原第 126–187 条语句）
+function revealModuleId(achievementId) {
+    try {
+        const records = core_context.getContext()?.chatMetadata?.revealRecordsV1;
+        const row = [...(Array.isArray(records) ? records : [])].reverse().find(item => item?.achievementId === achievementId && item?.moduleId);
+        return typeof row?.moduleId === 'string' ? row.moduleId : '';
+    } catch { return ''; }
+}
+
 export function overlayArchiveActions(actionEl, action) {
+    if (action === 'achievement-jump') {
+        const jumped = ui_floor.highlightFloor(actionEl?.dataset?.rmtFloor);
+        if (!jumped.ok) globalThis.toastr?.info?.('这一楼现在翻不到。成就还在这里。', '心迹回廊');
+        return;
+    }
+    if (action === 'achievement-open') {
+        const moduleId = actionEl?.dataset?.rmtMode || revealModuleId(actionEl?.dataset?.rmtAchievementId);
+        if (!moduleId) {
+            globalThis.toastr?.info?.('这段成就就在这一页。', '心迹回廊');
+            return;
+        }
+        return openCachedOrGenerate(moduleId);
+    }
     if (action === 'archive-inheritance-open') {
         archive_inheritance_view.clearArchiveInheritancePreview();
         if (bodyEl()) bodyEl().innerHTML = archive_inheritance_view.archiveInheritancePickerHtml();

@@ -1,6 +1,27 @@
 // 抽签候选与权重。不读聊天，不发请求。
 // 近期命中只降权，不永久排除。长期没抽中才加权重。
 
+function drawable(item, excluded, satisfied) {
+    if (!item?.id || excluded.has(item.id)) return false;
+    if (item.inDrawPool !== true || item.autoEligible !== true || item.achievementMerged !== true) return false;
+    const needs = Array.isArray(item.prerequisites) ? item.prerequisites : [];
+    return !needs.some(need => !satisfied.has(need));
+}
+
+// 到点后的抽签池：没生成过的模块留在池里，当作第一次生成。只有用户排除的模块拿掉。
+export function roundCandidateIds(modules, { excludedModuleIds = [], satisfiedPrerequisiteIds = [] } = {}) {
+    const excluded = new Set(Array.isArray(excludedModuleIds) ? excludedModuleIds : []);
+    const satisfied = new Set(Array.isArray(satisfiedPrerequisiteIds) ? satisfiedPrerequisiteIds : []);
+    const seen = new Set();
+    const selected = [];
+    for (const item of Array.isArray(modules) ? modules : []) {
+        if (!drawable(item, excluded, satisfied) || seen.has(item.id)) continue;
+        seen.add(item.id);
+        selected.push(item.id);
+    }
+    return selected;
+}
+
 export function eligibleDrawIds(modules, { preferredModuleIds = [], excludedModuleIds = [], satisfiedPrerequisiteIds = [] } = {}) {
     const excluded = new Set(Array.isArray(excludedModuleIds) ? excludedModuleIds : []);
     const satisfied = new Set(Array.isArray(satisfiedPrerequisiteIds) ? satisfiedPrerequisiteIds : []);
@@ -56,7 +77,11 @@ export function newMemoryIds(before, after) {
     return out;
 }
 
-// 增量建档沿用现有导入。聊天和外部摘要按各自的分段上限拆开，这里不改成单次请求。
-export function incrementalImportOptions() {
-    return { automatic: true };
+// 到点后只把这一窗楼层交给现有导入。分段上限仍由导入自己拆，这里不改成单次请求。
+export function incrementalImportOptions(window = null) {
+    const options = { automatic: true };
+    const start = Math.floor(Number(window?.start));
+    const end = Math.floor(Number(window?.end));
+    if (start >= 1 && end >= start) options.floorWindow = { start, end };
+    return options;
 }

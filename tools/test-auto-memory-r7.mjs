@@ -1,0 +1,104 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import * as draw from '../src/autoMemory/draw.js';
+import * as floor from '../src/autoMemory/floorPace.js';
+import * as gate from '../src/autoMemory/incrementalGate.js';
+import * as lookback from '../src/autoMemory/achievementLookback.js';
+import * as plans from '../src/autoMemory/modulePlans.js';
+import * as planStore from '../src/autoMemory/planStore.js';
+import * as shell from '../src/autoMemory/shellState.js';
+
+const memory = (id, extra) => ({ id, sourceKind: 'chat', date: '春日', summary: '一起看过晚霞', messageStart: 6, messageEnd: 8, ...extra });
+
+test('a due floor reads the floors since the last completion', () => {
+    assert.deepEqual(floor.dueFloorWindow(5, 10), { start: 6, end: 10 });
+    assert.equal(floor.dueFloorWindow(10, 10), null);
+    assert.equal(floor.formatFloorRemain(floor.floorsRemaining(8, 13)), '还差 5 楼');
+    assert.equal(floor.formatFloorRemain(floor.floorsRemaining(12, 13)), '下一楼');
+    assert.equal(floor.formatFloorRemain(floor.floorsRemaining(13, 13)), '下一楼');
+});
+
+test('the waiting shell shows the floor countdown and does not block input', () => {
+    const pace = shell.shellView({ enabled: true, archiveReady: true, floor: 8, nextDueFloor: 13 });
+    assert.equal(pace.phase, 'pace');
+    assert.equal(pace.detail, '还差 5 楼');
+    assert.equal(pace.blocksInput, false);
+    assert.equal(JSON.stringify(pace).includes('建档'), false);
+    assert.equal(shell.shellView({ enabled: true, archiveReady: false, floor: 8, nextDueFloor: 13 }).phase, 'hidden');
+});
+
+test('never-generated modules stay in the draw unless the user excluded them', () => {
+    const modules = [
+        { id: 'cabinet', inDrawPool: true, autoEligible: true, achievementMerged: true, prerequisites: [] },
+        { id: 'inbox', inDrawPool: true, autoEligible: true, achievementMerged: true, prerequisites: [] },
+        { id: 'items', inDrawPool: true, autoEligible: true, achievementMerged: true, prerequisites: ['room'] },
+    ];
+    assert.deepEqual(draw.roundCandidateIds(modules, { excludedModuleIds: ['inbox'], satisfiedPrerequisiteIds: [] }), ['cabinet']);
+    assert.equal(plans.buildModulePlan('inbox', { letters: 0 }), null);
+    const first = plans.buildModulePlan('inbox', { letters: 0, firstGeneration: true });
+    assert.equal(first.steps[0].kind, 'catalog');
+});
+
+test('a due round asks the importer for that floor window before drawing', async () => {
+    const calls = [];
+    const snapshot = planStore.parseAutoMemorySnapshot({
+        plan: planStore.createAutoMemoryPlan({
+            revision: 2, updatedAt: 20, enabled: true, intervalFloors: 5,
+            preferredModuleIds: [], excludedModuleIds: ['inbox'], legacyPreferencesMigrated: true,
+            nextDueFloor: 10, lastCompletedFloor: 5,
+        }),
+        revealRecords: [], drawTickets: [], modulePlan: null,
+    });
+    const result = await gate.runAutoMemoryRound({
+        snapshot, floor: 10, memoryIds: [], now: 50, archiveRevision: 'rev-1', chatId: 'chat-1',
+        modules: [
+            { id: 'cabinet', inDrawPool: true, autoEligible: true, achievementMerged: true, prerequisites: [] },
+            { id: 'inbox', inDrawPool: true, autoEligible: true, achievementMerged: true, prerequisites: [] },
+        ],
+        satisfiedPrerequisiteIds: [],
+    }, {
+        importIncremental: async options => { calls.push(options); },
+        readMemoryIds: async () => ['M100'],
+        random: () => 0,
+        nextId: () => 'drawticket1',
+        prepareModulePlan: async () => ({
+            version: 1, drawId: 'drawticket1', moduleId: 'cabinet', chatId: 'chat-1', archiveRevision: 'rev-1',
+            sourceMemoryIds: ['M100'], expectedRequestRange: { min: 1, max: 1 }, frozenAt: 30,
+            steps: [{ id: 'body', kind: 'generate', order: 0, status: 'pending', recoverySlot: 'slot-body' }],
+        }),
+        persist: async () => {},
+        startModule: async () => { calls.push('start'); },
+    });
+    assert.deepEqual(calls[0], { automatic: true, floorWindow: { start: 6, end: 10 } });
+    assert.equal(result.moduleRequest, true);
+    assert.deepEqual(result.snapshot.drawTickets[0].candidates.map(item => item.id), ['cabinet']);
+});
+
+test('historical achievements jump to covered chat floors and external sources do not', () => {
+    const historical = lookback.achievementLookback(
+        { sourceMemoryIds: ['M100', 'M999'], kind: 'historical' },
+        [memory('M100'), memory('M101', { messageStart: 2, messageEnd: 2 })],
+        [{ start: 1, end: 20 }],
+    );
+    assert.equal(historical.kind, 'historical');
+    assert.equal(historical.period, '春日');
+    assert.equal(historical.jumpFloor, 6);
+    assert.deepEqual(historical.floors, [6, 7, 8]);
+    const invented = lookback.achievementLookback(
+        { sourceMemoryIds: ['M100'] },
+        [memory('M100', { messageStart: 80, messageEnd: 82 })],
+        [{ start: 1, end: 20 }],
+    );
+    assert.equal(invented.jumpFloor, null);
+    assert.equal(invented.floors.length, 0);
+    const external = lookback.achievementLookback(
+        { sourceMemoryIds: ['M100'] },
+        [memory('M100', { sourceKind: 'external' })],
+        [{ start: 1, end: 20 }],
+    );
+    assert.equal(external.jumpFloor, null);
+    assert.match(external.sourceNote, /外部或继承/);
+    const collection = lookback.achievementLookback({ sourceMemoryIds: ['M404'], kind: 'historical' }, [memory('M100')]);
+    assert.equal(collection.kind, 'collection');
+    assert.equal(collection.jumpFloor, null);
+});

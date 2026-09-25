@@ -17,3 +17,15 @@ export function placeAfterMessage(messageNode, createElement = tag => document.c
 export function writesMessageText() {
     return false;
 }
+
+export function highlightFloor(floor, root = document) {
+    const value = Math.floor(Number(floor));
+    if (!Number.isSafeInteger(value) || value < 1) return { ok: false, mesid: null };
+    const node = messageElement(value - 1, root);
+    if (!node) return { ok: false, mesid: value - 1 };
+    root.querySelectorAll?.('.rmt-floor-return')?.forEach(item => item.classList.remove('rmt-floor-return'));
+    node.classList.add('rmt-floor-return');
+    try { node.scrollIntoView({ block: 'center' }); }
+    catch { try { node.scrollIntoView(); } catch { /* 滚动失败只放弃跳转，不改成就。 */ } }
+    return { ok: true, mesid: value - 1 };
+}

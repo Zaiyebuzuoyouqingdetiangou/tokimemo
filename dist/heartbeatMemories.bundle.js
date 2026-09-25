@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
-// Source modules: 257
-// Source SHA-256: 5d919853313bcb2ef9497afe7db574057356664518643e6e4a61f28c283c1a20
+// Source modules: 259
+// Source SHA-256: 345d6f245c7b9cfb8e902dc368a2c513c8bdb7950aa32e204c3aff73f5c1a736
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -32,8 +32,10 @@ const __m_archive_sourceLedger_js = Object.create(null);
 const __m_archive_sourceReadGuard_js = Object.create(null);
 const __m_archive_storyScenes_js = Object.create(null);
 const __m_archive_worldInfoSources_js = Object.create(null);
+const __m_autoMemory_achievementLookback_js = Object.create(null);
 const __m_autoMemory_combinedResult_js = Object.create(null);
 const __m_autoMemory_draw_js = Object.create(null);
+const __m_autoMemory_floorPace_js = Object.create(null);
 const __m_autoMemory_incrementalGate_js = Object.create(null);
 const __m_autoMemory_incrementalView_js = Object.create(null);
 const __m_autoMemory_migrateLegacy_js = Object.create(null);
@@ -12127,8 +12129,86 @@ __m_modes_cabinet_js.renderCabinet = renderCabinet;
 __m_modes_cabinet_js.projectCabinetProgress = projectCabinetProgress;
 }
 
+function __init_autoMemory_achievementLookback_js() {
+// MODULE: autoMemory/achievementLookback.js
+
+// 成就回看只使用档案里已经写下的记忆和覆盖范围。时期、楼层都不采用模型自己报的数字。
+
+const MEMORY_ID = /^M\d{3,6}$/;
+
+function clean(value, max) {
+    return String(value ?? '').replace(/[\u0000-\u001f]/g, '').trim().slice(0, max);
+}
+
+function floorsBetween(start, end) {
+    const first = Math.floor(Number(start));
+    const last = Math.floor(Number(end));
+    if (!Number.isSafeInteger(first) || first < 1 || !Number.isSafeInteger(last) || last < first) return [];
+    const rows = [];
+    const stop = Math.min(last, first + 39);
+    for (let floor = first; floor <= stop; floor += 1) rows.push(floor);
+    return rows;
+}
+
+function sourceKind(memory) {
+    return clean(memory?.sourceKind, 40).toLowerCase() || 'chat';
+}
+
+function blockedSource(kind) {
+    return kind === 'external' || kind === 'inherited' || kind.startsWith('external') || kind.startsWith('inherited');
+}
+
+function covered(ranges) {
+    return (Array.isArray(ranges) ? ranges : []).map(row => ({
+        start: Math.floor(Number(row?.start)),
+        end: Math.floor(Number(row?.end)),
+    })).filter(row => row.start >= 1 && row.end >= row.start);
+}
+
+function floorIsCovered(floor, ranges) {
+    return ranges.some(row => floor >= row.start && floor <= row.end);
+}
+
+function achievementLookback(entry, memories = [], coveredRanges = []) {
+    const ids = (Array.isArray(entry?.sourceMemoryIds) ? entry.sourceMemoryIds : []).filter(id => MEMORY_ID.test(id));
+    const bank = new Map((Array.isArray(memories) ? memories : []).filter(item => MEMORY_ID.test(item?.id)).map(item => [item.id, item]));
+    const linked = ids.map(id => bank.get(id)).filter(Boolean);
+    const kind = linked.length && entry?.kind !== 'collection' ? 'historical' : 'collection';
+    const blocked = linked.filter(item => blockedSource(sourceKind(item)));
+    const chat = linked.filter(item => !blockedSource(sourceKind(item)));
+    const ledger = covered(coveredRanges);
+    const floors = [];
+    for (const item of chat) {
+        for (const floor of floorsBetween(item.messageStart, item.messageEnd)) {
+            if (ledger.length && !floorIsCovered(floor, ledger)) continue;
+            if (!floors.includes(floor)) floors.push(floor);
+        }
+    }
+    floors.sort((a, b) => a - b);
+    const dates = [...new Set(linked.map(item => clean(item.date, 40)).filter(date => date && date !== '未标注'))];
+    const summary = linked.map(item => clean(item.summary, 120)).find(Boolean) || '';
+    const canJump = kind === 'historical' && blocked.length === 0 && floors.length > 0;
+    let sourceNote = '';
+    if (blocked.length) sourceNote = '这份成就来自外部或继承的记录，没有可以回到的聊天楼层。';
+    else if (kind === 'historical' && !floors.length) sourceNote = '档案里有这段经历，但没有对应的楼层编号。';
+    return {
+        kind,
+        period: dates[0] || '',
+        summary,
+        floors: canJump ? floors : [],
+        jumpFloor: canJump ? floors[0] : null,
+        sourceNote,
+        moduleId: clean(entry?.moduleId, 40),
+    };
+}
+
+__m_autoMemory_achievementLookback_js.achievementLookback = achievementLookback;
+}
+
 function __init_modes_achievements_js() {
 // MODULE: modes/achievements.js
+const archive_core = __m_archive_archiveCore_js;
+const auto_memory_lookback = __m_autoMemory_achievementLookback_js;
 const core_cache = __m_core_cache_js;
 const core_constants = __m_core_constants_js;
 const core_context = __m_core_context_js;
@@ -12141,6 +12221,8 @@ const ui_overlay = __m_ui_overlay_js;
 const runtimeState = __m_core_state_js.state;
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
+
+
 
 
 
@@ -12335,9 +12417,23 @@ async function generateAchievementsWithRepair(context, memoryBank, origin, taskK
     return core_incremental.stampIncrementalCoverage(merged, previous, memoryBank, 'mode', sourceMemoryIds, added);
 }
 
+function lookbackHtml(item, bank) {
+    if (!item.unlocked) return '';
+    const look = auto_memory_lookback.achievementLookback(item, bank?.memories, bank?.coveredRanges);
+    const label = look.kind === 'historical' ? '当时' : '收藏';
+    const period = look.period ? `<small>时期：${core_text.esc(look.period)}</small>` : '';
+    const summary = look.summary ? `<p>${core_text.esc(look.summary)}</p>` : '';
+    const note = look.sourceNote ? `<small>${core_text.esc(look.sourceNote)}</small>` : '';
+    const jump = look.jumpFloor == null ? '' : `<button type="button" class="rmt-btn" data-rmt-action="achievement-jump" data-rmt-floor="${look.jumpFloor}">回到当时</button>`;
+    const floors = look.floors.length > 1 ? `<div>${look.floors.map(floor => `<button type="button" class="rmt-btn" data-rmt-action="achievement-jump" data-rmt-floor="${floor}">#${floor}</button>`).join('')}</div>` : '';
+    return `<div class="rmt-achievement-lookback"><span>${label}</span>${period}${summary}${note}<button type="button" class="rmt-btn" data-rmt-action="achievement-open" data-rmt-achievement-id="${core_text.esc(item.id)}" data-rmt-mode="${core_text.esc(look.moduleId)}">打开这段回忆</button>${jump}${floors}</div>`;
+}
+
 function renderAchievements() {
     const session = runtimeState.activeSession;
     if (!session || session.kind !== core_constants.MODE.ACHIEVEMENTS) return;
+    let bank = null;
+    try { bank = archive_core.getImportedMemory(core_context.getContext()); } catch { bank = null; }
     const readOnly = !!runtimeState.activeArchiveSnapshot && runtimeState.activeArchiveReadOnly;
     ui_overlay.setBackVisible(true, runtimeState.activeArchiveSnapshot ? (readOnly ? '只读档案' : '档案') : '当前档案');
     ui_overlay.topTitle('成就库');
@@ -12357,6 +12453,7 @@ function renderAchievements() {
         <small>${lockedState
             ? core_text.esc(item.hint)
             : `解锁条件：${core_text.esc(achievementUnlockCondition(item))} · 解锁时间：${core_text.esc(item.unlockedAt || '已解锁')}`}</small>
+        ${lockedState ? '' : lookbackHtml(item, bank)}
       </div>
     </article>`).join('');
     ui_overlay.bodyEl().innerHTML = `<div class="rmt-achievements">
@@ -56976,6 +57073,7 @@ const ui_advEventView = __m_ui_advEventView_js;
 const modes_advEvent = __m_modes_advEvent_js;
 const ui_phoneView = __m_ui_phoneView_js;
 const modes_items = __m_modes_items_js;
+const ui_floor = __m_ui_chatFloorNav_js;
 const applyArchiveMobileSafeArea = __m_ui_overlayShell_js.applyArchiveMobileSafeArea;
 const bindOverlayCloseFallback = __m_ui_overlayShell_js.bindOverlayCloseFallback;
 const bindToolbarMoreMenu = __m_ui_overlayShell_js.bindToolbarMoreMenu;
@@ -57025,7 +57123,28 @@ const showChooser = __m_ui_overlayCore_js.showChooser;
 // 返回 OVERLAY_CLICK_UNHANDLED 表示“这一段没有处理”，原函数接着往下走，和拆分前完全相同。
 
 // 按 data-rmt-action 分发：继承、改写、任务、首页 / 档案室、HEART、头像、当前档案、阅读、终端、记忆、角色档案、关系、管理、重建 / 导入、参与者、重新生成（原第 126–187 条语句）
+function revealModuleId(achievementId) {
+    try {
+        const records = core_context.getContext()?.chatMetadata?.revealRecordsV1;
+        const row = [...(Array.isArray(records) ? records : [])].reverse().find(item => item?.achievementId === achievementId && item?.moduleId);
+        return typeof row?.moduleId === 'string' ? row.moduleId : '';
+    } catch { return ''; }
+}
+
 function overlayArchiveActions(actionEl, action) {
+    if (action === 'achievement-jump') {
+        const jumped = ui_floor.highlightFloor(actionEl?.dataset?.rmtFloor);
+        if (!jumped.ok) globalThis.toastr?.info?.('这一楼现在翻不到。成就还在这里。', '心迹回廊');
+        return;
+    }
+    if (action === 'achievement-open') {
+        const moduleId = actionEl?.dataset?.rmtMode || revealModuleId(actionEl?.dataset?.rmtAchievementId);
+        if (!moduleId) {
+            globalThis.toastr?.info?.('这段成就就在这一页。', '心迹回廊');
+            return;
+        }
+        return openCachedOrGenerate(moduleId);
+    }
     if (action === 'archive-inheritance-open') {
         archive_inheritance_view.clearArchiveInheritancePreview();
         if (bodyEl()) bodyEl().innerHTML = archive_inheritance_view.archiveInheritancePickerHtml();
@@ -62144,6 +62263,7 @@ const archive_requestBudget = __m_archive_requestBudget_js;
 const core_cache = __m_core_cache_js;
 const core_constants = __m_core_constants_js;
 const cast_looks = __m_core_castLooks_js;
+const chat_read_range = __m_core_chatReadRange_js;
 const core_context = __m_core_context_js;
 const core_requestCoordinator = __m_core_requestCoordinator_js;
 const core_settings = __m_core_settings_js;
@@ -62210,10 +62330,24 @@ const generateArchiveImportSegment = __m_archive_archiveVerdict_js.generateArchi
 
 
 
+
 // 建档主流程：一次建档操作（分批、请求、校验、保存）
 // 从 archive/repository.js 原样搬出（重构阶段 2），声明文本一字未改；archive/repository.js 仍转发原有导出。
 
-async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic = false, continueRecovery = false, restartImport = false, participantRoster, logicalTask,
+function windowChatMessages(context, floorWindow) {
+    const start = Math.floor(Number(floorWindow?.start));
+    const end = Math.floor(Number(floorWindow?.end));
+    if (start < 1 || end < start) return [];
+    return chat_read_range.selectChatReadRange(context, { mode: 'range', start, end, includeHidden: false }).map(row => ({
+        index: row.index,
+        role: row.message?.is_user === true ? 'user' : 'char',
+        name: core_text.normalizeText(row.message?.name, 120),
+        date: core_text.normalizeText(row.message?.send_date || row.message?.date || '', 80),
+        text: core_text.normalizeText(row.message?.mes, 8000),
+    })).filter(item => item.text);
+}
+
+async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic = false, continueRecovery = false, restartImport = false, participantRoster, logicalTask, floorWindow = null,
     draftId = '', selectedDraft = null, commitCompletedOnly = false, partialBase = null, independentResult = false, nextIndependentBatch = false, baseMemoryMissing = false, sceneRecords = null } = {}, preparation) {
     const context = preparation.context;
     const existing = Object.hasOwn(preparation, 'sourceExisting') ? preparation.sourceExisting : preparation.existing;
@@ -62365,7 +62499,12 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
     const coverageWindow = archive_coverage.runCoverageWindow(snapshot, { incrementalUpdate, rangeChanged, previousMessageCount });
     // Broader/revised choices may explicitly add older selected floors. The merge below
     // deduplicates already archived content and never deletes records outside the range.
-    const chatInput = sceneOnly ? [] : (progress || restartImport ? snapshot.messages : incrementalUpdate && !rangeChanged ? snapshot.incrementalMessages : snapshot.messages);
+    let chatInput = sceneOnly ? [] : (progress || restartImport ? snapshot.messages : incrementalUpdate && !rangeChanged ? snapshot.incrementalMessages : snapshot.messages);
+    // 自动留忆到点时，只读这一窗楼层的正文，不改用户保存的读取范围。
+    if (automatic && floorWindow && !progress && !restartImport && !capturedInput && !sceneOnly) {
+        const scoped = windowChatMessages(context, floorWindow);
+        if (scoped.length) chatInput = scoped;
+    }
     const externalChanged = !!progress || restartImport || !incrementalUpdate || core_text.normalizeText(existing?.externalMemoryFingerprint, 240) !== core_text.normalizeText(external.fingerprint, 240);
     if (!progress && incrementalUpdate && !chatInput.length && !externalChanged) {
         clearMemoryPreflight(context);
@@ -70293,6 +70432,12 @@ function catalog(id) {
     return [step(id, 'catalog', 0)];
 }
 
+// 没生成过时，空增量不能把模块直接拿掉，先做一次目录。
+function firstCatalog(moduleId, known, id) {
+    if (known.firstGeneration !== true) return null;
+    return shell(moduleId, known, catalog(id), 1, null);
+}
+
 function token(value) {
     const text = String(value || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 60);
     return /^[A-Za-z0-9_-]{1,60}$/.test(text) ? text : '';
@@ -70322,7 +70467,7 @@ function buildModulePlan(moduleId, facts = {}) {
     const known = facts || {};
     if (moduleId === 'inbox') {
         const letters = count(known.letters);
-        if (letters === 0) return null;
+        if (letters === 0) return firstCatalog(moduleId, known, 'letters');
         return shell(moduleId, known, letters == null ? catalog('letters') : [step('letters', 'letters', 0)], letters ? 1 : 0, 1);
     }
     if (moduleId === 'cabinet' || moduleId === 'calendar' || moduleId === 'relations') {
@@ -70348,7 +70493,7 @@ function buildModulePlan(moduleId, facts = {}) {
     }
     if (moduleId === 'album') {
         const steps = albumSteps(known.unlocked);
-        if (known.unlocked === 0) return null;
+        if (known.unlocked === 0) return firstCatalog(moduleId, known, 'index');
         return shell(moduleId, known, steps || catalog('index'), steps ? 2 + batches(known.unlocked, ALBUM_BATCH) : 1, steps ? 2 + batches(known.unlocked, ALBUM_BATCH) : null);
     }
     if (moduleId === 'room') {
@@ -70357,21 +70502,21 @@ function buildModulePlan(moduleId, facts = {}) {
     }
     if (moduleId === 'phone') {
         const ids = Array.isArray(known.appIds) ? known.appIds : [];
-        if (known.incremental === true && count(known.updates) === 0) return null;
-        if (known.incremental !== true && count(known.apps) === 0) return null;
+        if (known.incremental === true && count(known.updates) === 0) return firstCatalog(moduleId, known, 'catalog');
+        if (known.incremental !== true && count(known.apps) === 0) return firstCatalog(moduleId, known, 'catalog');
         const steps = ids.length ? phoneSteps(ids, { incremental: known.incremental === true }) : catalog(known.incremental === true ? 'update-plan' : 'catalog');
         const total = ids.length ? ids.length + 1 : 1;
         return shell(moduleId, known, steps, total, ids.length ? total : null);
     }
     if (moduleId === 'adv') {
         const groups = batches(known.events, ADV_BATCH);
-        if (known.events === 0) return null;
+        if (known.events === 0) return firstCatalog(moduleId, known, 'index');
         const steps = groups ? [step('index', 'index', 0), ...numbered('event', groups, 'events', 1)] : catalog('index');
         return shell(moduleId, known, steps, groups ? 1 + groups : 1, groups ? 1 + groups : null);
     }
     if (moduleId === 'ending') {
         const routes = count(known.routes);
-        if (routes === 0) return null;
+        if (routes === 0) return firstCatalog(moduleId, known, 'index');
         const confession = known.confession === true ? 1 : 0;
         const steps = routes ? [step('index', 'index', 0), ...numbered('route', routes, 'route', 1), ...(confession ? [step('confession', 'confession', 0)] : [])] : catalog('index');
         return shell(moduleId, known, steps, routes ? 1 + routes + confession : 1, routes ? 1 + routes + confession : null);
@@ -70382,7 +70527,7 @@ function buildModulePlan(moduleId, facts = {}) {
             return shell(moduleId, known, [step('divergences', 'divergences', 0), ...prose], 1 + prose.length, 2);
         }
         const axes = count(known.axes);
-        if (axes === 0) return null;
+        if (axes === 0) return firstCatalog(moduleId, known, 'main');
         const prose = known.prose === 1 || known.prose === true ? [step('prose', 'prose', 0)] : [];
         const steps = axes ? [step('main', 'main', 0), ...numbered('branch', axes, 'branch', 1), step('omega', 'omega', 0), ...prose] : catalog('main');
         return shell(moduleId, known, steps, axes ? 2 + axes + prose.length : 1, axes ? 2 + axes + prose.length : null);
@@ -71181,6 +71326,27 @@ function __init_autoMemory_draw_js() {
 // 抽签候选与权重。不读聊天，不发请求。
 // 近期命中只降权，不永久排除。长期没抽中才加权重。
 
+function drawable(item, excluded, satisfied) {
+    if (!item?.id || excluded.has(item.id)) return false;
+    if (item.inDrawPool !== true || item.autoEligible !== true || item.achievementMerged !== true) return false;
+    const needs = Array.isArray(item.prerequisites) ? item.prerequisites : [];
+    return !needs.some(need => !satisfied.has(need));
+}
+
+// 到点后的抽签池：没生成过的模块留在池里，当作第一次生成。只有用户排除的模块拿掉。
+function roundCandidateIds(modules, { excludedModuleIds = [], satisfiedPrerequisiteIds = [] } = {}) {
+    const excluded = new Set(Array.isArray(excludedModuleIds) ? excludedModuleIds : []);
+    const satisfied = new Set(Array.isArray(satisfiedPrerequisiteIds) ? satisfiedPrerequisiteIds : []);
+    const seen = new Set();
+    const selected = [];
+    for (const item of Array.isArray(modules) ? modules : []) {
+        if (!drawable(item, excluded, satisfied) || seen.has(item.id)) continue;
+        seen.add(item.id);
+        selected.push(item.id);
+    }
+    return selected;
+}
+
 function eligibleDrawIds(modules, { preferredModuleIds = [], excludedModuleIds = [], satisfiedPrerequisiteIds = [] } = {}) {
     const excluded = new Set(Array.isArray(excludedModuleIds) ? excludedModuleIds : []);
     const satisfied = new Set(Array.isArray(satisfiedPrerequisiteIds) ? satisfiedPrerequisiteIds : []);
@@ -71236,11 +71402,16 @@ function newMemoryIds(before, after) {
     return out;
 }
 
-// 增量建档沿用现有导入。聊天和外部摘要按各自的分段上限拆开，这里不改成单次请求。
-function incrementalImportOptions() {
-    return { automatic: true };
+// 到点后只把这一窗楼层交给现有导入。分段上限仍由导入自己拆，这里不改成单次请求。
+function incrementalImportOptions(window = null) {
+    const options = { automatic: true };
+    const start = Math.floor(Number(window?.start));
+    const end = Math.floor(Number(window?.end));
+    if (start >= 1 && end >= start) options.floorWindow = { start, end };
+    return options;
 }
 
+__m_autoMemory_draw_js.roundCandidateIds = roundCandidateIds;
 __m_autoMemory_draw_js.eligibleDrawIds = eligibleDrawIds;
 __m_autoMemory_draw_js.weightCandidates = weightCandidates;
 __m_autoMemory_draw_js.pickWeighted = pickWeighted;
@@ -71248,12 +71419,44 @@ __m_autoMemory_draw_js.newMemoryIds = newMemoryIds;
 __m_autoMemory_draw_js.incrementalImportOptions = incrementalImportOptions;
 }
 
+function __init_autoMemory_floorPace_js() {
+// MODULE: autoMemory/floorPace.js
+
+// 固定楼层的窗口和倒计时。只算数字，不读聊天，也不发请求。
+
+function dueFloorWindow(lastCompletedFloor, floor) {
+    const end = Math.floor(Number(floor));
+    const start = Math.floor(Number(lastCompletedFloor)) + 1;
+    if (!Number.isSafeInteger(end) || end < 1 || !Number.isSafeInteger(start) || start < 1 || start > end) return null;
+    return { start, end };
+}
+
+function floorsRemaining(floor, nextDueFloor) {
+    const now = Math.floor(Number(floor));
+    const due = Math.floor(Number(nextDueFloor));
+    if (!Number.isSafeInteger(due) || due < 1 || !Number.isSafeInteger(now) || now < 0) return null;
+    return Math.max(0, due - now);
+}
+
+// 还差两楼以上写明数字；只剩一楼，或这一楼已经到点，都写成「下一楼」。
+function formatFloorRemain(left) {
+    if (!Number.isSafeInteger(left) || left < 0) return '';
+    return left <= 1 ? '下一楼' : `还差 ${left} 楼`;
+}
+
+__m_autoMemory_floorPace_js.dueFloorWindow = dueFloorWindow;
+__m_autoMemory_floorPace_js.floorsRemaining = floorsRemaining;
+__m_autoMemory_floorPace_js.formatFloorRemain = formatFloorRemain;
+}
+
 function __init_autoMemory_incrementalGate_js() {
 // MODULE: autoMemory/incrementalGate.js
 const auto_memory_draw = __m_autoMemory_draw_js;
+const auto_memory_floor = __m_autoMemory_floorPace_js;
 const auto_memory_registry = __m_autoMemory_moduleRegistry_js;
 const auto_memory_plan = __m_autoMemory_planStore_js;
 // 楼层闸门与一轮抽签。真正的导入和保存由调用方注入，方便测试时不碰酒馆。
+
 
 
 
@@ -71348,14 +71551,14 @@ async function runAutoMemoryRound(input, io) {
         await io.persist(next);
         return { action: 'arm', moduleRequest: false, snapshot: next };
     }
-    const options = auto_memory_draw.incrementalImportOptions();
+    const floorWindow = auto_memory_floor.dueFloorWindow(plan.lastCompletedFloor, input.floor);
+    const options = auto_memory_draw.incrementalImportOptions(floorWindow);
     await io.importIncremental(options);
     const after = await io.readMemoryIds();
     const fresh = auto_memory_draw.newMemoryIds(input.memoryIds, after);
     if (!fresh.length) return persistNoop(snapshot, input.floor, io, input.now, 'no-new-memory');
     const modules = Array.isArray(input.modules) ? input.modules : auto_memory_registry.listAutoMemoryModules();
-    const candidates = auto_memory_draw.eligibleDrawIds(modules, {
-        preferredModuleIds: plan.preferredModuleIds,
+    const candidates = auto_memory_draw.roundCandidateIds(modules, {
         excludedModuleIds: plan.excludedModuleIds,
         satisfiedPrerequisiteIds: input.satisfiedPrerequisiteIds,
     });
@@ -71728,6 +71931,7 @@ function collectModuleFacts(moduleId, context, source = {}) {
     if (moduleId === 'butterfly') facts.phase = loadSession('butterfly', context, memory) ? 'increment' : 'first';
     if (moduleId === 'bedtime') facts.bedtime = source.bedtime?.action === 'continue' ? source.bedtime : { action: 'new' };
     if (moduleId === 'themeSong') facts.song = { subject: 'character' };
+    facts.firstGeneration = !loadSession(moduleId, context, memory);
     return facts;
 }
 
@@ -71787,7 +71991,7 @@ const auto_memory_host = __m_autoMemory_moduleHost_js;
 const auto_memory_plan = __m_autoMemory_planStore_js;
 const auto_memory_registry = __m_autoMemory_moduleRegistry_js;
 const core_context = __m_core_context_js;
-// 启用新计划后，由这一处按楼层做增量建档和抽签。没有新记忆或没有可抽模块时不发模块请求。
+// 启用新计划后，楼层到点就读最近这一窗正文，做成增量回忆再抽签。没有新记忆或没有可抽模块时不发模块请求。
 
 
 
@@ -71914,7 +72118,7 @@ __m_autoMemory_scheduler_js.startAutoMemoryScheduler = startAutoMemoryScheduler;
 
 function __init_autoMemory_shellState_js() {
 // MODULE: autoMemory/shellState.js
-
+const auto_memory_floor = __m_autoMemory_floorPace_js;
 // 楼层下面的生成壳只说明模块是不是在生成。建档在插件里进行，档案没完成时不挂壳。
 
 function shellBlocksChatInput() {
@@ -71932,6 +72136,9 @@ function floorShellCss() {
 .rmt-floor-shell summary small{display:block;margin-top:4px;color:#7b8798;font-size:12px}
 .rmt-floor-shell .rmt-floor-note,.rmt-floor-shell .rmt-floor-body{margin-top:8px;min-width:0}
 .rmt-floor-shell[data-rmt-pending="1"] details{opacity:.76}
+.rmt-floor-shell .rmt-floor-pace{display:inline-flex;align-items:center;gap:8px;margin:0;padding:6px 10px;border:1px solid rgba(0,0,0,.08);border-radius:999px;background:#fff;color:#4d5d73;font-size:12px;box-shadow:3px 0 0 #e99ab9 inset}
+.rmt-floor-shell .rmt-floor-pace b{font-weight:650}
+#chat .mes.rmt-floor-return{outline:2px solid #e99ab9;outline-offset:2px}
 `;
 }
 
@@ -72004,6 +72211,8 @@ function shellView(input = {}) {
     if (revealStatus === 'generating' || revealStatus === 'ready' || revealStatus === 'opened') {
         return { ...face, phase: 'generating', title: '回忆生成中', detail: '还没整份写完，先不拆开。' };
     }
+    const remain = auto_memory_floor.formatFloorRemain(auto_memory_floor.floorsRemaining(input.floor, input.nextDueFloor));
+    if (remain) return { ...face, phase: 'pace', title: '留忆', detail: remain };
     return hidden();
 }
 
@@ -72304,9 +72513,22 @@ function writesMessageText() {
     return false;
 }
 
+function highlightFloor(floor, root = document) {
+    const value = Math.floor(Number(floor));
+    if (!Number.isSafeInteger(value) || value < 1) return { ok: false, mesid: null };
+    const node = messageElement(value - 1, root);
+    if (!node) return { ok: false, mesid: value - 1 };
+    root.querySelectorAll?.('.rmt-floor-return')?.forEach(item => item.classList.remove('rmt-floor-return'));
+    node.classList.add('rmt-floor-return');
+    try { node.scrollIntoView({ block: 'center' }); }
+    catch { try { node.scrollIntoView(); } catch { /* 滚动失败只放弃跳转，不改成就。 */ } }
+    return { ok: true, mesid: value - 1 };
+}
+
 __m_ui_chatFloorNav_js.messageElement = messageElement;
 __m_ui_chatFloorNav_js.placeAfterMessage = placeAfterMessage;
 __m_ui_chatFloorNav_js.writesMessageText = writesMessageText;
+__m_ui_chatFloorNav_js.highlightFloor = highlightFloor;
 }
 
 function __init_ui_autoMemoryWizard_js() {
@@ -72850,10 +73072,13 @@ function viewFor(context) {
         revealLine: shell_state.revealFace({ userName: context.name1, achievementTitle: '', moduleTitle: item?.title || '' }),
         failureRecoverable: !running && (failedStep || common.state === 'failed' || common.state === 'retry'),
         paused: moduleRow?.phase === 'queue',
+        floor: Array.isArray(context.chat) ? context.chat.length : 0,
+        nextDueFloor: snapshot.plan.nextDueFloor,
     });
 }
 
 function markup(view) {
+    if (view.phase === 'pace') return `<p class="rmt-floor-pace" data-rmt-floor-pace><span>留忆</span><b>${core_text.esc(view.detail)}</b></p>`;
     const pending = view.phase === 'reveal' ? '' : ' data-rmt-pending="1"';
     const status = view.progress ? `<p class="rmt-floor-status">${core_text.esc(view.detail)}</p>` : '';
     const body = view.showReveal
@@ -72883,11 +73108,13 @@ function paint(context) {
         host = ui_floor.placeAfterMessage(mes);
     }
     if (!host) return;
+    if (view.phase === 'pace' && host.dataset.rmtPhase === 'pace' && host.dataset.rmtPace === view.detail) return;
     const details = host.querySelector('[data-rmt-floor-details]');
     const body = host.querySelector('[data-rmt-floor-body]');
     const sameReveal = host.dataset.rmtPhase === view.phase && host.dataset.rmtReveal === view.revealId && details?.open && body?.childElementCount;
     host.dataset.rmtPhase = view.phase;
     host.dataset.rmtReveal = view.revealId;
+    host.dataset.rmtPace = view.phase === 'pace' ? view.detail : '';
     host.dataset.rmtPending = view.phase === 'reveal' ? '0' : '1';
     if (sameReveal) {
         const title = host.querySelector('summary b');
@@ -73349,6 +73576,7 @@ __init_generation_jsonParser_js();
 __init_generation_recoveryMerge_js();
 __init_core_bedtimeContract_js();
 __init_modes_cabinet_js();
+__init_autoMemory_achievementLookback_js();
 __init_modes_achievements_js();
 __init_modes_postcardDesign_js();
 __init_modes_travel_js();
@@ -73530,6 +73758,7 @@ __init_autoMemory_moduleRegistry_js();
 __init_autoMemory_planStore_js();
 __init_autoMemory_migrateLegacy_js();
 __init_autoMemory_draw_js();
+__init_autoMemory_floorPace_js();
 __init_autoMemory_incrementalGate_js();
 __init_autoMemory_combinedResult_js();
 __init_autoMemory_moduleRunner_js();

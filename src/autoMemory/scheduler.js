@@ -1,4 +1,4 @@
-// 启用新计划后，由这一处按楼层做增量建档和抽签。没有新记忆或没有可抽模块时不发模块请求。
+// 启用新计划后，楼层到点就读最近这一窗正文，做成增量回忆再抽签。没有新记忆或没有可抽模块时不发模块请求。
 import * as archive_repository from '../archive/repository.js';
 import * as auto_memory_gate from './incrementalGate.js';
 import * as auto_memory_host from './moduleHost.js';

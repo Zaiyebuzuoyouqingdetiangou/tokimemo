@@ -1,5 +1,6 @@
 // 楼层闸门与一轮抽签。真正的导入和保存由调用方注入，方便测试时不碰酒馆。
 import * as auto_memory_draw from './draw.js';
+import * as auto_memory_floor from './floorPace.js';
 import * as auto_memory_registry from './moduleRegistry.js';
 import * as auto_memory_plan from './planStore.js';
 
@@ -94,14 +95,14 @@ export async function runAutoMemoryRound(input, io) {
         await io.persist(next);
         return { action: 'arm', moduleRequest: false, snapshot: next };
     }
-    const options = auto_memory_draw.incrementalImportOptions();
+    const floorWindow = auto_memory_floor.dueFloorWindow(plan.lastCompletedFloor, input.floor);
+    const options = auto_memory_draw.incrementalImportOptions(floorWindow);
     await io.importIncremental(options);
     const after = await io.readMemoryIds();
     const fresh = auto_memory_draw.newMemoryIds(input.memoryIds, after);
     if (!fresh.length) return persistNoop(snapshot, input.floor, io, input.now, 'no-new-memory');
     const modules = Array.isArray(input.modules) ? input.modules : auto_memory_registry.listAutoMemoryModules();
-    const candidates = auto_memory_draw.eligibleDrawIds(modules, {
-        preferredModuleIds: plan.preferredModuleIds,
+    const candidates = auto_memory_draw.roundCandidateIds(modules, {
         excludedModuleIds: plan.excludedModuleIds,
         satisfiedPrerequisiteIds: input.satisfiedPrerequisiteIds,
     });

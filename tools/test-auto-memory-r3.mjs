@@ -62,7 +62,7 @@ test('the same due floor does not import twice and an empty candidate pool does 
     assert.equal(first.action, 'noop');
     assert.equal(first.reason, 'no-new-memory');
     assert.equal(first.moduleRequest, false);
-    assert.deepEqual(calls[0], { automatic: true });
+    assert.deepEqual(calls[0], { automatic: true, floorWindow: { start: 6, end: 10 } });
     const again = await gate.runAutoMemoryRound({ snapshot: due, floor: 10, memoryIds: ['M001'], inflightFloor: 10, now: 51 }, io);
     assert.equal(again.action, 'duplicate');
     const live = await gate.runAutoMemoryRound({
