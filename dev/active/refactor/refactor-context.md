@@ -45,7 +45,10 @@
 |---|---|---|---|
 | r84.71 | 0.99.19 | `f7d2259…` | 起点 |
 | r84.72 | 0.99.20 / `0.99.20-r84.72-refactor-p1` | `f7d2259…`（与起点相同） | 阶段 0、1；用户已在测试分支确认能打开 |
-| r84.73 | 0.99.21 / `0.99.21-r84.73-refactor-p2a` | `0e2c7675…` | styles、repository、cache 拆分；197 个模块 |
+| r84.73 | 0.99.21 / `0.99.21-r84.73-refactor-p2a` | `0e2c7675…` | styles、repository、cache 拆分；197 个模块；用户已验收 |
+| r84.74 | 0.99.22 / `0.99.22-r84.74-refactor-p2b` | `e110055d…` | room 拆分；角色页继承入口（功能改动，已登记 allow） |
+| r84.75 | 0.99.23 / `0.99.23-r84.75-room-figure` | `461e8fa6…` | 房间小人按人设（功能改动，任务 room-figure，已登记 allow） |
+| r84.76 | 0.99.24 / `0.99.24-r84.76-refactor-p2c` | 见 checks.json | heart、phone 拆分；215 个模块 |
 
 ## 决策记录（续）
 
@@ -58,9 +61,15 @@
 
 - `core/cache.js` 原有未使用的内部函数 `cacheRecordUpdatedAt`。
 
+## 同轮的功能改动（不属于重构，单独登记）
+
+- r84.74 角色页继承入口：`archive/library.js` `showArchiveCharacter`。已登记在 `verification/refactor-allow.json`，并加测试 `tests/archive-inherit-entry.test.mjs`。
+- 房间小人按人设：另开任务 `dev/active/room-figure/`，等用户确认。
+
 ## 当前进度 / 下一步
 
-- 已完成：阶段 0、1（r84.72，已验收能打开）；阶段 2 的 styles、repository、cache（r84.73，待验收）。
-- 等用户：装 r84.73，按 tasks 里的验收项点一遍。
-- 下一步：`modes/room.js`（170KB）。先 `node tools/split-module.mjs --analyze modes/room.js` 列出顶层声明与互相引用，按“后依赖前”分组写 spec，再运行拆分；没有自动测试，拆完请用户手点房间页。
+- 已完成：阶段 0、1；阶段 2 的 styles、repository、cache（r84.73 已验收）、room（r84.74 待验收）。
+- 等用户：装 r84.74，手点房间页；看角色页继承入口。
+- D10 heart 分组：heartData → heartPrompts → heartRuntime → heartGeneration。phone 分组：phoneBasics → phoneEvidence → phonePrompts → phoneData → phoneIncrement → phoneGeneration（`projectPhoneProgress` 依赖增量规划，放进 phoneIncrement，工具报出后调整）。
+- 下一步：阶段 2 剩下的 `generation/client.js`、`ui/overlay.js`、`ui/settingsPanel.js`（这三个先改测试夹具），以及 `archive/library.js`、`generation/recovery.js`、`modes/relations.js`、`modes/calendar.js`、`generation/imageGeneration.js`。做法同 D6。
 - 未打包的改动：无。

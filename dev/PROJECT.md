@@ -91,6 +91,9 @@ dev/                      开发文档（本目录）
   - `ui/styles.js` 的主窗口 CSS → `ui/css/*.js`（7 个，按层叠顺序拼接，不要调换）
   - `archive/repository.js` → `archive/archiveCore.js`、`worldInfoSources.js`、`externalMemory.js`、`importPrompts.js`、`importIdentity.js`、`recoveryDrafts.js`、`archiveVerdict.js`、`importOperation.js`
   - `core/cache.js` → `core/cacheRecords.js`、`cacheCommit.js`、`cacheVersions.js`、`cacheGenerationDrafts.js`、`cacheSessions.js`、`cacheArchiveMemory.js`
+  - `modes/room.js` → `modes/roomProfile.js`、`roomPets.js`、`roomLayout.js`、`roomParticipantData.js`、`roomLife.js`、`roomData.js`、`roomRender.js`（小人本地外形另在 `roomFigureLocal.js`）
+  - `modes/heart.js` → `modes/heartData.js`、`heartPrompts.js`、`heartRuntime.js`、`heartGeneration.js`
+  - `modes/phone.js` → `modes/phoneBasics.js`、`phoneEvidence.js`、`phonePrompts.js`、`phoneData.js`、`phoneIncrement.js`、`phoneGeneration.js`
 - 拆大文件用 `tools/split-module.mjs spec.json`（原样搬声明、自动补 import / 转发 / 模块顺序，发现反向依赖直接报错），拆完必须跑第 6 节全部命令。
 
 ---

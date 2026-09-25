@@ -28,10 +28,13 @@
 - [x] 写 `tools/split-module.mjs`（原样搬家工具）
 - [x] `archive/repository.js` → 8 个模块，原文件 30KB 转发（r84.73）
 - [x] `core/cache.js` → 6 个模块，原文件 12KB 转发（r84.73）
-- [ ] 用户在 `测试` 分支装 r84.73：打开档案室、建档或继续一次建档、打开任一已生成页面、看设置页样式是否正常
-- [ ] `modes/room.js` 拆分（无自动测试：需用户手点房间页）
-- [ ] `modes/heart.js` 拆分（需手点 HEART 页）
-- [ ] `modes/phone.js` 拆分（需手点私人终端）
+- [x] 用户在 `测试` 分支装 r84.73：档案室、建档、已生成页面、设置页均正常（2026-09-25）
+- [x] `modes/room.js` → 7 个模块，原文件 6KB 转发（r84.74）
+- [ ] 用户手点房间页（单人、多人房间各一次；切换空间、点物件、白天/夜晚）
+- [x] `modes/heart.js` → 4 个模块，原文件 5KB 转发（r84.76）
+- [ ] 用户手点 HEART 页（主线、萤火虫、四季、单页重新生成）
+- [x] `modes/phone.js` → 6 个模块，原文件 3KB 转发（r84.76）
+- [ ] 用户手点私人终端（设备首页、App 列表、通讯、补缺 / 增量生成）
 - [ ] 改 `tests/runtime-harness.mjs` 的按路径假冒，使其覆盖拆出去的函数
 - [ ] `generation/client.js` 拆分
 - [ ] `ui/overlay.js` 拆分

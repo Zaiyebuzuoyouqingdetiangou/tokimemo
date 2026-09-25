@@ -2,6 +2,7 @@ import * as workspace_ui from '../ui/workspace.js';
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
 import * as archive_groups from './groups.js';
+import * as archive_inheritance from './inheritance.js';
 import * as archive_backupStore from './backupStore.js';
 import * as archive_repository from './repository.js';
 import * as archive_coverage from './coverageRanges.js';
@@ -172,8 +173,19 @@ export function showArchiveCharacter(groupId) {
     if (profile && matchedDescriptor) profile = modes_relations.patchCharacterProfileFromCard(context, profile, matchedDescriptor.index);
     const canGenerateProfile = !!matchedDescriptor;
     const profileHtml = modes_relations.characterProfileHtml({ profile, profileKey, characterName: name, avatarUrl: charAvatar, canGenerate: canGenerateProfile });
+    // r84.74: 当前聊天还没有档案、且这个角色页里有可继承的旧档案时，把“继承”入口固定放在这里，
+    // 不用再回档案室最底部找。判断沿用 archive/inheritance.js 的候选规则（同角色卡位置与头像）。
+    let inheritHtml = '';
+    try {
+        const current = core_context.currentCharacterGuard();
+        const entryIds = new Set(entries.map(item => core_context.archiveIndexEntryId(item)));
+        if (!archive_repository.getImportedMemory(current)
+            && archive_inheritance.inheritanceCandidates(current).some(candidate => entryIds.has(core_context.archiveIndexEntryId(candidate)))) {
+            inheritHtml = `<section class="rmt-archive-card rmt-current-archive-card rmt-character-inherit-card"><div><b>当前聊天还没有档案</b><small>可以把这个角色某个旧聊天的档案复制过来，旧档案保持原样。</small></div><div class="rmt-current-archive-actions"><button type="button" class="rmt-btn" data-rmt-action="archive-inheritance-open">从这个角色的旧聊天继承…</button></div></section>`;
+        }
+    } catch {}
     const rows = entries.map(item => `<button type="button" class="rmt-archive-overview-item" data-rmt-indexed-chat="${core_text.esc(item.chatId)}" data-rmt-indexed-character="${core_text.esc(item.characterKey)}" data-rmt-indexed-entry="${core_text.esc(core_context.archiveIndexEntryId(item))}"><span class="rmt-overview-dot">●</span><span><b>${core_text.esc(item.archiveName)}</b><small>${core_text.esc(item.characterName)} · ${core_text.esc(item.chatId)} · ${item.memoryCount} 条记忆 · ${core_text.esc(ui_overlay.formatArchiveTime(item.updatedAt))}</small></span><i class="fa-solid fa-chevron-right"></i></button>`).join('');
-    body.innerHTML = `<div class="rmt-archive-room">${profileHtml}<section class="rmt-archive-card rmt-character-chat-archives"><div class="rmt-character-heart-head"><button type="button" class="rmt-character-heart-avatar" data-rmt-avatar-talk="${core_text.esc(key)}" aria-label="和角色说话">${charAvatar ? `<img src="${core_text.esc(charAvatar)}" alt="">` : '<i class="fa-solid fa-user"></i>'}<span><i class="fa-solid fa-comment-dots"></i></span></button><div><div class="rmt-archive-kicker">CHAT ARCHIVES</div><strong class="rmt-archive-title">${core_text.esc(name)} · 不同聊天世界线</strong></div></div><div style="margin:10px 0"><button type="button" class="rmt-btn" data-rmt-action="archive-group-manager">管理角色分类</button></div><div class="rmt-archive-overview-list" style="max-height:none">${rows || '<div class="rmt-archive-overview-empty">这个角色组还没有已索引档案。</div>'}</div></section></div>`;
+    body.innerHTML = `<div class="rmt-archive-room">${profileHtml}${inheritHtml}<section class="rmt-archive-card rmt-character-chat-archives"><div class="rmt-character-heart-head"><button type="button" class="rmt-character-heart-avatar" data-rmt-avatar-talk="${core_text.esc(key)}" aria-label="和角色说话">${charAvatar ? `<img src="${core_text.esc(charAvatar)}" alt="">` : '<i class="fa-solid fa-user"></i>'}<span><i class="fa-solid fa-comment-dots"></i></span></button><div><div class="rmt-archive-kicker">CHAT ARCHIVES</div><strong class="rmt-archive-title">${core_text.esc(name)} · 不同聊天世界线</strong></div></div><div style="margin:10px 0"><button type="button" class="rmt-btn" data-rmt-action="archive-group-manager">管理角色分类</button></div><div class="rmt-archive-overview-list" style="max-height:none">${rows || '<div class="rmt-archive-overview-empty">这个角色组还没有已索引档案。</div>'}</div></section></div>`;
 }
 
 export function showArchiveGroupManager() {

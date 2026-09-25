@@ -1,15 +1,14 @@
 {
-  "version": "0.99.21",
-  "build": "0.99.21-r84.73-refactor-p2a",
-  "syntaxFiles": 210,
+  "version": "0.99.24",
+  "build": "0.99.24-r84.76-refactor-p2c",
+  "syntaxFiles": 230,
   "syntaxExit": 0,
-  "bundleModules": 197,
-  "bundleSha256": "0e2c767577993643432d91aba21fb02c796c0def1f0dc3e4de0ad30e5488e3bb",
+  "bundleModules": 215,
+  "bundleSha256": "65f6a9f090ca50dad601deb483d975a70595aa17f14206b82624bd60f78ddafe",
   "bundleRebuildIdentical": true,
-  "generatedCssIdenticalToR84_72": true,
-  "tests": 70,
-  "pass": 70,
+  "tests": 76,
+  "pass": 76,
   "fail": 0,
-  "refactorGuard": "ok vs r84.71 baseline; allowed: ui/styles.js ensureStyles (CSS split, output identical); unresolved bindings 0",
+  "refactorGuard": "ok vs r84.71 baseline; allowed changes listed in verification/refactor-allow.json (no new entries in r84.76); unresolved bindings 0",
   "testedEnvironment": "Node VM production modules and bundle; host/provider/storage boundaries replaced; not phone or live SillyTavern"
 }
