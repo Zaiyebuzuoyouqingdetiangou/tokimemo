@@ -372,7 +372,7 @@ async function generateHeartFirefliesSectionOperation(options, logicalTask) {
             base = recovery.contentInputs?.baseSession || base;
             legacyBatch = legacyFireflyVoices(base).slice(0, 6);
             const upgraded = await requestHeartPart(
-                heartFireflyUpgradePrompt(context, base, legacyBatch),
+                heartFireflyUpgradePrompt(context, base, legacyBatch, memoryBank),
                 '角色互动 · 正在把旧版萤火虫升级为 GS4 式追加约会会话…',
                 { maxTokens: 5200, context, origin, taskKey: `${taskKey}:upgrade`, mode: core_constants.MODE.HEART, background: true },
                 raw => normalizeFireflyUpgradePart(raw, legacyBatch),

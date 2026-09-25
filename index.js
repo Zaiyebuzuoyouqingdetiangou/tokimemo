@@ -1,5 +1,5 @@
-const VERSION = '0.99.24';
-const BUILD = '0.99.24-r84.76-refactor-p2c';
+const VERSION = '0.99.27';
+const BUILD = '0.99.27-r84.79-room-figure-fix';
 
 const SETTINGS_ID = 'heartbeat_memories_settings';
 const MENU_ID = 'heartbeat_memories_menu_item';

@@ -5,10 +5,12 @@ import * as world_sources from '../archive/worldInfoSources.js';
 // 不请求模型，不写回存档；结果只用于画小人，全部是代码自有的枚举值。
 // 优先级：房间生成时已核验的字段（explicitFields）> 角色卡 > 世界书 > 按身份推断 > 原值。
 
-const SENTENCE_SPLIT = /[\n。！？!?；;]+/;
-const LOOK_WORDS = /(发|髮|眸|瞳|眼|衣|袍|衫|裙|服|装|袖|斗篷|披风|身材|身形|个子|身高|体型|肩|戴|耳|角|尾|帽|冠|巾|围巾|镜|hair|eyes?|wear|dress|robe|coat|suit)/i;
-const USER_WORDS = /(\{\{user\}\}|<user>|\buser\b)/i;
-const NEGATION = /(不|没|无|未|别|非)[^，。；,\n]{0,2}$/;
+const SENTENCE_SPLIT = /[\n。！？!?；;]+|\.(?:\s|$)/;
+const CLAUSE_SPLIT = /[，,、]+/;
+const LOOK_WORDS = /(发|髮|眸|瞳|眼|衣|袍|衫|裙|服|装|袖|斗篷|披风|身材|身形|个子|身高|体型|肩|戴|耳|角|尾|帽|冠|巾|围巾|镜|\bhair\b|\beyes?\b|\bwear(s|ing)?\b|\bdress(es|ed)?\b|\brobes?\b|\bcoats?\b|\bsuits?\b|\bglasses\b|\bears\b|\bhorns?\b|\bbuilt\b|\btall\b)/i;
+const NEGATION = /(不|没|无|未|别|非)[^，。；,\n]{0,3}$|\b(?:not|never|without|no|doesn't|don't)\b[^.,;\n]{0,12}$/i;
+// r84.79: 英文词一律按整词匹配（\b），避免 that→hat、childhood→hood、himself→elf 这类误判。
+const either = (zh, en) => new RegExp(`${zh}|\\b(?:${en})\\b`, 'i');
 
 // 颜色词 → 代码自有色板键。顺序决定“银白”先于“白”。
 const COLOUR_WORDS = [
@@ -17,59 +19,106 @@ const COLOUR_WORDS = [
     ['blue', /湛蓝|深蓝|藏蓝|蓝/], ['cyan', /青|碧/], ['green', /绿/], ['purple', /紫/], ['gray', /灰/],
 ];
 const HAIR_FROM_COLOUR = { silver: 'silver', white: 'white', black: 'black', red: 'red', pink: 'fantasy_warm', gold: 'light', brown: 'brown', blue: 'fantasy_cool', cyan: 'fantasy_cool', green: 'fantasy_cool', purple: 'fantasy_cool', gray: 'silver' };
-const HAIR_ENGLISH = [['silver', /silver hair/i], ['white', /white hair/i], ['black', /black hair|dark hair/i], ['red', /red hair|ginger/i], ['light', /blond/i], ['brown', /brown hair|brunette/i], ['fantasy_cool', /(blue|green|purple) hair/i], ['fantasy_warm', /(pink|orange) hair/i]];
+// 英文发色：颜色词与 hair 之间允许夹几个词（long black hair / silver, waist-length hair）。
+const EN_HAIR = (colour) => new RegExp(`\\b(?:${colour})\\b[^.;!?\\n]{0,24}?\\bhair\\b`, 'i');
+const HAIR_ENGLISH = [['silver', EN_HAIR('silver|silvery|platinum|grey|gray')], ['white', EN_HAIR('white|snowy')], ['black', EN_HAIR('black|jet-black|raven|dark')],
+    ['red', EN_HAIR('red|crimson|ginger|auburn')], ['light', EN_HAIR('blond|blonde|golden|fair')], ['brown', EN_HAIR('brown|chestnut|brunette')],
+    ['fantasy_cool', EN_HAIR('blue|green|purple|violet|teal')], ['fantasy_warm', EN_HAIR('pink|orange')]];
 const EYE_TONES = new Set(['gold', 'red', 'blue', 'cyan', 'green', 'purple', 'silver', 'pink', 'brown', 'black', 'gray']);
+const EN_EYES = [['gold', 'golden|gold|amber'], ['red', 'red|crimson|scarlet'], ['blue', 'blue|azure'], ['cyan', 'teal|cyan'], ['green', 'green|emerald'],
+    ['purple', 'purple|violet'], ['silver', 'silver'], ['gray', 'gray|grey'], ['brown', 'brown|hazel'], ['black', 'black|dark']]
+    .map(([key, words]) => [key, new RegExp(`\\b(?:${words})\\b[^.;!?\\n]{0,12}?\\beyes?\\b`, 'i')]);
 
 const HAIR_SHAPES = [
-    ['tied', /马尾|束发|发髻|高束|挽发|发冠|玉冠|束冠|盘发|扎起|ponytail|bun/i],
-    ['cropped', /寸头|板寸|平头|buzz cut/i],
-    ['curly', /卷发|卷毛|自然卷|curly/i],
-    ['long', /长发|及腰|披发|披肩|长至|垂腰|long hair/i],
-    ['medium', /及肩|中长发|齐肩|shoulder.length/i],
-    ['short', /短发|碎发|利落的发|short hair/i],
-    ['covered', /兜帽|头巾|面纱|头纱|hood|veil/i],
+    ['tied', either('马尾|束发|发髻|高束|挽发|发冠|玉冠|束冠|盘发|扎起', 'ponytail|bun|topknot|braid(?:ed|s)?')],
+    ['cropped', either('寸头|板寸|平头', 'buzz ?cut|crew ?cut|shaved head')],
+    ['curly', either('卷发|卷毛|自然卷', 'curly|wavy')],
+    ['long', /长发|及腰|披发|披肩|长至|垂腰|\blong\b[^.;!?\n]{0,20}?\bhair\b|\bwaist-length\b/i],
+    ['medium', /及肩|中长发|齐肩|\bshoulder-length\b|\bshoulder length\b/i],
+    ['short', /短发|碎发|利落的发|\bshort\b[^.;!?\n]{0,20}?\bhair\b/i],
+    ['covered', either('兜帽|头巾|面纱|头纱', 'hood(?:ed)?|veil(?:ed)?|headscarf')],
 ];
 const OUTFITS = [
-    ['combat', /铠甲|盔甲|战甲|甲胄|作战服|劲装|armou?r/i],
-    ['technical', /实验服|白大褂|防护服|宇航服|机甲驾驶服|lab coat/i],
-    ['uniform', /制服|军装|警服|军服|uniform/i],
-    ['academic', /校服|学生服|学院服|school uniform/i],
-    ['formal', /西装|西服|正装|礼服|衬衫|领带|suit|tuxedo/i],
-    ['fantasy', /法袍|魔法袍|斗篷|巫师袍|mage robe|cloak/i],
-    ['ceremonial', /祭服|祭袍|礼袍/i],
-    ['historical', /[长锦道僧儒蟒]袍|衣袍|袍子|长衫|青衫|襦裙|汉服|古装|广袖|宽袖|衣袂|锦衣|玄衣|白衣|黑衣|素衣|长袍|kimono|hanfu|robe/i],
-    ['work', /工装|围裙|工作服|apron|overalls/i],
-    ['casual', /卫衣|T恤|牛仔|休闲|运动服|便服|夹克|hoodie|t-shirt|jeans/i],
+    ['combat', either('铠甲|盔甲|战甲|甲胄|作战服|劲装', 'armou?r|plate mail|combat gear')],
+    ['technical', either('实验服|白大褂|防护服|宇航服|机甲驾驶服', 'lab coat|space ?suit|hazmat')],
+    ['uniform', either('制服|军装|警服|军服', 'uniform')],
+    ['academic', either('校服|学生服|学院服', 'school uniform')],
+    ['formal', either('西装|西服|正装|礼服|衬衫|领带', 'suit|tuxedo|necktie|dress shirt')],
+    ['fantasy', either('法袍|魔法袍|斗篷|巫师袍', 'mage robes?|wizard robes?|cloak')],
+    ['ceremonial', /祭服|祭袍|礼袍/],
+    ['historical', either('[长锦道僧儒蟒]袍|衣袍|袍子|长衫|青衫|襦裙|汉服|古装|广袖|宽袖|衣袂|锦衣|玄衣|白衣|黑衣|素衣|长袍', 'kimono|hanfu|robes?')],
+    ['work', either('工装|围裙|工作服', 'apron|overalls')],
+    ['casual', either('卫衣|T恤|牛仔|休闲|运动服|便服|夹克', 'hoodie|t-shirt|tee|jeans|jacket')],
 ];
 const BUILDS = [
-    ['broad', /宽肩|魁梧|高大健壮|健硕|肌肉结实|壮硕|broad|muscular/i],
-    ['slender', /修长|清瘦|纤细|瘦削|颀长|单薄|slender/i],
-    ['compact', /娇小|矮小|小个子|个子小|petite/i],
-    ['soft', /微胖|圆润|丰腴|plump/i],
+    ['broad', either('宽肩|魁梧|高大健壮|健硕|肌肉结实|壮硕', 'broad-shouldered|broad shoulders|muscular|burly')],
+    ['slender', either('修长|清瘦|纤细|瘦削|颀长|单薄', 'slender|lanky|slim')],
+    ['compact', either('娇小|矮小|小个子|个子小', 'petite|short and small')],
+    ['soft', either('微胖|圆润|丰腴', 'plump|chubby')],
 ];
 const DETAILS = [
-    ['glasses', /眼镜|镜片|glasses|spectacles/i],
-    ['animal_ears', /兽耳|猫耳|狐耳|狼耳|犬耳|兔耳|cat ears|fox ears|animal ears/i],
-    ['pointed_ears', /尖耳|精灵耳|pointed ears|elven ears/i],
-    ['horns', /犄角|龙角|羊角|鹿角|双角|头上长着?角|horns?/i],
-    ['visor', /护目镜|面罩|visor|goggles/i],
-    ['headphones', /耳机|headphones/i],
-    ['scarf', /围巾|scarf/i],
-    ['headwear', /发冠|玉冠|帽子|戴着?帽|头盔|王冠|发簪|hat|helmet|crown/i],
+    ['glasses', either('眼镜|镜片', 'glasses|spectacles')],
+    ['animal_ears', either('兽耳|猫耳|狐耳|狼耳|犬耳|兔耳', 'cat ears|fox ears|wolf ears|animal ears|bunny ears')],
+    ['pointed_ears', either('尖耳|精灵耳', 'pointed ears|elven ears|elf ears')],
+    ['horns', either('犄角|龙角|羊角|鹿角|双角|头上长着?角', 'horns?')],
+    ['visor', either('护目镜|面罩', 'visor|goggles')],
+    ['headphones', either('耳机', 'headphones')],
+    ['scarf', either('围巾', 'scarf')],
+    ['headwear', either('发冠|玉冠|帽子|戴着?帽|头盔|王冠|发簪', 'hat|helmet|crown|circlet|tiara')],
 ];
-// 按身份推断（用户 2026-09-25 授权：角色卡与世界书都没写时可以按身份猜）。
+// 按身份推断（用户 2026-09-25 授权）。r84.79: 只在“写角色本人身份”的分句里找：
+// 关键词前有“是 / 身为 / 作为 / 担任…”，或整个分句就是这个身份词（如“剑修”）。
 const IDENTITY_OUTFITS = [
     ['historical', /修仙|仙门|宗门|门派|剑修|江湖|侠客|大侠|王爷|皇子|皇帝|将军|公子|师尊|掌门|古代|朝廷|书生|世子|少主/],
-    ['combat', /骑士|战士|佣兵|士兵|军人|武士|knight|soldier|mercenary/i],
-    ['fantasy', /魔法|法师|巫师|精灵|魔王|龙族|mage|wizard|elf/i],
-    ['technical', /赛博|机甲|星舰|宇宙|科学家|研究员|医生|cyber|scientist|doctor/i],
-    ['uniform', /警察|警官|军官|机长|空乘|police|officer/i],
-    ['academic', /学生|高中|初中|学长|学弟|student/i],
-    ['formal', /总裁|律师|经理|董事|商人|老板|秘书|ceo|lawyer/i],
-    ['casual', /现代|都市|大学|同居|室友|网友|主播|modern/i],
+    ['combat', either('骑士|战士|佣兵|士兵|军人|武士', 'knight|soldier|mercenary|warrior')],
+    ['fantasy', either('魔法师|法师|巫师|精灵|魔王|龙族', 'mage|wizard|sorcerer|sorceress|witch|elf|elven')],
+    ['technical', either('赛博|机甲|星舰|科学家|研究员|医生', 'scientist|researcher|doctor|engineer')],
+    ['uniform', either('警察|警官|军官|机长|空乘', 'police officer|policeman|policewoman|detective|pilot')],
+    ['academic', either('学生|高中生|初中生', 'student')],
+    ['formal', either('总裁|律师|经理|董事|商人|老板|秘书', 'ceo|lawyer|manager|businessman|businesswoman|secretary')],
 ];
+const IDENTITY_MARKER = /(是|为|身为|作为|担任|身份|职业|出身|乃|当上|成为|\bis an?\b|\bwas an?\b|\bworks? as\b|\bserves? as\b|\boccupation\b|\bjob\b|\brole\b)/i;
 const WORLD_OUTFIT = { historical: 'historical', fantasy: 'fantasy', scifi: 'technical', contemporary: 'casual', institutional: 'uniform', maritime: 'uniform', nomadic: 'artisan' };
 const WORLD_HAIR = { historical: 'long' };
+
+// r84.79: 按分句判断“这句在说谁”。句首是 你 / 您 / {{user}} / 用户名 → 用户；
+// “他的妹妹”“his sister” 这类 → 别人；他 / 她 / 角色名 / {{char}} → 角色本人；
+// 没写主语的分句沿用同一句里前一个分句的主语，每句开头默认是角色本人。
+const RELATIONS = '妹妹|姐姐|哥哥|弟弟|母亲|父亲|妈妈|爸爸|娘亲|爹爹|妻子|丈夫|老婆|老公|女友|男友|女朋友|男朋友|朋友|同伴|伙伴|手下|下属|徒弟|师父|师尊|师兄|师姐|师弟|师妹|侍女|侍从|仆人|管家|宠物|孩子|儿子|女儿|恋人|爱人|未婚妻|未婚夫|对手|敌人|同事|上司|室友|同学';
+const EN_RELATIONS = 'sister|brother|mother|father|mom|dad|wife|husband|girlfriend|boyfriend|friends?|partner|servant|maid|butler|pet|child|son|daughter|lover|fiancee?|fiancée|rival|enemy|colleague|boss|roommate|classmate|master|apprentice|twin';
+const escapeRe = text => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+function subjectMatchers(charName = '', userName = '') {
+    const char = core_text.normalizeText(charName, 60), user = core_text.normalizeText(userName, 60);
+    const charAlt = ['他', '她', '它', '\\{\\{char\\}\\}', '<char>', char && escapeRe(char)].filter(Boolean).join('|');
+    const userAlt = ['你', '您', '\\{\\{user\\}\\}', '<user>', user && user !== char && escapeRe(user)].filter(Boolean).join('|');
+    return {
+        other: new RegExp(`^(?:(?:${charAlt}|你|您|\\{\\{user\\}\\})的?)?(?:${RELATIONS})|^(?:his|her|their|my|your|\\{\\{char\\}\\}'s)\\s+(?:${EN_RELATIONS})\\b`, 'i'),
+        user: new RegExp(`^(?:${userAlt})|^(?:you|your|user)\\b`, 'i'),
+        char: new RegExp(`^(?:${charAlt})|^(?:he|she|they|his|her|their)\\b`, 'i'),
+    };
+}
+
+export function characterClauses(texts, { charName = '', userName = '', perClause = false } = {}) {
+    const who = subjectMatchers(charName, userName), out = [];
+    for (const raw of texts) {
+        for (const sentence of plain(raw).split(SENTENCE_SPLIT)) {
+            let subject = 'char';
+            const kept = [];
+            for (const part of sentence.split(CLAUSE_SPLIT)) {
+                const clause = part.trim().replace(/^["'“”‘’「」『』（）()\s*-]+/, '');
+                if (!clause) continue;
+                if (who.other.test(clause)) subject = 'other';
+                else if (who.user.test(clause)) subject = 'user';
+                else if (who.char.test(clause)) subject = 'char';
+                if (subject === 'char') kept.push(clause);
+            }
+            if (perClause) out.push(...kept); else if (kept.length) out.push(kept.join('，'));
+            if (out.length >= 160) return out;
+        }
+    }
+    return out;
+}
 
 const plain = (value, max = 20000) => typeof value === 'string' ? value.slice(0, max) : '';
 
@@ -78,7 +127,7 @@ function firstMatch(text, table) {
     for (const [value, pattern] of table) {
         const re = new RegExp(pattern.source, pattern.flags.includes('g') ? pattern.flags : pattern.flags + 'g');
         for (const match of text.matchAll(re)) {
-            if (NEGATION.test(text.slice(Math.max(0, match.index - 3), match.index))) continue;
+            if (NEGATION.test(text.slice(Math.max(0, match.index - 10), match.index))) continue;
             if (!best || match.index < best.index) best = { value, index: match.index };
             break;
         }
@@ -120,25 +169,17 @@ function colourAfter(text, targets) {
     return '';
 }
 
-export function appearanceSentences(texts, name = '') {
-    const out = [];
-    for (const raw of texts) {
-        for (const sentence of plain(raw).split(SENTENCE_SPLIT)) {
-            const line = sentence.trim();
-            if (line && LOOK_WORDS.test(line) && !USER_WORDS.test(line)) out.push(line);
-            if (out.length >= 80) return out;
-        }
-    }
-    return out;
+export function appearanceSentences(texts, names = {}) {
+    return characterClauses(texts, names).filter(line => LOOK_WORDS.test(line)).slice(0, 80);
 }
 
-export function figureFromText(texts, name = '') {
-    const text = appearanceSentences(texts, name).join('。');
+export function figureFromText(texts, names = {}) {
+    const text = appearanceSentences(texts, names).join('。');
     if (!text) return {};
     const hairColour = colourBefore(text, '发|髮|头发|长发|短发|卷发') || colourAfter(text, '发色|头发是|头发');
     const hairTone = HAIR_FROM_COLOUR[hairColour] || firstMatch(text, HAIR_ENGLISH);
     const outfitTone = colourBefore(text, '衣|袍|衫|裙|服|装|斗篷|披风|外套|西装') || colourAfter(text, '衣服|衣着|着装|穿着');
-    const eyeTone = colourBefore(text, '瞳|眸|眼睛|眼珠') || colourAfter(text, '瞳色|眸色|瞳孔|眼眸|眼睛|眼珠');
+    const eyeTone = colourBefore(text, '瞳|眸|眼睛|眼珠') || colourAfter(text, '瞳色|眸色|瞳孔|眼眸|眼睛|眼珠') || firstMatch(text, EN_EYES);
     const figure = {
         hairTone, hairShape: firstMatch(text, HAIR_SHAPES), outfit: firstMatch(text, OUTFITS),
         build: firstMatch(text, BUILDS), detail: firstMatch(text, DETAILS),
@@ -147,19 +188,34 @@ export function figureFromText(texts, name = '') {
     return Object.fromEntries(Object.entries(figure).filter(([, value]) => value));
 }
 
-export function figureFromIdentity(texts, worldStyle = '') {
-    const text = texts.map(value => plain(value, 6000)).join('\n');
-    const outfit = firstMatch(text, IDENTITY_OUTFITS) || WORLD_OUTFIT[worldStyle] || '';
+function identityOutfit(clauses) {
+    let best = null;
+    for (const clause of clauses) {
+        const marker = clause.search(IDENTITY_MARKER);
+        for (const [value, pattern] of IDENTITY_OUTFITS) {
+            const hit = clause.match(pattern);
+            if (!hit) continue;
+            const labelOnly = clause.trim().length <= hit[0].length + 2;
+            if ((marker >= 0 && hit.index > marker) || labelOnly) { if (!best) best = value; break; }
+        }
+        if (best) return best;
+    }
+    return '';
+}
+
+export function figureFromIdentity(texts, worldStyle = '', names = {}) {
+    const outfit = identityOutfit(characterClauses(texts.map(value => plain(value, 6000)), { ...names, perClause: true })) || WORLD_OUTFIT[worldStyle] || '';
     const hairShape = outfit === 'historical' ? 'long' : (WORLD_HAIR[worldStyle] || '');
     return Object.fromEntries(Object.entries({ outfit, hairShape }).filter(([, value]) => value));
 }
 
 const unset = value => !value || value === 'unspecified' || value === 'none';
 
-export function localRoomFigure(figure = {}, { explicitFields = [], cardTexts = [], worldTexts = [], worldStyle = '' } = {}) {
+export function localRoomFigure(figure = {}, { explicitFields = [], cardTexts = [], worldTexts = [], worldStyle = '', charName = '', userName = '' } = {}) {
     const verified = new Set((Array.isArray(explicitFields) ? explicitFields : []).map(field => String(field).replace(/^figure\./, '')));
-    const card = figureFromText(cardTexts), world = figureFromText(worldTexts);
-    const guess = figureFromIdentity([...cardTexts, ...worldTexts], worldStyle);
+    const names = { charName, userName };
+    const card = figureFromText(cardTexts, names), world = figureFromText(worldTexts, names);
+    const guess = figureFromIdentity([...cardTexts, ...worldTexts], worldStyle, names);
     const out = { ...(figure && typeof figure === 'object' ? figure : {}) };
     for (const key of ['hairTone', 'hairShape', 'outfit', 'build', 'detail', 'outfitTone', 'eyeTone']) {
         if (verified.has(key) && !unset(out[key])) continue;
@@ -185,7 +241,8 @@ function cardsNamed(context, name) {
 
 export function roomFigureSources(context, name, onWorldReady = null) {
     const cards = cardsNamed(context, name);
-    if (cards.length !== 1) return { cardTexts: [], worldTexts: [] };
+    const userName = core_text.normalizeText(context?.name1, 60);
+    if (cards.length !== 1) return { cardTexts: [], worldTexts: [], charName: core_text.normalizeText(name, 60), userName };
     const card = cards[0], data = card.data && typeof card.data === 'object' ? card.data : {};
     const cardTexts = [data.description, card.description, data.personality, card.personality, data.scenario, card.scenario].map(value => plain(value)).filter(Boolean);
     const wanted = core_text.normalizeText(name, 120);
@@ -209,5 +266,5 @@ export function roomFigureSources(context, name, onWorldReady = null) {
             }).catch(() => worldCache.set(key, []));
         }
     }
-    return { cardTexts, worldTexts };
+    return { cardTexts, worldTexts, charName: core_text.normalizeText(name, 60), userName };
 }

@@ -85,7 +85,7 @@ dev/                      开发文档（本目录）
 
 - **自制打包器**（`tools/build-runtime-bundle.mjs`）只认单行 `import * as X from '…'` 和 `import { a, b } from '…'`；导出只认 `export function`、`export async function`、`export const`。不支持 `export let`、`export default`、`export class`、`export {…}`、多行 import。
 - **初始化顺序是钉死的**：176 个模块里 125 个在同一个循环依赖里，所以 `tools/runtime-module-order.json` 规定了初始化顺序。新增 / 拆分模块必须同时改这个文件；`import {x}` 在初始化时就取值，顺序错了会拿到 undefined，整包加载失败（历史上出现过“心迹回廊加载失败”）。
-- **测试夹具按路径假冒**：`tests/runtime-harness.mjs` 把 `ui/overlay.js`、`ui/settingsPanel.js`、`generation/client.js` 整个换成假模块。拆这三个文件时，挪出去的函数会逃出假冒范围，必须同步改夹具。
+- **测试夹具按路径假冒**：`tests/runtime-harness.mjs` 把 `ui/overlay.js`、`ui/settingsPanel.js`、`generation/client.js` 换成假模块。这三个文件拆分后只剩转发，夹具按导出名假冒转发层，外部调用照样被拦住，所以夹具不用改（r84.77 实测 77/77）。不要让别的模块绕过转发层直接 import 拆出去的新文件，否则会逃出假冒。
 - r84.72 删除了 29 个不可达旧文件（`src/modes/` 下 28 个与 `src/ui/` 同名的旧界面副本、`src/ui/photoshootView.js`）。测试分支的导入流程只覆盖不删除，所以仓库里它们可能还在；如果上传包里又出现这些文件，就是残留，不参与运行，可以删。
 - **转发层**（r84.73 起）：大文件拆分后，原文件只剩 `export const 名字 = split_xxx.名字;` 转发和少量没拆的函数，外部调用方不用改。要改某个函数，去它真正所在的新文件改（看原文件顶部的 `import * as split_…` 就知道在哪）：
   - `ui/styles.js` 的主窗口 CSS → `ui/css/*.js`（7 个，按层叠顺序拼接，不要调换）
@@ -94,7 +94,16 @@ dev/                      开发文档（本目录）
   - `modes/room.js` → `modes/roomProfile.js`、`roomPets.js`、`roomLayout.js`、`roomParticipantData.js`、`roomLife.js`、`roomData.js`、`roomRender.js`（小人本地外形另在 `roomFigureLocal.js`）
   - `modes/heart.js` → `modes/heartData.js`、`heartPrompts.js`、`heartRuntime.js`、`heartGeneration.js`
   - `modes/phone.js` → `modes/phoneBasics.js`、`phoneEvidence.js`、`phonePrompts.js`、`phoneData.js`、`phoneIncrement.js`、`phoneGeneration.js`
-- 拆大文件用 `tools/split-module.mjs spec.json`（原样搬声明、自动补 import / 转发 / 模块顺序，发现反向依赖直接报错），拆完必须跑第 6 节全部命令。
+  - `modes/relations.js` → `modes/characterProfile.js`、`relationsView.js`
+  - `modes/calendar.js` → `modes/calendarBasics.js`、`calendarData.js`
+  - `generation/imageGeneration.js` → `generation/cgImageCore.js`、`cgImageActions.js`
+  - `generation/recovery.js` → `generation/recoveryFeedback.js`、`recoverySegments.js`（截断续写登记仍在 recovery.js）
+  - `generation/client.js` → `generation/generationContext.js`、`generationRequest.js`、`generationSavedActions.js`、`generationModes.js`（顶层注册语句仍在 client.js）
+  - `archive/library.js` → `archive/libraryCharacter.js`、`librarySnapshots.js`（档案室首页等读写模块状态的函数仍在 library.js）
+  - `ui/settingsPanel.js` → `ui/settingsPanelParts.js`、`settingsPanelHome.js`
+  - `ui/overlay.js` → `ui/overlayShell.js`、`overlayManage.js`、`overlayCore.js`、`overlayPartial.js`
+  - 主窗口按钮：`overlayCore.js` 的 `handleOverlayClick` 依次调用 `ui/overlayClickTargets.js`（按元素属性）和 `ui/overlayClickActions.js`（按 `data-rmt-action`）里的 4 个分组；加新按钮就加进对应分组，**分组顺序不能调换**。设置页整页 HTML 在 `ui/settingsPanelMarkup.js`。
+- 拆大文件用 `tools/split-module.mjs`：先 `--plan 文件 最大字节` 出分组草稿（按依赖排序；`let` 与所有读写它的函数必须同组；顶层语句留在原文件），给每组改名写说明，再用 spec 运行（原样搬声明、自动补 import / 转发 / 模块顺序，发现反向依赖直接报错）。拆完必须跑第 6 节全部命令。
 
 ---
 
@@ -105,9 +114,10 @@ node tools/build-runtime-bundle.mjs .                                   # 打包
 node --experimental-vm-modules --test tests/*.test.mjs                  # 全部测试
 node --experimental-vm-modules tools/refactor-guard.mjs check           # 重构护栏：代码文本、导出、CSS、初始化绑定
 node tools/verify-release.mjs .                                         # 全部 JS/MJS 语法、manifest、bundle SHA（需要 git 工作树）
+node tools/check-undefined-names.mjs                                    # 用 TypeScript 找“用了没定义 / 定义两次”的名字（拆分漏 import 只在调用时才炸）
 ```
 
-`refactor-guard` 和 `split-module` 需要 acorn（Claude 沙箱的全局 npm 里有；别处用 `ACORN_PATH` / `ACORN_DIR` 指定）。只有**有意改行为**的轮次才重拍基线：`… refactor-guard.mjs snapshot`，并在该轮 context 里写明原因。某个声明因拆分必须改写时（例如 CSS 字符串拆段），写进 `verification/refactor-allow.json` 并写原因；CSS 输出和初始化绑定不能放行。
+护栏基线是 r84.78（`verification/refactor-baseline.json`）；r84.71 的旧基线另存为 `refactor-baseline-r84.71.json`，供 `tests/dispatch-split-identity.test.mjs` 证明分发拆分逐字不变。`refactor-guard`、`split-module`、`split-dispatch` 需要 acorn（Claude 沙箱的全局 npm 里有；别处用 `ACORN_PATH` / `ACORN_DIR` 指定）。只有**有意改行为**的轮次才重拍基线：`… refactor-guard.mjs snapshot`，并在该轮 context 里写明原因。某个声明因拆分必须改写时（例如 CSS 字符串拆段），写进 `verification/refactor-allow.json` 并写原因；CSS 输出和初始化绑定不能放行。
 
 ---
 

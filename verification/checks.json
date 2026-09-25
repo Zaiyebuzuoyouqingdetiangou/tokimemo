@@ -1,14 +1,15 @@
 {
-  "version": "0.99.24",
-  "build": "0.99.24-r84.76-refactor-p2c",
-  "syntaxFiles": 230,
+  "version": "0.99.27",
+  "build": "0.99.27-r84.79-room-figure-fix",
+  "syntaxFiles": 258,
   "syntaxExit": 0,
-  "bundleModules": 215,
-  "bundleSha256": "65f6a9f090ca50dad601deb483d975a70595aa17f14206b82624bd60f78ddafe",
+  "bundleModules": 238,
+  "bundleSha256": "507fb4e4ddfe78c575059fbc3fb90b13ac09b4614d489dfb74585fd5e29fc42a",
   "bundleRebuildIdentical": true,
-  "tests": 76,
-  "pass": 76,
+  "tests": 83,
+  "pass": 83,
   "fail": 0,
-  "refactorGuard": "ok vs r84.71 baseline; allowed changes listed in verification/refactor-allow.json (no new entries in r84.76); unresolved bindings 0",
+  "undefinedNames": 0,
+  "refactorGuard": "ok vs r84.78 baseline; the 20 changed room-figure declarations are listed in verification/refactor-allow.json; unresolved bindings 0",
   "testedEnvironment": "Node VM production modules and bundle; host/provider/storage boundaries replaced; not phone or live SillyTavern"
 }

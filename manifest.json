@@ -1,15 +1,15 @@
 {
   "display_name": "心迹回廊",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.99.24-r84.76-refactor-p2c",
+  "js": "index.js?heartbeat=0.99.27-r84.79-room-figure-fix",
   "author": "Toto",
-  "version": "0.99.24",
+  "version": "0.99.27",
   "auto_update": true,
   "minimum_client_version": "1.13.0",
   "hooks": {
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r84.76：重构继续，功能不变。HEART 与私人终端代码按职责拆成小文件，原文件保留转发。",
+  "description": "r84.79：房间小人识别修复——英文角色卡不再误认，写用户或别人的句子不再算到角色身上，按身份推断更严格；寸头、兜帽、耳机、角的画法调整。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }

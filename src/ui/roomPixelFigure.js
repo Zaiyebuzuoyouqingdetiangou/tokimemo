@@ -15,6 +15,15 @@ export function pixelFigureSvg(profile = {}) {
     const rect = (x, y, w, h, color) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${color}"/>`;
     const outline = '#443b52', skin = '#f3ccba', eye = tone(profile.eyeTone) || outline;
     const trim = profile.outfitTone === 'black' ? '#8d7a52' : '#e9d9b3';
+    // r84.79: 寸头只留贴头皮的一层头发；兜帽把后脑头发换成兜帽布料、只露出刘海。其他发型输出与 r84.75 相同。
+    const cropped = profile.hairShape === 'cropped', covered = profile.hairShape === 'covered';
+    const hoodShade = '#00000022';
+    const backHair = cropped ? rect(6,4,18,2,hair) + rect(5,6,20,4,hair)
+        : covered ? rect(5,2,20,2,coat) + rect(3,4,24,4,coat) + rect(2,8,26,14,coat) + rect(4,22,22,3,coat) + rect(2,8,2,14,hoodShade) + rect(26,8,2,14,hoodShade)
+        : rect(6,4,18,3,hair) + rect(3,7,24,13,hair) + rect(5,19,20,4,hair);
+    const fringe = cropped ? rect(5,8,20,2,hair) + rect(5,10,1,3,hair) + rect(24,10,1,3,hair)
+        : covered ? rect(6,8,18,3,hair) + rect(7,11,4,1,hair) + rect(20,11,4,1,hair)
+        : rect(5,8,20,3,hair) + rect(6,10,5,3,hair) + rect(11,10,4,2,hair) + rect(22,10,3,5,hair);
     return `<g data-rmt-local-figure="pixel" transform="translate(-56 -100) scale(4)" shape-rendering="crispEdges">
       ${rect(5,43,20,2,'#00000020')}
       ${long ? rect(4,7,22,27,hair) + rect(6,33,18,3,hair) : ''}
@@ -26,16 +35,14 @@ export function pixelFigureSvg(profile = {}) {
       ${collar ? rect(10,24,3,3,'#e6e4e9') + rect(18,24,3,3,'#e6e4e9') + rect(15,26,2,7,outline) : ''}
       ${armor ? rect(x-3,25,5,4,'#b5c7d0') + rect(x+bodyWidth-2,25,5,4,'#b5c7d0') + rect(x+3,27,bodyWidth-6,6,'#a5b8c4') : ''}
       ${profile.outfit === 'artisan' || profile.outfit === 'work' ? rect(10,27,10,10,'#e2c9a7') + rect(13,30,4,3,coat) : ''}
-      ${rect(6,4,18,3,hair)}${rect(3,7,24,13,hair)}${rect(5,19,20,4,hair)}
+      ${backHair}
       ${rect(6,10,18,11,skin)}${rect(8,21,14,2,skin)}${rect(4,13,2,5,skin)}${rect(24,13,2,5,skin)}
       ${rect(8,15,2,3,eye)}${rect(19,15,2,3,eye)}${rect(8,15,1,1,'#fff9ed')}${rect(19,15,1,1,'#fff9ed')}
       ${rect(6,18,4,1,'#e59fa6')}${rect(20,18,3,1,'#e59fa6')}${rect(14,20,3,1,'#b4767f')}
-      ${rect(5,8,20,3,hair)}${rect(6,10,5,3,hair)}${rect(11,10,4,2,hair)}${rect(22,10,3,5,hair)}
+      ${fringe}
       ${profile.hairShape === 'curly' ? rect(2,9,3,5,hair) + rect(25,9,3,5,hair) + rect(4,19,3,5,hair) : ''}
       ${profile.hairShape === 'short' ? rect(6,5,7,1,'#ffffff25') : rect(7,6,8,1,'#ffffff30')}
       ${profile.hairShape === 'medium' ? rect(3,18,4,9,hair) + rect(23,18,4,9,hair) : ''}
-      ${profile.hairShape === 'cropped' ? rect(5,19,20,4,skin) + rect(8,21,14,2,skin) + rect(6,18,4,1,'#e59fa6') + rect(20,18,3,1,'#e59fa6') + rect(14,20,3,1,'#b4767f') : ''}
-      ${profile.hairShape === 'covered' ? rect(2,3,26,6,coat) + rect(2,8,4,16,coat) + rect(24,8,4,16,coat) : ''}
       ${detailSvg(profile.detail, { rect, hair, skin, coat, x, bodyWidth })}
     </g>`;
 }
@@ -46,10 +53,10 @@ function detailSvg(detail, { rect, hair, skin, coat, x, bodyWidth }) {
     case 'glasses': return frame(7) + frame(18) + rect(12,15,6,1,'#3a3542');
     case 'animal_ears': return rect(4,0,6,6,hair) + rect(20,0,6,6,hair) + rect(6,2,2,3,'#e9a3b3') + rect(22,2,2,3,'#e9a3b3');
     case 'pointed_ears': return rect(1,12,3,2,skin) + rect(0,11,2,2,skin) + rect(26,12,3,2,skin) + rect(28,11,2,2,skin);
-    case 'horns': return rect(7,0,3,5,'#e6d8bd') + rect(6,0,2,2,'#e6d8bd') + rect(20,0,3,5,'#e6d8bd') + rect(22,0,2,2,'#e6d8bd');
+    case 'horns': return rect(9,3,3,2,'#e6d8bd') + rect(8,1,2,2,'#e6d8bd') + rect(7,0,2,1,'#b9a684') + rect(18,3,3,2,'#e6d8bd') + rect(20,1,2,2,'#e6d8bd') + rect(21,0,2,1,'#b9a684');
     case 'headwear': return rect(12,1,6,4,'#d4ad55') + rect(14,0,2,2,'#f1d88a');
     case 'visor': return rect(6,14,18,3,'#6fb3d6') + rect(6,14,18,1,'#bfe4f3');
-    case 'headphones': return rect(5,3,20,2,'#4b4652') + rect(2,11,4,7,'#4b4652') + rect(24,11,4,7,'#4b4652');
+    case 'headphones': return rect(8,2,14,2,'#4b4652') + rect(6,3,3,2,'#4b4652') + rect(21,3,3,2,'#4b4652') + rect(4,5,2,7,'#4b4652') + rect(24,5,2,7,'#4b4652') + rect(2,11,4,7,'#4b4652') + rect(24,11,4,7,'#4b4652') + rect(3,12,2,5,'#6b6573') + rect(25,12,2,5,'#6b6573');
     case 'scarf': return rect(x,22,bodyWidth,3,'#c96f7d') + rect(x+bodyWidth-4,24,3,6,'#c96f7d');
     default: return '';
     }

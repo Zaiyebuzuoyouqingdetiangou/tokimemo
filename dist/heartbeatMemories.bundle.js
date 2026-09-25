@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
-// Source modules: 215
-// Source SHA-256: b06b98544917e1f14fcc256555142670660129393ba3194de79d82819789df09
+// Source modules: 238
+// Source SHA-256: 7e17dea4467df4202f6ee89979d6bc8d4dc6fff635fc45d43b9682727340596e
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -18,6 +18,8 @@ const __m_archive_importPrompts_js = Object.create(null);
 const __m_archive_importRecovery_js = Object.create(null);
 const __m_archive_inheritance_js = Object.create(null);
 const __m_archive_library_js = Object.create(null);
+const __m_archive_libraryCharacter_js = Object.create(null);
+const __m_archive_librarySnapshots_js = Object.create(null);
 const __m_archive_memoryFileImport_js = Object.create(null);
 const __m_archive_memoryProviders_js = Object.create(null);
 const __m_archive_partialImport_js = Object.create(null);
@@ -101,9 +103,15 @@ const __m_core_timeStoriesContract_js = Object.create(null);
 const __m_core_worldPresentation_js = Object.create(null);
 const __m_generation_baibaiImage_js = Object.create(null);
 const __m_generation_cgAppearance_js = Object.create(null);
+const __m_generation_cgImageActions_js = Object.create(null);
+const __m_generation_cgImageCore_js = Object.create(null);
 const __m_generation_cgPromptPolicy_js = Object.create(null);
 const __m_generation_client_js = Object.create(null);
 const __m_generation_contentRegeneration_js = Object.create(null);
+const __m_generation_generationContext_js = Object.create(null);
+const __m_generation_generationModes_js = Object.create(null);
+const __m_generation_generationRequest_js = Object.create(null);
+const __m_generation_generationSavedActions_js = Object.create(null);
 const __m_generation_imageGeneration_js = Object.create(null);
 const __m_generation_jsonParser_js = Object.create(null);
 const __m_generation_jsonShapeExamples_js = Object.create(null);
@@ -113,8 +121,10 @@ const __m_generation_partialProgress_js = Object.create(null);
 const __m_generation_prompts_js = Object.create(null);
 const __m_generation_recovery_js = Object.create(null);
 const __m_generation_recoveryAdapters_js = Object.create(null);
+const __m_generation_recoveryFeedback_js = Object.create(null);
 const __m_generation_recoveryMerge_js = Object.create(null);
 const __m_generation_recoveryPayload_js = Object.create(null);
+const __m_generation_recoverySegments_js = Object.create(null);
 const __m_generation_requestTemperature_js = Object.create(null);
 const __m_heartbeatMemories_js = Object.create(null);
 const __m_modes_achievements_js = Object.create(null);
@@ -124,6 +134,9 @@ const __m_modes_bedtime_js = Object.create(null);
 const __m_modes_butterfly_js = Object.create(null);
 const __m_modes_cabinet_js = Object.create(null);
 const __m_modes_calendar_js = Object.create(null);
+const __m_modes_calendarBasics_js = Object.create(null);
+const __m_modes_calendarData_js = Object.create(null);
+const __m_modes_characterProfile_js = Object.create(null);
 const __m_modes_ending_js = Object.create(null);
 const __m_modes_heart_js = Object.create(null);
 const __m_modes_heartData_js = Object.create(null);
@@ -142,6 +155,7 @@ const __m_modes_phoneIncrement_js = Object.create(null);
 const __m_modes_phonePrompts_js = Object.create(null);
 const __m_modes_postcardDesign_js = Object.create(null);
 const __m_modes_relations_js = Object.create(null);
+const __m_modes_relationsView_js = Object.create(null);
 const __m_modes_room_js = Object.create(null);
 const __m_modes_roomData_js = Object.create(null);
 const __m_modes_roomFigureLocal_js = Object.create(null);
@@ -194,6 +208,12 @@ const __m_ui_mirrorCallView_js = Object.create(null);
 const __m_ui_mirrorTtsReader_js = Object.create(null);
 const __m_ui_navigationBookmark_js = Object.create(null);
 const __m_ui_overlay_js = Object.create(null);
+const __m_ui_overlayClickActions_js = Object.create(null);
+const __m_ui_overlayClickTargets_js = Object.create(null);
+const __m_ui_overlayCore_js = Object.create(null);
+const __m_ui_overlayManage_js = Object.create(null);
+const __m_ui_overlayPartial_js = Object.create(null);
+const __m_ui_overlayShell_js = Object.create(null);
 const __m_ui_participantPicker_js = Object.create(null);
 const __m_ui_pastLivesReading_css_js = Object.create(null);
 const __m_ui_pastLivesView_js = Object.create(null);
@@ -207,6 +227,9 @@ const __m_ui_roomPixelFigure_js = Object.create(null);
 const __m_ui_routeParticipants_js = Object.create(null);
 const __m_ui_scenePicker_js = Object.create(null);
 const __m_ui_settingsPanel_js = Object.create(null);
+const __m_ui_settingsPanelHome_js = Object.create(null);
+const __m_ui_settingsPanelMarkup_js = Object.create(null);
+const __m_ui_settingsPanelParts_js = Object.create(null);
 const __m_ui_styles_js = Object.create(null);
 const __m_ui_taskCenter_js = Object.create(null);
 const __m_ui_themeSongStyles_js = Object.create(null);
@@ -16007,23 +16030,16 @@ __m_modes_phone_js.generatePhoneIncrementalWithRepair = generatePhoneIncremental
 __m_modes_phone_js.normalizePhone = normalizePhone;
 }
 
-function __init_modes_relations_js() {
-// MODULE: modes/relations.js
+function __init_modes_characterProfile_js() {
+// MODULE: modes/characterProfile.js
 const archive_groups = __m_archive_groups_js;
-const archive_repository = __m_archive_repository_js;
-const core_cache = __m_core_cache_js;
 const core_constants = __m_core_constants_js;
 const core_context = __m_core_context_js;
-const core_evidence = __m_core_evidence_js;
 const core_participants = __m_core_participants_js;
 const core_requestCoordinator = __m_core_requestCoordinator_js;
 const core_text = __m_core_text_js;
 const generation_client = __m_generation_client_js;
 const generation_prompts = __m_generation_prompts_js;
-const ui_overlay = __m_ui_overlay_js;
-const runtimeState = __m_core_state_js.state;
-// Character Profile + Relation Garden.
-// Shared profile uses only controlled setting sources; per-chat relations use evidence-gated Mxxx memories.
 
 
 
@@ -16032,21 +16048,29 @@ const runtimeState = __m_core_state_js.state;
 
 
 
-
-
-
-
+// 角色档案：资料来源与字面事实、提示词、规范化与读写
+// 从 modes/relations.js 原样搬出（重构阶段 2），声明文本一字未改；modes/relations.js 仍转发原有导出。
 
 const PROFILE_VERSION = 1;
+
 const MAX_SHARED_RELATIONS = 12;
+
 const MAX_DYNAMIC_RELATIONS = 14;
+
 const PROFILE_FACT_ORDER = Object.freeze(['生日', '年龄 / 年级', '身高', '血型', '职业 / 学校', '社团 / 工作', '兴趣', '喜欢的东西', '不喜欢的东西']);
+
 const PROFILE_FACT_LABELS = new Set(PROFILE_FACT_ORDER);
+
 const PROFILE_DISCOVERY_LABELS = new Set([...PROFILE_FACT_LABELS, '习惯', '擅长的事', '害怕的东西', '重要的人 / 事物']);
+
 const RELATION_LAYERS = new Set(['family', 'close', 'friend', 'work', 'school', 'rival', 'acquaintance', 'special']);
+
 const RELATION_STATES = new Set(['亲密', '友好', '普通', '疏远', '紧张', '敌对', '竞争', '复杂', '恋爱', '暧昧', '伴侣', '家人', '同事', '同学', '师生', '主从', '特殊']);
+
 const SOURCE_TYPES = new Set(['character_card', 'user_persona', 'world_info']);
+
 const PROFILE_FACT_SOURCE_TYPES = new Set(['character_card', 'world_info']);
+
 const PROFILE_FACT_LABEL_ALIASES = new Map([
     ['生日', '生日'], ['出生日期', '生日'], ['出生年月日', '生日'], ['誕生日', '生日'],
     ['年龄', '年龄 / 年级'], ['年齡', '年龄 / 年级'], ['年龄/年级', '年龄 / 年级'], ['年级', '年龄 / 年级'], ['年齢', '年龄 / 年级'], ['学年', '年龄 / 年级'],
@@ -16133,7 +16157,6 @@ function targetCharacterRawData(context, index) {
     };
 }
 
-
 function normalizeProfileFactLabel(value) {
     const raw = core_text.normalizeText(value, 40);
     if (!raw) return '';
@@ -16168,6 +16191,7 @@ function labeledTextFact(text, label, labels) {
 }
 
 const OCCUPATION_HINT_RE = /(?:作家|作者|编剧|編劇|讲师|講師|教师|教師|教授|医生|醫生|律师|律師|警察|侦探|偵探|演员|演員|歌手|模特|研究员|研究員|工程师|工程師|设计师|設計師|画家|畫家|摄影师|攝影師|记者|記者|编辑|編輯|厨师|廚師|社长|社長|总裁|總裁|CEO|军人|軍人|骑士|騎士|魔法师|魔法師|猎人|獵人|主播|程序员|程式設計師|学生|學生)/u;
+
 const OCCUPATION_CONTEXT_EXCLUDE_RE = /(?:父亲|父親|母亲|母親|爸爸|妈妈|哥哥|姐姐|弟弟|妹妹|朋友|好友|同事|上司|下属|下屬|妻子|丈夫|伴侣|伴侶|喜欢|喜歡|讨厌|討厭|崇拜|认识|認識|\{\{user\}\}|用户|用戶)/u;
 
 function occupationFactFromText(text) {
@@ -16608,6 +16632,67 @@ function normalizeSettingRelationships(data, entries = [], context = {}) {
     }).filter(Boolean);
 }
 
+__m_modes_characterProfile_js.collectCharacterProfileSources = collectCharacterProfileSources;
+__m_modes_characterProfile_js.generateCharacterProfileForGroup = generateCharacterProfileForGroup;
+__m_modes_characterProfile_js.foldEvidence = foldEvidence;
+__m_modes_characterProfile_js.relationParticipantNames = relationParticipantNames;
+__m_modes_characterProfile_js.factValueBackedByEvidence = factValueBackedByEvidence;
+__m_modes_characterProfile_js.normalizeProfileFactLabel = normalizeProfileFactLabel;
+__m_modes_characterProfile_js.extractLiteralCharacterFacts = extractLiteralCharacterFacts;
+__m_modes_characterProfile_js.characterProfileContextEnvelope = characterProfileContextEnvelope;
+__m_modes_characterProfile_js.characterProfilePrompt = characterProfilePrompt;
+__m_modes_characterProfile_js.normalizeCharacterProfile = normalizeCharacterProfile;
+__m_modes_characterProfile_js.patchCharacterProfileFromCard = patchCharacterProfileFromCard;
+__m_modes_characterProfile_js.getCharacterProfiles = getCharacterProfiles;
+__m_modes_characterProfile_js.getCharacterProfile = getCharacterProfile;
+__m_modes_characterProfile_js.setCharacterProfile = setCharacterProfile;
+__m_modes_characterProfile_js.deleteCharacterProfile = deleteCharacterProfile;
+__m_modes_characterProfile_js.archiveCharacterProfileKey = archiveCharacterProfileKey;
+__m_modes_characterProfile_js.fitRelationSettingEntries = fitRelationSettingEntries;
+__m_modes_characterProfile_js.mergeBudgetRetainedSettingRelations = mergeBudgetRetainedSettingRelations;
+__m_modes_characterProfile_js.relationsPrompt = relationsPrompt;
+__m_modes_characterProfile_js.normalizeSettingRelationships = normalizeSettingRelationships;
+__m_modes_characterProfile_js.MAX_DYNAMIC_RELATIONS = MAX_DYNAMIC_RELATIONS;
+__m_modes_characterProfile_js.PROFILE_FACT_ORDER = PROFILE_FACT_ORDER;
+__m_modes_characterProfile_js.PROFILE_DISCOVERY_LABELS = PROFILE_DISCOVERY_LABELS;
+__m_modes_characterProfile_js.RELATION_LAYERS = RELATION_LAYERS;
+__m_modes_characterProfile_js.RELATION_STATES = RELATION_STATES;
+}
+
+function __init_modes_relationsView_js() {
+// MODULE: modes/relationsView.js
+const archive_groups = __m_archive_groups_js;
+const archive_repository = __m_archive_repository_js;
+const core_constants = __m_core_constants_js;
+const core_context = __m_core_context_js;
+const core_evidence = __m_core_evidence_js;
+const core_text = __m_core_text_js;
+const ui_overlay = __m_ui_overlay_js;
+const runtimeState = __m_core_state_js.state;
+const MAX_DYNAMIC_RELATIONS = __m_modes_characterProfile_js.MAX_DYNAMIC_RELATIONS;
+const PROFILE_DISCOVERY_LABELS = __m_modes_characterProfile_js.PROFILE_DISCOVERY_LABELS;
+const PROFILE_FACT_ORDER = __m_modes_characterProfile_js.PROFILE_FACT_ORDER;
+const RELATION_LAYERS = __m_modes_characterProfile_js.RELATION_LAYERS;
+const RELATION_STATES = __m_modes_characterProfile_js.RELATION_STATES;
+const archiveCharacterProfileKey = __m_modes_characterProfile_js.archiveCharacterProfileKey;
+const factValueBackedByEvidence = __m_modes_characterProfile_js.factValueBackedByEvidence;
+const foldEvidence = __m_modes_characterProfile_js.foldEvidence;
+const getCharacterProfile = __m_modes_characterProfile_js.getCharacterProfile;
+const normalizeProfileFactLabel = __m_modes_characterProfile_js.normalizeProfileFactLabel;
+const normalizeSettingRelationships = __m_modes_characterProfile_js.normalizeSettingRelationships;
+const relationParticipantNames = __m_modes_characterProfile_js.relationParticipantNames;
+
+
+
+
+
+
+
+
+
+// 关系：关系数据规范化与进度、关系层合并、关系花园与页面渲染
+// 从 modes/relations.js 原样搬出（重构阶段 2），声明文本一字未改；modes/relations.js 仍转发原有导出。
+
 function normalizeRelations(data, memoryBank, context = null) {
     if (!data || typeof data !== 'object' || !Array.isArray(data.relationships)) throw new Error('人际庭园 JSON 结构不完整。');
     const seen = new Set();
@@ -17004,10 +17089,56 @@ function renderRelations() {
     </div>`;
 }
 
-__m_modes_relations_js.collectCharacterProfileSources = collectCharacterProfileSources;
-__m_modes_relations_js.generateCharacterProfileForGroup = generateCharacterProfileForGroup;
+__m_modes_relationsView_js.normalizeRelations = normalizeRelations;
+__m_modes_relationsView_js.projectRelationsProgress = projectRelationsProgress;
+__m_modes_relationsView_js.relationsViewIdentity = relationsViewIdentity;
+__m_modes_relationsView_js.mergeRelationLayers = mergeRelationLayers;
+__m_modes_relationsView_js.relationGardenPositions = relationGardenPositions;
+__m_modes_relationsView_js.relationGardenHtml = relationGardenHtml;
+__m_modes_relationsView_js.cardRelationSourcesHtml = cardRelationSourcesHtml;
+__m_modes_relationsView_js.characterProfileHtml = characterProfileHtml;
+__m_modes_relationsView_js.worldlineDiscoveriesHtml = worldlineDiscoveriesHtml;
+__m_modes_relationsView_js.renderRelations = renderRelations;
+}
+
+function __init_modes_relations_js() {
+// MODULE: modes/relations.js
+const split_characterProfile = __m_modes_characterProfile_js;
+const split_relationsView = __m_modes_relationsView_js;
+
+
+// 以下导出已搬到 modes/characterProfile.js、modes/relationsView.js，这里原样转发，调用方不用改。
+const relationParticipantNames = split_characterProfile.relationParticipantNames;
+const extractLiteralCharacterFacts = split_characterProfile.extractLiteralCharacterFacts;
+const collectCharacterProfileSources = split_characterProfile.collectCharacterProfileSources;
+const characterProfileContextEnvelope = split_characterProfile.characterProfileContextEnvelope;
+const characterProfilePrompt = split_characterProfile.characterProfilePrompt;
+const normalizeCharacterProfile = split_characterProfile.normalizeCharacterProfile;
+const patchCharacterProfileFromCard = split_characterProfile.patchCharacterProfileFromCard;
+const getCharacterProfiles = split_characterProfile.getCharacterProfiles;
+const getCharacterProfile = split_characterProfile.getCharacterProfile;
+const setCharacterProfile = split_characterProfile.setCharacterProfile;
+const deleteCharacterProfile = split_characterProfile.deleteCharacterProfile;
+const archiveCharacterProfileKey = split_characterProfile.archiveCharacterProfileKey;
+const generateCharacterProfileForGroup = split_characterProfile.generateCharacterProfileForGroup;
+const fitRelationSettingEntries = split_characterProfile.fitRelationSettingEntries;
+const mergeBudgetRetainedSettingRelations = split_characterProfile.mergeBudgetRetainedSettingRelations;
+const relationsPrompt = split_characterProfile.relationsPrompt;
+const normalizeSettingRelationships = split_characterProfile.normalizeSettingRelationships;
+const normalizeRelations = split_relationsView.normalizeRelations;
+const projectRelationsProgress = split_relationsView.projectRelationsProgress;
+const relationsViewIdentity = split_relationsView.relationsViewIdentity;
+const mergeRelationLayers = split_relationsView.mergeRelationLayers;
+const relationGardenPositions = split_relationsView.relationGardenPositions;
+const relationGardenHtml = split_relationsView.relationGardenHtml;
+const cardRelationSourcesHtml = split_relationsView.cardRelationSourcesHtml;
+const characterProfileHtml = split_relationsView.characterProfileHtml;
+const worldlineDiscoveriesHtml = split_relationsView.worldlineDiscoveriesHtml;
+const renderRelations = split_relationsView.renderRelations;
+
 __m_modes_relations_js.relationParticipantNames = relationParticipantNames;
 __m_modes_relations_js.extractLiteralCharacterFacts = extractLiteralCharacterFacts;
+__m_modes_relations_js.collectCharacterProfileSources = collectCharacterProfileSources;
 __m_modes_relations_js.characterProfileContextEnvelope = characterProfileContextEnvelope;
 __m_modes_relations_js.characterProfilePrompt = characterProfilePrompt;
 __m_modes_relations_js.normalizeCharacterProfile = normalizeCharacterProfile;
@@ -17017,6 +17148,7 @@ __m_modes_relations_js.getCharacterProfile = getCharacterProfile;
 __m_modes_relations_js.setCharacterProfile = setCharacterProfile;
 __m_modes_relations_js.deleteCharacterProfile = deleteCharacterProfile;
 __m_modes_relations_js.archiveCharacterProfileKey = archiveCharacterProfileKey;
+__m_modes_relations_js.generateCharacterProfileForGroup = generateCharacterProfileForGroup;
 __m_modes_relations_js.fitRelationSettingEntries = fitRelationSettingEntries;
 __m_modes_relations_js.mergeBudgetRetainedSettingRelations = mergeBudgetRetainedSettingRelations;
 __m_modes_relations_js.relationsPrompt = relationsPrompt;
@@ -17033,25 +17165,22 @@ __m_modes_relations_js.worldlineDiscoveriesHtml = worldlineDiscoveriesHtml;
 __m_modes_relations_js.renderRelations = renderRelations;
 }
 
-function __init_modes_calendar_js() {
-// MODULE: modes/calendar.js
+function __init_modes_calendarBasics_js() {
+// MODULE: modes/calendarBasics.js
 const core_constants = __m_core_constants_js;
 const core_evidence = __m_core_evidence_js;
 const core_presentExpression = __m_core_presentExpression_js;
 const core_participants = __m_core_participants_js;
-const core_narrativeAuthority = __m_core_narrativeAuthority_js;
 const core_text = __m_core_text_js;
 const core_worldPresentation = __m_core_worldPresentation_js;
-// Heartbeat Memories r40 calendar mode.
-// Calendar is a derived, evidence-gated personal calendar. It intentionally does NOT mirror every
-// dated archive memory. The model may nominate only calendar-worthy moments; the plugin validates
-// their archive evidence and derives past dates from the anchored memory instead of trusting model dates.
 
 
 
 
 
 
+// 两个人的日历基础：状态、标签与便签枚举，节日贺卡素材，条目与便签规范化
+// 从 modes/calendar.js 原样搬出（重构阶段 2），声明文本一字未改；modes/calendar.js 仍转发原有导出。
 
 const CALENDAR_STATUS = Object.freeze({
     PAST: 'past',
@@ -17076,10 +17205,15 @@ const CALENDAR_NOTE_SOURCE = Object.freeze({
 const CALENDAR_LEGACY_PAGE_KEY = 'legacy:unassigned';
 
 const HOLIDAY_CARD_EXPRESSIONS = Object.freeze(['text', 'drawing', 'writing', 'mixed', 'minimal']);
+
 const HOLIDAY_CARD_MOTIFS = Object.freeze(['celestial', 'botanical', 'light', 'ribbon', 'snow', 'wave', 'cloud', 'flame', 'petal', 'leaf', 'spark', 'geometric']);
+
 const HOLIDAY_CARD_PALETTES = Object.freeze(['paper', 'dawn', 'night', 'jade', 'rose', 'frost', 'festival']);
+
 const HOLIDAY_CARD_MEDIA = Object.freeze(['card', 'paper', 'letter', 'scroll', 'folio', 'screen']);
+
 const HOLIDAY_CARD_STROKES = Object.freeze(['fine', 'soft', 'bold', 'dry', 'round']);
+
 const HOLIDAY_CARD_FLOWS = Object.freeze(['horizontal', 'vertical']);
 
 const CALENDAR_PAGE_KEY_RE = /^(?:date:\d{4}\/\d{2}\/\d{2}|annual:\d{2}\/\d{2}|pending:[A-Za-z0-9_-]{1,120}|legacy:unassigned)$/;
@@ -17196,6 +17330,7 @@ function storyCalendarDate(memoryBank) {
     }
     return '';
 }
+
 function calendarDateEvidenceVariants(parsed) {
     if (!parsed || parsed.date === '待定') return [];
     const { year, month, day } = parsed;
@@ -17788,6 +17923,83 @@ function normalizeStickyNotes(value, memoryBank, { controlledEvidence = '' } = {
     return out;
 }
 
+__m_modes_calendarBasics_js.pageMetaForKey = pageMetaForKey;
+__m_modes_calendarBasics_js.calendarPageKeyForDate = calendarPageKeyForDate;
+__m_modes_calendarBasics_js.calendarEntryPageKey = calendarEntryPageKey;
+__m_modes_calendarBasics_js.createCalendarDayPage = createCalendarDayPage;
+__m_modes_calendarBasics_js.ensureCalendarDayPage = ensureCalendarDayPage;
+__m_modes_calendarBasics_js.calendarDayPage = calendarDayPage;
+__m_modes_calendarBasics_js.normalizeCalendarTags = normalizeCalendarTags;
+__m_modes_calendarBasics_js.normalizeCalendarDate = normalizeCalendarDate;
+__m_modes_calendarBasics_js.currentCalendarDate = currentCalendarDate;
+__m_modes_calendarBasics_js.storyCalendarDate = storyCalendarDate;
+__m_modes_calendarBasics_js.calendarDateMatchesToday = calendarDateMatchesToday;
+__m_modes_calendarBasics_js.folded = folded;
+__m_modes_calendarBasics_js.ensureUniqueCalendarEntryIds = ensureUniqueCalendarEntryIds;
+__m_modes_calendarBasics_js.ensureUniqueCalendarPageItems = ensureUniqueCalendarPageItems;
+__m_modes_calendarBasics_js.normalizeCalendarPageCollections = normalizeCalendarPageCollections;
+__m_modes_calendarBasics_js.resolveAnchoredMemory = resolveAnchoredMemory;
+__m_modes_calendarBasics_js.resolveAnchoredDatedMemory = resolveAnchoredDatedMemory;
+__m_modes_calendarBasics_js.derivePastCalendarEntries = derivePastCalendarEntries;
+__m_modes_calendarBasics_js.normalizePastMarkedEntries = normalizePastMarkedEntries;
+__m_modes_calendarBasics_js.normalizePromisedEntries = normalizePromisedEntries;
+__m_modes_calendarBasics_js.normalizeFutureEntries = normalizeFutureEntries;
+__m_modes_calendarBasics_js.holidayCardClaimsSharedHistory = holidayCardClaimsSharedHistory;
+__m_modes_calendarBasics_js.normalizeHolidayCards = normalizeHolidayCards;
+__m_modes_calendarBasics_js.normalizeStickyNotes = normalizeStickyNotes;
+__m_modes_calendarBasics_js.CALENDAR_STATUS = CALENDAR_STATUS;
+__m_modes_calendarBasics_js.CALENDAR_TAG_ALLOWLIST = CALENDAR_TAG_ALLOWLIST;
+__m_modes_calendarBasics_js.CALENDAR_NOTE_KIND = CALENDAR_NOTE_KIND;
+__m_modes_calendarBasics_js.CALENDAR_NOTE_SOURCE = CALENDAR_NOTE_SOURCE;
+__m_modes_calendarBasics_js.CALENDAR_LEGACY_PAGE_KEY = CALENDAR_LEGACY_PAGE_KEY;
+__m_modes_calendarBasics_js.HOLIDAY_CARD_EXPRESSIONS = HOLIDAY_CARD_EXPRESSIONS;
+__m_modes_calendarBasics_js.HOLIDAY_CARD_MOTIFS = HOLIDAY_CARD_MOTIFS;
+__m_modes_calendarBasics_js.HOLIDAY_CARD_PALETTES = HOLIDAY_CARD_PALETTES;
+__m_modes_calendarBasics_js.HOLIDAY_CARD_MEDIA = HOLIDAY_CARD_MEDIA;
+__m_modes_calendarBasics_js.HOLIDAY_CARD_STROKES = HOLIDAY_CARD_STROKES;
+__m_modes_calendarBasics_js.HOLIDAY_CARD_FLOWS = HOLIDAY_CARD_FLOWS;
+}
+
+function __init_modes_calendarData_js() {
+// MODULE: modes/calendarData.js
+const core_constants = __m_core_constants_js;
+const core_evidence = __m_core_evidence_js;
+const core_presentExpression = __m_core_presentExpression_js;
+const core_narrativeAuthority = __m_core_narrativeAuthority_js;
+const core_text = __m_core_text_js;
+const core_worldPresentation = __m_core_worldPresentation_js;
+const CALENDAR_LEGACY_PAGE_KEY = __m_modes_calendarBasics_js.CALENDAR_LEGACY_PAGE_KEY;
+const CALENDAR_NOTE_KIND = __m_modes_calendarBasics_js.CALENDAR_NOTE_KIND;
+const CALENDAR_NOTE_SOURCE = __m_modes_calendarBasics_js.CALENDAR_NOTE_SOURCE;
+const CALENDAR_STATUS = __m_modes_calendarBasics_js.CALENDAR_STATUS;
+const calendarEntryPageKey = __m_modes_calendarBasics_js.calendarEntryPageKey;
+const calendarPageKeyForDate = __m_modes_calendarBasics_js.calendarPageKeyForDate;
+const createCalendarDayPage = __m_modes_calendarBasics_js.createCalendarDayPage;
+const ensureCalendarDayPage = __m_modes_calendarBasics_js.ensureCalendarDayPage;
+const ensureUniqueCalendarEntryIds = __m_modes_calendarBasics_js.ensureUniqueCalendarEntryIds;
+const ensureUniqueCalendarPageItems = __m_modes_calendarBasics_js.ensureUniqueCalendarPageItems;
+const folded = __m_modes_calendarBasics_js.folded;
+const normalizeCalendarDate = __m_modes_calendarBasics_js.normalizeCalendarDate;
+const normalizeCalendarPageCollections = __m_modes_calendarBasics_js.normalizeCalendarPageCollections;
+const normalizeFutureEntries = __m_modes_calendarBasics_js.normalizeFutureEntries;
+const normalizeHolidayCards = __m_modes_calendarBasics_js.normalizeHolidayCards;
+const normalizePastMarkedEntries = __m_modes_calendarBasics_js.normalizePastMarkedEntries;
+const normalizePromisedEntries = __m_modes_calendarBasics_js.normalizePromisedEntries;
+const normalizeStickyNotes = __m_modes_calendarBasics_js.normalizeStickyNotes;
+const pageMetaForKey = __m_modes_calendarBasics_js.pageMetaForKey;
+const resolveAnchoredDatedMemory = __m_modes_calendarBasics_js.resolveAnchoredDatedMemory;
+const resolveAnchoredMemory = __m_modes_calendarBasics_js.resolveAnchoredMemory;
+const storyCalendarDate = __m_modes_calendarBasics_js.storyCalendarDate;
+
+
+
+
+
+
+
+// 日历数据：条目键与月份、旧会话迁移、刷新合并、整体规范化与进度
+// 从 modes/calendar.js 原样搬出（重构阶段 2），声明文本一字未改；modes/calendar.js 仍转发原有导出。
+
 function normalizeMoodNotes(value, memoryBank, { entries = [], currentDate = '' } = {}) {
     const raw = Array.isArray(value) ? value : [];
     const out = [];
@@ -18206,6 +18418,67 @@ function projectCalendarProgress({ segments, memoryBank, previousSession, frozen
     return mergeCalendarRefresh(previousSession, { ...fresh, entries: [...entries.values()] }, memoryBank);
 }
 
+__m_modes_calendarData_js.calendarEntryKey = calendarEntryKey;
+__m_modes_calendarData_js.calendarMonthKey = calendarMonthKey;
+__m_modes_calendarData_js.calendarEntryMatchesMonth = calendarEntryMatchesMonth;
+__m_modes_calendarData_js.calendarDateKeyForMonth = calendarDateKeyForMonth;
+__m_modes_calendarData_js.defaultCalendarMonth = defaultCalendarMonth;
+__m_modes_calendarData_js.migrateCalendarSession = migrateCalendarSession;
+__m_modes_calendarData_js.mergeCalendarRefresh = mergeCalendarRefresh;
+__m_modes_calendarData_js.normalizeCalendar = normalizeCalendar;
+__m_modes_calendarData_js.projectCalendarProgress = projectCalendarProgress;
+}
+
+function __init_modes_calendar_js() {
+// MODULE: modes/calendar.js
+const split_calendarBasics = __m_modes_calendarBasics_js;
+const split_calendarData = __m_modes_calendarData_js;
+
+
+// 以下导出已搬到 modes/calendarBasics.js、modes/calendarData.js，这里原样转发，调用方不用改。
+const CALENDAR_STATUS = split_calendarBasics.CALENDAR_STATUS;
+const CALENDAR_TAG_ALLOWLIST = split_calendarBasics.CALENDAR_TAG_ALLOWLIST;
+const CALENDAR_NOTE_KIND = split_calendarBasics.CALENDAR_NOTE_KIND;
+const CALENDAR_NOTE_SOURCE = split_calendarBasics.CALENDAR_NOTE_SOURCE;
+const CALENDAR_LEGACY_PAGE_KEY = split_calendarBasics.CALENDAR_LEGACY_PAGE_KEY;
+const HOLIDAY_CARD_EXPRESSIONS = split_calendarBasics.HOLIDAY_CARD_EXPRESSIONS;
+const HOLIDAY_CARD_MOTIFS = split_calendarBasics.HOLIDAY_CARD_MOTIFS;
+const HOLIDAY_CARD_PALETTES = split_calendarBasics.HOLIDAY_CARD_PALETTES;
+const HOLIDAY_CARD_MEDIA = split_calendarBasics.HOLIDAY_CARD_MEDIA;
+const HOLIDAY_CARD_STROKES = split_calendarBasics.HOLIDAY_CARD_STROKES;
+const HOLIDAY_CARD_FLOWS = split_calendarBasics.HOLIDAY_CARD_FLOWS;
+const calendarPageKeyForDate = split_calendarBasics.calendarPageKeyForDate;
+const calendarEntryPageKey = split_calendarBasics.calendarEntryPageKey;
+const createCalendarDayPage = split_calendarBasics.createCalendarDayPage;
+const calendarDayPage = split_calendarBasics.calendarDayPage;
+const normalizeCalendarTags = split_calendarBasics.normalizeCalendarTags;
+const normalizeCalendarDate = split_calendarBasics.normalizeCalendarDate;
+const currentCalendarDate = split_calendarBasics.currentCalendarDate;
+const storyCalendarDate = split_calendarBasics.storyCalendarDate;
+const calendarDateMatchesToday = split_calendarBasics.calendarDateMatchesToday;
+const derivePastCalendarEntries = split_calendarBasics.derivePastCalendarEntries;
+const holidayCardClaimsSharedHistory = split_calendarBasics.holidayCardClaimsSharedHistory;
+const calendarEntryKey = split_calendarData.calendarEntryKey;
+const calendarMonthKey = split_calendarData.calendarMonthKey;
+const calendarEntryMatchesMonth = split_calendarData.calendarEntryMatchesMonth;
+const calendarDateKeyForMonth = split_calendarData.calendarDateKeyForMonth;
+const defaultCalendarMonth = split_calendarData.defaultCalendarMonth;
+const migrateCalendarSession = split_calendarData.migrateCalendarSession;
+const mergeCalendarRefresh = split_calendarData.mergeCalendarRefresh;
+const normalizeCalendar = split_calendarData.normalizeCalendar;
+const projectCalendarProgress = split_calendarData.projectCalendarProgress;
+
+__m_modes_calendar_js.CALENDAR_STATUS = CALENDAR_STATUS;
+__m_modes_calendar_js.CALENDAR_TAG_ALLOWLIST = CALENDAR_TAG_ALLOWLIST;
+__m_modes_calendar_js.CALENDAR_NOTE_KIND = CALENDAR_NOTE_KIND;
+__m_modes_calendar_js.CALENDAR_NOTE_SOURCE = CALENDAR_NOTE_SOURCE;
+__m_modes_calendar_js.CALENDAR_LEGACY_PAGE_KEY = CALENDAR_LEGACY_PAGE_KEY;
+__m_modes_calendar_js.HOLIDAY_CARD_EXPRESSIONS = HOLIDAY_CARD_EXPRESSIONS;
+__m_modes_calendar_js.HOLIDAY_CARD_MOTIFS = HOLIDAY_CARD_MOTIFS;
+__m_modes_calendar_js.HOLIDAY_CARD_PALETTES = HOLIDAY_CARD_PALETTES;
+__m_modes_calendar_js.HOLIDAY_CARD_MEDIA = HOLIDAY_CARD_MEDIA;
+__m_modes_calendar_js.HOLIDAY_CARD_STROKES = HOLIDAY_CARD_STROKES;
+__m_modes_calendar_js.HOLIDAY_CARD_FLOWS = HOLIDAY_CARD_FLOWS;
 __m_modes_calendar_js.calendarPageKeyForDate = calendarPageKeyForDate;
 __m_modes_calendar_js.calendarEntryPageKey = calendarEntryPageKey;
 __m_modes_calendar_js.createCalendarDayPage = createCalendarDayPage;
@@ -18226,17 +18499,6 @@ __m_modes_calendar_js.migrateCalendarSession = migrateCalendarSession;
 __m_modes_calendar_js.mergeCalendarRefresh = mergeCalendarRefresh;
 __m_modes_calendar_js.normalizeCalendar = normalizeCalendar;
 __m_modes_calendar_js.projectCalendarProgress = projectCalendarProgress;
-__m_modes_calendar_js.CALENDAR_STATUS = CALENDAR_STATUS;
-__m_modes_calendar_js.CALENDAR_TAG_ALLOWLIST = CALENDAR_TAG_ALLOWLIST;
-__m_modes_calendar_js.CALENDAR_NOTE_KIND = CALENDAR_NOTE_KIND;
-__m_modes_calendar_js.CALENDAR_NOTE_SOURCE = CALENDAR_NOTE_SOURCE;
-__m_modes_calendar_js.CALENDAR_LEGACY_PAGE_KEY = CALENDAR_LEGACY_PAGE_KEY;
-__m_modes_calendar_js.HOLIDAY_CARD_EXPRESSIONS = HOLIDAY_CARD_EXPRESSIONS;
-__m_modes_calendar_js.HOLIDAY_CARD_MOTIFS = HOLIDAY_CARD_MOTIFS;
-__m_modes_calendar_js.HOLIDAY_CARD_PALETTES = HOLIDAY_CARD_PALETTES;
-__m_modes_calendar_js.HOLIDAY_CARD_MEDIA = HOLIDAY_CARD_MEDIA;
-__m_modes_calendar_js.HOLIDAY_CARD_STROKES = HOLIDAY_CARD_STROKES;
-__m_modes_calendar_js.HOLIDAY_CARD_FLOWS = HOLIDAY_CARD_FLOWS;
 }
 
 function __init_ui_advancedGenerationUi_js() {
@@ -28656,40 +28918,24 @@ __m_ui_styles_js.ensureStyles = ensureStyles;
 __m_ui_styles_js.abstractStyle = abstractStyle;
 }
 
-function __init_ui_settingsPanel_js() {
-// MODULE: ui/settingsPanel.js
-const advanced_ui = __m_ui_advancedGenerationUi_js;
-const output_budget = __m_core_outputBudget_js;
-const cg_format_ui = __m_ui_cgFormatControl_js;
+function __init_ui_settingsPanelParts_js() {
+// MODULE: ui/settingsPanelParts.js
 const archive_repository = __m_archive_repository_js;
 const archive_coverage = __m_archive_coverageRanges_js;
-const source_guard = __m_archive_sourceReadGuard_js;
-const archive_library = __m_archive_library_js;
 const generation_imageGeneration = __m_generation_imageGeneration_js;
 const core_constants = __m_core_constants_js;
 const core_context = __m_core_context_js;
 const core_independentApi = __m_core_independentApi_js;
 const core_requestCoordinator = __m_core_requestCoordinator_js;
 const core_settings = __m_core_settings_js;
-const floating_archive = __m_ui_floatingArchive_js;
 const core_text = __m_core_text_js;
 const core_theme = __m_core_theme_js;
 const core_autoUpdatePolicy = __m_core_autoUpdatePolicy_js;
 const core_autoUpdates = __m_core_autoUpdates_js;
-const core_selfUpdater = __m_core_selfUpdater_js;
-const core_contextTags = __m_core_contextTags_js;
-const core_chatReadRange = __m_core_chatReadRange_js;
-const ui_archivePortal = __m_ui_archivePortal_js;
-const ui_overlay = __m_ui_overlay_js;
-const ui_scenePicker = __m_ui_scenePicker_js;
-const ui_styles = __m_ui_styles_js;
-const mirrorReader = __m_ui_mirrorTtsReader_js;
 const runtimeState = __m_core_state_js.state;
 
 
 
-// Heartbeat Memories r35 modular runtime.
-// Extracted from r34 without changing archive/cache storage contracts.
 
 
 
@@ -28700,34 +28946,12 @@ const runtimeState = __m_core_state_js.state;
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
+// 设置页组件：启动入口、生图 / 语音 / 读取范围设置、模型列表、任务与记忆状态刷新
+// 从 ui/settingsPanel.js 原样搬出（重构阶段 2），声明文本一字未改；ui/settingsPanel.js 仍转发原有导出。
 
 let imageProviderEventCleanup = null;
-let homeSettingsPanel = null;
-let homeSettingsEpoch = -1;
-let homeSettingsScope = '';
-let memoryFilePreviewEpoch = 0;
-const SETTINGS_LAUNCHER_ID = core_constants.SETTINGS_ID + '_launcher';
 
-function clearHomeSettingsPanel() {
-    mirrorReader.parkMirrorSettings();
-    homeSettingsPanel?.remove(); homeSettingsPanel = null; homeSettingsEpoch = -1;
-    pendingMemoryFilePreview = null; memoryIngressRequestEpoch += 1; memoryFilePreviewEpoch += 1;
-    homeSettingsScope = '';
-    document.getElementById(SETTINGS_LAUNCHER_ID)?.remove();
-}
+const SETTINGS_LAUNCHER_ID = core_constants.SETTINGS_ID + '_launcher';
 
 function refreshImageGenerationSettingsUi() {
     const panel = document.getElementById(core_constants.SETTINGS_ID);
@@ -28824,67 +29048,6 @@ function bindImageProviderEvents() {
 }
 
 function unbindImageProviderEvents() { imageProviderEventCleanup?.(); }
-
-let pendingMemoryFilePreview = null;
-let memoryIngressRequestEpoch = 0;
-
-async function refreshMemoryIngressUi() {
-    const requestEpoch = ++memoryIngressRequestEpoch;
-    const panel = document.getElementById(core_constants.SETTINGS_ID);
-    if (!panel) return;
-    const status = panel.querySelector('[data-rmt-memory-ingress-status]');
-    const details = panel.querySelector('[data-rmt-memory-source-list]');
-    const historyBooks = panel.querySelector('[data-rmt-memory-history-books]');
-    let capturedScopeKey = '';
-    const isCurrent = () => {
-        if (requestEpoch !== memoryIngressRequestEpoch || !capturedScopeKey) return false;
-        try {
-            const liveContext = core_context.currentCharacterGuard();
-            return archive_repository.memorySourceScopeForContext(liveContext).key === capturedScopeKey;
-        } catch { return false; }
-    };
-    try {
-        const context = core_context.currentCharacterGuard();
-        capturedScopeKey = archive_repository.memorySourceScopeForContext(context).key;
-        const summary = await archive_repository.currentMemorySourceLedgerSummary(context);
-        if (!isCurrent()) return;
-        const preflight = archive_repository.getMemoryPreflight(context);
-        const displayedSources = [...summary.sources];
-        for (const source of preflight?.sources || []) {
-            const latest = { provider: source.label || source.id, id: source.id, coverage: source.coverage, count: source.count };
-            const index = displayedSources.findIndex(item => (item.provider || item.id) === source.id);
-            if (index >= 0) displayedSources[index] = latest;
-            else displayedSources.push(latest);
-        }
-        if (status) status.textContent = summary.sources.length
-            ? `● 已保存 ${summary.sources.length} 个来源 · ${summary.recordCount} 条记录 · ${summary.totalChars.toLocaleString()} 字符`
-            : '○ 当前聊天还没有已保存来源';
-        if (details) {
-            details.replaceChildren();
-            for (const source of displayedSources) {
-                const row = document.createElement('div');
-                const coverage = source.coverage?.status || 'partial';
-                const labels = { complete: '完整', partial: '部分', truncated: '已截断', failed: '失败' };
-                row.textContent = `${labels[coverage] || '部分'} · ${source.label || source.provider || source.id}${source.coverage?.returned ? ` · ${source.coverage.returned} 条` : ''}${source.coverage?.reason ? ` · ${source.coverage.reason}` : ''}`;
-                details.appendChild(row);
-            }
-            if (!details.childElementCount) details.textContent = '暂无持久化来源。';
-        }
-        if (historyBooks) {
-            const selection = archive_repository.getMemoryWorldInfoSelection(context);
-            historyBooks.innerHTML = selection.books.length
-                ? selection.books.map(book => `<label class="checkbox_label rmt-settings-check"><input type="checkbox" data-rmt-memory-history-book="${core_text.esc(book.name)}" ${book.historySource ? 'checked' : ''}> ${core_text.esc(book.name)} · 作为历史摘要</label>`).join('')
-                : '<small>请先在档案室选择记忆相关世界书；默认仍只作设定解释。</small>';
-        }
-    } catch (error) {
-        if (capturedScopeKey && !isCurrent()) return;
-        if (status) status.textContent = capturedScopeKey
-            ? '○ ' + core_text.safeErrorSummary({ code: 'RMT_LEDGER_UNAVAILABLE' })
-            : '○ 请先打开一个单角色聊天，再查看该聊天的来源账本。';
-        if (details) details.textContent = '无法读取当前聊天来源。';
-        if (historyBooks) historyBooks.textContent = '请先打开单角色聊天。';
-    }
-}
 
 async function refreshModelOptions({ fetchRemote = false } = {}) {
     const panel = document.getElementById(core_constants.SETTINGS_ID);
@@ -28994,6 +29157,7 @@ function manualSettingsFromPanel(panel) {
 }
 
 const manualAutosaves = new WeakMap();
+
 async function saveManualPanel(panel, activate = false) {
     clearTimeout(manualAutosaves.get(panel)); manualAutosaves.delete(panel);
     const status = panel.querySelector('[data-rmt-manual-save-status]');
@@ -29014,6 +29178,7 @@ async function saveManualPanel(panel, activate = false) {
         return null;
     }
 }
+
 function bindManualAutosave(panel) {
     const schedule = event => {
         if (!event.target.matches?.('[data-rmt-manual-api-base],[data-rmt-manual-api-key],[data-rmt-manual-api-model]')) return;
@@ -29221,21 +29386,6 @@ function refreshGenerationSettingsUi() {
     void refreshManualModelOptions();
 }
 
-function hydrateSettingsPanel({ memory = false } = {}) {
-    const panel = document.getElementById(core_constants.SETTINGS_ID);
-    if (!panel) return false;
-    refreshSettingsMemoryStatus({ lightweight: true });
-    if (memory) {
-        void refreshMemoryIngressUi();
-        const picker = panel.querySelector('[data-rmt-scene-picker]');
-        if (picker && !picker.querySelector('[data-rmt-scene-picker-root]')) ui_scenePicker.mountScenePicker(picker);
-    }
-    if (panel.dataset.rmtHydrated === '1') return true;
-    refreshGenerationSettingsUi();
-    panel.dataset.rmtHydrated = '1';
-    return true;
-}
-
 function refreshSettingsTaskStatus() {
     const panel = document.getElementById(core_constants.SETTINGS_ID);
     if (!panel) return;
@@ -29299,6 +29449,192 @@ function refreshSettingsMemoryStatus({ lightweight = false } = {}) {
     }
 }
 
+__m_ui_settingsPanelParts_js.refreshModelOptions = refreshModelOptions;
+__m_ui_settingsPanelParts_js.saveManualPanel = saveManualPanel;
+__m_ui_settingsPanelParts_js.refreshManualModelOptions = refreshManualModelOptions;
+__m_ui_settingsPanelParts_js.refreshImageGenerationSettingsUi = refreshImageGenerationSettingsUi;
+__m_ui_settingsPanelParts_js.voiceSettingsHtml = voiceSettingsHtml;
+__m_ui_settingsPanelParts_js.chatReadingSettingsHtml = chatReadingSettingsHtml;
+__m_ui_settingsPanelParts_js.refreshReadingSettingsUi = refreshReadingSettingsUi;
+__m_ui_settingsPanelParts_js.paintCoverageMap = paintCoverageMap;
+__m_ui_settingsPanelParts_js.bindImageProviderEvents = bindImageProviderEvents;
+__m_ui_settingsPanelParts_js.unbindImageProviderEvents = unbindImageProviderEvents;
+__m_ui_settingsPanelParts_js.bindManualAutosave = bindManualAutosave;
+__m_ui_settingsPanelParts_js.refreshThemeUi = refreshThemeUi;
+__m_ui_settingsPanelParts_js.refreshGenerationSettingsUi = refreshGenerationSettingsUi;
+__m_ui_settingsPanelParts_js.refreshSettingsTaskStatus = refreshSettingsTaskStatus;
+__m_ui_settingsPanelParts_js.refreshSettingsMemoryStatus = refreshSettingsMemoryStatus;
+__m_ui_settingsPanelParts_js.SETTINGS_LAUNCHER_ID = SETTINGS_LAUNCHER_ID;
+__m_ui_settingsPanelParts_js.manualAutosaves = manualAutosaves;
+}
+
+function __init_ui_settingsPanelHome_js() {
+// MODULE: ui/settingsPanelHome.js
+const advanced_ui = __m_ui_advancedGenerationUi_js;
+const output_budget = __m_core_outputBudget_js;
+const cg_format_ui = __m_ui_cgFormatControl_js;
+const archive_repository = __m_archive_repository_js;
+const archive_coverage = __m_archive_coverageRanges_js;
+const source_guard = __m_archive_sourceReadGuard_js;
+const archive_library = __m_archive_library_js;
+const generation_imageGeneration = __m_generation_imageGeneration_js;
+const core_constants = __m_core_constants_js;
+const core_context = __m_core_context_js;
+const core_requestCoordinator = __m_core_requestCoordinator_js;
+const core_settings = __m_core_settings_js;
+const floating_archive = __m_ui_floatingArchive_js;
+const core_text = __m_core_text_js;
+const core_theme = __m_core_theme_js;
+const core_autoUpdatePolicy = __m_core_autoUpdatePolicy_js;
+const core_autoUpdates = __m_core_autoUpdates_js;
+const core_selfUpdater = __m_core_selfUpdater_js;
+const core_contextTags = __m_core_contextTags_js;
+const core_chatReadRange = __m_core_chatReadRange_js;
+const ui_overlay = __m_ui_overlay_js;
+const ui_scenePicker = __m_ui_scenePicker_js;
+const ui_styles = __m_ui_styles_js;
+const mirrorReader = __m_ui_mirrorTtsReader_js;
+const dispatch_settingsPanelMarkup = __m_ui_settingsPanelMarkup_js;
+const runtimeState = __m_core_state_js.state;
+const SETTINGS_LAUNCHER_ID = __m_ui_settingsPanelParts_js.SETTINGS_LAUNCHER_ID;
+const bindManualAutosave = __m_ui_settingsPanelParts_js.bindManualAutosave;
+const chatReadingSettingsHtml = __m_ui_settingsPanelParts_js.chatReadingSettingsHtml;
+const manualAutosaves = __m_ui_settingsPanelParts_js.manualAutosaves;
+const paintCoverageMap = __m_ui_settingsPanelParts_js.paintCoverageMap;
+const refreshGenerationSettingsUi = __m_ui_settingsPanelParts_js.refreshGenerationSettingsUi;
+const refreshImageGenerationSettingsUi = __m_ui_settingsPanelParts_js.refreshImageGenerationSettingsUi;
+const refreshManualModelOptions = __m_ui_settingsPanelParts_js.refreshManualModelOptions;
+const refreshModelOptions = __m_ui_settingsPanelParts_js.refreshModelOptions;
+const refreshReadingSettingsUi = __m_ui_settingsPanelParts_js.refreshReadingSettingsUi;
+const refreshSettingsMemoryStatus = __m_ui_settingsPanelParts_js.refreshSettingsMemoryStatus;
+const refreshThemeUi = __m_ui_settingsPanelParts_js.refreshThemeUi;
+const saveManualPanel = __m_ui_settingsPanelParts_js.saveManualPanel;
+const voiceSettingsHtml = __m_ui_settingsPanelParts_js.voiceSettingsHtml;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// mountSettings 的连续语句分组放在 ui/settingsPanelMarkup.js；分组函数返回它表示“没处理”，接着往下走。
+const SETTINGS_MOUNT_UNHANDLED = Symbol('SETTINGS_MOUNT_UNHANDLED');
+// 设置页主体：主页设置面板状态、记忆导入入口刷新、设置页挂载与填充
+// 从 ui/settingsPanel.js 原样搬出（重构阶段 2），声明文本一字未改；ui/settingsPanel.js 仍转发原有导出。
+
+let homeSettingsPanel = null;
+
+let homeSettingsEpoch = -1;
+
+let homeSettingsScope = '';
+
+let memoryFilePreviewEpoch = 0;
+
+function clearHomeSettingsPanel() {
+    mirrorReader.parkMirrorSettings();
+    homeSettingsPanel?.remove(); homeSettingsPanel = null; homeSettingsEpoch = -1;
+    pendingMemoryFilePreview = null; memoryIngressRequestEpoch += 1; memoryFilePreviewEpoch += 1;
+    homeSettingsScope = '';
+    document.getElementById(SETTINGS_LAUNCHER_ID)?.remove();
+}
+
+let pendingMemoryFilePreview = null;
+
+let memoryIngressRequestEpoch = 0;
+
+async function refreshMemoryIngressUi() {
+    const requestEpoch = ++memoryIngressRequestEpoch;
+    const panel = document.getElementById(core_constants.SETTINGS_ID);
+    if (!panel) return;
+    const status = panel.querySelector('[data-rmt-memory-ingress-status]');
+    const details = panel.querySelector('[data-rmt-memory-source-list]');
+    const historyBooks = panel.querySelector('[data-rmt-memory-history-books]');
+    let capturedScopeKey = '';
+    const isCurrent = () => {
+        if (requestEpoch !== memoryIngressRequestEpoch || !capturedScopeKey) return false;
+        try {
+            const liveContext = core_context.currentCharacterGuard();
+            return archive_repository.memorySourceScopeForContext(liveContext).key === capturedScopeKey;
+        } catch { return false; }
+    };
+    try {
+        const context = core_context.currentCharacterGuard();
+        capturedScopeKey = archive_repository.memorySourceScopeForContext(context).key;
+        const summary = await archive_repository.currentMemorySourceLedgerSummary(context);
+        if (!isCurrent()) return;
+        const preflight = archive_repository.getMemoryPreflight(context);
+        const displayedSources = [...summary.sources];
+        for (const source of preflight?.sources || []) {
+            const latest = { provider: source.label || source.id, id: source.id, coverage: source.coverage, count: source.count };
+            const index = displayedSources.findIndex(item => (item.provider || item.id) === source.id);
+            if (index >= 0) displayedSources[index] = latest;
+            else displayedSources.push(latest);
+        }
+        if (status) status.textContent = summary.sources.length
+            ? `● 已保存 ${summary.sources.length} 个来源 · ${summary.recordCount} 条记录 · ${summary.totalChars.toLocaleString()} 字符`
+            : '○ 当前聊天还没有已保存来源';
+        if (details) {
+            details.replaceChildren();
+            for (const source of displayedSources) {
+                const row = document.createElement('div');
+                const coverage = source.coverage?.status || 'partial';
+                const labels = { complete: '完整', partial: '部分', truncated: '已截断', failed: '失败' };
+                row.textContent = `${labels[coverage] || '部分'} · ${source.label || source.provider || source.id}${source.coverage?.returned ? ` · ${source.coverage.returned} 条` : ''}${source.coverage?.reason ? ` · ${source.coverage.reason}` : ''}`;
+                details.appendChild(row);
+            }
+            if (!details.childElementCount) details.textContent = '暂无持久化来源。';
+        }
+        if (historyBooks) {
+            const selection = archive_repository.getMemoryWorldInfoSelection(context);
+            historyBooks.innerHTML = selection.books.length
+                ? selection.books.map(book => `<label class="checkbox_label rmt-settings-check"><input type="checkbox" data-rmt-memory-history-book="${core_text.esc(book.name)}" ${book.historySource ? 'checked' : ''}> ${core_text.esc(book.name)} · 作为历史摘要</label>`).join('')
+                : '<small>请先在档案室选择记忆相关世界书；默认仍只作设定解释。</small>';
+        }
+    } catch (error) {
+        if (capturedScopeKey && !isCurrent()) return;
+        if (status) status.textContent = capturedScopeKey
+            ? '○ ' + core_text.safeErrorSummary({ code: 'RMT_LEDGER_UNAVAILABLE' })
+            : '○ 请先打开一个单角色聊天，再查看该聊天的来源账本。';
+        if (details) details.textContent = '无法读取当前聊天来源。';
+        if (historyBooks) historyBooks.textContent = '请先打开单角色聊天。';
+    }
+}
+
+function hydrateSettingsPanel({ memory = false } = {}) {
+    const panel = document.getElementById(core_constants.SETTINGS_ID);
+    if (!panel) return false;
+    refreshSettingsMemoryStatus({ lightweight: true });
+    if (memory) {
+        void refreshMemoryIngressUi();
+        const picker = panel.querySelector('[data-rmt-scene-picker]');
+        if (picker && !picker.querySelector('[data-rmt-scene-picker-root]')) ui_scenePicker.mountScenePicker(picker);
+    }
+    if (panel.dataset.rmtHydrated === '1') return true;
+    refreshGenerationSettingsUi();
+    panel.dataset.rmtHydrated = '1';
+    return true;
+}
+
 function mountSettings({ homeTarget = null } = {}) {
     ui_styles.ensureSettingsStyles();
     if (!homeTarget) {
@@ -29334,159 +29670,7 @@ function mountSettings({ homeTarget = null } = {}) {
     panel.id = core_constants.SETTINGS_ID;
     panel.className = 'rmt-home-settings';
     homeSettingsPanel = panel; homeSettingsEpoch = runtimeState.runtimeLifecycleEpoch;
-    panel.innerHTML = `
-      <div class="inline-drawer-toggle inline-drawer-header rmt-settings-header">
-        <div><b>心迹回廊</b><small> API SETTINGS</small></div>
-        <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
-      </div>
-      <div class="inline-drawer-content rmt-settings-content">
-        ${voiceSettingsHtml()}
-        <details class="rmt-settings-card rmt-api-box" data-rmt-settings-section="api">
-          <summary class="rmt-settings-card-head"><span>API</span><div><b>独立 API</b><small>一键配置 · 手动配置</small></div></summary>
-          <div class="rmt-settings-section-body">
-          <div class="rmt-api-source-grid" role="group" aria-label="独立 API 配置方式">
-            <button type="button" class="menu_button rmt-api-source-card" data-rmt-api-import-current aria-pressed="false"><span class="rmt-api-source-badge">凭证绑定</span><b>一键配置</b><small>读取酒馆当前连接</small></button>
-            <button type="button" class="menu_button rmt-api-source-card" data-rmt-api-select-manual aria-pressed="false"><span class="rmt-api-source-badge">OPENAI</span><b>手动配置</b><small>URL · Key · 模型</small></button>
-          </div>
-          <div data-rmt-api-host-capability role="status"></div>
-          <div class="rmt-api-status" data-rmt-api-status role="status">○ 一键连接未配置</div>
-          <div class="rmt-api-source-panel" data-rmt-api-profile-panel>
-            <label class="rmt-settings-field"><span>连接配置</span><select class="text_pole" data-rmt-api-profile><option value="">选择 Connection Manager 配置</option></select></label>
-            <details class="rmt-api-pool"><summary>多个连接轮流使用</summary><label class="rmt-settings-check"><input type="checkbox" data-rmt-api-pool-enabled><span>启用轮询连接池</span></label><div data-rmt-api-pool-choices></div><small>新任务依次使用勾选的连接及其模型；本次运行中的重试保持原连接；重新打开后续接会重新分配。可同时运行的任务数量沿用已有并发设置。</small></details>
-            <div class="rmt-model-row">
-              <label class="rmt-settings-field"><span>模型</span><select class="text_pole" data-rmt-api-model><option value="">请先选择专用连接</option></select></label>
-              <button type="button" class="menu_button rmt-model-refresh" data-rmt-api-model-refresh>刷新模型</button>
-            </div>
-          </div>
-          <div class="rmt-api-source-panel" data-rmt-api-manual-panel hidden>
-            <label class="rmt-settings-field"><span>API 地址</span><input class="text_pole" data-rmt-manual-api-base type="url" inputmode="url" placeholder="https://api.example.com/v1"></label>
-            <label class="rmt-settings-field"><span>API Key</span><div class="rmt-manual-key-row"><input class="text_pole" data-rmt-manual-api-key type="password" autocomplete="new-password" placeholder="API Key（可留空）"><button type="button" class="menu_button" data-rmt-manual-api-key-clear>清除 Key</button></div></label>
-            <div class="rmt-model-row">
-              <label class="rmt-settings-field"><span>模型 ID</span><input class="text_pole" data-rmt-manual-api-model type="text" placeholder="例如 gpt-4.1"><select class="text_pole rmt-manual-model-picker" data-rmt-manual-api-models hidden><option value="">选择已拉取模型</option></select></label>
-              <button type="button" class="menu_button rmt-model-refresh" data-rmt-manual-api-model-refresh>拉取模型</button>
-            </div>
-            <button type="button" class="menu_button rmt-settings-wide rmt-manual-save" data-rmt-manual-api-save>保存并使用</button>
-            <div data-rmt-manual-save-status role="status" aria-live="polite">填写后自动保存到本机，不随档案导出。</div>
-            <label class="rmt-settings-check"><input type="checkbox" data-rmt-manual-streaming ${core_settings.getPluginSettings().manualApiStreaming ? 'checked' : ''}><span>使用流式输出（仅此手动 API）</span></label>
-            <small>需要服务端支持 SSE；关闭时使用普通完整响应，不影响主聊天。</small>
-          </div>
-          <div class="rmt-api-grid">
-            <label class="rmt-settings-field"><span>最大输出</span><input class="text_pole" data-rmt-api-max-tokens type="number" min="1" step="1" placeholder="默认 60000"></label>
-            <label class="rmt-settings-field"><span>输入预算</span><input class="text_pole" data-rmt-api-input-budget type="number" min="8000" max="200000" step="1" placeholder="默认 60000"></label>
-            <small>最大输出是模型最多写多长，默认 60000，不拦输入。输入预算是发送前本地保险，默认 60000 tokens，范围 8000–200000，越大越贵；与最大输出无关。</small>
-            <label class="rmt-settings-field"><span>温度</span><input class="text_pole" data-rmt-api-temperature type="number" min="0" max="2" step="0.1"></label>
-            <small data-rmt-temperature-note></small>
-          </div>
-          <label class="rmt-settings-check"><input type="checkbox" data-rmt-auto-second ${core_settings.getPluginSettings().autoSecondPass ? 'checked' : ''}><span>第一次完成后，自动进行第二次生成</span></label>
-          <label class="rmt-settings-check"><input type="checkbox" data-rmt-auto-retry ${core_settings.getPluginSettings().autoRetryEnabled ? 'checked' : ''}><span>失败后自动重试未完成部分</span></label>
-          <label class="rmt-settings-field"><span>自动重试次数</span><input class="text_pole" data-rmt-auto-retry-count type="number" min="1" max="5" step="1" value="${core_settings.getPluginSettings().autoRetryCount}" ${core_settings.getPluginSettings().autoRetryEnabled ? '' : 'disabled'}></label>
-          <small>默认关闭。打开后，新出现的「重试未完成部分」会自动再试，默认 1 次，可改成 1–5 次。每次都使用生成额度。超限草稿和已经写好、只差继续的草稿不会自动重试。</small>
-          <label class="rmt-settings-field"><span>生成禁用词</span><input class="text_pole" data-rmt-banned-generated-phrases type="text" placeholder="用逗号分隔，例如：老子"></label>
-          <p>打开房间只读已有内容；“今日生活”由房间里的手动更新按钮触发，不会在进入时自动请求。</p>
-          <label class="rmt-settings-check"><input data-rmt-tt-display type="checkbox"><span>TT 顶部安全区</span></label>
-          </div>
-        </details>
-        ${advanced_ui.advancedGenerationHtml()}
-        ${chatReadingSettingsHtml()}
-        <details class="rmt-settings-card" data-rmt-settings-section="image">
-          <summary class="rmt-settings-card-head"><span>CG</span><div><b>CG 生图</b><small>相簿 · ADV · 日常一格</small></div></summary>
-          <div class="rmt-settings-section-body">
-            ${cg_format_ui.cgFormatControlHtml()}
-            <label class="rmt-settings-field"><span>生图渠道</span><select class="text_pole" data-rmt-image-generation-provider aria-describedby="rmt-image-provider-status"><option value="baibai-image">柏宝绘 · 公开 API v1</option></select></label>
-            <p id="rmt-image-provider-status" data-rmt-image-generation-status role="status" aria-live="polite"></p>
-            <p>柏宝绘需单独安装并配置出图渠道。只在点击绘制并确认后出图，失败不会自动换渠道。</p>
-          </div>
-        </details>
-        <details class="rmt-settings-card" data-rmt-settings-section="creative">
-          <summary class="rmt-settings-card-head"><span>文</span><div><b>创作补充词</b><small>仅用于心迹回廊独立 API</small></div></summary>
-          <div class="rmt-settings-section-body">
-            <label class="rmt-settings-check"><input type="checkbox" data-rmt-creative-enabled><span>启用创作补充词</span></label>
-            <label class="rmt-settings-field"><span>文风、氛围与叙事偏好</span><textarea class="text_pole" data-rmt-creative-text maxlength="20000" rows="8" placeholder="例如：少用总结式旁白，让情绪从对白和细节中自然流露。"></textarea></label>
-            <p><output data-rmt-creative-count>0 / 20,000</output> 字符。仅随心迹回廊文本生成发送，不写入主聊天、不发送给生图接口；会占用模型输入额度。</p>
-            <div class="rmt-theme-presets"><button type="button" data-rmt-creative-save>保存补充词</button><button type="button" data-rmt-creative-cancel>撤销编辑</button></div>
-            <div role="status" data-rmt-creative-status></div>
-          </div>
-        </details>
-        <details class="rmt-settings-card" data-rmt-settings-section="filter">
-          <summary class="rmt-settings-card-head"><span>TAG</span><div><b>过滤标签</b><small>勾选即不读取</small></div></summary>
-          <div class="rmt-settings-section-body">
-            <p>勾选的标签及其中全部内容不参与后续读取；未勾选的内容和无标签正文保留。可排除正文内嵌的标签块，不改聊天和旧档案。</p>
-            <textarea class="text_pole" data-rmt-tag-draft aria-label="不读取的标签名" placeholder="thinking, 绘图提示词标签"></textarea>
-            <div class="rmt-theme-presets"><button type="button" data-rmt-tag-scan>扫描当前聊天</button><button type="button" data-rmt-tag-all>全选</button><button type="button" data-rmt-tag-invert>反选</button><button type="button" data-rmt-tag-clear>清空选择</button><button type="button" data-rmt-tag-cancel>撤销编辑</button><button type="button" data-rmt-tag-save>保存选择</button></div>
-            <div data-rmt-tag-status role="status"></div>
-            <div data-rmt-tag-results></div>
-          </div>
-        </details>
-        <details class="rmt-settings-card rmt-theme-box" data-rmt-settings-section="theme">
-          <summary class="rmt-settings-card-head"><span>UI</span><div><b>界面主题</b><small>配色与透明度</small></div></summary>
-          <div class="rmt-settings-section-body">
-          <label class="rmt-settings-field"><span>外观</span><select class="text_pole" data-rmt-theme-mode><option value="default">日间 · 珍珠白</option><option value="night">夜间 · 星黛蓝</option><option value="gs1">初叶绿</option><option value="gs2">海盐蓝</option><option value="gs3">花漾粉</option><option value="gs4">杏糖橙</option><option value="host">跟随酒馆美化</option><option value="custom">自定义配色</option></select></label>
-          <label class="rmt-settings-field"><span>悬浮头像</span><select class="text_pole" data-rmt-floating-avatar><option value="char">角色 char（默认）</option><option value="user">用户 user</option><option value="off">关闭</option></select></label>
-          <label class="rmt-settings-field"><span>卡片不透明度 <output data-rmt-theme-opacity></output></span><input data-rmt-theme-alpha type="range" min="0.72" max="1" step="0.01"></label>
-          <div class="rmt-theme-custom-panel" data-rmt-theme-custom-panel>
-            <div class="rmt-theme-presets"><button type="button" data-rmt-theme-preset="day">从日间开始</button><button type="button" data-rmt-theme-preset="night">从夜间开始</button></div>
-            <label><span>背景</span><input type="color" data-rmt-theme-color="background"></label>
-            <label><span>卡片</span><input type="color" data-rmt-theme-color="surface"></label>
-            <label><span>主文字</span><input type="color" data-rmt-theme-color="text"></label>
-            <label><span>次文字</span><input type="color" data-rmt-theme-color="muted"></label>
-            <label><span>选中与装饰色</span><input type="color" data-rmt-theme-color="accent"></label>
-            <label><span>第二装饰色</span><input type="color" data-rmt-theme-color="accentAlt"></label>
-            <label><span>边框</span><input type="color" data-rmt-theme-color="border"></label>
-          </div>
-          <button type="button" class="menu_button rmt-settings-wide" data-rmt-theme-reset>恢复默认配色</button>
-          </div>
-        </details>
-        <details class="rmt-settings-card" data-rmt-settings-section="auto">
-          <summary class="rmt-settings-card-head"><span>↻</span><div><b>自动更新</b><small>跟随当前聊天 · 每项独立设置</small></div></summary>
-          <div class="rmt-settings-section-body">
-          <p>只在已有档案的当前窗口运行。每条聊天消息算一楼，编辑不加楼；开启后从当前楼数起计。</p>
-          <p>“档案同步”收录新聊天；其他模块使用已归档记忆，不改旧内容。会调用独立 API。</p>
-          <div class="rmt-auto-rules">${core_autoUpdatePolicy.AUTO_UPDATE_MODES.map(mode => `<div class="rmt-auto-rule"><label><input type="checkbox" data-rmt-auto-enabled="${mode}"> ${core_text.esc(mode === 'archive' ? '档案同步' : core_constants.MODE_LABEL[mode])}</label><label>每 <input type="number" min="1" max="1000" step="1" data-rmt-auto-every="${mode}" aria-label="${core_text.esc(mode === 'archive' ? '档案同步' : core_constants.MODE_LABEL[mode])}间隔楼层"> 楼</label><small data-rmt-auto-status="${mode}" role="status"></small></div>`).join('')}</div>
-          <small data-rmt-auto-warning role="status"></small>
-          <small>失败后不连续重试，等待下一个间隔；可随时手动生成。不支持跨页任务锁的浏览器仅保留手动操作。</small>
-          </div>
-        </details>
-        <div class="rmt-settings-card">
-          <button type="button" class="menu_button rmt-settings-wide" data-rmt-self-update>检查并更新插件</button>
-          <small data-rmt-self-update-status role="status">强制检查已发布更新 · 完成后手动刷新页面</small>
-        </div>
-        <details class="rmt-settings-card rmt-api-box" data-rmt-settings-section="memory">
-          <summary class="rmt-settings-card-head"><span>MEM</span><div><b>记忆来源</b><small>当前角色 · 当前聊天</small></div></summary>
-          <div class="rmt-settings-section-body">
-          <div class="rmt-api-source-grid" role="group" aria-label="记忆来源操作">
-            <button type="button" class="menu_button rmt-api-source-card" data-rmt-memory-auto-read><span class="rmt-api-source-badge">AUTO</span><b>自动读取</b><small>已注册的当前聊天来源</small></button>
-            <button type="button" class="menu_button rmt-api-source-card" data-rmt-memory-file-choose><span class="rmt-api-source-badge">FILE</span><b>导入记忆</b><small>JSON · JSONL · TXT · Markdown</small></button>
-          </div>
-          <label class="rmt-settings-check"><input type="checkbox" data-rmt-source-external ${core_settings.getPluginSettings().useCurrentChatExternalMemory !== false ? 'checked' : ''}><span>读取当前聊天的外部记忆摘要</span></label>
-          <label class="rmt-settings-check"><input type="checkbox" data-rmt-source-world-info ${core_settings.getPluginSettings().useActivatedWorldInfo !== false ? 'checked' : ''}><span>读取自动激活的世界书</span></label>
-          <p>聊天范围只控制聊天摘录。外部摘要、自动激活世界书分别由上方开关控制；手动选择的世界书仍按下方来源设置读取。已有档案不会被删除，派生模块仍使用已经归档的记忆。</p>
-          <button type="button" class="menu_button rmt-settings-wide" data-rmt-action="memory-worldinfo-picker" ${runtimeState.busy || core_requestCoordinator.hasGenerationTasks() ? 'disabled' : ''}>选择记忆相关世界书</button>
-          <button type="button" class="menu_button rmt-settings-wide" data-rmt-action="participants-picker">选择加入回廊的人物</button>
-          <button type="button" class="menu_button rmt-settings-wide" data-rmt-action="participants-versions">查看重做前的旧版本</button>
-          <input type="file" accept=".json,.jsonl,.txt,.md,.markdown,application/json,text/plain,text/markdown" data-rmt-memory-file-input hidden>
-          <div class="rmt-api-status" data-rmt-memory-ingress-status role="status">展开记忆来源后查看状态；不会自动导入或生成。</div>
-          <div class="rmt-api-source-panel" data-rmt-memory-file-preview hidden>
-            <b data-rmt-memory-file-preview-title>待确认的记忆文件</b>
-            <small data-rmt-memory-file-preview-meta></small>
-            <small data-rmt-memory-file-preview-binding></small>
-            <div data-rmt-memory-file-preview-sample></div>
-            <label class="checkbox_label rmt-settings-check"><input type="checkbox" data-rmt-memory-file-history-confirm> 我确认这是已经发生的历史/摘要，不是角色设定</label>
-            <button type="button" class="menu_button rmt-settings-wide" data-rmt-memory-file-commit disabled>确认作为历史导入当前聊天</button>
-          </div>
-          <details class="rmt-api-source-panel"><summary>来源详情与世界书类型</summary>
-            <div data-rmt-memory-source-list>暂无持久化来源。</div>
-            <div data-rmt-memory-history-books></div>
-          </details>
-          <div data-rmt-scene-picker></div>
-          <button type="button" class="menu_button rmt-settings-wide" data-rmt-memory-source-clear>清除当前聊天已导入来源</button>
-          <small>只清除心迹回廊自己的来源账本；不会删除聊天、第三方记忆或正式 Mxxx。</small>
-          </div>
-        </details>
-        <div class="rmt-settings-archive-actions">
-          <button type="button" class="menu_button rmt-open-archive-room" data-rmt-settings-current-archive><i class="fa-solid fa-file-circle-plus"></i><span>生成当前窗口档案</span></button>
-          <button type="button" class="menu_button rmt-open-archive-room" data-rmt-settings-open-archive><i class="fa-solid fa-box-archive"></i><span>打开档案室</span></button>
-        </div>
-      </div>`;
+    if (dispatch_settingsPanelMarkup.renderSettingsPanelMarkup(panel) !== SETTINGS_MOUNT_UNHANDLED) return;
     mount.appendChild(panel);
     mirrorReader.showMirrorSettings(panel.querySelector('[data-rmt-voice-settings]'));
     paintCoverageMap(panel);
@@ -30074,21 +30258,250 @@ function mountSettings({ homeTarget = null } = {}) {
     return true;
 }
 
-__m_ui_settingsPanel_js.refreshMemoryIngressUi = refreshMemoryIngressUi;
-__m_ui_settingsPanel_js.refreshModelOptions = refreshModelOptions;
-__m_ui_settingsPanel_js.refreshManualModelOptions = refreshManualModelOptions;
+__m_ui_settingsPanelHome_js.refreshMemoryIngressUi = refreshMemoryIngressUi;
+__m_ui_settingsPanelHome_js.clearHomeSettingsPanel = clearHomeSettingsPanel;
+__m_ui_settingsPanelHome_js.hydrateSettingsPanel = hydrateSettingsPanel;
+__m_ui_settingsPanelHome_js.mountSettings = mountSettings;
+__m_ui_settingsPanelHome_js.SETTINGS_MOUNT_UNHANDLED = SETTINGS_MOUNT_UNHANDLED;
+}
+
+function __init_ui_settingsPanelMarkup_js() {
+// MODULE: ui/settingsPanelMarkup.js
+const core_settings = __m_core_settings_js;
+const advanced_ui = __m_ui_advancedGenerationUi_js;
+const cg_format_ui = __m_ui_cgFormatControl_js;
+const core_autoUpdatePolicy = __m_core_autoUpdatePolicy_js;
+const core_text = __m_core_text_js;
+const core_constants = __m_core_constants_js;
+const core_requestCoordinator = __m_core_requestCoordinator_js;
+const SETTINGS_LAUNCHER_ID = __m_ui_settingsPanelParts_js.SETTINGS_LAUNCHER_ID;
+const bindManualAutosave = __m_ui_settingsPanelParts_js.bindManualAutosave;
+const chatReadingSettingsHtml = __m_ui_settingsPanelParts_js.chatReadingSettingsHtml;
+const manualAutosaves = __m_ui_settingsPanelParts_js.manualAutosaves;
+const paintCoverageMap = __m_ui_settingsPanelParts_js.paintCoverageMap;
+const refreshGenerationSettingsUi = __m_ui_settingsPanelParts_js.refreshGenerationSettingsUi;
+const refreshImageGenerationSettingsUi = __m_ui_settingsPanelParts_js.refreshImageGenerationSettingsUi;
+const refreshManualModelOptions = __m_ui_settingsPanelParts_js.refreshManualModelOptions;
+const refreshModelOptions = __m_ui_settingsPanelParts_js.refreshModelOptions;
+const refreshReadingSettingsUi = __m_ui_settingsPanelParts_js.refreshReadingSettingsUi;
+const refreshSettingsMemoryStatus = __m_ui_settingsPanelParts_js.refreshSettingsMemoryStatus;
+const refreshThemeUi = __m_ui_settingsPanelParts_js.refreshThemeUi;
+const saveManualPanel = __m_ui_settingsPanelParts_js.saveManualPanel;
+const voiceSettingsHtml = __m_ui_settingsPanelParts_js.voiceSettingsHtml;
+const runtimeState = __m_core_state_js.state;
+const SETTINGS_MOUNT_UNHANDLED = __m_ui_settingsPanelHome_js.SETTINGS_MOUNT_UNHANDLED;
+
+
+
+
+
+
+
+
+
+
+// ui/settingsPanelHome.js mountSettings 的分组处理（重构阶段 3）。每个函数是原函数里连续的一段语句，一字未改；
+// 返回 SETTINGS_MOUNT_UNHANDLED 表示“这一段没有处理”，原函数接着往下走，和拆分前完全相同。
+
+// 设置页整页 HTML（panel.innerHTML 赋值原样搬出）（原第 13–13 条语句）
+function renderSettingsPanelMarkup(panel) {
+    panel.innerHTML = `
+      <div class="inline-drawer-toggle inline-drawer-header rmt-settings-header">
+        <div><b>心迹回廊</b><small> API SETTINGS</small></div>
+        <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
+      </div>
+      <div class="inline-drawer-content rmt-settings-content">
+        ${voiceSettingsHtml()}
+        <details class="rmt-settings-card rmt-api-box" data-rmt-settings-section="api">
+          <summary class="rmt-settings-card-head"><span>API</span><div><b>独立 API</b><small>一键配置 · 手动配置</small></div></summary>
+          <div class="rmt-settings-section-body">
+          <div class="rmt-api-source-grid" role="group" aria-label="独立 API 配置方式">
+            <button type="button" class="menu_button rmt-api-source-card" data-rmt-api-import-current aria-pressed="false"><span class="rmt-api-source-badge">凭证绑定</span><b>一键配置</b><small>读取酒馆当前连接</small></button>
+            <button type="button" class="menu_button rmt-api-source-card" data-rmt-api-select-manual aria-pressed="false"><span class="rmt-api-source-badge">OPENAI</span><b>手动配置</b><small>URL · Key · 模型</small></button>
+          </div>
+          <div data-rmt-api-host-capability role="status"></div>
+          <div class="rmt-api-status" data-rmt-api-status role="status">○ 一键连接未配置</div>
+          <div class="rmt-api-source-panel" data-rmt-api-profile-panel>
+            <label class="rmt-settings-field"><span>连接配置</span><select class="text_pole" data-rmt-api-profile><option value="">选择 Connection Manager 配置</option></select></label>
+            <details class="rmt-api-pool"><summary>多个连接轮流使用</summary><label class="rmt-settings-check"><input type="checkbox" data-rmt-api-pool-enabled><span>启用轮询连接池</span></label><div data-rmt-api-pool-choices></div><small>新任务依次使用勾选的连接及其模型；本次运行中的重试保持原连接；重新打开后续接会重新分配。可同时运行的任务数量沿用已有并发设置。</small></details>
+            <div class="rmt-model-row">
+              <label class="rmt-settings-field"><span>模型</span><select class="text_pole" data-rmt-api-model><option value="">请先选择专用连接</option></select></label>
+              <button type="button" class="menu_button rmt-model-refresh" data-rmt-api-model-refresh>刷新模型</button>
+            </div>
+          </div>
+          <div class="rmt-api-source-panel" data-rmt-api-manual-panel hidden>
+            <label class="rmt-settings-field"><span>API 地址</span><input class="text_pole" data-rmt-manual-api-base type="url" inputmode="url" placeholder="https://api.example.com/v1"></label>
+            <label class="rmt-settings-field"><span>API Key</span><div class="rmt-manual-key-row"><input class="text_pole" data-rmt-manual-api-key type="password" autocomplete="new-password" placeholder="API Key（可留空）"><button type="button" class="menu_button" data-rmt-manual-api-key-clear>清除 Key</button></div></label>
+            <div class="rmt-model-row">
+              <label class="rmt-settings-field"><span>模型 ID</span><input class="text_pole" data-rmt-manual-api-model type="text" placeholder="例如 gpt-4.1"><select class="text_pole rmt-manual-model-picker" data-rmt-manual-api-models hidden><option value="">选择已拉取模型</option></select></label>
+              <button type="button" class="menu_button rmt-model-refresh" data-rmt-manual-api-model-refresh>拉取模型</button>
+            </div>
+            <button type="button" class="menu_button rmt-settings-wide rmt-manual-save" data-rmt-manual-api-save>保存并使用</button>
+            <div data-rmt-manual-save-status role="status" aria-live="polite">填写后自动保存到本机，不随档案导出。</div>
+            <label class="rmt-settings-check"><input type="checkbox" data-rmt-manual-streaming ${core_settings.getPluginSettings().manualApiStreaming ? 'checked' : ''}><span>使用流式输出（仅此手动 API）</span></label>
+            <small>需要服务端支持 SSE；关闭时使用普通完整响应，不影响主聊天。</small>
+          </div>
+          <div class="rmt-api-grid">
+            <label class="rmt-settings-field"><span>最大输出</span><input class="text_pole" data-rmt-api-max-tokens type="number" min="1" step="1" placeholder="默认 60000"></label>
+            <label class="rmt-settings-field"><span>输入预算</span><input class="text_pole" data-rmt-api-input-budget type="number" min="8000" max="200000" step="1" placeholder="默认 60000"></label>
+            <small>最大输出是模型最多写多长，默认 60000，不拦输入。输入预算是发送前本地保险，默认 60000 tokens，范围 8000–200000，越大越贵；与最大输出无关。</small>
+            <label class="rmt-settings-field"><span>温度</span><input class="text_pole" data-rmt-api-temperature type="number" min="0" max="2" step="0.1"></label>
+            <small data-rmt-temperature-note></small>
+          </div>
+          <label class="rmt-settings-check"><input type="checkbox" data-rmt-auto-second ${core_settings.getPluginSettings().autoSecondPass ? 'checked' : ''}><span>第一次完成后，自动进行第二次生成</span></label>
+          <label class="rmt-settings-check"><input type="checkbox" data-rmt-auto-retry ${core_settings.getPluginSettings().autoRetryEnabled ? 'checked' : ''}><span>失败后自动重试未完成部分</span></label>
+          <label class="rmt-settings-field"><span>自动重试次数</span><input class="text_pole" data-rmt-auto-retry-count type="number" min="1" max="5" step="1" value="${core_settings.getPluginSettings().autoRetryCount}" ${core_settings.getPluginSettings().autoRetryEnabled ? '' : 'disabled'}></label>
+          <small>默认关闭。打开后，新出现的「重试未完成部分」会自动再试，默认 1 次，可改成 1–5 次。每次都使用生成额度。超限草稿和已经写好、只差继续的草稿不会自动重试。</small>
+          <label class="rmt-settings-field"><span>生成禁用词</span><input class="text_pole" data-rmt-banned-generated-phrases type="text" placeholder="用逗号分隔，例如：老子"></label>
+          <p>打开房间只读已有内容；“今日生活”由房间里的手动更新按钮触发，不会在进入时自动请求。</p>
+          <label class="rmt-settings-check"><input data-rmt-tt-display type="checkbox"><span>TT 顶部安全区</span></label>
+          </div>
+        </details>
+        ${advanced_ui.advancedGenerationHtml()}
+        ${chatReadingSettingsHtml()}
+        <details class="rmt-settings-card" data-rmt-settings-section="image">
+          <summary class="rmt-settings-card-head"><span>CG</span><div><b>CG 生图</b><small>相簿 · ADV · 日常一格</small></div></summary>
+          <div class="rmt-settings-section-body">
+            ${cg_format_ui.cgFormatControlHtml()}
+            <label class="rmt-settings-field"><span>生图渠道</span><select class="text_pole" data-rmt-image-generation-provider aria-describedby="rmt-image-provider-status"><option value="baibai-image">柏宝绘 · 公开 API v1</option></select></label>
+            <p id="rmt-image-provider-status" data-rmt-image-generation-status role="status" aria-live="polite"></p>
+            <p>柏宝绘需单独安装并配置出图渠道。只在点击绘制并确认后出图，失败不会自动换渠道。</p>
+          </div>
+        </details>
+        <details class="rmt-settings-card" data-rmt-settings-section="creative">
+          <summary class="rmt-settings-card-head"><span>文</span><div><b>创作补充词</b><small>仅用于心迹回廊独立 API</small></div></summary>
+          <div class="rmt-settings-section-body">
+            <label class="rmt-settings-check"><input type="checkbox" data-rmt-creative-enabled><span>启用创作补充词</span></label>
+            <label class="rmt-settings-field"><span>文风、氛围与叙事偏好</span><textarea class="text_pole" data-rmt-creative-text maxlength="20000" rows="8" placeholder="例如：少用总结式旁白，让情绪从对白和细节中自然流露。"></textarea></label>
+            <p><output data-rmt-creative-count>0 / 20,000</output> 字符。仅随心迹回廊文本生成发送，不写入主聊天、不发送给生图接口；会占用模型输入额度。</p>
+            <div class="rmt-theme-presets"><button type="button" data-rmt-creative-save>保存补充词</button><button type="button" data-rmt-creative-cancel>撤销编辑</button></div>
+            <div role="status" data-rmt-creative-status></div>
+          </div>
+        </details>
+        <details class="rmt-settings-card" data-rmt-settings-section="filter">
+          <summary class="rmt-settings-card-head"><span>TAG</span><div><b>过滤标签</b><small>勾选即不读取</small></div></summary>
+          <div class="rmt-settings-section-body">
+            <p>勾选的标签及其中全部内容不参与后续读取；未勾选的内容和无标签正文保留。可排除正文内嵌的标签块，不改聊天和旧档案。</p>
+            <textarea class="text_pole" data-rmt-tag-draft aria-label="不读取的标签名" placeholder="thinking, 绘图提示词标签"></textarea>
+            <div class="rmt-theme-presets"><button type="button" data-rmt-tag-scan>扫描当前聊天</button><button type="button" data-rmt-tag-all>全选</button><button type="button" data-rmt-tag-invert>反选</button><button type="button" data-rmt-tag-clear>清空选择</button><button type="button" data-rmt-tag-cancel>撤销编辑</button><button type="button" data-rmt-tag-save>保存选择</button></div>
+            <div data-rmt-tag-status role="status"></div>
+            <div data-rmt-tag-results></div>
+          </div>
+        </details>
+        <details class="rmt-settings-card rmt-theme-box" data-rmt-settings-section="theme">
+          <summary class="rmt-settings-card-head"><span>UI</span><div><b>界面主题</b><small>配色与透明度</small></div></summary>
+          <div class="rmt-settings-section-body">
+          <label class="rmt-settings-field"><span>外观</span><select class="text_pole" data-rmt-theme-mode><option value="default">日间 · 珍珠白</option><option value="night">夜间 · 星黛蓝</option><option value="gs1">初叶绿</option><option value="gs2">海盐蓝</option><option value="gs3">花漾粉</option><option value="gs4">杏糖橙</option><option value="host">跟随酒馆美化</option><option value="custom">自定义配色</option></select></label>
+          <label class="rmt-settings-field"><span>悬浮头像</span><select class="text_pole" data-rmt-floating-avatar><option value="char">角色 char（默认）</option><option value="user">用户 user</option><option value="off">关闭</option></select></label>
+          <label class="rmt-settings-field"><span>卡片不透明度 <output data-rmt-theme-opacity></output></span><input data-rmt-theme-alpha type="range" min="0.72" max="1" step="0.01"></label>
+          <div class="rmt-theme-custom-panel" data-rmt-theme-custom-panel>
+            <div class="rmt-theme-presets"><button type="button" data-rmt-theme-preset="day">从日间开始</button><button type="button" data-rmt-theme-preset="night">从夜间开始</button></div>
+            <label><span>背景</span><input type="color" data-rmt-theme-color="background"></label>
+            <label><span>卡片</span><input type="color" data-rmt-theme-color="surface"></label>
+            <label><span>主文字</span><input type="color" data-rmt-theme-color="text"></label>
+            <label><span>次文字</span><input type="color" data-rmt-theme-color="muted"></label>
+            <label><span>选中与装饰色</span><input type="color" data-rmt-theme-color="accent"></label>
+            <label><span>第二装饰色</span><input type="color" data-rmt-theme-color="accentAlt"></label>
+            <label><span>边框</span><input type="color" data-rmt-theme-color="border"></label>
+          </div>
+          <button type="button" class="menu_button rmt-settings-wide" data-rmt-theme-reset>恢复默认配色</button>
+          </div>
+        </details>
+        <details class="rmt-settings-card" data-rmt-settings-section="auto">
+          <summary class="rmt-settings-card-head"><span>↻</span><div><b>自动更新</b><small>跟随当前聊天 · 每项独立设置</small></div></summary>
+          <div class="rmt-settings-section-body">
+          <p>只在已有档案的当前窗口运行。每条聊天消息算一楼，编辑不加楼；开启后从当前楼数起计。</p>
+          <p>“档案同步”收录新聊天；其他模块使用已归档记忆，不改旧内容。会调用独立 API。</p>
+          <div class="rmt-auto-rules">${core_autoUpdatePolicy.AUTO_UPDATE_MODES.map(mode => `<div class="rmt-auto-rule"><label><input type="checkbox" data-rmt-auto-enabled="${mode}"> ${core_text.esc(mode === 'archive' ? '档案同步' : core_constants.MODE_LABEL[mode])}</label><label>每 <input type="number" min="1" max="1000" step="1" data-rmt-auto-every="${mode}" aria-label="${core_text.esc(mode === 'archive' ? '档案同步' : core_constants.MODE_LABEL[mode])}间隔楼层"> 楼</label><small data-rmt-auto-status="${mode}" role="status"></small></div>`).join('')}</div>
+          <small data-rmt-auto-warning role="status"></small>
+          <small>失败后不连续重试，等待下一个间隔；可随时手动生成。不支持跨页任务锁的浏览器仅保留手动操作。</small>
+          </div>
+        </details>
+        <div class="rmt-settings-card">
+          <button type="button" class="menu_button rmt-settings-wide" data-rmt-self-update>检查并更新插件</button>
+          <small data-rmt-self-update-status role="status">强制检查已发布更新 · 完成后手动刷新页面</small>
+        </div>
+        <details class="rmt-settings-card rmt-api-box" data-rmt-settings-section="memory">
+          <summary class="rmt-settings-card-head"><span>MEM</span><div><b>记忆来源</b><small>当前角色 · 当前聊天</small></div></summary>
+          <div class="rmt-settings-section-body">
+          <div class="rmt-api-source-grid" role="group" aria-label="记忆来源操作">
+            <button type="button" class="menu_button rmt-api-source-card" data-rmt-memory-auto-read><span class="rmt-api-source-badge">AUTO</span><b>自动读取</b><small>已注册的当前聊天来源</small></button>
+            <button type="button" class="menu_button rmt-api-source-card" data-rmt-memory-file-choose><span class="rmt-api-source-badge">FILE</span><b>导入记忆</b><small>JSON · JSONL · TXT · Markdown</small></button>
+          </div>
+          <label class="rmt-settings-check"><input type="checkbox" data-rmt-source-external ${core_settings.getPluginSettings().useCurrentChatExternalMemory !== false ? 'checked' : ''}><span>读取当前聊天的外部记忆摘要</span></label>
+          <label class="rmt-settings-check"><input type="checkbox" data-rmt-source-world-info ${core_settings.getPluginSettings().useActivatedWorldInfo !== false ? 'checked' : ''}><span>读取自动激活的世界书</span></label>
+          <p>聊天范围只控制聊天摘录。外部摘要、自动激活世界书分别由上方开关控制；手动选择的世界书仍按下方来源设置读取。已有档案不会被删除，派生模块仍使用已经归档的记忆。</p>
+          <button type="button" class="menu_button rmt-settings-wide" data-rmt-action="memory-worldinfo-picker" ${runtimeState.busy || core_requestCoordinator.hasGenerationTasks() ? 'disabled' : ''}>选择记忆相关世界书</button>
+          <button type="button" class="menu_button rmt-settings-wide" data-rmt-action="participants-picker">选择加入回廊的人物</button>
+          <button type="button" class="menu_button rmt-settings-wide" data-rmt-action="participants-versions">查看重做前的旧版本</button>
+          <input type="file" accept=".json,.jsonl,.txt,.md,.markdown,application/json,text/plain,text/markdown" data-rmt-memory-file-input hidden>
+          <div class="rmt-api-status" data-rmt-memory-ingress-status role="status">展开记忆来源后查看状态；不会自动导入或生成。</div>
+          <div class="rmt-api-source-panel" data-rmt-memory-file-preview hidden>
+            <b data-rmt-memory-file-preview-title>待确认的记忆文件</b>
+            <small data-rmt-memory-file-preview-meta></small>
+            <small data-rmt-memory-file-preview-binding></small>
+            <div data-rmt-memory-file-preview-sample></div>
+            <label class="checkbox_label rmt-settings-check"><input type="checkbox" data-rmt-memory-file-history-confirm> 我确认这是已经发生的历史/摘要，不是角色设定</label>
+            <button type="button" class="menu_button rmt-settings-wide" data-rmt-memory-file-commit disabled>确认作为历史导入当前聊天</button>
+          </div>
+          <details class="rmt-api-source-panel"><summary>来源详情与世界书类型</summary>
+            <div data-rmt-memory-source-list>暂无持久化来源。</div>
+            <div data-rmt-memory-history-books></div>
+          </details>
+          <div data-rmt-scene-picker></div>
+          <button type="button" class="menu_button rmt-settings-wide" data-rmt-memory-source-clear>清除当前聊天已导入来源</button>
+          <small>只清除心迹回廊自己的来源账本；不会删除聊天、第三方记忆或正式 Mxxx。</small>
+          </div>
+        </details>
+        <div class="rmt-settings-archive-actions">
+          <button type="button" class="menu_button rmt-open-archive-room" data-rmt-settings-current-archive><i class="fa-solid fa-file-circle-plus"></i><span>生成当前窗口档案</span></button>
+          <button type="button" class="menu_button rmt-open-archive-room" data-rmt-settings-open-archive><i class="fa-solid fa-box-archive"></i><span>打开档案室</span></button>
+        </div>
+      </div>`;
+    return SETTINGS_MOUNT_UNHANDLED;
+}
+
+__m_ui_settingsPanelMarkup_js.renderSettingsPanelMarkup = renderSettingsPanelMarkup;
+}
+
+function __init_ui_settingsPanel_js() {
+// MODULE: ui/settingsPanel.js
+const split_settingsPanelParts = __m_ui_settingsPanelParts_js;
+const split_settingsPanelHome = __m_ui_settingsPanelHome_js;
+
+
+// 以下导出已搬到 ui/settingsPanelParts.js、ui/settingsPanelHome.js，这里原样转发，调用方不用改。
+const SETTINGS_LAUNCHER_ID = split_settingsPanelParts.SETTINGS_LAUNCHER_ID;
+const clearHomeSettingsPanel = split_settingsPanelHome.clearHomeSettingsPanel;
+const refreshImageGenerationSettingsUi = split_settingsPanelParts.refreshImageGenerationSettingsUi;
+const voiceSettingsHtml = split_settingsPanelParts.voiceSettingsHtml;
+const chatReadingSettingsHtml = split_settingsPanelParts.chatReadingSettingsHtml;
+const bindImageProviderEvents = split_settingsPanelParts.bindImageProviderEvents;
+const unbindImageProviderEvents = split_settingsPanelParts.unbindImageProviderEvents;
+const refreshMemoryIngressUi = split_settingsPanelHome.refreshMemoryIngressUi;
+const refreshModelOptions = split_settingsPanelParts.refreshModelOptions;
+const refreshManualModelOptions = split_settingsPanelParts.refreshManualModelOptions;
+const refreshGenerationSettingsUi = split_settingsPanelParts.refreshGenerationSettingsUi;
+const hydrateSettingsPanel = split_settingsPanelHome.hydrateSettingsPanel;
+const refreshSettingsTaskStatus = split_settingsPanelParts.refreshSettingsTaskStatus;
+const refreshSettingsMemoryStatus = split_settingsPanelParts.refreshSettingsMemoryStatus;
+const mountSettings = split_settingsPanelHome.mountSettings;
+
+__m_ui_settingsPanel_js.SETTINGS_LAUNCHER_ID = SETTINGS_LAUNCHER_ID;
 __m_ui_settingsPanel_js.clearHomeSettingsPanel = clearHomeSettingsPanel;
 __m_ui_settingsPanel_js.refreshImageGenerationSettingsUi = refreshImageGenerationSettingsUi;
 __m_ui_settingsPanel_js.voiceSettingsHtml = voiceSettingsHtml;
 __m_ui_settingsPanel_js.chatReadingSettingsHtml = chatReadingSettingsHtml;
 __m_ui_settingsPanel_js.bindImageProviderEvents = bindImageProviderEvents;
 __m_ui_settingsPanel_js.unbindImageProviderEvents = unbindImageProviderEvents;
+__m_ui_settingsPanel_js.refreshMemoryIngressUi = refreshMemoryIngressUi;
+__m_ui_settingsPanel_js.refreshModelOptions = refreshModelOptions;
+__m_ui_settingsPanel_js.refreshManualModelOptions = refreshManualModelOptions;
 __m_ui_settingsPanel_js.refreshGenerationSettingsUi = refreshGenerationSettingsUi;
 __m_ui_settingsPanel_js.hydrateSettingsPanel = hydrateSettingsPanel;
 __m_ui_settingsPanel_js.refreshSettingsTaskStatus = refreshSettingsTaskStatus;
 __m_ui_settingsPanel_js.refreshSettingsMemoryStatus = refreshSettingsMemoryStatus;
 __m_ui_settingsPanel_js.mountSettings = mountSettings;
-__m_ui_settingsPanel_js.SETTINGS_LAUNCHER_ID = SETTINGS_LAUNCHER_ID;
 }
 
 function __init_modes_advEvent_js() {
@@ -32768,39 +33181,38 @@ __m_generation_recoveryPayload_js.packRecoveryPayload = packRecoveryPayload;
 __m_generation_recoveryPayload_js.unpackRecoveryPayload = unpackRecoveryPayload;
 }
 
-function __init_generation_recovery_js() {
-// MODULE: generation/recovery.js
-const recovery_merge = __m_generation_recoveryMerge_js;
-const partial_progress = __m_generation_partialProgress_js;
+function __init_generation_recoveryFeedback_js() {
+// MODULE: generation/recoveryFeedback.js
 const core_digest = __m_core_digest_js;
 const core_text = __m_core_text_js;
 const recovery_payload = __m_generation_recoveryPayload_js;
 
 
-// Request-segment recovery, not a second normalizer or a source of archive facts.
-// Storage is supplied by the existing origin/revision/fence-aware cache boundary.
-// Model text stays inert and is never put on Error objects, in logs, or in DOM.
 
-
+// 生成恢复基础：恢复缓存键与上限、失败原因与重试反馈、恢复摘要
+// 从 generation/recovery.js 原样搬出（重构阶段 2），声明文本一字未改；generation/recovery.js 仍转发原有导出。
 
 const GENERATION_RECOVERY_CACHE_KEY = '__generationRecoveryV1';
+
 const GENERATION_RECOVERY_LIMITS = Object.freeze({
     segments: 128, segmentChars: 600000, journalChars: 1800000,
     requestChars: 1200000, maxAgeMs: 7 * 24 * 60 * 60 * 1000,
 });
 
 const handles = new WeakMap();
-const handleBindings = new WeakMap();
-const requestTokens = new WeakMap();
-const internalHandles = new WeakSet();
-let truncationContinueHandler = null;
 
-function setTruncationContinueHandler(handler) {
-    truncationContinueHandler = typeof handler === 'function' ? handler : null;
-}
+const handleBindings = new WeakMap();
+
+const requestTokens = new WeakMap();
+
+const internalHandles = new WeakSet();
+
 const TOKEN = Symbol('generation-recovery-request');
+
 const DIGEST = /^[a-f0-9]{64}$/;
+
 const FAILURE_CODE = /^(?:RMT_[A-Z0-9_]{1,80}|RMT_BUTTERFLY_(?:systemNote|monologue|intervention|omega|worldSpec|relationship|unique))$/;
+
 const COMPATIBILITY_CONTRACTS = Object.freeze({
     'heart-language-birthday-r8412': Object.freeze({ mode: 'heart', slot: /:(?:dialogues|dialogues-full)$/ }),
     'heart-season-siblings-r8412': Object.freeze({ mode: 'heart', slot: /^heart-season:.*:(?:spring|summer|autumn|winter):(?:voice|scenario)$/ }),
@@ -32856,6 +33268,7 @@ const RETRY_FEEDBACK = Object.freeze({
     mailAddress: '上一轮称呼或措辞超出了两人当前的真实关系。只用档案里已经成立的关系称呼对方，不要用尚未成立的亲密称呼。',
     mailHistory: '上一轮把档案里没有依据的共同往事写成了事实。日常信只写今天此刻的心情、眼前的小事和接下来的打算；不要写「上次」「那天」「还记得」「昨天你说」这类回忆两人过去的句子，也不要提起以前来信里写过的事。',
 });
+
 const FAILURE_DETAIL = Object.freeze({
     json: '没有完整 JSON',
     empty: '没有最终正文',
@@ -32873,11 +33286,13 @@ const FAILURE_DETAIL = Object.freeze({
     mailAddress: '称呼超出两人当前关系',
     mailHistory: '写了档案里没有的往事',
 });
+
 // 邮箱校验失败时使用插件自己写死的提示文字（safeUserMessage），按原文细分原因。
 const MAIL_FAILURE = Object.freeze([
     ['来信未完整返回', 'mailCount'], ['来信类型重复或缺失', 'mailSlot'], ['来信正文还未写完', 'mailEmpty'],
     ['称呼超出了两人当前关系', 'mailAddress'], ['未有依据的共同往事', 'mailHistory'],
 ]);
+
 function classifyLengthKind(text) {
     const message = String(text || '');
     if (!message) return '';
@@ -32889,6 +33304,7 @@ function classifyLengthKind(text) {
     if (chars) return 'chars';
     return '';
 }
+
 function failureFeedback(code, error) {
     if (['RMT_JSON_NOT_FOUND', 'RMT_JSON_INVALID'].includes(code)) return 'json';
     if (['RMT_JSON_EMPTY_FINAL', 'RMT_JSON_EMPTY_FINAL_WITH_REASONING'].includes(code)) return 'empty';
@@ -32908,6 +33324,7 @@ function failureFeedback(code, error) {
     if (['RMT_SEGMENT_VALIDATION', 'RMT_ROOM_STRUCTURE', 'RMT_ROOM_FIELDS'].includes(code)) return 'structure';
     return '';
 }
+
 function generationFailureReason(summary) {
     if (!summary) return '';
     if (summary.canContinue) return '正文未写完';
@@ -32915,9 +33332,11 @@ function generationFailureReason(summary) {
     if (summary.failed && !summary.failureCode) return '上次中断时还没有留下具体失败原因';
     return '';
 }
+
 function generationRetryFeedbackText(code, error) {
     return RETRY_FEEDBACK[failureFeedback(code, error)] || '';
 }
+
 function generationRetryPrompt(prompt, feedback) {
     if (!Object.hasOwn(RETRY_FEEDBACK, feedback || '')) return prompt;
     return `【本地上一轮失败反馈】${RETRY_FEEDBACK[feedback]} 本轮仍只处理当前未完成段，保留原人物身份、资料来源和全部硬性要求。不要把反馈写进正文。\n\n${prompt}`;
@@ -33013,7 +33432,9 @@ function recoveryIdentity(origin, mode) {
 // through the existing explicit user export path. No limit is raised and no
 // old draft is dropped to make room.
 const unsavedReplyHolds = new Map();
+
 const UNSAVED_REPLY_HOLD_LIMITS = Object.freeze({ perIdentity: 8, identities: 16 });
+
 const HELD_REPLY_EXPORT_HINT = '本次新收到的成果已保留在当前页面，可通过恢复区“导出未提交草稿”一并导出。';
 
 // Accurate only where a hold actually succeeded; best effort on the error
@@ -33204,6 +33625,239 @@ function exportGenerationRecovery(raw) {
     return bundle;
 }
 
+function attachGenerationRecovery(origin, handle) {
+    if (!origin || typeof origin !== 'object' || !internalHandles.has(handle)) return false;
+    handles.set(origin, handle);
+    return true;
+}
+
+function detachGenerationRecovery(origin) {
+    if (origin && typeof origin === 'object') handles.delete(origin);
+}
+
+function generationRecoverySnapshot(handle) {
+    return internalHandles.has(handle) ? recoveryJournalData(handle.journal).expanded : null;
+}
+
+function readGenerationContentSnapshot(value) {
+    const journal = internalHandles.has(value) ? value.journal : value;
+    if (journal?.contentSnapshotVersion !== 1 || !journal.contentSnapshot || typeof journal.contentSnapshot !== 'object' || Array.isArray(journal.contentSnapshot)) return null;
+    try { return JSON.parse(jsonData(journal.contentSnapshot, GENERATION_RECOVERY_LIMITS.requestChars, true)); } catch { return null; }
+}
+
+function generationContentSnapshotForOrigin(origin) {
+    const handle = origin && handles.get(origin);
+    return handle ? readGenerationContentSnapshot(currentAttachedJournal(origin, handle)) : null;
+}
+
+async function persistGenerationRecovery(handle) {
+    if (!internalHandles.has(handle)) return false;
+    const saved = await changeJournal(handle, () => {});
+    if (!saved && !handle.pageOnly) throw recoveryError('RMT_RECOVERY_STORAGE', '原任务资料未能保存，未发起生成请求；旧内容和草稿仍保留。');
+    return saved;
+}
+
+// Publish after the journal acknowledges durable storage. A separate lane keeps
+// projections ordered without re-entering the journal's storage transaction.
+// Failure here must never turn a received complete segment back into a retry.
+async function publishGenerationRecoveryProgress(handle) {
+    if (!internalHandles.has(handle) || !handle.onProgress) return false;
+    const operation = handle.progressLane.catch(() => {}).then(async () => {
+        checkCurrent(handle);
+        if (!handle.durable) return false;
+        const journal = generationRecoverySnapshot(handle);
+        const received = journal.segments.filter(row => row.state === 'complete' || row.state === 'truncated');
+        if (!received.length) return false;
+        const signature = JSON.stringify({ segments: received.map(row => ({ slot: row.slot,
+            state: row.state, rawJson: row.rawJson, partial: row.partial, retainedPartials: row.retainedPartials })),
+            operation: journal.operation, frozenInputs: journal.frozenInputs });
+        if (signature === handle.publishedProgress) return true;
+        try {
+            await handle.onProgress(journal);
+            checkCurrent(handle);
+            handle.publishedProgress = signature;
+            return true;
+        } catch (error) {
+            if (error?.name === 'AbortError') throw error;
+            throw recoveryError('RMT_RECOVERY_PROGRESS_STORAGE', '已收到的正文和成功分段仍在草稿中，但可阅读成果暂未保存成功；已停止后续请求，可检查本地存储后继续，不会重做成功段。');
+        }
+    });
+    handle.progressLane = operation;
+    return operation;
+}
+
+function validRequestRecipe(recipe) {
+    return !!recipe && recipe.version === 1 && typeof recipe.identity?.prompt === 'string'
+        && typeof recipe.identity?.contextEnvelope === 'string'
+        && (recipe.actualPrompt === undefined || typeof recipe.actualPrompt === 'string')
+        && Object.keys(recipe).every(key => ['version', 'identity', 'actualPrompt', 'contentSettings'].includes(key));
+}
+
+function generationRecoveryForOrigin(origin) {
+    const handle = origin && handles.get(origin);
+    return handle ? { ...generationRecoverySummary(handle.journal, handle.now()), durable: handle.durable } : null;
+}
+
+// Counts and ids only. Callers must not receive segment text, prompts, or evidence.
+function generationRecoveryProgress(origin) {
+    try {
+        const handle = origin && handles.get(origin);
+        if (!handle?.journal) return null;
+        const summary = generationRecoverySummary(handle.journal, typeof handle.now === 'function' ? handle.now() : Date.now());
+        if (!summary) return null;
+        const segments = Array.isArray(handle.journal.segments) ? handle.journal.segments : [];
+        return {
+            draftId: typeof handle.journal.draftId === 'string' ? handle.journal.draftId.slice(0, 240) : '',
+            pageId: typeof handle.journal.pageId === 'string' ? handle.journal.pageId.slice(0, 80) : '',
+            mode: summary.mode,
+            received: summary.completed + summary.truncated,
+            saved: handle.durable === true ? summary.completed : 0,
+            total: segments.length,
+            durable: handle.durable === true,
+        };
+    } catch {
+        return null;
+    }
+}
+
+function currentAttachedJournal(origin, handle) {
+    checkCurrent(handle);
+    const journal = validJournal(handle.journal, handle.now());
+    const binding = handleBindings.get(handle);
+    // The live origin may omit the canonical index ID which beginModeRecovery
+    // adds when creating the handle. No other identity component is aliased.
+    const identity = recoveryIdentity({ ...origin,
+        archiveTargetEntryId: origin?.archiveTargetEntryId || journal?.identity?.archiveTargetEntryId || '',
+    }, journal?.identity?.mode);
+    if (!journal || !binding || !identity || jsonData(journal.identity) !== binding.identity
+        || jsonData(identity) !== binding.identity || journal.settingsHash !== binding.settingsHash) {
+        throw generationRecoveryMismatch('attachment', 'attachment');
+    }
+    checkCurrent(handle);
+    return journal;
+}
+
+// Planning data only, never acceptance authority. Callers must still replay each
+// complete segment through withRecoverySegment and its production validator.
+function generationRecoverySegmentsForOrigin(origin) {
+    const handle = origin && handles.get(origin);
+    if (!handle) return null;
+    return currentAttachedJournal(origin, handle).segments.map(segment => ({
+        slot: segment.slot, state: segment.state,
+        ...(segment.state === 'complete' ? { rawJson: segment.rawJson } : {}),
+        ...(segment.contract ? { contract: segment.contract } : {}),
+    }));
+}
+
+function checkCurrent(handle) {
+    if (handle.assertCurrent() === false) throw new DOMException('Generation recovery origin changed', 'AbortError');
+}
+
+async function changeJournal(handle, mutate) {
+    const operation = handle.lane.catch(() => {}).then(async () => {
+        checkCurrent(handle);
+        const next = generationRecoverySnapshot(handle);
+        mutate(next);
+        next.updatedAt = handle.now();
+        const { expanded, stored } = recoveryJournalData(next);
+        if (next.segments.length > GENERATION_RECOVERY_LIMITS.segments) {
+            throw recoveryError('RMT_RECOVERY_LIMIT', '本轮续写草稿已达到分段上限，此前成功部分和旧内容仍保留。');
+        }
+        checkCurrent(handle);
+        // Preserve an in-page copy even if durable storage is temporarily unavailable.
+        handle.journal = expanded;
+        try { handle.durable = typeof handle.save === 'function' && await handle.save(JSON.parse(stored)) !== false; }
+        catch (error) {
+            handle.durable = false;
+            if (error?.name === 'AbortError') throw error;
+        }
+        checkCurrent(handle);
+        return handle.durable;
+    });
+    handle.lane = operation;
+    return operation;
+}
+
+__m_generation_recoveryFeedback_js.generationRecoveryDigest = generationRecoveryDigest;
+__m_generation_recoveryFeedback_js.projectHeldReply = projectHeldReply;
+__m_generation_recoveryFeedback_js.persistGenerationRecovery = persistGenerationRecovery;
+__m_generation_recoveryFeedback_js.publishGenerationRecoveryProgress = publishGenerationRecoveryProgress;
+__m_generation_recoveryFeedback_js.changeJournal = changeJournal;
+__m_generation_recoveryFeedback_js.recoveryError = recoveryError;
+__m_generation_recoveryFeedback_js.generationRecoveryMismatch = generationRecoveryMismatch;
+__m_generation_recoveryFeedback_js.recoveryFailureCode = recoveryFailureCode;
+__m_generation_recoveryFeedback_js.failureFeedback = failureFeedback;
+__m_generation_recoveryFeedback_js.generationFailureReason = generationFailureReason;
+__m_generation_recoveryFeedback_js.generationRetryFeedbackText = generationRetryFeedbackText;
+__m_generation_recoveryFeedback_js.generationRetryPrompt = generationRetryPrompt;
+__m_generation_recoveryFeedback_js.generationPhoneRetryPrompt = generationPhoneRetryPrompt;
+__m_generation_recoveryFeedback_js.primitiveString = primitiveString;
+__m_generation_recoveryFeedback_js.jsonData = jsonData;
+__m_generation_recoveryFeedback_js.recoveryIdentity = recoveryIdentity;
+__m_generation_recoveryFeedback_js.noteHeldReplyExport = noteHeldReplyExport;
+__m_generation_recoveryFeedback_js.holdUnsavedReply = holdUnsavedReply;
+__m_generation_recoveryFeedback_js.generationRecoveryHeldReplies = generationRecoveryHeldReplies;
+__m_generation_recoveryFeedback_js.discardGenerationRecoveryHeldReplies = discardGenerationRecoveryHeldReplies;
+__m_generation_recoveryFeedback_js.validJournal = validJournal;
+__m_generation_recoveryFeedback_js.readableJournal = readableJournal;
+__m_generation_recoveryFeedback_js.generationRecoverySummary = generationRecoverySummary;
+__m_generation_recoveryFeedback_js.canRestartLegacyConfiguration = canRestartLegacyConfiguration;
+__m_generation_recoveryFeedback_js.exportGenerationRecovery = exportGenerationRecovery;
+__m_generation_recoveryFeedback_js.attachGenerationRecovery = attachGenerationRecovery;
+__m_generation_recoveryFeedback_js.detachGenerationRecovery = detachGenerationRecovery;
+__m_generation_recoveryFeedback_js.generationRecoverySnapshot = generationRecoverySnapshot;
+__m_generation_recoveryFeedback_js.readGenerationContentSnapshot = readGenerationContentSnapshot;
+__m_generation_recoveryFeedback_js.generationContentSnapshotForOrigin = generationContentSnapshotForOrigin;
+__m_generation_recoveryFeedback_js.generationRecoveryForOrigin = generationRecoveryForOrigin;
+__m_generation_recoveryFeedback_js.generationRecoveryProgress = generationRecoveryProgress;
+__m_generation_recoveryFeedback_js.currentAttachedJournal = currentAttachedJournal;
+__m_generation_recoveryFeedback_js.generationRecoverySegmentsForOrigin = generationRecoverySegmentsForOrigin;
+__m_generation_recoveryFeedback_js.checkCurrent = checkCurrent;
+__m_generation_recoveryFeedback_js.GENERATION_RECOVERY_CACHE_KEY = GENERATION_RECOVERY_CACHE_KEY;
+__m_generation_recoveryFeedback_js.GENERATION_RECOVERY_LIMITS = GENERATION_RECOVERY_LIMITS;
+__m_generation_recoveryFeedback_js.handles = handles;
+__m_generation_recoveryFeedback_js.handleBindings = handleBindings;
+__m_generation_recoveryFeedback_js.requestTokens = requestTokens;
+__m_generation_recoveryFeedback_js.internalHandles = internalHandles;
+__m_generation_recoveryFeedback_js.TOKEN = TOKEN;
+__m_generation_recoveryFeedback_js.COMPATIBILITY_CONTRACTS = COMPATIBILITY_CONTRACTS;
+}
+
+function __init_generation_recoverySegments_js() {
+// MODULE: generation/recoverySegments.js
+const partial_progress = __m_generation_partialProgress_js;
+const COMPATIBILITY_CONTRACTS = __m_generation_recoveryFeedback_js.COMPATIBILITY_CONTRACTS;
+const GENERATION_RECOVERY_LIMITS = __m_generation_recoveryFeedback_js.GENERATION_RECOVERY_LIMITS;
+const TOKEN = __m_generation_recoveryFeedback_js.TOKEN;
+const canRestartLegacyConfiguration = __m_generation_recoveryFeedback_js.canRestartLegacyConfiguration;
+const changeJournal = __m_generation_recoveryFeedback_js.changeJournal;
+const checkCurrent = __m_generation_recoveryFeedback_js.checkCurrent;
+const currentAttachedJournal = __m_generation_recoveryFeedback_js.currentAttachedJournal;
+const failureFeedback = __m_generation_recoveryFeedback_js.failureFeedback;
+const generationRecoveryDigest = __m_generation_recoveryFeedback_js.generationRecoveryDigest;
+const generationRecoveryMismatch = __m_generation_recoveryFeedback_js.generationRecoveryMismatch;
+const handleBindings = __m_generation_recoveryFeedback_js.handleBindings;
+const handles = __m_generation_recoveryFeedback_js.handles;
+const holdUnsavedReply = __m_generation_recoveryFeedback_js.holdUnsavedReply;
+const internalHandles = __m_generation_recoveryFeedback_js.internalHandles;
+const jsonData = __m_generation_recoveryFeedback_js.jsonData;
+const noteHeldReplyExport = __m_generation_recoveryFeedback_js.noteHeldReplyExport;
+const persistGenerationRecovery = __m_generation_recoveryFeedback_js.persistGenerationRecovery;
+const primitiveString = __m_generation_recoveryFeedback_js.primitiveString;
+const projectHeldReply = __m_generation_recoveryFeedback_js.projectHeldReply;
+const publishGenerationRecoveryProgress = __m_generation_recoveryFeedback_js.publishGenerationRecoveryProgress;
+const readGenerationContentSnapshot = __m_generation_recoveryFeedback_js.readGenerationContentSnapshot;
+const readableJournal = __m_generation_recoveryFeedback_js.readableJournal;
+const recoveryError = __m_generation_recoveryFeedback_js.recoveryError;
+const recoveryFailureCode = __m_generation_recoveryFeedback_js.recoveryFailureCode;
+const recoveryIdentity = __m_generation_recoveryFeedback_js.recoveryIdentity;
+const requestTokens = __m_generation_recoveryFeedback_js.requestTokens;
+const validJournal = __m_generation_recoveryFeedback_js.validJournal;
+
+
+// 生成恢复流程：创建恢复、冻结输入与请求、续写提示、分段恢复
+// 从 generation/recovery.js 原样搬出（重构阶段 2），声明文本一字未改；generation/recovery.js 仍转发原有导出。
+
 async function createGenerationRecovery({ origin, mode, settingsIdentity, existing = null,
     continueRequested = false, save, assertCurrent = () => true, now = () => Date.now(), pageOnly = false, taskScopes = [], sourcePolicy = null, confirmLegacyRestart = null,
     contentSnapshot = null, draftId = '', pageId = '', onProgress = null, modeTaskScopes = [] } = {}) {
@@ -33322,74 +33976,6 @@ async function createGenerationRecovery({ origin, mode, settingsIdentity, existi
     return handle;
 }
 
-function attachGenerationRecovery(origin, handle) {
-    if (!origin || typeof origin !== 'object' || !internalHandles.has(handle)) return false;
-    handles.set(origin, handle);
-    return true;
-}
-
-function detachGenerationRecovery(origin) {
-    if (origin && typeof origin === 'object') handles.delete(origin);
-}
-
-function generationRecoverySnapshot(handle) {
-    return internalHandles.has(handle) ? recoveryJournalData(handle.journal).expanded : null;
-}
-
-function readGenerationContentSnapshot(value) {
-    const journal = internalHandles.has(value) ? value.journal : value;
-    if (journal?.contentSnapshotVersion !== 1 || !journal.contentSnapshot || typeof journal.contentSnapshot !== 'object' || Array.isArray(journal.contentSnapshot)) return null;
-    try { return JSON.parse(jsonData(journal.contentSnapshot, GENERATION_RECOVERY_LIMITS.requestChars, true)); } catch { return null; }
-}
-
-function generationContentSnapshotForOrigin(origin) {
-    const handle = origin && handles.get(origin);
-    return handle ? readGenerationContentSnapshot(currentAttachedJournal(origin, handle)) : null;
-}
-
-async function persistGenerationRecovery(handle) {
-    if (!internalHandles.has(handle)) return false;
-    const saved = await changeJournal(handle, () => {});
-    if (!saved && !handle.pageOnly) throw recoveryError('RMT_RECOVERY_STORAGE', '原任务资料未能保存，未发起生成请求；旧内容和草稿仍保留。');
-    return saved;
-}
-
-// Publish after the journal acknowledges durable storage. A separate lane keeps
-// projections ordered without re-entering the journal's storage transaction.
-// Failure here must never turn a received complete segment back into a retry.
-async function publishGenerationRecoveryProgress(handle) {
-    if (!internalHandles.has(handle) || !handle.onProgress) return false;
-    const operation = handle.progressLane.catch(() => {}).then(async () => {
-        checkCurrent(handle);
-        if (!handle.durable) return false;
-        const journal = generationRecoverySnapshot(handle);
-        const received = journal.segments.filter(row => row.state === 'complete' || row.state === 'truncated');
-        if (!received.length) return false;
-        const signature = JSON.stringify({ segments: received.map(row => ({ slot: row.slot,
-            state: row.state, rawJson: row.rawJson, partial: row.partial, retainedPartials: row.retainedPartials })),
-            operation: journal.operation, frozenInputs: journal.frozenInputs });
-        if (signature === handle.publishedProgress) return true;
-        try {
-            await handle.onProgress(journal);
-            checkCurrent(handle);
-            handle.publishedProgress = signature;
-            return true;
-        } catch (error) {
-            if (error?.name === 'AbortError') throw error;
-            throw recoveryError('RMT_RECOVERY_PROGRESS_STORAGE', '已收到的正文和成功分段仍在草稿中，但可阅读成果暂未保存成功；已停止后续请求，可检查本地存储后继续，不会重做成功段。');
-        }
-    });
-    handle.progressLane = operation;
-    return operation;
-}
-
-function validRequestRecipe(recipe) {
-    return !!recipe && recipe.version === 1 && typeof recipe.identity?.prompt === 'string'
-        && typeof recipe.identity?.contextEnvelope === 'string'
-        && (recipe.actualPrompt === undefined || typeof recipe.actualPrompt === 'string')
-        && Object.keys(recipe).every(key => ['version', 'identity', 'actualPrompt', 'contentSettings'].includes(key));
-}
-
 // Called at the transport boundary after macro expansion and content policy have
 // been applied. Credentials, profiles and provider options never enter this record.
 async function freezeRecoveryRequestPayload(options, payload) {
@@ -33404,50 +33990,6 @@ async function freezeRecoveryRequestPayload(options, payload) {
     });
     if (!saved && !record.handle.pageOnly) throw recoveryError('RMT_RECOVERY_STORAGE', '本段原始请求未能保存，未发起模型请求；旧内容和草稿仍保留。');
     return safe;
-}
-
-function generationRecoveryForOrigin(origin) {
-    const handle = origin && handles.get(origin);
-    return handle ? { ...generationRecoverySummary(handle.journal, handle.now()), durable: handle.durable } : null;
-}
-
-// Counts and ids only. Callers must not receive segment text, prompts, or evidence.
-function generationRecoveryProgress(origin) {
-    try {
-        const handle = origin && handles.get(origin);
-        if (!handle?.journal) return null;
-        const summary = generationRecoverySummary(handle.journal, typeof handle.now === 'function' ? handle.now() : Date.now());
-        if (!summary) return null;
-        const segments = Array.isArray(handle.journal.segments) ? handle.journal.segments : [];
-        return {
-            draftId: typeof handle.journal.draftId === 'string' ? handle.journal.draftId.slice(0, 240) : '',
-            pageId: typeof handle.journal.pageId === 'string' ? handle.journal.pageId.slice(0, 80) : '',
-            mode: summary.mode,
-            received: summary.completed + summary.truncated,
-            saved: handle.durable === true ? summary.completed : 0,
-            total: segments.length,
-            durable: handle.durable === true,
-        };
-    } catch {
-        return null;
-    }
-}
-
-function currentAttachedJournal(origin, handle) {
-    checkCurrent(handle);
-    const journal = validJournal(handle.journal, handle.now());
-    const binding = handleBindings.get(handle);
-    // The live origin may omit the canonical index ID which beginModeRecovery
-    // adds when creating the handle. No other identity component is aliased.
-    const identity = recoveryIdentity({ ...origin,
-        archiveTargetEntryId: origin?.archiveTargetEntryId || journal?.identity?.archiveTargetEntryId || '',
-    }, journal?.identity?.mode);
-    if (!journal || !binding || !identity || jsonData(journal.identity) !== binding.identity
-        || jsonData(identity) !== binding.identity || journal.settingsHash !== binding.settingsHash) {
-        throw generationRecoveryMismatch('attachment', 'attachment');
-    }
-    checkCurrent(handle);
-    return journal;
 }
 
 // A code-owned input snapshot, never model-owned routing or evidence authority.
@@ -33496,47 +34038,6 @@ async function acceptPreparedInputs(handle, slot) {
     });
     if (!saved && !handle.pageOnly) throw recoveryError('RMT_RECOVERY_STORAGE', '本轮背景未能保存，已停止模型请求；旧内容和草稿仍保留。');
     handle.stagedInputs.clear(); handle.stagedSourcePolicy = null;
-}
-
-// Planning data only, never acceptance authority. Callers must still replay each
-// complete segment through withRecoverySegment and its production validator.
-function generationRecoverySegmentsForOrigin(origin) {
-    const handle = origin && handles.get(origin);
-    if (!handle) return null;
-    return currentAttachedJournal(origin, handle).segments.map(segment => ({
-        slot: segment.slot, state: segment.state,
-        ...(segment.state === 'complete' ? { rawJson: segment.rawJson } : {}),
-        ...(segment.contract ? { contract: segment.contract } : {}),
-    }));
-}
-
-function checkCurrent(handle) {
-    if (handle.assertCurrent() === false) throw new DOMException('Generation recovery origin changed', 'AbortError');
-}
-
-async function changeJournal(handle, mutate) {
-    const operation = handle.lane.catch(() => {}).then(async () => {
-        checkCurrent(handle);
-        const next = generationRecoverySnapshot(handle);
-        mutate(next);
-        next.updatedAt = handle.now();
-        const { expanded, stored } = recoveryJournalData(next);
-        if (next.segments.length > GENERATION_RECOVERY_LIMITS.segments) {
-            throw recoveryError('RMT_RECOVERY_LIMIT', '本轮续写草稿已达到分段上限，此前成功部分和旧内容仍保留。');
-        }
-        checkCurrent(handle);
-        // Preserve an in-page copy even if durable storage is temporarily unavailable.
-        handle.journal = expanded;
-        try { handle.durable = typeof handle.save === 'function' && await handle.save(JSON.parse(stored)) !== false; }
-        catch (error) {
-            handle.durable = false;
-            if (error?.name === 'AbortError') throw error;
-        }
-        checkCurrent(handle);
-        return handle.durable;
-    });
-    handle.lane = operation;
-    return operation;
 }
 
 function replaceSegment(journal, segment) {
@@ -33805,6 +34306,95 @@ async function withRecoverySegment(prompt, options, validator, run) {
     }
 }
 
+async function noteGenerationRecoveryFailure(origin, error) {
+    const handle = origin && handles.get(origin);
+    if (!handle || error?.name === 'AbortError') return false;
+    const code = recoveryFailureCode(error);
+    return changeJournal(handle, journal => {
+        journal.failureCode = code;
+        delete journal.failureCategory; delete journal.failurePhase;
+        if (['RMT_RECOVERY_INPUT_CHANGED', 'RMT_RECOVERY_SOURCE_CHANGED', 'RMT_RECOVERY_OPERATION_CHANGED'].includes(code)) {
+            const safe = generationRecoveryMismatch(error.archiveInputCategory, error.recoveryPhase, code);
+            journal.failureCategory = safe.archiveInputCategory; journal.failurePhase = safe.recoveryPhase;
+        }
+    });
+}
+
+function assertRetainedSize(raw, retained) {
+    // Each received reply keeps the pre-existing per-reply bound. The journal's
+    // existing total bound is applied by changeJournal; no new history-total cap.
+    if ([raw, ...retained].some(value => value.length > GENERATION_RECOVERY_LIMITS.segmentChars))
+        throw recoveryError('RMT_RECOVERY_LIMIT', '恢复片段超过原有单段保存范围；旧草稿未被覆盖，请先导出保留。');
+}
+
+__m_generation_recoverySegments_js.createGenerationRecovery = createGenerationRecovery;
+__m_generation_recoverySegments_js.freezeRecoveryRequestPayload = freezeRecoveryRequestPayload;
+__m_generation_recoverySegments_js.frozenGenerationInput = frozenGenerationInput;
+__m_generation_recoverySegments_js.legacyRecoveryPromptPermitted = legacyRecoveryPromptPermitted;
+__m_generation_recoverySegments_js.withRecoverySegment = withRecoverySegment;
+__m_generation_recoverySegments_js.noteGenerationRecoveryFailure = noteGenerationRecoveryFailure;
+__m_generation_recoverySegments_js.replaceSegment = replaceSegment;
+__m_generation_recoverySegments_js.generationContinuationPrompt = generationContinuationPrompt;
+__m_generation_recoverySegments_js.assertRetainedSize = assertRetainedSize;
+}
+
+function __init_generation_recovery_js() {
+// MODULE: generation/recovery.js
+const recovery_merge = __m_generation_recoveryMerge_js;
+const split_recoveryFeedback = __m_generation_recoveryFeedback_js;
+const split_recoverySegments = __m_generation_recoverySegments_js;
+const TOKEN = __m_generation_recoveryFeedback_js.TOKEN;
+const changeJournal = __m_generation_recoveryFeedback_js.changeJournal;
+const holdUnsavedReply = __m_generation_recoveryFeedback_js.holdUnsavedReply;
+const noteHeldReplyExport = __m_generation_recoveryFeedback_js.noteHeldReplyExport;
+const projectHeldReply = __m_generation_recoveryFeedback_js.projectHeldReply;
+const recoveryError = __m_generation_recoveryFeedback_js.recoveryError;
+const requestTokens = __m_generation_recoveryFeedback_js.requestTokens;
+const assertRetainedSize = __m_generation_recoverySegments_js.assertRetainedSize;
+const replaceSegment = __m_generation_recoverySegments_js.replaceSegment;
+
+
+
+
+
+// 以下导出已搬到 generation/recoveryFeedback.js、generation/recoverySegments.js，这里原样转发，调用方不用改。
+const GENERATION_RECOVERY_CACHE_KEY = split_recoveryFeedback.GENERATION_RECOVERY_CACHE_KEY;
+const GENERATION_RECOVERY_LIMITS = split_recoveryFeedback.GENERATION_RECOVERY_LIMITS;
+const generationRecoveryMismatch = split_recoveryFeedback.generationRecoveryMismatch;
+const generationFailureReason = split_recoveryFeedback.generationFailureReason;
+const generationRetryFeedbackText = split_recoveryFeedback.generationRetryFeedbackText;
+const generationRetryPrompt = split_recoveryFeedback.generationRetryPrompt;
+const generationPhoneRetryPrompt = split_recoveryFeedback.generationPhoneRetryPrompt;
+const generationRecoveryDigest = split_recoveryFeedback.generationRecoveryDigest;
+const generationRecoveryHeldReplies = split_recoveryFeedback.generationRecoveryHeldReplies;
+const discardGenerationRecoveryHeldReplies = split_recoveryFeedback.discardGenerationRecoveryHeldReplies;
+const generationRecoverySummary = split_recoveryFeedback.generationRecoverySummary;
+const canRestartLegacyConfiguration = split_recoveryFeedback.canRestartLegacyConfiguration;
+const exportGenerationRecovery = split_recoveryFeedback.exportGenerationRecovery;
+const createGenerationRecovery = split_recoverySegments.createGenerationRecovery;
+const attachGenerationRecovery = split_recoveryFeedback.attachGenerationRecovery;
+const detachGenerationRecovery = split_recoveryFeedback.detachGenerationRecovery;
+const generationRecoverySnapshot = split_recoveryFeedback.generationRecoverySnapshot;
+const readGenerationContentSnapshot = split_recoveryFeedback.readGenerationContentSnapshot;
+const generationContentSnapshotForOrigin = split_recoveryFeedback.generationContentSnapshotForOrigin;
+const persistGenerationRecovery = split_recoveryFeedback.persistGenerationRecovery;
+const publishGenerationRecoveryProgress = split_recoveryFeedback.publishGenerationRecoveryProgress;
+const freezeRecoveryRequestPayload = split_recoverySegments.freezeRecoveryRequestPayload;
+const generationRecoveryForOrigin = split_recoveryFeedback.generationRecoveryForOrigin;
+const generationRecoveryProgress = split_recoveryFeedback.generationRecoveryProgress;
+const frozenGenerationInput = split_recoverySegments.frozenGenerationInput;
+const generationRecoverySegmentsForOrigin = split_recoveryFeedback.generationRecoverySegmentsForOrigin;
+const generationContinuationPrompt = split_recoverySegments.generationContinuationPrompt;
+const legacyRecoveryPromptPermitted = split_recoverySegments.legacyRecoveryPromptPermitted;
+const withRecoverySegment = split_recoverySegments.withRecoverySegment;
+const noteGenerationRecoveryFailure = split_recoverySegments.noteGenerationRecoveryFailure;
+
+let truncationContinueHandler = null;
+
+function setTruncationContinueHandler(handler) {
+    truncationContinueHandler = typeof handler === 'function' ? handler : null;
+}
+
 async function recordRecoveryTruncation(options, raw, error) {
     const record = options?.[TOKEN] && requestTokens.get(options[TOKEN]);
     if (!record || error?.code !== 'RMT_JSON_TRUNCATED' || typeof raw !== 'string' || !raw.trim()) return false;
@@ -33858,59 +34448,38 @@ async function recordRecoveryTruncation(options, raw, error) {
     return true;
 }
 
-async function noteGenerationRecoveryFailure(origin, error) {
-    const handle = origin && handles.get(origin);
-    if (!handle || error?.name === 'AbortError') return false;
-    const code = recoveryFailureCode(error);
-    return changeJournal(handle, journal => {
-        journal.failureCode = code;
-        delete journal.failureCategory; delete journal.failurePhase;
-        if (['RMT_RECOVERY_INPUT_CHANGED', 'RMT_RECOVERY_SOURCE_CHANGED', 'RMT_RECOVERY_OPERATION_CHANGED'].includes(code)) {
-            const safe = generationRecoveryMismatch(error.archiveInputCategory, error.recoveryPhase, code);
-            journal.failureCategory = safe.archiveInputCategory; journal.failurePhase = safe.recoveryPhase;
-        }
-    });
-}
-
-function assertRetainedSize(raw, retained) {
-    // Each received reply keeps the pre-existing per-reply bound. The journal's
-    // existing total bound is applied by changeJournal; no new history-total cap.
-    if ([raw, ...retained].some(value => value.length > GENERATION_RECOVERY_LIMITS.segmentChars))
-        throw recoveryError('RMT_RECOVERY_LIMIT', '恢复片段超过原有单段保存范围；旧草稿未被覆盖，请先导出保留。');
-}
-
-__m_generation_recovery_js.generationRecoveryDigest = generationRecoveryDigest;
-__m_generation_recovery_js.createGenerationRecovery = createGenerationRecovery;
-__m_generation_recovery_js.persistGenerationRecovery = persistGenerationRecovery;
-__m_generation_recovery_js.publishGenerationRecoveryProgress = publishGenerationRecoveryProgress;
-__m_generation_recovery_js.freezeRecoveryRequestPayload = freezeRecoveryRequestPayload;
-__m_generation_recovery_js.frozenGenerationInput = frozenGenerationInput;
-__m_generation_recovery_js.legacyRecoveryPromptPermitted = legacyRecoveryPromptPermitted;
-__m_generation_recovery_js.withRecoverySegment = withRecoverySegment;
 __m_generation_recovery_js.recordRecoveryTruncation = recordRecoveryTruncation;
-__m_generation_recovery_js.noteGenerationRecoveryFailure = noteGenerationRecoveryFailure;
 __m_generation_recovery_js.setTruncationContinueHandler = setTruncationContinueHandler;
+__m_generation_recovery_js.GENERATION_RECOVERY_CACHE_KEY = GENERATION_RECOVERY_CACHE_KEY;
+__m_generation_recovery_js.GENERATION_RECOVERY_LIMITS = GENERATION_RECOVERY_LIMITS;
 __m_generation_recovery_js.generationRecoveryMismatch = generationRecoveryMismatch;
 __m_generation_recovery_js.generationFailureReason = generationFailureReason;
 __m_generation_recovery_js.generationRetryFeedbackText = generationRetryFeedbackText;
 __m_generation_recovery_js.generationRetryPrompt = generationRetryPrompt;
 __m_generation_recovery_js.generationPhoneRetryPrompt = generationPhoneRetryPrompt;
+__m_generation_recovery_js.generationRecoveryDigest = generationRecoveryDigest;
 __m_generation_recovery_js.generationRecoveryHeldReplies = generationRecoveryHeldReplies;
 __m_generation_recovery_js.discardGenerationRecoveryHeldReplies = discardGenerationRecoveryHeldReplies;
 __m_generation_recovery_js.generationRecoverySummary = generationRecoverySummary;
 __m_generation_recovery_js.canRestartLegacyConfiguration = canRestartLegacyConfiguration;
 __m_generation_recovery_js.exportGenerationRecovery = exportGenerationRecovery;
+__m_generation_recovery_js.createGenerationRecovery = createGenerationRecovery;
 __m_generation_recovery_js.attachGenerationRecovery = attachGenerationRecovery;
 __m_generation_recovery_js.detachGenerationRecovery = detachGenerationRecovery;
 __m_generation_recovery_js.generationRecoverySnapshot = generationRecoverySnapshot;
 __m_generation_recovery_js.readGenerationContentSnapshot = readGenerationContentSnapshot;
 __m_generation_recovery_js.generationContentSnapshotForOrigin = generationContentSnapshotForOrigin;
+__m_generation_recovery_js.persistGenerationRecovery = persistGenerationRecovery;
+__m_generation_recovery_js.publishGenerationRecoveryProgress = publishGenerationRecoveryProgress;
+__m_generation_recovery_js.freezeRecoveryRequestPayload = freezeRecoveryRequestPayload;
 __m_generation_recovery_js.generationRecoveryForOrigin = generationRecoveryForOrigin;
 __m_generation_recovery_js.generationRecoveryProgress = generationRecoveryProgress;
+__m_generation_recovery_js.frozenGenerationInput = frozenGenerationInput;
 __m_generation_recovery_js.generationRecoverySegmentsForOrigin = generationRecoverySegmentsForOrigin;
 __m_generation_recovery_js.generationContinuationPrompt = generationContinuationPrompt;
-__m_generation_recovery_js.GENERATION_RECOVERY_CACHE_KEY = GENERATION_RECOVERY_CACHE_KEY;
-__m_generation_recovery_js.GENERATION_RECOVERY_LIMITS = GENERATION_RECOVERY_LIMITS;
+__m_generation_recovery_js.legacyRecoveryPromptPermitted = legacyRecoveryPromptPermitted;
+__m_generation_recovery_js.withRecoverySegment = withRecoverySegment;
+__m_generation_recovery_js.noteGenerationRecoveryFailure = noteGenerationRecoveryFailure;
 }
 
 function __init_modes_heartData_js() {
@@ -34913,7 +35482,7 @@ ${incremental ? '旧光点由本地永久保留。本请求只根据本轮新增
 只输出 JSON。`;
 }
 
-function heartFireflyUpgradePrompt(context, core, items) {
+function heartFireflyUpgradePrompt(context, core, items, memoryBank = null) {
     const batch = (Array.isArray(items) ? items : []).slice(0, 6).map(item => ({
         id: core_text.normalizeText(item?.id, 80),
         color: core_text.normalizeText(item?.color, 20),
@@ -36024,7 +36593,7 @@ async function generateHeartFirefliesSectionOperation(options, logicalTask) {
             base = recovery.contentInputs?.baseSession || base;
             legacyBatch = legacyFireflyVoices(base).slice(0, 6);
             const upgraded = await requestHeartPart(
-                heartFireflyUpgradePrompt(context, base, legacyBatch),
+                heartFireflyUpgradePrompt(context, base, legacyBatch, memoryBank),
                 '角色互动 · 正在把旧版萤火虫升级为 GS4 式追加约会会话…',
                 { maxTokens: 5200, context, origin, taskKey: `${taskKey}:upgrade`, mode: core_constants.MODE.HEART, background: true },
                 raw => normalizeFireflyUpgradePart(raw, legacyBatch),
@@ -38089,13 +38658,12 @@ __m_ui_albumView_js.albumSpeakerSnapshot = albumSpeakerSnapshot;
 __m_ui_albumView_js.renderSharedMemory = renderSharedMemory;
 }
 
-function __init_generation_imageGeneration_js() {
-// MODULE: generation/imageGeneration.js
+function __init_generation_cgImageCore_js() {
+// MODULE: generation/cgImageCore.js
 const cg_visual = __m_core_cgVisualRules_js;
 const cg_format = __m_core_cgPromptFormat_js;
 const baibai_image = __m_generation_baibaiImage_js;
 const cg_appearance = __m_generation_cgAppearance_js;
-const backup_diagnostics = __m_core_backupDiagnostics_js;
 const archive_library = __m_archive_library_js;
 const archive_repository = __m_archive_repository_js;
 const core_cache = __m_core_cache_js;
@@ -38103,10 +38671,8 @@ const image_patch = __m_core_cgImagePatch_js;
 const cg_targets = __m_core_cgTargets_js;
 const photoshoots = __m_core_photoshootContract_js;
 const core_constants = __m_core_constants_js;
-const cast_looks = __m_core_castLooks_js;
 const core_context = __m_core_context_js;
 const core_requestCoordinator = __m_core_requestCoordinator_js;
-const core_settings = __m_core_settings_js;
 const core_text = __m_core_text_js;
 const generation_client = __m_generation_client_js;
 const ui_advEventView = __m_ui_advEventView_js;
@@ -38120,8 +38686,6 @@ const ui_styles = __m_ui_styles_js;
 const runtimeState = __m_core_state_js.state;
 
 
-// Heartbeat Memories r35 modular runtime.
-// Extracted from r34 without changing archive/cache storage contracts.
 
 
 
@@ -38144,8 +38708,8 @@ const runtimeState = __m_core_state_js.state;
 
 
 
-
-
+// CG 生图基础：生图命令与界面状态、图片地址与记录规范化、历史、提示词清洗、调用生图
+// 从 generation/imageGeneration.js 原样搬出（重构阶段 2），声明文本一字未改；generation/imageGeneration.js 仍转发原有导出。
 
 const IMAGE_GENERATION_COMMAND_NAMES = Object.freeze(['imagine', 'sd', 'img']);
 
@@ -38212,8 +38776,6 @@ function sanitizeCgVisualText(value, limit = core_constants.MAX_CG_IMAGE_PROMPT_
         .replace(/<[^>]{0,500}>/g, ' ');
     return core_text.normalizeText(text.replace(/\s{2,}/g, ' '), limit);
 }
-
-
 
 function cgImagePromptForItem(item, castLooksLine = '', promptFormat = '') {
     if (cg_format.normalizeCgPromptFormat(promptFormat)) {
@@ -38315,34 +38877,6 @@ function cgImageVersions(item) {
     const current = normalizeCgImageRecord(item?.cgImage);
     if (current && !rows.some(row => row.url === current.url)) rows.push(current);
     return rows.sort((a,b) => a.generatedAt - b.generatedAt || a.url.localeCompare(b.url));
-}
-
-async function handleCgHistorySwitch(eventOrButton) {
-    const button = eventOrButton?.target?.closest?.('[data-rmt-cg-history-step]') || eventOrButton;
-    const controls = button?.closest?.('[data-rmt-cg-history-controls]');
-    if (!controls || button.disabled) return false;
-    const session = runtimeState.activeSession, mode = runtimeState.activeMode;
-    const item = cgItemInSession(mode,session,controls.dataset.rmtCgItem);
-    const versions = cgImageVersions(item);
-    const imageElement = controls.parentElement?.querySelector('[data-rmt-cg-image]');
-    if (!item || versions.length < 2 || !imageElement) return false;
-    eventOrButton?.preventDefault?.(); eventOrButton?.stopPropagation?.();
-    const shown = normalizeCgImageUrl(imageElement.getAttribute('src'));
-    const current = Math.max(0,versions.findIndex(row => row.url === shown));
-    const index = (current + (Number(button.dataset.rmtCgHistoryStep) < 0 ? -1 : 1) + versions.length) % versions.length;
-    if (runtimeState.activeArchiveSnapshot) {
-        // Historical/read-only browsing affects this image element only.
-        imageElement.src = versions[index].url;
-        controls.querySelector('[data-rmt-cg-history-count]').textContent = `${index+1} / ${versions.length}`;
-        return true;
-    }
-    button.disabled = true;
-    try {
-        const captured = captureCgImageTarget({mode,session,item});
-        if (!captured) return false;
-        return await restoreSelectedCgImageVersion(versions[index].url,captured,{confirm:false});
-    } catch(error) { globalThis.toastr?.error?.(core_text.safeErrorSummary(error),'心迹回廊'); return false; }
-    finally { if(button.isConnected)button.disabled=false; }
 }
 
 // Bind an editor/drawing operation to one local item. Neither model output nor a
@@ -38636,6 +39170,7 @@ async function prepareLanguageCgTarget({ category, line, scenePrompt } = {}) {
 }
 
 const DEFAULT_LANGUAGE_PORTRAIT = '角色独自面向屏幕外的用户，与镜头平视、目光相接，像隔着屏幕陪伴彼此。半身肖像，保留角色原本的衣着与外貌；用户在镜头这一侧，不画成第二个出镜人物。';
+
 async function prepareLanguagePortraitTarget({ scenePrompt = DEFAULT_LANGUAGE_PORTRAIT } = {}) {
     if (!archive_library.requireWritableArchiveAction() || runtimeState.activeArchiveSnapshot) return null;
     const session = runtimeState.activeSession;
@@ -38756,6 +39291,146 @@ function abortActiveCgImageTasks() {
 // It is deliberately page-local: origin/fence/signature checks are still required
 // before a retry, and a plugin reload invalidates every retained capability.
 const pendingCgImages = new Map();
+
+__m_generation_cgImageCore_js.invokeImageGeneration = invokeImageGeneration;
+__m_generation_cgImageCore_js.reconceiveCgImagePrompt = reconceiveCgImagePrompt;
+__m_generation_cgImageCore_js.prepareLanguageCgTarget = prepareLanguageCgTarget;
+__m_generation_cgImageCore_js.prepareLanguagePortraitTarget = prepareLanguagePortraitTarget;
+__m_generation_cgImageCore_js.preparePhotoshootTarget = preparePhotoshootTarget;
+__m_generation_cgImageCore_js.imageGenerationCommand = imageGenerationCommand;
+__m_generation_cgImageCore_js.imageGenerationUiState = imageGenerationUiState;
+__m_generation_cgImageCore_js.sanitizeImageGenerationSlashPrompt = sanitizeImageGenerationSlashPrompt;
+__m_generation_cgImageCore_js.normalizeCgImageUrl = normalizeCgImageUrl;
+__m_generation_cgImageCore_js.normalizeCgImageRecord = normalizeCgImageRecord;
+__m_generation_cgImageCore_js.normalizeCgImageHistory = normalizeCgImageHistory;
+__m_generation_cgImageCore_js.sanitizeCgVisualText = sanitizeCgVisualText;
+__m_generation_cgImageCore_js.cgImagePromptForItem = cgImagePromptForItem;
+__m_generation_cgImageCore_js.cgImageTaskKey = cgImageTaskKey;
+__m_generation_cgImageCore_js.cgImageReservationKey = cgImageReservationKey;
+__m_generation_cgImageCore_js.isCgImageDrawing = isCgImageDrawing;
+__m_generation_cgImageCore_js.cgImageStartBlockedReason = cgImageStartBlockedReason;
+__m_generation_cgImageCore_js.dailyComicImagePrompt = dailyComicImagePrompt;
+__m_generation_cgImageCore_js.cgImageLayerHtml = cgImageLayerHtml;
+__m_generation_cgImageCore_js.cgImageVersions = cgImageVersions;
+__m_generation_cgImageCore_js.cgItemSignature = cgItemSignature;
+__m_generation_cgImageCore_js.cgItemInSession = cgItemInSession;
+__m_generation_cgImageCore_js.cgDraftRecord = cgDraftRecord;
+__m_generation_cgImageCore_js.captureCgImageTarget = captureCgImageTarget;
+__m_generation_cgImageCore_js.isCgImageTargetCurrent = isCgImageTargetCurrent;
+__m_generation_cgImageCore_js.assertCgImageTargetCurrent = assertCgImageTargetCurrent;
+__m_generation_cgImageCore_js.buildCgReconceptPrompt = buildCgReconceptPrompt;
+__m_generation_cgImageCore_js.cgImageProviderBar = cgImageProviderBar;
+__m_generation_cgImageCore_js.cgImageProgressHtml = cgImageProgressHtml;
+__m_generation_cgImageCore_js.updateCgImageProgress = updateCgImageProgress;
+__m_generation_cgImageCore_js.cancelCurrentCgImage = cancelCurrentCgImage;
+__m_generation_cgImageCore_js.refreshSettledCgImage = refreshSettledCgImage;
+__m_generation_cgImageCore_js.refreshCgImageProviderBars = refreshCgImageProviderBars;
+__m_generation_cgImageCore_js.imageGenerationUnavailableMessage = imageGenerationUnavailableMessage;
+__m_generation_cgImageCore_js.refreshImageGenerationUi = refreshImageGenerationUi;
+__m_generation_cgImageCore_js.indexedArchiveMatchesCurrentChat = indexedArchiveMatchesCurrentChat;
+__m_generation_cgImageCore_js.resolveCgImageTargetDescriptor = resolveCgImageTargetDescriptor;
+__m_generation_cgImageCore_js.selectedCgTarget = selectedCgTarget;
+__m_generation_cgImageCore_js.renderCurrentCgMode = renderCurrentCgMode;
+__m_generation_cgImageCore_js.renderCapturedCgMode = renderCapturedCgMode;
+__m_generation_cgImageCore_js.deferCgSessionIfOriginChanged = deferCgSessionIfOriginChanged;
+__m_generation_cgImageCore_js.deferCgImageIfOriginChanged = deferCgImageIfOriginChanged;
+__m_generation_cgImageCore_js.abortActiveCgImageTasks = abortActiveCgImageTasks;
+__m_generation_cgImageCore_js.IMAGE_GENERATION_COMMAND_NAMES = IMAGE_GENERATION_COMMAND_NAMES;
+__m_generation_cgImageCore_js.DEFAULT_LANGUAGE_PORTRAIT = DEFAULT_LANGUAGE_PORTRAIT;
+__m_generation_cgImageCore_js.pendingCgImages = pendingCgImages;
+}
+
+function __init_generation_cgImageActions_js() {
+// MODULE: generation/cgImageActions.js
+const cg_format = __m_core_cgPromptFormat_js;
+const baibai_image = __m_generation_baibaiImage_js;
+const cg_appearance = __m_generation_cgAppearance_js;
+const backup_diagnostics = __m_core_backupDiagnostics_js;
+const archive_library = __m_archive_library_js;
+const archive_repository = __m_archive_repository_js;
+const core_cache = __m_core_cache_js;
+const image_patch = __m_core_cgImagePatch_js;
+const core_constants = __m_core_constants_js;
+const cast_looks = __m_core_castLooks_js;
+const core_context = __m_core_context_js;
+const core_requestCoordinator = __m_core_requestCoordinator_js;
+const core_settings = __m_core_settings_js;
+const core_text = __m_core_text_js;
+const ui_overlay = __m_ui_overlay_js;
+const runtimeState = __m_core_state_js.state;
+const assertCgImageTargetCurrent = __m_generation_cgImageCore_js.assertCgImageTargetCurrent;
+const captureCgImageTarget = __m_generation_cgImageCore_js.captureCgImageTarget;
+const cgDraftRecord = __m_generation_cgImageCore_js.cgDraftRecord;
+const cgImagePromptForItem = __m_generation_cgImageCore_js.cgImagePromptForItem;
+const cgImageReservationKey = __m_generation_cgImageCore_js.cgImageReservationKey;
+const cgImageStartBlockedReason = __m_generation_cgImageCore_js.cgImageStartBlockedReason;
+const cgImageTaskKey = __m_generation_cgImageCore_js.cgImageTaskKey;
+const cgImageVersions = __m_generation_cgImageCore_js.cgImageVersions;
+const cgItemInSession = __m_generation_cgImageCore_js.cgItemInSession;
+const cgItemSignature = __m_generation_cgImageCore_js.cgItemSignature;
+const dailyComicImagePrompt = __m_generation_cgImageCore_js.dailyComicImagePrompt;
+const deferCgImageIfOriginChanged = __m_generation_cgImageCore_js.deferCgImageIfOriginChanged;
+const imageGenerationUiState = __m_generation_cgImageCore_js.imageGenerationUiState;
+const imageGenerationUnavailableMessage = __m_generation_cgImageCore_js.imageGenerationUnavailableMessage;
+const invokeImageGeneration = __m_generation_cgImageCore_js.invokeImageGeneration;
+const isCgImageDrawing = __m_generation_cgImageCore_js.isCgImageDrawing;
+const isCgImageTargetCurrent = __m_generation_cgImageCore_js.isCgImageTargetCurrent;
+const normalizeCgImageRecord = __m_generation_cgImageCore_js.normalizeCgImageRecord;
+const normalizeCgImageUrl = __m_generation_cgImageCore_js.normalizeCgImageUrl;
+const pendingCgImages = __m_generation_cgImageCore_js.pendingCgImages;
+const refreshSettledCgImage = __m_generation_cgImageCore_js.refreshSettledCgImage;
+const renderCapturedCgMode = __m_generation_cgImageCore_js.renderCapturedCgMode;
+const renderCurrentCgMode = __m_generation_cgImageCore_js.renderCurrentCgMode;
+const sanitizeCgVisualText = __m_generation_cgImageCore_js.sanitizeCgVisualText;
+const selectedCgTarget = __m_generation_cgImageCore_js.selectedCgTarget;
+const updateCgImageProgress = __m_generation_cgImageCore_js.updateCgImageProgress;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// CG 生图操作：待补图重试、切换与恢复版本、媒体错误、发送前组装、绘制与预览
+// 从 generation/imageGeneration.js 原样搬出（重构阶段 2），声明文本一字未改；generation/imageGeneration.js 仍转发原有导出。
+
+async function handleCgHistorySwitch(eventOrButton) {
+    const button = eventOrButton?.target?.closest?.('[data-rmt-cg-history-step]') || eventOrButton;
+    const controls = button?.closest?.('[data-rmt-cg-history-controls]');
+    if (!controls || button.disabled) return false;
+    const session = runtimeState.activeSession, mode = runtimeState.activeMode;
+    const item = cgItemInSession(mode,session,controls.dataset.rmtCgItem);
+    const versions = cgImageVersions(item);
+    const imageElement = controls.parentElement?.querySelector('[data-rmt-cg-image]');
+    if (!item || versions.length < 2 || !imageElement) return false;
+    eventOrButton?.preventDefault?.(); eventOrButton?.stopPropagation?.();
+    const shown = normalizeCgImageUrl(imageElement.getAttribute('src'));
+    const current = Math.max(0,versions.findIndex(row => row.url === shown));
+    const index = (current + (Number(button.dataset.rmtCgHistoryStep) < 0 ? -1 : 1) + versions.length) % versions.length;
+    if (runtimeState.activeArchiveSnapshot) {
+        // Historical/read-only browsing affects this image element only.
+        imageElement.src = versions[index].url;
+        controls.querySelector('[data-rmt-cg-history-count]').textContent = `${index+1} / ${versions.length}`;
+        return true;
+    }
+    button.disabled = true;
+    try {
+        const captured = captureCgImageTarget({mode,session,item});
+        if (!captured) return false;
+        return await restoreSelectedCgImageVersion(versions[index].url,captured,{confirm:false});
+    } catch(error) { globalThis.toastr?.error?.(core_text.safeErrorSummary(error),'心迹回廊'); return false; }
+    finally { if(button.isConnected)button.disabled=false; }
+}
 
 function pendingCgImage(target) {
     for (const [key, pending] of pendingCgImages) {
@@ -39096,25 +39771,89 @@ function prepareCgSendParts(mode, item, scene, rawMetadata, selectedFormat = '')
     const prompt = comicPanels ? cg_format.formatDailyComicPrompt({panelCount:comicPanels}, scene, promptFormat) : scene;
     return {prompt, metadata: cg_appearance.normalizeCgPromptMetadata({...metadata, promptFormat, ...(comicPanels ? {comicPanels} : {})})};
 }
+
 function cgEditorSendPreview(mode, item, scene, metadata, promptFormat) {
     const parts = prepareCgSendParts(mode, item, scene, metadata, promptFormat);
     const providerState = baibai_image.baiBaiImageState();
     return cg_appearance.formattedCgProviderPrompts(parts.prompt, parts.metadata, providerState.supportsCharacters === true, providerState.backend);
 }
 
-__m_generation_imageGeneration_js.invokeImageGeneration = invokeImageGeneration;
-__m_generation_imageGeneration_js.handleCgHistorySwitch = handleCgHistorySwitch;
-__m_generation_imageGeneration_js.reconceiveCgImagePrompt = reconceiveCgImagePrompt;
-__m_generation_imageGeneration_js.prepareLanguageCgTarget = prepareLanguageCgTarget;
-__m_generation_imageGeneration_js.prepareLanguagePortraitTarget = prepareLanguagePortraitTarget;
-__m_generation_imageGeneration_js.preparePhotoshootTarget = preparePhotoshootTarget;
-__m_generation_imageGeneration_js.retryPendingCgImage = retryPendingCgImage;
-__m_generation_imageGeneration_js.drawSelectedCgImage = drawSelectedCgImage;
-__m_generation_imageGeneration_js.clearSelectedCgImage = clearSelectedCgImage;
-__m_generation_imageGeneration_js.restoreSelectedCgImageVersion = restoreSelectedCgImageVersion;
+__m_generation_cgImageActions_js.handleCgHistorySwitch = handleCgHistorySwitch;
+__m_generation_cgImageActions_js.retryPendingCgImage = retryPendingCgImage;
+__m_generation_cgImageActions_js.drawSelectedCgImage = drawSelectedCgImage;
+__m_generation_cgImageActions_js.clearSelectedCgImage = clearSelectedCgImage;
+__m_generation_cgImageActions_js.restoreSelectedCgImageVersion = restoreSelectedCgImageVersion;
+__m_generation_cgImageActions_js.hasPendingCgImage = hasPendingCgImage;
+__m_generation_cgImageActions_js.handleOverlayMediaError = handleOverlayMediaError;
+__m_generation_cgImageActions_js.prepareCgSendParts = prepareCgSendParts;
+__m_generation_cgImageActions_js.cgEditorSendPreview = cgEditorSendPreview;
+}
+
+function __init_generation_imageGeneration_js() {
+// MODULE: generation/imageGeneration.js
+const split_cgImageCore = __m_generation_cgImageCore_js;
+const split_cgImageActions = __m_generation_cgImageActions_js;
+
+
+// 以下导出已搬到 generation/cgImageCore.js、generation/cgImageActions.js，这里原样转发，调用方不用改。
+const IMAGE_GENERATION_COMMAND_NAMES = split_cgImageCore.IMAGE_GENERATION_COMMAND_NAMES;
+const imageGenerationCommand = split_cgImageCore.imageGenerationCommand;
+const imageGenerationUiState = split_cgImageCore.imageGenerationUiState;
+const sanitizeImageGenerationSlashPrompt = split_cgImageCore.sanitizeImageGenerationSlashPrompt;
+const invokeImageGeneration = split_cgImageCore.invokeImageGeneration;
+const normalizeCgImageUrl = split_cgImageCore.normalizeCgImageUrl;
+const normalizeCgImageRecord = split_cgImageCore.normalizeCgImageRecord;
+const normalizeCgImageHistory = split_cgImageCore.normalizeCgImageHistory;
+const sanitizeCgVisualText = split_cgImageCore.sanitizeCgVisualText;
+const cgImagePromptForItem = split_cgImageCore.cgImagePromptForItem;
+const cgImageTaskKey = split_cgImageCore.cgImageTaskKey;
+const cgImageReservationKey = split_cgImageCore.cgImageReservationKey;
+const isCgImageDrawing = split_cgImageCore.isCgImageDrawing;
+const cgImageStartBlockedReason = split_cgImageCore.cgImageStartBlockedReason;
+const dailyComicImagePrompt = split_cgImageCore.dailyComicImagePrompt;
+const cgImageLayerHtml = split_cgImageCore.cgImageLayerHtml;
+const cgImageVersions = split_cgImageCore.cgImageVersions;
+const handleCgHistorySwitch = split_cgImageActions.handleCgHistorySwitch;
+const cgItemSignature = split_cgImageCore.cgItemSignature;
+const cgItemInSession = split_cgImageCore.cgItemInSession;
+const captureCgImageTarget = split_cgImageCore.captureCgImageTarget;
+const isCgImageTargetCurrent = split_cgImageCore.isCgImageTargetCurrent;
+const assertCgImageTargetCurrent = split_cgImageCore.assertCgImageTargetCurrent;
+const buildCgReconceptPrompt = split_cgImageCore.buildCgReconceptPrompt;
+const reconceiveCgImagePrompt = split_cgImageCore.reconceiveCgImagePrompt;
+const cgImageProviderBar = split_cgImageCore.cgImageProviderBar;
+const cgImageProgressHtml = split_cgImageCore.cgImageProgressHtml;
+const updateCgImageProgress = split_cgImageCore.updateCgImageProgress;
+const cancelCurrentCgImage = split_cgImageCore.cancelCurrentCgImage;
+const refreshSettledCgImage = split_cgImageCore.refreshSettledCgImage;
+const refreshCgImageProviderBars = split_cgImageCore.refreshCgImageProviderBars;
+const imageGenerationUnavailableMessage = split_cgImageCore.imageGenerationUnavailableMessage;
+const refreshImageGenerationUi = split_cgImageCore.refreshImageGenerationUi;
+const indexedArchiveMatchesCurrentChat = split_cgImageCore.indexedArchiveMatchesCurrentChat;
+const resolveCgImageTargetDescriptor = split_cgImageCore.resolveCgImageTargetDescriptor;
+const selectedCgTarget = split_cgImageCore.selectedCgTarget;
+const prepareLanguageCgTarget = split_cgImageCore.prepareLanguageCgTarget;
+const DEFAULT_LANGUAGE_PORTRAIT = split_cgImageCore.DEFAULT_LANGUAGE_PORTRAIT;
+const prepareLanguagePortraitTarget = split_cgImageCore.prepareLanguagePortraitTarget;
+const preparePhotoshootTarget = split_cgImageCore.preparePhotoshootTarget;
+const renderCurrentCgMode = split_cgImageCore.renderCurrentCgMode;
+const deferCgSessionIfOriginChanged = split_cgImageCore.deferCgSessionIfOriginChanged;
+const deferCgImageIfOriginChanged = split_cgImageCore.deferCgImageIfOriginChanged;
+const abortActiveCgImageTasks = split_cgImageCore.abortActiveCgImageTasks;
+const hasPendingCgImage = split_cgImageActions.hasPendingCgImage;
+const retryPendingCgImage = split_cgImageActions.retryPendingCgImage;
+const drawSelectedCgImage = split_cgImageActions.drawSelectedCgImage;
+const clearSelectedCgImage = split_cgImageActions.clearSelectedCgImage;
+const restoreSelectedCgImageVersion = split_cgImageActions.restoreSelectedCgImageVersion;
+const handleOverlayMediaError = split_cgImageActions.handleOverlayMediaError;
+const prepareCgSendParts = split_cgImageActions.prepareCgSendParts;
+const cgEditorSendPreview = split_cgImageActions.cgEditorSendPreview;
+
+__m_generation_imageGeneration_js.IMAGE_GENERATION_COMMAND_NAMES = IMAGE_GENERATION_COMMAND_NAMES;
 __m_generation_imageGeneration_js.imageGenerationCommand = imageGenerationCommand;
 __m_generation_imageGeneration_js.imageGenerationUiState = imageGenerationUiState;
 __m_generation_imageGeneration_js.sanitizeImageGenerationSlashPrompt = sanitizeImageGenerationSlashPrompt;
+__m_generation_imageGeneration_js.invokeImageGeneration = invokeImageGeneration;
 __m_generation_imageGeneration_js.normalizeCgImageUrl = normalizeCgImageUrl;
 __m_generation_imageGeneration_js.normalizeCgImageRecord = normalizeCgImageRecord;
 __m_generation_imageGeneration_js.normalizeCgImageHistory = normalizeCgImageHistory;
@@ -39127,12 +39866,14 @@ __m_generation_imageGeneration_js.cgImageStartBlockedReason = cgImageStartBlocke
 __m_generation_imageGeneration_js.dailyComicImagePrompt = dailyComicImagePrompt;
 __m_generation_imageGeneration_js.cgImageLayerHtml = cgImageLayerHtml;
 __m_generation_imageGeneration_js.cgImageVersions = cgImageVersions;
+__m_generation_imageGeneration_js.handleCgHistorySwitch = handleCgHistorySwitch;
 __m_generation_imageGeneration_js.cgItemSignature = cgItemSignature;
 __m_generation_imageGeneration_js.cgItemInSession = cgItemInSession;
 __m_generation_imageGeneration_js.captureCgImageTarget = captureCgImageTarget;
 __m_generation_imageGeneration_js.isCgImageTargetCurrent = isCgImageTargetCurrent;
 __m_generation_imageGeneration_js.assertCgImageTargetCurrent = assertCgImageTargetCurrent;
 __m_generation_imageGeneration_js.buildCgReconceptPrompt = buildCgReconceptPrompt;
+__m_generation_imageGeneration_js.reconceiveCgImagePrompt = reconceiveCgImagePrompt;
 __m_generation_imageGeneration_js.cgImageProviderBar = cgImageProviderBar;
 __m_generation_imageGeneration_js.cgImageProgressHtml = cgImageProgressHtml;
 __m_generation_imageGeneration_js.updateCgImageProgress = updateCgImageProgress;
@@ -39144,16 +39885,22 @@ __m_generation_imageGeneration_js.refreshImageGenerationUi = refreshImageGenerat
 __m_generation_imageGeneration_js.indexedArchiveMatchesCurrentChat = indexedArchiveMatchesCurrentChat;
 __m_generation_imageGeneration_js.resolveCgImageTargetDescriptor = resolveCgImageTargetDescriptor;
 __m_generation_imageGeneration_js.selectedCgTarget = selectedCgTarget;
+__m_generation_imageGeneration_js.prepareLanguageCgTarget = prepareLanguageCgTarget;
+__m_generation_imageGeneration_js.DEFAULT_LANGUAGE_PORTRAIT = DEFAULT_LANGUAGE_PORTRAIT;
+__m_generation_imageGeneration_js.prepareLanguagePortraitTarget = prepareLanguagePortraitTarget;
+__m_generation_imageGeneration_js.preparePhotoshootTarget = preparePhotoshootTarget;
 __m_generation_imageGeneration_js.renderCurrentCgMode = renderCurrentCgMode;
 __m_generation_imageGeneration_js.deferCgSessionIfOriginChanged = deferCgSessionIfOriginChanged;
 __m_generation_imageGeneration_js.deferCgImageIfOriginChanged = deferCgImageIfOriginChanged;
 __m_generation_imageGeneration_js.abortActiveCgImageTasks = abortActiveCgImageTasks;
 __m_generation_imageGeneration_js.hasPendingCgImage = hasPendingCgImage;
+__m_generation_imageGeneration_js.retryPendingCgImage = retryPendingCgImage;
+__m_generation_imageGeneration_js.drawSelectedCgImage = drawSelectedCgImage;
+__m_generation_imageGeneration_js.clearSelectedCgImage = clearSelectedCgImage;
+__m_generation_imageGeneration_js.restoreSelectedCgImageVersion = restoreSelectedCgImageVersion;
 __m_generation_imageGeneration_js.handleOverlayMediaError = handleOverlayMediaError;
 __m_generation_imageGeneration_js.prepareCgSendParts = prepareCgSendParts;
 __m_generation_imageGeneration_js.cgEditorSendPreview = cgEditorSendPreview;
-__m_generation_imageGeneration_js.IMAGE_GENERATION_COMMAND_NAMES = IMAGE_GENERATION_COMMAND_NAMES;
-__m_generation_imageGeneration_js.DEFAULT_LANGUAGE_PORTRAIT = DEFAULT_LANGUAGE_PORTRAIT;
 }
 
 function __init_modes_album_js() {
@@ -43250,23 +43997,11 @@ __m_ui_contentManager_js.managementTargetsForSession = managementTargetsForSessi
 __m_ui_contentManager_js.renderContentManager = renderContentManager;
 }
 
-function __init_generation_client_js() {
-// MODULE: generation/client.js
+function __init_generation_generationContext_js() {
+// MODULE: generation/generationContext.js
 const inbox_art = __m_core_letterIllustrationV2_js;
-const routePeople = __m_core_routeParticipants_js;
-const composerOptions = __m_core_generationOptions_js;
-const connection_pool = __m_core_connectionPool_js;
-const generation_merged = __m_generation_mergedGeneration_js;
-const advanced_generation = __m_core_advancedGeneration_js;
-const recovery_source = __m_core_recoverySourcePolicy_js;
 const output_budget = __m_core_outputBudget_js;
-const archive_requestBudget = __m_archive_requestBudget_js;
-const cg_policy = __m_generation_cgPromptPolicy_js;
-const core_butterflyContract = __m_core_butterflyContract_js;
-const archive_groups = __m_archive_groups_js;
-const archive_library = __m_archive_library_js;
 const archive_repository = __m_archive_repository_js;
-const archive_snapshots = __m_archive_snapshots_js;
 const core_cache = __m_core_cache_js;
 const core_participants = __m_core_participants_js;
 const core_generationParticipants = __m_core_generationParticipants_js;
@@ -43274,49 +44009,16 @@ const core_controlledSources = __m_core_controlledSources_js;
 const core_inputLedger = __m_core_inputLedger_js;
 const core_constants = __m_core_constants_js;
 const core_context = __m_core_context_js;
-const core_evidence = __m_core_evidence_js;
-const core_incremental = __m_core_incremental_js;
-const core_independentApi = __m_core_independentApi_js;
 const core_requestCoordinator = __m_core_requestCoordinator_js;
 const core_settings = __m_core_settings_js;
-const creative_supplement = __m_core_creativeSupplement_js;
 const generation_recovery = __m_generation_recovery_js;
-const generation_progress = __m_generation_partialProgress_js;
 const core_text = __m_core_text_js;
 const core_taskTrace = __m_core_taskTrace_js;
 const core_contextTags = __m_core_contextTags_js;
 const core_worldPresentation = __m_core_worldPresentation_js;
-const generation_jsonParser = __m_generation_jsonParser_js;
-const generation_normalizers = __m_generation_normalizers_js;
-const generation_prompts = __m_generation_prompts_js;
-const generation_jsonShapeExamples = __m_generation_jsonShapeExamples_js;
-const generation_requestTemperature = __m_generation_requestTemperature_js;
-const modes_achievements = __m_modes_achievements_js;
-const modes_advEvent = __m_modes_advEvent_js;
-const modes_album = __m_modes_album_js;
-const modes_butterfly = __m_modes_butterfly_js;
-const modes_calendar = __m_modes_calendar_js;
-const modes_ending = __m_modes_ending_js;
-const modes_heart = __m_modes_heart_js;
-const modes_items = __m_modes_items_js;
-const modes_cabinet = __m_modes_cabinet_js;
-const modes_phone = __m_modes_phone_js;
-const modes_song = __m_modes_themeSong_js;
-const song_contract = __m_core_themeSongContract_js;
-const modes_bedtime = __m_modes_bedtime_js;
-const bedtime_contract = __m_core_bedtimeContract_js;
-const heart_reader = __m_ui_heartReaderState_js;
-const modes_inbox = __m_modes_inbox_js;
-const modes_pastLives = __m_modes_pastLives_js;
-const modes_timeStories = __m_modes_timeStories_js;
 const time_stories = __m_core_timeStoriesContract_js;
-const modes_room = __m_modes_room_js;
 const modes_relations = __m_modes_relations_js;
-const modes_travel = __m_modes_travel_js;
 const ui_overlay = __m_ui_overlay_js;
-const ui_settingsPanel = __m_ui_settingsPanel_js;
-const ui_contentManager = __m_ui_contentManager_js;
-const navigation_bookmark = __m_ui_navigationBookmark_js;
 const runtimeState = __m_core_state_js.state;
 
 
@@ -43329,8 +44031,6 @@ const runtimeState = __m_core_state_js.state;
 
 
 
-// Heartbeat Memories r35 modular runtime.
-// Extracted from r34 without changing archive/cache storage contracts.
 
 
 
@@ -43341,59 +44041,21 @@ const runtimeState = __m_core_state_js.state;
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+// 生成上下文：内容设置与快照裁剪、世界书扫描词、各玩法参与者快照、世界呈现上下文
+// 从 generation/client.js 原样搬出（重构阶段 2），声明文本一字未改；generation/client.js 仍转发原有导出。
 
 // Only in-flight bindings; never persisted or exported. Clear at the owning mode's finally.
 const modeTaskTraces = new Map();
+
 const contentContextSources = new WeakMap();
+
 const CONTENT_SETTING_KEYS = ['creativeSupplementEnabled', 'creativeSupplement', 'excludedContextTags',
     'contextTagMode', 'retainedContextTags', 'bannedGeneratedPhrases', 'useActivatedWorldInfo', 'useCurrentChatExternalMemory', 'cgPromptFormat'];
+
 function generationContentSettings(settings = {}) {
     return Object.fromEntries(CONTENT_SETTING_KEYS.filter(key => settings[key] !== undefined).map(key => [key, structuredClone(settings[key])]));
 }
+
 function snapshotGenerationContent(value) {
     const snapshot = structuredClone(value), seen = new WeakSet();
     // Internal sessions may contain optional undefined fields. Preserve the
@@ -43417,6 +44079,7 @@ function snapshotGenerationContent(value) {
     visit(snapshot);
     return snapshot;
 }
+
 // Host cards can carry executable or proxied fields that structuredClone rejects.
 // Degrade only the offending field to its JSON-safe representation instead of
 // failing the whole capture; a field that cannot be copied either way makes the
@@ -43431,6 +44094,7 @@ function cloneContentField(value) {
         }
     }
 }
+
 function captureGenerationContent(context, bank) {
     const fields = {};
     for (const key of ['characterId', 'name1', 'name2', 'userAvatar', 'personaAvatar', 'user_avatar', 'maxContext']) {
@@ -43498,6 +44162,7 @@ function captureGenerationContent(context, bank) {
     return { version: 1, fields, cardFields, memoryBank,
         contentSettings: generationContentSettings(core_settings.getPluginSettings(context)) };
 }
+
 // A full archive at the legitimate item cap can serialize beyond the recovery
 // snapshot budget, which would otherwise block every derived task before any
 // request. Slim only what no snapshot consumer can observe beyond the existing
@@ -43530,6 +44195,7 @@ function fitGenerationContentSnapshot(snapshot) {
     }
     return snapshot;
 }
+
 function generationContentContext(origin, context) {
     const snapshot = generation_recovery.generationContentSnapshotForOrigin(origin);
     if (!snapshot?.fields) return context;
@@ -43550,6 +44216,7 @@ function generationContentContext(origin, context) {
     contentContextSources.set(view, source);
     return view;
 }
+
 function generationTrace(options = {}) {
     const parentKey = options.parentTaskKey || core_requestCoordinator.activeModeBuildScopeForTask(options.taskKey || '');
     return options.taskTrace || modeTaskTraces.get(parentKey || options.taskKey) || null;
@@ -43649,6 +44316,7 @@ async function captureRoomParticipantSnapshot(context, origin, { existing = null
     if (!snapshot) return null;
     return generation_recovery.frozenGenerationInput(origin, 'participants:room', () => snapshot);
 }
+
 async function captureAlbumParticipantSnapshot(context, origin, { existing = null, participantSnapshot } = {}) {
     // Keep legacy recipes and single-card journals byte-for-byte free of the
     // multiplayer input key. Only explicit multiplayer work freezes a roster.
@@ -43675,6 +44343,7 @@ async function captureModeParticipantSnapshot(mode, context, origin, { existing 
     // a single-person retry into a different prompt, without adding a prompt block.
     return generation_recovery.frozenGenerationInput(origin, key, () => snapshot);
 }
+
 async function activatedWorldInfoText(context, mode) {
     if (core_settings.getPluginSettings(context).useActivatedWorldInfo === false || typeof context.getWorldInfoPrompt !== 'function') return '';
     try {
@@ -43808,78 +44477,6 @@ async function mapGenerationConcurrent(items, limit, worker) {
     await Promise.all(Array.from({ length: workerCount }, () => run()));
     if (firstError) throw firstError;
     return results;
-}
-
-async function requestValidatedSegment(prompt, status, options, validator) {
-    const logicalTask = core_requestCoordinator.logicalGenerationTaskForOrigin(options?.origin);
-    core_requestCoordinator.assertLogicalGenerationTaskCurrent(logicalTask);
-    if (logicalTask?.participantSnapshot && !options?.participantPromptApplied) {
-        const block = logicalTask.participantPromptIndexed
-            ? core_participants.participantIndexPromptBlock(logicalTask.participantSnapshot)
-            : core_participants.participantPromptBlock(logicalTask.participantSnapshot);
-        if (block && !prompt.includes(block)) prompt += block;
-        options = { ...options, participantPromptApplied: true };
-    }
-    if (core_requestCoordinator.chatScopeCancellationBlocksOrigin(options?.origin)) {
-        throw core_requestCoordinator.createGenerationAbortError();
-    }
-    prompt = cg_policy.cgPromptForSegment(prompt, options);
-    validator = cg_policy.cgSegmentValidator(validator, options);
-    const parentTrace = generationTrace(options);
-    const taskTrace = core_taskTrace.startTaskTrace('', options?.mode, parentTrace);
-    core_taskTrace.markStage(taskTrace, 'start');
-    core_taskTrace.beginStage(taskTrace, 'prompt');
-    try {
-    const context = generationContentContext(options?.origin, options?.context || core_context.currentCharacterGuard());
-    options = { ...options, taskTrace, context, contextEnvelope: typeof options?.contextEnvelope === 'string'
-        ? options.contextEnvelope : await generation_recovery.frozenGenerationInput(options?.origin, `context:${options?.mode || 'segment'}`,
-            () => core_cache.buildControlledContextEnvelope(context, { worldInfoScanTerms: generationWorldInfoScanTerms(options?.mode, context) })) };
-    const result = await generation_recovery.withRecoverySegment(prompt, options, validator, async (prompt, options, accepted) => {
-    let lastError = null;
-    // Automatic retry is off by default. A failed segment used to silently re-run prompt
-    // building, token counting and a second paid request; on a slow host that turned one
-    // failure into minutes of extra billing the user could not stop. Successful segments
-    // are already kept by the recovery draft, so the run stops and waits for「续写」.
-    const allowAutoRetry = options?.allowAutoRetry === true;
-    const configuredAttempts = allowAutoRetry
-        ? Math.max(1, Math.min(core_requestCoordinator.MAX_RATE_LIMIT_ATTEMPTS, Number(options?.segmentMaxAttempts) || core_requestCoordinator.MAX_RATE_LIMIT_ATTEMPTS))
-        : 1;
-    const maxAttempts = Math.max(configuredAttempts, 2);
-    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-        const retryNote = attempt && lastError
-            ? '\n\n【本地校验反馈】' + (core_butterflyContract.butterflyValidationFeedback(lastError) || generation_recovery.generationRetryFeedbackText(lastError?.code, lastError) || core_text.normalizeText(lastError?.repairHint, 600) || (String(lastError.code || '').startsWith('RMT_ROOM_') ? core_text.safeErrorSummary(lastError) : '上一轮结构或完整度没有通过。')) + ' 请严格按原硬性要求重新输出完整 JSON，不要解释，也不要引用这条反馈作为内容。'
-            : '';
-        try {
-            const raw = await requestJson(`${prompt}${retryNote}`, `${status}${attempt ? `（重试 ${attempt}/${maxAttempts - 1}）` : ''}`, options);
-            core_taskTrace.beginStage(options.taskTrace, 'validate');
-            const value = core_requestCoordinator.validateGeneratedSegment(raw, validator);
-            core_taskTrace.markStage(options.taskTrace, 'validate');
-            await accepted(raw);
-            return value;
-        } catch (error) {
-            if (options.taskTrace?.activeStage === 'validate') core_taskTrace.markStage(options.taskTrace, 'validate', false);
-            if (error?.name === 'AbortError' || error?.nonRetryable === true || error?.code === 'RMT_PHONE_NO_CONVERSATION' || error?.code === 'RMT_BANNED_GENERATED_PHRASE' || error?.code === 'RMT_JSON_TRUNCATED') throw error;
-            lastError = error;
-            const emptyReroll = attempt === 0 && ['RMT_JSON_EMPTY_FINAL', 'RMT_JSON_EMPTY_FINAL_WITH_REASONING', 'RMT_JSON_NOT_FOUND'].includes(error?.code);
-            const configuredRetry = attempt + 1 < configuredAttempts && core_requestCoordinator.shouldRetrySegmentRequest(error, attempt);
-            if (attempt + 1 < maxAttempts && (emptyReroll || configuredRetry)) {
-                core_taskTrace.recordRetry(options.taskTrace, error);
-                core_taskTrace.beginStage(options.taskTrace, 'retry');
-                try { await core_requestCoordinator.waitBeforeSegmentRetry(error, attempt); }
-                finally { core_taskTrace.markStage(options.taskTrace, 'retry'); }
-                continue;
-            }
-            throw error;
-        }
-    }
-    throw lastError || new Error(`${status}失败。`);
-    });
-    core_taskTrace.finishSegmentTrace(parentTrace, taskTrace, 'ok');
-    return result;
-    } catch (error) {
-        core_taskTrace.finishSegmentTrace(parentTrace, taskTrace, error?.name === 'AbortError' ? 'cancelled' : 'failed', error);
-        throw error;
-    }
 }
 
 // The host tokenizer may use an unavailable service. Bound the wait, then use
@@ -44036,6 +44633,173 @@ function assertNoBannedGeneratedPhrase(value, settings, evidence = null) {
     const error = new Error(`模型新生成内容命中禁用词「${found}」。本次结果没有保存，也不会自动重试；请手动重试，或在插件设置里调整“生成禁用词”。历史聊天原文和证据锚点不会被改写。`);
     error.code = 'RMT_BANNED_GENERATED_PHRASE';
     throw error;
+}
+
+__m_generation_generationContext_js.buildWorldPresentationContext = buildWorldPresentationContext;
+__m_generation_generationContext_js.captureRoomParticipantSnapshot = captureRoomParticipantSnapshot;
+__m_generation_generationContext_js.captureAlbumParticipantSnapshot = captureAlbumParticipantSnapshot;
+__m_generation_generationContext_js.captureModeParticipantSnapshot = captureModeParticipantSnapshot;
+__m_generation_generationContext_js.mapGenerationConcurrent = mapGenerationConcurrent;
+__m_generation_generationContext_js.assertPromptBudget = assertPromptBudget;
+__m_generation_generationContext_js.generationContentSettings = generationContentSettings;
+__m_generation_generationContext_js.snapshotGenerationContent = snapshotGenerationContent;
+__m_generation_generationContext_js.captureGenerationContent = captureGenerationContent;
+__m_generation_generationContext_js.fitGenerationContentSnapshot = fitGenerationContentSnapshot;
+__m_generation_generationContext_js.generationContentContext = generationContentContext;
+__m_generation_generationContext_js.generationTrace = generationTrace;
+__m_generation_generationContext_js.generationWorldInfoScanTerms = generationWorldInfoScanTerms;
+__m_generation_generationContext_js.chunkForGeneration = chunkForGeneration;
+__m_generation_generationContext_js.enrichInputBudgetError = enrichInputBudgetError;
+__m_generation_generationContext_js.notifyInputPackingOnce = notifyInputPackingOnce;
+__m_generation_generationContext_js.generatedPhrasePolicyText = generatedPhrasePolicyText;
+__m_generation_generationContext_js.findBannedGeneratedPhrase = findBannedGeneratedPhrase;
+__m_generation_generationContext_js.assertNoBannedGeneratedPhrase = assertNoBannedGeneratedPhrase;
+__m_generation_generationContext_js.modeTaskTraces = modeTaskTraces;
+__m_generation_generationContext_js.contentContextSources = contentContextSources;
+__m_generation_generationContext_js.TOKEN_COUNT_TIMEOUT_MS = TOKEN_COUNT_TIMEOUT_MS;
+__m_generation_generationContext_js.GENERATED_PHRASE_EVIDENCE_KEYS = GENERATED_PHRASE_EVIDENCE_KEYS;
+}
+
+function __init_generation_generationRequest_js() {
+// MODULE: generation/generationRequest.js
+const connection_pool = __m_core_connectionPool_js;
+const advanced_generation = __m_core_advancedGeneration_js;
+const recovery_source = __m_core_recoverySourcePolicy_js;
+const output_budget = __m_core_outputBudget_js;
+const archive_requestBudget = __m_archive_requestBudget_js;
+const cg_policy = __m_generation_cgPromptPolicy_js;
+const core_butterflyContract = __m_core_butterflyContract_js;
+const archive_repository = __m_archive_repository_js;
+const core_cache = __m_core_cache_js;
+const core_participants = __m_core_participants_js;
+const core_constants = __m_core_constants_js;
+const core_context = __m_core_context_js;
+const core_independentApi = __m_core_independentApi_js;
+const core_requestCoordinator = __m_core_requestCoordinator_js;
+const core_settings = __m_core_settings_js;
+const creative_supplement = __m_core_creativeSupplement_js;
+const generation_recovery = __m_generation_recovery_js;
+const core_text = __m_core_text_js;
+const core_taskTrace = __m_core_taskTrace_js;
+const core_contextTags = __m_core_contextTags_js;
+const core_worldPresentation = __m_core_worldPresentation_js;
+const generation_jsonParser = __m_generation_jsonParser_js;
+const generation_prompts = __m_generation_prompts_js;
+const generation_jsonShapeExamples = __m_generation_jsonShapeExamples_js;
+const generation_requestTemperature = __m_generation_requestTemperature_js;
+const ui_overlay = __m_ui_overlay_js;
+const runtimeState = __m_core_state_js.state;
+const assertNoBannedGeneratedPhrase = __m_generation_generationContext_js.assertNoBannedGeneratedPhrase;
+const assertPromptBudget = __m_generation_generationContext_js.assertPromptBudget;
+const contentContextSources = __m_generation_generationContext_js.contentContextSources;
+const enrichInputBudgetError = __m_generation_generationContext_js.enrichInputBudgetError;
+const generatedPhrasePolicyText = __m_generation_generationContext_js.generatedPhrasePolicyText;
+const generationContentContext = __m_generation_generationContext_js.generationContentContext;
+const generationContentSettings = __m_generation_generationContext_js.generationContentSettings;
+const generationTrace = __m_generation_generationContext_js.generationTrace;
+const generationWorldInfoScanTerms = __m_generation_generationContext_js.generationWorldInfoScanTerms;
+const notifyInputPackingOnce = __m_generation_generationContext_js.notifyInputPackingOnce;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// 请求发送：连接错误规范化、组装外发提示词、生成 JSON、请求与分段校验、建档分块请求
+// 从 generation/client.js 原样搬出（重构阶段 2），声明文本一字未改；generation/client.js 仍转发原有导出。
+
+async function requestValidatedSegment(prompt, status, options, validator) {
+    const logicalTask = core_requestCoordinator.logicalGenerationTaskForOrigin(options?.origin);
+    core_requestCoordinator.assertLogicalGenerationTaskCurrent(logicalTask);
+    if (logicalTask?.participantSnapshot && !options?.participantPromptApplied) {
+        const block = logicalTask.participantPromptIndexed
+            ? core_participants.participantIndexPromptBlock(logicalTask.participantSnapshot)
+            : core_participants.participantPromptBlock(logicalTask.participantSnapshot);
+        if (block && !prompt.includes(block)) prompt += block;
+        options = { ...options, participantPromptApplied: true };
+    }
+    if (core_requestCoordinator.chatScopeCancellationBlocksOrigin(options?.origin)) {
+        throw core_requestCoordinator.createGenerationAbortError();
+    }
+    prompt = cg_policy.cgPromptForSegment(prompt, options);
+    validator = cg_policy.cgSegmentValidator(validator, options);
+    const parentTrace = generationTrace(options);
+    const taskTrace = core_taskTrace.startTaskTrace('', options?.mode, parentTrace);
+    core_taskTrace.markStage(taskTrace, 'start');
+    core_taskTrace.beginStage(taskTrace, 'prompt');
+    try {
+    const context = generationContentContext(options?.origin, options?.context || core_context.currentCharacterGuard());
+    options = { ...options, taskTrace, context, contextEnvelope: typeof options?.contextEnvelope === 'string'
+        ? options.contextEnvelope : await generation_recovery.frozenGenerationInput(options?.origin, `context:${options?.mode || 'segment'}`,
+            () => core_cache.buildControlledContextEnvelope(context, { worldInfoScanTerms: generationWorldInfoScanTerms(options?.mode, context) })) };
+    const result = await generation_recovery.withRecoverySegment(prompt, options, validator, async (prompt, options, accepted) => {
+    let lastError = null;
+    // Automatic retry is off by default. A failed segment used to silently re-run prompt
+    // building, token counting and a second paid request; on a slow host that turned one
+    // failure into minutes of extra billing the user could not stop. Successful segments
+    // are already kept by the recovery draft, so the run stops and waits for「续写」.
+    const allowAutoRetry = options?.allowAutoRetry === true;
+    const configuredAttempts = allowAutoRetry
+        ? Math.max(1, Math.min(core_requestCoordinator.MAX_RATE_LIMIT_ATTEMPTS, Number(options?.segmentMaxAttempts) || core_requestCoordinator.MAX_RATE_LIMIT_ATTEMPTS))
+        : 1;
+    const maxAttempts = Math.max(configuredAttempts, 2);
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+        const retryNote = attempt && lastError
+            ? '\n\n【本地校验反馈】' + (core_butterflyContract.butterflyValidationFeedback(lastError) || generation_recovery.generationRetryFeedbackText(lastError?.code, lastError) || core_text.normalizeText(lastError?.repairHint, 600) || (String(lastError.code || '').startsWith('RMT_ROOM_') ? core_text.safeErrorSummary(lastError) : '上一轮结构或完整度没有通过。')) + ' 请严格按原硬性要求重新输出完整 JSON，不要解释，也不要引用这条反馈作为内容。'
+            : '';
+        try {
+            const raw = await requestJson(`${prompt}${retryNote}`, `${status}${attempt ? `（重试 ${attempt}/${maxAttempts - 1}）` : ''}`, options);
+            core_taskTrace.beginStage(options.taskTrace, 'validate');
+            const value = core_requestCoordinator.validateGeneratedSegment(raw, validator);
+            core_taskTrace.markStage(options.taskTrace, 'validate');
+            await accepted(raw);
+            return value;
+        } catch (error) {
+            if (options.taskTrace?.activeStage === 'validate') core_taskTrace.markStage(options.taskTrace, 'validate', false);
+            if (error?.name === 'AbortError' || error?.nonRetryable === true || error?.code === 'RMT_PHONE_NO_CONVERSATION' || error?.code === 'RMT_BANNED_GENERATED_PHRASE' || error?.code === 'RMT_JSON_TRUNCATED') throw error;
+            lastError = error;
+            const emptyReroll = attempt === 0 && ['RMT_JSON_EMPTY_FINAL', 'RMT_JSON_EMPTY_FINAL_WITH_REASONING', 'RMT_JSON_NOT_FOUND'].includes(error?.code);
+            const configuredRetry = attempt + 1 < configuredAttempts && core_requestCoordinator.shouldRetrySegmentRequest(error, attempt);
+            if (attempt + 1 < maxAttempts && (emptyReroll || configuredRetry)) {
+                core_taskTrace.recordRetry(options.taskTrace, error);
+                core_taskTrace.beginStage(options.taskTrace, 'retry');
+                try { await core_requestCoordinator.waitBeforeSegmentRetry(error, attempt); }
+                finally { core_taskTrace.markStage(options.taskTrace, 'retry'); }
+                continue;
+            }
+            throw error;
+        }
+    }
+    throw lastError || new Error(`${status}失败。`);
+    });
+    core_taskTrace.finishSegmentTrace(parentTrace, taskTrace, 'ok');
+    return result;
+    } catch (error) {
+        core_taskTrace.finishSegmentTrace(parentTrace, taskTrace, error?.name === 'AbortError' ? 'cancelled' : 'failed', error);
+        throw error;
+    }
 }
 
 function normalizeConnectionManagerError(error) {
@@ -44487,6 +45251,60 @@ function recoveryModeTaskScopes(mode, context, bank, origin, entryId, existing, 
     return [...scopes];
 }
 
+__m_generation_generationRequest_js.requestValidatedSegment = requestValidatedSegment;
+__m_generation_generationRequest_js.generateConfiguredJson = generateConfiguredJson;
+__m_generation_generationRequest_js.requestJson = requestJson;
+__m_generation_generationRequest_js.generateArchiveChunkJson = generateArchiveChunkJson;
+__m_generation_generationRequest_js.normalizeConnectionManagerError = normalizeConnectionManagerError;
+__m_generation_generationRequest_js.composeOutgoingGenerationPrompt = composeOutgoingGenerationPrompt;
+__m_generation_generationRequest_js.recoverySettingsIdentity = recoverySettingsIdentity;
+__m_generation_generationRequest_js.recoveryModeTaskScopes = recoveryModeTaskScopes;
+}
+
+function __init_generation_generationSavedActions_js() {
+// MODULE: generation/generationSavedActions.js
+const recovery_source = __m_core_recoverySourcePolicy_js;
+const cg_policy = __m_generation_cgPromptPolicy_js;
+const archive_library = __m_archive_library_js;
+const archive_repository = __m_archive_repository_js;
+const core_cache = __m_core_cache_js;
+const core_constants = __m_core_constants_js;
+const core_context = __m_core_context_js;
+const core_requestCoordinator = __m_core_requestCoordinator_js;
+const core_settings = __m_core_settings_js;
+const generation_recovery = __m_generation_recovery_js;
+const generation_progress = __m_generation_partialProgress_js;
+const core_text = __m_core_text_js;
+const modes_advEvent = __m_modes_advEvent_js;
+const ui_overlay = __m_ui_overlay_js;
+const runtimeState = __m_core_state_js.state;
+const captureGenerationContent = __m_generation_generationContext_js.captureGenerationContent;
+const contentContextSources = __m_generation_generationContext_js.contentContextSources;
+const fitGenerationContentSnapshot = __m_generation_generationContext_js.fitGenerationContentSnapshot;
+const generationContentContext = __m_generation_generationContext_js.generationContentContext;
+const snapshotGenerationContent = __m_generation_generationContext_js.snapshotGenerationContent;
+const recoveryModeTaskScopes = __m_generation_generationRequest_js.recoveryModeTaskScopes;
+const recoverySettingsIdentity = __m_generation_generationRequest_js.recoverySettingsIdentity;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// 已保存生成的操作：开始恢复、导出与丢弃、ADV 第二步
+// 从 generation/client.js 原样搬出（重构阶段 2），声明文本一字未改；generation/client.js 仍转发原有导出。
+
 async function beginModeRecovery(mode, context, bank, origin, options = {}) {
     const identity = recoverySettingsIdentity(context);
     const existing = options.existing === undefined ? core_cache.loadGenerationRecovery(mode, context, options.archiveTarget?.cache,
@@ -44593,51 +45411,6 @@ async function beginModeRecovery(mode, context, bank, origin, options = {}) {
     return handle;
 }
 
-async function continueSavedGeneration(mode, options = {}) {
-    if (!Object.values(core_constants.MODE).includes(mode)) return;
-    const snapshot = runtimeState.activeArchiveSnapshot;
-    if (snapshot?.backupOnly) throw new Error('独立备份是只读快照，不能继续生成。');
-    const targetOptions = snapshot ? archive_library.archiveTargetGenerationOptions(snapshot) : {};
-    const context = targetOptions.context || options.context || core_context.currentCharacterGuard();
-    const bank = archive_repository.requireArchive(context);
-    const existing = core_cache.loadGenerationRecovery(mode, context, targetOptions.archiveTarget?.cache,
-        { ...(options.draftId ? { draftId: options.draftId } : {}), ...(options.pageId ? { pageId: options.pageId } : {}) });
-    if (!existing) { globalThis.toastr?.info?.('当前档案没有可继续的草稿，不会发起新请求。', '心迹回廊'); return; }
-    if (options.skipConfirm !== true && !ui_overlay.confirmExplicitAction('继续未完成内容？', '只补原任务未完成的内容，会使用文本生成额度。认证或额度问题需要先在设置里解决；取消不改动草稿。', { destructive: false })) return;
-    const operation = existing.operation || { kind: 'mode', mode };
-    const resumeOptions = { ...options, ...targetOptions, existing, continueRecovery: true,
-        ...(operation.participantRegeneration ? { participantRegeneration: operation.participantRegeneration } : {}) };
-    if (operation.kind === 'merged') return generation_merged.resumeMergedGeneration(existing, resumeOptions);
-    if (operation.kind === 'mode') return generateMode(mode, { ...resumeOptions,
-        background: options.skipConfirm === true || !(runtimeState.activeMode === mode && (time_stories.isTimeStoryMode(mode)
-            || mode === core_constants.MODE.THEME_SONG || mode === core_constants.MODE.BEDTIME
-            || (mode === core_constants.MODE.PHONE && runtimeState.activeSession?._rmtEmptyTerminal === true))) });
-    if (operation.kind === 'content-item' && operation.sourceDraftId) return ui_contentManager.resumeContentRegeneration(resumeOptions);
-    let session = core_cache.loadSession(mode, { context, memoryBank: bank, cache: targetOptions.archiveTarget?.cache, clone: true });
-    const stored = targetOptions.archiveTarget?.cache || core_cache.getCache(context);
-    if (!session && mode === core_constants.MODE.HEART && !stored?.[mode]
-        && ['heart-section', 'heart-season', 'heart-fireflies'].includes(operation.kind)) session = modes_heart.makeHeartShell(bank);
-    if (!session) throw new Error('原任务所依赖的内容已不在当前档案；草稿保留，没有重新生成。');
-    if (operation.kind === 'content-item') {
-        runtimeState.activeMode = mode;
-        runtimeState.activeSession = session;
-        return ui_contentManager.resumeContentRegeneration(resumeOptions);
-    }
-    const routes = {
-        'adv-single': () => modes_advEvent.generateAdvForSelected({ ...resumeOptions, eventId: operation.eventId }),
-        'adv-bulk': () => modes_advEvent.generateAllAdvForSession(resumeOptions),
-        'adv-repair': () => modes_advEvent.repairFailedAdvForSession(resumeOptions),
-        'heart-section': () => modes_heart.generateHeartSection(operation.part, resumeOptions),
-        'heart-fireflies': () => modes_heart.generateHeartFirefliesSection(resumeOptions),
-        'heart-season': () => modes_heart.generateHeartSeasonSection(operation.season, resumeOptions),
-        'room-daily-life': () => modes_room.ensureRoomLifePlan({ ...resumeOptions, force: true }),
-    };
-    if (!routes[operation.kind] || !operation.kind.startsWith(mode === core_constants.MODE.ADV ? 'adv-' : mode === core_constants.MODE.HEART ? 'heart-' : mode === core_constants.MODE.ROOM ? 'room-' : '!')) throw new Error('无法识别原续写入口，草稿保留。');
-    runtimeState.activeMode = mode;
-    runtimeState.activeSession = session;
-    return routes[operation.kind]();
-}
-
 async function exportSavedGeneration(mode, options = {}) {
     if (!Object.values(core_constants.MODE).includes(mode)) throw generation_recovery.generationRecoveryMismatch('operation', 'operation');
     const snapshot = runtimeState.activeArchiveSnapshot;
@@ -44684,6 +45457,183 @@ async function discardSavedGeneration(mode, options = {}) {
     else ui_overlay.showChooser();
 }
 
+async function startAdvScriptSecondStep() {
+    const context = core_context.currentCharacterGuard();
+    const memoryBank = archive_repository.requireArchive(context);
+    const session = core_cache.loadSession(core_constants.MODE.ADV, { context, chatId: core_context.getChatId(context), memoryBank, clone: true });
+    if (!session?.events?.some(event => !event.adv?.paragraphs?.length)) return;
+    runtimeState.activeMode = core_constants.MODE.ADV;
+    runtimeState.activeSession = session;
+    return modes_advEvent.generateAllAdvForSession({ background: true });
+}
+
+__m_generation_generationSavedActions_js.beginModeRecovery = beginModeRecovery;
+__m_generation_generationSavedActions_js.exportSavedGeneration = exportSavedGeneration;
+__m_generation_generationSavedActions_js.discardSavedGeneration = discardSavedGeneration;
+__m_generation_generationSavedActions_js.startAdvScriptSecondStep = startAdvScriptSecondStep;
+}
+
+function __init_generation_generationModes_js() {
+// MODULE: generation/generationModes.js
+const routePeople = __m_core_routeParticipants_js;
+const composerOptions = __m_core_generationOptions_js;
+const generation_merged = __m_generation_mergedGeneration_js;
+const archive_groups = __m_archive_groups_js;
+const archive_library = __m_archive_library_js;
+const archive_repository = __m_archive_repository_js;
+const archive_snapshots = __m_archive_snapshots_js;
+const core_cache = __m_core_cache_js;
+const core_participants = __m_core_participants_js;
+const core_generationParticipants = __m_core_generationParticipants_js;
+const core_constants = __m_core_constants_js;
+const core_context = __m_core_context_js;
+const core_evidence = __m_core_evidence_js;
+const core_incremental = __m_core_incremental_js;
+const core_requestCoordinator = __m_core_requestCoordinator_js;
+const core_settings = __m_core_settings_js;
+const generation_recovery = __m_generation_recovery_js;
+const core_text = __m_core_text_js;
+const core_taskTrace = __m_core_taskTrace_js;
+const core_worldPresentation = __m_core_worldPresentation_js;
+const generation_normalizers = __m_generation_normalizers_js;
+const generation_prompts = __m_generation_prompts_js;
+const modes_achievements = __m_modes_achievements_js;
+const modes_advEvent = __m_modes_advEvent_js;
+const modes_album = __m_modes_album_js;
+const modes_butterfly = __m_modes_butterfly_js;
+const modes_calendar = __m_modes_calendar_js;
+const modes_ending = __m_modes_ending_js;
+const modes_heart = __m_modes_heart_js;
+const modes_items = __m_modes_items_js;
+const modes_cabinet = __m_modes_cabinet_js;
+const modes_phone = __m_modes_phone_js;
+const modes_song = __m_modes_themeSong_js;
+const song_contract = __m_core_themeSongContract_js;
+const modes_bedtime = __m_modes_bedtime_js;
+const bedtime_contract = __m_core_bedtimeContract_js;
+const heart_reader = __m_ui_heartReaderState_js;
+const modes_inbox = __m_modes_inbox_js;
+const modes_pastLives = __m_modes_pastLives_js;
+const modes_timeStories = __m_modes_timeStories_js;
+const time_stories = __m_core_timeStoriesContract_js;
+const modes_room = __m_modes_room_js;
+const modes_relations = __m_modes_relations_js;
+const modes_travel = __m_modes_travel_js;
+const ui_overlay = __m_ui_overlay_js;
+const ui_settingsPanel = __m_ui_settingsPanel_js;
+const ui_contentManager = __m_ui_contentManager_js;
+const navigation_bookmark = __m_ui_navigationBookmark_js;
+const runtimeState = __m_core_state_js.state;
+const buildWorldPresentationContext = __m_generation_generationContext_js.buildWorldPresentationContext;
+const captureAlbumParticipantSnapshot = __m_generation_generationContext_js.captureAlbumParticipantSnapshot;
+const captureModeParticipantSnapshot = __m_generation_generationContext_js.captureModeParticipantSnapshot;
+const captureRoomParticipantSnapshot = __m_generation_generationContext_js.captureRoomParticipantSnapshot;
+const contentContextSources = __m_generation_generationContext_js.contentContextSources;
+const generationWorldInfoScanTerms = __m_generation_generationContext_js.generationWorldInfoScanTerms;
+const modeTaskTraces = __m_generation_generationContext_js.modeTaskTraces;
+const requestValidatedSegment = __m_generation_generationRequest_js.requestValidatedSegment;
+const beginModeRecovery = __m_generation_generationSavedActions_js.beginModeRecovery;
+const startAdvScriptSecondStep = __m_generation_generationSavedActions_js.startAdvScriptSecondStep;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// 各玩法生成主流程：继续已保存的生成、generateMode
+// 从 generation/client.js 原样搬出（重构阶段 2），声明文本一字未改；generation/client.js 仍转发原有导出。
+
+async function continueSavedGeneration(mode, options = {}) {
+    if (!Object.values(core_constants.MODE).includes(mode)) return;
+    const snapshot = runtimeState.activeArchiveSnapshot;
+    if (snapshot?.backupOnly) throw new Error('独立备份是只读快照，不能继续生成。');
+    const targetOptions = snapshot ? archive_library.archiveTargetGenerationOptions(snapshot) : {};
+    const context = targetOptions.context || options.context || core_context.currentCharacterGuard();
+    const bank = archive_repository.requireArchive(context);
+    const existing = core_cache.loadGenerationRecovery(mode, context, targetOptions.archiveTarget?.cache,
+        { ...(options.draftId ? { draftId: options.draftId } : {}), ...(options.pageId ? { pageId: options.pageId } : {}) });
+    if (!existing) { globalThis.toastr?.info?.('当前档案没有可继续的草稿，不会发起新请求。', '心迹回廊'); return; }
+    if (options.skipConfirm !== true && !ui_overlay.confirmExplicitAction('继续未完成内容？', '只补原任务未完成的内容，会使用文本生成额度。认证或额度问题需要先在设置里解决；取消不改动草稿。', { destructive: false })) return;
+    const operation = existing.operation || { kind: 'mode', mode };
+    const resumeOptions = { ...options, ...targetOptions, existing, continueRecovery: true,
+        ...(operation.participantRegeneration ? { participantRegeneration: operation.participantRegeneration } : {}) };
+    if (operation.kind === 'merged') return generation_merged.resumeMergedGeneration(existing, resumeOptions);
+    if (operation.kind === 'mode') return generateMode(mode, { ...resumeOptions,
+        background: options.skipConfirm === true || !(runtimeState.activeMode === mode && (time_stories.isTimeStoryMode(mode)
+            || mode === core_constants.MODE.THEME_SONG || mode === core_constants.MODE.BEDTIME
+            || (mode === core_constants.MODE.PHONE && runtimeState.activeSession?._rmtEmptyTerminal === true))) });
+    if (operation.kind === 'content-item' && operation.sourceDraftId) return ui_contentManager.resumeContentRegeneration(resumeOptions);
+    let session = core_cache.loadSession(mode, { context, memoryBank: bank, cache: targetOptions.archiveTarget?.cache, clone: true });
+    const stored = targetOptions.archiveTarget?.cache || core_cache.getCache(context);
+    if (!session && mode === core_constants.MODE.HEART && !stored?.[mode]
+        && ['heart-section', 'heart-season', 'heart-fireflies'].includes(operation.kind)) session = modes_heart.makeHeartShell(bank);
+    if (!session) throw new Error('原任务所依赖的内容已不在当前档案；草稿保留，没有重新生成。');
+    if (operation.kind === 'content-item') {
+        runtimeState.activeMode = mode;
+        runtimeState.activeSession = session;
+        return ui_contentManager.resumeContentRegeneration(resumeOptions);
+    }
+    const routes = {
+        'adv-single': () => modes_advEvent.generateAdvForSelected({ ...resumeOptions, eventId: operation.eventId }),
+        'adv-bulk': () => modes_advEvent.generateAllAdvForSession(resumeOptions),
+        'adv-repair': () => modes_advEvent.repairFailedAdvForSession(resumeOptions),
+        'heart-section': () => modes_heart.generateHeartSection(operation.part, resumeOptions),
+        'heart-fireflies': () => modes_heart.generateHeartFirefliesSection(resumeOptions),
+        'heart-season': () => modes_heart.generateHeartSeasonSection(operation.season, resumeOptions),
+        'room-daily-life': () => modes_room.ensureRoomLifePlan({ ...resumeOptions, force: true }),
+    };
+    if (!routes[operation.kind] || !operation.kind.startsWith(mode === core_constants.MODE.ADV ? 'adv-' : mode === core_constants.MODE.HEART ? 'heart-' : mode === core_constants.MODE.ROOM ? 'room-' : '!')) throw new Error('无法识别原续写入口，草稿保留。');
+    runtimeState.activeMode = mode;
+    runtimeState.activeSession = session;
+    return routes[operation.kind]();
+}
+
 async function generateMode(mode, options = {}) {
     if (!Object.values(core_constants.MODE).includes(mode)) return;
     const context = options.context || core_context.currentCharacterGuard();
@@ -44716,16 +45666,6 @@ async function generateMode(mode, options = {}) {
         core_requestCoordinator.finishLogicalGenerationTask(logicalTask, result);
         if (autoAdvScripts) setTimeout(() => { startAdvScriptSecondStep().catch(() => {}); }, 600);
     }
-}
-
-async function startAdvScriptSecondStep() {
-    const context = core_context.currentCharacterGuard();
-    const memoryBank = archive_repository.requireArchive(context);
-    const session = core_cache.loadSession(core_constants.MODE.ADV, { context, chatId: core_context.getChatId(context), memoryBank, clone: true });
-    if (!session?.events?.some(event => !event.adv?.paragraphs?.length)) return;
-    runtimeState.activeMode = core_constants.MODE.ADV;
-    runtimeState.activeSession = session;
-    return modes_advEvent.generateAllAdvForSession({ background: true });
 }
 
 async function generateModeOperation(mode, options = {}) {
@@ -45364,6 +46304,56 @@ async function generateModeOperation(mode, options = {}) {
 }
 
 const autoContinuedDrafts = new Set();
+
+__m_generation_generationModes_js.continueSavedGeneration = continueSavedGeneration;
+__m_generation_generationModes_js.generateMode = generateMode;
+__m_generation_generationModes_js.autoContinuedDrafts = autoContinuedDrafts;
+}
+
+function __init_generation_client_js() {
+// MODULE: generation/client.js
+const generation_recovery = __m_generation_recovery_js;
+const split_generationContext = __m_generation_generationContext_js;
+const split_generationRequest = __m_generation_generationRequest_js;
+const split_generationSavedActions = __m_generation_generationSavedActions_js;
+const split_generationModes = __m_generation_generationModes_js;
+const autoContinuedDrafts = __m_generation_generationModes_js.autoContinuedDrafts;
+
+
+
+
+
+
+// 以下导出已搬到 generation/generationContext.js、generation/generationRequest.js、generation/generationSavedActions.js、generation/generationModes.js，这里原样转发，调用方不用改。
+const generationContentSettings = split_generationContext.generationContentSettings;
+const fitGenerationContentSnapshot = split_generationContext.fitGenerationContentSnapshot;
+const generationContentContext = split_generationContext.generationContentContext;
+const generationWorldInfoScanTerms = split_generationContext.generationWorldInfoScanTerms;
+const buildWorldPresentationContext = split_generationContext.buildWorldPresentationContext;
+const captureRoomParticipantSnapshot = split_generationContext.captureRoomParticipantSnapshot;
+const captureAlbumParticipantSnapshot = split_generationContext.captureAlbumParticipantSnapshot;
+const captureModeParticipantSnapshot = split_generationContext.captureModeParticipantSnapshot;
+const chunkForGeneration = split_generationContext.chunkForGeneration;
+const mapGenerationConcurrent = split_generationContext.mapGenerationConcurrent;
+const requestValidatedSegment = split_generationRequest.requestValidatedSegment;
+const TOKEN_COUNT_TIMEOUT_MS = split_generationContext.TOKEN_COUNT_TIMEOUT_MS;
+const assertPromptBudget = split_generationContext.assertPromptBudget;
+const GENERATED_PHRASE_EVIDENCE_KEYS = split_generationContext.GENERATED_PHRASE_EVIDENCE_KEYS;
+const generatedPhrasePolicyText = split_generationContext.generatedPhrasePolicyText;
+const findBannedGeneratedPhrase = split_generationContext.findBannedGeneratedPhrase;
+const assertNoBannedGeneratedPhrase = split_generationContext.assertNoBannedGeneratedPhrase;
+const normalizeConnectionManagerError = split_generationRequest.normalizeConnectionManagerError;
+const generateConfiguredJson = split_generationRequest.generateConfiguredJson;
+const composeOutgoingGenerationPrompt = split_generationRequest.composeOutgoingGenerationPrompt;
+const requestJson = split_generationRequest.requestJson;
+const generateArchiveChunkJson = split_generationRequest.generateArchiveChunkJson;
+const beginModeRecovery = split_generationSavedActions.beginModeRecovery;
+const continueSavedGeneration = split_generationModes.continueSavedGeneration;
+const exportSavedGeneration = split_generationSavedActions.exportSavedGeneration;
+const discardSavedGeneration = split_generationSavedActions.discardSavedGeneration;
+const generateMode = split_generationModes.generateMode;
+const startAdvScriptSecondStep = split_generationSavedActions.startAdvScriptSecondStep;
+
 // Recovery is a dependency of this module, but the bundle initializes this file first
 // when the import cycle is cut. Register after the current init turn so the export exists.
 queueMicrotask(() => {
@@ -45385,14 +46375,26 @@ queueMicrotask(() => {
     });
 });
 
+__m_generation_client_js.generationContentSettings = generationContentSettings;
+__m_generation_client_js.fitGenerationContentSnapshot = fitGenerationContentSnapshot;
+__m_generation_client_js.generationContentContext = generationContentContext;
+__m_generation_client_js.generationWorldInfoScanTerms = generationWorldInfoScanTerms;
 __m_generation_client_js.buildWorldPresentationContext = buildWorldPresentationContext;
 __m_generation_client_js.captureRoomParticipantSnapshot = captureRoomParticipantSnapshot;
 __m_generation_client_js.captureAlbumParticipantSnapshot = captureAlbumParticipantSnapshot;
 __m_generation_client_js.captureModeParticipantSnapshot = captureModeParticipantSnapshot;
+__m_generation_client_js.chunkForGeneration = chunkForGeneration;
 __m_generation_client_js.mapGenerationConcurrent = mapGenerationConcurrent;
 __m_generation_client_js.requestValidatedSegment = requestValidatedSegment;
+__m_generation_client_js.TOKEN_COUNT_TIMEOUT_MS = TOKEN_COUNT_TIMEOUT_MS;
 __m_generation_client_js.assertPromptBudget = assertPromptBudget;
+__m_generation_client_js.GENERATED_PHRASE_EVIDENCE_KEYS = GENERATED_PHRASE_EVIDENCE_KEYS;
+__m_generation_client_js.generatedPhrasePolicyText = generatedPhrasePolicyText;
+__m_generation_client_js.findBannedGeneratedPhrase = findBannedGeneratedPhrase;
+__m_generation_client_js.assertNoBannedGeneratedPhrase = assertNoBannedGeneratedPhrase;
+__m_generation_client_js.normalizeConnectionManagerError = normalizeConnectionManagerError;
 __m_generation_client_js.generateConfiguredJson = generateConfiguredJson;
+__m_generation_client_js.composeOutgoingGenerationPrompt = composeOutgoingGenerationPrompt;
 __m_generation_client_js.requestJson = requestJson;
 __m_generation_client_js.generateArchiveChunkJson = generateArchiveChunkJson;
 __m_generation_client_js.beginModeRecovery = beginModeRecovery;
@@ -45401,18 +46403,6 @@ __m_generation_client_js.exportSavedGeneration = exportSavedGeneration;
 __m_generation_client_js.discardSavedGeneration = discardSavedGeneration;
 __m_generation_client_js.generateMode = generateMode;
 __m_generation_client_js.startAdvScriptSecondStep = startAdvScriptSecondStep;
-__m_generation_client_js.generationContentSettings = generationContentSettings;
-__m_generation_client_js.fitGenerationContentSnapshot = fitGenerationContentSnapshot;
-__m_generation_client_js.generationContentContext = generationContentContext;
-__m_generation_client_js.generationWorldInfoScanTerms = generationWorldInfoScanTerms;
-__m_generation_client_js.chunkForGeneration = chunkForGeneration;
-__m_generation_client_js.generatedPhrasePolicyText = generatedPhrasePolicyText;
-__m_generation_client_js.findBannedGeneratedPhrase = findBannedGeneratedPhrase;
-__m_generation_client_js.assertNoBannedGeneratedPhrase = assertNoBannedGeneratedPhrase;
-__m_generation_client_js.normalizeConnectionManagerError = normalizeConnectionManagerError;
-__m_generation_client_js.composeOutgoingGenerationPrompt = composeOutgoingGenerationPrompt;
-__m_generation_client_js.TOKEN_COUNT_TIMEOUT_MS = TOKEN_COUNT_TIMEOUT_MS;
-__m_generation_client_js.GENERATED_PHRASE_EVIDENCE_KEYS = GENERATED_PHRASE_EVIDENCE_KEYS;
 }
 
 function __init_ui_roomPixelFigure_js() {
@@ -45434,6 +46424,15 @@ function pixelFigureSvg(profile = {}) {
     const rect = (x, y, w, h, color) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${color}"/>`;
     const outline = '#443b52', skin = '#f3ccba', eye = tone(profile.eyeTone) || outline;
     const trim = profile.outfitTone === 'black' ? '#8d7a52' : '#e9d9b3';
+    // r84.79: 寸头只留贴头皮的一层头发；兜帽把后脑头发换成兜帽布料、只露出刘海。其他发型输出与 r84.75 相同。
+    const cropped = profile.hairShape === 'cropped', covered = profile.hairShape === 'covered';
+    const hoodShade = '#00000022';
+    const backHair = cropped ? rect(6,4,18,2,hair) + rect(5,6,20,4,hair)
+        : covered ? rect(5,2,20,2,coat) + rect(3,4,24,4,coat) + rect(2,8,26,14,coat) + rect(4,22,22,3,coat) + rect(2,8,2,14,hoodShade) + rect(26,8,2,14,hoodShade)
+        : rect(6,4,18,3,hair) + rect(3,7,24,13,hair) + rect(5,19,20,4,hair);
+    const fringe = cropped ? rect(5,8,20,2,hair) + rect(5,10,1,3,hair) + rect(24,10,1,3,hair)
+        : covered ? rect(6,8,18,3,hair) + rect(7,11,4,1,hair) + rect(20,11,4,1,hair)
+        : rect(5,8,20,3,hair) + rect(6,10,5,3,hair) + rect(11,10,4,2,hair) + rect(22,10,3,5,hair);
     return `<g data-rmt-local-figure="pixel" transform="translate(-56 -100) scale(4)" shape-rendering="crispEdges">
       ${rect(5,43,20,2,'#00000020')}
       ${long ? rect(4,7,22,27,hair) + rect(6,33,18,3,hair) : ''}
@@ -45445,16 +46444,14 @@ function pixelFigureSvg(profile = {}) {
       ${collar ? rect(10,24,3,3,'#e6e4e9') + rect(18,24,3,3,'#e6e4e9') + rect(15,26,2,7,outline) : ''}
       ${armor ? rect(x-3,25,5,4,'#b5c7d0') + rect(x+bodyWidth-2,25,5,4,'#b5c7d0') + rect(x+3,27,bodyWidth-6,6,'#a5b8c4') : ''}
       ${profile.outfit === 'artisan' || profile.outfit === 'work' ? rect(10,27,10,10,'#e2c9a7') + rect(13,30,4,3,coat) : ''}
-      ${rect(6,4,18,3,hair)}${rect(3,7,24,13,hair)}${rect(5,19,20,4,hair)}
+      ${backHair}
       ${rect(6,10,18,11,skin)}${rect(8,21,14,2,skin)}${rect(4,13,2,5,skin)}${rect(24,13,2,5,skin)}
       ${rect(8,15,2,3,eye)}${rect(19,15,2,3,eye)}${rect(8,15,1,1,'#fff9ed')}${rect(19,15,1,1,'#fff9ed')}
       ${rect(6,18,4,1,'#e59fa6')}${rect(20,18,3,1,'#e59fa6')}${rect(14,20,3,1,'#b4767f')}
-      ${rect(5,8,20,3,hair)}${rect(6,10,5,3,hair)}${rect(11,10,4,2,hair)}${rect(22,10,3,5,hair)}
+      ${fringe}
       ${profile.hairShape === 'curly' ? rect(2,9,3,5,hair) + rect(25,9,3,5,hair) + rect(4,19,3,5,hair) : ''}
       ${profile.hairShape === 'short' ? rect(6,5,7,1,'#ffffff25') : rect(7,6,8,1,'#ffffff30')}
       ${profile.hairShape === 'medium' ? rect(3,18,4,9,hair) + rect(23,18,4,9,hair) : ''}
-      ${profile.hairShape === 'cropped' ? rect(5,19,20,4,skin) + rect(8,21,14,2,skin) + rect(6,18,4,1,'#e59fa6') + rect(20,18,3,1,'#e59fa6') + rect(14,20,3,1,'#b4767f') : ''}
-      ${profile.hairShape === 'covered' ? rect(2,3,26,6,coat) + rect(2,8,4,16,coat) + rect(24,8,4,16,coat) : ''}
       ${detailSvg(profile.detail, { rect, hair, skin, coat, x, bodyWidth })}
     </g>`;
 }
@@ -45465,10 +46462,10 @@ function detailSvg(detail, { rect, hair, skin, coat, x, bodyWidth }) {
     case 'glasses': return frame(7) + frame(18) + rect(12,15,6,1,'#3a3542');
     case 'animal_ears': return rect(4,0,6,6,hair) + rect(20,0,6,6,hair) + rect(6,2,2,3,'#e9a3b3') + rect(22,2,2,3,'#e9a3b3');
     case 'pointed_ears': return rect(1,12,3,2,skin) + rect(0,11,2,2,skin) + rect(26,12,3,2,skin) + rect(28,11,2,2,skin);
-    case 'horns': return rect(7,0,3,5,'#e6d8bd') + rect(6,0,2,2,'#e6d8bd') + rect(20,0,3,5,'#e6d8bd') + rect(22,0,2,2,'#e6d8bd');
+    case 'horns': return rect(9,3,3,2,'#e6d8bd') + rect(8,1,2,2,'#e6d8bd') + rect(7,0,2,1,'#b9a684') + rect(18,3,3,2,'#e6d8bd') + rect(20,1,2,2,'#e6d8bd') + rect(21,0,2,1,'#b9a684');
     case 'headwear': return rect(12,1,6,4,'#d4ad55') + rect(14,0,2,2,'#f1d88a');
     case 'visor': return rect(6,14,18,3,'#6fb3d6') + rect(6,14,18,1,'#bfe4f3');
-    case 'headphones': return rect(5,3,20,2,'#4b4652') + rect(2,11,4,7,'#4b4652') + rect(24,11,4,7,'#4b4652');
+    case 'headphones': return rect(8,2,14,2,'#4b4652') + rect(6,3,3,2,'#4b4652') + rect(21,3,3,2,'#4b4652') + rect(4,5,2,7,'#4b4652') + rect(24,5,2,7,'#4b4652') + rect(2,11,4,7,'#4b4652') + rect(24,11,4,7,'#4b4652') + rect(3,12,2,5,'#6b6573') + rect(25,12,2,5,'#6b6573');
     case 'scarf': return rect(x,22,bodyWidth,3,'#c96f7d') + rect(x+bodyWidth-4,24,3,6,'#c96f7d');
     default: return '';
     }
@@ -47554,10 +48551,12 @@ const world_sources = __m_archive_worldInfoSources_js;
 // 不请求模型，不写回存档；结果只用于画小人，全部是代码自有的枚举值。
 // 优先级：房间生成时已核验的字段（explicitFields）> 角色卡 > 世界书 > 按身份推断 > 原值。
 
-const SENTENCE_SPLIT = /[\n。！？!?；;]+/;
-const LOOK_WORDS = /(发|髮|眸|瞳|眼|衣|袍|衫|裙|服|装|袖|斗篷|披风|身材|身形|个子|身高|体型|肩|戴|耳|角|尾|帽|冠|巾|围巾|镜|hair|eyes?|wear|dress|robe|coat|suit)/i;
-const USER_WORDS = /(\{\{user\}\}|<user>|\buser\b)/i;
-const NEGATION = /(不|没|无|未|别|非)[^，。；,\n]{0,2}$/;
+const SENTENCE_SPLIT = /[\n。！？!?；;]+|\.(?:\s|$)/;
+const CLAUSE_SPLIT = /[，,、]+/;
+const LOOK_WORDS = /(发|髮|眸|瞳|眼|衣|袍|衫|裙|服|装|袖|斗篷|披风|身材|身形|个子|身高|体型|肩|戴|耳|角|尾|帽|冠|巾|围巾|镜|\bhair\b|\beyes?\b|\bwear(s|ing)?\b|\bdress(es|ed)?\b|\brobes?\b|\bcoats?\b|\bsuits?\b|\bglasses\b|\bears\b|\bhorns?\b|\bbuilt\b|\btall\b)/i;
+const NEGATION = /(不|没|无|未|别|非)[^，。；,\n]{0,3}$|\b(?:not|never|without|no|doesn't|don't)\b[^.,;\n]{0,12}$/i;
+// r84.79: 英文词一律按整词匹配（\b），避免 that→hat、childhood→hood、himself→elf 这类误判。
+const either = (zh, en) => new RegExp(`${zh}|\\b(?:${en})\\b`, 'i');
 
 // 颜色词 → 代码自有色板键。顺序决定“银白”先于“白”。
 const COLOUR_WORDS = [
@@ -47566,59 +48565,106 @@ const COLOUR_WORDS = [
     ['blue', /湛蓝|深蓝|藏蓝|蓝/], ['cyan', /青|碧/], ['green', /绿/], ['purple', /紫/], ['gray', /灰/],
 ];
 const HAIR_FROM_COLOUR = { silver: 'silver', white: 'white', black: 'black', red: 'red', pink: 'fantasy_warm', gold: 'light', brown: 'brown', blue: 'fantasy_cool', cyan: 'fantasy_cool', green: 'fantasy_cool', purple: 'fantasy_cool', gray: 'silver' };
-const HAIR_ENGLISH = [['silver', /silver hair/i], ['white', /white hair/i], ['black', /black hair|dark hair/i], ['red', /red hair|ginger/i], ['light', /blond/i], ['brown', /brown hair|brunette/i], ['fantasy_cool', /(blue|green|purple) hair/i], ['fantasy_warm', /(pink|orange) hair/i]];
+// 英文发色：颜色词与 hair 之间允许夹几个词（long black hair / silver, waist-length hair）。
+const EN_HAIR = (colour) => new RegExp(`\\b(?:${colour})\\b[^.;!?\\n]{0,24}?\\bhair\\b`, 'i');
+const HAIR_ENGLISH = [['silver', EN_HAIR('silver|silvery|platinum|grey|gray')], ['white', EN_HAIR('white|snowy')], ['black', EN_HAIR('black|jet-black|raven|dark')],
+    ['red', EN_HAIR('red|crimson|ginger|auburn')], ['light', EN_HAIR('blond|blonde|golden|fair')], ['brown', EN_HAIR('brown|chestnut|brunette')],
+    ['fantasy_cool', EN_HAIR('blue|green|purple|violet|teal')], ['fantasy_warm', EN_HAIR('pink|orange')]];
 const EYE_TONES = new Set(['gold', 'red', 'blue', 'cyan', 'green', 'purple', 'silver', 'pink', 'brown', 'black', 'gray']);
+const EN_EYES = [['gold', 'golden|gold|amber'], ['red', 'red|crimson|scarlet'], ['blue', 'blue|azure'], ['cyan', 'teal|cyan'], ['green', 'green|emerald'],
+    ['purple', 'purple|violet'], ['silver', 'silver'], ['gray', 'gray|grey'], ['brown', 'brown|hazel'], ['black', 'black|dark']]
+    .map(([key, words]) => [key, new RegExp(`\\b(?:${words})\\b[^.;!?\\n]{0,12}?\\beyes?\\b`, 'i')]);
 
 const HAIR_SHAPES = [
-    ['tied', /马尾|束发|发髻|高束|挽发|发冠|玉冠|束冠|盘发|扎起|ponytail|bun/i],
-    ['cropped', /寸头|板寸|平头|buzz cut/i],
-    ['curly', /卷发|卷毛|自然卷|curly/i],
-    ['long', /长发|及腰|披发|披肩|长至|垂腰|long hair/i],
-    ['medium', /及肩|中长发|齐肩|shoulder.length/i],
-    ['short', /短发|碎发|利落的发|short hair/i],
-    ['covered', /兜帽|头巾|面纱|头纱|hood|veil/i],
+    ['tied', either('马尾|束发|发髻|高束|挽发|发冠|玉冠|束冠|盘发|扎起', 'ponytail|bun|topknot|braid(?:ed|s)?')],
+    ['cropped', either('寸头|板寸|平头', 'buzz ?cut|crew ?cut|shaved head')],
+    ['curly', either('卷发|卷毛|自然卷', 'curly|wavy')],
+    ['long', /长发|及腰|披发|披肩|长至|垂腰|\blong\b[^.;!?\n]{0,20}?\bhair\b|\bwaist-length\b/i],
+    ['medium', /及肩|中长发|齐肩|\bshoulder-length\b|\bshoulder length\b/i],
+    ['short', /短发|碎发|利落的发|\bshort\b[^.;!?\n]{0,20}?\bhair\b/i],
+    ['covered', either('兜帽|头巾|面纱|头纱', 'hood(?:ed)?|veil(?:ed)?|headscarf')],
 ];
 const OUTFITS = [
-    ['combat', /铠甲|盔甲|战甲|甲胄|作战服|劲装|armou?r/i],
-    ['technical', /实验服|白大褂|防护服|宇航服|机甲驾驶服|lab coat/i],
-    ['uniform', /制服|军装|警服|军服|uniform/i],
-    ['academic', /校服|学生服|学院服|school uniform/i],
-    ['formal', /西装|西服|正装|礼服|衬衫|领带|suit|tuxedo/i],
-    ['fantasy', /法袍|魔法袍|斗篷|巫师袍|mage robe|cloak/i],
-    ['ceremonial', /祭服|祭袍|礼袍/i],
-    ['historical', /[长锦道僧儒蟒]袍|衣袍|袍子|长衫|青衫|襦裙|汉服|古装|广袖|宽袖|衣袂|锦衣|玄衣|白衣|黑衣|素衣|长袍|kimono|hanfu|robe/i],
-    ['work', /工装|围裙|工作服|apron|overalls/i],
-    ['casual', /卫衣|T恤|牛仔|休闲|运动服|便服|夹克|hoodie|t-shirt|jeans/i],
+    ['combat', either('铠甲|盔甲|战甲|甲胄|作战服|劲装', 'armou?r|plate mail|combat gear')],
+    ['technical', either('实验服|白大褂|防护服|宇航服|机甲驾驶服', 'lab coat|space ?suit|hazmat')],
+    ['uniform', either('制服|军装|警服|军服', 'uniform')],
+    ['academic', either('校服|学生服|学院服', 'school uniform')],
+    ['formal', either('西装|西服|正装|礼服|衬衫|领带', 'suit|tuxedo|necktie|dress shirt')],
+    ['fantasy', either('法袍|魔法袍|斗篷|巫师袍', 'mage robes?|wizard robes?|cloak')],
+    ['ceremonial', /祭服|祭袍|礼袍/],
+    ['historical', either('[长锦道僧儒蟒]袍|衣袍|袍子|长衫|青衫|襦裙|汉服|古装|广袖|宽袖|衣袂|锦衣|玄衣|白衣|黑衣|素衣|长袍', 'kimono|hanfu|robes?')],
+    ['work', either('工装|围裙|工作服', 'apron|overalls')],
+    ['casual', either('卫衣|T恤|牛仔|休闲|运动服|便服|夹克', 'hoodie|t-shirt|tee|jeans|jacket')],
 ];
 const BUILDS = [
-    ['broad', /宽肩|魁梧|高大健壮|健硕|肌肉结实|壮硕|broad|muscular/i],
-    ['slender', /修长|清瘦|纤细|瘦削|颀长|单薄|slender/i],
-    ['compact', /娇小|矮小|小个子|个子小|petite/i],
-    ['soft', /微胖|圆润|丰腴|plump/i],
+    ['broad', either('宽肩|魁梧|高大健壮|健硕|肌肉结实|壮硕', 'broad-shouldered|broad shoulders|muscular|burly')],
+    ['slender', either('修长|清瘦|纤细|瘦削|颀长|单薄', 'slender|lanky|slim')],
+    ['compact', either('娇小|矮小|小个子|个子小', 'petite|short and small')],
+    ['soft', either('微胖|圆润|丰腴', 'plump|chubby')],
 ];
 const DETAILS = [
-    ['glasses', /眼镜|镜片|glasses|spectacles/i],
-    ['animal_ears', /兽耳|猫耳|狐耳|狼耳|犬耳|兔耳|cat ears|fox ears|animal ears/i],
-    ['pointed_ears', /尖耳|精灵耳|pointed ears|elven ears/i],
-    ['horns', /犄角|龙角|羊角|鹿角|双角|头上长着?角|horns?/i],
-    ['visor', /护目镜|面罩|visor|goggles/i],
-    ['headphones', /耳机|headphones/i],
-    ['scarf', /围巾|scarf/i],
-    ['headwear', /发冠|玉冠|帽子|戴着?帽|头盔|王冠|发簪|hat|helmet|crown/i],
+    ['glasses', either('眼镜|镜片', 'glasses|spectacles')],
+    ['animal_ears', either('兽耳|猫耳|狐耳|狼耳|犬耳|兔耳', 'cat ears|fox ears|wolf ears|animal ears|bunny ears')],
+    ['pointed_ears', either('尖耳|精灵耳', 'pointed ears|elven ears|elf ears')],
+    ['horns', either('犄角|龙角|羊角|鹿角|双角|头上长着?角', 'horns?')],
+    ['visor', either('护目镜|面罩', 'visor|goggles')],
+    ['headphones', either('耳机', 'headphones')],
+    ['scarf', either('围巾', 'scarf')],
+    ['headwear', either('发冠|玉冠|帽子|戴着?帽|头盔|王冠|发簪', 'hat|helmet|crown|circlet|tiara')],
 ];
-// 按身份推断（用户 2026-09-25 授权：角色卡与世界书都没写时可以按身份猜）。
+// 按身份推断（用户 2026-09-25 授权）。r84.79: 只在“写角色本人身份”的分句里找：
+// 关键词前有“是 / 身为 / 作为 / 担任…”，或整个分句就是这个身份词（如“剑修”）。
 const IDENTITY_OUTFITS = [
     ['historical', /修仙|仙门|宗门|门派|剑修|江湖|侠客|大侠|王爷|皇子|皇帝|将军|公子|师尊|掌门|古代|朝廷|书生|世子|少主/],
-    ['combat', /骑士|战士|佣兵|士兵|军人|武士|knight|soldier|mercenary/i],
-    ['fantasy', /魔法|法师|巫师|精灵|魔王|龙族|mage|wizard|elf/i],
-    ['technical', /赛博|机甲|星舰|宇宙|科学家|研究员|医生|cyber|scientist|doctor/i],
-    ['uniform', /警察|警官|军官|机长|空乘|police|officer/i],
-    ['academic', /学生|高中|初中|学长|学弟|student/i],
-    ['formal', /总裁|律师|经理|董事|商人|老板|秘书|ceo|lawyer/i],
-    ['casual', /现代|都市|大学|同居|室友|网友|主播|modern/i],
+    ['combat', either('骑士|战士|佣兵|士兵|军人|武士', 'knight|soldier|mercenary|warrior')],
+    ['fantasy', either('魔法师|法师|巫师|精灵|魔王|龙族', 'mage|wizard|sorcerer|sorceress|witch|elf|elven')],
+    ['technical', either('赛博|机甲|星舰|科学家|研究员|医生', 'scientist|researcher|doctor|engineer')],
+    ['uniform', either('警察|警官|军官|机长|空乘', 'police officer|policeman|policewoman|detective|pilot')],
+    ['academic', either('学生|高中生|初中生', 'student')],
+    ['formal', either('总裁|律师|经理|董事|商人|老板|秘书', 'ceo|lawyer|manager|businessman|businesswoman|secretary')],
 ];
+const IDENTITY_MARKER = /(是|为|身为|作为|担任|身份|职业|出身|乃|当上|成为|\bis an?\b|\bwas an?\b|\bworks? as\b|\bserves? as\b|\boccupation\b|\bjob\b|\brole\b)/i;
 const WORLD_OUTFIT = { historical: 'historical', fantasy: 'fantasy', scifi: 'technical', contemporary: 'casual', institutional: 'uniform', maritime: 'uniform', nomadic: 'artisan' };
 const WORLD_HAIR = { historical: 'long' };
+
+// r84.79: 按分句判断“这句在说谁”。句首是 你 / 您 / {{user}} / 用户名 → 用户；
+// “他的妹妹”“his sister” 这类 → 别人；他 / 她 / 角色名 / {{char}} → 角色本人；
+// 没写主语的分句沿用同一句里前一个分句的主语，每句开头默认是角色本人。
+const RELATIONS = '妹妹|姐姐|哥哥|弟弟|母亲|父亲|妈妈|爸爸|娘亲|爹爹|妻子|丈夫|老婆|老公|女友|男友|女朋友|男朋友|朋友|同伴|伙伴|手下|下属|徒弟|师父|师尊|师兄|师姐|师弟|师妹|侍女|侍从|仆人|管家|宠物|孩子|儿子|女儿|恋人|爱人|未婚妻|未婚夫|对手|敌人|同事|上司|室友|同学';
+const EN_RELATIONS = 'sister|brother|mother|father|mom|dad|wife|husband|girlfriend|boyfriend|friends?|partner|servant|maid|butler|pet|child|son|daughter|lover|fiancee?|fiancée|rival|enemy|colleague|boss|roommate|classmate|master|apprentice|twin';
+const escapeRe = text => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+function subjectMatchers(charName = '', userName = '') {
+    const char = core_text.normalizeText(charName, 60), user = core_text.normalizeText(userName, 60);
+    const charAlt = ['他', '她', '它', '\\{\\{char\\}\\}', '<char>', char && escapeRe(char)].filter(Boolean).join('|');
+    const userAlt = ['你', '您', '\\{\\{user\\}\\}', '<user>', user && user !== char && escapeRe(user)].filter(Boolean).join('|');
+    return {
+        other: new RegExp(`^(?:(?:${charAlt}|你|您|\\{\\{user\\}\\})的?)?(?:${RELATIONS})|^(?:his|her|their|my|your|\\{\\{char\\}\\}'s)\\s+(?:${EN_RELATIONS})\\b`, 'i'),
+        user: new RegExp(`^(?:${userAlt})|^(?:you|your|user)\\b`, 'i'),
+        char: new RegExp(`^(?:${charAlt})|^(?:he|she|they|his|her|their)\\b`, 'i'),
+    };
+}
+
+function characterClauses(texts, { charName = '', userName = '', perClause = false } = {}) {
+    const who = subjectMatchers(charName, userName), out = [];
+    for (const raw of texts) {
+        for (const sentence of plain(raw).split(SENTENCE_SPLIT)) {
+            let subject = 'char';
+            const kept = [];
+            for (const part of sentence.split(CLAUSE_SPLIT)) {
+                const clause = part.trim().replace(/^["'“”‘’「」『』（）()\s*-]+/, '');
+                if (!clause) continue;
+                if (who.other.test(clause)) subject = 'other';
+                else if (who.user.test(clause)) subject = 'user';
+                else if (who.char.test(clause)) subject = 'char';
+                if (subject === 'char') kept.push(clause);
+            }
+            if (perClause) out.push(...kept); else if (kept.length) out.push(kept.join('，'));
+            if (out.length >= 160) return out;
+        }
+    }
+    return out;
+}
 
 const plain = (value, max = 20000) => typeof value === 'string' ? value.slice(0, max) : '';
 
@@ -47627,7 +48673,7 @@ function firstMatch(text, table) {
     for (const [value, pattern] of table) {
         const re = new RegExp(pattern.source, pattern.flags.includes('g') ? pattern.flags : pattern.flags + 'g');
         for (const match of text.matchAll(re)) {
-            if (NEGATION.test(text.slice(Math.max(0, match.index - 3), match.index))) continue;
+            if (NEGATION.test(text.slice(Math.max(0, match.index - 10), match.index))) continue;
             if (!best || match.index < best.index) best = { value, index: match.index };
             break;
         }
@@ -47669,25 +48715,17 @@ function colourAfter(text, targets) {
     return '';
 }
 
-function appearanceSentences(texts, name = '') {
-    const out = [];
-    for (const raw of texts) {
-        for (const sentence of plain(raw).split(SENTENCE_SPLIT)) {
-            const line = sentence.trim();
-            if (line && LOOK_WORDS.test(line) && !USER_WORDS.test(line)) out.push(line);
-            if (out.length >= 80) return out;
-        }
-    }
-    return out;
+function appearanceSentences(texts, names = {}) {
+    return characterClauses(texts, names).filter(line => LOOK_WORDS.test(line)).slice(0, 80);
 }
 
-function figureFromText(texts, name = '') {
-    const text = appearanceSentences(texts, name).join('。');
+function figureFromText(texts, names = {}) {
+    const text = appearanceSentences(texts, names).join('。');
     if (!text) return {};
     const hairColour = colourBefore(text, '发|髮|头发|长发|短发|卷发') || colourAfter(text, '发色|头发是|头发');
     const hairTone = HAIR_FROM_COLOUR[hairColour] || firstMatch(text, HAIR_ENGLISH);
     const outfitTone = colourBefore(text, '衣|袍|衫|裙|服|装|斗篷|披风|外套|西装') || colourAfter(text, '衣服|衣着|着装|穿着');
-    const eyeTone = colourBefore(text, '瞳|眸|眼睛|眼珠') || colourAfter(text, '瞳色|眸色|瞳孔|眼眸|眼睛|眼珠');
+    const eyeTone = colourBefore(text, '瞳|眸|眼睛|眼珠') || colourAfter(text, '瞳色|眸色|瞳孔|眼眸|眼睛|眼珠') || firstMatch(text, EN_EYES);
     const figure = {
         hairTone, hairShape: firstMatch(text, HAIR_SHAPES), outfit: firstMatch(text, OUTFITS),
         build: firstMatch(text, BUILDS), detail: firstMatch(text, DETAILS),
@@ -47696,19 +48734,34 @@ function figureFromText(texts, name = '') {
     return Object.fromEntries(Object.entries(figure).filter(([, value]) => value));
 }
 
-function figureFromIdentity(texts, worldStyle = '') {
-    const text = texts.map(value => plain(value, 6000)).join('\n');
-    const outfit = firstMatch(text, IDENTITY_OUTFITS) || WORLD_OUTFIT[worldStyle] || '';
+function identityOutfit(clauses) {
+    let best = null;
+    for (const clause of clauses) {
+        const marker = clause.search(IDENTITY_MARKER);
+        for (const [value, pattern] of IDENTITY_OUTFITS) {
+            const hit = clause.match(pattern);
+            if (!hit) continue;
+            const labelOnly = clause.trim().length <= hit[0].length + 2;
+            if ((marker >= 0 && hit.index > marker) || labelOnly) { if (!best) best = value; break; }
+        }
+        if (best) return best;
+    }
+    return '';
+}
+
+function figureFromIdentity(texts, worldStyle = '', names = {}) {
+    const outfit = identityOutfit(characterClauses(texts.map(value => plain(value, 6000)), { ...names, perClause: true })) || WORLD_OUTFIT[worldStyle] || '';
     const hairShape = outfit === 'historical' ? 'long' : (WORLD_HAIR[worldStyle] || '');
     return Object.fromEntries(Object.entries({ outfit, hairShape }).filter(([, value]) => value));
 }
 
 const unset = value => !value || value === 'unspecified' || value === 'none';
 
-function localRoomFigure(figure = {}, { explicitFields = [], cardTexts = [], worldTexts = [], worldStyle = '' } = {}) {
+function localRoomFigure(figure = {}, { explicitFields = [], cardTexts = [], worldTexts = [], worldStyle = '', charName = '', userName = '' } = {}) {
     const verified = new Set((Array.isArray(explicitFields) ? explicitFields : []).map(field => String(field).replace(/^figure\./, '')));
-    const card = figureFromText(cardTexts), world = figureFromText(worldTexts);
-    const guess = figureFromIdentity([...cardTexts, ...worldTexts], worldStyle);
+    const names = { charName, userName };
+    const card = figureFromText(cardTexts, names), world = figureFromText(worldTexts, names);
+    const guess = figureFromIdentity([...cardTexts, ...worldTexts], worldStyle, names);
     const out = { ...(figure && typeof figure === 'object' ? figure : {}) };
     for (const key of ['hairTone', 'hairShape', 'outfit', 'build', 'detail', 'outfitTone', 'eyeTone']) {
         if (verified.has(key) && !unset(out[key])) continue;
@@ -47734,7 +48787,8 @@ function cardsNamed(context, name) {
 
 function roomFigureSources(context, name, onWorldReady = null) {
     const cards = cardsNamed(context, name);
-    if (cards.length !== 1) return { cardTexts: [], worldTexts: [] };
+    const userName = core_text.normalizeText(context?.name1, 60);
+    if (cards.length !== 1) return { cardTexts: [], worldTexts: [], charName: core_text.normalizeText(name, 60), userName };
     const card = cards[0], data = card.data && typeof card.data === 'object' ? card.data : {};
     const cardTexts = [data.description, card.description, data.personality, card.personality, data.scenario, card.scenario].map(value => plain(value)).filter(Boolean);
     const wanted = core_text.normalizeText(name, 120);
@@ -47758,9 +48812,10 @@ function roomFigureSources(context, name, onWorldReady = null) {
             }).catch(() => worldCache.set(key, []));
         }
     }
-    return { cardTexts, worldTexts };
+    return { cardTexts, worldTexts, charName: core_text.normalizeText(name, 60), userName };
 }
 
+__m_modes_roomFigureLocal_js.characterClauses = characterClauses;
 __m_modes_roomFigureLocal_js.appearanceSentences = appearanceSentences;
 __m_modes_roomFigureLocal_js.figureFromText = figureFromText;
 __m_modes_roomFigureLocal_js.figureFromIdentity = figureFromIdentity;
@@ -48433,7 +49488,9 @@ function renderRoomParticipants(session = runtimeState.activeSession) {
       <details class="rmt-room-find-person"><summary>找人 · ${slots.length} 人</summary><div class="rmt-room-participants" aria-label="查找人物所在空间">${people}</div></details><nav class="rmt-room-map" aria-label="切换空间">${locations}</nav>
       <div class="rmt-room-location"><b>${e(session.homeName)}</b><span data-rmt-room-clock>${e(roomDaypartState(now).label)} · ${e(roomClockText(now))}</span>${readOnly ? '' : '<button type="button" class="rmt-btn" data-rmt-action="room-refresh-figure">更新人物外形 · 保留房间内容</button><button type="button" class="rmt-btn" data-rmt-action="room-life-refresh">更新今日生活</button>'}</div>
       <div class="rmt-room-flow"><section class="rmt-room-stage"><div class="rmt-room-stage-head"><b>${e(selectedSpace.label)}</b><small>${e(present.length ? `在场：${present.map(slot => slot.name).join("、")}` : "此刻没有已记录的在场者")}</small></div><div class="rmt-room-scene rmt-room-layout-scene" data-rmt-room-beat="${e(current.id)}">
-        ${room_interior.roomInteriorHtml(layout, { selectedId: selected?.id, world: visual.worldStyle, participants: present.map(slot => ({ id: slot.participantId, name: slot.name, figure: room_figure_local.localRoomFigure(slot.visualProfile?.figure || {}, { explicitFields: slot.visualProfile?.explicitFields, ...room_figure_local.roomFigureSources(core_context.getContext(), slot.name), worldStyle: visual.worldStyle }) })) })}
+        ${room_interior.roomInteriorHtml(layout, { selectedId: selected?.id, world: visual.worldStyle, participants: present.map(slot => ({ id: slot.participantId, name: slot.name, figure: room_figure_local.localRoomFigure(slot.visualProfile?.figure || {}, { explicitFields: slot.visualProfile?.explicitFields, ...room_figure_local.roomFigureSources(core_context.getContext(), slot.name, () => {
+            if (runtimeState.activeMode === core_constants.MODE.ROOM && runtimeState.activeSession === session) renderRoom();
+        }), worldStyle: visual.worldStyle }) })) })}
         ${(session.pets || []).filter(pet => pet.spaceId === selectedSpace.id).map(roomPetNodeHtml).join('')}</div>
         <div class="rmt-room-object-rail">${layout.map(entry => roomObjectLayoutButtonHtml(entry, 'rail', selected?.id)).join('')}</div><div class="rmt-room-participant-states">${lines}</div></section>
       <section class="rmt-room-card" id="${core_constants.OVERLAY_ID}_room_object_detail"><div class="rmt-room-card-kicker">物品介绍</div><b>${e(selected?.label || selectedSpace.label)}</b><p>${e(selected?.description || selectedSpace.atmosphere)}</p>${selected?.line ? `<div class="rmt-room-object-line"><b>${e(speaker ? `${speaker}的话` : '未标注说话人')}</b><p>${e(selected.line)}</p></div>` : ''}</section>
@@ -53158,35 +54215,24 @@ __m_ui_toolbarIcons_js.toolbarIcon = toolbarIcon;
 __m_ui_toolbarIcons_js.TOOLBAR_ICON_NAMES = TOOLBAR_ICON_NAMES;
 }
 
-function __init_ui_overlay_js() {
-// MODULE: ui/overlay.js
-const handJournal = __m_ui_handJournalView_js;
-const expanded_cg_view = __m_ui_expandedCgView_js;
+function __init_ui_overlayShell_js() {
+// MODULE: ui/overlayShell.js
 const archive_inheritance_view = __m_ui_archiveInheritance_js;
 const bedtime_contract = __m_core_bedtimeContract_js;
 const bedtime_view = __m_ui_bedtimeView_js;
-const cg_format_ui = __m_ui_cgFormatControl_js;
-const generation_status_view = __m_ui_generationStatus_js;
 const mirror_reader = __m_ui_mirrorTtsReader_js;
 const mirror_call = __m_ui_mirrorCallView_js;
-const heart_reader = __m_ui_heartReaderState_js;
-const archive_groups = __m_archive_groups_js;
 const archive_library = __m_archive_library_js;
 const archive_repository = __m_archive_repository_js;
-const archive_snapshots = __m_archive_snapshots_js;
-const archive_importRecovery = __m_archive_importRecovery_js;
 const core_cache = __m_core_cache_js;
-const core_archiveCover = __m_core_archiveCover_js;
 const core_constants = __m_core_constants_js;
 const core_context = __m_core_context_js;
 const core_requestCoordinator = __m_core_requestCoordinator_js;
 const ui_taskCenter = __m_ui_taskCenter_js;
 const core_settings = __m_core_settings_js;
 const core_text = __m_core_text_js;
-const core_theme = __m_core_theme_js;
 const generation_client = __m_generation_client_js;
 const generation_contentRegeneration = __m_generation_contentRegeneration_js;
-const generation_imageGeneration = __m_generation_imageGeneration_js;
 const cg_editor = __m_ui_cgPromptEditor_js;
 const participant_picker = __m_ui_participantPicker_js;
 const participant_contract = __m_core_participants_js;
@@ -53194,41 +54240,19 @@ const image_viewer = __m_ui_cgImageViewer_js;
 const navigation_bookmark = __m_ui_navigationBookmark_js;
 const floating_archive = __m_ui_floatingArchive_js;
 const recovery_view = __m_ui_recoveryView_js;
-const modes_achievements = __m_modes_achievements_js;
-const modes_album = __m_modes_album_js;
-const modes_butterfly = __m_modes_butterfly_js;
 const modes_calendar = __m_modes_calendar_js;
-const modes_ending = __m_modes_ending_js;
-const modes_advEvent = __m_modes_advEvent_js;
 const modes_heart = __m_modes_heart_js;
-const modes_items = __m_modes_items_js;
-const modes_cabinet = __m_modes_cabinet_js;
-const modes_phone = __m_modes_phone_js;
 const modes_room = __m_modes_room_js;
-const modes_relations = __m_modes_relations_js;
-const ui_advEventView = __m_ui_advEventView_js;
-const ui_albumView = __m_ui_albumView_js;
-const ui_butterflyView = __m_ui_butterflyView_js;
-const ui_calendarView = __m_ui_calendarView_js;
 const ui_contentManager = __m_ui_contentManager_js;
 const ui_endingView = __m_ui_endingView_js;
-const ui_heartView = __m_ui_heartView_js;
 const ui_phoneView = __m_ui_phoneView_js;
-const song_view = __m_ui_themeSongView_js;
 const song_contract = __m_core_themeSongContract_js;
-const ui_inboxView = __m_ui_inboxView_js;
 const modes_inbox = __m_modes_inbox_js;
 const modes_pastLives = __m_modes_pastLives_js;
-const ui_travelView = __m_ui_travelView_js;
 const ui_settingsPanel = __m_ui_settingsPanel_js;
-const home_view = __m_ui_homeView_js;
-const past_lives_view = __m_ui_pastLivesView_js;
-const time_stories_view = __m_ui_timeStoriesView_js;
 const time_stories = __m_core_timeStoriesContract_js;
 const modes_timeStories = __m_modes_timeStories_js;
-const ui_styles = __m_ui_styles_js;
 const workspace_ui = __m_ui_workspace_js;
-const language_view = __m_ui_languageView_js;
 const ui_workspaceState = __m_ui_workspaceState_js;
 const toolbarIcons = __m_ui_toolbarIcons_js;
 const runtimeState = __m_core_state_js.state;
@@ -53242,8 +54266,6 @@ const runtimeState = __m_core_state_js.state;
 
 
 
-// Heartbeat Memories r35 modular runtime.
-// Extracted from r34 without changing archive/cache storage contracts.
 
 
 
@@ -53273,38 +54295,8 @@ const runtimeState = __m_core_state_js.state;
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+// 主窗口外壳：手机安全区、打开 / 关闭 / 返回、聊天切换失效、通用小部件
+// 从 ui/overlay.js 原样搬出（重构阶段 2），声明文本一字未改；ui/overlay.js 仍转发原有导出。
 
 function isArchiveMobileViewport() {
     try {
@@ -53379,6 +54371,7 @@ function bindOverlayCloseFallback(overlay) {
 function toolbarMoreMenu(overlay) {
     return overlay?.querySelector?.('[data-rmt-toolbar-more-menu]') || null;
 }
+
 function closeToolbarMoreMenu(overlay, { restoreFocus = false } = {}) {
     const menu = toolbarMoreMenu(overlay);
     const trigger = overlay?.querySelector?.('[data-rmt-action="toolbar-more"]');
@@ -53388,6 +54381,7 @@ function closeToolbarMoreMenu(overlay, { restoreFocus = false } = {}) {
     if (restoreFocus) trigger?.focus?.();
     return true;
 }
+
 function toggleToolbarMoreMenu(overlay) {
     const menu = toolbarMoreMenu(overlay);
     const trigger = overlay?.querySelector?.('[data-rmt-action="toolbar-more"]');
@@ -53397,6 +54391,7 @@ function toggleToolbarMoreMenu(overlay) {
     trigger.setAttribute('aria-expanded', String(open));
     if (open) menu.querySelector('button:not([disabled])')?.focus?.();
 }
+
 function bindToolbarMoreMenu(overlay) {
     if (!overlay || overlay.dataset.rmtToolbarMenuBound === 'true') return;
     overlay.addEventListener('keydown', event => {
@@ -53419,68 +54414,6 @@ function revealArchiveOverlay(overlay) {
             }
         }
     }
-}
-
-function openOverlay() {
-    floating_archive.hideFloatingArchive();
-    image_viewer.closeCgImageViewer({ restoreFocus: false });
-    ui_styles.ensureStyles();
-    const preferDialog = isArchiveMobileViewport() && typeof globalThis.HTMLDialogElement === 'function';
-    let overlay = document.getElementById(core_constants.OVERLAY_ID);
-    if (overlay && preferDialog && !(overlay instanceof globalThis.HTMLDialogElement)) {
-        overlay.remove();
-        overlay = null;
-    }
-    if (!overlay) {
-        overlay = document.createElement(preferDialog ? 'dialog' : 'div');
-        overlay.id = core_constants.OVERLAY_ID;
-        overlay.innerHTML = `
-          <div class="rmt-shell" role="dialog" aria-modal="true" aria-label="心迹回廊">
-            <div class="rmt-topbar">
-              <button type="button" data-rmt-action="back" hidden aria-label="返回上级">${toolbarIcons.toolbarIcon('back')}</button>
-              <div class="rmt-topbar-title">心迹回廊</div>
-              <div class="rmt-live-tasks" data-rmt-live-tasks hidden></div>
-              <button type="button" data-rmt-action="library-home" aria-label="打开档案室" title="档案室">${toolbarIcons.toolbarIcon('library')}</button>
-              <button type="button" data-rmt-action="workspace-expand" aria-label="展开窗口" title="展开窗口">${toolbarIcons.toolbarIcon('expand')}</button>
-              <button type="button" data-rmt-action="regenerate" hidden aria-label="增量追加" title="增量追加">${toolbarIcons.toolbarIcon('add')}</button>
-              <button type="button" data-rmt-action="manage" hidden aria-label="管理" title="管理">${toolbarIcons.toolbarIcon('manage')}</button>
-              <button type="button" data-rmt-action="tasks" aria-label="任务" title="任务">${toolbarIcons.toolbarIcon('tasks')}<span class="rmt-task-count" data-rmt-task-count hidden>0</span></button>
-              <button type="button" data-rmt-action="toolbar-more" aria-label="更多操作" aria-haspopup="menu" aria-controls="rmt-toolbar-more-menu" aria-expanded="false">${toolbarIcons.toolbarIcon('more')}</button>
-              <div id="rmt-toolbar-more-menu" class="rmt-toolbar-more-menu" data-rmt-toolbar-more-menu role="menu" aria-label="更多操作" hidden>
-<button type="button" data-reader="page" role="menuitem">朗读本页</button><button type="button" data-reader="selection" role="menuitem">朗读选中文字</button><button type="button" data-reader="stop" role="menuitem">停止朗读</button><button type="button" data-rmt-workspace-route="mirrorVoice" role="menuitem">镜译 · 语音设置</button>
-                <button type="button" data-rmt-action="workspace-expand" role="menuitem">${toolbarIcons.toolbarIcon('expand')}<span>展开窗口</span></button>
-                <button type="button" data-rmt-action="regenerate" data-rmt-toolbar-more-item="regenerate" role="menuitem" hidden>${toolbarIcons.toolbarIcon('add')}<span>增量追加</span></button>
-                <button type="button" data-rmt-action="manage" data-rmt-toolbar-more-item="manage" role="menuitem" hidden>${toolbarIcons.toolbarIcon('manage')}<span>管理</span></button>
-              </div>
-              <button type="button" data-rmt-action="close" aria-label="关闭档案室">${toolbarIcons.toolbarIcon('close')}</button>
-            </div>
-            ${workspace_ui.workspaceNavHtml()}
-            <div class="rmt-task-center" data-rmt-task-center hidden></div>
-            <div class="rmt-body"></div>
-          </div>`;
-        document.body.appendChild(overlay);
-        overlay.addEventListener('click', handleOverlayClick);
-        overlay.addEventListener('change', handleOverlayChange);
-        overlay.addEventListener('error', generation_imageGeneration.handleOverlayMediaError, true);
-        if (typeof globalThis.HTMLDialogElement === 'function' && overlay instanceof globalThis.HTMLDialogElement) {
-            overlay.addEventListener('cancel', event => {
-                // ESC on desktop and the Android back gesture both land here.
-                event.preventDefault();
-                closeArchiveOverlayFromUser();
-            });
-        }
-    }
-    ui_taskCenter.ensureTaskCenterChrome(overlay);
-    applyArchiveMobileSafeArea(overlay);
-    try { core_theme.applyThemeToElement(overlay, core_settings.getPluginSettings(core_context.getContext())); } catch {}
-    ui_taskCenter.syncTaskCenterChrome();
-    bindOverlayCloseFallback(overlay);
-    bindToolbarMoreMenu(overlay);
-    revealArchiveOverlay(overlay);
-    workspace_ui.syncWorkspaceChrome();
-    mirror_reader.mountMirrorReader(overlay);
-
-    return overlay;
 }
 
 function closeOverlay(options = {}) {
@@ -53558,43 +54491,6 @@ function setBackVisible(visible, label = '返回上级') {
     button.innerHTML = toolbarIcons.toolbarIcon('back');
     button.title = label;
     button.setAttribute('aria-label', label);
-}
-
-function navigateBack() {
-    if (image_viewer.closeCgImageViewer()) return;
-    if (runtimeState.activeMode === 'bedtime' && bedtime_view.closeBedtimeDetail()) return;
-    if (runtimeState.activeMode === 'pastLives' && past_lives_view.closePastLivesDetail()) return;
-    if (time_stories.isTimeStoryMode(runtimeState.activeMode) && time_stories_view.closeTimeStoryDetail()) return;
-    if (runtimeState.activeMode === core_constants.MODE.TIME_ECHO) return openCachedOrGenerate(core_constants.MODE.PHONE);
-    if (cg_editor.hasCgPromptEditor()) return cg_editor.closeCgPromptEditor();
-    if (runtimeState.endingEasterEggRuntime) return ui_endingView.closeEndingEasterEgg();
-    if (runtimeState.contentManagerOpen) {
-        runtimeState.contentManagerOpen = false;
-        return renderActive();
-    }
-    if (runtimeState.activeMode === core_constants.MODE.INBOX && ui_inboxView.closeInboxLetter()) return;
-    if (runtimeState.activeMode === core_constants.MODE.TRAVEL && runtimeState.activeSession?.selectedLocationId) return ui_travelView.closeTravelDetail();
-    if (runtimeState.activeMode === core_constants.MODE.ITEMS) return modes_room.returnToRoomFromDeep();
-    if (runtimeState.activeMode === core_constants.MODE.ALBUM && runtimeState.activeSession?.kind === core_constants.MODE.ALBUM && runtimeState.activeSession.sharedMemory) {
-        runtimeState.activeSession.sharedMemory = false;
-        return ui_albumView.renderAlbum();
-    }
-    if (runtimeState.activeMode) return workspace_ui.openWorkspaceTab('content');
-    if (runtimeState.archiveViewLevel === 'snapshot' && runtimeState.activeArchiveSnapshot) {
-        const key = core_text.normalizeText(runtimeState.activeArchiveSnapshot.archiveGroupId, 120) || (() => { const entry = archive_groups.getArchiveIndex(core_context.getContext()).find(item => core_context.archiveIndexEntryId(item) === core_text.normalizeText(runtimeState.activeArchiveSnapshot.entryId, 120)); return entry ? archive_groups.archiveGroupKeyForEntry(entry) : ''; })();
-        runtimeState.activeArchiveSnapshot = null;
-        runtimeState.activeArchiveReadOnly = true;
-        return key ? archive_library.showArchiveCharacter(key) : archive_library.showArchiveLibrary();
-    }
-    if (runtimeState.archiveViewLevel === 'chooser') {
-        try {
-            const key = archive_groups.currentArchiveGroupKey(core_context.currentCharacterGuard());
-            if (key) return archive_library.showArchiveCharacter(key);
-        } catch {}
-        return archive_library.showArchiveLibrary();
-    }
-    if (runtimeState.archiveViewLevel === 'character') return archive_library.showArchiveLibrary();
-    return home_view.showHome();
 }
 
 function setManageVisible(visible) {
@@ -53676,53 +54572,6 @@ function confirmRoomLifeRefresh() {
         '这会重新生成今天的房间生活状态并替换当前“今日生活”缓存；聊天档案和房间主体不会被修改。',
         { destructive: true },
     );
-}
-
-function requestCurrentArchiveImport({ cardTypeConfirmed = false, participantRoster } = {}) {
-    let context;
-    try { context = core_context.currentCharacterGuard(); }
-    catch (error) {
-        globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心迹回廊');
-        return false;
-    }
-    const existing = archive_repository.getImportedMemory(context);
-    if (!existing && !cardTypeConfirmed && !archive_repository.getCurrentArchiveImportRecoverySummary(context)) {
-        return participant_picker.showArchiveCardTypePicker({ context,
-            onSingle: () => {
-                void core_cache.discardParticipantDraft(context).then(() => requestCurrentArchiveImport({ cardTypeConfirmed: true, participantRoster: null }))
-                    .catch(error => globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心迹回廊'));
-            },
-            onMultiple: () => {
-                void participant_picker.showParticipantPicker({ context, requireSelection: true, confirmLabel: '确认人物并建档',
-                    onConfirm: async (roster, expectedRevision) => {
-                        const saved = await core_cache.commitParticipantRoster(context, roster, { expectedRevision });
-                        participant_picker.closeParticipantPicker();
-                        requestCurrentArchiveImport({ cardTypeConfirmed: true, participantRoster: saved });
-                    },
-                }).catch(error => globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心迹回廊'));
-            },
-        });
-    }
-    const settings = core_settings.getPluginSettings(context);
-    const detected = archive_repository.externalMemorySourceSummary(context);
-    if (settings.useCurrentChatExternalMemory && detected.length && !archive_repository.getMemoryPreflight(context)
-        && !archive_repository.getCurrentArchiveImportRecoverySummary(context)) {
-        showChooser();
-        globalThis.toastr?.info?.('检测到当前窗口记忆 / 摘要来源。请先点“扫描记忆 / 摘要”，确认读取范围后再生成/更新当前窗口档案。', '心迹回廊');
-        return false;
-    }
-    const title = existing ? '增量更新当前窗口档案？' : '生成当前窗口档案？';
-    const detail = existing
-        ? '默认只整理“上次档案之后新增的聊天”和发生变化的当前窗口记忆/摘要。已有 Mxxx 记忆 ID 不重排，已生成的回忆相簿、CG、ADV、房间、ENDING、储物、私人终端会继续保留。若检测到旧聊天被编辑/删除，本次会停止并保留成果，说明变更类别，由你选择如何处理。'
-        : '这会读取当前聊天窗口并建立一份只属于这个窗口的心迹回廊档案。聊天正文不会被修改；之后也只有你手动更新时档案才会变化。';
-    if (!confirmExplicitAction(title, detail, { destructive: false })) return false;
-    void archive_repository.importCurrentChatMemory({ fullRebuild: false,
-        ...(participantRoster !== undefined ? { participantRoster } : {}),
-    }).catch(error => {
-        console.error('[HeartbeatMemories] current archive import action failed', core_text.safeErrorDiagnostic(error));
-        globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心迹回廊');
-    });
-    return true;
 }
 
 async function requestParticipantSelection() {
@@ -53841,49 +54690,6 @@ async function requestParticipantVersions() {
     });
 }
 
-async function presentGenerationTaskResult(draftId, context = core_context.currentCharacterGuard()) {
-    const scope = core_context.chatScopeKey(context);
-    const record = await core_cache.readGenerationTaskResult(context, draftId);
-    if (core_context.chatScopeKey(core_context.currentCharacterGuard()) !== scope) return { status: 'awaiting-choice', draftId };
-    const decision = await participant_picker.chooseGenerationTaskResult({ context,
-        title: `${core_constants.MODE_LABEL[record.mode] || '旧任务'}已生成完成` });
-    if (!decision || core_context.chatScopeKey(core_context.currentCharacterGuard()) !== scope) return { status: 'awaiting-choice', draftId };
-    const result = await core_cache.resolveGenerationTaskResult(context, draftId, decision);
-    if (decision === 'independent') await archive_library.openGenerationTaskResult(draftId, context);
-    else {
-        globalThis.toastr?.success?.('已更新对应页面；替换前的内容和原任务成果都已保留。', '心迹回廊');
-        showChooser();
-    }
-    return result;
-}
-
-function requestCurrentArchiveFullRebuild() {
-    let context;
-    try { context = core_context.currentCharacterGuard(); }
-    catch (error) {
-        globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心迹回廊');
-        return false;
-    }
-    if (!archive_repository.getImportedMemory(context)) return requestCurrentArchiveImport();
-    const settings = core_settings.getPluginSettings(context);
-    const detected = archive_repository.externalMemorySourceSummary(context);
-    if (settings.useCurrentChatExternalMemory && detected.length && !archive_repository.getMemoryPreflight(context)) {
-        showChooser();
-        globalThis.toastr?.info?.('完全重建前请先扫描当前窗口记忆 / 摘要，确认读取范围。', '心迹回廊');
-        return false;
-    }
-    if (!confirmExplicitActionTwice(
-        '完全重建当前窗口档案？',
-        '这会重新读取整个当前聊天并重新编号 Mxxx 记忆，因此旧档案版本对应的回忆相簿、CG、ADV、房间、蝴蝶效应、ENDING、储物、私人终端和邮箱（含来信及收藏的明信片）缓存都会失效，请先备份。只有当你明确需要从头整理（例如旧消息被大量编辑/删除）时才建议使用。',
-        { destructive: true },
-    )) return false;
-    void archive_repository.importCurrentChatMemory({ fullRebuild: true }).catch(error => {
-        console.error('[HeartbeatMemories] full archive rebuild failed', core_text.safeErrorDiagnostic(error));
-        globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心迹回廊');
-    });
-    return true;
-}
-
 function formatArchiveTime(value) {
     const time = Number(value) || 0;
     if (!time) return '未记录';
@@ -53969,182 +54775,6 @@ function memoryLockPanelHtml(memory, { readOnly = false } = {}) {
       <input type="text" data-rmt-memory-date="${core_text.esc(item.id)}" value="${core_text.esc(item.date || '')}" ${readOnly ? 'disabled' : ''} placeholder="公历 YYYY/MM/DD 或历年" style="min-width:160px;flex:1">
     </div>`).join('');
     return `<details class="rmt-memory-lock-panel"><summary>档案记忆 ${hot.length} 条${cold ? ` · 冷归档 ${cold}` : ''}</summary><div style="max-height:240px;overflow:auto">${rows}</div></details>`;
-}
-
-function refreshAfterMemoryPatch() {
-    if (runtimeState.activeMode === core_constants.MODE.ALBUM) return ui_albumView.renderAlbum();
-    if (runtimeState.archiveViewLevel === 'chooser' && !runtimeState.activeMode) return showChooser();
-}
-
-async function applyMemoryPatch(id, patch) {
-    try {
-        await archive_repository.patchImportedMemoryFields(id, patch);
-        refreshAfterMemoryPatch();
-    } catch (error) {
-        globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊');
-    }
-}
-
-function showChooser({ section = null } = {}) {
-    const priorTab = ui_workspaceState.workspace.tab;
-    ui_workspaceState.leaveWorkspaceReader();
-    ui_workspaceState.workspace.tab = section === 'content' || (!section && priorTab === 'content') ? 'content' : 'archive';
-    ui_endingView.closeEndingEasterEgg({ restoreFocus: false });
-    runtimeState.activeArchiveSnapshot = null;
-    runtimeState.activeArchiveReadOnly = true;
-    modes_room.stopRoomClock();
-    ui_phoneView.stopPhoneClock();
-    runtimeState.activeMode = null;
-    runtimeState.activeSession = null;
-    runtimeState.archiveViewLevel = 'chooser';
-    openOverlay();
-    setRegenerateVisible(false);
-    setManageVisible(false);
-    setBackVisible(true, '角色档案');
-    const body = bodyEl();
-    if (!body) return;
-
-    let hydrationContext;
-    try { hydrationContext = core_context.currentCharacterGuard(); } catch { hydrationContext = null; }
-    if (hydrationContext) {
-        const scope = core_cache.cacheScopeFromContext(hydrationContext);
-        const stored = hydrationContext.chatMetadata?.[core_constants.CACHE_KEY];
-        if (core_cache.isCompressedCacheRecord(stored) && !runtimeState.runtimeSessionCache.has(scope)) {
-            topTitle('心迹回廊 · 档案室');
-            body.innerHTML = '<div class="rmt-loading"><div class="rmt-loading-card"><div class="rmt-spinner"></div><b>正在读取已生成档案…</b></div></div>';
-            const chooserEpoch = ui_workspaceState.workspace.epoch;
-            const chooserStillVisible = () => chooserEpoch === ui_workspaceState.workspace.epoch
-                && runtimeState.archiveViewLevel === 'chooser' && !runtimeState.activeMode
-                && !runtimeState.activeArchiveSnapshot && !document.getElementById(core_constants.OVERLAY_ID)?.hidden
-                && core_cache.cacheScopeFromContext(core_context.getContext()) === scope;
-            void core_cache.ensureCacheHydrated(hydrationContext).then(() => {
-                if (chooserStillVisible()) archive_snapshots.scheduleChooserRefresh(0);
-            }).catch(error => {
-                if (!chooserStillVisible()) return;
-                console.warn('[HeartbeatMemories] compressed cache read failed', core_text.safeErrorDiagnostic(error));
-                const latestBody = bodyEl();
-                if (latestBody) latestBody.innerHTML = `<div class="rmt-error"><div><b>已生成内容缓存读取失败</b><div style="margin:10px 0;white-space:pre-wrap;opacity:.78">${core_text.esc(core_text.safeErrorSummary(error))}</div><button type="button" class="rmt-btn" data-rmt-action="library-home">返回档案室</button></div></div>`;
-            });
-            return;
-        }
-    }
-
-    let state;
-    let context;
-    try {
-        context = core_context.currentCharacterGuard();
-        state = archive_repository.getMemoryState(context);
-    } catch (error) {
-        if (ui_workspaceState.workspace.tab === 'content') {
-            topTitle('心迹回廊 · 内容');
-            body.innerHTML = '<main class="rmt-workspace-page">' + workspace_ui.workspaceCatalogueHtml() + '</main>';
-            workspace_ui.syncWorkspaceChrome();
-            return;
-        }
-        topTitle('心迹回廊 · 档案室');
-        body.innerHTML = `<div class="rmt-error"><div><b>无法读取当前聊天</b><div style="margin-top:10px;white-space:pre-wrap;opacity:.75">${core_text.esc(core_text.safeErrorSummary(error))}</div></div></div>`;
-        return;
-    }
-    const ready = state.status === 'ready';
-    const settings = core_settings.getPluginSettings(context);
-    const memory = state.memory;
-    const importLabel = ready ? '增量更新当前窗口档案' : '生成当前窗口档案';
-    const preview = ready ? memory.memories.slice(0, 7).map(item => item.title).join(' · ') : '';
-    const archiveName = ready ? (memory.archiveName || archive_repository.fallbackArchiveName(memory.memories)) : '尚未创建档案';
-    const archiveSummary = ready ? (memory.archiveSummary || archive_repository.fallbackArchiveSummary(memory.memories)) : '先为当前聊天创建档案。默认手动更新，也可在设置中开启按楼层自动同步。';
-    const keywords = ready ? core_text.cleanArray(memory.archiveKeywords, 10, 80) : [];
-    const pendingClass = ready && (state.pendingMessages > 0 || state.sourceChanged) ? 'pending' : 'ready';
-    const cachedRead = ready ? { context, chatId: core_context.getChatId(context), memoryBank: memory, clone: false } : null;
-    const portals = ready ? readableModePortals(archive_snapshots.baseModeAvailability(cachedRead), cachedRead) : core_constants.ARCHIVE_PORTAL_MODES.map(mode => ({ mode, session: null, meta: archive_snapshots.modePortalMeta(mode) }));
-    const generatedCount = portals.filter(item => !!item.session && !item.session.readableProgress).length;
-    const calendarPortal = portals.find(item => item.mode === core_constants.MODE.CALENDAR) || { session: null };
-    const calendarGenerated = !!calendarPortal.session;
-    const calendarGenerating = core_requestCoordinator.isModeGenerating(core_constants.MODE.CALENDAR);
-    const calendarQuick = calendarQuickAccessHtml({ ready, generated: calendarGenerated, generating: calendarGenerating,
-        partial: !!calendarPortal.session?.readableProgress, readOnly: false });
-    const concurrentLabels = core_requestCoordinator.generationTaskLabels();
-    const anyRunning = runtimeState.busy || concurrentLabels.length > 0;
-    topTitle(`心迹回廊 · 档案室${ready ? ` · ${archiveName}` : ''}`);
-    const portalHtml = portals.filter(item => item.mode !== core_constants.MODE.CALENDAR).map(({ mode, session, meta }) => {
-        const generated = !!session;
-        const generating = core_requestCoordinator.isModeGenerating(mode);
-        const capacityReached = core_requestCoordinator.activeLogicalGenerationCount() >= core_constants.MAX_CONCURRENT_GENERATION_TASKS && !generating;
-        const isCalendar = mode === core_constants.MODE.CALENDAR;
-        const statusText = session?.readableProgress ? '已生成部分内容 · 可以先查看' : generating
-            ? (generated ? (isCalendar ? '刷新中 · 旧日历仍可查看' : '增量追加中 · 旧内容仍可查看') : '后台生成中 · 可继续启动其他入口')
-            : generated ? (isCalendar ? '已整理 · 点击查看日历' : '已生成 · 点击头像查看') : '尚未生成';
-        const draft = mode === core_constants.MODE.PHONE && ready ? core_cache.loadPhoneGenerationDraft(context) : null;
-        const actionText = mode === core_constants.MODE.INBOX ? (generating ? '收信中…' : '收取新信') : generating ? '生成中…' : draft ? '重试未完成项' : generated ? (isCalendar ? '刷新日历' : '增量追加') : (isCalendar ? '生成日历' : '生成这一项');
-        return `<article class="rmt-archive-portal ${generated ? 'ready' : 'empty'} ${generating ? 'generating' : ''} rmt-archive-portal-${core_text.esc(meta.accent)}">
-          <button type="button" class="rmt-portal-open" ${generated || (ready && [core_constants.MODE.INBOX, core_constants.MODE.PHONE, core_constants.MODE.HEART].includes(mode)) ? `data-rmt-mode="${core_text.esc(mode)}"` : 'disabled'}>
-            <span class="rmt-portal-avatar"><i class="fa-solid ${core_text.esc(meta.icon)}"></i>${generated ? `<span class="rmt-portal-ready-dot">${session?.readableProgress ? '…' : '✓'}</span>` : '<span class="rmt-portal-lock"><i class="fa-solid fa-lock"></i></span>'}</span>
-            <span class="rmt-portal-title">${core_text.esc(meta.title)}</span>
-            <span class="rmt-portal-subtitle">${core_text.esc(meta.subtitle)}</span>
-            <span class="rmt-portal-status">${core_text.esc(statusText)}</span>
-          </button>
-          ${draft ? `<p class="rmt-phone-draft-status" role="status">${core_text.esc(core_text.safeErrorSummary({ code: 'RMT_PHONE_DRAFT_AVAILABLE', failure: draft.failure, partialProgress: { completed: draft.completedApps.length, total: draft.plan.apps.length } }))}</p>` : ''}
-          <button type="button" class="rmt-btn rmt-portal-generate" ${mode === core_constants.MODE.HEART ? 'data-rmt-action="open-heart"' : `data-rmt-generate-mode="${core_text.esc(mode)}"`} ${generated ? 'data-rmt-regenerate="true"' : ''} ${runtimeState.busy || generating || capacityReached ? 'disabled' : ''}>${core_text.esc(mode === core_constants.MODE.HEART ? '打开角色互动' : actionText)}</button>
-        </article>`;
-    }).join('');
-    const memorySettings = core_settings.getPluginSettings();
-    const externalSetting = memorySettings.useCurrentChatExternalMemory;
-    const detectedExternalSources = archive_repository.externalMemorySourceSummary(context);
-    const preflight = archive_repository.getMemoryPreflight(context);
-    const importedSources = ready ? core_text.cleanArray((memory.externalMemorySources || []).map(item => {
-        const label = core_text.normalizeText(item?.label, 80);
-        const coverage = { complete: '完整', partial: '部分', truncated: '已截断', failed: '失败' }[item?.coverageStatus] || '部分';
-        const reason = core_text.normalizeText(item?.coverageReason, 80);
-        return `${coverage} · ${label} ${Number(item?.count) || 0}条${reason ? ` · ${reason}` : ''}`;
-    }), 8, 220) : [];
-    const worldInfoSelectionText = archive_repository.memoryWorldInfoSelectionSummary(context);
-    const preflightText = preflight
-        ? `本次已扫描：建档可用 ${preflight.records.length} 个摘要片段${preflight.worldInfo?.entries?.length ? ` · 世界书 ${preflight.worldInfo.entries.length} 条` : ''} · ${Number(preflight.totalChars || 0).toLocaleString()} 字符`
-        : detectedExternalSources.length
-            ? `检测到：${detectedExternalSources.map(item => item.label).join(' · ')}；建档前请先扫描一次。`
-            : archive_repository.hasMemoryWorldInfoSelection(context)
-                ? `${worldInfoSelectionText}；历史摘要将用于建档，未标记的条目仍只作设定背景。`
-                : '当前没有检测到可读取的当前窗口记忆 / 摘要；仍可只用聊天正文建档。普通世界书/角色卡只作为设定参考。';
-    const externalSourceText = preflight ? preflightText : importedSources.length ? `上次档案同步：${importedSources.join(' · ')}` : preflightText;
-    const requirePreflight = externalSetting && (detectedExternalSources.length > 0 || archive_repository.hasMemoryWorldInfoSelection(context)) && !preflight;
-    const externalMemoryControls = `<div class="rmt-external-memory-row">
-      <label class="rmt-external-memory-toggle"><input type="checkbox" data-rmt-external-memory-toggle ${externalSetting ? 'checked' : ''} ${runtimeState.busy || core_requestCoordinator.hasGenerationTasks() ? 'disabled' : ''}> 读取外部记忆 / 摘要</label>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:7px"><button type="button" class="rmt-btn" data-rmt-action="read-memory-plugins" ${runtimeState.busy || core_requestCoordinator.hasGenerationTasks() ? 'disabled' : ''}>扫描记忆 / 摘要</button><button type="button" class="rmt-btn" data-rmt-action="memory-worldinfo-picker" ${runtimeState.busy || core_requestCoordinator.hasGenerationTasks() ? 'disabled' : ''}>选择记忆世界书</button></div>
-      <small>${core_text.esc(externalSourceText)}</small>
-      ${preflight ? `<details class="rmt-memory-read-details"><summary>来源读取详情</summary><small>本地当前来源：${Number(preflight.storedRecordCount || 0)} 条 · ${Number(preflight.storedChars || 0).toLocaleString()} 字符；本次建档：${preflight.records.length} 个片段 · ${Number(preflight.recordChars || 0).toLocaleString()} 字符。</small>${preflight.sources.map(source => `<p>${core_text.esc(source.label)}：${core_text.esc(source.coverage?.reason || ({ complete: '已读取', partial: '部分可用', truncated: '本次输入受限', failed: '读取失败' }[source.coverage?.status] || '状态未知'))}</p>`).join('')}${(preflight.worldInfo?.books || []).filter(book => !book.historySource).map(book => `<p>${core_text.esc(book.name)}：${book.error ? '读取失败' : `${book.imported} 条，仅作设定背景；历史内容请标记为历史摘要`}</p>`).join('')}</details>` : ''}
-    </div>`;
-    const generationAction = '';
-
-    body.innerHTML = `
-      <div class="rmt-archive-room">
-        <div data-rmt-archive-recoveries aria-live="polite">
-        <div data-rmt-archive-recoveries>${recovery_view.archiveRecoveryHtml(archive_repository.getCurrentArchiveImportRecoverySummary(context))}
-        ${recovery_view.archiveRecoveryHtml(archive_repository.getCurrentArchiveProfileRecoverySummary(context), { profile: true })}</div>
-        </div>
-        <div data-rmt-calendar-quick>${calendarQuick}</div>
-        <section class="rmt-memory-gate rmt-archive-card">
-          <div class="rmt-memory-gate-text">
-            <div class="rmt-archive-kicker">PRIVATE MEMORY ARCHIVE</div>
-            <strong class="rmt-archive-title">${core_text.esc(archiveName)}</strong>
-            ${ready ? core_archiveCover.archiveCoverHtml(memory, { writable: true, busy: anyRunning }) : `<div class="rmt-archive-summary">${core_text.esc(archiveSummary)}</div>`}
-            ${keywords.length ? `<div class="rmt-archive-keywords">${keywords.map(word => `<span>${core_text.esc(word)}</span>`).join('')}</div>` : ''}
-            <div class="rmt-memory-status ${pendingClass}">${core_text.esc(archive_snapshots.memoryStateLabel(state, settings.autoUpdates?.archive?.enabled))}</div>
-            ${ready ? `<div class="rmt-archive-meta">上次归档：${core_text.esc(formatArchiveTime(memory.updatedAt || memory.createdAt))}</div>` : ''}
-            ${ready ? memoryLockPanelHtml(memory) : ''}
-          </div>
-          <div class="rmt-current-archive-actions">
-            <button type="button" class="rmt-btn" data-rmt-archive-read-drafts>读取已保存草稿（不生成）</button>
-            <button type="button" class="rmt-btn" data-rmt-archive-import-draft>导入整理草稿</button>
-            <button class="rmt-btn rmt-archive-update" type="button" data-rmt-action="import-memory" ${runtimeState.busy || core_requestCoordinator.hasGenerationTasks() || requirePreflight ? 'disabled' : ''}>${core_text.esc(requirePreflight ? '先扫描记忆 / 摘要' : (ready ? '增量更新当前窗口档案' : importLabel))}</button>
-            ${ready ? `<button class="rmt-btn" type="button" data-rmt-action="full-rebuild-memory" ${runtimeState.busy || core_requestCoordinator.hasGenerationTasks() || requirePreflight ? 'disabled' : ''}>完全重建档案</button><button class="rmt-btn" type="button" data-rmt-action="current-archive-delete" ${runtimeState.busy || core_requestCoordinator.hasGenerationTasks() ? 'disabled' : ''}>删除当前档案</button>` : ''}
-          </div>
-        </section>
-        ${externalMemoryControls}
-        <section class="rmt-archive-portals" aria-label="档案室内容入口">${portalHtml}</section>
-        ${generationAction}
-      </div>`;
-    workspace_ui.arrangeArchiveWorkspace(body, { portals, ready });
-    if (ui_workspaceState.workspace.tab === 'archive') void loadChooserArchiveRecovery(context);
-    ui_settingsPanel.refreshSettingsMemoryStatus();
 }
 
 function showLoading(text) {
@@ -54274,59 +54904,6 @@ function emptyArchiveMode(mode, memory, context, stored) {
     return null;
 }
 
-let heartOpenRequest = 0;
-function openCachedOrGenerate(mode, options = {}) {
-    if (mode === 'journal') return handJournal.openHandJournal();
-    if (['mirrorCall','mirrorVoice'].includes(mode)) return workspace_ui.openVoiceModule(mode);
-    if (!Object.values(core_constants.MODE).includes(mode)) return;
-    heart_reader.rememberHeartReader();
-    const openRequest = ++heartOpenRequest;
-    const route = options.workspaceRoute || mode;
-    ui_workspaceState.workspace.route = route; ui_workspaceState.workspace.tab = 'content'; ui_workspaceState.workspace.empty = null;
-    const navigationEpoch = ui_workspaceState.workspace.epoch;
-    if (runtimeState.activeArchiveSnapshot) {
-        const snapshot = runtimeState.activeArchiveSnapshot;
-        const stored = snapshot.cache || {};
-        const cached = core_cache.loadSession(mode, { chatId: snapshot.chatId, memoryBank: snapshot.memory, cache: stored, clone: true, includePartial: true });
-        const session = cached || (!stored[mode] ? emptyArchiveMode(mode, snapshot.memory, null, stored) : null);
-        if (session) {
-            runtimeState.activeMode = mode; runtimeState.activeSession = session;
-            ui_workspaceState.prepareWorkspaceSession(mode, session, route);
-        heart_reader.enterHeartReader(session, route); return renderActive();
-        }
-        return workspace_ui.showEmptyWorkspace(mode, { memory: snapshot.memory, stored: !!stored[mode] });
-    }
-    let context, memory;
-    try { context = core_context.currentCharacterGuard(); memory = archive_repository.requireArchive(context); }
-    catch {
-        return workspace_ui.showEmptyWorkspace(mode, { noChat: !context });
-    }
-    // Hydrate before deciding whether a record is absent. A fresh empty page must never
-    // become an overwrite route for an existing compressed/unreadable record.
-    if (core_cache.isCompressedCacheRecord(context.chatMetadata?.[core_constants.CACHE_KEY])
-        && !runtimeState.runtimeSessionCache.has(core_cache.cacheScopeFromContext(context))) {
-        const origin = core_context.captureTaskOrigin(context, memory.archiveRevision);
-        const priorMode = runtimeState.activeMode;
-        return core_cache.ensureCacheHydrated(context).then(() => {
-            if (openRequest !== heartOpenRequest || navigationEpoch !== ui_workspaceState.workspace.epoch || !core_context.isCurrentTaskOrigin(origin)
-                || runtimeState.activeArchiveSnapshot || runtimeState.activeMode !== priorMode
-                || document.getElementById(core_constants.OVERLAY_ID)?.hidden) return;
-            return openCachedOrGenerate(mode, { workspaceRoute: route });
-        }).catch(error => {
-            if (openRequest === heartOpenRequest && navigationEpoch === ui_workspaceState.workspace.epoch) globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心迹回廊');
-        });
-    }
-    const stored = core_cache.getCache(context);
-    const cached = core_cache.loadSession(mode, { context, memoryBank: memory, clone: true, includePartial: true });
-    const session = cached || (!stored?.[mode] ? emptyArchiveMode(mode, memory, context, stored) : null);
-    if (session) {
-        runtimeState.activeMode = mode; runtimeState.activeSession = session;
-        ui_workspaceState.prepareWorkspaceSession(mode, session, route);
-        heart_reader.enterHeartReader(session, route); return renderActive();
-    }
-    return workspace_ui.showEmptyWorkspace(mode, { memory, stored: !!stored?.[mode] });
-}
-
 function decorateReadOnlyModeUi() {
     if (!runtimeState.activeArchiveSnapshot) return;
     const body = bodyEl();
@@ -54372,120 +54949,6 @@ function refreshContentRegenerationDraftView(journal, context, { archiveTarget =
     return true;
 }
 
-async function refreshPartialGenerationView(mode, context, { draftId, pageId, archiveTarget = null, readerStillCurrent = null } = {}) {
-    const host = document.getElementById(core_constants.OVERLAY_ID);
-    if (!host || host.hidden) return false;
-    const snapshot = runtimeState.activeArchiveSnapshot;
-    if (snapshot?.taskResultDraftId && snapshot.taskResultDraftId !== draftId) return false;
-    if (snapshot && !snapshot.taskResultDraftId) {
-        if (snapshot.historyVersionId || snapshot.backupOnly || !archiveTarget
-            || snapshot.entryId !== archiveTarget.entryId
-            || snapshot.memory?.archiveRevision !== archiveTarget.memory?.archiveRevision
-            || core_context.comparableChatId(snapshot.chatId) !== core_context.comparableChatId(archiveTarget.chatId)) return false;
-        snapshot.cache = structuredClone(archiveTarget.cache);
-        if (!runtimeState.activeMode) {
-            const scrollTop = bodyEl()?.scrollTop || 0;
-            archive_library.showIndexedArchiveSnapshot(snapshot);
-            if (bodyEl()) bodyEl().scrollTop = scrollTop;
-            return true;
-        }
-    }
-    if (!snapshot && core_context.chatScopeKey(context) !== core_context.chatScopeKey(core_context.getContext())) return false;
-    if (!snapshot && !runtimeState.activeMode && runtimeState.archiveViewLevel === 'chooser') {
-        if (ui_workspaceState.workspace.tab === 'content') {
-            const scrollTop = bodyEl()?.scrollTop || 0;
-            showChooser({ section: 'content' });
-            if (bodyEl()) bodyEl().scrollTop = scrollTop;
-        } else {
-            // Archive source selections may be half edited. Refresh only the
-            // received-content controls, leaving those inputs in place.
-            const memory = archive_repository.getImportedMemory(context);
-            const stored = core_cache.getCache(context);
-            const recovery = bodyEl()?.querySelector?.('[data-rmt-generation-recoveries]');
-            if (recovery) recovery.innerHTML = recovery_view.recoveryBannerHtml(stored, memory);
-            const session = core_cache.loadSession(mode, { context, memoryBank: memory, includePartial: true });
-            const portal = bodyEl()?.querySelector?.(`.rmt-archive-portal [data-rmt-mode="${mode}"]`)
-                ?.closest?.('.rmt-archive-portal')
-                || bodyEl()?.querySelector?.(`[data-rmt-generate-mode="${mode}"]`)?.closest?.('.rmt-archive-portal');
-            if (session && portal) {
-                portal.classList.remove('empty'); portal.classList.add('ready');
-                const open = portal.querySelector('.rmt-portal-open');
-                open.disabled = false; open.setAttribute('data-rmt-mode', mode);
-                const status = portal.querySelector('.rmt-portal-status');
-                if (status) status.textContent = '已生成部分内容 · 可以先查看';
-                const dot = portal.querySelector('.rmt-portal-lock, .rmt-portal-ready-dot');
-                if (dot) { dot.className = 'rmt-portal-ready-dot'; dot.textContent = '…'; }
-            }
-            if (mode === core_constants.MODE.CALENDAR) {
-                const quick = bodyEl()?.querySelector?.('[data-rmt-calendar-quick]');
-                if (quick) quick.innerHTML = calendarQuickAccessHtml({ ready: !!memory, generated: !!session,
-                    generating: core_requestCoordinator.isModeGenerating(mode), partial: !!session?.readableProgress });
-            }
-        }
-        return true;
-    }
-    if (runtimeState.activeMode !== mode) return false;
-    const prior = runtimeState.activeSession;
-    // A full-page/background task does not own every later reader of its mode.
-    // An explicitly opened view of this very draft can keep receiving progress;
-    // otherwise the caller's original reader and position must still be current.
-    const ownsDraft = snapshot?.taskResultDraftId === draftId
-        || (prior?.readableProgress?.complete === false && prior.readableProgress.draftId === draftId);
-    if (prior?.readableProgress?.explicitDraft && !ownsDraft) return false;
-    if (!ownsDraft && typeof readerStillCurrent === 'function' && !readerStillCurrent()) return false;
-    if (mode === core_constants.MODE.HEART && pageId && pageId !== 'heart') {
-        const shownPage = ui_workspaceState.workspace.route === 'heart'
-            ? heart_reader.heartReaderSession(prior)?.selectedSeason || 'spring' : ui_workspaceState.workspace.route;
-        if (shownPage !== pageId) return false;
-    }
-    let memory, stored;
-    if (snapshot?.taskResultDraftId) {
-        const result = await core_cache.readGenerationTaskResult(context, draftId);
-        if (runtimeState.activeArchiveSnapshot !== snapshot || runtimeState.activeSession !== prior
-            || runtimeState.activeMode !== mode || host.hidden) return false;
-        memory = result.sourceMemory;
-        stored = { chatId: memory.chatId, archiveRevision: memory.archiveRevision, [mode]: result.session };
-        snapshot.memory = structuredClone(memory); snapshot.cache = structuredClone(stored);
-    } else if (snapshot) {
-        memory = snapshot.memory; stored = snapshot.cache;
-    } else {
-        memory = archive_repository.getImportedMemory(context); stored = core_cache.getCache(context);
-    }
-    const exactResult = prior?.readableProgress?.explicitDraft ? stored?.[core_cache.GENERATION_DRAFTS_CACHE_KEY]?.records?.[prior.readableProgress.draftId]?.result : null;
-    const session = exactResult ? core_cache.generationTaskResultSession({ draftId: prior.readableProgress.draftId, ...exactResult })
-        : core_cache.loadSession(mode, { context, chatId: memory?.chatId, memoryBank: memory, cache: stored, clone: true, includePartial: true });
-    if (!session?.readableProgress) return false;
-    if (!snapshot && !exactResult && stored?.[core_cache.GENERATION_DRAFTS_CACHE_KEY]?.records?.[draftId]?.result?.sourceMemory?.archiveRevision !== memory?.archiveRevision) return false;
-    for (const key of ['selectedId', 'selectedEntryId', 'selectedContainerId', 'selectedNodeId', 'category', 'page', 'viewPath',
-        'selectedMonth', 'selectedDateKey', 'view', 'tab', 'reading', 'dialogueIndex', 'sharedMemory',
-        'selectedSeason', 'selectedVoiceId', 'selectedScenarioId', 'selectedStripId', 'selectedFireflyId', 'selectedDramaKey']) {
-        if (prior && Object.hasOwn(prior, key)) session[key] = structuredClone(prior[key]);
-    }
-    const body = bodyEl(), scrollTop = body?.scrollTop || 0;
-    // The generation caller uses this reference to recognize its original
-    // foreground reader at the final save. Progress is a refresh of that same
-    // reader, not navigation to a replacement reader.
-    if (prior && typeof readerStillCurrent === 'function') {
-        for (const key of Object.keys(prior)) delete prior[key];
-        Object.assign(prior, session);
-        runtimeState.activeSession = prior;
-    } else runtimeState.activeSession = session;
-    ui_workspaceState.workspace.empty = null;
-    renderActive();
-    if (body) body.scrollTop = scrollTop;
-    return true;
-}
-
-function openPartialTaskSession(record) {
-    runtimeState.activeArchiveSnapshot = null;
-    runtimeState.activeArchiveReadOnly = false;
-    runtimeState.activeMode = record.mode;
-    runtimeState.activeSession = core_cache.generationTaskResultSession(record);
-    runtimeState.archiveViewLevel = 'content';
-    ui_workspaceState.prepareWorkspaceSession(record.mode, runtimeState.activeSession, record.pageId);
-    renderActive();
-}
-
 // Persist a local change to the precise draft/formal item that the user saw.
 async function saveActiveSessionEdit(mutator, { select = value => value } = {}) {
     if (!archive_library.requireWritableArchiveAction()) return null;
@@ -54515,91 +54978,6 @@ async function saveActiveSessionEdit(mutator, { select = value => value } = {}) 
     return committed;
 }
 
-// Refresh only the live saved reader. Drafts and historical views own separate data.
-function refreshSavedActiveSession() {
-    if (runtimeState.activeArchiveSnapshot || !runtimeState.activeSession || !runtimeState.activeMode
-        || (runtimeState.activeSession.readableProgress && runtimeState.activeSession.readableProgress.complete !== true) || runtimeState.contentManagerOpen) return false;
-    const body = bodyEl();
-    if (!body || body.querySelector('[data-rmt-cg-editor]')) return false;
-    // Never replace an in-progress form edit in order to show a background result.
-    if (body.contains(document.activeElement) && document.activeElement?.matches?.('input,textarea,select,[contenteditable=true]')) return false;
-    const context = core_context.currentCharacterGuard();
-    const memory = archive_repository.getImportedMemory(context);
-    const next = core_cache.loadSession(runtimeState.activeMode, { context, memoryBank: memory, clone: true });
-    if (!next) return false;
-    const position = navigation_bookmark.readingPosition(runtimeState.activeSession);
-    const scroll = body.scrollTop;
-    const controls = [...body.querySelectorAll('input,textarea,select')].map(el => ({
-        id: el.id, name: el.name, type: el.type, value: el.value, checked: el.checked,
-    })).filter(el => el.id || el.name);
-    runtimeState.activeSession = Object.assign(next, position);
-    renderActive();
-    for (const saved of controls) {
-        const control = [...body.querySelectorAll('input,textarea,select')].find(el => saved.id ? el.id === saved.id : el.name === saved.name && el.type === saved.type);
-        if (control) { control.value = saved.value; if ('checked' in control) control.checked = saved.checked; }
-    }
-    body.scrollTop = scroll;
-    return true;
-}
-
-function renderActive() {
-    const overlay = document.getElementById(core_constants.OVERLAY_ID);
-    if (!overlay || overlay.hidden) return;
-    try {
-        const scope = core_context.chatScopeKey(core_context.currentCharacterGuard());
-        if (runtimeState.renderedChatScope && runtimeState.renderedChatScope !== scope) return;
-    } catch { return; }
-    if (['mirrorCall', 'mirrorVoice', 'journal'].includes(runtimeState.activeMode)) return;
-    if (workspace_ui.renderEmptyWorkspace()) return;
-    image_viewer.closeCgImageViewer({ restoreFocus: false });
-    runtimeState.contentManagerOpen = false;
-    if (runtimeState.activeMode !== core_constants.MODE.ENDING) ui_endingView.closeEndingEasterEgg({ restoreFocus: false });
-    if (!runtimeState.activeSession || !runtimeState.activeMode) return runtimeState.activeArchiveSnapshot ? archive_library.showIndexedArchiveSnapshot(runtimeState.activeArchiveSnapshot) : showChooser();
-    const supportsTopbarIncrement = !time_stories.isTimeStoryMode(runtimeState.activeMode) && ![core_constants.MODE.INBOX, core_constants.MODE.HEART, core_constants.MODE.THEME_SONG, 'pastLives', 'bedtime'].includes(runtimeState.activeMode) && (!core_constants.ROOM_DEEP_MODES.includes(runtimeState.activeMode) || runtimeState.activeMode === core_constants.MODE.PHONE);
-    setRegenerateVisible((!runtimeState.activeArchiveSnapshot || !runtimeState.activeArchiveReadOnly) && supportsTopbarIncrement);
-    setManageVisible(!(runtimeState.activeMode === core_constants.MODE.HEART && ui_workspaceState.workspace.route === 'language') && (!runtimeState.activeArchiveSnapshot || !runtimeState.activeArchiveReadOnly) && !time_stories.isTimeStoryMode(runtimeState.activeMode) && ![core_constants.MODE.RELATIONS, core_constants.MODE.INBOX, core_constants.MODE.THEME_SONG, 'pastLives', 'bedtime'].includes(runtimeState.activeMode));
-    setBackVisible(true, runtimeState.activeArchiveSnapshot ? (runtimeState.activeArchiveReadOnly ? '只读档案' : '档案') : core_constants.ROOM_DEEP_MODES.includes(runtimeState.activeMode) ? '他的房间' : '当前档案');
-    if (runtimeState.activeMode !== core_constants.MODE.ROOM) modes_room.stopRoomClock();
-    if (runtimeState.activeMode !== core_constants.MODE.PHONE) ui_phoneView.stopPhoneClock();
-    if (runtimeState.activeMode === 'bedtime') bedtime_view.renderBedtime();
-    else if (runtimeState.activeMode === core_constants.MODE.BUTTERFLY) ui_butterflyView.renderButterfly();
-    else if (runtimeState.activeMode === core_constants.MODE.ALBUM) ui_albumView.renderAlbum();
-    else if (runtimeState.activeMode === core_constants.MODE.ADV) ui_advEventView.renderAdvMode();
-    else if (runtimeState.activeMode === core_constants.MODE.ROOM) modes_room.renderRoom();
-    else if (runtimeState.activeMode === core_constants.MODE.ITEMS) modes_items.renderItems();
-    else if (runtimeState.activeMode === core_constants.MODE.CABINET) modes_cabinet.renderCabinet();
-    else if (runtimeState.activeMode === core_constants.MODE.PHONE) ui_phoneView.renderPhone();
-    else if (runtimeState.activeMode === core_constants.MODE.THEME_SONG) song_view.renderThemeSongs();
-    else if (runtimeState.activeMode === core_constants.MODE.INBOX) ui_inboxView.renderInbox();
-    else if (runtimeState.activeMode === core_constants.MODE.TRAVEL) ui_travelView.renderTravel();
-    else if (runtimeState.activeMode === core_constants.MODE.ENDING) ui_endingView.renderEnding();
-    else if (runtimeState.activeMode === core_constants.MODE.CALENDAR) ui_calendarView.renderCalendar();
-    else if (runtimeState.activeMode === core_constants.MODE.RELATIONS) modes_relations.renderRelations();
-    else if (runtimeState.activeMode === core_constants.MODE.ACHIEVEMENTS) modes_achievements.renderAchievements();
-    else if (runtimeState.activeMode === core_constants.MODE.HEART) ui_heartView.renderHeart();
-    else if (runtimeState.activeMode === 'pastLives') past_lives_view.renderPastLives();
-    else if (time_stories.isTimeStoryMode(runtimeState.activeMode)) time_stories_view.renderTimeStories();
-    const progress = runtimeState.activeSession?.readableProgress;
-    if (progress?.version === 1 && progress.complete === false && bodyEl()) {
-        const note = document.createElement('section');
-        note.className = 'rmt-recovery-status';
-        note.setAttribute('role', 'status');
-        note.innerHTML = `<b>已生成部分内容 · 本次任务尚未完成</b><p>这里显示已收到的内容。后续失败或关闭页面，不会清除已保存部分；继续生成只补未完成部分。</p>${!runtimeState.activeArchiveSnapshot ? '<button type="button" class="rmt-btn" data-rmt-edit-partial>编辑已生成内容</button>' : ''}`;
-        bodyEl().prepend(note);
-    }
-    const pageStatus = generation_status_view.routeGenerationStatus(ui_workspaceState.workspace.route || runtimeState.activeMode, runtimeState.activeMode, runtimeState.activeSession, { snapshot: runtimeState.activeArchiveSnapshot });
-    if (['unsaved', 'failed', 'retry'].includes(pageStatus.state) && bodyEl() && !bodyEl().querySelector('.rmt-generation-completion,.rmt-recovery-status')) {
-        const statusNote = document.createElement('section');
-        statusNote.className = 'rmt-generation-completion';
-        statusNote.innerHTML = `<h3>生成与补全</h3><p role="status">${core_text.esc(pageStatus.label)}</p>${!runtimeState.activeArchiveSnapshot ? '<button type="button" class="rmt-btn" data-rmt-action="tasks">打开任务中心</button>' : ''}`;
-        bodyEl().prepend(statusNote);
-    }
-    cg_format_ui.mountCgFormatControl(bodyEl(), runtimeState.activeMode, ui_workspaceState.workspace.route, !!runtimeState.activeArchiveSnapshot && runtimeState.activeArchiveReadOnly);
-    decorateReadOnlyModeUi();
-    workspace_ui.syncWorkspaceChrome();
-}
-
-
 function managedTargetRecord(type, id, parentId = '') {
     return ui_contentManager.managementTargetsForSession(runtimeState.activeSession).find(item =>
         item.type === core_text.normalizeText(type, 60)
@@ -54623,6 +55001,93 @@ function managedItemFromSession(session, type, id, parentId = '') {
     try { return generation_contentRegeneration.contentRegenerationTarget(session, baseType, id, parentId).item; }
     catch { return null; }
 }
+
+__m_ui_overlayShell_js.requestParticipantSelection = requestParticipantSelection;
+__m_ui_overlayShell_js.runParticipantRegeneration = runParticipantRegeneration;
+__m_ui_overlayShell_js.requestParticipantVersions = requestParticipantVersions;
+__m_ui_overlayShell_js.loadChooserArchiveRecovery = loadChooserArchiveRecovery;
+__m_ui_overlayShell_js.refreshArchiveRecoveryView = refreshArchiveRecoveryView;
+__m_ui_overlayShell_js.saveActiveSessionEdit = saveActiveSessionEdit;
+__m_ui_overlayShell_js.isArchiveMobileViewport = isArchiveMobileViewport;
+__m_ui_overlayShell_js.archiveMobileSafeTopFallback = archiveMobileSafeTopFallback;
+__m_ui_overlayShell_js.applyArchiveMobileSafeArea = applyArchiveMobileSafeArea;
+__m_ui_overlayShell_js.overlayCloseButtonFromEvent = overlayCloseButtonFromEvent;
+__m_ui_overlayShell_js.closeArchiveOverlayFromUser = closeArchiveOverlayFromUser;
+__m_ui_overlayShell_js.bindOverlayCloseFallback = bindOverlayCloseFallback;
+__m_ui_overlayShell_js.toolbarMoreMenu = toolbarMoreMenu;
+__m_ui_overlayShell_js.closeToolbarMoreMenu = closeToolbarMoreMenu;
+__m_ui_overlayShell_js.toggleToolbarMoreMenu = toggleToolbarMoreMenu;
+__m_ui_overlayShell_js.bindToolbarMoreMenu = bindToolbarMoreMenu;
+__m_ui_overlayShell_js.revealArchiveOverlay = revealArchiveOverlay;
+__m_ui_overlayShell_js.closeOverlay = closeOverlay;
+__m_ui_overlayShell_js.invalidateArchiveViewForChatNavigation = invalidateArchiveViewForChatNavigation;
+__m_ui_overlayShell_js.bodyEl = bodyEl;
+__m_ui_overlayShell_js.topTitle = topTitle;
+__m_ui_overlayShell_js.setBackVisible = setBackVisible;
+__m_ui_overlayShell_js.setManageVisible = setManageVisible;
+__m_ui_overlayShell_js.setRegenerateVisible = setRegenerateVisible;
+__m_ui_overlayShell_js.confirmExplicitAction = confirmExplicitAction;
+__m_ui_overlayShell_js.confirmExplicitActionTwice = confirmExplicitActionTwice;
+__m_ui_overlayShell_js.confirmModeRegeneration = confirmModeRegeneration;
+__m_ui_overlayShell_js.confirmRoomLifeRefresh = confirmRoomLifeRefresh;
+__m_ui_overlayShell_js.participantRegenerationScopes = participantRegenerationScopes;
+__m_ui_overlayShell_js.formatArchiveTime = formatArchiveTime;
+__m_ui_overlayShell_js.calendarQuickAccessHtml = calendarQuickAccessHtml;
+__m_ui_overlayShell_js.readableModePortals = readableModePortals;
+__m_ui_overlayShell_js.memoryLockPanelHtml = memoryLockPanelHtml;
+__m_ui_overlayShell_js.showLoading = showLoading;
+__m_ui_overlayShell_js.showError = showError;
+__m_ui_overlayShell_js.showMemoryImportError = showMemoryImportError;
+__m_ui_overlayShell_js.updateBackgroundTaskLabel = updateBackgroundTaskLabel;
+__m_ui_overlayShell_js.setBusyUi = setBusyUi;
+__m_ui_overlayShell_js.setInnerLoading = setInnerLoading;
+__m_ui_overlayShell_js.refreshArchiveTargetSnapshotView = refreshArchiveTargetSnapshotView;
+__m_ui_overlayShell_js.showInlineError = showInlineError;
+__m_ui_overlayShell_js.showInlinePreflight = showInlinePreflight;
+__m_ui_overlayShell_js.emptyArchiveMode = emptyArchiveMode;
+__m_ui_overlayShell_js.decorateReadOnlyModeUi = decorateReadOnlyModeUi;
+__m_ui_overlayShell_js.refreshContentRegenerationDraftView = refreshContentRegenerationDraftView;
+__m_ui_overlayShell_js.managedTargetRecord = managedTargetRecord;
+__m_ui_overlayShell_js.markUserManaged = markUserManaged;
+__m_ui_overlayShell_js.managedItemFromSession = managedItemFromSession;
+}
+
+function __init_ui_overlayManage_js() {
+// MODULE: ui/overlayManage.js
+const archive_library = __m_archive_library_js;
+const archive_repository = __m_archive_repository_js;
+const core_cache = __m_core_cache_js;
+const core_constants = __m_core_constants_js;
+const core_context = __m_core_context_js;
+const core_text = __m_core_text_js;
+const generation_client = __m_generation_client_js;
+const generation_imageGeneration = __m_generation_imageGeneration_js;
+const modes_calendar = __m_modes_calendar_js;
+const modes_room = __m_modes_room_js;
+const ui_contentManager = __m_ui_contentManager_js;
+const ui_heartView = __m_ui_heartView_js;
+const runtimeState = __m_core_state_js.state;
+const confirmExplicitActionTwice = __m_ui_overlayShell_js.confirmExplicitActionTwice;
+const confirmRoomLifeRefresh = __m_ui_overlayShell_js.confirmRoomLifeRefresh;
+const managedItemFromSession = __m_ui_overlayShell_js.managedItemFromSession;
+const managedTargetRecord = __m_ui_overlayShell_js.managedTargetRecord;
+const markUserManaged = __m_ui_overlayShell_js.markUserManaged;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// 内容管理：删除 / 重新生成 / 重新分类已生成内容、世界书控件刷新
+// 从 ui/overlay.js 原样搬出（重构阶段 2），声明文本一字未改；ui/overlay.js 仍转发原有导出。
 
 function deleteManagedTargetFromSession(session, type, id, parentId = '') {
     const updated = structuredClone(session);
@@ -54821,6 +55286,687 @@ async function recategorizeManagedTarget(id, parentId = '') {
     return ui_contentManager.runContentRegeneration('album-category', id, parentId, { confirmed: true });
 }
 
+async function regenerateManagedCategory() {
+    if (runtimeState.activeMode === core_constants.MODE.INBOX) return;
+    if (!runtimeState.activeMode || !archive_library.requireWritableArchiveAction()) return;
+    const mode = runtimeState.activeMode;
+    const label = core_constants.MODE_LABEL[mode] || mode;
+    if (!confirmExplicitActionTwice(
+        `重新生成整个「${label}」？`,
+        `成功后会用全新的分类基础内容替换当前分类；旧内容在新结果成功写入之前会一直保留。${mode === core_constants.MODE.ROOM ? '房间成功替换后，只清除依赖旧结构的“他的物品”；私人终端保留。' : ''} 实图/可选长正文等独立子内容可继续使用各自的单项重新生成按钮。正式档案不会修改。`,
+        { destructive: true },
+    )) return;
+    runtimeState.contentManagerOpen = false;
+    const fresh = await generation_client.generateMode(mode, { background: false, replaceExisting: true });
+    if (fresh && mode === core_constants.MODE.ROOM) {
+        try {
+            const context = core_context.currentCharacterGuard();
+            await core_cache.deleteSessions([core_constants.MODE.ITEMS], core_context.getChatId(context));
+        } catch (error) {
+            console.warn('[HeartbeatMemories] room dependent cache invalidation after replacement failed', core_text.safeErrorDiagnostic(error));
+        }
+    }
+}
+
+function refreshMemoryWorldInfoBookControls(context, world, section, expectedScopeKey) {
+    try {
+        if (archive_repository.memorySourceScopeForContext(core_context.currentCharacterGuard()).key !== expectedScopeKey) return;
+    } catch { return; }
+    const book = archive_repository.getMemoryWorldInfoSelection(context).books.find(item => item.name === world);
+    const all = book?.all === true;
+    const selected = new Set(all ? [] : (book?.entryUids || []).map(String));
+    const allInput = section?.querySelector?.('[data-rmt-memory-wi-all]');
+    if (allInput) allInput.checked = all;
+    const historyInput = section?.querySelector?.('[data-rmt-memory-wi-history]');
+    if (historyInput) { historyInput.checked = book?.historySource === true; historyInput.disabled = !book; }
+    section?.querySelectorAll?.('[data-rmt-memory-wi-entry]').forEach(input => {
+        input.disabled = all;
+        input.checked = !all && selected.has(String(input.dataset.rmtMemoryWiUid || ''));
+    });
+}
+
+__m_ui_overlayManage_js.deleteManagedTarget = deleteManagedTarget;
+__m_ui_overlayManage_js.regenerateManagedTarget = regenerateManagedTarget;
+__m_ui_overlayManage_js.recategorizeManagedTarget = recategorizeManagedTarget;
+__m_ui_overlayManage_js.regenerateManagedCategory = regenerateManagedCategory;
+__m_ui_overlayManage_js.refreshMemoryWorldInfoBookControls = refreshMemoryWorldInfoBookControls;
+}
+
+function __init_ui_overlayCore_js() {
+// MODULE: ui/overlayCore.js
+const handJournal = __m_ui_handJournalView_js;
+const expanded_cg_view = __m_ui_expandedCgView_js;
+const archive_inheritance_view = __m_ui_archiveInheritance_js;
+const bedtime_view = __m_ui_bedtimeView_js;
+const cg_format_ui = __m_ui_cgFormatControl_js;
+const generation_status_view = __m_ui_generationStatus_js;
+const mirror_reader = __m_ui_mirrorTtsReader_js;
+const heart_reader = __m_ui_heartReaderState_js;
+const archive_groups = __m_archive_groups_js;
+const archive_library = __m_archive_library_js;
+const archive_repository = __m_archive_repository_js;
+const archive_snapshots = __m_archive_snapshots_js;
+const core_cache = __m_core_cache_js;
+const core_archiveCover = __m_core_archiveCover_js;
+const core_constants = __m_core_constants_js;
+const core_context = __m_core_context_js;
+const core_requestCoordinator = __m_core_requestCoordinator_js;
+const ui_taskCenter = __m_ui_taskCenter_js;
+const core_settings = __m_core_settings_js;
+const core_text = __m_core_text_js;
+const core_theme = __m_core_theme_js;
+const generation_client = __m_generation_client_js;
+const generation_imageGeneration = __m_generation_imageGeneration_js;
+const cg_editor = __m_ui_cgPromptEditor_js;
+const participant_picker = __m_ui_participantPicker_js;
+const image_viewer = __m_ui_cgImageViewer_js;
+const floating_archive = __m_ui_floatingArchive_js;
+const recovery_view = __m_ui_recoveryView_js;
+const modes_achievements = __m_modes_achievements_js;
+const modes_advEvent = __m_modes_advEvent_js;
+const modes_heart = __m_modes_heart_js;
+const modes_items = __m_modes_items_js;
+const modes_cabinet = __m_modes_cabinet_js;
+const modes_room = __m_modes_room_js;
+const modes_relations = __m_modes_relations_js;
+const ui_advEventView = __m_ui_advEventView_js;
+const ui_albumView = __m_ui_albumView_js;
+const ui_butterflyView = __m_ui_butterflyView_js;
+const ui_calendarView = __m_ui_calendarView_js;
+const ui_contentManager = __m_ui_contentManager_js;
+const ui_endingView = __m_ui_endingView_js;
+const ui_heartView = __m_ui_heartView_js;
+const ui_phoneView = __m_ui_phoneView_js;
+const song_view = __m_ui_themeSongView_js;
+const ui_inboxView = __m_ui_inboxView_js;
+const ui_travelView = __m_ui_travelView_js;
+const ui_settingsPanel = __m_ui_settingsPanel_js;
+const home_view = __m_ui_homeView_js;
+const past_lives_view = __m_ui_pastLivesView_js;
+const time_stories_view = __m_ui_timeStoriesView_js;
+const time_stories = __m_core_timeStoriesContract_js;
+const ui_styles = __m_ui_styles_js;
+const workspace_ui = __m_ui_workspace_js;
+const language_view = __m_ui_languageView_js;
+const ui_workspaceState = __m_ui_workspaceState_js;
+const toolbarIcons = __m_ui_toolbarIcons_js;
+const dispatch_overlayClickTargets = __m_ui_overlayClickTargets_js;
+const dispatch_overlayClickActions = __m_ui_overlayClickActions_js;
+const runtimeState = __m_core_state_js.state;
+const applyArchiveMobileSafeArea = __m_ui_overlayShell_js.applyArchiveMobileSafeArea;
+const bindOverlayCloseFallback = __m_ui_overlayShell_js.bindOverlayCloseFallback;
+const bindToolbarMoreMenu = __m_ui_overlayShell_js.bindToolbarMoreMenu;
+const bodyEl = __m_ui_overlayShell_js.bodyEl;
+const calendarQuickAccessHtml = __m_ui_overlayShell_js.calendarQuickAccessHtml;
+const closeArchiveOverlayFromUser = __m_ui_overlayShell_js.closeArchiveOverlayFromUser;
+const closeToolbarMoreMenu = __m_ui_overlayShell_js.closeToolbarMoreMenu;
+const confirmExplicitAction = __m_ui_overlayShell_js.confirmExplicitAction;
+const confirmExplicitActionTwice = __m_ui_overlayShell_js.confirmExplicitActionTwice;
+const confirmModeRegeneration = __m_ui_overlayShell_js.confirmModeRegeneration;
+const confirmRoomLifeRefresh = __m_ui_overlayShell_js.confirmRoomLifeRefresh;
+const decorateReadOnlyModeUi = __m_ui_overlayShell_js.decorateReadOnlyModeUi;
+const emptyArchiveMode = __m_ui_overlayShell_js.emptyArchiveMode;
+const formatArchiveTime = __m_ui_overlayShell_js.formatArchiveTime;
+const isArchiveMobileViewport = __m_ui_overlayShell_js.isArchiveMobileViewport;
+const loadChooserArchiveRecovery = __m_ui_overlayShell_js.loadChooserArchiveRecovery;
+const memoryLockPanelHtml = __m_ui_overlayShell_js.memoryLockPanelHtml;
+const readableModePortals = __m_ui_overlayShell_js.readableModePortals;
+const requestParticipantSelection = __m_ui_overlayShell_js.requestParticipantSelection;
+const requestParticipantVersions = __m_ui_overlayShell_js.requestParticipantVersions;
+const revealArchiveOverlay = __m_ui_overlayShell_js.revealArchiveOverlay;
+const setBackVisible = __m_ui_overlayShell_js.setBackVisible;
+const setManageVisible = __m_ui_overlayShell_js.setManageVisible;
+const setRegenerateVisible = __m_ui_overlayShell_js.setRegenerateVisible;
+const toggleToolbarMoreMenu = __m_ui_overlayShell_js.toggleToolbarMoreMenu;
+const toolbarMoreMenu = __m_ui_overlayShell_js.toolbarMoreMenu;
+const topTitle = __m_ui_overlayShell_js.topTitle;
+const deleteManagedTarget = __m_ui_overlayManage_js.deleteManagedTarget;
+const recategorizeManagedTarget = __m_ui_overlayManage_js.recategorizeManagedTarget;
+const refreshMemoryWorldInfoBookControls = __m_ui_overlayManage_js.refreshMemoryWorldInfoBookControls;
+const regenerateManagedCategory = __m_ui_overlayManage_js.regenerateManagedCategory;
+const regenerateManagedTarget = __m_ui_overlayManage_js.regenerateManagedTarget;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// handleOverlayClick 的连续语句分组放在 ui/overlayClickTargets.js、ui/overlayClickActions.js；分组函数返回它表示“没处理”，接着往下走。
+const OVERLAY_CLICK_UNHANDLED = Symbol('OVERLAY_CLICK_UNHANDLED');
+// 主窗口核心：打开与导航、建档入口、任务结果呈现、页面渲染、点击与变更事件分发
+// 从 ui/overlay.js 原样搬出（重构阶段 2），声明文本一字未改；ui/overlay.js 仍转发原有导出。
+
+function openOverlay() {
+    floating_archive.hideFloatingArchive();
+    image_viewer.closeCgImageViewer({ restoreFocus: false });
+    ui_styles.ensureStyles();
+    const preferDialog = isArchiveMobileViewport() && typeof globalThis.HTMLDialogElement === 'function';
+    let overlay = document.getElementById(core_constants.OVERLAY_ID);
+    if (overlay && preferDialog && !(overlay instanceof globalThis.HTMLDialogElement)) {
+        overlay.remove();
+        overlay = null;
+    }
+    if (!overlay) {
+        overlay = document.createElement(preferDialog ? 'dialog' : 'div');
+        overlay.id = core_constants.OVERLAY_ID;
+        overlay.innerHTML = `
+          <div class="rmt-shell" role="dialog" aria-modal="true" aria-label="心迹回廊">
+            <div class="rmt-topbar">
+              <button type="button" data-rmt-action="back" hidden aria-label="返回上级">${toolbarIcons.toolbarIcon('back')}</button>
+              <div class="rmt-topbar-title">心迹回廊</div>
+              <div class="rmt-live-tasks" data-rmt-live-tasks hidden></div>
+              <button type="button" data-rmt-action="library-home" aria-label="打开档案室" title="档案室">${toolbarIcons.toolbarIcon('library')}</button>
+              <button type="button" data-rmt-action="workspace-expand" aria-label="展开窗口" title="展开窗口">${toolbarIcons.toolbarIcon('expand')}</button>
+              <button type="button" data-rmt-action="regenerate" hidden aria-label="增量追加" title="增量追加">${toolbarIcons.toolbarIcon('add')}</button>
+              <button type="button" data-rmt-action="manage" hidden aria-label="管理" title="管理">${toolbarIcons.toolbarIcon('manage')}</button>
+              <button type="button" data-rmt-action="tasks" aria-label="任务" title="任务">${toolbarIcons.toolbarIcon('tasks')}<span class="rmt-task-count" data-rmt-task-count hidden>0</span></button>
+              <button type="button" data-rmt-action="toolbar-more" aria-label="更多操作" aria-haspopup="menu" aria-controls="rmt-toolbar-more-menu" aria-expanded="false">${toolbarIcons.toolbarIcon('more')}</button>
+              <div id="rmt-toolbar-more-menu" class="rmt-toolbar-more-menu" data-rmt-toolbar-more-menu role="menu" aria-label="更多操作" hidden>
+<button type="button" data-reader="page" role="menuitem">朗读本页</button><button type="button" data-reader="selection" role="menuitem">朗读选中文字</button><button type="button" data-reader="stop" role="menuitem">停止朗读</button><button type="button" data-rmt-workspace-route="mirrorVoice" role="menuitem">镜译 · 语音设置</button>
+                <button type="button" data-rmt-action="workspace-expand" role="menuitem">${toolbarIcons.toolbarIcon('expand')}<span>展开窗口</span></button>
+                <button type="button" data-rmt-action="regenerate" data-rmt-toolbar-more-item="regenerate" role="menuitem" hidden>${toolbarIcons.toolbarIcon('add')}<span>增量追加</span></button>
+                <button type="button" data-rmt-action="manage" data-rmt-toolbar-more-item="manage" role="menuitem" hidden>${toolbarIcons.toolbarIcon('manage')}<span>管理</span></button>
+              </div>
+              <button type="button" data-rmt-action="close" aria-label="关闭档案室">${toolbarIcons.toolbarIcon('close')}</button>
+            </div>
+            ${workspace_ui.workspaceNavHtml()}
+            <div class="rmt-task-center" data-rmt-task-center hidden></div>
+            <div class="rmt-body"></div>
+          </div>`;
+        document.body.appendChild(overlay);
+        overlay.addEventListener('click', handleOverlayClick);
+        overlay.addEventListener('change', handleOverlayChange);
+        overlay.addEventListener('error', generation_imageGeneration.handleOverlayMediaError, true);
+        if (typeof globalThis.HTMLDialogElement === 'function' && overlay instanceof globalThis.HTMLDialogElement) {
+            overlay.addEventListener('cancel', event => {
+                // ESC on desktop and the Android back gesture both land here.
+                event.preventDefault();
+                closeArchiveOverlayFromUser();
+            });
+        }
+    }
+    ui_taskCenter.ensureTaskCenterChrome(overlay);
+    applyArchiveMobileSafeArea(overlay);
+    try { core_theme.applyThemeToElement(overlay, core_settings.getPluginSettings(core_context.getContext())); } catch {}
+    ui_taskCenter.syncTaskCenterChrome();
+    bindOverlayCloseFallback(overlay);
+    bindToolbarMoreMenu(overlay);
+    revealArchiveOverlay(overlay);
+    workspace_ui.syncWorkspaceChrome();
+    mirror_reader.mountMirrorReader(overlay);
+
+    return overlay;
+}
+
+function navigateBack() {
+    if (image_viewer.closeCgImageViewer()) return;
+    if (runtimeState.activeMode === 'bedtime' && bedtime_view.closeBedtimeDetail()) return;
+    if (runtimeState.activeMode === 'pastLives' && past_lives_view.closePastLivesDetail()) return;
+    if (time_stories.isTimeStoryMode(runtimeState.activeMode) && time_stories_view.closeTimeStoryDetail()) return;
+    if (runtimeState.activeMode === core_constants.MODE.TIME_ECHO) return openCachedOrGenerate(core_constants.MODE.PHONE);
+    if (cg_editor.hasCgPromptEditor()) return cg_editor.closeCgPromptEditor();
+    if (runtimeState.endingEasterEggRuntime) return ui_endingView.closeEndingEasterEgg();
+    if (runtimeState.contentManagerOpen) {
+        runtimeState.contentManagerOpen = false;
+        return renderActive();
+    }
+    if (runtimeState.activeMode === core_constants.MODE.INBOX && ui_inboxView.closeInboxLetter()) return;
+    if (runtimeState.activeMode === core_constants.MODE.TRAVEL && runtimeState.activeSession?.selectedLocationId) return ui_travelView.closeTravelDetail();
+    if (runtimeState.activeMode === core_constants.MODE.ITEMS) return modes_room.returnToRoomFromDeep();
+    if (runtimeState.activeMode === core_constants.MODE.ALBUM && runtimeState.activeSession?.kind === core_constants.MODE.ALBUM && runtimeState.activeSession.sharedMemory) {
+        runtimeState.activeSession.sharedMemory = false;
+        return ui_albumView.renderAlbum();
+    }
+    if (runtimeState.activeMode) return workspace_ui.openWorkspaceTab('content');
+    if (runtimeState.archiveViewLevel === 'snapshot' && runtimeState.activeArchiveSnapshot) {
+        const key = core_text.normalizeText(runtimeState.activeArchiveSnapshot.archiveGroupId, 120) || (() => { const entry = archive_groups.getArchiveIndex(core_context.getContext()).find(item => core_context.archiveIndexEntryId(item) === core_text.normalizeText(runtimeState.activeArchiveSnapshot.entryId, 120)); return entry ? archive_groups.archiveGroupKeyForEntry(entry) : ''; })();
+        runtimeState.activeArchiveSnapshot = null;
+        runtimeState.activeArchiveReadOnly = true;
+        return key ? archive_library.showArchiveCharacter(key) : archive_library.showArchiveLibrary();
+    }
+    if (runtimeState.archiveViewLevel === 'chooser') {
+        try {
+            const key = archive_groups.currentArchiveGroupKey(core_context.currentCharacterGuard());
+            if (key) return archive_library.showArchiveCharacter(key);
+        } catch {}
+        return archive_library.showArchiveLibrary();
+    }
+    if (runtimeState.archiveViewLevel === 'character') return archive_library.showArchiveLibrary();
+    return home_view.showHome();
+}
+
+function requestCurrentArchiveImport({ cardTypeConfirmed = false, participantRoster } = {}) {
+    let context;
+    try { context = core_context.currentCharacterGuard(); }
+    catch (error) {
+        globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心迹回廊');
+        return false;
+    }
+    const existing = archive_repository.getImportedMemory(context);
+    if (!existing && !cardTypeConfirmed && !archive_repository.getCurrentArchiveImportRecoverySummary(context)) {
+        return participant_picker.showArchiveCardTypePicker({ context,
+            onSingle: () => {
+                void core_cache.discardParticipantDraft(context).then(() => requestCurrentArchiveImport({ cardTypeConfirmed: true, participantRoster: null }))
+                    .catch(error => globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心迹回廊'));
+            },
+            onMultiple: () => {
+                void participant_picker.showParticipantPicker({ context, requireSelection: true, confirmLabel: '确认人物并建档',
+                    onConfirm: async (roster, expectedRevision) => {
+                        const saved = await core_cache.commitParticipantRoster(context, roster, { expectedRevision });
+                        participant_picker.closeParticipantPicker();
+                        requestCurrentArchiveImport({ cardTypeConfirmed: true, participantRoster: saved });
+                    },
+                }).catch(error => globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心迹回廊'));
+            },
+        });
+    }
+    const settings = core_settings.getPluginSettings(context);
+    const detected = archive_repository.externalMemorySourceSummary(context);
+    if (settings.useCurrentChatExternalMemory && detected.length && !archive_repository.getMemoryPreflight(context)
+        && !archive_repository.getCurrentArchiveImportRecoverySummary(context)) {
+        showChooser();
+        globalThis.toastr?.info?.('检测到当前窗口记忆 / 摘要来源。请先点“扫描记忆 / 摘要”，确认读取范围后再生成/更新当前窗口档案。', '心迹回廊');
+        return false;
+    }
+    const title = existing ? '增量更新当前窗口档案？' : '生成当前窗口档案？';
+    const detail = existing
+        ? '默认只整理“上次档案之后新增的聊天”和发生变化的当前窗口记忆/摘要。已有 Mxxx 记忆 ID 不重排，已生成的回忆相簿、CG、ADV、房间、ENDING、储物、私人终端会继续保留。若检测到旧聊天被编辑/删除，本次会停止并保留成果，说明变更类别，由你选择如何处理。'
+        : '这会读取当前聊天窗口并建立一份只属于这个窗口的心迹回廊档案。聊天正文不会被修改；之后也只有你手动更新时档案才会变化。';
+    if (!confirmExplicitAction(title, detail, { destructive: false })) return false;
+    void archive_repository.importCurrentChatMemory({ fullRebuild: false,
+        ...(participantRoster !== undefined ? { participantRoster } : {}),
+    }).catch(error => {
+        console.error('[HeartbeatMemories] current archive import action failed', core_text.safeErrorDiagnostic(error));
+        globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心迹回廊');
+    });
+    return true;
+}
+
+async function presentGenerationTaskResult(draftId, context = core_context.currentCharacterGuard()) {
+    const scope = core_context.chatScopeKey(context);
+    const record = await core_cache.readGenerationTaskResult(context, draftId);
+    if (core_context.chatScopeKey(core_context.currentCharacterGuard()) !== scope) return { status: 'awaiting-choice', draftId };
+    const decision = await participant_picker.chooseGenerationTaskResult({ context,
+        title: `${core_constants.MODE_LABEL[record.mode] || '旧任务'}已生成完成` });
+    if (!decision || core_context.chatScopeKey(core_context.currentCharacterGuard()) !== scope) return { status: 'awaiting-choice', draftId };
+    const result = await core_cache.resolveGenerationTaskResult(context, draftId, decision);
+    if (decision === 'independent') await archive_library.openGenerationTaskResult(draftId, context);
+    else {
+        globalThis.toastr?.success?.('已更新对应页面；替换前的内容和原任务成果都已保留。', '心迹回廊');
+        showChooser();
+    }
+    return result;
+}
+
+function requestCurrentArchiveFullRebuild() {
+    let context;
+    try { context = core_context.currentCharacterGuard(); }
+    catch (error) {
+        globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心迹回廊');
+        return false;
+    }
+    if (!archive_repository.getImportedMemory(context)) return requestCurrentArchiveImport();
+    const settings = core_settings.getPluginSettings(context);
+    const detected = archive_repository.externalMemorySourceSummary(context);
+    if (settings.useCurrentChatExternalMemory && detected.length && !archive_repository.getMemoryPreflight(context)) {
+        showChooser();
+        globalThis.toastr?.info?.('完全重建前请先扫描当前窗口记忆 / 摘要，确认读取范围。', '心迹回廊');
+        return false;
+    }
+    if (!confirmExplicitActionTwice(
+        '完全重建当前窗口档案？',
+        '这会重新读取整个当前聊天并重新编号 Mxxx 记忆，因此旧档案版本对应的回忆相簿、CG、ADV、房间、蝴蝶效应、ENDING、储物、私人终端和邮箱（含来信及收藏的明信片）缓存都会失效，请先备份。只有当你明确需要从头整理（例如旧消息被大量编辑/删除）时才建议使用。',
+        { destructive: true },
+    )) return false;
+    void archive_repository.importCurrentChatMemory({ fullRebuild: true }).catch(error => {
+        console.error('[HeartbeatMemories] full archive rebuild failed', core_text.safeErrorDiagnostic(error));
+        globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心迹回廊');
+    });
+    return true;
+}
+
+function refreshAfterMemoryPatch() {
+    if (runtimeState.activeMode === core_constants.MODE.ALBUM) return ui_albumView.renderAlbum();
+    if (runtimeState.archiveViewLevel === 'chooser' && !runtimeState.activeMode) return showChooser();
+}
+
+async function applyMemoryPatch(id, patch) {
+    try {
+        await archive_repository.patchImportedMemoryFields(id, patch);
+        refreshAfterMemoryPatch();
+    } catch (error) {
+        globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊');
+    }
+}
+
+function showChooser({ section = null } = {}) {
+    const priorTab = ui_workspaceState.workspace.tab;
+    ui_workspaceState.leaveWorkspaceReader();
+    ui_workspaceState.workspace.tab = section === 'content' || (!section && priorTab === 'content') ? 'content' : 'archive';
+    ui_endingView.closeEndingEasterEgg({ restoreFocus: false });
+    runtimeState.activeArchiveSnapshot = null;
+    runtimeState.activeArchiveReadOnly = true;
+    modes_room.stopRoomClock();
+    ui_phoneView.stopPhoneClock();
+    runtimeState.activeMode = null;
+    runtimeState.activeSession = null;
+    runtimeState.archiveViewLevel = 'chooser';
+    openOverlay();
+    setRegenerateVisible(false);
+    setManageVisible(false);
+    setBackVisible(true, '角色档案');
+    const body = bodyEl();
+    if (!body) return;
+
+    let hydrationContext;
+    try { hydrationContext = core_context.currentCharacterGuard(); } catch { hydrationContext = null; }
+    if (hydrationContext) {
+        const scope = core_cache.cacheScopeFromContext(hydrationContext);
+        const stored = hydrationContext.chatMetadata?.[core_constants.CACHE_KEY];
+        if (core_cache.isCompressedCacheRecord(stored) && !runtimeState.runtimeSessionCache.has(scope)) {
+            topTitle('心迹回廊 · 档案室');
+            body.innerHTML = '<div class="rmt-loading"><div class="rmt-loading-card"><div class="rmt-spinner"></div><b>正在读取已生成档案…</b></div></div>';
+            const chooserEpoch = ui_workspaceState.workspace.epoch;
+            const chooserStillVisible = () => chooserEpoch === ui_workspaceState.workspace.epoch
+                && runtimeState.archiveViewLevel === 'chooser' && !runtimeState.activeMode
+                && !runtimeState.activeArchiveSnapshot && !document.getElementById(core_constants.OVERLAY_ID)?.hidden
+                && core_cache.cacheScopeFromContext(core_context.getContext()) === scope;
+            void core_cache.ensureCacheHydrated(hydrationContext).then(() => {
+                if (chooserStillVisible()) archive_snapshots.scheduleChooserRefresh(0);
+            }).catch(error => {
+                if (!chooserStillVisible()) return;
+                console.warn('[HeartbeatMemories] compressed cache read failed', core_text.safeErrorDiagnostic(error));
+                const latestBody = bodyEl();
+                if (latestBody) latestBody.innerHTML = `<div class="rmt-error"><div><b>已生成内容缓存读取失败</b><div style="margin:10px 0;white-space:pre-wrap;opacity:.78">${core_text.esc(core_text.safeErrorSummary(error))}</div><button type="button" class="rmt-btn" data-rmt-action="library-home">返回档案室</button></div></div>`;
+            });
+            return;
+        }
+    }
+
+    let state;
+    let context;
+    try {
+        context = core_context.currentCharacterGuard();
+        state = archive_repository.getMemoryState(context);
+    } catch (error) {
+        if (ui_workspaceState.workspace.tab === 'content') {
+            topTitle('心迹回廊 · 内容');
+            body.innerHTML = '<main class="rmt-workspace-page">' + workspace_ui.workspaceCatalogueHtml() + '</main>';
+            workspace_ui.syncWorkspaceChrome();
+            return;
+        }
+        topTitle('心迹回廊 · 档案室');
+        body.innerHTML = `<div class="rmt-error"><div><b>无法读取当前聊天</b><div style="margin-top:10px;white-space:pre-wrap;opacity:.75">${core_text.esc(core_text.safeErrorSummary(error))}</div></div></div>`;
+        return;
+    }
+    const ready = state.status === 'ready';
+    const settings = core_settings.getPluginSettings(context);
+    const memory = state.memory;
+    const importLabel = ready ? '增量更新当前窗口档案' : '生成当前窗口档案';
+    const preview = ready ? memory.memories.slice(0, 7).map(item => item.title).join(' · ') : '';
+    const archiveName = ready ? (memory.archiveName || archive_repository.fallbackArchiveName(memory.memories)) : '尚未创建档案';
+    const archiveSummary = ready ? (memory.archiveSummary || archive_repository.fallbackArchiveSummary(memory.memories)) : '先为当前聊天创建档案。默认手动更新，也可在设置中开启按楼层自动同步。';
+    const keywords = ready ? core_text.cleanArray(memory.archiveKeywords, 10, 80) : [];
+    const pendingClass = ready && (state.pendingMessages > 0 || state.sourceChanged) ? 'pending' : 'ready';
+    const cachedRead = ready ? { context, chatId: core_context.getChatId(context), memoryBank: memory, clone: false } : null;
+    const portals = ready ? readableModePortals(archive_snapshots.baseModeAvailability(cachedRead), cachedRead) : core_constants.ARCHIVE_PORTAL_MODES.map(mode => ({ mode, session: null, meta: archive_snapshots.modePortalMeta(mode) }));
+    const generatedCount = portals.filter(item => !!item.session && !item.session.readableProgress).length;
+    const calendarPortal = portals.find(item => item.mode === core_constants.MODE.CALENDAR) || { session: null };
+    const calendarGenerated = !!calendarPortal.session;
+    const calendarGenerating = core_requestCoordinator.isModeGenerating(core_constants.MODE.CALENDAR);
+    const calendarQuick = calendarQuickAccessHtml({ ready, generated: calendarGenerated, generating: calendarGenerating,
+        partial: !!calendarPortal.session?.readableProgress, readOnly: false });
+    const concurrentLabels = core_requestCoordinator.generationTaskLabels();
+    const anyRunning = runtimeState.busy || concurrentLabels.length > 0;
+    topTitle(`心迹回廊 · 档案室${ready ? ` · ${archiveName}` : ''}`);
+    const portalHtml = portals.filter(item => item.mode !== core_constants.MODE.CALENDAR).map(({ mode, session, meta }) => {
+        const generated = !!session;
+        const generating = core_requestCoordinator.isModeGenerating(mode);
+        const capacityReached = core_requestCoordinator.activeLogicalGenerationCount() >= core_constants.MAX_CONCURRENT_GENERATION_TASKS && !generating;
+        const isCalendar = mode === core_constants.MODE.CALENDAR;
+        const statusText = session?.readableProgress ? '已生成部分内容 · 可以先查看' : generating
+            ? (generated ? (isCalendar ? '刷新中 · 旧日历仍可查看' : '增量追加中 · 旧内容仍可查看') : '后台生成中 · 可继续启动其他入口')
+            : generated ? (isCalendar ? '已整理 · 点击查看日历' : '已生成 · 点击头像查看') : '尚未生成';
+        const draft = mode === core_constants.MODE.PHONE && ready ? core_cache.loadPhoneGenerationDraft(context) : null;
+        const actionText = mode === core_constants.MODE.INBOX ? (generating ? '收信中…' : '收取新信') : generating ? '生成中…' : draft ? '重试未完成项' : generated ? (isCalendar ? '刷新日历' : '增量追加') : (isCalendar ? '生成日历' : '生成这一项');
+        return `<article class="rmt-archive-portal ${generated ? 'ready' : 'empty'} ${generating ? 'generating' : ''} rmt-archive-portal-${core_text.esc(meta.accent)}">
+          <button type="button" class="rmt-portal-open" ${generated || (ready && [core_constants.MODE.INBOX, core_constants.MODE.PHONE, core_constants.MODE.HEART].includes(mode)) ? `data-rmt-mode="${core_text.esc(mode)}"` : 'disabled'}>
+            <span class="rmt-portal-avatar"><i class="fa-solid ${core_text.esc(meta.icon)}"></i>${generated ? `<span class="rmt-portal-ready-dot">${session?.readableProgress ? '…' : '✓'}</span>` : '<span class="rmt-portal-lock"><i class="fa-solid fa-lock"></i></span>'}</span>
+            <span class="rmt-portal-title">${core_text.esc(meta.title)}</span>
+            <span class="rmt-portal-subtitle">${core_text.esc(meta.subtitle)}</span>
+            <span class="rmt-portal-status">${core_text.esc(statusText)}</span>
+          </button>
+          ${draft ? `<p class="rmt-phone-draft-status" role="status">${core_text.esc(core_text.safeErrorSummary({ code: 'RMT_PHONE_DRAFT_AVAILABLE', failure: draft.failure, partialProgress: { completed: draft.completedApps.length, total: draft.plan.apps.length } }))}</p>` : ''}
+          <button type="button" class="rmt-btn rmt-portal-generate" ${mode === core_constants.MODE.HEART ? 'data-rmt-action="open-heart"' : `data-rmt-generate-mode="${core_text.esc(mode)}"`} ${generated ? 'data-rmt-regenerate="true"' : ''} ${runtimeState.busy || generating || capacityReached ? 'disabled' : ''}>${core_text.esc(mode === core_constants.MODE.HEART ? '打开角色互动' : actionText)}</button>
+        </article>`;
+    }).join('');
+    const memorySettings = core_settings.getPluginSettings();
+    const externalSetting = memorySettings.useCurrentChatExternalMemory;
+    const detectedExternalSources = archive_repository.externalMemorySourceSummary(context);
+    const preflight = archive_repository.getMemoryPreflight(context);
+    const importedSources = ready ? core_text.cleanArray((memory.externalMemorySources || []).map(item => {
+        const label = core_text.normalizeText(item?.label, 80);
+        const coverage = { complete: '完整', partial: '部分', truncated: '已截断', failed: '失败' }[item?.coverageStatus] || '部分';
+        const reason = core_text.normalizeText(item?.coverageReason, 80);
+        return `${coverage} · ${label} ${Number(item?.count) || 0}条${reason ? ` · ${reason}` : ''}`;
+    }), 8, 220) : [];
+    const worldInfoSelectionText = archive_repository.memoryWorldInfoSelectionSummary(context);
+    const preflightText = preflight
+        ? `本次已扫描：建档可用 ${preflight.records.length} 个摘要片段${preflight.worldInfo?.entries?.length ? ` · 世界书 ${preflight.worldInfo.entries.length} 条` : ''} · ${Number(preflight.totalChars || 0).toLocaleString()} 字符`
+        : detectedExternalSources.length
+            ? `检测到：${detectedExternalSources.map(item => item.label).join(' · ')}；建档前请先扫描一次。`
+            : archive_repository.hasMemoryWorldInfoSelection(context)
+                ? `${worldInfoSelectionText}；历史摘要将用于建档，未标记的条目仍只作设定背景。`
+                : '当前没有检测到可读取的当前窗口记忆 / 摘要；仍可只用聊天正文建档。普通世界书/角色卡只作为设定参考。';
+    const externalSourceText = preflight ? preflightText : importedSources.length ? `上次档案同步：${importedSources.join(' · ')}` : preflightText;
+    const requirePreflight = externalSetting && (detectedExternalSources.length > 0 || archive_repository.hasMemoryWorldInfoSelection(context)) && !preflight;
+    const externalMemoryControls = `<div class="rmt-external-memory-row">
+      <label class="rmt-external-memory-toggle"><input type="checkbox" data-rmt-external-memory-toggle ${externalSetting ? 'checked' : ''} ${runtimeState.busy || core_requestCoordinator.hasGenerationTasks() ? 'disabled' : ''}> 读取外部记忆 / 摘要</label>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:7px"><button type="button" class="rmt-btn" data-rmt-action="read-memory-plugins" ${runtimeState.busy || core_requestCoordinator.hasGenerationTasks() ? 'disabled' : ''}>扫描记忆 / 摘要</button><button type="button" class="rmt-btn" data-rmt-action="memory-worldinfo-picker" ${runtimeState.busy || core_requestCoordinator.hasGenerationTasks() ? 'disabled' : ''}>选择记忆世界书</button></div>
+      <small>${core_text.esc(externalSourceText)}</small>
+      ${preflight ? `<details class="rmt-memory-read-details"><summary>来源读取详情</summary><small>本地当前来源：${Number(preflight.storedRecordCount || 0)} 条 · ${Number(preflight.storedChars || 0).toLocaleString()} 字符；本次建档：${preflight.records.length} 个片段 · ${Number(preflight.recordChars || 0).toLocaleString()} 字符。</small>${preflight.sources.map(source => `<p>${core_text.esc(source.label)}：${core_text.esc(source.coverage?.reason || ({ complete: '已读取', partial: '部分可用', truncated: '本次输入受限', failed: '读取失败' }[source.coverage?.status] || '状态未知'))}</p>`).join('')}${(preflight.worldInfo?.books || []).filter(book => !book.historySource).map(book => `<p>${core_text.esc(book.name)}：${book.error ? '读取失败' : `${book.imported} 条，仅作设定背景；历史内容请标记为历史摘要`}</p>`).join('')}</details>` : ''}
+    </div>`;
+    const generationAction = '';
+
+    body.innerHTML = `
+      <div class="rmt-archive-room">
+        <div data-rmt-archive-recoveries aria-live="polite">
+        <div data-rmt-archive-recoveries>${recovery_view.archiveRecoveryHtml(archive_repository.getCurrentArchiveImportRecoverySummary(context))}
+        ${recovery_view.archiveRecoveryHtml(archive_repository.getCurrentArchiveProfileRecoverySummary(context), { profile: true })}</div>
+        </div>
+        <div data-rmt-calendar-quick>${calendarQuick}</div>
+        <section class="rmt-memory-gate rmt-archive-card">
+          <div class="rmt-memory-gate-text">
+            <div class="rmt-archive-kicker">PRIVATE MEMORY ARCHIVE</div>
+            <strong class="rmt-archive-title">${core_text.esc(archiveName)}</strong>
+            ${ready ? core_archiveCover.archiveCoverHtml(memory, { writable: true, busy: anyRunning }) : `<div class="rmt-archive-summary">${core_text.esc(archiveSummary)}</div>`}
+            ${keywords.length ? `<div class="rmt-archive-keywords">${keywords.map(word => `<span>${core_text.esc(word)}</span>`).join('')}</div>` : ''}
+            <div class="rmt-memory-status ${pendingClass}">${core_text.esc(archive_snapshots.memoryStateLabel(state, settings.autoUpdates?.archive?.enabled))}</div>
+            ${ready ? `<div class="rmt-archive-meta">上次归档：${core_text.esc(formatArchiveTime(memory.updatedAt || memory.createdAt))}</div>` : ''}
+            ${ready ? memoryLockPanelHtml(memory) : ''}
+          </div>
+          <div class="rmt-current-archive-actions">
+            <button type="button" class="rmt-btn" data-rmt-archive-read-drafts>读取已保存草稿（不生成）</button>
+            <button type="button" class="rmt-btn" data-rmt-archive-import-draft>导入整理草稿</button>
+            <button class="rmt-btn rmt-archive-update" type="button" data-rmt-action="import-memory" ${runtimeState.busy || core_requestCoordinator.hasGenerationTasks() || requirePreflight ? 'disabled' : ''}>${core_text.esc(requirePreflight ? '先扫描记忆 / 摘要' : (ready ? '增量更新当前窗口档案' : importLabel))}</button>
+            ${ready ? `<button class="rmt-btn" type="button" data-rmt-action="full-rebuild-memory" ${runtimeState.busy || core_requestCoordinator.hasGenerationTasks() || requirePreflight ? 'disabled' : ''}>完全重建档案</button><button class="rmt-btn" type="button" data-rmt-action="current-archive-delete" ${runtimeState.busy || core_requestCoordinator.hasGenerationTasks() ? 'disabled' : ''}>删除当前档案</button>` : ''}
+          </div>
+        </section>
+        ${externalMemoryControls}
+        <section class="rmt-archive-portals" aria-label="档案室内容入口">${portalHtml}</section>
+        ${generationAction}
+      </div>`;
+    workspace_ui.arrangeArchiveWorkspace(body, { portals, ready });
+    if (ui_workspaceState.workspace.tab === 'archive') void loadChooserArchiveRecovery(context);
+    ui_settingsPanel.refreshSettingsMemoryStatus();
+}
+
+let heartOpenRequest = 0;
+
+function openCachedOrGenerate(mode, options = {}) {
+    if (mode === 'journal') return handJournal.openHandJournal();
+    if (['mirrorCall','mirrorVoice'].includes(mode)) return workspace_ui.openVoiceModule(mode);
+    if (!Object.values(core_constants.MODE).includes(mode)) return;
+    heart_reader.rememberHeartReader();
+    const openRequest = ++heartOpenRequest;
+    const route = options.workspaceRoute || mode;
+    ui_workspaceState.workspace.route = route; ui_workspaceState.workspace.tab = 'content'; ui_workspaceState.workspace.empty = null;
+    const navigationEpoch = ui_workspaceState.workspace.epoch;
+    if (runtimeState.activeArchiveSnapshot) {
+        const snapshot = runtimeState.activeArchiveSnapshot;
+        const stored = snapshot.cache || {};
+        const cached = core_cache.loadSession(mode, { chatId: snapshot.chatId, memoryBank: snapshot.memory, cache: stored, clone: true, includePartial: true });
+        const session = cached || (!stored[mode] ? emptyArchiveMode(mode, snapshot.memory, null, stored) : null);
+        if (session) {
+            runtimeState.activeMode = mode; runtimeState.activeSession = session;
+            ui_workspaceState.prepareWorkspaceSession(mode, session, route);
+        heart_reader.enterHeartReader(session, route); return renderActive();
+        }
+        return workspace_ui.showEmptyWorkspace(mode, { memory: snapshot.memory, stored: !!stored[mode] });
+    }
+    let context, memory;
+    try { context = core_context.currentCharacterGuard(); memory = archive_repository.requireArchive(context); }
+    catch {
+        return workspace_ui.showEmptyWorkspace(mode, { noChat: !context });
+    }
+    // Hydrate before deciding whether a record is absent. A fresh empty page must never
+    // become an overwrite route for an existing compressed/unreadable record.
+    if (core_cache.isCompressedCacheRecord(context.chatMetadata?.[core_constants.CACHE_KEY])
+        && !runtimeState.runtimeSessionCache.has(core_cache.cacheScopeFromContext(context))) {
+        const origin = core_context.captureTaskOrigin(context, memory.archiveRevision);
+        const priorMode = runtimeState.activeMode;
+        return core_cache.ensureCacheHydrated(context).then(() => {
+            if (openRequest !== heartOpenRequest || navigationEpoch !== ui_workspaceState.workspace.epoch || !core_context.isCurrentTaskOrigin(origin)
+                || runtimeState.activeArchiveSnapshot || runtimeState.activeMode !== priorMode
+                || document.getElementById(core_constants.OVERLAY_ID)?.hidden) return;
+            return openCachedOrGenerate(mode, { workspaceRoute: route });
+        }).catch(error => {
+            if (openRequest === heartOpenRequest && navigationEpoch === ui_workspaceState.workspace.epoch) globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心迹回廊');
+        });
+    }
+    const stored = core_cache.getCache(context);
+    const cached = core_cache.loadSession(mode, { context, memoryBank: memory, clone: true, includePartial: true });
+    const session = cached || (!stored?.[mode] ? emptyArchiveMode(mode, memory, context, stored) : null);
+    if (session) {
+        runtimeState.activeMode = mode; runtimeState.activeSession = session;
+        ui_workspaceState.prepareWorkspaceSession(mode, session, route);
+        heart_reader.enterHeartReader(session, route); return renderActive();
+    }
+    return workspace_ui.showEmptyWorkspace(mode, { memory, stored: !!stored?.[mode] });
+}
+
+function renderActive() {
+    const overlay = document.getElementById(core_constants.OVERLAY_ID);
+    if (!overlay || overlay.hidden) return;
+    try {
+        const scope = core_context.chatScopeKey(core_context.currentCharacterGuard());
+        if (runtimeState.renderedChatScope && runtimeState.renderedChatScope !== scope) return;
+    } catch { return; }
+    if (['mirrorCall', 'mirrorVoice', 'journal'].includes(runtimeState.activeMode)) return;
+    if (workspace_ui.renderEmptyWorkspace()) return;
+    image_viewer.closeCgImageViewer({ restoreFocus: false });
+    runtimeState.contentManagerOpen = false;
+    if (runtimeState.activeMode !== core_constants.MODE.ENDING) ui_endingView.closeEndingEasterEgg({ restoreFocus: false });
+    if (!runtimeState.activeSession || !runtimeState.activeMode) return runtimeState.activeArchiveSnapshot ? archive_library.showIndexedArchiveSnapshot(runtimeState.activeArchiveSnapshot) : showChooser();
+    const supportsTopbarIncrement = !time_stories.isTimeStoryMode(runtimeState.activeMode) && ![core_constants.MODE.INBOX, core_constants.MODE.HEART, core_constants.MODE.THEME_SONG, 'pastLives', 'bedtime'].includes(runtimeState.activeMode) && (!core_constants.ROOM_DEEP_MODES.includes(runtimeState.activeMode) || runtimeState.activeMode === core_constants.MODE.PHONE);
+    setRegenerateVisible((!runtimeState.activeArchiveSnapshot || !runtimeState.activeArchiveReadOnly) && supportsTopbarIncrement);
+    setManageVisible(!(runtimeState.activeMode === core_constants.MODE.HEART && ui_workspaceState.workspace.route === 'language') && (!runtimeState.activeArchiveSnapshot || !runtimeState.activeArchiveReadOnly) && !time_stories.isTimeStoryMode(runtimeState.activeMode) && ![core_constants.MODE.RELATIONS, core_constants.MODE.INBOX, core_constants.MODE.THEME_SONG, 'pastLives', 'bedtime'].includes(runtimeState.activeMode));
+    setBackVisible(true, runtimeState.activeArchiveSnapshot ? (runtimeState.activeArchiveReadOnly ? '只读档案' : '档案') : core_constants.ROOM_DEEP_MODES.includes(runtimeState.activeMode) ? '他的房间' : '当前档案');
+    if (runtimeState.activeMode !== core_constants.MODE.ROOM) modes_room.stopRoomClock();
+    if (runtimeState.activeMode !== core_constants.MODE.PHONE) ui_phoneView.stopPhoneClock();
+    if (runtimeState.activeMode === 'bedtime') bedtime_view.renderBedtime();
+    else if (runtimeState.activeMode === core_constants.MODE.BUTTERFLY) ui_butterflyView.renderButterfly();
+    else if (runtimeState.activeMode === core_constants.MODE.ALBUM) ui_albumView.renderAlbum();
+    else if (runtimeState.activeMode === core_constants.MODE.ADV) ui_advEventView.renderAdvMode();
+    else if (runtimeState.activeMode === core_constants.MODE.ROOM) modes_room.renderRoom();
+    else if (runtimeState.activeMode === core_constants.MODE.ITEMS) modes_items.renderItems();
+    else if (runtimeState.activeMode === core_constants.MODE.CABINET) modes_cabinet.renderCabinet();
+    else if (runtimeState.activeMode === core_constants.MODE.PHONE) ui_phoneView.renderPhone();
+    else if (runtimeState.activeMode === core_constants.MODE.THEME_SONG) song_view.renderThemeSongs();
+    else if (runtimeState.activeMode === core_constants.MODE.INBOX) ui_inboxView.renderInbox();
+    else if (runtimeState.activeMode === core_constants.MODE.TRAVEL) ui_travelView.renderTravel();
+    else if (runtimeState.activeMode === core_constants.MODE.ENDING) ui_endingView.renderEnding();
+    else if (runtimeState.activeMode === core_constants.MODE.CALENDAR) ui_calendarView.renderCalendar();
+    else if (runtimeState.activeMode === core_constants.MODE.RELATIONS) modes_relations.renderRelations();
+    else if (runtimeState.activeMode === core_constants.MODE.ACHIEVEMENTS) modes_achievements.renderAchievements();
+    else if (runtimeState.activeMode === core_constants.MODE.HEART) ui_heartView.renderHeart();
+    else if (runtimeState.activeMode === 'pastLives') past_lives_view.renderPastLives();
+    else if (time_stories.isTimeStoryMode(runtimeState.activeMode)) time_stories_view.renderTimeStories();
+    const progress = runtimeState.activeSession?.readableProgress;
+    if (progress?.version === 1 && progress.complete === false && bodyEl()) {
+        const note = document.createElement('section');
+        note.className = 'rmt-recovery-status';
+        note.setAttribute('role', 'status');
+        note.innerHTML = `<b>已生成部分内容 · 本次任务尚未完成</b><p>这里显示已收到的内容。后续失败或关闭页面，不会清除已保存部分；继续生成只补未完成部分。</p>${!runtimeState.activeArchiveSnapshot ? '<button type="button" class="rmt-btn" data-rmt-edit-partial>编辑已生成内容</button>' : ''}`;
+        bodyEl().prepend(note);
+    }
+    const pageStatus = generation_status_view.routeGenerationStatus(ui_workspaceState.workspace.route || runtimeState.activeMode, runtimeState.activeMode, runtimeState.activeSession, { snapshot: runtimeState.activeArchiveSnapshot });
+    if (['unsaved', 'failed', 'retry'].includes(pageStatus.state) && bodyEl() && !bodyEl().querySelector('.rmt-generation-completion,.rmt-recovery-status')) {
+        const statusNote = document.createElement('section');
+        statusNote.className = 'rmt-generation-completion';
+        statusNote.innerHTML = `<h3>生成与补全</h3><p role="status">${core_text.esc(pageStatus.label)}</p>${!runtimeState.activeArchiveSnapshot ? '<button type="button" class="rmt-btn" data-rmt-action="tasks">打开任务中心</button>' : ''}`;
+        bodyEl().prepend(statusNote);
+    }
+    cg_format_ui.mountCgFormatControl(bodyEl(), runtimeState.activeMode, ui_workspaceState.workspace.route, !!runtimeState.activeArchiveSnapshot && runtimeState.activeArchiveReadOnly);
+    decorateReadOnlyModeUi();
+    workspace_ui.syncWorkspaceChrome();
+}
+
 async function deleteManagedCategory() {
     if (!runtimeState.activeMode || !archive_library.requireWritableArchiveAction()) return;
     const mode = runtimeState.activeMode;
@@ -54845,28 +55991,6 @@ async function deleteManagedCategory() {
     }
 }
 
-async function regenerateManagedCategory() {
-    if (runtimeState.activeMode === core_constants.MODE.INBOX) return;
-    if (!runtimeState.activeMode || !archive_library.requireWritableArchiveAction()) return;
-    const mode = runtimeState.activeMode;
-    const label = core_constants.MODE_LABEL[mode] || mode;
-    if (!confirmExplicitActionTwice(
-        `重新生成整个「${label}」？`,
-        `成功后会用全新的分类基础内容替换当前分类；旧内容在新结果成功写入之前会一直保留。${mode === core_constants.MODE.ROOM ? '房间成功替换后，只清除依赖旧结构的“他的物品”；私人终端保留。' : ''} 实图/可选长正文等独立子内容可继续使用各自的单项重新生成按钮。正式档案不会修改。`,
-        { destructive: true },
-    )) return;
-    runtimeState.contentManagerOpen = false;
-    const fresh = await generation_client.generateMode(mode, { background: false, replaceExisting: true });
-    if (fresh && mode === core_constants.MODE.ROOM) {
-        try {
-            const context = core_context.currentCharacterGuard();
-            await core_cache.deleteSessions([core_constants.MODE.ITEMS], core_context.getChatId(context));
-        } catch (error) {
-            console.warn('[HeartbeatMemories] room dependent cache invalidation after replacement failed', core_text.safeErrorDiagnostic(error));
-        }
-    }
-}
-
 function handleOverlayClick(event) {
     if (event.target.closest?.('[data-rmt-cg-history-step]')) { event.preventDefault(); event.stopPropagation(); return void generation_imageGeneration.handleCgHistorySwitch(event); }
     const moreTrigger = event.target.closest?.('[data-rmt-action="toolbar-more"]');
@@ -54875,6 +55999,229 @@ function handleOverlayClick(event) {
     const moreMenu = toolbarMoreMenu(overlay);
     if (!moreMenu?.hidden && !event.target.closest?.('[data-rmt-toolbar-more-menu]')) closeToolbarMoreMenu(overlay);
     else if (!moreMenu?.hidden && event.target.closest?.('[data-rmt-toolbar-more-menu] [data-rmt-action],[data-rmt-toolbar-more-menu] [data-reader],[data-rmt-toolbar-more-menu] [data-rmt-workspace-route]')) closeToolbarMoreMenu(overlay);
+    if (dispatch_overlayClickTargets.overlayClickRecordTargets(event) !== OVERLAY_CLICK_UNHANDLED) return;
+    if (dispatch_overlayClickTargets.overlayClickPageTargets(event) !== OVERLAY_CLICK_UNHANDLED) return;
+
+    const actionEl = event.target.closest?.('[data-rmt-action]');
+    const action = actionEl?.dataset?.rmtAction;
+    if (!action) return;
+    if (!action.startsWith('archive-inheritance-')) archive_inheritance_view.clearArchiveInheritancePreview();
+    if (dispatch_overlayClickActions.overlayArchiveActions(actionEl, action) !== OVERLAY_CLICK_UNHANDLED) return;
+    if (dispatch_overlayClickActions.overlayPageActions(actionEl, action) !== OVERLAY_CLICK_UNHANDLED) return;
+}
+
+async function handleOverlayChange(event) {
+    const dateInput = event.target.closest?.('[data-rmt-memory-date]');
+    if (dateInput) return void applyMemoryPatch(dateInput.dataset.rmtMemoryDate, { date: dateInput.value });
+    if (cg_format_ui.handleCgFormatChange(event)) return;
+    if (workspace_ui.handleWorkspaceChange(event) || language_view.handleLanguageChange(event)) return;
+    const advSelectEl = event.target.closest?.('[data-rmt-adv-select]');
+    if (advSelectEl) return ui_advEventView.advSelect(advSelectEl.value);
+    const historyToggle = event.target.closest?.('[data-rmt-memory-wi-history]');
+    if (historyToggle) {
+        const context = core_context.currentCharacterGuard();
+        const selection = archive_repository.getMemoryWorldInfoSelection(context);
+        const world = core_text.normalizeText(historyToggle.dataset.rmtMemoryWiHistory, 240);
+        const previous = selection.books.find(book => book.name === world);
+        if (!previous || runtimeState.busy || core_requestCoordinator.hasGenerationTasks()) {
+            historyToggle.checked = previous?.historySource === true; return;
+        }
+        archive_repository.updateMemoryWorldInfoBookSelection(context, world, { historySource: historyToggle.checked === true });
+        const attempted = JSON.stringify(archive_repository.getMemoryWorldInfoSelection(context).books);
+        try { await archive_repository.syncSelectedWorldInfoHistoryLedger(context); }
+        catch (error) {
+            if (!error?.worldHistoryPersisted && JSON.stringify(archive_repository.getMemoryWorldInfoSelection(context).books) === attempted) {
+                archive_repository.setMemoryWorldInfoSelection(context, selection); historyToggle.checked = previous.historySource;
+            }
+            if (error?.name !== 'AbortError') globalThis.toastr?.error?.('历史来源未同步，原有来源仍保留。', '心迹回廊');
+        }
+        return;
+    }
+    const allToggle = event.target.closest?.('[data-rmt-memory-wi-all]');
+    if (allToggle) {
+        const context = core_context.currentCharacterGuard();
+        const expectedScopeKey = archive_repository.memorySourceScopeForContext(context).key;
+        const world = core_text.normalizeText(allToggle.dataset.rmtMemoryWiAll, 240);
+        const selection = archive_repository.getMemoryWorldInfoSelection(context);
+        if (allToggle.checked && !selection.books.some(book => book.name === world) && selection.books.length >= core_constants.MAX_MEMORY_WORLD_INFO_BOOKS) {
+            allToggle.checked = false;
+            globalThis.toastr?.warning?.(`最多选择 ${core_constants.MAX_MEMORY_WORLD_INFO_BOOKS} 本记忆相关世界书。`, '心迹回廊');
+            return;
+        }
+        archive_repository.updateMemoryWorldInfoBookSelection(context, world, { all: !!allToggle.checked, entryUids: [] });
+        const section = allToggle.closest?.('[data-rmt-memory-wi-book]');
+        const attemptedSelectionJson = JSON.stringify(archive_repository.getMemoryWorldInfoSelection(context).books);
+        refreshMemoryWorldInfoBookControls(context, world, section, expectedScopeKey);
+        try { await archive_repository.syncSelectedWorldInfoHistoryLedger(context); }
+        catch (error) {
+            if (!error?.worldHistoryPersisted
+                && JSON.stringify(archive_repository.getMemoryWorldInfoSelection(context).books) === attemptedSelectionJson) {
+                archive_repository.setMemoryWorldInfoSelection(context, selection);
+            }
+            if (error?.name !== 'AbortError') globalThis.toastr?.error?.(`世界书选择没有同步，已恢复原选择：${core_text.toastText(core_text.safeErrorSummary(error))}`, '心迹回廊');
+        } finally {
+            refreshMemoryWorldInfoBookControls(context, world, section, expectedScopeKey);
+        }
+        return;
+    }
+    const entryToggle = event.target.closest?.('[data-rmt-memory-wi-entry]');
+    if (entryToggle) {
+        const context = core_context.currentCharacterGuard();
+        const expectedScopeKey = archive_repository.memorySourceScopeForContext(context).key;
+        const world = core_text.normalizeText(entryToggle.dataset.rmtMemoryWiEntry, 240);
+        const uid = core_text.normalizeText(entryToggle.dataset.rmtMemoryWiUid, 120);
+        const selection = archive_repository.getMemoryWorldInfoSelection(context);
+        const current = selection.books.find(item => item.name === world);
+        if (entryToggle.checked && !current && selection.books.length >= core_constants.MAX_MEMORY_WORLD_INFO_BOOKS) {
+            entryToggle.checked = false;
+            globalThis.toastr?.warning?.(`最多选择 ${core_constants.MAX_MEMORY_WORLD_INFO_BOOKS} 本记忆相关世界书。`, '心迹回廊');
+            return;
+        }
+        const set = new Set(current?.all ? [] : (current?.entryUids || []));
+        if (entryToggle.checked && !set.has(uid) && set.size >= core_constants.MAX_MEMORY_WORLD_INFO_ENTRIES) {
+            entryToggle.checked = false;
+            globalThis.toastr?.warning?.(`每次最多精确选择 ${core_constants.MAX_MEMORY_WORLD_INFO_ENTRIES} 个世界书条目。`, '心迹回廊');
+            return;
+        }
+        if (entryToggle.checked) set.add(uid); else set.delete(uid);
+        archive_repository.updateMemoryWorldInfoBookSelection(context, world, { all: false, entryUids: [...set] });
+        const attemptedSelectionJson = JSON.stringify(archive_repository.getMemoryWorldInfoSelection(context).books);
+        const section = entryToggle.closest?.('[data-rmt-memory-wi-book]');
+        refreshMemoryWorldInfoBookControls(context, world, section, expectedScopeKey);
+        try { await archive_repository.syncSelectedWorldInfoHistoryLedger(context); }
+        catch (error) {
+            if (!error?.worldHistoryPersisted
+                && JSON.stringify(archive_repository.getMemoryWorldInfoSelection(context).books) === attemptedSelectionJson) {
+                archive_repository.setMemoryWorldInfoSelection(context, selection);
+            }
+            if (error?.name !== 'AbortError') globalThis.toastr?.error?.(`世界书选择没有同步，已恢复原选择：${core_text.toastText(core_text.safeErrorSummary(error))}`, '心迹回廊');
+        } finally {
+            refreshMemoryWorldInfoBookControls(context, world, section, expectedScopeKey);
+        }
+        return;
+    }
+}
+
+__m_ui_overlayCore_js.presentGenerationTaskResult = presentGenerationTaskResult;
+__m_ui_overlayCore_js.applyMemoryPatch = applyMemoryPatch;
+__m_ui_overlayCore_js.deleteManagedCategory = deleteManagedCategory;
+__m_ui_overlayCore_js.handleOverlayChange = handleOverlayChange;
+__m_ui_overlayCore_js.openOverlay = openOverlay;
+__m_ui_overlayCore_js.navigateBack = navigateBack;
+__m_ui_overlayCore_js.requestCurrentArchiveImport = requestCurrentArchiveImport;
+__m_ui_overlayCore_js.requestCurrentArchiveFullRebuild = requestCurrentArchiveFullRebuild;
+__m_ui_overlayCore_js.showChooser = showChooser;
+__m_ui_overlayCore_js.openCachedOrGenerate = openCachedOrGenerate;
+__m_ui_overlayCore_js.renderActive = renderActive;
+__m_ui_overlayCore_js.handleOverlayClick = handleOverlayClick;
+__m_ui_overlayCore_js.OVERLAY_CLICK_UNHANDLED = OVERLAY_CLICK_UNHANDLED;
+}
+
+function __init_ui_overlayClickTargets_js() {
+// MODULE: ui/overlayClickTargets.js
+const workspace_ui = __m_ui_workspace_js;
+const language_view = __m_ui_languageView_js;
+const ui_contentManager = __m_ui_contentManager_js;
+const archive_library = __m_archive_library_js;
+const core_context = __m_core_context_js;
+const core_text = __m_core_text_js;
+const past_lives_view = __m_ui_pastLivesView_js;
+const time_stories_view = __m_ui_timeStoriesView_js;
+const generation_client = __m_generation_client_js;
+const core_requestCoordinator = __m_core_requestCoordinator_js;
+const archive_repository = __m_archive_repository_js;
+const core_constants = __m_core_constants_js;
+const expanded_cg_view = __m_ui_expandedCgView_js;
+const bedtime_view = __m_ui_bedtimeView_js;
+const song_view = __m_ui_themeSongView_js;
+const ui_inboxView = __m_ui_inboxView_js;
+const ui_taskCenter = __m_ui_taskCenter_js;
+const time_stories = __m_core_timeStoriesContract_js;
+const ui_workspaceState = __m_ui_workspaceState_js;
+const ui_calendarView = __m_ui_calendarView_js;
+const ui_travelView = __m_ui_travelView_js;
+const ui_butterflyView = __m_ui_butterflyView_js;
+const ui_endingView = __m_ui_endingView_js;
+const ui_albumView = __m_ui_albumView_js;
+const ui_advEventView = __m_ui_advEventView_js;
+const modes_room = __m_modes_room_js;
+const modes_items = __m_modes_items_js;
+const ui_phoneView = __m_ui_phoneView_js;
+const ui_heartView = __m_ui_heartView_js;
+const archive_snapshots = __m_archive_snapshots_js;
+const core_settings = __m_core_settings_js;
+const runtimeState = __m_core_state_js.state;
+const applyArchiveMobileSafeArea = __m_ui_overlayShell_js.applyArchiveMobileSafeArea;
+const bindOverlayCloseFallback = __m_ui_overlayShell_js.bindOverlayCloseFallback;
+const bindToolbarMoreMenu = __m_ui_overlayShell_js.bindToolbarMoreMenu;
+const bodyEl = __m_ui_overlayShell_js.bodyEl;
+const calendarQuickAccessHtml = __m_ui_overlayShell_js.calendarQuickAccessHtml;
+const closeArchiveOverlayFromUser = __m_ui_overlayShell_js.closeArchiveOverlayFromUser;
+const closeToolbarMoreMenu = __m_ui_overlayShell_js.closeToolbarMoreMenu;
+const confirmExplicitAction = __m_ui_overlayShell_js.confirmExplicitAction;
+const confirmExplicitActionTwice = __m_ui_overlayShell_js.confirmExplicitActionTwice;
+const confirmModeRegeneration = __m_ui_overlayShell_js.confirmModeRegeneration;
+const confirmRoomLifeRefresh = __m_ui_overlayShell_js.confirmRoomLifeRefresh;
+const decorateReadOnlyModeUi = __m_ui_overlayShell_js.decorateReadOnlyModeUi;
+const emptyArchiveMode = __m_ui_overlayShell_js.emptyArchiveMode;
+const formatArchiveTime = __m_ui_overlayShell_js.formatArchiveTime;
+const isArchiveMobileViewport = __m_ui_overlayShell_js.isArchiveMobileViewport;
+const loadChooserArchiveRecovery = __m_ui_overlayShell_js.loadChooserArchiveRecovery;
+const memoryLockPanelHtml = __m_ui_overlayShell_js.memoryLockPanelHtml;
+const readableModePortals = __m_ui_overlayShell_js.readableModePortals;
+const requestParticipantSelection = __m_ui_overlayShell_js.requestParticipantSelection;
+const requestParticipantVersions = __m_ui_overlayShell_js.requestParticipantVersions;
+const revealArchiveOverlay = __m_ui_overlayShell_js.revealArchiveOverlay;
+const setBackVisible = __m_ui_overlayShell_js.setBackVisible;
+const setManageVisible = __m_ui_overlayShell_js.setManageVisible;
+const setRegenerateVisible = __m_ui_overlayShell_js.setRegenerateVisible;
+const toggleToolbarMoreMenu = __m_ui_overlayShell_js.toggleToolbarMoreMenu;
+const toolbarMoreMenu = __m_ui_overlayShell_js.toolbarMoreMenu;
+const topTitle = __m_ui_overlayShell_js.topTitle;
+const OVERLAY_CLICK_UNHANDLED = __m_ui_overlayCore_js.OVERLAY_CLICK_UNHANDLED;
+const applyMemoryPatch = __m_ui_overlayCore_js.applyMemoryPatch;
+const openCachedOrGenerate = __m_ui_overlayCore_js.openCachedOrGenerate;
+const presentGenerationTaskResult = __m_ui_overlayCore_js.presentGenerationTaskResult;
+const showChooser = __m_ui_overlayCore_js.showChooser;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// ui/overlayCore.js handleOverlayClick 的分组处理（重构阶段 3）。每个函数是原函数里连续的一段语句，一字未改；
+// 返回 OVERLAY_CLICK_UNHANDLED 表示“这一段没有处理”，原函数接着往下走，和拆分前完全相同。
+
+// 按元素属性分发：记忆锁定、工作区、内容草稿、任务结果、前世 / 时间故事、恢复草稿、档案草稿、CG 大图、睡前故事 / 印象曲 / 邮箱、生成队列（原第 6–49 条语句）
+function overlayClickRecordTargets(event) {
     const lockBtn = event.target.closest?.('[data-rmt-memory-lock]');
     if (lockBtn) {
         const pressed = lockBtn.getAttribute('aria-pressed') === 'true';
@@ -55034,6 +56381,11 @@ function handleOverlayClick(event) {
         void generation_client.generateMode(mode, { workspaceRoute: ui_workspaceState.workspace.route || mode, background, ...completionOptions });
         return;
     }
+    return OVERLAY_CLICK_UNHANDLED;
+}
+
+// 按元素属性分发：玩法入口、日历、出行、结局、相簿、房间、终端、HEART、头像对话、档案聊天 / 角色、外部记忆与只读开关（原第 50–121 条语句）
+function overlayClickPageTargets(event) {
     const modeButton = event.target.closest?.('[data-rmt-mode]');
     if (modeButton) {
         openCachedOrGenerate(modeButton.dataset.rmtMode);
@@ -55125,11 +56477,120 @@ function handleOverlayClick(event) {
         archive_library.setArchiveReadOnly(!!readOnlyToggle.checked);
         return;
     }
+    return OVERLAY_CLICK_UNHANDLED;
+}
 
-    const actionEl = event.target.closest?.('[data-rmt-action]');
-    const action = actionEl?.dataset?.rmtAction;
-    if (!action) return;
-    if (!action.startsWith('archive-inheritance-')) archive_inheritance_view.clearArchiveInheritancePreview();
+__m_ui_overlayClickTargets_js.overlayClickRecordTargets = overlayClickRecordTargets;
+__m_ui_overlayClickTargets_js.overlayClickPageTargets = overlayClickPageTargets;
+}
+
+function __init_ui_overlayClickActions_js() {
+// MODULE: ui/overlayClickActions.js
+const archive_inheritance_view = __m_ui_archiveInheritance_js;
+const ui_workspaceState = __m_ui_workspaceState_js;
+const core_context = __m_core_context_js;
+const core_text = __m_core_text_js;
+const archive_library = __m_archive_library_js;
+const archive_repository = __m_archive_repository_js;
+const ui_inboxView = __m_ui_inboxView_js;
+const ui_travelView = __m_ui_travelView_js;
+const ui_taskCenter = __m_ui_taskCenter_js;
+const home_view = __m_ui_homeView_js;
+const ui_heartView = __m_ui_heartView_js;
+const archive_groups = __m_archive_groups_js;
+const modes_heart = __m_modes_heart_js;
+const core_constants = __m_core_constants_js;
+const generation_client = __m_generation_client_js;
+const ui_settingsPanel = __m_ui_settingsPanel_js;
+const modes_relations = __m_modes_relations_js;
+const ui_contentManager = __m_ui_contentManager_js;
+const archive_snapshots = __m_archive_snapshots_js;
+const modes_room = __m_modes_room_js;
+const ui_endingView = __m_ui_endingView_js;
+const generation_imageGeneration = __m_generation_imageGeneration_js;
+const ui_albumView = __m_ui_albumView_js;
+const cg_editor = __m_ui_cgPromptEditor_js;
+const ui_advEventView = __m_ui_advEventView_js;
+const modes_advEvent = __m_modes_advEvent_js;
+const ui_phoneView = __m_ui_phoneView_js;
+const modes_items = __m_modes_items_js;
+const applyArchiveMobileSafeArea = __m_ui_overlayShell_js.applyArchiveMobileSafeArea;
+const bindOverlayCloseFallback = __m_ui_overlayShell_js.bindOverlayCloseFallback;
+const bindToolbarMoreMenu = __m_ui_overlayShell_js.bindToolbarMoreMenu;
+const bodyEl = __m_ui_overlayShell_js.bodyEl;
+const calendarQuickAccessHtml = __m_ui_overlayShell_js.calendarQuickAccessHtml;
+const closeArchiveOverlayFromUser = __m_ui_overlayShell_js.closeArchiveOverlayFromUser;
+const closeToolbarMoreMenu = __m_ui_overlayShell_js.closeToolbarMoreMenu;
+const confirmExplicitAction = __m_ui_overlayShell_js.confirmExplicitAction;
+const confirmExplicitActionTwice = __m_ui_overlayShell_js.confirmExplicitActionTwice;
+const confirmModeRegeneration = __m_ui_overlayShell_js.confirmModeRegeneration;
+const confirmRoomLifeRefresh = __m_ui_overlayShell_js.confirmRoomLifeRefresh;
+const decorateReadOnlyModeUi = __m_ui_overlayShell_js.decorateReadOnlyModeUi;
+const emptyArchiveMode = __m_ui_overlayShell_js.emptyArchiveMode;
+const formatArchiveTime = __m_ui_overlayShell_js.formatArchiveTime;
+const isArchiveMobileViewport = __m_ui_overlayShell_js.isArchiveMobileViewport;
+const loadChooserArchiveRecovery = __m_ui_overlayShell_js.loadChooserArchiveRecovery;
+const memoryLockPanelHtml = __m_ui_overlayShell_js.memoryLockPanelHtml;
+const readableModePortals = __m_ui_overlayShell_js.readableModePortals;
+const requestParticipantSelection = __m_ui_overlayShell_js.requestParticipantSelection;
+const requestParticipantVersions = __m_ui_overlayShell_js.requestParticipantVersions;
+const revealArchiveOverlay = __m_ui_overlayShell_js.revealArchiveOverlay;
+const setBackVisible = __m_ui_overlayShell_js.setBackVisible;
+const setManageVisible = __m_ui_overlayShell_js.setManageVisible;
+const setRegenerateVisible = __m_ui_overlayShell_js.setRegenerateVisible;
+const toggleToolbarMoreMenu = __m_ui_overlayShell_js.toggleToolbarMoreMenu;
+const toolbarMoreMenu = __m_ui_overlayShell_js.toolbarMoreMenu;
+const topTitle = __m_ui_overlayShell_js.topTitle;
+const runtimeState = __m_core_state_js.state;
+const deleteManagedTarget = __m_ui_overlayManage_js.deleteManagedTarget;
+const recategorizeManagedTarget = __m_ui_overlayManage_js.recategorizeManagedTarget;
+const refreshMemoryWorldInfoBookControls = __m_ui_overlayManage_js.refreshMemoryWorldInfoBookControls;
+const regenerateManagedCategory = __m_ui_overlayManage_js.regenerateManagedCategory;
+const regenerateManagedTarget = __m_ui_overlayManage_js.regenerateManagedTarget;
+const OVERLAY_CLICK_UNHANDLED = __m_ui_overlayCore_js.OVERLAY_CLICK_UNHANDLED;
+const deleteManagedCategory = __m_ui_overlayCore_js.deleteManagedCategory;
+const navigateBack = __m_ui_overlayCore_js.navigateBack;
+const openCachedOrGenerate = __m_ui_overlayCore_js.openCachedOrGenerate;
+const requestCurrentArchiveFullRebuild = __m_ui_overlayCore_js.requestCurrentArchiveFullRebuild;
+const requestCurrentArchiveImport = __m_ui_overlayCore_js.requestCurrentArchiveImport;
+const showChooser = __m_ui_overlayCore_js.showChooser;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// ui/overlayCore.js handleOverlayClick 的分组处理（重构阶段 3）。每个函数是原函数里连续的一段语句，一字未改；
+// 返回 OVERLAY_CLICK_UNHANDLED 表示“这一段没有处理”，原函数接着往下走，和拆分前完全相同。
+
+// 按 data-rmt-action 分发：继承、改写、任务、首页 / 档案室、HEART、头像、当前档案、阅读、终端、记忆、角色档案、关系、管理、重建 / 导入、参与者、重新生成（原第 126–187 条语句）
+function overlayArchiveActions(actionEl, action) {
     if (action === 'archive-inheritance-open') {
         archive_inheritance_view.clearArchiveInheritancePreview();
         if (bodyEl()) bodyEl().innerHTML = archive_inheritance_view.archiveInheritancePickerHtml();
@@ -55338,6 +56799,11 @@ function handleOverlayClick(event) {
         }
         return generation_client.generateMode(runtimeState.activeMode, { background: false });
     }
+    return OVERLAY_CLICK_UNHANDLED;
+}
+
+// 按 data-rmt-action 分发：房间、结局、相簿、共同回忆、CG、阅读、物品、ADV（原第 188–234 条语句）
+function overlayPageActions(actionEl, action) {
     if (action === 'room-schema-upgrade') {
         if (runtimeState.activeMode !== core_constants.MODE.ROOM || !modes_room.roomNeedsSchemaUpgrade(runtimeState.activeSession)) return;
         if (!confirmExplicitAction(
@@ -55436,126 +56902,255 @@ function handleOverlayClick(event) {
     if (action === 'adv-event-next') return ui_advEventView.advEventStep(1);
     if (action === 'adv-prev') return ui_advEventView.advStep(-1);
     if (action === 'adv-next') return ui_advEventView.advStep(1);
+    return OVERLAY_CLICK_UNHANDLED;
 }
 
-function refreshMemoryWorldInfoBookControls(context, world, section, expectedScopeKey) {
-    try {
-        if (archive_repository.memorySourceScopeForContext(core_context.currentCharacterGuard()).key !== expectedScopeKey) return;
-    } catch { return; }
-    const book = archive_repository.getMemoryWorldInfoSelection(context).books.find(item => item.name === world);
-    const all = book?.all === true;
-    const selected = new Set(all ? [] : (book?.entryUids || []).map(String));
-    const allInput = section?.querySelector?.('[data-rmt-memory-wi-all]');
-    if (allInput) allInput.checked = all;
-    const historyInput = section?.querySelector?.('[data-rmt-memory-wi-history]');
-    if (historyInput) { historyInput.checked = book?.historySource === true; historyInput.disabled = !book; }
-    section?.querySelectorAll?.('[data-rmt-memory-wi-entry]').forEach(input => {
-        input.disabled = all;
-        input.checked = !all && selected.has(String(input.dataset.rmtMemoryWiUid || ''));
-    });
+__m_ui_overlayClickActions_js.overlayArchiveActions = overlayArchiveActions;
+__m_ui_overlayClickActions_js.overlayPageActions = overlayPageActions;
 }
 
-async function handleOverlayChange(event) {
-    const dateInput = event.target.closest?.('[data-rmt-memory-date]');
-    if (dateInput) return void applyMemoryPatch(dateInput.dataset.rmtMemoryDate, { date: dateInput.value });
-    if (cg_format_ui.handleCgFormatChange(event)) return;
-    if (workspace_ui.handleWorkspaceChange(event) || language_view.handleLanguageChange(event)) return;
-    const advSelectEl = event.target.closest?.('[data-rmt-adv-select]');
-    if (advSelectEl) return ui_advEventView.advSelect(advSelectEl.value);
-    const historyToggle = event.target.closest?.('[data-rmt-memory-wi-history]');
-    if (historyToggle) {
-        const context = core_context.currentCharacterGuard();
-        const selection = archive_repository.getMemoryWorldInfoSelection(context);
-        const world = core_text.normalizeText(historyToggle.dataset.rmtMemoryWiHistory, 240);
-        const previous = selection.books.find(book => book.name === world);
-        if (!previous || runtimeState.busy || core_requestCoordinator.hasGenerationTasks()) {
-            historyToggle.checked = previous?.historySource === true; return;
+function __init_ui_overlayPartial_js() {
+// MODULE: ui/overlayPartial.js
+const heart_reader = __m_ui_heartReaderState_js;
+const archive_library = __m_archive_library_js;
+const archive_repository = __m_archive_repository_js;
+const core_cache = __m_core_cache_js;
+const core_constants = __m_core_constants_js;
+const core_context = __m_core_context_js;
+const core_requestCoordinator = __m_core_requestCoordinator_js;
+const navigation_bookmark = __m_ui_navigationBookmark_js;
+const recovery_view = __m_ui_recoveryView_js;
+const ui_workspaceState = __m_ui_workspaceState_js;
+const runtimeState = __m_core_state_js.state;
+const bodyEl = __m_ui_overlayShell_js.bodyEl;
+const calendarQuickAccessHtml = __m_ui_overlayShell_js.calendarQuickAccessHtml;
+const renderActive = __m_ui_overlayCore_js.renderActive;
+const showChooser = __m_ui_overlayCore_js.showChooser;
+
+
+
+
+
+
+
+
+
+
+
+
+
+// 未完成任务视图：局部生成刷新、打开未完成任务、刷新已保存会话
+// 从 ui/overlay.js 原样搬出（重构阶段 2），声明文本一字未改；ui/overlay.js 仍转发原有导出。
+
+async function refreshPartialGenerationView(mode, context, { draftId, pageId, archiveTarget = null, readerStillCurrent = null } = {}) {
+    const host = document.getElementById(core_constants.OVERLAY_ID);
+    if (!host || host.hidden) return false;
+    const snapshot = runtimeState.activeArchiveSnapshot;
+    if (snapshot?.taskResultDraftId && snapshot.taskResultDraftId !== draftId) return false;
+    if (snapshot && !snapshot.taskResultDraftId) {
+        if (snapshot.historyVersionId || snapshot.backupOnly || !archiveTarget
+            || snapshot.entryId !== archiveTarget.entryId
+            || snapshot.memory?.archiveRevision !== archiveTarget.memory?.archiveRevision
+            || core_context.comparableChatId(snapshot.chatId) !== core_context.comparableChatId(archiveTarget.chatId)) return false;
+        snapshot.cache = structuredClone(archiveTarget.cache);
+        if (!runtimeState.activeMode) {
+            const scrollTop = bodyEl()?.scrollTop || 0;
+            archive_library.showIndexedArchiveSnapshot(snapshot);
+            if (bodyEl()) bodyEl().scrollTop = scrollTop;
+            return true;
         }
-        archive_repository.updateMemoryWorldInfoBookSelection(context, world, { historySource: historyToggle.checked === true });
-        const attempted = JSON.stringify(archive_repository.getMemoryWorldInfoSelection(context).books);
-        try { await archive_repository.syncSelectedWorldInfoHistoryLedger(context); }
-        catch (error) {
-            if (!error?.worldHistoryPersisted && JSON.stringify(archive_repository.getMemoryWorldInfoSelection(context).books) === attempted) {
-                archive_repository.setMemoryWorldInfoSelection(context, selection); historyToggle.checked = previous.historySource;
-            }
-            if (error?.name !== 'AbortError') globalThis.toastr?.error?.('历史来源未同步，原有来源仍保留。', '心迹回廊');
-        }
-        return;
     }
-    const allToggle = event.target.closest?.('[data-rmt-memory-wi-all]');
-    if (allToggle) {
-        const context = core_context.currentCharacterGuard();
-        const expectedScopeKey = archive_repository.memorySourceScopeForContext(context).key;
-        const world = core_text.normalizeText(allToggle.dataset.rmtMemoryWiAll, 240);
-        const selection = archive_repository.getMemoryWorldInfoSelection(context);
-        if (allToggle.checked && !selection.books.some(book => book.name === world) && selection.books.length >= core_constants.MAX_MEMORY_WORLD_INFO_BOOKS) {
-            allToggle.checked = false;
-            globalThis.toastr?.warning?.(`最多选择 ${core_constants.MAX_MEMORY_WORLD_INFO_BOOKS} 本记忆相关世界书。`, '心迹回廊');
-            return;
-        }
-        archive_repository.updateMemoryWorldInfoBookSelection(context, world, { all: !!allToggle.checked, entryUids: [] });
-        const section = allToggle.closest?.('[data-rmt-memory-wi-book]');
-        const attemptedSelectionJson = JSON.stringify(archive_repository.getMemoryWorldInfoSelection(context).books);
-        refreshMemoryWorldInfoBookControls(context, world, section, expectedScopeKey);
-        try { await archive_repository.syncSelectedWorldInfoHistoryLedger(context); }
-        catch (error) {
-            if (!error?.worldHistoryPersisted
-                && JSON.stringify(archive_repository.getMemoryWorldInfoSelection(context).books) === attemptedSelectionJson) {
-                archive_repository.setMemoryWorldInfoSelection(context, selection);
+    if (!snapshot && core_context.chatScopeKey(context) !== core_context.chatScopeKey(core_context.getContext())) return false;
+    if (!snapshot && !runtimeState.activeMode && runtimeState.archiveViewLevel === 'chooser') {
+        if (ui_workspaceState.workspace.tab === 'content') {
+            const scrollTop = bodyEl()?.scrollTop || 0;
+            showChooser({ section: 'content' });
+            if (bodyEl()) bodyEl().scrollTop = scrollTop;
+        } else {
+            // Archive source selections may be half edited. Refresh only the
+            // received-content controls, leaving those inputs in place.
+            const memory = archive_repository.getImportedMemory(context);
+            const stored = core_cache.getCache(context);
+            const recovery = bodyEl()?.querySelector?.('[data-rmt-generation-recoveries]');
+            if (recovery) recovery.innerHTML = recovery_view.recoveryBannerHtml(stored, memory);
+            const session = core_cache.loadSession(mode, { context, memoryBank: memory, includePartial: true });
+            const portal = bodyEl()?.querySelector?.(`.rmt-archive-portal [data-rmt-mode="${mode}"]`)
+                ?.closest?.('.rmt-archive-portal')
+                || bodyEl()?.querySelector?.(`[data-rmt-generate-mode="${mode}"]`)?.closest?.('.rmt-archive-portal');
+            if (session && portal) {
+                portal.classList.remove('empty'); portal.classList.add('ready');
+                const open = portal.querySelector('.rmt-portal-open');
+                open.disabled = false; open.setAttribute('data-rmt-mode', mode);
+                const status = portal.querySelector('.rmt-portal-status');
+                if (status) status.textContent = '已生成部分内容 · 可以先查看';
+                const dot = portal.querySelector('.rmt-portal-lock, .rmt-portal-ready-dot');
+                if (dot) { dot.className = 'rmt-portal-ready-dot'; dot.textContent = '…'; }
             }
-            if (error?.name !== 'AbortError') globalThis.toastr?.error?.(`世界书选择没有同步，已恢复原选择：${core_text.toastText(core_text.safeErrorSummary(error))}`, '心迹回廊');
-        } finally {
-            refreshMemoryWorldInfoBookControls(context, world, section, expectedScopeKey);
-        }
-        return;
-    }
-    const entryToggle = event.target.closest?.('[data-rmt-memory-wi-entry]');
-    if (entryToggle) {
-        const context = core_context.currentCharacterGuard();
-        const expectedScopeKey = archive_repository.memorySourceScopeForContext(context).key;
-        const world = core_text.normalizeText(entryToggle.dataset.rmtMemoryWiEntry, 240);
-        const uid = core_text.normalizeText(entryToggle.dataset.rmtMemoryWiUid, 120);
-        const selection = archive_repository.getMemoryWorldInfoSelection(context);
-        const current = selection.books.find(item => item.name === world);
-        if (entryToggle.checked && !current && selection.books.length >= core_constants.MAX_MEMORY_WORLD_INFO_BOOKS) {
-            entryToggle.checked = false;
-            globalThis.toastr?.warning?.(`最多选择 ${core_constants.MAX_MEMORY_WORLD_INFO_BOOKS} 本记忆相关世界书。`, '心迹回廊');
-            return;
-        }
-        const set = new Set(current?.all ? [] : (current?.entryUids || []));
-        if (entryToggle.checked && !set.has(uid) && set.size >= core_constants.MAX_MEMORY_WORLD_INFO_ENTRIES) {
-            entryToggle.checked = false;
-            globalThis.toastr?.warning?.(`每次最多精确选择 ${core_constants.MAX_MEMORY_WORLD_INFO_ENTRIES} 个世界书条目。`, '心迹回廊');
-            return;
-        }
-        if (entryToggle.checked) set.add(uid); else set.delete(uid);
-        archive_repository.updateMemoryWorldInfoBookSelection(context, world, { all: false, entryUids: [...set] });
-        const attemptedSelectionJson = JSON.stringify(archive_repository.getMemoryWorldInfoSelection(context).books);
-        const section = entryToggle.closest?.('[data-rmt-memory-wi-book]');
-        refreshMemoryWorldInfoBookControls(context, world, section, expectedScopeKey);
-        try { await archive_repository.syncSelectedWorldInfoHistoryLedger(context); }
-        catch (error) {
-            if (!error?.worldHistoryPersisted
-                && JSON.stringify(archive_repository.getMemoryWorldInfoSelection(context).books) === attemptedSelectionJson) {
-                archive_repository.setMemoryWorldInfoSelection(context, selection);
+            if (mode === core_constants.MODE.CALENDAR) {
+                const quick = bodyEl()?.querySelector?.('[data-rmt-calendar-quick]');
+                if (quick) quick.innerHTML = calendarQuickAccessHtml({ ready: !!memory, generated: !!session,
+                    generating: core_requestCoordinator.isModeGenerating(mode), partial: !!session?.readableProgress });
             }
-            if (error?.name !== 'AbortError') globalThis.toastr?.error?.(`世界书选择没有同步，已恢复原选择：${core_text.toastText(core_text.safeErrorSummary(error))}`, '心迹回廊');
-        } finally {
-            refreshMemoryWorldInfoBookControls(context, world, section, expectedScopeKey);
         }
-        return;
+        return true;
     }
+    if (runtimeState.activeMode !== mode) return false;
+    const prior = runtimeState.activeSession;
+    // A full-page/background task does not own every later reader of its mode.
+    // An explicitly opened view of this very draft can keep receiving progress;
+    // otherwise the caller's original reader and position must still be current.
+    const ownsDraft = snapshot?.taskResultDraftId === draftId
+        || (prior?.readableProgress?.complete === false && prior.readableProgress.draftId === draftId);
+    if (prior?.readableProgress?.explicitDraft && !ownsDraft) return false;
+    if (!ownsDraft && typeof readerStillCurrent === 'function' && !readerStillCurrent()) return false;
+    if (mode === core_constants.MODE.HEART && pageId && pageId !== 'heart') {
+        const shownPage = ui_workspaceState.workspace.route === 'heart'
+            ? heart_reader.heartReaderSession(prior)?.selectedSeason || 'spring' : ui_workspaceState.workspace.route;
+        if (shownPage !== pageId) return false;
+    }
+    let memory, stored;
+    if (snapshot?.taskResultDraftId) {
+        const result = await core_cache.readGenerationTaskResult(context, draftId);
+        if (runtimeState.activeArchiveSnapshot !== snapshot || runtimeState.activeSession !== prior
+            || runtimeState.activeMode !== mode || host.hidden) return false;
+        memory = result.sourceMemory;
+        stored = { chatId: memory.chatId, archiveRevision: memory.archiveRevision, [mode]: result.session };
+        snapshot.memory = structuredClone(memory); snapshot.cache = structuredClone(stored);
+    } else if (snapshot) {
+        memory = snapshot.memory; stored = snapshot.cache;
+    } else {
+        memory = archive_repository.getImportedMemory(context); stored = core_cache.getCache(context);
+    }
+    const exactResult = prior?.readableProgress?.explicitDraft ? stored?.[core_cache.GENERATION_DRAFTS_CACHE_KEY]?.records?.[prior.readableProgress.draftId]?.result : null;
+    const session = exactResult ? core_cache.generationTaskResultSession({ draftId: prior.readableProgress.draftId, ...exactResult })
+        : core_cache.loadSession(mode, { context, chatId: memory?.chatId, memoryBank: memory, cache: stored, clone: true, includePartial: true });
+    if (!session?.readableProgress) return false;
+    if (!snapshot && !exactResult && stored?.[core_cache.GENERATION_DRAFTS_CACHE_KEY]?.records?.[draftId]?.result?.sourceMemory?.archiveRevision !== memory?.archiveRevision) return false;
+    for (const key of ['selectedId', 'selectedEntryId', 'selectedContainerId', 'selectedNodeId', 'category', 'page', 'viewPath',
+        'selectedMonth', 'selectedDateKey', 'view', 'tab', 'reading', 'dialogueIndex', 'sharedMemory',
+        'selectedSeason', 'selectedVoiceId', 'selectedScenarioId', 'selectedStripId', 'selectedFireflyId', 'selectedDramaKey']) {
+        if (prior && Object.hasOwn(prior, key)) session[key] = structuredClone(prior[key]);
+    }
+    const body = bodyEl(), scrollTop = body?.scrollTop || 0;
+    // The generation caller uses this reference to recognize its original
+    // foreground reader at the final save. Progress is a refresh of that same
+    // reader, not navigation to a replacement reader.
+    if (prior && typeof readerStillCurrent === 'function') {
+        for (const key of Object.keys(prior)) delete prior[key];
+        Object.assign(prior, session);
+        runtimeState.activeSession = prior;
+    } else runtimeState.activeSession = session;
+    ui_workspaceState.workspace.empty = null;
+    renderActive();
+    if (body) body.scrollTop = scrollTop;
+    return true;
 }
 
-__m_ui_overlay_js.requestParticipantSelection = requestParticipantSelection;
-__m_ui_overlay_js.runParticipantRegeneration = runParticipantRegeneration;
-__m_ui_overlay_js.requestParticipantVersions = requestParticipantVersions;
-__m_ui_overlay_js.presentGenerationTaskResult = presentGenerationTaskResult;
-__m_ui_overlay_js.loadChooserArchiveRecovery = loadChooserArchiveRecovery;
-__m_ui_overlay_js.refreshArchiveRecoveryView = refreshArchiveRecoveryView;
-__m_ui_overlay_js.refreshPartialGenerationView = refreshPartialGenerationView;
-__m_ui_overlay_js.saveActiveSessionEdit = saveActiveSessionEdit;
-__m_ui_overlay_js.handleOverlayChange = handleOverlayChange;
+function openPartialTaskSession(record) {
+    runtimeState.activeArchiveSnapshot = null;
+    runtimeState.activeArchiveReadOnly = false;
+    runtimeState.activeMode = record.mode;
+    runtimeState.activeSession = core_cache.generationTaskResultSession(record);
+    runtimeState.archiveViewLevel = 'content';
+    ui_workspaceState.prepareWorkspaceSession(record.mode, runtimeState.activeSession, record.pageId);
+    renderActive();
+}
+
+// Refresh only the live saved reader. Drafts and historical views own separate data.
+function refreshSavedActiveSession() {
+    if (runtimeState.activeArchiveSnapshot || !runtimeState.activeSession || !runtimeState.activeMode
+        || (runtimeState.activeSession.readableProgress && runtimeState.activeSession.readableProgress.complete !== true) || runtimeState.contentManagerOpen) return false;
+    const body = bodyEl();
+    if (!body || body.querySelector('[data-rmt-cg-editor]')) return false;
+    // Never replace an in-progress form edit in order to show a background result.
+    if (body.contains(document.activeElement) && document.activeElement?.matches?.('input,textarea,select,[contenteditable=true]')) return false;
+    const context = core_context.currentCharacterGuard();
+    const memory = archive_repository.getImportedMemory(context);
+    const next = core_cache.loadSession(runtimeState.activeMode, { context, memoryBank: memory, clone: true });
+    if (!next) return false;
+    const position = navigation_bookmark.readingPosition(runtimeState.activeSession);
+    const scroll = body.scrollTop;
+    const controls = [...body.querySelectorAll('input,textarea,select')].map(el => ({
+        id: el.id, name: el.name, type: el.type, value: el.value, checked: el.checked,
+    })).filter(el => el.id || el.name);
+    runtimeState.activeSession = Object.assign(next, position);
+    renderActive();
+    for (const saved of controls) {
+        const control = [...body.querySelectorAll('input,textarea,select')].find(el => saved.id ? el.id === saved.id : el.name === saved.name && el.type === saved.type);
+        if (control) { control.value = saved.value; if ('checked' in control) control.checked = saved.checked; }
+    }
+    body.scrollTop = scroll;
+    return true;
+}
+
+__m_ui_overlayPartial_js.refreshPartialGenerationView = refreshPartialGenerationView;
+__m_ui_overlayPartial_js.openPartialTaskSession = openPartialTaskSession;
+__m_ui_overlayPartial_js.refreshSavedActiveSession = refreshSavedActiveSession;
+}
+
+function __init_ui_overlay_js() {
+// MODULE: ui/overlay.js
+const split_overlayShell = __m_ui_overlayShell_js;
+const split_overlayManage = __m_ui_overlayManage_js;
+const split_overlayCore = __m_ui_overlayCore_js;
+const split_overlayPartial = __m_ui_overlayPartial_js;
+
+
+
+
+// 以下导出已搬到 ui/overlayShell.js、ui/overlayManage.js、ui/overlayCore.js、ui/overlayPartial.js，这里原样转发，调用方不用改。
+const isArchiveMobileViewport = split_overlayShell.isArchiveMobileViewport;
+const archiveMobileSafeTopFallback = split_overlayShell.archiveMobileSafeTopFallback;
+const applyArchiveMobileSafeArea = split_overlayShell.applyArchiveMobileSafeArea;
+const overlayCloseButtonFromEvent = split_overlayShell.overlayCloseButtonFromEvent;
+const closeArchiveOverlayFromUser = split_overlayShell.closeArchiveOverlayFromUser;
+const bindOverlayCloseFallback = split_overlayShell.bindOverlayCloseFallback;
+const revealArchiveOverlay = split_overlayShell.revealArchiveOverlay;
+const openOverlay = split_overlayCore.openOverlay;
+const closeOverlay = split_overlayShell.closeOverlay;
+const invalidateArchiveViewForChatNavigation = split_overlayShell.invalidateArchiveViewForChatNavigation;
+const bodyEl = split_overlayShell.bodyEl;
+const topTitle = split_overlayShell.topTitle;
+const setBackVisible = split_overlayShell.setBackVisible;
+const navigateBack = split_overlayCore.navigateBack;
+const setManageVisible = split_overlayShell.setManageVisible;
+const setRegenerateVisible = split_overlayShell.setRegenerateVisible;
+const confirmExplicitAction = split_overlayShell.confirmExplicitAction;
+const confirmExplicitActionTwice = split_overlayShell.confirmExplicitActionTwice;
+const confirmModeRegeneration = split_overlayShell.confirmModeRegeneration;
+const confirmRoomLifeRefresh = split_overlayShell.confirmRoomLifeRefresh;
+const requestCurrentArchiveImport = split_overlayCore.requestCurrentArchiveImport;
+const requestParticipantSelection = split_overlayShell.requestParticipantSelection;
+const participantRegenerationScopes = split_overlayShell.participantRegenerationScopes;
+const runParticipantRegeneration = split_overlayShell.runParticipantRegeneration;
+const requestParticipantVersions = split_overlayShell.requestParticipantVersions;
+const presentGenerationTaskResult = split_overlayCore.presentGenerationTaskResult;
+const requestCurrentArchiveFullRebuild = split_overlayCore.requestCurrentArchiveFullRebuild;
+const formatArchiveTime = split_overlayShell.formatArchiveTime;
+const loadChooserArchiveRecovery = split_overlayShell.loadChooserArchiveRecovery;
+const readableModePortals = split_overlayShell.readableModePortals;
+const showChooser = split_overlayCore.showChooser;
+const showLoading = split_overlayShell.showLoading;
+const showError = split_overlayShell.showError;
+const showMemoryImportError = split_overlayShell.showMemoryImportError;
+const updateBackgroundTaskLabel = split_overlayShell.updateBackgroundTaskLabel;
+const setBusyUi = split_overlayShell.setBusyUi;
+const setInnerLoading = split_overlayShell.setInnerLoading;
+const refreshArchiveTargetSnapshotView = split_overlayShell.refreshArchiveTargetSnapshotView;
+const showInlineError = split_overlayShell.showInlineError;
+const showInlinePreflight = split_overlayShell.showInlinePreflight;
+const openCachedOrGenerate = split_overlayCore.openCachedOrGenerate;
+const decorateReadOnlyModeUi = split_overlayShell.decorateReadOnlyModeUi;
+const refreshArchiveRecoveryView = split_overlayShell.refreshArchiveRecoveryView;
+const refreshContentRegenerationDraftView = split_overlayShell.refreshContentRegenerationDraftView;
+const refreshPartialGenerationView = split_overlayPartial.refreshPartialGenerationView;
+const openPartialTaskSession = split_overlayPartial.openPartialTaskSession;
+const saveActiveSessionEdit = split_overlayShell.saveActiveSessionEdit;
+const refreshSavedActiveSession = split_overlayPartial.refreshSavedActiveSession;
+const renderActive = split_overlayCore.renderActive;
+const handleOverlayClick = split_overlayCore.handleOverlayClick;
+const handleOverlayChange = split_overlayCore.handleOverlayChange;
+
 __m_ui_overlay_js.isArchiveMobileViewport = isArchiveMobileViewport;
 __m_ui_overlay_js.archiveMobileSafeTopFallback = archiveMobileSafeTopFallback;
 __m_ui_overlay_js.applyArchiveMobileSafeArea = applyArchiveMobileSafeArea;
@@ -55577,9 +57172,14 @@ __m_ui_overlay_js.confirmExplicitActionTwice = confirmExplicitActionTwice;
 __m_ui_overlay_js.confirmModeRegeneration = confirmModeRegeneration;
 __m_ui_overlay_js.confirmRoomLifeRefresh = confirmRoomLifeRefresh;
 __m_ui_overlay_js.requestCurrentArchiveImport = requestCurrentArchiveImport;
+__m_ui_overlay_js.requestParticipantSelection = requestParticipantSelection;
 __m_ui_overlay_js.participantRegenerationScopes = participantRegenerationScopes;
+__m_ui_overlay_js.runParticipantRegeneration = runParticipantRegeneration;
+__m_ui_overlay_js.requestParticipantVersions = requestParticipantVersions;
+__m_ui_overlay_js.presentGenerationTaskResult = presentGenerationTaskResult;
 __m_ui_overlay_js.requestCurrentArchiveFullRebuild = requestCurrentArchiveFullRebuild;
 __m_ui_overlay_js.formatArchiveTime = formatArchiveTime;
+__m_ui_overlay_js.loadChooserArchiveRecovery = loadChooserArchiveRecovery;
 __m_ui_overlay_js.readableModePortals = readableModePortals;
 __m_ui_overlay_js.showChooser = showChooser;
 __m_ui_overlay_js.showLoading = showLoading;
@@ -55593,11 +57193,15 @@ __m_ui_overlay_js.showInlineError = showInlineError;
 __m_ui_overlay_js.showInlinePreflight = showInlinePreflight;
 __m_ui_overlay_js.openCachedOrGenerate = openCachedOrGenerate;
 __m_ui_overlay_js.decorateReadOnlyModeUi = decorateReadOnlyModeUi;
+__m_ui_overlay_js.refreshArchiveRecoveryView = refreshArchiveRecoveryView;
 __m_ui_overlay_js.refreshContentRegenerationDraftView = refreshContentRegenerationDraftView;
+__m_ui_overlay_js.refreshPartialGenerationView = refreshPartialGenerationView;
 __m_ui_overlay_js.openPartialTaskSession = openPartialTaskSession;
+__m_ui_overlay_js.saveActiveSessionEdit = saveActiveSessionEdit;
 __m_ui_overlay_js.refreshSavedActiveSession = refreshSavedActiveSession;
 __m_ui_overlay_js.renderActive = renderActive;
 __m_ui_overlay_js.handleOverlayClick = handleOverlayClick;
+__m_ui_overlay_js.handleOverlayChange = handleOverlayChange;
 }
 
 function __init_archive_snapshots_js() {
@@ -61774,20 +63378,15 @@ __m_ui_workspace_js.handleWorkspaceChange = handleWorkspaceChange;
 __m_ui_workspace_js.openVoiceModule = openVoiceModule;
 }
 
-function __init_archive_library_js() {
-// MODULE: archive/library.js
-const workspace_ui = __m_ui_workspace_js;
+function __init_archive_libraryCharacter_js() {
+// MODULE: archive/libraryCharacter.js
 const archive_groups = __m_archive_groups_js;
 const archive_inheritance = __m_archive_inheritance_js;
 const archive_backupStore = __m_archive_backupStore_js;
 const archive_repository = __m_archive_repository_js;
-const archive_coverage = __m_archive_coverageRanges_js;
-const archive_snapshots = __m_archive_snapshots_js;
 const core_cache = __m_core_cache_js;
-const core_archiveCover = __m_core_archiveCover_js;
 const core_constants = __m_core_constants_js;
 const core_context = __m_core_context_js;
-const core_requestCoordinator = __m_core_requestCoordinator_js;
 const core_text = __m_core_text_js;
 const generation_imageGeneration = __m_generation_imageGeneration_js;
 const generation_jsonParser = __m_generation_jsonParser_js;
@@ -61797,12 +63396,8 @@ const ui_overlay = __m_ui_overlay_js;
 const archive_avatars = __m_ui_archiveAvatars_js;
 const ui_phoneView = __m_ui_phoneView_js;
 const ui_endingView = __m_ui_endingView_js;
-const recovery_view = __m_ui_recoveryView_js;
-const host_compatibility = __m_core_hostCompatibility_js;
 const runtimeState = __m_core_state_js.state;
 
-// Heartbeat Memories r35 modular runtime.
-// Extracted from r34 without changing archive/cache storage contracts.
 
 
 
@@ -61819,133 +63414,8 @@ const runtimeState = __m_core_state_js.state;
 
 
 
-
-
-
-
-
-
-
-let archiveLibraryRenderSequence = 0;
-let indexedArchiveOpenSequence = 0;
-async function showArchiveLibrary() {
-    const renderSequence = ++archiveLibraryRenderSequence;
-    const openingContext = core_context.getContext();
-    const openingScope = core_context.chatScopeKey(openingContext), openingGroup = openingContext.groupId;
-    ui_endingView.closeEndingEasterEgg({ restoreFocus: false });
-    modes_room.stopRoomClock(); ui_phoneView.stopPhoneClock(); runtimeState.activeMode = null; runtimeState.activeSession = null; runtimeState.activeArchiveSnapshot = null; runtimeState.activeArchiveReadOnly = true; runtimeState.archiveLibraryCharacterKey = ''; runtimeState.archiveViewLevel = 'library';
-    ui_overlay.openOverlay(); ui_overlay.setRegenerateVisible(false); ui_overlay.setManageVisible(false); ui_overlay.setBackVisible(false); ui_overlay.topTitle('心迹回廊 · 档案室');
-    const body = ui_overlay.bodyEl(); if (!body) return;
-    const overlay = document.getElementById(core_constants.OVERLAY_ID);
-    body.innerHTML = '<div class="rmt-loading"><div class="rmt-loading-card"><div class="rmt-spinner"></div><b>正在核对档案室…</b><div class="rmt-loading-note">只读取心迹回廊自己的本机删除记录，不扫描或改写聊天正文。</div></div></div>';
-    const lifecycleEpoch = runtimeState.runtimeLifecycleEpoch;
-    const viewStillCurrent = () => {
-        try {
-            const live = core_context.getContext();
-            return renderSequence === archiveLibraryRenderSequence && lifecycleEpoch === runtimeState.runtimeLifecycleEpoch
-                && core_context.chatScopeKey(live) === openingScope && live.groupId === openingGroup
-                && runtimeState.archiveViewLevel === 'library' && !runtimeState.activeMode && !runtimeState.activeSession
-                && document.getElementById(core_constants.OVERLAY_ID) === overlay && !overlay.hidden
-                && ui_overlay.bodyEl() === body;
-        } catch { return false; }
-    };
-    const indexedBefore = archive_groups.getArchiveIndex(core_context.getContext());
-    const deletedEntryIds = new Set();
-    await Promise.all(indexedBefore.map(async entry => {
-        try {
-            if (await archive_backupStore.hasArchiveBackupDeletionFence(entry)) {
-                deletedEntryIds.add(core_context.archiveIndexEntryId(entry));
-            }
-        } catch {}
-    }));
-    if (!viewStillCurrent()) return;
-    if (deletedEntryIds.size) {
-        const liveContext = core_context.getContext();
-        const rawMemory = archive_repository.migrateArchiveInMemory(liveContext.chatMetadata?.[core_constants.MEMORY_KEY]);
-        for (const entry of indexedBefore) {
-            if (!deletedEntryIds.has(core_context.archiveIndexEntryId(entry))) continue;
-            if (rawMemory && core_context.comparableChatId(entry.chatId) === core_context.comparableChatId(rawMemory.chatId)
-                && Number(entry.characterIndexHint) === Number(liveContext.characterId)) {
-                runtimeState.archiveDeletionFences.add(archive_repository.archiveDeletionFenceKey(liveContext, rawMemory, core_context.archiveIndexEntryId(entry)));
-            }
-        }
-        archive_groups.setArchiveIndex(liveContext, indexedBefore.filter(entry => !deletedEntryIds.has(core_context.archiveIndexEntryId(entry))));
-    }
-    try {
-        let ctx = core_context.currentCharacterGuard();
-        await core_cache.ensureCurrentArchiveBackup(ctx);
-        if (!viewStillCurrent()) return;
-        ctx = core_context.currentCharacterGuard();
-        const mem = archive_repository.getImportedMemory(ctx);
-        if (mem) {
-            // r42.5 could commit an explicit fresh archive while leaving an older character-level
-            // library tombstone behind. Repair only when createdAt proves this archive was created
-            // after the tombstone; genuinely old source metadata stays hidden.
-            const resolvedEntry = core_cache.archiveBackupEntryForContext(ctx, mem);
-            const backupState = await archive_backupStore.readArchiveBackupState(resolvedEntry);
-            if (!viewStillCurrent()) return;
-            if (backupState.deleted) {
-                runtimeState.archiveDeletionFences.add(archive_repository.archiveDeletionFenceKey(ctx, mem, resolvedEntry.entryId));
-            } else {
-                archive_groups.restoreCurrentCharacterArchiveVisibility(ctx, mem);
-                archive_groups.upsertArchiveIndex(ctx, mem, { existingEntryId: resolvedEntry.entryId });
-            }
-        }
-    } catch {}
-    const archiveContext = core_context.getContext();
-    const index = archive_groups.getArchiveIndex(archiveContext);
-    const deletedIndex = archive_groups.buildDeletedArchiveCharacterIndex(archiveContext);
-    const groups = new Map();
-    for (const item of index) {
-        if (archive_groups.isArchiveEntryDeletedFromLibrary(item, archiveContext, deletedIndex)) continue;
-        const groupId = archive_groups.archiveGroupKeyForEntry(item);
-        if (!groupId) continue;
-        const current = groups.get(groupId) || { groupId, entries: [] };
-        current.entries.push(item);
-        groups.set(groupId, current);
-    }
-    const cards = [...groups.values()].sort((a,b) => Math.max(...b.entries.map(x=>x.updatedAt)) - Math.max(...a.entries.map(x=>x.updatedAt))).map(group => {
-        const meta = archive_groups.archiveGroupMeta(group.groupId, group.entries, archiveContext);
-        const src = archive_groups.archiveGroupAvatarUrl(meta, group.entries[0], archiveContext);
-        const name = core_text.normalizeText(meta.label || meta.characterName || group.entries[0]?.characterName, 120) || '角色档案';
-        const charHint = Number(meta.characterIndexHint) >= 0 ? ` · char #${Number(meta.characterIndexHint) + 1}` : '';
-        return `<article class="rmt-archive-portal ready rmt-character-archive-card"><button type="button" class="rmt-portal-open rmt-character-portal-open" data-rmt-archive-character="${core_text.esc(group.groupId)}"><span class="rmt-portal-avatar" data-rmt-avatar-talk="${core_text.esc(group.groupId)}" title="点头像听他说一句">${src ? `<img src="${core_text.esc(src)}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%">` : '<i class="fa-solid fa-user"></i>'}<i class="fa-solid fa-comment-dots rmt-avatar-talk-mark"></i></span><span class="rmt-portal-title">${core_text.esc(name)}</span><span class="rmt-portal-subtitle">${group.entries.length} 个聊天档案${core_text.esc(charHint)}</span><span class="rmt-portal-status">${meta.manual ? '手动角色组' : '自动分类'} · 点击查看</span></button><button type="button" class="rmt-character-archive-delete" data-rmt-action="archive-character-delete" data-rmt-archive-group-id="${core_text.esc(group.groupId)}"><i class="fa-solid fa-trash-can"></i><span>删除角色档案</span></button></article>`;
-    }).join('');
-    let currentQuick = '';
-    let calendarQuick = snapshotCalendarQuickAccessHtml({ ready: false, generated: false, readOnly: false, generating: false });
-    try {
-        const ctx = core_context.currentCharacterGuard();
-        const mem = archive_repository.getImportedMemory(ctx);
-        const deletedFromLibrary = archive_groups.isCurrentCharacterDeletedFromLibrary(ctx, mem);
-        if (deletedFromLibrary) {
-            currentQuick = '';
-            calendarQuick = '';
-        } else if (mem) {
-            const name = core_text.normalizeText(mem.archiveName, 120) || archive_repository.fallbackArchiveName(mem.memories);
-            currentQuick = `<section class="rmt-archive-card rmt-current-archive-card" style="margin-top:12px"><div><b>当前窗口档案</b><small>${core_text.esc(name)} · ${mem.memories.length} 条记忆</small></div><div class="rmt-current-archive-actions"><button type="button" class="rmt-btn" data-rmt-action="current-archive">打开当前窗口档案</button><button type="button" class="rmt-btn" data-rmt-action="current-archive-import">增量更新当前窗口档案</button><button type="button" class="rmt-btn" data-rmt-action="current-archive-delete">删除当前档案</button></div></section>`;
-            const calendarPortal = archive_snapshots.baseModeAvailability({ context: ctx, chatId: core_context.getChatId(ctx), memoryBank: mem, clone: false })
-                .find(item => item.mode === core_constants.MODE.CALENDAR) || { session: null };
-            calendarQuick = snapshotCalendarQuickAccessHtml({
-                ready: true,
-                generated: !!calendarPortal.session,
-                readOnly: false,
-                generating: core_requestCoordinator.isModeGenerating(core_constants.MODE.CALENDAR),
-            });
-        } else {
-            const inheritanceDescriptor = archive_groups.characterDescriptor(ctx, Number(ctx.characterId));
-            const inheritanceAvailable = archive_groups.getArchiveIndex(ctx).some(entry =>
-                core_context.comparableChatId(entry.chatId) !== core_context.comparableChatId(core_context.getChatId(ctx))
-                && Number(entry.characterIndexHint) === Number(ctx.characterId)
-                && !!core_context.currentCharacterAvatar(ctx)
-                && core_context.archiveStoredAvatar(entry) === core_context.currentCharacterAvatar(ctx)
-                && (!entry.characterFingerprint || !inheritanceDescriptor?.fingerprint
-                    || entry.characterFingerprint === inheritanceDescriptor.fingerprint));
-            currentQuick = `<section class="rmt-archive-card rmt-current-archive-card" style="margin-top:12px"><div><b>当前聊天还没有档案</b></div><div class="rmt-current-archive-actions"><button type="button" class="rmt-btn" data-rmt-action="current-archive-import">生成当前窗口档案</button>${inheritanceAvailable ? '<button type="button" class="rmt-btn" data-rmt-action="archive-inheritance-open">从这个角色的旧聊天继承…</button>' : ''}</div></section>`;
-        }
-    } catch {}
-    if (!viewStillCurrent()) return;
-    body.innerHTML = `<div class="rmt-archive-room"><section class="rmt-archive-card"><div class="rmt-archive-kicker">MEMORY ARCHIVE LIBRARY</div><strong class="rmt-archive-title">档案室一览</strong><div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="rmt-btn" data-rmt-action="archive-group-manager">管理角色分类</button><button type="button" class="rmt-btn" data-rmt-action="archive-auto-classify">自动分类</button><button type="button" class="rmt-btn" data-rmt-action="rebuild-archive-index">扫描旧版本已有档案</button></div></section>${calendarQuick}${cards ? `<section class="rmt-archive-portals rmt-character-portals">${cards}</section>` : '<div class="rmt-archive-overview-empty">还没有已索引的档案。当前版本创建/更新档案后会自动加入这里；旧版本档案可点上方按钮手动扫描一次。</div>'}${currentQuick}</div>`;
-}
+// 档案室角色页与快照：角色页、分类管理、快照缓存、恢复草稿入口、档案目标冻结
+// 从 archive/library.js 原样搬出（重构阶段 2），声明文本一字未改；archive/library.js 仍转发原有导出。
 
 function showArchiveCharacter(groupId) {
     modes_room.stopRoomClock(); ui_phoneView.stopPhoneClock(); ui_endingView.closeEndingEasterEgg({ restoreFocus: false });
@@ -62037,64 +63507,6 @@ function rememberArchiveSnapshot(snapshot) {
     return snapshot;
 }
 
-// Saved versions never read /api/chats/get and never enter the live snapshot
-// cache. The existing permanent read-only capability protects every old reader.
-async function openArchiveVersion(versionId, context = core_context.currentCharacterGuard()) {
-    const lifecycle = runtimeState.runtimeLifecycleEpoch;
-    const scope = core_context.chatScopeKey(context);
-    const record = await core_cache.readArchiveVersion(context, versionId);
-    core_context.assertRuntimeLifecycleCurrent(lifecycle);
-    if (core_context.chatScopeKey(core_context.currentCharacterGuard()) !== scope) throw new DOMException('Chat changed', 'AbortError');
-    const snapshot = {
-        ...record.entry,
-        entryId: `${record.entryId}:version:${record.versionId}`,
-        archiveGroupId: record.entry.archiveGroupId || archive_groups.archiveGroupKeyForEntry(record.entry),
-        chatId: record.chatId, archiveName: record.memory.archiveName || '未命名档案',
-        characterName: record.memory.characterName || record.entry.characterName,
-        memory: structuredClone(record.memory), cache: structuredClone(record.cache),
-        historyVersionId: record.versionId, historyCreatedAt: record.createdAt,
-        historyReason: record.reason, historySelectedPages: [...record.selectedPages],
-        historyDrafts: structuredClone(record.drafts),
-        backupOnly: true, sourceError: '', sourceMirrorLagging: false, settingBookSelection: { books: [] },
-        loadedAt: Date.now(),
-    };
-    showIndexedArchiveSnapshot(snapshot);
-    return snapshot;
-}
-
-async function openGenerationTaskResult(draftId, context = core_context.currentCharacterGuard(), { snapshot: sourceSnapshot = null } = {}) {
-    const lifecycle = runtimeState.runtimeLifecycleEpoch;
-    const scope = core_context.chatScopeKey(context);
-    const record = await core_cache.readGenerationTaskResult(context, draftId, sourceSnapshot ? { cache: sourceSnapshot.cache } : {});
-    core_context.assertRuntimeLifecycleCurrent(lifecycle);
-    if (sourceSnapshot ? runtimeState.activeArchiveSnapshot !== sourceSnapshot
-        : core_context.chatScopeKey(core_context.currentCharacterGuard()) !== scope) throw new DOMException('Chat changed', 'AbortError');
-    const memory = structuredClone(record.sourceMemory);
-    if (!memory?.memories || !record.session) throw new Error('这份成果的原始资料暂时无法读取，已保存的成果仍保留。');
-    if (record.status === 'open' && record.session.readableProgress?.complete === false
-        && (!sourceSnapshot || (!sourceSnapshot.historyVersionId && !sourceSnapshot.backupOnly
-            && generation_imageGeneration.indexedArchiveMatchesCurrentChat(sourceSnapshot, context)))) {
-        const current = sourceSnapshot ? await core_cache.readGenerationTaskResult(context, draftId) : record;
-        core_context.assertRuntimeLifecycleCurrent(lifecycle);
-        if (core_context.chatScopeKey(core_context.currentCharacterGuard()) !== scope) throw new DOMException('Chat changed', 'AbortError');
-        ui_overlay.openPartialTaskSession(current);
-        return current;
-    }
-    const entry = record.targetEntry || core_cache.archiveBackupEntryForContext(context, memory);
-    const snapshot = {
-        ...entry, entryId: `${record.entryId || entry.entryId}:task:${draftId}`,
-        archiveGroupId: entry.archiveGroupId || archive_groups.archiveGroupKeyForEntry(entry),
-        chatId: memory.chatId, archiveName: `${core_constants.MODE_LABEL[record.mode] || '旧任务'} · 独立成果`,
-        characterName: memory.characterName || entry.characterName,
-        memory, cache: { chatId: memory.chatId, archiveRevision: memory.archiveRevision, [record.mode]: structuredClone(record.session) },
-        taskResultDraftId: draftId, historyVersionId: `task:${draftId}`, historyCreatedAt: record.createdAt,
-        historyReason: '按原任务资料生成，独立保留的成果', historySelectedPages: [record.pageId],
-        backupOnly: true, sourceError: '', sourceMirrorLagging: false, settingBookSelection: { books: [] }, loadedAt: Date.now(),
-    };
-    showIndexedArchiveSnapshot(snapshot);
-    return snapshot;
-}
-
 const CONTENT_DRAFT_FIELD_LABELS = Object.freeze({
     title: '标题', subtitle: '副标题', label: '名称', name: '名称', date: '日期', setting: '场景', scene: '场景',
     description: '说明', desc: '画面说明', summary: '摘要', text: '正文', line: '台词', lines: '台词',
@@ -62131,39 +63543,6 @@ function contentRegenerationDraftHtml(journal) {
         if (fields.length) sections.push(`<section class="rmt-archive-card"><h3>第 ${sections.length + 1} 段 · ${segment.state === 'complete' ? '已保存的分段' : '已收到的完整字段'}</h3>${fields.join('')}</section>`);
     }
     return `<div class="rmt-content-draft-reader" data-rmt-content-draft-reader="${esc(journal?.draftId || '')}"><section class="rmt-recovery-status"><h2>单项重新生成 · 已收到的正文</h2><p>本项尚未完成，父草稿中的原内容没有被替换。这里只展示已完整收到的字段和段落；未写完的字段仍保存在原草稿中。</p><p>查看不会调用生成 API。完成本项校验并保存后，才会替换原草稿中的对应内容。</p></section>${sections.join('') || '<p>尚未收到可独立阅读的完整字段或段落，原草稿仍保留。</p>'}</div>`;
-}
-
-async function openContentRegenerationDraft(draftId, context = core_context.currentCharacterGuard(), { snapshot: sourceSnapshot = null } = {}) {
-    const lifecycle = runtimeState.runtimeLifecycleEpoch, scope = core_context.chatScopeKey(context);
-    const targetContext = sourceSnapshot ? archiveTargetGenerationOptions(sourceSnapshot).context : context;
-    const bank = archive_repository.requireArchive(targetContext);
-    const entry = sourceSnapshot || core_cache.archiveBackupEntryForContext(targetContext, bank);
-    // Read the acknowledged local checkpoint, including a child that failed
-    // after the last visible historical snapshot was rendered. No host/model
-    // request is needed merely to open already received prose.
-    const stored = await archive_backupStore.readArchiveBackupState(entry);
-    core_context.assertRuntimeLifecycleCurrent(lifecycle);
-    if (sourceSnapshot ? runtimeState.activeArchiveSnapshot !== sourceSnapshot
-        : core_context.chatScopeKey(core_context.currentCharacterGuard()) !== scope) throw new DOMException('Chat changed', 'AbortError');
-    if (stored.deleted || !stored.record) throw new Error('这份草稿所属的本机档案已不存在。');
-    const savedCache = await hydrateSnapshotCache(stored.record.cache, stored.record.memory, bank.chatId, lifecycle);
-    const row = core_cache.generationDraftRows(savedCache, bank).find(item => item.draftId === draftId);
-    const journal = row && core_cache.loadGenerationRecovery(row.mode, targetContext, savedCache, { draftId });
-    if (!journal || journal.operation?.kind !== 'content-item' || !journal.operation.sourceDraftId) throw new Error('找不到对应的单项重新生成草稿；没有请求模型，也没有改写原内容。');
-    core_context.assertRuntimeLifecycleCurrent(lifecycle);
-    if (sourceSnapshot ? runtimeState.activeArchiveSnapshot !== sourceSnapshot
-        : core_context.chatScopeKey(core_context.currentCharacterGuard()) !== scope) throw new DOMException('Chat changed', 'AbortError');
-    if (sourceSnapshot && sourceSnapshot.memory?.archiveRevision === stored.record.archiveRevision) sourceSnapshot.cache = structuredClone(savedCache);
-    ui_endingView.closeEndingEasterEgg({ restoreFocus: false }); modes_room.stopRoomClock(); ui_phoneView.stopPhoneClock();
-    runtimeState.activeMode = null; runtimeState.activeSession = null; runtimeState.contentManagerOpen = false;
-    // Retain the actual B snapshot while A remains the live host chat. The
-    // existing back/continuation routes must still refer to B after reading.
-    runtimeState.activeArchiveSnapshot = sourceSnapshot;
-    runtimeState.archiveViewLevel = sourceSnapshot ? 'snapshot' : 'recovery';
-    ui_overlay.openOverlay(); ui_overlay.setRegenerateVisible(false); ui_overlay.setManageVisible(false); ui_overlay.setBackVisible(true);
-    ui_overlay.topTitle('心迹回廊 · 单项草稿正文');
-    const body = ui_overlay.bodyEl(); if (body) body.innerHTML = contentRegenerationDraftHtml(journal);
-    return journal;
 }
 
 // An archive checkpoint is a reader, never a formal bank or writable archive
@@ -62523,6 +63902,89 @@ function archiveTargetGenerationOptions(snapshot = runtimeState.activeArchiveSna
     };
 }
 
+__m_archive_libraryCharacter_js.openArchiveRecoveryDraft = openArchiveRecoveryDraft;
+__m_archive_libraryCharacter_js.hydrateSnapshotCache = hydrateSnapshotCache;
+__m_archive_libraryCharacter_js.fetchIndexedArchiveSnapshot = fetchIndexedArchiveSnapshot;
+__m_archive_libraryCharacter_js.revalidateArchiveTarget = revalidateArchiveTarget;
+__m_archive_libraryCharacter_js.commitArchiveTargetSession = commitArchiveTargetSession;
+__m_archive_libraryCharacter_js.commitArchiveTargetSessionMutation = commitArchiveTargetSessionMutation;
+__m_archive_libraryCharacter_js.claimArchiveTargetMode = claimArchiveTargetMode;
+__m_archive_libraryCharacter_js.showArchiveCharacter = showArchiveCharacter;
+__m_archive_libraryCharacter_js.showArchiveGroupManager = showArchiveGroupManager;
+__m_archive_libraryCharacter_js.archiveSnapshotCacheKey = archiveSnapshotCacheKey;
+__m_archive_libraryCharacter_js.rememberArchiveSnapshot = rememberArchiveSnapshot;
+__m_archive_libraryCharacter_js.contentRegenerationDraftHtml = contentRegenerationDraftHtml;
+__m_archive_libraryCharacter_js.archiveRecoveryDraftHtml = archiveRecoveryDraftHtml;
+__m_archive_libraryCharacter_js.freezeArchiveTarget = freezeArchiveTarget;
+__m_archive_libraryCharacter_js.archiveTargetGenerationOptions = archiveTargetGenerationOptions;
+}
+
+function __init_archive_librarySnapshots_js() {
+// MODULE: archive/librarySnapshots.js
+const archive_backupStore = __m_archive_backupStore_js;
+const archive_repository = __m_archive_repository_js;
+const core_cache = __m_core_cache_js;
+const core_constants = __m_core_constants_js;
+const core_context = __m_core_context_js;
+const core_text = __m_core_text_js;
+const generation_imageGeneration = __m_generation_imageGeneration_js;
+const modes_room = __m_modes_room_js;
+const ui_overlay = __m_ui_overlay_js;
+const ui_phoneView = __m_ui_phoneView_js;
+const ui_endingView = __m_ui_endingView_js;
+const runtimeState = __m_core_state_js.state;
+const archiveTargetGenerationOptions = __m_archive_libraryCharacter_js.archiveTargetGenerationOptions;
+const contentRegenerationDraftHtml = __m_archive_libraryCharacter_js.contentRegenerationDraftHtml;
+const hydrateSnapshotCache = __m_archive_libraryCharacter_js.hydrateSnapshotCache;
+
+
+
+
+
+
+
+
+
+
+
+
+
+// 档案快照写入：内容重新生成草稿、档案目标子任务、只读 / 可写判断、版本草稿
+// 从 archive/library.js 原样搬出（重构阶段 2），声明文本一字未改；archive/library.js 仍转发原有导出。
+
+async function openContentRegenerationDraft(draftId, context = core_context.currentCharacterGuard(), { snapshot: sourceSnapshot = null } = {}) {
+    const lifecycle = runtimeState.runtimeLifecycleEpoch, scope = core_context.chatScopeKey(context);
+    const targetContext = sourceSnapshot ? archiveTargetGenerationOptions(sourceSnapshot).context : context;
+    const bank = archive_repository.requireArchive(targetContext);
+    const entry = sourceSnapshot || core_cache.archiveBackupEntryForContext(targetContext, bank);
+    // Read the acknowledged local checkpoint, including a child that failed
+    // after the last visible historical snapshot was rendered. No host/model
+    // request is needed merely to open already received prose.
+    const stored = await archive_backupStore.readArchiveBackupState(entry);
+    core_context.assertRuntimeLifecycleCurrent(lifecycle);
+    if (sourceSnapshot ? runtimeState.activeArchiveSnapshot !== sourceSnapshot
+        : core_context.chatScopeKey(core_context.currentCharacterGuard()) !== scope) throw new DOMException('Chat changed', 'AbortError');
+    if (stored.deleted || !stored.record) throw new Error('这份草稿所属的本机档案已不存在。');
+    const savedCache = await hydrateSnapshotCache(stored.record.cache, stored.record.memory, bank.chatId, lifecycle);
+    const row = core_cache.generationDraftRows(savedCache, bank).find(item => item.draftId === draftId);
+    const journal = row && core_cache.loadGenerationRecovery(row.mode, targetContext, savedCache, { draftId });
+    if (!journal || journal.operation?.kind !== 'content-item' || !journal.operation.sourceDraftId) throw new Error('找不到对应的单项重新生成草稿；没有请求模型，也没有改写原内容。');
+    core_context.assertRuntimeLifecycleCurrent(lifecycle);
+    if (sourceSnapshot ? runtimeState.activeArchiveSnapshot !== sourceSnapshot
+        : core_context.chatScopeKey(core_context.currentCharacterGuard()) !== scope) throw new DOMException('Chat changed', 'AbortError');
+    if (sourceSnapshot && sourceSnapshot.memory?.archiveRevision === stored.record.archiveRevision) sourceSnapshot.cache = structuredClone(savedCache);
+    ui_endingView.closeEndingEasterEgg({ restoreFocus: false }); modes_room.stopRoomClock(); ui_phoneView.stopPhoneClock();
+    runtimeState.activeMode = null; runtimeState.activeSession = null; runtimeState.contentManagerOpen = false;
+    // Retain the actual B snapshot while A remains the live host chat. The
+    // existing back/continuation routes must still refer to B after reading.
+    runtimeState.activeArchiveSnapshot = sourceSnapshot;
+    runtimeState.archiveViewLevel = sourceSnapshot ? 'snapshot' : 'recovery';
+    ui_overlay.openOverlay(); ui_overlay.setRegenerateVisible(false); ui_overlay.setManageVisible(false); ui_overlay.setBackVisible(true);
+    ui_overlay.topTitle('心迹回廊 · 单项草稿正文');
+    const body = ui_overlay.bodyEl(); if (body) body.innerHTML = contentRegenerationDraftHtml(journal);
+    return journal;
+}
+
 async function prepareArchiveTargetSubtask(mode, taskPart, snapshot = runtimeState.activeArchiveSnapshot) {
     const lifecycleEpoch = runtimeState.runtimeLifecycleEpoch;
     core_context.assertRuntimeLifecycleCurrent(lifecycleEpoch);
@@ -62614,32 +64076,6 @@ function syncArchiveTargetSubtask(targetRuntime, snapshot) {
     targetRuntime.context.chatMetadata[core_constants.CACHE_KEY] = structuredClone(targetRuntime.archiveTarget.cache);
 }
 
-function setArchiveReadOnly(readOnly) {
-    if (!runtimeState.activeArchiveSnapshot) return;
-    if (runtimeState.activeArchiveSnapshot.historyVersionId) {
-        runtimeState.activeArchiveReadOnly = true;
-        if (readOnly === false) globalThis.toastr?.info?.(runtimeState.activeArchiveSnapshot.taskResultDraftId ? '当前是独立保存的成果；请返回当前档案继续操作。' : '旧版本永久只读；请返回当前档案继续操作。', '心迹回廊');
-        return showIndexedArchiveSnapshot(runtimeState.activeArchiveSnapshot);
-    }
-    if (runtimeState.activeArchiveSnapshot.backupOnly && readOnly === false) {
-        runtimeState.activeArchiveReadOnly = true;
-        globalThis.toastr?.info?.('源聊天暂不可读，当前查看只读备份。请重试读取源聊天；备份本身不能解除只读或绑定到其他聊天。', '心迹回廊');
-        return showIndexedArchiveSnapshot(runtimeState.activeArchiveSnapshot);
-    }
-    runtimeState.activeArchiveReadOnly = readOnly !== false;
-    if (runtimeState.activeMode && runtimeState.activeSession) ui_overlay.renderActive();
-    else showIndexedArchiveSnapshot(runtimeState.activeArchiveSnapshot);
-    if (!runtimeState.activeArchiveReadOnly) {
-        const live = generation_imageGeneration.indexedArchiveMatchesCurrentChat(runtimeState.activeArchiveSnapshot, core_context.getContext());
-        globalThis.toastr?.info?.(
-            live
-                ? '已关闭只读保护。当前酒馆正好打开这份档案对应聊天；增量追加/绘制仍会逐项确认。'
-                : '已关闭只读保护，但心迹回廊不会自动切换聊天。你可以查看编辑按钮；真正写入前必须先手动在酒馆打开这份档案对应聊天。',
-            '心迹回廊',
-        );
-    }
-}
-
 function archiveSnapshotEditableUi() {
     return !!runtimeState.activeArchiveSnapshot
         && runtimeState.activeArchiveSnapshot.backupOnly !== true
@@ -62722,6 +64158,320 @@ function snapshotCalendarQuickAccessHtml({ ready = true, generated = false, read
     </section>`;
 }
 
+function archiveVersionDraftsHtml(snapshot) {
+    if (!snapshot?.historyVersionId || !snapshot.historyDrafts) return '';
+    const parts = [];
+    const seen = new Set();
+    const show = (label, value) => `<details class="rmt-archive-card"><summary>${core_text.esc(label)}</summary><pre style="white-space:pre-wrap;overflow-wrap:anywhere">${core_text.esc(value)}</pre></details>`;
+    const appendJournal = (mode, journal) => {
+        const key = journal?.draftId || JSON.stringify(journal);
+        if (seen.has(key)) return;
+        seen.add(key);
+        const label = core_constants.MODE_LABEL[mode] || mode;
+        for (const [index, segment] of (journal?.segments || []).entries()) {
+            const value = segment.state === 'complete' ? segment.rawJson : segment.state === 'truncated' ? segment.partial : '';
+            if (typeof value !== 'string' || !value) continue;
+            parts.push(show(`${label} · 第 ${index + 1} 段 · ${segment.state === 'complete' ? '已生成片段' : '未完成片段'}`, value));
+        }
+    };
+    for (const journal of Object.values(snapshot.historyDrafts.tasks || {})) appendJournal(journal?.identity?.mode || journal?.operation?.mode || '草稿', journal);
+    for (const [mode, journal] of Object.entries(snapshot.historyDrafts.modules || {})) appendJournal(mode, journal);
+    if (snapshot.historyDrafts.phone && Object.keys(snapshot.historyDrafts.phone).length) parts.push(show('私人终端 · 保存的未完成草稿', JSON.stringify(snapshot.historyDrafts.phone, null, 2)));
+    return parts.length ? `<section data-rmt-version-drafts><h3>重做前的未完成草稿</h3><p>以下是原任务已收到的内容，可能尚未组成完整作品；查看不会调用 API。</p>${parts.join('')}</section>` : '';
+}
+
+__m_archive_librarySnapshots_js.openContentRegenerationDraft = openContentRegenerationDraft;
+__m_archive_librarySnapshots_js.prepareArchiveTargetSubtask = prepareArchiveTargetSubtask;
+__m_archive_librarySnapshots_js.beginArchiveTargetSubtask = beginArchiveTargetSubtask;
+__m_archive_librarySnapshots_js.syncArchiveTargetSubtask = syncArchiveTargetSubtask;
+__m_archive_librarySnapshots_js.archiveSnapshotEditableUi = archiveSnapshotEditableUi;
+__m_archive_librarySnapshots_js.snapshotWriteBlockMessage = snapshotWriteBlockMessage;
+__m_archive_librarySnapshots_js.promoteSnapshotToLiveIfCurrent = promoteSnapshotToLiveIfCurrent;
+__m_archive_librarySnapshots_js.requireWritableArchiveAction = requireWritableArchiveAction;
+__m_archive_librarySnapshots_js.snapshotCalendarQuickAccessHtml = snapshotCalendarQuickAccessHtml;
+__m_archive_librarySnapshots_js.archiveVersionDraftsHtml = archiveVersionDraftsHtml;
+}
+
+function __init_archive_library_js() {
+// MODULE: archive/library.js
+const workspace_ui = __m_ui_workspace_js;
+const archive_groups = __m_archive_groups_js;
+const archive_backupStore = __m_archive_backupStore_js;
+const archive_repository = __m_archive_repository_js;
+const archive_coverage = __m_archive_coverageRanges_js;
+const archive_snapshots = __m_archive_snapshots_js;
+const core_cache = __m_core_cache_js;
+const core_archiveCover = __m_core_archiveCover_js;
+const core_constants = __m_core_constants_js;
+const core_context = __m_core_context_js;
+const core_requestCoordinator = __m_core_requestCoordinator_js;
+const core_text = __m_core_text_js;
+const generation_imageGeneration = __m_generation_imageGeneration_js;
+const modes_room = __m_modes_room_js;
+const ui_overlay = __m_ui_overlay_js;
+const ui_phoneView = __m_ui_phoneView_js;
+const ui_endingView = __m_ui_endingView_js;
+const recovery_view = __m_ui_recoveryView_js;
+const host_compatibility = __m_core_hostCompatibility_js;
+const split_libraryCharacter = __m_archive_libraryCharacter_js;
+const split_librarySnapshots = __m_archive_librarySnapshots_js;
+const runtimeState = __m_core_state_js.state;
+const snapshotCalendarQuickAccessHtml = __m_archive_librarySnapshots_js.snapshotCalendarQuickAccessHtml;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// 以下导出已搬到 archive/libraryCharacter.js、archive/librarySnapshots.js，这里原样转发，调用方不用改。
+const showArchiveCharacter = split_libraryCharacter.showArchiveCharacter;
+const showArchiveGroupManager = split_libraryCharacter.showArchiveGroupManager;
+const archiveSnapshotCacheKey = split_libraryCharacter.archiveSnapshotCacheKey;
+const rememberArchiveSnapshot = split_libraryCharacter.rememberArchiveSnapshot;
+const contentRegenerationDraftHtml = split_libraryCharacter.contentRegenerationDraftHtml;
+const openContentRegenerationDraft = split_librarySnapshots.openContentRegenerationDraft;
+const archiveRecoveryDraftHtml = split_libraryCharacter.archiveRecoveryDraftHtml;
+const openArchiveRecoveryDraft = split_libraryCharacter.openArchiveRecoveryDraft;
+const fetchIndexedArchiveSnapshot = split_libraryCharacter.fetchIndexedArchiveSnapshot;
+const freezeArchiveTarget = split_libraryCharacter.freezeArchiveTarget;
+const revalidateArchiveTarget = split_libraryCharacter.revalidateArchiveTarget;
+const commitArchiveTargetSession = split_libraryCharacter.commitArchiveTargetSession;
+const commitArchiveTargetSessionMutation = split_libraryCharacter.commitArchiveTargetSessionMutation;
+const claimArchiveTargetMode = split_libraryCharacter.claimArchiveTargetMode;
+const archiveTargetGenerationOptions = split_libraryCharacter.archiveTargetGenerationOptions;
+const prepareArchiveTargetSubtask = split_librarySnapshots.prepareArchiveTargetSubtask;
+const beginArchiveTargetSubtask = split_librarySnapshots.beginArchiveTargetSubtask;
+const syncArchiveTargetSubtask = split_librarySnapshots.syncArchiveTargetSubtask;
+const archiveSnapshotEditableUi = split_librarySnapshots.archiveSnapshotEditableUi;
+const snapshotWriteBlockMessage = split_librarySnapshots.snapshotWriteBlockMessage;
+const promoteSnapshotToLiveIfCurrent = split_librarySnapshots.promoteSnapshotToLiveIfCurrent;
+const requireWritableArchiveAction = split_librarySnapshots.requireWritableArchiveAction;
+const archiveVersionDraftsHtml = split_librarySnapshots.archiveVersionDraftsHtml;
+
+let archiveLibraryRenderSequence = 0;
+
+let indexedArchiveOpenSequence = 0;
+
+async function showArchiveLibrary() {
+    const renderSequence = ++archiveLibraryRenderSequence;
+    const openingContext = core_context.getContext();
+    const openingScope = core_context.chatScopeKey(openingContext), openingGroup = openingContext.groupId;
+    ui_endingView.closeEndingEasterEgg({ restoreFocus: false });
+    modes_room.stopRoomClock(); ui_phoneView.stopPhoneClock(); runtimeState.activeMode = null; runtimeState.activeSession = null; runtimeState.activeArchiveSnapshot = null; runtimeState.activeArchiveReadOnly = true; runtimeState.archiveLibraryCharacterKey = ''; runtimeState.archiveViewLevel = 'library';
+    ui_overlay.openOverlay(); ui_overlay.setRegenerateVisible(false); ui_overlay.setManageVisible(false); ui_overlay.setBackVisible(false); ui_overlay.topTitle('心迹回廊 · 档案室');
+    const body = ui_overlay.bodyEl(); if (!body) return;
+    const overlay = document.getElementById(core_constants.OVERLAY_ID);
+    body.innerHTML = '<div class="rmt-loading"><div class="rmt-loading-card"><div class="rmt-spinner"></div><b>正在核对档案室…</b><div class="rmt-loading-note">只读取心迹回廊自己的本机删除记录，不扫描或改写聊天正文。</div></div></div>';
+    const lifecycleEpoch = runtimeState.runtimeLifecycleEpoch;
+    const viewStillCurrent = () => {
+        try {
+            const live = core_context.getContext();
+            return renderSequence === archiveLibraryRenderSequence && lifecycleEpoch === runtimeState.runtimeLifecycleEpoch
+                && core_context.chatScopeKey(live) === openingScope && live.groupId === openingGroup
+                && runtimeState.archiveViewLevel === 'library' && !runtimeState.activeMode && !runtimeState.activeSession
+                && document.getElementById(core_constants.OVERLAY_ID) === overlay && !overlay.hidden
+                && ui_overlay.bodyEl() === body;
+        } catch { return false; }
+    };
+    const indexedBefore = archive_groups.getArchiveIndex(core_context.getContext());
+    const deletedEntryIds = new Set();
+    await Promise.all(indexedBefore.map(async entry => {
+        try {
+            if (await archive_backupStore.hasArchiveBackupDeletionFence(entry)) {
+                deletedEntryIds.add(core_context.archiveIndexEntryId(entry));
+            }
+        } catch {}
+    }));
+    if (!viewStillCurrent()) return;
+    if (deletedEntryIds.size) {
+        const liveContext = core_context.getContext();
+        const rawMemory = archive_repository.migrateArchiveInMemory(liveContext.chatMetadata?.[core_constants.MEMORY_KEY]);
+        for (const entry of indexedBefore) {
+            if (!deletedEntryIds.has(core_context.archiveIndexEntryId(entry))) continue;
+            if (rawMemory && core_context.comparableChatId(entry.chatId) === core_context.comparableChatId(rawMemory.chatId)
+                && Number(entry.characterIndexHint) === Number(liveContext.characterId)) {
+                runtimeState.archiveDeletionFences.add(archive_repository.archiveDeletionFenceKey(liveContext, rawMemory, core_context.archiveIndexEntryId(entry)));
+            }
+        }
+        archive_groups.setArchiveIndex(liveContext, indexedBefore.filter(entry => !deletedEntryIds.has(core_context.archiveIndexEntryId(entry))));
+    }
+    try {
+        let ctx = core_context.currentCharacterGuard();
+        await core_cache.ensureCurrentArchiveBackup(ctx);
+        if (!viewStillCurrent()) return;
+        ctx = core_context.currentCharacterGuard();
+        const mem = archive_repository.getImportedMemory(ctx);
+        if (mem) {
+            // r42.5 could commit an explicit fresh archive while leaving an older character-level
+            // library tombstone behind. Repair only when createdAt proves this archive was created
+            // after the tombstone; genuinely old source metadata stays hidden.
+            const resolvedEntry = core_cache.archiveBackupEntryForContext(ctx, mem);
+            const backupState = await archive_backupStore.readArchiveBackupState(resolvedEntry);
+            if (!viewStillCurrent()) return;
+            if (backupState.deleted) {
+                runtimeState.archiveDeletionFences.add(archive_repository.archiveDeletionFenceKey(ctx, mem, resolvedEntry.entryId));
+            } else {
+                archive_groups.restoreCurrentCharacterArchiveVisibility(ctx, mem);
+                archive_groups.upsertArchiveIndex(ctx, mem, { existingEntryId: resolvedEntry.entryId });
+            }
+        }
+    } catch {}
+    const archiveContext = core_context.getContext();
+    const index = archive_groups.getArchiveIndex(archiveContext);
+    const deletedIndex = archive_groups.buildDeletedArchiveCharacterIndex(archiveContext);
+    const groups = new Map();
+    for (const item of index) {
+        if (archive_groups.isArchiveEntryDeletedFromLibrary(item, archiveContext, deletedIndex)) continue;
+        const groupId = archive_groups.archiveGroupKeyForEntry(item);
+        if (!groupId) continue;
+        const current = groups.get(groupId) || { groupId, entries: [] };
+        current.entries.push(item);
+        groups.set(groupId, current);
+    }
+    const cards = [...groups.values()].sort((a,b) => Math.max(...b.entries.map(x=>x.updatedAt)) - Math.max(...a.entries.map(x=>x.updatedAt))).map(group => {
+        const meta = archive_groups.archiveGroupMeta(group.groupId, group.entries, archiveContext);
+        const src = archive_groups.archiveGroupAvatarUrl(meta, group.entries[0], archiveContext);
+        const name = core_text.normalizeText(meta.label || meta.characterName || group.entries[0]?.characterName, 120) || '角色档案';
+        const charHint = Number(meta.characterIndexHint) >= 0 ? ` · char #${Number(meta.characterIndexHint) + 1}` : '';
+        return `<article class="rmt-archive-portal ready rmt-character-archive-card"><button type="button" class="rmt-portal-open rmt-character-portal-open" data-rmt-archive-character="${core_text.esc(group.groupId)}"><span class="rmt-portal-avatar" data-rmt-avatar-talk="${core_text.esc(group.groupId)}" title="点头像听他说一句">${src ? `<img src="${core_text.esc(src)}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%">` : '<i class="fa-solid fa-user"></i>'}<i class="fa-solid fa-comment-dots rmt-avatar-talk-mark"></i></span><span class="rmt-portal-title">${core_text.esc(name)}</span><span class="rmt-portal-subtitle">${group.entries.length} 个聊天档案${core_text.esc(charHint)}</span><span class="rmt-portal-status">${meta.manual ? '手动角色组' : '自动分类'} · 点击查看</span></button><button type="button" class="rmt-character-archive-delete" data-rmt-action="archive-character-delete" data-rmt-archive-group-id="${core_text.esc(group.groupId)}"><i class="fa-solid fa-trash-can"></i><span>删除角色档案</span></button></article>`;
+    }).join('');
+    let currentQuick = '';
+    let calendarQuick = snapshotCalendarQuickAccessHtml({ ready: false, generated: false, readOnly: false, generating: false });
+    try {
+        const ctx = core_context.currentCharacterGuard();
+        const mem = archive_repository.getImportedMemory(ctx);
+        const deletedFromLibrary = archive_groups.isCurrentCharacterDeletedFromLibrary(ctx, mem);
+        if (deletedFromLibrary) {
+            currentQuick = '';
+            calendarQuick = '';
+        } else if (mem) {
+            const name = core_text.normalizeText(mem.archiveName, 120) || archive_repository.fallbackArchiveName(mem.memories);
+            currentQuick = `<section class="rmt-archive-card rmt-current-archive-card" style="margin-top:12px"><div><b>当前窗口档案</b><small>${core_text.esc(name)} · ${mem.memories.length} 条记忆</small></div><div class="rmt-current-archive-actions"><button type="button" class="rmt-btn" data-rmt-action="current-archive">打开当前窗口档案</button><button type="button" class="rmt-btn" data-rmt-action="current-archive-import">增量更新当前窗口档案</button><button type="button" class="rmt-btn" data-rmt-action="current-archive-delete">删除当前档案</button></div></section>`;
+            const calendarPortal = archive_snapshots.baseModeAvailability({ context: ctx, chatId: core_context.getChatId(ctx), memoryBank: mem, clone: false })
+                .find(item => item.mode === core_constants.MODE.CALENDAR) || { session: null };
+            calendarQuick = snapshotCalendarQuickAccessHtml({
+                ready: true,
+                generated: !!calendarPortal.session,
+                readOnly: false,
+                generating: core_requestCoordinator.isModeGenerating(core_constants.MODE.CALENDAR),
+            });
+        } else {
+            const inheritanceDescriptor = archive_groups.characterDescriptor(ctx, Number(ctx.characterId));
+            const inheritanceAvailable = archive_groups.getArchiveIndex(ctx).some(entry =>
+                core_context.comparableChatId(entry.chatId) !== core_context.comparableChatId(core_context.getChatId(ctx))
+                && Number(entry.characterIndexHint) === Number(ctx.characterId)
+                && !!core_context.currentCharacterAvatar(ctx)
+                && core_context.archiveStoredAvatar(entry) === core_context.currentCharacterAvatar(ctx)
+                && (!entry.characterFingerprint || !inheritanceDescriptor?.fingerprint
+                    || entry.characterFingerprint === inheritanceDescriptor.fingerprint));
+            currentQuick = `<section class="rmt-archive-card rmt-current-archive-card" style="margin-top:12px"><div><b>当前聊天还没有档案</b></div><div class="rmt-current-archive-actions"><button type="button" class="rmt-btn" data-rmt-action="current-archive-import">生成当前窗口档案</button>${inheritanceAvailable ? '<button type="button" class="rmt-btn" data-rmt-action="archive-inheritance-open">从这个角色的旧聊天继承…</button>' : ''}</div></section>`;
+        }
+    } catch {}
+    if (!viewStillCurrent()) return;
+    body.innerHTML = `<div class="rmt-archive-room"><section class="rmt-archive-card"><div class="rmt-archive-kicker">MEMORY ARCHIVE LIBRARY</div><strong class="rmt-archive-title">档案室一览</strong><div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="rmt-btn" data-rmt-action="archive-group-manager">管理角色分类</button><button type="button" class="rmt-btn" data-rmt-action="archive-auto-classify">自动分类</button><button type="button" class="rmt-btn" data-rmt-action="rebuild-archive-index">扫描旧版本已有档案</button></div></section>${calendarQuick}${cards ? `<section class="rmt-archive-portals rmt-character-portals">${cards}</section>` : '<div class="rmt-archive-overview-empty">还没有已索引的档案。当前版本创建/更新档案后会自动加入这里；旧版本档案可点上方按钮手动扫描一次。</div>'}${currentQuick}</div>`;
+}
+
+// Saved versions never read /api/chats/get and never enter the live snapshot
+// cache. The existing permanent read-only capability protects every old reader.
+async function openArchiveVersion(versionId, context = core_context.currentCharacterGuard()) {
+    const lifecycle = runtimeState.runtimeLifecycleEpoch;
+    const scope = core_context.chatScopeKey(context);
+    const record = await core_cache.readArchiveVersion(context, versionId);
+    core_context.assertRuntimeLifecycleCurrent(lifecycle);
+    if (core_context.chatScopeKey(core_context.currentCharacterGuard()) !== scope) throw new DOMException('Chat changed', 'AbortError');
+    const snapshot = {
+        ...record.entry,
+        entryId: `${record.entryId}:version:${record.versionId}`,
+        archiveGroupId: record.entry.archiveGroupId || archive_groups.archiveGroupKeyForEntry(record.entry),
+        chatId: record.chatId, archiveName: record.memory.archiveName || '未命名档案',
+        characterName: record.memory.characterName || record.entry.characterName,
+        memory: structuredClone(record.memory), cache: structuredClone(record.cache),
+        historyVersionId: record.versionId, historyCreatedAt: record.createdAt,
+        historyReason: record.reason, historySelectedPages: [...record.selectedPages],
+        historyDrafts: structuredClone(record.drafts),
+        backupOnly: true, sourceError: '', sourceMirrorLagging: false, settingBookSelection: { books: [] },
+        loadedAt: Date.now(),
+    };
+    showIndexedArchiveSnapshot(snapshot);
+    return snapshot;
+}
+
+async function openGenerationTaskResult(draftId, context = core_context.currentCharacterGuard(), { snapshot: sourceSnapshot = null } = {}) {
+    const lifecycle = runtimeState.runtimeLifecycleEpoch;
+    const scope = core_context.chatScopeKey(context);
+    const record = await core_cache.readGenerationTaskResult(context, draftId, sourceSnapshot ? { cache: sourceSnapshot.cache } : {});
+    core_context.assertRuntimeLifecycleCurrent(lifecycle);
+    if (sourceSnapshot ? runtimeState.activeArchiveSnapshot !== sourceSnapshot
+        : core_context.chatScopeKey(core_context.currentCharacterGuard()) !== scope) throw new DOMException('Chat changed', 'AbortError');
+    const memory = structuredClone(record.sourceMemory);
+    if (!memory?.memories || !record.session) throw new Error('这份成果的原始资料暂时无法读取，已保存的成果仍保留。');
+    if (record.status === 'open' && record.session.readableProgress?.complete === false
+        && (!sourceSnapshot || (!sourceSnapshot.historyVersionId && !sourceSnapshot.backupOnly
+            && generation_imageGeneration.indexedArchiveMatchesCurrentChat(sourceSnapshot, context)))) {
+        const current = sourceSnapshot ? await core_cache.readGenerationTaskResult(context, draftId) : record;
+        core_context.assertRuntimeLifecycleCurrent(lifecycle);
+        if (core_context.chatScopeKey(core_context.currentCharacterGuard()) !== scope) throw new DOMException('Chat changed', 'AbortError');
+        ui_overlay.openPartialTaskSession(current);
+        return current;
+    }
+    const entry = record.targetEntry || core_cache.archiveBackupEntryForContext(context, memory);
+    const snapshot = {
+        ...entry, entryId: `${record.entryId || entry.entryId}:task:${draftId}`,
+        archiveGroupId: entry.archiveGroupId || archive_groups.archiveGroupKeyForEntry(entry),
+        chatId: memory.chatId, archiveName: `${core_constants.MODE_LABEL[record.mode] || '旧任务'} · 独立成果`,
+        characterName: memory.characterName || entry.characterName,
+        memory, cache: { chatId: memory.chatId, archiveRevision: memory.archiveRevision, [record.mode]: structuredClone(record.session) },
+        taskResultDraftId: draftId, historyVersionId: `task:${draftId}`, historyCreatedAt: record.createdAt,
+        historyReason: '按原任务资料生成，独立保留的成果', historySelectedPages: [record.pageId],
+        backupOnly: true, sourceError: '', sourceMirrorLagging: false, settingBookSelection: { books: [] }, loadedAt: Date.now(),
+    };
+    showIndexedArchiveSnapshot(snapshot);
+    return snapshot;
+}
+
+function setArchiveReadOnly(readOnly) {
+    if (!runtimeState.activeArchiveSnapshot) return;
+    if (runtimeState.activeArchiveSnapshot.historyVersionId) {
+        runtimeState.activeArchiveReadOnly = true;
+        if (readOnly === false) globalThis.toastr?.info?.(runtimeState.activeArchiveSnapshot.taskResultDraftId ? '当前是独立保存的成果；请返回当前档案继续操作。' : '旧版本永久只读；请返回当前档案继续操作。', '心迹回廊');
+        return showIndexedArchiveSnapshot(runtimeState.activeArchiveSnapshot);
+    }
+    if (runtimeState.activeArchiveSnapshot.backupOnly && readOnly === false) {
+        runtimeState.activeArchiveReadOnly = true;
+        globalThis.toastr?.info?.('源聊天暂不可读，当前查看只读备份。请重试读取源聊天；备份本身不能解除只读或绑定到其他聊天。', '心迹回廊');
+        return showIndexedArchiveSnapshot(runtimeState.activeArchiveSnapshot);
+    }
+    runtimeState.activeArchiveReadOnly = readOnly !== false;
+    if (runtimeState.activeMode && runtimeState.activeSession) ui_overlay.renderActive();
+    else showIndexedArchiveSnapshot(runtimeState.activeArchiveSnapshot);
+    if (!runtimeState.activeArchiveReadOnly) {
+        const live = generation_imageGeneration.indexedArchiveMatchesCurrentChat(runtimeState.activeArchiveSnapshot, core_context.getContext());
+        globalThis.toastr?.info?.(
+            live
+                ? '已关闭只读保护。当前酒馆正好打开这份档案对应聊天；增量追加/绘制仍会逐项确认。'
+                : '已关闭只读保护，但心迹回廊不会自动切换聊天。你可以查看编辑按钮；真正写入前必须先手动在酒馆打开这份档案对应聊天。',
+            '心迹回廊',
+        );
+    }
+}
+
 function showIndexedArchiveSnapshot(snapshot = runtimeState.activeArchiveSnapshot) {
     if (!snapshot?.memory) return showArchiveLibrary();
     modes_room.stopRoomClock(); ui_phoneView.stopPhoneClock(); ui_endingView.closeEndingEasterEgg({ restoreFocus: false });
@@ -62784,28 +64534,6 @@ function showIndexedArchiveSnapshot(snapshot = runtimeState.activeArchiveSnapsho
     </div>`;
     workspace_ui.arrangeArchiveWorkspace(body, { portals, ready: true, snapshot });
 
-}
-
-function archiveVersionDraftsHtml(snapshot) {
-    if (!snapshot?.historyVersionId || !snapshot.historyDrafts) return '';
-    const parts = [];
-    const seen = new Set();
-    const show = (label, value) => `<details class="rmt-archive-card"><summary>${core_text.esc(label)}</summary><pre style="white-space:pre-wrap;overflow-wrap:anywhere">${core_text.esc(value)}</pre></details>`;
-    const appendJournal = (mode, journal) => {
-        const key = journal?.draftId || JSON.stringify(journal);
-        if (seen.has(key)) return;
-        seen.add(key);
-        const label = core_constants.MODE_LABEL[mode] || mode;
-        for (const [index, segment] of (journal?.segments || []).entries()) {
-            const value = segment.state === 'complete' ? segment.rawJson : segment.state === 'truncated' ? segment.partial : '';
-            if (typeof value !== 'string' || !value) continue;
-            parts.push(show(`${label} · 第 ${index + 1} 段 · ${segment.state === 'complete' ? '已生成片段' : '未完成片段'}`, value));
-        }
-    };
-    for (const journal of Object.values(snapshot.historyDrafts.tasks || {})) appendJournal(journal?.identity?.mode || journal?.operation?.mode || '草稿', journal);
-    for (const [mode, journal] of Object.entries(snapshot.historyDrafts.modules || {})) appendJournal(mode, journal);
-    if (snapshot.historyDrafts.phone && Object.keys(snapshot.historyDrafts.phone).length) parts.push(show('私人终端 · 保存的未完成草稿', JSON.stringify(snapshot.historyDrafts.phone, null, 2)));
-    return parts.length ? `<section data-rmt-version-drafts><h3>重做前的未完成草稿</h3><p>以下是原任务已收到的内容，可能尚未组成完整作品；查看不会调用 API。</p>${parts.join('')}</section>` : '';
 }
 
 async function openIndexedArchive(characterKey, chatId, entryId = '') {
@@ -62973,32 +64701,32 @@ async function rebuildArchiveIndexFromExisting() {
 __m_archive_library_js.showArchiveLibrary = showArchiveLibrary;
 __m_archive_library_js.openArchiveVersion = openArchiveVersion;
 __m_archive_library_js.openGenerationTaskResult = openGenerationTaskResult;
-__m_archive_library_js.openContentRegenerationDraft = openContentRegenerationDraft;
-__m_archive_library_js.openArchiveRecoveryDraft = openArchiveRecoveryDraft;
-__m_archive_library_js.fetchIndexedArchiveSnapshot = fetchIndexedArchiveSnapshot;
-__m_archive_library_js.revalidateArchiveTarget = revalidateArchiveTarget;
-__m_archive_library_js.commitArchiveTargetSession = commitArchiveTargetSession;
-__m_archive_library_js.commitArchiveTargetSessionMutation = commitArchiveTargetSessionMutation;
-__m_archive_library_js.claimArchiveTargetMode = claimArchiveTargetMode;
-__m_archive_library_js.prepareArchiveTargetSubtask = prepareArchiveTargetSubtask;
-__m_archive_library_js.beginArchiveTargetSubtask = beginArchiveTargetSubtask;
 __m_archive_library_js.openIndexedArchive = openIndexedArchive;
 __m_archive_library_js.rebuildArchiveIndexFromExisting = rebuildArchiveIndexFromExisting;
+__m_archive_library_js.setArchiveReadOnly = setArchiveReadOnly;
+__m_archive_library_js.showIndexedArchiveSnapshot = showIndexedArchiveSnapshot;
 __m_archive_library_js.showArchiveCharacter = showArchiveCharacter;
 __m_archive_library_js.showArchiveGroupManager = showArchiveGroupManager;
 __m_archive_library_js.archiveSnapshotCacheKey = archiveSnapshotCacheKey;
 __m_archive_library_js.rememberArchiveSnapshot = rememberArchiveSnapshot;
 __m_archive_library_js.contentRegenerationDraftHtml = contentRegenerationDraftHtml;
+__m_archive_library_js.openContentRegenerationDraft = openContentRegenerationDraft;
 __m_archive_library_js.archiveRecoveryDraftHtml = archiveRecoveryDraftHtml;
+__m_archive_library_js.openArchiveRecoveryDraft = openArchiveRecoveryDraft;
+__m_archive_library_js.fetchIndexedArchiveSnapshot = fetchIndexedArchiveSnapshot;
 __m_archive_library_js.freezeArchiveTarget = freezeArchiveTarget;
+__m_archive_library_js.revalidateArchiveTarget = revalidateArchiveTarget;
+__m_archive_library_js.commitArchiveTargetSession = commitArchiveTargetSession;
+__m_archive_library_js.commitArchiveTargetSessionMutation = commitArchiveTargetSessionMutation;
+__m_archive_library_js.claimArchiveTargetMode = claimArchiveTargetMode;
 __m_archive_library_js.archiveTargetGenerationOptions = archiveTargetGenerationOptions;
+__m_archive_library_js.prepareArchiveTargetSubtask = prepareArchiveTargetSubtask;
+__m_archive_library_js.beginArchiveTargetSubtask = beginArchiveTargetSubtask;
 __m_archive_library_js.syncArchiveTargetSubtask = syncArchiveTargetSubtask;
-__m_archive_library_js.setArchiveReadOnly = setArchiveReadOnly;
 __m_archive_library_js.archiveSnapshotEditableUi = archiveSnapshotEditableUi;
 __m_archive_library_js.snapshotWriteBlockMessage = snapshotWriteBlockMessage;
 __m_archive_library_js.promoteSnapshotToLiveIfCurrent = promoteSnapshotToLiveIfCurrent;
 __m_archive_library_js.requireWritableArchiveAction = requireWritableArchiveAction;
-__m_archive_library_js.showIndexedArchiveSnapshot = showIndexedArchiveSnapshot;
 __m_archive_library_js.archiveVersionDraftsHtml = archiveVersionDraftsHtml;
 }
 
@@ -68435,7 +70163,11 @@ __init_modes_phoneData_js();
 __init_modes_phoneIncrement_js();
 __init_modes_phoneGeneration_js();
 __init_modes_phone_js();
+__init_modes_characterProfile_js();
+__init_modes_relationsView_js();
 __init_modes_relations_js();
+__init_modes_calendarBasics_js();
+__init_modes_calendarData_js();
 __init_modes_calendar_js();
 __init_ui_advancedGenerationUi_js();
 __init_archive_sourceReadGuard_js();
@@ -68485,6 +70217,9 @@ __init_ui_css_phoneMobileCss_js();
 __init_ui_css_calendarCss_js();
 __init_ui_css_heartProfileTravelCss_js();
 __init_ui_styles_js();
+__init_ui_settingsPanelParts_js();
+__init_ui_settingsPanelHome_js();
+__init_ui_settingsPanelMarkup_js();
 __init_ui_settingsPanel_js();
 __init_modes_advEvent_js();
 __init_core_butterflyLegacyRecovery_js();
@@ -68493,6 +70228,8 @@ __init_modes_themeSong_js();
 __init_generation_recoveryAdapters_js();
 __init_generation_partialProgress_js();
 __init_generation_recoveryPayload_js();
+__init_generation_recoveryFeedback_js();
+__init_generation_recoverySegments_js();
 __init_generation_recovery_js();
 __init_modes_heartData_js();
 __init_modes_heartPrompts_js();
@@ -68503,6 +70240,8 @@ __init_ui_languageView_js();
 __init_ui_heartView_js();
 __init_ui_cgPromptEditor_js();
 __init_ui_albumView_js();
+__init_generation_cgImageCore_js();
+__init_generation_cgImageActions_js();
 __init_generation_imageGeneration_js();
 __init_modes_album_js();
 __init_generation_prompts_js();
@@ -68515,6 +70254,10 @@ __init_generation_jsonShapeExamples_js();
 __init_generation_requestTemperature_js();
 __init_generation_contentRegeneration_js();
 __init_ui_contentManager_js();
+__init_generation_generationContext_js();
+__init_generation_generationRequest_js();
+__init_generation_generationSavedActions_js();
+__init_generation_generationModes_js();
 __init_generation_client_js();
 __init_ui_roomPixelFigure_js();
 __init_ui_roomObjectDrawing_js();
@@ -68545,6 +70288,12 @@ __init_ui_travelView_js();
 __init_core_mailGallery_js();
 __init_ui_inboxView_js();
 __init_ui_toolbarIcons_js();
+__init_ui_overlayShell_js();
+__init_ui_overlayManage_js();
+__init_ui_overlayCore_js();
+__init_ui_overlayClickTargets_js();
+__init_ui_overlayClickActions_js();
+__init_ui_overlayPartial_js();
 __init_ui_overlay_js();
 __init_archive_snapshots_js();
 __init_core_requestCoordinator_js();
@@ -68561,6 +70310,8 @@ __init_archive_repository_js();
 __init_core_routeParticipants_js();
 __init_ui_routeParticipants_js();
 __init_ui_workspace_js();
+__init_archive_libraryCharacter_js();
+__init_archive_librarySnapshots_js();
 __init_archive_library_js();
 __init_archive_groups_js();
 __init_core_context_js();

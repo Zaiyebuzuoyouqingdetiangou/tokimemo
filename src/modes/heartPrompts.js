@@ -196,7 +196,7 @@ ${incremental ? '旧光点由本地永久保留。本请求只根据本轮新增
 只输出 JSON。`;
 }
 
-export function heartFireflyUpgradePrompt(context, core, items) {
+export function heartFireflyUpgradePrompt(context, core, items, memoryBank = null) {
     const batch = (Array.isArray(items) ? items : []).slice(0, 6).map(item => ({
         id: core_text.normalizeText(item?.id, 80),
         color: core_text.normalizeText(item?.color, 20),

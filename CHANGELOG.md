@@ -1,3 +1,25 @@
+# 0.99.27 / r84.79 — 房间小人识别修复
+
+- 英文角色卡：关键词改为按整个单词匹配。that、childhood、himself、image、pursuit、abroad、wardrobe 这类词不再被误认成帽子、兜帽、法袍、西装、宽肩、长袍；long black hair、bright blue eyes 这类写法现在能认出。英文否定句（does not wear glasses）不算。
+- 分清在说谁：按分句判断主语。写“你 / 您 / {{user}} / 用户名”的句子，以及写“他的妹妹、师父、朋友”等别人的句子，不再算到角色身上；没写主语的后半句跟着前半句走。
+- 按身份推断更严格：只认“他是……”“身为……”这类说角色本人身份的句子，或单独写着的身份词（如“剑修”）。“带过很多学生”不会再被猜成穿校服。
+- 多人房间：角色绑定的世界书读完后立即重画小人。
+- 画法：寸头只留一层短发；兜帽包住后脑、露出刘海；耳机头梁贴着头顶；角改成两段细角。其他发型画法不变。
+- 测试新增 3 组，共 83 个测试通过。
+
+# 0.99.26 / r84.78 — 重构收尾（功能不变）
+
+- 主窗口的按钮点击分发（44KB、111 种按钮）按原顺序拆成 4 组，放到 `ui/overlayClickTargets.js`、`ui/overlayClickActions.js`；原函数依次调用。新测试把调用换回原文，确认与拆分前逐字相同；另一组测试在拆分前后的运行包上点同样的按钮，结果一致。
+- 设置页整页 HTML 搬到 `ui/settingsPanelMarkup.js`，同样逐字核对。
+- 新工具 `tools/split-dispatch.mjs`；重构护栏基线更新到本版，旧基线另存。
+- 重构任务结束：最大的源文件从 284KB 降到 60KB。
+
+# 0.99.25 / r84.77 — 其余大文件拆分、修旧版萤火虫升级
+
+- 修复（r84.71 起就有）：HEART 把旧版萤火虫升级为新版会话时，提示词引用了未定义的变量，一调用就报错、不发请求。现在使用本次冻结的档案记忆，与其他 HEART 提示词一致。新增测试，修复前该测试确认失败。
+- 重构（功能不变）：`ui/overlay.js`、`ui/settingsPanel.js`、`generation/client.js`、`archive/library.js`、`generation/recovery.js`、`modes/relations.js`、`modes/calendar.js`、`generation/imageGeneration.js` 原样拆成 20 个文件，原文件保留转发。
+- 新工具：`tools/split-module.mjs --plan` 自动出分组草稿；`tools/check-undefined-names.mjs` 用 TypeScript 检查未定义 / 重复的名字（本版 0 处）。
+
 # 0.99.24 / r84.76 — HEART 与私人终端代码拆分（功能不变）
 
 - `modes/heart.js`（145KB）原样拆成 4 个文件：数据规范化与合并、提示词、任务运行与恢复、分段生成入口。原文件保留转发。
