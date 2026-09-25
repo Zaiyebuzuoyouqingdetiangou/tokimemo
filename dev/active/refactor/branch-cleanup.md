@@ -4,15 +4,13 @@
 
 想清理时，在本地仓库或 GitHub Desktop 里一次删掉这些路径再提交即可；网页上只能一个个删。
 
-## 根目录旧文档（已移到 dev/archive/）
+## 根目录旧文档（已清掉）
 
-- LOCAL-REPAIR-r84.56.md
-- REPAIR-r84.69.md、REPAIR-r84.70.md、REPAIR-r84.71.md
-- REVIEW-r84.57.md、REVIEW-r84.58.md、REVIEW-r84.59.md
-- REPLACE-INSTRUCTIONS.txt
-- 施工方案.md、整体逻辑.md
-- 问题分析-为什么会反复出现重试未完成部分.md、问题分析-房间预算与长记忆上限.md
-- 乱码文件名的 .md（例如 `P0-╨▐╕┤╦╡├≈.md`、`╩⌐╣ñ╖╜░╕.md` 以及 `#U…` 开头的文件名），如果仓库里有
+根目录那批重复 / 乱码 / `#U…` 文件名文档已经删掉，只留 archive 里的正常中文名：
+
+- 逐轮修复、复核：`dev/archive/rounds/`（含 r84.80–r84.82）
+- 运行地图、施工方案、问题分析：`dev/archive/docs/`
+- 超长的「为什么会反复出现重试未完成部分」正文在 `dev/archive/docs/问题分析-为什么会反复出现重试未完成部分.md`，没有改内容
 
 ## 不可达旧源文件（r84.72 删除）
 
