@@ -22,16 +22,16 @@ function modulePlan(moduleId = 'cabinet') {
     };
 }
 
-test('the first four modules count complete only when every step is done and stay ineligible', () => {
-    for (const id of ['cabinet', 'calendar', 'relations', 'inbox']) {
+test('adapted modules count complete only when every step is done', () => {
+    for (const id of ['cabinet', 'calendar', 'relations', 'inbox', 'album', 'phone', 'heart']) {
         const item = registry.autoMemoryModuleById(id);
-        assert.equal(item.autoEligible, false);
-        assert.equal(item.achievementMerged, false);
+        assert.equal(item.autoEligible, true);
+        assert.equal(item.achievementMerged, true);
         assert.equal(item.isComplete(null, modulePlan(id)), false);
         assert.equal(item.isComplete(null, { steps: [{ status: 'completed' }, { status: 'completed' }] }), true);
     }
-    assert.equal(registry.autoMemoryModuleById('album').isComplete(null, { steps: [{ status: 'completed' }] }), false);
-    assert.equal(registry.autoMemoryRuntimeCandidates(['cabinet', 'calendar', 'relations', 'inbox']).length, 0);
+    assert.equal(registry.autoMemoryModuleById('achievements').autoEligible, false);
+    assert.deepEqual(registry.autoMemoryRuntimeCandidates(['cabinet', 'inbox', 'achievements'], ['inbox']), ['cabinet']);
 });
 
 test('a combined response saves the module and one reveal without a second achievement request', () => {

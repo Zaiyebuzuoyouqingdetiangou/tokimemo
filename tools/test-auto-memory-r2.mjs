@@ -73,7 +73,7 @@ test('an enabled plan blocks the legacy scheduler and turning it off resumes the
     restored[plans.AUTO_MEMORY_DRAW_TICKETS_KEY] = disabled.snapshot.drawTickets;
     restored[plans.AUTO_MEMORY_MODULE_PLAN_KEY] = disabled.snapshot.modulePlan;
     assert.equal(policy.readLegacySchedulerGate(restored).source, 'legacy');
-    assert.equal(registry.autoMemoryRuntimeCandidates(disabled.snapshot.plan.preferredModuleIds, disabled.snapshot.plan.excludedModuleIds).length, 0);
+    assert.deepEqual(registry.autoMemoryRuntimeCandidates(disabled.snapshot.plan.preferredModuleIds, disabled.snapshot.plan.excludedModuleIds), ['cabinet']);
 
     let floor = 10;
     const state = {};

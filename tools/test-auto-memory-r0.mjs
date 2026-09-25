@@ -100,8 +100,8 @@ test('registry stays ineligible until a module is adapted', () => {
     assert.equal(modules.length, 18);
     for (const item of modules) {
         assert.equal(modeIds.has(item.id), true);
-        assert.equal(item.autoEligible, false);
-        assert.equal(item.achievementMerged, false);
+        assert.equal(item.autoEligible, item.id !== 'achievements');
+        assert.equal(item.achievementMerged, item.id !== 'achievements');
         assert.equal(item.description.length > 0, true);
         assert.equal(item.normalRequestEstimate.length > 0, true);
         assert.ok(item.contentKind === 'historical' || item.contentKind === 'collection');
@@ -110,7 +110,9 @@ test('registry stays ineligible until a module is adapted', () => {
     assert.equal(registry.autoMemoryModuleById('achievements').inDrawPool, false);
     assert.equal(registry.autoMemoryModuleById('items').prerequisites[0], 'room');
     assert.throws(() => { modules[0].autoEligible = true; });
-    assert.deepEqual(registry.autoMemoryRuntimeCandidates(modules.map(item => item.id), []), []);
+    const adapted = modules.filter(item => item.inDrawPool && item.autoEligible).map(item => item.id);
+    assert.deepEqual(registry.autoMemoryRuntimeCandidates(modules.map(item => item.id), []), adapted);
+    assert.equal(adapted.includes('achievements'), false);
 });
 
 test('a plan round trip keeps every field and rejects loose values', () => {
@@ -132,7 +134,7 @@ test('a plan round trip keeps every field and rejects loose values', () => {
     assert.throws(() => plans.parseAutoMemoryPlan({ ...original.plan, preferredModuleIds: ['cabinet'], excludedModuleIds: ['cabinet'] }));
     assert.throws(() => plans.parseModuleStep({ ...modulePlan().steps[0], recoverySlot: '' }));
     assert.throws(() => plans.parseDrawTicket({ ...ticket(), selectedModuleId: 'inbox' }));
-    assert.equal(registry.autoMemoryRuntimeCandidates(original.plan.preferredModuleIds, original.plan.excludedModuleIds).length, 0);
+    assert.deepEqual(registry.autoMemoryRuntimeCandidates(original.plan.preferredModuleIds, original.plan.excludedModuleIds), ['cabinet', 'calendar']);
 });
 
 test('old and corrupt chats are not rewritten', () => {
@@ -166,7 +168,7 @@ test('legacy switches migrate once into preferences and stay disabled', () => {
     assert.equal(first.plan.intervalFloors, 5);
     assert.deepEqual(first.plan.preferredModuleIds, ['album', 'cabinet']);
     assert.deepEqual(first.plan.excludedModuleIds, []);
-    assert.equal(registry.autoMemoryRuntimeCandidates(first.plan.preferredModuleIds).length, 0);
+    assert.deepEqual(registry.autoMemoryRuntimeCandidates(first.plan.preferredModuleIds), ['album', 'cabinet']);
     assert.deepEqual(legacy, legacyCopy);
 
     const second = migrate.migrateLegacyAutoPreferences(first.plan, { album: { enabled: false, every: 20, epoch: 0 } }, 80);

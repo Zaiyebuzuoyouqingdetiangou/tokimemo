@@ -66,9 +66,8 @@ export function wizardModuleCards(queueableIds = []) {
 }
 
 export function createWizardDraft(plan = null) {
-    const openIds = wizardModuleCards().filter(item => item.inDrawPool && item.autoEligible).map(item => item.id);
     const excludedModuleIds = uniqueDrawIds(plan?.excludedModuleIds);
-    const preferredModuleIds = (plan ? uniqueDrawIds(plan.preferredModuleIds) : openIds).filter(id => !excludedModuleIds.includes(id));
+    const preferredModuleIds = uniqueDrawIds(plan?.preferredModuleIds).filter(id => !excludedModuleIds.includes(id));
     return {
         cardType: '',
         participantConfirmed: false,

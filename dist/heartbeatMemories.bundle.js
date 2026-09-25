@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
-// Source modules: 252
-// Source SHA-256: 45579300dec999fa0c86e0442a2712624b3a910d61ffb405fbbb00a1798ed7fc
+// Source modules: 257
+// Source SHA-256: 5d919853313bcb2ef9497afe7db574057356664518643e6e4a61f28c283c1a20
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -35,8 +35,12 @@ const __m_archive_worldInfoSources_js = Object.create(null);
 const __m_autoMemory_combinedResult_js = Object.create(null);
 const __m_autoMemory_draw_js = Object.create(null);
 const __m_autoMemory_incrementalGate_js = Object.create(null);
+const __m_autoMemory_incrementalView_js = Object.create(null);
 const __m_autoMemory_migrateLegacy_js = Object.create(null);
+const __m_autoMemory_moduleHost_js = Object.create(null);
+const __m_autoMemory_modulePlans_js = Object.create(null);
 const __m_autoMemory_moduleRegistry_js = Object.create(null);
+const __m_autoMemory_moduleRunner_js = Object.create(null);
 const __m_autoMemory_planStore_js = Object.create(null);
 const __m_autoMemory_scheduler_js = Object.create(null);
 const __m_autoMemory_shellState_js = Object.create(null);
@@ -110,6 +114,7 @@ const __m_core_theme_js = Object.create(null);
 const __m_core_themeSongContract_js = Object.create(null);
 const __m_core_timeStoriesContract_js = Object.create(null);
 const __m_core_worldPresentation_js = Object.create(null);
+const __m_generation_achievementCapture_js = Object.create(null);
 const __m_generation_baibaiImage_js = Object.create(null);
 const __m_generation_cgAppearance_js = Object.create(null);
 const __m_generation_cgImageActions_js = Object.create(null);
@@ -45053,6 +45058,51 @@ __m_generation_generationContext_js.TOKEN_COUNT_TIMEOUT_MS = TOKEN_COUNT_TIMEOUT
 __m_generation_generationContext_js.GENERATED_PHRASE_EVIDENCE_KEYS = GENERATED_PHRASE_EVIDENCE_KEYS;
 }
 
+function __init_generation_achievementCapture_js() {
+// MODULE: generation/achievementCapture.js
+
+// 只有自动留忆的最后一步才武装。成就字段从正文 JSON 里拆走，不改各模块原来的校验。
+
+const SUFFIX = '\n若这是本轮最后一段，在原有 JSON 里额外给出 "achievement":{"title":"不超过20字","kind":"historical或collection"}。没有证据就用 collection。不要改动原有字段，不要解释。';
+
+let armed = false;
+let packet = null;
+
+function armAchievementCapture() {
+    armed = true;
+    packet = null;
+}
+
+function achievementCaptureArmed() {
+    return armed === true;
+}
+
+function achievementPromptSuffix() {
+    return armed ? SUFFIX : '';
+}
+
+function stripAchievementField(raw) {
+    if (!armed || !raw || typeof raw !== 'object' || Array.isArray(raw) || !Object.hasOwn(raw, 'achievement')) return raw;
+    packet = raw.achievement;
+    const copy = { ...raw };
+    delete copy.achievement;
+    return copy;
+}
+
+function finishAchievementCapture() {
+    armed = false;
+    const value = packet;
+    packet = null;
+    return value && typeof value === 'object' ? value : null;
+}
+
+__m_generation_achievementCapture_js.armAchievementCapture = armAchievementCapture;
+__m_generation_achievementCapture_js.achievementCaptureArmed = achievementCaptureArmed;
+__m_generation_achievementCapture_js.achievementPromptSuffix = achievementPromptSuffix;
+__m_generation_achievementCapture_js.stripAchievementField = stripAchievementField;
+__m_generation_achievementCapture_js.finishAchievementCapture = finishAchievementCapture;
+}
+
 function __init_generation_generationRequest_js() {
 // MODULE: generation/generationRequest.js
 const connection_pool = __m_core_connectionPool_js;
@@ -45079,6 +45129,7 @@ const core_worldPresentation = __m_core_worldPresentation_js;
 const generation_jsonParser = __m_generation_jsonParser_js;
 const generation_prompts = __m_generation_prompts_js;
 const generation_jsonShapeExamples = __m_generation_jsonShapeExamples_js;
+const generation_achievement = __m_generation_achievementCapture_js;
 const generation_requestTemperature = __m_generation_requestTemperature_js;
 const ui_overlay = __m_ui_overlay_js;
 const runtimeState = __m_core_state_js.state;
@@ -45128,6 +45179,7 @@ async function requestValidatedSegment(prompt, status, options, validator) {
         throw core_requestCoordinator.createGenerationAbortError();
     }
     prompt = cg_policy.cgPromptForSegment(prompt, options);
+    if (generation_achievement.achievementCaptureArmed()) prompt += generation_achievement.achievementPromptSuffix();
     validator = cg_policy.cgSegmentValidator(validator, options);
     const parentTrace = generationTrace(options);
     const taskTrace = core_taskTrace.startTaskTrace('', options?.mode, parentTrace);
@@ -45154,7 +45206,7 @@ async function requestValidatedSegment(prompt, status, options, validator) {
             ? '\n\n【本地校验反馈】' + (core_butterflyContract.butterflyValidationFeedback(lastError) || generation_recovery.generationRetryFeedbackText(lastError?.code, lastError) || core_text.normalizeText(lastError?.repairHint, 600) || (String(lastError.code || '').startsWith('RMT_ROOM_') ? core_text.safeErrorSummary(lastError) : '上一轮结构或完整度没有通过。')) + ' 请严格按原硬性要求重新输出完整 JSON，不要解释，也不要引用这条反馈作为内容。'
             : '';
         try {
-            const raw = await requestJson(`${prompt}${retryNote}`, `${status}${attempt ? `（重试 ${attempt}/${maxAttempts - 1}）` : ''}`, options);
+            const raw = generation_achievement.stripAchievementField(await requestJson(`${prompt}${retryNote}`, `${status}${attempt ? `（重试 ${attempt}/${maxAttempts - 1}）` : ''}`, options));
             core_taskTrace.beginStage(options.taskTrace, 'validate');
             const value = core_requestCoordinator.validateGeneratedSegment(raw, validator);
             core_taskTrace.markStage(options.taskTrace, 'validate');
@@ -46048,7 +46100,7 @@ async function generateModeOperation(mode, options = {}) {
     // Capture once, before any archive/network/storage await. A destroyed invocation must never
     // adopt the next runtime lifetime and re-register itself as a fresh paid task.
     const lifecycleEpoch = runtimeState.runtimeLifecycleEpoch;
-    if ([core_constants.MODE.THEME_SONG, core_constants.MODE.BEDTIME].includes(mode) && options.automatic) return { status: 'noop' };
+    if ([core_constants.MODE.THEME_SONG, core_constants.MODE.BEDTIME].includes(mode) && options.automatic && !options.autoMemoryStep) return { status: 'noop' };
     options = { ...options, cgPromptFormat: options.cgPromptFormat || core_settings.getPluginSettings(options.context || core_context.getContext()).cgPromptFormat };
     // Readers may belong to a historical archive while the host stays in another
     // chat. Only that exact, unchanged reader may receive a foreground result.
@@ -56247,6 +56299,13 @@ function openCachedOrGenerate(mode, options = {}) {
     if (mode === 'journal') return handJournal.openHandJournal();
     if (['mirrorCall','mirrorVoice'].includes(mode)) return workspace_ui.openVoiceModule(mode);
     if (!Object.values(core_constants.MODE).includes(mode)) return;
+    if (options.incrementalSession) {
+        const route = options.workspaceRoute || mode;
+        ui_workspaceState.workspace.route = route; ui_workspaceState.workspace.tab = 'content'; ui_workspaceState.workspace.empty = null;
+        runtimeState.activeMode = mode; runtimeState.activeSession = options.incrementalSession;
+        ui_workspaceState.prepareWorkspaceSession(mode, options.incrementalSession, route);
+        return renderActive();
+    }
     heart_reader.rememberHeartReader();
     const openRequest = ++heartOpenRequest;
     const route = options.workspaceRoute || mode;
@@ -70183,12 +70242,219 @@ __m_core_cache_js.loadReadableGenerationProgress = loadReadableGenerationProgres
 __m_core_cache_js.loadSession = loadSession;
 }
 
+function __init_autoMemory_modulePlans_js() {
+// MODULE: autoMemory/modulePlans.js
+
+// 每个模块的有限计划。目录出来后才补全步骤；空计划不生成成果。
+
+const ROOM_REPAIR_LIMIT = 2;
+const PHONE_APP_CONCURRENCY = 2;
+const ALBUM_BATCH = 3;
+const ADV_BATCH = 6;
+const ROOM_BATCH = 6;
+
+function step(id, kind, order) {
+    return { id, kind, order, status: 'pending', recoverySlot: '' };
+}
+
+function numbered(prefix, count, kind, start) {
+    const rows = [];
+    for (let index = 0; index < count; index += 1) rows.push(step(`${prefix}-${index + 1}`, kind, start + index));
+    return rows;
+}
+
+function shell(moduleId, facts, steps, min, max) {
+    if (!steps.length) return null;
+    return {
+        version: 1,
+        drawId: facts.drawId || 'drawpending',
+        moduleId,
+        chatId: facts.chatId || 'chat',
+        archiveRevision: facts.archiveRevision || 'current',
+        sourceMemoryIds: Array.isArray(facts.sourceMemoryIds) ? facts.sourceMemoryIds : [],
+        expectedRequestRange: { min, max },
+        steps: steps.map((item, index) => ({ ...item, order: index })),
+        frozenAt: Number.isSafeInteger(facts.frozenAt) ? facts.frozenAt : 0,
+    };
+}
+
+function count(value) {
+    return Number.isSafeInteger(value) && value >= 0 ? value : null;
+}
+
+function batches(total, size) {
+    const known = count(total);
+    if (known == null) return null;
+    if (known === 0) return 0;
+    return Math.ceil(known / size);
+}
+
+function catalog(id) {
+    return [step(id, 'catalog', 0)];
+}
+
+function token(value) {
+    const text = String(value || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 60);
+    return /^[A-Za-z0-9_-]{1,60}$/.test(text) ? text : '';
+}
+
+function albumSteps(unlocked) {
+    const groups = batches(unlocked, ALBUM_BATCH);
+    if (!groups) return null;
+    return [step('index', 'index', 0), step('relations', 'snapshot', 1), ...numbered('comment', groups, 'comments', 2)];
+}
+
+function roomSteps(slots, repairs) {
+    const groups = batches(slots, ROOM_BATCH);
+    if (groups == null) return null;
+    const fix = Math.min(ROOM_REPAIR_LIMIT, count(repairs) || 0);
+    return [step('structure', 'structure', 0), ...numbered('slot', groups, 'slots', 1), ...numbered('repair', fix, 'repair', 1 + groups)];
+}
+
+function phoneSteps(ids, { incremental = false } = {}) {
+    const apps = (Array.isArray(ids) ? ids : []).map((id, index) => token(id) || `app-${index + 1}`);
+    if (!apps.length) return null;
+    const head = incremental ? [step('update-plan', 'catalog', 0)] : [step('catalog', 'catalog', 0)];
+    return [...head, ...apps.map((id, index) => step(`app-${id}`, 'app', index + 1))];
+}
+
+function buildModulePlan(moduleId, facts = {}) {
+    const known = facts || {};
+    if (moduleId === 'inbox') {
+        const letters = count(known.letters);
+        if (letters === 0) return null;
+        return shell(moduleId, known, letters == null ? catalog('letters') : [step('letters', 'letters', 0)], letters ? 1 : 0, 1);
+    }
+    if (moduleId === 'cabinet' || moduleId === 'calendar' || moduleId === 'relations') {
+        return shell(moduleId, known, [step('body', 'generate', 0)], 1, 1);
+    }
+    if (moduleId === 'themeSong') return shell(moduleId, known, [step('song-next', 'song', 0)], 1, 1);
+    if (moduleId === 'timeEcho') return shell(moduleId, known, [step('echo', 'echo', 0)], 1, 1);
+    if (moduleId === 'bedtime') {
+        if (known.bedtime?.action === 'continue') {
+            const storyId = token(known.bedtime.storyId);
+            if (!storyId) return null;
+            return shell(moduleId, known, [step(`cont-${storyId}`, 'chapter', 0)], 1, 1);
+        }
+        return shell(moduleId, known, [step('bed-new', 'chapter', 0)], 1, 1);
+    }
+    if (moduleId === 'travel') {
+        const steps = known.needsBody === true ? [step('map', 'map', 0), step('prose', 'prose', 1)] : [step('map', 'map', 0)];
+        return shell(moduleId, known, steps, 1, known.needsBody === true ? 2 : 1);
+    }
+    if (moduleId === 'items') {
+        if (known.roomReady === false) return null;
+        return shell(moduleId, known, [step('structure', 'structure', 0), step('lines', 'lines', 1)], 2, 2);
+    }
+    if (moduleId === 'album') {
+        const steps = albumSteps(known.unlocked);
+        if (known.unlocked === 0) return null;
+        return shell(moduleId, known, steps || catalog('index'), steps ? 2 + batches(known.unlocked, ALBUM_BATCH) : 1, steps ? 2 + batches(known.unlocked, ALBUM_BATCH) : null);
+    }
+    if (moduleId === 'room') {
+        const steps = roomSteps(known.slots, known.repairs);
+        return shell(moduleId, known, steps || catalog('structure'), steps ? steps.length : 1, steps ? steps.length : null);
+    }
+    if (moduleId === 'phone') {
+        const ids = Array.isArray(known.appIds) ? known.appIds : [];
+        if (known.incremental === true && count(known.updates) === 0) return null;
+        if (known.incremental !== true && count(known.apps) === 0) return null;
+        const steps = ids.length ? phoneSteps(ids, { incremental: known.incremental === true }) : catalog(known.incremental === true ? 'update-plan' : 'catalog');
+        const total = ids.length ? ids.length + 1 : 1;
+        return shell(moduleId, known, steps, total, ids.length ? total : null);
+    }
+    if (moduleId === 'adv') {
+        const groups = batches(known.events, ADV_BATCH);
+        if (known.events === 0) return null;
+        const steps = groups ? [step('index', 'index', 0), ...numbered('event', groups, 'events', 1)] : catalog('index');
+        return shell(moduleId, known, steps, groups ? 1 + groups : 1, groups ? 1 + groups : null);
+    }
+    if (moduleId === 'ending') {
+        const routes = count(known.routes);
+        if (routes === 0) return null;
+        const confession = known.confession === true ? 1 : 0;
+        const steps = routes ? [step('index', 'index', 0), ...numbered('route', routes, 'route', 1), ...(confession ? [step('confession', 'confession', 0)] : [])] : catalog('index');
+        return shell(moduleId, known, steps, routes ? 1 + routes + confession : 1, routes ? 1 + routes + confession : null);
+    }
+    if (moduleId === 'butterfly') {
+        if (known.phase === 'increment') {
+            const prose = known.prose === 1 || known.prose === true ? [step('prose', 'prose', 1)] : [];
+            return shell(moduleId, known, [step('divergences', 'divergences', 0), ...prose], 1 + prose.length, 2);
+        }
+        const axes = count(known.axes);
+        if (axes === 0) return null;
+        const prose = known.prose === 1 || known.prose === true ? [step('prose', 'prose', 0)] : [];
+        const steps = axes ? [step('main', 'main', 0), ...numbered('branch', axes, 'branch', 1), step('omega', 'omega', 0), ...prose] : catalog('main');
+        return shell(moduleId, known, steps, axes ? 2 + axes + prose.length : 1, axes ? 2 + axes + prose.length : null);
+    }
+    if (moduleId === 'pastLives') {
+        const dossiers = count(known.dossiers);
+        const prose = known.prose === 1 || known.prose === true ? [step('prologue-prose', 'prose', 0)] : [];
+        const steps = dossiers == null ? catalog('episode') : [step('prologue', 'prologue', 0), ...prose, ...numbered('dossier', dossiers, 'dossier', 1), step('echo', 'echo', 0)];
+        return shell(moduleId, known, steps, dossiers == null ? 1 : 2 + dossiers + prose.length, dossiers == null ? null : 2 + dossiers + prose.length);
+    }
+    if (moduleId === 'heart') {
+        const steps = ['dialogue', 'daily', 'fireflies', 'epilogue', 'spring', 'summer', 'autumn', 'winter'].map((id, index) => step(id, id === 'winter' ? 'season' : id, index));
+        return shell(moduleId, known, steps, 8, 13);
+    }
+    return null;
+}
+
+function expandModulePlan(plan, expand = {}) {
+    if (!plan || plan.steps?.some(item => item.kind !== 'catalog' && item.status === 'completed')) return plan;
+    const facts = {
+        ...expand,
+        drawId: plan.drawId,
+        chatId: plan.chatId,
+        archiveRevision: plan.archiveRevision,
+        sourceMemoryIds: plan.sourceMemoryIds,
+        frozenAt: plan.frozenAt,
+    };
+    const built = buildModulePlan(plan.moduleId, facts);
+    if (!built || built.steps.some(item => item.kind === 'catalog') && built.steps.length === 1 && plan.steps.length === 1) return built && built.steps.length > 1 ? built : null;
+    if (!built) return null;
+    const catalogStep = plan.steps.find(item => item.kind === 'catalog');
+    const kept = catalogStep ? [{ ...catalogStep, status: 'completed', recoverySlot: catalogStep.recoverySlot || 'catalog' }] : [];
+    const rest = built.steps.filter(item => !kept.some(done => done.id === item.id));
+    return { ...built, steps: [...kept, ...rest].map((item, index) => ({ ...item, order: index })) };
+}
+
+function concurrentSteps(steps) {
+    const pending = (Array.isArray(steps) ? steps : []).filter(item => item && item.status !== 'completed');
+    if (!pending.length || pending[0].kind !== 'app') return pending.slice(0, 1);
+    const lastId = pending[pending.length - 1].id;
+    const parallel = [];
+    for (const item of pending) {
+        if (item.kind !== 'app' || item.id === lastId) break;
+        parallel.push(item);
+        if (parallel.length === PHONE_APP_CONCURRENCY) break;
+    }
+    return parallel.length ? parallel : pending.slice(0, 1);
+}
+
+function addRoomRepair(plan) {
+    const repairs = (plan?.steps || []).filter(item => item.kind === 'repair');
+    if (!plan || repairs.length >= ROOM_REPAIR_LIMIT) return plan;
+    const order = plan.steps.length;
+    return {
+        ...plan,
+        steps: [...plan.steps, step(`repair-${repairs.length + 1}`, 'repair', order)],
+        expectedRequestRange: { min: plan.expectedRequestRange.min, max: (plan.expectedRequestRange.max || plan.steps.length) + 1 },
+    };
+}
+
+__m_autoMemory_modulePlans_js.buildModulePlan = buildModulePlan;
+__m_autoMemory_modulePlans_js.expandModulePlan = expandModulePlan;
+__m_autoMemory_modulePlans_js.concurrentSteps = concurrentSteps;
+__m_autoMemory_modulePlans_js.addRoomRepair = addRoomRepair;
+__m_autoMemory_modulePlans_js.ROOM_REPAIR_LIMIT = ROOM_REPAIR_LIMIT;
+__m_autoMemory_modulePlans_js.PHONE_APP_CONCURRENCY = PHONE_APP_CONCURRENCY;
+}
+
 function __init_autoMemory_moduleRegistry_js() {
 // MODULE: autoMemory/moduleRegistry.js
-
-// 自动留忆模块注册表。只描述合同，不发请求，也不读聊天。
-// autoEligible 表示代码已经完成适配，不能由用户勾选改写。
-// R0 全部为 false：勾选只会被存成偏好，不会进入运行候选。
+const auto_memory_plans = __m_autoMemory_modulePlans_js;
+// 自动留忆模块注册表。计划由 modulePlans 生成。成就不进抽签。
 
 const HISTORICAL = 'historical';
 const COLLECTION = 'collection';
@@ -70217,9 +70483,9 @@ function defineModule(spec) {
     return Object.freeze({
         ...spec,
         prerequisites: Object.freeze([...spec.prerequisites]),
-        plan: inertPlan,
+        plan: spec.plan || (spec.inDrawPool ? facts => Promise.resolve(auto_memory_plans.buildModulePlan(spec.id, facts || {})) : inertPlan),
         pendingSteps: inertPendingSteps,
-        isComplete: spec.isComplete || inertComplete,
+        isComplete: spec.inDrawPool ? stepsComplete : inertComplete,
     });
 }
 
@@ -70228,103 +70494,103 @@ const MODULES = Object.freeze([
         id: 'album', title: '回忆相簿', contentKind: HISTORICAL, batch: 2, inDrawPool: true,
         description: '先生成条目索引和关系快照，再写完本轮全部已解锁条目的评论。只有索引不算完成。',
         normalRequestEstimate: '2 + ceil(U / 3)', prerequisites: [], supportsIncremental: true,
-        autoEligible: false, achievementMerged: false, unavailableReason: '暂不可自动生成',
+        autoEligible: true, achievementMerged: true, unavailableReason: '',
     }),
     defineModule({
         id: 'adv', title: 'ADV EVENT', contentKind: COLLECTION, batch: 4, inDrawPool: true,
         description: '先冻结本轮事件索引，再写完索引里的全部事件正文。不能停在标题，也不能只挑一篇。',
         normalRequestEstimate: '1 + ceil(E / 6)', prerequisites: [], supportsIncremental: true,
-        autoEligible: false, achievementMerged: false, unavailableReason: '暂不可自动生成',
+        autoEligible: true, achievementMerged: true, unavailableReason: '',
     }),
     defineModule({
         id: 'room', title: '他的房间', contentKind: COLLECTION, batch: 2, inDrawPool: true,
         description: '生成房间结构并补完必需文字槽位。修复次数有上限，未完成时不揭晓。',
         normalRequestEstimate: '1 + ceil(S / 6) + 0～2', prerequisites: [], supportsIncremental: true,
-        autoEligible: false, achievementMerged: false, unavailableReason: '暂不可自动生成',
+        autoEligible: true, achievementMerged: true, unavailableReason: '',
     }),
     defineModule({
         id: 'items', title: '他的物品', contentKind: COLLECTION, batch: 2, inDrawPool: true,
         description: '在已有且版本匹配的房间上，生成物品结构和全部必需台词。',
         normalRequestEstimate: '通常 2', prerequisites: ['room'], supportsIncremental: true,
-        autoEligible: false, achievementMerged: false, unavailableReason: '暂不可自动生成',
+        autoEligible: true, achievementMerged: true, unavailableReason: '',
     }),
     defineModule({
         id: 'phone', title: '他的私人终端', contentKind: COLLECTION, batch: 3, inDrawPool: true,
         description: '先冻结 App 目录，再生成目录中的全部 App。目录本身不产生成就。',
         normalRequestEstimate: '首次 1 + A；增量 1 + M', prerequisites: [], supportsIncremental: true,
-        autoEligible: false, achievementMerged: false, unavailableReason: '暂不可自动生成',
+        autoEligible: true, achievementMerged: true, unavailableReason: '',
     }),
     defineModule({
         id: 'inbox', title: '你的邮箱', contentKind: COLLECTION, batch: 1, inDrawPool: true,
         description: '有信件计划时一次写完本轮信件。没有计划则跳过，不生成信封或成就。',
         normalRequestEstimate: '0～1', prerequisites: [], supportsIncremental: true,
-        autoEligible: false, achievementMerged: false, unavailableReason: '暂不可自动生成', isComplete: stepsComplete,
+        autoEligible: true, achievementMerged: true, unavailableReason: '', isComplete: stepsComplete,
     }),
     defineModule({
         id: 'cabinet', title: '两个人的陈列柜', contentKind: HISTORICAL, batch: 1, inDrawPool: true,
         description: '生成或刷新本轮陈列柜成果。通过校验并保存后才算完成。',
         normalRequestEstimate: '1', prerequisites: [], supportsIncremental: true,
-        autoEligible: false, achievementMerged: false, unavailableReason: '暂不可自动生成', isComplete: stepsComplete,
+        autoEligible: true, achievementMerged: true, unavailableReason: '', isComplete: stepsComplete,
     }),
     defineModule({
         id: 'travel', title: '他的出行路线', contentKind: HISTORICAL, batch: 2, inDrawPool: true,
         description: '生成地图或旅行结构；若计划还要求正文，正文完成前不揭晓。',
         normalRequestEstimate: '1～2', prerequisites: [], supportsIncremental: true,
-        autoEligible: false, achievementMerged: false, unavailableReason: '暂不可自动生成',
+        autoEligible: true, achievementMerged: true, unavailableReason: '',
     }),
     defineModule({
         id: 'ending', title: '结局与后日谈', contentKind: COLLECTION, batch: 4, inDrawPool: true,
         description: '冻结全部可用路线并写完路线正文，需要时再做一次告白扫描。不能缩成单路线。',
         normalRequestEstimate: '首次 1 + A + C', prerequisites: [], supportsIncremental: true,
-        autoEligible: false, achievementMerged: false, unavailableReason: '暂不可自动生成',
+        autoEligible: true, achievementMerged: true, unavailableReason: '',
     }),
     defineModule({
         id: 'calendar', title: '两个人的日历', contentKind: HISTORICAL, batch: 1, inDrawPool: true,
         description: '生成或刷新本轮日历成果。通过校验并保存后才算完成。',
         normalRequestEstimate: '1', prerequisites: [], supportsIncremental: true,
-        autoEligible: false, achievementMerged: false, unavailableReason: '暂不可自动生成', isComplete: stepsComplete,
+        autoEligible: true, achievementMerged: true, unavailableReason: '', isComplete: stepsComplete,
     }),
     defineModule({
         id: 'relations', title: '人际庭园', contentKind: HISTORICAL, batch: 1, inDrawPool: true,
         description: '生成或刷新本轮关系成果。通过校验并保存后才算完成。',
         normalRequestEstimate: '1', prerequisites: [], supportsIncremental: true,
-        autoEligible: false, achievementMerged: false, unavailableReason: '暂不可自动生成', isComplete: stepsComplete,
+        autoEligible: true, achievementMerged: true, unavailableReason: '', isComplete: stepsComplete,
     }),
     defineModule({
         id: 'heart', title: '角色互动', contentKind: COLLECTION, batch: 5, inDrawPool: true,
         description: '必须先冻结基础对话、日常一格、萤火虫、后日谈和四季内容，并全部跑完后才算一份成果。',
         normalRequestEstimate: '约 8～13 以上', prerequisites: [], supportsIncremental: false,
-        autoEligible: false, achievementMerged: false, unavailableReason: '暂不可自动生成',
+        autoEligible: true, achievementMerged: true, unavailableReason: '',
     }),
     defineModule({
         id: 'butterfly', title: '蝴蝶效应', contentKind: COLLECTION, batch: 4, inDrawPool: true,
         description: '首次写完 MAIN、全部分支和 Ω。已有进度的增量只补本轮新增分歧，不把首次生成直接放进自动池。',
         normalRequestEstimate: '2 + B + P，约 3～11', prerequisites: [], supportsIncremental: true,
-        autoEligible: false, achievementMerged: false, unavailableReason: '暂不可自动生成',
+        autoEligible: true, achievementMerged: true, unavailableReason: '',
     }),
     defineModule({
         id: 'pastLives', title: '前世今生', contentKind: COLLECTION, batch: 4, inDrawPool: true,
         description: '每次只完成一篇：引子、全部卷宗、今生回响和落款。这是新篇，不是档案差量。',
         normalRequestEstimate: '2 + D + P，约 3～9', prerequisites: [], supportsIncremental: false,
-        autoEligible: false, achievementMerged: false, unavailableReason: '暂不可自动生成',
+        autoEligible: true, achievementMerged: true, unavailableReason: '',
     }),
     defineModule({
         id: 'themeSong', title: '角色印象曲', contentKind: COLLECTION, batch: 2, inDrawPool: true,
         description: '生成一首完整歌曲。当前自动入口还没有默认计划，完成前不能抽中。',
         normalRequestEstimate: '每首 1', prerequisites: [], supportsIncremental: false,
-        autoEligible: false, achievementMerged: false, unavailableReason: '暂不可自动生成',
+        autoEligible: true, achievementMerged: true, unavailableReason: '',
     }),
     defineModule({
         id: 'bedtime', title: '睡前故事', contentKind: COLLECTION, batch: 2, inDrawPool: true,
         description: '按冻结计划生成一章完整故事。必须事先写明是新故事还是指定故事的续章。',
         normalRequestEstimate: '每章 1', prerequisites: [], supportsIncremental: false,
-        autoEligible: false, achievementMerged: false, unavailableReason: '暂不可自动生成',
+        autoEligible: true, achievementMerged: true, unavailableReason: '',
     }),
     defineModule({
         id: 'timeEcho', title: '时空回响', contentKind: COLLECTION, batch: 2, inDrawPool: true,
         description: '生成一篇完整回声。当前还没有自动入口，补上之前不能抽中。',
         normalRequestEstimate: '每篇 1', prerequisites: [], supportsIncremental: false,
-        autoEligible: false, achievementMerged: false, unavailableReason: '暂不可自动生成',
+        autoEligible: true, achievementMerged: true, unavailableReason: '',
     }),
     defineModule({
         id: 'achievements', title: '成就', contentKind: COLLECTION, batch: 0, inDrawPool: false,
@@ -71069,7 +71335,10 @@ async function runAutoMemoryRound(input, io) {
         enabled: plan.enabled, floor: input.floor, interval: plan.intervalFloors, nextDueFloor: plan.nextDueFloor,
         modulePlan: snapshot.modulePlan, activeTicket: activeTicket(snapshot), inflightFloor: input.inflightFloor, seenFloor: input.seenFloor,
     });
-    if (decision.action === 'hold') return { action: 'hold', moduleRequest: false, sourceMemoryIds: decision.sourceMemoryIds };
+    if (decision.action === 'hold') {
+        if (typeof io.resumeModule === 'function') await io.resumeModule(snapshot);
+        return { action: 'hold', moduleRequest: false, sourceMemoryIds: decision.sourceMemoryIds };
+    }
     if (decision.action === 'reuse') return { action: 'reuse', moduleRequest: false, drawId: decision.ticketId };
     if (decision.action !== 'arm' && decision.action !== 'due') return { action: decision.action, moduleRequest: false };
     if (decision.action === 'arm') {
@@ -71095,7 +71364,9 @@ async function runAutoMemoryRound(input, io) {
     const selected = auto_memory_draw.pickWeighted(weighted, io.random);
     if (!selected || plan.excludedModuleIds.includes(selected)) return persistNoop(snapshot, input.floor, io, input.now, 'no-candidates');
     const drawId = io.nextId();
-    const prepared = await io.prepareModulePlan({ moduleId: selected, sourceMemoryIds: [...fresh], drawId });
+    const prepared = await io.prepareModulePlan({
+        moduleId: selected, sourceMemoryIds: [...fresh], drawId, chatId: input.chatId, archiveRevision: input.archiveRevision,
+    });
     if (!prepared) return persistNoop(snapshot, input.floor, io, input.now, 'no-module-plan');
     const modulePlan = auto_memory_plan.parseModulePlan({
         ...prepared, drawId, moduleId: selected, sourceMemoryIds: [...fresh],
@@ -71200,7 +71471,9 @@ function settleCombined({
     snapshot, moduleId, moduleSaved = false, packet = null, sourceMemoryIds = [], allowHistorical = false,
     inboxPlan = null, now = 0, revealId = '', achievementId = '',
 } = {}) {
-    if (!SINGLE_REQUEST.has(moduleId)) return { action: 'unsupported', requests: 0, extraAchievementRequest: false, reveal: null, snapshot };
+    if (!SINGLE_REQUEST.has(moduleId) && !['album', 'adv', 'room', 'items', 'phone', 'travel', 'ending', 'heart', 'butterfly', 'pastLives', 'themeSong', 'bedtime', 'timeEcho'].includes(moduleId)) {
+        return { action: 'unsupported', requests: 0, extraAchievementRequest: false, reveal: null, snapshot };
+    }
     if (moduleId === 'inbox' && inboxPlanLength(inboxPlan) === 0) {
         return { action: 'noop', requests: 0, extraAchievementRequest: false, reveal: null, snapshot };
     }
@@ -71241,11 +71514,276 @@ __m_autoMemory_combinedResult_js.settleCombined = settleCombined;
 __m_autoMemory_combinedResult_js.repairAchievementRequest = repairAchievementRequest;
 }
 
+function __init_autoMemory_moduleRunner_js() {
+// MODULE: autoMemory/moduleRunner.js
+const auto_memory_combined = __m_autoMemory_combinedResult_js;
+const auto_memory_plans = __m_autoMemory_modulePlans_js;
+const auto_memory_plan = __m_autoMemory_planStore_js;
+// 只补未完成的步骤。成功一步就保存；最后一步才带成就。成就失败不重跑正文。
+
+
+
+function replace(snapshot, modulePlan, now, extra = {}) {
+    const updatedAt = Number.isSafeInteger(now) && now > snapshot.plan.updatedAt ? now : snapshot.plan.updatedAt + 1;
+    return auto_memory_plan.parseAutoMemorySnapshot({
+        plan: auto_memory_plan.parseAutoMemoryPlan({
+            ...snapshot.plan,
+            ...extra.plan,
+            revision: snapshot.plan.revision + 1,
+            updatedAt,
+        }),
+        revealRecords: extra.revealRecords || snapshot.revealRecords,
+        drawTickets: extra.drawTickets || snapshot.drawTickets,
+        modulePlan,
+    });
+}
+
+function markStep(plan, stepId, status, recoverySlot) {
+    return auto_memory_plan.parseModulePlan({
+        ...plan,
+        steps: plan.steps.map(item => (item.id === stepId ? { ...item, status, recoverySlot: recoverySlot || item.recoverySlot || status } : item)),
+    });
+}
+
+function closeDraw(snapshot, now) {
+    const tickets = snapshot.drawTickets.map(ticket => (
+        ticket.id === snapshot.plan.activeDrawTicketId ? { ...ticket, status: 'completed' } : ticket
+    ));
+    return replace(snapshot, snapshot.modulePlan, now, { plan: { activeDrawTicketId: null }, drawTickets: tickets });
+}
+
+async function runPending(snapshot, io) {
+    const plan = snapshot?.modulePlan;
+    if (!plan) return { action: 'idle', snapshot };
+    const pending = plan.steps.filter(item => item.status !== 'completed');
+    if (!pending.length) return { action: 'complete', snapshot };
+    const batch = auto_memory_plans.concurrentSteps(pending);
+    const lastPending = pending[pending.length - 1];
+    const outcomes = await Promise.all(batch.map(async step => {
+        try {
+            const outcome = await io.execute({ step, plan, carryAchievement: step.id === lastPending.id && batch.length === 1 });
+            return { step, outcome };
+        } catch (error) {
+            return { step, error };
+        }
+    }));
+    let nextPlan = plan;
+    let expand = null;
+    let noop = false;
+    let addRepair = false;
+    for (const row of outcomes) {
+        if (row.error) {
+            nextPlan = markStep(nextPlan, row.step.id, 'failed', 'failed');
+            continue;
+        }
+        if (row.outcome?.noop === true) { noop = true; continue; }
+        if (row.outcome?.saved === false) {
+            nextPlan = markStep(nextPlan, row.step.id, 'failed', 'failed');
+            continue;
+        }
+        if (row.outcome?.expand) expand = row.outcome.expand;
+        if (row.outcome?.addRepair === true) addRepair = true;
+        nextPlan = markStep(nextPlan, row.step.id, 'completed', row.outcome?.recoverySlot || `${plan.moduleId}:${row.step.id}`);
+    }
+    if (expand) {
+        const expanded = auto_memory_plans.expandModulePlan(nextPlan, expand);
+        if (!expanded) {
+            const released = closeDraw(replace(snapshot, null, io.now), io.now);
+            await io.persist(released);
+            return { action: 'noop', snapshot: released };
+        }
+        const saved = replace(snapshot, expanded, io.now);
+        await io.persist(saved);
+        return { action: 'expanded', snapshot: saved };
+    }
+    if (noop && outcomes.every(row => row.outcome?.noop === true)) {
+        const released = closeDraw(replace(snapshot, null, io.now), io.now);
+        await io.persist(released);
+        return { action: 'noop', snapshot: released };
+    }
+    if (addRepair) nextPlan = auto_memory_plan.parseModulePlan(auto_memory_plans.addRoomRepair(nextPlan));
+    const saved = replace(snapshot, nextPlan, io.now);
+    await io.persist(saved);
+    if (nextPlan.steps.some(item => item.status !== 'completed')) return { action: 'saved', snapshot: saved };
+    const moduleItem = io.module || {};
+    const settled = auto_memory_combined.settleCombined({
+        snapshot: saved,
+        moduleId: nextPlan.moduleId,
+        moduleSaved: outcomes.every(row => !row.error && row.outcome?.saved !== false),
+        packet: outcomes.find(row => row.outcome?.achievement)?.outcome.achievement || null,
+        sourceMemoryIds: nextPlan.sourceMemoryIds,
+        allowHistorical: moduleItem.contentKind === 'historical',
+        now: io.now,
+    });
+    if (settled.action === 'noop' || settled.action === 'hold' || settled.action === 'unsupported') return { ...settled, snapshot: saved };
+    const closed = closeDraw(settled.snapshot, io.now);
+    await io.persist(closed);
+    return { ...settled, snapshot: closed, extraAchievementRequest: false };
+}
+
+__m_autoMemory_moduleRunner_js.runPending = runPending;
+}
+
+function __init_autoMemory_incrementalView_js() {
+// MODULE: autoMemory/incrementalView.js
+
+// 楼层里只放这一轮新增的段落。旧信、旧章节和旧日记留在插件页面。
+
+const LIST_KEYS = ['items', 'letters', 'entries', 'chapters', 'stories', 'songs', 'apps', 'events', 'routes', 'episodes', 'pages', 'nodes'];
+
+function listedIds(item) {
+    const rows = [];
+    if (Array.isArray(item?.sourceMemoryIds)) rows.push(...item.sourceMemoryIds);
+    if (typeof item?.sourceMemoryId === 'string') rows.push(item.sourceMemoryId);
+    return rows;
+}
+
+function matches(item, ids, createdAt) {
+    if (!item || typeof item !== 'object') return false;
+    if (listedIds(item).some(id => ids.has(id))) return true;
+    return Number.isFinite(item.createdAt) && createdAt > 0 && item.createdAt >= createdAt;
+}
+
+function trimStory(story, ids, createdAt) {
+    if (!Array.isArray(story?.chapters)) return matches(story, ids, createdAt) ? story : null;
+    const chapters = story.chapters.filter(chapter => matches(chapter, ids, createdAt) || matches(story, ids, createdAt));
+    if (!chapters.length) return null;
+    return { ...story, chapters };
+}
+
+function incrementalProjection(session, { sourceMemoryIds = [], createdAt = 0 } = {}) {
+    if (!session || typeof session !== 'object') return { kept: false, session: null };
+    const ids = new Set(Array.isArray(sourceMemoryIds) ? sourceMemoryIds : []);
+    const copy = structuredClone(session);
+    let kept = false;
+    for (const key of LIST_KEYS) {
+        if (!Array.isArray(copy[key])) continue;
+        copy[key] = key === 'stories'
+            ? copy[key].map(story => trimStory(story, ids, createdAt)).filter(Boolean)
+            : copy[key].filter(item => matches(item, ids, createdAt));
+        if (copy[key].length) kept = true;
+    }
+    copy.incrementalOnly = true;
+    return { kept, session: copy };
+}
+
+__m_autoMemory_incrementalView_js.incrementalProjection = incrementalProjection;
+}
+
+function __init_autoMemory_moduleHost_js() {
+// MODULE: autoMemory/moduleHost.js
+const archive_repository = __m_archive_repository_js;
+const core_cache = __m_core_cache_js;
+const generation_achievement = __m_generation_achievementCapture_js;
+const generation_client = __m_generation_client_js;
+const modes_inbox = __m_modes_inbox_js;
+const auto_memory_plans = __m_autoMemory_modulePlans_js;
+const auto_memory_registry = __m_autoMemory_moduleRegistry_js;
+const auto_memory_runner = __m_autoMemory_moduleRunner_js;
+// 把冻结好的步骤交给现有生成入口。一次唤醒只推进当前这一批，不重做已经记下的步骤。
+
+
+
+
+
+
+
+
+function loadSession(mode, context, memory) {
+    try { return core_cache.loadSession(mode, { context, memoryBank: memory, clone: true }); }
+    catch { return null; }
+}
+
+function roomReady(context, memory = archive_repository.getImportedMemory(context)) {
+    const session = loadSession('room', context, memory);
+    if (!session) return false;
+    if (session.archiveRevision && memory?.archiveRevision && session.archiveRevision !== memory.archiveRevision) return false;
+    return true;
+}
+
+function collectModuleFacts(moduleId, context, source = {}) {
+    const memory = archive_repository.getImportedMemory(context);
+    const facts = {
+        chatId: source.chatId, archiveRevision: source.archiveRevision,
+        sourceMemoryIds: source.sourceMemoryIds, drawId: source.drawId,
+    };
+    if (moduleId === 'inbox') {
+        try { facts.letters = modes_inbox.inboxPlan(memory, loadSession('inbox', context, memory), new Date()).length; }
+        catch { /* 信件计划读不到时留下目录步骤，不把空计划当成有信。 */ }
+    }
+    if (moduleId === 'items') facts.roomReady = roomReady(context, memory);
+    if (moduleId === 'album') {
+        const session = loadSession('album', context, memory);
+        if (session) facts.unlocked = (session.entries || []).filter(item => item?.unlocked !== false && !(item.comments || []).length).length;
+    }
+    if (moduleId === 'phone') {
+        const session = loadSession('phone', context, memory);
+        const apps = session?.apps || [];
+        facts.incremental = !!session;
+        if (apps.length) {
+            facts.appIds = apps.map((app, index) => app?.id || `app-${index + 1}`);
+            facts.updates = facts.appIds.length;
+        }
+    }
+    if (moduleId === 'butterfly') facts.phase = loadSession('butterfly', context, memory) ? 'increment' : 'first';
+    if (moduleId === 'bedtime') facts.bedtime = source.bedtime?.action === 'continue' ? source.bedtime : { action: 'new' };
+    if (moduleId === 'themeSong') facts.song = { subject: 'character' };
+    return facts;
+}
+
+function stepOptions(step, plan) {
+    const options = { automatic: true, background: true, autoMemoryStep: step.id };
+    if (step.kind === 'comments') options.secondStep = true;
+    if (step.kind === 'slots') options.fillRoomText = true;
+    if (step.kind === 'lines') options.fillItemsText = true;
+    if (step.kind === 'prose' && plan.moduleId === 'travel') options.fillTravelText = true;
+    if (step.kind === 'prose' && plan.moduleId === 'butterfly') options.fillButterflyText = true;
+    if (step.kind === 'app' || step.kind === 'catalog' && plan.moduleId === 'phone') options.continueDraft = step.kind === 'app';
+    if (plan.moduleId === 'bedtime' && step.id === 'bed-new') options.bedtimeOptions = { action: 'new' };
+    if (plan.moduleId === 'bedtime' && step.id.startsWith('cont-')) options.bedtimeOptions = { action: 'continue', storyId: step.id.slice(5) };
+    if (plan.moduleId === 'themeSong') options.songOptions = { subject: 'character', language: 'zh', voice: 'char' };
+    return options;
+}
+
+async function executeModuleStep({ step, plan, carryAchievement }, context) {
+    if (carryAchievement) generation_achievement.armAchievementCapture();
+    try {
+        const result = await generation_client.generateMode(plan.moduleId, stepOptions(step, plan));
+        const achievement = generation_achievement.finishAchievementCapture();
+        if (result?.status === 'noop') return { noop: true };
+        if (step.kind === 'catalog') {
+            const facts = collectModuleFacts(plan.moduleId, context, plan);
+            const built = auto_memory_plans.buildModulePlan(plan.moduleId, facts);
+            if (built && built.steps.length > 1) return { saved: true, recoverySlot: `${plan.moduleId}:${step.id}`, expand: facts, achievement };
+        }
+        return { saved: true, recoverySlot: `${plan.moduleId}:${step.id}`, achievement };
+    } catch (error) {
+        generation_achievement.finishAchievementCapture();
+        throw error;
+    }
+}
+
+async function runModulePlan(snapshot, persist, context, now = Date.now()) {
+    const item = auto_memory_registry.autoMemoryModuleById(snapshot?.modulePlan?.moduleId);
+    return auto_memory_runner.runPending(snapshot, {
+        now,
+        module: item,
+        persist,
+        execute: request => executeModuleStep(request, context),
+    });
+}
+
+__m_autoMemory_moduleHost_js.executeModuleStep = executeModuleStep;
+__m_autoMemory_moduleHost_js.runModulePlan = runModulePlan;
+__m_autoMemory_moduleHost_js.roomReady = roomReady;
+__m_autoMemory_moduleHost_js.collectModuleFacts = collectModuleFacts;
+}
+
 function __init_autoMemory_scheduler_js() {
 // MODULE: autoMemory/scheduler.js
 const archive_repository = __m_archive_repository_js;
-const auto_memory_combined = __m_autoMemory_combinedResult_js;
 const auto_memory_gate = __m_autoMemory_incrementalGate_js;
+const auto_memory_host = __m_autoMemory_moduleHost_js;
 const auto_memory_plan = __m_autoMemory_planStore_js;
 const auto_memory_registry = __m_autoMemory_moduleRegistry_js;
 const core_context = __m_core_context_js;
@@ -71283,12 +71821,8 @@ function nextDrawId() {
     return 'draw' + suffix;
 }
 
-function satisfiedPrerequisiteIds() {
-    const done = [];
-    for (const item of auto_memory_registry.listAutoMemoryModules()) {
-        if (item.isComplete() === true) done.push(item.id);
-    }
-    return done;
+function satisfiedPrerequisiteIds(context) {
+    return auto_memory_host.roomReady(context) ? ['room'] : [];
 }
 
 async function runHostRound() {
@@ -71313,9 +71847,20 @@ async function runHostRound() {
             if (!snapshot?.plan.enabled) return;
             const live = core_context.currentCharacterGuard();
             if (core_context.chatScopeKey(live) !== scope) return;
+            const persist = async next => {
+                const current = auto_memory_plan.readAutoMemoryMetadata(metadata);
+                auto_memory_plan.commitAutoMemoryMetadata(metadata, next, current ? current.plan.revision : 0);
+                await context.saveMetadataDebounced?.();
+                try {
+                    const chatId = core_context.getChatId(context);
+                    const recovery = await auto_memory_plan.readAutoMemoryRecovery(chatId);
+                    const expected = recovery ? recovery.revision : 0;
+                    if (next.plan.revision === expected + 1) await auto_memory_plan.writeAutoMemoryRecovery(chatId, next, expected);
+                } catch { /* 聊天记录已经写下。备份写失败时不改主档，也不补发请求。 */ }
+            };
             const result = await auto_memory_gate.runAutoMemoryRound({
                 snapshot, floor, memoryIds: collectMemoryIds(live), seenFloor: handledFloors.get(scope), now: Date.now(),
-                satisfiedPrerequisiteIds: satisfiedPrerequisiteIds(),
+                satisfiedPrerequisiteIds: satisfiedPrerequisiteIds(live),
                 archiveRevision: archive_repository.getImportedMemory(live)?.archiveRevision || 'current',
                 chatId: core_context.getChatId(live),
             }, {
@@ -71325,23 +71870,12 @@ async function runHostRound() {
                 nextId: nextDrawId,
                 prepareModulePlan: async request => {
                     const item = auto_memory_registry.autoMemoryModuleById(request.moduleId);
-                    return item?.plan?.() || null;
+                    const facts = auto_memory_host.collectModuleFacts(request.moduleId, core_context.currentCharacterGuard(), request);
+                    return item?.plan?.(facts) || null;
                 },
-                persist: async next => {
-                    const current = auto_memory_plan.readAutoMemoryMetadata(metadata);
-                    auto_memory_plan.commitAutoMemoryMetadata(metadata, next, current ? current.plan.revision : 0);
-                    await context.saveMetadataDebounced?.();
-                    try {
-                        const chatId = core_context.getChatId(context);
-                        const recovery = await auto_memory_plan.readAutoMemoryRecovery(chatId);
-                        const expected = recovery ? recovery.revision : 0;
-                        if (next.plan.revision === expected + 1) await auto_memory_plan.writeAutoMemoryRecovery(chatId, next, expected);
-                    } catch { /* 聊天记录已经写下。备份写失败时不改主档，也不补发请求。 */ }
-                },
-                startModule: async () => {
-                    // 四个单请求模块的成果合同已在 combinedResult。它们还不能自动抽取，所以这里不调用模型，也不结算成果。
-                    void auto_memory_combined.settleCombined;
-                },
+                persist,
+                startModule: next => auto_memory_host.runModulePlan(next, persist, core_context.currentCharacterGuard(), Date.now()),
+                resumeModule: current => auto_memory_host.runModulePlan(current, persist, core_context.currentCharacterGuard(), Date.now()),
             });
             if (result.action === 'arm' || result.action === 'noop' || result.action === 'drawn' || result.action === 'wait') {
                 handledFloors.set(scope, floor);
@@ -71553,9 +72087,8 @@ function wizardModuleCards(queueableIds = []) {
 }
 
 function createWizardDraft(plan = null) {
-    const openIds = wizardModuleCards().filter(item => item.inDrawPool && item.autoEligible).map(item => item.id);
     const excludedModuleIds = uniqueDrawIds(plan?.excludedModuleIds);
-    const preferredModuleIds = (plan ? uniqueDrawIds(plan.preferredModuleIds) : openIds).filter(id => !excludedModuleIds.includes(id));
+    const preferredModuleIds = uniqueDrawIds(plan?.preferredModuleIds).filter(id => !excludedModuleIds.includes(id));
     return {
         cardType: '',
         participantConfirmed: false,
@@ -72210,6 +72743,8 @@ __m_ui_autoMemoryWizard_js.openAutoMemoryWizard = openAutoMemoryWizard;
 function __init_ui_autoMemoryShell_js() {
 // MODULE: ui/autoMemoryShell.js
 const archive_repository = __m_archive_repository_js;
+const incremental_view = __m_autoMemory_incrementalView_js;
+const core_cache = __m_core_cache_js;
 const auto_memory_plan = __m_autoMemory_planStore_js;
 const auto_memory_registry = __m_autoMemory_moduleRegistry_js;
 const shell_state = __m_autoMemory_shellState_js;
@@ -72223,17 +72758,8 @@ const ui_reveal = __m_ui_memoryReveal_js;
 const ui_overlay = __m_ui_overlay_js;
 const ui_styles = __m_ui_styles_js;
 const ui_taskCenter = __m_ui_taskCenter_js;
+const runtimeState = __m_core_state_js.state;
 // 外置壳贴在角色楼层下面，点开才展开。档案没写完时不挂壳，也不显示建档进度。
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -72331,7 +72857,7 @@ function markup(view) {
     const pending = view.phase === 'reveal' ? '' : ' data-rmt-pending="1"';
     const status = view.progress ? `<p class="rmt-floor-status">${core_text.esc(view.detail)}</p>` : '';
     const body = view.showReveal
-        ? `<div class="rmt-floor-body" data-rmt-floor-body data-rmt-reveal="${core_text.esc(view.revealId)}" data-rmt-module="${core_text.esc(view.moduleId)}"></div>`
+        ? `<div class="rmt-floor-body" data-rmt-floor-body data-rmt-reveal="${core_text.esc(view.revealId)}" data-rmt-module="${core_text.esc(view.moduleId)}"></div><button type="button" class="rmt-btn" data-rmt-floor-plugin data-rmt-module="${core_text.esc(view.moduleId)}">以前的内容在插件里</button>`
         : `<p class="rmt-floor-note">${core_text.esc(view.detail)}</p>`;
     return `<div class="rmt-floor-external"${pending}>${status}<details data-rmt-floor-details><summary data-rmt-reveal="${core_text.esc(view.revealId)}"><b>${core_text.esc(view.title)}</b><small>${core_text.esc(view.detail)}</small></summary>${body}</details></div>`;
 }
@@ -72387,23 +72913,62 @@ function sync() {
     }
 }
 
+function incrementFor(moduleId, revealId) {
+    try {
+        const context = core_context.currentCharacterGuard();
+        const snapshot = readSnapshot(context);
+        const plan = snapshot?.modulePlan?.moduleId === moduleId ? snapshot.modulePlan : null;
+        const reveal = snapshot?.revealRecords?.find(row => row.id === revealId);
+        const memory = archive_repository.getImportedMemory(context);
+        const session = core_cache.loadSession(moduleId, { context, memoryBank: memory, clone: true });
+        return incremental_view.incrementalProjection(session, {
+            sourceMemoryIds: plan?.sourceMemoryIds || reveal?.sourceMemoryIds || [],
+            createdAt: reveal?.createdAt || 0,
+        });
+    } catch {
+        return { kept: false, session: null };
+    }
+}
+
 async function openInFloor(body) {
     const moduleId = body?.dataset?.rmtModule || '';
     const revealId = body?.dataset?.rmtReveal || '';
     const item = auto_memory_registry.autoMemoryModuleById(moduleId);
     if (!item || !body) return;
+    const increment = incrementFor(moduleId, revealId);
+    if (!increment.kept) {
+        body.innerHTML = '<p class="rmt-floor-note">这一轮没有单独的新增段落。以前的内容在插件里。</p>';
+        rememberOpened(revealId);
+        return;
+    }
     mirrorModuleCss();
     body.dataset.rmtFloorLive = '1';
+    const previousMode = runtimeState.activeMode;
+    const previousSession = runtimeState.activeSession;
     try {
-        await Promise.resolve(ui_overlay.openCachedOrGenerate(item.id, { workspaceRoute: item.id }));
+        await Promise.resolve(ui_overlay.openCachedOrGenerate(item.id, { workspaceRoute: item.id, incrementalSession: increment.session }));
     } catch (error) {
         console.warn('[HeartbeatMemories] floor detail skipped', core_text.safeErrorDiagnostic(error));
         globalThis.toastr?.error?.('这一页暂时没能打开。回忆还在，可以再点一次。', '心口顿了一下');
         return;
     } finally {
         delete body.dataset.rmtFloorLive;
+        runtimeState.activeMode = previousMode;
+        runtimeState.activeSession = previousSession;
     }
     rememberOpened(revealId);
+}
+
+function openPlugin(moduleId) {
+    const item = auto_memory_registry.autoMemoryModuleById(moduleId);
+    if (!item) return;
+    try {
+        ui_overlay.openOverlay();
+        ui_overlay.openCachedOrGenerate(item.id, { workspaceRoute: item.id });
+    } catch (error) {
+        console.warn('[HeartbeatMemories] plugin page skipped', core_text.safeErrorDiagnostic(error));
+        globalThis.toastr?.error?.('插件里的这一页暂时没能打开。已经记下的内容还在。', '心口顿了一下');
+    }
 }
 
 function rememberOpened(revealId) {
@@ -72426,6 +72991,14 @@ function openReveal(revealId) {
     if (!details) return;
     if (!details.open) details.open = true;
     else void openInFloor(details.querySelector('[data-rmt-floor-body]'));
+}
+
+function onClick(event) {
+    const plugin = event.target?.closest?.('[data-rmt-floor-plugin]');
+    if (!plugin) return;
+    event.preventDefault();
+    event.stopPropagation();
+    openPlugin(plugin.dataset.rmtModule || '');
 }
 
 function onToggle(event) {
@@ -72459,8 +73032,12 @@ function startAutoMemoryShell() {
         for (const type of events) source.on(type, type === types.CHAT_CHANGED ? onChat : listener);
         cleanup = () => { for (const type of events) source.off?.(type, type === types.CHAT_CHANGED ? onChat : listener); };
     }
+    document.addEventListener('click', onClick);
     document.addEventListener('toggle', onToggle, true);
-    const removeToggle = () => document.removeEventListener('toggle', onToggle, true);
+    const removeToggle = () => {
+        document.removeEventListener('click', onClick);
+        document.removeEventListener('toggle', onToggle, true);
+    };
     const previous = cleanup;
     cleanup = () => { previous?.(); removeToggle(); };
     timer = setInterval(sync, 2000);
@@ -72878,6 +73455,7 @@ __init_generation_requestTemperature_js();
 __init_generation_contentRegeneration_js();
 __init_ui_contentManager_js();
 __init_generation_generationContext_js();
+__init_generation_achievementCapture_js();
 __init_generation_generationRequest_js();
 __init_generation_generationSavedActions_js();
 __init_generation_generationModes_js();
@@ -72947,12 +73525,16 @@ __init_core_cacheGenerationDrafts_js();
 __init_core_cacheSessions_js();
 __init_core_cacheArchiveMemory_js();
 __init_core_cache_js();
+__init_autoMemory_modulePlans_js();
 __init_autoMemory_moduleRegistry_js();
 __init_autoMemory_planStore_js();
 __init_autoMemory_migrateLegacy_js();
 __init_autoMemory_draw_js();
 __init_autoMemory_incrementalGate_js();
 __init_autoMemory_combinedResult_js();
+__init_autoMemory_moduleRunner_js();
+__init_autoMemory_incrementalView_js();
+__init_autoMemory_moduleHost_js();
 __init_autoMemory_scheduler_js();
 __init_autoMemory_shellState_js();
 __init_autoMemory_wizardPlan_js();

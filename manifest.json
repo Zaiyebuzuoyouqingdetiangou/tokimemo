@@ -1,15 +1,15 @@
 {
   "display_name": "心迹回廊",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.99.37-r84.89-auto-memory-r6",
+  "js": "index.js?heartbeat=0.99.38-r84.90-auto-memory-r5",
   "author": "Toto",
-  "version": "0.99.37",
+  "version": "0.99.38",
   "auto_update": true,
   "minimum_client_version": "1.13.0",
   "hooks": {
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r84.89：档案没写完时，楼层下不挂壳。写完后贴在楼层下面，点开才展开对应回忆。成功和失败都会提示。自动抽签仍不发模块请求。",
+  "description": "r84.90：勾选过的模块可以按楼层自动生成。楼层下只展开这一轮新增的内容，以前的仍在插件里。空计划不生成成就。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }

@@ -1,7 +1,7 @@
 // 启用新计划后，由这一处按楼层做增量建档和抽签。没有新记忆或没有可抽模块时不发模块请求。
 import * as archive_repository from '../archive/repository.js';
-import * as auto_memory_combined from './combinedResult.js';
 import * as auto_memory_gate from './incrementalGate.js';
+import * as auto_memory_host from './moduleHost.js';
 import * as auto_memory_plan from './planStore.js';
 import * as auto_memory_registry from './moduleRegistry.js';
 import * as core_context from '../core/context.js';
@@ -33,12 +33,8 @@ function nextDrawId() {
     return 'draw' + suffix;
 }
 
-function satisfiedPrerequisiteIds() {
-    const done = [];
-    for (const item of auto_memory_registry.listAutoMemoryModules()) {
-        if (item.isComplete() === true) done.push(item.id);
-    }
-    return done;
+function satisfiedPrerequisiteIds(context) {
+    return auto_memory_host.roomReady(context) ? ['room'] : [];
 }
 
 async function runHostRound() {
@@ -63,9 +59,20 @@ async function runHostRound() {
             if (!snapshot?.plan.enabled) return;
             const live = core_context.currentCharacterGuard();
             if (core_context.chatScopeKey(live) !== scope) return;
+            const persist = async next => {
+                const current = auto_memory_plan.readAutoMemoryMetadata(metadata);
+                auto_memory_plan.commitAutoMemoryMetadata(metadata, next, current ? current.plan.revision : 0);
+                await context.saveMetadataDebounced?.();
+                try {
+                    const chatId = core_context.getChatId(context);
+                    const recovery = await auto_memory_plan.readAutoMemoryRecovery(chatId);
+                    const expected = recovery ? recovery.revision : 0;
+                    if (next.plan.revision === expected + 1) await auto_memory_plan.writeAutoMemoryRecovery(chatId, next, expected);
+                } catch { /* 聊天记录已经写下。备份写失败时不改主档，也不补发请求。 */ }
+            };
             const result = await auto_memory_gate.runAutoMemoryRound({
                 snapshot, floor, memoryIds: collectMemoryIds(live), seenFloor: handledFloors.get(scope), now: Date.now(),
-                satisfiedPrerequisiteIds: satisfiedPrerequisiteIds(),
+                satisfiedPrerequisiteIds: satisfiedPrerequisiteIds(live),
                 archiveRevision: archive_repository.getImportedMemory(live)?.archiveRevision || 'current',
                 chatId: core_context.getChatId(live),
             }, {
@@ -75,23 +82,12 @@ async function runHostRound() {
                 nextId: nextDrawId,
                 prepareModulePlan: async request => {
                     const item = auto_memory_registry.autoMemoryModuleById(request.moduleId);
-                    return item?.plan?.() || null;
+                    const facts = auto_memory_host.collectModuleFacts(request.moduleId, core_context.currentCharacterGuard(), request);
+                    return item?.plan?.(facts) || null;
                 },
-                persist: async next => {
-                    const current = auto_memory_plan.readAutoMemoryMetadata(metadata);
-                    auto_memory_plan.commitAutoMemoryMetadata(metadata, next, current ? current.plan.revision : 0);
-                    await context.saveMetadataDebounced?.();
-                    try {
-                        const chatId = core_context.getChatId(context);
-                        const recovery = await auto_memory_plan.readAutoMemoryRecovery(chatId);
-                        const expected = recovery ? recovery.revision : 0;
-                        if (next.plan.revision === expected + 1) await auto_memory_plan.writeAutoMemoryRecovery(chatId, next, expected);
-                    } catch { /* 聊天记录已经写下。备份写失败时不改主档，也不补发请求。 */ }
-                },
-                startModule: async () => {
-                    // 四个单请求模块的成果合同已在 combinedResult。它们还不能自动抽取，所以这里不调用模型，也不结算成果。
-                    void auto_memory_combined.settleCombined;
-                },
+                persist,
+                startModule: next => auto_memory_host.runModulePlan(next, persist, core_context.currentCharacterGuard(), Date.now()),
+                resumeModule: current => auto_memory_host.runModulePlan(current, persist, core_context.currentCharacterGuard(), Date.now()),
             });
             if (result.action === 'arm' || result.action === 'noop' || result.action === 'drawn' || result.action === 'wait') {
                 handledFloors.set(scope, floor);

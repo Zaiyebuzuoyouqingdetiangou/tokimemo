@@ -58,17 +58,17 @@ test('unadapted modules stay out of the draw and off by default', () => {
     assert.deepEqual(fresh.preferredModuleIds, []);
     assert.equal(fresh.intervalFloors, 5);
     const cards = wizard.wizardModuleCards();
-    assert.equal(cards.some(item => item.autoEligible), false);
-    assert.equal(cards.every(item => item.autoEligible || item.unavailableReason === '暂不可自动生成' || item.id === 'achievements'), true);
+    assert.equal(cards.some(item => item.autoEligible), true);
+    assert.equal(cards.find(item => item.id === 'achievements').autoEligible, false);
     const draft = wizard.createWizardDraft(storedPlan().plan);
     const chosen = wizard.preferenceUpdate(draft, 'album', 'prefer');
     assert.equal(chosen.error, '');
     assert.equal(chosen.preferredModuleIds.includes('album'), true);
-    assert.deepEqual(registry.autoMemoryRuntimeCandidates(chosen.preferredModuleIds, chosen.excludedModuleIds), []);
+    assert.deepEqual(registry.autoMemoryRuntimeCandidates(chosen.preferredModuleIds, chosen.excludedModuleIds), ['cabinet', 'calendar', 'album']);
     const blocked = wizard.preferenceUpdate(draft, 'achievements', 'prefer');
     assert.equal(blocked.error, 'unavailable');
     assert.equal(blocked.preferredModuleIds.includes('achievements'), false);
-    assert.deepEqual(registry.autoMemoryRuntimeCandidates(draft.preferredModuleIds, draft.excludedModuleIds), []);
+    assert.deepEqual(registry.autoMemoryRuntimeCandidates(draft.preferredModuleIds, draft.excludedModuleIds), ['cabinet', 'calendar']);
 });
 
 test('archive and module request counts stay separate', () => {
@@ -138,7 +138,7 @@ test('wizard completion round-trips and does not rewrite corrupt or old settings
     assert.equal(saved.plan.intervalFloors, 12);
     assert.deepEqual(saved.plan.preferredModuleIds, ['cabinet', 'album', 'calendar']);
     assert.deepEqual(saved.plan.excludedModuleIds, ['inbox']);
-    assert.deepEqual(registry.autoMemoryRuntimeCandidates(saved.plan.preferredModuleIds, saved.plan.excludedModuleIds), []);
+    assert.deepEqual(registry.autoMemoryRuntimeCandidates(saved.plan.preferredModuleIds, saved.plan.excludedModuleIds), ['cabinet', 'album', 'calendar']);
     plans.commitAutoMemoryMetadata(metadata, saved, 2);
     assert.equal(metadata.legacyAutoUpdate.album.enabled, true);
     assert.equal(metadata.heartbeatMemoriesArchiveV3.version, 3);

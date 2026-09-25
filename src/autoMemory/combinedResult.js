@@ -74,7 +74,9 @@ export function settleCombined({
     snapshot, moduleId, moduleSaved = false, packet = null, sourceMemoryIds = [], allowHistorical = false,
     inboxPlan = null, now = 0, revealId = '', achievementId = '',
 } = {}) {
-    if (!SINGLE_REQUEST.has(moduleId)) return { action: 'unsupported', requests: 0, extraAchievementRequest: false, reveal: null, snapshot };
+    if (!SINGLE_REQUEST.has(moduleId) && !['album', 'adv', 'room', 'items', 'phone', 'travel', 'ending', 'heart', 'butterfly', 'pastLives', 'themeSong', 'bedtime', 'timeEcho'].includes(moduleId)) {
+        return { action: 'unsupported', requests: 0, extraAchievementRequest: false, reveal: null, snapshot };
+    }
     if (moduleId === 'inbox' && inboxPlanLength(inboxPlan) === 0) {
         return { action: 'noop', requests: 0, extraAchievementRequest: false, reveal: null, snapshot };
     }

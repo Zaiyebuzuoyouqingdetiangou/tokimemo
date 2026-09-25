@@ -23,6 +23,7 @@ import * as core_worldPresentation from '../core/worldPresentation.js';
 import * as generation_jsonParser from './jsonParser.js';
 import * as generation_prompts from './prompts.js';
 import * as generation_jsonShapeExamples from './jsonShapeExamples.js';
+import * as generation_achievement from './achievementCapture.js';
 import * as generation_requestTemperature from './requestTemperature.js';
 import * as ui_overlay from '../ui/overlay.js';
 import { assertNoBannedGeneratedPhrase, assertPromptBudget, contentContextSources, enrichInputBudgetError, generatedPhrasePolicyText, generationContentContext, generationContentSettings, generationTrace, generationWorldInfoScanTerms, notifyInputPackingOnce } from './generationContext.js';
@@ -43,6 +44,7 @@ export async function requestValidatedSegment(prompt, status, options, validator
         throw core_requestCoordinator.createGenerationAbortError();
     }
     prompt = cg_policy.cgPromptForSegment(prompt, options);
+    if (generation_achievement.achievementCaptureArmed()) prompt += generation_achievement.achievementPromptSuffix();
     validator = cg_policy.cgSegmentValidator(validator, options);
     const parentTrace = generationTrace(options);
     const taskTrace = core_taskTrace.startTaskTrace('', options?.mode, parentTrace);
@@ -69,7 +71,7 @@ export async function requestValidatedSegment(prompt, status, options, validator
             ? '\n\n【本地校验反馈】' + (core_butterflyContract.butterflyValidationFeedback(lastError) || generation_recovery.generationRetryFeedbackText(lastError?.code, lastError) || core_text.normalizeText(lastError?.repairHint, 600) || (String(lastError.code || '').startsWith('RMT_ROOM_') ? core_text.safeErrorSummary(lastError) : '上一轮结构或完整度没有通过。')) + ' 请严格按原硬性要求重新输出完整 JSON，不要解释，也不要引用这条反馈作为内容。'
             : '';
         try {
-            const raw = await requestJson(`${prompt}${retryNote}`, `${status}${attempt ? `（重试 ${attempt}/${maxAttempts - 1}）` : ''}`, options);
+            const raw = generation_achievement.stripAchievementField(await requestJson(`${prompt}${retryNote}`, `${status}${attempt ? `（重试 ${attempt}/${maxAttempts - 1}）` : ''}`, options));
             core_taskTrace.beginStage(options.taskTrace, 'validate');
             const value = core_requestCoordinator.validateGeneratedSegment(raw, validator);
             core_taskTrace.markStage(options.taskTrace, 'validate');

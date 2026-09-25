@@ -81,7 +81,10 @@ export async function runAutoMemoryRound(input, io) {
         enabled: plan.enabled, floor: input.floor, interval: plan.intervalFloors, nextDueFloor: plan.nextDueFloor,
         modulePlan: snapshot.modulePlan, activeTicket: activeTicket(snapshot), inflightFloor: input.inflightFloor, seenFloor: input.seenFloor,
     });
-    if (decision.action === 'hold') return { action: 'hold', moduleRequest: false, sourceMemoryIds: decision.sourceMemoryIds };
+    if (decision.action === 'hold') {
+        if (typeof io.resumeModule === 'function') await io.resumeModule(snapshot);
+        return { action: 'hold', moduleRequest: false, sourceMemoryIds: decision.sourceMemoryIds };
+    }
     if (decision.action === 'reuse') return { action: 'reuse', moduleRequest: false, drawId: decision.ticketId };
     if (decision.action !== 'arm' && decision.action !== 'due') return { action: decision.action, moduleRequest: false };
     if (decision.action === 'arm') {
@@ -107,7 +110,9 @@ export async function runAutoMemoryRound(input, io) {
     const selected = auto_memory_draw.pickWeighted(weighted, io.random);
     if (!selected || plan.excludedModuleIds.includes(selected)) return persistNoop(snapshot, input.floor, io, input.now, 'no-candidates');
     const drawId = io.nextId();
-    const prepared = await io.prepareModulePlan({ moduleId: selected, sourceMemoryIds: [...fresh], drawId });
+    const prepared = await io.prepareModulePlan({
+        moduleId: selected, sourceMemoryIds: [...fresh], drawId, chatId: input.chatId, archiveRevision: input.archiveRevision,
+    });
     if (!prepared) return persistNoop(snapshot, input.floor, io, input.now, 'no-module-plan');
     const modulePlan = auto_memory_plan.parseModulePlan({
         ...prepared, drawId, moduleId: selected, sourceMemoryIds: [...fresh],

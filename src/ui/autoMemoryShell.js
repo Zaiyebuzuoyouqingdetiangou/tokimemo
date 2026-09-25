@@ -1,5 +1,8 @@
 // 外置壳贴在角色楼层下面，点开才展开。档案没写完时不挂壳，也不显示建档进度。
 import * as archive_repository from '../archive/repository.js';
+import * as incremental_view from '../autoMemory/incrementalView.js';
+import * as core_cache from '../core/cache.js';
+import { state as runtimeState } from '../core/state.js';
 import * as auto_memory_plan from '../autoMemory/planStore.js';
 import * as auto_memory_registry from '../autoMemory/moduleRegistry.js';
 import * as shell_state from '../autoMemory/shellState.js';
@@ -107,7 +110,7 @@ function markup(view) {
     const pending = view.phase === 'reveal' ? '' : ' data-rmt-pending="1"';
     const status = view.progress ? `<p class="rmt-floor-status">${core_text.esc(view.detail)}</p>` : '';
     const body = view.showReveal
-        ? `<div class="rmt-floor-body" data-rmt-floor-body data-rmt-reveal="${core_text.esc(view.revealId)}" data-rmt-module="${core_text.esc(view.moduleId)}"></div>`
+        ? `<div class="rmt-floor-body" data-rmt-floor-body data-rmt-reveal="${core_text.esc(view.revealId)}" data-rmt-module="${core_text.esc(view.moduleId)}"></div><button type="button" class="rmt-btn" data-rmt-floor-plugin data-rmt-module="${core_text.esc(view.moduleId)}">以前的内容在插件里</button>`
         : `<p class="rmt-floor-note">${core_text.esc(view.detail)}</p>`;
     return `<div class="rmt-floor-external"${pending}>${status}<details data-rmt-floor-details><summary data-rmt-reveal="${core_text.esc(view.revealId)}"><b>${core_text.esc(view.title)}</b><small>${core_text.esc(view.detail)}</small></summary>${body}</details></div>`;
 }
@@ -163,23 +166,62 @@ function sync() {
     }
 }
 
+function incrementFor(moduleId, revealId) {
+    try {
+        const context = core_context.currentCharacterGuard();
+        const snapshot = readSnapshot(context);
+        const plan = snapshot?.modulePlan?.moduleId === moduleId ? snapshot.modulePlan : null;
+        const reveal = snapshot?.revealRecords?.find(row => row.id === revealId);
+        const memory = archive_repository.getImportedMemory(context);
+        const session = core_cache.loadSession(moduleId, { context, memoryBank: memory, clone: true });
+        return incremental_view.incrementalProjection(session, {
+            sourceMemoryIds: plan?.sourceMemoryIds || reveal?.sourceMemoryIds || [],
+            createdAt: reveal?.createdAt || 0,
+        });
+    } catch {
+        return { kept: false, session: null };
+    }
+}
+
 async function openInFloor(body) {
     const moduleId = body?.dataset?.rmtModule || '';
     const revealId = body?.dataset?.rmtReveal || '';
     const item = auto_memory_registry.autoMemoryModuleById(moduleId);
     if (!item || !body) return;
+    const increment = incrementFor(moduleId, revealId);
+    if (!increment.kept) {
+        body.innerHTML = '<p class="rmt-floor-note">这一轮没有单独的新增段落。以前的内容在插件里。</p>';
+        rememberOpened(revealId);
+        return;
+    }
     mirrorModuleCss();
     body.dataset.rmtFloorLive = '1';
+    const previousMode = runtimeState.activeMode;
+    const previousSession = runtimeState.activeSession;
     try {
-        await Promise.resolve(ui_overlay.openCachedOrGenerate(item.id, { workspaceRoute: item.id }));
+        await Promise.resolve(ui_overlay.openCachedOrGenerate(item.id, { workspaceRoute: item.id, incrementalSession: increment.session }));
     } catch (error) {
         console.warn('[HeartbeatMemories] floor detail skipped', core_text.safeErrorDiagnostic(error));
         globalThis.toastr?.error?.('这一页暂时没能打开。回忆还在，可以再点一次。', '心口顿了一下');
         return;
     } finally {
         delete body.dataset.rmtFloorLive;
+        runtimeState.activeMode = previousMode;
+        runtimeState.activeSession = previousSession;
     }
     rememberOpened(revealId);
+}
+
+function openPlugin(moduleId) {
+    const item = auto_memory_registry.autoMemoryModuleById(moduleId);
+    if (!item) return;
+    try {
+        ui_overlay.openOverlay();
+        ui_overlay.openCachedOrGenerate(item.id, { workspaceRoute: item.id });
+    } catch (error) {
+        console.warn('[HeartbeatMemories] plugin page skipped', core_text.safeErrorDiagnostic(error));
+        globalThis.toastr?.error?.('插件里的这一页暂时没能打开。已经记下的内容还在。', '心口顿了一下');
+    }
 }
 
 function rememberOpened(revealId) {
@@ -202,6 +244,14 @@ function openReveal(revealId) {
     if (!details) return;
     if (!details.open) details.open = true;
     else void openInFloor(details.querySelector('[data-rmt-floor-body]'));
+}
+
+function onClick(event) {
+    const plugin = event.target?.closest?.('[data-rmt-floor-plugin]');
+    if (!plugin) return;
+    event.preventDefault();
+    event.stopPropagation();
+    openPlugin(plugin.dataset.rmtModule || '');
 }
 
 function onToggle(event) {
@@ -235,8 +285,12 @@ export function startAutoMemoryShell() {
         for (const type of events) source.on(type, type === types.CHAT_CHANGED ? onChat : listener);
         cleanup = () => { for (const type of events) source.off?.(type, type === types.CHAT_CHANGED ? onChat : listener); };
     }
+    document.addEventListener('click', onClick);
     document.addEventListener('toggle', onToggle, true);
-    const removeToggle = () => document.removeEventListener('toggle', onToggle, true);
+    const removeToggle = () => {
+        document.removeEventListener('click', onClick);
+        document.removeEventListener('toggle', onToggle, true);
+    };
     const previous = cleanup;
     cleanup = () => { previous?.(); removeToggle(); };
     timer = setInterval(sync, 2000);

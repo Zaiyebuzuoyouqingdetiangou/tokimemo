@@ -66,7 +66,8 @@ test('the same due floor does not import twice and an empty candidate pool does 
     const again = await gate.runAutoMemoryRound({ snapshot: due, floor: 10, memoryIds: ['M001'], inflightFloor: 10, now: 51 }, io);
     assert.equal(again.action, 'duplicate');
     const live = await gate.runAutoMemoryRound({
-        snapshot: due, floor: 10, memoryIds: [], now: 52, modules: registry.listAutoMemoryModules(),
+        snapshot: due, floor: 10, memoryIds: [], now: 52,
+        modules: registry.listAutoMemoryModules().map(item => ({ ...item, autoEligible: false })),
     }, { ...io, readMemoryIds: async () => ['M200'] });
     assert.equal(live.reason, 'no-candidates');
     assert.equal(calls.includes('start'), false);
