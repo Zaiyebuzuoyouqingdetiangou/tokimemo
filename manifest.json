@@ -1,15 +1,15 @@
 {
   "display_name": "心迹回廊",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.99.34-r84.86-auto-memory-r2",
+  "js": "index.js?heartbeat=0.99.35-r84.87-auto-memory-r3",
   "author": "Toto",
-  "version": "0.99.34",
+  "version": "0.99.35",
   "auto_update": true,
   "minimum_client_version": "1.13.0",
   "hooks": {
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r84.86：保存自动留忆计划后，这一段聊天会暂停原来的按模块自动更新。已有档案可以跳过建档，直接选择想自动跑的条目，并改单人卡或多人卡。自动抽签还没开始。",
+  "description": "r84.87：自动留忆到了间隔会做增量建档。还没有可抽的模块时，不会为模块发请求。改了人物名单后会问要不要重新建档；不重新建档就继续用旧档案。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }

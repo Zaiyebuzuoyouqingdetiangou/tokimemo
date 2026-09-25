@@ -48,11 +48,24 @@ export function noteLegacySchedulerSource(gate, scope = '') {
     if (notedSchedulerSource === key) return;
     notedSchedulerSource = key;
     const text = gate?.source === 'paused-new-plan'
-        ? '这一段聊天已启用自动留忆计划，原来的按模块自动更新已暂停。自动抽签尚未开始。'
+        ? '这一段聊天已启用自动留忆计划，原来的按模块自动更新已暂停。到了间隔会检查新记忆；还没有可抽模块时，不会为模块发请求。'
         : gate?.source === 'paused-corrupt'
             ? '这一段聊天的自动留忆记录无法读取，原来的按模块自动更新已暂停，记录没有改写。'
             : '这一段聊天使用原来的按模块自动更新。';
     console.info('[HeartbeatMemories] ' + text);
+}
+
+// 新计划到了间隔，或还没记下起点时，才把运行时拉起来。损坏记录不拉，也不改写。
+export function autoMemoryRuntimeWake(chatMetadata, floor) {
+    if (!Number.isSafeInteger(floor) || floor < 0) return false;
+    try {
+        const snapshot = auto_memory_plan.readAutoMemoryMetadata(chatMetadata);
+        if (snapshot?.plan.enabled !== true) return false;
+        const next = snapshot.plan.nextDueFloor;
+        return next == null || floor >= next;
+    } catch {
+        return false;
+    }
 }
 
 // One scheduler owns eligibility, attempt dedupe and success checkpoints. No timers or APIs here.

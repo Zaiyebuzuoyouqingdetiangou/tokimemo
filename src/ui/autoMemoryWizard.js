@@ -108,7 +108,7 @@ function preferenceHtml() {
     }).join('');
     const report = apiReport();
     const api = report.ready ? '' : `<p>${core_text.esc(report.message)}</p><p>${core_text.esc(report.action)}</p>`;
-    return `${api}${cardBar()}<p>已有档案时不必重新建档。勾选的是以后想自动跑的条目；还没适配的不会进入抽签。</p>${choices}`;
+    return `${api}${cardBar()}<p>选人和原来一样，从世界书里的人设条目勾选。已经有档案时，改了人物会先问要不要按新名单和当前剧情重新建档；不重新建档就继续用旧档案。</p><p>勾选的是以后想自动跑的条目；还没适配的不会进入抽签。</p>${choices}`;
 }
 
 function previewHtml(context) {
@@ -124,7 +124,7 @@ function pageHtml(context) {
     const report = apiReport();
     if (name === 'api') return `<h2>API 就绪检查</h2><p>${core_text.esc(report.message)}</p>${report.action ? `<p>${core_text.esc(report.action)}</p>` : ''}`;
     if (name === 'card') return `<h2>单人卡，还是一张卡里的多个人？</h2><p>原生群聊暂不支持。这里沿用现有的人物选择。</p><p>${draft.cardType === 'single' ? '已选单人卡。' : draft.cardType === 'multiple' ? '已选一张卡内多人。' : '还没有选择。'}</p><button type="button" class="rmt-btn" data-rmt-auto-memory-card="single">单人卡</button><button type="button" class="rmt-btn" data-rmt-auto-memory-card="multiple">一张卡内多人</button>`;
-    if (name === 'people') return `<h2>人物名单</h2>${draft.cardType === 'single' ? '<p>单人卡沿用原来的建档方式，不用另选名单。</p>' : `<p>${draft.participantConfirmed ? `已选 ${draft.participantIds.length} 人。` : '请从现有人物选择里确认名单。'}</p><button type="button" class="rmt-btn" data-rmt-auto-memory-people>选择人物</button>`}`;
+    if (name === 'people') return `<h2>人物名单</h2>${draft.cardType === 'single' ? '<p>单人卡沿用原来的建档方式，不用另选名单。</p>' : `<p>从世界书的人设条目里选，和原来的人物选择一样。确认名单不请求模型。</p><p>${draft.participantConfirmed ? `已选 ${draft.participantIds.length} 人。` : '请先确认名单。'}</p><button type="button" class="rmt-btn" data-rmt-auto-memory-people>选择人物</button>`}`;
     if (name === 'sources') {
         const scan = sourceScan(context);
         const names = scan.sources.length ? scan.sources.map(item => core_text.esc(item.label)).join('、') : '没有检测到外部来源';
@@ -132,7 +132,7 @@ function pageHtml(context) {
     }
     if (name === 'modules') return `<h2>模块介绍</h2><p>性质和正常请求范围如下。未适配的不能自动生成。</p>${moduleHtml()}`;
     if (name === 'preference') return `<h2>选择想自动跑的条目</h2>${preferenceHtml()}`;
-    if (name === 'interval') return `<h2>自动间隔</h2><p>默认 5 楼，只能填 1 到 1000 的整数。自动抽签还没开始，这个数字会先保存下来。</p><label>每 <input type="number" min="1" max="1000" step="1" data-rmt-auto-memory-interval value="${draft.intervalFloors}"> 楼</label><p data-rmt-auto-memory-interval-error role="alert"></p>`;
+    if (name === 'interval') return `<h2>自动间隔</h2><p>默认 5 楼，只能填 1 到 1000 的整数。到了这个间隔会检查有没有新记忆。还没有可抽的模块时，不会为模块发请求。</p><label>每 <input type="number" min="1" max="1000" step="1" data-rmt-auto-memory-interval value="${draft.intervalFloors}"> 楼</label><p data-rmt-auto-memory-interval-error role="alert"></p>`;
     if (name === 'archive') return `<h2>建档预计</h2>${previewHtml(context)}<label class="rmt-settings-check"><input type="checkbox" data-rmt-auto-memory-archive ${draft.doArchive ? 'checked' : ''}><span>这次整理档案</span></label>`;
     if (name === 'first') {
         const choices = cards().filter(item => item.queueable).map(item => `<label class="rmt-settings-check"><input type="checkbox" data-rmt-auto-memory-first="${core_text.esc(item.id)}" ${draft.firstModuleIds.includes(item.id) ? 'checked' : ''} ${draft.skipFirst || draft.archiveOnly ? 'disabled' : ''}><span>${core_text.esc(item.title)}：${core_text.esc(item.normalRequestEstimate)}</span></label>`).join('');
@@ -151,7 +151,7 @@ function render(context) {
     ui_overlay.setManageVisible(false);
     const resume = showingSummary ? wizard_plan.wizardResumeView(auto_memory_plan.readAutoMemoryMetadata(context.chatMetadata), archive_repository.getCurrentArchiveImportRecoverySummary(context)) : { completed: false };
     const inner = resume.completed
-        ? `<h2>向导已经保存</h2><p>间隔 ${resume.intervalFloors} 楼。记下 ${resume.preferredModuleIds.length} 项，其中已开放 ${cards().filter(item => item.autoEligible && resume.preferredModuleIds.includes(item.id)).length} 项，排除 ${resume.excludedModuleIds.length} 项。尚未适配的模块不会进入抽签。</p><p>${resume.archiveStillRunning ? '建档还在原来的整理流程里，可以关闭窗口继续聊天。' : '刷新后这份设置还在。任务中心的队列不会在刷新后自动重发。'}</p><p>自动抽签还没开始。这一段聊天会暂停原来的按模块自动更新；设置里可以恢复那些开关。</p><button type="button" class="rmt-btn" data-rmt-auto-memory-edit>重新设置</button>`
+        ? `<h2>向导已经保存</h2><p>间隔 ${resume.intervalFloors} 楼。记下 ${resume.preferredModuleIds.length} 项，其中已开放 ${cards().filter(item => item.autoEligible && resume.preferredModuleIds.includes(item.id)).length} 项，排除 ${resume.excludedModuleIds.length} 项。尚未适配的模块不会进入抽签，也不会发模块请求。</p><p>${resume.archiveStillRunning ? '建档还在原来的整理流程里，可以关闭窗口继续聊天。' : '刷新后这份设置还在。任务中心的队列不会在刷新后自动重发。'}</p><p>到了间隔会检查新记忆。这一段聊天会暂停原来的按模块自动更新；设置里可以恢复那些开关。</p><button type="button" class="rmt-btn" data-rmt-auto-memory-edit>重新设置</button>`
         : `${pageHtml(context)}<p><button type="button" class="rmt-btn" data-rmt-auto-memory-prev ${step === 0 ? 'disabled' : ''}>上一步</button><button type="button" class="rmt-btn" data-rmt-auto-memory-next ${step >= wizard_plan.WIZARD_STEPS.length - 1 ? 'disabled' : ''}>下一步</button></p>`;
     body.innerHTML = `<main class="rmt-home" data-rmt-auto-memory-root><p>第 ${showingSummary ? wizard_plan.WIZARD_STEPS.length : step + 1} / ${wizard_plan.WIZARD_STEPS.length} 步</p>${inner}<p><button type="button" class="rmt-btn" data-rmt-auto-memory-home>返回设置</button><button type="button" class="rmt-btn" data-rmt-auto-memory-close>关闭窗口，任务继续</button></p><p data-rmt-auto-memory-status role="status"></p></main>`;
     if (body.dataset.rmtAutoMemoryBound !== '1') {
@@ -160,6 +160,19 @@ function render(context) {
         body.addEventListener('change', onChange);
     }
     return true;
+}
+
+function openPeople(context) {
+    void participant_picker.showParticipantPicker({ context, requireSelection: true, confirmLabel: '确认人物',
+        onConfirm: (nextRoster, expectedRevision) => {
+            roster = nextRoster; rosterRevision = expectedRevision;
+            draft.cardType = 'multiple';
+            draft.cardChoiceDirty = true;
+            draft.participantConfirmed = true;
+            draft.participantIds = Array.isArray(nextRoster?.selectedIds) ? nextRoster.selectedIds.filter(id => typeof id === 'string') : [];
+            if (sameChat(context)) render(context);
+        },
+    }).catch(error => status(core_text.safeErrorSummary(error)));
 }
 
 function status(message) {
@@ -251,7 +264,9 @@ async function saveAndStart(context) {
     } catch { status('聊天里的设置已保存。本机备份没有写上，没有用备份覆盖它。'); }
     let archiveStarted = false;
     let archiveNote = '';
-    if (draft.cardChoiceDirty || draft.doArchive) {
+    const cardDirty = draft.cardChoiceDirty === true;
+    const archivePresent = !!archive_repository.getImportedMemory(context);
+    if (cardDirty || draft.doArchive) {
         try {
             if (draft.cardType === 'multiple') {
                 if (!roster) { status('请先确认人物名单。已保存的间隔和偏好还在。'); return; }
@@ -264,10 +279,32 @@ async function saveAndStart(context) {
             draft.cardChoiceDirty = false;
         } catch (error) { status(core_text.safeErrorSummary(error)); return; }
     }
-    if (draft.doArchive) {
+    const asked = wizard_plan.archiveRebuildChoice({ cardChoiceDirty: cardDirty, archivePresent });
+    let rebuild = false;
+    if (asked === 'ask') {
+        const settings = core_settings.getPluginSettings(context);
+        const detected = archive_repository.externalMemorySourceSummary(context);
+        const needsScan = settings.useCurrentChatExternalMemory && detected.length && !archive_repository.getMemoryPreflight(context);
+        if (needsScan) archiveNote = '重新建档前要先扫描当前窗口的记忆或摘要。这次没有建档，旧档案还在。';
+        else rebuild = ui_overlay.confirmExplicitAction(
+            '按新人物重新建档',
+            '人物或卡片类型改过了。重新建档会按当前剧情和这份名单重做档案，旧档案会被换掉。取消就继续用现在这份旧档案，不会为此发请求。',
+            { destructive: true },
+        ) === true;
+    }
+    const action = wizard_plan.archiveActionAfterChoice({ asked, rebuild, doArchive: draft.doArchive });
+    if (action === 'rebuild') {
+        const participantRoster = draft.cardType === 'multiple' ? roster : null;
+        archiveStarted = true;
+        void archive_repository.importCurrentChatMemory({ fullRebuild: true, participantRoster }).catch(error => {
+            console.error('[HeartbeatMemories] auto memory rebuild failed', core_text.safeErrorDiagnostic(error));
+            globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心迹回廊');
+        });
+        archiveNote = '已按新名单开始重新建档，旧档案会在重建完成后被换掉。可以关闭窗口继续聊天。';
+    } else if (action === 'create') {
         archiveStarted = ui_overlay.requestCurrentArchiveImport({ cardTypeConfirmed: true, participantRoster: draft.cardType === 'multiple' ? roster : null }) === true;
         if (!archiveStarted) archiveNote = '建档没有开始。已保存的间隔和偏好还在。';
-    }
+    } else if (asked === 'ask' && !archiveNote) archiveNote = '继续使用旧档案，这次没有重新建档。';
     const routes = wizard_plan.firstQueueRoutes(draft, queueableIds());
     const queued = routes.length && (archiveStarted || !draft.doArchive) ? ui_taskCenter.enqueueSelectedModes(routes) : 0;
     showingSummary = true;
@@ -338,21 +375,10 @@ function onClick(event) {
         draft.participantIds = card === 'single' ? [] : draft.participantIds;
         if (card === 'single') roster = null;
         render(context);
+        if (card === 'multiple') openPeople(context);
         return;
     }
-    if (event.target.closest?.('[data-rmt-auto-memory-people]')) {
-        void participant_picker.showParticipantPicker({ context, requireSelection: true, confirmLabel: '确认人物',
-            onConfirm: (nextRoster, expectedRevision) => {
-                roster = nextRoster; rosterRevision = expectedRevision;
-                draft.cardType = 'multiple';
-                draft.cardChoiceDirty = true;
-                draft.participantConfirmed = true;
-                draft.participantIds = Array.isArray(nextRoster?.selectedIds) ? nextRoster.selectedIds.filter(id => typeof id === 'string') : [];
-                if (sameChat(context)) render(context);
-            },
-        }).catch(error => status(core_text.safeErrorSummary(error)));
-        return;
-    }
+    if (event.target.closest?.('[data-rmt-auto-memory-people]')) { openPeople(context); return; }
     if (event.target.closest?.('[data-rmt-auto-memory-save]')) void saveAndStart(context);
 }
 

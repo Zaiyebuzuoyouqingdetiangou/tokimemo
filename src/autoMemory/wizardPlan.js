@@ -147,6 +147,16 @@ export function wizardEntry({ archivePresent = false, cardType = '', apiReady = 
     };
 }
 
+// 改过人物且已有档案时先问。同意才重建；不同意就留着旧档案。
+export function archiveRebuildChoice({ cardChoiceDirty = false, archivePresent = false } = {}) {
+    return cardChoiceDirty === true && archivePresent === true ? 'ask' : 'keep';
+}
+
+export function archiveActionAfterChoice({ asked = 'keep', rebuild = false, doArchive = false } = {}) {
+    if (asked === 'ask') return rebuild === true ? 'rebuild' : 'keep';
+    return doArchive === true ? 'create' : 'keep';
+}
+
 export function disableAutoMemoryPlan(chatMetadata, now = 0) {
     const existing = auto_memory_plan.readAutoMemoryMetadata(chatMetadata);
     if (!existing?.plan.enabled) return { changed: false, snapshot: existing };

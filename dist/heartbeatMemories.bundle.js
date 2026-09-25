@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
-// Source modules: 244
-// Source SHA-256: dbd5b4530bbf94b4fef004e605f16051932f1a9eddd2e00e6c13fd1025a5bc58
+// Source modules: 247
+// Source SHA-256: e32f533a65fe47ff1771cfbf8c6aabda959c061d66b22d32b065d049f179f61c
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -32,9 +32,12 @@ const __m_archive_sourceLedger_js = Object.create(null);
 const __m_archive_sourceReadGuard_js = Object.create(null);
 const __m_archive_storyScenes_js = Object.create(null);
 const __m_archive_worldInfoSources_js = Object.create(null);
+const __m_autoMemory_draw_js = Object.create(null);
+const __m_autoMemory_incrementalGate_js = Object.create(null);
 const __m_autoMemory_migrateLegacy_js = Object.create(null);
 const __m_autoMemory_moduleRegistry_js = Object.create(null);
 const __m_autoMemory_planStore_js = Object.create(null);
+const __m_autoMemory_scheduler_js = Object.create(null);
 const __m_autoMemory_wizardPlan_js = Object.create(null);
 const __m_core_advancedGeneration_js = Object.create(null);
 const __m_core_archiveCover_js = Object.create(null);
@@ -4095,11 +4098,24 @@ function noteLegacySchedulerSource(gate, scope = '') {
     if (notedSchedulerSource === key) return;
     notedSchedulerSource = key;
     const text = gate?.source === 'paused-new-plan'
-        ? '这一段聊天已启用自动留忆计划，原来的按模块自动更新已暂停。自动抽签尚未开始。'
+        ? '这一段聊天已启用自动留忆计划，原来的按模块自动更新已暂停。到了间隔会检查新记忆；还没有可抽模块时，不会为模块发请求。'
         : gate?.source === 'paused-corrupt'
             ? '这一段聊天的自动留忆记录无法读取，原来的按模块自动更新已暂停，记录没有改写。'
             : '这一段聊天使用原来的按模块自动更新。';
     console.info('[HeartbeatMemories] ' + text);
+}
+
+// 新计划到了间隔，或还没记下起点时，才把运行时拉起来。损坏记录不拉，也不改写。
+function autoMemoryRuntimeWake(chatMetadata, floor) {
+    if (!Number.isSafeInteger(floor) || floor < 0) return false;
+    try {
+        const snapshot = auto_memory_plan.readAutoMemoryMetadata(chatMetadata);
+        if (snapshot?.plan.enabled !== true) return false;
+        const next = snapshot.plan.nextDueFloor;
+        return next == null || floor >= next;
+    } catch {
+        return false;
+    }
 }
 
 // One scheduler owns eligibility, attempt dedupe and success checkpoints. No timers or APIs here.
@@ -4190,6 +4206,7 @@ __m_core_autoUpdatePolicy_js.normalizeAutoUpdateCheckpoint = normalizeAutoUpdate
 __m_core_autoUpdatePolicy_js.normalizeAutoUpdates = normalizeAutoUpdates;
 __m_core_autoUpdatePolicy_js.readLegacySchedulerGate = readLegacySchedulerGate;
 __m_core_autoUpdatePolicy_js.noteLegacySchedulerSource = noteLegacySchedulerSource;
+__m_core_autoUpdatePolicy_js.autoMemoryRuntimeWake = autoMemoryRuntimeWake;
 __m_core_autoUpdatePolicy_js.createFloorScheduler = createFloorScheduler;
 __m_core_autoUpdatePolicy_js.AUTO_UPDATE_MODES = AUTO_UPDATE_MODES;
 __m_core_autoUpdatePolicy_js.autoUpdateStorageKey = autoUpdateStorageKey;
@@ -29672,7 +29689,7 @@ function refreshGenerationSettingsUi() {
     const gateNote = panel.querySelector('[data-rmt-auto-memory-gate]');
     if (gateNote) gateNote.textContent = !paused ? '' : gate.source === 'paused-corrupt'
         ? '自动留忆记录无法读取，旧自动更新已暂停，没有改写。'
-        : '这一段聊天已保存自动留忆计划，上面的按模块开关已暂停。自动抽签还没开始。';
+        : '这一段聊天已保存自动留忆计划，上面的按模块开关已暂停。到了间隔会检查新记忆；还没有可抽的模块时，不会为模块发请求。';
     const restore = panel.querySelector('[data-rmt-auto-memory-restore]');
     if (restore) restore.hidden = gate.source !== 'paused-new-plan';
     const autoWarning = panel.querySelector('[data-rmt-auto-warning]');
@@ -30769,7 +30786,7 @@ function renderSettingsPanelMarkup(panel) {
           <p>只在已有档案的当前窗口运行。每条聊天消息算一楼，编辑不加楼；开启后从当前楼数起计。</p>
           <p>“档案同步”收录新聊天；其他模块使用已归档记忆，不改旧内容。会调用独立 API。</p>
           <button type="button" class="menu_button rmt-settings-wide" data-rmt-auto-memory-wizard>打开自动留忆向导</button>
-          <small>已有档案时，向导会跳过建档，直接选择想自动跑的条目，并显示当前是单人卡还是一张卡内多人。保存后这一段聊天会暂停下面的按模块开关。自动抽签还没开始。</small>
+          <small>已有档案时，向导会跳过建档，直接选择想自动跑的条目，并显示当前是单人卡还是一张卡内多人。改人物后会问要不要重新建档。保存后这一段聊天会暂停下面的按模块开关。到了间隔会检查新记忆；还没有可抽的模块时，不会为模块发请求。</small>
           <p data-rmt-auto-memory-gate role="status"></p>
           <button type="button" class="menu_button rmt-settings-wide" data-rmt-auto-memory-restore hidden>恢复原来的按模块自动更新</button>
           <div class="rmt-auto-rules">${core_autoUpdatePolicy.AUTO_UPDATE_MODES.map(mode => `<div class="rmt-auto-rule"><label><input type="checkbox" data-rmt-auto-enabled="${mode}"> ${core_text.esc(mode === 'archive' ? '档案同步' : core_constants.MODE_LABEL[mode])}</label><label>每 <input type="number" min="1" max="1000" step="1" data-rmt-auto-every="${mode}" aria-label="${core_text.esc(mode === 'archive' ? '档案同步' : core_constants.MODE_LABEL[mode])}间隔楼层"> 楼</label><small data-rmt-auto-status="${mode}" role="status"></small></div>`).join('')}</div>
@@ -70879,6 +70896,353 @@ function migrateLegacyAutoPreferences(existingPlanRaw, legacyAutoUpdates, now = 
 __m_autoMemory_migrateLegacy_js.migrateLegacyAutoPreferences = migrateLegacyAutoPreferences;
 }
 
+function __init_autoMemory_draw_js() {
+// MODULE: autoMemory/draw.js
+
+// 抽签候选与权重。不读聊天，不发请求。
+// 近期命中只降权，不永久排除。长期没抽中才加权重。
+
+function eligibleDrawIds(modules, { preferredModuleIds = [], excludedModuleIds = [], satisfiedPrerequisiteIds = [] } = {}) {
+    const excluded = new Set(Array.isArray(excludedModuleIds) ? excludedModuleIds : []);
+    const satisfied = new Set(Array.isArray(satisfiedPrerequisiteIds) ? satisfiedPrerequisiteIds : []);
+    const byId = new Map((Array.isArray(modules) ? modules : []).map(item => [item?.id, item]));
+    const seen = new Set();
+    const selected = [];
+    for (const id of Array.isArray(preferredModuleIds) ? preferredModuleIds : []) {
+        const item = byId.get(id);
+        if (!item || seen.has(id) || excluded.has(id)) continue;
+        if (item.inDrawPool !== true || item.autoEligible !== true || item.achievementMerged !== true) continue;
+        const needs = Array.isArray(item.prerequisites) ? item.prerequisites : [];
+        if (needs.some(need => !satisfied.has(need))) continue;
+        seen.add(id);
+        selected.push(id);
+    }
+    return selected;
+}
+
+function weightCandidates(ids, tickets = []) {
+    const history = Array.isArray(tickets) ? tickets : [];
+    const recent = history.slice(-3);
+    return (Array.isArray(ids) ? ids : []).map(id => {
+        const recentHits = recent.filter(ticket => ticket?.selectedModuleId === id).length;
+        const eligible = history.filter(ticket => (Array.isArray(ticket?.candidates) ? ticket.candidates : []).some(item => item?.id === id));
+        const misses = eligible.filter(ticket => ticket?.selectedModuleId !== id).length;
+        const weight = Math.max(1, Math.floor(100 / (1 + recentHits))) + Math.min(misses, 20) * 25;
+        return { id, weight };
+    });
+}
+
+function pickWeighted(weighted, random) {
+    const rows = Array.isArray(weighted) ? weighted.filter(item => item && item.weight > 0) : [];
+    const total = rows.reduce((sum, item) => sum + item.weight, 0);
+    if (!rows.length || total < 1) return '';
+    const roll = typeof random === 'function' ? Number(random()) : Number(random);
+    const unit = Number.isFinite(roll) ? Math.min(Math.max(roll, 0), 0.999999999999) : 0;
+    let cursor = Math.floor(unit * total);
+    if (cursor >= total) cursor = total - 1;
+    for (const item of rows) {
+        if (cursor < item.weight) return item.id;
+        cursor -= item.weight;
+    }
+    return rows[rows.length - 1].id;
+}
+
+function newMemoryIds(before, after) {
+    const seen = new Set(Array.isArray(before) ? before : []);
+    const out = [];
+    for (const id of Array.isArray(after) ? after : []) {
+        if (typeof id !== 'string' || !/^M\d{3,6}$/.test(id) || seen.has(id) || out.includes(id)) continue;
+        out.push(id);
+    }
+    return out;
+}
+
+// 增量建档沿用现有导入。聊天和外部摘要按各自的分段上限拆开，这里不改成单次请求。
+function incrementalImportOptions() {
+    return { automatic: true };
+}
+
+__m_autoMemory_draw_js.eligibleDrawIds = eligibleDrawIds;
+__m_autoMemory_draw_js.weightCandidates = weightCandidates;
+__m_autoMemory_draw_js.pickWeighted = pickWeighted;
+__m_autoMemory_draw_js.newMemoryIds = newMemoryIds;
+__m_autoMemory_draw_js.incrementalImportOptions = incrementalImportOptions;
+}
+
+function __init_autoMemory_incrementalGate_js() {
+// MODULE: autoMemory/incrementalGate.js
+const auto_memory_draw = __m_autoMemory_draw_js;
+const auto_memory_registry = __m_autoMemory_moduleRegistry_js;
+const auto_memory_plan = __m_autoMemory_planStore_js;
+// 楼层闸门与一轮抽签。真正的导入和保存由调用方注入，方便测试时不碰酒馆。
+
+
+
+function modulePlanOpen(modulePlan) {
+    const steps = Array.isArray(modulePlan?.steps) ? modulePlan.steps : [];
+    return steps.some(step => step && step.status !== 'completed');
+}
+
+function floorDecision({ enabled = false, floor = 0, interval = 0, nextDueFloor = null, modulePlan = null, activeTicket = null, inflightFloor = null, seenFloor = null } = {}) {
+    if (enabled !== true) return { action: 'idle' };
+    if (modulePlanOpen(modulePlan)) return { action: 'hold', sourceMemoryIds: [...(modulePlan.sourceMemoryIds || [])] };
+    if (activeTicket && (activeTicket.status === 'drawn' || activeTicket.status === 'running')) {
+        return { action: 'reuse', ticketId: activeTicket.id };
+    }
+    if (Number.isSafeInteger(inflightFloor) && inflightFloor === floor) return { action: 'duplicate' };
+    if (nextDueFloor == null) {
+        const due = floor + interval;
+        if (!Number.isSafeInteger(floor) || floor < 0 || !Number.isSafeInteger(due)) return { action: 'stop' };
+        return { action: 'arm', lastCompletedFloor: floor, nextDueFloor: due };
+    }
+    if (!Number.isSafeInteger(floor) || floor < nextDueFloor) return { action: 'wait' };
+    if (seenFloor === floor) return { action: 'duplicate' };
+    return { action: 'due' };
+}
+
+function roundGuard(error) {
+    if (error?.code === 'RMT_AUTO_MEMORY_CORRUPT' || error?.code === 'RMT_AUTO_MEMORY_INTERVAL') return { action: 'stop', rewrite: false };
+    return null;
+}
+
+function autoMemoryLockName(scope) {
+    return 'heartbeat-auto-memory:' + String(scope || '');
+}
+
+async function withAutoMemoryLock(locks, scope, job) {
+    if (typeof locks?.request !== 'function') return { acquired: false };
+    let acquired = false;
+    await locks.request(autoMemoryLockName(scope), { ifAvailable: true }, async lock => {
+        if (!lock) return;
+        acquired = true;
+        await job();
+    });
+    return { acquired };
+}
+
+function nextSnapshot(snapshot, planPatch, extra, now) {
+    const updatedAt = Number.isSafeInteger(now) && now > snapshot.plan.updatedAt ? now : snapshot.plan.updatedAt + 1;
+    return auto_memory_plan.parseAutoMemorySnapshot({
+        plan: auto_memory_plan.parseAutoMemoryPlan({
+            ...snapshot.plan, ...planPatch, revision: snapshot.plan.revision + 1, updatedAt,
+        }),
+        revealRecords: snapshot.revealRecords,
+        drawTickets: extra.drawTickets || snapshot.drawTickets,
+        modulePlan: Object.hasOwn(extra, 'modulePlan') ? extra.modulePlan : snapshot.modulePlan,
+    });
+}
+
+function activeTicket(snapshot) {
+    const id = snapshot?.plan?.activeDrawTicketId;
+    if (!id) return null;
+    return (snapshot.drawTickets || []).find(ticket => ticket.id === id) || null;
+}
+
+async function persistNoop(snapshot, floor, io, now, reason) {
+    const next = nextSnapshot(snapshot, {
+        lastCompletedFloor: floor,
+        nextDueFloor: floor + snapshot.plan.intervalFloors,
+        activeDrawTicketId: null,
+    }, {}, now);
+    await io.persist(next);
+    return { action: 'noop', moduleRequest: false, reason, snapshot: next };
+}
+
+async function runAutoMemoryRound(input, io) {
+    const snapshot = input?.snapshot;
+    const plan = snapshot?.plan;
+    if (!plan) return { action: 'idle', moduleRequest: false };
+    const decision = floorDecision({
+        enabled: plan.enabled, floor: input.floor, interval: plan.intervalFloors, nextDueFloor: plan.nextDueFloor,
+        modulePlan: snapshot.modulePlan, activeTicket: activeTicket(snapshot), inflightFloor: input.inflightFloor, seenFloor: input.seenFloor,
+    });
+    if (decision.action === 'hold') return { action: 'hold', moduleRequest: false, sourceMemoryIds: decision.sourceMemoryIds };
+    if (decision.action === 'reuse') return { action: 'reuse', moduleRequest: false, drawId: decision.ticketId };
+    if (decision.action !== 'arm' && decision.action !== 'due') return { action: decision.action, moduleRequest: false };
+    if (decision.action === 'arm') {
+        const next = nextSnapshot(snapshot, {
+            lastCompletedFloor: decision.lastCompletedFloor, nextDueFloor: decision.nextDueFloor,
+        }, {}, input.now);
+        await io.persist(next);
+        return { action: 'arm', moduleRequest: false, snapshot: next };
+    }
+    const options = auto_memory_draw.incrementalImportOptions();
+    await io.importIncremental(options);
+    const after = await io.readMemoryIds();
+    const fresh = auto_memory_draw.newMemoryIds(input.memoryIds, after);
+    if (!fresh.length) return persistNoop(snapshot, input.floor, io, input.now, 'no-new-memory');
+    const modules = Array.isArray(input.modules) ? input.modules : auto_memory_registry.listAutoMemoryModules();
+    const candidates = auto_memory_draw.eligibleDrawIds(modules, {
+        preferredModuleIds: plan.preferredModuleIds,
+        excludedModuleIds: plan.excludedModuleIds,
+        satisfiedPrerequisiteIds: input.satisfiedPrerequisiteIds,
+    });
+    if (!candidates.length) return persistNoop(snapshot, input.floor, io, input.now, 'no-candidates');
+    const weighted = auto_memory_draw.weightCandidates(candidates, snapshot.drawTickets);
+    const selected = auto_memory_draw.pickWeighted(weighted, io.random);
+    if (!selected || plan.excludedModuleIds.includes(selected)) return persistNoop(snapshot, input.floor, io, input.now, 'no-candidates');
+    const drawId = io.nextId();
+    const prepared = await io.prepareModulePlan({ moduleId: selected, sourceMemoryIds: [...fresh], drawId });
+    if (!prepared) return persistNoop(snapshot, input.floor, io, input.now, 'no-module-plan');
+    const modulePlan = auto_memory_plan.parseModulePlan({
+        ...prepared, drawId, moduleId: selected, sourceMemoryIds: [...fresh],
+    });
+    const ticket = auto_memory_plan.parseDrawTicket({
+        id: drawId, dueFloor: input.floor, archiveRevision: input.archiveRevision, candidates: weighted,
+        selectedModuleId: selected, sourceMemoryIds: [...fresh], status: 'drawn',
+    });
+    const next = nextSnapshot(snapshot, {
+        lastCompletedFloor: input.floor,
+        nextDueFloor: input.floor + plan.intervalFloors,
+        activeDrawTicketId: drawId,
+    }, { drawTickets: [...snapshot.drawTickets, ticket], modulePlan }, input.now);
+    await io.persist(next);
+    await io.startModule(next);
+    return { action: 'drawn', moduleRequest: true, drawId, snapshot: next };
+}
+
+__m_autoMemory_incrementalGate_js.withAutoMemoryLock = withAutoMemoryLock;
+__m_autoMemory_incrementalGate_js.runAutoMemoryRound = runAutoMemoryRound;
+__m_autoMemory_incrementalGate_js.modulePlanOpen = modulePlanOpen;
+__m_autoMemory_incrementalGate_js.floorDecision = floorDecision;
+__m_autoMemory_incrementalGate_js.roundGuard = roundGuard;
+__m_autoMemory_incrementalGate_js.autoMemoryLockName = autoMemoryLockName;
+}
+
+function __init_autoMemory_scheduler_js() {
+// MODULE: autoMemory/scheduler.js
+const archive_repository = __m_archive_repository_js;
+const auto_memory_gate = __m_autoMemory_incrementalGate_js;
+const auto_memory_plan = __m_autoMemory_planStore_js;
+const auto_memory_registry = __m_autoMemory_moduleRegistry_js;
+const core_context = __m_core_context_js;
+// 启用新计划后，由这一处按楼层做增量建档和抽签。没有新记忆或没有可抽模块时不发模块请求。
+
+
+
+
+
+let cleanup = null;
+const handledFloors = new Map();
+const inflightScopes = new Set();
+
+function collectMemoryIds(context) {
+    const memory = archive_repository.getImportedMemory(context);
+    const rows = Array.isArray(memory?.memories) ? memory.memories : [];
+    return rows.map(item => item?.id).filter(id => typeof id === 'string' && /^M\d{3,6}$/.test(id));
+}
+
+function randomUnit() {
+    const cryptoObj = globalThis.crypto;
+    if (typeof cryptoObj?.getRandomValues === 'function') {
+        const buf = new Uint32Array(1);
+        cryptoObj.getRandomValues(buf);
+        return buf[0] / 4294967296;
+    }
+    return Math.random();
+}
+
+function nextDrawId() {
+    const alphabet = 'abcdefghijklmnopqrstuvwxyz0123456789';
+    let suffix = '';
+    for (let index = 0; index < 12; index += 1) suffix += alphabet[Math.floor(randomUnit() * alphabet.length)];
+    return 'draw' + suffix;
+}
+
+function satisfiedPrerequisiteIds() {
+    const done = [];
+    for (const item of auto_memory_registry.listAutoMemoryModules()) {
+        if (item.isComplete() === true) done.push(item.id);
+    }
+    return done;
+}
+
+async function runHostRound() {
+    let context;
+    try { context = core_context.currentCharacterGuard(); }
+    catch { return; }
+    const metadata = context.chatMetadata;
+    if (!metadata || !Object.prototype.hasOwnProperty.call(metadata, auto_memory_plan.AUTO_MEMORY_PLAN_KEY)) return;
+    const scope = core_context.chatScopeKey(context);
+    const floor = Array.isArray(context.chat) ? context.chat.length : 0;
+    if (handledFloors.get(scope) === floor || inflightScopes.has(scope)) return;
+    await auto_memory_gate.withAutoMemoryLock(globalThis.navigator?.locks, scope, async () => {
+        if (handledFloors.get(scope) === floor || inflightScopes.has(scope)) return;
+        inflightScopes.add(scope);
+        try {
+            let snapshot;
+            try { snapshot = auto_memory_plan.readAutoMemoryMetadata(metadata); }
+            catch (error) {
+                if (auto_memory_gate.roundGuard(error)) return;
+                throw error;
+            }
+            if (!snapshot?.plan.enabled) return;
+            const live = core_context.currentCharacterGuard();
+            if (core_context.chatScopeKey(live) !== scope) return;
+            const result = await auto_memory_gate.runAutoMemoryRound({
+                snapshot, floor, memoryIds: collectMemoryIds(live), seenFloor: handledFloors.get(scope), now: Date.now(),
+                satisfiedPrerequisiteIds: satisfiedPrerequisiteIds(),
+                archiveRevision: archive_repository.getImportedMemory(live)?.archiveRevision || 'current',
+                chatId: core_context.getChatId(live),
+            }, {
+                importIncremental: options => archive_repository.importCurrentChatMemory(options),
+                readMemoryIds: () => collectMemoryIds(core_context.currentCharacterGuard()),
+                random: randomUnit,
+                nextId: nextDrawId,
+                prepareModulePlan: async request => {
+                    const item = auto_memory_registry.autoMemoryModuleById(request.moduleId);
+                    return item?.plan?.() || null;
+                },
+                persist: async next => {
+                    const current = auto_memory_plan.readAutoMemoryMetadata(metadata);
+                    auto_memory_plan.commitAutoMemoryMetadata(metadata, next, current ? current.plan.revision : 0);
+                    await context.saveMetadataDebounced?.();
+                    try {
+                        const chatId = core_context.getChatId(context);
+                        const recovery = await auto_memory_plan.readAutoMemoryRecovery(chatId);
+                        const expected = recovery ? recovery.revision : 0;
+                        if (next.plan.revision === expected + 1) await auto_memory_plan.writeAutoMemoryRecovery(chatId, next, expected);
+                    } catch { /* 聊天记录已经写下。备份写失败时不改主档，也不补发请求。 */ }
+                },
+                startModule: async () => {
+                    // 生成壳在后续轮次。票据已经先落盘，这里不调用模型。
+                },
+            });
+            if (result.action === 'arm' || result.action === 'noop' || result.action === 'drawn' || result.action === 'wait') {
+                handledFloors.set(scope, floor);
+            }
+        } finally {
+            inflightScopes.delete(scope);
+        }
+    });
+}
+
+function stopAutoMemoryScheduler() {
+    cleanup?.();
+    cleanup = null;
+    handledFloors.clear();
+    inflightScopes.clear();
+}
+
+function startAutoMemoryScheduler() {
+    stopAutoMemoryScheduler();
+    let context;
+    try { context = core_context.getContext(); }
+    catch { return; }
+    const source = context?.eventSource;
+    const types = context?.eventTypes || context?.event_types || {};
+    if (!source?.on) return;
+    const events = [...new Set([types.MESSAGE_SENT, types.MESSAGE_RECEIVED, types.CHAT_CHANGED, types.CHAT_LOADED].filter(Boolean))];
+    const listener = () => { void runHostRound(); };
+    for (const type of events) source.on(type, listener);
+    cleanup = () => { for (const type of events) source.off?.(type, listener); };
+    listener();
+}
+
+__m_autoMemory_scheduler_js.stopAutoMemoryScheduler = stopAutoMemoryScheduler;
+__m_autoMemory_scheduler_js.startAutoMemoryScheduler = startAutoMemoryScheduler;
+}
+
 function __init_autoMemory_wizardPlan_js() {
 // MODULE: autoMemory/wizardPlan.js
 const core_constants = __m_core_constants_js;
@@ -71032,6 +71396,16 @@ function wizardEntry({ archivePresent = false, cardType = '', apiReady = false }
     };
 }
 
+// 改过人物且已有档案时先问。同意才重建；不同意就留着旧档案。
+function archiveRebuildChoice({ cardChoiceDirty = false, archivePresent = false } = {}) {
+    return cardChoiceDirty === true && archivePresent === true ? 'ask' : 'keep';
+}
+
+function archiveActionAfterChoice({ asked = 'keep', rebuild = false, doArchive = false } = {}) {
+    if (asked === 'ask') return rebuild === true ? 'rebuild' : 'keep';
+    return doArchive === true ? 'create' : 'keep';
+}
+
 function disableAutoMemoryPlan(chatMetadata, now = 0) {
     const existing = auto_memory_plan.readAutoMemoryMetadata(chatMetadata);
     if (!existing?.plan.enabled) return { changed: false, snapshot: existing };
@@ -71092,6 +71466,8 @@ __m_autoMemory_wizardPlan_js.splitRequestPreview = splitRequestPreview;
 __m_autoMemory_wizardPlan_js.queueAfterItemFailure = queueAfterItemFailure;
 __m_autoMemory_wizardPlan_js.wizardResumeView = wizardResumeView;
 __m_autoMemory_wizardPlan_js.wizardEntry = wizardEntry;
+__m_autoMemory_wizardPlan_js.archiveRebuildChoice = archiveRebuildChoice;
+__m_autoMemory_wizardPlan_js.archiveActionAfterChoice = archiveActionAfterChoice;
 __m_autoMemory_wizardPlan_js.disableAutoMemoryPlan = disableAutoMemoryPlan;
 __m_autoMemory_wizardPlan_js.wizardBlocksChatInput = wizardBlocksChatInput;
 __m_autoMemory_wizardPlan_js.wizardCloseAbortsTasks = wizardCloseAbortsTasks;
@@ -71227,7 +71603,7 @@ function preferenceHtml() {
     }).join('');
     const report = apiReport();
     const api = report.ready ? '' : `<p>${core_text.esc(report.message)}</p><p>${core_text.esc(report.action)}</p>`;
-    return `${api}${cardBar()}<p>已有档案时不必重新建档。勾选的是以后想自动跑的条目；还没适配的不会进入抽签。</p>${choices}`;
+    return `${api}${cardBar()}<p>选人和原来一样，从世界书里的人设条目勾选。已经有档案时，改了人物会先问要不要按新名单和当前剧情重新建档；不重新建档就继续用旧档案。</p><p>勾选的是以后想自动跑的条目；还没适配的不会进入抽签。</p>${choices}`;
 }
 
 function previewHtml(context) {
@@ -71243,7 +71619,7 @@ function pageHtml(context) {
     const report = apiReport();
     if (name === 'api') return `<h2>API 就绪检查</h2><p>${core_text.esc(report.message)}</p>${report.action ? `<p>${core_text.esc(report.action)}</p>` : ''}`;
     if (name === 'card') return `<h2>单人卡，还是一张卡里的多个人？</h2><p>原生群聊暂不支持。这里沿用现有的人物选择。</p><p>${draft.cardType === 'single' ? '已选单人卡。' : draft.cardType === 'multiple' ? '已选一张卡内多人。' : '还没有选择。'}</p><button type="button" class="rmt-btn" data-rmt-auto-memory-card="single">单人卡</button><button type="button" class="rmt-btn" data-rmt-auto-memory-card="multiple">一张卡内多人</button>`;
-    if (name === 'people') return `<h2>人物名单</h2>${draft.cardType === 'single' ? '<p>单人卡沿用原来的建档方式，不用另选名单。</p>' : `<p>${draft.participantConfirmed ? `已选 ${draft.participantIds.length} 人。` : '请从现有人物选择里确认名单。'}</p><button type="button" class="rmt-btn" data-rmt-auto-memory-people>选择人物</button>`}`;
+    if (name === 'people') return `<h2>人物名单</h2>${draft.cardType === 'single' ? '<p>单人卡沿用原来的建档方式，不用另选名单。</p>' : `<p>从世界书的人设条目里选，和原来的人物选择一样。确认名单不请求模型。</p><p>${draft.participantConfirmed ? `已选 ${draft.participantIds.length} 人。` : '请先确认名单。'}</p><button type="button" class="rmt-btn" data-rmt-auto-memory-people>选择人物</button>`}`;
     if (name === 'sources') {
         const scan = sourceScan(context);
         const names = scan.sources.length ? scan.sources.map(item => core_text.esc(item.label)).join('、') : '没有检测到外部来源';
@@ -71251,7 +71627,7 @@ function pageHtml(context) {
     }
     if (name === 'modules') return `<h2>模块介绍</h2><p>性质和正常请求范围如下。未适配的不能自动生成。</p>${moduleHtml()}`;
     if (name === 'preference') return `<h2>选择想自动跑的条目</h2>${preferenceHtml()}`;
-    if (name === 'interval') return `<h2>自动间隔</h2><p>默认 5 楼，只能填 1 到 1000 的整数。自动抽签还没开始，这个数字会先保存下来。</p><label>每 <input type="number" min="1" max="1000" step="1" data-rmt-auto-memory-interval value="${draft.intervalFloors}"> 楼</label><p data-rmt-auto-memory-interval-error role="alert"></p>`;
+    if (name === 'interval') return `<h2>自动间隔</h2><p>默认 5 楼，只能填 1 到 1000 的整数。到了这个间隔会检查有没有新记忆。还没有可抽的模块时，不会为模块发请求。</p><label>每 <input type="number" min="1" max="1000" step="1" data-rmt-auto-memory-interval value="${draft.intervalFloors}"> 楼</label><p data-rmt-auto-memory-interval-error role="alert"></p>`;
     if (name === 'archive') return `<h2>建档预计</h2>${previewHtml(context)}<label class="rmt-settings-check"><input type="checkbox" data-rmt-auto-memory-archive ${draft.doArchive ? 'checked' : ''}><span>这次整理档案</span></label>`;
     if (name === 'first') {
         const choices = cards().filter(item => item.queueable).map(item => `<label class="rmt-settings-check"><input type="checkbox" data-rmt-auto-memory-first="${core_text.esc(item.id)}" ${draft.firstModuleIds.includes(item.id) ? 'checked' : ''} ${draft.skipFirst || draft.archiveOnly ? 'disabled' : ''}><span>${core_text.esc(item.title)}：${core_text.esc(item.normalRequestEstimate)}</span></label>`).join('');
@@ -71270,7 +71646,7 @@ function render(context) {
     ui_overlay.setManageVisible(false);
     const resume = showingSummary ? wizard_plan.wizardResumeView(auto_memory_plan.readAutoMemoryMetadata(context.chatMetadata), archive_repository.getCurrentArchiveImportRecoverySummary(context)) : { completed: false };
     const inner = resume.completed
-        ? `<h2>向导已经保存</h2><p>间隔 ${resume.intervalFloors} 楼。记下 ${resume.preferredModuleIds.length} 项，其中已开放 ${cards().filter(item => item.autoEligible && resume.preferredModuleIds.includes(item.id)).length} 项，排除 ${resume.excludedModuleIds.length} 项。尚未适配的模块不会进入抽签。</p><p>${resume.archiveStillRunning ? '建档还在原来的整理流程里，可以关闭窗口继续聊天。' : '刷新后这份设置还在。任务中心的队列不会在刷新后自动重发。'}</p><p>自动抽签还没开始。这一段聊天会暂停原来的按模块自动更新；设置里可以恢复那些开关。</p><button type="button" class="rmt-btn" data-rmt-auto-memory-edit>重新设置</button>`
+        ? `<h2>向导已经保存</h2><p>间隔 ${resume.intervalFloors} 楼。记下 ${resume.preferredModuleIds.length} 项，其中已开放 ${cards().filter(item => item.autoEligible && resume.preferredModuleIds.includes(item.id)).length} 项，排除 ${resume.excludedModuleIds.length} 项。尚未适配的模块不会进入抽签，也不会发模块请求。</p><p>${resume.archiveStillRunning ? '建档还在原来的整理流程里，可以关闭窗口继续聊天。' : '刷新后这份设置还在。任务中心的队列不会在刷新后自动重发。'}</p><p>到了间隔会检查新记忆。这一段聊天会暂停原来的按模块自动更新；设置里可以恢复那些开关。</p><button type="button" class="rmt-btn" data-rmt-auto-memory-edit>重新设置</button>`
         : `${pageHtml(context)}<p><button type="button" class="rmt-btn" data-rmt-auto-memory-prev ${step === 0 ? 'disabled' : ''}>上一步</button><button type="button" class="rmt-btn" data-rmt-auto-memory-next ${step >= wizard_plan.WIZARD_STEPS.length - 1 ? 'disabled' : ''}>下一步</button></p>`;
     body.innerHTML = `<main class="rmt-home" data-rmt-auto-memory-root><p>第 ${showingSummary ? wizard_plan.WIZARD_STEPS.length : step + 1} / ${wizard_plan.WIZARD_STEPS.length} 步</p>${inner}<p><button type="button" class="rmt-btn" data-rmt-auto-memory-home>返回设置</button><button type="button" class="rmt-btn" data-rmt-auto-memory-close>关闭窗口，任务继续</button></p><p data-rmt-auto-memory-status role="status"></p></main>`;
     if (body.dataset.rmtAutoMemoryBound !== '1') {
@@ -71279,6 +71655,19 @@ function render(context) {
         body.addEventListener('change', onChange);
     }
     return true;
+}
+
+function openPeople(context) {
+    void participant_picker.showParticipantPicker({ context, requireSelection: true, confirmLabel: '确认人物',
+        onConfirm: (nextRoster, expectedRevision) => {
+            roster = nextRoster; rosterRevision = expectedRevision;
+            draft.cardType = 'multiple';
+            draft.cardChoiceDirty = true;
+            draft.participantConfirmed = true;
+            draft.participantIds = Array.isArray(nextRoster?.selectedIds) ? nextRoster.selectedIds.filter(id => typeof id === 'string') : [];
+            if (sameChat(context)) render(context);
+        },
+    }).catch(error => status(core_text.safeErrorSummary(error)));
 }
 
 function status(message) {
@@ -71370,7 +71759,9 @@ async function saveAndStart(context) {
     } catch { status('聊天里的设置已保存。本机备份没有写上，没有用备份覆盖它。'); }
     let archiveStarted = false;
     let archiveNote = '';
-    if (draft.cardChoiceDirty || draft.doArchive) {
+    const cardDirty = draft.cardChoiceDirty === true;
+    const archivePresent = !!archive_repository.getImportedMemory(context);
+    if (cardDirty || draft.doArchive) {
         try {
             if (draft.cardType === 'multiple') {
                 if (!roster) { status('请先确认人物名单。已保存的间隔和偏好还在。'); return; }
@@ -71383,10 +71774,32 @@ async function saveAndStart(context) {
             draft.cardChoiceDirty = false;
         } catch (error) { status(core_text.safeErrorSummary(error)); return; }
     }
-    if (draft.doArchive) {
+    const asked = wizard_plan.archiveRebuildChoice({ cardChoiceDirty: cardDirty, archivePresent });
+    let rebuild = false;
+    if (asked === 'ask') {
+        const settings = core_settings.getPluginSettings(context);
+        const detected = archive_repository.externalMemorySourceSummary(context);
+        const needsScan = settings.useCurrentChatExternalMemory && detected.length && !archive_repository.getMemoryPreflight(context);
+        if (needsScan) archiveNote = '重新建档前要先扫描当前窗口的记忆或摘要。这次没有建档，旧档案还在。';
+        else rebuild = ui_overlay.confirmExplicitAction(
+            '按新人物重新建档',
+            '人物或卡片类型改过了。重新建档会按当前剧情和这份名单重做档案，旧档案会被换掉。取消就继续用现在这份旧档案，不会为此发请求。',
+            { destructive: true },
+        ) === true;
+    }
+    const action = wizard_plan.archiveActionAfterChoice({ asked, rebuild, doArchive: draft.doArchive });
+    if (action === 'rebuild') {
+        const participantRoster = draft.cardType === 'multiple' ? roster : null;
+        archiveStarted = true;
+        void archive_repository.importCurrentChatMemory({ fullRebuild: true, participantRoster }).catch(error => {
+            console.error('[HeartbeatMemories] auto memory rebuild failed', core_text.safeErrorDiagnostic(error));
+            globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心迹回廊');
+        });
+        archiveNote = '已按新名单开始重新建档，旧档案会在重建完成后被换掉。可以关闭窗口继续聊天。';
+    } else if (action === 'create') {
         archiveStarted = ui_overlay.requestCurrentArchiveImport({ cardTypeConfirmed: true, participantRoster: draft.cardType === 'multiple' ? roster : null }) === true;
         if (!archiveStarted) archiveNote = '建档没有开始。已保存的间隔和偏好还在。';
-    }
+    } else if (asked === 'ask' && !archiveNote) archiveNote = '继续使用旧档案，这次没有重新建档。';
     const routes = wizard_plan.firstQueueRoutes(draft, queueableIds());
     const queued = routes.length && (archiveStarted || !draft.doArchive) ? ui_taskCenter.enqueueSelectedModes(routes) : 0;
     showingSummary = true;
@@ -71457,21 +71870,10 @@ function onClick(event) {
         draft.participantIds = card === 'single' ? [] : draft.participantIds;
         if (card === 'single') roster = null;
         render(context);
+        if (card === 'multiple') openPeople(context);
         return;
     }
-    if (event.target.closest?.('[data-rmt-auto-memory-people]')) {
-        void participant_picker.showParticipantPicker({ context, requireSelection: true, confirmLabel: '确认人物',
-            onConfirm: (nextRoster, expectedRevision) => {
-                roster = nextRoster; rosterRevision = expectedRevision;
-                draft.cardType = 'multiple';
-                draft.cardChoiceDirty = true;
-                draft.participantConfirmed = true;
-                draft.participantIds = Array.isArray(nextRoster?.selectedIds) ? nextRoster.selectedIds.filter(id => typeof id === 'string') : [];
-                if (sameChat(context)) render(context);
-            },
-        }).catch(error => status(core_text.safeErrorSummary(error)));
-        return;
-    }
+    if (event.target.closest?.('[data-rmt-auto-memory-people]')) { openPeople(context); return; }
     if (event.target.closest?.('[data-rmt-auto-memory-save]')) void saveAndStart(context);
 }
 
@@ -71511,6 +71913,7 @@ const core_autoUpdates = __m_core_autoUpdates_js;
 const auto_memory_registry = __m_autoMemory_moduleRegistry_js;
 const auto_memory_plan = __m_autoMemory_planStore_js;
 const auto_memory_migrate = __m_autoMemory_migrateLegacy_js;
+const auto_memory_scheduler = __m_autoMemory_scheduler_js;
 const core_constants = __m_core_constants_js;
 const core_context = __m_core_context_js;
 const core_diagnosticReport = __m_core_diagnosticReport_js;
@@ -71534,6 +71937,7 @@ const mirror_call = __m_ui_mirrorCallView_js;
 const runtimeState = __m_core_state_js.state;
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
+
 
 
 
@@ -71575,6 +71979,7 @@ function initMemoryTheater() {
         ui_archivePortal.bindChatStateEvents();
         ui_archivePortal.bindDiagnosticCopy();
         core_autoUpdates.startAutoUpdates();
+        auto_memory_scheduler.startAutoMemoryScheduler();
         ui_archivePortal.bindRobustArchiveOpenHandlers();
         ui_archivePortal.bindGenerationNavigationGuards();
         ui_archivePortal.scheduleMounts(settingsMounted, menuMounted);
@@ -71601,6 +72006,7 @@ function destroyMemoryTheater() {
     core_diagnosticReport.uninstallRuntimeDiagnostic();
     try { globalThis.__heartbeatMemoriesRemoveDiagnostics?.(); } catch {}
     ui_cgImageViewer.closeCgImageViewer({ restoreFocus: false });
+    auto_memory_scheduler.stopAutoMemoryScheduler();
     core_autoUpdates.stopAutoUpdates();
     ui_settingsPanel.clearHomeSettingsPanel();
     ui_settingsPanel.unbindImageProviderEvents();
@@ -71974,6 +72380,9 @@ __init_core_cache_js();
 __init_autoMemory_moduleRegistry_js();
 __init_autoMemory_planStore_js();
 __init_autoMemory_migrateLegacy_js();
+__init_autoMemory_draw_js();
+__init_autoMemory_incrementalGate_js();
+__init_autoMemory_scheduler_js();
 __init_autoMemory_wizardPlan_js();
 __init_ui_autoMemoryWizard_js();
 __init_heartbeatMemories_js();

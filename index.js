@@ -1,5 +1,5 @@
-const VERSION = '0.99.34';
-const BUILD = '0.99.34-r84.86-auto-memory-r2';
+const VERSION = '0.99.35';
+const BUILD = '0.99.35-r84.87-auto-memory-r3';
 
 const SETTINGS_ID = 'heartbeat_memories_settings';
 const MENU_ID = 'heartbeat_memories_menu_item';
@@ -478,14 +478,22 @@ function startBootstrapAutoUpdates({ wakeRuntime = () => ensureRuntime('auto-upd
     try {
         context = globalThis.SillyTavern?.getContext?.();
         const raw = context?.extensionSettings?.heartbeatMemories?.autoUpdates;
-        if (!raw || !Object.values(raw).some(rule => rule?.enabled === true)
+        const legacyOn = !!raw && Object.values(raw).some(rule => rule?.enabled === true);
+        const hasPlan = !!context?.chatMetadata && Object.prototype.hasOwnProperty.call(context.chatMetadata, 'autoMemoryPlanV1');
+        if ((!legacyOn && !hasPlan)
             || !context.eventSource?.on || !globalThis.navigator?.locks?.request || !globalThis.localStorage) return Promise.resolve();
     } catch { return Promise.resolve(); }
     const lifetime = bootstrapAutoEpoch;
     // The pure floor policy has no runtime imports. A saved toggle alone never loads the bundle.
     bootstrapAutoPending = import(`./src/core/autoUpdatePolicy.js?heartbeat=${BUILD}`).then(async policy => {
-        if (disabled || runtimeModule || lifetime !== bootstrapAutoEpoch
-            || !policy.hasEnabledAutoUpdates(context.extensionSettings?.heartbeatMemories?.autoUpdates)) return;
+        if (disabled || runtimeModule || lifetime !== bootstrapAutoEpoch) return;
+        const openingFloor = Array.isArray(context.chat) ? context.chat.length : 0;
+        const wakeNow = policy.autoMemoryRuntimeWake(context.chatMetadata, openingFloor);
+        const legacyEnabled = policy.hasEnabledAutoUpdates(context.extensionSettings?.heartbeatMemories?.autoUpdates);
+        let openingGate = { allowLegacy: true, source: 'legacy' };
+        try { openingGate = policy.readLegacySchedulerGate(context.chatMetadata); }
+        catch { openingGate = { allowLegacy: false, source: 'paused-corrupt' }; }
+        if (!wakeNow && !legacyEnabled && openingGate.source !== 'paused-new-plan') return;
         const snapshot = () => {
             try {
                 const current = globalThis.SillyTavern?.getContext?.();
@@ -518,6 +526,15 @@ function startBootstrapAutoUpdates({ wakeRuntime = () => ensureRuntime('auto-upd
         let timer = 0, stopped = false;
         const listener = () => {
             if (stopped) return Promise.resolve();
+            try {
+                const host = globalThis.SillyTavern?.getContext?.();
+                const hostFloor = Array.isArray(host?.chat) ? host.chat.length : 0;
+                if (policy.autoMemoryRuntimeWake(host?.chatMetadata, hostFloor)) {
+                    stopBootstrapAutoUpdates();
+                    void Promise.resolve().then(wakeRuntime).catch(showBootError);
+                    return Promise.resolve();
+                }
+            } catch {}
             let enabled = false;
             try {
                 const host = globalThis.SillyTavern?.getContext?.();
