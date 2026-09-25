@@ -1,5 +1,5 @@
-const VERSION = '0.99.30';
-const BUILD = '0.99.30-r84.82-wand-icon';
+const VERSION = '0.99.31';
+const BUILD = '0.99.31-r84.83-auto-memory-r0';
 
 const SETTINGS_ID = 'heartbeat_memories_settings';
 const MENU_ID = 'heartbeat_memories_menu_item';

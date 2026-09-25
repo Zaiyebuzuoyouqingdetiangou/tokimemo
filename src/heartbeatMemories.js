@@ -2,6 +2,9 @@
 // Extracted from r34 without changing archive/cache storage contracts.
 import * as core_cache from './core/cache.js';
 import * as core_autoUpdates from './core/autoUpdates.js';
+import * as auto_memory_registry from './autoMemory/moduleRegistry.js';
+import * as auto_memory_plan from './autoMemory/planStore.js';
+import * as auto_memory_migrate from './autoMemory/migrateLegacy.js';
 import * as core_constants from './core/constants.js';
 import * as core_context from './core/context.js';
 import * as core_diagnosticReport from './core/diagnosticReport.js';
@@ -34,6 +37,15 @@ export function openSettingsHome() {
 
 export function isGenerationBusy() {
     return runtimeState.busy || core_requestCoordinator.hasGenerationTasks() || !!runtimeState.roomLifeRefreshPromise;
+}
+
+// R0 合同随运行时加载，启动时不读不写聊天。旧自动更新仍走原来的调度。
+export function autoMemoryContractSurface() {
+    return {
+        modules: auto_memory_registry.listAutoMemoryModules().map(item => item.id),
+        intervalMax: auto_memory_plan.AUTO_MEMORY_INTERVAL_MAX,
+        canMigrate: typeof auto_memory_migrate.migrateLegacyAutoPreferences === 'function',
+    };
 }
 
 export function initMemoryTheater() {

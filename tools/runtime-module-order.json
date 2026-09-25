@@ -236,5 +236,8 @@
   "core/cacheSessions.js",
   "core/cacheArchiveMemory.js",
   "core/cache.js",
+  "autoMemory/moduleRegistry.js",
+  "autoMemory/planStore.js",
+  "autoMemory/migrateLegacy.js",
   "heartbeatMemories.js"
 ]

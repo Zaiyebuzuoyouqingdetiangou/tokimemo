@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
-// Source modules: 239
-// Source SHA-256: edaee0119d7aee57d4ea9d28ccafb2f6ef47cd4a7f68f5c60a527b08628ee8ce
+// Source modules: 242
+// Source SHA-256: d9f2f91926349d0554267f7d3f93009a2af2b2437df1042231da4546dbdc7d34
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -32,6 +32,9 @@ const __m_archive_sourceLedger_js = Object.create(null);
 const __m_archive_sourceReadGuard_js = Object.create(null);
 const __m_archive_storyScenes_js = Object.create(null);
 const __m_archive_worldInfoSources_js = Object.create(null);
+const __m_autoMemory_migrateLegacy_js = Object.create(null);
+const __m_autoMemory_moduleRegistry_js = Object.create(null);
+const __m_autoMemory_planStore_js = Object.create(null);
 const __m_core_advancedGeneration_js = Object.create(null);
 const __m_core_archiveCover_js = Object.create(null);
 const __m_core_autoUpdatePolicy_js = Object.create(null);
@@ -69624,10 +69627,734 @@ __m_core_cache_js.loadReadableGenerationProgress = loadReadableGenerationProgres
 __m_core_cache_js.loadSession = loadSession;
 }
 
+function __init_autoMemory_moduleRegistry_js() {
+// MODULE: autoMemory/moduleRegistry.js
+
+// 自动留忆模块注册表。只描述合同，不发请求，也不读聊天。
+// autoEligible 表示代码已经完成适配，不能由用户勾选改写。
+// R0 全部为 false：勾选只会被存成偏好，不会进入运行候选。
+
+const HISTORICAL = 'historical';
+const COLLECTION = 'collection';
+
+function inertPlan() {
+    // 未适配模块没有可冻结的计划。null 表示本轮不生成，也不能解锁成就。
+    return Promise.resolve(null);
+}
+
+function inertPendingSteps(_result, plan) {
+    const steps = Array.isArray(plan?.steps) ? plan.steps : [];
+    return steps.filter(step => step && step.status !== 'completed');
+}
+
+function inertComplete() {
+    // 信封与成就的硬闸门。未适配时永远未完成，避免“请求发过”被当成成果。
+    return false;
+}
+
+function defineModule(spec) {
+    return Object.freeze({
+        ...spec,
+        prerequisites: Object.freeze([...spec.prerequisites]),
+        plan: inertPlan,
+        pendingSteps: inertPendingSteps,
+        isComplete: inertComplete,
+    });
+}
+
+const MODULES = Object.freeze([
+    defineModule({
+        id: 'album', title: '回忆相簿', contentKind: HISTORICAL, batch: 2, inDrawPool: true,
+        description: '先生成条目索引和关系快照，再写完本轮全部已解锁条目的评论。只有索引不算完成。',
+        normalRequestEstimate: '2 + ceil(U / 3)', prerequisites: [], supportsIncremental: true,
+        autoEligible: false, achievementMerged: false, unavailableReason: '暂不可自动生成',
+    }),
+    defineModule({
+        id: 'adv', title: 'ADV EVENT', contentKind: COLLECTION, batch: 4, inDrawPool: true,
+        description: '先冻结本轮事件索引，再写完索引里的全部事件正文。不能停在标题，也不能只挑一篇。',
+        normalRequestEstimate: '1 + ceil(E / 6)', prerequisites: [], supportsIncremental: true,
+        autoEligible: false, achievementMerged: false, unavailableReason: '暂不可自动生成',
+    }),
+    defineModule({
+        id: 'room', title: '他的房间', contentKind: COLLECTION, batch: 2, inDrawPool: true,
+        description: '生成房间结构并补完必需文字槽位。修复次数有上限，未完成时不揭晓。',
+        normalRequestEstimate: '1 + ceil(S / 6) + 0～2', prerequisites: [], supportsIncremental: true,
+        autoEligible: false, achievementMerged: false, unavailableReason: '暂不可自动生成',
+    }),
+    defineModule({
+        id: 'items', title: '他的物品', contentKind: COLLECTION, batch: 2, inDrawPool: true,
+        description: '在已有且版本匹配的房间上，生成物品结构和全部必需台词。',
+        normalRequestEstimate: '通常 2', prerequisites: ['room'], supportsIncremental: true,
+        autoEligible: false, achievementMerged: false, unavailableReason: '暂不可自动生成',
+    }),
+    defineModule({
+        id: 'phone', title: '他的私人终端', contentKind: COLLECTION, batch: 3, inDrawPool: true,
+        description: '先冻结 App 目录，再生成目录中的全部 App。目录本身不产生成就。',
+        normalRequestEstimate: '首次 1 + A；增量 1 + M', prerequisites: [], supportsIncremental: true,
+        autoEligible: false, achievementMerged: false, unavailableReason: '暂不可自动生成',
+    }),
+    defineModule({
+        id: 'inbox', title: '你的邮箱', contentKind: COLLECTION, batch: 1, inDrawPool: true,
+        description: '有信件计划时一次写完本轮信件。没有计划则跳过，不生成信封或成就。',
+        normalRequestEstimate: '0～1', prerequisites: [], supportsIncremental: true,
+        autoEligible: false, achievementMerged: false, unavailableReason: '暂不可自动生成',
+    }),
+    defineModule({
+        id: 'cabinet', title: '两个人的陈列柜', contentKind: HISTORICAL, batch: 1, inDrawPool: true,
+        description: '生成或刷新本轮陈列柜成果。通过校验并保存后才算完成。',
+        normalRequestEstimate: '1', prerequisites: [], supportsIncremental: true,
+        autoEligible: false, achievementMerged: false, unavailableReason: '暂不可自动生成',
+    }),
+    defineModule({
+        id: 'travel', title: '他的出行路线', contentKind: HISTORICAL, batch: 2, inDrawPool: true,
+        description: '生成地图或旅行结构；若计划还要求正文，正文完成前不揭晓。',
+        normalRequestEstimate: '1～2', prerequisites: [], supportsIncremental: true,
+        autoEligible: false, achievementMerged: false, unavailableReason: '暂不可自动生成',
+    }),
+    defineModule({
+        id: 'ending', title: '结局与后日谈', contentKind: COLLECTION, batch: 4, inDrawPool: true,
+        description: '冻结全部可用路线并写完路线正文，需要时再做一次告白扫描。不能缩成单路线。',
+        normalRequestEstimate: '首次 1 + A + C', prerequisites: [], supportsIncremental: true,
+        autoEligible: false, achievementMerged: false, unavailableReason: '暂不可自动生成',
+    }),
+    defineModule({
+        id: 'calendar', title: '两个人的日历', contentKind: HISTORICAL, batch: 1, inDrawPool: true,
+        description: '生成或刷新本轮日历成果。通过校验并保存后才算完成。',
+        normalRequestEstimate: '1', prerequisites: [], supportsIncremental: true,
+        autoEligible: false, achievementMerged: false, unavailableReason: '暂不可自动生成',
+    }),
+    defineModule({
+        id: 'relations', title: '人际庭园', contentKind: HISTORICAL, batch: 1, inDrawPool: true,
+        description: '生成或刷新本轮关系成果。通过校验并保存后才算完成。',
+        normalRequestEstimate: '1', prerequisites: [], supportsIncremental: true,
+        autoEligible: false, achievementMerged: false, unavailableReason: '暂不可自动生成',
+    }),
+    defineModule({
+        id: 'heart', title: '角色互动', contentKind: COLLECTION, batch: 5, inDrawPool: true,
+        description: '必须先冻结基础对话、日常一格、萤火虫、后日谈和四季内容，并全部跑完后才算一份成果。',
+        normalRequestEstimate: '约 8～13 以上', prerequisites: [], supportsIncremental: false,
+        autoEligible: false, achievementMerged: false, unavailableReason: '暂不可自动生成',
+    }),
+    defineModule({
+        id: 'butterfly', title: '蝴蝶效应', contentKind: COLLECTION, batch: 4, inDrawPool: true,
+        description: '首次写完 MAIN、全部分支和 Ω。已有进度的增量只补本轮新增分歧，不把首次生成直接放进自动池。',
+        normalRequestEstimate: '2 + B + P，约 3～11', prerequisites: [], supportsIncremental: true,
+        autoEligible: false, achievementMerged: false, unavailableReason: '暂不可自动生成',
+    }),
+    defineModule({
+        id: 'pastLives', title: '前世今生', contentKind: COLLECTION, batch: 4, inDrawPool: true,
+        description: '每次只完成一篇：引子、全部卷宗、今生回响和落款。这是新篇，不是档案差量。',
+        normalRequestEstimate: '2 + D + P，约 3～9', prerequisites: [], supportsIncremental: false,
+        autoEligible: false, achievementMerged: false, unavailableReason: '暂不可自动生成',
+    }),
+    defineModule({
+        id: 'themeSong', title: '角色印象曲', contentKind: COLLECTION, batch: 2, inDrawPool: true,
+        description: '生成一首完整歌曲。当前自动入口还没有默认计划，完成前不能抽中。',
+        normalRequestEstimate: '每首 1', prerequisites: [], supportsIncremental: false,
+        autoEligible: false, achievementMerged: false, unavailableReason: '暂不可自动生成',
+    }),
+    defineModule({
+        id: 'bedtime', title: '睡前故事', contentKind: COLLECTION, batch: 2, inDrawPool: true,
+        description: '按冻结计划生成一章完整故事。必须事先写明是新故事还是指定故事的续章。',
+        normalRequestEstimate: '每章 1', prerequisites: [], supportsIncremental: false,
+        autoEligible: false, achievementMerged: false, unavailableReason: '暂不可自动生成',
+    }),
+    defineModule({
+        id: 'timeEcho', title: '时空回响', contentKind: COLLECTION, batch: 2, inDrawPool: true,
+        description: '生成一篇完整回声。当前还没有自动入口，补上之前不能抽中。',
+        normalRequestEstimate: '每篇 1', prerequisites: [], supportsIncremental: false,
+        autoEligible: false, achievementMerged: false, unavailableReason: '暂不可自动生成',
+    }),
+    defineModule({
+        id: 'achievements', title: '成就', contentKind: COLLECTION, batch: 0, inDrawPool: false,
+        description: '成就不再单独抽签，也不再单独请求。它只作为其他模块最后一次生成的末包。',
+        normalRequestEstimate: '0（不单独请求）', prerequisites: [], supportsIncremental: false,
+        autoEligible: false, achievementMerged: false, unavailableReason: '已移出抽签池',
+    }),
+]);
+
+function listAutoMemoryModules() {
+    return MODULES;
+}
+
+function autoMemoryModuleById(id) {
+    return MODULES.find(item => item.id === id) || null;
+}
+
+function isAutoMemoryDrawModule(id) {
+    const item = autoMemoryModuleById(id);
+    return !!item && item.inDrawPool === true;
+}
+
+// 运行候选 = 用户选中 ∩ 未排除 ∩ 已适配 ∩ 成就末包已接入 ∩ 仍在抽签池。
+// 偏好数组本身不能把未适配模块放进候选。
+function autoMemoryRuntimeCandidates(preferredIds, excludedIds = []) {
+    const preferred = Array.isArray(preferredIds) ? preferredIds : [];
+    const excluded = new Set(Array.isArray(excludedIds) ? excludedIds : []);
+    const seen = new Set();
+    const selected = [];
+    for (const id of preferred) {
+        const item = autoMemoryModuleById(id);
+        if (!item || seen.has(id) || excluded.has(id)) continue;
+        if (!item.inDrawPool || item.autoEligible !== true || item.achievementMerged !== true) continue;
+        seen.add(id);
+        selected.push(id);
+    }
+    return selected;
+}
+
+__m_autoMemory_moduleRegistry_js.listAutoMemoryModules = listAutoMemoryModules;
+__m_autoMemory_moduleRegistry_js.autoMemoryModuleById = autoMemoryModuleById;
+__m_autoMemory_moduleRegistry_js.isAutoMemoryDrawModule = isAutoMemoryDrawModule;
+__m_autoMemory_moduleRegistry_js.autoMemoryRuntimeCandidates = autoMemoryRuntimeCandidates;
+}
+
+function __init_autoMemory_planStore_js() {
+// MODULE: autoMemory/planStore.js
+const auto_memory_registry = __m_autoMemory_moduleRegistry_js;
+// 自动留忆主档与恢复副本的校验。
+// 聊天 metadata 是主档。损坏的记录只拒绝，不改成默认值，也不让旧备份覆盖较新主档。
+
+const AUTO_MEMORY_PLAN_KEY = 'autoMemoryPlanV1';
+const AUTO_MEMORY_REVEAL_KEY = 'revealRecordsV1';
+const AUTO_MEMORY_DRAW_TICKETS_KEY = 'autoMemoryDrawTicketsV1';
+const AUTO_MEMORY_MODULE_PLAN_KEY = 'autoMemoryModulePlanV1';
+const AUTO_MEMORY_INTERVAL_MIN = 1;
+const AUTO_MEMORY_INTERVAL_MAX = 1000;
+
+const PLAN_KEYS = Object.freeze(['schemaVersion', 'revision', 'updatedAt', 'enabled', 'intervalFloors', 'preferredModuleIds', 'excludedModuleIds', 'lastCompletedFloor', 'nextDueFloor', 'activeDrawTicketId', 'legacyPreferencesMigrated']);
+const METADATA_KEYS = Object.freeze([AUTO_MEMORY_PLAN_KEY, AUTO_MEMORY_REVEAL_KEY, AUTO_MEMORY_DRAW_TICKETS_KEY, AUTO_MEMORY_MODULE_PLAN_KEY]);
+const RECOVERY_KEYS = Object.freeze(['key', 'schemaVersion', 'chatId', 'revision', 'payload']);
+const SNAPSHOT_KEYS = Object.freeze(['plan', 'revealRecords', 'drawTickets', 'modulePlan']);
+const STEP_KEYS = Object.freeze(['id', 'kind', 'order', 'status', 'recoverySlot']);
+const MODULE_PLAN_KEYS = Object.freeze(['version', 'drawId', 'moduleId', 'chatId', 'archiveRevision', 'sourceMemoryIds', 'expectedRequestRange', 'steps', 'frozenAt']);
+const TICKET_KEYS = Object.freeze(['id', 'dueFloor', 'archiveRevision', 'candidates', 'selectedModuleId', 'sourceMemoryIds', 'status']);
+const REVEAL_KEYS = Object.freeze(['id', 'moduleId', 'achievementId', 'sourceMemoryIds', 'status', 'createdAt']);
+const STEP_STATUS = new Set(['pending', 'running', 'completed', 'failed']);
+const TICKET_STATUS = new Set(['drawn', 'running', 'completed', 'failed']);
+const REVEAL_STATUS = new Set(['generating', 'ready', 'achievement_pending', 'opened']);
+const DATABASE = 'heartbeat_memories_auto_memory_v1';
+const STORE = 'snapshots';
+let testBackend = null;
+
+function fail(code, message) {
+    const error = new Error(message);
+    error.code = code;
+    error.safeToDisplay = true;
+    error.safeUserMessage = message;
+    error.retryable = false;
+    return error;
+}
+
+function corrupt(message = '这份自动留忆记录已损坏，原记录保留，没有改写。') {
+    return fail('RMT_AUTO_MEMORY_CORRUPT', message);
+}
+
+function stale(message = '自动留忆记录版本已变化，没有覆盖较新的记录。') {
+    return fail('RMT_AUTO_MEMORY_STALE', message);
+}
+
+function plainData(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    const prototype = Object.getPrototypeOf(value);
+    return prototype === Object.prototype || prototype === null;
+}
+
+function exactKeys(value, keys) {
+    if (!plainData(value)) throw corrupt();
+    const actual = Object.keys(value);
+    if (actual.length !== keys.length || keys.some(key => !Object.hasOwn(value, key))) throw corrupt();
+}
+
+function boundedToken(value, min, max) {
+    if (typeof value !== 'string' || value.length < min || value.length > max || !/^[A-Za-z0-9_-]+$/.test(value)) throw corrupt();
+    return value;
+}
+
+function boundedText(value, max) {
+    if (typeof value !== 'string' || value.length < 1 || value.length > max || /[\u0000-\u001f]/.test(value)) throw corrupt();
+    return value;
+}
+
+function safeCount(value, min, max) {
+    if (!Number.isSafeInteger(value) || value < min || value > max) throw corrupt();
+    return value;
+}
+
+function nullableCount(value, max) {
+    if (value === null) return null;
+    return safeCount(value, 0, max);
+}
+
+function uniqueStrings(value, accept) {
+    if (!Array.isArray(value)) throw corrupt();
+    const seen = new Set();
+    const out = [];
+    for (const item of value) {
+        if (typeof item !== 'string' || seen.has(item) || !accept(item)) throw corrupt();
+        seen.add(item);
+        out.push(item);
+    }
+    return out;
+}
+
+function memoryIds(value) {
+    return uniqueStrings(value, item => /^M\d{3,6}$/.test(item));
+}
+
+function moduleIdList(value) {
+    return uniqueStrings(value, auto_memory_registry.isAutoMemoryDrawModule);
+}
+
+function setAutoMemoryRecoveryBackendForTests(value) {
+    testBackend = value;
+}
+
+function parseAutoMemoryPlan(value) {
+    exactKeys(value, PLAN_KEYS);
+    if (value.schemaVersion !== 1) throw corrupt();
+    const revision = safeCount(value.revision, 1, Number.MAX_SAFE_INTEGER);
+    const updatedAt = safeCount(value.updatedAt, 0, Number.MAX_SAFE_INTEGER);
+    if (typeof value.enabled !== 'boolean' || typeof value.legacyPreferencesMigrated !== 'boolean') throw corrupt();
+    if (!Number.isSafeInteger(value.intervalFloors) || value.intervalFloors < AUTO_MEMORY_INTERVAL_MIN || value.intervalFloors > AUTO_MEMORY_INTERVAL_MAX) {
+        throw fail('RMT_AUTO_MEMORY_INTERVAL', '自动留忆间隔只能保存 1 到 1000 楼，原设置没有改。');
+    }
+    const preferredModuleIds = moduleIdList(value.preferredModuleIds);
+    const excludedModuleIds = moduleIdList(value.excludedModuleIds);
+    if (preferredModuleIds.some(id => excludedModuleIds.includes(id))) throw corrupt();
+    const activeDrawTicketId = value.activeDrawTicketId === null ? null : boundedToken(value.activeDrawTicketId, 8, 80);
+    return {
+        schemaVersion: 1,
+        revision,
+        updatedAt,
+        enabled: value.enabled,
+        intervalFloors: value.intervalFloors,
+        preferredModuleIds,
+        excludedModuleIds,
+        lastCompletedFloor: nullableCount(value.lastCompletedFloor, Number.MAX_SAFE_INTEGER),
+        nextDueFloor: nullableCount(value.nextDueFloor, Number.MAX_SAFE_INTEGER),
+        activeDrawTicketId,
+        legacyPreferencesMigrated: value.legacyPreferencesMigrated,
+    };
+}
+
+function createAutoMemoryPlan(input = {}) {
+    const source = plainData(input) ? input : {};
+    return parseAutoMemoryPlan({
+        schemaVersion: 1,
+        revision: Object.hasOwn(source, 'revision') ? source.revision : 1,
+        updatedAt: Object.hasOwn(source, 'updatedAt') ? source.updatedAt : 0,
+        enabled: Object.hasOwn(source, 'enabled') ? source.enabled : false,
+        intervalFloors: Object.hasOwn(source, 'intervalFloors') ? source.intervalFloors : 5,
+        preferredModuleIds: Object.hasOwn(source, 'preferredModuleIds') ? source.preferredModuleIds : [],
+        excludedModuleIds: Object.hasOwn(source, 'excludedModuleIds') ? source.excludedModuleIds : [],
+        lastCompletedFloor: Object.hasOwn(source, 'lastCompletedFloor') ? source.lastCompletedFloor : null,
+        nextDueFloor: Object.hasOwn(source, 'nextDueFloor') ? source.nextDueFloor : null,
+        activeDrawTicketId: Object.hasOwn(source, 'activeDrawTicketId') ? source.activeDrawTicketId : null,
+        legacyPreferencesMigrated: Object.hasOwn(source, 'legacyPreferencesMigrated') ? source.legacyPreferencesMigrated : false,
+    });
+}
+
+function parseModuleStep(value) {
+    exactKeys(value, STEP_KEYS);
+    const status = STEP_STATUS.has(value.status) ? value.status : null;
+    if (!status) throw corrupt();
+    const recoverySlot = typeof value.recoverySlot === 'string' && value.recoverySlot.length <= 160 && !/[\u0000-\u001f]/.test(value.recoverySlot)
+        ? value.recoverySlot : null;
+    if (recoverySlot === null) throw corrupt();
+    if (status === 'completed' && !recoverySlot) throw corrupt();
+    return {
+        id: boundedToken(value.id, 1, 80),
+        kind: boundedToken(value.kind, 1, 40),
+        order: safeCount(value.order, 0, 100000),
+        status,
+        recoverySlot,
+    };
+}
+
+function parseModulePlan(value) {
+    exactKeys(value, MODULE_PLAN_KEYS);
+    if (value.version !== 1) throw corrupt();
+    const moduleId = boundedToken(value.moduleId, 1, 40);
+    if (!auto_memory_registry.isAutoMemoryDrawModule(moduleId)) throw corrupt();
+    exactKeys(value.expectedRequestRange, ['min', 'max']);
+    const min = safeCount(value.expectedRequestRange.min, 0, 100000);
+    const max = value.expectedRequestRange.max === null ? null : safeCount(value.expectedRequestRange.max, min, 100000);
+    if (!Array.isArray(value.steps) || value.steps.length < 1 || value.steps.length > 200) throw corrupt();
+    const steps = value.steps.map(parseModuleStep);
+    const orders = new Set(steps.map(step => step.order));
+    const ids = new Set(steps.map(step => step.id));
+    if (orders.size !== steps.length || ids.size !== steps.length) throw corrupt();
+    return {
+        version: 1,
+        drawId: boundedToken(value.drawId, 8, 80),
+        moduleId,
+        chatId: boundedText(value.chatId, 240),
+        archiveRevision: boundedText(value.archiveRevision, 240),
+        sourceMemoryIds: memoryIds(value.sourceMemoryIds),
+        expectedRequestRange: { min, max },
+        steps,
+        frozenAt: safeCount(value.frozenAt, 0, Number.MAX_SAFE_INTEGER),
+    };
+}
+
+function parseDrawTicket(value) {
+    exactKeys(value, TICKET_KEYS);
+    if (!TICKET_STATUS.has(value.status)) throw corrupt();
+    if (!Array.isArray(value.candidates) || value.candidates.length < 1 || value.candidates.length > 40) throw corrupt();
+    const seen = new Set();
+    const candidates = value.candidates.map(item => {
+        exactKeys(item, ['id', 'weight']);
+        const id = boundedToken(item.id, 1, 40);
+        if (!auto_memory_registry.isAutoMemoryDrawModule(id) || seen.has(id)) throw corrupt();
+        seen.add(id);
+        return { id, weight: safeCount(item.weight, 1, 1000000) };
+    });
+    const selectedModuleId = boundedToken(value.selectedModuleId, 1, 40);
+    if (!candidates.some(item => item.id === selectedModuleId)) throw corrupt();
+    return {
+        id: boundedToken(value.id, 8, 80),
+        dueFloor: safeCount(value.dueFloor, 0, Number.MAX_SAFE_INTEGER),
+        archiveRevision: boundedText(value.archiveRevision, 240),
+        candidates,
+        selectedModuleId,
+        sourceMemoryIds: memoryIds(value.sourceMemoryIds),
+        status: value.status,
+    };
+}
+
+function parseRevealRecord(value) {
+    exactKeys(value, REVEAL_KEYS);
+    if (!REVEAL_STATUS.has(value.status)) throw corrupt();
+    const moduleId = boundedToken(value.moduleId, 1, 40);
+    if (!auto_memory_registry.isAutoMemoryDrawModule(moduleId)) throw corrupt();
+    return {
+        id: boundedToken(value.id, 8, 80),
+        moduleId,
+        achievementId: value.achievementId === null ? null : boundedToken(value.achievementId, 8, 80),
+        sourceMemoryIds: memoryIds(value.sourceMemoryIds),
+        status: value.status,
+        createdAt: safeCount(value.createdAt, 0, Number.MAX_SAFE_INTEGER),
+    };
+}
+
+function parseList(value, parseItem, max) {
+    if (!Array.isArray(value) || value.length > max) throw corrupt();
+    const rows = value.map(parseItem);
+    const ids = new Set(rows.map(item => item.id));
+    if (ids.size !== rows.length) throw corrupt();
+    return rows;
+}
+
+function parseAutoMemorySnapshot(value) {
+    exactKeys(value, SNAPSHOT_KEYS);
+    const plan = parseAutoMemoryPlan(value.plan);
+    const drawTickets = parseList(value.drawTickets, parseDrawTicket, 40);
+    if (plan.activeDrawTicketId && !drawTickets.some(item => item.id === plan.activeDrawTicketId)) throw corrupt();
+    const modulePlan = value.modulePlan === null ? null : parseModulePlan(value.modulePlan);
+    if (modulePlan && plan.activeDrawTicketId && modulePlan.drawId !== plan.activeDrawTicketId) throw corrupt();
+    return {
+        plan,
+        revealRecords: parseList(value.revealRecords, parseRevealRecord, 200),
+        drawTickets,
+        modulePlan,
+    };
+}
+
+function readAutoMemoryMetadata(chatMetadata) {
+    if (chatMetadata == null) return null;
+    if (!plainData(chatMetadata)) throw corrupt();
+    const present = METADATA_KEYS.filter(key => Object.hasOwn(chatMetadata, key));
+    if (!present.length) return null;
+    if (present.length !== METADATA_KEYS.length) throw corrupt('自动留忆记录不完整，原记录保留，没有用默认值补齐。');
+    try {
+        return parseAutoMemorySnapshot({
+            plan: chatMetadata[AUTO_MEMORY_PLAN_KEY],
+            revealRecords: chatMetadata[AUTO_MEMORY_REVEAL_KEY],
+            drawTickets: chatMetadata[AUTO_MEMORY_DRAW_TICKETS_KEY],
+            modulePlan: chatMetadata[AUTO_MEMORY_MODULE_PLAN_KEY],
+        });
+    } catch (error) {
+        if (error?.code === 'RMT_AUTO_MEMORY_INTERVAL' || error?.code === 'RMT_AUTO_MEMORY_CORRUPT') {
+            throw corrupt();
+        }
+        throw error;
+    }
+}
+
+function inspectMetadata(metadata) {
+    try {
+        const snapshot = readAutoMemoryMetadata(metadata);
+        return { present: !!snapshot, corrupt: false, snapshot };
+    } catch (error) {
+        if (error?.code === 'RMT_AUTO_MEMORY_CORRUPT') return { present: true, corrupt: true, snapshot: null };
+        throw error;
+    }
+}
+
+function parseAutoMemoryRecoveryRecord(value) {
+    exactKeys(value, RECOVERY_KEYS);
+    if (value.schemaVersion !== 1) throw corrupt();
+    const chatId = boundedText(value.chatId, 240);
+    const key = recoveryKey(chatId);
+    if (value.key !== key) throw corrupt();
+    const payload = parseAutoMemorySnapshot(value.payload);
+    const revision = safeCount(value.revision, 1, Number.MAX_SAFE_INTEGER);
+    if (revision !== payload.plan.revision) throw corrupt();
+    return { key, schemaVersion: 1, chatId, revision, payload };
+}
+
+function inspectRecovery(recovery) {
+    if (recovery == null) return { present: false, corrupt: false, record: null };
+    try {
+        return { present: true, corrupt: false, record: parseAutoMemoryRecoveryRecord(recovery) };
+    } catch (error) {
+        if (error?.code === 'RMT_AUTO_MEMORY_CORRUPT' || error?.code === 'RMT_AUTO_MEMORY_INTERVAL') {
+            return { present: true, corrupt: true, record: null };
+        }
+        throw error;
+    }
+}
+
+// 主档修订不低于备份时保留主档。备份只在主档缺失，或备份修订确实更新且属于同一聊天时，才作为恢复来源。
+function selectAutoMemoryCanonical(metadata, recovery, expectedChatId = '') {
+    const primary = inspectMetadata(metadata);
+    const backup = inspectRecovery(recovery);
+    if (primary.corrupt) throw corrupt('这份自动留忆记录已损坏，原记录保留，没有用备份覆盖。');
+    if (backup.corrupt) {
+        if (!primary.present) throw corrupt('自动留忆备份已损坏，没有改成默认设置。');
+        return { snapshot: primary.snapshot, source: 'metadata', recoveryIgnored: true };
+    }
+    if (backup.present && backup.record.chatId !== boundedText(expectedChatId, 240)) {
+        if (!primary.present) throw corrupt('自动留忆备份属于另一段聊天，没有写入当前聊天。');
+        return { snapshot: primary.snapshot, source: 'metadata', recoveryIgnored: true };
+    }
+    if (!primary.present && !backup.present) return { snapshot: null, source: 'absent', recoveryIgnored: false };
+    if (!backup.present) return { snapshot: primary.snapshot, source: 'metadata', recoveryIgnored: false };
+    if (!primary.present) return { snapshot: backup.record.payload, source: 'recovery', recoveryIgnored: false };
+    if (backup.record.revision > primary.snapshot.plan.revision) {
+        return { snapshot: backup.record.payload, source: 'recovery', recoveryIgnored: false };
+    }
+    return { snapshot: primary.snapshot, source: 'metadata', recoveryIgnored: false };
+}
+
+function assertMayRestoreFromRecovery(metadata, recovery, expectedChatId = '') {
+    const chosen = selectAutoMemoryCanonical(metadata, recovery, expectedChatId);
+    if (chosen.source !== 'recovery') {
+        throw fail('RMT_AUTO_MEMORY_RECOVERY_STALE', '备份不新于聊天里的自动留忆记录，没有覆盖。');
+    }
+    return chosen.snapshot;
+}
+
+function prepareAutoMemoryWrite(chatMetadata, snapshot, expectedRevision) {
+    const current = readAutoMemoryMetadata(chatMetadata);
+    const currentRevision = current ? current.plan.revision : 0;
+    if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0 || currentRevision !== expectedRevision) throw stale();
+    const parsed = parseAutoMemorySnapshot(snapshot);
+    if (parsed.plan.revision !== expectedRevision + 1) throw stale();
+    return parsed;
+}
+
+function assignAutoMemoryMetadata(chatMetadata, snapshot) {
+    if (!plainData(chatMetadata)) throw corrupt();
+    const parsed = parseAutoMemorySnapshot(snapshot);
+    chatMetadata[AUTO_MEMORY_PLAN_KEY] = parsed.plan;
+    chatMetadata[AUTO_MEMORY_REVEAL_KEY] = parsed.revealRecords;
+    chatMetadata[AUTO_MEMORY_DRAW_TICKETS_KEY] = parsed.drawTickets;
+    chatMetadata[AUTO_MEMORY_MODULE_PLAN_KEY] = parsed.modulePlan;
+    return parsed;
+}
+
+function commitAutoMemoryMetadata(chatMetadata, snapshot, expectedRevision) {
+    const next = prepareAutoMemoryWrite(chatMetadata, snapshot, expectedRevision);
+    return assignAutoMemoryMetadata(chatMetadata, next);
+}
+
+function recoveryKey(chatId) {
+    const id = boundedText(chatId, 240);
+    return 'chat:' + encodeURIComponent(id);
+}
+
+function autoMemoryRecoveryAvailable() {
+    try { return !!testBackend || typeof globalThis.indexedDB?.open === 'function'; }
+    catch { return false; }
+}
+
+function recoveryUnavailable() {
+    return fail('RMT_AUTO_MEMORY_RECOVERY_UNAVAILABLE', '当前环境没有可用的自动留忆备份存储，聊天里的记录没有被覆盖。');
+}
+
+async function database() {
+    return new Promise((resolve, reject) => {
+        let request;
+        let settled = false;
+        const timer = setTimeout(() => { settled = true; reject(recoveryUnavailable()); }, 5000);
+        const stop = () => { clearTimeout(timer); if (!settled) { settled = true; reject(recoveryUnavailable()); } };
+        try {
+            request = globalThis.indexedDB.open(DATABASE, 1);
+            request.onupgradeneeded = () => {
+                if (!request.result.objectStoreNames.contains(STORE)) request.result.createObjectStore(STORE, { keyPath: 'key' });
+            };
+            request.onerror = stop;
+            request.onblocked = stop;
+            request.onsuccess = () => {
+                if (settled) { request.result.close(); return; }
+                settled = true;
+                clearTimeout(timer);
+                request.result.onversionchange = () => request.result.close();
+                resolve(request.result);
+            };
+        } catch { stop(); }
+    });
+}
+
+async function readAutoMemoryRecovery(chatId) {
+    if (!autoMemoryRecoveryAvailable()) throw recoveryUnavailable();
+    const key = recoveryKey(chatId);
+    const stored = testBackend ? await testBackend.read(key) : await idbRead(key);
+    if (!stored) return null;
+    return parseAutoMemoryRecoveryRecord(stored);
+}
+
+async function writeAutoMemoryRecovery(chatId, snapshot, expectedRevision) {
+    if (!autoMemoryRecoveryAvailable()) throw recoveryUnavailable();
+    const parsed = parseAutoMemorySnapshot(snapshot);
+    if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0 || parsed.plan.revision !== expectedRevision + 1) throw stale();
+    const record = parseAutoMemoryRecoveryRecord({
+        key: recoveryKey(chatId), schemaVersion: 1, chatId, revision: parsed.plan.revision, payload: parsed,
+    });
+    if (testBackend) return parseAutoMemoryRecoveryRecord(await testBackend.write(record.key, expectedRevision, record));
+    return parseAutoMemoryRecoveryRecord(await idbWrite(record.key, expectedRevision, record));
+}
+
+async function idbRead(key) {
+    const db = await database();
+    try {
+        return await new Promise((resolve, reject) => {
+            const tx = db.transaction(STORE, 'readonly');
+            let result = null;
+            const timer = setTimeout(() => { try { tx.abort(); } catch { /* already closed */ } reject(recoveryUnavailable()); }, 5000);
+            const request = tx.objectStore(STORE).get(key);
+            request.onsuccess = () => { result = request.result || null; };
+            tx.oncomplete = () => { clearTimeout(timer); resolve(result); };
+            tx.onabort = tx.onerror = () => { clearTimeout(timer); reject(recoveryUnavailable()); };
+        });
+    } finally { db.close(); }
+}
+
+async function idbWrite(key, expectedRevision, record) {
+    const db = await database();
+    try {
+        return await new Promise((resolve, reject) => {
+            const tx = db.transaction(STORE, 'readwrite');
+            let mismatch = false;
+            const timer = setTimeout(() => { try { tx.abort(); } catch { /* already closed */ } reject(recoveryUnavailable()); }, 5000);
+            const store = tx.objectStore(STORE);
+            const request = store.get(key);
+            request.onsuccess = () => {
+                if ((request.result?.revision || 0) !== expectedRevision) { mismatch = true; tx.abort(); return; }
+                store.put(record);
+            };
+            tx.oncomplete = () => { clearTimeout(timer); resolve(record); };
+            tx.onabort = tx.onerror = () => {
+                clearTimeout(timer);
+                reject(mismatch ? stale('自动留忆备份版本已变化，没有覆盖较新的记录。') : recoveryUnavailable());
+            };
+        });
+    } finally { db.close(); }
+}
+
+__m_autoMemory_planStore_js.readAutoMemoryRecovery = readAutoMemoryRecovery;
+__m_autoMemory_planStore_js.writeAutoMemoryRecovery = writeAutoMemoryRecovery;
+__m_autoMemory_planStore_js.setAutoMemoryRecoveryBackendForTests = setAutoMemoryRecoveryBackendForTests;
+__m_autoMemory_planStore_js.parseAutoMemoryPlan = parseAutoMemoryPlan;
+__m_autoMemory_planStore_js.createAutoMemoryPlan = createAutoMemoryPlan;
+__m_autoMemory_planStore_js.parseModuleStep = parseModuleStep;
+__m_autoMemory_planStore_js.parseModulePlan = parseModulePlan;
+__m_autoMemory_planStore_js.parseDrawTicket = parseDrawTicket;
+__m_autoMemory_planStore_js.parseRevealRecord = parseRevealRecord;
+__m_autoMemory_planStore_js.parseAutoMemorySnapshot = parseAutoMemorySnapshot;
+__m_autoMemory_planStore_js.readAutoMemoryMetadata = readAutoMemoryMetadata;
+__m_autoMemory_planStore_js.parseAutoMemoryRecoveryRecord = parseAutoMemoryRecoveryRecord;
+__m_autoMemory_planStore_js.selectAutoMemoryCanonical = selectAutoMemoryCanonical;
+__m_autoMemory_planStore_js.assertMayRestoreFromRecovery = assertMayRestoreFromRecovery;
+__m_autoMemory_planStore_js.prepareAutoMemoryWrite = prepareAutoMemoryWrite;
+__m_autoMemory_planStore_js.assignAutoMemoryMetadata = assignAutoMemoryMetadata;
+__m_autoMemory_planStore_js.commitAutoMemoryMetadata = commitAutoMemoryMetadata;
+__m_autoMemory_planStore_js.autoMemoryRecoveryAvailable = autoMemoryRecoveryAvailable;
+__m_autoMemory_planStore_js.AUTO_MEMORY_PLAN_KEY = AUTO_MEMORY_PLAN_KEY;
+__m_autoMemory_planStore_js.AUTO_MEMORY_REVEAL_KEY = AUTO_MEMORY_REVEAL_KEY;
+__m_autoMemory_planStore_js.AUTO_MEMORY_DRAW_TICKETS_KEY = AUTO_MEMORY_DRAW_TICKETS_KEY;
+__m_autoMemory_planStore_js.AUTO_MEMORY_MODULE_PLAN_KEY = AUTO_MEMORY_MODULE_PLAN_KEY;
+__m_autoMemory_planStore_js.AUTO_MEMORY_INTERVAL_MIN = AUTO_MEMORY_INTERVAL_MIN;
+__m_autoMemory_planStore_js.AUTO_MEMORY_INTERVAL_MAX = AUTO_MEMORY_INTERVAL_MAX;
+}
+
+function __init_autoMemory_migrateLegacy_js() {
+// MODULE: autoMemory/migrateLegacy.js
+const auto_update_policy = __m_core_autoUpdatePolicy_js;
+const auto_memory_registry = __m_autoMemory_moduleRegistry_js;
+const auto_memory_plan = __m_autoMemory_planStore_js;
+// 旧的按模块开关只转成一次用户偏好。
+// 不打开新计划，也不把任何模块标成已经可以自动生成。
+
+
+
+function legacyPreferredModuleIds(value) {
+    const normalized = auto_update_policy.normalizeAutoUpdates(value);
+    const preferred = [];
+    for (const mode of auto_update_policy.AUTO_UPDATE_MODES) {
+        // 建档是周期前提，不是抽签模块。成就已改成其他模块的末包。
+        if (mode === 'archive' || mode === 'achievements') continue;
+        if (normalized[mode]?.enabled !== true) continue;
+        if (!auto_memory_registry.isAutoMemoryDrawModule(mode)) continue;
+        preferred.push(mode);
+    }
+    return preferred;
+}
+
+function nextUpdatedAt(previous, now) {
+    if (Number.isSafeInteger(now) && now > previous) return now;
+    if (previous < Number.MAX_SAFE_INTEGER) return previous + 1;
+    return previous;
+}
+
+// existingPlanRaw 为空才读取旧开关。已经迁移过的计划保持原偏好，即使旧开关后来又变了。
+function migrateLegacyAutoPreferences(existingPlanRaw, legacyAutoUpdates, now = 0) {
+    if (existingPlanRaw != null) {
+        const parsed = auto_memory_plan.parseAutoMemoryPlan(existingPlanRaw);
+        if (parsed.legacyPreferencesMigrated) return { plan: parsed, changed: false };
+        const plan = auto_memory_plan.parseAutoMemoryPlan({
+            ...parsed,
+            legacyPreferencesMigrated: true,
+            revision: parsed.revision + 1,
+            updatedAt: nextUpdatedAt(parsed.updatedAt, now),
+        });
+        return { plan, changed: true };
+    }
+    return {
+        plan: auto_memory_plan.createAutoMemoryPlan({
+            enabled: false,
+            intervalFloors: 5,
+            preferredModuleIds: legacyPreferredModuleIds(legacyAutoUpdates),
+            excludedModuleIds: [],
+            legacyPreferencesMigrated: true,
+            updatedAt: Number.isSafeInteger(now) ? now : 0,
+        }),
+        changed: true,
+    };
+}
+
+__m_autoMemory_migrateLegacy_js.migrateLegacyAutoPreferences = migrateLegacyAutoPreferences;
+}
+
 function __init_heartbeatMemories_js() {
 // MODULE: heartbeatMemories.js
 const core_cache = __m_core_cache_js;
 const core_autoUpdates = __m_core_autoUpdates_js;
+const auto_memory_registry = __m_autoMemory_moduleRegistry_js;
+const auto_memory_plan = __m_autoMemory_planStore_js;
+const auto_memory_migrate = __m_autoMemory_migrateLegacy_js;
 const core_constants = __m_core_constants_js;
 const core_context = __m_core_context_js;
 const core_diagnosticReport = __m_core_diagnosticReport_js;
@@ -69659,6 +70386,9 @@ const runtimeState = __m_core_state_js.state;
 
 
 
+
+
+
 function openArchiveLibrary(source = 'runtime-api') {
     return ui_archivePortal.safeShowArchiveLibrary(source);
 }
@@ -69669,6 +70399,15 @@ function openSettingsHome() {
 
 function isGenerationBusy() {
     return runtimeState.busy || core_requestCoordinator.hasGenerationTasks() || !!runtimeState.roomLifeRefreshPromise;
+}
+
+// R0 合同随运行时加载，启动时不读不写聊天。旧自动更新仍走原来的调度。
+function autoMemoryContractSurface() {
+    return {
+        modules: auto_memory_registry.listAutoMemoryModules().map(item => item.id),
+        intervalMax: auto_memory_plan.AUTO_MEMORY_INTERVAL_MAX,
+        canMigrate: typeof auto_memory_migrate.migrateLegacyAutoPreferences === 'function',
+    };
 }
 
 function initMemoryTheater() {
@@ -69833,6 +70572,7 @@ function destroyMemoryTheater() {
 __m_heartbeatMemories_js.openArchiveLibrary = openArchiveLibrary;
 __m_heartbeatMemories_js.openSettingsHome = openSettingsHome;
 __m_heartbeatMemories_js.isGenerationBusy = isGenerationBusy;
+__m_heartbeatMemories_js.autoMemoryContractSurface = autoMemoryContractSurface;
 __m_heartbeatMemories_js.initMemoryTheater = initMemoryTheater;
 __m_heartbeatMemories_js.destroyMemoryTheater = destroyMemoryTheater;
 }
@@ -70075,10 +70815,14 @@ __init_core_cacheGenerationDrafts_js();
 __init_core_cacheSessions_js();
 __init_core_cacheArchiveMemory_js();
 __init_core_cache_js();
+__init_autoMemory_moduleRegistry_js();
+__init_autoMemory_planStore_js();
+__init_autoMemory_migrateLegacy_js();
 __init_heartbeatMemories_js();
 
 export const openArchiveLibrary = __m_heartbeatMemories_js.openArchiveLibrary;
 export const openSettingsHome = __m_heartbeatMemories_js.openSettingsHome;
 export const isGenerationBusy = __m_heartbeatMemories_js.isGenerationBusy;
+export const autoMemoryContractSurface = __m_heartbeatMemories_js.autoMemoryContractSurface;
 export const initMemoryTheater = __m_heartbeatMemories_js.initMemoryTheater;
 export const destroyMemoryTheater = __m_heartbeatMemories_js.destroyMemoryTheater;
