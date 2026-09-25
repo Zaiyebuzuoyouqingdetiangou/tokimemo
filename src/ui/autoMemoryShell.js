@@ -1,13 +1,17 @@
-// 外置壳贴在角色楼层下面，不悬浮。点开详情进入插件里原来的那一页。
+// 外置壳贴在角色楼层下面，点开才展开。档案没写完时不挂壳，也不显示建档进度。
+import * as archive_repository from '../archive/repository.js';
 import * as auto_memory_plan from '../autoMemory/planStore.js';
 import * as auto_memory_registry from '../autoMemory/moduleRegistry.js';
 import * as shell_state from '../autoMemory/shellState.js';
+import * as core_constants from '../core/constants.js';
 import * as core_context from '../core/context.js';
 import * as generation_status from '../core/generationStatus.js';
 import * as core_requestCoordinator from '../core/requestCoordinator.js';
-import * as core_taskTrace from '../core/taskTrace.js';
 import * as core_text from '../core/text.js';
+import * as ui_floor from './chatFloorNav.js';
+import * as ui_reveal from './memoryReveal.js';
 import * as ui_overlay from './overlay.js';
+import * as ui_styles from './styles.js';
 import * as ui_taskCenter from './taskCenter.js';
 
 let cleanup = null;
@@ -27,6 +31,17 @@ function ensureCss() {
     document.head?.appendChild(style);
 }
 
+function mirrorModuleCss() {
+    try { ui_styles.ensureStyles(); } catch { /* 样式还没准备好时，楼层壳仍显示摘要。 */ }
+    const source = document.getElementById(core_constants.STYLE_ID);
+    if (!source || document.getElementById('rmt-floor-module-css')) return;
+    const style = document.createElement('style');
+    style.id = 'rmt-floor-module-css';
+    style.textContent = `${source.textContent.replaceAll(`#${core_constants.OVERLAY_ID}`, '.rmt-floor-shell')}
+.rmt-floor-shell{position:relative!important;inset:auto!important;z-index:auto!important;height:auto!important;width:min(96%,640px)!important;max-height:none!important;display:block!important;padding:0!important;background:transparent!important;backdrop-filter:none!important}`;
+    document.head?.appendChild(style);
+}
+
 function latestAssistantIndex(chat) {
     if (!Array.isArray(chat)) return -1;
     for (let index = chat.length - 1; index >= 0; index -= 1) {
@@ -34,11 +49,6 @@ function latestAssistantIndex(chat) {
         if (message && message.is_user !== true && message.is_system !== true) return index;
     }
     return -1;
-}
-
-function messageNode(index) {
-    if (!Number.isSafeInteger(index) || index < 0) return null;
-    return document.querySelector(`#chat .mes[mesid="${index}"]`) || document.querySelector(`.mes[mesid="${index}"]`);
 }
 
 function clearShells() {
@@ -53,20 +63,11 @@ function readSnapshot(context) {
     }
 }
 
-function archiveProgress(rows) {
-    const traces = core_taskTrace.taskTraceSnapshot();
-    const trace = [...traces].reverse().find(row => row.mode === 'archive' && row.outcome === 'running' && row.chunks?.total > 0);
-    const running = rows.find(row => row.currentChat && row.running && (row.kind === 'archive' || row.id === 'archive-import'));
-    if (!running && !trace) return { archive: null, paused: false };
-    if (running?.phase === 'queue') return { archive: null, paused: true };
-    return {
-        paused: false,
-        archive: {
-            waiting: running?.phase === 'prepare' && !trace,
-            done: trace ? trace.chunks.ok : null,
-            total: trace ? trace.chunks.total : null,
-        },
-    };
+function archiveIsReady(context, rows) {
+    let memory = null;
+    try { memory = archive_repository.getImportedMemory(context); } catch { memory = null; }
+    const importing = rows.some(row => row.currentChat && row.running && (row.kind === 'archive' || row.id === 'archive-import'));
+    return !!memory && !importing;
 }
 
 function viewFor(context) {
@@ -78,27 +79,37 @@ function viewFor(context) {
     const reveal = [...snapshot.revealRecords].reverse().find(row => !moduleId || row.moduleId === moduleId) || null;
     let rows = [];
     try { rows = core_requestCoordinator.listChatTaskSnapshot(context); } catch { rows = []; }
-    const archive = archiveProgress(rows);
     const steps = snapshot.modulePlan?.steps || [];
     const failedStep = steps.some(step => step.status === 'failed') || ticket?.status === 'failed';
-    const running = rows.some(row => row.currentChat && row.running);
+    const moduleRow = rows.find(row => row.currentChat && row.running && row.kind !== 'archive' && row.id !== 'archive-import');
+    const running = !!moduleRow;
     const common = generation_status.resolveGenerationStatus({
         running, partial: failedStep, hasContent: steps.some(step => step.status === 'completed'),
     });
-    const moduleComplete = item?.isComplete?.(null, snapshot.modulePlan) === true && steps.length > 0 && steps.every(step => step.status === 'completed');
+    const moduleComplete = item?.isComplete?.(null, snapshot.modulePlan) === true;
     return shell_state.shellView({
         enabled: true,
+        archiveReady: archiveIsReady(context, rows),
         moduleId,
         moduleTitle: item?.title || '',
         moduleComplete,
         steps,
         ticketStatus: ticket?.status || '',
         revealStatus: reveal?.status || '',
+        revealId: reveal?.id || '',
         revealLine: shell_state.revealFace({ userName: context.name1, achievementTitle: '', moduleTitle: item?.title || '' }),
         failureRecoverable: !running && (failedStep || common.state === 'failed' || common.state === 'retry'),
-        paused: archive.paused,
-        archive: archive.archive,
+        paused: moduleRow?.phase === 'queue',
     });
+}
+
+function markup(view) {
+    const pending = view.phase === 'reveal' ? '' : ' data-rmt-pending="1"';
+    const status = view.progress ? `<p class="rmt-floor-status">${core_text.esc(view.detail)}</p>` : '';
+    const body = view.showReveal
+        ? `<div class="rmt-floor-body" data-rmt-floor-body data-rmt-reveal="${core_text.esc(view.revealId)}" data-rmt-module="${core_text.esc(view.moduleId)}"></div>`
+        : `<p class="rmt-floor-note">${core_text.esc(view.detail)}</p>`;
+    return `<div class="rmt-floor-external"${pending}>${status}<details data-rmt-floor-details><summary data-rmt-reveal="${core_text.esc(view.revealId)}"><b>${core_text.esc(view.title)}</b><small>${core_text.esc(view.detail)}</small></summary>${body}</details></div>`;
 }
 
 function paint(context) {
@@ -107,25 +118,37 @@ function paint(context) {
     const toast = shell_state.toastForTransition(lastPhase, view.phase, { line: view.title }, { initial: !sawPhase });
     sawPhase = true;
     lastPhase = view.phase;
-    if (toast) globalThis.toastr?.[toast.level]?.(toast.message, toast.title);
+    if (toast) {
+        const options = view.revealId ? { onclick: () => openReveal(view.revealId) } : undefined;
+        globalThis.toastr?.[toast.level]?.(toast.message, toast.title, options);
+    }
     if (view.phase === 'hidden') { clearShells(); return; }
     const index = latestAssistantIndex(context.chat);
-    const mes = messageNode(index);
-    if (!mes) { clearShells(); return; }
+    const mes = ui_floor.messageElement(index);
+    if (!mes || ui_floor.writesMessageText()) { clearShells(); return; }
     ensureCss();
     let host = mes.nextElementSibling;
     if (!host || host.dataset.rmtFloorShell !== '1') {
         clearShells();
-        host = document.createElement('div');
-        host.dataset.rmtFloorShell = '1';
-        host.className = 'rmt-floor-shell';
-        mes.insertAdjacentElement('afterend', host);
+        host = ui_floor.placeAfterMessage(mes);
     }
-    const open = view.showReveal && view.moduleId
-        ? `<button type="button" class="rmt-btn" data-rmt-floor-open="${core_text.esc(view.moduleId)}">查看详情</button>`
-        : '';
-    const tasks = view.phase === 'reveal' ? '' : '<button type="button" class="rmt-btn" data-rmt-floor-tasks>任务里也能看到</button>';
-    host.innerHTML = `<article class="rmt-floor-card"><b>${core_text.esc(view.title)}</b><p>${core_text.esc(view.detail)}</p>${open}${tasks}</article>`;
+    if (!host) return;
+    const details = host.querySelector('[data-rmt-floor-details]');
+    const body = host.querySelector('[data-rmt-floor-body]');
+    const sameReveal = host.dataset.rmtPhase === view.phase && host.dataset.rmtReveal === view.revealId && details?.open && body?.childElementCount;
+    host.dataset.rmtPhase = view.phase;
+    host.dataset.rmtReveal = view.revealId;
+    host.dataset.rmtPending = view.phase === 'reveal' ? '0' : '1';
+    if (sameReveal) {
+        const title = host.querySelector('summary b');
+        const detail = host.querySelector('summary small');
+        if (title) title.textContent = view.title;
+        if (detail) detail.textContent = view.detail;
+        return;
+    }
+    const wasOpen = !!details?.open;
+    host.innerHTML = markup(view);
+    if (wasOpen) host.querySelector('[data-rmt-floor-details]')?.setAttribute('open', '');
     try { ui_taskCenter.syncLiveTaskStrip(); } catch { /* 任务条刷新失败时，楼层下面的状态仍保留。 */ }
 }
 
@@ -140,32 +163,52 @@ function sync() {
     }
 }
 
-function openDetail(moduleId) {
+async function openInFloor(body) {
+    const moduleId = body?.dataset?.rmtModule || '';
+    const revealId = body?.dataset?.rmtReveal || '';
     const item = auto_memory_registry.autoMemoryModuleById(moduleId);
-    if (!item) return;
+    if (!item || !body) return;
+    mirrorModuleCss();
+    body.dataset.rmtFloorLive = '1';
     try {
-        ui_overlay.openOverlay();
-        ui_overlay.openCachedOrGenerate(item.id, { workspaceRoute: item.id });
+        await Promise.resolve(ui_overlay.openCachedOrGenerate(item.id, { workspaceRoute: item.id }));
     } catch (error) {
         console.warn('[HeartbeatMemories] floor detail skipped', core_text.safeErrorDiagnostic(error));
         globalThis.toastr?.error?.('这一页暂时没能打开。回忆还在，可以再点一次。', '心口顿了一下');
+        return;
+    } finally {
+        delete body.dataset.rmtFloorLive;
     }
+    rememberOpened(revealId);
 }
 
-function openTasks() {
+function rememberOpened(revealId) {
+    if (!revealId) return;
     try {
-        ui_overlay.openOverlay();
-        ui_taskCenter.handleTaskCenterAction('tasks');
+        const context = core_context.currentCharacterGuard();
+        const snapshot = readSnapshot(context);
+        const marked = ui_reveal.markRevealOpened(snapshot, revealId, Date.now());
+        if (!marked.changed) return;
+        auto_memory_plan.commitAutoMemoryMetadata(context.chatMetadata, marked.snapshot, snapshot.plan.revision);
+        context.saveMetadataDebounced?.();
     } catch (error) {
-        console.warn('[HeartbeatMemories] floor tasks skipped', core_text.safeErrorDiagnostic(error));
-        globalThis.toastr?.error?.('任务页暂时没能打开。楼层下面的进度还在。', '心口顿了一下');
+        console.warn('[HeartbeatMemories] reveal read state skipped', core_text.safeErrorDiagnostic(error));
     }
 }
 
-function onClick(event) {
-    const open = event.target?.closest?.('[data-rmt-floor-open]');
-    if (open) { openDetail(open.dataset.rmtFloorOpen || ''); return; }
-    if (event.target?.closest?.('[data-rmt-floor-tasks]')) openTasks();
+function openReveal(revealId) {
+    if (!/^[A-Za-z0-9_-]{8,80}$/.test(revealId || '')) return;
+    const details = document.querySelector(`[data-rmt-floor-shell][data-rmt-reveal="${revealId}"] [data-rmt-floor-details]`);
+    if (!details) return;
+    if (!details.open) details.open = true;
+    else void openInFloor(details.querySelector('[data-rmt-floor-body]'));
+}
+
+function onToggle(event) {
+    const details = event.target?.closest?.('[data-rmt-floor-details]');
+    if (!details?.open) return;
+    const body = details.querySelector('[data-rmt-floor-body]');
+    if (body) void openInFloor(body);
 }
 
 export function stopAutoMemoryShell() {
@@ -192,10 +235,10 @@ export function startAutoMemoryShell() {
         for (const type of events) source.on(type, type === types.CHAT_CHANGED ? onChat : listener);
         cleanup = () => { for (const type of events) source.off?.(type, type === types.CHAT_CHANGED ? onChat : listener); };
     }
-    document.addEventListener('click', onClick);
-    const removeClick = () => document.removeEventListener('click', onClick);
+    document.addEventListener('toggle', onToggle, true);
+    const removeToggle = () => document.removeEventListener('toggle', onToggle, true);
     const previous = cleanup;
-    cleanup = () => { previous?.(); removeClick(); };
+    cleanup = () => { previous?.(); removeToggle(); };
     timer = setInterval(sync, 2000);
     sync();
 }

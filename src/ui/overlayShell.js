@@ -217,6 +217,8 @@ export function invalidateArchiveViewForChatNavigation(nextChatId = '') {
 }
 
 export function bodyEl() {
+    const floor = document.querySelector('.rmt-floor-shell [data-rmt-floor-body][data-rmt-floor-live="1"]');
+    if (floor) return floor;
     return document.querySelector(`#${core_constants.OVERLAY_ID} .rmt-body`);
 }
 

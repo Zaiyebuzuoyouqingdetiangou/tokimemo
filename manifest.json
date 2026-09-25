@@ -1,15 +1,15 @@
 {
   "display_name": "心迹回廊",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.99.36-r84.88-auto-memory-r4",
+  "js": "index.js?heartbeat=0.99.37-r84.89-auto-memory-r6",
   "author": "Toto",
-  "version": "0.99.36",
+  "version": "0.99.37",
   "auto_update": true,
   "minimum_client_version": "1.13.0",
   "hooks": {
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r84.88：自动留忆的进度贴在角色楼层下面，不悬浮。整份没写完时不显示成就。点开详情进入原来的板块。成功和失败都会提示。",
+  "description": "r84.89：档案没写完时，楼层下不挂壳。写完后贴在楼层下面，点开才展开对应回忆。成功和失败都会提示。自动抽签仍不发模块请求。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }

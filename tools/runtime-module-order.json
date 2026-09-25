@@ -241,9 +241,12 @@
   "autoMemory/migrateLegacy.js",
   "autoMemory/draw.js",
   "autoMemory/incrementalGate.js",
+  "autoMemory/combinedResult.js",
   "autoMemory/scheduler.js",
   "autoMemory/shellState.js",
   "autoMemory/wizardPlan.js",
+  "ui/memoryReveal.js",
+  "ui/chatFloorNav.js",
   "ui/autoMemoryWizard.js",
   "ui/autoMemoryShell.js",
   "heartbeatMemories.js"

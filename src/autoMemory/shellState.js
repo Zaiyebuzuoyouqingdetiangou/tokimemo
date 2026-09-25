@@ -1,4 +1,4 @@
-// 楼层下面的生成壳只根据已知计划说话。总数未知时不编进度，整份没完成时不显示揭晓。
+// 楼层下面的生成壳只说明模块是不是在生成。建档在插件里进行，档案没完成时不挂壳。
 
 export function shellBlocksChatInput() {
     return false;
@@ -6,12 +6,15 @@ export function shellBlocksChatInput() {
 
 export function floorShellCss() {
     return `
-.rmt-floor-shell{position:static;clear:both;box-sizing:border-box;margin:8px 0 12px;max-width:100%;pointer-events:auto}
-.rmt-floor-shell .rmt-floor-card{margin:0 12px 0 54px;max-width:640px;padding:14px 16px;border:1px solid #cbdce6;border-radius:16px;background:linear-gradient(180deg,#fffdf9 0%,#f7fbfe 100%);color:#4d5d73;box-shadow:0 8px 22px rgba(77,100,118,.08)}
-.rmt-floor-shell .rmt-floor-card b{display:block;font-size:16px;line-height:1.55}
-.rmt-floor-shell .rmt-floor-card b:before{content:"♥ ";color:#e99ab9}
-.rmt-floor-shell .rmt-floor-card p{margin:6px 0 0;color:#7b8798;line-height:1.6}
-.rmt-floor-shell .rmt-btn{margin-top:10px}
+.rmt-floor-shell{position:relative;clear:both;box-sizing:border-box;width:min(96%,640px);margin:8px auto 12px;z-index:1}
+.rmt-floor-shell .rmt-floor-status{margin:0 0 8px;font-size:12px;font-weight:650;text-align:center;color:#4d5d73}
+.rmt-floor-shell details{margin:0}
+.rmt-floor-shell summary{display:block;width:fit-content;max-width:100%;box-sizing:border-box;padding:10px 14px;border:1px solid rgba(0,0,0,.10);border-radius:14px;background:linear-gradient(145deg,#fff,#f7fbfe);color:#4d5d73;box-shadow:0 6px 16px rgba(0,0,0,.07),3px 0 0 #e99ab9 inset;cursor:pointer;list-style:none}
+.rmt-floor-shell summary::-webkit-details-marker{display:none}
+.rmt-floor-shell summary b{display:block;font-size:15px;line-height:1.5}
+.rmt-floor-shell summary small{display:block;margin-top:4px;color:#7b8798;font-size:12px}
+.rmt-floor-shell .rmt-floor-note,.rmt-floor-shell .rmt-floor-body{margin-top:8px;min-width:0}
+.rmt-floor-shell[data-rmt-pending="1"] details{opacity:.76}
 `;
 }
 
@@ -29,7 +32,7 @@ export function revealFace({ userName = '', achievementTitle = '', moduleTitle =
 export function toastForTransition(previousPhase, nextPhase, face = {}, { initial = false } = {}) {
     if (initial || !nextPhase || previousPhase === nextPhase) return null;
     if (nextPhase === 'reveal') {
-        return { level: 'success', title: '心口一热', message: `${face.line || '一段新的回忆'}。点开楼层下面，就能看见。` };
+        return { level: 'success', title: '心口一热', message: `今天留下了新的回忆。${face.line || '一段新的回忆'}。点开楼层下面，就能看见。` };
     }
     if (nextPhase === 'failed') {
         return { level: 'error', title: '这份回忆停住了', message: '已经记下的部分还在。楼层下面不会把它当成已经拆开。' };
@@ -45,18 +48,19 @@ function cleanName(value) {
 }
 
 function hidden() {
-    return { phase: 'hidden', showReveal: false, blocksInput: false, progress: null, title: '', detail: '', moduleId: '' };
+    return { phase: 'hidden', showReveal: false, blocksInput: false, progress: null, title: '', detail: '', moduleId: '', revealId: '' };
 }
 
 export function shellView(input = {}) {
-    if (input.enabled !== true) return hidden();
+    if (input.enabled !== true || input.archiveReady !== true) return hidden();
     const steps = Array.isArray(input.steps) ? input.steps : [];
     const done = steps.filter(step => step?.status === 'completed').length;
     const allDone = steps.length > 0 && done === steps.length;
     const complete = input.moduleComplete === true && allDone;
     const revealStatus = input.revealStatus || '';
     const moduleId = typeof input.moduleId === 'string' ? input.moduleId : '';
-    const face = { blocksInput: false, showReveal: false, progress: null, moduleId };
+    const revealId = typeof input.revealId === 'string' ? input.revealId : '';
+    const face = { blocksInput: false, showReveal: false, progress: null, moduleId, revealId };
     if (complete && revealStatus === 'achievement_pending') {
         return { ...face, phase: 'achievement-pending', title: '回忆先留着', detail: '成就还缺一笔，先不拆开。' };
     }
@@ -79,11 +83,6 @@ export function shellView(input = {}) {
     if (input.ticketStatus === 'drawn' || input.ticketStatus === 'running') {
         const title = cleanName(input.moduleTitle);
         return { ...face, phase: 'drawn', title: '抽中了一段回忆', detail: title ? `这一页是${title}。` : '还没开始写正文。' };
-    }
-    if (input.archive) {
-        if (input.archive.waiting === true) return { ...face, phase: 'waiting-archive', title: '等待建档', detail: '档案还没开始写。' };
-        const progress = knownProgress(input.archive.done, input.archive.total);
-        return { ...face, phase: 'archiving', progress, title: '正在把聊天收成档案', detail: progress ? `正在建档 ${progress.done} / ${progress.total}` : '正在建档' };
     }
     if (revealStatus === 'generating' || revealStatus === 'ready' || revealStatus === 'opened') {
         return { ...face, phase: 'generating', title: '回忆生成中', detail: '还没整份写完，先不拆开。' };

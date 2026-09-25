@@ -1,5 +1,6 @@
 // 启用新计划后，由这一处按楼层做增量建档和抽签。没有新记忆或没有可抽模块时不发模块请求。
 import * as archive_repository from '../archive/repository.js';
+import * as auto_memory_combined from './combinedResult.js';
 import * as auto_memory_gate from './incrementalGate.js';
 import * as auto_memory_plan from './planStore.js';
 import * as auto_memory_registry from './moduleRegistry.js';
@@ -88,7 +89,8 @@ async function runHostRound() {
                     } catch { /* 聊天记录已经写下。备份写失败时不改主档，也不补发请求。 */ }
                 },
                 startModule: async () => {
-                    // 生成壳在后续轮次。票据已经先落盘，这里不调用模型。
+                    // 四个单请求模块的成果合同已在 combinedResult。它们还不能自动抽取，所以这里不调用模型，也不结算成果。
+                    void auto_memory_combined.settleCombined;
                 },
             });
             if (result.action === 'arm' || result.action === 'noop' || result.action === 'drawn' || result.action === 'wait') {

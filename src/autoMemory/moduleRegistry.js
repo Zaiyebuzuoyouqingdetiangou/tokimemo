@@ -20,13 +20,18 @@ function inertComplete() {
     return false;
 }
 
+function stepsComplete(_result, plan) {
+    const steps = Array.isArray(plan?.steps) ? plan.steps : [];
+    return steps.length > 0 && steps.every(step => step?.status === 'completed');
+}
+
 function defineModule(spec) {
     return Object.freeze({
         ...spec,
         prerequisites: Object.freeze([...spec.prerequisites]),
         plan: inertPlan,
         pendingSteps: inertPendingSteps,
-        isComplete: inertComplete,
+        isComplete: spec.isComplete || inertComplete,
     });
 }
 
@@ -65,13 +70,13 @@ const MODULES = Object.freeze([
         id: 'inbox', title: '你的邮箱', contentKind: COLLECTION, batch: 1, inDrawPool: true,
         description: '有信件计划时一次写完本轮信件。没有计划则跳过，不生成信封或成就。',
         normalRequestEstimate: '0～1', prerequisites: [], supportsIncremental: true,
-        autoEligible: false, achievementMerged: false, unavailableReason: '暂不可自动生成',
+        autoEligible: false, achievementMerged: false, unavailableReason: '暂不可自动生成', isComplete: stepsComplete,
     }),
     defineModule({
         id: 'cabinet', title: '两个人的陈列柜', contentKind: HISTORICAL, batch: 1, inDrawPool: true,
         description: '生成或刷新本轮陈列柜成果。通过校验并保存后才算完成。',
         normalRequestEstimate: '1', prerequisites: [], supportsIncremental: true,
-        autoEligible: false, achievementMerged: false, unavailableReason: '暂不可自动生成',
+        autoEligible: false, achievementMerged: false, unavailableReason: '暂不可自动生成', isComplete: stepsComplete,
     }),
     defineModule({
         id: 'travel', title: '他的出行路线', contentKind: HISTORICAL, batch: 2, inDrawPool: true,
@@ -89,13 +94,13 @@ const MODULES = Object.freeze([
         id: 'calendar', title: '两个人的日历', contentKind: HISTORICAL, batch: 1, inDrawPool: true,
         description: '生成或刷新本轮日历成果。通过校验并保存后才算完成。',
         normalRequestEstimate: '1', prerequisites: [], supportsIncremental: true,
-        autoEligible: false, achievementMerged: false, unavailableReason: '暂不可自动生成',
+        autoEligible: false, achievementMerged: false, unavailableReason: '暂不可自动生成', isComplete: stepsComplete,
     }),
     defineModule({
         id: 'relations', title: '人际庭园', contentKind: HISTORICAL, batch: 1, inDrawPool: true,
         description: '生成或刷新本轮关系成果。通过校验并保存后才算完成。',
         normalRequestEstimate: '1', prerequisites: [], supportsIncremental: true,
-        autoEligible: false, achievementMerged: false, unavailableReason: '暂不可自动生成',
+        autoEligible: false, achievementMerged: false, unavailableReason: '暂不可自动生成', isComplete: stepsComplete,
     }),
     defineModule({
         id: 'heart', title: '角色互动', contentKind: COLLECTION, batch: 5, inDrawPool: true,

@@ -484,8 +484,9 @@ export function openCachedOrGenerate(mode, options = {}) {
 }
 
 export function renderActive() {
+    const floorLive = !!document.querySelector('.rmt-floor-shell [data-rmt-floor-body][data-rmt-floor-live="1"]');
     const overlay = document.getElementById(core_constants.OVERLAY_ID);
-    if (!overlay || overlay.hidden) return;
+    if (!floorLive && (!overlay || overlay.hidden)) return;
     try {
         const scope = core_context.chatScopeKey(core_context.currentCharacterGuard());
         if (runtimeState.renderedChatScope && runtimeState.renderedChatScope !== scope) return;
