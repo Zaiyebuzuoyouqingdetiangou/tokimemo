@@ -18,14 +18,17 @@
 - [x] README 中指向已移动文件的 4 处链接更新
 - [x] 新身份 0.99.20 / `0.99.20-r84.72-refactor-p1`（manifest、index.js VERSION/BUILD）、CHANGELOG、checks.json
 - [x] 70/70 测试、188 个 JS/MJS 语法检查、guard ok
-- [ ] 用户在 `测试` 分支装上后确认能打开；确认根目录旧文档是否被导入工作流删除
+- [x] 用户在 `测试` 分支装上后确认能打开（2026-09-25）
+- [x] 确认导入工作流**不删除**旧文件：根目录旧文档仍在 → 清单见 `branch-cleanup.md`，由用户决定是否手动删
 
 ## 阶段 2 · 拆大文件（纯搬家）
 
-- [ ] guard 增加允许变化清单（`dev/active/refactor/guard-allow.json`，每条写原因），只用于 styles 拆分
-- [ ] `ui/styles.js` → 按页面拆出若干 `…Css()`；css 指纹逐字相同 → 候选 r84.73
-- [ ] `archive/repository.js` 按职责拆（建档 / 入档提交 / 恢复 / 容量等），原文件转发
-- [ ] `core/cache.js` 按玩法拆，原文件转发
+- [x] guard 增加允许变化清单（`verification/refactor-allow.json`，每条写原因）；目前只有 styles 一条
+- [x] `ui/styles.js` → `ui/css/*.js` 7 个；另用两份 bundle 直接比对 CSS：458,438 + 60,130 字符逐字相同（r84.73）
+- [x] 写 `tools/split-module.mjs`（原样搬家工具）
+- [x] `archive/repository.js` → 8 个模块，原文件 30KB 转发（r84.73）
+- [x] `core/cache.js` → 6 个模块，原文件 12KB 转发（r84.73）
+- [ ] 用户在 `测试` 分支装 r84.73：打开档案室、建档或继续一次建档、打开任一已生成页面、看设置页样式是否正常
 - [ ] `modes/room.js` 拆分（无自动测试：需用户手点房间页）
 - [ ] `modes/heart.js` 拆分（需手点 HEART 页）
 - [ ] `modes/phone.js` 拆分（需手点私人终端）
@@ -33,7 +36,8 @@
 - [ ] `generation/client.js` 拆分
 - [ ] `ui/overlay.js` 拆分
 - [ ] `ui/settingsPanel.js` 拆分
-- [ ] 复查：没有源文件超过约 60KB（CSS 数据文件除外需单独说明）
+- [ ] `archive/library.js`（89KB）、`generation/recovery.js`（70KB）、`modes/relations.js`（68KB）、`modes/calendar.js`、`generation/imageGeneration.js`（各约 63KB）
+- [ ] 复查：没有源文件超过约 60KB
 
 ## 阶段 3 · 理依赖（待用户决定是否做）
 

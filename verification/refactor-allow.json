@@ -1,0 +1,10 @@
+{
+  "note": "Declarations whose text may differ from verification/refactor-baseline.json. CSS output and init bindings are still checked and must match.",
+  "entries": [
+    {
+      "round": "r84.73",
+      "declaration": "ui/styles.js:ensureStyles",
+      "reason": "主 CSS 字符串（原第 229–1170 行）原样拆到 ui/css/*.js 七个函数，按原顺序拼接；输出由 css 指纹证明逐字相同。"
+    }
+  ]
+}

@@ -39,9 +39,28 @@
 - 上传包里的 `P0-修复说明.md` 原本只有乱码文件名，README 里指向它的链接之前就是断的（本轮已随改名修好）。
 - CURRENT §1–§6 只扫描了 240 / 12MB / 冷归档 / 温度 / 写真 / 120 万这几个关键词，可能还有其他过期表述。
 
+## 各轮身份
+
+| 轮次 | 版本 / build | bundle SHA-256 | 说明 |
+|---|---|---|---|
+| r84.71 | 0.99.19 | `f7d2259…` | 起点 |
+| r84.72 | 0.99.20 / `0.99.20-r84.72-refactor-p1` | `f7d2259…`（与起点相同） | 阶段 0、1；用户已在测试分支确认能打开 |
+| r84.73 | 0.99.21 / `0.99.21-r84.73-refactor-p2a` | `0e2c7675…` | styles、repository、cache 拆分；197 个模块 |
+
+## 决策记录（续）
+
+- D6 拆分用 `tools/split-module.mjs`：按调用关系分组，组与组之间只允许“后面的依赖前面的”，新模块全部排在原文件之前；原文件只留转发。工具发现反向依赖直接报错，不靠人工检查。
+- D7 repository 分组：archiveCore → worldInfoSources → externalMemory → importPrompts → importIdentity → recoveryDrafts → archiveVerdict → importOperation。`restartCurrentArchiveImport`、`continueCurrentArchiveImport`、建档入口和测试开关 `autoPartialCommitEnabled` 留在 repository（它们依赖入口函数，搬走会反向依赖）。`normalizeExternalMemoryRecords` 放进 worldInfoSources、`finishArchiveTaskTrace` / `isArchiveCancellation` 放进 archiveCore，都是为了消除组间循环。
+- D8 cache 分组：cacheRecords → cacheCommit → cacheVersions → cacheGenerationDrafts → cacheSessions → cacheArchiveMemory；`buildControlledContextEnvelope` 留在 cache.js。`cacheRecordUpdatedAt` 原本就没人调用，照搬到 cacheArchiveMemory，不删（删除属于改行为，另记）。
+- D9 测试分支导入流程只覆盖不删除（用户 2026-09-25 确认）。移动 / 删除文件后，仓库里会留下旧文件；清单在 `branch-cleanup.md`。
+
+## 发现的问题（续）
+
+- `core/cache.js` 原有未使用的内部函数 `cacheRecordUpdatedAt`。
+
 ## 当前进度 / 下一步
 
-- 已完成：阶段 0、阶段 1，交付 0.99.20 / `0.99.20-r84.72-refactor-p1`。bundle 仍是 `f7d2259…`，70/70 通过，guard ok。
-- 等用户：在 `测试` 分支装上 r84.72，确认能正常打开（运行代码没变，主要确认导入工作流是否删掉了根目录旧文件）。
-- 下一步：tasks 里阶段 2 第一项，给 guard 加允许变化清单，然后拆 `ui/styles.js`。
+- 已完成：阶段 0、1（r84.72，已验收能打开）；阶段 2 的 styles、repository、cache（r84.73，待验收）。
+- 等用户：装 r84.73，按 tasks 里的验收项点一遍。
+- 下一步：`modes/room.js`（170KB）。先 `node tools/split-module.mjs --analyze modes/room.js` 列出顶层声明与互相引用，按“后依赖前”分组写 spec，再运行拆分；没有自动测试，拆完请用户手点房间页。
 - 未打包的改动：无。

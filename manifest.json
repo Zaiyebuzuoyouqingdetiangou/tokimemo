@@ -1,15 +1,15 @@
 {
   "display_name": "心迹回廊",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.99.20-r84.72-refactor-p1",
+  "js": "index.js?heartbeat=0.99.21-r84.73-refactor-p2a",
   "author": "Toto",
-  "version": "0.99.20",
+  "version": "0.99.21",
   "auto_update": true,
   "minimum_client_version": "1.13.0",
   "hooks": {
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r84.72：重构第一步，功能不变。删除 29 个不再使用的旧源文件，整理开发文档；运行包与 r84.71 逐字节相同。",
+  "description": "r84.73：重构第二步，功能不变。样式、建档、缓存三个最大的文件按职责拆成小文件，原文件保留转发；生成的样式逐字相同。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }
