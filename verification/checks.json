@@ -1,13 +1,15 @@
 {
-  "version": "0.99.19",
-  "build": "0.99.19-r84.71-archive-resilience",
-  "syntaxFiles": 216,
+  "version": "0.99.20",
+  "build": "0.99.20-r84.72-refactor-p1",
+  "syntaxFiles": 188,
   "syntaxExit": 0,
   "bundleModules": 176,
   "bundleSha256": "f7d2259666c0616478699350816e06fb2b4e613ba5fda794cac28c0ffd570a76",
   "bundleRebuildIdentical": true,
+  "bundleIdenticalToR84_71": true,
   "tests": 70,
   "pass": 70,
   "fail": 0,
+  "refactorGuard": "ok (declarations 3532, exports 2047, css 10, unresolved bindings 0)",
   "testedEnvironment": "Node VM production modules and bundle; host/provider/storage boundaries replaced; not phone or live SillyTavern"
 }

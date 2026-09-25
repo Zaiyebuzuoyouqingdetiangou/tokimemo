@@ -1,3 +1,11 @@
+# 0.99.20 / r84.72 — 重构第一步（功能不变）
+
+- 删除 29 个入口不可达的旧源文件（`src/modes/` 下 28 个与 `src/ui/` 同名的旧界面副本、`src/ui/photoshootView.js`）。运行包 `dist/heartbeatMemories.bundle.js` 与 r84.71 逐字节相同。
+- 新增 `tools/refactor-guard.mjs` 与 `verification/refactor-baseline.json`：后续重构逐轮证明代码文本、导出、CSS 输出与初始化顺序未变。
+- 开发文档归到 `dev/`：`dev/PROJECT.md` 为开工必读；逐轮修复/复核说明移到 `dev/archive/rounds/`，旧施工方案与问题分析移到 `dev/archive/docs/`。
+- `Heartbeat-Memories-Project-CURRENT.md` 只保留需求合同 §1–§6，历史原样移到 `dev/archive/CURRENT-历史.md`；两处与已定决定冲突的数字（240 条、12MB）按 r84.69/r84.70 更正。
+- 去掉上传包里的乱码文件名副本；`P0-修复说明.md` 恢复正常文件名。
+
 # 0.99.19 / r84.71 — 建档不卡住、邮箱小画覆盖
 
 - 建档正式保存单位从一批最多 120 万字改为约 15 万字（约 5 个请求），只在请求之间切批。单次请求大小、模型预算不变；下一批仍由用户点击。
