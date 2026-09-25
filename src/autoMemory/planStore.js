@@ -429,6 +429,33 @@ async function idbRead(key) {
     } finally { db.close(); }
 }
 
+export async function compareAutoMemoryRecord(key, decide) {
+    if (!autoMemoryRecoveryAvailable()) throw recoveryUnavailable();
+    if (testBackend) {
+        if (typeof testBackend.compare !== 'function') throw recoveryUnavailable();
+        return testBackend.compare(key, decide);
+    }
+    const db = await database();
+    try {
+        return await new Promise((resolve, reject) => {
+            const tx = db.transaction(STORE, 'readwrite');
+            const timer = setTimeout(() => { try { tx.abort(); } catch { /* already closed */ } reject(recoveryUnavailable()); }, 5000);
+            const store = tx.objectStore(STORE);
+            const request = store.get(key);
+            request.onsuccess = () => {
+                let next;
+                try { next = decide(request.result || null); }
+                catch (error) { try { tx.abort(); } catch { /* already closed */ } reject(error); return; }
+                if (next === undefined) return;
+                if (next === null) store.delete(key);
+                else store.put(next);
+            };
+            tx.oncomplete = () => { clearTimeout(timer); resolve(true); };
+            tx.onabort = tx.onerror = () => { clearTimeout(timer); reject(recoveryUnavailable()); };
+        });
+    } finally { db.close(); }
+}
+
 async function idbWrite(key, expectedRevision, record) {
     const db = await database();
     try {

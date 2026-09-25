@@ -1,15 +1,15 @@
 {
   "display_name": "心迹回廊",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.99.39-r84.91-auto-memory-r7",
+  "js": "index.js?heartbeat=0.99.40-r84.92-auto-memory-r8",
   "author": "Toto",
-  "version": "0.99.39",
+  "version": "0.99.40",
   "auto_update": true,
   "minimum_client_version": "1.13.0",
   "hooks": {
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r84.91：固定楼层到了就读最近几楼正文，做成增量回忆再抽签。没生成过的按第一次生成。楼层下显示还差几楼。成就可以回到当时的楼层。",
+  "description": "r84.92：到点先把记忆插件的新摘要写入档案，再抽签生成增量回忆。没有网页锁时用本地租约，避免两个页面重复生成。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }

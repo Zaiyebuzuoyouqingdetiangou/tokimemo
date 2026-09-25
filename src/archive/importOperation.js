@@ -3,6 +3,7 @@ import * as source_read from './sourceReadGuard.js';
 import * as draft_inputs from './draftInputs.js';
 import * as archive_batches from './importBatches.js';
 import * as archive_coverage from './coverageRanges.js';
+import * as archive_summary from './summaryPreference.js';
 import * as archive_requestBudget from './requestBudget.js';
 import * as core_cache from '../core/cache.js';
 import * as core_constants from '../core/constants.js';
@@ -196,12 +197,18 @@ export async function importCurrentChatMemoryOperation({ fullRebuild = false, au
     // Broader/revised choices may explicitly add older selected floors. The merge below
     // deduplicates already archived content and never deletes records outside the range.
     let chatInput = sceneOnly ? [] : (progress || restartImport ? snapshot.messages : incrementalUpdate && !rangeChanged ? snapshot.incrementalMessages : snapshot.messages);
-    // 自动留忆到点时，只读这一窗楼层的正文，不改用户保存的读取范围。
-    if (automatic && floorWindow && !progress && !restartImport && !capturedInput && !sceneOnly) {
-        const scoped = windowChatMessages(context, floorWindow);
-        if (scoped.length) chatInput = scoped;
-    }
     const externalChanged = !!progress || restartImport || !incrementalUpdate || core_text.normalizeText(existing?.externalMemoryFingerprint, 240) !== core_text.normalizeText(external.fingerprint, 240);
+    // 自动留忆先建档。记忆插件有新摘要时直接用摘要；否则只读这一窗正文，不改用户保存的读取范围。
+    if (automatic && floorWindow && !progress && !restartImport && !capturedInput && !sceneOnly) {
+        const source = archive_summary.archiveSourceForDue({
+            summaryChanged: externalChanged,
+            summaryCount: archive_summary.pluginSummaryCount(external),
+        });
+        if (source === 'floors') {
+            const scoped = windowChatMessages(context, floorWindow);
+            if (scoped.length) chatInput = scoped;
+        }
+    }
     if (!progress && incrementalUpdate && !chatInput.length && !externalChanged) {
         clearMemoryPreflight(context);
         globalThis.toastr?.info?.('当前窗口没有发现新的聊天消息或新的记忆 / 摘要资料；现有档案和全部已生成内容保持不变。', '心迹回廊');

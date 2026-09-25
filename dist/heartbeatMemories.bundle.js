@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
-// Source modules: 259
-// Source SHA-256: 345d6f245c7b9cfb8e902dc368a2c513c8bdb7950aa32e204c3aff73f5c1a736
+// Source modules: 261
+// Source SHA-256: 28fd944a59b0a1a70680bbe48c0ed3f4f5c578f71d8dbc81a97a3a94e5f4afd4
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -31,6 +31,7 @@ const __m_archive_snapshots_js = Object.create(null);
 const __m_archive_sourceLedger_js = Object.create(null);
 const __m_archive_sourceReadGuard_js = Object.create(null);
 const __m_archive_storyScenes_js = Object.create(null);
+const __m_archive_summaryPreference_js = Object.create(null);
 const __m_archive_worldInfoSources_js = Object.create(null);
 const __m_autoMemory_achievementLookback_js = Object.create(null);
 const __m_autoMemory_combinedResult_js = Object.create(null);
@@ -38,6 +39,7 @@ const __m_autoMemory_draw_js = Object.create(null);
 const __m_autoMemory_floorPace_js = Object.create(null);
 const __m_autoMemory_incrementalGate_js = Object.create(null);
 const __m_autoMemory_incrementalView_js = Object.create(null);
+const __m_autoMemory_instanceLease_js = Object.create(null);
 const __m_autoMemory_migrateLegacy_js = Object.create(null);
 const __m_autoMemory_moduleHost_js = Object.create(null);
 const __m_autoMemory_modulePlans_js = Object.create(null);
@@ -62252,6 +62254,34 @@ __m_archive_archiveVerdict_js.generateArchiveImportSegment = generateArchiveImpo
 __m_archive_archiveVerdict_js.rewriteCurrentArchiveVerdict = rewriteCurrentArchiveVerdict;
 }
 
+function __init_archive_summaryPreference_js() {
+// MODULE: archive/summaryPreference.js
+
+// 到点建档时，记忆插件已经写出的新摘要优先于再读一遍正文。
+
+const PLUGIN_SUMMARY_SOURCE_IDS = new Set(['sillytavern-memory', 'baibai-book-public-api', 'qianqianjie-public-api']);
+
+function pluginSummaryCount(external) {
+    let count = 0;
+    for (const source of Array.isArray(external?.sources) ? external.sources : []) {
+        if (!PLUGIN_SUMMARY_SOURCE_IDS.has(source?.id)) continue;
+        const value = Math.floor(Number(source?.count) || 0);
+        if (value > 0) count += value;
+    }
+    if (count) return count;
+    return (Array.isArray(external?.records) ? external.records : []).filter(item => PLUGIN_SUMMARY_SOURCE_IDS.has(item?.provider) || item?.type === 'summary').length;
+}
+
+// summary：这一轮把插件摘要写入档案。floors：摘要没有更新，改读这一窗正文。
+function archiveSourceForDue({ summaryChanged = false, summaryCount = 0 } = {}) {
+    if (summaryChanged === true && summaryCount > 0) return 'summary';
+    return 'floors';
+}
+
+__m_archive_summaryPreference_js.pluginSummaryCount = pluginSummaryCount;
+__m_archive_summaryPreference_js.archiveSourceForDue = archiveSourceForDue;
+}
+
 function __init_archive_importOperation_js() {
 // MODULE: archive/importOperation.js
 const partial_import = __m_archive_partialImport_js;
@@ -62259,6 +62289,7 @@ const source_read = __m_archive_sourceReadGuard_js;
 const draft_inputs = __m_archive_draftInputs_js;
 const archive_batches = __m_archive_importBatches_js;
 const archive_coverage = __m_archive_coverageRanges_js;
+const archive_summary = __m_archive_summaryPreference_js;
 const archive_requestBudget = __m_archive_requestBudget_js;
 const core_cache = __m_core_cache_js;
 const core_constants = __m_core_constants_js;
@@ -62310,6 +62341,7 @@ const archiveSourceBank = __m_archive_recoveryDrafts_js.archiveSourceBank;
 const progressForDraftRow = __m_archive_recoveryDrafts_js.progressForDraftRow;
 const refreshArchiveRecoveryReading = __m_archive_recoveryDrafts_js.refreshArchiveRecoveryReading;
 const generateArchiveImportSegment = __m_archive_archiveVerdict_js.generateArchiveImportSegment;
+
 
 
 
@@ -62500,12 +62532,18 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
     // Broader/revised choices may explicitly add older selected floors. The merge below
     // deduplicates already archived content and never deletes records outside the range.
     let chatInput = sceneOnly ? [] : (progress || restartImport ? snapshot.messages : incrementalUpdate && !rangeChanged ? snapshot.incrementalMessages : snapshot.messages);
-    // 自动留忆到点时，只读这一窗楼层的正文，不改用户保存的读取范围。
-    if (automatic && floorWindow && !progress && !restartImport && !capturedInput && !sceneOnly) {
-        const scoped = windowChatMessages(context, floorWindow);
-        if (scoped.length) chatInput = scoped;
-    }
     const externalChanged = !!progress || restartImport || !incrementalUpdate || core_text.normalizeText(existing?.externalMemoryFingerprint, 240) !== core_text.normalizeText(external.fingerprint, 240);
+    // 自动留忆先建档。记忆插件有新摘要时直接用摘要；否则只读这一窗正文，不改用户保存的读取范围。
+    if (automatic && floorWindow && !progress && !restartImport && !capturedInput && !sceneOnly) {
+        const source = archive_summary.archiveSourceForDue({
+            summaryChanged: externalChanged,
+            summaryCount: archive_summary.pluginSummaryCount(external),
+        });
+        if (source === 'floors') {
+            const scoped = windowChatMessages(context, floorWindow);
+            if (scoped.length) chatInput = scoped;
+        }
+    }
     if (!progress && incrementalUpdate && !chatInput.length && !externalChanged) {
         clearMemoryPreflight(context);
         globalThis.toastr?.info?.('当前窗口没有发现新的聊天消息或新的记忆 / 摘要资料；现有档案和全部已生成内容保持不变。', '心迹回廊');
@@ -71214,6 +71252,33 @@ async function idbRead(key) {
     } finally { db.close(); }
 }
 
+async function compareAutoMemoryRecord(key, decide) {
+    if (!autoMemoryRecoveryAvailable()) throw recoveryUnavailable();
+    if (testBackend) {
+        if (typeof testBackend.compare !== 'function') throw recoveryUnavailable();
+        return testBackend.compare(key, decide);
+    }
+    const db = await database();
+    try {
+        return await new Promise((resolve, reject) => {
+            const tx = db.transaction(STORE, 'readwrite');
+            const timer = setTimeout(() => { try { tx.abort(); } catch { /* already closed */ } reject(recoveryUnavailable()); }, 5000);
+            const store = tx.objectStore(STORE);
+            const request = store.get(key);
+            request.onsuccess = () => {
+                let next;
+                try { next = decide(request.result || null); }
+                catch (error) { try { tx.abort(); } catch { /* already closed */ } reject(error); return; }
+                if (next === undefined) return;
+                if (next === null) store.delete(key);
+                else store.put(next);
+            };
+            tx.oncomplete = () => { clearTimeout(timer); resolve(true); };
+            tx.onabort = tx.onerror = () => { clearTimeout(timer); reject(recoveryUnavailable()); };
+        });
+    } finally { db.close(); }
+}
+
 async function idbWrite(key, expectedRevision, record) {
     const db = await database();
     try {
@@ -71238,6 +71303,7 @@ async function idbWrite(key, expectedRevision, record) {
 
 __m_autoMemory_planStore_js.readAutoMemoryRecovery = readAutoMemoryRecovery;
 __m_autoMemory_planStore_js.writeAutoMemoryRecovery = writeAutoMemoryRecovery;
+__m_autoMemory_planStore_js.compareAutoMemoryRecord = compareAutoMemoryRecord;
 __m_autoMemory_planStore_js.setAutoMemoryRecoveryBackendForTests = setAutoMemoryRecoveryBackendForTests;
 __m_autoMemory_planStore_js.parseAutoMemoryPlan = parseAutoMemoryPlan;
 __m_autoMemory_planStore_js.createAutoMemoryPlan = createAutoMemoryPlan;
@@ -71551,6 +71617,7 @@ async function runAutoMemoryRound(input, io) {
         await io.persist(next);
         return { action: 'arm', moduleRequest: false, snapshot: next };
     }
+    // 顺序固定：先把这一窗写入档案，再抽签，最后才生成增量回忆。
     const floorWindow = auto_memory_floor.dueFloorWindow(plan.lastCompletedFloor, input.floor);
     const options = auto_memory_draw.incrementalImportOptions(floorWindow);
     await io.importIncremental(options);
@@ -71983,11 +72050,104 @@ __m_autoMemory_moduleHost_js.roomReady = roomReady;
 __m_autoMemory_moduleHost_js.collectModuleFacts = collectModuleFacts;
 }
 
+function __init_autoMemory_instanceLease_js() {
+// MODULE: autoMemory/instanceLease.js
+
+// Web Locks 不可用时的 IndexedDB 租约。过期后才能被别的页面接管，接管前要看已经完成的步骤。
+
+const LEASE_TTL_MS = 20000;
+const LEASE_HEARTBEAT_MS = 8000;
+
+function leaseKey(chatId) {
+    return 'lease:' + encodeURIComponent(String(chatId || ''));
+}
+
+function groupChatNotice(context) {
+    if (!context?.groupId) return '';
+    return '心迹回廊当前只支持单角色聊天，群聊不会自动留忆。';
+}
+
+function decideLease(current, request, now) {
+    const owner = String(request?.owner || '');
+    const chatId = String(request?.chatId || '');
+    const dueFloor = Math.floor(Number(request?.dueFloor));
+    const archiveRevision = String(request?.archiveRevision || '');
+    if (!owner || !chatId || !Number.isSafeInteger(dueFloor) || dueFloor < 0 || !archiveRevision || !Number.isFinite(now)) {
+        return { granted: false, takeover: false, lease: current || null };
+    }
+    const expired = !current || !Number.isFinite(Number(current.expiresAt)) || Number(current.expiresAt) <= now;
+    const same = current?.owner === owner;
+    if (current && !expired && !same) return { granted: false, takeover: false, lease: current };
+    const lease = {
+        key: leaseKey(chatId),
+        chatId,
+        dueFloor,
+        archiveRevision,
+        owner,
+        expiresAt: now + LEASE_TTL_MS,
+        heartbeatAt: now,
+    };
+    return { granted: true, takeover: !!(current && expired && !same), lease };
+}
+
+function heartbeatLease(lease, owner, now) {
+    if (!lease || lease.owner !== owner || !Number.isFinite(now)) return null;
+    return { ...lease, expiresAt: now + LEASE_TTL_MS, heartbeatAt: now };
+}
+
+// skip：步骤已经完成，不能因为锁过期再发请求。resume / reuse：接着原来的票据。round：可以开始新的一轮。
+function takeoverDecision(snapshot) {
+    const steps = Array.isArray(snapshot?.modulePlan?.steps) ? snapshot.modulePlan.steps : [];
+    if (steps.length && steps.every(step => step?.status === 'completed')) return 'skip';
+    if (steps.some(step => step?.status === 'completed')) return 'resume';
+    const id = snapshot?.plan?.activeDrawTicketId;
+    const ticket = (snapshot?.drawTickets || []).find(item => item?.id === id);
+    if (ticket && (ticket.status === 'drawn' || ticket.status === 'running')) return 'reuse';
+    return 'round';
+}
+
+async function claimWith(compare, request, now) {
+    let decision = null;
+    await compare(leaseKey(request?.chatId), current => {
+        decision = decideLease(current, request, now);
+        return decision.granted ? decision.lease : undefined;
+    });
+    return decision || { granted: false, takeover: false, lease: null };
+}
+
+async function renewWith(compare, lease, now) {
+    const next = heartbeatLease(lease, lease?.owner, now);
+    if (!next) return null;
+    let renewed = null;
+    await compare(lease.key, current => {
+        renewed = heartbeatLease(current, lease.owner, now);
+        return renewed || undefined;
+    });
+    return renewed;
+}
+
+async function releaseWith(compare, lease) {
+    await compare(lease?.key, current => current?.owner === lease?.owner ? null : undefined);
+}
+
+__m_autoMemory_instanceLease_js.claimWith = claimWith;
+__m_autoMemory_instanceLease_js.renewWith = renewWith;
+__m_autoMemory_instanceLease_js.releaseWith = releaseWith;
+__m_autoMemory_instanceLease_js.leaseKey = leaseKey;
+__m_autoMemory_instanceLease_js.groupChatNotice = groupChatNotice;
+__m_autoMemory_instanceLease_js.decideLease = decideLease;
+__m_autoMemory_instanceLease_js.heartbeatLease = heartbeatLease;
+__m_autoMemory_instanceLease_js.takeoverDecision = takeoverDecision;
+__m_autoMemory_instanceLease_js.LEASE_TTL_MS = LEASE_TTL_MS;
+__m_autoMemory_instanceLease_js.LEASE_HEARTBEAT_MS = LEASE_HEARTBEAT_MS;
+}
+
 function __init_autoMemory_scheduler_js() {
 // MODULE: autoMemory/scheduler.js
 const archive_repository = __m_archive_repository_js;
 const auto_memory_gate = __m_autoMemory_incrementalGate_js;
 const auto_memory_host = __m_autoMemory_moduleHost_js;
+const auto_memory_lease = __m_autoMemory_instanceLease_js;
 const auto_memory_plan = __m_autoMemory_planStore_js;
 const auto_memory_registry = __m_autoMemory_moduleRegistry_js;
 const core_context = __m_core_context_js;
@@ -71998,9 +72158,17 @@ const core_context = __m_core_context_js;
 
 
 
+
 let cleanup = null;
+let leaseOwner = '';
 const handledFloors = new Map();
 const inflightScopes = new Set();
+const noticedGroups = new Set();
+
+function ownerId() {
+    if (!leaseOwner) leaseOwner = `tab-${Math.random().toString(36).slice(2, 10)}`;
+    return leaseOwner;
+}
 
 function collectMemoryIds(context) {
     const memory = archive_repository.getImportedMemory(context);
@@ -72031,6 +72199,17 @@ function satisfiedPrerequisiteIds(context) {
 
 async function runHostRound() {
     let context;
+    try { context = core_context.getContext(); }
+    catch { return; }
+    const notice = auto_memory_lease.groupChatNotice(context);
+    if (notice) {
+        const group = String(context.groupId);
+        if (!noticedGroups.has(group)) {
+            noticedGroups.add(group);
+            globalThis.toastr?.info?.(notice, '心迹回廊');
+        }
+        return;
+    }
     try { context = core_context.currentCharacterGuard(); }
     catch { return; }
     const metadata = context.chatMetadata;
@@ -72038,7 +72217,7 @@ async function runHostRound() {
     const scope = core_context.chatScopeKey(context);
     const floor = Array.isArray(context.chat) ? context.chat.length : 0;
     if (handledFloors.get(scope) === floor || inflightScopes.has(scope)) return;
-    await auto_memory_gate.withAutoMemoryLock(globalThis.navigator?.locks, scope, async () => {
+    const body = async claim => {
         if (handledFloors.get(scope) === floor || inflightScopes.has(scope)) return;
         inflightScopes.add(scope);
         try {
@@ -72049,6 +72228,10 @@ async function runHostRound() {
                 throw error;
             }
             if (!snapshot?.plan.enabled) return;
+            if (claim?.takeover && auto_memory_lease.takeoverDecision(snapshot) === 'skip') {
+                handledFloors.set(scope, floor);
+                return;
+            }
             const live = core_context.currentCharacterGuard();
             if (core_context.chatScopeKey(live) !== scope) return;
             const persist = async next => {
@@ -72087,7 +72270,31 @@ async function runHostRound() {
         } finally {
             inflightScopes.delete(scope);
         }
-    });
+    };
+    const locks = globalThis.navigator?.locks;
+    if (typeof locks?.request === 'function') {
+        await auto_memory_gate.withAutoMemoryLock(locks, scope, () => body(null));
+        return;
+    }
+    let claim = null;
+    const compare = (key, decide) => auto_memory_plan.compareAutoMemoryRecord(key, decide);
+    try {
+        claim = await auto_memory_lease.claimWith(compare, {
+            chatId: core_context.getChatId(context),
+            dueFloor: floor,
+            archiveRevision: archive_repository.getImportedMemory(context)?.archiveRevision || 'current',
+            owner: ownerId(),
+        }, Date.now());
+    } catch { claim = null; }
+    if (claim && claim.granted !== true) return;
+    const timer = claim?.granted ? setInterval(() => {
+        void auto_memory_lease.renewWith(compare, claim.lease, Date.now()).catch(() => {});
+    }, auto_memory_lease.LEASE_HEARTBEAT_MS) : 0;
+    try { await body(claim); }
+    finally {
+        if (timer) clearInterval(timer);
+        if (claim?.granted) await auto_memory_lease.releaseWith(compare, claim.lease).catch(() => {});
+    }
 }
 
 function stopAutoMemoryScheduler() {
@@ -72095,6 +72302,7 @@ function stopAutoMemoryScheduler() {
     cleanup = null;
     handledFloors.clear();
     inflightScopes.clear();
+    noticedGroups.clear();
 }
 
 function startAutoMemoryScheduler() {
@@ -73735,6 +73943,7 @@ __init_archive_importPrompts_js();
 __init_archive_importIdentity_js();
 __init_archive_recoveryDrafts_js();
 __init_archive_archiveVerdict_js();
+__init_archive_summaryPreference_js();
 __init_archive_importOperation_js();
 __init_archive_repository_js();
 __init_core_routeParticipants_js();
@@ -73764,6 +73973,7 @@ __init_autoMemory_combinedResult_js();
 __init_autoMemory_moduleRunner_js();
 __init_autoMemory_incrementalView_js();
 __init_autoMemory_moduleHost_js();
+__init_autoMemory_instanceLease_js();
 __init_autoMemory_scheduler_js();
 __init_autoMemory_shellState_js();
 __init_autoMemory_wizardPlan_js();

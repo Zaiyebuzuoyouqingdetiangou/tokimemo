@@ -95,6 +95,7 @@ export async function runAutoMemoryRound(input, io) {
         await io.persist(next);
         return { action: 'arm', moduleRequest: false, snapshot: next };
     }
+    // 顺序固定：先把这一窗写入档案，再抽签，最后才生成增量回忆。
     const floorWindow = auto_memory_floor.dueFloorWindow(plan.lastCompletedFloor, input.floor);
     const options = auto_memory_draw.incrementalImportOptions(floorWindow);
     await io.importIncremental(options);

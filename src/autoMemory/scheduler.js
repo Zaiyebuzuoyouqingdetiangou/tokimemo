@@ -2,13 +2,21 @@
 import * as archive_repository from '../archive/repository.js';
 import * as auto_memory_gate from './incrementalGate.js';
 import * as auto_memory_host from './moduleHost.js';
+import * as auto_memory_lease from './instanceLease.js';
 import * as auto_memory_plan from './planStore.js';
 import * as auto_memory_registry from './moduleRegistry.js';
 import * as core_context from '../core/context.js';
 
 let cleanup = null;
+let leaseOwner = '';
 const handledFloors = new Map();
 const inflightScopes = new Set();
+const noticedGroups = new Set();
+
+function ownerId() {
+    if (!leaseOwner) leaseOwner = `tab-${Math.random().toString(36).slice(2, 10)}`;
+    return leaseOwner;
+}
 
 function collectMemoryIds(context) {
     const memory = archive_repository.getImportedMemory(context);
@@ -39,6 +47,17 @@ function satisfiedPrerequisiteIds(context) {
 
 async function runHostRound() {
     let context;
+    try { context = core_context.getContext(); }
+    catch { return; }
+    const notice = auto_memory_lease.groupChatNotice(context);
+    if (notice) {
+        const group = String(context.groupId);
+        if (!noticedGroups.has(group)) {
+            noticedGroups.add(group);
+            globalThis.toastr?.info?.(notice, '心迹回廊');
+        }
+        return;
+    }
     try { context = core_context.currentCharacterGuard(); }
     catch { return; }
     const metadata = context.chatMetadata;
@@ -46,7 +65,7 @@ async function runHostRound() {
     const scope = core_context.chatScopeKey(context);
     const floor = Array.isArray(context.chat) ? context.chat.length : 0;
     if (handledFloors.get(scope) === floor || inflightScopes.has(scope)) return;
-    await auto_memory_gate.withAutoMemoryLock(globalThis.navigator?.locks, scope, async () => {
+    const body = async claim => {
         if (handledFloors.get(scope) === floor || inflightScopes.has(scope)) return;
         inflightScopes.add(scope);
         try {
@@ -57,6 +76,10 @@ async function runHostRound() {
                 throw error;
             }
             if (!snapshot?.plan.enabled) return;
+            if (claim?.takeover && auto_memory_lease.takeoverDecision(snapshot) === 'skip') {
+                handledFloors.set(scope, floor);
+                return;
+            }
             const live = core_context.currentCharacterGuard();
             if (core_context.chatScopeKey(live) !== scope) return;
             const persist = async next => {
@@ -95,7 +118,31 @@ async function runHostRound() {
         } finally {
             inflightScopes.delete(scope);
         }
-    });
+    };
+    const locks = globalThis.navigator?.locks;
+    if (typeof locks?.request === 'function') {
+        await auto_memory_gate.withAutoMemoryLock(locks, scope, () => body(null));
+        return;
+    }
+    let claim = null;
+    const compare = (key, decide) => auto_memory_plan.compareAutoMemoryRecord(key, decide);
+    try {
+        claim = await auto_memory_lease.claimWith(compare, {
+            chatId: core_context.getChatId(context),
+            dueFloor: floor,
+            archiveRevision: archive_repository.getImportedMemory(context)?.archiveRevision || 'current',
+            owner: ownerId(),
+        }, Date.now());
+    } catch { claim = null; }
+    if (claim && claim.granted !== true) return;
+    const timer = claim?.granted ? setInterval(() => {
+        void auto_memory_lease.renewWith(compare, claim.lease, Date.now()).catch(() => {});
+    }, auto_memory_lease.LEASE_HEARTBEAT_MS) : 0;
+    try { await body(claim); }
+    finally {
+        if (timer) clearInterval(timer);
+        if (claim?.granted) await auto_memory_lease.releaseWith(compare, claim.lease).catch(() => {});
+    }
 }
 
 export function stopAutoMemoryScheduler() {
@@ -103,6 +150,7 @@ export function stopAutoMemoryScheduler() {
     cleanup = null;
     handledFloors.clear();
     inflightScopes.clear();
+    noticedGroups.clear();
 }
 
 export function startAutoMemoryScheduler() {
