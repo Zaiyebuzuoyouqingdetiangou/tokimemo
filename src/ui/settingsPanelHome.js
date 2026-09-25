@@ -20,6 +20,7 @@ import * as core_selfUpdater from '../core/selfUpdater.js';
 import * as core_contextTags from '../core/contextTags.js';
 import * as core_chatReadRange from '../core/chatReadRange.js';
 import * as ui_overlay from './overlay.js';
+import * as auto_memory_wizard from './autoMemoryWizard.js';
 import * as ui_scenePicker from './scenePicker.js';
 import * as ui_styles from './styles.js';
 import * as mirrorReader from './mirrorTtsReader.js';
@@ -526,6 +527,10 @@ export function mountSettings({ homeTarget = null } = {}) {
             return;
         }
         if (event.target.closest?.('[data-rmt-creative-cancel]')) { refreshCreative(); panel.querySelector('[data-rmt-creative-status]').textContent = '已撤销未保存编辑。'; return; }
+        if (event.target.closest?.('[data-rmt-auto-memory-wizard]')) {
+            auto_memory_wizard.openAutoMemoryWizard();
+            return;
+        }
         const updateButton = event.target.closest?.('[data-rmt-self-update]');
         if (updateButton) {
             void core_selfUpdater.updateFromButton(updateButton, panel.querySelector('[data-rmt-self-update-status]'), {

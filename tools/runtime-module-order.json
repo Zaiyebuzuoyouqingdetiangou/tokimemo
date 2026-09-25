@@ -239,5 +239,7 @@
   "autoMemory/moduleRegistry.js",
   "autoMemory/planStore.js",
   "autoMemory/migrateLegacy.js",
+  "autoMemory/wizardPlan.js",
+  "ui/autoMemoryWizard.js",
   "heartbeatMemories.js"
 ]

@@ -120,6 +120,8 @@ export function renderSettingsPanelMarkup(panel) {
           <div class="rmt-settings-section-body">
           <p>只在已有档案的当前窗口运行。每条聊天消息算一楼，编辑不加楼；开启后从当前楼数起计。</p>
           <p>“档案同步”收录新聊天；其他模块使用已归档记忆，不改旧内容。会调用独立 API。</p>
+          <button type="button" class="menu_button rmt-settings-wide" data-rmt-auto-memory-wizard>打开自动留忆向导</button>
+          <small>向导保存间隔和模块偏好，也可以现在建档或把首次生成放进任务中心。自动抽签还没开始，上面的按模块自动更新不会被关掉。</small>
           <div class="rmt-auto-rules">${core_autoUpdatePolicy.AUTO_UPDATE_MODES.map(mode => `<div class="rmt-auto-rule"><label><input type="checkbox" data-rmt-auto-enabled="${mode}"> ${core_text.esc(mode === 'archive' ? '档案同步' : core_constants.MODE_LABEL[mode])}</label><label>每 <input type="number" min="1" max="1000" step="1" data-rmt-auto-every="${mode}" aria-label="${core_text.esc(mode === 'archive' ? '档案同步' : core_constants.MODE_LABEL[mode])}间隔楼层"> 楼</label><small data-rmt-auto-status="${mode}" role="status"></small></div>`).join('')}</div>
           <small data-rmt-auto-warning role="status"></small>
           <small>失败后不连续重试，等待下一个间隔；可随时手动生成。不支持跨页任务锁的浏览器仅保留手动操作。</small>

@@ -117,6 +117,13 @@ export function noteRetryableGeneration(info) {
     setTimeout(() => { void pumpQueue(); }, 0);
 }
 
+// 失败只结算当前项。调用方继续处理队列里其余项，不把已完成项改回未完成。
+export function settleQueuedItem(status, error) {
+    if (status !== 'running') return status;
+    if (error?.name === 'AbortError') return 'cancelled';
+    return 'failed';
+}
+
 export function enqueueSelectedModes(routes, frozenOptions = null) {
     const scope = currentScope();
     if (!scope) return 0;
@@ -187,7 +194,7 @@ async function pumpQueue() {
                     });
                     if (next.status === 'running') next.status = result == null ? 'failed' : 'done';
                 } catch (error) {
-                    if (next.status === 'running') next.status = error?.name === 'AbortError' ? 'cancelled' : 'failed';
+                    if (next.status === 'running') next.status = settleQueuedItem(next.status, error);
                 }
                 trimQueue();
                 refreshTaskCenterView();
@@ -210,7 +217,7 @@ async function pumpQueue() {
             try {
                 result = await runQueuedGeneration(next);
             } catch (error) {
-                if (next.status === 'running') next.status = error?.name === 'AbortError' ? 'cancelled' : 'failed';
+                if (next.status === 'running') next.status = settleQueuedItem(next.status, error);
                 trimQueue();
                 refreshTaskCenterView();
                 if (currentScope() !== scope) return;
