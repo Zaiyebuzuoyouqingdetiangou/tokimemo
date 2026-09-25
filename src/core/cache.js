@@ -64,6 +64,7 @@ export const saveArchiveVersion = split_cacheVersions.saveArchiveVersion;
 export const assertArchiveVersionReplacement = split_cacheVersions.assertArchiveVersionReplacement;
 export const discardParticipantDraft = split_cacheArchiveMemory.discardParticipantDraft;
 export const commitParticipantRoster = split_cacheArchiveMemory.commitParticipantRoster;
+export const selectSingleParticipantCard = split_cacheArchiveMemory.selectSingleParticipantCard;
 export const prepareCacheBackupValue = split_cacheRecords.prepareCacheBackupValue;
 export const assertPresentationOnlyMemoryPatch = split_cacheRecords.assertPresentationOnlyMemoryPatch;
 export const saveImportedMemory = split_cacheArchiveMemory.saveImportedMemory;

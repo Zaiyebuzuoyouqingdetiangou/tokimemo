@@ -20,7 +20,9 @@ import * as core_selfUpdater from '../core/selfUpdater.js';
 import * as core_contextTags from '../core/contextTags.js';
 import * as core_chatReadRange from '../core/chatReadRange.js';
 import * as ui_overlay from './overlay.js';
+import * as auto_memory_plan from '../autoMemory/planStore.js';
 import * as auto_memory_wizard from './autoMemoryWizard.js';
+import * as wizard_plan from '../autoMemory/wizardPlan.js';
 import * as ui_scenePicker from './scenePicker.js';
 import * as ui_styles from './styles.js';
 import * as mirrorReader from './mirrorTtsReader.js';
@@ -122,6 +124,40 @@ export function hydrateSettingsPanel({ memory = false } = {}) {
     refreshGenerationSettingsUi();
     panel.dataset.rmtHydrated = '1';
     return true;
+}
+
+async function restoreLegacyAutoUpdates(panel) {
+    const note = panel.querySelector('[data-rmt-auto-memory-gate]');
+    let context;
+    try { context = core_context.currentCharacterGuard(); }
+    catch (error) { if (note) note.textContent = core_text.safeErrorSummary(error); return; }
+    const metadata = context.chatMetadata;
+    const keys = [auto_memory_plan.AUTO_MEMORY_PLAN_KEY, auto_memory_plan.AUTO_MEMORY_REVEAL_KEY, auto_memory_plan.AUTO_MEMORY_DRAW_TICKETS_KEY, auto_memory_plan.AUTO_MEMORY_MODULE_PLAN_KEY];
+    const had = {};
+    const previous = {};
+    for (const key of keys) {
+        had[key] = Object.prototype.hasOwnProperty.call(metadata, key);
+        if (had[key]) previous[key] = metadata[key];
+    }
+    let result;
+    try { result = wizard_plan.disableAutoMemoryPlan(metadata, Date.now()); }
+    catch (error) { if (note) note.textContent = error?.safeToDisplay ? error.safeUserMessage : '这份记录没有改写。'; return; }
+    if (!result.changed) { refreshGenerationSettingsUi(); return; }
+    try {
+        const before = auto_memory_plan.readAutoMemoryMetadata(metadata);
+        auto_memory_plan.commitAutoMemoryMetadata(metadata, result.snapshot, before.plan.revision);
+        await context.saveMetadataDebounced?.();
+    } catch (error) {
+        for (const key of keys) {
+            if (had[key]) metadata[key] = previous[key];
+            else delete metadata[key];
+        }
+        if (note) note.textContent = error?.safeToDisplay ? error.safeUserMessage : '没有恢复。原来的开关也没有被改写。';
+        return;
+    }
+    core_autoUpdates.notifyAutoUpdateSettingsChanged();
+    refreshGenerationSettingsUi();
+    if (note) note.textContent = '已恢复原来的按模块自动更新。自动留忆计划已关闭，偏好还留着。';
 }
 
 export function mountSettings({ homeTarget = null } = {}) {
@@ -529,6 +565,10 @@ export function mountSettings({ homeTarget = null } = {}) {
         if (event.target.closest?.('[data-rmt-creative-cancel]')) { refreshCreative(); panel.querySelector('[data-rmt-creative-status]').textContent = '已撤销未保存编辑。'; return; }
         if (event.target.closest?.('[data-rmt-auto-memory-wizard]')) {
             auto_memory_wizard.openAutoMemoryWizard();
+            return;
+        }
+        if (event.target.closest?.('[data-rmt-auto-memory-restore]')) {
+            void restoreLegacyAutoUpdates(panel);
             return;
         }
         const updateButton = event.target.closest?.('[data-rmt-self-update]');

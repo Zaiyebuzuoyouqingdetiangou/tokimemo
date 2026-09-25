@@ -114,6 +114,50 @@ export async function commitParticipantRoster(context, nextRoster, { expectedRev
     }));
 }
 
+// 已有档案改回单人卡：去掉多人名单，不请求模型，也不重做已有记忆。
+export async function selectSingleParticipantCard(context = core_context.currentCharacterGuard(), { expectedRevision = '' } = {}) {
+    const originalMemory = archive_repository.getImportedMemory(context);
+    if (!originalMemory) return discardParticipantDraft(context);
+    const scope = cacheScopeFromContext(context);
+    const lifecycleEpoch = runtimeState.runtimeLifecycleEpoch;
+    const sameOrigin = () => {
+        let live;
+        try { live = core_context.currentCharacterGuard(); } catch { return false; }
+        return !context?.__rmtArchiveTargetEntryId && runtimeState.runtimeLifecycleEpoch === lifecycleEpoch
+            && cacheScopeFromContext(live) === scope;
+    };
+    if (!sameOrigin()) throw participantOriginChanged();
+    const revision = core_text.normalizeText(originalMemory.archiveRevision, 240);
+    const entry = archiveBackupEntryForContext(context, originalMemory);
+    const stillCurrent = () => sameOrigin()
+        && core_text.normalizeText(archive_repository.getImportedMemory(core_context.getContext())?.archiveRevision, 240) === revision;
+    const key = participant_contract.PARTICIPANTS_KEY;
+    const memoryForSave = cloneCacheValue(originalMemory);
+    delete memoryForSave[key];
+    return serializeArchiveCommitOperation(entry, originalMemory, () => serializeCacheScopeOperation(scope, async () => {
+        if (!stillCurrent()) throw participantOriginChanged();
+        const live = core_context.currentCharacterGuard();
+        await ensureCacheHydrated(live);
+        if (!stillCurrent()) throw participantOriginChanged();
+        let removed = false;
+        const committed = await commitArchiveCacheMutation(entry, memoryForSave, getCache(live), cache => {
+            const current = participantRoster(cache[key]) || participantRoster(originalMemory[key]);
+            if (!current) return false;
+            if ((current.revision || '') !== expectedRevision) throw participantConflict();
+            delete cache[key];
+            removed = true;
+        }, stillCurrent, { participantRosterMutation: true });
+        if (!removed || committed.unchanged) return false;
+        if (!stillCurrent()) throw participantOriginChanged();
+        delete originalMemory[key];
+        rememberRuntimeSessionCache(scope, committed.cache);
+        live.chatMetadata[core_constants.CACHE_KEY] = cloneCacheValue(committed.stored);
+        try { await saveMetadataDurably(live); }
+        catch (error) { console.warn('[HeartbeatMemories] participant metadata mirror failed', core_text.safeErrorDiagnostic(error)); }
+        return true;
+    }));
+}
+
 async function saveImportedMemoryOperation(context, memoryBank, expectedChatId = memoryBank?.chatId, options = {}) {
     options.assertTaskCurrent?.();
     const initialScope = cacheScopeFromContext(context);

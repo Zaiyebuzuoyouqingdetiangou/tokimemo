@@ -1,5 +1,5 @@
-const VERSION = '0.99.33';
-const BUILD = '0.99.33-r84.85-auto-memory-r1';
+const VERSION = '0.99.34';
+const BUILD = '0.99.34-r84.86-auto-memory-r2';
 
 const SETTINGS_ID = 'heartbeat_memories_settings';
 const MENU_ID = 'heartbeat_memories_menu_item';
@@ -490,6 +490,9 @@ function startBootstrapAutoUpdates({ wakeRuntime = () => ensureRuntime('auto-upd
             try {
                 const current = globalThis.SillyTavern?.getContext?.();
                 if (!current || current.groupId || current.characterId == null || !Array.isArray(current.chat)) return null;
+                const gate = policy.readLegacySchedulerGate(current.chatMetadata);
+                policy.noteLegacySchedulerSource(gate, bootstrapAutoUpdateScope(current));
+                if (!gate.allowLegacy) return null;
                 const rules = policy.normalizeAutoUpdates(current.extensionSettings?.heartbeatMemories?.autoUpdates);
                 if (!policy.hasEnabledAutoUpdates(rules)) return null;
                 const memory = current.chatMetadata?.[MEMORY_KEY];
@@ -516,7 +519,11 @@ function startBootstrapAutoUpdates({ wakeRuntime = () => ensureRuntime('auto-upd
         const listener = () => {
             if (stopped) return Promise.resolve();
             let enabled = false;
-            try { enabled = policy.hasEnabledAutoUpdates(globalThis.SillyTavern?.getContext?.()?.extensionSettings?.heartbeatMemories?.autoUpdates); } catch {}
+            try {
+                const host = globalThis.SillyTavern?.getContext?.();
+                const gate = policy.readLegacySchedulerGate(host?.chatMetadata);
+                enabled = gate.allowLegacy && policy.hasEnabledAutoUpdates(host?.extensionSettings?.heartbeatMemories?.autoUpdates);
+            } catch {}
             if (!enabled) { if (timer) clearInterval(timer); timer = 0; return Promise.resolve(); }
             if (!timer) timer = setInterval(listener, 5000);
             return scheduler.tick().catch(() => {

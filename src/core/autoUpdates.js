@@ -16,14 +16,18 @@ export function refreshAutoUpdateStatus() {
     if (!elements.length) return;
     for (const element of elements) element.textContent = '未选择可用聊天';
     try {
-        const scope = core_context.chatScopeKey(core_context.currentCharacterGuard());
+        const context = core_context.currentCharacterGuard();
+        const scope = core_context.chatScopeKey(context);
+        const gate = core_autoUpdatePolicy.readLegacySchedulerGate(context.chatMetadata);
         const rules = core_autoUpdatePolicy.normalizeAutoUpdates(core_settings.getPluginSettings().autoUpdates);
         const raw = JSON.parse(localStorage.getItem(storageKey(scope)) || '{}');
         const labels = { armed: '已待命', running: '本轮已开始', complete: '已完成', failed: '未完成 · 等下一间隔或手动重试' };
         for (const element of elements) {
             const entry = raw?.[element.dataset.rmtAutoStatus];
             const rule = rules[element.dataset.rmtAutoStatus];
-            element.textContent = !rule?.enabled ? '已关闭' : autoUpdateAvailability() || (entry && entry.signature === rule.every + ':' + rule.epoch
+            element.textContent = !gate.allowLegacy
+                ? (gate.source === 'paused-corrupt' ? '记录无法读取，已暂停，没有改写' : '新计划已启用，本项已暂停')
+                : !rule?.enabled ? '已关闭' : autoUpdateAvailability() || (entry && entry.signature === rule.every + ':' + rule.epoch
                 && labels[entry.status] && Number.isSafeInteger(entry.attemptFloor)
                 ? entry.attemptFloor + ' 楼 · ' + (entry.status === 'failed' && entry.failureCode === 'RMT_ARCHIVE_PREFIX_CHANGED'
                     ? '原档案基线不一致 · 请检查来源，旧内容保留' : labels[entry.status]) : '尚未计数');
@@ -50,6 +54,9 @@ export function startAutoUpdates() {
     const snapshot = () => {
         try {
             const current = core_context.currentCharacterGuard();
+            const gate = core_autoUpdatePolicy.readLegacySchedulerGate(current.chatMetadata);
+            core_autoUpdatePolicy.noteLegacySchedulerSource(gate, core_context.chatScopeKey(current));
+            if (!gate.allowLegacy) return null;
             const rules = core_autoUpdatePolicy.normalizeAutoUpdates(current.extensionSettings?.[core_constants.EXTENSION_SETTINGS_KEY]?.autoUpdates);
             if (!core_autoUpdatePolicy.hasEnabledAutoUpdates(rules)) return null;
             const archive = archive_repository.getImportedMemory(current);
@@ -77,7 +84,11 @@ export function startAutoUpdates() {
     const listener = () => {
         if (storageFailed) return Promise.resolve();
         let enabled = false;
-        try { enabled = core_autoUpdatePolicy.hasEnabledAutoUpdates(core_context.getContext().extensionSettings?.[core_constants.EXTENSION_SETTINGS_KEY]?.autoUpdates); } catch {}
+        try {
+            const current = core_context.getContext();
+            const gate = core_autoUpdatePolicy.readLegacySchedulerGate(current.chatMetadata);
+            enabled = gate.allowLegacy && core_autoUpdatePolicy.hasEnabledAutoUpdates(current.extensionSettings?.[core_constants.EXTENSION_SETTINGS_KEY]?.autoUpdates);
+        } catch {}
         if (!enabled) {
             if (timer) clearInterval(timer);
             timer = 0;

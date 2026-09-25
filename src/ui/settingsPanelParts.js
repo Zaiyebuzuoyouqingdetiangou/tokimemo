@@ -410,6 +410,16 @@ export function refreshGenerationSettingsUi() {
     const autoRules = core_autoUpdatePolicy.normalizeAutoUpdates(settings.autoUpdates);
     for (const input of panel.querySelectorAll('[data-rmt-auto-enabled]')) input.checked = autoRules[input.dataset.rmtAutoEnabled]?.enabled === true;
     for (const input of panel.querySelectorAll('[data-rmt-auto-every]')) input.value = String(autoRules[input.dataset.rmtAutoEvery]?.every || 20);
+    let gate = { allowLegacy: true, source: 'legacy' };
+    try { gate = core_autoUpdatePolicy.readLegacySchedulerGate(core_context.currentCharacterGuard().chatMetadata); } catch { gate = { allowLegacy: true, source: 'legacy' }; }
+    const paused = gate.allowLegacy !== true;
+    for (const input of panel.querySelectorAll('[data-rmt-auto-enabled], [data-rmt-auto-every]')) input.disabled = paused;
+    const gateNote = panel.querySelector('[data-rmt-auto-memory-gate]');
+    if (gateNote) gateNote.textContent = !paused ? '' : gate.source === 'paused-corrupt'
+        ? '自动留忆记录无法读取，旧自动更新已暂停，没有改写。'
+        : '这一段聊天已保存自动留忆计划，上面的按模块开关已暂停。自动抽签还没开始。';
+    const restore = panel.querySelector('[data-rmt-auto-memory-restore]');
+    if (restore) restore.hidden = gate.source !== 'paused-new-plan';
     const autoWarning = panel.querySelector('[data-rmt-auto-warning]');
     if (autoWarning) autoWarning.textContent = core_autoUpdates.autoUpdateAvailability();
     core_autoUpdates.refreshAutoUpdateStatus();

@@ -61,9 +61,10 @@ test('unadapted modules stay out of the draw and off by default', () => {
     assert.equal(cards.some(item => item.autoEligible), false);
     assert.equal(cards.every(item => item.autoEligible || item.unavailableReason === '暂不可自动生成' || item.id === 'achievements'), true);
     const draft = wizard.createWizardDraft(storedPlan().plan);
-    const refused = wizard.preferenceUpdate(draft, 'cabinet', 'prefer');
-    assert.equal(refused.error, 'ineligible');
-    assert.equal(refused.preferredModuleIds.includes('cabinet'), false);
+    const chosen = wizard.preferenceUpdate(draft, 'album', 'prefer');
+    assert.equal(chosen.error, '');
+    assert.equal(chosen.preferredModuleIds.includes('album'), true);
+    assert.deepEqual(registry.autoMemoryRuntimeCandidates(chosen.preferredModuleIds, chosen.excludedModuleIds), []);
     const blocked = wizard.preferenceUpdate(draft, 'achievements', 'prefer');
     assert.equal(blocked.error, 'unavailable');
     assert.equal(blocked.preferredModuleIds.includes('achievements'), false);
@@ -135,7 +136,7 @@ test('wizard completion round-trips and does not rewrite corrupt or old settings
     assert.equal(saved.plan.enabled, true);
     assert.equal(saved.plan.revision, 3);
     assert.equal(saved.plan.intervalFloors, 12);
-    assert.deepEqual(saved.plan.preferredModuleIds, ['cabinet', 'calendar']);
+    assert.deepEqual(saved.plan.preferredModuleIds, ['cabinet', 'album', 'calendar']);
     assert.deepEqual(saved.plan.excludedModuleIds, ['inbox']);
     assert.deepEqual(registry.autoMemoryRuntimeCandidates(saved.plan.preferredModuleIds, saved.plan.excludedModuleIds), []);
     plans.commitAutoMemoryMetadata(metadata, saved, 2);

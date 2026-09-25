@@ -1,4 +1,7 @@
-export const AUTO_UPDATE_MODES = Object.freeze(['archive', 'album', 'adv', 'room', 'phone', 'inbox', 'cabinet', 'travel', 'ending', 'calendar', 'relations', 'heart', 'achievements', 'butterfly']);
+import * as auto_memory_plan from '../autoMemory/planStore.js';
+
+// 成就已改成其他模块的末包，不再作为旧自动更新的独立候选。
+export const AUTO_UPDATE_MODES = Object.freeze(['archive', 'album', 'adv', 'room', 'phone', 'inbox', 'cabinet', 'travel', 'ending', 'calendar', 'relations', 'heart', 'butterfly']);
 
 export const autoUpdateStorageKey = scope => 'heartbeatMemoriesAutoFloorsV1:' + encodeURIComponent(scope);
 
@@ -22,6 +25,34 @@ export function normalizeAutoUpdates(value) {
         return [mode, { enabled: item?.enabled === true, every: Math.max(1, Math.min(1000, Math.floor(Number(item?.every) || 20))),
             epoch: Math.max(0, Math.min(Number.MAX_SAFE_INTEGER, Math.floor(Number(item?.epoch) || 0))) }];
     }));
+}
+
+let notedSchedulerSource = '';
+
+// 新计划启用或记录损坏时，旧的按模块计数不再发请求。损坏记录只暂停，不改写。
+export function readLegacySchedulerGate(chatMetadata) {
+    try {
+        const snapshot = auto_memory_plan.readAutoMemoryMetadata(chatMetadata);
+        if (snapshot?.plan.enabled === true) return { allowLegacy: false, source: 'paused-new-plan' };
+        return { allowLegacy: true, source: 'legacy' };
+    } catch (error) {
+        if (error?.code === 'RMT_AUTO_MEMORY_CORRUPT' || error?.code === 'RMT_AUTO_MEMORY_INTERVAL') {
+            return { allowLegacy: false, source: 'paused-corrupt' };
+        }
+        throw error;
+    }
+}
+
+export function noteLegacySchedulerSource(gate, scope = '') {
+    const key = String(scope || '') + '\n' + (gate?.source || '');
+    if (notedSchedulerSource === key) return;
+    notedSchedulerSource = key;
+    const text = gate?.source === 'paused-new-plan'
+        ? '这一段聊天已启用自动留忆计划，原来的按模块自动更新已暂停。自动抽签尚未开始。'
+        : gate?.source === 'paused-corrupt'
+            ? '这一段聊天的自动留忆记录无法读取，原来的按模块自动更新已暂停，记录没有改写。'
+            : '这一段聊天使用原来的按模块自动更新。';
+    console.info('[HeartbeatMemories] ' + text);
 }
 
 // One scheduler owns eligibility, attempt dedupe and success checkpoints. No timers or APIs here.

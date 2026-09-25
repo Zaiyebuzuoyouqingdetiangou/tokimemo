@@ -1,8 +1,10 @@
 // 自动留忆向导挂在插件窗口里。关闭窗口不取消已经开始的建档或任务队列，也不锁酒馆输入框。
 import * as archive_external from '../archive/externalMemory.js';
 import * as archive_repository from '../archive/repository.js';
+import * as auto_memory_migrate from '../autoMemory/migrateLegacy.js';
 import * as auto_memory_plan from '../autoMemory/planStore.js';
 import * as wizard_plan from '../autoMemory/wizardPlan.js';
+import * as core_autoUpdates from '../core/autoUpdates.js';
 import * as core_cache from '../core/cache.js';
 import * as core_chatReadRange from '../core/chatReadRange.js';
 import * as core_context from '../core/context.js';
@@ -90,15 +92,23 @@ function moduleHtml() {
     return cards().map(item => `<article class="rmt-settings-card"><h3>${core_text.esc(item.title)}</h3><p>${core_text.esc(item.contentLabel)} · 正常请求 ${core_text.esc(item.normalRequestEstimate)}</p><p>${core_text.esc(item.description)}</p>${item.autoEligible ? '' : `<p>${core_text.esc(item.unavailableReason)}</p>`}</article>`).join('');
 }
 
+function cardBar() {
+    const label = draft.cardType === 'single' ? '当前是单人卡。'
+        : draft.cardType === 'multiple' ? `当前是一张卡内多人，已选 ${draft.participantIds.length} 人。`
+            : '还没有选择单人卡或一张卡内多人。';
+    const people = draft.cardType === 'multiple' ? '<button type="button" class="rmt-btn" data-rmt-auto-memory-people>调整人物</button>' : '';
+    return `<p>${label}可以随时改，改名单本身不请求模型。</p><p><button type="button" class="rmt-btn" data-rmt-auto-memory-card="single">改成单人卡</button><button type="button" class="rmt-btn" data-rmt-auto-memory-card="multiple">改成一张卡内多人</button>${people}</p>`;
+}
+
 function preferenceHtml() {
     const rows = cards().filter(item => item.inDrawPool);
-    if (!rows.some(item => item.autoEligible)) {
-        const excludes = rows.map(item => `<label class="rmt-settings-check"><input type="checkbox" data-rmt-auto-memory-exclude="${core_text.esc(item.id)}" ${draft.excludedModuleIds.includes(item.id) ? 'checked' : ''}><span>排除${core_text.esc(item.title)}，以后也不要抽中</span></label>`).join('');
-        return `<p>目前没有已开放的自动模块，所以不会默认勾选。未适配的模块不能打开，只显示“暂不可自动生成”。</p>${excludes}`;
-    }
-    return rows.map(item => item.autoEligible
-        ? `<label class="rmt-settings-check"><input type="checkbox" data-rmt-auto-memory-prefer="${core_text.esc(item.id)}" ${draft.preferredModuleIds.includes(item.id) ? 'checked' : ''}><span>${core_text.esc(item.title)}</span></label>`
-        : `<p>${core_text.esc(item.title)}：暂不可自动生成</p><label class="rmt-settings-check"><input type="checkbox" data-rmt-auto-memory-exclude="${core_text.esc(item.id)}" ${draft.excludedModuleIds.includes(item.id) ? 'checked' : ''}><span>排除，以后也不要抽中</span></label>`).join('');
+    const choices = rows.map(item => {
+        const note = item.autoEligible ? '' : `<p>${core_text.esc(item.title)}：暂不可自动生成。勾选只会先记下，现在不会抽中，也不会请求。</p>`;
+        return `${note}<label class="rmt-settings-check"><input type="checkbox" data-rmt-auto-memory-prefer="${core_text.esc(item.id)}" ${draft.preferredModuleIds.includes(item.id) ? 'checked' : ''}><span>希望自动跑${core_text.esc(item.title)}</span></label><label class="rmt-settings-check"><input type="checkbox" data-rmt-auto-memory-exclude="${core_text.esc(item.id)}" ${draft.excludedModuleIds.includes(item.id) ? 'checked' : ''}><span>排除${core_text.esc(item.title)}，以后也不要抽中</span></label>`;
+    }).join('');
+    const report = apiReport();
+    const api = report.ready ? '' : `<p>${core_text.esc(report.message)}</p><p>${core_text.esc(report.action)}</p>`;
+    return `${api}${cardBar()}<p>已有档案时不必重新建档。勾选的是以后想自动跑的条目；还没适配的不会进入抽签。</p>${choices}`;
 }
 
 function previewHtml(context) {
@@ -121,7 +131,7 @@ function pageHtml(context) {
         return `<h2>聊天读取范围与外部来源</h2><p>${core_text.esc(scan.preview.label)}</p><p>约 ${scan.preview.characters.toLocaleString()} 个聊天字符。外部来源：${names}。${scan.externalOn ? '' : '外部记忆开关是关的。'}</p><p>这一步只在本地计数，不会请求模型。</p>`;
     }
     if (name === 'modules') return `<h2>模块介绍</h2><p>性质和正常请求范围如下。未适配的不能自动生成。</p>${moduleHtml()}`;
-    if (name === 'preference') return `<h2>喜欢或排除</h2>${preferenceHtml()}`;
+    if (name === 'preference') return `<h2>选择想自动跑的条目</h2>${preferenceHtml()}`;
     if (name === 'interval') return `<h2>自动间隔</h2><p>默认 5 楼，只能填 1 到 1000 的整数。自动抽签还没开始，这个数字会先保存下来。</p><label>每 <input type="number" min="1" max="1000" step="1" data-rmt-auto-memory-interval value="${draft.intervalFloors}"> 楼</label><p data-rmt-auto-memory-interval-error role="alert"></p>`;
     if (name === 'archive') return `<h2>建档预计</h2>${previewHtml(context)}<label class="rmt-settings-check"><input type="checkbox" data-rmt-auto-memory-archive ${draft.doArchive ? 'checked' : ''}><span>这次整理档案</span></label>`;
     if (name === 'first') {
@@ -141,7 +151,7 @@ function render(context) {
     ui_overlay.setManageVisible(false);
     const resume = showingSummary ? wizard_plan.wizardResumeView(auto_memory_plan.readAutoMemoryMetadata(context.chatMetadata), archive_repository.getCurrentArchiveImportRecoverySummary(context)) : { completed: false };
     const inner = resume.completed
-        ? `<h2>向导已经保存</h2><p>间隔 ${resume.intervalFloors} 楼。已开放并选中 ${cards().filter(item => item.autoEligible && resume.preferredModuleIds.includes(item.id)).length} 项，排除 ${resume.excludedModuleIds.length} 项。尚未适配的模块不会进入抽签。</p><p>${resume.archiveStillRunning ? '建档还在原来的整理流程里，可以关闭窗口继续聊天。' : '刷新后这份设置还在。任务中心的队列不会在刷新后自动重发。'}</p><p>自动抽签还没开始，原来的按模块自动更新仍按原样运行。</p><button type="button" class="rmt-btn" data-rmt-auto-memory-edit>重新设置</button>`
+        ? `<h2>向导已经保存</h2><p>间隔 ${resume.intervalFloors} 楼。记下 ${resume.preferredModuleIds.length} 项，其中已开放 ${cards().filter(item => item.autoEligible && resume.preferredModuleIds.includes(item.id)).length} 项，排除 ${resume.excludedModuleIds.length} 项。尚未适配的模块不会进入抽签。</p><p>${resume.archiveStillRunning ? '建档还在原来的整理流程里，可以关闭窗口继续聊天。' : '刷新后这份设置还在。任务中心的队列不会在刷新后自动重发。'}</p><p>自动抽签还没开始。这一段聊天会暂停原来的按模块自动更新；设置里可以恢复那些开关。</p><button type="button" class="rmt-btn" data-rmt-auto-memory-edit>重新设置</button>`
         : `${pageHtml(context)}<p><button type="button" class="rmt-btn" data-rmt-auto-memory-prev ${step === 0 ? 'disabled' : ''}>上一步</button><button type="button" class="rmt-btn" data-rmt-auto-memory-next ${step >= wizard_plan.WIZARD_STEPS.length - 1 ? 'disabled' : ''}>下一步</button></p>`;
     body.innerHTML = `<main class="rmt-home" data-rmt-auto-memory-root><p>第 ${showingSummary ? wizard_plan.WIZARD_STEPS.length : step + 1} / ${wizard_plan.WIZARD_STEPS.length} 步</p>${inner}<p><button type="button" class="rmt-btn" data-rmt-auto-memory-home>返回设置</button><button type="button" class="rmt-btn" data-rmt-auto-memory-close>关闭窗口，任务继续</button></p><p data-rmt-auto-memory-status role="status"></p></main>`;
     if (body.dataset.rmtAutoMemoryBound !== '1') {
@@ -155,6 +165,43 @@ function render(context) {
 function status(message) {
     const node = ui_overlay.bodyEl()?.querySelector?.('[data-rmt-auto-memory-status]');
     if (node) node.textContent = message;
+}
+
+function currentEntry(context) {
+    const archive = archive_repository.getImportedMemory(context);
+    const storedRoster = archive ? core_cache.readParticipantRoster(context) : null;
+    return {
+        entry: wizard_plan.wizardEntry({
+            archivePresent: !!archive,
+            cardType: storedRoster ? 'multiple' : (archive ? 'single' : ''),
+            apiReady: apiReport().ready,
+        }),
+        storedRoster,
+    };
+}
+
+function applyKnownCard(context) {
+    const { entry, storedRoster } = currentEntry(context);
+    if (entry.cardType) {
+        draft.cardType = entry.cardType;
+        draft.participantConfirmed = entry.cardType === 'single' || !!storedRoster;
+        if (storedRoster) {
+            roster = storedRoster;
+            rosterRevision = storedRoster.revision || '';
+            draft.participantIds = [...storedRoster.selectedIds];
+        }
+    }
+    if (entry.skipArchive) draft.doArchive = false;
+    return entry;
+}
+
+function seedDraft(existing) {
+    const legacy = core_settings.getPluginSettings().autoUpdates;
+    if (!existing) return wizard_plan.createWizardDraft(auto_memory_migrate.migrateLegacyAutoPreferences(null, legacy, 0).plan);
+    if (!existing.plan.legacyPreferencesMigrated) {
+        return wizard_plan.createWizardDraft(auto_memory_migrate.migrateLegacyAutoPreferences(existing.plan, legacy, Date.now()).plan);
+    }
+    return wizard_plan.createWizardDraft(existing.plan);
 }
 
 function sameChat(context) {
@@ -204,20 +251,27 @@ async function saveAndStart(context) {
     } catch { status('聊天里的设置已保存。本机备份没有写上，没有用备份覆盖它。'); }
     let archiveStarted = false;
     let archiveNote = '';
+    if (draft.cardChoiceDirty || draft.doArchive) {
+        try {
+            if (draft.cardType === 'multiple') {
+                if (!roster) { status('请先确认人物名单。已保存的间隔和偏好还在。'); return; }
+                roster = await core_cache.commitParticipantRoster(context, roster, { expectedRevision: rosterRevision });
+                rosterRevision = roster?.revision || rosterRevision;
+            } else if (draft.cardType === 'single') {
+                await core_cache.selectSingleParticipantCard(context, { expectedRevision: rosterRevision });
+                roster = null;
+            }
+            draft.cardChoiceDirty = false;
+        } catch (error) { status(core_text.safeErrorSummary(error)); return; }
+    }
     if (draft.doArchive) {
-        if (draft.cardType === 'multiple' && roster) {
-            try { roster = await core_cache.commitParticipantRoster(context, roster, { expectedRevision: rosterRevision }); }
-            catch (error) { status(core_text.safeErrorSummary(error)); return; }
-        } else if (draft.cardType === 'single') {
-            try { await core_cache.discardParticipantDraft(context); }
-            catch (error) { status(core_text.safeErrorSummary(error)); return; }
-        }
         archiveStarted = ui_overlay.requestCurrentArchiveImport({ cardTypeConfirmed: true, participantRoster: draft.cardType === 'multiple' ? roster : null }) === true;
         if (!archiveStarted) archiveNote = '建档没有开始。已保存的间隔和偏好还在。';
     }
     const routes = wizard_plan.firstQueueRoutes(draft, queueableIds());
     const queued = routes.length && (archiveStarted || !draft.doArchive) ? ui_taskCenter.enqueueSelectedModes(routes) : 0;
     showingSummary = true;
+    core_autoUpdates.notifyAutoUpdateSettingsChanged();
     if (sameChat(context)) render(context);
     status(archiveNote || (queued ? `已把 ${queued} 项放进任务中心。关闭窗口后任务继续，聊天可以照常发送。` : '设置已保存。关闭窗口不会取消正在进行的整理。'));
 }
@@ -228,7 +282,7 @@ function onChange(event) {
     const prefer = event.target.dataset?.rmtAutoMemoryPrefer;
     const first = event.target.dataset?.rmtAutoMemoryFirst;
     if (exclude) draft = wizard_plan.preferenceUpdate(draft, exclude, event.target.checked ? 'exclude' : 'unset');
-    if (prefer) draft = wizard_plan.preferenceUpdate(draft, prefer, event.target.checked ? 'prefer' : 'exclude');
+        if (prefer) draft = wizard_plan.preferenceUpdate(draft, prefer, event.target.checked ? 'prefer' : 'unset');
     if (first) {
         const ids = draft.firstModuleIds.filter(id => id !== first);
         if (event.target.checked) ids.push(first);
@@ -263,7 +317,12 @@ function onClick(event) {
         ui_overlay.closeArchiveOverlayFromUser();
         return;
     }
-    if (event.target.closest?.('[data-rmt-auto-memory-edit]')) { showingSummary = false; step = 0; render(context); return; }
+    if (event.target.closest?.('[data-rmt-auto-memory-edit]')) {
+        showingSummary = false;
+        step = wizard_plan.WIZARD_STEPS.indexOf(currentEntry(context).step);
+        render(context);
+        return;
+    }
     if (event.target.closest?.('[data-rmt-auto-memory-prev]')) { if (step > 0) step -= 1; render(context); return; }
     if (event.target.closest?.('[data-rmt-auto-memory-next]')) {
         if (!stepReady(context)) { status(wizard_plan.WIZARD_STEPS[step] === 'interval' ? wizard_plan.normalizeInterval(draft.intervalFloors).message : '这一步还没完成。'); return; }
@@ -274,9 +333,10 @@ function onClick(event) {
     const card = event.target.closest?.('[data-rmt-auto-memory-card]')?.dataset?.rmtAutoMemoryCard;
     if (card === 'single' || card === 'multiple') {
         draft.cardType = card;
-        draft.participantConfirmed = card === 'single';
+        draft.cardChoiceDirty = true;
+        draft.participantConfirmed = card === 'single' || (card === 'multiple' && !!roster);
         draft.participantIds = card === 'single' ? [] : draft.participantIds;
-        if (card === 'single') { roster = null; rosterRevision = ''; }
+        if (card === 'single') roster = null;
         render(context);
         return;
     }
@@ -284,6 +344,8 @@ function onClick(event) {
         void participant_picker.showParticipantPicker({ context, requireSelection: true, confirmLabel: '确认人物',
             onConfirm: (nextRoster, expectedRevision) => {
                 roster = nextRoster; rosterRevision = expectedRevision;
+                draft.cardType = 'multiple';
+                draft.cardChoiceDirty = true;
                 draft.participantConfirmed = true;
                 draft.participantIds = Array.isArray(nextRoster?.selectedIds) ? nextRoster.selectedIds.filter(id => typeof id === 'string') : [];
                 if (sameChat(context)) render(context);
@@ -310,11 +372,12 @@ export function openAutoMemoryWizard() {
             globalThis.toastr?.error?.(core_text.toastText(error?.safeToDisplay ? error.safeUserMessage : '已有的自动留忆记录已损坏，没有覆盖。'), '心迹回廊');
             return false;
         }
-        draft = wizard_plan.createWizardDraft(existing?.plan);
-        step = 0;
+        draft = seedDraft(existing);
         showingSummary = !!existing?.plan?.enabled;
         roster = null;
         rosterRevision = '';
+        const entry = applyKnownCard(context);
+        step = showingSummary ? 0 : wizard_plan.WIZARD_STEPS.indexOf(entry.step);
     }
     return render(context);
 }

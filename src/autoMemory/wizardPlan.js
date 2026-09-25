@@ -79,6 +79,7 @@ export function createWizardDraft(plan = null) {
         doArchive: true,
         skipFirst: false,
         archiveOnly: false,
+        cardChoiceDirty: false,
         firstModuleIds: [],
     };
 }
@@ -88,10 +89,8 @@ export function preferenceUpdate(draft, id, choice) {
     const next = { ...draft, preferredModuleIds: uniqueDrawIds(draft?.preferredModuleIds).filter(itemId => itemId !== id),
         excludedModuleIds: uniqueDrawIds(draft?.excludedModuleIds).filter(itemId => itemId !== id), error: '' };
     if (!item || item.inDrawPool !== true) return { ...next, error: 'unavailable' };
-    if (choice === 'prefer') {
-        if (item.autoEligible !== true) return { ...next, error: 'ineligible' };
-        next.preferredModuleIds = [...next.preferredModuleIds, id];
-    } else if (choice === 'exclude') next.excludedModuleIds = [...next.excludedModuleIds, id];
+    if (choice === 'prefer') next.preferredModuleIds = [...next.preferredModuleIds, id];
+    else if (choice === 'exclude') next.excludedModuleIds = [...next.excludedModuleIds, id];
     return next;
 }
 
@@ -137,6 +136,32 @@ export function wizardResumeView(snapshot, archiveRecovery = null) {
     };
 }
 
+export function wizardEntry({ archivePresent = false, cardType = '', apiReady = false } = {}) {
+    const known = cardType === 'single' || cardType === 'multiple';
+    const skipArchive = archivePresent === true && known;
+    return {
+        skipArchive,
+        step: skipArchive && apiReady === true ? 'preference' : 'api',
+        doArchive: !skipArchive,
+        cardType: known ? cardType : '',
+    };
+}
+
+export function disableAutoMemoryPlan(chatMetadata, now = 0) {
+    const existing = auto_memory_plan.readAutoMemoryMetadata(chatMetadata);
+    if (!existing?.plan.enabled) return { changed: false, snapshot: existing };
+    const updatedAt = Number.isSafeInteger(now) && now > existing.plan.updatedAt ? now : existing.plan.updatedAt + 1;
+    return {
+        changed: true,
+        snapshot: auto_memory_plan.parseAutoMemorySnapshot({
+            plan: auto_memory_plan.parseAutoMemoryPlan({
+                ...existing.plan, enabled: false, revision: existing.plan.revision + 1, updatedAt,
+            }),
+            revealRecords: existing.revealRecords, drawTickets: existing.drawTickets, modulePlan: existing.modulePlan,
+        }),
+    };
+}
+
 export function wizardBlocksChatInput() {
     return false;
 }
@@ -150,12 +175,7 @@ export function wizardCompletionSnapshot(chatMetadata, draft, now = 0) {
     if (!interval.ok) throw auto_memory_plan.createAutoMemoryPlan({ intervalFloors: draft?.intervalFloors });
     const excludedModuleIds = uniqueDrawIds(draft?.excludedModuleIds);
     const existing = auto_memory_plan.readAutoMemoryMetadata(chatMetadata);
-    const alreadyPreferred = new Set(existing?.plan.preferredModuleIds || []);
-    const preferredModuleIds = uniqueDrawIds(draft?.preferredModuleIds).filter(id => {
-        if (excludedModuleIds.includes(id)) return false;
-        const item = auto_memory_registry.autoMemoryModuleById(id);
-        return item?.autoEligible === true || alreadyPreferred.has(id);
-    });
+    const preferredModuleIds = uniqueDrawIds(draft?.preferredModuleIds).filter(id => !excludedModuleIds.includes(id));
     const updatedAt = Number.isSafeInteger(now) && now > 0 ? now : 0;
     if (!existing) {
         return auto_memory_plan.parseAutoMemorySnapshot({
