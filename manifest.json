@@ -1,15 +1,15 @@
 {
   "display_name": "心迹回廊",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.99.19-r84.71-archive-resilience",
+  "js": "index.js?heartbeat=0.99.30-r84.82-wand-icon",
   "author": "Toto",
-  "version": "0.99.19",
+  "version": "0.99.30",
   "auto_update": true,
   "minimum_client_version": "1.13.0",
   "hooks": {
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r84.71：建档按约 15 万字小批正式保存，临时网络错误自动重试，失败后自动保存成功分块；邮箱小画读取完整世界书并识别更多外貌写法。",
+  "description": "r84.82：魔法棒菜单的心迹回廊入口统一使用兔子镜同款线条兔子图标。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }

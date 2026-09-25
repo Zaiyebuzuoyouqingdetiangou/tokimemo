@@ -40,7 +40,7 @@ function exactLogicalOrigin(left, right) {
         .every(key => String(left[key] ?? '') === String(right[key] ?? ''));
 }
 
-export function beginLogicalGenerationTask({ kind = 'mode', mode = '', pageId = '', pageIds = [], context = null, origin = null, taskKey = '', label = '', parentTaskId = '', signal = null } = {}) {
+export function beginLogicalGenerationTask({ kind = 'mode', mode = '', pageId = '', pageIds = [], draftId = '', context = null, origin = null, taskKey = '', label = '', parentTaskId = '', signal = null } = {}) {
     if (taskKey && [...logicalGenerationTasks.values()].some(task => task.taskKey === taskKey)) {
         throw core_text.safeUserError('这一项仍在处理，请等待当前任务完全结束。', 'RMT_LOGICAL_TASK_BUSY');
     }
@@ -53,7 +53,7 @@ export function beginLogicalGenerationTask({ kind = 'mode', mode = '', pageId = 
     const forwardAbort = () => controller.abort(createGenerationAbortError());
     if (externalSignal?.aborted) throw createGenerationAbortError();
     externalSignal?.addEventListener?.('abort', forwardAbort, { once: true });
-    const handle = { id: `logical-generation-${++logicalTaskSequence}`, kind, mode, pageId, pageIds: [...pageIds], parentTaskId,
+    const handle = { id: `logical-generation-${++logicalTaskSequence}`, kind, mode, pageId, pageIds: [...pageIds], draftId, parentTaskId,
         label: label || core_constants.MODE_LABEL[mode] || kind, taskKey, controller,
         signal: controller.signal, settled, resolveSettled, lifecycleEpoch: runtimeState.runtimeLifecycleEpoch,
         scope: context ? core_context.chatScopeKey(context) : '', origin: null, origins: [], status: 'running', phase: 'prepare',
@@ -69,6 +69,7 @@ export function bindLogicalGenerationTask(handle, origin, options = {}) {
     if (origin && typeof origin === 'object') {
         logicalTaskOrigins.set(origin, handle);
         handle.origin = structuredClone(origin);
+        if (origin.generationRecoveryDraftId) handle.draftId = origin.generationRecoveryDraftId;
         handle.origins.push(handle.origin);
     }
     if (options.taskKey) handle.taskKey = options.taskKey;
@@ -111,10 +112,12 @@ export function finishLogicalGenerationTask(handle, result = null) {
     handle.resolveSettled({ id: handle.id, kind: handle.kind, mode: handle.mode, pageId: handle.pageId, status: handle.status });
 }
 
-export function queryParticipantGenerationTasks(context = core_context.getContext()) {
+export function queryParticipantGenerationTasks(context = core_context.getContext(), { stableIdentity = false } = {}) {
     const scope = core_context.chatScopeKey(context);
-    return [...logicalGenerationTasks.values()].filter(task => task.scope === scope).map(task => ({
-        id: task.id, kind: task.kind, mode: task.mode, pageId: task.pageId, pageIds: [...task.pageIds], parentTaskId: task.parentTaskId, label: task.label,
+    return [...logicalGenerationTasks.values()].filter(task => task.scope === scope || (stableIdentity
+        && core_context.taskOriginCharacterMatches(task.origin, context)
+        && task.origin?.chatId === core_context.comparableChatId(core_context.getChatId(context)))).map(task => ({
+        id: task.id, kind: task.kind, mode: task.mode, pageId: task.pageId, pageIds: [...task.pageIds], draftId: task.draftId, parentTaskId: task.parentTaskId, label: task.label,
         origin: task.origin ? structuredClone(task.origin) : null, status: task.status,
     }));
 }

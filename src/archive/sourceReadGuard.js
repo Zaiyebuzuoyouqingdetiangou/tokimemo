@@ -29,7 +29,9 @@ export function createSourceReadGuard(context, expectedChatId = contextApi.getCh
     };
 }
 
-export function boundedSourceRead(read, signal = null, timeoutMs = 15000) {
+// Stop waiting even when a host API ignores AbortSignal. Only use for reads;
+// writes must still acknowledge their transaction before an owner is released.
+export function waitForSourceRead(read, signal = null, timeoutMs = 0) {
     if (signal?.aborted) return Promise.reject(new DOMException('Read cancelled', 'AbortError'));
     return new Promise((resolve, reject) => {
         let done = false;
@@ -39,9 +41,12 @@ export function boundedSourceRead(read, signal = null, timeoutMs = 15000) {
             fn(value);
         };
         const abort = () => finish(reject, new DOMException('Read cancelled', 'AbortError'));
-        const timer = setTimeout(() => finish(reject, Object.assign(new Error('Memory reader timed out'), { code: 'RMT_MEMORY_READ_TIMEOUT' })),
-            Math.max(1, Math.min(15000, Number(timeoutMs) || 15000)));
+        const timer = timeoutMs > 0 ? setTimeout(() => finish(reject, Object.assign(new Error('Memory reader timed out'), { code: 'RMT_MEMORY_READ_TIMEOUT' })), timeoutMs) : 0;
         signal?.addEventListener?.('abort', abort, { once: true });
         Promise.resolve().then(() => done ? undefined : read()).then(value => finish(resolve, value), error => finish(reject, error));
     });
+}
+
+export function boundedSourceRead(read, signal = null, timeoutMs = 15000) {
+    return waitForSourceRead(read, signal, Math.max(1, Math.min(15000, Number(timeoutMs) || 15000)));
 }

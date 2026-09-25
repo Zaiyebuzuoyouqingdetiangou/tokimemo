@@ -664,7 +664,8 @@ export function syncLiveTaskStrip() {
     paintLiveStrip();
 }
 
-export function syncTaskCenterChrome() {
+export function syncTaskCenterChrome({ refreshRecovery = false } = {}) {
+    if (refreshRecovery) unfinishedCache.at = 0;
     bindTaskCenterRefresh();
     refreshTaskCenterView();
 }
