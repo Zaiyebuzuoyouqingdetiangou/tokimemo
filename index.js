@@ -1,5 +1,5 @@
-const VERSION = '0.99.35';
-const BUILD = '0.99.35-r84.87-auto-memory-r3';
+const VERSION = '0.99.36';
+const BUILD = '0.99.36-r84.88-auto-memory-r4';
 
 const SETTINGS_ID = 'heartbeat_memories_settings';
 const MENU_ID = 'heartbeat_memories_menu_item';

@@ -1,15 +1,15 @@
 {
   "display_name": "心迹回廊",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.99.35-r84.87-auto-memory-r3",
+  "js": "index.js?heartbeat=0.99.36-r84.88-auto-memory-r4",
   "author": "Toto",
-  "version": "0.99.35",
+  "version": "0.99.36",
   "auto_update": true,
   "minimum_client_version": "1.13.0",
   "hooks": {
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r84.87：自动留忆到了间隔会做增量建档。还没有可抽的模块时，不会为模块发请求。改了人物名单后会问要不要重新建档；不重新建档就继续用旧档案。",
+  "description": "r84.88：自动留忆的进度贴在角色楼层下面，不悬浮。整份没写完时不显示成就。点开详情进入原来的板块。成功和失败都会提示。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }

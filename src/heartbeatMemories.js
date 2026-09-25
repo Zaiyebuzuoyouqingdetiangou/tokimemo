@@ -6,6 +6,7 @@ import * as auto_memory_registry from './autoMemory/moduleRegistry.js';
 import * as auto_memory_plan from './autoMemory/planStore.js';
 import * as auto_memory_migrate from './autoMemory/migrateLegacy.js';
 import * as auto_memory_scheduler from './autoMemory/scheduler.js';
+import * as ui_autoMemoryShell from './ui/autoMemoryShell.js';
 import * as core_constants from './core/constants.js';
 import * as core_context from './core/context.js';
 import * as core_diagnosticReport from './core/diagnosticReport.js';
@@ -59,6 +60,7 @@ export function initMemoryTheater() {
         ui_archivePortal.bindDiagnosticCopy();
         core_autoUpdates.startAutoUpdates();
         auto_memory_scheduler.startAutoMemoryScheduler();
+        ui_autoMemoryShell.startAutoMemoryShell();
         ui_archivePortal.bindRobustArchiveOpenHandlers();
         ui_archivePortal.bindGenerationNavigationGuards();
         ui_archivePortal.scheduleMounts(settingsMounted, menuMounted);
@@ -85,6 +87,7 @@ export function destroyMemoryTheater() {
     core_diagnosticReport.uninstallRuntimeDiagnostic();
     try { globalThis.__heartbeatMemoriesRemoveDiagnostics?.(); } catch {}
     ui_cgImageViewer.closeCgImageViewer({ restoreFocus: false });
+    ui_autoMemoryShell.stopAutoMemoryShell();
     auto_memory_scheduler.stopAutoMemoryScheduler();
     core_autoUpdates.stopAutoUpdates();
     ui_settingsPanel.clearHomeSettingsPanel();
