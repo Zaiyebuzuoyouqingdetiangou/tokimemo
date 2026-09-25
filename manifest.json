@@ -1,15 +1,15 @@
 {
   "display_name": "心迹回廊",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.99.29-r84.81-archive-preparation",
+  "js": "index.js?heartbeat=0.99.30-r84.82-wand-icon",
   "author": "Toto",
-  "version": "0.99.29",
+  "version": "0.99.30",
   "auto_update": true,
   "minimum_client_version": "1.13.0",
   "hooks": {
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r84.81：建档准备可取消和重试，来源读取无响应可退出，取消本地草稿与历史来源固定额度。",
+  "description": "r84.82：魔法棒菜单的心迹回廊入口统一使用兔子镜同款线条兔子图标。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }

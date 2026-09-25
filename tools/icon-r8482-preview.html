@@ -1,0 +1,14 @@
+<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>魔法棒菜单图标复核</title><style>body{font:16px sans-serif;background:#ececec;color:#777;padding:24px}.list-group-item{display:flex;align-items:center;gap:7px;padding:8px}section{margin:16px 0}h2{font-size:14px;color:#333}</style><h2>加载前</h2><section id="before"></section><h2>加载后</h2><section id="after"></section><div id="extensionsMenu"></div><p id="result"></p><script type="module">
+const bootstrap=await import('../index.js?icon-preview-r8482');
+await new Promise(resolve=>setTimeout(resolve,0));
+const before=document.querySelector('#heartbeat_memories_menu_item');
+const first=before.querySelector('svg').outerHTML;
+document.querySelector('#before').appendChild(before.cloneNode(true));
+document.querySelector('#before [id]').removeAttribute('id');
+bootstrap.onDisable();
+const portal=await import('../src/ui/archivePortal.js?icon-preview-r8482');
+portal.mountMenuItem();
+const after=document.querySelector('#heartbeat_memories_menu_item');
+document.querySelector('#after').appendChild(after);
+document.querySelector('#result').textContent=first===after.querySelector('svg').outerHTML?'加载前后图标一致 · 18×18 · 随主题文字颜色':'图标不一致';
+</script>

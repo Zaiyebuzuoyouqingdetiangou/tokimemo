@@ -1,0 +1,59 @@
+(node:1544) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ first archive cancels a non-cooperative world-info read and can start again without a late request (370.3725ms)
+✔ unresponsive world-info read exits with a specific diagnostic and releases preparation (326.8476ms)
+✔ cancel during encrypted credential preparation settles without storing the late key (259.164ms)
+✔ cancelled memory scan does not occupy the next scan or cache a late source (204.262ms)
+✔ first-step draft read is cancellable without deleting stored archives or starting a request (252.7281ms)
+✔ source ledger aborts a stuck IDB transaction instead of holding the next preparation (173.9048ms)
+✔ cancellation between resolved storage and its continuation cannot publish the old hydration (250.3247ms)
+✔ a timed-out ledger open can be retried; its late connection is closed (173.0931ms)
+✔ explicit discard can find the same card owner after edits without selecting another chat or avatar (3.5136ms)
+✔ a selected retry owns its draft from preparation through origin rebinding (0.6486ms)
+✔ explicit discard clears a stale active archive draft and fences its late callback, preserving another chat (23.8099ms)
+✔ failed discard restores the draft but does not reauthorize the old callback; explicit retry can resume it (5.7003ms)
+(node:20352) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ editing the same card keeps canonical legacy mail readable, receivable and favoriteable (50.5324ms)
+✔ same-card fresh and partial mail append after an edit while retaining every old letter (37.1867ms)
+✔ canonical proof does not authorize a stale view from another card, chat, revision or mailbox (14.9695ms)
+✔ new mail captures stable owner identity and another avatar cannot reuse it (4.7488ms)
+✔ an unavailable avatar adds no restriction to the existing canonical same-card mailbox (4.3312ms)
+✔ a mismatched legacy mailbox is rejected before sending a new letter request (3.563ms)
+✔ local inbox failures keep concrete user-facing reasons (4.4353ms)
+✔ legacy buttons without draft ids stay distinct by page, mode, and chat (0.8967ms)
+✔ repeated taps share one pending operation and one error; next explicit attempt remains available (1.5535ms)
+✔ unrelated draft actions proceed independently and cancellation creates no error toast (0.3007ms)
+(node:7188) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ discard stops only the selected page owner and waits for cleanup; unrelated busy work does not block (555.1445ms)
+✔ failed durable discard reports storage failure without claiming success (5.9147ms)
+✔ a completed discard does not navigate another chat opened during persistence (4.9129ms)
+✔ a source snapshot beyond 1.2 million characters saves and resumes byte-for-byte (96.099ms)
+✔ received segments beyond 600k and a journal beyond 1.8m remain complete and replay without requests (106.5845ms)
+✔ a frozen request beyond 1.2m characters is replayed exactly and never replaced by live content (268.0038ms)
+✔ more than 128 validated segments are retained and exportable (91.7969ms)
+✔ more than four parked drafts and drafts from other chats remain saved and independently reloadable (9.8881ms)
+✔ archive source admission accepts more than 128 fragments without dropping any source digest (6.7051ms)
+✔ old journals have no seven-day expiry and invalid identity or JSON structure still fails (0.8601ms)
+✔ actual storage failure still stops before any model call and preserves all existing drafts (1.473ms)
+✔ source ledger retains and projects more than 8000 records including the complete selection whitelist (112.253ms)
+✔ source ledger and complete archive projection preserve history beyond 8 million characters (181.5967ms)
+✔ more than 200 selected history books save, reload and are all read (4.0012ms)
+✔ precise historical world-book selection keeps entries after 160 while ordinary background retains its request budget (1.2758ms)
+✔ local file preview preserves files beyond 4MB and JSON or JSONL entries beyond 5000 (92.1159ms)
+✔ all retained history revisions still project after more than 5000 partial source scans (98.9031ms)
+✔ retained revision projection still obeys baseline, incomplete overlays and explicit source revocation (0.5766ms)
+✔ same character card edits do not strand frozen drafts in pool or legacy storage (19.7884ms)
+✔ explicit inspect keeps old drafts exportable and discardable without treating them as resumable (4.115ms)
+✔ inspection does not revive closed drafts or select a different requested page (2.1377ms)
+✔ card edits never authorize another character, chat, or archive entry (5.2164ms)
+✔ resume after card edits replays saved segments and frozen requests, saves and reopens with source attribution intact (9.3349ms)
+ℹ tests 45
+ℹ suites 0
+ℹ pass 45
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2183.6728

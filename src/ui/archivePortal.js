@@ -30,7 +30,7 @@ export function mountMenuItem() {
     item.className = 'list-group-item flex-container flexGap5 interactable';
     item.tabIndex = 0;
     item.setAttribute('role', 'button');
-    item.innerHTML = '<i class="fa-solid fa-book-open" aria-hidden="true"></i><span>心迹回廊</span>';
+    item.innerHTML = '<span class="rmt-wand-icon" aria-hidden="true" style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;flex:0 0 auto"><svg style="display:block;width:18px;height:18px" focusable="false" viewBox="0 0 32 32" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M10 16C4 2 11 1 14 14M18 14C20 1 27 2 23 16M9 16c-7 11 3 15 9 14s13-8 5-14c-4-3-10-3-14 0Z"/><path d="M12 22h1m6 0h1m-6 4 2 1 2-1"/></svg></span><span>心迹回廊</span>';
     const open = () => safeShowArchiveLibrary('extensions-menu');
     item.addEventListener('click', open);
     item.addEventListener('keydown', event => {

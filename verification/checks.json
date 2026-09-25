@@ -1,18 +1,18 @@
 {
-  "version": "0.99.29",
-  "build": "0.99.29-r84.81-archive-preparation",
-  "baseCommit": "606bb46cdab079b21a4b24a669c43d59796f3c67",
+  "version": "0.99.30",
+  "build": "0.99.30-r84.82-wand-icon",
+  "baseCommit": "78b6b073359be0cbd7db49296e691658f26510a4",
   "syntaxFiles": 281,
   "syntaxExit": 0,
   "bundleModules": 239,
-  "bundleSha256": "000d2d98eb387146f7853a8979747f4e712ba60882190d021f6559a6431f192f",
+  "bundleSha256": "3c624c637fa7d71b81bc21381e481f767d852bc6e518fe96887265c093db99a2",
   "bundleRebuildIdentical": true,
   "tests": 45,
   "pass": 45,
   "fail": 0,
   "undefinedBindings": 0,
   "runtimeExports": 5,
-  "testedEnvironment": "Node production module graph with simulated host/provider/storage boundaries; local browser using production modules, real IndexedDB and synthetic chat; native confirmation replaced only in fixture. Verified preparation cancel, late reply, retry and timeout feedback. No paid provider, real user SillyTavern or iPhone acceptance.",
+  "testedEnvironment": "45 existing Node regressions; local browser mounts real bootstrap and runtime menu entries and verifies identical 18px decorative rabbit SVG. Real SillyTavern theme and iPhone not tested this round.",
   "priorBaseline": "r84.59 passed 221 tests before integrating r84.79. Remote r84.79 removed its test tooling; historical 83-test report was not rerun and is not claimed as current evidence.",
   "unavailableChecks": "Remote r84.79 removed tests/ and the refactor-guard, verify-release and TypeScript undefined-name tooling. Current syntax/runtime-binding verification is not a full TypeScript analysis."
 }
