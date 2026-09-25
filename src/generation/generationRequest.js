@@ -253,7 +253,7 @@ async function generateConfiguredJsonOperation(prompt, options = {}) {
     core_context.assertRuntimeLifecycleCurrent(lifecycleEpoch);
     const context = generationContentContext(options.origin, options.context || core_context.currentCharacterGuard());
     const transportContext = contentContextSources.get(context) || context;
-    await core_settings.prepareManualCredential(transportContext);
+    await core_settings.prepareManualCredential(transportContext, { signal: options.signal });
     const configuredSettings = core_settings.getPluginSettings(transportContext);
     // Persist only the selected profile's inert identifier, never credentials.
     // A reopened recovery origin is a new object, so WeakMap pinning alone
@@ -270,7 +270,7 @@ async function generateConfiguredJsonOperation(prompt, options = {}) {
     const configurationFingerprint = core_independentApi.apiConfigurationFingerprint(configuredSettings);
     const contextEnvelope = typeof options.contextEnvelope === 'string'
         ? options.contextEnvelope
-        : await core_cache.buildControlledContextEnvelope(context, { worldInfoScanTerms: generationWorldInfoScanTerms(options.mode, context) });
+        : await core_cache.buildControlledContextEnvelope(context, { worldInfoScanTerms: generationWorldInfoScanTerms(options.mode, context), signal: options.signal });
     let actualPrompt;
     if (typeof options.recoveryPreparedPrompt === 'string') actualPrompt = options.recoveryPreparedPrompt;
     else if (options.recoveryContinuationPartial) {

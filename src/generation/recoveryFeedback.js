@@ -6,9 +6,12 @@ import * as recovery_payload from './recoveryPayload.js';
 
 export const GENERATION_RECOVERY_CACHE_KEY = '__generationRecoveryV1';
 
+// Recovery storage is not a model context window. Retain valid sources and paid
+// results without fixed character/segment quotas; real storage failure still
+// stops subsequent requests. These numeric exports remain for legacy readers.
 export const GENERATION_RECOVERY_LIMITS = Object.freeze({
-    segments: 128, segmentChars: 600000, journalChars: 1800000,
-    requestChars: 1200000, maxAgeMs: 7 * 24 * 60 * 60 * 1000,
+    segments: Infinity, segmentChars: Infinity, journalChars: Infinity,
+    requestChars: Infinity, maxAgeMs: 7 * 24 * 60 * 60 * 1000,
 });
 
 export const handles = new WeakMap();
@@ -212,8 +215,9 @@ export function jsonData(value, maxChars = GENERATION_RECOVERY_LIMITS.segmentCha
         const text = JSON.stringify(copy(value, 0));
         if (text.length > maxChars) throw new Error('size');
         return text;
-    } catch {
-        throw recoveryError('RMT_RECOVERY_LIMIT', '这段内容超过可安全保存的续写草稿范围；已保留此前成功部分和旧内容。');
+    } catch (error) {
+        if (error?.message === 'size') throw recoveryError('RMT_RECOVERY_LIMIT', '这段内容超过调用方指定的保存范围；已保留此前成功部分和旧内容。');
+        throw recoveryError('RMT_RECOVERY_DATA', '续写资料未通过 JSON 数据结构校验；已保留此前成功部分和旧内容。');
     }
 }
 
@@ -304,11 +308,9 @@ export async function projectHeldReply(handle, slot, requestHash, rawJson) {
     catch (error) { if (error?.name === 'AbortError') throw error; }
 }
 
-// Validate JSON ownership first; apply the existing storage limit to the lossless
-// stored representation, not to duplicate in-memory copies of shared requests.
-// The journal-total limit stays enforced on every write. Read/export/discard
-// egress for a journal that already exceeds it passes enforceJournalLimit:false
-// so the user can still see, export, and discard it; it can never continue.
+// Validate JSON ownership and preserve the lossless stored representation.
+// Legacy size-policy parameters remain accepted, but recovery has no fixed
+// character quota; only the durable save acknowledges storage availability.
 function recoveryJournalData(raw, { enforceJournalLimit = true } = {}) {
     const safe = JSON.parse(jsonData(raw, Number.MAX_SAFE_INTEGER, true));
     const expanded = recovery_payload.unpackRecoveryPayload(safe, GENERATION_RECOVERY_LIMITS.requestChars);

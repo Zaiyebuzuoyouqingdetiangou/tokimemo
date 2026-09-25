@@ -1,6 +1,5 @@
 // Local memory-file parser.  Files are treated strictly as inert text/data: no HTML
 // rendering, macro expansion, script execution, fetch, or instruction interpretation.
-import * as core_constants from '../core/constants.js';
 import * as core_text from '../core/text.js';
 import * as archive_sourceLedger from './sourceLedger.js';
 
@@ -40,7 +39,6 @@ function extractObjectRecords(value, out = [], stats = { sensitive: 0, config: 0
         if (current == null) continue;
         visited += 1;
         if (visited > 100000) throw new Error('JSON 记忆文件结构过于复杂，已停止导入；没有把未读取分支标成完整。');
-        if (out.length > core_constants.MAX_MEMORY_FILE_RECORDS) throw new Error('记忆文件超过 5000 条记录上限。');
         if (Array.isArray(current)) {
             for (let index = current.length - 1; index >= 0; index -= 1) {
                 stack.push({ value: current[index], path: `${path}[${index}]`, configPath });
@@ -120,11 +118,8 @@ export async function previewMemoryFile(file, binding) {
     const name = core_text.normalizeText(file?.name, 240) || 'memory.txt';
     const extension = extensionOf(name);
     if (!ALLOWED_EXTENSIONS.has(extension)) throw new Error('只支持 JSON、JSONL、TXT、MD、MARKDOWN 记忆文件。');
-    const declaredBytes = Math.max(0, Number(file?.size) || 0);
-    if (declaredBytes > core_constants.MAX_MEMORY_FILE_BYTES) throw new Error('记忆文件超过 4 MB 安全上限。');
     const text = await fileText(file);
     const actualBytes = byteLength(text);
-    if (actualBytes > core_constants.MAX_MEMORY_FILE_BYTES) throw new Error('记忆文件超过 4 MB 安全上限。');
     let candidates = [];
     const parseStats = { sensitive: 0, config: 0 };
     if (extension === 'json') {
@@ -139,7 +134,6 @@ export async function previewMemoryFile(file, binding) {
             let value;
             try { value = JSON.parse(line); } catch { throw new Error(`JSONL 第 ${index + 1} 行格式无效。`); }
             extractObjectRecords(value, candidates, parseStats);
-            if (candidates.length > core_constants.MAX_MEMORY_FILE_RECORDS) break;
         }
     } else {
         candidates = splitPlainText(text, extension);
@@ -150,7 +144,6 @@ export async function previewMemoryFile(file, binding) {
     const fileHash = stableHash(text);
     const provider = archive_sourceLedger.normalizeMemorySourceProvider(`file:${name}`);
     for (let index = 0; index < candidates.length; index += 1) {
-        if (records.length >= core_constants.MAX_MEMORY_FILE_RECORDS) throw new Error('记忆文件超过 5000 条记录上限。');
         const raw = candidates[index];
         const content = inertText(raw?.content);
         if (!content) continue;
@@ -170,7 +163,6 @@ export async function previewMemoryFile(file, binding) {
         if (seen.has(dedupeKey)) continue;
         seen.add(dedupeKey);
         totalChars += content.length;
-        if (totalChars > core_constants.MAX_MEMORY_FILE_CHARS) throw new Error('记忆文件文字超过 400 万字符上限。');
         records.push({
             provider,
             providerVersion: 'file-import-v1',

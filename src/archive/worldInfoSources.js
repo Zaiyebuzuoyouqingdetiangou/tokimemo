@@ -153,7 +153,8 @@ export function normalizeMemoryWorldInfoBook(value) {
     const name = core_text.normalizeText(value?.name, 240);
     if (!name) return null;
     const all = value?.all === true;
-    const entryUids = all ? [] : core_text.cleanArray(value?.entryUids, core_constants.MAX_MEMORY_WORLD_INFO_ENTRIES, 120).map(String);
+    const entryLimit = value?.historySource === true ? Infinity : core_constants.MAX_MEMORY_WORLD_INFO_ENTRIES;
+    const entryUids = all ? [] : core_text.cleanArray(value?.entryUids, entryLimit, 120).map(String);
     if (!all && !entryUids.length) return null;
     return { name, all, historySource: value?.historySource === true, entryUids: [...new Set(entryUids)] };
 }
@@ -162,8 +163,7 @@ export function getMemoryWorldInfoSelection(context = core_context.currentCharac
     const raw = context.chatMetadata?.[core_constants.MEMORY_WORLD_INFO_SETTINGS_KEY];
     const books = (Array.isArray(raw?.books) ? raw.books : [])
         .map(normalizeMemoryWorldInfoBook)
-        .filter(Boolean)
-        .slice(0, core_constants.MAX_MEMORY_WORLD_INFO_BOOKS);
+        .filter(Boolean);
     return { books, updatedAt: Math.max(0, Number(raw?.updatedAt) || 0) };
 }
 
@@ -171,8 +171,7 @@ export function setMemoryWorldInfoSelection(context, selection) {
     if (!context.chatMetadata || typeof context.chatMetadata !== 'object') throw new Error('当前聊天无法保存记忆相关世界书选择。');
     const books = (Array.isArray(selection?.books) ? selection.books : [])
         .map(normalizeMemoryWorldInfoBook)
-        .filter(Boolean)
-        .slice(0, core_constants.MAX_MEMORY_WORLD_INFO_BOOKS);
+        .filter(Boolean);
     if (books.length) context.chatMetadata[core_constants.MEMORY_WORLD_INFO_SETTINGS_KEY] = { books, updatedAt: Date.now() };
     else delete context.chatMetadata[core_constants.MEMORY_WORLD_INFO_SETTINGS_KEY];
     context.saveMetadataDebounced?.();
@@ -286,7 +285,7 @@ export async function collectSelectedMemoryWorldInfo(context, expectedChatId, si
     let historyImported = 0;
     let historyTruncated = 0;
     let historyFailedBooks = 0;
-    for (const book of selection.books.filter(book => !settingsOnly || book.historySource !== true).slice(0, core_constants.MAX_MEMORY_WORLD_INFO_BOOKS)) {
+    for (const book of selection.books.filter(book => !settingsOnly || book.historySource !== true)) {
         assertSourceScope();
         let loaded;
         try { loaded = await loadMemoryWorldInfoBook(context, book.name, signal, { historySource: book.historySource === true }); }
@@ -359,7 +358,7 @@ export async function collectSelectedMemoryWorldInfo(context, expectedChatId, si
         : 'none';
     const coverageStatus = truncated ? 'truncated' : (failedBooks ? 'partial' : 'complete');
     const coverageReason = truncated
-        ? `设定背景上限 ${core_constants.MAX_MEMORY_WORLD_INFO_ENTRIES} 条 / ${core_constants.MAX_MEMORY_WORLD_INFO_CHARS.toLocaleString()} 字符；历史来源上限 ${core_constants.MAX_MEMORY_SOURCE_LEDGER_RECORDS} 条 / ${core_constants.MAX_MEMORY_SOURCE_LEDGER_CHARS.toLocaleString()} 字符；${truncated} 条未读取，未切半保存`
+        ? `设定背景上限 ${core_constants.MAX_MEMORY_WORLD_INFO_ENTRIES} 条 / ${core_constants.MAX_MEMORY_WORLD_INFO_CHARS.toLocaleString()} 字符；历史来源无固定条数或字符上限；${truncated} 条未读取，未切半保存`
         : (failedBooks ? `${failedBooks} 本世界书读取失败；只使用已成功读取的条目` : '已完整读取本次明确选择的世界书条目');
     const historyStatus = historyTruncated ? 'truncated' : (historyFailedBooks ? 'partial' : 'complete');
     const historyReason = historyTruncated
@@ -549,8 +548,9 @@ export async function syncSelectedWorldInfoHistoryLedger(context = core_context.
     if (currentSelectionFingerprint !== selectionFingerprint) throw abortSync('World info selection changed');
     const scope = memorySourceScopeForContext(context, chatId);
     let previousLedger;
-    try { previousLedger = await archive_sourceLedger.readMemorySourceLedger(scope); }
+    try { previousLedger = await archive_sourceLedger.readMemorySourceLedger(scope, { signal }); }
     catch (error) {
+        if (error?.name === 'AbortError') throw error;
         if (selection.books.some(book => book.historySource)) throw core_text.safeUserError('历史世界书未能保存，原有来源保留。', 'RMT_LEDGER_UNAVAILABLE');
         assertCurrent(); return worldInfo;
     }
@@ -558,7 +558,7 @@ export async function syncSelectedWorldInfoHistoryLedger(context = core_context.
     if (core_context.comparableChatId(core_context.getChatId(core_context.currentCharacterGuard())) !== chatId) throw abortSync('Chat changed');
     if (String(core_text.hashString(JSON.stringify(getMemoryWorldInfoSelection(context).books))) !== selectionFingerprint) throw abortSync('World info selection changed');
     const batches = selectedWorldInfoHistoryBatches(worldInfo, selection, previousLedger);
-    if (batches.length) await archive_sourceLedger.upsertMemorySourceLedgerBatches(scope, batches, { assertCurrent });
+    if (batches.length) await archive_sourceLedger.upsertMemorySourceLedgerBatches(scope, batches, { assertCurrent, signal });
     assertCurrent();
     runtimeState.memoryPreflightCache.delete(preflightKey);
     if (core_context.comparableChatId(core_context.getChatId(core_context.currentCharacterGuard())) !== chatId) throw abortSync('Chat changed', true);

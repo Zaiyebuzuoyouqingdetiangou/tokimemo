@@ -130,17 +130,19 @@ export const MEMORY_SOURCE_LEDGER_STORE_NAME = 'sourceLedgers';
 
 export const MEMORY_SOURCE_LEDGER_STORAGE_VERSION = 1;
 
-export const MAX_MEMORY_SOURCE_LEDGER_RECORDS = 8000;
+// Durable source storage has no plugin count/character quota. Per-request
+// batching and actual storage acknowledgements are separate contracts.
+export const MAX_MEMORY_SOURCE_LEDGER_RECORDS = Infinity;
 
-export const MAX_MEMORY_SOURCE_LEDGER_CHARS = 8000000;
+export const MAX_MEMORY_SOURCE_LEDGER_CHARS = Infinity;
 
 export const MAX_MEMORY_SOURCE_FRAGMENT_CHARS = 5200;
 
-export const MAX_MEMORY_FILE_BYTES = 4000000;
+export const MAX_MEMORY_FILE_BYTES = Infinity;
 
-export const MAX_MEMORY_FILE_RECORDS = 5000;
+export const MAX_MEMORY_FILE_RECORDS = Infinity;
 
-export const MAX_MEMORY_FILE_CHARS = 4000000;
+export const MAX_MEMORY_FILE_CHARS = Infinity;
 
 export const ARCHIVE_INDEX_SETTINGS_KEY = 'heartbeatMemoriesArchiveIndexV1';
 
@@ -166,7 +168,7 @@ export const MAX_BANNED_GENERATED_PHRASES = 24;
 
 export const MEMORY_WORLD_INFO_SETTINGS_KEY = 'heartbeatMemoriesMemoryWorldInfoV1';
 
-export const MAX_MEMORY_WORLD_INFO_BOOKS = 200;
+export const MAX_MEMORY_WORLD_INFO_BOOKS = Infinity;
 
 export const MAX_MEMORY_WORLD_INFO_ENTRIES = 160;
 

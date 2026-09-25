@@ -193,7 +193,7 @@ async function importCurrentChatMemoryOnce(options = {}) {
     let result;
     try {
         if (options.parkPriorDraft) {
-            await archive_importRecovery.hydrateArchiveRecovery(origin);
+            await archive_importRecovery.hydrateArchiveRecovery(origin, 'import', { signal: logicalTask.signal });
             core_requestCoordinator.assertLogicalGenerationTaskCurrent(logicalTask);
             if (archive_importRecovery.parkArchiveRecovery(origin)
                 && !await archive_importRecovery.flushArchiveRecovery(origin)) throw new Error('原整理草稿未确认保存，本次没有重新生成。');
@@ -255,11 +255,19 @@ async function runArchiveImport(context, options = {}, taskTrace = null) {
     const admission = {};
     runtimeState.archivePreparationToken = admission;
     runtimeState.busy = true;
+    runtimeState.activeTaskAbortController = options.logicalTask.controller;
+    runtimeState.activeTaskOrigin = options.logicalTask.origin;
+    runtimeState.activeTaskLabel = '正在准备当前聊天档案…';
     try { return await runArchiveImportPrepared(context, options, taskTrace, admission); }
     finally {
         if (runtimeState.archivePreparationToken === admission) {
             runtimeState.archivePreparationToken = null; runtimeState.busy = false;
             ui_overlay.setBusyUi(false);
+        }
+        if (runtimeState.activeTaskAbortController === options.logicalTask.controller) {
+            runtimeState.activeTaskAbortController = null;
+            runtimeState.activeTaskOrigin = null;
+            runtimeState.activeTaskLabel = '';
         }
     }
 }
@@ -274,7 +282,7 @@ async function runArchiveImportPrepared(context, options, taskTrace, admission) 
     const initialOrigin = core_context.captureTaskOrigin(context, getImportedMemory(context)?.archiveRevision || '');
     const localPendingAdmission = !options.draftId && !options.restartImport && !options.fullRebuild
         && !!getImportedMemory(context)?.[archive_batches.IMPORT_PROGRESS_KEY]?.capacityPending?.length;
-    if (!options.commitCompletedOnly && !localPendingAdmission) await core_settings.prepareManualCredential(context);
+    if (!options.commitCompletedOnly && !localPendingAdmission) await core_settings.prepareManualCredential(context, { signal: options.logicalTask.signal });
     core_requestCoordinator.assertLogicalGenerationTaskCurrent(options.logicalTask);
     if (!core_context.isCurrentTaskOrigin(initialOrigin)) throw new DOMException('Chat changed', 'AbortError');
     let existing = getImportedMemory(context);
@@ -303,7 +311,7 @@ async function runArchiveImportPrepared(context, options, taskTrace, admission) 
         }
     }
     const hydrationOrigin = core_context.captureTaskOrigin(context, existing?.archiveRevision || '');
-    await archive_importRecovery.hydrateArchiveRecovery(hydrationOrigin);
+    await archive_importRecovery.hydrateArchiveRecovery(hydrationOrigin, 'import', { signal: options.logicalTask.signal });
     core_requestCoordinator.assertLogicalGenerationTaskCurrent(options.logicalTask);
     if (!core_context.isCurrentTaskOrigin(hydrationOrigin)) throw new DOMException('Chat changed', 'AbortError');
     if (runtimeState.archivePreparationToken !== admission || core_requestCoordinator.hasGenerationTasks()) return { status: 'blocked' };

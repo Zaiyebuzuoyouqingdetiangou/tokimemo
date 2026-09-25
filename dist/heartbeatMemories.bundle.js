@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 239
-// Source SHA-256: 6491c0466d898129b29642d5ccadb6cfb30fa9314132569221007462976f96aa
+// Source SHA-256: afb5e23a53e5850d13f180f4b788868d4981d5faffa15f01a1e492a918289e3e
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -562,6 +562,8 @@ const SAFE_ERROR_CODE_MESSAGES = Object.freeze({
     RMT_CONNECTION_SERVER: '模型服务或代理暂时不可用；请稍后重试。',
     RMT_CONNECTION_NETWORK: '无法连接模型服务；请检查地址、网络、代理与服务状态后重试。',
     RMT_REQUEST_TIMEOUT: '模型请求超时，已停止等待并释放任务位；请稍后重试。',
+    RMT_WORLD_INFO_READ_TIMEOUT: '酒馆的世界书读取没有响应，本次准备已停止，尚未请求模型；原档案保留，可以直接重试。',
+    RMT_MEMORY_READ_TIMEOUT: '记忆来源或本地账本读取没有响应，原有内容保留；可以重新读取。',
     RMT_HEART_INCOMPLETE: '角色互动的条目、剧本句数或字数不完整；旧内容保留。',
     RMT_INBOX_CLOSED: '邮箱已关闭，请重新打开后操作。',
     RMT_INBOX_TARGET_CHANGED: '聊天、角色或档案已切换，请重新打开对应邮箱；原信件保留。',
@@ -1355,17 +1357,19 @@ const MEMORY_SOURCE_LEDGER_STORE_NAME = 'sourceLedgers';
 
 const MEMORY_SOURCE_LEDGER_STORAGE_VERSION = 1;
 
-const MAX_MEMORY_SOURCE_LEDGER_RECORDS = 8000;
+// Durable source storage has no plugin count/character quota. Per-request
+// batching and actual storage acknowledgements are separate contracts.
+const MAX_MEMORY_SOURCE_LEDGER_RECORDS = Infinity;
 
-const MAX_MEMORY_SOURCE_LEDGER_CHARS = 8000000;
+const MAX_MEMORY_SOURCE_LEDGER_CHARS = Infinity;
 
 const MAX_MEMORY_SOURCE_FRAGMENT_CHARS = 5200;
 
-const MAX_MEMORY_FILE_BYTES = 4000000;
+const MAX_MEMORY_FILE_BYTES = Infinity;
 
-const MAX_MEMORY_FILE_RECORDS = 5000;
+const MAX_MEMORY_FILE_RECORDS = Infinity;
 
-const MAX_MEMORY_FILE_CHARS = 4000000;
+const MAX_MEMORY_FILE_CHARS = Infinity;
 
 const ARCHIVE_INDEX_SETTINGS_KEY = 'heartbeatMemoriesArchiveIndexV1';
 
@@ -1391,7 +1395,7 @@ const MAX_BANNED_GENERATED_PHRASES = 24;
 
 const MEMORY_WORLD_INFO_SETTINGS_KEY = 'heartbeatMemoriesMemoryWorldInfoV1';
 
-const MAX_MEMORY_WORLD_INFO_BOOKS = 200;
+const MAX_MEMORY_WORLD_INFO_BOOKS = Infinity;
 
 const MAX_MEMORY_WORLD_INFO_ENTRIES = 160;
 
@@ -4478,6 +4482,7 @@ __m_core_state_js.state = state;
 function __init_core_settings_js() {
 // MODULE: core/settings.js
 const manual_credentials = __m_core_manualCredentialStore_js;
+const source_read = __m_archive_sourceReadGuard_js;
 const connection_pool = __m_core_connectionPool_js;
 const advanced_generation = __m_core_advancedGeneration_js;
 const output_budget = __m_core_outputBudget_js;
@@ -4492,6 +4497,7 @@ const core_autoUpdatePolicy = __m_core_autoUpdatePolicy_js;
 const creative_supplement = __m_core_creativeSupplement_js;
 const chat_read_range = __m_core_chatReadRange_js;
 const runtimeState = __m_core_state_js.state;
+
 
 
 
@@ -4609,10 +4615,12 @@ function updatePluginSettings(patch) {
 
 // Called only by an explicit manual action or before an authorized request.
 // No plaintext is returned to UI, ordinary settings, logs or export paths.
-async function prepareManualCredential(context = core_context.getContext()) {
+async function prepareManualCredential(context = core_context.getContext(), { signal = null } = {}) {
+    if (signal?.aborted) throw new DOMException('Read cancelled', 'AbortError');
     const before = getPluginSettings(context);
     if (before.manualApiKey || !before.manualApiSecretRef || before.apiConnectionMode !== 'manual') return;
-    const key = await manual_credentials.readManualCredential(before.manualApiBaseUrl, before.manualApiSecretRef);
+    const key = await source_read.waitForSourceRead(() => manual_credentials.readManualCredential(before.manualApiBaseUrl, before.manualApiSecretRef), signal);
+    if (signal?.aborted) throw new DOMException('Read cancelled', 'AbortError');
     const latest = getPluginSettings(context);
     if (core_context.getContext().extensionSettings !== context.extensionSettings || latest.manualApiBaseUrl !== before.manualApiBaseUrl
         || latest.manualApiSecretRef !== before.manualApiSecretRef || (latest.manualApiKey && latest.manualApiKey !== key)) throw new DOMException('Credential binding changed', 'AbortError');
@@ -9371,7 +9379,7 @@ const CODES = new Set(['RMT_LOCAL_STORAGE','RMT_LOCAL_CAS','RMT_MANUAL_KEY_STORA
     'RMT_TIME_STORY_STRUCTURE', 'RMT_TIME_STORY_RELATIONSHIP', 'RMT_TIME_STORY_WORLD', 'RMT_TIME_STORY_SOURCE', 'RMT_TIME_STORY_VERSION', 'RMT_TIME_STORY_LIMIT',
     'RMT_REQUEST_TIMEOUT', 'RMT_RESPONSE_FORMAT', 'RMT_RESPONSE_HTML', 'RMT_SEGMENT_VALIDATION', 'RMT_TOKEN_COUNT_TIMEOUT',
     'RMT_CACHE_BACKUP_CORRUPT', 'RMT_RECOVERY_SOURCE_SNAPSHOT_MISSING', 'RMT_RECOVERY_PROGRESS_STORAGE',
-    'RMT_TOKEN_COUNT_UNAVAILABLE', 'RMT_RECOVERY_FAILED',
+    'RMT_TOKEN_COUNT_UNAVAILABLE', 'RMT_RECOVERY_FAILED', 'RMT_MEMORY_READ_TIMEOUT', 'RMT_WORLD_INFO_READ_TIMEOUT',
 ]);
 
 const RESPONSE_SHAPES = new Set(['text', 'choices', 'message', 'content', 'output_text', 'output', 'candidates', 'text_fallback', 'wrapped', 'unsupported', 'empty', 'error']);
@@ -18657,7 +18665,9 @@ function createSourceReadGuard(context, expectedChatId = contextApi.getChatId(co
     };
 }
 
-function boundedSourceRead(read, signal = null, timeoutMs = 15000) {
+// Stop waiting even when a host API ignores AbortSignal. Only use for reads;
+// writes must still acknowledge their transaction before an owner is released.
+function waitForSourceRead(read, signal = null, timeoutMs = 0) {
     if (signal?.aborted) return Promise.reject(new DOMException('Read cancelled', 'AbortError'));
     return new Promise((resolve, reject) => {
         let done = false;
@@ -18667,15 +18677,19 @@ function boundedSourceRead(read, signal = null, timeoutMs = 15000) {
             fn(value);
         };
         const abort = () => finish(reject, new DOMException('Read cancelled', 'AbortError'));
-        const timer = setTimeout(() => finish(reject, Object.assign(new Error('Memory reader timed out'), { code: 'RMT_MEMORY_READ_TIMEOUT' })),
-            Math.max(1, Math.min(15000, Number(timeoutMs) || 15000)));
+        const timer = timeoutMs > 0 ? setTimeout(() => finish(reject, Object.assign(new Error('Memory reader timed out'), { code: 'RMT_MEMORY_READ_TIMEOUT' })), timeoutMs) : 0;
         signal?.addEventListener?.('abort', abort, { once: true });
         Promise.resolve().then(() => done ? undefined : read()).then(value => finish(resolve, value), error => finish(reject, error));
     });
 }
 
+function boundedSourceRead(read, signal = null, timeoutMs = 15000) {
+    return waitForSourceRead(read, signal, Math.max(1, Math.min(15000, Number(timeoutMs) || 15000)));
+}
+
 __m_archive_sourceReadGuard_js.sourceReadSignature = sourceReadSignature;
 __m_archive_sourceReadGuard_js.createSourceReadGuard = createSourceReadGuard;
+__m_archive_sourceReadGuard_js.waitForSourceRead = waitForSourceRead;
 __m_archive_sourceReadGuard_js.boundedSourceRead = boundedSourceRead;
 }
 
@@ -19185,6 +19199,7 @@ __m_ui_navigationBookmark_js.clearReadingPositions = clearReadingPositions;
 
 function __init_archive_importRecovery_js() {
 // MODULE: archive/importRecovery.js
+const source_read = __m_archive_sourceReadGuard_js;
 const draft_inputs = __m_archive_draftInputs_js;
 const local_store = __m_core_localRecoveryStore_js;
 const constants = __m_core_constants_js;
@@ -19193,6 +19208,7 @@ const client = __m_generation_client_js;
 const text = __m_core_text_js;
 const taskTrace = __m_core_taskTrace_js;
 const digest = __m_core_digest_js;
+
 
 
 
@@ -19205,7 +19221,9 @@ const digest = __m_core_digest_js;
 
 
 const ARCHIVE_RECOVERY_PAGE_NOTICE = '档案整理草稿仅本页保留，请勿刷新；关闭心迹回廊可保留。';
-const ARCHIVE_RECOVERY_MAX_DRAFTS = 4;
+// Compatibility export only. Draft admission depends on an acknowledged save,
+// never on how many drafts this page has read from this or another chat.
+const ARCHIVE_RECOVERY_MAX_DRAFTS = Infinity;
 const drafts = new Map();
 const tickets = new WeakSet();
 // Explicit discard revokes old owners even if durable deletion later fails.
@@ -19291,7 +19309,8 @@ async function flushArchiveRecovery(origin, operation = 'import') {
     return saveScope(key);
 }
 function resetArchiveRecoveryMemoryForTests() { drafts.clear(); scopes.clear(); loaded.clear(); lanes.clear(); hydrationLanes.clear(); }
-async function hydrateArchiveRecovery(origin, operation = 'import', { force = false } = {}) {
+async function hydrateArchiveRecovery(origin, operation = 'import', { force = false, signal = null } = {}) {
+    if (signal?.aborted) throw new DOMException('Read cancelled', 'AbortError');
     const key = draftKey(origin, operation); if (!key) return false;
     // An unavailable API is not an empty database (notably in embedded hosts).
     // Fail before any paid request instead of silently selecting page-only mode.
@@ -19299,20 +19318,35 @@ async function hydrateArchiveRecovery(origin, operation = 'import', { force = fa
     if (loaded.has(key) && !force) return false;
     // Opening the view and clicking continue may overlap. Reuse the same read;
     // neither path may overwrite a live journal with an older storage snapshot.
-    if (hydrationLanes.has(key)) return hydrationLanes.get(key);
-    const read = hydrateArchiveRecoveryScope(key, origin, operation, force);
-    hydrationLanes.set(key, read);
-    try { return await read; }
-    finally { if (hydrationLanes.get(key) === read) hydrationLanes.delete(key); }
+    let lane = hydrationLanes.get(key);
+    if (!lane) {
+        lane = { controller: new AbortController(), read: null };
+        lane.read = hydrateArchiveRecoveryScope(key, origin, operation, force, lane.controller.signal);
+        hydrationLanes.set(key, lane);
+    }
+    const cancel = () => {
+        // Invalidate the shared read, not stored data. A new click must not join
+        // the read the user just cancelled, nor accept its late storage reply.
+        if (hydrationLanes.get(key) === lane) hydrationLanes.delete(key);
+        lane.controller.abort();
+    };
+    signal?.addEventListener?.('abort', cancel, { once: true });
+    try { return await lane.read; }
+    finally {
+        signal?.removeEventListener?.('abort', cancel);
+        if (hydrationLanes.get(key) === lane) hydrationLanes.delete(key);
+    }
 }
-async function hydrateArchiveRecoveryScope(key, origin, operation, force) {
-    const id = `draft:${await recovery.generationRecoveryDigest(key)}`;
+async function hydrateArchiveRecoveryScope(key, origin, operation, force, signal) {
+    const id = `draft:${await source_read.waitForSourceRead(() => recovery.generationRecoveryDigest(key), signal)}`;
     // An explicit reread waits for our current write. It must never replace a
     // newer in-page success or adopt a foreign revision just to overwrite it.
-    if (lanes.has(key)) await lanes.get(key).catch(() => {});
+    if (lanes.has(key)) await source_read.waitForSourceRead(() => lanes.get(key).catch(() => {}), signal);
     const readRevision = scopes.get(key)?.revision;
     let record;
-    try { record = await local_store.readLocalRecoveryRecord(id); } catch { throw storageFailure('read'); }
+    try { record = await source_read.waitForSourceRead(() => local_store.readLocalRecoveryRecord(id), signal); }
+    catch (error) { if (error?.name === 'AbortError') throw error; throw storageFailure('read'); }
+    if (signal.aborted) throw new DOMException('Read cancelled', 'AbortError');
     if (record !== null && (!record || record.key !== id || !Number.isSafeInteger(record.revision) || record.revision < 1)) throw storageFailure('read');
     if (loaded.has(key)) {
         if (!force) return true;
@@ -19326,7 +19360,7 @@ async function hydrateArchiveRecoveryScope(key, origin, operation, force) {
     const payload = record?.payload;
     if (payload) {
         if (new TextEncoder().encode(JSON.stringify(payload)).byteLength > constants.MAX_CACHE_SOURCE_BYTES
-            || payload.version !== 1 || !Array.isArray(payload.rows) || payload.rows.length > ARCHIVE_RECOVERY_MAX_DRAFTS) throw storageFailure('read');
+            || payload.version !== 1 || !Array.isArray(payload.rows)) throw storageFailure('read');
         const checked = [];
         for (const [rowKey, value] of payload.rows) {
             if (typeof rowKey !== 'string' || (rowKey !== key && !rowKey.startsWith(`${key}:paused:`))
@@ -19337,9 +19371,10 @@ async function hydrateArchiveRecoveryScope(key, origin, operation, force) {
             if (entry.stage === 'awaiting-commit' && entry.committedRevision !== origin.archiveRevision) entry.stage = 'segments';
             checked.push([rowKey, entry]);
         }
-        if (drafts.size + checked.filter(([id]) => !drafts.has(id)).length > ARCHIVE_RECOVERY_MAX_DRAFTS) throw storageFailure('read');
+        if (signal.aborted) throw new DOMException('Read cancelled', 'AbortError');
         for (const [id,entry] of checked) if (!drafts.has(id)) drafts.set(id,entry);
     }
+    if (signal.aborted) throw new DOMException('Read cancelled', 'AbortError');
     const state = { id, revision: record?.revision || 0 };
     confirmCounts(state, payload?.rows || []);
     scopes.set(key, state); loaded.add(key);
@@ -19362,7 +19397,6 @@ async function importArchiveRecoveryData(origin, data) {
         || new TextEncoder().encode(JSON.stringify(data)).byteLength > constants.MAX_CACHE_SOURCE_BYTES) throw storageFailure();
     await hydrateArchiveRecovery(origin);
     if (drafts.has(key)) throw text.safeUserError('当前聊天已有整理草稿，导入没有覆盖它。请先导出并明确处理现有草稿。', 'RMT_RECOVERY_BUSY');
-    if (drafts.size + data.pageDrafts.length > ARCHIVE_RECOVERY_MAX_DRAFTS) throw storageFailure();
     const values = data.pageDrafts.map(row => {
         const sourceHash = String(row?.journal?.identity?.archiveRevision || '').replace(/^archive-draft:/, '');
         const entry = { key, operation:'import', sourceHash, fullRebuild: row.fullRebuild === true,
@@ -19478,7 +19512,6 @@ function parkArchiveRecovery(origin, operation = 'import') {
     const key = draftKey(origin, operation), entry = drafts.get(key);
     if (!entry) return false;
     if (entry.active || entry.stage === 'awaiting-commit') throw text.safeUserError('请先完成当前请求或仅重试保存；未改动草稿。', 'RMT_RECOVERY_BUSY');
-    if (drafts.size >= ARCHIVE_RECOVERY_MAX_DRAFTS) throw text.safeUserError('本页已保留四份草稿，旧成果没有被挤掉；请先导出并明确处理旧草稿。', 'RMT_RECOVERY_LIMIT');
     drafts.delete(key);
     drafts.set(`${key}:paused:${Date.now()}:${drafts.size}`, entry);
     scheduleSave(key);
@@ -19515,11 +19548,8 @@ async function beginArchiveRecovery({ origin, operation = 'import', sourceIdenti
     if (priorResult) existing = null;
     if (existing?.active) throw text.safeUserError('这份档案草稿正在处理，请等当前请求结束。', 'RMT_RECOVERY_BUSY');
     if (existing && (!continueApproved || existing.stage !== 'segments')) throw incompatible();
-    if (!existing && !priorResult && drafts.size >= ARCHIVE_RECOVERY_MAX_DRAFTS) {
-        throw text.safeUserError('本页已保留 4 份未完成的档案整理草稿。请先完成或明确放弃其中一份；旧草稿没有被挤掉。', 'RMT_RECOVERY_LIMIT');
-    }
-    if (!Array.isArray(sourceFragments) || sourceFragments.length > recovery.GENERATION_RECOVERY_LIMITS.segments) {
-        throw text.safeUserError('档案整理来源超过本页可保留的分段范围，旧草稿仍保留。', 'RMT_RECOVERY_LIMIT');
+    if (!Array.isArray(sourceFragments)) {
+        throw text.safeUserError('档案整理来源分段格式无效，旧草稿仍保留。', 'RMT_RECOVERY_DATA');
     }
     const sourceHash = await recovery.generationRecoveryDigest({
         identity: await recovery.generationRecoveryDigest(sourceIdentity),
@@ -19547,7 +19577,6 @@ async function beginArchiveRecovery({ origin, operation = 'import', sourceIdenti
         } });
     if (drafts.get(key) && drafts.get(key) !== expectedEntry) throw incompatible();
     if (existing?.active) throw text.safeUserError('这份档案草稿正在处理，请等当前请求结束。', 'RMT_RECOVERY_BUSY');
-    if (!existing && !priorResult && drafts.size >= ARCHIVE_RECOVERY_MAX_DRAFTS) throw text.safeUserError('本页档案整理草稿已满，旧草稿仍保留。', 'RMT_RECOVERY_LIMIT');
     if ((!existing || entry.importedUnverified) && inputs) entry.inputs = structuredClone(inputs);
     if (priorResult && expectedEntry.profilePending) {
         const profileCopy = { ...structuredClone(expectedEntry), stage: 'profile-only', active: false,
@@ -23334,9 +23363,11 @@ function __init_archive_sourceLedger_js() {
 // MODULE: archive/sourceLedger.js
 const core_constants = __m_core_constants_js;
 const core_text = __m_core_text_js;
+const source_read = __m_archive_sourceReadGuard_js;
 // Durable, read-only-at-the-provider-boundary source ledger for r46.
 // Provider data is copied only after an explicit current-chat scan/import.  The ledger
 // never writes back to, edits, or deletes data in another extension.
+
 
 
 let databasePromise = null;
@@ -23391,7 +23422,6 @@ function normalizeRevisionList(values) {
         if (!normalized || seen.has(normalized)) continue;
         seen.add(normalized);
         out.push(normalized);
-        if (out.length >= 5000) break;
     }
     return out;
 }
@@ -23404,7 +23434,6 @@ function normalizeSourceIdList(values) {
         if (!normalized || seen.has(normalized)) continue;
         seen.add(normalized);
         out.push(normalized);
-        if (out.length >= 5000) break;
     }
     return out;
 }
@@ -23497,7 +23526,17 @@ function ledgerCurrentRecords(ledger) {
             const allowed = Array.isArray(source?.allowedSourceIds)
                 ? new Set(normalizeSourceIdList(source.allowedSourceIds))
                 : null;
-            return [normalizeMemorySourceProvider(source?.provider), { ...source, allowed }];
+            // All records in this projection share the same provider descriptor.
+            // Build its retained revision set once, not again for every record;
+            // keep this local so the next projection sees any source revocation.
+            const coverage = normalizeMemorySourceCoverage(source?.coverage);
+            const revision = normalizeMemorySourceRevision(source?.revision);
+            const baselineRevision = normalizeMemorySourceRevision(
+                source?.baselineRevision || (coverage.status === 'complete' ? revision : ''),
+            );
+            const overlayRevisions = new Set(normalizeRevisionList(source?.overlayRevisions));
+            if (coverage.status !== 'complete' && revision) overlayRevisions.add(revision);
+            return [normalizeMemorySourceProvider(source?.provider), { allowed, baselineRevision, overlayRevisions }];
         }));
     const projected = (Array.isArray(ledger?.records) ? ledger.records : []).filter(record => {
         const descriptor = sourceByProvider.get(record.provider);
@@ -23506,13 +23545,7 @@ function ledgerCurrentRecords(ledger) {
         // when the next read is partial/failed, old baseline rows outside the
         // current UID whitelist may not continue entering generation prompts.
         if (descriptor.allowed && !descriptor.allowed.has(record.sourceId)) return false;
-        const coverage = normalizeMemorySourceCoverage(descriptor.coverage);
-        const revision = normalizeMemorySourceRevision(descriptor.revision);
-        const baselineRevision = normalizeMemorySourceRevision(
-            descriptor.baselineRevision || (coverage.status === 'complete' ? revision : ''),
-        );
-        const overlayRevisions = new Set(normalizeRevisionList(descriptor.overlayRevisions));
-        if (coverage.status !== 'complete' && revision) overlayRevisions.add(revision);
+        const { baselineRevision, overlayRevisions } = descriptor;
         if (!baselineRevision && !overlayRevisions.size) return true;
         const recordBatchRevision = normalizeMemorySourceRevision(record.batchRevision || record.revision);
         return recordBatchRevision === baselineRevision || overlayRevisions.has(recordBatchRevision);
@@ -23528,12 +23561,9 @@ function normalizeLedger(raw, scope = null) {
     const identity = normalizeMemorySourceScope(raw.scope);
     if (scope && identity.key !== normalizeMemorySourceScope(scope).key) return null;
     const records = [];
-    let chars = 0;
     for (const item of Array.isArray(raw.records) ? raw.records : []) {
         const record = normalizeMemorySourceRecord({ ...item, content: Array.isArray(item?.fragments) ? item.fragments.join('') : item?.content });
         if (!record) continue;
-        chars += record.fragments.join('').length;
-        if (records.length >= core_constants.MAX_MEMORY_SOURCE_LEDGER_RECORDS || chars > core_constants.MAX_MEMORY_SOURCE_LEDGER_CHARS) return null;
         records.push(record);
     }
     const sources = (Array.isArray(raw.sources) ? raw.sources : []).map(source => ({
@@ -23571,7 +23601,8 @@ function transactionDone(transaction, message) {
 function openDatabase() {
     if (databasePromise) return databasePromise;
     if (!globalThis.indexedDB?.open) return Promise.reject(new Error('当前浏览器没有可用的 IndexedDB，无法保存记忆来源账本。'));
-    databasePromise = new Promise((resolve, reject) => {
+    let stopped = false;
+    const opening = new Promise((resolve, reject) => {
         const request = globalThis.indexedDB.open(core_constants.MEMORY_SOURCE_LEDGER_DB_NAME, core_constants.MEMORY_SOURCE_LEDGER_STORAGE_VERSION);
         request.onupgradeneeded = () => {
             const db = request.result;
@@ -23581,39 +23612,53 @@ function openDatabase() {
         };
         request.onsuccess = () => {
             const db = request.result;
-            db.onclose = () => { databasePromise = null; };
+            if (stopped) { db.close(); return; }
+            db.onclose = () => { if (databasePromise === pending) databasePromise = null; };
             db.onversionchange = () => {
                 try { db.close(); } catch {}
-                databasePromise = null;
+                if (databasePromise === pending) databasePromise = null;
             };
             resolve(db);
         };
-        request.onerror = () => { databasePromise = null; reject(request.error || new Error('无法打开记忆来源账本。')); };
-        request.onblocked = () => { databasePromise = null; reject(new Error('记忆来源账本被旧页面占用。')); };
-    }).catch(error => {
+        request.onerror = () => reject(request.error || new Error('无法打开记忆来源账本。'));
+        request.onblocked = () => reject(new Error('记忆来源账本被旧页面占用。'));
+    });
+    const pending = source_read.boundedSourceRead(() => opening).catch(error => {
         // A synchronous open() exception rejects the executor too. Never retain
         // that rejected promise for the lifetime of the page.
-        databasePromise = null;
+        stopped = true;
+        if (databasePromise === pending) databasePromise = null;
         throw error;
     });
-    return databasePromise;
+    databasePromise = pending;
+    return pending;
 }
 
-async function idbRead(scope) {
-    const db = await openDatabase();
+async function finishLedgerTransaction(transaction, request, signal) {
+    try {
+        const [result] = await source_read.boundedSourceRead(() => Promise.all([
+            requestValue(request), transactionDone(transaction, '记忆来源账本事务未完成。'),
+        ]), signal);
+        return result;
+    } catch (error) {
+        // Never let a timed-out/cancelled write commit later behind a new scan.
+        try { transaction.abort(); } catch {}
+        throw error;
+    }
+}
+
+async function idbRead(scope, { signal = null } = {}) {
+    const db = await source_read.waitForSourceRead(openDatabase, signal);
     const identity = normalizeMemorySourceScope(scope);
-    return requestValue(db.transaction(core_constants.MEMORY_SOURCE_LEDGER_STORE_NAME, 'readonly')
-        .objectStore(core_constants.MEMORY_SOURCE_LEDGER_STORE_NAME).get(identity.key));
+    const transaction = db.transaction(core_constants.MEMORY_SOURCE_LEDGER_STORE_NAME, 'readonly');
+    return finishLedgerTransaction(transaction, transaction.objectStore(core_constants.MEMORY_SOURCE_LEDGER_STORE_NAME).get(identity.key), signal);
 }
 
-async function idbWrite(ledger) {
-    const db = await openDatabase();
+async function idbWrite(ledger, { signal = null } = {}) {
+    const db = await source_read.waitForSourceRead(openDatabase, signal);
     const transaction = db.transaction(core_constants.MEMORY_SOURCE_LEDGER_STORE_NAME, 'readwrite');
     const request = transaction.objectStore(core_constants.MEMORY_SOURCE_LEDGER_STORE_NAME).put(ledger);
-    await Promise.all([
-        requestValue(request),
-        transactionDone(transaction, '记忆来源账本写入事务未完成。'),
-    ]);
+    await finishLedgerTransaction(transaction, request, signal);
     return true;
 }
 
@@ -23622,10 +23667,7 @@ async function idbDelete(scope) {
     const identity = normalizeMemorySourceScope(scope);
     const transaction = db.transaction(core_constants.MEMORY_SOURCE_LEDGER_STORE_NAME, 'readwrite');
     const request = transaction.objectStore(core_constants.MEMORY_SOURCE_LEDGER_STORE_NAME).delete(identity.key);
-    await Promise.all([
-        requestValue(request),
-        transactionDone(transaction, '记忆来源账本删除事务未完成。'),
-    ]);
+    await finishLedgerTransaction(transaction, request);
     return true;
 }
 
@@ -23638,8 +23680,8 @@ function setMemorySourceLedgerBackendForTests(value = null) {
     ledgerMutationQueues.clear();
 }
 
-async function readMemorySourceLedger(scope) {
-    const raw = await backend().read(normalizeMemorySourceScope(scope));
+async function readMemorySourceLedger(scope, { signal = null } = {}) {
+    const raw = await source_read.waitForSourceRead(() => backend().read(normalizeMemorySourceScope(scope), { signal }), signal);
     const ledger = normalizeLedger(raw, scope);
     if (raw != null && !ledger) throw new Error('记忆来源账本校验失败；为避免覆盖旧来源，已停止本次操作。');
     return ledger;
@@ -23672,11 +23714,6 @@ function mergeMemorySourceLedgerBatch(previous, identity, batch = {}) {
         if (exact.has(key)) continue;
         exact.add(key);
         records.push(record);
-    }
-    let totalChars = 0;
-    for (const record of records) totalChars += record.fragments.join('').length;
-    if (records.length > core_constants.MAX_MEMORY_SOURCE_LEDGER_RECORDS || totalChars > core_constants.MAX_MEMORY_SOURCE_LEDGER_CHARS) {
-        throw new Error('记忆来源账本超过安全上限；没有静默丢弃旧来源。请拆分聊天或减少导入范围。');
     }
     const sources = [...(previous?.sources || [])];
     if (provider) {
@@ -23724,25 +23761,26 @@ function mergeMemorySourceLedgerBatch(previous, identity, batch = {}) {
     return ledger;
 }
 
-async function upsertMemorySourceLedgerBatchesUnlocked(identity, batches, assertCurrent = () => {}) {
+async function upsertMemorySourceLedgerBatchesUnlocked(identity, batches, assertCurrent = () => {}, signal = null) {
     assertCurrent();
-    let ledger = await readMemorySourceLedger(identity);
+    let ledger = await readMemorySourceLedger(identity, { signal });
     for (const batch of batches) ledger = mergeMemorySourceLedgerBatch(ledger, identity, batch);
     if (!batches.length) return ledger;
     assertCurrent();
-    await backend().write(cloneValue(ledger));
+    await backend().write(cloneValue(ledger), { signal });
+    assertCurrent();
     return normalizeLedger(ledger, identity);
 }
 
-async function upsertMemorySourceLedger(scope, batch = {}, { assertCurrent = () => {} } = {}) {
+async function upsertMemorySourceLedger(scope, batch = {}, { assertCurrent = () => {}, signal = null } = {}) {
     const identity = normalizeMemorySourceScope(scope);
-    return runLedgerMutation(identity, () => upsertMemorySourceLedgerBatchesUnlocked(identity, [batch], assertCurrent));
+    return runLedgerMutation(identity, () => upsertMemorySourceLedgerBatchesUnlocked(identity, [batch], assertCurrent, signal));
 }
 
-async function upsertMemorySourceLedgerBatches(scope, batches = [], { assertCurrent = () => {} } = {}) {
+async function upsertMemorySourceLedgerBatches(scope, batches = [], { assertCurrent = () => {}, signal = null } = {}) {
     const identity = normalizeMemorySourceScope(scope);
     const list = Array.isArray(batches) ? batches.filter(batch => batch && typeof batch === 'object') : [];
-    return runLedgerMutation(identity, () => upsertMemorySourceLedgerBatchesUnlocked(identity, list, assertCurrent));
+    return runLedgerMutation(identity, () => upsertMemorySourceLedgerBatchesUnlocked(identity, list, assertCurrent, signal));
 }
 
 async function deleteMemorySourceLedger(scope) {
@@ -33212,9 +33250,12 @@ const recovery_payload = __m_generation_recoveryPayload_js;
 
 const GENERATION_RECOVERY_CACHE_KEY = '__generationRecoveryV1';
 
+// Recovery storage is not a model context window. Retain valid sources and paid
+// results without fixed character/segment quotas; real storage failure still
+// stops subsequent requests. These numeric exports remain for legacy readers.
 const GENERATION_RECOVERY_LIMITS = Object.freeze({
-    segments: 128, segmentChars: 600000, journalChars: 1800000,
-    requestChars: 1200000, maxAgeMs: 7 * 24 * 60 * 60 * 1000,
+    segments: Infinity, segmentChars: Infinity, journalChars: Infinity,
+    requestChars: Infinity, maxAgeMs: 7 * 24 * 60 * 60 * 1000,
 });
 
 const handles = new WeakMap();
@@ -33418,8 +33459,9 @@ function jsonData(value, maxChars = GENERATION_RECOVERY_LIMITS.segmentChars, pre
         const text = JSON.stringify(copy(value, 0));
         if (text.length > maxChars) throw new Error('size');
         return text;
-    } catch {
-        throw recoveryError('RMT_RECOVERY_LIMIT', '这段内容超过可安全保存的续写草稿范围；已保留此前成功部分和旧内容。');
+    } catch (error) {
+        if (error?.message === 'size') throw recoveryError('RMT_RECOVERY_LIMIT', '这段内容超过调用方指定的保存范围；已保留此前成功部分和旧内容。');
+        throw recoveryError('RMT_RECOVERY_DATA', '续写资料未通过 JSON 数据结构校验；已保留此前成功部分和旧内容。');
     }
 }
 
@@ -33510,11 +33552,9 @@ async function projectHeldReply(handle, slot, requestHash, rawJson) {
     catch (error) { if (error?.name === 'AbortError') throw error; }
 }
 
-// Validate JSON ownership first; apply the existing storage limit to the lossless
-// stored representation, not to duplicate in-memory copies of shared requests.
-// The journal-total limit stays enforced on every write. Read/export/discard
-// egress for a journal that already exceeds it passes enforceJournalLimit:false
-// so the user can still see, export, and discard it; it can never continue.
+// Validate JSON ownership and preserve the lossless stored representation.
+// Legacy size-policy parameters remain accepted, but recovery has no fixed
+// character quota; only the durable save acknowledges storage availability.
 function recoveryJournalData(raw, { enforceJournalLimit = true } = {}) {
     const safe = JSON.parse(jsonData(raw, Number.MAX_SAFE_INTEGER, true));
     const expanded = recovery_payload.unpackRecoveryPayload(safe, GENERATION_RECOVERY_LIMITS.requestChars);
@@ -44895,7 +44935,7 @@ async function generateConfiguredJsonOperation(prompt, options = {}) {
     core_context.assertRuntimeLifecycleCurrent(lifecycleEpoch);
     const context = generationContentContext(options.origin, options.context || core_context.currentCharacterGuard());
     const transportContext = contentContextSources.get(context) || context;
-    await core_settings.prepareManualCredential(transportContext);
+    await core_settings.prepareManualCredential(transportContext, { signal: options.signal });
     const configuredSettings = core_settings.getPluginSettings(transportContext);
     // Persist only the selected profile's inert identifier, never credentials.
     // A reopened recovery origin is a new object, so WeakMap pinning alone
@@ -44912,7 +44952,7 @@ async function generateConfiguredJsonOperation(prompt, options = {}) {
     const configurationFingerprint = core_independentApi.apiConfigurationFingerprint(configuredSettings);
     const contextEnvelope = typeof options.contextEnvelope === 'string'
         ? options.contextEnvelope
-        : await core_cache.buildControlledContextEnvelope(context, { worldInfoScanTerms: generationWorldInfoScanTerms(options.mode, context) });
+        : await core_cache.buildControlledContextEnvelope(context, { worldInfoScanTerms: generationWorldInfoScanTerms(options.mode, context), signal: options.signal });
     let actualPrompt;
     if (typeof options.recoveryPreparedPrompt === 'string') actualPrompt = options.recoveryPreparedPrompt;
     else if (options.recoveryContinuationPartial) {
@@ -58548,12 +58588,10 @@ __m_core_requestCoordinator_js.MAX_RATE_LIMIT_ATTEMPTS = MAX_RATE_LIMIT_ATTEMPTS
 
 function __init_archive_memoryFileImport_js() {
 // MODULE: archive/memoryFileImport.js
-const core_constants = __m_core_constants_js;
 const core_text = __m_core_text_js;
 const archive_sourceLedger = __m_archive_sourceLedger_js;
 // Local memory-file parser.  Files are treated strictly as inert text/data: no HTML
 // rendering, macro expansion, script execution, fetch, or instruction interpretation.
-
 
 
 const ALLOWED_EXTENSIONS = new Set(['json', 'jsonl', 'txt', 'md', 'markdown']);
@@ -58592,7 +58630,6 @@ function extractObjectRecords(value, out = [], stats = { sensitive: 0, config: 0
         if (current == null) continue;
         visited += 1;
         if (visited > 100000) throw new Error('JSON 记忆文件结构过于复杂，已停止导入；没有把未读取分支标成完整。');
-        if (out.length > core_constants.MAX_MEMORY_FILE_RECORDS) throw new Error('记忆文件超过 5000 条记录上限。');
         if (Array.isArray(current)) {
             for (let index = current.length - 1; index >= 0; index -= 1) {
                 stack.push({ value: current[index], path: `${path}[${index}]`, configPath });
@@ -58672,11 +58709,8 @@ async function previewMemoryFile(file, binding) {
     const name = core_text.normalizeText(file?.name, 240) || 'memory.txt';
     const extension = extensionOf(name);
     if (!ALLOWED_EXTENSIONS.has(extension)) throw new Error('只支持 JSON、JSONL、TXT、MD、MARKDOWN 记忆文件。');
-    const declaredBytes = Math.max(0, Number(file?.size) || 0);
-    if (declaredBytes > core_constants.MAX_MEMORY_FILE_BYTES) throw new Error('记忆文件超过 4 MB 安全上限。');
     const text = await fileText(file);
     const actualBytes = byteLength(text);
-    if (actualBytes > core_constants.MAX_MEMORY_FILE_BYTES) throw new Error('记忆文件超过 4 MB 安全上限。');
     let candidates = [];
     const parseStats = { sensitive: 0, config: 0 };
     if (extension === 'json') {
@@ -58691,7 +58725,6 @@ async function previewMemoryFile(file, binding) {
             let value;
             try { value = JSON.parse(line); } catch { throw new Error(`JSONL 第 ${index + 1} 行格式无效。`); }
             extractObjectRecords(value, candidates, parseStats);
-            if (candidates.length > core_constants.MAX_MEMORY_FILE_RECORDS) break;
         }
     } else {
         candidates = splitPlainText(text, extension);
@@ -58702,7 +58735,6 @@ async function previewMemoryFile(file, binding) {
     const fileHash = stableHash(text);
     const provider = archive_sourceLedger.normalizeMemorySourceProvider(`file:${name}`);
     for (let index = 0; index < candidates.length; index += 1) {
-        if (records.length >= core_constants.MAX_MEMORY_FILE_RECORDS) throw new Error('记忆文件超过 5000 条记录上限。');
         const raw = candidates[index];
         const content = inertText(raw?.content);
         if (!content) continue;
@@ -58722,7 +58754,6 @@ async function previewMemoryFile(file, binding) {
         if (seen.has(dedupeKey)) continue;
         seen.add(dedupeKey);
         totalChars += content.length;
-        if (totalChars > core_constants.MAX_MEMORY_FILE_CHARS) throw new Error('记忆文件文字超过 400 万字符上限。');
         records.push({
             provider,
             providerVersion: 'file-import-v1',
@@ -59081,7 +59112,8 @@ function normalizeMemoryWorldInfoBook(value) {
     const name = core_text.normalizeText(value?.name, 240);
     if (!name) return null;
     const all = value?.all === true;
-    const entryUids = all ? [] : core_text.cleanArray(value?.entryUids, core_constants.MAX_MEMORY_WORLD_INFO_ENTRIES, 120).map(String);
+    const entryLimit = value?.historySource === true ? Infinity : core_constants.MAX_MEMORY_WORLD_INFO_ENTRIES;
+    const entryUids = all ? [] : core_text.cleanArray(value?.entryUids, entryLimit, 120).map(String);
     if (!all && !entryUids.length) return null;
     return { name, all, historySource: value?.historySource === true, entryUids: [...new Set(entryUids)] };
 }
@@ -59090,8 +59122,7 @@ function getMemoryWorldInfoSelection(context = core_context.currentCharacterGuar
     const raw = context.chatMetadata?.[core_constants.MEMORY_WORLD_INFO_SETTINGS_KEY];
     const books = (Array.isArray(raw?.books) ? raw.books : [])
         .map(normalizeMemoryWorldInfoBook)
-        .filter(Boolean)
-        .slice(0, core_constants.MAX_MEMORY_WORLD_INFO_BOOKS);
+        .filter(Boolean);
     return { books, updatedAt: Math.max(0, Number(raw?.updatedAt) || 0) };
 }
 
@@ -59099,8 +59130,7 @@ function setMemoryWorldInfoSelection(context, selection) {
     if (!context.chatMetadata || typeof context.chatMetadata !== 'object') throw new Error('当前聊天无法保存记忆相关世界书选择。');
     const books = (Array.isArray(selection?.books) ? selection.books : [])
         .map(normalizeMemoryWorldInfoBook)
-        .filter(Boolean)
-        .slice(0, core_constants.MAX_MEMORY_WORLD_INFO_BOOKS);
+        .filter(Boolean);
     if (books.length) context.chatMetadata[core_constants.MEMORY_WORLD_INFO_SETTINGS_KEY] = { books, updatedAt: Date.now() };
     else delete context.chatMetadata[core_constants.MEMORY_WORLD_INFO_SETTINGS_KEY];
     context.saveMetadataDebounced?.();
@@ -59214,7 +59244,7 @@ async function collectSelectedMemoryWorldInfo(context, expectedChatId, signal, {
     let historyImported = 0;
     let historyTruncated = 0;
     let historyFailedBooks = 0;
-    for (const book of selection.books.filter(book => !settingsOnly || book.historySource !== true).slice(0, core_constants.MAX_MEMORY_WORLD_INFO_BOOKS)) {
+    for (const book of selection.books.filter(book => !settingsOnly || book.historySource !== true)) {
         assertSourceScope();
         let loaded;
         try { loaded = await loadMemoryWorldInfoBook(context, book.name, signal, { historySource: book.historySource === true }); }
@@ -59287,7 +59317,7 @@ async function collectSelectedMemoryWorldInfo(context, expectedChatId, signal, {
         : 'none';
     const coverageStatus = truncated ? 'truncated' : (failedBooks ? 'partial' : 'complete');
     const coverageReason = truncated
-        ? `设定背景上限 ${core_constants.MAX_MEMORY_WORLD_INFO_ENTRIES} 条 / ${core_constants.MAX_MEMORY_WORLD_INFO_CHARS.toLocaleString()} 字符；历史来源上限 ${core_constants.MAX_MEMORY_SOURCE_LEDGER_RECORDS} 条 / ${core_constants.MAX_MEMORY_SOURCE_LEDGER_CHARS.toLocaleString()} 字符；${truncated} 条未读取，未切半保存`
+        ? `设定背景上限 ${core_constants.MAX_MEMORY_WORLD_INFO_ENTRIES} 条 / ${core_constants.MAX_MEMORY_WORLD_INFO_CHARS.toLocaleString()} 字符；历史来源无固定条数或字符上限；${truncated} 条未读取，未切半保存`
         : (failedBooks ? `${failedBooks} 本世界书读取失败；只使用已成功读取的条目` : '已完整读取本次明确选择的世界书条目');
     const historyStatus = historyTruncated ? 'truncated' : (historyFailedBooks ? 'partial' : 'complete');
     const historyReason = historyTruncated
@@ -59477,8 +59507,9 @@ async function syncSelectedWorldInfoHistoryLedger(context = core_context.current
     if (currentSelectionFingerprint !== selectionFingerprint) throw abortSync('World info selection changed');
     const scope = memorySourceScopeForContext(context, chatId);
     let previousLedger;
-    try { previousLedger = await archive_sourceLedger.readMemorySourceLedger(scope); }
+    try { previousLedger = await archive_sourceLedger.readMemorySourceLedger(scope, { signal }); }
     catch (error) {
+        if (error?.name === 'AbortError') throw error;
         if (selection.books.some(book => book.historySource)) throw core_text.safeUserError('历史世界书未能保存，原有来源保留。', 'RMT_LEDGER_UNAVAILABLE');
         assertCurrent(); return worldInfo;
     }
@@ -59486,7 +59517,7 @@ async function syncSelectedWorldInfoHistoryLedger(context = core_context.current
     if (core_context.comparableChatId(core_context.getChatId(core_context.currentCharacterGuard())) !== chatId) throw abortSync('Chat changed');
     if (String(core_text.hashString(JSON.stringify(getMemoryWorldInfoSelection(context).books))) !== selectionFingerprint) throw abortSync('World info selection changed');
     const batches = selectedWorldInfoHistoryBatches(worldInfo, selection, previousLedger);
-    if (batches.length) await archive_sourceLedger.upsertMemorySourceLedgerBatches(scope, batches, { assertCurrent });
+    if (batches.length) await archive_sourceLedger.upsertMemorySourceLedgerBatches(scope, batches, { assertCurrent, signal });
     assertCurrent();
     runtimeState.memoryPreflightCache.delete(preflightKey);
     if (core_context.comparableChatId(core_context.getChatId(core_context.currentCharacterGuard())) !== chatId) throw abortSync('Chat changed', true);
@@ -59922,7 +59953,7 @@ async function collectCurrentChatExternalMemory(context, expectedChatId, signal)
         if (!batchRecords.length && coverage.status !== 'complete') { excluded.add(batch.provider); return; }
         scannedMemoryRecords.push(...batchRecords.map(record => ({ ...record, provider: batch.provider, revision: batch.revision })));
         try {
-            await archive_sourceLedger.upsertMemorySourceLedger(scope, batch, { assertCurrent: providerGuard });
+            await archive_sourceLedger.upsertMemorySourceLedger(scope, batch, { assertCurrent: providerGuard, signal });
             providerGuard();
         } catch (error) {
             if (error?.name === 'AbortError') throw error;
@@ -59966,7 +59997,7 @@ async function collectCurrentChatExternalMemory(context, expectedChatId, signal)
     let durable = { records: [], sources: [], ledgerFingerprint: 'none' };
     let ledgerReadbackFailed = false;
     try {
-        const saved = await archive_sourceLedger.readMemorySourceLedger(scope);
+        const saved = await archive_sourceLedger.readMemorySourceLedger(scope, { signal });
         assertCurrent();
         durable = externalMemoryFromSourceLedger(saved, { worldInfoSelection: getMemoryWorldInfoSelection(context),
             useCurrentChatExternalMemory: settings.useCurrentChatExternalMemory, excludeProviders: excluded,
@@ -59993,26 +60024,30 @@ async function collectCurrentChatExternalMemory(context, expectedChatId, signal)
 const sourceScans = new Map();
 
 function readCurrentChatMemoryPlugins(options = {}) {
+    if (options.signal?.aborted) return Promise.reject(new DOMException('Read cancelled', 'AbortError'));
     const context = core_context.currentCharacterGuard();
     const signature = sourceGuard.sourceReadSignature(context);
-    if (sourceScans.has(signature)) return sourceScans.get(signature);
-    const pending = readCurrentChatMemoryPluginsOnce(options).finally(() => { if (sourceScans.get(signature) === pending) sourceScans.delete(signature); });
-    sourceScans.set(signature, pending);
+    const existing = sourceScans.get(signature);
+    if (existing && !existing.signal?.aborted) return sourceGuard.waitForSourceRead(() => existing.pending, options.signal);
+    const entry = { signal: options.signal, pending: null };
+    const pending = readCurrentChatMemoryPluginsOnce(options).finally(() => { if (sourceScans.get(signature) === entry) sourceScans.delete(signature); });
+    entry.pending = pending;
+    sourceScans.set(signature, entry);
     return pending;
 }
 
-async function readCurrentChatMemoryPluginsOnce({ automatic = false, preparationToken = null } = {}) {
+async function readCurrentChatMemoryPluginsOnce({ automatic = false, preparationToken = null, signal = null } = {}) {
     const context = core_context.currentCharacterGuard();
     const lifecycleEpoch = runtimeState.runtimeLifecycleEpoch;
     if ((runtimeState.busy && !(automatic && preparationToken && preparationToken === runtimeState.archivePreparationToken)) || core_requestCoordinator.hasGenerationTasks()) throw new Error('当前还有内容生成任务在进行，请等生成结束后再扫描记忆 / 摘要。');
     const chatId = core_context.getChatId(context);
     if (!chatId) throw new Error('无法识别当前聊天窗口。');
     const taskOrigin = core_context.captureTaskOrigin(context);
-    const controller = new AbortController();
-    const assertCurrent = sourceGuard.createSourceReadGuard(context, chatId, controller.signal);
-    const worldInfo = await syncSelectedWorldInfoHistoryLedger(context, chatId, controller.signal);
+    const assertCurrent = sourceGuard.createSourceReadGuard(context, chatId, signal);
     assertCurrent();
-    const result = await collectCurrentChatExternalMemory(context, chatId, controller.signal);
+    const worldInfo = await syncSelectedWorldInfoHistoryLedger(context, chatId, signal);
+    assertCurrent();
+    const result = await collectCurrentChatExternalMemory(context, chatId, signal);
     const recordChars = result.records.reduce((sum, item) => sum + String(item.content || '').length, 0);
     const totalChars = recordChars + worldInfo.entries.filter(item => !item.historySource).reduce((sum, item) => sum + item.content.length, 0);
     const combinedFingerprint = result.records.length
@@ -61205,6 +61240,7 @@ __m_archive_recoveryDrafts_js.getCurrentArchiveProfileRecoverySummary = getCurre
 
 function __init_archive_archiveVerdict_js() {
 // MODULE: archive/archiveVerdict.js
+const source_read = __m_archive_sourceReadGuard_js;
 const core_cache = __m_core_cache_js;
 const core_constants = __m_core_constants_js;
 const core_context = __m_core_context_js;
@@ -61234,6 +61270,7 @@ const archivedRequestJson = __m_archive_recoveryDrafts_js.archivedRequestJson;
 const getCurrentArchiveImportRecoverySummary = __m_archive_recoveryDrafts_js.getCurrentArchiveImportRecoverySummary;
 const getCurrentArchiveProfileRecoverySummary = __m_archive_recoveryDrafts_js.getCurrentArchiveProfileRecoverySummary;
 const refreshArchiveRecoveryReading = __m_archive_recoveryDrafts_js.refreshArchiveRecoveryReading;
+
 
 
 
@@ -61309,9 +61346,9 @@ async function rewriteCurrentArchiveVerdictOperation(taskTrace, options = {}) {
         if (!snapshot) throw new Error('明确重做缺少本次已确认的人物快照。');
         options.participantRegeneration = { ...replacementTicket, participantSnapshot: snapshot };
     }
-    await core_settings.prepareManualCredential(context);
-    await archive_importRecovery.hydrateArchiveRecovery(origin);
-    await archive_importRecovery.hydrateArchiveRecovery(origin, 'profile');
+    await core_settings.prepareManualCredential(context, { signal: options.logicalTask.signal });
+    await archive_importRecovery.hydrateArchiveRecovery(origin, 'import', { signal: options.logicalTask.signal });
+    await archive_importRecovery.hydrateArchiveRecovery(origin, 'profile', { signal: options.logicalTask.signal });
     core_requestCoordinator.assertLogicalGenerationTaskCurrent(options.logicalTask);
     if (!core_context.isCurrentTaskOrigin(origin)) throw new DOMException('Chat changed', 'AbortError');
     if (runtimeState.busy || core_requestCoordinator.hasGenerationTasks()) return { status: 'blocked' };
@@ -61374,7 +61411,7 @@ async function rewriteCurrentArchiveVerdictOperation(taskTrace, options = {}) {
     };
     try {
         ui_overlay.setBusyUi(true, runtimeState.activeTaskLabel);
-        await core_cache.ensureCacheHydrated(context);
+        await source_read.waitForSourceRead(() => core_cache.ensureCacheHydrated(context), controller.signal);
         if (!stillCurrent()) throw new DOMException('Archive changed', 'AbortError');
         const profileInputs = selectedProfile?.inputs || archive_importRecovery.archiveRecoveryInputs(origin, 'profile');
         let taskInputV1 = profileInputs?.taskInputV1 || null;
@@ -61389,7 +61426,7 @@ async function rewriteCurrentArchiveVerdictOperation(taskTrace, options = {}) {
             throw error;
         }
         const contextEnvelope = capturedInput?.contextEnvelope ?? (profileInputs?.ownerIdentity ? profileInputs.contextEnvelope
-            : await core_cache.buildControlledContextEnvelope(context)
+            : await core_cache.buildControlledContextEnvelope(context, { signal: controller.signal })
                 + (replacementTicket ? participants.participantPromptBlock(options.participantRegeneration.participantSnapshot) : ''));
         if (!stillCurrent()) throw new DOMException('Archive changed', 'AbortError');
         const settings = core_settings.getPluginSettings(contentContext);
@@ -61527,6 +61564,7 @@ __m_archive_archiveVerdict_js.rewriteCurrentArchiveVerdict = rewriteCurrentArchi
 function __init_archive_importOperation_js() {
 // MODULE: archive/importOperation.js
 const partial_import = __m_archive_partialImport_js;
+const source_read = __m_archive_sourceReadGuard_js;
 const draft_inputs = __m_archive_draftInputs_js;
 const archive_batches = __m_archive_importBatches_js;
 const archive_coverage = __m_archive_coverageRanges_js;
@@ -61599,6 +61637,7 @@ const generateArchiveImportSegment = __m_archive_archiveVerdict_js.generateArchi
 
 
 
+
 // 建档主流程：一次建档操作（分批、请求、校验、保存）
 // 从 archive/repository.js 原样搬出（重构阶段 2），声明文本一字未改；archive/repository.js 仍转发原有导出。
 
@@ -61615,7 +61654,7 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
         && core_context.isCurrentTaskOrigin(preparation.origin, core_context.currentCharacterGuard());
     if (automatic) {
         if (!existing) return { status: 'blocked' };
-        await core_cache.ensureCacheHydrated(context);
+        await source_read.waitForSourceRead(() => core_cache.ensureCacheHydrated(context), logicalTask.signal);
         if (!preparationStillCurrent()) throw new DOMException('Chat changed', 'AbortError');
         if (core_cache.loadPhoneGenerationDraft(context, existing)) {
             globalThis.toastr?.info?.('私人终端有未完成草稿，自动档案同步暂缓；请先继续生成终端。', '心迹回廊');
@@ -61675,9 +61714,10 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
     }
     if (pinnedInputs?.identity) archive_batches.assertIdentity(pinnedInputs.identity, identity);
     const shouldScan = settings.useCurrentChatExternalMemory || hasMemoryWorldInfoSelection(context);
-    let external = capturedInput?.external || pinnedInputs?.external || (progress ? await retainedBatchExternal(context, progress) : (shouldScan
-        ? await readCurrentChatMemoryPlugins({ automatic: true, preparationToken: runtimeState.archivePreparationToken })
-        : await currentMemorySourceLedgerExternal(context).catch(() => {
+    let external = capturedInput?.external || pinnedInputs?.external || (progress ? await source_read.boundedSourceRead(() => retainedBatchExternal(context, progress), logicalTask.signal) : (shouldScan
+        ? await readCurrentChatMemoryPlugins({ automatic: true, preparationToken: runtimeState.archivePreparationToken, signal: logicalTask.signal })
+        : await source_read.boundedSourceRead(() => currentMemorySourceLedgerExternal(context), logicalTask.signal).catch(error => {
+            if (error?.name === 'AbortError') throw error;
             globalThis.toastr?.info?.('来源账本暂不可读，本批仅处理已取得的聊天；没有宣称账本来源已全部归档。', '心迹回廊');
             return { records: [], sources: [{ id: 'source-ledger', label: '本地来源账本', count: 0,
                 readStatus: 'unavailable', coverage: { status: 'failed', reason: '账本读取未完成' } }], fingerprint: 'none', ledgerAvailable: false };
@@ -61704,9 +61744,10 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
 
     if (incrementalUpdate && core_cache.isCompressedCacheRecord(context.chatMetadata?.[core_constants.CACHE_KEY])) {
         try {
-            await core_cache.ensureCacheHydrated(context);
+            await source_read.waitForSourceRead(() => core_cache.ensureCacheHydrated(context), logicalTask.signal);
             assertPreparationCurrent();
         } catch (error) {
+            if (error?.name === 'AbortError') throw error;
             const blocked = new Error(`旧的 ADV EVENT 等生成缓存暂时无法读取，因此已取消档案更新，避免误清空缓存。请刷新页面后重试。${core_text.safeErrorSummary(error)}`);
             blocked.safeToDisplay = true;
             blocked.safeUserMessage = blocked.message;
@@ -61729,7 +61770,8 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
         readRange: settings.chatReadRange,
         expectedChatId: preparation.origin.chatId,
         stillCurrent: () => {
-            try { return core_context.isCurrentTaskOrigin(preparation.origin, core_context.currentCharacterGuard()); }
+            try { return core_requestCoordinator.isLogicalGenerationTaskCurrent(logicalTask)
+                && core_context.isCurrentTaskOrigin(preparation.origin, core_context.currentCharacterGuard()); }
             catch { return false; }
         },
     });
@@ -61792,7 +61834,7 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
     try {
         const liveEnvelopeContext = assertPreparationCurrent();
         const contextEnvelope = capturedInput?.contextEnvelope ?? pinnedInputs?.contextEnvelope ?? progress?.contextEnvelope ??
-            (await core_cache.buildControlledContextEnvelope(liveEnvelopeContext, { includeWorldInfoDepth: true })
+            (await core_cache.buildControlledContextEnvelope(liveEnvelopeContext, { includeWorldInfoDepth: true, signal: importController.signal })
                 + participants.participantPromptBlock(participantSnapshot));
         assertPreparationCurrent();
         const chatEnvelope = legacyDraft ? contextEnvelope : contextEnvelope + memoryWorldInfoPromptBlock(external.worldInfo);
@@ -61953,7 +61995,7 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
             // Retain the exact old request/replay above, then queue every source not
             // covered by that draft. No old successful chunk is generated a second time.
             const completeExternal = shouldScan ? await readCurrentChatMemoryPlugins({ automatic: true,
-                preparationToken: runtimeState.archivePreparationToken }) : await currentMemorySourceLedgerExternal(context);
+                preparationToken: runtimeState.archivePreparationToken, signal: importController.signal }) : await source_read.boundedSourceRead(() => currentMemorySourceLedgerExternal(context), importController.signal);
             const covered = archive_batches.makeSourceUnits(chunks.flat(), externalChunks.flat());
             const capturedChat = incrementalUpdate && !rangeChanged
                 ? snapshotForIdentity.messages.filter(row => row.index > previousMessageCount) : snapshotForIdentity.messages;
@@ -62198,7 +62240,7 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
             globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心迹回廊');
             if (archive_importRecovery.archiveRecoverySummary(origin)) globalThis.toastr?.info?.(archive_importRecovery.archiveRecoverySummary(origin)?.notice || archive_importRecovery.ARCHIVE_RECOVERY_PAGE_NOTICE, '心迹回廊 · 档案整理草稿');
         }
-        return { status: cancelled ? 'cancelled' : 'failed' };
+        return { status: cancelled ? 'cancelled' : 'failed', error };
     } finally {
         archive_importRecovery.releaseArchiveRecovery(recoveryTicket);
         if (recoveryTicket) try { await archive_importRecovery.flushArchiveRecovery(origin, recoveryTicket.entry.operation); }
@@ -62423,7 +62465,7 @@ async function importCurrentChatMemoryOnce(options = {}) {
     let result;
     try {
         if (options.parkPriorDraft) {
-            await archive_importRecovery.hydrateArchiveRecovery(origin);
+            await archive_importRecovery.hydrateArchiveRecovery(origin, 'import', { signal: logicalTask.signal });
             core_requestCoordinator.assertLogicalGenerationTaskCurrent(logicalTask);
             if (archive_importRecovery.parkArchiveRecovery(origin)
                 && !await archive_importRecovery.flushArchiveRecovery(origin)) throw new Error('原整理草稿未确认保存，本次没有重新生成。');
@@ -62485,11 +62527,19 @@ async function runArchiveImport(context, options = {}, taskTrace = null) {
     const admission = {};
     runtimeState.archivePreparationToken = admission;
     runtimeState.busy = true;
+    runtimeState.activeTaskAbortController = options.logicalTask.controller;
+    runtimeState.activeTaskOrigin = options.logicalTask.origin;
+    runtimeState.activeTaskLabel = '正在准备当前聊天档案…';
     try { return await runArchiveImportPrepared(context, options, taskTrace, admission); }
     finally {
         if (runtimeState.archivePreparationToken === admission) {
             runtimeState.archivePreparationToken = null; runtimeState.busy = false;
             ui_overlay.setBusyUi(false);
+        }
+        if (runtimeState.activeTaskAbortController === options.logicalTask.controller) {
+            runtimeState.activeTaskAbortController = null;
+            runtimeState.activeTaskOrigin = null;
+            runtimeState.activeTaskLabel = '';
         }
     }
 }
@@ -62504,7 +62554,7 @@ async function runArchiveImportPrepared(context, options, taskTrace, admission) 
     const initialOrigin = core_context.captureTaskOrigin(context, getImportedMemory(context)?.archiveRevision || '');
     const localPendingAdmission = !options.draftId && !options.restartImport && !options.fullRebuild
         && !!getImportedMemory(context)?.[archive_batches.IMPORT_PROGRESS_KEY]?.capacityPending?.length;
-    if (!options.commitCompletedOnly && !localPendingAdmission) await core_settings.prepareManualCredential(context);
+    if (!options.commitCompletedOnly && !localPendingAdmission) await core_settings.prepareManualCredential(context, { signal: options.logicalTask.signal });
     core_requestCoordinator.assertLogicalGenerationTaskCurrent(options.logicalTask);
     if (!core_context.isCurrentTaskOrigin(initialOrigin)) throw new DOMException('Chat changed', 'AbortError');
     let existing = getImportedMemory(context);
@@ -62533,7 +62583,7 @@ async function runArchiveImportPrepared(context, options, taskTrace, admission) 
         }
     }
     const hydrationOrigin = core_context.captureTaskOrigin(context, existing?.archiveRevision || '');
-    await archive_importRecovery.hydrateArchiveRecovery(hydrationOrigin);
+    await archive_importRecovery.hydrateArchiveRecovery(hydrationOrigin, 'import', { signal: options.logicalTask.signal });
     core_requestCoordinator.assertLogicalGenerationTaskCurrent(options.logicalTask);
     if (!core_context.isCurrentTaskOrigin(hydrationOrigin)) throw new DOMException('Chat changed', 'AbortError');
     if (runtimeState.archivePreparationToken !== admission || core_requestCoordinator.hasGenerationTasks()) return { status: 'blocked' };
@@ -69318,6 +69368,7 @@ __m_core_cacheArchiveMemory_js.ensureCurrentArchiveBackup = ensureCurrentArchive
 function __init_core_cache_js() {
 // MODULE: core/cache.js
 const core_constants = __m_core_constants_js;
+const source_read = __m_archive_sourceReadGuard_js;
 const core_text = __m_core_text_js;
 const core_contextTags = __m_core_contextTags_js;
 const core_settings = __m_core_settings_js;
@@ -69327,6 +69378,7 @@ const split_cacheVersions = __m_core_cacheVersions_js;
 const split_cacheGenerationDrafts = __m_core_cacheGenerationDrafts_js;
 const split_cacheSessions = __m_core_cacheSessions_js;
 const split_cacheArchiveMemory = __m_core_cacheArchiveMemory_js;
+
 
 
 
@@ -69410,6 +69462,7 @@ const loadReadableGenerationProgress = split_cacheGenerationDrafts.loadReadableG
 const loadSession = split_cacheSessions.loadSession;
 
 async function buildControlledContextEnvelope(context, options = {}) {
+    if (options.signal?.aborted) throw new DOMException('Read cancelled', 'AbortError');
     const card = (() => {
         try { return context.getCharacterCardFields?.() || {}; } catch { return {}; }
     })();
@@ -69459,7 +69512,9 @@ async function buildControlledContextEnvelope(context, options = {}) {
             creatorNotes: characterData.creatorNotes,
         };
         if (!hasHandPickedSettings && core_settings.getPluginSettings(context).useActivatedWorldInfo !== false && typeof context.getWorldInfoPrompt === 'function') {
-            const result = await context.getWorldInfoPrompt(worldInfoScan, Math.max(2048, Math.min(32768, Number(context.maxContext) || 8192)), true, globalScanData);
+            const result = await source_read.boundedSourceRead(() => context.getWorldInfoPrompt(worldInfoScan,
+                Math.max(2048, Math.min(32768, Number(context.maxContext) || 8192)), true, globalScanData), options.signal);
+            if (options.signal?.aborted) throw new DOMException('Read cancelled', 'AbortError');
             let worldText = result?.worldInfoString || [result?.worldInfoBefore, result?.worldInfoAfter].filter(Boolean).join('\n');
             if (options.includeWorldInfoDepth === true) {
                 const depthText = (Array.isArray(result?.worldInfoDepth) ? result.worldInfoDepth : []).map(item => {
@@ -69471,6 +69526,9 @@ async function buildControlledContextEnvelope(context, options = {}) {
             worldInfo = core_contextTags.filterContextTags(core_text.normalizeText(worldText, 12000), core_contextTags.tagPolicyForContext(context));
         }
     } catch (error) {
+        if (error?.name === 'AbortError') throw error;
+        if (error?.code === 'RMT_MEMORY_READ_TIMEOUT') throw core_text.safeUserError(
+            '酒馆的世界书读取没有响应，本次准备已停止，尚未请求模型；原档案保留，可以直接重试。', 'RMT_WORLD_INFO_READ_TIMEOUT');
         console.warn('[HeartbeatMemories] independent world-info dry run failed', core_text.safeErrorDiagnostic(error));
     }
     if (!controlledWorldText && hasHandPickedSettings) {

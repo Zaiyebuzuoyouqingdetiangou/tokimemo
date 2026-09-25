@@ -92,6 +92,8 @@ const SAFE_ERROR_CODE_MESSAGES = Object.freeze({
     RMT_CONNECTION_SERVER: '模型服务或代理暂时不可用；请稍后重试。',
     RMT_CONNECTION_NETWORK: '无法连接模型服务；请检查地址、网络、代理与服务状态后重试。',
     RMT_REQUEST_TIMEOUT: '模型请求超时，已停止等待并释放任务位；请稍后重试。',
+    RMT_WORLD_INFO_READ_TIMEOUT: '酒馆的世界书读取没有响应，本次准备已停止，尚未请求模型；原档案保留，可以直接重试。',
+    RMT_MEMORY_READ_TIMEOUT: '记忆来源或本地账本读取没有响应，原有内容保留；可以重新读取。',
     RMT_HEART_INCOMPLETE: '角色互动的条目、剧本句数或字数不完整；旧内容保留。',
     RMT_INBOX_CLOSED: '邮箱已关闭，请重新打开后操作。',
     RMT_INBOX_TARGET_CHANGED: '聊天、角色或档案已切换，请重新打开对应邮箱；原信件保留。',

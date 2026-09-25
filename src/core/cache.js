@@ -1,4 +1,5 @@
 import * as core_constants from './constants.js';
+import * as source_read from '../archive/sourceReadGuard.js';
 import * as core_text from './text.js';
 import * as core_contextTags from './contextTags.js';
 import * as core_settings from './settings.js';
@@ -81,6 +82,7 @@ export const loadReadableGenerationProgress = split_cacheGenerationDrafts.loadRe
 export const loadSession = split_cacheSessions.loadSession;
 
 export async function buildControlledContextEnvelope(context, options = {}) {
+    if (options.signal?.aborted) throw new DOMException('Read cancelled', 'AbortError');
     const card = (() => {
         try { return context.getCharacterCardFields?.() || {}; } catch { return {}; }
     })();
@@ -130,7 +132,9 @@ export async function buildControlledContextEnvelope(context, options = {}) {
             creatorNotes: characterData.creatorNotes,
         };
         if (!hasHandPickedSettings && core_settings.getPluginSettings(context).useActivatedWorldInfo !== false && typeof context.getWorldInfoPrompt === 'function') {
-            const result = await context.getWorldInfoPrompt(worldInfoScan, Math.max(2048, Math.min(32768, Number(context.maxContext) || 8192)), true, globalScanData);
+            const result = await source_read.boundedSourceRead(() => context.getWorldInfoPrompt(worldInfoScan,
+                Math.max(2048, Math.min(32768, Number(context.maxContext) || 8192)), true, globalScanData), options.signal);
+            if (options.signal?.aborted) throw new DOMException('Read cancelled', 'AbortError');
             let worldText = result?.worldInfoString || [result?.worldInfoBefore, result?.worldInfoAfter].filter(Boolean).join('\n');
             if (options.includeWorldInfoDepth === true) {
                 const depthText = (Array.isArray(result?.worldInfoDepth) ? result.worldInfoDepth : []).map(item => {
@@ -142,6 +146,9 @@ export async function buildControlledContextEnvelope(context, options = {}) {
             worldInfo = core_contextTags.filterContextTags(core_text.normalizeText(worldText, 12000), core_contextTags.tagPolicyForContext(context));
         }
     } catch (error) {
+        if (error?.name === 'AbortError') throw error;
+        if (error?.code === 'RMT_MEMORY_READ_TIMEOUT') throw core_text.safeUserError(
+            '酒馆的世界书读取没有响应，本次准备已停止，尚未请求模型；原档案保留，可以直接重试。', 'RMT_WORLD_INFO_READ_TIMEOUT');
         console.warn('[HeartbeatMemories] independent world-info dry run failed', core_text.safeErrorDiagnostic(error));
     }
     if (!controlledWorldText && hasHandPickedSettings) {

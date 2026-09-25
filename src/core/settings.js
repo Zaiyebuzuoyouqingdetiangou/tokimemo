@@ -1,4 +1,5 @@
 import * as manual_credentials from './manualCredentialStore.js';
+import * as source_read from '../archive/sourceReadGuard.js';
 import * as connection_pool from './connectionPool.js';
 import * as advanced_generation from './advancedGeneration.js';
 import * as output_budget from './outputBudget.js';
@@ -122,10 +123,12 @@ export function updatePluginSettings(patch) {
 
 // Called only by an explicit manual action or before an authorized request.
 // No plaintext is returned to UI, ordinary settings, logs or export paths.
-export async function prepareManualCredential(context = core_context.getContext()) {
+export async function prepareManualCredential(context = core_context.getContext(), { signal = null } = {}) {
+    if (signal?.aborted) throw new DOMException('Read cancelled', 'AbortError');
     const before = getPluginSettings(context);
     if (before.manualApiKey || !before.manualApiSecretRef || before.apiConnectionMode !== 'manual') return;
-    const key = await manual_credentials.readManualCredential(before.manualApiBaseUrl, before.manualApiSecretRef);
+    const key = await source_read.waitForSourceRead(() => manual_credentials.readManualCredential(before.manualApiBaseUrl, before.manualApiSecretRef), signal);
+    if (signal?.aborted) throw new DOMException('Read cancelled', 'AbortError');
     const latest = getPluginSettings(context);
     if (core_context.getContext().extensionSettings !== context.extensionSettings || latest.manualApiBaseUrl !== before.manualApiBaseUrl
         || latest.manualApiSecretRef !== before.manualApiSecretRef || (latest.manualApiKey && latest.manualApiKey !== key)) throw new DOMException('Credential binding changed', 'AbortError');

@@ -265,7 +265,7 @@ export async function collectCurrentChatExternalMemory(context, expectedChatId, 
         if (!batchRecords.length && coverage.status !== 'complete') { excluded.add(batch.provider); return; }
         scannedMemoryRecords.push(...batchRecords.map(record => ({ ...record, provider: batch.provider, revision: batch.revision })));
         try {
-            await archive_sourceLedger.upsertMemorySourceLedger(scope, batch, { assertCurrent: providerGuard });
+            await archive_sourceLedger.upsertMemorySourceLedger(scope, batch, { assertCurrent: providerGuard, signal });
             providerGuard();
         } catch (error) {
             if (error?.name === 'AbortError') throw error;
@@ -309,7 +309,7 @@ export async function collectCurrentChatExternalMemory(context, expectedChatId, 
     let durable = { records: [], sources: [], ledgerFingerprint: 'none' };
     let ledgerReadbackFailed = false;
     try {
-        const saved = await archive_sourceLedger.readMemorySourceLedger(scope);
+        const saved = await archive_sourceLedger.readMemorySourceLedger(scope, { signal });
         assertCurrent();
         durable = externalMemoryFromSourceLedger(saved, { worldInfoSelection: getMemoryWorldInfoSelection(context),
             useCurrentChatExternalMemory: settings.useCurrentChatExternalMemory, excludeProviders: excluded,
@@ -336,26 +336,30 @@ export async function collectCurrentChatExternalMemory(context, expectedChatId, 
 const sourceScans = new Map();
 
 export function readCurrentChatMemoryPlugins(options = {}) {
+    if (options.signal?.aborted) return Promise.reject(new DOMException('Read cancelled', 'AbortError'));
     const context = core_context.currentCharacterGuard();
     const signature = sourceGuard.sourceReadSignature(context);
-    if (sourceScans.has(signature)) return sourceScans.get(signature);
-    const pending = readCurrentChatMemoryPluginsOnce(options).finally(() => { if (sourceScans.get(signature) === pending) sourceScans.delete(signature); });
-    sourceScans.set(signature, pending);
+    const existing = sourceScans.get(signature);
+    if (existing && !existing.signal?.aborted) return sourceGuard.waitForSourceRead(() => existing.pending, options.signal);
+    const entry = { signal: options.signal, pending: null };
+    const pending = readCurrentChatMemoryPluginsOnce(options).finally(() => { if (sourceScans.get(signature) === entry) sourceScans.delete(signature); });
+    entry.pending = pending;
+    sourceScans.set(signature, entry);
     return pending;
 }
 
-async function readCurrentChatMemoryPluginsOnce({ automatic = false, preparationToken = null } = {}) {
+async function readCurrentChatMemoryPluginsOnce({ automatic = false, preparationToken = null, signal = null } = {}) {
     const context = core_context.currentCharacterGuard();
     const lifecycleEpoch = runtimeState.runtimeLifecycleEpoch;
     if ((runtimeState.busy && !(automatic && preparationToken && preparationToken === runtimeState.archivePreparationToken)) || core_requestCoordinator.hasGenerationTasks()) throw new Error('当前还有内容生成任务在进行，请等生成结束后再扫描记忆 / 摘要。');
     const chatId = core_context.getChatId(context);
     if (!chatId) throw new Error('无法识别当前聊天窗口。');
     const taskOrigin = core_context.captureTaskOrigin(context);
-    const controller = new AbortController();
-    const assertCurrent = sourceGuard.createSourceReadGuard(context, chatId, controller.signal);
-    const worldInfo = await syncSelectedWorldInfoHistoryLedger(context, chatId, controller.signal);
+    const assertCurrent = sourceGuard.createSourceReadGuard(context, chatId, signal);
     assertCurrent();
-    const result = await collectCurrentChatExternalMemory(context, chatId, controller.signal);
+    const worldInfo = await syncSelectedWorldInfoHistoryLedger(context, chatId, signal);
+    assertCurrent();
+    const result = await collectCurrentChatExternalMemory(context, chatId, signal);
     const recordChars = result.records.reduce((sum, item) => sum + String(item.content || '').length, 0);
     const totalChars = recordChars + worldInfo.entries.filter(item => !item.historySource).reduce((sum, item) => sum + item.content.length, 0);
     const combinedFingerprint = result.records.length

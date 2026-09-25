@@ -1,0 +1,34 @@
+<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>r84.81 首次建档取消验证</title>
+<style>#probe{position:fixed;z-index:2147483647;bottom:0;left:0;right:0;background:white;font:13px sans-serif;padding:8px}#probe button{padding:10px}#probe-log{max-height:115px;overflow:auto;white-space:pre-wrap;margin:4px}</style>
+<div id="probe"><button id="start">模拟第一步等待</button><button id="release">放回旧请求</button><button id="retry">重新开始</button><pre id="probe-log">本地虚构聊天，无 API Key，不连接生成服务。</pre></div>
+<script type="module">
+const log = document.querySelector('#probe-log');
+const print = message => { log.textContent += '\n' + message; log.scrollTop = log.scrollHeight; };
+globalThis.confirm = () => true; // Only the re-seedable test fixture accepts its cancellation dialog.
+globalThis.toastr = Object.fromEntries(['error','warning','info','success'].map(level => [level, text => print(level + ': ' + text)]));
+window.addEventListener('unhandledrejection', event => print('UNHANDLED: ' + event.reason));
+let release, reads = 0;
+const host = { characterId:0,name1:'阿宁',name2:'岚',chatId:'preparation-r8481',
+  characters:[{name:'岚',avatar:'preparation-r8481.png',description:'在窗边读书的人。'}],
+  chat:[{is_user:true,mes:'今天我们一起读完了窗边的书。'}],chatMetadata:{keep:'原聊天标记'},powerUserSettings:{},
+  extensionSettings:{heartbeatMemories:{apiConnectionMode:'manual',manualApiBaseUrl:'https://example.invalid/v1',manualApiModel:'fixture',useCurrentChatExternalMemory:false,useActivatedWorldInfo:true}},
+  getCurrentChatId(){return this.chatId;},saveSettingsDebounced(){},saveMetadata:async()=>{},getTokenCountAsync:async()=>20,
+  getWorldInfoPrompt:()=>{reads++;print('世界书读取 #'+reads+' 等待中');return new Promise(resolve=>{release=resolve;});}};
+globalThis.SillyTavern={getContext:()=>host};
+const {state}=await import('../src/core/state.js');
+const repo=await import('../src/archive/repository.js');
+const overlay=await import('../src/ui/overlay.js');
+const tasks=await import('../src/ui/taskCenter.js');
+const coordinator=await import('../src/core/requestCoordinator.js');
+overlay.openOverlay();overlay.showChooser();
+document.getElementById('heartbeat_memories_overlay')?.append(document.querySelector('#probe'));
+async function start(){
+  const run=repo.importCurrentChatMemory();
+  tasks.handleTaskCenterAction('tasks');
+  try{const result=await run;print('建档结束: '+result.status);}catch(error){print('建档退出: '+error.message);}
+  print(JSON.stringify({busy:state.busy,active:coordinator.queryParticipantGenerationTasks(host).length,kept:host.chatMetadata.keep,reads}));
+}
+document.querySelector('#start').onclick=start;
+document.querySelector('#release').onclick=()=>{release?.({worldInfoString:'迟到的旧世界书'});print('旧返回已放回');};
+document.querySelector('#retry').onclick=start;
+</script></html>

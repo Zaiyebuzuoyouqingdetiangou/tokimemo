@@ -1,4 +1,5 @@
 import * as partial_import from './partialImport.js';
+import * as source_read from './sourceReadGuard.js';
 import * as draft_inputs from './draftInputs.js';
 import * as archive_batches from './importBatches.js';
 import * as archive_coverage from './coverageRanges.js';
@@ -41,7 +42,7 @@ export async function importCurrentChatMemoryOperation({ fullRebuild = false, au
         && core_context.isCurrentTaskOrigin(preparation.origin, core_context.currentCharacterGuard());
     if (automatic) {
         if (!existing) return { status: 'blocked' };
-        await core_cache.ensureCacheHydrated(context);
+        await source_read.waitForSourceRead(() => core_cache.ensureCacheHydrated(context), logicalTask.signal);
         if (!preparationStillCurrent()) throw new DOMException('Chat changed', 'AbortError');
         if (core_cache.loadPhoneGenerationDraft(context, existing)) {
             globalThis.toastr?.info?.('私人终端有未完成草稿，自动档案同步暂缓；请先继续生成终端。', '心迹回廊');
@@ -101,9 +102,10 @@ export async function importCurrentChatMemoryOperation({ fullRebuild = false, au
     }
     if (pinnedInputs?.identity) archive_batches.assertIdentity(pinnedInputs.identity, identity);
     const shouldScan = settings.useCurrentChatExternalMemory || hasMemoryWorldInfoSelection(context);
-    let external = capturedInput?.external || pinnedInputs?.external || (progress ? await retainedBatchExternal(context, progress) : (shouldScan
-        ? await readCurrentChatMemoryPlugins({ automatic: true, preparationToken: runtimeState.archivePreparationToken })
-        : await currentMemorySourceLedgerExternal(context).catch(() => {
+    let external = capturedInput?.external || pinnedInputs?.external || (progress ? await source_read.boundedSourceRead(() => retainedBatchExternal(context, progress), logicalTask.signal) : (shouldScan
+        ? await readCurrentChatMemoryPlugins({ automatic: true, preparationToken: runtimeState.archivePreparationToken, signal: logicalTask.signal })
+        : await source_read.boundedSourceRead(() => currentMemorySourceLedgerExternal(context), logicalTask.signal).catch(error => {
+            if (error?.name === 'AbortError') throw error;
             globalThis.toastr?.info?.('来源账本暂不可读，本批仅处理已取得的聊天；没有宣称账本来源已全部归档。', '心迹回廊');
             return { records: [], sources: [{ id: 'source-ledger', label: '本地来源账本', count: 0,
                 readStatus: 'unavailable', coverage: { status: 'failed', reason: '账本读取未完成' } }], fingerprint: 'none', ledgerAvailable: false };
@@ -130,9 +132,10 @@ export async function importCurrentChatMemoryOperation({ fullRebuild = false, au
 
     if (incrementalUpdate && core_cache.isCompressedCacheRecord(context.chatMetadata?.[core_constants.CACHE_KEY])) {
         try {
-            await core_cache.ensureCacheHydrated(context);
+            await source_read.waitForSourceRead(() => core_cache.ensureCacheHydrated(context), logicalTask.signal);
             assertPreparationCurrent();
         } catch (error) {
+            if (error?.name === 'AbortError') throw error;
             const blocked = new Error(`旧的 ADV EVENT 等生成缓存暂时无法读取，因此已取消档案更新，避免误清空缓存。请刷新页面后重试。${core_text.safeErrorSummary(error)}`);
             blocked.safeToDisplay = true;
             blocked.safeUserMessage = blocked.message;
@@ -155,7 +158,8 @@ export async function importCurrentChatMemoryOperation({ fullRebuild = false, au
         readRange: settings.chatReadRange,
         expectedChatId: preparation.origin.chatId,
         stillCurrent: () => {
-            try { return core_context.isCurrentTaskOrigin(preparation.origin, core_context.currentCharacterGuard()); }
+            try { return core_requestCoordinator.isLogicalGenerationTaskCurrent(logicalTask)
+                && core_context.isCurrentTaskOrigin(preparation.origin, core_context.currentCharacterGuard()); }
             catch { return false; }
         },
     });
@@ -218,7 +222,7 @@ export async function importCurrentChatMemoryOperation({ fullRebuild = false, au
     try {
         const liveEnvelopeContext = assertPreparationCurrent();
         const contextEnvelope = capturedInput?.contextEnvelope ?? pinnedInputs?.contextEnvelope ?? progress?.contextEnvelope ??
-            (await core_cache.buildControlledContextEnvelope(liveEnvelopeContext, { includeWorldInfoDepth: true })
+            (await core_cache.buildControlledContextEnvelope(liveEnvelopeContext, { includeWorldInfoDepth: true, signal: importController.signal })
                 + participants.participantPromptBlock(participantSnapshot));
         assertPreparationCurrent();
         const chatEnvelope = legacyDraft ? contextEnvelope : contextEnvelope + memoryWorldInfoPromptBlock(external.worldInfo);
@@ -379,7 +383,7 @@ export async function importCurrentChatMemoryOperation({ fullRebuild = false, au
             // Retain the exact old request/replay above, then queue every source not
             // covered by that draft. No old successful chunk is generated a second time.
             const completeExternal = shouldScan ? await readCurrentChatMemoryPlugins({ automatic: true,
-                preparationToken: runtimeState.archivePreparationToken }) : await currentMemorySourceLedgerExternal(context);
+                preparationToken: runtimeState.archivePreparationToken, signal: importController.signal }) : await source_read.boundedSourceRead(() => currentMemorySourceLedgerExternal(context), importController.signal);
             const covered = archive_batches.makeSourceUnits(chunks.flat(), externalChunks.flat());
             const capturedChat = incrementalUpdate && !rangeChanged
                 ? snapshotForIdentity.messages.filter(row => row.index > previousMessageCount) : snapshotForIdentity.messages;
@@ -624,7 +628,7 @@ export async function importCurrentChatMemoryOperation({ fullRebuild = false, au
             globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心迹回廊');
             if (archive_importRecovery.archiveRecoverySummary(origin)) globalThis.toastr?.info?.(archive_importRecovery.archiveRecoverySummary(origin)?.notice || archive_importRecovery.ARCHIVE_RECOVERY_PAGE_NOTICE, '心迹回廊 · 档案整理草稿');
         }
-        return { status: cancelled ? 'cancelled' : 'failed' };
+        return { status: cancelled ? 'cancelled' : 'failed', error };
     } finally {
         archive_importRecovery.releaseArchiveRecovery(recoveryTicket);
         if (recoveryTicket) try { await archive_importRecovery.flushArchiveRecovery(origin, recoveryTicket.entry.operation); }

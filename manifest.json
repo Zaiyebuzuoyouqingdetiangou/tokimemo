@@ -1,15 +1,15 @@
 {
   "display_name": "心迹回廊",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.99.28-r84.80-draft-repair",
+  "js": "index.js?heartbeat=0.99.29-r84.81-archive-preparation",
   "author": "Toto",
-  "version": "0.99.28",
+  "version": "0.99.29",
   "auto_update": true,
   "minimum_client_version": "1.13.0",
   "hooks": {
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r84.80：修复草稿重试/放弃与邮箱身份误判，去掉档案列表重复日历，保留 r84.79 更新。",
+  "description": "r84.81：建档准备可取消和重试，来源读取无响应可退出，取消本地草稿与历史来源固定额度。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }

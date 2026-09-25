@@ -1,3 +1,4 @@
+import * as source_read from './sourceReadGuard.js';
 import * as draft_inputs from './draftInputs.js';
 import * as local_store from '../core/localRecoveryStore.js';
 import * as constants from '../core/constants.js';
@@ -11,7 +12,9 @@ import * as taskTrace from '../core/taskTrace.js';
 import * as digest from '../core/digest.js';
 
 export const ARCHIVE_RECOVERY_PAGE_NOTICE = '档案整理草稿仅本页保留，请勿刷新；关闭心迹回廊可保留。';
-export const ARCHIVE_RECOVERY_MAX_DRAFTS = 4;
+// Compatibility export only. Draft admission depends on an acknowledged save,
+// never on how many drafts this page has read from this or another chat.
+export const ARCHIVE_RECOVERY_MAX_DRAFTS = Infinity;
 const drafts = new Map();
 const tickets = new WeakSet();
 // Explicit discard revokes old owners even if durable deletion later fails.
@@ -97,7 +100,8 @@ export async function flushArchiveRecovery(origin, operation = 'import') {
     return saveScope(key);
 }
 export function resetArchiveRecoveryMemoryForTests() { drafts.clear(); scopes.clear(); loaded.clear(); lanes.clear(); hydrationLanes.clear(); }
-export async function hydrateArchiveRecovery(origin, operation = 'import', { force = false } = {}) {
+export async function hydrateArchiveRecovery(origin, operation = 'import', { force = false, signal = null } = {}) {
+    if (signal?.aborted) throw new DOMException('Read cancelled', 'AbortError');
     const key = draftKey(origin, operation); if (!key) return false;
     // An unavailable API is not an empty database (notably in embedded hosts).
     // Fail before any paid request instead of silently selecting page-only mode.
@@ -105,20 +109,35 @@ export async function hydrateArchiveRecovery(origin, operation = 'import', { for
     if (loaded.has(key) && !force) return false;
     // Opening the view and clicking continue may overlap. Reuse the same read;
     // neither path may overwrite a live journal with an older storage snapshot.
-    if (hydrationLanes.has(key)) return hydrationLanes.get(key);
-    const read = hydrateArchiveRecoveryScope(key, origin, operation, force);
-    hydrationLanes.set(key, read);
-    try { return await read; }
-    finally { if (hydrationLanes.get(key) === read) hydrationLanes.delete(key); }
+    let lane = hydrationLanes.get(key);
+    if (!lane) {
+        lane = { controller: new AbortController(), read: null };
+        lane.read = hydrateArchiveRecoveryScope(key, origin, operation, force, lane.controller.signal);
+        hydrationLanes.set(key, lane);
+    }
+    const cancel = () => {
+        // Invalidate the shared read, not stored data. A new click must not join
+        // the read the user just cancelled, nor accept its late storage reply.
+        if (hydrationLanes.get(key) === lane) hydrationLanes.delete(key);
+        lane.controller.abort();
+    };
+    signal?.addEventListener?.('abort', cancel, { once: true });
+    try { return await lane.read; }
+    finally {
+        signal?.removeEventListener?.('abort', cancel);
+        if (hydrationLanes.get(key) === lane) hydrationLanes.delete(key);
+    }
 }
-async function hydrateArchiveRecoveryScope(key, origin, operation, force) {
-    const id = `draft:${await recovery.generationRecoveryDigest(key)}`;
+async function hydrateArchiveRecoveryScope(key, origin, operation, force, signal) {
+    const id = `draft:${await source_read.waitForSourceRead(() => recovery.generationRecoveryDigest(key), signal)}`;
     // An explicit reread waits for our current write. It must never replace a
     // newer in-page success or adopt a foreign revision just to overwrite it.
-    if (lanes.has(key)) await lanes.get(key).catch(() => {});
+    if (lanes.has(key)) await source_read.waitForSourceRead(() => lanes.get(key).catch(() => {}), signal);
     const readRevision = scopes.get(key)?.revision;
     let record;
-    try { record = await local_store.readLocalRecoveryRecord(id); } catch { throw storageFailure('read'); }
+    try { record = await source_read.waitForSourceRead(() => local_store.readLocalRecoveryRecord(id), signal); }
+    catch (error) { if (error?.name === 'AbortError') throw error; throw storageFailure('read'); }
+    if (signal.aborted) throw new DOMException('Read cancelled', 'AbortError');
     if (record !== null && (!record || record.key !== id || !Number.isSafeInteger(record.revision) || record.revision < 1)) throw storageFailure('read');
     if (loaded.has(key)) {
         if (!force) return true;
@@ -132,7 +151,7 @@ async function hydrateArchiveRecoveryScope(key, origin, operation, force) {
     const payload = record?.payload;
     if (payload) {
         if (new TextEncoder().encode(JSON.stringify(payload)).byteLength > constants.MAX_CACHE_SOURCE_BYTES
-            || payload.version !== 1 || !Array.isArray(payload.rows) || payload.rows.length > ARCHIVE_RECOVERY_MAX_DRAFTS) throw storageFailure('read');
+            || payload.version !== 1 || !Array.isArray(payload.rows)) throw storageFailure('read');
         const checked = [];
         for (const [rowKey, value] of payload.rows) {
             if (typeof rowKey !== 'string' || (rowKey !== key && !rowKey.startsWith(`${key}:paused:`))
@@ -143,9 +162,10 @@ async function hydrateArchiveRecoveryScope(key, origin, operation, force) {
             if (entry.stage === 'awaiting-commit' && entry.committedRevision !== origin.archiveRevision) entry.stage = 'segments';
             checked.push([rowKey, entry]);
         }
-        if (drafts.size + checked.filter(([id]) => !drafts.has(id)).length > ARCHIVE_RECOVERY_MAX_DRAFTS) throw storageFailure('read');
+        if (signal.aborted) throw new DOMException('Read cancelled', 'AbortError');
         for (const [id,entry] of checked) if (!drafts.has(id)) drafts.set(id,entry);
     }
+    if (signal.aborted) throw new DOMException('Read cancelled', 'AbortError');
     const state = { id, revision: record?.revision || 0 };
     confirmCounts(state, payload?.rows || []);
     scopes.set(key, state); loaded.add(key);
@@ -168,7 +188,6 @@ export async function importArchiveRecoveryData(origin, data) {
         || new TextEncoder().encode(JSON.stringify(data)).byteLength > constants.MAX_CACHE_SOURCE_BYTES) throw storageFailure();
     await hydrateArchiveRecovery(origin);
     if (drafts.has(key)) throw text.safeUserError('当前聊天已有整理草稿，导入没有覆盖它。请先导出并明确处理现有草稿。', 'RMT_RECOVERY_BUSY');
-    if (drafts.size + data.pageDrafts.length > ARCHIVE_RECOVERY_MAX_DRAFTS) throw storageFailure();
     const values = data.pageDrafts.map(row => {
         const sourceHash = String(row?.journal?.identity?.archiveRevision || '').replace(/^archive-draft:/, '');
         const entry = { key, operation:'import', sourceHash, fullRebuild: row.fullRebuild === true,
@@ -284,7 +303,6 @@ export function parkArchiveRecovery(origin, operation = 'import') {
     const key = draftKey(origin, operation), entry = drafts.get(key);
     if (!entry) return false;
     if (entry.active || entry.stage === 'awaiting-commit') throw text.safeUserError('请先完成当前请求或仅重试保存；未改动草稿。', 'RMT_RECOVERY_BUSY');
-    if (drafts.size >= ARCHIVE_RECOVERY_MAX_DRAFTS) throw text.safeUserError('本页已保留四份草稿，旧成果没有被挤掉；请先导出并明确处理旧草稿。', 'RMT_RECOVERY_LIMIT');
     drafts.delete(key);
     drafts.set(`${key}:paused:${Date.now()}:${drafts.size}`, entry);
     scheduleSave(key);
@@ -321,11 +339,8 @@ export async function beginArchiveRecovery({ origin, operation = 'import', sourc
     if (priorResult) existing = null;
     if (existing?.active) throw text.safeUserError('这份档案草稿正在处理，请等当前请求结束。', 'RMT_RECOVERY_BUSY');
     if (existing && (!continueApproved || existing.stage !== 'segments')) throw incompatible();
-    if (!existing && !priorResult && drafts.size >= ARCHIVE_RECOVERY_MAX_DRAFTS) {
-        throw text.safeUserError('本页已保留 4 份未完成的档案整理草稿。请先完成或明确放弃其中一份；旧草稿没有被挤掉。', 'RMT_RECOVERY_LIMIT');
-    }
-    if (!Array.isArray(sourceFragments) || sourceFragments.length > recovery.GENERATION_RECOVERY_LIMITS.segments) {
-        throw text.safeUserError('档案整理来源超过本页可保留的分段范围，旧草稿仍保留。', 'RMT_RECOVERY_LIMIT');
+    if (!Array.isArray(sourceFragments)) {
+        throw text.safeUserError('档案整理来源分段格式无效，旧草稿仍保留。', 'RMT_RECOVERY_DATA');
     }
     const sourceHash = await recovery.generationRecoveryDigest({
         identity: await recovery.generationRecoveryDigest(sourceIdentity),
@@ -353,7 +368,6 @@ export async function beginArchiveRecovery({ origin, operation = 'import', sourc
         } });
     if (drafts.get(key) && drafts.get(key) !== expectedEntry) throw incompatible();
     if (existing?.active) throw text.safeUserError('这份档案草稿正在处理，请等当前请求结束。', 'RMT_RECOVERY_BUSY');
-    if (!existing && !priorResult && drafts.size >= ARCHIVE_RECOVERY_MAX_DRAFTS) throw text.safeUserError('本页档案整理草稿已满，旧草稿仍保留。', 'RMT_RECOVERY_LIMIT');
     if ((!existing || entry.importedUnverified) && inputs) entry.inputs = structuredClone(inputs);
     if (priorResult && expectedEntry.profilePending) {
         const profileCopy = { ...structuredClone(expectedEntry), stage: 'profile-only', active: false,

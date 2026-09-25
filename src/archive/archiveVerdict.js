@@ -1,3 +1,4 @@
+import * as source_read from './sourceReadGuard.js';
 import * as core_cache from '../core/cache.js';
 import * as core_constants from '../core/constants.js';
 import * as core_context from '../core/context.js';
@@ -78,9 +79,9 @@ async function rewriteCurrentArchiveVerdictOperation(taskTrace, options = {}) {
         if (!snapshot) throw new Error('明确重做缺少本次已确认的人物快照。');
         options.participantRegeneration = { ...replacementTicket, participantSnapshot: snapshot };
     }
-    await core_settings.prepareManualCredential(context);
-    await archive_importRecovery.hydrateArchiveRecovery(origin);
-    await archive_importRecovery.hydrateArchiveRecovery(origin, 'profile');
+    await core_settings.prepareManualCredential(context, { signal: options.logicalTask.signal });
+    await archive_importRecovery.hydrateArchiveRecovery(origin, 'import', { signal: options.logicalTask.signal });
+    await archive_importRecovery.hydrateArchiveRecovery(origin, 'profile', { signal: options.logicalTask.signal });
     core_requestCoordinator.assertLogicalGenerationTaskCurrent(options.logicalTask);
     if (!core_context.isCurrentTaskOrigin(origin)) throw new DOMException('Chat changed', 'AbortError');
     if (runtimeState.busy || core_requestCoordinator.hasGenerationTasks()) return { status: 'blocked' };
@@ -143,7 +144,7 @@ async function rewriteCurrentArchiveVerdictOperation(taskTrace, options = {}) {
     };
     try {
         ui_overlay.setBusyUi(true, runtimeState.activeTaskLabel);
-        await core_cache.ensureCacheHydrated(context);
+        await source_read.waitForSourceRead(() => core_cache.ensureCacheHydrated(context), controller.signal);
         if (!stillCurrent()) throw new DOMException('Archive changed', 'AbortError');
         const profileInputs = selectedProfile?.inputs || archive_importRecovery.archiveRecoveryInputs(origin, 'profile');
         let taskInputV1 = profileInputs?.taskInputV1 || null;
@@ -158,7 +159,7 @@ async function rewriteCurrentArchiveVerdictOperation(taskTrace, options = {}) {
             throw error;
         }
         const contextEnvelope = capturedInput?.contextEnvelope ?? (profileInputs?.ownerIdentity ? profileInputs.contextEnvelope
-            : await core_cache.buildControlledContextEnvelope(context)
+            : await core_cache.buildControlledContextEnvelope(context, { signal: controller.signal })
                 + (replacementTicket ? participants.participantPromptBlock(options.participantRegeneration.participantSnapshot) : ''));
         if (!stillCurrent()) throw new DOMException('Archive changed', 'AbortError');
         const settings = core_settings.getPluginSettings(contentContext);

@@ -1,17 +1,18 @@
 {
-  "version": "0.99.28",
-  "build": "0.99.28-r84.80-draft-repair",
-  "baseCommit": "d08e3ee",
-  "syntaxFiles": 278,
+  "version": "0.99.29",
+  "build": "0.99.29-r84.81-archive-preparation",
+  "baseCommit": "606bb46cdab079b21a4b24a669c43d59796f3c67",
+  "syntaxFiles": 281,
   "syntaxExit": 0,
   "bundleModules": 239,
-  "bundleSha256": "69163ebaef2f3e5138f1b989aa89618ceae38f603f13a3eef14457c200b9894e",
+  "bundleSha256": "000d2d98eb387146f7853a8979747f4e712ba60882190d021f6559a6431f192f",
   "bundleRebuildIdentical": true,
-  "tests": 22,
-  "pass": 22,
+  "tests": 45,
+  "pass": 45,
   "fail": 0,
-  "undefinedNames": 0,
+  "undefinedBindings": 0,
   "runtimeExports": 5,
-  "testedEnvironment": "Node production modules with host/provider/storage boundaries simulated; local browser at 319px with real IndexedDB and synthetic archive; native confirmation replaced only in fixture. No paid provider or real SillyTavern/iPhone acceptance.",
-  "priorBaseline": "r84.59 passed 221 tests before integrating r84.79. Remote r84.79 removed its test tooling; historical 83-test report was not rerun and is not claimed as current evidence."
+  "testedEnvironment": "Node production module graph with simulated host/provider/storage boundaries; local browser using production modules, real IndexedDB and synthetic chat; native confirmation replaced only in fixture. Verified preparation cancel, late reply, retry and timeout feedback. No paid provider, real user SillyTavern or iPhone acceptance.",
+  "priorBaseline": "r84.59 passed 221 tests before integrating r84.79. Remote r84.79 removed its test tooling; historical 83-test report was not rerun and is not claimed as current evidence.",
+  "unavailableChecks": "Remote r84.79 removed tests/ and the refactor-guard, verify-release and TypeScript undefined-name tooling. Current syntax/runtime-binding verification is not a full TypeScript analysis."
 }
