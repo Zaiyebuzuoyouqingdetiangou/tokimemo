@@ -110,25 +110,15 @@ export async function showArchiveLibrary() {
         return `<article class="rmt-archive-portal ready rmt-character-archive-card"><button type="button" class="rmt-portal-open rmt-character-portal-open" data-rmt-archive-character="${core_text.esc(group.groupId)}"><span class="rmt-portal-avatar" data-rmt-avatar-talk="${core_text.esc(group.groupId)}" title="点头像听他说一句">${src ? `<img src="${core_text.esc(src)}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%">` : '<i class="fa-solid fa-user"></i>'}<i class="fa-solid fa-comment-dots rmt-avatar-talk-mark"></i></span><span class="rmt-portal-title">${core_text.esc(name)}</span><span class="rmt-portal-subtitle">${group.entries.length} 个聊天档案${core_text.esc(charHint)}</span><span class="rmt-portal-status">${meta.manual ? '手动角色组' : '自动分类'} · 点击查看</span></button><button type="button" class="rmt-character-archive-delete" data-rmt-action="archive-character-delete" data-rmt-archive-group-id="${core_text.esc(group.groupId)}"><i class="fa-solid fa-trash-can"></i><span>删除角色档案</span></button></article>`;
     }).join('');
     let currentQuick = '';
-    let calendarQuick = snapshotCalendarQuickAccessHtml({ ready: false, generated: false, readOnly: false, generating: false });
     try {
         const ctx = core_context.currentCharacterGuard();
         const mem = archive_repository.getImportedMemory(ctx);
         const deletedFromLibrary = archive_groups.isCurrentCharacterDeletedFromLibrary(ctx, mem);
         if (deletedFromLibrary) {
             currentQuick = '';
-            calendarQuick = '';
         } else if (mem) {
             const name = core_text.normalizeText(mem.archiveName, 120) || archive_repository.fallbackArchiveName(mem.memories);
             currentQuick = `<section class="rmt-archive-card rmt-current-archive-card" style="margin-top:12px"><div><b>当前窗口档案</b><small>${core_text.esc(name)} · ${mem.memories.length} 条记忆</small></div><div class="rmt-current-archive-actions"><button type="button" class="rmt-btn" data-rmt-action="current-archive">打开当前窗口档案</button><button type="button" class="rmt-btn" data-rmt-action="current-archive-import">增量更新当前窗口档案</button><button type="button" class="rmt-btn" data-rmt-action="current-archive-delete">删除当前档案</button></div></section>`;
-            const calendarPortal = archive_snapshots.baseModeAvailability({ context: ctx, chatId: core_context.getChatId(ctx), memoryBank: mem, clone: false })
-                .find(item => item.mode === core_constants.MODE.CALENDAR) || { session: null };
-            calendarQuick = snapshotCalendarQuickAccessHtml({
-                ready: true,
-                generated: !!calendarPortal.session,
-                readOnly: false,
-                generating: core_requestCoordinator.isModeGenerating(core_constants.MODE.CALENDAR),
-            });
         } else {
             const inheritanceDescriptor = archive_groups.characterDescriptor(ctx, Number(ctx.characterId));
             const inheritanceAvailable = archive_groups.getArchiveIndex(ctx).some(entry =>
@@ -142,7 +132,7 @@ export async function showArchiveLibrary() {
         }
     } catch {}
     if (!viewStillCurrent()) return;
-    body.innerHTML = `<div class="rmt-archive-room"><section class="rmt-archive-card"><div class="rmt-archive-kicker">MEMORY ARCHIVE LIBRARY</div><strong class="rmt-archive-title">档案室一览</strong><div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="rmt-btn" data-rmt-action="archive-group-manager">管理角色分类</button><button type="button" class="rmt-btn" data-rmt-action="archive-auto-classify">自动分类</button><button type="button" class="rmt-btn" data-rmt-action="rebuild-archive-index">扫描旧版本已有档案</button></div></section>${calendarQuick}${cards ? `<section class="rmt-archive-portals rmt-character-portals">${cards}</section>` : '<div class="rmt-archive-overview-empty">还没有已索引的档案。当前版本创建/更新档案后会自动加入这里；旧版本档案可点上方按钮手动扫描一次。</div>'}${currentQuick}</div>`;
+    body.innerHTML = `<div class="rmt-archive-room"><section class="rmt-archive-card"><div class="rmt-archive-kicker">MEMORY ARCHIVE LIBRARY</div><strong class="rmt-archive-title">档案室一览</strong><div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="rmt-btn" data-rmt-action="archive-group-manager">管理角色分类</button><button type="button" class="rmt-btn" data-rmt-action="archive-auto-classify">自动分类</button><button type="button" class="rmt-btn" data-rmt-action="rebuild-archive-index">扫描旧版本已有档案</button></div></section>${cards ? `<section class="rmt-archive-portals rmt-character-portals">${cards}</section>` : '<div class="rmt-archive-overview-empty">还没有已索引的档案。当前版本创建/更新档案后会自动加入这里；旧版本档案可点上方按钮手动扫描一次。</div>'}${currentQuick}</div>`;
 }
 
 export function showArchiveCharacter(groupId) {

@@ -1,0 +1,71 @@
+<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>r84.60 草稿与日历隔离验证</title>
+<style>#fixture-controls{position:fixed;z-index:2147483647;bottom:0;left:0;background:white;max-width:100%;font:12px sans-serif;padding:4px}#fixture-controls button{padding:8px}#fixture-log{max-height:70px;overflow:auto;white-space:pre-wrap;margin:0}</style>
+<div id="fixture-controls"><button id="fixture-library">档案列表样本</button><button id="fixture-drafts">角色卡编辑后草稿</button><button id="fixture-orphan">整理草稿遗留活动标记</button><pre id="fixture-log">仅本地测试数据，不调用模型。</pre></div>
+<script type="module">
+const log = document.querySelector('#fixture-log');
+const print = message => { log.textContent += '\n' + message; };
+// Only these re-seedable synthetic records are used by this fixture. The in-app
+// browser does not expose native confirm reliably; production keeps its dialog.
+globalThis.confirm = message => { print('测试确认（仅测试数据）: ' + message.split('\n')[0]); return true; };
+window.addEventListener('error', e => print('ERROR: ' + e.message));
+window.addEventListener('unhandledrejection', e => print('ERROR: ' + e.reason));
+globalThis.toastr = Object.fromEntries(['error','warning','info','success'].map(level => [level, message => print(level + ': ' + message)]));
+const host = { characterId:0,name1:'阿宁',name2:'岚',chatId:'review-r8460',characters:[{name:'岚',avatar:'review-r8460.png',description:'原人设'}],chat:[{is_user:false,mes:'窗边一起读书。'}],chatMetadata:{},extensionSettings:{},powerUserSettings:{},saveMetadata:async()=>{},saveSettingsDebounced(){},getCurrentChatId(){return this.chatId;} };
+globalThis.SillyTavern = {getContext:()=>host};
+const constants = await import('../src/core/constants.js');
+const contextApi = await import('../src/core/context.js');
+const {state} = await import('../src/core/state.js');
+const cache = await import('../src/core/cache.js');
+const backup = await import('../src/archive/backupStore.js');
+const groups = await import('../src/archive/groups.js');
+const library = await import('../src/archive/library.js');
+const recovery = await import('../src/generation/recovery.js');
+const archiveDrafts = await import('../src/archive/importRecovery.js');
+const overlay = await import('../src/ui/overlay.js');
+const tasks = await import('../src/ui/taskCenter.js');
+const inbox = await import('../src/modes/inbox.js');
+const memory = {version:3,chatId:host.chatId,archiveRevision:'review-r8460-v1',characterName:'岚',userName:'阿宁',memories:[{id:'M001',title:'窗边读书',summary:'两人一起读完窗边的故事。',anchors:['一起读完窗边的故事']}],archiveSummary:'窗边的故事',archiveKeywords:[]};
+host.chatMetadata[constants.MEMORY_KEY]=memory;
+groups.upsertArchiveIndex(host,memory);
+const entry = cache.archiveBackupEntryForContext(host,memory);
+const formal = {version:3,chatId:memory.chatId,archiveRevision:memory.archiveRevision,
+    inbox:{...inbox.emptyInbox(memory,host),letters:[{id:'saved',eventKey:'saved',type:'daily',title:'保留的旧信',body:'这封原信不应删除。',greeting:'阿宁：',closing:'岚',readAt:1,createdAt:1}]}};
+host.chatMetadata[constants.CACHE_KEY]=formal;
+await backup.seedArchiveBackup(entry,memory,formal,{replaceInvalidCache:true});
+overlay.openOverlay();
+document.getElementById(constants.OVERLAY_ID).append(document.querySelector('#fixture-controls'));
+document.querySelector('#fixture-library').onclick=async()=>{await library.showArchiveLibrary();print('列表已打开；内容页日历保留。');};
+document.querySelector('#fixture-drafts').onclick=async()=>{
+ try {
+    host.characters[0].description='原人设';
+    const origin={...contextApi.captureTaskOrigin(host,memory.archiveRevision),archiveTargetEntryId:entry.entryId};
+    const handle=await recovery.createGenerationRecovery({origin,mode:'inbox',settingsIdentity:'fixture',draftId:'r8460-mail',pageId:'inbox',
+      contentSnapshot:{fields:{description:'原人设'},memoryBank:memory,contentSettings:{},contentInputs:{}},
+      save:async()=>true});
+    recovery.attachGenerationRecovery(origin,handle);
+    await recovery.withRecoverySegment('本地测试请求',{origin,mode:'inbox',taskKey:'letter:one'},x=>x,async(p,o,accept)=>{await accept({text:'付费成功段原文'});return {text:'付费成功段原文'};});
+    try { await recovery.withRecoverySegment('本地失败请求',{origin,mode:'inbox',taskKey:'letter:two'},x=>x,async()=>{throw Object.assign(Error('<html>test proxy response</html>'),{code:'RMT_RESPONSE_HTML',status:502});}); } catch {}
+    handle.journal.operation={kind:'mode',mode:'inbox'};
+    const saved=recovery.generationRecoverySnapshot(handle);
+    const stored=structuredClone(formal);
+    stored[cache.GENERATION_DRAFTS_CACHE_KEY]={version:1,records:{'r8460-mail':{status:'open',journal:saved}}};
+    await backup.seedArchiveBackup(entry,memory,stored,{replaceInvalidCache:true});
+    host.chatMetadata[constants.CACHE_KEY]=stored;
+    host.characters[0].description='同一个角色修改过的人设';
+    state.activeArchiveSnapshot=null;state.activeArchiveReadOnly=false;
+    overlay.showChooser();tasks.hideTaskCenter();tasks.handleTaskCenterAction('tasks');
+    print('同角色编辑后草稿已准备，原信仍在；可操作导出/放弃。');
+ } catch(e) {print('ERROR: '+e.message);}
+};
+document.querySelector('#fixture-orphan').onclick=async()=>{
+ try {
+    const origin=contextApi.captureTaskOrigin(host,memory.archiveRevision);
+    await archiveDrafts.discardArchiveRecovery(origin);
+    await archiveDrafts.beginArchiveRecovery({origin,operation:'profile',sourceIdentity:'fixture',sourceFragments:['旧来源'],settingsIdentity:'fixture'});
+    state.busy=false;state.activeArchiveSnapshot=null;state.activeArchiveReadOnly=false;
+    overlay.showChooser();tasks.hideTaskCenter();tasks.handleTaskCenterAction('tasks');
+    print('模拟失败后残留 active 标记。点击当前档案内“放弃整理草稿”验证。');
+ } catch(e) {print('ERROR: '+e.message);}
+};
+await library.showArchiveLibrary();
+</script></html>

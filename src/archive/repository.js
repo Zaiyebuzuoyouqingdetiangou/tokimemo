@@ -1990,8 +1990,16 @@ function currentPendingArchiveSave(context) {
 
 // The existing explicit discard confirmation owns permission. Remove the exact
 // pending archive records first so a later chat-open flush cannot resurrect them.
-export function discardCurrentArchiveImportRecovery(context = core_context.currentCharacterGuard()) {
-    if (runtimeState.busy || core_requestCoordinator.hasGenerationTasks()) return false;
+export async function discardCurrentArchiveImportRecovery(context = core_context.currentCharacterGuard()) {
+    const origin = core_context.captureTaskOrigin(context, getImportedMemory(context)?.archiveRevision || '');
+    // Stop only this chat's archive owners, and let their final writes settle.
+    // A different module being busy is not a reason to trap an abandoned draft.
+    const owners = core_requestCoordinator.queryParticipantGenerationTasks(context)
+        .filter(task => ['archive-import', 'archive-profile'].includes(task.kind));
+    await core_requestCoordinator.cancelParticipantGenerationTasks(owners.map(task => task.id));
+    if (!core_context.deferredCommitOriginMatchesContext(origin, core_context.getContext())) {
+        throw new DOMException('Archive discard scope changed', 'AbortError');
+    }
     for (const [key, bucket] of runtimeState.deferredChatCommits) {
         for (const item of Array.isArray(bucket) ? bucket.slice() : []) {
             if (item?.kind !== 'archive' || !core_context.deferredCommitOriginMatchesContext(item.origin, context)) continue;
@@ -2001,7 +2009,7 @@ export function discardCurrentArchiveImportRecovery(context = core_context.curre
             }
         }
     }
-    return archive_importRecovery.discardArchiveRecovery(core_context.captureTaskOrigin(context, getImportedMemory(context)?.archiveRevision || ''));
+    return archive_importRecovery.discardArchiveRecovery(origin);
 }
 
 async function retryCurrentArchiveSave(context, taskTrace) {

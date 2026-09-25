@@ -1330,7 +1330,7 @@ export async function exportSavedGeneration(mode, options = {}) {
         throw new DOMException('Recovery export scope changed', 'AbortError');
     }
     const journal = core_cache.loadGenerationRecovery(mode, context, snapshot?.cache,
-        { ...(options.draftId ? { draftId: options.draftId } : {}), ...(options.pageId ? { pageId: options.pageId } : {}) });
+        { ...(options.draftId ? { draftId: options.draftId, intent: 'inspect' } : {}), ...(options.pageId ? { pageId: options.pageId } : {}) });
     if (!journal) throw generation_recovery.generationRecoveryMismatch('record');
     const exported = generation_recovery.exportGenerationRecovery(journal);
     // Replies held in-page because the journal's existing total capacity rejected
@@ -1344,24 +1344,35 @@ export async function exportSavedGeneration(mode, options = {}) {
 
 export async function discardSavedGeneration(mode, options = {}) {
     if (!Object.values(core_constants.MODE).includes(mode)) return;
-    if (runtimeState.busy || core_requestCoordinator.hasGenerationTasks() || runtimeState.activeModeBuildScopes.size) {
-        globalThis.toastr?.info?.('请等当前生成任务结束后，再放弃未提交草稿。', '心迹回廊'); return;
-    }
     const snapshot = runtimeState.activeArchiveSnapshot;
     if (snapshot?.backupOnly) return;
     const opts = snapshot ? archive_library.archiveTargetGenerationOptions(snapshot) : {};
     const context = opts.context || core_context.currentCharacterGuard();
     const bank = archive_repository.requireArchive(context);
     const retained = core_cache.loadGenerationRecovery(mode, context, opts.archiveTarget?.cache,
-        { ...(options.draftId ? { draftId: options.draftId } : {}), ...(options.pageId ? { pageId: options.pageId } : {}) });
-    if (!retained) return;
-    if (!ui_overlay.confirmExplicitAction('放弃这轮未提交草稿？', '仅清除此轮分段恢复记录，不删除已保存的模块、正式记忆或图片。未提交的成功分段也会放弃，不能恢复；不会自动重新生成。终端原有的逐 App 草稿另行保留。', { destructive: true })) return;
+        { ...(options.draftId ? { draftId: options.draftId, intent: 'inspect' } : {}), ...(options.pageId ? { pageId: options.pageId } : {}) });
+    if (!retained) throw core_text.safeUserError('这份草稿已不在当前档案，请重新打开任务列表查看。', 'RMT_RECOVERY_NOT_FOUND');
+    if (!ui_overlay.confirmExplicitAction('放弃这轮未提交草稿？', '如这项任务还在生成，将先停止它。仅清除此轮分段恢复记录，不删除已保存的模块、正式记忆或图片。未提交的成功分段也会放弃，不能恢复；不会自动重新生成。终端原有的逐 App 草稿另行保留。', { destructive: true })) return;
     const origin = { ...core_context.captureTaskOrigin(context, bank.archiveRevision), archiveTargetEntryId: opts.archiveTarget?.entryId || '' };
+    const owners = core_requestCoordinator.queryParticipantGenerationTasks(context).filter(task =>
+        task.mode === mode && (task.pageId === retained.pageId || task.pageIds.includes(retained.pageId))
+        && (task.origin?.archiveTargetEntryId || '') === origin.archiveTargetEntryId);
+    await core_requestCoordinator.cancelParticipantGenerationTasks(owners.map(task => task.id));
+    if (!core_context.runtimeLifecycleStillCurrent(origin.lifecycleEpoch)
+        || (snapshot ? runtimeState.activeArchiveSnapshot !== snapshot : !core_context.isCurrentTaskOrigin(origin))) {
+        throw new DOMException('Recovery discard scope changed', 'AbortError');
+    }
     origin.generationRecoveryDraftId = retained.draftId;
-    await core_cache.saveGenerationRecovery(context, bank, mode, null, origin, { ...opts, draftId: retained.draftId, discardDraft: true });
+    const saved = await core_cache.saveGenerationRecovery(context, bank, mode, null, origin, { ...opts, draftId: retained.draftId, discardDraft: true });
+    if (!saved) throw core_text.safeUserError('草稿删除尚未保存成功，原记录仍保留，请重试。', 'RMT_RECOVERY_DISCARD_STORAGE');
     generation_recovery.discardGenerationRecoveryHeldReplies(retained.identity, retained.identity?.mode || mode);
-    if (snapshot) await ui_overlay.refreshArchiveTargetSnapshotView(snapshot.entryId);
-    else ui_overlay.showChooser();
+    if (core_context.runtimeLifecycleStillCurrent(origin.lifecycleEpoch)
+        && (snapshot ? runtimeState.activeArchiveSnapshot === snapshot : core_context.isCurrentTaskOrigin(origin))) {
+        if (snapshot) await ui_overlay.refreshArchiveTargetSnapshotView(snapshot.entryId);
+        else ui_overlay.showChooser();
+    }
+    globalThis.toastr?.success?.('这份未提交草稿已放弃，已保存内容仍保留。', '心迹回廊');
+    return true;
 }
 
 export async function generateMode(mode, options = {}) {

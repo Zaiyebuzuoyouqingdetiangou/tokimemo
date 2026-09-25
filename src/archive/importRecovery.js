@@ -13,6 +13,8 @@ export const ARCHIVE_RECOVERY_PAGE_NOTICE = '档案整理草稿仅本页保留�
 export const ARCHIVE_RECOVERY_MAX_DRAFTS = 4;
 const drafts = new Map();
 const tickets = new WeakSet();
+// Explicit discard revokes old owners even if durable deletion later fails.
+const discardedEntries = new WeakSet();
 const scopes = new Map();
 const lanes = new Map();
 const loaded = new Set();
@@ -336,16 +338,16 @@ export async function beginArchiveRecovery({ origin, operation = 'import', sourc
     // Here it is ONLY a draft fingerprint, never an origin for archive/cache writes.
     // An initial import has no bank and must remain that way until normal commit.
     const recoveryOrigin = { ...origin, archiveRevision: `archive-draft:${sourceHash}` };
-    const entry = existing || { key: storageKey, operation, sourceHash, fullRebuild: !!fullRebuild, stage: 'segments', journal: null, active: false,
+    const entry = (existing && (discardedEntries.has(existing) ? { ...existing, active: false } : existing)) || { key: storageKey, operation, sourceHash, fullRebuild: !!fullRebuild, stage: 'segments', journal: null, active: false,
         ...(priorResult ? { archiveResult: structuredClone(priorResult), draftId: inheritedDraftId } : {}) };
     let attached = false;
-    const stillCurrent = () => (!attached || drafts.get(key) === entry) && assertCurrent() !== false;
+    const stillCurrent = () => !discardedEntries.has(entry) && (!attached || drafts.get(key) === entry) && assertCurrent() !== false;
     const handle = await recovery.createGenerationRecovery({ origin: recoveryOrigin,
         mode: operation === 'import' ? 'archive-import' : 'archive-profile', settingsIdentity, pageOnly: false,
         ...(!existing && inputs?.taskInputV1 ? { contentSnapshot: { version: 1, archiveInputsHash: inputsDigest(inputs) } } : {}),
         existing: entry.journal, continueRequested: !!existing, assertCurrent: stillCurrent, onProgress,
         save: async journal => {
-            if (drafts.get(key) !== entry) throw new DOMException('Archive draft cleared', 'AbortError');
+            if (discardedEntries.has(entry) || drafts.get(key) !== entry) throw new DOMException('Archive draft cleared', 'AbortError');
             entry.journal = journal;
             entry.durable = false;
             return saveScope(storageKey);
@@ -382,13 +384,18 @@ export async function resumeArchiveImportProfile({ origin, draftId = '', setting
         : drafts.has(key) ? [key, drafts.get(key)] : null;
     if (!found || !(found[1].stage === 'profile-only' || found[1].stage === 'archive-result' && found[1].profilePending)
         || !inputsMatchJournal(found[1])) throw incompatible();
-    const [recordKey, entry] = found;
+    const [recordKey, previousEntry] = found;
+    const entry = discardedEntries.has(previousEntry) ? { ...previousEntry, active: false } : previousEntry;
     if (entry.active) throw text.safeUserError('这份简介正在处理，请等当前请求结束。', 'RMT_RECOVERY_BUSY');
     const recoveryOrigin = { ...origin, ...entry.journal.identity };
-    const stillCurrent = () => drafts.get(recordKey) === entry && assertCurrent() !== false;
+    const stillCurrent = () => !discardedEntries.has(entry) && drafts.get(recordKey) === entry && assertCurrent() !== false;
+    if (entry !== previousEntry) drafts.set(recordKey, entry);
     const handle = await recovery.createGenerationRecovery({ origin: recoveryOrigin, mode: 'archive-import',
         existing: entry.journal, continueRequested: true, settingsIdentity, assertCurrent: stillCurrent, onProgress,
-        save: async journal => { entry.journal = journal; entry.durable = false; return saveScope(key); } });
+        save: async journal => {
+            if (!stillCurrent()) throw new DOMException('Archive draft cleared', 'AbortError');
+            entry.journal = journal; entry.durable = false; return saveScope(key);
+        } });
     entry.active = true;
     recovery.attachGenerationRecovery(recoveryOrigin, handle);
     const ticket = { key: recordKey, storageKey: key, entry, origin: recoveryOrigin, handle, assertCurrent: stillCurrent, released: false };
@@ -397,7 +404,7 @@ export async function resumeArchiveImportProfile({ origin, draftId = '', setting
 }
 
 export async function retainCompletedArchiveProfile(ticket, profile, sourceMemory) {
-    if (!tickets.has(ticket) || ticket.released || drafts.get(ticket.key) !== ticket.entry) throw incompatible();
+    if (!tickets.has(ticket) || ticket.released || discardedEntries.has(ticket.entry) || drafts.get(ticket.key) !== ticket.entry) throw incompatible();
     ticket.entry.profileResult = { profile: structuredClone(profile), sourceMemory: structuredClone(sourceMemory), completedAt: Date.now() };
     if (ticket.entry.archiveResult) {
         Object.assign(ticket.entry.archiveResult.memoryBank, { archiveName: profile.archiveName,
@@ -410,7 +417,7 @@ export async function retainCompletedArchiveProfile(ticket, profile, sourceMemor
 }
 
 export async function retainCompletedArchiveImport(ticket, memoryBank, { sourceMemory = null, profilePending = false, baseMemoryMissing = false } = {}) {
-    if (!tickets.has(ticket) || ticket.released || drafts.get(ticket.key) !== ticket.entry) throw incompatible();
+    if (!tickets.has(ticket) || ticket.released || discardedEntries.has(ticket.entry) || drafts.get(ticket.key) !== ticket.entry) throw incompatible();
     ticket.entry.archiveResult = { memoryBank: structuredClone(memoryBank),
         sourceMemory: sourceMemory ? structuredClone(sourceMemory) : null, completedAt: Date.now(), baseMemoryMissing };
     ticket.entry.profileMemory = structuredClone(Object.fromEntries(['version','chatId','archiveRevision','characterName','userName','memories']
@@ -422,7 +429,7 @@ export async function retainCompletedArchiveImport(ticket, memoryBank, { sourceM
 }
 
 export async function requestArchiveRecoverySegment(ticket, slot, prompt, options, validator) {
-    if (!tickets.has(ticket) || ticket.released || drafts.get(ticket.key) !== ticket.entry || !ticket.entry.active) throw incompatible();
+    if (!tickets.has(ticket) || ticket.released || discardedEntries.has(ticket.entry) || drafts.get(ticket.key) !== ticket.entry || !ticket.entry.active) throw incompatible();
     const checked = async raw => {
         taskTrace.beginStage(options?.taskTrace, 'validate');
         const result = await validator(raw);
@@ -444,7 +451,7 @@ export async function requestArchiveRecoverySegment(ticket, slot, prompt, option
 }
 
 export function stageArchiveRecoveryCommit(ticket, revision, { profilePending = false, profileMemory = null } = {}) {
-    if (!tickets.has(ticket) || ticket.released || drafts.get(ticket.key) !== ticket.entry || !revision) return false;
+    if (!tickets.has(ticket) || ticket.released || discardedEntries.has(ticket.entry) || drafts.get(ticket.key) !== ticket.entry || !revision) return false;
     ticket.entry.stage = 'awaiting-commit';
     ticket.entry.committedRevision = String(revision);
     ticket.entry.profilePending = !!profilePending;
@@ -457,7 +464,7 @@ export function stageArchiveRecoveryCommit(ticket, revision, { profilePending = 
 }
 
 export function finishArchiveProfileRecovery(ticket, committedOrigin) {
-    if (!tickets.has(ticket) || ticket.released || drafts.get(ticket.key) !== ticket.entry) return false;
+    if (!tickets.has(ticket) || ticket.released || discardedEntries.has(ticket.entry) || drafts.get(ticket.key) !== ticket.entry) return false;
     drafts.delete(ticket.key);
     // Only this exact task finished. A separately selected/paused profile does
     // not own another import's paid cover checkpoint, even at the same revision.
@@ -485,14 +492,18 @@ export function clearArchiveRecovery(origin, operation = null) {
 }
 
 // Explicit discard awaits the tombstone; failed persistence restores visible data.
-export async function clearArchiveRecoveryDurably(origin, operation = null) {
+export async function clearArchiveRecoveryDurably(origin, operation = null, { explicitDiscard = false } = {}) {
     for (const kind of operation ? [operation] : ['import','profile']) {
         await hydrateArchiveRecovery(origin, kind);
         const key = draftKey(origin, kind);
         if (!key) continue;
         if (lanes.has(key)) await lanes.get(key).catch(() => {});
         const previous = [...drafts].filter(([id]) => id === key || id.startsWith(`${key}:paused:`));
-        if (previous.some(([,entry]) => entry.active)) throw text.safeUserError('当前请求尚未结束，草稿没有清除。', 'RMT_RECOVERY_BUSY');
+        if (!explicitDiscard && previous.some(([,entry]) => entry.active)) throw text.safeUserError('当前请求尚未结束，草稿没有清除。', 'RMT_RECOVERY_BUSY');
+        if (explicitDiscard) for (const [, entry] of previous) {
+            discardedEntries.add(entry);
+            entry.active = false;
+        }
         for (const [id] of previous) drafts.delete(id);
         try { await saveScope(key); }
         catch (error) { for (const [id,entry] of previous) drafts.set(id,entry); throw error; }
@@ -501,5 +512,5 @@ export async function clearArchiveRecoveryDurably(origin, operation = null) {
 }
 
 export function discardArchiveRecovery(origin, operation = null) {
-    return clearArchiveRecoveryDurably(origin, operation);
+    return clearArchiveRecoveryDurably(origin, operation, { explicitDiscard: true });
 }

@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
-// Source modules: 174
-// Source SHA-256: f414e007140b77db90991ee173094389721000d20dd12fca52034d678759a813
+// Source modules: 175
+// Source SHA-256: a43fcd7412516bffb45d77981636e503ec7e0b09648ce84050bd44ede4bef79f
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_backupStore_js = Object.create(null);
@@ -159,6 +159,7 @@ const __m_ui_pastLivesView_js = Object.create(null);
 const __m_ui_phoneView_js = Object.create(null);
 const __m_ui_postcardDesignView_js = Object.create(null);
 const __m_ui_readingStyles_js = Object.create(null);
+const __m_ui_recoveryAction_js = Object.create(null);
 const __m_ui_recoveryView_js = Object.create(null);
 const __m_ui_roomInterior_js = Object.create(null);
 const __m_ui_roomObjectDrawing_js = Object.create(null);
@@ -470,7 +471,7 @@ const SAFE_ERROR_CODE_MESSAGES = Object.freeze({
     RMT_MANUAL_API_URL: '手动 API 地址无效；请检查地址，并把 Key、Token 或密码放在独立凭据输入框中。',
     RMT_MANUAL_API_TRANSPORT: '远程手动 API 必须使用 HTTPS；只有本机地址可以使用 HTTP。',
     RMT_MANUAL_RESPONSE_TOO_LARGE: '模型服务返回内容过大，已停止读取。',
-    RMT_RESPONSE_HTML: '上游返回了非 API 的 HTML 页面；响应正文已隐藏。',
+    RMT_RESPONSE_HTML: '模型服务或代理返回了网页，没有返回 API 正文；请检查接口地址和服务状态后重试。已完成内容保留。',
     RMT_MANUAL_INVALID_JSON: '接口响应封装无法解析；尚不能判断是模型正文格式、代理错误页或传输损坏，响应正文已隐藏。',
     RMT_MANUAL_HTTP: '手动 API 请求失败；请检查手动配置与服务状态。',
     RMT_MANUAL_PROVIDER_ERROR: '手动 API 返回了错误状态；响应详情已隐藏，请检查服务配置后重试。',
@@ -498,6 +499,18 @@ const SAFE_ERROR_CODE_MESSAGES = Object.freeze({
     RMT_CONNECTION_NETWORK: '无法连接模型服务；请检查地址、网络、代理与服务状态后重试。',
     RMT_REQUEST_TIMEOUT: '模型请求超时，已停止等待并释放任务位；请稍后重试。',
     RMT_HEART_INCOMPLETE: '角色互动的条目、剧本句数或字数不完整；旧内容保留。',
+    RMT_INBOX_CLOSED: '邮箱已关闭，请重新打开后操作。',
+    RMT_INBOX_TARGET_CHANGED: '聊天、角色或档案已切换，请重新打开对应邮箱；原信件保留。',
+    RMT_INBOX_READ_ONLY: '当前正在查看只读邮箱，请返回可编辑档案后操作。',
+    RMT_INBOX_SAVE_FAILED: '未能确认这次邮箱操作已保存，原信件仍保留，请重试。',
+    RMT_INBOX_INCOMPLETE: '来信未完整返回；已完成内容保留，可重试未完成的信件。',
+    RMT_INBOX_SLOT_INVALID: '返回的来信类型重复或缺失；原信件保留，可重试。',
+    RMT_INBOX_RELATIONSHIP: '来信称呼与两人当前关系不一致；原信件保留，可重试。',
+    RMT_INBOX_HISTORY: '来信把没有依据的共同往事写成了事实；原信件保留，可重试。',
+    RMT_INBOX_STRUCTURE: '本次返回的邮箱结构无法读取；原信件保留，可重试。',
+    RMT_INBOX_IDENTITY: '本次返回的来信标识重复或缺失；原信件保留，可重试。',
+    RMT_INBOX_POSTCARD_SOURCE: '这张明信片不属于当前档案，请打开对应的出行路线。',
+    RMT_INBOX_POSTCARD_MISSING: '这处路线还没有可收取的明信片。',
     RMT_PHONE_NO_CONVERSATION: '通讯没有可保存的对话；已完成的其他应用保留。',
     RMT_RECOVERY_SOURCE_SNAPSHOT_MISSING: '旧草稿缺少完整的冻结来源；请先导出保留草稿，再单独重新生成未完成内容，已完成的其他内容保留。',
     RMT_SEGMENT_VALIDATION: '模型结果没有通过本地完整性校验；旧内容未被覆盖。',
@@ -519,6 +532,8 @@ const SAFE_ERROR_CODE_MESSAGES = Object.freeze({
     RMT_CACHE_CAS_CONFLICT: '档案已被其他操作更新；本次旧结果没有覆盖新内容，请检查当前档案后再保存。',
     RMT_RECOVERY_IDENTITY: '缺少当前档案身份，本次未发送；请重新打开对应档案。',
     RMT_RECOVERY_BUSY: '这一段正在生成，请等当前请求结束。',
+    RMT_RECOVERY_NOT_FOUND: '这份草稿已不在当前档案，请重新打开任务列表查看。',
+    RMT_RECOVERY_DISCARD_STORAGE: '草稿删除尚未保存成功，原记录仍保留，请重试。',
     RMT_RECOVERY_FAILED: '具体原因未记录；旧内容保留，可重试。',
     RMT_RECOVERY_VALIDATION_CHANGED: '已保存片段暂未通过当前校验；草稿仍保留，没有重新收费生成。',
     RMT_RECOVERY_STORAGE: '这一段已返回，但浏览器没有保存成功；已停止后续生成，请检查存储后重试。',
@@ -12623,6 +12638,8 @@ const narrative = __m_core_narrativeAuthority_js;
 const generation = __m_generation_client_js;
 const relationshipSafety = __m_core_relationshipSafety_js;
 const participants = __m_core_participants_js;
+const cache = __m_core_cache_js;
+
 
 
 
@@ -12647,9 +12664,40 @@ function localDay(date) {
 function frozenParticipantNames(memory) {
     return participants.resolveStoryIdentities(memory).ownerNames.map(name => clean(name, 120)).filter(Boolean);
 }
+function inboxOwnerOrigin(context, memory) {
+    const origin = contextApi.captureTaskOrigin(context, memory.archiveRevision);
+    return Object.fromEntries(['characterKey', 'characterId', 'characterAvatar', 'chatId'].map(key => [key, origin[key]]));
+}
+function inboxOwnerMatchesContext(session, context, canonical = null) {
+    if (!session?.ownerKey) return true;
+    const origin = session.ownerOrigin;
+    if (origin && (origin.characterId !== String(context?.characterId ?? '')
+        || origin.chatId !== contextApi.comparableChatId(contextApi.getChatId(context)))) return false;
+    if (origin?.characterAvatar) return origin.characterAvatar === contextApi.currentCharacterAvatar(context);
+    if (session.ownerKey === contextApi.currentCharacterRuntimeKey(context)) return true;
+    // Legacy mail stored a card-content hash, not the stable avatar. Only the
+    // mailbox loaded from this current archive may attest that old hash. A slot
+    // alone or a similarly named mailbox is not a substitute for that record.
+    const slot = /\u001fcharacter:([^\u001f]+)$/u.exec(session.ownerKey)?.[1];
+    return slot === String(context?.characterId ?? '') && canonical?.kind === 'inbox'
+        && ['ownerKey', 'chatId', 'archiveRevision', 'sender', 'recipient'].every(key => canonical[key] === session[key])
+        && canonical.chatId === contextApi.comparableChatId(contextApi.getChatId(context));
+}
+function inboxGenerationOwner(previous, context, memory) {
+    const current = { ownerKey: contextApi.currentCharacterRuntimeKey(context), ownerOrigin: inboxOwnerOrigin(context, memory) };
+    if (!previous?.ownerKey) return current;
+    if (!inboxOwnerMatchesContext(previous, context)
+        && !inboxOwnerMatchesContext(previous, context, cache.loadSession('inbox', { context, memoryBank: memory }))) {
+        throw text.safeUserError('聊天或角色已切换，请重新打开对应邮箱。', 'RMT_INBOX_TARGET_CHANGED');
+    }
+    // Keep the canonical key across ordinary card edits so the durable merge
+    // sees the same mailbox. No letter or frozen request is rebuilt here.
+    return { ownerKey: previous.ownerKey, ownerOrigin: previous.ownerOrigin || current.ownerOrigin };
+}
 function emptyInbox(memory, context = null) {
     return { kind: 'inbox', inboxVersion: INBOX_VERSION, chatId: memory.chatId, archiveRevision: memory.archiveRevision,
         ownerKey: context ? contextApi.currentCharacterRuntimeKey(context) : '', sender: clean(memory.characterName, 120),
+        ...(context ? { ownerOrigin: inboxOwnerOrigin(context, memory) } : {}),
         participantNames: frozenParticipantNames(memory), recipient: clean(memory.userName, 120), letters: [] };
 }
 function inboxPlan(memory, previous, date = new Date()) {
@@ -12693,22 +12741,22 @@ function inboxRelationshipAllows(prose, memory, options = {}) {
 }
 function normalizeInboxLetters(raw, memory, plan, date = new Date(), options = {}) {
     const values = raw?.letters;
-    if (!Array.isArray(values) || values.length !== plan.length) throw new Error('来信未完整返回，请只补齐计划中的信件。');
+    if (!Array.isArray(values) || values.length !== plan.length) throw text.safeUserError('来信未完整返回，请只补齐计划中的信件。', 'RMT_INBOX_INCOMPLETE');
     const sourceText = ids => (memory.memories || []).filter(item => ids.includes(item.id)).map(item => [item.title, item.summary, ...(item.anchors || [])].join('\n')).join('\n');
     const letters = plan.map(item => {
         const matches = values.filter(value => value?.slot === item.slot);
-        if (matches.length !== 1) throw new Error('来信类型重复或缺失。');
+        if (matches.length !== 1) throw text.safeUserError('来信类型重复或缺失。', 'RMT_INBOX_SLOT_INVALID');
         const value = matches[0];
         const completeText = value => typeof value === 'string' ? value.replace(/\r\n?/g, '\n').replace(/\u0000/g, '') : '';
         const title = completeText(value.title), greeting = completeText(value.greeting), body = completeText(value.body), closing = completeText(value.closing);
-        if (!title.trim() || !body.trim()) throw new Error('来信正文还未写完。');
+        if (!title.trim() || !body.trim()) throw text.safeUserError('来信正文还未写完。', 'RMT_INBOX_INCOMPLETE');
         if (!inboxRelationshipAllows([title, greeting, body, closing].join('\n'), memory, {
             ...options, controlledEvidence: options.controlledEvidence || options.characterEvidence || '',
-        })) throw new Error('称呼超出了两人当前关系，请按真实关系写来信。');
+        })) throw text.safeUserError('称呼超出了两人当前关系，请按真实关系写来信。', 'RMT_INBOX_RELATIONSHIP');
         const historic = [title, greeting, body, closing].flatMap(part => part.split(/[。！？!?\n]+/u))
             .filter(part => narrative.narrativeClaimsSharedHistory(part, { userName: memory.userName }));
         if (historic.some(part => !sourceText(item.sourceMemoryIds).includes(part.trim()))
-            || (historic.length && !item.sourceMemoryIds.length)) throw new Error('来信把未有依据的共同往事写成了事实；请写当下心情或未来邀请。');
+            || (historic.length && !item.sourceMemoryIds.length)) throw text.safeUserError('来信把未有依据的共同往事写成了事实；请写当下心情或未来邀请。', 'RMT_INBOX_HISTORY');
         const letterText = [title, greeting, body, closing].join('\n');
         return { id: 'mail-' + digest(item.eventKey), eventKey: item.eventKey, type: item.slot,
             title, greeting, body, closing, createdAt: date.getTime(), sourceArchiveRevision: memory.archiveRevision,
@@ -12752,17 +12800,18 @@ function postcardLetterKey(letter) {
         sourceMemoryIds: letter.sourceMemoryIds, sourceMemoryAnchor: letter.sourceMemoryAnchor });
 }
 function mergeInboxLatest(latest, incoming) {
-    if (!incoming || incoming.kind !== 'inbox' || !Array.isArray(incoming.letters)) throw new Error('邮箱结构不可读取。');
+    if (!incoming || incoming.kind !== 'inbox' || !Array.isArray(incoming.letters)) throw text.safeUserError('邮箱结构不可读取。', 'RMT_INBOX_STRUCTURE');
     if (latest?.kind === 'inbox' && (latest.chatId !== incoming.chatId || latest.archiveRevision !== incoming.archiveRevision || (latest.ownerKey && incoming.ownerKey && latest.ownerKey !== incoming.ownerKey)))
-        throw new Error('邮箱所属聊天或档案版本已变化。');
+        throw text.safeUserError('邮箱所属聊天或档案版本已变化。', 'RMT_INBOX_TARGET_CHANGED');
     const merged = structuredClone(latest?.kind === 'inbox' ? latest : { ...incoming, letters: [] });
+    if (!merged.ownerOrigin && incoming.ownerOrigin) merged.ownerOrigin = structuredClone(incoming.ownerOrigin);
     const keys = new Set(merged.letters.map(item => item.eventKey));
     const postcards = new Set(merged.letters.map(postcardLetterKey).filter(Boolean));
     const ids = new Set(merged.letters.map(item => item.id));
     for (const letter of incoming.letters) {
         const postcardKey = postcardLetterKey(letter);
         if (keys.has(letter.eventKey) || (postcardKey && postcards.has(postcardKey))) continue;
-        if (!letter.eventKey || !letter.id || ids.has(letter.id)) throw new Error('来信身份冲突，已有信件保持不变。');
+        if (!letter.eventKey || !letter.id || ids.has(letter.id)) throw text.safeUserError('来信身份冲突，已有信件保持不变。', 'RMT_INBOX_IDENTITY');
         const saved = structuredClone(letter);
         // The next sheet changes colour without recolouring already saved mail.
         if (!saved.paperTone) saved.paperTone = ['cream', 'rose', 'sky', 'sage', 'lilac', 'peach'][merged.letters.length % 6];
@@ -12775,10 +12824,11 @@ async function generateInbox(context, memory, origin, taskKey, previous, options
     const date = options.date || new Date();
     const plan = inboxPlan(memory, previous, date);
     if (!plan.length) return previous || emptyInbox(memory);
+    const owner = inboxGenerationOwner(previous, context, memory);
     const fresh = await generation.requestValidatedSegment(inboxPrompt(memory, plan), '正在收取寄给你的信…',
         { context, contextEnvelope: options.presentationContext?.contextEnvelope, origin, taskKey, mode: 'inbox', maxTokens: 4000, background: true },
         raw => normalizeInboxLetters(raw, memory, plan, date, { characterEvidence: options.presentationContext?.characterEvidence || '' }));
-    fresh.ownerKey = contextApi.currentCharacterRuntimeKey(context);
+    Object.assign(fresh, owner);
     return mergeInboxLatest(previous, fresh);
 }
 
@@ -12789,6 +12839,7 @@ function projectInboxProgress({ segments, memoryBank, context, previousSession, 
     if (!Number.isFinite(date.getTime())) return null;
     const plan = inboxPlan(memoryBank, previousSession, date);
     const incoming = emptyInbox(memoryBank, context);
+    Object.assign(incoming, inboxGenerationOwner(previousSession, context, memoryBank));
     const seen = new Set();
     for (const value of segment.items('/letters')) {
         const slot = plan.find(item => item.slot === value?.slot);
@@ -12805,11 +12856,11 @@ function projectInboxProgress({ segments, memoryBank, context, previousSession, 
 }
 function postcardInboxItem(location, travel, memory, date = new Date()) {
     if (travel?.chatId !== memory.chatId || travel?.archiveRevision !== memory.archiveRevision
-        || !travel.locations?.some(item => item.id === location?.id)) throw new Error('明信片不属于这份当前档案。');
+        || !travel.locations?.some(item => item.id === location?.id)) throw text.safeUserError('明信片不属于这份当前档案。', 'RMT_INBOX_POSTCARD_SOURCE');
     const original = travel.locations.find(item => item.id === location.id);
     const canonical = travel_mode.travelKeepsakeForItem(original);
     const card = canonical?.kind === 'postcard' ? { ...canonical, postmark: canonical.mark, stampLabel: canonical.emblem } : null;
-    if (!card?.body) throw new Error('这处路线还没有明信片。');
+    if (!card?.body) throw text.safeUserError('这处路线还没有明信片。', 'RMT_INBOX_POSTCARD_MISSING');
     const frozen = {};
     for (const key of ['id', 'name', 'region', 'summary', 'distanceLabel', 'sceneTheme', 'kind', 'basis'])
         frozen[key] = clean(original[key], key === 'summary' ? 1800 : key === 'id' ? 100 : 160);
@@ -12840,6 +12891,7 @@ function postcardInboxItem(location, travel, memory, date = new Date()) {
 }
 
 __m_modes_inbox_js.generateInbox = generateInbox;
+__m_modes_inbox_js.inboxOwnerMatchesContext = inboxOwnerMatchesContext;
 __m_modes_inbox_js.emptyInbox = emptyInbox;
 __m_modes_inbox_js.inboxPlan = inboxPlan;
 __m_modes_inbox_js.inboxPrompt = inboxPrompt;
@@ -18033,6 +18085,8 @@ const ARCHIVE_RECOVERY_PAGE_NOTICE = '档案整理草稿仅本页保留，请勿
 const ARCHIVE_RECOVERY_MAX_DRAFTS = 4;
 const drafts = new Map();
 const tickets = new WeakSet();
+// Explicit discard revokes old owners even if durable deletion later fails.
+const discardedEntries = new WeakSet();
 const scopes = new Map();
 const lanes = new Map();
 const loaded = new Set();
@@ -18356,16 +18410,16 @@ async function beginArchiveRecovery({ origin, operation = 'import', sourceIdenti
     // Here it is ONLY a draft fingerprint, never an origin for archive/cache writes.
     // An initial import has no bank and must remain that way until normal commit.
     const recoveryOrigin = { ...origin, archiveRevision: `archive-draft:${sourceHash}` };
-    const entry = existing || { key: storageKey, operation, sourceHash, fullRebuild: !!fullRebuild, stage: 'segments', journal: null, active: false,
+    const entry = (existing && (discardedEntries.has(existing) ? { ...existing, active: false } : existing)) || { key: storageKey, operation, sourceHash, fullRebuild: !!fullRebuild, stage: 'segments', journal: null, active: false,
         ...(priorResult ? { archiveResult: structuredClone(priorResult), draftId: inheritedDraftId } : {}) };
     let attached = false;
-    const stillCurrent = () => (!attached || drafts.get(key) === entry) && assertCurrent() !== false;
+    const stillCurrent = () => !discardedEntries.has(entry) && (!attached || drafts.get(key) === entry) && assertCurrent() !== false;
     const handle = await recovery.createGenerationRecovery({ origin: recoveryOrigin,
         mode: operation === 'import' ? 'archive-import' : 'archive-profile', settingsIdentity, pageOnly: false,
         ...(!existing && inputs?.taskInputV1 ? { contentSnapshot: { version: 1, archiveInputsHash: inputsDigest(inputs) } } : {}),
         existing: entry.journal, continueRequested: !!existing, assertCurrent: stillCurrent, onProgress,
         save: async journal => {
-            if (drafts.get(key) !== entry) throw new DOMException('Archive draft cleared', 'AbortError');
+            if (discardedEntries.has(entry) || drafts.get(key) !== entry) throw new DOMException('Archive draft cleared', 'AbortError');
             entry.journal = journal;
             entry.durable = false;
             return saveScope(storageKey);
@@ -18402,13 +18456,18 @@ async function resumeArchiveImportProfile({ origin, draftId = '', settingsIdenti
         : drafts.has(key) ? [key, drafts.get(key)] : null;
     if (!found || !(found[1].stage === 'profile-only' || found[1].stage === 'archive-result' && found[1].profilePending)
         || !inputsMatchJournal(found[1])) throw incompatible();
-    const [recordKey, entry] = found;
+    const [recordKey, previousEntry] = found;
+    const entry = discardedEntries.has(previousEntry) ? { ...previousEntry, active: false } : previousEntry;
     if (entry.active) throw text.safeUserError('这份简介正在处理，请等当前请求结束。', 'RMT_RECOVERY_BUSY');
     const recoveryOrigin = { ...origin, ...entry.journal.identity };
-    const stillCurrent = () => drafts.get(recordKey) === entry && assertCurrent() !== false;
+    const stillCurrent = () => !discardedEntries.has(entry) && drafts.get(recordKey) === entry && assertCurrent() !== false;
+    if (entry !== previousEntry) drafts.set(recordKey, entry);
     const handle = await recovery.createGenerationRecovery({ origin: recoveryOrigin, mode: 'archive-import',
         existing: entry.journal, continueRequested: true, settingsIdentity, assertCurrent: stillCurrent, onProgress,
-        save: async journal => { entry.journal = journal; entry.durable = false; return saveScope(key); } });
+        save: async journal => {
+            if (!stillCurrent()) throw new DOMException('Archive draft cleared', 'AbortError');
+            entry.journal = journal; entry.durable = false; return saveScope(key);
+        } });
     entry.active = true;
     recovery.attachGenerationRecovery(recoveryOrigin, handle);
     const ticket = { key: recordKey, storageKey: key, entry, origin: recoveryOrigin, handle, assertCurrent: stillCurrent, released: false };
@@ -18417,7 +18476,7 @@ async function resumeArchiveImportProfile({ origin, draftId = '', settingsIdenti
 }
 
 async function retainCompletedArchiveProfile(ticket, profile, sourceMemory) {
-    if (!tickets.has(ticket) || ticket.released || drafts.get(ticket.key) !== ticket.entry) throw incompatible();
+    if (!tickets.has(ticket) || ticket.released || discardedEntries.has(ticket.entry) || drafts.get(ticket.key) !== ticket.entry) throw incompatible();
     ticket.entry.profileResult = { profile: structuredClone(profile), sourceMemory: structuredClone(sourceMemory), completedAt: Date.now() };
     if (ticket.entry.archiveResult) {
         Object.assign(ticket.entry.archiveResult.memoryBank, { archiveName: profile.archiveName,
@@ -18430,7 +18489,7 @@ async function retainCompletedArchiveProfile(ticket, profile, sourceMemory) {
 }
 
 async function retainCompletedArchiveImport(ticket, memoryBank, { sourceMemory = null, profilePending = false, baseMemoryMissing = false } = {}) {
-    if (!tickets.has(ticket) || ticket.released || drafts.get(ticket.key) !== ticket.entry) throw incompatible();
+    if (!tickets.has(ticket) || ticket.released || discardedEntries.has(ticket.entry) || drafts.get(ticket.key) !== ticket.entry) throw incompatible();
     ticket.entry.archiveResult = { memoryBank: structuredClone(memoryBank),
         sourceMemory: sourceMemory ? structuredClone(sourceMemory) : null, completedAt: Date.now(), baseMemoryMissing };
     ticket.entry.profileMemory = structuredClone(Object.fromEntries(['version','chatId','archiveRevision','characterName','userName','memories']
@@ -18442,7 +18501,7 @@ async function retainCompletedArchiveImport(ticket, memoryBank, { sourceMemory =
 }
 
 async function requestArchiveRecoverySegment(ticket, slot, prompt, options, validator) {
-    if (!tickets.has(ticket) || ticket.released || drafts.get(ticket.key) !== ticket.entry || !ticket.entry.active) throw incompatible();
+    if (!tickets.has(ticket) || ticket.released || discardedEntries.has(ticket.entry) || drafts.get(ticket.key) !== ticket.entry || !ticket.entry.active) throw incompatible();
     const checked = async raw => {
         taskTrace.beginStage(options?.taskTrace, 'validate');
         const result = await validator(raw);
@@ -18464,7 +18523,7 @@ async function requestArchiveRecoverySegment(ticket, slot, prompt, options, vali
 }
 
 function stageArchiveRecoveryCommit(ticket, revision, { profilePending = false, profileMemory = null } = {}) {
-    if (!tickets.has(ticket) || ticket.released || drafts.get(ticket.key) !== ticket.entry || !revision) return false;
+    if (!tickets.has(ticket) || ticket.released || discardedEntries.has(ticket.entry) || drafts.get(ticket.key) !== ticket.entry || !revision) return false;
     ticket.entry.stage = 'awaiting-commit';
     ticket.entry.committedRevision = String(revision);
     ticket.entry.profilePending = !!profilePending;
@@ -18477,7 +18536,7 @@ function stageArchiveRecoveryCommit(ticket, revision, { profilePending = false, 
 }
 
 function finishArchiveProfileRecovery(ticket, committedOrigin) {
-    if (!tickets.has(ticket) || ticket.released || drafts.get(ticket.key) !== ticket.entry) return false;
+    if (!tickets.has(ticket) || ticket.released || discardedEntries.has(ticket.entry) || drafts.get(ticket.key) !== ticket.entry) return false;
     drafts.delete(ticket.key);
     // Only this exact task finished. A separately selected/paused profile does
     // not own another import's paid cover checkpoint, even at the same revision.
@@ -18505,14 +18564,18 @@ function clearArchiveRecovery(origin, operation = null) {
 }
 
 // Explicit discard awaits the tombstone; failed persistence restores visible data.
-async function clearArchiveRecoveryDurably(origin, operation = null) {
+async function clearArchiveRecoveryDurably(origin, operation = null, { explicitDiscard = false } = {}) {
     for (const kind of operation ? [operation] : ['import','profile']) {
         await hydrateArchiveRecovery(origin, kind);
         const key = draftKey(origin, kind);
         if (!key) continue;
         if (lanes.has(key)) await lanes.get(key).catch(() => {});
         const previous = [...drafts].filter(([id]) => id === key || id.startsWith(`${key}:paused:`));
-        if (previous.some(([,entry]) => entry.active)) throw text.safeUserError('当前请求尚未结束，草稿没有清除。', 'RMT_RECOVERY_BUSY');
+        if (!explicitDiscard && previous.some(([,entry]) => entry.active)) throw text.safeUserError('当前请求尚未结束，草稿没有清除。', 'RMT_RECOVERY_BUSY');
+        if (explicitDiscard) for (const [, entry] of previous) {
+            discardedEntries.add(entry);
+            entry.active = false;
+        }
         for (const [id] of previous) drafts.delete(id);
         try { await saveScope(key); }
         catch (error) { for (const [id,entry] of previous) drafts.set(id,entry); throw error; }
@@ -18521,7 +18584,7 @@ async function clearArchiveRecoveryDurably(origin, operation = null) {
 }
 
 function discardArchiveRecovery(origin, operation = null) {
-    return clearArchiveRecoveryDurably(origin, operation);
+    return clearArchiveRecoveryDurably(origin, operation, { explicitDiscard: true });
 }
 
 __m_archive_importRecovery_js.flushArchiveRecovery = flushArchiveRecovery;
@@ -31871,10 +31934,12 @@ async function createGenerationRecovery({ origin, mode, settingsIdentity, existi
                 journal.identity = { ...journal.identity, archiveRevision: identity.archiveRevision };
             }
             if ((journal.identity[key] ?? '') !== identity[key]) {
-                if (key === 'characterKey' && identity.characterAvatar
+                if (key === 'characterKey' && readGenerationContentSnapshot(journal) && identity.characterAvatar
                     && (journal.identity.characterId ?? '') === identity.characterId
                     && (journal.identity.characterAvatar ?? '') === identity.characterAvatar
                     && (journal.identity.chatId ?? '') === identity.chatId) {
+                    journal.sourceIdentity ||= structuredClone(journal.identity);
+                    journal.identity = { ...journal.identity, characterKey: identity.characterKey };
                     fingerprintDriftOnly = true;
                     continue;
                 }
@@ -42888,7 +42953,7 @@ async function exportSavedGeneration(mode, options = {}) {
         throw new DOMException('Recovery export scope changed', 'AbortError');
     }
     const journal = core_cache.loadGenerationRecovery(mode, context, snapshot?.cache,
-        { ...(options.draftId ? { draftId: options.draftId } : {}), ...(options.pageId ? { pageId: options.pageId } : {}) });
+        { ...(options.draftId ? { draftId: options.draftId, intent: 'inspect' } : {}), ...(options.pageId ? { pageId: options.pageId } : {}) });
     if (!journal) throw generation_recovery.generationRecoveryMismatch('record');
     const exported = generation_recovery.exportGenerationRecovery(journal);
     // Replies held in-page because the journal's existing total capacity rejected
@@ -42902,24 +42967,35 @@ async function exportSavedGeneration(mode, options = {}) {
 
 async function discardSavedGeneration(mode, options = {}) {
     if (!Object.values(core_constants.MODE).includes(mode)) return;
-    if (runtimeState.busy || core_requestCoordinator.hasGenerationTasks() || runtimeState.activeModeBuildScopes.size) {
-        globalThis.toastr?.info?.('请等当前生成任务结束后，再放弃未提交草稿。', '心迹回廊'); return;
-    }
     const snapshot = runtimeState.activeArchiveSnapshot;
     if (snapshot?.backupOnly) return;
     const opts = snapshot ? archive_library.archiveTargetGenerationOptions(snapshot) : {};
     const context = opts.context || core_context.currentCharacterGuard();
     const bank = archive_repository.requireArchive(context);
     const retained = core_cache.loadGenerationRecovery(mode, context, opts.archiveTarget?.cache,
-        { ...(options.draftId ? { draftId: options.draftId } : {}), ...(options.pageId ? { pageId: options.pageId } : {}) });
-    if (!retained) return;
-    if (!ui_overlay.confirmExplicitAction('放弃这轮未提交草稿？', '仅清除此轮分段恢复记录，不删除已保存的模块、正式记忆或图片。未提交的成功分段也会放弃，不能恢复；不会自动重新生成。终端原有的逐 App 草稿另行保留。', { destructive: true })) return;
+        { ...(options.draftId ? { draftId: options.draftId, intent: 'inspect' } : {}), ...(options.pageId ? { pageId: options.pageId } : {}) });
+    if (!retained) throw core_text.safeUserError('这份草稿已不在当前档案，请重新打开任务列表查看。', 'RMT_RECOVERY_NOT_FOUND');
+    if (!ui_overlay.confirmExplicitAction('放弃这轮未提交草稿？', '如这项任务还在生成，将先停止它。仅清除此轮分段恢复记录，不删除已保存的模块、正式记忆或图片。未提交的成功分段也会放弃，不能恢复；不会自动重新生成。终端原有的逐 App 草稿另行保留。', { destructive: true })) return;
     const origin = { ...core_context.captureTaskOrigin(context, bank.archiveRevision), archiveTargetEntryId: opts.archiveTarget?.entryId || '' };
+    const owners = core_requestCoordinator.queryParticipantGenerationTasks(context).filter(task =>
+        task.mode === mode && (task.pageId === retained.pageId || task.pageIds.includes(retained.pageId))
+        && (task.origin?.archiveTargetEntryId || '') === origin.archiveTargetEntryId);
+    await core_requestCoordinator.cancelParticipantGenerationTasks(owners.map(task => task.id));
+    if (!core_context.runtimeLifecycleStillCurrent(origin.lifecycleEpoch)
+        || (snapshot ? runtimeState.activeArchiveSnapshot !== snapshot : !core_context.isCurrentTaskOrigin(origin))) {
+        throw new DOMException('Recovery discard scope changed', 'AbortError');
+    }
     origin.generationRecoveryDraftId = retained.draftId;
-    await core_cache.saveGenerationRecovery(context, bank, mode, null, origin, { ...opts, draftId: retained.draftId, discardDraft: true });
+    const saved = await core_cache.saveGenerationRecovery(context, bank, mode, null, origin, { ...opts, draftId: retained.draftId, discardDraft: true });
+    if (!saved) throw core_text.safeUserError('草稿删除尚未保存成功，原记录仍保留，请重试。', 'RMT_RECOVERY_DISCARD_STORAGE');
     generation_recovery.discardGenerationRecoveryHeldReplies(retained.identity, retained.identity?.mode || mode);
-    if (snapshot) await ui_overlay.refreshArchiveTargetSnapshotView(snapshot.entryId);
-    else ui_overlay.showChooser();
+    if (core_context.runtimeLifecycleStillCurrent(origin.lifecycleEpoch)
+        && (snapshot ? runtimeState.activeArchiveSnapshot === snapshot : core_context.isCurrentTaskOrigin(origin))) {
+        if (snapshot) await ui_overlay.refreshArchiveTargetSnapshotView(snapshot.entryId);
+        else ui_overlay.showChooser();
+    }
+    globalThis.toastr?.success?.('这份未提交草稿已放弃，已保存内容仍保留。', '心迹回廊');
+    return true;
 }
 
 async function generateMode(mode, options = {}) {
@@ -46378,6 +46454,32 @@ async function openHandJournal() {
 __m_ui_handJournalView_js.openHandJournal = openHandJournal;
 __m_ui_handJournalView_js.journalSourceRoute = journalSourceRoute;
 __m_ui_handJournalView_js.journalPageHtml = journalPageHtml;
+}
+
+function __init_ui_recoveryAction_js() {
+// MODULE: ui/recoveryAction.js
+const text = __m_core_text_js;
+
+const pending = new Map();
+
+// Coalesce only the same in-flight action, including buttons replaced by a
+// render. No cooldown or retry quota: settling always makes it available again.
+function runRecoveryAction(button, key, operation, { label = '处理中…', title = '心迹回廊' } = {}) {
+    if (pending.has(key)) return pending.get(key);
+    const original = button?.textContent;
+    const wasDisabled = button?.disabled === true;
+    if (button) { button.disabled = true; button.textContent = label; button.setAttribute?.('aria-busy', 'true'); }
+    const task = Promise.resolve().then(operation).catch(error => {
+        if (error?.name !== 'AbortError') globalThis.toastr?.error?.(text.safeErrorSummary(error), title, { preventDuplicates: true });
+    }).finally(() => {
+        pending.delete(key);
+        if (button) { button.disabled = wasDisabled; button.textContent = original; button.removeAttribute?.('aria-busy'); }
+    });
+    pending.set(key, task);
+    return task;
+}
+
+__m_ui_recoveryAction_js.runRecoveryAction = runRecoveryAction;
 }
 
 function __init_archive_backupStore_js() {
@@ -50586,35 +50688,36 @@ function renderInbox() {
 // State changes use the same durable CAS as model output. Navigation never calls saveSession.
 function assertShownInboxTarget() {
     const shown = runtimeState.activeSession;
-    if (shown?.kind !== 'inbox' || runtimeState.activeMode !== 'inbox') throw new Error('邮箱已关闭。');
+    if (shown?.kind !== 'inbox' || runtimeState.activeMode !== 'inbox') throw text.safeUserError('邮箱已关闭。', 'RMT_INBOX_CLOSED');
     const snapshot = runtimeState.activeArchiveSnapshot;
     if (snapshot) {
         const source = cache.generationPageReadingSource(shown, 'inbox', snapshot.memory);
         if (shown.chatId !== snapshot.chatId || shown.archiveRevision !== snapshot.memory?.archiveRevision
-            || source.session.sender !== source.memoryBank?.characterName || source.session.recipient !== source.memoryBank?.userName) throw new Error('显示的邮箱与目标档案不一致。');
+            || source.session.sender !== source.memoryBank?.characterName || source.session.recipient !== source.memoryBank?.userName) throw text.safeUserError('显示的邮箱与目标档案不一致。', 'RMT_INBOX_TARGET_CHANGED');
         return;
     }
     const context = contextApi.currentCharacterGuard(), memory = repository.requireArchive(context);
     const source = cache.generationPageReadingSource(shown, 'inbox', memory);
     if (shown.chatId !== memory.chatId || shown.archiveRevision !== memory.archiveRevision
         || source.session.sender !== source.memoryBank.characterName || source.session.recipient !== source.memoryBank.userName
-        || (!source.source && shown.ownerKey && shown.ownerKey !== contextApi.currentCharacterRuntimeKey(context))) throw new Error('聊天或角色已切换，请重新打开对应邮箱。');
+        || (!source.source && !inbox.inboxOwnerMatchesContext(shown, context,
+            cache.loadSession('inbox', { context, memoryBank: memory, clone: true })))) throw text.safeUserError('聊天或角色已切换，请重新打开对应邮箱。', 'RMT_INBOX_TARGET_CHANGED');
 }
 async function mutateInbox(mutator) {
     assertShownInboxTarget();
-    if (readonly()) throw new Error('这份邮箱正在只读查看。');
+    if (readonly()) throw text.safeUserError('这份邮箱正在只读查看。', 'RMT_INBOX_READ_ONLY');
     const lifecycle = runtimeState.runtimeLifecycleEpoch;
     const shown = runtimeState.activeSession;
     const shownScope = sessionScope(shown);
     const snapshot = runtimeState.activeArchiveSnapshot;
     let updated, writeOrigin = null;
-    if (shown?.kind !== 'inbox') throw new Error('邮箱已关闭。');
+    if (shown?.kind !== 'inbox') throw text.safeUserError('邮箱已关闭。', 'RMT_INBOX_CLOSED');
     if (snapshot) {
         const options = library.archiveTargetGenerationOptions(snapshot);
         const target = await options.revalidateArchiveTarget(options.archiveTarget);
         const reading = cache.generationPageReadingSource(shown, 'inbox', target.memory);
         if (shown.chatId !== target.chatId || shown.archiveRevision !== target.memory.archiveRevision
-            || reading.session.sender !== reading.memoryBank.characterName || reading.session.recipient !== reading.memoryBank.userName) throw new Error('显示的邮箱与目标档案不一致。');
+            || reading.session.sender !== reading.memoryBank.characterName || reading.session.recipient !== reading.memoryBank.userName) throw text.safeUserError('显示的邮箱与目标档案不一致。', 'RMT_INBOX_TARGET_CHANGED');
         // Capture the canonical cache fence, including an in-flight generation's fence.
         options.context.chatMetadata[constants.MEMORY_KEY] = target.memory;
         options.context.chatMetadata[constants.CACHE_KEY] = target.cache;
@@ -50635,8 +50738,9 @@ async function mutateInbox(mutator) {
         const reading = cache.generationPageReadingSource(shown, 'inbox', memory);
         if (shown.chatId !== memory.chatId || shown.archiveRevision !== memory.archiveRevision
             || reading.session.sender !== reading.memoryBank.characterName || reading.session.recipient !== reading.memoryBank.userName
-            || (!reading.source && shown.ownerKey && shown.ownerKey !== contextApi.currentCharacterRuntimeKey(context)))
-            throw new Error('聊天或角色已切换，请重新打开对应邮箱。');
+            || (!reading.source && !inbox.inboxOwnerMatchesContext(shown, context,
+                cache.loadSession('inbox', { context, memoryBank: memory, clone: true }))))
+            throw text.safeUserError('聊天或角色已切换，请重新打开对应邮箱。', 'RMT_INBOX_TARGET_CHANGED');
         const origin = contextApi.captureTaskOrigin(context, memory.archiveRevision);
         writeOrigin = origin;
         updated = shown.readableProgress?.complete === false && shown.readableProgress.draftId
@@ -50645,9 +50749,9 @@ async function mutateInbox(mutator) {
             : await cache.commitSessionMutation('inbox', memory.chatId, origin,
                 (latest, bank) => mutator(latest?.kind === 'inbox' ? latest : inbox.emptyInbox(bank, context),
                     cache.generationPageSourceMemory(latest, 'inbox', bank), cache.getCache(context)), inbox.emptyInbox(memory, context));
-        if (!updated) throw new Error('聊天或档案已经切换，本次操作没有写入。');
+        if (!updated) throw text.safeUserError('聊天或档案已经切换，本次操作没有写入。', 'RMT_INBOX_TARGET_CHANGED');
     }
-    if (!updated) throw new Error('未能确认这次邮箱操作已保存，原信件仍保留。');
+    if (!updated) throw text.safeUserError('未能确认这次邮箱操作已保存，原信件仍保留。', 'RMT_INBOX_SAVE_FAILED');
     if (runtimeState.activeMode === 'inbox' && shownScope === sessionScope(runtimeState.activeSession)
         && (snapshot ? runtimeState.activeArchiveSnapshot?.entryId === snapshot.entryId : !runtimeState.activeArchiveSnapshot && contextApi.isCurrentTaskOrigin(writeOrigin))) {
         runtimeState.activeSession = updated;
@@ -50730,6 +50834,7 @@ __m_ui_toolbarIcons_js.TOOLBAR_ICON_NAMES = TOOLBAR_ICON_NAMES;
 function __init_ui_overlay_js() {
 // MODULE: ui/overlay.js
 const handJournal = __m_ui_handJournalView_js;
+const recovery_action = __m_ui_recoveryAction_js;
 const expanded_cg_view = __m_ui_expandedCgView_js;
 const archive_inheritance_view = __m_ui_archiveInheritance_js;
 const bedtime_contract = __m_core_bedtimeContract_js;
@@ -50801,6 +50906,7 @@ const language_view = __m_ui_languageView_js;
 const ui_workspaceState = __m_ui_workspaceState_js;
 const toolbarIcons = __m_ui_toolbarIcons_js;
 const runtimeState = __m_core_state_js.state;
+
 
 
 
@@ -52417,7 +52523,7 @@ function handleOverlayClick(event) {
     const timeStoryButton = event.target.closest?.('[data-rmt-time-story]');
     if (timeStoryButton) return void time_stories_view.handleTimeStoryAction(timeStoryButton.dataset.rmtTimeStory, timeStoryButton.dataset.rmtTimeStoryId);
     const exportRecoveryButton = event.target.closest?.('[data-rmt-recovery-export]');
-    if (exportRecoveryButton) return void generation_client.exportSavedGeneration(exportRecoveryButton.dataset.rmtRecoveryExport, {
+    if (exportRecoveryButton) return void recovery_action.runRecoveryAction(exportRecoveryButton, `export:${exportRecoveryButton.dataset.rmtRecoveryDraftId}`, () => generation_client.exportSavedGeneration(exportRecoveryButton.dataset.rmtRecoveryExport, {
         draftId: exportRecoveryButton.dataset.rmtRecoveryDraftId || '', pageId: exportRecoveryButton.dataset.rmtRecoveryPageId || '',
     }).then(value => {
         const blob = new Blob([JSON.stringify(value, null, 2)], { type: 'application/json' });
@@ -52425,11 +52531,11 @@ function handleOverlayClick(event) {
         link.href = url; link.download = 'hearttrace-module-recovery.json';
         link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
         globalThis.toastr?.info?.('草稿文件包含任务背景与未提交内容，请勿公开分享。', '心迹回廊');
-    }).catch(error => { if (error?.name !== 'AbortError') globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊'); });
+    }), { label: '正在导出…' });
     const discardButton = event.target.closest?.('[data-rmt-recovery-discard]');
-    if (discardButton) return void generation_client.discardSavedGeneration(discardButton.dataset.rmtRecoveryDiscard, {
+    if (discardButton) return void recovery_action.runRecoveryAction(discardButton, `discard:${discardButton.dataset.rmtRecoveryDraftId}`, () => generation_client.discardSavedGeneration(discardButton.dataset.rmtRecoveryDiscard, {
         draftId: discardButton.dataset.rmtRecoveryDraftId || '', pageId: discardButton.dataset.rmtRecoveryPageId || '',
-    }).catch(error => globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊'));
+    }), { label: '正在停止并放弃…' });
     if (event.target.closest?.('[data-rmt-archive-read-drafts]')) {
         return void loadChooserArchiveRecovery(core_context.getContext(), { showEmpty: true });
     }
@@ -52483,25 +52589,27 @@ function handleOverlayClick(event) {
             { destructive: false })) return;
         return void archive_repository.restartCurrentArchiveImport().catch(error => globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊'));
     }
-    if (event.target.closest?.('[data-rmt-archive-discard]')) {
-        if (runtimeState.busy || core_requestCoordinator.hasGenerationTasks()) return;
-        if (!confirmExplicitAction('放弃整理草稿？', '仅清除当前聊天尚未提交的档案整理/简介草稿，不能恢复。不删除已保存的正式记忆、模块或图片，也不会自动发起新请求。', { destructive: true })) return;
+    const archiveDiscard = event.target.closest?.('[data-rmt-archive-discard]');
+    if (archiveDiscard) {
         const context = core_context.currentCharacterGuard();
-        try {
-            return void Promise.resolve(archive_repository.discardCurrentArchiveImportRecovery(context)).then(cleared => {
-                if (cleared && core_context.getContext() === context) showChooser();
-            }).catch(error => globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊 · 草稿未放弃'));
-        } catch (error) { globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊 · 草稿未放弃'); }
-        return;
+        const discardOrigin = core_context.captureTaskOrigin(context);
+        return void recovery_action.runRecoveryAction(archiveDiscard, `archive-discard:${core_context.chatScopeKey(context)}`, async () => {
+            if (!confirmExplicitAction('放弃整理草稿？', '如当前聊天的档案整理或简介仍在生成，将先停止它。仅清除这些未提交草稿，不能恢复。不删除已保存的正式记忆、模块或图片，也不会自动发起新请求。', { destructive: true })) return;
+            const cleared = await archive_repository.discardCurrentArchiveImportRecovery(context);
+            if (cleared) {
+                globalThis.toastr?.success?.('整理草稿已放弃，正式档案仍保留。', '心迹回廊');
+                if (core_context.isCurrentTaskOrigin(discardOrigin)) showChooser();
+            }
+        }, { label: '正在停止并放弃…', title: '心迹回廊 · 草稿未放弃' });
     }
     const recoveryButton = event.target.closest?.('[data-rmt-recovery-mode]');
-    if (recoveryButton) return void generation_client.continueSavedGeneration(recoveryButton.dataset.rmtRecoveryMode, {
+    if (recoveryButton) return void recovery_action.runRecoveryAction(recoveryButton, `retry:${recoveryButton.dataset.rmtRecoveryDraftId}`, () => generation_client.continueSavedGeneration(recoveryButton.dataset.rmtRecoveryMode, {
         draftId: recoveryButton.dataset.rmtRecoveryDraftId || '', pageId: recoveryButton.dataset.rmtRecoveryPageId || '',
-    }).catch(error => globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊'));
+    }), { label: '正在继续…' });
     const archiveRecoveryButton = event.target.closest?.('[data-rmt-archive-recovery]');
-    if (archiveRecoveryButton) return void (archiveRecoveryButton.dataset.rmtArchiveRecovery === 'profile'
+    if (archiveRecoveryButton) return void recovery_action.runRecoveryAction(archiveRecoveryButton, `archive-retry:${archiveRecoveryButton.dataset.rmtArchiveRecovery}:${archiveRecoveryButton.dataset.rmtArchiveRecoveryDraftId}`, () => (archiveRecoveryButton.dataset.rmtArchiveRecovery === 'profile'
         ? archive_repository.rewriteCurrentArchiveVerdict({ draftId: archiveRecoveryButton.dataset.rmtArchiveRecoveryDraftId || '' })
-        : archive_repository.continueCurrentArchiveImport({ draftId: archiveRecoveryButton.dataset.rmtArchiveRecoveryDraftId || '' })).catch(error => globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊'));
+        : archive_repository.continueCurrentArchiveImport({ draftId: archiveRecoveryButton.dataset.rmtArchiveRecoveryDraftId || '' })), { label: '正在继续…' });
     const expandedCgButton = event.target.closest?.('[data-rmt-expanded-cg]');
     if (expandedCgButton) return void expanded_cg_view.handleExpandedCgButton(expandedCgButton);
     const bedtimeButton = event.target.closest?.('[data-rmt-bedtime]');
@@ -56865,8 +56973,16 @@ function currentPendingArchiveSave(context) {
 
 // The existing explicit discard confirmation owns permission. Remove the exact
 // pending archive records first so a later chat-open flush cannot resurrect them.
-function discardCurrentArchiveImportRecovery(context = core_context.currentCharacterGuard()) {
-    if (runtimeState.busy || core_requestCoordinator.hasGenerationTasks()) return false;
+async function discardCurrentArchiveImportRecovery(context = core_context.currentCharacterGuard()) {
+    const origin = core_context.captureTaskOrigin(context, getImportedMemory(context)?.archiveRevision || '');
+    // Stop only this chat's archive owners, and let their final writes settle.
+    // A different module being busy is not a reason to trap an abandoned draft.
+    const owners = core_requestCoordinator.queryParticipantGenerationTasks(context)
+        .filter(task => ['archive-import', 'archive-profile'].includes(task.kind));
+    await core_requestCoordinator.cancelParticipantGenerationTasks(owners.map(task => task.id));
+    if (!core_context.deferredCommitOriginMatchesContext(origin, core_context.getContext())) {
+        throw new DOMException('Archive discard scope changed', 'AbortError');
+    }
     for (const [key, bucket] of runtimeState.deferredChatCommits) {
         for (const item of Array.isArray(bucket) ? bucket.slice() : []) {
             if (item?.kind !== 'archive' || !core_context.deferredCommitOriginMatchesContext(item.origin, context)) continue;
@@ -56876,7 +56992,7 @@ function discardCurrentArchiveImportRecovery(context = core_context.currentChara
             }
         }
     }
-    return archive_importRecovery.discardArchiveRecovery(core_context.captureTaskOrigin(context, getImportedMemory(context)?.archiveRevision || ''));
+    return archive_importRecovery.discardArchiveRecovery(origin);
 }
 
 async function retryCurrentArchiveSave(context, taskTrace) {
@@ -58084,6 +58200,7 @@ __m_archive_repository_js.exportCurrentArchiveRecoveryAfterLoad = exportCurrentA
 __m_archive_repository_js.saveCurrentArchiveRecovery = saveCurrentArchiveRecovery;
 __m_archive_repository_js.importCurrentArchiveRecoveryFile = importCurrentArchiveRecoveryFile;
 __m_archive_repository_js.restartCurrentArchiveImport = restartCurrentArchiveImport;
+__m_archive_repository_js.discardCurrentArchiveImportRecovery = discardCurrentArchiveImportRecovery;
 __m_archive_repository_js.generateArchiveImportSegment = generateArchiveImportSegment;
 __m_archive_repository_js.rewriteCurrentArchiveVerdict = rewriteCurrentArchiveVerdict;
 __m_archive_repository_js.importSelectedStoryScenes = importSelectedStoryScenes;
@@ -58140,7 +58257,6 @@ __m_archive_repository_js.archiveProfilePrompt = archiveProfilePrompt;
 __m_archive_repository_js.normalizeArchiveProfile = normalizeArchiveProfile;
 __m_archive_repository_js.exportCurrentArchiveImportProgress = exportCurrentArchiveImportProgress;
 __m_archive_repository_js.getCurrentArchiveImportRecoverySummary = getCurrentArchiveImportRecoverySummary;
-__m_archive_repository_js.discardCurrentArchiveImportRecovery = discardCurrentArchiveImportRecovery;
 __m_archive_repository_js.getCurrentArchiveProfileRecoverySummary = getCurrentArchiveProfileRecoverySummary;
 __m_archive_repository_js.continueCurrentArchiveImport = continueCurrentArchiveImport;
 __m_archive_repository_js.mismatchedArchiveInfo = mismatchedArchiveInfo;
@@ -58679,25 +58795,15 @@ async function showArchiveLibrary() {
         return `<article class="rmt-archive-portal ready rmt-character-archive-card"><button type="button" class="rmt-portal-open rmt-character-portal-open" data-rmt-archive-character="${core_text.esc(group.groupId)}"><span class="rmt-portal-avatar" data-rmt-avatar-talk="${core_text.esc(group.groupId)}" title="点头像听他说一句">${src ? `<img src="${core_text.esc(src)}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%">` : '<i class="fa-solid fa-user"></i>'}<i class="fa-solid fa-comment-dots rmt-avatar-talk-mark"></i></span><span class="rmt-portal-title">${core_text.esc(name)}</span><span class="rmt-portal-subtitle">${group.entries.length} 个聊天档案${core_text.esc(charHint)}</span><span class="rmt-portal-status">${meta.manual ? '手动角色组' : '自动分类'} · 点击查看</span></button><button type="button" class="rmt-character-archive-delete" data-rmt-action="archive-character-delete" data-rmt-archive-group-id="${core_text.esc(group.groupId)}"><i class="fa-solid fa-trash-can"></i><span>删除角色档案</span></button></article>`;
     }).join('');
     let currentQuick = '';
-    let calendarQuick = snapshotCalendarQuickAccessHtml({ ready: false, generated: false, readOnly: false, generating: false });
     try {
         const ctx = core_context.currentCharacterGuard();
         const mem = archive_repository.getImportedMemory(ctx);
         const deletedFromLibrary = archive_groups.isCurrentCharacterDeletedFromLibrary(ctx, mem);
         if (deletedFromLibrary) {
             currentQuick = '';
-            calendarQuick = '';
         } else if (mem) {
             const name = core_text.normalizeText(mem.archiveName, 120) || archive_repository.fallbackArchiveName(mem.memories);
             currentQuick = `<section class="rmt-archive-card rmt-current-archive-card" style="margin-top:12px"><div><b>当前窗口档案</b><small>${core_text.esc(name)} · ${mem.memories.length} 条记忆</small></div><div class="rmt-current-archive-actions"><button type="button" class="rmt-btn" data-rmt-action="current-archive">打开当前窗口档案</button><button type="button" class="rmt-btn" data-rmt-action="current-archive-import">增量更新当前窗口档案</button><button type="button" class="rmt-btn" data-rmt-action="current-archive-delete">删除当前档案</button></div></section>`;
-            const calendarPortal = archive_snapshots.baseModeAvailability({ context: ctx, chatId: core_context.getChatId(ctx), memoryBank: mem, clone: false })
-                .find(item => item.mode === core_constants.MODE.CALENDAR) || { session: null };
-            calendarQuick = snapshotCalendarQuickAccessHtml({
-                ready: true,
-                generated: !!calendarPortal.session,
-                readOnly: false,
-                generating: core_requestCoordinator.isModeGenerating(core_constants.MODE.CALENDAR),
-            });
         } else {
             const inheritanceDescriptor = archive_groups.characterDescriptor(ctx, Number(ctx.characterId));
             const inheritanceAvailable = archive_groups.getArchiveIndex(ctx).some(entry =>
@@ -58711,7 +58817,7 @@ async function showArchiveLibrary() {
         }
     } catch {}
     if (!viewStillCurrent()) return;
-    body.innerHTML = `<div class="rmt-archive-room"><section class="rmt-archive-card"><div class="rmt-archive-kicker">MEMORY ARCHIVE LIBRARY</div><strong class="rmt-archive-title">档案室一览</strong><div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="rmt-btn" data-rmt-action="archive-group-manager">管理角色分类</button><button type="button" class="rmt-btn" data-rmt-action="archive-auto-classify">自动分类</button><button type="button" class="rmt-btn" data-rmt-action="rebuild-archive-index">扫描旧版本已有档案</button></div></section>${calendarQuick}${cards ? `<section class="rmt-archive-portals rmt-character-portals">${cards}</section>` : '<div class="rmt-archive-overview-empty">还没有已索引的档案。当前版本创建/更新档案后会自动加入这里；旧版本档案可点上方按钮手动扫描一次。</div>'}${currentQuick}</div>`;
+    body.innerHTML = `<div class="rmt-archive-room"><section class="rmt-archive-card"><div class="rmt-archive-kicker">MEMORY ARCHIVE LIBRARY</div><strong class="rmt-archive-title">档案室一览</strong><div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="rmt-btn" data-rmt-action="archive-group-manager">管理角色分类</button><button type="button" class="rmt-btn" data-rmt-action="archive-auto-classify">自动分类</button><button type="button" class="rmt-btn" data-rmt-action="rebuild-archive-index">扫描旧版本已有档案</button></div></section>${cards ? `<section class="rmt-archive-portals rmt-character-portals">${cards}</section>` : '<div class="rmt-archive-overview-empty">还没有已索引的档案。当前版本创建/更新档案后会自动加入这里；旧版本档案可点上方按钮手动扫描一次。</div>'}${currentQuick}</div>`;
 }
 
 function showArchiveCharacter(groupId) {
@@ -62151,9 +62257,23 @@ async function savePhoneGenerationDraft(context, memoryBank, plan, completedApps
     }, stillCurrent);
 }
 
+function recoveryMatchesCurrentArchive(raw, origin, entryId, revision, { inspect = false } = {}) {
+    const identity = raw?.identity;
+    if (!identity || ['characterId', 'characterAvatar', 'chatId'].some(key => identity[key] !== origin[key])
+        || (identity.archiveTargetEntryId && identity.archiveTargetEntryId !== entryId)) return false;
+    const frozen = !!generation_recovery.readGenerationContentSnapshot(raw);
+    // Card descriptions contribute to characterKey. A saved source snapshot
+    // keeps the old generation inputs; the stable card/chat/entry still owns it.
+    // Explicit export/discard can also inspect an older draft without resuming it.
+    if (identity.characterKey !== origin.characterKey && (!(frozen || inspect) || !origin.characterAvatar)) return false;
+    return identity.archiveRevision === revision || frozen || inspect;
+}
+
 // Independent recovery journal; never used as formal memories or as a completed mode.
 function loadGenerationRecovery(mode, context = core_context.getContext(), suppliedCache = null, options = {}) {
     try {
+        if (options.intent === 'inspect' && !options.draftId) return null;
+        const inspect = options.intent === 'inspect' && !!options.draftId;
         const bank = archive_repository.requireArchive(context);
         const cache = suppliedCache || getCache(context);
         if (options.draftId || options.pageId || cache?.[GENERATION_DRAFTS_CACHE_KEY]) {
@@ -62164,10 +62284,8 @@ function loadGenerationRecovery(mode, context = core_context.getContext(), suppl
             const origin = core_context.captureTaskOrigin(context, bank.archiveRevision);
             const entryId = context?.__rmtArchiveTargetEntryId || archiveBackupEntryForContext(context, bank, { expectedTaskOrigin: origin, previousMemory: bank }).entryId;
             if (raw.identity?.mode !== mode
-                || ['characterKey', 'characterId', 'characterAvatar', 'chatId'].some(key => raw.identity?.[key] !== origin[key])
-                || (raw.identity?.archiveTargetEntryId && raw.identity.archiveTargetEntryId !== entryId)
-                || (raw.identity?.archiveRevision !== bank.archiveRevision && !generation_recovery.readGenerationContentSnapshot(raw))) return null;
-            if (!Object.hasOwn(generationDraftRecords(cache), selected.draftId)
+                || !recoveryMatchesCurrentArchive(raw, origin, entryId, bank.archiveRevision, { inspect })) return null;
+            if (!inspect && !Object.hasOwn(generationDraftRecords(cache), selected.draftId)
                 && raw[core_constants.SESSION_MODE_WRITE_FENCE_KEY] !== modeWriteFenceForCache(cache, mode)) return null;
             // A selected pool task can reclaim a newer mode fence. Its content
             // still belongs to the exact character/chat/entry recorded above.
@@ -62180,12 +62298,7 @@ function loadGenerationRecovery(mode, context = core_context.getContext(), suppl
         const entryId = context?.__rmtArchiveTargetEntryId || archiveBackupEntryForContext(context, bank, { expectedTaskOrigin: origin, previousMemory: bank }).entryId;
         if (!Object.values(core_constants.MODE).includes(mode) || !generation_recovery.generationRecoverySummary(raw)
             || recoveryCleared(cache, mode) || raw.identity?.mode !== mode
-            || raw.identity?.characterKey !== origin.characterKey
-            || raw.identity?.characterId !== origin.characterId
-            || raw.identity?.characterAvatar !== origin.characterAvatar
-            || (raw.identity?.archiveTargetEntryId && raw.identity.archiveTargetEntryId !== entryId)
-            || raw.identity?.chatId !== core_context.comparableChatId(core_context.getChatId(context))
-            || raw.identity?.archiveRevision !== bank.archiveRevision
+            || !recoveryMatchesCurrentArchive(raw, origin, entryId, bank.archiveRevision)
             || raw[core_constants.SESSION_MODE_WRITE_FENCE_KEY] !== modeWriteFenceForCache(cache, mode)) return null;
         // The loader has proved the exact character/chat/revision, canonical
         // entry and write fence above. Older V1 journals allowed this derived ID
@@ -64731,6 +64844,7 @@ __init_ui_roomObjectDrawing_js();
 __init_ui_roomInterior_js();
 __init_modes_room_js();
 __init_ui_handJournalView_js();
+__init_ui_recoveryAction_js();
 __init_archive_backupStore_js();
 __init_archive_inheritance_js();
 __init_ui_archiveInheritance_js();

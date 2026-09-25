@@ -988,9 +988,23 @@ export async function savePhoneGenerationDraft(context, memoryBank, plan, comple
     }, stillCurrent);
 }
 
+function recoveryMatchesCurrentArchive(raw, origin, entryId, revision, { inspect = false } = {}) {
+    const identity = raw?.identity;
+    if (!identity || ['characterId', 'characterAvatar', 'chatId'].some(key => identity[key] !== origin[key])
+        || (identity.archiveTargetEntryId && identity.archiveTargetEntryId !== entryId)) return false;
+    const frozen = !!generation_recovery.readGenerationContentSnapshot(raw);
+    // Card descriptions contribute to characterKey. A saved source snapshot
+    // keeps the old generation inputs; the stable card/chat/entry still owns it.
+    // Explicit export/discard can also inspect an older draft without resuming it.
+    if (identity.characterKey !== origin.characterKey && (!(frozen || inspect) || !origin.characterAvatar)) return false;
+    return identity.archiveRevision === revision || frozen || inspect;
+}
+
 // Independent recovery journal; never used as formal memories or as a completed mode.
 export function loadGenerationRecovery(mode, context = core_context.getContext(), suppliedCache = null, options = {}) {
     try {
+        if (options.intent === 'inspect' && !options.draftId) return null;
+        const inspect = options.intent === 'inspect' && !!options.draftId;
         const bank = archive_repository.requireArchive(context);
         const cache = suppliedCache || getCache(context);
         if (options.draftId || options.pageId || cache?.[GENERATION_DRAFTS_CACHE_KEY]) {
@@ -1001,10 +1015,8 @@ export function loadGenerationRecovery(mode, context = core_context.getContext()
             const origin = core_context.captureTaskOrigin(context, bank.archiveRevision);
             const entryId = context?.__rmtArchiveTargetEntryId || archiveBackupEntryForContext(context, bank, { expectedTaskOrigin: origin, previousMemory: bank }).entryId;
             if (raw.identity?.mode !== mode
-                || ['characterKey', 'characterId', 'characterAvatar', 'chatId'].some(key => raw.identity?.[key] !== origin[key])
-                || (raw.identity?.archiveTargetEntryId && raw.identity.archiveTargetEntryId !== entryId)
-                || (raw.identity?.archiveRevision !== bank.archiveRevision && !generation_recovery.readGenerationContentSnapshot(raw))) return null;
-            if (!Object.hasOwn(generationDraftRecords(cache), selected.draftId)
+                || !recoveryMatchesCurrentArchive(raw, origin, entryId, bank.archiveRevision, { inspect })) return null;
+            if (!inspect && !Object.hasOwn(generationDraftRecords(cache), selected.draftId)
                 && raw[core_constants.SESSION_MODE_WRITE_FENCE_KEY] !== modeWriteFenceForCache(cache, mode)) return null;
             // A selected pool task can reclaim a newer mode fence. Its content
             // still belongs to the exact character/chat/entry recorded above.
@@ -1017,12 +1029,7 @@ export function loadGenerationRecovery(mode, context = core_context.getContext()
         const entryId = context?.__rmtArchiveTargetEntryId || archiveBackupEntryForContext(context, bank, { expectedTaskOrigin: origin, previousMemory: bank }).entryId;
         if (!Object.values(core_constants.MODE).includes(mode) || !generation_recovery.generationRecoverySummary(raw)
             || recoveryCleared(cache, mode) || raw.identity?.mode !== mode
-            || raw.identity?.characterKey !== origin.characterKey
-            || raw.identity?.characterId !== origin.characterId
-            || raw.identity?.characterAvatar !== origin.characterAvatar
-            || (raw.identity?.archiveTargetEntryId && raw.identity.archiveTargetEntryId !== entryId)
-            || raw.identity?.chatId !== core_context.comparableChatId(core_context.getChatId(context))
-            || raw.identity?.archiveRevision !== bank.archiveRevision
+            || !recoveryMatchesCurrentArchive(raw, origin, entryId, bank.archiveRevision)
             || raw[core_constants.SESSION_MODE_WRITE_FENCE_KEY] !== modeWriteFenceForCache(cache, mode)) return null;
         // The loader has proved the exact character/chat/revision, canonical
         // entry and write fence above. Older V1 journals allowed this derived ID

@@ -417,10 +417,12 @@ export async function createGenerationRecovery({ origin, mode, settingsIdentity,
                 journal.identity = { ...journal.identity, archiveRevision: identity.archiveRevision };
             }
             if ((journal.identity[key] ?? '') !== identity[key]) {
-                if (key === 'characterKey' && identity.characterAvatar
+                if (key === 'characterKey' && readGenerationContentSnapshot(journal) && identity.characterAvatar
                     && (journal.identity.characterId ?? '') === identity.characterId
                     && (journal.identity.characterAvatar ?? '') === identity.characterAvatar
                     && (journal.identity.chatId ?? '') === identity.chatId) {
+                    journal.sourceIdentity ||= structuredClone(journal.identity);
+                    journal.identity = { ...journal.identity, characterKey: identity.characterKey };
                     fingerprintDriftOnly = true;
                     continue;
                 }

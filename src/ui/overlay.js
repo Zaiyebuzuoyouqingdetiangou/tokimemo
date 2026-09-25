@@ -1,4 +1,5 @@
 import * as handJournal from './handJournalView.js';
+import * as recovery_action from './recoveryAction.js';
 import * as expanded_cg_view from './expandedCgView.js';
 import * as archive_inheritance_view from './archiveInheritance.js';
 import * as bedtime_contract from '../core/bedtimeContract.js';
@@ -1664,7 +1665,7 @@ export function handleOverlayClick(event) {
     const timeStoryButton = event.target.closest?.('[data-rmt-time-story]');
     if (timeStoryButton) return void time_stories_view.handleTimeStoryAction(timeStoryButton.dataset.rmtTimeStory, timeStoryButton.dataset.rmtTimeStoryId);
     const exportRecoveryButton = event.target.closest?.('[data-rmt-recovery-export]');
-    if (exportRecoveryButton) return void generation_client.exportSavedGeneration(exportRecoveryButton.dataset.rmtRecoveryExport, {
+    if (exportRecoveryButton) return void recovery_action.runRecoveryAction(exportRecoveryButton, `export:${exportRecoveryButton.dataset.rmtRecoveryDraftId}`, () => generation_client.exportSavedGeneration(exportRecoveryButton.dataset.rmtRecoveryExport, {
         draftId: exportRecoveryButton.dataset.rmtRecoveryDraftId || '', pageId: exportRecoveryButton.dataset.rmtRecoveryPageId || '',
     }).then(value => {
         const blob = new Blob([JSON.stringify(value, null, 2)], { type: 'application/json' });
@@ -1672,11 +1673,11 @@ export function handleOverlayClick(event) {
         link.href = url; link.download = 'hearttrace-module-recovery.json';
         link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
         globalThis.toastr?.info?.('草稿文件包含任务背景与未提交内容，请勿公开分享。', '心迹回廊');
-    }).catch(error => { if (error?.name !== 'AbortError') globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊'); });
+    }), { label: '正在导出…' });
     const discardButton = event.target.closest?.('[data-rmt-recovery-discard]');
-    if (discardButton) return void generation_client.discardSavedGeneration(discardButton.dataset.rmtRecoveryDiscard, {
+    if (discardButton) return void recovery_action.runRecoveryAction(discardButton, `discard:${discardButton.dataset.rmtRecoveryDraftId}`, () => generation_client.discardSavedGeneration(discardButton.dataset.rmtRecoveryDiscard, {
         draftId: discardButton.dataset.rmtRecoveryDraftId || '', pageId: discardButton.dataset.rmtRecoveryPageId || '',
-    }).catch(error => globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊'));
+    }), { label: '正在停止并放弃…' });
     if (event.target.closest?.('[data-rmt-archive-read-drafts]')) {
         return void loadChooserArchiveRecovery(core_context.getContext(), { showEmpty: true });
     }
@@ -1730,25 +1731,27 @@ export function handleOverlayClick(event) {
             { destructive: false })) return;
         return void archive_repository.restartCurrentArchiveImport().catch(error => globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊'));
     }
-    if (event.target.closest?.('[data-rmt-archive-discard]')) {
-        if (runtimeState.busy || core_requestCoordinator.hasGenerationTasks()) return;
-        if (!confirmExplicitAction('放弃整理草稿？', '仅清除当前聊天尚未提交的档案整理/简介草稿，不能恢复。不删除已保存的正式记忆、模块或图片，也不会自动发起新请求。', { destructive: true })) return;
+    const archiveDiscard = event.target.closest?.('[data-rmt-archive-discard]');
+    if (archiveDiscard) {
         const context = core_context.currentCharacterGuard();
-        try {
-            return void Promise.resolve(archive_repository.discardCurrentArchiveImportRecovery(context)).then(cleared => {
-                if (cleared && core_context.getContext() === context) showChooser();
-            }).catch(error => globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊 · 草稿未放弃'));
-        } catch (error) { globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊 · 草稿未放弃'); }
-        return;
+        const discardOrigin = core_context.captureTaskOrigin(context);
+        return void recovery_action.runRecoveryAction(archiveDiscard, `archive-discard:${core_context.chatScopeKey(context)}`, async () => {
+            if (!confirmExplicitAction('放弃整理草稿？', '如当前聊天的档案整理或简介仍在生成，将先停止它。仅清除这些未提交草稿，不能恢复。不删除已保存的正式记忆、模块或图片，也不会自动发起新请求。', { destructive: true })) return;
+            const cleared = await archive_repository.discardCurrentArchiveImportRecovery(context);
+            if (cleared) {
+                globalThis.toastr?.success?.('整理草稿已放弃，正式档案仍保留。', '心迹回廊');
+                if (core_context.isCurrentTaskOrigin(discardOrigin)) showChooser();
+            }
+        }, { label: '正在停止并放弃…', title: '心迹回廊 · 草稿未放弃' });
     }
     const recoveryButton = event.target.closest?.('[data-rmt-recovery-mode]');
-    if (recoveryButton) return void generation_client.continueSavedGeneration(recoveryButton.dataset.rmtRecoveryMode, {
+    if (recoveryButton) return void recovery_action.runRecoveryAction(recoveryButton, `retry:${recoveryButton.dataset.rmtRecoveryDraftId}`, () => generation_client.continueSavedGeneration(recoveryButton.dataset.rmtRecoveryMode, {
         draftId: recoveryButton.dataset.rmtRecoveryDraftId || '', pageId: recoveryButton.dataset.rmtRecoveryPageId || '',
-    }).catch(error => globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊'));
+    }), { label: '正在继续…' });
     const archiveRecoveryButton = event.target.closest?.('[data-rmt-archive-recovery]');
-    if (archiveRecoveryButton) return void (archiveRecoveryButton.dataset.rmtArchiveRecovery === 'profile'
+    if (archiveRecoveryButton) return void recovery_action.runRecoveryAction(archiveRecoveryButton, `archive-retry:${archiveRecoveryButton.dataset.rmtArchiveRecovery}:${archiveRecoveryButton.dataset.rmtArchiveRecoveryDraftId}`, () => (archiveRecoveryButton.dataset.rmtArchiveRecovery === 'profile'
         ? archive_repository.rewriteCurrentArchiveVerdict({ draftId: archiveRecoveryButton.dataset.rmtArchiveRecoveryDraftId || '' })
-        : archive_repository.continueCurrentArchiveImport({ draftId: archiveRecoveryButton.dataset.rmtArchiveRecoveryDraftId || '' })).catch(error => globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊'));
+        : archive_repository.continueCurrentArchiveImport({ draftId: archiveRecoveryButton.dataset.rmtArchiveRecoveryDraftId || '' })), { label: '正在继续…' });
     const expandedCgButton = event.target.closest?.('[data-rmt-expanded-cg]');
     if (expandedCgButton) return void expanded_cg_view.handleExpandedCgButton(expandedCgButton);
     const bedtimeButton = event.target.closest?.('[data-rmt-bedtime]');
