@@ -502,7 +502,6 @@ function onClick(event) {
         complete.disabled = true;
         watchFloorAction(auto_memory_scheduler.completeFloorRound(), '等这楼正文写完，再补这一页。').catch(error => {
             console.warn('[HeartbeatMemories] floor complete skipped', core_text.safeErrorDiagnostic(error));
-            globalThis.toastr?.error?.('这一页暂时没能补上。可以再点一次补全。', '心口顿了一下');
         }).finally(() => { complete.disabled = false; sync(); });
         return;
     }
@@ -513,7 +512,6 @@ function onClick(event) {
         redo.disabled = true;
         watchFloorAction(auto_memory_scheduler.retryFloorRound(), '等这楼正文写完，再重写这一页。').catch(error => {
             console.warn('[HeartbeatMemories] floor redo skipped', core_text.safeErrorDiagnostic(error));
-            globalThis.toastr?.error?.('这一页暂时没能重写。可以再点一次重试。', '心口顿了一下');
         }).finally(() => { redo.disabled = false; sync(); });
         return;
     }
@@ -524,7 +522,6 @@ function onClick(event) {
         retry.disabled = true;
         watchFloorAction(auto_memory_scheduler.resumeFloorPlan(), '等这楼正文写完，再重写这一页。').catch(error => {
             console.warn('[HeartbeatMemories] floor retry skipped', core_text.safeErrorDiagnostic(error));
-            globalThis.toastr?.error?.('这一封暂时没能续上。可以再点一次重试。', '心口顿了一下');
         }).finally(() => { retry.disabled = false; sync(); });
         return;
     }

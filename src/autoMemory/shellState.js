@@ -30,11 +30,15 @@ export function floorShellCss() {
 .rmt-envelope{display:block;width:min(100%,240px);height:auto;filter:drop-shadow(0 12px 16px rgba(90,24,48,.16))}
 .rmt-heart-letter.is-writing .rmt-heart-letter-seal{display:grid!important;cursor:default}
 .rmt-heart-letter.is-writing .rmt-heart-letter-paper{display:none!important}
-.rmt-heart-letter-paper{margin-top:8px;min-width:0;overflow:hidden;padding:16px 14px 12px;border:1px solid #e6d3c4;border-left:7px solid #e99ab9;border-radius:4px 16px 16px 4px;background:#fff8ee;background-image:repeating-linear-gradient(0deg,transparent,transparent 22px,rgba(180,140,120,.16) 23px);color:#5c463c}
+.rmt-heart-letter-paper{margin-top:8px;min-width:0;height:auto!important;max-height:none!important;overflow:visible;padding:16px 14px 12px;border:1px solid #e6d3c4;border-left:7px solid #e99ab9;border-radius:4px 16px 16px 4px;background:#fff8ee;background-image:repeating-linear-gradient(0deg,transparent,transparent 22px,rgba(180,140,120,.16) 23px);color:#5c463c}
 .rmt-heart-letter-paper p{margin:0 0 10px;font-size:15px;line-height:1.6}
 .rmt-heart-letter-close{margin:0 0 12px}
 .rmt-heart-letter .rmt-letter-piece h3{margin:16px 0 8px;font-size:16px}
-.rmt-heart-letter .rmt-floor-body{max-height:70vh;max-width:100%;min-width:0;margin-top:10px;overflow:auto}
+.rmt-heart-letter .rmt-floor-body{display:block!important;height:auto!important;max-height:70vh!important;max-width:100%;min-width:0;min-height:0;margin-top:10px;overflow:auto!important}
+.rmt-heart-letter .rmt-theme-song,.rmt-heart-letter .rmt-song-layout,.rmt-heart-letter .rmt-song-sheet,.rmt-heart-letter .rmt-song-sheet :is(header,section,div,h2,h3,p){position:static!important;display:block!important;height:auto!important;max-height:none!important;min-height:0!important;overflow:visible!important;flex:none!important;float:none!important;visibility:visible!important;opacity:1!important;transform:none!important;width:auto!important;max-width:100%!important;grid-template-columns:none!important;color:#5c463c!important;-webkit-text-fill-color:#5c463c!important;font-size:15px!important;line-height:1.8!important;white-space:pre-wrap!important}
+.rmt-heart-letter .rmt-song-sheet{margin:0 0 8px;padding:4px 2px 8px;border:0!important;background:transparent!important;box-shadow:none!important}
+.rmt-heart-letter .rmt-song-sheet h2{font-size:22px!important;font-weight:700!important;margin:4px 0 8px!important}
+.rmt-heart-letter .rmt-song-sheet h3{font-size:13px!important;font-weight:650!important;margin:14px 0 6px!important;color:#8d6d78!important;-webkit-text-fill-color:#8d6d78!important}
 /* 信里用手机上的模块布局。生图条和会浮出屏幕的明信片留在插件页。 */
 .rmt-heart-letter .rmt-floor-body .rmt-cg-format,
 .rmt-heart-letter .rmt-floor-body .rmt-cg-provider-bar{display:none!important}
@@ -153,9 +157,7 @@ export function toastForTransition(previousPhase, nextPhase, face = {}, { initia
     if (nextPhase === 'reveal') {
         return { level: 'success', title: '心口一热', message: `今天留下了新的回忆。${face.line || '一段新的回忆'}。点开楼层下面，就能看见。` };
     }
-    if (nextPhase === 'failed') {
-        return { level: 'error', title: '这份回忆停住了', message: '可以补全没写完的部分，或再试一次。任务中心也能看到。' };
-    }
+    if (nextPhase === 'failed') return null;
     if (nextPhase === 'achievement-pending') {
         return { level: 'warning', title: '回忆先留着', message: '成就还缺一笔。先不拆开，写好的部分还在。' };
     }

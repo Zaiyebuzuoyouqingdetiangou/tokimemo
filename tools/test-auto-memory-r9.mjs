@@ -248,4 +248,13 @@ test('the letter offers repair and retry only when that work is still open', () 
     assert.equal(idleRound.phase, 'failed');
     assert.equal(idleRound.canComplete, true);
     assert.equal(idleRound.detail.includes('90 秒'), true);
+    const song = view.roundReadingHtml({
+        kind: 'themeSong',
+        songs: [{ title: '夜航', singer: '南玺', styleDescription: '钢琴', lyrics: '第一行\n第二行', createdAt: 50 }],
+    });
+    assert.equal(song.includes('<main'), false);
+    assert.equal(song.includes('has-songs'), false);
+    assert.equal(song.includes('夜航'), true);
+    assert.equal(song.includes('第一行'), true);
+    assert.equal(shell.floorShellCss().includes('.rmt-heart-letter .rmt-theme-song'), true);
 });

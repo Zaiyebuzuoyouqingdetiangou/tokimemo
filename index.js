@@ -1,5 +1,5 @@
-const VERSION = '0.99.88';
-const BUILD = '0.99.88-r84.140-after-story';
+const VERSION = '0.99.89';
+const BUILD = '0.99.89-r84.141-queue-song';
 
 const SETTINGS_ID = 'heartbeat_memories_settings';
 const MENU_ID = 'heartbeat_memories_menu_item';

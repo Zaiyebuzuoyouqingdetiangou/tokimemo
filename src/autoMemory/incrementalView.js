@@ -396,11 +396,18 @@ function butterflySurface(session) {
     return `<div class="rmt-crt"><div class="rmt-crt-content"><div class="rmt-tree-branches">${branches}</div>${blocks}</div></div>`;
 }
 
+function songLyrics(lyrics) {
+    const text = String(textOf(lyrics) || '').trim();
+    if (!text) return '';
+    const blocks = text.split(/\n{2,}/).map(block => block.trim()).filter(Boolean);
+    return (blocks.length ? blocks : [text]).map(block => `<p class="rmt-song-stanza">${esc(block)}</p>`).join('');
+}
+
 function songSurface(session) {
     const songs = Array.isArray(session.songs) ? session.songs : [];
     if (!songs.length) return '';
-    const sheets = songs.map(song => `<article class="rmt-song-sheet rmt-song-readable"><header><h2>${esc(textOf(song.title) || '印象曲')}</h2><p>演唱者 · ${esc(textOf(song.singer))}</p></header><section class="rmt-song-style"><h3>曲风</h3><p>${esc(textOf(song.styleDescription))}</p></section><section class="rmt-song-lyrics"><h3>完整歌词</h3><pre>${esc(textOf(song.lyrics))}</pre></section></article>`).join('');
-    return `<main class="rmt-theme-song"><div class="rmt-song-layout has-songs">${sheets}</div></main>`;
+    const sheets = songs.map(song => `<article class="rmt-song-sheet rmt-song-readable"><header><h2>${esc(textOf(song.title) || '印象曲')}</h2><p>演唱者 · ${esc(textOf(song.singer))}</p></header><section class="rmt-song-style"><h3>曲风</h3><p>${esc(textOf(song.styleDescription))}</p></section><div class="rmt-song-reading-lyrics">${songLyrics(song.lyrics)}</div></article>`).join('');
+    return `<div class="rmt-theme-song"><div class="rmt-song-layout">${sheets}</div></div>`;
 }
 
 function bedtimeSurface(session) {

@@ -87,9 +87,7 @@ test('toasts explain success and failure once the phase actually changes', () =>
     assert.equal(success.title, '心口一热');
     assert.equal(success.message.includes('今天留下了新的回忆'), true);
     assert.equal(success.message.includes('小满获得了陈列柜的成就'), true);
-    const failure = shell.toastForTransition('generating', 'failed');
-    assert.equal(failure.level, 'error');
-    assert.equal(failure.message.includes('可以补全没写完的部分'), true);
+    assert.equal(shell.toastForTransition('generating', 'failed'), null);
     assert.equal(shell.toastForTransition('failed', 'failed'), null);
     assert.equal(shell.toastForTransition('reveal', 'reveal', face), null);
     const css = shell.floorShellCss();

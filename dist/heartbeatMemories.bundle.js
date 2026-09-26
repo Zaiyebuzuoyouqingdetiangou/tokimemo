@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 284
-// Source SHA-256: b88f8e2e9998ad5b168b7a40a7e9f82ac1f68bab10c1c5e4b97ab5c5fffd720a
+// Source SHA-256: cbb72c1b5f8fe92d504e2e7310f70f731a9716bb3849b918adedf2b2aa384000
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -4369,11 +4369,18 @@ function butterflySurface(session) {
     return `<div class="rmt-crt"><div class="rmt-crt-content"><div class="rmt-tree-branches">${branches}</div>${blocks}</div></div>`;
 }
 
+function songLyrics(lyrics) {
+    const text = String(textOf(lyrics) || '').trim();
+    if (!text) return '';
+    const blocks = text.split(/\n{2,}/).map(block => block.trim()).filter(Boolean);
+    return (blocks.length ? blocks : [text]).map(block => `<p class="rmt-song-stanza">${esc(block)}</p>`).join('');
+}
+
 function songSurface(session) {
     const songs = Array.isArray(session.songs) ? session.songs : [];
     if (!songs.length) return '';
-    const sheets = songs.map(song => `<article class="rmt-song-sheet rmt-song-readable"><header><h2>${esc(textOf(song.title) || '印象曲')}</h2><p>演唱者 · ${esc(textOf(song.singer))}</p></header><section class="rmt-song-style"><h3>曲风</h3><p>${esc(textOf(song.styleDescription))}</p></section><section class="rmt-song-lyrics"><h3>完整歌词</h3><pre>${esc(textOf(song.lyrics))}</pre></section></article>`).join('');
-    return `<main class="rmt-theme-song"><div class="rmt-song-layout has-songs">${sheets}</div></main>`;
+    const sheets = songs.map(song => `<article class="rmt-song-sheet rmt-song-readable"><header><h2>${esc(textOf(song.title) || '印象曲')}</h2><p>演唱者 · ${esc(textOf(song.singer))}</p></header><section class="rmt-song-style"><h3>曲风</h3><p>${esc(textOf(song.styleDescription))}</p></section><div class="rmt-song-reading-lyrics">${songLyrics(song.lyrics)}</div></article>`).join('');
+    return `<div class="rmt-theme-song"><div class="rmt-song-layout">${sheets}</div></div>`;
 }
 
 function bedtimeSurface(session) {
@@ -6032,7 +6039,9 @@ const core_text = __m_core_text_js;
 const generation_request = __m_generation_generationRequest_js;
 const auto_memory_stream = __m_autoMemory_streamGate_js;
 const ui_countdown = __m_ui_autoMemoryCountdown_js;
+const ui_taskCenter = __m_ui_taskCenter_js;
 // 启用新计划后，楼层到点就读最近这一窗正文，做成增量回忆再抽签。没有新记忆或没有可抽模块时不发模块请求。
+
 
 
 
@@ -6129,10 +6138,37 @@ async function rememberTitle(context, result) {
     if (wroteTitle || wroteLibrary) context.saveMetadataDebounced?.();
 }
 
+function moduleLabel(moduleId) {
+    return auto_memory_registry.autoMemoryModuleById(moduleId)?.title || '自动留忆';
+}
+
+async function withAutoMemoryJob(moduleId, detail, run) {
+    const label = moduleLabel(moduleId);
+    const job = ui_taskCenter.openAutoMemoryJob({ label, detail });
+    if (!job.owned) return run();
+    try {
+        const result = await run();
+        if (result?.action === 'idle') {
+            ui_taskCenter.settleAutoMemoryJob(job.id, 'cancelled', '这一轮没有要补的内容。');
+            return result;
+        }
+        const steps = result?.snapshot?.modulePlan?.steps || [];
+        const failed = result !== true && (!result || result.action === 'failed' || steps.some(step => step.status === 'failed'));
+        ui_taskCenter.settleAutoMemoryJob(job.id, failed ? 'failed' : 'done', failed ? '这一次没写完。可以再点补全。' : detail);
+        return result;
+    } catch (error) {
+        ui_taskCenter.settleAutoMemoryJob(job.id, 'failed', '这一次没写完。可以再点补全。');
+        console.warn('[HeartbeatMemories] auto memory job skipped', core_text.safeErrorDiagnostic(error));
+        return { action: 'failed', error };
+    }
+}
+
 async function runModule(snapshot, persist, context) {
-    const result = await auto_memory_host.runModulePlan(snapshot, persist, context, Date.now());
-    await rememberTitle(context, result);
-    return followIfEnabled(context, result);
+    return withAutoMemoryJob(snapshot?.modulePlan?.moduleId, '抽中了这一轮，正在写。', async () => {
+        const result = await auto_memory_host.runModulePlan(snapshot, persist, context, Date.now());
+        await rememberTitle(context, result);
+        return followIfEnabled(context, result);
+    });
 }
 
 function moduleStillOpen(result) {
@@ -6451,13 +6487,15 @@ async function failStalledFloor() {
 async function resumeFloorPlanOnce(context) {
     const snapshot = auto_memory_plan.readAutoMemoryMetadata(context.chatMetadata);
     if (!snapshot?.modulePlan) return { action: 'idle' };
-    const retryPlan = auto_memory_plan.parseModulePlan(auto_memory_redo.modulePlanForRetry(snapshot.modulePlan));
-    const prepared = auto_memory_plan.parseAutoMemorySnapshot({ ...snapshot, modulePlan: retryPlan });
-    const persist = next => persistSnapshot(context, next);
-    const result = await auto_memory_host.runModulePlan(prepared, persist, context, Date.now());
-    await rememberTitle(context, result);
-    ui_countdown.refreshAutoMemoryCountdown();
-    return followIfEnabled(context, result);
+    return withAutoMemoryJob(snapshot.modulePlan.moduleId, '接着写没完成的部分。', async () => {
+        const retryPlan = auto_memory_plan.parseModulePlan(auto_memory_redo.modulePlanForRetry(snapshot.modulePlan));
+        const prepared = auto_memory_plan.parseAutoMemorySnapshot({ ...snapshot, modulePlan: retryPlan });
+        const persist = next => persistSnapshot(context, next);
+        const result = await auto_memory_host.runModulePlan(prepared, persist, context, Date.now());
+        await rememberTitle(context, result);
+        ui_countdown.refreshAutoMemoryCountdown();
+        return followIfEnabled(context, result);
+    });
 }
 
 async function resumeFloorPlan() {
@@ -6585,6 +6623,7 @@ async function rerollOwnedFloor(messageIndex) {
     redoInflight = true;
     const oldIds = [...(ticket.sourceMemoryIds || [])];
     try {
+        const outcome = await withAutoMemoryJob(modulePlan.moduleId, '按新正文重写这一轮。', async () => {
         context.chatMetadata[auto_memory_redo.SOURCE_STAMP_KEY] = {
             drawId: ticket.id,
             dueFloor: ticket.dueFloor,
@@ -6709,11 +6748,9 @@ async function rerollOwnedFloor(messageIndex) {
         }
         ui_countdown.refreshAutoMemoryCountdown();
         await followIfEnabled(context, result);
-        return true;
-    } catch (error) {
-        console.warn('[HeartbeatMemories] floor reroll skipped', core_text.safeErrorDiagnostic(error));
-        globalThis.toastr?.error?.('这一楼的旧回忆已经撤回，新的还没写上。可以再点一次重试。', '心口顿了一下');
-        return true;
+        return result || true;
+        });
+        return outcome?.action === 'failed' ? true : !!outcome;
     } finally {
         redoInflight = false;
     }
@@ -6774,6 +6811,7 @@ async function regenerateCurrentMemory({ mode = 'keep', moduleId = '' } = {}) {
             selected = moduleId;
         }
         if (!selected) return { action: 'idle' };
+        return await withAutoMemoryJob(selected, '补上没写完的这一轮。', async () => {
         const keepPlan = mode === 'keep' && snapshot.modulePlan?.drawId === ticket.id
             ? auto_memory_plan.parseModulePlan(auto_memory_redo.resetModuleSteps(snapshot.modulePlan))
             : null;
@@ -6810,9 +6848,9 @@ async function regenerateCurrentMemory({ mode = 'keep', moduleId = '' } = {}) {
         }
         ui_countdown.refreshAutoMemoryCountdown();
         return followIfEnabled(context, result);
+        });
     } catch (error) {
         console.warn('[HeartbeatMemories] memory redo skipped', core_text.safeErrorDiagnostic(error));
-        globalThis.toastr?.error?.('这一份暂时没能重写。原来的回忆还在，可以再点一次。', '心口顿了一下');
         return { action: 'failed', error };
     } finally {
         redoInflight = false;
@@ -7018,11 +7056,15 @@ function floorShellCss() {
 .rmt-envelope{display:block;width:min(100%,240px);height:auto;filter:drop-shadow(0 12px 16px rgba(90,24,48,.16))}
 .rmt-heart-letter.is-writing .rmt-heart-letter-seal{display:grid!important;cursor:default}
 .rmt-heart-letter.is-writing .rmt-heart-letter-paper{display:none!important}
-.rmt-heart-letter-paper{margin-top:8px;min-width:0;overflow:hidden;padding:16px 14px 12px;border:1px solid #e6d3c4;border-left:7px solid #e99ab9;border-radius:4px 16px 16px 4px;background:#fff8ee;background-image:repeating-linear-gradient(0deg,transparent,transparent 22px,rgba(180,140,120,.16) 23px);color:#5c463c}
+.rmt-heart-letter-paper{margin-top:8px;min-width:0;height:auto!important;max-height:none!important;overflow:visible;padding:16px 14px 12px;border:1px solid #e6d3c4;border-left:7px solid #e99ab9;border-radius:4px 16px 16px 4px;background:#fff8ee;background-image:repeating-linear-gradient(0deg,transparent,transparent 22px,rgba(180,140,120,.16) 23px);color:#5c463c}
 .rmt-heart-letter-paper p{margin:0 0 10px;font-size:15px;line-height:1.6}
 .rmt-heart-letter-close{margin:0 0 12px}
 .rmt-heart-letter .rmt-letter-piece h3{margin:16px 0 8px;font-size:16px}
-.rmt-heart-letter .rmt-floor-body{max-height:70vh;max-width:100%;min-width:0;margin-top:10px;overflow:auto}
+.rmt-heart-letter .rmt-floor-body{display:block!important;height:auto!important;max-height:70vh!important;max-width:100%;min-width:0;min-height:0;margin-top:10px;overflow:auto!important}
+.rmt-heart-letter .rmt-theme-song,.rmt-heart-letter .rmt-song-layout,.rmt-heart-letter .rmt-song-sheet,.rmt-heart-letter .rmt-song-sheet :is(header,section,div,h2,h3,p){position:static!important;display:block!important;height:auto!important;max-height:none!important;min-height:0!important;overflow:visible!important;flex:none!important;float:none!important;visibility:visible!important;opacity:1!important;transform:none!important;width:auto!important;max-width:100%!important;grid-template-columns:none!important;color:#5c463c!important;-webkit-text-fill-color:#5c463c!important;font-size:15px!important;line-height:1.8!important;white-space:pre-wrap!important}
+.rmt-heart-letter .rmt-song-sheet{margin:0 0 8px;padding:4px 2px 8px;border:0!important;background:transparent!important;box-shadow:none!important}
+.rmt-heart-letter .rmt-song-sheet h2{font-size:22px!important;font-weight:700!important;margin:4px 0 8px!important}
+.rmt-heart-letter .rmt-song-sheet h3{font-size:13px!important;font-weight:650!important;margin:14px 0 6px!important;color:#8d6d78!important;-webkit-text-fill-color:#8d6d78!important}
 /* 信里用手机上的模块布局。生图条和会浮出屏幕的明信片留在插件页。 */
 .rmt-heart-letter .rmt-floor-body .rmt-cg-format,
 .rmt-heart-letter .rmt-floor-body .rmt-cg-provider-bar{display:none!important}
@@ -7141,9 +7183,7 @@ function toastForTransition(previousPhase, nextPhase, face = {}, { initial = fal
     if (nextPhase === 'reveal') {
         return { level: 'success', title: '心口一热', message: `今天留下了新的回忆。${face.line || '一段新的回忆'}。点开楼层下面，就能看见。` };
     }
-    if (nextPhase === 'failed') {
-        return { level: 'error', title: '这份回忆停住了', message: '可以补全没写完的部分，或再试一次。任务中心也能看到。' };
-    }
+    if (nextPhase === 'failed') return null;
     if (nextPhase === 'achievement-pending') {
         return { level: 'warning', title: '回忆先留着', message: '成就还缺一笔。先不拆开，写好的部分还在。' };
     }
@@ -37686,6 +37726,7 @@ async function generateModeOperation(mode, options = {}) {
         if (!archiveTarget && mode === core_constants.MODE.PHONE && error?.code === 'RMT_PHONE_DRAFT_AVAILABLE' && runtimeState.activeMode === core_constants.MODE.ROOM && runtimeState.activeSession?.kind === core_constants.MODE.ROOM) {
             modes_room.renderRoom();
         }
+        if (options.autoMemory === true) return null;
         if (archiveTarget && !targetVisible) {
             globalThis.toastr?.error?.(
                 core_text.toastText(`${archiveTarget.characterName} · ${archiveTarget.archiveName} · ${core_constants.MODE_LABEL[mode]}：${safeError}`),
@@ -61091,7 +61132,6 @@ function onClick(event) {
         complete.disabled = true;
         watchFloorAction(auto_memory_scheduler.completeFloorRound(), '等这楼正文写完，再补这一页。').catch(error => {
             console.warn('[HeartbeatMemories] floor complete skipped', core_text.safeErrorDiagnostic(error));
-            globalThis.toastr?.error?.('这一页暂时没能补上。可以再点一次补全。', '心口顿了一下');
         }).finally(() => { complete.disabled = false; sync(); });
         return;
     }
@@ -61102,7 +61142,6 @@ function onClick(event) {
         redo.disabled = true;
         watchFloorAction(auto_memory_scheduler.retryFloorRound(), '等这楼正文写完，再重写这一页。').catch(error => {
             console.warn('[HeartbeatMemories] floor redo skipped', core_text.safeErrorDiagnostic(error));
-            globalThis.toastr?.error?.('这一页暂时没能重写。可以再点一次重试。', '心口顿了一下');
         }).finally(() => { redo.disabled = false; sync(); });
         return;
     }
@@ -61113,7 +61152,6 @@ function onClick(event) {
         retry.disabled = true;
         watchFloorAction(auto_memory_scheduler.resumeFloorPlan(), '等这楼正文写完，再重写这一页。').catch(error => {
             console.warn('[HeartbeatMemories] floor retry skipped', core_text.safeErrorDiagnostic(error));
-            globalThis.toastr?.error?.('这一封暂时没能续上。可以再点一次重试。', '心口顿了一下');
         }).finally(() => { retry.disabled = false; sync(); });
         return;
     }
@@ -76128,7 +76166,41 @@ function setQueuePick(route, on) {
 }
 
 function queuedForScope(scope = currentScope()) {
-    return queue.filter(item => item.scope === scope && item.status === 'queued');
+    return queue.filter(item => item.scope === scope && item.status === 'queued' && item.kind !== 'auto-memory');
+}
+
+function openAutoMemoryJob({ label = '自动留忆', detail = '正在写这一轮回忆' } = {}) {
+    const scope = currentScope();
+    if (!scope) return { id: '', owned: false };
+    const running = queue.find(item => item.kind === 'auto-memory' && item.scope === scope && item.status === 'running' && item.label === label);
+    if (running) {
+        running.detail = detail;
+        refreshTaskCenterView();
+        return { id: running.id, owned: false };
+    }
+    const item = {
+        id: `auto-memory-${Date.now().toString(36)}-${queue.length}`,
+        kind: 'auto-memory',
+        label,
+        detail,
+        scope,
+        status: 'running',
+        attached: false,
+        at: Date.now(),
+    };
+    queue.push(item);
+    trimQueue();
+    refreshTaskCenterView();
+    return { id: item.id, owned: true };
+}
+
+function settleAutoMemoryJob(id, status, detail = '') {
+    const item = queue.find(row => row.id === id && row.kind === 'auto-memory');
+    if (!item || item.status !== 'running') return;
+    item.status = status === 'failed' ? 'failed' : status === 'cancelled' ? 'cancelled' : 'done';
+    if (detail) item.detail = detail;
+    trimQueue();
+    refreshTaskCenterView();
 }
 
 function dropForeignQueue() {
@@ -76256,7 +76328,7 @@ async function pumpQueue() {
                 trimQueue();
                 refreshTaskCenterView();
             }
-            const next = queue.find(item => item.status === 'queued' && item.scope === scope);
+            const next = queue.find(item => item.status === 'queued' && item.scope === scope && item.kind !== 'auto-memory');
             if (!next || runtimeState.busy) return;
             if (next.kind === 'recovery') {
                 if (core_requestCoordinator.isModeGenerating(next.mode)) return;
@@ -76606,7 +76678,17 @@ function collectTaskCards() {
     }
     const scope = currentScope();
     const mine = queue.filter(item => item.scope === scope);
-    mine.filter(item => item.status === 'queued').forEach((item, index) => {
+    for (const item of mine) {
+        if (item.kind !== 'auto-memory' || (item.status !== 'running' && item.status !== 'queued')) continue;
+        cards.push({
+            state: item.status === 'queued' ? 'queued' : 'running',
+            label: item.label,
+            detail: item.detail || '正在写这一轮回忆',
+            at: item.at || Date.now(),
+            actions: '',
+        });
+    }
+    mine.filter(item => item.status === 'queued' && item.kind !== 'auto-memory').forEach((item, index) => {
         if (cards.some(card => sameJob(card, item) && card.state === 'running')) return;
         const existing = cards.find(card => sameJob(card, item));
         const next = {
@@ -76646,16 +76728,18 @@ function collectTaskCards() {
     }
     for (const item of mine) {
         if (item.status !== 'done' && item.status !== 'failed' && item.status !== 'cancelled') continue;
-        if (cards.some(card => sameJob(card, item))) continue;
+        if (item.kind !== 'auto-memory' && cards.some(card => sameJob(card, item))) continue;
         cards.push({
             state: item.status === 'failed' ? 'failed' : item.status === 'cancelled' ? 'cancelled' : 'done',
             label: item.label,
             mode: item.mode || '',
             pageId: item.pageId || '',
             draftId: item.draftId || '',
-            detail: item.kind === 'recovery' ? '自动重试未完成部分' : '当前聊天 · 串行队列',
-            at: 0,
-            actions: item.status === 'failed'
+            detail: item.kind === 'auto-memory' ? (item.detail || '这一轮回忆') : item.kind === 'recovery' ? '自动重试未完成部分' : '当前聊天 · 串行队列',
+            at: item.at || 0,
+            actions: item.kind === 'auto-memory'
+                ? (item.status === 'failed' ? '<button type="button" class="rmt-btn" data-rmt-action="task-floor-complete">补全没写完的部分</button><button type="button" class="rmt-btn" data-rmt-action="task-floor-retry">重试</button>' : '')
+                : item.status === 'failed'
                 ? `${failedRetryHtml(item.kind === 'recovery' || item.draftId
                     ? { kind: item.kind, mode: item.mode, pageId: item.pageId, draftId: item.draftId, label: item.label }
                     : { queueRoute: item.route, queueId: item.id })}${openAction({ id: '', mode: item.mode, pageId: item.pageId, label: item.label, outcome: item.status })}`
@@ -76921,7 +77005,6 @@ function handleTaskCenterAction(action, actionEl) {
             if (result?.action === 'wait' || result?.action === 'busy') globalThis.toastr?.info?.(waiting, '心迹回廊');
         }).catch(error => {
             console.warn('[HeartbeatMemories] floor recovery skipped', core_text.safeErrorDiagnostic(error));
-            globalThis.toastr?.error?.('这一次没能补上。可以再点一次。', '心口顿了一下');
         });
         return;
     }
@@ -77102,6 +77185,8 @@ __m_ui_taskCenter_js.clearAutoMemoryFloorFailure = clearAutoMemoryFloorFailure;
 __m_ui_taskCenter_js.queuePickHtml = queuePickHtml;
 __m_ui_taskCenter_js.selectedQueueRoutes = selectedQueueRoutes;
 __m_ui_taskCenter_js.setQueuePick = setQueuePick;
+__m_ui_taskCenter_js.openAutoMemoryJob = openAutoMemoryJob;
+__m_ui_taskCenter_js.settleAutoMemoryJob = settleAutoMemoryJob;
 __m_ui_taskCenter_js.noteRetryableGeneration = noteRetryableGeneration;
 __m_ui_taskCenter_js.settleQueuedItem = settleQueuedItem;
 __m_ui_taskCenter_js.enqueueSelectedModes = enqueueSelectedModes;

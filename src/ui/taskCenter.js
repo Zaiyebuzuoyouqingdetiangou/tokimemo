@@ -78,7 +78,41 @@ export function setQueuePick(route, on) {
 }
 
 function queuedForScope(scope = currentScope()) {
-    return queue.filter(item => item.scope === scope && item.status === 'queued');
+    return queue.filter(item => item.scope === scope && item.status === 'queued' && item.kind !== 'auto-memory');
+}
+
+export function openAutoMemoryJob({ label = '自动留忆', detail = '正在写这一轮回忆' } = {}) {
+    const scope = currentScope();
+    if (!scope) return { id: '', owned: false };
+    const running = queue.find(item => item.kind === 'auto-memory' && item.scope === scope && item.status === 'running' && item.label === label);
+    if (running) {
+        running.detail = detail;
+        refreshTaskCenterView();
+        return { id: running.id, owned: false };
+    }
+    const item = {
+        id: `auto-memory-${Date.now().toString(36)}-${queue.length}`,
+        kind: 'auto-memory',
+        label,
+        detail,
+        scope,
+        status: 'running',
+        attached: false,
+        at: Date.now(),
+    };
+    queue.push(item);
+    trimQueue();
+    refreshTaskCenterView();
+    return { id: item.id, owned: true };
+}
+
+export function settleAutoMemoryJob(id, status, detail = '') {
+    const item = queue.find(row => row.id === id && row.kind === 'auto-memory');
+    if (!item || item.status !== 'running') return;
+    item.status = status === 'failed' ? 'failed' : status === 'cancelled' ? 'cancelled' : 'done';
+    if (detail) item.detail = detail;
+    trimQueue();
+    refreshTaskCenterView();
 }
 
 function dropForeignQueue() {
@@ -206,7 +240,7 @@ async function pumpQueue() {
                 trimQueue();
                 refreshTaskCenterView();
             }
-            const next = queue.find(item => item.status === 'queued' && item.scope === scope);
+            const next = queue.find(item => item.status === 'queued' && item.scope === scope && item.kind !== 'auto-memory');
             if (!next || runtimeState.busy) return;
             if (next.kind === 'recovery') {
                 if (core_requestCoordinator.isModeGenerating(next.mode)) return;
@@ -556,7 +590,17 @@ function collectTaskCards() {
     }
     const scope = currentScope();
     const mine = queue.filter(item => item.scope === scope);
-    mine.filter(item => item.status === 'queued').forEach((item, index) => {
+    for (const item of mine) {
+        if (item.kind !== 'auto-memory' || (item.status !== 'running' && item.status !== 'queued')) continue;
+        cards.push({
+            state: item.status === 'queued' ? 'queued' : 'running',
+            label: item.label,
+            detail: item.detail || '正在写这一轮回忆',
+            at: item.at || Date.now(),
+            actions: '',
+        });
+    }
+    mine.filter(item => item.status === 'queued' && item.kind !== 'auto-memory').forEach((item, index) => {
         if (cards.some(card => sameJob(card, item) && card.state === 'running')) return;
         const existing = cards.find(card => sameJob(card, item));
         const next = {
@@ -596,16 +640,18 @@ function collectTaskCards() {
     }
     for (const item of mine) {
         if (item.status !== 'done' && item.status !== 'failed' && item.status !== 'cancelled') continue;
-        if (cards.some(card => sameJob(card, item))) continue;
+        if (item.kind !== 'auto-memory' && cards.some(card => sameJob(card, item))) continue;
         cards.push({
             state: item.status === 'failed' ? 'failed' : item.status === 'cancelled' ? 'cancelled' : 'done',
             label: item.label,
             mode: item.mode || '',
             pageId: item.pageId || '',
             draftId: item.draftId || '',
-            detail: item.kind === 'recovery' ? '自动重试未完成部分' : '当前聊天 · 串行队列',
-            at: 0,
-            actions: item.status === 'failed'
+            detail: item.kind === 'auto-memory' ? (item.detail || '这一轮回忆') : item.kind === 'recovery' ? '自动重试未完成部分' : '当前聊天 · 串行队列',
+            at: item.at || 0,
+            actions: item.kind === 'auto-memory'
+                ? (item.status === 'failed' ? '<button type="button" class="rmt-btn" data-rmt-action="task-floor-complete">补全没写完的部分</button><button type="button" class="rmt-btn" data-rmt-action="task-floor-retry">重试</button>' : '')
+                : item.status === 'failed'
                 ? `${failedRetryHtml(item.kind === 'recovery' || item.draftId
                     ? { kind: item.kind, mode: item.mode, pageId: item.pageId, draftId: item.draftId, label: item.label }
                     : { queueRoute: item.route, queueId: item.id })}${openAction({ id: '', mode: item.mode, pageId: item.pageId, label: item.label, outcome: item.status })}`
@@ -871,7 +917,6 @@ export function handleTaskCenterAction(action, actionEl) {
             if (result?.action === 'wait' || result?.action === 'busy') globalThis.toastr?.info?.(waiting, '心迹回廊');
         }).catch(error => {
             console.warn('[HeartbeatMemories] floor recovery skipped', core_text.safeErrorDiagnostic(error));
-            globalThis.toastr?.error?.('这一次没能补上。可以再点一次。', '心口顿了一下');
         });
         return;
     }

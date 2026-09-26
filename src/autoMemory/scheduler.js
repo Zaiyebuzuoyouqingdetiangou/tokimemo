@@ -21,6 +21,7 @@ import * as core_text from '../core/text.js';
 import * as generation_request from '../generation/generationRequest.js';
 import * as auto_memory_stream from './streamGate.js';
 import * as ui_countdown from '../ui/autoMemoryCountdown.js';
+import * as ui_taskCenter from '../ui/taskCenter.js';
 
 let cleanup = null;
 let leaseOwner = '';
@@ -96,10 +97,37 @@ async function rememberTitle(context, result) {
     if (wroteTitle || wroteLibrary) context.saveMetadataDebounced?.();
 }
 
+function moduleLabel(moduleId) {
+    return auto_memory_registry.autoMemoryModuleById(moduleId)?.title || '自动留忆';
+}
+
+async function withAutoMemoryJob(moduleId, detail, run) {
+    const label = moduleLabel(moduleId);
+    const job = ui_taskCenter.openAutoMemoryJob({ label, detail });
+    if (!job.owned) return run();
+    try {
+        const result = await run();
+        if (result?.action === 'idle') {
+            ui_taskCenter.settleAutoMemoryJob(job.id, 'cancelled', '这一轮没有要补的内容。');
+            return result;
+        }
+        const steps = result?.snapshot?.modulePlan?.steps || [];
+        const failed = result !== true && (!result || result.action === 'failed' || steps.some(step => step.status === 'failed'));
+        ui_taskCenter.settleAutoMemoryJob(job.id, failed ? 'failed' : 'done', failed ? '这一次没写完。可以再点补全。' : detail);
+        return result;
+    } catch (error) {
+        ui_taskCenter.settleAutoMemoryJob(job.id, 'failed', '这一次没写完。可以再点补全。');
+        console.warn('[HeartbeatMemories] auto memory job skipped', core_text.safeErrorDiagnostic(error));
+        return { action: 'failed', error };
+    }
+}
+
 async function runModule(snapshot, persist, context) {
-    const result = await auto_memory_host.runModulePlan(snapshot, persist, context, Date.now());
-    await rememberTitle(context, result);
-    return followIfEnabled(context, result);
+    return withAutoMemoryJob(snapshot?.modulePlan?.moduleId, '抽中了这一轮，正在写。', async () => {
+        const result = await auto_memory_host.runModulePlan(snapshot, persist, context, Date.now());
+        await rememberTitle(context, result);
+        return followIfEnabled(context, result);
+    });
 }
 
 function moduleStillOpen(result) {
@@ -418,13 +446,15 @@ export async function failStalledFloor() {
 async function resumeFloorPlanOnce(context) {
     const snapshot = auto_memory_plan.readAutoMemoryMetadata(context.chatMetadata);
     if (!snapshot?.modulePlan) return { action: 'idle' };
-    const retryPlan = auto_memory_plan.parseModulePlan(auto_memory_redo.modulePlanForRetry(snapshot.modulePlan));
-    const prepared = auto_memory_plan.parseAutoMemorySnapshot({ ...snapshot, modulePlan: retryPlan });
-    const persist = next => persistSnapshot(context, next);
-    const result = await auto_memory_host.runModulePlan(prepared, persist, context, Date.now());
-    await rememberTitle(context, result);
-    ui_countdown.refreshAutoMemoryCountdown();
-    return followIfEnabled(context, result);
+    return withAutoMemoryJob(snapshot.modulePlan.moduleId, '接着写没完成的部分。', async () => {
+        const retryPlan = auto_memory_plan.parseModulePlan(auto_memory_redo.modulePlanForRetry(snapshot.modulePlan));
+        const prepared = auto_memory_plan.parseAutoMemorySnapshot({ ...snapshot, modulePlan: retryPlan });
+        const persist = next => persistSnapshot(context, next);
+        const result = await auto_memory_host.runModulePlan(prepared, persist, context, Date.now());
+        await rememberTitle(context, result);
+        ui_countdown.refreshAutoMemoryCountdown();
+        return followIfEnabled(context, result);
+    });
 }
 
 export async function resumeFloorPlan() {
@@ -552,6 +582,7 @@ async function rerollOwnedFloor(messageIndex) {
     redoInflight = true;
     const oldIds = [...(ticket.sourceMemoryIds || [])];
     try {
+        const outcome = await withAutoMemoryJob(modulePlan.moduleId, '按新正文重写这一轮。', async () => {
         context.chatMetadata[auto_memory_redo.SOURCE_STAMP_KEY] = {
             drawId: ticket.id,
             dueFloor: ticket.dueFloor,
@@ -676,11 +707,9 @@ async function rerollOwnedFloor(messageIndex) {
         }
         ui_countdown.refreshAutoMemoryCountdown();
         await followIfEnabled(context, result);
-        return true;
-    } catch (error) {
-        console.warn('[HeartbeatMemories] floor reroll skipped', core_text.safeErrorDiagnostic(error));
-        globalThis.toastr?.error?.('这一楼的旧回忆已经撤回，新的还没写上。可以再点一次重试。', '心口顿了一下');
-        return true;
+        return result || true;
+        });
+        return outcome?.action === 'failed' ? true : !!outcome;
     } finally {
         redoInflight = false;
     }
@@ -741,6 +770,7 @@ export async function regenerateCurrentMemory({ mode = 'keep', moduleId = '' } =
             selected = moduleId;
         }
         if (!selected) return { action: 'idle' };
+        return await withAutoMemoryJob(selected, '补上没写完的这一轮。', async () => {
         const keepPlan = mode === 'keep' && snapshot.modulePlan?.drawId === ticket.id
             ? auto_memory_plan.parseModulePlan(auto_memory_redo.resetModuleSteps(snapshot.modulePlan))
             : null;
@@ -777,9 +807,9 @@ export async function regenerateCurrentMemory({ mode = 'keep', moduleId = '' } =
         }
         ui_countdown.refreshAutoMemoryCountdown();
         return followIfEnabled(context, result);
+        });
     } catch (error) {
         console.warn('[HeartbeatMemories] memory redo skipped', core_text.safeErrorDiagnostic(error));
-        globalThis.toastr?.error?.('这一份暂时没能重写。原来的回忆还在，可以再点一次。', '心口顿了一下');
         return { action: 'failed', error };
     } finally {
         redoInflight = false;

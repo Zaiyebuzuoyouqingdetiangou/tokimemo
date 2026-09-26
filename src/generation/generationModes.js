@@ -751,6 +751,7 @@ async function generateModeOperation(mode, options = {}) {
         if (!archiveTarget && mode === core_constants.MODE.PHONE && error?.code === 'RMT_PHONE_DRAFT_AVAILABLE' && runtimeState.activeMode === core_constants.MODE.ROOM && runtimeState.activeSession?.kind === core_constants.MODE.ROOM) {
             modes_room.renderRoom();
         }
+        if (options.autoMemory === true) return null;
         if (archiveTarget && !targetVisible) {
             globalThis.toastr?.error?.(
                 core_text.toastText(`${archiveTarget.characterName} · ${archiveTarget.archiveName} · ${core_constants.MODE_LABEL[mode]}：${safeError}`),
