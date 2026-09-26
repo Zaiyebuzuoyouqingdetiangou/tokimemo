@@ -20,6 +20,12 @@ test('a new plugin summary is archived instead of rereading the same floors', ()
     assert.equal(summary.archiveSourceForDue({ summaryChanged: true, summaryCount: 1 }), 'summary');
     assert.equal(summary.archiveSourceForDue({ summaryChanged: false, summaryCount: 1 }), 'floors');
     assert.equal(summary.archiveSourceForDue({ summaryChanged: true, summaryCount: 0 }), 'floors');
+    const window = [
+        { index: 6, text: '第六楼全文' },
+        { index: 7, text: '第七楼全文，不应该被截断。' },
+    ];
+    assert.deepEqual(summary.uncoveredWindowMessages(window, [{ messageStart: 6, messageEnd: 6 }]).map(item => item.index), [7]);
+    assert.equal(summary.uncoveredWindowMessages(window, [{ text: '没有楼号的摘要' }])[1].text, '第七楼全文，不应该被截断。');
 });
 
 test('an indexedDB lease is exclusive until it expires and a takeover sees finished steps', async () => {

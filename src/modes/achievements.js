@@ -11,6 +11,7 @@ import { state as runtimeState } from '../core/state.js';
 import * as core_text from '../core/text.js';
 import * as generation_client from '../generation/client.js';
 import * as generation_prompts from '../generation/prompts.js';
+import * as ui_floor from '../ui/chatFloorNav.js';
 import * as ui_overlay from '../ui/overlay.js';
 import * as generation_modesBridge from '../generation/modesBridge.js';
 
@@ -209,8 +210,13 @@ function lookbackHtml(item, bank) {
     const period = look.period ? `<small>时期：${core_text.esc(look.period)}</small>` : '';
     const summary = look.summary ? `<p>${core_text.esc(look.summary)}</p>` : '';
     const note = look.sourceNote ? `<small>${core_text.esc(look.sourceNote)}</small>` : '';
-    const jump = look.jumpFloor == null ? '' : `<button type="button" class="rmt-btn" data-rmt-action="achievement-jump" data-rmt-floor="${look.jumpFloor}">回到当时</button>`;
-    const floors = look.floors.length > 1 ? `<div>${look.floors.map(floor => `<button type="button" class="rmt-btn" data-rmt-action="achievement-jump" data-rmt-floor="${floor}">#${floor}</button>`).join('')}</div>` : '';
+    const shown = floor => ui_floor.displayedMesid(floor);
+    const jumpId = shown(look.jumpFloor);
+    const jump = jumpId == null ? '' : `<button type="button" class="rmt-btn" data-rmt-action="achievement-jump" data-rmt-floor="${jumpId}">回到当时</button>`;
+    const floors = look.floors.length > 1 ? `<div>${look.floors.map(floor => {
+        const id = shown(floor);
+        return id == null ? '' : `<button type="button" class="rmt-btn" data-rmt-action="achievement-jump" data-rmt-floor="${id}">#${id}</button>`;
+    }).join('')}</div>` : '';
     return `<div class="rmt-achievement-lookback"><span>${label}</span>${period}${summary}${note}<button type="button" class="rmt-btn" data-rmt-action="achievement-open" data-rmt-achievement-id="${core_text.esc(item.id)}" data-rmt-mode="${core_text.esc(look.moduleId)}">打开这段回忆</button>${jump}${floors}</div>`;
 }
 

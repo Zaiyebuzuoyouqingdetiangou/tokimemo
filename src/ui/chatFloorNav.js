@@ -21,12 +21,19 @@ export function writesMessageText() {
 
 export function highlightFloor(floor, root = document) {
     const value = Math.floor(Number(floor));
-    if (!Number.isSafeInteger(value) || value < 1) return { ok: false, mesid: null };
-    const node = messageElement(value - 1, root);
-    if (!node) return { ok: false, mesid: value - 1 };
+    if (!Number.isSafeInteger(value) || value < 0) return { ok: false, mesid: null };
+    const node = messageElement(value, root);
+    if (!node) return { ok: false, mesid: value };
     root.querySelectorAll?.('.rmt-floor-return')?.forEach(item => item.classList.remove('rmt-floor-return'));
     node.classList.add('rmt-floor-return');
     try { node.scrollIntoView({ block: 'center' }); }
     catch { try { node.scrollIntoView(); } catch { /* 滚动失败只放弃跳转，不改成就。 */ } }
-    return { ok: true, mesid: value - 1 };
+    return { ok: true, mesid: value };
+}
+
+// 档案楼号从 1 计数，聊天上印出来的 # 是 mesid。回到当时用印出来的那个数。
+export function displayedMesid(storedFloor) {
+    const value = Math.floor(Number(storedFloor));
+    if (!Number.isSafeInteger(value) || value < 1) return null;
+    return value - 1;
 }

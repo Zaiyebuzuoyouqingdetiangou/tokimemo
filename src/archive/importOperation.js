@@ -4,7 +4,6 @@ import * as draft_inputs from './draftInputs.js';
 import * as archive_batches from './importBatches.js';
 import * as archive_coverage from './coverageRanges.js';
 import * as archive_summary from './summaryPreference.js';
-import * as auto_memory_floor from '../autoMemory/floorPace.js';
 import * as archive_requestBudget from './requestBudget.js';
 import * as core_cache from '../core/cache.js';
 import * as core_constants from '../core/constants.js';
@@ -41,7 +40,7 @@ function windowChatMessages(context, floorWindow) {
         role: row.message?.is_user === true ? 'user' : 'char',
         name: core_text.normalizeText(row.message?.name, 120),
         date: core_text.normalizeText(row.message?.send_date || row.message?.date || '', 80),
-        text: core_text.normalizeText(row.message?.mes, 8000),
+        text: String(row.message?.mes ?? '').replace(/\r\n?/g, '\n').replace(/\u0000/g, '').trim(),
     })).filter(item => item.text);
 }
 
@@ -199,19 +198,17 @@ export async function importCurrentChatMemoryOperation({ fullRebuild = false, au
     // deduplicates already archived content and never deletes records outside the range.
     let chatInput = sceneOnly ? [] : (progress || restartImport ? snapshot.messages : incrementalUpdate && !rangeChanged ? snapshot.incrementalMessages : snapshot.messages);
     const externalChanged = !!progress || restartImport || !incrementalUpdate || core_text.normalizeText(existing?.externalMemoryFingerprint, 240) !== core_text.normalizeText(external.fingerprint, 240);
-    // 自动留忆先建档。记忆插件有新摘要时直接用摘要；否则只读这一窗正文，不改用户保存的读取范围。
+    // 自动留忆先建档。有新摘要时，摘要和没被摘要点名的楼一起送出，正文不截断。摘要没更新才只读这一窗。
     if (automatic && floorWindow && !progress && !restartImport && !capturedInput && !sceneOnly) {
         const scoped = windowChatMessages(context, floorWindow);
-        if (floorWindow.latestAssistant === true) {
-            const mixed = auto_memory_floor.latestAssistantWindow(scoped, floorWindow.interval);
-            if (mixed.length) chatInput = mixed;
-        } else {
-            const source = archive_summary.archiveSourceForDue({
-                summaryChanged: externalChanged,
-                summaryCount: archive_summary.pluginSummaryCount(external),
-            });
-            if (source === 'floors' && scoped.length) chatInput = scoped;
-        }
+        const source = archive_summary.archiveSourceForDue({
+            summaryChanged: externalChanged,
+            summaryCount: archive_summary.pluginSummaryCount(external),
+        });
+        if (source === 'summary') {
+            const uncovered = archive_summary.uncoveredWindowMessages(scoped, external.records);
+            chatInput = uncovered;
+        } else if (scoped.length) chatInput = scoped;
     }
     if (!progress && incrementalUpdate && !chatInput.length && !externalChanged) {
         clearMemoryPreflight(context);

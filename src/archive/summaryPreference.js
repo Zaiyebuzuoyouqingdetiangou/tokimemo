@@ -18,3 +18,30 @@ export function archiveSourceForDue({ summaryChanged = false, summaryCount = 0 }
     if (summaryChanged === true && summaryCount > 0) return 'summary';
     return 'floors';
 }
+
+function namedFloors(record) {
+    const floors = [];
+    const single = [record?.messageStart, record?.messageEnd, record?.msgIndex, record?.floor, record?.messageIndex];
+    const start = Math.floor(Number(record?.messageStart ?? record?.msgIndex ?? record?.floor ?? record?.messageIndex));
+    const end = Math.floor(Number(record?.messageEnd ?? record?.msgIndex ?? record?.floor ?? record?.messageIndex));
+    if (Number.isSafeInteger(start) && start >= 1 && Number.isSafeInteger(end) && end >= start && end - start <= 400) {
+        for (let floor = start; floor <= end; floor += 1) floors.push(floor);
+        return floors;
+    }
+    for (const value of single) {
+        const floor = Math.floor(Number(value));
+        if (Number.isSafeInteger(floor) && floor >= 1) floors.push(floor);
+    }
+    return floors;
+}
+
+// 摘要写明了楼号时，只补没被点名的楼，正文不截断。摘要没有楼号时，这一窗正文整段附上。
+export function uncoveredWindowMessages(messages, records = []) {
+    const rows = Array.isArray(messages) ? messages : [];
+    const named = new Set();
+    for (const record of Array.isArray(records) ? records : []) {
+        for (const floor of namedFloors(record)) named.add(floor);
+    }
+    if (!named.size) return rows.map(item => ({ ...item }));
+    return rows.filter(item => !named.has(Math.floor(Number(item?.index)))).map(item => ({ ...item }));
+}

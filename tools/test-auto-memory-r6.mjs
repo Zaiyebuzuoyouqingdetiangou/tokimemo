@@ -36,6 +36,14 @@ test('one reveal id is shared and a floor mount does not write the message', () 
     assert.equal(host.parent, message.block);
     assert.equal(message.children.includes(host), false);
     assert.equal(host.dataset.rmtFloorShell, '1');
+    assert.equal(floor.displayedMesid(56), 55);
+    const marked = { classList: { add() { this.marked = true; } }, scrollIntoView() {} };
+    const root = {
+        querySelector(selector) { return selector.includes('mesid="55"') ? marked : null; },
+        querySelectorAll() { return []; },
+    };
+    assert.equal(floor.highlightFloor(55, root).ok, true);
+    assert.equal(marked.classList.marked, true);
     assert.equal(reveal.firstReveal('generating', 'ready'), true);
     assert.equal(reveal.firstReveal('ready', 'ready'), false);
     assert.equal(reveal.firstReveal('opened', 'ready'), false);

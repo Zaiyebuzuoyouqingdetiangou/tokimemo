@@ -1,5 +1,5 @@
-const VERSION = '0.99.71';
-const BUILD = '0.99.71-r84.123-image-refill-reconnect';
+const VERSION = '0.99.72';
+const BUILD = '0.99.72-r84.124-settled-floor';
 
 const SETTINGS_ID = 'heartbeat_memories_settings';
 const MENU_ID = 'heartbeat_memories_menu_item';

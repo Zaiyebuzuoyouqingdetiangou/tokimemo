@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
-// Source modules: 281
-// Source SHA-256: 06fb77146c85ae133a098265b979bc9a44780edd5cf40a4a923dd45c6dd5e19d
+// Source modules: 282
+// Source SHA-256: 6d54b72724db8815a775c57124c96f8bdf600efd788acb2de4d6cf13da59f3b1
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -49,6 +49,7 @@ const __m_autoMemory_moduleRunner_js = Object.create(null);
 const __m_autoMemory_planStore_js = Object.create(null);
 const __m_autoMemory_scheduler_js = Object.create(null);
 const __m_autoMemory_shellState_js = Object.create(null);
+const __m_autoMemory_streamGate_js = Object.create(null);
 const __m_autoMemory_wizardPlan_js = Object.create(null);
 const __m_core_advancedGeneration_js = Object.create(null);
 const __m_core_archiveBridge_js = Object.create(null);
@@ -2953,8 +2954,36 @@ function archiveSourceForDue({ summaryChanged = false, summaryCount = 0 } = {}) 
     return 'floors';
 }
 
+function namedFloors(record) {
+    const floors = [];
+    const single = [record?.messageStart, record?.messageEnd, record?.msgIndex, record?.floor, record?.messageIndex];
+    const start = Math.floor(Number(record?.messageStart ?? record?.msgIndex ?? record?.floor ?? record?.messageIndex));
+    const end = Math.floor(Number(record?.messageEnd ?? record?.msgIndex ?? record?.floor ?? record?.messageIndex));
+    if (Number.isSafeInteger(start) && start >= 1 && Number.isSafeInteger(end) && end >= start && end - start <= 400) {
+        for (let floor = start; floor <= end; floor += 1) floors.push(floor);
+        return floors;
+    }
+    for (const value of single) {
+        const floor = Math.floor(Number(value));
+        if (Number.isSafeInteger(floor) && floor >= 1) floors.push(floor);
+    }
+    return floors;
+}
+
+// 摘要写明了楼号时，只补没被点名的楼，正文不截断。摘要没有楼号时，这一窗正文整段附上。
+function uncoveredWindowMessages(messages, records = []) {
+    const rows = Array.isArray(messages) ? messages : [];
+    const named = new Set();
+    for (const record of Array.isArray(records) ? records : []) {
+        for (const floor of namedFloors(record)) named.add(floor);
+    }
+    if (!named.size) return rows.map(item => ({ ...item }));
+    return rows.filter(item => !named.has(Math.floor(Number(item?.index)))).map(item => ({ ...item }));
+}
+
 __m_archive_summaryPreference_js.pluginSummaryCount = pluginSummaryCount;
 __m_archive_summaryPreference_js.archiveSourceForDue = archiveSourceForDue;
+__m_archive_summaryPreference_js.uncoveredWindowMessages = uncoveredWindowMessages;
 }
 
 function __init_autoMemory_achievementLookback_js() {
@@ -3307,17 +3336,11 @@ function chatRangeForAssistantSpan(chat, startCount, endCount) {
     return { start: first, end: last };
 }
 
-// 间隔 1：只留最新一条角色楼正文。间隔更大：前面几条收成短摘要，最后一条保留正文。
+// 间隔窗口里的角色楼都保留完整正文。摘要没写到的楼在建档时另附原文，这里不截字。
 function latestAssistantWindow(messages, interval) {
     const assistant = (Array.isArray(messages) ? messages : []).filter(item => item && item.role !== 'user' && String(item.text || '').trim());
     const count = Math.max(1, Math.floor(Number(interval)) || 1);
-    const slice = assistant.slice(-count);
-    if (slice.length < 2) return slice.map(item => ({ ...item }));
-    return slice.map((item, index) => {
-        if (index === slice.length - 1) return { ...item };
-        const brief = String(item.text || '').replace(/\s+/g, ' ').trim().slice(0, 180);
-        return { ...item, text: brief };
-    }).filter(item => item.text);
+    return assistant.slice(-count).map(item => ({ ...item }));
 }
 
 function countdownLabel(left) {
@@ -3335,7 +3358,9 @@ function assistantBodyReady(chat, options = {}) {
         const message = list[index];
         if (!message || message.is_system === true) continue;
         if (message.is_user === true) return false;
-        return String(message.mes ?? '').trim().length > 0;
+        const text = String(message.mes ?? '').trim();
+        if (!text || /^[.。…．]{1,12}$/.test(text)) return false;
+        return true;
     }
     return false;
 }
@@ -3356,6 +3381,25 @@ const core_text = __m_core_text_js;
 // 到点却没有新编号时，只再问一次：这一窗要不要补一条档案。
 
 const GAP_KEY = 'autoMemoryGapV1';
+const ACHIEVEMENT_TITLE_KEY = 'autoMemoryAchievementTitlesV1';
+
+function rememberedAchievementTitle(metadata, achievementId) {
+    const map = metadata?.[ACHIEVEMENT_TITLE_KEY];
+    const title = typeof achievementId === 'string' ? map?.[achievementId] : '';
+    return typeof title === 'string' ? title.replace(/[\u0000-\u001f]/g, '').trim().slice(0, 40) : '';
+}
+
+function rememberAchievementTitle(metadata, achievement) {
+    const id = typeof achievement?.id === 'string' ? achievement.id : '';
+    const title = String(achievement?.title || '').replace(/[\u0000-\u001f]/g, '').trim().slice(0, 40);
+    if (!metadata || !id || !title) return false;
+    const prev = metadata[ACHIEVEMENT_TITLE_KEY];
+    const map = prev && typeof prev === 'object' && !Array.isArray(prev) ? { ...prev } : {};
+    if (map[id] === title) return false;
+    map[id] = title;
+    metadata[ACHIEVEMENT_TITLE_KEY] = map;
+    return true;
+}
 
 function readableGap(note) {
     if (!note || note.schemaVersion !== 1 || note.reason !== 'no-new-memory') return null;
@@ -3413,10 +3457,13 @@ function oneSupplementMemory(data, bounds = {}) {
     };
 }
 
+__m_autoMemory_gapFill_js.rememberedAchievementTitle = rememberedAchievementTitle;
+__m_autoMemory_gapFill_js.rememberAchievementTitle = rememberAchievementTitle;
 __m_autoMemory_gapFill_js.readableGap = readableGap;
 __m_autoMemory_gapFill_js.supplementPrompt = supplementPrompt;
 __m_autoMemory_gapFill_js.oneSupplementMemory = oneSupplementMemory;
 __m_autoMemory_gapFill_js.GAP_KEY = GAP_KEY;
+__m_autoMemory_gapFill_js.ACHIEVEMENT_TITLE_KEY = ACHIEVEMENT_TITLE_KEY;
 }
 
 function __init_autoMemory_incrementalGate_js() {
@@ -4994,8 +5041,10 @@ const core_context = __m_core_context_js;
 const core_settings = __m_core_settings_js;
 const core_text = __m_core_text_js;
 const generation_request = __m_generation_generationRequest_js;
+const auto_memory_stream = __m_autoMemory_streamGate_js;
 const ui_countdown = __m_ui_autoMemoryCountdown_js;
 // 启用新计划后，楼层到点就读最近这一窗正文，做成增量回忆再抽签。没有新记忆或没有可抽模块时不发模块请求。
+
 
 
 
@@ -5015,6 +5064,10 @@ const ui_countdown = __m_ui_autoMemoryCountdown_js;
 let cleanup = null;
 let leaseOwner = '';
 let fillInflight = false;
+let quietTimer = 0;
+let stablePasses = 0;
+let settleWaits = 0;
+let lastSignature = '';
 const handledFloors = new Map();
 const inflightScopes = new Set();
 const noticedGroups = new Set();
@@ -5052,13 +5105,18 @@ function satisfiedPrerequisiteIds(context) {
 }
 
 function generationStillOpen(context) {
-    const stream = context?.streamingProcessor;
-    if (stream && stream.finished !== true && stream.isStopped !== true) return true;
-    if (context?.generating === true || context?.isGenerating === true) return true;
-    const stop = globalThis.document?.getElementById?.('mes_stop');
-    if (!stop) return false;
-    if (stop.hidden === true || stop.style?.display === 'none') return false;
-    return stop.offsetParent !== null;
+    return auto_memory_stream.generationOpen(context);
+}
+
+function rememberTitle(context, result) {
+    if (!auto_memory_gap.rememberAchievementTitle(context?.chatMetadata, result?.achievement)) return;
+    context.saveMetadataDebounced?.();
+}
+
+async function runModule(snapshot, persist, context) {
+    const result = await auto_memory_host.runModulePlan(snapshot, persist, context, Date.now());
+    rememberTitle(context, result);
+    return result;
 }
 
 async function persistSnapshot(context, next) {
@@ -5099,7 +5157,7 @@ function gapMessages(context, note) {
         index: row.index,
         role: row.message?.is_user === true ? 'user' : 'char',
         name: core_text.normalizeText(row.message?.name, 120),
-        text: core_text.normalizeText(row.message?.mes, 4000),
+        text: String(row.message?.mes ?? '').replace(/\r\n?/g, '\n').replace(/\u0000/g, '').trim(),
     })).filter(item => item.text);
     if (note.latestAssistant === true) return auto_memory_floor.latestAssistantWindow(rows, note.interval);
     return rows;
@@ -5175,8 +5233,8 @@ async function runHostRound() {
                 },
                 persist,
                 noteGap: note => writeGap(live, note),
-                startModule: next => auto_memory_host.runModulePlan(next, persist, core_context.currentCharacterGuard(), Date.now()),
-                resumeModule: current => auto_memory_host.runModulePlan(current, persist, core_context.currentCharacterGuard(), Date.now()),
+                startModule: next => runModule(next, persist, core_context.currentCharacterGuard()),
+                resumeModule: current => runModule(current, persist, core_context.currentCharacterGuard()),
             });
             if (result.action === 'arm' || result.action === 'noop' || result.action === 'drawn' || result.action === 'wait') {
                 handledFloors.set(scope, floor);
@@ -5269,7 +5327,7 @@ async function fillFloorGap() {
                 const facts = auto_memory_host.collectModuleFacts(request.moduleId, core_context.currentCharacterGuard(), request);
                 return moduleItem?.plan?.(facts) || null;
             },
-            startModule: next => auto_memory_host.runModulePlan(next, persist, core_context.currentCharacterGuard(), Date.now()),
+            startModule: next => runModule(next, persist, core_context.currentCharacterGuard()),
         });
         globalThis.toastr?.success?.(added.length ? `补上了 ${added[0]}。` : '这一窗已经看过。', '心迹回廊');
         ui_countdown.refreshAutoMemoryCountdown();
@@ -5288,7 +5346,7 @@ async function resumeFloorPlan() {
     const snapshot = auto_memory_plan.readAutoMemoryMetadata(context.chatMetadata);
     if (!snapshot?.modulePlan) return { action: 'idle' };
     const persist = next => persistSnapshot(context, next);
-    const result = await auto_memory_host.runModulePlan(snapshot, persist, context, Date.now());
+    const result = await runModule(snapshot, persist, context);
     ui_countdown.refreshAutoMemoryCountdown();
     return result;
 }
@@ -5296,9 +5354,64 @@ async function resumeFloorPlan() {
 function stopAutoMemoryScheduler() {
     cleanup?.();
     cleanup = null;
+    if (quietTimer) clearTimeout(quietTimer);
+    quietTimer = 0;
+    stablePasses = 0;
+    settleWaits = 0;
+    lastSignature = '';
+    auto_memory_stream.noteAssistantStream(false);
     handledFloors.clear();
     inflightScopes.clear();
     noticedGroups.clear();
+}
+
+function assistantStillTyping(chat) {
+    const list = Array.isArray(chat) ? chat : [];
+    for (let index = list.length - 1; index >= 0; index -= 1) {
+        const message = list[index];
+        if (!message || message.is_system === true) continue;
+        if (message.is_user === true) return false;
+        const text = String(message.mes ?? '').trim();
+        return !text || /^[.。…．]{1,12}$/.test(text);
+    }
+    return false;
+}
+
+function scheduleSettledRound() {
+    if (quietTimer) clearTimeout(quietTimer);
+    quietTimer = setTimeout(() => {
+        quietTimer = 0;
+        let context = null;
+        try { context = core_context.getContext(); } catch { context = null; }
+        const chat = Array.isArray(context?.chat) ? context.chat : [];
+        const last = [...chat].reverse().find(item => item && item.is_system !== true);
+        const signature = !last || last.is_user === true ? 'user' : `${String(last.mes ?? '').length}:${String(last.mes ?? '').slice(-24)}`;
+        if (auto_memory_stream.generationOpen(context) || assistantStillTyping(chat)) {
+            const ready = auto_memory_floor.assistantBodyReady(chat, { generating: false });
+            if (signature && signature === lastSignature && ready) stablePasses += 1;
+            else stablePasses = 0;
+            lastSignature = signature;
+            if (stablePasses >= 2) {
+                stablePasses = 0;
+                settleWaits = 0;
+                auto_memory_stream.noteAssistantStream(false);
+                void runHostRound();
+                return;
+            }
+            settleWaits += 1;
+            if (settleWaits > 40 && !ready) {
+                settleWaits = 0;
+                auto_memory_stream.noteAssistantStream(false);
+                return;
+            }
+            scheduleSettledRound();
+            return;
+        }
+        stablePasses = 0;
+        settleWaits = 0;
+        lastSignature = signature;
+        void runHostRound();
+    }, 800);
 }
 
 function startAutoMemoryScheduler() {
@@ -5312,15 +5425,38 @@ function startAutoMemoryScheduler() {
     const events = [...new Set([
         types.MESSAGE_SENT,
         types.MESSAGE_RECEIVED,
+        types.MESSAGE_UPDATED,
+        types.GENERATION_STARTED,
         types.GENERATION_ENDED,
+        types.GENERATION_STOPPED,
+        types.STREAM_TOKEN_RECEIVED,
+        types.STREAM_TOKEN_RECEIVED_FULLY,
         types.CHARACTER_MESSAGE_RENDERED,
         types.CHAT_CHANGED,
         types.CHAT_LOADED,
     ].filter(Boolean))];
-    const listener = () => { void runHostRound(); };
-    for (const type of events) source.on(type, listener);
-    cleanup = () => { for (const type of events) source.off?.(type, listener); };
-    listener();
+    const listener = type => {
+        const starting = type === types.GENERATION_STARTED || type === types.STREAM_TOKEN_RECEIVED || type === types.STREAM_TOKEN_RECEIVED_FULLY;
+        const ended = type === types.GENERATION_ENDED || type === types.GENERATION_STOPPED;
+        if (starting) {
+            auto_memory_stream.noteAssistantStream(true);
+            stablePasses = 0;
+            settleWaits = 0;
+            scheduleSettledRound();
+            return;
+        }
+        if (ended) auto_memory_stream.noteAssistantStream(false);
+        if (auto_memory_stream.assistantStreamLatched()) return;
+        scheduleSettledRound();
+    };
+    const bound = new Map();
+    for (const type of events) {
+        const handler = () => listener(type);
+        bound.set(type, handler);
+        source.on(type, handler);
+    }
+    cleanup = () => { for (const [type, handler] of bound) source.off?.(type, handler); };
+    if (!auto_memory_stream.generationOpen(context)) scheduleSettledRound();
 }
 
 __m_autoMemory_scheduler_js.fillFloorGap = fillFloorGap;
@@ -5453,6 +5589,37 @@ __m_autoMemory_shellState_js.knownProgress = knownProgress;
 __m_autoMemory_shellState_js.revealFace = revealFace;
 __m_autoMemory_shellState_js.toastForTransition = toastForTransition;
 __m_autoMemory_shellState_js.shellView = shellView;
+}
+
+function __init_autoMemory_streamGate_js() {
+// MODULE: autoMemory/streamGate.js
+
+// 流式生成的开始和结束由本页自己记住。不能只看宿主有没有暴露 generating。
+
+let latched = false;
+
+function noteAssistantStream(open) {
+    latched = open === true;
+}
+
+function assistantStreamLatched() {
+    return latched === true;
+}
+
+function generationOpen(context) {
+    if (latched) return true;
+    const stream = context?.streamingProcessor;
+    if (stream && stream.finished !== true && stream.isStopped !== true) return true;
+    if (context?.generating === true || context?.isGenerating === true) return true;
+    const stop = globalThis.document?.getElementById?.('mes_stop');
+    if (stop && stop.hidden !== true && stop.style?.display !== 'none' && stop.offsetParent !== null) return true;
+    const live = globalThis.document?.querySelector?.('#chat .mes.streaming, #chat .mes.mes_streaming, #chat .last_mes.streaming');
+    return !!live;
+}
+
+__m_autoMemory_streamGate_js.noteAssistantStream = noteAssistantStream;
+__m_autoMemory_streamGate_js.assistantStreamLatched = assistantStreamLatched;
+__m_autoMemory_streamGate_js.generationOpen = generationOpen;
 }
 
 function __init_autoMemory_wizardPlan_js() {
@@ -21434,7 +21601,6 @@ const draft_inputs = __m_archive_draftInputs_js;
 const archive_batches = __m_archive_importBatches_js;
 const archive_coverage = __m_archive_coverageRanges_js;
 const archive_summary = __m_archive_summaryPreference_js;
-const auto_memory_floor = __m_autoMemory_floorPace_js;
 const archive_requestBudget = __m_archive_requestBudget_js;
 const core_cache = __m_core_cache_js;
 const core_constants = __m_core_constants_js;
@@ -21508,7 +21674,6 @@ const generateArchiveImportSegment = __m_archive_archiveVerdict_js.generateArchi
 
 
 
-
 // 建档主流程：一次建档操作（分批、请求、校验、保存）
 // 从 archive/repository.js 原样搬出（重构阶段 2），声明文本一字未改；archive/repository.js 仍转发原有导出。
 
@@ -21521,7 +21686,7 @@ function windowChatMessages(context, floorWindow) {
         role: row.message?.is_user === true ? 'user' : 'char',
         name: core_text.normalizeText(row.message?.name, 120),
         date: core_text.normalizeText(row.message?.send_date || row.message?.date || '', 80),
-        text: core_text.normalizeText(row.message?.mes, 8000),
+        text: String(row.message?.mes ?? '').replace(/\r\n?/g, '\n').replace(/\u0000/g, '').trim(),
     })).filter(item => item.text);
 }
 
@@ -21679,19 +21844,17 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
     // deduplicates already archived content and never deletes records outside the range.
     let chatInput = sceneOnly ? [] : (progress || restartImport ? snapshot.messages : incrementalUpdate && !rangeChanged ? snapshot.incrementalMessages : snapshot.messages);
     const externalChanged = !!progress || restartImport || !incrementalUpdate || core_text.normalizeText(existing?.externalMemoryFingerprint, 240) !== core_text.normalizeText(external.fingerprint, 240);
-    // 自动留忆先建档。记忆插件有新摘要时直接用摘要；否则只读这一窗正文，不改用户保存的读取范围。
+    // 自动留忆先建档。有新摘要时，摘要和没被摘要点名的楼一起送出，正文不截断。摘要没更新才只读这一窗。
     if (automatic && floorWindow && !progress && !restartImport && !capturedInput && !sceneOnly) {
         const scoped = windowChatMessages(context, floorWindow);
-        if (floorWindow.latestAssistant === true) {
-            const mixed = auto_memory_floor.latestAssistantWindow(scoped, floorWindow.interval);
-            if (mixed.length) chatInput = mixed;
-        } else {
-            const source = archive_summary.archiveSourceForDue({
-                summaryChanged: externalChanged,
-                summaryCount: archive_summary.pluginSummaryCount(external),
-            });
-            if (source === 'floors' && scoped.length) chatInput = scoped;
-        }
+        const source = archive_summary.archiveSourceForDue({
+            summaryChanged: externalChanged,
+            summaryCount: archive_summary.pluginSummaryCount(external),
+        });
+        if (source === 'summary') {
+            const uncovered = archive_summary.uncoveredWindowMessages(scoped, external.records);
+            chatInput = uncovered;
+        } else if (scoped.length) chatInput = scoped;
     }
     if (!progress && incrementalUpdate && !chatInput.length && !externalChanged) {
         clearMemoryPreflight(context);
@@ -40612,6 +40775,7 @@ const core_incremental = __m_core_incremental_js;
 const core_text = __m_core_text_js;
 const generation_client = __m_generation_client_js;
 const generation_prompts = __m_generation_prompts_js;
+const ui_floor = __m_ui_chatFloorNav_js;
 const ui_overlay = __m_ui_overlay_js;
 const generation_modesBridge = __m_generation_modesBridge_js;
 const runtimeState = __m_core_state_js.state;
@@ -40820,8 +40984,13 @@ function lookbackHtml(item, bank) {
     const period = look.period ? `<small>时期：${core_text.esc(look.period)}</small>` : '';
     const summary = look.summary ? `<p>${core_text.esc(look.summary)}</p>` : '';
     const note = look.sourceNote ? `<small>${core_text.esc(look.sourceNote)}</small>` : '';
-    const jump = look.jumpFloor == null ? '' : `<button type="button" class="rmt-btn" data-rmt-action="achievement-jump" data-rmt-floor="${look.jumpFloor}">回到当时</button>`;
-    const floors = look.floors.length > 1 ? `<div>${look.floors.map(floor => `<button type="button" class="rmt-btn" data-rmt-action="achievement-jump" data-rmt-floor="${floor}">#${floor}</button>`).join('')}</div>` : '';
+    const shown = floor => ui_floor.displayedMesid(floor);
+    const jumpId = shown(look.jumpFloor);
+    const jump = jumpId == null ? '' : `<button type="button" class="rmt-btn" data-rmt-action="achievement-jump" data-rmt-floor="${jumpId}">回到当时</button>`;
+    const floors = look.floors.length > 1 ? `<div>${look.floors.map(floor => {
+        const id = shown(floor);
+        return id == null ? '' : `<button type="button" class="rmt-btn" data-rmt-action="achievement-jump" data-rmt-floor="${id}">#${id}</button>`;
+    }).join('')}</div>` : '';
     return `<div class="rmt-achievement-lookback"><span>${label}</span>${period}${summary}${note}<button type="button" class="rmt-btn" data-rmt-action="achievement-open" data-rmt-achievement-id="${core_text.esc(item.id)}" data-rmt-mode="${core_text.esc(look.moduleId)}">打开这段回忆</button>${jump}${floors}</div>`;
 }
 
@@ -58709,6 +58878,7 @@ const auto_memory_gap = __m_autoMemory_gapFill_js;
 const auto_memory_plan = __m_autoMemory_planStore_js;
 const auto_memory_registry = __m_autoMemory_moduleRegistry_js;
 const auto_memory_scheduler = __m_autoMemory_scheduler_js;
+const auto_memory_stream = __m_autoMemory_streamGate_js;
 const shell_state = __m_autoMemory_shellState_js;
 const core_constants = __m_core_constants_js;
 const core_context = __m_core_context_js;
@@ -58810,7 +58980,11 @@ function viewFor(context) {
         ticketStatus: ticket?.status || '',
         revealStatus: reveal?.status || '',
         revealId: reveal?.id || '',
-        revealLine: shell_state.revealFace({ userName: context.name1, achievementTitle: '', moduleTitle: item?.title || '' }),
+        revealLine: shell_state.revealFace({
+            userName: context.name1,
+            achievementTitle: auto_memory_gap.rememberedAchievementTitle(context.chatMetadata, reveal?.achievementId),
+            moduleTitle: item?.title || '',
+        }),
         failureRecoverable: !running && (failedStep || common.state === 'failed' || common.state === 'retry'),
         paused: moduleRow?.phase === 'queue',
         floor: core_settings.getPluginSettings().autoMemoryLatestFloor === true
@@ -58832,25 +59006,21 @@ function markup(view) {
     const retry = view.phase === 'failed'
         ? '<button type="button" class="rmt-btn" data-rmt-floor-retry>重试</button>'
         : '';
-    if (view.phase === 'reveal' && view.showReveal) {
-        return `<article class="rmt-heart-letter">
-            <button type="button" class="rmt-heart-letter-seal" data-rmt-letter-open>
-                <i aria-hidden="true">♥</i><b>一封写给你的信</b><small>点开看看</small>
-            </button>
-            <div class="rmt-heart-letter-paper" data-rmt-letter-paper hidden>
-                <p data-rmt-letter-title>${core_text.esc(view.title)}</p>
-                <button type="button" class="rmt-btn" data-rmt-letter-read data-rmt-reveal="${core_text.esc(view.revealId)}" data-rmt-module="${core_text.esc(view.moduleId)}">打开这封回忆</button>
-                <div class="rmt-floor-body" data-rmt-floor-body data-rmt-reveal="${core_text.esc(view.revealId)}" data-rmt-module="${core_text.esc(view.moduleId)}"></div>
-            </div>
-        </article>`;
-    }
-    return `<article class="rmt-heart-letter is-waiting">
-        <div class="rmt-heart-letter-seal">
-            <i aria-hidden="true">♥</i>
-            <b data-rmt-letter-title>${core_text.esc(view.title)}</b>
-            <small data-rmt-letter-detail>${core_text.esc(view.detail)}</small>
+    const revealPaper = view.phase === 'reveal' && view.showReveal;
+    const heading = revealPaper ? '一封写给你的信' : view.title;
+    const aside = revealPaper ? '点开看看' : view.detail;
+    const paper = revealPaper
+        ? `<p data-rmt-letter-title>${core_text.esc(view.title)}</p><button type="button" class="rmt-btn" data-rmt-letter-read data-rmt-reveal="${core_text.esc(view.revealId)}" data-rmt-module="${core_text.esc(view.moduleId)}">打开这封回忆</button>`
+        : `<p data-rmt-letter-detail>${core_text.esc(view.detail)}</p>${view.moduleId ? `<button type="button" class="rmt-btn" data-rmt-letter-read data-rmt-reveal="${core_text.esc(view.revealId)}" data-rmt-module="${core_text.esc(view.moduleId)}">打开这页回忆</button>` : ''}`;
+    return `<article class="rmt-heart-letter">
+        <button type="button" class="rmt-heart-letter-seal" data-rmt-letter-open>
+            <i aria-hidden="true">♥</i><b data-rmt-letter-title>${core_text.esc(heading)}</b><small data-rmt-letter-detail>${core_text.esc(aside)}</small>
+        </button>
+        <div class="rmt-heart-letter-paper" data-rmt-letter-paper hidden>
+            ${paper}
+            <div class="rmt-floor-body" data-rmt-floor-body data-rmt-reveal="${core_text.esc(view.revealId)}" data-rmt-module="${core_text.esc(view.moduleId)}"></div>
+            ${retry}
         </div>
-        ${retry}
     </article>`;
 }
 
@@ -58865,6 +59035,10 @@ function paint(context) {
         globalThis.toastr?.[toast.level]?.(toast.message, toast.title, options);
     }
     if (view.phase === 'hidden') { clearShells(); return; }
+    if (!auto_memory_floor.assistantBodyReady(context.chat, { generating: auto_memory_stream.generationOpen(context) })) {
+        clearShells();
+        return;
+    }
     const index = latestAssistantIndex(context.chat);
     const mes = ui_floor.messageElement(index);
     if (!mes || ui_floor.writesMessageText()) { clearShells(); return; }
@@ -58906,6 +59080,9 @@ function paint(context) {
 
 function sync() {
     let context;
+    try { context = core_context.getContext(); }
+    catch { clearShells(); return; }
+    if (context?.groupId) { clearShells(); return; }
     try { context = core_context.currentCharacterGuard(); }
     catch { clearShells(); return; }
     try { paint(context); }
@@ -58938,9 +59115,16 @@ async function openInFloor(body) {
     const item = auto_memory_registry.autoMemoryModuleById(moduleId);
     if (!item || !body) return;
     const increment = incrementFor(moduleId, revealId);
-    if (!increment.kept) {
-        body.innerHTML = '<p class="rmt-floor-note">这一页还没有可以展开的新段落。</p>';
-        rememberOpened(revealId);
+    let session = increment.kept ? increment.session : null;
+    if (!session) {
+        try {
+            const context = core_context.currentCharacterGuard();
+            const memory = archive_repository.getImportedMemory(context);
+            session = core_cache.loadSession(moduleId, { context, memoryBank: memory, clone: true });
+        } catch { session = null; }
+    }
+    if (!session) {
+        body.innerHTML = '<p class="rmt-floor-note">这一页还在写。写好之后可以在这里打开。</p>';
         return;
     }
     mirrorModuleCss();
@@ -58948,7 +59132,7 @@ async function openInFloor(body) {
     const previousMode = runtimeState.activeMode;
     const previousSession = runtimeState.activeSession;
     try {
-        await Promise.resolve(ui_overlay.openCachedOrGenerate(item.id, { workspaceRoute: item.id, incrementalSession: increment.session }));
+        await Promise.resolve(ui_overlay.openCachedOrGenerate(item.id, { workspaceRoute: item.id, incrementalSession: session }));
     } catch (error) {
         console.warn('[HeartbeatMemories] floor detail skipped', core_text.safeErrorDiagnostic(error));
         globalThis.toastr?.error?.('这一页暂时没能打开。回忆还在，可以再点一次。', '心口顿了一下');
@@ -59004,6 +59188,10 @@ function onClick(event) {
     const paper = seal.parentElement?.querySelector('[data-rmt-letter-paper]');
     if (paper) paper.hidden = false;
     seal.hidden = true;
+    const host = seal.closest?.('[data-rmt-floor-shell]');
+    if (host?.dataset?.rmtPhase === 'reveal') return;
+    const body = paper?.querySelector?.('[data-rmt-floor-body]');
+    if (body?.dataset?.rmtModule) void openInFloor(body);
 }
 function rememberOpened(revealId) {
     if (!revealId) return;
@@ -61683,20 +61871,28 @@ function writesMessageText() {
 
 function highlightFloor(floor, root = document) {
     const value = Math.floor(Number(floor));
-    if (!Number.isSafeInteger(value) || value < 1) return { ok: false, mesid: null };
-    const node = messageElement(value - 1, root);
-    if (!node) return { ok: false, mesid: value - 1 };
+    if (!Number.isSafeInteger(value) || value < 0) return { ok: false, mesid: null };
+    const node = messageElement(value, root);
+    if (!node) return { ok: false, mesid: value };
     root.querySelectorAll?.('.rmt-floor-return')?.forEach(item => item.classList.remove('rmt-floor-return'));
     node.classList.add('rmt-floor-return');
     try { node.scrollIntoView({ block: 'center' }); }
     catch { try { node.scrollIntoView(); } catch { /* 滚动失败只放弃跳转，不改成就。 */ } }
-    return { ok: true, mesid: value - 1 };
+    return { ok: true, mesid: value };
+}
+
+// 档案楼号从 1 计数，聊天上印出来的 # 是 mesid。回到当时用印出来的那个数。
+function displayedMesid(storedFloor) {
+    const value = Math.floor(Number(storedFloor));
+    if (!Number.isSafeInteger(value) || value < 1) return null;
+    return value - 1;
 }
 
 __m_ui_chatFloorNav_js.messageElement = messageElement;
 __m_ui_chatFloorNav_js.placeAfterMessage = placeAfterMessage;
 __m_ui_chatFloorNav_js.writesMessageText = writesMessageText;
 __m_ui_chatFloorNav_js.highlightFloor = highlightFloor;
+__m_ui_chatFloorNav_js.displayedMesid = displayedMesid;
 }
 
 function __init_ui_contentManager_js() {
@@ -76675,6 +76871,7 @@ __init_autoMemory_moduleRunner_js();
 __init_autoMemory_planStore_js();
 __init_autoMemory_scheduler_js();
 __init_autoMemory_shellState_js();
+__init_autoMemory_streamGate_js();
 __init_autoMemory_wizardPlan_js();
 __init_core_advancedGeneration_js();
 __init_core_archiveBridge_js();

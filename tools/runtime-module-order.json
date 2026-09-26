@@ -27,6 +27,7 @@
   "autoMemory/planStore.js",
   "autoMemory/scheduler.js",
   "autoMemory/shellState.js",
+  "autoMemory/streamGate.js",
   "autoMemory/wizardPlan.js",
   "core/advancedGeneration.js",
   "core/archiveBridge.js",

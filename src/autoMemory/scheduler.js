@@ -14,11 +14,16 @@ import * as core_context from '../core/context.js';
 import * as core_settings from '../core/settings.js';
 import * as core_text from '../core/text.js';
 import * as generation_request from '../generation/generationRequest.js';
+import * as auto_memory_stream from './streamGate.js';
 import * as ui_countdown from '../ui/autoMemoryCountdown.js';
 
 let cleanup = null;
 let leaseOwner = '';
 let fillInflight = false;
+let quietTimer = 0;
+let stablePasses = 0;
+let settleWaits = 0;
+let lastSignature = '';
 const handledFloors = new Map();
 const inflightScopes = new Set();
 const noticedGroups = new Set();
@@ -56,13 +61,18 @@ function satisfiedPrerequisiteIds(context) {
 }
 
 function generationStillOpen(context) {
-    const stream = context?.streamingProcessor;
-    if (stream && stream.finished !== true && stream.isStopped !== true) return true;
-    if (context?.generating === true || context?.isGenerating === true) return true;
-    const stop = globalThis.document?.getElementById?.('mes_stop');
-    if (!stop) return false;
-    if (stop.hidden === true || stop.style?.display === 'none') return false;
-    return stop.offsetParent !== null;
+    return auto_memory_stream.generationOpen(context);
+}
+
+function rememberTitle(context, result) {
+    if (!auto_memory_gap.rememberAchievementTitle(context?.chatMetadata, result?.achievement)) return;
+    context.saveMetadataDebounced?.();
+}
+
+async function runModule(snapshot, persist, context) {
+    const result = await auto_memory_host.runModulePlan(snapshot, persist, context, Date.now());
+    rememberTitle(context, result);
+    return result;
 }
 
 async function persistSnapshot(context, next) {
@@ -103,7 +113,7 @@ function gapMessages(context, note) {
         index: row.index,
         role: row.message?.is_user === true ? 'user' : 'char',
         name: core_text.normalizeText(row.message?.name, 120),
-        text: core_text.normalizeText(row.message?.mes, 4000),
+        text: String(row.message?.mes ?? '').replace(/\r\n?/g, '\n').replace(/\u0000/g, '').trim(),
     })).filter(item => item.text);
     if (note.latestAssistant === true) return auto_memory_floor.latestAssistantWindow(rows, note.interval);
     return rows;
@@ -179,8 +189,8 @@ async function runHostRound() {
                 },
                 persist,
                 noteGap: note => writeGap(live, note),
-                startModule: next => auto_memory_host.runModulePlan(next, persist, core_context.currentCharacterGuard(), Date.now()),
-                resumeModule: current => auto_memory_host.runModulePlan(current, persist, core_context.currentCharacterGuard(), Date.now()),
+                startModule: next => runModule(next, persist, core_context.currentCharacterGuard()),
+                resumeModule: current => runModule(current, persist, core_context.currentCharacterGuard()),
             });
             if (result.action === 'arm' || result.action === 'noop' || result.action === 'drawn' || result.action === 'wait') {
                 handledFloors.set(scope, floor);
@@ -273,7 +283,7 @@ export async function fillFloorGap() {
                 const facts = auto_memory_host.collectModuleFacts(request.moduleId, core_context.currentCharacterGuard(), request);
                 return moduleItem?.plan?.(facts) || null;
             },
-            startModule: next => auto_memory_host.runModulePlan(next, persist, core_context.currentCharacterGuard(), Date.now()),
+            startModule: next => runModule(next, persist, core_context.currentCharacterGuard()),
         });
         globalThis.toastr?.success?.(added.length ? `补上了 ${added[0]}。` : '这一窗已经看过。', '心迹回廊');
         ui_countdown.refreshAutoMemoryCountdown();
@@ -292,7 +302,7 @@ export async function resumeFloorPlan() {
     const snapshot = auto_memory_plan.readAutoMemoryMetadata(context.chatMetadata);
     if (!snapshot?.modulePlan) return { action: 'idle' };
     const persist = next => persistSnapshot(context, next);
-    const result = await auto_memory_host.runModulePlan(snapshot, persist, context, Date.now());
+    const result = await runModule(snapshot, persist, context);
     ui_countdown.refreshAutoMemoryCountdown();
     return result;
 }
@@ -300,9 +310,64 @@ export async function resumeFloorPlan() {
 export function stopAutoMemoryScheduler() {
     cleanup?.();
     cleanup = null;
+    if (quietTimer) clearTimeout(quietTimer);
+    quietTimer = 0;
+    stablePasses = 0;
+    settleWaits = 0;
+    lastSignature = '';
+    auto_memory_stream.noteAssistantStream(false);
     handledFloors.clear();
     inflightScopes.clear();
     noticedGroups.clear();
+}
+
+function assistantStillTyping(chat) {
+    const list = Array.isArray(chat) ? chat : [];
+    for (let index = list.length - 1; index >= 0; index -= 1) {
+        const message = list[index];
+        if (!message || message.is_system === true) continue;
+        if (message.is_user === true) return false;
+        const text = String(message.mes ?? '').trim();
+        return !text || /^[.。…．]{1,12}$/.test(text);
+    }
+    return false;
+}
+
+function scheduleSettledRound() {
+    if (quietTimer) clearTimeout(quietTimer);
+    quietTimer = setTimeout(() => {
+        quietTimer = 0;
+        let context = null;
+        try { context = core_context.getContext(); } catch { context = null; }
+        const chat = Array.isArray(context?.chat) ? context.chat : [];
+        const last = [...chat].reverse().find(item => item && item.is_system !== true);
+        const signature = !last || last.is_user === true ? 'user' : `${String(last.mes ?? '').length}:${String(last.mes ?? '').slice(-24)}`;
+        if (auto_memory_stream.generationOpen(context) || assistantStillTyping(chat)) {
+            const ready = auto_memory_floor.assistantBodyReady(chat, { generating: false });
+            if (signature && signature === lastSignature && ready) stablePasses += 1;
+            else stablePasses = 0;
+            lastSignature = signature;
+            if (stablePasses >= 2) {
+                stablePasses = 0;
+                settleWaits = 0;
+                auto_memory_stream.noteAssistantStream(false);
+                void runHostRound();
+                return;
+            }
+            settleWaits += 1;
+            if (settleWaits > 40 && !ready) {
+                settleWaits = 0;
+                auto_memory_stream.noteAssistantStream(false);
+                return;
+            }
+            scheduleSettledRound();
+            return;
+        }
+        stablePasses = 0;
+        settleWaits = 0;
+        lastSignature = signature;
+        void runHostRound();
+    }, 800);
 }
 
 export function startAutoMemoryScheduler() {
@@ -316,13 +381,36 @@ export function startAutoMemoryScheduler() {
     const events = [...new Set([
         types.MESSAGE_SENT,
         types.MESSAGE_RECEIVED,
+        types.MESSAGE_UPDATED,
+        types.GENERATION_STARTED,
         types.GENERATION_ENDED,
+        types.GENERATION_STOPPED,
+        types.STREAM_TOKEN_RECEIVED,
+        types.STREAM_TOKEN_RECEIVED_FULLY,
         types.CHARACTER_MESSAGE_RENDERED,
         types.CHAT_CHANGED,
         types.CHAT_LOADED,
     ].filter(Boolean))];
-    const listener = () => { void runHostRound(); };
-    for (const type of events) source.on(type, listener);
-    cleanup = () => { for (const type of events) source.off?.(type, listener); };
-    listener();
+    const listener = type => {
+        const starting = type === types.GENERATION_STARTED || type === types.STREAM_TOKEN_RECEIVED || type === types.STREAM_TOKEN_RECEIVED_FULLY;
+        const ended = type === types.GENERATION_ENDED || type === types.GENERATION_STOPPED;
+        if (starting) {
+            auto_memory_stream.noteAssistantStream(true);
+            stablePasses = 0;
+            settleWaits = 0;
+            scheduleSettledRound();
+            return;
+        }
+        if (ended) auto_memory_stream.noteAssistantStream(false);
+        if (auto_memory_stream.assistantStreamLatched()) return;
+        scheduleSettledRound();
+    };
+    const bound = new Map();
+    for (const type of events) {
+        const handler = () => listener(type);
+        bound.set(type, handler);
+        source.on(type, handler);
+    }
+    cleanup = () => { for (const [type, handler] of bound) source.off?.(type, handler); };
+    if (!auto_memory_stream.generationOpen(context)) scheduleSettledRound();
 }

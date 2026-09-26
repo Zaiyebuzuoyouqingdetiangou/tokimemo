@@ -34,7 +34,7 @@ test('a due floor reads the floors since the last completion', () => {
     ], 3);
     assert.equal(mixed.length, 3);
     assert.equal(mixed[2].text, '最新一条角色楼的完整正文。');
-    assert.equal(mixed[0].text.length <= 180, true);
+    assert.equal(mixed[0].text, '第一段很长的角色回复，应该收成摘要。');
     assert.equal(floor.latestAssistantWindow([{ role: 'char', text: '只有最新楼。' }], 1)[0].text, '只有最新楼。');
     assert.equal(floor.countdownLabel(5), '回忆还有 5 楼');
     assert.equal(floor.countdownLabel(1), '下一楼留下回忆');
@@ -43,6 +43,7 @@ test('a due floor reads the floors since the last completion', () => {
     assert.equal(floor.assistantBodyReady(chat.slice(0, 4)), false);
     assert.equal(floor.assistantBodyReady([...chat.slice(0, 4), { is_user: false, mes: '   ' }]), false);
     assert.equal(floor.assistantBodyReady([...chat, { is_system: true, mes: '系统' }]), true);
+    assert.equal(floor.assistantBodyReady([...chat.slice(0, 4), { is_user: false, mes: '...' }]), false);
 });
 
 test('the waiting shell shows the floor countdown and does not block input', () => {
@@ -60,6 +61,9 @@ test('the waiting shell shows the floor countdown and does not block input', () 
     assert.equal(noted.canFill, true);
     assert.equal(gap.readableGap({ schemaVersion: 1, floor: 10, reason: 'no-new-memory', filled: false }).canFill, true);
     assert.equal(gap.readableGap({ schemaVersion: 1, floor: 10, reason: 'no-new-memory', filled: true }).canFill, false);
+    const titled = {};
+    assert.equal(gap.rememberAchievementTitle(titled, { id: 'achv0001', title: '晚霞' }), true);
+    assert.equal(gap.rememberedAchievementTitle(titled, 'achv0001'), '晚霞');
     const one = gap.oneSupplementMemory({
         memories: [
             { title: '晚霞', summary: '一起看过。', date: '春日', messageStart: 2, messageEnd: 9 },

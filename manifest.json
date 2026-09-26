@@ -1,15 +1,15 @@
 {
   "display_name": "心迹回廊",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.99.71-r84.123-image-refill-reconnect",
+  "js": "index.js?heartbeat=0.99.72-r84.124-settled-floor",
   "author": "Toto",
-  "version": "0.99.71",
+  "version": "0.99.72",
   "auto_update": true,
   "minimum_client_version": "1.13.0",
   "hooks": {
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r84.123：备份库连接被浏览器关掉后自动重连，生图后能回填。新玩法生图初稿不再照抄原文。蝴蝶效应铺满窗口，图片加终端玻璃。小画能认出更多场景，没有小画时不再提示。",
+  "description": "r84.124：最新楼正文停稳后才留忆。摘要没写到的楼附上完整正文。回到当时对准聊天上的楼号。点开信可以看回忆。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }
