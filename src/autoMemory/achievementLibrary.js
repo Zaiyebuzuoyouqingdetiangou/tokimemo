@@ -74,6 +74,27 @@ export function appendLibraryEntry(previous, entry) {
     };
 }
 
+export function autoAchievementForReveal(context, { achievementId = '', moduleId = '', sourceMemoryIds = [] } = {}) {
+    if (!context) return null;
+    let memory = null;
+    try { memory = archive_repository.getImportedMemory(context); } catch { memory = null; }
+    const session = core_cache.loadSession(core_constants.MODE.ACHIEVEMENTS, { context, memoryBank: memory, clone: true });
+    const entries = Array.isArray(session?.entries) ? session.entries : [];
+    const ids = new Set((Array.isArray(sourceMemoryIds) ? sourceMemoryIds : []).filter(id => /^M\d{3,6}$/.test(id)));
+    const usable = item => item?.origin === 'auto' && clip(item.title, 100);
+    const byId = achievementId ? entries.find(item => usable(item) && item.id === achievementId) : null;
+    const byMemory = entries.find(item => usable(item)
+        && (!moduleId || !item.moduleId || item.moduleId === moduleId)
+        && (item.sourceMemoryIds || []).some(id => ids.has(id)));
+    const entry = byId || byMemory;
+    if (!entry) return null;
+    return {
+        title: clip(entry.title, 100),
+        description: clip(entry.description, 900),
+        unlockCondition: clip(entry.unlockCondition, 300),
+    };
+}
+
 export function dropAutoRound(context, { moduleId = '', sourceMemoryIds = [] } = {}) {
     const ids = new Set((Array.isArray(sourceMemoryIds) ? sourceMemoryIds : []).filter(id => /^M\d{3,6}$/.test(id)));
     if (!context || !ids.size) return false;

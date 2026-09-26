@@ -21,7 +21,7 @@ test('an unfinished archive hides the shell and an unknown plan does not invent 
     });
     assert.equal(generating.phase, 'generating');
     assert.deepEqual(generating.progress, { done: 1, total: 3 });
-    assert.equal(generating.detail, '正在生成 1 / 3');
+    assert.equal(generating.detail, '正在生成中');
     assert.equal(generating.detail.includes('%'), false);
     assert.equal(generating.showReveal, false);
     const planning = shell.shellView({ enabled: true, ...readyArchive, steps: [{ status: 'pending' }, { status: 'pending' }] });
@@ -34,7 +34,19 @@ test('an unfinished archive hides the shell and an unknown plan does not invent 
     assert.equal(shell.shellView({ enabled: true, ...readyArchive, failureRecoverable: true, steps }).phase, 'failed');
     const checked = shell.shellView({ enabled: true, ...readyArchive, moduleComplete: false, steps: [{ status: 'completed' }], revealStatus: 'ready' });
     assert.equal(checked.showReveal, false);
-    assert.equal(checked.detail, '还没整份核对完，先不拆开。');
+    assert.equal(checked.detail, '正在生成中');
+    const library = shell.shellView({
+        enabled: true, ...readyArchive, moduleComplete: true, canOpen: true, revealStatus: 'ready',
+        steps: [{ status: 'completed' }], preferLibraryAchievement: true, revealLine: '穿堂春风', achievementCopy: '初春微寒。',
+        moduleTitle: '角色互动', userName: '南玺',
+    });
+    assert.equal(library.title, '穿堂春风');
+    assert.equal(library.achievementCopy, '初春微寒。');
+    const unnamed = shell.shellView({
+        enabled: true, ...readyArchive, moduleComplete: true, canOpen: true, revealStatus: 'ready',
+        steps: [{ status: 'completed' }], preferLibraryAchievement: true, moduleTitle: '角色互动', userName: '南玺',
+    });
+    assert.equal(unnamed.title, '');
 });
 
 test('the reveal line appears only after the whole plan is complete and does not block chat', () => {

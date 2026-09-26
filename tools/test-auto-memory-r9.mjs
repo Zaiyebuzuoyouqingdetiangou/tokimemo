@@ -146,7 +146,7 @@ test('the letter offers repair and retry only when that work is still open', () 
         ...readyArchive, ticketStatus: 'drawn', moduleTitle: '角色互动', canOpen: true, moduleId: 'heart',
     });
     assert.equal(leaked.phase, 'generating');
-    assert.equal(leaked.detail, '正在写角色互动。');
+    assert.equal(leaked.detail, '正在生成中');
     assert.equal(leaked.canOpen, false);
     assert.equal(leaked.showReveal, false);
     const finished = shell.shellView({

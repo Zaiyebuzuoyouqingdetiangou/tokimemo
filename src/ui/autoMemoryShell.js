@@ -4,6 +4,7 @@ import * as archive_repository from '../archive/repository.js';
 import * as archive_snapshots from '../archive/snapshots.js';
 import * as incremental_view from '../autoMemory/incrementalView.js';
 import * as core_cache from '../core/cache.js';
+import * as auto_memory_library from '../autoMemory/achievementLibrary.js';
 import * as auto_memory_floor from '../autoMemory/floorPace.js';
 import * as auto_memory_gap from '../autoMemory/gapFill.js';
 import * as auto_memory_plan from '../autoMemory/planStore.js';
@@ -120,6 +121,13 @@ function viewFor(context) {
     });
     const moduleComplete = item?.isComplete?.(null, snapshot.modulePlan) === true;
     const previewKept = moduleId ? incrementFor(moduleId, reveal?.id || '').kept === true : false;
+    const stored = auto_memory_library.autoAchievementForReveal(context, {
+        achievementId: reveal?.achievementId || '',
+        moduleId,
+        sourceMemoryIds: [...roundIds],
+    });
+    const rememberedTitle = auto_memory_gap.rememberedAchievementTitle(context.chatMetadata, reveal?.achievementId);
+    const rememberedCopy = auto_memory_gap.rememberedAchievementCopy(context.chatMetadata, reveal?.achievementId);
     return shell_state.shellView({
         enabled: true,
         archiveReady: archiveIsReady(context, rows),
@@ -131,11 +139,9 @@ function viewFor(context) {
         revealStatus: reveal?.status || '',
         revealId: reveal?.id || '',
         roundReveal: !!reveal && !stepsForReveal.some(step => step.status !== 'completed') && (reveal.status === 'ready' || reveal.status === 'opened'),
-        revealLine: shell_state.revealFace({
-            userName: context.name1,
-            achievementTitle: auto_memory_gap.rememberedAchievementTitle(context.chatMetadata, reveal?.achievementId),
-            moduleTitle: item?.title || '',
-        }),
+        revealLine: stored?.title || rememberedTitle || '',
+        achievementCopy: stored?.description || rememberedCopy || '',
+        preferLibraryAchievement: true,
         roundEmpty: roundIsEmpty(moduleId, reveal, running, steps, ticket, moduleComplete, previewKept),
         canOpen: previewKept,
         failureRecoverable: !running && (failedStep || common.state === 'failed' || common.state === 'retry'),
@@ -183,9 +189,12 @@ function markup(view) {
     const actions = repair || complete || redo || retry ? `<div class="rmt-heart-letter-actions">${repair}${complete}${redo}${retry}</div>` : '';
     const revealPaper = view.phase === 'reveal' && view.showReveal;
     const writing = view.phase === 'generating' || view.phase === 'planning';
-    const caption = revealPaper ? '' : `<small data-rmt-letter-detail>${core_text.esc(view.detail)}</small>`;
+    const caption = revealPaper ? '' : `<small data-rmt-letter-detail>${core_text.esc(view.detail || (writing ? '正在生成中' : ''))}</small>`;
+    const heading = view.title ? `<p data-rmt-letter-achievement>${core_text.esc(view.title)}</p>` : '';
+    const copy = view.achievementCopy ? `<p data-rmt-letter-copy>${core_text.esc(view.achievementCopy)}</p>` : '';
+    const read = view.contentOpen ? '' : `<button type="button" class="rmt-btn" data-rmt-letter-read data-rmt-reveal="${core_text.esc(view.revealId)}" data-rmt-module="${core_text.esc(view.moduleId)}">打开回忆</button>`;
     const paper = revealPaper
-        ? `<button type="button" class="rmt-btn rmt-heart-letter-close" data-rmt-letter-close>收起这封信</button><p data-rmt-letter-achievement>${core_text.esc(view.title)}</p><button type="button" class="rmt-btn" data-rmt-letter-read data-rmt-reveal="${core_text.esc(view.revealId)}" data-rmt-module="${core_text.esc(view.moduleId)}">打开回忆</button>`
+        ? `<button type="button" class="rmt-btn rmt-heart-letter-close" data-rmt-letter-close>收起这封信</button>${heading}${copy}${read}`
         : '';
     return `<article class="rmt-heart-letter${writing ? ' is-writing' : ''}">
         <button type="button" class="rmt-heart-letter-seal" data-rmt-letter-open aria-label="${core_text.esc(revealPaper ? '拆开这封信' : view.detail || '回忆')}">
@@ -228,12 +237,16 @@ function paint(context) {
     if (view.phase === 'pace' && host.dataset.rmtPhase === 'pace' && host.dataset.rmtPace === view.detail && host.dataset.rmtGap === (view.gapText || '')) return;
     const paper = host.querySelector('[data-rmt-letter-paper]');
     const body = host.querySelector('[data-rmt-floor-body]');
-    const sameLetter = host.dataset.rmtPhase === view.phase && host.dataset.rmtReveal === view.revealId && host.dataset.rmtPace === (view.phase === 'pace' ? view.detail : '');
+    const contentOpen = view.phase === 'reveal' && host.dataset.rmtRead === view.revealId;
+    view.contentOpen = contentOpen;
+    const sameLetter = host.dataset.rmtPhase === view.phase && host.dataset.rmtReveal === view.revealId && host.dataset.rmtPace === (view.phase === 'pace' ? view.detail : '') && host.dataset.rmtOpen === (contentOpen ? '1' : '');
     host.dataset.rmtPhase = view.phase;
     host.dataset.rmtReveal = view.revealId;
     host.dataset.rmtPace = view.phase === 'pace' ? view.detail : '';
     host.dataset.rmtGap = view.gapText || '';
+    host.dataset.rmtOpen = contentOpen ? '1' : '';
     host.dataset.rmtPending = view.phase === 'reveal' ? '0' : '1';
+    if (view.phase !== 'reveal') delete host.dataset.rmtRead;
     if (sameLetter) {
         if (view.phase !== 'reveal' && body) {
             body.replaceChildren();
@@ -243,20 +256,28 @@ function paint(context) {
             writeRound(body, view.moduleId, view.revealId);
         }
         const achievement = host.querySelector('[data-rmt-letter-achievement]');
+        const copy = host.querySelector('[data-rmt-letter-copy]');
         const detail = host.querySelector('[data-rmt-letter-detail]');
         if (achievement && view.phase === 'reveal') achievement.textContent = view.title;
-        if (detail && view.phase !== 'reveal') detail.textContent = view.detail;
+        if (copy && view.phase === 'reveal') copy.textContent = view.achievementCopy || '';
+        if (detail && view.phase !== 'reveal') detail.textContent = view.detail || '正在生成中';
+        if (view.phase !== 'reveal') closeLetter(host);
         host.querySelector('.rmt-heart-letter')?.classList.toggle('is-writing', view.phase === 'generating' || view.phase === 'planning');
         queueAutomaticRepair(view);
         return;
     }
-    const paperWasOpen = paper && !paper.hidden;
+    const paperWasOpen = view.phase === 'reveal' && ((paper && !paper.hidden) || contentOpen);
     host.innerHTML = markup(view);
     if (paperWasOpen) {
         const nextPaper = host.querySelector('[data-rmt-letter-paper]');
         const seal = host.querySelector('[data-rmt-letter-open]');
+        const nextBody = host.querySelector('[data-rmt-floor-body]');
         if (nextPaper) nextPaper.hidden = false;
         if (seal) seal.hidden = true;
+        if (contentOpen && nextBody) {
+            nextBody.dataset.rmtLetterRead = '1';
+            writeRound(nextBody, view.moduleId, view.revealId);
+        }
     }
     try { ui_taskCenter.syncLiveTaskStrip(); } catch { /* 任务条刷新失败时，楼层下面的状态仍保留。 */ }
     queueAutomaticRepair(view);
@@ -348,7 +369,21 @@ function writeRound(body, moduleId, revealId) {
         return false;
     }
     body.innerHTML = html;
+    const read = body.parentElement?.querySelector?.('[data-rmt-letter-read]');
+    if (read) read.remove();
+    const host = body.closest?.('[data-rmt-floor-shell]');
+    if (host && revealId) {
+        host.dataset.rmtRead = revealId;
+        host.dataset.rmtOpen = '1';
+    }
     return true;
+}
+
+function closeLetter(host) {
+    const paper = host?.querySelector?.('[data-rmt-letter-paper]');
+    const seal = host?.querySelector?.('[data-rmt-letter-open]');
+    if (paper) paper.hidden = true;
+    if (seal) seal.hidden = false;
 }
 
 async function openInFloor(body) {

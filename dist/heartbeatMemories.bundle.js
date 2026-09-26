@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 284
-// Source SHA-256: 6076616744b97a995c42118252e0b4bea7592cbfe5d66c054336fe012e15f9dc
+// Source SHA-256: 1d69fb1cd406c3a088c8c3970f66dc491a9ac7537d2c0f27b8f030112681d7a2
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -3071,6 +3071,27 @@ function appendLibraryEntry(previous, entry) {
     };
 }
 
+function autoAchievementForReveal(context, { achievementId = '', moduleId = '', sourceMemoryIds = [] } = {}) {
+    if (!context) return null;
+    let memory = null;
+    try { memory = archive_repository.getImportedMemory(context); } catch { memory = null; }
+    const session = core_cache.loadSession(core_constants.MODE.ACHIEVEMENTS, { context, memoryBank: memory, clone: true });
+    const entries = Array.isArray(session?.entries) ? session.entries : [];
+    const ids = new Set((Array.isArray(sourceMemoryIds) ? sourceMemoryIds : []).filter(id => /^M\d{3,6}$/.test(id)));
+    const usable = item => item?.origin === 'auto' && clip(item.title, 100);
+    const byId = achievementId ? entries.find(item => usable(item) && item.id === achievementId) : null;
+    const byMemory = entries.find(item => usable(item)
+        && (!moduleId || !item.moduleId || item.moduleId === moduleId)
+        && (item.sourceMemoryIds || []).some(id => ids.has(id)));
+    const entry = byId || byMemory;
+    if (!entry) return null;
+    return {
+        title: clip(entry.title, 100),
+        description: clip(entry.description, 900),
+        unlockCondition: clip(entry.unlockCondition, 300),
+    };
+}
+
 function dropAutoRound(context, { moduleId = '', sourceMemoryIds = [] } = {}) {
     const ids = new Set((Array.isArray(sourceMemoryIds) ? sourceMemoryIds : []).filter(id => /^M\d{3,6}$/.test(id)));
     if (!context || !ids.size) return false;
@@ -3114,6 +3135,7 @@ function saveAutoAchievement(context, result, now = Date.now()) {
 
 __m_autoMemory_achievementLibrary_js.libraryEntryFromAutoAchievement = libraryEntryFromAutoAchievement;
 __m_autoMemory_achievementLibrary_js.appendLibraryEntry = appendLibraryEntry;
+__m_autoMemory_achievementLibrary_js.autoAchievementForReveal = autoAchievementForReveal;
 __m_autoMemory_achievementLibrary_js.dropAutoRound = dropAutoRound;
 __m_autoMemory_achievementLibrary_js.saveAutoAchievement = saveAutoAchievement;
 }
@@ -3624,6 +3646,7 @@ const core_text = __m_core_text_js;
 
 const GAP_KEY = 'autoMemoryGapV1';
 const ACHIEVEMENT_TITLE_KEY = 'autoMemoryAchievementTitlesV1';
+const ACHIEVEMENT_COPY_KEY = 'autoMemoryAchievementCopiesV1';
 const PENDING_ACHIEVEMENT_KEY = 'autoMemoryPendingAchievementV1';
 
 function holdPendingAchievement(metadata, { drawId = '', moduleId = '', achievement = null } = {}) {
@@ -3648,19 +3671,32 @@ function clearPendingAchievement(metadata, drawId) {
 function rememberedAchievementTitle(metadata, achievementId) {
     const map = metadata?.[ACHIEVEMENT_TITLE_KEY];
     const title = typeof achievementId === 'string' ? map?.[achievementId] : '';
-    return typeof title === 'string' ? title.replace(/[\u0000-\u001f]/g, '').trim().slice(0, 40) : '';
+    return typeof title === 'string' ? title.replace(/[\u0000-\u001f]/g, '').trim().slice(0, 100) : '';
+}
+
+function rememberedAchievementCopy(metadata, achievementId) {
+    const map = metadata?.[ACHIEVEMENT_COPY_KEY];
+    const text = typeof achievementId === 'string' ? map?.[achievementId] : '';
+    return typeof text === 'string' ? text.replace(/[\u0000-\u001f]/g, '').trim().slice(0, 180) : '';
 }
 
 function rememberAchievementTitle(metadata, achievement) {
     const id = typeof achievement?.id === 'string' ? achievement.id : '';
-    const title = String(achievement?.title || '').replace(/[\u0000-\u001f]/g, '').trim().slice(0, 40);
+    const title = String(achievement?.title || '').replace(/[\u0000-\u001f]/g, '').trim().slice(0, 100);
     if (!metadata || !id || !title) return false;
     const prev = metadata[ACHIEVEMENT_TITLE_KEY];
     const map = prev && typeof prev === 'object' && !Array.isArray(prev) ? { ...prev } : {};
-    if (map[id] === title) return false;
+    const description = String(achievement?.description || achievement?.unlockCondition || '').replace(/[\u0000-\u001f]/g, '').trim().slice(0, 180);
+    const copies = metadata[ACHIEVEMENT_COPY_KEY];
+    const copyMap = copies && typeof copies === 'object' && !Array.isArray(copies) ? { ...copies } : {};
+    const same = map[id] === title && (!description || copyMap[id] === description);
     map[id] = title;
     metadata[ACHIEVEMENT_TITLE_KEY] = map;
-    return true;
+    if (description) {
+        copyMap[id] = description;
+        metadata[ACHIEVEMENT_COPY_KEY] = copyMap;
+    }
+    return !same;
 }
 
 function readableGap(note) {
@@ -3723,12 +3759,14 @@ __m_autoMemory_gapFill_js.holdPendingAchievement = holdPendingAchievement;
 __m_autoMemory_gapFill_js.readPendingAchievement = readPendingAchievement;
 __m_autoMemory_gapFill_js.clearPendingAchievement = clearPendingAchievement;
 __m_autoMemory_gapFill_js.rememberedAchievementTitle = rememberedAchievementTitle;
+__m_autoMemory_gapFill_js.rememberedAchievementCopy = rememberedAchievementCopy;
 __m_autoMemory_gapFill_js.rememberAchievementTitle = rememberAchievementTitle;
 __m_autoMemory_gapFill_js.readableGap = readableGap;
 __m_autoMemory_gapFill_js.supplementPrompt = supplementPrompt;
 __m_autoMemory_gapFill_js.oneSupplementMemory = oneSupplementMemory;
 __m_autoMemory_gapFill_js.GAP_KEY = GAP_KEY;
 __m_autoMemory_gapFill_js.ACHIEVEMENT_TITLE_KEY = ACHIEVEMENT_TITLE_KEY;
+__m_autoMemory_gapFill_js.ACHIEVEMENT_COPY_KEY = ACHIEVEMENT_COPY_KEY;
 __m_autoMemory_gapFill_js.PENDING_ACHIEVEMENT_KEY = PENDING_ACHIEVEMENT_KEY;
 }
 
@@ -6694,6 +6732,13 @@ function knownProgress(done, total) {
     return { done, total };
 }
 
+function letterTitle(input) {
+    const written = String(input.revealLine || '').replace(/[\u0000-\u001f]/g, '').trim().slice(0, 100);
+    if (written) return written;
+    if (input.preferLibraryAchievement === true) return '';
+    return revealFace(input);
+}
+
 function revealFace({ userName = '', achievementTitle = '', moduleTitle = '' } = {}) {
     const who = cleanName(userName) || '你';
     const what = cleanName(achievementTitle) || cleanName(moduleTitle) || '一段回忆';
@@ -6747,7 +6792,7 @@ function shellView(input = {}) {
     if (written || (complete && (revealStatus === 'ready' || revealStatus === 'opened'))) {
         return {
             ...face, phase: 'reveal', showReveal: true, canOpen: input.canOpen === true,
-            title: input.revealLine || revealFace(input), detail: '点击查看详情',
+            title: letterTitle(input), achievementCopy: input.achievementCopy || '', detail: '点击查看详情',
         };
     }
     if (input.failureRecoverable === true) {
@@ -6762,28 +6807,27 @@ function shellView(input = {}) {
             return { ...face, phase: 'planning', title: '正在建立目录', detail: '目录还没定下来，先不显示第几步。' };
         }
         const canRetry = started && !running;
-        if (allDone) return { ...face, phase: 'generating', canRetry, title: '回忆正在生成中', detail: '还没整份核对完，先不拆开。' };
+        if (allDone) return { ...face, phase: 'generating', canRetry, title: '回忆正在生成中', detail: '正在生成中' };
         const progress = knownProgress(done, steps.length);
-        return { ...face, phase: 'generating', canRetry, progress, title: '回忆正在生成中', detail: progress ? `正在生成 ${progress.done} / ${progress.total}` : '还没写完，先不打开。' };
+        return { ...face, phase: 'generating', canRetry, progress, title: '回忆正在生成中', detail: '正在生成中' };
     }
     if (!steps.length && input.roundReveal === true && (revealStatus === 'ready' || revealStatus === 'opened')) {
         return {
             ...face, phase: 'reveal', showReveal: true, canOpen: input.canOpen === true,
-            title: input.revealLine || revealFace(input), detail: '点击查看详情',
+            title: letterTitle(input), achievementCopy: input.achievementCopy || '', detail: '点击查看详情',
         };
     }
     if (input.ticketStatus === 'drawn' || input.ticketStatus === 'running') {
-        const title = cleanName(input.moduleTitle);
-        return { ...face, phase: 'generating', title: '回忆正在生成中', detail: title ? `正在写${title}。` : '还没写完，先不打开。' };
+        return { ...face, phase: 'generating', title: '回忆正在生成中', detail: '正在生成中' };
     }
     if (revealStatus === 'ready' || revealStatus === 'opened') {
         return {
             ...face, phase: 'reveal', showReveal: true, canOpen: input.canOpen === true,
-            title: input.revealLine || revealFace(input), detail: '点击查看详情',
+            title: letterTitle(input), achievementCopy: input.achievementCopy || '', detail: '点击查看详情',
         };
     }
     if (revealStatus === 'generating') {
-        return { ...face, phase: 'generating', title: '回忆生成中', detail: '还没整份写完，先不拆开。' };
+        return { ...face, phase: 'generating', title: '回忆正在生成中', detail: '正在生成中' };
     }
     const interval = Math.floor(Number(input.intervalFloors));
     const left = auto_memory_floor.floorsRemaining(input.floor, input.nextDueFloor);
@@ -60104,6 +60148,7 @@ const archive_repository = __m_archive_repository_js;
 const archive_snapshots = __m_archive_snapshots_js;
 const incremental_view = __m_autoMemory_incrementalView_js;
 const core_cache = __m_core_cache_js;
+const auto_memory_library = __m_autoMemory_achievementLibrary_js;
 const auto_memory_floor = __m_autoMemory_floorPace_js;
 const auto_memory_gap = __m_autoMemory_gapFill_js;
 const auto_memory_plan = __m_autoMemory_planStore_js;
@@ -60122,6 +60167,7 @@ const ui_reveal = __m_ui_memoryReveal_js;
 const ui_styles = __m_ui_styles_js;
 const ui_taskCenter = __m_ui_taskCenter_js;
 // 外置壳贴在角色楼层下面，点开才展开。档案没写完时不挂壳，也不显示建档进度。
+
 
 
 
@@ -60242,6 +60288,13 @@ function viewFor(context) {
     });
     const moduleComplete = item?.isComplete?.(null, snapshot.modulePlan) === true;
     const previewKept = moduleId ? incrementFor(moduleId, reveal?.id || '').kept === true : false;
+    const stored = auto_memory_library.autoAchievementForReveal(context, {
+        achievementId: reveal?.achievementId || '',
+        moduleId,
+        sourceMemoryIds: [...roundIds],
+    });
+    const rememberedTitle = auto_memory_gap.rememberedAchievementTitle(context.chatMetadata, reveal?.achievementId);
+    const rememberedCopy = auto_memory_gap.rememberedAchievementCopy(context.chatMetadata, reveal?.achievementId);
     return shell_state.shellView({
         enabled: true,
         archiveReady: archiveIsReady(context, rows),
@@ -60253,11 +60306,9 @@ function viewFor(context) {
         revealStatus: reveal?.status || '',
         revealId: reveal?.id || '',
         roundReveal: !!reveal && !stepsForReveal.some(step => step.status !== 'completed') && (reveal.status === 'ready' || reveal.status === 'opened'),
-        revealLine: shell_state.revealFace({
-            userName: context.name1,
-            achievementTitle: auto_memory_gap.rememberedAchievementTitle(context.chatMetadata, reveal?.achievementId),
-            moduleTitle: item?.title || '',
-        }),
+        revealLine: stored?.title || rememberedTitle || '',
+        achievementCopy: stored?.description || rememberedCopy || '',
+        preferLibraryAchievement: true,
         roundEmpty: roundIsEmpty(moduleId, reveal, running, steps, ticket, moduleComplete, previewKept),
         canOpen: previewKept,
         failureRecoverable: !running && (failedStep || common.state === 'failed' || common.state === 'retry'),
@@ -60305,9 +60356,12 @@ function markup(view) {
     const actions = repair || complete || redo || retry ? `<div class="rmt-heart-letter-actions">${repair}${complete}${redo}${retry}</div>` : '';
     const revealPaper = view.phase === 'reveal' && view.showReveal;
     const writing = view.phase === 'generating' || view.phase === 'planning';
-    const caption = revealPaper ? '' : `<small data-rmt-letter-detail>${core_text.esc(view.detail)}</small>`;
+    const caption = revealPaper ? '' : `<small data-rmt-letter-detail>${core_text.esc(view.detail || (writing ? '正在生成中' : ''))}</small>`;
+    const heading = view.title ? `<p data-rmt-letter-achievement>${core_text.esc(view.title)}</p>` : '';
+    const copy = view.achievementCopy ? `<p data-rmt-letter-copy>${core_text.esc(view.achievementCopy)}</p>` : '';
+    const read = view.contentOpen ? '' : `<button type="button" class="rmt-btn" data-rmt-letter-read data-rmt-reveal="${core_text.esc(view.revealId)}" data-rmt-module="${core_text.esc(view.moduleId)}">打开回忆</button>`;
     const paper = revealPaper
-        ? `<button type="button" class="rmt-btn rmt-heart-letter-close" data-rmt-letter-close>收起这封信</button><p data-rmt-letter-achievement>${core_text.esc(view.title)}</p><button type="button" class="rmt-btn" data-rmt-letter-read data-rmt-reveal="${core_text.esc(view.revealId)}" data-rmt-module="${core_text.esc(view.moduleId)}">打开回忆</button>`
+        ? `<button type="button" class="rmt-btn rmt-heart-letter-close" data-rmt-letter-close>收起这封信</button>${heading}${copy}${read}`
         : '';
     return `<article class="rmt-heart-letter${writing ? ' is-writing' : ''}">
         <button type="button" class="rmt-heart-letter-seal" data-rmt-letter-open aria-label="${core_text.esc(revealPaper ? '拆开这封信' : view.detail || '回忆')}">
@@ -60350,12 +60404,16 @@ function paint(context) {
     if (view.phase === 'pace' && host.dataset.rmtPhase === 'pace' && host.dataset.rmtPace === view.detail && host.dataset.rmtGap === (view.gapText || '')) return;
     const paper = host.querySelector('[data-rmt-letter-paper]');
     const body = host.querySelector('[data-rmt-floor-body]');
-    const sameLetter = host.dataset.rmtPhase === view.phase && host.dataset.rmtReveal === view.revealId && host.dataset.rmtPace === (view.phase === 'pace' ? view.detail : '');
+    const contentOpen = view.phase === 'reveal' && host.dataset.rmtRead === view.revealId;
+    view.contentOpen = contentOpen;
+    const sameLetter = host.dataset.rmtPhase === view.phase && host.dataset.rmtReveal === view.revealId && host.dataset.rmtPace === (view.phase === 'pace' ? view.detail : '') && host.dataset.rmtOpen === (contentOpen ? '1' : '');
     host.dataset.rmtPhase = view.phase;
     host.dataset.rmtReveal = view.revealId;
     host.dataset.rmtPace = view.phase === 'pace' ? view.detail : '';
     host.dataset.rmtGap = view.gapText || '';
+    host.dataset.rmtOpen = contentOpen ? '1' : '';
     host.dataset.rmtPending = view.phase === 'reveal' ? '0' : '1';
+    if (view.phase !== 'reveal') delete host.dataset.rmtRead;
     if (sameLetter) {
         if (view.phase !== 'reveal' && body) {
             body.replaceChildren();
@@ -60365,20 +60423,28 @@ function paint(context) {
             writeRound(body, view.moduleId, view.revealId);
         }
         const achievement = host.querySelector('[data-rmt-letter-achievement]');
+        const copy = host.querySelector('[data-rmt-letter-copy]');
         const detail = host.querySelector('[data-rmt-letter-detail]');
         if (achievement && view.phase === 'reveal') achievement.textContent = view.title;
-        if (detail && view.phase !== 'reveal') detail.textContent = view.detail;
+        if (copy && view.phase === 'reveal') copy.textContent = view.achievementCopy || '';
+        if (detail && view.phase !== 'reveal') detail.textContent = view.detail || '正在生成中';
+        if (view.phase !== 'reveal') closeLetter(host);
         host.querySelector('.rmt-heart-letter')?.classList.toggle('is-writing', view.phase === 'generating' || view.phase === 'planning');
         queueAutomaticRepair(view);
         return;
     }
-    const paperWasOpen = paper && !paper.hidden;
+    const paperWasOpen = view.phase === 'reveal' && ((paper && !paper.hidden) || contentOpen);
     host.innerHTML = markup(view);
     if (paperWasOpen) {
         const nextPaper = host.querySelector('[data-rmt-letter-paper]');
         const seal = host.querySelector('[data-rmt-letter-open]');
+        const nextBody = host.querySelector('[data-rmt-floor-body]');
         if (nextPaper) nextPaper.hidden = false;
         if (seal) seal.hidden = true;
+        if (contentOpen && nextBody) {
+            nextBody.dataset.rmtLetterRead = '1';
+            writeRound(nextBody, view.moduleId, view.revealId);
+        }
     }
     try { ui_taskCenter.syncLiveTaskStrip(); } catch { /* 任务条刷新失败时，楼层下面的状态仍保留。 */ }
     queueAutomaticRepair(view);
@@ -60470,7 +60536,21 @@ function writeRound(body, moduleId, revealId) {
         return false;
     }
     body.innerHTML = html;
+    const read = body.parentElement?.querySelector?.('[data-rmt-letter-read]');
+    if (read) read.remove();
+    const host = body.closest?.('[data-rmt-floor-shell]');
+    if (host && revealId) {
+        host.dataset.rmtRead = revealId;
+        host.dataset.rmtOpen = '1';
+    }
     return true;
+}
+
+function closeLetter(host) {
+    const paper = host?.querySelector?.('[data-rmt-letter-paper]');
+    const seal = host?.querySelector?.('[data-rmt-letter-open]');
+    if (paper) paper.hidden = true;
+    if (seal) seal.hidden = false;
 }
 
 async function openInFloor(body) {

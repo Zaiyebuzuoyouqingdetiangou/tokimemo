@@ -3,6 +3,7 @@ import * as core_text from '../core/text.js';
 
 export const GAP_KEY = 'autoMemoryGapV1';
 export const ACHIEVEMENT_TITLE_KEY = 'autoMemoryAchievementTitlesV1';
+export const ACHIEVEMENT_COPY_KEY = 'autoMemoryAchievementCopiesV1';
 export const PENDING_ACHIEVEMENT_KEY = 'autoMemoryPendingAchievementV1';
 
 export function holdPendingAchievement(metadata, { drawId = '', moduleId = '', achievement = null } = {}) {
@@ -27,19 +28,32 @@ export function clearPendingAchievement(metadata, drawId) {
 export function rememberedAchievementTitle(metadata, achievementId) {
     const map = metadata?.[ACHIEVEMENT_TITLE_KEY];
     const title = typeof achievementId === 'string' ? map?.[achievementId] : '';
-    return typeof title === 'string' ? title.replace(/[\u0000-\u001f]/g, '').trim().slice(0, 40) : '';
+    return typeof title === 'string' ? title.replace(/[\u0000-\u001f]/g, '').trim().slice(0, 100) : '';
+}
+
+export function rememberedAchievementCopy(metadata, achievementId) {
+    const map = metadata?.[ACHIEVEMENT_COPY_KEY];
+    const text = typeof achievementId === 'string' ? map?.[achievementId] : '';
+    return typeof text === 'string' ? text.replace(/[\u0000-\u001f]/g, '').trim().slice(0, 180) : '';
 }
 
 export function rememberAchievementTitle(metadata, achievement) {
     const id = typeof achievement?.id === 'string' ? achievement.id : '';
-    const title = String(achievement?.title || '').replace(/[\u0000-\u001f]/g, '').trim().slice(0, 40);
+    const title = String(achievement?.title || '').replace(/[\u0000-\u001f]/g, '').trim().slice(0, 100);
     if (!metadata || !id || !title) return false;
     const prev = metadata[ACHIEVEMENT_TITLE_KEY];
     const map = prev && typeof prev === 'object' && !Array.isArray(prev) ? { ...prev } : {};
-    if (map[id] === title) return false;
+    const description = String(achievement?.description || achievement?.unlockCondition || '').replace(/[\u0000-\u001f]/g, '').trim().slice(0, 180);
+    const copies = metadata[ACHIEVEMENT_COPY_KEY];
+    const copyMap = copies && typeof copies === 'object' && !Array.isArray(copies) ? { ...copies } : {};
+    const same = map[id] === title && (!description || copyMap[id] === description);
     map[id] = title;
     metadata[ACHIEVEMENT_TITLE_KEY] = map;
-    return true;
+    if (description) {
+        copyMap[id] = description;
+        metadata[ACHIEVEMENT_COPY_KEY] = copyMap;
+    }
+    return !same;
 }
 
 export function readableGap(note) {
