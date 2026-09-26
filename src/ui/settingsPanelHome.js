@@ -29,20 +29,7 @@ import * as mirrorReader from './mirrorTtsReader.js';
 import * as ui_overlay from './overlay.js';
 import * as ui_scenePicker from './scenePicker.js';
 import * as dispatch_settingsPanelMarkup from './settingsPanelMarkup.js';
-import {
-  SETTINGS_LAUNCHER_ID,
-  bindManualAutosave,
-  manualAutosaves,
-  paintCoverageMap,
-  refreshGenerationSettingsUi,
-  refreshImageGenerationSettingsUi,
-  refreshManualModelOptions,
-  refreshModelOptions,
-  refreshReadingSettingsUi,
-  refreshSettingsMemoryStatus,
-  refreshThemeUi,
-  saveManualPanel,
-} from './settingsPanelParts.js';
+import { SETTINGS_LAUNCHER_ID, bindManualAutosave, manualAutosaves, paintCoverageMap, refreshGenerationSettingsUi, refreshImageGenerationSettingsUi, refreshManualModelOptions, refreshModelOptions, refreshReadingSettingsUi, refreshSettingsMemoryStatus, refreshThemeUi, saveManualPanel } from './settingsPanelParts.js';
 import * as ui_styles from './styles.js';
 
 // mountSettings 的连续语句分组放在 ui/settingsPanelHome.js；分组函数返回它表示“没处理”，接着往下走。

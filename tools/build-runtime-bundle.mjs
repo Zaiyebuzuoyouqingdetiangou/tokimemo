@@ -47,7 +47,7 @@ for (const rel of moduleFiles) {
     // produce the same source fingerprint and runtime bytes.
     const source = (await readFile(path.join(sourceRoot, rel), 'utf8')).replace(/\r\n/g, '\n');
     const namespaceImports = [...source.matchAll(namespaceImport)].map(match => ({ local: match[1], specifier: match[2] }));
-    const stateImports = [...source.matchAll(stateImport)].flatMap(match => match[1].split(',').map(binding => { const [imported, local = imported] = binding.trim().split(/\s+as\s+/); return { imported, local, specifier: match[2] }; }));
+    const stateImports = [...source.matchAll(stateImport)].flatMap(match => match[1].split(',').map(binding => { const [imported, local = imported] = binding.trim().split(/\s+as\s+/); return { imported, local, specifier: match[2] }; }).filter(item => item.imported));
     let importsStripped = source.replace(namespaceImport, '').replace(stateImport, '');
     if (unsupportedImport.test(importsStripped)) throw new Error(`Unsupported import syntax remains in ${rel}`);
     const exports = [];
