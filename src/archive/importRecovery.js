@@ -299,10 +299,12 @@ export function archiveRecoveryInputs(origin, operation = 'import') {
     return entry?.stage === 'segments' && !entry.importedUnverified && entry.inputs ? structuredClone(entry.inputs) : null;
 }
 
-export function parkArchiveRecovery(origin, operation = 'import') {
+export function parkArchiveRecovery(origin, operation = 'import', options = {}) {
     const key = draftKey(origin, operation), entry = drafts.get(key);
     if (!entry) return false;
-    if (entry.active || entry.stage === 'awaiting-commit') throw text.safeUserError('请先完成当前请求或仅重试保存；未改动草稿。', 'RMT_RECOVERY_BUSY');
+    if (entry.stage === 'awaiting-commit') throw text.safeUserError('请先完成当前请求或仅重试保存；未改动草稿。', 'RMT_RECOVERY_BUSY');
+    if (entry.active && options.ignoreActive !== true) throw text.safeUserError('请先完成当前请求或仅重试保存；未改动草稿。', 'RMT_RECOVERY_BUSY');
+    entry.active = false;
     drafts.delete(key);
     drafts.set(`${key}:paused:${Date.now()}:${drafts.size}`, entry);
     scheduleSave(key);

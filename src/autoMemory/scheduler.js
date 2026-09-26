@@ -313,14 +313,19 @@ async function runHostRound() {
                 archiveRevision: archive_repository.getImportedMemory(live)?.archiveRevision || 'current',
                 chatId: core_context.getChatId(live),
             }, {
-                importIncremental: options => {
+                importIncremental: async options => {
                     const window = options?.floorWindow;
-                    if (!latestFloor || !window) return archive_repository.importCurrentChatMemory(options);
-                    const mapped = auto_memory_floor.chatRangeForAssistantSpan(live.chat, window.start, window.end);
-                    const floorWindow = mapped
-                        ? { ...mapped, latestAssistant: true, interval: snapshot.plan.intervalFloors }
-                        : { ...window, latestAssistant: true, interval: snapshot.plan.intervalFloors };
-                    return archive_repository.importCurrentChatMemory({ ...options, floorWindow });
+                    let result;
+                    if (!latestFloor || !window) result = await archive_repository.importCurrentChatMemory(options);
+                    else {
+                        const mapped = auto_memory_floor.chatRangeForAssistantSpan(live.chat, window.start, window.end);
+                        const floorWindow = mapped
+                            ? { ...mapped, latestAssistant: true, interval: snapshot.plan.intervalFloors }
+                            : { ...window, latestAssistant: true, interval: snapshot.plan.intervalFloors };
+                        result = await archive_repository.importCurrentChatMemory({ ...options, floorWindow });
+                    }
+                    if (result?.status === 'failed' && result.error) throw result.error;
+                    return result;
                 },
                 readMemoryIds: () => collectMemoryIds(core_context.currentCharacterGuard()),
                 random: randomUnit,

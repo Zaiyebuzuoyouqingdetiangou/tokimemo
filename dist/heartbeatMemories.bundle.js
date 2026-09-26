@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 286
-// Source SHA-256: 3f9a9a8576351e5bd53e3fd27187979780ac53b38071d6e785e67f9a8a22375a
+// Source SHA-256: 62313566debccc33476a847627957ab2bfdd289406e21a1d48c18ff2a11b5421
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -1078,10 +1078,12 @@ function archiveRecoveryInputs(origin, operation = 'import') {
     return entry?.stage === 'segments' && !entry.importedUnverified && entry.inputs ? structuredClone(entry.inputs) : null;
 }
 
-function parkArchiveRecovery(origin, operation = 'import') {
+function parkArchiveRecovery(origin, operation = 'import', options = {}) {
     const key = draftKey(origin, operation), entry = drafts.get(key);
     if (!entry) return false;
-    if (entry.active || entry.stage === 'awaiting-commit') throw text.safeUserError('请先完成当前请求或仅重试保存；未改动草稿。', 'RMT_RECOVERY_BUSY');
+    if (entry.stage === 'awaiting-commit') throw text.safeUserError('请先完成当前请求或仅重试保存；未改动草稿。', 'RMT_RECOVERY_BUSY');
+    if (entry.active && options.ignoreActive !== true) throw text.safeUserError('请先完成当前请求或仅重试保存；未改动草稿。', 'RMT_RECOVERY_BUSY');
+    entry.active = false;
     drafts.delete(key);
     drafts.set(`${key}:paused:${Date.now()}:${drafts.size}`, entry);
     scheduleSave(key);
@@ -6737,14 +6739,19 @@ async function runHostRound() {
                 archiveRevision: archive_repository.getImportedMemory(live)?.archiveRevision || 'current',
                 chatId: core_context.getChatId(live),
             }, {
-                importIncremental: options => {
+                importIncremental: async options => {
                     const window = options?.floorWindow;
-                    if (!latestFloor || !window) return archive_repository.importCurrentChatMemory(options);
-                    const mapped = auto_memory_floor.chatRangeForAssistantSpan(live.chat, window.start, window.end);
-                    const floorWindow = mapped
-                        ? { ...mapped, latestAssistant: true, interval: snapshot.plan.intervalFloors }
-                        : { ...window, latestAssistant: true, interval: snapshot.plan.intervalFloors };
-                    return archive_repository.importCurrentChatMemory({ ...options, floorWindow });
+                    let result;
+                    if (!latestFloor || !window) result = await archive_repository.importCurrentChatMemory(options);
+                    else {
+                        const mapped = auto_memory_floor.chatRangeForAssistantSpan(live.chat, window.start, window.end);
+                        const floorWindow = mapped
+                            ? { ...mapped, latestAssistant: true, interval: snapshot.plan.intervalFloors }
+                            : { ...window, latestAssistant: true, interval: snapshot.plan.intervalFloors };
+                        result = await archive_repository.importCurrentChatMemory({ ...options, floorWindow });
+                    }
+                    if (result?.status === 'failed' && result.error) throw result.error;
+                    return result;
                 },
                 readMemoryIds: () => collectMemoryIds(core_context.currentCharacterGuard()),
                 random: randomUnit,
@@ -24845,9 +24852,6 @@ async function autoCommitCompletedArchiveChunks(options, outcome) {
 }
 
 async function importCurrentChatMemory(options = {}) {
-    if (archive_batches.isAutomaticFloorWindowSync(options) && options.parkPriorDraft !== true) {
-        options = { ...options, parkPriorDraft: true };
-    }
     let outcome;
     try {
         outcome = await importCurrentChatMemoryOnce(options);
@@ -25006,6 +25010,15 @@ async function runArchiveImportPrepared(context, options, taskTrace, admission) 
         return saveCurrentArchivePendingResults(context, existing, options.logicalTask, taskTrace);
     }
     const floorWindowSync = archive_batches.isAutomaticFloorWindowSync(options);
+    if (floorWindowSync && pending?.awaitingCommit) return { status: 'blocked' };
+    // Park a leftover draft so this window can start. Do not set parkPriorDraft:
+    // that flag swallows later import errors and the due floor is marked empty.
+    if (floorWindowSync && pending && !pending.onlyArchivedDrafts) {
+        if (archive_importRecovery.parkArchiveRecovery(hydrationOrigin, 'import', { ignoreActive: true })
+            && !await archive_importRecovery.flushArchiveRecovery(hydrationOrigin, 'import')) {
+            throw new Error('原整理草稿未确认保存，本次没有重新生成。');
+        }
+    }
     let selectedDraft = null, sourceExisting;
     if (options.draftId) selectedDraft = archive_importRecovery.readArchiveRecoveryDraft(hydrationOrigin, options.draftId);
     // A completed pending result already owns its validated content. Its local

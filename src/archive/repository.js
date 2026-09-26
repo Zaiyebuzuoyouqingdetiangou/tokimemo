@@ -170,9 +170,6 @@ async function autoCommitCompletedArchiveChunks(options, outcome) {
 }
 
 export async function importCurrentChatMemory(options = {}) {
-    if (archive_batches.isAutomaticFloorWindowSync(options) && options.parkPriorDraft !== true) {
-        options = { ...options, parkPriorDraft: true };
-    }
     let outcome;
     try {
         outcome = await importCurrentChatMemoryOnce(options);
@@ -331,6 +328,15 @@ async function runArchiveImportPrepared(context, options, taskTrace, admission) 
         return saveCurrentArchivePendingResults(context, existing, options.logicalTask, taskTrace);
     }
     const floorWindowSync = archive_batches.isAutomaticFloorWindowSync(options);
+    if (floorWindowSync && pending?.awaitingCommit) return { status: 'blocked' };
+    // Park a leftover draft so this window can start. Do not set parkPriorDraft:
+    // that flag swallows later import errors and the due floor is marked empty.
+    if (floorWindowSync && pending && !pending.onlyArchivedDrafts) {
+        if (archive_importRecovery.parkArchiveRecovery(hydrationOrigin, 'import', { ignoreActive: true })
+            && !await archive_importRecovery.flushArchiveRecovery(hydrationOrigin, 'import')) {
+            throw new Error('原整理草稿未确认保存，本次没有重新生成。');
+        }
+    }
     let selectedDraft = null, sourceExisting;
     if (options.draftId) selectedDraft = archive_importRecovery.readArchiveRecoveryDraft(hydrationOrigin, options.draftId);
     // A completed pending result already owns its validated content. Its local

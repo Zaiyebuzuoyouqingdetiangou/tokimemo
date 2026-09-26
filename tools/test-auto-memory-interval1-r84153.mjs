@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { readFile } from 'node:fs/promises';
 import * as batches from '../src/archive/importBatches.js';
 import * as draw from '../src/autoMemory/draw.js';
 import * as tasks from '../src/ui/taskCenter.js';
@@ -34,8 +35,17 @@ test('interval-1 floor sync does not treat append-only chat growth as a new sour
     );
 
     assert.deepEqual(draw.incrementalImportOptions({ start: 11, end: 11 }), { automatic: true, floorWindow: { start: 11, end: 11 } });
+    assert.equal(Object.hasOwn(draw.incrementalImportOptions({ start: 11, end: 11 }), 'parkPriorDraft'), false);
     assert.deepEqual(
         tasks.failedTaskRetrySpec({ kind: 'archive-import', failureCode: 'RMT_RECOVERY_INPUT_CHANGED' }),
         { archiveRestart: true, label: '按当前聊天再整理' },
     );
+});
+
+test('interval-1 sync does not swallow import errors behind parkPriorDraft', async () => {
+    const repo = await readFile(new URL('../src/archive/repository.js', import.meta.url), 'utf8');
+    const scheduler = await readFile(new URL('../src/autoMemory/scheduler.js', import.meta.url), 'utf8');
+    assert.equal(repo.includes('isAutomaticFloorWindowSync(options) && options.parkPriorDraft !== true'), false);
+    assert.match(repo, /parkArchiveRecovery\(hydrationOrigin, 'import', \{ ignoreActive: true \}\)/);
+    assert.match(scheduler, /if \(result\?\.status === 'failed' && result\.error\) throw result\.error/);
 });
