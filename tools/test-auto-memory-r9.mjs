@@ -4,6 +4,7 @@ import * as combined from '../src/autoMemory/combinedResult.js';
 import * as plans from '../src/autoMemory/planStore.js';
 import * as redo from '../src/autoMemory/redo.js';
 import * as shell from '../src/autoMemory/shellState.js';
+import * as stream from '../src/autoMemory/streamGate.js';
 import * as view from '../src/autoMemory/incrementalView.js';
 
 function snapshot(modulePlan = null) {
@@ -61,7 +62,8 @@ test('automatic repair follows the existing retry switch and keeps finished step
         ],
     };
     assert.equal(redo.modulePlanForRetry(plan).steps[0].status, 'completed');
-    assert.equal(redo.modulePlanForRetry(plan).steps[1].status, 'failed');
+    assert.equal(redo.modulePlanForRetry(plan).steps[1].status, 'pending');
+    assert.equal(redo.modulePlanForRetry(plan).steps[1].recoverySlot, '');
     const finished = {
         steps: [
             { id: 'index', status: 'completed', recoverySlot: 'album:index' },
@@ -233,6 +235,11 @@ test('the letter offers repair and retry only when that work is still open', () 
     const stalledClock = shell.generationStall({ active: true, running: false, signature: 'a', previous: { signature: 'a', since: 1000 }, now: 1000 + 90000 });
     assert.equal(stalledClock.stalled, true);
     assert.equal(shell.generationStall({ active: true, running: true, signature: 'a', previous: stalledClock, now: 1000 + 90000 }).stalled, false);
+    assert.equal(shell.generationStall({ active: true, running: false, storyOpen: true, signature: 'a', previous: { signature: 'a', since: 1000 }, now: 1000 + 90000 }).stalled, false);
+    assert.equal(stream.stopButtonOpen({ hidden: false, style: { display: 'flex' } }), true);
+    assert.equal(stream.stopButtonOpen({ hidden: false, style: { display: '' } }, 'none'), false);
+    assert.equal(stream.stopButtonOpen({ hidden: false, style: { display: '' } }, 'flex'), true);
+    assert.equal(stream.generationOpen({}), false);
     const stoppedRound = shell.shellView({ enabled: true, archiveReady: true, failureRecoverable: true, moduleTitle: '人际庭园', steps: [{ status: 'pending' }] });
     assert.equal(stoppedRound.phase, 'failed');
     assert.equal(stoppedRound.canRetry, true);

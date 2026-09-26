@@ -227,7 +227,10 @@ function watchStall(view, context) {
     const running = generationRunning(context);
     const active = view.phase === 'generating' || view.phase === 'planning';
     const signature = [view.phase, view.moduleId, view.revealId, view.progress?.done || 0, view.progress?.total || 0, view.detail].join('|');
-    const next = shell_state.generationStall({ active, running, signature, previous: stallState, now: Date.now() });
+    const next = shell_state.generationStall({
+        active, running, storyOpen: auto_memory_scheduler.storyStillWriting(context),
+        signature, previous: stallState, now: Date.now(),
+    });
     stallState = { signature: next.signature, since: next.since };
     if (next.stalled) {
         const detail = '90 秒没有新的进度。可以补全没写完的部分，或再试一次。';
@@ -256,6 +259,13 @@ function watchStall(view, context) {
 
 function paint(context) {
     if (shell_state.shellBlocksChatInput()) return;
+    if (auto_memory_scheduler.storyStillWriting(context)) {
+        stallState = { signature: '', since: 0 };
+        stallNoted = false;
+        try { ui_taskCenter.clearAutoMemoryFloorFailure(); } catch { /* 任务条稍后还会刷。 */ }
+        clearShells();
+        return;
+    }
     const view = watchStall(viewFor(context), context);
     const toast = shell_state.toastForTransition(lastPhase, view.phase, { line: view.title }, { initial: !sawPhase });
     sawPhase = true;
@@ -457,6 +467,14 @@ function openReveal(revealId) {
     seal.hidden = true;
 }
 
+function watchFloorAction(promise, waiting) {
+    return promise.then(result => {
+        if (result?.action === 'wait' || result?.action === 'busy') {
+            globalThis.toastr?.info?.(waiting, '心迹回廊');
+        }
+    });
+}
+
 function onClick(event) {
     const fill = event.target?.closest?.('[data-rmt-floor-fill]');
     if (fill) {
@@ -482,7 +500,7 @@ function onClick(event) {
         event.preventDefault();
         event.stopPropagation();
         complete.disabled = true;
-        void auto_memory_scheduler.completeFloorRound().catch(error => {
+        watchFloorAction(auto_memory_scheduler.completeFloorRound(), '等这楼正文写完，再补这一页。').catch(error => {
             console.warn('[HeartbeatMemories] floor complete skipped', core_text.safeErrorDiagnostic(error));
             globalThis.toastr?.error?.('这一页暂时没能补上。可以再点一次补全。', '心口顿了一下');
         }).finally(() => { complete.disabled = false; sync(); });
@@ -493,7 +511,7 @@ function onClick(event) {
         event.preventDefault();
         event.stopPropagation();
         redo.disabled = true;
-        void auto_memory_scheduler.retryFloorRound().catch(error => {
+        watchFloorAction(auto_memory_scheduler.retryFloorRound(), '等这楼正文写完，再重写这一页。').catch(error => {
             console.warn('[HeartbeatMemories] floor redo skipped', core_text.safeErrorDiagnostic(error));
             globalThis.toastr?.error?.('这一页暂时没能重写。可以再点一次重试。', '心口顿了一下');
         }).finally(() => { redo.disabled = false; sync(); });
@@ -504,7 +522,7 @@ function onClick(event) {
         event.preventDefault();
         event.stopPropagation();
         retry.disabled = true;
-        void auto_memory_scheduler.resumeFloorPlan().catch(error => {
+        watchFloorAction(auto_memory_scheduler.resumeFloorPlan(), '等这楼正文写完，再重写这一页。').catch(error => {
             console.warn('[HeartbeatMemories] floor retry skipped', core_text.safeErrorDiagnostic(error));
             globalThis.toastr?.error?.('这一封暂时没能续上。可以再点一次重试。', '心口顿了一下');
         }).finally(() => { retry.disabled = false; sync(); });

@@ -122,9 +122,9 @@ export function promoteNarrowLayout(css, scope = '.rmt-floor-shell') {
 
 export const GENERATION_STALL_MS = 90_000;
 
-// 没有正在跑的任务，进度签名也一直不变，超过 90 秒就当失败。有请求在跑就重新计时。
-export function generationStall({ active = false, running = false, signature = '', previous = null, now = 0 } = {}) {
-    if (!active || running) return { stalled: false, since: 0, signature: '' };
+// 没有正在跑的任务，进度签名也一直不变，超过 90 秒就当失败。有请求在跑，或这楼正文还在写，就重新计时。
+export function generationStall({ active = false, running = false, storyOpen = false, signature = '', previous = null, now = 0 } = {}) {
+    if (!active || running || storyOpen) return { stalled: false, since: 0, signature: '' };
     const same = previous && previous.signature === signature && Number(previous.since) > 0;
     const since = same ? previous.since : now;
     return { stalled: now - since >= GENERATION_STALL_MS, since, signature };

@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 284
-// Source SHA-256: a7ca80fc0a13dc55e7f8107e0f38658a485c252ae55c3929d84a61f94688d0fb
+// Source SHA-256: b88f8e2e9998ad5b168b7a40a7e9f82ac1f68bab10c1c5e4b97ab5c5fffd720a
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -3629,6 +3629,19 @@ function assistantBodyReady(chat, options = {}) {
     return false;
 }
 
+// 最后一条还是角色楼，但正文是空的或只有省略号。流式刚开头时就是这样。
+function assistantStillTyping(chat) {
+    const list = Array.isArray(chat) ? chat : [];
+    for (let index = list.length - 1; index >= 0; index -= 1) {
+        const message = list[index];
+        if (!message || message.is_system === true) continue;
+        if (message.is_user === true) return false;
+        const text = String(message.mes ?? '').trim();
+        return !text || /^[.。…．]{1,12}$/.test(text);
+    }
+    return false;
+}
+
 __m_autoMemory_floorPace_js.dueFloorWindow = dueFloorWindow;
 __m_autoMemory_floorPace_js.floorsRemaining = floorsRemaining;
 __m_autoMemory_floorPace_js.formatFloorRemain = formatFloorRemain;
@@ -3637,6 +3650,7 @@ __m_autoMemory_floorPace_js.chatRangeForAssistantSpan = chatRangeForAssistantSpa
 __m_autoMemory_floorPace_js.latestAssistantWindow = latestAssistantWindow;
 __m_autoMemory_floorPace_js.countdownLabel = countdownLabel;
 __m_autoMemory_floorPace_js.assistantBodyReady = assistantBodyReady;
+__m_autoMemory_floorPace_js.assistantStillTyping = assistantStillTyping;
 }
 
 function __init_autoMemory_gapFill_js() {
@@ -4696,6 +4710,7 @@ async function executeModuleStep({ step, plan, carryAchievement }, context) {
     try {
         const result = await generation_client.generateMode(plan.moduleId, stepOptions(step, plan));
         const achievement = generation_achievement.finishAchievementCapture();
+        if (!result || result.status === 'failed' || result.status === 'cancelled' || result.status === 'blocked') return { saved: false };
         if (result?.status === 'noop') return { noop: true };
         if (step.kind === 'catalog') {
             const facts = collectModuleFacts(plan.moduleId, context, plan);
@@ -5846,12 +5861,21 @@ function resetModuleSteps(modulePlan) {
 
 function modulePlanForRetry(modulePlan) {
   const steps = modulePlan?.steps || [];
-  if (!steps.length || steps.some(step => step.status !== 'completed')) return modulePlan;
+  if (!steps.length) return modulePlan;
+  if (steps.every(step => step.status === 'completed')) {
+    return {
+      ...modulePlan,
+      steps: steps.map((step, index) =>
+        index === steps.length - 1 ? { ...step, status: 'pending', recoverySlot: '' } : step,
+      ),
+    };
+  }
+  if (!steps.some(step => step.status === 'failed' || step.status === 'running')) return modulePlan;
   return {
     ...modulePlan,
-    steps: steps.map((step, index) =>
-      index === steps.length - 1 ? { ...step, status: 'pending', recoverySlot: '' } : step,
-    ),
+    steps: steps.map(step => (step.status === 'completed'
+      ? step
+      : { ...step, status: 'pending', recoverySlot: '' })),
   };
 }
 
@@ -6044,7 +6068,13 @@ const noticedGroups = new Set();
 const autoUsed = new Map();
 let autoRepairInflight = false;
 let redoInflight = false;
+let floorRecovery = '';
 const sameFloor = auto_memory_redo.createSameFloorGate();
+
+function storyStillWriting(context) {
+    const chat = Array.isArray(context?.chat) ? context.chat : [];
+    return auto_memory_stream.hostGenerationOpen(context) || auto_memory_floor.assistantStillTyping(chat);
+}
 
 function ownerId() {
     if (!leaseOwner) leaseOwner = `tab-${Math.random().toString(36).slice(2, 10)}`;
@@ -6364,14 +6394,28 @@ async function fillFloorGap() {
     }
 }
 
+function queueFloorRecovery(kind) {
+    floorRecovery = kind;
+    return { action: 'wait' };
+}
+
 async function completeFloorRound() {
     const context = core_context.currentCharacterGuard();
+    if (redoInflight) return { action: 'busy' };
+    if (storyStillWriting(context)) return queueFloorRecovery('complete');
+    const rewritten = await rerollOwnedFloor(null);
+    if (rewritten) return { action: 'rerolled' };
     const snapshot = auto_memory_plan.readAutoMemoryMetadata(context.chatMetadata);
     if (snapshot?.modulePlan?.steps?.length) return resumeFloorPlan();
     return regenerateCurrentMemory({ mode: 'keep' });
 }
 
 async function retryFloorRound() {
+    const context = core_context.currentCharacterGuard();
+    if (redoInflight) return { action: 'busy' };
+    if (storyStillWriting(context)) return queueFloorRecovery('redo');
+    const rewritten = await rerollOwnedFloor(null);
+    if (rewritten) return { action: 'rerolled' };
     return regenerateCurrentMemory({ mode: 'keep' });
 }
 
@@ -6380,6 +6424,7 @@ async function failStalledFloor() {
     let context;
     try { context = core_context.currentCharacterGuard(); }
     catch { return { action: 'idle' }; }
+    if (storyStillWriting(context)) return { action: 'idle' };
     const snapshot = auto_memory_plan.readAutoMemoryMetadata(context.chatMetadata);
     const steps = snapshot?.modulePlan?.steps || [];
     if (!steps.length || steps.some(step => step.status === 'failed') || steps.every(step => step.status === 'completed')) return { action: 'idle' };
@@ -6389,12 +6434,21 @@ async function failStalledFloor() {
         ...snapshot.modulePlan,
         steps: steps.map((step, stepIndex) => stepIndex === index ? { ...step, status: 'failed' } : step),
     });
-    await persistSnapshot(context, auto_memory_plan.parseAutoMemorySnapshot({ ...snapshot, modulePlan }));
+    const next = auto_memory_plan.parseAutoMemorySnapshot({
+        plan: auto_memory_plan.parseAutoMemoryPlan({
+            ...snapshot.plan,
+            revision: snapshot.plan.revision + 1,
+            updatedAt: Date.now(),
+        }),
+        revealRecords: snapshot.revealRecords,
+        drawTickets: snapshot.drawTickets,
+        modulePlan,
+    });
+    await persistSnapshot(context, next);
     return { action: 'failed' };
 }
 
-async function resumeFloorPlan() {
-    const context = core_context.currentCharacterGuard();
+async function resumeFloorPlanOnce(context) {
     const snapshot = auto_memory_plan.readAutoMemoryMetadata(context.chatMetadata);
     if (!snapshot?.modulePlan) return { action: 'idle' };
     const retryPlan = auto_memory_plan.parseModulePlan(auto_memory_redo.modulePlanForRetry(snapshot.modulePlan));
@@ -6404,6 +6458,18 @@ async function resumeFloorPlan() {
     await rememberTitle(context, result);
     ui_countdown.refreshAutoMemoryCountdown();
     return followIfEnabled(context, result);
+}
+
+async function resumeFloorPlan() {
+    const context = core_context.currentCharacterGuard();
+    if (redoInflight) return { action: 'busy' };
+    if (storyStillWriting(context)) return queueFloorRecovery('retry');
+    try {
+        return await resumeFloorPlanOnce(context);
+    } catch (error) {
+        if (error?.code !== 'RMT_AUTO_MEMORY_STALE') throw error;
+        return resumeFloorPlanOnce(core_context.currentCharacterGuard());
+    }
 }
 
 async function repairFloorAchievement(context = core_context.currentCharacterGuard()) {
@@ -6515,6 +6581,7 @@ async function rerollOwnedFloor(messageIndex) {
     if (!auto_memory_redo.swipeNeedsRegenerate({
         stamp, messageIndex: index, hash, ticketMessageIndex: located.index,
     })) return false;
+    if (storyStillWriting(context)) return false;
     redoInflight = true;
     const oldIds = [...(ticket.sourceMemoryIds || [])];
     try {
@@ -6762,22 +6829,11 @@ function stopAutoMemoryScheduler() {
     lastSignature = '';
     auto_memory_stream.noteAssistantStream(false);
     sameFloor.clear();
+    floorRecovery = '';
     handledFloors.clear();
     inflightScopes.clear();
     noticedGroups.clear();
     autoUsed.clear();
-}
-
-function assistantStillTyping(chat) {
-    const list = Array.isArray(chat) ? chat : [];
-    for (let index = list.length - 1; index >= 0; index -= 1) {
-        const message = list[index];
-        if (!message || message.is_system === true) continue;
-        if (message.is_user === true) return false;
-        const text = String(message.mes ?? '').trim();
-        return !text || /^[.。…．]{1,12}$/.test(text);
-    }
-    return false;
 }
 
 function scheduleSettledRound() {
@@ -6789,35 +6845,50 @@ function scheduleSettledRound() {
         const chat = Array.isArray(context?.chat) ? context.chat : [];
         const last = [...chat].reverse().find(item => item && item.is_system !== true);
         const signature = !last || last.is_user === true ? 'user' : `${String(last.mes ?? '').length}:${String(last.mes ?? '').slice(-24)}`;
-        if (auto_memory_stream.generationOpen(context) || assistantStillTyping(chat)) {
-            const ready = auto_memory_floor.assistantBodyReady(chat, { generating: false });
-            if (signature && signature === lastSignature && ready) stablePasses += 1;
-            else stablePasses = 0;
+        if (storyStillWriting(context)) {
+            stablePasses = 0;
             lastSignature = signature;
-            if (stablePasses >= 2) {
-                stablePasses = 0;
-                settleWaits = 0;
-                auto_memory_stream.noteAssistantStream(false);
-                void settleReadyRound();
-                return;
-            }
             settleWaits += 1;
-            if (settleWaits > 40 && !ready) {
+            if (settleWaits > 400) {
                 settleWaits = 0;
-                auto_memory_stream.noteAssistantStream(false);
                 return;
             }
             scheduleSettledRound();
             return;
         }
+        const ready = auto_memory_floor.assistantBodyReady(chat, { generating: false });
+        if (auto_memory_stream.assistantStreamLatched()) {
+            if (signature && signature === lastSignature && ready) stablePasses += 1;
+            else stablePasses = 0;
+            lastSignature = signature;
+            if (stablePasses < 2) {
+                settleWaits += 1;
+                if (settleWaits > 40 && !ready) {
+                    settleWaits = 0;
+                    auto_memory_stream.noteAssistantStream(false);
+                    return;
+                }
+                scheduleSettledRound();
+                return;
+            }
+            auto_memory_stream.noteAssistantStream(false);
+        }
         stablePasses = 0;
         settleWaits = 0;
         lastSignature = signature;
+        if (!ready) return;
         void settleReadyRound();
     }, 800);
 }
 
 async function settleReadyRound() {
+    let context = null;
+    try { context = core_context.getContext(); } catch { context = null; }
+    if (storyStillWriting(context)) {
+        scheduleSettledRound();
+        return;
+    }
+    if (!auto_memory_floor.assistantBodyReady(context?.chat, { generating: false })) return;
     if (sameFloor.pending()) {
         if (redoInflight || inflightScopes.size) {
             scheduleSettledRound();
@@ -6825,7 +6896,22 @@ async function settleReadyRound() {
         }
         const ran = await rerollOwnedFloor(null);
         sameFloor.consume();
+        floorRecovery = '';
         if (ran) return;
+    }
+    const recovery = floorRecovery;
+    floorRecovery = '';
+    if (recovery === 'retry') {
+        await resumeFloorPlan();
+        return;
+    }
+    if (recovery === 'redo') {
+        await retryFloorRound();
+        return;
+    }
+    if (recovery === 'complete') {
+        await completeFloorRound();
+        return;
     }
     void runHostRound();
 }
@@ -6854,7 +6940,10 @@ function startAutoMemoryScheduler() {
     const listener = (type, ...args) => {
         const starting = type === types.GENERATION_STARTED || type === types.STREAM_TOKEN_RECEIVED || type === types.STREAM_TOKEN_RECEIVED_FULLY;
         const ended = type === types.GENERATION_ENDED || type === types.GENERATION_STOPPED;
-        if (type === types.GENERATION_STOPPED) sameFloor.clear();
+        if (type === types.GENERATION_STOPPED) {
+            sameFloor.clear();
+            floorRecovery = '';
+        }
         if (type === types.GENERATION_STARTED && args[2] !== true && !redoInflight) sameFloor.mark(args[0]);
         if (starting) {
             auto_memory_stream.noteAssistantStream(true);
@@ -6890,6 +6979,7 @@ __m_autoMemory_scheduler_js.resumeFloorPlan = resumeFloorPlan;
 __m_autoMemory_scheduler_js.repairFloorAchievement = repairFloorAchievement;
 __m_autoMemory_scheduler_js.automaticRepairIfNeeded = automaticRepairIfNeeded;
 __m_autoMemory_scheduler_js.regenerateCurrentMemory = regenerateCurrentMemory;
+__m_autoMemory_scheduler_js.storyStillWriting = storyStillWriting;
 __m_autoMemory_scheduler_js.stopAutoMemoryScheduler = stopAutoMemoryScheduler;
 __m_autoMemory_scheduler_js.startAutoMemoryScheduler = startAutoMemoryScheduler;
 }
@@ -7020,9 +7110,9 @@ function promoteNarrowLayout(css, scope = '.rmt-floor-shell') {
 
 const GENERATION_STALL_MS = 90_000;
 
-// 没有正在跑的任务，进度签名也一直不变，超过 90 秒就当失败。有请求在跑就重新计时。
-function generationStall({ active = false, running = false, signature = '', previous = null, now = 0 } = {}) {
-    if (!active || running) return { stalled: false, since: 0, signature: '' };
+// 没有正在跑的任务，进度签名也一直不变，超过 90 秒就当失败。有请求在跑，或这楼正文还在写，就重新计时。
+function generationStall({ active = false, running = false, storyOpen = false, signature = '', previous = null, now = 0 } = {}) {
+    if (!active || running || storyOpen) return { stalled: false, since: 0, signature: '' };
     const same = previous && previous.signature === signature && Number(previous.since) > 0;
     const since = same ? previous.since : now;
     return { stalled: now - since >= GENERATION_STALL_MS, since, signature };
@@ -7177,19 +7267,39 @@ function assistantStreamLatched() {
     return latched === true;
 }
 
-function generationOpen(context) {
-    if (latched) return true;
+// 停止按钮平时靠样式表藏起来，生成时酒馆给它写上 inline display。
+// position:fixed 时 offsetParent 会是空的，不能拿它判断按钮在不在。
+function stopButtonOpen(stop, computedDisplay = '') {
+    if (!stop || stop.hidden === true) return false;
+    const inline = typeof stop.style?.display === 'string' ? stop.style.display : '';
+    if (inline === 'none') return false;
+    if (inline === 'flex' || inline === 'block' || inline === 'grid' || inline === 'inline-flex') return true;
+    if (!computedDisplay) return false;
+    return computedDisplay !== 'none';
+}
+
+function hostGenerationOpen(context) {
+    if (globalThis.document?.body?.dataset?.generating === 'true') return true;
     const stream = context?.streamingProcessor;
     if (stream && stream.finished !== true && stream.isStopped !== true) return true;
     if (context?.generating === true || context?.isGenerating === true) return true;
     const stop = globalThis.document?.getElementById?.('mes_stop');
-    if (stop && stop.hidden !== true && stop.style?.display !== 'none' && stop.offsetParent !== null) return true;
+    let computed = '';
+    try { computed = globalThis.getComputedStyle?.(stop)?.display || ''; } catch { computed = ''; }
+    if (stopButtonOpen(stop, computed)) return true;
     const live = globalThis.document?.querySelector?.('#chat .mes.streaming, #chat .mes.mes_streaming, #chat .last_mes.streaming');
     return !!live;
 }
 
+function generationOpen(context) {
+    if (latched) return true;
+    return hostGenerationOpen(context);
+}
+
 __m_autoMemory_streamGate_js.noteAssistantStream = noteAssistantStream;
 __m_autoMemory_streamGate_js.assistantStreamLatched = assistantStreamLatched;
+__m_autoMemory_streamGate_js.stopButtonOpen = stopButtonOpen;
+__m_autoMemory_streamGate_js.hostGenerationOpen = hostGenerationOpen;
 __m_autoMemory_streamGate_js.generationOpen = generationOpen;
 }
 
@@ -60706,7 +60816,10 @@ function watchStall(view, context) {
     const running = generationRunning(context);
     const active = view.phase === 'generating' || view.phase === 'planning';
     const signature = [view.phase, view.moduleId, view.revealId, view.progress?.done || 0, view.progress?.total || 0, view.detail].join('|');
-    const next = shell_state.generationStall({ active, running, signature, previous: stallState, now: Date.now() });
+    const next = shell_state.generationStall({
+        active, running, storyOpen: auto_memory_scheduler.storyStillWriting(context),
+        signature, previous: stallState, now: Date.now(),
+    });
     stallState = { signature: next.signature, since: next.since };
     if (next.stalled) {
         const detail = '90 秒没有新的进度。可以补全没写完的部分，或再试一次。';
@@ -60735,6 +60848,13 @@ function watchStall(view, context) {
 
 function paint(context) {
     if (shell_state.shellBlocksChatInput()) return;
+    if (auto_memory_scheduler.storyStillWriting(context)) {
+        stallState = { signature: '', since: 0 };
+        stallNoted = false;
+        try { ui_taskCenter.clearAutoMemoryFloorFailure(); } catch { /* 任务条稍后还会刷。 */ }
+        clearShells();
+        return;
+    }
     const view = watchStall(viewFor(context), context);
     const toast = shell_state.toastForTransition(lastPhase, view.phase, { line: view.title }, { initial: !sawPhase });
     sawPhase = true;
@@ -60936,6 +61056,14 @@ function openReveal(revealId) {
     seal.hidden = true;
 }
 
+function watchFloorAction(promise, waiting) {
+    return promise.then(result => {
+        if (result?.action === 'wait' || result?.action === 'busy') {
+            globalThis.toastr?.info?.(waiting, '心迹回廊');
+        }
+    });
+}
+
 function onClick(event) {
     const fill = event.target?.closest?.('[data-rmt-floor-fill]');
     if (fill) {
@@ -60961,7 +61089,7 @@ function onClick(event) {
         event.preventDefault();
         event.stopPropagation();
         complete.disabled = true;
-        void auto_memory_scheduler.completeFloorRound().catch(error => {
+        watchFloorAction(auto_memory_scheduler.completeFloorRound(), '等这楼正文写完，再补这一页。').catch(error => {
             console.warn('[HeartbeatMemories] floor complete skipped', core_text.safeErrorDiagnostic(error));
             globalThis.toastr?.error?.('这一页暂时没能补上。可以再点一次补全。', '心口顿了一下');
         }).finally(() => { complete.disabled = false; sync(); });
@@ -60972,7 +61100,7 @@ function onClick(event) {
         event.preventDefault();
         event.stopPropagation();
         redo.disabled = true;
-        void auto_memory_scheduler.retryFloorRound().catch(error => {
+        watchFloorAction(auto_memory_scheduler.retryFloorRound(), '等这楼正文写完，再重写这一页。').catch(error => {
             console.warn('[HeartbeatMemories] floor redo skipped', core_text.safeErrorDiagnostic(error));
             globalThis.toastr?.error?.('这一页暂时没能重写。可以再点一次重试。', '心口顿了一下');
         }).finally(() => { redo.disabled = false; sync(); });
@@ -60983,7 +61111,7 @@ function onClick(event) {
         event.preventDefault();
         event.stopPropagation();
         retry.disabled = true;
-        void auto_memory_scheduler.resumeFloorPlan().catch(error => {
+        watchFloorAction(auto_memory_scheduler.resumeFloorPlan(), '等这楼正文写完，再重写这一页。').catch(error => {
             console.warn('[HeartbeatMemories] floor retry skipped', core_text.safeErrorDiagnostic(error));
             globalThis.toastr?.error?.('这一封暂时没能续上。可以再点一次重试。', '心口顿了一下');
         }).finally(() => { retry.disabled = false; sync(); });
@@ -70388,7 +70516,7 @@ function overlayArchiveActions(actionEl, action) {
     if (action === 'travel-dialogue-prev') return ui_travelView.travelDialogueStep(-1);
     if (action === 'travel-dialogue-next') return ui_travelView.travelDialogueStep(1);
     if (action === 'travel-dialogue-replay') return ui_travelView.replayTravelDialogue();
-    if (action === 'tasks' || action === 'task-center-close' || action === 'task-cancel' || action === 'task-cancel-current' || action === 'task-open' || action === 'task-second-step' || action === 'task-queue-remove' || action === 'task-clear-done' || action === 'queue-selected' || action === 'generate-together' || action === 'merged-repair' || action === 'merged-resave' || ['merged-discard', 'merged-new', 'merged-export', 'merged-export-legacy', 'merged-discard-legacy'].includes(action)) {
+    if (action === 'tasks' || action === 'task-center-close' || action === 'task-cancel' || action === 'task-cancel-current' || action === 'task-open' || action === 'task-second-step' || action === 'task-queue-remove' || action === 'task-clear-done' || action === 'task-floor-complete' || action === 'task-floor-retry' || action === 'queue-selected' || action === 'generate-together' || action === 'merged-repair' || action === 'merged-resave' || ['merged-discard', 'merged-new', 'merged-export', 'merged-export-legacy', 'merged-discard-legacy'].includes(action)) {
         return ui_taskCenter.handleTaskCenterAction(action, actionEl);
     }
     if (action === 'close') return closeArchiveOverlayFromUser();
@@ -76788,7 +76916,10 @@ function handleTaskCenterAction(action, actionEl) {
     if (action === 'task-floor-complete' || action === 'task-floor-retry') {
         clearAutoMemoryFloorFailure();
         const run = action === 'task-floor-complete' ? 'completeFloorRound' : 'resumeFloorPlan';
-        void import('../autoMemory/scheduler.js').then(mod => mod[run]()).catch(error => {
+        const waiting = action === 'task-floor-complete' ? '等这楼正文写完，再补这一页。' : '等这楼正文写完，再重写这一页。';
+        void import('../autoMemory/scheduler.js').then(mod => mod[run]()).then(result => {
+            if (result?.action === 'wait' || result?.action === 'busy') globalThis.toastr?.info?.(waiting, '心迹回廊');
+        }).catch(error => {
             console.warn('[HeartbeatMemories] floor recovery skipped', core_text.safeErrorDiagnostic(error));
             globalThis.toastr?.error?.('这一次没能补上。可以再点一次。', '心口顿了一下');
         });

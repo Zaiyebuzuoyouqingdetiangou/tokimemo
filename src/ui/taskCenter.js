@@ -866,7 +866,10 @@ export function handleTaskCenterAction(action, actionEl) {
     if (action === 'task-floor-complete' || action === 'task-floor-retry') {
         clearAutoMemoryFloorFailure();
         const run = action === 'task-floor-complete' ? 'completeFloorRound' : 'resumeFloorPlan';
-        void import('../autoMemory/scheduler.js').then(mod => mod[run]()).catch(error => {
+        const waiting = action === 'task-floor-complete' ? '等这楼正文写完，再补这一页。' : '等这楼正文写完，再重写这一页。';
+        void import('../autoMemory/scheduler.js').then(mod => mod[run]()).then(result => {
+            if (result?.action === 'wait' || result?.action === 'busy') globalThis.toastr?.info?.(waiting, '心迹回廊');
+        }).catch(error => {
             console.warn('[HeartbeatMemories] floor recovery skipped', core_text.safeErrorDiagnostic(error));
             globalThis.toastr?.error?.('这一次没能补上。可以再点一次。', '心口顿了一下');
         });

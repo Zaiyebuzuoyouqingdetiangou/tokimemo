@@ -1,15 +1,15 @@
 {
   "display_name": "心迹回廊",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.99.87-r84.139-letter-mobile",
+  "js": "index.js?heartbeat=0.99.88-r84.140-after-story",
   "author": "Toto",
-  "version": "0.99.87",
+  "version": "0.99.88",
   "auto_update": true,
   "minimum_client_version": "1.13.0",
   "hooks": {
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r84.139：信里每个模块都按手机上的布局来排。",
+  "description": "r84.140：这楼正文写完，才撤回旧回忆并重写。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }

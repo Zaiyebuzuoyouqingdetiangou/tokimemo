@@ -84,6 +84,7 @@ export async function executeModuleStep({ step, plan, carryAchievement }, contex
     try {
         const result = await generation_client.generateMode(plan.moduleId, stepOptions(step, plan));
         const achievement = generation_achievement.finishAchievementCapture();
+        if (!result || result.status === 'failed' || result.status === 'cancelled' || result.status === 'blocked') return { saved: false };
         if (result?.status === 'noop') return { noop: true };
         if (step.kind === 'catalog') {
             const facts = collectModuleFacts(plan.moduleId, context, plan);

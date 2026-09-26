@@ -52,12 +52,21 @@ export function resetModuleSteps(modulePlan) {
 
 export function modulePlanForRetry(modulePlan) {
   const steps = modulePlan?.steps || [];
-  if (!steps.length || steps.some(step => step.status !== 'completed')) return modulePlan;
+  if (!steps.length) return modulePlan;
+  if (steps.every(step => step.status === 'completed')) {
+    return {
+      ...modulePlan,
+      steps: steps.map((step, index) =>
+        index === steps.length - 1 ? { ...step, status: 'pending', recoverySlot: '' } : step,
+      ),
+    };
+  }
+  if (!steps.some(step => step.status === 'failed' || step.status === 'running')) return modulePlan;
   return {
     ...modulePlan,
-    steps: steps.map((step, index) =>
-      index === steps.length - 1 ? { ...step, status: 'pending', recoverySlot: '' } : step,
-    ),
+    steps: steps.map(step => (step.status === 'completed'
+      ? step
+      : { ...step, status: 'pending', recoverySlot: '' })),
   };
 }
 

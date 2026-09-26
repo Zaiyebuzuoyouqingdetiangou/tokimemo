@@ -35,7 +35,13 @@ const noticedGroups = new Set();
 const autoUsed = new Map();
 let autoRepairInflight = false;
 let redoInflight = false;
+let floorRecovery = '';
 const sameFloor = auto_memory_redo.createSameFloorGate();
+
+export function storyStillWriting(context) {
+    const chat = Array.isArray(context?.chat) ? context.chat : [];
+    return auto_memory_stream.hostGenerationOpen(context) || auto_memory_floor.assistantStillTyping(chat);
+}
 
 function ownerId() {
     if (!leaseOwner) leaseOwner = `tab-${Math.random().toString(36).slice(2, 10)}`;
@@ -355,14 +361,28 @@ export async function fillFloorGap() {
     }
 }
 
+function queueFloorRecovery(kind) {
+    floorRecovery = kind;
+    return { action: 'wait' };
+}
+
 export async function completeFloorRound() {
     const context = core_context.currentCharacterGuard();
+    if (redoInflight) return { action: 'busy' };
+    if (storyStillWriting(context)) return queueFloorRecovery('complete');
+    const rewritten = await rerollOwnedFloor(null);
+    if (rewritten) return { action: 'rerolled' };
     const snapshot = auto_memory_plan.readAutoMemoryMetadata(context.chatMetadata);
     if (snapshot?.modulePlan?.steps?.length) return resumeFloorPlan();
     return regenerateCurrentMemory({ mode: 'keep' });
 }
 
 export async function retryFloorRound() {
+    const context = core_context.currentCharacterGuard();
+    if (redoInflight) return { action: 'busy' };
+    if (storyStillWriting(context)) return queueFloorRecovery('redo');
+    const rewritten = await rerollOwnedFloor(null);
+    if (rewritten) return { action: 'rerolled' };
     return regenerateCurrentMemory({ mode: 'keep' });
 }
 
@@ -371,6 +391,7 @@ export async function failStalledFloor() {
     let context;
     try { context = core_context.currentCharacterGuard(); }
     catch { return { action: 'idle' }; }
+    if (storyStillWriting(context)) return { action: 'idle' };
     const snapshot = auto_memory_plan.readAutoMemoryMetadata(context.chatMetadata);
     const steps = snapshot?.modulePlan?.steps || [];
     if (!steps.length || steps.some(step => step.status === 'failed') || steps.every(step => step.status === 'completed')) return { action: 'idle' };
@@ -380,12 +401,21 @@ export async function failStalledFloor() {
         ...snapshot.modulePlan,
         steps: steps.map((step, stepIndex) => stepIndex === index ? { ...step, status: 'failed' } : step),
     });
-    await persistSnapshot(context, auto_memory_plan.parseAutoMemorySnapshot({ ...snapshot, modulePlan }));
+    const next = auto_memory_plan.parseAutoMemorySnapshot({
+        plan: auto_memory_plan.parseAutoMemoryPlan({
+            ...snapshot.plan,
+            revision: snapshot.plan.revision + 1,
+            updatedAt: Date.now(),
+        }),
+        revealRecords: snapshot.revealRecords,
+        drawTickets: snapshot.drawTickets,
+        modulePlan,
+    });
+    await persistSnapshot(context, next);
     return { action: 'failed' };
 }
 
-export async function resumeFloorPlan() {
-    const context = core_context.currentCharacterGuard();
+async function resumeFloorPlanOnce(context) {
     const snapshot = auto_memory_plan.readAutoMemoryMetadata(context.chatMetadata);
     if (!snapshot?.modulePlan) return { action: 'idle' };
     const retryPlan = auto_memory_plan.parseModulePlan(auto_memory_redo.modulePlanForRetry(snapshot.modulePlan));
@@ -395,6 +425,18 @@ export async function resumeFloorPlan() {
     await rememberTitle(context, result);
     ui_countdown.refreshAutoMemoryCountdown();
     return followIfEnabled(context, result);
+}
+
+export async function resumeFloorPlan() {
+    const context = core_context.currentCharacterGuard();
+    if (redoInflight) return { action: 'busy' };
+    if (storyStillWriting(context)) return queueFloorRecovery('retry');
+    try {
+        return await resumeFloorPlanOnce(context);
+    } catch (error) {
+        if (error?.code !== 'RMT_AUTO_MEMORY_STALE') throw error;
+        return resumeFloorPlanOnce(core_context.currentCharacterGuard());
+    }
 }
 
 export async function repairFloorAchievement(context = core_context.currentCharacterGuard()) {
@@ -506,6 +548,7 @@ async function rerollOwnedFloor(messageIndex) {
     if (!auto_memory_redo.swipeNeedsRegenerate({
         stamp, messageIndex: index, hash, ticketMessageIndex: located.index,
     })) return false;
+    if (storyStillWriting(context)) return false;
     redoInflight = true;
     const oldIds = [...(ticket.sourceMemoryIds || [])];
     try {
@@ -753,22 +796,11 @@ export function stopAutoMemoryScheduler() {
     lastSignature = '';
     auto_memory_stream.noteAssistantStream(false);
     sameFloor.clear();
+    floorRecovery = '';
     handledFloors.clear();
     inflightScopes.clear();
     noticedGroups.clear();
     autoUsed.clear();
-}
-
-function assistantStillTyping(chat) {
-    const list = Array.isArray(chat) ? chat : [];
-    for (let index = list.length - 1; index >= 0; index -= 1) {
-        const message = list[index];
-        if (!message || message.is_system === true) continue;
-        if (message.is_user === true) return false;
-        const text = String(message.mes ?? '').trim();
-        return !text || /^[.。…．]{1,12}$/.test(text);
-    }
-    return false;
 }
 
 function scheduleSettledRound() {
@@ -780,35 +812,50 @@ function scheduleSettledRound() {
         const chat = Array.isArray(context?.chat) ? context.chat : [];
         const last = [...chat].reverse().find(item => item && item.is_system !== true);
         const signature = !last || last.is_user === true ? 'user' : `${String(last.mes ?? '').length}:${String(last.mes ?? '').slice(-24)}`;
-        if (auto_memory_stream.generationOpen(context) || assistantStillTyping(chat)) {
-            const ready = auto_memory_floor.assistantBodyReady(chat, { generating: false });
-            if (signature && signature === lastSignature && ready) stablePasses += 1;
-            else stablePasses = 0;
+        if (storyStillWriting(context)) {
+            stablePasses = 0;
             lastSignature = signature;
-            if (stablePasses >= 2) {
-                stablePasses = 0;
-                settleWaits = 0;
-                auto_memory_stream.noteAssistantStream(false);
-                void settleReadyRound();
-                return;
-            }
             settleWaits += 1;
-            if (settleWaits > 40 && !ready) {
+            if (settleWaits > 400) {
                 settleWaits = 0;
-                auto_memory_stream.noteAssistantStream(false);
                 return;
             }
             scheduleSettledRound();
             return;
         }
+        const ready = auto_memory_floor.assistantBodyReady(chat, { generating: false });
+        if (auto_memory_stream.assistantStreamLatched()) {
+            if (signature && signature === lastSignature && ready) stablePasses += 1;
+            else stablePasses = 0;
+            lastSignature = signature;
+            if (stablePasses < 2) {
+                settleWaits += 1;
+                if (settleWaits > 40 && !ready) {
+                    settleWaits = 0;
+                    auto_memory_stream.noteAssistantStream(false);
+                    return;
+                }
+                scheduleSettledRound();
+                return;
+            }
+            auto_memory_stream.noteAssistantStream(false);
+        }
         stablePasses = 0;
         settleWaits = 0;
         lastSignature = signature;
+        if (!ready) return;
         void settleReadyRound();
     }, 800);
 }
 
 async function settleReadyRound() {
+    let context = null;
+    try { context = core_context.getContext(); } catch { context = null; }
+    if (storyStillWriting(context)) {
+        scheduleSettledRound();
+        return;
+    }
+    if (!auto_memory_floor.assistantBodyReady(context?.chat, { generating: false })) return;
     if (sameFloor.pending()) {
         if (redoInflight || inflightScopes.size) {
             scheduleSettledRound();
@@ -816,7 +863,22 @@ async function settleReadyRound() {
         }
         const ran = await rerollOwnedFloor(null);
         sameFloor.consume();
+        floorRecovery = '';
         if (ran) return;
+    }
+    const recovery = floorRecovery;
+    floorRecovery = '';
+    if (recovery === 'retry') {
+        await resumeFloorPlan();
+        return;
+    }
+    if (recovery === 'redo') {
+        await retryFloorRound();
+        return;
+    }
+    if (recovery === 'complete') {
+        await completeFloorRound();
+        return;
     }
     void runHostRound();
 }
@@ -845,7 +907,10 @@ export function startAutoMemoryScheduler() {
     const listener = (type, ...args) => {
         const starting = type === types.GENERATION_STARTED || type === types.STREAM_TOKEN_RECEIVED || type === types.STREAM_TOKEN_RECEIVED_FULLY;
         const ended = type === types.GENERATION_ENDED || type === types.GENERATION_STOPPED;
-        if (type === types.GENERATION_STOPPED) sameFloor.clear();
+        if (type === types.GENERATION_STOPPED) {
+            sameFloor.clear();
+            floorRecovery = '';
+        }
         if (type === types.GENERATION_STARTED && args[2] !== true && !redoInflight) sameFloor.mark(args[0]);
         if (starting) {
             auto_memory_stream.noteAssistantStream(true);

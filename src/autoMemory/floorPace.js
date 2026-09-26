@@ -76,3 +76,16 @@ export function assistantBodyReady(chat, options = {}) {
     }
     return false;
 }
+
+// 最后一条还是角色楼，但正文是空的或只有省略号。流式刚开头时就是这样。
+export function assistantStillTyping(chat) {
+    const list = Array.isArray(chat) ? chat : [];
+    for (let index = list.length - 1; index >= 0; index -= 1) {
+        const message = list[index];
+        if (!message || message.is_system === true) continue;
+        if (message.is_user === true) return false;
+        const text = String(message.mes ?? '').trim();
+        return !text || /^[.。…．]{1,12}$/.test(text);
+    }
+    return false;
+}
