@@ -20,14 +20,34 @@ export function floorShellCss() {
 .rmt-floor-shell .rmt-floor-pace b{font-weight:650}
 .rmt-floor-shell .rmt-floor-pace small{color:#7b8798}
 .rmt-floor-shell .rmt-floor-fill,.rmt-floor-shell .rmt-heart-letter .rmt-btn{min-height:28px;padding:2px 10px}
-.rmt-heart-letter{width:min(100%,320px);margin:10px 0 4px;color:#5c463c}
+.rmt-heart-letter{width:min(100%,320px);max-width:100%;min-width:0;margin:10px 0 4px;color:#5c463c}
+.rmt-heart-letter:has(.rmt-heart-letter-paper:not([hidden])){width:min(100%,640px)}
 .rmt-heart-letter-seal{display:grid;justify-items:center;gap:2px;width:100%;margin:0;padding:16px 14px 14px;border:1px solid #e7b7c8;border-left:7px solid #e99ab9;border-radius:6px 18px 18px 6px;background:#fff7f2;color:#6a4a58;box-shadow:0 10px 24px rgba(20,12,16,.16);font:inherit;text-align:center;cursor:pointer}
 .rmt-heart-letter-seal i{font-style:normal;color:#e07098;font-size:22px;line-height:1}
 .rmt-heart-letter-seal b{font-size:15px;line-height:1.4}
 .rmt-heart-letter-seal small{color:#8d6d78;font-size:12px}
-.rmt-heart-letter-paper{margin-top:8px;padding:16px 14px 12px;border:1px solid #e6d3c4;border-left:7px solid #e99ab9;border-radius:4px 16px 16px 4px;background:#fff8ee;background-image:repeating-linear-gradient(0deg,transparent,transparent 22px,rgba(180,140,120,.16) 23px);color:#5c463c}
+.rmt-heart-letter-paper{margin-top:8px;min-width:0;overflow:hidden;padding:16px 14px 12px;border:1px solid #e6d3c4;border-left:7px solid #e99ab9;border-radius:4px 16px 16px 4px;background:#fff8ee;background-image:repeating-linear-gradient(0deg,transparent,transparent 22px,rgba(180,140,120,.16) 23px);color:#5c463c}
 .rmt-heart-letter-paper p{margin:0 0 10px;font-size:15px;line-height:1.6}
-.rmt-heart-letter .rmt-floor-body{max-height:70vh;margin-top:10px;overflow:auto}
+.rmt-heart-letter .rmt-floor-body{max-height:70vh;max-width:100%;min-width:0;margin-top:10px;overflow:auto}
+/* 模块页按整页两栏排。在信里改成单栏，生图设置不占信纸。 */
+.rmt-heart-letter .rmt-floor-body .rmt-cg-format,
+.rmt-heart-letter .rmt-floor-body .rmt-cg-provider-bar{display:none!important}
+.rmt-heart-letter .rmt-album,
+.rmt-heart-letter .rmt-adv,
+.rmt-heart-letter .rmt-heart,
+.rmt-heart-letter .rmt-ending,
+.rmt-heart-letter .rmt-room-view{min-height:0;max-width:100%;box-sizing:border-box;padding:4px;background:transparent}
+.rmt-heart-letter .rmt-album-layout,
+.rmt-heart-letter .rmt-adv,
+.rmt-heart-letter .rmt-heart-drama-layout,
+.rmt-heart-letter .rmt-ending{grid-template-columns:minmax(0,1fr)!important}
+.rmt-heart-letter .rmt-album-head{align-items:flex-start}
+.rmt-heart-letter .rmt-filter{width:100%;margin-left:0}
+.rmt-heart-letter .rmt-grid{grid-template-columns:minmax(0,1fr)}
+.rmt-heart-letter .rmt-info{position:static;top:auto;width:auto;max-width:100%;min-height:0}
+.rmt-heart-letter .rmt-actions{display:grid;grid-template-columns:minmax(0,1fr)}
+.rmt-heart-letter .rmt-btn{max-width:100%;white-space:normal}
+.rmt-heart-letter .rmt-card:hover{transform:none}
 .rmt-heart-letter.is-waiting .rmt-heart-letter-seal{cursor:default}
 #chat .mes.rmt-floor-return{outline:2px solid #e99ab9;outline-offset:2px}
 `;

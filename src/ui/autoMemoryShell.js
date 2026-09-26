@@ -46,7 +46,8 @@ function mirrorModuleCss() {
     const style = document.createElement('style');
     style.id = 'rmt-floor-module-css';
     style.textContent = `${source.textContent.replaceAll(`#${core_constants.OVERLAY_ID}`, '.rmt-floor-shell')}
-.rmt-floor-shell{position:relative!important;inset:auto!important;z-index:auto!important;height:auto!important;width:min(96%,640px)!important;max-height:none!important;display:block!important;padding:0!important;background:transparent!important;backdrop-filter:none!important}`;
+.rmt-floor-shell{position:relative!important;inset:auto!important;z-index:auto!important;height:auto!important;width:min(96%,640px)!important;max-height:none!important;display:block!important;padding:0!important;background:transparent!important;backdrop-filter:none!important}
+${shell_state.floorShellCss()}`;
     document.head?.appendChild(style);
 }
 
