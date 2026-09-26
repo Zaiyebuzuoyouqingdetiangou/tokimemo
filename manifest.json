@@ -1,15 +1,15 @@
 {
   "display_name": "心迹回廊",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.99.72-r84.124-settled-floor",
+  "js": "index.js?heartbeat=0.99.73-r84.125-settings-front",
   "author": "Toto",
-  "version": "0.99.72",
+  "version": "0.99.73",
   "auto_update": true,
   "minimum_client_version": "1.13.0",
   "hooks": {
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r84.124：最新楼正文停稳后才留忆。摘要没写到的楼附上完整正文。回到当时对准聊天上的楼号。点开信可以看回忆。",
+  "description": "r84.125：自动留忆回到设置第一项。按模块的旧楼层开关不再出现在设置里。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }

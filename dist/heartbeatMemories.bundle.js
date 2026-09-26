@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 282
-// Source SHA-256: 6d54b72724db8815a775c57124c96f8bdf600efd788acb2de4d6cf13da59f3b1
+// Source SHA-256: d420c34935c5123d9a1ebd255114e1d4be1ebca74bea37d9c17c0c83df5af615
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -72445,7 +72445,7 @@ async function restoreLegacyAutoUpdates(panel) {
     }
     core_autoUpdates.notifyAutoUpdateSettingsChanged();
     refreshGenerationSettingsUi();
-    if (note) note.textContent = '已恢复原来的按模块自动更新。自动留忆计划已关闭，偏好还留着。';
+    if (note) note.textContent = '自动留忆已关闭。你可以继续手动生成，也可以再打开回忆向导。';
 }
 
 function mountSettings({ homeTarget = null } = {}) {
@@ -73146,9 +73146,6 @@ function __init_ui_settingsPanelMarkup_js() {
 const core_settings = __m_core_settings_js;
 const advanced_ui = __m_ui_advancedGenerationUi_js;
 const cg_format_ui = __m_ui_cgFormatControl_js;
-const core_autoUpdatePolicy = __m_core_autoUpdatePolicy_js;
-const core_text = __m_core_text_js;
-const core_constants = __m_core_constants_js;
 const core_requestCoordinator = __m_core_requestCoordinator_js;
 const SETTINGS_LAUNCHER_ID = __m_ui_settingsPanelParts_js.SETTINGS_LAUNCHER_ID;
 const bindManualAutosave = __m_ui_settingsPanelParts_js.bindManualAutosave;
@@ -73284,17 +73281,14 @@ function renderSettingsPanelMarkup(panel) {
           <label class="rmt-settings-field"><span>每隔多少楼抽一次</span><input class="text_pole" data-rmt-auto-memory-interval type="number" min="1" max="1000" step="1" value="${core_settings.getPluginSettings().autoMemoryIntervalFloors}" aria-label="每隔多少楼抽一次"></label>
           <small>到了这个间隔就从勾选的回忆里抽一份。1 到 1000。改完从现在重新计。</small>
           <label class="rmt-settings-check"><input type="checkbox" data-rmt-auto-memory-latest ${core_settings.getPluginSettings().autoMemoryLatestFloor ? 'checked' : ''}><span>在最新角色楼生成回忆</span></label>
-          <small>勾上后只数角色楼。间隔是 1 时，只用最新一条角色楼的正文。间隔更大时，前面几条收成摘要，最后一条用正文。</small>
+          <small>勾上后只数角色楼。间隔是 1 时，只用最新一条角色楼的正文。间隔更大时，这一窗角色楼的正文都会送去建档，不再截短。有摘要时，摘要没写到的楼附上完整正文。</small>
           <p>打开自动留忆后，需要两次才完整的模块会自动做第二次生成。两次合在一起才是一份完整回忆。手动生成仍看连接设置里的开关。</p>
           <label class="rmt-settings-field"><span>失败后重试次数</span><input class="text_pole" data-rmt-auto-memory-retry-count type="number" min="1" max="5" step="1" value="${core_settings.getPluginSettings().autoRetryCount}" aria-label="失败后重试次数"></label>
           <small>这一份没写完时，自动再试这么多次。范围是 1 到 5。</small>
           <button type="button" class="menu_button rmt-settings-wide" data-rmt-auto-memory-wizard>打开回忆向导</button>
           <small>向导先接 API、读取范围和档案。生图和文字 API 分开配，配完点下一步。结束后再问要不要自动留忆。已有档案时不会重新建档。</small>
           <p data-rmt-auto-memory-gate role="status"></p>
-          <button type="button" class="menu_button rmt-settings-wide" data-rmt-auto-memory-restore hidden>恢复原来的按模块自动更新</button>
-          <div class="rmt-auto-rules">${core_autoUpdatePolicy.AUTO_UPDATE_MODES.map(mode => `<div class="rmt-auto-rule"><label><input type="checkbox" data-rmt-auto-enabled="${mode}"> ${core_text.esc(mode === 'archive' ? '档案同步' : core_constants.MODE_LABEL[mode])}</label><label>每 <input type="number" min="1" max="1000" step="1" data-rmt-auto-every="${mode}" aria-label="${core_text.esc(mode === 'archive' ? '档案同步' : core_constants.MODE_LABEL[mode])}间隔楼层"> 楼</label><small data-rmt-auto-status="${mode}" role="status"></small></div>`).join('')}</div>
-          <small data-rmt-auto-warning role="status"></small>
-          <small>失败后不连续重试，等待下一个间隔；可随时手动生成。不支持跨页任务锁的浏览器仅保留手动操作。</small>
+          <button type="button" class="menu_button rmt-settings-wide" data-rmt-auto-memory-restore hidden>关闭自动留忆</button>
           </div>
         </details>
         <div class="rmt-settings-card">
@@ -76349,10 +76343,18 @@ function arrangeSettingsHome(body) {
         const more = document.createElement('details'); more.className = 'rmt-workspace-more';
         const title = document.createElement('summary'); title.textContent = '更多设置'; more.appendChild(title);
         const sectionBody = document.createElement('div'); sectionBody.className = 'rmt-workspace-more-body'; more.appendChild(sectionBody);
+        const front = ['auto', 'voice', 'api', 'reading', 'image', 'theme'];
         for (const card of [...content.querySelectorAll(':scope > [data-rmt-settings-section]')]) {
-            if (!['api','theme','image','reading','voice'].includes(card.dataset.rmtSettingsSection)) sectionBody.appendChild(card);
+            if (!front.includes(card.dataset.rmtSettingsSection)) sectionBody.appendChild(card);
         }
         if (sectionBody.children.length) content.appendChild(more);
+        let cursor = content.firstChild;
+        for (const id of front) {
+            const card = content.querySelector(`:scope > [data-rmt-settings-section="${id}"]`);
+            if (!card) continue;
+            content.insertBefore(card, cursor);
+            cursor = card.nextSibling;
+        }
         const preferences = [...content.querySelectorAll(':scope > .rmt-workspace-preferences')];
         for (const duplicate of preferences.slice(1)) duplicate.remove();
         if (!preferences.length) {

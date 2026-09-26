@@ -160,7 +160,7 @@ async function restoreLegacyAutoUpdates(panel) {
     }
     core_autoUpdates.notifyAutoUpdateSettingsChanged();
     refreshGenerationSettingsUi();
-    if (note) note.textContent = '已恢复原来的按模块自动更新。自动留忆计划已关闭，偏好还留着。';
+    if (note) note.textContent = '自动留忆已关闭。你可以继续手动生成，也可以再打开回忆向导。';
 }
 
 export function mountSettings({ homeTarget = null } = {}) {
