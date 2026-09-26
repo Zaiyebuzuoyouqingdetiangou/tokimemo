@@ -1,15 +1,15 @@
 {
   "display_name": "心迹回廊",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.99.40-r84.92-auto-memory-r8",
+  "js": "index.js?heartbeat=0.99.41-r84.93-auto-memory-wizard",
   "author": "Toto",
-  "version": "0.99.40",
+  "version": "0.99.41",
   "auto_update": true,
   "minimum_client_version": "1.13.0",
   "hooks": {
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r84.92：到点先把记忆插件的新摘要写入档案，再抽签生成增量回忆。没有网页锁时用本地租约，避免两个页面重复生成。",
+  "description": "r84.93：自动留忆向导里可以直接接上 API。模块介绍写明会生成什么、大约请求几次，勾选和全选也在这一步。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }

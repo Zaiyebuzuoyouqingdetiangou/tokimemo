@@ -3,7 +3,7 @@ import * as core_constants from '../core/constants.js';
 import * as auto_memory_registry from './moduleRegistry.js';
 import * as auto_memory_plan from './planStore.js';
 
-export const WIZARD_STEPS = Object.freeze(['api', 'card', 'people', 'sources', 'modules', 'preference', 'interval', 'archive', 'first', 'run']);
+export const WIZARD_STEPS = Object.freeze(['api', 'card', 'people', 'sources', 'modules', 'interval', 'archive', 'first', 'run']);
 
 function count(value) {
     const number = Math.floor(Number(value));
@@ -27,11 +27,11 @@ export function inspectAutoMemoryApi(input = {}) {
     const mode = input.mode === 'manual' ? 'manual' : 'profile';
     if (mode === 'manual') {
         if (input.manualReady === true) return { ready: true, message: '手动 API 已就绪。', action: '' };
-        return { ready: false, message: input.manualMessage || '手动 API 还没配好。', action: '请到设置的 API 页填写地址、模型和 Key，保存后再打开向导。' };
+        return { ready: false, message: input.manualMessage || '手动 API 还没配好。', action: '在下面填好地址、模型和 Key。' };
     }
     if (input.profileReady === true) return { ready: true, message: '一键连接已就绪。', action: '' };
-    if (input.profileConfigured === true) return { ready: false, message: '一键连接还不能安全读取凭证。', action: '请改用手动 API，或换用支持凭证绑定的酒馆后再试。' };
-    return { ready: false, message: '一键连接未配置。', action: '请到设置的 API 页选择连接配置，或改用手动 API。' };
+    if (input.profileConfigured === true) return { ready: false, message: '一键连接还不能安全读取凭证。', action: '可以在下面改用手动填写。' };
+    return { ready: false, message: '还没有接上 API。', action: '在下面读取酒馆当前连接，或手动填写地址、模型和 Key。' };
 }
 
 export function archiveSegmentEstimate({ chatCharacters = 0, externalCharacters = 0 } = {}) {
@@ -55,6 +55,8 @@ export function wizardModuleCards(queueableIds = []) {
         id: item.id,
         title: item.title,
         description: item.description,
+        audience: item.audience || item.description,
+        requestPlain: item.requestPlain || item.normalRequestEstimate,
         contentKind: item.contentKind,
         contentLabel: item.contentKind === 'historical' ? '剧情里程碑' : '作品收藏',
         normalRequestEstimate: item.normalRequestEstimate,
@@ -81,6 +83,23 @@ export function createWizardDraft(plan = null) {
         cardChoiceDirty: false,
         firstModuleIds: [],
     };
+}
+
+export function selectableModuleIds() {
+    return auto_memory_registry.listAutoMemoryModules()
+        .filter(item => item.inDrawPool === true && item.autoEligible === true)
+        .map(item => item.id);
+}
+
+// 没被排除的就是这次会自动生成的。新向导默认一项都不排除，所以一开始是全选。
+export function moduleSelected(draft, id) {
+    return !uniqueDrawIds(draft?.excludedModuleIds).includes(id);
+}
+
+export function preferenceSelectAll(draft, selected) {
+    let next = draft;
+    for (const id of selectableModuleIds()) next = preferenceUpdate(next, id, selected ? 'prefer' : 'exclude');
+    return next;
 }
 
 export function preferenceUpdate(draft, id, choice) {
@@ -140,7 +159,7 @@ export function wizardEntry({ archivePresent = false, cardType = '', apiReady = 
     const skipArchive = archivePresent === true && known;
     return {
         skipArchive,
-        step: skipArchive && apiReady === true ? 'preference' : 'api',
+        step: skipArchive && apiReady === true ? 'modules' : 'api',
         doArchive: !skipArchive,
         cardType: known ? cardType : '',
     };

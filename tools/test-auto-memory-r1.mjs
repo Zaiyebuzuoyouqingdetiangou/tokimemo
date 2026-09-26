@@ -36,14 +36,14 @@ function metadataFrom(value) {
 }
 
 test('api check names the next action and interval stays an integer', () => {
-    assert.deepEqual(wizard.WIZARD_STEPS, ['api', 'card', 'people', 'sources', 'modules', 'preference', 'interval', 'archive', 'first', 'run']);
+    assert.deepEqual(wizard.WIZARD_STEPS, ['api', 'card', 'people', 'sources', 'modules', 'interval', 'archive', 'first', 'run']);
     assert.equal(wizard.inspectAutoMemoryApi({ mode: 'manual', manualReady: true }).ready, true);
     const manual = wizard.inspectAutoMemoryApi({ mode: 'manual', manualReady: false, manualMessage: '请填写手动 API 的模型 ID。' });
     assert.equal(manual.ready, false);
     assert.match(manual.message, /模型 ID/);
-    assert.match(manual.action, /API 页/);
+    assert.match(manual.action, /地址、模型和 Key/);
     const missing = wizard.inspectAutoMemoryApi({ mode: 'profile', profileConfigured: false });
-    assert.match(missing.action, /连接配置|手动 API/);
+    assert.match(missing.action, /手动填写|当前连接/);
     const unsafe = wizard.inspectAutoMemoryApi({ mode: 'profile', profileConfigured: true, profileReady: false });
     assert.match(unsafe.message, /凭证/);
     assert.equal(wizard.normalizeInterval(1).ok, true);
@@ -68,6 +68,13 @@ test('unadapted modules stay out of the draw and off by default', () => {
     const blocked = wizard.preferenceUpdate(draft, 'achievements', 'prefer');
     assert.equal(blocked.error, 'unavailable');
     assert.equal(blocked.preferredModuleIds.includes('achievements'), false);
+    const freshOff = wizard.preferenceSelectAll(wizard.createWizardDraft(null), false);
+    assert.equal(wizard.moduleSelected(freshOff, 'album'), false);
+    assert.equal(freshOff.excludedModuleIds.includes('achievements'), false);
+    const freshOn = wizard.preferenceSelectAll(freshOff, true);
+    assert.equal(wizard.moduleSelected(freshOn, 'album'), true);
+    assert.equal(freshOn.excludedModuleIds.includes('album'), false);
+    assert.equal(wizard.wizardModuleCards().find(item => item.id === 'album').audience.includes('你与他'), true);
     assert.deepEqual(registry.autoMemoryRuntimeCandidates(draft.preferredModuleIds, draft.excludedModuleIds), ['cabinet', 'calendar']);
 });
 

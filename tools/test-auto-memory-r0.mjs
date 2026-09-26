@@ -103,11 +103,14 @@ test('registry stays ineligible until a module is adapted', () => {
         assert.equal(item.autoEligible, item.id !== 'achievements');
         assert.equal(item.achievementMerged, item.id !== 'achievements');
         assert.equal(item.description.length > 0, true);
+        assert.equal(item.audience.length > 0, true);
+        assert.equal(item.requestPlain.length > 0, true);
         assert.equal(item.normalRequestEstimate.length > 0, true);
         assert.ok(item.contentKind === 'historical' || item.contentKind === 'collection');
         for (const prerequisite of item.prerequisites) assert.equal(registry.isAutoMemoryDrawModule(prerequisite), true);
     }
     assert.equal(registry.autoMemoryModuleById('achievements').inDrawPool, false);
+    assert.match(registry.autoMemoryModuleById('achievements').audience, /每生成一份回忆/);
     assert.equal(registry.autoMemoryModuleById('items').prerequisites[0], 'room');
     assert.throws(() => { modules[0].autoEligible = true; });
     const adapted = modules.filter(item => item.inDrawPool && item.autoEligible).map(item => item.id);
