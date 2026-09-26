@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 284
-// Source SHA-256: 9f16978c4af08a3d71bc0ebd2ae8eb026cf1e7d9bca4e96cef4e343ba06d54f4
+// Source SHA-256: 943b929aaf17caad4ac5d89b015a6d86119cca9a173f7d85b9314b67e3d05f7d
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -6247,14 +6247,14 @@ function floorShellCss() {
 .rmt-floor-shell .rmt-floor-pace small{color:#7b8798}
 .rmt-floor-shell .rmt-floor-fill,.rmt-floor-shell .rmt-heart-letter .rmt-btn{min-height:28px;padding:2px 10px}
 .rmt-heart-letter-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
-.rmt-heart-letter{width:min(100%,320px);max-width:100%;min-width:0;margin:10px 0 4px;color:#5c463c}
+.rmt-heart-letter{width:min(100%,260px);max-width:100%;min-width:0;margin:10px 0 4px;color:#5c463c}
 .rmt-heart-letter:has(.rmt-heart-letter-paper:not([hidden])){width:min(100%,640px)}
 .rmt-heart-letter:has(.rmt-heart-letter-paper:not([hidden])) .rmt-heart-letter-seal{display:none}
 .rmt-heart-letter [data-rmt-letter-achievement]{margin:0 0 10px;font-weight:650}
-.rmt-heart-letter-seal{display:grid;justify-items:center;gap:2px;width:100%;margin:0;padding:16px 14px 14px;border:1px solid #e7b7c8;border-left:7px solid #e99ab9;border-radius:6px 18px 18px 6px;background:#fff7f2;color:#6a4a58;box-shadow:0 10px 24px rgba(20,12,16,.16);font:inherit;text-align:center;cursor:pointer}
-.rmt-heart-letter-seal i{font-style:normal;color:#e07098;font-size:22px;line-height:1}
-.rmt-heart-letter-seal b{font-size:15px;line-height:1.4}
-.rmt-heart-letter-seal small{color:#8d6d78;font-size:12px}
+.rmt-heart-letter-seal{display:grid;justify-items:center;gap:8px;width:100%;margin:0;padding:0;border:0;background:transparent;color:#6a4a58;box-shadow:none;font:inherit;text-align:center;cursor:pointer}
+.rmt-heart-letter-seal small{color:#8d6d78;font-size:12px;line-height:1.4}
+.rmt-envelope{display:block;width:min(100%,240px);height:auto;filter:drop-shadow(0 12px 16px rgba(90,24,48,.16))}
+.rmt-heart-letter.is-writing .rmt-heart-letter-seal{cursor:default}
 .rmt-heart-letter-paper{margin-top:8px;min-width:0;overflow:hidden;padding:16px 14px 12px;border:1px solid #e6d3c4;border-left:7px solid #e99ab9;border-radius:4px 16px 16px 4px;background:#fff8ee;background-image:repeating-linear-gradient(0deg,transparent,transparent 22px,rgba(180,140,120,.16) 23px);color:#5c463c}
 .rmt-heart-letter-paper p{margin:0 0 10px;font-size:15px;line-height:1.6}
 .rmt-heart-letter .rmt-floor-body{max-height:70vh;max-width:100%;min-width:0;margin-top:10px;overflow:auto}
@@ -6328,16 +6328,20 @@ function shellView(input = {}) {
     const face = {
         blocksInput: false, showReveal: false, progress: null, moduleId, revealId,
         canRetry: false, canRepairAchievement: false, canComplete: false, canRedo: false,
-        canOpen: input.canOpen === true,
+        canOpen: false,
     };
+    const written = complete && input.canOpen === true && !running;
     if (complete && revealStatus === 'achievement_pending') {
         return { ...face, phase: 'achievement-pending', canRepairAchievement: true, title: '回忆先留着', detail: '成就还缺一笔。可以补一次，不必重写正文。' };
     }
     if (input.roundEmpty === true) {
         return { ...face, phase: 'empty', canComplete: true, canRedo: true, title: '这一页还是空的', detail: '写完了，但是没有新的段落。' };
     }
-    if (complete && (revealStatus === 'ready' || revealStatus === 'opened')) {
-        return { ...face, phase: 'reveal', showReveal: true, title: input.revealLine || revealFace(input), detail: '点击查看详情' };
+    if (written || (complete && (revealStatus === 'ready' || revealStatus === 'opened'))) {
+        return {
+            ...face, phase: 'reveal', showReveal: true, canOpen: input.canOpen === true,
+            title: input.revealLine || revealFace(input), detail: '点击查看详情',
+        };
     }
     if (input.failureRecoverable === true) {
         return { ...face, phase: 'failed', canRetry: true, title: '这份回忆可以再续', detail: '已经记下的部分还在，不会把它当成已经拆开。' };
@@ -6356,14 +6360,20 @@ function shellView(input = {}) {
         return { ...face, phase: 'generating', canRetry, progress, title: '回忆正在生成中', detail: progress ? `正在生成 ${progress.done} / ${progress.total}` : '还没写完，先不打开。' };
     }
     if (!steps.length && input.roundReveal === true && (revealStatus === 'ready' || revealStatus === 'opened')) {
-        return { ...face, phase: 'reveal', showReveal: true, title: input.revealLine || revealFace(input), detail: '点击查看详情' };
+        return {
+            ...face, phase: 'reveal', showReveal: true, canOpen: input.canOpen === true,
+            title: input.revealLine || revealFace(input), detail: '点击查看详情',
+        };
     }
     if (input.ticketStatus === 'drawn' || input.ticketStatus === 'running') {
         const title = cleanName(input.moduleTitle);
         return { ...face, phase: 'generating', title: '回忆正在生成中', detail: title ? `正在写${title}。` : '还没写完，先不打开。' };
     }
     if (revealStatus === 'ready' || revealStatus === 'opened') {
-        return { ...face, phase: 'reveal', showReveal: true, title: input.revealLine || revealFace(input), detail: '点击查看详情' };
+        return {
+            ...face, phase: 'reveal', showReveal: true, canOpen: input.canOpen === true,
+            title: input.revealLine || revealFace(input), detail: '点击查看详情',
+        };
     }
     if (revealStatus === 'generating') {
         return { ...face, phase: 'generating', title: '回忆生成中', detail: '还没整份写完，先不拆开。' };
@@ -59845,6 +59855,17 @@ function viewFor(context) {
     });
 }
 
+function envelopeArt() {
+    return `<svg class="rmt-envelope" viewBox="0 0 280 190" aria-hidden="true">
+        <rect x="8" y="18" width="264" height="164" rx="22" fill="#f6c6d4"/>
+        <path d="M8 146 L140 86 L272 146 L272 160 Q272 182 250 182 L30 182 Q8 182 8 160 Z" fill="#f3b4c8"/>
+        <path d="M8 146 L140 86 L140 182 L30 182 Q8 182 8 160 Z" fill="#eea9c0"/>
+        <path d="M20 36 L260 36 L140 124 Z" fill="#fff2f5"/>
+        <path d="M20 36 L140 124 L140 36 Z" fill="#fde7ee"/>
+        <path d="M140 112c-15-13-34-26-34-43 0-12 9-21 21-21 7 0 13 4 13 4s6-4 13-4c12 0 21 9 21 21 0 17-19 30-34 43z" fill="#d64578"/>
+    </svg>`;
+}
+
 function markup(view) {
     if (view.phase === 'pace') {
         const gap = view.gapText
@@ -59866,14 +59887,14 @@ function markup(view) {
         : '';
     const actions = repair || complete || redo || retry ? `<div class="rmt-heart-letter-actions">${repair}${complete}${redo}${retry}</div>` : '';
     const revealPaper = view.phase === 'reveal' && view.showReveal;
-    const heading = revealPaper ? '一封写给你的信' : view.title;
-    const aside = revealPaper ? '点开看看' : view.detail;
+    const writing = view.phase === 'generating' || view.phase === 'planning';
+    const caption = revealPaper ? '' : `<small data-rmt-letter-detail>${core_text.esc(view.detail)}</small>`;
     const paper = revealPaper
-        ? `<p data-rmt-letter-title>${core_text.esc(view.title)}</p><button type="button" class="rmt-btn" data-rmt-letter-read data-rmt-reveal="${core_text.esc(view.revealId)}" data-rmt-module="${core_text.esc(view.moduleId)}">打开这封回忆</button>`
-        : `<p data-rmt-letter-detail>${core_text.esc(view.detail)}</p>${view.canOpen && view.moduleId ? `<button type="button" class="rmt-btn" data-rmt-letter-read data-rmt-reveal="${core_text.esc(view.revealId)}" data-rmt-module="${core_text.esc(view.moduleId)}">打开这页回忆</button>` : ''}`;
-    return `<article class="rmt-heart-letter">
-        <button type="button" class="rmt-heart-letter-seal" data-rmt-letter-open>
-            <i aria-hidden="true">♥</i><b data-rmt-letter-title>${core_text.esc(heading)}</b><small data-rmt-letter-detail>${core_text.esc(aside)}</small>
+        ? `<p data-rmt-letter-achievement>${core_text.esc(view.title)}</p><button type="button" class="rmt-btn" data-rmt-letter-read data-rmt-reveal="${core_text.esc(view.revealId)}" data-rmt-module="${core_text.esc(view.moduleId)}">打开回忆</button>`
+        : '';
+    return `<article class="rmt-heart-letter${writing ? ' is-writing' : ''}">
+        <button type="button" class="rmt-heart-letter-seal" data-rmt-letter-open aria-label="${core_text.esc(revealPaper ? '拆开这封信' : view.detail || '回忆')}">
+            ${envelopeArt()}${caption}
         </button>
         <div class="rmt-heart-letter-paper" data-rmt-letter-paper hidden>
             ${paper}
@@ -59919,20 +59940,20 @@ function paint(context) {
     host.dataset.rmtGap = view.gapText || '';
     host.dataset.rmtPending = view.phase === 'reveal' ? '0' : '1';
     if (sameLetter) {
-        if (floorWorkspace(body)) {
+        if (view.phase !== 'reveal' && body) {
+            body.replaceChildren();
+            delete body.dataset.rmtLetterRead;
+        } else if (body?.dataset?.rmtLetterRead === '1' && view.canOpen) {
             if (body.dataset.rmtFloorLive === '1') body.removeAttribute('data-rmt-floor-live');
-            if (view.canOpen) writeRound(body, view.moduleId, view.revealId);
-            else body.replaceChildren();
+            writeRound(body, view.moduleId, view.revealId);
         }
-        if (paper && !paper.hidden && body?.childElementCount && !floorWorkspace(body)) return;
-        const title = host.querySelector('[data-rmt-letter-title]');
+        const achievement = host.querySelector('[data-rmt-letter-achievement]');
         const detail = host.querySelector('[data-rmt-letter-detail]');
-        if (title && view.phase !== 'reveal') title.textContent = view.title;
-        if (detail) detail.textContent = view.detail;
-        if (title || detail || (paper && !paper.hidden)) {
-            queueAutomaticRepair(view);
-            return;
-        }
+        if (achievement && view.phase === 'reveal') achievement.textContent = view.title;
+        if (detail && view.phase !== 'reveal') detail.textContent = view.detail;
+        host.querySelector('.rmt-heart-letter')?.classList.toggle('is-writing', view.phase === 'generating' || view.phase === 'planning');
+        queueAutomaticRepair(view);
+        return;
     }
     const paperWasOpen = paper && !paper.hidden;
     host.innerHTML = markup(view);
@@ -59998,10 +60019,6 @@ function incrementFor(moduleId, revealId) {
     }
 }
 
-function floorWorkspace(body) {
-    return body?.querySelector?.('.rmt-workspace-catalogue, .rmt-archive-room, .rmt-workspace-page, .rmt-heart, .rmt-album, .rmt-adv, .rmt-ending, .rmt-room-view');
-}
-
 function writeRound(body, moduleId, revealId) {
     const increment = incrementFor(moduleId, revealId);
     if (!increment.kept) {
@@ -60027,6 +60044,12 @@ async function openInFloor(body) {
     const item = auto_memory_registry.autoMemoryModuleById(moduleId);
     if (!item || !body) return;
     if (body.dataset.rmtFloorLive === '1') body.removeAttribute('data-rmt-floor-live');
+    body.dataset.rmtLetterRead = '1';
+    const host = body.closest?.('[data-rmt-floor-shell]');
+    if (host?.dataset?.rmtPhase !== 'reveal') {
+        body.replaceChildren();
+        return;
+    }
     if (!writeRound(body, moduleId, revealId)) return;
     rememberOpened(revealId);
 }
@@ -60105,14 +60128,11 @@ function onClick(event) {
     if (!seal) return;
     event.preventDefault();
     event.stopPropagation();
+    const host = seal.closest?.('[data-rmt-floor-shell]');
+    if (host?.dataset?.rmtPhase !== 'reveal') return;
     const paper = seal.parentElement?.querySelector('[data-rmt-letter-paper]');
     if (paper) paper.hidden = false;
     seal.hidden = true;
-    const host = seal.closest?.('[data-rmt-floor-shell]');
-    const phase = host?.dataset?.rmtPhase;
-    if (phase === 'reveal' || phase === 'generating' || phase === 'planning' || phase === 'empty') return;
-    const body = paper?.querySelector?.('[data-rmt-floor-body]');
-    if (body?.dataset?.rmtModule) void openInFloor(body);
 }
 function rememberOpened(revealId) {
     if (!revealId) return;

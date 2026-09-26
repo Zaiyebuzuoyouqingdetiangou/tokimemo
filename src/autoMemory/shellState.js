@@ -21,14 +21,14 @@ export function floorShellCss() {
 .rmt-floor-shell .rmt-floor-pace small{color:#7b8798}
 .rmt-floor-shell .rmt-floor-fill,.rmt-floor-shell .rmt-heart-letter .rmt-btn{min-height:28px;padding:2px 10px}
 .rmt-heart-letter-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
-.rmt-heart-letter{width:min(100%,320px);max-width:100%;min-width:0;margin:10px 0 4px;color:#5c463c}
+.rmt-heart-letter{width:min(100%,260px);max-width:100%;min-width:0;margin:10px 0 4px;color:#5c463c}
 .rmt-heart-letter:has(.rmt-heart-letter-paper:not([hidden])){width:min(100%,640px)}
 .rmt-heart-letter:has(.rmt-heart-letter-paper:not([hidden])) .rmt-heart-letter-seal{display:none}
 .rmt-heart-letter [data-rmt-letter-achievement]{margin:0 0 10px;font-weight:650}
-.rmt-heart-letter-seal{display:grid;justify-items:center;gap:2px;width:100%;margin:0;padding:16px 14px 14px;border:1px solid #e7b7c8;border-left:7px solid #e99ab9;border-radius:6px 18px 18px 6px;background:#fff7f2;color:#6a4a58;box-shadow:0 10px 24px rgba(20,12,16,.16);font:inherit;text-align:center;cursor:pointer}
-.rmt-heart-letter-seal i{font-style:normal;color:#e07098;font-size:22px;line-height:1}
-.rmt-heart-letter-seal b{font-size:15px;line-height:1.4}
-.rmt-heart-letter-seal small{color:#8d6d78;font-size:12px}
+.rmt-heart-letter-seal{display:grid;justify-items:center;gap:8px;width:100%;margin:0;padding:0;border:0;background:transparent;color:#6a4a58;box-shadow:none;font:inherit;text-align:center;cursor:pointer}
+.rmt-heart-letter-seal small{color:#8d6d78;font-size:12px;line-height:1.4}
+.rmt-envelope{display:block;width:min(100%,240px);height:auto;filter:drop-shadow(0 12px 16px rgba(90,24,48,.16))}
+.rmt-heart-letter.is-writing .rmt-heart-letter-seal{cursor:default}
 .rmt-heart-letter-paper{margin-top:8px;min-width:0;overflow:hidden;padding:16px 14px 12px;border:1px solid #e6d3c4;border-left:7px solid #e99ab9;border-radius:4px 16px 16px 4px;background:#fff8ee;background-image:repeating-linear-gradient(0deg,transparent,transparent 22px,rgba(180,140,120,.16) 23px);color:#5c463c}
 .rmt-heart-letter-paper p{margin:0 0 10px;font-size:15px;line-height:1.6}
 .rmt-heart-letter .rmt-floor-body{max-height:70vh;max-width:100%;min-width:0;margin-top:10px;overflow:auto}
@@ -102,16 +102,20 @@ export function shellView(input = {}) {
     const face = {
         blocksInput: false, showReveal: false, progress: null, moduleId, revealId,
         canRetry: false, canRepairAchievement: false, canComplete: false, canRedo: false,
-        canOpen: input.canOpen === true,
+        canOpen: false,
     };
+    const written = complete && input.canOpen === true && !running;
     if (complete && revealStatus === 'achievement_pending') {
         return { ...face, phase: 'achievement-pending', canRepairAchievement: true, title: '回忆先留着', detail: '成就还缺一笔。可以补一次，不必重写正文。' };
     }
     if (input.roundEmpty === true) {
         return { ...face, phase: 'empty', canComplete: true, canRedo: true, title: '这一页还是空的', detail: '写完了，但是没有新的段落。' };
     }
-    if (complete && (revealStatus === 'ready' || revealStatus === 'opened')) {
-        return { ...face, phase: 'reveal', showReveal: true, title: input.revealLine || revealFace(input), detail: '点击查看详情' };
+    if (written || (complete && (revealStatus === 'ready' || revealStatus === 'opened'))) {
+        return {
+            ...face, phase: 'reveal', showReveal: true, canOpen: input.canOpen === true,
+            title: input.revealLine || revealFace(input), detail: '点击查看详情',
+        };
     }
     if (input.failureRecoverable === true) {
         return { ...face, phase: 'failed', canRetry: true, title: '这份回忆可以再续', detail: '已经记下的部分还在，不会把它当成已经拆开。' };
@@ -130,14 +134,20 @@ export function shellView(input = {}) {
         return { ...face, phase: 'generating', canRetry, progress, title: '回忆正在生成中', detail: progress ? `正在生成 ${progress.done} / ${progress.total}` : '还没写完，先不打开。' };
     }
     if (!steps.length && input.roundReveal === true && (revealStatus === 'ready' || revealStatus === 'opened')) {
-        return { ...face, phase: 'reveal', showReveal: true, title: input.revealLine || revealFace(input), detail: '点击查看详情' };
+        return {
+            ...face, phase: 'reveal', showReveal: true, canOpen: input.canOpen === true,
+            title: input.revealLine || revealFace(input), detail: '点击查看详情',
+        };
     }
     if (input.ticketStatus === 'drawn' || input.ticketStatus === 'running') {
         const title = cleanName(input.moduleTitle);
         return { ...face, phase: 'generating', title: '回忆正在生成中', detail: title ? `正在写${title}。` : '还没写完，先不打开。' };
     }
     if (revealStatus === 'ready' || revealStatus === 'opened') {
-        return { ...face, phase: 'reveal', showReveal: true, title: input.revealLine || revealFace(input), detail: '点击查看详情' };
+        return {
+            ...face, phase: 'reveal', showReveal: true, canOpen: input.canOpen === true,
+            title: input.revealLine || revealFace(input), detail: '点击查看详情',
+        };
     }
     if (revealStatus === 'generating') {
         return { ...face, phase: 'generating', title: '回忆生成中', detail: '还没整份写完，先不拆开。' };

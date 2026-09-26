@@ -147,6 +147,17 @@ function viewFor(context) {
     });
 }
 
+function envelopeArt() {
+    return `<svg class="rmt-envelope" viewBox="0 0 280 190" aria-hidden="true">
+        <rect x="8" y="18" width="264" height="164" rx="22" fill="#f6c6d4"/>
+        <path d="M8 146 L140 86 L272 146 L272 160 Q272 182 250 182 L30 182 Q8 182 8 160 Z" fill="#f3b4c8"/>
+        <path d="M8 146 L140 86 L140 182 L30 182 Q8 182 8 160 Z" fill="#eea9c0"/>
+        <path d="M20 36 L260 36 L140 124 Z" fill="#fff2f5"/>
+        <path d="M20 36 L140 124 L140 36 Z" fill="#fde7ee"/>
+        <path d="M140 112c-15-13-34-26-34-43 0-12 9-21 21-21 7 0 13 4 13 4s6-4 13-4c12 0 21 9 21 21 0 17-19 30-34 43z" fill="#d64578"/>
+    </svg>`;
+}
+
 function markup(view) {
     if (view.phase === 'pace') {
         const gap = view.gapText
@@ -168,14 +179,14 @@ function markup(view) {
         : '';
     const actions = repair || complete || redo || retry ? `<div class="rmt-heart-letter-actions">${repair}${complete}${redo}${retry}</div>` : '';
     const revealPaper = view.phase === 'reveal' && view.showReveal;
-    const heading = revealPaper ? '一封写给你的信' : view.title;
-    const aside = revealPaper ? '点开看看' : view.detail;
+    const writing = view.phase === 'generating' || view.phase === 'planning';
+    const caption = revealPaper ? '' : `<small data-rmt-letter-detail>${core_text.esc(view.detail)}</small>`;
     const paper = revealPaper
-        ? `<p data-rmt-letter-title>${core_text.esc(view.title)}</p><button type="button" class="rmt-btn" data-rmt-letter-read data-rmt-reveal="${core_text.esc(view.revealId)}" data-rmt-module="${core_text.esc(view.moduleId)}">打开这封回忆</button>`
-        : `<p data-rmt-letter-detail>${core_text.esc(view.detail)}</p>${view.canOpen && view.moduleId ? `<button type="button" class="rmt-btn" data-rmt-letter-read data-rmt-reveal="${core_text.esc(view.revealId)}" data-rmt-module="${core_text.esc(view.moduleId)}">打开这页回忆</button>` : ''}`;
-    return `<article class="rmt-heart-letter">
-        <button type="button" class="rmt-heart-letter-seal" data-rmt-letter-open>
-            <i aria-hidden="true">♥</i><b data-rmt-letter-title>${core_text.esc(heading)}</b><small data-rmt-letter-detail>${core_text.esc(aside)}</small>
+        ? `<p data-rmt-letter-achievement>${core_text.esc(view.title)}</p><button type="button" class="rmt-btn" data-rmt-letter-read data-rmt-reveal="${core_text.esc(view.revealId)}" data-rmt-module="${core_text.esc(view.moduleId)}">打开回忆</button>`
+        : '';
+    return `<article class="rmt-heart-letter${writing ? ' is-writing' : ''}">
+        <button type="button" class="rmt-heart-letter-seal" data-rmt-letter-open aria-label="${core_text.esc(revealPaper ? '拆开这封信' : view.detail || '回忆')}">
+            ${envelopeArt()}${caption}
         </button>
         <div class="rmt-heart-letter-paper" data-rmt-letter-paper hidden>
             ${paper}
@@ -221,20 +232,20 @@ function paint(context) {
     host.dataset.rmtGap = view.gapText || '';
     host.dataset.rmtPending = view.phase === 'reveal' ? '0' : '1';
     if (sameLetter) {
-        if (floorWorkspace(body)) {
+        if (view.phase !== 'reveal' && body) {
+            body.replaceChildren();
+            delete body.dataset.rmtLetterRead;
+        } else if (body?.dataset?.rmtLetterRead === '1' && view.canOpen) {
             if (body.dataset.rmtFloorLive === '1') body.removeAttribute('data-rmt-floor-live');
-            if (view.canOpen) writeRound(body, view.moduleId, view.revealId);
-            else body.replaceChildren();
+            writeRound(body, view.moduleId, view.revealId);
         }
-        if (paper && !paper.hidden && body?.childElementCount && !floorWorkspace(body)) return;
-        const title = host.querySelector('[data-rmt-letter-title]');
+        const achievement = host.querySelector('[data-rmt-letter-achievement]');
         const detail = host.querySelector('[data-rmt-letter-detail]');
-        if (title && view.phase !== 'reveal') title.textContent = view.title;
-        if (detail) detail.textContent = view.detail;
-        if (title || detail || (paper && !paper.hidden)) {
-            queueAutomaticRepair(view);
-            return;
-        }
+        if (achievement && view.phase === 'reveal') achievement.textContent = view.title;
+        if (detail && view.phase !== 'reveal') detail.textContent = view.detail;
+        host.querySelector('.rmt-heart-letter')?.classList.toggle('is-writing', view.phase === 'generating' || view.phase === 'planning');
+        queueAutomaticRepair(view);
+        return;
     }
     const paperWasOpen = paper && !paper.hidden;
     host.innerHTML = markup(view);
@@ -300,10 +311,6 @@ function incrementFor(moduleId, revealId) {
     }
 }
 
-function floorWorkspace(body) {
-    return body?.querySelector?.('.rmt-workspace-catalogue, .rmt-archive-room, .rmt-workspace-page, .rmt-heart, .rmt-album, .rmt-adv, .rmt-ending, .rmt-room-view');
-}
-
 function writeRound(body, moduleId, revealId) {
     const increment = incrementFor(moduleId, revealId);
     if (!increment.kept) {
@@ -329,6 +336,12 @@ async function openInFloor(body) {
     const item = auto_memory_registry.autoMemoryModuleById(moduleId);
     if (!item || !body) return;
     if (body.dataset.rmtFloorLive === '1') body.removeAttribute('data-rmt-floor-live');
+    body.dataset.rmtLetterRead = '1';
+    const host = body.closest?.('[data-rmt-floor-shell]');
+    if (host?.dataset?.rmtPhase !== 'reveal') {
+        body.replaceChildren();
+        return;
+    }
     if (!writeRound(body, moduleId, revealId)) return;
     rememberOpened(revealId);
 }
@@ -407,14 +420,11 @@ function onClick(event) {
     if (!seal) return;
     event.preventDefault();
     event.stopPropagation();
+    const host = seal.closest?.('[data-rmt-floor-shell]');
+    if (host?.dataset?.rmtPhase !== 'reveal') return;
     const paper = seal.parentElement?.querySelector('[data-rmt-letter-paper]');
     if (paper) paper.hidden = false;
     seal.hidden = true;
-    const host = seal.closest?.('[data-rmt-floor-shell]');
-    const phase = host?.dataset?.rmtPhase;
-    if (phase === 'reveal' || phase === 'generating' || phase === 'planning' || phase === 'empty') return;
-    const body = paper?.querySelector?.('[data-rmt-floor-body]');
-    if (body?.dataset?.rmtModule) void openInFloor(body);
 }
 function rememberOpened(revealId) {
     if (!revealId) return;

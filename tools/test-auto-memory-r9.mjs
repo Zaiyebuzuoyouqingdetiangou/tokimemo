@@ -116,6 +116,23 @@ test('the letter offers repair and retry only when that work is still open', () 
     assert.equal(writing.phase, 'generating');
     assert.equal(writing.title, '回忆正在生成中');
     assert.equal(writing.canComplete, false);
+    assert.equal(writing.canOpen, false);
+    const leaked = shell.shellView({
+        ...readyArchive, ticketStatus: 'drawn', moduleTitle: '角色互动', canOpen: true, moduleId: 'heart',
+    });
+    assert.equal(leaked.phase, 'generating');
+    assert.equal(leaked.detail, '正在写角色互动。');
+    assert.equal(leaked.canOpen, false);
+    assert.equal(leaked.showReveal, false);
+    const finished = shell.shellView({
+        ...readyArchive, ticketStatus: 'drawn', moduleTitle: '角色互动', canOpen: true, moduleId: 'heart',
+        moduleComplete: true, steps: [{ status: 'completed' }], revealLine: '你获得了春日洗车摊的成就',
+    });
+    assert.equal(finished.phase, 'reveal');
+    assert.equal(finished.showReveal, true);
+    assert.equal(finished.canOpen, true);
+    assert.equal(finished.title, '你获得了春日洗车摊的成就');
+    assert.equal(finished.detail.includes('正在写'), false);
     const empty = shell.shellView({ ...readyArchive, roundEmpty: true, moduleComplete: true, revealStatus: 'ready', steps: [{ status: 'completed' }] });
     assert.equal(empty.phase, 'empty');
     assert.equal(empty.canComplete, true);
