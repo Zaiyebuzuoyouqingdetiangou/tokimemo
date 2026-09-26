@@ -218,9 +218,9 @@ export function invalidateArchiveViewForChatNavigation(nextChatId = '') {
 }
 
 export function bodyEl() {
-    const overlay = document.getElementById(core_constants.OVERLAY_ID);
     const floor = document.querySelector('.rmt-floor-shell [data-rmt-floor-body][data-rmt-floor-live="1"]');
-    if (floor && (!overlay || overlay.hidden)) return floor;
+    if (floor) return floor;
+    const overlay = document.getElementById(core_constants.OVERLAY_ID);
     return overlay?.querySelector('.rmt-body') || document.querySelector(`#${core_constants.OVERLAY_ID} .rmt-body`);
 }
 

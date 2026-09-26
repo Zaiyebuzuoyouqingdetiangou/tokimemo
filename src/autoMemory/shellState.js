@@ -101,10 +101,14 @@ export function shellView(input = {}) {
     const running = steps.some(step => step?.status === 'running');
     const face = {
         blocksInput: false, showReveal: false, progress: null, moduleId, revealId,
-        canRetry: false, canRepairAchievement: false,
+        canRetry: false, canRepairAchievement: false, canComplete: false, canRedo: false,
+        canOpen: input.canOpen === true,
     };
     if (complete && revealStatus === 'achievement_pending') {
         return { ...face, phase: 'achievement-pending', canRepairAchievement: true, title: '回忆先留着', detail: '成就还缺一笔。可以补一次，不必重写正文。' };
+    }
+    if (input.roundEmpty === true) {
+        return { ...face, phase: 'empty', canComplete: true, canRedo: true, title: '这一页还是空的', detail: '写完了，但是没有新的段落。' };
     }
     if (complete && (revealStatus === 'ready' || revealStatus === 'opened')) {
         return { ...face, phase: 'reveal', showReveal: true, title: input.revealLine || revealFace(input), detail: '点击查看详情' };
@@ -117,18 +121,20 @@ export function shellView(input = {}) {
     }
     if (steps.length && !complete) {
         const started = steps.some(step => step?.status === 'running' || step?.status === 'completed' || step?.status === 'failed');
-        if (!started) return { ...face, phase: 'planning', title: '正在建立目录', detail: '目录还没定下来，先不显示第几步。' };
-        const canRetry = !running;
-        if (allDone) return { ...face, phase: 'generating', canRetry, title: '回忆生成中', detail: '还没整份核对完，先不拆开。' };
+        if (!started && input.ticketStatus !== 'drawn' && input.ticketStatus !== 'running') {
+            return { ...face, phase: 'planning', title: '正在建立目录', detail: '目录还没定下来，先不显示第几步。' };
+        }
+        const canRetry = started && !running;
+        if (allDone) return { ...face, phase: 'generating', canRetry, title: '回忆正在生成中', detail: '还没整份核对完，先不拆开。' };
         const progress = knownProgress(done, steps.length);
-        return { ...face, phase: 'generating', canRetry, progress, title: '正在把这段回忆写下来', detail: progress ? `正在生成 ${progress.done} / ${progress.total}` : '正在生成' };
+        return { ...face, phase: 'generating', canRetry, progress, title: '回忆正在生成中', detail: progress ? `正在生成 ${progress.done} / ${progress.total}` : '还没写完，先不打开。' };
     }
     if (!steps.length && input.roundReveal === true && (revealStatus === 'ready' || revealStatus === 'opened')) {
         return { ...face, phase: 'reveal', showReveal: true, title: input.revealLine || revealFace(input), detail: '点击查看详情' };
     }
     if (input.ticketStatus === 'drawn' || input.ticketStatus === 'running') {
         const title = cleanName(input.moduleTitle);
-        return { ...face, phase: 'drawn', title: '抽中了一段回忆', detail: title ? `这一页是${title}。` : '还没开始写正文。' };
+        return { ...face, phase: 'generating', title: '回忆正在生成中', detail: title ? `正在写${title}。` : '还没写完，先不打开。' };
     }
     if (revealStatus === 'ready' || revealStatus === 'opened') {
         return { ...face, phase: 'reveal', showReveal: true, title: input.revealLine || revealFace(input), detail: '点击查看详情' };

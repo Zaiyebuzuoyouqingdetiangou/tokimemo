@@ -1,16 +1,16 @@
-import { SETTINGS_LAUNCHER_ID, bindManualAutosave, chatReadingSettingsHtml, manualAutosaves, paintCoverageMap, refreshGenerationSettingsUi, refreshImageGenerationSettingsUi, refreshManualModelOptions, refreshModelOptions, refreshReadingSettingsUi, refreshSettingsMemoryStatus, refreshThemeUi, saveManualPanel, voiceSettingsHtml } from './settingsPanelParts.js';
+import * as core_requestCoordinator from '../core/requestCoordinator.js';
 import * as core_settings from '../core/settings.js';
+import { state as runtimeState } from '../core/state.js';
 import * as advanced_ui from './advancedGenerationUi.js';
 import * as cg_format_ui from './cgFormatControl.js';
-import { state as runtimeState } from '../core/state.js';
-import * as core_requestCoordinator from '../core/requestCoordinator.js';
 import { SETTINGS_MOUNT_UNHANDLED } from './settingsPanelHome.js';
+import { chatReadingSettingsHtml, voiceSettingsHtml } from './settingsPanelParts.js';
 // ui/settingsPanelHome.js mountSettings 的分组处理（重构阶段 3）。每个函数是原函数里连续的一段语句，一字未改；
 // 返回 SETTINGS_MOUNT_UNHANDLED 表示“这一段没有处理”，原函数接着往下走，和拆分前完全相同。
 
 // 设置页整页 HTML（panel.innerHTML 赋值原样搬出）（原第 13–13 条语句）
 export function renderSettingsPanelMarkup(panel) {
-    panel.innerHTML = `
+  panel.innerHTML = `
       <div class="inline-drawer-toggle inline-drawer-header rmt-settings-header">
         <div><b>心迹回廊</b><small> API SETTINGS</small></div>
         <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
@@ -178,5 +178,5 @@ export function renderSettingsPanelMarkup(panel) {
           <button type="button" class="menu_button rmt-open-archive-room" data-rmt-settings-open-archive><i class="fa-solid fa-box-archive"></i><span>打开档案室</span></button>
         </div>
       </div>`;
-    return SETTINGS_MOUNT_UNHANDLED;
+  return SETTINGS_MOUNT_UNHANDLED;
 }

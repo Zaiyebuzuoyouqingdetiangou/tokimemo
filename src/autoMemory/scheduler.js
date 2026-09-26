@@ -351,6 +351,17 @@ export async function fillFloorGap() {
     }
 }
 
+export async function completeFloorRound() {
+    const context = core_context.currentCharacterGuard();
+    const snapshot = auto_memory_plan.readAutoMemoryMetadata(context.chatMetadata);
+    if (snapshot?.modulePlan?.steps?.length) return resumeFloorPlan();
+    return regenerateCurrentMemory({ mode: 'keep' });
+}
+
+export async function retryFloorRound() {
+    return regenerateCurrentMemory({ mode: 'keep' });
+}
+
 export async function resumeFloorPlan() {
     const context = core_context.currentCharacterGuard();
     const snapshot = auto_memory_plan.readAutoMemoryMetadata(context.chatMetadata);

@@ -100,6 +100,17 @@ function readSnapshot(context) {
     }
 }
 
+function roundIsEmpty(moduleId, reveal, running, steps, ticket, moduleComplete, previewKept) {
+    const open = running
+        || ticket?.status === 'drawn'
+        || ticket?.status === 'running'
+        || steps.some(step => step.status === 'pending' || step.status === 'running' || step.status === 'failed');
+    if (open || !moduleId || previewKept === true) return false;
+    const settled = moduleComplete === true || reveal?.status === 'ready' || reveal?.status === 'opened';
+    if (!settled) return false;
+    return true;
+}
+
 function archiveIsReady(context, rows) {
     let memory = null;
     try { memory = archive_repository.getImportedMemory(context); } catch { memory = null; }
@@ -126,6 +137,7 @@ function viewFor(context) {
         running, partial: failedStep, hasContent: steps.some(step => step.status === 'completed'),
     });
     const moduleComplete = item?.isComplete?.(null, snapshot.modulePlan) === true;
+    const previewKept = moduleId ? incrementFor(moduleId, reveal?.id || '').kept === true : false;
     return shell_state.shellView({
         enabled: true,
         archiveReady: archiveIsReady(context, rows),
@@ -142,6 +154,8 @@ function viewFor(context) {
             achievementTitle: auto_memory_gap.rememberedAchievementTitle(context.chatMetadata, reveal?.achievementId),
             moduleTitle: item?.title || '',
         }),
+        roundEmpty: roundIsEmpty(moduleId, reveal, running, steps, ticket, moduleComplete, previewKept),
+        canOpen: previewKept,
         failureRecoverable: !running && (failedStep || common.state === 'failed' || common.state === 'retry'),
         paused: moduleRow?.phase === 'queue',
         floor: core_settings.getPluginSettings().autoMemoryLatestFloor === true
@@ -163,16 +177,22 @@ function markup(view) {
     const repair = view.canRepairAchievement
         ? '<button type="button" class="rmt-btn" data-rmt-floor-achievement>补成就</button>'
         : '';
+    const complete = view.canComplete
+        ? '<button type="button" class="rmt-btn" data-rmt-floor-complete>补全</button>'
+        : '';
+    const redo = view.canRedo
+        ? '<button type="button" class="rmt-btn" data-rmt-floor-redo>重试</button>'
+        : '';
     const retry = view.canRetry
         ? '<button type="button" class="rmt-btn" data-rmt-floor-retry>重试</button>'
         : '';
-    const actions = repair || retry ? `<div class="rmt-heart-letter-actions">${repair}${retry}</div>` : '';
+    const actions = repair || complete || redo || retry ? `<div class="rmt-heart-letter-actions">${repair}${complete}${redo}${retry}</div>` : '';
     const revealPaper = view.phase === 'reveal' && view.showReveal;
     const heading = revealPaper ? '一封写给你的信' : view.title;
     const aside = revealPaper ? '点开看看' : view.detail;
     const paper = revealPaper
         ? `<p data-rmt-letter-title>${core_text.esc(view.title)}</p><button type="button" class="rmt-btn" data-rmt-letter-read data-rmt-reveal="${core_text.esc(view.revealId)}" data-rmt-module="${core_text.esc(view.moduleId)}">打开这封回忆</button>`
-        : `<p data-rmt-letter-detail>${core_text.esc(view.detail)}</p>${view.moduleId ? `<button type="button" class="rmt-btn" data-rmt-letter-read data-rmt-reveal="${core_text.esc(view.revealId)}" data-rmt-module="${core_text.esc(view.moduleId)}">打开这页回忆</button>` : ''}`;
+        : `<p data-rmt-letter-detail>${core_text.esc(view.detail)}</p>${view.canOpen && view.moduleId ? `<button type="button" class="rmt-btn" data-rmt-letter-read data-rmt-reveal="${core_text.esc(view.revealId)}" data-rmt-module="${core_text.esc(view.moduleId)}">打开这页回忆</button>` : ''}`;
     return `<article class="rmt-heart-letter">
         <button type="button" class="rmt-heart-letter-seal" data-rmt-letter-open>
             <i aria-hidden="true">♥</i><b data-rmt-letter-title>${core_text.esc(heading)}</b><small data-rmt-letter-detail>${core_text.esc(aside)}</small>
@@ -317,7 +337,11 @@ async function openInFloor(body) {
     letterSession = increment.kept ? increment.session : null;
     letterMode = item.id;
     if (!letterSession) {
-        body.innerHTML = '<p class="rmt-floor-note">这一轮还没有新的段落。写好之后，这里只放新的。</p>';
+        const phase = body.closest?.('[data-rmt-floor-shell]')?.dataset?.rmtPhase || '';
+        const writing = phase === 'generating' || phase === 'planning';
+        body.innerHTML = writing
+            ? '<p class="rmt-floor-note">回忆正在生成中。</p>'
+            : '<p class="rmt-floor-note">这一轮写完了，但是没有新的段落。</p><div class="rmt-heart-letter-actions"><button type="button" class="rmt-btn" data-rmt-floor-complete>补全</button><button type="button" class="rmt-btn" data-rmt-floor-redo>重试</button></div>';
         return;
     }
     mirrorModuleCss();
@@ -361,6 +385,28 @@ function onClick(event) {
         }).finally(() => { repair.disabled = false; sync(); });
         return;
     }
+    const complete = event.target?.closest?.('[data-rmt-floor-complete]');
+    if (complete) {
+        event.preventDefault();
+        event.stopPropagation();
+        complete.disabled = true;
+        void auto_memory_scheduler.completeFloorRound().catch(error => {
+            console.warn('[HeartbeatMemories] floor complete skipped', core_text.safeErrorDiagnostic(error));
+            globalThis.toastr?.error?.('这一页暂时没能补上。可以再点一次补全。', '心口顿了一下');
+        }).finally(() => { complete.disabled = false; sync(); });
+        return;
+    }
+    const redo = event.target?.closest?.('[data-rmt-floor-redo]');
+    if (redo) {
+        event.preventDefault();
+        event.stopPropagation();
+        redo.disabled = true;
+        void auto_memory_scheduler.retryFloorRound().catch(error => {
+            console.warn('[HeartbeatMemories] floor redo skipped', core_text.safeErrorDiagnostic(error));
+            globalThis.toastr?.error?.('这一页暂时没能重写。可以再点一次重试。', '心口顿了一下');
+        }).finally(() => { redo.disabled = false; sync(); });
+        return;
+    }
     const retry = event.target?.closest?.('[data-rmt-floor-retry]');
     if (retry) {
         event.preventDefault();
@@ -376,7 +422,8 @@ function onClick(event) {
     if (read) {
         event.preventDefault();
         event.stopPropagation();
-        void openInFloor(read.parentElement?.querySelector('[data-rmt-floor-body]'));
+        const paper = read.closest?.('[data-rmt-letter-paper]') || read.closest?.('[data-rmt-floor-shell]');
+        void openInFloor(paper?.querySelector?.('[data-rmt-floor-body]'));
         return;
     }
     const floorBody = event.target?.closest?.('[data-rmt-floor-body]');
@@ -394,7 +441,8 @@ function onClick(event) {
     if (paper) paper.hidden = false;
     seal.hidden = true;
     const host = seal.closest?.('[data-rmt-floor-shell]');
-    if (host?.dataset?.rmtPhase === 'reveal') return;
+    const phase = host?.dataset?.rmtPhase;
+    if (phase === 'reveal' || phase === 'generating' || phase === 'planning' || phase === 'empty') return;
     const body = paper?.querySelector?.('[data-rmt-floor-body]');
     if (body?.dataset?.rmtModule) void openInFloor(body);
 }

@@ -4,6 +4,7 @@ import * as combined from '../src/autoMemory/combinedResult.js';
 import * as plans from '../src/autoMemory/planStore.js';
 import * as redo from '../src/autoMemory/redo.js';
 import * as shell from '../src/autoMemory/shellState.js';
+import * as view from '../src/autoMemory/incrementalView.js';
 
 function snapshot(modulePlan = null) {
     return plans.parseAutoMemorySnapshot({
@@ -111,4 +112,23 @@ test('the letter offers repair and retry only when that work is still open', () 
     assert.equal(running.canRetry, false);
     const planning = shell.shellView({ ...readyArchive, steps: [{ status: 'pending' }] });
     assert.equal(planning.canRetry, false);
+    const writing = shell.shellView({ ...readyArchive, ticketStatus: 'drawn', moduleTitle: '他的出行路线' });
+    assert.equal(writing.phase, 'generating');
+    assert.equal(writing.title, '回忆正在生成中');
+    assert.equal(writing.canComplete, false);
+    const empty = shell.shellView({ ...readyArchive, roundEmpty: true, moduleComplete: true, revealStatus: 'ready', steps: [{ status: 'completed' }] });
+    assert.equal(empty.phase, 'empty');
+    assert.equal(empty.canComplete, true);
+    assert.equal(empty.canRedo, true);
+    const heart = view.incrementalProjection({
+        relationshipSummary: '还在说话',
+        fireflyVoices: [{ id: 'F01', title: '灯' }],
+    }, { sourceMemoryIds: ['M100'], since: 0 });
+    assert.equal(heart.kept, true);
+    assert.equal(heart.session.fireflyVoices.length, 1);
+    const stale = view.incrementalProjection({
+        relationshipSummary: '旧的',
+        generationMeta: { lastUpdate: { added: 0, updatedAt: 10, consumedMemoryIds: ['M001'] } },
+    }, { sourceMemoryIds: ['M100'], since: 50 });
+    assert.equal(stale.kept, false);
 });

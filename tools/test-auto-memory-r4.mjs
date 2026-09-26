@@ -27,7 +27,9 @@ test('an unfinished archive hides the shell and an unknown plan does not invent 
     const planning = shell.shellView({ enabled: true, ...readyArchive, steps: [{ status: 'pending' }, { status: 'pending' }] });
     assert.equal(planning.phase, 'planning');
     assert.equal(planning.progress, null);
-    assert.equal(shell.shellView({ enabled: true, ...readyArchive, ticketStatus: 'drawn', moduleTitle: '两个人的陈列柜' }).phase, 'drawn');
+    const drawn = shell.shellView({ enabled: true, ...readyArchive, ticketStatus: 'drawn', moduleTitle: '两个人的陈列柜' });
+    assert.equal(drawn.phase, 'generating');
+    assert.equal(drawn.title, '回忆正在生成中');
     assert.equal(shell.shellView({ enabled: true, ...readyArchive, paused: true, steps }).phase, 'paused');
     assert.equal(shell.shellView({ enabled: true, ...readyArchive, failureRecoverable: true, steps }).phase, 'failed');
     const checked = shell.shellView({ enabled: true, ...readyArchive, moduleComplete: false, steps: [{ status: 'completed' }], revealStatus: 'ready' });

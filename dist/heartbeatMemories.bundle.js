@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 284
-// Source SHA-256: 4b905c00f96af1c191c6ff41223558d950459365f1da17c5d893e7b454ffd459
+// Source SHA-256: 6841a3cb8dc1ca45dea242bc243e335ab492e011acd5fea16ecba7a600559e28
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -3181,154 +3181,220 @@ const auto_memory_plan = __m_autoMemory_planStore_js;
 const SINGLE_REQUEST = new Set(['cabinet', 'calendar', 'relations', 'inbox']);
 
 function token(prefix) {
-    const alphabet = 'abcdefghijklmnopqrstuvwxyz0123456789';
-    let suffix = '';
-    const cryptoObj = globalThis.crypto;
-    if (typeof cryptoObj?.getRandomValues === 'function') {
-        const bytes = new Uint8Array(8);
-        cryptoObj.getRandomValues(bytes);
-        suffix = [...bytes].map(item => alphabet[item % alphabet.length]).join('');
-    } else {
-        for (let index = 0; index < 8; index += 1) suffix += alphabet[Math.floor(Math.random() * alphabet.length)];
-    }
-    return prefix + suffix;
+  const alphabet = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  let suffix = '';
+  const cryptoObj = globalThis.crypto;
+  if (typeof cryptoObj?.getRandomValues === 'function') {
+    const bytes = new Uint8Array(8);
+    cryptoObj.getRandomValues(bytes);
+    suffix = [...bytes].map(item => alphabet[item % alphabet.length]).join('');
+  } else {
+    for (let index = 0; index < 8; index += 1) suffix += alphabet[Math.floor(Math.random() * alphabet.length)];
+  }
+  return prefix + suffix;
 }
 
 function parseCombinedResponse(value) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return { ok: false, reason: 'shape' };
-    if (!Object.hasOwn(value, 'moduleResult') || !Object.hasOwn(value, 'achievement')) return { ok: false, reason: 'shape' };
-    return { ok: true, moduleResult: value.moduleResult, achievement: value.achievement };
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return { ok: false, reason: 'shape' };
+  if (!Object.hasOwn(value, 'moduleResult') || !Object.hasOwn(value, 'achievement'))
+    return { ok: false, reason: 'shape' };
+  return { ok: true, moduleResult: value.moduleResult, achievement: value.achievement };
 }
 
 function inboxPlanLength(plan) {
-    if (Array.isArray(plan)) return plan.length;
-    if (Array.isArray(plan?.letters)) return plan.letters.length;
-    return 0;
+  if (Array.isArray(plan)) return plan.length;
+  if (Array.isArray(plan?.letters)) return plan.letters.length;
+  return 0;
 }
 
 function classifyAchievement(packet, { allowHistorical = false, sourceMemoryIds = [] } = {}) {
-    if (packet == null) return { ok: false, reason: 'missing' };
-    if (!packet || typeof packet !== 'object' || Array.isArray(packet)) return { ok: false, reason: 'shape' };
-    const clip = (value, max) => String(value || '').replace(/[\u0000-\u001f]/g, '').trim().slice(0, max);
-    const title = clip(packet.title, 40);
-    const kind = packet.kind === 'historical' || packet.kind === 'collection' ? packet.kind : '';
-    if (!title || !kind) return { ok: false, reason: 'invalid' };
-    const historicalEvidence = sourceMemoryIds.some(id => /^M\d{3,6}$/.test(id));
-    if (kind === 'historical' && (!allowHistorical || !historicalEvidence)) return { ok: false, reason: 'historical' };
-    const id = typeof packet.id === 'string' && /^[A-Za-z0-9_-]{8,80}$/.test(packet.id) ? packet.id : '';
-    const description = clip(packet.description, 900);
-    const unlockCondition = clip(packet.unlockCondition, 300);
-    const sourceMemoryAnchor = clip(packet.sourceMemoryAnchor, 160);
-    return {
-        ok: true,
-        achievement: {
-            id, title, kind,
-            ...(description ? { description } : {}),
-            ...(unlockCondition ? { unlockCondition } : {}),
-            ...(sourceMemoryAnchor ? { sourceMemoryAnchor } : {}),
-        },
-    };
+  if (packet == null) return { ok: false, reason: 'missing' };
+  if (!packet || typeof packet !== 'object' || Array.isArray(packet)) return { ok: false, reason: 'shape' };
+  const clip = (value, max) =>
+    String(value || '')
+      .replace(/[\u0000-\u001f]/g, '')
+      .trim()
+      .slice(0, max);
+  const title = clip(packet.title, 40);
+  const kind = packet.kind === 'historical' || packet.kind === 'collection' ? packet.kind : '';
+  if (!title || !kind) return { ok: false, reason: 'invalid' };
+  const historicalEvidence = sourceMemoryIds.some(id => /^M\d{3,6}$/.test(id));
+  if (kind === 'historical' && (!allowHistorical || !historicalEvidence)) return { ok: false, reason: 'historical' };
+  const id = typeof packet.id === 'string' && /^[A-Za-z0-9_-]{8,80}$/.test(packet.id) ? packet.id : '';
+  const description = clip(packet.description, 900);
+  const unlockCondition = clip(packet.unlockCondition, 300);
+  const sourceMemoryAnchor = clip(packet.sourceMemoryAnchor, 160);
+  return {
+    ok: true,
+    achievement: {
+      id,
+      title,
+      kind,
+      ...(description ? { description } : {}),
+      ...(unlockCondition ? { unlockCondition } : {}),
+      ...(sourceMemoryAnchor ? { sourceMemoryAnchor } : {}),
+    },
+  };
 }
 
 function bumpedPlan(snapshot, now) {
-    return auto_memory_plan.parseAutoMemoryPlan({
-        ...snapshot.plan,
-        revision: snapshot.plan.revision + 1,
-        updatedAt: now,
-    });
+  return auto_memory_plan.parseAutoMemoryPlan({
+    ...snapshot.plan,
+    revision: snapshot.plan.revision + 1,
+    updatedAt: now,
+  });
 }
 
 function completedPlan(modulePlan) {
-    if (!modulePlan) return null;
-    return auto_memory_plan.parseModulePlan({
-        ...modulePlan,
-        steps: modulePlan.steps.map(step => ({
-            ...step,
-            status: 'completed',
-            recoverySlot: step.recoverySlot || 'module-saved',
-        })),
-    });
+  if (!modulePlan) return null;
+  return auto_memory_plan.parseModulePlan({
+    ...modulePlan,
+    steps: modulePlan.steps.map(step => ({
+      ...step,
+      status: 'completed',
+      recoverySlot: step.recoverySlot || 'module-saved',
+    })),
+  });
 }
 
 function nextSnapshot(snapshot, now, reveal, modulePlan) {
-    return auto_memory_plan.parseAutoMemorySnapshot({
-        plan: bumpedPlan(snapshot, now),
-        revealRecords: [...snapshot.revealRecords, reveal],
-        drawTickets: snapshot.drawTickets,
-        modulePlan: completedPlan(modulePlan),
-    });
+  return auto_memory_plan.parseAutoMemorySnapshot({
+    plan: bumpedPlan(snapshot, now),
+    revealRecords: [...snapshot.revealRecords, reveal],
+    drawTickets: snapshot.drawTickets,
+    modulePlan: completedPlan(modulePlan),
+  });
 }
 
 function settleCombined({
-    snapshot, moduleId, moduleSaved = false, packet = null, sourceMemoryIds = [], allowHistorical = false,
-    inboxPlan = null, now = 0, revealId = '', achievementId = '',
+  snapshot,
+  moduleId,
+  moduleSaved = false,
+  packet = null,
+  sourceMemoryIds = [],
+  allowHistorical = false,
+  inboxPlan = null,
+  now = 0,
+  revealId = '',
+  achievementId = '',
 } = {}) {
-    if (!SINGLE_REQUEST.has(moduleId) && !['album', 'adv', 'room', 'items', 'phone', 'travel', 'ending', 'heart', 'butterfly', 'pastLives', 'themeSong', 'bedtime', 'timeEcho'].includes(moduleId)) {
-        return { action: 'unsupported', requests: 0, extraAchievementRequest: false, reveal: null, snapshot };
-    }
-    if (moduleId === 'inbox' && inboxPlanLength(inboxPlan) === 0) {
-        return { action: 'noop', requests: 0, extraAchievementRequest: false, reveal: null, snapshot };
-    }
-    const parsedResponse = packet && Object.hasOwn(packet, 'moduleResult') ? parseCombinedResponse(packet) : { ok: true, achievement: packet };
-    const achievementPacket = parsedResponse.ok ? parsedResponse.achievement : null;
-    if (!moduleSaved) return { action: 'hold', requests: 1, extraAchievementRequest: false, reveal: null, snapshot, redoModule: false };
-    const parsed = classifyAchievement(achievementPacket, { allowHistorical, sourceMemoryIds });
-    const id = revealId || token('rv');
-    if (!parsed.ok) {
-        const reveal = auto_memory_plan.parseRevealRecord({
-            id, moduleId, achievementId: null, sourceMemoryIds, status: 'achievement_pending', createdAt: now,
-        });
-        return {
-            action: 'achievement-pending', requests: 1, extraAchievementRequest: false, reveal, redoModule: false,
-            snapshot: nextSnapshot(snapshot, now, reveal, snapshot.modulePlan),
-        };
-    }
-    const savedAchievementId = parsed.achievement.id || achievementId || token('achv');
+  if (
+    !SINGLE_REQUEST.has(moduleId) &&
+    ![
+      'album',
+      'adv',
+      'room',
+      'items',
+      'phone',
+      'travel',
+      'ending',
+      'heart',
+      'butterfly',
+      'pastLives',
+      'themeSong',
+      'bedtime',
+      'timeEcho',
+    ].includes(moduleId)
+  ) {
+    return { action: 'unsupported', requests: 0, extraAchievementRequest: false, reveal: null, snapshot };
+  }
+  if (moduleId === 'inbox' && inboxPlanLength(inboxPlan) === 0) {
+    return { action: 'noop', requests: 0, extraAchievementRequest: false, reveal: null, snapshot };
+  }
+  const parsedResponse =
+    packet && Object.hasOwn(packet, 'moduleResult') ? parseCombinedResponse(packet) : { ok: true, achievement: packet };
+  const achievementPacket = parsedResponse.ok ? parsedResponse.achievement : null;
+  if (!moduleSaved)
+    return { action: 'hold', requests: 1, extraAchievementRequest: false, reveal: null, snapshot, redoModule: false };
+  const parsed = classifyAchievement(achievementPacket, { allowHistorical, sourceMemoryIds });
+  const id = revealId || token('rv');
+  if (!parsed.ok) {
     const reveal = auto_memory_plan.parseRevealRecord({
-        id, moduleId, achievementId: savedAchievementId, sourceMemoryIds, status: 'ready', createdAt: now,
+      id,
+      moduleId,
+      achievementId: null,
+      sourceMemoryIds,
+      status: 'achievement_pending',
+      createdAt: now,
     });
     return {
-        action: 'reveal', requests: 1, extraAchievementRequest: false, reveal,
-        achievement: { ...parsed.achievement, id: savedAchievementId },
-        snapshot: nextSnapshot(snapshot, now, reveal, snapshot.modulePlan),
+      action: 'achievement-pending',
+      requests: 1,
+      extraAchievementRequest: false,
+      reveal,
+      redoModule: false,
+      snapshot: nextSnapshot(snapshot, now, reveal, snapshot.modulePlan),
     };
+  }
+  const savedAchievementId = parsed.achievement.id || achievementId || token('achv');
+  const reveal = auto_memory_plan.parseRevealRecord({
+    id,
+    moduleId,
+    achievementId: savedAchievementId,
+    sourceMemoryIds,
+    status: 'ready',
+    createdAt: now,
+  });
+  return {
+    action: 'reveal',
+    requests: 1,
+    extraAchievementRequest: false,
+    reveal,
+    achievement: { ...parsed.achievement, id: savedAchievementId },
+    snapshot: nextSnapshot(snapshot, now, reveal, snapshot.modulePlan),
+  };
 }
 
 function repairAchievementRequest({ confirmed = false, moduleSaved = false } = {}) {
-    if (confirmed !== true || moduleSaved !== true) return { action: 'refused', requests: 0, redoesModule: false };
-    return { action: 'repair', requests: 1, redoesModule: false, extraAchievementRequest: false };
+  if (confirmed !== true || moduleSaved !== true) return { action: 'refused', requests: 0, redoesModule: false };
+  return { action: 'repair', requests: 1, redoesModule: false, extraAchievementRequest: false };
 }
 
 function replacePendingAchievement({
-    snapshot, revealId = '', packet = null, allowHistorical = false, sourceMemoryIds = [], now = 0,
+  snapshot,
+  revealId = '',
+  packet = null,
+  allowHistorical = false,
+  sourceMemoryIds = [],
+  now = 0,
 } = {}) {
-    const current = (snapshot?.revealRecords || []).find(item => item.id === revealId);
-    if (!current || current.status !== 'achievement_pending') {
-        return { action: 'idle', requests: 0, reveal: null, snapshot, extraAchievementRequest: false };
-    }
-    const ids = sourceMemoryIds.length ? sourceMemoryIds : current.sourceMemoryIds;
-    const parsed = classifyAchievement(packet, { allowHistorical, sourceMemoryIds: ids });
-    if (!parsed.ok) {
-        return { action: 'achievement-pending', requests: 1, reveal: current, snapshot, achievement: null, extraAchievementRequest: false };
-    }
-    const savedAchievementId = parsed.achievement.id || token('achv');
-    const reveal = auto_memory_plan.parseRevealRecord({
-        ...current,
-        achievementId: savedAchievementId,
-        status: 'ready',
-    });
-    const revealRecords = snapshot.revealRecords.map(item => (item.id === revealId ? reveal : item));
-    const next = auto_memory_plan.parseAutoMemorySnapshot({
-        plan: bumpedPlan(snapshot, now),
-        revealRecords,
-        drawTickets: snapshot.drawTickets,
-        modulePlan: snapshot.modulePlan,
-    });
+  const current = (snapshot?.revealRecords || []).find(item => item.id === revealId);
+  if (!current || current.status !== 'achievement_pending') {
+    return { action: 'idle', requests: 0, reveal: null, snapshot, extraAchievementRequest: false };
+  }
+  const ids = sourceMemoryIds.length ? sourceMemoryIds : current.sourceMemoryIds;
+  const parsed = classifyAchievement(packet, { allowHistorical, sourceMemoryIds: ids });
+  if (!parsed.ok) {
     return {
-        action: 'reveal', requests: 1, extraAchievementRequest: false, reveal,
-        achievement: { ...parsed.achievement, id: savedAchievementId },
-        snapshot: next,
+      action: 'achievement-pending',
+      requests: 1,
+      reveal: current,
+      snapshot,
+      achievement: null,
+      extraAchievementRequest: false,
     };
+  }
+  const savedAchievementId = parsed.achievement.id || token('achv');
+  const reveal = auto_memory_plan.parseRevealRecord({
+    ...current,
+    achievementId: savedAchievementId,
+    status: 'ready',
+  });
+  const revealRecords = snapshot.revealRecords.map(item => (item.id === revealId ? reveal : item));
+  const next = auto_memory_plan.parseAutoMemorySnapshot({
+    plan: bumpedPlan(snapshot, now),
+    revealRecords,
+    drawTickets: snapshot.drawTickets,
+    modulePlan: snapshot.modulePlan,
+  });
+  return {
+    action: 'reveal',
+    requests: 1,
+    extraAchievementRequest: false,
+    reveal,
+    achievement: { ...parsed.achievement, id: savedAchievementId },
+    snapshot: next,
+  };
 }
 
 __m_autoMemory_combinedResult_js.parseCombinedResponse = parseCombinedResponse;
@@ -3836,6 +3902,7 @@ function __init_autoMemory_incrementalView_js() {
 // 楼层里只放这一轮新增的段落。旧信、旧章节和旧日记留在插件页面。
 
 const LIST_KEYS = ['items', 'letters', 'entries', 'chapters', 'stories', 'songs', 'apps', 'events', 'routes', 'episodes', 'pages', 'nodes'];
+const MODULE_BODY_KEYS = ['dailyStrips', 'fireflyVoices', 'voiceDramas', 'scenarioDramas', 'greetings', 'dialogues'];
 
 function listedIds(item) {
     const rows = [];
@@ -3855,6 +3922,11 @@ function trimStory(story, ids, createdAt) {
     const chapters = story.chapters.filter(chapter => matches(chapter, ids, createdAt) || matches(story, ids, createdAt));
     if (!chapters.length) return null;
     return { ...story, chapters };
+}
+
+function hasOwnBody(session) {
+    if (typeof session?.relationshipSummary === 'string' && session.relationshipSummary.trim()) return true;
+    return MODULE_BODY_KEYS.some(key => Array.isArray(session?.[key]) && session[key].length > 0);
 }
 
 function lastUpdateOf(session) {
@@ -3899,6 +3971,8 @@ function incrementalProjection(session, { sourceMemoryIds = [], createdAt = 0, s
         copy[key] = key === 'stories' || !belongs ? filtered : narrowToRound(original, filtered, last.added);
         if (copy[key].length) kept = true;
     }
+    // 角色互动这类正文不在上面的列表里。抽中的编号对得上、又不是更早的一轮时，直接打开插件里已经写好的那份。
+    if (!kept && !predates && ids.size > 0 && hasOwnBody(copy)) kept = true;
     copy.incrementalOnly = true;
     return { kept, session: copy };
 }
@@ -5253,133 +5327,136 @@ function __init_autoMemory_redo_js() {
 const SOURCE_STAMP_KEY = 'autoMemorySourceStampV1';
 
 function shouldAutoRepair({ enabled = false, used = 0, limit = 1 } = {}) {
-    if (enabled !== true) return false;
-    const cap = Math.max(1, Math.min(5, Math.floor(Number(limit)) || 1));
-    const count = Math.max(0, Math.floor(Number(used)) || 0);
-    return count < cap;
+  if (enabled !== true) return false;
+  const cap = Math.max(1, Math.min(5, Math.floor(Number(limit)) || 1));
+  const count = Math.max(0, Math.floor(Number(used)) || 0);
+  return count < cap;
 }
 
 function retryableFailure(error) {
-    if (!error) return true;
-    if (error.name === 'AbortError' || error.nonRetryable === true) return false;
-    const code = `${error.code || ''} ${error.status || ''}`;
-    return !/quota|429|config|preflight|unauthorized/i.test(code);
+  if (!error) return true;
+  if (error.name === 'AbortError' || error.nonRetryable === true) return false;
+  const code = `${error.code || ''} ${error.status || ''}`;
+  return !/quota|429|config|preflight|unauthorized/i.test(code);
 }
 
 function pendingReveal(snapshot) {
-    const rows = Array.isArray(snapshot?.revealRecords) ? snapshot.revealRecords : [];
-    for (let index = rows.length - 1; index >= 0; index -= 1) {
-        if (rows[index]?.status === 'achievement_pending') return rows[index];
-    }
-    return null;
+  const rows = Array.isArray(snapshot?.revealRecords) ? snapshot.revealRecords : [];
+  for (let index = rows.length - 1; index >= 0; index -= 1) {
+    if (rows[index]?.status === 'achievement_pending') return rows[index];
+  }
+  return null;
 }
 
 function achievementRepairPrompt({ moduleTitle = '', sourceMemoryIds = [], allowHistorical = false } = {}) {
-    const title = String(moduleTitle || '这份回忆').slice(0, 40);
-    const ids = (Array.isArray(sourceMemoryIds) ? sourceMemoryIds : []).filter(id => /^M\d{3,6}$/.test(id));
-    const evidence = ids.length ? ids.join('、') : '没有可引用的编号';
-    const kind = allowHistorical ? 'historical 或 collection' : 'collection';
-    return `只补这一份回忆的成就，不要重写模块正文。模块：${title}。可以引用的记忆编号：${evidence}。
+  const title = String(moduleTitle || '这份回忆').slice(0, 40);
+  const ids = (Array.isArray(sourceMemoryIds) ? sourceMemoryIds : []).filter(id => /^M\d{3,6}$/.test(id));
+  const evidence = ids.length ? ids.join('、') : '没有可引用的编号';
+  const kind = allowHistorical ? 'historical 或 collection' : 'collection';
+  return `只补这一份回忆的成就，不要重写模块正文。模块：${title}。可以引用的记忆编号：${evidence}。
 只返回一个 JSON 对象，不要解释：
 {"title":"不超过40字","description":"一句","unlockCondition":"一句","kind":"${allowHistorical ? 'historical' : 'collection'}","sourceMemoryAnchor":"编号或一句"}
 kind 只能是 ${kind}。没有编号证据就用 collection。`;
 }
 
 function achievementPacket(value) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
-    if (value.achievement && typeof value.achievement === 'object' && !Array.isArray(value.achievement)) return value.achievement;
-    return value;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  if (value.achievement && typeof value.achievement === 'object' && !Array.isArray(value.achievement))
+    return value.achievement;
+  return value;
 }
 
 function resetModuleSteps(modulePlan) {
-    if (!modulePlan?.steps?.length) return modulePlan;
-    return {
-        ...modulePlan,
-        steps: modulePlan.steps.map(step => ({ ...step, status: 'pending', recoverySlot: '' })),
-    };
+  if (!modulePlan?.steps?.length) return modulePlan;
+  return {
+    ...modulePlan,
+    steps: modulePlan.steps.map(step => ({ ...step, status: 'pending', recoverySlot: '' })),
+  };
 }
 
 function modulePlanForRetry(modulePlan) {
-    const steps = modulePlan?.steps || [];
-    if (!steps.length || steps.some(step => step.status !== 'completed')) return modulePlan;
-    return {
-        ...modulePlan,
-        steps: steps.map((step, index) => (
-            index === steps.length - 1 ? { ...step, status: 'pending', recoverySlot: '' } : step
-        )),
-    };
+  const steps = modulePlan?.steps || [];
+  if (!steps.length || steps.some(step => step.status !== 'completed')) return modulePlan;
+  return {
+    ...modulePlan,
+    steps: steps.map((step, index) =>
+      index === steps.length - 1 ? { ...step, status: 'pending', recoverySlot: '' } : step,
+    ),
+  };
 }
 
 function currentDrawTicket(snapshot) {
-    const tickets = Array.isArray(snapshot?.drawTickets) ? snapshot.drawTickets : [];
-    const activeId = snapshot?.plan?.activeDrawTicketId;
-    if (activeId) {
-        const active = tickets.find(item => item.id === activeId);
-        if (active) return active;
-    }
-    return tickets.length ? tickets[tickets.length - 1] : null;
+  const tickets = Array.isArray(snapshot?.drawTickets) ? snapshot.drawTickets : [];
+  const activeId = snapshot?.plan?.activeDrawTicketId;
+  if (activeId) {
+    const active = tickets.find(item => item.id === activeId);
+    if (active) return active;
+  }
+  return tickets.length ? tickets[tickets.length - 1] : null;
 }
 
 function choosableModules(modules) {
-    return (Array.isArray(modules) ? modules : [])
-        .filter(item => item?.inDrawPool === true && item.autoEligible === true && item.achievementMerged === true)
-        .map(item => ({ id: item.id, title: item.title || item.id }));
+  return (Array.isArray(modules) ? modules : [])
+    .filter(item => item?.inDrawPool === true && item.autoEligible === true && item.achievementMerged === true)
+    .map(item => ({ id: item.id, title: item.title || item.id }));
 }
 
 function redrawModuleId(candidates, currentId, randomUnit = 0) {
-    const ids = (Array.isArray(candidates) ? candidates : []).map(item => item?.id).filter(id => typeof id === 'string' && id);
-    const others = ids.filter(id => id !== currentId);
-    const pool = others.length ? others : ids;
-    if (!pool.length) return '';
-    const unit = Math.min(0.999999, Math.max(0, Number(randomUnit) || 0));
-    return pool[Math.min(pool.length - 1, Math.floor(unit * pool.length))];
+  const ids = (Array.isArray(candidates) ? candidates : [])
+    .map(item => item?.id)
+    .filter(id => typeof id === 'string' && id);
+  const others = ids.filter(id => id !== currentId);
+  const pool = others.length ? others : ids;
+  if (!pool.length) return '';
+  const unit = Math.min(0.999999, Math.max(0, Number(randomUnit) || 0));
+  return pool[Math.min(pool.length - 1, Math.floor(unit * pool.length))];
 }
 
 function drawFloorMessage(chat, dueFloor, latestFloor) {
-    const floor = Math.floor(Number(dueFloor));
-    const list = Array.isArray(chat) ? chat : [];
-    if (floor < 1) return null;
-    if (latestFloor === true) {
-        let seen = 0;
-        for (let index = 0; index < list.length; index += 1) {
-            const message = list[index];
-            if (!message || message.is_user === true || message.is_system === true) continue;
-            seen += 1;
-            if (seen === floor) return { index, message };
-        }
-        return null;
+  const floor = Math.floor(Number(dueFloor));
+  const list = Array.isArray(chat) ? chat : [];
+  if (floor < 1) return null;
+  if (latestFloor === true) {
+    let seen = 0;
+    for (let index = 0; index < list.length; index += 1) {
+      const message = list[index];
+      if (!message || message.is_user === true || message.is_system === true) continue;
+      seen += 1;
+      if (seen === floor) return { index, message };
     }
-    const index = floor - 1;
-    const message = list[index];
-    return message ? { index, message } : null;
+    return null;
+  }
+  const index = floor - 1;
+  const message = list[index];
+  return message ? { index, message } : null;
 }
 
 function bodyHash(text) {
-    const value = String(text ?? '');
-    let hash = 0;
-    for (let index = 0; index < value.length; index += 1) hash = (Math.imul(hash, 33) + value.charCodeAt(index)) >>> 0;
-    return `${value.length}:${hash}`;
+  const value = String(text ?? '');
+  let hash = 0;
+  for (let index = 0; index < value.length; index += 1) hash = (Math.imul(hash, 33) + value.charCodeAt(index)) >>> 0;
+  return `${value.length}:${hash}`;
 }
 
 function sourceStamp(chat, dueFloor, latestFloor, drawId) {
-    const located = drawFloorMessage(chat, dueFloor, latestFloor);
-    if (!located || typeof drawId !== 'string' || !drawId) return null;
-    return {
-        drawId,
-        dueFloor: Math.floor(Number(dueFloor)),
-        latestAssistant: latestFloor === true,
-        messageIndex: located.index,
-        hash: bodyHash(located.message?.mes),
-    };
+  const located = drawFloorMessage(chat, dueFloor, latestFloor);
+  if (!located || typeof drawId !== 'string' || !drawId) return null;
+  return {
+    drawId,
+    dueFloor: Math.floor(Number(dueFloor)),
+    latestAssistant: latestFloor === true,
+    messageIndex: located.index,
+    hash: bodyHash(located.message?.mes),
+  };
 }
 
 function swipeNeedsRegenerate({ stamp = null, messageIndex = -1, hash = '', ticketMessageIndex = -1 } = {}) {
-    if (!Number.isInteger(messageIndex) || messageIndex < 0) return false;
-    if (stamp && Number.isInteger(stamp.messageIndex)) {
-        if (stamp.messageIndex !== messageIndex) return false;
-        return stamp.hash !== hash;
-    }
-    return Number.isInteger(ticketMessageIndex) && ticketMessageIndex === messageIndex;
+  if (!Number.isInteger(messageIndex) || messageIndex < 0) return false;
+  if (stamp && Number.isInteger(stamp.messageIndex)) {
+    if (stamp.messageIndex !== messageIndex) return false;
+    return stamp.hash !== hash;
+  }
+  return Number.isInteger(ticketMessageIndex) && ticketMessageIndex === messageIndex;
 }
 
 __m_autoMemory_redo_js.shouldAutoRepair = shouldAutoRepair;
@@ -5773,6 +5850,17 @@ async function fillFloorGap() {
     }
 }
 
+async function completeFloorRound() {
+    const context = core_context.currentCharacterGuard();
+    const snapshot = auto_memory_plan.readAutoMemoryMetadata(context.chatMetadata);
+    if (snapshot?.modulePlan?.steps?.length) return resumeFloorPlan();
+    return regenerateCurrentMemory({ mode: 'keep' });
+}
+
+async function retryFloorRound() {
+    return regenerateCurrentMemory({ mode: 'keep' });
+}
+
 async function resumeFloorPlan() {
     const context = core_context.currentCharacterGuard();
     const snapshot = auto_memory_plan.readAutoMemoryMetadata(context.chatMetadata);
@@ -6090,6 +6178,8 @@ function startAutoMemoryScheduler() {
 }
 
 __m_autoMemory_scheduler_js.fillFloorGap = fillFloorGap;
+__m_autoMemory_scheduler_js.completeFloorRound = completeFloorRound;
+__m_autoMemory_scheduler_js.retryFloorRound = retryFloorRound;
 __m_autoMemory_scheduler_js.resumeFloorPlan = resumeFloorPlan;
 __m_autoMemory_scheduler_js.repairFloorAchievement = repairFloorAchievement;
 __m_autoMemory_scheduler_js.automaticRepairIfNeeded = automaticRepairIfNeeded;
@@ -6203,10 +6293,14 @@ function shellView(input = {}) {
     const running = steps.some(step => step?.status === 'running');
     const face = {
         blocksInput: false, showReveal: false, progress: null, moduleId, revealId,
-        canRetry: false, canRepairAchievement: false,
+        canRetry: false, canRepairAchievement: false, canComplete: false, canRedo: false,
+        canOpen: input.canOpen === true,
     };
     if (complete && revealStatus === 'achievement_pending') {
         return { ...face, phase: 'achievement-pending', canRepairAchievement: true, title: '回忆先留着', detail: '成就还缺一笔。可以补一次，不必重写正文。' };
+    }
+    if (input.roundEmpty === true) {
+        return { ...face, phase: 'empty', canComplete: true, canRedo: true, title: '这一页还是空的', detail: '写完了，但是没有新的段落。' };
     }
     if (complete && (revealStatus === 'ready' || revealStatus === 'opened')) {
         return { ...face, phase: 'reveal', showReveal: true, title: input.revealLine || revealFace(input), detail: '点击查看详情' };
@@ -6219,18 +6313,20 @@ function shellView(input = {}) {
     }
     if (steps.length && !complete) {
         const started = steps.some(step => step?.status === 'running' || step?.status === 'completed' || step?.status === 'failed');
-        if (!started) return { ...face, phase: 'planning', title: '正在建立目录', detail: '目录还没定下来，先不显示第几步。' };
-        const canRetry = !running;
-        if (allDone) return { ...face, phase: 'generating', canRetry, title: '回忆生成中', detail: '还没整份核对完，先不拆开。' };
+        if (!started && input.ticketStatus !== 'drawn' && input.ticketStatus !== 'running') {
+            return { ...face, phase: 'planning', title: '正在建立目录', detail: '目录还没定下来，先不显示第几步。' };
+        }
+        const canRetry = started && !running;
+        if (allDone) return { ...face, phase: 'generating', canRetry, title: '回忆正在生成中', detail: '还没整份核对完，先不拆开。' };
         const progress = knownProgress(done, steps.length);
-        return { ...face, phase: 'generating', canRetry, progress, title: '正在把这段回忆写下来', detail: progress ? `正在生成 ${progress.done} / ${progress.total}` : '正在生成' };
+        return { ...face, phase: 'generating', canRetry, progress, title: '回忆正在生成中', detail: progress ? `正在生成 ${progress.done} / ${progress.total}` : '还没写完，先不打开。' };
     }
     if (!steps.length && input.roundReveal === true && (revealStatus === 'ready' || revealStatus === 'opened')) {
         return { ...face, phase: 'reveal', showReveal: true, title: input.revealLine || revealFace(input), detail: '点击查看详情' };
     }
     if (input.ticketStatus === 'drawn' || input.ticketStatus === 'running') {
         const title = cleanName(input.moduleTitle);
-        return { ...face, phase: 'drawn', title: '抽中了一段回忆', detail: title ? `这一页是${title}。` : '还没开始写正文。' };
+        return { ...face, phase: 'generating', title: '回忆正在生成中', detail: title ? `正在写${title}。` : '还没写完，先不打开。' };
     }
     if (revealStatus === 'ready' || revealStatus === 'opened') {
         return { ...face, phase: 'reveal', showReveal: true, title: input.revealLine || revealFace(input), detail: '点击查看详情' };
@@ -59652,6 +59748,17 @@ function readSnapshot(context) {
     }
 }
 
+function roundIsEmpty(moduleId, reveal, running, steps, ticket, moduleComplete, previewKept) {
+    const open = running
+        || ticket?.status === 'drawn'
+        || ticket?.status === 'running'
+        || steps.some(step => step.status === 'pending' || step.status === 'running' || step.status === 'failed');
+    if (open || !moduleId || previewKept === true) return false;
+    const settled = moduleComplete === true || reveal?.status === 'ready' || reveal?.status === 'opened';
+    if (!settled) return false;
+    return true;
+}
+
 function archiveIsReady(context, rows) {
     let memory = null;
     try { memory = archive_repository.getImportedMemory(context); } catch { memory = null; }
@@ -59678,6 +59785,7 @@ function viewFor(context) {
         running, partial: failedStep, hasContent: steps.some(step => step.status === 'completed'),
     });
     const moduleComplete = item?.isComplete?.(null, snapshot.modulePlan) === true;
+    const previewKept = moduleId ? incrementFor(moduleId, reveal?.id || '').kept === true : false;
     return shell_state.shellView({
         enabled: true,
         archiveReady: archiveIsReady(context, rows),
@@ -59694,6 +59802,8 @@ function viewFor(context) {
             achievementTitle: auto_memory_gap.rememberedAchievementTitle(context.chatMetadata, reveal?.achievementId),
             moduleTitle: item?.title || '',
         }),
+        roundEmpty: roundIsEmpty(moduleId, reveal, running, steps, ticket, moduleComplete, previewKept),
+        canOpen: previewKept,
         failureRecoverable: !running && (failedStep || common.state === 'failed' || common.state === 'retry'),
         paused: moduleRow?.phase === 'queue',
         floor: core_settings.getPluginSettings().autoMemoryLatestFloor === true
@@ -59715,16 +59825,22 @@ function markup(view) {
     const repair = view.canRepairAchievement
         ? '<button type="button" class="rmt-btn" data-rmt-floor-achievement>补成就</button>'
         : '';
+    const complete = view.canComplete
+        ? '<button type="button" class="rmt-btn" data-rmt-floor-complete>补全</button>'
+        : '';
+    const redo = view.canRedo
+        ? '<button type="button" class="rmt-btn" data-rmt-floor-redo>重试</button>'
+        : '';
     const retry = view.canRetry
         ? '<button type="button" class="rmt-btn" data-rmt-floor-retry>重试</button>'
         : '';
-    const actions = repair || retry ? `<div class="rmt-heart-letter-actions">${repair}${retry}</div>` : '';
+    const actions = repair || complete || redo || retry ? `<div class="rmt-heart-letter-actions">${repair}${complete}${redo}${retry}</div>` : '';
     const revealPaper = view.phase === 'reveal' && view.showReveal;
     const heading = revealPaper ? '一封写给你的信' : view.title;
     const aside = revealPaper ? '点开看看' : view.detail;
     const paper = revealPaper
         ? `<p data-rmt-letter-title>${core_text.esc(view.title)}</p><button type="button" class="rmt-btn" data-rmt-letter-read data-rmt-reveal="${core_text.esc(view.revealId)}" data-rmt-module="${core_text.esc(view.moduleId)}">打开这封回忆</button>`
-        : `<p data-rmt-letter-detail>${core_text.esc(view.detail)}</p>${view.moduleId ? `<button type="button" class="rmt-btn" data-rmt-letter-read data-rmt-reveal="${core_text.esc(view.revealId)}" data-rmt-module="${core_text.esc(view.moduleId)}">打开这页回忆</button>` : ''}`;
+        : `<p data-rmt-letter-detail>${core_text.esc(view.detail)}</p>${view.canOpen && view.moduleId ? `<button type="button" class="rmt-btn" data-rmt-letter-read data-rmt-reveal="${core_text.esc(view.revealId)}" data-rmt-module="${core_text.esc(view.moduleId)}">打开这页回忆</button>` : ''}`;
     return `<article class="rmt-heart-letter">
         <button type="button" class="rmt-heart-letter-seal" data-rmt-letter-open>
             <i aria-hidden="true">♥</i><b data-rmt-letter-title>${core_text.esc(heading)}</b><small data-rmt-letter-detail>${core_text.esc(aside)}</small>
@@ -59869,7 +59985,11 @@ async function openInFloor(body) {
     letterSession = increment.kept ? increment.session : null;
     letterMode = item.id;
     if (!letterSession) {
-        body.innerHTML = '<p class="rmt-floor-note">这一轮还没有新的段落。写好之后，这里只放新的。</p>';
+        const phase = body.closest?.('[data-rmt-floor-shell]')?.dataset?.rmtPhase || '';
+        const writing = phase === 'generating' || phase === 'planning';
+        body.innerHTML = writing
+            ? '<p class="rmt-floor-note">回忆正在生成中。</p>'
+            : '<p class="rmt-floor-note">这一轮写完了，但是没有新的段落。</p><div class="rmt-heart-letter-actions"><button type="button" class="rmt-btn" data-rmt-floor-complete>补全</button><button type="button" class="rmt-btn" data-rmt-floor-redo>重试</button></div>';
         return;
     }
     mirrorModuleCss();
@@ -59913,6 +60033,28 @@ function onClick(event) {
         }).finally(() => { repair.disabled = false; sync(); });
         return;
     }
+    const complete = event.target?.closest?.('[data-rmt-floor-complete]');
+    if (complete) {
+        event.preventDefault();
+        event.stopPropagation();
+        complete.disabled = true;
+        void auto_memory_scheduler.completeFloorRound().catch(error => {
+            console.warn('[HeartbeatMemories] floor complete skipped', core_text.safeErrorDiagnostic(error));
+            globalThis.toastr?.error?.('这一页暂时没能补上。可以再点一次补全。', '心口顿了一下');
+        }).finally(() => { complete.disabled = false; sync(); });
+        return;
+    }
+    const redo = event.target?.closest?.('[data-rmt-floor-redo]');
+    if (redo) {
+        event.preventDefault();
+        event.stopPropagation();
+        redo.disabled = true;
+        void auto_memory_scheduler.retryFloorRound().catch(error => {
+            console.warn('[HeartbeatMemories] floor redo skipped', core_text.safeErrorDiagnostic(error));
+            globalThis.toastr?.error?.('这一页暂时没能重写。可以再点一次重试。', '心口顿了一下');
+        }).finally(() => { redo.disabled = false; sync(); });
+        return;
+    }
     const retry = event.target?.closest?.('[data-rmt-floor-retry]');
     if (retry) {
         event.preventDefault();
@@ -59928,7 +60070,8 @@ function onClick(event) {
     if (read) {
         event.preventDefault();
         event.stopPropagation();
-        void openInFloor(read.parentElement?.querySelector('[data-rmt-floor-body]'));
+        const paper = read.closest?.('[data-rmt-letter-paper]') || read.closest?.('[data-rmt-floor-shell]');
+        void openInFloor(paper?.querySelector?.('[data-rmt-floor-body]'));
         return;
     }
     const floorBody = event.target?.closest?.('[data-rmt-floor-body]');
@@ -59946,7 +60089,8 @@ function onClick(event) {
     if (paper) paper.hidden = false;
     seal.hidden = true;
     const host = seal.closest?.('[data-rmt-floor-shell]');
-    if (host?.dataset?.rmtPhase === 'reveal') return;
+    const phase = host?.dataset?.rmtPhase;
+    if (phase === 'reveal' || phase === 'generating' || phase === 'planning' || phase === 'empty') return;
     const body = paper?.querySelector?.('[data-rmt-floor-body]');
     if (body?.dataset?.rmtModule) void openInFloor(body);
 }
@@ -67558,9 +67702,9 @@ function invalidateArchiveViewForChatNavigation(nextChatId = '') {
 }
 
 function bodyEl() {
-    const overlay = document.getElementById(core_constants.OVERLAY_ID);
     const floor = document.querySelector('.rmt-floor-shell [data-rmt-floor-body][data-rmt-floor-live="1"]');
-    if (floor && (!overlay || overlay.hidden)) return floor;
+    if (floor) return floor;
+    const overlay = document.getElementById(core_constants.OVERLAY_ID);
     return overlay?.querySelector('.rmt-body') || document.querySelector(`#${core_constants.OVERLAY_ID} .rmt-body`);
 }
 
@@ -73017,41 +73161,40 @@ __m_ui_settingsPanelParts_js.manualAutosaves = manualAutosaves;
 
 function __init_ui_settingsPanelHome_js() {
 // MODULE: ui/settingsPanelHome.js
-const advanced_ui = __m_ui_advancedGenerationUi_js;
-const output_budget = __m_core_outputBudget_js;
-const cg_format_ui = __m_ui_cgFormatControl_js;
-const archive_repository = __m_archive_repository_js;
 const archive_coverage = __m_archive_coverageRanges_js;
-const source_guard = __m_archive_sourceReadGuard_js;
 const archive_library = __m_archive_library_js;
-const generation_imageGeneration = __m_generation_imageGeneration_js;
-const core_constants = __m_core_constants_js;
-const core_context = __m_core_context_js;
-const core_requestCoordinator = __m_core_requestCoordinator_js;
-const core_settings = __m_core_settings_js;
-const floating_archive = __m_ui_floatingArchive_js;
-const core_text = __m_core_text_js;
-const core_theme = __m_core_theme_js;
-const core_autoUpdatePolicy = __m_core_autoUpdatePolicy_js;
-const core_autoUpdates = __m_core_autoUpdates_js;
-const core_selfUpdater = __m_core_selfUpdater_js;
-const core_contextTags = __m_core_contextTags_js;
-const core_chatReadRange = __m_core_chatReadRange_js;
-const ui_overlay = __m_ui_overlay_js;
+const archive_repository = __m_archive_repository_js;
+const source_guard = __m_archive_sourceReadGuard_js;
+const auto_memory_registry = __m_autoMemory_moduleRegistry_js;
 const auto_memory_plan = __m_autoMemory_planStore_js;
 const auto_memory_redo = __m_autoMemory_redo_js;
-const auto_memory_registry = __m_autoMemory_moduleRegistry_js;
 const auto_memory_scheduler = __m_autoMemory_scheduler_js;
-const auto_memory_wizard = __m_ui_autoMemoryWizard_js;
 const wizard_plan = __m_autoMemory_wizardPlan_js;
-const ui_scenePicker = __m_ui_scenePicker_js;
-const ui_styles = __m_ui_styles_js;
+const core_autoUpdatePolicy = __m_core_autoUpdatePolicy_js;
+const core_autoUpdates = __m_core_autoUpdates_js;
+const core_chatReadRange = __m_core_chatReadRange_js;
+const core_constants = __m_core_constants_js;
+const core_context = __m_core_context_js;
+const core_contextTags = __m_core_contextTags_js;
+const output_budget = __m_core_outputBudget_js;
+const core_requestCoordinator = __m_core_requestCoordinator_js;
+const core_selfUpdater = __m_core_selfUpdater_js;
+const core_settings = __m_core_settings_js;
+const core_text = __m_core_text_js;
+const core_theme = __m_core_theme_js;
+const generation_imageGeneration = __m_generation_imageGeneration_js;
+const advanced_ui = __m_ui_advancedGenerationUi_js;
+const auto_memory_wizard = __m_ui_autoMemoryWizard_js;
+const cg_format_ui = __m_ui_cgFormatControl_js;
+const floating_archive = __m_ui_floatingArchive_js;
 const mirrorReader = __m_ui_mirrorTtsReader_js;
+const ui_overlay = __m_ui_overlay_js;
+const ui_scenePicker = __m_ui_scenePicker_js;
 const dispatch_settingsPanelMarkup = __m_ui_settingsPanelMarkup_js;
+const ui_styles = __m_ui_styles_js;
 const runtimeState = __m_core_state_js.state;
 const SETTINGS_LAUNCHER_ID = __m_ui_settingsPanelParts_js.SETTINGS_LAUNCHER_ID;
 const bindManualAutosave = __m_ui_settingsPanelParts_js.bindManualAutosave;
-const chatReadingSettingsHtml = __m_ui_settingsPanelParts_js.chatReadingSettingsHtml;
 const manualAutosaves = __m_ui_settingsPanelParts_js.manualAutosaves;
 const paintCoverageMap = __m_ui_settingsPanelParts_js.paintCoverageMap;
 const refreshGenerationSettingsUi = __m_ui_settingsPanelParts_js.refreshGenerationSettingsUi;
@@ -73062,7 +73205,13 @@ const refreshReadingSettingsUi = __m_ui_settingsPanelParts_js.refreshReadingSett
 const refreshSettingsMemoryStatus = __m_ui_settingsPanelParts_js.refreshSettingsMemoryStatus;
 const refreshThemeUi = __m_ui_settingsPanelParts_js.refreshThemeUi;
 const saveManualPanel = __m_ui_settingsPanelParts_js.saveManualPanel;
-const voiceSettingsHtml = __m_ui_settingsPanelParts_js.voiceSettingsHtml;
+const  = __m_ui_settingsPanelParts_js.;
+
+
+
+
+
+
 
 
 
@@ -73088,18 +73237,24 @@ const SETTINGS_MOUNT_UNHANDLED = Symbol('SETTINGS_MOUNT_UNHANDLED');
 let homeSettingsPanel = null;
 
 async function runCurrentMemoryRedo(panel, mode, moduleId) {
-    const status = panel.querySelector('[data-rmt-auto-memory-redo-status]');
-    if (status) status.textContent = '正在重写这一份回忆…';
-    try {
-        const result = await auto_memory_scheduler.regenerateCurrentMemory({ mode, moduleId });
-        if (!status) return;
-        if (result?.action === 'idle') status.textContent = '还没有可以重写的这一份。先等抽签写过一次。';
-        else if (result?.action === 'busy') status.textContent = '这一份正在写，等它停下来再点。';
-        else if (result?.action === 'failed') status.textContent = '这一次没写完。可以再点一次。';
-        else status.textContent = mode === 'redraw' ? '已按新抽到的模块再写。' : mode === 'pick' ? '已按选中的模块再写。' : '已按原来抽中的模块再写。';
-    } catch (error) {
-        if (status) status.textContent = core_text.safeErrorSummary(error);
-    }
+  const status = panel.querySelector('[data-rmt-auto-memory-redo-status]');
+  if (status) status.textContent = '正在重写这一份回忆…';
+  try {
+    const result = await auto_memory_scheduler.regenerateCurrentMemory({ mode, moduleId });
+    if (!status) return;
+    if (result?.action === 'idle') status.textContent = '还没有可以重写的这一份。先等抽签写过一次。';
+    else if (result?.action === 'busy') status.textContent = '这一份正在写，等它停下来再点。';
+    else if (result?.action === 'failed') status.textContent = '这一次没写完。可以再点一次。';
+    else
+      status.textContent =
+        mode === 'redraw'
+          ? '已按新抽到的模块再写。'
+          : mode === 'pick'
+            ? '已按选中的模块再写。'
+            : '已按原来抽中的模块再写。';
+  } catch (error) {
+    if (status) status.textContent = core_text.safeErrorSummary(error);
+  }
 }
 
 let homeSettingsEpoch = -1;
@@ -73109,11 +73264,15 @@ let homeSettingsScope = '';
 let memoryFilePreviewEpoch = 0;
 
 function clearHomeSettingsPanel() {
-    mirrorReader.parkMirrorSettings();
-    homeSettingsPanel?.remove(); homeSettingsPanel = null; homeSettingsEpoch = -1;
-    pendingMemoryFilePreview = null; memoryIngressRequestEpoch += 1; memoryFilePreviewEpoch += 1;
-    homeSettingsScope = '';
-    document.getElementById(SETTINGS_LAUNCHER_ID)?.remove();
+  mirrorReader.parkMirrorSettings();
+  homeSettingsPanel?.remove();
+  homeSettingsPanel = null;
+  homeSettingsEpoch = -1;
+  pendingMemoryFilePreview = null;
+  memoryIngressRequestEpoch += 1;
+  memoryFilePreviewEpoch += 1;
+  homeSettingsScope = '';
+  document.getElementById(SETTINGS_LAUNCHER_ID)?.remove();
 }
 
 let pendingMemoryFilePreview = null;
@@ -73121,778 +73280,1038 @@ let pendingMemoryFilePreview = null;
 let memoryIngressRequestEpoch = 0;
 
 async function refreshMemoryIngressUi() {
-    const requestEpoch = ++memoryIngressRequestEpoch;
-    const panel = document.getElementById(core_constants.SETTINGS_ID);
-    if (!panel) return;
-    const status = panel.querySelector('[data-rmt-memory-ingress-status]');
-    const details = panel.querySelector('[data-rmt-memory-source-list]');
-    const historyBooks = panel.querySelector('[data-rmt-memory-history-books]');
-    let capturedScopeKey = '';
-    const isCurrent = () => {
-        if (requestEpoch !== memoryIngressRequestEpoch || !capturedScopeKey) return false;
-        try {
-            const liveContext = core_context.currentCharacterGuard();
-            return archive_repository.memorySourceScopeForContext(liveContext).key === capturedScopeKey;
-        } catch { return false; }
-    };
+  const requestEpoch = ++memoryIngressRequestEpoch;
+  const panel = document.getElementById(core_constants.SETTINGS_ID);
+  if (!panel) return;
+  const status = panel.querySelector('[data-rmt-memory-ingress-status]');
+  const details = panel.querySelector('[data-rmt-memory-source-list]');
+  const historyBooks = panel.querySelector('[data-rmt-memory-history-books]');
+  let capturedScopeKey = '';
+  const isCurrent = () => {
+    if (requestEpoch !== memoryIngressRequestEpoch || !capturedScopeKey) return false;
     try {
-        const context = core_context.currentCharacterGuard();
-        capturedScopeKey = archive_repository.memorySourceScopeForContext(context).key;
-        const summary = await archive_repository.currentMemorySourceLedgerSummary(context);
-        if (!isCurrent()) return;
-        const preflight = archive_repository.getMemoryPreflight(context);
-        const displayedSources = [...summary.sources];
-        for (const source of preflight?.sources || []) {
-            const latest = { provider: source.label || source.id, id: source.id, coverage: source.coverage, count: source.count };
-            const index = displayedSources.findIndex(item => (item.provider || item.id) === source.id);
-            if (index >= 0) displayedSources[index] = latest;
-            else displayedSources.push(latest);
-        }
-        if (status) status.textContent = summary.sources.length
-            ? `● 已保存 ${summary.sources.length} 个来源 · ${summary.recordCount} 条记录 · ${summary.totalChars.toLocaleString()} 字符`
-            : '○ 当前聊天还没有已保存来源';
-        if (details) {
-            details.replaceChildren();
-            for (const source of displayedSources) {
-                const row = document.createElement('div');
-                const coverage = source.coverage?.status || 'partial';
-                const labels = { complete: '完整', partial: '部分', truncated: '已截断', failed: '失败' };
-                row.textContent = `${labels[coverage] || '部分'} · ${source.label || source.provider || source.id}${source.coverage?.returned ? ` · ${source.coverage.returned} 条` : ''}${source.coverage?.reason ? ` · ${source.coverage.reason}` : ''}`;
-                details.appendChild(row);
-            }
-            if (!details.childElementCount) details.textContent = '暂无持久化来源。';
-        }
-        if (historyBooks) {
-            const selection = archive_repository.getMemoryWorldInfoSelection(context);
-            historyBooks.innerHTML = selection.books.length
-                ? selection.books.map(book => `<label class="checkbox_label rmt-settings-check"><input type="checkbox" data-rmt-memory-history-book="${core_text.esc(book.name)}" ${book.historySource ? 'checked' : ''}> ${core_text.esc(book.name)} · 作为历史摘要</label>`).join('')
-                : '<small>请先在档案室选择记忆相关世界书；默认仍只作设定解释。</small>';
-        }
-    } catch (error) {
-        if (capturedScopeKey && !isCurrent()) return;
-        if (status) status.textContent = capturedScopeKey
-            ? '○ ' + core_text.safeErrorSummary({ code: 'RMT_LEDGER_UNAVAILABLE' })
-            : '○ 请先打开一个单角色聊天，再查看该聊天的来源账本。';
-        if (details) details.textContent = '无法读取当前聊天来源。';
-        if (historyBooks) historyBooks.textContent = '请先打开单角色聊天。';
+      const liveContext = core_context.currentCharacterGuard();
+      return archive_repository.memorySourceScopeForContext(liveContext).key === capturedScopeKey;
+    } catch {
+      return false;
     }
+  };
+  try {
+    const context = core_context.currentCharacterGuard();
+    capturedScopeKey = archive_repository.memorySourceScopeForContext(context).key;
+    const summary = await archive_repository.currentMemorySourceLedgerSummary(context);
+    if (!isCurrent()) return;
+    const preflight = archive_repository.getMemoryPreflight(context);
+    const displayedSources = [...summary.sources];
+    for (const source of preflight?.sources || []) {
+      const latest = {
+        provider: source.label || source.id,
+        id: source.id,
+        coverage: source.coverage,
+        count: source.count,
+      };
+      const index = displayedSources.findIndex(item => (item.provider || item.id) === source.id);
+      if (index >= 0) displayedSources[index] = latest;
+      else displayedSources.push(latest);
+    }
+    if (status)
+      status.textContent = summary.sources.length
+        ? `● 已保存 ${summary.sources.length} 个来源 · ${summary.recordCount} 条记录 · ${summary.totalChars.toLocaleString()} 字符`
+        : '○ 当前聊天还没有已保存来源';
+    if (details) {
+      details.replaceChildren();
+      for (const source of displayedSources) {
+        const row = document.createElement('div');
+        const coverage = source.coverage?.status || 'partial';
+        const labels = { complete: '完整', partial: '部分', truncated: '已截断', failed: '失败' };
+        row.textContent = `${labels[coverage] || '部分'} · ${source.label || source.provider || source.id}${source.coverage?.returned ? ` · ${source.coverage.returned} 条` : ''}${source.coverage?.reason ? ` · ${source.coverage.reason}` : ''}`;
+        details.appendChild(row);
+      }
+      if (!details.childElementCount) details.textContent = '暂无持久化来源。';
+    }
+    if (historyBooks) {
+      const selection = archive_repository.getMemoryWorldInfoSelection(context);
+      historyBooks.innerHTML = selection.books.length
+        ? selection.books
+            .map(
+              book =>
+                `<label class="checkbox_label rmt-settings-check"><input type="checkbox" data-rmt-memory-history-book="${core_text.esc(book.name)}" ${book.historySource ? 'checked' : ''}> ${core_text.esc(book.name)} · 作为历史摘要</label>`,
+            )
+            .join('')
+        : '<small>请先在档案室选择记忆相关世界书；默认仍只作设定解释。</small>';
+    }
+  } catch (error) {
+    if (capturedScopeKey && !isCurrent()) return;
+    if (status)
+      status.textContent = capturedScopeKey
+        ? '○ ' + core_text.safeErrorSummary({ code: 'RMT_LEDGER_UNAVAILABLE' })
+        : '○ 请先打开一个单角色聊天，再查看该聊天的来源账本。';
+    if (details) details.textContent = '无法读取当前聊天来源。';
+    if (historyBooks) historyBooks.textContent = '请先打开单角色聊天。';
+  }
 }
 
 function hydrateSettingsPanel({ memory = false } = {}) {
-    const panel = document.getElementById(core_constants.SETTINGS_ID);
-    if (!panel) return false;
-    refreshSettingsMemoryStatus({ lightweight: true });
-    if (memory) {
-        void refreshMemoryIngressUi();
-        const picker = panel.querySelector('[data-rmt-scene-picker]');
-        if (picker && !picker.querySelector('[data-rmt-scene-picker-root]')) ui_scenePicker.mountScenePicker(picker);
-    }
-    if (panel.dataset.rmtHydrated === '1') return true;
-    refreshGenerationSettingsUi();
-    panel.dataset.rmtHydrated = '1';
-    return true;
+  const panel = document.getElementById(core_constants.SETTINGS_ID);
+  if (!panel) return false;
+  refreshSettingsMemoryStatus({ lightweight: true });
+  if (memory) {
+    void refreshMemoryIngressUi();
+    const picker = panel.querySelector('[data-rmt-scene-picker]');
+    if (picker && !picker.querySelector('[data-rmt-scene-picker-root]')) ui_scenePicker.mountScenePicker(picker);
+  }
+  if (panel.dataset.rmtHydrated === '1') return true;
+  refreshGenerationSettingsUi();
+  panel.dataset.rmtHydrated = '1';
+  return true;
 }
 
 async function restoreLegacyAutoUpdates(panel) {
-    const note = panel.querySelector('[data-rmt-auto-memory-gate]');
-    let context;
-    try { context = core_context.currentCharacterGuard(); }
-    catch (error) { if (note) note.textContent = core_text.safeErrorSummary(error); return; }
-    const metadata = context.chatMetadata;
-    const keys = [auto_memory_plan.AUTO_MEMORY_PLAN_KEY, auto_memory_plan.AUTO_MEMORY_REVEAL_KEY, auto_memory_plan.AUTO_MEMORY_DRAW_TICKETS_KEY, auto_memory_plan.AUTO_MEMORY_MODULE_PLAN_KEY];
-    const had = {};
-    const previous = {};
-    for (const key of keys) {
-        had[key] = Object.prototype.hasOwnProperty.call(metadata, key);
-        if (had[key]) previous[key] = metadata[key];
-    }
-    let result;
-    try { result = wizard_plan.disableAutoMemoryPlan(metadata, Date.now()); }
-    catch (error) { if (note) note.textContent = error?.safeToDisplay ? error.safeUserMessage : '这份记录没有改写。'; return; }
-    if (!result.changed) { refreshGenerationSettingsUi(); return; }
-    try {
-        const before = auto_memory_plan.readAutoMemoryMetadata(metadata);
-        auto_memory_plan.commitAutoMemoryMetadata(metadata, result.snapshot, before.plan.revision);
-        await context.saveMetadataDebounced?.();
-    } catch (error) {
-        for (const key of keys) {
-            if (had[key]) metadata[key] = previous[key];
-            else delete metadata[key];
-        }
-        if (note) note.textContent = error?.safeToDisplay ? error.safeUserMessage : '没有恢复。原来的开关也没有被改写。';
-        return;
-    }
-    core_autoUpdates.notifyAutoUpdateSettingsChanged();
+  const note = panel.querySelector('[data-rmt-auto-memory-gate]');
+  let context;
+  try {
+    context = core_context.currentCharacterGuard();
+  } catch (error) {
+    if (note) note.textContent = core_text.safeErrorSummary(error);
+    return;
+  }
+  const metadata = context.chatMetadata;
+  const keys = [
+    auto_memory_plan.AUTO_MEMORY_PLAN_KEY,
+    auto_memory_plan.AUTO_MEMORY_REVEAL_KEY,
+    auto_memory_plan.AUTO_MEMORY_DRAW_TICKETS_KEY,
+    auto_memory_plan.AUTO_MEMORY_MODULE_PLAN_KEY,
+  ];
+  const had = {};
+  const previous = {};
+  for (const key of keys) {
+    had[key] = Object.prototype.hasOwnProperty.call(metadata, key);
+    if (had[key]) previous[key] = metadata[key];
+  }
+  let result;
+  try {
+    result = wizard_plan.disableAutoMemoryPlan(metadata, Date.now());
+  } catch (error) {
+    if (note) note.textContent = error?.safeToDisplay ? error.safeUserMessage : '这份记录没有改写。';
+    return;
+  }
+  if (!result.changed) {
     refreshGenerationSettingsUi();
-    if (note) note.textContent = '自动留忆已关闭。你可以继续手动生成，也可以再打开回忆向导。';
+    return;
+  }
+  try {
+    const before = auto_memory_plan.readAutoMemoryMetadata(metadata);
+    auto_memory_plan.commitAutoMemoryMetadata(metadata, result.snapshot, before.plan.revision);
+    await context.saveMetadataDebounced?.();
+  } catch (error) {
+    for (const key of keys) {
+      if (had[key]) metadata[key] = previous[key];
+      else delete metadata[key];
+    }
+    if (note) note.textContent = error?.safeToDisplay ? error.safeUserMessage : '没有恢复。原来的开关也没有被改写。';
+    return;
+  }
+  core_autoUpdates.notifyAutoUpdateSettingsChanged();
+  refreshGenerationSettingsUi();
+  if (note) note.textContent = '自动留忆已关闭。你可以继续手动生成，也可以再打开回忆向导。';
 }
 
 function mountSettings({ homeTarget = null } = {}) {
-    ui_styles.ensureSettingsStyles();
-    if (!homeTarget) {
-        document.getElementById(SETTINGS_LAUNCHER_ID)?.remove();
-        // The full settings and normal diagnostics entry belong to Hearttrace home.
-        return true;
-    }
-    const existing = homeSettingsEpoch === runtimeState.runtimeLifecycleEpoch ? homeSettingsPanel : null;
-    let scope = '';
-    try { scope = core_context.chatScopeKey(core_context.currentCharacterGuard()); } catch {}
-    if (scope !== homeSettingsScope) {
-        homeSettingsScope = scope;
-        pendingMemoryFilePreview = null; memoryIngressRequestEpoch += 1; memoryFilePreviewEpoch += 1;
-        const preview = existing?.querySelector('[data-rmt-memory-file-preview]');
-        if (preview) preview.hidden = true;
-        const status = existing?.querySelector('[data-rmt-memory-ingress-status]');
-        if (status) status.textContent = '聊天已切换；展开记忆来源后查看状态。';
-        const sourceList = existing?.querySelector('[data-rmt-memory-source-list]');
-        const historyBooks = existing?.querySelector('[data-rmt-memory-history-books]');
-        if (sourceList) sourceList.textContent = '';
-        if (historyBooks) historyBooks.textContent = '';
-    }
-    if (existing) {
-        homeTarget.appendChild(existing);
-        mirrorReader.showMirrorSettings(existing.querySelector('[data-rmt-voice-settings]'));
-        paintCoverageMap(existing);
-        refreshSettingsMemoryStatus({ lightweight: true });
-        if (existing.dataset.rmtHydrated === '1') refreshGenerationSettingsUi();
-        return true;
-    }
-    const mount = homeTarget;
-    const panel = document.createElement('div');
-    panel.id = core_constants.SETTINGS_ID;
-    panel.className = 'rmt-home-settings';
-    homeSettingsPanel = panel; homeSettingsEpoch = runtimeState.runtimeLifecycleEpoch;
-    if (dispatch_settingsPanelMarkup.renderSettingsPanelMarkup(panel) !== SETTINGS_MOUNT_UNHANDLED) return;
-    mount.appendChild(panel);
-    mirrorReader.showMirrorSettings(panel.querySelector('[data-rmt-voice-settings]'));
-    paintCoverageMap(panel);
-    refreshThemeUi();
-    const tagDraft = panel.querySelector('[data-rmt-tag-draft]');
-    const tagStatus = panel.querySelector('[data-rmt-tag-status]');
-    const tagState = { tagChoices: new Map(), tagScanned: false, tagEdited: false, tagScanEpoch: 0 }; // r84.96: 标签扫描的共享状态，供拆出去的监听器一起读写
-    const savedTagDraft = () => {
-        const settings = core_settings.getPluginSettings();
-        return settings.excludedContextTags;
-    };
-    const renderTagChoices = () => {
-        const selected = new Set(core_contextTags.normalizeExcludedTags(tagDraft.value));
-        for (const name of selected) if (!tagState.tagChoices.has(name)) tagState.tagChoices.set(name, 0);
-        const result = panel.querySelector('[data-rmt-tag-results]');
-        // Empty/legacy initial state does not need to allocate a tag subtree.
-        if (!tagState.tagChoices.size) { result.textContent = ''; return; }
-        const fragment = document.createDocumentFragment();
-        for (const [name, count] of tagState.tagChoices) {
-            const label = document.createElement('label'); label.className = 'rmt-tag-choice';
-            const input = document.createElement('input'); input.type = 'checkbox'; input.dataset.rmtTagName = name;
-            input.checked = selected.has(name);
-            const text = document.createElement('span'); text.textContent = name + (count ? ' · ' + count : '');
-            label.append(input, text); fragment.appendChild(label);
-        }
-        result.replaceChildren(fragment);
-    };
-    tagDraft.value = savedTagDraft().join(', ');
-    tagStatus.textContent = core_settings.getPluginSettings().contextTagMode === 'keep'
-        ? '旧版保留规则尚未更改。当前显示原有排除名单；请自行勾选并保存，之后勾选的标签内容不读取。'
-        : '勾选的标签内容不读取；保存后用于后续整理。';
-    renderTagChoices();
-    const scanTagChoices = async () => {
-        const epoch = ++tagState.tagScanEpoch, context = core_context.currentCharacterGuard();
-        const scope = core_context.chatScopeKey(context), chat = context.chat, length = chat?.length;
-        const lifecycle = runtimeState.runtimeLifecycleEpoch;
-        const sourceSignature = source_guard.sourceReadSignature(context);
-        const assertCurrent = () => {
-            if (epoch !== tagState.tagScanEpoch || !panel.isConnected || lifecycle !== runtimeState.runtimeLifecycleEpoch
-                || core_context.chatScopeKey(core_context.currentCharacterGuard()) !== scope
-                || core_context.getContext().chat !== chat || chat?.length !== length
-                || source_guard.sourceReadSignature(core_context.getContext()) !== sourceSignature) throw new DOMException('Changed', 'AbortError');
-        };
-        tagStatus.textContent = '正在扫描当前聊天的标签…';
-        const scanned = await core_contextTags.scanContextTagChoices(chat, { assertCurrent });
-        assertCurrent();
-        const names = new Map(scanned.tags.map(tag => [tag.name, tag.count]));
-        for (const name of core_contextTags.normalizeExcludedTags(tagDraft.value)) if (!names.has(name)) names.set(name, 0);
-        tagState.tagChoices = names; tagState.tagScanned = true;
-        if (!tagState.tagEdited) tagDraft.value = savedTagDraft().join(', ');
-        renderTagChoices();
-        tagStatus.textContent = '已扫描 ' + scanned.usedMessages + ' 条消息／' + scanned.tags.length + ' 种标签；选择后保存生效。';
-    };
-    const refreshCreative = () => {
-        const settings = core_settings.getPluginSettings();
-        panel.querySelector('[data-rmt-creative-text]').value = settings.creativeSupplement;
-        panel.querySelector('[data-rmt-creative-enabled]').checked = settings.creativeSupplementEnabled;
-        panel.querySelector('[data-rmt-creative-count]').textContent = settings.creativeSupplement.length.toLocaleString() + ' / 20,000';
-    };
-    refreshCreative();
-    advanced_ui.bindAdvancedGenerationUi(panel);
-    bindManualAutosave(panel);
-    if (bindSettingsChange(panel, tagDraft, tagStatus, tagState) !== SETTINGS_BIND_UNHANDLED) return;
-    panel.addEventListener('input', event => {
-        if (event.target.closest?.('[data-rmt-scene-picker-root]')) {
-            void ui_scenePicker.handleScenePickerEvent(event);
-            return;
-        }
-        if (event.target === tagDraft) {
-            ++tagState.tagScanEpoch; tagState.tagEdited = true;
-            const selected = new Set(core_contextTags.normalizeExcludedTags(tagDraft.value));
-            for (const input of panel.querySelectorAll('[data-rmt-tag-name]')) input.checked = selected.has(input.dataset.rmtTagName);
-            tagStatus.textContent = '选择已更新；尚未保存。';
-            return;
-        }
-        if (event.target.matches?.('[data-rmt-creative-text]')) panel.querySelector('[data-rmt-creative-count]').textContent = event.target.value.length.toLocaleString() + ' / 20,000';
-        if (event.target.matches?.('[data-rmt-manual-api-base],[data-rmt-manual-api-key],[data-rmt-manual-api-model]')) {
-            panel.dataset.rmtManualDirty = '1';
-            if (event.target.matches?.('[data-rmt-manual-api-model]')) {
-                const picker = panel.querySelector('[data-rmt-manual-api-models]');
-                if (picker) picker.value = [...picker.options].some(option => option.value === event.target.value) ? event.target.value : '';
-            }
-        }
-        if (event.target.matches?.('[data-rmt-theme-alpha]')) {
-            core_settings.updatePluginSettings({ themeAlpha: Math.max(0.72, Math.min(1, Number(event.target.value) || 0.96)) });
-            refreshThemeUi();
-        }
-    });
-    if (bindSettingsClick(panel, tagDraft, tagStatus, tagState, savedTagDraft, renderTagChoices, scanTagChoices, refreshCreative) !== SETTINGS_BIND_UNHANDLED) return;
-    panel.addEventListener('focusin', event => {
-        if (event.target.closest?.('[data-rmt-settings-section="voice"]')) return;
-        if (panel.dataset.rmtHydrated !== '1' && event.target.matches?.('input,select,button,textarea')) hydrateSettingsPanel();
-    });
-    refreshSettingsMemoryStatus({ lightweight: true });
+  ui_styles.ensureSettingsStyles();
+  if (!homeTarget) {
+    document.getElementById(SETTINGS_LAUNCHER_ID)?.remove();
+    // The full settings and normal diagnostics entry belong to Hearttrace home.
     return true;
+  }
+  const existing = homeSettingsEpoch === runtimeState.runtimeLifecycleEpoch ? homeSettingsPanel : null;
+  let scope = '';
+  try {
+    scope = core_context.chatScopeKey(core_context.currentCharacterGuard());
+  } catch {}
+  if (scope !== homeSettingsScope) {
+    homeSettingsScope = scope;
+    pendingMemoryFilePreview = null;
+    memoryIngressRequestEpoch += 1;
+    memoryFilePreviewEpoch += 1;
+    const preview = existing?.querySelector('[data-rmt-memory-file-preview]');
+    if (preview) preview.hidden = true;
+    const status = existing?.querySelector('[data-rmt-memory-ingress-status]');
+    if (status) status.textContent = '聊天已切换；展开记忆来源后查看状态。';
+    const sourceList = existing?.querySelector('[data-rmt-memory-source-list]');
+    const historyBooks = existing?.querySelector('[data-rmt-memory-history-books]');
+    if (sourceList) sourceList.textContent = '';
+    if (historyBooks) historyBooks.textContent = '';
+  }
+  if (existing) {
+    homeTarget.appendChild(existing);
+    mirrorReader.showMirrorSettings(existing.querySelector('[data-rmt-voice-settings]'));
+    paintCoverageMap(existing);
+    refreshSettingsMemoryStatus({ lightweight: true });
+    if (existing.dataset.rmtHydrated === '1') refreshGenerationSettingsUi();
+    return true;
+  }
+  const mount = homeTarget;
+  const panel = document.createElement('div');
+  panel.id = core_constants.SETTINGS_ID;
+  panel.className = 'rmt-home-settings';
+  homeSettingsPanel = panel;
+  homeSettingsEpoch = runtimeState.runtimeLifecycleEpoch;
+  if (dispatch_settingsPanelMarkup.renderSettingsPanelMarkup(panel) !== SETTINGS_MOUNT_UNHANDLED) return;
+  mount.appendChild(panel);
+  mirrorReader.showMirrorSettings(panel.querySelector('[data-rmt-voice-settings]'));
+  paintCoverageMap(panel);
+  refreshThemeUi();
+  const tagDraft = panel.querySelector('[data-rmt-tag-draft]');
+  const tagStatus = panel.querySelector('[data-rmt-tag-status]');
+  const tagState = { tagChoices: new Map(), tagScanned: false, tagEdited: false, tagScanEpoch: 0 }; // r84.96: 标签扫描的共享状态，供拆出去的监听器一起读写
+  const savedTagDraft = () => {
+    const settings = core_settings.getPluginSettings();
+    return settings.excludedContextTags;
+  };
+  const renderTagChoices = () => {
+    const selected = new Set(core_contextTags.normalizeExcludedTags(tagDraft.value));
+    for (const name of selected) if (!tagState.tagChoices.has(name)) tagState.tagChoices.set(name, 0);
+    const result = panel.querySelector('[data-rmt-tag-results]');
+    // Empty/legacy initial state does not need to allocate a tag subtree.
+    if (!tagState.tagChoices.size) {
+      result.textContent = '';
+      return;
+    }
+    const fragment = document.createDocumentFragment();
+    for (const [name, count] of tagState.tagChoices) {
+      const label = document.createElement('label');
+      label.className = 'rmt-tag-choice';
+      const input = document.createElement('input');
+      input.type = 'checkbox';
+      input.dataset.rmtTagName = name;
+      input.checked = selected.has(name);
+      const text = document.createElement('span');
+      text.textContent = name + (count ? ' · ' + count : '');
+      label.append(input, text);
+      fragment.appendChild(label);
+    }
+    result.replaceChildren(fragment);
+  };
+  tagDraft.value = savedTagDraft().join(', ');
+  tagStatus.textContent =
+    core_settings.getPluginSettings().contextTagMode === 'keep'
+      ? '旧版保留规则尚未更改。当前显示原有排除名单；请自行勾选并保存，之后勾选的标签内容不读取。'
+      : '勾选的标签内容不读取；保存后用于后续整理。';
+  renderTagChoices();
+  const scanTagChoices = async () => {
+    const epoch = ++tagState.tagScanEpoch,
+      context = core_context.currentCharacterGuard();
+    const scope = core_context.chatScopeKey(context),
+      chat = context.chat,
+      length = chat?.length;
+    const lifecycle = runtimeState.runtimeLifecycleEpoch;
+    const sourceSignature = source_guard.sourceReadSignature(context);
+    const assertCurrent = () => {
+      if (
+        epoch !== tagState.tagScanEpoch ||
+        !panel.isConnected ||
+        lifecycle !== runtimeState.runtimeLifecycleEpoch ||
+        core_context.chatScopeKey(core_context.currentCharacterGuard()) !== scope ||
+        core_context.getContext().chat !== chat ||
+        chat?.length !== length ||
+        source_guard.sourceReadSignature(core_context.getContext()) !== sourceSignature
+      )
+        throw new DOMException('Changed', 'AbortError');
+    };
+    tagStatus.textContent = '正在扫描当前聊天的标签…';
+    const scanned = await core_contextTags.scanContextTagChoices(chat, { assertCurrent });
+    assertCurrent();
+    const names = new Map(scanned.tags.map(tag => [tag.name, tag.count]));
+    for (const name of core_contextTags.normalizeExcludedTags(tagDraft.value)) if (!names.has(name)) names.set(name, 0);
+    tagState.tagChoices = names;
+    tagState.tagScanned = true;
+    if (!tagState.tagEdited) tagDraft.value = savedTagDraft().join(', ');
+    renderTagChoices();
+    tagStatus.textContent =
+      '已扫描 ' + scanned.usedMessages + ' 条消息／' + scanned.tags.length + ' 种标签；选择后保存生效。';
+  };
+  const refreshCreative = () => {
+    const settings = core_settings.getPluginSettings();
+    panel.querySelector('[data-rmt-creative-text]').value = settings.creativeSupplement;
+    panel.querySelector('[data-rmt-creative-enabled]').checked = settings.creativeSupplementEnabled;
+    panel.querySelector('[data-rmt-creative-count]').textContent =
+      settings.creativeSupplement.length.toLocaleString() + ' / 20,000';
+  };
+  refreshCreative();
+  advanced_ui.bindAdvancedGenerationUi(panel);
+  bindManualAutosave(panel);
+  if (bindSettingsChange(panel, tagDraft, tagStatus, tagState) !== SETTINGS_BIND_UNHANDLED) return;
+  panel.addEventListener('input', event => {
+    if (event.target.closest?.('[data-rmt-scene-picker-root]')) {
+      void ui_scenePicker.handleScenePickerEvent(event);
+      return;
+    }
+    if (event.target === tagDraft) {
+      ++tagState.tagScanEpoch;
+      tagState.tagEdited = true;
+      const selected = new Set(core_contextTags.normalizeExcludedTags(tagDraft.value));
+      for (const input of panel.querySelectorAll('[data-rmt-tag-name]'))
+        input.checked = selected.has(input.dataset.rmtTagName);
+      tagStatus.textContent = '选择已更新；尚未保存。';
+      return;
+    }
+    if (event.target.matches?.('[data-rmt-creative-text]'))
+      panel.querySelector('[data-rmt-creative-count]').textContent =
+        event.target.value.length.toLocaleString() + ' / 20,000';
+    if (event.target.matches?.('[data-rmt-manual-api-base],[data-rmt-manual-api-key],[data-rmt-manual-api-model]')) {
+      panel.dataset.rmtManualDirty = '1';
+      if (event.target.matches?.('[data-rmt-manual-api-model]')) {
+        const picker = panel.querySelector('[data-rmt-manual-api-models]');
+        if (picker)
+          picker.value = [...picker.options].some(option => option.value === event.target.value)
+            ? event.target.value
+            : '';
+      }
+    }
+    if (event.target.matches?.('[data-rmt-theme-alpha]')) {
+      core_settings.updatePluginSettings({
+        themeAlpha: Math.max(0.72, Math.min(1, Number(event.target.value) || 0.96)),
+      });
+      refreshThemeUi();
+    }
+  });
+  if (
+    bindSettingsClick(
+      panel,
+      tagDraft,
+      tagStatus,
+      tagState,
+      savedTagDraft,
+      renderTagChoices,
+      scanTagChoices,
+      refreshCreative,
+    ) !== SETTINGS_BIND_UNHANDLED
+  )
+    return;
+  panel.addEventListener('focusin', event => {
+    if (event.target.closest?.('[data-rmt-settings-section="voice"]')) return;
+    if (panel.dataset.rmtHydrated !== '1' && event.target.matches?.('input,select,button,textarea'))
+      hydrateSettingsPanel();
+  });
+  refreshSettingsMemoryStatus({ lightweight: true });
+  return true;
 }
 
 // 设置页“改设置”监听器（change）：切换下拉框、勾选开关、填完输入框（mountSettings 原第 31–31 条语句，一字未改地搬出）
 function bindSettingsChange(panel, tagDraft, tagStatus, tagState) {
-    panel.addEventListener('change', async event => {
-        if (await ui_scenePicker.handleScenePickerEvent(event)) return;
-        if (cg_format_ui.handleCgFormatChange(event)) return;
-        const target = event.target;
-        if (target.matches?.('[data-rmt-tag-name]')) {
-            ++tagState.tagScanEpoch;
-            const selected = new Set(core_contextTags.normalizeExcludedTags(tagDraft.value));
-            if (target.checked) selected.add(target.dataset.rmtTagName); else selected.delete(target.dataset.rmtTagName);
-            tagDraft.value = [...selected].join(', '); tagState.tagEdited = true;
-            tagStatus.textContent = '选择已更新；尚未保存。';
-            return;
+  panel.addEventListener('change', async event => {
+    if (await ui_scenePicker.handleScenePickerEvent(event)) return;
+    if (cg_format_ui.handleCgFormatChange(event)) return;
+    const target = event.target;
+    if (target.matches?.('[data-rmt-tag-name]')) {
+      ++tagState.tagScanEpoch;
+      const selected = new Set(core_contextTags.normalizeExcludedTags(tagDraft.value));
+      if (target.checked) selected.add(target.dataset.rmtTagName);
+      else selected.delete(target.dataset.rmtTagName);
+      tagDraft.value = [...selected].join(', ');
+      tagState.tagEdited = true;
+      tagStatus.textContent = '选择已更新；尚未保存。';
+      return;
+    }
+    if (target.matches?.('[data-rmt-source-external]')) {
+      core_settings.updatePluginSettings({ useCurrentChatExternalMemory: !!target.checked });
+      return;
+    }
+    if (target.matches?.('[data-rmt-source-world-info]')) {
+      core_settings.updatePluginSettings({ useActivatedWorldInfo: !!target.checked });
+      return;
+    }
+    if (target.matches?.('[data-rmt-manual-streaming]')) {
+      core_settings.updatePluginSettings({ manualApiStreaming: !!target.checked });
+      return;
+    }
+    if (target.matches?.('[data-rmt-auto-second]')) {
+      core_settings.updatePluginSettings({ autoSecondPass: !!target.checked });
+      return;
+    }
+    if (target.matches?.('[data-rmt-auto-retry]')) {
+      core_settings.updatePluginSettings({ autoRetryEnabled: !!target.checked });
+      const count = panel.querySelector('[data-rmt-auto-retry-count]');
+      if (count) count.disabled = !target.checked;
+      const memoryRetry = panel.querySelector('[data-rmt-auto-memory-retry]');
+      if (memoryRetry) memoryRetry.checked = !!target.checked;
+      return;
+    }
+    if (target.matches?.('[data-rmt-auto-retry-count]')) {
+      core_settings.updatePluginSettings({ autoRetryCount: target.value });
+      target.value = String(core_settings.getPluginSettings().autoRetryCount);
+      return;
+    }
+    if (
+      target.matches?.(
+        '[data-rmt-read-mode], [data-rmt-read-recent], [data-rmt-read-start], [data-rmt-read-end], [data-rmt-read-hidden]',
+      )
+    ) {
+      const range = {
+        mode: panel.querySelector('[data-rmt-read-mode]').value,
+        recent: Number(panel.querySelector('[data-rmt-read-recent]').value),
+        start: Number(panel.querySelector('[data-rmt-read-start]').value),
+        end: Number(panel.querySelector('[data-rmt-read-end]').value),
+        includeHidden: panel.querySelector('[data-rmt-read-hidden]').checked,
+      };
+      core_settings.updatePluginSettings({ chatReadRange: range });
+      refreshReadingSettingsUi(panel);
+      panel.querySelector('[data-rmt-read-preview-status]').textContent =
+        '已保存，之后读取聊天时生效；已有记忆保持不变。';
+      return;
+    }
+    const autoMode = target.dataset?.rmtAutoEnabled || target.dataset?.rmtAutoEvery;
+    if (core_autoUpdatePolicy.AUTO_UPDATE_MODES.includes(autoMode)) {
+      const rules = core_autoUpdatePolicy.normalizeAutoUpdates(core_settings.getPluginSettings().autoUpdates);
+      rules[autoMode] = {
+        ...rules[autoMode],
+        epoch: Date.now(),
+        ...(target.dataset.rmtAutoEnabled ? { enabled: target.checked } : { every: Number(target.value) }),
+      };
+      core_settings.updatePluginSettings({ autoUpdates: rules });
+      core_autoUpdates.notifyAutoUpdateSettingsChanged();
+      refreshGenerationSettingsUi();
+      return;
+    }
+    if (target.matches?.('[data-rmt-memory-file-input]')) {
+      const file = target.files?.[0];
+      pendingMemoryFilePreview = null;
+      const previewEpoch = ++memoryFilePreviewEpoch;
+      const previewScope = homeSettingsScope;
+      const previewStillCurrent = () => {
+        try {
+          return (
+            previewEpoch === memoryFilePreviewEpoch &&
+            homeSettingsPanel === panel &&
+            previewScope === core_context.chatScopeKey(core_context.currentCharacterGuard())
+          );
+        } catch {
+          return false;
         }
-        if (target.matches?.('[data-rmt-source-external]')) {
-            core_settings.updatePluginSettings({ useCurrentChatExternalMemory: !!target.checked });
-            return;
+      };
+      if (!file) return;
+      const previewPanel = panel.querySelector('[data-rmt-memory-file-preview]');
+      const title = panel.querySelector('[data-rmt-memory-file-preview-title]');
+      const meta = panel.querySelector('[data-rmt-memory-file-preview-meta]');
+      const binding = panel.querySelector('[data-rmt-memory-file-preview-binding]');
+      const sample = panel.querySelector('[data-rmt-memory-file-preview-sample]');
+      const historyConfirm = panel.querySelector('[data-rmt-memory-file-history-confirm]');
+      const commitButton = panel.querySelector('[data-rmt-memory-file-commit]');
+      archive_repository
+        .previewCurrentChatMemoryFile(file)
+        .then(preview => {
+          if (!previewStillCurrent()) return;
+          pendingMemoryFilePreview = preview;
+          if (title) title.textContent = preview.fileName;
+          if (meta) {
+            const skipped = Number(preview.skippedSensitiveFields || 0) + Number(preview.skippedConfigFields || 0);
+            meta.textContent = `${preview.records.length} 条 · ${preview.totalChars.toLocaleString()} 字符 · ${(preview.bytes / 1024).toFixed(1)} KB${skipped ? ` · 已排除敏感/配置字段 ${skipped} 个` : ''}`;
+          }
+          if (binding)
+            binding.textContent = `归属：${preview.scope.characterName || '当前角色'} · ${preview.scope.chatId}`;
+          if (sample) {
+            const excerpt = preview.records
+              .slice(0, 3)
+              .map((item, index) => {
+                const label = item.title ? `${item.title}：` : '';
+                return `${index + 1}. ${label}${core_text.normalizeText(item.content, 220)}`;
+              })
+              .join('\n');
+            sample.textContent = `内容预览\n${excerpt}`;
+          }
+          if (historyConfirm) historyConfirm.checked = false;
+          if (commitButton) commitButton.disabled = true;
+          if (previewPanel) previewPanel.hidden = false;
+        })
+        .catch(error => {
+          if (!previewStillCurrent()) return;
+          if (previewPanel) previewPanel.hidden = true;
+          globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心迹回廊');
+        })
+        .finally(() => {
+          target.value = '';
+        });
+      return;
+    }
+    if (target.matches?.('[data-rmt-memory-file-history-confirm]')) {
+      const commitButton = panel.querySelector('[data-rmt-memory-file-commit]');
+      if (commitButton) commitButton.disabled = !target.checked || !pendingMemoryFilePreview;
+      return;
+    }
+    if (target.matches?.('[data-rmt-memory-history-book]')) {
+      let context = null;
+      let previousSelection = null;
+      let attemptedSelectionJson = '';
+      try {
+        context = core_context.currentCharacterGuard();
+        previousSelection = archive_repository.getMemoryWorldInfoSelection(context);
+        archive_repository.updateMemoryWorldInfoBookSelection(context, target.dataset.rmtMemoryHistoryBook, {
+          historySource: !!target.checked,
+        });
+        attemptedSelectionJson = JSON.stringify(archive_repository.getMemoryWorldInfoSelection(context).books);
+        const worldInfo = await archive_repository.syncSelectedWorldInfoHistoryLedger(context);
+        const bookResult = worldInfo.books?.find(book => book.name === target.dataset.rmtMemoryHistoryBook);
+        if (target.checked && bookResult?.coverageInfo?.status !== 'complete') {
+          globalThis.toastr?.warning?.(
+            `已标记，但本轮只完成部分同步：${bookResult?.coverageInfo?.reason || '请查看来源状态'}`,
+            '心迹回廊',
+          );
+        } else {
+          globalThis.toastr?.success?.(
+            target.checked ? '已标记为历史摘要来源。' : '已恢复为设定解释来源。',
+            '心迹回廊',
+          );
         }
-        if (target.matches?.('[data-rmt-source-world-info]')) {
-            core_settings.updatePluginSettings({ useActivatedWorldInfo: !!target.checked });
-            return;
+        void refreshMemoryIngressUi();
+      } catch (error) {
+        if (
+          !error?.worldHistoryPersisted &&
+          context &&
+          previousSelection &&
+          JSON.stringify(archive_repository.getMemoryWorldInfoSelection(context).books) === attemptedSelectionJson
+        ) {
+          archive_repository.setMemoryWorldInfoSelection(context, previousSelection);
+          const previousBook = previousSelection.books.find(book => book.name === target.dataset.rmtMemoryHistoryBook);
+          target.checked = previousBook?.historySource === true;
         }
-        if (target.matches?.('[data-rmt-manual-streaming]')) {
-            core_settings.updatePluginSettings({ manualApiStreaming: !!target.checked });
-            return;
-        }
-        if (target.matches?.('[data-rmt-auto-second]')) {
-            core_settings.updatePluginSettings({ autoSecondPass: !!target.checked });
-            return;
-        }
-        if (target.matches?.('[data-rmt-auto-retry]')) {
-            core_settings.updatePluginSettings({ autoRetryEnabled: !!target.checked });
-            const count = panel.querySelector('[data-rmt-auto-retry-count]');
-            if (count) count.disabled = !target.checked;
-            const memoryRetry = panel.querySelector('[data-rmt-auto-memory-retry]');
-            if (memoryRetry) memoryRetry.checked = !!target.checked;
-            return;
-        }
-        if (target.matches?.('[data-rmt-auto-retry-count]')) {
-            core_settings.updatePluginSettings({ autoRetryCount: target.value });
-            target.value = String(core_settings.getPluginSettings().autoRetryCount);
-            return;
-        }
-        if (target.matches?.('[data-rmt-read-mode], [data-rmt-read-recent], [data-rmt-read-start], [data-rmt-read-end], [data-rmt-read-hidden]')) {
-            const range = {
-                mode: panel.querySelector('[data-rmt-read-mode]').value,
-                recent: Number(panel.querySelector('[data-rmt-read-recent]').value),
-                start: Number(panel.querySelector('[data-rmt-read-start]').value),
-                end: Number(panel.querySelector('[data-rmt-read-end]').value),
-                includeHidden: panel.querySelector('[data-rmt-read-hidden]').checked,
-            };
-            core_settings.updatePluginSettings({ chatReadRange: range });
-            refreshReadingSettingsUi(panel);
-            panel.querySelector('[data-rmt-read-preview-status]').textContent = '已保存，之后读取聊天时生效；已有记忆保持不变。';
-            return;
-        }
-        const autoMode = target.dataset?.rmtAutoEnabled || target.dataset?.rmtAutoEvery;
-        if (core_autoUpdatePolicy.AUTO_UPDATE_MODES.includes(autoMode)) {
-            const rules = core_autoUpdatePolicy.normalizeAutoUpdates(core_settings.getPluginSettings().autoUpdates);
-            rules[autoMode] = { ...rules[autoMode], epoch: Date.now(),
-                ...(target.dataset.rmtAutoEnabled ? { enabled: target.checked } : { every: Number(target.value) }) };
-            core_settings.updatePluginSettings({ autoUpdates: rules });
-            core_autoUpdates.notifyAutoUpdateSettingsChanged();
-            refreshGenerationSettingsUi();
-            return;
-        }
-        if (target.matches?.('[data-rmt-memory-file-input]')) {
-            const file = target.files?.[0];
-            pendingMemoryFilePreview = null;
-            const previewEpoch = ++memoryFilePreviewEpoch;
-            const previewScope = homeSettingsScope;
-            const previewStillCurrent = () => {
-                try { return previewEpoch === memoryFilePreviewEpoch && homeSettingsPanel === panel
-                    && previewScope === core_context.chatScopeKey(core_context.currentCharacterGuard()); } catch { return false; }
-            };
-            if (!file) return;
-            const previewPanel = panel.querySelector('[data-rmt-memory-file-preview]');
-            const title = panel.querySelector('[data-rmt-memory-file-preview-title]');
-            const meta = panel.querySelector('[data-rmt-memory-file-preview-meta]');
-            const binding = panel.querySelector('[data-rmt-memory-file-preview-binding]');
-            const sample = panel.querySelector('[data-rmt-memory-file-preview-sample]');
-            const historyConfirm = panel.querySelector('[data-rmt-memory-file-history-confirm]');
-            const commitButton = panel.querySelector('[data-rmt-memory-file-commit]');
-            archive_repository.previewCurrentChatMemoryFile(file).then(preview => {
-                if (!previewStillCurrent()) return;
-                pendingMemoryFilePreview = preview;
-                if (title) title.textContent = preview.fileName;
-                if (meta) {
-                    const skipped = Number(preview.skippedSensitiveFields || 0) + Number(preview.skippedConfigFields || 0);
-                    meta.textContent = `${preview.records.length} 条 · ${preview.totalChars.toLocaleString()} 字符 · ${(preview.bytes / 1024).toFixed(1)} KB${skipped ? ` · 已排除敏感/配置字段 ${skipped} 个` : ''}`;
-                }
-                if (binding) binding.textContent = `归属：${preview.scope.characterName || '当前角色'} · ${preview.scope.chatId}`;
-                if (sample) {
-                    const excerpt = preview.records.slice(0, 3).map((item, index) => {
-                        const label = item.title ? `${item.title}：` : '';
-                        return `${index + 1}. ${label}${core_text.normalizeText(item.content, 220)}`;
-                    }).join('\n');
-                    sample.textContent = `内容预览\n${excerpt}`;
-                }
-                if (historyConfirm) historyConfirm.checked = false;
-                if (commitButton) commitButton.disabled = true;
-                if (previewPanel) previewPanel.hidden = false;
-            }).catch(error => {
-                if (!previewStillCurrent()) return;
-                if (previewPanel) previewPanel.hidden = true;
-                globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心迹回廊');
-            }).finally(() => { target.value = ''; });
-            return;
-        }
-        if (target.matches?.('[data-rmt-memory-file-history-confirm]')) {
-            const commitButton = panel.querySelector('[data-rmt-memory-file-commit]');
-            if (commitButton) commitButton.disabled = !target.checked || !pendingMemoryFilePreview;
-            return;
-        }
-        if (target.matches?.('[data-rmt-memory-history-book]')) {
-            let context = null;
-            let previousSelection = null;
-            let attemptedSelectionJson = '';
-            try {
-                context = core_context.currentCharacterGuard();
-                previousSelection = archive_repository.getMemoryWorldInfoSelection(context);
-                archive_repository.updateMemoryWorldInfoBookSelection(context, target.dataset.rmtMemoryHistoryBook, { historySource: !!target.checked });
-                attemptedSelectionJson = JSON.stringify(archive_repository.getMemoryWorldInfoSelection(context).books);
-                const worldInfo = await archive_repository.syncSelectedWorldInfoHistoryLedger(context);
-                const bookResult = worldInfo.books?.find(book => book.name === target.dataset.rmtMemoryHistoryBook);
-                if (target.checked && bookResult?.coverageInfo?.status !== 'complete') {
-                    globalThis.toastr?.warning?.(`已标记，但本轮只完成部分同步：${bookResult?.coverageInfo?.reason || '请查看来源状态'}`, '心迹回廊');
-                } else {
-                    globalThis.toastr?.success?.(target.checked ? '已标记为历史摘要来源。' : '已恢复为设定解释来源。', '心迹回廊');
-                }
-                void refreshMemoryIngressUi();
-            } catch (error) {
-                if (!error?.worldHistoryPersisted && context && previousSelection
-                    && JSON.stringify(archive_repository.getMemoryWorldInfoSelection(context).books) === attemptedSelectionJson) {
-                    archive_repository.setMemoryWorldInfoSelection(context, previousSelection);
-                    const previousBook = previousSelection.books.find(book => book.name === target.dataset.rmtMemoryHistoryBook);
-                    target.checked = previousBook?.historySource === true;
-                }
-                if (error?.name !== 'AbortError') globalThis.toastr?.error?.(`历史来源没有同步，已恢复原选择：${core_text.toastText(core_text.safeErrorSummary(error))}`, '心迹回廊');
-                void refreshMemoryIngressUi();
-            }
-            return;
-        }
-        if (target.matches?.('[data-rmt-api-profile]')) {
-            panel.dataset.rmtApiEditor = 'profile';
-            const connectionProfileId = core_text.normalizeText(target.value, 160);
-            core_settings.updatePluginSettings({ apiConnectionMode: 'profile', connectionProfileId, modelOverride: '' });
-            refreshGenerationSettingsUi();
-            void refreshModelOptions({ fetchRemote: !!connectionProfileId });
-            return;
-        }
-        if (target.matches?.('[data-rmt-api-pool-enabled], [data-rmt-api-pool-profile]')) {
-            const connectionPoolIds = [...panel.querySelectorAll('[data-rmt-api-pool-profile]:checked')].map(input => input.dataset.rmtApiPoolProfile);
-            core_settings.updatePluginSettings({connectionPoolEnabled:panel.querySelector('[data-rmt-api-pool-enabled]')?.checked === true,connectionPoolIds});
-            refreshGenerationSettingsUi();
-            return;
-        }
-        if (target.matches?.('[data-rmt-api-model]')) {
-            panel.dataset.rmtApiEditor = 'profile';
-            core_settings.updatePluginSettings({ apiConnectionMode: 'profile', modelOverride: core_text.normalizeText(target.value, 240) });
-            refreshGenerationSettingsUi();
-            return;
-        }
-        if (target.matches?.('[data-rmt-api-max-tokens]')) {
-            if (target.validity?.badInput || (target.value.trim() && !output_budget.isValidOutputTokens(target.value))) {
-                globalThis.toastr?.warning?.('最大输出请填写正整数；原设置未改动。', '心迹回廊');
-                target.value = String(core_settings.getPluginSettings().maxTokens);
-                return;
-            }
-            core_settings.updatePluginSettings({ maxTokens: output_budget.normalizeOutputTokens(target.value) });
-            refreshGenerationSettingsUi();
-            return;
-        }
-        if (target.matches?.('[data-rmt-api-input-budget]')) {
-            if (target.validity?.badInput || (target.value.trim() && !output_budget.isValidInputBudgetTokens(target.value))) {
-                globalThis.toastr?.warning?.('输入预算请填写 8000–200000 的整数；原设置未改动。打开设置 → 输入预算，不是最大输出。', '心迹回廊');
-                target.value = String(core_settings.getPluginSettings().inputBudgetTokens);
-                return;
-            }
-            core_settings.updatePluginSettings({ inputBudgetTokens: output_budget.normalizeInputBudgetTokens(target.value) });
-            refreshGenerationSettingsUi();
-            return;
-        }
-        if (target.matches?.('[data-rmt-api-temperature]')) {
-            core_settings.updatePluginSettings({ temperature: Math.max(0, Math.min(2, Number.isFinite(Number(target.value)) ? Number(target.value) : core_constants.DEFAULT_SETTINGS.temperature)) });
-            refreshGenerationSettingsUi();
-            return;
-        }
-        if (target.matches?.('[data-rmt-room-life-auto]')) {
-            core_settings.updatePluginSettings({ roomLifeAutoDaily: !!target.checked });
-            refreshGenerationSettingsUi();
-            return;
-        }
-        if (target.matches?.('[data-rmt-image-generation-provider]')) {
-            core_settings.updatePluginSettings({ imageGenerationProvider: target.value });
-            refreshImageGenerationSettingsUi();
-            generation_imageGeneration.refreshCgImageProviderBars();
-            return;
-        }
-        if (target.matches?.('[data-rmt-tt-display]')) {
-            core_settings.updatePluginSettings({ ttDisplayMode: !!target.checked });
-            const overlay = document.getElementById(core_constants.OVERLAY_ID);
-            if (overlay) ui_overlay.applyArchiveMobileSafeArea(overlay);
-            refreshGenerationSettingsUi();
-            return;
-        }
-        if (target.matches?.('[data-rmt-floating-avatar]')) {
-            core_settings.updatePluginSettings({ floatingAvatar: target.value });
-            floating_archive.refreshFloatingArchive();
-            return;
-        }
-        if (target.matches?.('[data-rmt-theme-mode]')) {
-            core_settings.updatePluginSettings({ themeMode: core_constants.THEME_MODES.has(target.value) ? target.value : 'default' });
-            refreshThemeUi();
-            refreshGenerationSettingsUi();
-            return;
-        }
-        if (target.matches?.('[data-rmt-theme-alpha]')) {
-            core_settings.updatePluginSettings({ themeAlpha: Math.max(0.72, Math.min(1, Number(target.value) || 0.96)) });
-            refreshThemeUi();
-            return;
-        }
-        if (target.matches?.('[data-rmt-theme-color]')) {
-            const key = target.dataset.rmtThemeColor;
-            const settings = core_settings.getPluginSettings();
-            if (key && Object.prototype.hasOwnProperty.call(settings.themeCustom || {}, key)) {
-                core_settings.updatePluginSettings({ themeMode: 'custom', themeCustom: core_theme.normalizeThemeCustom({ ...settings.themeCustom, [key]: target.value }) });
-                refreshThemeUi();
-                refreshGenerationSettingsUi();
-            }
-            return;
-        }
-        if (target.matches?.('[data-rmt-manual-api-models]')) {
-            const manualInput = panel.querySelector('[data-rmt-manual-api-model]');
-            if (manualInput && target.value) {
-                manualInput.value = target.value;
-                panel.dataset.rmtManualDirty = '1';
-            }
-            return;
-        }
-        if (target.matches?.('[data-rmt-banned-generated-phrases]')) {
-            core_settings.updatePluginSettings({ bannedGeneratedPhrases: core_settings.normalizeBannedGeneratedPhrases(target.value) });
-            refreshGenerationSettingsUi();
-        }
-    });
-    return SETTINGS_BIND_UNHANDLED;
+        if (error?.name !== 'AbortError')
+          globalThis.toastr?.error?.(
+            `历史来源没有同步，已恢复原选择：${core_text.toastText(core_text.safeErrorSummary(error))}`,
+            '心迹回廊',
+          );
+        void refreshMemoryIngressUi();
+      }
+      return;
+    }
+    if (target.matches?.('[data-rmt-api-profile]')) {
+      panel.dataset.rmtApiEditor = 'profile';
+      const connectionProfileId = core_text.normalizeText(target.value, 160);
+      core_settings.updatePluginSettings({ apiConnectionMode: 'profile', connectionProfileId, modelOverride: '' });
+      refreshGenerationSettingsUi();
+      void refreshModelOptions({ fetchRemote: !!connectionProfileId });
+      return;
+    }
+    if (target.matches?.('[data-rmt-api-pool-enabled], [data-rmt-api-pool-profile]')) {
+      const connectionPoolIds = [...panel.querySelectorAll('[data-rmt-api-pool-profile]:checked')].map(
+        input => input.dataset.rmtApiPoolProfile,
+      );
+      core_settings.updatePluginSettings({
+        connectionPoolEnabled: panel.querySelector('[data-rmt-api-pool-enabled]')?.checked === true,
+        connectionPoolIds,
+      });
+      refreshGenerationSettingsUi();
+      return;
+    }
+    if (target.matches?.('[data-rmt-api-model]')) {
+      panel.dataset.rmtApiEditor = 'profile';
+      core_settings.updatePluginSettings({
+        apiConnectionMode: 'profile',
+        modelOverride: core_text.normalizeText(target.value, 240),
+      });
+      refreshGenerationSettingsUi();
+      return;
+    }
+    if (target.matches?.('[data-rmt-api-max-tokens]')) {
+      if (target.validity?.badInput || (target.value.trim() && !output_budget.isValidOutputTokens(target.value))) {
+        globalThis.toastr?.warning?.('最大输出请填写正整数；原设置未改动。', '心迹回廊');
+        target.value = String(core_settings.getPluginSettings().maxTokens);
+        return;
+      }
+      core_settings.updatePluginSettings({ maxTokens: output_budget.normalizeOutputTokens(target.value) });
+      refreshGenerationSettingsUi();
+      return;
+    }
+    if (target.matches?.('[data-rmt-api-input-budget]')) {
+      if (target.validity?.badInput || (target.value.trim() && !output_budget.isValidInputBudgetTokens(target.value))) {
+        globalThis.toastr?.warning?.(
+          '输入预算请填写 8000–200000 的整数；原设置未改动。打开设置 → 输入预算，不是最大输出。',
+          '心迹回廊',
+        );
+        target.value = String(core_settings.getPluginSettings().inputBudgetTokens);
+        return;
+      }
+      core_settings.updatePluginSettings({ inputBudgetTokens: output_budget.normalizeInputBudgetTokens(target.value) });
+      refreshGenerationSettingsUi();
+      return;
+    }
+    if (target.matches?.('[data-rmt-api-temperature]')) {
+      core_settings.updatePluginSettings({
+        temperature: Math.max(
+          0,
+          Math.min(
+            2,
+            Number.isFinite(Number(target.value)) ? Number(target.value) : core_constants.DEFAULT_SETTINGS.temperature,
+          ),
+        ),
+      });
+      refreshGenerationSettingsUi();
+      return;
+    }
+    if (target.matches?.('[data-rmt-room-life-auto]')) {
+      core_settings.updatePluginSettings({ roomLifeAutoDaily: !!target.checked });
+      refreshGenerationSettingsUi();
+      return;
+    }
+    if (target.matches?.('[data-rmt-image-generation-provider]')) {
+      core_settings.updatePluginSettings({ imageGenerationProvider: target.value });
+      refreshImageGenerationSettingsUi();
+      generation_imageGeneration.refreshCgImageProviderBars();
+      return;
+    }
+    if (target.matches?.('[data-rmt-tt-display]')) {
+      core_settings.updatePluginSettings({ ttDisplayMode: !!target.checked });
+      const overlay = document.getElementById(core_constants.OVERLAY_ID);
+      if (overlay) ui_overlay.applyArchiveMobileSafeArea(overlay);
+      refreshGenerationSettingsUi();
+      return;
+    }
+    if (target.matches?.('[data-rmt-floating-avatar]')) {
+      core_settings.updatePluginSettings({ floatingAvatar: target.value });
+      floating_archive.refreshFloatingArchive();
+      return;
+    }
+    if (target.matches?.('[data-rmt-theme-mode]')) {
+      core_settings.updatePluginSettings({
+        themeMode: core_constants.THEME_MODES.has(target.value) ? target.value : 'default',
+      });
+      refreshThemeUi();
+      refreshGenerationSettingsUi();
+      return;
+    }
+    if (target.matches?.('[data-rmt-theme-alpha]')) {
+      core_settings.updatePluginSettings({ themeAlpha: Math.max(0.72, Math.min(1, Number(target.value) || 0.96)) });
+      refreshThemeUi();
+      return;
+    }
+    if (target.matches?.('[data-rmt-theme-color]')) {
+      const key = target.dataset.rmtThemeColor;
+      const settings = core_settings.getPluginSettings();
+      if (key && Object.prototype.hasOwnProperty.call(settings.themeCustom || {}, key)) {
+        core_settings.updatePluginSettings({
+          themeMode: 'custom',
+          themeCustom: core_theme.normalizeThemeCustom({ ...settings.themeCustom, [key]: target.value }),
+        });
+        refreshThemeUi();
+        refreshGenerationSettingsUi();
+      }
+      return;
+    }
+    if (target.matches?.('[data-rmt-manual-api-models]')) {
+      const manualInput = panel.querySelector('[data-rmt-manual-api-model]');
+      if (manualInput && target.value) {
+        manualInput.value = target.value;
+        panel.dataset.rmtManualDirty = '1';
+      }
+      return;
+    }
+    if (target.matches?.('[data-rmt-banned-generated-phrases]')) {
+      core_settings.updatePluginSettings({
+        bannedGeneratedPhrases: core_settings.normalizeBannedGeneratedPhrases(target.value),
+      });
+      refreshGenerationSettingsUi();
+    }
+  });
+  return SETTINGS_BIND_UNHANDLED;
 }
 
 // 设置页“点按钮”监听器（click）：扫描标签、测试连接等设置页按钮（mountSettings 原第 33–33 条语句，一字未改地搬出）
-function bindSettingsClick(panel, tagDraft, tagStatus, tagState, savedTagDraft, renderTagChoices, scanTagChoices, refreshCreative) {
-    panel.addEventListener('click', event => {
-        if (event.target.closest?.('[data-rmt-scene-picker-root]')) {
-            void ui_scenePicker.handleScenePickerEvent(event);
-            return;
+function bindSettingsClick(
+  panel,
+  tagDraft,
+  tagStatus,
+  tagState,
+  savedTagDraft,
+  renderTagChoices,
+  scanTagChoices,
+  refreshCreative,
+) {
+  panel.addEventListener('click', event => {
+    if (event.target.closest?.('[data-rmt-scene-picker-root]')) {
+      void ui_scenePicker.handleScenePickerEvent(event);
+      return;
+    }
+    const coverageGap = event.target.closest?.('[data-rmt-coverage-gap]');
+    if (coverageGap) {
+      const [start, end] = String(coverageGap.dataset.rmtCoverageGap || '')
+        .split('-')
+        .map(Number);
+      if (!start || !end || start > end) return;
+      const current = core_settings.getPluginSettings().chatReadRange || {};
+      core_settings.updatePluginSettings({ chatReadRange: { ...current, mode: 'range', start, end } });
+      refreshReadingSettingsUi(panel);
+      const preview = panel.querySelector('[data-rmt-read-preview-status]');
+      if (preview)
+        preview.textContent = `已把读取范围设为第 ${start}–${end} 楼。下次整理档案只读这一段，不会重做已有记忆，也还没有开始生成。`;
+      return;
+    }
+    if (event.target.closest?.('[data-rmt-read-preview]')) {
+      const status = panel.querySelector('[data-rmt-read-preview-status]');
+      try {
+        const context = core_context.currentCharacterGuard();
+        const preview = core_chatReadRange.readRangePreview(context, core_settings.getPluginSettings());
+        const bank = archive_repository.getImportedMemory(context);
+        const coverage = archive_coverage.archiveCoverageSummary(bank, preview.start ? preview : null);
+        const coverageNote = !bank
+          ? ''
+          : coverage.covered.length
+            ? `档案已整理 ${archive_coverage.formatCoveredRanges(coverage.covered)}。`
+            : '档案尚未记录已整理楼层区间。';
+        const gapNote = !coverageNote
+          ? ''
+          : coverage.gaps.length
+            ? `本次范围内缺口：${archive_coverage.formatFloorGaps(coverage.gaps)}。`
+            : preview.start
+              ? '本次范围内没有缺口。'
+              : '';
+        const suggestNote =
+          coverageNote && coverage.suggested
+            ? `建议下一段补录范围：第 ${coverage.suggested.start}–${coverage.suggested.end} 楼（切换为“指定楼号范围”后填写）。`
+            : '';
+        status.textContent = `${preview.label} · 共 ${preview.totalFloors} 楼，选中 ${preview.selectedFloors} 楼（普通 ${preview.visibleCount} / 隐藏 ${preview.hiddenCount}），约 ${preview.characters.toLocaleString()} 字符。仅本地预览，未发起生成。${coverageNote}${gapNote}${suggestNote}`;
+      } catch (error) {
+        status.textContent = core_text.safeErrorSummary(error);
+      }
+      return;
+    }
+    if (event.target.closest?.('[data-rmt-creative-save]')) {
+      try {
+        core_settings.updatePluginSettings({
+          creativeSupplement: panel.querySelector('[data-rmt-creative-text]').value,
+          creativeSupplementEnabled: panel.querySelector('[data-rmt-creative-enabled]').checked,
+        });
+        panel.querySelector('[data-rmt-creative-status]').textContent = '已保存；下次心迹回廊文本生成生效。';
+      } catch (error) {
+        panel.querySelector('[data-rmt-creative-status]').textContent = core_text.safeErrorSummary(error);
+      }
+      return;
+    }
+    if (event.target.closest?.('[data-rmt-creative-cancel]')) {
+      refreshCreative();
+      panel.querySelector('[data-rmt-creative-status]').textContent = '已撤销未保存编辑。';
+      return;
+    }
+    if (event.target.closest?.('[data-rmt-auto-memory-wizard]')) {
+      auto_memory_wizard.openAutoMemoryWizard();
+      return;
+    }
+    const redoPick = event.target.closest?.('[data-rmt-auto-memory-pick-module]');
+    if (redoPick) {
+      void runCurrentMemoryRedo(panel, 'pick', redoPick.getAttribute('data-rmt-auto-memory-pick-module') || '');
+      return;
+    }
+    const redoButton = event.target.closest?.('[data-rmt-auto-memory-redo]');
+    if (redoButton) {
+      const mode = redoButton.getAttribute('data-rmt-auto-memory-redo') || '';
+      if (mode === 'pick') {
+        const host = panel.querySelector('[data-rmt-auto-memory-pick]');
+        if (host) {
+          host.hidden = !host.hidden;
+          if (!host.hidden && !host.childElementCount) {
+            host.innerHTML = auto_memory_redo
+              .choosableModules(auto_memory_registry.listAutoMemoryModules())
+              .map(
+                item =>
+                  `<button type="button" class="menu_button" data-rmt-auto-memory-pick-module="${core_text.esc(item.id)}">${core_text.esc(item.title)}</button>`,
+              )
+              .join('');
+          }
         }
-        const coverageGap = event.target.closest?.('[data-rmt-coverage-gap]');
-        if (coverageGap) {
-            const [start, end] = String(coverageGap.dataset.rmtCoverageGap || '').split('-').map(Number);
-            if (!start || !end || start > end) return;
-            const current = core_settings.getPluginSettings().chatReadRange || {};
-            core_settings.updatePluginSettings({ chatReadRange: { ...current, mode: 'range', start, end } });
-            refreshReadingSettingsUi(panel);
-            const preview = panel.querySelector('[data-rmt-read-preview-status]');
-            if (preview) preview.textContent = `已把读取范围设为第 ${start}–${end} 楼。下次整理档案只读这一段，不会重做已有记忆，也还没有开始生成。`;
-            return;
+        return;
+      }
+      void runCurrentMemoryRedo(panel, mode, '');
+      return;
+    }
+    if (event.target.closest?.('[data-rmt-auto-memory-restore]')) {
+      void restoreLegacyAutoUpdates(panel);
+      return;
+    }
+    const updateButton = event.target.closest?.('[data-rmt-self-update]');
+    if (updateButton) {
+      void core_selfUpdater.updateFromButton(updateButton, panel.querySelector('[data-rmt-self-update-status]'), {
+        isBusy: () =>
+          runtimeState.busy || core_requestCoordinator.hasGenerationTasks() || !!runtimeState.roomLifeRefreshPromise,
+      });
+      return;
+    }
+    const tagAction = event.target.closest?.(
+      '[data-rmt-tag-save],[data-rmt-tag-cancel],[data-rmt-tag-clear],[data-rmt-tag-scan],[data-rmt-tag-all],[data-rmt-tag-invert]',
+    );
+    if (tagAction) {
+      void (async () => {
+        try {
+          if (tagAction.hasAttribute('data-rmt-tag-save')) {
+            ++tagState.tagScanEpoch;
+            const tags = core_contextTags.normalizeExcludedTags(tagDraft.value);
+            core_settings.updatePluginSettings({ contextTagMode: 'exclude', excludedContextTags: tags });
+            tagDraft.value = tags.join(', ');
+            tagState.tagEdited = false;
+            renderTagChoices();
+            tagStatus.textContent =
+              '已保存 ' + tags.length + ' 个过滤标签，标签内的内容不读取；下次整理生效，聊天和旧档案未改动。';
+          } else if (tagAction.hasAttribute('data-rmt-tag-cancel')) {
+            ++tagState.tagScanEpoch;
+            tagState.tagEdited = false;
+            tagDraft.value = savedTagDraft().join(', ');
+            renderTagChoices();
+            tagStatus.textContent = '已撤销未保存编辑。';
+          } else if (tagAction.hasAttribute('data-rmt-tag-clear')) {
+            ++tagState.tagScanEpoch;
+            tagState.tagEdited = true;
+            tagDraft.value = '';
+            renderTagChoices();
+            tagStatus.textContent = '已清空选择；尚未保存。';
+          } else if (tagAction.hasAttribute('data-rmt-tag-scan')) {
+            tagAction.disabled = true;
+            await scanTagChoices();
+          } else {
+            tagAction.disabled = true;
+            if (!tagState.tagScanned) await scanTagChoices();
+            ++tagState.tagScanEpoch;
+            const selected = new Set(core_contextTags.normalizeExcludedTags(tagDraft.value));
+            tagDraft.value = [...tagState.tagChoices.keys()]
+              .filter(name => tagAction.hasAttribute('data-rmt-tag-all') || !selected.has(name))
+              .join(', ');
+            tagState.tagEdited = true;
+            renderTagChoices();
+            tagStatus.textContent = '选择已更新；尚未保存。';
+          }
+        } catch (error) {
+          if (error?.name !== 'AbortError') tagStatus.textContent = core_text.safeErrorSummary(error);
+        } finally {
+          tagAction.disabled = false;
         }
-        if (event.target.closest?.('[data-rmt-read-preview]')) {
-            const status = panel.querySelector('[data-rmt-read-preview-status]');
-            try {
-                const context = core_context.currentCharacterGuard();
-                const preview = core_chatReadRange.readRangePreview(context, core_settings.getPluginSettings());
-                const bank = archive_repository.getImportedMemory(context);
-                const coverage = archive_coverage.archiveCoverageSummary(bank, preview.start ? preview : null);
-                const coverageNote = !bank ? ''
-                    : coverage.covered.length ? `档案已整理 ${archive_coverage.formatCoveredRanges(coverage.covered)}。` : '档案尚未记录已整理楼层区间。';
-                const gapNote = !coverageNote ? '' : coverage.gaps.length ? `本次范围内缺口：${archive_coverage.formatFloorGaps(coverage.gaps)}。` : (preview.start ? '本次范围内没有缺口。' : '');
-                const suggestNote = coverageNote && coverage.suggested ? `建议下一段补录范围：第 ${coverage.suggested.start}–${coverage.suggested.end} 楼（切换为“指定楼号范围”后填写）。` : '';
-                status.textContent = `${preview.label} · 共 ${preview.totalFloors} 楼，选中 ${preview.selectedFloors} 楼（普通 ${preview.visibleCount} / 隐藏 ${preview.hiddenCount}），约 ${preview.characters.toLocaleString()} 字符。仅本地预览，未发起生成。${coverageNote}${gapNote}${suggestNote}`;
-            } catch (error) { status.textContent = core_text.safeErrorSummary(error); }
+      })();
+      return;
+    }
+    const preset = event.target.closest?.('[data-rmt-theme-preset]');
+    if (preset) {
+      core_settings.updatePluginSettings({
+        themeMode: 'custom',
+        themeCustom: {
+          ...(preset.dataset.rmtThemePreset === 'night'
+            ? core_constants.NIGHT_THEME_PALETTE
+            : core_constants.DEFAULT_THEME_PALETTE),
+        },
+      });
+      refreshGenerationSettingsUi();
+      return;
+    }
+    const settingsSummary = event.target.closest?.('[data-rmt-settings-section] > summary');
+    if (settingsSummary && settingsSummary.parentElement?.dataset.rmtSettingsSection !== 'voice')
+      hydrateSettingsPanel({ memory: settingsSummary.parentElement?.dataset.rmtSettingsSection === 'memory' });
+    const themeReset = event.target.closest?.('[data-rmt-theme-reset]');
+    if (themeReset) {
+      core_settings.updatePluginSettings({
+        themeMode: 'default',
+        themeAlpha: core_constants.DEFAULT_SETTINGS.themeAlpha,
+        themeCustom: { ...core_constants.DEFAULT_THEME_PALETTE },
+      });
+      refreshThemeUi();
+      refreshGenerationSettingsUi();
+      globalThis.toastr?.success?.('已恢复心迹回廊默认配色。', '心迹回廊');
+      return;
+    }
+    const memoryAutoRead = event.target.closest?.('[data-rmt-memory-auto-read]');
+    if (memoryAutoRead) {
+      memoryAutoRead.disabled = true;
+      memoryAutoRead.querySelector('small')?.replaceChildren(document.createTextNode('正在读取…'));
+      archive_repository
+        .readCurrentChatMemoryPlugins()
+        .then(() => refreshMemoryIngressUi())
+        .catch(error => globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心迹回廊'))
+        .finally(() => {
+          memoryAutoRead.disabled = false;
+          const small = memoryAutoRead.querySelector('small');
+          if (small) small.textContent = '已注册的当前聊天来源';
+        });
+      return;
+    }
+    const memoryFileChoose = event.target.closest?.('[data-rmt-memory-file-choose]');
+    if (memoryFileChoose) {
+      panel.querySelector('[data-rmt-memory-file-input]')?.click?.();
+      return;
+    }
+    const memoryFileCommit = event.target.closest?.('[data-rmt-memory-file-commit]');
+    if (memoryFileCommit) {
+      if (!pendingMemoryFilePreview) {
+        globalThis.toastr?.warning?.('请先选择并预览记忆文件。', '心迹回廊');
+        return;
+      }
+      if (!panel.querySelector('[data-rmt-memory-file-history-confirm]')?.checked) {
+        globalThis.toastr?.warning?.('请先确认：文件内容是已经发生的历史/摘要，不是角色设定。', '心迹回廊');
+        return;
+      }
+      memoryFileCommit.disabled = true;
+      archive_repository
+        .commitCurrentChatMemoryFilePreview(pendingMemoryFilePreview, core_context.currentCharacterGuard(), {
+          confirmedHistory: true,
+        })
+        .then(async summary => {
+          pendingMemoryFilePreview = null;
+          const previewPanel = panel.querySelector('[data-rmt-memory-file-preview]');
+          if (previewPanel) previewPanel.hidden = true;
+          globalThis.toastr?.success?.(`已导入来源账本：${summary.recordCount} 条。`, '心迹回廊');
+          await refreshMemoryIngressUi();
+        })
+        .catch(error => globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心迹回廊'))
+        .finally(() => {
+          memoryFileCommit.disabled = false;
+        });
+      return;
+    }
+    const memorySourceClear = event.target.closest?.('[data-rmt-memory-source-clear]');
+    if (memorySourceClear) {
+      if (
+        !globalThis.confirm?.(
+          '只清除当前角色、当前聊天在“心迹回廊”内保存的来源账本。正式 Mxxx、聊天和第三方记忆都不会删除。确定继续吗？',
+        )
+      )
+        return;
+      memorySourceClear.disabled = true;
+      archive_repository
+        .clearCurrentChatImportedSources()
+        .then(async () => {
+          pendingMemoryFilePreview = null;
+          const previewPanel = panel.querySelector('[data-rmt-memory-file-preview]');
+          if (previewPanel) previewPanel.hidden = true;
+          await refreshMemoryIngressUi();
+          globalThis.toastr?.success?.('当前聊天的心迹回廊来源账本已清除并验证。', '心迹回廊');
+        })
+        .catch(error => globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心迹回廊'))
+        .finally(() => {
+          memorySourceClear.disabled = false;
+        });
+      return;
+    }
+    const manualChoiceButton = event.target.closest?.('[data-rmt-api-select-manual]');
+    if (manualChoiceButton) {
+      core_settings.beginApiConfigurationOperation();
+      panel.dataset.rmtApiEditor = 'manual';
+      refreshGenerationSettingsUi();
+      return;
+    }
+    const manualClearButton = event.target.closest?.('[data-rmt-manual-api-key-clear]');
+    if (manualClearButton) {
+      clearTimeout(manualAutosaves.get(panel));
+      manualAutosaves.delete(panel);
+      const keyInput = panel.querySelector('[data-rmt-manual-api-key]');
+      if (keyInput) keyInput.value = '';
+      void core_settings
+        .forgetManualApiCredential()
+        .then(() => {
+          refreshGenerationSettingsUi();
+          const status = panel.querySelector('[data-rmt-manual-save-status]');
+          if (status) status.textContent = '本插件手动 Key 已清除，主聊天连接未改。';
+        })
+        .catch(error => globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊'));
+      return;
+    }
+    if (event.target.closest?.('[data-rmt-manual-api-save]')) {
+      void saveManualPanel(panel, true);
+      return;
+    }
+    const manualRefreshButton = event.target.closest?.('[data-rmt-manual-api-model-refresh]');
+    if (manualRefreshButton) {
+      refreshManualModelOptions({ fetchRemote: true })
+        .then(models => {
+          if (!models?.length) return;
+          if (panel.dataset.rmtManualModelFallback === '1')
+            globalThis.toastr?.warning?.('远程模型列表暂不可用，已保留手动 API 自己保存的模型。', '心迹回廊');
+          else globalThis.toastr?.success?.(`已找到 ${models.length} 个模型。`, '心迹回廊');
+        })
+        .catch(error => globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心迹回廊'));
+      return;
+    }
+    const modelRefreshButton = event.target.closest?.('[data-rmt-api-model-refresh]');
+    if (modelRefreshButton) {
+      refreshModelOptions({ fetchRemote: true })
+        .then(result => {
+          if (!result) return;
+          if (result.fallbackOnly)
+            globalThis.toastr?.warning?.('远程列表暂不可用，已显示这一连接保存的模型。', '心迹回廊');
+          else globalThis.toastr?.success?.('模型列表已更新。', '心迹回廊');
+        })
+        .catch(error => globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心迹回廊'));
+      return;
+    }
+    const apiImportButton = event.target.closest?.('[data-rmt-api-import-current]');
+    if (apiImportButton) {
+      panel.dataset.rmtApiEditor = 'profile';
+      const operationEpoch = core_settings.beginApiConfigurationOperation();
+      const uiRequestEpoch = Number(panel.dataset.rmtOneClickRequest || 0) + 1;
+      panel.dataset.rmtOneClickRequest = String(uiRequestEpoch);
+      const isLatestUiRequest = () => Number(panel.dataset.rmtOneClickRequest || 0) === uiRequestEpoch;
+      apiImportButton.disabled = true;
+      core_settings
+        .importCurrentSillyTavernConnection({
+          isCurrent: () => core_settings.isCurrentApiConfigurationOperation(operationEpoch),
+        })
+        .then(result => {
+          if (!isLatestUiRequest()) return;
+          refreshGenerationSettingsUi();
+          const current = core_settings.getPluginSettings();
+          if (
+            current.apiConnectionMode !== 'profile' ||
+            current.connectionProfileId !== core_text.normalizeText(result?.id, 160)
+          )
             return;
+          globalThis.toastr?.success?.(result?.created ? '一键连接已创建并启用。' : '一键连接已启用。', '心迹回廊');
+          void refreshModelOptions({ fetchRemote: true });
+        })
+        .catch(error => {
+          if (!isLatestUiRequest()) return;
+          if (error?.code !== 'RMT_API_CONFIGURATION_SUPERSEDED') {
+            console.warn('[HeartbeatMemories] one-click configuration failed', core_text.safeErrorDiagnostic(error));
+            globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心迹回廊');
+          }
+          refreshGenerationSettingsUi();
+        })
+        .finally(() => {
+          if (isLatestUiRequest()) apiImportButton.disabled = false;
+        });
+      return;
+    }
+    const currentArchiveButton = event.target.closest?.('[data-rmt-settings-current-archive]');
+    if (currentArchiveButton) {
+      // In claim mode this button re-binds the existing archive instead of paying for
+      // a rebuild. Nothing is generated and no memory is altered.
+      if (currentArchiveButton.dataset.rmtArchiveClaim === '1') {
+        let info = null;
+        try {
+          info = archive_repository.mismatchedArchiveInfo(core_context.currentCharacterGuard());
+        } catch {}
+        if (!info) {
+          refreshSettingsMemoryStatus();
+          return;
         }
-        if (event.target.closest?.('[data-rmt-creative-save]')) {
-            try {
-                core_settings.updatePluginSettings({ creativeSupplement: panel.querySelector('[data-rmt-creative-text]').value, creativeSupplementEnabled: panel.querySelector('[data-rmt-creative-enabled]').checked });
-                panel.querySelector('[data-rmt-creative-status]').textContent = '已保存；下次心迹回廊文本生成生效。';
-            } catch (error) { panel.querySelector('[data-rmt-creative-status]').textContent = core_text.safeErrorSummary(error); }
-            return;
+        const ok = ui_overlay.confirmExplicitAction(
+          '认领这份档案到当前聊天？',
+          `找到「${info.archiveName || '未命名档案'}」，共 ${info.memoryCount} 条记忆，但它记录的聊天标识与当前聊天不同。` +
+            '\n\n聊天被重命名、分支或复制后会出现这种情况。' +
+            '\n\n确定＝把它绑定到当前聊天。不改动任何记忆内容，不消耗生成额度，原标识会被保留备查。' +
+            '\n取消＝保持原样。',
+          { destructive: false },
+        );
+        if (!ok) return;
+        try {
+          const claimed = archive_repository.claimMismatchedArchive(core_context.currentCharacterGuard());
+          globalThis.toastr?.success?.(`已认领 ${claimed.memoryCount} 条记忆到当前聊天。`, '心迹回廊');
+        } catch (error) {
+          globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊 · 认领失败');
         }
-        if (event.target.closest?.('[data-rmt-creative-cancel]')) { refreshCreative(); panel.querySelector('[data-rmt-creative-status]').textContent = '已撤销未保存编辑。'; return; }
-        if (event.target.closest?.('[data-rmt-auto-memory-wizard]')) {
-            auto_memory_wizard.openAutoMemoryWizard();
-            return;
-        }
-        const redoPick = event.target.closest?.('[data-rmt-auto-memory-pick-module]');
-        if (redoPick) {
-            void runCurrentMemoryRedo(panel, 'pick', redoPick.getAttribute('data-rmt-auto-memory-pick-module') || '');
-            return;
-        }
-        const redoButton = event.target.closest?.('[data-rmt-auto-memory-redo]');
-        if (redoButton) {
-            const mode = redoButton.getAttribute('data-rmt-auto-memory-redo') || '';
-            if (mode === 'pick') {
-                const host = panel.querySelector('[data-rmt-auto-memory-pick]');
-                if (host) {
-                    host.hidden = !host.hidden;
-                    if (!host.hidden && !host.childElementCount) {
-                        host.innerHTML = auto_memory_redo.choosableModules(auto_memory_registry.listAutoMemoryModules())
-                            .map(item => `<button type="button" class="menu_button" data-rmt-auto-memory-pick-module="${core_text.esc(item.id)}">${core_text.esc(item.title)}</button>`)
-                            .join('');
-                    }
-                }
-                return;
-            }
-            void runCurrentMemoryRedo(panel, mode, '');
-            return;
-        }
-        if (event.target.closest?.('[data-rmt-auto-memory-restore]')) {
-            void restoreLegacyAutoUpdates(panel);
-            return;
-        }
-        const updateButton = event.target.closest?.('[data-rmt-self-update]');
-        if (updateButton) {
-            void core_selfUpdater.updateFromButton(updateButton, panel.querySelector('[data-rmt-self-update-status]'), {
-                isBusy: () => runtimeState.busy || core_requestCoordinator.hasGenerationTasks() || !!runtimeState.roomLifeRefreshPromise,
-            });
-            return;
-        }
-        const tagAction = event.target.closest?.('[data-rmt-tag-save],[data-rmt-tag-cancel],[data-rmt-tag-clear],[data-rmt-tag-scan],[data-rmt-tag-all],[data-rmt-tag-invert]');
-        if (tagAction) {
-            void (async () => {
-                try {
-                    if (tagAction.hasAttribute('data-rmt-tag-save')) {
-                        ++tagState.tagScanEpoch;
-                        const tags = core_contextTags.normalizeExcludedTags(tagDraft.value);
-                        core_settings.updatePluginSettings({ contextTagMode: 'exclude', excludedContextTags: tags });
-                        tagDraft.value = tags.join(', '); tagState.tagEdited = false; renderTagChoices();
-                        tagStatus.textContent = '已保存 ' + tags.length + ' 个过滤标签，标签内的内容不读取；下次整理生效，聊天和旧档案未改动。';
-                    } else if (tagAction.hasAttribute('data-rmt-tag-cancel')) {
-                        ++tagState.tagScanEpoch; tagState.tagEdited = false; tagDraft.value = savedTagDraft().join(', '); renderTagChoices();
-                        tagStatus.textContent = '已撤销未保存编辑。';
-                    } else if (tagAction.hasAttribute('data-rmt-tag-clear')) {
-                        ++tagState.tagScanEpoch; tagState.tagEdited = true; tagDraft.value = ''; renderTagChoices();
-                        tagStatus.textContent = '已清空选择；尚未保存。';
-                    } else if (tagAction.hasAttribute('data-rmt-tag-scan')) {
-                        tagAction.disabled = true;
-                        await scanTagChoices();
-                    } else {
-                        tagAction.disabled = true;
-                        if (!tagState.tagScanned) await scanTagChoices();
-                        ++tagState.tagScanEpoch;
-                        const selected = new Set(core_contextTags.normalizeExcludedTags(tagDraft.value));
-                        tagDraft.value = [...tagState.tagChoices.keys()].filter(name => tagAction.hasAttribute('data-rmt-tag-all') || !selected.has(name)).join(', ');
-                        tagState.tagEdited = true; renderTagChoices(); tagStatus.textContent = '选择已更新；尚未保存。';
-                    }
-                } catch (error) {
-                    if (error?.name !== 'AbortError') tagStatus.textContent = core_text.safeErrorSummary(error);
-                } finally { tagAction.disabled = false; }
-            })();
-            return;
-        }
-        const preset = event.target.closest?.('[data-rmt-theme-preset]');
-        if (preset) {
-            core_settings.updatePluginSettings({ themeMode: 'custom', themeCustom: { ...(preset.dataset.rmtThemePreset === 'night' ? core_constants.NIGHT_THEME_PALETTE : core_constants.DEFAULT_THEME_PALETTE) } });
-            refreshGenerationSettingsUi();
-            return;
-        }
-        const settingsSummary = event.target.closest?.('[data-rmt-settings-section] > summary');
-        if (settingsSummary && settingsSummary.parentElement?.dataset.rmtSettingsSection !== 'voice') hydrateSettingsPanel({ memory: settingsSummary.parentElement?.dataset.rmtSettingsSection === 'memory' });
-        const themeReset = event.target.closest?.('[data-rmt-theme-reset]');
-        if (themeReset) {
-            core_settings.updatePluginSettings({ themeMode: 'default', themeAlpha: core_constants.DEFAULT_SETTINGS.themeAlpha, themeCustom: { ...core_constants.DEFAULT_THEME_PALETTE } });
-            refreshThemeUi();
-            refreshGenerationSettingsUi();
-            globalThis.toastr?.success?.('已恢复心迹回廊默认配色。', '心迹回廊');
-            return;
-        }
-        const memoryAutoRead = event.target.closest?.('[data-rmt-memory-auto-read]');
-        if (memoryAutoRead) {
-            memoryAutoRead.disabled = true;
-            memoryAutoRead.querySelector('small')?.replaceChildren(document.createTextNode('正在读取…'));
-            archive_repository.readCurrentChatMemoryPlugins()
-                .then(() => refreshMemoryIngressUi())
-                .catch(error => globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心迹回廊'))
-                .finally(() => { memoryAutoRead.disabled = false; const small = memoryAutoRead.querySelector('small'); if (small) small.textContent = '已注册的当前聊天来源'; });
-            return;
-        }
-        const memoryFileChoose = event.target.closest?.('[data-rmt-memory-file-choose]');
-        if (memoryFileChoose) {
-            panel.querySelector('[data-rmt-memory-file-input]')?.click?.();
-            return;
-        }
-        const memoryFileCommit = event.target.closest?.('[data-rmt-memory-file-commit]');
-        if (memoryFileCommit) {
-            if (!pendingMemoryFilePreview) {
-                globalThis.toastr?.warning?.('请先选择并预览记忆文件。', '心迹回廊');
-                return;
-            }
-            if (!panel.querySelector('[data-rmt-memory-file-history-confirm]')?.checked) {
-                globalThis.toastr?.warning?.('请先确认：文件内容是已经发生的历史/摘要，不是角色设定。', '心迹回廊');
-                return;
-            }
-            memoryFileCommit.disabled = true;
-            archive_repository.commitCurrentChatMemoryFilePreview(pendingMemoryFilePreview, core_context.currentCharacterGuard(), { confirmedHistory: true })
-                .then(async summary => {
-                    pendingMemoryFilePreview = null;
-                    const previewPanel = panel.querySelector('[data-rmt-memory-file-preview]');
-                    if (previewPanel) previewPanel.hidden = true;
-                    globalThis.toastr?.success?.(`已导入来源账本：${summary.recordCount} 条。`, '心迹回廊');
-                    await refreshMemoryIngressUi();
-                })
-                .catch(error => globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心迹回廊'))
-                .finally(() => { memoryFileCommit.disabled = false; });
-            return;
-        }
-        const memorySourceClear = event.target.closest?.('[data-rmt-memory-source-clear]');
-        if (memorySourceClear) {
-            if (!globalThis.confirm?.('只清除当前角色、当前聊天在“心迹回廊”内保存的来源账本。正式 Mxxx、聊天和第三方记忆都不会删除。确定继续吗？')) return;
-            memorySourceClear.disabled = true;
-            archive_repository.clearCurrentChatImportedSources()
-                .then(async () => {
-                    pendingMemoryFilePreview = null;
-                    const previewPanel = panel.querySelector('[data-rmt-memory-file-preview]');
-                    if (previewPanel) previewPanel.hidden = true;
-                    await refreshMemoryIngressUi();
-                    globalThis.toastr?.success?.('当前聊天的心迹回廊来源账本已清除并验证。', '心迹回廊');
-                })
-                .catch(error => globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心迹回廊'))
-                .finally(() => { memorySourceClear.disabled = false; });
-            return;
-        }
-        const manualChoiceButton = event.target.closest?.('[data-rmt-api-select-manual]');
-        if (manualChoiceButton) {
-            core_settings.beginApiConfigurationOperation();
-            panel.dataset.rmtApiEditor = 'manual';
-            refreshGenerationSettingsUi();
-            return;
-        }
-        const manualClearButton = event.target.closest?.('[data-rmt-manual-api-key-clear]');
-        if (manualClearButton) {
-            clearTimeout(manualAutosaves.get(panel)); manualAutosaves.delete(panel);
-            const keyInput = panel.querySelector('[data-rmt-manual-api-key]'); if (keyInput) keyInput.value = '';
-            void core_settings.forgetManualApiCredential().then(() => {
-                refreshGenerationSettingsUi();
-                const status = panel.querySelector('[data-rmt-manual-save-status]'); if (status) status.textContent = '本插件手动 Key 已清除，主聊天连接未改。';
-            }).catch(error => globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊'));
-            return;
-        }
-        if (event.target.closest?.('[data-rmt-manual-api-save]')) { void saveManualPanel(panel, true); return; }
-        const manualRefreshButton = event.target.closest?.('[data-rmt-manual-api-model-refresh]');
-        if (manualRefreshButton) {
-            refreshManualModelOptions({ fetchRemote: true })
-                .then(models => {
-                    if (!models?.length) return;
-                    if (panel.dataset.rmtManualModelFallback === '1') globalThis.toastr?.warning?.('远程模型列表暂不可用，已保留手动 API 自己保存的模型。', '心迹回廊');
-                    else globalThis.toastr?.success?.(`已找到 ${models.length} 个模型。`, '心迹回廊');
-                })
-                .catch(error => globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心迹回廊'));
-            return;
-        }
-        const modelRefreshButton = event.target.closest?.('[data-rmt-api-model-refresh]');
-        if (modelRefreshButton) {
-            refreshModelOptions({ fetchRemote: true })
-                .then(result => {
-                    if (!result) return;
-                    if (result.fallbackOnly) globalThis.toastr?.warning?.('远程列表暂不可用，已显示这一连接保存的模型。', '心迹回廊');
-                    else globalThis.toastr?.success?.('模型列表已更新。', '心迹回廊');
-                })
-                .catch(error => globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心迹回廊'));
-            return;
-        }
-        const apiImportButton = event.target.closest?.('[data-rmt-api-import-current]');
-        if (apiImportButton) {
-            panel.dataset.rmtApiEditor = 'profile';
-            const operationEpoch = core_settings.beginApiConfigurationOperation();
-            const uiRequestEpoch = Number(panel.dataset.rmtOneClickRequest || 0) + 1;
-            panel.dataset.rmtOneClickRequest = String(uiRequestEpoch);
-            const isLatestUiRequest = () => Number(panel.dataset.rmtOneClickRequest || 0) === uiRequestEpoch;
-            apiImportButton.disabled = true;
-            core_settings.importCurrentSillyTavernConnection({
-                isCurrent: () => core_settings.isCurrentApiConfigurationOperation(operationEpoch),
-            }).then(result => {
-                if (!isLatestUiRequest()) return;
-                refreshGenerationSettingsUi();
-                const current = core_settings.getPluginSettings();
-                if (current.apiConnectionMode !== 'profile' || current.connectionProfileId !== core_text.normalizeText(result?.id, 160)) return;
-                globalThis.toastr?.success?.(result?.created ? '一键连接已创建并启用。' : '一键连接已启用。', '心迹回廊');
-                void refreshModelOptions({ fetchRemote: true });
-            }).catch(error => {
-                if (!isLatestUiRequest()) return;
-                if (error?.code !== 'RMT_API_CONFIGURATION_SUPERSEDED') {
-                    console.warn('[HeartbeatMemories] one-click configuration failed', core_text.safeErrorDiagnostic(error));
-                    globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心迹回廊');
-                }
-                refreshGenerationSettingsUi();
-            }).finally(() => {
-                if (isLatestUiRequest()) apiImportButton.disabled = false;
-            });
-            return;
-        }
-        const currentArchiveButton = event.target.closest?.('[data-rmt-settings-current-archive]');
-        if (currentArchiveButton) {
-            // In claim mode this button re-binds the existing archive instead of paying for
-            // a rebuild. Nothing is generated and no memory is altered.
-            if (currentArchiveButton.dataset.rmtArchiveClaim === '1') {
-                let info = null;
-                try { info = archive_repository.mismatchedArchiveInfo(core_context.currentCharacterGuard()); } catch {}
-                if (!info) { refreshSettingsMemoryStatus(); return; }
-                const ok = ui_overlay.confirmExplicitAction('认领这份档案到当前聊天？',
-                    `找到「${info.archiveName || '未命名档案'}」，共 ${info.memoryCount} 条记忆，但它记录的聊天标识与当前聊天不同。`
-                    + '\n\n聊天被重命名、分支或复制后会出现这种情况。'
-                    + '\n\n确定＝把它绑定到当前聊天。不改动任何记忆内容，不消耗生成额度，原标识会被保留备查。'
-                    + '\n取消＝保持原样。',
-                    { destructive: false });
-                if (!ok) return;
-                try {
-                    const claimed = archive_repository.claimMismatchedArchive(core_context.currentCharacterGuard());
-                    globalThis.toastr?.success?.(`已认领 ${claimed.memoryCount} 条记忆到当前聊天。`, '心迹回廊');
-                } catch (error) {
-                    globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊 · 认领失败');
-                }
-                refreshSettingsMemoryStatus();
-                return;
-            }
-            ui_overlay.requestCurrentArchiveImport();
-            return;
-        }
-        const openArchiveButton = event.target.closest?.('[data-rmt-settings-open-archive]');
-        if (openArchiveButton) {
-            void archive_library.showArchiveLibrary();
-            return;
-        }
-    });
-    return SETTINGS_BIND_UNHANDLED;
+        refreshSettingsMemoryStatus();
+        return;
+      }
+      ui_overlay.requestCurrentArchiveImport();
+      return;
+    }
+    const openArchiveButton = event.target.closest?.('[data-rmt-settings-open-archive]');
+    if (openArchiveButton) {
+      void archive_library.showArchiveLibrary();
+      return;
+    }
+  });
+  return SETTINGS_BIND_UNHANDLED;
 }
 
 __m_ui_settingsPanelHome_js.refreshMemoryIngressUi = refreshMemoryIngressUi;
@@ -73947,26 +74366,16 @@ __m_ui_settingsPanel_js.mountSettings = mountSettings;
 
 function __init_ui_settingsPanelMarkup_js() {
 // MODULE: ui/settingsPanelMarkup.js
+const core_requestCoordinator = __m_core_requestCoordinator_js;
 const core_settings = __m_core_settings_js;
 const advanced_ui = __m_ui_advancedGenerationUi_js;
 const cg_format_ui = __m_ui_cgFormatControl_js;
-const core_requestCoordinator = __m_core_requestCoordinator_js;
-const SETTINGS_LAUNCHER_ID = __m_ui_settingsPanelParts_js.SETTINGS_LAUNCHER_ID;
-const bindManualAutosave = __m_ui_settingsPanelParts_js.bindManualAutosave;
-const chatReadingSettingsHtml = __m_ui_settingsPanelParts_js.chatReadingSettingsHtml;
-const manualAutosaves = __m_ui_settingsPanelParts_js.manualAutosaves;
-const paintCoverageMap = __m_ui_settingsPanelParts_js.paintCoverageMap;
-const refreshGenerationSettingsUi = __m_ui_settingsPanelParts_js.refreshGenerationSettingsUi;
-const refreshImageGenerationSettingsUi = __m_ui_settingsPanelParts_js.refreshImageGenerationSettingsUi;
-const refreshManualModelOptions = __m_ui_settingsPanelParts_js.refreshManualModelOptions;
-const refreshModelOptions = __m_ui_settingsPanelParts_js.refreshModelOptions;
-const refreshReadingSettingsUi = __m_ui_settingsPanelParts_js.refreshReadingSettingsUi;
-const refreshSettingsMemoryStatus = __m_ui_settingsPanelParts_js.refreshSettingsMemoryStatus;
-const refreshThemeUi = __m_ui_settingsPanelParts_js.refreshThemeUi;
-const saveManualPanel = __m_ui_settingsPanelParts_js.saveManualPanel;
-const voiceSettingsHtml = __m_ui_settingsPanelParts_js.voiceSettingsHtml;
 const runtimeState = __m_core_state_js.state;
 const SETTINGS_MOUNT_UNHANDLED = __m_ui_settingsPanelHome_js.SETTINGS_MOUNT_UNHANDLED;
+const chatReadingSettingsHtml = __m_ui_settingsPanelParts_js.chatReadingSettingsHtml;
+const voiceSettingsHtml = __m_ui_settingsPanelParts_js.voiceSettingsHtml;
+
+
 
 
 
@@ -73975,7 +74384,7 @@ const SETTINGS_MOUNT_UNHANDLED = __m_ui_settingsPanelHome_js.SETTINGS_MOUNT_UNHA
 
 // 设置页整页 HTML（panel.innerHTML 赋值原样搬出）（原第 13–13 条语句）
 function renderSettingsPanelMarkup(panel) {
-    panel.innerHTML = `
+  panel.innerHTML = `
       <div class="inline-drawer-toggle inline-drawer-header rmt-settings-header">
         <div><b>心迹回廊</b><small> API SETTINGS</small></div>
         <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
@@ -74143,7 +74552,7 @@ function renderSettingsPanelMarkup(panel) {
           <button type="button" class="menu_button rmt-open-archive-room" data-rmt-settings-open-archive><i class="fa-solid fa-box-archive"></i><span>打开档案室</span></button>
         </div>
       </div>`;
-    return SETTINGS_MOUNT_UNHANDLED;
+  return SETTINGS_MOUNT_UNHANDLED;
 }
 
 __m_ui_settingsPanelMarkup_js.renderSettingsPanelMarkup = renderSettingsPanelMarkup;

@@ -1,6 +1,7 @@
 // 楼层里只放这一轮新增的段落。旧信、旧章节和旧日记留在插件页面。
 
 const LIST_KEYS = ['items', 'letters', 'entries', 'chapters', 'stories', 'songs', 'apps', 'events', 'routes', 'episodes', 'pages', 'nodes'];
+const MODULE_BODY_KEYS = ['dailyStrips', 'fireflyVoices', 'voiceDramas', 'scenarioDramas', 'greetings', 'dialogues'];
 
 function listedIds(item) {
     const rows = [];
@@ -20,6 +21,11 @@ function trimStory(story, ids, createdAt) {
     const chapters = story.chapters.filter(chapter => matches(chapter, ids, createdAt) || matches(story, ids, createdAt));
     if (!chapters.length) return null;
     return { ...story, chapters };
+}
+
+function hasOwnBody(session) {
+    if (typeof session?.relationshipSummary === 'string' && session.relationshipSummary.trim()) return true;
+    return MODULE_BODY_KEYS.some(key => Array.isArray(session?.[key]) && session[key].length > 0);
 }
 
 function lastUpdateOf(session) {
@@ -64,6 +70,8 @@ export function incrementalProjection(session, { sourceMemoryIds = [], createdAt
         copy[key] = key === 'stories' || !belongs ? filtered : narrowToRound(original, filtered, last.added);
         if (copy[key].length) kept = true;
     }
+    // 角色互动这类正文不在上面的列表里。抽中的编号对得上、又不是更早的一轮时，直接打开插件里已经写好的那份。
+    if (!kept && !predates && ids.size > 0 && hasOwnBody(copy)) kept = true;
     copy.incrementalOnly = true;
     return { kept, session: copy };
 }
