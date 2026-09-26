@@ -497,10 +497,11 @@ export function failedTaskRetrySpec({ kind = '', mode = '', pageId = '', draftId
     const archiveImport = kind === 'archive-import' || pageId === 'archiveImport' || label === '聊天经历整理';
     const archiveProfile = !archiveImport && (kind === 'archive-profile' || pageId === 'archiveProfile');
     const prefixChanged = failureCode === 'RMT_ARCHIVE_PREFIX_CHANGED';
+    const inputChanged = failureCode === 'RMT_RECOVERY_INPUT_CHANGED';
     if (archiveImport || archiveProfile) {
         if (archiveCanContinue === false) return null;
-        if (archiveImport && (archiveRestart || prefixChanged)) {
-            return { archiveRestart: true, label: prefixChanged ? '按当前聊天再整理' : '重试未完成部分' };
+        if (archiveImport && (archiveRestart || prefixChanged || inputChanged)) {
+            return { archiveRestart: true, label: prefixChanged || inputChanged ? '按当前聊天再整理' : '重试未完成部分' };
         }
         return { archive: archiveProfile ? 'profile' : 'import', draftId: draftId || '', label: '重试未完成部分' };
     }
@@ -534,12 +535,13 @@ function archiveRetryFlags(kind, failureCode = '') {
             ? archive_repository.getCurrentArchiveProfileRecoverySummary()
             : archive_repository.getCurrentArchiveImportRecoverySummary();
     } catch {
-        return { archiveCanContinue: true, archiveRestart: !profile || failureCode === 'RMT_ARCHIVE_PREFIX_CHANGED', failureCode };
+        return { archiveCanContinue: true, archiveRestart: !profile || failureCode === 'RMT_ARCHIVE_PREFIX_CHANGED' || failureCode === 'RMT_RECOVERY_INPUT_CHANGED', failureCode };
     }
     const code = failureCode || summary?.failureCode || '';
-    if (!summary) return { archiveCanContinue: true, archiveRestart: !profile || code === 'RMT_ARCHIVE_PREFIX_CHANGED', failureCode: code };
+    const staleArchive = code === 'RMT_ARCHIVE_PREFIX_CHANGED' || code === 'RMT_RECOVERY_INPUT_CHANGED';
+    if (!summary) return { archiveCanContinue: true, archiveRestart: !profile || staleArchive, failureCode: code };
     if (summary.capacityBlocked === true || summary.onlyArchivedDrafts === true) return { archiveCanContinue: false, archiveRestart: false, failureCode: code };
-    return { archiveCanContinue: true, archiveRestart: !profile && code === 'RMT_ARCHIVE_PREFIX_CHANGED', failureCode: code };
+    return { archiveCanContinue: true, archiveRestart: !profile && staleArchive, failureCode: code };
 }
 
 function failedRetryHtml(input) {
@@ -628,7 +630,8 @@ function collectTaskCards() {
         if (cards.some(card => sameJob(card, { label: row.label, mode: record.mode, pageId: record.pageId, draftId: record.draftId }))) continue;
         const kind = record.kind || row.kind || '';
         const failureCode = record.failureCode || row.failureCode
-            || (/历史基线不一致/.test(row.progressText || record.failureSummary || '') ? 'RMT_ARCHIVE_PREFIX_CHANGED' : '');
+            || (/历史基线不一致/.test(row.progressText || record.failureSummary || '') ? 'RMT_ARCHIVE_PREFIX_CHANGED'
+                : /与原任务不一致|与当前输入不一致/.test(row.progressText || record.failureSummary || '') ? 'RMT_RECOVERY_INPUT_CHANGED' : '');
         const retry = state === 'failed' && row.currentChat !== false
             ? failedRetryHtml({
                 kind, mode: record.mode, pageId: record.pageId, draftId: record.draftId, label: row.label,

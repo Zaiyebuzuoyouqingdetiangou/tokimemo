@@ -111,8 +111,11 @@ export async function importCurrentChatMemoryOperation({ fullRebuild = false, au
         stillCurrent: preparationStillCurrent });
     assertPreparationCurrent();
     const identity = capturedInput?.identity || batchIdentity(context, snapshotForIdentity);
+    const floorWindowSync = archive_batches.isAutomaticFloorWindowSync({
+        automatic, floorWindow, continueRecovery, restartImport, selectedDraft, nextIndependentBatch, draftId,
+    });
     if (progress) {
-        archive_batches.assertIdentity(progress.identity, identity);
+        archive_batches.assertIdentity(progress.identity, identity, { ignoreChatFingerprint: floorWindowSync });
         if (progress.archiveRevision !== (existing?.archiveRevision || '')) throw archive_batches.changedInput('archive');
     }
     if (pinnedInputs?.identity) archive_batches.assertIdentity(pinnedInputs.identity, identity);
@@ -565,6 +568,7 @@ export async function importCurrentChatMemoryOperation({ fullRebuild = false, au
             const live = core_context.currentCharacterGuard();
             if (!core_context.isCurrentTaskOrigin(origin, live)) throw archive_batches.changedInput('archive');
             if ((commitCompletedOnly || receiptBase?.archivePartialDraft)
+                && !floorWindowSync
                 && core_context.completeArchiveChatFingerprint(live) !== snapshotForIdentity.fullFingerprint) throw archive_batches.changedInput('chat');
             assertBatchCommitIdentity(live, memoryBank);
         };

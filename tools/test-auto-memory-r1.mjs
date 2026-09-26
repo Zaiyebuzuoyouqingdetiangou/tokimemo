@@ -191,6 +191,7 @@ test('wizard completion round-trips and does not rewrite corrupt or old settings
     assert.deepEqual(tasks.failedTaskRetrySpec({ kind: 'archive-import', label: '聊天经历整理' }), { archive: 'import', draftId: '', label: '重试未完成部分' });
     assert.equal(tasks.failedTaskRetrySpec({ kind: 'archive-import', archiveRestart: true }).archiveRestart, true);
     assert.deepEqual(tasks.failedTaskRetrySpec({ kind: 'archive-import', failureCode: 'RMT_ARCHIVE_PREFIX_CHANGED' }), { archiveRestart: true, label: '按当前聊天再整理' });
+    assert.deepEqual(tasks.failedTaskRetrySpec({ kind: 'archive-import', failureCode: 'RMT_RECOVERY_INPUT_CHANGED' }), { archiveRestart: true, label: '按当前聊天再整理' });
     assert.equal(tasks.failedTaskRetrySpec({ kind: 'archive-import', archiveCanContinue: false }), null);
     assert.equal(tasks.failedTaskRetrySpec({ kind: 'mode', mode: 'album', draftId: 'd1', pageId: 'album' }).mode, 'album');
     assert.equal(tasks.failedTaskRetrySpec({ oversized: true, mode: 'album', draftId: 'd1' }), null);

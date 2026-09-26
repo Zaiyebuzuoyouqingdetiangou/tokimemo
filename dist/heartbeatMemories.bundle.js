@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 286
-// Source SHA-256: d621180ccbca41ce1e823480bff60f4c3a82459acdc934eea8f150fd6930be42
+// Source SHA-256: fdbfe312f889aa27f25db346cd65e73c9c5cb844689ad67c90e169b4d4cdff92
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -11314,10 +11314,26 @@ function changedInput(category = 'unknown') {
     return error;
 }
 
-function assertIdentity(expected, actual) {
+function assertIdentity(expected, actual, options = {}) {
     for (const key of ['chat', 'character', 'persona', 'range', 'selection', 'configuration']) {
+        if (options.ignoreChatFingerprint === true && key === 'chat') continue;
         if (expected?.[key] !== actual?.[key]) throw changedInput(key);
     }
+}
+
+// Automatic per-floor sync captures one window, then the next user line grows the
+// live chat. That leftover batch still belongs to the same chat; blocking or
+// comparing the full-chat fingerprint would fail every interval-1 floor.
+function isAutomaticFloorWindowSync(options = {}) {
+    const start = Math.floor(Number(options.floorWindow?.start));
+    const end = Math.floor(Number(options.floorWindow?.end));
+    return options.automatic === true
+        && start >= 1 && end >= start
+        && options.continueRecovery !== true
+        && options.restartImport !== true
+        && options.nextIndependentBatch !== true
+        && !options.selectedDraft
+        && !options.draftId;
 }
 
 function cutEnd(value, start, size) {
@@ -11566,6 +11582,7 @@ __m_archive_importBatches_js.setArchiveBatchCharsForTests = setArchiveBatchChars
 __m_archive_importBatches_js.utf8Bytes = utf8Bytes;
 __m_archive_importBatches_js.changedInput = changedInput;
 __m_archive_importBatches_js.assertIdentity = assertIdentity;
+__m_archive_importBatches_js.isAutomaticFloorWindowSync = isAutomaticFloorWindowSync;
 __m_archive_importBatches_js.makeSourceUnits = makeSourceUnits;
 __m_archive_importBatches_js.excludeSavedUnits = excludeSavedUnits;
 __m_archive_importBatches_js.manifestFromBatches = manifestFromBatches;
@@ -24055,8 +24072,11 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
         stillCurrent: preparationStillCurrent });
     assertPreparationCurrent();
     const identity = capturedInput?.identity || batchIdentity(context, snapshotForIdentity);
+    const floorWindowSync = archive_batches.isAutomaticFloorWindowSync({
+        automatic, floorWindow, continueRecovery, restartImport, selectedDraft, nextIndependentBatch, draftId,
+    });
     if (progress) {
-        archive_batches.assertIdentity(progress.identity, identity);
+        archive_batches.assertIdentity(progress.identity, identity, { ignoreChatFingerprint: floorWindowSync });
         if (progress.archiveRevision !== (existing?.archiveRevision || '')) throw archive_batches.changedInput('archive');
     }
     if (pinnedInputs?.identity) archive_batches.assertIdentity(pinnedInputs.identity, identity);
@@ -24509,6 +24529,7 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
             const live = core_context.currentCharacterGuard();
             if (!core_context.isCurrentTaskOrigin(origin, live)) throw archive_batches.changedInput('archive');
             if ((commitCompletedOnly || receiptBase?.archivePartialDraft)
+                && !floorWindowSync
                 && core_context.completeArchiveChatFingerprint(live) !== snapshotForIdentity.fullFingerprint) throw archive_batches.changedInput('chat');
             assertBatchCommitIdentity(live, memoryBank);
         };
@@ -24801,6 +24822,9 @@ async function autoCommitCompletedArchiveChunks(options, outcome) {
 }
 
 async function importCurrentChatMemory(options = {}) {
+    if (archive_batches.isAutomaticFloorWindowSync(options) && options.parkPriorDraft !== true) {
+        options = { ...options, parkPriorDraft: true };
+    }
     let outcome;
     try {
         outcome = await importCurrentChatMemoryOnce(options);
@@ -24958,11 +24982,12 @@ async function runArchiveImportPrepared(context, options, taskTrace, admission) 
             '只保存本批已校验结果，不请求模型、不删除旧记忆；保存成功后才推进批次。', { destructive: false })) return { status: 'cancelled' };
         return saveCurrentArchivePendingResults(context, existing, options.logicalTask, taskTrace);
     }
+    const floorWindowSync = archive_batches.isAutomaticFloorWindowSync(options);
     let selectedDraft = null, sourceExisting;
     if (options.draftId) selectedDraft = archive_importRecovery.readArchiveRecoveryDraft(hydrationOrigin, options.draftId);
     // A completed pending result already owns its validated content. Its local
     // save retry must precede source-journal admission (including a card rename).
-    else if (!options.restartImport && pending && !pending.onlyArchivedDrafts && !pending.awaitingCommit) {
+    else if (!options.restartImport && !floorWindowSync && pending && !pending.onlyArchivedDrafts && !pending.awaitingCommit) {
         const active = archive_importRecovery.listArchiveRecoveryDrafts(hydrationOrigin, 'import').find(row => !row.paused && row.stage === 'segments');
         if (active) selectedDraft = archive_importRecovery.readArchiveRecoveryDraft(hydrationOrigin, active.draftId);
     }
@@ -25008,7 +25033,7 @@ async function runArchiveImportPrepared(context, options, taskTrace, admission) 
             continueRecovery: !previousResult, independentResult, nextIndependentBatch: !!previousResult, baseMemoryMissing };
     }
     if (options.commitCompletedOnly && !selectedDraft) throw core_text.safeUserError('没有可先入档的原整理草稿，原记录未改动。', 'RMT_ARCHIVE_DRAFT_NOT_FOUND');
-    if (!selectedDraft && pending && !pending.onlyArchivedDrafts && !options.restartImport) {
+    if (!selectedDraft && pending && !pending.onlyArchivedDrafts && !options.restartImport && !floorWindowSync) {
         if (options.automatic === true) return { status: 'blocked' };
         if (pending.capacityBlocked) {
             globalThis.toastr?.warning?.(pending.notice, '心迹回廊 · 容量边界');
@@ -77679,10 +77704,11 @@ function failedTaskRetrySpec({ kind = '', mode = '', pageId = '', draftId = '', 
     const archiveImport = kind === 'archive-import' || pageId === 'archiveImport' || label === '聊天经历整理';
     const archiveProfile = !archiveImport && (kind === 'archive-profile' || pageId === 'archiveProfile');
     const prefixChanged = failureCode === 'RMT_ARCHIVE_PREFIX_CHANGED';
+    const inputChanged = failureCode === 'RMT_RECOVERY_INPUT_CHANGED';
     if (archiveImport || archiveProfile) {
         if (archiveCanContinue === false) return null;
-        if (archiveImport && (archiveRestart || prefixChanged)) {
-            return { archiveRestart: true, label: prefixChanged ? '按当前聊天再整理' : '重试未完成部分' };
+        if (archiveImport && (archiveRestart || prefixChanged || inputChanged)) {
+            return { archiveRestart: true, label: prefixChanged || inputChanged ? '按当前聊天再整理' : '重试未完成部分' };
         }
         return { archive: archiveProfile ? 'profile' : 'import', draftId: draftId || '', label: '重试未完成部分' };
     }
@@ -77716,12 +77742,13 @@ function archiveRetryFlags(kind, failureCode = '') {
             ? archive_repository.getCurrentArchiveProfileRecoverySummary()
             : archive_repository.getCurrentArchiveImportRecoverySummary();
     } catch {
-        return { archiveCanContinue: true, archiveRestart: !profile || failureCode === 'RMT_ARCHIVE_PREFIX_CHANGED', failureCode };
+        return { archiveCanContinue: true, archiveRestart: !profile || failureCode === 'RMT_ARCHIVE_PREFIX_CHANGED' || failureCode === 'RMT_RECOVERY_INPUT_CHANGED', failureCode };
     }
     const code = failureCode || summary?.failureCode || '';
-    if (!summary) return { archiveCanContinue: true, archiveRestart: !profile || code === 'RMT_ARCHIVE_PREFIX_CHANGED', failureCode: code };
+    const staleArchive = code === 'RMT_ARCHIVE_PREFIX_CHANGED' || code === 'RMT_RECOVERY_INPUT_CHANGED';
+    if (!summary) return { archiveCanContinue: true, archiveRestart: !profile || staleArchive, failureCode: code };
     if (summary.capacityBlocked === true || summary.onlyArchivedDrafts === true) return { archiveCanContinue: false, archiveRestart: false, failureCode: code };
-    return { archiveCanContinue: true, archiveRestart: !profile && code === 'RMT_ARCHIVE_PREFIX_CHANGED', failureCode: code };
+    return { archiveCanContinue: true, archiveRestart: !profile && staleArchive, failureCode: code };
 }
 
 function failedRetryHtml(input) {
@@ -77810,7 +77837,8 @@ function collectTaskCards() {
         if (cards.some(card => sameJob(card, { label: row.label, mode: record.mode, pageId: record.pageId, draftId: record.draftId }))) continue;
         const kind = record.kind || row.kind || '';
         const failureCode = record.failureCode || row.failureCode
-            || (/历史基线不一致/.test(row.progressText || record.failureSummary || '') ? 'RMT_ARCHIVE_PREFIX_CHANGED' : '');
+            || (/历史基线不一致/.test(row.progressText || record.failureSummary || '') ? 'RMT_ARCHIVE_PREFIX_CHANGED'
+                : /与原任务不一致|与当前输入不一致/.test(row.progressText || record.failureSummary || '') ? 'RMT_RECOVERY_INPUT_CHANGED' : '');
         const retry = state === 'failed' && row.currentChat !== false
             ? failedRetryHtml({
                 kind, mode: record.mode, pageId: record.pageId, draftId: record.draftId, label: row.label,

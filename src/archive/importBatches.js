@@ -25,10 +25,26 @@ export function changedInput(category = 'unknown') {
     return error;
 }
 
-export function assertIdentity(expected, actual) {
+export function assertIdentity(expected, actual, options = {}) {
     for (const key of ['chat', 'character', 'persona', 'range', 'selection', 'configuration']) {
+        if (options.ignoreChatFingerprint === true && key === 'chat') continue;
         if (expected?.[key] !== actual?.[key]) throw changedInput(key);
     }
+}
+
+// Automatic per-floor sync captures one window, then the next user line grows the
+// live chat. That leftover batch still belongs to the same chat; blocking or
+// comparing the full-chat fingerprint would fail every interval-1 floor.
+export function isAutomaticFloorWindowSync(options = {}) {
+    const start = Math.floor(Number(options.floorWindow?.start));
+    const end = Math.floor(Number(options.floorWindow?.end));
+    return options.automatic === true
+        && start >= 1 && end >= start
+        && options.continueRecovery !== true
+        && options.restartImport !== true
+        && options.nextIndependentBatch !== true
+        && !options.selectedDraft
+        && !options.draftId;
 }
 
 function cutEnd(value, start, size) {

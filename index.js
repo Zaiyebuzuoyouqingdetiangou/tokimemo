@@ -1,5 +1,5 @@
 const VERSION = '0.99.90';
-const BUILD = '0.99.90-r84.152-task-retry';
+const BUILD = '0.99.90-r84.153-interval-floor';
 
 const SETTINGS_ID = 'heartbeat_memories_settings';
 const MENU_ID = 'heartbeat_memories_menu_item';
