@@ -1,10 +1,13 @@
-import * as archive_backupStore from '../archive/backupStore.js';
-import * as archive_repository from '../archive/repository.js';
+// C-3c（r84.101）：别名沿用 archive_backupStore，函数体一字不改；实际指向 core 层的桥，不再 import archive 层。
+import * as archive_backupStore from './archiveBridge.js';
+// C-3c（r84.101）：别名沿用 archive_repository，函数体一字不改；实际指向 core 层的桥，不再 import archive 层。
+import * as archive_repository from './archiveBridge.js';
 import * as core_constants from './constants.js';
 import * as core_context from './context.js';
 import { state as runtimeState } from './state.js';
 import * as core_text from './text.js';
-import * as generation_recovery from '../generation/recovery.js';
+// C-3b（r84.99）：别名沿用 generation_recovery，函数体一字不改；实际指向 core 层的桥，不再 import generation 层。
+import * as generation_recovery from './generationBridge.js';
 import * as participant_contract from './participants.js';
 import { ARCHIVE_VERSIONS_CACHE_KEY, GENERATION_DRAFTS_CACHE_KEY, PARTICIPANT_REPLACEMENT_KEY, VERSION_PAGE_MODES, archiveBackupEntryForContext, archiveVersionSummary, archiveVersions, cacheScopeFromContext, clearRecoveryInCache, cloneCacheValue, generationDraftRecords, getCache, hydrateBackupCacheValue, participantConflict, participantOriginChanged, participantRoster, recoveryPageForVersion, rememberRuntimeSessionCache, retainLegacyGenerationDraft, saveMetadataDurably, serializeArchiveCommitOperation, serializeCacheScopeOperation } from './cacheRecords.js';
 import { commitArchiveCacheMutation } from './cacheCommit.js';

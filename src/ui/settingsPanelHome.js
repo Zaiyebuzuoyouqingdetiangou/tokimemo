@@ -22,14 +22,15 @@ import * as core_chatReadRange from '../core/chatReadRange.js';
 import * as ui_overlay from './overlay.js';
 import * as auto_memory_plan from '../autoMemory/planStore.js';
 import * as auto_memory_wizard from './autoMemoryWizard.js';
-import * as auto_memory_floor from '../autoMemory/floorPace.js';
 import * as wizard_plan from '../autoMemory/wizardPlan.js';
-import * as ui_countdown from './autoMemoryCountdown.js';
 import * as ui_scenePicker from './scenePicker.js';
 import * as ui_styles from './styles.js';
 import * as mirrorReader from './mirrorTtsReader.js';
 import { SETTINGS_LAUNCHER_ID, bindManualAutosave, chatReadingSettingsHtml, manualAutosaves, paintCoverageMap, refreshGenerationSettingsUi, refreshImageGenerationSettingsUi, refreshManualModelOptions, refreshModelOptions, refreshReadingSettingsUi, refreshSettingsMemoryStatus, refreshThemeUi, saveManualPanel, voiceSettingsHtml } from './settingsPanelParts.js';
 import * as dispatch_settingsPanelMarkup from './settingsPanelMarkup.js';
+
+// mountSettings 的连续语句分组放在 ui/settingsPanelHome.js；分组函数返回它表示“没处理”，接着往下走。
+export const SETTINGS_BIND_UNHANDLED = Symbol('SETTINGS_BIND_UNHANDLED');
 // mountSettings 的连续语句分组放在 ui/settingsPanelMarkup.js；分组函数返回它表示“没处理”，接着往下走。
 export const SETTINGS_MOUNT_UNHANDLED = Symbol('SETTINGS_MOUNT_UNHANDLED');
 // 设置页主体：主页设置面板状态、记忆导入入口刷新、设置页挂载与填充
@@ -128,35 +129,6 @@ export function hydrateSettingsPanel({ memory = false } = {}) {
     return true;
 }
 
-async function saveAutoMemoryPace(panel) {
-    const note = panel.querySelector('[data-rmt-auto-memory-gate]');
-    let context;
-    try { context = core_context.currentCharacterGuard(); }
-    catch { return; }
-    const settings = core_settings.getPluginSettings();
-    const latest = settings.autoMemoryLatestFloor === true;
-    const floor = latest ? auto_memory_floor.assistantFloorCount(context.chat) : (Array.isArray(context.chat) ? context.chat.length : 0);
-    const metadata = context.chatMetadata;
-    let result;
-    try { result = wizard_plan.pacePatch(metadata, { intervalFloors: settings.autoMemoryIntervalFloors, floor }, Date.now()); }
-    catch (error) { if (note) note.textContent = error?.safeToDisplay ? error.safeUserMessage : '间隔没有改。'; return; }
-    if (!result.changed) {
-        if (result.message && note) note.textContent = result.message;
-        ui_countdown.refreshAutoMemoryCountdown();
-        return;
-    }
-    try {
-        const before = auto_memory_plan.readAutoMemoryMetadata(metadata);
-        auto_memory_plan.commitAutoMemoryMetadata(metadata, result.snapshot, before.plan.revision);
-        await context.saveMetadataDebounced?.();
-    } catch (error) {
-        if (note) note.textContent = error?.safeToDisplay ? error.safeUserMessage : '间隔没有写进当前聊天。';
-        return;
-    }
-    ui_countdown.refreshAutoMemoryCountdown();
-    if (note && result.snapshot?.plan?.enabled) note.textContent = `已改成每 ${result.snapshot.plan.intervalFloors} 楼抽一次，从现在重新计。`;
-}
-
 async function restoreLegacyAutoUpdates(panel) {
     const note = panel.querySelector('[data-rmt-auto-memory-gate]');
     let context;
@@ -188,7 +160,7 @@ async function restoreLegacyAutoUpdates(panel) {
     }
     core_autoUpdates.notifyAutoUpdateSettingsChanged();
     refreshGenerationSettingsUi();
-    if (note) note.textContent = '自动留忆已关闭。你可以继续手动生成，也可以再打开回忆向导。';
+    if (note) note.textContent = '已恢复原来的按模块自动更新。自动留忆计划已关闭，偏好还留着。';
 }
 
 export function mountSettings({ homeTarget = null } = {}) {
@@ -233,19 +205,19 @@ export function mountSettings({ homeTarget = null } = {}) {
     refreshThemeUi();
     const tagDraft = panel.querySelector('[data-rmt-tag-draft]');
     const tagStatus = panel.querySelector('[data-rmt-tag-status]');
-    let tagChoices = new Map(), tagScanned = false, tagEdited = false, tagScanEpoch = 0;
+    const tagState = { tagChoices: new Map(), tagScanned: false, tagEdited: false, tagScanEpoch: 0 }; // r84.96: 标签扫描的共享状态，供拆出去的监听器一起读写
     const savedTagDraft = () => {
         const settings = core_settings.getPluginSettings();
         return settings.excludedContextTags;
     };
     const renderTagChoices = () => {
         const selected = new Set(core_contextTags.normalizeExcludedTags(tagDraft.value));
-        for (const name of selected) if (!tagChoices.has(name)) tagChoices.set(name, 0);
+        for (const name of selected) if (!tagState.tagChoices.has(name)) tagState.tagChoices.set(name, 0);
         const result = panel.querySelector('[data-rmt-tag-results]');
         // Empty/legacy initial state does not need to allocate a tag subtree.
-        if (!tagChoices.size) { result.textContent = ''; return; }
+        if (!tagState.tagChoices.size) { result.textContent = ''; return; }
         const fragment = document.createDocumentFragment();
-        for (const [name, count] of tagChoices) {
+        for (const [name, count] of tagState.tagChoices) {
             const label = document.createElement('label'); label.className = 'rmt-tag-choice';
             const input = document.createElement('input'); input.type = 'checkbox'; input.dataset.rmtTagName = name;
             input.checked = selected.has(name);
@@ -260,12 +232,12 @@ export function mountSettings({ homeTarget = null } = {}) {
         : '勾选的标签内容不读取；保存后用于后续整理。';
     renderTagChoices();
     const scanTagChoices = async () => {
-        const epoch = ++tagScanEpoch, context = core_context.currentCharacterGuard();
+        const epoch = ++tagState.tagScanEpoch, context = core_context.currentCharacterGuard();
         const scope = core_context.chatScopeKey(context), chat = context.chat, length = chat?.length;
         const lifecycle = runtimeState.runtimeLifecycleEpoch;
         const sourceSignature = source_guard.sourceReadSignature(context);
         const assertCurrent = () => {
-            if (epoch !== tagScanEpoch || !panel.isConnected || lifecycle !== runtimeState.runtimeLifecycleEpoch
+            if (epoch !== tagState.tagScanEpoch || !panel.isConnected || lifecycle !== runtimeState.runtimeLifecycleEpoch
                 || core_context.chatScopeKey(core_context.currentCharacterGuard()) !== scope
                 || core_context.getContext().chat !== chat || chat?.length !== length
                 || source_guard.sourceReadSignature(core_context.getContext()) !== sourceSignature) throw new DOMException('Changed', 'AbortError');
@@ -275,8 +247,8 @@ export function mountSettings({ homeTarget = null } = {}) {
         assertCurrent();
         const names = new Map(scanned.tags.map(tag => [tag.name, tag.count]));
         for (const name of core_contextTags.normalizeExcludedTags(tagDraft.value)) if (!names.has(name)) names.set(name, 0);
-        tagChoices = names; tagScanned = true;
-        if (!tagEdited) tagDraft.value = savedTagDraft().join(', ');
+        tagState.tagChoices = names; tagState.tagScanned = true;
+        if (!tagState.tagEdited) tagDraft.value = savedTagDraft().join(', ');
         renderTagChoices();
         tagStatus.textContent = '已扫描 ' + scanned.usedMessages + ' 条消息／' + scanned.tags.length + ' 种标签；选择后保存生效。';
     };
@@ -289,15 +261,52 @@ export function mountSettings({ homeTarget = null } = {}) {
     refreshCreative();
     advanced_ui.bindAdvancedGenerationUi(panel);
     bindManualAutosave(panel);
+    if (bindSettingsChange(panel, tagDraft, tagStatus, tagState) !== SETTINGS_BIND_UNHANDLED) return;
+    panel.addEventListener('input', event => {
+        if (event.target.closest?.('[data-rmt-scene-picker-root]')) {
+            void ui_scenePicker.handleScenePickerEvent(event);
+            return;
+        }
+        if (event.target === tagDraft) {
+            ++tagState.tagScanEpoch; tagState.tagEdited = true;
+            const selected = new Set(core_contextTags.normalizeExcludedTags(tagDraft.value));
+            for (const input of panel.querySelectorAll('[data-rmt-tag-name]')) input.checked = selected.has(input.dataset.rmtTagName);
+            tagStatus.textContent = '选择已更新；尚未保存。';
+            return;
+        }
+        if (event.target.matches?.('[data-rmt-creative-text]')) panel.querySelector('[data-rmt-creative-count]').textContent = event.target.value.length.toLocaleString() + ' / 20,000';
+        if (event.target.matches?.('[data-rmt-manual-api-base],[data-rmt-manual-api-key],[data-rmt-manual-api-model]')) {
+            panel.dataset.rmtManualDirty = '1';
+            if (event.target.matches?.('[data-rmt-manual-api-model]')) {
+                const picker = panel.querySelector('[data-rmt-manual-api-models]');
+                if (picker) picker.value = [...picker.options].some(option => option.value === event.target.value) ? event.target.value : '';
+            }
+        }
+        if (event.target.matches?.('[data-rmt-theme-alpha]')) {
+            core_settings.updatePluginSettings({ themeAlpha: Math.max(0.72, Math.min(1, Number(event.target.value) || 0.96)) });
+            refreshThemeUi();
+        }
+    });
+    if (bindSettingsClick(panel, tagDraft, tagStatus, tagState, savedTagDraft, renderTagChoices, scanTagChoices, refreshCreative) !== SETTINGS_BIND_UNHANDLED) return;
+    panel.addEventListener('focusin', event => {
+        if (event.target.closest?.('[data-rmt-settings-section="voice"]')) return;
+        if (panel.dataset.rmtHydrated !== '1' && event.target.matches?.('input,select,button,textarea')) hydrateSettingsPanel();
+    });
+    refreshSettingsMemoryStatus({ lightweight: true });
+    return true;
+}
+
+// 设置页“改设置”监听器（change）：切换下拉框、勾选开关、填完输入框（mountSettings 原第 31–31 条语句，一字未改地搬出）
+function bindSettingsChange(panel, tagDraft, tagStatus, tagState) {
     panel.addEventListener('change', async event => {
         if (await ui_scenePicker.handleScenePickerEvent(event)) return;
         if (cg_format_ui.handleCgFormatChange(event)) return;
         const target = event.target;
         if (target.matches?.('[data-rmt-tag-name]')) {
-            ++tagScanEpoch;
+            ++tagState.tagScanEpoch;
             const selected = new Set(core_contextTags.normalizeExcludedTags(tagDraft.value));
             if (target.checked) selected.add(target.dataset.rmtTagName); else selected.delete(target.dataset.rmtTagName);
-            tagDraft.value = [...selected].join(', '); tagEdited = true;
+            tagDraft.value = [...selected].join(', '); tagState.tagEdited = true;
             tagStatus.textContent = '选择已更新；尚未保存。';
             return;
         }
@@ -323,26 +332,9 @@ export function mountSettings({ homeTarget = null } = {}) {
             if (count) count.disabled = !target.checked;
             return;
         }
-        if (target.matches?.('[data-rmt-auto-memory-latest]')) {
-            core_settings.updatePluginSettings({ autoMemoryLatestFloor: !!target.checked });
-            void saveAutoMemoryPace(panel);
-            return;
-        }
-        if (target.matches?.('[data-rmt-auto-memory-interval]') && target.closest?.('[data-rmt-settings-section="auto"]')) {
-            core_settings.updatePluginSettings({ autoMemoryIntervalFloors: target.value });
-            target.value = String(core_settings.getPluginSettings().autoMemoryIntervalFloors);
-            void saveAutoMemoryPace(panel);
-            return;
-        }
-        if (target.matches?.('[data-rmt-auto-retry-count], [data-rmt-auto-memory-retry-count]')) {
-            core_settings.updatePluginSettings({ autoRetryCount: target.value, autoRetryEnabled: true });
-            const count = String(core_settings.getPluginSettings().autoRetryCount);
-            for (const input of panel.querySelectorAll('[data-rmt-auto-retry-count], [data-rmt-auto-memory-retry-count]')) {
-                input.value = count;
-                input.disabled = false;
-            }
-            const retry = panel.querySelector('[data-rmt-auto-retry]');
-            if (retry) retry.checked = true;
+        if (target.matches?.('[data-rmt-auto-retry-count]')) {
+            core_settings.updatePluginSettings({ autoRetryCount: target.value });
+            target.value = String(core_settings.getPluginSettings().autoRetryCount);
             return;
         }
         if (target.matches?.('[data-rmt-read-mode], [data-rmt-read-recent], [data-rmt-read-start], [data-rmt-read-end], [data-rmt-read-hidden]')) {
@@ -547,31 +539,11 @@ export function mountSettings({ homeTarget = null } = {}) {
             refreshGenerationSettingsUi();
         }
     });
-    panel.addEventListener('input', event => {
-        if (event.target.closest?.('[data-rmt-scene-picker-root]')) {
-            void ui_scenePicker.handleScenePickerEvent(event);
-            return;
-        }
-        if (event.target === tagDraft) {
-            ++tagScanEpoch; tagEdited = true;
-            const selected = new Set(core_contextTags.normalizeExcludedTags(tagDraft.value));
-            for (const input of panel.querySelectorAll('[data-rmt-tag-name]')) input.checked = selected.has(input.dataset.rmtTagName);
-            tagStatus.textContent = '选择已更新；尚未保存。';
-            return;
-        }
-        if (event.target.matches?.('[data-rmt-creative-text]')) panel.querySelector('[data-rmt-creative-count]').textContent = event.target.value.length.toLocaleString() + ' / 20,000';
-        if (event.target.matches?.('[data-rmt-manual-api-base],[data-rmt-manual-api-key],[data-rmt-manual-api-model]')) {
-            panel.dataset.rmtManualDirty = '1';
-            if (event.target.matches?.('[data-rmt-manual-api-model]')) {
-                const picker = panel.querySelector('[data-rmt-manual-api-models]');
-                if (picker) picker.value = [...picker.options].some(option => option.value === event.target.value) ? event.target.value : '';
-            }
-        }
-        if (event.target.matches?.('[data-rmt-theme-alpha]')) {
-            core_settings.updatePluginSettings({ themeAlpha: Math.max(0.72, Math.min(1, Number(event.target.value) || 0.96)) });
-            refreshThemeUi();
-        }
-    });
+    return SETTINGS_BIND_UNHANDLED;
+}
+
+// 设置页“点按钮”监听器（click）：扫描标签、测试连接等设置页按钮（mountSettings 原第 33–33 条语句，一字未改地搬出）
+function bindSettingsClick(panel, tagDraft, tagStatus, tagState, savedTagDraft, renderTagChoices, scanTagChoices, refreshCreative) {
     panel.addEventListener('click', event => {
         if (event.target.closest?.('[data-rmt-scene-picker-root]')) {
             void ui_scenePicker.handleScenePickerEvent(event);
@@ -631,27 +603,27 @@ export function mountSettings({ homeTarget = null } = {}) {
             void (async () => {
                 try {
                     if (tagAction.hasAttribute('data-rmt-tag-save')) {
-                        ++tagScanEpoch;
+                        ++tagState.tagScanEpoch;
                         const tags = core_contextTags.normalizeExcludedTags(tagDraft.value);
                         core_settings.updatePluginSettings({ contextTagMode: 'exclude', excludedContextTags: tags });
-                        tagDraft.value = tags.join(', '); tagEdited = false; renderTagChoices();
+                        tagDraft.value = tags.join(', '); tagState.tagEdited = false; renderTagChoices();
                         tagStatus.textContent = '已保存 ' + tags.length + ' 个过滤标签，标签内的内容不读取；下次整理生效，聊天和旧档案未改动。';
                     } else if (tagAction.hasAttribute('data-rmt-tag-cancel')) {
-                        ++tagScanEpoch; tagEdited = false; tagDraft.value = savedTagDraft().join(', '); renderTagChoices();
+                        ++tagState.tagScanEpoch; tagState.tagEdited = false; tagDraft.value = savedTagDraft().join(', '); renderTagChoices();
                         tagStatus.textContent = '已撤销未保存编辑。';
                     } else if (tagAction.hasAttribute('data-rmt-tag-clear')) {
-                        ++tagScanEpoch; tagEdited = true; tagDraft.value = ''; renderTagChoices();
+                        ++tagState.tagScanEpoch; tagState.tagEdited = true; tagDraft.value = ''; renderTagChoices();
                         tagStatus.textContent = '已清空选择；尚未保存。';
                     } else if (tagAction.hasAttribute('data-rmt-tag-scan')) {
                         tagAction.disabled = true;
                         await scanTagChoices();
                     } else {
                         tagAction.disabled = true;
-                        if (!tagScanned) await scanTagChoices();
-                        ++tagScanEpoch;
+                        if (!tagState.tagScanned) await scanTagChoices();
+                        ++tagState.tagScanEpoch;
                         const selected = new Set(core_contextTags.normalizeExcludedTags(tagDraft.value));
-                        tagDraft.value = [...tagChoices.keys()].filter(name => tagAction.hasAttribute('data-rmt-tag-all') || !selected.has(name)).join(', ');
-                        tagEdited = true; renderTagChoices(); tagStatus.textContent = '选择已更新；尚未保存。';
+                        tagDraft.value = [...tagState.tagChoices.keys()].filter(name => tagAction.hasAttribute('data-rmt-tag-all') || !selected.has(name)).join(', ');
+                        tagState.tagEdited = true; renderTagChoices(); tagStatus.textContent = '选择已更新；尚未保存。';
                     }
                 } catch (error) {
                     if (error?.name !== 'AbortError') tagStatus.textContent = core_text.safeErrorSummary(error);
@@ -831,10 +803,5 @@ export function mountSettings({ homeTarget = null } = {}) {
             return;
         }
     });
-    panel.addEventListener('focusin', event => {
-        if (event.target.closest?.('[data-rmt-settings-section="voice"]')) return;
-        if (panel.dataset.rmtHydrated !== '1' && event.target.matches?.('input,select,button,textarea')) hydrateSettingsPanel();
-    });
-    refreshSettingsMemoryStatus({ lightweight: true });
-    return true;
+    return SETTINGS_BIND_UNHANDLED;
 }

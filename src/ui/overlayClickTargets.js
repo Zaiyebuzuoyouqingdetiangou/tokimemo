@@ -157,12 +157,9 @@ export function overlayClickRecordTargets(event) {
         draftId: recoveryButton.dataset.rmtRecoveryDraftId || '', pageId: recoveryButton.dataset.rmtRecoveryPageId || '',
     }), { label: '正在继续…' });
     const archiveRecoveryButton = event.target.closest?.('[data-rmt-archive-recovery]');
-    if (archiveRecoveryButton) return void recovery_action.runRecoveryAction(archiveRecoveryButton, recoveryButtonKey('archive-retry', archiveRecoveryButton, archiveRecoveryButton.dataset.rmtArchiveRecovery), async () => {
-        const result = archiveRecoveryButton.dataset.rmtArchiveRecovery === 'profile'
-            ? await archive_repository.rewriteCurrentArchiveVerdict({ draftId: archiveRecoveryButton.dataset.rmtArchiveRecoveryDraftId || '' })
-            : await archive_repository.continueCurrentArchiveImport({ draftId: archiveRecoveryButton.dataset.rmtArchiveRecoveryDraftId || '' });
-        if (result?.status === 'blocked') globalThis.toastr?.info?.('没有可继续的整理草稿，这次没有重新请求。正式档案还在。', '心迹回廊');
-    }, { label: '正在继续…' });
+    if (archiveRecoveryButton) return void recovery_action.runRecoveryAction(archiveRecoveryButton, recoveryButtonKey('archive-retry', archiveRecoveryButton, archiveRecoveryButton.dataset.rmtArchiveRecovery), () => (archiveRecoveryButton.dataset.rmtArchiveRecovery === 'profile'
+        ? archive_repository.rewriteCurrentArchiveVerdict({ draftId: archiveRecoveryButton.dataset.rmtArchiveRecoveryDraftId || '' })
+        : archive_repository.continueCurrentArchiveImport({ draftId: archiveRecoveryButton.dataset.rmtArchiveRecoveryDraftId || '' })), { label: '正在继续…' });
     const expandedCgButton = event.target.closest?.('[data-rmt-expanded-cg]');
     if (expandedCgButton) return void expanded_cg_view.handleExpandedCgButton(expandedCgButton);
     const bedtimeButton = event.target.closest?.('[data-rmt-bedtime]');

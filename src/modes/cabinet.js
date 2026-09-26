@@ -5,6 +5,7 @@ import * as generation_prompts from '../generation/prompts.js';
 import * as core_participants from '../core/participants.js';
 import * as ui_overlay from '../ui/overlay.js';
 import { state as runtimeState } from '../core/state.js';
+import * as generation_modesBridge from '../generation/modesBridge.js';
 
 export function cabinetPrompt(context, memoryBank) {
     return generation_prompts.promptSafetyBoundary(context, '两个人的陈列柜', null, memoryBank) + '\n' +
@@ -80,3 +81,6 @@ export function projectCabinetProgress({ segments, memoryBank, previousSession }
     if (!fresh.items.length) return null;
     return previousSession ? mergeCabinet(previousSession, fresh) : fresh;
 }
+
+// 重构清单 C-4（r84.115）：把生成层要用的函数登记到 generation/modesBridge.js（生成层不再 import 本文件）。
+generation_modesBridge.registerGenerationModesBridge({ cabinetPrompt, normalizeCabinet, mergeCabinet, projectCabinetProgress });

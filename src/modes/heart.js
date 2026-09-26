@@ -2,6 +2,8 @@ import * as split_heartData from './heartData.js';
 import * as split_heartPrompts from './heartPrompts.js';
 import * as split_heartRuntime from './heartRuntime.js';
 import * as split_heartGeneration from './heartGeneration.js';
+import * as core_modesBridge from '../core/modesBridge.js';
+import * as generation_modesBridge from '../generation/modesBridge.js';
 // 以下导出已搬到 modes/heartData.js、modes/heartPrompts.js、modes/heartRuntime.js、modes/heartGeneration.js，这里原样转发，调用方不用改。
 export const normalizeHeartCore = split_heartData.normalizeHeartCore;
 export const heartCorePrompt = split_heartPrompts.heartCorePrompt;
@@ -57,4 +59,10 @@ export const normalizeHeartScript = split_heartData.normalizeHeartScript;
 export const normalizeHeartPhotoshoots = split_heartData.normalizeHeartPhotoshoots;
 export const normalizeHeart = split_heartData.normalizeHeart;
 
+// 重构清单 C-3（r84.98）：把 core 层要用的函数登记到 core/modesBridge.js（core 不再 import 本文件）。
+core_modesBridge.registerModesBridge({ mergeDeferredHeartPatches });
 
+// 重构清单 C-4（r84.120）：把生成层要用的函数登记到 generation/modesBridge.js（生成层不再 import 本文件）。
+generation_modesBridge.registerGenerationModesBridge({
+    heartCorePrompt, heartPostVoicePrompt, heartSeasonVoicePrompt, heartSeasonScenarioPrompt, heartStripsPrompt, heartDramaRelationshipOnlyContext, requestHeartPart, normalizeVoiceDramaPart, normalizeScenarioDramaPart, normalizeFireflyVoicesPart, normalizeHeartStripsPart, normalizeHeart, makeHeartShell, generateHeartSection, generateHeartFirefliesSection, generateHeartSeasonSection, generateHeartWithRepair, projectHeartProgress,
+});

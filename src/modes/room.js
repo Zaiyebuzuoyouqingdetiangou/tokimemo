@@ -5,6 +5,8 @@ import * as split_roomParticipantData from './roomParticipantData.js';
 import * as split_roomLife from './roomLife.js';
 import * as split_roomData from './roomData.js';
 import * as split_roomRender from './roomRender.js';
+import * as core_modesBridge from '../core/modesBridge.js';
+import * as generation_modesBridge from '../generation/modesBridge.js';
 // 以下导出已搬到 modes/roomProfile.js、modes/roomPets.js、modes/roomLayout.js、modes/roomParticipantData.js、modes/roomLife.js、modes/roomData.js、modes/roomRender.js，这里原样转发，调用方不用改。
 export const ROOM_PET_SPECIES = split_roomPets.ROOM_PET_SPECIES;
 export const roomNarrativeClaimsSharedHistory = split_roomProfile.roomNarrativeClaimsSharedHistory;
@@ -77,4 +79,7 @@ export const roomParticipantSlots = split_roomLife.roomParticipantSlots;
 export const roomSelectParticipant = split_roomRender.roomSelectParticipant;
 export const renderRoomParticipants = split_roomRender.renderRoomParticipants;
 
-
+// 重构清单 C-3（r84.98）：把 core 层要用的函数登记到 core/modesBridge.js（core 不再 import 本文件）。
+core_modesBridge.registerModesBridge({ renderRoom });
+// 重构清单 C-4（r84.110）：把生成层要用的函数登记到 generation/modesBridge.js（生成层不再 import 本文件）。
+generation_modesBridge.registerGenerationModesBridge({ roomNarrativeClaimsSharedHistory, roomNeedsSchemaUpgrade, normalizeRoom, projectRoomProgress, generateRoomWithRepair, refreshRoomFigure, generateRoomIncrementalWithRepair, ensureRoomLifePlan, renderRoom, preserveRoomLinkedContent });

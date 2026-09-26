@@ -12,7 +12,8 @@ import * as generation_recovery from './recovery.js';
 import * as generation_progress from './partialProgress.js';
 import { state as runtimeState } from '../core/state.js';
 import * as core_text from '../core/text.js';
-import * as modes_advEvent from '../modes/advEvent.js';
+// C-4（r84.118）：别名沿用 modes_advEvent，函数体一字不改；实际指向生成层的桥，不再 import ADV 模块。
+import * as modes_advEvent from './modesBridge.js';
 import * as ui_overlay from '../ui/overlay.js';
 import { captureGenerationContent, contentContextSources, fitGenerationContentSnapshot, generationContentContext, snapshotGenerationContent } from './generationContext.js';
 import { recoveryModeTaskScopes, recoverySettingsIdentity } from './generationRequest.js';

@@ -4,6 +4,7 @@ import * as settingsApi from '../core/settings.js';
 import * as constants from '../core/constants.js';
 import * as contextTags from '../core/contextTags.js';
 import * as stateModule from '../core/state.js';
+import * as core_archiveBridge from '../core/archiveBridge.js';
 
 export function sourceReadSignature(context) {
     const settings = settingsApi.getPluginSettings(context);
@@ -50,3 +51,6 @@ export function waitForSourceRead(read, signal = null, timeoutMs = 0) {
 export function boundedSourceRead(read, signal = null, timeoutMs = 15000) {
     return waitForSourceRead(read, signal, Math.max(1, Math.min(15000, Number(timeoutMs) || 15000)));
 }
+
+// 重构清单 C-3c（r84.100）：把 core 层要用的函数登记到 core/archiveBridge.js（core 不再 import 本文件）。
+core_archiveBridge.registerArchiveBridge({ boundedSourceRead, waitForSourceRead });

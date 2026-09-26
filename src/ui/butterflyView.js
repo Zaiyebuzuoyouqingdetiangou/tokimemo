@@ -1,4 +1,6 @@
 import * as expanded_cg_view from './expandedCgView.js';
+// C-4（r84.111）：生成层不再 import 蝴蝶效应。界面加载本页时把玩法登记进生成层。
+import * as modes_butterfly from '../modes/butterfly.js';
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
 import * as core_constants from '../core/constants.js';

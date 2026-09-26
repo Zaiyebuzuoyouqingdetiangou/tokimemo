@@ -4,6 +4,7 @@ import * as split_generationRequest from './generationRequest.js';
 import * as split_generationSavedActions from './generationSavedActions.js';
 import * as split_generationModes from './generationModes.js';
 import { autoContinuedDrafts } from './generationModes.js';
+import * as core_generationBridge from '../core/generationBridge.js';
 // 以下导出已搬到 generation/generationContext.js、generation/generationRequest.js、generation/generationSavedActions.js、generation/generationModes.js，这里原样转发，调用方不用改。
 export const generationContentSettings = split_generationContext.generationContentSettings;
 export const fitGenerationContentSnapshot = split_generationContext.fitGenerationContentSnapshot;
@@ -54,3 +55,6 @@ queueMicrotask(() => {
         }, 400);
     });
 });
+
+// 重构清单 C-3b（r84.99）：把 core 层要用的函数登记到 core/generationBridge.js（core 不再 import 本文件）。
+core_generationBridge.registerGenerationBridge({ generateMode });

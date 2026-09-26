@@ -3,6 +3,7 @@ import * as split_recoveryFeedback from './recoveryFeedback.js';
 import * as split_recoverySegments from './recoverySegments.js';
 import { TOKEN, changeJournal, holdUnsavedReply, noteHeldReplyExport, projectHeldReply, recoveryError, requestTokens } from './recoveryFeedback.js';
 import { assertRetainedSize, replaceSegment } from './recoverySegments.js';
+import * as core_generationBridge from '../core/generationBridge.js';
 // 以下导出已搬到 generation/recoveryFeedback.js、generation/recoverySegments.js，这里原样转发，调用方不用改。
 export const GENERATION_RECOVERY_CACHE_KEY = split_recoveryFeedback.GENERATION_RECOVERY_CACHE_KEY;
 export const GENERATION_RECOVERY_LIMITS = split_recoveryFeedback.GENERATION_RECOVERY_LIMITS;
@@ -93,3 +94,6 @@ export async function recordRecoveryTruncation(options, raw, error) {
     }
     return true;
 }
+
+// 重构清单 C-3b（r84.99）：把 core 层要用的函数登记到 core/generationBridge.js（core 不再 import 本文件）。
+core_generationBridge.registerGenerationBridge({ readGenerationContentSnapshot, generationRecoverySummary, generationRecoveryDigest, canRestartLegacyConfiguration, generationRecoveryMismatch, generationRecoveryProgress, generationRecoveryForOrigin });

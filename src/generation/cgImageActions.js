@@ -121,7 +121,7 @@ export async function retryPendingCgImage(target) {
         globalThis.toastr?.success?.('已回填原先生成的图片，没有再次生图。', '心迹回廊');
         return true;
     } catch (error) {
-        globalThis.toastr?.error?.(cgImageCommitErrorMessage(error), '心迹回廊');
+        globalThis.toastr?.error?.(cgImageCommitErrorMessage(error), '心迹回廊', { preventDuplicates: true });
         return false;
     } finally { pending.busy = false; }
 }
@@ -260,7 +260,7 @@ export async function drawSelectedCgImage({ promptOverride, promptMetadata, prom
         if (completedImage && isCgImageTargetCurrent(captured, { requireSelection: false })) {
             if (pendingCgImages.size >= 32) pendingCgImages.delete(pendingCgImages.keys().next().value);
             pendingCgImages.set(taskKey, { key: taskKey, target: captured, image: completedImage, busy: false });
-            globalThis.toastr?.error?.(cgImageCommitErrorMessage(error), '心迹回廊');
+            globalThis.toastr?.error?.(cgImageCommitErrorMessage(error), '心迹回廊', { preventDuplicates: true });
         } else {
             console.error('[HeartbeatMemories] CG image generation failed', core_text.safeErrorDiagnostic(error));
             globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心迹回廊');

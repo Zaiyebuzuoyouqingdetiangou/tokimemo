@@ -1,5 +1,6 @@
 import * as split_characterProfile from './characterProfile.js';
 import * as split_relationsView from './relationsView.js';
+import * as generation_modesBridge from '../generation/modesBridge.js';
 // 以下导出已搬到 modes/characterProfile.js、modes/relationsView.js，这里原样转发，调用方不用改。
 export const relationParticipantNames = split_characterProfile.relationParticipantNames;
 export const extractLiteralCharacterFacts = split_characterProfile.extractLiteralCharacterFacts;
@@ -28,5 +29,8 @@ export const cardRelationSourcesHtml = split_relationsView.cardRelationSourcesHt
 export const characterProfileHtml = split_relationsView.characterProfileHtml;
 export const worldlineDiscoveriesHtml = split_relationsView.worldlineDiscoveriesHtml;
 export const renderRelations = split_relationsView.renderRelations;
+
+// 重构清单 C-4（r84.112）：把生成层要用的函数登记到 generation/modesBridge.js（生成层不再 import 本文件）。
+generation_modesBridge.registerGenerationModesBridge({ normalizeRelations, fitRelationSettingEntries, relationsPrompt, mergeBudgetRetainedSettingRelations, archiveCharacterProfileKey, projectRelationsProgress, relationsViewIdentity });
 
 

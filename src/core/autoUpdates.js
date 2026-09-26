@@ -3,8 +3,10 @@ import * as core_constants from './constants.js';
 import * as core_context from './context.js';
 import * as core_settings from './settings.js';
 import * as core_requestCoordinator from './requestCoordinator.js';
-import * as archive_repository from '../archive/repository.js';
-import * as generation_client from '../generation/client.js';
+// C-3c（r84.100）：别名沿用 archive_repository，函数体一字不改；实际指向 core 层的桥，不再 import archive 层。
+import * as archive_repository from './archiveBridge.js';
+// C-3b（r84.99）：别名沿用 generation_client，函数体一字不改；实际指向 core 层的桥，不再 import generation 层。
+import * as generation_client from './generationBridge.js';
 import { state as runtimeState } from './state.js';
 
 let cleanup = null;

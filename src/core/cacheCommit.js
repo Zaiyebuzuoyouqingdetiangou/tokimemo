@@ -1,13 +1,16 @@
 import * as recovery_source from './recoverySourcePolicy.js';
-import * as archive_backupStore from '../archive/backupStore.js';
-import * as archive_repository from '../archive/repository.js';
+// C-3c（r84.101）：别名沿用 archive_backupStore，函数体一字不改；实际指向 core 层的桥，不再 import archive 层。
+import * as archive_backupStore from './archiveBridge.js';
+// C-3c（r84.101）：别名沿用 archive_repository，函数体一字不改；实际指向 core 层的桥，不再 import archive 层。
+import * as archive_repository from './archiveBridge.js';
 import * as core_constants from './constants.js';
 import * as core_context from './context.js';
 import * as core_requestCoordinator from './requestCoordinator.js';
 import { state as runtimeState } from './state.js';
 import * as core_text from './text.js';
 import * as backup_diagnostics from './backupDiagnostics.js';
-import * as generation_recovery from '../generation/recovery.js';
+// C-3b（r84.99）：别名沿用 generation_recovery，函数体一字不改；实际指向 core 层的桥，不再 import generation 层。
+import * as generation_recovery from './generationBridge.js';
 import * as participant_contract from './participants.js';
 import { archiveBackupEntryForContext, archiveCommitScope, cacheOrderValue, cacheScopeFromContext, clearRecoveryInCache, cloneCacheValue, compressedCacheManifest, discardSessionsBehindModeFences, ensureCacheHydrated, generationDraftRecords, getCache, gzipJson, hydrateBackupCacheValue, isCompressedCacheRecord, mergeCacheSnapshotsWithModeFences, mergeModeWriteFences, mirrorCacheUsableAsStarting, modeWriteFenceSignature, nextModeWriteFence, participantRoster, prepareBoundedRawCache, prepareCommittedCacheBackupValue, recoveryCleared, recoveryDraftId, recoveryPageForVersion, rememberPendingCompressedWrite, rememberRuntimeSessionCache, retainCanonicalArchiveVersions, retainCanonicalGenerationDrafts, saveMetadataDurably, serializeArchiveCommitOperation, serializeCacheScopeOperation, stampCacheCommit } from './cacheRecords.js';
 // 缓存提交：压缩落盘调度、档案缓存合并提交、实时缓存提交、模式生成认领、删除会话

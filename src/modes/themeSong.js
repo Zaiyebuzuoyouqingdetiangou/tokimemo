@@ -5,6 +5,8 @@ import * as contextApi from '../core/context.js';
 import * as text from '../core/text.js';
 import * as generation from '../generation/client.js';
 import * as participants from '../core/participants.js';
+import * as core_modesBridge from '../core/modesBridge.js';
+import * as generation_modesBridge from '../generation/modesBridge.js';
 const L = contract.SONG_LIMITS;
 const ownerLabel = memory => participants.resolveStoryIdentities(memory).ownerNames.join('、') || text.normalizeText(memory?.characterName, 120);
 export function createThemeSongPlan(options = {}, memory, previous = null) {
@@ -130,3 +132,8 @@ export function readableThemeSongProgressSession(value, memory) {
         return value;
     } catch { return null; }
 }
+
+// 重构清单 C-3（r84.98）：把 core 层要用的函数登记到 core/modesBridge.js（core 不再 import 本文件）。
+core_modesBridge.registerModesBridge({ readableThemeSongProgressSession });
+// 重构清单 C-4（r84.106）：把生成层要用的函数登记到 generation/modesBridge.js（生成层不再 import 本文件）。
+generation_modesBridge.registerGenerationModesBridge({ createThemeSongPlan, validateThemeSongPlan, themeSongPrompt, normalizeGeneratedSong, generateThemeSong, projectThemeSongProgress });

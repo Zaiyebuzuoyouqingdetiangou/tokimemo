@@ -42,6 +42,15 @@ ${r} .rmt-workspace-location>span{min-width:0;overflow-wrap:anywhere}
 ${r} .rmt-workspace-location>small{margin-left:auto;font-size:12px;max-width:45%;overflow-wrap:anywhere;color:var(--rmt-theme-muted)!important}
 ${r} .rmt-crumb-button{min-height:38px;flex:none;border:0;background:transparent;color:var(--rmt-theme-text);font:inherit;padding:6px;cursor:pointer}
 ${r} .rmt-body{flex:1 1 auto!important;min-height:0!important;min-width:0!important;overflow:auto!important;overscroll-behavior:contain!important;padding:20px!important;background:var(--rmt-theme-bg)!important;scrollbar-gutter:stable;touch-action:pan-y pinch-zoom!important}
+${r} .rmt-body:has(>.rmt-crt){padding:0!important;scrollbar-gutter:auto}
+${r} .rmt-body>.rmt-crt{box-sizing:border-box;min-height:100%}
+${r} .rmt-crt .rmt-expanded-cg .rmt-thumb{position:relative;isolation:isolate;border:1px solid rgba(130,219,245,.5);border-radius:10px;background:#020a14;box-shadow:0 0 0 3px rgba(2,10,20,.85),0 0 22px rgba(116,191,213,.2)}
+${r} .rmt-crt .rmt-expanded-cg .rmt-cg-real{background:#020a14;filter:saturate(.92) contrast(1.05) brightness(.95)}
+${r} .rmt-crt .rmt-expanded-cg .rmt-thumb:after{content:"";position:absolute;inset:0;z-index:4;pointer-events:none;border-radius:inherit;background:repeating-linear-gradient(to bottom,rgba(4,14,27,.3) 0 1px,transparent 1px 3px),radial-gradient(ellipse at 50% 46%,transparent 56%,rgba(1,6,14,.58) 100%),linear-gradient(118deg,rgba(232,251,255,.13) 0%,rgba(232,251,255,.04) 20%,transparent 36%),linear-gradient(90deg,rgba(242,168,198,.06),transparent 22%,transparent 78%,rgba(116,191,213,.07));box-shadow:inset 0 0 40px rgba(116,191,213,.22),inset 0 0 0 1px rgba(191,239,255,.18);animation:rmtGlassFlicker 6s steps(1,end) infinite}
+${r} .rmt-crt .rmt-expanded-cg .rmt-thumb:before{content:"";position:absolute;left:0;right:0;top:-24%;height:24%;z-index:5;pointer-events:none;background:linear-gradient(to bottom,transparent,rgba(191,239,255,.08),transparent);animation:rmtGlassSweep 7s linear infinite}
+@keyframes rmtGlassSweep{from{transform:translateY(0)}to{transform:translateY(520%)}}
+@keyframes rmtGlassFlicker{0%,95%,100%{opacity:1}96%{opacity:.84}97%{opacity:.96}}
+@media (prefers-reduced-motion:reduce){${r} .rmt-crt .rmt-expanded-cg .rmt-thumb:before,${r} .rmt-crt .rmt-expanded-cg .rmt-thumb:after{animation:none}}
 ${r} .rmt-body>:is(.rmt-workspace-page,.rmt-home){width:100%;max-width:960px;margin:0 auto;padding:0;box-sizing:border-box}
 ${r} .rmt-workspace-section-head{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin:0 0 18px}
 ${r} .rmt-workspace-section-head h2{margin:0!important;font-size:22px!important}

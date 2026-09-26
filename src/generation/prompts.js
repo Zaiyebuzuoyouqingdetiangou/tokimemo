@@ -6,10 +6,15 @@ import * as core_evidence from '../core/evidence.js';
 import * as core_narrativeAuthority from '../core/narrativeAuthority.js';
 import * as core_participants from '../core/participants.js';
 import * as core_text from '../core/text.js';
-import * as modes_album from '../modes/album.js';
-import * as modes_cabinet from '../modes/cabinet.js';
-import * as modes_ending from '../modes/ending.js';
-import * as modes_heart from '../modes/heart.js';
+// C-4（r84.119）：别名沿用 modes_album，函数体一字不改；实际指向生成层的桥，不再 import 相簿模块。
+import * as modes_album from './modesBridge.js';
+// C-4（r84.115）：别名沿用 modes_cabinet，函数体一字不改；实际指向生成层的桥，不再 import 陈列柜模块。
+import * as modes_cabinet from './modesBridge.js';
+// C-4（r84.117）：别名沿用 modes_ending，函数体一字不改；实际指向生成层的桥，不再 import 结局模块。
+import * as modes_ending from './modesBridge.js';
+// C-4（r84.120）：别名沿用 modes_heart，函数体一字不改；实际指向生成层的桥，不再 import HEART 模块。
+import * as modes_heart from './modesBridge.js';
+import * as core_generationBridge from '../core/generationBridge.js';
 
 export function promptSafetyBoundary(context, taskLabel = '番外数据', people = null, memoryBank = null) {
     const story = core_participants.resolveStoryIdentities(memoryBank, context, people);
@@ -668,3 +673,8 @@ visualProfile 只使用这些安全枚举：${JSON.stringify(visualValues)}。ex
 basis=记忆 的物件必须填写真实 sourceMemoryIds 和精确 sourceMemoryAnchor；其余物件只能作为当下设定，不能伪称用户已经赠送、使用或来访。homeSummary/atmosphere/dayparts/presenceLines 只写当前生活与设定；既往共同经历只放入有精确档案证据的记忆物件。不得替用户行动或回应。
 只输出完整 JSON，不替换已有历史，不把设定写成已发生事件。`;
 }
+
+// 重构清单 C-3b（r84.99）：把 core 层要用的函数登记到 core/generationBridge.js（core 不再 import 本文件）。
+core_generationBridge.registerGenerationBridge({ promptSafetyBoundary });
+// r84.122：旧蝴蝶效应提示词在顶层解构 promptArchiveSlice。再登记一次，上面那一行保持原样。
+core_generationBridge.registerGenerationBridge({ promptArchiveSlice });

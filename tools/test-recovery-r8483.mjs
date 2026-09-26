@@ -8,6 +8,8 @@ const origin={characterKey:'owner',chatId:bank.chatId,archiveRevision:bank.archi
 function storage(){const data=new Map();return {getItem:k=>data.get(k)||null,setItem:(k,v)=>data.set(k,v)};}
 test('cabinet and achievements accepted results carry trusted identity and save in one provider call',async()=>{
  const f=await preparationFixture(),m=await f.api('generation/mergedGeneration.js');
+ await f.api('modes/cabinet.js');
+ await f.api('modes/achievements.js');
  const tasks=['cabinet','achievements'].map(route=>m.buildMergeTask(route,f.host,bank));let calls=0,saves=[];
  const result=await m.runMergedBatch({tasks,request:async()=>{calls++;return {modules:{cabinet:{items:[]},achievements:{title:'成就库',entries:[]}}};},
  save:async(mode,session)=>{m.assertMergedSaveIdentity(session,origin,bank);saves.push(mode);}});

@@ -13,6 +13,8 @@ import * as core_text from '../core/text.js';
 import * as generation_imageGeneration from '../generation/imageGeneration.js';
 import * as ui_overlay from '../ui/overlay.js';
 import * as archive_avatars from '../ui/archiveAvatars.js';
+import * as core_characterDescriptor from '../core/characterDescriptor.js';
+import * as core_archiveBridge from '../core/archiveBridge.js';
 
 export function normalizeArchiveGroup(item) {
     const id = core_text.normalizeText(item?.id, 120);
@@ -278,23 +280,9 @@ export function archiveGroupMeta(groupId, entries, context = core_context.getCon
     };
 }
 
-export function characterDescriptor(context, index) {
-    const character = context?.characters?.[index];
-    if (!character) return null;
-    const data = character?.data && typeof character.data === 'object' ? character.data : character;
-    const name = core_text.normalizeText(character?.name || data?.name, 120) || `角色 ${Number(index) + 1}`;
-    const avatar = core_text.normalizeText(character?.avatar || data?.avatar, 300);
-    const fingerprintSource = [
-        avatar, name,
-        core_text.normalizeText(data?.description || character?.description, 5000),
-        core_text.normalizeText(data?.personality || character?.personality, 5000),
-        core_text.normalizeText(data?.scenario || character?.scenario, 5000),
-        core_text.normalizeText(data?.first_mes || character?.first_mes, 5000),
-        core_text.normalizeText(data?.mes_example || character?.mes_example, 5000),
-    ].join('\u001f');
-    const fingerprint = `card:${core_context.stableArchiveHash(fingerprintSource)}`;
-    return { index: Number(index), name, avatar, fingerprint };
-}
+// C-3c（r84.100）：已挪到 core/characterDescriptor.js，这里原样转发。
+export const characterDescriptor = core_characterDescriptor.characterDescriptor;
+
 
 export function matchArchiveEntryToCharacter(entry, context = core_context.getContext()) {
     const characters = Array.isArray(context?.characters) ? context.characters : [];
@@ -754,3 +742,6 @@ export function upsertArchiveIndex(context, memoryBank, options = {}) {
     index.sort((a,b) => b.updatedAt - a.updatedAt);
     setArchiveIndex(context, index);
 }
+
+// 重构清单 C-3c（r84.101）：把 core 层要用的函数登记到 core/archiveBridge.js（core 不再 import 本文件）。
+core_archiveBridge.registerArchiveBridge({ currentCharacterArchiveDeletionFence, restoreCurrentCharacterArchiveVisibility, upsertArchiveIndex, currentCharacterArchiveProbe, getArchiveIndex, isCurrentCharacterDeletedFromLibrary });

@@ -7,14 +7,22 @@ import * as core_narrativeAuthority from '../core/narrativeAuthority.js';
 import * as core_context from '../core/context.js';
 import * as core_evidence from '../core/evidence.js';
 import * as core_text from '../core/text.js';
-import * as modes_achievements from '../modes/achievements.js';
-import * as modes_advEvent from '../modes/advEvent.js';
-import * as modes_album from '../modes/album.js';
-import * as modes_calendar from '../modes/calendar.js';
-import * as modes_ending from '../modes/ending.js';
-import * as modes_heart from '../modes/heart.js';
-import * as modes_butterfly from '../modes/butterfly.js';
-import * as modes_phone from '../modes/phone.js';
+// C-4（r84.116）：别名沿用 modes_achievements，函数体一字不改；实际指向生成层的桥，不再 import 成就库模块。
+import * as modes_achievements from './modesBridge.js';
+// C-4（r84.118）：别名沿用 modes_advEvent，函数体一字不改；实际指向生成层的桥，不再 import ADV 模块。
+import * as modes_advEvent from './modesBridge.js';
+// C-4（r84.119）：别名沿用 modes_album，函数体一字不改；实际指向生成层的桥，不再 import 相簿模块。
+import * as modes_album from './modesBridge.js';
+// C-4（r84.113）：别名沿用 modes_calendar，函数体一字不改；实际指向生成层的桥，不再 import 日历模块。
+import * as modes_calendar from './modesBridge.js';
+// C-4（r84.117）：别名沿用 modes_ending，函数体一字不改；实际指向生成层的桥，不再 import 结局模块。
+import * as modes_ending from './modesBridge.js';
+// C-4（r84.120）：别名沿用 modes_heart，函数体一字不改；实际指向生成层的桥，不再 import HEART 模块。
+import * as modes_heart from './modesBridge.js';
+// C-4（r84.111）：别名沿用 modes_butterfly，函数体一字不改；实际指向生成层的桥，不再 import 蝴蝶效应模块。
+import * as modes_butterfly from './modesBridge.js';
+// C-4（r84.114）：别名沿用 modes_phone，函数体一字不改；实际指向生成层的桥，不再 import 私人终端模块。
+import * as modes_phone from './modesBridge.js';
 import * as generation_client from './client.js';
 import * as generation_prompts from './prompts.js';
 import * as generation_recovery from './recovery.js';

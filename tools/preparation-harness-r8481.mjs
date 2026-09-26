@@ -39,7 +39,14 @@ export async function preparationFixture({ timers = {}, hostOverrides = {}, stor
     const root = await moduleAt(new URL('../src/archive/repository.js', import.meta.url));
     await root.link((spec, parent) => moduleAt(new URL(spec, parent.identifier)));
     await root.evaluate();
-    const api = async path => (await moduleAt(new URL(`../src/${path}`, import.meta.url))).namespace;
+    const api = async path => {
+        const mod = await moduleAt(new URL(`../src/${path}`, import.meta.url));
+        if (mod.status === 'unlinked') {
+            await mod.link((spec, parent) => moduleAt(new URL(spec, parent.identifier)));
+            await mod.evaluate();
+        }
+        return mod.namespace;
+    };
     const store = await api('core/localRecoveryStore.js');
     store.setLocalRecoveryBackendForTests({
         read: key => storageRead ? storageRead(key, records) : structuredClone(records.get(key) || null),

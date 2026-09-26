@@ -1,5 +1,6 @@
 import * as core_constants from './constants.js';
-import * as source_read from '../archive/sourceReadGuard.js';
+// C-3c（r84.100）：别名沿用 source_read，函数体一字不改；实际指向 core 层的桥，不再 import archive 层。
+import * as source_read from './archiveBridge.js';
 import * as core_text from './text.js';
 import * as core_contextTags from './contextTags.js';
 import * as core_settings from './settings.js';

@@ -96,11 +96,13 @@ function attachEndingVisual(owner, slot) {
         },
     };
 }
-function facade({ descriptor, visualRef, sourceHash, title, subtitle = '', scene = '', sourceText = scene, visualSeed = [], authored = null }) {
+function facade({ descriptor, visualRef, sourceHash, title, subtitle = '', scene = '', sourceText = scene, visualSeed = [], authored = null, composed = '' }) {
     const saved = visualRef.read();
+    const imagePrompt = normalized(saved?.imagePrompt || authored?.imagePrompt, constants.MAX_CG_IMAGE_PROMPT_CHARS);
+    // cgComposedDraft 只给编辑器初稿用，不进 cgItemSignature：旧条目的签名保持不变。
     const item = { id: cgTargetItemId(descriptor), title: normalized(title, 160), subtitle: normalized(subtitle, 600), desc: sourceText, cgDesc: scene,
-        cgSourceText: sourceText,
-        imagePrompt: normalized(saved?.imagePrompt || authored?.imagePrompt, constants.MAX_CG_IMAGE_PROMPT_CHARS),
+        cgSourceText: sourceText, imagePrompt,
+        ...(!imagePrompt && composed ? { cgComposedDraft: composed } : {}),
         ...cg_visual.generatedCgDraftFields(authored), visualSeed, sourceHash,
         __rmtCgDescriptor: { ...descriptor, sourceHash } };
     Object.defineProperties(item, {
@@ -145,6 +147,7 @@ export function cgTargetInSession(mode, session, itemId) {
         const sourceHash = hash(sourceForDrama(owner, descriptor.kind));
         return facade({ descriptor, visualRef: attachVisual(owner, 'visual'), sourceHash, title: owner.title, subtitle: owner.subtitle,
             scene: owner.imagePrompt || cg_visual.legacyCgSceneExcerpt(scriptText(owner), normalized(owner.setting, 800)), authored: owner,
+            composed: cg_visual.composedCgSceneDraft(scriptText(owner), { setting: [owner.setting] }),
             sourceText: `${normalized(owner.setting, 1800)}\n${scriptText(owner)}`, visualSeed: [isVoice ? owner.kind : owner.season, owner.visualTone] });
     }
     if (descriptor.kind === 'heart-photoshoot') {
@@ -176,7 +179,8 @@ export function cgTargetInSession(mode, session, itemId) {
         const authored = individual || (slot === 'epilogue' ? owner.epilogue : owner);
         const scene = authored.imagePrompt || cg_visual.legacyCgSceneExcerpt(sourceText, individual?.title || owner.title);
         return facade({ descriptor, visualRef: attachEndingVisual(owner, slot), sourceHash, title: owner.title,
-            subtitle: individual ? individual.title : slot === 'epilogue' ? owner.epilogue?.title || '后日谈' : owner.subtitle, scene, sourceText, authored, visualSeed: [owner.type, slot] });
+            subtitle: individual ? individual.title : slot === 'epilogue' ? owner.epilogue?.title || '后日谈' : owner.subtitle, scene, sourceText, authored, visualSeed: [owner.type, slot],
+            composed: cg_visual.composedCgSceneDraft(sourceText, { setting: [slot === 'confession' ? owner.scene : ''] }) });
     }
     if (descriptor.kind === 'heart-firefly') {
         const scene = '柔和绝美的夏夜，角色独自置身安静的草地与疏林间，萤火虫围绕其手边、发梢和肩侧缓缓飞舞。镜头以角色为清晰主体，前景少量失焦暖金光点，中景有层次的萤光勾勒人物轮廓，远景暗青绿的树影与薄雾。柔和月光与细小暖光交织，细腻夜色、自然景深，宁静而亲密。保留角色资料中明确的外貌与合世界观衣着，不增加其他人物、文字或水印。';
@@ -195,7 +199,8 @@ export function cgTargetInSession(mode, session, itemId) {
         const sourceHash = hash(JSON.stringify([episode.id, owner.id, owner.title, sourceText]));
         return facade({ descriptor, visualRef: attachVisual(owner, 'visual'), sourceHash, title: owner.title,
             subtitle: episode.title, sourceText, authored: owner,
-            scene: owner.imagePrompt || cg_visual.legacyCgSceneExcerpt(sourceText, owner.era) });
+            scene: owner.imagePrompt || cg_visual.legacyCgSceneExcerpt(sourceText, owner.era),
+            composed: cg_visual.composedCgSceneDraft([owner.synopsis, ...(owner.clues || []).map(row => row.text)].filter(Boolean).join('\n'), { setting: [owner.era] }) });
     }
     if (descriptor.kind === 'bedtime-chapter') {
         if (mode !== constants.MODE.BEDTIME) return null;
@@ -205,7 +210,8 @@ export function cgTargetInSession(mode, session, itemId) {
         const sourceHash = hash(JSON.stringify([story.id, owner.id, owner.title, owner.text]));
         return facade({ descriptor, visualRef: attachVisual(owner, 'visual'), sourceHash, title: owner.title,
             subtitle: story.title, sourceText: owner.text, authored: owner,
-            scene: owner.imagePrompt || cg_visual.legacyCgSceneExcerpt(owner.text, story.genre) });
+            scene: owner.imagePrompt || cg_visual.legacyCgSceneExcerpt(owner.text, story.genre),
+            composed: cg_visual.composedCgSceneDraft(owner.text) });
     }
     if (descriptor.kind === 'butterfly-node') {
         if (mode !== constants.MODE.BUTTERFLY) return null;
@@ -213,8 +219,12 @@ export function cgTargetInSession(mode, session, itemId) {
         if (!owner?.monologue) return null;
         const sourceText = [owner.worldSpec?.era, owner.worldSpec?.location, owner.monologue].filter(Boolean).join('\n');
         const sourceHash = hash(JSON.stringify([owner.id, owner.label, sourceText]));
+        const subject = normalized(session?.subject, 40);
+        const identity = normalized(owner.worldSpec?.identity, 40);
         return facade({ descriptor, visualRef: attachVisual(owner, 'visual'), sourceHash, title: owner.label,
-            sourceText, authored: owner, scene: owner.imagePrompt || cg_visual.legacyCgSceneExcerpt(sourceText, owner.worldSpec?.location) });
+            sourceText, authored: owner, scene: owner.imagePrompt || cg_visual.legacyCgSceneExcerpt(sourceText, owner.worldSpec?.location),
+            composed: cg_visual.composedCgSceneDraft(owner.monologue, { subject, firstPerson: true,
+                setting: [owner.worldSpec?.location, owner.worldSpec?.era, subject && identity ? `${subject}是${identity}` : ''] }) });
     }
     if (descriptor.kind === 'heart-portrait') {
         const owner = object(session?.languagePortrait);

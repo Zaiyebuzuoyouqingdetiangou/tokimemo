@@ -1,0 +1,105 @@
+{
+  "note": "Declarations whose text may differ from verification/refactor-baseline.json (r84.78). CSS output and init bindings are still checked.",
+  "entries": [
+    {
+      "round": "r84.79",
+      "declaration": "modes/room.js:renderRoomParticipants",
+      "reason": "r84.79 复核后修复（用户要求）：房间小人识别——英文按整词匹配；按分句判断主语，写用户 / 别人的句子不算角色；按身份推断只认“是 / 身为…”或单独成句的身份词；多人房间世界书读完后重画；寸头 / 兜帽 / 耳机 / 角的画法。"
+    },
+    {
+      "round": "r84.79",
+      "declaration": "modes/roomFigureLocal.js:BUILDS",
+      "reason": "r84.79 复核后修复（用户要求）：房间小人识别——英文按整词匹配；按分句判断主语，写用户 / 别人的句子不算角色；按身份推断只认“是 / 身为…”或单独成句的身份词；多人房间世界书读完后重画；寸头 / 兜帽 / 耳机 / 角的画法。"
+    },
+    {
+      "round": "r84.79",
+      "declaration": "modes/roomFigureLocal.js:DETAILS",
+      "reason": "r84.79 复核后修复（用户要求）：房间小人识别——英文按整词匹配；按分句判断主语，写用户 / 别人的句子不算角色；按身份推断只认“是 / 身为…”或单独成句的身份词；多人房间世界书读完后重画；寸头 / 兜帽 / 耳机 / 角的画法。"
+    },
+    {
+      "round": "r84.79",
+      "declaration": "modes/roomFigureLocal.js:HAIR_ENGLISH",
+      "reason": "r84.79 复核后修复（用户要求）：房间小人识别——英文按整词匹配；按分句判断主语，写用户 / 别人的句子不算角色；按身份推断只认“是 / 身为…”或单独成句的身份词；多人房间世界书读完后重画；寸头 / 兜帽 / 耳机 / 角的画法。"
+    },
+    {
+      "round": "r84.79",
+      "declaration": "modes/roomFigureLocal.js:HAIR_SHAPES",
+      "reason": "r84.79 复核后修复（用户要求）：房间小人识别——英文按整词匹配；按分句判断主语，写用户 / 别人的句子不算角色；按身份推断只认“是 / 身为…”或单独成句的身份词；多人房间世界书读完后重画；寸头 / 兜帽 / 耳机 / 角的画法。"
+    },
+    {
+      "round": "r84.79",
+      "declaration": "modes/roomFigureLocal.js:IDENTITY_OUTFITS",
+      "reason": "r84.79 复核后修复（用户要求）：房间小人识别——英文按整词匹配；按分句判断主语，写用户 / 别人的句子不算角色；按身份推断只认“是 / 身为…”或单独成句的身份词；多人房间世界书读完后重画；寸头 / 兜帽 / 耳机 / 角的画法。"
+    },
+    {
+      "round": "r84.79",
+      "declaration": "modes/roomFigureLocal.js:LOOK_WORDS",
+      "reason": "r84.79 复核后修复（用户要求）：房间小人识别——英文按整词匹配；按分句判断主语，写用户 / 别人的句子不算角色；按身份推断只认“是 / 身为…”或单独成句的身份词；多人房间世界书读完后重画；寸头 / 兜帽 / 耳机 / 角的画法。"
+    },
+    {
+      "round": "r84.79",
+      "declaration": "modes/roomFigureLocal.js:NEGATION",
+      "reason": "r84.79 复核后修复（用户要求）：房间小人识别——英文按整词匹配；按分句判断主语，写用户 / 别人的句子不算角色；按身份推断只认“是 / 身为…”或单独成句的身份词；多人房间世界书读完后重画；寸头 / 兜帽 / 耳机 / 角的画法。"
+    },
+    {
+      "round": "r84.79",
+      "declaration": "modes/roomFigureLocal.js:OUTFITS",
+      "reason": "r84.79 复核后修复（用户要求）：房间小人识别——英文按整词匹配；按分句判断主语，写用户 / 别人的句子不算角色；按身份推断只认“是 / 身为…”或单独成句的身份词；多人房间世界书读完后重画；寸头 / 兜帽 / 耳机 / 角的画法。"
+    },
+    {
+      "round": "r84.79",
+      "declaration": "modes/roomFigureLocal.js:SENTENCE_SPLIT",
+      "reason": "r84.79 复核后修复（用户要求）：房间小人识别——英文按整词匹配；按分句判断主语，写用户 / 别人的句子不算角色；按身份推断只认“是 / 身为…”或单独成句的身份词；多人房间世界书读完后重画；寸头 / 兜帽 / 耳机 / 角的画法。"
+    },
+    {
+      "round": "r84.79",
+      "declaration": "modes/roomFigureLocal.js:USER_WORDS",
+      "reason": "r84.79 复核后修复（用户要求）：房间小人识别——英文按整词匹配；按分句判断主语，写用户 / 别人的句子不算角色；按身份推断只认“是 / 身为…”或单独成句的身份词；多人房间世界书读完后重画；寸头 / 兜帽 / 耳机 / 角的画法。"
+    },
+    {
+      "round": "r84.79",
+      "declaration": "modes/roomFigureLocal.js:appearanceSentences",
+      "reason": "r84.79 复核后修复（用户要求）：房间小人识别——英文按整词匹配；按分句判断主语，写用户 / 别人的句子不算角色；按身份推断只认“是 / 身为…”或单独成句的身份词；多人房间世界书读完后重画；寸头 / 兜帽 / 耳机 / 角的画法。"
+    },
+    {
+      "round": "r84.79",
+      "declaration": "modes/roomFigureLocal.js:figureFromIdentity",
+      "reason": "r84.79 复核后修复（用户要求）：房间小人识别——英文按整词匹配；按分句判断主语，写用户 / 别人的句子不算角色；按身份推断只认“是 / 身为…”或单独成句的身份词；多人房间世界书读完后重画；寸头 / 兜帽 / 耳机 / 角的画法。"
+    },
+    {
+      "round": "r84.79",
+      "declaration": "modes/roomFigureLocal.js:figureFromText",
+      "reason": "r84.79 复核后修复（用户要求）：房间小人识别——英文按整词匹配；按分句判断主语，写用户 / 别人的句子不算角色；按身份推断只认“是 / 身为…”或单独成句的身份词；多人房间世界书读完后重画；寸头 / 兜帽 / 耳机 / 角的画法。"
+    },
+    {
+      "round": "r84.79",
+      "declaration": "modes/roomFigureLocal.js:firstMatch",
+      "reason": "r84.79 复核后修复（用户要求）：房间小人识别——英文按整词匹配；按分句判断主语，写用户 / 别人的句子不算角色；按身份推断只认“是 / 身为…”或单独成句的身份词；多人房间世界书读完后重画；寸头 / 兜帽 / 耳机 / 角的画法。"
+    },
+    {
+      "round": "r84.79",
+      "declaration": "modes/roomFigureLocal.js:localRoomFigure",
+      "reason": "r84.79 复核后修复（用户要求）：房间小人识别——英文按整词匹配；按分句判断主语，写用户 / 别人的句子不算角色；按身份推断只认“是 / 身为…”或单独成句的身份词；多人房间世界书读完后重画；寸头 / 兜帽 / 耳机 / 角的画法。"
+    },
+    {
+      "round": "r84.79",
+      "declaration": "modes/roomFigureLocal.js:roomFigureSources",
+      "reason": "r84.79 复核后修复（用户要求）：房间小人识别——英文按整词匹配；按分句判断主语，写用户 / 别人的句子不算角色；按身份推断只认“是 / 身为…”或单独成句的身份词；多人房间世界书读完后重画；寸头 / 兜帽 / 耳机 / 角的画法。"
+    },
+    {
+      "round": "r84.79",
+      "declaration": "modes/roomRender.js:renderRoomParticipants",
+      "reason": "r84.79 复核后修复（用户要求）：房间小人识别——英文按整词匹配；按分句判断主语，写用户 / 别人的句子不算角色；按身份推断只认“是 / 身为…”或单独成句的身份词；多人房间世界书读完后重画；寸头 / 兜帽 / 耳机 / 角的画法。"
+    },
+    {
+      "round": "r84.79",
+      "declaration": "ui/roomPixelFigure.js:detailSvg",
+      "reason": "r84.79 复核后修复（用户要求）：房间小人识别——英文按整词匹配；按分句判断主语，写用户 / 别人的句子不算角色；按身份推断只认“是 / 身为…”或单独成句的身份词；多人房间世界书读完后重画；寸头 / 兜帽 / 耳机 / 角的画法。"
+    },
+    {
+      "round": "r84.79",
+      "declaration": "ui/roomPixelFigure.js:pixelFigureSvg",
+      "reason": "r84.79 复核后修复（用户要求）：房间小人识别——英文按整词匹配；按分句判断主语，写用户 / 别人的句子不算角色；按身份推断只认“是 / 身为…”或单独成句的身份词；多人房间世界书读完后重画；寸头 / 兜帽 / 耳机 / 角的画法。"
+    }
+  ]
+}

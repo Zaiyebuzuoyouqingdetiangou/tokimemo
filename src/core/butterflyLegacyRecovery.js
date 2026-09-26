@@ -1,6 +1,7 @@
 // Exact r61 prompt recipes, used only to authenticate legacy recovery hashes.
 // Never used as the default generation policy. Do not "improve" their wording.
-import * as generation_prompts from '../generation/prompts.js';
+// C-3b（r84.99）：别名沿用 generation_prompts，函数体一字不改；实际指向 core 层的桥，不再 import generation 层。
+import * as generation_prompts from './generationBridge.js';
 import * as core_constants from './constants.js';
 import * as core_incremental from './incremental.js';
 import * as core_text from './text.js';

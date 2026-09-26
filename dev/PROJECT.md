@@ -25,7 +25,7 @@
 - GitHub 默认只读。未经本轮明确授权，不 commit / push / 建分支 / 发布。main 不改；候选在 `测试` 分支验收。
 - 只改获准事项。不顺手加功能、不加门槛、不改其他功能的 Prompt。
 - “检查 / 诊断 / 复核”不等于允许改代码。
-- 先找根因，不叠补丁，不改错死文件。真实运行路径以 `tools/runtime-module-order.json` 为准。
+- 先找根因，不叠补丁，不改错死文件。加载顺序由 `tools/build-runtime-bundle.mjs` 生成，写进 `tools/runtime-module-order.json`。
 - 测试失败不删测试、不改预期、不放宽校验凑全绿。没执行的验证写“未执行”，模拟环境不冒充真机。
 - 温度交给用户（r84.51）：写正文 / 对白的请求用用户温度；抽取、判断、核对证据的步骤取“用户温度与上限”的较小值。插件不封顶用户温度。
 
@@ -82,15 +82,15 @@ src/generation/           请求客户端（所有出网走 client.js）、Promp
 src/modes/                各玩法的生成与校验逻辑
 src/ui/                   现行界面（窗口、设置、各阅读页、样式）
 dist/                     打包结果，安装用这份。手不改，用构建脚本生成
-tests/  tools/  verification/   测试、构建与校验工具、结果
+tools/  verification/     构建、测试（tools/test-*.mjs）、护栏工具与校验结果；tools/ 只在交付 ZIP 里，不进 GitHub（见第 6 节）
 dev/                      开发文档（本目录）
 ```
 
 必须知道的坑：
 
 - **自制打包器**（`tools/build-runtime-bundle.mjs`）只认单行 `import * as X from '…'` 和 `import { a, b } from '…'`；导出只认 `export function`、`export async function`、`export const`。不支持 `export let`、`export default`、`export class`、`export {…}`、多行 import。
-- **初始化顺序是钉死的**：176 个模块里 125 个在同一个循环依赖里，所以 `tools/runtime-module-order.json` 规定了初始化顺序。新增 / 拆分模块必须同时改这个文件；`import {x}` 在初始化时就取值，顺序错了会拿到 undefined，整包加载失败（历史上出现过“心迹回廊加载失败”）。
-- **测试夹具按路径假冒**：`tests/runtime-harness.mjs` 把 `ui/overlay.js`、`ui/settingsPanel.js`、`generation/client.js` 换成假模块。这三个文件拆分后只剩转发，夹具按导出名假冒转发层，外部调用照样被拦住，所以夹具不用改（r84.77 实测 77/77）。不要让别的模块绕过转发层直接 import 拆出去的新文件，否则会逃出假冒。
+- **初始化顺序自动计算**（r84.121，r84.122 补上顶层解构）：279 个运行模块里，全部 import 仍有一个 97 个模块的圈（`import * as` 互相引用，要等调用才读）。初始化时真正取值的边没有圈：命名导入，模块顶层（含顶层直接调用的本文件函数）对 `import * as` 的属性读取，以及从这种别名做的解构。`tools/build-runtime-bundle.mjs` 按这些边排序，并写出 `tools/runtime-module-order.json`。不要手改这个文件。新增模块只要 import 写对，下次构建会排进去。`const a = 别名.b` 这种如果顺序错了，整包加载会失败（历史上出现过「心迹回廊加载失败」）。从别名解构取值时，整包仍可能加载成功，要等走到那段代码才报错。`verify-runtime` 和护栏把「初始化完成前被读取」算作失败。
+- **测试夹具按路径假冒**：`tools/runtime-harness.mjs`（旧 `tests/` 里的夹具，r84.93 找回）把 `ui/overlay.js`、`ui/settingsPanel.js`、`generation/client.js` 换成假模块。这三个文件拆分后只剩转发，夹具按导出名假冒转发层，外部调用照样被拦住。不要让别的模块绕过转发层直接 import 拆出去的新文件，否则会逃出假冒。
 - r84.72 删除了 29 个不可达旧文件（`src/modes/` 下 28 个与 `src/ui/` 同名的旧界面副本、`src/ui/photoshootView.js`）。测试分支的导入流程只覆盖不删除，所以仓库里它们可能还在；如果上传包里又出现这些文件，就是残留，不参与运行，可以删。
 - **转发层**（r84.73 起）：大文件拆分后，原文件只剩 `export const 名字 = split_xxx.名字;` 转发和少量没拆的函数，外部调用方不用改。要改某个函数，去它真正所在的新文件改（看原文件顶部的 `import * as split_…` 就知道在哪）：
   - `ui/styles.js` 的主窗口 CSS → `ui/css/*.js`（7 个，按层叠顺序拼接，不要调换）
@@ -107,24 +107,40 @@ dev/                      开发文档（本目录）
   - `archive/library.js` → `archive/libraryCharacter.js`、`librarySnapshots.js`（档案室首页等读写模块状态的函数仍在 library.js）
   - `ui/settingsPanel.js` → `ui/settingsPanelParts.js`、`settingsPanelHome.js`
   - `ui/overlay.js` → `ui/overlayShell.js`、`overlayManage.js`、`overlayCore.js`、`overlayPartial.js`
+  - `core/requestCoordinator.js` → `core/requestTasks.js`、`requestTaskCenter.js`；`core/independentApi.js` → `core/independentApiConfig.js`、`independentApiRequest.js`；`modes/ending.js` → `modes/endingData.js`、`endingGeneration.js`；`modes/advEvent.js` → `modes/advEventData.js`、`advEventGeneration.js`；`modes/travel.js` → `modes/travelScenes.js`、`travelGeneration.js`（r84.95）
+  - **core 不许 import ui**（r84.97 起）：core 需要的 ui 函数加进 `core/uiBridge.js`，并在入口 `src/heartbeatMemories.js` 的 `registerUiBridge` 里登记；调用方沿用原别名，只改 import 那一行
+  - **core 不许 import modes**（r84.98 起）：core 要用的玩法函数加进 `core/modesBridge.js`，并在该玩法的 modes 文件末尾 `registerModesBridge({ … })` 登记；未登记就调用会报错
+  - **core 不许 import generation**（r84.99 起，r84.102 起没有例外）：同上，用 `core/generationBridge.js`，由 generation 文件末尾 `registerGenerationBridge({ … })` 登记。生成恢复缓存键 `GENERATION_RECOVERY_CACHE_KEY` 定义在这个桥里。生成恢复登记表 `handles` 和进度计算在 `core/recoveryRegistry.js`（编解码在 `core/recoveryPayload.js`），`generation/recoveryFeedback.js` 与 `generation/recoveryPayload.js` 仍导出同一个值。r84.122 补上当时漏登记的 `promptArchiveSlice`（旧蝴蝶效应提示词在顶层解构它）
+  - **core 不许 import archive**（r84.101 起）：用 `core/archiveBridge.js`，由 archive 文件末尾 `registerArchiveBridge({ … })` 登记；角色身份描述 `characterDescriptor` 已挪到 `core/characterDescriptor.js`
+  - **generation 按玩法登记**（r84.103 起）：生成层要用的玩法函数加进 `generation/modesBridge.js`，由该玩法文件末尾 `registerGenerationModesBridge({ … })` 登记。调用方只改 import 行、别名不变。未登记就调用会报错。已做：睡前故事（r84.103，3 行 / 6 个函数）、前世今生（r84.104，4 行 / 3 个函数；其中 1 行是没有调用的 import，已删）、时间故事（r84.105，4 行 / 3 个函数）、印象曲（r84.106，4 行 / 6 个函数；其中 1 行是没有调用的 import，已删）、出行路线（r84.107，4 行 / 4 个函数；登记表在加载顺序里挪到该玩法之前）、邮箱（r84.108，4 行 / 6 个函数）、他的物品（r84.109，4 行 / 6 个函数）、他的房间（r84.110，4 行 / 10 个函数）、蝴蝶效应（r84.111，5 行 / 7 个函数；其中 1 行是没有调用的 import，已删；界面补了一行 import，否则玩法不会被加载）、关系（r84.112，5 行 / 7 个函数）、日历（r84.113，5 行 / 8 个函数；其中 1 行是没有调用的 import，已删）、私人终端（r84.114，5 行 / 10 个函数）、陈列柜（r84.115，6 行 / 4 个函数；登记表在加载顺序里挪到该玩法之前）、成就库（r84.116，6 行 / 5 个函数）、结局（r84.117，6 行 / 7 个函数；其中 1 行是没有调用的 import，已删；告白正则经桥上的同名 `test` 转发）、ADV（r84.118，6 行 / 9 个函数）、相簿（r84.119，6 行 / 10 个函数）、HEART（r84.120，6 行 / 18 个函数）
+  - 桥的限制：只 import core 文件的代码（包括测试）拿不到上层登记的函数。桥过去的函数如果依赖上层正在运行的状态，就不能走桥，要先把状态挪下来
+  - 设置页：`mountSettings` 只负责组装；“改设置”监听器是同文件的 `bindSettingsChange`，“点按钮”监听器是 `bindSettingsClick`，标签扫描状态放在共享对象 `tagState` 里（r84.96）
+  - 不拆：`generation/mergedGeneration.js`、`generation/generationSavedActions.js`、`generation/cgPromptPolicy.js` 被测试当作单独边界加载（只替换它们直接 import 的模块），拆开会让测试替身失效
   - 主窗口按钮：`overlayCore.js` 的 `handleOverlayClick` 依次调用 `ui/overlayClickTargets.js`（按元素属性）和 `ui/overlayClickActions.js`（按 `data-rmt-action`）里的 4 个分组；加新按钮就加进对应分组，**分组顺序不能调换**。设置页整页 HTML 在 `ui/settingsPanelMarkup.js`。
 - 拆大文件用 `tools/split-module.mjs`：先 `--plan 文件 最大字节` 出分组草稿（按依赖排序；`let` 与所有读写它的函数必须同组；顶层语句留在原文件），给每组改名写说明，再用 spec 运行（原样搬声明、自动补 import / 转发 / 模块顺序，发现反向依赖直接报错）。拆完必须跑第 6 节全部命令。
+- 拆超大同步函数用 `tools/split-dispatch.mjs`：连续语句原样搬成分组函数；分组读这个文件的模块级 `let` 时，把分组的 module 写成源文件本身，就会变成同文件的具名函数；函数里被回调改写的局部变量不能按值传，先改成共享对象（工具会拦住）。
 
 ---
 
 ## 6. 验证命令（每轮都跑）
 
 ```bash
-node tools/build-runtime-bundle.mjs .                                   # 打包；连续两次必须逐字节一致
-node --experimental-vm-modules --test tests/*.test.mjs                  # 全部测试
-node --experimental-vm-modules tools/refactor-guard.mjs check           # 重构护栏：代码文本、导出、CSS、初始化绑定
-node tools/verify-release.mjs .                                         # 全部 JS/MJS 语法、manifest、bundle SHA（需要 git 工作树）
-node tools/check-undefined-names.mjs                                    # 用 TypeScript 找“用了没定义 / 定义两次”的名字（拆分漏 import 只在调用时才炸）
+node tools/build-runtime-bundle.mjs .                                   # 打包；连续两次 sha256 必须一致
+node --experimental-vm-modules --test tools/test-*.mjs                  # 全部测试（r84.123 实测 228）
+node --experimental-vm-modules tools/verify-runtime.mjs                 # 语法 + 初始化绑定：undefinedBindings 与 prematureReads 必须为 0
+node --experimental-vm-modules tools/refactor-guard.mjs check           # 重构护栏：代码文本、导出、CSS、初始化绑定与基线一致
+node tools/check-undefined-names.mjs                                    # 用 TypeScript 找“用了没定义 / 定义两次”的名字
 ```
 
-护栏基线是 r84.78（`verification/refactor-baseline.json`）；r84.71 的旧基线另存为 `refactor-baseline-r84.71.json`，供 `tests/dispatch-split-identity.test.mjs` 证明分发拆分逐字不变。`refactor-guard`、`split-module`、`split-dispatch` 需要 acorn（Claude 沙箱的全局 npm 里有；别处用 `ACORN_PATH` / `ACORN_DIR` 指定）。只有**有意改行为**的轮次才重拍基线：`… refactor-guard.mjs snapshot`，并在该轮 context 里写明原因。某个声明因拆分必须改写时（例如 CSS 字符串拆段），写进 `verification/refactor-allow.json` 并写原因；CSS 输出和初始化绑定不能放行。
+**`tools/` 和 `tests/` 永远不会出现在 GitHub 上**：`.github/workflows/import-hearttrace-zip.yml` 导入交付 ZIP 时会把它们排除，并删掉仓库里已有的 `tools/`、`tests/`。它们只随交付 ZIP 流转。所以：
 
----
+- 每轮开工必须用**上一轮的交付 ZIP**，不能用 GitHub 分支下载的包；分支包里没有打包脚本、模块顺序表、测试和护栏。
+- 如果手里只有分支包（没有 `tools/`），先向用户要上一轮的交付 ZIP，不要凭记忆重写工具。
+- r84.80 – r84.92 之间护栏和旧测试丢失，就是因为某一轮从分支包开工。r84.93 已找回，旧测试以 `tools/test-legacy-*.mjs` 的名字放回（81 个全部通过）。
+
+护栏基线是 r84.123（`verification/refactor-baseline.json`）。r84.122 与 r84.92 的基线另存为 `refactor-baseline-r84.122.json`、`refactor-baseline-r84.92.json`。更早的 `refactor-baseline-r84.71.json`、`refactor-baseline-r84.78.json` 和旧允许清单只作记录。重构中必须改写的声明写进 `verification/refactor-allow.json` 并写原因；CSS 输出和初始化绑定不能放行。功能改动轮次改完后重拍基线：`… refactor-guard.mjs snapshot`，并在 CHANGELOG 里写明。
+
+`build-runtime-bundle`、`refactor-guard`、`split-module`、`split-dispatch` 需要 acorn，`check-undefined-names` 需要 typescript。acorn 从 `ACORN_PATH`、`NODE_PATH`、Claude 沙箱的全局 npm，或 node 程序旁边的 `node_modules` 里找。typescript 从 `TYPESCRIPT_PATH`、`NODE_PATH`、同一条沙箱路径，或 node 旁边的 `node_modules` 里找。
 
 ## 7. 交付
 

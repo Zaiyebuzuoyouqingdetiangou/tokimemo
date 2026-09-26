@@ -11,6 +11,7 @@ import * as core_settings from '../core/settings.js';
 import * as core_text from '../core/text.js';
 import * as generation_client from '../generation/client.js';
 import * as generation_prompts from '../generation/prompts.js';
+import * as generation_modesBridge from '../generation/modesBridge.js';
 import * as ui_overlay from '../ui/overlay.js';
 
 export function normalizePossessionNode(node, memoryBank, depth = 0, fallbackId = 'IT01', { structureOnly = false } = {}) {
@@ -435,3 +436,6 @@ export function itemsBack() {
     runtimeState.activeSession.selectedNodeId = nodes[0]?.id || '';
     renderItems();
 }
+
+// 重构清单 C-4（r84.109）：把生成层要用的函数登记到 generation/modesBridge.js（生成层不再 import 本文件）。
+generation_modesBridge.registerGenerationModesBridge({ normalizePossessionNode, normalizeItems, fillItemsLines, generateItemsWithRepair, generateItemsIncrementalWithRepair, projectItemsProgress });

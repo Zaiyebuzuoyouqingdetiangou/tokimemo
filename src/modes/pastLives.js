@@ -13,6 +13,8 @@ import * as prompts from '../generation/prompts.js';
 import * as relationshipSafety from '../core/relationshipSafety.js';
 import * as requestCoordinator from '../core/requestCoordinator.js';
 import * as settings from '../core/settings.js';
+import * as core_modesBridge from '../core/modesBridge.js';
+import * as generation_modesBridge from '../generation/modesBridge.js';
 
 export const PAST_LIVES_VERSION = contract.PAST_LIVES_VERSION;
 export const PAST_LIVES_MODE = contract.PAST_LIVES_MODE;
@@ -431,3 +433,8 @@ export async function generatePastLivesWithRepair(context, memory, origin, taskK
     contract.pastLivesData(next);
     return next;
 }
+
+// 重构清单 C-3（r84.98）：把 core 层要用的函数登记到 core/modesBridge.js（core 不再 import 本文件）。
+core_modesBridge.registerModesBridge({ readablePastLivesProgressSession, readablePastLivesSession });
+// 重构清单 C-4（r84.104）：把生成层要用的函数登记到 generation/modesBridge.js（生成层不再 import 本文件）。
+generation_modesBridge.registerGenerationModesBridge({ projectPastLivesProgress, generatePastLivesWithRepair, normalizePastLives });

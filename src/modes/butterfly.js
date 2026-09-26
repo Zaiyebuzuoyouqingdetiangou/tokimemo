@@ -15,6 +15,7 @@ import * as core_settings from '../core/settings.js';
 import * as generation_client from '../generation/client.js';
 import * as generation_prompts from '../generation/prompts.js';
 import * as generation_recovery from '../generation/recovery.js';
+import * as generation_modesBridge from '../generation/modesBridge.js';
 import * as legacy_recovery from '../core/butterflyLegacyRecovery.js';
 
 export const BUTTERFLY_PRIMARY_AXES = core_butterflyContract.BUTTERFLY_PRIMARY_AXES;
@@ -397,6 +398,7 @@ export async function fillButterflyProse(context, memoryBank, origin, taskKey, s
         generation_prompts.promptSafetyBoundary(context, '蝴蝶效应 / 补正文', null, memoryBank)
         + '\n只补下面这些节点缺少的 monologue、intervention、systemNote。不得改 id、label、worldSpec、primaryAxis、sourceMemoryIds、sourceMemoryAnchor。'
         + '\nOMEGA 的 monologue 必须为空。只输出 {"repairs":[{"id":"节点id","monologue":"","intervention":"","systemNote":""}]}。'
+        + '\n若后面附有画面字段规则，imagePrompt 与可选 cgPromptDraft 写在同一个 repairs 条目里，按该节点这次补写的正文构思画面；OMEGA 不写画面字段。'
         + '\nPENDING_NODES_JSON:\n' + JSON.stringify(pending.map(node => ({
             id: node.id, label: node.label, primaryAxis: node.primaryAxis, trueEnding: node.trueEnding === true, worldSpec: node.worldSpec || null,
         }))),
@@ -708,3 +710,6 @@ export async function generateButterflyIncrementalWithRepair(context, memoryBank
         context, memoryBank, origin, taskKey, {},
     );
 }
+
+// 重构清单 C-4（r84.111）：把生成层要用的函数登记到 generation/modesBridge.js（生成层不再 import 本文件）。
+generation_modesBridge.registerGenerationModesBridge({ normalizeButterflyBranch, normalizeButterflyOmega, projectButterflyProgress, normalizeButterfly, fillButterflyProse, generateButterflyWithRepair, generateButterflyIncrementalWithRepair });

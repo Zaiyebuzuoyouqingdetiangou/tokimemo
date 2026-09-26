@@ -2,6 +2,9 @@ import { SETTINGS_LAUNCHER_ID, bindManualAutosave, chatReadingSettingsHtml, manu
 import * as core_settings from '../core/settings.js';
 import * as advanced_ui from './advancedGenerationUi.js';
 import * as cg_format_ui from './cgFormatControl.js';
+import * as core_autoUpdatePolicy from '../core/autoUpdatePolicy.js';
+import * as core_text from '../core/text.js';
+import * as core_constants from '../core/constants.js';
 import { state as runtimeState } from '../core/state.js';
 import * as core_requestCoordinator from '../core/requestCoordinator.js';
 import { SETTINGS_MOUNT_UNHANDLED } from './settingsPanelHome.js';
@@ -127,7 +130,10 @@ export function renderSettingsPanelMarkup(panel) {
           <button type="button" class="menu_button rmt-settings-wide" data-rmt-auto-memory-wizard>打开回忆向导</button>
           <small>向导先接 API、读取范围和档案。生图和文字 API 分开配，配完点下一步。结束后再问要不要自动留忆。已有档案时不会重新建档。</small>
           <p data-rmt-auto-memory-gate role="status"></p>
-          <button type="button" class="menu_button rmt-settings-wide" data-rmt-auto-memory-restore hidden>关闭自动留忆</button>
+          <button type="button" class="menu_button rmt-settings-wide" data-rmt-auto-memory-restore hidden>恢复原来的按模块自动更新</button>
+          <div class="rmt-auto-rules">${core_autoUpdatePolicy.AUTO_UPDATE_MODES.map(mode => `<div class="rmt-auto-rule"><label><input type="checkbox" data-rmt-auto-enabled="${mode}"> ${core_text.esc(mode === 'archive' ? '档案同步' : core_constants.MODE_LABEL[mode])}</label><label>每 <input type="number" min="1" max="1000" step="1" data-rmt-auto-every="${mode}" aria-label="${core_text.esc(mode === 'archive' ? '档案同步' : core_constants.MODE_LABEL[mode])}间隔楼层"> 楼</label><small data-rmt-auto-status="${mode}" role="status"></small></div>`).join('')}</div>
+          <small data-rmt-auto-warning role="status"></small>
+          <small>失败后不连续重试，等待下一个间隔；可随时手动生成。不支持跨页任务锁的浏览器仅保留手动操作。</small>
           </div>
         </details>
         <div class="rmt-settings-card">

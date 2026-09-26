@@ -3,24 +3,42 @@
 import * as json_parser from './jsonParser.js';
 import * as recovery_merge from './recoveryMerge.js';
 import * as recovery_adapters from './recoveryAdapters.js';
-import * as album from '../modes/album.js';
-import * as butterfly from '../modes/butterfly.js';
-import * as ending from '../modes/ending.js';
-import * as pastLives from '../modes/pastLives.js';
-import * as adv from '../modes/advEvent.js';
-import * as phone from '../modes/phone.js';
-import * as room from '../modes/room.js';
-import * as heart from '../modes/heart.js';
-import * as items from '../modes/items.js';
-import * as cabinet from '../modes/cabinet.js';
-import * as inbox from '../modes/inbox.js';
-import * as themeSong from '../modes/themeSong.js';
-import * as bedtime from '../modes/bedtime.js';
-import * as timeStories from '../modes/timeStories.js';
-import * as travel from '../modes/travel.js';
-import * as calendar from '../modes/calendar.js';
-import * as relations from '../modes/relations.js';
-import * as achievements from '../modes/achievements.js';
+// C-4（r84.119）：别名沿用 album，函数体一字不改；实际指向生成层的桥，不再 import 相簿模块。
+import * as album from './modesBridge.js';
+// C-4（r84.111）：别名沿用 butterfly，函数体一字不改；实际指向生成层的桥，不再 import 蝴蝶效应模块。
+import * as butterfly from './modesBridge.js';
+// C-4（r84.117）：别名沿用 ending，函数体一字不改；实际指向生成层的桥，不再 import 结局模块。
+import * as ending from './modesBridge.js';
+// C-4（r84.104）：别名沿用 pastLives，函数体一字不改；实际指向生成层的桥，不再 import 前世今生模块。
+import * as pastLives from './modesBridge.js';
+// C-4（r84.118）：别名沿用 adv，函数体一字不改；实际指向生成层的桥，不再 import ADV 模块。
+import * as adv from './modesBridge.js';
+// C-4（r84.114）：别名沿用 phone，函数体一字不改；实际指向生成层的桥，不再 import 私人终端模块。
+import * as phone from './modesBridge.js';
+// C-4（r84.110）：别名沿用 room，函数体一字不改；实际指向生成层的桥，不再 import 房间模块。
+import * as room from './modesBridge.js';
+// C-4（r84.120）：别名沿用 heart，函数体一字不改；实际指向生成层的桥，不再 import HEART 模块。
+import * as heart from './modesBridge.js';
+// C-4（r84.109）：别名沿用 items，函数体一字不改；实际指向生成层的桥，不再 import 物品模块。
+import * as items from './modesBridge.js';
+// C-4（r84.115）：别名沿用 cabinet，函数体一字不改；实际指向生成层的桥，不再 import 陈列柜模块。
+import * as cabinet from './modesBridge.js';
+// C-4（r84.108）：别名沿用 inbox，函数体一字不改；实际指向生成层的桥，不再 import 邮箱模块。
+import * as inbox from './modesBridge.js';
+// C-4（r84.106）：别名沿用 themeSong，函数体一字不改；实际指向生成层的桥，不再 import 印象曲模块。
+import * as themeSong from './modesBridge.js';
+// C-4（r84.103）：别名沿用 bedtime，函数体一字不改；实际指向生成层的桥，不再 import 睡前故事模块。
+import * as bedtime from './modesBridge.js';
+// C-4（r84.105）：别名沿用 timeStories，函数体一字不改；实际指向生成层的桥，不再 import 时间故事模块。
+import * as timeStories from './modesBridge.js';
+// C-4（r84.107）：别名沿用 travel，函数体一字不改；实际指向生成层的桥，不再 import 出行路线模块。
+import * as travel from './modesBridge.js';
+// C-4（r84.113）：别名沿用 calendar，函数体一字不改；实际指向生成层的桥，不再 import 日历模块。
+import * as calendar from './modesBridge.js';
+// C-4（r84.112）：别名沿用 relations，函数体一字不改；实际指向生成层的桥，不再 import 关系模块。
+import * as relations from './modesBridge.js';
+// C-4（r84.116）：别名沿用 achievements，函数体一字不改；实际指向生成层的桥，不再 import 成就库模块。
+import * as achievements from './modesBridge.js';
 
 export function generationProgressSegments(journal, options = {}) {
     return (Array.isArray(journal?.segments) ? journal.segments : []).filter(segment =>

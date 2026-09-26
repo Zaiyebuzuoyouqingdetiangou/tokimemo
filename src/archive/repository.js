@@ -24,6 +24,7 @@ import { finishArchiveTaskTrace, isArchiveCancellation } from './archiveCore.js'
 import { checkedArchiveTaskInput } from './importIdentity.js';
 import { retryCurrentArchiveSave, saveCurrentArchivePendingResults } from './recoveryDrafts.js';
 import { importCurrentChatMemoryOperation } from './importOperation.js';
+import * as core_archiveBridge from '../core/archiveBridge.js';
 // 以下导出已搬到 archive/archiveCore.js、archive/worldInfoSources.js、archive/externalMemory.js、archive/importPrompts.js、archive/importIdentity.js、archive/recoveryDrafts.js、archive/archiveVerdict.js、archive/importOperation.js，这里原样转发，调用方不用改。
 export const archiveSchemaVersion = split_archiveCore.archiveSchemaVersion;
 export const isCompatibleArchive = split_archiveCore.isCompatibleArchive;
@@ -435,3 +436,6 @@ async function runArchiveImportPrepared(context, options, taskTrace, admission) 
     }
     return result;
 }
+
+// 重构清单 C-3c（r84.100）：把 core 层要用的函数登记到 core/archiveBridge.js（core 不再 import 本文件）。
+core_archiveBridge.registerArchiveBridge({ getImportedMemory, importCurrentChatMemory, requireArchive, getMemoryWorldInfoSelection, migrateDerivedCacheRevision, migrateArchiveInMemory, archiveDeletionFenceKey });

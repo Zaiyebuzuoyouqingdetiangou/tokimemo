@@ -20,11 +20,16 @@ import * as core_taskTrace from '../core/taskTrace.js';
 import * as generation_client from './client.js';
 import * as generation_prompts from './prompts.js';
 import * as generation_recovery from './recovery.js';
-import * as modes_achievements from '../modes/achievements.js';
-import * as modes_cabinet from '../modes/cabinet.js';
-import * as modes_inbox from '../modes/inbox.js';
-import * as modes_themeSong from '../modes/themeSong.js';
-import * as modes_bedtime from '../modes/bedtime.js';
+// C-4（r84.116）：别名沿用 modes_achievements，函数体一字不改；实际指向生成层的桥，不再 import 成就库模块。
+import * as modes_achievements from './modesBridge.js';
+// C-4（r84.115）：别名沿用 modes_cabinet，函数体一字不改；实际指向生成层的桥，不再 import 陈列柜模块。
+import * as modes_cabinet from './modesBridge.js';
+// C-4（r84.108）：别名沿用 modes_inbox，函数体一字不改；实际指向生成层的桥，不再 import 邮箱模块。
+import * as modes_inbox from './modesBridge.js';
+// C-4（r84.106）：别名沿用 modes_themeSong，函数体一字不改；实际指向生成层的桥，不再 import 印象曲模块。
+import * as modes_themeSong from './modesBridge.js';
+// C-4（r84.103）：别名沿用 modes_bedtime，函数体一字不改；实际指向生成层的桥，不再 import 睡前故事模块。
+import * as modes_bedtime from './modesBridge.js';
 import * as bedtime_contract from '../core/bedtimeContract.js';
 import * as ui_overlay from '../ui/overlay.js';
 import * as ui_workspaceState from '../ui/workspaceState.js';

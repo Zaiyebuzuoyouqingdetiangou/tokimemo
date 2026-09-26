@@ -97,13 +97,13 @@ export function sanitizeCgVisualText(value, limit = core_constants.MAX_CG_IMAGE_
 export function cgImagePromptForItem(item, castLooksLine = '', promptFormat = '') {
     if (cg_format.normalizeCgPromptFormat(promptFormat)) {
         // A typed draft must not append Chinese descriptions or stale appearance.
-        return sanitizeCgVisualText(normalizeCgImageRecord(item?.cgImage)?.prompt || item?.imagePrompt || item?.cgDesc || (item?.__rmtCgDescriptor ? '' : item?.desc));
+        return sanitizeCgVisualText(normalizeCgImageRecord(item?.cgImage)?.prompt || item?.imagePrompt || item?.cgComposedDraft || item?.cgDesc || (item?.__rmtCgDescriptor ? '' : item?.desc));
     }
     const saved = sanitizeCgVisualText(normalizeCgImageRecord(item?.cgImage)?.prompt);
     if (saved) return saved;
     // Only the initial editable draft is composed here. Keep the event ahead of
     // optional design details; never read a live card or rewrite a confirmed image.
-    const scene = sanitizeCgVisualText(item?.cgDesc || (item?.__rmtCgDescriptor ? '' : item?.desc), 1100);
+    const scene = sanitizeCgVisualText(item?.cgComposedDraft || item?.cgDesc || (item?.__rmtCgDescriptor ? '' : item?.desc), 1100);
     const authored = sanitizeCgVisualText(item?.imagePrompt, core_constants.MAX_CG_IMAGE_PROMPT_CHARS);
     const seeds = core_text.cleanArray(item?.visualSeed, 10, 80).map(seed => sanitizeCgVisualText(seed, 80)).filter(Boolean);
     const style = item?.cgLayout === 'photoshoot-9-grid'

@@ -411,7 +411,9 @@ export async function resumeArchiveImportProfile({ origin, draftId = '', setting
         } });
     entry.active = true;
     recovery.attachGenerationRecovery(recoveryOrigin, handle);
-    const ticket = { key: recordKey, storageKey: key, entry, origin: recoveryOrigin, handle, assertCurrent: stillCurrent, released: false, completedOnly };
+    // r84.94: 原来这里写的是本函数里不存在的 completedOnly（r84.71 起），一调用就 ReferenceError，
+    // 而且发生在 entry.active = true 之后，草稿被卡成“正在处理”、放弃也被拒绝。续写简介不是“仅入档已完成分块”。
+    const ticket = { key: recordKey, storageKey: key, entry, origin: recoveryOrigin, handle, assertCurrent: stillCurrent, released: false, completedOnly: false };
     tickets.add(ticket);
     return ticket;
 }

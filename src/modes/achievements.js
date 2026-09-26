@@ -12,6 +12,7 @@ import * as core_text from '../core/text.js';
 import * as generation_client from '../generation/client.js';
 import * as generation_prompts from '../generation/prompts.js';
 import * as ui_overlay from '../ui/overlay.js';
+import * as generation_modesBridge from '../generation/modesBridge.js';
 
 function achievementUnlockCondition(item) {
     return core_text.normalizeText(item?.unlockCondition, 300)
@@ -246,3 +247,6 @@ export function renderAchievements() {
       <section class="rmt-achievement-section"><h3>未解锁 <span>${locked.length}</span></h3><div class="rmt-achievement-grid">${locked.length ? cards(locked, true) : '<div class="rmt-heart-empty">目前没有未解锁目标。</div>'}</div></section>
     </div>`;
 }
+
+// 重构清单 C-4（r84.116）：把生成层要用的函数登记到 generation/modesBridge.js（生成层不再 import 本文件）。
+generation_modesBridge.registerGenerationModesBridge({ achievementsPrompt, normalizeAchievements, mergeAchievementsIncremental, generateAchievementsWithRepair, projectAchievementsProgress });

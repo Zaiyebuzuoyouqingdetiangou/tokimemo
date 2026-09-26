@@ -7,6 +7,7 @@ import * as context_tags from '../core/contextTags.js';
 import * as cast_looks from '../core/castLooks.js';
 import * as participants from '../core/participants.js';
 import * as cache from '../core/cache.js';
+import * as core_generationBridge from '../core/generationBridge.js';
 
 export const CG_APPEARANCE_TAG_LIMIT = 400;
 export const CG_SCENE_TAG_LIMIT = 600;
@@ -383,3 +384,6 @@ export function formattedCgProviderPrompts(scene, rawMetadata, supportsCharacter
     }) : null;
     return { prompt, nl, ...(characters ? {characters} : {}) };
 }
+
+// 重构清单 C-3b（r84.99）：把 core 层要用的函数登记到 core/generationBridge.js（core 不再 import 本文件）。
+core_generationBridge.registerGenerationBridge({ normalizeCgPromptMetadata });

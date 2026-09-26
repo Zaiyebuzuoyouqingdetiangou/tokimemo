@@ -106,3 +106,37 @@ export function legacyCgSceneExcerpt(value, context = '') {
     const visible = clauses.filter(line => /(?:窗|灯|光|夜|雨|风|海|树|街|房|手|衣|发|眼|站|坐|走|倚|抱|握|抬|垂|桌|门|船|window|light|hand|hair|stand|sit|hold|room|street)/iu.test(line));
     return text.normalizeText([context, ...visible.slice(0, 5)].filter(Boolean).join(' '), 1500);
 }
+
+// 没有模型写好的 imagePrompt 时的编辑器初稿：设定放前面，再从正文挑几处看得见的动作和物件。
+// 传闻、心理、判断和对白不进画面；第一人称的“我”换成角色名，“你”指谁不确定，整句跳过。
+const DRAFT_VISIBLE = /(?:窗|灯|烛|光|火|炉|夜|雨|雪|风|海|河|湖|山|树|花|月|街|巷|桥|房|屋|门|槛|桌|椅|床|船|车|马|剑|刀|铁|锤|书|信|杯|茶|伞|衣|袖|裙|发|眼|脸|手|指|肩|膝|脚|站|坐|走|跑|跪|躺|倚|靠|抱|握|牵|拉|捏|拿|捧|举|推|抬头|低头|低着|垂着|回头|转身|看着|望着|盯着|看见|擦|抹|敲|编|window|light|hand|hair|stand|sit|hold|room|street)/iu;
+const DRAFT_NOT_VISIBLE = /(?:都说|听说|据说|传说|觉得|以为|想着|想起|想到|记得|忘了|知道|明白|心里|心想|心中|仿佛|好像|似乎|大概|也许|或许|如果|要是|假如|倘若|因为|所以|可惜|从来|一辈子|永远|曾经|后来|总有一天|为什么|怎么|难道|是不是|会不会|应该|必须|不得不|决定|打算|希望|害怕|担心|后悔)/u;
+function draftSettingPart(value) {
+    const first = String(value || '').replace(/[“”「」"]/gu, '').split(/[，,。！？!?；;\n]/u)[0];
+    const clean = text.normalizeText(first, 60);
+    return clean.length >= 2 && clean.length <= 40 ? clean : '';
+}
+export function composedCgSceneDraft(value, { setting = [], subject = '', firstPerson = false } = {}) {
+    const name = text.normalizeText(subject, 40);
+    const lines = String(value || '').split(/\r?\n/u).filter(line => !/^\s*(?:char|user)\s*[:：]/iu.test(line))
+        .map(line => line.replace(/^\s*narrator\s*[:：]\s*/iu, ''));
+    const clauses = lines.join('，').replace(/[“「『][^”」』]*[”」』]/gu, '，').split(/[，,。！？!?；;…、]+/u);
+    const moment = [];
+    for (const raw of clauses) {
+        let clause = text.normalizeText(raw, 80);
+        if (clause.length < 4 || clause.length > 60 || !DRAFT_VISIBLE.test(clause) || DRAFT_NOT_VISIBLE.test(clause)) continue;
+        if (firstPerson) {
+            if (/[你您]/u.test(clause) || (!name && /我/u.test(clause))) continue;
+            clause = clause.replace(/(?:我们|咱们)/gu, '两人').replace(/我/gu, name);
+        } else if (/[我你您]/u.test(clause)) continue;
+        if (!moment.includes(clause)) moment.push(clause);
+        if (moment.length >= 4) break;
+    }
+    const parts = [];
+    for (const part of (Array.isArray(setting) ? setting : [setting]).map(draftSettingPart)) {
+        if (part && !parts.some(existing => existing.includes(part) || part.includes(existing))) parts.push(part);
+    }
+    const scene = parts.length ? `${parts.join('，')}。` : '';
+    const action = moment.length ? `${moment.join('，')}。` : '';
+    return text.normalizeText(`${scene}${action}`, 400);
+}

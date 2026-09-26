@@ -2,7 +2,8 @@
 // deferred payload: never replay a stale whole Album / ADV / Heart session.
 import * as constants from './constants.js';
 import * as text from './text.js';
-import * as appearance from '../generation/cgAppearance.js';
+// C-3b（r84.99）：别名沿用 appearance，函数体一字不改；实际指向 core 层的桥，不再 import generation 层。
+import * as appearance from './generationBridge.js';
 import * as cg_visual from './cgVisualRules.js';
 import * as cg_targets from './cgTargets.js';
 

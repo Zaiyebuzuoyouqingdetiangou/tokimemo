@@ -1,7 +1,8 @@
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
 import * as core_digest from './digest.js';
-import * as archive_groups from '../archive/groups.js';
+// C-3c（r84.100）：别名沿用 archive_groups，函数体一字不改；characterDescriptor 已挪到 core 层，不再 import archive 层。
+import * as archive_groups from './characterDescriptor.js';
 import * as core_constants from './constants.js';
 import * as core_evidence from './evidence.js';
 import { state as runtimeState } from './state.js';

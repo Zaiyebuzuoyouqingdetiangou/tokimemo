@@ -1,23 +1,81 @@
-# 测试分支残留文件清单
+# 测试分支残留文件清单（r84.94 更新）
 
-测试分支的 ZIP 导入只新增 / 覆盖文件，不删除。下面这些文件在新包里已经删除或移走，但仓库里还留着旧的一份。它们**都不参与运行**（插件只加载 `index.js`、`src/core/autoUpdatePolicy.js` 和 `dist/heartbeatMemories.bundle.js`），留着不影响使用，只是会让以后读仓库的人（和 AI）看到过期内容。
+GitHub 导入只新增 / 覆盖文件，**不会删除**。下面这些文件在交付包里早已删除，但仓库分支里还留着旧的一份。它们都不参与运行（插件只加载 `index.js`、`src/core/autoUpdatePolicy.js` 和 `dist/heartbeatMemories.bundle.js`），留着不影响使用；但以后有人从分支读代码，最容易改错的就是它们，尤其 `src/modes/styles.js`（254KB）、`src/modes/overlay.js`（94KB）、`src/modes/settingsPanel.js`（75KB）。
 
-想清理时，在本地仓库或 GitHub Desktop 里一次删掉这些路径再提交即可；网页上只能一个个删。
+## 最省事的删法（电脑上装了 git 或 GitHub Desktop 时）
 
-## 根目录旧文档（已移到 dev/archive/）
+在仓库目录里切到 `测试` 分支，复制下面一整段运行，然后提交并推送：
 
-- LOCAL-REPAIR-r84.56.md
-- REPAIR-r84.69.md、REPAIR-r84.70.md、REPAIR-r84.71.md
-- REVIEW-r84.57.md、REVIEW-r84.58.md、REVIEW-r84.59.md
-- REPLACE-INSTRUCTIONS.txt
-- 施工方案.md、整体逻辑.md
-- 问题分析-为什么会反复出现重试未完成部分.md、问题分析-房间预算与长记忆上限.md
-- 乱码文件名的 .md（例如 `P0-╨▐╕┤╦╡├≈.md`、`╩⌐╣ñ╖╜░╕.md` 以及 `#U…` 开头的文件名），如果仓库里有
+```bash
+git rm -r -- \
+  src/modes/advEventView.js \
+  src/modes/albumView.js \
+  src/modes/archiveAvatars.js \
+  src/modes/archivePortal.js \
+  src/modes/butterflyView.js \
+  src/modes/calendarView.js \
+  src/modes/cgImageViewer.js \
+  src/modes/cgPromptEditor.js \
+  src/modes/contentManager.js \
+  src/modes/endingView.js \
+  src/modes/floatingArchive.js \
+  src/modes/floatingAvatarButton.js \
+  src/modes/heartView.js \
+  src/modes/homeView.js \
+  src/modes/immersionStyles.js \
+  src/modes/inboxStyles.js \
+  src/modes/inboxView.js \
+  src/modes/navigationBookmark.js \
+  src/modes/overlay.js \
+  src/modes/pastLivesView.js \
+  src/modes/phoneView.js \
+  src/modes/readingStyles.js \
+  src/modes/recoveryView.js \
+  src/modes/settingsPanel.js \
+  src/modes/styles.js \
+  src/modes/themeSurfaces.js \
+  src/modes/timeStoriesView.js \
+  src/modes/travelView.js \
+  src/ui/photoshootView.js \
+  dev/active/refactor
+git commit -m "删除不参与运行的旧文件"
+```
 
-## 不可达旧源文件（r84.72 删除）
+只能用 GitHub 网页时，逐个打开文件，点右上角的垃圾桶图标删除即可（`dev/active/refactor/` 里有 4 个文件）。
 
-src/modes/ 下：advEventView.js、albumView.js、archiveAvatars.js、archivePortal.js、butterflyView.js、calendarView.js、cgImageViewer.js、cgPromptEditor.js、contentManager.js、endingView.js、floatingArchive.js、floatingAvatarButton.js、heartView.js、homeView.js、immersionStyles.js、inboxStyles.js、inboxView.js、navigationBookmark.js、overlay.js、pastLivesView.js、phoneView.js、readingStyles.js、recoveryView.js、settingsPanel.js、styles.js、themeSurfaces.js、timeStoriesView.js、travelView.js
+## 清单
 
-src/ui/ 下：photoshootView.js
+- `dev/active/refactor/`（整个目录；正式记录在 `dev/archive/refactor/`）
+- `src/modes/advEventView.js`
+- `src/modes/albumView.js`
+- `src/modes/archiveAvatars.js`
+- `src/modes/archivePortal.js`
+- `src/modes/butterflyView.js`
+- `src/modes/calendarView.js`
+- `src/modes/cgImageViewer.js`
+- `src/modes/cgPromptEditor.js`
+- `src/modes/contentManager.js`
+- `src/modes/endingView.js`
+- `src/modes/floatingArchive.js`
+- `src/modes/floatingAvatarButton.js`
+- `src/modes/heartView.js`
+- `src/modes/homeView.js`
+- `src/modes/immersionStyles.js`
+- `src/modes/inboxStyles.js`
+- `src/modes/inboxView.js`
+- `src/modes/navigationBookmark.js`
+- `src/modes/overlay.js`
+- `src/modes/pastLivesView.js`
+- `src/modes/phoneView.js`
+- `src/modes/readingStyles.js`
+- `src/modes/recoveryView.js`
+- `src/modes/settingsPanel.js`
+- `src/modes/styles.js`
+- `src/modes/themeSurfaces.js`
+- `src/modes/timeStoriesView.js`
+- `src/modes/travelView.js`
+- `src/ui/photoshootView.js`
 
-注意：只删上面列出的 `src/modes/` 文件。`src/modes/` 里其他文件（room.js、heart.js、phone.js 等）是正在用的。
+注意：`src/modes/` 里的其他文件（room.js、heart.js、phone.js 等）正在使用，不要删；只删上面列出的路径。
+
+删完后，下一轮开工时 AI 会复查“入口不可达的源文件为 0”（重构清单 1-2）。

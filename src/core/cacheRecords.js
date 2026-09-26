@@ -1,11 +1,14 @@
-import * as archive_groups from '../archive/groups.js';
-import * as archive_repository from '../archive/repository.js';
+// C-3c（r84.101）：别名沿用 archive_groups，函数体一字不改；实际指向 core 层的桥，不再 import archive 层。
+import * as archive_groups from './archiveBridge.js';
+// C-3c（r84.101）：别名沿用 archive_repository，函数体一字不改；实际指向 core 层的桥，不再 import archive 层。
+import * as archive_repository from './archiveBridge.js';
 import * as core_constants from './constants.js';
 import * as core_context from './context.js';
 import * as core_requestCoordinator from './requestCoordinator.js';
 import { state as runtimeState } from './state.js';
 import * as core_text from './text.js';
-import * as generation_recovery from '../generation/recovery.js';
+// C-3b（r84.99）：别名沿用 generation_recovery，函数体一字不改；实际指向 core 层的桥，不再 import generation 层。
+import * as generation_recovery from './generationBridge.js';
 import * as participant_contract from './participants.js';
 // 缓存底层：缓存键与克隆、压缩与清单、提交令牌、写入栅栏、备份条目、参与者草稿元数据、缓存读取与水合
 // 从 core/cache.js 原样搬出（重构阶段 2），声明文本一字未改；core/cache.js 仍转发原有导出。

@@ -1,14 +1,19 @@
-import * as archive_groups from '../archive/groups.js';
-import * as archive_backupStore from '../archive/backupStore.js';
-import * as archive_repository from '../archive/repository.js';
-import * as archive_snapshots from '../archive/snapshots.js';
+// C-3c（r84.101）：别名沿用 archive_groups，函数体一字不改；实际指向 core 层的桥，不再 import archive 层。
+import * as archive_groups from './archiveBridge.js';
+// C-3c（r84.101）：别名沿用 archive_backupStore，函数体一字不改；实际指向 core 层的桥，不再 import archive 层。
+import * as archive_backupStore from './archiveBridge.js';
+// C-3c（r84.101）：别名沿用 archive_repository，函数体一字不改；实际指向 core 层的桥，不再 import archive 层。
+import * as archive_repository from './archiveBridge.js';
+// C-3c（r84.101）：别名沿用 archive_snapshots，函数体一字不改；实际指向 core 层的桥，不再 import archive 层。
+import * as archive_snapshots from './archiveBridge.js';
 import * as core_constants from './constants.js';
 import * as core_context from './context.js';
 import * as core_requestCoordinator from './requestCoordinator.js';
 import { state as runtimeState } from './state.js';
 import * as core_text from './text.js';
 import * as backup_diagnostics from './backupDiagnostics.js';
-import * as generation_recovery from '../generation/recovery.js';
+// C-3b（r84.99）：别名沿用 generation_recovery，函数体一字不改；实际指向 core 层的桥，不再 import generation 层。
+import * as generation_recovery from './generationBridge.js';
 import * as participant_contract from './participants.js';
 import { ARCHIVE_VERSIONS_CACHE_KEY, GENERATION_DRAFTS_CACHE_KEY, GENERATION_RECOVERY_CLEARED_KEY, PARTICIPANT_DRAFT_METADATA_KEY, RETIRED_STORY_MODE, STORED_MODES, archiveBackupEntryForContext, archiveVersions, assertArchiveCommitState, assertExpectedTaskOrigin, assertPresentationOnlyMemoryPatch, cacheOrderValue, cacheScopeFromContext, cloneCacheValue, ensureCacheHydrated, getCache, hydrateBackupCacheValue, mergeCacheSnapshotsWithModeFences, participantConflict, participantDraft, participantOriginChanged, participantRoster, prepareCacheBackupValue, rememberRuntimeSessionCache, retainLegacyGenerationDraft, saveMetadataDurably, serializeArchiveCommitOperation, serializeCacheScopeOperation, stabilizeDeferredMigrationTimestamps, stampCacheCommit, stampStableMigratedCacheCommit } from './cacheRecords.js';
 import { commitArchiveCacheMutation, scheduleCompressedCachePersist } from './cacheCommit.js';

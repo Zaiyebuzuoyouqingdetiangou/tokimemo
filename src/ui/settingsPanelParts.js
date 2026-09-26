@@ -12,6 +12,8 @@ import * as core_theme from '../core/theme.js';
 import * as core_autoUpdatePolicy from '../core/autoUpdatePolicy.js';
 import * as core_autoUpdates from '../core/autoUpdates.js';
 import * as auto_memory_plan from '../autoMemory/planStore.js';
+import * as auto_memory_floor from '../autoMemory/floorPace.js';
+import * as wizard_plan from '../autoMemory/wizardPlan.js';
 import * as ui_countdown from './autoMemoryCountdown.js';
 // 设置页组件：启动入口、生图 / 语音 / 读取范围设置、模型列表、任务与记忆状态刷新
 // 从 ui/settingsPanel.js 原样搬出（重构阶段 2），声明文本一字未改；ui/settingsPanel.js 仍转发原有导出。
@@ -322,9 +324,67 @@ export function refreshThemeUi() {
     if (opacity) opacity.textContent = Math.round(settings.themeAlpha * 100) + '%';
 }
 
+async function onAutoMemoryPaceChange(panel, event) {
+    const target = event.target;
+    if (target.matches?.('[data-rmt-auto-memory-latest]')) {
+        core_settings.updatePluginSettings({ autoMemoryLatestFloor: !!target.checked });
+        await saveAutoMemoryPace(panel);
+        return;
+    }
+    if (target.matches?.('[data-rmt-auto-memory-interval]') && target.closest?.('[data-rmt-settings-section="auto"]')) {
+        core_settings.updatePluginSettings({ autoMemoryIntervalFloors: target.value });
+        target.value = String(core_settings.getPluginSettings().autoMemoryIntervalFloors);
+        await saveAutoMemoryPace(panel);
+        return;
+    }
+    if (target.matches?.('[data-rmt-auto-memory-retry-count]')) {
+        core_settings.updatePluginSettings({ autoRetryCount: target.value, autoRetryEnabled: true });
+        const count = String(core_settings.getPluginSettings().autoRetryCount);
+        for (const input of panel.querySelectorAll('[data-rmt-auto-retry-count], [data-rmt-auto-memory-retry-count]')) {
+            input.value = count;
+            input.disabled = false;
+        }
+        const retry = panel.querySelector('[data-rmt-auto-retry]');
+        if (retry) retry.checked = true;
+    }
+}
+
+async function saveAutoMemoryPace(panel) {
+    const note = panel.querySelector('[data-rmt-auto-memory-gate]');
+    let context;
+    try { context = core_context.currentCharacterGuard(); }
+    catch { return; }
+    const settings = core_settings.getPluginSettings();
+    const latest = settings.autoMemoryLatestFloor === true;
+    const floor = latest ? auto_memory_floor.assistantFloorCount(context.chat) : (Array.isArray(context.chat) ? context.chat.length : 0);
+    const metadata = context.chatMetadata;
+    let result;
+    try { result = wizard_plan.pacePatch(metadata, { intervalFloors: settings.autoMemoryIntervalFloors, floor }, Date.now()); }
+    catch (error) { if (note) note.textContent = error?.safeToDisplay ? error.safeUserMessage : '间隔没有改。'; return; }
+    if (!result.changed) {
+        if (result.message && note) note.textContent = result.message;
+        ui_countdown.refreshAutoMemoryCountdown();
+        return;
+    }
+    try {
+        const before = auto_memory_plan.readAutoMemoryMetadata(metadata);
+        auto_memory_plan.commitAutoMemoryMetadata(metadata, result.snapshot, before.plan.revision);
+        await context.saveMetadataDebounced?.();
+    } catch (error) {
+        if (note) note.textContent = error?.safeToDisplay ? error.safeUserMessage : '间隔没有写进当前聊天。';
+        return;
+    }
+    ui_countdown.refreshAutoMemoryCountdown();
+    if (note && result.snapshot?.plan?.enabled) note.textContent = `已改成每 ${result.snapshot.plan.intervalFloors} 楼抽一次，从现在重新计。`;
+}
+
 export function refreshGenerationSettingsUi() {
     const panel = document.getElementById(core_constants.SETTINGS_ID);
     if (!panel) return;
+    if (panel.dataset.rmtAutoMemoryPaceBound !== '1') {
+        panel.dataset.rmtAutoMemoryPaceBound = '1';
+        panel.addEventListener('change', event => { void onAutoMemoryPaceChange(panel, event); });
+    }
     const settings = core_settings.getPluginSettings();
     refreshThemeUi();
     const connectionMode = settings.apiConnectionMode === 'manual' ? 'manual' : 'profile';

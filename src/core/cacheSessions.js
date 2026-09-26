@@ -1,5 +1,7 @@
-import * as archive_repository from '../archive/repository.js';
-import * as archive_snapshots from '../archive/snapshots.js';
+// C-3c（r84.100）：别名沿用 archive_repository，函数体一字不改；实际指向 core 层的桥，不再 import archive 层。
+import * as archive_repository from './archiveBridge.js';
+// C-3c（r84.100）：别名沿用 archive_snapshots，函数体一字不改；实际指向 core 层的桥，不再 import archive 层。
+import * as archive_snapshots from './archiveBridge.js';
 import * as core_constants from './constants.js';
 import * as core_heartLanguage from './heartLanguage.js';
 import * as song_contract from './themeSongContract.js';
@@ -8,13 +10,20 @@ import * as core_context from './context.js';
 import * as core_requestCoordinator from './requestCoordinator.js';
 import { state as runtimeState } from './state.js';
 import * as core_text from './text.js';
-import * as modes_calendar from '../modes/calendar.js';
-import * as modes_phone from '../modes/phone.js';
-import * as modes_inbox from '../modes/inbox.js';
-import * as modes_pastLives from '../modes/pastLives.js';
-import * as modes_timeStories from '../modes/timeStories.js';
-import * as modes_themeSong from '../modes/themeSong.js';
-import * as modes_bedtime from '../modes/bedtime.js';
+// C-3（r84.98）：别名沿用 modes_calendar，函数体一字不改；实际指向 core 层的桥，不再 import modes 层。
+import * as modes_calendar from './modesBridge.js';
+// C-3（r84.98）：别名沿用 modes_phone，函数体一字不改；实际指向 core 层的桥，不再 import modes 层。
+import * as modes_phone from './modesBridge.js';
+// C-3（r84.98）：别名沿用 modes_inbox，函数体一字不改；实际指向 core 层的桥，不再 import modes 层。
+import * as modes_inbox from './modesBridge.js';
+// C-3（r84.98）：别名沿用 modes_pastLives，函数体一字不改；实际指向 core 层的桥，不再 import modes 层。
+import * as modes_pastLives from './modesBridge.js';
+// C-3（r84.98）：别名沿用 modes_timeStories，函数体一字不改；实际指向 core 层的桥，不再 import modes 层。
+import * as modes_timeStories from './modesBridge.js';
+// C-3（r84.98）：别名沿用 modes_themeSong，函数体一字不改；实际指向 core 层的桥，不再 import modes 层。
+import * as modes_themeSong from './modesBridge.js';
+// C-3（r84.98）：别名沿用 modes_bedtime，函数体一字不改；实际指向 core 层的桥，不再 import modes 层。
+import * as modes_bedtime from './modesBridge.js';
 import * as time_stories from './timeStoriesContract.js';
 import { PARTICIPANT_REPLACEMENT_KEY, archiveBackupEntryForContext, assertModeWriteFence, cacheCommitToken, cacheScopeFromContext, clearCompletedRecovery, cloneCacheValue, ensureCacheHydrated, generationDraftRecords, getCache, isCompressedCacheRecord, rememberRuntimeSessionCache, saveMetadataDurably, serializeArchiveCommitOperation, serializeCacheScopeOperation, stampCacheCommit } from './cacheRecords.js';
 import { commitArchiveCacheMutation, persistCompressedCacheNow, scheduleCompressedCachePersist, shouldWriteUncompressedCacheImmediately } from './cacheCommit.js';

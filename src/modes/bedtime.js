@@ -4,6 +4,8 @@ import * as contract from '../core/bedtimeContract.js';
 import * as contextApi from '../core/context.js';
 import * as text from '../core/text.js';
 import * as generation from '../generation/client.js';
+import * as core_modesBridge from '../core/modesBridge.js';
+import * as generation_modesBridge from '../generation/modesBridge.js';
 
 const limits = () => contract.BEDTIME_LIMITS;
 
@@ -155,3 +157,8 @@ export function readableBedtimeProgressSession(value, memory) {
         return value;
     } catch { return null; }
 }
+
+// 重构清单 C-3（r84.98）：把 core 层要用的函数登记到 core/modesBridge.js（core 不再 import 本文件）。
+core_modesBridge.registerModesBridge({ readableBedtimeProgressSession });
+// 重构清单 C-4（r84.103）：把生成层要用的函数登记到 generation/modesBridge.js（生成层不再 import 本文件）。
+generation_modesBridge.registerGenerationModesBridge({ createBedtimePlan, validateBedtimePlan, bedtimePrompt, normalizeGeneratedBedtime, generateBedtime, projectBedtimeProgress });

@@ -13,12 +13,6 @@ import * as overlay from './overlay.js';
 import * as travelView from './travelView.js';
 import * as mailGallery from '../core/mailGallery.js';
 
-// r84.71: plain reason for a new letter without a drawing (display only).
-const MISSING_ART_NOTE = Object.freeze({
-    appearance: '这封没有小画：发送的角色卡/世界书里没找到可画的外貌（如"黑色长发""白衬衫"）。',
-    scene: '这封没有小画：信里没有可画的场景（如喝茶、下雨、窗边、写信）。',
-});
-
 let view = { scope: '', selected: '', filter: 'all' };
 const readonly = () => !!runtimeState.activeArchiveSnapshot && (runtimeState.activeArchiveReadOnly || runtimeState.activeArchiveSnapshot.backupOnly);
 const letterTypeLabel = type => type === 'stage' ? '阶段来信' : type === 'daily' ? '日常来信' : type === 'travel' ? '旅行明信片' : '来信';
@@ -56,10 +50,11 @@ export function renderInbox() {
         view.filter === 'unread' ? !letter.readAt : view.filter === 'favorite' ? letter.favorite : true);
     const stamp = mailStamp;
     const tab = (id, label) => `<button type="button" class="rmt-btn" data-rmt-inbox="filter" data-rmt-inbox-id="${id}" aria-pressed="${view.filter === id}">${label}</button>`;
+    const drawing = selected ? letterArt.renderLetterIllustration(selected.illustration, { idPrefix: selected.id, label: '随信小画' }) : '';
     const detail = selected ? `<article class="rmt-mail-open">
         <div class="rmt-mail-actions"><button type="button" class="rmt-btn" data-rmt-inbox="back">← 收件箱</button><button type="button" class="rmt-btn" data-rmt-inbox="favorite" data-rmt-inbox-id="${text.esc(selected.id)}" aria-pressed="${selected.favorite}" ${readonly() ? 'disabled' : ''}>${selected.favorite ? '已收藏' : '收藏这封信'}</button></div>
         ${selected.travelSnapshot ? travelView.travelPostcardHtml(selected.travelSnapshot.location, selected.travelSnapshot, { recipient: session.recipient, closeAction: 'inbox-back' })
-            : `<div class="rmt-mail-paper" data-rmt-paper="${inboxPaperTone(selected)}"><header><small>${letterTypeLabel(selected.type)} · TO ${text.esc(session.recipient || '你')} · ${text.esc(stamp(selected.createdAt))}</small><h2>${text.esc(selected.title)}</h2></header><b>${text.esc(selected.greeting)}</b><p>${text.esc(selected.body)}</p><figure class="rmt-letter-illustration" style="margin:24px auto;text-align:center">${letterArt.renderLetterIllustration(selected.illustration, { idPrefix: selected.id, label: '随信小画' })}${!selected.illustration && MISSING_ART_NOTE[selected.illustrationMissing] ? `<figcaption style="font-size:12px;opacity:.62">${text.esc(MISSING_ART_NOTE[selected.illustrationMissing])}</figcaption>` : ''}</figure><footer>${text.esc(selected.closing || inboxSenderLabel(selected, session))}</footer></div>`}
+            : `<div class="rmt-mail-paper" data-rmt-paper="${inboxPaperTone(selected)}"><header><small>${letterTypeLabel(selected.type)} · TO ${text.esc(session.recipient || '你')} · ${text.esc(stamp(selected.createdAt))}</small><h2>${text.esc(selected.title)}</h2></header><b>${text.esc(selected.greeting)}</b><p>${text.esc(selected.body)}</p>${drawing ? `<figure class="rmt-letter-illustration" style="margin:24px auto;text-align:center">${drawing}</figure>` : ''}<footer>${text.esc(selected.closing || inboxSenderLabel(selected, session))}</footer></div>`}
     </article>` : `<nav class="rmt-mail-filters" aria-label="筛选信件">${tab('all','全部')}${tab('unread','未读')}${tab('favorite','收藏')}${tab('gallery','随信画册 · ' + mailGallery.savedMailDrawings(session).length)}</nav>${view.filter === 'gallery' ? inboxGalleryHtml(session) : `<div class="rmt-mail-list">${letters.map(letter =>
         `<button type="button" class="rmt-mail-row ${letter.readAt ? '' : 'is-unread'}" data-rmt-inbox="read" data-rmt-inbox-id="${text.esc(letter.id)}"><span class="rmt-mail-seal" aria-hidden="true">${letter.type === 'travel' ? '▧' : '✉'}</span><span><small>${letterTypeLabel(letter.type)} · ${text.esc(inboxSenderLabel(letter, session))} · ${text.esc(stamp(letter.createdAt))}${letter.favorite ? ' · 收藏' : ''}${!letter.readAt ? ' · 未读' : ''}</small><b>${text.esc(letter.title)}</b><span>${text.esc(letter.body.slice(0, 90))}</span></span><i aria-hidden="true">›</i></button>`).join('') || '<div class="rmt-mail-empty"><span aria-hidden="true">✉</span><h3>信箱里留着位置</h3><p>可以收一封今天的来信，也可以把路线中的明信片收进来。</p></div>'}</div>`}`;
     overlay.bodyEl().innerHTML = `<section class="rmt-inbox"><header class="rmt-mail-header"><div><small>LETTERS TO YOU</small><h2>${text.esc(session.recipient || '你')}的邮箱</h2><p>${session.letters.length} 封来信 · ${session.letters.filter(item => !item.readAt).length} 封未读</p></div><div class="rmt-mail-actions"><button type="button" class="rmt-btn" data-rmt-inbox="receive" ${readonly() ? 'disabled' : ''}>收取新信</button><button type="button" class="rmt-btn" data-rmt-inbox="postcards" ${readonly() ? 'disabled' : ''}>收进路线明信片</button></div></header>${detail}</section>`;

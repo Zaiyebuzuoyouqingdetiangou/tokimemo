@@ -1,5 +1,6 @@
 import * as text from './text.js';
-import * as appearance from '../generation/cgAppearance.js';
+// C-3b（r84.99）：别名沿用 appearance，函数体一字不改；实际指向 core 层的桥，不再 import generation 层。
+import * as appearance from './generationBridge.js';
 
 export const PHOTOSHOOT_ROUTE = Object.freeze({ NORMAL: 'photoshoot', FAILED: 'failed-photoshoot' });
 export const PHOTOSHOOT_CAPTURE = Object.freeze(['selfie', 'portrait', 'together']);

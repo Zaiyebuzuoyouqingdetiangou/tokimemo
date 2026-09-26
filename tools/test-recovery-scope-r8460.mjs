@@ -4,6 +4,8 @@ import * as cache from '../src/core/cache.js';
 import * as recovery from '../src/generation/recovery.js';
 import * as contextApi from '../src/core/context.js';
 import * as constants from '../src/core/constants.js';
+// C-4（r84.120）：生成层不再 import HEART。这个测试只加载恢复模块，要先加载 HEART，档案函数才会登记。断言没改。
+import '../src/modes/heart.js';
 
 async function fixture({ frozen = true, legacy = false } = {}) {
     const bank = { version: 3, chatId: 'same-chat', archiveRevision: 'r1', characterName: '林深', userName: '阿宁',

@@ -14,7 +14,8 @@ import * as core_text from './text.js';
 import * as core_digest from './digest.js';
 import * as context_tags from './contextTags.js';
 import { state as runtimeState } from './state.js';
-import * as archive_repository from '../archive/repository.js';
+// C-3c（r84.100）：别名沿用 archive_repository，函数体一字不改；实际指向 core 层的桥，不再 import archive 层。
+import * as archive_repository from './archiveBridge.js';
 
 export const CAST_LOOKS_KEY = 'heartbeatMemoriesCastLooksV1';
 export const CAST_LOOKS_FIELD_LIMIT = 400;

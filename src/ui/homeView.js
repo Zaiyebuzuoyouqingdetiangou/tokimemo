@@ -15,7 +15,7 @@ import * as mirrorReader from './mirrorTtsReader.js';
 export function homeHeadingHtml(ctx = context.getContext()) {
     const name = text.normalizeText(ctx?.name2, 120);
     const bank = repository.getImportedMemory(ctx);
-    return `<header class="rmt-home-heading"><h1>设置</h1><p>${name ? text.esc(name) + ' · ' : ''}自动留忆、连接与生成</p></header>`;
+    return `<header class="rmt-home-heading"><h1>设置</h1><p>${name ? text.esc(name) + ' · ' : ''}连接、主题与生成参数</p></header>`;
 }
 
 export function showHome({ section = '' } = {}) {
