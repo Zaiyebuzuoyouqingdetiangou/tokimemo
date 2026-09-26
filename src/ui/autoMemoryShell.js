@@ -37,74 +37,29 @@ export function floorShellCss() {
 }
 
 function ensureCss() {
-    if (!document.getElementById('rmt-floor-shell-style')) {
-        const style = document.createElement('style');
-        style.id = 'rmt-floor-shell-style';
-        style.textContent = floorShellCss();
-        document.head?.appendChild(style);
-    }
-    let guard = document.getElementById('rmt-letter-guard');
-    if (!guard) {
-        guard = document.createElement('style');
-        guard.id = 'rmt-letter-guard';
-        guard.textContent = `#chat .mes .rmt-floor-shell .rmt-heart-letter-paper .rmt-floor-body,#chat .mes .rmt-floor-shell .rmt-heart-letter-paper .rmt-floor-body :is(p,h1,h2,h3,h4,h5,h6,article,pre,main,header,section,aside,figure,blockquote),.rmt-floor-shell .rmt-letter-song,.rmt-floor-shell .rmt-letter-song-line,.rmt-floor-shell .rmt-letter-song-title,.rmt-floor-shell .rmt-letter-song-label,.rmt-floor-shell [data-rmt-letter-achievement],.rmt-floor-shell [data-rmt-letter-copy]{display:block!important;visibility:visible!important;height:auto!important;max-height:none!important;overflow:visible!important;opacity:1!important;position:static!important;color:#5c463c!important;-webkit-text-fill-color:#5c463c!important;font-size:15px!important;line-height:1.8!important;white-space:pre-wrap!important}#chat .mes .rmt-floor-shell .rmt-heart-letter-paper .rmt-floor-body{max-height:70vh!important;overflow:auto!important}.rmt-floor-shell .rmt-letter-song-title{font-size:22px!important;font-weight:700!important}`;
-    }
-    document.head?.appendChild(guard);
-}
-
-function pinLetterNode(node, scrolling = false) {
-    if (!node?.style?.setProperty) return;
-    node.style.setProperty('display', 'block', 'important');
-    node.style.setProperty('visibility', 'visible', 'important');
-    node.style.setProperty('height', 'auto', 'important');
-    node.style.setProperty('max-height', scrolling ? '70vh' : 'none', 'important');
-    node.style.setProperty('overflow', scrolling ? 'auto' : 'visible', 'important');
-    node.style.setProperty('opacity', '1', 'important');
-    node.style.setProperty('position', 'static', 'important');
-    node.style.setProperty('transform', 'none', 'important');
-    node.style.setProperty('color', '#5c463c', 'important');
-    node.style.setProperty('-webkit-text-fill-color', '#5c463c', 'important');
-    node.style.setProperty('font-size', '15px', 'important');
-    node.style.setProperty('line-height', '1.8', 'important');
-    node.style.setProperty('white-space', 'pre-wrap', 'important');
-}
-
-const PINNED_TAGS = new Set(['P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'ARTICLE', 'PRE', 'MAIN', 'HEADER', 'SECTION', 'ASIDE', 'FIGURE', 'FIGCAPTION', 'BLOCKQUOTE']);
-
-function pinRound(body) {
-    pinLetterNode(body, true);
-    body?.querySelectorAll?.('*')?.forEach(node => {
-        if (node.tagName === 'BUTTON') return;
-        const force = PINNED_TAGS.has(node.tagName) || node.classList?.contains('rmt-letter-song') || node.classList?.contains('rmt-letter-song-line') || node.classList?.contains('rmt-letter-song-title') || node.classList?.contains('rmt-round-reading');
-        if (force) pinLetterNode(node);
-        else if (node.style?.setProperty) {
-            node.style.setProperty('visibility', 'visible', 'important');
-            node.style.setProperty('opacity', '1', 'important');
-            node.style.setProperty('max-height', 'none', 'important');
-        }
-    });
-    const paper = body?.parentElement;
-    if (paper?.classList?.contains('rmt-heart-letter-paper')) {
-        paper.style.setProperty('overflow', 'visible', 'important');
-        paper.style.setProperty('height', 'auto', 'important');
-        paper.style.setProperty('max-height', 'none', 'important');
-        paper.querySelectorAll?.('[data-rmt-letter-achievement],[data-rmt-letter-copy]')?.forEach(node => pinLetterNode(node));
-    }
+    document.getElementById('rmt-letter-guard')?.remove();
+    if (document.getElementById('rmt-floor-shell-style')) return;
+    const style = document.createElement('style');
+    style.id = 'rmt-floor-shell-style';
+    style.textContent = floorShellCss();
+    document.head?.appendChild(style);
 }
 
 function mirrorModuleCss() {
     try { ui_styles.ensureStyles(); } catch { /* 样式还没准备好时，楼层壳仍显示摘要。 */ }
     const source = document.getElementById(core_constants.STYLE_ID);
     if (!source || document.getElementById('rmt-floor-module-css')) return;
-    const copied = source.textContent.replaceAll(`#${core_constants.OVERLAY_ID}`, '.rmt-floor-shell');
+    const copied = shell_state.mirrorOverlayCss(source.textContent, core_constants.OVERLAY_ID);
     const roomCss = room_layout.roomLayoutCss('.rmt-floor-shell');
     const style = document.createElement('style');
     style.id = 'rmt-floor-module-css';
+    // 插件窗口的根规则（全屏 fixed、100vw、去外边距）也会落到楼层壳上，壳自己的尺寸放在最后压住。
     style.textContent = `${copied}
-.rmt-floor-shell{position:relative!important;inset:auto!important;z-index:auto!important;height:auto!important;width:min(96%,420px)!important;max-height:none!important;display:block!important;padding:0!important;background:transparent!important;backdrop-filter:none!important}
 ${shell_state.floorShellCss()}
 ${roomCss}
-${shell_state.promoteNarrowLayout(`${copied}\n${roomCss}`)}`;
+${shell_state.promoteNarrowLayout(`${copied}\n${roomCss}`)}
+.rmt-floor-shell{position:relative!important;inset:auto!important;z-index:auto!important;height:auto!important;width:min(96%,420px)!important;max-width:100%!important;max-height:none!important;margin:8px auto 12px!important;display:block!important;padding:0!important;border:0!important;background:transparent!important;backdrop-filter:none!important}
+.rmt-floor-shell .rmt-floor-body{position:static!important;inset:auto!important;box-sizing:border-box!important;width:auto!important;max-width:100%!important;height:auto!important;max-height:70vh!important;margin:10px 0 0!important;padding:0!important;display:block!important;border:0!important;background:transparent!important;overflow:auto!important}`;
     document.head?.appendChild(style);
 }
 
@@ -139,10 +94,9 @@ function readSnapshot(context) {
 }
 
 function roundIsEmpty(moduleId, reveal, running, steps, ticket, moduleComplete, previewKept) {
-    const open = running
-        || ticket?.status === 'drawn'
-        || ticket?.status === 'running'
-        || steps.some(step => step.status === 'pending' || step.status === 'running' || step.status === 'failed');
+    const stepsBusy = steps.some(step => step.status === 'pending' || step.status === 'running' || step.status === 'failed');
+    const ticketBusy = (ticket?.status === 'drawn' || ticket?.status === 'running') && moduleComplete !== true;
+    const open = running || stepsBusy || ticketBusy;
     if (open || !moduleId || previewKept === true) return false;
     const settled = moduleComplete === true || reveal?.status === 'ready' || reveal?.status === 'opened';
     if (!settled) return false;
@@ -246,8 +200,8 @@ function markup(view) {
     const revealPaper = view.phase === 'reveal' && view.showReveal;
     const writing = view.phase === 'generating' || view.phase === 'planning';
     const caption = revealPaper ? '' : `<small data-rmt-letter-detail>${core_text.esc(view.detail || (writing ? '正在生成中' : ''))}</small>`;
-    const heading = view.title ? `<div class="rmt-letter-song-title" data-rmt-letter-achievement>${core_text.esc(view.title)}</div>` : '';
-    const copy = view.achievementCopy ? `<div class="rmt-letter-song-line" data-rmt-letter-copy>${core_text.esc(view.achievementCopy)}</div>` : '';
+    const heading = view.title ? `<p data-rmt-letter-achievement>${core_text.esc(view.title)}</p>` : '';
+    const copy = view.achievementCopy ? `<p data-rmt-letter-copy>${core_text.esc(view.achievementCopy)}</p>` : '';
     const read = view.contentOpen ? '' : `<button type="button" class="rmt-btn" data-rmt-letter-read data-rmt-reveal="${core_text.esc(view.revealId)}" data-rmt-module="${core_text.esc(view.moduleId)}">打开回忆</button>`;
     const paper = revealPaper
         ? `<button type="button" class="rmt-btn rmt-heart-letter-close" data-rmt-letter-close>收起这封信</button>${heading}${copy}${read}`
@@ -423,7 +377,9 @@ function incrementFor(moduleId, revealId) {
         const context = core_context.currentCharacterGuard();
         const snapshot = readSnapshot(context);
         const plan = snapshot?.modulePlan?.moduleId === moduleId ? snapshot.modulePlan : null;
-        const ticket = snapshot?.drawTickets?.find(item => item.id === snapshot.plan?.activeDrawTicketId && item.selectedModuleId === moduleId) || null;
+        const ticket = snapshot?.drawTickets?.find(item => item.selectedModuleId === moduleId && (
+            item.id === snapshot.plan?.activeDrawTicketId || item.id === snapshot.modulePlan?.drawId
+        )) || [...(snapshot?.drawTickets || [])].reverse().find(item => item.selectedModuleId === moduleId) || null;
         const reveal = snapshot?.revealRecords?.find(row => row.id === revealId && row.moduleId === moduleId);
         const sourceMemoryIds = plan?.sourceMemoryIds?.length
             ? plan.sourceMemoryIds
@@ -458,25 +414,22 @@ function letterIdentity() {
     };
 }
 
+const EMPTY_ROUND = '<p class="rmt-floor-note">这一轮写完了，但是没有新的段落。</p><div class="rmt-heart-letter-actions"><button type="button" class="rmt-btn" data-rmt-floor-complete>补全</button><button type="button" class="rmt-btn" data-rmt-floor-redo>重试</button></div>';
+
 function writeRound(body, moduleId, revealId) {
     const increment = incrementFor(moduleId, revealId);
     if (!increment.kept) {
         const phase = body.closest?.('[data-rmt-floor-shell]')?.dataset?.rmtPhase || '';
         const writing = phase === 'generating' || phase === 'planning';
-        body.innerHTML = writing
-            ? '<div class="rmt-letter-song-line">回忆正在生成中。</div>'
-            : '<div class="rmt-letter-song"><div class="rmt-letter-song-line">这一轮写完了，但是没有新的段落。</div><div class="rmt-heart-letter-actions"><button type="button" class="rmt-btn" data-rmt-floor-complete>补全</button><button type="button" class="rmt-btn" data-rmt-floor-redo>重试</button></div></div>';
-        pinRound(body);
+        body.innerHTML = writing ? '<p class="rmt-floor-note">回忆正在生成中。</p>' : EMPTY_ROUND;
         return false;
     }
     const html = incremental_view.roundReadingHtml(increment.session, letterIdentity());
     if (!html) {
-        body.innerHTML = '<div class="rmt-letter-song"><div class="rmt-letter-song-line">这一轮写完了，但是没有新的段落。</div><div class="rmt-heart-letter-actions"><button type="button" class="rmt-btn" data-rmt-floor-complete>补全</button><button type="button" class="rmt-btn" data-rmt-floor-redo>重试</button></div></div>';
-        pinRound(body);
+        body.innerHTML = EMPTY_ROUND;
         return false;
     }
     body.innerHTML = html;
-    pinRound(body);
     const read = body.parentElement?.querySelector?.('[data-rmt-letter-read]');
     if (read) read.remove();
     const host = body.closest?.('[data-rmt-floor-shell]');

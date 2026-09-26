@@ -1,7 +1,7 @@
 {
   "display_name": "心迹回廊",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.99.90-r84.142-due-letter",
+  "js": "index.js?heartbeat=0.99.90-r84.143-letter-draw",
   "author": "Toto",
   "version": "0.99.90",
   "auto_update": true,
@@ -10,6 +10,6 @@
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r84.142：下一楼重新抽签，抽签进任务队列，信里的歌不再缩成一条。",
+  "description": "r84.143：空着的旧票不再挡住下一楼另抽；出行写进信里；印象曲按信纸排。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }

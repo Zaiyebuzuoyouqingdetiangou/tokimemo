@@ -7,7 +7,8 @@ export function shellBlocksChatInput() {
 
 export function floorShellCss() {
     return `
-.rmt-floor-shell{position:relative;clear:both;box-sizing:border-box;width:min(96%,640px);margin:8px auto 12px;z-index:1}
+/* 模块样式按插件主题变量取色。信纸固定用浅色信笺，这里给出同名变量，信里的模块才有可读的颜色。 */
+.rmt-floor-shell{--rmt-theme-bg:#fff8ee;--rmt-theme-surface:#fffdf8;--rmt-theme-surface-solid:#fffdf8;--rmt-theme-surface-alpha:#fffdf8;--rmt-theme-surface-tint:#fcf0e8;--rmt-theme-bg-tint:#fff5ea;--rmt-theme-header-tint:#fdf0f3;--rmt-theme-text:#5c463c;--rmt-theme-muted:#7f5f6b;--rmt-theme-accent:#e99ab9;--rmt-theme-accent-alt:#f3c7a6;--rmt-theme-accent-ink:#a8395f;--rmt-theme-border:#e6d3c4;--rmt-theme-soft:#fbeef0;--rmt-theme-wash:#fcebf1;--rmt-theme-wash-ink:#5c463c;--rmt-theme-shadow:#5a183016;--rmt-theme-alpha:1;--rmt-paper-note:#ffecab;--rmt-paper-note-ink:#594019;--rmt-paper-note-blue:#e0f0ff;--rmt-paper-note-blue-ink:#264c70;--rmt-paper-note-rose:#ffe2ec;--rmt-paper-note-rose-ink:#71344e;--rmt-paper-letter:#fff9ed;--rmt-paper-letter-ink:#594934;--rmt-paper-journal:#eee6fc;--rmt-paper-journal-ink:#584070;color-scheme:light;position:relative;clear:both;box-sizing:border-box;width:min(96%,640px);margin:8px auto 12px;z-index:1}
 .rmt-floor-shell .rmt-floor-status{margin:0 0 8px;font-size:12px;font-weight:650;text-align:center;color:#4d5d73}
 .rmt-floor-shell details{margin:0}
 .rmt-floor-shell summary{display:block;width:fit-content;max-width:100%;box-sizing:border-box;padding:10px 14px;border:1px solid rgba(0,0,0,.10);border-radius:14px;background:linear-gradient(145deg,#fff,#f7fbfe);color:#4d5d73;box-shadow:0 6px 16px rgba(0,0,0,.07),3px 0 0 #e99ab9 inset;cursor:pointer;list-style:none}
@@ -30,15 +31,28 @@ export function floorShellCss() {
 .rmt-envelope{display:block;width:min(100%,240px);height:auto;filter:drop-shadow(0 12px 16px rgba(90,24,48,.16))}
 .rmt-heart-letter.is-writing .rmt-heart-letter-seal{display:grid!important;cursor:default}
 .rmt-heart-letter.is-writing .rmt-heart-letter-paper{display:none!important}
-.rmt-heart-letter-paper{margin-top:8px;min-width:0;height:auto!important;max-height:none!important;overflow:visible;padding:16px 14px 12px;border:1px solid #e6d3c4;border-left:7px solid #e99ab9;border-radius:4px 16px 16px 4px;background:#fff8ee;background-image:repeating-linear-gradient(0deg,transparent,transparent 22px,rgba(180,140,120,.16) 23px);color:#5c463c}
-.rmt-heart-letter-paper p{margin:0 0 10px;font-size:15px;line-height:1.6}
+.rmt-heart-letter-paper{margin-top:8px;min-width:0;height:auto;max-height:none;overflow:visible;padding:16px 14px 12px;border:1px solid #e6d3c4;border-left:7px solid #e99ab9;border-radius:4px 16px 16px 4px;background:#fff8ee;background-image:repeating-linear-gradient(0deg,transparent,transparent 22px,rgba(180,140,120,.16) 23px);color:var(--rmt-theme-text)}
+.rmt-heart-letter-paper>p,.rmt-heart-letter-paper [data-rmt-letter-copy]{margin:0 0 10px;font-size:15px;line-height:1.6}
+.rmt-heart-letter-paper [data-rmt-letter-achievement]{font-size:20px;line-height:1.5}
 .rmt-heart-letter-close{margin:0 0 12px}
 .rmt-heart-letter .rmt-letter-piece h3{margin:16px 0 8px;font-size:16px}
-.rmt-heart-letter .rmt-floor-body{display:block!important;height:auto!important;max-height:70vh!important;max-width:100%;min-width:0;min-height:0;margin-top:10px;overflow:auto!important}
-.rmt-heart-letter .rmt-theme-song,.rmt-heart-letter .rmt-song-layout,.rmt-heart-letter .rmt-song-sheet,.rmt-heart-letter .rmt-song-sheet :is(header,section,div,h2,h3,p){position:static!important;display:block!important;height:auto!important;max-height:none!important;min-height:0!important;overflow:visible!important;flex:none!important;float:none!important;visibility:visible!important;opacity:1!important;transform:none!important;width:auto!important;max-width:100%!important;grid-template-columns:none!important;color:#5c463c!important;-webkit-text-fill-color:#5c463c!important;font-size:15px!important;line-height:1.8!important;white-space:pre-wrap!important}
-.rmt-heart-letter .rmt-song-sheet{margin:0 0 8px;padding:4px 2px 8px;border:0!important;background:transparent!important;box-shadow:none!important}
-.rmt-heart-letter .rmt-song-sheet h2{font-size:22px!important;font-weight:700!important;margin:4px 0 8px!important}
-.rmt-heart-letter .rmt-song-sheet h3{font-size:13px!important;font-weight:650!important;margin:14px 0 6px!important;color:#8d6d78!important;-webkit-text-fill-color:#8d6d78!important}
+.rmt-heart-letter .rmt-floor-body{display:block;height:auto;max-height:70vh;max-width:100%;min-width:0;min-height:0;margin-top:10px;overflow:auto}
+.rmt-heart-letter .rmt-floor-note{margin:0 0 10px;font-size:15px;line-height:1.7}
+.rmt-heart-letter .rmt-theme-song,.rmt-heart-letter .rmt-letter-song{display:block;max-width:100%;margin:0;color:var(--rmt-theme-text)}
+.rmt-heart-letter .rmt-letter-song-sheet{margin:0 0 16px;padding:0;border:0;background:transparent}
+.rmt-heart-letter .rmt-letter-song-title{margin:0 0 8px;font-size:22px;line-height:1.4;font-weight:700;color:var(--rmt-theme-text)}
+.rmt-heart-letter .rmt-letter-song-label{margin:14px 0 6px;font-size:13px;font-weight:650;color:var(--rmt-theme-muted)}
+.rmt-heart-letter .rmt-letter-song-line,.rmt-heart-letter .rmt-letter-song-stanza p{margin:0 0 8px;font-size:16px;line-height:2;white-space:pre-wrap;overflow-wrap:anywhere;color:var(--rmt-theme-text)}
+.rmt-heart-letter .rmt-letter-song-stanza{margin:16px 0}
+.rmt-heart-letter .rmt-letter-travel-list{display:grid;gap:12px;margin-top:10px}
+.rmt-heart-letter .rmt-letter-travel-stop{padding:10px 0;border-top:1px dashed var(--rmt-theme-border)}
+.rmt-heart-letter .rmt-letter-travel-stop h3{margin:0 0 4px;font-size:16px}
+.rmt-heart-letter .rmt-letter-travel-stop small{display:block;margin:0 0 6px;color:var(--rmt-theme-muted)}
+.rmt-heart-letter .rmt-letter-travel-stop p,.rmt-heart-letter .rmt-letter-travel-stop blockquote{margin:0 0 8px;font-size:15px;line-height:1.7;white-space:pre-wrap}
+/* 酒馆美化常给 .mes 里的文字统一上色。信里只把字色拉回信纸，不动排版。 */
+#chat .mes .rmt-floor-shell .rmt-heart-letter-paper{color:var(--rmt-theme-text)!important;-webkit-text-fill-color:currentColor!important}
+#chat .mes .rmt-floor-shell .rmt-heart-letter-paper :is(p,span,small,b,strong,em,i,h1,h2,h3,h4,h5,h6,li,dt,dd,blockquote,pre,label,figcaption,time){color:inherit;-webkit-text-fill-color:currentColor!important;text-shadow:none}
+#chat .mes .rmt-floor-shell .rmt-floor-body :not(button,[hidden]){visibility:visible;opacity:1}
 /* 信里用手机上的模块布局。生图条和会浮出屏幕的明信片留在插件页。 */
 .rmt-heart-letter .rmt-floor-body .rmt-cg-format,
 .rmt-heart-letter .rmt-floor-body .rmt-cg-provider-bar{display:none!important}
@@ -101,6 +115,17 @@ function scopeNarrowRules(body, scope) {
         else out += ch;
     }
     return out;
+}
+
+// 插件窗口的样式根带着 .rmt-workspace[data-rmt-theme-mode] 或 [data-rmt-theme-mode] .rmt-body。只换 id 的话，印象曲、睡前故事、时空回响的规则在信里一条也不生效。
+// 这两类根落到信纸正文上，不碰信封和倒计时。单独的 [data-rmt-theme-mode] 是整套按钮/字号的结构主题，信里不套。
+export function mirrorOverlayCss(css, overlayId, scope = '.rmt-floor-shell') {
+    const id = '#' + overlayId;
+    const body = `${scope} .rmt-floor-body`;
+    return String(css || '')
+        .replaceAll(`${id}.rmt-workspace[data-rmt-theme-mode]`, body)
+        .replaceAll(`${id}[data-rmt-theme-mode] .rmt-body`, body)
+        .replaceAll(id, scope);
 }
 
 // 手机布局写在 max-width 媒体查询里。信比视口窄，桌面上看不到那套规则，这里把它们固定作用在楼层壳上。
@@ -191,7 +216,9 @@ export function shellView(input = {}) {
     const drawFloor = Math.floor(Number(input.drawFloor));
     const floorNow = Math.floor(Number(input.floor));
     const planFinished = steps.length > 0 && steps.every(step => step?.status === 'completed');
-    const staleLetter = planFinished && Number.isSafeInteger(drawFloor) && drawFloor > 0 && Number.isSafeInteger(floorNow) && floorNow > drawFloor;
+    // 拆过的旧信在后面的楼层让位给倒计时。还没拆、或还缺成就的信留着，设置里重写的这一份也能看见。
+    const unread = revealStatus === 'ready' || revealStatus === 'achievement_pending';
+    const staleLetter = planFinished && !unread && Number.isSafeInteger(drawFloor) && drawFloor > 0 && Number.isSafeInteger(floorNow) && floorNow > drawFloor;
     const written = !staleLetter && complete && input.canOpen === true && !running;
     if (!staleLetter && complete && revealStatus === 'achievement_pending') {
         return { ...face, phase: 'achievement-pending', canRepairAchievement: true, title: '回忆先留着', detail: '成就还缺一笔。可以补一次，不必重写正文。' };
@@ -204,6 +231,9 @@ export function shellView(input = {}) {
             ...face, phase: 'reveal', showReveal: true, canOpen: input.canOpen === true,
             title: letterTitle(input), achievementCopy: input.achievementCopy || '', detail: '点击查看详情',
         };
+    }
+    if (!staleLetter && complete && !running) {
+        return { ...face, phase: 'empty', canComplete: true, canRedo: true, title: '这一页还是空的', detail: '写完了，但是没有新的段落。' };
     }
     if (input.failureRecoverable === true || input.stalled === true) {
         return {
@@ -233,7 +263,7 @@ export function shellView(input = {}) {
             title: letterTitle(input), achievementCopy: input.achievementCopy || '', detail: '点击查看详情',
         };
     }
-    if (!staleLetter && (input.ticketStatus === 'drawn' || input.ticketStatus === 'running')) {
+    if (!staleLetter && !complete && (input.ticketStatus === 'drawn' || input.ticketStatus === 'running')) {
         return { ...face, phase: 'generating', title: '回忆正在生成中', detail: '正在生成中' };
     }
     if (!staleLetter && (revealStatus === 'ready' || revealStatus === 'opened')) {

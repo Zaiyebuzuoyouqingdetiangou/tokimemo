@@ -258,6 +258,25 @@ test('the letter offers repair and retry only when that work is still open', () 
     assert.equal(song.includes('第一行'), true);
     assert.equal(song.includes('rmt-letter-song'), true);
     assert.equal(shell.floorShellCss().includes('.rmt-heart-letter .rmt-theme-song'), true);
+    const travelKept = view.incrementalProjection({
+        kind: 'travel',
+        locations: [
+            { id: 'N1', name: '旧街', summary: '以前', createdAt: 10 },
+            { id: 'N2', name: '河岸', summary: '新去的', sourceMemoryIds: ['M100'], createdAt: 80 },
+        ],
+    }, { sourceMemoryIds: ['M100'], since: 50 });
+    assert.equal(travelKept.kept, true);
+    assert.deepEqual(travelKept.session.locations.map(item => item.id), ['N2']);
+    const travelHtml = view.roundReadingHtml(travelKept.session);
+    assert.equal(travelHtml.includes('河岸'), true);
+    assert.equal(travelHtml.includes('旧街'), false);
+    assert.equal(travelHtml.includes('rmt-letter-travel'), true);
+    const finishedDrawn = shell.shellView({
+        ...readyArchive, ticketStatus: 'drawn', moduleComplete: true, steps: [{ status: 'completed' }],
+        moduleTitle: '他的出行路线',
+    });
+    assert.equal(finishedDrawn.phase, 'empty');
+    assert.equal(finishedDrawn.canComplete, true);
     const oldLetter = shell.shellView({
         enabled: true, archiveReady: true, moduleComplete: true, canOpen: true,
         steps: [{ status: 'completed' }], revealStatus: 'opened', revealLine: '旧歌',

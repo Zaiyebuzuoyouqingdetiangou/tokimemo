@@ -110,7 +110,7 @@ function finishHostJob(job, result) {
         : action === 'hold'
             ? '接着写没完成的一轮。'
             : action === 'reuse'
-                ? '上一轮还占着抽签，这一楼没有另抽。'
+                ? '接着写上一轮抽中的模块。'
                 : action === 'failed'
                     ? '这一次没写完。可以再点补全。'
                     : action === 'drawn'
@@ -141,10 +141,27 @@ async function withAutoMemoryJob(moduleId, detail, run) {
     }
 }
 
+// 计划最多 200 步。一次唤醒就把能写的都写完，不留到下一楼；失败或没有进展时停下，交给重试。
+const PLAN_PASS_LIMIT = 200;
+
+async function runPlanToEnd(snapshot, persist, context) {
+    let current = snapshot;
+    let result = null;
+    for (let pass = 0; pass < PLAN_PASS_LIMIT; pass += 1) {
+        result = await auto_memory_host.runModulePlan(current, persist, context, Date.now());
+        await rememberTitle(context, result);
+        current = result?.snapshot || current;
+        if (result?.action !== 'saved' && result?.action !== 'expanded') break;
+        const steps = current?.modulePlan?.steps || [];
+        if (steps.some(step => step.status === 'failed')) break;
+        if (!steps.some(step => step.status !== 'completed')) break;
+    }
+    return result;
+}
+
 async function runModule(snapshot, persist, context) {
     return withAutoMemoryJob(snapshot?.modulePlan?.moduleId, '抽中了这一轮，正在写。', async () => {
-        const result = await auto_memory_host.runModulePlan(snapshot, persist, context, Date.now());
-        await rememberTitle(context, result);
+        const result = await runPlanToEnd(snapshot, persist, context);
         return followIfEnabled(context, result);
     });
 }
@@ -309,10 +326,10 @@ async function runHostRound() {
                 startModule: next => runModule(next, persist, core_context.currentCharacterGuard()),
                 resumeModule: current => runModule(current, persist, core_context.currentCharacterGuard()),
             });
-            if (result.action === 'arm' || result.action === 'noop' || result.action === 'drawn' || result.action === 'failed' || result.action === 'wait') {
+            if (['arm', 'noop', 'drawn', 'reuse', 'failed', 'wait'].includes(result.action)) {
                 handledFloors.set(scope, floor);
             }
-            if (result.action === 'drawn') stampDrawSource(context, result.drawId);
+            if (result.action === 'drawn' || result.action === 'reuse') stampDrawSource(context, result.drawId);
             ui_countdown.refreshAutoMemoryCountdown();
             finishHostJob(hostJob, result);
             } catch (error) {
@@ -478,11 +495,15 @@ async function resumeFloorPlanOnce(context) {
     const snapshot = auto_memory_plan.readAutoMemoryMetadata(context.chatMetadata);
     if (!snapshot?.modulePlan) return { action: 'idle' };
     return withAutoMemoryJob(snapshot.modulePlan.moduleId, '接着写没完成的部分。', async () => {
-        const retryPlan = auto_memory_plan.parseModulePlan(auto_memory_redo.modulePlanForRetry(snapshot.modulePlan));
+        // 写完却没结算的一轮只补结算，不把最后一步重发一遍。
+        const unsettled = snapshot.plan.activeDrawTicketId === snapshot.modulePlan.drawId
+            && snapshot.modulePlan.steps.every(step => step.status === 'completed');
+        const retryPlan = unsettled
+            ? snapshot.modulePlan
+            : auto_memory_plan.parseModulePlan(auto_memory_redo.modulePlanForRetry(snapshot.modulePlan));
         const prepared = auto_memory_plan.parseAutoMemorySnapshot({ ...snapshot, modulePlan: retryPlan });
         const persist = next => persistSnapshot(context, next);
-        const result = await auto_memory_host.runModulePlan(prepared, persist, context, Date.now());
-        await rememberTitle(context, result);
+        const result = await runPlanToEnd(prepared, persist, context);
         ui_countdown.refreshAutoMemoryCountdown();
         return followIfEnabled(context, result);
     });
@@ -724,18 +745,7 @@ async function rerollOwnedFloor(messageIndex) {
         });
         await persistSnapshot(context, next);
         const persist = step => persistSnapshot(context, step);
-        const limit = Math.min(12, next.modulePlan.steps.length);
-        let current = next;
-        let result = null;
-        for (let step = 0; step < limit; step += 1) {
-            result = await auto_memory_host.runModulePlan(current, persist, context, Date.now());
-            await rememberTitle(context, result);
-            current = result?.snapshot || current;
-            const steps = result?.snapshot?.modulePlan?.steps || [];
-            if (result?.action === 'failed' || steps.some(item => item.status === 'failed')) break;
-            if (!steps.some(item => item.status !== 'completed')) break;
-            if (result?.action !== 'saved' && result?.action !== 'expanded') break;
-        }
+        const result = await runPlanToEnd(next, persist, context);
         ui_countdown.refreshAutoMemoryCountdown();
         await followIfEnabled(context, result);
         return result || true;
@@ -824,18 +834,7 @@ export async function regenerateCurrentMemory({ mode = 'keep', moduleId = '' } =
         const persist = step => persistSnapshot(context, step);
         await persist(next);
         stampDrawSource(context, ticket.id);
-        const limit = Math.min(12, next.modulePlan.steps.length);
-        let current = next;
-        let result = null;
-        for (let index = 0; index < limit; index += 1) {
-            result = await auto_memory_host.runModulePlan(current, persist, context, Date.now());
-            await rememberTitle(context, result);
-            current = result?.snapshot || current;
-            const steps = result?.snapshot?.modulePlan?.steps || [];
-            if (result?.action === 'failed' || steps.some(step => step.status === 'failed')) break;
-            if (!steps.some(step => step.status !== 'completed')) break;
-            if (result?.action !== 'saved' && result?.action !== 'expanded') break;
-        }
+        const result = await runPlanToEnd(next, persist, context);
         ui_countdown.refreshAutoMemoryCountdown();
         return followIfEnabled(context, result);
         });

@@ -9,14 +9,25 @@ export function modulePlanOpen(modulePlan) {
     return steps.some(step => step && step.status !== 'completed');
 }
 
+function ticketOpen(ticket) {
+    return !!ticket && (ticket.status === 'drawn' || ticket.status === 'running');
+}
+
+function laterThanTicket(floor, ticket) {
+    const due = Math.floor(Number(ticket?.dueFloor));
+    return Number.isSafeInteger(floor) && Number.isSafeInteger(due) && due > 0 && floor > due;
+}
+
 export function floorDecision({ enabled = false, floor = 0, interval = 0, nextDueFloor = null, modulePlan = null, activeTicket = null, inflightFloor = null, seenFloor = null } = {}) {
     if (enabled !== true) return { action: 'idle' };
     if (modulePlanOpen(modulePlan)) return { action: 'hold', sourceMemoryIds: [...(modulePlan.sourceMemoryIds || [])] };
-    if (activeTicket && (activeTicket.status === 'drawn' || activeTicket.status === 'running')) {
+    if (ticketOpen(activeTicket)) {
         const finished = !!modulePlan && !modulePlanOpen(modulePlan);
-        const laterFloor = Number.isSafeInteger(floor) && Number.isSafeInteger(activeTicket.dueFloor) && floor > activeTicket.dueFloor;
-        // 上一轮已经写完，却把票据留在 drawn。下一楼必须重新抽，不能一直复用旧信。
-        if (!(finished && laterFloor)) return { action: 'reuse', ticketId: activeTicket.id };
+        const orphan = !modulePlan;
+        // 同一楼接着写。计划写完、或票还开着却丢了计划，到了下一楼就让位另抽。
+        if (!((finished || orphan) && laterThanTicket(floor, activeTicket))) {
+            return { action: 'reuse', ticketId: activeTicket.id };
+        }
     }
     if (Number.isSafeInteger(inflightFloor) && inflightFloor === floor) return { action: 'duplicate' };
     if (nextDueFloor == null) {
@@ -135,10 +146,56 @@ async function drawFresh(snapshot, fresh, input, io, { keepPace = false } = {}) 
     return { action: failed ? 'failed' : 'drawn', moduleRequest: true, drawId, snapshot: started?.snapshot || next };
 }
 
+function closeActiveTicket(snapshot, ticket) {
+    return auto_memory_plan.parseAutoMemorySnapshot({
+        plan: auto_memory_plan.parseAutoMemoryPlan({ ...snapshot.plan, activeDrawTicketId: null }),
+        revealRecords: snapshot.revealRecords,
+        drawTickets: snapshot.drawTickets.map(row => (row.id === ticket.id ? { ...row, status: 'completed' } : row)),
+        modulePlan: snapshot.modulePlan,
+    });
+}
+
+// 计划写完了，票却没关（旧版本结算失败留下的）。同一修订里把票关掉，后面的写入照常只加一版。
+function releaseFinishedTicket(snapshot, floor = null) {
+    const ticket = activeTicket(snapshot);
+    if (!ticketOpen(ticket)) return snapshot;
+    const finished = !!snapshot.modulePlan && !modulePlanOpen(snapshot.modulePlan);
+    const orphanLater = !snapshot.modulePlan && laterThanTicket(floor, ticket);
+    if (!finished && !orphanLater) return snapshot;
+    if (finished && floor != null && !laterThanTicket(floor, ticket)) return snapshot;
+    return closeActiveTicket(snapshot, ticket);
+}
+
+async function resumeTicket(snapshot, ticket, input, io) {
+    const prepared = typeof io.prepareModulePlan === 'function'
+        ? await io.prepareModulePlan({
+            moduleId: ticket.selectedModuleId, sourceMemoryIds: [...ticket.sourceMemoryIds], drawId: ticket.id,
+            chatId: input.chatId, archiveRevision: ticket.archiveRevision,
+        })
+        : null;
+    if (!prepared) {
+        const released = nextSnapshot(snapshot, { activeDrawTicketId: null }, {
+            drawTickets: snapshot.drawTickets.map(row => (row.id === ticket.id ? { ...row, status: 'completed' } : row)),
+        }, input.now);
+        await io.persist(released);
+        return runAutoMemoryRound({ ...input, snapshot: released }, io);
+    }
+    const modulePlan = auto_memory_plan.parseModulePlan({
+        ...prepared, drawId: ticket.id, moduleId: ticket.selectedModuleId, sourceMemoryIds: [...ticket.sourceMemoryIds],
+    });
+    const next = nextSnapshot(snapshot, {}, { modulePlan }, input.now);
+    await io.persist(next);
+    const started = await io.startModule(next);
+    const steps = started?.snapshot?.modulePlan?.steps || [];
+    const failed = started?.action === 'failed' || steps.some(step => step.status === 'failed');
+    return { action: failed ? 'failed' : 'reuse', moduleRequest: true, drawId: ticket.id, snapshot: started?.snapshot || next };
+}
+
 export async function runAutoMemoryRound(input, io) {
-    const snapshot = input?.snapshot;
+    const snapshot = input?.snapshot ? releaseFinishedTicket(input.snapshot, input.floor) : null;
     const plan = snapshot?.plan;
     if (!plan) return { action: 'idle', moduleRequest: false };
+    input = { ...input, snapshot };
     const decision = floorDecision({
         enabled: plan.enabled, floor: input.floor, interval: plan.intervalFloors, nextDueFloor: plan.nextDueFloor,
         modulePlan: snapshot.modulePlan, activeTicket: activeTicket(snapshot), inflightFloor: input.inflightFloor, seenFloor: input.seenFloor,
@@ -147,7 +204,7 @@ export async function runAutoMemoryRound(input, io) {
         if (typeof io.resumeModule === 'function') await io.resumeModule(snapshot);
         return { action: 'hold', moduleRequest: false, sourceMemoryIds: decision.sourceMemoryIds };
     }
-    if (decision.action === 'reuse') return { action: 'reuse', moduleRequest: false, drawId: decision.ticketId };
+    if (decision.action === 'reuse') return resumeTicket(snapshot, activeTicket(snapshot), input, io);
     if (decision.action !== 'arm' && decision.action !== 'due') return { action: decision.action, moduleRequest: false };
     if (decision.action === 'arm') {
         const next = nextSnapshot(snapshot, {
@@ -167,8 +224,8 @@ export async function runAutoMemoryRound(input, io) {
 }
 
 export async function drawKnownMemories(input, io) {
-    const snapshot = input?.snapshot;
+    const snapshot = input?.snapshot ? releaseFinishedTicket(input.snapshot, input.floor) : null;
     const fresh = Array.isArray(input?.freshIds) ? input.freshIds.filter(id => /^M\d{3,6}$/.test(id)) : [];
     if (!snapshot?.plan || !fresh.length) return { action: 'noop', moduleRequest: false, reason: 'no-new-memory' };
-    return drawFresh(snapshot, fresh, input, io, { keepPace: true });
+    return drawFresh(snapshot, fresh, { ...input, snapshot }, io, { keepPace: true });
 }

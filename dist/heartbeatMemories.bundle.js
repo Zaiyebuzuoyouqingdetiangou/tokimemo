@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 284
-// Source SHA-256: b41ac7366c156c2e36720b84e44231e3e4e17471565eb1bf4b129f8b1827e373
+// Source SHA-256: bb7a4cdaca9575d2384dac639cc94f66dd66cd569738c137b6993c3066f437e8
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -3341,7 +3341,8 @@ function settleCombined({
   ) {
     return { action: 'unsupported', requests: 0, extraAchievementRequest: false, reveal: null, snapshot };
   }
-  if (moduleId === 'inbox' && inboxPlanLength(inboxPlan) === 0) {
+  // 没传计划时不能当成「没有新信」：步骤已经写完，空信在执行那一步就会返回 noop。
+  if (moduleId === 'inbox' && inboxPlan != null && inboxPlanLength(inboxPlan) === 0) {
     return { action: 'noop', requests: 0, extraAchievementRequest: false, reveal: null, snapshot };
   }
   const parsedResponse =
@@ -3800,14 +3801,25 @@ function modulePlanOpen(modulePlan) {
     return steps.some(step => step && step.status !== 'completed');
 }
 
+function ticketOpen(ticket) {
+    return !!ticket && (ticket.status === 'drawn' || ticket.status === 'running');
+}
+
+function laterThanTicket(floor, ticket) {
+    const due = Math.floor(Number(ticket?.dueFloor));
+    return Number.isSafeInteger(floor) && Number.isSafeInteger(due) && due > 0 && floor > due;
+}
+
 function floorDecision({ enabled = false, floor = 0, interval = 0, nextDueFloor = null, modulePlan = null, activeTicket = null, inflightFloor = null, seenFloor = null } = {}) {
     if (enabled !== true) return { action: 'idle' };
     if (modulePlanOpen(modulePlan)) return { action: 'hold', sourceMemoryIds: [...(modulePlan.sourceMemoryIds || [])] };
-    if (activeTicket && (activeTicket.status === 'drawn' || activeTicket.status === 'running')) {
+    if (ticketOpen(activeTicket)) {
         const finished = !!modulePlan && !modulePlanOpen(modulePlan);
-        const laterFloor = Number.isSafeInteger(floor) && Number.isSafeInteger(activeTicket.dueFloor) && floor > activeTicket.dueFloor;
-        // 上一轮已经写完，却把票据留在 drawn。下一楼必须重新抽，不能一直复用旧信。
-        if (!(finished && laterFloor)) return { action: 'reuse', ticketId: activeTicket.id };
+        const orphan = !modulePlan;
+        // 同一楼接着写。计划写完、或票还开着却丢了计划，到了下一楼就让位另抽。
+        if (!((finished || orphan) && laterThanTicket(floor, activeTicket))) {
+            return { action: 'reuse', ticketId: activeTicket.id };
+        }
     }
     if (Number.isSafeInteger(inflightFloor) && inflightFloor === floor) return { action: 'duplicate' };
     if (nextDueFloor == null) {
@@ -3926,10 +3938,56 @@ async function drawFresh(snapshot, fresh, input, io, { keepPace = false } = {}) 
     return { action: failed ? 'failed' : 'drawn', moduleRequest: true, drawId, snapshot: started?.snapshot || next };
 }
 
+function closeActiveTicket(snapshot, ticket) {
+    return auto_memory_plan.parseAutoMemorySnapshot({
+        plan: auto_memory_plan.parseAutoMemoryPlan({ ...snapshot.plan, activeDrawTicketId: null }),
+        revealRecords: snapshot.revealRecords,
+        drawTickets: snapshot.drawTickets.map(row => (row.id === ticket.id ? { ...row, status: 'completed' } : row)),
+        modulePlan: snapshot.modulePlan,
+    });
+}
+
+// 计划写完了，票却没关（旧版本结算失败留下的）。同一修订里把票关掉，后面的写入照常只加一版。
+function releaseFinishedTicket(snapshot, floor = null) {
+    const ticket = activeTicket(snapshot);
+    if (!ticketOpen(ticket)) return snapshot;
+    const finished = !!snapshot.modulePlan && !modulePlanOpen(snapshot.modulePlan);
+    const orphanLater = !snapshot.modulePlan && laterThanTicket(floor, ticket);
+    if (!finished && !orphanLater) return snapshot;
+    if (finished && floor != null && !laterThanTicket(floor, ticket)) return snapshot;
+    return closeActiveTicket(snapshot, ticket);
+}
+
+async function resumeTicket(snapshot, ticket, input, io) {
+    const prepared = typeof io.prepareModulePlan === 'function'
+        ? await io.prepareModulePlan({
+            moduleId: ticket.selectedModuleId, sourceMemoryIds: [...ticket.sourceMemoryIds], drawId: ticket.id,
+            chatId: input.chatId, archiveRevision: ticket.archiveRevision,
+        })
+        : null;
+    if (!prepared) {
+        const released = nextSnapshot(snapshot, { activeDrawTicketId: null }, {
+            drawTickets: snapshot.drawTickets.map(row => (row.id === ticket.id ? { ...row, status: 'completed' } : row)),
+        }, input.now);
+        await io.persist(released);
+        return runAutoMemoryRound({ ...input, snapshot: released }, io);
+    }
+    const modulePlan = auto_memory_plan.parseModulePlan({
+        ...prepared, drawId: ticket.id, moduleId: ticket.selectedModuleId, sourceMemoryIds: [...ticket.sourceMemoryIds],
+    });
+    const next = nextSnapshot(snapshot, {}, { modulePlan }, input.now);
+    await io.persist(next);
+    const started = await io.startModule(next);
+    const steps = started?.snapshot?.modulePlan?.steps || [];
+    const failed = started?.action === 'failed' || steps.some(step => step.status === 'failed');
+    return { action: failed ? 'failed' : 'reuse', moduleRequest: true, drawId: ticket.id, snapshot: started?.snapshot || next };
+}
+
 async function runAutoMemoryRound(input, io) {
-    const snapshot = input?.snapshot;
+    const snapshot = input?.snapshot ? releaseFinishedTicket(input.snapshot, input.floor) : null;
     const plan = snapshot?.plan;
     if (!plan) return { action: 'idle', moduleRequest: false };
+    input = { ...input, snapshot };
     const decision = floorDecision({
         enabled: plan.enabled, floor: input.floor, interval: plan.intervalFloors, nextDueFloor: plan.nextDueFloor,
         modulePlan: snapshot.modulePlan, activeTicket: activeTicket(snapshot), inflightFloor: input.inflightFloor, seenFloor: input.seenFloor,
@@ -3938,7 +3996,7 @@ async function runAutoMemoryRound(input, io) {
         if (typeof io.resumeModule === 'function') await io.resumeModule(snapshot);
         return { action: 'hold', moduleRequest: false, sourceMemoryIds: decision.sourceMemoryIds };
     }
-    if (decision.action === 'reuse') return { action: 'reuse', moduleRequest: false, drawId: decision.ticketId };
+    if (decision.action === 'reuse') return resumeTicket(snapshot, activeTicket(snapshot), input, io);
     if (decision.action !== 'arm' && decision.action !== 'due') return { action: decision.action, moduleRequest: false };
     if (decision.action === 'arm') {
         const next = nextSnapshot(snapshot, {
@@ -3958,10 +4016,10 @@ async function runAutoMemoryRound(input, io) {
 }
 
 async function drawKnownMemories(input, io) {
-    const snapshot = input?.snapshot;
+    const snapshot = input?.snapshot ? releaseFinishedTicket(input.snapshot, input.floor) : null;
     const fresh = Array.isArray(input?.freshIds) ? input.freshIds.filter(id => /^M\d{3,6}$/.test(id)) : [];
     if (!snapshot?.plan || !fresh.length) return { action: 'noop', moduleRequest: false, reason: 'no-new-memory' };
-    return drawFresh(snapshot, fresh, input, io, { keepPace: true });
+    return drawFresh(snapshot, fresh, { ...input, snapshot }, io, { keepPace: true });
 }
 
 __m_autoMemory_incrementalGate_js.withAutoMemoryLock = withAutoMemoryLock;
@@ -3978,7 +4036,10 @@ function __init_autoMemory_incrementalView_js() {
 
 // 楼层里只放这一轮新增的段落。旧信、旧章节和旧日记留在插件页面。
 
-const LIST_KEYS = ['items', 'letters', 'entries', 'chapters', 'stories', 'songs', 'apps', 'events', 'routes', 'episodes', 'pages', 'nodes'];
+const LIST_KEYS = [
+    'items', 'letters', 'entries', 'chapters', 'stories', 'songs', 'apps', 'events', 'routes',
+    'episodes', 'pages', 'nodes', 'locations', 'spaces', 'containers', 'endings', 'confessionReplays', 'relationships',
+];
 const MODULE_BODY_KEYS = ['dailyStrips', 'fireflyVoices', 'voiceDramas', 'scenarioDramas', 'greetings', 'dialogues'];
 
 function listedIds(item) {
@@ -4345,15 +4406,15 @@ function calendarSurface(session) {
 function travelSurface(session) {
     const locations = Array.isArray(session.locations) ? session.locations : (Array.isArray(session.routes) ? session.routes : []);
     if (!locations.length) return '';
-    const markers = locations.map((item, index) => {
-        const angle = (-Math.PI / 2) + (Math.PI * 2 * index / locations.length);
-        const x = (50 + Math.cos(angle) * 28).toFixed(1);
-        const y = (50 + Math.sin(angle) * 22).toFixed(1);
-        const kind = item?.kind === 'far' ? 'far' : 'near';
-        return `<div class="rmt-travel-marker ${kind}" style="--map-x:${x}%;--map-y:${y}%"><span>${esc(textOf(item.name) || textOf(item.title) || '地点')}</span></div>`;
+    const cards = locations.map(item => {
+        const name = textOf(item.name) || textOf(item.title) || '地点';
+        const region = textOf(item.region);
+        const summary = textOf(item.summary) || textOf(item.note) || textOf(item.description);
+        const lines = Array.isArray(item.dialogueLines) ? item.dialogueLines.map(textOf).filter(Boolean) : [];
+        const talk = lines.length ? `<blockquote>${lines.map(line => esc(line)).join('<br>')}</blockquote>` : '';
+        return `<article class="rmt-letter-travel-stop"><h3>${esc(name)}</h3>${region ? `<small>${esc(region)}</small>` : ''}${summary ? `<p>${esc(summary)}</p>` : ''}${talk}</article>`;
     }).join('');
-    const index = locations.map(item => `<div><span><b>${esc(textOf(item.name) || textOf(item.title) || '地点')}</b><small>${esc(textOf(item.note) || textOf(item.summary) || textOf(item.description) || textOf(item.region))}</small></span></div>`).join('');
-    return `<div class="rmt-travel"><header class="rmt-travel-head"><div><h2>${esc(textOf(session.title) || '他的出行路线')}</h2><p>${esc(textOf(session.routeSummary))}</p></div></header><div class="rmt-travel-layout"><section class="rmt-travel-map" aria-label="他的出行路线地图">${markers}</section><aside class="rmt-travel-index"><nav>${index}</nav></aside></div></div>`;
+    return `<div class="rmt-travel rmt-letter-travel"><header class="rmt-travel-head"><div><h2>${esc(textOf(session.title) || '他的出行路线')}</h2><p>${esc(textOf(session.routeSummary))}</p></div></header><div class="rmt-letter-travel-list">${cards}</div></div>`;
 }
 
 function endingSurface(session) {
@@ -4374,18 +4435,39 @@ function butterflySurface(session) {
     return `<div class="rmt-crt"><div class="rmt-crt-content"><div class="rmt-tree-branches">${branches}</div>${blocks}</div></div>`;
 }
 
+const STANZA_LABELS = [
+    [/^Final Chorus$/i, '最后的副歌'], [/^Pre[- ]Chorus/i, '预副歌'], [/^Chorus/i, '副歌'],
+    [/^Verse/i, '主歌'], [/^Bridge/i, '桥段'], [/^Intro$/i, '前奏'], [/^Outro$/i, '尾声'],
+];
+
+// 和插件里的阅读模式同一套分段：[Verse] 这类标记单独成标题，其余行原样留在段里。
 function songLyrics(lyrics) {
-    const text = String(textOf(lyrics) || '').trim();
-    if (!text) return '';
-    const blocks = text.split(/\n{2,}/).map(block => block.trim()).filter(Boolean);
-    return (blocks.length ? blocks : [text]).map(block => `<div class="rmt-letter-song-line">${esc(block)}</div>`).join('');
+    const sections = [];
+    let current = { label: '', lines: [] };
+    for (const line of String(textOf(lyrics) || '').replace(/\r\n?/g, '\n').split('\n')) {
+        const heading = line.match(/^\[([^\]\n]+)\]\s*$/);
+        if (!heading) { current.lines.push(line); continue; }
+        if (current.label || current.lines.some(value => value.trim())) sections.push(current);
+        current = { label: heading[1], lines: [] };
+    }
+    if (current.label || current.lines.some(value => value.trim())) sections.push(current);
+    const label = value => STANZA_LABELS.reduce((text, [pattern, name]) => text.replace(pattern, name), value);
+    return sections.filter(section => section.lines.some(value => value.trim())).map(section =>
+        `<section class="rmt-letter-song-stanza">${section.label ? `<h3 class="rmt-letter-song-label">${esc(label(section.label))}</h3>` : ''}<p class="rmt-letter-song-line">${esc(section.lines.join('\n').trim())}</p></section>`).join('');
 }
 
 function songSurface(session) {
     const songs = Array.isArray(session.songs) ? session.songs : [];
     if (!songs.length) return '';
-    const sheets = songs.map(song => `<div class="rmt-letter-song-sheet"><div class="rmt-letter-song-title">${esc(textOf(song.title) || '印象曲')}</div><div class="rmt-letter-song-line">演唱者 · ${esc(textOf(song.singer))}</div><div class="rmt-letter-song-label">曲风</div><div class="rmt-letter-song-line">${esc(textOf(song.styleDescription))}</div><div class="rmt-letter-song-label">歌词</div>${songLyrics(song.lyrics)}</div>`).join('');
-    return `<div class="rmt-letter-song">${sheets}</div>`;
+    const sheets = songs.map(song => {
+        const style = textOf(song.styleDescription);
+        const vocal = textOf(song.vocalDescription);
+        const arrangement = style || vocal
+            ? `<section class="rmt-letter-song-block"><div class="rmt-letter-song-label">曲风</div><p class="rmt-letter-song-line">${esc([style, vocal].filter(Boolean).join('\n'))}</p></section>`
+            : '';
+        return `<article class="rmt-letter-song-sheet"><h2 class="rmt-letter-song-title">${esc(textOf(song.title) || '印象曲')}</h2>${textOf(song.singer) ? `<p class="rmt-letter-song-line">演唱者 · ${esc(textOf(song.singer))}</p>` : ''}${arrangement}<section class="rmt-letter-song-block"><div class="rmt-letter-song-label">歌词</div>${songLyrics(song.lyrics)}</section></article>`;
+    }).join('');
+    return `<div class="rmt-letter-song rmt-theme-song">${sheets}</div>`;
 }
 
 function bedtimeSurface(session) {
@@ -5225,21 +5307,52 @@ function markStep(plan, stepId, status, recoverySlot) {
     });
 }
 
-function closeDraw(snapshot, now) {
-    const tickets = snapshot.drawTickets.map(ticket => (
-        ticket.id === snapshot.plan.activeDrawTicketId ? { ...ticket, status: 'completed' } : ticket
-    ));
-    return replace(snapshot, snapshot.modulePlan, now, { plan: { activeDrawTicketId: null }, drawTickets: tickets });
+// 主档只接受比当前多 1 的修订。关票和它前面那一步合成同一次写入，不再另加一版。
+function closeDraw(snapshot) {
+    const activeId = snapshot.plan.activeDrawTicketId;
+    return auto_memory_plan.parseAutoMemorySnapshot({
+        plan: auto_memory_plan.parseAutoMemoryPlan({ ...snapshot.plan, activeDrawTicketId: null }),
+        revealRecords: snapshot.revealRecords,
+        drawTickets: snapshot.drawTickets.map(ticket => (ticket.id === activeId ? { ...ticket, status: 'completed' } : ticket)),
+        modulePlan: snapshot.modulePlan,
+    });
+}
+
+async function settleRound(saved, io, { captured, moduleSaved }) {
+    const plan = saved.modulePlan;
+    const moduleItem = io.module || {};
+    const settled = auto_memory_combined.settleCombined({
+        snapshot: saved,
+        moduleId: plan.moduleId,
+        moduleSaved,
+        packet: captured,
+        sourceMemoryIds: plan.sourceMemoryIds,
+        allowHistorical: moduleItem.contentKind === 'historical',
+        now: io.now,
+    });
+    if (settled.action === 'hold' || settled.action === 'unsupported') return { ...settled, snapshot: saved };
+    if (settled.action === 'noop') {
+        const released = closeDraw(replace(saved, saved.modulePlan, io.now));
+        await io.persist(released);
+        return { ...settled, snapshot: released };
+    }
+    const closed = closeDraw(settled.snapshot);
+    await io.persist(closed);
+    return { ...settled, snapshot: closed, extraAchievementRequest: false };
 }
 
 async function runPending(snapshot, io) {
     const plan = snapshot?.modulePlan;
     if (!plan) return { action: 'idle', snapshot };
     const pending = plan.steps.filter(item => item.status !== 'completed');
-    if (!pending.length) return { action: 'complete', snapshot };
+    let captured = typeof io.heldAchievement === 'function' ? io.heldAchievement() : null;
+    if (!pending.length) {
+        // 步骤都写完了，票却还开着：只补结算，不再发请求。
+        if (!snapshot.plan.activeDrawTicketId) return { action: 'complete', snapshot };
+        return settleRound(snapshot, io, { captured, moduleSaved: true });
+    }
     const batch = auto_memory_plans.concurrentSteps(pending);
     const firstRequest = !plan.steps.some(step => step.status === 'completed');
-    let captured = typeof io.heldAchievement === 'function' ? io.heldAchievement() : null;
     const outcomes = await Promise.all(batch.map(async step => {
         try {
             const outcome = await io.execute({ step, plan, carryAchievement: firstRequest && step.id === pending[0].id });
@@ -5271,7 +5384,7 @@ async function runPending(snapshot, io) {
     if (expand) {
         const expanded = auto_memory_plans.expandModulePlan(nextPlan, expand);
         if (!expanded) {
-            const released = closeDraw(replace(snapshot, null, io.now), io.now);
+            const released = closeDraw(replace(snapshot, null, io.now));
             await io.persist(released);
             return { action: 'noop', snapshot: released };
         }
@@ -5280,7 +5393,7 @@ async function runPending(snapshot, io) {
         return { action: 'expanded', snapshot: saved };
     }
     if (noop && outcomes.every(row => row.outcome?.noop === true)) {
-        const released = closeDraw(replace(snapshot, null, io.now), io.now);
+        const released = closeDraw(replace(snapshot, null, io.now));
         await io.persist(released);
         return { action: 'noop', snapshot: released };
     }
@@ -5288,20 +5401,10 @@ async function runPending(snapshot, io) {
     const saved = replace(snapshot, nextPlan, io.now);
     await io.persist(saved);
     if (nextPlan.steps.some(item => item.status !== 'completed')) return { action: 'saved', snapshot: saved };
-    const moduleItem = io.module || {};
-    const settled = auto_memory_combined.settleCombined({
-        snapshot: saved,
-        moduleId: nextPlan.moduleId,
+    return settleRound(saved, io, {
+        captured,
         moduleSaved: outcomes.every(row => !row.error && row.outcome?.saved !== false),
-        packet: captured,
-        sourceMemoryIds: nextPlan.sourceMemoryIds,
-        allowHistorical: moduleItem.contentKind === 'historical',
-        now: io.now,
     });
-    if (settled.action === 'noop' || settled.action === 'hold' || settled.action === 'unsupported') return { ...settled, snapshot: saved };
-    const closed = closeDraw(settled.snapshot, io.now);
-    await io.persist(closed);
-    return { ...settled, snapshot: closed, extraAchievementRequest: false };
 }
 
 __m_autoMemory_moduleRunner_js.runPending = runPending;
@@ -6156,7 +6259,7 @@ function finishHostJob(job, result) {
         : action === 'hold'
             ? '接着写没完成的一轮。'
             : action === 'reuse'
-                ? '上一轮还占着抽签，这一楼没有另抽。'
+                ? '接着写上一轮抽中的模块。'
                 : action === 'failed'
                     ? '这一次没写完。可以再点补全。'
                     : action === 'drawn'
@@ -6187,10 +6290,27 @@ async function withAutoMemoryJob(moduleId, detail, run) {
     }
 }
 
+// 计划最多 200 步。一次唤醒就把能写的都写完，不留到下一楼；失败或没有进展时停下，交给重试。
+const PLAN_PASS_LIMIT = 200;
+
+async function runPlanToEnd(snapshot, persist, context) {
+    let current = snapshot;
+    let result = null;
+    for (let pass = 0; pass < PLAN_PASS_LIMIT; pass += 1) {
+        result = await auto_memory_host.runModulePlan(current, persist, context, Date.now());
+        await rememberTitle(context, result);
+        current = result?.snapshot || current;
+        if (result?.action !== 'saved' && result?.action !== 'expanded') break;
+        const steps = current?.modulePlan?.steps || [];
+        if (steps.some(step => step.status === 'failed')) break;
+        if (!steps.some(step => step.status !== 'completed')) break;
+    }
+    return result;
+}
+
 async function runModule(snapshot, persist, context) {
     return withAutoMemoryJob(snapshot?.modulePlan?.moduleId, '抽中了这一轮，正在写。', async () => {
-        const result = await auto_memory_host.runModulePlan(snapshot, persist, context, Date.now());
-        await rememberTitle(context, result);
+        const result = await runPlanToEnd(snapshot, persist, context);
         return followIfEnabled(context, result);
     });
 }
@@ -6355,10 +6475,10 @@ async function runHostRound() {
                 startModule: next => runModule(next, persist, core_context.currentCharacterGuard()),
                 resumeModule: current => runModule(current, persist, core_context.currentCharacterGuard()),
             });
-            if (result.action === 'arm' || result.action === 'noop' || result.action === 'drawn' || result.action === 'failed' || result.action === 'wait') {
+            if (['arm', 'noop', 'drawn', 'reuse', 'failed', 'wait'].includes(result.action)) {
                 handledFloors.set(scope, floor);
             }
-            if (result.action === 'drawn') stampDrawSource(context, result.drawId);
+            if (result.action === 'drawn' || result.action === 'reuse') stampDrawSource(context, result.drawId);
             ui_countdown.refreshAutoMemoryCountdown();
             finishHostJob(hostJob, result);
             } catch (error) {
@@ -6524,11 +6644,15 @@ async function resumeFloorPlanOnce(context) {
     const snapshot = auto_memory_plan.readAutoMemoryMetadata(context.chatMetadata);
     if (!snapshot?.modulePlan) return { action: 'idle' };
     return withAutoMemoryJob(snapshot.modulePlan.moduleId, '接着写没完成的部分。', async () => {
-        const retryPlan = auto_memory_plan.parseModulePlan(auto_memory_redo.modulePlanForRetry(snapshot.modulePlan));
+        // 写完却没结算的一轮只补结算，不把最后一步重发一遍。
+        const unsettled = snapshot.plan.activeDrawTicketId === snapshot.modulePlan.drawId
+            && snapshot.modulePlan.steps.every(step => step.status === 'completed');
+        const retryPlan = unsettled
+            ? snapshot.modulePlan
+            : auto_memory_plan.parseModulePlan(auto_memory_redo.modulePlanForRetry(snapshot.modulePlan));
         const prepared = auto_memory_plan.parseAutoMemorySnapshot({ ...snapshot, modulePlan: retryPlan });
         const persist = next => persistSnapshot(context, next);
-        const result = await auto_memory_host.runModulePlan(prepared, persist, context, Date.now());
-        await rememberTitle(context, result);
+        const result = await runPlanToEnd(prepared, persist, context);
         ui_countdown.refreshAutoMemoryCountdown();
         return followIfEnabled(context, result);
     });
@@ -6770,18 +6894,7 @@ async function rerollOwnedFloor(messageIndex) {
         });
         await persistSnapshot(context, next);
         const persist = step => persistSnapshot(context, step);
-        const limit = Math.min(12, next.modulePlan.steps.length);
-        let current = next;
-        let result = null;
-        for (let step = 0; step < limit; step += 1) {
-            result = await auto_memory_host.runModulePlan(current, persist, context, Date.now());
-            await rememberTitle(context, result);
-            current = result?.snapshot || current;
-            const steps = result?.snapshot?.modulePlan?.steps || [];
-            if (result?.action === 'failed' || steps.some(item => item.status === 'failed')) break;
-            if (!steps.some(item => item.status !== 'completed')) break;
-            if (result?.action !== 'saved' && result?.action !== 'expanded') break;
-        }
+        const result = await runPlanToEnd(next, persist, context);
         ui_countdown.refreshAutoMemoryCountdown();
         await followIfEnabled(context, result);
         return result || true;
@@ -6870,18 +6983,7 @@ async function regenerateCurrentMemory({ mode = 'keep', moduleId = '' } = {}) {
         const persist = step => persistSnapshot(context, step);
         await persist(next);
         stampDrawSource(context, ticket.id);
-        const limit = Math.min(12, next.modulePlan.steps.length);
-        let current = next;
-        let result = null;
-        for (let index = 0; index < limit; index += 1) {
-            result = await auto_memory_host.runModulePlan(current, persist, context, Date.now());
-            await rememberTitle(context, result);
-            current = result?.snapshot || current;
-            const steps = result?.snapshot?.modulePlan?.steps || [];
-            if (result?.action === 'failed' || steps.some(step => step.status === 'failed')) break;
-            if (!steps.some(step => step.status !== 'completed')) break;
-            if (result?.action !== 'saved' && result?.action !== 'expanded') break;
-        }
+        const result = await runPlanToEnd(next, persist, context);
         ui_countdown.refreshAutoMemoryCountdown();
         return followIfEnabled(context, result);
         });
@@ -7069,7 +7171,8 @@ function shellBlocksChatInput() {
 
 function floorShellCss() {
     return `
-.rmt-floor-shell{position:relative;clear:both;box-sizing:border-box;width:min(96%,640px);margin:8px auto 12px;z-index:1}
+/* 模块样式按插件主题变量取色。信纸固定用浅色信笺，这里给出同名变量，信里的模块才有可读的颜色。 */
+.rmt-floor-shell{--rmt-theme-bg:#fff8ee;--rmt-theme-surface:#fffdf8;--rmt-theme-surface-solid:#fffdf8;--rmt-theme-surface-alpha:#fffdf8;--rmt-theme-surface-tint:#fcf0e8;--rmt-theme-bg-tint:#fff5ea;--rmt-theme-header-tint:#fdf0f3;--rmt-theme-text:#5c463c;--rmt-theme-muted:#7f5f6b;--rmt-theme-accent:#e99ab9;--rmt-theme-accent-alt:#f3c7a6;--rmt-theme-accent-ink:#a8395f;--rmt-theme-border:#e6d3c4;--rmt-theme-soft:#fbeef0;--rmt-theme-wash:#fcebf1;--rmt-theme-wash-ink:#5c463c;--rmt-theme-shadow:#5a183016;--rmt-theme-alpha:1;--rmt-paper-note:#ffecab;--rmt-paper-note-ink:#594019;--rmt-paper-note-blue:#e0f0ff;--rmt-paper-note-blue-ink:#264c70;--rmt-paper-note-rose:#ffe2ec;--rmt-paper-note-rose-ink:#71344e;--rmt-paper-letter:#fff9ed;--rmt-paper-letter-ink:#594934;--rmt-paper-journal:#eee6fc;--rmt-paper-journal-ink:#584070;color-scheme:light;position:relative;clear:both;box-sizing:border-box;width:min(96%,640px);margin:8px auto 12px;z-index:1}
 .rmt-floor-shell .rmt-floor-status{margin:0 0 8px;font-size:12px;font-weight:650;text-align:center;color:#4d5d73}
 .rmt-floor-shell details{margin:0}
 .rmt-floor-shell summary{display:block;width:fit-content;max-width:100%;box-sizing:border-box;padding:10px 14px;border:1px solid rgba(0,0,0,.10);border-radius:14px;background:linear-gradient(145deg,#fff,#f7fbfe);color:#4d5d73;box-shadow:0 6px 16px rgba(0,0,0,.07),3px 0 0 #e99ab9 inset;cursor:pointer;list-style:none}
@@ -7092,15 +7195,28 @@ function floorShellCss() {
 .rmt-envelope{display:block;width:min(100%,240px);height:auto;filter:drop-shadow(0 12px 16px rgba(90,24,48,.16))}
 .rmt-heart-letter.is-writing .rmt-heart-letter-seal{display:grid!important;cursor:default}
 .rmt-heart-letter.is-writing .rmt-heart-letter-paper{display:none!important}
-.rmt-heart-letter-paper{margin-top:8px;min-width:0;height:auto!important;max-height:none!important;overflow:visible;padding:16px 14px 12px;border:1px solid #e6d3c4;border-left:7px solid #e99ab9;border-radius:4px 16px 16px 4px;background:#fff8ee;background-image:repeating-linear-gradient(0deg,transparent,transparent 22px,rgba(180,140,120,.16) 23px);color:#5c463c}
-.rmt-heart-letter-paper p{margin:0 0 10px;font-size:15px;line-height:1.6}
+.rmt-heart-letter-paper{margin-top:8px;min-width:0;height:auto;max-height:none;overflow:visible;padding:16px 14px 12px;border:1px solid #e6d3c4;border-left:7px solid #e99ab9;border-radius:4px 16px 16px 4px;background:#fff8ee;background-image:repeating-linear-gradient(0deg,transparent,transparent 22px,rgba(180,140,120,.16) 23px);color:var(--rmt-theme-text)}
+.rmt-heart-letter-paper>p,.rmt-heart-letter-paper [data-rmt-letter-copy]{margin:0 0 10px;font-size:15px;line-height:1.6}
+.rmt-heart-letter-paper [data-rmt-letter-achievement]{font-size:20px;line-height:1.5}
 .rmt-heart-letter-close{margin:0 0 12px}
 .rmt-heart-letter .rmt-letter-piece h3{margin:16px 0 8px;font-size:16px}
-.rmt-heart-letter .rmt-floor-body{display:block!important;height:auto!important;max-height:70vh!important;max-width:100%;min-width:0;min-height:0;margin-top:10px;overflow:auto!important}
-.rmt-heart-letter .rmt-theme-song,.rmt-heart-letter .rmt-song-layout,.rmt-heart-letter .rmt-song-sheet,.rmt-heart-letter .rmt-song-sheet :is(header,section,div,h2,h3,p){position:static!important;display:block!important;height:auto!important;max-height:none!important;min-height:0!important;overflow:visible!important;flex:none!important;float:none!important;visibility:visible!important;opacity:1!important;transform:none!important;width:auto!important;max-width:100%!important;grid-template-columns:none!important;color:#5c463c!important;-webkit-text-fill-color:#5c463c!important;font-size:15px!important;line-height:1.8!important;white-space:pre-wrap!important}
-.rmt-heart-letter .rmt-song-sheet{margin:0 0 8px;padding:4px 2px 8px;border:0!important;background:transparent!important;box-shadow:none!important}
-.rmt-heart-letter .rmt-song-sheet h2{font-size:22px!important;font-weight:700!important;margin:4px 0 8px!important}
-.rmt-heart-letter .rmt-song-sheet h3{font-size:13px!important;font-weight:650!important;margin:14px 0 6px!important;color:#8d6d78!important;-webkit-text-fill-color:#8d6d78!important}
+.rmt-heart-letter .rmt-floor-body{display:block;height:auto;max-height:70vh;max-width:100%;min-width:0;min-height:0;margin-top:10px;overflow:auto}
+.rmt-heart-letter .rmt-floor-note{margin:0 0 10px;font-size:15px;line-height:1.7}
+.rmt-heart-letter .rmt-theme-song,.rmt-heart-letter .rmt-letter-song{display:block;max-width:100%;margin:0;color:var(--rmt-theme-text)}
+.rmt-heart-letter .rmt-letter-song-sheet{margin:0 0 16px;padding:0;border:0;background:transparent}
+.rmt-heart-letter .rmt-letter-song-title{margin:0 0 8px;font-size:22px;line-height:1.4;font-weight:700;color:var(--rmt-theme-text)}
+.rmt-heart-letter .rmt-letter-song-label{margin:14px 0 6px;font-size:13px;font-weight:650;color:var(--rmt-theme-muted)}
+.rmt-heart-letter .rmt-letter-song-line,.rmt-heart-letter .rmt-letter-song-stanza p{margin:0 0 8px;font-size:16px;line-height:2;white-space:pre-wrap;overflow-wrap:anywhere;color:var(--rmt-theme-text)}
+.rmt-heart-letter .rmt-letter-song-stanza{margin:16px 0}
+.rmt-heart-letter .rmt-letter-travel-list{display:grid;gap:12px;margin-top:10px}
+.rmt-heart-letter .rmt-letter-travel-stop{padding:10px 0;border-top:1px dashed var(--rmt-theme-border)}
+.rmt-heart-letter .rmt-letter-travel-stop h3{margin:0 0 4px;font-size:16px}
+.rmt-heart-letter .rmt-letter-travel-stop small{display:block;margin:0 0 6px;color:var(--rmt-theme-muted)}
+.rmt-heart-letter .rmt-letter-travel-stop p,.rmt-heart-letter .rmt-letter-travel-stop blockquote{margin:0 0 8px;font-size:15px;line-height:1.7;white-space:pre-wrap}
+/* 酒馆美化常给 .mes 里的文字统一上色。信里只把字色拉回信纸，不动排版。 */
+#chat .mes .rmt-floor-shell .rmt-heart-letter-paper{color:var(--rmt-theme-text)!important;-webkit-text-fill-color:currentColor!important}
+#chat .mes .rmt-floor-shell .rmt-heart-letter-paper :is(p,span,small,b,strong,em,i,h1,h2,h3,h4,h5,h6,li,dt,dd,blockquote,pre,label,figcaption,time){color:inherit;-webkit-text-fill-color:currentColor!important;text-shadow:none}
+#chat .mes .rmt-floor-shell .rmt-floor-body :not(button,[hidden]){visibility:visible;opacity:1}
 /* 信里用手机上的模块布局。生图条和会浮出屏幕的明信片留在插件页。 */
 .rmt-heart-letter .rmt-floor-body .rmt-cg-format,
 .rmt-heart-letter .rmt-floor-body .rmt-cg-provider-bar{display:none!important}
@@ -7163,6 +7279,17 @@ function scopeNarrowRules(body, scope) {
         else out += ch;
     }
     return out;
+}
+
+// 插件窗口的样式根带着 .rmt-workspace[data-rmt-theme-mode] 或 [data-rmt-theme-mode] .rmt-body。只换 id 的话，印象曲、睡前故事、时空回响的规则在信里一条也不生效。
+// 这两类根落到信纸正文上，不碰信封和倒计时。单独的 [data-rmt-theme-mode] 是整套按钮/字号的结构主题，信里不套。
+function mirrorOverlayCss(css, overlayId, scope = '.rmt-floor-shell') {
+    const id = '#' + overlayId;
+    const body = `${scope} .rmt-floor-body`;
+    return String(css || '')
+        .replaceAll(`${id}.rmt-workspace[data-rmt-theme-mode]`, body)
+        .replaceAll(`${id}[data-rmt-theme-mode] .rmt-body`, body)
+        .replaceAll(id, scope);
 }
 
 // 手机布局写在 max-width 媒体查询里。信比视口窄，桌面上看不到那套规则，这里把它们固定作用在楼层壳上。
@@ -7253,7 +7380,9 @@ function shellView(input = {}) {
     const drawFloor = Math.floor(Number(input.drawFloor));
     const floorNow = Math.floor(Number(input.floor));
     const planFinished = steps.length > 0 && steps.every(step => step?.status === 'completed');
-    const staleLetter = planFinished && Number.isSafeInteger(drawFloor) && drawFloor > 0 && Number.isSafeInteger(floorNow) && floorNow > drawFloor;
+    // 拆过的旧信在后面的楼层让位给倒计时。还没拆、或还缺成就的信留着，设置里重写的这一份也能看见。
+    const unread = revealStatus === 'ready' || revealStatus === 'achievement_pending';
+    const staleLetter = planFinished && !unread && Number.isSafeInteger(drawFloor) && drawFloor > 0 && Number.isSafeInteger(floorNow) && floorNow > drawFloor;
     const written = !staleLetter && complete && input.canOpen === true && !running;
     if (!staleLetter && complete && revealStatus === 'achievement_pending') {
         return { ...face, phase: 'achievement-pending', canRepairAchievement: true, title: '回忆先留着', detail: '成就还缺一笔。可以补一次，不必重写正文。' };
@@ -7266,6 +7395,9 @@ function shellView(input = {}) {
             ...face, phase: 'reveal', showReveal: true, canOpen: input.canOpen === true,
             title: letterTitle(input), achievementCopy: input.achievementCopy || '', detail: '点击查看详情',
         };
+    }
+    if (!staleLetter && complete && !running) {
+        return { ...face, phase: 'empty', canComplete: true, canRedo: true, title: '这一页还是空的', detail: '写完了，但是没有新的段落。' };
     }
     if (input.failureRecoverable === true || input.stalled === true) {
         return {
@@ -7295,7 +7427,7 @@ function shellView(input = {}) {
             title: letterTitle(input), achievementCopy: input.achievementCopy || '', detail: '点击查看详情',
         };
     }
-    if (!staleLetter && (input.ticketStatus === 'drawn' || input.ticketStatus === 'running')) {
+    if (!staleLetter && !complete && (input.ticketStatus === 'drawn' || input.ticketStatus === 'running')) {
         return { ...face, phase: 'generating', title: '回忆正在生成中', detail: '正在生成中' };
     }
     if (!staleLetter && (revealStatus === 'ready' || revealStatus === 'opened')) {
@@ -7323,6 +7455,7 @@ function shellView(input = {}) {
 
 __m_autoMemory_shellState_js.shellBlocksChatInput = shellBlocksChatInput;
 __m_autoMemory_shellState_js.floorShellCss = floorShellCss;
+__m_autoMemory_shellState_js.mirrorOverlayCss = mirrorOverlayCss;
 __m_autoMemory_shellState_js.promoteNarrowLayout = promoteNarrowLayout;
 __m_autoMemory_shellState_js.generationStall = generationStall;
 __m_autoMemory_shellState_js.knownProgress = knownProgress;
@@ -60707,74 +60840,29 @@ function floorShellCss() {
 }
 
 function ensureCss() {
-    if (!document.getElementById('rmt-floor-shell-style')) {
-        const style = document.createElement('style');
-        style.id = 'rmt-floor-shell-style';
-        style.textContent = floorShellCss();
-        document.head?.appendChild(style);
-    }
-    let guard = document.getElementById('rmt-letter-guard');
-    if (!guard) {
-        guard = document.createElement('style');
-        guard.id = 'rmt-letter-guard';
-        guard.textContent = `#chat .mes .rmt-floor-shell .rmt-heart-letter-paper .rmt-floor-body,#chat .mes .rmt-floor-shell .rmt-heart-letter-paper .rmt-floor-body :is(p,h1,h2,h3,h4,h5,h6,article,pre,main,header,section,aside,figure,blockquote),.rmt-floor-shell .rmt-letter-song,.rmt-floor-shell .rmt-letter-song-line,.rmt-floor-shell .rmt-letter-song-title,.rmt-floor-shell .rmt-letter-song-label,.rmt-floor-shell [data-rmt-letter-achievement],.rmt-floor-shell [data-rmt-letter-copy]{display:block!important;visibility:visible!important;height:auto!important;max-height:none!important;overflow:visible!important;opacity:1!important;position:static!important;color:#5c463c!important;-webkit-text-fill-color:#5c463c!important;font-size:15px!important;line-height:1.8!important;white-space:pre-wrap!important}#chat .mes .rmt-floor-shell .rmt-heart-letter-paper .rmt-floor-body{max-height:70vh!important;overflow:auto!important}.rmt-floor-shell .rmt-letter-song-title{font-size:22px!important;font-weight:700!important}`;
-    }
-    document.head?.appendChild(guard);
-}
-
-function pinLetterNode(node, scrolling = false) {
-    if (!node?.style?.setProperty) return;
-    node.style.setProperty('display', 'block', 'important');
-    node.style.setProperty('visibility', 'visible', 'important');
-    node.style.setProperty('height', 'auto', 'important');
-    node.style.setProperty('max-height', scrolling ? '70vh' : 'none', 'important');
-    node.style.setProperty('overflow', scrolling ? 'auto' : 'visible', 'important');
-    node.style.setProperty('opacity', '1', 'important');
-    node.style.setProperty('position', 'static', 'important');
-    node.style.setProperty('transform', 'none', 'important');
-    node.style.setProperty('color', '#5c463c', 'important');
-    node.style.setProperty('-webkit-text-fill-color', '#5c463c', 'important');
-    node.style.setProperty('font-size', '15px', 'important');
-    node.style.setProperty('line-height', '1.8', 'important');
-    node.style.setProperty('white-space', 'pre-wrap', 'important');
-}
-
-const PINNED_TAGS = new Set(['P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'ARTICLE', 'PRE', 'MAIN', 'HEADER', 'SECTION', 'ASIDE', 'FIGURE', 'FIGCAPTION', 'BLOCKQUOTE']);
-
-function pinRound(body) {
-    pinLetterNode(body, true);
-    body?.querySelectorAll?.('*')?.forEach(node => {
-        if (node.tagName === 'BUTTON') return;
-        const force = PINNED_TAGS.has(node.tagName) || node.classList?.contains('rmt-letter-song') || node.classList?.contains('rmt-letter-song-line') || node.classList?.contains('rmt-letter-song-title') || node.classList?.contains('rmt-round-reading');
-        if (force) pinLetterNode(node);
-        else if (node.style?.setProperty) {
-            node.style.setProperty('visibility', 'visible', 'important');
-            node.style.setProperty('opacity', '1', 'important');
-            node.style.setProperty('max-height', 'none', 'important');
-        }
-    });
-    const paper = body?.parentElement;
-    if (paper?.classList?.contains('rmt-heart-letter-paper')) {
-        paper.style.setProperty('overflow', 'visible', 'important');
-        paper.style.setProperty('height', 'auto', 'important');
-        paper.style.setProperty('max-height', 'none', 'important');
-        paper.querySelectorAll?.('[data-rmt-letter-achievement],[data-rmt-letter-copy]')?.forEach(node => pinLetterNode(node));
-    }
+    document.getElementById('rmt-letter-guard')?.remove();
+    if (document.getElementById('rmt-floor-shell-style')) return;
+    const style = document.createElement('style');
+    style.id = 'rmt-floor-shell-style';
+    style.textContent = floorShellCss();
+    document.head?.appendChild(style);
 }
 
 function mirrorModuleCss() {
     try { ui_styles.ensureStyles(); } catch { /* 样式还没准备好时，楼层壳仍显示摘要。 */ }
     const source = document.getElementById(core_constants.STYLE_ID);
     if (!source || document.getElementById('rmt-floor-module-css')) return;
-    const copied = source.textContent.replaceAll(`#${core_constants.OVERLAY_ID}`, '.rmt-floor-shell');
+    const copied = shell_state.mirrorOverlayCss(source.textContent, core_constants.OVERLAY_ID);
     const roomCss = room_layout.roomLayoutCss('.rmt-floor-shell');
     const style = document.createElement('style');
     style.id = 'rmt-floor-module-css';
+    // 插件窗口的根规则（全屏 fixed、100vw、去外边距）也会落到楼层壳上，壳自己的尺寸放在最后压住。
     style.textContent = `${copied}
-.rmt-floor-shell{position:relative!important;inset:auto!important;z-index:auto!important;height:auto!important;width:min(96%,420px)!important;max-height:none!important;display:block!important;padding:0!important;background:transparent!important;backdrop-filter:none!important}
 ${shell_state.floorShellCss()}
 ${roomCss}
-${shell_state.promoteNarrowLayout(`${copied}\n${roomCss}`)}`;
+${shell_state.promoteNarrowLayout(`${copied}\n${roomCss}`)}
+.rmt-floor-shell{position:relative!important;inset:auto!important;z-index:auto!important;height:auto!important;width:min(96%,420px)!important;max-width:100%!important;max-height:none!important;margin:8px auto 12px!important;display:block!important;padding:0!important;border:0!important;background:transparent!important;backdrop-filter:none!important}
+.rmt-floor-shell .rmt-floor-body{position:static!important;inset:auto!important;box-sizing:border-box!important;width:auto!important;max-width:100%!important;height:auto!important;max-height:70vh!important;margin:10px 0 0!important;padding:0!important;display:block!important;border:0!important;background:transparent!important;overflow:auto!important}`;
     document.head?.appendChild(style);
 }
 
@@ -60809,10 +60897,9 @@ function readSnapshot(context) {
 }
 
 function roundIsEmpty(moduleId, reveal, running, steps, ticket, moduleComplete, previewKept) {
-    const open = running
-        || ticket?.status === 'drawn'
-        || ticket?.status === 'running'
-        || steps.some(step => step.status === 'pending' || step.status === 'running' || step.status === 'failed');
+    const stepsBusy = steps.some(step => step.status === 'pending' || step.status === 'running' || step.status === 'failed');
+    const ticketBusy = (ticket?.status === 'drawn' || ticket?.status === 'running') && moduleComplete !== true;
+    const open = running || stepsBusy || ticketBusy;
     if (open || !moduleId || previewKept === true) return false;
     const settled = moduleComplete === true || reveal?.status === 'ready' || reveal?.status === 'opened';
     if (!settled) return false;
@@ -60916,8 +61003,8 @@ function markup(view) {
     const revealPaper = view.phase === 'reveal' && view.showReveal;
     const writing = view.phase === 'generating' || view.phase === 'planning';
     const caption = revealPaper ? '' : `<small data-rmt-letter-detail>${core_text.esc(view.detail || (writing ? '正在生成中' : ''))}</small>`;
-    const heading = view.title ? `<div class="rmt-letter-song-title" data-rmt-letter-achievement>${core_text.esc(view.title)}</div>` : '';
-    const copy = view.achievementCopy ? `<div class="rmt-letter-song-line" data-rmt-letter-copy>${core_text.esc(view.achievementCopy)}</div>` : '';
+    const heading = view.title ? `<p data-rmt-letter-achievement>${core_text.esc(view.title)}</p>` : '';
+    const copy = view.achievementCopy ? `<p data-rmt-letter-copy>${core_text.esc(view.achievementCopy)}</p>` : '';
     const read = view.contentOpen ? '' : `<button type="button" class="rmt-btn" data-rmt-letter-read data-rmt-reveal="${core_text.esc(view.revealId)}" data-rmt-module="${core_text.esc(view.moduleId)}">打开回忆</button>`;
     const paper = revealPaper
         ? `<button type="button" class="rmt-btn rmt-heart-letter-close" data-rmt-letter-close>收起这封信</button>${heading}${copy}${read}`
@@ -61093,7 +61180,9 @@ function incrementFor(moduleId, revealId) {
         const context = core_context.currentCharacterGuard();
         const snapshot = readSnapshot(context);
         const plan = snapshot?.modulePlan?.moduleId === moduleId ? snapshot.modulePlan : null;
-        const ticket = snapshot?.drawTickets?.find(item => item.id === snapshot.plan?.activeDrawTicketId && item.selectedModuleId === moduleId) || null;
+        const ticket = snapshot?.drawTickets?.find(item => item.selectedModuleId === moduleId && (
+            item.id === snapshot.plan?.activeDrawTicketId || item.id === snapshot.modulePlan?.drawId
+        )) || [...(snapshot?.drawTickets || [])].reverse().find(item => item.selectedModuleId === moduleId) || null;
         const reveal = snapshot?.revealRecords?.find(row => row.id === revealId && row.moduleId === moduleId);
         const sourceMemoryIds = plan?.sourceMemoryIds?.length
             ? plan.sourceMemoryIds
@@ -61128,25 +61217,22 @@ function letterIdentity() {
     };
 }
 
+const EMPTY_ROUND = '<p class="rmt-floor-note">这一轮写完了，但是没有新的段落。</p><div class="rmt-heart-letter-actions"><button type="button" class="rmt-btn" data-rmt-floor-complete>补全</button><button type="button" class="rmt-btn" data-rmt-floor-redo>重试</button></div>';
+
 function writeRound(body, moduleId, revealId) {
     const increment = incrementFor(moduleId, revealId);
     if (!increment.kept) {
         const phase = body.closest?.('[data-rmt-floor-shell]')?.dataset?.rmtPhase || '';
         const writing = phase === 'generating' || phase === 'planning';
-        body.innerHTML = writing
-            ? '<div class="rmt-letter-song-line">回忆正在生成中。</div>'
-            : '<div class="rmt-letter-song"><div class="rmt-letter-song-line">这一轮写完了，但是没有新的段落。</div><div class="rmt-heart-letter-actions"><button type="button" class="rmt-btn" data-rmt-floor-complete>补全</button><button type="button" class="rmt-btn" data-rmt-floor-redo>重试</button></div></div>';
-        pinRound(body);
+        body.innerHTML = writing ? '<p class="rmt-floor-note">回忆正在生成中。</p>' : EMPTY_ROUND;
         return false;
     }
     const html = incremental_view.roundReadingHtml(increment.session, letterIdentity());
     if (!html) {
-        body.innerHTML = '<div class="rmt-letter-song"><div class="rmt-letter-song-line">这一轮写完了，但是没有新的段落。</div><div class="rmt-heart-letter-actions"><button type="button" class="rmt-btn" data-rmt-floor-complete>补全</button><button type="button" class="rmt-btn" data-rmt-floor-redo>重试</button></div></div>';
-        pinRound(body);
+        body.innerHTML = EMPTY_ROUND;
         return false;
     }
     body.innerHTML = html;
-    pinRound(body);
     const read = body.parentElement?.querySelector?.('[data-rmt-letter-read]');
     if (read) read.remove();
     const host = body.closest?.('[data-rmt-floor-shell]');

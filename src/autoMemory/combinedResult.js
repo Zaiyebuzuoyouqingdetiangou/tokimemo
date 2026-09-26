@@ -121,7 +121,8 @@ export function settleCombined({
   ) {
     return { action: 'unsupported', requests: 0, extraAchievementRequest: false, reveal: null, snapshot };
   }
-  if (moduleId === 'inbox' && inboxPlanLength(inboxPlan) === 0) {
+  // 没传计划时不能当成「没有新信」：步骤已经写完，空信在执行那一步就会返回 noop。
+  if (moduleId === 'inbox' && inboxPlan != null && inboxPlanLength(inboxPlan) === 0) {
     return { action: 'noop', requests: 0, extraAchievementRequest: false, reveal: null, snapshot };
   }
   const parsedResponse =

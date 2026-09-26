@@ -1,6 +1,9 @@
 // 楼层里只放这一轮新增的段落。旧信、旧章节和旧日记留在插件页面。
 
-const LIST_KEYS = ['items', 'letters', 'entries', 'chapters', 'stories', 'songs', 'apps', 'events', 'routes', 'episodes', 'pages', 'nodes'];
+const LIST_KEYS = [
+    'items', 'letters', 'entries', 'chapters', 'stories', 'songs', 'apps', 'events', 'routes',
+    'episodes', 'pages', 'nodes', 'locations', 'spaces', 'containers', 'endings', 'confessionReplays', 'relationships',
+];
 const MODULE_BODY_KEYS = ['dailyStrips', 'fireflyVoices', 'voiceDramas', 'scenarioDramas', 'greetings', 'dialogues'];
 
 function listedIds(item) {
@@ -367,15 +370,15 @@ function calendarSurface(session) {
 function travelSurface(session) {
     const locations = Array.isArray(session.locations) ? session.locations : (Array.isArray(session.routes) ? session.routes : []);
     if (!locations.length) return '';
-    const markers = locations.map((item, index) => {
-        const angle = (-Math.PI / 2) + (Math.PI * 2 * index / locations.length);
-        const x = (50 + Math.cos(angle) * 28).toFixed(1);
-        const y = (50 + Math.sin(angle) * 22).toFixed(1);
-        const kind = item?.kind === 'far' ? 'far' : 'near';
-        return `<div class="rmt-travel-marker ${kind}" style="--map-x:${x}%;--map-y:${y}%"><span>${esc(textOf(item.name) || textOf(item.title) || '地点')}</span></div>`;
+    const cards = locations.map(item => {
+        const name = textOf(item.name) || textOf(item.title) || '地点';
+        const region = textOf(item.region);
+        const summary = textOf(item.summary) || textOf(item.note) || textOf(item.description);
+        const lines = Array.isArray(item.dialogueLines) ? item.dialogueLines.map(textOf).filter(Boolean) : [];
+        const talk = lines.length ? `<blockquote>${lines.map(line => esc(line)).join('<br>')}</blockquote>` : '';
+        return `<article class="rmt-letter-travel-stop"><h3>${esc(name)}</h3>${region ? `<small>${esc(region)}</small>` : ''}${summary ? `<p>${esc(summary)}</p>` : ''}${talk}</article>`;
     }).join('');
-    const index = locations.map(item => `<div><span><b>${esc(textOf(item.name) || textOf(item.title) || '地点')}</b><small>${esc(textOf(item.note) || textOf(item.summary) || textOf(item.description) || textOf(item.region))}</small></span></div>`).join('');
-    return `<div class="rmt-travel"><header class="rmt-travel-head"><div><h2>${esc(textOf(session.title) || '他的出行路线')}</h2><p>${esc(textOf(session.routeSummary))}</p></div></header><div class="rmt-travel-layout"><section class="rmt-travel-map" aria-label="他的出行路线地图">${markers}</section><aside class="rmt-travel-index"><nav>${index}</nav></aside></div></div>`;
+    return `<div class="rmt-travel rmt-letter-travel"><header class="rmt-travel-head"><div><h2>${esc(textOf(session.title) || '他的出行路线')}</h2><p>${esc(textOf(session.routeSummary))}</p></div></header><div class="rmt-letter-travel-list">${cards}</div></div>`;
 }
 
 function endingSurface(session) {
@@ -396,18 +399,39 @@ function butterflySurface(session) {
     return `<div class="rmt-crt"><div class="rmt-crt-content"><div class="rmt-tree-branches">${branches}</div>${blocks}</div></div>`;
 }
 
+const STANZA_LABELS = [
+    [/^Final Chorus$/i, '最后的副歌'], [/^Pre[- ]Chorus/i, '预副歌'], [/^Chorus/i, '副歌'],
+    [/^Verse/i, '主歌'], [/^Bridge/i, '桥段'], [/^Intro$/i, '前奏'], [/^Outro$/i, '尾声'],
+];
+
+// 和插件里的阅读模式同一套分段：[Verse] 这类标记单独成标题，其余行原样留在段里。
 function songLyrics(lyrics) {
-    const text = String(textOf(lyrics) || '').trim();
-    if (!text) return '';
-    const blocks = text.split(/\n{2,}/).map(block => block.trim()).filter(Boolean);
-    return (blocks.length ? blocks : [text]).map(block => `<div class="rmt-letter-song-line">${esc(block)}</div>`).join('');
+    const sections = [];
+    let current = { label: '', lines: [] };
+    for (const line of String(textOf(lyrics) || '').replace(/\r\n?/g, '\n').split('\n')) {
+        const heading = line.match(/^\[([^\]\n]+)\]\s*$/);
+        if (!heading) { current.lines.push(line); continue; }
+        if (current.label || current.lines.some(value => value.trim())) sections.push(current);
+        current = { label: heading[1], lines: [] };
+    }
+    if (current.label || current.lines.some(value => value.trim())) sections.push(current);
+    const label = value => STANZA_LABELS.reduce((text, [pattern, name]) => text.replace(pattern, name), value);
+    return sections.filter(section => section.lines.some(value => value.trim())).map(section =>
+        `<section class="rmt-letter-song-stanza">${section.label ? `<h3 class="rmt-letter-song-label">${esc(label(section.label))}</h3>` : ''}<p class="rmt-letter-song-line">${esc(section.lines.join('\n').trim())}</p></section>`).join('');
 }
 
 function songSurface(session) {
     const songs = Array.isArray(session.songs) ? session.songs : [];
     if (!songs.length) return '';
-    const sheets = songs.map(song => `<div class="rmt-letter-song-sheet"><div class="rmt-letter-song-title">${esc(textOf(song.title) || '印象曲')}</div><div class="rmt-letter-song-line">演唱者 · ${esc(textOf(song.singer))}</div><div class="rmt-letter-song-label">曲风</div><div class="rmt-letter-song-line">${esc(textOf(song.styleDescription))}</div><div class="rmt-letter-song-label">歌词</div>${songLyrics(song.lyrics)}</div>`).join('');
-    return `<div class="rmt-letter-song">${sheets}</div>`;
+    const sheets = songs.map(song => {
+        const style = textOf(song.styleDescription);
+        const vocal = textOf(song.vocalDescription);
+        const arrangement = style || vocal
+            ? `<section class="rmt-letter-song-block"><div class="rmt-letter-song-label">曲风</div><p class="rmt-letter-song-line">${esc([style, vocal].filter(Boolean).join('\n'))}</p></section>`
+            : '';
+        return `<article class="rmt-letter-song-sheet"><h2 class="rmt-letter-song-title">${esc(textOf(song.title) || '印象曲')}</h2>${textOf(song.singer) ? `<p class="rmt-letter-song-line">演唱者 · ${esc(textOf(song.singer))}</p>` : ''}${arrangement}<section class="rmt-letter-song-block"><div class="rmt-letter-song-label">歌词</div>${songLyrics(song.lyrics)}</section></article>`;
+    }).join('');
+    return `<div class="rmt-letter-song rmt-theme-song">${sheets}</div>`;
 }
 
 function bedtimeSurface(session) {

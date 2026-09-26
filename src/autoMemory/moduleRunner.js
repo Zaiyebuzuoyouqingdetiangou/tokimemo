@@ -25,21 +25,52 @@ function markStep(plan, stepId, status, recoverySlot) {
     });
 }
 
-function closeDraw(snapshot, now) {
-    const tickets = snapshot.drawTickets.map(ticket => (
-        ticket.id === snapshot.plan.activeDrawTicketId ? { ...ticket, status: 'completed' } : ticket
-    ));
-    return replace(snapshot, snapshot.modulePlan, now, { plan: { activeDrawTicketId: null }, drawTickets: tickets });
+// 主档只接受比当前多 1 的修订。关票和它前面那一步合成同一次写入，不再另加一版。
+function closeDraw(snapshot) {
+    const activeId = snapshot.plan.activeDrawTicketId;
+    return auto_memory_plan.parseAutoMemorySnapshot({
+        plan: auto_memory_plan.parseAutoMemoryPlan({ ...snapshot.plan, activeDrawTicketId: null }),
+        revealRecords: snapshot.revealRecords,
+        drawTickets: snapshot.drawTickets.map(ticket => (ticket.id === activeId ? { ...ticket, status: 'completed' } : ticket)),
+        modulePlan: snapshot.modulePlan,
+    });
+}
+
+async function settleRound(saved, io, { captured, moduleSaved }) {
+    const plan = saved.modulePlan;
+    const moduleItem = io.module || {};
+    const settled = auto_memory_combined.settleCombined({
+        snapshot: saved,
+        moduleId: plan.moduleId,
+        moduleSaved,
+        packet: captured,
+        sourceMemoryIds: plan.sourceMemoryIds,
+        allowHistorical: moduleItem.contentKind === 'historical',
+        now: io.now,
+    });
+    if (settled.action === 'hold' || settled.action === 'unsupported') return { ...settled, snapshot: saved };
+    if (settled.action === 'noop') {
+        const released = closeDraw(replace(saved, saved.modulePlan, io.now));
+        await io.persist(released);
+        return { ...settled, snapshot: released };
+    }
+    const closed = closeDraw(settled.snapshot);
+    await io.persist(closed);
+    return { ...settled, snapshot: closed, extraAchievementRequest: false };
 }
 
 export async function runPending(snapshot, io) {
     const plan = snapshot?.modulePlan;
     if (!plan) return { action: 'idle', snapshot };
     const pending = plan.steps.filter(item => item.status !== 'completed');
-    if (!pending.length) return { action: 'complete', snapshot };
+    let captured = typeof io.heldAchievement === 'function' ? io.heldAchievement() : null;
+    if (!pending.length) {
+        // 步骤都写完了，票却还开着：只补结算，不再发请求。
+        if (!snapshot.plan.activeDrawTicketId) return { action: 'complete', snapshot };
+        return settleRound(snapshot, io, { captured, moduleSaved: true });
+    }
     const batch = auto_memory_plans.concurrentSteps(pending);
     const firstRequest = !plan.steps.some(step => step.status === 'completed');
-    let captured = typeof io.heldAchievement === 'function' ? io.heldAchievement() : null;
     const outcomes = await Promise.all(batch.map(async step => {
         try {
             const outcome = await io.execute({ step, plan, carryAchievement: firstRequest && step.id === pending[0].id });
@@ -71,7 +102,7 @@ export async function runPending(snapshot, io) {
     if (expand) {
         const expanded = auto_memory_plans.expandModulePlan(nextPlan, expand);
         if (!expanded) {
-            const released = closeDraw(replace(snapshot, null, io.now), io.now);
+            const released = closeDraw(replace(snapshot, null, io.now));
             await io.persist(released);
             return { action: 'noop', snapshot: released };
         }
@@ -80,7 +111,7 @@ export async function runPending(snapshot, io) {
         return { action: 'expanded', snapshot: saved };
     }
     if (noop && outcomes.every(row => row.outcome?.noop === true)) {
-        const released = closeDraw(replace(snapshot, null, io.now), io.now);
+        const released = closeDraw(replace(snapshot, null, io.now));
         await io.persist(released);
         return { action: 'noop', snapshot: released };
     }
@@ -88,18 +119,8 @@ export async function runPending(snapshot, io) {
     const saved = replace(snapshot, nextPlan, io.now);
     await io.persist(saved);
     if (nextPlan.steps.some(item => item.status !== 'completed')) return { action: 'saved', snapshot: saved };
-    const moduleItem = io.module || {};
-    const settled = auto_memory_combined.settleCombined({
-        snapshot: saved,
-        moduleId: nextPlan.moduleId,
+    return settleRound(saved, io, {
+        captured,
         moduleSaved: outcomes.every(row => !row.error && row.outcome?.saved !== false),
-        packet: captured,
-        sourceMemoryIds: nextPlan.sourceMemoryIds,
-        allowHistorical: moduleItem.contentKind === 'historical',
-        now: io.now,
     });
-    if (settled.action === 'noop' || settled.action === 'hold' || settled.action === 'unsupported') return { ...settled, snapshot: saved };
-    const closed = closeDraw(settled.snapshot, io.now);
-    await io.persist(closed);
-    return { ...settled, snapshot: closed, extraAchievementRequest: false };
 }

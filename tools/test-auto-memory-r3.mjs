@@ -102,13 +102,18 @@ test('excluded modules stay out of the ticket and a refresh reuses the frozen dr
     assert.deepEqual(held.sourceMemoryIds, ['M100']);
     assert.equal(calls.filter(item => item === 'import').length, 1);
     const ticket = drawn.snapshot.drawTickets[0];
-    const reused = await gate.runAutoMemoryRound({
+    const sameFloor = await gate.runAutoMemoryRound({
         snapshot: snapshot({ nextDueFloor: 10, activeDrawTicketId: ticket.id }, null, [ticket]),
-        floor: 40, memoryIds: ['M100', 'M102'], now: 80,
+        floor: 10, memoryIds: ['M100', 'M102'], now: 80,
     }, io);
-    assert.equal(reused.action, 'reuse');
-    assert.equal(reused.drawId, 'drawticket1');
-    assert.equal(calls.filter(item => item === 'import').length, 1);
+    assert.equal(sameFloor.action, 'reuse');
+    assert.equal(sameFloor.drawId, 'drawticket1');
+    const later = await gate.runAutoMemoryRound({
+        snapshot: snapshot({ nextDueFloor: 40, activeDrawTicketId: ticket.id }, null, [ticket]),
+        floor: 40, memoryIds: ['M100'], now: 81, archiveRevision: 'rev-1', chatId: 'chat-1',
+    }, { ...io, nextId: () => 'drawticket2', readMemoryIds: async () => ['M100', 'M102'] });
+    assert.notEqual(later.action, 'reuse');
+    assert.equal(later.moduleRequest, true);
 });
 
 test('a finished draw does not block the next floor', () => {
@@ -126,6 +131,12 @@ test('a finished draw does not block the next floor', () => {
         activeTicket: { id: 'drawticket1', status: 'drawn', dueFloor: 10 },
     });
     assert.equal(same.action, 'reuse');
+    const orphanLater = gate.floorDecision({
+        enabled: true, floor: 12, interval: 1, nextDueFloor: 12,
+        modulePlan: null,
+        activeTicket: { id: 'drawticket1', status: 'drawn', dueFloor: 10 },
+    });
+    assert.equal(orphanLater.action, 'due');
 });
 
 test('weights lower a recent hit and raise a long miss without restoring an excluded id', () => {
