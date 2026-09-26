@@ -3,6 +3,10 @@ import test from 'node:test';
 import { readFile } from 'node:fs/promises';
 import * as batches from '../src/archive/importBatches.js';
 import * as draw from '../src/autoMemory/draw.js';
+import * as floor from '../src/autoMemory/floorPace.js';
+import * as gate from '../src/autoMemory/incrementalGate.js';
+import * as plans from '../src/autoMemory/planStore.js';
+import * as wizard from '../src/autoMemory/wizardPlan.js';
 import * as tasks from '../src/ui/taskCenter.js';
 
 function identity(chat, extra = {}) {
@@ -48,4 +52,31 @@ test('interval-1 sync does not swallow import errors behind parkPriorDraft', asy
     assert.equal(repo.includes('isAutomaticFloorWindowSync(options) && options.parkPriorDraft !== true'), false);
     assert.match(repo, /parkArchiveRecovery\(hydrationOrigin, 'import', \{ ignoreActive: true \}\)/);
     assert.match(scheduler, /if \(result\?\.status === 'failed' && result\.error\) throw result\.error/);
+});
+
+test('setting interval 1 makes the current finished floor due and a blocked import stays visible', async () => {
+    const metadata = {
+        [plans.AUTO_MEMORY_PLAN_KEY]: plans.createAutoMemoryPlan({
+            revision: 2, updatedAt: 20, enabled: true, intervalFloors: 5,
+            lastCompletedFloor: 40, nextDueFloor: 45, legacyPreferencesMigrated: true,
+        }),
+        [plans.AUTO_MEMORY_REVEAL_KEY]: [],
+        [plans.AUTO_MEMORY_DRAW_TICKETS_KEY]: [],
+        [plans.AUTO_MEMORY_MODULE_PLAN_KEY]: null,
+    };
+    const patched = wizard.pacePatch(metadata, { intervalFloors: 1, floor: 80 }, 90);
+    assert.equal(patched.changed, true);
+    assert.equal(patched.snapshot.plan.intervalFloors, 1);
+    assert.equal(patched.snapshot.plan.lastCompletedFloor, 79);
+    assert.equal(patched.snapshot.plan.nextDueFloor, 80);
+    assert.deepEqual(floor.dueFloorWindow(79, 80), { start: 80, end: 80 });
+    const blocked = await gate.runAutoMemoryRound({
+        snapshot: patched.snapshot, floor: 80, memoryIds: ['M001'], now: 100,
+    }, {
+        importIncremental: async () => ({ status: 'blocked' }),
+        persist: async () => { throw new Error('must not mark the floor empty'); },
+        readMemoryIds: async () => ['M001'],
+    });
+    assert.equal(blocked.action, 'failed');
+    assert.equal(blocked.reason, 'import-blocked');
 });

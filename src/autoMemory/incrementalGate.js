@@ -245,7 +245,10 @@ export async function runAutoMemoryRound(input, io) {
     // 顺序固定：先把这一窗写入档案，再抽签，最后才生成增量回忆。
     const floorWindow = auto_memory_floor.dueFloorWindow(plan.lastCompletedFloor, input.floor);
     const options = auto_memory_draw.incrementalImportOptions(floorWindow);
-    await io.importIncremental(options);
+    const imported = await io.importIncremental(options);
+    if (imported?.status === 'blocked') {
+        return { action: 'failed', moduleRequest: false, reason: 'import-blocked' };
+    }
     const after = await io.readMemoryIds();
     const fresh = auto_memory_draw.newMemoryIds(input.memoryIds, after);
     if (!fresh.length) return persistNoop(snapshot, input.floor, io, input.now, 'no-new-memory', floorWindow);

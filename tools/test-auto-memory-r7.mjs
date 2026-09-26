@@ -39,7 +39,7 @@ test('a due floor reads the floors since the last completion', () => {
     assert.equal(floor.countdownLabel(5, 5), '回忆还有 5 楼');
     assert.equal(floor.countdownLabel(1, 5), '回忆还有 1 楼');
     assert.equal(floor.countdownLabel(0, 5), '');
-    assert.equal(floor.countdownLabel(1, 1), '');
+    assert.equal(floor.countdownLabel(1, 1), '下一句角色楼就抽');
     assert.equal(floor.assistantBodyReady(chat), true);
     assert.equal(floor.assistantBodyReady(chat, { generating: true }), false);
     assert.equal(floor.assistantBodyReady(chat.slice(0, 4)), false);

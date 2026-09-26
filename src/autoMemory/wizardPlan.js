@@ -203,6 +203,7 @@ export function pacePatch(chatMetadata, { intervalFloors, floor } = {}, now = 0)
     if (!interval.ok) return { changed: false, snapshot: existing, message: interval.message };
     const updatedAt = Number.isSafeInteger(now) && now > existing.plan.updatedAt ? now : existing.plan.updatedAt + 1;
     const armed = existing.plan.enabled === true && Number.isSafeInteger(floor) && floor >= 0;
+    const everyFloor = interval.intervalFloors === 1;
     return {
         changed: true,
         message: '',
@@ -210,8 +211,10 @@ export function pacePatch(chatMetadata, { intervalFloors, floor } = {}, now = 0)
             plan: auto_memory_plan.parseAutoMemoryPlan({
                 ...existing.plan,
                 intervalFloors: interval.intervalFloors,
-                lastCompletedFloor: armed ? floor : existing.plan.lastCompletedFloor,
-                nextDueFloor: armed ? floor + interval.intervalFloors : existing.plan.nextDueFloor,
+                lastCompletedFloor: !armed ? existing.plan.lastCompletedFloor
+                    : everyFloor && floor > 0 ? floor - 1 : floor,
+                nextDueFloor: !armed ? existing.plan.nextDueFloor
+                    : everyFloor && floor > 0 ? floor : floor + interval.intervalFloors,
                 revision: existing.plan.revision + 1,
                 updatedAt,
             }),

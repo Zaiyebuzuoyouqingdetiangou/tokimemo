@@ -13,6 +13,7 @@ import * as core_autoUpdatePolicy from '../core/autoUpdatePolicy.js';
 import * as core_autoUpdates from '../core/autoUpdates.js';
 import * as auto_memory_plan from '../autoMemory/planStore.js';
 import * as auto_memory_floor from '../autoMemory/floorPace.js';
+import * as auto_memory_scheduler from '../autoMemory/scheduler.js';
 import * as wizard_plan from '../autoMemory/wizardPlan.js';
 import * as ui_countdown from './autoMemoryCountdown.js';
 import * as ui_heartEnvelope from './heartEnvelope.js';
@@ -384,7 +385,12 @@ async function saveAutoMemoryPace(panel) {
         return;
     }
     ui_countdown.refreshAutoMemoryCountdown();
-    if (note && result.snapshot?.plan?.enabled) note.textContent = `已改成每 ${result.snapshot.plan.intervalFloors} 楼抽一次，从现在重新计。`;
+    auto_memory_scheduler.nudgeAutoMemoryScheduler();
+    if (note && result.snapshot?.plan?.enabled) {
+        note.textContent = result.snapshot.plan.intervalFloors === 1
+            ? '已改成每一楼抽取。当前这楼到点了会马上整理。'
+            : `已改成每 ${result.snapshot.plan.intervalFloors} 楼抽一次，从现在重新计。`;
+    }
 }
 
 export function refreshGenerationSettingsUi() {

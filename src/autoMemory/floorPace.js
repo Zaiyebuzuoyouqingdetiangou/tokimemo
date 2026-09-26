@@ -57,8 +57,8 @@ export function latestAssistantWindow(messages, interval) {
 }
 
 export function countdownLabel(left, interval = 0) {
-    const everyFloor = Math.floor(Number(interval)) === 1;
-    if (everyFloor || !Number.isSafeInteger(left) || left < 1) return '';
+    if (!Number.isSafeInteger(left) || left < 1) return '';
+    if (Math.floor(Number(interval)) === 1) return '下一句角色楼就抽';
     return `回忆还有 ${left} 楼`;
 }
 

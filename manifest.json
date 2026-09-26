@@ -1,7 +1,7 @@
 {
   "display_name": "心迹回廊",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.99.90-r84.155-interval-visible",
+  "js": "index.js?heartbeat=0.99.90-r84.156-interval-now",
   "author": "Toto",
   "version": "0.99.90",
   "auto_update": true,
@@ -10,6 +10,6 @@
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r84.155：每一楼抽取时整理和留忆会重新出现在任务中心。",
+  "description": "r84.156：设成每一楼抽取时，当前这楼会马上整理。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }

@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 286
-// Source SHA-256: 62313566debccc33476a847627957ab2bfdd289406e21a1d48c18ff2a11b5421
+// Source SHA-256: 9a655728e4f940f461eebae7ef79ef504ddff2be7bf4cfa4df43796e07c0dc89
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -3708,8 +3708,8 @@ function latestAssistantWindow(messages, interval) {
 }
 
 function countdownLabel(left, interval = 0) {
-    const everyFloor = Math.floor(Number(interval)) === 1;
-    if (everyFloor || !Number.isSafeInteger(left) || left < 1) return '';
+    if (!Number.isSafeInteger(left) || left < 1) return '';
+    if (Math.floor(Number(interval)) === 1) return '下一句角色楼就抽';
     return `回忆还有 ${left} 楼`;
 }
 
@@ -4135,7 +4135,10 @@ async function runAutoMemoryRound(input, io) {
     // 顺序固定：先把这一窗写入档案，再抽签，最后才生成增量回忆。
     const floorWindow = auto_memory_floor.dueFloorWindow(plan.lastCompletedFloor, input.floor);
     const options = auto_memory_draw.incrementalImportOptions(floorWindow);
-    await io.importIncremental(options);
+    const imported = await io.importIncremental(options);
+    if (imported?.status === 'blocked') {
+        return { action: 'failed', moduleRequest: false, reason: 'import-blocked' };
+    }
     const after = await io.readMemoryIds();
     const fresh = auto_memory_draw.newMemoryIds(input.memoryIds, after);
     if (!fresh.length) return persistNoop(snapshot, input.floor, io, input.now, 'no-new-memory', floorWindow);
@@ -7304,6 +7307,14 @@ async function regenerateCurrentMemory({ mode = 'keep', moduleId = '' } = {}) {
     }
 }
 
+function nudgeAutoMemoryScheduler() {
+    try {
+        const context = core_context.currentCharacterGuard();
+        handledFloors.delete(core_context.chatScopeKey(context));
+    } catch { /* 设置改完仍会再扫一楼。 */ }
+    scheduleSettledRound();
+}
+
 function stopAutoMemoryScheduler() {
     cleanup?.();
     cleanup = null;
@@ -7570,6 +7581,7 @@ __m_autoMemory_scheduler_js.repairFloorAchievement = repairFloorAchievement;
 __m_autoMemory_scheduler_js.automaticRepairIfNeeded = automaticRepairIfNeeded;
 __m_autoMemory_scheduler_js.regenerateCurrentMemory = regenerateCurrentMemory;
 __m_autoMemory_scheduler_js.storyStillWriting = storyStillWriting;
+__m_autoMemory_scheduler_js.nudgeAutoMemoryScheduler = nudgeAutoMemoryScheduler;
 __m_autoMemory_scheduler_js.stopAutoMemoryScheduler = stopAutoMemoryScheduler;
 __m_autoMemory_scheduler_js.startAutoMemoryScheduler = startAutoMemoryScheduler;
 }
@@ -8137,6 +8149,7 @@ function pacePatch(chatMetadata, { intervalFloors, floor } = {}, now = 0) {
     if (!interval.ok) return { changed: false, snapshot: existing, message: interval.message };
     const updatedAt = Number.isSafeInteger(now) && now > existing.plan.updatedAt ? now : existing.plan.updatedAt + 1;
     const armed = existing.plan.enabled === true && Number.isSafeInteger(floor) && floor >= 0;
+    const everyFloor = interval.intervalFloors === 1;
     return {
         changed: true,
         message: '',
@@ -8144,8 +8157,10 @@ function pacePatch(chatMetadata, { intervalFloors, floor } = {}, now = 0) {
             plan: auto_memory_plan.parseAutoMemoryPlan({
                 ...existing.plan,
                 intervalFloors: interval.intervalFloors,
-                lastCompletedFloor: armed ? floor : existing.plan.lastCompletedFloor,
-                nextDueFloor: armed ? floor + interval.intervalFloors : existing.plan.nextDueFloor,
+                lastCompletedFloor: !armed ? existing.plan.lastCompletedFloor
+                    : everyFloor && floor > 0 ? floor - 1 : floor,
+                nextDueFloor: !armed ? existing.plan.nextDueFloor
+                    : everyFloor && floor > 0 ? floor : floor + interval.intervalFloors,
                 revision: existing.plan.revision + 1,
                 updatedAt,
             }),
@@ -74780,6 +74795,7 @@ const core_autoUpdatePolicy = __m_core_autoUpdatePolicy_js;
 const core_autoUpdates = __m_core_autoUpdates_js;
 const auto_memory_plan = __m_autoMemory_planStore_js;
 const auto_memory_floor = __m_autoMemory_floorPace_js;
+const auto_memory_scheduler = __m_autoMemory_scheduler_js;
 const wizard_plan = __m_autoMemory_wizardPlan_js;
 const ui_countdown = __m_ui_autoMemoryCountdown_js;
 const ui_heartEnvelope = __m_ui_heartEnvelope_js;
@@ -75161,7 +75177,12 @@ async function saveAutoMemoryPace(panel) {
         return;
     }
     ui_countdown.refreshAutoMemoryCountdown();
-    if (note && result.snapshot?.plan?.enabled) note.textContent = `已改成每 ${result.snapshot.plan.intervalFloors} 楼抽一次，从现在重新计。`;
+    auto_memory_scheduler.nudgeAutoMemoryScheduler();
+    if (note && result.snapshot?.plan?.enabled) {
+        note.textContent = result.snapshot.plan.intervalFloors === 1
+            ? '已改成每一楼抽取。当前这楼到点了会马上整理。'
+            : `已改成每 ${result.snapshot.plan.intervalFloors} 楼抽一次，从现在重新计。`;
+    }
 }
 
 function refreshGenerationSettingsUi() {

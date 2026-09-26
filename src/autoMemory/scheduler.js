@@ -878,6 +878,14 @@ export async function regenerateCurrentMemory({ mode = 'keep', moduleId = '' } =
     }
 }
 
+export function nudgeAutoMemoryScheduler() {
+    try {
+        const context = core_context.currentCharacterGuard();
+        handledFloors.delete(core_context.chatScopeKey(context));
+    } catch { /* 设置改完仍会再扫一楼。 */ }
+    scheduleSettledRound();
+}
+
 export function stopAutoMemoryScheduler() {
     cleanup?.();
     cleanup = null;
