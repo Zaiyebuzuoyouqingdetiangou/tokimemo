@@ -41,15 +41,20 @@ import * as relations from './modesBridge.js';
 import * as achievements from './modesBridge.js';
 
 export function generationProgressSegments(journal, options = {}) {
+    const inboxMode = journal?.identity?.mode === 'inbox';
     return (Array.isArray(journal?.segments) ? journal.segments : []).filter(segment =>
         segment.state === 'complete' || segment.state === 'truncated').map(segment => {
         const latest = segment.state === 'complete' ? segment.rawJson : segment.partial;
         const parsed = segment.retainedPartials?.length
             ? recovery_merge.mergeRecoveryPartials([...segment.retainedPartials, latest], generationRecoverySchema(journal, segment, options), { final: segment.state === 'complete' })
             : json_parser.parsePartialJsonObject(latest);
+        const closedLetters = parsed.items('/letters');
+        const salvagedLetters = inboxMode && typeof latest === 'string' && !closedLetters.length
+            ? json_parser.salvageInboxLetters(latest)?.letters : null;
         return { slot: segment.slot, state: segment.state, contract: segment.contract, value: parsed.value, partialValue: parsed.partialValue,
             complete: segment.state === 'complete' && parsed.complete,
-            items: parsed.items, has: parsed.has, at: parsed.at };
+            items: pointer => pointer === '/letters' && salvagedLetters?.length ? salvagedLetters : parsed.items(pointer),
+            has: parsed.has, at: parsed.at };
     });
 }
 

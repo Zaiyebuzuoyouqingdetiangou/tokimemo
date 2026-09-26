@@ -166,6 +166,69 @@ export function parsePartialJsonObject(raw) {
     };
 }
 
+const INBOX_SLOT = /"slot"\s*:\s*"(?:daily|stage)"/;
+
+function looksLikeInboxPayload(text) {
+    return /"letters"\s*:/.test(text) && INBOX_SLOT.test(text);
+}
+
+function usableInboxLetter(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+    const slot = value.slot === 'daily' || value.slot === 'stage' ? value.slot : '';
+    if (!slot || typeof value.title !== 'string' || !value.title.trim()
+        || typeof value.body !== 'string' || !value.body.trim()) return null;
+    const letter = {
+        slot,
+        title: value.title,
+        greeting: typeof value.greeting === 'string' ? value.greeting : '',
+        body: value.body,
+        closing: typeof value.closing === 'string' ? value.closing : '',
+    };
+    if (value.letterIllustration && typeof value.letterIllustration === 'object' && !Array.isArray(value.letterIllustration)) {
+        letter.letterIllustration = value.letterIllustration;
+    }
+    return letter;
+}
+
+function collectInboxLetters(value, letters, seen) {
+    if (!value || typeof value !== 'object') return;
+    if (Array.isArray(value.letters)) {
+        for (const item of value.letters) collectInboxLetters(item, letters, seen);
+    }
+    const letter = usableInboxLetter(value);
+    if (!letter) return;
+    const key = `${letter.slot}\u001f${letter.title}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    letters.push(letter);
+}
+
+// Inbox-only. Reads already-closed letter fields from a broken reply.
+// Does not invent quotes, commas, or missing title/body text.
+export function salvageInboxLetters(raw) {
+    const text = typeof raw === 'string' ? raw : '';
+    if (!looksLikeInboxPayload(text)) return null;
+    const letters = [];
+    const seen = new Set();
+    let inString = false;
+    let escaped = false;
+    for (let i = 0; i < text.length; i += 1) {
+        const char = text[i];
+        if (inString) {
+            if (escaped) escaped = false;
+            else if (char === '\\') escaped = true;
+            else if (char === '"') inString = false;
+            continue;
+        }
+        if (char === '"') { inString = true; continue; }
+        if (char !== '{') continue;
+        const peek = text.slice(i, i + 160);
+        if (!/"letters"\s*:/.test(peek) && !INBOX_SLOT.test(peek)) continue;
+        collectInboxLetters(parsePartialJsonObject(text.slice(i)).partialValue, letters, seen);
+    }
+    return letters.length ? { letters } : null;
+}
+
 export function jsonOutputBudgetSummary({ requestMaxTokens = 0, configuredMaxTokens = 0 } = {}) {
     const requestMax = Math.max(0, Math.floor(Number(requestMaxTokens) || 0));
     const configuredMax = output_budget.normalizeOutputTokens(configuredMaxTokens);
@@ -216,6 +279,8 @@ export function extractJson(raw, { reasoning = '', requestMaxTokens = 0, configu
             if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed;
         } catch {}
     }
+    const salvaged = salvageInboxLetters(text);
+    if (salvaged) return salvaged;
     if (hasUnclosedObject) {
         throw jsonOutputError(
             'RMT_JSON_TRUNCATED',
