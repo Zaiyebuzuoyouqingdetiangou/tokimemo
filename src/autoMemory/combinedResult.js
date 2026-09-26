@@ -32,13 +32,25 @@ export function inboxPlanLength(plan) {
 export function classifyAchievement(packet, { allowHistorical = false, sourceMemoryIds = [] } = {}) {
     if (packet == null) return { ok: false, reason: 'missing' };
     if (!packet || typeof packet !== 'object' || Array.isArray(packet)) return { ok: false, reason: 'shape' };
-    const title = String(packet.title || '').replace(/[\u0000-\u001f]/g, '').trim().slice(0, 40);
+    const clip = (value, max) => String(value || '').replace(/[\u0000-\u001f]/g, '').trim().slice(0, max);
+    const title = clip(packet.title, 40);
     const kind = packet.kind === 'historical' || packet.kind === 'collection' ? packet.kind : '';
     if (!title || !kind) return { ok: false, reason: 'invalid' };
     const historicalEvidence = sourceMemoryIds.some(id => /^M\d{3,6}$/.test(id));
     if (kind === 'historical' && (!allowHistorical || !historicalEvidence)) return { ok: false, reason: 'historical' };
     const id = typeof packet.id === 'string' && /^[A-Za-z0-9_-]{8,80}$/.test(packet.id) ? packet.id : '';
-    return { ok: true, achievement: { id, title, kind } };
+    const description = clip(packet.description, 900);
+    const unlockCondition = clip(packet.unlockCondition, 300);
+    const sourceMemoryAnchor = clip(packet.sourceMemoryAnchor, 160);
+    return {
+        ok: true,
+        achievement: {
+            id, title, kind,
+            ...(description ? { description } : {}),
+            ...(unlockCondition ? { unlockCondition } : {}),
+            ...(sourceMemoryAnchor ? { sourceMemoryAnchor } : {}),
+        },
+    };
 }
 
 function bumpedPlan(snapshot, now) {

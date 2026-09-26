@@ -1,6 +1,7 @@
 // 启用新计划后，楼层到点就读最近这一窗正文，做成增量回忆再抽签。没有新记忆或没有可抽模块时不发模块请求。
 import * as archive_external from '../archive/externalMemory.js';
 import * as archive_repository from '../archive/repository.js';
+import * as auto_memory_library from './achievementLibrary.js';
 import * as auto_memory_floor from './floorPace.js';
 import * as auto_memory_gap from './gapFill.js';
 import * as auto_memory_gate from './incrementalGate.js';
@@ -64,14 +65,26 @@ function generationStillOpen(context) {
     return auto_memory_stream.generationOpen(context);
 }
 
-function rememberTitle(context, result) {
-    if (!auto_memory_gap.rememberAchievementTitle(context?.chatMetadata, result?.achievement)) return;
-    context.saveMetadataDebounced?.();
+async function rememberTitle(context, result) {
+    const wroteTitle = auto_memory_gap.rememberAchievementTitle(context?.chatMetadata, result?.achievement);
+    let wroteLibrary = false;
+    if (result?.action === 'reveal') {
+        try {
+            await core_cache.ensureCacheHydrated(context);
+            wroteLibrary = auto_memory_library.saveAutoAchievement(context, result);
+        } catch (error) {
+            console.warn('[HeartbeatMemories] achievement library skipped', core_text.safeErrorDiagnostic(error));
+        }
+    }
+    if (wroteLibrary || result?.action === 'achievement-pending') {
+        auto_memory_gap.clearPendingAchievement(context?.chatMetadata, result?.snapshot?.modulePlan?.drawId);
+    }
+    if (wroteTitle || wroteLibrary) context.saveMetadataDebounced?.();
 }
 
 async function runModule(snapshot, persist, context) {
     const result = await auto_memory_host.runModulePlan(snapshot, persist, context, Date.now());
-    rememberTitle(context, result);
+    await rememberTitle(context, result);
     return result;
 }
 

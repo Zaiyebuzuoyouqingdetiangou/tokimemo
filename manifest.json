@@ -1,15 +1,15 @@
 {
   "display_name": "心迹回廊",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.99.75-r84.127-letter-round",
+  "js": "index.js?heartbeat=0.99.76-r84.128-achievement-library",
   "author": "Toto",
-  "version": "0.99.75",
+  "version": "0.99.76",
   "auto_update": true,
   "minimum_client_version": "1.13.0",
   "hooks": {
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r84.127：信封里只放这一轮新增的回忆，点进去能看这一条，成就句写在信上。",
+  "description": "r84.128：每份回忆的成就和第一次请求写在一起，并追加进成就库，手动成就仍留在库里。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }

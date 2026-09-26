@@ -1,6 +1,10 @@
 // 只有自动留忆的最后一步才武装。成就字段从正文 JSON 里拆走，不改各模块原来的校验。
 
-const SUFFIX = '\n若这是本轮最后一段，在原有 JSON 里额外给出 "achievement":{"title":"不超过20字","kind":"historical或collection"}。没有证据就用 collection。不要改动原有字段，不要解释。';
+const SUFFIX = `
+【本轮成就，和上面这份回忆写在同一次 JSON 里】
+不要另起一份回复，也不要改动原有字段。在原来的 JSON 对象上增加 "achievement"：
+{"title":"不超过20字","description":"一两句说明","unlockCondition":"做到或经历了什么才解锁","kind":"historical或collection","sourceMemoryAnchor":"从本轮档案锚点原样复制"}
+能被本轮真实档案证明的用 historical。推演、模拟、后日谈用 collection。不要解释。`;
 
 let armed = false;
 let packet = null;

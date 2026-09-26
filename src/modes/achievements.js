@@ -100,6 +100,9 @@ export function normalizeAchievements(data, memoryBank, { allowPartial = false, 
             if (!sourceMemoryIds.length || !sourceMemoryAnchor) return null;
         }
         const tierRaw = core_text.normalizeText(item?.tier, 20).toLowerCase();
+        const kind = item?.kind === 'historical' || item?.kind === 'collection' ? item.kind : '';
+        const moduleId = core_text.normalizeText(item?.moduleId, 40);
+        const origin = item?.origin === 'auto' ? 'auto' : '';
         return {
             id: core_text.safeId(item?.id, `ACH${String(index + 1).padStart(2, '0')}`),
             title,
@@ -112,6 +115,9 @@ export function normalizeAchievements(data, memoryBank, { allowPartial = false, 
             sourceMemoryIds,
             sourceMemoryAnchor,
             hint: unlocked ? '' : (core_text.normalizeText(item?.hint, 500) || '继续积累新的重要回忆。'),
+            ...(kind ? { kind } : {}),
+            ...(moduleId ? { moduleId } : {}),
+            ...(origin ? { origin } : {}),
         };
     }).filter(item => item && (!sourceMemoryIds || (item.unlocked && core_incremental.usesIncrementalMemoryId(item.sourceMemoryIds, sourceMemoryIds))));
     if (!allowPartial && raw.length && !entries.length) throw new Error('成就库没有生成可用条目。');
@@ -239,7 +245,7 @@ export function renderAchievements() {
     const cards = (items, lockedState) => items.map(item => `<article class="rmt-achievement-card ${lockedState ? 'locked' : 'unlocked'}">
       <div class="rmt-achievement-icon"><i class="fa-solid ${tierIcon(item.tier)}"></i></div>
       <div class="rmt-achievement-copy">
-        <div class="rmt-achievement-title"><b>${core_text.esc(item.title)}</b><span>${core_text.esc(item.category)}</span></div>
+        <div class="rmt-achievement-title"><b>${core_text.esc(item.title)}</b><span>${core_text.esc(item.category)}${item.origin === 'auto' ? ' · 自动' : ''}</span></div>
         <p>${core_text.esc(item.description)}</p>
         <small>${lockedState
             ? core_text.esc(item.hint)

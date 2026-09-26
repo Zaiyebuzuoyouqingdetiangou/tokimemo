@@ -4,6 +4,7 @@ import * as plans from '../src/autoMemory/modulePlans.js';
 import * as runner from '../src/autoMemory/moduleRunner.js';
 import * as store from '../src/autoMemory/planStore.js';
 import * as view from '../src/autoMemory/incrementalView.js';
+import * as library from '../src/autoMemory/achievementLibrary.js';
 
 const base = {
     chatId: 'chat-1', archiveRevision: 'rev-1', sourceMemoryIds: ['M100'], drawId: 'drawticket1', frozenAt: 30,
@@ -59,29 +60,38 @@ test('every remaining module freezes a finite plan and refuses an empty one', ()
     assert.equal(lives.steps.at(-1).id, 'echo');
 });
 
-test('a catalog expands once, later steps resume, and the last step carries the only achievement', async () => {
+test('a catalog expands once, later steps resume, and the first request carries the only achievement', async () => {
     const calls = [];
     const persisted = [];
+    let held = null;
+    const hold = {
+        holdAchievement: async packet => { held = packet; },
+        heldAchievement: () => held,
+    };
     const catalog = plans.buildModulePlan('album', base);
     assert.equal(catalog.steps.length, 1);
     const expanded = await runner.runPending(snapshot(catalog), {
         now: 40,
         module: { contentKind: 'historical' },
+        ...hold,
         persist: async next => { persisted.push(next.modulePlan.steps.map(item => item.status)); },
-        execute: async ({ step }) => {
-            calls.push(step.id);
-            return { expand: { ...base, unlocked: 3 } };
+        execute: async ({ step, carryAchievement }) => {
+            calls.push(`${step.id}:${carryAchievement}`);
+            return { expand: { ...base, unlocked: 3 }, achievement: carryAchievement ? { title: '新的一页', kind: 'historical', id: 'achv0001' } : null };
         },
     });
     assert.equal(expanded.action, 'expanded');
+    assert.equal(calls[0].endsWith(':true'), true);
+    assert.equal(held?.id, 'achv0001');
     assert.deepEqual(expanded.snapshot.modulePlan.steps.map(item => item.kind), ['catalog', 'snapshot', 'comments']);
     const again = await runner.runPending(expanded.snapshot, {
         now: 41,
         module: { contentKind: 'historical' },
+        ...hold,
         persist: async next => { persisted.push(next.plan.revision); },
         execute: async ({ step, carryAchievement }) => {
             calls.push(`${step.id}:${carryAchievement}`);
-            return { saved: true, recoverySlot: step.id, achievement: carryAchievement ? { title: '新的一页', kind: 'historical', id: 'achv0001' } : null };
+            return { saved: true, recoverySlot: step.id };
         },
     });
     assert.equal(again.action, 'saved');
@@ -89,10 +99,11 @@ test('a catalog expands once, later steps resume, and the last step carries the 
     const done = await runner.runPending(again.snapshot, {
         now: 42,
         module: { contentKind: 'historical' },
+        ...hold,
         persist: async () => {},
         execute: async ({ step, carryAchievement }) => {
             calls.push(`${step.id}:${carryAchievement}`);
-            return { saved: true, achievement: { title: '新的一页', kind: 'historical', id: 'achv0001' } };
+            return { saved: true };
         },
     });
     assert.equal(done.action, 'reveal');
@@ -150,4 +161,23 @@ test('achievement failure keeps the finished steps and an empty increment does n
         generationMeta: { lastUpdate: { added: 1, updatedAt: 80, consumedMemoryIds: ['M100'] } },
     }, { sourceMemoryIds: ['M100'], since: 50 });
     assert.deepEqual(shared.session.entries.map(item => item.id), ['d']);
+});
+
+test('an automatic achievement is added beside manual library entries', () => {
+    const manual = {
+        id: 'ACH01', title: '一起出门', description: '手动生成的里程碑', category: '事件', tier: 'silver',
+        unlocked: true, unlockedAt: '已解锁', unlockCondition: '出过一次门', sourceMemoryIds: ['M001'], sourceMemoryAnchor: '出门',
+    };
+    const entry = library.libraryEntryFromAutoAchievement(
+        { id: 'achv0001', title: '新的一页', kind: 'historical', description: '这一轮留下的', unlockCondition: '写下这一页' },
+        { moduleId: 'album', sourceMemoryIds: ['M100'], now: Date.parse('2026-09-26T00:00:00Z') },
+    );
+    const first = library.appendLibraryEntry({ kind: 'achievements', title: '成就库', entries: [manual] }, entry);
+    assert.deepEqual(first.entries.map(item => item.title), ['一起出门', '新的一页']);
+    assert.equal(first.entries[0].origin, undefined);
+    assert.equal(first.entries[1].origin, 'auto');
+    assert.equal(first.entries[1].moduleId, 'album');
+    assert.deepEqual(first.entries[1].sourceMemoryIds, ['M100']);
+    const again = library.appendLibraryEntry(first, entry);
+    assert.equal(again.entries.length, 2);
 });

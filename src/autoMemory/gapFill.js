@@ -3,6 +3,26 @@ import * as core_text from '../core/text.js';
 
 export const GAP_KEY = 'autoMemoryGapV1';
 export const ACHIEVEMENT_TITLE_KEY = 'autoMemoryAchievementTitlesV1';
+export const PENDING_ACHIEVEMENT_KEY = 'autoMemoryPendingAchievementV1';
+
+export function holdPendingAchievement(metadata, { drawId = '', moduleId = '', achievement = null } = {}) {
+    if (!metadata || !achievement || typeof drawId !== 'string' || !drawId) return false;
+    metadata[PENDING_ACHIEVEMENT_KEY] = { drawId, moduleId: typeof moduleId === 'string' ? moduleId : '', achievement };
+    return true;
+}
+
+export function readPendingAchievement(metadata, drawId) {
+    const row = metadata?.[PENDING_ACHIEVEMENT_KEY];
+    if (!row || row.drawId !== drawId || !row.achievement) return null;
+    return row.achievement;
+}
+
+export function clearPendingAchievement(metadata, drawId) {
+    const row = metadata?.[PENDING_ACHIEVEMENT_KEY];
+    if (!metadata || !row || (drawId && row.drawId !== drawId)) return false;
+    delete metadata[PENDING_ACHIEVEMENT_KEY];
+    return true;
+}
 
 export function rememberedAchievementTitle(metadata, achievementId) {
     const map = metadata?.[ACHIEVEMENT_TITLE_KEY];

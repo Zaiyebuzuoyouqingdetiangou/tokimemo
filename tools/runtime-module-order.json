@@ -11,6 +11,7 @@
   "archive/sourceLedger.js",
   "archive/storyScenes.js",
   "archive/summaryPreference.js",
+  "autoMemory/achievementLibrary.js",
   "autoMemory/achievementLookback.js",
   "autoMemory/combinedResult.js",
   "autoMemory/draw.js",

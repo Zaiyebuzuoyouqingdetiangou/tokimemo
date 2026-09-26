@@ -4,6 +4,7 @@ import * as core_cache from '../core/cache.js';
 import * as generation_achievement from '../generation/achievementCapture.js';
 import * as generation_client from '../generation/client.js';
 import * as modes_inbox from '../modes/inbox.js';
+import * as auto_memory_gap from './gapFill.js';
 import * as auto_memory_plans from './modulePlans.js';
 import * as auto_memory_registry from './moduleRegistry.js';
 import * as auto_memory_runner from './moduleRunner.js';
@@ -98,10 +99,16 @@ export async function executeModuleStep({ step, plan, carryAchievement }, contex
 
 export async function runModulePlan(snapshot, persist, context, now = Date.now()) {
     const item = auto_memory_registry.autoMemoryModuleById(snapshot?.modulePlan?.moduleId);
+    const plan = snapshot?.modulePlan;
     return auto_memory_runner.runPending(snapshot, {
         now,
         module: item,
         persist,
         execute: request => executeModuleStep(request, context),
+        heldAchievement: () => auto_memory_gap.readPendingAchievement(context?.chatMetadata, plan?.drawId),
+        holdAchievement: packet => {
+            if (!auto_memory_gap.holdPendingAchievement(context?.chatMetadata, { drawId: plan?.drawId, moduleId: plan?.moduleId, achievement: packet })) return;
+            context?.saveMetadataDebounced?.();
+        },
     });
 }

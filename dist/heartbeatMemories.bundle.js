@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
-// Source modules: 282
-// Source SHA-256: 0c1946cdbc602c9af2f5728bbd0ace0705de7a28c039ad576ca2277bb829990b
+// Source modules: 283
+// Source SHA-256: aedc91cfc442da216139f65c9d7f4436fd8bd53ec10f4da177a88fc39260ac8c
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -33,6 +33,7 @@ const __m_archive_sourceReadGuard_js = Object.create(null);
 const __m_archive_storyScenes_js = Object.create(null);
 const __m_archive_summaryPreference_js = Object.create(null);
 const __m_archive_worldInfoSources_js = Object.create(null);
+const __m_autoMemory_achievementLibrary_js = Object.create(null);
 const __m_autoMemory_achievementLookback_js = Object.create(null);
 const __m_autoMemory_combinedResult_js = Object.create(null);
 const __m_autoMemory_draw_js = Object.create(null);
@@ -2986,6 +2987,115 @@ __m_archive_summaryPreference_js.archiveSourceForDue = archiveSourceForDue;
 __m_archive_summaryPreference_js.uncoveredWindowMessages = uncoveredWindowMessages;
 }
 
+function __init_autoMemory_achievementLibrary_js() {
+// MODULE: autoMemory/achievementLibrary.js
+const archive_repository = __m_archive_repository_js;
+const core_cache = __m_core_cache_js;
+const core_constants = __m_core_constants_js;
+const core_context = __m_core_context_js;
+const core_evidence = __m_core_evidence_js;
+const core_text = __m_core_text_js;
+// 自动留忆的成就追加进成就库。手动生成的条目留在原处，不互相覆盖。
+
+
+
+
+
+
+function clip(value, max) {
+    return String(value || '').replace(/[\u0000-\u001f]/g, '').trim().slice(0, max);
+}
+
+function unlockedOn(now) {
+    const date = new Date(now);
+    if (Number.isNaN(date.getTime())) return '已解锁';
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${date.getFullYear()}/${month}/${day}`;
+}
+
+function sameAuto(existing, entry) {
+    if (existing?.origin !== 'auto') return false;
+    if (existing.id && existing.id === entry.id) return true;
+    return clip(existing.title, 100).toLowerCase() === clip(entry.title, 100).toLowerCase();
+}
+
+function libraryEntryFromAutoAchievement(achievement, { moduleId = '', sourceMemoryIds = [], memoryBank = null, now = Date.now() } = {}) {
+    const title = clip(achievement?.title, 100);
+    if (!title) return null;
+    const kind = achievement?.kind === 'collection' ? 'collection' : 'historical';
+    const ids = core_text.cleanArray(sourceMemoryIds, 8, 40).filter(id => /^M\d{3,6}$/.test(id));
+    const known = memoryBank ? core_evidence.normalizeSourceMemoryIds(ids, memoryBank, 1) : ids;
+    const anchor = core_evidence.memoryEvidenceTerms(memoryBank, known.length ? known : ids)[0]
+        || clip(achievement?.sourceMemoryAnchor, 160);
+    const description = clip(achievement?.description, 900) || title;
+    const unlockCondition = clip(achievement?.unlockCondition, 300) || anchor || description;
+    return {
+        id: core_text.safeId(achievement?.id, '') || `auto-${clip(moduleId, 20) || 'memory'}-${String(now).slice(-8)}`,
+        title,
+        description,
+        category: '特别',
+        tier: 'bronze',
+        unlocked: true,
+        unlockedAt: unlockedOn(now),
+        unlockCondition,
+        sourceMemoryIds: known.length ? known : ids,
+        sourceMemoryAnchor: anchor || unlockCondition,
+        hint: '',
+        kind,
+        moduleId: clip(moduleId, 40),
+        origin: 'auto',
+    };
+}
+
+function appendLibraryEntry(previous, entry) {
+    if (!entry?.title) return previous || null;
+    const entries = Array.isArray(previous?.entries) ? previous.entries.map(item => structuredClone(item)) : [];
+    const index = entries.findIndex(item => sameAuto(item, entry));
+    if (index >= 0) entries[index] = { ...entries[index], ...entry, id: entries[index].id || entry.id };
+    else entries.push(structuredClone(entry));
+    const seen = new Set();
+    let serial = 1;
+    const deduped = entries.map(item => {
+        let id = core_text.safeId(item?.id, '');
+        while (!id || seen.has(id)) id = `ACH${String(serial++).padStart(2, '0')}`;
+        seen.add(id);
+        return { ...item, id };
+    });
+    return {
+        ...(previous && typeof previous === 'object' ? previous : {}),
+        kind: core_constants.MODE.ACHIEVEMENTS,
+        title: previous?.title || '成就库',
+        entries: deduped,
+    };
+}
+
+function saveAutoAchievement(context, result, now = Date.now()) {
+    const achievement = result?.achievement;
+    const reveal = result?.reveal;
+    if (!context || result?.action !== 'reveal' || !achievement?.title) return false;
+    let memory = null;
+    try { memory = archive_repository.getImportedMemory(context); } catch { memory = null; }
+    const entry = libraryEntryFromAutoAchievement(achievement, {
+        moduleId: reveal?.moduleId || '',
+        sourceMemoryIds: reveal?.sourceMemoryIds || [],
+        memoryBank: memory,
+        now,
+    });
+    if (!entry) return false;
+    const previous = core_cache.loadSession(core_constants.MODE.ACHIEVEMENTS, { context, memoryBank: memory, clone: true });
+    const session = appendLibraryEntry(previous, entry);
+    const chatId = core_context.getChatId(context);
+    session.chatId = chatId;
+    if (memory?.archiveRevision) session.archiveRevision = memory.archiveRevision;
+    return core_cache.saveSession(core_constants.MODE.ACHIEVEMENTS, session, chatId) === true;
+}
+
+__m_autoMemory_achievementLibrary_js.libraryEntryFromAutoAchievement = libraryEntryFromAutoAchievement;
+__m_autoMemory_achievementLibrary_js.appendLibraryEntry = appendLibraryEntry;
+__m_autoMemory_achievementLibrary_js.saveAutoAchievement = saveAutoAchievement;
+}
+
 function __init_autoMemory_achievementLookback_js() {
 // MODULE: autoMemory/achievementLookback.js
 
@@ -3098,13 +3208,25 @@ function inboxPlanLength(plan) {
 function classifyAchievement(packet, { allowHistorical = false, sourceMemoryIds = [] } = {}) {
     if (packet == null) return { ok: false, reason: 'missing' };
     if (!packet || typeof packet !== 'object' || Array.isArray(packet)) return { ok: false, reason: 'shape' };
-    const title = String(packet.title || '').replace(/[\u0000-\u001f]/g, '').trim().slice(0, 40);
+    const clip = (value, max) => String(value || '').replace(/[\u0000-\u001f]/g, '').trim().slice(0, max);
+    const title = clip(packet.title, 40);
     const kind = packet.kind === 'historical' || packet.kind === 'collection' ? packet.kind : '';
     if (!title || !kind) return { ok: false, reason: 'invalid' };
     const historicalEvidence = sourceMemoryIds.some(id => /^M\d{3,6}$/.test(id));
     if (kind === 'historical' && (!allowHistorical || !historicalEvidence)) return { ok: false, reason: 'historical' };
     const id = typeof packet.id === 'string' && /^[A-Za-z0-9_-]{8,80}$/.test(packet.id) ? packet.id : '';
-    return { ok: true, achievement: { id, title, kind } };
+    const description = clip(packet.description, 900);
+    const unlockCondition = clip(packet.unlockCondition, 300);
+    const sourceMemoryAnchor = clip(packet.sourceMemoryAnchor, 160);
+    return {
+        ok: true,
+        achievement: {
+            id, title, kind,
+            ...(description ? { description } : {}),
+            ...(unlockCondition ? { unlockCondition } : {}),
+            ...(sourceMemoryAnchor ? { sourceMemoryAnchor } : {}),
+        },
+    };
 }
 
 function bumpedPlan(snapshot, now) {
@@ -3382,6 +3504,26 @@ const core_text = __m_core_text_js;
 
 const GAP_KEY = 'autoMemoryGapV1';
 const ACHIEVEMENT_TITLE_KEY = 'autoMemoryAchievementTitlesV1';
+const PENDING_ACHIEVEMENT_KEY = 'autoMemoryPendingAchievementV1';
+
+function holdPendingAchievement(metadata, { drawId = '', moduleId = '', achievement = null } = {}) {
+    if (!metadata || !achievement || typeof drawId !== 'string' || !drawId) return false;
+    metadata[PENDING_ACHIEVEMENT_KEY] = { drawId, moduleId: typeof moduleId === 'string' ? moduleId : '', achievement };
+    return true;
+}
+
+function readPendingAchievement(metadata, drawId) {
+    const row = metadata?.[PENDING_ACHIEVEMENT_KEY];
+    if (!row || row.drawId !== drawId || !row.achievement) return null;
+    return row.achievement;
+}
+
+function clearPendingAchievement(metadata, drawId) {
+    const row = metadata?.[PENDING_ACHIEVEMENT_KEY];
+    if (!metadata || !row || (drawId && row.drawId !== drawId)) return false;
+    delete metadata[PENDING_ACHIEVEMENT_KEY];
+    return true;
+}
 
 function rememberedAchievementTitle(metadata, achievementId) {
     const map = metadata?.[ACHIEVEMENT_TITLE_KEY];
@@ -3457,6 +3599,9 @@ function oneSupplementMemory(data, bounds = {}) {
     };
 }
 
+__m_autoMemory_gapFill_js.holdPendingAchievement = holdPendingAchievement;
+__m_autoMemory_gapFill_js.readPendingAchievement = readPendingAchievement;
+__m_autoMemory_gapFill_js.clearPendingAchievement = clearPendingAchievement;
 __m_autoMemory_gapFill_js.rememberedAchievementTitle = rememberedAchievementTitle;
 __m_autoMemory_gapFill_js.rememberAchievementTitle = rememberAchievementTitle;
 __m_autoMemory_gapFill_js.readableGap = readableGap;
@@ -3464,6 +3609,7 @@ __m_autoMemory_gapFill_js.supplementPrompt = supplementPrompt;
 __m_autoMemory_gapFill_js.oneSupplementMemory = oneSupplementMemory;
 __m_autoMemory_gapFill_js.GAP_KEY = GAP_KEY;
 __m_autoMemory_gapFill_js.ACHIEVEMENT_TITLE_KEY = ACHIEVEMENT_TITLE_KEY;
+__m_autoMemory_gapFill_js.PENDING_ACHIEVEMENT_KEY = PENDING_ACHIEVEMENT_KEY;
 }
 
 function __init_autoMemory_incrementalGate_js() {
@@ -3883,10 +4029,12 @@ const core_cache = __m_core_cache_js;
 const generation_achievement = __m_generation_achievementCapture_js;
 const generation_client = __m_generation_client_js;
 const modes_inbox = __m_modes_inbox_js;
+const auto_memory_gap = __m_autoMemory_gapFill_js;
 const auto_memory_plans = __m_autoMemory_modulePlans_js;
 const auto_memory_registry = __m_autoMemory_moduleRegistry_js;
 const auto_memory_runner = __m_autoMemory_moduleRunner_js;
 // 把冻结好的步骤交给现有生成入口。一次唤醒只推进当前这一批，不重做已经记下的步骤。
+
 
 
 
@@ -3985,11 +4133,17 @@ async function executeModuleStep({ step, plan, carryAchievement }, context) {
 
 async function runModulePlan(snapshot, persist, context, now = Date.now()) {
     const item = auto_memory_registry.autoMemoryModuleById(snapshot?.modulePlan?.moduleId);
+    const plan = snapshot?.modulePlan;
     return auto_memory_runner.runPending(snapshot, {
         now,
         module: item,
         persist,
         execute: request => executeModuleStep(request, context),
+        heldAchievement: () => auto_memory_gap.readPendingAchievement(context?.chatMetadata, plan?.drawId),
+        holdAchievement: packet => {
+            if (!auto_memory_gap.holdPendingAchievement(context?.chatMetadata, { drawId: plan?.drawId, moduleId: plan?.moduleId, achievement: packet })) return;
+            context?.saveMetadataDebounced?.();
+        },
     });
 }
 
@@ -4440,7 +4594,7 @@ function __init_autoMemory_moduleRunner_js() {
 const auto_memory_combined = __m_autoMemory_combinedResult_js;
 const auto_memory_plans = __m_autoMemory_modulePlans_js;
 const auto_memory_plan = __m_autoMemory_planStore_js;
-// 只补未完成的步骤。成功一步就保存；最后一步才带成就。成就失败不重跑正文。
+// 只补未完成的步骤。成就和第一次请求写在一起；后面的步骤不再带成就。成就失败不重跑正文。
 
 
 
@@ -4479,10 +4633,11 @@ async function runPending(snapshot, io) {
     const pending = plan.steps.filter(item => item.status !== 'completed');
     if (!pending.length) return { action: 'complete', snapshot };
     const batch = auto_memory_plans.concurrentSteps(pending);
-    const lastPending = pending[pending.length - 1];
+    const firstRequest = !plan.steps.some(step => step.status === 'completed');
+    let captured = typeof io.heldAchievement === 'function' ? io.heldAchievement() : null;
     const outcomes = await Promise.all(batch.map(async step => {
         try {
-            const outcome = await io.execute({ step, plan, carryAchievement: step.id === lastPending.id && batch.length === 1 });
+            const outcome = await io.execute({ step, plan, carryAchievement: firstRequest && step.id === pending[0].id });
             return { step, outcome };
         } catch (error) {
             return { step, error };
@@ -4504,8 +4659,10 @@ async function runPending(snapshot, io) {
         }
         if (row.outcome?.expand) expand = row.outcome.expand;
         if (row.outcome?.addRepair === true) addRepair = true;
+        if (firstRequest && row.outcome?.achievement) captured = row.outcome.achievement;
         nextPlan = markStep(nextPlan, row.step.id, 'completed', row.outcome?.recoverySlot || `${plan.moduleId}:${row.step.id}`);
     }
+    if (captured) await io.holdAchievement?.(captured);
     if (expand) {
         const expanded = auto_memory_plans.expandModulePlan(nextPlan, expand);
         if (!expanded) {
@@ -4531,7 +4688,7 @@ async function runPending(snapshot, io) {
         snapshot: saved,
         moduleId: nextPlan.moduleId,
         moduleSaved: outcomes.every(row => !row.error && row.outcome?.saved !== false),
-        packet: outcomes.find(row => row.outcome?.achievement)?.outcome.achievement || null,
+        packet: captured,
         sourceMemoryIds: nextPlan.sourceMemoryIds,
         allowHistorical: moduleItem.contentKind === 'historical',
         now: io.now,
@@ -5058,6 +5215,7 @@ function __init_autoMemory_scheduler_js() {
 // MODULE: autoMemory/scheduler.js
 const archive_external = __m_archive_externalMemory_js;
 const archive_repository = __m_archive_repository_js;
+const auto_memory_library = __m_autoMemory_achievementLibrary_js;
 const auto_memory_floor = __m_autoMemory_floorPace_js;
 const auto_memory_gap = __m_autoMemory_gapFill_js;
 const auto_memory_gate = __m_autoMemory_incrementalGate_js;
@@ -5074,6 +5232,7 @@ const generation_request = __m_generation_generationRequest_js;
 const auto_memory_stream = __m_autoMemory_streamGate_js;
 const ui_countdown = __m_ui_autoMemoryCountdown_js;
 // 启用新计划后，楼层到点就读最近这一窗正文，做成增量回忆再抽签。没有新记忆或没有可抽模块时不发模块请求。
+
 
 
 
@@ -5138,14 +5297,26 @@ function generationStillOpen(context) {
     return auto_memory_stream.generationOpen(context);
 }
 
-function rememberTitle(context, result) {
-    if (!auto_memory_gap.rememberAchievementTitle(context?.chatMetadata, result?.achievement)) return;
-    context.saveMetadataDebounced?.();
+async function rememberTitle(context, result) {
+    const wroteTitle = auto_memory_gap.rememberAchievementTitle(context?.chatMetadata, result?.achievement);
+    let wroteLibrary = false;
+    if (result?.action === 'reveal') {
+        try {
+            await core_cache.ensureCacheHydrated(context);
+            wroteLibrary = auto_memory_library.saveAutoAchievement(context, result);
+        } catch (error) {
+            console.warn('[HeartbeatMemories] achievement library skipped', core_text.safeErrorDiagnostic(error));
+        }
+    }
+    if (wroteLibrary || result?.action === 'achievement-pending') {
+        auto_memory_gap.clearPendingAchievement(context?.chatMetadata, result?.snapshot?.modulePlan?.drawId);
+    }
+    if (wroteTitle || wroteLibrary) context.saveMetadataDebounced?.();
 }
 
 async function runModule(snapshot, persist, context) {
     const result = await auto_memory_host.runModulePlan(snapshot, persist, context, Date.now());
-    rememberTitle(context, result);
+    await rememberTitle(context, result);
     return result;
 }
 
@@ -31338,7 +31509,11 @@ function __init_generation_achievementCapture_js() {
 
 // 只有自动留忆的最后一步才武装。成就字段从正文 JSON 里拆走，不改各模块原来的校验。
 
-const SUFFIX = '\n若这是本轮最后一段，在原有 JSON 里额外给出 "achievement":{"title":"不超过20字","kind":"historical或collection"}。没有证据就用 collection。不要改动原有字段，不要解释。';
+const SUFFIX = `
+【本轮成就，和上面这份回忆写在同一次 JSON 里】
+不要另起一份回复，也不要改动原有字段。在原来的 JSON 对象上增加 "achievement"：
+{"title":"不超过20字","description":"一两句说明","unlockCondition":"做到或经历了什么才解锁","kind":"historical或collection","sourceMemoryAnchor":"从本轮档案锚点原样复制"}
+能被本轮真实档案证明的用 historical。推演、模拟、后日谈用 collection。不要解释。`;
 
 let armed = false;
 let packet = null;
@@ -40932,6 +41107,9 @@ function normalizeAchievements(data, memoryBank, { allowPartial = false, sourceM
             if (!sourceMemoryIds.length || !sourceMemoryAnchor) return null;
         }
         const tierRaw = core_text.normalizeText(item?.tier, 20).toLowerCase();
+        const kind = item?.kind === 'historical' || item?.kind === 'collection' ? item.kind : '';
+        const moduleId = core_text.normalizeText(item?.moduleId, 40);
+        const origin = item?.origin === 'auto' ? 'auto' : '';
         return {
             id: core_text.safeId(item?.id, `ACH${String(index + 1).padStart(2, '0')}`),
             title,
@@ -40944,6 +41122,9 @@ function normalizeAchievements(data, memoryBank, { allowPartial = false, sourceM
             sourceMemoryIds,
             sourceMemoryAnchor,
             hint: unlocked ? '' : (core_text.normalizeText(item?.hint, 500) || '继续积累新的重要回忆。'),
+            ...(kind ? { kind } : {}),
+            ...(moduleId ? { moduleId } : {}),
+            ...(origin ? { origin } : {}),
         };
     }).filter(item => item && (!sourceMemoryIds || (item.unlocked && core_incremental.usesIncrementalMemoryId(item.sourceMemoryIds, sourceMemoryIds))));
     if (!allowPartial && raw.length && !entries.length) throw new Error('成就库没有生成可用条目。');
@@ -41071,7 +41252,7 @@ function renderAchievements() {
     const cards = (items, lockedState) => items.map(item => `<article class="rmt-achievement-card ${lockedState ? 'locked' : 'unlocked'}">
       <div class="rmt-achievement-icon"><i class="fa-solid ${tierIcon(item.tier)}"></i></div>
       <div class="rmt-achievement-copy">
-        <div class="rmt-achievement-title"><b>${core_text.esc(item.title)}</b><span>${core_text.esc(item.category)}</span></div>
+        <div class="rmt-achievement-title"><b>${core_text.esc(item.title)}</b><span>${core_text.esc(item.category)}${item.origin === 'auto' ? ' · 自动' : ''}</span></div>
         <p>${core_text.esc(item.description)}</p>
         <small>${lockedState
             ? core_text.esc(item.hint)
@@ -76960,6 +77141,7 @@ __init_archive_requestBudget_js();
 __init_archive_sourceLedger_js();
 __init_archive_storyScenes_js();
 __init_archive_summaryPreference_js();
+__init_autoMemory_achievementLibrary_js();
 __init_autoMemory_achievementLookback_js();
 __init_autoMemory_combinedResult_js();
 __init_autoMemory_draw_js();

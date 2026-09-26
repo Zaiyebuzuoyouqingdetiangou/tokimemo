@@ -1,4 +1,4 @@
-// 只补未完成的步骤。成功一步就保存；最后一步才带成就。成就失败不重跑正文。
+// 只补未完成的步骤。成就和第一次请求写在一起；后面的步骤不再带成就。成就失败不重跑正文。
 import * as auto_memory_combined from './combinedResult.js';
 import * as auto_memory_plans from './modulePlans.js';
 import * as auto_memory_plan from './planStore.js';
@@ -38,10 +38,11 @@ export async function runPending(snapshot, io) {
     const pending = plan.steps.filter(item => item.status !== 'completed');
     if (!pending.length) return { action: 'complete', snapshot };
     const batch = auto_memory_plans.concurrentSteps(pending);
-    const lastPending = pending[pending.length - 1];
+    const firstRequest = !plan.steps.some(step => step.status === 'completed');
+    let captured = typeof io.heldAchievement === 'function' ? io.heldAchievement() : null;
     const outcomes = await Promise.all(batch.map(async step => {
         try {
-            const outcome = await io.execute({ step, plan, carryAchievement: step.id === lastPending.id && batch.length === 1 });
+            const outcome = await io.execute({ step, plan, carryAchievement: firstRequest && step.id === pending[0].id });
             return { step, outcome };
         } catch (error) {
             return { step, error };
@@ -63,8 +64,10 @@ export async function runPending(snapshot, io) {
         }
         if (row.outcome?.expand) expand = row.outcome.expand;
         if (row.outcome?.addRepair === true) addRepair = true;
+        if (firstRequest && row.outcome?.achievement) captured = row.outcome.achievement;
         nextPlan = markStep(nextPlan, row.step.id, 'completed', row.outcome?.recoverySlot || `${plan.moduleId}:${row.step.id}`);
     }
+    if (captured) await io.holdAchievement?.(captured);
     if (expand) {
         const expanded = auto_memory_plans.expandModulePlan(nextPlan, expand);
         if (!expanded) {
@@ -90,7 +93,7 @@ export async function runPending(snapshot, io) {
         snapshot: saved,
         moduleId: nextPlan.moduleId,
         moduleSaved: outcomes.every(row => !row.error && row.outcome?.saved !== false),
-        packet: outcomes.find(row => row.outcome?.achievement)?.outcome.achievement || null,
+        packet: captured,
         sourceMemoryIds: nextPlan.sourceMemoryIds,
         allowHistorical: moduleItem.contentKind === 'historical',
         now: io.now,
