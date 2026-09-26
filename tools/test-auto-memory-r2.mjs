@@ -105,10 +105,10 @@ test('a corrupt plan pauses the old scheduler and is not replaced', () => {
 
 test('an existing single or multi archive skips archive setup', () => {
     const single = wizard.wizardEntry({ archivePresent: true, cardType: 'single', apiReady: true });
-    assert.deepEqual(single, { skipArchive: true, step: 'modules', doArchive: false, cardType: 'single' });
+    assert.deepEqual(single, { skipArchive: true, step: 'sources', doArchive: false, cardType: 'single' });
     const multiple = wizard.wizardEntry({ archivePresent: true, cardType: 'multiple', apiReady: true });
     assert.equal(multiple.cardType, 'multiple');
-    assert.equal(multiple.step, 'modules');
+    assert.equal(multiple.step, 'sources');
     const unknown = wizard.wizardEntry({ archivePresent: true, cardType: '', apiReady: true });
     assert.equal(unknown.skipArchive, false);
     assert.equal(unknown.step, 'api');

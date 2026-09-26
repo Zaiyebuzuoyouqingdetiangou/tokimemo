@@ -36,7 +36,10 @@ function metadataFrom(value) {
 }
 
 test('api check names the next action and interval stays an integer', () => {
-    assert.deepEqual(wizard.WIZARD_STEPS, ['api', 'card', 'people', 'sources', 'modules', 'interval', 'archive', 'first', 'run']);
+    assert.deepEqual(wizard.WIZARD_STEPS, ['api', 'card', 'people', 'sources', 'image', 'archive', 'modules', 'offer', 'autoModules', 'interval', 'run']);
+    assert.deepEqual(wizard.wizardVisibleSteps({ archivePresent: true, wantAuto: false }), ['api', 'card', 'people', 'sources', 'image', 'modules', 'offer']);
+    assert.equal(wizard.wizardVisibleSteps({ archivePresent: false, wantAuto: true }).includes('autoModules'), true);
+    assert.equal(wizard.wizardVisibleSteps({ archivePresent: false, wantAuto: false }).includes('run'), false);
     assert.equal(wizard.inspectAutoMemoryApi({ mode: 'manual', manualReady: true }).ready, true);
     const manual = wizard.inspectAutoMemoryApi({ mode: 'manual', manualReady: false, manualMessage: '请填写手动 API 的模型 ID。' });
     assert.equal(manual.ready, false);

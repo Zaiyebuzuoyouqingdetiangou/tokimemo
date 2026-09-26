@@ -12,6 +12,7 @@ import * as core_context from '../core/context.js';
 import * as core_independentApi from '../core/independentApi.js';
 import * as core_settings from '../core/settings.js';
 import * as core_text from '../core/text.js';
+import * as generation_imageGeneration from '../generation/imageGeneration.js';
 import * as settings_parts from './settingsPanelParts.js';
 import * as home_view from './homeView.js';
 import * as ui_overlay from './overlay.js';
@@ -23,6 +24,7 @@ let draft = null;
 let step = 0;
 let scope = '';
 let showingSummary = false;
+let guideDone = false;
 let roster = null;
 let rosterRevision = '';
 let apiEditor = '';
@@ -94,13 +96,25 @@ function stepReady(context) {
     return true;
 }
 
-function moduleHtml() {
+function requestLine(item) {
+    return `单次回忆调用 API：${item.requestPlain}`;
+}
+
+function moduleIntro(item) {
+    return `<b>${core_text.esc(item.title)}</b><span>${core_text.esc(item.audience)}</span><small>${core_text.esc(requestLine(item))}</small>`;
+}
+
+function moduleHtml({ autoPick = false } = {}) {
     const rows = cards().filter(item => item.inDrawPool && item.autoEligible);
     const notes = cards().filter(item => !(item.inDrawPool && item.autoEligible));
     const allOn = rows.length > 0 && rows.every(item => wizard_plan.moduleSelected(draft, item.id));
-    const picks = rows.map(item => `<label class="rmt-auto-pick"><input type="checkbox" data-rmt-auto-memory-prefer="${core_text.esc(item.id)}" ${wizard_plan.moduleSelected(draft, item.id) ? 'checked' : ''}><span><b>${core_text.esc(item.title)}</b><span>${core_text.esc(item.audience)}</span><small>生成次数：${core_text.esc(item.requestPlain)}</small></span></label>`).join('');
-    const note = notes.map(item => `<article class="rmt-auto-note"><b>${core_text.esc(item.title)}</b><p>${core_text.esc(item.audience)}</p><small>${core_text.esc(item.requestPlain)}</small></article>`).join('');
-    return `<label class="rmt-auto-all"><input type="checkbox" data-rmt-auto-memory-all ${allOn ? 'checked' : ''}><span>全选</span></label><p class="rmt-auto-lead">勾上的内容，到了间隔会从里面抽一份生成。取消勾选的，以后不会抽到。</p><div class="rmt-auto-picks">${picks}</div>${note}`;
+    const picks = rows.map(item => autoPick
+        ? `<label class="rmt-auto-pick"><input type="checkbox" data-rmt-auto-memory-prefer="${core_text.esc(item.id)}" ${wizard_plan.moduleSelected(draft, item.id) ? 'checked' : ''}><span>${moduleIntro(item)}</span></label>`
+        : `<article class="rmt-auto-note">${moduleIntro(item)}</article>`).join('');
+    const note = notes.map(item => `<article class="rmt-auto-note">${moduleIntro(item)}</article>`).join('');
+    const selectAll = autoPick ? `<label class="rmt-auto-all"><input type="checkbox" data-rmt-auto-memory-all ${allOn ? 'checked' : ''}><span>全选自动生成</span></label><p class="rmt-auto-lead">勾上的，到了间隔会从里面抽一份自动生成。取消勾选的，以后不会抽到。下面的次数是生成这一份回忆要调用 API 的次数。</p>` : '';
+    const first = autoPick ? '' : `<h3>这次要不要先生成</h3><p>可勾可不勾。勾上的会在向导结束时放进任务中心。不勾就留着，以后你自己打开页面再生成。次数同样是单次回忆调用 API 的次数。</p><div class="rmt-auto-picks">${rows.filter(item => item.queueable).map(item => `<label class="rmt-auto-pick"><input type="checkbox" data-rmt-auto-memory-first="${core_text.esc(item.id)}" ${draft.firstModuleIds.includes(item.id) ? 'checked' : ''}><span><b>${core_text.esc(item.title)}</b><small>${core_text.esc(requestLine(item))}</small></span></label>`).join('')}</div>`;
+    return `${selectAll}<div class="rmt-auto-picks">${picks}</div>${note}${first}`;
 }
 
 function apiEditorMode() {
@@ -163,23 +177,40 @@ function pageHtml(context) {
     if (name === 'people') return `<h2>人物名单</h2>${draft.cardType === 'single' ? '<p>单人卡沿用原来的建档方式，不用另选名单。</p>' : `<p>从世界书的人设条目里选，和原来的人物选择一样。确认名单不请求模型。</p><p>${draft.participantConfirmed ? `已选 ${draft.participantIds.length} 人。` : '请先确认名单。'}</p><button type="button" class="rmt-btn" data-rmt-auto-memory-people>选择人物</button>`}`;
     if (name === 'sources') {
         const scan = sourceScan(context);
+        const range = core_chatReadRange.normalizeChatReadRange(core_settings.getPluginSettings(context));
         const names = scan.sources.length ? scan.sources.map(item => core_text.esc(item.label)).join('、') : '没有检测到外部来源';
-        return `<h2>聊天读取范围与外部来源</h2><p>${core_text.esc(scan.preview.label)}</p><p>约 ${scan.preview.characters.toLocaleString()} 个聊天字符。外部来源：${names}。${scan.externalOn ? '' : '外部记忆开关是关的。'}</p><p>这一步只在本地计数，不会请求模型。</p>`;
+        return `<h2>聊天读取范围</h2><p>这里决定建档和以后生成会读哪一段聊天。改完只在本地计数，不会请求，也不会删掉已有档案。</p><label class="rmt-auto-field"><span>读取方式</span><select data-rmt-read-mode><option value="recent" ${range.mode === 'recent' ? 'selected' : ''}>最近若干楼</option><option value="range" ${range.mode === 'range' ? 'selected' : ''}>指定楼号范围</option><option value="all" ${range.mode === 'all' ? 'selected' : ''}>当前聊天全部楼层</option></select></label><label class="rmt-auto-field" data-rmt-read-recent-row ${range.mode === 'recent' ? '' : 'hidden'}><span>最近多少楼</span><input type="number" min="1" step="1" data-rmt-read-recent value="${core_text.esc(range.recent)}"></label><div data-rmt-read-range-row ${range.mode === 'range' ? '' : 'hidden'}><label class="rmt-auto-field"><span>从第几楼</span><input type="number" min="1" step="1" data-rmt-read-start value="${core_text.esc(range.start)}"></label><label class="rmt-auto-field"><span>到第几楼</span><input type="number" min="1" step="1" data-rmt-read-end value="${core_text.esc(range.end)}"></label></div><label class="rmt-settings-check"><input type="checkbox" data-rmt-read-hidden ${range.includeHidden ? 'checked' : ''}><span>包含范围内被隐藏的普通聊天楼层</span></label><p>${core_text.esc(scan.preview.label)}</p><p>约 ${scan.preview.characters.toLocaleString()} 个聊天字符。外部来源：${names}。${scan.externalOn ? '' : '外部记忆开关是关的。'}</p>`;
     }
-    if (name === 'modules') return `<h2>这次会生成什么</h2><p>每一项写的是会留下什么，以及大约要请求几次。每生成一份回忆，都会带上对应的成就。</p>${moduleHtml()}`;
+    if (name === 'image') {
+        let state = { available: false, reason: '柏宝绘还没接上。' };
+        try { state = generation_imageGeneration.imageGenerationUiState(); } catch { state = { available: false, reason: '柏宝绘还没接上。' }; }
+        const line = state.available
+            ? '柏宝绘已经接上。这里不会出图，仍要在相簿、ADV 或日常一格里点绘制。'
+            : `${state.reason || '柏宝绘还没接上。'} 可以先跳过，以后在设置里再开。生图走柏宝绘，和上面的文字 API 不是同一个连接。`;
+        return `<h2>生图可以先不配</h2><p>${core_text.esc(line)}</p><p>跳过不会出图，也不挡住后面的回忆。</p><button type="button" class="rmt-btn" data-rmt-auto-memory-goto="api">回到文字 API</button>`;
+    }
+    if (name === 'modules') return `<h2>这些是可以留下的回忆</h2><p>每一项是一份回忆。次数写的是生成这一份要调用 API 几次，不是会自动生成多少回。每生成一份，都会带上对应的成就。</p>${moduleHtml()}`;
+    if (name === 'offer') {
+        const ending = shouldSkipArchive(context) ? '当前聊天已经有档案，结束时不会重新建档。' : '结束时会按前面的选择开始建档。';
+        return `<h2>要不要打开自动留忆？</h2><p>不开的话，向导到这里结束。你可以自己打开各个页面手动生成。以后在设置里也能打开或关闭自动留忆。</p><p>${ending}你在上面勾过「这次就生成」的，会放进任务中心。</p><button type="button" class="rmt-btn" data-rmt-auto-memory-offer="no">先不用，我自己生成</button><button type="button" class="rmt-btn" data-rmt-auto-memory-offer="yes">打开自动留忆</button>`;
+    }
+    if (name === 'autoModules') return `<h2>哪些要自动生成</h2><p>再看一遍每份回忆是什么，以及单次要调用几次 API。勾上的才会进入自动生成。成就仍然跟着每份回忆，不用单独勾。</p>${moduleHtml({ autoPick: true })}`;
     if (name === 'interval') return `<h2>自动间隔</h2><p>默认 5 楼，只能填 1 到 1000 的整数。到了这个间隔会检查有没有新记忆。还没有可抽的模块时，不会为模块发请求。</p><label>每 <input type="number" min="1" max="1000" step="1" data-rmt-auto-memory-interval value="${draft.intervalFloors}"> 楼</label><p data-rmt-auto-memory-interval-error role="alert"></p>`;
     if (name === 'archive') return `<h2>建档预计</h2>${previewHtml(context)}<label class="rmt-settings-check"><input type="checkbox" data-rmt-auto-memory-archive ${draft.doArchive ? 'checked' : ''}><span>这次整理档案</span></label>`;
-    if (name === 'first') {
-        const choices = cards().filter(item => item.queueable).map(item => `<label class="rmt-auto-pick"><input type="checkbox" data-rmt-auto-memory-first="${core_text.esc(item.id)}" ${draft.firstModuleIds.includes(item.id) ? 'checked' : ''} ${draft.skipFirst || draft.archiveOnly ? 'disabled' : ''}><span><b>${core_text.esc(item.title)}</b><small>生成次数：${core_text.esc(item.requestPlain)}</small></span></label>`).join('');
-        const archiveOnly = archivePresentNow(context) ? '' : `<label class="rmt-settings-check"><input type="checkbox" data-rmt-auto-memory-archive-only ${draft.archiveOnly ? 'checked' : ''}><span>只建档</span></label>`;
-        return `<h2>首次生成</h2><p>可以跳过，也可以多选后放进现有任务中心。一项失败不会撤销其他项。深层页面仍从自己的页面手动生成。</p><label class="rmt-settings-check"><input type="checkbox" data-rmt-auto-memory-skip ${draft.skipFirst ? 'checked' : ''}><span>跳过全部首次生成</span></label>${archiveOnly}<div class="rmt-auto-picks">${choices}</div>`;
-    }
     const archiveNote = shouldSkipArchive(context) ? '保存成功后才会排队。这次不建档。' : '保存成功后才会建档或排队。';
-    return `<h2>确认后在后台执行</h2>${previewHtml(context)}<p>${archiveNote}关闭这个窗口不会取消已经开始的任务，聊天输入也不会被锁住。</p><button type="button" class="rmt-btn" data-rmt-auto-memory-save>保存并开始</button>`;
+    return `<h2>确认后在后台执行</h2>${previewHtml(context)}<p>${archiveNote}关闭这个窗口不会取消已经开始的任务，聊天输入也不会被锁住。自动留忆以后可以在设置里关闭。</p><button type="button" class="rmt-btn" data-rmt-auto-memory-save>保存并开始</button>`;
 }
 
 function visibleWizardSteps(context) {
-    return wizard_plan.WIZARD_STEPS.filter(name => !(name === 'archive' && shouldSkipArchive(context)));
+    return wizard_plan.wizardVisibleSteps({
+        archivePresent: archivePresentNow(context),
+        cardChoiceDirty: draft?.cardChoiceDirty === true,
+        wantAuto: draft?.wantAuto === true,
+    });
+}
+
+function stepHidden(name, context) {
+    return !visibleWizardSteps(context).includes(name);
 }
 
 function moveWizardStep(delta, context) {
@@ -188,8 +219,8 @@ function moveWizardStep(delta, context) {
     do {
         next += delta;
         if (next < 0 || next >= steps.length) return;
-    } while (steps[next] === 'archive' && shouldSkipArchive(context));
-    if (steps[next] !== 'archive') draft.doArchive = shouldSkipArchive(context) ? false : draft.doArchive;
+    } while (stepHidden(steps[next], context));
+    if (shouldSkipArchive(context)) draft.doArchive = false;
     step = next;
 }
 
@@ -201,16 +232,22 @@ function render(context) {
     const body = ui_overlay.bodyEl();
     if (!body) return false;
     ui_overlay.openOverlay();
-    ui_overlay.topTitle('心迹回廊 · 自动留忆');
+    const charName = core_text.normalizeText(context?.name2, 40) || '这个角色';
+    const onAuto = ['autoModules', 'interval', 'run'].includes(wizard_plan.WIZARD_STEPS[step]) || showingSummary;
+    ui_overlay.topTitle(onAuto ? '心迹回廊 · 自动留忆' : `开始你和${charName}的回忆`);
     ui_overlay.setBackVisible(false);
     ui_overlay.setRegenerateVisible(false);
     ui_overlay.setManageVisible(false);
     const resume = showingSummary ? wizard_plan.wizardResumeView(auto_memory_plan.readAutoMemoryMetadata(context.chatMetadata), archive_repository.getCurrentArchiveImportRecoverySummary(context)) : { completed: false };
     const shownSteps = visibleWizardSteps(context);
     const shownIndex = Math.max(0, shownSteps.indexOf(wizard_plan.WIZARD_STEPS[step]));
-    const inner = resume.completed
-        ? `<h2>向导已经保存</h2><p>间隔 ${resume.intervalFloors} 楼。会自动生成 ${cards().filter(item => item.autoEligible && item.inDrawPool && !resume.excludedModuleIds.includes(item.id)).length} 项，已排除 ${resume.excludedModuleIds.length} 项。每份回忆都会带上成就。</p><p>${resume.archiveStillRunning ? '建档还在原来的整理流程里，可以关闭窗口继续聊天。' : '刷新后这份设置还在。任务中心的队列不会在刷新后自动重发。'}</p><p>到了间隔会检查新记忆。这一段聊天会暂停原来的按模块自动更新；设置里可以恢复那些开关。</p><button type="button" class="rmt-btn" data-rmt-auto-memory-edit>重新设置</button>`
-        : `${pageHtml(context)}<p><button type="button" class="rmt-btn" data-rmt-auto-memory-prev ${step === 0 ? 'disabled' : ''}>上一步</button><button type="button" class="rmt-btn" data-rmt-auto-memory-next ${step >= wizard_plan.WIZARD_STEPS.length - 1 ? 'disabled' : ''}>下一步</button></p>`;
+    const atOffer = wizard_plan.WIZARD_STEPS[step] === 'offer';
+    const atEnd = shownSteps[shownSteps.length - 1] === wizard_plan.WIZARD_STEPS[step];
+    const inner = guideDone
+        ? `<h2>可以开始了</h2><p>自动留忆没有打开。你可以自己打开各个页面手动生成。以后在设置里也能打开或关闭自动留忆。</p><p>关闭这个窗口不会取消已经开始的建档或排队。</p>`
+        : resume.completed
+        ? `<h2>自动留忆已经打开</h2><p>间隔 ${resume.intervalFloors} 楼。会自动生成 ${cards().filter(item => item.autoEligible && item.inDrawPool && !resume.excludedModuleIds.includes(item.id)).length} 项，已排除 ${resume.excludedModuleIds.length} 项。每份回忆都会带上成就。</p><p>${resume.archiveStillRunning ? '建档还在原来的整理流程里，可以关闭窗口继续聊天。' : '刷新后这份设置还在。任务中心的队列不会在刷新后自动重发。'}</p><p>设置里可以关闭自动留忆。关闭后仍能手动生成。</p><button type="button" class="rmt-btn" data-rmt-auto-memory-edit>重新设置</button>`
+        : `${pageHtml(context)}<p><button type="button" class="rmt-btn" data-rmt-auto-memory-prev ${step === 0 ? 'disabled' : ''}>上一步</button>${atOffer ? '' : `<button type="button" class="rmt-btn" data-rmt-auto-memory-next ${atEnd ? 'disabled' : ''}>下一步</button>`}</p>`;
     body.innerHTML = `<main class="rmt-home" data-rmt-auto-memory-root><p>第 ${showingSummary ? shownSteps.length : shownIndex + 1} / ${shownSteps.length} 步</p>${inner}<p><button type="button" class="rmt-btn" data-rmt-auto-memory-home>返回设置</button><button type="button" class="rmt-btn" data-rmt-auto-memory-close>关闭窗口，任务继续</button></p><p data-rmt-auto-memory-status role="status"></p></main>`;
     if (body.dataset.rmtAutoMemoryBound !== '1') {
         body.dataset.rmtAutoMemoryBound = '1';
@@ -281,9 +318,13 @@ function sameChat(context) {
     catch { return false; }
 }
 
-async function saveAndStart(context) {
-    if (!sameChat(context) || !apiReport().ready || !wizard_plan.normalizeInterval(draft.intervalFloors).ok) {
+async function saveAndStart(context, { enableAuto = false } = {}) {
+    if (!sameChat(context) || !apiReport().ready || (enableAuto && !wizard_plan.normalizeInterval(draft.intervalFloors).ok)) {
         status('设置还没通过，没有开始建档或排队。');
+        return;
+    }
+    if (!enableAuto) {
+        await startChosenWork(context, { enableAuto: false });
         return;
     }
     const metadata = context.chatMetadata;
@@ -321,6 +362,10 @@ async function saveAndStart(context) {
         const recoveryExpected = recovery ? recovery.revision : 0;
         if (snapshot.plan.revision === recoveryExpected + 1) await auto_memory_plan.writeAutoMemoryRecovery(chatId, snapshot, recoveryExpected);
     } catch { status('聊天里的设置已保存。本机备份没有写上，没有用备份覆盖它。'); }
+    await startChosenWork(context, { enableAuto: true });
+}
+
+async function startChosenWork(context, { enableAuto = false } = {}) {
     let archiveStarted = false;
     let archiveNote = '';
     const cardDirty = draft.cardChoiceDirty === true;
@@ -367,10 +412,12 @@ async function saveAndStart(context) {
     } else if (asked === 'ask' && !archiveNote) archiveNote = '继续使用旧档案，这次没有重新建档。';
     const routes = wizard_plan.firstQueueRoutes(draft, queueableIds());
     const queued = routes.length && (archiveStarted || !draft.doArchive) ? ui_taskCenter.enqueueSelectedModes(routes) : 0;
-    showingSummary = true;
-    core_autoUpdates.notifyAutoUpdateSettingsChanged();
+    guideDone = enableAuto !== true;
+    showingSummary = enableAuto === true;
+    if (enableAuto) core_autoUpdates.notifyAutoUpdateSettingsChanged();
     if (sameChat(context)) render(context);
-    status(archiveNote || (queued ? `已把 ${queued} 项放进任务中心。关闭窗口后任务继续，聊天可以照常发送。` : '设置已保存。关闭窗口不会取消正在进行的整理。'));
+    const idle = enableAuto ? '自动留忆已打开。关闭窗口不会取消正在进行的整理。' : '向导结束了。自动留忆没有打开，你可以自己手动生成。';
+    status(archiveNote || (queued ? `已把 ${queued} 项放进任务中心。关闭窗口后任务继续，聊天可以照常发送。` : idle));
 }
 
 function syncSelectAll(root) {
@@ -380,8 +427,24 @@ function syncSelectAll(root) {
     all.checked = ids.length > 0 && ids.every(id => wizard_plan.moduleSelected(draft, id));
 }
 
+function writeReadRange(root) {
+    const mode = root?.querySelector?.('[data-rmt-read-mode]');
+    if (!mode) return;
+    core_settings.updatePluginSettings({ chatReadRange: core_chatReadRange.normalizeChatReadRange({
+        mode: mode.value,
+        recent: Number(root.querySelector('[data-rmt-read-recent]')?.value),
+        start: Number(root.querySelector('[data-rmt-read-start]')?.value),
+        end: Number(root.querySelector('[data-rmt-read-end]')?.value),
+        includeHidden: root.querySelector('[data-rmt-read-hidden]')?.checked === true,
+    }) });
+}
+
 function onManualInput(event) {
     const root = event.target.closest?.('[data-rmt-auto-memory-root]');
+    if (root && event.target.matches?.('[data-rmt-read-recent],[data-rmt-read-start],[data-rmt-read-end]')) {
+        writeReadRange(root);
+        return;
+    }
     if (!root || !event.target.matches?.('[data-rmt-manual-api-base],[data-rmt-manual-api-key],[data-rmt-manual-api-model]')) return;
     clearTimeout(manualSaveTimer);
     manualSaveTimer = setTimeout(() => { void settings_parts.saveManualPanel(root); }, 500);
@@ -448,6 +511,13 @@ async function refreshWizardManualModels(root, context) {
 function onChange(event) {
     const root = event.target.closest?.('[data-rmt-auto-memory-root]');
     if (!root || !draft) return;
+    if (event.target.matches?.('[data-rmt-read-mode], [data-rmt-read-recent], [data-rmt-read-start], [data-rmt-read-end], [data-rmt-read-hidden]')) {
+        writeReadRange(root);
+        let context;
+        try { context = liveContext(); } catch { return; }
+        if (sameChat(context)) render(context);
+        return;
+    }
     if (event.target.matches?.('[data-rmt-auto-memory-all]')) {
         draft = wizard_plan.preferenceSelectAll(draft, event.target.checked === true);
         for (const input of root.querySelectorAll('[data-rmt-auto-memory-prefer]')) input.checked = event.target.checked === true;
@@ -526,7 +596,28 @@ function onClick(event) {
     }
     if (event.target.closest?.('[data-rmt-auto-memory-edit]')) {
         showingSummary = false;
-        step = wizard_plan.WIZARD_STEPS.indexOf(currentEntry(context).step);
+        guideDone = false;
+        draft.wantAuto = null;
+        step = wizard_plan.WIZARD_STEPS.indexOf(currentEntry(context).entry.step);
+        render(context);
+        return;
+    }
+    const offer = event.target.closest?.('[data-rmt-auto-memory-offer]')?.dataset?.rmtAutoMemoryOffer;
+    if (offer === 'yes') {
+        draft.wantAuto = true;
+        guideDone = false;
+        step = wizard_plan.WIZARD_STEPS.indexOf('autoModules');
+        render(context);
+        return;
+    }
+    if (offer === 'no') {
+        draft.wantAuto = false;
+        void saveAndStart(context, { enableAuto: false });
+        return;
+    }
+    const goto = event.target.closest?.('[data-rmt-auto-memory-goto]')?.dataset?.rmtAutoMemoryGoto;
+    if (goto && wizard_plan.WIZARD_STEPS.includes(goto)) {
+        step = wizard_plan.WIZARD_STEPS.indexOf(goto);
         render(context);
         return;
     }
@@ -577,7 +668,7 @@ function onClick(event) {
     }
     if (event.target.closest?.('[data-rmt-auto-api-manual-refresh]')) { void refreshWizardManualModels(root, context); return; }
     if (event.target.closest?.('[data-rmt-auto-api-model-refresh]')) { void refreshWizardProfileModels(context); return; }
-    if (event.target.closest?.('[data-rmt-auto-memory-save]')) void saveAndStart(context);
+    if (event.target.closest?.('[data-rmt-auto-memory-save]')) void saveAndStart(context, { enableAuto: true });
 }
 
 export function openAutoMemoryWizard() {
@@ -598,6 +689,7 @@ export function openAutoMemoryWizard() {
         }
         draft = seedDraft(existing);
         showingSummary = !!existing?.plan?.enabled;
+        guideDone = false;
         roster = null;
         rosterRevision = '';
         apiEditor = '';

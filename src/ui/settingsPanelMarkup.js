@@ -120,10 +120,10 @@ export function renderSettingsPanelMarkup(panel) {
           <div class="rmt-settings-section-body">
           <p>只在已有档案的当前窗口运行。每条聊天消息算一楼，编辑不加楼；开启后从当前楼数起计。</p>
           <p>“档案同步”收录新聊天；其他模块使用已归档记忆，不改旧内容。会调用独立 API。</p>
-          <button type="button" class="menu_button rmt-settings-wide" data-rmt-auto-memory-wizard>打开自动留忆向导</button>
-          <small>已有档案时，向导会跳过建档，直接选择想自动跑的条目，并显示当前是单人卡还是一张卡内多人。改人物后会问要不要重新建档。保存后这一段聊天会暂停下面的按模块开关。到了间隔会检查新记忆；还没有可抽的模块时，不会为模块发请求。</small>
+          <button type="button" class="menu_button rmt-settings-wide" data-rmt-auto-memory-wizard>打开回忆向导</button>
+          <small>向导先接 API、读取范围和档案。生图可以跳过。结束后再问要不要自动留忆。不要的话就能自己手动生成。已有档案时不会重新建档。打开自动留忆后，下面的按模块开关会暂停。</small>
           <p data-rmt-auto-memory-gate role="status"></p>
-          <button type="button" class="menu_button rmt-settings-wide" data-rmt-auto-memory-restore hidden>恢复原来的按模块自动更新</button>
+          <button type="button" class="menu_button rmt-settings-wide" data-rmt-auto-memory-restore hidden>关闭自动留忆</button>
           <div class="rmt-auto-rules">${core_autoUpdatePolicy.AUTO_UPDATE_MODES.map(mode => `<div class="rmt-auto-rule"><label><input type="checkbox" data-rmt-auto-enabled="${mode}"> ${core_text.esc(mode === 'archive' ? '档案同步' : core_constants.MODE_LABEL[mode])}</label><label>每 <input type="number" min="1" max="1000" step="1" data-rmt-auto-every="${mode}" aria-label="${core_text.esc(mode === 'archive' ? '档案同步' : core_constants.MODE_LABEL[mode])}间隔楼层"> 楼</label><small data-rmt-auto-status="${mode}" role="status"></small></div>`).join('')}</div>
           <small data-rmt-auto-warning role="status"></small>
           <small>失败后不连续重试，等待下一个间隔；可随时手动生成。不支持跨页任务锁的浏览器仅保留手动操作。</small>

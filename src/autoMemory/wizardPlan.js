@@ -3,7 +3,8 @@ import * as core_constants from '../core/constants.js';
 import * as auto_memory_registry from './moduleRegistry.js';
 import * as auto_memory_plan from './planStore.js';
 
-export const WIZARD_STEPS = Object.freeze(['api', 'card', 'people', 'sources', 'modules', 'interval', 'archive', 'first', 'run']);
+export const WIZARD_STEPS = Object.freeze(['api', 'card', 'people', 'sources', 'image', 'archive', 'modules', 'offer', 'autoModules', 'interval', 'run']);
+const WIZARD_AUTO_STEPS = Object.freeze(['autoModules', 'interval', 'run']);
 
 function count(value) {
     const number = Math.floor(Number(value));
@@ -81,6 +82,7 @@ export function createWizardDraft(plan = null) {
         skipFirst: false,
         archiveOnly: false,
         cardChoiceDirty: false,
+        wantAuto: null,
         firstModuleIds: [],
     };
 }
@@ -134,7 +136,7 @@ export function splitRequestPreview(estimate, routes) {
         externalRequests: estimate?.externalRequests || 0,
         checkpoints: estimate?.checkpoints || 0,
         moduleCount: selected.length,
-        moduleEstimates: selected.map(item => ({ id: item.id, title: item.title, estimate: item.normalRequestEstimate })),
+        moduleEstimates: selected.map(item => ({ id: item.id, title: item.title, estimate: item.requestPlain })),
     };
 }
 
@@ -159,7 +161,7 @@ export function wizardEntry({ archivePresent = false, cardType = '', apiReady = 
     const skipArchive = archivePresent === true && known;
     return {
         skipArchive,
-        step: skipArchive && apiReady === true ? 'modules' : 'api',
+        step: skipArchive && apiReady === true ? 'sources' : 'api',
         doArchive: !skipArchive,
         cardType: known ? cardType : '',
     };
@@ -168,6 +170,15 @@ export function wizardEntry({ archivePresent = false, cardType = '', apiReady = 
 // 已有正式档案时，向导不再走建档，也不为建档发请求。人物改过才另问要不要重建。
 export function wizardSkipsArchiveStep({ archivePresent = false, cardChoiceDirty = false } = {}) {
     return archivePresent === true && cardChoiceDirty !== true;
+}
+
+// 自动留忆那几步只有用户点了「打开」才出现。不要则向导在发问处结束。
+export function wizardVisibleSteps({ archivePresent = false, cardChoiceDirty = false, wantAuto = false } = {}) {
+    return WIZARD_STEPS.filter(name => {
+        if (name === 'archive' && wizardSkipsArchiveStep({ archivePresent, cardChoiceDirty })) return false;
+        if (WIZARD_AUTO_STEPS.includes(name) && wantAuto !== true) return false;
+        return true;
+    });
 }
 
 // 改过人物且已有档案时先问。同意才重建；不同意就留着旧档案。
