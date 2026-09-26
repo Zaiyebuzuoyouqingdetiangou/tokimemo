@@ -86,7 +86,7 @@ function trimQueue() {
 
 export function noteRetryableGeneration(info) {
     const settings = core_settings.getPluginSettings();
-    if (settings.autoRetryEnabled !== true) return;
+    if (settings.autoRetryEnabled !== true && info?.autoMemory !== true) return;
     const mode = info?.mode;
     const draftId = info?.draftId || '';
     const pageId = info?.pageId || mode;

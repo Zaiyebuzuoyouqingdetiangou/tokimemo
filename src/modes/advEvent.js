@@ -407,7 +407,7 @@ export async function generateAdvIndexWithRepair(context, memoryBank, origin, ex
     core_incremental.stampIncrementalCoverage(merged, previous, memoryBank, 'mode', sourceMemoryIds, added);
     if (revisit) merged.generationMeta.expansionRound = (Number(previous?.generationMeta?.expansionRound) || 0) + 1;
     if (merged.events?.some(event => !event.adv?.paragraphs?.length)) {
-        if (core_settings.getPluginSettings().autoSecondPass === true) {
+        if (options.secondStep === true || core_settings.getPluginSettings().autoSecondPass === true) {
             const task = core_requestCoordinator.logicalGenerationTaskForOrigin(origin);
             if (task) task.autoAdvScripts = true;
         } else {

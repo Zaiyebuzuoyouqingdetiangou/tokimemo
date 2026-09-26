@@ -469,7 +469,7 @@ async function generateModeOperation(mode, options = {}) {
         } else if (mode === core_constants.MODE.PAST_LIVES) {
             session = await modes_pastLives.generatePastLivesWithRepair(context, memoryBank, origin, taskKey, { previousSession, replaceExisting, presentationContext, secondStep: options.secondStep === true });
         } else if (mode === core_constants.MODE.ADV) {
-            session = await modes_advEvent.generateAdvIndexWithRepair(context, memoryBank, origin, expectedChatId, taskKey, { replaceExisting });
+            session = await modes_advEvent.generateAdvIndexWithRepair(context, memoryBank, origin, expectedChatId, taskKey, { replaceExisting, secondStep: options.secondStep === true });
         } else if (mode === core_constants.MODE.BUTTERFLY && options.fillButterflyText && previousSession) {
             session = await modes_butterfly.fillButterflyProse(context, memoryBank, origin, taskKey, previousSession);
         } else if (mode === core_constants.MODE.BUTTERFLY) {
@@ -713,6 +713,7 @@ async function generateModeOperation(mode, options = {}) {
                         draftId: recoveryHandle.journal.draftId || '',
                         pageId: recoveryHandle.journal.pageId || mode,
                         label: core_constants.MODE_LABEL[mode] || mode,
+                        autoMemory: options.autoMemory === true,
                     });
                 }
             } catch { /* A missed auto-retry leaves the manual button in the task center. */ }

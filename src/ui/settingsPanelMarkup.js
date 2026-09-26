@@ -120,6 +120,9 @@ export function renderSettingsPanelMarkup(panel) {
           <div class="rmt-settings-section-body">
           <p>只在已有档案的当前窗口运行。每条聊天消息算一楼，编辑不加楼；开启后从当前楼数起计。</p>
           <p>“档案同步”收录新聊天；其他模块使用已归档记忆，不改旧内容。会调用独立 API。</p>
+          <p>打开自动留忆后，需要两次才完整的模块会自动做第二次生成。两次合在一起才是一份完整回忆。手动生成仍看连接设置里的开关。</p>
+          <label class="rmt-settings-field"><span>失败后重试次数</span><input class="text_pole" data-rmt-auto-memory-retry-count type="number" min="1" max="5" step="1" value="${core_settings.getPluginSettings().autoRetryCount}" aria-label="失败后重试次数"></label>
+          <small>这一份没写完时，自动再试这么多次。范围是 1 到 5。</small>
           <button type="button" class="menu_button rmt-settings-wide" data-rmt-auto-memory-wizard>打开回忆向导</button>
           <small>向导先接 API、读取范围和档案。生图可以跳过。结束后再问要不要自动留忆。不要的话就能自己手动生成。已有档案时不会重新建档。打开自动留忆后，下面的按模块开关会暂停。</small>
           <p data-rmt-auto-memory-gate role="status"></p>

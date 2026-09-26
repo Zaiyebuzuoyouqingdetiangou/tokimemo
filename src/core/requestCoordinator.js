@@ -1139,6 +1139,7 @@ export function noteRetryableGeneration(item) {
     if (typeof autoRetryHandler === 'function') autoRetryHandler(item);
     else if (pendingAutoRetries.length < 8) pendingAutoRetries.push({
         mode: item.mode, draftId: item.draftId, pageId: item.pageId || item.mode, label: item.label || item.mode,
+        autoMemory: item.autoMemory === true,
     });
 }
 

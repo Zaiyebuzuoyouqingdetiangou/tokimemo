@@ -1,15 +1,15 @@
 {
   "display_name": "心迹回廊",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.99.43-r84.95-memory-guide",
+  "js": "index.js?heartbeat=0.99.44-r84.96-memory-second",
   "author": "Toto",
-  "version": "0.99.43",
+  "version": "0.99.44",
   "auto_update": true,
   "minimum_client_version": "1.13.0",
   "hooks": {
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r84.95：回忆向导先走共通设置。结束时再问要不要自动留忆。模块介绍写的是单次回忆要调用几次 API。",
+  "description": "r84.96：一份回忆最多调用 2 次 API。自动留忆会把第二次生成一起做完。设置里可以改失败后的重试次数。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }

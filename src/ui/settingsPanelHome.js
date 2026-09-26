@@ -292,9 +292,15 @@ export function mountSettings({ homeTarget = null } = {}) {
             if (count) count.disabled = !target.checked;
             return;
         }
-        if (target.matches?.('[data-rmt-auto-retry-count]')) {
-            core_settings.updatePluginSettings({ autoRetryCount: target.value });
-            target.value = String(core_settings.getPluginSettings().autoRetryCount);
+        if (target.matches?.('[data-rmt-auto-retry-count], [data-rmt-auto-memory-retry-count]')) {
+            core_settings.updatePluginSettings({ autoRetryCount: target.value, autoRetryEnabled: true });
+            const count = String(core_settings.getPluginSettings().autoRetryCount);
+            for (const input of panel.querySelectorAll('[data-rmt-auto-retry-count], [data-rmt-auto-memory-retry-count]')) {
+                input.value = count;
+                input.disabled = false;
+            }
+            const retry = panel.querySelector('[data-rmt-auto-retry]');
+            if (retry) retry.checked = true;
             return;
         }
         if (target.matches?.('[data-rmt-read-mode], [data-rmt-read-recent], [data-rmt-read-start], [data-rmt-read-end], [data-rmt-read-hidden]')) {

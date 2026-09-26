@@ -51,9 +51,22 @@ export function collectModuleFacts(moduleId, context, source = {}) {
     return facts;
 }
 
+const SECOND_PASS_MODULES = new Set(['album', 'adv', 'room', 'items', 'phone', 'travel', 'ending', 'heart', 'butterfly', 'pastLives']);
+const FIRST_HALF_KINDS = new Set(['catalog', 'index', 'structure', 'map', 'main', 'prologue', 'snapshot']);
+
+function autoIncludesSecondPass(step, plan) {
+    // 自动留忆默认把第二次生成一起做完。目录、索引后面还有专门的补全步骤时，由那些步骤来写，避免同一份内容请求两遍。
+    if (plan.moduleId === 'adv') return true;
+    if (step.kind === 'comments') return true;
+    if (!SECOND_PASS_MODULES.has(plan.moduleId)) return false;
+    const followers = (plan.steps || []).some(item => item.order > step.order && item.status !== 'completed');
+    if (followers && FIRST_HALF_KINDS.has(step.kind)) return false;
+    return true;
+}
+
 function stepOptions(step, plan) {
-    const options = { automatic: true, background: true, autoMemoryStep: step.id };
-    if (step.kind === 'comments') options.secondStep = true;
+    const options = { automatic: true, background: true, autoMemory: true, autoMemoryStep: step.id };
+    if (autoIncludesSecondPass(step, plan)) options.secondStep = true;
     if (step.kind === 'slots') options.fillRoomText = true;
     if (step.kind === 'lines') options.fillItemsText = true;
     if (step.kind === 'prose' && plan.moduleId === 'travel') options.fillTravelText = true;

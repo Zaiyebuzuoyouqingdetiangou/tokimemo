@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 261
-// Source SHA-256: 3ef653663156f441779fb2069afb1b54604ef117b46f65f375cf78f1dd1c7246
+// Source SHA-256: c8ee554d48540451003440b9e12d61c6344b2c260b33b8b64925c9774196e57c
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -30278,9 +30278,15 @@ function mountSettings({ homeTarget = null } = {}) {
             if (count) count.disabled = !target.checked;
             return;
         }
-        if (target.matches?.('[data-rmt-auto-retry-count]')) {
-            core_settings.updatePluginSettings({ autoRetryCount: target.value });
-            target.value = String(core_settings.getPluginSettings().autoRetryCount);
+        if (target.matches?.('[data-rmt-auto-retry-count], [data-rmt-auto-memory-retry-count]')) {
+            core_settings.updatePluginSettings({ autoRetryCount: target.value, autoRetryEnabled: true });
+            const count = String(core_settings.getPluginSettings().autoRetryCount);
+            for (const input of panel.querySelectorAll('[data-rmt-auto-retry-count], [data-rmt-auto-memory-retry-count]')) {
+                input.value = count;
+                input.disabled = false;
+            }
+            const retry = panel.querySelector('[data-rmt-auto-retry]');
+            if (retry) retry.checked = true;
             return;
         }
         if (target.matches?.('[data-rmt-read-mode], [data-rmt-read-recent], [data-rmt-read-start], [data-rmt-read-end], [data-rmt-read-hidden]')) {
@@ -30924,6 +30930,9 @@ function renderSettingsPanelMarkup(panel) {
           <div class="rmt-settings-section-body">
           <p>只在已有档案的当前窗口运行。每条聊天消息算一楼，编辑不加楼；开启后从当前楼数起计。</p>
           <p>“档案同步”收录新聊天；其他模块使用已归档记忆，不改旧内容。会调用独立 API。</p>
+          <p>打开自动留忆后，需要两次才完整的模块会自动做第二次生成。两次合在一起才是一份完整回忆。手动生成仍看连接设置里的开关。</p>
+          <label class="rmt-settings-field"><span>失败后重试次数</span><input class="text_pole" data-rmt-auto-memory-retry-count type="number" min="1" max="5" step="1" value="${core_settings.getPluginSettings().autoRetryCount}" aria-label="失败后重试次数"></label>
+          <small>这一份没写完时，自动再试这么多次。范围是 1 到 5。</small>
           <button type="button" class="menu_button rmt-settings-wide" data-rmt-auto-memory-wizard>打开回忆向导</button>
           <small>向导先接 API、读取范围和档案。生图可以跳过。结束后再问要不要自动留忆。不要的话就能自己手动生成。已有档案时不会重新建档。打开自动留忆后，下面的按模块开关会暂停。</small>
           <p data-rmt-auto-memory-gate role="status"></p>
@@ -31443,7 +31452,7 @@ async function generateAdvIndexWithRepair(context, memoryBank, origin, expectedC
     core_incremental.stampIncrementalCoverage(merged, previous, memoryBank, 'mode', sourceMemoryIds, added);
     if (revisit) merged.generationMeta.expansionRound = (Number(previous?.generationMeta?.expansionRound) || 0) + 1;
     if (merged.events?.some(event => !event.adv?.paragraphs?.length)) {
-        if (core_settings.getPluginSettings().autoSecondPass === true) {
+        if (options.secondStep === true || core_settings.getPluginSettings().autoSecondPass === true) {
             const task = core_requestCoordinator.logicalGenerationTaskForOrigin(origin);
             if (task) task.autoAdvScripts = true;
         } else {
@@ -46560,7 +46569,7 @@ async function generateModeOperation(mode, options = {}) {
         } else if (mode === core_constants.MODE.PAST_LIVES) {
             session = await modes_pastLives.generatePastLivesWithRepair(context, memoryBank, origin, taskKey, { previousSession, replaceExisting, presentationContext, secondStep: options.secondStep === true });
         } else if (mode === core_constants.MODE.ADV) {
-            session = await modes_advEvent.generateAdvIndexWithRepair(context, memoryBank, origin, expectedChatId, taskKey, { replaceExisting });
+            session = await modes_advEvent.generateAdvIndexWithRepair(context, memoryBank, origin, expectedChatId, taskKey, { replaceExisting, secondStep: options.secondStep === true });
         } else if (mode === core_constants.MODE.BUTTERFLY && options.fillButterflyText && previousSession) {
             session = await modes_butterfly.fillButterflyProse(context, memoryBank, origin, taskKey, previousSession);
         } else if (mode === core_constants.MODE.BUTTERFLY) {
@@ -46804,6 +46813,7 @@ async function generateModeOperation(mode, options = {}) {
                         draftId: recoveryHandle.journal.draftId || '',
                         pageId: recoveryHandle.journal.pageId || mode,
                         label: core_constants.MODE_LABEL[mode] || mode,
+                        autoMemory: options.autoMemory === true,
                     });
                 }
             } catch { /* A missed auto-retry leaves the manual button in the task center. */ }
@@ -52026,7 +52036,7 @@ function trimQueue() {
 
 function noteRetryableGeneration(info) {
     const settings = core_settings.getPluginSettings();
-    if (settings.autoRetryEnabled !== true) return;
+    if (settings.autoRetryEnabled !== true && info?.autoMemory !== true) return;
     const mode = info?.mode;
     const draftId = info?.draftId || '';
     const pageId = info?.pageId || mode;
@@ -59310,6 +59320,7 @@ function noteRetryableGeneration(item) {
     if (typeof autoRetryHandler === 'function') autoRetryHandler(item);
     else if (pendingAutoRetries.length < 8) pendingAutoRetries.push({
         mode: item.mode, draftId: item.draftId, pageId: item.pageId || item.mode, label: item.label || item.mode,
+        autoMemory: item.autoMemory === true,
     });
 }
 
@@ -70810,7 +70821,7 @@ const MODULES = Object.freeze([
         id: 'album', title: '回忆相簿', contentKind: HISTORICAL, batch: 2, inDrawPool: true,
         description: '先生成条目索引和关系快照，再写完本轮全部已解锁条目的评论。只有索引不算完成。',
         audience: '生成你与他的照片，以及每张照片下面的话。',
-        requestPlain: '先 2 次，之后大约每 3 条再 1 次。',
+        requestPlain: '2 次。两次合在一起才是一份完整回忆。',
         normalRequestEstimate: '2 + ceil(U / 3)', prerequisites: [], supportsIncremental: true,
         autoEligible: true, achievementMerged: true, unavailableReason: '',
     }),
@@ -70818,7 +70829,7 @@ const MODULES = Object.freeze([
         id: 'adv', title: 'ADV EVENT', contentKind: COLLECTION, batch: 4, inDrawPool: true,
         description: '先冻结本轮事件索引，再写完索引里的全部事件正文。不能停在标题，也不能只挑一篇。',
         audience: '生成你们一起经历过的事件故事。',
-        requestPlain: '先 1 次，之后大约每 6 篇再 1 次。',
+        requestPlain: '2 次。两次合在一起才是一份完整回忆。',
         normalRequestEstimate: '1 + ceil(E / 6)', prerequisites: [], supportsIncremental: true,
         autoEligible: true, achievementMerged: true, unavailableReason: '',
     }),
@@ -70826,7 +70837,7 @@ const MODULES = Object.freeze([
         id: 'room', title: '他的房间', contentKind: COLLECTION, batch: 2, inDrawPool: true,
         description: '生成房间结构并补完必需文字槽位。修复次数有上限，未完成时不揭晓。',
         audience: '生成他现在的房间，以及房间里要写上的字。',
-        requestPlain: '先 1 次。字多了会再补，修不好最多再加 2 次。',
+        requestPlain: '2 次。两次合在一起才是一份完整回忆。',
         normalRequestEstimate: '1 + ceil(S / 6) + 0～2', prerequisites: [], supportsIncremental: true,
         autoEligible: true, achievementMerged: true, unavailableReason: '',
     }),
@@ -70834,7 +70845,7 @@ const MODULES = Object.freeze([
         id: 'items', title: '他的物品', contentKind: COLLECTION, batch: 2, inDrawPool: true,
         description: '在已有且版本匹配的房间上，生成物品结构和全部必需台词。',
         audience: '生成他房间里的东西，以及拿起来时会说的话。需要先有他的房间。',
-        requestPlain: '通常 2 次。',
+        requestPlain: '2 次。两次合在一起才是一份完整回忆。',
         normalRequestEstimate: '通常 2', prerequisites: ['room'], supportsIncremental: true,
         autoEligible: true, achievementMerged: true, unavailableReason: '',
     }),
@@ -70842,7 +70853,7 @@ const MODULES = Object.freeze([
         id: 'phone', title: '他的私人终端', contentKind: COLLECTION, batch: 3, inDrawPool: true,
         description: '先冻结 App 目录，再生成目录中的全部 App。目录本身不产生成就。',
         audience: '生成他手机里的应用，以及应用里的内容。',
-        requestPlain: '第一次先 1 次目录，再按应用数量各 1 次。以后只补有变化的。',
+        requestPlain: '2 次。两次合在一起才是一份完整回忆。',
         normalRequestEstimate: '首次 1 + A；增量 1 + M', prerequisites: [], supportsIncremental: true,
         autoEligible: true, achievementMerged: true, unavailableReason: '',
     }),
@@ -70850,7 +70861,7 @@ const MODULES = Object.freeze([
         id: 'inbox', title: '你的邮箱', contentKind: COLLECTION, batch: 1, inDrawPool: true,
         description: '有信件计划时一次写完本轮信件。没有计划则跳过，不生成信封或成就。',
         audience: '生成他写给你的信。没有新信就不会写。',
-        requestPlain: '有信 1 次，没有就是 0 次。',
+        requestPlain: '1 次。没有新信就是 0 次。',
         normalRequestEstimate: '0～1', prerequisites: [], supportsIncremental: true,
         autoEligible: true, achievementMerged: true, unavailableReason: '', isComplete: stepsComplete,
     }),
@@ -70866,7 +70877,7 @@ const MODULES = Object.freeze([
         id: 'travel', title: '他的出行路线', contentKind: HISTORICAL, batch: 2, inDrawPool: true,
         description: '生成地图或旅行结构；若计划还要求正文，正文完成前不揭晓。',
         audience: '生成他去过的地方，以及想带你去的路。',
-        requestPlain: '1 到 2 次。',
+        requestPlain: '2 次。两次合在一起才是一份完整回忆。',
         normalRequestEstimate: '1～2', prerequisites: [], supportsIncremental: true,
         autoEligible: true, achievementMerged: true, unavailableReason: '',
     }),
@@ -70874,7 +70885,7 @@ const MODULES = Object.freeze([
         id: 'ending', title: '结局与后日谈', contentKind: COLLECTION, batch: 4, inDrawPool: true,
         description: '冻结全部可用路线并写完路线正文，需要时再做一次告白扫描。不能缩成单路线。',
         audience: '生成这段关系可能走到的结局，以及结局之后的话。',
-        requestPlain: '先 1 次，再按路线补。不会只写一条结局。',
+        requestPlain: '2 次。两次合在一起才是一份完整回忆。',
         normalRequestEstimate: '首次 1 + A + C', prerequisites: [], supportsIncremental: true,
         autoEligible: true, achievementMerged: true, unavailableReason: '',
     }),
@@ -70898,7 +70909,7 @@ const MODULES = Object.freeze([
         id: 'heart', title: '角色互动', contentKind: COLLECTION, batch: 5, inDrawPool: true,
         description: '必须先冻结基础对话、日常一格、萤火虫、后日谈和四季内容，并全部跑完后才算一份成果。',
         audience: '生成你可以和他点开的互动。',
-        requestPlain: '大约 8 到 13 次，内容多的时候还会更多。',
+        requestPlain: '2 次。两次合在一起才是一份完整回忆。',
         normalRequestEstimate: '约 8～13 以上', prerequisites: [], supportsIncremental: false,
         autoEligible: true, achievementMerged: true, unavailableReason: '',
     }),
@@ -70906,7 +70917,7 @@ const MODULES = Object.freeze([
         id: 'butterfly', title: '蝴蝶效应', contentKind: COLLECTION, batch: 4, inDrawPool: true,
         description: '首次写完 MAIN、全部分支和 Ω。已有进度的增量只补本轮新增分歧，不把首次生成直接放进自动池。',
         audience: '生成如果当时换一个选择，故事会怎么走。',
-        requestPlain: '大约 3 到 11 次。',
+        requestPlain: '2 次。两次合在一起才是一份完整回忆。',
         normalRequestEstimate: '2 + B + P，约 3～11', prerequisites: [], supportsIncremental: true,
         autoEligible: true, achievementMerged: true, unavailableReason: '',
     }),
@@ -70914,7 +70925,7 @@ const MODULES = Object.freeze([
         id: 'pastLives', title: '前世今生', contentKind: COLLECTION, batch: 4, inDrawPool: true,
         description: '每次只完成一篇：引子、全部卷宗、今生回响和落款。这是新篇，不是档案差量。',
         audience: '生成你们上一段人生的故事。',
-        requestPlain: '大约 3 到 9 次。',
+        requestPlain: '2 次。两次合在一起才是一份完整回忆。',
         normalRequestEstimate: '2 + D + P，约 3～9', prerequisites: [], supportsIncremental: false,
         autoEligible: true, achievementMerged: true, unavailableReason: '',
     }),
@@ -70922,7 +70933,7 @@ const MODULES = Object.freeze([
         id: 'themeSong', title: '角色印象曲', contentKind: COLLECTION, batch: 2, inDrawPool: true,
         description: '生成一首完整歌曲。当前自动入口还没有默认计划，完成前不能抽中。',
         audience: '生成一首属于他的歌。',
-        requestPlain: '每首 1 次。',
+        requestPlain: '1 次。',
         normalRequestEstimate: '每首 1', prerequisites: [], supportsIncremental: false,
         autoEligible: true, achievementMerged: true, unavailableReason: '',
     }),
@@ -70930,7 +70941,7 @@ const MODULES = Object.freeze([
         id: 'bedtime', title: '睡前故事', contentKind: COLLECTION, batch: 2, inDrawPool: true,
         description: '按冻结计划生成一章完整故事。必须事先写明是新故事还是指定故事的续章。',
         audience: '生成他讲给你听的一章故事。',
-        requestPlain: '每章 1 次。',
+        requestPlain: '1 次。',
         normalRequestEstimate: '每章 1', prerequisites: [], supportsIncremental: false,
         autoEligible: true, achievementMerged: true, unavailableReason: '',
     }),
@@ -70938,7 +70949,7 @@ const MODULES = Object.freeze([
         id: 'timeEcho', title: '时空回响', contentKind: COLLECTION, batch: 2, inDrawPool: true,
         description: '生成一篇完整回声。当前还没有自动入口，补上之前不能抽中。',
         audience: '生成一篇从过去传过来的声音。',
-        requestPlain: '每篇 1 次。',
+        requestPlain: '1 次。',
         normalRequestEstimate: '每篇 1', prerequisites: [], supportsIncremental: false,
         autoEligible: true, achievementMerged: true, unavailableReason: '',
     }),
@@ -72171,9 +72182,22 @@ function collectModuleFacts(moduleId, context, source = {}) {
     return facts;
 }
 
+const SECOND_PASS_MODULES = new Set(['album', 'adv', 'room', 'items', 'phone', 'travel', 'ending', 'heart', 'butterfly', 'pastLives']);
+const FIRST_HALF_KINDS = new Set(['catalog', 'index', 'structure', 'map', 'main', 'prologue', 'snapshot']);
+
+function autoIncludesSecondPass(step, plan) {
+    // 自动留忆默认把第二次生成一起做完。目录、索引后面还有专门的补全步骤时，由那些步骤来写，避免同一份内容请求两遍。
+    if (plan.moduleId === 'adv') return true;
+    if (step.kind === 'comments') return true;
+    if (!SECOND_PASS_MODULES.has(plan.moduleId)) return false;
+    const followers = (plan.steps || []).some(item => item.order > step.order && item.status !== 'completed');
+    if (followers && FIRST_HALF_KINDS.has(step.kind)) return false;
+    return true;
+}
+
 function stepOptions(step, plan) {
-    const options = { automatic: true, background: true, autoMemoryStep: step.id };
-    if (step.kind === 'comments') options.secondStep = true;
+    const options = { automatic: true, background: true, autoMemory: true, autoMemoryStep: step.id };
+    if (autoIncludesSecondPass(step, plan)) options.secondStep = true;
     if (step.kind === 'slots') options.fillRoomText = true;
     if (step.kind === 'lines') options.fillItemsText = true;
     if (step.kind === 'prose' && plan.moduleId === 'travel') options.fillTravelText = true;
