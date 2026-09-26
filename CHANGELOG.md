@@ -1,3 +1,14 @@
+# 0.99.90 / r84.157 — 每一楼抽取时，建档晚一步保存不再误报「聊天不一致」
+
+- 自动留忆设成每一楼时，建档结果有时要晚一步才保存。那时聊天已经多了一楼，保存前的核对还在比较整段聊天，于是必定弹出「聊天正文或聊天身份与原任务不一致」。这份结果卡在「待保存」后，后面每一楼的自动建档也会被挡住，任务中心就不再出现建档和回忆。
+- 现在每楼自动建档会把这一窗的起止楼和内容指纹记进检查点（`archiveImportProgress.floorWindow`）。延后保存时只核对这一窗：窗口后面新增的楼不算变化；窗口里的楼被改或被删，仍然报聊天不一致。
+- 改了四处：`retryCurrentArchiveSave`（仅重试保存）、`saveCurrentArchivePendingResults` 的两处（续存容量待定批次）、`flushDeferredCommitsForCurrentChat`（回到聊天时自动写回；诊断说明里没列，是同一个问题）。手动建档、非窗口建档、没有窗口记录的旧条目一律按原来的整段聊天规则，不放宽。
+- 读窗口的函数从 `archive/importOperation.js`（原名 `windowChatMessages`）原样搬到新文件 `archive/floorWindowCheck.js`，建档读窗口和保存前核对用同一个读法。`importOperation.js` 顺带去掉了因此不再使用的 `chatReadRange` 导入。
+- 本版之前已经卡在「待保存」的条目没有窗口记录，不会自动恢复；请在档案整理草稿那一栏点一次「放弃整理草稿」。正式档案不会删。
+- 新测试 `tools/test-floor-window-deferred-save-r84157.mjs`（8 项）。改之前 4 项失败（第 1 项失败时的提示与用户报告的红字一字不差），另 4 项（窗口里的楼被改 / 被删、手动建档、窗口被改的续存）改前改后都报聊天不一致。
+- 全部测试 253 个，251 通过；失败的 2 个是 `tools/test-settings-listeners-r8496.mjs`，与本轮无关，待修清单 P3 另出一包处理。verify-runtime：undefinedBindings 0、prematureReads 0。「未定义名字」扫描 0。
+- 护栏：上传的 r84.156 包与 r84.123 基线已有 397 处差异（r84.124–r84.156 各轮功能改动没有重拍基线），本轮新增 7 处（上面四个函数、搬走的 `windowChatMessages`）。本轮是功能改动，按规矩重拍基线（287 个模块）；原 r84.123 基线另存为 `verification/refactor-baseline-r84.123.json`。
+
 # 0.99.90 / r84.156 — 设成每一楼时，当前这楼会马上整理
 
 - 设成每一楼后，上一版会从现在再等一楼，倒计时还是空的，任务中心就像没跑。

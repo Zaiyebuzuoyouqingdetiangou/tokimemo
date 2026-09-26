@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
-// Source modules: 286
-// Source SHA-256: 9a655728e4f940f461eebae7ef79ef504ddff2be7bf4cfa4df43796e07c0dc89
+// Source modules: 287
+// Source SHA-256: e36fabd988e20250b6fab709e6739af7ab49f504ff92886c5e354710c6d8ed70
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -10,6 +10,7 @@ const __m_archive_capacity_js = Object.create(null);
 const __m_archive_coverageRanges_js = Object.create(null);
 const __m_archive_draftInputs_js = Object.create(null);
 const __m_archive_externalMemory_js = Object.create(null);
+const __m_archive_floorWindowCheck_js = Object.create(null);
 const __m_archive_groups_js = Object.create(null);
 const __m_archive_importBatches_js = Object.create(null);
 const __m_archive_importIdentity_js = Object.create(null);
@@ -765,6 +766,74 @@ function compactArchiveEntry(entry) {
 __m_archive_draftInputs_js.inputHash = inputHash;
 __m_archive_draftInputs_js.compactArchiveInputs = compactArchiveInputs;
 __m_archive_draftInputs_js.compactArchiveEntry = compactArchiveEntry;
+}
+
+function __init_archive_floorWindowCheck_js() {
+// MODULE: archive/floorWindowCheck.js
+const archive_batches = __m_archive_importBatches_js;
+const chat_read_range = __m_core_chatReadRange_js;
+const core_text = __m_core_text_js;
+
+
+
+// 自动每楼窗口建档（r84.157）：建档时把这一窗的起止楼和内容指纹记进检查点（archiveImportProgress.floorWindow）。
+// 延后保存时只核对这一窗：窗口后面新增的楼不算变化；窗口里的楼被改、被删，仍按「聊天正文不一致」处理。
+// 没有这条记录的档案（手动建档、非窗口建档、r84.157 之前的旧条目）一律按原来的整段聊天规则核对。
+
+// 从 archive/importOperation.js 原样搬来（原名 windowChatMessages），建档读窗口和保存前核对窗口用同一个读法。
+function floorWindowMessages(context, floorWindow) {
+    const start = Math.floor(Number(floorWindow?.start));
+    const end = Math.floor(Number(floorWindow?.end));
+    if (start < 1 || end < start) return [];
+    return chat_read_range.selectChatReadRange(context, { mode: 'range', start, end, includeHidden: false }).map(row => ({
+        index: row.index,
+        role: row.message?.is_user === true ? 'user' : 'char',
+        name: core_text.normalizeText(row.message?.name, 120),
+        date: core_text.normalizeText(row.message?.send_date || row.message?.date || '', 80),
+        text: String(row.message?.mes ?? '').replace(/\r\n?/g, '\n').replace(/\u0000/g, '').trim(),
+    })).filter(item => item.text);
+}
+
+function floorWindowFingerprint(rows) {
+    return archive_batches.sourceHash(JSON.stringify((rows || []).map(row => [row.index, row.role, row.name, row.date, row.text])));
+}
+
+function floorWindowStamp(floorWindow, rows) {
+    const start = Math.floor(Number(floorWindow?.start));
+    const end = Math.floor(Number(floorWindow?.end));
+    if (!(start >= 1) || !(end >= start)) return null;
+    return { start, end, fingerprint: floorWindowFingerprint(rows) };
+}
+
+function checkedFloorWindowStamp(value) {
+    if (!value || typeof value !== 'object') return null;
+    const { start, end, fingerprint } = value;
+    if (!Number.isInteger(start) || !Number.isInteger(end) || start < 1 || end < start) return null;
+    if (typeof fingerprint !== 'string' || !/^[a-f0-9]{64}$/.test(fingerprint)) return null;
+    return { start, end, fingerprint };
+}
+
+// 只有自动每楼窗口建档写出的检查点带这条记录；格式不对就当没有，走原严格规则。
+function bankFloorWindow(bank) {
+    return checkedFloorWindowStamp(bank?.[archive_batches.IMPORT_PROGRESS_KEY]?.floorWindow);
+}
+
+function sameFloorWindow(context, stamp) {
+    const checked = checkedFloorWindowStamp(stamp);
+    return !!checked && floorWindowFingerprint(floorWindowMessages(context, checked)) === checked.fingerprint;
+}
+
+function assertFloorWindowUnchanged(context, stamp) {
+    if (!sameFloorWindow(context, stamp)) throw archive_batches.changedInput('chat');
+}
+
+__m_archive_floorWindowCheck_js.floorWindowMessages = floorWindowMessages;
+__m_archive_floorWindowCheck_js.floorWindowFingerprint = floorWindowFingerprint;
+__m_archive_floorWindowCheck_js.floorWindowStamp = floorWindowStamp;
+__m_archive_floorWindowCheck_js.checkedFloorWindowStamp = checkedFloorWindowStamp;
+__m_archive_floorWindowCheck_js.bankFloorWindow = bankFloorWindow;
+__m_archive_floorWindowCheck_js.sameFloorWindow = sameFloorWindow;
+__m_archive_floorWindowCheck_js.assertFloorWindowUnchanged = assertFloorWindowUnchanged;
 }
 
 function __init_archive_importRecovery_js() {
@@ -22981,6 +23050,7 @@ const generation_jsonParser = __m_generation_jsonParser_js;
 const modes_heart = __m_modes_heart_js;
 const ui_overlay = __m_ui_overlay_js;
 const ui_settingsPanel = __m_ui_settingsPanel_js;
+const archive_floorWindow = __m_archive_floorWindowCheck_js;
 const runtimeState = __m_core_state_js.state;
 const clearMemoryPreflight = __m_archive_archiveCore_js.clearMemoryPreflight;
 const getImportedMemory = __m_archive_archiveCore_js.getImportedMemory;
@@ -23042,8 +23112,11 @@ async function flushDeferredCommitsForCurrentChat() {
                 if (liveCharacterName) bank.characterName = liveCharacterName;
                 const hasBatchCheckpoint = !!bank[archive_batches.IMPORT_PROGRESS_KEY];
                 if (hasBatchCheckpoint) assertBatchCommitIdentity(context, bank, { completedSaveOnly: true });
-                const currentCount = getCurrentUsableMessageCount(context);
-                if (Number(bank?.sourceMessageCount) !== currentCount) {
+                // r84.157：自动每楼窗口建档只核对窗口里那几楼；窗口后面新增的楼不算变化。
+                const floorWindow = archive_floorWindow.bankFloorWindow(bank);
+                const sourceChanged = floorWindow ? !archive_floorWindow.sameFloorWindow(context, floorWindow)
+                    : Number(bank?.sourceMessageCount) !== getCurrentUsableMessageCount(context);
+                if (sourceChanged) {
                     globalThis.toastr?.warning?.(`后台档案已完成，但原聊天在此期间发生变化，因此没有自动覆盖「${bank?.archiveName || '档案'}」。请重新更新档案。`, '心迹回廊');
                     acknowledge = !hasBatchCheckpoint;
                     continue;
@@ -23482,7 +23555,10 @@ async function retryCurrentArchiveSave(context, taskTrace) {
         const snapshot = await core_context.buildChatSnapshot(context, { completeSource: !!bank.fullSourceFingerprint, expectedChatId: item.origin.chatId, stillCurrent });
         assertCurrent();
         if (!runtimeState.deferredChatCommits.get(key)?.includes(item)) return { status: 'blocked' };
-        if (!archivedChatFingerprint(bank) || archivedChatFingerprint(bank) !== snapshot.fingerprint
+        // r84.157：自动每楼窗口建档只核对窗口里那几楼；其余（手动、非窗口、旧条目）仍比较整段聊天。
+        const floorWindow = archive_floorWindow.bankFloorWindow(bank);
+        if (floorWindow) archive_floorWindow.assertFloorWindowUnchanged(context, floorWindow);
+        else if (!archivedChatFingerprint(bank) || archivedChatFingerprint(bank) !== snapshot.fingerprint
             || Number(bank.sourceMessageCount) !== snapshot.totalMessages
             || (bank.fullSourceFingerprint && bank.fullSourceFingerprint !== snapshot.fullFingerprint)) {
             throw archive_batches.changedInput('chat');
@@ -23537,6 +23613,8 @@ function getCurrentArchiveProfileRecoverySummary(context = core_context.getConte
 async function saveCurrentArchivePendingResults(context, existing, logicalTask, taskTrace) {
     const origin = { ...core_context.captureTaskOrigin(context, existing.archiveRevision), archivePresent: true };
     core_requestCoordinator.bindLogicalGenerationTask(logicalTask, origin);
+    // r84.157：自动每楼窗口建档只核对窗口里那几楼；其余仍比较整段聊天。
+    const floorWindow = archive_floorWindow.bankFloorWindow(existing);
     const assertCurrent = () => {
         core_requestCoordinator.assertLogicalGenerationTaskCurrent(logicalTask);
         if (!core_context.isCurrentTaskOrigin(origin)) throw new DOMException('Chat or archive changed', 'AbortError');
@@ -23544,7 +23622,8 @@ async function saveCurrentArchivePendingResults(context, existing, logicalTask, 
             throw archive_batches.changedInput('archive');
         }
         assertBatchCommitIdentity(core_context.currentCharacterGuard(), existing, { completedSaveOnly: true });
-        if (existing.fullSourceFingerprint && core_context.completeArchiveChatFingerprint(core_context.currentCharacterGuard()) !== existing.fullSourceFingerprint) {
+        if (floorWindow) archive_floorWindow.assertFloorWindowUnchanged(core_context.currentCharacterGuard(), floorWindow);
+        else if (existing.fullSourceFingerprint && core_context.completeArchiveChatFingerprint(core_context.currentCharacterGuard()) !== existing.fullSourceFingerprint) {
             throw archive_batches.changedInput('chat');
         }
     };
@@ -23557,8 +23636,8 @@ async function saveCurrentArchivePendingResults(context, existing, logicalTask, 
         const snapshot = await core_context.buildChatSnapshot(context, { completeSource: true, expectedChatId: origin.chatId,
             stillCurrent: () => { assertCurrent(); return true; } });
         assertCurrent();
-        if (Number(existing.sourceMessageCount) !== snapshot.totalMessages
-            || (!existing.fullSourceFingerprint && archivedChatFingerprint(existing) !== snapshot.fingerprint)) throw archive_batches.changedInput('chat');
+        if (!floorWindow && (Number(existing.sourceMessageCount) !== snapshot.totalMessages
+            || (!existing.fullSourceFingerprint && archivedChatFingerprint(existing) !== snapshot.fingerprint))) throw archive_batches.changedInput('chat');
         const captured = checkedArchiveTaskInput(progress.taskInputV1, context, { completedSaveOnly: true });
         const external = captured?.external || await retainedBatchExternal(context, progress);
         assertCurrent();
@@ -23965,7 +24044,6 @@ const archive_requestBudget = __m_archive_requestBudget_js;
 const core_cache = __m_core_cache_js;
 const core_constants = __m_core_constants_js;
 const cast_looks = __m_core_castLooks_js;
-const chat_read_range = __m_core_chatReadRange_js;
 const core_context = __m_core_context_js;
 const core_requestCoordinator = __m_core_requestCoordinator_js;
 const core_settings = __m_core_settings_js;
@@ -24012,6 +24090,8 @@ const archiveSourceBank = __m_archive_recoveryDrafts_js.archiveSourceBank;
 const progressForDraftRow = __m_archive_recoveryDrafts_js.progressForDraftRow;
 const refreshArchiveRecoveryReading = __m_archive_recoveryDrafts_js.refreshArchiveRecoveryReading;
 const generateArchiveImportSegment = __m_archive_archiveVerdict_js.generateArchiveImportSegment;
+const floorWindowMessages = __m_archive_floorWindowCheck_js.floorWindowMessages;
+const floorWindowStamp = __m_archive_floorWindowCheck_js.floorWindowStamp;
 
 
 
@@ -24036,19 +24116,6 @@ const generateArchiveImportSegment = __m_archive_archiveVerdict_js.generateArchi
 
 // 建档主流程：一次建档操作（分批、请求、校验、保存）
 // 从 archive/repository.js 原样搬出（重构阶段 2），声明文本一字未改；archive/repository.js 仍转发原有导出。
-
-function windowChatMessages(context, floorWindow) {
-    const start = Math.floor(Number(floorWindow?.start));
-    const end = Math.floor(Number(floorWindow?.end));
-    if (start < 1 || end < start) return [];
-    return chat_read_range.selectChatReadRange(context, { mode: 'range', start, end, includeHidden: false }).map(row => ({
-        index: row.index,
-        role: row.message?.is_user === true ? 'user' : 'char',
-        name: core_text.normalizeText(row.message?.name, 120),
-        date: core_text.normalizeText(row.message?.send_date || row.message?.date || '', 80),
-        text: String(row.message?.mes ?? '').replace(/\r\n?/g, '\n').replace(/\u0000/g, '').trim(),
-    })).filter(item => item.text);
-}
 
 async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic = false, continueRecovery = false, restartImport = false, participantRoster, logicalTask, floorWindow = null,
     draftId = '', selectedDraft = null, commitCompletedOnly = false, partialBase = null, independentResult = false, nextIndependentBatch = false, baseMemoryMissing = false, sceneRecords = null } = {}, preparation) {
@@ -24208,8 +24275,10 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
     let chatInput = sceneOnly ? [] : (progress || restartImport ? snapshot.messages : incrementalUpdate && !rangeChanged ? snapshot.incrementalMessages : snapshot.messages);
     const externalChanged = !!progress || restartImport || !incrementalUpdate || core_text.normalizeText(existing?.externalMemoryFingerprint, 240) !== core_text.normalizeText(external.fingerprint, 240);
     // 自动留忆先建档。有新摘要时，摘要和没被摘要点名的楼一起送出，正文不截断。摘要没更新才只读这一窗。
+    // r84.157：这一窗真的成了聊天来源时，记下窗口起止楼和内容指纹，延后保存只核对这一窗。
+    let windowStamp = null;
     if (automatic && floorWindow && !progress && !restartImport && !capturedInput && !sceneOnly) {
-        const scoped = windowChatMessages(context, floorWindow);
+        const scoped = floorWindowMessages(context, floorWindow);
         const source = archive_summary.archiveSourceForDue({
             summaryChanged: externalChanged,
             summaryCount: archive_summary.pluginSummaryCount(external),
@@ -24217,7 +24286,11 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
         if (source === 'summary') {
             const uncovered = archive_summary.uncoveredWindowMessages(scoped, external.records);
             chatInput = uncovered;
-        } else if (scoped.length) chatInput = scoped;
+            if (floorWindowSync) windowStamp = floorWindowStamp(floorWindow, scoped);
+        } else if (scoped.length) {
+            chatInput = scoped;
+            if (floorWindowSync) windowStamp = floorWindowStamp(floorWindow, scoped);
+        }
     }
     if (!progress && incrementalUpdate && !chatInput.length && !externalChanged) {
         clearMemoryPreflight(context);
@@ -24294,6 +24367,7 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
                     baseUsedChars: incrementalUpdate ? Number(existing?.usedCharacterCount) || 0 : 0,
                     ...(external.ledgerAvailable === false ? { fallbackRecords: external.records } : {}),
                     capacityPending: [], createdAt: Date.now(),
+                    ...(windowStamp ? { floorWindow: windowStamp } : {}),
                     ...(archiveRoster ? { participantRoster: archiveRoster } : {}) };
                 archive_batches.checkedProgress(progress);
             }
@@ -80522,6 +80596,7 @@ __m_ui_workspaceStyles_js.capsuleCss = capsuleCss;
 __init_archive_capacity_js();
 __init_archive_coverageRanges_js();
 __init_archive_draftInputs_js();
+__init_archive_floorWindowCheck_js();
 __init_archive_importRecovery_js();
 __init_archive_memoryFileImport_js();
 __init_archive_memoryProviders_js();
