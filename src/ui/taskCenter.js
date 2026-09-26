@@ -746,11 +746,17 @@ function paintTaskCenter(panel) {
     const waiting = queuedForScope();
     const runningNow = cards.some(card => card.state === 'running') || waiting.length > 0;
     const esc = core_text.esc;
-    const cardHtml = card => `<article class="rmt-task-card" data-state="${card.state}">
-      <div class="rmt-task-main"><b>${esc(card.label)}</b><span class="rmt-task-state" data-state="${card.state}">${esc(CARD_LABEL[card.state] || card.state)}</span></div>
+    const cardHtml = card => {
+        const retryable = (card.state === 'failed' || card.state === 'retry') && card.actions;
+        const state = retryable
+            ? `<button type="button" class="rmt-task-state" data-state="${card.state}" data-rmt-action="task-retry-state">${esc(CARD_LABEL[card.state] || card.state)}</button>`
+            : `<span class="rmt-task-state" data-state="${card.state}">${esc(CARD_LABEL[card.state] || card.state)}</span>`;
+        return `<article class="rmt-task-card" data-state="${card.state}">
+      <div class="rmt-task-main"><b>${esc(card.label)}</b>${state}</div>
       <p>${esc(card.detail || '')}</p>
       ${card.actions ? `<div class="rmt-task-actions">${card.actions}</div>` : ''}
     </article>`;
+    };
     const top = panel.scrollTop;
     panel.innerHTML = `<div class="rmt-task-head">
       <b>任务</b>
@@ -916,6 +922,17 @@ export function handleTaskCenterAction(action, actionEl) {
         return;
     }
     if (action === 'task-center-close') return hideTaskCenter();
+    if (action === 'task-retry-state') {
+        const card = actionEl?.closest?.('.rmt-task-card');
+        const button = [...(card?.querySelectorAll?.('.rmt-task-actions .rmt-btn, .rmt-task-actions button') || [])]
+            .find(node => !node.disabled && node !== actionEl);
+        if (!button) {
+            globalThis.toastr?.info?.('这项现在还不能重试。', '心迹回廊');
+            return;
+        }
+        button.click();
+        return;
+    }
     if (action === 'task-floor-complete' || action === 'task-floor-retry') {
         clearAutoMemoryFloorFailure();
         const run = action === 'task-floor-complete' ? 'completeFloorRound' : 'resumeFloorPlan';

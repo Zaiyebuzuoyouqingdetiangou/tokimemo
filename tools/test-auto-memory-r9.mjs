@@ -326,4 +326,12 @@ test('the letter offers repair and retry only when that work is still open', () 
         floor: 6, drawFloor: 5, intervalFloors: 1, nextDueFloor: 6,
     });
     assert.equal(oldLetter.phase, 'hidden');
+    const pinned = shell.shellView({
+        enabled: true, archiveReady: true, moduleComplete: true, canOpen: true,
+        steps: [{ status: 'completed' }], revealStatus: 'opened', revealLine: '旧歌',
+        floor: 5, drawFloor: 5, intervalFloors: 1, nextDueFloor: 6,
+    });
+    assert.equal(pinned.phase, 'reveal');
+    assert.equal(pinned.canOpen, true);
+    assert.equal(pinned.showReveal, true);
 });

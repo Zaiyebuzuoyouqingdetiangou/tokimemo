@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 286
-// Source SHA-256: d94753ecd2e9948664fbad76e8dbabebf7224e1f6e1ffc5d5b7d79735b3f03d6
+// Source SHA-256: b28e0385bd27fd56b8057a3c2b919efc92591a68e13481e841a6eea00ae0e579
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -60954,6 +60954,7 @@ const auto_memory_floor = __m_autoMemory_floorPace_js;
 const auto_memory_gap = __m_autoMemory_gapFill_js;
 const auto_memory_plan = __m_autoMemory_planStore_js;
 const auto_memory_registry = __m_autoMemory_moduleRegistry_js;
+const auto_memory_redo = __m_autoMemory_redo_js;
 const auto_memory_scheduler = __m_autoMemory_scheduler_js;
 const auto_memory_stream = __m_autoMemory_streamGate_js;
 const shell_state = __m_autoMemory_shellState_js;
@@ -60970,6 +60971,7 @@ const ui_heartEnvelope = __m_ui_heartEnvelope_js;
 const ui_styles = __m_ui_styles_js;
 const ui_taskCenter = __m_ui_taskCenter_js;
 // 外置壳贴在角色楼层下面，点开才展开。档案没写完时不挂壳，也不显示建档进度。
+
 
 
 
@@ -61045,6 +61047,18 @@ function latestAssistantIndex(chat) {
 
 function clearShells() {
     document.querySelectorAll('[data-rmt-floor-shell]').forEach(node => node.remove());
+}
+
+function latestFloorMode() {
+    return core_settings.getPluginSettings().autoMemoryLatestFloor === true;
+}
+
+function ticketForReveal(snapshot, reveal) {
+    const ids = new Set(reveal?.sourceMemoryIds || []);
+    const tickets = [...(snapshot?.drawTickets || [])].reverse();
+    return tickets.find(ticket => ticket.selectedModuleId === reveal?.moduleId && (ticket.sourceMemoryIds || []).some(id => ids.has(id)))
+        || tickets.find(ticket => ticket.selectedModuleId === reveal?.moduleId)
+        || null;
 }
 
 function roundReveal(records, moduleId, ids, steps, ticket) {
@@ -61168,7 +61182,7 @@ function markup(view) {
     const caption = revealPaper ? '' : `<small data-rmt-letter-detail>${core_text.esc(view.detail || (writing ? '正在生成中' : ''))}</small>`;
     const heading = view.title ? `<p data-rmt-letter-achievement>${core_text.esc(view.title)}</p>` : '';
     const copy = view.achievementCopy ? `<p data-rmt-letter-copy>${core_text.esc(view.achievementCopy)}</p>` : '';
-    const read = view.contentOpen ? '' : `<button type="button" class="rmt-btn" data-rmt-letter-read data-rmt-reveal="${core_text.esc(view.revealId)}" data-rmt-module="${core_text.esc(view.moduleId)}">打开回忆</button>`;
+    const read = `<button type="button" class="rmt-btn" data-rmt-letter-read data-rmt-reveal="${core_text.esc(view.revealId)}" data-rmt-module="${core_text.esc(view.moduleId)}">打开回忆</button>`;
     const paper = revealPaper
         ? `<button type="button" class="rmt-btn rmt-heart-letter-close" data-rmt-letter-close>收起这封信</button>${heading}${copy}${read}`
         : '';
@@ -61226,43 +61240,70 @@ function watchStall(view, context) {
     return view;
 }
 
-function paint(context) {
-    if (shell_state.shellBlocksChatInput()) return;
-    if (auto_memory_scheduler.storyStillWriting(context)) {
-        stallState = { signature: '', since: 0 };
-        stallNoted = false;
-        try { ui_taskCenter.clearAutoMemoryFloorFailure(); } catch { /* 任务条稍后还会刷。 */ }
-        clearShells();
-        return;
+function viewForReveal(context, snapshot, reveal) {
+    const ticket = ticketForReveal(snapshot, reveal);
+    const moduleId = reveal.moduleId || '';
+    const item = auto_memory_registry.autoMemoryModuleById(moduleId);
+    const previewKept = moduleId ? incrementFor(moduleId, reveal.id).kept === true : false;
+    const stored = auto_memory_library.autoAchievementForReveal(context, {
+        achievementId: reveal.achievementId || '',
+        moduleId,
+        sourceMemoryIds: [...(reveal.sourceMemoryIds || [])],
+    });
+    const rememberedTitle = auto_memory_gap.rememberedAchievementTitle(context.chatMetadata, reveal.achievementId);
+    const rememberedCopy = auto_memory_gap.rememberedAchievementCopy(context.chatMetadata, reveal.achievementId);
+    return shell_state.shellView({
+        enabled: true,
+        archiveReady: true,
+        moduleId,
+        moduleTitle: item?.title || '',
+        moduleComplete: true,
+        steps: [{ status: 'completed' }],
+        ticketStatus: ticket?.status || 'completed',
+        revealStatus: reveal.status,
+        revealId: reveal.id,
+        drawFloor: ticket?.dueFloor || 0,
+        floor: ticket?.dueFloor || 0,
+        canOpen: previewKept,
+        revealLine: stored?.title || rememberedTitle || '',
+        achievementCopy: stored?.description || rememberedCopy || '',
+        preferLibraryAchievement: true,
+        intervalFloors: snapshot.plan.intervalFloors,
+        nextDueFloor: snapshot.plan.nextDueFloor,
+    });
+}
+
+function letterSlots(context) {
+    const snapshot = readSnapshot(context);
+    const slots = [];
+    const seen = new Set();
+    if (snapshot?.plan.enabled) {
+        for (const reveal of snapshot.revealRecords || []) {
+            if (reveal.status !== 'ready' && reveal.status !== 'opened' && reveal.status !== 'achievement_pending') continue;
+            const ticket = ticketForReveal(snapshot, reveal);
+            const located = auto_memory_redo.drawFloorMessage(context.chat, ticket?.dueFloor, latestFloorMode());
+            if (!located) continue;
+            const view = viewForReveal(context, snapshot, reveal);
+            if (view.phase === 'hidden') continue;
+            slots.push({ key: reveal.id, messageIndex: located.index, view });
+            seen.add(reveal.id);
+        }
     }
-    const view = watchStall(viewFor(context), context);
-    const toast = shell_state.toastForTransition(lastPhase, view.phase, { line: view.title }, { initial: !sawPhase });
-    sawPhase = true;
-    lastPhase = view.phase;
-    if (toast) {
-        const options = view.revealId ? { onclick: () => openReveal(view.revealId) } : undefined;
-        globalThis.toastr?.[toast.level]?.(toast.message, toast.title, options);
+    const live = watchStall(viewFor(context), context);
+    const latest = latestAssistantIndex(context.chat);
+    if (latest >= 0 && live.phase !== 'hidden') {
+        const existing = live.revealId ? slots.find(slot => slot.key === live.revealId) : null;
+        if (existing) existing.view = live;
+        else slots.push({ key: live.revealId || `live:${latest}`, messageIndex: latest, view: live });
     }
-    if (view.phase === 'hidden') { clearShells(); return; }
-    if (!auto_memory_floor.assistantBodyReady(context.chat, { generating: auto_memory_stream.generationOpen(context) })) {
-        clearShells();
-        return;
-    }
-    const index = latestAssistantIndex(context.chat);
-    const mes = ui_floor.messageElement(index);
-    if (!mes || ui_floor.writesMessageText()) { clearShells(); return; }
-    ensureCss();
-    mirrorModuleCss();
-    let host = mes.querySelector('[data-rmt-floor-shell="1"]');
-    if (!host) {
-        clearShells();
-        host = ui_floor.placeAfterMessage(mes);
-    }
-    if (!host) return;
+    return { slots, live };
+}
+
+function paintHost(host, view) {
     if (view.phase === 'pace' && host.dataset.rmtPhase === 'pace' && host.dataset.rmtPace === view.detail && host.dataset.rmtGap === (view.gapText || '')) return;
     const paper = host.querySelector('[data-rmt-letter-paper]');
     const body = host.querySelector('[data-rmt-floor-body]');
-    const contentOpen = view.phase === 'reveal' && host.dataset.rmtRead === view.revealId;
+    const contentOpen = view.phase === 'reveal' && (host.dataset.rmtRead === view.revealId || body?.dataset?.rmtLetterRead === '1');
     view.contentOpen = contentOpen;
     const sameLetter = host.dataset.rmtPhase === view.phase && host.dataset.rmtReveal === view.revealId && host.dataset.rmtPace === (view.phase === 'pace' ? view.detail : '') && host.dataset.rmtOpen === (contentOpen ? '1' : '');
     host.dataset.rmtPhase = view.phase;
@@ -61276,7 +61317,7 @@ function paint(context) {
         if (view.phase !== 'reveal' && body) {
             body.replaceChildren();
             delete body.dataset.rmtLetterRead;
-        } else if (body?.dataset?.rmtLetterRead === '1' && view.canOpen) {
+        } else if (body?.dataset?.rmtLetterRead === '1') {
             if (body.dataset.rmtFloorLive === '1') body.removeAttribute('data-rmt-floor-live');
             writeRound(body, view.moduleId, view.revealId);
         }
@@ -61288,7 +61329,6 @@ function paint(context) {
         if (detail && view.phase !== 'reveal') detail.textContent = view.detail || '正在生成中';
         if (view.phase !== 'reveal') closeLetter(host);
         host.querySelector('.rmt-heart-letter')?.classList.toggle('is-writing', view.phase === 'generating' || view.phase === 'planning');
-        queueAutomaticRepair(view);
         return;
     }
     const paperWasOpen = view.phase === 'reveal' && ((paper && !paper.hidden) || contentOpen);
@@ -61299,13 +61339,49 @@ function paint(context) {
         const nextBody = host.querySelector('[data-rmt-floor-body]');
         if (nextPaper) nextPaper.hidden = false;
         if (seal) seal.hidden = true;
-        if (contentOpen && nextBody) {
+        if (nextBody && (contentOpen || nextBody.dataset.rmtLetterRead === '1')) {
             nextBody.dataset.rmtLetterRead = '1';
             writeRound(nextBody, view.moduleId, view.revealId);
         }
     }
+}
+
+function paint(context) {
+    if (shell_state.shellBlocksChatInput()) return;
+    if (auto_memory_scheduler.storyStillWriting(context)) {
+        stallState = { signature: '', since: 0 };
+        stallNoted = false;
+        try { ui_taskCenter.clearAutoMemoryFloorFailure(); } catch { /* 任务条稍后还会刷。 */ }
+        return;
+    }
+    if (!auto_memory_floor.assistantBodyReady(context.chat, { generating: auto_memory_stream.generationOpen(context) })) return;
+    if (ui_floor.writesMessageText()) return;
+    const { slots, live } = letterSlots(context);
+    const toast = shell_state.toastForTransition(lastPhase, live.phase, { line: live.title }, { initial: !sawPhase });
+    sawPhase = true;
+    lastPhase = live.phase;
+    if (toast) {
+        const options = live.revealId ? { onclick: () => openReveal(live.revealId) } : undefined;
+        globalThis.toastr?.[toast.level]?.(toast.message, toast.title, options);
+    }
+    ensureCss();
+    mirrorModuleCss();
+    const wanted = new Set();
+    for (const slot of slots) {
+        const mes = ui_floor.messageElement(slot.messageIndex);
+        if (!mes) continue;
+        let host = [...mes.querySelectorAll('[data-rmt-floor-shell="1"]')].find(node => node.dataset.rmtLetterKey === slot.key);
+        if (!host) host = ui_floor.placeAfterMessage(mes);
+        if (!host) continue;
+        host.dataset.rmtLetterKey = slot.key;
+        wanted.add(host);
+        paintHost(host, slot.view);
+    }
+    document.querySelectorAll('[data-rmt-floor-shell]').forEach(node => {
+        if (!wanted.has(node)) node.remove();
+    });
     try { ui_taskCenter.syncLiveTaskStrip(); } catch { /* 任务条刷新失败时，楼层下面的状态仍保留。 */ }
-    queueAutomaticRepair(view);
+    queueAutomaticRepair(live);
 }
 
 function queueAutomaticRepair(view) {
@@ -61342,21 +61418,25 @@ function incrementFor(moduleId, revealId) {
     try {
         const context = core_context.currentCharacterGuard();
         const snapshot = readSnapshot(context);
-        const plan = snapshot?.modulePlan?.moduleId === moduleId ? snapshot.modulePlan : null;
-        const ticket = snapshot?.drawTickets?.find(item => item.selectedModuleId === moduleId && (
-            item.id === snapshot.plan?.activeDrawTicketId || item.id === snapshot.modulePlan?.drawId
-        )) || [...(snapshot?.drawTickets || [])].reverse().find(item => item.selectedModuleId === moduleId) || null;
-        const reveal = snapshot?.revealRecords?.find(row => row.id === revealId && row.moduleId === moduleId);
-        const sourceMemoryIds = plan?.sourceMemoryIds?.length
-            ? plan.sourceMemoryIds
-            : (ticket?.sourceMemoryIds?.length ? ticket.sourceMemoryIds : (reveal?.sourceMemoryIds || []));
+        const reveal = snapshot?.revealRecords?.find(row => row.id === revealId && row.moduleId === moduleId)
+            || snapshot?.revealRecords?.find(row => row.id === revealId);
+        const ids = Array.isArray(reveal?.sourceMemoryIds) && reveal.sourceMemoryIds.length ? reveal.sourceMemoryIds : null;
+        const ticket = ticketForReveal(snapshot, reveal || { moduleId, sourceMemoryIds: ids || [] });
+        const livePlan = snapshot?.modulePlan?.moduleId === moduleId && (!revealId || snapshot.modulePlan.drawId === ticket?.id)
+            ? snapshot.modulePlan
+            : null;
+        const sourceMemoryIds = ids
+            || (ticket?.sourceMemoryIds?.length ? ticket.sourceMemoryIds : null)
+            || livePlan?.sourceMemoryIds
+            || [];
         const memory = archive_repository.getImportedMemory(context);
         const session = core_cache.loadSession(moduleId, { context, memoryBank: memory, clone: true });
         if (session && typeof session === 'object' && !session.kind && moduleId) session.kind = moduleId;
+        // 只按这封信自己的档案编号收。当前这一轮的 frozenAt 会把旧信的段落判成更早的一轮。
         return incremental_view.incrementalProjection(session, {
             sourceMemoryIds,
             createdAt: reveal?.createdAt || 0,
-            since: plan?.frozenAt || 0,
+            since: 0,
         });
     } catch {
         return { kept: false, session: null };
@@ -61386,6 +61466,7 @@ const EMPTY_ROUND = '<p class="rmt-floor-note">这一轮写完了，但是没有
 function writeRound(body, moduleId, revealId) {
     const increment = incrementFor(moduleId, revealId);
     if (!increment.kept) {
+        if (body.dataset.rmtLetterRead === '1' && body.innerHTML) return false;
         const phase = body.closest?.('[data-rmt-floor-shell]')?.dataset?.rmtPhase || '';
         const writing = phase === 'generating' || phase === 'planning';
         body.innerHTML = writing ? '<p class="rmt-floor-note">回忆正在生成中。</p>' : EMPTY_ROUND;
@@ -61397,8 +61478,6 @@ function writeRound(body, moduleId, revealId) {
         return false;
     }
     body.innerHTML = html;
-    const read = body.parentElement?.querySelector?.('[data-rmt-letter-read]');
-    if (read) read.remove();
     const host = body.closest?.('[data-rmt-floor-shell]');
     if (host && revealId) {
         host.dataset.rmtRead = revealId;
@@ -65381,7 +65460,8 @@ dialog#${core_constants.OVERLAY_ID}::backdrop{background:transparent}
 .rmt-task-card[data-state="failed"],.rmt-task-card[data-state="retry"]{border-color:#f0c4c8}
 .rmt-task-main{display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:0}
 .rmt-task-main b{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px}
-.rmt-task-state{flex:0 0 auto;padding:2px 8px;border-radius:999px;background:var(--rmt-theme-soft,#f4e7ee);color:var(--rmt-theme-accent-ink,#9d6d82);font-size:11px;font-weight:800}
+.rmt-task-state{flex:0 0 auto;padding:2px 8px;border:0;border-radius:999px;background:var(--rmt-theme-soft,#f4e7ee);color:var(--rmt-theme-accent-ink,#9d6d82);font:inherit;font-size:11px;font-weight:800}
+button.rmt-task-state{cursor:pointer}
 .rmt-task-state[data-state="running"]{background:#fde7f0;color:#b85b7d}
 .rmt-task-state[data-state="failed"],.rmt-task-state[data-state="retry"]{background:#fde8ea;color:#c24545}
 .rmt-task-state[data-state="done"]{background:#e7f6ee;color:#3d7a55}
@@ -71164,7 +71244,7 @@ function overlayArchiveActions(actionEl, action) {
     if (action === 'travel-dialogue-prev') return ui_travelView.travelDialogueStep(-1);
     if (action === 'travel-dialogue-next') return ui_travelView.travelDialogueStep(1);
     if (action === 'travel-dialogue-replay') return ui_travelView.replayTravelDialogue();
-    if (action === 'tasks' || action === 'task-center-close' || action === 'task-cancel' || action === 'task-cancel-current' || action === 'task-open' || action === 'task-second-step' || action === 'task-queue-remove' || action === 'task-clear-done' || action === 'task-floor-complete' || action === 'task-floor-retry' || action === 'queue-selected' || action === 'generate-together' || action === 'merged-repair' || action === 'merged-resave' || ['merged-discard', 'merged-new', 'merged-export', 'merged-export-legacy', 'merged-discard-legacy'].includes(action)) {
+    if (action === 'tasks' || action === 'task-center-close' || action === 'task-cancel' || action === 'task-cancel-current' || action === 'task-open' || action === 'task-second-step' || action === 'task-queue-remove' || action === 'task-clear-done' || action === 'task-retry-state' || action === 'task-floor-complete' || action === 'task-floor-retry' || action === 'queue-selected' || action === 'generate-together' || action === 'merged-repair' || action === 'merged-resave' || ['merged-discard', 'merged-new', 'merged-export', 'merged-export-legacy', 'merged-discard-legacy'].includes(action)) {
         return ui_taskCenter.handleTaskCenterAction(action, actionEl);
     }
     if (action === 'close') return closeArchiveOverlayFromUser();
@@ -77471,11 +77551,17 @@ function paintTaskCenter(panel) {
     const waiting = queuedForScope();
     const runningNow = cards.some(card => card.state === 'running') || waiting.length > 0;
     const esc = core_text.esc;
-    const cardHtml = card => `<article class="rmt-task-card" data-state="${card.state}">
-      <div class="rmt-task-main"><b>${esc(card.label)}</b><span class="rmt-task-state" data-state="${card.state}">${esc(CARD_LABEL[card.state] || card.state)}</span></div>
+    const cardHtml = card => {
+        const retryable = (card.state === 'failed' || card.state === 'retry') && card.actions;
+        const state = retryable
+            ? `<button type="button" class="rmt-task-state" data-state="${card.state}" data-rmt-action="task-retry-state">${esc(CARD_LABEL[card.state] || card.state)}</button>`
+            : `<span class="rmt-task-state" data-state="${card.state}">${esc(CARD_LABEL[card.state] || card.state)}</span>`;
+        return `<article class="rmt-task-card" data-state="${card.state}">
+      <div class="rmt-task-main"><b>${esc(card.label)}</b>${state}</div>
       <p>${esc(card.detail || '')}</p>
       ${card.actions ? `<div class="rmt-task-actions">${card.actions}</div>` : ''}
     </article>`;
+    };
     const top = panel.scrollTop;
     panel.innerHTML = `<div class="rmt-task-head">
       <b>任务</b>
@@ -77641,6 +77727,17 @@ function handleTaskCenterAction(action, actionEl) {
         return;
     }
     if (action === 'task-center-close') return hideTaskCenter();
+    if (action === 'task-retry-state') {
+        const card = actionEl?.closest?.('.rmt-task-card');
+        const button = [...(card?.querySelectorAll?.('.rmt-task-actions .rmt-btn, .rmt-task-actions button') || [])]
+            .find(node => !node.disabled && node !== actionEl);
+        if (!button) {
+            globalThis.toastr?.info?.('这项现在还不能重试。', '心迹回廊');
+            return;
+        }
+        button.click();
+        return;
+    }
     if (action === 'task-floor-complete' || action === 'task-floor-retry') {
         clearAutoMemoryFloorFailure();
         const run = action === 'task-floor-complete' ? 'completeFloorRound' : 'resumeFloorPlan';

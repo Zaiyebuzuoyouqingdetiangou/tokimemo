@@ -9,6 +9,7 @@ import * as auto_memory_floor from '../autoMemory/floorPace.js';
 import * as auto_memory_gap from '../autoMemory/gapFill.js';
 import * as auto_memory_plan from '../autoMemory/planStore.js';
 import * as auto_memory_registry from '../autoMemory/moduleRegistry.js';
+import * as auto_memory_redo from '../autoMemory/redo.js';
 import * as auto_memory_scheduler from '../autoMemory/scheduler.js';
 import * as auto_memory_stream from '../autoMemory/streamGate.js';
 import * as shell_state from '../autoMemory/shellState.js';
@@ -75,6 +76,18 @@ function latestAssistantIndex(chat) {
 
 function clearShells() {
     document.querySelectorAll('[data-rmt-floor-shell]').forEach(node => node.remove());
+}
+
+function latestFloorMode() {
+    return core_settings.getPluginSettings().autoMemoryLatestFloor === true;
+}
+
+function ticketForReveal(snapshot, reveal) {
+    const ids = new Set(reveal?.sourceMemoryIds || []);
+    const tickets = [...(snapshot?.drawTickets || [])].reverse();
+    return tickets.find(ticket => ticket.selectedModuleId === reveal?.moduleId && (ticket.sourceMemoryIds || []).some(id => ids.has(id)))
+        || tickets.find(ticket => ticket.selectedModuleId === reveal?.moduleId)
+        || null;
 }
 
 function roundReveal(records, moduleId, ids, steps, ticket) {
@@ -198,7 +211,7 @@ function markup(view) {
     const caption = revealPaper ? '' : `<small data-rmt-letter-detail>${core_text.esc(view.detail || (writing ? '正在生成中' : ''))}</small>`;
     const heading = view.title ? `<p data-rmt-letter-achievement>${core_text.esc(view.title)}</p>` : '';
     const copy = view.achievementCopy ? `<p data-rmt-letter-copy>${core_text.esc(view.achievementCopy)}</p>` : '';
-    const read = view.contentOpen ? '' : `<button type="button" class="rmt-btn" data-rmt-letter-read data-rmt-reveal="${core_text.esc(view.revealId)}" data-rmt-module="${core_text.esc(view.moduleId)}">打开回忆</button>`;
+    const read = `<button type="button" class="rmt-btn" data-rmt-letter-read data-rmt-reveal="${core_text.esc(view.revealId)}" data-rmt-module="${core_text.esc(view.moduleId)}">打开回忆</button>`;
     const paper = revealPaper
         ? `<button type="button" class="rmt-btn rmt-heart-letter-close" data-rmt-letter-close>收起这封信</button>${heading}${copy}${read}`
         : '';
@@ -256,43 +269,70 @@ function watchStall(view, context) {
     return view;
 }
 
-function paint(context) {
-    if (shell_state.shellBlocksChatInput()) return;
-    if (auto_memory_scheduler.storyStillWriting(context)) {
-        stallState = { signature: '', since: 0 };
-        stallNoted = false;
-        try { ui_taskCenter.clearAutoMemoryFloorFailure(); } catch { /* 任务条稍后还会刷。 */ }
-        clearShells();
-        return;
+function viewForReveal(context, snapshot, reveal) {
+    const ticket = ticketForReveal(snapshot, reveal);
+    const moduleId = reveal.moduleId || '';
+    const item = auto_memory_registry.autoMemoryModuleById(moduleId);
+    const previewKept = moduleId ? incrementFor(moduleId, reveal.id).kept === true : false;
+    const stored = auto_memory_library.autoAchievementForReveal(context, {
+        achievementId: reveal.achievementId || '',
+        moduleId,
+        sourceMemoryIds: [...(reveal.sourceMemoryIds || [])],
+    });
+    const rememberedTitle = auto_memory_gap.rememberedAchievementTitle(context.chatMetadata, reveal.achievementId);
+    const rememberedCopy = auto_memory_gap.rememberedAchievementCopy(context.chatMetadata, reveal.achievementId);
+    return shell_state.shellView({
+        enabled: true,
+        archiveReady: true,
+        moduleId,
+        moduleTitle: item?.title || '',
+        moduleComplete: true,
+        steps: [{ status: 'completed' }],
+        ticketStatus: ticket?.status || 'completed',
+        revealStatus: reveal.status,
+        revealId: reveal.id,
+        drawFloor: ticket?.dueFloor || 0,
+        floor: ticket?.dueFloor || 0,
+        canOpen: previewKept,
+        revealLine: stored?.title || rememberedTitle || '',
+        achievementCopy: stored?.description || rememberedCopy || '',
+        preferLibraryAchievement: true,
+        intervalFloors: snapshot.plan.intervalFloors,
+        nextDueFloor: snapshot.plan.nextDueFloor,
+    });
+}
+
+function letterSlots(context) {
+    const snapshot = readSnapshot(context);
+    const slots = [];
+    const seen = new Set();
+    if (snapshot?.plan.enabled) {
+        for (const reveal of snapshot.revealRecords || []) {
+            if (reveal.status !== 'ready' && reveal.status !== 'opened' && reveal.status !== 'achievement_pending') continue;
+            const ticket = ticketForReveal(snapshot, reveal);
+            const located = auto_memory_redo.drawFloorMessage(context.chat, ticket?.dueFloor, latestFloorMode());
+            if (!located) continue;
+            const view = viewForReveal(context, snapshot, reveal);
+            if (view.phase === 'hidden') continue;
+            slots.push({ key: reveal.id, messageIndex: located.index, view });
+            seen.add(reveal.id);
+        }
     }
-    const view = watchStall(viewFor(context), context);
-    const toast = shell_state.toastForTransition(lastPhase, view.phase, { line: view.title }, { initial: !sawPhase });
-    sawPhase = true;
-    lastPhase = view.phase;
-    if (toast) {
-        const options = view.revealId ? { onclick: () => openReveal(view.revealId) } : undefined;
-        globalThis.toastr?.[toast.level]?.(toast.message, toast.title, options);
+    const live = watchStall(viewFor(context), context);
+    const latest = latestAssistantIndex(context.chat);
+    if (latest >= 0 && live.phase !== 'hidden') {
+        const existing = live.revealId ? slots.find(slot => slot.key === live.revealId) : null;
+        if (existing) existing.view = live;
+        else slots.push({ key: live.revealId || `live:${latest}`, messageIndex: latest, view: live });
     }
-    if (view.phase === 'hidden') { clearShells(); return; }
-    if (!auto_memory_floor.assistantBodyReady(context.chat, { generating: auto_memory_stream.generationOpen(context) })) {
-        clearShells();
-        return;
-    }
-    const index = latestAssistantIndex(context.chat);
-    const mes = ui_floor.messageElement(index);
-    if (!mes || ui_floor.writesMessageText()) { clearShells(); return; }
-    ensureCss();
-    mirrorModuleCss();
-    let host = mes.querySelector('[data-rmt-floor-shell="1"]');
-    if (!host) {
-        clearShells();
-        host = ui_floor.placeAfterMessage(mes);
-    }
-    if (!host) return;
+    return { slots, live };
+}
+
+function paintHost(host, view) {
     if (view.phase === 'pace' && host.dataset.rmtPhase === 'pace' && host.dataset.rmtPace === view.detail && host.dataset.rmtGap === (view.gapText || '')) return;
     const paper = host.querySelector('[data-rmt-letter-paper]');
     const body = host.querySelector('[data-rmt-floor-body]');
-    const contentOpen = view.phase === 'reveal' && host.dataset.rmtRead === view.revealId;
+    const contentOpen = view.phase === 'reveal' && (host.dataset.rmtRead === view.revealId || body?.dataset?.rmtLetterRead === '1');
     view.contentOpen = contentOpen;
     const sameLetter = host.dataset.rmtPhase === view.phase && host.dataset.rmtReveal === view.revealId && host.dataset.rmtPace === (view.phase === 'pace' ? view.detail : '') && host.dataset.rmtOpen === (contentOpen ? '1' : '');
     host.dataset.rmtPhase = view.phase;
@@ -306,7 +346,7 @@ function paint(context) {
         if (view.phase !== 'reveal' && body) {
             body.replaceChildren();
             delete body.dataset.rmtLetterRead;
-        } else if (body?.dataset?.rmtLetterRead === '1' && view.canOpen) {
+        } else if (body?.dataset?.rmtLetterRead === '1') {
             if (body.dataset.rmtFloorLive === '1') body.removeAttribute('data-rmt-floor-live');
             writeRound(body, view.moduleId, view.revealId);
         }
@@ -318,7 +358,6 @@ function paint(context) {
         if (detail && view.phase !== 'reveal') detail.textContent = view.detail || '正在生成中';
         if (view.phase !== 'reveal') closeLetter(host);
         host.querySelector('.rmt-heart-letter')?.classList.toggle('is-writing', view.phase === 'generating' || view.phase === 'planning');
-        queueAutomaticRepair(view);
         return;
     }
     const paperWasOpen = view.phase === 'reveal' && ((paper && !paper.hidden) || contentOpen);
@@ -329,13 +368,49 @@ function paint(context) {
         const nextBody = host.querySelector('[data-rmt-floor-body]');
         if (nextPaper) nextPaper.hidden = false;
         if (seal) seal.hidden = true;
-        if (contentOpen && nextBody) {
+        if (nextBody && (contentOpen || nextBody.dataset.rmtLetterRead === '1')) {
             nextBody.dataset.rmtLetterRead = '1';
             writeRound(nextBody, view.moduleId, view.revealId);
         }
     }
+}
+
+function paint(context) {
+    if (shell_state.shellBlocksChatInput()) return;
+    if (auto_memory_scheduler.storyStillWriting(context)) {
+        stallState = { signature: '', since: 0 };
+        stallNoted = false;
+        try { ui_taskCenter.clearAutoMemoryFloorFailure(); } catch { /* 任务条稍后还会刷。 */ }
+        return;
+    }
+    if (!auto_memory_floor.assistantBodyReady(context.chat, { generating: auto_memory_stream.generationOpen(context) })) return;
+    if (ui_floor.writesMessageText()) return;
+    const { slots, live } = letterSlots(context);
+    const toast = shell_state.toastForTransition(lastPhase, live.phase, { line: live.title }, { initial: !sawPhase });
+    sawPhase = true;
+    lastPhase = live.phase;
+    if (toast) {
+        const options = live.revealId ? { onclick: () => openReveal(live.revealId) } : undefined;
+        globalThis.toastr?.[toast.level]?.(toast.message, toast.title, options);
+    }
+    ensureCss();
+    mirrorModuleCss();
+    const wanted = new Set();
+    for (const slot of slots) {
+        const mes = ui_floor.messageElement(slot.messageIndex);
+        if (!mes) continue;
+        let host = [...mes.querySelectorAll('[data-rmt-floor-shell="1"]')].find(node => node.dataset.rmtLetterKey === slot.key);
+        if (!host) host = ui_floor.placeAfterMessage(mes);
+        if (!host) continue;
+        host.dataset.rmtLetterKey = slot.key;
+        wanted.add(host);
+        paintHost(host, slot.view);
+    }
+    document.querySelectorAll('[data-rmt-floor-shell]').forEach(node => {
+        if (!wanted.has(node)) node.remove();
+    });
     try { ui_taskCenter.syncLiveTaskStrip(); } catch { /* 任务条刷新失败时，楼层下面的状态仍保留。 */ }
-    queueAutomaticRepair(view);
+    queueAutomaticRepair(live);
 }
 
 function queueAutomaticRepair(view) {
@@ -372,21 +447,25 @@ function incrementFor(moduleId, revealId) {
     try {
         const context = core_context.currentCharacterGuard();
         const snapshot = readSnapshot(context);
-        const plan = snapshot?.modulePlan?.moduleId === moduleId ? snapshot.modulePlan : null;
-        const ticket = snapshot?.drawTickets?.find(item => item.selectedModuleId === moduleId && (
-            item.id === snapshot.plan?.activeDrawTicketId || item.id === snapshot.modulePlan?.drawId
-        )) || [...(snapshot?.drawTickets || [])].reverse().find(item => item.selectedModuleId === moduleId) || null;
-        const reveal = snapshot?.revealRecords?.find(row => row.id === revealId && row.moduleId === moduleId);
-        const sourceMemoryIds = plan?.sourceMemoryIds?.length
-            ? plan.sourceMemoryIds
-            : (ticket?.sourceMemoryIds?.length ? ticket.sourceMemoryIds : (reveal?.sourceMemoryIds || []));
+        const reveal = snapshot?.revealRecords?.find(row => row.id === revealId && row.moduleId === moduleId)
+            || snapshot?.revealRecords?.find(row => row.id === revealId);
+        const ids = Array.isArray(reveal?.sourceMemoryIds) && reveal.sourceMemoryIds.length ? reveal.sourceMemoryIds : null;
+        const ticket = ticketForReveal(snapshot, reveal || { moduleId, sourceMemoryIds: ids || [] });
+        const livePlan = snapshot?.modulePlan?.moduleId === moduleId && (!revealId || snapshot.modulePlan.drawId === ticket?.id)
+            ? snapshot.modulePlan
+            : null;
+        const sourceMemoryIds = ids
+            || (ticket?.sourceMemoryIds?.length ? ticket.sourceMemoryIds : null)
+            || livePlan?.sourceMemoryIds
+            || [];
         const memory = archive_repository.getImportedMemory(context);
         const session = core_cache.loadSession(moduleId, { context, memoryBank: memory, clone: true });
         if (session && typeof session === 'object' && !session.kind && moduleId) session.kind = moduleId;
+        // 只按这封信自己的档案编号收。当前这一轮的 frozenAt 会把旧信的段落判成更早的一轮。
         return incremental_view.incrementalProjection(session, {
             sourceMemoryIds,
             createdAt: reveal?.createdAt || 0,
-            since: plan?.frozenAt || 0,
+            since: 0,
         });
     } catch {
         return { kept: false, session: null };
@@ -416,6 +495,7 @@ const EMPTY_ROUND = '<p class="rmt-floor-note">这一轮写完了，但是没有
 function writeRound(body, moduleId, revealId) {
     const increment = incrementFor(moduleId, revealId);
     if (!increment.kept) {
+        if (body.dataset.rmtLetterRead === '1' && body.innerHTML) return false;
         const phase = body.closest?.('[data-rmt-floor-shell]')?.dataset?.rmtPhase || '';
         const writing = phase === 'generating' || phase === 'planning';
         body.innerHTML = writing ? '<p class="rmt-floor-note">回忆正在生成中。</p>' : EMPTY_ROUND;
@@ -427,8 +507,6 @@ function writeRound(body, moduleId, revealId) {
         return false;
     }
     body.innerHTML = html;
-    const read = body.parentElement?.querySelector?.('[data-rmt-letter-read]');
-    if (read) read.remove();
     const host = body.closest?.('[data-rmt-floor-shell]');
     if (host && revealId) {
         host.dataset.rmtRead = revealId;
