@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 282
-// Source SHA-256: b572f04aae8a7c94ee1bab53f725c6e8d010af4ec53dfe0cf886d25a9dba98cb
+// Source SHA-256: 0c1946cdbc602c9af2f5728bbd0ace0705de7a28c039ad576ca2277bb829990b
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -3677,16 +3677,46 @@ function trimStory(story, ids, createdAt) {
     return { ...story, chapters };
 }
 
-function incrementalProjection(session, { sourceMemoryIds = [], createdAt = 0 } = {}) {
+function lastUpdateOf(session) {
+    const last = session?.generationMeta?.lastUpdate;
+    if (!last || typeof last !== 'object') return null;
+    return {
+        added: Math.max(0, Math.floor(Number(last.added) || 0)),
+        updatedAt: Number(last.updatedAt) || 0,
+        consumed: Array.isArray(last.consumedMemoryIds) ? last.consumedMemoryIds : [],
+    };
+}
+
+function narrowToRound(original, filtered, added) {
+    if (!Array.isArray(original) || added < 1) return filtered;
+    const tail = original.slice(-added);
+    if (!filtered.length) return tail;
+    if (filtered.length <= added) return filtered;
+    const tailIds = new Set(tail.map(item => item?.id).filter(Boolean));
+    const narrowed = filtered.filter(item => tailIds.has(item?.id));
+    return narrowed.length ? narrowed : tail;
+}
+
+function incrementalProjection(session, { sourceMemoryIds = [], createdAt = 0, since = 0 } = {}) {
     if (!session || typeof session !== 'object') return { kept: false, session: null };
     const ids = new Set(Array.isArray(sourceMemoryIds) ? sourceMemoryIds : []);
     const copy = structuredClone(session);
+    const last = lastUpdateOf(session);
+    const sinceAt = Number(since) || 0;
+    const predates = !!(last && sinceAt > 0 && last.updatedAt > 0 && last.updatedAt < sinceAt);
+    const belongs = !!(last && !predates && ((sinceAt > 0 && last.updatedAt >= sinceAt) || last.consumed.some(id => ids.has(id))));
     let kept = false;
     for (const key of LIST_KEYS) {
         if (!Array.isArray(copy[key])) continue;
-        copy[key] = key === 'stories'
-            ? copy[key].map(story => trimStory(story, ids, createdAt)).filter(Boolean)
-            : copy[key].filter(item => matches(item, ids, createdAt));
+        if (predates || (belongs && last.added < 1)) {
+            copy[key] = [];
+            continue;
+        }
+        const original = Array.isArray(session[key]) ? session[key] : [];
+        const filtered = key === 'stories'
+            ? original.map(story => trimStory(story, ids, createdAt)).filter(Boolean)
+            : original.filter(item => matches(item, ids, createdAt));
+        copy[key] = key === 'stories' || !belongs ? filtered : narrowToRound(original, filtered, last.added);
         if (copy[key].length) kept = true;
     }
     copy.incrementalOnly = true;
@@ -5491,6 +5521,8 @@ function floorShellCss() {
 .rmt-floor-shell .rmt-floor-fill,.rmt-floor-shell .rmt-heart-letter .rmt-btn{min-height:28px;padding:2px 10px}
 .rmt-heart-letter{width:min(100%,320px);max-width:100%;min-width:0;margin:10px 0 4px;color:#5c463c}
 .rmt-heart-letter:has(.rmt-heart-letter-paper:not([hidden])){width:min(100%,640px)}
+.rmt-heart-letter:has(.rmt-heart-letter-paper:not([hidden])) .rmt-heart-letter-seal{display:none}
+.rmt-heart-letter [data-rmt-letter-achievement]{margin:0 0 10px;font-weight:650}
 .rmt-heart-letter-seal{display:grid;justify-items:center;gap:2px;width:100%;margin:0;padding:16px 14px 14px;border:1px solid #e7b7c8;border-left:7px solid #e99ab9;border-radius:6px 18px 18px 6px;background:#fff7f2;color:#6a4a58;box-shadow:0 10px 24px rgba(20,12,16,.16);font:inherit;text-align:center;cursor:pointer}
 .rmt-heart-letter-seal i{font-style:normal;color:#e07098;font-size:22px;line-height:1}
 .rmt-heart-letter-seal b{font-size:15px;line-height:1.4}
@@ -5584,11 +5616,17 @@ function shellView(input = {}) {
         const progress = knownProgress(done, steps.length);
         return { ...face, phase: 'generating', progress, title: '正在把这段回忆写下来', detail: progress ? `正在生成 ${progress.done} / ${progress.total}` : '正在生成' };
     }
+    if (!steps.length && input.roundReveal === true && (revealStatus === 'ready' || revealStatus === 'opened')) {
+        return { ...face, phase: 'reveal', showReveal: true, title: input.revealLine || revealFace(input), detail: '点击查看详情' };
+    }
     if (input.ticketStatus === 'drawn' || input.ticketStatus === 'running') {
         const title = cleanName(input.moduleTitle);
         return { ...face, phase: 'drawn', title: '抽中了一段回忆', detail: title ? `这一页是${title}。` : '还没开始写正文。' };
     }
-    if (revealStatus === 'generating' || revealStatus === 'ready' || revealStatus === 'opened') {
+    if (revealStatus === 'ready' || revealStatus === 'opened') {
+        return { ...face, phase: 'reveal', showReveal: true, title: input.revealLine || revealFace(input), detail: '点击查看详情' };
+    }
+    if (revealStatus === 'generating') {
         return { ...face, phase: 'generating', title: '回忆生成中', detail: '还没整份写完，先不拆开。' };
     }
     const remain = auto_memory_floor.formatFloorRemain(auto_memory_floor.floorsRemaining(input.floor, input.nextDueFloor));
@@ -58921,6 +58959,11 @@ let cleanup = null;
 let lastPhase = '';
 let sawPhase = false;
 let timer = 0;
+let letterSession = null;
+let letterMode = '';
+let letterParked = false;
+let parkedMode = null;
+let parkedSession = null;
 
 function floorShellCss() {
     return shell_state.floorShellCss();
@@ -58955,8 +58998,30 @@ function latestAssistantIndex(chat) {
     return -1;
 }
 
+function releaseLetterRuntime() {
+    if (letterParked && runtimeState.activeSession === letterSession) {
+        runtimeState.activeMode = parkedMode;
+        runtimeState.activeSession = parkedSession;
+    }
+    letterParked = false;
+    parkedMode = null;
+    parkedSession = null;
+    letterSession = null;
+    letterMode = '';
+}
+
 function clearShells() {
+    releaseLetterRuntime();
     document.querySelectorAll('[data-rmt-floor-shell]').forEach(node => node.remove());
+}
+
+function roundReveal(records, moduleId, ids, steps, ticket) {
+    const mine = records.filter(row => row.moduleId === moduleId);
+    const matched = ids.size ? mine.find(row => (row.sourceMemoryIds || []).some(id => ids.has(id))) : null;
+    if (matched) return matched;
+    const busy = steps.some(step => step.status !== 'completed') || ticket?.status === 'drawn' || ticket?.status === 'running';
+    if (busy || !moduleId) return null;
+    return mine[0] || null;
 }
 
 function readSnapshot(context) {
@@ -58980,7 +59045,9 @@ function viewFor(context) {
     const ticket = snapshot.drawTickets.find(item => item.id === snapshot.plan.activeDrawTicketId) || null;
     const moduleId = snapshot.modulePlan?.moduleId || ticket?.selectedModuleId || '';
     const item = auto_memory_registry.autoMemoryModuleById(moduleId);
-    const reveal = [...snapshot.revealRecords].reverse().find(row => !moduleId || row.moduleId === moduleId) || null;
+    const stepsForReveal = snapshot.modulePlan?.steps || [];
+    const roundIds = new Set([...(snapshot.modulePlan?.sourceMemoryIds || []), ...(ticket?.sourceMemoryIds || [])]);
+    const reveal = roundReveal([...snapshot.revealRecords].reverse(), moduleId, roundIds, stepsForReveal, ticket);
     let rows = [];
     try { rows = core_requestCoordinator.listChatTaskSnapshot(context); } catch { rows = []; }
     const steps = snapshot.modulePlan?.steps || [];
@@ -59001,6 +59068,7 @@ function viewFor(context) {
         ticketStatus: ticket?.status || '',
         revealStatus: reveal?.status || '',
         revealId: reveal?.id || '',
+        roundReveal: !!reveal && !stepsForReveal.some(step => step.status !== 'completed') && (reveal.status === 'ready' || reveal.status === 'opened'),
         revealLine: shell_state.revealFace({
             userName: context.name1,
             achievementTitle: auto_memory_gap.rememberedAchievementTitle(context.chatMetadata, reveal?.achievementId),
@@ -59118,16 +59186,34 @@ function incrementFor(moduleId, revealId) {
         const context = core_context.currentCharacterGuard();
         const snapshot = readSnapshot(context);
         const plan = snapshot?.modulePlan?.moduleId === moduleId ? snapshot.modulePlan : null;
-        const reveal = snapshot?.revealRecords?.find(row => row.id === revealId);
+        const ticket = snapshot?.drawTickets?.find(item => item.id === snapshot.plan?.activeDrawTicketId && item.selectedModuleId === moduleId) || null;
+        const reveal = snapshot?.revealRecords?.find(row => row.id === revealId && row.moduleId === moduleId);
+        const sourceMemoryIds = plan?.sourceMemoryIds?.length
+            ? plan.sourceMemoryIds
+            : (ticket?.sourceMemoryIds?.length ? ticket.sourceMemoryIds : (reveal?.sourceMemoryIds || []));
         const memory = archive_repository.getImportedMemory(context);
         const session = core_cache.loadSession(moduleId, { context, memoryBank: memory, clone: true });
         return incremental_view.incrementalProjection(session, {
-            sourceMemoryIds: plan?.sourceMemoryIds || reveal?.sourceMemoryIds || [],
+            sourceMemoryIds,
             createdAt: reveal?.createdAt || 0,
+            since: plan?.frozenAt || 0,
         });
     } catch {
         return { kept: false, session: null };
     }
+}
+
+function engageLetter(body) {
+    if (!body || !letterSession) return false;
+    if (!letterParked) {
+        parkedMode = runtimeState.activeMode;
+        parkedSession = runtimeState.activeSession;
+        letterParked = true;
+    }
+    body.dataset.rmtFloorLive = '1';
+    runtimeState.activeMode = letterMode;
+    runtimeState.activeSession = letterSession;
+    return true;
 }
 
 async function openInFloor(body) {
@@ -59136,32 +59222,20 @@ async function openInFloor(body) {
     const item = auto_memory_registry.autoMemoryModuleById(moduleId);
     if (!item || !body) return;
     const increment = incrementFor(moduleId, revealId);
-    let session = increment.kept ? increment.session : null;
-    if (!session) {
-        try {
-            const context = core_context.currentCharacterGuard();
-            const memory = archive_repository.getImportedMemory(context);
-            session = core_cache.loadSession(moduleId, { context, memoryBank: memory, clone: true });
-        } catch { session = null; }
-    }
-    if (!session) {
-        body.innerHTML = '<p class="rmt-floor-note">这一页还在写。写好之后可以在这里打开。</p>';
+    letterSession = increment.kept ? increment.session : null;
+    letterMode = item.id;
+    if (!letterSession) {
+        body.innerHTML = '<p class="rmt-floor-note">这一轮还没有新的段落。写好之后，这里只放新的。</p>';
         return;
     }
     mirrorModuleCss();
-    body.dataset.rmtFloorLive = '1';
-    const previousMode = runtimeState.activeMode;
-    const previousSession = runtimeState.activeSession;
     try {
-        await Promise.resolve(ui_overlay.openCachedOrGenerate(item.id, { workspaceRoute: item.id, incrementalSession: session }));
+        if (!engageLetter(body)) return;
+        await Promise.resolve(ui_overlay.openCachedOrGenerate(item.id, { workspaceRoute: item.id, incrementalSession: letterSession }));
     } catch (error) {
         console.warn('[HeartbeatMemories] floor detail skipped', core_text.safeErrorDiagnostic(error));
         globalThis.toastr?.error?.('这一页暂时没能打开。回忆还在，可以再点一次。', '心口顿了一下');
         return;
-    } finally {
-        delete body.dataset.rmtFloorLive;
-        runtimeState.activeMode = previousMode;
-        runtimeState.activeSession = previousSession;
     }
     rememberOpened(revealId);
 }
@@ -59200,6 +59274,13 @@ function onClick(event) {
         event.preventDefault();
         event.stopPropagation();
         void openInFloor(read.parentElement?.querySelector('[data-rmt-floor-body]'));
+        return;
+    }
+    const floorBody = event.target?.closest?.('[data-rmt-floor-body]');
+    if (floorBody?.childElementCount && letterSession && floorBody.dataset.rmtModule === letterMode) {
+        event.preventDefault();
+        event.stopPropagation();
+        if (engageLetter(floorBody)) ui_overlay.handleOverlayClick(event);
         return;
     }
     const seal = event.target?.closest?.('[data-rmt-letter-open]');
@@ -66822,9 +66903,10 @@ function invalidateArchiveViewForChatNavigation(nextChatId = '') {
 }
 
 function bodyEl() {
+    const overlay = document.getElementById(core_constants.OVERLAY_ID);
     const floor = document.querySelector('.rmt-floor-shell [data-rmt-floor-body][data-rmt-floor-live="1"]');
-    if (floor) return floor;
-    return document.querySelector(`#${core_constants.OVERLAY_ID} .rmt-body`);
+    if (floor && (!overlay || overlay.hidden)) return floor;
+    return overlay?.querySelector('.rmt-body') || document.querySelector(`#${core_constants.OVERLAY_ID} .rmt-body`);
 }
 
 function topTitle(text) {

@@ -26,6 +26,11 @@ let cleanup = null;
 let lastPhase = '';
 let sawPhase = false;
 let timer = 0;
+let letterSession = null;
+let letterMode = '';
+let letterParked = false;
+let parkedMode = null;
+let parkedSession = null;
 
 export function floorShellCss() {
     return shell_state.floorShellCss();
@@ -60,8 +65,30 @@ function latestAssistantIndex(chat) {
     return -1;
 }
 
+function releaseLetterRuntime() {
+    if (letterParked && runtimeState.activeSession === letterSession) {
+        runtimeState.activeMode = parkedMode;
+        runtimeState.activeSession = parkedSession;
+    }
+    letterParked = false;
+    parkedMode = null;
+    parkedSession = null;
+    letterSession = null;
+    letterMode = '';
+}
+
 function clearShells() {
+    releaseLetterRuntime();
     document.querySelectorAll('[data-rmt-floor-shell]').forEach(node => node.remove());
+}
+
+function roundReveal(records, moduleId, ids, steps, ticket) {
+    const mine = records.filter(row => row.moduleId === moduleId);
+    const matched = ids.size ? mine.find(row => (row.sourceMemoryIds || []).some(id => ids.has(id))) : null;
+    if (matched) return matched;
+    const busy = steps.some(step => step.status !== 'completed') || ticket?.status === 'drawn' || ticket?.status === 'running';
+    if (busy || !moduleId) return null;
+    return mine[0] || null;
 }
 
 function readSnapshot(context) {
@@ -85,7 +112,9 @@ function viewFor(context) {
     const ticket = snapshot.drawTickets.find(item => item.id === snapshot.plan.activeDrawTicketId) || null;
     const moduleId = snapshot.modulePlan?.moduleId || ticket?.selectedModuleId || '';
     const item = auto_memory_registry.autoMemoryModuleById(moduleId);
-    const reveal = [...snapshot.revealRecords].reverse().find(row => !moduleId || row.moduleId === moduleId) || null;
+    const stepsForReveal = snapshot.modulePlan?.steps || [];
+    const roundIds = new Set([...(snapshot.modulePlan?.sourceMemoryIds || []), ...(ticket?.sourceMemoryIds || [])]);
+    const reveal = roundReveal([...snapshot.revealRecords].reverse(), moduleId, roundIds, stepsForReveal, ticket);
     let rows = [];
     try { rows = core_requestCoordinator.listChatTaskSnapshot(context); } catch { rows = []; }
     const steps = snapshot.modulePlan?.steps || [];
@@ -106,6 +135,7 @@ function viewFor(context) {
         ticketStatus: ticket?.status || '',
         revealStatus: reveal?.status || '',
         revealId: reveal?.id || '',
+        roundReveal: !!reveal && !stepsForReveal.some(step => step.status !== 'completed') && (reveal.status === 'ready' || reveal.status === 'opened'),
         revealLine: shell_state.revealFace({
             userName: context.name1,
             achievementTitle: auto_memory_gap.rememberedAchievementTitle(context.chatMetadata, reveal?.achievementId),
@@ -223,16 +253,34 @@ function incrementFor(moduleId, revealId) {
         const context = core_context.currentCharacterGuard();
         const snapshot = readSnapshot(context);
         const plan = snapshot?.modulePlan?.moduleId === moduleId ? snapshot.modulePlan : null;
-        const reveal = snapshot?.revealRecords?.find(row => row.id === revealId);
+        const ticket = snapshot?.drawTickets?.find(item => item.id === snapshot.plan?.activeDrawTicketId && item.selectedModuleId === moduleId) || null;
+        const reveal = snapshot?.revealRecords?.find(row => row.id === revealId && row.moduleId === moduleId);
+        const sourceMemoryIds = plan?.sourceMemoryIds?.length
+            ? plan.sourceMemoryIds
+            : (ticket?.sourceMemoryIds?.length ? ticket.sourceMemoryIds : (reveal?.sourceMemoryIds || []));
         const memory = archive_repository.getImportedMemory(context);
         const session = core_cache.loadSession(moduleId, { context, memoryBank: memory, clone: true });
         return incremental_view.incrementalProjection(session, {
-            sourceMemoryIds: plan?.sourceMemoryIds || reveal?.sourceMemoryIds || [],
+            sourceMemoryIds,
             createdAt: reveal?.createdAt || 0,
+            since: plan?.frozenAt || 0,
         });
     } catch {
         return { kept: false, session: null };
     }
+}
+
+function engageLetter(body) {
+    if (!body || !letterSession) return false;
+    if (!letterParked) {
+        parkedMode = runtimeState.activeMode;
+        parkedSession = runtimeState.activeSession;
+        letterParked = true;
+    }
+    body.dataset.rmtFloorLive = '1';
+    runtimeState.activeMode = letterMode;
+    runtimeState.activeSession = letterSession;
+    return true;
 }
 
 async function openInFloor(body) {
@@ -241,32 +289,20 @@ async function openInFloor(body) {
     const item = auto_memory_registry.autoMemoryModuleById(moduleId);
     if (!item || !body) return;
     const increment = incrementFor(moduleId, revealId);
-    let session = increment.kept ? increment.session : null;
-    if (!session) {
-        try {
-            const context = core_context.currentCharacterGuard();
-            const memory = archive_repository.getImportedMemory(context);
-            session = core_cache.loadSession(moduleId, { context, memoryBank: memory, clone: true });
-        } catch { session = null; }
-    }
-    if (!session) {
-        body.innerHTML = '<p class="rmt-floor-note">这一页还在写。写好之后可以在这里打开。</p>';
+    letterSession = increment.kept ? increment.session : null;
+    letterMode = item.id;
+    if (!letterSession) {
+        body.innerHTML = '<p class="rmt-floor-note">这一轮还没有新的段落。写好之后，这里只放新的。</p>';
         return;
     }
     mirrorModuleCss();
-    body.dataset.rmtFloorLive = '1';
-    const previousMode = runtimeState.activeMode;
-    const previousSession = runtimeState.activeSession;
     try {
-        await Promise.resolve(ui_overlay.openCachedOrGenerate(item.id, { workspaceRoute: item.id, incrementalSession: session }));
+        if (!engageLetter(body)) return;
+        await Promise.resolve(ui_overlay.openCachedOrGenerate(item.id, { workspaceRoute: item.id, incrementalSession: letterSession }));
     } catch (error) {
         console.warn('[HeartbeatMemories] floor detail skipped', core_text.safeErrorDiagnostic(error));
         globalThis.toastr?.error?.('这一页暂时没能打开。回忆还在，可以再点一次。', '心口顿了一下');
         return;
-    } finally {
-        delete body.dataset.rmtFloorLive;
-        runtimeState.activeMode = previousMode;
-        runtimeState.activeSession = previousSession;
     }
     rememberOpened(revealId);
 }
@@ -305,6 +341,13 @@ function onClick(event) {
         event.preventDefault();
         event.stopPropagation();
         void openInFloor(read.parentElement?.querySelector('[data-rmt-floor-body]'));
+        return;
+    }
+    const floorBody = event.target?.closest?.('[data-rmt-floor-body]');
+    if (floorBody?.childElementCount && letterSession && floorBody.dataset.rmtModule === letterMode) {
+        event.preventDefault();
+        event.stopPropagation();
+        if (engageLetter(floorBody)) ui_overlay.handleOverlayClick(event);
         return;
     }
     const seal = event.target?.closest?.('[data-rmt-letter-open]');

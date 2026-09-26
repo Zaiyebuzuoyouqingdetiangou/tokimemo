@@ -22,16 +22,46 @@ function trimStory(story, ids, createdAt) {
     return { ...story, chapters };
 }
 
-export function incrementalProjection(session, { sourceMemoryIds = [], createdAt = 0 } = {}) {
+function lastUpdateOf(session) {
+    const last = session?.generationMeta?.lastUpdate;
+    if (!last || typeof last !== 'object') return null;
+    return {
+        added: Math.max(0, Math.floor(Number(last.added) || 0)),
+        updatedAt: Number(last.updatedAt) || 0,
+        consumed: Array.isArray(last.consumedMemoryIds) ? last.consumedMemoryIds : [],
+    };
+}
+
+function narrowToRound(original, filtered, added) {
+    if (!Array.isArray(original) || added < 1) return filtered;
+    const tail = original.slice(-added);
+    if (!filtered.length) return tail;
+    if (filtered.length <= added) return filtered;
+    const tailIds = new Set(tail.map(item => item?.id).filter(Boolean));
+    const narrowed = filtered.filter(item => tailIds.has(item?.id));
+    return narrowed.length ? narrowed : tail;
+}
+
+export function incrementalProjection(session, { sourceMemoryIds = [], createdAt = 0, since = 0 } = {}) {
     if (!session || typeof session !== 'object') return { kept: false, session: null };
     const ids = new Set(Array.isArray(sourceMemoryIds) ? sourceMemoryIds : []);
     const copy = structuredClone(session);
+    const last = lastUpdateOf(session);
+    const sinceAt = Number(since) || 0;
+    const predates = !!(last && sinceAt > 0 && last.updatedAt > 0 && last.updatedAt < sinceAt);
+    const belongs = !!(last && !predates && ((sinceAt > 0 && last.updatedAt >= sinceAt) || last.consumed.some(id => ids.has(id))));
     let kept = false;
     for (const key of LIST_KEYS) {
         if (!Array.isArray(copy[key])) continue;
-        copy[key] = key === 'stories'
-            ? copy[key].map(story => trimStory(story, ids, createdAt)).filter(Boolean)
-            : copy[key].filter(item => matches(item, ids, createdAt));
+        if (predates || (belongs && last.added < 1)) {
+            copy[key] = [];
+            continue;
+        }
+        const original = Array.isArray(session[key]) ? session[key] : [];
+        const filtered = key === 'stories'
+            ? original.map(story => trimStory(story, ids, createdAt)).filter(Boolean)
+            : original.filter(item => matches(item, ids, createdAt));
+        copy[key] = key === 'stories' || !belongs ? filtered : narrowToRound(original, filtered, last.added);
         if (copy[key].length) kept = true;
     }
     copy.incrementalOnly = true;

@@ -22,6 +22,8 @@ export function floorShellCss() {
 .rmt-floor-shell .rmt-floor-fill,.rmt-floor-shell .rmt-heart-letter .rmt-btn{min-height:28px;padding:2px 10px}
 .rmt-heart-letter{width:min(100%,320px);max-width:100%;min-width:0;margin:10px 0 4px;color:#5c463c}
 .rmt-heart-letter:has(.rmt-heart-letter-paper:not([hidden])){width:min(100%,640px)}
+.rmt-heart-letter:has(.rmt-heart-letter-paper:not([hidden])) .rmt-heart-letter-seal{display:none}
+.rmt-heart-letter [data-rmt-letter-achievement]{margin:0 0 10px;font-weight:650}
 .rmt-heart-letter-seal{display:grid;justify-items:center;gap:2px;width:100%;margin:0;padding:16px 14px 14px;border:1px solid #e7b7c8;border-left:7px solid #e99ab9;border-radius:6px 18px 18px 6px;background:#fff7f2;color:#6a4a58;box-shadow:0 10px 24px rgba(20,12,16,.16);font:inherit;text-align:center;cursor:pointer}
 .rmt-heart-letter-seal i{font-style:normal;color:#e07098;font-size:22px;line-height:1}
 .rmt-heart-letter-seal b{font-size:15px;line-height:1.4}
@@ -115,11 +117,17 @@ export function shellView(input = {}) {
         const progress = knownProgress(done, steps.length);
         return { ...face, phase: 'generating', progress, title: '正在把这段回忆写下来', detail: progress ? `正在生成 ${progress.done} / ${progress.total}` : '正在生成' };
     }
+    if (!steps.length && input.roundReveal === true && (revealStatus === 'ready' || revealStatus === 'opened')) {
+        return { ...face, phase: 'reveal', showReveal: true, title: input.revealLine || revealFace(input), detail: '点击查看详情' };
+    }
     if (input.ticketStatus === 'drawn' || input.ticketStatus === 'running') {
         const title = cleanName(input.moduleTitle);
         return { ...face, phase: 'drawn', title: '抽中了一段回忆', detail: title ? `这一页是${title}。` : '还没开始写正文。' };
     }
-    if (revealStatus === 'generating' || revealStatus === 'ready' || revealStatus === 'opened') {
+    if (revealStatus === 'ready' || revealStatus === 'opened') {
+        return { ...face, phase: 'reveal', showReveal: true, title: input.revealLine || revealFace(input), detail: '点击查看详情' };
+    }
+    if (revealStatus === 'generating') {
         return { ...face, phase: 'generating', title: '回忆生成中', detail: '还没整份写完，先不拆开。' };
     }
     const remain = auto_memory_floor.formatFloorRemain(auto_memory_floor.floorsRemaining(input.floor, input.nextDueFloor));

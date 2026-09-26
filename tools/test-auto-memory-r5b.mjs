@@ -130,4 +130,24 @@ test('achievement failure keeps the finished steps and an empty increment does n
     assert.deepEqual(projected.session.letters.map(item => item.id), ['new']);
     assert.deepEqual(projected.session.stories[0].chapters.map(item => item.id), ['new-chapter']);
     assert.equal(projected.kept, true);
+    const older = view.incrementalProjection({
+        entries: [
+            { id: 'a', sourceMemoryIds: ['M001'] },
+            { id: 'b', sourceMemoryIds: ['M002'] },
+            { id: 'c', sourceMemoryIds: ['M003'] },
+            { id: 'd', sourceMemoryIds: ['M004'] },
+        ],
+        generationMeta: { lastUpdate: { added: 4, updatedAt: 10, consumedMemoryIds: ['M001'] } },
+    }, { sourceMemoryIds: ['M100'], since: 50 });
+    assert.equal(older.kept, false);
+    const shared = view.incrementalProjection({
+        entries: [
+            { id: 'a', sourceMemoryIds: ['M100'] },
+            { id: 'b', sourceMemoryIds: ['M100'] },
+            { id: 'c', sourceMemoryIds: ['M100'] },
+            { id: 'd', sourceMemoryIds: ['M100'] },
+        ],
+        generationMeta: { lastUpdate: { added: 1, updatedAt: 80, consumedMemoryIds: ['M100'] } },
+    }, { sourceMemoryIds: ['M100'], since: 50 });
+    assert.deepEqual(shared.session.entries.map(item => item.id), ['d']);
 });
