@@ -8,6 +8,7 @@ import * as auto_memory_gap from '../autoMemory/gapFill.js';
 import * as auto_memory_plan from '../autoMemory/planStore.js';
 import * as auto_memory_registry from '../autoMemory/moduleRegistry.js';
 import * as auto_memory_scheduler from '../autoMemory/scheduler.js';
+import * as auto_memory_stream from '../autoMemory/streamGate.js';
 import * as shell_state from '../autoMemory/shellState.js';
 import * as core_constants from '../core/constants.js';
 import * as core_context from '../core/context.js';
@@ -104,7 +105,11 @@ function viewFor(context) {
         ticketStatus: ticket?.status || '',
         revealStatus: reveal?.status || '',
         revealId: reveal?.id || '',
-        revealLine: shell_state.revealFace({ userName: context.name1, achievementTitle: '', moduleTitle: item?.title || '' }),
+        revealLine: shell_state.revealFace({
+            userName: context.name1,
+            achievementTitle: auto_memory_gap.rememberedAchievementTitle(context.chatMetadata, reveal?.achievementId),
+            moduleTitle: item?.title || '',
+        }),
         failureRecoverable: !running && (failedStep || common.state === 'failed' || common.state === 'retry'),
         paused: moduleRow?.phase === 'queue',
         floor: core_settings.getPluginSettings().autoMemoryLatestFloor === true
@@ -126,25 +131,21 @@ function markup(view) {
     const retry = view.phase === 'failed'
         ? '<button type="button" class="rmt-btn" data-rmt-floor-retry>重试</button>'
         : '';
-    if (view.phase === 'reveal' && view.showReveal) {
-        return `<article class="rmt-heart-letter">
-            <button type="button" class="rmt-heart-letter-seal" data-rmt-letter-open>
-                <i aria-hidden="true">♥</i><b>一封写给你的信</b><small>点开看看</small>
-            </button>
-            <div class="rmt-heart-letter-paper" data-rmt-letter-paper hidden>
-                <p data-rmt-letter-title>${core_text.esc(view.title)}</p>
-                <button type="button" class="rmt-btn" data-rmt-letter-read data-rmt-reveal="${core_text.esc(view.revealId)}" data-rmt-module="${core_text.esc(view.moduleId)}">打开这封回忆</button>
-                <div class="rmt-floor-body" data-rmt-floor-body data-rmt-reveal="${core_text.esc(view.revealId)}" data-rmt-module="${core_text.esc(view.moduleId)}"></div>
-            </div>
-        </article>`;
-    }
-    return `<article class="rmt-heart-letter is-waiting">
-        <div class="rmt-heart-letter-seal">
-            <i aria-hidden="true">♥</i>
-            <b data-rmt-letter-title>${core_text.esc(view.title)}</b>
-            <small data-rmt-letter-detail>${core_text.esc(view.detail)}</small>
+    const revealPaper = view.phase === 'reveal' && view.showReveal;
+    const heading = revealPaper ? '一封写给你的信' : view.title;
+    const aside = revealPaper ? '点开看看' : view.detail;
+    const paper = revealPaper
+        ? `<p data-rmt-letter-title>${core_text.esc(view.title)}</p><button type="button" class="rmt-btn" data-rmt-letter-read data-rmt-reveal="${core_text.esc(view.revealId)}" data-rmt-module="${core_text.esc(view.moduleId)}">打开这封回忆</button>`
+        : `<p data-rmt-letter-detail>${core_text.esc(view.detail)}</p>${view.moduleId ? `<button type="button" class="rmt-btn" data-rmt-letter-read data-rmt-reveal="${core_text.esc(view.revealId)}" data-rmt-module="${core_text.esc(view.moduleId)}">打开这页回忆</button>` : ''}`;
+    return `<article class="rmt-heart-letter">
+        <button type="button" class="rmt-heart-letter-seal" data-rmt-letter-open>
+            <i aria-hidden="true">♥</i><b data-rmt-letter-title>${core_text.esc(heading)}</b><small data-rmt-letter-detail>${core_text.esc(aside)}</small>
+        </button>
+        <div class="rmt-heart-letter-paper" data-rmt-letter-paper hidden>
+            ${paper}
+            <div class="rmt-floor-body" data-rmt-floor-body data-rmt-reveal="${core_text.esc(view.revealId)}" data-rmt-module="${core_text.esc(view.moduleId)}"></div>
+            ${retry}
         </div>
-        ${retry}
     </article>`;
 }
 
@@ -159,6 +160,10 @@ function paint(context) {
         globalThis.toastr?.[toast.level]?.(toast.message, toast.title, options);
     }
     if (view.phase === 'hidden') { clearShells(); return; }
+    if (!auto_memory_floor.assistantBodyReady(context.chat, { generating: auto_memory_stream.generationOpen(context) })) {
+        clearShells();
+        return;
+    }
     const index = latestAssistantIndex(context.chat);
     const mes = ui_floor.messageElement(index);
     if (!mes || ui_floor.writesMessageText()) { clearShells(); return; }
@@ -200,6 +205,9 @@ function paint(context) {
 
 function sync() {
     let context;
+    try { context = core_context.getContext(); }
+    catch { clearShells(); return; }
+    if (context?.groupId) { clearShells(); return; }
     try { context = core_context.currentCharacterGuard(); }
     catch { clearShells(); return; }
     try { paint(context); }
@@ -232,9 +240,16 @@ async function openInFloor(body) {
     const item = auto_memory_registry.autoMemoryModuleById(moduleId);
     if (!item || !body) return;
     const increment = incrementFor(moduleId, revealId);
-    if (!increment.kept) {
-        body.innerHTML = '<p class="rmt-floor-note">这一页还没有可以展开的新段落。</p>';
-        rememberOpened(revealId);
+    let session = increment.kept ? increment.session : null;
+    if (!session) {
+        try {
+            const context = core_context.currentCharacterGuard();
+            const memory = archive_repository.getImportedMemory(context);
+            session = core_cache.loadSession(moduleId, { context, memoryBank: memory, clone: true });
+        } catch { session = null; }
+    }
+    if (!session) {
+        body.innerHTML = '<p class="rmt-floor-note">这一页还在写。写好之后可以在这里打开。</p>';
         return;
     }
     mirrorModuleCss();
@@ -242,7 +257,7 @@ async function openInFloor(body) {
     const previousMode = runtimeState.activeMode;
     const previousSession = runtimeState.activeSession;
     try {
-        await Promise.resolve(ui_overlay.openCachedOrGenerate(item.id, { workspaceRoute: item.id, incrementalSession: increment.session }));
+        await Promise.resolve(ui_overlay.openCachedOrGenerate(item.id, { workspaceRoute: item.id, incrementalSession: session }));
     } catch (error) {
         console.warn('[HeartbeatMemories] floor detail skipped', core_text.safeErrorDiagnostic(error));
         globalThis.toastr?.error?.('这一页暂时没能打开。回忆还在，可以再点一次。', '心口顿了一下');
@@ -298,6 +313,10 @@ function onClick(event) {
     const paper = seal.parentElement?.querySelector('[data-rmt-letter-paper]');
     if (paper) paper.hidden = false;
     seal.hidden = true;
+    const host = seal.closest?.('[data-rmt-floor-shell]');
+    if (host?.dataset?.rmtPhase === 'reveal') return;
+    const body = paper?.querySelector?.('[data-rmt-floor-body]');
+    if (body?.dataset?.rmtModule) void openInFloor(body);
 }
 function rememberOpened(revealId) {
     if (!revealId) return;

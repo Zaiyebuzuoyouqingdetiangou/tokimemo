@@ -49,17 +49,11 @@ export function chatRangeForAssistantSpan(chat, startCount, endCount) {
     return { start: first, end: last };
 }
 
-// 间隔 1：只留最新一条角色楼正文。间隔更大：前面几条收成短摘要，最后一条保留正文。
+// 间隔窗口里的角色楼都保留完整正文。摘要没写到的楼在建档时另附原文，这里不截字。
 export function latestAssistantWindow(messages, interval) {
     const assistant = (Array.isArray(messages) ? messages : []).filter(item => item && item.role !== 'user' && String(item.text || '').trim());
     const count = Math.max(1, Math.floor(Number(interval)) || 1);
-    const slice = assistant.slice(-count);
-    if (slice.length < 2) return slice.map(item => ({ ...item }));
-    return slice.map((item, index) => {
-        if (index === slice.length - 1) return { ...item };
-        const brief = String(item.text || '').replace(/\s+/g, ' ').trim().slice(0, 180);
-        return { ...item, text: brief };
-    }).filter(item => item.text);
+    return assistant.slice(-count).map(item => ({ ...item }));
 }
 
 export function countdownLabel(left) {
@@ -77,7 +71,9 @@ export function assistantBodyReady(chat, options = {}) {
         const message = list[index];
         if (!message || message.is_system === true) continue;
         if (message.is_user === true) return false;
-        return String(message.mes ?? '').trim().length > 0;
+        const text = String(message.mes ?? '').trim();
+        if (!text || /^[.。…．]{1,12}$/.test(text)) return false;
+        return true;
     }
     return false;
 }

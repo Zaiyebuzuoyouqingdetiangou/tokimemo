@@ -2,6 +2,25 @@
 import * as core_text from '../core/text.js';
 
 export const GAP_KEY = 'autoMemoryGapV1';
+export const ACHIEVEMENT_TITLE_KEY = 'autoMemoryAchievementTitlesV1';
+
+export function rememberedAchievementTitle(metadata, achievementId) {
+    const map = metadata?.[ACHIEVEMENT_TITLE_KEY];
+    const title = typeof achievementId === 'string' ? map?.[achievementId] : '';
+    return typeof title === 'string' ? title.replace(/[\u0000-\u001f]/g, '').trim().slice(0, 40) : '';
+}
+
+export function rememberAchievementTitle(metadata, achievement) {
+    const id = typeof achievement?.id === 'string' ? achievement.id : '';
+    const title = String(achievement?.title || '').replace(/[\u0000-\u001f]/g, '').trim().slice(0, 40);
+    if (!metadata || !id || !title) return false;
+    const prev = metadata[ACHIEVEMENT_TITLE_KEY];
+    const map = prev && typeof prev === 'object' && !Array.isArray(prev) ? { ...prev } : {};
+    if (map[id] === title) return false;
+    map[id] = title;
+    metadata[ACHIEVEMENT_TITLE_KEY] = map;
+    return true;
+}
 
 export function readableGap(note) {
     if (!note || note.schemaVersion !== 1 || note.reason !== 'no-new-memory') return null;
