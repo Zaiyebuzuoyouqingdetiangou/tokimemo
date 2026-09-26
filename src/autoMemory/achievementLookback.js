@@ -49,8 +49,13 @@ export function autoLetterMesid(entry, { snapshot = null, chat = [], latestFloor
         return own.some(id => ids.has(id));
     }) || [...tickets].reverse().find(item => entry?.moduleId && item?.selectedModuleId === entry.moduleId);
     if (!ticket) return null;
-    const located = locate(chat, ticket.dueFloor, latestFloor === true);
-    return located ? safeMesid(located.index) : null;
+    const located = typeof locate === 'function' ? locate(chat, ticket.dueFloor, latestFloor === true) : null;
+    if (located) return safeMesid(located.index);
+    if (latestFloor !== true) {
+        const index = Math.floor(Number(ticket.dueFloor)) - 1;
+        return index >= 0 ? index : null;
+    }
+    return null;
 }
 
 function covered(ranges) {
@@ -83,18 +88,32 @@ export function achievementLookback(entry, memories = [], coveredRanges = [], ex
     floors.sort((a, b) => a - b);
     const dates = [...new Set(linked.map(item => clean(item.date, 40)).filter(date => date && date !== '未标注'))];
     const summary = linked.map(item => clean(item.summary, 120)).find(Boolean) || '';
-    const canJump = floors.length > 0 || letterMesid != null;
+    const auto = entry?.origin === 'auto';
+    const canJump = auto ? letterMesid != null : (floors.length > 0 || letterMesid != null);
     let sourceNote = '';
     if (!canJump && blocked.length) sourceNote = '这份成就来自外部或继承的记录，没有可以回到的聊天楼层。';
-    else if (!canJump && kind === 'historical') sourceNote = '档案里有这段经历，但没有对应的楼层编号。';
+    else if (!canJump && kind === 'historical' && !auto) sourceNote = '档案里有这段经历，但没有对应的楼层编号。';
     return {
         kind,
         period: dates[0] || '',
         summary,
-        floors: floors.length ? floors : [],
-        jumpFloor: floors[0] ?? null,
+        floors: auto ? [] : (floors.length ? floors : []),
+        jumpFloor: auto ? null : (floors[0] ?? null),
         jumpMesid: letterMesid,
         sourceNote,
         moduleId: clean(entry?.moduleId, 40),
     };
+}
+
+export function autoLetterOrphaned(entry, chat, extra = {}) {
+    if (entry?.origin !== 'auto') return false;
+    const mesid = safeMesid(extra.messageIndex ?? entry?.messageIndex);
+    if (mesid == null) return false;
+    const index = mesid;
+    const list = Array.isArray(chat) ? chat : [];
+    if (index >= list.length) return true;
+    const message = list[index];
+    if (!message) return true;
+    const text = String(message?.mes ?? '').trim();
+    return !text || /^[.。…．]{1,12}$/.test(text);
 }

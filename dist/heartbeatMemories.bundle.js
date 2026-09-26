@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 286
-// Source SHA-256: 4eb8f06804ce548ec2a354ebbb9239af74a11cc6585dea41a624226360c4222f
+// Source SHA-256: f7bc750530b2b98123260ce3f515688382bd1317d6c46f70d7602905ef9c287c
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -3132,15 +3132,18 @@ function autoAchievementForReveal(context, { achievementId = '', moduleId = '', 
     };
 }
 
-function dropAutoRound(context, { moduleId = '', sourceMemoryIds = [] } = {}) {
+function dropAutoRound(context, { moduleId = '', sourceMemoryIds = [], messageIndex = null } = {}) {
     const ids = new Set((Array.isArray(sourceMemoryIds) ? sourceMemoryIds : []).filter(id => /^M\d{3,6}$/.test(id)));
-    if (!context || !ids.size) return false;
+    const mesid = Math.floor(Number(messageIndex));
+    const hasFloor = Number.isSafeInteger(mesid) && mesid >= 0;
+    if (!context || (!ids.size && !hasFloor)) return false;
     let memory = null;
     try { memory = archive_repository.getImportedMemory(context); } catch { memory = null; }
     const previous = core_cache.loadSession(core_constants.MODE.ACHIEVEMENTS, { context, memoryBank: memory, clone: true });
     if (!previous?.entries?.length) return false;
     const entries = previous.entries.filter(item => {
         if (item?.origin !== 'auto') return true;
+        if (hasFloor && Math.floor(Number(item.messageIndex)) === mesid) return false;
         if (moduleId && item.moduleId && item.moduleId !== moduleId) return true;
         const own = Array.isArray(item.sourceMemoryIds) ? item.sourceMemoryIds : [];
         return !own.some(id => ids.has(id));
@@ -3235,8 +3238,13 @@ function autoLetterMesid(entry, { snapshot = null, chat = [], latestFloor = fals
         return own.some(id => ids.has(id));
     }) || [...tickets].reverse().find(item => entry?.moduleId && item?.selectedModuleId === entry.moduleId);
     if (!ticket) return null;
-    const located = locate(chat, ticket.dueFloor, latestFloor === true);
-    return located ? safeMesid(located.index) : null;
+    const located = typeof locate === 'function' ? locate(chat, ticket.dueFloor, latestFloor === true) : null;
+    if (located) return safeMesid(located.index);
+    if (latestFloor !== true) {
+        const index = Math.floor(Number(ticket.dueFloor)) - 1;
+        return index >= 0 ? index : null;
+    }
+    return null;
 }
 
 function covered(ranges) {
@@ -3269,24 +3277,39 @@ function achievementLookback(entry, memories = [], coveredRanges = [], extra = {
     floors.sort((a, b) => a - b);
     const dates = [...new Set(linked.map(item => clean(item.date, 40)).filter(date => date && date !== '未标注'))];
     const summary = linked.map(item => clean(item.summary, 120)).find(Boolean) || '';
-    const canJump = floors.length > 0 || letterMesid != null;
+    const auto = entry?.origin === 'auto';
+    const canJump = auto ? letterMesid != null : (floors.length > 0 || letterMesid != null);
     let sourceNote = '';
     if (!canJump && blocked.length) sourceNote = '这份成就来自外部或继承的记录，没有可以回到的聊天楼层。';
-    else if (!canJump && kind === 'historical') sourceNote = '档案里有这段经历，但没有对应的楼层编号。';
+    else if (!canJump && kind === 'historical' && !auto) sourceNote = '档案里有这段经历，但没有对应的楼层编号。';
     return {
         kind,
         period: dates[0] || '',
         summary,
-        floors: floors.length ? floors : [],
-        jumpFloor: floors[0] ?? null,
+        floors: auto ? [] : (floors.length ? floors : []),
+        jumpFloor: auto ? null : (floors[0] ?? null),
         jumpMesid: letterMesid,
         sourceNote,
         moduleId: clean(entry?.moduleId, 40),
     };
 }
 
+function autoLetterOrphaned(entry, chat, extra = {}) {
+    if (entry?.origin !== 'auto') return false;
+    const mesid = safeMesid(extra.messageIndex ?? entry?.messageIndex);
+    if (mesid == null) return false;
+    const index = mesid;
+    const list = Array.isArray(chat) ? chat : [];
+    if (index >= list.length) return true;
+    const message = list[index];
+    if (!message) return true;
+    const text = String(message?.mes ?? '').trim();
+    return !text || /^[.。…．]{1,12}$/.test(text);
+}
+
 __m_autoMemory_achievementLookback_js.autoLetterMesid = autoLetterMesid;
 __m_autoMemory_achievementLookback_js.achievementLookback = achievementLookback;
+__m_autoMemory_achievementLookback_js.autoLetterOrphaned = autoLetterOrphaned;
 }
 
 function __init_autoMemory_combinedResult_js() {
@@ -6228,6 +6251,39 @@ function redrawModuleId(candidates, currentId, randomUnit = 0) {
   return pool[Math.min(pool.length - 1, Math.floor(unit * pool.length))];
 }
 
+function letterBodyGone(chat, messageIndex) {
+  const index = Math.floor(Number(messageIndex));
+  if (!Number.isSafeInteger(index) || index < 0) return false;
+  const list = Array.isArray(chat) ? chat : [];
+  if (index >= list.length) return true;
+  const message = list[index];
+  if (!message) return true;
+  const text = String(message.mes ?? '').trim();
+  return !text || /^[.。…．]{1,12}$/.test(text);
+}
+
+function ticketMatchingReveal(snapshot, reveal) {
+  const ids = new Set(reveal?.sourceMemoryIds || []);
+  const tickets = [...(Array.isArray(snapshot?.drawTickets) ? snapshot.drawTickets : [])].reverse();
+  return tickets.find(ticket => ticket.selectedModuleId === reveal?.moduleId && (ticket.sourceMemoryIds || []).some(id => ids.has(id)))
+    || tickets.find(ticket => ticket.selectedModuleId === reveal?.moduleId)
+    || null;
+}
+
+function ticketLetterMesid(chat, ticket, latestFloor, stamp = null) {
+  if (stamp && Number.isInteger(stamp.messageIndex) && stamp.messageIndex >= 0
+    && (!stamp.drawId || !ticket?.id || stamp.drawId === ticket.id)) {
+    return stamp.messageIndex;
+  }
+  const located = drawFloorMessage(chat, ticket?.dueFloor, latestFloor === true);
+  if (located) return located.index;
+  if (latestFloor !== true) {
+    const index = Math.floor(Number(ticket?.dueFloor)) - 1;
+    return Number.isSafeInteger(index) && index >= 0 ? index : null;
+  }
+  return null;
+}
+
 function drawFloorMessage(chat, dueFloor, latestFloor) {
   const floor = Math.floor(Number(dueFloor));
   const list = Array.isArray(chat) ? chat : [];
@@ -6319,6 +6375,9 @@ __m_autoMemory_redo_js.modulePlanForRetry = modulePlanForRetry;
 __m_autoMemory_redo_js.currentDrawTicket = currentDrawTicket;
 __m_autoMemory_redo_js.choosableModules = choosableModules;
 __m_autoMemory_redo_js.redrawModuleId = redrawModuleId;
+__m_autoMemory_redo_js.letterBodyGone = letterBodyGone;
+__m_autoMemory_redo_js.ticketMatchingReveal = ticketMatchingReveal;
+__m_autoMemory_redo_js.ticketLetterMesid = ticketLetterMesid;
 __m_autoMemory_redo_js.drawFloorMessage = drawFloorMessage;
 __m_autoMemory_redo_js.bodyHash = bodyHash;
 __m_autoMemory_redo_js.sourceStamp = sourceStamp;
@@ -6335,6 +6394,7 @@ function __init_autoMemory_scheduler_js() {
 const archive_external = __m_archive_externalMemory_js;
 const archive_repository = __m_archive_repository_js;
 const auto_memory_library = __m_autoMemory_achievementLibrary_js;
+const auto_memory_lookback = __m_autoMemory_achievementLookback_js;
 const auto_memory_floor = __m_autoMemory_floorPace_js;
 const auto_memory_gap = __m_autoMemory_gapFill_js;
 const auto_memory_gate = __m_autoMemory_incrementalGate_js;
@@ -6348,6 +6408,7 @@ const auto_memory_view = __m_autoMemory_incrementalView_js;
 const auto_memory_registry = __m_autoMemory_moduleRegistry_js;
 const chat_read_range = __m_core_chatReadRange_js;
 const core_cache = __m_core_cache_js;
+const core_constants = __m_core_constants_js;
 const core_context = __m_core_context_js;
 const core_settings = __m_core_settings_js;
 const core_text = __m_core_text_js;
@@ -6356,6 +6417,8 @@ const auto_memory_stream = __m_autoMemory_streamGate_js;
 const ui_countdown = __m_ui_autoMemoryCountdown_js;
 const ui_taskCenter = __m_ui_taskCenter_js;
 // 启用新计划后，楼层到点就读最近这一窗正文，做成增量回忆再抽签。没有新记忆或没有可抽模块时不发模块请求。
+
+
 
 
 
@@ -7271,6 +7334,108 @@ function scheduleSettledRound() {
     }, 800);
 }
 
+async function stripLostRound(context, { moduleId = '', sourceMemoryIds = [], createdAt = 0, frozenAt = 0, messageIndex = null } = {}) {
+    const oldIds = [...(Array.isArray(sourceMemoryIds) ? sourceMemoryIds : [])].filter(id => /^M\d{3,6}$/.test(id));
+    let memory = null;
+    try { memory = archive_repository.getImportedMemory(context); } catch { memory = null; }
+    const session = moduleId ? core_cache.loadSession(moduleId, { context, memoryBank: memory, clone: true }) : null;
+    const stripped = session
+        ? auto_memory_view.sessionWithoutRound(session, {
+            sourceMemoryIds: oldIds,
+            createdAt: createdAt || 0,
+            since: frozenAt || 0,
+        })
+        : null;
+    auto_memory_library.dropAutoRound(context, { moduleId, sourceMemoryIds: oldIds, messageIndex });
+    if (stripped) {
+        stripped.chatId = core_context.getChatId(context);
+        if (memory?.archiveRevision) stripped.archiveRevision = memory.archiveRevision;
+        core_cache.saveSession(moduleId, stripped, stripped.chatId);
+    }
+    if (memory && oldIds.length) {
+        const memories = auto_memory_redo.memoriesWithoutIds(memory.memories, oldIds);
+        await core_cache.saveImportedMemory(context, { ...memory, memories }, memory.chatId, {
+            preserveDerivedCache: true,
+            expectedPreviousArchiveState: { present: true, revision: memory.archiveRevision || '' },
+        });
+    }
+}
+
+async function sweepLostLetters(context) {
+    if (!context?.chatMetadata || storyStillWriting(context) || generationStillOpen(context)) return false;
+    let snapshot;
+    try { snapshot = auto_memory_plan.readAutoMemoryMetadata(context.chatMetadata); }
+    catch { return false; }
+    if (!snapshot?.plan?.enabled) return false;
+    let latest = false;
+    try { latest = core_settings.getPluginSettings().autoMemoryLatestFloor === true; }
+    catch { latest = false; }
+    const stamp = context.chatMetadata?.[auto_memory_redo.SOURCE_STAMP_KEY] || null;
+    const lost = [];
+    for (const reveal of snapshot.revealRecords || []) {
+        const ticket = auto_memory_redo.ticketMatchingReveal(snapshot, reveal);
+        const mesid = auto_memory_redo.ticketLetterMesid(context.chat, ticket, latest, stamp);
+        if (mesid == null || !auto_memory_redo.letterBodyGone(context.chat, mesid)) continue;
+        lost.push({
+            reveal,
+            ticket,
+            mesid,
+            sourceMemoryIds: ticket?.sourceMemoryIds || reveal.sourceMemoryIds || [],
+        });
+    }
+    let memory = null;
+    try { memory = archive_repository.getImportedMemory(context); } catch { memory = null; }
+    const library = core_cache.loadSession(core_constants.MODE.ACHIEVEMENTS, { context, memoryBank: memory, clone: true });
+    const covered = new Set(lost.map(row => row.mesid));
+    for (const entry of Array.isArray(library?.entries) ? library.entries : []) {
+        if (entry?.origin !== 'auto') continue;
+        const mesid = auto_memory_lookback.autoLetterMesid(entry, {
+            snapshot,
+            chat: context.chat,
+            latestFloor: latest,
+            locate: auto_memory_redo.drawFloorMessage,
+        }) ?? (Number.isSafeInteger(Math.floor(Number(entry.messageIndex))) ? Math.floor(Number(entry.messageIndex)) : null);
+        if (mesid == null || covered.has(mesid) || !auto_memory_lookback.autoLetterOrphaned(entry, context.chat, { messageIndex: mesid })) continue;
+        lost.push({
+            reveal: null,
+            ticket: null,
+            mesid,
+            moduleId: entry.moduleId,
+            sourceMemoryIds: entry.sourceMemoryIds || [],
+        });
+        covered.add(mesid);
+    }
+    if (!lost.length) return false;
+    for (const row of lost) {
+        await stripLostRound(context, {
+            moduleId: row.ticket?.selectedModuleId || row.reveal?.moduleId || row.moduleId || '',
+            sourceMemoryIds: row.sourceMemoryIds,
+            createdAt: row.reveal?.createdAt || 0,
+            frozenAt: snapshot.modulePlan?.drawId === row.ticket?.id ? snapshot.modulePlan.frozenAt : 0,
+            messageIndex: row.mesid,
+        });
+    }
+    const dropReveal = new Set(lost.map(row => row.reveal?.id).filter(Boolean));
+    const dropTicket = new Set(lost.map(row => row.ticket?.id).filter(Boolean));
+    const clearActive = dropTicket.has(snapshot.plan.activeDrawTicketId);
+    const next = auto_memory_plan.parseAutoMemorySnapshot({
+        plan: auto_memory_plan.parseAutoMemoryPlan({
+            ...snapshot.plan,
+            revision: snapshot.plan.revision + 1,
+            updatedAt: Date.now(),
+            activeDrawTicketId: clearActive ? null : snapshot.plan.activeDrawTicketId,
+        }),
+        revealRecords: snapshot.revealRecords.filter(row => !dropReveal.has(row.id)),
+        drawTickets: snapshot.drawTickets.map(row => (dropTicket.has(row.id)
+            ? auto_memory_plan.parseDrawTicket({ ...row, status: 'completed' })
+            : row)),
+        modulePlan: clearActive ? null : snapshot.modulePlan,
+    });
+    await persistSnapshot(context, next);
+    globalThis.toastr?.info?.('这一楼的正文已经没了，那一轮的回忆和成就一起收走了。', '心迹回廊');
+    return true;
+}
+
 async function settleReadyRound() {
     let context = null;
     try { context = core_context.getContext(); } catch { context = null; }
@@ -7278,6 +7443,7 @@ async function settleReadyRound() {
         scheduleSettledRound();
         return;
     }
+    if (await sweepLostLetters(context)) ui_countdown.refreshAutoMemoryCountdown();
     if (!auto_memory_floor.assistantBodyReady(context?.chat, { generating: false })) return;
     if (sameFloor.pending()) {
         if (redoInflight || inflightScopes.size) {
@@ -7324,6 +7490,7 @@ function startAutoMemoryScheduler() {
         types.STREAM_TOKEN_RECEIVED,
         types.STREAM_TOKEN_RECEIVED_FULLY,
         types.CHARACTER_MESSAGE_RENDERED,
+        types.MESSAGE_DELETED,
         types.CHAT_CHANGED,
         types.CHAT_LOADED,
     ].filter(Boolean))];
@@ -43125,7 +43292,7 @@ async function generateAchievementsWithRepair(context, memoryBank, origin, taskK
     return core_incremental.stampIncrementalCoverage(merged, previous, memoryBank, 'mode', sourceMemoryIds, added);
 }
 
-function letterMesidForRender(item) {
+function intendedLetterMesid(item) {
     const stored = Math.floor(Number(item?.messageIndex));
     if (Number.isSafeInteger(stored) && stored >= 0) return stored;
     try {
@@ -43139,6 +43306,15 @@ function letterMesidForRender(item) {
     } catch {
         return null;
     }
+}
+
+function letterMesidForRender(item) {
+    const mesid = intendedLetterMesid(item);
+    if (mesid == null) return null;
+    try {
+        if (auto_memory_lookback.autoLetterOrphaned(item, core_context.getContext()?.chat, { messageIndex: mesid })) return null;
+    } catch { /* 聊天读不到时仍用记下的楼层。 */ }
+    return mesid;
 }
 
 function lookbackHtml(item, bank) {
@@ -43168,7 +43344,14 @@ function renderAchievements() {
     const readOnly = !!runtimeState.activeArchiveSnapshot && runtimeState.activeArchiveReadOnly;
     ui_overlay.setBackVisible(true, runtimeState.activeArchiveSnapshot ? (readOnly ? '只读档案' : '档案') : '当前档案');
     ui_overlay.topTitle('成就库');
-    const unlocked = session.entries.filter(item => item.unlocked);
+    let chat = null;
+    try { chat = core_context.getContext()?.chat; } catch { chat = null; }
+    const unlocked = session.entries.filter(item => {
+        if (!item.unlocked) return false;
+        if (item.origin !== 'auto') return true;
+        const mesid = intendedLetterMesid(item);
+        return !auto_memory_lookback.autoLetterOrphaned(item, chat, { messageIndex: mesid });
+    });
     const locked = session.entries.filter(item => !item.unlocked);
     const tierIcon = tier => ({
         bronze: 'fa-medal',

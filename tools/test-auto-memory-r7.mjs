@@ -170,6 +170,17 @@ test('historical achievements jump to covered chat floors and external sources d
     assert.equal(autoLetter.jumpMesid, 55);
     assert.equal(autoLetter.sourceNote, '');
     assert.equal(autoLetter.kind, 'historical');
+    assert.deepEqual(autoLetter.floors, []);
+    const autoWindow = lookback.achievementLookback(
+        { sourceMemoryIds: ['M100'], kind: 'historical', origin: 'auto', messageIndex: 56 },
+        [memory('M100', { messageStart: 44, messageEnd: 54 })],
+        [{ start: 1, end: 80 }],
+    );
+    assert.deepEqual(autoWindow.floors, []);
+    assert.equal(autoWindow.jumpMesid, 56);
+    const gone = Array.from({ length: 56 }, () => ({ mes: '还在' }));
+    assert.equal(lookback.autoLetterOrphaned({ origin: 'auto', messageIndex: 56 }, gone), true);
+    assert.equal(lookback.autoLetterOrphaned({ origin: 'auto', messageIndex: 56 }, [...gone, { mes: '这一楼的正文' }]), false);
     const fromTicket = lookback.autoLetterMesid(
         { origin: 'auto', moduleId: 'cabinet', sourceMemoryIds: ['M100'] },
         {
@@ -179,4 +190,13 @@ test('historical achievements jump to covered chat floors and external sources d
         },
     );
     assert.equal(fromTicket, 55);
+    const missingBody = lookback.autoLetterMesid(
+        { origin: 'auto', moduleId: 'cabinet', sourceMemoryIds: ['M100'] },
+        {
+            snapshot: { drawTickets: [{ id: 'drawticket1', selectedModuleId: 'cabinet', sourceMemoryIds: ['M100'], dueFloor: 57 }] },
+            chat: [],
+            locate: () => null,
+        },
+    );
+    assert.equal(missingBody, 56);
 });

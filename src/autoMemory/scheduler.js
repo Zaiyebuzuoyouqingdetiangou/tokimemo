@@ -2,6 +2,7 @@
 import * as archive_external from '../archive/externalMemory.js';
 import * as archive_repository from '../archive/repository.js';
 import * as auto_memory_library from './achievementLibrary.js';
+import * as auto_memory_lookback from './achievementLookback.js';
 import * as auto_memory_floor from './floorPace.js';
 import * as auto_memory_gap from './gapFill.js';
 import * as auto_memory_gate from './incrementalGate.js';
@@ -15,6 +16,7 @@ import * as auto_memory_view from './incrementalView.js';
 import * as auto_memory_registry from './moduleRegistry.js';
 import * as chat_read_range from '../core/chatReadRange.js';
 import * as core_cache from '../core/cache.js';
+import * as core_constants from '../core/constants.js';
 import * as core_context from '../core/context.js';
 import * as core_settings from '../core/settings.js';
 import * as core_text from '../core/text.js';
@@ -915,6 +917,108 @@ function scheduleSettledRound() {
     }, 800);
 }
 
+async function stripLostRound(context, { moduleId = '', sourceMemoryIds = [], createdAt = 0, frozenAt = 0, messageIndex = null } = {}) {
+    const oldIds = [...(Array.isArray(sourceMemoryIds) ? sourceMemoryIds : [])].filter(id => /^M\d{3,6}$/.test(id));
+    let memory = null;
+    try { memory = archive_repository.getImportedMemory(context); } catch { memory = null; }
+    const session = moduleId ? core_cache.loadSession(moduleId, { context, memoryBank: memory, clone: true }) : null;
+    const stripped = session
+        ? auto_memory_view.sessionWithoutRound(session, {
+            sourceMemoryIds: oldIds,
+            createdAt: createdAt || 0,
+            since: frozenAt || 0,
+        })
+        : null;
+    auto_memory_library.dropAutoRound(context, { moduleId, sourceMemoryIds: oldIds, messageIndex });
+    if (stripped) {
+        stripped.chatId = core_context.getChatId(context);
+        if (memory?.archiveRevision) stripped.archiveRevision = memory.archiveRevision;
+        core_cache.saveSession(moduleId, stripped, stripped.chatId);
+    }
+    if (memory && oldIds.length) {
+        const memories = auto_memory_redo.memoriesWithoutIds(memory.memories, oldIds);
+        await core_cache.saveImportedMemory(context, { ...memory, memories }, memory.chatId, {
+            preserveDerivedCache: true,
+            expectedPreviousArchiveState: { present: true, revision: memory.archiveRevision || '' },
+        });
+    }
+}
+
+async function sweepLostLetters(context) {
+    if (!context?.chatMetadata || storyStillWriting(context) || generationStillOpen(context)) return false;
+    let snapshot;
+    try { snapshot = auto_memory_plan.readAutoMemoryMetadata(context.chatMetadata); }
+    catch { return false; }
+    if (!snapshot?.plan?.enabled) return false;
+    let latest = false;
+    try { latest = core_settings.getPluginSettings().autoMemoryLatestFloor === true; }
+    catch { latest = false; }
+    const stamp = context.chatMetadata?.[auto_memory_redo.SOURCE_STAMP_KEY] || null;
+    const lost = [];
+    for (const reveal of snapshot.revealRecords || []) {
+        const ticket = auto_memory_redo.ticketMatchingReveal(snapshot, reveal);
+        const mesid = auto_memory_redo.ticketLetterMesid(context.chat, ticket, latest, stamp);
+        if (mesid == null || !auto_memory_redo.letterBodyGone(context.chat, mesid)) continue;
+        lost.push({
+            reveal,
+            ticket,
+            mesid,
+            sourceMemoryIds: ticket?.sourceMemoryIds || reveal.sourceMemoryIds || [],
+        });
+    }
+    let memory = null;
+    try { memory = archive_repository.getImportedMemory(context); } catch { memory = null; }
+    const library = core_cache.loadSession(core_constants.MODE.ACHIEVEMENTS, { context, memoryBank: memory, clone: true });
+    const covered = new Set(lost.map(row => row.mesid));
+    for (const entry of Array.isArray(library?.entries) ? library.entries : []) {
+        if (entry?.origin !== 'auto') continue;
+        const mesid = auto_memory_lookback.autoLetterMesid(entry, {
+            snapshot,
+            chat: context.chat,
+            latestFloor: latest,
+            locate: auto_memory_redo.drawFloorMessage,
+        }) ?? (Number.isSafeInteger(Math.floor(Number(entry.messageIndex))) ? Math.floor(Number(entry.messageIndex)) : null);
+        if (mesid == null || covered.has(mesid) || !auto_memory_lookback.autoLetterOrphaned(entry, context.chat, { messageIndex: mesid })) continue;
+        lost.push({
+            reveal: null,
+            ticket: null,
+            mesid,
+            moduleId: entry.moduleId,
+            sourceMemoryIds: entry.sourceMemoryIds || [],
+        });
+        covered.add(mesid);
+    }
+    if (!lost.length) return false;
+    for (const row of lost) {
+        await stripLostRound(context, {
+            moduleId: row.ticket?.selectedModuleId || row.reveal?.moduleId || row.moduleId || '',
+            sourceMemoryIds: row.sourceMemoryIds,
+            createdAt: row.reveal?.createdAt || 0,
+            frozenAt: snapshot.modulePlan?.drawId === row.ticket?.id ? snapshot.modulePlan.frozenAt : 0,
+            messageIndex: row.mesid,
+        });
+    }
+    const dropReveal = new Set(lost.map(row => row.reveal?.id).filter(Boolean));
+    const dropTicket = new Set(lost.map(row => row.ticket?.id).filter(Boolean));
+    const clearActive = dropTicket.has(snapshot.plan.activeDrawTicketId);
+    const next = auto_memory_plan.parseAutoMemorySnapshot({
+        plan: auto_memory_plan.parseAutoMemoryPlan({
+            ...snapshot.plan,
+            revision: snapshot.plan.revision + 1,
+            updatedAt: Date.now(),
+            activeDrawTicketId: clearActive ? null : snapshot.plan.activeDrawTicketId,
+        }),
+        revealRecords: snapshot.revealRecords.filter(row => !dropReveal.has(row.id)),
+        drawTickets: snapshot.drawTickets.map(row => (dropTicket.has(row.id)
+            ? auto_memory_plan.parseDrawTicket({ ...row, status: 'completed' })
+            : row)),
+        modulePlan: clearActive ? null : snapshot.modulePlan,
+    });
+    await persistSnapshot(context, next);
+    globalThis.toastr?.info?.('这一楼的正文已经没了，那一轮的回忆和成就一起收走了。', '心迹回廊');
+    return true;
+}
+
 async function settleReadyRound() {
     let context = null;
     try { context = core_context.getContext(); } catch { context = null; }
@@ -922,6 +1026,7 @@ async function settleReadyRound() {
         scheduleSettledRound();
         return;
     }
+    if (await sweepLostLetters(context)) ui_countdown.refreshAutoMemoryCountdown();
     if (!auto_memory_floor.assistantBodyReady(context?.chat, { generating: false })) return;
     if (sameFloor.pending()) {
         if (redoInflight || inflightScopes.size) {
@@ -968,6 +1073,7 @@ export function startAutoMemoryScheduler() {
         types.STREAM_TOKEN_RECEIVED,
         types.STREAM_TOKEN_RECEIVED_FULLY,
         types.CHARACTER_MESSAGE_RENDERED,
+        types.MESSAGE_DELETED,
         types.CHAT_CHANGED,
         types.CHAT_LOADED,
     ].filter(Boolean))];

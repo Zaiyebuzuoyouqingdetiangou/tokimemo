@@ -130,15 +130,18 @@ export function autoAchievementForReveal(context, { achievementId = '', moduleId
     };
 }
 
-export function dropAutoRound(context, { moduleId = '', sourceMemoryIds = [] } = {}) {
+export function dropAutoRound(context, { moduleId = '', sourceMemoryIds = [], messageIndex = null } = {}) {
     const ids = new Set((Array.isArray(sourceMemoryIds) ? sourceMemoryIds : []).filter(id => /^M\d{3,6}$/.test(id)));
-    if (!context || !ids.size) return false;
+    const mesid = Math.floor(Number(messageIndex));
+    const hasFloor = Number.isSafeInteger(mesid) && mesid >= 0;
+    if (!context || (!ids.size && !hasFloor)) return false;
     let memory = null;
     try { memory = archive_repository.getImportedMemory(context); } catch { memory = null; }
     const previous = core_cache.loadSession(core_constants.MODE.ACHIEVEMENTS, { context, memoryBank: memory, clone: true });
     if (!previous?.entries?.length) return false;
     const entries = previous.entries.filter(item => {
         if (item?.origin !== 'auto') return true;
+        if (hasFloor && Math.floor(Number(item.messageIndex)) === mesid) return false;
         if (moduleId && item.moduleId && item.moduleId !== moduleId) return true;
         const own = Array.isArray(item.sourceMemoryIds) ? item.sourceMemoryIds : [];
         return !own.some(id => ids.has(id));

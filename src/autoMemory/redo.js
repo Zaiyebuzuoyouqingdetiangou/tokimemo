@@ -97,6 +97,39 @@ export function redrawModuleId(candidates, currentId, randomUnit = 0) {
   return pool[Math.min(pool.length - 1, Math.floor(unit * pool.length))];
 }
 
+export function letterBodyGone(chat, messageIndex) {
+  const index = Math.floor(Number(messageIndex));
+  if (!Number.isSafeInteger(index) || index < 0) return false;
+  const list = Array.isArray(chat) ? chat : [];
+  if (index >= list.length) return true;
+  const message = list[index];
+  if (!message) return true;
+  const text = String(message.mes ?? '').trim();
+  return !text || /^[.。…．]{1,12}$/.test(text);
+}
+
+export function ticketMatchingReveal(snapshot, reveal) {
+  const ids = new Set(reveal?.sourceMemoryIds || []);
+  const tickets = [...(Array.isArray(snapshot?.drawTickets) ? snapshot.drawTickets : [])].reverse();
+  return tickets.find(ticket => ticket.selectedModuleId === reveal?.moduleId && (ticket.sourceMemoryIds || []).some(id => ids.has(id)))
+    || tickets.find(ticket => ticket.selectedModuleId === reveal?.moduleId)
+    || null;
+}
+
+export function ticketLetterMesid(chat, ticket, latestFloor, stamp = null) {
+  if (stamp && Number.isInteger(stamp.messageIndex) && stamp.messageIndex >= 0
+    && (!stamp.drawId || !ticket?.id || stamp.drawId === ticket.id)) {
+    return stamp.messageIndex;
+  }
+  const located = drawFloorMessage(chat, ticket?.dueFloor, latestFloor === true);
+  if (located) return located.index;
+  if (latestFloor !== true) {
+    const index = Math.floor(Number(ticket?.dueFloor)) - 1;
+    return Number.isSafeInteger(index) && index >= 0 ? index : null;
+  }
+  return null;
+}
+
 export function drawFloorMessage(chat, dueFloor, latestFloor) {
   const floor = Math.floor(Number(dueFloor));
   const list = Array.isArray(chat) ? chat : [];

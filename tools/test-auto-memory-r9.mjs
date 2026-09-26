@@ -76,6 +76,19 @@ test('automatic repair follows the existing retry switch and keeps finished step
     assert.equal(redo.resetModuleSteps(finished).steps.every(step => step.status === 'pending'), true);
 });
 
+test('a missing letter floor is gone, and the ticket still points at that mesid', () => {
+    const chat = Array.from({ length: 56 }, () => ({ is_user: false, mes: '还在' }));
+    assert.equal(redo.letterBodyGone(chat, 56), true);
+    assert.equal(redo.letterBodyGone([...chat, { is_user: false, mes: '这一楼的正文' }], 56), false);
+    assert.equal(redo.letterBodyGone([...chat, { is_user: false, mes: '...' }], 56), true);
+    assert.equal(redo.ticketLetterMesid([], { id: 'drawticket1', dueFloor: 57 }, false), 56);
+    const reveal = { moduleId: 'cabinet', sourceMemoryIds: ['M100'] };
+    const snapshot = {
+        drawTickets: [{ id: 'drawticket1', selectedModuleId: 'cabinet', sourceMemoryIds: ['M100'], dueFloor: 57 }],
+    };
+    assert.equal(redo.ticketMatchingReveal(snapshot, reveal).id, 'drawticket1');
+});
+
 test('a rerolled draw floor is a new body, and redraw can leave the current module', () => {
     const chat = [
         { is_user: true, mes: '你好' },

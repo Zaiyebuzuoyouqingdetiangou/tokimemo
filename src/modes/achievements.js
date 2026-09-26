@@ -212,7 +212,7 @@ export async function generateAchievementsWithRepair(context, memoryBank, origin
     return core_incremental.stampIncrementalCoverage(merged, previous, memoryBank, 'mode', sourceMemoryIds, added);
 }
 
-function letterMesidForRender(item) {
+function intendedLetterMesid(item) {
     const stored = Math.floor(Number(item?.messageIndex));
     if (Number.isSafeInteger(stored) && stored >= 0) return stored;
     try {
@@ -226,6 +226,15 @@ function letterMesidForRender(item) {
     } catch {
         return null;
     }
+}
+
+function letterMesidForRender(item) {
+    const mesid = intendedLetterMesid(item);
+    if (mesid == null) return null;
+    try {
+        if (auto_memory_lookback.autoLetterOrphaned(item, core_context.getContext()?.chat, { messageIndex: mesid })) return null;
+    } catch { /* 聊天读不到时仍用记下的楼层。 */ }
+    return mesid;
 }
 
 function lookbackHtml(item, bank) {
@@ -255,7 +264,14 @@ export function renderAchievements() {
     const readOnly = !!runtimeState.activeArchiveSnapshot && runtimeState.activeArchiveReadOnly;
     ui_overlay.setBackVisible(true, runtimeState.activeArchiveSnapshot ? (readOnly ? '只读档案' : '档案') : '当前档案');
     ui_overlay.topTitle('成就库');
-    const unlocked = session.entries.filter(item => item.unlocked);
+    let chat = null;
+    try { chat = core_context.getContext()?.chat; } catch { chat = null; }
+    const unlocked = session.entries.filter(item => {
+        if (!item.unlocked) return false;
+        if (item.origin !== 'auto') return true;
+        const mesid = intendedLetterMesid(item);
+        return !auto_memory_lookback.autoLetterOrphaned(item, chat, { messageIndex: mesid });
+    });
     const locked = session.entries.filter(item => !item.unlocked);
     const tierIcon = tier => ({
         bronze: 'fa-medal',
