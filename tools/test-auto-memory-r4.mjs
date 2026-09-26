@@ -96,3 +96,18 @@ test('toasts explain success and failure once the phase actually changes', () =>
     assert.equal(css.includes('summary'), true);
     assert.equal(css.includes('details'), true);
 });
+
+test('a finished letter stays on its own floor and does not paint the later due floor', () => {
+    const letter = {
+        enabled: true, ...readyArchive, moduleComplete: true, canOpen: true,
+        steps: [{ status: 'completed' }], revealStatus: 'ready', revealLine: '54楼的歌',
+        drawFloor: 54, intervalFloors: 1, nextDueFloor: 56,
+    };
+    const later = shell.shellView({ ...letter, floor: 56 });
+    assert.equal(later.phase, 'hidden');
+    assert.equal(later.showReveal, false);
+    const home = shell.shellView({ ...letter, floor: 54 });
+    assert.equal(home.phase, 'reveal');
+    assert.equal(home.showReveal, true);
+    assert.equal(home.title.includes('54楼的歌'), true);
+});

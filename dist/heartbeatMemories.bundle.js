@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 286
-// Source SHA-256: d621180ccbca41ce1e823480bff60f4c3a82459acdc934eea8f150fd6930be42
+// Source SHA-256: e929e175d4da2553f30bd53fa58f90df3cee48cc6679383e0fd8a01bede17fc6
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -3910,6 +3910,12 @@ function floorIsDue(floor, nextDueFloor) {
     return Number.isSafeInteger(floor) && Number.isSafeInteger(nextDueFloor) && floor >= nextDueFloor;
 }
 
+function shouldRetryDueRound(snapshot, floor) {
+    const plan = snapshot?.plan;
+    if (plan?.enabled !== true) return false;
+    return floorIsDue(floor, plan.nextDueFloor);
+}
+
 function floorDecision({ enabled = false, floor = 0, interval = 0, nextDueFloor = null, modulePlan = null, activeTicket = null, inflightFloor = null, seenFloor = null } = {}) {
     if (enabled !== true) return { action: 'idle' };
     if (modulePlanOpen(modulePlan)) {
@@ -4145,6 +4151,7 @@ __m_autoMemory_incrementalGate_js.withAutoMemoryLock = withAutoMemoryLock;
 __m_autoMemory_incrementalGate_js.runAutoMemoryRound = runAutoMemoryRound;
 __m_autoMemory_incrementalGate_js.drawKnownMemories = drawKnownMemories;
 __m_autoMemory_incrementalGate_js.modulePlanOpen = modulePlanOpen;
+__m_autoMemory_incrementalGate_js.shouldRetryDueRound = shouldRetryDueRound;
 __m_autoMemory_incrementalGate_js.floorDecision = floorDecision;
 __m_autoMemory_incrementalGate_js.roundGuard = roundGuard;
 __m_autoMemory_incrementalGate_js.autoMemoryLockName = autoMemoryLockName;
@@ -6761,6 +6768,7 @@ async function runHostRound() {
             } catch (error) {
                 finishHostJob(hostJob, { action: 'failed' });
                 console.warn('[HeartbeatMemories] due floor skipped', core_text.safeErrorDiagnostic(error));
+                globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊');
             }
         } finally {
             inflightScopes.delete(scope);
@@ -6863,18 +6871,32 @@ async function fillFloorGap() {
     }
 }
 
+function currentPlanFloor(context, latestFloor) {
+    const chat = Array.isArray(context?.chat) ? context.chat : [];
+    return latestFloor === true ? auto_memory_floor.assistantFloorCount(chat) : chat.length;
+}
+
 function queueFloorRecovery(kind) {
     floorRecovery = kind;
     return { action: 'wait' };
+}
+
+async function retryDueFloor(context) {
+    const scope = core_context.chatScopeKey(context);
+    handledFloors.delete(scope);
+    await runHostRound();
+    return { action: 'due-retry' };
 }
 
 async function completeFloorRound() {
     const context = core_context.currentCharacterGuard();
     if (redoInflight) return { action: 'busy' };
     if (storyStillWriting(context)) return queueFloorRecovery('complete');
+    const latest = core_settings.getPluginSettings().autoMemoryLatestFloor === true;
+    const snapshot = auto_memory_plan.readAutoMemoryMetadata(context.chatMetadata);
+    if (auto_memory_gate.shouldRetryDueRound(snapshot, currentPlanFloor(context, latest))) return retryDueFloor(context);
     const rewritten = await rerollOwnedFloor(null);
     if (rewritten) return { action: 'rerolled' };
-    const snapshot = auto_memory_plan.readAutoMemoryMetadata(context.chatMetadata);
     if (snapshot?.modulePlan?.steps?.length) return resumeFloorPlan();
     return regenerateCurrentMemory({ mode: 'keep' });
 }
@@ -6883,6 +6905,9 @@ async function retryFloorRound() {
     const context = core_context.currentCharacterGuard();
     if (redoInflight) return { action: 'busy' };
     if (storyStillWriting(context)) return queueFloorRecovery('redo');
+    const latest = core_settings.getPluginSettings().autoMemoryLatestFloor === true;
+    const snapshot = auto_memory_plan.readAutoMemoryMetadata(context.chatMetadata);
+    if (auto_memory_gate.shouldRetryDueRound(snapshot, currentPlanFloor(context, latest))) return retryDueFloor(context);
     const rewritten = await rerollOwnedFloor(null);
     if (rewritten) return { action: 'rerolled' };
     return regenerateCurrentMemory({ mode: 'keep' });
@@ -7761,10 +7786,8 @@ function shellView(input = {}) {
     };
     const drawFloor = Math.floor(Number(input.drawFloor));
     const floorNow = Math.floor(Number(input.floor));
-    const planFinished = steps.length > 0 && steps.every(step => step?.status === 'completed');
-    // 拆过的旧信在后面的楼层让位给倒计时。还没拆、或还缺成就的信留着，设置里重写的这一份也能看见。
-    const unread = revealStatus === 'ready' || revealStatus === 'achievement_pending';
-    const staleLetter = planFinished && !unread && Number.isSafeInteger(drawFloor) && drawFloor > 0 && Number.isSafeInteger(floorNow) && floorNow > drawFloor;
+    // 旧信只钉在出信那一楼。后面的楼层让给倒计时或新抽，不要把 54 楼的信贴到 56 楼。
+    const staleLetter = Number.isSafeInteger(drawFloor) && drawFloor > 0 && Number.isSafeInteger(floorNow) && floorNow > drawFloor;
     const written = !staleLetter && complete && input.canOpen === true && !running;
     if (!staleLetter && complete && revealStatus === 'achievement_pending') {
         return { ...face, phase: 'achievement-pending', canRepairAchievement: true, title: '回忆先留着', detail: '成就还缺一笔。可以补一次，不必重写正文。' };
@@ -24125,7 +24148,7 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
     if (!snapshot.chatId) throw new Error('无法识别当前聊天窗口 ID，请先保存或打开一个具体聊天。');
     if (!archiveInputAvailable(snapshot, external)) throw new Error('当前聊天窗口没有可用于创建档案的角色/用户消息或已绑定的外部历史。');
 
-    if (incrementalUpdate && !capturedInput && !restartImport) {
+    if (incrementalUpdate && !capturedInput && !restartImport && !(automatic && floorWindow)) {
         const oldChatFingerprint = archivedChatFingerprint(existing);
         if (!oldChatFingerprint || previousMessageCount > snapshot.totalMessages || snapshot.prefixFingerprint !== oldChatFingerprint
             || (existing?.fullSourceFingerprint && snapshot.fullPrefixFingerprint && snapshot.fullPrefixFingerprint !== existing.fullSourceFingerprint)) {
@@ -78170,6 +78193,8 @@ function handleTaskCenterAction(action, actionEl) {
         }).then(result => {
             if (result?.action === 'wait' || result?.action === 'busy') globalThis.toastr?.info?.(waiting, '心迹回廊');
             else if (result?.action === 'idle') globalThis.toastr?.info?.('这一轮已经没有可以补的了。', '心迹回廊');
+            else if (result?.action === 'due-retry') globalThis.toastr?.info?.('这一楼到点了，正在重新抽签。', '心迹回廊');
+            else if (result?.action === 'failed') globalThis.toastr?.error?.(core_text.safeErrorSummary(result.error) || '这一次还是没写完。', '心迹回廊');
         }).catch(error => {
             console.warn('[HeartbeatMemories] floor recovery skipped', core_text.safeErrorDiagnostic(error));
             globalThis.toastr?.info?.('这次没能重试，请再点一次。', '心迹回廊');
