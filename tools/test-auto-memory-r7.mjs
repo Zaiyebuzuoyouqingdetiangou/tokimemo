@@ -15,8 +15,8 @@ test('a due floor reads the floors since the last completion', () => {
     assert.deepEqual(floor.dueFloorWindow(5, 10), { start: 6, end: 10 });
     assert.equal(floor.dueFloorWindow(10, 10), null);
     assert.equal(floor.formatFloorRemain(floor.floorsRemaining(8, 13)), '还差 5 楼');
-    assert.equal(floor.formatFloorRemain(floor.floorsRemaining(12, 13)), '下一楼');
-    assert.equal(floor.formatFloorRemain(floor.floorsRemaining(13, 13)), '下一楼');
+    assert.equal(floor.formatFloorRemain(floor.floorsRemaining(12, 13)), '还差 1 楼');
+    assert.equal(floor.formatFloorRemain(floor.floorsRemaining(13, 13)), '');
     const chat = [
         { is_user: true, mes: '用户' },
         { is_user: false, mes: '第一段很长的角色回复，应该收成摘要。' },
@@ -36,8 +36,10 @@ test('a due floor reads the floors since the last completion', () => {
     assert.equal(mixed[2].text, '最新一条角色楼的完整正文。');
     assert.equal(mixed[0].text, '第一段很长的角色回复，应该收成摘要。');
     assert.equal(floor.latestAssistantWindow([{ role: 'char', text: '只有最新楼。' }], 1)[0].text, '只有最新楼。');
-    assert.equal(floor.countdownLabel(5), '回忆还有 5 楼');
-    assert.equal(floor.countdownLabel(1), '下一楼留下回忆');
+    assert.equal(floor.countdownLabel(5, 5), '回忆还有 5 楼');
+    assert.equal(floor.countdownLabel(1, 5), '回忆还有 1 楼');
+    assert.equal(floor.countdownLabel(0, 5), '');
+    assert.equal(floor.countdownLabel(1, 1), '');
     assert.equal(floor.assistantBodyReady(chat), true);
     assert.equal(floor.assistantBodyReady(chat, { generating: true }), false);
     assert.equal(floor.assistantBodyReady(chat.slice(0, 4)), false);
@@ -59,6 +61,9 @@ test('the waiting shell shows the floor countdown and does not block input', () 
     });
     assert.equal(noted.detail, '还差 5 楼');
     assert.equal(noted.canFill, true);
+    assert.equal(shell.shellView({ enabled: true, archiveReady: true, floor: 8, nextDueFloor: 9, intervalFloors: 1 }).phase, 'hidden');
+    assert.equal(shell.shellView({ enabled: true, archiveReady: true, floor: 12, nextDueFloor: 13, intervalFloors: 5 }).detail, '还差 1 楼');
+    assert.equal(shell.shellView({ enabled: true, archiveReady: true, floor: 13, nextDueFloor: 13, intervalFloors: 5 }).phase, 'hidden');
     assert.equal(gap.readableGap({ schemaVersion: 1, floor: 10, reason: 'no-new-memory', filled: false }).canFill, true);
     assert.equal(gap.readableGap({ schemaVersion: 1, floor: 10, reason: 'no-new-memory', filled: true }).canFill, false);
     const titled = {};

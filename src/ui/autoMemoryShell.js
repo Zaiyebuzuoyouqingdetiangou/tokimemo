@@ -1,5 +1,7 @@
 // 外置壳贴在角色楼层下面，点开才展开。档案没写完时不挂壳，也不显示建档进度。
+import * as archive_avatars from './archiveAvatars.js';
 import * as archive_repository from '../archive/repository.js';
+import * as archive_snapshots from '../archive/snapshots.js';
 import * as incremental_view from '../autoMemory/incrementalView.js';
 import * as core_cache from '../core/cache.js';
 import * as auto_memory_floor from '../autoMemory/floorPace.js';
@@ -142,6 +144,7 @@ function viewFor(context) {
             ? auto_memory_floor.assistantFloorCount(context.chat)
             : (Array.isArray(context.chat) ? context.chat.length : 0),
         nextDueFloor: snapshot.plan.nextDueFloor,
+        intervalFloors: snapshot.plan.intervalFloors,
         gapText: auto_memory_gap.readableGap(context.chatMetadata?.[auto_memory_gap.GAP_KEY])?.text || '',
         canFill: auto_memory_gap.readableGap(context.chatMetadata?.[auto_memory_gap.GAP_KEY])?.canFill === true,
     });
@@ -182,7 +185,7 @@ function markup(view) {
     const writing = view.phase === 'generating' || view.phase === 'planning';
     const caption = revealPaper ? '' : `<small data-rmt-letter-detail>${core_text.esc(view.detail)}</small>`;
     const paper = revealPaper
-        ? `<p data-rmt-letter-achievement>${core_text.esc(view.title)}</p><button type="button" class="rmt-btn" data-rmt-letter-read data-rmt-reveal="${core_text.esc(view.revealId)}" data-rmt-module="${core_text.esc(view.moduleId)}">打开回忆</button>`
+        ? `<button type="button" class="rmt-btn rmt-heart-letter-close" data-rmt-letter-close>收起这封信</button><p data-rmt-letter-achievement>${core_text.esc(view.title)}</p><button type="button" class="rmt-btn" data-rmt-letter-read data-rmt-reveal="${core_text.esc(view.revealId)}" data-rmt-module="${core_text.esc(view.moduleId)}">打开回忆</button>`
         : '';
     return `<article class="rmt-heart-letter${writing ? ' is-writing' : ''}">
         <button type="button" class="rmt-heart-letter-seal" data-rmt-letter-open aria-label="${core_text.esc(revealPaper ? '拆开这封信' : view.detail || '回忆')}">
@@ -311,6 +314,24 @@ function incrementFor(moduleId, revealId) {
     }
 }
 
+function letterIdentity() {
+    let context = null;
+    try { context = core_context.getContext(); } catch { context = null; }
+    const userFile = archive_avatars.currentUserAvatar(context);
+    const userAvatar = userFile ? (archive_avatars.characterAvatarUrl(userFile, context) || archive_avatars.userAvatarUrl(userFile)) : '';
+    let charAvatar = '';
+    try {
+        const file = archive_snapshots.currentCharacterAvatar(context);
+        charAvatar = file ? (archive_avatars.characterAvatarUrl(file, context) || '') : '';
+    } catch { charAvatar = ''; }
+    return {
+        characterName: context?.name2 || '角色',
+        userName: context?.name1 || '你',
+        charAvatar,
+        userAvatar,
+    };
+}
+
 function writeRound(body, moduleId, revealId) {
     const increment = incrementFor(moduleId, revealId);
     if (!increment.kept) {
@@ -321,7 +342,7 @@ function writeRound(body, moduleId, revealId) {
             : '<p class="rmt-floor-note">这一轮写完了，但是没有新的段落。</p><div class="rmt-heart-letter-actions"><button type="button" class="rmt-btn" data-rmt-floor-complete>补全</button><button type="button" class="rmt-btn" data-rmt-floor-redo>重试</button></div>';
         return false;
     }
-    const html = incremental_view.roundReadingHtml(increment.session);
+    const html = incremental_view.roundReadingHtml(increment.session, letterIdentity());
     if (!html) {
         body.innerHTML = '<p class="rmt-floor-note">这一轮写完了，但是没有新的段落。</p><div class="rmt-heart-letter-actions"><button type="button" class="rmt-btn" data-rmt-floor-complete>补全</button><button type="button" class="rmt-btn" data-rmt-floor-redo>重试</button></div>';
         return false;
@@ -406,6 +427,16 @@ function onClick(event) {
             console.warn('[HeartbeatMemories] floor retry skipped', core_text.safeErrorDiagnostic(error));
             globalThis.toastr?.error?.('这一封暂时没能续上。可以再点一次重试。', '心口顿了一下');
         }).finally(() => { retry.disabled = false; sync(); });
+        return;
+    }
+    const close = event.target?.closest?.('[data-rmt-letter-close]');
+    if (close) {
+        event.preventDefault();
+        event.stopPropagation();
+        const paper = close.closest?.('[data-rmt-letter-paper]');
+        const seal = paper?.parentElement?.querySelector?.('[data-rmt-letter-open]');
+        if (paper) paper.hidden = true;
+        if (seal) seal.hidden = false;
         return;
     }
     const read = event.target?.closest?.('[data-rmt-letter-read]');

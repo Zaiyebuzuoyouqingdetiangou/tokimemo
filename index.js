@@ -1,5 +1,5 @@
-const VERSION = '0.99.82';
-const BUILD = '0.99.82-r84.134-heart-envelope';
+const VERSION = '0.99.83';
+const BUILD = '0.99.83-r84.135-letter-reading';
 
 const SETTINGS_ID = 'heartbeat_memories_settings';
 const MENU_ID = 'heartbeat_memories_menu_item';

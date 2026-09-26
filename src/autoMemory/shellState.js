@@ -31,6 +31,23 @@ export function floorShellCss() {
 .rmt-heart-letter.is-writing .rmt-heart-letter-seal{cursor:default}
 .rmt-heart-letter-paper{margin-top:8px;min-width:0;overflow:hidden;padding:16px 14px 12px;border:1px solid #e6d3c4;border-left:7px solid #e99ab9;border-radius:4px 16px 16px 4px;background:#fff8ee;background-image:repeating-linear-gradient(0deg,transparent,transparent 22px,rgba(180,140,120,.16) 23px);color:#5c463c}
 .rmt-heart-letter-paper p{margin:0 0 10px;font-size:15px;line-height:1.6}
+.rmt-heart-letter-close{margin:0 0 12px}
+.rmt-heart-letter .rmt-heart-line{display:flex;gap:12px;align-items:flex-start;margin:14px 0}
+.rmt-heart-letter .rmt-heart-line-avatar{width:42px;height:42px;border-radius:50%;overflow:hidden;flex:none;display:grid;place-items:center;background:#edf3f6;color:#7c8da0}
+.rmt-heart-letter .rmt-heart-line-avatar img{width:100%;height:100%;object-fit:cover}
+.rmt-heart-letter .rmt-heart-line>div{min-width:0;background:#fff;border:1px solid #e3ebf0;border-radius:6px 18px 18px 18px;padding:10px 14px}
+.rmt-heart-letter .rmt-heart-line small{display:block;margin-bottom:4px;color:#8d6d78;font-size:12px}
+.rmt-heart-letter .rmt-heart-line.user{flex-direction:row-reverse}
+.rmt-heart-letter .rmt-heart-line.user>div{background:#fff0f5;border-radius:18px 6px 18px 18px}
+.rmt-heart-letter .rmt-heart-narration{margin:10px 4px;color:#6d7c8a;line-height:1.7}
+.rmt-heart-letter .rmt-letter-piece h3{margin:16px 0 8px;font-size:16px}
+.rmt-heart-letter .rmt-phone{display:flex;justify-content:center;margin:8px 0}
+.rmt-heart-letter .rmt-phone-shell{width:min(360px,100%);box-sizing:border-box;border:6px solid #222b33;border-radius:36px;padding:12px 12px 16px;background:#eaf0f3;color:#20303d}
+.rmt-heart-letter .rmt-phone-notch{width:72px;height:5px;margin:0 auto 10px;border-radius:999px;background:rgba(39,57,65,.28)}
+.rmt-heart-letter .rmt-phone-message{margin:8px 0;max-width:86%}
+.rmt-heart-letter .rmt-phone-message-owner{margin-left:auto}
+.rmt-heart-letter .rmt-phone-message p{margin:4px 0 0;padding:8px 10px;border-radius:12px;background:#fff}
+.rmt-heart-letter .rmt-phone-message-owner p{background:#d9ecff}
 .rmt-heart-letter .rmt-floor-body{max-height:70vh;max-width:100%;min-width:0;margin-top:10px;overflow:auto}
 /* 模块页按整页两栏排。在信里改成单栏，生图设置不占信纸。 */
 .rmt-heart-letter .rmt-floor-body .rmt-cg-format,
@@ -152,7 +169,9 @@ export function shellView(input = {}) {
     if (revealStatus === 'generating') {
         return { ...face, phase: 'generating', title: '回忆生成中', detail: '还没整份写完，先不拆开。' };
     }
-    const remain = auto_memory_floor.formatFloorRemain(auto_memory_floor.floorsRemaining(input.floor, input.nextDueFloor));
+    const interval = Math.floor(Number(input.intervalFloors));
+    const left = auto_memory_floor.floorsRemaining(input.floor, input.nextDueFloor);
+    const remain = interval === 1 ? '' : auto_memory_floor.formatFloorRemain(left);
     if (remain) {
         const pace = { ...face, phase: 'pace', title: '留忆', detail: remain };
         if (input.gapText) {

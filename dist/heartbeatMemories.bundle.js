@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 284
-// Source SHA-256: 943b929aaf17caad4ac5d89b015a6d86119cca9a173f7d85b9314b67e3d05f7d
+// Source SHA-256: aceff16f1f3cc0ab3e7de5655a51bee09613cdaff06b895cd593851df7648df2
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -3523,10 +3523,10 @@ function floorsRemaining(floor, nextDueFloor) {
     return Math.max(0, due - now);
 }
 
-// 还差两楼以上写明数字；只剩一楼，或这一楼已经到点，都写成「下一楼」。
+// 间隔大于 1 时，每一楼都写还差几楼。到点那一楼不写倒计时，直接生成。
 function formatFloorRemain(left) {
-    if (!Number.isSafeInteger(left) || left < 0) return '';
-    return left <= 1 ? '下一楼' : `还差 ${left} 楼`;
+    if (!Number.isSafeInteger(left) || left < 1) return '';
+    return `还差 ${left} 楼`;
 }
 
 function isAssistantFloor(message) {
@@ -3565,10 +3565,9 @@ function latestAssistantWindow(messages, interval) {
     return assistant.slice(-count).map(item => ({ ...item }));
 }
 
-function countdownLabel(left) {
-    if (!Number.isSafeInteger(left) || left < 0) return '';
-    if (left <= 0) return '这一楼留下回忆';
-    if (left === 1) return '下一楼留下回忆';
+function countdownLabel(left, interval = 0) {
+    const everyFloor = Math.floor(Number(interval)) === 1;
+    if (everyFloor || !Number.isSafeInteger(left) || left < 1) return '';
     return `回忆还有 ${left} 楼`;
 }
 
@@ -3911,15 +3910,30 @@ function listedIds(item) {
     return rows;
 }
 
-function matches(item, ids, createdAt) {
-    if (!item || typeof item !== 'object') return false;
-    if (listedIds(item).some(id => ids.has(id))) return true;
-    return Number.isFinite(item.createdAt) && createdAt > 0 && item.createdAt >= createdAt;
+function stampOf(item) {
+    const created = Number(item?.createdAt);
+    const generated = Number(item?.generatedAt);
+    if (Number.isFinite(created) && created > 0) return created;
+    if (Number.isFinite(generated) && generated > 0) return generated;
+    return 0;
 }
 
-function trimStory(story, ids, createdAt) {
-    if (!Array.isArray(story?.chapters)) return matches(story, ids, createdAt) ? story : null;
-    const chapters = story.chapters.filter(chapter => matches(chapter, ids, createdAt) || matches(story, ids, createdAt));
+function roundStart(createdAt, since) {
+    const bounds = [Number(since) || 0, Number(createdAt) || 0].filter(value => value > 0);
+    return bounds.length ? Math.min(...bounds) : 0;
+}
+
+function matches(item, ids, createdAt, since) {
+    if (!item || typeof item !== 'object') return false;
+    if (listedIds(item).some(id => ids.has(id))) return true;
+    const stamp = stampOf(item);
+    const start = roundStart(createdAt, since);
+    return stamp > 0 && start > 0 && stamp >= start;
+}
+
+function trimStory(story, ids, createdAt, since) {
+    if (!Array.isArray(story?.chapters)) return matches(story, ids, createdAt, since) ? story : null;
+    const chapters = story.chapters.filter(chapter => matches(chapter, ids, createdAt, since) || matches(story, ids, createdAt, since));
     if (!chapters.length) return null;
     return { ...story, chapters };
 }
@@ -3961,8 +3975,8 @@ function incrementalProjection(session, { sourceMemoryIds = [], createdAt = 0, s
         }
         const original = Array.isArray(session[key]) ? session[key] : [];
         const filtered = key === 'stories'
-            ? original.map(story => trimStory(story, ids, createdAt)).filter(Boolean)
-            : original.filter(item => matches(item, ids, createdAt));
+            ? original.map(story => trimStory(story, ids, createdAt, sinceAt)).filter(Boolean)
+            : original.filter(item => matches(item, ids, createdAt, sinceAt));
         copy[key] = key === 'stories' || !belongs ? filtered : narrowToRound(original, filtered, last.added);
         if (copy[key].length) kept = true;
     }
@@ -3999,8 +4013,89 @@ function esc(value) {
     return String(value).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
 }
 
-function roundReadingHtml(session) {
-    if (!session || typeof session !== 'object') return '';
+const SEASON_LABEL = { spring: '春', summer: '夏', autumn: '秋', winter: '冬', postending: '未来 / 后日谈' };
+
+function heartLine(line, identity) {
+    const speaker = line?.speaker === 'user' || line?.speaker === 'npc' || line?.speaker === 'narrator' ? line.speaker : 'char';
+    const text = typeof line?.text === 'string' ? line.text.trim() : '';
+    if (!text) return '';
+    if (speaker === 'narrator') return `<div class="rmt-heart-narration">${esc(text)}</div>`;
+    const isUser = speaker === 'user';
+    const name = isUser ? (identity.userName || '你') : (line.speakerName || identity.characterName || '角色');
+    const avatar = isUser ? identity.userAvatar : identity.charAvatar;
+    const face = avatar
+        ? `<img src="${esc(avatar)}" alt="">`
+        : `<i class="fa-solid ${isUser ? 'fa-user' : 'fa-heart'}"></i>`;
+    return `<div class="rmt-heart-line ${isUser ? 'user' : 'char'}"><span class="rmt-heart-line-avatar">${face}</span><div><small>${esc(name)}</small><p>${esc(text)}</p></div></div>`;
+}
+
+function heartScript(lines, identity) {
+    const html = (Array.isArray(lines) ? lines : []).map(line => heartLine(line, identity)).filter(Boolean).join('');
+    return html ? `<div class="rmt-heart-script">${html}</div>` : '';
+}
+
+function heartPiece(title, body) {
+    if (!body && !title) return '';
+    const heading = title ? `<h3>${esc(title)}</h3>` : '';
+    return `<section class="rmt-letter-piece">${heading}${body || ''}</section>`;
+}
+
+function heartHtml(session, identity) {
+    const blocks = [];
+    if (session.relationshipSummary) blocks.push(heartPiece('', `<div class="rmt-heart-narration">${esc(session.relationshipSummary)}</div>`));
+    for (const drama of [...(session.voiceDramas || []), ...(session.scenarioDramas || [])]) {
+        const season = SEASON_LABEL[drama.season || drama.kind] || '';
+        const title = [season, drama.title].filter(Boolean).join(' · ');
+        const setting = drama.setting ? `<div class="rmt-heart-narration">${esc(drama.setting)}</div>` : '';
+        blocks.push(heartPiece(title, `${setting}${heartScript(drama.script, identity)}`));
+    }
+    for (const strip of session.dailyStrips || []) {
+        const lines = [];
+        for (const panel of strip.panels || []) {
+            if (panel.caption) lines.push({ speaker: 'narrator', text: panel.caption });
+            if (panel.action) lines.push({ speaker: 'narrator', text: panel.action });
+            if (panel.charLine) lines.push({ speaker: 'char', text: panel.charLine });
+            if (panel.userLine) lines.push({ speaker: 'user', text: panel.userLine });
+        }
+        blocks.push(heartPiece(strip.title || '日常', heartScript(lines, identity)));
+    }
+    for (const voice of session.fireflyVoices || []) {
+        blocks.push(heartPiece(voice.title || '萤火虫', heartScript(voice.script, identity)));
+    }
+    return blocks.filter(Boolean).join('');
+}
+
+function phoneMessages(entry) {
+    const rows = Array.isArray(entry?.messages) ? entry.messages : [];
+    return rows.map(message => {
+        const text = typeof message?.text === 'string' ? message.text.trim() : '';
+        if (!text) return '';
+        const role = message.speakerRole === 'owner' ? 'owner' : 'contact';
+        const speaker = message.speaker || (role === 'owner' ? '他' : '联系人');
+        return `<div class="rmt-phone-message rmt-phone-message-${role}"><div><b>${esc(speaker)}</b></div><p>${esc(text)}</p></div>`;
+    }).filter(Boolean).join('');
+}
+
+function phoneHtml(session) {
+    const apps = Array.isArray(session.apps) ? session.apps : [];
+    const blocks = [];
+    for (const app of apps) {
+        const entries = Array.isArray(app?.entries) ? app.entries : [];
+        const inner = entries.map(entry => {
+            const thread = phoneMessages(entry);
+            const title = entry?.title ? `<h3>${esc(entry.title)}</h3>` : '';
+            const detail = typeof entry?.detail === 'string' && entry.detail.trim() ? `<p class="rmt-phone-record-copy">${esc(entry.detail.trim())}</p>` : '';
+            if (!thread && !detail && !title) return '';
+            return `<section class="rmt-phone-conversation">${title}${detail}${thread ? `<div class="rmt-phone-chat-thread">${thread}</div>` : ''}</section>`;
+        }).join('');
+        if (!inner) continue;
+        const label = app.label || app.title || '私人终端';
+        blocks.push(`<div class="rmt-phone"><div class="rmt-phone-shell"><div class="rmt-phone-notch"></div><p class="rmt-phone-lock"><b>${esc(label)}</b></p>${inner}</div></div>`);
+    }
+    return blocks.join('');
+}
+
+function plainHtml(session) {
     const lines = [];
     pushLine(lines, session.relationshipSummary);
     for (const key of [...MODULE_BODY_KEYS, ...LIST_KEYS]) {
@@ -4008,6 +4103,20 @@ function roundReadingHtml(session) {
     }
     if (!lines.length) return '';
     return `<div class="rmt-round-reading">${lines.map(line => `<p>${esc(line)}</p>`).join('')}</div>`;
+}
+
+function roundReadingHtml(session, identity = {}) {
+    if (!session || typeof session !== 'object') return '';
+    const who = {
+        characterName: identity.characterName || '角色',
+        userName: identity.userName || '你',
+        charAvatar: identity.charAvatar || '',
+        userAvatar: identity.userAvatar || '',
+    };
+    const heart = heartHtml(session, who);
+    const phone = phoneHtml(session);
+    if (heart || phone) return `<div class="rmt-round-reading">${heart}${phone}</div>`;
+    return plainHtml(session);
 }
 
 __m_autoMemory_incrementalView_js.incrementalProjection = incrementalProjection;
@@ -6257,6 +6366,23 @@ function floorShellCss() {
 .rmt-heart-letter.is-writing .rmt-heart-letter-seal{cursor:default}
 .rmt-heart-letter-paper{margin-top:8px;min-width:0;overflow:hidden;padding:16px 14px 12px;border:1px solid #e6d3c4;border-left:7px solid #e99ab9;border-radius:4px 16px 16px 4px;background:#fff8ee;background-image:repeating-linear-gradient(0deg,transparent,transparent 22px,rgba(180,140,120,.16) 23px);color:#5c463c}
 .rmt-heart-letter-paper p{margin:0 0 10px;font-size:15px;line-height:1.6}
+.rmt-heart-letter-close{margin:0 0 12px}
+.rmt-heart-letter .rmt-heart-line{display:flex;gap:12px;align-items:flex-start;margin:14px 0}
+.rmt-heart-letter .rmt-heart-line-avatar{width:42px;height:42px;border-radius:50%;overflow:hidden;flex:none;display:grid;place-items:center;background:#edf3f6;color:#7c8da0}
+.rmt-heart-letter .rmt-heart-line-avatar img{width:100%;height:100%;object-fit:cover}
+.rmt-heart-letter .rmt-heart-line>div{min-width:0;background:#fff;border:1px solid #e3ebf0;border-radius:6px 18px 18px 18px;padding:10px 14px}
+.rmt-heart-letter .rmt-heart-line small{display:block;margin-bottom:4px;color:#8d6d78;font-size:12px}
+.rmt-heart-letter .rmt-heart-line.user{flex-direction:row-reverse}
+.rmt-heart-letter .rmt-heart-line.user>div{background:#fff0f5;border-radius:18px 6px 18px 18px}
+.rmt-heart-letter .rmt-heart-narration{margin:10px 4px;color:#6d7c8a;line-height:1.7}
+.rmt-heart-letter .rmt-letter-piece h3{margin:16px 0 8px;font-size:16px}
+.rmt-heart-letter .rmt-phone{display:flex;justify-content:center;margin:8px 0}
+.rmt-heart-letter .rmt-phone-shell{width:min(360px,100%);box-sizing:border-box;border:6px solid #222b33;border-radius:36px;padding:12px 12px 16px;background:#eaf0f3;color:#20303d}
+.rmt-heart-letter .rmt-phone-notch{width:72px;height:5px;margin:0 auto 10px;border-radius:999px;background:rgba(39,57,65,.28)}
+.rmt-heart-letter .rmt-phone-message{margin:8px 0;max-width:86%}
+.rmt-heart-letter .rmt-phone-message-owner{margin-left:auto}
+.rmt-heart-letter .rmt-phone-message p{margin:4px 0 0;padding:8px 10px;border-radius:12px;background:#fff}
+.rmt-heart-letter .rmt-phone-message-owner p{background:#d9ecff}
 .rmt-heart-letter .rmt-floor-body{max-height:70vh;max-width:100%;min-width:0;margin-top:10px;overflow:auto}
 /* 模块页按整页两栏排。在信里改成单栏，生图设置不占信纸。 */
 .rmt-heart-letter .rmt-floor-body .rmt-cg-format,
@@ -6378,7 +6504,9 @@ function shellView(input = {}) {
     if (revealStatus === 'generating') {
         return { ...face, phase: 'generating', title: '回忆生成中', detail: '还没整份写完，先不拆开。' };
     }
-    const remain = auto_memory_floor.formatFloorRemain(auto_memory_floor.floorsRemaining(input.floor, input.nextDueFloor));
+    const interval = Math.floor(Number(input.intervalFloors));
+    const left = auto_memory_floor.floorsRemaining(input.floor, input.nextDueFloor);
+    const remain = interval === 1 ? '' : auto_memory_floor.formatFloorRemain(left);
     if (remain) {
         const pace = { ...face, phase: 'pace', title: '留忆', detail: remain };
         if (input.gapText) {
@@ -59673,7 +59801,10 @@ function refreshAutoMemoryCountdown() {
             const floor = latest
                 ? auto_memory_floor.assistantFloorCount(context.chat)
                 : (Array.isArray(context.chat) ? context.chat.length : 0);
-            label = auto_memory_floor.countdownLabel(auto_memory_floor.floorsRemaining(floor, plan.nextDueFloor));
+            label = auto_memory_floor.countdownLabel(
+                auto_memory_floor.floorsRemaining(floor, plan.nextDueFloor),
+                plan.intervalFloors,
+            );
         }
     } catch { label = ''; }
     for (const node of nodes) {
@@ -59687,7 +59818,9 @@ __m_ui_autoMemoryCountdown_js.refreshAutoMemoryCountdown = refreshAutoMemoryCoun
 
 function __init_ui_autoMemoryShell_js() {
 // MODULE: ui/autoMemoryShell.js
+const archive_avatars = __m_ui_archiveAvatars_js;
 const archive_repository = __m_archive_repository_js;
+const archive_snapshots = __m_archive_snapshots_js;
 const incremental_view = __m_autoMemory_incrementalView_js;
 const core_cache = __m_core_cache_js;
 const auto_memory_floor = __m_autoMemory_floorPace_js;
@@ -59708,6 +59841,8 @@ const ui_reveal = __m_ui_memoryReveal_js;
 const ui_styles = __m_ui_styles_js;
 const ui_taskCenter = __m_ui_taskCenter_js;
 // 外置壳贴在角色楼层下面，点开才展开。档案没写完时不挂壳，也不显示建档进度。
+
+
 
 
 
@@ -59850,6 +59985,7 @@ function viewFor(context) {
             ? auto_memory_floor.assistantFloorCount(context.chat)
             : (Array.isArray(context.chat) ? context.chat.length : 0),
         nextDueFloor: snapshot.plan.nextDueFloor,
+        intervalFloors: snapshot.plan.intervalFloors,
         gapText: auto_memory_gap.readableGap(context.chatMetadata?.[auto_memory_gap.GAP_KEY])?.text || '',
         canFill: auto_memory_gap.readableGap(context.chatMetadata?.[auto_memory_gap.GAP_KEY])?.canFill === true,
     });
@@ -59890,7 +60026,7 @@ function markup(view) {
     const writing = view.phase === 'generating' || view.phase === 'planning';
     const caption = revealPaper ? '' : `<small data-rmt-letter-detail>${core_text.esc(view.detail)}</small>`;
     const paper = revealPaper
-        ? `<p data-rmt-letter-achievement>${core_text.esc(view.title)}</p><button type="button" class="rmt-btn" data-rmt-letter-read data-rmt-reveal="${core_text.esc(view.revealId)}" data-rmt-module="${core_text.esc(view.moduleId)}">打开回忆</button>`
+        ? `<button type="button" class="rmt-btn rmt-heart-letter-close" data-rmt-letter-close>收起这封信</button><p data-rmt-letter-achievement>${core_text.esc(view.title)}</p><button type="button" class="rmt-btn" data-rmt-letter-read data-rmt-reveal="${core_text.esc(view.revealId)}" data-rmt-module="${core_text.esc(view.moduleId)}">打开回忆</button>`
         : '';
     return `<article class="rmt-heart-letter${writing ? ' is-writing' : ''}">
         <button type="button" class="rmt-heart-letter-seal" data-rmt-letter-open aria-label="${core_text.esc(revealPaper ? '拆开这封信' : view.detail || '回忆')}">
@@ -60019,6 +60155,24 @@ function incrementFor(moduleId, revealId) {
     }
 }
 
+function letterIdentity() {
+    let context = null;
+    try { context = core_context.getContext(); } catch { context = null; }
+    const userFile = archive_avatars.currentUserAvatar(context);
+    const userAvatar = userFile ? (archive_avatars.characterAvatarUrl(userFile, context) || archive_avatars.userAvatarUrl(userFile)) : '';
+    let charAvatar = '';
+    try {
+        const file = archive_snapshots.currentCharacterAvatar(context);
+        charAvatar = file ? (archive_avatars.characterAvatarUrl(file, context) || '') : '';
+    } catch { charAvatar = ''; }
+    return {
+        characterName: context?.name2 || '角色',
+        userName: context?.name1 || '你',
+        charAvatar,
+        userAvatar,
+    };
+}
+
 function writeRound(body, moduleId, revealId) {
     const increment = incrementFor(moduleId, revealId);
     if (!increment.kept) {
@@ -60029,7 +60183,7 @@ function writeRound(body, moduleId, revealId) {
             : '<p class="rmt-floor-note">这一轮写完了，但是没有新的段落。</p><div class="rmt-heart-letter-actions"><button type="button" class="rmt-btn" data-rmt-floor-complete>补全</button><button type="button" class="rmt-btn" data-rmt-floor-redo>重试</button></div>';
         return false;
     }
-    const html = incremental_view.roundReadingHtml(increment.session);
+    const html = incremental_view.roundReadingHtml(increment.session, letterIdentity());
     if (!html) {
         body.innerHTML = '<p class="rmt-floor-note">这一轮写完了，但是没有新的段落。</p><div class="rmt-heart-letter-actions"><button type="button" class="rmt-btn" data-rmt-floor-complete>补全</button><button type="button" class="rmt-btn" data-rmt-floor-redo>重试</button></div>';
         return false;
@@ -60114,6 +60268,16 @@ function onClick(event) {
             console.warn('[HeartbeatMemories] floor retry skipped', core_text.safeErrorDiagnostic(error));
             globalThis.toastr?.error?.('这一封暂时没能续上。可以再点一次重试。', '心口顿了一下');
         }).finally(() => { retry.disabled = false; sync(); });
+        return;
+    }
+    const close = event.target?.closest?.('[data-rmt-letter-close]');
+    if (close) {
+        event.preventDefault();
+        event.stopPropagation();
+        const paper = close.closest?.('[data-rmt-letter-paper]');
+        const seal = paper?.parentElement?.querySelector?.('[data-rmt-letter-open]');
+        if (paper) paper.hidden = true;
+        if (seal) seal.hidden = false;
         return;
     }
     const read = event.target?.closest?.('[data-rmt-letter-read]');
@@ -65678,6 +65842,7 @@ const language_view = __m_ui_languageView_js;
 const archive_groups = __m_archive_groups_js;
 const archive_library = __m_archive_library_js;
 const archive_repository = __m_archive_repository_js;
+const archive_avatars = __m_ui_archiveAvatars_js;
 const archive_snapshots = __m_archive_snapshots_js;
 const core_cache = __m_core_cache_js;
 const core_cgImagePatch = __m_core_cgImagePatch_js;
@@ -65716,6 +65881,7 @@ const runtimeState = __m_core_state_js.state;
 
 
 
+
 function viewHeartStripImage(opener = null) {
     const item = selectedHeartStrip();
     if (item) return image_viewer.openCgImageViewer(item.cgImage, item.title, { opener });
@@ -65734,8 +65900,9 @@ function heartCharacterAvatarUrl(entry = runtimeState.activeArchiveSnapshot, con
 
 function heartUserAvatarUrl(context = core_context.getContext()) {
     try {
-        const raw = core_text.normalizeText(context?.user_avatar || context?.userAvatar || globalThis.user_avatar, 300);
-        return raw ? (context.getThumbnailUrl?.('avatar', raw) || '') : '';
+        const file = archive_avatars.currentUserAvatar(context);
+        if (!file) return '';
+        return archive_avatars.characterAvatarUrl(file, context) || archive_avatars.userAvatarUrl(file);
     } catch {
         return '';
     }
@@ -75059,6 +75226,7 @@ let painting = false;
 let pumping = false;
 const queue = [];
 const autoRetryUsed = new Map();
+const autoRetryExhausted = new Set();
 const picks = new Set();
 let pickScope = '';
 const QUEUE_STATUS = { queued: '排队', running: '进行中', done: '完成', failed: '失败', cancelled: '已取消' };
@@ -75131,7 +75299,12 @@ function noteRetryableGeneration(info) {
     if (!scope) return;
     const key = `${scope}|${draftId}|${pageId}|${mode}`;
     const used = autoRetryUsed.get(key) || 0;
-    if (used >= settings.autoRetryCount) return;
+    if (used >= settings.autoRetryCount) {
+        autoRetryExhausted.add(key);
+        refreshTaskCenterView();
+        return;
+    }
+    autoRetryExhausted.delete(key);
     if (queue.some(item => item.kind === 'recovery' && item.draftId === draftId && item.pageId === pageId && item.status === 'queued')) return;
     autoRetryUsed.set(key, used + 1);
     queue.push({
@@ -75460,7 +75633,7 @@ function draftCards() {
             mode: row.mode,
             pageId: row.pageId || '',
             draftId: row.draftId,
-            detail: `已保留 ${Number(row.completed) || 0} 个成功分段 · ${String(reason || '').replace(/[。\s]+$/, '')}`,
+            detail: [`已保留 ${Number(row.completed) || 0} 个成功分段`, String(reason || '').replace(/[。\s]+$/, ''), autoRetryExhausted.has(`${currentScope()}|${row.draftId}|${row.pageId || row.mode}|${row.mode}`) ? '自动重试已经用完，请手动点重试' : ''].filter(Boolean).join(' · '),
             at: Number(row.updatedAt) || Number(row.createdAt) || 0,
             actions: `${retry}${fresh}<button type="button" class="rmt-btn" data-rmt-recovery-export="${core_text.esc(row.mode)}" ${attrs}>导出未提交草稿</button><button type="button" class="rmt-btn" data-rmt-recovery-discard="${core_text.esc(row.mode)}" ${attrs}>放弃这份草稿</button>`,
         };

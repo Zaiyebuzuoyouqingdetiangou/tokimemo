@@ -16,7 +16,10 @@ export function refreshAutoMemoryCountdown() {
             const floor = latest
                 ? auto_memory_floor.assistantFloorCount(context.chat)
                 : (Array.isArray(context.chat) ? context.chat.length : 0);
-            label = auto_memory_floor.countdownLabel(auto_memory_floor.floorsRemaining(floor, plan.nextDueFloor));
+            label = auto_memory_floor.countdownLabel(
+                auto_memory_floor.floorsRemaining(floor, plan.nextDueFloor),
+                plan.intervalFloors,
+            );
         }
     } catch { label = ''; }
     for (const node of nodes) {

@@ -160,4 +160,17 @@ test('the letter offers repair and retry only when that work is still open', () 
         generationMeta: { lastUpdate: { added: 0, updatedAt: 10, consumedMemoryIds: ['M001'] } },
     }, { sourceMemoryIds: ['M100'], since: 50 });
     assert.equal(stale.kept, false);
+    const stamped = view.incrementalProjection({
+        voiceDramas: [{ id: 'v1', title: '春日', season: 'spring', generatedAt: 80, script: [{ speaker: 'user', text: '擦了两下车门' }, { speaker: 'char', text: '水压太大' }] }],
+    }, { sourceMemoryIds: ['M200'], since: 50, createdAt: 90 });
+    assert.equal(stamped.kept, true);
+    const bubbles = view.roundReadingHtml(stamped.session, { characterName: '裴司野', userName: '星野南', charAvatar: 'char.png', userAvatar: 'user.png' });
+    assert.equal(bubbles.includes('rmt-heart-line user'), true);
+    assert.equal(bubbles.includes('user.png'), true);
+    assert.equal(bubbles.includes('擦了两下车门'), true);
+    const phone = view.roundReadingHtml({
+        apps: [{ label: '短信', entries: [{ title: '今晚', messages: [{ speaker: '他', speakerRole: 'owner', text: '到了' }] }] }],
+    });
+    assert.equal(phone.includes('rmt-phone-shell'), true);
+    assert.equal(phone.includes('rmt-phone-message-owner'), true);
 });

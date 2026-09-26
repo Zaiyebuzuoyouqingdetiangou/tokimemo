@@ -14,10 +14,10 @@ export function floorsRemaining(floor, nextDueFloor) {
     return Math.max(0, due - now);
 }
 
-// 还差两楼以上写明数字；只剩一楼，或这一楼已经到点，都写成「下一楼」。
+// 间隔大于 1 时，每一楼都写还差几楼。到点那一楼不写倒计时，直接生成。
 export function formatFloorRemain(left) {
-    if (!Number.isSafeInteger(left) || left < 0) return '';
-    return left <= 1 ? '下一楼' : `还差 ${left} 楼`;
+    if (!Number.isSafeInteger(left) || left < 1) return '';
+    return `还差 ${left} 楼`;
 }
 
 function isAssistantFloor(message) {
@@ -56,10 +56,9 @@ export function latestAssistantWindow(messages, interval) {
     return assistant.slice(-count).map(item => ({ ...item }));
 }
 
-export function countdownLabel(left) {
-    if (!Number.isSafeInteger(left) || left < 0) return '';
-    if (left <= 0) return '这一楼留下回忆';
-    if (left === 1) return '下一楼留下回忆';
+export function countdownLabel(left, interval = 0) {
+    const everyFloor = Math.floor(Number(interval)) === 1;
+    if (everyFloor || !Number.isSafeInteger(left) || left < 1) return '';
     return `回忆还有 ${left} 楼`;
 }
 

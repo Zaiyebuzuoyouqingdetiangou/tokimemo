@@ -23,6 +23,7 @@ let painting = false;
 let pumping = false;
 const queue = [];
 const autoRetryUsed = new Map();
+const autoRetryExhausted = new Set();
 const picks = new Set();
 let pickScope = '';
 const QUEUE_STATUS = { queued: '排队', running: '进行中', done: '完成', failed: '失败', cancelled: '已取消' };
@@ -95,7 +96,12 @@ export function noteRetryableGeneration(info) {
     if (!scope) return;
     const key = `${scope}|${draftId}|${pageId}|${mode}`;
     const used = autoRetryUsed.get(key) || 0;
-    if (used >= settings.autoRetryCount) return;
+    if (used >= settings.autoRetryCount) {
+        autoRetryExhausted.add(key);
+        refreshTaskCenterView();
+        return;
+    }
+    autoRetryExhausted.delete(key);
     if (queue.some(item => item.kind === 'recovery' && item.draftId === draftId && item.pageId === pageId && item.status === 'queued')) return;
     autoRetryUsed.set(key, used + 1);
     queue.push({
@@ -424,7 +430,7 @@ function draftCards() {
             mode: row.mode,
             pageId: row.pageId || '',
             draftId: row.draftId,
-            detail: `已保留 ${Number(row.completed) || 0} 个成功分段 · ${String(reason || '').replace(/[。\s]+$/, '')}`,
+            detail: [`已保留 ${Number(row.completed) || 0} 个成功分段`, String(reason || '').replace(/[。\s]+$/, ''), autoRetryExhausted.has(`${currentScope()}|${row.draftId}|${row.pageId || row.mode}|${row.mode}`) ? '自动重试已经用完，请手动点重试' : ''].filter(Boolean).join(' · '),
             at: Number(row.updatedAt) || Number(row.createdAt) || 0,
             actions: `${retry}${fresh}<button type="button" class="rmt-btn" data-rmt-recovery-export="${core_text.esc(row.mode)}" ${attrs}>导出未提交草稿</button><button type="button" class="rmt-btn" data-rmt-recovery-discard="${core_text.esc(row.mode)}" ${attrs}>放弃这份草稿</button>`,
         };

@@ -10,6 +10,7 @@ import * as language_view from './languageView.js';
 import * as archive_groups from '../archive/groups.js';
 import * as archive_library from '../archive/library.js';
 import * as archive_repository from '../archive/repository.js';
+import * as archive_avatars from './archiveAvatars.js';
 import * as archive_snapshots from '../archive/snapshots.js';
 import * as core_cache from '../core/cache.js';
 import * as core_cgImagePatch from '../core/cgImagePatch.js';
@@ -46,8 +47,9 @@ export function heartCharacterAvatarUrl(entry = runtimeState.activeArchiveSnapsh
 
 export function heartUserAvatarUrl(context = core_context.getContext()) {
     try {
-        const raw = core_text.normalizeText(context?.user_avatar || context?.userAvatar || globalThis.user_avatar, 300);
-        return raw ? (context.getThumbnailUrl?.('avatar', raw) || '') : '';
+        const file = archive_avatars.currentUserAvatar(context);
+        if (!file) return '';
+        return archive_avatars.characterAvatarUrl(file, context) || archive_avatars.userAvatarUrl(file);
     } catch {
         return '';
     }

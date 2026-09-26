@@ -10,15 +10,30 @@ function listedIds(item) {
     return rows;
 }
 
-function matches(item, ids, createdAt) {
-    if (!item || typeof item !== 'object') return false;
-    if (listedIds(item).some(id => ids.has(id))) return true;
-    return Number.isFinite(item.createdAt) && createdAt > 0 && item.createdAt >= createdAt;
+function stampOf(item) {
+    const created = Number(item?.createdAt);
+    const generated = Number(item?.generatedAt);
+    if (Number.isFinite(created) && created > 0) return created;
+    if (Number.isFinite(generated) && generated > 0) return generated;
+    return 0;
 }
 
-function trimStory(story, ids, createdAt) {
-    if (!Array.isArray(story?.chapters)) return matches(story, ids, createdAt) ? story : null;
-    const chapters = story.chapters.filter(chapter => matches(chapter, ids, createdAt) || matches(story, ids, createdAt));
+function roundStart(createdAt, since) {
+    const bounds = [Number(since) || 0, Number(createdAt) || 0].filter(value => value > 0);
+    return bounds.length ? Math.min(...bounds) : 0;
+}
+
+function matches(item, ids, createdAt, since) {
+    if (!item || typeof item !== 'object') return false;
+    if (listedIds(item).some(id => ids.has(id))) return true;
+    const stamp = stampOf(item);
+    const start = roundStart(createdAt, since);
+    return stamp > 0 && start > 0 && stamp >= start;
+}
+
+function trimStory(story, ids, createdAt, since) {
+    if (!Array.isArray(story?.chapters)) return matches(story, ids, createdAt, since) ? story : null;
+    const chapters = story.chapters.filter(chapter => matches(chapter, ids, createdAt, since) || matches(story, ids, createdAt, since));
     if (!chapters.length) return null;
     return { ...story, chapters };
 }
@@ -60,8 +75,8 @@ export function incrementalProjection(session, { sourceMemoryIds = [], createdAt
         }
         const original = Array.isArray(session[key]) ? session[key] : [];
         const filtered = key === 'stories'
-            ? original.map(story => trimStory(story, ids, createdAt)).filter(Boolean)
-            : original.filter(item => matches(item, ids, createdAt));
+            ? original.map(story => trimStory(story, ids, createdAt, sinceAt)).filter(Boolean)
+            : original.filter(item => matches(item, ids, createdAt, sinceAt));
         copy[key] = key === 'stories' || !belongs ? filtered : narrowToRound(original, filtered, last.added);
         if (copy[key].length) kept = true;
     }
@@ -98,8 +113,89 @@ function esc(value) {
     return String(value).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
 }
 
-export function roundReadingHtml(session) {
-    if (!session || typeof session !== 'object') return '';
+const SEASON_LABEL = { spring: '春', summer: '夏', autumn: '秋', winter: '冬', postending: '未来 / 后日谈' };
+
+function heartLine(line, identity) {
+    const speaker = line?.speaker === 'user' || line?.speaker === 'npc' || line?.speaker === 'narrator' ? line.speaker : 'char';
+    const text = typeof line?.text === 'string' ? line.text.trim() : '';
+    if (!text) return '';
+    if (speaker === 'narrator') return `<div class="rmt-heart-narration">${esc(text)}</div>`;
+    const isUser = speaker === 'user';
+    const name = isUser ? (identity.userName || '你') : (line.speakerName || identity.characterName || '角色');
+    const avatar = isUser ? identity.userAvatar : identity.charAvatar;
+    const face = avatar
+        ? `<img src="${esc(avatar)}" alt="">`
+        : `<i class="fa-solid ${isUser ? 'fa-user' : 'fa-heart'}"></i>`;
+    return `<div class="rmt-heart-line ${isUser ? 'user' : 'char'}"><span class="rmt-heart-line-avatar">${face}</span><div><small>${esc(name)}</small><p>${esc(text)}</p></div></div>`;
+}
+
+function heartScript(lines, identity) {
+    const html = (Array.isArray(lines) ? lines : []).map(line => heartLine(line, identity)).filter(Boolean).join('');
+    return html ? `<div class="rmt-heart-script">${html}</div>` : '';
+}
+
+function heartPiece(title, body) {
+    if (!body && !title) return '';
+    const heading = title ? `<h3>${esc(title)}</h3>` : '';
+    return `<section class="rmt-letter-piece">${heading}${body || ''}</section>`;
+}
+
+function heartHtml(session, identity) {
+    const blocks = [];
+    if (session.relationshipSummary) blocks.push(heartPiece('', `<div class="rmt-heart-narration">${esc(session.relationshipSummary)}</div>`));
+    for (const drama of [...(session.voiceDramas || []), ...(session.scenarioDramas || [])]) {
+        const season = SEASON_LABEL[drama.season || drama.kind] || '';
+        const title = [season, drama.title].filter(Boolean).join(' · ');
+        const setting = drama.setting ? `<div class="rmt-heart-narration">${esc(drama.setting)}</div>` : '';
+        blocks.push(heartPiece(title, `${setting}${heartScript(drama.script, identity)}`));
+    }
+    for (const strip of session.dailyStrips || []) {
+        const lines = [];
+        for (const panel of strip.panels || []) {
+            if (panel.caption) lines.push({ speaker: 'narrator', text: panel.caption });
+            if (panel.action) lines.push({ speaker: 'narrator', text: panel.action });
+            if (panel.charLine) lines.push({ speaker: 'char', text: panel.charLine });
+            if (panel.userLine) lines.push({ speaker: 'user', text: panel.userLine });
+        }
+        blocks.push(heartPiece(strip.title || '日常', heartScript(lines, identity)));
+    }
+    for (const voice of session.fireflyVoices || []) {
+        blocks.push(heartPiece(voice.title || '萤火虫', heartScript(voice.script, identity)));
+    }
+    return blocks.filter(Boolean).join('');
+}
+
+function phoneMessages(entry) {
+    const rows = Array.isArray(entry?.messages) ? entry.messages : [];
+    return rows.map(message => {
+        const text = typeof message?.text === 'string' ? message.text.trim() : '';
+        if (!text) return '';
+        const role = message.speakerRole === 'owner' ? 'owner' : 'contact';
+        const speaker = message.speaker || (role === 'owner' ? '他' : '联系人');
+        return `<div class="rmt-phone-message rmt-phone-message-${role}"><div><b>${esc(speaker)}</b></div><p>${esc(text)}</p></div>`;
+    }).filter(Boolean).join('');
+}
+
+function phoneHtml(session) {
+    const apps = Array.isArray(session.apps) ? session.apps : [];
+    const blocks = [];
+    for (const app of apps) {
+        const entries = Array.isArray(app?.entries) ? app.entries : [];
+        const inner = entries.map(entry => {
+            const thread = phoneMessages(entry);
+            const title = entry?.title ? `<h3>${esc(entry.title)}</h3>` : '';
+            const detail = typeof entry?.detail === 'string' && entry.detail.trim() ? `<p class="rmt-phone-record-copy">${esc(entry.detail.trim())}</p>` : '';
+            if (!thread && !detail && !title) return '';
+            return `<section class="rmt-phone-conversation">${title}${detail}${thread ? `<div class="rmt-phone-chat-thread">${thread}</div>` : ''}</section>`;
+        }).join('');
+        if (!inner) continue;
+        const label = app.label || app.title || '私人终端';
+        blocks.push(`<div class="rmt-phone"><div class="rmt-phone-shell"><div class="rmt-phone-notch"></div><p class="rmt-phone-lock"><b>${esc(label)}</b></p>${inner}</div></div>`);
+    }
+    return blocks.join('');
+}
+
+function plainHtml(session) {
     const lines = [];
     pushLine(lines, session.relationshipSummary);
     for (const key of [...MODULE_BODY_KEYS, ...LIST_KEYS]) {
@@ -107,4 +203,18 @@ export function roundReadingHtml(session) {
     }
     if (!lines.length) return '';
     return `<div class="rmt-round-reading">${lines.map(line => `<p>${esc(line)}</p>`).join('')}</div>`;
+}
+
+export function roundReadingHtml(session, identity = {}) {
+    if (!session || typeof session !== 'object') return '';
+    const who = {
+        characterName: identity.characterName || '角色',
+        userName: identity.userName || '你',
+        charAvatar: identity.charAvatar || '',
+        userAvatar: identity.userAvatar || '',
+    };
+    const heart = heartHtml(session, who);
+    const phone = phoneHtml(session);
+    if (heart || phone) return `<div class="rmt-round-reading">${heart}${phone}</div>`;
+    return plainHtml(session);
 }
