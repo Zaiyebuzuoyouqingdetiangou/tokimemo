@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 286
-// Source SHA-256: a934541437f63d5d8ccb53838ca49143f978f7a5a5961aef8792b2f94e1d5dab
+// Source SHA-256: d621180ccbca41ce1e823480bff60f4c3a82459acdc934eea8f150fd6930be42
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -24125,7 +24125,7 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
     if (!snapshot.chatId) throw new Error('无法识别当前聊天窗口 ID，请先保存或打开一个具体聊天。');
     if (!archiveInputAvailable(snapshot, external)) throw new Error('当前聊天窗口没有可用于创建档案的角色/用户消息或已绑定的外部历史。');
 
-    if (incrementalUpdate && !capturedInput) {
+    if (incrementalUpdate && !capturedInput && !restartImport) {
         const oldChatFingerprint = archivedChatFingerprint(existing);
         if (!oldChatFingerprint || previousMessageCount > snapshot.totalMessages || snapshot.prefixFingerprint !== oldChatFingerprint
             || (existing?.fullSourceFingerprint && snapshot.fullPrefixFingerprint && snapshot.fullPrefixFingerprint !== existing.fullSourceFingerprint)) {
@@ -74071,20 +74071,22 @@ function archiveRecoveryHtml(summary, { profile = false } = {}) {
     if (!summary) return '';
     const draftLinks = (summary.drafts || []).map(draft => `<button type="button" class="rmt-btn" data-rmt-archive-draft-open="${text.esc(draft.draftId)}">查看${draft.stage === 'profile-only' || draft.stage === 'profile-result' || draft.operation === 'profile' ? '简介' : '建档'}${draft.paused ? '旧' : ''}草稿正文</button>`).join(' ');
     if (summary.onlyArchivedDrafts) return `<section class="rmt-recovery-status"><p>${text.esc(summary.notice)}</p><div class="rmt-recovery-actions">${draftLinks} <button type="button" class="rmt-btn" data-rmt-archive-discard>清除这些旧草稿</button></div></section>`;
+    const prefixChanged = summary.failureCode === 'RMT_ARCHIVE_PREFIX_CHANGED';
     const label = profile || summary.profileOnly ? '仅重试档案简介' : summary.awaitingCommit ? '仅重试保存'
         : summary.pendingAdmission ? '保存待入档结果（不生成）'
         : summary.batchProgress ? '继续下一批' : summary.canContinue ? '继续整理档案' : '重试未完成分块';
     const capacity = summary.capacityBlocked === true;
     const batch = summary.batchProgress;
-    const commitFirst = !profile && !summary.profileOnly && !summary.awaitingCommit && summary.canCommitComplete;
-    const nextStep = commitFirst ? '建议：先点「先将成功分段入档」，再点「' + label + '」。'
+    const commitFirst = !profile && !summary.profileOnly && !summary.awaitingCommit && summary.canCommitComplete && !prefixChanged;
+    const nextStep = prefixChanged ? '建议：点「按当前条件另起任务」。正式档案不会删。'
+        : commitFirst ? '建议：先点「先将成功分段入档」，再点「' + label + '」。'
         : !capacity ? '建议：点「' + label + '」。' : '';
     const heading = batch ? `批次 ${batch.currentBatch}/${batch.batches} · 已正式保存 ${batch.saved} 个来源片段`
         : `${label} · 已保留 ${Number(summary.completed) || 0} 个成功分段`;
     return `<section class="rmt-recovery-status" role="status"><b>${text.esc(heading)}</b><p>${text.esc(summary.notice)}</p>${nextStep ? `<p><b>${text.esc(nextStep)}</b></p>` : ''}${summary.failureCode ? `<p>${text.esc(text.safeErrorSummary({ code: summary.failureCode }))}</p>` : ''}<div class="rmt-recovery-actions">${draftLinks}
 ${summary.pageOnly && !summary.awaitingCommit ? `<button type="button" class="rmt-btn" data-rmt-archive-save-draft="${profile ? 'profile' : 'import'}">保存本页草稿（不生成）</button>` : ''}
 ${commitFirst ? '<button type="button" class="rmt-btn" data-rmt-archive-commit-complete>先将成功分段入档（不生成）</button>' : ''}
-${!capacity ? `<button type="button" class="rmt-btn" data-rmt-archive-recovery="${profile || summary.profileOnly ? 'profile' : 'import'}">${label}</button>` : ''}
+${!capacity && !prefixChanged ? `<button type="button" class="rmt-btn" data-rmt-archive-recovery="${profile || summary.profileOnly ? 'profile' : 'import'}">${label}</button>` : ''}
 ${!profile && !summary.profileOnly ? '<button type="button" class="rmt-btn" data-rmt-archive-export-pending>导出待入档成果</button>' : ''}
 ${!profile && !summary.profileOnly && !summary.awaitingCommit && !capacity && !summary.pendingAdmission ? '<button type="button" class="rmt-btn" data-rmt-archive-restart>按当前条件另起任务</button>' : ''}
 ${!batch ? '<button type="button" class="rmt-btn" data-rmt-archive-discard>放弃整理草稿</button>' : ''}</div></section>`;
@@ -77180,6 +77182,7 @@ const generation_merged = __m_generation_mergedGeneration_js;
 const modes_heart = __m_modes_heart_js;
 const ui_overlay = __m_ui_overlay_js;
 const ui_workspaceState = __m_ui_workspaceState_js;
+const auto_memory_scheduler = __m_autoMemory_scheduler_js;
 const runtimeState = __m_core_state_js.state;
 
 
@@ -77671,13 +77674,16 @@ function draftCards() {
 }
 
 // 待重试必须能点。超限草稿和没有所属的旧记录不能重试，这里返回空。
-function failedTaskRetrySpec({ kind = '', mode = '', pageId = '', draftId = '', label = '', oversized = false, queueRoute = '', queueId = '', archiveCanContinue = true, archiveRestart = false } = {}) {
+function failedTaskRetrySpec({ kind = '', mode = '', pageId = '', draftId = '', label = '', oversized = false, queueRoute = '', queueId = '', archiveCanContinue = true, archiveRestart = false, failureCode = '' } = {}) {
     if (oversized) return null;
     const archiveImport = kind === 'archive-import' || pageId === 'archiveImport' || label === '聊天经历整理';
     const archiveProfile = !archiveImport && (kind === 'archive-profile' || pageId === 'archiveProfile');
+    const prefixChanged = failureCode === 'RMT_ARCHIVE_PREFIX_CHANGED';
     if (archiveImport || archiveProfile) {
         if (archiveCanContinue === false) return null;
-        if (archiveImport && archiveRestart) return { archiveRestart: true, label: '重试未完成部分' };
+        if (archiveImport && (archiveRestart || prefixChanged)) {
+            return { archiveRestart: true, label: prefixChanged ? '按当前聊天再整理' : '重试未完成部分' };
+        }
         return { archive: archiveProfile ? 'profile' : 'import', draftId: draftId || '', label: '重试未完成部分' };
     }
     if (queueRoute) return { queueRoute, queueId, label: '重试未完成部分' };
@@ -77702,7 +77708,7 @@ function retryButtonHtml(spec) {
     return '';
 }
 
-function archiveRetryFlags(kind) {
+function archiveRetryFlags(kind, failureCode = '') {
     const profile = kind === 'archive-profile';
     let summary = null;
     try {
@@ -77710,11 +77716,12 @@ function archiveRetryFlags(kind) {
             ? archive_repository.getCurrentArchiveProfileRecoverySummary()
             : archive_repository.getCurrentArchiveImportRecoverySummary();
     } catch {
-        return { archiveCanContinue: true, archiveRestart: false };
+        return { archiveCanContinue: true, archiveRestart: !profile || failureCode === 'RMT_ARCHIVE_PREFIX_CHANGED', failureCode };
     }
-    if (!summary) return { archiveCanContinue: true, archiveRestart: !profile };
-    if (summary.capacityBlocked === true || summary.onlyArchivedDrafts === true) return { archiveCanContinue: false, archiveRestart: false };
-    return { archiveCanContinue: true, archiveRestart: false };
+    const code = failureCode || summary?.failureCode || '';
+    if (!summary) return { archiveCanContinue: true, archiveRestart: !profile || code === 'RMT_ARCHIVE_PREFIX_CHANGED', failureCode: code };
+    if (summary.capacityBlocked === true || summary.onlyArchivedDrafts === true) return { archiveCanContinue: false, archiveRestart: false, failureCode: code };
+    return { archiveCanContinue: true, archiveRestart: !profile && code === 'RMT_ARCHIVE_PREFIX_CHANGED', failureCode: code };
 }
 
 function failedRetryHtml(input) {
@@ -77802,10 +77809,13 @@ function collectTaskCards() {
         const state = row.phase === 'failed' || record.outcome === 'failed' ? 'failed' : row.phase === 'cancelled' || record.outcome === 'cancelled' ? 'cancelled' : 'done';
         if (cards.some(card => sameJob(card, { label: row.label, mode: record.mode, pageId: record.pageId, draftId: record.draftId }))) continue;
         const kind = record.kind || row.kind || '';
+        const failureCode = record.failureCode || row.failureCode
+            || (/历史基线不一致/.test(row.progressText || record.failureSummary || '') ? 'RMT_ARCHIVE_PREFIX_CHANGED' : '');
         const retry = state === 'failed' && row.currentChat !== false
             ? failedRetryHtml({
                 kind, mode: record.mode, pageId: record.pageId, draftId: record.draftId, label: row.label,
-                ...(kind === 'archive-import' || kind === 'archive-profile' ? archiveRetryFlags(kind) : {}),
+                failureCode,
+                ...(kind === 'archive-import' || kind === 'archive-profile' ? archiveRetryFlags(kind, failureCode) : {}),
             })
             : '';
         cards.push({
@@ -78118,13 +78128,17 @@ function handleTaskCenterAction(action, actionEl) {
     if (action === 'task-archive-retry' || action === 'task-archive-restart') {
         const profile = actionEl?.dataset?.rmtArchiveRecovery === 'profile';
         const draftId = actionEl?.dataset?.rmtArchiveRecoveryDraftId || '';
-        if (action === 'task-archive-restart') {
+        let prefixChanged = false;
+        try {
+            prefixChanged = !profile && archive_repository.getCurrentArchiveImportRecoverySummary()?.failureCode === 'RMT_ARCHIVE_PREFIX_CHANGED';
+        } catch { /* 读不到草稿时仍按按钮自己的动作走。 */ }
+        if (action === 'task-archive-restart' || prefixChanged) {
             if (runtimeState.busy || core_requestCoordinator.hasGenerationTasks()) {
                 globalThis.toastr?.info?.('现在还有任务在跑，等它停住再另起整理。', '心迹回廊');
                 return;
             }
-            if (!ui_overlay.confirmExplicitAction('按当前条件另起整理任务？',
-                '正式档案与旧 Mxxx 保持不变。当前未提交草稿暂停并保留，可导出；是否已保存到本机请看草稿状态。已保存的批次检查点随下一次成功保存一并保留。新任务使用当前来源与配置，可能重新处理旧任务尚未正式入档的片段并消耗额度。零成功草稿也可这样重新开始。',
+            if (!ui_overlay.confirmExplicitAction('按当前聊天再整理？',
+                '正式档案与旧 Mxxx 保持不变。当前未提交草稿暂停并保留，可导出。新任务按现在的楼层和来源整理，可能重新处理尚未入档的片段并消耗额度。',
                 { destructive: false })) return;
             void archive_repository.restartCurrentArchiveImport().catch(error => {
                 globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊');
@@ -78137,6 +78151,10 @@ function handleTaskCenterAction(action, actionEl) {
         void Promise.resolve(run).then(result => {
             if (result?.status === 'blocked') globalThis.toastr?.info?.('现在没有可继续的整理草稿。', '心迹回廊');
         }).catch(error => {
+            if (!profile && error?.code === 'RMT_ARCHIVE_PREFIX_CHANGED') {
+                globalThis.toastr?.info?.('当前聊天和旧档案对不上，不能沿用上次草稿。请点「按当前聊天再整理」。正式档案不会删。', '心迹回廊');
+                return;
+            }
             globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊');
         });
         return;
@@ -78145,9 +78163,10 @@ function handleTaskCenterAction(action, actionEl) {
         clearAutoMemoryFloorFailure();
         const run = action === 'task-floor-complete' ? 'completeFloorRound' : 'retryFloorRound';
         const waiting = action === 'task-floor-complete' ? '等这楼正文写完，再补这一页。' : '等这楼正文写完，再重写这一页。';
-        void import('../autoMemory/scheduler.js').then(mod => {
-            if (typeof mod[run] !== 'function') throw new Error(`missing ${run}`);
-            return mod[run]();
+        void Promise.resolve().then(() => {
+            const fn = auto_memory_scheduler[run];
+            if (typeof fn !== 'function') throw new Error(`missing ${run}`);
+            return fn();
         }).then(result => {
             if (result?.action === 'wait' || result?.action === 'busy') globalThis.toastr?.info?.(waiting, '心迹回廊');
             else if (result?.action === 'idle') globalThis.toastr?.info?.('这一轮已经没有可以补的了。', '心迹回廊');

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { readFile } from 'node:fs/promises';
 import * as constants from '../src/core/constants.js';
 import * as envelopes from '../src/ui/heartEnvelope.js';
 import * as registry from '../src/autoMemory/moduleRegistry.js';
@@ -189,10 +190,18 @@ test('wizard completion round-trips and does not rewrite corrupt or old settings
     assert.equal(wizard.wizardSkipsArchiveStep({ archivePresent: false }), false);
     assert.deepEqual(tasks.failedTaskRetrySpec({ kind: 'archive-import', label: '聊天经历整理' }), { archive: 'import', draftId: '', label: '重试未完成部分' });
     assert.equal(tasks.failedTaskRetrySpec({ kind: 'archive-import', archiveRestart: true }).archiveRestart, true);
+    assert.deepEqual(tasks.failedTaskRetrySpec({ kind: 'archive-import', failureCode: 'RMT_ARCHIVE_PREFIX_CHANGED' }), { archiveRestart: true, label: '按当前聊天再整理' });
     assert.equal(tasks.failedTaskRetrySpec({ kind: 'archive-import', archiveCanContinue: false }), null);
     assert.equal(tasks.failedTaskRetrySpec({ kind: 'mode', mode: 'album', draftId: 'd1', pageId: 'album' }).mode, 'album');
     assert.equal(tasks.failedTaskRetrySpec({ oversized: true, mode: 'album', draftId: 'd1' }), null);
     assert.equal(tasks.failedTaskRetrySpec({ kind: 'logical' }), null);
     assert.equal(tasks.failedTaskRetrySpec({ queueRoute: 'album', queueId: 'q1' }).queueId, 'q1');
     assert.equal(tasks.handleTaskCenterAction('task-retry-queue', { dataset: { rmtQueueId: 'missing' } }), undefined);
+});
+
+test('task center floor retry uses the bundled scheduler, not a dynamic import', async () => {
+    const src = await readFile(new URL('../src/ui/taskCenter.js', import.meta.url), 'utf8');
+    assert.equal(src.includes("import('../autoMemory/scheduler.js')"), false);
+    assert.match(src, /import \* as auto_memory_scheduler from '\.\.\/autoMemory\/scheduler\.js'/);
+    assert.match(src, /auto_memory_scheduler\[run\]/);
 });

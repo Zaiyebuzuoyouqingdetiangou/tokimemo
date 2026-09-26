@@ -18,6 +18,7 @@ import * as modes_heart from '../modes/heart.js';
 import { state as runtimeState } from '../core/state.js';
 import * as ui_overlay from './overlay.js';
 import * as ui_workspaceState from './workspaceState.js';
+import * as auto_memory_scheduler from '../autoMemory/scheduler.js';
 
 let painting = false;
 let pumping = false;
@@ -491,13 +492,16 @@ function draftCards() {
 }
 
 // 待重试必须能点。超限草稿和没有所属的旧记录不能重试，这里返回空。
-export function failedTaskRetrySpec({ kind = '', mode = '', pageId = '', draftId = '', label = '', oversized = false, queueRoute = '', queueId = '', archiveCanContinue = true, archiveRestart = false } = {}) {
+export function failedTaskRetrySpec({ kind = '', mode = '', pageId = '', draftId = '', label = '', oversized = false, queueRoute = '', queueId = '', archiveCanContinue = true, archiveRestart = false, failureCode = '' } = {}) {
     if (oversized) return null;
     const archiveImport = kind === 'archive-import' || pageId === 'archiveImport' || label === '聊天经历整理';
     const archiveProfile = !archiveImport && (kind === 'archive-profile' || pageId === 'archiveProfile');
+    const prefixChanged = failureCode === 'RMT_ARCHIVE_PREFIX_CHANGED';
     if (archiveImport || archiveProfile) {
         if (archiveCanContinue === false) return null;
-        if (archiveImport && archiveRestart) return { archiveRestart: true, label: '重试未完成部分' };
+        if (archiveImport && (archiveRestart || prefixChanged)) {
+            return { archiveRestart: true, label: prefixChanged ? '按当前聊天再整理' : '重试未完成部分' };
+        }
         return { archive: archiveProfile ? 'profile' : 'import', draftId: draftId || '', label: '重试未完成部分' };
     }
     if (queueRoute) return { queueRoute, queueId, label: '重试未完成部分' };
@@ -522,7 +526,7 @@ function retryButtonHtml(spec) {
     return '';
 }
 
-function archiveRetryFlags(kind) {
+function archiveRetryFlags(kind, failureCode = '') {
     const profile = kind === 'archive-profile';
     let summary = null;
     try {
@@ -530,11 +534,12 @@ function archiveRetryFlags(kind) {
             ? archive_repository.getCurrentArchiveProfileRecoverySummary()
             : archive_repository.getCurrentArchiveImportRecoverySummary();
     } catch {
-        return { archiveCanContinue: true, archiveRestart: false };
+        return { archiveCanContinue: true, archiveRestart: !profile || failureCode === 'RMT_ARCHIVE_PREFIX_CHANGED', failureCode };
     }
-    if (!summary) return { archiveCanContinue: true, archiveRestart: !profile };
-    if (summary.capacityBlocked === true || summary.onlyArchivedDrafts === true) return { archiveCanContinue: false, archiveRestart: false };
-    return { archiveCanContinue: true, archiveRestart: false };
+    const code = failureCode || summary?.failureCode || '';
+    if (!summary) return { archiveCanContinue: true, archiveRestart: !profile || code === 'RMT_ARCHIVE_PREFIX_CHANGED', failureCode: code };
+    if (summary.capacityBlocked === true || summary.onlyArchivedDrafts === true) return { archiveCanContinue: false, archiveRestart: false, failureCode: code };
+    return { archiveCanContinue: true, archiveRestart: !profile && code === 'RMT_ARCHIVE_PREFIX_CHANGED', failureCode: code };
 }
 
 function failedRetryHtml(input) {
@@ -622,10 +627,13 @@ function collectTaskCards() {
         const state = row.phase === 'failed' || record.outcome === 'failed' ? 'failed' : row.phase === 'cancelled' || record.outcome === 'cancelled' ? 'cancelled' : 'done';
         if (cards.some(card => sameJob(card, { label: row.label, mode: record.mode, pageId: record.pageId, draftId: record.draftId }))) continue;
         const kind = record.kind || row.kind || '';
+        const failureCode = record.failureCode || row.failureCode
+            || (/历史基线不一致/.test(row.progressText || record.failureSummary || '') ? 'RMT_ARCHIVE_PREFIX_CHANGED' : '');
         const retry = state === 'failed' && row.currentChat !== false
             ? failedRetryHtml({
                 kind, mode: record.mode, pageId: record.pageId, draftId: record.draftId, label: row.label,
-                ...(kind === 'archive-import' || kind === 'archive-profile' ? archiveRetryFlags(kind) : {}),
+                failureCode,
+                ...(kind === 'archive-import' || kind === 'archive-profile' ? archiveRetryFlags(kind, failureCode) : {}),
             })
             : '';
         cards.push({
@@ -938,13 +946,17 @@ export function handleTaskCenterAction(action, actionEl) {
     if (action === 'task-archive-retry' || action === 'task-archive-restart') {
         const profile = actionEl?.dataset?.rmtArchiveRecovery === 'profile';
         const draftId = actionEl?.dataset?.rmtArchiveRecoveryDraftId || '';
-        if (action === 'task-archive-restart') {
+        let prefixChanged = false;
+        try {
+            prefixChanged = !profile && archive_repository.getCurrentArchiveImportRecoverySummary()?.failureCode === 'RMT_ARCHIVE_PREFIX_CHANGED';
+        } catch { /* 读不到草稿时仍按按钮自己的动作走。 */ }
+        if (action === 'task-archive-restart' || prefixChanged) {
             if (runtimeState.busy || core_requestCoordinator.hasGenerationTasks()) {
                 globalThis.toastr?.info?.('现在还有任务在跑，等它停住再另起整理。', '心迹回廊');
                 return;
             }
-            if (!ui_overlay.confirmExplicitAction('按当前条件另起整理任务？',
-                '正式档案与旧 Mxxx 保持不变。当前未提交草稿暂停并保留，可导出；是否已保存到本机请看草稿状态。已保存的批次检查点随下一次成功保存一并保留。新任务使用当前来源与配置，可能重新处理旧任务尚未正式入档的片段并消耗额度。零成功草稿也可这样重新开始。',
+            if (!ui_overlay.confirmExplicitAction('按当前聊天再整理？',
+                '正式档案与旧 Mxxx 保持不变。当前未提交草稿暂停并保留，可导出。新任务按现在的楼层和来源整理，可能重新处理尚未入档的片段并消耗额度。',
                 { destructive: false })) return;
             void archive_repository.restartCurrentArchiveImport().catch(error => {
                 globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊');
@@ -957,6 +969,10 @@ export function handleTaskCenterAction(action, actionEl) {
         void Promise.resolve(run).then(result => {
             if (result?.status === 'blocked') globalThis.toastr?.info?.('现在没有可继续的整理草稿。', '心迹回廊');
         }).catch(error => {
+            if (!profile && error?.code === 'RMT_ARCHIVE_PREFIX_CHANGED') {
+                globalThis.toastr?.info?.('当前聊天和旧档案对不上，不能沿用上次草稿。请点「按当前聊天再整理」。正式档案不会删。', '心迹回廊');
+                return;
+            }
             globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊');
         });
         return;
@@ -965,9 +981,10 @@ export function handleTaskCenterAction(action, actionEl) {
         clearAutoMemoryFloorFailure();
         const run = action === 'task-floor-complete' ? 'completeFloorRound' : 'retryFloorRound';
         const waiting = action === 'task-floor-complete' ? '等这楼正文写完，再补这一页。' : '等这楼正文写完，再重写这一页。';
-        void import('../autoMemory/scheduler.js').then(mod => {
-            if (typeof mod[run] !== 'function') throw new Error(`missing ${run}`);
-            return mod[run]();
+        void Promise.resolve().then(() => {
+            const fn = auto_memory_scheduler[run];
+            if (typeof fn !== 'function') throw new Error(`missing ${run}`);
+            return fn();
         }).then(result => {
             if (result?.action === 'wait' || result?.action === 'busy') globalThis.toastr?.info?.(waiting, '心迹回廊');
             else if (result?.action === 'idle') globalThis.toastr?.info?.('这一轮已经没有可以补的了。', '心迹回廊');
