@@ -6,8 +6,15 @@ const MODULE_BODY_KEYS = ['dailyStrips', 'fireflyVoices', 'voiceDramas', 'scenar
 function listedIds(item) {
     const rows = [];
     if (Array.isArray(item?.sourceMemoryIds)) rows.push(...item.sourceMemoryIds);
+    if (Array.isArray(item?.sourceArchiveMemoryIds)) rows.push(...item.sourceArchiveMemoryIds);
     if (typeof item?.sourceMemoryId === 'string') rows.push(item.sourceMemoryId);
     return rows;
+}
+
+function itemKey(item) {
+    if (item && typeof item === 'object' && typeof item.id === 'string' && item.id) return `id:${item.id}`;
+    try { return `json:${JSON.stringify(item)}`; }
+    catch { return ''; }
 }
 
 function stampOf(item) {
@@ -86,6 +93,41 @@ export function incrementalProjection(session, { sourceMemoryIds = [], createdAt
     if (summaryKept) kept = true;
     copy.incrementalOnly = true;
     return { kept, session: copy };
+}
+
+// 把这一轮已经写进模块里的段落拿掉，留下更早的。重 roll 先撤回，再按新正文重写。
+export function sessionWithoutRound(session, query = {}) {
+    if (!session || typeof session !== 'object') return session;
+    const projected = incrementalProjection(session, query);
+    const next = structuredClone(session);
+    if (!projected.kept || !projected.session) return next;
+    const round = projected.session;
+    const ids = new Set(Array.isArray(query.sourceMemoryIds) ? query.sourceMemoryIds : []);
+    const createdAt = Number(query.createdAt) || 0;
+    const since = Number(query.since) || 0;
+    for (const key of [...LIST_KEYS, ...MODULE_BODY_KEYS]) {
+        if (!Array.isArray(next[key]) || !Array.isArray(round[key]) || !round[key].length) continue;
+        const drop = new Set(round[key].map(itemKey).filter(Boolean));
+        next[key] = next[key].filter(item => !drop.has(itemKey(item)));
+    }
+    if (Array.isArray(next.apps)) {
+        next.apps = next.apps.map(app => {
+            if (!app || !Array.isArray(app.entries)) return app;
+            return { ...app, entries: app.entries.filter(entry => !matches(entry, ids, createdAt, since)) };
+        });
+    }
+    if (round.relationshipSummary && next.relationshipSummary === round.relationshipSummary) next.relationshipSummary = '';
+    const meta = next.generationMeta;
+    if (meta?.parts && typeof meta.parts === 'object') {
+        for (const part of Object.values(meta.parts)) {
+            if (Array.isArray(part?.coveredMemoryIds)) part.coveredMemoryIds = part.coveredMemoryIds.filter(id => !ids.has(id));
+        }
+    }
+    if (Array.isArray(meta?.lastUpdate?.consumedMemoryIds)) {
+        meta.lastUpdate.consumedMemoryIds = meta.lastUpdate.consumedMemoryIds.filter(id => !ids.has(id));
+        meta.lastUpdate.added = 0;
+    }
+    return next;
 }
 
 function pushLine(lines, value) {

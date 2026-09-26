@@ -91,6 +91,31 @@ test('a rerolled draw floor is a new body, and redraw can leave the current modu
     assert.equal(next, 'cabinet');
     const only = redo.redrawModuleId([{ id: 'album' }], 'album', 0);
     assert.equal(only, 'album');
+    assert.equal(redo.isSameFloorGeneration('regenerate'), true);
+    assert.equal(redo.isSameFloorGeneration('swipe'), true);
+    assert.equal(redo.isSameFloorGeneration('normal'), false);
+    const gate = redo.createSameFloorGate();
+    gate.mark('normal');
+    assert.equal(gate.pending(), false);
+    gate.mark('regenerate');
+    assert.equal(gate.pending(), true);
+    assert.equal(gate.consume(), true);
+    assert.equal(gate.pending(), false);
+    assert.deepEqual(redo.rerollWindow(55, 5), { start: 51, end: 55 });
+    assert.deepEqual(redo.rerollWindow(55, 1), { start: 55, end: 55 });
+    assert.deepEqual(redo.memoriesWithoutIds([{ id: 'M100' }, { id: 'M200' }], ['M100']).map(item => item.id), ['M200']);
+    const kept = view.sessionWithoutRound({
+        voiceDramas: [
+            { id: 'old', title: '旧', generatedAt: 10, script: [{ speaker: 'char', text: '早' }] },
+            { id: 'new', title: '洗车', generatedAt: 80, sourceArchiveMemoryIds: ['M100'], script: [{ speaker: 'char', text: '擦了两下车门' }] },
+        ],
+        apps: [{ id: 'sms', entries: [
+            { id: 'keep', title: '旧信', createdAt: 10 },
+            { id: 'drop', title: '新信', sourceMemoryIds: ['M100'], createdAt: 80 },
+        ] }],
+    }, { sourceMemoryIds: ['M100'], since: 50, createdAt: 90 });
+    assert.deepEqual(kept.voiceDramas.map(item => item.id), ['old']);
+    assert.deepEqual(kept.apps[0].entries.map(item => item.id), ['keep']);
 });
 
 test('the letter offers repair and retry only when that work is still open', () => {

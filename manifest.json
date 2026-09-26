@@ -1,15 +1,15 @@
 {
   "display_name": "心迹回廊",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.99.83-r84.135-letter-reading",
+  "js": "index.js?heartbeat=0.99.84-r84.136-floor-reroll",
   "author": "Toto",
-  "version": "0.99.83",
+  "version": "0.99.84",
   "auto_update": true,
   "minimum_client_version": "1.13.0",
   "hooks": {
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r84.135：信可以收起。回忆按插件里的对话和手机样式来读。间隔 1 楼不再显示下一楼。",
+  "description": "r84.136：正文重 roll 会先撤回这一楼的旧回忆，再按新正文重写。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }

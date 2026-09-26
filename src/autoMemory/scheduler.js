@@ -9,7 +9,9 @@ import * as auto_memory_host from './moduleHost.js';
 import * as auto_memory_lease from './instanceLease.js';
 import * as auto_memory_plan from './planStore.js';
 import * as auto_memory_combined from './combinedResult.js';
+import * as auto_memory_draw from './draw.js';
 import * as auto_memory_redo from './redo.js';
+import * as auto_memory_view from './incrementalView.js';
 import * as auto_memory_registry from './moduleRegistry.js';
 import * as chat_read_range from '../core/chatReadRange.js';
 import * as core_cache from '../core/cache.js';
@@ -33,6 +35,7 @@ const noticedGroups = new Set();
 const autoUsed = new Map();
 let autoRepairInflight = false;
 let redoInflight = false;
+const sameFloor = auto_memory_redo.createSameFloorGate();
 
 function ownerId() {
     if (!leaseOwner) leaseOwner = `tab-${Math.random().toString(36).slice(2, 10)}`;
@@ -191,6 +194,7 @@ async function runHostRound() {
         ui_countdown.refreshAutoMemoryCountdown();
         return;
     }
+    if (redoInflight) return;
     const metadata = context.chatMetadata;
     if (!metadata || !Object.prototype.hasOwnProperty.call(metadata, auto_memory_plan.AUTO_MEMORY_PLAN_KEY)) return;
     const scope = core_context.chatScopeKey(context);
@@ -441,27 +445,184 @@ function stampDrawSource(context, drawId) {
     context.saveMetadataDebounced?.();
 }
 
+function lastStoryIndex(chat) {
+    const list = Array.isArray(chat) ? chat : [];
+    for (let index = list.length - 1; index >= 0; index -= 1) {
+        const message = list[index];
+        if (!message || message.is_system === true) continue;
+        if (message.is_user === true) return -1;
+        return index;
+    }
+    return -1;
+}
+
 async function noteSwipedFloor(messageId) {
     const index = Number(messageId);
     if (!Number.isInteger(index) || index < 0 || redoInflight || autoRepairInflight) return;
+    if (generationStillOpen()) {
+        sameFloor.mark('swipe');
+        return;
+    }
+    await rerollOwnedFloor(index);
+}
+
+// 抽签那一楼的正文被重 roll 或切 swipe 后：先撤回这一轮写过的回忆，再按新正文重写。间隔不往前走。
+async function rerollOwnedFloor(messageIndex) {
+    if (redoInflight || autoRepairInflight) return false;
     let context;
-    try { context = core_context.getContext(); }
-    catch { return; }
-    const message = context?.chat?.[index];
-    if (!message || message.is_user === true || message.is_system === true) return;
-    let snapshot = null;
+    try { context = core_context.currentCharacterGuard(); }
+    catch { return false; }
+    let snapshot;
     try { snapshot = auto_memory_plan.readAutoMemoryMetadata(context.chatMetadata); }
-    catch { return; }
+    catch { return false; }
     const ticket = auto_memory_redo.currentDrawTicket(snapshot);
-    if (!ticket || snapshot?.plan?.enabled !== true) return;
+    const modulePlan = snapshot?.modulePlan;
+    if (!snapshot?.plan?.enabled || !ticket || !modulePlan || modulePlan.drawId !== ticket.id) return false;
     const latest = core_settings.getPluginSettings().autoMemoryLatestFloor === true;
     const located = auto_memory_redo.drawFloorMessage(context.chat, ticket.dueFloor, latest);
+    if (!located) return false;
+    const index = messageIndex == null ? lastStoryIndex(context.chat) : messageIndex;
+    if (index !== located.index) return false;
+    const hash = auto_memory_redo.bodyHash(located.message?.mes);
     const stamp = context.chatMetadata?.[auto_memory_redo.SOURCE_STAMP_KEY] || null;
-    const hash = auto_memory_redo.bodyHash(message.mes);
     if (!auto_memory_redo.swipeNeedsRegenerate({
-        stamp, messageIndex: index, hash, ticketMessageIndex: located?.index,
-    })) return;
-    await regenerateCurrentMemory({ mode: 'keep' });
+        stamp, messageIndex: index, hash, ticketMessageIndex: located.index,
+    })) return false;
+    redoInflight = true;
+    const oldIds = [...(ticket.sourceMemoryIds || [])];
+    try {
+        context.chatMetadata[auto_memory_redo.SOURCE_STAMP_KEY] = {
+            drawId: ticket.id,
+            dueFloor: ticket.dueFloor,
+            latestAssistant: latest,
+            messageIndex: index,
+            hash,
+        };
+        const memory = archive_repository.getImportedMemory(context);
+        const session = core_cache.loadSession(modulePlan.moduleId, { context, memoryBank: memory, clone: true });
+        const reveal = [...(snapshot.revealRecords || [])].reverse().find(row => row.moduleId === modulePlan.moduleId
+            && (oldIds.length ? (row.sourceMemoryIds || []).some(id => oldIds.includes(id)) : row.createdAt >= (modulePlan.frozenAt || 0)));
+        const stripped = session
+            ? auto_memory_view.sessionWithoutRound(session, {
+                sourceMemoryIds: oldIds,
+                createdAt: reveal?.createdAt || 0,
+                since: modulePlan.frozenAt || 0,
+            })
+            : null;
+        auto_memory_library.dropAutoRound(context, { moduleId: modulePlan.moduleId, sourceMemoryIds: oldIds });
+        const frozenAt = Date.now();
+        const revealRecords = snapshot.revealRecords.filter(row => {
+            if (row.moduleId !== modulePlan.moduleId) return true;
+            const own = row.sourceMemoryIds || [];
+            if (oldIds.length && own.some(id => oldIds.includes(id))) return false;
+            if (modulePlan.frozenAt && row.createdAt >= modulePlan.frozenAt) return false;
+            return true;
+        });
+        const withdrawn = auto_memory_plan.parseAutoMemorySnapshot({
+            plan: auto_memory_plan.parseAutoMemoryPlan({
+                ...snapshot.plan,
+                revision: snapshot.plan.revision + 1,
+                updatedAt: frozenAt,
+                activeDrawTicketId: ticket.id,
+            }),
+            revealRecords,
+            drawTickets: snapshot.drawTickets.map(row => (row.id === ticket.id
+                ? auto_memory_plan.parseDrawTicket({ ...row, status: 'drawn' })
+                : row)),
+            modulePlan: auto_memory_plan.parseModulePlan(auto_memory_redo.resetModuleSteps({ ...modulePlan, frozenAt })),
+        });
+        await persistSnapshot(context, withdrawn);
+        if (stripped) {
+            stripped.chatId = core_context.getChatId(context);
+            if (memory?.archiveRevision) stripped.archiveRevision = memory.archiveRevision;
+            core_cache.saveSession(modulePlan.moduleId, stripped, stripped.chatId);
+        }
+        if (memory && oldIds.length) {
+            const memories = auto_memory_redo.memoriesWithoutIds(memory.memories, oldIds);
+            await core_cache.saveImportedMemory(context, { ...memory, memories }, memory.chatId, {
+                preserveDerivedCache: true,
+                expectedPreviousArchiveState: { present: true, revision: memory.archiveRevision || '' },
+            });
+        }
+        const window = auto_memory_redo.rerollWindow(ticket.dueFloor, snapshot.plan.intervalFloors);
+        const before = new Set(collectMemoryIds(context));
+        if (window) {
+            const options = auto_memory_draw.incrementalImportOptions(window);
+            if (latest) {
+                const mapped = auto_memory_floor.chatRangeForAssistantSpan(context.chat, window.start, window.end);
+                options.floorWindow = mapped
+                    ? { ...mapped, latestAssistant: true, interval: snapshot.plan.intervalFloors }
+                    : { ...window, latestAssistant: true, interval: snapshot.plan.intervalFloors };
+            }
+            await archive_repository.importCurrentChatMemory(options);
+        }
+        const fresh = auto_memory_draw.newMemoryIds([...before], collectMemoryIds(context));
+        const liveMemory = archive_repository.getImportedMemory(context);
+        if (stripped) {
+            stripped.chatId = core_context.getChatId(context);
+            if (liveMemory?.archiveRevision) stripped.archiveRevision = liveMemory.archiveRevision;
+            else delete stripped.archiveRevision;
+            core_cache.saveSession(modulePlan.moduleId, stripped, stripped.chatId);
+        }
+        if (!fresh.length) {
+            const idle = auto_memory_plan.parseAutoMemorySnapshot({
+                plan: auto_memory_plan.parseAutoMemoryPlan({
+                    ...withdrawn.plan,
+                    revision: withdrawn.plan.revision + 1,
+                    updatedAt: Date.now(),
+                    activeDrawTicketId: null,
+                }),
+                revealRecords,
+                drawTickets: withdrawn.drawTickets.map(row => (row.id === ticket.id
+                    ? auto_memory_plan.parseDrawTicket({ ...row, status: 'completed' })
+                    : row)),
+                modulePlan: null,
+            });
+            await persistSnapshot(context, idle);
+            globalThis.toastr?.info?.('这一楼的正文换了，旧回忆已经撤回。这一窗没有新的档案。', '心迹回廊');
+            ui_countdown.refreshAutoMemoryCountdown();
+            return true;
+        }
+        const next = auto_memory_plan.parseAutoMemorySnapshot({
+            plan: auto_memory_plan.parseAutoMemoryPlan({
+                ...withdrawn.plan,
+                revision: withdrawn.plan.revision + 1,
+                updatedAt: Date.now(),
+                activeDrawTicketId: ticket.id,
+            }),
+            revealRecords,
+            drawTickets: withdrawn.drawTickets.map(row => (row.id === ticket.id
+                ? auto_memory_plan.parseDrawTicket({ ...row, sourceMemoryIds: fresh, status: 'drawn' })
+                : row)),
+            modulePlan: auto_memory_plan.parseModulePlan({
+                ...withdrawn.modulePlan,
+                sourceMemoryIds: fresh,
+            }),
+        });
+        await persistSnapshot(context, next);
+        const persist = step => persistSnapshot(context, step);
+        const limit = Math.min(12, next.modulePlan.steps.length);
+        let current = next;
+        let result = null;
+        for (let step = 0; step < limit; step += 1) {
+            result = await auto_memory_host.runModulePlan(current, persist, context, Date.now());
+            await rememberTitle(context, result);
+            current = result?.snapshot || current;
+            const steps = result?.snapshot?.modulePlan?.steps || [];
+            if (result?.action === 'failed' || steps.some(item => item.status === 'failed')) break;
+            if (!steps.some(item => item.status !== 'completed')) break;
+            if (result?.action !== 'saved' && result?.action !== 'expanded') break;
+        }
+        ui_countdown.refreshAutoMemoryCountdown();
+        await followIfEnabled(context, result);
+        return true;
+    } catch (error) {
+        console.warn('[HeartbeatMemories] floor reroll skipped', core_text.safeErrorDiagnostic(error));
+        globalThis.toastr?.error?.('这一楼的旧回忆已经撤回，新的还没写上。可以再点一次重试。', '心口顿了一下');
+        return true;
+    } finally {
+        redoInflight = false;
+    }
 }
 
 async function installRedraw(context, snapshot, ticket, moduleId) {
@@ -573,6 +734,7 @@ export function stopAutoMemoryScheduler() {
     settleWaits = 0;
     lastSignature = '';
     auto_memory_stream.noteAssistantStream(false);
+    sameFloor.clear();
     handledFloors.clear();
     inflightScopes.clear();
     noticedGroups.clear();
@@ -609,7 +771,7 @@ function scheduleSettledRound() {
                 stablePasses = 0;
                 settleWaits = 0;
                 auto_memory_stream.noteAssistantStream(false);
-                void runHostRound();
+                void settleReadyRound();
                 return;
             }
             settleWaits += 1;
@@ -624,8 +786,21 @@ function scheduleSettledRound() {
         stablePasses = 0;
         settleWaits = 0;
         lastSignature = signature;
-        void runHostRound();
+        void settleReadyRound();
     }, 800);
+}
+
+async function settleReadyRound() {
+    if (sameFloor.pending()) {
+        if (redoInflight || inflightScopes.size) {
+            scheduleSettledRound();
+            return;
+        }
+        const ran = await rerollOwnedFloor(null);
+        sameFloor.consume();
+        if (ran) return;
+    }
+    void runHostRound();
 }
 
 export function startAutoMemoryScheduler() {
@@ -649,9 +824,11 @@ export function startAutoMemoryScheduler() {
         types.CHAT_CHANGED,
         types.CHAT_LOADED,
     ].filter(Boolean))];
-    const listener = type => {
+    const listener = (type, ...args) => {
         const starting = type === types.GENERATION_STARTED || type === types.STREAM_TOKEN_RECEIVED || type === types.STREAM_TOKEN_RECEIVED_FULLY;
         const ended = type === types.GENERATION_ENDED || type === types.GENERATION_STOPPED;
+        if (type === types.GENERATION_STOPPED) sameFloor.clear();
+        if (type === types.GENERATION_STARTED && args[2] !== true && !redoInflight) sameFloor.mark(args[0]);
         if (starting) {
             auto_memory_stream.noteAssistantStream(true);
             stablePasses = 0;
@@ -665,7 +842,7 @@ export function startAutoMemoryScheduler() {
     };
     const bound = new Map();
     for (const type of events) {
-        const handler = () => listener(type);
+        const handler = (...args) => listener(type, ...args);
         bound.set(type, handler);
         source.on(type, handler);
     }

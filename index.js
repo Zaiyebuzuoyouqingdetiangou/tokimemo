@@ -1,5 +1,5 @@
-const VERSION = '0.99.83';
-const BUILD = '0.99.83-r84.135-letter-reading';
+const VERSION = '0.99.84';
+const BUILD = '0.99.84-r84.136-floor-reroll';
 
 const SETTINGS_ID = 'heartbeat_memories_settings';
 const MENU_ID = 'heartbeat_memories_menu_item';

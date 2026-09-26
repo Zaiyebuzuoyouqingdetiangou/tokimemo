@@ -134,3 +134,37 @@ export function swipeNeedsRegenerate({ stamp = null, messageIndex = -1, hash = '
   }
   return Number.isInteger(ticketMessageIndex) && ticketMessageIndex === messageIndex;
 }
+
+// 酒馆的重 roll 会先删掉最后一条再写回来，下标不变，也不发 swipe。和切 swipe 一样，都还是这一楼。
+export function isSameFloorGeneration(genType) {
+  return genType === 'regenerate' || genType === 'swipe';
+}
+
+export function createSameFloorGate() {
+  let pending = false;
+  return {
+    mark(genType) {
+      if (isSameFloorGeneration(genType)) pending = true;
+    },
+    pending() { return pending; },
+    consume() {
+      const value = pending;
+      pending = false;
+      return value;
+    },
+    clear() { pending = false; },
+  };
+}
+
+// 这一轮已经记在 lastCompletedFloor 上。重 roll 仍读原来那一窗，不把间隔再往后推。
+export function rerollWindow(lastCompletedFloor, intervalFloors) {
+  const end = Math.floor(Number(lastCompletedFloor));
+  const span = Math.max(1, Math.floor(Number(intervalFloors)) || 1);
+  if (!Number.isSafeInteger(end) || end < 1) return null;
+  return { start: Math.max(1, end - span + 1), end };
+}
+
+export function memoriesWithoutIds(memories, ids) {
+  const drop = new Set((Array.isArray(ids) ? ids : []).filter(id => typeof id === 'string' && id));
+  return (Array.isArray(memories) ? memories : []).filter(item => !drop.has(item?.id));
+}

@@ -74,6 +74,26 @@ export function appendLibraryEntry(previous, entry) {
     };
 }
 
+export function dropAutoRound(context, { moduleId = '', sourceMemoryIds = [] } = {}) {
+    const ids = new Set((Array.isArray(sourceMemoryIds) ? sourceMemoryIds : []).filter(id => /^M\d{3,6}$/.test(id)));
+    if (!context || !ids.size) return false;
+    let memory = null;
+    try { memory = archive_repository.getImportedMemory(context); } catch { memory = null; }
+    const previous = core_cache.loadSession(core_constants.MODE.ACHIEVEMENTS, { context, memoryBank: memory, clone: true });
+    if (!previous?.entries?.length) return false;
+    const entries = previous.entries.filter(item => {
+        if (item?.origin !== 'auto') return true;
+        if (moduleId && item.moduleId && item.moduleId !== moduleId) return true;
+        const own = Array.isArray(item.sourceMemoryIds) ? item.sourceMemoryIds : [];
+        return !own.some(id => ids.has(id));
+    });
+    if (entries.length === previous.entries.length) return false;
+    const session = { ...previous, entries };
+    session.chatId = core_context.getChatId(context);
+    if (memory?.archiveRevision) session.archiveRevision = memory.archiveRevision;
+    return core_cache.saveSession(core_constants.MODE.ACHIEVEMENTS, session, session.chatId) === true;
+}
+
 export function saveAutoAchievement(context, result, now = Date.now()) {
     const achievement = result?.achievement;
     const reveal = result?.reveal;
