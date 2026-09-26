@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import * as draw from '../src/autoMemory/draw.js';
 import * as floor from '../src/autoMemory/floorPace.js';
+import * as gap from '../src/autoMemory/gapFill.js';
 import * as gate from '../src/autoMemory/incrementalGate.js';
 import * as lookback from '../src/autoMemory/achievementLookback.js';
 import * as plans from '../src/autoMemory/modulePlans.js';
@@ -37,6 +38,11 @@ test('a due floor reads the floors since the last completion', () => {
     assert.equal(floor.latestAssistantWindow([{ role: 'char', text: '只有最新楼。' }], 1)[0].text, '只有最新楼。');
     assert.equal(floor.countdownLabel(5), '回忆还有 5 楼');
     assert.equal(floor.countdownLabel(1), '下一楼留下回忆');
+    assert.equal(floor.assistantBodyReady(chat), true);
+    assert.equal(floor.assistantBodyReady(chat, { generating: true }), false);
+    assert.equal(floor.assistantBodyReady(chat.slice(0, 4)), false);
+    assert.equal(floor.assistantBodyReady([...chat.slice(0, 4), { is_user: false, mes: '   ' }]), false);
+    assert.equal(floor.assistantBodyReady([...chat, { is_system: true, mes: '系统' }]), true);
 });
 
 test('the waiting shell shows the floor countdown and does not block input', () => {
@@ -46,6 +52,24 @@ test('the waiting shell shows the floor countdown and does not block input', () 
     assert.equal(pace.blocksInput, false);
     assert.equal(JSON.stringify(pace).includes('建档'), false);
     assert.equal(shell.shellView({ enabled: true, archiveReady: false, floor: 8, nextDueFloor: 13 }).phase, 'hidden');
+    const noted = shell.shellView({
+        enabled: true, archiveReady: true, floor: 8, nextDueFloor: 13,
+        gapText: '这一轮没有新的档案编号，倒计时已经进入下一间隔。', canFill: true,
+    });
+    assert.equal(noted.detail, '还差 5 楼');
+    assert.equal(noted.canFill, true);
+    assert.equal(gap.readableGap({ schemaVersion: 1, floor: 10, reason: 'no-new-memory', filled: false }).canFill, true);
+    assert.equal(gap.readableGap({ schemaVersion: 1, floor: 10, reason: 'no-new-memory', filled: true }).canFill, false);
+    const one = gap.oneSupplementMemory({
+        memories: [
+            { title: '晚霞', summary: '一起看过。', date: '春日', messageStart: 2, messageEnd: 9 },
+            { title: '不该出现', summary: '第二条' },
+        ],
+    }, { start: 6, end: 8 });
+    assert.equal(one.title, '晚霞');
+    assert.equal(one.messageStart, 6);
+    assert.equal(one.messageEnd, 8);
+    assert.equal(gap.oneSupplementMemory({ memories: [] }, { start: 6, end: 8 }), null);
 });
 
 test('never-generated modules stay in the draw unless the user excluded them', () => {

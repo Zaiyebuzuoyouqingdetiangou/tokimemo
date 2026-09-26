@@ -3,11 +3,15 @@ import * as archive_repository from '../archive/repository.js';
 import * as incremental_view from '../autoMemory/incrementalView.js';
 import * as core_cache from '../core/cache.js';
 import { state as runtimeState } from '../core/state.js';
+import * as auto_memory_floor from '../autoMemory/floorPace.js';
+import * as auto_memory_gap from '../autoMemory/gapFill.js';
 import * as auto_memory_plan from '../autoMemory/planStore.js';
 import * as auto_memory_registry from '../autoMemory/moduleRegistry.js';
+import * as auto_memory_scheduler from '../autoMemory/scheduler.js';
 import * as shell_state from '../autoMemory/shellState.js';
 import * as core_constants from '../core/constants.js';
 import * as core_context from '../core/context.js';
+import * as core_settings from '../core/settings.js';
 import * as generation_status from '../core/generationStatus.js';
 import * as core_requestCoordinator from '../core/requestCoordinator.js';
 import * as core_text from '../core/text.js';
@@ -103,19 +107,45 @@ function viewFor(context) {
         revealLine: shell_state.revealFace({ userName: context.name1, achievementTitle: '', moduleTitle: item?.title || '' }),
         failureRecoverable: !running && (failedStep || common.state === 'failed' || common.state === 'retry'),
         paused: moduleRow?.phase === 'queue',
-        floor: Array.isArray(context.chat) ? context.chat.length : 0,
+        floor: core_settings.getPluginSettings().autoMemoryLatestFloor === true
+            ? auto_memory_floor.assistantFloorCount(context.chat)
+            : (Array.isArray(context.chat) ? context.chat.length : 0),
         nextDueFloor: snapshot.plan.nextDueFloor,
+        gapText: auto_memory_gap.readableGap(context.chatMetadata?.[auto_memory_gap.GAP_KEY])?.text || '',
+        canFill: auto_memory_gap.readableGap(context.chatMetadata?.[auto_memory_gap.GAP_KEY])?.canFill === true,
     });
 }
 
 function markup(view) {
-    if (view.phase === 'pace') return `<p class="rmt-floor-pace" data-rmt-floor-pace><span>留忆</span><b>${core_text.esc(view.detail)}</b></p>`;
-    const pending = view.phase === 'reveal' ? '' : ' data-rmt-pending="1"';
-    const status = view.progress ? `<p class="rmt-floor-status">${core_text.esc(view.detail)}</p>` : '';
-    const body = view.showReveal
-        ? `<div class="rmt-floor-body" data-rmt-floor-body data-rmt-reveal="${core_text.esc(view.revealId)}" data-rmt-module="${core_text.esc(view.moduleId)}"></div><button type="button" class="rmt-btn" data-rmt-floor-plugin data-rmt-module="${core_text.esc(view.moduleId)}">以前的内容在插件里</button>`
-        : `<p class="rmt-floor-note">${core_text.esc(view.detail)}</p>`;
-    return `<div class="rmt-floor-external"${pending}>${status}<details data-rmt-floor-details><summary data-rmt-reveal="${core_text.esc(view.revealId)}"><b>${core_text.esc(view.title)}</b><small>${core_text.esc(view.detail)}</small></summary>${body}</details></div>`;
+    if (view.phase === 'pace') {
+        const gap = view.gapText
+            ? `<small>${core_text.esc(view.gapText)}</small>${view.canFill ? '<button type="button" class="rmt-btn rmt-floor-fill" data-rmt-floor-fill>补</button>' : ''}`
+            : '';
+        return `<p class="rmt-floor-pace" data-rmt-floor-pace><span>留忆</span><b>${core_text.esc(view.detail)}</b>${gap}</p>`;
+    }
+    const retry = view.phase === 'failed'
+        ? '<button type="button" class="rmt-btn" data-rmt-floor-retry>重试</button>'
+        : '';
+    if (view.phase === 'reveal' && view.showReveal) {
+        return `<article class="rmt-heart-letter">
+            <button type="button" class="rmt-heart-letter-seal" data-rmt-letter-open>
+                <i aria-hidden="true">♥</i><b>一封写给你的信</b><small>点开看看</small>
+            </button>
+            <div class="rmt-heart-letter-paper" data-rmt-letter-paper hidden>
+                <p data-rmt-letter-title>${core_text.esc(view.title)}</p>
+                <button type="button" class="rmt-btn" data-rmt-letter-read data-rmt-reveal="${core_text.esc(view.revealId)}" data-rmt-module="${core_text.esc(view.moduleId)}">打开这封回忆</button>
+                <div class="rmt-floor-body" data-rmt-floor-body data-rmt-reveal="${core_text.esc(view.revealId)}" data-rmt-module="${core_text.esc(view.moduleId)}"></div>
+            </div>
+        </article>`;
+    }
+    return `<article class="rmt-heart-letter is-waiting">
+        <div class="rmt-heart-letter-seal">
+            <i aria-hidden="true">♥</i>
+            <b data-rmt-letter-title>${core_text.esc(view.title)}</b>
+            <small data-rmt-letter-detail>${core_text.esc(view.detail)}</small>
+        </div>
+        ${retry}
+    </article>`;
 }
 
 function paint(context) {
@@ -133,30 +163,38 @@ function paint(context) {
     const mes = ui_floor.messageElement(index);
     if (!mes || ui_floor.writesMessageText()) { clearShells(); return; }
     ensureCss();
-    let host = mes.nextElementSibling;
-    if (!host || host.dataset.rmtFloorShell !== '1') {
+    mirrorModuleCss();
+    let host = mes.querySelector('[data-rmt-floor-shell="1"]');
+    if (!host) {
         clearShells();
         host = ui_floor.placeAfterMessage(mes);
     }
     if (!host) return;
-    if (view.phase === 'pace' && host.dataset.rmtPhase === 'pace' && host.dataset.rmtPace === view.detail) return;
-    const details = host.querySelector('[data-rmt-floor-details]');
+    if (view.phase === 'pace' && host.dataset.rmtPhase === 'pace' && host.dataset.rmtPace === view.detail && host.dataset.rmtGap === (view.gapText || '')) return;
+    const paper = host.querySelector('[data-rmt-letter-paper]');
     const body = host.querySelector('[data-rmt-floor-body]');
-    const sameReveal = host.dataset.rmtPhase === view.phase && host.dataset.rmtReveal === view.revealId && details?.open && body?.childElementCount;
+    const sameLetter = host.dataset.rmtPhase === view.phase && host.dataset.rmtReveal === view.revealId && host.dataset.rmtPace === (view.phase === 'pace' ? view.detail : '');
     host.dataset.rmtPhase = view.phase;
     host.dataset.rmtReveal = view.revealId;
     host.dataset.rmtPace = view.phase === 'pace' ? view.detail : '';
+    host.dataset.rmtGap = view.gapText || '';
     host.dataset.rmtPending = view.phase === 'reveal' ? '0' : '1';
-    if (sameReveal) {
-        const title = host.querySelector('summary b');
-        const detail = host.querySelector('summary small');
-        if (title) title.textContent = view.title;
+    if (sameLetter) {
+        if (paper && !paper.hidden && body?.childElementCount) return;
+        const title = host.querySelector('[data-rmt-letter-title]');
+        const detail = host.querySelector('[data-rmt-letter-detail]');
+        if (title && view.phase !== 'reveal') title.textContent = view.title;
         if (detail) detail.textContent = view.detail;
-        return;
+        if (title || detail || (paper && !paper.hidden)) return;
     }
-    const wasOpen = !!details?.open;
+    const paperWasOpen = paper && !paper.hidden;
     host.innerHTML = markup(view);
-    if (wasOpen) host.querySelector('[data-rmt-floor-details]')?.setAttribute('open', '');
+    if (paperWasOpen) {
+        const nextPaper = host.querySelector('[data-rmt-letter-paper]');
+        const seal = host.querySelector('[data-rmt-letter-open]');
+        if (nextPaper) nextPaper.hidden = false;
+        if (seal) seal.hidden = true;
+    }
     try { ui_taskCenter.syncLiveTaskStrip(); } catch { /* 任务条刷新失败时，楼层下面的状态仍保留。 */ }
 }
 
@@ -195,7 +233,7 @@ async function openInFloor(body) {
     if (!item || !body) return;
     const increment = incrementFor(moduleId, revealId);
     if (!increment.kept) {
-        body.innerHTML = '<p class="rmt-floor-note">这一轮没有单独的新增段落。以前的内容在插件里。</p>';
+        body.innerHTML = '<p class="rmt-floor-note">这一页还没有可以展开的新段落。</p>';
         rememberOpened(revealId);
         return;
     }
@@ -217,18 +255,50 @@ async function openInFloor(body) {
     rememberOpened(revealId);
 }
 
-function openPlugin(moduleId) {
-    const item = auto_memory_registry.autoMemoryModuleById(moduleId);
-    if (!item) return;
-    try {
-        ui_overlay.openOverlay();
-        ui_overlay.openCachedOrGenerate(item.id, { workspaceRoute: item.id });
-    } catch (error) {
-        console.warn('[HeartbeatMemories] plugin page skipped', core_text.safeErrorDiagnostic(error));
-        globalThis.toastr?.error?.('插件里的这一页暂时没能打开。已经记下的内容还在。', '心口顿了一下');
-    }
+function openReveal(revealId) {
+    if (!/^[A-Za-z0-9_-]{8,80}$/.test(revealId || '')) return;
+    const seal = document.querySelector(`[data-rmt-floor-shell][data-rmt-reveal="${revealId}"] [data-rmt-letter-open]`);
+    if (!seal || seal.hidden) return;
+    const paper = seal.parentElement?.querySelector('[data-rmt-letter-paper]');
+    if (paper) paper.hidden = false;
+    seal.hidden = true;
 }
 
+function onClick(event) {
+    const fill = event.target?.closest?.('[data-rmt-floor-fill]');
+    if (fill) {
+        event.preventDefault();
+        event.stopPropagation();
+        fill.disabled = true;
+        void auto_memory_scheduler.fillFloorGap().finally(() => { fill.disabled = false; sync(); });
+        return;
+    }
+    const retry = event.target?.closest?.('[data-rmt-floor-retry]');
+    if (retry) {
+        event.preventDefault();
+        event.stopPropagation();
+        retry.disabled = true;
+        void auto_memory_scheduler.resumeFloorPlan().catch(error => {
+            console.warn('[HeartbeatMemories] floor retry skipped', core_text.safeErrorDiagnostic(error));
+            globalThis.toastr?.error?.('这一封暂时没能续上。可以再点一次重试。', '心口顿了一下');
+        }).finally(() => { retry.disabled = false; sync(); });
+        return;
+    }
+    const read = event.target?.closest?.('[data-rmt-letter-read]');
+    if (read) {
+        event.preventDefault();
+        event.stopPropagation();
+        void openInFloor(read.parentElement?.querySelector('[data-rmt-floor-body]'));
+        return;
+    }
+    const seal = event.target?.closest?.('[data-rmt-letter-open]');
+    if (!seal) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const paper = seal.parentElement?.querySelector('[data-rmt-letter-paper]');
+    if (paper) paper.hidden = false;
+    seal.hidden = true;
+}
 function rememberOpened(revealId) {
     if (!revealId) return;
     try {
@@ -241,29 +311,6 @@ function rememberOpened(revealId) {
     } catch (error) {
         console.warn('[HeartbeatMemories] reveal read state skipped', core_text.safeErrorDiagnostic(error));
     }
-}
-
-function openReveal(revealId) {
-    if (!/^[A-Za-z0-9_-]{8,80}$/.test(revealId || '')) return;
-    const details = document.querySelector(`[data-rmt-floor-shell][data-rmt-reveal="${revealId}"] [data-rmt-floor-details]`);
-    if (!details) return;
-    if (!details.open) details.open = true;
-    else void openInFloor(details.querySelector('[data-rmt-floor-body]'));
-}
-
-function onClick(event) {
-    const plugin = event.target?.closest?.('[data-rmt-floor-plugin]');
-    if (!plugin) return;
-    event.preventDefault();
-    event.stopPropagation();
-    openPlugin(plugin.dataset.rmtModule || '');
-}
-
-function onToggle(event) {
-    const details = event.target?.closest?.('[data-rmt-floor-details]');
-    if (!details?.open) return;
-    const body = details.querySelector('[data-rmt-floor-body]');
-    if (body) void openInFloor(body);
 }
 
 export function stopAutoMemoryShell() {
@@ -291,10 +338,8 @@ export function startAutoMemoryShell() {
         cleanup = () => { for (const type of events) source.off?.(type, type === types.CHAT_CHANGED ? onChat : listener); };
     }
     document.addEventListener('click', onClick);
-    document.addEventListener('toggle', onToggle, true);
     const removeToggle = () => {
         document.removeEventListener('click', onClick);
-        document.removeEventListener('toggle', onToggle, true);
     };
     const previous = cleanup;
     cleanup = () => { previous?.(); removeToggle(); };

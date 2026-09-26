@@ -64,14 +64,70 @@ function activeTicket(snapshot) {
     return (snapshot.drawTickets || []).find(ticket => ticket.id === id) || null;
 }
 
-async function persistNoop(snapshot, floor, io, now, reason) {
+async function persistNoop(snapshot, floor, io, now, reason, floorWindow = null) {
     const next = nextSnapshot(snapshot, {
         lastCompletedFloor: floor,
         nextDueFloor: floor + snapshot.plan.intervalFloors,
         activeDrawTicketId: null,
     }, {}, now);
     await io.persist(next);
+    if (reason === 'no-new-memory') {
+        await io.noteGap?.({
+            schemaVersion: 1,
+            floor,
+            windowStart: floorWindow?.start ?? null,
+            windowEnd: floorWindow?.end ?? null,
+            reason,
+            filled: false,
+        });
+    }
     return { action: 'noop', moduleRequest: false, reason, snapshot: next };
+}
+
+async function drawFresh(snapshot, fresh, input, io, { keepPace = false } = {}) {
+    const plan = snapshot.plan;
+    const modules = Array.isArray(input.modules) ? input.modules : auto_memory_registry.listAutoMemoryModules();
+    const candidates = auto_memory_draw.roundCandidateIds(modules, {
+        excludedModuleIds: plan.excludedModuleIds,
+        satisfiedPrerequisiteIds: input.satisfiedPrerequisiteIds,
+    });
+    if (!candidates.length) {
+        if (keepPace) return { action: 'noop', moduleRequest: false, reason: 'no-candidates' };
+        return persistNoop(snapshot, input.floor, io, input.now, 'no-candidates');
+    }
+    const weighted = auto_memory_draw.weightCandidates(candidates, snapshot.drawTickets);
+    const selected = auto_memory_draw.pickWeighted(weighted, io.random);
+    if (!selected || plan.excludedModuleIds.includes(selected)) {
+        if (keepPace) return { action: 'noop', moduleRequest: false, reason: 'no-candidates' };
+        return persistNoop(snapshot, input.floor, io, input.now, 'no-candidates');
+    }
+    const drawId = io.nextId();
+    const prepared = await io.prepareModulePlan({
+        moduleId: selected, sourceMemoryIds: [...fresh], drawId, chatId: input.chatId, archiveRevision: input.archiveRevision,
+    });
+    if (!prepared) {
+        if (keepPace) return { action: 'noop', moduleRequest: false, reason: 'no-module-plan' };
+        return persistNoop(snapshot, input.floor, io, input.now, 'no-module-plan');
+    }
+    const modulePlan = auto_memory_plan.parseModulePlan({
+        ...prepared, drawId, moduleId: selected, sourceMemoryIds: [...fresh],
+    });
+    const ticket = auto_memory_plan.parseDrawTicket({
+        id: drawId, dueFloor: input.floor, archiveRevision: input.archiveRevision, candidates: weighted,
+        selectedModuleId: selected, sourceMemoryIds: [...fresh], status: 'drawn',
+    });
+    const pace = keepPace ? {} : {
+        lastCompletedFloor: input.floor,
+        nextDueFloor: input.floor + plan.intervalFloors,
+    };
+    const next = nextSnapshot(snapshot, {
+        ...pace,
+        activeDrawTicketId: drawId,
+    }, { drawTickets: [...snapshot.drawTickets, ticket], modulePlan }, input.now);
+    await io.persist(next);
+    await io.noteGap?.(null);
+    await io.startModule(next);
+    return { action: 'drawn', moduleRequest: true, drawId, snapshot: next };
 }
 
 export async function runAutoMemoryRound(input, io) {
@@ -101,34 +157,13 @@ export async function runAutoMemoryRound(input, io) {
     await io.importIncremental(options);
     const after = await io.readMemoryIds();
     const fresh = auto_memory_draw.newMemoryIds(input.memoryIds, after);
-    if (!fresh.length) return persistNoop(snapshot, input.floor, io, input.now, 'no-new-memory');
-    const modules = Array.isArray(input.modules) ? input.modules : auto_memory_registry.listAutoMemoryModules();
-    const candidates = auto_memory_draw.roundCandidateIds(modules, {
-        excludedModuleIds: plan.excludedModuleIds,
-        satisfiedPrerequisiteIds: input.satisfiedPrerequisiteIds,
-    });
-    if (!candidates.length) return persistNoop(snapshot, input.floor, io, input.now, 'no-candidates');
-    const weighted = auto_memory_draw.weightCandidates(candidates, snapshot.drawTickets);
-    const selected = auto_memory_draw.pickWeighted(weighted, io.random);
-    if (!selected || plan.excludedModuleIds.includes(selected)) return persistNoop(snapshot, input.floor, io, input.now, 'no-candidates');
-    const drawId = io.nextId();
-    const prepared = await io.prepareModulePlan({
-        moduleId: selected, sourceMemoryIds: [...fresh], drawId, chatId: input.chatId, archiveRevision: input.archiveRevision,
-    });
-    if (!prepared) return persistNoop(snapshot, input.floor, io, input.now, 'no-module-plan');
-    const modulePlan = auto_memory_plan.parseModulePlan({
-        ...prepared, drawId, moduleId: selected, sourceMemoryIds: [...fresh],
-    });
-    const ticket = auto_memory_plan.parseDrawTicket({
-        id: drawId, dueFloor: input.floor, archiveRevision: input.archiveRevision, candidates: weighted,
-        selectedModuleId: selected, sourceMemoryIds: [...fresh], status: 'drawn',
-    });
-    const next = nextSnapshot(snapshot, {
-        lastCompletedFloor: input.floor,
-        nextDueFloor: input.floor + plan.intervalFloors,
-        activeDrawTicketId: drawId,
-    }, { drawTickets: [...snapshot.drawTickets, ticket], modulePlan }, input.now);
-    await io.persist(next);
-    await io.startModule(next);
-    return { action: 'drawn', moduleRequest: true, drawId, snapshot: next };
+    if (!fresh.length) return persistNoop(snapshot, input.floor, io, input.now, 'no-new-memory', floorWindow);
+    return drawFresh(snapshot, fresh, input, io);
+}
+
+export async function drawKnownMemories(input, io) {
+    const snapshot = input?.snapshot;
+    const fresh = Array.isArray(input?.freshIds) ? input.freshIds.filter(id => /^M\d{3,6}$/.test(id)) : [];
+    if (!snapshot?.plan || !fresh.length) return { action: 'noop', moduleRequest: false, reason: 'no-new-memory' };
+    return drawFresh(snapshot, fresh, input, io, { keepPace: true });
 }

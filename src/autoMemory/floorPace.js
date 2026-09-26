@@ -68,3 +68,16 @@ export function countdownLabel(left) {
     if (left === 1) return '下一楼留下回忆';
     return `回忆还有 ${left} 楼`;
 }
+
+// 最新一条有效消息必须是已经写完的角色楼。用户楼、空正文、或这一楼还在生成，都不算到点。
+export function assistantBodyReady(chat, options = {}) {
+    if (options.generating === true) return false;
+    const list = Array.isArray(chat) ? chat : [];
+    for (let index = list.length - 1; index >= 0; index -= 1) {
+        const message = list[index];
+        if (!message || message.is_system === true) continue;
+        if (message.is_user === true) return false;
+        return String(message.mes ?? '').trim().length > 0;
+    }
+    return false;
+}

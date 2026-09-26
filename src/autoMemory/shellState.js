@@ -16,8 +16,19 @@ export function floorShellCss() {
 .rmt-floor-shell summary small{display:block;margin-top:4px;color:#7b8798;font-size:12px}
 .rmt-floor-shell .rmt-floor-note,.rmt-floor-shell .rmt-floor-body{margin-top:8px;min-width:0}
 .rmt-floor-shell[data-rmt-pending="1"] details{opacity:.76}
-.rmt-floor-shell .rmt-floor-pace{display:inline-flex;align-items:center;gap:8px;margin:0;padding:6px 10px;border:1px solid rgba(0,0,0,.08);border-radius:999px;background:#fff;color:#4d5d73;font-size:12px;box-shadow:3px 0 0 #e99ab9 inset}
+.rmt-floor-shell .rmt-floor-pace{display:inline-flex;align-items:center;flex-wrap:wrap;gap:8px;margin:0;padding:6px 10px;border:1px solid rgba(0,0,0,.08);border-radius:999px;background:#fff;color:#4d5d73;font-size:12px;box-shadow:3px 0 0 #e99ab9 inset}
 .rmt-floor-shell .rmt-floor-pace b{font-weight:650}
+.rmt-floor-shell .rmt-floor-pace small{color:#7b8798}
+.rmt-floor-shell .rmt-floor-fill,.rmt-floor-shell .rmt-heart-letter .rmt-btn{min-height:28px;padding:2px 10px}
+.rmt-heart-letter{width:min(100%,320px);margin:10px 0 4px;color:#5c463c}
+.rmt-heart-letter-seal{display:grid;justify-items:center;gap:2px;width:100%;margin:0;padding:16px 14px 14px;border:1px solid #e7b7c8;border-left:7px solid #e99ab9;border-radius:6px 18px 18px 6px;background:#fff7f2;color:#6a4a58;box-shadow:0 10px 24px rgba(20,12,16,.16);font:inherit;text-align:center;cursor:pointer}
+.rmt-heart-letter-seal i{font-style:normal;color:#e07098;font-size:22px;line-height:1}
+.rmt-heart-letter-seal b{font-size:15px;line-height:1.4}
+.rmt-heart-letter-seal small{color:#8d6d78;font-size:12px}
+.rmt-heart-letter-paper{margin-top:8px;padding:16px 14px 12px;border:1px solid #e6d3c4;border-left:7px solid #e99ab9;border-radius:4px 16px 16px 4px;background:#fff8ee;background-image:repeating-linear-gradient(0deg,transparent,transparent 22px,rgba(180,140,120,.16) 23px);color:#5c463c}
+.rmt-heart-letter-paper p{margin:0 0 10px;font-size:15px;line-height:1.6}
+.rmt-heart-letter .rmt-floor-body{max-height:70vh;margin-top:10px;overflow:auto}
+.rmt-heart-letter.is-waiting .rmt-heart-letter-seal{cursor:default}
 #chat .mes.rmt-floor-return{outline:2px solid #e99ab9;outline-offset:2px}
 `;
 }
@@ -92,6 +103,13 @@ export function shellView(input = {}) {
         return { ...face, phase: 'generating', title: '回忆生成中', detail: '还没整份写完，先不拆开。' };
     }
     const remain = auto_memory_floor.formatFloorRemain(auto_memory_floor.floorsRemaining(input.floor, input.nextDueFloor));
-    if (remain) return { ...face, phase: 'pace', title: '留忆', detail: remain };
+    if (remain) {
+        const pace = { ...face, phase: 'pace', title: '留忆', detail: remain };
+        if (input.gapText) {
+            pace.gapText = String(input.gapText);
+            pace.canFill = input.canFill === true;
+        }
+        return pace;
+    }
     return hidden();
 }

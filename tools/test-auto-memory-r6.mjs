@@ -27,6 +27,15 @@ test('one reveal id is shared and a floor mount does not write the message', () 
     assert.equal(mount.writesMessageText, false);
     assert.equal(mount.sendsToModel, false);
     assert.equal(floor.writesMessageText(), false);
+    const message = {
+        children: [],
+        querySelector(selector) { return selector === '.mes_block' ? this.block : null; },
+        block: { children: [], appendChild(node) { this.children.push(node); node.parent = this; return node; } },
+    };
+    const host = floor.placeAfterMessage(message, tag => ({ tag, className: '', dataset: {}, parent: null }));
+    assert.equal(host.parent, message.block);
+    assert.equal(message.children.includes(host), false);
+    assert.equal(host.dataset.rmtFloorShell, '1');
     assert.equal(reveal.firstReveal('generating', 'ready'), true);
     assert.equal(reveal.firstReveal('ready', 'ready'), false);
     assert.equal(reveal.firstReveal('opened', 'ready'), false);
