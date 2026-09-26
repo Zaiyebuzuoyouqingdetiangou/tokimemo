@@ -431,6 +431,57 @@ function draftCards() {
     });
 }
 
+// 待重试必须能点。超限草稿和没有所属的旧记录不能重试，这里返回空。
+export function failedTaskRetrySpec({ kind = '', mode = '', pageId = '', draftId = '', label = '', oversized = false, queueRoute = '', queueId = '', archiveCanContinue = true, archiveRestart = false } = {}) {
+    if (oversized) return null;
+    const archiveImport = kind === 'archive-import' || pageId === 'archiveImport' || label === '聊天经历整理';
+    const archiveProfile = !archiveImport && (kind === 'archive-profile' || pageId === 'archiveProfile');
+    if (archiveImport || archiveProfile) {
+        if (archiveCanContinue === false) return null;
+        if (archiveImport && archiveRestart) return { archiveRestart: true, label: '重试未完成部分' };
+        return { archive: archiveProfile ? 'profile' : 'import', draftId: draftId || '', label: '重试未完成部分' };
+    }
+    if (queueRoute) return { queueRoute, queueId, label: '重试未完成部分' };
+    if (mode && Object.values(core_constants.MODE).includes(mode)) {
+        if (draftId) return { mode, pageId: pageId || '', draftId, label: '重试未完成部分' };
+        return { generateMode: mode, label: '重试未完成部分' };
+    }
+    return null;
+}
+
+function retryButtonHtml(spec) {
+    if (!spec?.label) return '';
+    const esc = core_text.esc;
+    if (spec.archiveRestart) return `<button type="button" class="rmt-btn" data-rmt-archive-restart>${esc(spec.label)}</button>`;
+    if (spec.archive === 'import' || spec.archive === 'profile') {
+        const draftAttr = spec.draftId ? ` data-rmt-archive-recovery-draft-id="${esc(spec.draftId)}"` : '';
+        return `<button type="button" class="rmt-btn" data-rmt-archive-recovery="${spec.archive}"${draftAttr}>${esc(spec.label)}</button>`;
+    }
+    if (spec.queueRoute) return `<button type="button" class="rmt-btn" data-rmt-action="task-retry-queue" data-rmt-queue-id="${esc(spec.queueId || '')}">${esc(spec.label)}</button>`;
+    if (spec.mode && spec.draftId) return `<button type="button" class="rmt-btn" data-rmt-recovery-mode="${esc(spec.mode)}" data-rmt-recovery-draft-id="${esc(spec.draftId)}" data-rmt-recovery-page-id="${esc(spec.pageId || '')}">${esc(spec.label)}</button>`;
+    if (spec.generateMode) return `<button type="button" class="rmt-btn" data-rmt-generate-mode="${esc(spec.generateMode)}">${esc(spec.label)}</button>`;
+    return '';
+}
+
+function archiveRetryFlags(kind) {
+    const profile = kind === 'archive-profile';
+    let summary = null;
+    try {
+        summary = profile
+            ? archive_repository.getCurrentArchiveProfileRecoverySummary()
+            : archive_repository.getCurrentArchiveImportRecoverySummary();
+    } catch {
+        return { archiveCanContinue: true, archiveRestart: false };
+    }
+    if (!summary) return { archiveCanContinue: true, archiveRestart: !profile };
+    if (summary.capacityBlocked === true || summary.onlyArchivedDrafts === true) return { archiveCanContinue: false, archiveRestart: false };
+    return { archiveCanContinue: true, archiveRestart: false };
+}
+
+function failedRetryHtml(input) {
+    return retryButtonHtml(failedTaskRetrySpec(input));
+}
+
 function secondStepButton(record, id) {
     if (!record?.secondStepKind || !record?.secondStepLabel || !id) return '';
     return `<button type="button" class="rmt-btn" data-rmt-action="task-second-step" data-rmt-task-id="${core_text.esc(id)}">第二次生成${core_text.esc(record.secondStepLabel)}</button>`;
@@ -501,6 +552,13 @@ function collectTaskCards() {
         const record = core_requestCoordinator.settledChatTaskRecord(row.id) || {};
         const state = row.phase === 'failed' || record.outcome === 'failed' ? 'failed' : row.phase === 'cancelled' || record.outcome === 'cancelled' ? 'cancelled' : 'done';
         if (cards.some(card => sameJob(card, { label: row.label, mode: record.mode, pageId: record.pageId, draftId: record.draftId }))) continue;
+        const kind = record.kind || row.kind || '';
+        const retry = state === 'failed' && row.currentChat !== false
+            ? failedRetryHtml({
+                kind, mode: record.mode, pageId: record.pageId, draftId: record.draftId, label: row.label,
+                ...(kind === 'archive-import' || kind === 'archive-profile' ? archiveRetryFlags(kind) : {}),
+            })
+            : '';
         cards.push({
             state,
             label: taskLabel(record.mode, record.pageId, row.label),
@@ -509,7 +567,7 @@ function collectTaskCards() {
             draftId: record.draftId || '',
             detail: [row.chatCaption, row.progressText].filter(Boolean).join(' · '),
             at: Number(record.endedAt) || 0,
-            actions: `${secondStepButton(record, row.id)}${openAction({ ...record, id: row.id, label: row.label, outcome: record.outcome || state, phase: row.phase })}`,
+            actions: `${retry}${secondStepButton(record, row.id)}${openAction({ ...record, id: row.id, label: row.label, outcome: record.outcome || state, phase: row.phase })}`,
         });
     }
     for (const item of mine) {
@@ -523,10 +581,30 @@ function collectTaskCards() {
             draftId: item.draftId || '',
             detail: item.kind === 'recovery' ? '自动重试未完成部分' : '当前聊天 · 串行队列',
             at: 0,
-            actions: item.status === 'done' || item.status === 'failed' ? openAction({ id: '', mode: item.mode, pageId: item.pageId, label: item.label, outcome: item.status }) : '',
+            actions: item.status === 'failed'
+                ? `${failedRetryHtml(item.kind === 'recovery' || item.draftId
+                    ? { kind: item.kind, mode: item.mode, pageId: item.pageId, draftId: item.draftId, label: item.label }
+                    : { queueRoute: item.route, queueId: item.id })}${openAction({ id: '', mode: item.mode, pageId: item.pageId, label: item.label, outcome: item.status })}`
+                : item.status === 'done' ? openAction({ id: '', mode: item.mode, pageId: item.pageId, label: item.label, outcome: item.status }) : '',
         });
     }
+    pushMissingArchiveRecovery(cards);
     return cards.sort((left, right) => (CARD_RANK[left.state] ?? 9) - (CARD_RANK[right.state] ?? 9) || right.at - left.at);
+}
+
+function pushMissingArchiveRecovery(cards) {
+    const add = (summary, profile) => {
+        if (!summary || summary.onlyArchivedDrafts === true || summary.capacityBlocked === true) return;
+        const label = profile ? '档案简介' : '聊天经历整理';
+        if (cards.some(card => card.label === label && card.state !== 'done' && card.state !== 'cancelled' && String(card.actions || '').includes('data-rmt-archive-'))) return;
+        const retry = failedRetryHtml({ kind: profile ? 'archive-profile' : 'archive-import', label, ...archiveRetryFlags(profile ? 'archive-profile' : 'archive-import') });
+        if (!retry) return;
+        cards.push({ state: 'failed', label, detail: summary.notice || '这次没有完成', at: 0, actions: retry });
+    };
+    try {
+        add(archive_repository.getCurrentArchiveImportRecoverySummary(), false);
+        add(archive_repository.getCurrentArchiveProfileRecoverySummary(), true);
+    } catch { /* 读不到草稿时，已记下的失败任务仍按自己的重试按钮显示。 */ }
 }
 
 export function liveTaskStripHtml(active, waiting) {
@@ -764,6 +842,19 @@ export function handleTaskCenterAction(action, actionEl) {
     }
     if (action === 'task-queue-remove') {
         cancelQueuedItem(actionEl?.dataset?.rmtQueueId || '');
+        return;
+    }
+    if (action === 'task-retry-queue') {
+        const item = queue.find(row => row.id === (actionEl?.dataset?.rmtQueueId || '') && row.status === 'failed' && row.route);
+        if (!item || item.scope !== currentScope()) return;
+        if (queue.some(row => row !== item && row.scope === item.scope && row.route === item.route && (row.status === 'queued' || row.status === 'running'))) {
+            globalThis.toastr?.info?.('这项已经在队列里。', '心迹回廊');
+            return;
+        }
+        item.status = 'queued';
+        item.attached = false;
+        refreshTaskCenterView();
+        void pumpQueue();
         return;
     }
     if (action === 'task-clear-done') {

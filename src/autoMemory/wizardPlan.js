@@ -165,6 +165,11 @@ export function wizardEntry({ archivePresent = false, cardType = '', apiReady = 
     };
 }
 
+// 已有正式档案时，向导不再走建档，也不为建档发请求。人物改过才另问要不要重建。
+export function wizardSkipsArchiveStep({ archivePresent = false, cardChoiceDirty = false } = {}) {
+    return archivePresent === true && cardChoiceDirty !== true;
+}
+
 // 改过人物且已有档案时先问。同意才重建；不同意就留着旧档案。
 export function archiveRebuildChoice({ cardChoiceDirty = false, archivePresent = false } = {}) {
     return cardChoiceDirty === true && archivePresent === true ? 'ask' : 'keep';

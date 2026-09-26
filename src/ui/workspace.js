@@ -208,10 +208,18 @@ export function arrangeSettingsHome(body) {
         const more = document.createElement('details'); more.className = 'rmt-workspace-more';
         const title = document.createElement('summary'); title.textContent = '更多设置'; more.appendChild(title);
         const sectionBody = document.createElement('div'); sectionBody.className = 'rmt-workspace-more-body'; more.appendChild(sectionBody);
+        const front = ['auto', 'voice', 'api', 'reading', 'image', 'theme'];
         for (const card of [...content.querySelectorAll(':scope > [data-rmt-settings-section]')]) {
-            if (!['api','theme','image','reading','voice'].includes(card.dataset.rmtSettingsSection)) sectionBody.appendChild(card);
+            if (!front.includes(card.dataset.rmtSettingsSection)) sectionBody.appendChild(card);
         }
         if (sectionBody.children.length) content.appendChild(more);
+        let cursor = content.firstChild;
+        for (const id of front) {
+            const card = content.querySelector(`:scope > [data-rmt-settings-section="${id}"]`);
+            if (!card) continue;
+            content.insertBefore(card, cursor);
+            cursor = card.nextSibling;
+        }
         const preferences = [...content.querySelectorAll(':scope > .rmt-workspace-preferences')];
         for (const duplicate of preferences.slice(1)) duplicate.remove();
         if (!preferences.length) {

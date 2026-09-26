@@ -161,4 +161,14 @@ test('wizard completion round-trips and does not rewrite corrupt or old settings
     assert.deepEqual(broken, brokenCopy);
     assert.equal(wizard.wizardBlocksChatInput(), false);
     assert.equal(wizard.wizardCloseAbortsTasks(), false);
+    assert.equal(wizard.wizardSkipsArchiveStep({ archivePresent: true, cardChoiceDirty: false }), true);
+    assert.equal(wizard.wizardSkipsArchiveStep({ archivePresent: true, cardChoiceDirty: true }), false);
+    assert.equal(wizard.wizardSkipsArchiveStep({ archivePresent: false }), false);
+    assert.deepEqual(tasks.failedTaskRetrySpec({ kind: 'archive-import', label: '聊天经历整理' }), { archive: 'import', draftId: '', label: '重试未完成部分' });
+    assert.equal(tasks.failedTaskRetrySpec({ kind: 'archive-import', archiveRestart: true }).archiveRestart, true);
+    assert.equal(tasks.failedTaskRetrySpec({ kind: 'archive-import', archiveCanContinue: false }), null);
+    assert.equal(tasks.failedTaskRetrySpec({ kind: 'mode', mode: 'album', draftId: 'd1', pageId: 'album' }).mode, 'album');
+    assert.equal(tasks.failedTaskRetrySpec({ oversized: true, mode: 'album', draftId: 'd1' }), null);
+    assert.equal(tasks.failedTaskRetrySpec({ kind: 'logical' }), null);
+    assert.equal(tasks.failedTaskRetrySpec({ queueRoute: 'album', queueId: 'q1' }).queueId, 'q1');
 });

@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 261
-// Source SHA-256: 13289813bb20b0966d1b9df41568a6dc2cf59bfa87697261f6411a69f1408e5f
+// Source SHA-256: 181b589e0efbf801e3571def93658aa863065c19f389a8d5eb01bd7eb43ce536
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -22646,7 +22646,7 @@ const runtimeState = __m_core_state_js.state;
 function homeHeadingHtml(ctx = context.getContext()) {
     const name = text.normalizeText(ctx?.name2, 120);
     const bank = repository.getImportedMemory(ctx);
-    return `<header class="rmt-home-heading"><h1>设置</h1><p>${name ? text.esc(name) + ' · ' : ''}连接、主题与生成参数</p></header>`;
+    return `<header class="rmt-home-heading"><h1>设置</h1><p>${name ? text.esc(name) + ' · ' : ''}自动留忆、连接与生成</p></header>`;
 }
 
 function showHome({ section = '' } = {}) {
@@ -30920,7 +30920,7 @@ function renderSettingsPanelMarkup(panel) {
           </div>
         </details>
         <details class="rmt-settings-card" data-rmt-settings-section="auto">
-          <summary class="rmt-settings-card-head"><span>↻</span><div><b>自动更新</b><small>跟随当前聊天 · 每项独立设置</small></div></summary>
+          <summary class="rmt-settings-card-head"><span>↻</span><div><b>自动留忆</b><small>和这个角色的回忆 · 向导与间隔</small></div></summary>
           <div class="rmt-settings-section-body">
           <p>只在已有档案的当前窗口运行。每条聊天消息算一楼，编辑不加楼；开启后从当前楼数起计。</p>
           <p>“档案同步”收录新聊天；其他模块使用已归档记忆，不改旧内容。会调用独立 API。</p>
@@ -52371,6 +52371,57 @@ function draftCards() {
     });
 }
 
+// 待重试必须能点。超限草稿和没有所属的旧记录不能重试，这里返回空。
+function failedTaskRetrySpec({ kind = '', mode = '', pageId = '', draftId = '', label = '', oversized = false, queueRoute = '', queueId = '', archiveCanContinue = true, archiveRestart = false } = {}) {
+    if (oversized) return null;
+    const archiveImport = kind === 'archive-import' || pageId === 'archiveImport' || label === '聊天经历整理';
+    const archiveProfile = !archiveImport && (kind === 'archive-profile' || pageId === 'archiveProfile');
+    if (archiveImport || archiveProfile) {
+        if (archiveCanContinue === false) return null;
+        if (archiveImport && archiveRestart) return { archiveRestart: true, label: '重试未完成部分' };
+        return { archive: archiveProfile ? 'profile' : 'import', draftId: draftId || '', label: '重试未完成部分' };
+    }
+    if (queueRoute) return { queueRoute, queueId, label: '重试未完成部分' };
+    if (mode && Object.values(core_constants.MODE).includes(mode)) {
+        if (draftId) return { mode, pageId: pageId || '', draftId, label: '重试未完成部分' };
+        return { generateMode: mode, label: '重试未完成部分' };
+    }
+    return null;
+}
+
+function retryButtonHtml(spec) {
+    if (!spec?.label) return '';
+    const esc = core_text.esc;
+    if (spec.archiveRestart) return `<button type="button" class="rmt-btn" data-rmt-archive-restart>${esc(spec.label)}</button>`;
+    if (spec.archive === 'import' || spec.archive === 'profile') {
+        const draftAttr = spec.draftId ? ` data-rmt-archive-recovery-draft-id="${esc(spec.draftId)}"` : '';
+        return `<button type="button" class="rmt-btn" data-rmt-archive-recovery="${spec.archive}"${draftAttr}>${esc(spec.label)}</button>`;
+    }
+    if (spec.queueRoute) return `<button type="button" class="rmt-btn" data-rmt-action="task-retry-queue" data-rmt-queue-id="${esc(spec.queueId || '')}">${esc(spec.label)}</button>`;
+    if (spec.mode && spec.draftId) return `<button type="button" class="rmt-btn" data-rmt-recovery-mode="${esc(spec.mode)}" data-rmt-recovery-draft-id="${esc(spec.draftId)}" data-rmt-recovery-page-id="${esc(spec.pageId || '')}">${esc(spec.label)}</button>`;
+    if (spec.generateMode) return `<button type="button" class="rmt-btn" data-rmt-generate-mode="${esc(spec.generateMode)}">${esc(spec.label)}</button>`;
+    return '';
+}
+
+function archiveRetryFlags(kind) {
+    const profile = kind === 'archive-profile';
+    let summary = null;
+    try {
+        summary = profile
+            ? archive_repository.getCurrentArchiveProfileRecoverySummary()
+            : archive_repository.getCurrentArchiveImportRecoverySummary();
+    } catch {
+        return { archiveCanContinue: true, archiveRestart: false };
+    }
+    if (!summary) return { archiveCanContinue: true, archiveRestart: !profile };
+    if (summary.capacityBlocked === true || summary.onlyArchivedDrafts === true) return { archiveCanContinue: false, archiveRestart: false };
+    return { archiveCanContinue: true, archiveRestart: false };
+}
+
+function failedRetryHtml(input) {
+    return retryButtonHtml(failedTaskRetrySpec(input));
+}
+
 function secondStepButton(record, id) {
     if (!record?.secondStepKind || !record?.secondStepLabel || !id) return '';
     return `<button type="button" class="rmt-btn" data-rmt-action="task-second-step" data-rmt-task-id="${core_text.esc(id)}">第二次生成${core_text.esc(record.secondStepLabel)}</button>`;
@@ -52441,6 +52492,13 @@ function collectTaskCards() {
         const record = core_requestCoordinator.settledChatTaskRecord(row.id) || {};
         const state = row.phase === 'failed' || record.outcome === 'failed' ? 'failed' : row.phase === 'cancelled' || record.outcome === 'cancelled' ? 'cancelled' : 'done';
         if (cards.some(card => sameJob(card, { label: row.label, mode: record.mode, pageId: record.pageId, draftId: record.draftId }))) continue;
+        const kind = record.kind || row.kind || '';
+        const retry = state === 'failed' && row.currentChat !== false
+            ? failedRetryHtml({
+                kind, mode: record.mode, pageId: record.pageId, draftId: record.draftId, label: row.label,
+                ...(kind === 'archive-import' || kind === 'archive-profile' ? archiveRetryFlags(kind) : {}),
+            })
+            : '';
         cards.push({
             state,
             label: taskLabel(record.mode, record.pageId, row.label),
@@ -52449,7 +52507,7 @@ function collectTaskCards() {
             draftId: record.draftId || '',
             detail: [row.chatCaption, row.progressText].filter(Boolean).join(' · '),
             at: Number(record.endedAt) || 0,
-            actions: `${secondStepButton(record, row.id)}${openAction({ ...record, id: row.id, label: row.label, outcome: record.outcome || state, phase: row.phase })}`,
+            actions: `${retry}${secondStepButton(record, row.id)}${openAction({ ...record, id: row.id, label: row.label, outcome: record.outcome || state, phase: row.phase })}`,
         });
     }
     for (const item of mine) {
@@ -52463,10 +52521,30 @@ function collectTaskCards() {
             draftId: item.draftId || '',
             detail: item.kind === 'recovery' ? '自动重试未完成部分' : '当前聊天 · 串行队列',
             at: 0,
-            actions: item.status === 'done' || item.status === 'failed' ? openAction({ id: '', mode: item.mode, pageId: item.pageId, label: item.label, outcome: item.status }) : '',
+            actions: item.status === 'failed'
+                ? `${failedRetryHtml(item.kind === 'recovery' || item.draftId
+                    ? { kind: item.kind, mode: item.mode, pageId: item.pageId, draftId: item.draftId, label: item.label }
+                    : { queueRoute: item.route, queueId: item.id })}${openAction({ id: '', mode: item.mode, pageId: item.pageId, label: item.label, outcome: item.status })}`
+                : item.status === 'done' ? openAction({ id: '', mode: item.mode, pageId: item.pageId, label: item.label, outcome: item.status }) : '',
         });
     }
+    pushMissingArchiveRecovery(cards);
     return cards.sort((left, right) => (CARD_RANK[left.state] ?? 9) - (CARD_RANK[right.state] ?? 9) || right.at - left.at);
+}
+
+function pushMissingArchiveRecovery(cards) {
+    const add = (summary, profile) => {
+        if (!summary || summary.onlyArchivedDrafts === true || summary.capacityBlocked === true) return;
+        const label = profile ? '档案简介' : '聊天经历整理';
+        if (cards.some(card => card.label === label && card.state !== 'done' && card.state !== 'cancelled' && String(card.actions || '').includes('data-rmt-archive-'))) return;
+        const retry = failedRetryHtml({ kind: profile ? 'archive-profile' : 'archive-import', label, ...archiveRetryFlags(profile ? 'archive-profile' : 'archive-import') });
+        if (!retry) return;
+        cards.push({ state: 'failed', label, detail: summary.notice || '这次没有完成', at: 0, actions: retry });
+    };
+    try {
+        add(archive_repository.getCurrentArchiveImportRecoverySummary(), false);
+        add(archive_repository.getCurrentArchiveProfileRecoverySummary(), true);
+    } catch { /* 读不到草稿时，已记下的失败任务仍按自己的重试按钮显示。 */ }
 }
 
 function liveTaskStripHtml(active, waiting) {
@@ -52706,6 +52784,19 @@ function handleTaskCenterAction(action, actionEl) {
         cancelQueuedItem(actionEl?.dataset?.rmtQueueId || '');
         return;
     }
+    if (action === 'task-retry-queue') {
+        const item = queue.find(row => row.id === (actionEl?.dataset?.rmtQueueId || '') && row.status === 'failed' && row.route);
+        if (!item || item.scope !== currentScope()) return;
+        if (queue.some(row => row !== item && row.scope === item.scope && row.route === item.route && (row.status === 'queued' || row.status === 'running'))) {
+            globalThis.toastr?.info?.('这项已经在队列里。', '心迹回廊');
+            return;
+        }
+        item.status = 'queued';
+        item.attached = false;
+        refreshTaskCenterView();
+        void pumpQueue();
+        return;
+    }
     if (action === 'task-clear-done') {
         let queueRemoved = 0;
         for (let index = queue.length - 1; index >= 0; index -= 1) {
@@ -52859,6 +52950,7 @@ __m_ui_taskCenter_js.settleQueuedItem = settleQueuedItem;
 __m_ui_taskCenter_js.enqueueSelectedModes = enqueueSelectedModes;
 __m_ui_taskCenter_js.ensureTaskCenterChrome = ensureTaskCenterChrome;
 __m_ui_taskCenter_js.hideTaskCenter = hideTaskCenter;
+__m_ui_taskCenter_js.failedTaskRetrySpec = failedTaskRetrySpec;
 __m_ui_taskCenter_js.liveTaskStripHtml = liveTaskStripHtml;
 __m_ui_taskCenter_js.syncLiveTaskStrip = syncLiveTaskStrip;
 __m_ui_taskCenter_js.syncTaskCenterChrome = syncTaskCenterChrome;
@@ -56922,9 +57014,12 @@ function overlayClickRecordTargets(event) {
         draftId: recoveryButton.dataset.rmtRecoveryDraftId || '', pageId: recoveryButton.dataset.rmtRecoveryPageId || '',
     }), { label: '正在继续…' });
     const archiveRecoveryButton = event.target.closest?.('[data-rmt-archive-recovery]');
-    if (archiveRecoveryButton) return void recovery_action.runRecoveryAction(archiveRecoveryButton, recoveryButtonKey('archive-retry', archiveRecoveryButton, archiveRecoveryButton.dataset.rmtArchiveRecovery), () => (archiveRecoveryButton.dataset.rmtArchiveRecovery === 'profile'
-        ? archive_repository.rewriteCurrentArchiveVerdict({ draftId: archiveRecoveryButton.dataset.rmtArchiveRecoveryDraftId || '' })
-        : archive_repository.continueCurrentArchiveImport({ draftId: archiveRecoveryButton.dataset.rmtArchiveRecoveryDraftId || '' })), { label: '正在继续…' });
+    if (archiveRecoveryButton) return void recovery_action.runRecoveryAction(archiveRecoveryButton, recoveryButtonKey('archive-retry', archiveRecoveryButton, archiveRecoveryButton.dataset.rmtArchiveRecovery), async () => {
+        const result = archiveRecoveryButton.dataset.rmtArchiveRecovery === 'profile'
+            ? await archive_repository.rewriteCurrentArchiveVerdict({ draftId: archiveRecoveryButton.dataset.rmtArchiveRecoveryDraftId || '' })
+            : await archive_repository.continueCurrentArchiveImport({ draftId: archiveRecoveryButton.dataset.rmtArchiveRecoveryDraftId || '' });
+        if (result?.status === 'blocked') globalThis.toastr?.info?.('没有可继续的整理草稿，这次没有重新请求。正式档案还在。', '心迹回廊');
+    }, { label: '正在继续…' });
     const expandedCgButton = event.target.closest?.('[data-rmt-expanded-cg]');
     if (expandedCgButton) return void expanded_cg_view.handleExpandedCgButton(expandedCgButton);
     const bedtimeButton = event.target.closest?.('[data-rmt-bedtime]');
@@ -57216,7 +57311,7 @@ function overlayArchiveActions(actionEl, action) {
     if (action === 'travel-dialogue-prev') return ui_travelView.travelDialogueStep(-1);
     if (action === 'travel-dialogue-next') return ui_travelView.travelDialogueStep(1);
     if (action === 'travel-dialogue-replay') return ui_travelView.replayTravelDialogue();
-    if (action === 'tasks' || action === 'task-center-close' || action === 'task-cancel' || action === 'task-cancel-current' || action === 'task-open' || action === 'task-second-step' || action === 'task-queue-remove' || action === 'task-clear-done' || action === 'queue-selected' || action === 'generate-together' || action === 'merged-repair' || action === 'merged-resave' || ['merged-discard', 'merged-new', 'merged-export', 'merged-export-legacy', 'merged-discard-legacy'].includes(action)) {
+    if (action === 'tasks' || action === 'task-center-close' || action === 'task-cancel' || action === 'task-cancel-current' || action === 'task-open' || action === 'task-second-step' || action === 'task-queue-remove' || action === 'task-retry-queue' || action === 'task-clear-done' || action === 'queue-selected' || action === 'generate-together' || action === 'merged-repair' || action === 'merged-resave' || ['merged-discard', 'merged-new', 'merged-export', 'merged-export-legacy', 'merged-discard-legacy'].includes(action)) {
         return ui_taskCenter.handleTaskCenterAction(action, actionEl);
     }
     if (action === 'close') return closeArchiveOverlayFromUser();
@@ -63885,10 +63980,18 @@ function arrangeSettingsHome(body) {
         const more = document.createElement('details'); more.className = 'rmt-workspace-more';
         const title = document.createElement('summary'); title.textContent = '更多设置'; more.appendChild(title);
         const sectionBody = document.createElement('div'); sectionBody.className = 'rmt-workspace-more-body'; more.appendChild(sectionBody);
+        const front = ['auto', 'voice', 'api', 'reading', 'image', 'theme'];
         for (const card of [...content.querySelectorAll(':scope > [data-rmt-settings-section]')]) {
-            if (!['api','theme','image','reading','voice'].includes(card.dataset.rmtSettingsSection)) sectionBody.appendChild(card);
+            if (!front.includes(card.dataset.rmtSettingsSection)) sectionBody.appendChild(card);
         }
         if (sectionBody.children.length) content.appendChild(more);
+        let cursor = content.firstChild;
+        for (const id of front) {
+            const card = content.querySelector(`:scope > [data-rmt-settings-section="${id}"]`);
+            if (!card) continue;
+            content.insertBefore(card, cursor);
+            cursor = card.nextSibling;
+        }
         const preferences = [...content.querySelectorAll(':scope > .rmt-workspace-preferences')];
         for (const duplicate of preferences.slice(1)) duplicate.remove();
         if (!preferences.length) {
@@ -72669,6 +72772,11 @@ function wizardEntry({ archivePresent = false, cardType = '', apiReady = false }
     };
 }
 
+// 已有正式档案时，向导不再走建档，也不为建档发请求。人物改过才另问要不要重建。
+function wizardSkipsArchiveStep({ archivePresent = false, cardChoiceDirty = false } = {}) {
+    return archivePresent === true && cardChoiceDirty !== true;
+}
+
 // 改过人物且已有档案时先问。同意才重建；不同意就留着旧档案。
 function archiveRebuildChoice({ cardChoiceDirty = false, archivePresent = false } = {}) {
     return cardChoiceDirty === true && archivePresent === true ? 'ask' : 'keep';
@@ -72742,6 +72850,7 @@ __m_autoMemory_wizardPlan_js.splitRequestPreview = splitRequestPreview;
 __m_autoMemory_wizardPlan_js.queueAfterItemFailure = queueAfterItemFailure;
 __m_autoMemory_wizardPlan_js.wizardResumeView = wizardResumeView;
 __m_autoMemory_wizardPlan_js.wizardEntry = wizardEntry;
+__m_autoMemory_wizardPlan_js.wizardSkipsArchiveStep = wizardSkipsArchiveStep;
 __m_autoMemory_wizardPlan_js.archiveRebuildChoice = archiveRebuildChoice;
 __m_autoMemory_wizardPlan_js.archiveActionAfterChoice = archiveActionAfterChoice;
 __m_autoMemory_wizardPlan_js.disableAutoMemoryPlan = disableAutoMemoryPlan;
@@ -72836,6 +72945,7 @@ const auto_memory_plan = __m_autoMemory_planStore_js;
 const wizard_plan = __m_autoMemory_wizardPlan_js;
 const core_autoUpdates = __m_core_autoUpdates_js;
 const core_cache = __m_core_cache_js;
+const core_constants = __m_core_constants_js;
 const core_chatReadRange = __m_core_chatReadRange_js;
 const core_context = __m_core_context_js;
 const core_independentApi = __m_core_independentApi_js;
@@ -72848,6 +72958,7 @@ const participant_picker = __m_ui_participantPicker_js;
 const ui_taskCenter = __m_ui_taskCenter_js;
 const ui_workspaceState = __m_ui_workspaceState_js;
 // 自动留忆向导挂在插件窗口里。关闭窗口不取消已经开始的建档或任务队列，也不锁酒馆输入框。
+
 
 
 
@@ -72975,12 +73086,32 @@ function apiConnectHtml() {
     return `<h2>先接上 API</h2><p>${core_text.esc(report.message)} ${core_text.esc(report.action)}</p><section class="rmt-auto-api"><div class="rmt-auto-api-modes" role="group" aria-label="API 连接方式"><button type="button" class="rmt-auto-api-mode${editor === 'profile' ? ' is-on' : ''}" data-rmt-auto-api-mode="profile" aria-pressed="${editor === 'profile' ? 'true' : 'false'}"><b>一键配置</b><small>读取酒馆当前连接</small></button><button type="button" class="rmt-auto-api-mode${editor === 'manual' ? ' is-on' : ''}" data-rmt-auto-api-mode="manual" aria-pressed="${editor === 'manual' ? 'true' : 'false'}"><b>手动配置</b><small>地址 · Key · 模型</small></button></div><p class="rmt-auto-api-note">${core_text.esc(capability.message)}</p><div class="rmt-auto-api-panel" data-rmt-auto-api-profile-panel ${editor === 'profile' ? '' : 'hidden'}><label class="rmt-auto-field"><span>连接</span><select data-rmt-auto-api-profile-id>${profileOptions}</select></label><div class="rmt-auto-api-row"><label class="rmt-auto-field"><span>模型</span><select data-rmt-auto-api-model>${modelOptions}</select></label><button type="button" class="rmt-btn" data-rmt-auto-api-model-refresh>刷新模型</button></div></div><div class="rmt-auto-api-panel" data-rmt-auto-api-manual-panel ${editor === 'manual' ? '' : 'hidden'}><label class="rmt-auto-field"><span>API 地址</span><input data-rmt-manual-api-base type="url" inputmode="url" placeholder="https://api.example.com/v1" value="${core_text.esc(settings.manualApiBaseUrl)}"></label><label class="rmt-auto-field"><span>API Key</span><span class="rmt-auto-api-row"><input data-rmt-manual-api-key type="password" autocomplete="new-password" placeholder="${core_text.esc(keyPlaceholder)}"><button type="button" class="rmt-btn" data-rmt-auto-api-key-clear>清除 Key</button></span></label><div class="rmt-auto-api-row"><label class="rmt-auto-field"><span>模型 ID</span><input data-rmt-manual-api-model type="text" placeholder="例如 gpt-4.1" value="${core_text.esc(settings.manualApiModel)}">${manualModels.length ? `<select data-rmt-manual-api-models>${manualOptions}</select>` : ''}</label><button type="button" class="rmt-btn" data-rmt-auto-api-manual-refresh>拉取模型</button></div><button type="button" class="rmt-btn rmt-auto-api-save" data-rmt-manual-api-save>保存并使用</button><p data-rmt-manual-save-status role="status">填写后会保存到本机，不随档案导出。</p></div></section>`;
 }
 
+function archivePresentNow(context) {
+    try { return !!archive_repository.getImportedMemory(context); }
+    catch { return false; }
+}
+
+function shouldSkipArchive(context) {
+    return wizard_plan.wizardSkipsArchiveStep({
+        archivePresent: archivePresentNow(context),
+        cardChoiceDirty: draft?.cardChoiceDirty === true,
+    });
+}
+
 function previewHtml(context) {
     const scan = sourceScan(context);
     const routes = wizard_plan.firstQueueRoutes(draft, queueableIds());
     const split = wizard_plan.splitRequestPreview(scan.estimate, routes);
     const moduleLines = split.moduleEstimates.length ? split.moduleEstimates.map(item => `<li>${core_text.esc(item.title)}：${core_text.esc(item.estimate)}</li>`).join('') : '<li>这次不生成模块。</li>';
-    return `<p>建档请求和模块请求分开计算。</p><p>建档预计：聊天 ${split.chatRequests} 次，外部摘要 ${split.externalRequests} 次，合计 ${split.archiveRequests} 次。这次${draft.doArchive ? '会' : '不会'}发起建档。聊天可能分成 ${scan.estimate.checkpoints} 个检查点，长聊天不会只调用一次。</p>${scan.unknownExternal ? '<p>还有未扫描的外部来源，上面的次数不含它们。</p>' : ''}<p>首次模块：${split.moduleCount} 项，和建档次数不是同一笔。</p><ul>${moduleLines}</ul><p>${core_text.esc(scan.preview.label)}</p>`;
+    const chunkWan = Math.max(1, Math.round(core_constants.IMPORT_CHUNK_CHARS / 10000));
+    const present = archivePresentNow(context);
+    if (shouldSkipArchive(context)) draft.doArchive = false;
+    const archiveText = draft.doArchive
+        ? `<p>这次会建档。聊天正文大约每 ${chunkWan} 万字请求 1 次，所以这次聊天是 ${split.chatRequests} 次，外部摘要 ${split.externalRequests} 次。这只算建档，不会按每个模块再乘一遍。聊天可能分成 ${scan.estimate.checkpoints} 个检查点。</p>`
+        : present
+            ? '<p>当前聊天已经有档案，这次跳过建档，不会为建档再请求。</p>'
+            : '<p>这次不建档，也不会为建档再请求。</p>';
+    return `<p>建档请求和模块请求分开计算。</p>${archiveText}${scan.unknownExternal ? '<p>还有未扫描的外部来源，上面的次数不含它们。</p>' : ''}<p>首次模块：${split.moduleCount} 项，和建档次数不是同一笔。</p><ul>${moduleLines}</ul><p>${core_text.esc(scan.preview.label)}</p>`;
 }
 
 function pageHtml(context) {
@@ -72998,12 +73129,33 @@ function pageHtml(context) {
     if (name === 'archive') return `<h2>建档预计</h2>${previewHtml(context)}<label class="rmt-settings-check"><input type="checkbox" data-rmt-auto-memory-archive ${draft.doArchive ? 'checked' : ''}><span>这次整理档案</span></label>`;
     if (name === 'first') {
         const choices = cards().filter(item => item.queueable).map(item => `<label class="rmt-auto-pick"><input type="checkbox" data-rmt-auto-memory-first="${core_text.esc(item.id)}" ${draft.firstModuleIds.includes(item.id) ? 'checked' : ''} ${draft.skipFirst || draft.archiveOnly ? 'disabled' : ''}><span><b>${core_text.esc(item.title)}</b><small>生成次数：${core_text.esc(item.requestPlain)}</small></span></label>`).join('');
-        return `<h2>首次生成</h2><p>可以跳过，也可以多选后放进现有任务中心。一项失败不会撤销其他项。深层页面仍从自己的页面手动生成。</p><label class="rmt-settings-check"><input type="checkbox" data-rmt-auto-memory-skip ${draft.skipFirst ? 'checked' : ''}><span>跳过全部首次生成</span></label><label class="rmt-settings-check"><input type="checkbox" data-rmt-auto-memory-archive-only ${draft.archiveOnly ? 'checked' : ''}><span>只建档</span></label><div class="rmt-auto-picks">${choices}</div>`;
+        const archiveOnly = archivePresentNow(context) ? '' : `<label class="rmt-settings-check"><input type="checkbox" data-rmt-auto-memory-archive-only ${draft.archiveOnly ? 'checked' : ''}><span>只建档</span></label>`;
+        return `<h2>首次生成</h2><p>可以跳过，也可以多选后放进现有任务中心。一项失败不会撤销其他项。深层页面仍从自己的页面手动生成。</p><label class="rmt-settings-check"><input type="checkbox" data-rmt-auto-memory-skip ${draft.skipFirst ? 'checked' : ''}><span>跳过全部首次生成</span></label>${archiveOnly}<div class="rmt-auto-picks">${choices}</div>`;
     }
-    return `<h2>确认后在后台执行</h2>${previewHtml(context)}<p>保存成功后才会建档或排队。关闭这个窗口不会取消已经开始的任务，聊天输入也不会被锁住。</p><button type="button" class="rmt-btn" data-rmt-auto-memory-save>保存并开始</button>`;
+    const archiveNote = shouldSkipArchive(context) ? '保存成功后才会排队。这次不建档。' : '保存成功后才会建档或排队。';
+    return `<h2>确认后在后台执行</h2>${previewHtml(context)}<p>${archiveNote}关闭这个窗口不会取消已经开始的任务，聊天输入也不会被锁住。</p><button type="button" class="rmt-btn" data-rmt-auto-memory-save>保存并开始</button>`;
+}
+
+function visibleWizardSteps(context) {
+    return wizard_plan.WIZARD_STEPS.filter(name => !(name === 'archive' && shouldSkipArchive(context)));
+}
+
+function moveWizardStep(delta, context) {
+    const steps = wizard_plan.WIZARD_STEPS;
+    let next = step;
+    do {
+        next += delta;
+        if (next < 0 || next >= steps.length) return;
+    } while (steps[next] === 'archive' && shouldSkipArchive(context));
+    if (steps[next] !== 'archive') draft.doArchive = shouldSkipArchive(context) ? false : draft.doArchive;
+    step = next;
 }
 
 function render(context) {
+    if (draft && shouldSkipArchive(context)) draft.doArchive = false;
+    if (!showingSummary && wizard_plan.WIZARD_STEPS[step] === 'archive' && shouldSkipArchive(context)) {
+        if (step < wizard_plan.WIZARD_STEPS.length - 1) step += 1;
+    }
     const body = ui_overlay.bodyEl();
     if (!body) return false;
     ui_overlay.openOverlay();
@@ -73012,10 +73164,12 @@ function render(context) {
     ui_overlay.setRegenerateVisible(false);
     ui_overlay.setManageVisible(false);
     const resume = showingSummary ? wizard_plan.wizardResumeView(auto_memory_plan.readAutoMemoryMetadata(context.chatMetadata), archive_repository.getCurrentArchiveImportRecoverySummary(context)) : { completed: false };
+    const shownSteps = visibleWizardSteps(context);
+    const shownIndex = Math.max(0, shownSteps.indexOf(wizard_plan.WIZARD_STEPS[step]));
     const inner = resume.completed
         ? `<h2>向导已经保存</h2><p>间隔 ${resume.intervalFloors} 楼。会自动生成 ${cards().filter(item => item.autoEligible && item.inDrawPool && !resume.excludedModuleIds.includes(item.id)).length} 项，已排除 ${resume.excludedModuleIds.length} 项。每份回忆都会带上成就。</p><p>${resume.archiveStillRunning ? '建档还在原来的整理流程里，可以关闭窗口继续聊天。' : '刷新后这份设置还在。任务中心的队列不会在刷新后自动重发。'}</p><p>到了间隔会检查新记忆。这一段聊天会暂停原来的按模块自动更新；设置里可以恢复那些开关。</p><button type="button" class="rmt-btn" data-rmt-auto-memory-edit>重新设置</button>`
         : `${pageHtml(context)}<p><button type="button" class="rmt-btn" data-rmt-auto-memory-prev ${step === 0 ? 'disabled' : ''}>上一步</button><button type="button" class="rmt-btn" data-rmt-auto-memory-next ${step >= wizard_plan.WIZARD_STEPS.length - 1 ? 'disabled' : ''}>下一步</button></p>`;
-    body.innerHTML = `<main class="rmt-home" data-rmt-auto-memory-root><p>第 ${showingSummary ? wizard_plan.WIZARD_STEPS.length : step + 1} / ${wizard_plan.WIZARD_STEPS.length} 步</p>${inner}<p><button type="button" class="rmt-btn" data-rmt-auto-memory-home>返回设置</button><button type="button" class="rmt-btn" data-rmt-auto-memory-close>关闭窗口，任务继续</button></p><p data-rmt-auto-memory-status role="status"></p></main>`;
+    body.innerHTML = `<main class="rmt-home" data-rmt-auto-memory-root><p>第 ${showingSummary ? shownSteps.length : shownIndex + 1} / ${shownSteps.length} 步</p>${inner}<p><button type="button" class="rmt-btn" data-rmt-auto-memory-home>返回设置</button><button type="button" class="rmt-btn" data-rmt-auto-memory-close>关闭窗口，任务继续</button></p><p data-rmt-auto-memory-status role="status"></p></main>`;
     if (body.dataset.rmtAutoMemoryBound !== '1') {
         body.dataset.rmtAutoMemoryBound = '1';
         body.addEventListener('click', onClick);
@@ -73129,6 +73283,7 @@ async function saveAndStart(context) {
     let archiveNote = '';
     const cardDirty = draft.cardChoiceDirty === true;
     const archivePresent = !!archive_repository.getImportedMemory(context);
+    if (wizard_plan.wizardSkipsArchiveStep({ archivePresent, cardChoiceDirty: cardDirty })) draft.doArchive = false;
     if (cardDirty || draft.doArchive) {
         try {
             if (draft.cardType === 'multiple') {
@@ -73305,7 +73460,12 @@ function onChange(event) {
     if (event.target.matches?.('[data-rmt-auto-memory-skip]')) draft.skipFirst = event.target.checked === true;
     if (event.target.matches?.('[data-rmt-auto-memory-archive-only]')) {
         draft.archiveOnly = event.target.checked === true;
-        if (draft.archiveOnly) { draft.doArchive = true; draft.skipFirst = true; }
+        if (draft.archiveOnly) {
+            draft.skipFirst = true;
+            let context;
+            try { context = liveContext(); } catch { context = null; }
+            if (!context || !archivePresentNow(context)) draft.doArchive = true;
+        }
     }
 }
 
@@ -73328,10 +73488,10 @@ function onClick(event) {
         render(context);
         return;
     }
-    if (event.target.closest?.('[data-rmt-auto-memory-prev]')) { if (step > 0) step -= 1; render(context); return; }
+    if (event.target.closest?.('[data-rmt-auto-memory-prev]')) { moveWizardStep(-1, context); render(context); return; }
     if (event.target.closest?.('[data-rmt-auto-memory-next]')) {
         if (!stepReady(context)) { status(wizard_plan.WIZARD_STEPS[step] === 'interval' ? wizard_plan.normalizeInterval(draft.intervalFloors).message : '这一步还没完成。'); return; }
-        if (step < wizard_plan.WIZARD_STEPS.length - 1) step += 1;
+        moveWizardStep(1, context);
         render(context);
         return;
     }
