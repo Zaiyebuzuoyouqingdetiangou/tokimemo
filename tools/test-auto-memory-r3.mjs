@@ -174,6 +174,10 @@ test('weights lower a recent hit and raise a long miss without restoring an excl
     });
     assert.deepEqual(ids, ['cabinet']);
     assert.deepEqual(draw.incrementalImportOptions(), { automatic: true });
+    assert.deepEqual(draw.incrementalImportOptions({ start: 55, end: 56 }), { automatic: true, floorWindow: { start: 55, end: 56 } });
+    assert.equal(gate.shouldRetryDueRound(snapshot({ enabled: true, nextDueFloor: 56 }), 56), true);
+    assert.equal(gate.shouldRetryDueRound(snapshot({ enabled: true, nextDueFloor: 56 }), 54), false);
+    assert.equal(gate.shouldRetryDueRound(snapshot({ enabled: false, nextDueFloor: 56 }), 56), false);
 });
 
 test('a corrupt plan is not rewritten and does not wake the runtime', () => {

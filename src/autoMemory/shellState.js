@@ -215,10 +215,8 @@ export function shellView(input = {}) {
     };
     const drawFloor = Math.floor(Number(input.drawFloor));
     const floorNow = Math.floor(Number(input.floor));
-    const planFinished = steps.length > 0 && steps.every(step => step?.status === 'completed');
-    // 拆过的旧信在后面的楼层让位给倒计时。还没拆、或还缺成就的信留着，设置里重写的这一份也能看见。
-    const unread = revealStatus === 'ready' || revealStatus === 'achievement_pending';
-    const staleLetter = planFinished && !unread && Number.isSafeInteger(drawFloor) && drawFloor > 0 && Number.isSafeInteger(floorNow) && floorNow > drawFloor;
+    // 旧信只钉在出信那一楼。后面的楼层让给倒计时或新抽，不要把 54 楼的信贴到 56 楼。
+    const staleLetter = Number.isSafeInteger(drawFloor) && drawFloor > 0 && Number.isSafeInteger(floorNow) && floorNow > drawFloor;
     const written = !staleLetter && complete && input.canOpen === true && !running;
     if (!staleLetter && complete && revealStatus === 'achievement_pending') {
         return { ...face, phase: 'achievement-pending', canRepairAchievement: true, title: '回忆先留着', detail: '成就还缺一笔。可以补一次，不必重写正文。' };

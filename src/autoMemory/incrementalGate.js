@@ -22,6 +22,12 @@ function floorIsDue(floor, nextDueFloor) {
     return Number.isSafeInteger(floor) && Number.isSafeInteger(nextDueFloor) && floor >= nextDueFloor;
 }
 
+export function shouldRetryDueRound(snapshot, floor) {
+    const plan = snapshot?.plan;
+    if (plan?.enabled !== true) return false;
+    return floorIsDue(floor, plan.nextDueFloor);
+}
+
 export function floorDecision({ enabled = false, floor = 0, interval = 0, nextDueFloor = null, modulePlan = null, activeTicket = null, inflightFloor = null, seenFloor = null } = {}) {
     if (enabled !== true) return { action: 'idle' };
     if (modulePlanOpen(modulePlan)) {

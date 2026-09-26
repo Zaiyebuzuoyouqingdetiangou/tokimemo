@@ -991,6 +991,8 @@ export function handleTaskCenterAction(action, actionEl) {
         }).then(result => {
             if (result?.action === 'wait' || result?.action === 'busy') globalThis.toastr?.info?.(waiting, '心迹回廊');
             else if (result?.action === 'idle') globalThis.toastr?.info?.('这一轮已经没有可以补的了。', '心迹回廊');
+            else if (result?.action === 'due-retry') globalThis.toastr?.info?.('这一楼到点了，正在重新抽签。', '心迹回廊');
+            else if (result?.action === 'failed') globalThis.toastr?.error?.(core_text.safeErrorSummary(result.error) || '这一次还是没写完。', '心迹回廊');
         }).catch(error => {
             console.warn('[HeartbeatMemories] floor recovery skipped', core_text.safeErrorDiagnostic(error));
             globalThis.toastr?.info?.('这次没能重试，请再点一次。', '心迹回廊');

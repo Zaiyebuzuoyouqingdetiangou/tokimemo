@@ -184,7 +184,7 @@ export async function importCurrentChatMemoryOperation({ fullRebuild = false, au
     if (!snapshot.chatId) throw new Error('无法识别当前聊天窗口 ID，请先保存或打开一个具体聊天。');
     if (!archiveInputAvailable(snapshot, external)) throw new Error('当前聊天窗口没有可用于创建档案的角色/用户消息或已绑定的外部历史。');
 
-    if (incrementalUpdate && !capturedInput && !restartImport) {
+    if (incrementalUpdate && !capturedInput && !restartImport && !(automatic && floorWindow)) {
         const oldChatFingerprint = archivedChatFingerprint(existing);
         if (!oldChatFingerprint || previousMessageCount > snapshot.totalMessages || snapshot.prefixFingerprint !== oldChatFingerprint
             || (existing?.fullSourceFingerprint && snapshot.fullPrefixFingerprint && snapshot.fullPrefixFingerprint !== existing.fullSourceFingerprint)) {

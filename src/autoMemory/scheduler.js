@@ -344,6 +344,7 @@ async function runHostRound() {
             } catch (error) {
                 finishHostJob(hostJob, { action: 'failed' });
                 console.warn('[HeartbeatMemories] due floor skipped', core_text.safeErrorDiagnostic(error));
+                globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊');
             }
         } finally {
             inflightScopes.delete(scope);
@@ -446,18 +447,32 @@ export async function fillFloorGap() {
     }
 }
 
+function currentPlanFloor(context, latestFloor) {
+    const chat = Array.isArray(context?.chat) ? context.chat : [];
+    return latestFloor === true ? auto_memory_floor.assistantFloorCount(chat) : chat.length;
+}
+
 function queueFloorRecovery(kind) {
     floorRecovery = kind;
     return { action: 'wait' };
+}
+
+async function retryDueFloor(context) {
+    const scope = core_context.chatScopeKey(context);
+    handledFloors.delete(scope);
+    await runHostRound();
+    return { action: 'due-retry' };
 }
 
 export async function completeFloorRound() {
     const context = core_context.currentCharacterGuard();
     if (redoInflight) return { action: 'busy' };
     if (storyStillWriting(context)) return queueFloorRecovery('complete');
+    const latest = core_settings.getPluginSettings().autoMemoryLatestFloor === true;
+    const snapshot = auto_memory_plan.readAutoMemoryMetadata(context.chatMetadata);
+    if (auto_memory_gate.shouldRetryDueRound(snapshot, currentPlanFloor(context, latest))) return retryDueFloor(context);
     const rewritten = await rerollOwnedFloor(null);
     if (rewritten) return { action: 'rerolled' };
-    const snapshot = auto_memory_plan.readAutoMemoryMetadata(context.chatMetadata);
     if (snapshot?.modulePlan?.steps?.length) return resumeFloorPlan();
     return regenerateCurrentMemory({ mode: 'keep' });
 }
@@ -466,6 +481,9 @@ export async function retryFloorRound() {
     const context = core_context.currentCharacterGuard();
     if (redoInflight) return { action: 'busy' };
     if (storyStillWriting(context)) return queueFloorRecovery('redo');
+    const latest = core_settings.getPluginSettings().autoMemoryLatestFloor === true;
+    const snapshot = auto_memory_plan.readAutoMemoryMetadata(context.chatMetadata);
+    if (auto_memory_gate.shouldRetryDueRound(snapshot, currentPlanFloor(context, latest))) return retryDueFloor(context);
     const rewritten = await rerollOwnedFloor(null);
     if (rewritten) return { action: 'rerolled' };
     return regenerateCurrentMemory({ mode: 'keep' });
