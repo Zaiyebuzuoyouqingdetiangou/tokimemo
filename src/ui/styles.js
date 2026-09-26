@@ -18,6 +18,8 @@ import * as css_roomMotifsItemsCss from './css/roomMotifsItemsCss.js';
 import * as css_phoneMobileCss from './css/phoneMobileCss.js';
 import * as css_calendarCss from './css/calendarCss.js';
 import * as css_heartProfileTravelCss from './css/heartProfileTravelCss.js';
+import * as ui_autoMemoryWizardStyles from './autoMemoryWizardStyles.js';
+import * as ui_heartEnvelope from './heartEnvelope.js';
 
 export function participantPickerCss() {
     const root = '#' + core_constants.OVERLAY_ID;
@@ -186,6 +188,11 @@ export function ensureSettingsStyles() {
 }
 `;
     style.textContent += ui_themeSurfaces.structuralThemeCss('#' + core_constants.SETTINGS_ID);
+    style.textContent += ui_heartEnvelope.heartEnvelopePickerCss('#' + core_constants.SETTINGS_ID);
+    style.textContent += `
+#${core_constants.SETTINGS_ID} [data-rmt-settings-section="auto"] .rmt-settings-section-body > :is(p, small){font-size:14px!important;line-height:1.65!important;margin:0}
+#${core_constants.OVERLAY_ID} #${core_constants.SETTINGS_ID} [data-rmt-settings-section="auto"] .rmt-settings-section-body > :is(p, small){font-size:14px!important;line-height:1.65!important;margin:0}
+`;
     style.textContent += `
 #${core_constants.SETTINGS_ID}_launcher{padding:16px;border:1px solid var(--SmartThemeBorderColor,#cbdce6);border-radius:14px;color:var(--SmartThemeBodyColor,#334155);background:var(--SmartThemeBlurTintColor,#fff);line-height:1.6}
 #${core_constants.SETTINGS_ID}_launcher b{font-size:16px}
@@ -331,6 +338,8 @@ export function ensureStyles() {
 }
 `;
     style.textContent += homeAndReadingCss();
+    style.textContent += ui_autoMemoryWizardStyles.wizardCss('#' + core_constants.OVERLAY_ID);
+    style.textContent += ui_heartEnvelope.heartEnvelopePickerCss('#' + core_constants.OVERLAY_ID);
     style.textContent += participantPickerCss();
     style.textContent += ui_immersionStyles.immersionCss('#' + core_constants.OVERLAY_ID);
     style.textContent += ui_readingStyles.readingCss('#' + core_constants.OVERLAY_ID);

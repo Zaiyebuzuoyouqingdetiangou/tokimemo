@@ -6,7 +6,6 @@ import * as auto_memory_plan from '../autoMemory/planStore.js';
 import * as wizard_plan from '../autoMemory/wizardPlan.js';
 import * as core_autoUpdates from '../core/autoUpdates.js';
 import * as core_cache from '../core/cache.js';
-import * as core_constants from '../core/constants.js';
 import * as core_chatReadRange from '../core/chatReadRange.js';
 import * as core_context from '../core/context.js';
 import * as core_independentApi from '../core/independentApi.js';
@@ -97,26 +96,82 @@ function stepReady(context) {
     return true;
 }
 
-function requestLine(item) {
-    return `单次回忆调用 API：${item.requestPlain}`;
+const STEP_TITLES = Object.freeze({
+    api: '接上 API',
+    card: '单人还是多人',
+    people: '人物名单',
+    sources: '读取范围',
+    image: 'CG 生图',
+    archive: '建档预计',
+    modules: '留下哪些回忆',
+    offer: '要不要自动留忆',
+    interval: '自动间隔',
+    run: '确认并开始',
+});
+
+const MODULE_ICON_PATH = Object.freeze({
+    album: 'M4 6h16v13H4z M8 6V4h8v2 M7 11h10 M7 14h6',
+    adv: 'M5 5h14v14H5z M8 9h8 M8 12h8 M8 15h5',
+    room: 'M4 11 12 4 20 11 V20 H4z M10 20v-6h4v6',
+    items: 'M4 8h16v11H4z M8 8V5h8v3',
+    phone: 'M8 3h8v18H8z M11 18h2',
+    inbox: 'M3 8h18v11H3z M3 8l9 6 9-6',
+    cabinet: 'M4 4h16v16H4z M12 4v16 M4 12h16',
+    travel: 'M4 16c4-8 12-8 16 0 M12 8v3',
+    ending: 'M6 4h9l3 3v13H6z M15 4v3h3',
+    calendar: 'M5 6h14v13H5z M5 10h14 M8 4v4 M16 4v4',
+    relations: 'M8 8a3 3 0 1 0 .1 0 M16 8a3 3 0 1 0 .1 0 M8 16a3 3 0 1 0 .1 0 M8 11v2',
+    heart: 'M12 19s-7-4.4-7-9a4 4 0 0 1 7-2 4 4 0 0 1 7 2c0 4.6-7 9-7 9z',
+    butterfly: 'M12 12c-4-6-9-5-9 0s5 6 9 0z M12 12c4-6 9-5 9 0s-5 6-9 0z',
+    pastLives: 'M12 4a8 8 0 1 0 8 8 M12 8v5l3 2',
+    themeSong: 'M9 17a2 2 0 1 0 .1 0 V8l8-2v8',
+    bedtime: 'M6 16a6 6 0 0 1 10-4 4 4 0 0 0 2 8H6',
+    timeEcho: 'M12 6a6 6 0 1 0 6 6 M12 8v4l3 2',
+});
+
+function stepTitle(name) {
+    return STEP_TITLES[name] || '回忆向导';
 }
 
-function moduleIntro(item) {
-    return `<b>${core_text.esc(item.title)}</b><span>${core_text.esc(item.audience)}</span><small>${core_text.esc(requestLine(item))}</small>`;
+function requestTag(item) {
+    const plain = item.requestPlain || '';
+    if (plain.startsWith('2 次')) return '2 次请求·分两步';
+    if (plain.includes('没有新信')) return '1 次请求·没新信是 0 次';
+    if (plain.startsWith('1 次')) return '1 次请求';
+    return plain.replace(/。/g, '').slice(0, 24);
 }
 
-function moduleHtml({ autoPick = false } = {}) {
-    const rows = cards().filter(item => item.inDrawPool && item.autoEligible);
-    const notes = cards().filter(item => !(item.inDrawPool && item.autoEligible));
-    const allOn = rows.length > 0 && rows.every(item => wizard_plan.moduleSelected(draft, item.id));
-    const picks = rows.map(item => autoPick
-        ? `<label class="rmt-auto-pick"><input type="checkbox" data-rmt-auto-memory-prefer="${core_text.esc(item.id)}" ${wizard_plan.moduleSelected(draft, item.id) ? 'checked' : ''}><span>${moduleIntro(item)}</span></label>`
-        : `<article class="rmt-auto-note">${moduleIntro(item)}</article>`).join('');
-    const note = notes.map(item => `<article class="rmt-auto-note">${moduleIntro(item)}</article>`).join('');
-    const selectAll = autoPick ? `<label class="rmt-auto-all"><input type="checkbox" data-rmt-auto-memory-all ${allOn ? 'checked' : ''}><span>全选自动生成</span></label><p class="rmt-auto-lead">勾上的，到了间隔会从里面抽一份自动生成。取消勾选的，以后不会抽到。下面的次数是生成这一份回忆要调用 API 的次数。</p>` : '';
-    const firstPicks = rows.filter(item => item.queueable).map(item => `<label class="rmt-auto-pick"><input type="checkbox" data-rmt-auto-memory-first="${core_text.esc(item.id)}" ${draft.firstModuleIds.includes(item.id) ? 'checked' : ''}><span><b>${core_text.esc(item.title)}</b><small>${core_text.esc(requestLine(item))}</small></span></label>`).join('');
-    const first = autoPick ? '' : `<details class="rmt-auto-fold"><summary>这次要不要先生成</summary><p>可勾可不勾。勾上的会在向导结束时放进任务中心。不勾就留着，以后你自己打开页面再生成。</p><div class="rmt-auto-picks">${firstPicks}</div></details>`;
-    return `${selectAll}<div class="rmt-auto-picks">${picks}</div>${note}${first}`;
+function firstBlockReason(item) {
+    if (item.queueable) return '';
+    const spec = ui_workspaceState.WORKSPACE_ROUTES[item.id];
+    if (spec?.deep) return '要打开对应页面才能写，向导不能直接排进任务中心。';
+    if (spec?.manualOnly) return '只能手动打开，向导不能直接排进任务中心。';
+    return '向导没有单独的排队入口，这次不能先生成。';
+}
+
+function moduleIcon(id) {
+    const path = MODULE_ICON_PATH[id] || 'M6 4h9l3 3v13H6z';
+    return `<svg class="rmt-auto-card-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="${path}"/></svg>`;
+}
+
+function moduleHtml() {
+    const rows = cards().filter(item => item.id !== 'achievements' && item.inDrawPool);
+    const achievement = cards().find(item => item.id === 'achievements');
+    const selectable = rows.filter(item => item.autoEligible);
+    const allOn = selectable.length > 0 && selectable.every(item => wizard_plan.moduleSelected(draft, item.id));
+    const lead = `<label class="rmt-auto-all"><input type="checkbox" data-rmt-auto-memory-all ${allOn ? 'checked' : ''}><span>全选自动生成</span></label><p class="rmt-auto-lead">每张卡是一份回忆。标签上的次数，是生成这一份要调用 API 几次。写着「分两步」的，要请求两次，合在一起才是一份完整回忆。勾上「自动生成」，到了间隔会从里面抽一份；取消的以后不会抽到。「这次先生成」会在结束时放进任务中心，不勾就留着，以后自己打开页面再生成。</p>`;
+    const picks = rows.map(item => {
+        const autoOn = item.autoEligible && wizard_plan.moduleSelected(draft, item.id);
+        const autoDisabled = item.autoEligible ? '' : 'disabled';
+        const autoReason = item.autoEligible ? '' : (item.unavailableReason || '暂不可自动生成');
+        const block = firstBlockReason(item);
+        const firstOn = !block && draft.firstModuleIds.includes(item.id);
+        return `<article class="rmt-auto-card">${moduleIcon(item.id)}<div><h3>${core_text.esc(item.title)}</h3><p>${core_text.esc(item.audience)}</p><span class="rmt-auto-tag">${core_text.esc(requestTag(item))}</span></div><div class="rmt-auto-switches"><label class="rmt-auto-switch"><input type="checkbox" data-rmt-auto-memory-prefer="${core_text.esc(item.id)}" ${autoOn ? 'checked' : ''} ${autoDisabled}><span>自动生成</span></label><label class="rmt-auto-switch"><input type="checkbox" data-rmt-auto-memory-first="${core_text.esc(item.id)}" ${firstOn ? 'checked' : ''} ${block ? 'disabled' : ''}><span>这次先生成</span></label></div>${autoReason ? `<small class="rmt-auto-why">${core_text.esc(autoReason)}</small>` : ''}${block ? `<small class="rmt-auto-why">${core_text.esc(block)}</small>` : ''}</article>`;
+    }).join('');
+    const hint = achievement
+        ? `<p class="rmt-auto-achieve">${core_text.esc(achievement.audience)}</p>`
+        : '';
+    return `${lead}<div class="rmt-auto-cards">${picks}</div>${hint}`;
 }
 
 function apiEditorMode() {
@@ -160,16 +215,17 @@ function previewHtml(context) {
     const scan = sourceScan(context);
     const routes = wizard_plan.firstQueueRoutes(draft, queueableIds());
     const split = wizard_plan.splitRequestPreview(scan.estimate, routes);
-    const moduleLines = split.moduleEstimates.length ? split.moduleEstimates.map(item => `<li>${core_text.esc(item.title)}：${core_text.esc(item.estimate)}</li>`).join('') : '<li>这次不生成模块。</li>';
-    const chunkWan = Math.max(1, Math.round(core_constants.IMPORT_CHUNK_CHARS / 10000));
-    const present = archivePresentNow(context);
     if (shouldSkipArchive(context)) draft.doArchive = false;
-    const archiveText = draft.doArchive
-        ? `<p>这次会建档。聊天正文大约每 ${chunkWan} 万字请求 1 次，所以这次聊天是 ${split.chatRequests} 次，外部摘要 ${split.externalRequests} 次。这只算建档，不会按每个模块再乘一遍。聊天可能分成 ${scan.estimate.checkpoints} 个检查点。</p>`
+    const archiveRequests = draft.doArchive ? split.archiveRequests : 0;
+    const moduleRequests = split.moduleEstimates.reduce((sum, item) => sum + wizard_plan.plainRequestCount(item.estimate), 0);
+    const present = archivePresentNow(context);
+    const archiveNote = draft.doArchive
+        ? '建档次数和首次生成是分开算的。聊天正文按字数分段请求，不会按每个模块再乘一遍。'
         : present
-            ? '<p>当前聊天已经有档案，这次跳过建档，不会为建档再请求。</p>'
-            : '<p>这次不建档，也不会为建档再请求。</p>';
-    return `<p>建档请求和模块请求分开计算。</p>${archiveText}${scan.unknownExternal ? '<p>还有未扫描的外部来源，上面的次数不含它们。</p>' : ''}<p>首次模块：${split.moduleCount} 项，和建档次数不是同一笔。</p><ul>${moduleLines}</ul><p>${core_text.esc(scan.preview.label)}</p>`;
+            ? '当前聊天已经有档案，这次跳过建档，不会为建档再请求。'
+            : '这次不建档，也不会为建档再请求。';
+    const unknown = scan.unknownExternal ? '<small>还有未扫描的外部来源，上面的次数不含它们。</small>' : '';
+    return `<article class="rmt-auto-summary"><strong>建档 ${archiveRequests} 次 · 首次生成 ${split.moduleCount} 项 · 大约 ${archiveRequests + moduleRequests} 次请求</strong><small>${core_text.esc(archiveNote)}</small>${unknown}<small>${core_text.esc(scan.preview.label)}</small></article>`;
 }
 
 function pageHtml(context) {
@@ -189,16 +245,15 @@ function pageHtml(context) {
         const status = state.available ? '柏宝绘已连接 · 公开 API v1' : (state.reason || '未检测到柏宝绘公开 API v1。');
         return `<h2>CG 生图</h2><p>相簿、ADV、日常一格。和文字 API 不是同一个连接。这里配好后点下一步，不会现在出图。</p>${cg_format_ui.cgFormatControlHtml()}<label class="rmt-settings-field"><span>生图渠道</span><select class="text_pole" data-rmt-image-generation-provider aria-label="生图渠道"><option value="baibai-image">柏宝绘 · 公开 API v1</option></select></label><p role="status">${core_text.esc(status)}</p><p>柏宝绘需单独安装并配置出图渠道。只在点击绘制并确认后出图，失败不会自动换渠道。</p><p>先不配也可以。点下一步继续，跳过不会出图，也不挡住后面的回忆。</p>`;
     }
-    if (name === 'modules') return `<h2>这些是可以留下的回忆</h2><p>每一项是一份回忆。次数写的是生成这一份要调用 API 几次，不是会自动生成多少回。每生成一份，都会带上对应的成就。</p>${moduleHtml()}`;
+    if (name === 'modules') return `<h2>留下哪些回忆</h2>${moduleHtml()}`;
     if (name === 'offer') {
         const ending = shouldSkipArchive(context) ? '当前聊天已经有档案，结束时不会重新建档。' : '结束时会按前面的选择开始建档。';
-        return `<h2>要不要打开自动留忆？</h2><p>不开的话，向导到这里结束。你可以自己打开各个页面手动生成。以后在设置里也能打开或关闭自动留忆。</p><p>${ending}你在上面勾过「这次就生成」的，会放进任务中心。</p><button type="button" class="rmt-btn" data-rmt-auto-memory-offer="no">先不用，我自己生成</button><button type="button" class="rmt-btn" data-rmt-auto-memory-offer="yes">打开自动留忆</button>`;
+        return `<h2>要不要打开自动留忆？</h2><p>不开的话，向导到这里结束。你可以自己打开各个页面手动生成。以后在设置里也能打开或关闭自动留忆。</p><p>${ending}上一页勾过「这次先生成」的，会放进任务中心。勾过「自动生成」的，只有打开之后才会到间隔抽签。</p><button type="button" class="rmt-btn" data-rmt-auto-memory-offer="no">先不用，我自己生成</button><button type="button" class="rmt-btn" data-rmt-auto-memory-offer="yes">打开自动留忆</button>`;
     }
-    if (name === 'autoModules') return `<h2>哪些要自动生成</h2><p>再看一遍每份回忆是什么，以及单次要调用几次 API。勾上的才会进入自动生成。成就仍然跟着每份回忆，不用单独勾。</p>${moduleHtml({ autoPick: true })}`;
     if (name === 'interval') return `<h2>自动间隔</h2><p>默认 5 楼，只能填 1 到 1000 的整数。到了这个间隔会检查有没有新记忆。还没有可抽的模块时，不会为模块发请求。</p><label>每 <input type="number" min="1" max="1000" step="1" data-rmt-auto-memory-interval value="${draft.intervalFloors}"> 楼</label><p data-rmt-auto-memory-interval-error role="alert"></p>`;
     if (name === 'archive') return `<h2>建档预计</h2>${previewHtml(context)}<label class="rmt-settings-check"><input type="checkbox" data-rmt-auto-memory-archive ${draft.doArchive ? 'checked' : ''}><span>这次整理档案</span></label>`;
     const archiveNote = shouldSkipArchive(context) ? '保存成功后才会排队。这次不建档。' : '保存成功后才会建档或排队。';
-    return `<h2>确认后在后台执行</h2>${previewHtml(context)}<p>${archiveNote}关闭这个窗口不会取消已经开始的任务，聊天输入也不会被锁住。自动留忆以后可以在设置里关闭。</p><button type="button" class="rmt-btn" data-rmt-auto-memory-save>保存并开始</button>`;
+    return `<h2>确认后在后台执行</h2>${previewHtml(context)}<p>${archiveNote}关闭这个窗口不会取消已经开始的任务，聊天输入也不会被锁住。自动留忆以后可以在设置里关闭。</p>`;
 }
 
 function visibleWizardSteps(context) {
@@ -233,7 +288,7 @@ function render(context) {
     if (!body) return false;
     ui_overlay.openOverlay();
     const charName = core_text.normalizeText(context?.name2, 40) || '这个角色';
-    const onAuto = ['autoModules', 'interval', 'run'].includes(wizard_plan.WIZARD_STEPS[step]) || showingSummary;
+    const onAuto = ['interval', 'run'].includes(wizard_plan.WIZARD_STEPS[step]) || showingSummary;
     ui_overlay.topTitle(onAuto ? '心迹回廊 · 自动留忆' : `开始你和${charName}的回忆`);
     ui_overlay.setBackVisible(false);
     ui_overlay.setRegenerateVisible(false);
@@ -243,12 +298,23 @@ function render(context) {
     const shownIndex = Math.max(0, shownSteps.indexOf(wizard_plan.WIZARD_STEPS[step]));
     const atOffer = wizard_plan.WIZARD_STEPS[step] === 'offer';
     const atEnd = shownSteps[shownSteps.length - 1] === wizard_plan.WIZARD_STEPS[step];
+    const browsing = !guideDone && !resume.completed;
+    const stepName = wizard_plan.WIZARD_STEPS[step];
+    const showSave = browsing && stepName === 'run';
     const inner = guideDone
         ? `<h2>可以开始了</h2><p>自动留忆没有打开。你可以自己打开各个页面手动生成。以后在设置里也能打开或关闭自动留忆。</p><p>关闭这个窗口不会取消已经开始的建档或排队。</p>`
         : resume.completed
         ? `<h2>自动留忆已经打开</h2><p>间隔 ${resume.intervalFloors} 楼。会自动生成 ${cards().filter(item => item.autoEligible && item.inDrawPool && !resume.excludedModuleIds.includes(item.id)).length} 项，已排除 ${resume.excludedModuleIds.length} 项。每份回忆都会带上成就。</p><p>${resume.archiveStillRunning ? '建档还在原来的整理流程里，可以关闭窗口继续聊天。' : '刷新后这份设置还在。任务中心的队列不会在刷新后自动重发。'}</p><p>设置里可以关闭自动留忆。关闭后仍能手动生成。</p><button type="button" class="rmt-btn" data-rmt-auto-memory-edit>重新设置</button>`
-        : `${pageHtml(context)}<p><button type="button" class="rmt-btn" data-rmt-auto-memory-prev ${step === 0 ? 'disabled' : ''}>上一步</button>${atOffer ? '' : `<button type="button" class="rmt-btn" data-rmt-auto-memory-next ${atEnd ? 'disabled' : ''}>下一步</button>`}</p>`;
-    body.innerHTML = `<main class="rmt-home" data-rmt-auto-memory-root><p>第 ${showingSummary ? shownSteps.length : shownIndex + 1} / ${shownSteps.length} 步</p>${inner}<p><button type="button" class="rmt-btn" data-rmt-auto-memory-home>返回设置</button><button type="button" class="rmt-btn" data-rmt-auto-memory-close>关闭窗口，任务继续</button></p><p data-rmt-auto-memory-status role="status"></p></main>`;
+        : pageHtml(context);
+    const progressName = guideDone ? '可以开始了' : resume.completed ? '自动留忆已经打开' : stepTitle(stepName);
+    const progressIndex = browsing ? shownIndex : Math.max(0, shownSteps.length - 1);
+    const progressCurrent = Math.min(shownSteps.length || 1, progressIndex + 1);
+    const progressTotal = shownSteps.length || 1;
+    const progressWidth = Math.round((progressCurrent / progressTotal) * 100);
+    const prev = browsing ? `<button type="button" class="rmt-btn" data-rmt-auto-memory-prev ${step === 0 ? 'disabled' : ''}>上一步</button>` : '';
+    const next = browsing && !atOffer && !atEnd ? `<button type="button" class="rmt-btn" data-rmt-auto-memory-next>下一步</button>` : '';
+    const save = showSave ? `<button type="button" class="rmt-btn rmt-auto-save" data-rmt-auto-memory-save>保存并开始</button>` : '';
+    body.innerHTML = `<main data-rmt-auto-memory-root><div class="rmt-auto-scroll"><div class="rmt-home rmt-auto-page"><div class="rmt-auto-progress"><div class="rmt-auto-progress-track" role="progressbar" aria-valuemin="1" aria-valuemax="${progressTotal}" aria-valuenow="${progressCurrent}" aria-valuetext="${core_text.esc(progressName)}，第 ${progressCurrent} / ${progressTotal} 步"><span style="width:${progressWidth}%"></span></div><p><b>${core_text.esc(progressName)}</b><small>第 ${progressCurrent} / ${progressTotal} 步</small></p></div>${inner}</div></div><div class="rmt-auto-bar"><p data-rmt-auto-memory-status role="status"></p><div class="rmt-auto-bar-main">${prev}${next}${save}</div><div class="rmt-auto-bar-quiet"><button type="button" data-rmt-auto-memory-home>返回设置</button><button type="button" data-rmt-auto-memory-close>关闭窗口，任务继续</button></div></div></main>`;
     if (body.dataset.rmtAutoMemoryBound !== '1') {
         body.dataset.rmtAutoMemoryBound = '1';
         body.addEventListener('click', onClick);
@@ -526,7 +592,9 @@ function onChange(event) {
     }
     if (event.target.matches?.('[data-rmt-auto-memory-all]')) {
         draft = wizard_plan.preferenceSelectAll(draft, event.target.checked === true);
-        for (const input of root.querySelectorAll('[data-rmt-auto-memory-prefer]')) input.checked = event.target.checked === true;
+        for (const input of root.querySelectorAll('[data-rmt-auto-memory-prefer]')) {
+            if (!input.disabled) input.checked = event.target.checked === true;
+        }
         return;
     }
     const prefer = event.target.dataset?.rmtAutoMemoryPrefer;
@@ -612,7 +680,7 @@ function onClick(event) {
     if (offer === 'yes') {
         draft.wantAuto = true;
         guideDone = false;
-        step = wizard_plan.WIZARD_STEPS.indexOf('autoModules');
+        step = wizard_plan.WIZARD_STEPS.indexOf('interval');
         render(context);
         return;
     }

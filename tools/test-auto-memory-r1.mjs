@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import * as constants from '../src/core/constants.js';
+import * as envelopes from '../src/ui/heartEnvelope.js';
 import * as registry from '../src/autoMemory/moduleRegistry.js';
 import * as plans from '../src/autoMemory/planStore.js';
 import * as wizard from '../src/autoMemory/wizardPlan.js';
@@ -36,9 +37,25 @@ function metadataFrom(value) {
 }
 
 test('api check names the next action and interval stays an integer', () => {
-    assert.deepEqual(wizard.WIZARD_STEPS, ['api', 'card', 'people', 'sources', 'image', 'archive', 'modules', 'offer', 'autoModules', 'interval', 'run']);
+    assert.deepEqual(wizard.WIZARD_STEPS, ['api', 'card', 'people', 'sources', 'image', 'archive', 'modules', 'offer', 'interval', 'run']);
     assert.deepEqual(wizard.wizardVisibleSteps({ archivePresent: true, wantAuto: false }), ['api', 'card', 'people', 'sources', 'image', 'modules', 'offer']);
-    assert.equal(wizard.wizardVisibleSteps({ archivePresent: false, wantAuto: true }).includes('autoModules'), true);
+    assert.deepEqual(wizard.wizardVisibleSteps({ archivePresent: true, wantAuto: true }), ['api', 'card', 'people', 'sources', 'image', 'modules', 'offer', 'interval', 'run']);
+    assert.equal(wizard.wizardVisibleSteps({ archivePresent: false, wantAuto: true }).includes('autoModules'), false);
+    assert.equal(wizard.wizardVisibleSteps({ archivePresent: false, wantAuto: true }).includes('interval'), true);
+    assert.equal(wizard.plainRequestCount('2 次。两次合在一起才是一份完整回忆。'), 2);
+    assert.equal(wizard.plainRequestCount('1 次。没有新信就是 0 次。'), 1);
+    assert.equal(wizard.plainRequestCount('不用再单独请求。'), 0);
+    const sample = ['album', 'adv', 'inbox', 'travel', 'butterfly', 'heart']
+        .reduce((sum, id) => sum + wizard.plainRequestCount(registry.autoMemoryModuleById(id).requestPlain), 0);
+    assert.equal(sample, 11);
+    for (const id of constants.HEART_ENVELOPE_SKINS) {
+        const art = envelopes.heartEnvelopeSvg(id);
+        assert.match(art, /viewBox="0 0 280 190"/);
+        assert.match(art, /class="rmt-envelope"/);
+    }
+    const picker = envelopes.heartEnvelopePickerHtml('wax');
+    assert.equal((picker.match(/data-rmt-heart-envelope/g) || []).length, 6);
+    assert.match(picker, /value="wax" checked/);
     assert.equal(wizard.wizardVisibleSteps({ archivePresent: false, wantAuto: false }).includes('run'), false);
     assert.equal(wizard.inspectAutoMemoryApi({ mode: 'manual', manualReady: true }).ready, true);
     const manual = wizard.inspectAutoMemoryApi({ mode: 'manual', manualReady: false, manualMessage: '请填写手动 API 的模型 ID。' });

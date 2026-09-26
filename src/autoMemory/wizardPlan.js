@@ -3,8 +3,8 @@ import * as core_constants from '../core/constants.js';
 import * as auto_memory_registry from './moduleRegistry.js';
 import * as auto_memory_plan from './planStore.js';
 
-export const WIZARD_STEPS = Object.freeze(['api', 'card', 'people', 'sources', 'image', 'archive', 'modules', 'offer', 'autoModules', 'interval', 'run']);
-const WIZARD_AUTO_STEPS = Object.freeze(['autoModules', 'interval', 'run']);
+export const WIZARD_STEPS = Object.freeze(['api', 'card', 'people', 'sources', 'image', 'archive', 'modules', 'offer', 'interval', 'run']);
+const WIZARD_AUTO_STEPS = Object.freeze(['interval', 'run']);
 
 function count(value) {
     const number = Math.floor(Number(value));
@@ -125,6 +125,11 @@ export function firstQueueRoutes(draft, queueableIds = []) {
     if (!draft || draft.archiveOnly === true || draft.skipFirst === true) return [];
     const allowed = new Set(Array.isArray(queueableIds) ? queueableIds : []);
     return uniqueDrawIds(draft.firstModuleIds).filter(id => allowed.has(id));
+}
+
+export function plainRequestCount(text) {
+    const match = String(text || '').match(/(\d+)\s*次/);
+    return match ? Number(match[1]) : 0;
 }
 
 export function splitRequestPreview(estimate, routes) {

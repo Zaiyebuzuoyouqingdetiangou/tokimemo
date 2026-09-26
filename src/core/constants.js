@@ -226,6 +226,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
     autoSecondPass: false,
     autoMemoryLatestFloor: false,
     autoMemoryIntervalFloors: 5,
+    heartEnvelopeSkin: 'pink',
     creativeSupplementEnabled: false,
     creativeSupplement: '',
     imageGenerationProvider: 'baibai-image',
@@ -240,6 +241,8 @@ export const DEFAULT_SETTINGS = Object.freeze({
     // Applies only to newly model-generated derivative content. Never rewrite chat/archive evidence.
     bannedGeneratedPhrases: ['老子'],
 });
+
+export const HEART_ENVELOPE_SKINS = Object.freeze(['pink', 'wax', 'night', 'sakura', 'airmail', 'wash']);
 
 export const MODE = Object.freeze({
     BUTTERFLY: 'butterfly',

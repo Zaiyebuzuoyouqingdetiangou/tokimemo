@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
-// Source modules: 284
-// Source SHA-256: eb771b9cc9b5d3c8e87e6abbb03a7b8fb48bc20dc28beeff3e6e5ed094813f92
+// Source modules: 286
+// Source SHA-256: d94753ecd2e9948664fbad76e8dbabebf7224e1f6e1ffc5d5b7d79735b3f03d6
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -218,6 +218,7 @@ const __m_ui_archivePortal_js = Object.create(null);
 const __m_ui_autoMemoryCountdown_js = Object.create(null);
 const __m_ui_autoMemoryShell_js = Object.create(null);
 const __m_ui_autoMemoryWizard_js = Object.create(null);
+const __m_ui_autoMemoryWizardStyles_js = Object.create(null);
 const __m_ui_bedtimeView_js = Object.create(null);
 const __m_ui_butterflyView_js = Object.create(null);
 const __m_ui_calendarPrint_js = Object.create(null);
@@ -241,6 +242,7 @@ const __m_ui_floatingAvatarButton_js = Object.create(null);
 const __m_ui_generationCompletion_js = Object.create(null);
 const __m_ui_generationStatus_js = Object.create(null);
 const __m_ui_handJournalView_js = Object.create(null);
+const __m_ui_heartEnvelope_js = Object.create(null);
 const __m_ui_heartReaderState_js = Object.create(null);
 const __m_ui_heartView_js = Object.create(null);
 const __m_ui_homeView_js = Object.create(null);
@@ -7666,8 +7668,8 @@ const auto_memory_plan = __m_autoMemory_planStore_js;
 
 
 
-const WIZARD_STEPS = Object.freeze(['api', 'card', 'people', 'sources', 'image', 'archive', 'modules', 'offer', 'autoModules', 'interval', 'run']);
-const WIZARD_AUTO_STEPS = Object.freeze(['autoModules', 'interval', 'run']);
+const WIZARD_STEPS = Object.freeze(['api', 'card', 'people', 'sources', 'image', 'archive', 'modules', 'offer', 'interval', 'run']);
+const WIZARD_AUTO_STEPS = Object.freeze(['interval', 'run']);
 
 function count(value) {
     const number = Math.floor(Number(value));
@@ -7788,6 +7790,11 @@ function firstQueueRoutes(draft, queueableIds = []) {
     if (!draft || draft.archiveOnly === true || draft.skipFirst === true) return [];
     const allowed = new Set(Array.isArray(queueableIds) ? queueableIds : []);
     return uniqueDrawIds(draft.firstModuleIds).filter(id => allowed.has(id));
+}
+
+function plainRequestCount(text) {
+    const match = String(text || '').match(/(\d+)\s*次/);
+    return match ? Number(match[1]) : 0;
 }
 
 function splitRequestPreview(estimate, routes) {
@@ -7939,6 +7946,7 @@ __m_autoMemory_wizardPlan_js.preferenceSelectAll = preferenceSelectAll;
 __m_autoMemory_wizardPlan_js.preferenceUpdate = preferenceUpdate;
 __m_autoMemory_wizardPlan_js.normalizeInterval = normalizeInterval;
 __m_autoMemory_wizardPlan_js.firstQueueRoutes = firstQueueRoutes;
+__m_autoMemory_wizardPlan_js.plainRequestCount = plainRequestCount;
 __m_autoMemory_wizardPlan_js.splitRequestPreview = splitRequestPreview;
 __m_autoMemory_wizardPlan_js.queueAfterItemFailure = queueAfterItemFailure;
 __m_autoMemory_wizardPlan_js.wizardResumeView = wizardResumeView;
@@ -10423,11 +10431,23 @@ function selection(context, settings) {
         rows.push({ index, message, hidden });
         characters += text.length;
     }
-    const modeLabel = range.mode === 'all' ? '全部楼层' : range.mode === 'recent' ? `最近 ${range.recent} 楼` : '指定范围';
-    const boundsLabel = start ? `第 ${start}–${end} 楼` : '无匹配楼层';
+    const span = start ? end - start + 1 : 0;
+    const hiddenNote = range.includeHidden ? '含隐藏对话' : '不含隐藏对话';
+    const windowText = !start
+        ? ''
+        : range.mode === 'recent'
+            ? `最近 ${range.recent} 楼是第 ${start}–${end} 楼，共 ${span} 楼`
+            : range.mode === 'all'
+                ? `当前聊天全部 ${span} 楼（第 ${start}–${end} 楼）`
+                : `指定的第 ${start}–${end} 楼，共 ${span} 楼`;
+    const bodyText = !start
+        ? '没有匹配的楼层，读不到正文。'
+        : rows.length === span
+            ? `${windowText}。这 ${span} 楼都是能读的正文（你和角色的对话）。${hiddenNote}。`
+            : `${windowText}。这 ${span} 楼里有 ${rows.length} 条能读的正文（你和角色的对话），其余楼层空着或不是对话。${hiddenNote}。`;
     return { rows, preview: {
         totalFloors: chat.length, selectedFloors: rows.length, visibleCount, hiddenCount, characters, start, end,
-        label: `${modeLabel} · ${boundsLabel} · 读取 ${rows.length} 条正文 · ${range.includeHidden ? '含隐藏对话' : '不含隐藏对话'}`,
+        label: bodyText,
     } };
 }
 
@@ -10731,6 +10751,7 @@ const DEFAULT_SETTINGS = Object.freeze({
     autoSecondPass: false,
     autoMemoryLatestFloor: false,
     autoMemoryIntervalFloors: 5,
+    heartEnvelopeSkin: 'pink',
     creativeSupplementEnabled: false,
     creativeSupplement: '',
     imageGenerationProvider: 'baibai-image',
@@ -10745,6 +10766,8 @@ const DEFAULT_SETTINGS = Object.freeze({
     // Applies only to newly model-generated derivative content. Never rewrite chat/archive evidence.
     bannedGeneratedPhrases: ['老子'],
 });
+
+const HEART_ENVELOPE_SKINS = Object.freeze(['pink', 'wax', 'night', 'sakura', 'airmail', 'wash']);
 
 const MODE = Object.freeze({
     BUTTERFLY: 'butterfly',
@@ -10976,6 +10999,7 @@ __m_core_constants_js.SEASON_THEME_PALETTES = SEASON_THEME_PALETTES;
 __m_core_constants_js.NIGHT_THEME_PALETTE = NIGHT_THEME_PALETTE;
 __m_core_constants_js.DEFAULT_THEME_PALETTE = DEFAULT_THEME_PALETTE;
 __m_core_constants_js.DEFAULT_SETTINGS = DEFAULT_SETTINGS;
+__m_core_constants_js.HEART_ENVELOPE_SKINS = HEART_ENVELOPE_SKINS;
 __m_core_constants_js.MODE = MODE;
 __m_core_constants_js.MODE_LABEL = MODE_LABEL;
 __m_core_constants_js.MODE_TOKEN_CAPS = MODE_TOKEN_CAPS;
@@ -31120,6 +31144,7 @@ function getPluginSettings(context = core_context.getContext()) {
         autoSecondPass: settings.autoSecondPass === true,
         autoMemoryLatestFloor: settings.autoMemoryLatestFloor === true,
         autoMemoryIntervalFloors: normalizeAutoMemoryInterval(settings.autoMemoryIntervalFloors),
+        heartEnvelopeSkin: core_constants.HEART_ENVELOPE_SKINS.includes(settings.heartEnvelopeSkin) ? settings.heartEnvelopeSkin : 'pink',
         creativeSupplementEnabled: settings.creativeSupplementEnabled === true,
         creativeSupplement: creative_supplement.normalizeCreativeSupplement(settings.creativeSupplement),
         ttDisplayMode: settings.ttDisplayMode === true,
@@ -60941,9 +60966,11 @@ const core_text = __m_core_text_js;
 const ui_floor = __m_ui_chatFloorNav_js;
 const ui_reveal = __m_ui_memoryReveal_js;
 const room_layout = __m_modes_roomLayout_js;
+const ui_heartEnvelope = __m_ui_heartEnvelope_js;
 const ui_styles = __m_ui_styles_js;
 const ui_taskCenter = __m_ui_taskCenter_js;
 // 外置壳贴在角色楼层下面，点开才展开。档案没写完时不挂壳，也不显示建档进度。
+
 
 
 
@@ -61111,14 +61138,9 @@ function viewFor(context) {
 }
 
 function envelopeArt() {
-    return `<svg class="rmt-envelope" viewBox="0 0 280 190" aria-hidden="true">
-        <rect x="8" y="18" width="264" height="164" rx="22" fill="#f6c6d4"/>
-        <path d="M8 146 L140 86 L272 146 L272 160 Q272 182 250 182 L30 182 Q8 182 8 160 Z" fill="#f3b4c8"/>
-        <path d="M8 146 L140 86 L140 182 L30 182 Q8 182 8 160 Z" fill="#eea9c0"/>
-        <path d="M20 36 L260 36 L140 124 Z" fill="#fff2f5"/>
-        <path d="M20 36 L140 124 L140 36 Z" fill="#fde7ee"/>
-        <path d="M140 112c-15-13-34-26-34-43 0-12 9-21 21-21 7 0 13 4 13 4s6-4 13-4c12 0 21 9 21 21 0 17-19 30-34 43z" fill="#d64578"/>
-    </svg>`;
+    let skin = 'pink';
+    try { skin = core_settings.getPluginSettings().heartEnvelopeSkin; } catch { skin = 'pink'; }
+    return ui_heartEnvelope.heartEnvelopeSvg(skin);
 }
 
 function markup(view) {
@@ -61565,7 +61587,6 @@ const auto_memory_plan = __m_autoMemory_planStore_js;
 const wizard_plan = __m_autoMemory_wizardPlan_js;
 const core_autoUpdates = __m_core_autoUpdates_js;
 const core_cache = __m_core_cache_js;
-const core_constants = __m_core_constants_js;
 const core_chatReadRange = __m_core_chatReadRange_js;
 const core_context = __m_core_context_js;
 const core_independentApi = __m_core_independentApi_js;
@@ -61580,7 +61601,6 @@ const participant_picker = __m_ui_participantPicker_js;
 const ui_taskCenter = __m_ui_taskCenter_js;
 const ui_workspaceState = __m_ui_workspaceState_js;
 // 自动留忆向导挂在插件窗口里。关闭窗口不取消已经开始的建档或任务队列，也不锁酒馆输入框。
-
 
 
 
@@ -61677,26 +61697,82 @@ function stepReady(context) {
     return true;
 }
 
-function requestLine(item) {
-    return `单次回忆调用 API：${item.requestPlain}`;
+const STEP_TITLES = Object.freeze({
+    api: '接上 API',
+    card: '单人还是多人',
+    people: '人物名单',
+    sources: '读取范围',
+    image: 'CG 生图',
+    archive: '建档预计',
+    modules: '留下哪些回忆',
+    offer: '要不要自动留忆',
+    interval: '自动间隔',
+    run: '确认并开始',
+});
+
+const MODULE_ICON_PATH = Object.freeze({
+    album: 'M4 6h16v13H4z M8 6V4h8v2 M7 11h10 M7 14h6',
+    adv: 'M5 5h14v14H5z M8 9h8 M8 12h8 M8 15h5',
+    room: 'M4 11 12 4 20 11 V20 H4z M10 20v-6h4v6',
+    items: 'M4 8h16v11H4z M8 8V5h8v3',
+    phone: 'M8 3h8v18H8z M11 18h2',
+    inbox: 'M3 8h18v11H3z M3 8l9 6 9-6',
+    cabinet: 'M4 4h16v16H4z M12 4v16 M4 12h16',
+    travel: 'M4 16c4-8 12-8 16 0 M12 8v3',
+    ending: 'M6 4h9l3 3v13H6z M15 4v3h3',
+    calendar: 'M5 6h14v13H5z M5 10h14 M8 4v4 M16 4v4',
+    relations: 'M8 8a3 3 0 1 0 .1 0 M16 8a3 3 0 1 0 .1 0 M8 16a3 3 0 1 0 .1 0 M8 11v2',
+    heart: 'M12 19s-7-4.4-7-9a4 4 0 0 1 7-2 4 4 0 0 1 7 2c0 4.6-7 9-7 9z',
+    butterfly: 'M12 12c-4-6-9-5-9 0s5 6 9 0z M12 12c4-6 9-5 9 0s-5 6-9 0z',
+    pastLives: 'M12 4a8 8 0 1 0 8 8 M12 8v5l3 2',
+    themeSong: 'M9 17a2 2 0 1 0 .1 0 V8l8-2v8',
+    bedtime: 'M6 16a6 6 0 0 1 10-4 4 4 0 0 0 2 8H6',
+    timeEcho: 'M12 6a6 6 0 1 0 6 6 M12 8v4l3 2',
+});
+
+function stepTitle(name) {
+    return STEP_TITLES[name] || '回忆向导';
 }
 
-function moduleIntro(item) {
-    return `<b>${core_text.esc(item.title)}</b><span>${core_text.esc(item.audience)}</span><small>${core_text.esc(requestLine(item))}</small>`;
+function requestTag(item) {
+    const plain = item.requestPlain || '';
+    if (plain.startsWith('2 次')) return '2 次请求·分两步';
+    if (plain.includes('没有新信')) return '1 次请求·没新信是 0 次';
+    if (plain.startsWith('1 次')) return '1 次请求';
+    return plain.replace(/。/g, '').slice(0, 24);
 }
 
-function moduleHtml({ autoPick = false } = {}) {
-    const rows = cards().filter(item => item.inDrawPool && item.autoEligible);
-    const notes = cards().filter(item => !(item.inDrawPool && item.autoEligible));
-    const allOn = rows.length > 0 && rows.every(item => wizard_plan.moduleSelected(draft, item.id));
-    const picks = rows.map(item => autoPick
-        ? `<label class="rmt-auto-pick"><input type="checkbox" data-rmt-auto-memory-prefer="${core_text.esc(item.id)}" ${wizard_plan.moduleSelected(draft, item.id) ? 'checked' : ''}><span>${moduleIntro(item)}</span></label>`
-        : `<article class="rmt-auto-note">${moduleIntro(item)}</article>`).join('');
-    const note = notes.map(item => `<article class="rmt-auto-note">${moduleIntro(item)}</article>`).join('');
-    const selectAll = autoPick ? `<label class="rmt-auto-all"><input type="checkbox" data-rmt-auto-memory-all ${allOn ? 'checked' : ''}><span>全选自动生成</span></label><p class="rmt-auto-lead">勾上的，到了间隔会从里面抽一份自动生成。取消勾选的，以后不会抽到。下面的次数是生成这一份回忆要调用 API 的次数。</p>` : '';
-    const firstPicks = rows.filter(item => item.queueable).map(item => `<label class="rmt-auto-pick"><input type="checkbox" data-rmt-auto-memory-first="${core_text.esc(item.id)}" ${draft.firstModuleIds.includes(item.id) ? 'checked' : ''}><span><b>${core_text.esc(item.title)}</b><small>${core_text.esc(requestLine(item))}</small></span></label>`).join('');
-    const first = autoPick ? '' : `<details class="rmt-auto-fold"><summary>这次要不要先生成</summary><p>可勾可不勾。勾上的会在向导结束时放进任务中心。不勾就留着，以后你自己打开页面再生成。</p><div class="rmt-auto-picks">${firstPicks}</div></details>`;
-    return `${selectAll}<div class="rmt-auto-picks">${picks}</div>${note}${first}`;
+function firstBlockReason(item) {
+    if (item.queueable) return '';
+    const spec = ui_workspaceState.WORKSPACE_ROUTES[item.id];
+    if (spec?.deep) return '要打开对应页面才能写，向导不能直接排进任务中心。';
+    if (spec?.manualOnly) return '只能手动打开，向导不能直接排进任务中心。';
+    return '向导没有单独的排队入口，这次不能先生成。';
+}
+
+function moduleIcon(id) {
+    const path = MODULE_ICON_PATH[id] || 'M6 4h9l3 3v13H6z';
+    return `<svg class="rmt-auto-card-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="${path}"/></svg>`;
+}
+
+function moduleHtml() {
+    const rows = cards().filter(item => item.id !== 'achievements' && item.inDrawPool);
+    const achievement = cards().find(item => item.id === 'achievements');
+    const selectable = rows.filter(item => item.autoEligible);
+    const allOn = selectable.length > 0 && selectable.every(item => wizard_plan.moduleSelected(draft, item.id));
+    const lead = `<label class="rmt-auto-all"><input type="checkbox" data-rmt-auto-memory-all ${allOn ? 'checked' : ''}><span>全选自动生成</span></label><p class="rmt-auto-lead">每张卡是一份回忆。标签上的次数，是生成这一份要调用 API 几次。写着「分两步」的，要请求两次，合在一起才是一份完整回忆。勾上「自动生成」，到了间隔会从里面抽一份；取消的以后不会抽到。「这次先生成」会在结束时放进任务中心，不勾就留着，以后自己打开页面再生成。</p>`;
+    const picks = rows.map(item => {
+        const autoOn = item.autoEligible && wizard_plan.moduleSelected(draft, item.id);
+        const autoDisabled = item.autoEligible ? '' : 'disabled';
+        const autoReason = item.autoEligible ? '' : (item.unavailableReason || '暂不可自动生成');
+        const block = firstBlockReason(item);
+        const firstOn = !block && draft.firstModuleIds.includes(item.id);
+        return `<article class="rmt-auto-card">${moduleIcon(item.id)}<div><h3>${core_text.esc(item.title)}</h3><p>${core_text.esc(item.audience)}</p><span class="rmt-auto-tag">${core_text.esc(requestTag(item))}</span></div><div class="rmt-auto-switches"><label class="rmt-auto-switch"><input type="checkbox" data-rmt-auto-memory-prefer="${core_text.esc(item.id)}" ${autoOn ? 'checked' : ''} ${autoDisabled}><span>自动生成</span></label><label class="rmt-auto-switch"><input type="checkbox" data-rmt-auto-memory-first="${core_text.esc(item.id)}" ${firstOn ? 'checked' : ''} ${block ? 'disabled' : ''}><span>这次先生成</span></label></div>${autoReason ? `<small class="rmt-auto-why">${core_text.esc(autoReason)}</small>` : ''}${block ? `<small class="rmt-auto-why">${core_text.esc(block)}</small>` : ''}</article>`;
+    }).join('');
+    const hint = achievement
+        ? `<p class="rmt-auto-achieve">${core_text.esc(achievement.audience)}</p>`
+        : '';
+    return `${lead}<div class="rmt-auto-cards">${picks}</div>${hint}`;
 }
 
 function apiEditorMode() {
@@ -61740,16 +61816,17 @@ function previewHtml(context) {
     const scan = sourceScan(context);
     const routes = wizard_plan.firstQueueRoutes(draft, queueableIds());
     const split = wizard_plan.splitRequestPreview(scan.estimate, routes);
-    const moduleLines = split.moduleEstimates.length ? split.moduleEstimates.map(item => `<li>${core_text.esc(item.title)}：${core_text.esc(item.estimate)}</li>`).join('') : '<li>这次不生成模块。</li>';
-    const chunkWan = Math.max(1, Math.round(core_constants.IMPORT_CHUNK_CHARS / 10000));
-    const present = archivePresentNow(context);
     if (shouldSkipArchive(context)) draft.doArchive = false;
-    const archiveText = draft.doArchive
-        ? `<p>这次会建档。聊天正文大约每 ${chunkWan} 万字请求 1 次，所以这次聊天是 ${split.chatRequests} 次，外部摘要 ${split.externalRequests} 次。这只算建档，不会按每个模块再乘一遍。聊天可能分成 ${scan.estimate.checkpoints} 个检查点。</p>`
+    const archiveRequests = draft.doArchive ? split.archiveRequests : 0;
+    const moduleRequests = split.moduleEstimates.reduce((sum, item) => sum + wizard_plan.plainRequestCount(item.estimate), 0);
+    const present = archivePresentNow(context);
+    const archiveNote = draft.doArchive
+        ? '建档次数和首次生成是分开算的。聊天正文按字数分段请求，不会按每个模块再乘一遍。'
         : present
-            ? '<p>当前聊天已经有档案，这次跳过建档，不会为建档再请求。</p>'
-            : '<p>这次不建档，也不会为建档再请求。</p>';
-    return `<p>建档请求和模块请求分开计算。</p>${archiveText}${scan.unknownExternal ? '<p>还有未扫描的外部来源，上面的次数不含它们。</p>' : ''}<p>首次模块：${split.moduleCount} 项，和建档次数不是同一笔。</p><ul>${moduleLines}</ul><p>${core_text.esc(scan.preview.label)}</p>`;
+            ? '当前聊天已经有档案，这次跳过建档，不会为建档再请求。'
+            : '这次不建档，也不会为建档再请求。';
+    const unknown = scan.unknownExternal ? '<small>还有未扫描的外部来源，上面的次数不含它们。</small>' : '';
+    return `<article class="rmt-auto-summary"><strong>建档 ${archiveRequests} 次 · 首次生成 ${split.moduleCount} 项 · 大约 ${archiveRequests + moduleRequests} 次请求</strong><small>${core_text.esc(archiveNote)}</small>${unknown}<small>${core_text.esc(scan.preview.label)}</small></article>`;
 }
 
 function pageHtml(context) {
@@ -61769,16 +61846,15 @@ function pageHtml(context) {
         const status = state.available ? '柏宝绘已连接 · 公开 API v1' : (state.reason || '未检测到柏宝绘公开 API v1。');
         return `<h2>CG 生图</h2><p>相簿、ADV、日常一格。和文字 API 不是同一个连接。这里配好后点下一步，不会现在出图。</p>${cg_format_ui.cgFormatControlHtml()}<label class="rmt-settings-field"><span>生图渠道</span><select class="text_pole" data-rmt-image-generation-provider aria-label="生图渠道"><option value="baibai-image">柏宝绘 · 公开 API v1</option></select></label><p role="status">${core_text.esc(status)}</p><p>柏宝绘需单独安装并配置出图渠道。只在点击绘制并确认后出图，失败不会自动换渠道。</p><p>先不配也可以。点下一步继续，跳过不会出图，也不挡住后面的回忆。</p>`;
     }
-    if (name === 'modules') return `<h2>这些是可以留下的回忆</h2><p>每一项是一份回忆。次数写的是生成这一份要调用 API 几次，不是会自动生成多少回。每生成一份，都会带上对应的成就。</p>${moduleHtml()}`;
+    if (name === 'modules') return `<h2>留下哪些回忆</h2>${moduleHtml()}`;
     if (name === 'offer') {
         const ending = shouldSkipArchive(context) ? '当前聊天已经有档案，结束时不会重新建档。' : '结束时会按前面的选择开始建档。';
-        return `<h2>要不要打开自动留忆？</h2><p>不开的话，向导到这里结束。你可以自己打开各个页面手动生成。以后在设置里也能打开或关闭自动留忆。</p><p>${ending}你在上面勾过「这次就生成」的，会放进任务中心。</p><button type="button" class="rmt-btn" data-rmt-auto-memory-offer="no">先不用，我自己生成</button><button type="button" class="rmt-btn" data-rmt-auto-memory-offer="yes">打开自动留忆</button>`;
+        return `<h2>要不要打开自动留忆？</h2><p>不开的话，向导到这里结束。你可以自己打开各个页面手动生成。以后在设置里也能打开或关闭自动留忆。</p><p>${ending}上一页勾过「这次先生成」的，会放进任务中心。勾过「自动生成」的，只有打开之后才会到间隔抽签。</p><button type="button" class="rmt-btn" data-rmt-auto-memory-offer="no">先不用，我自己生成</button><button type="button" class="rmt-btn" data-rmt-auto-memory-offer="yes">打开自动留忆</button>`;
     }
-    if (name === 'autoModules') return `<h2>哪些要自动生成</h2><p>再看一遍每份回忆是什么，以及单次要调用几次 API。勾上的才会进入自动生成。成就仍然跟着每份回忆，不用单独勾。</p>${moduleHtml({ autoPick: true })}`;
     if (name === 'interval') return `<h2>自动间隔</h2><p>默认 5 楼，只能填 1 到 1000 的整数。到了这个间隔会检查有没有新记忆。还没有可抽的模块时，不会为模块发请求。</p><label>每 <input type="number" min="1" max="1000" step="1" data-rmt-auto-memory-interval value="${draft.intervalFloors}"> 楼</label><p data-rmt-auto-memory-interval-error role="alert"></p>`;
     if (name === 'archive') return `<h2>建档预计</h2>${previewHtml(context)}<label class="rmt-settings-check"><input type="checkbox" data-rmt-auto-memory-archive ${draft.doArchive ? 'checked' : ''}><span>这次整理档案</span></label>`;
     const archiveNote = shouldSkipArchive(context) ? '保存成功后才会排队。这次不建档。' : '保存成功后才会建档或排队。';
-    return `<h2>确认后在后台执行</h2>${previewHtml(context)}<p>${archiveNote}关闭这个窗口不会取消已经开始的任务，聊天输入也不会被锁住。自动留忆以后可以在设置里关闭。</p><button type="button" class="rmt-btn" data-rmt-auto-memory-save>保存并开始</button>`;
+    return `<h2>确认后在后台执行</h2>${previewHtml(context)}<p>${archiveNote}关闭这个窗口不会取消已经开始的任务，聊天输入也不会被锁住。自动留忆以后可以在设置里关闭。</p>`;
 }
 
 function visibleWizardSteps(context) {
@@ -61813,7 +61889,7 @@ function render(context) {
     if (!body) return false;
     ui_overlay.openOverlay();
     const charName = core_text.normalizeText(context?.name2, 40) || '这个角色';
-    const onAuto = ['autoModules', 'interval', 'run'].includes(wizard_plan.WIZARD_STEPS[step]) || showingSummary;
+    const onAuto = ['interval', 'run'].includes(wizard_plan.WIZARD_STEPS[step]) || showingSummary;
     ui_overlay.topTitle(onAuto ? '心迹回廊 · 自动留忆' : `开始你和${charName}的回忆`);
     ui_overlay.setBackVisible(false);
     ui_overlay.setRegenerateVisible(false);
@@ -61823,12 +61899,23 @@ function render(context) {
     const shownIndex = Math.max(0, shownSteps.indexOf(wizard_plan.WIZARD_STEPS[step]));
     const atOffer = wizard_plan.WIZARD_STEPS[step] === 'offer';
     const atEnd = shownSteps[shownSteps.length - 1] === wizard_plan.WIZARD_STEPS[step];
+    const browsing = !guideDone && !resume.completed;
+    const stepName = wizard_plan.WIZARD_STEPS[step];
+    const showSave = browsing && stepName === 'run';
     const inner = guideDone
         ? `<h2>可以开始了</h2><p>自动留忆没有打开。你可以自己打开各个页面手动生成。以后在设置里也能打开或关闭自动留忆。</p><p>关闭这个窗口不会取消已经开始的建档或排队。</p>`
         : resume.completed
         ? `<h2>自动留忆已经打开</h2><p>间隔 ${resume.intervalFloors} 楼。会自动生成 ${cards().filter(item => item.autoEligible && item.inDrawPool && !resume.excludedModuleIds.includes(item.id)).length} 项，已排除 ${resume.excludedModuleIds.length} 项。每份回忆都会带上成就。</p><p>${resume.archiveStillRunning ? '建档还在原来的整理流程里，可以关闭窗口继续聊天。' : '刷新后这份设置还在。任务中心的队列不会在刷新后自动重发。'}</p><p>设置里可以关闭自动留忆。关闭后仍能手动生成。</p><button type="button" class="rmt-btn" data-rmt-auto-memory-edit>重新设置</button>`
-        : `${pageHtml(context)}<p><button type="button" class="rmt-btn" data-rmt-auto-memory-prev ${step === 0 ? 'disabled' : ''}>上一步</button>${atOffer ? '' : `<button type="button" class="rmt-btn" data-rmt-auto-memory-next ${atEnd ? 'disabled' : ''}>下一步</button>`}</p>`;
-    body.innerHTML = `<main class="rmt-home" data-rmt-auto-memory-root><p>第 ${showingSummary ? shownSteps.length : shownIndex + 1} / ${shownSteps.length} 步</p>${inner}<p><button type="button" class="rmt-btn" data-rmt-auto-memory-home>返回设置</button><button type="button" class="rmt-btn" data-rmt-auto-memory-close>关闭窗口，任务继续</button></p><p data-rmt-auto-memory-status role="status"></p></main>`;
+        : pageHtml(context);
+    const progressName = guideDone ? '可以开始了' : resume.completed ? '自动留忆已经打开' : stepTitle(stepName);
+    const progressIndex = browsing ? shownIndex : Math.max(0, shownSteps.length - 1);
+    const progressCurrent = Math.min(shownSteps.length || 1, progressIndex + 1);
+    const progressTotal = shownSteps.length || 1;
+    const progressWidth = Math.round((progressCurrent / progressTotal) * 100);
+    const prev = browsing ? `<button type="button" class="rmt-btn" data-rmt-auto-memory-prev ${step === 0 ? 'disabled' : ''}>上一步</button>` : '';
+    const next = browsing && !atOffer && !atEnd ? `<button type="button" class="rmt-btn" data-rmt-auto-memory-next>下一步</button>` : '';
+    const save = showSave ? `<button type="button" class="rmt-btn rmt-auto-save" data-rmt-auto-memory-save>保存并开始</button>` : '';
+    body.innerHTML = `<main data-rmt-auto-memory-root><div class="rmt-auto-scroll"><div class="rmt-home rmt-auto-page"><div class="rmt-auto-progress"><div class="rmt-auto-progress-track" role="progressbar" aria-valuemin="1" aria-valuemax="${progressTotal}" aria-valuenow="${progressCurrent}" aria-valuetext="${core_text.esc(progressName)}，第 ${progressCurrent} / ${progressTotal} 步"><span style="width:${progressWidth}%"></span></div><p><b>${core_text.esc(progressName)}</b><small>第 ${progressCurrent} / ${progressTotal} 步</small></p></div>${inner}</div></div><div class="rmt-auto-bar"><p data-rmt-auto-memory-status role="status"></p><div class="rmt-auto-bar-main">${prev}${next}${save}</div><div class="rmt-auto-bar-quiet"><button type="button" data-rmt-auto-memory-home>返回设置</button><button type="button" data-rmt-auto-memory-close>关闭窗口，任务继续</button></div></div></main>`;
     if (body.dataset.rmtAutoMemoryBound !== '1') {
         body.dataset.rmtAutoMemoryBound = '1';
         body.addEventListener('click', onClick);
@@ -62106,7 +62193,9 @@ function onChange(event) {
     }
     if (event.target.matches?.('[data-rmt-auto-memory-all]')) {
         draft = wizard_plan.preferenceSelectAll(draft, event.target.checked === true);
-        for (const input of root.querySelectorAll('[data-rmt-auto-memory-prefer]')) input.checked = event.target.checked === true;
+        for (const input of root.querySelectorAll('[data-rmt-auto-memory-prefer]')) {
+            if (!input.disabled) input.checked = event.target.checked === true;
+        }
         return;
     }
     const prefer = event.target.dataset?.rmtAutoMemoryPrefer;
@@ -62192,7 +62281,7 @@ function onClick(event) {
     if (offer === 'yes') {
         draft.wantAuto = true;
         guideDone = false;
-        step = wizard_plan.WIZARD_STEPS.indexOf('autoModules');
+        step = wizard_plan.WIZARD_STEPS.indexOf('interval');
         render(context);
         return;
     }
@@ -62288,6 +62377,76 @@ function openAutoMemoryWizard() {
 }
 
 __m_ui_autoMemoryWizard_js.openAutoMemoryWizard = openAutoMemoryWizard;
+}
+
+function __init_ui_autoMemoryWizardStyles_js() {
+// MODULE: ui/autoMemoryWizardStyles.js
+
+// 回忆向导的排版。步骤条、回忆卡片和底部操作栏。
+function wizardCss(root) {
+    return `
+${root} .rmt-body:has([data-rmt-auto-memory-root]){display:flex;flex-direction:column;overflow:hidden}
+${root} [data-rmt-auto-memory-root]{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;max-width:none;margin:0;padding:0}
+${root} .rmt-auto-scroll{flex:1 1 auto;min-height:0;overflow:auto}
+${root} .rmt-auto-page{padding:8px 16px 24px}
+${root} .rmt-auto-progress{display:grid;gap:8px;margin:0 0 16px}
+${root} .rmt-auto-progress-track{height:8px;border-radius:999px;background:var(--rmt-theme-soft,#f3f0f5);overflow:hidden}
+${root} .rmt-auto-progress-track>span{display:block;height:100%;border-radius:inherit;background:var(--rmt-theme-accent-ink,#5f5770)}
+${root} .rmt-auto-progress p{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin:0}
+${root} .rmt-auto-progress b{font-size:16px;line-height:1.4}
+${root} .rmt-auto-progress small{font-size:13px;line-height:1.4;color:var(--rmt-theme-muted,#59677a)}
+${root} .rmt-auto-page h2{margin:0 0 8px;font-size:22px;line-height:1.35}
+${root} .rmt-auto-page p{margin:0 0 12px;font-size:15px;line-height:1.65}
+${root} .rmt-auto-page small,${root} .rmt-auto-why{display:block;font-size:13px;line-height:1.55;color:var(--rmt-theme-muted,#59677a)}
+${root} .rmt-auto-lead{font-size:15px;line-height:1.65}
+${root} .rmt-auto-field{display:grid;gap:6px;margin:0 0 12px}
+${root} .rmt-auto-field>span{font-size:14px;font-weight:650}
+${root} .rmt-auto-field :is(input,select){box-sizing:border-box;width:100%;min-height:44px;padding:8px 12px;border:1px solid var(--rmt-theme-border,#cbdce6);border-radius:12px;background:var(--rmt-theme-surface-solid,#fff);color:inherit;font:inherit}
+${root} .rmt-auto-api{display:grid;gap:12px}
+${root} .rmt-auto-api-modes{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+${root} .rmt-auto-api-mode{min-height:44px;padding:12px;border-radius:14px;border:1px solid var(--rmt-theme-border,#cbdce6);background:var(--rmt-theme-surface-solid,#fff);color:inherit;text-align:left}
+${root} .rmt-auto-api-mode b,${root} .rmt-auto-api-mode small{display:block}
+${root} .rmt-auto-api-mode.is-on{border-color:var(--rmt-theme-accent-ink,#5f5770);background:var(--rmt-theme-soft,#f3f0f5)}
+${root} .rmt-auto-api-row{display:flex;flex-wrap:wrap;gap:8px;align-items:end}
+${root} .rmt-auto-api-row .rmt-auto-field{flex:1 1 180px}
+${root} .rmt-auto-api .rmt-btn,${root} .rmt-auto-page>.rmt-btn{min-height:44px;margin-top:8px}
+${root} .rmt-auto-page>.rmt-btn{width:100%}
+${root} .rmt-auto-page .rmt-settings-check{display:flex;align-items:center;gap:10px;min-height:44px;font-size:15px}
+${root} .rmt-auto-page label:has([data-rmt-auto-memory-interval]){display:flex;align-items:center;gap:8px;font-size:15px}
+${root} .rmt-auto-page [data-rmt-auto-memory-interval]{width:6em;min-height:44px;padding:8px;border:1px solid var(--rmt-theme-border,#cbdce6);border-radius:12px;font:inherit}
+${root} .rmt-auto-all{display:flex;align-items:center;gap:10px;min-height:44px;margin:0 0 8px;font-size:15px}
+${root} .rmt-auto-cards{display:grid;grid-template-columns:1fr;gap:12px;margin:0 0 12px}
+${root} .rmt-auto-card{display:grid;grid-template-columns:36px minmax(0,1fr);gap:8px 10px;padding:14px;border:1px solid var(--rmt-theme-border,#cbdce6);border-radius:16px;background:var(--rmt-theme-surface-solid,#fff)}
+${root} .rmt-auto-card-icon{width:32px;height:32px;color:var(--rmt-theme-accent-ink,#5f5770)}
+${root} .rmt-auto-card h3{margin:0;font-size:16px;line-height:1.4}
+${root} .rmt-auto-card p{margin:4px 0;font-size:14px;line-height:1.55}
+${root} .rmt-auto-tag{display:inline-block;padding:2px 8px;border-radius:999px;background:var(--rmt-theme-soft,#f3f0f5);color:var(--rmt-theme-accent-ink,#5f5770);font-size:12px;line-height:1.5}
+${root} .rmt-auto-switches{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:8px}
+${root} .rmt-auto-switch{display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:0 12px;border:1px solid var(--rmt-theme-border,#cbdce6);border-radius:999px;background:var(--rmt-theme-bg,#fff);font-size:14px}
+${root} .rmt-auto-switch input{width:18px;height:18px;margin:0;accent-color:var(--rmt-theme-accent-ink,#5f5770)}
+${root} .rmt-auto-switch:has(input:checked){border-color:var(--rmt-theme-accent-ink,#5f5770);background:var(--rmt-theme-soft,#f3f0f5)}
+${root} .rmt-auto-switch:has(input:disabled){border-style:dashed}
+${root} .rmt-auto-switch:has(input:focus-visible){outline:3px solid var(--rmt-theme-accent-ink,#5f5770);outline-offset:3px}
+${root} .rmt-auto-why{grid-column:1/-1;margin:0}
+${root} .rmt-auto-achieve{margin:4px 0 0;font-size:14px;line-height:1.6;color:var(--rmt-theme-muted,#59677a)}
+${root} .rmt-auto-summary{display:grid;gap:8px;margin:8px 0 0;padding:18px;border:1px solid var(--rmt-theme-border,#cbdce6);border-radius:18px;background:var(--rmt-theme-soft,#f3f0f5)}
+${root} .rmt-auto-summary strong{font-size:20px;line-height:1.45;font-weight:750}
+${root} .rmt-auto-bar{flex:none;display:grid;gap:4px;padding:10px 16px 14px;border-top:1px solid var(--rmt-theme-border,#cbdce6);background:var(--rmt-theme-surface-solid,#fff)}
+${root} .rmt-auto-bar-main{display:flex;gap:8px}
+${root} .rmt-auto-bar-main:empty{display:none}
+${root} .rmt-auto-bar-main .rmt-btn{flex:1 1 0;min-height:48px;min-width:0}
+${root} .rmt-auto-save{background:var(--rmt-theme-accent-ink,#5f5770)!important;color:var(--rmt-theme-surface-solid,#fff)!important;-webkit-text-fill-color:currentColor!important;font-size:16px;font-weight:750}
+${root} .rmt-auto-bar-quiet{display:flex;justify-content:center;gap:8px;flex-wrap:wrap}
+${root} .rmt-auto-bar-quiet button{min-height:44px;padding:8px 12px;border:0;background:transparent;color:var(--rmt-theme-muted,#59677a);font-size:13px;line-height:1.4}
+${root} .rmt-auto-bar [data-rmt-auto-memory-status]:empty{display:none}
+${root} .rmt-auto-bar [data-rmt-auto-memory-status]{margin:0;font-size:14px;line-height:1.5}
+${root} [data-rmt-auto-memory-root] :is(button,input,select,summary):focus-visible{outline:3px solid var(--rmt-theme-accent-ink,#5f5770);outline-offset:3px}
+@media(min-width:760px){${root} .rmt-auto-cards{grid-template-columns:1fr 1fr}}
+@media(prefers-reduced-motion:reduce){${root} [data-rmt-auto-memory-root] *{transition:none!important}}
+`;
+}
+
+__m_ui_autoMemoryWizardStyles_js.wizardCss = wizardCss;
 }
 
 function __init_ui_bedtimeView_js() {
@@ -66945,6 +67104,137 @@ __m_ui_handJournalView_js.openHandJournal = openHandJournal;
 __m_ui_handJournalView_js.journalSourceRoute = journalSourceRoute;
 __m_ui_handJournalView_js.journalPageHtml = journalPageHtml;
 __m_ui_handJournalView_js.journalPaletteControls = journalPaletteControls;
+}
+
+function __init_ui_heartEnvelope_js() {
+// MODULE: ui/heartEnvelope.js
+const core_constants = __m_core_constants_js;
+// 爱心信的六款信封。只换画法，不改生成提示词。
+
+const TITLES = Object.freeze({
+    pink: '现在 粉色信封',
+    wax: 'A 蜡封信',
+    night: 'B 星夜信',
+    sakura: 'C 樱花信',
+    airmail: 'D 航空邮简',
+    wash: 'E 水彩渐变',
+});
+
+function svg(body) {
+    return `<svg class="rmt-envelope" viewBox="0 0 280 190" aria-hidden="true" focusable="false">${body}</svg>`;
+}
+
+function pinkBody() {
+    return `<rect x="8" y="18" width="264" height="164" rx="22" fill="#f6c6d4"/>
+        <path d="M8 146 L140 86 L272 146 L272 160 Q272 182 250 182 L30 182 Q8 182 8 160 Z" fill="#f3b4c8"/>
+        <path d="M8 146 L140 86 L140 182 L30 182 Q8 182 8 160 Z" fill="#eea9c0"/>
+        <path d="M20 36 L260 36 L140 124 Z" fill="#fff2f5"/>
+        <path d="M20 36 L140 124 L140 36 Z" fill="#fde7ee"/>
+        <path d="M140 112c-15-13-34-26-34-43 0-12 9-21 21-21 7 0 13 4 13 4s6-4 13-4c12 0 21 9 21 21 0 17-19 30-34 43z" fill="#d64578"/>`;
+}
+
+function waxBody() {
+    return `<rect x="8" y="18" width="264" height="164" rx="18" fill="#f3e6d0"/>
+        <path d="M8 148 L140 84 L272 148 V162 Q272 182 250 182 H30 Q8 182 8 162 Z" fill="#e7d3b4"/>
+        <path d="M22 34 H258 L140 122 Z" fill="#fbf6ee"/>
+        <path d="M22 34 L140 122 V34 Z" fill="#f4ead8"/>
+        <circle cx="140" cy="100" r="24" fill="#8e2a2a"/>
+        <circle cx="140" cy="100" r="18" fill="#a33b3b"/>
+        <path d="M140 108c-5-4-10-8-10-13 0-4 3-6 6-6 2 0 4 1 4 1s2-1 4-1c3 0 6 2 6 6 0 5-5 9-10 13z" fill="#f6d5d8"/>`;
+}
+
+function nightBody() {
+    return `<rect x="8" y="18" width="264" height="164" rx="18" fill="#15233f"/>
+        <path d="M8 148 L140 82 L272 148 V162 Q272 182 250 182 H30 Q8 182 8 162 Z" fill="#1c2e52"/>
+        <path d="M22 34 H258 L140 120 Z" fill="none" stroke="#e4c56a" stroke-width="2"/>
+        <path d="M22 34 L140 120" fill="none" stroke="#e4c56a" stroke-width="1.4"/>
+        <path d="M258 34 L140 120" fill="none" stroke="#e4c56a" stroke-width="1.4"/>
+        <circle cx="46" cy="58" r="1.4" fill="#f4e7b2"/><circle cx="78" cy="48" r="1.2" fill="#f4e7b2"/>
+        <circle cx="210" cy="52" r="1.3" fill="#f4e7b2"/><circle cx="236" cy="70" r="1.1" fill="#f4e7b2"/>
+        <circle cx="188" cy="40" r="1.2" fill="#f4e7b2"/>
+        <path d="M128 92a16 16 0 1 0 18 10 12 12 0 1 1-18-10z" fill="#f3e7c2"/>`;
+}
+
+function blossom(cx, cy) {
+    return `<g fill="#f4a8c0" transform="translate(${cx} ${cy})"><circle cx="-6" cy="0" r="4"/><circle cx="6" cy="0" r="4"/><circle cx="0" cy="-6" r="4"/><circle cx="0" cy="6" r="4"/><circle cx="0" cy="0" r="2.2" fill="#f7d7e2"/></g>`;
+}
+
+function sakuraBody() {
+    return `<rect x="8" y="18" width="264" height="164" rx="22" fill="#fde8ef"/>
+        <path d="M8 148 L140 86 L272 148 V162 Q272 182 250 182 H30 Q8 182 8 162 Z" fill="#f8d5e2"/>
+        <path d="M22 34 H258 L140 120 Z" fill="#fff7f9"/>
+        ${blossom(48, 64)}${blossom(228, 58)}${blossom(62, 150)}${blossom(214, 146)}
+        <path d="M140 108c-8-7-18-14-18-23 0-6 5-11 11-11 4 0 7 2 7 2s3-2 7-2c6 0 11 5 11 11 0 9-10 16-18 23z" fill="#e56b92"/>`;
+}
+
+function airmailBody() {
+    let lines = '';
+    for (let index = -4; index < 22; index += 1) {
+        const x = index * 16;
+        lines += `<line x1="${x}" y1="200" x2="${x + 92}" y2="-8" stroke="${index % 2 ? '#2a4f96' : '#d64545'}" stroke-width="8"/>`;
+    }
+    return `${lines}
+        <rect x="22" y="30" width="236" height="132" fill="#fffdf8"/>
+        <text x="36" y="72" fill="#2a4f96" font-size="14" font-family="Georgia, 'Times New Roman', serif" letter-spacing="1.4">PAR AVION</text>
+        <path d="M36 92 H168 M36 106 H168 M36 120 H120" stroke="#c9bbaa" stroke-width="1.2"/>
+        <circle cx="176" cy="58" r="15" fill="none" stroke="#7d6a62" stroke-width="1.3"/>
+        <circle cx="176" cy="58" r="10" fill="none" stroke="#7d6a62" stroke-width="1"/>
+        <rect x="198" y="36" width="46" height="38" rx="3" fill="#f7c5d4" stroke="#e08aa6"/>
+        <path d="M221 56c-4-4-9-6-9-2 0 5 9 9 9 9s9-4 9-9c0-4-5-2-9 2z" fill="#d64578"/>`;
+}
+
+function washBody() {
+    return `<rect x="8" y="18" width="264" height="164" rx="22" fill="#e5d2f4"/>
+        <ellipse cx="214" cy="150" rx="150" ry="110" fill="#f8c9b4"/>
+        <ellipse cx="52" cy="46" rx="78" ry="52" fill="#f6e7fb"/>
+        <path d="M8 148 L140 86 L272 148" fill="none" stroke="#fff" stroke-width="3" opacity=".85"/>
+        <path d="M140 112c-12-10-26-20-26-33 0-9 7-16 16-16 5 0 10 3 10 3s5-3 10-3c9 0 16 7 16 16 0 13-14 23-26 33z" fill="#fff"/>`;
+}
+
+const BODIES = Object.freeze({
+    pink: pinkBody,
+    wax: waxBody,
+    night: nightBody,
+    sakura: sakuraBody,
+    airmail: airmailBody,
+    wash: washBody,
+});
+
+function heartEnvelopeSvg(skin) {
+    const id = core_constants.HEART_ENVELOPE_SKINS.includes(skin) ? skin : 'pink';
+    return svg(BODIES[id]());
+}
+
+function heartEnvelopePickerHtml(selected) {
+    const current = core_constants.HEART_ENVELOPE_SKINS.includes(selected) ? selected : 'pink';
+    const options = core_constants.HEART_ENVELOPE_SKINS.map(id => {
+        const on = id === current;
+        return `<label class="rmt-envelope-option${on ? ' is-on' : ''}"><input type="radio" name="rmt-heart-envelope" data-rmt-heart-envelope value="${id}" ${on ? 'checked' : ''}><span class="rmt-envelope-art">${heartEnvelopeSvg(id)}</span><span>${TITLES[id]}</span></label>`;
+    }).join('');
+    return `<fieldset class="rmt-envelope-picker"><legend>信封样式</legend><p>六款一样大。选中的会用在聊天里的那封信上。</p>${options}</fieldset>`;
+}
+
+function heartEnvelopePickerCss(root) {
+    return `
+${root} .rmt-envelope-picker{border:0;margin:0;padding:0;display:grid;gap:12px;min-width:0}
+${root} .rmt-envelope-picker legend{font-size:14px;font-weight:750;line-height:1.5;padding:0}
+${root} .rmt-envelope-picker p{margin:0;font-size:14px;line-height:1.65}
+${root} .rmt-envelope-picker{grid-template-columns:1fr}
+${root} .rmt-envelope-options,${root} .rmt-envelope-picker{align-items:stretch}
+${root} .rmt-envelope-picker{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,240px),1fr));gap:12px}
+${root} .rmt-envelope-picker legend,${root} .rmt-envelope-picker p{grid-column:1/-1}
+${root} .rmt-envelope-option{position:relative;display:grid;justify-items:center;align-content:start;gap:8px;margin:0;padding:12px;border:1px solid var(--rmt-theme-border,#cbdce6);border-radius:16px;background:var(--rmt-theme-surface-solid,#fff);color:var(--rmt-theme-text,#334155);cursor:pointer;min-height:44px}
+${root} .rmt-envelope-option input{position:absolute;width:1px;height:1px;margin:0;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%)}
+${root} .rmt-envelope-option .rmt-envelope{display:block;width:min(100%,240px);height:auto}
+${root} .rmt-envelope-option span:last-child{font-size:14px;line-height:1.4;text-align:center}
+${root} .rmt-envelope-option.is-on{outline:3px solid var(--rmt-theme-accent-ink,#5f5770);outline-offset:2px}
+${root} .rmt-envelope-option:has(input:focus-visible){outline:3px solid var(--rmt-theme-accent-ink,#5f5770);outline-offset:3px}
+`;
+}
+
+__m_ui_heartEnvelope_js.heartEnvelopeSvg = heartEnvelopeSvg;
+__m_ui_heartEnvelope_js.heartEnvelopePickerHtml = heartEnvelopePickerHtml;
+__m_ui_heartEnvelope_js.heartEnvelopePickerCss = heartEnvelopePickerCss;
 }
 
 function __init_ui_heartReaderState_js() {
@@ -74314,6 +74604,13 @@ async function onAutoMemoryPaceChange(panel, event) {
         for (const input of panel.querySelectorAll('[data-rmt-auto-retry-count], [data-rmt-auto-memory-retry-count]')) {
             input.value = count;
         }
+        return;
+    }
+    if (target.matches?.('[data-rmt-heart-envelope]')) {
+        core_settings.updatePluginSettings({ heartEnvelopeSkin: target.value });
+        for (const input of panel.querySelectorAll('[data-rmt-heart-envelope]')) {
+            input.closest('.rmt-envelope-option')?.classList.toggle('is-on', input.checked);
+        }
     }
 }
 
@@ -74456,6 +74753,10 @@ function refreshGenerationSettingsUi() {
     }
     const latestInput = panel.querySelector('[data-rmt-auto-memory-latest]');
     if (latestInput) latestInput.checked = settings.autoMemoryLatestFloor === true;
+    for (const input of panel.querySelectorAll('[data-rmt-heart-envelope]')) {
+        input.checked = input.value === settings.heartEnvelopeSkin;
+        input.closest('.rmt-envelope-option')?.classList.toggle('is-on', input.checked);
+    }
     ui_countdown.refreshAutoMemoryCountdown();
     const restore = panel.querySelector('[data-rmt-auto-memory-restore]');
     if (restore) restore.hidden = gate.source !== 'paused-new-plan';
@@ -75792,6 +76093,7 @@ const core_requestCoordinator = __m_core_requestCoordinator_js;
 const core_settings = __m_core_settings_js;
 const advanced_ui = __m_ui_advancedGenerationUi_js;
 const cg_format_ui = __m_ui_cgFormatControl_js;
+const ui_heartEnvelope = __m_ui_heartEnvelope_js;
 const runtimeState = __m_core_state_js.state;
 const SETTINGS_MOUNT_UNHANDLED = __m_ui_settingsPanelHome_js.SETTINGS_MOUNT_UNHANDLED;
 const chatReadingSettingsHtml = __m_ui_settingsPanelParts_js.chatReadingSettingsHtml;
@@ -75917,14 +76219,18 @@ function renderSettingsPanelMarkup(panel) {
           <small>到了这个间隔就从勾选的回忆里抽一份。1 到 1000。改完从现在重新计。</small>
           <label class="rmt-settings-check"><input type="checkbox" data-rmt-auto-memory-latest ${core_settings.getPluginSettings().autoMemoryLatestFloor ? 'checked' : ''}><span>在最新角色楼生成回忆</span></label>
           <small>勾上后只数角色楼。间隔是 1 时，只用最新一条角色楼的正文。间隔更大时，这一窗角色楼的正文都会送去建档，不再截短。有摘要时，摘要没写到的楼附上完整正文。</small>
-          <p>打开自动留忆后，需要两次才完整的模块会自动做第二次生成。两次合在一起才是一份完整回忆。手动生成仍看连接设置里的开关。</p>
+          <small>打开自动留忆后，需要两次才完整的模块会自动做第二次生成。两次合在一起才是一份完整回忆。手动生成仍看连接设置里的开关。</small>
           <label class="rmt-settings-check"><input type="checkbox" data-rmt-auto-memory-retry ${core_settings.getPluginSettings().autoRetryEnabled ? 'checked' : ''}><span>失败后自动重试</span></label>
           <label class="rmt-settings-field"><span>失败后重试次数</span><input class="text_pole" data-rmt-auto-memory-retry-count type="number" min="1" max="5" step="1" value="${core_settings.getPluginSettings().autoRetryCount}" aria-label="失败后重试次数"></label>
           <small>勾上之后，信上的重试和补成就会自己跑，次数是 1 到 5。没勾就只有点了才发。已经写好的步骤会留着。</small>
-          <p>当前这一份回忆可以再写一遍。</p>
+          <small>当前这一份回忆可以再写一遍。下面三个按钮不一样。</small>
           <button type="button" class="menu_button rmt-settings-wide" data-rmt-auto-memory-redo="keep">按原来的抽签再写</button>
+          <small>还是刚才抽中的那一项，再写一遍。</small>
           <button type="button" class="menu_button rmt-settings-wide" data-rmt-auto-memory-redo="redraw">重新抽一份</button>
+          <small>丢掉这次抽签，从已勾选的回忆里另抽一项来写。</small>
           <button type="button" class="menu_button rmt-settings-wide" data-rmt-auto-memory-redo="pick">自己选一份</button>
+          <small>不抽签。点开后从清单里选一项来写。</small>
+          ${ui_heartEnvelope.heartEnvelopePickerHtml(core_settings.getPluginSettings().heartEnvelopeSkin)}
           <div data-rmt-auto-memory-pick hidden></div>
           <p data-rmt-auto-memory-redo-status role="status"></p>
           <button type="button" class="menu_button rmt-settings-wide" data-rmt-auto-memory-wizard>打开回忆向导</button>
@@ -76000,11 +76306,15 @@ const css_roomMotifsItemsCss = __m_ui_css_roomMotifsItemsCss_js;
 const css_phoneMobileCss = __m_ui_css_phoneMobileCss_js;
 const css_calendarCss = __m_ui_css_calendarCss_js;
 const css_heartProfileTravelCss = __m_ui_css_heartProfileTravelCss_js;
+const ui_autoMemoryWizardStyles = __m_ui_autoMemoryWizardStyles_js;
+const ui_heartEnvelope = __m_ui_heartEnvelope_js;
 
 
 
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
+
+
 
 
 
@@ -76187,6 +76497,11 @@ function ensureSettingsStyles() {
 }
 `;
     style.textContent += ui_themeSurfaces.structuralThemeCss('#' + core_constants.SETTINGS_ID);
+    style.textContent += ui_heartEnvelope.heartEnvelopePickerCss('#' + core_constants.SETTINGS_ID);
+    style.textContent += `
+#${core_constants.SETTINGS_ID} [data-rmt-settings-section="auto"] .rmt-settings-section-body > :is(p, small){font-size:14px!important;line-height:1.65!important;margin:0}
+#${core_constants.OVERLAY_ID} #${core_constants.SETTINGS_ID} [data-rmt-settings-section="auto"] .rmt-settings-section-body > :is(p, small){font-size:14px!important;line-height:1.65!important;margin:0}
+`;
     style.textContent += `
 #${core_constants.SETTINGS_ID}_launcher{padding:16px;border:1px solid var(--SmartThemeBorderColor,#cbdce6);border-radius:14px;color:var(--SmartThemeBodyColor,#334155);background:var(--SmartThemeBlurTintColor,#fff);line-height:1.6}
 #${core_constants.SETTINGS_ID}_launcher b{font-size:16px}
@@ -76332,6 +76647,8 @@ function ensureStyles() {
 }
 `;
     style.textContent += homeAndReadingCss();
+    style.textContent += ui_autoMemoryWizardStyles.wizardCss('#' + core_constants.OVERLAY_ID);
+    style.textContent += ui_heartEnvelope.heartEnvelopePickerCss('#' + core_constants.OVERLAY_ID);
     style.textContent += participantPickerCss();
     style.textContent += ui_immersionStyles.immersionCss('#' + core_constants.OVERLAY_ID);
     style.textContent += ui_readingStyles.readingCss('#' + core_constants.OVERLAY_ID);
@@ -79803,6 +80120,7 @@ __init_ui_archivePortal_js();
 __init_ui_autoMemoryCountdown_js();
 __init_ui_autoMemoryShell_js();
 __init_ui_autoMemoryWizard_js();
+__init_ui_autoMemoryWizardStyles_js();
 __init_ui_bedtimeView_js();
 __init_ui_butterflyView_js();
 __init_ui_calendarPrint_js();
@@ -79826,6 +80144,7 @@ __init_ui_floatingAvatarButton_js();
 __init_ui_generationCompletion_js();
 __init_ui_generationStatus_js();
 __init_ui_handJournalView_js();
+__init_ui_heartEnvelope_js();
 __init_ui_heartReaderState_js();
 __init_ui_heartView_js();
 __init_ui_homeView_js();

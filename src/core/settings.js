@@ -77,6 +77,7 @@ export function getPluginSettings(context = core_context.getContext()) {
         autoSecondPass: settings.autoSecondPass === true,
         autoMemoryLatestFloor: settings.autoMemoryLatestFloor === true,
         autoMemoryIntervalFloors: normalizeAutoMemoryInterval(settings.autoMemoryIntervalFloors),
+        heartEnvelopeSkin: core_constants.HEART_ENVELOPE_SKINS.includes(settings.heartEnvelopeSkin) ? settings.heartEnvelopeSkin : 'pink',
         creativeSupplementEnabled: settings.creativeSupplementEnabled === true,
         creativeSupplement: creative_supplement.normalizeCreativeSupplement(settings.creativeSupplement),
         ttDisplayMode: settings.ttDisplayMode === true,

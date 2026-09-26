@@ -3,6 +3,7 @@ import * as core_settings from '../core/settings.js';
 import { state as runtimeState } from '../core/state.js';
 import * as advanced_ui from './advancedGenerationUi.js';
 import * as cg_format_ui from './cgFormatControl.js';
+import * as ui_heartEnvelope from './heartEnvelope.js';
 import { SETTINGS_MOUNT_UNHANDLED } from './settingsPanelHome.js';
 import { chatReadingSettingsHtml, voiceSettingsHtml } from './settingsPanelParts.js';
 // ui/settingsPanelHome.js mountSettings 的分组处理（重构阶段 3）。每个函数是原函数里连续的一段语句，一字未改；
@@ -121,14 +122,18 @@ export function renderSettingsPanelMarkup(panel) {
           <small>到了这个间隔就从勾选的回忆里抽一份。1 到 1000。改完从现在重新计。</small>
           <label class="rmt-settings-check"><input type="checkbox" data-rmt-auto-memory-latest ${core_settings.getPluginSettings().autoMemoryLatestFloor ? 'checked' : ''}><span>在最新角色楼生成回忆</span></label>
           <small>勾上后只数角色楼。间隔是 1 时，只用最新一条角色楼的正文。间隔更大时，这一窗角色楼的正文都会送去建档，不再截短。有摘要时，摘要没写到的楼附上完整正文。</small>
-          <p>打开自动留忆后，需要两次才完整的模块会自动做第二次生成。两次合在一起才是一份完整回忆。手动生成仍看连接设置里的开关。</p>
+          <small>打开自动留忆后，需要两次才完整的模块会自动做第二次生成。两次合在一起才是一份完整回忆。手动生成仍看连接设置里的开关。</small>
           <label class="rmt-settings-check"><input type="checkbox" data-rmt-auto-memory-retry ${core_settings.getPluginSettings().autoRetryEnabled ? 'checked' : ''}><span>失败后自动重试</span></label>
           <label class="rmt-settings-field"><span>失败后重试次数</span><input class="text_pole" data-rmt-auto-memory-retry-count type="number" min="1" max="5" step="1" value="${core_settings.getPluginSettings().autoRetryCount}" aria-label="失败后重试次数"></label>
           <small>勾上之后，信上的重试和补成就会自己跑，次数是 1 到 5。没勾就只有点了才发。已经写好的步骤会留着。</small>
-          <p>当前这一份回忆可以再写一遍。</p>
+          <small>当前这一份回忆可以再写一遍。下面三个按钮不一样。</small>
           <button type="button" class="menu_button rmt-settings-wide" data-rmt-auto-memory-redo="keep">按原来的抽签再写</button>
+          <small>还是刚才抽中的那一项，再写一遍。</small>
           <button type="button" class="menu_button rmt-settings-wide" data-rmt-auto-memory-redo="redraw">重新抽一份</button>
+          <small>丢掉这次抽签，从已勾选的回忆里另抽一项来写。</small>
           <button type="button" class="menu_button rmt-settings-wide" data-rmt-auto-memory-redo="pick">自己选一份</button>
+          <small>不抽签。点开后从清单里选一项来写。</small>
+          ${ui_heartEnvelope.heartEnvelopePickerHtml(core_settings.getPluginSettings().heartEnvelopeSkin)}
           <div data-rmt-auto-memory-pick hidden></div>
           <p data-rmt-auto-memory-redo-status role="status"></p>
           <button type="button" class="menu_button rmt-settings-wide" data-rmt-auto-memory-wizard>打开回忆向导</button>

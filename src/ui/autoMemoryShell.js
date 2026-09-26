@@ -21,6 +21,7 @@ import * as core_text from '../core/text.js';
 import * as ui_floor from './chatFloorNav.js';
 import * as ui_reveal from './memoryReveal.js';
 import * as room_layout from '../modes/roomLayout.js';
+import * as ui_heartEnvelope from './heartEnvelope.js';
 import * as ui_styles from './styles.js';
 import * as ui_taskCenter from './taskCenter.js';
 
@@ -167,14 +168,9 @@ function viewFor(context) {
 }
 
 function envelopeArt() {
-    return `<svg class="rmt-envelope" viewBox="0 0 280 190" aria-hidden="true">
-        <rect x="8" y="18" width="264" height="164" rx="22" fill="#f6c6d4"/>
-        <path d="M8 146 L140 86 L272 146 L272 160 Q272 182 250 182 L30 182 Q8 182 8 160 Z" fill="#f3b4c8"/>
-        <path d="M8 146 L140 86 L140 182 L30 182 Q8 182 8 160 Z" fill="#eea9c0"/>
-        <path d="M20 36 L260 36 L140 124 Z" fill="#fff2f5"/>
-        <path d="M20 36 L140 124 L140 36 Z" fill="#fde7ee"/>
-        <path d="M140 112c-15-13-34-26-34-43 0-12 9-21 21-21 7 0 13 4 13 4s6-4 13-4c12 0 21 9 21 21 0 17-19 30-34 43z" fill="#d64578"/>
-    </svg>`;
+    let skin = 'pink';
+    try { skin = core_settings.getPluginSettings().heartEnvelopeSkin; } catch { skin = 'pink'; }
+    return ui_heartEnvelope.heartEnvelopeSvg(skin);
 }
 
 function markup(view) {

@@ -349,6 +349,13 @@ async function onAutoMemoryPaceChange(panel, event) {
         for (const input of panel.querySelectorAll('[data-rmt-auto-retry-count], [data-rmt-auto-memory-retry-count]')) {
             input.value = count;
         }
+        return;
+    }
+    if (target.matches?.('[data-rmt-heart-envelope]')) {
+        core_settings.updatePluginSettings({ heartEnvelopeSkin: target.value });
+        for (const input of panel.querySelectorAll('[data-rmt-heart-envelope]')) {
+            input.closest('.rmt-envelope-option')?.classList.toggle('is-on', input.checked);
+        }
     }
 }
 
@@ -491,6 +498,10 @@ export function refreshGenerationSettingsUi() {
     }
     const latestInput = panel.querySelector('[data-rmt-auto-memory-latest]');
     if (latestInput) latestInput.checked = settings.autoMemoryLatestFloor === true;
+    for (const input of panel.querySelectorAll('[data-rmt-heart-envelope]')) {
+        input.checked = input.value === settings.heartEnvelopeSkin;
+        input.closest('.rmt-envelope-option')?.classList.toggle('is-on', input.checked);
+    }
     ui_countdown.refreshAutoMemoryCountdown();
     const restore = panel.querySelector('[data-rmt-auto-memory-restore]');
     if (restore) restore.hidden = gate.source !== 'paused-new-plan';

@@ -1,7 +1,7 @@
 {
   "display_name": "心迹回廊",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.99.90-r84.144-due-abandon",
+  "js": "index.js?heartbeat=0.99.90-r84.145-wizard-cards",
   "author": "Toto",
   "version": "0.99.90",
   "auto_update": true,
@@ -10,6 +10,6 @@
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r84.144：到点放弃没写完的一轮另抽；各模块这次写下的增量都会进信。",
+  "description": "r84.145：回忆向导改成卡片并补上样式；信封可选六款。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }
