@@ -1,15 +1,15 @@
 {
   "display_name": "心迹回廊",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.99.86-r84.138-letter-stall",
+  "js": "index.js?heartbeat=0.99.87-r84.139-letter-mobile",
   "author": "Toto",
-  "version": "0.99.86",
+  "version": "0.99.87",
   "auto_update": true,
   "minimum_client_version": "1.13.0",
   "hooks": {
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r84.138：生成停住 90 秒会失败，信和任务中心可以补全或重试。信里用和插件一样的版式。",
+  "description": "r84.139：信里每个模块都按手机上的布局来排。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }

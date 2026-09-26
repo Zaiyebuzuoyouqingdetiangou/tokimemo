@@ -35,28 +35,89 @@ export function floorShellCss() {
 .rmt-heart-letter-close{margin:0 0 12px}
 .rmt-heart-letter .rmt-letter-piece h3{margin:16px 0 8px;font-size:16px}
 .rmt-heart-letter .rmt-floor-body{max-height:70vh;max-width:100%;min-width:0;margin-top:10px;overflow:auto}
-/* 模块页按整页两栏排。在信里改成单栏，生图设置不占信纸。 */
+/* 信里用手机上的模块布局。生图条和会浮出屏幕的明信片留在插件页。 */
 .rmt-heart-letter .rmt-floor-body .rmt-cg-format,
 .rmt-heart-letter .rmt-floor-body .rmt-cg-provider-bar{display:none!important}
 .rmt-heart-letter .rmt-album,
 .rmt-heart-letter .rmt-adv,
 .rmt-heart-letter .rmt-heart,
 .rmt-heart-letter .rmt-ending,
-.rmt-heart-letter .rmt-room-view{min-height:0;max-width:100%;box-sizing:border-box;padding:4px;background:transparent}
-.rmt-heart-letter .rmt-album-layout,
-.rmt-heart-letter .rmt-adv,
-.rmt-heart-letter .rmt-heart-drama-layout,
-.rmt-heart-letter .rmt-ending{grid-template-columns:minmax(0,1fr)!important}
-.rmt-heart-letter .rmt-album-head{align-items:flex-start}
-.rmt-heart-letter .rmt-filter{width:100%;margin-left:0}
-.rmt-heart-letter .rmt-grid{grid-template-columns:minmax(0,1fr)}
+.rmt-heart-letter .rmt-room-view,
+.rmt-heart-letter .rmt-travel,
+.rmt-heart-letter .rmt-crt,
+.rmt-heart-letter .rmt-calendar-shell{min-height:0;max-width:100%;box-sizing:border-box}
 .rmt-heart-letter .rmt-info{position:static;top:auto;width:auto;max-width:100%;min-height:0}
-.rmt-heart-letter .rmt-actions{display:grid;grid-template-columns:minmax(0,1fr)}
+.rmt-heart-letter .rmt-travel-postcard,
+.rmt-heart-letter .rmt-travel-dialogue,
+.rmt-heart-letter .rmt-travel-artifact{position:relative!important;inset:auto!important;transform:none!important;width:auto!important;max-height:none!important}
 .rmt-heart-letter .rmt-btn{max-width:100%;white-space:normal}
 .rmt-heart-letter .rmt-card:hover{transform:none}
 .rmt-heart-letter.is-waiting .rmt-heart-letter-seal{cursor:default}
 #chat .mes.rmt-floor-return{outline:2px solid #e99ab9;outline-offset:2px}
 `;
+}
+
+function splitSelectors(selector) {
+    const parts = [];
+    let current = '';
+    let depth = 0;
+    for (const ch of selector) {
+        if (ch === '(') depth += 1;
+        else if (ch === ')' && depth > 0) depth -= 1;
+        if (ch === ',' && depth === 0) {
+            parts.push(current);
+            current = '';
+        } else current += ch;
+    }
+    if (current.trim()) parts.push(current);
+    return parts;
+}
+
+function scopeNarrowRules(body, scope) {
+    let out = '';
+    let depth = 0;
+    let selector = '';
+    for (let index = 0; index < body.length; index += 1) {
+        const ch = body[index];
+        if (ch === '{') {
+            if (depth === 0) {
+                const scoped = splitSelectors(selector).map(part => {
+                    const sel = part.trim();
+                    if (!sel || sel.startsWith('@') || sel.includes(scope)) return sel;
+                    return `${scope} ${sel}`;
+                }).filter(Boolean).join(',');
+                out += `${scoped}{`;
+                selector = '';
+            } else out += ch;
+            depth += 1;
+        } else if (ch === '}') {
+            depth = Math.max(0, depth - 1);
+            out += ch;
+        } else if (depth === 0) selector += ch;
+        else out += ch;
+    }
+    return out;
+}
+
+// 手机布局写在 max-width 媒体查询里。信比视口窄，桌面上看不到那套规则，这里把它们固定作用在楼层壳上。
+export function promoteNarrowLayout(css, scope = '.rmt-floor-shell') {
+    const source = String(css || '');
+    const chunks = [];
+    const pattern = /@media[^{]*max-width\s*:\s*\d+px[^{]*\{/g;
+    let match = pattern.exec(source);
+    while (match) {
+        const start = match.index + match[0].length;
+        let depth = 1;
+        let index = start;
+        while (index < source.length && depth > 0) {
+            if (source[index] === '{') depth += 1;
+            else if (source[index] === '}') depth -= 1;
+            index += 1;
+        }
+        chunks.push(scopeNarrowRules(source.slice(start, index - 1), scope));
+        match = pattern.exec(source);
+    }
+    return chunks.join('\n');
 }
 
 export const GENERATION_STALL_MS = 90_000;

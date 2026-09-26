@@ -20,6 +20,7 @@ import * as core_requestCoordinator from '../core/requestCoordinator.js';
 import * as core_text from '../core/text.js';
 import * as ui_floor from './chatFloorNav.js';
 import * as ui_reveal from './memoryReveal.js';
+import * as room_layout from '../modes/roomLayout.js';
 import * as ui_styles from './styles.js';
 import * as ui_taskCenter from './taskCenter.js';
 
@@ -47,11 +48,15 @@ function mirrorModuleCss() {
     try { ui_styles.ensureStyles(); } catch { /* 样式还没准备好时，楼层壳仍显示摘要。 */ }
     const source = document.getElementById(core_constants.STYLE_ID);
     if (!source || document.getElementById('rmt-floor-module-css')) return;
+    const copied = source.textContent.replaceAll(`#${core_constants.OVERLAY_ID}`, '.rmt-floor-shell');
+    const roomCss = room_layout.roomLayoutCss('.rmt-floor-shell');
     const style = document.createElement('style');
     style.id = 'rmt-floor-module-css';
-    style.textContent = `${source.textContent.replaceAll(`#${core_constants.OVERLAY_ID}`, '.rmt-floor-shell')}
-.rmt-floor-shell{position:relative!important;inset:auto!important;z-index:auto!important;height:auto!important;width:min(96%,640px)!important;max-height:none!important;display:block!important;padding:0!important;background:transparent!important;backdrop-filter:none!important}
-${shell_state.floorShellCss()}`;
+    style.textContent = `${copied}
+.rmt-floor-shell{position:relative!important;inset:auto!important;z-index:auto!important;height:auto!important;width:min(96%,420px)!important;max-height:none!important;display:block!important;padding:0!important;background:transparent!important;backdrop-filter:none!important}
+${shell_state.floorShellCss()}
+${roomCss}
+${shell_state.promoteNarrowLayout(`${copied}\n${roomCss}`)}`;
     document.head?.appendChild(style);
 }
 

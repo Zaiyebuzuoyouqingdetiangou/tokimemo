@@ -269,24 +269,27 @@ function albumSurface(session) {
     const entries = Array.isArray(session.entries) ? session.entries : [];
     if (!entries.length) return '';
     const cards = entries.map(item => `<article class="rmt-card"><div class="rmt-thumb"><div class="rmt-abstract"></div></div><div class="rmt-card-meta"><div class="rmt-card-title">${esc(textOf(item.title) || '回忆')}</div><div class="rmt-card-date">${esc(textOf(item.date))}</div><div class="rmt-card-desc">${esc(textOf(item.desc) || textOf(item.comment))}</div></div></article>`).join('');
-    return `<div class="rmt-album"><div class="rmt-album-layout"><section class="rmt-grid-wrap"><div class="rmt-grid">${cards}</div></section></div></div>`;
+    const info = entries.map(item => `<h3>${esc(textOf(item.title) || '回忆')}</h3><div class="rmt-info-date">${esc(textOf(item.date))}</div><div class="rmt-info-desc">${esc(textOf(item.desc) || textOf(item.comment))}</div>`).join('');
+    return `<div class="rmt-album"><div class="rmt-album-head"><h2>${esc(textOf(session.title) || '回忆相簿')}</h2></div><div class="rmt-album-layout"><section class="rmt-grid-wrap"><div class="rmt-grid">${cards}</div></section><aside class="rmt-info">${info}</aside></div></div>`;
 }
 
 function advSurface(session) {
     const events = Array.isArray(session.events) ? session.events : [];
     if (!events.length) return '';
     const list = events.map((item, index) => `<div class="rmt-event"><span class="rmt-event-index">${String(index + 1).padStart(2, '0')}</span><span class="rmt-event-copy"><b>${esc(textOf(item.title))}</b><small>${esc(textOf(item.date))}</small></span></div>`).join('');
+    const picker = `<div class="rmt-adv-mobile-picker"><div class="rmt-adv-picker-status"><b>事件</b><span>${esc(events.map(item => textOf(item.title)).filter(Boolean).join(' · ') || '这一轮')}</span></div></div>`;
     const reading = events.map(item => {
         const paras = Array.isArray(item.adv?.paragraphs) ? item.adv.paragraphs : [];
         return `<div class="rmt-adv-reading-copy"><h3>${esc(textOf(item.title))}</h3>${paras.map(paragraph => `<div class="rmt-adv-para">${esc(textOf(paragraph))}</div>`).join('')}</div>`;
     }).join('');
-    return `<div class="rmt-adv rmt-adv-reading"><aside class="rmt-event-list"><div class="rmt-event-items">${list}</div></aside><section class="rmt-event-detail"><div class="rmt-adv-reading-layout rmt-adv-text-first">${reading}</section></section></div>`;
+    return `<div class="rmt-adv rmt-adv-reading"><aside class="rmt-event-list">${picker}<div class="rmt-event-items">${list}</div></aside><section class="rmt-event-detail"><div class="rmt-adv-reading-layout rmt-adv-text-first">${reading}</section></section></div>`;
 }
 
 function inboxSurface(session) {
     const letters = Array.isArray(session.letters) ? session.letters : [];
     if (!letters.length) return '';
-    return `<section class="rmt-inbox">${letters.map(letter => `<div class="rmt-mail-paper"><header><h2>${esc(textOf(letter.title) || '来信')}</h2></header><b>${esc(textOf(letter.greeting))}</b><p>${esc(textOf(letter.body))}</p><footer>${esc(textOf(letter.closing))}</footer></div>`).join('')}</section>`;
+    const papers = letters.map(letter => `<div class="rmt-mail-row"><b>${esc(textOf(letter.title) || '来信')}</b></div><div class="rmt-mail-paper"><header><h2>${esc(textOf(letter.title) || '来信')}</h2></header><b>${esc(textOf(letter.greeting))}</b><p>${esc(textOf(letter.body))}</p><footer>${esc(textOf(letter.closing))}</footer></div>`).join('');
+    return `<section class="rmt-inbox"><header class="rmt-mail-header"><div><h2>${esc(textOf(session.recipient) || '你')}的邮箱</h2></div></header>${papers}</section>`;
 }
 
 function cabinetSurface(session) {
@@ -295,20 +298,45 @@ function cabinetSurface(session) {
     return `<section class="rmt-cabinet"><div class="rmt-cabinet-shelves">${items.map((item, index) => `<details class="rmt-cabinet-piece" open><summary><small>No. ${String(index + 1).padStart(2, '0')}</small><b>${esc(textOf(item.name) || '纪念')}</b></summary><div class="rmt-cabinet-detail"><blockquote>${esc(textOf(item.objectEvidence) || textOf(item.summary) || textOf(item.text))}</blockquote></div></details>`).join('')}</div></section>`;
 }
 
+const ROOM_ICON = '<svg viewBox="0 0 32 32" aria-hidden="true"><path d="m16 3 12 7v13l-12 7L4 23V10z" fill="none" stroke="currentColor" stroke-width="1.7"/></svg>';
+
+function roomObjectHtml(item, index, scene) {
+    const label = textOf(item?.label) || textOf(item?.name) || '物件';
+    const klass = scene ? 'rmt-room-layout-object' : 'rmt-room-object-chip rmt-room-layout-chip';
+    return `<div class="${klass}" data-rmt-visual-kind="other"><span class="rmt-room-layout-number">${index + 1}</span>${ROOM_ICON}<b class="rmt-room-layout-name">${esc(label)}</b></div>`;
+}
+
 function roomSurface(session) {
     const spaces = Array.isArray(session.spaces) ? session.spaces : [];
+    const focus = spaces[0] || null;
+    const focusObjects = Array.isArray(focus?.objects) ? focus.objects : [];
+    const map = spaces.map((space, index) => `<div class="rmt-room-space${index === 0 ? ' active present' : ''}"><b>${esc(textOf(space?.label) || '房间')}</b></div>`).join('');
+    const scene = focusObjects.map((item, index) => roomObjectHtml(item, index, true)).join('');
+    const rail = [];
     const cards = [];
-    for (const space of spaces) {
+    spaces.forEach(space => {
         const objects = Array.isArray(space?.objects) ? space.objects : [];
-        if (!objects.length && (textOf(space?.label) || textOf(space?.atmosphere))) {
-            cards.push(`<section class="rmt-room-card"><div class="rmt-room-object-title">${esc(textOf(space.label) || '房间')}</div><div class="rmt-room-object-desc">${esc(textOf(space.atmosphere))}</div></section>`);
-        }
-        for (const item of objects) {
+        objects.forEach((item, index) => {
+            rail.push(roomObjectHtml(item, index, false));
             cards.push(`<section class="rmt-room-card"><div class="rmt-room-card-kicker">${esc(textOf(space?.label) || '房间')}</div><div class="rmt-room-object-title">${esc(textOf(item.label) || textOf(item.name) || '物件')}</div><div class="rmt-room-object-desc">${esc(textOf(item.description))}</div>${textOf(item.line) ? `<div class="rmt-room-object-line"><p>${esc(textOf(item.line))}</p></div>` : ''}</section>`);
-        }
-    }
-    if (!cards.length && textOf(session.homeSummary)) cards.push(`<section class="rmt-room-card"><div class="rmt-room-object-desc">${esc(session.homeSummary)}</div></section>`);
-    return cards.length ? `<div class="rmt-room-view"><div class="rmt-room-flow">${cards.join('')}</div></div>` : '';
+        });
+    });
+    if (!map && !scene && !cards.length && !textOf(session.homeSummary)) return '';
+    const summary = textOf(focus?.atmosphere) || textOf(session.homeSummary);
+    return `<div class="rmt-room-view" data-rmt-room-daypart="daytime">
+      <div class="rmt-room-map" aria-label="私人空间地图">${map}</div>
+      <div class="rmt-room-location"><div><b>${esc(textOf(focus?.label) || textOf(session.homeName) || '他的房间')}</b><small>${esc(textOf(session.homeName) || '')} · ${spaces.length} 个可观察区域</small></div></div>
+      <div class="rmt-room-flow">
+        <section class="rmt-room-stage">
+          <div class="rmt-room-stage-head"><b>${esc(textOf(focus?.label) || '房间')}</b></div>
+          <div class="rmt-room-scene rmt-room-layout-scene" data-rmt-room-daypart="daytime"><div class="rmt-room-interior-layout"><div class="rmt-room-object-layout">${scene}</div></div></div>
+          <div class="rmt-room-object-rail" aria-label="房间物件">${rail.join('')}</div>
+          <div class="rmt-room-caption"><b>${esc(textOf(focus?.label) || '房间')}：</b>${esc(summary)}</div>
+        </section>
+        ${cards.join('')}
+        <section class="rmt-room-card rmt-room-private-life-card"><div class="rmt-room-card-kicker">房间介绍</div><div class="rmt-room-atmosphere">${esc(summary)}</div></section>
+      </div>
+    </div>`;
 }
 
 function itemsSurface(session) {
@@ -322,38 +350,50 @@ function itemsSurface(session) {
     };
     for (const box of Array.isArray(session.containers) ? session.containers : []) walk(box?.nodes);
     if (!nodes.length) return '';
-    const list = nodes.map(node => `<div class="rmt-item-node"><span><b>${esc(textOf(node.label) || '物品')}</b></span></div>`).join('');
+    const boxes = (Array.isArray(session.containers) ? session.containers : []).map((box, index) => `<div class="rmt-event${index === 0 ? ' active' : ''}"><b>${esc(textOf(box?.label) || '收纳')}</b><small>${esc(textOf(box?.containerType))}</small></div>`).join('');
+    const list = nodes.map(node => `<div class="rmt-item-node"><span><b>${esc(textOf(node.label) || '物品')}</b><small>${esc(textOf(node.summary))}</small></span></div>`).join('');
     const detail = nodes.map(node => `<div class="rmt-item-detail"><div class="rmt-item-detail-head"><b>${esc(textOf(node.label) || '物品')}</b></div><p>${esc(textOf(node.summary))}</p>${textOf(node.line) ? `<blockquote>${esc(textOf(node.line))}</blockquote>` : ''}</div>`).join('');
-    return `<div class="rmt-items"><section class="rmt-items-main"><div class="rmt-items-grid"><div class="rmt-items-list">${list}</div>${detail}</div></section></div>`;
+    return `<div class="rmt-items"><aside class="rmt-items-boxes">${boxes}</aside><section class="rmt-items-main"><div class="rmt-items-grid"><div class="rmt-items-list">${list}</div><div>${detail}</div></div></section></div>`;
 }
 
 function calendarSurface(session) {
     const entries = Array.isArray(session.entries) ? session.entries : [];
     if (!entries.length) return '';
+    const days = entries.map(item => `<div class="rmt-calendar-day marked"><span class="rmt-calendar-day-number">${esc((textOf(item.date).match(/\d{1,2}(?!\d)/) || [''])[0] || '·')}</span><span class="rmt-calendar-day-title">${esc(textOf(item.title) || '日子')}</span></div>`).join('');
     const notes = entries.map(item => `<article class="rmt-calendar-sticky memo"><span class="rmt-calendar-sticky-pin" aria-hidden="true"></span><small>STICKY NOTE</small><h3>${esc(textOf(item.title) || '日子')}</h3><p>${esc(textOf(item.text) || textOf(item.note) || textOf(item.summary))}</p><footer>${esc(textOf(item.date))}</footer></article>`).join('');
-    return `<div class="rmt-calendar-shell rmt-calendar-v3">${notes}</div>`;
+    return `<div class="rmt-calendar-shell rmt-calendar-v3"><section class="rmt-calendar-hero compact"><div><h2>${esc(textOf(session.title) || '两个人的日历')}</h2></div><div class="rmt-calendar-counts"><span><b>${entries.length}</b> 日子</span></div></section><section class="rmt-calendar-paper"><div class="rmt-calendar-grid">${days}</div></section><section class="rmt-calendar-notebook-board"><section class="rmt-calendar-sticky-panel"><div class="rmt-calendar-sticky-grid">${notes}</div></section></section></div>`;
 }
 
 function travelSurface(session) {
     const locations = Array.isArray(session.locations) ? session.locations : (Array.isArray(session.routes) ? session.routes : []);
     if (!locations.length) return '';
-    return locations.map(item => `<section class="rmt-travel-postcard"><div class="rmt-travel-postcard-back"><div class="rmt-travel-postcard-copy"><b>${esc(textOf(item.name) || textOf(item.title) || '地点')}</b><p>${esc(textOf(item.note) || textOf(item.summary) || textOf(item.description))}</p></div></div></section>`).join('');
+    const markers = locations.map((item, index) => {
+        const angle = (-Math.PI / 2) + (Math.PI * 2 * index / locations.length);
+        const x = (50 + Math.cos(angle) * 28).toFixed(1);
+        const y = (50 + Math.sin(angle) * 22).toFixed(1);
+        const kind = item?.kind === 'far' ? 'far' : 'near';
+        return `<div class="rmt-travel-marker ${kind}" style="--map-x:${x}%;--map-y:${y}%"><span>${esc(textOf(item.name) || textOf(item.title) || '地点')}</span></div>`;
+    }).join('');
+    const index = locations.map(item => `<div><span><b>${esc(textOf(item.name) || textOf(item.title) || '地点')}</b><small>${esc(textOf(item.note) || textOf(item.summary) || textOf(item.description) || textOf(item.region))}</small></span></div>`).join('');
+    return `<div class="rmt-travel"><header class="rmt-travel-head"><div><h2>${esc(textOf(session.title) || '他的出行路线')}</h2><p>${esc(textOf(session.routeSummary))}</p></div></header><div class="rmt-travel-layout"><section class="rmt-travel-map" aria-label="他的出行路线地图">${markers}</section><aside class="rmt-travel-index"><nav>${index}</nav></aside></div></div>`;
 }
 
 function endingSurface(session) {
     const endings = Array.isArray(session.endings) ? session.endings : [];
     const replays = Array.isArray(session.confessionReplays) ? session.confessionReplays : [];
     if (!endings.length && !replays.length) return '';
-    const routes = endings.map(item => `<article class="rmt-ending-detail"><div class="rmt-ending-head"><h2>${esc(textOf(item.title) || '结局')}</h2></div><p class="rmt-ending-prose">${esc(textOf(item.summary) || textOf(item.epilogue) || textOf(item.body))}</p></article>`).join('');
+    const routes = endings.map(item => `<div class="rmt-ending-route"><b>${esc(textOf(item.title) || '结局')}</b><span>${esc(textOf(item.summary) || textOf(item.epilogue) || textOf(item.body))}</span></div>`).join('');
+    const detail = endings.map(item => `<article class="rmt-ending-detail"><div class="rmt-ending-head"><h2>${esc(textOf(item.title) || '结局')}</h2></div><p class="rmt-ending-prose">${esc(textOf(item.summary) || textOf(item.epilogue) || textOf(item.body))}</p></article>`).join('');
     const confessions = replays.map(item => `<div class="rmt-confession-card"><b>${esc(textOf(item.title))}</b><span>${esc(textOf(item.scene) || textOf(item.subtitle))}</span></div>`).join('');
-    return `<div class="rmt-ending">${routes}${confessions}</div>`;
+    return `<div class="rmt-ending"><nav class="rmt-ending-list">${routes}${confessions}</nav><main class="rmt-ending-detail">${detail}</main></div>`;
 }
 
 function butterflySurface(session) {
     const nodes = Array.isArray(session.nodes) ? session.nodes : [];
     if (!nodes.length) return '';
+    const branches = nodes.map((node, index) => `<div class="rmt-node rmt-branch-node"><span>${String(index + 1).padStart(2, '0')}</span>${esc(textOf(node.label) || textOf(node.code) || '观测')}</div>`).join('');
     const blocks = nodes.map(node => `<section class="rmt-terminal-block rmt-observation-screen"><div class="rmt-terminal-section-title">${esc(textOf(node.label) || textOf(node.code) || '观测')}</div><div class="rmt-mono">${esc(textOf(node.monologue) || textOf(node.intervention) || textOf(node.systemNote))}</div></section>`).join('');
-    return `<div class="rmt-crt"><div class="rmt-crt-content">${blocks}</div></div>`;
+    return `<div class="rmt-crt"><div class="rmt-crt-content"><div class="rmt-tree-branches">${branches}</div>${blocks}</div></div>`;
 }
 
 function songSurface(session) {
@@ -438,7 +478,8 @@ export function roundReadingHtml(session, identity = {}) {
         charAvatar: identity.charAvatar || '',
         userAvatar: identity.userAvatar || '',
     };
-    const heart = heartHtml(session, who);
+    const heartBody = heartHtml(session, who);
+    const heart = heartBody ? `<div class="rmt-heart"><div class="rmt-heart-drama-layout"><main>${heartBody}</main></div></div>` : '';
     const phone = phoneHtml(session);
     const surface = moduleSurface(session);
     if (heart || phone || surface) return `<div class="rmt-round-reading">${heart}${phone}${surface}</div>`;

@@ -209,7 +209,25 @@ test('the letter offers repair and retry only when that work is still open', () 
     assert.equal(garden.includes('星野南'), true);
     const album = view.roundReadingHtml({ kind: 'album', entries: [{ title: '雨天', date: '春', desc: '伞' }] });
     assert.equal(album.includes('rmt-card'), true);
+    assert.equal(album.includes('rmt-album-layout'), true);
     assert.equal(album.includes('雨天'), true);
+    const room = view.roundReadingHtml({
+        kind: 'room',
+        homeName: '私人生活空间',
+        spaces: [{ label: '书桌边', atmosphere: '灯还亮着', objects: [{ label: '台灯', description: '暖光', line: '先坐。' }] }],
+    });
+    assert.equal(room.includes('rmt-room-map'), true);
+    assert.equal(room.includes('rmt-room-scene'), true);
+    assert.equal(room.includes('rmt-room-object-layout'), true);
+    assert.equal(room.includes('台灯'), true);
+    const narrow = shell.promoteNarrowLayout('@media(max-width:760px){.rmt-album-layout{grid-template-columns:1fr}.rmt-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(min-width:900px){.rmt-grid{grid-template-columns:repeat(4,1fr)}}');
+    assert.equal(narrow.includes('@media'), false);
+    assert.equal(narrow.includes('.rmt-floor-shell .rmt-grid'), true);
+    assert.equal(narrow.includes('repeat(2'), true);
+    assert.equal(narrow.includes('repeat(4'), false);
+    const already = shell.promoteNarrowLayout('@media(max-width:600px){.rmt-floor-shell .rmt-room-object-layout{grid-template-columns:repeat(2,minmax(0,1fr))}}');
+    assert.equal(already.includes('.rmt-floor-shell .rmt-floor-shell'), false);
+    assert.equal(already.includes('.rmt-floor-shell .rmt-room-object-layout'), true);
     const quiet = shell.generationStall({ active: true, running: false, signature: 'a', previous: { signature: 'a', since: 1000 }, now: 1000 + 89999 });
     assert.equal(quiet.stalled, false);
     const stalledClock = shell.generationStall({ active: true, running: false, signature: 'a', previous: { signature: 'a', since: 1000 }, now: 1000 + 90000 });
