@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 286
-// Source SHA-256: dec0fd02f12324a3cf4d41be8fbb3373c445cf5554c33788450c68e4cb7842e0
+// Source SHA-256: edaccc9c0dd6d8d1f06457b924277c7bd7c07bf6d76440c10a0c82e97a8bef89
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -7432,6 +7432,7 @@ async function sweepLostLetters(context) {
         modulePlan: clearActive ? null : snapshot.modulePlan,
     });
     await persistSnapshot(context, next);
+    try { ui_taskCenter.clearAutoMemoryFloorFailure(); } catch { /* 任务条稍后还会刷。 */ }
     globalThis.toastr?.info?.('这一楼的正文已经没了，那一轮的回忆和成就一起收走了。', '心迹回廊');
     return true;
 }
@@ -71547,7 +71548,7 @@ function overlayArchiveActions(actionEl, action) {
     if (action === 'travel-dialogue-prev') return ui_travelView.travelDialogueStep(-1);
     if (action === 'travel-dialogue-next') return ui_travelView.travelDialogueStep(1);
     if (action === 'travel-dialogue-replay') return ui_travelView.replayTravelDialogue();
-    if (action === 'tasks' || action === 'task-center-close' || action === 'task-cancel' || action === 'task-cancel-current' || action === 'task-open' || action === 'task-second-step' || action === 'task-queue-remove' || action === 'task-clear-done' || action === 'task-retry-state' || action === 'task-floor-complete' || action === 'task-floor-retry' || action === 'queue-selected' || action === 'generate-together' || action === 'merged-repair' || action === 'merged-resave' || ['merged-discard', 'merged-new', 'merged-export', 'merged-export-legacy', 'merged-discard-legacy'].includes(action)) {
+    if (action === 'tasks' || action === 'task-center-close' || action === 'task-cancel' || action === 'task-cancel-current' || action === 'task-open' || action === 'task-second-step' || action === 'task-queue-remove' || action === 'task-retry-queue' || action === 'task-clear-done' || action === 'task-retry-state' || action === 'task-floor-complete' || action === 'task-floor-retry' || action === 'task-archive-retry' || action === 'task-archive-restart' || action === 'queue-selected' || action === 'generate-together' || action === 'merged-repair' || action === 'merged-resave' || ['merged-discard', 'merged-new', 'merged-export', 'merged-export-legacy', 'merged-discard-legacy'].includes(action)) {
         return ui_taskCenter.handleTaskCenterAction(action, actionEl);
     }
     if (action === 'close') return closeArchiveOverlayFromUser();
@@ -72028,7 +72029,10 @@ function overlayClickRecordTargets(event) {
     const archiveRecoveryButton = event.target.closest?.('[data-rmt-archive-recovery]');
     if (archiveRecoveryButton) return void recovery_action.runRecoveryAction(archiveRecoveryButton, recoveryButtonKey('archive-retry', archiveRecoveryButton, archiveRecoveryButton.dataset.rmtArchiveRecovery), () => (archiveRecoveryButton.dataset.rmtArchiveRecovery === 'profile'
         ? archive_repository.rewriteCurrentArchiveVerdict({ draftId: archiveRecoveryButton.dataset.rmtArchiveRecoveryDraftId || '' })
-        : archive_repository.continueCurrentArchiveImport({ draftId: archiveRecoveryButton.dataset.rmtArchiveRecoveryDraftId || '' })), { label: '正在继续…' });
+        : archive_repository.continueCurrentArchiveImport({ draftId: archiveRecoveryButton.dataset.rmtArchiveRecoveryDraftId || '' }).then(result => {
+            if (result?.status === 'blocked') globalThis.toastr?.info?.('现在没有可继续的整理草稿。', '心迹回廊');
+            return result;
+        })), { label: '正在继续…' });
     const expandedCgButton = event.target.closest?.('[data-rmt-expanded-cg]');
     if (expandedCgButton) return void expanded_cg_view.handleExpandedCgButton(expandedCgButton);
     const bedtimeButton = event.target.closest?.('[data-rmt-bedtime]');
@@ -73882,7 +73886,7 @@ function runRecoveryAction(button, key, operation, { label = '处理中…', tit
     const wasDisabled = button?.disabled === true;
     if (button) { button.disabled = true; button.textContent = label; button.setAttribute?.('aria-busy', 'true'); }
     const task = Promise.resolve().then(operation).catch(error => {
-        if (error?.name !== 'AbortError') globalThis.toastr?.error?.(text.safeErrorSummary(error), title, { preventDuplicates: true });
+        if (error?.name !== 'AbortError') globalThis.toastr?.error?.(text.safeErrorSummary(error), title);
     }).finally(() => {
         pending.delete(key);
         if (button) { button.disabled = wasDisabled; button.textContent = original; button.removeAttribute?.('aria-busy'); }
@@ -77615,10 +77619,10 @@ function failedTaskRetrySpec({ kind = '', mode = '', pageId = '', draftId = '', 
 function retryButtonHtml(spec) {
     if (!spec?.label) return '';
     const esc = core_text.esc;
-    if (spec.archiveRestart) return `<button type="button" class="rmt-btn" data-rmt-archive-restart>${esc(spec.label)}</button>`;
+    if (spec.archiveRestart) return `<button type="button" class="rmt-btn" data-rmt-action="task-archive-restart" data-rmt-archive-restart>${esc(spec.label)}</button>`;
     if (spec.archive === 'import' || spec.archive === 'profile') {
         const draftAttr = spec.draftId ? ` data-rmt-archive-recovery-draft-id="${esc(spec.draftId)}"` : '';
-        return `<button type="button" class="rmt-btn" data-rmt-archive-recovery="${spec.archive}"${draftAttr}>${esc(spec.label)}</button>`;
+        return `<button type="button" class="rmt-btn" data-rmt-action="task-archive-retry" data-rmt-archive-recovery="${spec.archive}"${draftAttr}>${esc(spec.label)}</button>`;
     }
     if (spec.queueRoute) return `<button type="button" class="rmt-btn" data-rmt-action="task-retry-queue" data-rmt-queue-id="${esc(spec.queueId || '')}">${esc(spec.label)}</button>`;
     if (spec.mode && spec.draftId) return `<button type="button" class="rmt-btn" data-rmt-recovery-mode="${esc(spec.mode)}" data-rmt-recovery-draft-id="${esc(spec.draftId)}" data-rmt-recovery-page-id="${esc(spec.pageId || '')}">${esc(spec.label)}</button>`;
@@ -78034,17 +78038,50 @@ function handleTaskCenterAction(action, actionEl) {
             globalThis.toastr?.info?.('这项现在还不能重试。', '心迹回廊');
             return;
         }
+        const next = button.dataset?.rmtAction;
+        if (next && next !== 'task-retry-state') return handleTaskCenterAction(next, button);
         button.click();
+        return;
+    }
+    if (action === 'task-archive-retry' || action === 'task-archive-restart') {
+        const profile = actionEl?.dataset?.rmtArchiveRecovery === 'profile';
+        const draftId = actionEl?.dataset?.rmtArchiveRecoveryDraftId || '';
+        if (action === 'task-archive-restart') {
+            if (runtimeState.busy || core_requestCoordinator.hasGenerationTasks()) {
+                globalThis.toastr?.info?.('现在还有任务在跑，等它停住再另起整理。', '心迹回廊');
+                return;
+            }
+            if (!ui_overlay.confirmExplicitAction('按当前条件另起整理任务？',
+                '正式档案与旧 Mxxx 保持不变。当前未提交草稿暂停并保留，可导出；是否已保存到本机请看草稿状态。已保存的批次检查点随下一次成功保存一并保留。新任务使用当前来源与配置，可能重新处理旧任务尚未正式入档的片段并消耗额度。零成功草稿也可这样重新开始。',
+                { destructive: false })) return;
+            void archive_repository.restartCurrentArchiveImport().catch(error => {
+                globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊');
+            });
+            return;
+        }
+        const run = profile
+            ? archive_repository.rewriteCurrentArchiveVerdict({ draftId })
+            : archive_repository.continueCurrentArchiveImport({ draftId });
+        void Promise.resolve(run).then(result => {
+            if (result?.status === 'blocked') globalThis.toastr?.info?.('现在没有可继续的整理草稿。', '心迹回廊');
+        }).catch(error => {
+            globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊');
+        });
         return;
     }
     if (action === 'task-floor-complete' || action === 'task-floor-retry') {
         clearAutoMemoryFloorFailure();
-        const run = action === 'task-floor-complete' ? 'completeFloorRound' : 'resumeFloorPlan';
+        const run = action === 'task-floor-complete' ? 'completeFloorRound' : 'retryFloorRound';
         const waiting = action === 'task-floor-complete' ? '等这楼正文写完，再补这一页。' : '等这楼正文写完，再重写这一页。';
-        void import('../autoMemory/scheduler.js').then(mod => mod[run]()).then(result => {
+        void import('../autoMemory/scheduler.js').then(mod => {
+            if (typeof mod[run] !== 'function') throw new Error(`missing ${run}`);
+            return mod[run]();
+        }).then(result => {
             if (result?.action === 'wait' || result?.action === 'busy') globalThis.toastr?.info?.(waiting, '心迹回廊');
+            else if (result?.action === 'idle') globalThis.toastr?.info?.('这一轮已经没有可以补的了。', '心迹回廊');
         }).catch(error => {
             console.warn('[HeartbeatMemories] floor recovery skipped', core_text.safeErrorDiagnostic(error));
+            globalThis.toastr?.info?.('这次没能重试，请再点一次。', '心迹回廊');
         });
         return;
     }
@@ -78064,7 +78101,10 @@ function handleTaskCenterAction(action, actionEl) {
     }
     if (action === 'task-retry-queue') {
         const item = queue.find(row => row.id === (actionEl?.dataset?.rmtQueueId || '') && row.status === 'failed' && row.route);
-        if (!item || item.scope !== currentScope()) return;
+        if (!item || item.scope !== currentScope()) {
+            globalThis.toastr?.info?.('这项已经不在队列里。', '心迹回廊');
+            return;
+        }
         if (queue.some(row => row !== item && row.scope === item.scope && row.route === item.route && (row.status === 'queued' || row.status === 'running'))) {
             globalThis.toastr?.info?.('这项已经在队列里。', '心迹回廊');
             return;

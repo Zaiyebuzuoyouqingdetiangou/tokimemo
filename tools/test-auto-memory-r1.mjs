@@ -194,4 +194,5 @@ test('wizard completion round-trips and does not rewrite corrupt or old settings
     assert.equal(tasks.failedTaskRetrySpec({ oversized: true, mode: 'album', draftId: 'd1' }), null);
     assert.equal(tasks.failedTaskRetrySpec({ kind: 'logical' }), null);
     assert.equal(tasks.failedTaskRetrySpec({ queueRoute: 'album', queueId: 'q1' }).queueId, 'q1');
+    assert.equal(tasks.handleTaskCenterAction('task-retry-queue', { dataset: { rmtQueueId: 'missing' } }), undefined);
 });

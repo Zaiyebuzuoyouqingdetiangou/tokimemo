@@ -1015,6 +1015,7 @@ async function sweepLostLetters(context) {
         modulePlan: clearActive ? null : snapshot.modulePlan,
     });
     await persistSnapshot(context, next);
+    try { ui_taskCenter.clearAutoMemoryFloorFailure(); } catch { /* 任务条稍后还会刷。 */ }
     globalThis.toastr?.info?.('这一楼的正文已经没了，那一轮的回忆和成就一起收走了。', '心迹回廊');
     return true;
 }
