@@ -122,10 +122,22 @@ test('the letter offers repair and retry only when that work is still open', () 
     assert.equal(empty.canRedo, true);
     const heart = view.incrementalProjection({
         relationshipSummary: '还在说话',
-        fireflyVoices: [{ id: 'F01', title: '灯' }],
+        fireflyVoices: [
+            { id: 'old', title: '旧的萤火虫' },
+            { id: 'F01', title: '灯', sourceMemoryIds: ['M100'] },
+        ],
     }, { sourceMemoryIds: ['M100'], since: 0 });
     assert.equal(heart.kept, true);
-    assert.equal(heart.session.fireflyVoices.length, 1);
+    assert.deepEqual(heart.session.fireflyVoices.map(item => item.id), ['F01']);
+    assert.equal(view.roundReadingHtml(heart.session).includes('灯'), true);
+    assert.equal(view.roundReadingHtml(heart.session).includes('旧的萤火虫'), false);
+    assert.equal(view.roundReadingHtml(heart.session).includes('选择你想看的那一页'), false);
+    const tail = view.incrementalProjection({
+        fireflyVoices: [{ id: 'old', title: '旧' }, { id: 'new', title: '这一轮' }],
+        generationMeta: { lastUpdate: { added: 1, updatedAt: 80, consumedMemoryIds: ['M100'] } },
+    }, { sourceMemoryIds: ['M100'], since: 50 });
+    assert.equal(tail.kept, true);
+    assert.deepEqual(tail.session.fireflyVoices.map(item => item.id), ['new']);
     const stale = view.incrementalProjection({
         relationshipSummary: '旧的',
         generationMeta: { lastUpdate: { added: 0, updatedAt: 10, consumedMemoryIds: ['M001'] } },

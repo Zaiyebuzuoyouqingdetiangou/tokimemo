@@ -2,7 +2,6 @@
 import * as archive_repository from '../archive/repository.js';
 import * as incremental_view from '../autoMemory/incrementalView.js';
 import * as core_cache from '../core/cache.js';
-import { state as runtimeState } from '../core/state.js';
 import * as auto_memory_floor from '../autoMemory/floorPace.js';
 import * as auto_memory_gap from '../autoMemory/gapFill.js';
 import * as auto_memory_plan from '../autoMemory/planStore.js';
@@ -18,7 +17,6 @@ import * as core_requestCoordinator from '../core/requestCoordinator.js';
 import * as core_text from '../core/text.js';
 import * as ui_floor from './chatFloorNav.js';
 import * as ui_reveal from './memoryReveal.js';
-import * as ui_overlay from './overlay.js';
 import * as ui_styles from './styles.js';
 import * as ui_taskCenter from './taskCenter.js';
 
@@ -27,11 +25,6 @@ let lastPhase = '';
 let sawPhase = false;
 let autoRepairLatch = '';
 let timer = 0;
-let letterSession = null;
-let letterMode = '';
-let letterParked = false;
-let parkedMode = null;
-let parkedSession = null;
 
 export function floorShellCss() {
     return shell_state.floorShellCss();
@@ -66,20 +59,7 @@ function latestAssistantIndex(chat) {
     return -1;
 }
 
-function releaseLetterRuntime() {
-    if (letterParked && runtimeState.activeSession === letterSession) {
-        runtimeState.activeMode = parkedMode;
-        runtimeState.activeSession = parkedSession;
-    }
-    letterParked = false;
-    parkedMode = null;
-    parkedSession = null;
-    letterSession = null;
-    letterMode = '';
-}
-
 function clearShells() {
-    releaseLetterRuntime();
     document.querySelectorAll('[data-rmt-floor-shell]').forEach(node => node.remove());
 }
 
@@ -241,7 +221,12 @@ function paint(context) {
     host.dataset.rmtGap = view.gapText || '';
     host.dataset.rmtPending = view.phase === 'reveal' ? '0' : '1';
     if (sameLetter) {
-        if (paper && !paper.hidden && body?.childElementCount) return;
+        if (floorWorkspace(body)) {
+            if (body.dataset.rmtFloorLive === '1') body.removeAttribute('data-rmt-floor-live');
+            if (view.canOpen) writeRound(body, view.moduleId, view.revealId);
+            else body.replaceChildren();
+        }
+        if (paper && !paper.hidden && body?.childElementCount && !floorWorkspace(body)) return;
         const title = host.querySelector('[data-rmt-letter-title]');
         const detail = host.querySelector('[data-rmt-letter-detail]');
         if (title && view.phase !== 'reveal') title.textContent = view.title;
@@ -315,16 +300,26 @@ function incrementFor(moduleId, revealId) {
     }
 }
 
-function engageLetter(body) {
-    if (!body || !letterSession) return false;
-    if (!letterParked) {
-        parkedMode = runtimeState.activeMode;
-        parkedSession = runtimeState.activeSession;
-        letterParked = true;
+function floorWorkspace(body) {
+    return body?.querySelector?.('.rmt-workspace-catalogue, .rmt-archive-room, .rmt-workspace-page, .rmt-heart, .rmt-album, .rmt-adv, .rmt-ending, .rmt-room-view');
+}
+
+function writeRound(body, moduleId, revealId) {
+    const increment = incrementFor(moduleId, revealId);
+    if (!increment.kept) {
+        const phase = body.closest?.('[data-rmt-floor-shell]')?.dataset?.rmtPhase || '';
+        const writing = phase === 'generating' || phase === 'planning';
+        body.innerHTML = writing
+            ? '<p class="rmt-floor-note">回忆正在生成中。</p>'
+            : '<p class="rmt-floor-note">这一轮写完了，但是没有新的段落。</p><div class="rmt-heart-letter-actions"><button type="button" class="rmt-btn" data-rmt-floor-complete>补全</button><button type="button" class="rmt-btn" data-rmt-floor-redo>重试</button></div>';
+        return false;
     }
-    body.dataset.rmtFloorLive = '1';
-    runtimeState.activeMode = letterMode;
-    runtimeState.activeSession = letterSession;
+    const html = incremental_view.roundReadingHtml(increment.session);
+    if (!html) {
+        body.innerHTML = '<p class="rmt-floor-note">这一轮写完了，但是没有新的段落。</p><div class="rmt-heart-letter-actions"><button type="button" class="rmt-btn" data-rmt-floor-complete>补全</button><button type="button" class="rmt-btn" data-rmt-floor-redo>重试</button></div>';
+        return false;
+    }
+    body.innerHTML = html;
     return true;
 }
 
@@ -333,26 +328,8 @@ async function openInFloor(body) {
     const revealId = body?.dataset?.rmtReveal || '';
     const item = auto_memory_registry.autoMemoryModuleById(moduleId);
     if (!item || !body) return;
-    const increment = incrementFor(moduleId, revealId);
-    letterSession = increment.kept ? increment.session : null;
-    letterMode = item.id;
-    if (!letterSession) {
-        const phase = body.closest?.('[data-rmt-floor-shell]')?.dataset?.rmtPhase || '';
-        const writing = phase === 'generating' || phase === 'planning';
-        body.innerHTML = writing
-            ? '<p class="rmt-floor-note">回忆正在生成中。</p>'
-            : '<p class="rmt-floor-note">这一轮写完了，但是没有新的段落。</p><div class="rmt-heart-letter-actions"><button type="button" class="rmt-btn" data-rmt-floor-complete>补全</button><button type="button" class="rmt-btn" data-rmt-floor-redo>重试</button></div>';
-        return;
-    }
-    mirrorModuleCss();
-    try {
-        if (!engageLetter(body)) return;
-        await Promise.resolve(ui_overlay.openCachedOrGenerate(item.id, { workspaceRoute: item.id, incrementalSession: letterSession }));
-    } catch (error) {
-        console.warn('[HeartbeatMemories] floor detail skipped', core_text.safeErrorDiagnostic(error));
-        globalThis.toastr?.error?.('这一页暂时没能打开。回忆还在，可以再点一次。', '心口顿了一下');
-        return;
-    }
+    if (body.dataset.rmtFloorLive === '1') body.removeAttribute('data-rmt-floor-live');
+    if (!writeRound(body, moduleId, revealId)) return;
     rememberOpened(revealId);
 }
 
@@ -424,13 +401,6 @@ function onClick(event) {
         event.stopPropagation();
         const paper = read.closest?.('[data-rmt-letter-paper]') || read.closest?.('[data-rmt-floor-shell]');
         void openInFloor(paper?.querySelector?.('[data-rmt-floor-body]'));
-        return;
-    }
-    const floorBody = event.target?.closest?.('[data-rmt-floor-body]');
-    if (floorBody?.childElementCount && letterSession && floorBody.dataset.rmtModule === letterMode) {
-        event.preventDefault();
-        event.stopPropagation();
-        if (engageLetter(floorBody)) ui_overlay.handleOverlayClick(event);
         return;
     }
     const seal = event.target?.closest?.('[data-rmt-letter-open]');
