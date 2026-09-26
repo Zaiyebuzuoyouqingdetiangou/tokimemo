@@ -1,15 +1,15 @@
 {
   "display_name": "心迹回廊",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.99.89-r84.141-queue-song",
+  "js": "index.js?heartbeat=0.99.90-r84.142-due-letter",
   "author": "Toto",
-  "version": "0.99.89",
+  "version": "0.99.90",
   "auto_update": true,
   "minimum_client_version": "1.13.0",
   "hooks": {
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r84.141：抽签、补全和重试都进任务队列；信里的印象曲能读完。",
+  "description": "r84.142：下一楼重新抽签，抽签进任务队列，信里的歌不再缩成一条。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }

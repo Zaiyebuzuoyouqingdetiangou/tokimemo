@@ -13,7 +13,10 @@ export function floorDecision({ enabled = false, floor = 0, interval = 0, nextDu
     if (enabled !== true) return { action: 'idle' };
     if (modulePlanOpen(modulePlan)) return { action: 'hold', sourceMemoryIds: [...(modulePlan.sourceMemoryIds || [])] };
     if (activeTicket && (activeTicket.status === 'drawn' || activeTicket.status === 'running')) {
-        return { action: 'reuse', ticketId: activeTicket.id };
+        const finished = !!modulePlan && !modulePlanOpen(modulePlan);
+        const laterFloor = Number.isSafeInteger(floor) && Number.isSafeInteger(activeTicket.dueFloor) && floor > activeTicket.dueFloor;
+        // 上一轮已经写完，却把票据留在 drawn。下一楼必须重新抽，不能一直复用旧信。
+        if (!(finished && laterFloor)) return { action: 'reuse', ticketId: activeTicket.id };
     }
     if (Number.isSafeInteger(inflightFloor) && inflightFloor === floor) return { action: 'duplicate' };
     if (nextDueFloor == null) {
@@ -126,8 +129,10 @@ async function drawFresh(snapshot, fresh, input, io, { keepPace = false } = {}) 
     }, { drawTickets: [...snapshot.drawTickets, ticket], modulePlan }, input.now);
     await io.persist(next);
     await io.noteGap?.(null);
-    await io.startModule(next);
-    return { action: 'drawn', moduleRequest: true, drawId, snapshot: next };
+    const started = await io.startModule(next);
+    const steps = started?.snapshot?.modulePlan?.steps || [];
+    const failed = started?.action === 'failed' || steps.some(step => step.status === 'failed');
+    return { action: failed ? 'failed' : 'drawn', moduleRequest: true, drawId, snapshot: started?.snapshot || next };
 }
 
 export async function runAutoMemoryRound(input, io) {

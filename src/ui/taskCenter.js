@@ -84,8 +84,9 @@ function queuedForScope(scope = currentScope()) {
 export function openAutoMemoryJob({ label = '自动留忆', detail = '正在写这一轮回忆' } = {}) {
     const scope = currentScope();
     if (!scope) return { id: '', owned: false };
-    const running = queue.find(item => item.kind === 'auto-memory' && item.scope === scope && item.status === 'running' && item.label === label);
+    const running = queue.find(item => item.kind === 'auto-memory' && item.scope === scope && item.status === 'running');
     if (running) {
+        running.label = label || running.label;
         running.detail = detail;
         refreshTaskCenterView();
         return { id: running.id, owned: false };
@@ -707,6 +708,11 @@ function paintLiveStrip() {
     for (const row of running) {
         chips.push(`<button type="button" class="rmt-live-chip rmt-live-run" data-rmt-action="tasks"><i></i><b>${esc(row.label)}</b><em>${esc(row.phaseLabel || '进行中')}</em></button>`);
     }
+    for (const item of queue) {
+        if (item.kind !== 'auto-memory' || item.scope !== currentScope() || item.status !== 'running') continue;
+        if (running.some(row => row.label === item.label)) continue;
+        chips.push(`<button type="button" class="rmt-live-chip rmt-live-run" data-rmt-action="tasks"><i></i><b>${esc(item.label)}</b><em>抽签</em></button>`);
+    }
     const failedLabels = failed.map(row => row.label);
     for (const row of failed.slice(0, 4)) {
         chips.push(`<button type="button" class="rmt-live-chip rmt-live-fail" data-rmt-action="tasks"><b>${esc(row.label)}</b><em>失败了</em></button>`);
@@ -721,7 +727,8 @@ function paintLiveStrip() {
         chips.push(`<button type="button" class="rmt-live-chip" data-rmt-action="tasks"><b>${esc(card.label)}</b><em>${esc(CARD_LABEL[card.state])}</em></button>`);
     }
     // Keep detailed rows in the task panel; one summary never pushes reading controls away.
-    const active = running.length + (runtimeState.busy && !running.some(row => row.id === 'archive-import' || row.kind === 'archive') ? 1 : 0);
+    const autoRunning = queue.filter(item => item.kind === 'auto-memory' && item.scope === currentScope() && item.status === 'running' && !runningLabels.has(item.label)).length;
+    const active = running.length + autoRunning + (runtimeState.busy && !running.some(row => row.id === 'archive-import' || row.kind === 'archive') ? 1 : 0);
     const waiting = Math.max(0, chips.length - active);
     host.hidden = !active && !waiting;
     host.innerHTML = liveTaskStripHtml(active, waiting);

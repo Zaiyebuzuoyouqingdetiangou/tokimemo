@@ -101,6 +101,25 @@ function moduleLabel(moduleId) {
     return auto_memory_registry.autoMemoryModuleById(moduleId)?.title || '自动留忆';
 }
 
+function finishHostJob(job, result) {
+    if (!job?.owned || !job.id) return;
+    const moduleId = result?.snapshot?.modulePlan?.moduleId || '';
+    const action = result?.action || 'failed';
+    const detail = action === 'noop'
+        ? '这一楼没有新的档案，所以没有重抽。'
+        : action === 'hold'
+            ? '接着写没完成的一轮。'
+            : action === 'reuse'
+                ? '上一轮还占着抽签，这一楼没有另抽。'
+                : action === 'failed'
+                    ? '这一次没写完。可以再点补全。'
+                    : action === 'drawn'
+                        ? '抽中了，这一轮已经写上。'
+                        : '这一楼先记着。';
+    if (moduleId) ui_taskCenter.openAutoMemoryJob({ label: moduleLabel(moduleId), detail });
+    ui_taskCenter.settleAutoMemoryJob(job.id, action === 'failed' ? 'failed' : 'done', detail);
+}
+
 async function withAutoMemoryJob(moduleId, detail, run) {
     const label = moduleLabel(moduleId);
     const job = ui_taskCenter.openAutoMemoryJob({ label, detail });
@@ -255,7 +274,14 @@ async function runHostRound() {
             const live = core_context.currentCharacterGuard();
             if (core_context.chatScopeKey(live) !== scope) return;
             const persist = next => persistSnapshot(context, next);
-            const result = await auto_memory_gate.runAutoMemoryRound({
+            const due = snapshot.plan.nextDueFloor == null ? false : floor >= snapshot.plan.nextDueFloor;
+            const continuing = auto_memory_gate.modulePlanOpen(snapshot.modulePlan);
+            const hostJob = due || continuing
+                ? ui_taskCenter.openAutoMemoryJob({ label: '自动留忆', detail: continuing ? '接着写没完成的一轮。' : '这一楼到点了，正在抽签。' })
+                : { id: '', owned: false };
+            let result;
+            try {
+            result = await auto_memory_gate.runAutoMemoryRound({
                 snapshot, floor, memoryIds: collectMemoryIds(live), seenFloor: handledFloors.get(scope), now: Date.now(),
                 satisfiedPrerequisiteIds: satisfiedPrerequisiteIds(live),
                 archiveRevision: archive_repository.getImportedMemory(live)?.archiveRevision || 'current',
@@ -283,11 +309,16 @@ async function runHostRound() {
                 startModule: next => runModule(next, persist, core_context.currentCharacterGuard()),
                 resumeModule: current => runModule(current, persist, core_context.currentCharacterGuard()),
             });
-            if (result.action === 'arm' || result.action === 'noop' || result.action === 'drawn' || result.action === 'wait') {
+            if (result.action === 'arm' || result.action === 'noop' || result.action === 'drawn' || result.action === 'failed' || result.action === 'wait') {
                 handledFloors.set(scope, floor);
             }
             if (result.action === 'drawn') stampDrawSource(context, result.drawId);
             ui_countdown.refreshAutoMemoryCountdown();
+            finishHostJob(hostJob, result);
+            } catch (error) {
+                finishHostJob(hostJob, { action: 'failed' });
+                console.warn('[HeartbeatMemories] due floor skipped', core_text.safeErrorDiagnostic(error));
+            }
         } finally {
             inflightScopes.delete(scope);
         }

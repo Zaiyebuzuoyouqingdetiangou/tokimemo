@@ -37,11 +37,59 @@ export function floorShellCss() {
 }
 
 function ensureCss() {
-    if (document.getElementById('rmt-floor-shell-style')) return;
-    const style = document.createElement('style');
-    style.id = 'rmt-floor-shell-style';
-    style.textContent = floorShellCss();
-    document.head?.appendChild(style);
+    if (!document.getElementById('rmt-floor-shell-style')) {
+        const style = document.createElement('style');
+        style.id = 'rmt-floor-shell-style';
+        style.textContent = floorShellCss();
+        document.head?.appendChild(style);
+    }
+    let guard = document.getElementById('rmt-letter-guard');
+    if (!guard) {
+        guard = document.createElement('style');
+        guard.id = 'rmt-letter-guard';
+        guard.textContent = `#chat .mes .rmt-floor-shell .rmt-heart-letter-paper .rmt-floor-body,#chat .mes .rmt-floor-shell .rmt-heart-letter-paper .rmt-floor-body :is(p,h1,h2,h3,h4,h5,h6,article,pre,main,header,section,aside,figure,blockquote),.rmt-floor-shell .rmt-letter-song,.rmt-floor-shell .rmt-letter-song-line,.rmt-floor-shell .rmt-letter-song-title,.rmt-floor-shell .rmt-letter-song-label,.rmt-floor-shell [data-rmt-letter-achievement],.rmt-floor-shell [data-rmt-letter-copy]{display:block!important;visibility:visible!important;height:auto!important;max-height:none!important;overflow:visible!important;opacity:1!important;position:static!important;color:#5c463c!important;-webkit-text-fill-color:#5c463c!important;font-size:15px!important;line-height:1.8!important;white-space:pre-wrap!important}#chat .mes .rmt-floor-shell .rmt-heart-letter-paper .rmt-floor-body{max-height:70vh!important;overflow:auto!important}.rmt-floor-shell .rmt-letter-song-title{font-size:22px!important;font-weight:700!important}`;
+    }
+    document.head?.appendChild(guard);
+}
+
+function pinLetterNode(node, scrolling = false) {
+    if (!node?.style?.setProperty) return;
+    node.style.setProperty('display', 'block', 'important');
+    node.style.setProperty('visibility', 'visible', 'important');
+    node.style.setProperty('height', 'auto', 'important');
+    node.style.setProperty('max-height', scrolling ? '70vh' : 'none', 'important');
+    node.style.setProperty('overflow', scrolling ? 'auto' : 'visible', 'important');
+    node.style.setProperty('opacity', '1', 'important');
+    node.style.setProperty('position', 'static', 'important');
+    node.style.setProperty('transform', 'none', 'important');
+    node.style.setProperty('color', '#5c463c', 'important');
+    node.style.setProperty('-webkit-text-fill-color', '#5c463c', 'important');
+    node.style.setProperty('font-size', '15px', 'important');
+    node.style.setProperty('line-height', '1.8', 'important');
+    node.style.setProperty('white-space', 'pre-wrap', 'important');
+}
+
+const PINNED_TAGS = new Set(['P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'ARTICLE', 'PRE', 'MAIN', 'HEADER', 'SECTION', 'ASIDE', 'FIGURE', 'FIGCAPTION', 'BLOCKQUOTE']);
+
+function pinRound(body) {
+    pinLetterNode(body, true);
+    body?.querySelectorAll?.('*')?.forEach(node => {
+        if (node.tagName === 'BUTTON') return;
+        const force = PINNED_TAGS.has(node.tagName) || node.classList?.contains('rmt-letter-song') || node.classList?.contains('rmt-letter-song-line') || node.classList?.contains('rmt-letter-song-title') || node.classList?.contains('rmt-round-reading');
+        if (force) pinLetterNode(node);
+        else if (node.style?.setProperty) {
+            node.style.setProperty('visibility', 'visible', 'important');
+            node.style.setProperty('opacity', '1', 'important');
+            node.style.setProperty('max-height', 'none', 'important');
+        }
+    });
+    const paper = body?.parentElement;
+    if (paper?.classList?.contains('rmt-heart-letter-paper')) {
+        paper.style.setProperty('overflow', 'visible', 'important');
+        paper.style.setProperty('height', 'auto', 'important');
+        paper.style.setProperty('max-height', 'none', 'important');
+        paper.querySelectorAll?.('[data-rmt-letter-achievement],[data-rmt-letter-copy]')?.forEach(node => pinLetterNode(node));
+    }
 }
 
 function mirrorModuleCss() {
@@ -145,6 +193,7 @@ function viewFor(context) {
         ticketStatus: ticket?.status || '',
         revealStatus: reveal?.status || '',
         revealId: reveal?.id || '',
+        drawFloor: (snapshot.drawTickets.find(item => item.id === (snapshot.modulePlan?.drawId || snapshot.plan.activeDrawTicketId)) || ticket)?.dueFloor || 0,
         roundReveal: !!reveal && !stepsForReveal.some(step => step.status !== 'completed') && (reveal.status === 'ready' || reveal.status === 'opened'),
         revealLine: stored?.title || rememberedTitle || '',
         achievementCopy: stored?.description || rememberedCopy || '',
@@ -197,8 +246,8 @@ function markup(view) {
     const revealPaper = view.phase === 'reveal' && view.showReveal;
     const writing = view.phase === 'generating' || view.phase === 'planning';
     const caption = revealPaper ? '' : `<small data-rmt-letter-detail>${core_text.esc(view.detail || (writing ? '正在生成中' : ''))}</small>`;
-    const heading = view.title ? `<p data-rmt-letter-achievement>${core_text.esc(view.title)}</p>` : '';
-    const copy = view.achievementCopy ? `<p data-rmt-letter-copy>${core_text.esc(view.achievementCopy)}</p>` : '';
+    const heading = view.title ? `<div class="rmt-letter-song-title" data-rmt-letter-achievement>${core_text.esc(view.title)}</div>` : '';
+    const copy = view.achievementCopy ? `<div class="rmt-letter-song-line" data-rmt-letter-copy>${core_text.esc(view.achievementCopy)}</div>` : '';
     const read = view.contentOpen ? '' : `<button type="button" class="rmt-btn" data-rmt-letter-read data-rmt-reveal="${core_text.esc(view.revealId)}" data-rmt-module="${core_text.esc(view.moduleId)}">打开回忆</button>`;
     const paper = revealPaper
         ? `<button type="button" class="rmt-btn rmt-heart-letter-close" data-rmt-letter-close>收起这封信</button>${heading}${copy}${read}`
@@ -415,16 +464,19 @@ function writeRound(body, moduleId, revealId) {
         const phase = body.closest?.('[data-rmt-floor-shell]')?.dataset?.rmtPhase || '';
         const writing = phase === 'generating' || phase === 'planning';
         body.innerHTML = writing
-            ? '<p class="rmt-floor-note">回忆正在生成中。</p>'
-            : '<p class="rmt-floor-note">这一轮写完了，但是没有新的段落。</p><div class="rmt-heart-letter-actions"><button type="button" class="rmt-btn" data-rmt-floor-complete>补全</button><button type="button" class="rmt-btn" data-rmt-floor-redo>重试</button></div>';
+            ? '<div class="rmt-letter-song-line">回忆正在生成中。</div>'
+            : '<div class="rmt-letter-song"><div class="rmt-letter-song-line">这一轮写完了，但是没有新的段落。</div><div class="rmt-heart-letter-actions"><button type="button" class="rmt-btn" data-rmt-floor-complete>补全</button><button type="button" class="rmt-btn" data-rmt-floor-redo>重试</button></div></div>';
+        pinRound(body);
         return false;
     }
     const html = incremental_view.roundReadingHtml(increment.session, letterIdentity());
     if (!html) {
-        body.innerHTML = '<p class="rmt-floor-note">这一轮写完了，但是没有新的段落。</p><div class="rmt-heart-letter-actions"><button type="button" class="rmt-btn" data-rmt-floor-complete>补全</button><button type="button" class="rmt-btn" data-rmt-floor-redo>重试</button></div>';
+        body.innerHTML = '<div class="rmt-letter-song"><div class="rmt-letter-song-line">这一轮写完了，但是没有新的段落。</div><div class="rmt-heart-letter-actions"><button type="button" class="rmt-btn" data-rmt-floor-complete>补全</button><button type="button" class="rmt-btn" data-rmt-floor-redo>重试</button></div></div>';
+        pinRound(body);
         return false;
     }
     body.innerHTML = html;
+    pinRound(body);
     const read = body.parentElement?.querySelector?.('[data-rmt-letter-read]');
     if (read) read.remove();
     const host = body.closest?.('[data-rmt-floor-shell]');

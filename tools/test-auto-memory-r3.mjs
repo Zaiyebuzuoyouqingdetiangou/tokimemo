@@ -111,6 +111,23 @@ test('excluded modules stay out of the ticket and a refresh reuses the frozen dr
     assert.equal(calls.filter(item => item === 'import').length, 1);
 });
 
+test('a finished draw does not block the next floor', () => {
+    const finished = openModule();
+    finished.steps[0].status = 'completed';
+    const decision = gate.floorDecision({
+        enabled: true, floor: 11, interval: 1, nextDueFloor: 11,
+        modulePlan: finished,
+        activeTicket: { id: 'drawticket1', status: 'drawn', dueFloor: 10 },
+    });
+    assert.equal(decision.action, 'due');
+    const same = gate.floorDecision({
+        enabled: true, floor: 10, interval: 1, nextDueFloor: 10,
+        modulePlan: finished,
+        activeTicket: { id: 'drawticket1', status: 'drawn', dueFloor: 10 },
+    });
+    assert.equal(same.action, 'reuse');
+});
+
 test('weights lower a recent hit and raise a long miss without restoring an excluded id', () => {
     const tickets = [1, 2, 3, 4].map(index => ({
         selectedModuleId: 'cabinet',

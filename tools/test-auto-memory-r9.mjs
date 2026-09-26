@@ -256,5 +256,12 @@ test('the letter offers repair and retry only when that work is still open', () 
     assert.equal(song.includes('has-songs'), false);
     assert.equal(song.includes('夜航'), true);
     assert.equal(song.includes('第一行'), true);
+    assert.equal(song.includes('rmt-letter-song'), true);
     assert.equal(shell.floorShellCss().includes('.rmt-heart-letter .rmt-theme-song'), true);
+    const oldLetter = shell.shellView({
+        enabled: true, archiveReady: true, moduleComplete: true, canOpen: true,
+        steps: [{ status: 'completed' }], revealStatus: 'opened', revealLine: '旧歌',
+        floor: 6, drawFloor: 5, intervalFloors: 1, nextDueFloor: 6,
+    });
+    assert.equal(oldLetter.phase, 'hidden');
 });

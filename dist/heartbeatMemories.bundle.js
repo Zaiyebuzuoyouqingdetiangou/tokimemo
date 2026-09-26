@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 284
-// Source SHA-256: cbb72c1b5f8fe92d504e2e7310f70f731a9716bb3849b918adedf2b2aa384000
+// Source SHA-256: b41ac7366c156c2e36720b84e44231e3e4e17471565eb1bf4b129f8b1827e373
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -3804,7 +3804,10 @@ function floorDecision({ enabled = false, floor = 0, interval = 0, nextDueFloor 
     if (enabled !== true) return { action: 'idle' };
     if (modulePlanOpen(modulePlan)) return { action: 'hold', sourceMemoryIds: [...(modulePlan.sourceMemoryIds || [])] };
     if (activeTicket && (activeTicket.status === 'drawn' || activeTicket.status === 'running')) {
-        return { action: 'reuse', ticketId: activeTicket.id };
+        const finished = !!modulePlan && !modulePlanOpen(modulePlan);
+        const laterFloor = Number.isSafeInteger(floor) && Number.isSafeInteger(activeTicket.dueFloor) && floor > activeTicket.dueFloor;
+        // 上一轮已经写完，却把票据留在 drawn。下一楼必须重新抽，不能一直复用旧信。
+        if (!(finished && laterFloor)) return { action: 'reuse', ticketId: activeTicket.id };
     }
     if (Number.isSafeInteger(inflightFloor) && inflightFloor === floor) return { action: 'duplicate' };
     if (nextDueFloor == null) {
@@ -3917,8 +3920,10 @@ async function drawFresh(snapshot, fresh, input, io, { keepPace = false } = {}) 
     }, { drawTickets: [...snapshot.drawTickets, ticket], modulePlan }, input.now);
     await io.persist(next);
     await io.noteGap?.(null);
-    await io.startModule(next);
-    return { action: 'drawn', moduleRequest: true, drawId, snapshot: next };
+    const started = await io.startModule(next);
+    const steps = started?.snapshot?.modulePlan?.steps || [];
+    const failed = started?.action === 'failed' || steps.some(step => step.status === 'failed');
+    return { action: failed ? 'failed' : 'drawn', moduleRequest: true, drawId, snapshot: started?.snapshot || next };
 }
 
 async function runAutoMemoryRound(input, io) {
@@ -4373,14 +4378,14 @@ function songLyrics(lyrics) {
     const text = String(textOf(lyrics) || '').trim();
     if (!text) return '';
     const blocks = text.split(/\n{2,}/).map(block => block.trim()).filter(Boolean);
-    return (blocks.length ? blocks : [text]).map(block => `<p class="rmt-song-stanza">${esc(block)}</p>`).join('');
+    return (blocks.length ? blocks : [text]).map(block => `<div class="rmt-letter-song-line">${esc(block)}</div>`).join('');
 }
 
 function songSurface(session) {
     const songs = Array.isArray(session.songs) ? session.songs : [];
     if (!songs.length) return '';
-    const sheets = songs.map(song => `<article class="rmt-song-sheet rmt-song-readable"><header><h2>${esc(textOf(song.title) || '印象曲')}</h2><p>演唱者 · ${esc(textOf(song.singer))}</p></header><section class="rmt-song-style"><h3>曲风</h3><p>${esc(textOf(song.styleDescription))}</p></section><div class="rmt-song-reading-lyrics">${songLyrics(song.lyrics)}</div></article>`).join('');
-    return `<div class="rmt-theme-song"><div class="rmt-song-layout">${sheets}</div></div>`;
+    const sheets = songs.map(song => `<div class="rmt-letter-song-sheet"><div class="rmt-letter-song-title">${esc(textOf(song.title) || '印象曲')}</div><div class="rmt-letter-song-line">演唱者 · ${esc(textOf(song.singer))}</div><div class="rmt-letter-song-label">曲风</div><div class="rmt-letter-song-line">${esc(textOf(song.styleDescription))}</div><div class="rmt-letter-song-label">歌词</div>${songLyrics(song.lyrics)}</div>`).join('');
+    return `<div class="rmt-letter-song">${sheets}</div>`;
 }
 
 function bedtimeSurface(session) {
@@ -6142,6 +6147,25 @@ function moduleLabel(moduleId) {
     return auto_memory_registry.autoMemoryModuleById(moduleId)?.title || '自动留忆';
 }
 
+function finishHostJob(job, result) {
+    if (!job?.owned || !job.id) return;
+    const moduleId = result?.snapshot?.modulePlan?.moduleId || '';
+    const action = result?.action || 'failed';
+    const detail = action === 'noop'
+        ? '这一楼没有新的档案，所以没有重抽。'
+        : action === 'hold'
+            ? '接着写没完成的一轮。'
+            : action === 'reuse'
+                ? '上一轮还占着抽签，这一楼没有另抽。'
+                : action === 'failed'
+                    ? '这一次没写完。可以再点补全。'
+                    : action === 'drawn'
+                        ? '抽中了，这一轮已经写上。'
+                        : '这一楼先记着。';
+    if (moduleId) ui_taskCenter.openAutoMemoryJob({ label: moduleLabel(moduleId), detail });
+    ui_taskCenter.settleAutoMemoryJob(job.id, action === 'failed' ? 'failed' : 'done', detail);
+}
+
 async function withAutoMemoryJob(moduleId, detail, run) {
     const label = moduleLabel(moduleId);
     const job = ui_taskCenter.openAutoMemoryJob({ label, detail });
@@ -6296,7 +6320,14 @@ async function runHostRound() {
             const live = core_context.currentCharacterGuard();
             if (core_context.chatScopeKey(live) !== scope) return;
             const persist = next => persistSnapshot(context, next);
-            const result = await auto_memory_gate.runAutoMemoryRound({
+            const due = snapshot.plan.nextDueFloor == null ? false : floor >= snapshot.plan.nextDueFloor;
+            const continuing = auto_memory_gate.modulePlanOpen(snapshot.modulePlan);
+            const hostJob = due || continuing
+                ? ui_taskCenter.openAutoMemoryJob({ label: '自动留忆', detail: continuing ? '接着写没完成的一轮。' : '这一楼到点了，正在抽签。' })
+                : { id: '', owned: false };
+            let result;
+            try {
+            result = await auto_memory_gate.runAutoMemoryRound({
                 snapshot, floor, memoryIds: collectMemoryIds(live), seenFloor: handledFloors.get(scope), now: Date.now(),
                 satisfiedPrerequisiteIds: satisfiedPrerequisiteIds(live),
                 archiveRevision: archive_repository.getImportedMemory(live)?.archiveRevision || 'current',
@@ -6324,11 +6355,16 @@ async function runHostRound() {
                 startModule: next => runModule(next, persist, core_context.currentCharacterGuard()),
                 resumeModule: current => runModule(current, persist, core_context.currentCharacterGuard()),
             });
-            if (result.action === 'arm' || result.action === 'noop' || result.action === 'drawn' || result.action === 'wait') {
+            if (result.action === 'arm' || result.action === 'noop' || result.action === 'drawn' || result.action === 'failed' || result.action === 'wait') {
                 handledFloors.set(scope, floor);
             }
             if (result.action === 'drawn') stampDrawSource(context, result.drawId);
             ui_countdown.refreshAutoMemoryCountdown();
+            finishHostJob(hostJob, result);
+            } catch (error) {
+                finishHostJob(hostJob, { action: 'failed' });
+                console.warn('[HeartbeatMemories] due floor skipped', core_text.safeErrorDiagnostic(error));
+            }
         } finally {
             inflightScopes.delete(scope);
         }
@@ -7214,14 +7250,18 @@ function shellView(input = {}) {
         canOpen: false,
         moduleTitle: typeof input.moduleTitle === 'string' ? input.moduleTitle : '',
     };
-    const written = complete && input.canOpen === true && !running;
-    if (complete && revealStatus === 'achievement_pending') {
+    const drawFloor = Math.floor(Number(input.drawFloor));
+    const floorNow = Math.floor(Number(input.floor));
+    const planFinished = steps.length > 0 && steps.every(step => step?.status === 'completed');
+    const staleLetter = planFinished && Number.isSafeInteger(drawFloor) && drawFloor > 0 && Number.isSafeInteger(floorNow) && floorNow > drawFloor;
+    const written = !staleLetter && complete && input.canOpen === true && !running;
+    if (!staleLetter && complete && revealStatus === 'achievement_pending') {
         return { ...face, phase: 'achievement-pending', canRepairAchievement: true, title: '回忆先留着', detail: '成就还缺一笔。可以补一次，不必重写正文。' };
     }
-    if (input.roundEmpty === true) {
+    if (!staleLetter && input.roundEmpty === true) {
         return { ...face, phase: 'empty', canComplete: true, canRedo: true, title: '这一页还是空的', detail: '写完了，但是没有新的段落。' };
     }
-    if (written || (complete && (revealStatus === 'ready' || revealStatus === 'opened'))) {
+    if (!staleLetter && (written || (complete && (revealStatus === 'ready' || revealStatus === 'opened')))) {
         return {
             ...face, phase: 'reveal', showReveal: true, canOpen: input.canOpen === true,
             title: letterTitle(input), achievementCopy: input.achievementCopy || '', detail: '点击查看详情',
@@ -7249,16 +7289,16 @@ function shellView(input = {}) {
         const progress = knownProgress(done, steps.length);
         return { ...face, phase: 'generating', canRetry, progress, title: '回忆正在生成中', detail: '正在生成中' };
     }
-    if (!steps.length && input.roundReveal === true && (revealStatus === 'ready' || revealStatus === 'opened')) {
+    if (!staleLetter && !steps.length && input.roundReveal === true && (revealStatus === 'ready' || revealStatus === 'opened')) {
         return {
             ...face, phase: 'reveal', showReveal: true, canOpen: input.canOpen === true,
             title: letterTitle(input), achievementCopy: input.achievementCopy || '', detail: '点击查看详情',
         };
     }
-    if (input.ticketStatus === 'drawn' || input.ticketStatus === 'running') {
+    if (!staleLetter && (input.ticketStatus === 'drawn' || input.ticketStatus === 'running')) {
         return { ...face, phase: 'generating', title: '回忆正在生成中', detail: '正在生成中' };
     }
-    if (revealStatus === 'ready' || revealStatus === 'opened') {
+    if (!staleLetter && (revealStatus === 'ready' || revealStatus === 'opened')) {
         return {
             ...face, phase: 'reveal', showReveal: true, canOpen: input.canOpen === true,
             title: letterTitle(input), achievementCopy: input.achievementCopy || '', detail: '点击查看详情',
@@ -60667,11 +60707,59 @@ function floorShellCss() {
 }
 
 function ensureCss() {
-    if (document.getElementById('rmt-floor-shell-style')) return;
-    const style = document.createElement('style');
-    style.id = 'rmt-floor-shell-style';
-    style.textContent = floorShellCss();
-    document.head?.appendChild(style);
+    if (!document.getElementById('rmt-floor-shell-style')) {
+        const style = document.createElement('style');
+        style.id = 'rmt-floor-shell-style';
+        style.textContent = floorShellCss();
+        document.head?.appendChild(style);
+    }
+    let guard = document.getElementById('rmt-letter-guard');
+    if (!guard) {
+        guard = document.createElement('style');
+        guard.id = 'rmt-letter-guard';
+        guard.textContent = `#chat .mes .rmt-floor-shell .rmt-heart-letter-paper .rmt-floor-body,#chat .mes .rmt-floor-shell .rmt-heart-letter-paper .rmt-floor-body :is(p,h1,h2,h3,h4,h5,h6,article,pre,main,header,section,aside,figure,blockquote),.rmt-floor-shell .rmt-letter-song,.rmt-floor-shell .rmt-letter-song-line,.rmt-floor-shell .rmt-letter-song-title,.rmt-floor-shell .rmt-letter-song-label,.rmt-floor-shell [data-rmt-letter-achievement],.rmt-floor-shell [data-rmt-letter-copy]{display:block!important;visibility:visible!important;height:auto!important;max-height:none!important;overflow:visible!important;opacity:1!important;position:static!important;color:#5c463c!important;-webkit-text-fill-color:#5c463c!important;font-size:15px!important;line-height:1.8!important;white-space:pre-wrap!important}#chat .mes .rmt-floor-shell .rmt-heart-letter-paper .rmt-floor-body{max-height:70vh!important;overflow:auto!important}.rmt-floor-shell .rmt-letter-song-title{font-size:22px!important;font-weight:700!important}`;
+    }
+    document.head?.appendChild(guard);
+}
+
+function pinLetterNode(node, scrolling = false) {
+    if (!node?.style?.setProperty) return;
+    node.style.setProperty('display', 'block', 'important');
+    node.style.setProperty('visibility', 'visible', 'important');
+    node.style.setProperty('height', 'auto', 'important');
+    node.style.setProperty('max-height', scrolling ? '70vh' : 'none', 'important');
+    node.style.setProperty('overflow', scrolling ? 'auto' : 'visible', 'important');
+    node.style.setProperty('opacity', '1', 'important');
+    node.style.setProperty('position', 'static', 'important');
+    node.style.setProperty('transform', 'none', 'important');
+    node.style.setProperty('color', '#5c463c', 'important');
+    node.style.setProperty('-webkit-text-fill-color', '#5c463c', 'important');
+    node.style.setProperty('font-size', '15px', 'important');
+    node.style.setProperty('line-height', '1.8', 'important');
+    node.style.setProperty('white-space', 'pre-wrap', 'important');
+}
+
+const PINNED_TAGS = new Set(['P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'ARTICLE', 'PRE', 'MAIN', 'HEADER', 'SECTION', 'ASIDE', 'FIGURE', 'FIGCAPTION', 'BLOCKQUOTE']);
+
+function pinRound(body) {
+    pinLetterNode(body, true);
+    body?.querySelectorAll?.('*')?.forEach(node => {
+        if (node.tagName === 'BUTTON') return;
+        const force = PINNED_TAGS.has(node.tagName) || node.classList?.contains('rmt-letter-song') || node.classList?.contains('rmt-letter-song-line') || node.classList?.contains('rmt-letter-song-title') || node.classList?.contains('rmt-round-reading');
+        if (force) pinLetterNode(node);
+        else if (node.style?.setProperty) {
+            node.style.setProperty('visibility', 'visible', 'important');
+            node.style.setProperty('opacity', '1', 'important');
+            node.style.setProperty('max-height', 'none', 'important');
+        }
+    });
+    const paper = body?.parentElement;
+    if (paper?.classList?.contains('rmt-heart-letter-paper')) {
+        paper.style.setProperty('overflow', 'visible', 'important');
+        paper.style.setProperty('height', 'auto', 'important');
+        paper.style.setProperty('max-height', 'none', 'important');
+        paper.querySelectorAll?.('[data-rmt-letter-achievement],[data-rmt-letter-copy]')?.forEach(node => pinLetterNode(node));
+    }
 }
 
 function mirrorModuleCss() {
@@ -60775,6 +60863,7 @@ function viewFor(context) {
         ticketStatus: ticket?.status || '',
         revealStatus: reveal?.status || '',
         revealId: reveal?.id || '',
+        drawFloor: (snapshot.drawTickets.find(item => item.id === (snapshot.modulePlan?.drawId || snapshot.plan.activeDrawTicketId)) || ticket)?.dueFloor || 0,
         roundReveal: !!reveal && !stepsForReveal.some(step => step.status !== 'completed') && (reveal.status === 'ready' || reveal.status === 'opened'),
         revealLine: stored?.title || rememberedTitle || '',
         achievementCopy: stored?.description || rememberedCopy || '',
@@ -60827,8 +60916,8 @@ function markup(view) {
     const revealPaper = view.phase === 'reveal' && view.showReveal;
     const writing = view.phase === 'generating' || view.phase === 'planning';
     const caption = revealPaper ? '' : `<small data-rmt-letter-detail>${core_text.esc(view.detail || (writing ? '正在生成中' : ''))}</small>`;
-    const heading = view.title ? `<p data-rmt-letter-achievement>${core_text.esc(view.title)}</p>` : '';
-    const copy = view.achievementCopy ? `<p data-rmt-letter-copy>${core_text.esc(view.achievementCopy)}</p>` : '';
+    const heading = view.title ? `<div class="rmt-letter-song-title" data-rmt-letter-achievement>${core_text.esc(view.title)}</div>` : '';
+    const copy = view.achievementCopy ? `<div class="rmt-letter-song-line" data-rmt-letter-copy>${core_text.esc(view.achievementCopy)}</div>` : '';
     const read = view.contentOpen ? '' : `<button type="button" class="rmt-btn" data-rmt-letter-read data-rmt-reveal="${core_text.esc(view.revealId)}" data-rmt-module="${core_text.esc(view.moduleId)}">打开回忆</button>`;
     const paper = revealPaper
         ? `<button type="button" class="rmt-btn rmt-heart-letter-close" data-rmt-letter-close>收起这封信</button>${heading}${copy}${read}`
@@ -61045,16 +61134,19 @@ function writeRound(body, moduleId, revealId) {
         const phase = body.closest?.('[data-rmt-floor-shell]')?.dataset?.rmtPhase || '';
         const writing = phase === 'generating' || phase === 'planning';
         body.innerHTML = writing
-            ? '<p class="rmt-floor-note">回忆正在生成中。</p>'
-            : '<p class="rmt-floor-note">这一轮写完了，但是没有新的段落。</p><div class="rmt-heart-letter-actions"><button type="button" class="rmt-btn" data-rmt-floor-complete>补全</button><button type="button" class="rmt-btn" data-rmt-floor-redo>重试</button></div>';
+            ? '<div class="rmt-letter-song-line">回忆正在生成中。</div>'
+            : '<div class="rmt-letter-song"><div class="rmt-letter-song-line">这一轮写完了，但是没有新的段落。</div><div class="rmt-heart-letter-actions"><button type="button" class="rmt-btn" data-rmt-floor-complete>补全</button><button type="button" class="rmt-btn" data-rmt-floor-redo>重试</button></div></div>';
+        pinRound(body);
         return false;
     }
     const html = incremental_view.roundReadingHtml(increment.session, letterIdentity());
     if (!html) {
-        body.innerHTML = '<p class="rmt-floor-note">这一轮写完了，但是没有新的段落。</p><div class="rmt-heart-letter-actions"><button type="button" class="rmt-btn" data-rmt-floor-complete>补全</button><button type="button" class="rmt-btn" data-rmt-floor-redo>重试</button></div>';
+        body.innerHTML = '<div class="rmt-letter-song"><div class="rmt-letter-song-line">这一轮写完了，但是没有新的段落。</div><div class="rmt-heart-letter-actions"><button type="button" class="rmt-btn" data-rmt-floor-complete>补全</button><button type="button" class="rmt-btn" data-rmt-floor-redo>重试</button></div></div>';
+        pinRound(body);
         return false;
     }
     body.innerHTML = html;
+    pinRound(body);
     const read = body.parentElement?.querySelector?.('[data-rmt-letter-read]');
     if (read) read.remove();
     const host = body.closest?.('[data-rmt-floor-shell]');
@@ -76172,8 +76264,9 @@ function queuedForScope(scope = currentScope()) {
 function openAutoMemoryJob({ label = '自动留忆', detail = '正在写这一轮回忆' } = {}) {
     const scope = currentScope();
     if (!scope) return { id: '', owned: false };
-    const running = queue.find(item => item.kind === 'auto-memory' && item.scope === scope && item.status === 'running' && item.label === label);
+    const running = queue.find(item => item.kind === 'auto-memory' && item.scope === scope && item.status === 'running');
     if (running) {
+        running.label = label || running.label;
         running.detail = detail;
         refreshTaskCenterView();
         return { id: running.id, owned: false };
@@ -76795,6 +76888,11 @@ function paintLiveStrip() {
     for (const row of running) {
         chips.push(`<button type="button" class="rmt-live-chip rmt-live-run" data-rmt-action="tasks"><i></i><b>${esc(row.label)}</b><em>${esc(row.phaseLabel || '进行中')}</em></button>`);
     }
+    for (const item of queue) {
+        if (item.kind !== 'auto-memory' || item.scope !== currentScope() || item.status !== 'running') continue;
+        if (running.some(row => row.label === item.label)) continue;
+        chips.push(`<button type="button" class="rmt-live-chip rmt-live-run" data-rmt-action="tasks"><i></i><b>${esc(item.label)}</b><em>抽签</em></button>`);
+    }
     const failedLabels = failed.map(row => row.label);
     for (const row of failed.slice(0, 4)) {
         chips.push(`<button type="button" class="rmt-live-chip rmt-live-fail" data-rmt-action="tasks"><b>${esc(row.label)}</b><em>失败了</em></button>`);
@@ -76809,7 +76907,8 @@ function paintLiveStrip() {
         chips.push(`<button type="button" class="rmt-live-chip" data-rmt-action="tasks"><b>${esc(card.label)}</b><em>${esc(CARD_LABEL[card.state])}</em></button>`);
     }
     // Keep detailed rows in the task panel; one summary never pushes reading controls away.
-    const active = running.length + (runtimeState.busy && !running.some(row => row.id === 'archive-import' || row.kind === 'archive') ? 1 : 0);
+    const autoRunning = queue.filter(item => item.kind === 'auto-memory' && item.scope === currentScope() && item.status === 'running' && !runningLabels.has(item.label)).length;
+    const active = running.length + autoRunning + (runtimeState.busy && !running.some(row => row.id === 'archive-import' || row.kind === 'archive') ? 1 : 0);
     const waiting = Math.max(0, chips.length - active);
     host.hidden = !active && !waiting;
     host.innerHTML = liveTaskStripHtml(active, waiting);
