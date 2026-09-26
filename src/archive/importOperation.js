@@ -4,6 +4,7 @@ import * as draft_inputs from './draftInputs.js';
 import * as archive_batches from './importBatches.js';
 import * as archive_coverage from './coverageRanges.js';
 import * as archive_summary from './summaryPreference.js';
+import * as auto_memory_floor from '../autoMemory/floorPace.js';
 import * as archive_requestBudget from './requestBudget.js';
 import * as core_cache from '../core/cache.js';
 import * as core_constants from '../core/constants.js';
@@ -200,13 +201,16 @@ export async function importCurrentChatMemoryOperation({ fullRebuild = false, au
     const externalChanged = !!progress || restartImport || !incrementalUpdate || core_text.normalizeText(existing?.externalMemoryFingerprint, 240) !== core_text.normalizeText(external.fingerprint, 240);
     // 自动留忆先建档。记忆插件有新摘要时直接用摘要；否则只读这一窗正文，不改用户保存的读取范围。
     if (automatic && floorWindow && !progress && !restartImport && !capturedInput && !sceneOnly) {
-        const source = archive_summary.archiveSourceForDue({
-            summaryChanged: externalChanged,
-            summaryCount: archive_summary.pluginSummaryCount(external),
-        });
-        if (source === 'floors') {
-            const scoped = windowChatMessages(context, floorWindow);
-            if (scoped.length) chatInput = scoped;
+        const scoped = windowChatMessages(context, floorWindow);
+        if (floorWindow.latestAssistant === true) {
+            const mixed = auto_memory_floor.latestAssistantWindow(scoped, floorWindow.interval);
+            if (mixed.length) chatInput = mixed;
+        } else {
+            const source = archive_summary.archiveSourceForDue({
+                summaryChanged: externalChanged,
+                summaryCount: archive_summary.pluginSummaryCount(external),
+            });
+            if (source === 'floors' && scoped.length) chatInput = scoped;
         }
     }
     if (!progress && incrementalUpdate && !chatInput.length && !externalChanged) {

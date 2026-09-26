@@ -82,6 +82,7 @@ export function openOverlay() {
             <div class="rmt-topbar">
               <button type="button" data-rmt-action="back" hidden aria-label="返回上级">${toolbarIcons.toolbarIcon('back')}</button>
               <div class="rmt-topbar-title">心迹回廊</div>
+              <div class="rmt-memory-due" data-rmt-memory-due hidden></div>
               <div class="rmt-live-tasks" data-rmt-live-tasks hidden></div>
               <button type="button" data-rmt-action="library-home" aria-label="打开档案室" title="档案室">${toolbarIcons.toolbarIcon('library')}</button>
               <button type="button" data-rmt-action="workspace-expand" aria-label="展开窗口" title="展开窗口">${toolbarIcons.toolbarIcon('expand')}</button>

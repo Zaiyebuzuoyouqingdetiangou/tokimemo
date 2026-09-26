@@ -191,6 +191,32 @@ export function archiveActionAfterChoice({ asked = 'keep', rebuild = false, doAr
     return doArchive === true ? 'create' : 'keep';
 }
 
+export function pacePatch(chatMetadata, { intervalFloors, floor } = {}, now = 0) {
+    const existing = auto_memory_plan.readAutoMemoryMetadata(chatMetadata);
+    if (!existing?.plan) return { changed: false, snapshot: existing, message: '' };
+    const interval = normalizeInterval(intervalFloors);
+    if (!interval.ok) return { changed: false, snapshot: existing, message: interval.message };
+    const updatedAt = Number.isSafeInteger(now) && now > existing.plan.updatedAt ? now : existing.plan.updatedAt + 1;
+    const armed = existing.plan.enabled === true && Number.isSafeInteger(floor) && floor >= 0;
+    return {
+        changed: true,
+        message: '',
+        snapshot: auto_memory_plan.parseAutoMemorySnapshot({
+            plan: auto_memory_plan.parseAutoMemoryPlan({
+                ...existing.plan,
+                intervalFloors: interval.intervalFloors,
+                lastCompletedFloor: armed ? floor : existing.plan.lastCompletedFloor,
+                nextDueFloor: armed ? floor + interval.intervalFloors : existing.plan.nextDueFloor,
+                revision: existing.plan.revision + 1,
+                updatedAt,
+            }),
+            revealRecords: existing.revealRecords,
+            drawTickets: existing.drawTickets,
+            modulePlan: existing.modulePlan,
+        }),
+    };
+}
+
 export function disableAutoMemoryPlan(chatMetadata, now = 0) {
     const existing = auto_memory_plan.readAutoMemoryMetadata(chatMetadata);
     if (!existing?.plan.enabled) return { changed: false, snapshot: existing };

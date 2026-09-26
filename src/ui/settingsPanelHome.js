@@ -22,7 +22,9 @@ import * as core_chatReadRange from '../core/chatReadRange.js';
 import * as ui_overlay from './overlay.js';
 import * as auto_memory_plan from '../autoMemory/planStore.js';
 import * as auto_memory_wizard from './autoMemoryWizard.js';
+import * as auto_memory_floor from '../autoMemory/floorPace.js';
 import * as wizard_plan from '../autoMemory/wizardPlan.js';
+import * as ui_countdown from './autoMemoryCountdown.js';
 import * as ui_scenePicker from './scenePicker.js';
 import * as ui_styles from './styles.js';
 import * as mirrorReader from './mirrorTtsReader.js';
@@ -124,6 +126,35 @@ export function hydrateSettingsPanel({ memory = false } = {}) {
     refreshGenerationSettingsUi();
     panel.dataset.rmtHydrated = '1';
     return true;
+}
+
+async function saveAutoMemoryPace(panel) {
+    const note = panel.querySelector('[data-rmt-auto-memory-gate]');
+    let context;
+    try { context = core_context.currentCharacterGuard(); }
+    catch { return; }
+    const settings = core_settings.getPluginSettings();
+    const latest = settings.autoMemoryLatestFloor === true;
+    const floor = latest ? auto_memory_floor.assistantFloorCount(context.chat) : (Array.isArray(context.chat) ? context.chat.length : 0);
+    const metadata = context.chatMetadata;
+    let result;
+    try { result = wizard_plan.pacePatch(metadata, { intervalFloors: settings.autoMemoryIntervalFloors, floor }, Date.now()); }
+    catch (error) { if (note) note.textContent = error?.safeToDisplay ? error.safeUserMessage : '间隔没有改。'; return; }
+    if (!result.changed) {
+        if (result.message && note) note.textContent = result.message;
+        ui_countdown.refreshAutoMemoryCountdown();
+        return;
+    }
+    try {
+        const before = auto_memory_plan.readAutoMemoryMetadata(metadata);
+        auto_memory_plan.commitAutoMemoryMetadata(metadata, result.snapshot, before.plan.revision);
+        await context.saveMetadataDebounced?.();
+    } catch (error) {
+        if (note) note.textContent = error?.safeToDisplay ? error.safeUserMessage : '间隔没有写进当前聊天。';
+        return;
+    }
+    ui_countdown.refreshAutoMemoryCountdown();
+    if (note && result.snapshot?.plan?.enabled) note.textContent = `已改成每 ${result.snapshot.plan.intervalFloors} 楼抽一次，从现在重新计。`;
 }
 
 async function restoreLegacyAutoUpdates(panel) {
@@ -290,6 +321,17 @@ export function mountSettings({ homeTarget = null } = {}) {
             core_settings.updatePluginSettings({ autoRetryEnabled: !!target.checked });
             const count = panel.querySelector('[data-rmt-auto-retry-count]');
             if (count) count.disabled = !target.checked;
+            return;
+        }
+        if (target.matches?.('[data-rmt-auto-memory-latest]')) {
+            core_settings.updatePluginSettings({ autoMemoryLatestFloor: !!target.checked });
+            void saveAutoMemoryPace(panel);
+            return;
+        }
+        if (target.matches?.('[data-rmt-auto-memory-interval]') && target.closest?.('[data-rmt-settings-section="auto"]')) {
+            core_settings.updatePluginSettings({ autoMemoryIntervalFloors: target.value });
+            target.value = String(core_settings.getPluginSettings().autoMemoryIntervalFloors);
+            void saveAutoMemoryPace(panel);
             return;
         }
         if (target.matches?.('[data-rmt-auto-retry-count], [data-rmt-auto-memory-retry-count]')) {

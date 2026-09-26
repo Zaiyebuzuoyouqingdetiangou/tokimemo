@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
-// Source modules: 261
-// Source SHA-256: c8ee554d48540451003440b9e12d61c6344b2c260b33b8b64925c9774196e57c
+// Source modules: 262
+// Source SHA-256: 81b98a0dec67a4e35c54eb6862474b9b0dfd512bdb5e6afa62188e3da09fc7fe
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -193,6 +193,7 @@ const __m_ui_albumView_js = Object.create(null);
 const __m_ui_archiveAvatars_js = Object.create(null);
 const __m_ui_archiveInheritance_js = Object.create(null);
 const __m_ui_archivePortal_js = Object.create(null);
+const __m_ui_autoMemoryCountdown_js = Object.create(null);
 const __m_ui_autoMemoryShell_js = Object.create(null);
 const __m_ui_autoMemoryWizard_js = Object.create(null);
 const __m_ui_bedtimeView_js = Object.create(null);
@@ -1473,6 +1474,8 @@ const DEFAULT_SETTINGS = Object.freeze({
     autoRetryEnabled: false,
     autoRetryCount: 1,
     autoSecondPass: false,
+    autoMemoryLatestFloor: false,
+    autoMemoryIntervalFloors: 5,
     creativeSupplementEnabled: false,
     creativeSupplement: '',
     imageGenerationProvider: 'baibai-image',
@@ -4583,6 +4586,12 @@ const runtimeState = __m_core_state_js.state;
 
 
 
+function normalizeAutoMemoryInterval(value) {
+    const count = Math.floor(Number(value));
+    if (!Number.isFinite(count)) return 5;
+    return Math.max(1, Math.min(1000, count));
+}
+
 function normalizeAutoRetryCount(value) {
     const count = Math.floor(Number(value));
     if (!Number.isFinite(count)) return 1;
@@ -4634,6 +4643,8 @@ function getPluginSettings(context = core_context.getContext()) {
         autoRetryEnabled: settings.autoRetryEnabled === true,
         autoRetryCount: normalizeAutoRetryCount(settings.autoRetryCount),
         autoSecondPass: settings.autoSecondPass === true,
+        autoMemoryLatestFloor: settings.autoMemoryLatestFloor === true,
+        autoMemoryIntervalFloors: normalizeAutoMemoryInterval(settings.autoMemoryIntervalFloors),
         creativeSupplementEnabled: settings.creativeSupplementEnabled === true,
         creativeSupplement: creative_supplement.normalizeCreativeSupplement(settings.creativeSupplement),
         ttDisplayMode: settings.ttDisplayMode === true,
@@ -5209,6 +5220,7 @@ __m_core_settings_js.fetchModelsForManualConnection = fetchModelsForManualConnec
 __m_core_settings_js.invokeSlashCommandCapture = invokeSlashCommandCapture;
 __m_core_settings_js.readCurrentSlashSetting = readCurrentSlashSetting;
 __m_core_settings_js.importCurrentSillyTavernConnection = importCurrentSillyTavernConnection;
+__m_core_settings_js.normalizeAutoMemoryInterval = normalizeAutoMemoryInterval;
 __m_core_settings_js.normalizeAutoRetryCount = normalizeAutoRetryCount;
 __m_core_settings_js.normalizeBannedGeneratedPhrases = normalizeBannedGeneratedPhrases;
 __m_core_settings_js.normalizeFloatingAvatarPosition = normalizeFloatingAvatarPosition;
@@ -27985,6 +27997,8 @@ dialog#${core_constants.OVERLAY_ID}::backdrop{background:transparent}
   font-weight:800;letter-spacing:.055em;min-width:0;flex:1 1 auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
   color:#50627b;font-size:18px
 }
+.rmt-memory-due{flex:0 1 auto;min-width:0;margin-right:8px;color:#9d6d82;font-size:12px;line-height:1.3;white-space:nowrap}
+.rmt-memory-due[hidden]{display:none!important}
 .rmt-topbar:has(.rmt-live-tasks:not([hidden])) .rmt-topbar-title{flex:0 1 auto;max-width:min(46%,280px)}
 .rmt-topbar-title:after{
   content:"  MEMORY ARCHIVE";font-size:9px;letter-spacing:.16em;font-weight:700;color:#9aa7b5;margin-left:9px;vertical-align:2px
@@ -28140,6 +28154,9 @@ dialog#${core_constants.OVERLAY_ID}::backdrop{background:transparent}
 .rmt-auto-note{display:grid;gap:4px;padding:12px 14px;border:1px solid #ead3c4;border-radius:14px;background:#fffaf6}
 .rmt-auto-note b{font-size:15px;color:#6d5348}
 .rmt-auto-note p{margin:0;color:#6d5348}
+.rmt-auto-fold{margin-top:8px;border:1px solid #d7e4eb;border-radius:14px;background:#fff;padding:0 14px 8px}
+.rmt-auto-fold summary{display:flex;align-items:center;min-height:44px;cursor:pointer;font-weight:600;color:#4d5d73}
+.rmt-auto-fold p{margin:0 0 8px;color:#627286;font-size:13px;line-height:1.6}
 .rmt-auto-api{display:grid;gap:10px}
 .rmt-auto-api-modes{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .rmt-auto-api-mode{display:grid;gap:4px;min-height:72px;padding:12px;border:1px solid #d5e3ea;border-radius:14px;background:#fff;color:#4d5d73;text-align:left;cursor:pointer}
@@ -29398,6 +29415,41 @@ __m_ui_styles_js.ensureStyles = ensureStyles;
 __m_ui_styles_js.abstractStyle = abstractStyle;
 }
 
+function __init_ui_autoMemoryCountdown_js() {
+// MODULE: ui/autoMemoryCountdown.js
+const auto_memory_floor = __m_autoMemory_floorPace_js;
+const auto_memory_plan = __m_autoMemory_planStore_js;
+const core_context = __m_core_context_js;
+const core_settings = __m_core_settings_js;
+// 插件顶端的倒计时。只读当前聊天的计划，不发请求。
+
+
+
+
+function refreshAutoMemoryCountdown() {
+    const nodes = typeof document !== 'undefined' ? document.querySelectorAll('[data-rmt-memory-due]') : [];
+    let label = '';
+    try {
+        const context = core_context.getContext();
+        const snapshot = auto_memory_plan.readAutoMemoryMetadata(context?.chatMetadata);
+        const plan = snapshot?.plan;
+        if (plan?.enabled === true && Number.isSafeInteger(plan.nextDueFloor)) {
+            const latest = core_settings.getPluginSettings().autoMemoryLatestFloor === true;
+            const floor = latest
+                ? auto_memory_floor.assistantFloorCount(context.chat)
+                : (Array.isArray(context.chat) ? context.chat.length : 0);
+            label = auto_memory_floor.countdownLabel(auto_memory_floor.floorsRemaining(floor, plan.nextDueFloor));
+        }
+    } catch { label = ''; }
+    for (const node of nodes) {
+        node.textContent = label;
+        node.hidden = !label;
+    }
+}
+
+__m_ui_autoMemoryCountdown_js.refreshAutoMemoryCountdown = refreshAutoMemoryCountdown;
+}
+
 function __init_ui_settingsPanelParts_js() {
 // MODULE: ui/settingsPanelParts.js
 const archive_repository = __m_archive_repository_js;
@@ -29412,6 +29464,8 @@ const core_text = __m_core_text_js;
 const core_theme = __m_core_theme_js;
 const core_autoUpdatePolicy = __m_core_autoUpdatePolicy_js;
 const core_autoUpdates = __m_core_autoUpdates_js;
+const auto_memory_plan = __m_autoMemory_planStore_js;
+const ui_countdown = __m_ui_autoMemoryCountdown_js;
 const runtimeState = __m_core_state_js.state;
 
 
@@ -29827,8 +29881,17 @@ function refreshGenerationSettingsUi() {
     for (const input of panel.querySelectorAll('[data-rmt-auto-enabled], [data-rmt-auto-every]')) input.disabled = paused;
     const gateNote = panel.querySelector('[data-rmt-auto-memory-gate]');
     if (gateNote) gateNote.textContent = !paused ? '' : gate.source === 'paused-corrupt'
-        ? '自动留忆记录无法读取，旧自动更新已暂停，没有改写。'
-        : '这一段聊天已保存自动留忆计划，上面的按模块开关已暂停。到了间隔会检查新记忆；还没有可抽的模块时，不会为模块发请求。';
+        ? '自动留忆记录无法读取，没有改写。'
+        : '这一段聊天的自动留忆已打开。到了间隔会抽一份回忆。';
+    let pacePlan = null;
+    try { pacePlan = auto_memory_plan.readAutoMemoryMetadata(core_context.currentCharacterGuard().chatMetadata)?.plan || null; } catch { pacePlan = null; }
+    const intervalInput = panel.querySelector('[data-rmt-auto-memory-interval]');
+    if (intervalInput && document.activeElement !== intervalInput) {
+        intervalInput.value = String(pacePlan?.intervalFloors || settings.autoMemoryIntervalFloors);
+    }
+    const latestInput = panel.querySelector('[data-rmt-auto-memory-latest]');
+    if (latestInput) latestInput.checked = settings.autoMemoryLatestFloor === true;
+    ui_countdown.refreshAutoMemoryCountdown();
     const restore = panel.querySelector('[data-rmt-auto-memory-restore]');
     if (restore) restore.hidden = gate.source !== 'paused-new-plan';
     const autoWarning = panel.querySelector('[data-rmt-auto-warning]');
@@ -29979,7 +30042,9 @@ const core_chatReadRange = __m_core_chatReadRange_js;
 const ui_overlay = __m_ui_overlay_js;
 const auto_memory_plan = __m_autoMemory_planStore_js;
 const auto_memory_wizard = __m_ui_autoMemoryWizard_js;
+const auto_memory_floor = __m_autoMemory_floorPace_js;
 const wizard_plan = __m_autoMemory_wizardPlan_js;
+const ui_countdown = __m_ui_autoMemoryCountdown_js;
 const ui_scenePicker = __m_ui_scenePicker_js;
 const ui_styles = __m_ui_styles_js;
 const mirrorReader = __m_ui_mirrorTtsReader_js;
@@ -30110,6 +30175,35 @@ function hydrateSettingsPanel({ memory = false } = {}) {
     refreshGenerationSettingsUi();
     panel.dataset.rmtHydrated = '1';
     return true;
+}
+
+async function saveAutoMemoryPace(panel) {
+    const note = panel.querySelector('[data-rmt-auto-memory-gate]');
+    let context;
+    try { context = core_context.currentCharacterGuard(); }
+    catch { return; }
+    const settings = core_settings.getPluginSettings();
+    const latest = settings.autoMemoryLatestFloor === true;
+    const floor = latest ? auto_memory_floor.assistantFloorCount(context.chat) : (Array.isArray(context.chat) ? context.chat.length : 0);
+    const metadata = context.chatMetadata;
+    let result;
+    try { result = wizard_plan.pacePatch(metadata, { intervalFloors: settings.autoMemoryIntervalFloors, floor }, Date.now()); }
+    catch (error) { if (note) note.textContent = error?.safeToDisplay ? error.safeUserMessage : '间隔没有改。'; return; }
+    if (!result.changed) {
+        if (result.message && note) note.textContent = result.message;
+        ui_countdown.refreshAutoMemoryCountdown();
+        return;
+    }
+    try {
+        const before = auto_memory_plan.readAutoMemoryMetadata(metadata);
+        auto_memory_plan.commitAutoMemoryMetadata(metadata, result.snapshot, before.plan.revision);
+        await context.saveMetadataDebounced?.();
+    } catch (error) {
+        if (note) note.textContent = error?.safeToDisplay ? error.safeUserMessage : '间隔没有写进当前聊天。';
+        return;
+    }
+    ui_countdown.refreshAutoMemoryCountdown();
+    if (note && result.snapshot?.plan?.enabled) note.textContent = `已改成每 ${result.snapshot.plan.intervalFloors} 楼抽一次，从现在重新计。`;
 }
 
 async function restoreLegacyAutoUpdates(panel) {
@@ -30276,6 +30370,17 @@ function mountSettings({ homeTarget = null } = {}) {
             core_settings.updatePluginSettings({ autoRetryEnabled: !!target.checked });
             const count = panel.querySelector('[data-rmt-auto-retry-count]');
             if (count) count.disabled = !target.checked;
+            return;
+        }
+        if (target.matches?.('[data-rmt-auto-memory-latest]')) {
+            core_settings.updatePluginSettings({ autoMemoryLatestFloor: !!target.checked });
+            void saveAutoMemoryPace(panel);
+            return;
+        }
+        if (target.matches?.('[data-rmt-auto-memory-interval]') && target.closest?.('[data-rmt-settings-section="auto"]')) {
+            core_settings.updatePluginSettings({ autoMemoryIntervalFloors: target.value });
+            target.value = String(core_settings.getPluginSettings().autoMemoryIntervalFloors);
+            void saveAutoMemoryPace(panel);
             return;
         }
         if (target.matches?.('[data-rmt-auto-retry-count], [data-rmt-auto-memory-retry-count]')) {
@@ -30795,9 +30900,6 @@ function __init_ui_settingsPanelMarkup_js() {
 const core_settings = __m_core_settings_js;
 const advanced_ui = __m_ui_advancedGenerationUi_js;
 const cg_format_ui = __m_ui_cgFormatControl_js;
-const core_autoUpdatePolicy = __m_core_autoUpdatePolicy_js;
-const core_text = __m_core_text_js;
-const core_constants = __m_core_constants_js;
 const core_requestCoordinator = __m_core_requestCoordinator_js;
 const SETTINGS_LAUNCHER_ID = __m_ui_settingsPanelParts_js.SETTINGS_LAUNCHER_ID;
 const bindManualAutosave = __m_ui_settingsPanelParts_js.bindManualAutosave;
@@ -30928,18 +31030,19 @@ function renderSettingsPanelMarkup(panel) {
         <details class="rmt-settings-card" data-rmt-settings-section="auto">
           <summary class="rmt-settings-card-head"><span>↻</span><div><b>自动留忆</b><small>和这个角色的回忆 · 向导与间隔</small></div></summary>
           <div class="rmt-settings-section-body">
-          <p>只在已有档案的当前窗口运行。每条聊天消息算一楼，编辑不加楼；开启后从当前楼数起计。</p>
-          <p>“档案同步”收录新聊天；其他模块使用已归档记忆，不改旧内容。会调用独立 API。</p>
+          <p>只在已有档案的当前聊天里运行。打开后从当前楼数起计。</p>
+          <p data-rmt-memory-due hidden></p>
+          <label class="rmt-settings-field"><span>每隔多少楼抽一次</span><input class="text_pole" data-rmt-auto-memory-interval type="number" min="1" max="1000" step="1" value="${core_settings.getPluginSettings().autoMemoryIntervalFloors}" aria-label="每隔多少楼抽一次"></label>
+          <small>到了这个间隔就从勾选的回忆里抽一份。1 到 1000。改完从现在重新计。</small>
+          <label class="rmt-settings-check"><input type="checkbox" data-rmt-auto-memory-latest ${core_settings.getPluginSettings().autoMemoryLatestFloor ? 'checked' : ''}><span>在最新角色楼生成回忆</span></label>
+          <small>勾上后只数角色楼。间隔是 1 时，只用最新一条角色楼的正文。间隔更大时，前面几条收成摘要，最后一条用正文。</small>
           <p>打开自动留忆后，需要两次才完整的模块会自动做第二次生成。两次合在一起才是一份完整回忆。手动生成仍看连接设置里的开关。</p>
           <label class="rmt-settings-field"><span>失败后重试次数</span><input class="text_pole" data-rmt-auto-memory-retry-count type="number" min="1" max="5" step="1" value="${core_settings.getPluginSettings().autoRetryCount}" aria-label="失败后重试次数"></label>
           <small>这一份没写完时，自动再试这么多次。范围是 1 到 5。</small>
           <button type="button" class="menu_button rmt-settings-wide" data-rmt-auto-memory-wizard>打开回忆向导</button>
-          <small>向导先接 API、读取范围和档案。生图可以跳过。结束后再问要不要自动留忆。不要的话就能自己手动生成。已有档案时不会重新建档。打开自动留忆后，下面的按模块开关会暂停。</small>
+          <small>向导先接 API、读取范围和档案。生图和文字 API 分开配，配完点下一步。结束后再问要不要自动留忆。已有档案时不会重新建档。</small>
           <p data-rmt-auto-memory-gate role="status"></p>
           <button type="button" class="menu_button rmt-settings-wide" data-rmt-auto-memory-restore hidden>关闭自动留忆</button>
-          <div class="rmt-auto-rules">${core_autoUpdatePolicy.AUTO_UPDATE_MODES.map(mode => `<div class="rmt-auto-rule"><label><input type="checkbox" data-rmt-auto-enabled="${mode}"> ${core_text.esc(mode === 'archive' ? '档案同步' : core_constants.MODE_LABEL[mode])}</label><label>每 <input type="number" min="1" max="1000" step="1" data-rmt-auto-every="${mode}" aria-label="${core_text.esc(mode === 'archive' ? '档案同步' : core_constants.MODE_LABEL[mode])}间隔楼层"> 楼</label><small data-rmt-auto-status="${mode}" role="status"></small></div>`).join('')}</div>
-          <small data-rmt-auto-warning role="status"></small>
-          <small>失败后不连续重试，等待下一个间隔；可随时手动生成。不支持跨页任务锁的浏览器仅保留手动操作。</small>
           </div>
         </details>
         <div class="rmt-settings-card">
@@ -54966,6 +55069,7 @@ const core_constants = __m_core_constants_js;
 const core_context = __m_core_context_js;
 const core_requestCoordinator = __m_core_requestCoordinator_js;
 const ui_taskCenter = __m_ui_taskCenter_js;
+const ui_countdown = __m_ui_autoMemoryCountdown_js;
 const core_settings = __m_core_settings_js;
 const core_text = __m_core_text_js;
 const generation_client = __m_generation_client_js;
@@ -54993,6 +55097,7 @@ const workspace_ui = __m_ui_workspace_js;
 const ui_workspaceState = __m_ui_workspaceState_js;
 const toolbarIcons = __m_ui_toolbarIcons_js;
 const runtimeState = __m_core_state_js.state;
+
 
 
 
@@ -55196,6 +55301,7 @@ function topTitle(text) {
     const el = document.querySelector(`#${core_constants.OVERLAY_ID} .rmt-topbar-title`);
     if (el) el.textContent = text || '心迹回廊';
     workspace_ui.syncWorkspaceChrome();
+    ui_countdown.refreshAutoMemoryCountdown();
 }
 
 function setBackVisible(visible, label = '返回上级') {
@@ -56177,6 +56283,7 @@ function openOverlay() {
             <div class="rmt-topbar">
               <button type="button" data-rmt-action="back" hidden aria-label="返回上级">${toolbarIcons.toolbarIcon('back')}</button>
               <div class="rmt-topbar-title">心迹回廊</div>
+              <div class="rmt-memory-due" data-rmt-memory-due hidden></div>
               <div class="rmt-live-tasks" data-rmt-live-tasks hidden></div>
               <button type="button" data-rmt-action="library-home" aria-label="打开档案室" title="档案室">${toolbarIcons.toolbarIcon('library')}</button>
               <button type="button" data-rmt-action="workspace-expand" aria-label="展开窗口" title="展开窗口">${toolbarIcons.toolbarIcon('expand')}</button>
@@ -62426,6 +62533,7 @@ const draft_inputs = __m_archive_draftInputs_js;
 const archive_batches = __m_archive_importBatches_js;
 const archive_coverage = __m_archive_coverageRanges_js;
 const archive_summary = __m_archive_summaryPreference_js;
+const auto_memory_floor = __m_autoMemory_floorPace_js;
 const archive_requestBudget = __m_archive_requestBudget_js;
 const core_cache = __m_core_cache_js;
 const core_constants = __m_core_constants_js;
@@ -62477,6 +62585,7 @@ const archiveSourceBank = __m_archive_recoveryDrafts_js.archiveSourceBank;
 const progressForDraftRow = __m_archive_recoveryDrafts_js.progressForDraftRow;
 const refreshArchiveRecoveryReading = __m_archive_recoveryDrafts_js.refreshArchiveRecoveryReading;
 const generateArchiveImportSegment = __m_archive_archiveVerdict_js.generateArchiveImportSegment;
+
 
 
 
@@ -62671,13 +62780,16 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
     const externalChanged = !!progress || restartImport || !incrementalUpdate || core_text.normalizeText(existing?.externalMemoryFingerprint, 240) !== core_text.normalizeText(external.fingerprint, 240);
     // 自动留忆先建档。记忆插件有新摘要时直接用摘要；否则只读这一窗正文，不改用户保存的读取范围。
     if (automatic && floorWindow && !progress && !restartImport && !capturedInput && !sceneOnly) {
-        const source = archive_summary.archiveSourceForDue({
-            summaryChanged: externalChanged,
-            summaryCount: archive_summary.pluginSummaryCount(external),
-        });
-        if (source === 'floors') {
-            const scoped = windowChatMessages(context, floorWindow);
-            if (scoped.length) chatInput = scoped;
+        const scoped = windowChatMessages(context, floorWindow);
+        if (floorWindow.latestAssistant === true) {
+            const mixed = auto_memory_floor.latestAssistantWindow(scoped, floorWindow.interval);
+            if (mixed.length) chatInput = mixed;
+        } else {
+            const source = archive_summary.archiveSourceForDue({
+                summaryChanged: externalChanged,
+                summaryCount: archive_summary.pluginSummaryCount(external),
+            });
+            if (source === 'floors' && scoped.length) chatInput = scoped;
         }
     }
     if (!progress && incrementalUpdate && !chatInput.length && !externalChanged) {
@@ -71690,9 +71802,62 @@ function formatFloorRemain(left) {
     return left <= 1 ? '下一楼' : `还差 ${left} 楼`;
 }
 
+function isAssistantFloor(message) {
+    return !!message && message.is_user !== true;
+}
+
+function assistantFloorCount(chat) {
+    if (!Array.isArray(chat)) return 0;
+    let count = 0;
+    for (const message of chat) if (isAssistantFloor(message)) count += 1;
+    return count;
+}
+
+// 把「第几条角色楼」换回聊天里的楼号。用户楼不计入。
+function chatRangeForAssistantSpan(chat, startCount, endCount) {
+    const start = Math.floor(Number(startCount));
+    const end = Math.floor(Number(endCount));
+    if (!Array.isArray(chat) || start < 1 || end < start) return null;
+    let seen = 0;
+    let first = 0;
+    let last = 0;
+    for (let index = 0; index < chat.length; index += 1) {
+        if (!isAssistantFloor(chat[index])) continue;
+        seen += 1;
+        if (seen === start) first = index + 1;
+        if (seen === end) { last = index + 1; break; }
+    }
+    if (!first || !last) return null;
+    return { start: first, end: last };
+}
+
+// 间隔 1：只留最新一条角色楼正文。间隔更大：前面几条收成短摘要，最后一条保留正文。
+function latestAssistantWindow(messages, interval) {
+    const assistant = (Array.isArray(messages) ? messages : []).filter(item => item && item.role !== 'user' && String(item.text || '').trim());
+    const count = Math.max(1, Math.floor(Number(interval)) || 1);
+    const slice = assistant.slice(-count);
+    if (slice.length < 2) return slice.map(item => ({ ...item }));
+    return slice.map((item, index) => {
+        if (index === slice.length - 1) return { ...item };
+        const brief = String(item.text || '').replace(/\s+/g, ' ').trim().slice(0, 180);
+        return { ...item, text: brief };
+    }).filter(item => item.text);
+}
+
+function countdownLabel(left) {
+    if (!Number.isSafeInteger(left) || left < 0) return '';
+    if (left <= 0) return '这一楼留下回忆';
+    if (left === 1) return '下一楼留下回忆';
+    return `回忆还有 ${left} 楼`;
+}
+
 __m_autoMemory_floorPace_js.dueFloorWindow = dueFloorWindow;
 __m_autoMemory_floorPace_js.floorsRemaining = floorsRemaining;
 __m_autoMemory_floorPace_js.formatFloorRemain = formatFloorRemain;
+__m_autoMemory_floorPace_js.assistantFloorCount = assistantFloorCount;
+__m_autoMemory_floorPace_js.chatRangeForAssistantSpan = chatRangeForAssistantSpan;
+__m_autoMemory_floorPace_js.latestAssistantWindow = latestAssistantWindow;
+__m_autoMemory_floorPace_js.countdownLabel = countdownLabel;
 }
 
 function __init_autoMemory_incrementalGate_js() {
@@ -72344,7 +72509,13 @@ const auto_memory_lease = __m_autoMemory_instanceLease_js;
 const auto_memory_plan = __m_autoMemory_planStore_js;
 const auto_memory_registry = __m_autoMemory_moduleRegistry_js;
 const core_context = __m_core_context_js;
+const core_settings = __m_core_settings_js;
+const auto_memory_floor = __m_autoMemory_floorPace_js;
+const ui_countdown = __m_ui_autoMemoryCountdown_js;
 // 启用新计划后，楼层到点就读最近这一窗正文，做成增量回忆再抽签。没有新记忆或没有可抽模块时不发模块请求。
+
+
+
 
 
 
@@ -72408,7 +72579,10 @@ async function runHostRound() {
     const metadata = context.chatMetadata;
     if (!metadata || !Object.prototype.hasOwnProperty.call(metadata, auto_memory_plan.AUTO_MEMORY_PLAN_KEY)) return;
     const scope = core_context.chatScopeKey(context);
-    const floor = Array.isArray(context.chat) ? context.chat.length : 0;
+    const latestFloor = core_settings.getPluginSettings().autoMemoryLatestFloor === true;
+    const floor = latestFloor
+        ? auto_memory_floor.assistantFloorCount(context.chat)
+        : (Array.isArray(context.chat) ? context.chat.length : 0);
     if (handledFloors.get(scope) === floor || inflightScopes.has(scope)) return;
     const body = async claim => {
         if (handledFloors.get(scope) === floor || inflightScopes.has(scope)) return;
@@ -72444,7 +72618,15 @@ async function runHostRound() {
                 archiveRevision: archive_repository.getImportedMemory(live)?.archiveRevision || 'current',
                 chatId: core_context.getChatId(live),
             }, {
-                importIncremental: options => archive_repository.importCurrentChatMemory(options),
+                importIncremental: options => {
+                    const window = options?.floorWindow;
+                    if (!latestFloor || !window) return archive_repository.importCurrentChatMemory(options);
+                    const mapped = auto_memory_floor.chatRangeForAssistantSpan(live.chat, window.start, window.end);
+                    const floorWindow = mapped
+                        ? { ...mapped, latestAssistant: true, interval: snapshot.plan.intervalFloors }
+                        : { ...window, latestAssistant: true, interval: snapshot.plan.intervalFloors };
+                    return archive_repository.importCurrentChatMemory({ ...options, floorWindow });
+                },
                 readMemoryIds: () => collectMemoryIds(core_context.currentCharacterGuard()),
                 random: randomUnit,
                 nextId: nextDrawId,
@@ -72460,6 +72642,7 @@ async function runHostRound() {
             if (result.action === 'arm' || result.action === 'noop' || result.action === 'drawn' || result.action === 'wait') {
                 handledFloors.set(scope, floor);
             }
+            ui_countdown.refreshAutoMemoryCountdown();
         } finally {
             inflightScopes.delete(scope);
         }
@@ -72822,6 +73005,32 @@ function archiveActionAfterChoice({ asked = 'keep', rebuild = false, doArchive =
     return doArchive === true ? 'create' : 'keep';
 }
 
+function pacePatch(chatMetadata, { intervalFloors, floor } = {}, now = 0) {
+    const existing = auto_memory_plan.readAutoMemoryMetadata(chatMetadata);
+    if (!existing?.plan) return { changed: false, snapshot: existing, message: '' };
+    const interval = normalizeInterval(intervalFloors);
+    if (!interval.ok) return { changed: false, snapshot: existing, message: interval.message };
+    const updatedAt = Number.isSafeInteger(now) && now > existing.plan.updatedAt ? now : existing.plan.updatedAt + 1;
+    const armed = existing.plan.enabled === true && Number.isSafeInteger(floor) && floor >= 0;
+    return {
+        changed: true,
+        message: '',
+        snapshot: auto_memory_plan.parseAutoMemorySnapshot({
+            plan: auto_memory_plan.parseAutoMemoryPlan({
+                ...existing.plan,
+                intervalFloors: interval.intervalFloors,
+                lastCompletedFloor: armed ? floor : existing.plan.lastCompletedFloor,
+                nextDueFloor: armed ? floor + interval.intervalFloors : existing.plan.nextDueFloor,
+                revision: existing.plan.revision + 1,
+                updatedAt,
+            }),
+            revealRecords: existing.revealRecords,
+            drawTickets: existing.drawTickets,
+            modulePlan: existing.modulePlan,
+        }),
+    };
+}
+
 function disableAutoMemoryPlan(chatMetadata, now = 0) {
     const existing = auto_memory_plan.readAutoMemoryMetadata(chatMetadata);
     if (!existing?.plan.enabled) return { changed: false, snapshot: existing };
@@ -72889,6 +73098,7 @@ __m_autoMemory_wizardPlan_js.wizardSkipsArchiveStep = wizardSkipsArchiveStep;
 __m_autoMemory_wizardPlan_js.wizardVisibleSteps = wizardVisibleSteps;
 __m_autoMemory_wizardPlan_js.archiveRebuildChoice = archiveRebuildChoice;
 __m_autoMemory_wizardPlan_js.archiveActionAfterChoice = archiveActionAfterChoice;
+__m_autoMemory_wizardPlan_js.pacePatch = pacePatch;
 __m_autoMemory_wizardPlan_js.disableAutoMemoryPlan = disableAutoMemoryPlan;
 __m_autoMemory_wizardPlan_js.wizardBlocksChatInput = wizardBlocksChatInput;
 __m_autoMemory_wizardPlan_js.wizardCloseAbortsTasks = wizardCloseAbortsTasks;
@@ -72988,6 +73198,7 @@ const core_independentApi = __m_core_independentApi_js;
 const core_settings = __m_core_settings_js;
 const core_text = __m_core_text_js;
 const generation_imageGeneration = __m_generation_imageGeneration_js;
+const cg_format_ui = __m_ui_cgFormatControl_js;
 const settings_parts = __m_ui_settingsPanelParts_js;
 const home_view = __m_ui_homeView_js;
 const ui_overlay = __m_ui_overlay_js;
@@ -72995,6 +73206,7 @@ const participant_picker = __m_ui_participantPicker_js;
 const ui_taskCenter = __m_ui_taskCenter_js;
 const ui_workspaceState = __m_ui_workspaceState_js;
 // 自动留忆向导挂在插件窗口里。关闭窗口不取消已经开始的建档或任务队列，也不锁酒馆输入框。
+
 
 
 
@@ -73108,7 +73320,8 @@ function moduleHtml({ autoPick = false } = {}) {
         : `<article class="rmt-auto-note">${moduleIntro(item)}</article>`).join('');
     const note = notes.map(item => `<article class="rmt-auto-note">${moduleIntro(item)}</article>`).join('');
     const selectAll = autoPick ? `<label class="rmt-auto-all"><input type="checkbox" data-rmt-auto-memory-all ${allOn ? 'checked' : ''}><span>全选自动生成</span></label><p class="rmt-auto-lead">勾上的，到了间隔会从里面抽一份自动生成。取消勾选的，以后不会抽到。下面的次数是生成这一份回忆要调用 API 的次数。</p>` : '';
-    const first = autoPick ? '' : `<h3>这次要不要先生成</h3><p>可勾可不勾。勾上的会在向导结束时放进任务中心。不勾就留着，以后你自己打开页面再生成。次数同样是单次回忆调用 API 的次数。</p><div class="rmt-auto-picks">${rows.filter(item => item.queueable).map(item => `<label class="rmt-auto-pick"><input type="checkbox" data-rmt-auto-memory-first="${core_text.esc(item.id)}" ${draft.firstModuleIds.includes(item.id) ? 'checked' : ''}><span><b>${core_text.esc(item.title)}</b><small>${core_text.esc(requestLine(item))}</small></span></label>`).join('')}</div>`;
+    const firstPicks = rows.filter(item => item.queueable).map(item => `<label class="rmt-auto-pick"><input type="checkbox" data-rmt-auto-memory-first="${core_text.esc(item.id)}" ${draft.firstModuleIds.includes(item.id) ? 'checked' : ''}><span><b>${core_text.esc(item.title)}</b><small>${core_text.esc(requestLine(item))}</small></span></label>`).join('');
+    const first = autoPick ? '' : `<details class="rmt-auto-fold"><summary>这次要不要先生成</summary><p>可勾可不勾。勾上的会在向导结束时放进任务中心。不勾就留着，以后你自己打开页面再生成。</p><div class="rmt-auto-picks">${firstPicks}</div></details>`;
     return `${selectAll}<div class="rmt-auto-picks">${picks}</div>${note}${first}`;
 }
 
@@ -73179,10 +73392,8 @@ function pageHtml(context) {
     if (name === 'image') {
         let state = { available: false, reason: '柏宝绘还没接上。' };
         try { state = generation_imageGeneration.imageGenerationUiState(); } catch { state = { available: false, reason: '柏宝绘还没接上。' }; }
-        const line = state.available
-            ? '柏宝绘已经接上。这里不会出图，仍要在相簿、ADV 或日常一格里点绘制。'
-            : `${state.reason || '柏宝绘还没接上。'} 可以先跳过，以后在设置里再开。生图走柏宝绘，和上面的文字 API 不是同一个连接。`;
-        return `<h2>生图可以先不配</h2><p>${core_text.esc(line)}</p><p>跳过不会出图，也不挡住后面的回忆。</p><button type="button" class="rmt-btn" data-rmt-auto-memory-goto="api">回到文字 API</button>`;
+        const status = state.available ? '柏宝绘已连接 · 公开 API v1' : (state.reason || '未检测到柏宝绘公开 API v1。');
+        return `<h2>CG 生图</h2><p>相簿、ADV、日常一格。和文字 API 不是同一个连接。这里配好后点下一步，不会现在出图。</p>${cg_format_ui.cgFormatControlHtml()}<label class="rmt-settings-field"><span>生图渠道</span><select class="text_pole" data-rmt-image-generation-provider aria-label="生图渠道"><option value="baibai-image">柏宝绘 · 公开 API v1</option></select></label><p role="status">${core_text.esc(status)}</p><p>柏宝绘需单独安装并配置出图渠道。只在点击绘制并确认后出图，失败不会自动换渠道。</p><p>先不配也可以。点下一步继续，跳过不会出图，也不挡住后面的回忆。</p>`;
     }
     if (name === 'modules') return `<h2>这些是可以留下的回忆</h2><p>每一项是一份回忆。次数写的是生成这一份要调用 API 几次，不是会自动生成多少回。每生成一份，都会带上对应的成就。</p>${moduleHtml()}`;
     if (name === 'offer') {
@@ -73301,7 +73512,12 @@ function applyKnownCard(context) {
 
 function seedDraft(existing) {
     const legacy = core_settings.getPluginSettings().autoUpdates;
-    if (!existing) return wizard_plan.createWizardDraft(auto_memory_migrate.migrateLegacyAutoPreferences(null, legacy, 0).plan);
+    if (!existing) {
+        const seeded = wizard_plan.createWizardDraft(auto_memory_migrate.migrateLegacyAutoPreferences(null, legacy, 0).plan);
+        const saved = wizard_plan.normalizeInterval(core_settings.getPluginSettings().autoMemoryIntervalFloors);
+        if (saved.ok) seeded.intervalFloors = saved.intervalFloors;
+        return seeded;
+    }
     if (!existing.plan.legacyPreferencesMigrated) {
         return wizard_plan.createWizardDraft(auto_memory_migrate.migrateLegacyAutoPreferences(existing.plan, legacy, Date.now()).plan);
     }
@@ -73504,6 +73720,7 @@ async function refreshWizardManualModels(root, context) {
 }
 
 function onChange(event) {
+    if (cg_format_ui.handleCgFormatChange(event)) return;
     const root = event.target.closest?.('[data-rmt-auto-memory-root]');
     if (!root || !draft) return;
     if (event.target.matches?.('[data-rmt-read-mode], [data-rmt-read-recent], [data-rmt-read-start], [data-rmt-read-end], [data-rmt-read-hidden]')) {
@@ -74382,6 +74599,7 @@ __init_ui_css_phoneMobileCss_js();
 __init_ui_css_calendarCss_js();
 __init_ui_css_heartProfileTravelCss_js();
 __init_ui_styles_js();
+__init_ui_autoMemoryCountdown_js();
 __init_ui_settingsPanelParts_js();
 __init_ui_settingsPanelHome_js();
 __init_ui_settingsPanelMarkup_js();

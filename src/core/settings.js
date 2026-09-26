@@ -17,6 +17,12 @@ import * as core_autoUpdatePolicy from './autoUpdatePolicy.js';
 import * as creative_supplement from './creativeSupplement.js';
 import * as chat_read_range from './chatReadRange.js';
 
+export function normalizeAutoMemoryInterval(value) {
+    const count = Math.floor(Number(value));
+    if (!Number.isFinite(count)) return 5;
+    return Math.max(1, Math.min(1000, count));
+}
+
 export function normalizeAutoRetryCount(value) {
     const count = Math.floor(Number(value));
     if (!Number.isFinite(count)) return 1;
@@ -68,6 +74,8 @@ export function getPluginSettings(context = core_context.getContext()) {
         autoRetryEnabled: settings.autoRetryEnabled === true,
         autoRetryCount: normalizeAutoRetryCount(settings.autoRetryCount),
         autoSecondPass: settings.autoSecondPass === true,
+        autoMemoryLatestFloor: settings.autoMemoryLatestFloor === true,
+        autoMemoryIntervalFloors: normalizeAutoMemoryInterval(settings.autoMemoryIntervalFloors),
         creativeSupplementEnabled: settings.creativeSupplementEnabled === true,
         creativeSupplement: creative_supplement.normalizeCreativeSupplement(settings.creativeSupplement),
         ttDisplayMode: settings.ttDisplayMode === true,

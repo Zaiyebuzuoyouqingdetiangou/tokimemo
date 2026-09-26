@@ -11,6 +11,8 @@ import * as core_text from '../core/text.js';
 import * as core_theme from '../core/theme.js';
 import * as core_autoUpdatePolicy from '../core/autoUpdatePolicy.js';
 import * as core_autoUpdates from '../core/autoUpdates.js';
+import * as auto_memory_plan from '../autoMemory/planStore.js';
+import * as ui_countdown from './autoMemoryCountdown.js';
 // 设置页组件：启动入口、生图 / 语音 / 读取范围设置、模型列表、任务与记忆状态刷新
 // 从 ui/settingsPanel.js 原样搬出（重构阶段 2），声明文本一字未改；ui/settingsPanel.js 仍转发原有导出。
 
@@ -416,8 +418,17 @@ export function refreshGenerationSettingsUi() {
     for (const input of panel.querySelectorAll('[data-rmt-auto-enabled], [data-rmt-auto-every]')) input.disabled = paused;
     const gateNote = panel.querySelector('[data-rmt-auto-memory-gate]');
     if (gateNote) gateNote.textContent = !paused ? '' : gate.source === 'paused-corrupt'
-        ? '自动留忆记录无法读取，旧自动更新已暂停，没有改写。'
-        : '这一段聊天已保存自动留忆计划，上面的按模块开关已暂停。到了间隔会检查新记忆；还没有可抽的模块时，不会为模块发请求。';
+        ? '自动留忆记录无法读取，没有改写。'
+        : '这一段聊天的自动留忆已打开。到了间隔会抽一份回忆。';
+    let pacePlan = null;
+    try { pacePlan = auto_memory_plan.readAutoMemoryMetadata(core_context.currentCharacterGuard().chatMetadata)?.plan || null; } catch { pacePlan = null; }
+    const intervalInput = panel.querySelector('[data-rmt-auto-memory-interval]');
+    if (intervalInput && document.activeElement !== intervalInput) {
+        intervalInput.value = String(pacePlan?.intervalFloors || settings.autoMemoryIntervalFloors);
+    }
+    const latestInput = panel.querySelector('[data-rmt-auto-memory-latest]');
+    if (latestInput) latestInput.checked = settings.autoMemoryLatestFloor === true;
+    ui_countdown.refreshAutoMemoryCountdown();
     const restore = panel.querySelector('[data-rmt-auto-memory-restore]');
     if (restore) restore.hidden = gate.source !== 'paused-new-plan';
     const autoWarning = panel.querySelector('[data-rmt-auto-warning]');

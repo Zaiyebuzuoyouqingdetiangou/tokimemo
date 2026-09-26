@@ -13,6 +13,7 @@ import * as core_independentApi from '../core/independentApi.js';
 import * as core_settings from '../core/settings.js';
 import * as core_text from '../core/text.js';
 import * as generation_imageGeneration from '../generation/imageGeneration.js';
+import * as cg_format_ui from './cgFormatControl.js';
 import * as settings_parts from './settingsPanelParts.js';
 import * as home_view from './homeView.js';
 import * as ui_overlay from './overlay.js';
@@ -113,7 +114,8 @@ function moduleHtml({ autoPick = false } = {}) {
         : `<article class="rmt-auto-note">${moduleIntro(item)}</article>`).join('');
     const note = notes.map(item => `<article class="rmt-auto-note">${moduleIntro(item)}</article>`).join('');
     const selectAll = autoPick ? `<label class="rmt-auto-all"><input type="checkbox" data-rmt-auto-memory-all ${allOn ? 'checked' : ''}><span>全选自动生成</span></label><p class="rmt-auto-lead">勾上的，到了间隔会从里面抽一份自动生成。取消勾选的，以后不会抽到。下面的次数是生成这一份回忆要调用 API 的次数。</p>` : '';
-    const first = autoPick ? '' : `<h3>这次要不要先生成</h3><p>可勾可不勾。勾上的会在向导结束时放进任务中心。不勾就留着，以后你自己打开页面再生成。次数同样是单次回忆调用 API 的次数。</p><div class="rmt-auto-picks">${rows.filter(item => item.queueable).map(item => `<label class="rmt-auto-pick"><input type="checkbox" data-rmt-auto-memory-first="${core_text.esc(item.id)}" ${draft.firstModuleIds.includes(item.id) ? 'checked' : ''}><span><b>${core_text.esc(item.title)}</b><small>${core_text.esc(requestLine(item))}</small></span></label>`).join('')}</div>`;
+    const firstPicks = rows.filter(item => item.queueable).map(item => `<label class="rmt-auto-pick"><input type="checkbox" data-rmt-auto-memory-first="${core_text.esc(item.id)}" ${draft.firstModuleIds.includes(item.id) ? 'checked' : ''}><span><b>${core_text.esc(item.title)}</b><small>${core_text.esc(requestLine(item))}</small></span></label>`).join('');
+    const first = autoPick ? '' : `<details class="rmt-auto-fold"><summary>这次要不要先生成</summary><p>可勾可不勾。勾上的会在向导结束时放进任务中心。不勾就留着，以后你自己打开页面再生成。</p><div class="rmt-auto-picks">${firstPicks}</div></details>`;
     return `${selectAll}<div class="rmt-auto-picks">${picks}</div>${note}${first}`;
 }
 
@@ -184,10 +186,8 @@ function pageHtml(context) {
     if (name === 'image') {
         let state = { available: false, reason: '柏宝绘还没接上。' };
         try { state = generation_imageGeneration.imageGenerationUiState(); } catch { state = { available: false, reason: '柏宝绘还没接上。' }; }
-        const line = state.available
-            ? '柏宝绘已经接上。这里不会出图，仍要在相簿、ADV 或日常一格里点绘制。'
-            : `${state.reason || '柏宝绘还没接上。'} 可以先跳过，以后在设置里再开。生图走柏宝绘，和上面的文字 API 不是同一个连接。`;
-        return `<h2>生图可以先不配</h2><p>${core_text.esc(line)}</p><p>跳过不会出图，也不挡住后面的回忆。</p><button type="button" class="rmt-btn" data-rmt-auto-memory-goto="api">回到文字 API</button>`;
+        const status = state.available ? '柏宝绘已连接 · 公开 API v1' : (state.reason || '未检测到柏宝绘公开 API v1。');
+        return `<h2>CG 生图</h2><p>相簿、ADV、日常一格。和文字 API 不是同一个连接。这里配好后点下一步，不会现在出图。</p>${cg_format_ui.cgFormatControlHtml()}<label class="rmt-settings-field"><span>生图渠道</span><select class="text_pole" data-rmt-image-generation-provider aria-label="生图渠道"><option value="baibai-image">柏宝绘 · 公开 API v1</option></select></label><p role="status">${core_text.esc(status)}</p><p>柏宝绘需单独安装并配置出图渠道。只在点击绘制并确认后出图，失败不会自动换渠道。</p><p>先不配也可以。点下一步继续，跳过不会出图，也不挡住后面的回忆。</p>`;
     }
     if (name === 'modules') return `<h2>这些是可以留下的回忆</h2><p>每一项是一份回忆。次数写的是生成这一份要调用 API 几次，不是会自动生成多少回。每生成一份，都会带上对应的成就。</p>${moduleHtml()}`;
     if (name === 'offer') {
@@ -306,7 +306,12 @@ function applyKnownCard(context) {
 
 function seedDraft(existing) {
     const legacy = core_settings.getPluginSettings().autoUpdates;
-    if (!existing) return wizard_plan.createWizardDraft(auto_memory_migrate.migrateLegacyAutoPreferences(null, legacy, 0).plan);
+    if (!existing) {
+        const seeded = wizard_plan.createWizardDraft(auto_memory_migrate.migrateLegacyAutoPreferences(null, legacy, 0).plan);
+        const saved = wizard_plan.normalizeInterval(core_settings.getPluginSettings().autoMemoryIntervalFloors);
+        if (saved.ok) seeded.intervalFloors = saved.intervalFloors;
+        return seeded;
+    }
     if (!existing.plan.legacyPreferencesMigrated) {
         return wizard_plan.createWizardDraft(auto_memory_migrate.migrateLegacyAutoPreferences(existing.plan, legacy, Date.now()).plan);
     }
@@ -509,6 +514,7 @@ async function refreshWizardManualModels(root, context) {
 }
 
 function onChange(event) {
+    if (cg_format_ui.handleCgFormatChange(event)) return;
     const root = event.target.closest?.('[data-rmt-auto-memory-root]');
     if (!root || !draft) return;
     if (event.target.matches?.('[data-rmt-read-mode], [data-rmt-read-recent], [data-rmt-read-start], [data-rmt-read-end], [data-rmt-read-hidden]')) {

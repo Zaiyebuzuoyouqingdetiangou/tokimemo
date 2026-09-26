@@ -64,6 +64,8 @@ dialog#${core_constants.OVERLAY_ID}::backdrop{background:transparent}
   font-weight:800;letter-spacing:.055em;min-width:0;flex:1 1 auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
   color:#50627b;font-size:18px
 }
+.rmt-memory-due{flex:0 1 auto;min-width:0;margin-right:8px;color:#9d6d82;font-size:12px;line-height:1.3;white-space:nowrap}
+.rmt-memory-due[hidden]{display:none!important}
 .rmt-topbar:has(.rmt-live-tasks:not([hidden])) .rmt-topbar-title{flex:0 1 auto;max-width:min(46%,280px)}
 .rmt-topbar-title:after{
   content:"  MEMORY ARCHIVE";font-size:9px;letter-spacing:.16em;font-weight:700;color:#9aa7b5;margin-left:9px;vertical-align:2px
@@ -219,6 +221,9 @@ dialog#${core_constants.OVERLAY_ID}::backdrop{background:transparent}
 .rmt-auto-note{display:grid;gap:4px;padding:12px 14px;border:1px solid #ead3c4;border-radius:14px;background:#fffaf6}
 .rmt-auto-note b{font-size:15px;color:#6d5348}
 .rmt-auto-note p{margin:0;color:#6d5348}
+.rmt-auto-fold{margin-top:8px;border:1px solid #d7e4eb;border-radius:14px;background:#fff;padding:0 14px 8px}
+.rmt-auto-fold summary{display:flex;align-items:center;min-height:44px;cursor:pointer;font-weight:600;color:#4d5d73}
+.rmt-auto-fold p{margin:0 0 8px;color:#627286;font-size:13px;line-height:1.6}
 .rmt-auto-api{display:grid;gap:10px}
 .rmt-auto-api-modes{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .rmt-auto-api-mode{display:grid;gap:4px;min-height:72px;padding:12px;border:1px solid #d5e3ea;border-radius:14px;background:#fff;color:#4d5d73;text-align:left;cursor:pointer}

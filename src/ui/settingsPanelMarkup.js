@@ -2,9 +2,6 @@ import { SETTINGS_LAUNCHER_ID, bindManualAutosave, chatReadingSettingsHtml, manu
 import * as core_settings from '../core/settings.js';
 import * as advanced_ui from './advancedGenerationUi.js';
 import * as cg_format_ui from './cgFormatControl.js';
-import * as core_autoUpdatePolicy from '../core/autoUpdatePolicy.js';
-import * as core_text from '../core/text.js';
-import * as core_constants from '../core/constants.js';
 import { state as runtimeState } from '../core/state.js';
 import * as core_requestCoordinator from '../core/requestCoordinator.js';
 import { SETTINGS_MOUNT_UNHANDLED } from './settingsPanelHome.js';
@@ -118,18 +115,19 @@ export function renderSettingsPanelMarkup(panel) {
         <details class="rmt-settings-card" data-rmt-settings-section="auto">
           <summary class="rmt-settings-card-head"><span>↻</span><div><b>自动留忆</b><small>和这个角色的回忆 · 向导与间隔</small></div></summary>
           <div class="rmt-settings-section-body">
-          <p>只在已有档案的当前窗口运行。每条聊天消息算一楼，编辑不加楼；开启后从当前楼数起计。</p>
-          <p>“档案同步”收录新聊天；其他模块使用已归档记忆，不改旧内容。会调用独立 API。</p>
+          <p>只在已有档案的当前聊天里运行。打开后从当前楼数起计。</p>
+          <p data-rmt-memory-due hidden></p>
+          <label class="rmt-settings-field"><span>每隔多少楼抽一次</span><input class="text_pole" data-rmt-auto-memory-interval type="number" min="1" max="1000" step="1" value="${core_settings.getPluginSettings().autoMemoryIntervalFloors}" aria-label="每隔多少楼抽一次"></label>
+          <small>到了这个间隔就从勾选的回忆里抽一份。1 到 1000。改完从现在重新计。</small>
+          <label class="rmt-settings-check"><input type="checkbox" data-rmt-auto-memory-latest ${core_settings.getPluginSettings().autoMemoryLatestFloor ? 'checked' : ''}><span>在最新角色楼生成回忆</span></label>
+          <small>勾上后只数角色楼。间隔是 1 时，只用最新一条角色楼的正文。间隔更大时，前面几条收成摘要，最后一条用正文。</small>
           <p>打开自动留忆后，需要两次才完整的模块会自动做第二次生成。两次合在一起才是一份完整回忆。手动生成仍看连接设置里的开关。</p>
           <label class="rmt-settings-field"><span>失败后重试次数</span><input class="text_pole" data-rmt-auto-memory-retry-count type="number" min="1" max="5" step="1" value="${core_settings.getPluginSettings().autoRetryCount}" aria-label="失败后重试次数"></label>
           <small>这一份没写完时，自动再试这么多次。范围是 1 到 5。</small>
           <button type="button" class="menu_button rmt-settings-wide" data-rmt-auto-memory-wizard>打开回忆向导</button>
-          <small>向导先接 API、读取范围和档案。生图可以跳过。结束后再问要不要自动留忆。不要的话就能自己手动生成。已有档案时不会重新建档。打开自动留忆后，下面的按模块开关会暂停。</small>
+          <small>向导先接 API、读取范围和档案。生图和文字 API 分开配，配完点下一步。结束后再问要不要自动留忆。已有档案时不会重新建档。</small>
           <p data-rmt-auto-memory-gate role="status"></p>
           <button type="button" class="menu_button rmt-settings-wide" data-rmt-auto-memory-restore hidden>关闭自动留忆</button>
-          <div class="rmt-auto-rules">${core_autoUpdatePolicy.AUTO_UPDATE_MODES.map(mode => `<div class="rmt-auto-rule"><label><input type="checkbox" data-rmt-auto-enabled="${mode}"> ${core_text.esc(mode === 'archive' ? '档案同步' : core_constants.MODE_LABEL[mode])}</label><label>每 <input type="number" min="1" max="1000" step="1" data-rmt-auto-every="${mode}" aria-label="${core_text.esc(mode === 'archive' ? '档案同步' : core_constants.MODE_LABEL[mode])}间隔楼层"> 楼</label><small data-rmt-auto-status="${mode}" role="status"></small></div>`).join('')}</div>
-          <small data-rmt-auto-warning role="status"></small>
-          <small>失败后不连续重试，等待下一个间隔；可随时手动生成。不支持跨页任务锁的浏览器仅保留手动操作。</small>
           </div>
         </details>
         <div class="rmt-settings-card">

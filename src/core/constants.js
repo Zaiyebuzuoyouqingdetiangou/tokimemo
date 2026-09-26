@@ -224,6 +224,8 @@ export const DEFAULT_SETTINGS = Object.freeze({
     autoRetryEnabled: false,
     autoRetryCount: 1,
     autoSecondPass: false,
+    autoMemoryLatestFloor: false,
+    autoMemoryIntervalFloors: 5,
     creativeSupplementEnabled: false,
     creativeSupplement: '',
     imageGenerationProvider: 'baibai-image',

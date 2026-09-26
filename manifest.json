@@ -1,15 +1,15 @@
 {
   "display_name": "心迹回廊",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.99.44-r84.96-memory-second",
+  "js": "index.js?heartbeat=0.99.45-r84.97-memory-pace",
   "author": "Toto",
-  "version": "0.99.44",
+  "version": "0.99.45",
   "auto_update": true,
   "minimum_client_version": "1.13.0",
   "hooks": {
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r84.96：一份回忆最多调用 2 次 API。自动留忆会把第二次生成一起做完。设置里可以改失败后的重试次数。",
+  "description": "r84.97：自动留忆可以设置每隔多少楼抽一次，也能改成只在最新角色楼生成。向导里的生图和设置是同一套。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }

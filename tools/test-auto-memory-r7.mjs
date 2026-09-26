@@ -16,6 +16,27 @@ test('a due floor reads the floors since the last completion', () => {
     assert.equal(floor.formatFloorRemain(floor.floorsRemaining(8, 13)), '还差 5 楼');
     assert.equal(floor.formatFloorRemain(floor.floorsRemaining(12, 13)), '下一楼');
     assert.equal(floor.formatFloorRemain(floor.floorsRemaining(13, 13)), '下一楼');
+    const chat = [
+        { is_user: true, mes: '用户' },
+        { is_user: false, mes: '第一段很长的角色回复，应该收成摘要。' },
+        { is_user: false, mes: '第二段角色回复。' },
+        { is_user: true, mes: '再问一句' },
+        { is_user: false, mes: '最新一条角色楼的完整正文。' },
+    ];
+    assert.equal(floor.assistantFloorCount(chat), 3);
+    assert.deepEqual(floor.chatRangeForAssistantSpan(chat, 2, 3), { start: 3, end: 5 });
+    const mixed = floor.latestAssistantWindow([
+        { role: 'user', text: '用户' },
+        { role: 'char', text: '第一段很长的角色回复，应该收成摘要。' },
+        { role: 'char', text: '第二段角色回复。' },
+        { role: 'char', text: '最新一条角色楼的完整正文。' },
+    ], 3);
+    assert.equal(mixed.length, 3);
+    assert.equal(mixed[2].text, '最新一条角色楼的完整正文。');
+    assert.equal(mixed[0].text.length <= 180, true);
+    assert.equal(floor.latestAssistantWindow([{ role: 'char', text: '只有最新楼。' }], 1)[0].text, '只有最新楼。');
+    assert.equal(floor.countdownLabel(5), '回忆还有 5 楼');
+    assert.equal(floor.countdownLabel(1), '下一楼留下回忆');
 });
 
 test('the waiting shell shows the floor countdown and does not block input', () => {

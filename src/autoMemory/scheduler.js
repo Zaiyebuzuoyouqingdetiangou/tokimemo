@@ -6,6 +6,9 @@ import * as auto_memory_lease from './instanceLease.js';
 import * as auto_memory_plan from './planStore.js';
 import * as auto_memory_registry from './moduleRegistry.js';
 import * as core_context from '../core/context.js';
+import * as core_settings from '../core/settings.js';
+import * as auto_memory_floor from './floorPace.js';
+import * as ui_countdown from '../ui/autoMemoryCountdown.js';
 
 let cleanup = null;
 let leaseOwner = '';
@@ -63,7 +66,10 @@ async function runHostRound() {
     const metadata = context.chatMetadata;
     if (!metadata || !Object.prototype.hasOwnProperty.call(metadata, auto_memory_plan.AUTO_MEMORY_PLAN_KEY)) return;
     const scope = core_context.chatScopeKey(context);
-    const floor = Array.isArray(context.chat) ? context.chat.length : 0;
+    const latestFloor = core_settings.getPluginSettings().autoMemoryLatestFloor === true;
+    const floor = latestFloor
+        ? auto_memory_floor.assistantFloorCount(context.chat)
+        : (Array.isArray(context.chat) ? context.chat.length : 0);
     if (handledFloors.get(scope) === floor || inflightScopes.has(scope)) return;
     const body = async claim => {
         if (handledFloors.get(scope) === floor || inflightScopes.has(scope)) return;
@@ -99,7 +105,15 @@ async function runHostRound() {
                 archiveRevision: archive_repository.getImportedMemory(live)?.archiveRevision || 'current',
                 chatId: core_context.getChatId(live),
             }, {
-                importIncremental: options => archive_repository.importCurrentChatMemory(options),
+                importIncremental: options => {
+                    const window = options?.floorWindow;
+                    if (!latestFloor || !window) return archive_repository.importCurrentChatMemory(options);
+                    const mapped = auto_memory_floor.chatRangeForAssistantSpan(live.chat, window.start, window.end);
+                    const floorWindow = mapped
+                        ? { ...mapped, latestAssistant: true, interval: snapshot.plan.intervalFloors }
+                        : { ...window, latestAssistant: true, interval: snapshot.plan.intervalFloors };
+                    return archive_repository.importCurrentChatMemory({ ...options, floorWindow });
+                },
                 readMemoryIds: () => collectMemoryIds(core_context.currentCharacterGuard()),
                 random: randomUnit,
                 nextId: nextDrawId,
@@ -115,6 +129,7 @@ async function runHostRound() {
             if (result.action === 'arm' || result.action === 'noop' || result.action === 'drawn' || result.action === 'wait') {
                 handledFloors.set(scope, floor);
             }
+            ui_countdown.refreshAutoMemoryCountdown();
         } finally {
             inflightScopes.delete(scope);
         }

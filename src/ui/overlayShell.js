@@ -10,6 +10,7 @@ import * as core_constants from '../core/constants.js';
 import * as core_context from '../core/context.js';
 import * as core_requestCoordinator from '../core/requestCoordinator.js';
 import * as ui_taskCenter from './taskCenter.js';
+import * as ui_countdown from './autoMemoryCountdown.js';
 import * as core_settings from '../core/settings.js';
 import { state as runtimeState } from '../core/state.js';
 import * as core_text from '../core/text.js';
@@ -226,6 +227,7 @@ export function topTitle(text) {
     const el = document.querySelector(`#${core_constants.OVERLAY_ID} .rmt-topbar-title`);
     if (el) el.textContent = text || '心迹回廊';
     workspace_ui.syncWorkspaceChrome();
+    ui_countdown.refreshAutoMemoryCountdown();
 }
 
 export function setBackVisible(visible, label = '返回上级') {
