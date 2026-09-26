@@ -1,5 +1,5 @@
 const VERSION = '0.99.90';
-const BUILD = '0.99.90-r84.148-drop-lost-letter';
+const BUILD = '0.99.90-r84.149-envelope-fold';
 
 const SETTINGS_ID = 'heartbeat_memories_settings';
 const MENU_ID = 'heartbeat_memories_menu_item';

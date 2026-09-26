@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 286
-// Source SHA-256: f7bc750530b2b98123260ce3f515688382bd1317d6c46f70d7602905ef9c287c
+// Source SHA-256: dec0fd02f12324a3cf4d41be8fbb3373c445cf5554c33788450c68e4cb7842e0
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -62272,7 +62272,7 @@ function render(context) {
     const prev = browsing ? `<button type="button" class="rmt-btn" data-rmt-auto-memory-prev ${step === 0 ? 'disabled' : ''}>上一步</button>` : '';
     const next = browsing && !atOffer && !atEnd ? `<button type="button" class="rmt-btn" data-rmt-auto-memory-next>下一步</button>` : '';
     const save = showSave ? `<button type="button" class="rmt-btn rmt-auto-save" data-rmt-auto-memory-save>保存并开始</button>` : '';
-    body.innerHTML = `<main data-rmt-auto-memory-root><div class="rmt-auto-scroll"><div class="rmt-home rmt-auto-page"><div class="rmt-auto-progress"><div class="rmt-auto-progress-track" role="progressbar" aria-valuemin="1" aria-valuemax="${progressTotal}" aria-valuenow="${progressCurrent}" aria-valuetext="${core_text.esc(progressName)}，第 ${progressCurrent} / ${progressTotal} 步"><span style="width:${progressWidth}%"></span></div><p><b>${core_text.esc(progressName)}</b><small>第 ${progressCurrent} / ${progressTotal} 步</small></p></div>${inner}</div></div><div class="rmt-auto-bar"><p data-rmt-auto-memory-status role="status"></p><div class="rmt-auto-bar-main">${prev}${next}${save}</div><div class="rmt-auto-bar-quiet"><button type="button" data-rmt-auto-memory-home>返回设置</button><button type="button" data-rmt-auto-memory-close>关闭窗口，任务继续</button></div></div></main>`;
+    body.innerHTML = `<main data-rmt-auto-memory-root><div class="rmt-auto-scroll"><div class="rmt-home rmt-auto-page"><div class="rmt-auto-progress"><div class="rmt-auto-progress-track" role="progressbar" aria-valuemin="1" aria-valuemax="${progressTotal}" aria-valuenow="${progressCurrent}" aria-valuetext="${core_text.esc(progressName)}，第 ${progressCurrent} / ${progressTotal} 步"><span style="width:${progressWidth}%"></span></div><p><b>${core_text.esc(progressName)}</b><small>第 ${progressCurrent} / ${progressTotal} 步</small></p></div>${inner}</div></div><div class="rmt-auto-bar"><p data-rmt-auto-memory-status role="status"></p><div class="rmt-auto-bar-main">${prev}${next}${save}</div><div class="rmt-auto-bar-quiet"><button type="button" class="rmt-btn" data-rmt-auto-memory-home>返回设置</button><button type="button" class="rmt-btn" data-rmt-auto-memory-close>关闭窗口，任务继续</button></div></div></main>`;
     if (body.dataset.rmtAutoMemoryBound !== '1') {
         body.dataset.rmtAutoMemoryBound = '1';
         body.addEventListener('click', onClick);
@@ -62791,10 +62791,9 @@ ${root} .rmt-auto-summary strong{font-size:20px;line-height:1.45;font-weight:750
 ${root} .rmt-auto-bar{flex:none;display:grid;gap:4px;padding:10px 16px 14px;border-top:1px solid var(--rmt-theme-border,#cbdce6);background:var(--rmt-theme-surface-solid,#fff)}
 ${root} .rmt-auto-bar-main{display:flex;gap:8px}
 ${root} .rmt-auto-bar-main:empty{display:none}
-${root} .rmt-auto-bar-main .rmt-btn{flex:1 1 0;min-height:48px;min-width:0}
+${root} .rmt-auto-bar-main .rmt-btn,${root} .rmt-auto-bar-quiet .rmt-btn{flex:1 1 0;min-height:48px;min-width:0;width:100%}
 ${root} .rmt-auto-save{background:var(--rmt-theme-accent-ink,#5f5770)!important;color:var(--rmt-theme-surface-solid,#fff)!important;-webkit-text-fill-color:currentColor!important;font-size:16px;font-weight:750}
-${root} .rmt-auto-bar-quiet{display:flex;justify-content:center;gap:8px;flex-wrap:wrap}
-${root} .rmt-auto-bar-quiet button{min-height:44px;padding:8px 12px;border:0;background:transparent;color:var(--rmt-theme-muted,#59677a);font-size:13px;line-height:1.4}
+${root} .rmt-auto-bar-quiet{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 ${root} .rmt-auto-bar [data-rmt-auto-memory-status]:empty{display:none}
 ${root} .rmt-auto-bar [data-rmt-auto-memory-status]{margin:0;font-size:14px;line-height:1.5}
 ${root} [data-rmt-auto-memory-root] :is(button,input,select,summary):focus-visible{outline:3px solid var(--rmt-theme-accent-ink,#5f5770);outline-offset:3px}
@@ -67558,40 +67557,66 @@ const BODIES = Object.freeze({
     wash: washBody,
 });
 
+function heartEnvelopeId(skin) {
+    return core_constants.HEART_ENVELOPE_SKINS.includes(skin) ? skin : 'pink';
+}
+
+function heartEnvelopeTitle(skin) {
+    return TITLES[heartEnvelopeId(skin)];
+}
+
 function heartEnvelopeSvg(skin) {
-    const id = core_constants.HEART_ENVELOPE_SKINS.includes(skin) ? skin : 'pink';
-    return svg(BODIES[id]());
+    return svg(BODIES[heartEnvelopeId(skin)]());
 }
 
 function heartEnvelopePickerHtml(selected) {
-    const current = core_constants.HEART_ENVELOPE_SKINS.includes(selected) ? selected : 'pink';
+    const current = heartEnvelopeId(selected);
     const options = core_constants.HEART_ENVELOPE_SKINS.map(id => {
         const on = id === current;
         return `<label class="rmt-envelope-option${on ? ' is-on' : ''}"><input type="radio" name="rmt-heart-envelope" data-rmt-heart-envelope value="${id}" ${on ? 'checked' : ''}><span class="rmt-envelope-art">${heartEnvelopeSvg(id)}</span><span>${TITLES[id]}</span></label>`;
     }).join('');
-    return `<fieldset class="rmt-envelope-picker"><legend>信封样式</legend><p>六款一样大。选中的会用在聊天里的那封信上。</p>${options}</fieldset>`;
+    return `<details class="rmt-envelope-picker"><summary><span class="rmt-envelope-current" data-rmt-envelope-current>${heartEnvelopeSvg(current)}</span><span><b>信封样式</b><small data-rmt-envelope-current-name>${heartEnvelopeTitle(current)}</small></span></summary><p>点开再选。六款一样大，用在聊天里的那封信上。</p><div class="rmt-envelope-options">${options}</div></details>`;
+}
+
+function paintEnvelopePicker(root, selected) {
+    if (!root) return;
+    const current = heartEnvelopeId(selected);
+    for (const input of root.querySelectorAll('[data-rmt-heart-envelope]')) {
+        input.checked = input.value === current;
+        input.closest('.rmt-envelope-option')?.classList.toggle('is-on', input.checked);
+    }
+    const art = root.querySelector('[data-rmt-envelope-current]');
+    const name = root.querySelector('[data-rmt-envelope-current-name]');
+    if (art) art.innerHTML = heartEnvelopeSvg(current);
+    if (name) name.textContent = heartEnvelopeTitle(current);
 }
 
 function heartEnvelopePickerCss(root) {
     return `
-${root} .rmt-envelope-picker{border:0;margin:0;padding:0;display:grid;gap:12px;min-width:0}
-${root} .rmt-envelope-picker legend{font-size:14px;font-weight:750;line-height:1.5;padding:0}
-${root} .rmt-envelope-picker p{margin:0;font-size:14px;line-height:1.65}
-${root} .rmt-envelope-picker{grid-template-columns:1fr}
-${root} .rmt-envelope-options,${root} .rmt-envelope-picker{align-items:stretch}
-${root} .rmt-envelope-picker{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,240px),1fr));gap:12px}
-${root} .rmt-envelope-picker legend,${root} .rmt-envelope-picker p{grid-column:1/-1}
-${root} .rmt-envelope-option{position:relative;display:grid;justify-items:center;align-content:start;gap:8px;margin:0;padding:12px;border:1px solid var(--rmt-theme-border,#cbdce6);border-radius:16px;background:var(--rmt-theme-surface-solid,#fff);color:var(--rmt-theme-text,#334155);cursor:pointer;min-height:44px}
+${root} .rmt-envelope-picker{border:1px solid var(--rmt-theme-border,#cbdce6);border-radius:16px;margin:0;padding:0;min-width:0;background:var(--rmt-theme-surface-solid,#fff);color:var(--rmt-theme-text,#334155)}
+${root} .rmt-envelope-picker>summary{display:flex;align-items:center;gap:12px;min-height:56px;padding:8px 12px;cursor:pointer;list-style:none}
+${root} .rmt-envelope-picker>summary::-webkit-details-marker{display:none}
+${root} .rmt-envelope-current{flex:0 0 88px;width:88px}
+${root} .rmt-envelope-current .rmt-envelope{display:block;width:88px;height:auto}
+${root} .rmt-envelope-picker>summary b,${root} .rmt-envelope-picker>summary small{display:block;font-size:14px;line-height:1.4}
+${root} .rmt-envelope-picker>summary small{color:var(--rmt-theme-muted,#59677a);font-size:13px}
+${root} .rmt-envelope-picker p{margin:0;padding:0 12px 8px;font-size:13px;line-height:1.55;color:var(--rmt-theme-muted,#59677a)}
+${root} .rmt-envelope-picker:not([open]) .rmt-envelope-options,${root} .rmt-envelope-picker:not([open])>p{display:none}
+${root} .rmt-envelope-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;padding:0 12px 12px}
+${root} .rmt-envelope-option{position:relative;display:grid;justify-items:center;align-content:start;gap:6px;margin:0;padding:8px;border:1px solid var(--rmt-theme-border,#cbdce6);border-radius:12px;background:var(--rmt-theme-bg,#fff);color:inherit;cursor:pointer;min-height:44px}
 ${root} .rmt-envelope-option input{position:absolute;width:1px;height:1px;margin:0;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%)}
-${root} .rmt-envelope-option .rmt-envelope{display:block;width:min(100%,240px);height:auto}
-${root} .rmt-envelope-option span:last-child{font-size:14px;line-height:1.4;text-align:center}
+${root} .rmt-envelope-option .rmt-envelope{display:block;width:100%;height:auto}
+${root} .rmt-envelope-option span:last-child{font-size:12px;line-height:1.35;text-align:center}
 ${root} .rmt-envelope-option.is-on{outline:3px solid var(--rmt-theme-accent-ink,#5f5770);outline-offset:2px}
-${root} .rmt-envelope-option:has(input:focus-visible){outline:3px solid var(--rmt-theme-accent-ink,#5f5770);outline-offset:3px}
+${root} .rmt-envelope-picker>summary:focus-visible,${root} .rmt-envelope-option:has(input:focus-visible){outline:3px solid var(--rmt-theme-accent-ink,#5f5770);outline-offset:3px}
 `;
 }
 
+__m_ui_heartEnvelope_js.heartEnvelopeId = heartEnvelopeId;
+__m_ui_heartEnvelope_js.heartEnvelopeTitle = heartEnvelopeTitle;
 __m_ui_heartEnvelope_js.heartEnvelopeSvg = heartEnvelopeSvg;
 __m_ui_heartEnvelope_js.heartEnvelopePickerHtml = heartEnvelopePickerHtml;
+__m_ui_heartEnvelope_js.paintEnvelopePicker = paintEnvelopePicker;
 __m_ui_heartEnvelope_js.heartEnvelopePickerCss = heartEnvelopePickerCss;
 }
 
@@ -74618,6 +74643,7 @@ const auto_memory_plan = __m_autoMemory_planStore_js;
 const auto_memory_floor = __m_autoMemory_floorPace_js;
 const wizard_plan = __m_autoMemory_wizardPlan_js;
 const ui_countdown = __m_ui_autoMemoryCountdown_js;
+const ui_heartEnvelope = __m_ui_heartEnvelope_js;
 const runtimeState = __m_core_state_js.state;
 
 
@@ -74965,10 +74991,8 @@ async function onAutoMemoryPaceChange(panel, event) {
         return;
     }
     if (target.matches?.('[data-rmt-heart-envelope]')) {
-        core_settings.updatePluginSettings({ heartEnvelopeSkin: target.value });
-        for (const input of panel.querySelectorAll('[data-rmt-heart-envelope]')) {
-            input.closest('.rmt-envelope-option')?.classList.toggle('is-on', input.checked);
-        }
+        const next = core_settings.updatePluginSettings({ heartEnvelopeSkin: target.value });
+        ui_heartEnvelope.paintEnvelopePicker(panel, next.heartEnvelopeSkin);
     }
 }
 
@@ -75111,10 +75135,7 @@ function refreshGenerationSettingsUi() {
     }
     const latestInput = panel.querySelector('[data-rmt-auto-memory-latest]');
     if (latestInput) latestInput.checked = settings.autoMemoryLatestFloor === true;
-    for (const input of panel.querySelectorAll('[data-rmt-heart-envelope]')) {
-        input.checked = input.value === settings.heartEnvelopeSkin;
-        input.closest('.rmt-envelope-option')?.classList.toggle('is-on', input.checked);
-    }
+    ui_heartEnvelope.paintEnvelopePicker(panel, settings.heartEnvelopeSkin);
     ui_countdown.refreshAutoMemoryCountdown();
     const restore = panel.querySelector('[data-rmt-auto-memory-restore]');
     if (restore) restore.hidden = gate.source !== 'paused-new-plan';

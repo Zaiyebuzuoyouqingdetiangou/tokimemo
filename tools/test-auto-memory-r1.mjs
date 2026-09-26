@@ -56,6 +56,9 @@ test('api check names the next action and interval stays an integer', () => {
     const picker = envelopes.heartEnvelopePickerHtml('wax');
     assert.equal((picker.match(/data-rmt-heart-envelope/g) || []).length, 6);
     assert.match(picker, /value="wax" checked/);
+    assert.match(picker, /<details class="rmt-envelope-picker">/);
+    assert.match(picker, /rmt-envelope-options/);
+    assert.equal(envelopes.heartEnvelopeTitle('wax'), 'A 蜡封信');
     assert.equal(wizard.wizardVisibleSteps({ archivePresent: false, wantAuto: false }).includes('run'), false);
     assert.equal(wizard.inspectAutoMemoryApi({ mode: 'manual', manualReady: true }).ready, true);
     const manual = wizard.inspectAutoMemoryApi({ mode: 'manual', manualReady: false, manualMessage: '请填写手动 API 的模型 ID。' });

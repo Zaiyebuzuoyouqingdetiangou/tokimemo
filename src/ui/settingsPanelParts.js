@@ -15,6 +15,7 @@ import * as auto_memory_plan from '../autoMemory/planStore.js';
 import * as auto_memory_floor from '../autoMemory/floorPace.js';
 import * as wizard_plan from '../autoMemory/wizardPlan.js';
 import * as ui_countdown from './autoMemoryCountdown.js';
+import * as ui_heartEnvelope from './heartEnvelope.js';
 // 设置页组件：启动入口、生图 / 语音 / 读取范围设置、模型列表、任务与记忆状态刷新
 // 从 ui/settingsPanel.js 原样搬出（重构阶段 2），声明文本一字未改；ui/settingsPanel.js 仍转发原有导出。
 
@@ -352,10 +353,8 @@ async function onAutoMemoryPaceChange(panel, event) {
         return;
     }
     if (target.matches?.('[data-rmt-heart-envelope]')) {
-        core_settings.updatePluginSettings({ heartEnvelopeSkin: target.value });
-        for (const input of panel.querySelectorAll('[data-rmt-heart-envelope]')) {
-            input.closest('.rmt-envelope-option')?.classList.toggle('is-on', input.checked);
-        }
+        const next = core_settings.updatePluginSettings({ heartEnvelopeSkin: target.value });
+        ui_heartEnvelope.paintEnvelopePicker(panel, next.heartEnvelopeSkin);
     }
 }
 
@@ -498,10 +497,7 @@ export function refreshGenerationSettingsUi() {
     }
     const latestInput = panel.querySelector('[data-rmt-auto-memory-latest]');
     if (latestInput) latestInput.checked = settings.autoMemoryLatestFloor === true;
-    for (const input of panel.querySelectorAll('[data-rmt-heart-envelope]')) {
-        input.checked = input.value === settings.heartEnvelopeSkin;
-        input.closest('.rmt-envelope-option')?.classList.toggle('is-on', input.checked);
-    }
+    ui_heartEnvelope.paintEnvelopePicker(panel, settings.heartEnvelopeSkin);
     ui_countdown.refreshAutoMemoryCountdown();
     const restore = panel.querySelector('[data-rmt-auto-memory-restore]');
     if (restore) restore.hidden = gate.source !== 'paused-new-plan';

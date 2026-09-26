@@ -1,7 +1,7 @@
 {
   "display_name": "心迹回廊",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.99.90-r84.148-drop-lost-letter",
+  "js": "index.js?heartbeat=0.99.90-r84.149-envelope-fold",
   "author": "Toto",
   "version": "0.99.90",
   "auto_update": true,
@@ -10,6 +10,6 @@
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r84.148：出信楼没了，成就和回忆一起收走。",
+  "description": "r84.149：信封改成收起再选；向导底部四个按钮都用胶囊。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }

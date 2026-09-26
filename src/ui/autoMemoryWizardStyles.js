@@ -50,10 +50,9 @@ ${root} .rmt-auto-summary strong{font-size:20px;line-height:1.45;font-weight:750
 ${root} .rmt-auto-bar{flex:none;display:grid;gap:4px;padding:10px 16px 14px;border-top:1px solid var(--rmt-theme-border,#cbdce6);background:var(--rmt-theme-surface-solid,#fff)}
 ${root} .rmt-auto-bar-main{display:flex;gap:8px}
 ${root} .rmt-auto-bar-main:empty{display:none}
-${root} .rmt-auto-bar-main .rmt-btn{flex:1 1 0;min-height:48px;min-width:0}
+${root} .rmt-auto-bar-main .rmt-btn,${root} .rmt-auto-bar-quiet .rmt-btn{flex:1 1 0;min-height:48px;min-width:0;width:100%}
 ${root} .rmt-auto-save{background:var(--rmt-theme-accent-ink,#5f5770)!important;color:var(--rmt-theme-surface-solid,#fff)!important;-webkit-text-fill-color:currentColor!important;font-size:16px;font-weight:750}
-${root} .rmt-auto-bar-quiet{display:flex;justify-content:center;gap:8px;flex-wrap:wrap}
-${root} .rmt-auto-bar-quiet button{min-height:44px;padding:8px 12px;border:0;background:transparent;color:var(--rmt-theme-muted,#59677a);font-size:13px;line-height:1.4}
+${root} .rmt-auto-bar-quiet{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 ${root} .rmt-auto-bar [data-rmt-auto-memory-status]:empty{display:none}
 ${root} .rmt-auto-bar [data-rmt-auto-memory-status]{margin:0;font-size:14px;line-height:1.5}
 ${root} [data-rmt-auto-memory-root] :is(button,input,select,summary):focus-visible{outline:3px solid var(--rmt-theme-accent-ink,#5f5770);outline-offset:3px}
