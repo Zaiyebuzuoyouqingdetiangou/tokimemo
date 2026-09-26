@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 284
-// Source SHA-256: bb7a4cdaca9575d2384dac639cc94f66dd66cd569738c137b6993c3066f437e8
+// Source SHA-256: eb771b9cc9b5d3c8e87e6abbb03a7b8fb48bc20dc28beeff3e6e5ed094813f92
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -3810,10 +3810,16 @@ function laterThanTicket(floor, ticket) {
     return Number.isSafeInteger(floor) && Number.isSafeInteger(due) && due > 0 && floor > due;
 }
 
+function floorIsDue(floor, nextDueFloor) {
+    return Number.isSafeInteger(floor) && Number.isSafeInteger(nextDueFloor) && floor >= nextDueFloor;
+}
+
 function floorDecision({ enabled = false, floor = 0, interval = 0, nextDueFloor = null, modulePlan = null, activeTicket = null, inflightFloor = null, seenFloor = null } = {}) {
     if (enabled !== true) return { action: 'idle' };
-    if (modulePlanOpen(modulePlan)) return { action: 'hold', sourceMemoryIds: [...(modulePlan.sourceMemoryIds || [])] };
-    if (ticketOpen(activeTicket)) {
+    if (modulePlanOpen(modulePlan)) {
+        // 间隔还没到，同一轮接着写。到点了就放弃没写完的，另抽一张。
+        if (!floorIsDue(floor, nextDueFloor)) return { action: 'hold', sourceMemoryIds: [...(modulePlan.sourceMemoryIds || [])] };
+    } else if (ticketOpen(activeTicket)) {
         const finished = !!modulePlan && !modulePlanOpen(modulePlan);
         const orphan = !modulePlan;
         // 同一楼接着写。计划写完、或票还开着却丢了计划，到了下一楼就让位另抽。
@@ -3947,6 +3953,15 @@ function closeActiveTicket(snapshot, ticket) {
     });
 }
 
+function closeRound(snapshot, ticket) {
+    return auto_memory_plan.parseAutoMemorySnapshot({
+        plan: auto_memory_plan.parseAutoMemoryPlan({ ...snapshot.plan, activeDrawTicketId: null }),
+        revealRecords: snapshot.revealRecords,
+        drawTickets: snapshot.drawTickets.map(row => (ticket && row.id === ticket.id ? { ...row, status: 'completed' } : row)),
+        modulePlan: null,
+    });
+}
+
 // 计划写完了，票却没关（旧版本结算失败留下的）。同一修订里把票关掉，后面的写入照常只加一版。
 function releaseFinishedTicket(snapshot, floor = null) {
     const ticket = activeTicket(snapshot);
@@ -3956,6 +3971,14 @@ function releaseFinishedTicket(snapshot, floor = null) {
     if (!finished && !orphanLater) return snapshot;
     if (finished && floor != null && !laterThanTicket(floor, ticket)) return snapshot;
     return closeActiveTicket(snapshot, ticket);
+}
+
+// 到点的新楼不再接着写没完成的一轮，先把旧计划和旧票放下。
+function abandonDueRound(snapshot, floor = null) {
+    if (modulePlanOpen(snapshot?.modulePlan) && floorIsDue(floor, snapshot.plan?.nextDueFloor)) {
+        return closeRound(snapshot, activeTicket(snapshot));
+    }
+    return releaseFinishedTicket(snapshot, floor);
 }
 
 async function resumeTicket(snapshot, ticket, input, io) {
@@ -3984,7 +4007,7 @@ async function resumeTicket(snapshot, ticket, input, io) {
 }
 
 async function runAutoMemoryRound(input, io) {
-    const snapshot = input?.snapshot ? releaseFinishedTicket(input.snapshot, input.floor) : null;
+    const snapshot = input?.snapshot ? abandonDueRound(input.snapshot, input.floor) : null;
     const plan = snapshot?.plan;
     if (!plan) return { action: 'idle', moduleRequest: false };
     input = { ...input, snapshot };
@@ -4041,6 +4064,25 @@ const LIST_KEYS = [
     'episodes', 'pages', 'nodes', 'locations', 'spaces', 'containers', 'endings', 'confessionReplays', 'relationships',
 ];
 const MODULE_BODY_KEYS = ['dailyStrips', 'fireflyVoices', 'voiceDramas', 'scenarioDramas', 'greetings', 'dialogues'];
+const KIND_KEYS = {
+    relations: ['relationships'],
+    album: ['entries'],
+    adv: ['events'],
+    inbox: ['letters'],
+    cabinet: ['items'],
+    room: ['spaces'],
+    items: ['containers'],
+    calendar: ['entries'],
+    travel: ['locations', 'routes'],
+    ending: ['endings', 'confessionReplays'],
+    butterfly: ['nodes'],
+    themeSong: ['songs'],
+    bedtime: ['stories'],
+    pastLives: ['episodes'],
+    timeEcho: ['episodes'],
+    heart: MODULE_BODY_KEYS,
+    phone: ['apps'],
+};
 
 function listedIds(item) {
     const rows = [];
@@ -4104,6 +4146,71 @@ function narrowToRound(original, filtered, added) {
     return narrowed.length ? narrowed : tail;
 }
 
+function primaryKeys(session) {
+    const kind = typeof session?.kind === 'string' ? session.kind : '';
+    if (KIND_KEYS[kind]) return KIND_KEYS[kind];
+    const populated = [];
+    for (const key of [...LIST_KEYS, ...MODULE_BODY_KEYS]) {
+        if (Array.isArray(session?.[key]) && session[key].length) populated.push(key);
+    }
+    return populated.length ? populated : [...LIST_KEYS, ...MODULE_BODY_KEYS];
+}
+
+function trimApp(app, ids, createdAt, since) {
+    if (!app || typeof app !== 'object') return null;
+    const entries = Array.isArray(app.entries) ? app.entries.filter(entry => matches(entry, ids, createdAt, since)) : [];
+    if (entries.length) return { ...app, entries };
+    return matches(app, ids, createdAt, since) ? app : null;
+}
+
+function trimSpace(space, ids, createdAt, since) {
+    if (!space || typeof space !== 'object') return null;
+    const objects = Array.isArray(space.objects) ? space.objects.filter(item => matches(item, ids, createdAt, since)) : [];
+    if (objects.length) return { ...space, objects };
+    return matches(space, ids, createdAt, since) ? space : null;
+}
+
+function trimNode(node, ids, createdAt, since) {
+    if (!node || typeof node !== 'object') return null;
+    const children = (Array.isArray(node.children) ? node.children : []).map(child => trimNode(child, ids, createdAt, since)).filter(Boolean);
+    if (children.length) return { ...node, children };
+    return matches(node, ids, createdAt, since) ? node : null;
+}
+
+function trimContainer(box, ids, createdAt, since) {
+    if (!box || typeof box !== 'object') return null;
+    const nodes = (Array.isArray(box.nodes) ? box.nodes : []).map(node => trimNode(node, ids, createdAt, since)).filter(Boolean);
+    if (nodes.length) return { ...box, nodes };
+    return matches(box, ids, createdAt, since) ? box : null;
+}
+
+function takeLastNested(list, added, childKey) {
+    if (!Array.isArray(list) || added < 1) return [];
+    const collected = [];
+    for (let index = list.length - 1; index >= 0 && collected.length < added; index -= 1) {
+        const item = list[index];
+        const children = Array.isArray(item?.[childKey]) ? item[childKey] : [];
+        const slice = children.slice(-(added - collected.length));
+        if (slice.length) collected.unshift({ ...item, [childKey]: slice });
+    }
+    return collected;
+}
+
+function projectList(key, original, ids, createdAt, since) {
+    if (key === 'stories') return original.map(story => trimStory(story, ids, createdAt, since)).filter(Boolean);
+    if (key === 'apps') return original.map(app => trimApp(app, ids, createdAt, since)).filter(Boolean);
+    if (key === 'spaces') return original.map(space => trimSpace(space, ids, createdAt, since)).filter(Boolean);
+    if (key === 'containers') return original.map(box => trimContainer(box, ids, createdAt, since)).filter(Boolean);
+    return original.filter(item => matches(item, ids, createdAt, since));
+}
+
+function fallbackList(key, original, added) {
+    if (key === 'apps') return takeLastNested(original, added, 'entries');
+    if (key === 'spaces') return takeLastNested(original, added, 'objects');
+    if (key === 'containers') return takeLastNested(original, added, 'nodes');
+    return narrowToRound(original, [], added);
+}
+
 function incrementalProjection(session, { sourceMemoryIds = [], createdAt = 0, since = 0 } = {}) {
     if (!session || typeof session !== 'object') return { kept: false, session: null };
     const ids = new Set(Array.isArray(sourceMemoryIds) ? sourceMemoryIds : []);
@@ -4112,18 +4219,26 @@ function incrementalProjection(session, { sourceMemoryIds = [], createdAt = 0, s
     const sinceAt = Number(since) || 0;
     const predates = !!(last && sinceAt > 0 && last.updatedAt > 0 && last.updatedAt < sinceAt);
     const belongs = !!(last && !predates && ((sinceAt > 0 && last.updatedAt >= sinceAt) || last.consumed.some(id => ids.has(id))));
+    const primary = new Set(primaryKeys(session));
     let kept = false;
     for (const key of [...LIST_KEYS, ...MODULE_BODY_KEYS]) {
         if (!Array.isArray(copy[key])) continue;
-        if (predates || (belongs && last.added < 1)) {
+        if (predates) {
             copy[key] = [];
             continue;
         }
         const original = Array.isArray(session[key]) ? session[key] : [];
-        const filtered = key === 'stories'
-            ? original.map(story => trimStory(story, ids, createdAt, sinceAt)).filter(Boolean)
-            : original.filter(item => matches(item, ids, createdAt, sinceAt));
-        copy[key] = key === 'stories' || !belongs ? filtered : narrowToRound(original, filtered, last.added);
+        let filtered = projectList(key, original, ids, createdAt, sinceAt);
+        // 同一组档案 id 会留在旧条目上。这一轮的条数用 lastUpdate.added 收束。
+        // 推演地点、新 App 条目常常没有档案 id，没有匹配时再用这一轮的尾巴。
+        if (belongs && last.added >= 1 && primary.has(key)) {
+            filtered = filtered.length
+                ? (key === 'apps' || key === 'spaces' || key === 'containers'
+                    ? fallbackList(key, filtered, last.added)
+                    : narrowToRound(original, filtered, last.added))
+                : fallbackList(key, original, last.added);
+        }
+        copy[key] = filtered;
         if (copy[key].length) kept = true;
     }
     const summary = typeof session.relationshipSummary === 'string' ? session.relationshipSummary.trim() : '';
@@ -4146,6 +4261,7 @@ function sessionWithoutRound(session, query = {}) {
     const since = Number(query.since) || 0;
     for (const key of [...LIST_KEYS, ...MODULE_BODY_KEYS]) {
         if (!Array.isArray(next[key]) || !Array.isArray(round[key]) || !round[key].length) continue;
+        if (key === 'apps' || key === 'spaces' || key === 'containers') continue;
         const drop = new Set(round[key].map(itemKey).filter(Boolean));
         next[key] = next[key].filter(item => !drop.has(itemKey(item)));
     }
@@ -4153,6 +4269,24 @@ function sessionWithoutRound(session, query = {}) {
         next.apps = next.apps.map(app => {
             if (!app || !Array.isArray(app.entries)) return app;
             return { ...app, entries: app.entries.filter(entry => !matches(entry, ids, createdAt, since)) };
+        }).filter(app => Array.isArray(app.entries) ? app.entries.length : true);
+    }
+    if (Array.isArray(next.spaces)) {
+        next.spaces = next.spaces.map(space => {
+            if (!space || !Array.isArray(space.objects)) return space;
+            return { ...space, objects: space.objects.filter(item => !matches(item, ids, createdAt, since)) };
+        });
+    }
+    if (Array.isArray(next.containers)) {
+        const dropNode = node => {
+            if (!node || typeof node !== 'object') return null;
+            if (matches(node, ids, createdAt, since)) return null;
+            const children = (Array.isArray(node.children) ? node.children : []).map(dropNode).filter(Boolean);
+            return { ...node, children };
+        };
+        next.containers = next.containers.map(box => {
+            if (!box || !Array.isArray(box.nodes)) return box;
+            return { ...box, nodes: box.nodes.map(dropNode).filter(Boolean) };
         });
     }
     if (round.relationshipSummary && next.relationshipSummary === round.relationshipSummary) next.relationshipSummary = '';
@@ -6443,7 +6577,14 @@ async function runHostRound() {
             const due = snapshot.plan.nextDueFloor == null ? false : floor >= snapshot.plan.nextDueFloor;
             const continuing = auto_memory_gate.modulePlanOpen(snapshot.modulePlan);
             const hostJob = due || continuing
-                ? ui_taskCenter.openAutoMemoryJob({ label: '自动留忆', detail: continuing ? '接着写没完成的一轮。' : '这一楼到点了，正在抽签。' })
+                ? ui_taskCenter.openAutoMemoryJob({
+                    label: '自动留忆',
+                    detail: continuing && due
+                        ? '上一轮没写完，这一楼到点了，重新抽。'
+                        : continuing
+                            ? '接着写没完成的一轮。'
+                            : '这一楼到点了，正在抽签。',
+                })
                 : { id: '', owned: false };
             let result;
             try {
@@ -61189,6 +61330,7 @@ function incrementFor(moduleId, revealId) {
             : (ticket?.sourceMemoryIds?.length ? ticket.sourceMemoryIds : (reveal?.sourceMemoryIds || []));
         const memory = archive_repository.getImportedMemory(context);
         const session = core_cache.loadSession(moduleId, { context, memoryBank: memory, clone: true });
+        if (session && typeof session === 'object' && !session.kind && moduleId) session.kind = moduleId;
         return incremental_view.incrementalProjection(session, {
             sourceMemoryIds,
             createdAt: reveal?.createdAt || 0,

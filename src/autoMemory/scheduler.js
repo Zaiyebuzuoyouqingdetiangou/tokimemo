@@ -294,7 +294,14 @@ async function runHostRound() {
             const due = snapshot.plan.nextDueFloor == null ? false : floor >= snapshot.plan.nextDueFloor;
             const continuing = auto_memory_gate.modulePlanOpen(snapshot.modulePlan);
             const hostJob = due || continuing
-                ? ui_taskCenter.openAutoMemoryJob({ label: '自动留忆', detail: continuing ? '接着写没完成的一轮。' : '这一楼到点了，正在抽签。' })
+                ? ui_taskCenter.openAutoMemoryJob({
+                    label: '自动留忆',
+                    detail: continuing && due
+                        ? '上一轮没写完，这一楼到点了，重新抽。'
+                        : continuing
+                            ? '接着写没完成的一轮。'
+                            : '这一楼到点了，正在抽签。',
+                })
                 : { id: '', owned: false };
             let result;
             try {

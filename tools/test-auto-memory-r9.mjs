@@ -271,6 +271,49 @@ test('the letter offers repair and retry only when that work is still open', () 
     assert.equal(travelHtml.includes('河岸'), true);
     assert.equal(travelHtml.includes('旧街'), false);
     assert.equal(travelHtml.includes('rmt-letter-travel'), true);
+    const inferredTravel = view.incrementalProjection({
+        kind: 'travel',
+        locations: [
+            { id: 'N1', name: '旧街' },
+            { id: 'N2', name: '河岸', summary: '推演的新站' },
+        ],
+        generationMeta: { lastUpdate: { added: 1, updatedAt: 80, consumedMemoryIds: ['M100'] } },
+    }, { sourceMemoryIds: ['M100'], since: 50 });
+    assert.equal(inferredTravel.kept, true);
+    assert.deepEqual(inferredTravel.session.locations.map(item => item.id), ['N2']);
+    const rewritten = view.incrementalProjection({
+        kind: 'travel',
+        locations: [{ id: 'N2', name: '河岸', sourceMemoryIds: ['M100'] }],
+        generationMeta: { lastUpdate: { added: 0, updatedAt: 80, consumedMemoryIds: ['M100'] } },
+    }, { sourceMemoryIds: ['M100'], since: 50 });
+    assert.equal(rewritten.kept, true);
+    assert.deepEqual(rewritten.session.locations.map(item => item.id), ['N2']);
+    const phoneInc = view.incrementalProjection({
+        kind: 'phone',
+        apps: [{
+            id: 'sms', label: '短信',
+            entries: [
+                { id: 'old', title: '旧信', createdAt: 10 },
+                { id: 'new', title: '新信', sourceMemoryIds: ['M100'], createdAt: 80 },
+            ],
+        }],
+    }, { sourceMemoryIds: ['M100'], since: 50 });
+    assert.equal(phoneInc.kept, true);
+    assert.deepEqual(phoneInc.session.apps[0].entries.map(item => item.id), ['new']);
+    assert.equal(view.roundReadingHtml(phoneInc.session).includes('新信'), true);
+    assert.equal(view.roundReadingHtml(phoneInc.session).includes('旧信'), false);
+    const roomInc = view.incrementalProjection({
+        kind: 'room',
+        spaces: [{
+            label: '书桌边',
+            objects: [
+                { label: '旧杯', createdAt: 10 },
+                { label: '台灯', description: '暖光', sourceMemoryIds: ['M100'], createdAt: 80 },
+            ],
+        }],
+    }, { sourceMemoryIds: ['M100'], since: 50 });
+    assert.equal(roomInc.kept, true);
+    assert.deepEqual(roomInc.session.spaces[0].objects.map(item => item.label), ['台灯']);
     const finishedDrawn = shell.shellView({
         ...readyArchive, ticketStatus: 'drawn', moduleComplete: true, steps: [{ status: 'completed' }],
         moduleTitle: '他的出行路线',

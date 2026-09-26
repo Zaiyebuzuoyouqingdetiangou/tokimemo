@@ -18,10 +18,16 @@ function laterThanTicket(floor, ticket) {
     return Number.isSafeInteger(floor) && Number.isSafeInteger(due) && due > 0 && floor > due;
 }
 
+function floorIsDue(floor, nextDueFloor) {
+    return Number.isSafeInteger(floor) && Number.isSafeInteger(nextDueFloor) && floor >= nextDueFloor;
+}
+
 export function floorDecision({ enabled = false, floor = 0, interval = 0, nextDueFloor = null, modulePlan = null, activeTicket = null, inflightFloor = null, seenFloor = null } = {}) {
     if (enabled !== true) return { action: 'idle' };
-    if (modulePlanOpen(modulePlan)) return { action: 'hold', sourceMemoryIds: [...(modulePlan.sourceMemoryIds || [])] };
-    if (ticketOpen(activeTicket)) {
+    if (modulePlanOpen(modulePlan)) {
+        // 间隔还没到，同一轮接着写。到点了就放弃没写完的，另抽一张。
+        if (!floorIsDue(floor, nextDueFloor)) return { action: 'hold', sourceMemoryIds: [...(modulePlan.sourceMemoryIds || [])] };
+    } else if (ticketOpen(activeTicket)) {
         const finished = !!modulePlan && !modulePlanOpen(modulePlan);
         const orphan = !modulePlan;
         // 同一楼接着写。计划写完、或票还开着却丢了计划，到了下一楼就让位另抽。
@@ -155,6 +161,15 @@ function closeActiveTicket(snapshot, ticket) {
     });
 }
 
+function closeRound(snapshot, ticket) {
+    return auto_memory_plan.parseAutoMemorySnapshot({
+        plan: auto_memory_plan.parseAutoMemoryPlan({ ...snapshot.plan, activeDrawTicketId: null }),
+        revealRecords: snapshot.revealRecords,
+        drawTickets: snapshot.drawTickets.map(row => (ticket && row.id === ticket.id ? { ...row, status: 'completed' } : row)),
+        modulePlan: null,
+    });
+}
+
 // 计划写完了，票却没关（旧版本结算失败留下的）。同一修订里把票关掉，后面的写入照常只加一版。
 function releaseFinishedTicket(snapshot, floor = null) {
     const ticket = activeTicket(snapshot);
@@ -164,6 +179,14 @@ function releaseFinishedTicket(snapshot, floor = null) {
     if (!finished && !orphanLater) return snapshot;
     if (finished && floor != null && !laterThanTicket(floor, ticket)) return snapshot;
     return closeActiveTicket(snapshot, ticket);
+}
+
+// 到点的新楼不再接着写没完成的一轮，先把旧计划和旧票放下。
+function abandonDueRound(snapshot, floor = null) {
+    if (modulePlanOpen(snapshot?.modulePlan) && floorIsDue(floor, snapshot.plan?.nextDueFloor)) {
+        return closeRound(snapshot, activeTicket(snapshot));
+    }
+    return releaseFinishedTicket(snapshot, floor);
 }
 
 async function resumeTicket(snapshot, ticket, input, io) {
@@ -192,7 +215,7 @@ async function resumeTicket(snapshot, ticket, input, io) {
 }
 
 export async function runAutoMemoryRound(input, io) {
-    const snapshot = input?.snapshot ? releaseFinishedTicket(input.snapshot, input.floor) : null;
+    const snapshot = input?.snapshot ? abandonDueRound(input.snapshot, input.floor) : null;
     const plan = snapshot?.plan;
     if (!plan) return { action: 'idle', moduleRequest: false };
     input = { ...input, snapshot };

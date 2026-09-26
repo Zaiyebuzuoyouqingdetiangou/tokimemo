@@ -386,6 +386,7 @@ function incrementFor(moduleId, revealId) {
             : (ticket?.sourceMemoryIds?.length ? ticket.sourceMemoryIds : (reveal?.sourceMemoryIds || []));
         const memory = archive_repository.getImportedMemory(context);
         const session = core_cache.loadSession(moduleId, { context, memoryBank: memory, clone: true });
+        if (session && typeof session === 'object' && !session.kind && moduleId) session.kind = moduleId;
         return incremental_view.incrementalProjection(session, {
             sourceMemoryIds,
             createdAt: reveal?.createdAt || 0,

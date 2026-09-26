@@ -96,11 +96,19 @@ test('excluded modules stay out of the ticket and a refresh reuses the frozen dr
     assert.equal(drawn.snapshot.drawTickets[0].candidates.some(item => item.id === 'inbox'), false);
     assert.deepEqual(calls, ['import', ['persist', 'drawticket1'], ['start', ['M100']]]);
     const held = await gate.runAutoMemoryRound({
-        snapshot: drawn.snapshot, floor: 30, memoryIds: ['M100', 'M101'], now: 70,
+        snapshot: drawn.snapshot, floor: 12, memoryIds: ['M100', 'M101'], now: 70,
     }, { ...io, readMemoryIds: async () => ['M100', 'M101'] });
     assert.equal(held.action, 'hold');
     assert.deepEqual(held.sourceMemoryIds, ['M100']);
     assert.equal(calls.filter(item => item === 'import').length, 1);
+    const abandoned = await gate.runAutoMemoryRound({
+        snapshot: drawn.snapshot, floor: 15, memoryIds: ['M100'], now: 71,
+        modules: eligibleModules(), archiveRevision: 'rev-1', chatId: 'chat-1',
+        satisfiedPrerequisiteIds: [],
+    }, { ...io, nextId: () => 'drawticket2', readMemoryIds: async () => ['M100', 'M101'] });
+    assert.notEqual(abandoned.action, 'hold');
+    assert.notEqual(abandoned.action, 'reuse');
+    assert.equal(abandoned.moduleRequest, true);
     const ticket = drawn.snapshot.drawTickets[0];
     const sameFloor = await gate.runAutoMemoryRound({
         snapshot: snapshot({ nextDueFloor: 10, activeDrawTicketId: ticket.id }, null, [ticket]),
@@ -137,6 +145,18 @@ test('a finished draw does not block the next floor', () => {
         activeTicket: { id: 'drawticket1', status: 'drawn', dueFloor: 10 },
     });
     assert.equal(orphanLater.action, 'due');
+    const openHold = gate.floorDecision({
+        enabled: true, floor: 12, interval: 5, nextDueFloor: 15,
+        modulePlan: openModule(),
+        activeTicket: { id: 'drawticket1', status: 'drawn', dueFloor: 10 },
+    });
+    assert.equal(openHold.action, 'hold');
+    const openDue = gate.floorDecision({
+        enabled: true, floor: 15, interval: 5, nextDueFloor: 15,
+        modulePlan: openModule(),
+        activeTicket: { id: 'drawticket1', status: 'drawn', dueFloor: 10 },
+    });
+    assert.equal(openDue.action, 'due');
 });
 
 test('weights lower a recent hit and raise a long miss without restoring an excluded id', () => {
