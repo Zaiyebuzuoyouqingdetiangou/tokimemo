@@ -366,6 +366,24 @@ export async function retryFloorRound() {
     return regenerateCurrentMemory({ mode: 'keep' });
 }
 
+export async function failStalledFloor() {
+    if (redoInflight) return { action: 'busy' };
+    let context;
+    try { context = core_context.currentCharacterGuard(); }
+    catch { return { action: 'idle' }; }
+    const snapshot = auto_memory_plan.readAutoMemoryMetadata(context.chatMetadata);
+    const steps = snapshot?.modulePlan?.steps || [];
+    if (!steps.length || steps.some(step => step.status === 'failed') || steps.every(step => step.status === 'completed')) return { action: 'idle' };
+    const index = steps.findIndex(step => step.status === 'pending' || step.status === 'running');
+    if (index < 0) return { action: 'idle' };
+    const modulePlan = auto_memory_plan.parseModulePlan({
+        ...snapshot.modulePlan,
+        steps: steps.map((step, stepIndex) => stepIndex === index ? { ...step, status: 'failed' } : step),
+    });
+    await persistSnapshot(context, auto_memory_plan.parseAutoMemorySnapshot({ ...snapshot, modulePlan }));
+    return { action: 'failed' };
+}
+
 export async function resumeFloorPlan() {
     const context = core_context.currentCharacterGuard();
     const snapshot = auto_memory_plan.readAutoMemoryMetadata(context.chatMetadata);

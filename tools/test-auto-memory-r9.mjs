@@ -198,4 +198,29 @@ test('the letter offers repair and retry only when that work is still open', () 
     });
     assert.equal(phone.includes('rmt-phone-shell'), true);
     assert.equal(phone.includes('rmt-phone-message-owner'), true);
+    assert.equal(phone.includes('rmt-phone-screen'), true);
+    const garden = view.roundReadingHtml({
+        kind: 'relations',
+        characterName: '裴司野',
+        relationships: [{ name: '星野南', relation: '恋人', summary: '还在一起', isUser: true }],
+    });
+    assert.equal(garden.includes('rmt-relation-garden'), true);
+    assert.equal(garden.includes('rmt-relation-layer-row'), true);
+    assert.equal(garden.includes('星野南'), true);
+    const album = view.roundReadingHtml({ kind: 'album', entries: [{ title: '雨天', date: '春', desc: '伞' }] });
+    assert.equal(album.includes('rmt-card'), true);
+    assert.equal(album.includes('雨天'), true);
+    const quiet = shell.generationStall({ active: true, running: false, signature: 'a', previous: { signature: 'a', since: 1000 }, now: 1000 + 89999 });
+    assert.equal(quiet.stalled, false);
+    const stalledClock = shell.generationStall({ active: true, running: false, signature: 'a', previous: { signature: 'a', since: 1000 }, now: 1000 + 90000 });
+    assert.equal(stalledClock.stalled, true);
+    assert.equal(shell.generationStall({ active: true, running: true, signature: 'a', previous: stalledClock, now: 1000 + 90000 }).stalled, false);
+    const stoppedRound = shell.shellView({ enabled: true, archiveReady: true, failureRecoverable: true, moduleTitle: '人际庭园', steps: [{ status: 'pending' }] });
+    assert.equal(stoppedRound.phase, 'failed');
+    assert.equal(stoppedRound.canRetry, true);
+    assert.equal(stoppedRound.canComplete, true);
+    const idleRound = shell.shellView({ enabled: true, archiveReady: true, stalled: true, ticketStatus: 'drawn' });
+    assert.equal(idleRound.phase, 'failed');
+    assert.equal(idleRound.canComplete, true);
+    assert.equal(idleRound.detail.includes('90 秒'), true);
 });

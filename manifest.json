@@ -1,15 +1,15 @@
 {
   "display_name": "心迹回廊",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.99.85-r84.137-letter-achievement",
+  "js": "index.js?heartbeat=0.99.86-r84.138-letter-stall",
   "author": "Toto",
-  "version": "0.99.85",
+  "version": "0.99.86",
   "auto_update": true,
   "minimum_client_version": "1.13.0",
   "hooks": {
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r84.137：展开回忆后收起按钮。成就用成就库里的名字和说明。生成中会写正在生成中。",
+  "description": "r84.138：生成停住 90 秒会失败，信和任务中心可以补全或重试。信里用和插件一样的版式。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }

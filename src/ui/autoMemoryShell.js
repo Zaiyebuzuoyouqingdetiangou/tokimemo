@@ -28,6 +28,8 @@ let lastPhase = '';
 let sawPhase = false;
 let autoRepairLatch = '';
 let timer = 0;
+let stallState = { signature: '', since: 0 };
+let stallNoted = false;
 
 export function floorShellCss() {
     return shell_state.floorShellCss();
@@ -208,9 +210,48 @@ function markup(view) {
     </article>`;
 }
 
+function generationRunning(context) {
+    try {
+        return core_requestCoordinator.listChatTaskSnapshot(context).some(row => row.currentChat && row.running && row.kind !== 'archive' && row.id !== 'archive-import');
+    } catch {
+        return false;
+    }
+}
+
+function watchStall(view, context) {
+    const running = generationRunning(context);
+    const active = view.phase === 'generating' || view.phase === 'planning';
+    const signature = [view.phase, view.moduleId, view.revealId, view.progress?.done || 0, view.progress?.total || 0, view.detail].join('|');
+    const next = shell_state.generationStall({ active, running, signature, previous: stallState, now: Date.now() });
+    stallState = { signature: next.signature, since: next.since };
+    if (next.stalled) {
+        const detail = '90 秒没有新的进度。可以补全没写完的部分，或再试一次。';
+        if (!stallNoted) {
+            stallNoted = true;
+            ui_taskCenter.noteAutoMemoryFloorFailure({ label: view.moduleTitle || '自动留忆', detail });
+            void auto_memory_scheduler.failStalledFloor().catch(error => {
+                console.warn('[HeartbeatMemories] stall mark skipped', core_text.safeErrorDiagnostic(error));
+            });
+        }
+        return { ...view, phase: 'failed', canRetry: true, canComplete: true, title: '这份回忆停住了', detail };
+    }
+    if (running || view.phase === 'reveal' || view.phase === 'pace' || view.phase === 'hidden') {
+        stallNoted = false;
+        ui_taskCenter.clearAutoMemoryFloorFailure();
+        return view;
+    }
+    if (view.phase === 'failed') {
+        ui_taskCenter.noteAutoMemoryFloorFailure({
+            label: view.moduleTitle || '自动留忆',
+            detail: view.detail || '可以补全没写完的部分，或再试一次。',
+        });
+    }
+    return view;
+}
+
 function paint(context) {
     if (shell_state.shellBlocksChatInput()) return;
-    const view = viewFor(context);
+    const view = watchStall(viewFor(context), context);
     const toast = shell_state.toastForTransition(lastPhase, view.phase, { line: view.title }, { initial: !sawPhase });
     sawPhase = true;
     lastPhase = view.phase;

@@ -23,6 +23,24 @@ let painting = false;
 let pumping = false;
 const queue = [];
 const autoRetryUsed = new Map();
+let floorFailure = null;
+
+export function noteAutoMemoryFloorFailure(info = {}) {
+    const next = {
+        label: info.label || '自动留忆',
+        detail: info.detail || '可以补全没写完的部分，或再试一次。',
+        at: floorFailure?.at || Date.now(),
+    };
+    if (floorFailure && floorFailure.label === next.label && floorFailure.detail === next.detail) return;
+    floorFailure = next;
+    refreshTaskCenterView();
+}
+
+export function clearAutoMemoryFloorFailure() {
+    if (!floorFailure) return;
+    floorFailure = null;
+    refreshTaskCenterView();
+}
 const autoRetryExhausted = new Set();
 const picks = new Set();
 let pickScope = '';
@@ -595,6 +613,15 @@ function collectTaskCards() {
         });
     }
     pushMissingArchiveRecovery(cards);
+    if (floorFailure) {
+        cards.push({
+            state: 'failed',
+            label: floorFailure.label,
+            detail: floorFailure.detail,
+            at: floorFailure.at,
+            actions: '<button type="button" class="rmt-btn" data-rmt-action="task-floor-complete">补全没写完的部分</button><button type="button" class="rmt-btn" data-rmt-action="task-floor-retry">重试</button>',
+        });
+    }
     return cards.sort((left, right) => (CARD_RANK[left.state] ?? 9) - (CARD_RANK[right.state] ?? 9) || right.at - left.at);
 }
 
@@ -836,6 +863,15 @@ export function handleTaskCenterAction(action, actionEl) {
         return;
     }
     if (action === 'task-center-close') return hideTaskCenter();
+    if (action === 'task-floor-complete' || action === 'task-floor-retry') {
+        clearAutoMemoryFloorFailure();
+        const run = action === 'task-floor-complete' ? 'completeFloorRound' : 'resumeFloorPlan';
+        void import('../autoMemory/scheduler.js').then(mod => mod[run]()).catch(error => {
+            console.warn('[HeartbeatMemories] floor recovery skipped', core_text.safeErrorDiagnostic(error));
+            globalThis.toastr?.error?.('这一次没能补上。可以再点一次。', '心口顿了一下');
+        });
+        return;
+    }
     if (action === 'task-cancel') {
         const id = actionEl?.dataset?.rmtTaskId || '';
         const row = core_requestCoordinator.listChatTaskSnapshot().find(item => item.id === id && item.running);

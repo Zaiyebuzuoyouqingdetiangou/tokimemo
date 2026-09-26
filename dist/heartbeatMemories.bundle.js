@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 284
-// Source SHA-256: 1d69fb1cd406c3a088c8c3970f66dc491a9ac7537d2c0f27b8f030112681d7a2
+// Source SHA-256: b1e9a9e99e2cb0f92d0b1443b5eaae553aa1878ea28dad22d21b8108cf37cba8
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -4191,9 +4191,192 @@ function phoneHtml(session) {
         }).join('');
         if (!inner) continue;
         const label = app.label || app.title || '私人终端';
-        blocks.push(`<div class="rmt-phone"><div class="rmt-phone-shell"><div class="rmt-phone-notch"></div><p class="rmt-phone-lock"><b>${esc(label)}</b></p>${inner}</div></div>`);
+        blocks.push(`<div class="rmt-phone"><div class="rmt-phone-shell rmt-device-phone rmt-phone-view-detail"><div class="rmt-phone-notch" aria-hidden="true"></div><div class="rmt-phone-screen"><main class="rmt-phone-content rmt-phone-content-single"><p class="rmt-phone-lock"><b>${esc(label)}</b></p>${inner}</main></div></div></div>`);
     }
     return blocks.join('');
+}
+
+function textOf(value) {
+    return typeof value === 'string' ? value.trim() : '';
+}
+
+function relationsSurface(session) {
+    const rows = (Array.isArray(session.relationships) ? session.relationships : []).slice(0, 18);
+    if (!rows.length) return '';
+    const positions = rows.map((_, index) => {
+        const angle = (-Math.PI / 2) + (Math.PI * 2 * index / rows.length);
+        return { x: 50 + Math.cos(angle) * 32, y: 50 + Math.sin(angle) * 30 };
+    });
+    const edges = positions.map(pos => `<line class="rmt-relation-edge dynamic" x1="50" y1="50" x2="${pos.x.toFixed(2)}" y2="${pos.y.toFixed(2)}"/>`).join('');
+    const nodes = rows.map((item, index) => {
+        const pos = positions[index];
+        const name = textOf(item.name) || '人物';
+        const title = textOf(item.relation) || textOf(item.dynamic?.relation) || '关系';
+        return `<div class="rmt-relation-node${item.isUser ? ' user' : ''} has-dynamic" style="left:${pos.x.toFixed(2)}%;top:${pos.y.toFixed(2)}%"><span class="rmt-relation-node-avatar">${item.isUser ? '<i class="fa-solid fa-heart"></i>' : '<i class="fa-solid fa-user"></i>'}</span><b>${esc(name)}</b><small>${esc(title)}</small></div>`;
+    }).join('');
+    const details = rows.map(item => {
+        const relation = textOf(item.relation) || textOf(item.dynamic?.relation);
+        const state = textOf(item.state) || textOf(item.dynamic?.state);
+        const summary = textOf(item.summary) || textOf(item.dynamic?.summary);
+        return `<article class="rmt-relation-detail"><div class="rmt-relation-detail-head"><b>${esc(textOf(item.name) || '人物')}</b></div><div class="rmt-relation-layer-row dynamic"><strong>本世界线</strong><span>${esc(relation)}${state ? ` · ${esc(state)}` : ''}</span><small>${esc(summary)}</small></div></article>`;
+    }).join('');
+    const center = textOf(session.characterName) || '角色';
+    return `<section class="rmt-relations-mode"><section class="rmt-relation-garden-wrap"><div class="rmt-relation-legend"><span><i class="dynamic"></i>本世界线</span></div><div class="rmt-relation-garden"><svg class="rmt-relation-edges" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">${edges}</svg><div class="rmt-relation-center"><i class="fa-solid fa-user"></i><b>${esc(center)}</b></div>${nodes}</div>${details}</section></section>`;
+}
+
+function albumSurface(session) {
+    const entries = Array.isArray(session.entries) ? session.entries : [];
+    if (!entries.length) return '';
+    const cards = entries.map(item => `<article class="rmt-card"><div class="rmt-thumb"><div class="rmt-abstract"></div></div><div class="rmt-card-meta"><div class="rmt-card-title">${esc(textOf(item.title) || '回忆')}</div><div class="rmt-card-date">${esc(textOf(item.date))}</div><div class="rmt-card-desc">${esc(textOf(item.desc) || textOf(item.comment))}</div></div></article>`).join('');
+    return `<div class="rmt-album"><div class="rmt-album-layout"><section class="rmt-grid-wrap"><div class="rmt-grid">${cards}</div></section></div></div>`;
+}
+
+function advSurface(session) {
+    const events = Array.isArray(session.events) ? session.events : [];
+    if (!events.length) return '';
+    const list = events.map((item, index) => `<div class="rmt-event"><span class="rmt-event-index">${String(index + 1).padStart(2, '0')}</span><span class="rmt-event-copy"><b>${esc(textOf(item.title))}</b><small>${esc(textOf(item.date))}</small></span></div>`).join('');
+    const reading = events.map(item => {
+        const paras = Array.isArray(item.adv?.paragraphs) ? item.adv.paragraphs : [];
+        return `<div class="rmt-adv-reading-copy"><h3>${esc(textOf(item.title))}</h3>${paras.map(paragraph => `<div class="rmt-adv-para">${esc(textOf(paragraph))}</div>`).join('')}</div>`;
+    }).join('');
+    return `<div class="rmt-adv rmt-adv-reading"><aside class="rmt-event-list"><div class="rmt-event-items">${list}</div></aside><section class="rmt-event-detail"><div class="rmt-adv-reading-layout rmt-adv-text-first">${reading}</section></section></div>`;
+}
+
+function inboxSurface(session) {
+    const letters = Array.isArray(session.letters) ? session.letters : [];
+    if (!letters.length) return '';
+    return `<section class="rmt-inbox">${letters.map(letter => `<div class="rmt-mail-paper"><header><h2>${esc(textOf(letter.title) || '来信')}</h2></header><b>${esc(textOf(letter.greeting))}</b><p>${esc(textOf(letter.body))}</p><footer>${esc(textOf(letter.closing))}</footer></div>`).join('')}</section>`;
+}
+
+function cabinetSurface(session) {
+    const items = Array.isArray(session.items) ? session.items : [];
+    if (!items.length) return '';
+    return `<section class="rmt-cabinet"><div class="rmt-cabinet-shelves">${items.map((item, index) => `<details class="rmt-cabinet-piece" open><summary><small>No. ${String(index + 1).padStart(2, '0')}</small><b>${esc(textOf(item.name) || '纪念')}</b></summary><div class="rmt-cabinet-detail"><blockquote>${esc(textOf(item.objectEvidence) || textOf(item.summary) || textOf(item.text))}</blockquote></div></details>`).join('')}</div></section>`;
+}
+
+function roomSurface(session) {
+    const spaces = Array.isArray(session.spaces) ? session.spaces : [];
+    const cards = [];
+    for (const space of spaces) {
+        const objects = Array.isArray(space?.objects) ? space.objects : [];
+        if (!objects.length && (textOf(space?.label) || textOf(space?.atmosphere))) {
+            cards.push(`<section class="rmt-room-card"><div class="rmt-room-object-title">${esc(textOf(space.label) || '房间')}</div><div class="rmt-room-object-desc">${esc(textOf(space.atmosphere))}</div></section>`);
+        }
+        for (const item of objects) {
+            cards.push(`<section class="rmt-room-card"><div class="rmt-room-card-kicker">${esc(textOf(space?.label) || '房间')}</div><div class="rmt-room-object-title">${esc(textOf(item.label) || textOf(item.name) || '物件')}</div><div class="rmt-room-object-desc">${esc(textOf(item.description))}</div>${textOf(item.line) ? `<div class="rmt-room-object-line"><p>${esc(textOf(item.line))}</p></div>` : ''}</section>`);
+        }
+    }
+    if (!cards.length && textOf(session.homeSummary)) cards.push(`<section class="rmt-room-card"><div class="rmt-room-object-desc">${esc(session.homeSummary)}</div></section>`);
+    return cards.length ? `<div class="rmt-room-view"><div class="rmt-room-flow">${cards.join('')}</div></div>` : '';
+}
+
+function itemsSurface(session) {
+    const nodes = [];
+    const walk = list => {
+        for (const node of Array.isArray(list) ? list : []) {
+            if (!node || typeof node !== 'object') continue;
+            nodes.push(node);
+            walk(node.children);
+        }
+    };
+    for (const box of Array.isArray(session.containers) ? session.containers : []) walk(box?.nodes);
+    if (!nodes.length) return '';
+    const list = nodes.map(node => `<div class="rmt-item-node"><span><b>${esc(textOf(node.label) || '物品')}</b></span></div>`).join('');
+    const detail = nodes.map(node => `<div class="rmt-item-detail"><div class="rmt-item-detail-head"><b>${esc(textOf(node.label) || '物品')}</b></div><p>${esc(textOf(node.summary))}</p>${textOf(node.line) ? `<blockquote>${esc(textOf(node.line))}</blockquote>` : ''}</div>`).join('');
+    return `<div class="rmt-items"><section class="rmt-items-main"><div class="rmt-items-grid"><div class="rmt-items-list">${list}</div>${detail}</div></section></div>`;
+}
+
+function calendarSurface(session) {
+    const entries = Array.isArray(session.entries) ? session.entries : [];
+    if (!entries.length) return '';
+    const notes = entries.map(item => `<article class="rmt-calendar-sticky memo"><span class="rmt-calendar-sticky-pin" aria-hidden="true"></span><small>STICKY NOTE</small><h3>${esc(textOf(item.title) || '日子')}</h3><p>${esc(textOf(item.text) || textOf(item.note) || textOf(item.summary))}</p><footer>${esc(textOf(item.date))}</footer></article>`).join('');
+    return `<div class="rmt-calendar-shell rmt-calendar-v3">${notes}</div>`;
+}
+
+function travelSurface(session) {
+    const locations = Array.isArray(session.locations) ? session.locations : (Array.isArray(session.routes) ? session.routes : []);
+    if (!locations.length) return '';
+    return locations.map(item => `<section class="rmt-travel-postcard"><div class="rmt-travel-postcard-back"><div class="rmt-travel-postcard-copy"><b>${esc(textOf(item.name) || textOf(item.title) || '地点')}</b><p>${esc(textOf(item.note) || textOf(item.summary) || textOf(item.description))}</p></div></div></section>`).join('');
+}
+
+function endingSurface(session) {
+    const endings = Array.isArray(session.endings) ? session.endings : [];
+    const replays = Array.isArray(session.confessionReplays) ? session.confessionReplays : [];
+    if (!endings.length && !replays.length) return '';
+    const routes = endings.map(item => `<article class="rmt-ending-detail"><div class="rmt-ending-head"><h2>${esc(textOf(item.title) || '结局')}</h2></div><p class="rmt-ending-prose">${esc(textOf(item.summary) || textOf(item.epilogue) || textOf(item.body))}</p></article>`).join('');
+    const confessions = replays.map(item => `<div class="rmt-confession-card"><b>${esc(textOf(item.title))}</b><span>${esc(textOf(item.scene) || textOf(item.subtitle))}</span></div>`).join('');
+    return `<div class="rmt-ending">${routes}${confessions}</div>`;
+}
+
+function butterflySurface(session) {
+    const nodes = Array.isArray(session.nodes) ? session.nodes : [];
+    if (!nodes.length) return '';
+    const blocks = nodes.map(node => `<section class="rmt-terminal-block rmt-observation-screen"><div class="rmt-terminal-section-title">${esc(textOf(node.label) || textOf(node.code) || '观测')}</div><div class="rmt-mono">${esc(textOf(node.monologue) || textOf(node.intervention) || textOf(node.systemNote))}</div></section>`).join('');
+    return `<div class="rmt-crt"><div class="rmt-crt-content">${blocks}</div></div>`;
+}
+
+function songSurface(session) {
+    const songs = Array.isArray(session.songs) ? session.songs : [];
+    if (!songs.length) return '';
+    const sheets = songs.map(song => `<article class="rmt-song-sheet rmt-song-readable"><header><h2>${esc(textOf(song.title) || '印象曲')}</h2><p>演唱者 · ${esc(textOf(song.singer))}</p></header><section class="rmt-song-style"><h3>曲风</h3><p>${esc(textOf(song.styleDescription))}</p></section><section class="rmt-song-lyrics"><h3>完整歌词</h3><pre>${esc(textOf(song.lyrics))}</pre></section></article>`).join('');
+    return `<main class="rmt-theme-song"><div class="rmt-song-layout has-songs">${sheets}</div></main>`;
+}
+
+function bedtimeSurface(session) {
+    const stories = Array.isArray(session.stories) ? session.stories : [];
+    if (!stories.length) return '';
+    const html = stories.map(story => {
+        const chapters = (Array.isArray(story.chapters) ? story.chapters : []).map((chapter, index) => `<section class="rmt-bedtime-chapter"><small>第 ${index + 1} 章</small><h3>${esc(textOf(chapter.title) || '本章')}</h3><p>${esc(textOf(chapter.text))}</p></section>`).join('');
+        return `<article class="rmt-bedtime-reader"><header><small>${esc(textOf(story.genre))} · 睡前故事</small><h2>${esc(textOf(story.title) || '故事')}</h2><p>${esc(textOf(story.premise))}</p></header>${chapters}</article>`;
+    }).join('');
+    return `<section class="rmt-bedtime">${html}</section>`;
+}
+
+function pastSurface(session) {
+    const episodes = Array.isArray(session.episodes) ? session.episodes : [];
+    if (session.kind === 'timeEcho') return '';
+    if (!episodes.length) return '';
+    const html = episodes.map(episode => {
+        const opening = episode?.opening ? `<article class="rmt-past-slip"><h3>${esc(textOf(episode.opening.motif) || textOf(episode.title))}</h3><p>${esc(textOf(episode.opening.text))}</p></article>` : '';
+        const dossiers = (Array.isArray(episode?.dossiers) ? episode.dossiers : []).map(dossier => `<article class="rmt-past-paper"><header><h3>${esc(textOf(dossier.title))}</h3></header><p>${esc(textOf(dossier.synopsis))}</p></article>`).join('');
+        return `<article class="rmt-past-draw is-open"><h3>${esc(textOf(episode.title))}</h3>${opening}${dossiers}</article>`;
+    }).join('');
+    return `<section class="rmt-past-lives">${html}</section>`;
+}
+
+function timeSurface(session) {
+    const episodes = Array.isArray(session.episodes) ? session.episodes : [];
+    if (!episodes.length) return '';
+    const html = episodes.map(episode => {
+        const lines = Array.isArray(episode?.lines) ? episode.lines : (Array.isArray(episode?.dialogue) ? episode.dialogue : []);
+        const body = lines.map(line => {
+            const speaker = line?.speaker === 'b' ? 'b' : line?.speaker === 'a' ? 'a' : 'narrator';
+            const text = textOf(line?.text) || textOf(line);
+            return text ? `<article class="rmt-time-line" data-rmt-time-speaker="${speaker}"><p>${esc(text)}</p></article>` : '';
+        }).join('');
+        return `<div><h3>${esc(textOf(episode.title))}</h3>${body}</div>`;
+    }).join('');
+    return `<section class="rmt-time-stories">${html}</section>`;
+}
+
+function moduleSurface(session) {
+    const kind = typeof session.kind === 'string' ? session.kind : '';
+    if (kind === 'relations') return relationsSurface(session);
+    if (kind === 'album') return albumSurface(session);
+    if (kind === 'adv') return advSurface(session);
+    if (kind === 'inbox') return inboxSurface(session);
+    if (kind === 'cabinet') return cabinetSurface(session);
+    if (kind === 'room') return roomSurface(session);
+    if (kind === 'items') return itemsSurface(session);
+    if (kind === 'calendar') return calendarSurface(session);
+    if (kind === 'travel') return travelSurface(session);
+    if (kind === 'ending') return endingSurface(session);
+    if (kind === 'butterfly') return butterflySurface(session);
+    if (kind === 'themeSong') return songSurface(session);
+    if (kind === 'bedtime') return bedtimeSurface(session);
+    if (kind === 'pastLives') return pastSurface(session);
+    if (kind === 'timeEcho') return timeSurface(session);
+    return '';
 }
 
 function plainHtml(session) {
@@ -4216,7 +4399,8 @@ function roundReadingHtml(session, identity = {}) {
     };
     const heart = heartHtml(session, who);
     const phone = phoneHtml(session);
-    if (heart || phone) return `<div class="rmt-round-reading">${heart}${phone}</div>`;
+    const surface = moduleSurface(session);
+    if (heart || phone || surface) return `<div class="rmt-round-reading">${heart}${phone}${surface}</div>`;
     return plainHtml(session);
 }
 
@@ -6150,6 +6334,24 @@ async function retryFloorRound() {
     return regenerateCurrentMemory({ mode: 'keep' });
 }
 
+async function failStalledFloor() {
+    if (redoInflight) return { action: 'busy' };
+    let context;
+    try { context = core_context.currentCharacterGuard(); }
+    catch { return { action: 'idle' }; }
+    const snapshot = auto_memory_plan.readAutoMemoryMetadata(context.chatMetadata);
+    const steps = snapshot?.modulePlan?.steps || [];
+    if (!steps.length || steps.some(step => step.status === 'failed') || steps.every(step => step.status === 'completed')) return { action: 'idle' };
+    const index = steps.findIndex(step => step.status === 'pending' || step.status === 'running');
+    if (index < 0) return { action: 'idle' };
+    const modulePlan = auto_memory_plan.parseModulePlan({
+        ...snapshot.modulePlan,
+        steps: steps.map((step, stepIndex) => stepIndex === index ? { ...step, status: 'failed' } : step),
+    });
+    await persistSnapshot(context, auto_memory_plan.parseAutoMemorySnapshot({ ...snapshot, modulePlan }));
+    return { action: 'failed' };
+}
+
 async function resumeFloorPlan() {
     const context = core_context.currentCharacterGuard();
     const snapshot = auto_memory_plan.readAutoMemoryMetadata(context.chatMetadata);
@@ -6642,6 +6844,7 @@ function startAutoMemoryScheduler() {
 __m_autoMemory_scheduler_js.fillFloorGap = fillFloorGap;
 __m_autoMemory_scheduler_js.completeFloorRound = completeFloorRound;
 __m_autoMemory_scheduler_js.retryFloorRound = retryFloorRound;
+__m_autoMemory_scheduler_js.failStalledFloor = failStalledFloor;
 __m_autoMemory_scheduler_js.resumeFloorPlan = resumeFloorPlan;
 __m_autoMemory_scheduler_js.repairFloorAchievement = repairFloorAchievement;
 __m_autoMemory_scheduler_js.automaticRepairIfNeeded = automaticRepairIfNeeded;
@@ -6682,26 +6885,12 @@ function floorShellCss() {
 .rmt-heart-letter-seal{display:grid;justify-items:center;gap:8px;width:100%;margin:0;padding:0;border:0;background:transparent;color:#6a4a58;box-shadow:none;font:inherit;text-align:center;cursor:pointer}
 .rmt-heart-letter-seal small{color:#8d6d78;font-size:12px;line-height:1.4}
 .rmt-envelope{display:block;width:min(100%,240px);height:auto;filter:drop-shadow(0 12px 16px rgba(90,24,48,.16))}
-.rmt-heart-letter.is-writing .rmt-heart-letter-seal{cursor:default}
+.rmt-heart-letter.is-writing .rmt-heart-letter-seal{display:grid!important;cursor:default}
+.rmt-heart-letter.is-writing .rmt-heart-letter-paper{display:none!important}
 .rmt-heart-letter-paper{margin-top:8px;min-width:0;overflow:hidden;padding:16px 14px 12px;border:1px solid #e6d3c4;border-left:7px solid #e99ab9;border-radius:4px 16px 16px 4px;background:#fff8ee;background-image:repeating-linear-gradient(0deg,transparent,transparent 22px,rgba(180,140,120,.16) 23px);color:#5c463c}
 .rmt-heart-letter-paper p{margin:0 0 10px;font-size:15px;line-height:1.6}
 .rmt-heart-letter-close{margin:0 0 12px}
-.rmt-heart-letter .rmt-heart-line{display:flex;gap:12px;align-items:flex-start;margin:14px 0}
-.rmt-heart-letter .rmt-heart-line-avatar{width:42px;height:42px;border-radius:50%;overflow:hidden;flex:none;display:grid;place-items:center;background:#edf3f6;color:#7c8da0}
-.rmt-heart-letter .rmt-heart-line-avatar img{width:100%;height:100%;object-fit:cover}
-.rmt-heart-letter .rmt-heart-line>div{min-width:0;background:#fff;border:1px solid #e3ebf0;border-radius:6px 18px 18px 18px;padding:10px 14px}
-.rmt-heart-letter .rmt-heart-line small{display:block;margin-bottom:4px;color:#8d6d78;font-size:12px}
-.rmt-heart-letter .rmt-heart-line.user{flex-direction:row-reverse}
-.rmt-heart-letter .rmt-heart-line.user>div{background:#fff0f5;border-radius:18px 6px 18px 18px}
-.rmt-heart-letter .rmt-heart-narration{margin:10px 4px;color:#6d7c8a;line-height:1.7}
 .rmt-heart-letter .rmt-letter-piece h3{margin:16px 0 8px;font-size:16px}
-.rmt-heart-letter .rmt-phone{display:flex;justify-content:center;margin:8px 0}
-.rmt-heart-letter .rmt-phone-shell{width:min(360px,100%);box-sizing:border-box;border:6px solid #222b33;border-radius:36px;padding:12px 12px 16px;background:#eaf0f3;color:#20303d}
-.rmt-heart-letter .rmt-phone-notch{width:72px;height:5px;margin:0 auto 10px;border-radius:999px;background:rgba(39,57,65,.28)}
-.rmt-heart-letter .rmt-phone-message{margin:8px 0;max-width:86%}
-.rmt-heart-letter .rmt-phone-message-owner{margin-left:auto}
-.rmt-heart-letter .rmt-phone-message p{margin:4px 0 0;padding:8px 10px;border-radius:12px;background:#fff}
-.rmt-heart-letter .rmt-phone-message-owner p{background:#d9ecff}
 .rmt-heart-letter .rmt-floor-body{max-height:70vh;max-width:100%;min-width:0;margin-top:10px;overflow:auto}
 /* 模块页按整页两栏排。在信里改成单栏，生图设置不占信纸。 */
 .rmt-heart-letter .rmt-floor-body .rmt-cg-format,
@@ -6725,6 +6914,16 @@ function floorShellCss() {
 .rmt-heart-letter.is-waiting .rmt-heart-letter-seal{cursor:default}
 #chat .mes.rmt-floor-return{outline:2px solid #e99ab9;outline-offset:2px}
 `;
+}
+
+const GENERATION_STALL_MS = 90_000;
+
+// 没有正在跑的任务，进度签名也一直不变，超过 90 秒就当失败。有请求在跑就重新计时。
+function generationStall({ active = false, running = false, signature = '', previous = null, now = 0 } = {}) {
+    if (!active || running) return { stalled: false, since: 0, signature: '' };
+    const same = previous && previous.signature === signature && Number(previous.since) > 0;
+    const since = same ? previous.since : now;
+    return { stalled: now - since >= GENERATION_STALL_MS, since, signature };
 }
 
 function knownProgress(done, total) {
@@ -6751,7 +6950,7 @@ function toastForTransition(previousPhase, nextPhase, face = {}, { initial = fal
         return { level: 'success', title: '心口一热', message: `今天留下了新的回忆。${face.line || '一段新的回忆'}。点开楼层下面，就能看见。` };
     }
     if (nextPhase === 'failed') {
-        return { level: 'error', title: '这份回忆停住了', message: '已经记下的部分还在。楼层下面不会把它当成已经拆开。' };
+        return { level: 'error', title: '这份回忆停住了', message: '可以补全没写完的部分，或再试一次。任务中心也能看到。' };
     }
     if (nextPhase === 'achievement-pending') {
         return { level: 'warning', title: '回忆先留着', message: '成就还缺一笔。先不拆开，写好的部分还在。' };
@@ -6781,6 +6980,7 @@ function shellView(input = {}) {
         blocksInput: false, showReveal: false, progress: null, moduleId, revealId,
         canRetry: false, canRepairAchievement: false, canComplete: false, canRedo: false,
         canOpen: false,
+        moduleTitle: typeof input.moduleTitle === 'string' ? input.moduleTitle : '',
     };
     const written = complete && input.canOpen === true && !running;
     if (complete && revealStatus === 'achievement_pending') {
@@ -6795,8 +6995,14 @@ function shellView(input = {}) {
             title: letterTitle(input), achievementCopy: input.achievementCopy || '', detail: '点击查看详情',
         };
     }
-    if (input.failureRecoverable === true) {
-        return { ...face, phase: 'failed', canRetry: true, title: '这份回忆可以再续', detail: '已经记下的部分还在，不会把它当成已经拆开。' };
+    if (input.failureRecoverable === true || input.stalled === true) {
+        return {
+            ...face, phase: 'failed', canRetry: true, canComplete: true,
+            title: '这份回忆停住了',
+            detail: input.stalled === true
+                ? '90 秒没有新的进度。可以补全没写完的部分，或再试一次。'
+                : '已经记下的部分还在。可以补全，或再试一次。',
+        };
     }
     if (input.paused === true) {
         return { ...face, phase: 'paused', title: '先停在这里', detail: '等待恢复。已经写好的部分不会重做。' };
@@ -6845,10 +7051,12 @@ function shellView(input = {}) {
 
 __m_autoMemory_shellState_js.shellBlocksChatInput = shellBlocksChatInput;
 __m_autoMemory_shellState_js.floorShellCss = floorShellCss;
+__m_autoMemory_shellState_js.generationStall = generationStall;
 __m_autoMemory_shellState_js.knownProgress = knownProgress;
 __m_autoMemory_shellState_js.revealFace = revealFace;
 __m_autoMemory_shellState_js.toastForTransition = toastForTransition;
 __m_autoMemory_shellState_js.shellView = shellView;
+__m_autoMemory_shellState_js.GENERATION_STALL_MS = GENERATION_STALL_MS;
 }
 
 function __init_autoMemory_streamGate_js() {
@@ -60195,6 +60403,8 @@ let lastPhase = '';
 let sawPhase = false;
 let autoRepairLatch = '';
 let timer = 0;
+let stallState = { signature: '', since: 0 };
+let stallNoted = false;
 
 function floorShellCss() {
     return shell_state.floorShellCss();
@@ -60375,9 +60585,48 @@ function markup(view) {
     </article>`;
 }
 
+function generationRunning(context) {
+    try {
+        return core_requestCoordinator.listChatTaskSnapshot(context).some(row => row.currentChat && row.running && row.kind !== 'archive' && row.id !== 'archive-import');
+    } catch {
+        return false;
+    }
+}
+
+function watchStall(view, context) {
+    const running = generationRunning(context);
+    const active = view.phase === 'generating' || view.phase === 'planning';
+    const signature = [view.phase, view.moduleId, view.revealId, view.progress?.done || 0, view.progress?.total || 0, view.detail].join('|');
+    const next = shell_state.generationStall({ active, running, signature, previous: stallState, now: Date.now() });
+    stallState = { signature: next.signature, since: next.since };
+    if (next.stalled) {
+        const detail = '90 秒没有新的进度。可以补全没写完的部分，或再试一次。';
+        if (!stallNoted) {
+            stallNoted = true;
+            ui_taskCenter.noteAutoMemoryFloorFailure({ label: view.moduleTitle || '自动留忆', detail });
+            void auto_memory_scheduler.failStalledFloor().catch(error => {
+                console.warn('[HeartbeatMemories] stall mark skipped', core_text.safeErrorDiagnostic(error));
+            });
+        }
+        return { ...view, phase: 'failed', canRetry: true, canComplete: true, title: '这份回忆停住了', detail };
+    }
+    if (running || view.phase === 'reveal' || view.phase === 'pace' || view.phase === 'hidden') {
+        stallNoted = false;
+        ui_taskCenter.clearAutoMemoryFloorFailure();
+        return view;
+    }
+    if (view.phase === 'failed') {
+        ui_taskCenter.noteAutoMemoryFloorFailure({
+            label: view.moduleTitle || '自动留忆',
+            detail: view.detail || '可以补全没写完的部分，或再试一次。',
+        });
+    }
+    return view;
+}
+
 function paint(context) {
     if (shell_state.shellBlocksChatInput()) return;
-    const view = viewFor(context);
+    const view = watchStall(viewFor(context), context);
     const toast = shell_state.toastForTransition(lastPhase, view.phase, { line: view.title }, { initial: !sawPhase });
     sawPhase = true;
     lastPhase = view.phase;
@@ -75587,6 +75836,24 @@ let painting = false;
 let pumping = false;
 const queue = [];
 const autoRetryUsed = new Map();
+let floorFailure = null;
+
+function noteAutoMemoryFloorFailure(info = {}) {
+    const next = {
+        label: info.label || '自动留忆',
+        detail: info.detail || '可以补全没写完的部分，或再试一次。',
+        at: floorFailure?.at || Date.now(),
+    };
+    if (floorFailure && floorFailure.label === next.label && floorFailure.detail === next.detail) return;
+    floorFailure = next;
+    refreshTaskCenterView();
+}
+
+function clearAutoMemoryFloorFailure() {
+    if (!floorFailure) return;
+    floorFailure = null;
+    refreshTaskCenterView();
+}
 const autoRetryExhausted = new Set();
 const picks = new Set();
 let pickScope = '';
@@ -76159,6 +76426,15 @@ function collectTaskCards() {
         });
     }
     pushMissingArchiveRecovery(cards);
+    if (floorFailure) {
+        cards.push({
+            state: 'failed',
+            label: floorFailure.label,
+            detail: floorFailure.detail,
+            at: floorFailure.at,
+            actions: '<button type="button" class="rmt-btn" data-rmt-action="task-floor-complete">补全没写完的部分</button><button type="button" class="rmt-btn" data-rmt-action="task-floor-retry">重试</button>',
+        });
+    }
     return cards.sort((left, right) => (CARD_RANK[left.state] ?? 9) - (CARD_RANK[right.state] ?? 9) || right.at - left.at);
 }
 
@@ -76400,6 +76676,15 @@ function handleTaskCenterAction(action, actionEl) {
         return;
     }
     if (action === 'task-center-close') return hideTaskCenter();
+    if (action === 'task-floor-complete' || action === 'task-floor-retry') {
+        clearAutoMemoryFloorFailure();
+        const run = action === 'task-floor-complete' ? 'completeFloorRound' : 'resumeFloorPlan';
+        void import('../autoMemory/scheduler.js').then(mod => mod[run]()).catch(error => {
+            console.warn('[HeartbeatMemories] floor recovery skipped', core_text.safeErrorDiagnostic(error));
+            globalThis.toastr?.error?.('这一次没能补上。可以再点一次。', '心口顿了一下');
+        });
+        return;
+    }
     if (action === 'task-cancel') {
         const id = actionEl?.dataset?.rmtTaskId || '';
         const row = core_requestCoordinator.listChatTaskSnapshot().find(item => item.id === id && item.running);
@@ -76572,6 +76857,8 @@ function handleTaskCenterAction(action, actionEl) {
 }
 
 __m_ui_taskCenter_js.runQueuedGeneration = runQueuedGeneration;
+__m_ui_taskCenter_js.noteAutoMemoryFloorFailure = noteAutoMemoryFloorFailure;
+__m_ui_taskCenter_js.clearAutoMemoryFloorFailure = clearAutoMemoryFloorFailure;
 __m_ui_taskCenter_js.queuePickHtml = queuePickHtml;
 __m_ui_taskCenter_js.selectedQueueRoutes = selectedQueueRoutes;
 __m_ui_taskCenter_js.setQueuePick = setQueuePick;

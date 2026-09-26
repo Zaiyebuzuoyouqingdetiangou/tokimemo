@@ -232,9 +232,192 @@ function phoneHtml(session) {
         }).join('');
         if (!inner) continue;
         const label = app.label || app.title || '私人终端';
-        blocks.push(`<div class="rmt-phone"><div class="rmt-phone-shell"><div class="rmt-phone-notch"></div><p class="rmt-phone-lock"><b>${esc(label)}</b></p>${inner}</div></div>`);
+        blocks.push(`<div class="rmt-phone"><div class="rmt-phone-shell rmt-device-phone rmt-phone-view-detail"><div class="rmt-phone-notch" aria-hidden="true"></div><div class="rmt-phone-screen"><main class="rmt-phone-content rmt-phone-content-single"><p class="rmt-phone-lock"><b>${esc(label)}</b></p>${inner}</main></div></div></div>`);
     }
     return blocks.join('');
+}
+
+function textOf(value) {
+    return typeof value === 'string' ? value.trim() : '';
+}
+
+function relationsSurface(session) {
+    const rows = (Array.isArray(session.relationships) ? session.relationships : []).slice(0, 18);
+    if (!rows.length) return '';
+    const positions = rows.map((_, index) => {
+        const angle = (-Math.PI / 2) + (Math.PI * 2 * index / rows.length);
+        return { x: 50 + Math.cos(angle) * 32, y: 50 + Math.sin(angle) * 30 };
+    });
+    const edges = positions.map(pos => `<line class="rmt-relation-edge dynamic" x1="50" y1="50" x2="${pos.x.toFixed(2)}" y2="${pos.y.toFixed(2)}"/>`).join('');
+    const nodes = rows.map((item, index) => {
+        const pos = positions[index];
+        const name = textOf(item.name) || '人物';
+        const title = textOf(item.relation) || textOf(item.dynamic?.relation) || '关系';
+        return `<div class="rmt-relation-node${item.isUser ? ' user' : ''} has-dynamic" style="left:${pos.x.toFixed(2)}%;top:${pos.y.toFixed(2)}%"><span class="rmt-relation-node-avatar">${item.isUser ? '<i class="fa-solid fa-heart"></i>' : '<i class="fa-solid fa-user"></i>'}</span><b>${esc(name)}</b><small>${esc(title)}</small></div>`;
+    }).join('');
+    const details = rows.map(item => {
+        const relation = textOf(item.relation) || textOf(item.dynamic?.relation);
+        const state = textOf(item.state) || textOf(item.dynamic?.state);
+        const summary = textOf(item.summary) || textOf(item.dynamic?.summary);
+        return `<article class="rmt-relation-detail"><div class="rmt-relation-detail-head"><b>${esc(textOf(item.name) || '人物')}</b></div><div class="rmt-relation-layer-row dynamic"><strong>本世界线</strong><span>${esc(relation)}${state ? ` · ${esc(state)}` : ''}</span><small>${esc(summary)}</small></div></article>`;
+    }).join('');
+    const center = textOf(session.characterName) || '角色';
+    return `<section class="rmt-relations-mode"><section class="rmt-relation-garden-wrap"><div class="rmt-relation-legend"><span><i class="dynamic"></i>本世界线</span></div><div class="rmt-relation-garden"><svg class="rmt-relation-edges" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">${edges}</svg><div class="rmt-relation-center"><i class="fa-solid fa-user"></i><b>${esc(center)}</b></div>${nodes}</div>${details}</section></section>`;
+}
+
+function albumSurface(session) {
+    const entries = Array.isArray(session.entries) ? session.entries : [];
+    if (!entries.length) return '';
+    const cards = entries.map(item => `<article class="rmt-card"><div class="rmt-thumb"><div class="rmt-abstract"></div></div><div class="rmt-card-meta"><div class="rmt-card-title">${esc(textOf(item.title) || '回忆')}</div><div class="rmt-card-date">${esc(textOf(item.date))}</div><div class="rmt-card-desc">${esc(textOf(item.desc) || textOf(item.comment))}</div></div></article>`).join('');
+    return `<div class="rmt-album"><div class="rmt-album-layout"><section class="rmt-grid-wrap"><div class="rmt-grid">${cards}</div></section></div></div>`;
+}
+
+function advSurface(session) {
+    const events = Array.isArray(session.events) ? session.events : [];
+    if (!events.length) return '';
+    const list = events.map((item, index) => `<div class="rmt-event"><span class="rmt-event-index">${String(index + 1).padStart(2, '0')}</span><span class="rmt-event-copy"><b>${esc(textOf(item.title))}</b><small>${esc(textOf(item.date))}</small></span></div>`).join('');
+    const reading = events.map(item => {
+        const paras = Array.isArray(item.adv?.paragraphs) ? item.adv.paragraphs : [];
+        return `<div class="rmt-adv-reading-copy"><h3>${esc(textOf(item.title))}</h3>${paras.map(paragraph => `<div class="rmt-adv-para">${esc(textOf(paragraph))}</div>`).join('')}</div>`;
+    }).join('');
+    return `<div class="rmt-adv rmt-adv-reading"><aside class="rmt-event-list"><div class="rmt-event-items">${list}</div></aside><section class="rmt-event-detail"><div class="rmt-adv-reading-layout rmt-adv-text-first">${reading}</section></section></div>`;
+}
+
+function inboxSurface(session) {
+    const letters = Array.isArray(session.letters) ? session.letters : [];
+    if (!letters.length) return '';
+    return `<section class="rmt-inbox">${letters.map(letter => `<div class="rmt-mail-paper"><header><h2>${esc(textOf(letter.title) || '来信')}</h2></header><b>${esc(textOf(letter.greeting))}</b><p>${esc(textOf(letter.body))}</p><footer>${esc(textOf(letter.closing))}</footer></div>`).join('')}</section>`;
+}
+
+function cabinetSurface(session) {
+    const items = Array.isArray(session.items) ? session.items : [];
+    if (!items.length) return '';
+    return `<section class="rmt-cabinet"><div class="rmt-cabinet-shelves">${items.map((item, index) => `<details class="rmt-cabinet-piece" open><summary><small>No. ${String(index + 1).padStart(2, '0')}</small><b>${esc(textOf(item.name) || '纪念')}</b></summary><div class="rmt-cabinet-detail"><blockquote>${esc(textOf(item.objectEvidence) || textOf(item.summary) || textOf(item.text))}</blockquote></div></details>`).join('')}</div></section>`;
+}
+
+function roomSurface(session) {
+    const spaces = Array.isArray(session.spaces) ? session.spaces : [];
+    const cards = [];
+    for (const space of spaces) {
+        const objects = Array.isArray(space?.objects) ? space.objects : [];
+        if (!objects.length && (textOf(space?.label) || textOf(space?.atmosphere))) {
+            cards.push(`<section class="rmt-room-card"><div class="rmt-room-object-title">${esc(textOf(space.label) || '房间')}</div><div class="rmt-room-object-desc">${esc(textOf(space.atmosphere))}</div></section>`);
+        }
+        for (const item of objects) {
+            cards.push(`<section class="rmt-room-card"><div class="rmt-room-card-kicker">${esc(textOf(space?.label) || '房间')}</div><div class="rmt-room-object-title">${esc(textOf(item.label) || textOf(item.name) || '物件')}</div><div class="rmt-room-object-desc">${esc(textOf(item.description))}</div>${textOf(item.line) ? `<div class="rmt-room-object-line"><p>${esc(textOf(item.line))}</p></div>` : ''}</section>`);
+        }
+    }
+    if (!cards.length && textOf(session.homeSummary)) cards.push(`<section class="rmt-room-card"><div class="rmt-room-object-desc">${esc(session.homeSummary)}</div></section>`);
+    return cards.length ? `<div class="rmt-room-view"><div class="rmt-room-flow">${cards.join('')}</div></div>` : '';
+}
+
+function itemsSurface(session) {
+    const nodes = [];
+    const walk = list => {
+        for (const node of Array.isArray(list) ? list : []) {
+            if (!node || typeof node !== 'object') continue;
+            nodes.push(node);
+            walk(node.children);
+        }
+    };
+    for (const box of Array.isArray(session.containers) ? session.containers : []) walk(box?.nodes);
+    if (!nodes.length) return '';
+    const list = nodes.map(node => `<div class="rmt-item-node"><span><b>${esc(textOf(node.label) || '物品')}</b></span></div>`).join('');
+    const detail = nodes.map(node => `<div class="rmt-item-detail"><div class="rmt-item-detail-head"><b>${esc(textOf(node.label) || '物品')}</b></div><p>${esc(textOf(node.summary))}</p>${textOf(node.line) ? `<blockquote>${esc(textOf(node.line))}</blockquote>` : ''}</div>`).join('');
+    return `<div class="rmt-items"><section class="rmt-items-main"><div class="rmt-items-grid"><div class="rmt-items-list">${list}</div>${detail}</div></section></div>`;
+}
+
+function calendarSurface(session) {
+    const entries = Array.isArray(session.entries) ? session.entries : [];
+    if (!entries.length) return '';
+    const notes = entries.map(item => `<article class="rmt-calendar-sticky memo"><span class="rmt-calendar-sticky-pin" aria-hidden="true"></span><small>STICKY NOTE</small><h3>${esc(textOf(item.title) || '日子')}</h3><p>${esc(textOf(item.text) || textOf(item.note) || textOf(item.summary))}</p><footer>${esc(textOf(item.date))}</footer></article>`).join('');
+    return `<div class="rmt-calendar-shell rmt-calendar-v3">${notes}</div>`;
+}
+
+function travelSurface(session) {
+    const locations = Array.isArray(session.locations) ? session.locations : (Array.isArray(session.routes) ? session.routes : []);
+    if (!locations.length) return '';
+    return locations.map(item => `<section class="rmt-travel-postcard"><div class="rmt-travel-postcard-back"><div class="rmt-travel-postcard-copy"><b>${esc(textOf(item.name) || textOf(item.title) || '地点')}</b><p>${esc(textOf(item.note) || textOf(item.summary) || textOf(item.description))}</p></div></div></section>`).join('');
+}
+
+function endingSurface(session) {
+    const endings = Array.isArray(session.endings) ? session.endings : [];
+    const replays = Array.isArray(session.confessionReplays) ? session.confessionReplays : [];
+    if (!endings.length && !replays.length) return '';
+    const routes = endings.map(item => `<article class="rmt-ending-detail"><div class="rmt-ending-head"><h2>${esc(textOf(item.title) || '结局')}</h2></div><p class="rmt-ending-prose">${esc(textOf(item.summary) || textOf(item.epilogue) || textOf(item.body))}</p></article>`).join('');
+    const confessions = replays.map(item => `<div class="rmt-confession-card"><b>${esc(textOf(item.title))}</b><span>${esc(textOf(item.scene) || textOf(item.subtitle))}</span></div>`).join('');
+    return `<div class="rmt-ending">${routes}${confessions}</div>`;
+}
+
+function butterflySurface(session) {
+    const nodes = Array.isArray(session.nodes) ? session.nodes : [];
+    if (!nodes.length) return '';
+    const blocks = nodes.map(node => `<section class="rmt-terminal-block rmt-observation-screen"><div class="rmt-terminal-section-title">${esc(textOf(node.label) || textOf(node.code) || '观测')}</div><div class="rmt-mono">${esc(textOf(node.monologue) || textOf(node.intervention) || textOf(node.systemNote))}</div></section>`).join('');
+    return `<div class="rmt-crt"><div class="rmt-crt-content">${blocks}</div></div>`;
+}
+
+function songSurface(session) {
+    const songs = Array.isArray(session.songs) ? session.songs : [];
+    if (!songs.length) return '';
+    const sheets = songs.map(song => `<article class="rmt-song-sheet rmt-song-readable"><header><h2>${esc(textOf(song.title) || '印象曲')}</h2><p>演唱者 · ${esc(textOf(song.singer))}</p></header><section class="rmt-song-style"><h3>曲风</h3><p>${esc(textOf(song.styleDescription))}</p></section><section class="rmt-song-lyrics"><h3>完整歌词</h3><pre>${esc(textOf(song.lyrics))}</pre></section></article>`).join('');
+    return `<main class="rmt-theme-song"><div class="rmt-song-layout has-songs">${sheets}</div></main>`;
+}
+
+function bedtimeSurface(session) {
+    const stories = Array.isArray(session.stories) ? session.stories : [];
+    if (!stories.length) return '';
+    const html = stories.map(story => {
+        const chapters = (Array.isArray(story.chapters) ? story.chapters : []).map((chapter, index) => `<section class="rmt-bedtime-chapter"><small>第 ${index + 1} 章</small><h3>${esc(textOf(chapter.title) || '本章')}</h3><p>${esc(textOf(chapter.text))}</p></section>`).join('');
+        return `<article class="rmt-bedtime-reader"><header><small>${esc(textOf(story.genre))} · 睡前故事</small><h2>${esc(textOf(story.title) || '故事')}</h2><p>${esc(textOf(story.premise))}</p></header>${chapters}</article>`;
+    }).join('');
+    return `<section class="rmt-bedtime">${html}</section>`;
+}
+
+function pastSurface(session) {
+    const episodes = Array.isArray(session.episodes) ? session.episodes : [];
+    if (session.kind === 'timeEcho') return '';
+    if (!episodes.length) return '';
+    const html = episodes.map(episode => {
+        const opening = episode?.opening ? `<article class="rmt-past-slip"><h3>${esc(textOf(episode.opening.motif) || textOf(episode.title))}</h3><p>${esc(textOf(episode.opening.text))}</p></article>` : '';
+        const dossiers = (Array.isArray(episode?.dossiers) ? episode.dossiers : []).map(dossier => `<article class="rmt-past-paper"><header><h3>${esc(textOf(dossier.title))}</h3></header><p>${esc(textOf(dossier.synopsis))}</p></article>`).join('');
+        return `<article class="rmt-past-draw is-open"><h3>${esc(textOf(episode.title))}</h3>${opening}${dossiers}</article>`;
+    }).join('');
+    return `<section class="rmt-past-lives">${html}</section>`;
+}
+
+function timeSurface(session) {
+    const episodes = Array.isArray(session.episodes) ? session.episodes : [];
+    if (!episodes.length) return '';
+    const html = episodes.map(episode => {
+        const lines = Array.isArray(episode?.lines) ? episode.lines : (Array.isArray(episode?.dialogue) ? episode.dialogue : []);
+        const body = lines.map(line => {
+            const speaker = line?.speaker === 'b' ? 'b' : line?.speaker === 'a' ? 'a' : 'narrator';
+            const text = textOf(line?.text) || textOf(line);
+            return text ? `<article class="rmt-time-line" data-rmt-time-speaker="${speaker}"><p>${esc(text)}</p></article>` : '';
+        }).join('');
+        return `<div><h3>${esc(textOf(episode.title))}</h3>${body}</div>`;
+    }).join('');
+    return `<section class="rmt-time-stories">${html}</section>`;
+}
+
+function moduleSurface(session) {
+    const kind = typeof session.kind === 'string' ? session.kind : '';
+    if (kind === 'relations') return relationsSurface(session);
+    if (kind === 'album') return albumSurface(session);
+    if (kind === 'adv') return advSurface(session);
+    if (kind === 'inbox') return inboxSurface(session);
+    if (kind === 'cabinet') return cabinetSurface(session);
+    if (kind === 'room') return roomSurface(session);
+    if (kind === 'items') return itemsSurface(session);
+    if (kind === 'calendar') return calendarSurface(session);
+    if (kind === 'travel') return travelSurface(session);
+    if (kind === 'ending') return endingSurface(session);
+    if (kind === 'butterfly') return butterflySurface(session);
+    if (kind === 'themeSong') return songSurface(session);
+    if (kind === 'bedtime') return bedtimeSurface(session);
+    if (kind === 'pastLives') return pastSurface(session);
+    if (kind === 'timeEcho') return timeSurface(session);
+    return '';
 }
 
 function plainHtml(session) {
@@ -257,6 +440,7 @@ export function roundReadingHtml(session, identity = {}) {
     };
     const heart = heartHtml(session, who);
     const phone = phoneHtml(session);
-    if (heart || phone) return `<div class="rmt-round-reading">${heart}${phone}</div>`;
+    const surface = moduleSurface(session);
+    if (heart || phone || surface) return `<div class="rmt-round-reading">${heart}${phone}${surface}</div>`;
     return plainHtml(session);
 }

@@ -28,26 +28,12 @@ export function floorShellCss() {
 .rmt-heart-letter-seal{display:grid;justify-items:center;gap:8px;width:100%;margin:0;padding:0;border:0;background:transparent;color:#6a4a58;box-shadow:none;font:inherit;text-align:center;cursor:pointer}
 .rmt-heart-letter-seal small{color:#8d6d78;font-size:12px;line-height:1.4}
 .rmt-envelope{display:block;width:min(100%,240px);height:auto;filter:drop-shadow(0 12px 16px rgba(90,24,48,.16))}
-.rmt-heart-letter.is-writing .rmt-heart-letter-seal{cursor:default}
+.rmt-heart-letter.is-writing .rmt-heart-letter-seal{display:grid!important;cursor:default}
+.rmt-heart-letter.is-writing .rmt-heart-letter-paper{display:none!important}
 .rmt-heart-letter-paper{margin-top:8px;min-width:0;overflow:hidden;padding:16px 14px 12px;border:1px solid #e6d3c4;border-left:7px solid #e99ab9;border-radius:4px 16px 16px 4px;background:#fff8ee;background-image:repeating-linear-gradient(0deg,transparent,transparent 22px,rgba(180,140,120,.16) 23px);color:#5c463c}
 .rmt-heart-letter-paper p{margin:0 0 10px;font-size:15px;line-height:1.6}
 .rmt-heart-letter-close{margin:0 0 12px}
-.rmt-heart-letter .rmt-heart-line{display:flex;gap:12px;align-items:flex-start;margin:14px 0}
-.rmt-heart-letter .rmt-heart-line-avatar{width:42px;height:42px;border-radius:50%;overflow:hidden;flex:none;display:grid;place-items:center;background:#edf3f6;color:#7c8da0}
-.rmt-heart-letter .rmt-heart-line-avatar img{width:100%;height:100%;object-fit:cover}
-.rmt-heart-letter .rmt-heart-line>div{min-width:0;background:#fff;border:1px solid #e3ebf0;border-radius:6px 18px 18px 18px;padding:10px 14px}
-.rmt-heart-letter .rmt-heart-line small{display:block;margin-bottom:4px;color:#8d6d78;font-size:12px}
-.rmt-heart-letter .rmt-heart-line.user{flex-direction:row-reverse}
-.rmt-heart-letter .rmt-heart-line.user>div{background:#fff0f5;border-radius:18px 6px 18px 18px}
-.rmt-heart-letter .rmt-heart-narration{margin:10px 4px;color:#6d7c8a;line-height:1.7}
 .rmt-heart-letter .rmt-letter-piece h3{margin:16px 0 8px;font-size:16px}
-.rmt-heart-letter .rmt-phone{display:flex;justify-content:center;margin:8px 0}
-.rmt-heart-letter .rmt-phone-shell{width:min(360px,100%);box-sizing:border-box;border:6px solid #222b33;border-radius:36px;padding:12px 12px 16px;background:#eaf0f3;color:#20303d}
-.rmt-heart-letter .rmt-phone-notch{width:72px;height:5px;margin:0 auto 10px;border-radius:999px;background:rgba(39,57,65,.28)}
-.rmt-heart-letter .rmt-phone-message{margin:8px 0;max-width:86%}
-.rmt-heart-letter .rmt-phone-message-owner{margin-left:auto}
-.rmt-heart-letter .rmt-phone-message p{margin:4px 0 0;padding:8px 10px;border-radius:12px;background:#fff}
-.rmt-heart-letter .rmt-phone-message-owner p{background:#d9ecff}
 .rmt-heart-letter .rmt-floor-body{max-height:70vh;max-width:100%;min-width:0;margin-top:10px;overflow:auto}
 /* 模块页按整页两栏排。在信里改成单栏，生图设置不占信纸。 */
 .rmt-heart-letter .rmt-floor-body .rmt-cg-format,
@@ -71,6 +57,16 @@ export function floorShellCss() {
 .rmt-heart-letter.is-waiting .rmt-heart-letter-seal{cursor:default}
 #chat .mes.rmt-floor-return{outline:2px solid #e99ab9;outline-offset:2px}
 `;
+}
+
+export const GENERATION_STALL_MS = 90_000;
+
+// 没有正在跑的任务，进度签名也一直不变，超过 90 秒就当失败。有请求在跑就重新计时。
+export function generationStall({ active = false, running = false, signature = '', previous = null, now = 0 } = {}) {
+    if (!active || running) return { stalled: false, since: 0, signature: '' };
+    const same = previous && previous.signature === signature && Number(previous.since) > 0;
+    const since = same ? previous.since : now;
+    return { stalled: now - since >= GENERATION_STALL_MS, since, signature };
 }
 
 export function knownProgress(done, total) {
@@ -97,7 +93,7 @@ export function toastForTransition(previousPhase, nextPhase, face = {}, { initia
         return { level: 'success', title: '心口一热', message: `今天留下了新的回忆。${face.line || '一段新的回忆'}。点开楼层下面，就能看见。` };
     }
     if (nextPhase === 'failed') {
-        return { level: 'error', title: '这份回忆停住了', message: '已经记下的部分还在。楼层下面不会把它当成已经拆开。' };
+        return { level: 'error', title: '这份回忆停住了', message: '可以补全没写完的部分，或再试一次。任务中心也能看到。' };
     }
     if (nextPhase === 'achievement-pending') {
         return { level: 'warning', title: '回忆先留着', message: '成就还缺一笔。先不拆开，写好的部分还在。' };
@@ -127,6 +123,7 @@ export function shellView(input = {}) {
         blocksInput: false, showReveal: false, progress: null, moduleId, revealId,
         canRetry: false, canRepairAchievement: false, canComplete: false, canRedo: false,
         canOpen: false,
+        moduleTitle: typeof input.moduleTitle === 'string' ? input.moduleTitle : '',
     };
     const written = complete && input.canOpen === true && !running;
     if (complete && revealStatus === 'achievement_pending') {
@@ -141,8 +138,14 @@ export function shellView(input = {}) {
             title: letterTitle(input), achievementCopy: input.achievementCopy || '', detail: '点击查看详情',
         };
     }
-    if (input.failureRecoverable === true) {
-        return { ...face, phase: 'failed', canRetry: true, title: '这份回忆可以再续', detail: '已经记下的部分还在，不会把它当成已经拆开。' };
+    if (input.failureRecoverable === true || input.stalled === true) {
+        return {
+            ...face, phase: 'failed', canRetry: true, canComplete: true,
+            title: '这份回忆停住了',
+            detail: input.stalled === true
+                ? '90 秒没有新的进度。可以补全没写完的部分，或再试一次。'
+                : '已经记下的部分还在。可以补全，或再试一次。',
+        };
     }
     if (input.paused === true) {
         return { ...face, phase: 'paused', title: '先停在这里', detail: '等待恢复。已经写好的部分不会重做。' };
