@@ -1,4 +1,4 @@
-// 单请求模块的正文和成就末包。成就失败只留下待补标记，不另发成就请求，也不重跑正文。
+// 单请求模块的正文和成就。成就失败只留下待补标记，不重跑正文。补成就是另一次单独请求，由信封上的按钮或自动重试发出。
 import * as auto_memory_plan from './planStore.js';
 
 const SINGLE_REQUEST = new Set(['cabinet', 'calendar', 'relations', 'inbox']);
@@ -120,4 +120,36 @@ export function settleCombined({
 export function repairAchievementRequest({ confirmed = false, moduleSaved = false } = {}) {
     if (confirmed !== true || moduleSaved !== true) return { action: 'refused', requests: 0, redoesModule: false };
     return { action: 'repair', requests: 1, redoesModule: false, extraAchievementRequest: false };
+}
+
+export function replacePendingAchievement({
+    snapshot, revealId = '', packet = null, allowHistorical = false, sourceMemoryIds = [], now = 0,
+} = {}) {
+    const current = (snapshot?.revealRecords || []).find(item => item.id === revealId);
+    if (!current || current.status !== 'achievement_pending') {
+        return { action: 'idle', requests: 0, reveal: null, snapshot, extraAchievementRequest: false };
+    }
+    const ids = sourceMemoryIds.length ? sourceMemoryIds : current.sourceMemoryIds;
+    const parsed = classifyAchievement(packet, { allowHistorical, sourceMemoryIds: ids });
+    if (!parsed.ok) {
+        return { action: 'achievement-pending', requests: 1, reveal: current, snapshot, achievement: null, extraAchievementRequest: false };
+    }
+    const savedAchievementId = parsed.achievement.id || token('achv');
+    const reveal = auto_memory_plan.parseRevealRecord({
+        ...current,
+        achievementId: savedAchievementId,
+        status: 'ready',
+    });
+    const revealRecords = snapshot.revealRecords.map(item => (item.id === revealId ? reveal : item));
+    const next = auto_memory_plan.parseAutoMemorySnapshot({
+        plan: bumpedPlan(snapshot, now),
+        revealRecords,
+        drawTickets: snapshot.drawTickets,
+        modulePlan: snapshot.modulePlan,
+    });
+    return {
+        action: 'reveal', requests: 1, extraAchievementRequest: false, reveal,
+        achievement: { ...parsed.achievement, id: savedAchievementId },
+        snapshot: next,
+    };
 }

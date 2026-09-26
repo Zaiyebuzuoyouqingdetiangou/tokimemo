@@ -20,6 +20,7 @@ export function floorShellCss() {
 .rmt-floor-shell .rmt-floor-pace b{font-weight:650}
 .rmt-floor-shell .rmt-floor-pace small{color:#7b8798}
 .rmt-floor-shell .rmt-floor-fill,.rmt-floor-shell .rmt-heart-letter .rmt-btn{min-height:28px;padding:2px 10px}
+.rmt-heart-letter-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
 .rmt-heart-letter{width:min(100%,320px);max-width:100%;min-width:0;margin:10px 0 4px;color:#5c463c}
 .rmt-heart-letter:has(.rmt-heart-letter-paper:not([hidden])){width:min(100%,640px)}
 .rmt-heart-letter:has(.rmt-heart-letter-paper:not([hidden])) .rmt-heart-letter-seal{display:none}
@@ -97,15 +98,19 @@ export function shellView(input = {}) {
     const revealStatus = input.revealStatus || '';
     const moduleId = typeof input.moduleId === 'string' ? input.moduleId : '';
     const revealId = typeof input.revealId === 'string' ? input.revealId : '';
-    const face = { blocksInput: false, showReveal: false, progress: null, moduleId, revealId };
+    const running = steps.some(step => step?.status === 'running');
+    const face = {
+        blocksInput: false, showReveal: false, progress: null, moduleId, revealId,
+        canRetry: false, canRepairAchievement: false,
+    };
     if (complete && revealStatus === 'achievement_pending') {
-        return { ...face, phase: 'achievement-pending', title: '回忆先留着', detail: '成就还缺一笔，先不拆开。' };
+        return { ...face, phase: 'achievement-pending', canRepairAchievement: true, title: '回忆先留着', detail: '成就还缺一笔。可以补一次，不必重写正文。' };
     }
     if (complete && (revealStatus === 'ready' || revealStatus === 'opened')) {
         return { ...face, phase: 'reveal', showReveal: true, title: input.revealLine || revealFace(input), detail: '点击查看详情' };
     }
     if (input.failureRecoverable === true) {
-        return { ...face, phase: 'failed', title: '这份回忆可以再续', detail: '已经记下的部分还在，不会把它当成已经拆开。' };
+        return { ...face, phase: 'failed', canRetry: true, title: '这份回忆可以再续', detail: '已经记下的部分还在，不会把它当成已经拆开。' };
     }
     if (input.paused === true) {
         return { ...face, phase: 'paused', title: '先停在这里', detail: '等待恢复。已经写好的部分不会重做。' };
@@ -113,9 +118,10 @@ export function shellView(input = {}) {
     if (steps.length && !complete) {
         const started = steps.some(step => step?.status === 'running' || step?.status === 'completed' || step?.status === 'failed');
         if (!started) return { ...face, phase: 'planning', title: '正在建立目录', detail: '目录还没定下来，先不显示第几步。' };
-        if (allDone) return { ...face, phase: 'generating', title: '回忆生成中', detail: '还没整份核对完，先不拆开。' };
+        const canRetry = !running;
+        if (allDone) return { ...face, phase: 'generating', canRetry, title: '回忆生成中', detail: '还没整份核对完，先不拆开。' };
         const progress = knownProgress(done, steps.length);
-        return { ...face, phase: 'generating', progress, title: '正在把这段回忆写下来', detail: progress ? `正在生成 ${progress.done} / ${progress.total}` : '正在生成' };
+        return { ...face, phase: 'generating', canRetry, progress, title: '正在把这段回忆写下来', detail: progress ? `正在生成 ${progress.done} / ${progress.total}` : '正在生成' };
     }
     if (!steps.length && input.roundReveal === true && (revealStatus === 'ready' || revealStatus === 'opened')) {
         return { ...face, phase: 'reveal', showReveal: true, title: input.revealLine || revealFace(input), detail: '点击查看详情' };

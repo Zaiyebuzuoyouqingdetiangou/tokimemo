@@ -26,6 +26,7 @@
   "autoMemory/moduleRegistry.js",
   "autoMemory/moduleRunner.js",
   "autoMemory/planStore.js",
+  "autoMemory/redo.js",
   "autoMemory/scheduler.js",
   "autoMemory/shellState.js",
   "autoMemory/streamGate.js",

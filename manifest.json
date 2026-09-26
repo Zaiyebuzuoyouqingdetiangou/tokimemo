@@ -1,15 +1,15 @@
 {
   "display_name": "心迹回廊",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.99.76-r84.128-achievement-library",
+  "js": "index.js?heartbeat=0.99.77-r84.129-letter-repair",
   "author": "Toto",
-  "version": "0.99.76",
+  "version": "0.99.77",
   "auto_update": true,
   "minimum_client_version": "1.13.0",
   "hooks": {
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r84.128：每份回忆的成就和第一次请求写在一起，并追加进成就库，手动成就仍留在库里。",
+  "description": "r84.129：成就没写上可以补一次，回忆没写完可以重试；抽签楼重 roll 或在设置里重写时，按原抽签、重抽或自选再生成。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }

@@ -21,6 +21,9 @@ import * as core_contextTags from '../core/contextTags.js';
 import * as core_chatReadRange from '../core/chatReadRange.js';
 import * as ui_overlay from './overlay.js';
 import * as auto_memory_plan from '../autoMemory/planStore.js';
+import * as auto_memory_redo from '../autoMemory/redo.js';
+import * as auto_memory_registry from '../autoMemory/moduleRegistry.js';
+import * as auto_memory_scheduler from '../autoMemory/scheduler.js';
 import * as auto_memory_wizard from './autoMemoryWizard.js';
 import * as wizard_plan from '../autoMemory/wizardPlan.js';
 import * as ui_scenePicker from './scenePicker.js';
@@ -37,6 +40,21 @@ export const SETTINGS_MOUNT_UNHANDLED = Symbol('SETTINGS_MOUNT_UNHANDLED');
 // 从 ui/settingsPanel.js 原样搬出（重构阶段 2），声明文本一字未改；ui/settingsPanel.js 仍转发原有导出。
 
 let homeSettingsPanel = null;
+
+async function runCurrentMemoryRedo(panel, mode, moduleId) {
+    const status = panel.querySelector('[data-rmt-auto-memory-redo-status]');
+    if (status) status.textContent = '正在重写这一份回忆…';
+    try {
+        const result = await auto_memory_scheduler.regenerateCurrentMemory({ mode, moduleId });
+        if (!status) return;
+        if (result?.action === 'idle') status.textContent = '还没有可以重写的这一份。先等抽签写过一次。';
+        else if (result?.action === 'busy') status.textContent = '这一份正在写，等它停下来再点。';
+        else if (result?.action === 'failed') status.textContent = '这一次没写完。可以再点一次。';
+        else status.textContent = mode === 'redraw' ? '已按新抽到的模块再写。' : mode === 'pick' ? '已按选中的模块再写。' : '已按原来抽中的模块再写。';
+    } catch (error) {
+        if (status) status.textContent = core_text.safeErrorSummary(error);
+    }
+}
 
 let homeSettingsEpoch = -1;
 
@@ -330,6 +348,8 @@ function bindSettingsChange(panel, tagDraft, tagStatus, tagState) {
             core_settings.updatePluginSettings({ autoRetryEnabled: !!target.checked });
             const count = panel.querySelector('[data-rmt-auto-retry-count]');
             if (count) count.disabled = !target.checked;
+            const memoryRetry = panel.querySelector('[data-rmt-auto-memory-retry]');
+            if (memoryRetry) memoryRetry.checked = !!target.checked;
             return;
         }
         if (target.matches?.('[data-rmt-auto-retry-count]')) {
@@ -585,6 +605,29 @@ function bindSettingsClick(panel, tagDraft, tagStatus, tagState, savedTagDraft, 
         if (event.target.closest?.('[data-rmt-creative-cancel]')) { refreshCreative(); panel.querySelector('[data-rmt-creative-status]').textContent = '已撤销未保存编辑。'; return; }
         if (event.target.closest?.('[data-rmt-auto-memory-wizard]')) {
             auto_memory_wizard.openAutoMemoryWizard();
+            return;
+        }
+        const redoPick = event.target.closest?.('[data-rmt-auto-memory-pick-module]');
+        if (redoPick) {
+            void runCurrentMemoryRedo(panel, 'pick', redoPick.getAttribute('data-rmt-auto-memory-pick-module') || '');
+            return;
+        }
+        const redoButton = event.target.closest?.('[data-rmt-auto-memory-redo]');
+        if (redoButton) {
+            const mode = redoButton.getAttribute('data-rmt-auto-memory-redo') || '';
+            if (mode === 'pick') {
+                const host = panel.querySelector('[data-rmt-auto-memory-pick]');
+                if (host) {
+                    host.hidden = !host.hidden;
+                    if (!host.hidden && !host.childElementCount) {
+                        host.innerHTML = auto_memory_redo.choosableModules(auto_memory_registry.listAutoMemoryModules())
+                            .map(item => `<button type="button" class="menu_button" data-rmt-auto-memory-pick-module="${core_text.esc(item.id)}">${core_text.esc(item.title)}</button>`)
+                            .join('');
+                    }
+                }
+                return;
+            }
+            void runCurrentMemoryRedo(panel, mode, '');
             return;
         }
         if (event.target.closest?.('[data-rmt-auto-memory-restore]')) {

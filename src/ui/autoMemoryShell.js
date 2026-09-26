@@ -25,6 +25,7 @@ import * as ui_taskCenter from './taskCenter.js';
 let cleanup = null;
 let lastPhase = '';
 let sawPhase = false;
+let autoRepairLatch = '';
 let timer = 0;
 let letterSession = null;
 let letterMode = '';
@@ -159,9 +160,13 @@ function markup(view) {
             : '';
         return `<p class="rmt-floor-pace" data-rmt-floor-pace><span>留忆</span><b>${core_text.esc(view.detail)}</b>${gap}</p>`;
     }
-    const retry = view.phase === 'failed'
+    const repair = view.canRepairAchievement
+        ? '<button type="button" class="rmt-btn" data-rmt-floor-achievement>补成就</button>'
+        : '';
+    const retry = view.canRetry
         ? '<button type="button" class="rmt-btn" data-rmt-floor-retry>重试</button>'
         : '';
+    const actions = repair || retry ? `<div class="rmt-heart-letter-actions">${repair}${retry}</div>` : '';
     const revealPaper = view.phase === 'reveal' && view.showReveal;
     const heading = revealPaper ? '一封写给你的信' : view.title;
     const aside = revealPaper ? '点开看看' : view.detail;
@@ -175,8 +180,8 @@ function markup(view) {
         <div class="rmt-heart-letter-paper" data-rmt-letter-paper hidden>
             ${paper}
             <div class="rmt-floor-body" data-rmt-floor-body data-rmt-reveal="${core_text.esc(view.revealId)}" data-rmt-module="${core_text.esc(view.moduleId)}"></div>
-            ${retry}
         </div>
+        ${actions}
     </article>`;
 }
 
@@ -221,7 +226,10 @@ function paint(context) {
         const detail = host.querySelector('[data-rmt-letter-detail]');
         if (title && view.phase !== 'reveal') title.textContent = view.title;
         if (detail) detail.textContent = view.detail;
-        if (title || detail || (paper && !paper.hidden)) return;
+        if (title || detail || (paper && !paper.hidden)) {
+            queueAutomaticRepair(view);
+            return;
+        }
     }
     const paperWasOpen = paper && !paper.hidden;
     host.innerHTML = markup(view);
@@ -232,6 +240,23 @@ function paint(context) {
         if (seal) seal.hidden = true;
     }
     try { ui_taskCenter.syncLiveTaskStrip(); } catch { /* 任务条刷新失败时，楼层下面的状态仍保留。 */ }
+    queueAutomaticRepair(view);
+}
+
+function queueAutomaticRepair(view) {
+    if (!view?.canRetry && !view?.canRepairAchievement) {
+        autoRepairLatch = '';
+        return;
+    }
+    if (core_settings.getPluginSettings().autoRetryEnabled !== true) return;
+    const token = `${view.phase}|${view.revealId}|${view.moduleId}|${view.canRepairAchievement ? 'achievement' : 'module'}`;
+    if (autoRepairLatch === token) return;
+    autoRepairLatch = token;
+    void auto_memory_scheduler.automaticRepairIfNeeded().then(did => {
+        if (did) sync();
+    }).catch(error => {
+        console.warn('[HeartbeatMemories] automatic repair skipped', core_text.safeErrorDiagnostic(error));
+    });
 }
 
 function sync() {
@@ -323,6 +348,17 @@ function onClick(event) {
         event.stopPropagation();
         fill.disabled = true;
         void auto_memory_scheduler.fillFloorGap().finally(() => { fill.disabled = false; sync(); });
+        return;
+    }
+    const repair = event.target?.closest?.('[data-rmt-floor-achievement]');
+    if (repair) {
+        event.preventDefault();
+        event.stopPropagation();
+        repair.disabled = true;
+        void auto_memory_scheduler.repairFloorAchievement().catch(error => {
+            console.warn('[HeartbeatMemories] achievement repair skipped', core_text.safeErrorDiagnostic(error));
+            globalThis.toastr?.error?.('这一次没能补上成就。回忆还在，可以再点一次。', '心口顿了一下');
+        }).finally(() => { repair.disabled = false; sync(); });
         return;
     }
     const retry = event.target?.closest?.('[data-rmt-floor-retry]');

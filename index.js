@@ -1,5 +1,5 @@
-const VERSION = '0.99.76';
-const BUILD = '0.99.76-r84.128-achievement-library';
+const VERSION = '0.99.77';
+const BUILD = '0.99.77-r84.129-letter-repair';
 
 const SETTINGS_ID = 'heartbeat_memories_settings';
 const MENU_ID = 'heartbeat_memories_menu_item';

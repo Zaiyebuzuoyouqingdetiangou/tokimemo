@@ -8,6 +8,8 @@ import * as auto_memory_gate from './incrementalGate.js';
 import * as auto_memory_host from './moduleHost.js';
 import * as auto_memory_lease from './instanceLease.js';
 import * as auto_memory_plan from './planStore.js';
+import * as auto_memory_combined from './combinedResult.js';
+import * as auto_memory_redo from './redo.js';
 import * as auto_memory_registry from './moduleRegistry.js';
 import * as chat_read_range from '../core/chatReadRange.js';
 import * as core_cache from '../core/cache.js';
@@ -28,6 +30,9 @@ let lastSignature = '';
 const handledFloors = new Map();
 const inflightScopes = new Set();
 const noticedGroups = new Set();
+const autoUsed = new Map();
+let autoRepairInflight = false;
+let redoInflight = false;
 
 function ownerId() {
     if (!leaseOwner) leaseOwner = `tab-${Math.random().toString(36).slice(2, 10)}`;
@@ -85,7 +90,42 @@ async function rememberTitle(context, result) {
 async function runModule(snapshot, persist, context) {
     const result = await auto_memory_host.runModulePlan(snapshot, persist, context, Date.now());
     await rememberTitle(context, result);
-    return result;
+    return followIfEnabled(context, result);
+}
+
+function moduleStillOpen(result) {
+    const steps = result?.snapshot?.modulePlan?.steps || [];
+    return steps.some(step => step.status !== 'completed');
+}
+
+async function followIfEnabled(context, result) {
+    const settings = core_settings.getPluginSettings();
+    if (settings.autoRetryEnabled !== true || autoRepairInflight) return result;
+    const limit = Math.max(1, Math.min(5, Math.floor(Number(settings.autoRetryCount)) || 1));
+    autoRepairInflight = true;
+    let current = result;
+    try {
+        while (current?.action === 'achievement-pending' || moduleStillOpen(current)) {
+            const drawId = current.snapshot?.modulePlan?.drawId || current.reveal?.id || 'round';
+            const kind = current.action === 'achievement-pending' ? 'achievement' : 'module';
+            const key = `${drawId}|${kind}`;
+            const used = autoUsed.get(key) || 0;
+            if (!auto_memory_redo.shouldAutoRepair({ enabled: true, used, limit })) break;
+            autoUsed.set(key, used + 1);
+            const next = kind === 'achievement'
+                ? await repairFloorAchievement(context)
+                : await resumeFloorPlan();
+            if (!next || next.action === 'failed') {
+                if (!auto_memory_redo.retryableFailure(next?.error)) autoUsed.set(key, limit);
+                if (next?.action === 'failed') continue;
+                break;
+            }
+            current = next;
+        }
+    } finally {
+        autoRepairInflight = false;
+    }
+    return current;
 }
 
 async function persistSnapshot(context, next) {
@@ -208,6 +248,7 @@ async function runHostRound() {
             if (result.action === 'arm' || result.action === 'noop' || result.action === 'drawn' || result.action === 'wait') {
                 handledFloors.set(scope, floor);
             }
+            if (result.action === 'drawn') stampDrawSource(context, result.drawId);
             ui_countdown.refreshAutoMemoryCountdown();
         } finally {
             inflightScopes.delete(scope);
@@ -314,10 +355,202 @@ export async function resumeFloorPlan() {
     const context = core_context.currentCharacterGuard();
     const snapshot = auto_memory_plan.readAutoMemoryMetadata(context.chatMetadata);
     if (!snapshot?.modulePlan) return { action: 'idle' };
+    const retryPlan = auto_memory_plan.parseModulePlan(auto_memory_redo.modulePlanForRetry(snapshot.modulePlan));
+    const prepared = auto_memory_plan.parseAutoMemorySnapshot({ ...snapshot, modulePlan: retryPlan });
     const persist = next => persistSnapshot(context, next);
-    const result = await runModule(snapshot, persist, context);
+    const result = await auto_memory_host.runModulePlan(prepared, persist, context, Date.now());
+    await rememberTitle(context, result);
     ui_countdown.refreshAutoMemoryCountdown();
-    return result;
+    return followIfEnabled(context, result);
+}
+
+export async function repairFloorAchievement(context = core_context.currentCharacterGuard()) {
+    const snapshot = auto_memory_plan.readAutoMemoryMetadata(context.chatMetadata);
+    const reveal = auto_memory_redo.pendingReveal(snapshot);
+    if (!reveal) return { action: 'idle', requests: 0 };
+    const item = auto_memory_registry.autoMemoryModuleById(reveal.moduleId);
+    const prompt = auto_memory_redo.achievementRepairPrompt({
+        moduleTitle: item?.title || reveal.moduleId,
+        sourceMemoryIds: reveal.sourceMemoryIds,
+        allowHistorical: item?.contentKind === 'historical',
+    });
+    let packet = null;
+    try {
+        const raw = await generation_request.requestJson(prompt, '补这一份成就', {
+            mode: 'auto-memory',
+            taskKey: `auto-memory-achievement:${reveal.id}`,
+        });
+        packet = auto_memory_redo.achievementPacket(raw);
+    } catch (error) {
+        return { action: 'failed', requests: 1, error, snapshot };
+    }
+    const replaced = auto_memory_combined.replacePendingAchievement({
+        snapshot,
+        revealId: reveal.id,
+        packet,
+        allowHistorical: item?.contentKind === 'historical',
+        sourceMemoryIds: reveal.sourceMemoryIds,
+        now: Date.now(),
+    });
+    if (replaced.snapshot && replaced.snapshot !== snapshot) await persistSnapshot(context, replaced.snapshot);
+    await rememberTitle(context, replaced);
+    ui_countdown.refreshAutoMemoryCountdown();
+    return replaced;
+}
+
+export async function automaticRepairIfNeeded() {
+    if (autoRepairInflight || redoInflight) return false;
+    if (core_settings.getPluginSettings().autoRetryEnabled !== true) return false;
+    let context;
+    try { context = core_context.currentCharacterGuard(); }
+    catch { return false; }
+    const snapshot = auto_memory_plan.readAutoMemoryMetadata(context.chatMetadata);
+    if (!snapshot) return false;
+    const pending = auto_memory_redo.pendingReveal(snapshot);
+    const steps = snapshot.modulePlan?.steps || [];
+    const running = steps.some(step => step.status === 'running');
+    const incomplete = steps.some(step => step.status !== 'completed');
+    if (running || (!pending && !incomplete)) return false;
+    const seed = pending && !incomplete
+        ? { action: 'achievement-pending', reveal: pending, snapshot }
+        : { action: 'saved', snapshot };
+    const followed = await followIfEnabled(context, seed);
+    return followed !== seed;
+}
+
+function stampDrawSource(context, drawId) {
+    if (!context?.chatMetadata || !drawId) return;
+    const snapshot = auto_memory_plan.readAutoMemoryMetadata(context.chatMetadata);
+    const ticket = (snapshot?.drawTickets || []).find(item => item.id === drawId) || auto_memory_redo.currentDrawTicket(snapshot);
+    if (!ticket) return;
+    const latest = core_settings.getPluginSettings().autoMemoryLatestFloor === true;
+    const stamp = auto_memory_redo.sourceStamp(context.chat, ticket.dueFloor, latest, ticket.id);
+    if (!stamp) return;
+    context.chatMetadata[auto_memory_redo.SOURCE_STAMP_KEY] = stamp;
+    context.saveMetadataDebounced?.();
+}
+
+async function noteSwipedFloor(messageId) {
+    const index = Number(messageId);
+    if (!Number.isInteger(index) || index < 0 || redoInflight || autoRepairInflight) return;
+    let context;
+    try { context = core_context.getContext(); }
+    catch { return; }
+    const message = context?.chat?.[index];
+    if (!message || message.is_user === true || message.is_system === true) return;
+    let snapshot = null;
+    try { snapshot = auto_memory_plan.readAutoMemoryMetadata(context.chatMetadata); }
+    catch { return; }
+    const ticket = auto_memory_redo.currentDrawTicket(snapshot);
+    if (!ticket || snapshot?.plan?.enabled !== true) return;
+    const latest = core_settings.getPluginSettings().autoMemoryLatestFloor === true;
+    const located = auto_memory_redo.drawFloorMessage(context.chat, ticket.dueFloor, latest);
+    const stamp = context.chatMetadata?.[auto_memory_redo.SOURCE_STAMP_KEY] || null;
+    const hash = auto_memory_redo.bodyHash(message.mes);
+    if (!auto_memory_redo.swipeNeedsRegenerate({
+        stamp, messageIndex: index, hash, ticketMessageIndex: located?.index,
+    })) return;
+    await regenerateCurrentMemory({ mode: 'keep' });
+}
+
+async function installRedraw(context, snapshot, ticket, moduleId) {
+    const item = auto_memory_registry.autoMemoryModuleById(moduleId);
+    if (!item?.inDrawPool) return null;
+    const facts = auto_memory_host.collectModuleFacts(moduleId, context, {
+        chatId: core_context.getChatId(context),
+        archiveRevision: ticket.archiveRevision,
+        sourceMemoryIds: ticket.sourceMemoryIds,
+        drawId: ticket.id,
+    });
+    const built = await item.plan?.(facts);
+    if (!built?.steps?.length) return null;
+    const modulePlan = auto_memory_plan.parseModulePlan(auto_memory_redo.resetModuleSteps({
+        ...built,
+        drawId: ticket.id,
+        moduleId,
+        sourceMemoryIds: ticket.sourceMemoryIds,
+    }));
+    const candidates = ticket.candidates.some(row => row.id === moduleId)
+        ? ticket.candidates
+        : [...ticket.candidates, { id: moduleId, weight: 1 }];
+    const nextTicket = auto_memory_plan.parseDrawTicket({
+        ...ticket, candidates, selectedModuleId: moduleId, status: 'drawn',
+    });
+    return auto_memory_plan.parseAutoMemorySnapshot({
+        plan: auto_memory_plan.parseAutoMemoryPlan({
+            ...snapshot.plan,
+            revision: snapshot.plan.revision + 1,
+            updatedAt: Date.now(),
+            activeDrawTicketId: ticket.id,
+        }),
+        revealRecords: snapshot.revealRecords,
+        drawTickets: snapshot.drawTickets.map(row => (row.id === ticket.id ? nextTicket : row)),
+        modulePlan,
+    });
+}
+
+export async function regenerateCurrentMemory({ mode = 'keep', moduleId = '' } = {}) {
+    if (redoInflight) return { action: 'busy' };
+    redoInflight = true;
+    try {
+        const context = core_context.currentCharacterGuard();
+        const snapshot = auto_memory_plan.readAutoMemoryMetadata(context.chatMetadata);
+        const ticket = auto_memory_redo.currentDrawTicket(snapshot);
+        if (!snapshot?.plan?.enabled || !ticket) return { action: 'idle' };
+        let selected = ticket.selectedModuleId;
+        if (mode === 'redraw') {
+            const live = auto_memory_registry.autoMemoryRuntimeCandidates(snapshot.plan.preferredModuleIds, snapshot.plan.excludedModuleIds);
+            const pool = live.length ? live.map(id => ({ id })) : ticket.candidates;
+            selected = auto_memory_redo.redrawModuleId(pool, ticket.selectedModuleId, randomUnit());
+        } else if (mode === 'pick') {
+            const allowed = auto_memory_redo.choosableModules(auto_memory_registry.listAutoMemoryModules());
+            if (!allowed.some(item => item.id === moduleId)) return { action: 'idle' };
+            selected = moduleId;
+        }
+        if (!selected) return { action: 'idle' };
+        const keepPlan = mode === 'keep' && snapshot.modulePlan?.drawId === ticket.id
+            ? auto_memory_plan.parseModulePlan(auto_memory_redo.resetModuleSteps(snapshot.modulePlan))
+            : null;
+        const next = keepPlan
+            ? auto_memory_plan.parseAutoMemorySnapshot({
+                plan: auto_memory_plan.parseAutoMemoryPlan({
+                    ...snapshot.plan,
+                    revision: snapshot.plan.revision + 1,
+                    updatedAt: Date.now(),
+                    activeDrawTicketId: ticket.id,
+                }),
+                revealRecords: snapshot.revealRecords,
+                drawTickets: snapshot.drawTickets.map(row => (row.id === ticket.id
+                    ? auto_memory_plan.parseDrawTicket({ ...row, status: 'drawn' })
+                    : row)),
+                modulePlan: keepPlan,
+            })
+            : await installRedraw(context, snapshot, ticket, selected);
+        if (!next) return { action: 'idle' };
+        const persist = step => persistSnapshot(context, step);
+        await persist(next);
+        stampDrawSource(context, ticket.id);
+        const limit = Math.min(12, next.modulePlan.steps.length);
+        let current = next;
+        let result = null;
+        for (let index = 0; index < limit; index += 1) {
+            result = await auto_memory_host.runModulePlan(current, persist, context, Date.now());
+            await rememberTitle(context, result);
+            current = result?.snapshot || current;
+            const steps = result?.snapshot?.modulePlan?.steps || [];
+            if (result?.action === 'failed' || steps.some(step => step.status === 'failed')) break;
+            if (!steps.some(step => step.status !== 'completed')) break;
+            if (result?.action !== 'saved' && result?.action !== 'expanded') break;
+        }
+        ui_countdown.refreshAutoMemoryCountdown();
+        return followIfEnabled(context, result);
+    } catch (error) {
+        console.warn('[HeartbeatMemories] memory redo skipped', core_text.safeErrorDiagnostic(error));
+        globalThis.toastr?.error?.('这一份暂时没能重写。原来的回忆还在，可以再点一次。', '心口顿了一下');
+        return { action: 'failed', error };
+    } finally {
+        redoInflight = false;
+    }
 }
 
 export function stopAutoMemoryScheduler() {
@@ -332,6 +565,7 @@ export function stopAutoMemoryScheduler() {
     handledFloors.clear();
     inflightScopes.clear();
     noticedGroups.clear();
+    autoUsed.clear();
 }
 
 function assistantStillTyping(chat) {
@@ -423,6 +657,11 @@ export function startAutoMemoryScheduler() {
         const handler = () => listener(type);
         bound.set(type, handler);
         source.on(type, handler);
+    }
+    if (types.MESSAGE_SWIPED) {
+        const swiped = messageId => { void noteSwipedFloor(messageId); };
+        bound.set(types.MESSAGE_SWIPED, swiped);
+        source.on(types.MESSAGE_SWIPED, swiped);
     }
     cleanup = () => { for (const [type, handler] of bound) source.off?.(type, handler); };
     if (!auto_memory_stream.generationOpen(context)) scheduleSettledRound();

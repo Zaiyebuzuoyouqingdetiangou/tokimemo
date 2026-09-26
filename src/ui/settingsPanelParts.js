@@ -337,15 +337,18 @@ async function onAutoMemoryPaceChange(panel, event) {
         await saveAutoMemoryPace(panel);
         return;
     }
+    if (target.matches?.('[data-rmt-auto-memory-retry]')) {
+        core_settings.updatePluginSettings({ autoRetryEnabled: !!target.checked });
+        const retry = panel.querySelector('[data-rmt-auto-retry]');
+        if (retry) retry.checked = !!target.checked;
+        return;
+    }
     if (target.matches?.('[data-rmt-auto-memory-retry-count]')) {
-        core_settings.updatePluginSettings({ autoRetryCount: target.value, autoRetryEnabled: true });
+        core_settings.updatePluginSettings({ autoRetryCount: target.value });
         const count = String(core_settings.getPluginSettings().autoRetryCount);
         for (const input of panel.querySelectorAll('[data-rmt-auto-retry-count], [data-rmt-auto-memory-retry-count]')) {
             input.value = count;
-            input.disabled = false;
         }
-        const retry = panel.querySelector('[data-rmt-auto-retry]');
-        if (retry) retry.checked = true;
     }
 }
 

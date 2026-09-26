@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
-// Source modules: 283
-// Source SHA-256: aedc91cfc442da216139f65c9d7f4436fd8bd53ec10f4da177a88fc39260ac8c
+// Source modules: 284
+// Source SHA-256: 4b905c00f96af1c191c6ff41223558d950459365f1da17c5d893e7b454ffd459
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -48,6 +48,7 @@ const __m_autoMemory_modulePlans_js = Object.create(null);
 const __m_autoMemory_moduleRegistry_js = Object.create(null);
 const __m_autoMemory_moduleRunner_js = Object.create(null);
 const __m_autoMemory_planStore_js = Object.create(null);
+const __m_autoMemory_redo_js = Object.create(null);
 const __m_autoMemory_scheduler_js = Object.create(null);
 const __m_autoMemory_shellState_js = Object.create(null);
 const __m_autoMemory_streamGate_js = Object.create(null);
@@ -3175,7 +3176,7 @@ __m_autoMemory_achievementLookback_js.achievementLookback = achievementLookback;
 function __init_autoMemory_combinedResult_js() {
 // MODULE: autoMemory/combinedResult.js
 const auto_memory_plan = __m_autoMemory_planStore_js;
-// 单请求模块的正文和成就末包。成就失败只留下待补标记，不另发成就请求，也不重跑正文。
+// 单请求模块的正文和成就。成就失败只留下待补标记，不重跑正文。补成就是另一次单独请求，由信封上的按钮或自动重试发出。
 
 const SINGLE_REQUEST = new Set(['cabinet', 'calendar', 'relations', 'inbox']);
 
@@ -3298,11 +3299,44 @@ function repairAchievementRequest({ confirmed = false, moduleSaved = false } = {
     return { action: 'repair', requests: 1, redoesModule: false, extraAchievementRequest: false };
 }
 
+function replacePendingAchievement({
+    snapshot, revealId = '', packet = null, allowHistorical = false, sourceMemoryIds = [], now = 0,
+} = {}) {
+    const current = (snapshot?.revealRecords || []).find(item => item.id === revealId);
+    if (!current || current.status !== 'achievement_pending') {
+        return { action: 'idle', requests: 0, reveal: null, snapshot, extraAchievementRequest: false };
+    }
+    const ids = sourceMemoryIds.length ? sourceMemoryIds : current.sourceMemoryIds;
+    const parsed = classifyAchievement(packet, { allowHistorical, sourceMemoryIds: ids });
+    if (!parsed.ok) {
+        return { action: 'achievement-pending', requests: 1, reveal: current, snapshot, achievement: null, extraAchievementRequest: false };
+    }
+    const savedAchievementId = parsed.achievement.id || token('achv');
+    const reveal = auto_memory_plan.parseRevealRecord({
+        ...current,
+        achievementId: savedAchievementId,
+        status: 'ready',
+    });
+    const revealRecords = snapshot.revealRecords.map(item => (item.id === revealId ? reveal : item));
+    const next = auto_memory_plan.parseAutoMemorySnapshot({
+        plan: bumpedPlan(snapshot, now),
+        revealRecords,
+        drawTickets: snapshot.drawTickets,
+        modulePlan: snapshot.modulePlan,
+    });
+    return {
+        action: 'reveal', requests: 1, extraAchievementRequest: false, reveal,
+        achievement: { ...parsed.achievement, id: savedAchievementId },
+        snapshot: next,
+    };
+}
+
 __m_autoMemory_combinedResult_js.parseCombinedResponse = parseCombinedResponse;
 __m_autoMemory_combinedResult_js.inboxPlanLength = inboxPlanLength;
 __m_autoMemory_combinedResult_js.classifyAchievement = classifyAchievement;
 __m_autoMemory_combinedResult_js.settleCombined = settleCombined;
 __m_autoMemory_combinedResult_js.repairAchievementRequest = repairAchievementRequest;
+__m_autoMemory_combinedResult_js.replacePendingAchievement = replacePendingAchievement;
 }
 
 function __init_autoMemory_draw_js() {
@@ -5211,6 +5245,160 @@ __m_autoMemory_planStore_js.AUTO_MEMORY_INTERVAL_MIN = AUTO_MEMORY_INTERVAL_MIN;
 __m_autoMemory_planStore_js.AUTO_MEMORY_INTERVAL_MAX = AUTO_MEMORY_INTERVAL_MAX;
 }
 
+function __init_autoMemory_redo_js() {
+// MODULE: autoMemory/redo.js
+
+// 信封上的补成就、未完成重试，以及当前这一份怎么再写。次数沿用插件已有的自动重试档，不再另设一档。
+
+const SOURCE_STAMP_KEY = 'autoMemorySourceStampV1';
+
+function shouldAutoRepair({ enabled = false, used = 0, limit = 1 } = {}) {
+    if (enabled !== true) return false;
+    const cap = Math.max(1, Math.min(5, Math.floor(Number(limit)) || 1));
+    const count = Math.max(0, Math.floor(Number(used)) || 0);
+    return count < cap;
+}
+
+function retryableFailure(error) {
+    if (!error) return true;
+    if (error.name === 'AbortError' || error.nonRetryable === true) return false;
+    const code = `${error.code || ''} ${error.status || ''}`;
+    return !/quota|429|config|preflight|unauthorized/i.test(code);
+}
+
+function pendingReveal(snapshot) {
+    const rows = Array.isArray(snapshot?.revealRecords) ? snapshot.revealRecords : [];
+    for (let index = rows.length - 1; index >= 0; index -= 1) {
+        if (rows[index]?.status === 'achievement_pending') return rows[index];
+    }
+    return null;
+}
+
+function achievementRepairPrompt({ moduleTitle = '', sourceMemoryIds = [], allowHistorical = false } = {}) {
+    const title = String(moduleTitle || '这份回忆').slice(0, 40);
+    const ids = (Array.isArray(sourceMemoryIds) ? sourceMemoryIds : []).filter(id => /^M\d{3,6}$/.test(id));
+    const evidence = ids.length ? ids.join('、') : '没有可引用的编号';
+    const kind = allowHistorical ? 'historical 或 collection' : 'collection';
+    return `只补这一份回忆的成就，不要重写模块正文。模块：${title}。可以引用的记忆编号：${evidence}。
+只返回一个 JSON 对象，不要解释：
+{"title":"不超过40字","description":"一句","unlockCondition":"一句","kind":"${allowHistorical ? 'historical' : 'collection'}","sourceMemoryAnchor":"编号或一句"}
+kind 只能是 ${kind}。没有编号证据就用 collection。`;
+}
+
+function achievementPacket(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+    if (value.achievement && typeof value.achievement === 'object' && !Array.isArray(value.achievement)) return value.achievement;
+    return value;
+}
+
+function resetModuleSteps(modulePlan) {
+    if (!modulePlan?.steps?.length) return modulePlan;
+    return {
+        ...modulePlan,
+        steps: modulePlan.steps.map(step => ({ ...step, status: 'pending', recoverySlot: '' })),
+    };
+}
+
+function modulePlanForRetry(modulePlan) {
+    const steps = modulePlan?.steps || [];
+    if (!steps.length || steps.some(step => step.status !== 'completed')) return modulePlan;
+    return {
+        ...modulePlan,
+        steps: steps.map((step, index) => (
+            index === steps.length - 1 ? { ...step, status: 'pending', recoverySlot: '' } : step
+        )),
+    };
+}
+
+function currentDrawTicket(snapshot) {
+    const tickets = Array.isArray(snapshot?.drawTickets) ? snapshot.drawTickets : [];
+    const activeId = snapshot?.plan?.activeDrawTicketId;
+    if (activeId) {
+        const active = tickets.find(item => item.id === activeId);
+        if (active) return active;
+    }
+    return tickets.length ? tickets[tickets.length - 1] : null;
+}
+
+function choosableModules(modules) {
+    return (Array.isArray(modules) ? modules : [])
+        .filter(item => item?.inDrawPool === true && item.autoEligible === true && item.achievementMerged === true)
+        .map(item => ({ id: item.id, title: item.title || item.id }));
+}
+
+function redrawModuleId(candidates, currentId, randomUnit = 0) {
+    const ids = (Array.isArray(candidates) ? candidates : []).map(item => item?.id).filter(id => typeof id === 'string' && id);
+    const others = ids.filter(id => id !== currentId);
+    const pool = others.length ? others : ids;
+    if (!pool.length) return '';
+    const unit = Math.min(0.999999, Math.max(0, Number(randomUnit) || 0));
+    return pool[Math.min(pool.length - 1, Math.floor(unit * pool.length))];
+}
+
+function drawFloorMessage(chat, dueFloor, latestFloor) {
+    const floor = Math.floor(Number(dueFloor));
+    const list = Array.isArray(chat) ? chat : [];
+    if (floor < 1) return null;
+    if (latestFloor === true) {
+        let seen = 0;
+        for (let index = 0; index < list.length; index += 1) {
+            const message = list[index];
+            if (!message || message.is_user === true || message.is_system === true) continue;
+            seen += 1;
+            if (seen === floor) return { index, message };
+        }
+        return null;
+    }
+    const index = floor - 1;
+    const message = list[index];
+    return message ? { index, message } : null;
+}
+
+function bodyHash(text) {
+    const value = String(text ?? '');
+    let hash = 0;
+    for (let index = 0; index < value.length; index += 1) hash = (Math.imul(hash, 33) + value.charCodeAt(index)) >>> 0;
+    return `${value.length}:${hash}`;
+}
+
+function sourceStamp(chat, dueFloor, latestFloor, drawId) {
+    const located = drawFloorMessage(chat, dueFloor, latestFloor);
+    if (!located || typeof drawId !== 'string' || !drawId) return null;
+    return {
+        drawId,
+        dueFloor: Math.floor(Number(dueFloor)),
+        latestAssistant: latestFloor === true,
+        messageIndex: located.index,
+        hash: bodyHash(located.message?.mes),
+    };
+}
+
+function swipeNeedsRegenerate({ stamp = null, messageIndex = -1, hash = '', ticketMessageIndex = -1 } = {}) {
+    if (!Number.isInteger(messageIndex) || messageIndex < 0) return false;
+    if (stamp && Number.isInteger(stamp.messageIndex)) {
+        if (stamp.messageIndex !== messageIndex) return false;
+        return stamp.hash !== hash;
+    }
+    return Number.isInteger(ticketMessageIndex) && ticketMessageIndex === messageIndex;
+}
+
+__m_autoMemory_redo_js.shouldAutoRepair = shouldAutoRepair;
+__m_autoMemory_redo_js.retryableFailure = retryableFailure;
+__m_autoMemory_redo_js.pendingReveal = pendingReveal;
+__m_autoMemory_redo_js.achievementRepairPrompt = achievementRepairPrompt;
+__m_autoMemory_redo_js.achievementPacket = achievementPacket;
+__m_autoMemory_redo_js.resetModuleSteps = resetModuleSteps;
+__m_autoMemory_redo_js.modulePlanForRetry = modulePlanForRetry;
+__m_autoMemory_redo_js.currentDrawTicket = currentDrawTicket;
+__m_autoMemory_redo_js.choosableModules = choosableModules;
+__m_autoMemory_redo_js.redrawModuleId = redrawModuleId;
+__m_autoMemory_redo_js.drawFloorMessage = drawFloorMessage;
+__m_autoMemory_redo_js.bodyHash = bodyHash;
+__m_autoMemory_redo_js.sourceStamp = sourceStamp;
+__m_autoMemory_redo_js.swipeNeedsRegenerate = swipeNeedsRegenerate;
+__m_autoMemory_redo_js.SOURCE_STAMP_KEY = SOURCE_STAMP_KEY;
+}
+
 function __init_autoMemory_scheduler_js() {
 // MODULE: autoMemory/scheduler.js
 const archive_external = __m_archive_externalMemory_js;
@@ -5222,6 +5410,8 @@ const auto_memory_gate = __m_autoMemory_incrementalGate_js;
 const auto_memory_host = __m_autoMemory_moduleHost_js;
 const auto_memory_lease = __m_autoMemory_instanceLease_js;
 const auto_memory_plan = __m_autoMemory_planStore_js;
+const auto_memory_combined = __m_autoMemory_combinedResult_js;
+const auto_memory_redo = __m_autoMemory_redo_js;
 const auto_memory_registry = __m_autoMemory_moduleRegistry_js;
 const chat_read_range = __m_core_chatReadRange_js;
 const core_cache = __m_core_cache_js;
@@ -5250,6 +5440,8 @@ const ui_countdown = __m_ui_autoMemoryCountdown_js;
 
 
 
+
+
 let cleanup = null;
 let leaseOwner = '';
 let fillInflight = false;
@@ -5260,6 +5452,9 @@ let lastSignature = '';
 const handledFloors = new Map();
 const inflightScopes = new Set();
 const noticedGroups = new Set();
+const autoUsed = new Map();
+let autoRepairInflight = false;
+let redoInflight = false;
 
 function ownerId() {
     if (!leaseOwner) leaseOwner = `tab-${Math.random().toString(36).slice(2, 10)}`;
@@ -5317,7 +5512,42 @@ async function rememberTitle(context, result) {
 async function runModule(snapshot, persist, context) {
     const result = await auto_memory_host.runModulePlan(snapshot, persist, context, Date.now());
     await rememberTitle(context, result);
-    return result;
+    return followIfEnabled(context, result);
+}
+
+function moduleStillOpen(result) {
+    const steps = result?.snapshot?.modulePlan?.steps || [];
+    return steps.some(step => step.status !== 'completed');
+}
+
+async function followIfEnabled(context, result) {
+    const settings = core_settings.getPluginSettings();
+    if (settings.autoRetryEnabled !== true || autoRepairInflight) return result;
+    const limit = Math.max(1, Math.min(5, Math.floor(Number(settings.autoRetryCount)) || 1));
+    autoRepairInflight = true;
+    let current = result;
+    try {
+        while (current?.action === 'achievement-pending' || moduleStillOpen(current)) {
+            const drawId = current.snapshot?.modulePlan?.drawId || current.reveal?.id || 'round';
+            const kind = current.action === 'achievement-pending' ? 'achievement' : 'module';
+            const key = `${drawId}|${kind}`;
+            const used = autoUsed.get(key) || 0;
+            if (!auto_memory_redo.shouldAutoRepair({ enabled: true, used, limit })) break;
+            autoUsed.set(key, used + 1);
+            const next = kind === 'achievement'
+                ? await repairFloorAchievement(context)
+                : await resumeFloorPlan();
+            if (!next || next.action === 'failed') {
+                if (!auto_memory_redo.retryableFailure(next?.error)) autoUsed.set(key, limit);
+                if (next?.action === 'failed') continue;
+                break;
+            }
+            current = next;
+        }
+    } finally {
+        autoRepairInflight = false;
+    }
+    return current;
 }
 
 async function persistSnapshot(context, next) {
@@ -5440,6 +5670,7 @@ async function runHostRound() {
             if (result.action === 'arm' || result.action === 'noop' || result.action === 'drawn' || result.action === 'wait') {
                 handledFloors.set(scope, floor);
             }
+            if (result.action === 'drawn') stampDrawSource(context, result.drawId);
             ui_countdown.refreshAutoMemoryCountdown();
         } finally {
             inflightScopes.delete(scope);
@@ -5546,10 +5777,202 @@ async function resumeFloorPlan() {
     const context = core_context.currentCharacterGuard();
     const snapshot = auto_memory_plan.readAutoMemoryMetadata(context.chatMetadata);
     if (!snapshot?.modulePlan) return { action: 'idle' };
+    const retryPlan = auto_memory_plan.parseModulePlan(auto_memory_redo.modulePlanForRetry(snapshot.modulePlan));
+    const prepared = auto_memory_plan.parseAutoMemorySnapshot({ ...snapshot, modulePlan: retryPlan });
     const persist = next => persistSnapshot(context, next);
-    const result = await runModule(snapshot, persist, context);
+    const result = await auto_memory_host.runModulePlan(prepared, persist, context, Date.now());
+    await rememberTitle(context, result);
     ui_countdown.refreshAutoMemoryCountdown();
-    return result;
+    return followIfEnabled(context, result);
+}
+
+async function repairFloorAchievement(context = core_context.currentCharacterGuard()) {
+    const snapshot = auto_memory_plan.readAutoMemoryMetadata(context.chatMetadata);
+    const reveal = auto_memory_redo.pendingReveal(snapshot);
+    if (!reveal) return { action: 'idle', requests: 0 };
+    const item = auto_memory_registry.autoMemoryModuleById(reveal.moduleId);
+    const prompt = auto_memory_redo.achievementRepairPrompt({
+        moduleTitle: item?.title || reveal.moduleId,
+        sourceMemoryIds: reveal.sourceMemoryIds,
+        allowHistorical: item?.contentKind === 'historical',
+    });
+    let packet = null;
+    try {
+        const raw = await generation_request.requestJson(prompt, '补这一份成就', {
+            mode: 'auto-memory',
+            taskKey: `auto-memory-achievement:${reveal.id}`,
+        });
+        packet = auto_memory_redo.achievementPacket(raw);
+    } catch (error) {
+        return { action: 'failed', requests: 1, error, snapshot };
+    }
+    const replaced = auto_memory_combined.replacePendingAchievement({
+        snapshot,
+        revealId: reveal.id,
+        packet,
+        allowHistorical: item?.contentKind === 'historical',
+        sourceMemoryIds: reveal.sourceMemoryIds,
+        now: Date.now(),
+    });
+    if (replaced.snapshot && replaced.snapshot !== snapshot) await persistSnapshot(context, replaced.snapshot);
+    await rememberTitle(context, replaced);
+    ui_countdown.refreshAutoMemoryCountdown();
+    return replaced;
+}
+
+async function automaticRepairIfNeeded() {
+    if (autoRepairInflight || redoInflight) return false;
+    if (core_settings.getPluginSettings().autoRetryEnabled !== true) return false;
+    let context;
+    try { context = core_context.currentCharacterGuard(); }
+    catch { return false; }
+    const snapshot = auto_memory_plan.readAutoMemoryMetadata(context.chatMetadata);
+    if (!snapshot) return false;
+    const pending = auto_memory_redo.pendingReveal(snapshot);
+    const steps = snapshot.modulePlan?.steps || [];
+    const running = steps.some(step => step.status === 'running');
+    const incomplete = steps.some(step => step.status !== 'completed');
+    if (running || (!pending && !incomplete)) return false;
+    const seed = pending && !incomplete
+        ? { action: 'achievement-pending', reveal: pending, snapshot }
+        : { action: 'saved', snapshot };
+    const followed = await followIfEnabled(context, seed);
+    return followed !== seed;
+}
+
+function stampDrawSource(context, drawId) {
+    if (!context?.chatMetadata || !drawId) return;
+    const snapshot = auto_memory_plan.readAutoMemoryMetadata(context.chatMetadata);
+    const ticket = (snapshot?.drawTickets || []).find(item => item.id === drawId) || auto_memory_redo.currentDrawTicket(snapshot);
+    if (!ticket) return;
+    const latest = core_settings.getPluginSettings().autoMemoryLatestFloor === true;
+    const stamp = auto_memory_redo.sourceStamp(context.chat, ticket.dueFloor, latest, ticket.id);
+    if (!stamp) return;
+    context.chatMetadata[auto_memory_redo.SOURCE_STAMP_KEY] = stamp;
+    context.saveMetadataDebounced?.();
+}
+
+async function noteSwipedFloor(messageId) {
+    const index = Number(messageId);
+    if (!Number.isInteger(index) || index < 0 || redoInflight || autoRepairInflight) return;
+    let context;
+    try { context = core_context.getContext(); }
+    catch { return; }
+    const message = context?.chat?.[index];
+    if (!message || message.is_user === true || message.is_system === true) return;
+    let snapshot = null;
+    try { snapshot = auto_memory_plan.readAutoMemoryMetadata(context.chatMetadata); }
+    catch { return; }
+    const ticket = auto_memory_redo.currentDrawTicket(snapshot);
+    if (!ticket || snapshot?.plan?.enabled !== true) return;
+    const latest = core_settings.getPluginSettings().autoMemoryLatestFloor === true;
+    const located = auto_memory_redo.drawFloorMessage(context.chat, ticket.dueFloor, latest);
+    const stamp = context.chatMetadata?.[auto_memory_redo.SOURCE_STAMP_KEY] || null;
+    const hash = auto_memory_redo.bodyHash(message.mes);
+    if (!auto_memory_redo.swipeNeedsRegenerate({
+        stamp, messageIndex: index, hash, ticketMessageIndex: located?.index,
+    })) return;
+    await regenerateCurrentMemory({ mode: 'keep' });
+}
+
+async function installRedraw(context, snapshot, ticket, moduleId) {
+    const item = auto_memory_registry.autoMemoryModuleById(moduleId);
+    if (!item?.inDrawPool) return null;
+    const facts = auto_memory_host.collectModuleFacts(moduleId, context, {
+        chatId: core_context.getChatId(context),
+        archiveRevision: ticket.archiveRevision,
+        sourceMemoryIds: ticket.sourceMemoryIds,
+        drawId: ticket.id,
+    });
+    const built = await item.plan?.(facts);
+    if (!built?.steps?.length) return null;
+    const modulePlan = auto_memory_plan.parseModulePlan(auto_memory_redo.resetModuleSteps({
+        ...built,
+        drawId: ticket.id,
+        moduleId,
+        sourceMemoryIds: ticket.sourceMemoryIds,
+    }));
+    const candidates = ticket.candidates.some(row => row.id === moduleId)
+        ? ticket.candidates
+        : [...ticket.candidates, { id: moduleId, weight: 1 }];
+    const nextTicket = auto_memory_plan.parseDrawTicket({
+        ...ticket, candidates, selectedModuleId: moduleId, status: 'drawn',
+    });
+    return auto_memory_plan.parseAutoMemorySnapshot({
+        plan: auto_memory_plan.parseAutoMemoryPlan({
+            ...snapshot.plan,
+            revision: snapshot.plan.revision + 1,
+            updatedAt: Date.now(),
+            activeDrawTicketId: ticket.id,
+        }),
+        revealRecords: snapshot.revealRecords,
+        drawTickets: snapshot.drawTickets.map(row => (row.id === ticket.id ? nextTicket : row)),
+        modulePlan,
+    });
+}
+
+async function regenerateCurrentMemory({ mode = 'keep', moduleId = '' } = {}) {
+    if (redoInflight) return { action: 'busy' };
+    redoInflight = true;
+    try {
+        const context = core_context.currentCharacterGuard();
+        const snapshot = auto_memory_plan.readAutoMemoryMetadata(context.chatMetadata);
+        const ticket = auto_memory_redo.currentDrawTicket(snapshot);
+        if (!snapshot?.plan?.enabled || !ticket) return { action: 'idle' };
+        let selected = ticket.selectedModuleId;
+        if (mode === 'redraw') {
+            const live = auto_memory_registry.autoMemoryRuntimeCandidates(snapshot.plan.preferredModuleIds, snapshot.plan.excludedModuleIds);
+            const pool = live.length ? live.map(id => ({ id })) : ticket.candidates;
+            selected = auto_memory_redo.redrawModuleId(pool, ticket.selectedModuleId, randomUnit());
+        } else if (mode === 'pick') {
+            const allowed = auto_memory_redo.choosableModules(auto_memory_registry.listAutoMemoryModules());
+            if (!allowed.some(item => item.id === moduleId)) return { action: 'idle' };
+            selected = moduleId;
+        }
+        if (!selected) return { action: 'idle' };
+        const keepPlan = mode === 'keep' && snapshot.modulePlan?.drawId === ticket.id
+            ? auto_memory_plan.parseModulePlan(auto_memory_redo.resetModuleSteps(snapshot.modulePlan))
+            : null;
+        const next = keepPlan
+            ? auto_memory_plan.parseAutoMemorySnapshot({
+                plan: auto_memory_plan.parseAutoMemoryPlan({
+                    ...snapshot.plan,
+                    revision: snapshot.plan.revision + 1,
+                    updatedAt: Date.now(),
+                    activeDrawTicketId: ticket.id,
+                }),
+                revealRecords: snapshot.revealRecords,
+                drawTickets: snapshot.drawTickets.map(row => (row.id === ticket.id
+                    ? auto_memory_plan.parseDrawTicket({ ...row, status: 'drawn' })
+                    : row)),
+                modulePlan: keepPlan,
+            })
+            : await installRedraw(context, snapshot, ticket, selected);
+        if (!next) return { action: 'idle' };
+        const persist = step => persistSnapshot(context, step);
+        await persist(next);
+        stampDrawSource(context, ticket.id);
+        const limit = Math.min(12, next.modulePlan.steps.length);
+        let current = next;
+        let result = null;
+        for (let index = 0; index < limit; index += 1) {
+            result = await auto_memory_host.runModulePlan(current, persist, context, Date.now());
+            await rememberTitle(context, result);
+            current = result?.snapshot || current;
+            const steps = result?.snapshot?.modulePlan?.steps || [];
+            if (result?.action === 'failed' || steps.some(step => step.status === 'failed')) break;
+            if (!steps.some(step => step.status !== 'completed')) break;
+            if (result?.action !== 'saved' && result?.action !== 'expanded') break;
+        }
+        ui_countdown.refreshAutoMemoryCountdown();
+        return followIfEnabled(context, result);
+    } catch (error) {
+        console.warn('[HeartbeatMemories] memory redo skipped', core_text.safeErrorDiagnostic(error));
+        globalThis.toastr?.error?.('这一份暂时没能重写。原来的回忆还在，可以再点一次。', '心口顿了一下');
+        return { action: 'failed', error };
+    } finally {
+        redoInflight = false;
+    }
 }
 
 function stopAutoMemoryScheduler() {
@@ -5564,6 +5987,7 @@ function stopAutoMemoryScheduler() {
     handledFloors.clear();
     inflightScopes.clear();
     noticedGroups.clear();
+    autoUsed.clear();
 }
 
 function assistantStillTyping(chat) {
@@ -5656,12 +6080,20 @@ function startAutoMemoryScheduler() {
         bound.set(type, handler);
         source.on(type, handler);
     }
+    if (types.MESSAGE_SWIPED) {
+        const swiped = messageId => { void noteSwipedFloor(messageId); };
+        bound.set(types.MESSAGE_SWIPED, swiped);
+        source.on(types.MESSAGE_SWIPED, swiped);
+    }
     cleanup = () => { for (const [type, handler] of bound) source.off?.(type, handler); };
     if (!auto_memory_stream.generationOpen(context)) scheduleSettledRound();
 }
 
 __m_autoMemory_scheduler_js.fillFloorGap = fillFloorGap;
 __m_autoMemory_scheduler_js.resumeFloorPlan = resumeFloorPlan;
+__m_autoMemory_scheduler_js.repairFloorAchievement = repairFloorAchievement;
+__m_autoMemory_scheduler_js.automaticRepairIfNeeded = automaticRepairIfNeeded;
+__m_autoMemory_scheduler_js.regenerateCurrentMemory = regenerateCurrentMemory;
 __m_autoMemory_scheduler_js.stopAutoMemoryScheduler = stopAutoMemoryScheduler;
 __m_autoMemory_scheduler_js.startAutoMemoryScheduler = startAutoMemoryScheduler;
 }
@@ -5690,6 +6122,7 @@ function floorShellCss() {
 .rmt-floor-shell .rmt-floor-pace b{font-weight:650}
 .rmt-floor-shell .rmt-floor-pace small{color:#7b8798}
 .rmt-floor-shell .rmt-floor-fill,.rmt-floor-shell .rmt-heart-letter .rmt-btn{min-height:28px;padding:2px 10px}
+.rmt-heart-letter-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
 .rmt-heart-letter{width:min(100%,320px);max-width:100%;min-width:0;margin:10px 0 4px;color:#5c463c}
 .rmt-heart-letter:has(.rmt-heart-letter-paper:not([hidden])){width:min(100%,640px)}
 .rmt-heart-letter:has(.rmt-heart-letter-paper:not([hidden])) .rmt-heart-letter-seal{display:none}
@@ -5767,15 +6200,19 @@ function shellView(input = {}) {
     const revealStatus = input.revealStatus || '';
     const moduleId = typeof input.moduleId === 'string' ? input.moduleId : '';
     const revealId = typeof input.revealId === 'string' ? input.revealId : '';
-    const face = { blocksInput: false, showReveal: false, progress: null, moduleId, revealId };
+    const running = steps.some(step => step?.status === 'running');
+    const face = {
+        blocksInput: false, showReveal: false, progress: null, moduleId, revealId,
+        canRetry: false, canRepairAchievement: false,
+    };
     if (complete && revealStatus === 'achievement_pending') {
-        return { ...face, phase: 'achievement-pending', title: '回忆先留着', detail: '成就还缺一笔，先不拆开。' };
+        return { ...face, phase: 'achievement-pending', canRepairAchievement: true, title: '回忆先留着', detail: '成就还缺一笔。可以补一次，不必重写正文。' };
     }
     if (complete && (revealStatus === 'ready' || revealStatus === 'opened')) {
         return { ...face, phase: 'reveal', showReveal: true, title: input.revealLine || revealFace(input), detail: '点击查看详情' };
     }
     if (input.failureRecoverable === true) {
-        return { ...face, phase: 'failed', title: '这份回忆可以再续', detail: '已经记下的部分还在，不会把它当成已经拆开。' };
+        return { ...face, phase: 'failed', canRetry: true, title: '这份回忆可以再续', detail: '已经记下的部分还在，不会把它当成已经拆开。' };
     }
     if (input.paused === true) {
         return { ...face, phase: 'paused', title: '先停在这里', detail: '等待恢复。已经写好的部分不会重做。' };
@@ -5783,9 +6220,10 @@ function shellView(input = {}) {
     if (steps.length && !complete) {
         const started = steps.some(step => step?.status === 'running' || step?.status === 'completed' || step?.status === 'failed');
         if (!started) return { ...face, phase: 'planning', title: '正在建立目录', detail: '目录还没定下来，先不显示第几步。' };
-        if (allDone) return { ...face, phase: 'generating', title: '回忆生成中', detail: '还没整份核对完，先不拆开。' };
+        const canRetry = !running;
+        if (allDone) return { ...face, phase: 'generating', canRetry, title: '回忆生成中', detail: '还没整份核对完，先不拆开。' };
         const progress = knownProgress(done, steps.length);
-        return { ...face, phase: 'generating', progress, title: '正在把这段回忆写下来', detail: progress ? `正在生成 ${progress.done} / ${progress.total}` : '正在生成' };
+        return { ...face, phase: 'generating', canRetry, progress, title: '正在把这段回忆写下来', detail: progress ? `正在生成 ${progress.done} / ${progress.total}` : '正在生成' };
     }
     if (!steps.length && input.roundReveal === true && (revealStatus === 'ready' || revealStatus === 'opened')) {
         return { ...face, phase: 'reveal', showReveal: true, title: input.revealLine || revealFace(input), detail: '点击查看详情' };
@@ -59139,6 +59577,7 @@ const runtimeState = __m_core_state_js.state;
 let cleanup = null;
 let lastPhase = '';
 let sawPhase = false;
+let autoRepairLatch = '';
 let timer = 0;
 let letterSession = null;
 let letterMode = '';
@@ -59273,9 +59712,13 @@ function markup(view) {
             : '';
         return `<p class="rmt-floor-pace" data-rmt-floor-pace><span>留忆</span><b>${core_text.esc(view.detail)}</b>${gap}</p>`;
     }
-    const retry = view.phase === 'failed'
+    const repair = view.canRepairAchievement
+        ? '<button type="button" class="rmt-btn" data-rmt-floor-achievement>补成就</button>'
+        : '';
+    const retry = view.canRetry
         ? '<button type="button" class="rmt-btn" data-rmt-floor-retry>重试</button>'
         : '';
+    const actions = repair || retry ? `<div class="rmt-heart-letter-actions">${repair}${retry}</div>` : '';
     const revealPaper = view.phase === 'reveal' && view.showReveal;
     const heading = revealPaper ? '一封写给你的信' : view.title;
     const aside = revealPaper ? '点开看看' : view.detail;
@@ -59289,8 +59732,8 @@ function markup(view) {
         <div class="rmt-heart-letter-paper" data-rmt-letter-paper hidden>
             ${paper}
             <div class="rmt-floor-body" data-rmt-floor-body data-rmt-reveal="${core_text.esc(view.revealId)}" data-rmt-module="${core_text.esc(view.moduleId)}"></div>
-            ${retry}
         </div>
+        ${actions}
     </article>`;
 }
 
@@ -59335,7 +59778,10 @@ function paint(context) {
         const detail = host.querySelector('[data-rmt-letter-detail]');
         if (title && view.phase !== 'reveal') title.textContent = view.title;
         if (detail) detail.textContent = view.detail;
-        if (title || detail || (paper && !paper.hidden)) return;
+        if (title || detail || (paper && !paper.hidden)) {
+            queueAutomaticRepair(view);
+            return;
+        }
     }
     const paperWasOpen = paper && !paper.hidden;
     host.innerHTML = markup(view);
@@ -59346,6 +59792,23 @@ function paint(context) {
         if (seal) seal.hidden = true;
     }
     try { ui_taskCenter.syncLiveTaskStrip(); } catch { /* 任务条刷新失败时，楼层下面的状态仍保留。 */ }
+    queueAutomaticRepair(view);
+}
+
+function queueAutomaticRepair(view) {
+    if (!view?.canRetry && !view?.canRepairAchievement) {
+        autoRepairLatch = '';
+        return;
+    }
+    if (core_settings.getPluginSettings().autoRetryEnabled !== true) return;
+    const token = `${view.phase}|${view.revealId}|${view.moduleId}|${view.canRepairAchievement ? 'achievement' : 'module'}`;
+    if (autoRepairLatch === token) return;
+    autoRepairLatch = token;
+    void auto_memory_scheduler.automaticRepairIfNeeded().then(did => {
+        if (did) sync();
+    }).catch(error => {
+        console.warn('[HeartbeatMemories] automatic repair skipped', core_text.safeErrorDiagnostic(error));
+    });
 }
 
 function sync() {
@@ -59437,6 +59900,17 @@ function onClick(event) {
         event.stopPropagation();
         fill.disabled = true;
         void auto_memory_scheduler.fillFloorGap().finally(() => { fill.disabled = false; sync(); });
+        return;
+    }
+    const repair = event.target?.closest?.('[data-rmt-floor-achievement]');
+    if (repair) {
+        event.preventDefault();
+        event.stopPropagation();
+        repair.disabled = true;
+        void auto_memory_scheduler.repairFloorAchievement().catch(error => {
+            console.warn('[HeartbeatMemories] achievement repair skipped', core_text.safeErrorDiagnostic(error));
+            globalThis.toastr?.error?.('这一次没能补上成就。回忆还在，可以再点一次。', '心口顿了一下');
+        }).finally(() => { repair.disabled = false; sync(); });
         return;
     }
     const retry = event.target?.closest?.('[data-rmt-floor-retry]');
@@ -72261,15 +72735,18 @@ async function onAutoMemoryPaceChange(panel, event) {
         await saveAutoMemoryPace(panel);
         return;
     }
+    if (target.matches?.('[data-rmt-auto-memory-retry]')) {
+        core_settings.updatePluginSettings({ autoRetryEnabled: !!target.checked });
+        const retry = panel.querySelector('[data-rmt-auto-retry]');
+        if (retry) retry.checked = !!target.checked;
+        return;
+    }
     if (target.matches?.('[data-rmt-auto-memory-retry-count]')) {
-        core_settings.updatePluginSettings({ autoRetryCount: target.value, autoRetryEnabled: true });
+        core_settings.updatePluginSettings({ autoRetryCount: target.value });
         const count = String(core_settings.getPluginSettings().autoRetryCount);
         for (const input of panel.querySelectorAll('[data-rmt-auto-retry-count], [data-rmt-auto-memory-retry-count]')) {
             input.value = count;
-            input.disabled = false;
         }
-        const retry = panel.querySelector('[data-rmt-auto-retry]');
-        if (retry) retry.checked = true;
     }
 }
 
@@ -72562,6 +73039,9 @@ const core_contextTags = __m_core_contextTags_js;
 const core_chatReadRange = __m_core_chatReadRange_js;
 const ui_overlay = __m_ui_overlay_js;
 const auto_memory_plan = __m_autoMemory_planStore_js;
+const auto_memory_redo = __m_autoMemory_redo_js;
+const auto_memory_registry = __m_autoMemory_moduleRegistry_js;
+const auto_memory_scheduler = __m_autoMemory_scheduler_js;
 const auto_memory_wizard = __m_ui_autoMemoryWizard_js;
 const wizard_plan = __m_autoMemory_wizardPlan_js;
 const ui_scenePicker = __m_ui_scenePicker_js;
@@ -72606,6 +73086,21 @@ const SETTINGS_MOUNT_UNHANDLED = Symbol('SETTINGS_MOUNT_UNHANDLED');
 // 从 ui/settingsPanel.js 原样搬出（重构阶段 2），声明文本一字未改；ui/settingsPanel.js 仍转发原有导出。
 
 let homeSettingsPanel = null;
+
+async function runCurrentMemoryRedo(panel, mode, moduleId) {
+    const status = panel.querySelector('[data-rmt-auto-memory-redo-status]');
+    if (status) status.textContent = '正在重写这一份回忆…';
+    try {
+        const result = await auto_memory_scheduler.regenerateCurrentMemory({ mode, moduleId });
+        if (!status) return;
+        if (result?.action === 'idle') status.textContent = '还没有可以重写的这一份。先等抽签写过一次。';
+        else if (result?.action === 'busy') status.textContent = '这一份正在写，等它停下来再点。';
+        else if (result?.action === 'failed') status.textContent = '这一次没写完。可以再点一次。';
+        else status.textContent = mode === 'redraw' ? '已按新抽到的模块再写。' : mode === 'pick' ? '已按选中的模块再写。' : '已按原来抽中的模块再写。';
+    } catch (error) {
+        if (status) status.textContent = core_text.safeErrorSummary(error);
+    }
+}
 
 let homeSettingsEpoch = -1;
 
@@ -72899,6 +73394,8 @@ function bindSettingsChange(panel, tagDraft, tagStatus, tagState) {
             core_settings.updatePluginSettings({ autoRetryEnabled: !!target.checked });
             const count = panel.querySelector('[data-rmt-auto-retry-count]');
             if (count) count.disabled = !target.checked;
+            const memoryRetry = panel.querySelector('[data-rmt-auto-memory-retry]');
+            if (memoryRetry) memoryRetry.checked = !!target.checked;
             return;
         }
         if (target.matches?.('[data-rmt-auto-retry-count]')) {
@@ -73154,6 +73651,29 @@ function bindSettingsClick(panel, tagDraft, tagStatus, tagState, savedTagDraft, 
         if (event.target.closest?.('[data-rmt-creative-cancel]')) { refreshCreative(); panel.querySelector('[data-rmt-creative-status]').textContent = '已撤销未保存编辑。'; return; }
         if (event.target.closest?.('[data-rmt-auto-memory-wizard]')) {
             auto_memory_wizard.openAutoMemoryWizard();
+            return;
+        }
+        const redoPick = event.target.closest?.('[data-rmt-auto-memory-pick-module]');
+        if (redoPick) {
+            void runCurrentMemoryRedo(panel, 'pick', redoPick.getAttribute('data-rmt-auto-memory-pick-module') || '');
+            return;
+        }
+        const redoButton = event.target.closest?.('[data-rmt-auto-memory-redo]');
+        if (redoButton) {
+            const mode = redoButton.getAttribute('data-rmt-auto-memory-redo') || '';
+            if (mode === 'pick') {
+                const host = panel.querySelector('[data-rmt-auto-memory-pick]');
+                if (host) {
+                    host.hidden = !host.hidden;
+                    if (!host.hidden && !host.childElementCount) {
+                        host.innerHTML = auto_memory_redo.choosableModules(auto_memory_registry.listAutoMemoryModules())
+                            .map(item => `<button type="button" class="menu_button" data-rmt-auto-memory-pick-module="${core_text.esc(item.id)}">${core_text.esc(item.title)}</button>`)
+                            .join('');
+                    }
+                }
+                return;
+            }
+            void runCurrentMemoryRedo(panel, mode, '');
             return;
         }
         if (event.target.closest?.('[data-rmt-auto-memory-restore]')) {
@@ -73567,8 +74087,15 @@ function renderSettingsPanelMarkup(panel) {
           <label class="rmt-settings-check"><input type="checkbox" data-rmt-auto-memory-latest ${core_settings.getPluginSettings().autoMemoryLatestFloor ? 'checked' : ''}><span>在最新角色楼生成回忆</span></label>
           <small>勾上后只数角色楼。间隔是 1 时，只用最新一条角色楼的正文。间隔更大时，这一窗角色楼的正文都会送去建档，不再截短。有摘要时，摘要没写到的楼附上完整正文。</small>
           <p>打开自动留忆后，需要两次才完整的模块会自动做第二次生成。两次合在一起才是一份完整回忆。手动生成仍看连接设置里的开关。</p>
+          <label class="rmt-settings-check"><input type="checkbox" data-rmt-auto-memory-retry ${core_settings.getPluginSettings().autoRetryEnabled ? 'checked' : ''}><span>失败后自动重试</span></label>
           <label class="rmt-settings-field"><span>失败后重试次数</span><input class="text_pole" data-rmt-auto-memory-retry-count type="number" min="1" max="5" step="1" value="${core_settings.getPluginSettings().autoRetryCount}" aria-label="失败后重试次数"></label>
-          <small>这一份没写完时，自动再试这么多次。范围是 1 到 5。</small>
+          <small>勾上之后，信上的重试和补成就会自己跑，次数是 1 到 5。没勾就只有点了才发。已经写好的步骤会留着。</small>
+          <p>当前这一份回忆可以再写一遍。</p>
+          <button type="button" class="menu_button rmt-settings-wide" data-rmt-auto-memory-redo="keep">按原来的抽签再写</button>
+          <button type="button" class="menu_button rmt-settings-wide" data-rmt-auto-memory-redo="redraw">重新抽一份</button>
+          <button type="button" class="menu_button rmt-settings-wide" data-rmt-auto-memory-redo="pick">自己选一份</button>
+          <div data-rmt-auto-memory-pick hidden></div>
+          <p data-rmt-auto-memory-redo-status role="status"></p>
           <button type="button" class="menu_button rmt-settings-wide" data-rmt-auto-memory-wizard>打开回忆向导</button>
           <small>向导先接 API、读取范围和档案。生图和文字 API 分开配，配完点下一步。结束后再问要不要自动留忆。已有档案时不会重新建档。</small>
           <p data-rmt-auto-memory-gate role="status"></p>
@@ -77156,6 +77683,7 @@ __init_autoMemory_modulePlans_js();
 __init_autoMemory_moduleRegistry_js();
 __init_autoMemory_moduleRunner_js();
 __init_autoMemory_planStore_js();
+__init_autoMemory_redo_js();
 __init_autoMemory_scheduler_js();
 __init_autoMemory_shellState_js();
 __init_autoMemory_streamGate_js();
