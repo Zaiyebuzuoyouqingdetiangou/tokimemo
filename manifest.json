@@ -1,7 +1,7 @@
 {
   "display_name": "心迹回廊",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.99.90-r84.146-keep-letters",
+  "js": "index.js?heartbeat=0.99.90-r84.147-jump-letter-floor",
   "author": "Toto",
   "version": "0.99.90",
   "auto_update": true,
@@ -10,6 +10,6 @@
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r84.146：每楼的信留着；打开回忆后还能再看；待重试可点。",
+  "description": "r84.147：自动成就能回到出信那一楼。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }

@@ -178,6 +178,11 @@ test('an automatic achievement is added beside manual library entries', () => {
     assert.equal(first.entries[1].origin, 'auto');
     assert.equal(first.entries[1].moduleId, 'album');
     assert.deepEqual(first.entries[1].sourceMemoryIds, ['M100']);
+    const withFloor = library.libraryEntryFromAutoAchievement(
+        { id: 'achv0002', title: '证据链闭环', kind: 'historical', description: '这一轮留下的' },
+        { moduleId: 'cabinet', sourceMemoryIds: ['M100'], now: Date.parse('2026-09-26T00:00:00Z'), messageIndex: 55 },
+    );
+    assert.equal(withFloor.messageIndex, 55);
     const again = library.appendLibraryEntry(first, entry);
     assert.equal(again.entries.length, 2);
 });

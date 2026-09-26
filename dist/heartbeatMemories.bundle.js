@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 286
-// Source SHA-256: b28e0385bd27fd56b8057a3c2b919efc92591a68e13481e841a6eea00ae0e579
+// Source SHA-256: 4eb8f06804ce548ec2a354ebbb9239af74a11cc6585dea41a624226360c4222f
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -2993,12 +2993,18 @@ __m_archive_summaryPreference_js.uncoveredWindowMessages = uncoveredWindowMessag
 function __init_autoMemory_achievementLibrary_js() {
 // MODULE: autoMemory/achievementLibrary.js
 const archive_repository = __m_archive_repository_js;
+const auto_memory_lookback = __m_autoMemory_achievementLookback_js;
+const auto_memory_redo = __m_autoMemory_redo_js;
 const core_cache = __m_core_cache_js;
 const core_constants = __m_core_constants_js;
 const core_context = __m_core_context_js;
 const core_evidence = __m_core_evidence_js;
+const core_settings = __m_core_settings_js;
 const core_text = __m_core_text_js;
 // 自动留忆的成就追加进成就库。手动生成的条目留在原处，不互相覆盖。
+
+
+
 
 
 
@@ -3023,7 +3029,36 @@ function sameAuto(existing, entry) {
     return clip(existing.title, 100).toLowerCase() === clip(entry.title, 100).toLowerCase();
 }
 
-function libraryEntryFromAutoAchievement(achievement, { moduleId = '', sourceMemoryIds = [], memoryBank = null, now = Date.now() } = {}) {
+function latestFloorOn() {
+    try { return core_settings.getPluginSettings().autoMemoryLatestFloor === true; }
+    catch { return false; }
+}
+
+function letterMesidFromResult(context, result) {
+    const snapshot = result?.snapshot;
+    const drawId = snapshot?.modulePlan?.drawId || snapshot?.plan?.activeDrawTicketId;
+    const ticket = (snapshot?.drawTickets || []).find(item => item.id === drawId)
+        || (snapshot?.drawTickets || []).find(item => item.id === snapshot?.plan?.activeDrawTicketId);
+    if (!ticket) {
+        return auto_memory_lookback.autoLetterMesid({
+            origin: 'auto',
+            id: result?.achievement?.id,
+            moduleId: result?.reveal?.moduleId,
+            sourceMemoryIds: result?.reveal?.sourceMemoryIds,
+        }, {
+            snapshot,
+            chat: context?.chat,
+            latestFloor: latestFloorOn(),
+            locate: auto_memory_redo.drawFloorMessage,
+        });
+    }
+    const latest = latestFloorOn();
+    const located = auto_memory_redo.drawFloorMessage(context?.chat, ticket.dueFloor, latest);
+    const index = Math.floor(Number(located?.index));
+    return Number.isSafeInteger(index) && index >= 0 ? index : null;
+}
+
+function libraryEntryFromAutoAchievement(achievement, { moduleId = '', sourceMemoryIds = [], memoryBank = null, now = Date.now(), messageIndex = null } = {}) {
     const title = clip(achievement?.title, 100);
     if (!title) return null;
     const kind = achievement?.kind === 'collection' ? 'collection' : 'historical';
@@ -3048,6 +3083,9 @@ function libraryEntryFromAutoAchievement(achievement, { moduleId = '', sourceMem
         kind,
         moduleId: clip(moduleId, 40),
         origin: 'auto',
+        ...(Number.isSafeInteger(Math.floor(Number(messageIndex))) && Math.floor(Number(messageIndex)) >= 0
+            ? { messageIndex: Math.floor(Number(messageIndex)) }
+            : {}),
     };
 }
 
@@ -3125,6 +3163,7 @@ function saveAutoAchievement(context, result, now = Date.now()) {
         sourceMemoryIds: reveal?.sourceMemoryIds || [],
         memoryBank: memory,
         now,
+        messageIndex: letterMesidFromResult(context, result),
     });
     if (!entry) return false;
     const previous = core_cache.loadSession(core_constants.MODE.ACHIEVEMENTS, { context, memoryBank: memory, clone: true });
@@ -3167,8 +3206,37 @@ function sourceKind(memory) {
     return clean(memory?.sourceKind, 40).toLowerCase() || 'chat';
 }
 
+function inheritedSource(kind) {
+    return kind === 'inherited' || kind.startsWith('inherited');
+}
+
+function externalAway(kind) {
+    return kind === 'external' || (kind.startsWith('external') && kind !== 'external-current-chat');
+}
+
 function blockedSource(kind) {
-    return kind === 'external' || kind === 'inherited' || kind.startsWith('external') || kind.startsWith('inherited');
+    return inheritedSource(kind) || externalAway(kind);
+}
+
+function safeMesid(value) {
+    const index = Math.floor(Number(value));
+    return Number.isSafeInteger(index) && index >= 0 ? index : null;
+}
+
+function autoLetterMesid(entry, { snapshot = null, chat = [], latestFloor = false, locate = null } = {}) {
+    const stored = safeMesid(entry?.messageIndex);
+    if (stored != null) return stored;
+    if (entry?.origin !== 'auto' || typeof locate !== 'function') return null;
+    const ids = new Set((Array.isArray(entry?.sourceMemoryIds) ? entry.sourceMemoryIds : []).filter(id => MEMORY_ID.test(id)));
+    const tickets = Array.isArray(snapshot?.drawTickets) ? snapshot.drawTickets : [];
+    const ticket = [...tickets].reverse().find(item => {
+        if (entry?.moduleId && item?.selectedModuleId && item.selectedModuleId !== entry.moduleId) return false;
+        const own = Array.isArray(item?.sourceMemoryIds) ? item.sourceMemoryIds : [];
+        return own.some(id => ids.has(id));
+    }) || [...tickets].reverse().find(item => entry?.moduleId && item?.selectedModuleId === entry.moduleId);
+    if (!ticket) return null;
+    const located = locate(chat, ticket.dueFloor, latestFloor === true);
+    return located ? safeMesid(located.index) : null;
 }
 
 function covered(ranges) {
@@ -3182,11 +3250,12 @@ function floorIsCovered(floor, ranges) {
     return ranges.some(row => floor >= row.start && floor <= row.end);
 }
 
-function achievementLookback(entry, memories = [], coveredRanges = []) {
+function achievementLookback(entry, memories = [], coveredRanges = [], extra = {}) {
     const ids = (Array.isArray(entry?.sourceMemoryIds) ? entry.sourceMemoryIds : []).filter(id => MEMORY_ID.test(id));
     const bank = new Map((Array.isArray(memories) ? memories : []).filter(item => MEMORY_ID.test(item?.id)).map(item => [item.id, item]));
     const linked = ids.map(id => bank.get(id)).filter(Boolean);
-    const kind = linked.length && entry?.kind !== 'collection' ? 'historical' : 'collection';
+    const letterMesid = safeMesid(extra.messageIndex ?? entry?.messageIndex);
+    const kind = (linked.length && entry?.kind !== 'collection') || letterMesid != null ? 'historical' : 'collection';
     const blocked = linked.filter(item => blockedSource(sourceKind(item)));
     const chat = linked.filter(item => !blockedSource(sourceKind(item)));
     const ledger = covered(coveredRanges);
@@ -3200,21 +3269,23 @@ function achievementLookback(entry, memories = [], coveredRanges = []) {
     floors.sort((a, b) => a - b);
     const dates = [...new Set(linked.map(item => clean(item.date, 40)).filter(date => date && date !== '未标注'))];
     const summary = linked.map(item => clean(item.summary, 120)).find(Boolean) || '';
-    const canJump = kind === 'historical' && blocked.length === 0 && floors.length > 0;
+    const canJump = floors.length > 0 || letterMesid != null;
     let sourceNote = '';
-    if (blocked.length) sourceNote = '这份成就来自外部或继承的记录，没有可以回到的聊天楼层。';
-    else if (kind === 'historical' && !floors.length) sourceNote = '档案里有这段经历，但没有对应的楼层编号。';
+    if (!canJump && blocked.length) sourceNote = '这份成就来自外部或继承的记录，没有可以回到的聊天楼层。';
+    else if (!canJump && kind === 'historical') sourceNote = '档案里有这段经历，但没有对应的楼层编号。';
     return {
         kind,
         period: dates[0] || '',
         summary,
-        floors: canJump ? floors : [],
-        jumpFloor: canJump ? floors[0] : null,
+        floors: floors.length ? floors : [],
+        jumpFloor: floors[0] ?? null,
+        jumpMesid: letterMesid,
         sourceNote,
         moduleId: clean(entry?.moduleId, 40),
     };
 }
 
+__m_autoMemory_achievementLookback_js.autoLetterMesid = autoLetterMesid;
 __m_autoMemory_achievementLookback_js.achievementLookback = achievementLookback;
 }
 
@@ -42832,11 +42903,14 @@ function __init_modes_achievements_js() {
 // MODULE: modes/achievements.js
 const archive_core = __m_archive_archiveCore_js;
 const auto_memory_lookback = __m_autoMemory_achievementLookback_js;
+const auto_memory_plan = __m_autoMemory_planStore_js;
+const auto_memory_redo = __m_autoMemory_redo_js;
 const core_cache = __m_core_cache_js;
 const core_constants = __m_core_constants_js;
 const core_context = __m_core_context_js;
 const core_evidence = __m_core_evidence_js;
 const core_incremental = __m_core_incremental_js;
+const core_settings = __m_core_settings_js;
 const core_text = __m_core_text_js;
 const generation_client = __m_generation_client_js;
 const generation_prompts = __m_generation_prompts_js;
@@ -42846,6 +42920,9 @@ const generation_modesBridge = __m_generation_modesBridge_js;
 const runtimeState = __m_core_state_js.state;
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
+
+
+
 
 
 
@@ -43048,15 +43125,33 @@ async function generateAchievementsWithRepair(context, memoryBank, origin, taskK
     return core_incremental.stampIncrementalCoverage(merged, previous, memoryBank, 'mode', sourceMemoryIds, added);
 }
 
+function letterMesidForRender(item) {
+    const stored = Math.floor(Number(item?.messageIndex));
+    if (Number.isSafeInteger(stored) && stored >= 0) return stored;
+    try {
+        const context = core_context.getContext();
+        return auto_memory_lookback.autoLetterMesid(item, {
+            snapshot: auto_memory_plan.readAutoMemoryMetadata(context?.chatMetadata),
+            chat: context?.chat,
+            latestFloor: core_settings.getPluginSettings().autoMemoryLatestFloor === true,
+            locate: auto_memory_redo.drawFloorMessage,
+        });
+    } catch {
+        return null;
+    }
+}
+
 function lookbackHtml(item, bank) {
     if (!item.unlocked) return '';
-    const look = auto_memory_lookback.achievementLookback(item, bank?.memories, bank?.coveredRanges);
+    const look = auto_memory_lookback.achievementLookback(item, bank?.memories, bank?.coveredRanges, {
+        messageIndex: letterMesidForRender(item),
+    });
     const label = look.kind === 'historical' ? '当时' : '收藏';
     const period = look.period ? `<small>时期：${core_text.esc(look.period)}</small>` : '';
     const summary = look.summary ? `<p>${core_text.esc(look.summary)}</p>` : '';
     const note = look.sourceNote ? `<small>${core_text.esc(look.sourceNote)}</small>` : '';
     const shown = floor => ui_floor.displayedMesid(floor);
-    const jumpId = shown(look.jumpFloor);
+    const jumpId = look.jumpMesid != null ? look.jumpMesid : shown(look.jumpFloor);
     const jump = jumpId == null ? '' : `<button type="button" class="rmt-btn" data-rmt-action="achievement-jump" data-rmt-floor="${jumpId}">回到当时</button>`;
     const floors = look.floors.length > 1 ? `<div>${look.floors.map(floor => {
         const id = shown(floor);

@@ -155,4 +155,28 @@ test('historical achievements jump to covered chat floors and external sources d
     const collection = lookback.achievementLookback({ sourceMemoryIds: ['M404'], kind: 'historical' }, [memory('M100')]);
     assert.equal(collection.kind, 'collection');
     assert.equal(collection.jumpFloor, null);
+    const mixed = lookback.achievementLookback(
+        { sourceMemoryIds: ['M100', 'M200'], kind: 'historical' },
+        [memory('M100'), memory('M200', { sourceKind: 'inherited-archive' })],
+        [{ start: 1, end: 20 }],
+    );
+    assert.equal(mixed.jumpFloor, 6);
+    assert.equal(mixed.sourceNote, '');
+    const autoLetter = lookback.achievementLookback(
+        { sourceMemoryIds: ['M100'], kind: 'historical', origin: 'auto', messageIndex: 55 },
+        [memory('M100', { sourceKind: 'external-current-chat', messageStart: 0, messageEnd: 0 })],
+        [{ start: 1, end: 20 }],
+    );
+    assert.equal(autoLetter.jumpMesid, 55);
+    assert.equal(autoLetter.sourceNote, '');
+    assert.equal(autoLetter.kind, 'historical');
+    const fromTicket = lookback.autoLetterMesid(
+        { origin: 'auto', moduleId: 'cabinet', sourceMemoryIds: ['M100'] },
+        {
+            snapshot: { drawTickets: [{ id: 'drawticket1', selectedModuleId: 'cabinet', sourceMemoryIds: ['M100'], dueFloor: 56 }] },
+            chat: Array.from({ length: 56 }, () => ({ is_user: false, mes: '角色楼' })),
+            locate: (chat, dueFloor) => ({ index: Math.floor(Number(dueFloor)) - 1, message: chat[Math.floor(Number(dueFloor)) - 1] }),
+        },
+    );
+    assert.equal(fromTicket, 55);
 });

@@ -20,8 +20,37 @@ function sourceKind(memory) {
     return clean(memory?.sourceKind, 40).toLowerCase() || 'chat';
 }
 
+function inheritedSource(kind) {
+    return kind === 'inherited' || kind.startsWith('inherited');
+}
+
+function externalAway(kind) {
+    return kind === 'external' || (kind.startsWith('external') && kind !== 'external-current-chat');
+}
+
 function blockedSource(kind) {
-    return kind === 'external' || kind === 'inherited' || kind.startsWith('external') || kind.startsWith('inherited');
+    return inheritedSource(kind) || externalAway(kind);
+}
+
+function safeMesid(value) {
+    const index = Math.floor(Number(value));
+    return Number.isSafeInteger(index) && index >= 0 ? index : null;
+}
+
+export function autoLetterMesid(entry, { snapshot = null, chat = [], latestFloor = false, locate = null } = {}) {
+    const stored = safeMesid(entry?.messageIndex);
+    if (stored != null) return stored;
+    if (entry?.origin !== 'auto' || typeof locate !== 'function') return null;
+    const ids = new Set((Array.isArray(entry?.sourceMemoryIds) ? entry.sourceMemoryIds : []).filter(id => MEMORY_ID.test(id)));
+    const tickets = Array.isArray(snapshot?.drawTickets) ? snapshot.drawTickets : [];
+    const ticket = [...tickets].reverse().find(item => {
+        if (entry?.moduleId && item?.selectedModuleId && item.selectedModuleId !== entry.moduleId) return false;
+        const own = Array.isArray(item?.sourceMemoryIds) ? item.sourceMemoryIds : [];
+        return own.some(id => ids.has(id));
+    }) || [...tickets].reverse().find(item => entry?.moduleId && item?.selectedModuleId === entry.moduleId);
+    if (!ticket) return null;
+    const located = locate(chat, ticket.dueFloor, latestFloor === true);
+    return located ? safeMesid(located.index) : null;
 }
 
 function covered(ranges) {
@@ -35,11 +64,12 @@ function floorIsCovered(floor, ranges) {
     return ranges.some(row => floor >= row.start && floor <= row.end);
 }
 
-export function achievementLookback(entry, memories = [], coveredRanges = []) {
+export function achievementLookback(entry, memories = [], coveredRanges = [], extra = {}) {
     const ids = (Array.isArray(entry?.sourceMemoryIds) ? entry.sourceMemoryIds : []).filter(id => MEMORY_ID.test(id));
     const bank = new Map((Array.isArray(memories) ? memories : []).filter(item => MEMORY_ID.test(item?.id)).map(item => [item.id, item]));
     const linked = ids.map(id => bank.get(id)).filter(Boolean);
-    const kind = linked.length && entry?.kind !== 'collection' ? 'historical' : 'collection';
+    const letterMesid = safeMesid(extra.messageIndex ?? entry?.messageIndex);
+    const kind = (linked.length && entry?.kind !== 'collection') || letterMesid != null ? 'historical' : 'collection';
     const blocked = linked.filter(item => blockedSource(sourceKind(item)));
     const chat = linked.filter(item => !blockedSource(sourceKind(item)));
     const ledger = covered(coveredRanges);
@@ -53,16 +83,17 @@ export function achievementLookback(entry, memories = [], coveredRanges = []) {
     floors.sort((a, b) => a - b);
     const dates = [...new Set(linked.map(item => clean(item.date, 40)).filter(date => date && date !== '未标注'))];
     const summary = linked.map(item => clean(item.summary, 120)).find(Boolean) || '';
-    const canJump = kind === 'historical' && blocked.length === 0 && floors.length > 0;
+    const canJump = floors.length > 0 || letterMesid != null;
     let sourceNote = '';
-    if (blocked.length) sourceNote = '这份成就来自外部或继承的记录，没有可以回到的聊天楼层。';
-    else if (kind === 'historical' && !floors.length) sourceNote = '档案里有这段经历，但没有对应的楼层编号。';
+    if (!canJump && blocked.length) sourceNote = '这份成就来自外部或继承的记录，没有可以回到的聊天楼层。';
+    else if (!canJump && kind === 'historical') sourceNote = '档案里有这段经历，但没有对应的楼层编号。';
     return {
         kind,
         period: dates[0] || '',
         summary,
-        floors: canJump ? floors : [],
-        jumpFloor: canJump ? floors[0] : null,
+        floors: floors.length ? floors : [],
+        jumpFloor: floors[0] ?? null,
+        jumpMesid: letterMesid,
         sourceNote,
         moduleId: clean(entry?.moduleId, 40),
     };

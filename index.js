@@ -1,5 +1,5 @@
 const VERSION = '0.99.90';
-const BUILD = '0.99.90-r84.146-keep-letters';
+const BUILD = '0.99.90-r84.147-jump-letter-floor';
 
 const SETTINGS_ID = 'heartbeat_memories_settings';
 const MENU_ID = 'heartbeat_memories_menu_item';

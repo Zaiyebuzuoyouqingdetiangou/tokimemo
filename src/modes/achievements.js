@@ -2,11 +2,14 @@
 // Extracted from r34 without changing archive/cache storage contracts.
 import * as archive_core from '../archive/archiveCore.js';
 import * as auto_memory_lookback from '../autoMemory/achievementLookback.js';
+import * as auto_memory_plan from '../autoMemory/planStore.js';
+import * as auto_memory_redo from '../autoMemory/redo.js';
 import * as core_cache from '../core/cache.js';
 import * as core_constants from '../core/constants.js';
 import * as core_context from '../core/context.js';
 import * as core_evidence from '../core/evidence.js';
 import * as core_incremental from '../core/incremental.js';
+import * as core_settings from '../core/settings.js';
 import { state as runtimeState } from '../core/state.js';
 import * as core_text from '../core/text.js';
 import * as generation_client from '../generation/client.js';
@@ -209,15 +212,33 @@ export async function generateAchievementsWithRepair(context, memoryBank, origin
     return core_incremental.stampIncrementalCoverage(merged, previous, memoryBank, 'mode', sourceMemoryIds, added);
 }
 
+function letterMesidForRender(item) {
+    const stored = Math.floor(Number(item?.messageIndex));
+    if (Number.isSafeInteger(stored) && stored >= 0) return stored;
+    try {
+        const context = core_context.getContext();
+        return auto_memory_lookback.autoLetterMesid(item, {
+            snapshot: auto_memory_plan.readAutoMemoryMetadata(context?.chatMetadata),
+            chat: context?.chat,
+            latestFloor: core_settings.getPluginSettings().autoMemoryLatestFloor === true,
+            locate: auto_memory_redo.drawFloorMessage,
+        });
+    } catch {
+        return null;
+    }
+}
+
 function lookbackHtml(item, bank) {
     if (!item.unlocked) return '';
-    const look = auto_memory_lookback.achievementLookback(item, bank?.memories, bank?.coveredRanges);
+    const look = auto_memory_lookback.achievementLookback(item, bank?.memories, bank?.coveredRanges, {
+        messageIndex: letterMesidForRender(item),
+    });
     const label = look.kind === 'historical' ? '当时' : '收藏';
     const period = look.period ? `<small>时期：${core_text.esc(look.period)}</small>` : '';
     const summary = look.summary ? `<p>${core_text.esc(look.summary)}</p>` : '';
     const note = look.sourceNote ? `<small>${core_text.esc(look.sourceNote)}</small>` : '';
     const shown = floor => ui_floor.displayedMesid(floor);
-    const jumpId = shown(look.jumpFloor);
+    const jumpId = look.jumpMesid != null ? look.jumpMesid : shown(look.jumpFloor);
     const jump = jumpId == null ? '' : `<button type="button" class="rmt-btn" data-rmt-action="achievement-jump" data-rmt-floor="${jumpId}">回到当时</button>`;
     const floors = look.floors.length > 1 ? `<div>${look.floors.map(floor => {
         const id = shown(floor);

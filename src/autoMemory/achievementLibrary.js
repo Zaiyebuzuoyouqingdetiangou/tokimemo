@@ -1,9 +1,12 @@
 // 自动留忆的成就追加进成就库。手动生成的条目留在原处，不互相覆盖。
 import * as archive_repository from '../archive/repository.js';
+import * as auto_memory_lookback from './achievementLookback.js';
+import * as auto_memory_redo from './redo.js';
 import * as core_cache from '../core/cache.js';
 import * as core_constants from '../core/constants.js';
 import * as core_context from '../core/context.js';
 import * as core_evidence from '../core/evidence.js';
+import * as core_settings from '../core/settings.js';
 import * as core_text from '../core/text.js';
 
 function clip(value, max) {
@@ -24,7 +27,36 @@ function sameAuto(existing, entry) {
     return clip(existing.title, 100).toLowerCase() === clip(entry.title, 100).toLowerCase();
 }
 
-export function libraryEntryFromAutoAchievement(achievement, { moduleId = '', sourceMemoryIds = [], memoryBank = null, now = Date.now() } = {}) {
+function latestFloorOn() {
+    try { return core_settings.getPluginSettings().autoMemoryLatestFloor === true; }
+    catch { return false; }
+}
+
+function letterMesidFromResult(context, result) {
+    const snapshot = result?.snapshot;
+    const drawId = snapshot?.modulePlan?.drawId || snapshot?.plan?.activeDrawTicketId;
+    const ticket = (snapshot?.drawTickets || []).find(item => item.id === drawId)
+        || (snapshot?.drawTickets || []).find(item => item.id === snapshot?.plan?.activeDrawTicketId);
+    if (!ticket) {
+        return auto_memory_lookback.autoLetterMesid({
+            origin: 'auto',
+            id: result?.achievement?.id,
+            moduleId: result?.reveal?.moduleId,
+            sourceMemoryIds: result?.reveal?.sourceMemoryIds,
+        }, {
+            snapshot,
+            chat: context?.chat,
+            latestFloor: latestFloorOn(),
+            locate: auto_memory_redo.drawFloorMessage,
+        });
+    }
+    const latest = latestFloorOn();
+    const located = auto_memory_redo.drawFloorMessage(context?.chat, ticket.dueFloor, latest);
+    const index = Math.floor(Number(located?.index));
+    return Number.isSafeInteger(index) && index >= 0 ? index : null;
+}
+
+export function libraryEntryFromAutoAchievement(achievement, { moduleId = '', sourceMemoryIds = [], memoryBank = null, now = Date.now(), messageIndex = null } = {}) {
     const title = clip(achievement?.title, 100);
     if (!title) return null;
     const kind = achievement?.kind === 'collection' ? 'collection' : 'historical';
@@ -49,6 +81,9 @@ export function libraryEntryFromAutoAchievement(achievement, { moduleId = '', so
         kind,
         moduleId: clip(moduleId, 40),
         origin: 'auto',
+        ...(Number.isSafeInteger(Math.floor(Number(messageIndex))) && Math.floor(Number(messageIndex)) >= 0
+            ? { messageIndex: Math.floor(Number(messageIndex)) }
+            : {}),
     };
 }
 
@@ -126,6 +161,7 @@ export function saveAutoAchievement(context, result, now = Date.now()) {
         sourceMemoryIds: reveal?.sourceMemoryIds || [],
         memoryBank: memory,
         now,
+        messageIndex: letterMesidFromResult(context, result),
     });
     if (!entry) return false;
     const previous = core_cache.loadSession(core_constants.MODE.ACHIEVEMENTS, { context, memoryBank: memory, clone: true });
