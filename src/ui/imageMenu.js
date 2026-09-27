@@ -32,7 +32,17 @@ export function installImageMenuDismiss(doc = globalThis.document) {
 
 export function imageMenuCss(root) {
     return `
-${root} .rmt-cg-menu-row{display:flex;justify-content:flex-end;align-items:flex-start;margin-top:6px;min-width:0}
+${root} .rmt-body .rmt-expanded-cg .rmt-thumb{aspect-ratio:auto;height:auto;max-height:none;position:relative}
+${root} .rmt-body .rmt-expanded-cg .rmt-thumb .rmt-cg-real{position:relative;inset:auto;display:block;width:100%;height:auto;max-height:80vh;max-height:80dvh;object-fit:contain;margin:0 auto;transform:none;border-radius:16px}
+${root} .rmt-body .rmt-expanded-cg .rmt-thumb .rmt-cg-real[hidden]{display:none!important}
+${root} .rmt-body .rmt-expanded-cg .rmt-thumb:has(.rmt-cg-real:not([hidden])) .rmt-abstract{display:none}
+${root} .rmt-body .rmt-bedtime-plate .rmt-thumb{position:relative;aspect-ratio:auto;height:auto;max-height:none;overflow:visible}
+${root} .rmt-body .rmt-bedtime-plate .rmt-thumb:has(.rmt-cg-real:not([hidden])) .rmt-abstract{display:none}
+${root} .rmt-body .rmt-bedtime-plate .rmt-thumb .rmt-cg-real{border-radius:12px;position:relative;inset:auto;display:block;width:100%;height:auto;max-height:80vh;max-height:80dvh;object-fit:contain}
+${root} .rmt-cg-menu-row{display:flex;justify-content:flex-end;align-items:flex-start;margin-top:4px;min-width:0}
+${root} .rmt-lenticular>.rmt-cg-menu-row{margin:4px 0 2px}
+${root} .rmt-album-card-actions{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-top:8px;min-width:0}
+${root} .rmt-album-card-actions>.rmt-cg-menu-row{margin-top:0;flex:0 1 auto}
 ${root} .rmt-cg-menu{display:flex;flex-direction:column;align-items:flex-end;max-width:100%}
 ${root} .rmt-cg-menu-toggle{list-style:none;display:grid;place-items:center;width:40px;height:40px;border-radius:50%;border:1px solid var(--rmt-theme-border);background:var(--rmt-theme-surface-solid,var(--rmt-theme-surface));color:var(--rmt-theme-text);cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent}
 ${root} .rmt-cg-menu-toggle::-webkit-details-marker{display:none}

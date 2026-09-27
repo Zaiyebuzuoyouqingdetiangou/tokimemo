@@ -40,16 +40,30 @@ export function eligibleDrawIds(modules, { preferredModuleIds = [], excludedModu
     return selected;
 }
 
+// r84.173：「很久没抽到」的加权只从它上次被抽中之后开始算。以前不清零，抽中过的模块仍带着旧的加权，容易连着被抽到。
 export function weightCandidates(ids, tickets = []) {
     const history = Array.isArray(tickets) ? tickets : [];
+    const list = Array.isArray(ids) ? ids : [];
     const recent = history.slice(-3);
-    return (Array.isArray(ids) ? ids : []).map(id => {
+    const picks = history.map(ticket => ticket?.selectedModuleId || '');
+    return list.map(id => {
         const recentHits = recent.filter(ticket => ticket?.selectedModuleId === id).length;
-        const eligible = history.filter(ticket => (Array.isArray(ticket?.candidates) ? ticket.candidates : []).some(item => item?.id === id));
+        const since = history.slice(picks.lastIndexOf(id) + 1);
+        const eligible = since.filter(ticket => (Array.isArray(ticket?.candidates) ? ticket.candidates : []).some(item => item?.id === id));
         const misses = eligible.filter(ticket => ticket?.selectedModuleId !== id).length;
         const weight = Math.max(1, Math.floor(100 / (1 + recentHits))) + Math.min(misses, 20) * 25;
         return { id, weight };
     });
+}
+
+// r84.173：冷却。上一轮刚抽到的模块，这一轮不参与抽签；只剩它一个候选时照常抽。
+// 抽签记录里仍保存完整候选和权重（权重必须 ≥1），冷却只影响这一轮从谁里面抽。
+export function cooledCandidates(weighted, tickets = []) {
+    const rows = Array.isArray(weighted) ? weighted : [];
+    const history = Array.isArray(tickets) ? tickets : [];
+    const last = [...history].reverse().find(ticket => ticket?.selectedModuleId)?.selectedModuleId || '';
+    const rest = rows.filter(item => item?.id !== last);
+    return last && rest.length ? rest : rows;
 }
 
 export function pickWeighted(weighted, random) {

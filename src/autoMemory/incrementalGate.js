@@ -122,7 +122,7 @@ async function drawFresh(snapshot, fresh, input, io, { keepPace = false } = {}) 
         return persistNoop(snapshot, input.floor, io, input.now, 'no-candidates');
     }
     const weighted = auto_memory_draw.weightCandidates(candidates, snapshot.drawTickets);
-    const selected = auto_memory_draw.pickWeighted(weighted, io.random);
+    const selected = auto_memory_draw.pickWeighted(auto_memory_draw.cooledCandidates(weighted, snapshot.drawTickets), io.random);
     if (!selected || plan.excludedModuleIds.includes(selected)) {
         if (keepPace) return { action: 'noop', moduleRequest: false, reason: 'no-candidates' };
         return persistNoop(snapshot, input.floor, io, input.now, 'no-candidates');

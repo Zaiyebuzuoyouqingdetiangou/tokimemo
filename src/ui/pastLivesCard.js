@@ -26,9 +26,9 @@ export function pastLivesCardHtml(session, descriptor, cache, readOnly = false, 
                 <span class="rmt-lenticular-face">${front ? '前世' : back ? '今生' : '前世 · 今生'}</span>
             </div>
         </div>
+        ${image_menu.imageMenuHtml(`${menuButtons}${readOnly ? '' : `<button type="button" class="rmt-btn" data-card-pick>${pair ? '更换今生' : '挑一张今生'}</button>${pair ? '<button type="button" class="rmt-btn" data-card-clear>移除配对</button>' : ''}`}<button type="button" class="rmt-btn" data-card-tilt hidden>启用倾斜</button>`)}
         <figcaption><div class="rmt-lenticular-controls"><button type="button" data-card-side="0" ${both ? '' : 'disabled'}>前世</button><input type="range" min="0" max="100" value="0" step="1" aria-label="前世与今生" aria-valuetext="前世" ${both ? '' : 'disabled'}><button type="button" data-card-side="100" ${both ? '' : 'disabled'}>今生</button></div>
             <p class="rmt-lenticular-status" role="status">${pair && !back ? '原图已不可用，请重新挑选今生。' : !back ? '今生还没留下画面' : !front ? '生成前世画面后即可切换两面' : '横滑或拖动滑杆，看见另一世'}</p>
-            ${image_menu.imageMenuHtml(`${menuButtons}${readOnly ? '' : `<button type="button" class="rmt-btn" data-card-pick>${pair ? '更换今生' : '挑一张今生'}</button>${pair ? '<button type="button" class="rmt-btn" data-card-clear>移除配对</button>' : ''}`}<button type="button" class="rmt-btn" data-card-tilt hidden>启用倾斜</button>`)}
         </figcaption>
     </figure>`;
 }

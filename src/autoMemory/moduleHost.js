@@ -2,6 +2,7 @@
 import * as archive_repository from '../archive/repository.js';
 import * as core_cache from '../core/cache.js';
 import * as generation_achievement from '../generation/achievementCapture.js';
+import * as journal_piggyback from '../core/journalPiggyback.js';
 import * as generation_client from '../generation/client.js';
 import * as modes_inbox from '../modes/inbox.js';
 import * as auto_memory_gap from './gapFill.js';
@@ -81,10 +82,14 @@ function stepOptions(step, plan) {
 }
 
 export async function executeModuleStep({ step, plan, carryAchievement }, context) {
-    if (carryAchievement) generation_achievement.armAchievementCapture();
+    // r84.175：最后一步顺便给「等批注」的手帐页写一句（读不到手帐就当没有，不影响本轮）。
+    const wanted = carryAchievement ? await journal_piggyback.wantedJournalPages() : { scope: '', pages: [] };
+    if (carryAchievement) generation_achievement.armAchievementCapture({ journalPages: wanted.pages, charName: context?.name2, userName: context?.name1 });
     try {
         const result = await generation_client.generateMode(plan.moduleId, stepOptions(step, plan));
+        const journalNotes = generation_achievement.takeJournalNotes();
         const achievement = generation_achievement.finishAchievementCapture();
+        if (Object.keys(journalNotes).length) void journal_piggyback.saveJournalNotes(wanted.scope, journalNotes, context?.name2 || '');
         if (!result || result.status === 'failed' || result.status === 'cancelled' || result.status === 'blocked') return { saved: false };
         if (result?.status === 'noop') return { noop: true };
         if (step.kind === 'catalog') {

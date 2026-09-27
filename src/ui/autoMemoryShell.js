@@ -27,6 +27,7 @@ import * as ui_styles from './styles.js';
 import * as ui_taskCenter from './taskCenter.js';
 import * as ui_overlay from './overlay.js';
 import * as core_theme from '../core/theme.js';
+import * as journal_clip from './journalClip.js';
 
 let cleanup = null;
 let lastPhase = '';
@@ -225,8 +226,10 @@ function markup(view) {
     const read = `<button type="button" class="rmt-btn" data-rmt-letter-read data-rmt-reveal="${esc(view.revealId)}" data-rmt-module="${esc(view.moduleId)}">打开回忆</button>`;
     // r84.162：打开回忆仍在信里直接展开内容；另给一个按钮去心迹回廊看同一份（只打开已保存的，不会重新生成）。
     const jump = view.moduleId ? `<button type="button" class="rmt-btn" data-rmt-letter-jump data-rmt-reveal="${esc(view.revealId)}" data-rmt-module="${esc(view.moduleId)}">去心迹回廊看</button>` : '';
+    // r84.175：把这封信夹进手帐（标题和一句简介）。
+    const clip = view.title ? `<button type="button" class="rmt-btn" data-rmt-journal-clip="${journal_clip.clipPayload({ mode: view.moduleId, id: view.revealId, title: view.title, body: view.achievementCopy || '' })}">夹进手帐</button>` : '';
     const paper = revealPaper
-        ? `<div class="rmt-letter-head"><span class="rmt-letter-badge">${esc(moduleTitle)}</span></div>${heading}${copy}<div class="rmt-letter-buttons">${read}${jump}<button type="button" class="rmt-btn rmt-heart-letter-close" data-rmt-letter-close>收起</button></div>`
+        ? `<div class="rmt-letter-head"><span class="rmt-letter-badge">${esc(moduleTitle)}</span></div>${heading}${copy}<div class="rmt-letter-buttons">${read}${jump}${clip}<button type="button" class="rmt-btn rmt-heart-letter-close" data-rmt-letter-close>收起</button></div>`
         : '';
     // r84.162：只有最新一楼用迷你信封；更早的楼压缩成一行提示条，没拆的带红点。
     const seal = view.compact
@@ -676,6 +679,8 @@ function onClick(event) {
         if (seal) seal.hidden = false;
         return;
     }
+    const clipButton = event.target?.closest?.('[data-rmt-journal-clip]');
+    if (clipButton) { event.preventDefault(); event.stopPropagation(); void journal_clip.clipToJournal(clipButton.dataset.rmtJournalClip); return; }
     const jump = event.target?.closest?.('[data-rmt-letter-jump]');
     if (jump) {
         event.preventDefault();
