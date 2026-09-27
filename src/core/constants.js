@@ -210,7 +210,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
     creativeSupplement: '',
     imageGenerationProvider: 'baibai-image',
     imageGenerationFallback: false,
-    autoMemoryLatestFloor: false,
+    autoMemoryLatestFloor: true,
     autoMemoryIntervalFloors: 5,
     heartEnvelopeSkin: 'pink',
     cgPromptFormat: 'nai5-natural',

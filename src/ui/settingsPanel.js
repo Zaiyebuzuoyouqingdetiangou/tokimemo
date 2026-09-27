@@ -590,8 +590,6 @@ export function refreshGenerationSettingsUi() {
     if (intervalInput && document.activeElement !== intervalInput) {
         intervalInput.value = String(pacePlan?.intervalFloors || settings.autoMemoryIntervalFloors);
     }
-    const latestInput = panel.querySelector('[data-rmt-auto-memory-latest]');
-    if (latestInput) latestInput.checked = settings.autoMemoryLatestFloor === true;
     ui_heartEnvelope.paintEnvelopePicker(panel, settings.heartEnvelopeSkin);
     ui_countdown.refreshAutoMemoryCountdown();
     const restore = panel.querySelector('[data-rmt-auto-memory-restore]');
@@ -823,9 +821,8 @@ export function mountSettings({ homeTarget = null } = {}) {
           <p>只在已有档案的当前聊天里运行。打开后从当前楼数起计。</p>
           <p data-rmt-memory-due hidden></p>
           <label class="rmt-settings-field"><span>每隔多少楼抽一次</span><input class="text_pole" data-rmt-auto-memory-interval type="number" min="1" max="1000" step="1" value="${core_settings.getPluginSettings().autoMemoryIntervalFloors}" aria-label="每隔多少楼抽一次"></label>
-          <small>到了这个间隔就从勾选的回忆里抽一份。1 到 1000。改完从现在重新计。</small>
-          <label class="rmt-settings-check"><input type="checkbox" data-rmt-auto-memory-latest ${core_settings.getPluginSettings().autoMemoryLatestFloor ? 'checked' : ''}><span>在最新角色楼生成回忆</span></label>
-          <small>勾上后只数角色楼，系统楼不算。间隔是 1 时，只用最新一条角色楼的正文。</small>
+          <small>每隔这么多条角色楼抽一次。用户楼和系统楼不算。1 到 1000。改完从现在重新计。</small>
+          <small>打开自动留忆后，需要两次才完整的模块会自动做第二次生成。一份回忆写完时带上一个成就，两样都在才算这一份。</small>
           ${ui_heartEnvelope.heartEnvelopePickerHtml(core_settings.getPluginSettings().heartEnvelopeSkin)}
           <button type="button" class="menu_button rmt-settings-wide" data-rmt-auto-memory-wizard>打开回忆向导</button>
           <small>向导先接 API、读取范围和档案。已有档案时不会重新建档。</small>
@@ -987,11 +984,6 @@ export function mountSettings({ homeTarget = null } = {}) {
         if (target.matches?.('[data-rmt-auto-retry-count]')) {
             core_settings.updatePluginSettings({ autoRetryCount: target.value });
             target.value = String(core_settings.getPluginSettings().autoRetryCount);
-            return;
-        }
-        if (target.matches?.('[data-rmt-auto-memory-latest]')) {
-            core_settings.updatePluginSettings({ autoMemoryLatestFloor: !!target.checked });
-            void saveAutoMemoryPace(panel);
             return;
         }
         if (target.matches?.('[data-rmt-auto-memory-interval]')) {

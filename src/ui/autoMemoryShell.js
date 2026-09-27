@@ -195,18 +195,12 @@ function markup(view) {
             : '';
         return `<p class="rmt-floor-pace" data-rmt-floor-pace><span>留忆</span><b>${core_text.esc(view.detail)}</b>${gap}</p>`;
     }
-    const repair = view.canRepairAchievement
-        ? '<button type="button" class="rmt-btn" data-rmt-floor-achievement>补成就</button>'
-        : '';
-    const complete = view.canComplete
+    const repair = '';
+    const complete = (view.canComplete || view.canRepairAchievement)
         ? '<button type="button" class="rmt-btn" data-rmt-floor-complete>补全</button>'
         : '';
-    const redo = view.canRedo
-        ? '<button type="button" class="rmt-btn" data-rmt-floor-redo>重试</button>'
-        : '';
-    const retry = view.canRetry
-        ? '<button type="button" class="rmt-btn" data-rmt-floor-retry>重试</button>'
-        : '';
+    const redo = '';
+    const retry = '';
     const actions = repair || complete || redo || retry ? `<div class="rmt-heart-letter-actions">${repair}${complete}${redo}${retry}</div>` : '';
     const revealPaper = view.phase === 'reveal' && view.showReveal;
     const writing = view.phase === 'generating' || view.phase === 'planning';
@@ -256,7 +250,7 @@ function watchStall(view, context) {
     });
     stallState = { signature: next.signature, since: next.since };
     if (next.stalled) {
-        const detail = '90 秒没有新的进度。可以补全没写完的部分，或再试一次。';
+        const detail = '90 秒没有新的进度。可以补全这一抽没写完的部分。';
         if (!stallNoted) {
             stallNoted = true;
             ui_taskCenter.noteAutoMemoryFloorFailure({ label: view.moduleTitle || '自动留忆', detail });
@@ -274,7 +268,7 @@ function watchStall(view, context) {
     if (view.phase === 'failed') {
         ui_taskCenter.noteAutoMemoryFloorFailure({
             label: view.moduleTitle || '自动留忆',
-            detail: view.detail || '可以补全没写完的部分，或再试一次。',
+            detail: view.detail || '可以补全这一抽没写完的部分。',
         });
     }
     return view;
@@ -512,7 +506,7 @@ function letterIdentity() {
     };
 }
 
-const EMPTY_ROUND = '<p class="rmt-floor-note">这一轮写完了，但是没有新的段落。</p><div class="rmt-heart-letter-actions"><button type="button" class="rmt-btn" data-rmt-floor-complete>补全</button><button type="button" class="rmt-btn" data-rmt-floor-redo>重试</button></div>';
+const EMPTY_ROUND = '<p class="rmt-floor-note">这一轮写完了，但是没有新的段落。</p><div class="rmt-heart-letter-actions"><button type="button" class="rmt-btn" data-rmt-floor-complete>补全</button></div>';
 
 function writeRound(body, moduleId, revealId) {
     const increment = incrementFor(moduleId, revealId);
@@ -612,7 +606,7 @@ function onClick(event) {
         event.preventDefault();
         event.stopPropagation();
         redo.disabled = true;
-        watchFloorAction(auto_memory_scheduler.retryFloorRound(), '等这楼正文写完，再重写这一页。').catch(error => {
+        watchFloorAction(auto_memory_scheduler.completeFloorRound(), '等这楼正文写完，再补这一页。').catch(error => {
             console.warn('[HeartbeatMemories] floor redo skipped', core_text.safeErrorDiagnostic(error));
         }).finally(() => { redo.disabled = false; sync(); });
         return;
@@ -622,7 +616,7 @@ function onClick(event) {
         event.preventDefault();
         event.stopPropagation();
         retry.disabled = true;
-        watchFloorAction(auto_memory_scheduler.resumeFloorPlan(), '等这楼正文写完，再重写这一页。').catch(error => {
+        watchFloorAction(auto_memory_scheduler.completeFloorRound(), '等这楼正文写完，再补这一页。').catch(error => {
             console.warn('[HeartbeatMemories] floor retry skipped', core_text.safeErrorDiagnostic(error));
         }).finally(() => { retry.disabled = false; sync(); });
         return;

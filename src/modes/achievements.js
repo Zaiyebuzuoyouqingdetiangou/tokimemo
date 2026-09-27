@@ -175,6 +175,15 @@ export function mergeAchievementsIncremental(previous, fresh, memoryBank) {
         return { ...item, id };
     });
     const normalized = normalizeAchievements({ title: fresh.title || previous.title || '成就库', entries: dedupedIds }, memoryBank);
+    const kept = new Map(dedupedIds.filter(item => item?.origin === 'auto').map(item => [item.id, item]));
+    for (const item of normalized.entries) {
+        const old = kept.get(item.id);
+        if (!old) continue;
+        item.origin = 'auto';
+        if (old.moduleId) item.moduleId = old.moduleId;
+        const mesid = Math.floor(Number(old.messageIndex));
+        if (Number.isSafeInteger(mesid) && mesid >= 0) item.messageIndex = mesid;
+    }
     // Do not rewrite old cache objects merely to materialize the new presentation field.
     // renderAchievements() supplies the anchor/description fallback until that achievement is
     // genuinely replaced (for example, when a formerly locked goal becomes unlocked).
@@ -212,7 +221,12 @@ export function renderAchievements() {
         gold: 'fa-trophy',
         hidden: 'fa-question',
     })[tier] || 'fa-medal';
-    const cards = (items, lockedState) => items.map(item => `<article class="rmt-achievement-card ${lockedState ? 'locked' : 'unlocked'}">
+    const cards = (items, lockedState) => items.map(item => {
+        const mesid = item?.origin === 'auto' ? Math.floor(Number(item.messageIndex)) : NaN;
+        const jump = item?.origin === 'auto' && Number.isSafeInteger(mesid) && mesid >= 0
+            ? `<button type="button" class="rmt-btn" data-rmt-action="achievement-jump" data-rmt-floor="${mesid}">回到当时</button>`
+            : '';
+        return `<article class="rmt-achievement-card ${lockedState ? 'locked' : 'unlocked'}">
       <div class="rmt-achievement-icon"><i class="fa-solid ${tierIcon(item.tier)}"></i></div>
       <div class="rmt-achievement-copy">
         <div class="rmt-achievement-title"><b>${core_text.esc(item.title)}</b><span>${core_text.esc(item.category)}</span></div>
@@ -220,8 +234,10 @@ export function renderAchievements() {
         <small>${lockedState
             ? core_text.esc(item.hint)
             : `解锁条件：${core_text.esc(achievementUnlockCondition(item))} · 解锁时间：${core_text.esc(item.unlockedAt || '已解锁')}`}</small>
+        ${jump}
       </div>
-    </article>`).join('');
+    </article>`;
+    }).join('');
     ui_overlay.bodyEl().innerHTML = `<div class="rmt-achievements">
       <div class="rmt-achievements-head"><div><h2>${core_text.esc(session.title || '成就库')}</h2><span>${unlocked.length} / ${session.entries.length}</span></div>${readOnly ? '' : '<button type="button" class="rmt-btn" data-rmt-action="regenerate">增量追加成就</button>'}</div>
       <section class="rmt-achievement-section"><h3>已解锁 <span>${unlocked.length}</span></h3><div class="rmt-achievement-grid">${unlocked.length ? cards(unlocked, false) : '<div class="rmt-heart-empty">还没有已解锁成就。</div>'}</div></section>

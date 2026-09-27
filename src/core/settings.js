@@ -70,7 +70,7 @@ export function getPluginSettings(context = core_context.getContext()) {
         imageGenerationManualEnabled: false,
         imageGenerationProvider: settings.imageGenerationProvider === 'chatu8-image' ? 'chatu8-image' : 'baibai-image',
         imageGenerationFallback: settings.imageGenerationFallback === true,
-        autoMemoryLatestFloor: settings.autoMemoryLatestFloor === true,
+        autoMemoryLatestFloor: true,
         autoMemoryIntervalFloors: normalizeAutoMemoryInterval(settings.autoMemoryIntervalFloors),
         heartEnvelopeSkin: core_constants.HEART_ENVELOPE_SKINS.includes(settings.heartEnvelopeSkin) ? settings.heartEnvelopeSkin : 'pink',
         cgPromptFormat: cg_format.normalizeCgPromptFormat(settings.cgPromptFormat, 'nai5-natural'),

@@ -47,6 +47,7 @@ export function overlayArchiveActions(actionEl, action) {
     if (action === 'achievement-jump') {
         const jumped = ui_floor.highlightFloor(actionEl?.dataset?.rmtFloor);
         if (!jumped.ok) globalThis.toastr?.info?.('这一楼现在翻不到。成就还在这里。', '心迹回廊');
+        else closeArchiveOverlayFromUser();
         return;
     }
     if (action === 'achievement-open') {

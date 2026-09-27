@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 212
-// Source SHA-256: cfa7f845fcc8a4c7e1cae61bfd4d2121978ab60389bb6d20bbf4616d8f9884b0
+// Source SHA-256: 5af1674629d74119d63193c28095935d2bd697fa71eb32390372c96c48df70c0
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -4546,17 +4546,16 @@ function floorIsDue(floor, nextDueFloor) {
     return Number.isSafeInteger(floor) && Number.isSafeInteger(nextDueFloor) && floor >= nextDueFloor;
 }
 
-function shouldRetryDueRound(snapshot, floor) {
-    const plan = snapshot?.plan;
-    if (plan?.enabled !== true) return false;
-    return floorIsDue(floor, plan.nextDueFloor);
+function shouldRetryDueRound() {
+    // 补全只接着当前这张票，到点也不另抽。
+    return false;
 }
 
 function floorDecision({ enabled = false, floor = 0, interval = 0, nextDueFloor = null, modulePlan = null, activeTicket = null, inflightFloor = null, seenFloor = null } = {}) {
     if (enabled !== true) return { action: 'idle' };
     if (modulePlanOpen(modulePlan)) {
-        // 间隔还没到，同一轮接着写。到点了就放弃没写完的，另抽一张。
-        if (!floorIsDue(floor, nextDueFloor)) return { action: 'hold', sourceMemoryIds: [...(modulePlan.sourceMemoryIds || [])] };
+        // 这一抽还没写完就先补完。下一间隔在它后面排队，不另抽、不换模块。
+        return { action: 'hold', sourceMemoryIds: [...(modulePlan.sourceMemoryIds || [])] };
     } else if (ticketOpen(activeTicket)) {
         const finished = !!modulePlan && !modulePlanOpen(modulePlan);
         const orphan = !modulePlan;
@@ -4691,15 +4690,6 @@ function closeActiveTicket(snapshot, ticket) {
     });
 }
 
-function closeRound(snapshot, ticket) {
-    return auto_memory_plan.parseAutoMemorySnapshot({
-        plan: auto_memory_plan.parseAutoMemoryPlan({ ...snapshot.plan, activeDrawTicketId: null }),
-        revealRecords: snapshot.revealRecords,
-        drawTickets: snapshot.drawTickets.map(row => (ticket && row.id === ticket.id ? { ...row, status: 'completed' } : row)),
-        modulePlan: null,
-    });
-}
-
 // 计划写完了，票却没关（旧版本结算失败留下的）。同一修订里把票关掉，后面的写入照常只加一版。
 function releaseFinishedTicket(snapshot, floor = null) {
     const ticket = activeTicket(snapshot);
@@ -4711,11 +4701,16 @@ function releaseFinishedTicket(snapshot, floor = null) {
     return closeActiveTicket(snapshot, ticket);
 }
 
-// 到点的新楼不再接着写没完成的一轮，先把旧计划和旧票放下。
+function roundStillOpen(snapshot) {
+    if (modulePlanOpen(snapshot?.modulePlan)) return true;
+    const drawId = snapshot?.modulePlan?.drawId || snapshot?.plan?.activeDrawTicketId || '';
+    return (snapshot?.revealRecords || []).some(row => row?.status === 'achievement_pending'
+        && (!drawId || row.id === drawId || row.moduleId === snapshot?.modulePlan?.moduleId));
+}
+
+// 写完的票可以放下。没写完的一轮留着，到点的新间隔等它结束再抽。
 function abandonDueRound(snapshot, floor = null) {
-    if (modulePlanOpen(snapshot?.modulePlan) && floorIsDue(floor, snapshot.plan?.nextDueFloor)) {
-        return closeRound(snapshot, activeTicket(snapshot));
-    }
+    if (roundStillOpen(snapshot)) return snapshot;
     return releaseFinishedTicket(snapshot, floor);
 }
 
@@ -4753,9 +4748,29 @@ async function runAutoMemoryRound(input, io) {
         enabled: plan.enabled, floor: input.floor, interval: plan.intervalFloors, nextDueFloor: plan.nextDueFloor,
         modulePlan: snapshot.modulePlan, activeTicket: activeTicket(snapshot), inflightFloor: input.inflightFloor, seenFloor: input.seenFloor,
     });
-    if (decision.action === 'hold') {
-        if (typeof io.resumeModule === 'function') await io.resumeModule(snapshot);
-        return { action: 'hold', moduleRequest: false, sourceMemoryIds: decision.sourceMemoryIds };
+    if (decision.action === 'hold' || roundStillOpen(snapshot)) {
+        const steps = snapshot.modulePlan?.steps || [];
+        const failed = steps.some(step => step.status === 'failed');
+        const due = floorIsDue(input.floor, snapshot.plan?.nextDueFloor);
+        const sourceMemoryIds = decision.sourceMemoryIds || [...(snapshot.modulePlan?.sourceMemoryIds || [])];
+        if (!failed && modulePlanOpen(snapshot.modulePlan) && typeof io.resumeModule === 'function') {
+            const resumed = await io.resumeModule(snapshot);
+            const resumedPlan = resumed?.snapshot?.modulePlan;
+            const finished = resumed
+                && !modulePlanOpen(resumedPlan)
+                && resumed.action !== 'achievement-pending'
+                && resumed.action !== 'failed'
+                && resumed.action !== 'queued'
+                && resumed.action !== 'hold';
+            if (finished) {
+                return { action: resumed.action || 'reveal', moduleRequest: true, snapshot: resumed.snapshot, sourceMemoryIds };
+            }
+        }
+        return {
+            action: due ? 'queued' : 'hold',
+            moduleRequest: false,
+            sourceMemoryIds,
+        };
     }
     if (decision.action === 'reuse') return resumeTicket(snapshot, activeTicket(snapshot), input, io);
     if (decision.action !== 'arm' && decision.action !== 'due') return { action: decision.action, moduleRequest: false };
@@ -7171,7 +7186,9 @@ function finishHostJob(job, result) {
     const action = result?.action || 'failed';
     const detail = action === 'noop'
         ? '这一楼没有新的档案，所以没有重抽。'
-        : action === 'hold'
+            : action === 'queued'
+                ? '上一轮还在补，新的一轮排在后面。'
+                : action === 'hold'
             ? '接着写没完成的一轮。'
             : action === 'reuse'
                 ? '接着写上一轮抽中的模块。'
@@ -7339,6 +7356,7 @@ async function runHostRound() {
     const body = async claim => {
         if (handledFloors.get(scope) === floor || inflightScopes.has(scope)) return;
         inflightScopes.add(scope);
+        let kickNextDue = false;
         try {
             let snapshot;
             try { snapshot = auto_memory_plan.readAutoMemoryMetadata(metadata); }
@@ -7360,7 +7378,7 @@ async function runHostRound() {
                 ? ui_taskCenter.openAutoMemoryJob({
                     label: '自动留忆',
                     detail: continuing && due
-                        ? '上一轮没写完，这一楼到点了，重新抽。'
+                        ? '上一轮还在补，新的一轮排在后面。'
                         : continuing
                             ? '接着写没完成的一轮。'
                             : '这一楼到点了，正在抽签。',
@@ -7401,8 +7419,16 @@ async function runHostRound() {
                 startModule: next => runModule(next, persist, core_context.currentCharacterGuard()),
                 resumeModule: current => runModule(current, persist, core_context.currentCharacterGuard()),
             });
-            if (['arm', 'noop', 'drawn', 'reuse', 'failed', 'wait'].includes(result.action)) {
+            if (['arm', 'noop', 'drawn', 'reuse', 'failed', 'wait', 'queued', 'hold'].includes(result.action)) {
                 handledFloors.set(scope, floor);
+            }
+            const planClosed = !auto_memory_gate.modulePlanOpen(result?.snapshot?.modulePlan)
+                && result?.action !== 'achievement-pending'
+                && result?.action !== 'queued'
+                && result?.action !== 'hold';
+            if (planClosed && (result?.action === 'reveal' || result?.action === 'noop' || result?.action === 'drawn' || result?.action === 'saved')) {
+                handledFloors.delete(scope);
+                kickNextDue = true;
             }
             if (result.action === 'drawn' || result.action === 'reuse') stampDrawSource(context, result.drawId);
             ui_countdown.refreshAutoMemoryCountdown();
@@ -7414,6 +7440,7 @@ async function runHostRound() {
             }
         } finally {
             inflightScopes.delete(scope);
+            if (kickNextDue) scheduleSettledRound();
         }
     };
     const locks = globalThis.navigator?.locks;
@@ -7523,33 +7550,27 @@ function queueFloorRecovery(kind) {
     return { action: 'wait' };
 }
 
-async function retryDueFloor(context) {
-    const scope = core_context.chatScopeKey(context);
-    handledFloors.delete(scope);
-    await runHostRound();
-    return { action: 'due-retry' };
-}
-
 async function completeFloorRound() {
     const context = core_context.currentCharacterGuard();
     if (redoInflight) return { action: 'busy' };
     if (storyStillWriting(context)) return queueFloorRecovery('complete');
-    const latest = core_settings.getPluginSettings().autoMemoryLatestFloor === true;
     const snapshot = auto_memory_plan.readAutoMemoryMetadata(context.chatMetadata);
-    if (auto_memory_gate.shouldRetryDueRound(snapshot, currentPlanFloor(context, latest))) return retryDueFloor(context);
-    const rewritten = await rerollOwnedFloor(null);
-    if (rewritten) return { action: 'rerolled' };
-    if (snapshot?.modulePlan?.steps?.length) return resumeFloorPlan();
-    return regenerateCurrentMemory({ mode: 'keep' });
+    const pending = auto_memory_redo.pendingReveal(snapshot);
+    let result = { action: 'idle' };
+    if (auto_memory_gate.modulePlanOpen(snapshot?.modulePlan)) result = await resumeFloorPlan();
+    else if (pending) result = await repairFloorAchievement(context);
+    if (result?.action === 'reveal' || result?.action === 'saved' || result?.action === 'drawn') {
+        handledFloors.delete(core_context.chatScopeKey(context));
+        scheduleSettledRound();
+    }
+    return result;
 }
 
 async function retryFloorRound() {
     const context = core_context.currentCharacterGuard();
     if (redoInflight) return { action: 'busy' };
     if (storyStillWriting(context)) return queueFloorRecovery('redo');
-    const latest = core_settings.getPluginSettings().autoMemoryLatestFloor === true;
     const snapshot = auto_memory_plan.readAutoMemoryMetadata(context.chatMetadata);
-    if (auto_memory_gate.shouldRetryDueRound(snapshot, currentPlanFloor(context, latest))) return retryDueFloor(context);
     const rewritten = await rerollOwnedFloor(null);
     if (rewritten) return { action: 'rerolled' };
     return regenerateCurrentMemory({ mode: 'keep' });
@@ -10530,7 +10551,7 @@ const DEFAULT_SETTINGS = Object.freeze({
     creativeSupplement: '',
     imageGenerationProvider: 'baibai-image',
     imageGenerationFallback: false,
-    autoMemoryLatestFloor: false,
+    autoMemoryLatestFloor: true,
     autoMemoryIntervalFloors: 5,
     heartEnvelopeSkin: 'pink',
     cgPromptFormat: 'nai5-natural',
@@ -29121,7 +29142,7 @@ function getPluginSettings(context = core_context.getContext()) {
         imageGenerationManualEnabled: false,
         imageGenerationProvider: settings.imageGenerationProvider === 'chatu8-image' ? 'chatu8-image' : 'baibai-image',
         imageGenerationFallback: settings.imageGenerationFallback === true,
-        autoMemoryLatestFloor: settings.autoMemoryLatestFloor === true,
+        autoMemoryLatestFloor: true,
         autoMemoryIntervalFloors: normalizeAutoMemoryInterval(settings.autoMemoryIntervalFloors),
         heartEnvelopeSkin: core_constants.HEART_ENVELOPE_SKINS.includes(settings.heartEnvelopeSkin) ? settings.heartEnvelopeSkin : 'pink',
         cgPromptFormat: cg_format.normalizeCgPromptFormat(settings.cgPromptFormat, 'nai5-natural'),
@@ -42167,6 +42188,15 @@ function mergeAchievementsIncremental(previous, fresh, memoryBank) {
         return { ...item, id };
     });
     const normalized = normalizeAchievements({ title: fresh.title || previous.title || '成就库', entries: dedupedIds }, memoryBank);
+    const kept = new Map(dedupedIds.filter(item => item?.origin === 'auto').map(item => [item.id, item]));
+    for (const item of normalized.entries) {
+        const old = kept.get(item.id);
+        if (!old) continue;
+        item.origin = 'auto';
+        if (old.moduleId) item.moduleId = old.moduleId;
+        const mesid = Math.floor(Number(old.messageIndex));
+        if (Number.isSafeInteger(mesid) && mesid >= 0) item.messageIndex = mesid;
+    }
     // Do not rewrite old cache objects merely to materialize the new presentation field.
     // renderAchievements() supplies the anchor/description fallback until that achievement is
     // genuinely replaced (for example, when a formerly locked goal becomes unlocked).
@@ -42204,7 +42234,12 @@ function renderAchievements() {
         gold: 'fa-trophy',
         hidden: 'fa-question',
     })[tier] || 'fa-medal';
-    const cards = (items, lockedState) => items.map(item => `<article class="rmt-achievement-card ${lockedState ? 'locked' : 'unlocked'}">
+    const cards = (items, lockedState) => items.map(item => {
+        const mesid = item?.origin === 'auto' ? Math.floor(Number(item.messageIndex)) : NaN;
+        const jump = item?.origin === 'auto' && Number.isSafeInteger(mesid) && mesid >= 0
+            ? `<button type="button" class="rmt-btn" data-rmt-action="achievement-jump" data-rmt-floor="${mesid}">回到当时</button>`
+            : '';
+        return `<article class="rmt-achievement-card ${lockedState ? 'locked' : 'unlocked'}">
       <div class="rmt-achievement-icon"><i class="fa-solid ${tierIcon(item.tier)}"></i></div>
       <div class="rmt-achievement-copy">
         <div class="rmt-achievement-title"><b>${core_text.esc(item.title)}</b><span>${core_text.esc(item.category)}</span></div>
@@ -42212,8 +42247,10 @@ function renderAchievements() {
         <small>${lockedState
             ? core_text.esc(item.hint)
             : `解锁条件：${core_text.esc(achievementUnlockCondition(item))} · 解锁时间：${core_text.esc(item.unlockedAt || '已解锁')}`}</small>
+        ${jump}
       </div>
-    </article>`).join('');
+    </article>`;
+    }).join('');
     ui_overlay.bodyEl().innerHTML = `<div class="rmt-achievements">
       <div class="rmt-achievements-head"><div><h2>${core_text.esc(session.title || '成就库')}</h2><span>${unlocked.length} / ${session.entries.length}</span></div>${readOnly ? '' : '<button type="button" class="rmt-btn" data-rmt-action="regenerate">增量追加成就</button>'}</div>
       <section class="rmt-achievement-section"><h3>已解锁 <span>${unlocked.length}</span></h3><div class="rmt-achievement-grid">${unlocked.length ? cards(unlocked, false) : '<div class="rmt-heart-empty">还没有已解锁成就。</div>'}</div></section>
@@ -58751,18 +58788,12 @@ function markup(view) {
             : '';
         return `<p class="rmt-floor-pace" data-rmt-floor-pace><span>留忆</span><b>${core_text.esc(view.detail)}</b>${gap}</p>`;
     }
-    const repair = view.canRepairAchievement
-        ? '<button type="button" class="rmt-btn" data-rmt-floor-achievement>补成就</button>'
-        : '';
-    const complete = view.canComplete
+    const repair = '';
+    const complete = (view.canComplete || view.canRepairAchievement)
         ? '<button type="button" class="rmt-btn" data-rmt-floor-complete>补全</button>'
         : '';
-    const redo = view.canRedo
-        ? '<button type="button" class="rmt-btn" data-rmt-floor-redo>重试</button>'
-        : '';
-    const retry = view.canRetry
-        ? '<button type="button" class="rmt-btn" data-rmt-floor-retry>重试</button>'
-        : '';
+    const redo = '';
+    const retry = '';
     const actions = repair || complete || redo || retry ? `<div class="rmt-heart-letter-actions">${repair}${complete}${redo}${retry}</div>` : '';
     const revealPaper = view.phase === 'reveal' && view.showReveal;
     const writing = view.phase === 'generating' || view.phase === 'planning';
@@ -58812,7 +58843,7 @@ function watchStall(view, context) {
     });
     stallState = { signature: next.signature, since: next.since };
     if (next.stalled) {
-        const detail = '90 秒没有新的进度。可以补全没写完的部分，或再试一次。';
+        const detail = '90 秒没有新的进度。可以补全这一抽没写完的部分。';
         if (!stallNoted) {
             stallNoted = true;
             ui_taskCenter.noteAutoMemoryFloorFailure({ label: view.moduleTitle || '自动留忆', detail });
@@ -58830,7 +58861,7 @@ function watchStall(view, context) {
     if (view.phase === 'failed') {
         ui_taskCenter.noteAutoMemoryFloorFailure({
             label: view.moduleTitle || '自动留忆',
-            detail: view.detail || '可以补全没写完的部分，或再试一次。',
+            detail: view.detail || '可以补全这一抽没写完的部分。',
         });
     }
     return view;
@@ -59068,7 +59099,7 @@ function letterIdentity() {
     };
 }
 
-const EMPTY_ROUND = '<p class="rmt-floor-note">这一轮写完了，但是没有新的段落。</p><div class="rmt-heart-letter-actions"><button type="button" class="rmt-btn" data-rmt-floor-complete>补全</button><button type="button" class="rmt-btn" data-rmt-floor-redo>重试</button></div>';
+const EMPTY_ROUND = '<p class="rmt-floor-note">这一轮写完了，但是没有新的段落。</p><div class="rmt-heart-letter-actions"><button type="button" class="rmt-btn" data-rmt-floor-complete>补全</button></div>';
 
 function writeRound(body, moduleId, revealId) {
     const increment = incrementFor(moduleId, revealId);
@@ -59168,7 +59199,7 @@ function onClick(event) {
         event.preventDefault();
         event.stopPropagation();
         redo.disabled = true;
-        watchFloorAction(auto_memory_scheduler.retryFloorRound(), '等这楼正文写完，再重写这一页。').catch(error => {
+        watchFloorAction(auto_memory_scheduler.completeFloorRound(), '等这楼正文写完，再补这一页。').catch(error => {
             console.warn('[HeartbeatMemories] floor redo skipped', core_text.safeErrorDiagnostic(error));
         }).finally(() => { redo.disabled = false; sync(); });
         return;
@@ -59178,7 +59209,7 @@ function onClick(event) {
         event.preventDefault();
         event.stopPropagation();
         retry.disabled = true;
-        watchFloorAction(auto_memory_scheduler.resumeFloorPlan(), '等这楼正文写完，再重写这一页。').catch(error => {
+        watchFloorAction(auto_memory_scheduler.completeFloorRound(), '等这楼正文写完，再补这一页。').catch(error => {
             console.warn('[HeartbeatMemories] floor retry skipped', core_text.safeErrorDiagnostic(error));
         }).finally(() => { retry.disabled = false; sync(); });
         return;
@@ -70826,8 +70857,6 @@ function refreshGenerationSettingsUi() {
     if (intervalInput && document.activeElement !== intervalInput) {
         intervalInput.value = String(pacePlan?.intervalFloors || settings.autoMemoryIntervalFloors);
     }
-    const latestInput = panel.querySelector('[data-rmt-auto-memory-latest]');
-    if (latestInput) latestInput.checked = settings.autoMemoryLatestFloor === true;
     ui_heartEnvelope.paintEnvelopePicker(panel, settings.heartEnvelopeSkin);
     ui_countdown.refreshAutoMemoryCountdown();
     const restore = panel.querySelector('[data-rmt-auto-memory-restore]');
@@ -71059,9 +71088,8 @@ function mountSettings({ homeTarget = null } = {}) {
           <p>只在已有档案的当前聊天里运行。打开后从当前楼数起计。</p>
           <p data-rmt-memory-due hidden></p>
           <label class="rmt-settings-field"><span>每隔多少楼抽一次</span><input class="text_pole" data-rmt-auto-memory-interval type="number" min="1" max="1000" step="1" value="${core_settings.getPluginSettings().autoMemoryIntervalFloors}" aria-label="每隔多少楼抽一次"></label>
-          <small>到了这个间隔就从勾选的回忆里抽一份。1 到 1000。改完从现在重新计。</small>
-          <label class="rmt-settings-check"><input type="checkbox" data-rmt-auto-memory-latest ${core_settings.getPluginSettings().autoMemoryLatestFloor ? 'checked' : ''}><span>在最新角色楼生成回忆</span></label>
-          <small>勾上后只数角色楼，系统楼不算。间隔是 1 时，只用最新一条角色楼的正文。</small>
+          <small>每隔这么多条角色楼抽一次。用户楼和系统楼不算。1 到 1000。改完从现在重新计。</small>
+          <small>打开自动留忆后，需要两次才完整的模块会自动做第二次生成。一份回忆写完时带上一个成就，两样都在才算这一份。</small>
           ${ui_heartEnvelope.heartEnvelopePickerHtml(core_settings.getPluginSettings().heartEnvelopeSkin)}
           <button type="button" class="menu_button rmt-settings-wide" data-rmt-auto-memory-wizard>打开回忆向导</button>
           <small>向导先接 API、读取范围和档案。已有档案时不会重新建档。</small>
@@ -71223,11 +71251,6 @@ function mountSettings({ homeTarget = null } = {}) {
         if (target.matches?.('[data-rmt-auto-retry-count]')) {
             core_settings.updatePluginSettings({ autoRetryCount: target.value });
             target.value = String(core_settings.getPluginSettings().autoRetryCount);
-            return;
-        }
-        if (target.matches?.('[data-rmt-auto-memory-latest]')) {
-            core_settings.updatePluginSettings({ autoMemoryLatestFloor: !!target.checked });
-            void saveAutoMemoryPace(panel);
             return;
         }
         if (target.matches?.('[data-rmt-auto-memory-interval]')) {
@@ -73790,7 +73813,7 @@ const QUEUE_STATUS = { queued: '排队', running: '进行中', done: '完成', f
 function noteAutoMemoryFloorFailure(info = {}) {
     const next = {
         label: info.label || '自动留忆',
-        detail: info.detail || '可以补全没写完的部分，或再试一次。',
+        detail: info.detail || '可以补全这一抽没写完的部分。',
         at: floorFailure?.at || Date.now(),
     };
     if (floorFailure && floorFailure.label === next.label && floorFailure.detail === next.detail) return;
@@ -73840,7 +73863,7 @@ function settleAutoMemoryJob(id, status, detail = '') {
 }
 
 function floorRetryActions() {
-    return '<button type="button" class="rmt-btn" data-rmt-action="task-floor-complete">补全没写完的部分</button><button type="button" class="rmt-btn" data-rmt-action="task-floor-retry">重试</button>';
+    return '<button type="button" class="rmt-btn" data-rmt-action="task-floor-complete">补全这一抽</button>';
 }
 
 function currentScope() {
@@ -74560,16 +74583,14 @@ function handleTaskCenterAction(action, actionEl) {
     if (action === 'task-center-close') return hideTaskCenter();
     if (action === 'task-floor-complete' || action === 'task-floor-retry') {
         clearAutoMemoryFloorFailure();
-        const run = action === 'task-floor-complete' ? auto_memory_scheduler.completeFloorRound : auto_memory_scheduler.retryFloorRound;
-        const waiting = action === 'task-floor-complete' ? '等这楼正文写完，再补这一页。' : '等这楼正文写完，再重写这一页。';
-        void Promise.resolve().then(() => run()).then(result => {
+        const waiting = '等这楼正文写完，再补这一抽。';
+        void Promise.resolve().then(() => auto_memory_scheduler.completeFloorRound()).then(result => {
             if (result?.action === 'wait' || result?.action === 'busy') globalThis.toastr?.info?.(waiting, '心迹回廊');
             else if (result?.action === 'idle') globalThis.toastr?.info?.('这一轮已经没有可以补的了。', '心迹回廊');
-            else if (result?.action === 'due-retry') globalThis.toastr?.info?.('这一楼到点了，正在重新抽签。', '心迹回廊');
             else if (result?.action === 'failed') globalThis.toastr?.error?.(core_text.safeErrorSummary(result.error) || '这一次还是没写完。', '心迹回廊');
         }).catch(error => {
             console.warn('[HeartbeatMemories] floor recovery skipped', core_text.safeErrorDiagnostic(error));
-            globalThis.toastr?.info?.('这次没能重试，请再点一次。', '心迹回廊');
+            globalThis.toastr?.info?.('这次没能补上，请再点一次。', '心迹回廊');
         });
         return;
     }

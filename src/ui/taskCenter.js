@@ -31,7 +31,7 @@ const QUEUE_STATUS = { queued: '排队', running: '进行中', done: '完成', f
 export function noteAutoMemoryFloorFailure(info = {}) {
     const next = {
         label: info.label || '自动留忆',
-        detail: info.detail || '可以补全没写完的部分，或再试一次。',
+        detail: info.detail || '可以补全这一抽没写完的部分。',
         at: floorFailure?.at || Date.now(),
     };
     if (floorFailure && floorFailure.label === next.label && floorFailure.detail === next.detail) return;
@@ -81,7 +81,7 @@ export function settleAutoMemoryJob(id, status, detail = '') {
 }
 
 function floorRetryActions() {
-    return '<button type="button" class="rmt-btn" data-rmt-action="task-floor-complete">补全没写完的部分</button><button type="button" class="rmt-btn" data-rmt-action="task-floor-retry">重试</button>';
+    return '<button type="button" class="rmt-btn" data-rmt-action="task-floor-complete">补全这一抽</button>';
 }
 
 function currentScope() {
@@ -801,16 +801,14 @@ export function handleTaskCenterAction(action, actionEl) {
     if (action === 'task-center-close') return hideTaskCenter();
     if (action === 'task-floor-complete' || action === 'task-floor-retry') {
         clearAutoMemoryFloorFailure();
-        const run = action === 'task-floor-complete' ? auto_memory_scheduler.completeFloorRound : auto_memory_scheduler.retryFloorRound;
-        const waiting = action === 'task-floor-complete' ? '等这楼正文写完，再补这一页。' : '等这楼正文写完，再重写这一页。';
-        void Promise.resolve().then(() => run()).then(result => {
+        const waiting = '等这楼正文写完，再补这一抽。';
+        void Promise.resolve().then(() => auto_memory_scheduler.completeFloorRound()).then(result => {
             if (result?.action === 'wait' || result?.action === 'busy') globalThis.toastr?.info?.(waiting, '心迹回廊');
             else if (result?.action === 'idle') globalThis.toastr?.info?.('这一轮已经没有可以补的了。', '心迹回廊');
-            else if (result?.action === 'due-retry') globalThis.toastr?.info?.('这一楼到点了，正在重新抽签。', '心迹回廊');
             else if (result?.action === 'failed') globalThis.toastr?.error?.(core_text.safeErrorSummary(result.error) || '这一次还是没写完。', '心迹回廊');
         }).catch(error => {
             console.warn('[HeartbeatMemories] floor recovery skipped', core_text.safeErrorDiagnostic(error));
-            globalThis.toastr?.info?.('这次没能重试，请再点一次。', '心迹回廊');
+            globalThis.toastr?.info?.('这次没能补上，请再点一次。', '心迹回廊');
         });
         return;
     }
