@@ -138,7 +138,7 @@ node tools/check-undefined-names.mjs                                    # 用 Ty
 - 如果手里只有分支包（没有 `tools/`），先向用户要上一轮的交付 ZIP，不要凭记忆重写工具。
 - r84.80 – r84.92 之间护栏和旧测试丢失，就是因为某一轮从分支包开工。r84.93 已找回，旧测试以 `tools/test-legacy-*.mjs` 的名字放回（81 个全部通过）。
 
-护栏基线是 r84.169（`verification/refactor-baseline.json`）。r84.123、r84.122 与 r84.92 的基线另存为 `refactor-baseline-r84.123.json`、`refactor-baseline-r84.122.json`、`refactor-baseline-r84.92.json`。重拍基线时**不再另存每一轮的旧基线**（每份约 0.6 MB，r84.157–r84.164 逐轮另存曾让交付包从 4.4 MB 涨到 6 MB）；需要旧基线时从 git 历史取。更早的 `refactor-baseline-r84.71.json`、`refactor-baseline-r84.78.json` 和旧允许清单只作记录。重构中必须改写的声明写进 `verification/refactor-allow.json` 并写原因；CSS 输出和初始化绑定不能放行。功能改动轮次改完后重拍基线：`… refactor-guard.mjs snapshot`，并在 CHANGELOG 里写明。
+护栏基线是 r84.172（`verification/refactor-baseline.json`）。r84.123、r84.122 与 r84.92 的基线另存为 `refactor-baseline-r84.123.json`、`refactor-baseline-r84.122.json`、`refactor-baseline-r84.92.json`。重拍基线时**不再另存每一轮的旧基线**（每份约 0.6 MB，r84.157–r84.164 逐轮另存曾让交付包从 4.4 MB 涨到 6 MB）；需要旧基线时从 git 历史取。更早的 `refactor-baseline-r84.71.json`、`refactor-baseline-r84.78.json` 和旧允许清单只作记录。重构中必须改写的声明写进 `verification/refactor-allow.json` 并写原因；CSS 输出和初始化绑定不能放行。功能改动轮次改完后重拍基线：`… refactor-guard.mjs snapshot`，并在 CHANGELOG 里写明。
 
 `build-runtime-bundle`、`refactor-guard`、`split-module`、`split-dispatch` 需要 acorn，`check-undefined-names` 需要 typescript。acorn 从 `ACORN_PATH`、`NODE_PATH`、Claude 沙箱的全局 npm，或 node 程序旁边的 `node_modules` 里找。typescript 从 `TYPESCRIPT_PATH`、`NODE_PATH`、同一条沙箱路径，或 node 旁边的 `node_modules` 里找。
 

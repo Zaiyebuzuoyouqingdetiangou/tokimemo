@@ -1,16 +1,16 @@
 {
   "version": "0.99.93",
-  "build": "0.99.93-r84.169-lenticular",
+  "build": "0.99.93-r84.172-bunny-menu",
   "baseline": "Prior delivered r84.168 complete hearttrace-upload.zip",
   "baselineZipSHA256": "3aa711d6acc61814c5aea174432f0783cf78bfe7802b57dc20d1415e34778e4b",
-  "syntaxFiles": 362,
+  "syntaxFiles": 396,
   "syntaxExit": 0,
   "bundleModules": 291,
-  "bundleSha256": "549cea3bdae0952050e904498129cfec8a69ac3eed644ef6d355c538bdcc5ec6",
+  "bundleSha256": "37191bdf24418239f2ecb161b43d929335ec7854de21a55bb2cc39ad0751054a",
   "bundleRebuildIdentical": true,
   "sourceSha256": "cfdded0fee7fb904b7fa47ddd40c1817fdab7737b4bec056ea640611d6410782",
-  "tests": 321,
-  "pass": 321,
+  "tests": 331,
+  "pass": 331,
   "fail": 0,
   "skipped": 0,
   "regressionTests": 12,
@@ -33,8 +33,8 @@
     "Durable origin/write-fence and local edit-revision checks reject stale saves.",
     "Existing past-lives data capacity/readability contract remains unchanged and is checked before pairing commits."
   ],
-  "testedEnvironment": "Node v24.19.0; production bundle in VM with simulated SillyTavern persistence; happy-dom event checks with simulated permission events. Full suite 321/321.",
-  "refactorGuard": "Three existing source files changed, four runtime modules added; intentional card CSS added. Existing-source diff reviewed and current baseline refreshed; no historical baseline copy added.",
+  "testedEnvironment": "331 Node tests (Node 22). Past-lives page with bunny menu rendered in Chromium at 390 and 1100 wide. check-lenticular-dom.mjs not run (happy-dom unavailable). No real SillyTavern, iPhone or TT.",
+  "refactorGuard": "Intended changes only (image menu, pastLives/bedtime/album views, ensureStyles CSS). Re-snapshotted.",
   "finalZipVerification": "See separately delivered evidence: final complete ZIP extraction, per-file hash identity, deterministic rebuild, targeted tests and guard check.",
   "unavailableChecks": [
     "Rendered browser screenshots: browser download endpoint returned Site Unavailable.",
@@ -42,5 +42,6 @@
     "Real user image database or paid provider/model.",
     "Independent reviewer/security service."
   ],
-  "githubWrite": "Not pushed this feature round."
+  "githubWrite": "Not pushed this feature round.",
+  "baseCommit": "r84.171 delivery"
 }

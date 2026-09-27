@@ -26,33 +26,48 @@ const localId = (prefix, index) => `${prefix}${String(index + 1).padStart(2, '0'
 const ownerLabel = memory => participants.resolveStoryIdentities(memory).ownerNames.join('、') || text.normalizeText(memory?.characterName, 120);
 const roleContext = memory => ({ name1: memory?.userName || '', name2: ownerLabel(memory) });
 
+// r84.171：文字检查不再让整步生成失败。只去掉命中的那几句；
+// 必需字段整段都命中时保留原文，非必需字段留空；回响、旁批这类单条内容整条命中时只丢掉那一条。
+const SENTENCES = /[^。！？!?；;\n]+[。！？!?；;]*\n?|\n/gu;
+function keepSentences(value, ok) {
+    if (!value || ok(value)) return value;
+    return (value.match(SENTENCES) || []).filter(part => !part.trim() || ok(part)).join('').trim();
+}
+
 function fictionalText(value, memory, max = L.prose, required = false, speaker = 'char') {
     const result = clean(value, max, required);
     const context = roleContext(memory);
     if (speaker === 'user') [context.name1, context.name2] = [context.name2, context.name1];
-    try { relationshipSafety.assertPairRelationshipSafety(result, context, '前世今生', undefined, { fictionPairScope: true }); }
-    catch { throw fail('RELATIONSHIP', '番外只能围绕两人展开，不增加前任或第三人的恋爱婚姻。'); }
-    return result;
+    const ok = part => {
+        try { relationshipSafety.assertPairRelationshipSafety(part, context, '前世今生', undefined, { fictionPairScope: true }); return true; }
+        catch { return false; }
+    };
+    const kept = keepSentences(result, ok);
+    return kept || (required ? result : '');
 }
 
+const PRESENT_CLAIM = /(?:今生|现实|此生).{0,16}(?:已经应验|确实发生|命中注定|注定.{0,6}(?:恋人|夫妻|相爱))/u;
 function presentText(value, memory, max = L.prose, required = false, options = {}) {
     const result = fictionalText(value, memory, max, required);
-    if (narrative.narrativeClaimsSharedHistory(result, { userName: memory?.userName })
-        || /(?:今生|现实|此生).{0,16}(?:已经应验|确实发生|命中注定|注定.{0,6}(?:恋人|夫妻|相爱))/u.test(result))
-        throw fail('HISTORY', '今生的新文字只写当下感受或未来可能；真正共同往事请放入有真实引文的记忆回响。');
-    if (!relationshipSafety.presentRelationshipAllows(result, memory, options)) throw fail('RELATIONSHIP', '今生称呼超出了两人当前关系，请保留原本的关系和选择。');
-    return result;
+    const ok = part => !narrative.narrativeClaimsSharedHistory(part, { userName: memory?.userName }) && !PRESENT_CLAIM.test(part)
+        && relationshipSafety.presentRelationshipAllows(part, memory, options);
+    const kept = keepSentences(result, ok);
+    // 整段命中：单条回响由调用处丢掉这一条（这里抛出只在逐条 try 里被接住，不会让整步失败）。
+    if (!kept && required) throw fail('HISTORY', '这一段今生文字整段都写成了共同往事或超出当前关系，已跳过。');
+    return kept;
 }
 
 function annotationText(value, memory) {
     const result = fictionalText(value, memory, L.prose, true);
-    for (const sentence of result.split(/[。！？!?；;\n]+/u)) {
-        if (!narrative.narrativeClaimsSharedHistory(sentence, { userName: memory?.userName })) continue;
+    const ok = sentence => {
+        if (!narrative.narrativeClaimsSharedHistory(sentence, { userName: memory?.userName })) return true;
         const explicitStory = /(?:前世|旧世|卷(?:宗|中|内|里)|虚构(?:人生|故事)|这(?:段|个)(?:故事|梦))/u.test(sentence);
         const currentLife = /(?:今生|此生|这一世|这辈子|现实|昨天|昨晚|去年|今年|今天)/u.test(sentence);
-        if (!explicitStory || currentLife) throw fail('HISTORY', '旁批可以重读明确标注的虚构卷宗；今生共同往事必须放入有真实引文的记忆回响。');
-    }
-    return result;
+        return explicitStory && !currentLife;
+    };
+    const kept = keepSentences(result, ok);
+    if (!kept) throw fail('HISTORY', '这条旁批整条都写成了今生往事，已跳过。');
+    return kept;
 }
 
 function exactReference(raw, memory) {
@@ -110,42 +125,56 @@ export function normalizePastLivesDossier(value, memory, { id = 'D01', title = '
         synopsis: fictionalText(raw.synopsis, memory, L.prose, true),
         ...cg_visual.generatedCgSceneFields(raw), ...cg_targets.normalizeLocalCgSlots(raw),
         clues: list(raw.clues, L.clues).map((clue, index) => {
-            if (!contract.PAST_LIVES_CLUE_KINDS.includes(clue.kind)) throw fail('STRUCTURE', '卷宗线索类型无法读取，请使用物证、证词、缺页或旁记。');
+            // r84.171：认不出的线索类型按「旁记」收下，不让整步失败。
+            const kind = contract.PAST_LIVES_CLUE_KINDS.includes(clue.kind) ? clue.kind : 'note';
             const speaker = ['char', 'user', 'narrator'].includes(clue.speaker) ? clue.speaker : 'narrator';
-            return { id: localId(`${id}-C`, index), kind: clue.kind, speaker,
+            return { id: localId(`${id}-C`, index), kind, speaker,
                 title: fictionalText(clue.title, memory, L.title, true),
                 text: fictionalText(clue.text, memory, L.prose, true, speaker),
-                revealedText: fictionalText(clue.revealedText, memory, L.prose, clue.kind === 'missing', speaker) };
+                revealedText: fictionalText(clue.revealedText, memory, L.prose, kind === 'missing', speaker) };
         }) };
 }
 
 export function normalizePastLivesFinale(value, memory, dossiers, options = {}) {
     const raw = contract.pastLivesData(value, L.episodeChars);
     const clueIds = new Set(dossiers.flatMap(item => item.clues.map(clue => clue.id)));
-    const echoes = list(raw.echoes, L.echoes).map((echo, index) => {
-        if (echo.kind === 'memory') {
-            const reference = exactReference(echo, memory);
-            const quote = clean(echo.text, L.prose, true);
-            if (!sourceText(memory, reference.sourceMemoryIds).includes(quote))
-                throw fail('HISTORY', '今生记忆须为所引 Mxxx 的真实原文片段，不能借一个 anchor 添加新往事。');
-            const source = memory.memories.find(item => item.id === reference.sourceMemoryIds[0]);
-            return { id: localId('E', index), kind: 'memory', title: text.normalizeText(source?.title || reference.sourceMemoryAnchor, L.title),
-                text: quote, reflection: presentText(echo.reflection, memory, 1800, false, options), ...reference };
-        }
-        if (echo.kind !== 'possibility') throw fail('STRUCTURE', '回响须区分真实记忆与未来可能。');
-        const prose = presentText(echo.text, memory, L.prose, true, options);
-        if (!/(?:可能|也许|或许|如果|假如|愿|希望|未必|不一定)/u.test(prose))
-            throw fail('HISTORY', '未来回响应写成可能、愿望或假设，不预先替两人确定未来。');
-        return { id: localId('E', index), kind: 'possibility', title: presentText(echo.title, memory, L.title, true, options),
-            text: prose, reflection: presentText(echo.reflection, memory, 1800, false, options), sourceMemoryIds: [], sourceMemoryAnchor: '' };
-    });
-    const annotations = list(raw.annotations, L.annotations).map((annotation, index) => {
-        const afterClueIds = [...new Set(list(annotation.afterClueIds, L.dossiers * L.clues))];
-        if (afterClueIds.some(id => typeof id !== 'string' || !clueIds.has(id))) throw fail('STRUCTURE', '旁批引用了不存在的线索，请只对应本篇已写出的线索。');
-        return { id: localId('A', index), afterClueIds, text: annotationText(annotation.text, memory) };
-    });
-    return { echoes, annotations, closing: { text: presentText(raw.closing?.text, memory, L.prose, true, options),
-        signature: presentText(raw.closing?.signature, memory, 240, false, options) || ownerLabel(memory) } };
+    // r84.171：和续写时的 pastLivesProgressFinale 一样逐条处理：某一条回响或旁批不合规，只丢掉那一条，不让整步失败。
+    // 今生真实记忆仍必须逐字出自所引 Mxxx（对不上就不收这一条，不会改标成别的）；未来回响仍须是假设语气。
+    const echoes = [];
+    for (const echo of list(raw.echoes, L.echoes)) {
+        try {
+            if (echo.kind === 'memory') {
+                const reference = exactReference(echo, memory);
+                const quote = clean(echo.text, L.prose, true);
+                if (!sourceText(memory, reference.sourceMemoryIds).includes(quote)) continue;
+                const source = memory.memories.find(item => item.id === reference.sourceMemoryIds[0]);
+                echoes.push({ id: localId('E', echoes.length), kind: 'memory', title: text.normalizeText(source?.title || reference.sourceMemoryAnchor, L.title),
+                    text: quote, reflection: presentText(echo.reflection, memory, 1800, false, options), ...reference });
+                continue;
+            }
+            if (echo.kind !== 'possibility') continue;
+            const prose = presentText(echo.text, memory, L.prose, true, options);
+            if (!/(?:可能|也许|或许|如果|假如|愿|希望|未必|不一定)/u.test(prose)) continue;
+            let title = '';
+            try { title = presentText(echo.title, memory, L.title, true, options); } catch { title = '未来的一种可能'; }
+            echoes.push({ id: localId('E', echoes.length), kind: 'possibility', title,
+                text: prose, reflection: presentText(echo.reflection, memory, 1800, false, options), sourceMemoryIds: [], sourceMemoryAnchor: '' });
+        } catch { /* 这一条不收，其余照常。 */ }
+    }
+    const annotations = [];
+    for (const annotation of list(raw.annotations, L.annotations)) {
+        try {
+            // 引用了不存在的线索时，去掉那几个引用；一个都不剩就当作随时可读的旁批。
+            const afterClueIds = [...new Set(list(annotation.afterClueIds, L.dossiers * L.clues))].filter(id => typeof id === 'string' && clueIds.has(id));
+            annotations.push({ id: localId('A', annotations.length), afterClueIds, text: annotationText(annotation.text, memory) });
+        } catch { /* 这一条不收，其余照常。 */ }
+    }
+    let closingText;
+    try { closingText = presentText(raw.closing?.text, memory, L.prose, true, options); }
+    catch { closingText = fictionalText(raw.closing?.text, memory, L.prose, true); }
+    let signature = '';
+    try { signature = presentText(raw.closing?.signature, memory, 240, false, options); } catch { signature = ''; }
+    return { echoes, annotations, closing: { text: closingText, signature: signature || ownerLabel(memory) } };
 }
 
 export function normalizePastLivesEpisode(value, memory, { id = 'PL01', presentation = 'neutral', controlledEvidence = '' } = {}) {
@@ -378,7 +407,7 @@ export async function generatePastLivesWithRepair(context, memory, origin, taskK
     if (previous && !readablePastLivesSession(previous, memory))
         throw fail('VERSION', '已有番外暂不可安全读取，原记录保持不变；不能直接覆盖。');
     const pendingEpisode = pendingPastLivesEpisode(previous);
-    if (previous?.episodes?.length >= L.episodes && !pendingEpisode) throw fail('LIMIT', '番外篇章已达到本地容量上限；旧篇章仍保留，请先备份整理。');
+    // r84.171：不再按篇数拒绝写新篇（原上限 48）。
     const assertContextRead = () => {
         contextApi.assertRuntimeLifecycleCurrent(origin.lifecycleEpoch);
         if (!context.__rmtArchiveTargetEntryId && !contextApi.isCurrentTaskOrigin(origin))

@@ -24,9 +24,16 @@ function fictionalText(value, memory, max = L.prose, required = false, role = 'c
         : { name1: story.userDisplay, name2: ownerLabel(memory) };
     let checked = result;
     for (const alias of story.userAliases) checked = checked.split(alias).join(story.userDisplay);
-    try { relationshipSafety.assertPairRelationshipSafety(checked, context, '时空番外', undefined, { fictionPairScope: true }); }
-    catch { throw fail('RELATIONSHIP', '番外围绕角色与用户展开，不新增第三人的恋爱或婚姻。'); }
-    return result;
+    // r84.171：不再让整步失败；只去掉命中的那几句，整段命中时必需字段保留原文。
+    const ok = part => {
+        let probe = part;
+        for (const alias of story.userAliases) probe = probe.split(alias).join(story.userDisplay);
+        try { relationshipSafety.assertPairRelationshipSafety(probe, context, '时空番外', undefined, { fictionPairScope: true }); return true; }
+        catch { return false; }
+    };
+    if (ok(checked)) return result;
+    const kept = (result.match(/[^。！？!?；;\n]+[。！？!?；;]*\n?|\n/gu) || []).filter(part => !part.trim() || ok(part)).join('').trim();
+    return kept || (required ? result : '');
 }
 
 export function emptyTimeStories(mode, memory, context = null) {
@@ -51,8 +58,9 @@ export function normalizeTimeStoryEpisode(mode, value, memory, options = {}) {
         closing: prose(raw.closing, L.prose, true), presentation,
         palette: contract.TIME_STORY_PALETTES.includes(raw.palette) ? raw.palette : 'slate', motif: prose(raw.motif, 160) };
     const allowed = contract.timeStoryMediumKinds(profile);
-    if (!allowed.includes(raw.medium?.kind)) throw fail('WORLD', `本世界的联络媒介请使用 ${allowed.join('|')}，并沿用已有设定中的器物，不增加现代科技或新的法术体系。`);
-    result.medium = { kind: raw.medium.kind, label: prose(raw.medium.label, L.title, true) };
+    // r84.171：媒介不在本世界可用列表里时，改用列表第一项，不让整步失败。
+    const mediumKind = allowed.includes(raw.medium?.kind) ? raw.medium.kind : allowed[0];
+    result.medium = { kind: mediumKind, label: prose(raw.medium?.label, L.title, false) || mediumKind };
     const ends = contract.timeStoryArray(raw.ends, 2); requireShape(ends.length === 2);
     result.ends = ends.map(end => { requireShape(end && ['char', 'user'].includes(end.role));
         return { role: end.role, time: prose(end.time, 240, true) }; });
@@ -111,7 +119,7 @@ export async function generateTimeStoryWithRepair(mode, context, memory, origin,
         || (previous && (previous.kind !== mode || !readableTimeStoriesSession(previous, memory)
             || previous.ownerKey && previous.ownerKey !== contextApi.currentCharacterRuntimeKey(context))))
         throw fail('VERSION', '已有番外暂不可安全读取，原记录保持不变，不能直接覆盖。');
-    if (previous?.episodes.length >= L.episodes) throw fail('LIMIT', '番外篇章已达到本地容量上限；旧篇章仍保留，请先备份整理。');
+    // r84.171：不再按篇数拒绝写新篇（原上限 48）。
     const assertSource = () => {
         contextApi.assertRuntimeLifecycleCurrent(origin?.lifecycleEpoch);
         if (!contextApi.isCurrentTaskOrigin(origin, context) || origin.archiveRevision !== memory.archiveRevision

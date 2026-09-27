@@ -3,7 +3,7 @@ export const MAX_CREATIVE_SUPPLEMENT_CHARS = 20000;
 export function normalizeCreativeSupplement(value) {
     const text = String(value ?? '').replace(/\u0000/g, '');
     if (text.length > MAX_CREATIVE_SUPPLEMENT_CHARS) {
-        const error = new Error('创作补充词最多 20,000 字符，请缩短后保存。');
+        const error = new Error('破限词最多 20,000 字符，请缩短后保存。');
         error.code = 'RMT_CREATIVE_SUPPLEMENT_LIMIT'; error.safeToDisplay = true;
         error.safeUserMessage = error.message; throw error;
     }

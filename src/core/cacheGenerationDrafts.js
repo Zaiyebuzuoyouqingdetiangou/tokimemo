@@ -246,13 +246,18 @@ export function preserveProgressLocalState(incoming, saved) {
         return incoming.map(item => item?.id && byId.has(item.id) ? preserveProgressLocalState(item, byId.get(item.id)) : item);
     }
     const next = { ...incoming };
-    for (const key of ['cgImage', 'cgImageHistory', 'cgPromptDraft', 'cgPromptMetadata', 'favorite', 'readAt', 'unlocked', 'userManaged', ...PROGRESS_READING_FIELDS]) {
+    // r84.170：visual / visuals / previousCgVisuals / fireflyVisual 是卷宗、睡前故事章节、蝴蝶节点、
+    // 结局、萤火虫等「按位置存图」的本地图片。以前只保留 cgImage，任务续写或完成时这些图被模型输出整份覆盖掉，
+    // 表现为图生成过、重启或续写后消失。按内容签名取用的旧图在原文变了时自然不显示，这里照原样带过去即可。
+    for (const key of ['cgImage', 'cgImageHistory', 'cgPromptDraft', 'cgPromptMetadata', 'favorite', 'readAt', 'unlocked', 'userManaged',
+        'visual', 'visuals', 'previousCgVisuals', 'fireflyVisual', ...PROGRESS_READING_FIELDS]) {
         if (Object.hasOwn(saved, key)) next[key] = structuredClone(saved[key]);
     }
     for (const [key, value] of Object.entries(next)) {
         if (Array.isArray(value) && Array.isArray(saved[key])) next[key] = preserveProgressLocalState(value, saved[key]);
         else if (value && typeof value === 'object' && !Array.isArray(value) && saved[key] && typeof saved[key] === 'object'
-            && !['generationSources', 'readableProgress', 'cgImage', 'cgImageHistory', 'cgPromptDraft', 'cgPromptMetadata'].includes(key)) next[key] = preserveProgressLocalState(value, saved[key]);
+            && !['generationSources', 'readableProgress', 'cgImage', 'cgImageHistory', 'cgPromptDraft', 'cgPromptMetadata',
+                'visual', 'visuals', 'previousCgVisuals', 'fireflyVisual'].includes(key)) next[key] = preserveProgressLocalState(value, saved[key]);
     }
     applyProgressOverrides(next, saved.readableProgress);
     if (next.readableProgress) for (const key of ['textOverridesV1', 'clearedFieldsV1', 'manualFieldsV1']) {

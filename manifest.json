@@ -1,7 +1,7 @@
 {
   "display_name": "心迹回廊",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.99.93-r84.169-lenticular",
+  "js": "index.js?heartbeat=0.99.93-r84.172-bunny-menu",
   "author": "Toto",
   "version": "0.99.93",
   "auto_update": true,
@@ -10,6 +10,6 @@
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r84.169：前世今生横版光栅卡；从同档案已有图片挑选今生，同记忆推荐，配对不额外调用模型。",
+  "description": "r84.172：图片操作收进图片右下角的小兔子；去掉阅读页里出戏的说明。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }

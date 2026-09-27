@@ -353,7 +353,7 @@ async function generateConfiguredJsonOperation(prompt, options = {}) {
         }
         if (core_independentApi.apiConfigurationFingerprint(latestSettings) !== configurationFingerprint
             || (connectionMode === 'profile' && latestProfileFingerprint !== selectedProfileFingerprint)) {
-            const error = new Error('API 配置或创作补充词在生成期间发生变化，本次旧请求已停止。');
+            const error = new Error('API 配置或破限词在生成期间发生变化，本次旧请求已停止。');
             error.code = 'RMT_API_CONFIG_CHANGED';
             error.retryable = false;
             throw error;

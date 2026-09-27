@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
-// Source modules: 292
-// Source SHA-256: c227e338d4784d48013720a57e857018fb069b2be3052825eceaddcdde0d44b2
+// Source modules: 293
+// Source SHA-256: 9e5c5c252ff67f0680447d6f08a8c67290981ff22e026528b499c89663a67091
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -250,6 +250,7 @@ const __m_ui_heartEnvelope_js = Object.create(null);
 const __m_ui_heartReaderState_js = Object.create(null);
 const __m_ui_heartView_js = Object.create(null);
 const __m_ui_homeView_js = Object.create(null);
+const __m_ui_imageMenu_js = Object.create(null);
 const __m_ui_immersionStyles_js = Object.create(null);
 const __m_ui_inboxStyles_js = Object.create(null);
 const __m_ui_inboxView_js = Object.create(null);
@@ -12450,7 +12451,7 @@ const MAX_CREATIVE_SUPPLEMENT_CHARS = 20000;
 function normalizeCreativeSupplement(value) {
     const text = String(value ?? '').replace(/\u0000/g, '');
     if (text.length > MAX_CREATIVE_SUPPLEMENT_CHARS) {
-        const error = new Error('创作补充词最多 20,000 字符，请缩短后保存。');
+        const error = new Error('破限词最多 20,000 字符，请缩短后保存。');
         error.code = 'RMT_CREATIVE_SUPPLEMENT_LIMIT'; error.safeToDisplay = true;
         error.safeUserMessage = error.message; throw error;
     }
@@ -17551,7 +17552,7 @@ function __init_core_pastLivesContract_js() {
 // Local data and presentation contract. No model-owned markup, selectors or assets.
 const PAST_LIVES_MODE = 'pastLives';
 const PAST_LIVES_VERSION = 1;
-const PAST_LIVES_LIMITS = Object.freeze({ episodes: 48, dossiers: 6, clues: 18, echoes: 12, annotations: 12,
+const PAST_LIVES_LIMITS = Object.freeze({ episodes: Number.MAX_SAFE_INTEGER, dossiers: 6, clues: 18, echoes: 12, annotations: 12,
     title: 120, prose: 6000, episodeChars: 180000, sessionChars: 1800000 });
 const PAST_LIVES_CLUE_KINDS = Object.freeze(['object', 'testimony', 'missing', 'note']);
 const PAST_LIVES_VIEWS = Object.freeze(['library', 'draw', 'dossier', 'echoes', 'closing']);
@@ -17574,8 +17575,9 @@ function pastLivesText(value, max = PAST_LIVES_LIMITS.prose, required = false) {
 }
 
 function pastLivesArray(value, max) {
-    if (!Array.isArray(value) || value.length > max) throw pastLivesError('STRUCTURE', '番外列表缺失或超过安全容量；不要求凑满数量。');
-    return value;
+    if (!Array.isArray(value)) throw pastLivesError('STRUCTURE', '番外列表缺失；不要求凑满数量。');
+    // r84.171：模型多写了几条（线索、回响、旁批等）时只收前面的，不让整步失败。
+    return value.length > max ? value.slice(0, max) : value;
 }
 
 // A bounded JSON snapshot rejects getters and custom prototypes before any field is read.
@@ -28439,13 +28441,18 @@ function preserveProgressLocalState(incoming, saved) {
         return incoming.map(item => item?.id && byId.has(item.id) ? preserveProgressLocalState(item, byId.get(item.id)) : item);
     }
     const next = { ...incoming };
-    for (const key of ['cgImage', 'cgImageHistory', 'cgPromptDraft', 'cgPromptMetadata', 'favorite', 'readAt', 'unlocked', 'userManaged', ...PROGRESS_READING_FIELDS]) {
+    // r84.170：visual / visuals / previousCgVisuals / fireflyVisual 是卷宗、睡前故事章节、蝴蝶节点、
+    // 结局、萤火虫等「按位置存图」的本地图片。以前只保留 cgImage，任务续写或完成时这些图被模型输出整份覆盖掉，
+    // 表现为图生成过、重启或续写后消失。按内容签名取用的旧图在原文变了时自然不显示，这里照原样带过去即可。
+    for (const key of ['cgImage', 'cgImageHistory', 'cgPromptDraft', 'cgPromptMetadata', 'favorite', 'readAt', 'unlocked', 'userManaged',
+        'visual', 'visuals', 'previousCgVisuals', 'fireflyVisual', ...PROGRESS_READING_FIELDS]) {
         if (Object.hasOwn(saved, key)) next[key] = structuredClone(saved[key]);
     }
     for (const [key, value] of Object.entries(next)) {
         if (Array.isArray(value) && Array.isArray(saved[key])) next[key] = preserveProgressLocalState(value, saved[key]);
         else if (value && typeof value === 'object' && !Array.isArray(value) && saved[key] && typeof saved[key] === 'object'
-            && !['generationSources', 'readableProgress', 'cgImage', 'cgImageHistory', 'cgPromptDraft', 'cgPromptMetadata'].includes(key)) next[key] = preserveProgressLocalState(value, saved[key]);
+            && !['generationSources', 'readableProgress', 'cgImage', 'cgImageHistory', 'cgPromptDraft', 'cgPromptMetadata',
+                'visual', 'visuals', 'previousCgVisuals', 'fireflyVisual'].includes(key)) next[key] = preserveProgressLocalState(value, saved[key]);
     }
     applyProgressOverrides(next, saved.readableProgress);
     if (next.readableProgress) for (const key of ['textOverridesV1', 'clearedFieldsV1', 'manualFieldsV1']) {
@@ -33647,7 +33654,7 @@ const safeData = __m_core_pastLivesContract_js;
 
 const TIME_ECHO_MODE = 'timeEcho';
 const TIME_STORY_VERSION = 1;
-const TIME_STORY_LIMITS = Object.freeze({ episodes: 48, lines: 120,
+const TIME_STORY_LIMITS = Object.freeze({ episodes: Number.MAX_SAFE_INTEGER, lines: 120,
     title: 120, prose: 30000, line: 3000, episodeChars: 180000, sessionChars: 1800000 });
 const TIME_STORY_PALETTES = Object.freeze(['rose', 'blue', 'moss', 'gold', 'plum', 'slate']);
 const TIME_STORY_PRESENTATIONS = Object.freeze(['modern', 'classical', 'fantasy', 'scifi', 'neutral']);
@@ -33669,9 +33676,9 @@ function timeStoryText(value, max = TIME_STORY_LIMITS.prose, required = false) {
     return result;
 }
 function timeStoryArray(value, max) {
-    if (!Array.isArray(value) || value.length > max)
-        throw timeStoryError('STRUCTURE', '番外列表缺失或超过本地安全容量；无需凑满数量。');
-    return value;
+    if (!Array.isArray(value)) throw timeStoryError('STRUCTURE', '番外列表缺失；无需凑满数量。');
+    // r84.171：模型多写了几条时只收前面的，不让整步失败。
+    return value.length > max ? value.slice(0, max) : value;
 }
 function timeStoryData(value, max = TIME_STORY_LIMITS.sessionChars) {
     try { return safeData.pastLivesData(value, max); }
@@ -37940,7 +37947,7 @@ async function generateConfiguredJsonOperation(prompt, options = {}) {
         }
         if (core_independentApi.apiConfigurationFingerprint(latestSettings) !== configurationFingerprint
             || (connectionMode === 'profile' && latestProfileFingerprint !== selectedProfileFingerprint)) {
-            const error = new Error('API 配置或创作补充词在生成期间发生变化，本次旧请求已停止。');
+            const error = new Error('API 配置或破限词在生成期间发生变化，本次旧请求已停止。');
             error.code = 'RMT_API_CONFIG_CHANGED';
             error.retryable = false;
             throw error;
@@ -53729,33 +53736,48 @@ const localId = (prefix, index) => `${prefix}${String(index + 1).padStart(2, '0'
 const ownerLabel = memory => participants.resolveStoryIdentities(memory).ownerNames.join('、') || text.normalizeText(memory?.characterName, 120);
 const roleContext = memory => ({ name1: memory?.userName || '', name2: ownerLabel(memory) });
 
+// r84.171：文字检查不再让整步生成失败。只去掉命中的那几句；
+// 必需字段整段都命中时保留原文，非必需字段留空；回响、旁批这类单条内容整条命中时只丢掉那一条。
+const SENTENCES = /[^。！？!?；;\n]+[。！？!?；;]*\n?|\n/gu;
+function keepSentences(value, ok) {
+    if (!value || ok(value)) return value;
+    return (value.match(SENTENCES) || []).filter(part => !part.trim() || ok(part)).join('').trim();
+}
+
 function fictionalText(value, memory, max = L.prose, required = false, speaker = 'char') {
     const result = clean(value, max, required);
     const context = roleContext(memory);
     if (speaker === 'user') [context.name1, context.name2] = [context.name2, context.name1];
-    try { relationshipSafety.assertPairRelationshipSafety(result, context, '前世今生', undefined, { fictionPairScope: true }); }
-    catch { throw fail('RELATIONSHIP', '番外只能围绕两人展开，不增加前任或第三人的恋爱婚姻。'); }
-    return result;
+    const ok = part => {
+        try { relationshipSafety.assertPairRelationshipSafety(part, context, '前世今生', undefined, { fictionPairScope: true }); return true; }
+        catch { return false; }
+    };
+    const kept = keepSentences(result, ok);
+    return kept || (required ? result : '');
 }
 
+const PRESENT_CLAIM = /(?:今生|现实|此生).{0,16}(?:已经应验|确实发生|命中注定|注定.{0,6}(?:恋人|夫妻|相爱))/u;
 function presentText(value, memory, max = L.prose, required = false, options = {}) {
     const result = fictionalText(value, memory, max, required);
-    if (narrative.narrativeClaimsSharedHistory(result, { userName: memory?.userName })
-        || /(?:今生|现实|此生).{0,16}(?:已经应验|确实发生|命中注定|注定.{0,6}(?:恋人|夫妻|相爱))/u.test(result))
-        throw fail('HISTORY', '今生的新文字只写当下感受或未来可能；真正共同往事请放入有真实引文的记忆回响。');
-    if (!relationshipSafety.presentRelationshipAllows(result, memory, options)) throw fail('RELATIONSHIP', '今生称呼超出了两人当前关系，请保留原本的关系和选择。');
-    return result;
+    const ok = part => !narrative.narrativeClaimsSharedHistory(part, { userName: memory?.userName }) && !PRESENT_CLAIM.test(part)
+        && relationshipSafety.presentRelationshipAllows(part, memory, options);
+    const kept = keepSentences(result, ok);
+    // 整段命中：单条回响由调用处丢掉这一条（这里抛出只在逐条 try 里被接住，不会让整步失败）。
+    if (!kept && required) throw fail('HISTORY', '这一段今生文字整段都写成了共同往事或超出当前关系，已跳过。');
+    return kept;
 }
 
 function annotationText(value, memory) {
     const result = fictionalText(value, memory, L.prose, true);
-    for (const sentence of result.split(/[。！？!?；;\n]+/u)) {
-        if (!narrative.narrativeClaimsSharedHistory(sentence, { userName: memory?.userName })) continue;
+    const ok = sentence => {
+        if (!narrative.narrativeClaimsSharedHistory(sentence, { userName: memory?.userName })) return true;
         const explicitStory = /(?:前世|旧世|卷(?:宗|中|内|里)|虚构(?:人生|故事)|这(?:段|个)(?:故事|梦))/u.test(sentence);
         const currentLife = /(?:今生|此生|这一世|这辈子|现实|昨天|昨晚|去年|今年|今天)/u.test(sentence);
-        if (!explicitStory || currentLife) throw fail('HISTORY', '旁批可以重读明确标注的虚构卷宗；今生共同往事必须放入有真实引文的记忆回响。');
-    }
-    return result;
+        return explicitStory && !currentLife;
+    };
+    const kept = keepSentences(result, ok);
+    if (!kept) throw fail('HISTORY', '这条旁批整条都写成了今生往事，已跳过。');
+    return kept;
 }
 
 function exactReference(raw, memory) {
@@ -53813,42 +53835,56 @@ function normalizePastLivesDossier(value, memory, { id = 'D01', title = '' } = {
         synopsis: fictionalText(raw.synopsis, memory, L.prose, true),
         ...cg_visual.generatedCgSceneFields(raw), ...cg_targets.normalizeLocalCgSlots(raw),
         clues: list(raw.clues, L.clues).map((clue, index) => {
-            if (!contract.PAST_LIVES_CLUE_KINDS.includes(clue.kind)) throw fail('STRUCTURE', '卷宗线索类型无法读取，请使用物证、证词、缺页或旁记。');
+            // r84.171：认不出的线索类型按「旁记」收下，不让整步失败。
+            const kind = contract.PAST_LIVES_CLUE_KINDS.includes(clue.kind) ? clue.kind : 'note';
             const speaker = ['char', 'user', 'narrator'].includes(clue.speaker) ? clue.speaker : 'narrator';
-            return { id: localId(`${id}-C`, index), kind: clue.kind, speaker,
+            return { id: localId(`${id}-C`, index), kind, speaker,
                 title: fictionalText(clue.title, memory, L.title, true),
                 text: fictionalText(clue.text, memory, L.prose, true, speaker),
-                revealedText: fictionalText(clue.revealedText, memory, L.prose, clue.kind === 'missing', speaker) };
+                revealedText: fictionalText(clue.revealedText, memory, L.prose, kind === 'missing', speaker) };
         }) };
 }
 
 function normalizePastLivesFinale(value, memory, dossiers, options = {}) {
     const raw = contract.pastLivesData(value, L.episodeChars);
     const clueIds = new Set(dossiers.flatMap(item => item.clues.map(clue => clue.id)));
-    const echoes = list(raw.echoes, L.echoes).map((echo, index) => {
-        if (echo.kind === 'memory') {
-            const reference = exactReference(echo, memory);
-            const quote = clean(echo.text, L.prose, true);
-            if (!sourceText(memory, reference.sourceMemoryIds).includes(quote))
-                throw fail('HISTORY', '今生记忆须为所引 Mxxx 的真实原文片段，不能借一个 anchor 添加新往事。');
-            const source = memory.memories.find(item => item.id === reference.sourceMemoryIds[0]);
-            return { id: localId('E', index), kind: 'memory', title: text.normalizeText(source?.title || reference.sourceMemoryAnchor, L.title),
-                text: quote, reflection: presentText(echo.reflection, memory, 1800, false, options), ...reference };
-        }
-        if (echo.kind !== 'possibility') throw fail('STRUCTURE', '回响须区分真实记忆与未来可能。');
-        const prose = presentText(echo.text, memory, L.prose, true, options);
-        if (!/(?:可能|也许|或许|如果|假如|愿|希望|未必|不一定)/u.test(prose))
-            throw fail('HISTORY', '未来回响应写成可能、愿望或假设，不预先替两人确定未来。');
-        return { id: localId('E', index), kind: 'possibility', title: presentText(echo.title, memory, L.title, true, options),
-            text: prose, reflection: presentText(echo.reflection, memory, 1800, false, options), sourceMemoryIds: [], sourceMemoryAnchor: '' };
-    });
-    const annotations = list(raw.annotations, L.annotations).map((annotation, index) => {
-        const afterClueIds = [...new Set(list(annotation.afterClueIds, L.dossiers * L.clues))];
-        if (afterClueIds.some(id => typeof id !== 'string' || !clueIds.has(id))) throw fail('STRUCTURE', '旁批引用了不存在的线索，请只对应本篇已写出的线索。');
-        return { id: localId('A', index), afterClueIds, text: annotationText(annotation.text, memory) };
-    });
-    return { echoes, annotations, closing: { text: presentText(raw.closing?.text, memory, L.prose, true, options),
-        signature: presentText(raw.closing?.signature, memory, 240, false, options) || ownerLabel(memory) } };
+    // r84.171：和续写时的 pastLivesProgressFinale 一样逐条处理：某一条回响或旁批不合规，只丢掉那一条，不让整步失败。
+    // 今生真实记忆仍必须逐字出自所引 Mxxx（对不上就不收这一条，不会改标成别的）；未来回响仍须是假设语气。
+    const echoes = [];
+    for (const echo of list(raw.echoes, L.echoes)) {
+        try {
+            if (echo.kind === 'memory') {
+                const reference = exactReference(echo, memory);
+                const quote = clean(echo.text, L.prose, true);
+                if (!sourceText(memory, reference.sourceMemoryIds).includes(quote)) continue;
+                const source = memory.memories.find(item => item.id === reference.sourceMemoryIds[0]);
+                echoes.push({ id: localId('E', echoes.length), kind: 'memory', title: text.normalizeText(source?.title || reference.sourceMemoryAnchor, L.title),
+                    text: quote, reflection: presentText(echo.reflection, memory, 1800, false, options), ...reference });
+                continue;
+            }
+            if (echo.kind !== 'possibility') continue;
+            const prose = presentText(echo.text, memory, L.prose, true, options);
+            if (!/(?:可能|也许|或许|如果|假如|愿|希望|未必|不一定)/u.test(prose)) continue;
+            let title = '';
+            try { title = presentText(echo.title, memory, L.title, true, options); } catch { title = '未来的一种可能'; }
+            echoes.push({ id: localId('E', echoes.length), kind: 'possibility', title,
+                text: prose, reflection: presentText(echo.reflection, memory, 1800, false, options), sourceMemoryIds: [], sourceMemoryAnchor: '' });
+        } catch { /* 这一条不收，其余照常。 */ }
+    }
+    const annotations = [];
+    for (const annotation of list(raw.annotations, L.annotations)) {
+        try {
+            // 引用了不存在的线索时，去掉那几个引用；一个都不剩就当作随时可读的旁批。
+            const afterClueIds = [...new Set(list(annotation.afterClueIds, L.dossiers * L.clues))].filter(id => typeof id === 'string' && clueIds.has(id));
+            annotations.push({ id: localId('A', annotations.length), afterClueIds, text: annotationText(annotation.text, memory) });
+        } catch { /* 这一条不收，其余照常。 */ }
+    }
+    let closingText;
+    try { closingText = presentText(raw.closing?.text, memory, L.prose, true, options); }
+    catch { closingText = fictionalText(raw.closing?.text, memory, L.prose, true); }
+    let signature = '';
+    try { signature = presentText(raw.closing?.signature, memory, 240, false, options); } catch { signature = ''; }
+    return { echoes, annotations, closing: { text: closingText, signature: signature || ownerLabel(memory) } };
 }
 
 function normalizePastLivesEpisode(value, memory, { id = 'PL01', presentation = 'neutral', controlledEvidence = '' } = {}) {
@@ -54081,7 +54117,7 @@ async function generatePastLivesWithRepair(context, memory, origin, taskKey, opt
     if (previous && !readablePastLivesSession(previous, memory))
         throw fail('VERSION', '已有番外暂不可安全读取，原记录保持不变；不能直接覆盖。');
     const pendingEpisode = pendingPastLivesEpisode(previous);
-    if (previous?.episodes?.length >= L.episodes && !pendingEpisode) throw fail('LIMIT', '番外篇章已达到本地容量上限；旧篇章仍保留，请先备份整理。');
+    // r84.171：不再按篇数拒绝写新篇（原上限 48）。
     const assertContextRead = () => {
         contextApi.assertRuntimeLifecycleCurrent(origin.lifecycleEpoch);
         if (!context.__rmtArchiveTargetEntryId && !contextApi.isCurrentTaskOrigin(origin))
@@ -60145,9 +60181,16 @@ function fictionalText(value, memory, max = L.prose, required = false, role = 'c
         : { name1: story.userDisplay, name2: ownerLabel(memory) };
     let checked = result;
     for (const alias of story.userAliases) checked = checked.split(alias).join(story.userDisplay);
-    try { relationshipSafety.assertPairRelationshipSafety(checked, context, '时空番外', undefined, { fictionPairScope: true }); }
-    catch { throw fail('RELATIONSHIP', '番外围绕角色与用户展开，不新增第三人的恋爱或婚姻。'); }
-    return result;
+    // r84.171：不再让整步失败；只去掉命中的那几句，整段命中时必需字段保留原文。
+    const ok = part => {
+        let probe = part;
+        for (const alias of story.userAliases) probe = probe.split(alias).join(story.userDisplay);
+        try { relationshipSafety.assertPairRelationshipSafety(probe, context, '时空番外', undefined, { fictionPairScope: true }); return true; }
+        catch { return false; }
+    };
+    if (ok(checked)) return result;
+    const kept = (result.match(/[^。！？!?；;\n]+[。！？!?；;]*\n?|\n/gu) || []).filter(part => !part.trim() || ok(part)).join('').trim();
+    return kept || (required ? result : '');
 }
 
 function emptyTimeStories(mode, memory, context = null) {
@@ -60172,8 +60215,9 @@ function normalizeTimeStoryEpisode(mode, value, memory, options = {}) {
         closing: prose(raw.closing, L.prose, true), presentation,
         palette: contract.TIME_STORY_PALETTES.includes(raw.palette) ? raw.palette : 'slate', motif: prose(raw.motif, 160) };
     const allowed = contract.timeStoryMediumKinds(profile);
-    if (!allowed.includes(raw.medium?.kind)) throw fail('WORLD', `本世界的联络媒介请使用 ${allowed.join('|')}，并沿用已有设定中的器物，不增加现代科技或新的法术体系。`);
-    result.medium = { kind: raw.medium.kind, label: prose(raw.medium.label, L.title, true) };
+    // r84.171：媒介不在本世界可用列表里时，改用列表第一项，不让整步失败。
+    const mediumKind = allowed.includes(raw.medium?.kind) ? raw.medium.kind : allowed[0];
+    result.medium = { kind: mediumKind, label: prose(raw.medium?.label, L.title, false) || mediumKind };
     const ends = contract.timeStoryArray(raw.ends, 2); requireShape(ends.length === 2);
     result.ends = ends.map(end => { requireShape(end && ['char', 'user'].includes(end.role));
         return { role: end.role, time: prose(end.time, 240, true) }; });
@@ -60232,7 +60276,7 @@ async function generateTimeStoryWithRepair(mode, context, memory, origin, taskKe
         || (previous && (previous.kind !== mode || !readableTimeStoriesSession(previous, memory)
             || previous.ownerKey && previous.ownerKey !== contextApi.currentCharacterRuntimeKey(context))))
         throw fail('VERSION', '已有番外暂不可安全读取，原记录保持不变，不能直接覆盖。');
-    if (previous?.episodes.length >= L.episodes) throw fail('LIMIT', '番外篇章已达到本地容量上限；旧篇章仍保留，请先备份整理。');
+    // r84.171：不再按篇数拒绝写新篇（原上限 48）。
     const assertSource = () => {
         contextApi.assertRuntimeLifecycleCurrent(origin?.lifecycleEpoch);
         if (!contextApi.isCurrentTaskOrigin(origin, context) || origin.archiveRevision !== memory.archiveRevision
@@ -61439,6 +61483,7 @@ const ui_cgPromptEditor = __m_ui_cgPromptEditor_js;
 const ui_overlay = __m_ui_overlay_js;
 const ui_styles = __m_ui_styles_js;
 const ui_generationCompletion = __m_ui_generationCompletion_js;
+const image_menu = __m_ui_imageMenu_js;
 const runtimeState = __m_core_state_js.state;
 
 
@@ -61713,7 +61758,7 @@ function renderSharedMemory() {
           <button type="button" class="rmt-btn" data-rmt-action="shared-next" ${!comments.length || last ? 'disabled' : ''}>下一句</button>
         </div>
       </div>
-      ${readOnly ? '' : '<div class="rmt-cg-card-actions rmt-cg-memory-actions"><button type="button" class="rmt-btn" data-rmt-action="edit-cg-prompt">图片设置</button></div>'}
+      ${readOnly ? '' : image_menu.imageSetupHtml(`<button type="button" class="rmt-btn" data-rmt-action="edit-cg-prompt">${image_menu.BUNNY_SVG}<span>图片设置</span></button>`)}
       ${generation_imageGeneration.cgImageProgressHtml()}
     </div>`;
     body.querySelector?.('[data-rmt-album-speaker]')?.addEventListener('change', event => {
@@ -64044,7 +64089,7 @@ function bedtimeHtml(session, { locked = false, generating = false } = {}) {
             const controls = `<div class="rmt-bedtime-page-controls">${button('prev', '上一章', '', ui.chapterIndex <= 0)}<span>${chapters.length ? `${ui.chapterIndex + 1} / ${chapters.length}` : '0 / 0'}</span>${button('next', '下一章', '', ui.chapterIndex >= chapters.length - 1)}</div>`;
             content = `<article class="rmt-bedtime-reader"><header>${button('library', '返回故事架')}<small>${esc(selected.genre || '题材待完成')} · 睡前故事</small><h2>${esc(selected.title || '未完成的故事')}</h2><p>${esc(selected.premise || '')}</p></header>${storyPartial ? '<p class="rmt-recovery-status" role="status">这一章尚未完成；已收到的正文可以先读，继续会按原草稿补齐，不会重写旧章节。</p>' : ''}${chapter ? `<section class="rmt-bedtime-chapter"><small>第 ${ui.chapterIndex + 1} 章</small><h3>${esc(chapter.title || '本章标题待完成')}</h3>${bedtimePlate(expanded_cg_view.expandedCgHtml(session, {kind:'bedtime-chapter',containerId:selected.id,slot:'chapter:'+chapter.id}, locked, { placeholder: '<p class="rmt-bedtime-plate-empty">这一章还没有插画</p>' }))}${paragraphs(chapter.text)}</section>${controls}` : '<p role="status">本章正文尚未收到。</p>'}<footer>${locked ? '' : button('continue', generating ? '正在续写…' : '追加下一章', selected.id, generating || storyPartial)}</footer></article>`;
         }
-        return `<section class="rmt-bedtime"><header class="rmt-bedtime-head"><div><small>可连续阅读的虚构作品${locked ? ' · 只读' : ''}</small><h2>睡前故事</h2></div>${ui.view === 'story' ? '' : `<small>已保存 ${session.stories.length} 篇</small>`}</header><p class="rmt-bedtime-note">写一个新故事，或接着喜欢的故事读下一章。</p>${composer}${content}</section>`;
+        return `<section class="rmt-bedtime"><header class="rmt-bedtime-head"><div><small>床边的故事${locked ? ' · 只读' : ''}</small><h2>睡前故事</h2></div>${ui.view === 'story' ? '' : `<small>已保存 ${session.stories.length} 篇</small>`}</header><p class="rmt-bedtime-note">写一个新故事，或接着喜欢的故事读下一章。</p>${composer}${content}</section>`;
     } catch { return '<section class="rmt-bedtime"><p role="status">这份睡前故事暂时无法读取，原内容仍保留。</p></section>'; }
 }
 
@@ -68065,6 +68110,8 @@ const editor = __m_ui_cgPromptEditor_js;
 const viewer = __m_ui_cgImageViewer_js;
 const text = __m_core_text_js;
 const state = __m_core_state_js;
+const image_menu = __m_ui_imageMenu_js;
+
 
 
 
@@ -68094,7 +68141,20 @@ function expandedCgHtml(session, input, readOnly = false, { savedOnly = false, s
     const saved = images.normalizeCgImageRecord(resolved.item.cgImage);
     if (savedOnly && !saved) return '';
     const attrs = `data-rmt-expanded-cg="${text.esc(JSON.stringify(descriptor))}"`;
-    return `<section class="rmt-expanded-cg">${saved && showImage ? `<div class="rmt-thumb">${images.cgImageLayerHtml(resolved.item)}</div>` : !saved ? placeholder : ''}<div class="rmt-cg-card-actions">${saved ? `<button type="button" class="rmt-btn" ${attrs} data-rmt-expanded-cg-view="1">查看已保存图片</button>` : ''}${readOnly ? '' : `<button type="button" class="rmt-btn" ${attrs}>${saved ? '编辑画面 / 再画一张' : '设置画面并预览生图'}</button>`}</div>${previousExpandedImagesHtml(session, descriptor)}</section>`;
+    // r84.172：有图时按钮收进图片外右下角的小兔子菜单；还没有图时只留一个带兔子的「设置画面」按钮。
+    const actions = saved ? image_menu.imageMenuHtml(expandedCgButtonsHtml(session, input, readOnly))
+        : readOnly ? '' : image_menu.imageSetupHtml(`<button type="button" class="rmt-btn" ${attrs}>${image_menu.BUNNY_SVG}<span>设置画面并预览生图</span></button>`);
+    return `<section class="rmt-expanded-cg">${saved && showImage ? `<div class="rmt-thumb">${images.cgImageLayerHtml(resolved.item)}</div>` : !saved ? placeholder : ''}${actions}${previousExpandedImagesHtml(session, descriptor)}</section>`;
+}
+
+// 只要按钮（给光栅卡等把图片操作并进同一个兔子菜单用）。
+function expandedCgButtonsHtml(session, input, readOnly = false) {
+    const descriptor = targets.describeExpandedCgTarget(session, input);
+    const resolved = descriptor && targets.expandedCgItem(session, descriptor);
+    if (!resolved) return '';
+    const saved = images.normalizeCgImageRecord(resolved.item.cgImage);
+    const attrs = `data-rmt-expanded-cg="${text.esc(JSON.stringify(descriptor))}"`;
+    return `${saved ? `<button type="button" class="rmt-btn" ${attrs} data-rmt-expanded-cg-view="1">查看大图</button>` : ''}${readOnly ? '' : `<button type="button" class="rmt-btn" ${attrs}>${saved ? '编辑画面 / 再画一张' : '设置画面并预览生图'}</button>`}`;
 }
 
 function handleExpandedCgButton(button) {
@@ -68118,6 +68178,7 @@ function expandedCgBackdropHtml(session, input) {
 
 __m_ui_expandedCgView_js.previousExpandedImagesHtml = previousExpandedImagesHtml;
 __m_ui_expandedCgView_js.expandedCgHtml = expandedCgHtml;
+__m_ui_expandedCgView_js.expandedCgButtonsHtml = expandedCgButtonsHtml;
 __m_ui_expandedCgView_js.handleExpandedCgButton = handleExpandedCgButton;
 __m_ui_expandedCgView_js.expandedCgBackdropHtml = expandedCgBackdropHtml;
 }
@@ -69691,6 +69752,67 @@ function mountHomeDiagnostics(target) {
 __m_ui_homeView_js.homeHeadingHtml = homeHeadingHtml;
 __m_ui_homeView_js.showHome = showHome;
 __m_ui_homeView_js.mountHomeDiagnostics = mountHomeDiagnostics;
+}
+
+function __init_ui_imageMenu_js() {
+// MODULE: ui/imageMenu.js
+
+// r84.172 · 图片操作收进图片外右下角的小兔子（心迹回廊在魔法棒菜单里的那只）。
+// 用 <details>/<summary>，点兔子展开、再点收起；按钮原样搬进菜单，原来的点击处理不变。
+// 菜单在图片下方就地展开（不浮在别的内容上），不会被外层 overflow 裁掉，手机和 TT 也好点。
+const BUNNY_SVG = '<svg class="rmt-bunny-icon" viewBox="0 0 32 32" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true" focusable="false"><path d="M10 16C4 2 11 1 14 14M18 14C20 1 27 2 23 16M9 16c-7 11 3 15 9 14s13-8 5-14c-4-3-10-3-14 0Z"/><path d="M12 22h1m6 0h1m-6 4 2 1 2-1"/></svg>';
+
+function imageMenuHtml(buttonsHtml, { label = '图片操作' } = {}) {
+    if (!buttonsHtml) return '';
+    return `<div class="rmt-cg-menu-row"><details class="rmt-cg-menu"><summary class="rmt-cg-menu-toggle" aria-label="${label}" title="${label}">${BUNNY_SVG}</summary><div class="rmt-cg-menu-list">${buttonsHtml}</div></details></div>`;
+}
+
+// 还没有图时只有一个动作：直接给一个带小兔子的按钮，不用先展开菜单。
+function imageSetupHtml(buttonHtml) {
+    return buttonHtml ? `<div class="rmt-cg-menu-row rmt-cg-menu-single">${buttonHtml}</div>` : '';
+}
+
+// 点菜单里的按钮后收起；点菜单外面时收起所有打开的菜单。只装一次。
+function installImageMenuDismiss(doc = globalThis.document) {
+    if (!doc || doc.__rmtImageMenuDismiss) return;
+    doc.__rmtImageMenuDismiss = true;
+    doc.addEventListener('click', event => {
+        const target = event.target;
+        const inside = target?.closest?.('.rmt-cg-menu');
+        for (const menu of doc.querySelectorAll('.rmt-cg-menu[open]')) {
+            if (menu === inside) {
+                if (target.closest?.('.rmt-cg-menu-list button:not([data-card-tilt])')) globalThis.setTimeout?.(() => { menu.open = false; }, 0);
+                continue;
+            }
+            menu.open = false;
+        }
+    }, true);
+}
+
+function imageMenuCss(root) {
+    return `
+${root} .rmt-cg-menu-row{display:flex;justify-content:flex-end;align-items:flex-start;margin-top:6px;min-width:0}
+${root} .rmt-cg-menu{display:flex;flex-direction:column;align-items:flex-end;max-width:100%}
+${root} .rmt-cg-menu-toggle{list-style:none;display:grid;place-items:center;width:40px;height:40px;border-radius:50%;border:1px solid var(--rmt-theme-border);background:var(--rmt-theme-surface-solid,var(--rmt-theme-surface));color:var(--rmt-theme-text);cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent}
+${root} .rmt-cg-menu-toggle::-webkit-details-marker{display:none}
+${root} .rmt-cg-menu-toggle::marker{content:''}
+${root} .rmt-cg-menu[open] .rmt-cg-menu-toggle{background:var(--rmt-theme-wash,var(--rmt-theme-surface-tint));color:var(--rmt-theme-accent-ink,var(--rmt-theme-text))}
+${root} .rmt-cg-menu-toggle:focus-visible{outline:3px solid var(--rmt-theme-accent-ink,var(--rmt-theme-text))!important;outline-offset:2px}
+${root} .rmt-cg-menu-list{display:grid;gap:2px;margin-top:6px;width:min(100%,260px);padding:6px;border:1px solid var(--rmt-theme-border);border-radius:12px;background:var(--rmt-theme-surface-solid,var(--rmt-theme-surface))}
+${root} .rmt-cg-menu-list .rmt-btn,${root} .rmt-cg-menu-list button{display:flex!important;align-items:center;justify-content:flex-start!important;width:100%!important;min-height:40px;margin:0!important;padding:8px 12px!important;border:0!important;border-radius:8px!important;background:transparent!important;box-shadow:none!important;color:var(--rmt-theme-text)!important;text-align:left!important;font-size:14px;white-space:normal}
+${root} .rmt-cg-menu-list button:hover,${root} .rmt-cg-menu-list button:focus-visible{background:var(--rmt-theme-surface-tint,var(--rmt-theme-soft))!important}
+${root} .rmt-cg-menu-list button[hidden]{display:none!important}
+${root} .rmt-cg-menu-list button:disabled{opacity:.5}
+${root} .rmt-cg-menu-single .rmt-btn{display:inline-flex!important;align-items:center;gap:6px;width:auto!important;flex:0 0 auto!important}
+${root} .rmt-cg-menu-single .rmt-bunny-icon{flex:0 0 auto}
+`;
+}
+
+__m_ui_imageMenu_js.imageMenuHtml = imageMenuHtml;
+__m_ui_imageMenu_js.imageSetupHtml = imageSetupHtml;
+__m_ui_imageMenu_js.installImageMenuDismiss = installImageMenuDismiss;
+__m_ui_imageMenu_js.imageMenuCss = imageMenuCss;
+__m_ui_imageMenu_js.BUNNY_SVG = BUNNY_SVG;
 }
 
 function __init_ui_immersionStyles_js() {
@@ -74114,6 +74236,8 @@ const text = __m_core_text_js;
 const cacheApi = __m_core_cache_js;
 const contextApi = __m_core_context_js;
 const actions = __m_generation_pastLivesCardActions_js;
+const image_menu = __m_ui_imageMenu_js;
+
 
 
 
@@ -74125,7 +74249,7 @@ const actions = __m_generation_pastLivesCardActions_js;
 const esc = text.esc;
 let disposeCurrent = null;
 
-function pastLivesCardHtml(session, descriptor, cache, readOnly = false) {
+function pastLivesCardHtml(session, descriptor, cache, readOnly = false, { menuButtons = '' } = {}) {
     const resolved = targets.expandedCgItem(session, descriptor);
     if (!resolved) return '';
     const item = resolved.item, front = images.normalizeCgImageRecord(item.cgImage);
@@ -74142,7 +74266,7 @@ function pastLivesCardHtml(session, descriptor, cache, readOnly = false) {
         </div>
         <figcaption><div class="rmt-lenticular-controls"><button type="button" data-card-side="0" ${both ? '' : 'disabled'}>前世</button><input type="range" min="0" max="100" value="0" step="1" aria-label="前世与今生" aria-valuetext="前世" ${both ? '' : 'disabled'}><button type="button" data-card-side="100" ${both ? '' : 'disabled'}>今生</button></div>
             <p class="rmt-lenticular-status" role="status">${pair && !back ? '原图已不可用，请重新挑选今生。' : !back ? '今生还没留下画面' : !front ? '生成前世画面后即可切换两面' : '横滑或拖动滑杆，看见另一世'}</p>
-            <div class="rmt-lenticular-actions">${readOnly ? '' : `<button type="button" class="rmt-btn" data-card-pick>${pair ? '更换今生' : '挑一张今生'}</button>${pair ? '<button type="button" class="rmt-btn" data-card-clear>移除配对</button>' : ''}`}<button type="button" class="rmt-btn" data-card-tilt hidden>启用倾斜</button></div>
+            ${image_menu.imageMenuHtml(`${menuButtons}${readOnly ? '' : `<button type="button" class="rmt-btn" data-card-pick>${pair ? '更换今生' : '挑一张今生'}</button>${pair ? '<button type="button" class="rmt-btn" data-card-clear>移除配对</button>' : ''}`}<button type="button" class="rmt-btn" data-card-tilt hidden>启用倾斜</button>`)}
         </figcaption>
     </figure>`;
 }
@@ -74444,13 +74568,13 @@ function pastLivesHtml(value, { readOnly = false, busy = false, notice = '', ima
         const labels = contract.pastLivesLabels(selected?.presentation || session.presentation);
         const generate = readOnly ? '' : button('generate', busy ? '正在续写篇章…' : session.episodes.length ? '再写一篇番外' : '写下第一篇番外', '', busy ? 'disabled' : '');
         const header = `<header class="rmt-past-head"><div><small>另一段人生 · 此刻的你我</small><h2>前世今生</h2><p>${esc(session.characterName || '角色')} 与 ${esc(session.userName || '你')}的番外卷宗</p></div><div class="rmt-past-actions">${generate}</div></header>`;
-        const boundary = '<p class="rmt-past-boundary">前世为虚构番外；今生记忆另附真实来源，故事不替两人决定未来。</p>';
+        const boundary = ''; // r84.172：去掉出戏的说明文字。
         let content = '';
         if (!selected || ui.view === 'library') {
             content = session.episodes.length ? `<div class="rmt-past-library">${session.episodes.map(episode => {
                 const label = contract.pastLivesLabels(episode.presentation);
-                return `<button type="button" class="rmt-past-cover" data-rmt-past-lives="open" data-rmt-past-lives-id="${esc(episode.id)}"><span class="rmt-past-cover-icon" aria-hidden="true"><i class="fa-solid ${label.icon}"></i></span><span><small>${esc(label.token)} · 番外推演</small><b>${esc(episode.title)}</b><span>${esc(episode.opening.motif)}</span></span><span aria-hidden="true">›</span></button>`;
-            }).join('')}</div>` : `<div class="rmt-past-empty"><i class="fa-solid fa-book-open" aria-hidden="true"></i><h3>有些回声，还没有写下</h3><p>从两人的一件物品、一句话或一个选择，打开另一段虚构人生。</p><small>阅读和探索都在本地完成；点击上方生成按钮才使用文本生成额度。</small></div>`;
+                return `<button type="button" class="rmt-past-cover" data-rmt-past-lives="open" data-rmt-past-lives-id="${esc(episode.id)}"><span class="rmt-past-cover-icon" aria-hidden="true"><i class="fa-solid ${label.icon}"></i></span><span><small>${esc(label.token)}</small><b>${esc(episode.title)}</b><span>${esc(episode.opening.motif)}</span></span><span aria-hidden="true">›</span></button>`;
+            }).join('')}</div>` : `<div class="rmt-past-empty"><i class="fa-solid fa-book-open" aria-hidden="true"></i><h3>有些回声，还没有写下</h3><p>从两人的一件物品、一句话或一个选择，打开另一段人生。</p></div>`;
         } else {
             const readIds = contract.pastLivesReadClueIds(session, ui);
             const allClues = selected.dossiers.flatMap(item => item.clues);
@@ -74462,21 +74586,20 @@ function pastLivesHtml(value, { readOnly = false, busy = false, notice = '', ima
             if (ui.view === 'draw') {
                 scene = `<section class="rmt-past-draw ${ui.pastLivesDrawn ? 'is-open' : ''}"><span class="rmt-past-seal" aria-hidden="true">${esc(labels.token)}</span><h3>${esc(selected.title)}</h3>${ui.pastLivesDrawn
                     ? `<article class="rmt-past-slip"><small>${esc(selected.opening.title)}</small><h3>${esc(selected.opening.motif)}</h3>${paragraphs(selected.opening.text || (selected.opening.prosePending ? '正文待补。引子和来源已经留下，可以再补这一段。' : ''))}</article>${button('tab', '翻开卷宗', 'dossier')}`
-                    : `<p>一段故事，正从熟悉的意象里醒来。</p>${button('draw', labels.draw)}${button('skip-draw', '直接入卷')}`}
-                    <details class="rmt-past-source"><summary>引子的今生来源</summary><p>${esc(selected.opening.sourceMemoryAnchor)}</p><small>${esc(selected.opening.sourceMemoryIds.join(' · '))}</small></details></section>`;
+                    : `<p>一段故事，正从熟悉的意象里醒来。</p>${button('draw', labels.draw)}${button('skip-draw', '直接入卷')}`}</section>`;
             } else if (ui.view === 'dossier') {
                 const dossier = selected.dossiers.find(item => item.id === ui.selectedEntryId) || selected.dossiers[0];
                 const chosenClue = dossier?.clues.find(item => item.id === ui.selectedKey);
                 const docket = selected.dossiers.length > 1 ? `<nav class="rmt-past-docket" aria-label="选择卷宗">${selected.dossiers.map(item => button('dossier', item.title, item.id, `aria-pressed="${dossier?.id === item.id}"`)).join('')}</nav>` : '';
-                scene = dossier ? `${docket}<article class="rmt-past-paper"><header><small>虚构卷宗${dossier.era ? ' · ' + esc(dossier.era) : ''}</small><h3>${esc(dossier.title)}</h3></header>${paragraphs(dossier.synopsis)}${lenticular.pastLivesCardHtml(session, {version:1,kind:'past-life-dossier',containerId:selected.id,slot:'dossier:'+dossier.id}, imageCache, cardReadOnly)}${expanded_cg_view.expandedCgHtml(session, {kind:'past-life-dossier',containerId:selected.id,slot:'dossier:'+dossier.id}, readOnly, {showImage:false})}</article>
+                scene = dossier ? `${docket}<article class="rmt-past-paper"><header><small>卷宗${dossier.era ? ' · ' + esc(dossier.era) : ''}</small><h3>${esc(dossier.title)}</h3></header>${paragraphs(dossier.synopsis)}${lenticular.pastLivesCardHtml(session, {version:1,kind:'past-life-dossier',containerId:selected.id,slot:'dossier:'+dossier.id}, imageCache, cardReadOnly, { menuButtons: expanded_cg_view.expandedCgButtonsHtml(session, {kind:'past-life-dossier',containerId:selected.id,slot:'dossier:'+dossier.id}, readOnly) })}</article>
                     <div class="rmt-past-clues" aria-label="可阅读的卷宗线索">${dossier.clues.map(clue => `<button type="button" class="rmt-past-clue ${clue.kind === 'missing' ? 'is-missing' : ''}" data-rmt-past-lives="clue" data-rmt-past-lives-id="${esc(clue.id)}" aria-pressed="${chosenClue?.id === clue.id}"><small>${esc(clueLabel(clue.kind))}${readIds.has(clue.id) ? ' · 已读' : ''}</small><b>${esc(clue.title)}</b><span>${clue.kind === 'missing' ? '一处字迹留着空白' : '点开阅读'}</span></button>`).join('')}</div>
-                    ${chosenClue ? `<article class="rmt-past-evidence" id="rmt-past-current-evidence"><small>${esc(clueLabel(chosenClue.kind))}${chosenClue.kind === 'testimony' ? ' · ' + esc(chosenClue.speaker === 'char' ? session.characterName : chosenClue.speaker === 'user' ? session.userName : '卷内记述') : ''} · 虚构</small><h3>${esc(chosenClue.title)}</h3>${paragraphs(chosenClue.text)}${chosenClue.kind === 'missing' ? readIds.has(chosenClue.id)
+                    ${chosenClue ? `<article class="rmt-past-evidence" id="rmt-past-current-evidence"><small>${esc(clueLabel(chosenClue.kind))}${chosenClue.kind === 'testimony' ? ' · ' + esc(chosenClue.speaker === 'char' ? session.characterName : chosenClue.speaker === 'user' ? session.userName : '卷内记述') : ''}</small><h3>${esc(chosenClue.title)}</h3>${paragraphs(chosenClue.text)}${chosenClue.kind === 'missing' ? readIds.has(chosenClue.id)
                         ? `<div class="rmt-past-revealed" role="status"><small>字迹已显</small>${paragraphs(chosenClue.revealedText)}</div>`
                         : button('reveal', labels.missing, chosenClue.id) : ''}</article>` : dossier.clues.length ? '<p class="rmt-past-hint">选一件线索，读它留下的痕迹。</p>' : '<p class="rmt-past-hint">这一卷的文字已经完整，无需额外寻证。</p>'}`
                     : partial ? '<article class="rmt-past-paper"><h3>卷宗尚未完成</h3><p>已生成的引子仍可阅读。</p></article>' : '<article class="rmt-past-paper"><h3>这一篇，写在引子与回响之间</h3><p>没有另设卷宗，可继续读今生回响。</p></article>';
                 scene += `<div class="rmt-past-actions">${button('tab', '看看今生回响', 'echoes')}${button('read-all', '略过探索，读完整旁批')}</div>`;
             } else if (ui.view === 'echoes') {
-                scene = `<div class="rmt-past-echoes">${selected.echoes.map(echo => `<article class="rmt-past-echo"><small>${echo.kind === 'memory' ? '今生真实记忆' : '未来的一种可能'}</small><h3>${esc(echo.title)}</h3>${paragraphs(echo.text)}${echo.reflection ? `<div class="rmt-past-reflection">${paragraphs(echo.reflection)}</div>` : ''}${echo.kind === 'memory' ? `<details class="rmt-past-source"><summary>记忆来源</summary><p>${esc(echo.sourceMemoryAnchor)}</p><small>${esc(echo.sourceMemoryIds.join(' · '))}</small></details>` : ''}</article>`).join('') || (partial ? '<article class="rmt-past-paper"><h3>今生回响尚未完成</h3><p>已生成的引子与卷宗仍可阅读。</p></article>' : '<article class="rmt-past-paper"><h3>让回声停在纸上</h3><p>这一篇没有另写今生回响，也没有把虚构故事当成已经应验的往事。</p></article>')}</div><div class="rmt-past-actions">${button('tab', `翻到${labels.closing}`, 'closing')}</div>`;
+                scene = `<div class="rmt-past-echoes">${selected.echoes.map(echo => `<article class="rmt-past-echo"><small>${echo.kind === 'memory' ? '今生' : '往后'}</small><h3>${esc(echo.title)}</h3>${paragraphs(echo.text)}${echo.reflection ? `<div class="rmt-past-reflection">${paragraphs(echo.reflection)}</div>` : ''}</article>`).join('') || (partial ? '<article class="rmt-past-paper"><h3>今生回响尚未完成</h3><p>已生成的引子与卷宗仍可阅读。</p></article>' : '<article class="rmt-past-paper"><h3>让回声停在纸上</h3><p>这一篇没有另写今生回响。</p></article>')}</div><div class="rmt-past-actions">${button('tab', `翻到${labels.closing}`, 'closing')}</div>`;
             } else {
                 scene = `<article class="rmt-past-closing"><small>${esc(labels.closing)} · 今生仍可选择</small><h3>${esc(selected.title)}</h3>${ui.pastLivesClosing
                     ? selected.closing ? `${paragraphs(selected.closing.text)}<footer>${esc(selected.closing.signature || session.characterName)}</footer>` : '<p role="status">落款尚未完成。</p>'
@@ -78060,12 +78183,12 @@ function renderSettingsPanelMarkup(panel) {
           </div>
         </details>
         <details class="rmt-settings-card" data-rmt-settings-section="creative">
-          <summary class="rmt-settings-card-head"><span>文</span><div><b>创作补充词</b><small>仅用于心迹回廊独立 API</small></div></summary>
+          <summary class="rmt-settings-card-head"><span>文</span><div><b>破限词</b><small>仅用于心迹回廊独立 API；发给模型时仍标为「创作补充词」</small></div></summary>
           <div class="rmt-settings-section-body">
-            <label class="rmt-settings-check"><input type="checkbox" data-rmt-creative-enabled><span>启用创作补充词</span></label>
+            <label class="rmt-settings-check"><input type="checkbox" data-rmt-creative-enabled><span>启用破限词</span></label>
             <label class="rmt-settings-field"><span>文风、氛围与叙事偏好</span><textarea class="text_pole" data-rmt-creative-text maxlength="20000" rows="8" placeholder="例如：少用总结式旁白，让情绪从对白和细节中自然流露。"></textarea></label>
             <p><output data-rmt-creative-count>0 / 20,000</output> 字符。仅随心迹回廊文本生成发送，不写入主聊天、不发送给生图接口；会占用模型输入额度。</p>
-            <div class="rmt-theme-presets"><button type="button" data-rmt-creative-save>保存补充词</button><button type="button" data-rmt-creative-cancel>撤销编辑</button></div>
+            <div class="rmt-theme-presets"><button type="button" data-rmt-creative-save>保存破限词</button><button type="button" data-rmt-creative-cancel>撤销编辑</button></div>
             <div role="status" data-rmt-creative-status></div>
           </div>
         </details>
@@ -78196,11 +78319,13 @@ const css_calendarCss = __m_ui_css_calendarCss_js;
 const css_heartProfileTravelCss = __m_ui_css_heartProfileTravelCss_js;
 const ui_autoMemoryWizardStyles = __m_ui_autoMemoryWizardStyles_js;
 const ui_heartEnvelope = __m_ui_heartEnvelope_js;
+const ui_imageMenu = __m_ui_imageMenu_js;
 
 
 
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
+
 
 
 
@@ -78445,6 +78570,8 @@ function ensureStyles() {
         + css_calendarCss.calendarCss()
         + css_heartProfileTravelCss.heartProfileTravelCss();
     style.textContent += ui_inboxStyles.inboxCss('#' + core_constants.OVERLAY_ID);
+    style.textContent += ui_imageMenu.imageMenuCss('#' + core_constants.OVERLAY_ID);
+    ui_imageMenu.installImageMenuDismiss(document);
     style.textContent += ui_pastLivesView.PAST_LIVES_CSS;
     style.textContent += time_stories_view.timeStoriesCss();
     style.textContent += ui_themeSurfaces.structuralThemeCss('#' + core_constants.OVERLAY_ID) + ui_themeSurfaces.structuralThemeCss('.rmt-avatar-dialog-pop[data-rmt-theme-mode]');
@@ -82138,6 +82265,7 @@ __init_ui_heartEnvelope_js();
 __init_ui_heartReaderState_js();
 __init_ui_heartView_js();
 __init_ui_homeView_js();
+__init_ui_imageMenu_js();
 __init_ui_immersionStyles_js();
 __init_ui_inboxStyles_js();
 __init_ui_inboxView_js();

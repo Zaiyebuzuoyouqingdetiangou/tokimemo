@@ -6,11 +6,12 @@ import * as text from '../core/text.js';
 import * as cacheApi from '../core/cache.js';
 import * as contextApi from '../core/context.js';
 import * as actions from '../generation/pastLivesCardActions.js';
+import * as image_menu from './imageMenu.js';
 
 const esc = text.esc;
 let disposeCurrent = null;
 
-export function pastLivesCardHtml(session, descriptor, cache, readOnly = false) {
+export function pastLivesCardHtml(session, descriptor, cache, readOnly = false, { menuButtons = '' } = {}) {
     const resolved = targets.expandedCgItem(session, descriptor);
     if (!resolved) return '';
     const item = resolved.item, front = images.normalizeCgImageRecord(item.cgImage);
@@ -27,7 +28,7 @@ export function pastLivesCardHtml(session, descriptor, cache, readOnly = false) 
         </div>
         <figcaption><div class="rmt-lenticular-controls"><button type="button" data-card-side="0" ${both ? '' : 'disabled'}>前世</button><input type="range" min="0" max="100" value="0" step="1" aria-label="前世与今生" aria-valuetext="前世" ${both ? '' : 'disabled'}><button type="button" data-card-side="100" ${both ? '' : 'disabled'}>今生</button></div>
             <p class="rmt-lenticular-status" role="status">${pair && !back ? '原图已不可用，请重新挑选今生。' : !back ? '今生还没留下画面' : !front ? '生成前世画面后即可切换两面' : '横滑或拖动滑杆，看见另一世'}</p>
-            <div class="rmt-lenticular-actions">${readOnly ? '' : `<button type="button" class="rmt-btn" data-card-pick>${pair ? '更换今生' : '挑一张今生'}</button>${pair ? '<button type="button" class="rmt-btn" data-card-clear>移除配对</button>' : ''}`}<button type="button" class="rmt-btn" data-card-tilt hidden>启用倾斜</button></div>
+            ${image_menu.imageMenuHtml(`${menuButtons}${readOnly ? '' : `<button type="button" class="rmt-btn" data-card-pick>${pair ? '更换今生' : '挑一张今生'}</button>${pair ? '<button type="button" class="rmt-btn" data-card-clear>移除配对</button>' : ''}`}<button type="button" class="rmt-btn" data-card-tilt hidden>启用倾斜</button>`)}
         </figcaption>
     </figure>`;
 }

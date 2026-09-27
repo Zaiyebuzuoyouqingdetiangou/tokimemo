@@ -20,6 +20,7 @@ import * as css_calendarCss from './css/calendarCss.js';
 import * as css_heartProfileTravelCss from './css/heartProfileTravelCss.js';
 import * as ui_autoMemoryWizardStyles from './autoMemoryWizardStyles.js';
 import * as ui_heartEnvelope from './heartEnvelope.js';
+import * as ui_imageMenu from './imageMenu.js';
 
 export function participantPickerCss() {
     const root = '#' + core_constants.OVERLAY_ID;
@@ -248,6 +249,8 @@ export function ensureStyles() {
         + css_calendarCss.calendarCss()
         + css_heartProfileTravelCss.heartProfileTravelCss();
     style.textContent += ui_inboxStyles.inboxCss('#' + core_constants.OVERLAY_ID);
+    style.textContent += ui_imageMenu.imageMenuCss('#' + core_constants.OVERLAY_ID);
+    ui_imageMenu.installImageMenuDismiss(document);
     style.textContent += ui_pastLivesView.PAST_LIVES_CSS;
     style.textContent += time_stories_view.timeStoriesCss();
     style.textContent += ui_themeSurfaces.structuralThemeCss('#' + core_constants.OVERLAY_ID) + ui_themeSurfaces.structuralThemeCss('.rmt-avatar-dialog-pop[data-rmt-theme-mode]');
