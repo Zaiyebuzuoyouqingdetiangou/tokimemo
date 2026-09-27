@@ -18,6 +18,7 @@ import * as ui_overlay from './overlay.js';
 import * as ui_styles from './styles.js';
 import * as ui_generationCompletion from './generationCompletion.js';
 import * as image_menu from './imageMenu.js';
+import * as journal_clip from './journalClip.js';
 export function filteredAlbumEntries() {
     if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.ALBUM) return [];
     const category = runtimeState.activeSession.category || '全部';
@@ -55,7 +56,7 @@ export function renderAlbum() {
     const cards = pageItems.map(item => {
         const drawing = item.unlocked && !readOnlyArchive && generation_imageGeneration.isCgImageDrawing(core_constants.MODE.ALBUM, item.id);
         const cardActions = item.unlocked
-            ? `<div class="rmt-cg-card-actions"><button type="button" class="rmt-btn rmt-memory-primary" data-rmt-album-memory="${core_text.esc(item.id)}" aria-label="${core_text.esc(item.title)}：共同回忆">共同回忆</button>${readOnlyArchive ? '' : `<button type="button" class="rmt-btn" data-rmt-album-prompt="${core_text.esc(item.id)}" ${drawing ? 'disabled' : ''} aria-label="${core_text.esc(item.title)}：图片设置">${drawing ? '绘制中…' : '图片设置'}</button>`}</div>`
+            ? `<div class="rmt-album-card-actions"><button type="button" class="rmt-btn rmt-memory-primary" data-rmt-album-memory="${core_text.esc(item.id)}" aria-label="${core_text.esc(item.title)}：共同回忆">共同回忆</button>${readOnlyArchive ? '' : image_menu.imageMenuHtml(`<button type="button" class="rmt-btn" data-rmt-album-prompt="${core_text.esc(item.id)}" ${drawing ? 'disabled' : ''} aria-label="${core_text.esc(item.title)}：图片设置">${drawing ? '绘制中…' : '图片设置'}</button>${item.cgImage?.url ? `<button type="button" class="rmt-btn" data-rmt-journal-clip="${journal_clip.clipPayload({ mode: 'album', id: item.id, title: item.title, url: item.cgImage.url, body: item.desc || '' })}">夹进手帐</button>` : ''}`, { label: `${core_text.esc(item.title)}：图片操作` })}</div>`
             : '';
         return `<article class="rmt-card ${item.id === session.selectedId ? 'active' : ''} ${item.unlocked ? '' : 'locked'}" data-rmt-album-id="${core_text.esc(item.id)}">
       <div class="rmt-thumb">${item.unlocked ? generation_imageGeneration.cgImageLayerHtml(item, { history: false }) : `<div class="rmt-abstract" style="${ui_styles.abstractStyle(item.visualSeed, item.id)}"></div>`}</div>

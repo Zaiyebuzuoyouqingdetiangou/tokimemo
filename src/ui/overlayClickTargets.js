@@ -33,6 +33,7 @@ import * as ui_heartView from './heartView.js';
 import * as archive_snapshots from '../archive/snapshots.js';
 import * as core_settings from '../core/settings.js';
 import { OVERLAY_CLICK_UNHANDLED, applyMemoryPatch, openCachedOrGenerate, presentGenerationTaskResult, showChooser } from './overlayCore.js';
+import * as journal_clip from './journalClip.js';
 // ui/overlayCore.js handleOverlayClick 的分组处理（重构阶段 3）。每个函数是原函数里连续的一段语句，一字未改；
 // 返回 OVERLAY_CLICK_UNHANDLED 表示“这一段没有处理”，原函数接着往下走，和拆分前完全相同。
 
@@ -62,6 +63,8 @@ export function overlayClickRecordTargets(event) {
     const resultOpen = event.target.closest?.('[data-rmt-task-result-open]');
     if (resultOpen) return void archive_library.openGenerationTaskResult(resultOpen.dataset.rmtTaskResultOpen, core_context.getContext(), { snapshot: runtimeState.activeArchiveSnapshot })
         .catch(error => globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊'));
+    const clipButton = event.target.closest?.('[data-rmt-journal-clip]');
+    if (clipButton) return void journal_clip.clipToJournal(clipButton.dataset.rmtJournalClip);
     const pastLivesButton = event.target.closest?.('[data-rmt-past-lives]');
     if (pastLivesButton) return void past_lives_view.handlePastLivesAction(pastLivesButton.dataset.rmtPastLives, pastLivesButton.dataset.rmtPastLivesId);
     const timeStoryButton = event.target.closest?.('[data-rmt-time-story]');

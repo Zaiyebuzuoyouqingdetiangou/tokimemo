@@ -5,6 +5,7 @@ import * as viewer from './cgImageViewer.js';
 import * as text from '../core/text.js';
 import * as state from '../core/state.js';
 import * as image_menu from './imageMenu.js';
+import * as journal_clip from './journalClip.js';
 
 export function previousExpandedImagesHtml(session, descriptor) {
     const collection = descriptor.kind === 'heart-voice' ? session?.voiceDramas
@@ -35,6 +36,14 @@ export function expandedCgHtml(session, input, readOnly = false, { savedOnly = f
     return `<section class="rmt-expanded-cg">${saved && showImage ? `<div class="rmt-thumb">${images.cgImageLayerHtml(resolved.item)}</div>` : !saved ? placeholder : ''}${actions}${previousExpandedImagesHtml(session, descriptor)}</section>`;
 }
 
+// r84.173：只要图片本身（睡前故事把图包进绘本页，兔子菜单放在页框外面）。
+export function expandedCgImageHtml(session, input) {
+    const descriptor = targets.describeExpandedCgTarget(session, input);
+    const resolved = descriptor && targets.expandedCgItem(session, descriptor);
+    if (!resolved || !images.normalizeCgImageRecord(resolved.item.cgImage)) return '';
+    return `<div class="rmt-thumb">${images.cgImageLayerHtml(resolved.item)}</div>`;
+}
+
 // 只要按钮（给光栅卡等把图片操作并进同一个兔子菜单用）。
 export function expandedCgButtonsHtml(session, input, readOnly = false) {
     const descriptor = targets.describeExpandedCgTarget(session, input);
@@ -42,7 +51,8 @@ export function expandedCgButtonsHtml(session, input, readOnly = false) {
     if (!resolved) return '';
     const saved = images.normalizeCgImageRecord(resolved.item.cgImage);
     const attrs = `data-rmt-expanded-cg="${text.esc(JSON.stringify(descriptor))}"`;
-    return `${saved ? `<button type="button" class="rmt-btn" ${attrs} data-rmt-expanded-cg-view="1">查看大图</button>` : ''}${readOnly ? '' : `<button type="button" class="rmt-btn" ${attrs}>${saved ? '编辑画面 / 再画一张' : '设置画面并预览生图'}</button>`}`;
+    const clip = saved && !readOnly ? `<button type="button" class="rmt-btn" data-rmt-journal-clip="${journal_clip.clipPayload({ mode: journal_clip.clipModeForKind(descriptor.kind), id: resolved.item.id, title: resolved.item.title, url: saved.url })}">夹进手帐</button>` : '';
+    return `${saved ? `<button type="button" class="rmt-btn" ${attrs} data-rmt-expanded-cg-view="1">查看大图</button>` : ''}${readOnly ? '' : `<button type="button" class="rmt-btn" ${attrs}>${saved ? '编辑画面 / 再画一张' : '设置画面并预览生图'}</button>`}${clip}`;
 }
 
 export function handleExpandedCgButton(button) {

@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
-// Source modules: 293
-// Source SHA-256: 9e5c5c252ff67f0680447d6f08a8c67290981ff22e026528b499c89663a67091
+// Source modules: 295
+// Source SHA-256: e223539c4717dd024bc9cecc424cfd9518eb0bcb7fa6eb9a5620a72f9749432e
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -100,6 +100,7 @@ const __m_core_independentApi_js = Object.create(null);
 const __m_core_independentApiConfig_js = Object.create(null);
 const __m_core_independentApiRequest_js = Object.create(null);
 const __m_core_inputLedger_js = Object.create(null);
+const __m_core_journalPiggyback_js = Object.create(null);
 const __m_core_lenticularCards_js = Object.create(null);
 const __m_core_letterIllustration_js = Object.create(null);
 const __m_core_letterIllustrationV2_js = Object.create(null);
@@ -254,6 +255,7 @@ const __m_ui_imageMenu_js = Object.create(null);
 const __m_ui_immersionStyles_js = Object.create(null);
 const __m_ui_inboxStyles_js = Object.create(null);
 const __m_ui_inboxView_js = Object.create(null);
+const __m_ui_journalClip_js = Object.create(null);
 const __m_ui_languageView_js = Object.create(null);
 const __m_ui_memoryReveal_js = Object.create(null);
 const __m_ui_mirrorCallView_js = Object.create(null);
@@ -3673,16 +3675,30 @@ function eligibleDrawIds(modules, { preferredModuleIds = [], excludedModuleIds =
     return selected;
 }
 
+// r84.173：「很久没抽到」的加权只从它上次被抽中之后开始算。以前不清零，抽中过的模块仍带着旧的加权，容易连着被抽到。
 function weightCandidates(ids, tickets = []) {
     const history = Array.isArray(tickets) ? tickets : [];
+    const list = Array.isArray(ids) ? ids : [];
     const recent = history.slice(-3);
-    return (Array.isArray(ids) ? ids : []).map(id => {
+    const picks = history.map(ticket => ticket?.selectedModuleId || '');
+    return list.map(id => {
         const recentHits = recent.filter(ticket => ticket?.selectedModuleId === id).length;
-        const eligible = history.filter(ticket => (Array.isArray(ticket?.candidates) ? ticket.candidates : []).some(item => item?.id === id));
+        const since = history.slice(picks.lastIndexOf(id) + 1);
+        const eligible = since.filter(ticket => (Array.isArray(ticket?.candidates) ? ticket.candidates : []).some(item => item?.id === id));
         const misses = eligible.filter(ticket => ticket?.selectedModuleId !== id).length;
         const weight = Math.max(1, Math.floor(100 / (1 + recentHits))) + Math.min(misses, 20) * 25;
         return { id, weight };
     });
+}
+
+// r84.173：冷却。上一轮刚抽到的模块，这一轮不参与抽签；只剩它一个候选时照常抽。
+// 抽签记录里仍保存完整候选和权重（权重必须 ≥1），冷却只影响这一轮从谁里面抽。
+function cooledCandidates(weighted, tickets = []) {
+    const rows = Array.isArray(weighted) ? weighted : [];
+    const history = Array.isArray(tickets) ? tickets : [];
+    const last = [...history].reverse().find(ticket => ticket?.selectedModuleId)?.selectedModuleId || '';
+    const rest = rows.filter(item => item?.id !== last);
+    return last && rest.length ? rest : rows;
 }
 
 function pickWeighted(weighted, random) {
@@ -3722,6 +3738,7 @@ function incrementalImportOptions(window = null) {
 __m_autoMemory_draw_js.roundCandidateIds = roundCandidateIds;
 __m_autoMemory_draw_js.eligibleDrawIds = eligibleDrawIds;
 __m_autoMemory_draw_js.weightCandidates = weightCandidates;
+__m_autoMemory_draw_js.cooledCandidates = cooledCandidates;
 __m_autoMemory_draw_js.pickWeighted = pickWeighted;
 __m_autoMemory_draw_js.newMemoryIds = newMemoryIds;
 __m_autoMemory_draw_js.incrementalImportOptions = incrementalImportOptions;
@@ -4093,7 +4110,7 @@ async function drawFresh(snapshot, fresh, input, io, { keepPace = false } = {}) 
         return persistNoop(snapshot, input.floor, io, input.now, 'no-candidates');
     }
     const weighted = auto_memory_draw.weightCandidates(candidates, snapshot.drawTickets);
-    const selected = auto_memory_draw.pickWeighted(weighted, io.random);
+    const selected = auto_memory_draw.pickWeighted(auto_memory_draw.cooledCandidates(weighted, snapshot.drawTickets), io.random);
     if (!selected || plan.excludedModuleIds.includes(selected)) {
         if (keepPace) return { action: 'noop', moduleRequest: false, reason: 'no-candidates' };
         return persistNoop(snapshot, input.floor, io, input.now, 'no-candidates');
@@ -5036,6 +5053,7 @@ function __init_autoMemory_moduleHost_js() {
 const archive_repository = __m_archive_repository_js;
 const core_cache = __m_core_cache_js;
 const generation_achievement = __m_generation_achievementCapture_js;
+const journal_piggyback = __m_core_journalPiggyback_js;
 const generation_client = __m_generation_client_js;
 const modes_inbox = __m_modes_inbox_js;
 const auto_memory_gap = __m_autoMemory_gapFill_js;
@@ -5043,6 +5061,7 @@ const auto_memory_plans = __m_autoMemory_modulePlans_js;
 const auto_memory_registry = __m_autoMemory_moduleRegistry_js;
 const auto_memory_runner = __m_autoMemory_moduleRunner_js;
 // 把冻结好的步骤交给现有生成入口。一次唤醒只推进当前这一批，不重做已经记下的步骤。
+
 
 
 
@@ -5124,10 +5143,14 @@ function stepOptions(step, plan) {
 }
 
 async function executeModuleStep({ step, plan, carryAchievement }, context) {
-    if (carryAchievement) generation_achievement.armAchievementCapture();
+    // r84.175：最后一步顺便给「等批注」的手帐页写一句（读不到手帐就当没有，不影响本轮）。
+    const wanted = carryAchievement ? await journal_piggyback.wantedJournalPages() : { scope: '', pages: [] };
+    if (carryAchievement) generation_achievement.armAchievementCapture({ journalPages: wanted.pages, charName: context?.name2, userName: context?.name1 });
     try {
         const result = await generation_client.generateMode(plan.moduleId, stepOptions(step, plan));
+        const journalNotes = generation_achievement.takeJournalNotes();
         const achievement = generation_achievement.finishAchievementCapture();
+        if (Object.keys(journalNotes).length) void journal_piggyback.saveJournalNotes(wanted.scope, journalNotes, context?.name2 || '');
         if (!result || result.status === 'failed' || result.status === 'cancelled' || result.status === 'blocked') return { saved: false };
         if (result?.status === 'noop') return { noop: true };
         if (step.kind === 'catalog') {
@@ -13817,19 +13840,40 @@ function normalizeEntry(value) {
     return { id, title, source: { mode: string(value.source.mode), id: string(value.source.id), title: string(value.source.title),
         ...(value.source.path === undefined ? {} : { path: string(value.source.path) }) }, blocks: value.blocks.map(normalizeBlock) };
 }
+// r84.174：收藏和便签。都是可选字段，旧页、旧备份照常读取。
+function normalizeNote(value) {
+    requireValue(object(value) && typeof value.id === 'string' && value.id.length > 0);
+    return { id: value.id, text: string(value.text) };
+}
+// r84.175：版式和角色批注，同样是可选字段。
+const JOURNAL_LAYOUTS = Object.freeze([
+    { id: 'collage', label: '拼贴' }, { id: 'photo', label: '大图' }, { id: 'quote', label: '摘录' }, { id: 'timeline', label: '时间线' },
+]);
+function normalizeAnnotation(value) {
+    if (!object(value) || typeof value.text !== 'string' || !value.text.trim()) return null;
+    return { text: value.text, at: Number.isFinite(value.at) && value.at >= 0 ? value.at : 0, ...(typeof value.by === 'string' && value.by ? { by: value.by } : {}) };
+}
 function normalizePage(value) {
     requireValue(object(value) && Array.isArray(value.entries) && typeof value.id === 'string' && value.id.length > 0
         && Number.isFinite(value.createdAt) && value.createdAt >= 0);
-    return { id: value.id, title: string(value.title), createdAt: value.createdAt, entries: value.entries.map(normalizeEntry), ...(value.palette ? {palette:journalPalette(value.palette)} : {}) };
+    requireValue(value.notes === undefined || Array.isArray(value.notes));
+    const notes = Array.isArray(value.notes) ? value.notes.map(normalizeNote).filter(note => note.text.trim()) : [];
+    return { id: value.id, title: string(value.title), createdAt: value.createdAt, entries: value.entries.map(normalizeEntry), ...(value.palette ? {palette:journalPalette(value.palette)} : {}),
+        ...(value.favorite === true ? { favorite: true } : {}), ...(notes.length ? { notes } : {}),
+        ...(JOURNAL_LAYOUTS.some(item => item.id === value.layout) ? { layout: value.layout } : {}),
+        ...(normalizeAnnotation(value.annotation) ? { annotation: normalizeAnnotation(value.annotation) } : {}),
+        ...(value.annotationWanted === true && !normalizeAnnotation(value.annotation) ? { annotationWanted: true } : {}) };
 }
+// 导入备份时判断「是不是同一页」：只看内容本身，不看收藏和便签（它们会在本机继续变）。
+function pageContentKey(page) { return JSON.stringify({ id: page.id, title: page.title, createdAt: page.createdAt, entries: page.entries, palette: page.palette }); } // 版式、批注、收藏、便签都是本机装饰，不参与判断。
 function pages(value) {
     requireValue(Array.isArray(value)); const rows = value.map(normalizePage), ids = new Set();
     for (const row of rows) { requireValue(!ids.has(row.id), '手帐页面标识重复，原记录没有改动。'); ids.add(row.id); }
     return rows;
 }
-function createJournalPage({ title = '', entries, id = globalThis.crypto?.randomUUID?.(), createdAt = Date.now(), palette } = {}) {
+function createJournalPage({ title = '', entries, id = globalThis.crypto?.randomUUID?.(), createdAt = Date.now(), palette, favorite, notes, layout, annotation, annotationWanted } = {}) {
     requireValue(typeof id === 'string' && !!id, '无法创建手帐页面标识，请稍后重试。');
-    return freeze(normalizePage({ id, title, entries, createdAt, palette }));
+    return freeze(normalizePage({ id, title, entries, createdAt, palette, favorite, notes, layout, annotation, annotationWanted }));
 }
 function exportJournal(value) { return JSON.stringify({ format: FORMAT, version: 1, pages: pages(value) }, null, 2); }
 function importJournal(value) {
@@ -13956,7 +14000,7 @@ function createJournalStore({ indexedDB = globalThis.indexedDB, currentScope } =
             return await new Promise((resolve,reject) => {
                 let tx, result, error;
                 try {
-                    const writing = incoming !== null || !!edit?.remove || !!edit?.rename || !!edit?.palette;
+                    const writing = incoming !== null || !!edit?.remove || !!edit?.rename || !!edit?.palette || !!edit?.update || !!edit?.annotations;
                     tx=db.transaction(STORE,writing?'readwrite':'readonly');
                     tx.oncomplete=()=>resolve(freeze(result));
                     tx.onabort=tx.onerror=()=>reject(error || fail('RMT_JOURNAL_STORAGE','手帐保存未完成，原记录保留；请保留未保存页面后重试。'));
@@ -13981,6 +14025,27 @@ function createJournalStore({ indexedDB = globalThis.indexedDB, currentScope } =
                                 store.put({scope,version:1,pages:result});
                                 return;
                             }
+                            if (edit?.update) {
+                                const index = result.findIndex(page => page.id === edit.update.id);
+                                requireValue(index >= 0, '找不到这一页，原手帐没有改动。');
+                                const patch = {};
+                                if (typeof edit.update.favorite === 'boolean') patch.favorite = edit.update.favorite;
+                                if (Array.isArray(edit.update.notes)) patch.notes = edit.update.notes;
+                                if (typeof edit.update.layout === 'string') patch.layout = edit.update.layout;
+                                result = result.slice();
+                                result[index] = createJournalPage({ ...result[index], ...patch });
+                                store.put({scope,version:1,pages:result});
+                                return;
+                            }
+                            if (edit?.annotations) {
+                                // 一次写入多页批注；找不到的页跳过，不让整批失败。
+                                result = result.map(page => {
+                                    const note = edit.annotations[page.id];
+                                    return note ? createJournalPage({ ...page, annotation: note }) : page;
+                                });
+                                store.put({scope,version:1,pages:result});
+                                return;
+                            }
                             if (edit?.rename) {
                                 const index = result.findIndex(page => page.id === edit.rename.id);
                                 requireValue(index >= 0, '找不到这一页，原手帐没有改动。');
@@ -13994,7 +14059,7 @@ function createJournalStore({ indexedDB = globalThis.indexedDB, currentScope } =
                             const ids=new Map(result.map(page=>[page.id,page]));
                             for(const page of incoming){
                                 const old=ids.get(page.id);
-                                requireValue(!old || JSON.stringify(old)===JSON.stringify(page),'已有同名页面标识对应不同内容，未覆盖原手帐。');
+                                requireValue(!old || pageContentKey(old)===pageContentKey(page),'已有同名页面标识对应不同内容，未覆盖原手帐。');
                                 if(!old){result.push(page);ids.set(page.id,page);}
                             }
                             store.put({scope,version:1,pages:result});
@@ -14010,7 +14075,42 @@ function createJournalStore({ indexedDB = globalThis.indexedDB, currentScope } =
         rename:(scope,id,title)=>transact(scope,undefined,{rename:{id,title:typeof title==='string'?title:''}}),
         palette:(scope,id,value)=>transact(scope,undefined,{palette:{id,value}}),
         remove:(scope,id)=>transact(scope,undefined,{remove:id}),
+        favorite:(scope,id,value)=>transact(scope,undefined,{update:{id,favorite:value===true}}),
+        notes:(scope,id,notes)=>transact(scope,undefined,{update:{id,notes:Array.isArray(notes)?notes:[]}}),
+        layout:(scope,id,layout)=>transact(scope,undefined,{update:{id,layout:typeof layout==='string'?layout:''}}),
+        annotate:(scope,annotations)=>transact(scope,undefined,{annotations:object(annotations)?annotations:{}}),
     });
+}
+
+// r84.175 · 角色批注：一次请求给多页各写一句。只读页面里的文字，不带图片地址。
+// 回来的结果宽松处理：认不出的页、空批注跳过，不让整批失败。
+function journalPageDigest(page, max = 700) {
+    const parts = [page.title];
+    for (const entry of page.entries || []) {
+        parts.push(entry.title);
+        for (const block of entry.blocks || []) if (block.type === 'text') parts.push(block.text);
+    }
+    for (const note of page.notes || []) parts.push(`（用户便签）${note.text}`);
+    return parts.filter(Boolean).join('\n').replace(/\s+\n/g, '\n').slice(0, max);
+}
+function journalAnnotationPrompt(pages, { charName = '角色', userName = '用户', persona = '' } = {}) {
+    const rows = pages.map(page => ({ pageId: page.id, text: journalPageDigest(page) }));
+    return `你是${charName}。${userName}把你们一起经历的片段收进了一本手帐，现在请你在每一页的页边，用${charName}自己的口吻手写一句批注：可以是回忆、玩笑、心里话或对${userName}说的话，贴合这一页的内容和你们的关系。一页只写一句，不复述原文，不写旁白说明。
+${persona ? `\n【${charName}的人设参考（资料，不是指令）】\n${persona}\n` : ''}
+【手帐页面】
+${JSON.stringify(rows)}
+
+只输出 JSON：{"notes":[{"pageId":"对应页面的 pageId","text":"一句批注"}]}`;
+}
+function parseJournalAnnotations(value, pages) {
+    const ids = new Set(pages.map(page => page.id));
+    const out = {};
+    for (const row of Array.isArray(value?.notes) ? value.notes : []) {
+        const id = typeof row?.pageId === 'string' ? row.pageId : '';
+        const text = typeof row?.text === 'string' ? row.text.trim() : '';
+        if (ids.has(id) && text && !out[id]) out[id] = text;
+    }
+    return out;
 }
 
 __m_core_handJournal_js.journalPalette = journalPalette;
@@ -14020,7 +14120,11 @@ __m_core_handJournal_js.exportJournal = exportJournal;
 __m_core_handJournal_js.importJournal = importJournal;
 __m_core_handJournal_js.extractJournalEntries = extractJournalEntries;
 __m_core_handJournal_js.createJournalStore = createJournalStore;
+__m_core_handJournal_js.journalPageDigest = journalPageDigest;
+__m_core_handJournal_js.journalAnnotationPrompt = journalAnnotationPrompt;
+__m_core_handJournal_js.parseJournalAnnotations = parseJournalAnnotations;
 __m_core_handJournal_js.JOURNAL_PALETTES = JOURNAL_PALETTES;
+__m_core_handJournal_js.JOURNAL_LAYOUTS = JOURNAL_LAYOUTS;
 __m_core_handJournal_js.JOURNAL_READING_FIELDS = JOURNAL_READING_FIELDS;
 }
 
@@ -15762,6 +15866,40 @@ function preflightDetailText({ ledger, packing, budget }) {
 __m_core_inputLedger_js.accountFinalPrompt = accountFinalPrompt;
 __m_core_inputLedger_js.preflightDetailText = preflightDetailText;
 __m_core_inputLedger_js.LEDGER_SECTION_NAMES = LEDGER_SECTION_NAMES;
+}
+
+function __init_core_journalPiggyback_js() {
+// MODULE: core/journalPiggyback.js
+const journal = __m_core_handJournal_js;
+const core_context = __m_core_context_js;
+// r84.175 · 自动留忆最后一步顺便给「等批注」的手帐页写一句。读写都只碰本机手帐；任何失败都不影响自动留忆本身。
+
+
+function liveScope() {
+    try { return core_context.chatScopeKey(core_context.currentCharacterGuard()); } catch { return ''; }
+}
+
+async function wantedJournalPages() {
+    const scope = liveScope();
+    if (!scope) return { scope: '', pages: [] };
+    try {
+        const pages = await journal.createJournalStore({ currentScope: liveScope }).read(scope);
+        return { scope, pages: pages.filter(page => page.annotationWanted === true && !page.annotation).map(page => ({ pageId: page.id, text: journal.journalPageDigest(page) })) };
+    } catch { return { scope: '', pages: [] }; }
+}
+
+async function saveJournalNotes(scope, notes, by = '') {
+    const ids = Object.keys(notes || {});
+    if (!scope || !ids.length || liveScope() !== scope) return 0;
+    try {
+        const at = Date.now();
+        await journal.createJournalStore({ currentScope: liveScope }).annotate(scope, Object.fromEntries(ids.map(id => [id, { text: notes[id], at, by }])));
+        return ids.length;
+    } catch { return 0; }
+}
+
+__m_core_journalPiggyback_js.wantedJournalPages = wantedJournalPages;
+__m_core_journalPiggyback_js.saveJournalNotes = saveJournalNotes;
 }
 
 function __init_core_lenticularCards_js() {
@@ -34184,10 +34322,26 @@ const SUFFIX = `
 
 let armed = false;
 let packet = null;
+// r84.175：手帐批注搭便车。只在自动留忆最后一步、而且有「等批注」的手帐页时才加这一段；
+// 字段 journalNotes 和成就一样从正文 JSON 里拆走，不改各模块的校验，也不多发请求。
+let journalPages = [];
+let journalPacket = null;
+let journalNames = { charName: '角色', userName: '用户' };
 
-function armAchievementCapture() {
+function armAchievementCapture({ journalPages: pages = [], charName = '', userName = '' } = {}) {
     armed = true;
     packet = null;
+    journalPacket = null;
+    journalPages = Array.isArray(pages) ? pages.filter(row => row && typeof row.pageId === 'string' && typeof row.text === 'string') : [];
+    journalNames = { charName: charName || '角色', userName: userName || '用户' };
+}
+
+function journalSuffix() {
+    if (!journalPages.length) return '';
+    return `
+【顺便给手帐写批注，同样写在这同一个 JSON 对象里】
+${journalNames.userName}把下面这些片段夹进了手帐。请以${journalNames.charName}的口吻，在每一页页边各写一句批注（回忆、玩笑或心里话，不复述原文）。在原来的 JSON 对象上再增加 "journalNotes"：[{"pageId":"原样复制","text":"一句批注"}]。不要改动其他字段。
+UNTRUSTED_JOURNAL_PAGES: ${JSON.stringify(journalPages)}`;
 }
 
 function achievementCaptureArmed() {
@@ -34195,19 +34349,34 @@ function achievementCaptureArmed() {
 }
 
 function achievementPromptSuffix() {
-    return armed ? SUFFIX : '';
+    return armed ? SUFFIX + journalSuffix() : '';
 }
 
 function stripAchievementField(raw) {
-    if (!armed || !raw || typeof raw !== 'object' || Array.isArray(raw) || !Object.hasOwn(raw, 'achievement')) return raw;
-    packet = raw.achievement;
+    if (!armed || !raw || typeof raw !== 'object' || Array.isArray(raw)) return raw;
+    if (!Object.hasOwn(raw, 'achievement') && !Object.hasOwn(raw, 'journalNotes')) return raw;
     const copy = { ...raw };
-    delete copy.achievement;
+    if (Object.hasOwn(raw, 'achievement')) { packet = raw.achievement; delete copy.achievement; }
+    if (Object.hasOwn(raw, 'journalNotes')) { journalPacket = raw.journalNotes; delete copy.journalNotes; }
     return copy;
+}
+
+// 取走本轮顺便写的手帐批注（只保留请求里那几页、非空的一句）。
+function takeJournalNotes() {
+    const ids = new Set(journalPages.map(row => row.pageId));
+    const out = {};
+    for (const row of Array.isArray(journalPacket) ? journalPacket : []) {
+        const id = typeof row?.pageId === 'string' ? row.pageId : '';
+        const text = typeof row?.text === 'string' ? row.text.trim() : '';
+        if (ids.has(id) && text && !out[id]) out[id] = text;
+    }
+    journalPacket = null;
+    return out;
 }
 
 function finishAchievementCapture() {
     armed = false;
+    journalPages = [];
     const value = packet;
     packet = null;
     return value && typeof value === 'object' ? value : null;
@@ -34217,6 +34386,7 @@ __m_generation_achievementCapture_js.armAchievementCapture = armAchievementCaptu
 __m_generation_achievementCapture_js.achievementCaptureArmed = achievementCaptureArmed;
 __m_generation_achievementCapture_js.achievementPromptSuffix = achievementPromptSuffix;
 __m_generation_achievementCapture_js.stripAchievementField = stripAchievementField;
+__m_generation_achievementCapture_js.takeJournalNotes = takeJournalNotes;
 __m_generation_achievementCapture_js.finishAchievementCapture = finishAchievementCapture;
 }
 
@@ -61484,6 +61654,7 @@ const ui_overlay = __m_ui_overlay_js;
 const ui_styles = __m_ui_styles_js;
 const ui_generationCompletion = __m_ui_generationCompletion_js;
 const image_menu = __m_ui_imageMenu_js;
+const journal_clip = __m_ui_journalClip_js;
 const runtimeState = __m_core_state_js.state;
 
 
@@ -61535,7 +61706,7 @@ function renderAlbum() {
     const cards = pageItems.map(item => {
         const drawing = item.unlocked && !readOnlyArchive && generation_imageGeneration.isCgImageDrawing(core_constants.MODE.ALBUM, item.id);
         const cardActions = item.unlocked
-            ? `<div class="rmt-cg-card-actions"><button type="button" class="rmt-btn rmt-memory-primary" data-rmt-album-memory="${core_text.esc(item.id)}" aria-label="${core_text.esc(item.title)}：共同回忆">共同回忆</button>${readOnlyArchive ? '' : `<button type="button" class="rmt-btn" data-rmt-album-prompt="${core_text.esc(item.id)}" ${drawing ? 'disabled' : ''} aria-label="${core_text.esc(item.title)}：图片设置">${drawing ? '绘制中…' : '图片设置'}</button>`}</div>`
+            ? `<div class="rmt-album-card-actions"><button type="button" class="rmt-btn rmt-memory-primary" data-rmt-album-memory="${core_text.esc(item.id)}" aria-label="${core_text.esc(item.title)}：共同回忆">共同回忆</button>${readOnlyArchive ? '' : image_menu.imageMenuHtml(`<button type="button" class="rmt-btn" data-rmt-album-prompt="${core_text.esc(item.id)}" ${drawing ? 'disabled' : ''} aria-label="${core_text.esc(item.title)}：图片设置">${drawing ? '绘制中…' : '图片设置'}</button>${item.cgImage?.url ? `<button type="button" class="rmt-btn" data-rmt-journal-clip="${journal_clip.clipPayload({ mode: 'album', id: item.id, title: item.title, url: item.cgImage.url, body: item.desc || '' })}">夹进手帐</button>` : ''}`, { label: `${core_text.esc(item.title)}：图片操作` })}</div>`
             : '';
         return `<article class="rmt-card ${item.id === session.selectedId ? 'active' : ''} ${item.unlocked ? '' : 'locked'}" data-rmt-album-id="${core_text.esc(item.id)}">
       <div class="rmt-thumb">${item.unlocked ? generation_imageGeneration.cgImageLayerHtml(item, { history: false }) : `<div class="rmt-abstract" style="${ui_styles.abstractStyle(item.visualSeed, item.id)}"></div>`}</div>
@@ -62388,7 +62559,9 @@ const ui_styles = __m_ui_styles_js;
 const ui_taskCenter = __m_ui_taskCenter_js;
 const ui_overlay = __m_ui_overlay_js;
 const core_theme = __m_core_theme_js;
+const journal_clip = __m_ui_journalClip_js;
 // 外置壳贴在角色楼层下面，点开才展开。档案没写完时不挂壳，也不显示建档进度。
+
 
 
 
@@ -62614,8 +62787,10 @@ function markup(view) {
     const read = `<button type="button" class="rmt-btn" data-rmt-letter-read data-rmt-reveal="${esc(view.revealId)}" data-rmt-module="${esc(view.moduleId)}">打开回忆</button>`;
     // r84.162：打开回忆仍在信里直接展开内容；另给一个按钮去心迹回廊看同一份（只打开已保存的，不会重新生成）。
     const jump = view.moduleId ? `<button type="button" class="rmt-btn" data-rmt-letter-jump data-rmt-reveal="${esc(view.revealId)}" data-rmt-module="${esc(view.moduleId)}">去心迹回廊看</button>` : '';
+    // r84.175：把这封信夹进手帐（标题和一句简介）。
+    const clip = view.title ? `<button type="button" class="rmt-btn" data-rmt-journal-clip="${journal_clip.clipPayload({ mode: view.moduleId, id: view.revealId, title: view.title, body: view.achievementCopy || '' })}">夹进手帐</button>` : '';
     const paper = revealPaper
-        ? `<div class="rmt-letter-head"><span class="rmt-letter-badge">${esc(moduleTitle)}</span></div>${heading}${copy}<div class="rmt-letter-buttons">${read}${jump}<button type="button" class="rmt-btn rmt-heart-letter-close" data-rmt-letter-close>收起</button></div>`
+        ? `<div class="rmt-letter-head"><span class="rmt-letter-badge">${esc(moduleTitle)}</span></div>${heading}${copy}<div class="rmt-letter-buttons">${read}${jump}${clip}<button type="button" class="rmt-btn rmt-heart-letter-close" data-rmt-letter-close>收起</button></div>`
         : '';
     // r84.162：只有最新一楼用迷你信封；更早的楼压缩成一行提示条，没拆的带红点。
     const seal = view.compact
@@ -63065,6 +63240,8 @@ function onClick(event) {
         if (seal) seal.hidden = false;
         return;
     }
+    const clipButton = event.target?.closest?.('[data-rmt-journal-clip]');
+    if (clipButton) { event.preventDefault(); event.stopPropagation(); void journal_clip.clipToJournal(clipButton.dataset.rmtJournalClip); return; }
     const jump = event.target?.closest?.('[data-rmt-letter-jump]');
     if (jump) {
         event.preventDefault();
@@ -64087,7 +64264,7 @@ function bedtimeHtml(session, { locked = false, generating = false } = {}) {
             const chapters = selected.chapters || [];
             const chapter = chapters[ui.chapterIndex] || chapters[0];
             const controls = `<div class="rmt-bedtime-page-controls">${button('prev', '上一章', '', ui.chapterIndex <= 0)}<span>${chapters.length ? `${ui.chapterIndex + 1} / ${chapters.length}` : '0 / 0'}</span>${button('next', '下一章', '', ui.chapterIndex >= chapters.length - 1)}</div>`;
-            content = `<article class="rmt-bedtime-reader"><header>${button('library', '返回故事架')}<small>${esc(selected.genre || '题材待完成')} · 睡前故事</small><h2>${esc(selected.title || '未完成的故事')}</h2><p>${esc(selected.premise || '')}</p></header>${storyPartial ? '<p class="rmt-recovery-status" role="status">这一章尚未完成；已收到的正文可以先读，继续会按原草稿补齐，不会重写旧章节。</p>' : ''}${chapter ? `<section class="rmt-bedtime-chapter"><small>第 ${ui.chapterIndex + 1} 章</small><h3>${esc(chapter.title || '本章标题待完成')}</h3>${bedtimePlate(expanded_cg_view.expandedCgHtml(session, {kind:'bedtime-chapter',containerId:selected.id,slot:'chapter:'+chapter.id}, locked, { placeholder: '<p class="rmt-bedtime-plate-empty">这一章还没有插画</p>' }))}${paragraphs(chapter.text)}</section>${controls}` : '<p role="status">本章正文尚未收到。</p>'}<footer>${locked ? '' : button('continue', generating ? '正在续写…' : '追加下一章', selected.id, generating || storyPartial)}</footer></article>`;
+            content = `<article class="rmt-bedtime-reader"><header>${button('library', '返回故事架')}<small>${esc(selected.genre || '题材待完成')} · 睡前故事</small><h2>${esc(selected.title || '未完成的故事')}</h2><p>${esc(selected.premise || '')}</p></header>${storyPartial ? '<p class="rmt-recovery-status" role="status">这一章尚未完成；已收到的正文可以先读，继续会按原草稿补齐，不会重写旧章节。</p>' : ''}${chapter ? `<section class="rmt-bedtime-chapter"><small>第 ${ui.chapterIndex + 1} 章</small><h3>${esc(chapter.title || '本章标题待完成')}</h3>${bedtimePlate(expanded_cg_view.expandedCgImageHtml(session, {kind:'bedtime-chapter',containerId:selected.id,slot:'chapter:'+chapter.id}))}${expanded_cg_view.expandedCgHtml(session, {kind:'bedtime-chapter',containerId:selected.id,slot:'chapter:'+chapter.id}, locked, { showImage: false, placeholder: '<p class="rmt-bedtime-plate-empty">这一章还没有插画</p>' })}${paragraphs(chapter.text)}</section>${controls}` : '<p role="status">本章正文尚未收到。</p>'}<footer>${locked ? '' : button('continue', generating ? '正在续写…' : '追加下一章', selected.id, generating || storyPartial)}</footer></article>`;
         }
         return `<section class="rmt-bedtime"><header class="rmt-bedtime-head"><div><small>床边的故事${locked ? ' · 只读' : ''}</small><h2>睡前故事</h2></div>${ui.view === 'story' ? '' : `<small>已保存 ${session.stories.length} 篇</small>`}</header><p class="rmt-bedtime-note">写一个新故事，或接着喜欢的故事读下一章。</p>${composer}${content}</section>`;
     } catch { return '<section class="rmt-bedtime"><p role="status">这份睡前故事暂时无法读取，原内容仍保留。</p></section>'; }
@@ -68111,6 +68288,8 @@ const viewer = __m_ui_cgImageViewer_js;
 const text = __m_core_text_js;
 const state = __m_core_state_js;
 const image_menu = __m_ui_imageMenu_js;
+const journal_clip = __m_ui_journalClip_js;
+
 
 
 
@@ -68147,6 +68326,14 @@ function expandedCgHtml(session, input, readOnly = false, { savedOnly = false, s
     return `<section class="rmt-expanded-cg">${saved && showImage ? `<div class="rmt-thumb">${images.cgImageLayerHtml(resolved.item)}</div>` : !saved ? placeholder : ''}${actions}${previousExpandedImagesHtml(session, descriptor)}</section>`;
 }
 
+// r84.173：只要图片本身（睡前故事把图包进绘本页，兔子菜单放在页框外面）。
+function expandedCgImageHtml(session, input) {
+    const descriptor = targets.describeExpandedCgTarget(session, input);
+    const resolved = descriptor && targets.expandedCgItem(session, descriptor);
+    if (!resolved || !images.normalizeCgImageRecord(resolved.item.cgImage)) return '';
+    return `<div class="rmt-thumb">${images.cgImageLayerHtml(resolved.item)}</div>`;
+}
+
 // 只要按钮（给光栅卡等把图片操作并进同一个兔子菜单用）。
 function expandedCgButtonsHtml(session, input, readOnly = false) {
     const descriptor = targets.describeExpandedCgTarget(session, input);
@@ -68154,7 +68341,8 @@ function expandedCgButtonsHtml(session, input, readOnly = false) {
     if (!resolved) return '';
     const saved = images.normalizeCgImageRecord(resolved.item.cgImage);
     const attrs = `data-rmt-expanded-cg="${text.esc(JSON.stringify(descriptor))}"`;
-    return `${saved ? `<button type="button" class="rmt-btn" ${attrs} data-rmt-expanded-cg-view="1">查看大图</button>` : ''}${readOnly ? '' : `<button type="button" class="rmt-btn" ${attrs}>${saved ? '编辑画面 / 再画一张' : '设置画面并预览生图'}</button>`}`;
+    const clip = saved && !readOnly ? `<button type="button" class="rmt-btn" data-rmt-journal-clip="${journal_clip.clipPayload({ mode: journal_clip.clipModeForKind(descriptor.kind), id: resolved.item.id, title: resolved.item.title, url: saved.url })}">夹进手帐</button>` : '';
+    return `${saved ? `<button type="button" class="rmt-btn" ${attrs} data-rmt-expanded-cg-view="1">查看大图</button>` : ''}${readOnly ? '' : `<button type="button" class="rmt-btn" ${attrs}>${saved ? '编辑画面 / 再画一张' : '设置画面并预览生图'}</button>`}${clip}`;
 }
 
 function handleExpandedCgButton(button) {
@@ -68178,6 +68366,7 @@ function expandedCgBackdropHtml(session, input) {
 
 __m_ui_expandedCgView_js.previousExpandedImagesHtml = previousExpandedImagesHtml;
 __m_ui_expandedCgView_js.expandedCgHtml = expandedCgHtml;
+__m_ui_expandedCgView_js.expandedCgImageHtml = expandedCgImageHtml;
 __m_ui_expandedCgView_js.expandedCgButtonsHtml = expandedCgButtonsHtml;
 __m_ui_expandedCgView_js.handleExpandedCgButton = handleExpandedCgButton;
 __m_ui_expandedCgView_js.expandedCgBackdropHtml = expandedCgBackdropHtml;
@@ -68580,7 +68769,9 @@ const workspace = __m_ui_workspace_js;
 const routes = __m_ui_workspaceState_js;
 const room = __m_modes_room_js;
 const phone = __m_ui_phoneView_js;
+const generation_client = __m_generation_client_js;
 const state = __m_core_state_js.state;
+
 
 
 
@@ -68606,11 +68797,49 @@ function sourceLabel(key) { return routes.WORKSPACE_ROUTES[key]?.title || consta
 const style = `<style>
 .rmt-journal{padding:18px;max-width:900px;margin:auto;min-width:0;overflow-wrap:anywhere}.rmt-journal *{box-sizing:border-box;min-width:0}.rmt-journal h2,.rmt-journal h3{margin:0 0 12px}.rmt-journal-controls,.rmt-journal-actions{display:flex;flex-wrap:wrap;gap:10px;margin:12px 0}.rmt-journal label{display:grid;gap:6px;flex:1}.rmt-journal input:not([type=checkbox]),.rmt-journal select,.rmt-journal textarea{width:100%;max-width:100%;font:inherit;padding:10px;border:1px solid var(--rmt-theme-line,#ddc9d3);border-radius:12px;background:var(--rmt-theme-bg,#fff);color:inherit}.rmt-journal button{min-height:42px;white-space:normal}.rmt-journal [hidden]{display:none!important}.rmt-journal-choices{display:grid;gap:8px;max-height:40vh;overflow:auto;padding:8px 0}.rmt-journal-choices label{display:flex;align-items:start;padding:10px;border:1px solid var(--rmt-theme-line,#ddc9d3);border-radius:12px}.rmt-journal-choices input{flex-shrink:0;margin-top:5px}.rmt-journal-choices small{display:block;opacity:.75}.rmt-journal-page{padding:24px;margin:18px 0;border:1px solid #e1d7c7;border-radius:10px 22px 22px 10px;background:#fffdf3;color:#554653;box-shadow:inset 7px 0 #efe4d5,0 5px 18px #523d4810}.rmt-journal-page:nth-child(3n+2){background:#f4f9f5}.rmt-journal-page:nth-child(3n+3){background:#fff4f6}.rmt-journal-page>header{border-bottom:1px dashed #d5c8c7;margin-bottom:18px;padding-bottom:12px}.rmt-journal-saved{margin:0}.rmt-journal-page-tools{display:flex;flex-wrap:wrap;gap:8px;margin:-8px 0 18px}.rmt-journal-entry{margin-top:22px}.rmt-journal-prose{white-space:pre-wrap;line-height:1.85;margin:10px 0}.rmt-journal figure{margin:16px 0}.rmt-journal img,.rmt-journal svg{display:block;max-width:100%;height:auto;margin:auto}.rmt-journal figcaption,.rmt-journal small{font-size:13px}.rmt-journal-empty{padding:28px 8px;text-align:center;opacity:.7}.rmt-journal-compose{padding:14px;border:1px solid var(--rmt-theme-line,#ddc9d3);border-radius:18px}.rmt-journal-status{white-space:pre-wrap;line-height:1.6}.rmt-journal-status:empty{display:none}@media(max-width:420px){.rmt-journal{padding:12px}.rmt-journal-page{padding:20px 16px 20px 22px}.rmt-journal-controls{display:grid}.rmt-journal-actions button{flex:1}}
 .rmt-journal-palette{display:flex;flex-wrap:wrap;align-items:end;gap:12px;border:1px solid #cdded5;border-radius:14px;margin:12px 0;padding:12px}.rmt-journal-palette label{flex:0 1 auto}.rmt-journal-palette input[type=color]{width:56px;height:40px;padding:3px;cursor:pointer}.rmt-journal-palette legend{font-size:13px}
+.rmt-journal-top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}.rmt-journal-top p{margin:0;color:var(--rmt-theme-muted)}
+.rmt-journal details>summary{list-style:none;cursor:pointer}.rmt-journal details>summary::-webkit-details-marker{display:none}
+.rmt-journal-more{position:relative;flex:0 0 auto}.rmt-journal-more>summary,.rmt-journal-page-more>summary{display:grid;place-items:center;width:40px;height:40px;border-radius:50%;border:1px solid var(--rmt-theme-border);background:var(--rmt-theme-surface-solid,var(--rmt-theme-surface));font-size:18px;line-height:1}
+.rmt-journal-more-list,.rmt-journal-page-more-list{display:grid;gap:6px;margin-top:6px;padding:8px;min-width:210px;border:1px solid var(--rmt-theme-border);border-radius:12px;background:var(--rmt-theme-surface-solid,var(--rmt-theme-surface))}
+.rmt-journal-more[open] .rmt-journal-more-list{position:absolute;right:0;z-index:5}.rmt-journal-more-list small{color:var(--rmt-theme-muted);font-size:12px;line-height:1.6}
+.rmt-journal-filter{display:flex;gap:8px;overflow-x:auto;margin:14px 0 10px;padding-bottom:2px}.rmt-journal-filter button{flex:0 0 auto;min-height:34px;padding:4px 14px;border-radius:999px;border:1px solid var(--rmt-theme-border);background:transparent;color:var(--rmt-theme-text);font-size:13px;cursor:pointer}.rmt-journal-filter button[aria-pressed="true"]{background:var(--rmt-theme-surface-tint,var(--rmt-theme-soft));font-weight:600}
+.rmt-journal-book{touch-action:pan-y}
+.rmt-journal-page{position:relative;margin:18px 0 10px;padding:26px clamp(16px,4vw,28px) 20px;border:1px solid;border-left-width:6px;border-radius:6px 16px 16px 6px}
+.rmt-journal-tape{position:absolute;top:-9px;left:50%;width:96px;height:20px;transform:translateX(-50%) rotate(-3deg);background:var(--rmt-journal-accent);opacity:.8;border-radius:2px}
+.rmt-journal-page>header{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:12px}.rmt-journal-page>header h3{margin:0;font-size:19px}
+.rmt-journal-stamp{flex:0 0 auto;padding:1px 7px;border:1.5px solid var(--rmt-journal-ink);border-radius:6px;font-size:12px;transform:rotate(6deg);opacity:.75}
+.rmt-journal-fav-mark{flex:0 0 auto;color:var(--rmt-journal-ink);opacity:.8}
+.rmt-journal-photo{margin:12px auto;padding:8px 8px 22px;max-width:min(100%,520px);background:#fff;border:1px solid var(--rmt-journal-accent);transform:rotate(var(--rmt-photo-tilt,0deg));box-shadow:0 4px 12px #0000000f}
+.rmt-journal-photo img{display:block;width:100%;height:auto}.rmt-journal-photo figcaption{margin-top:6px;text-align:center;font-size:12px;color:#6b5a50}
+.rmt-journal-note{position:relative;margin:14px 0 4px auto;max-width:min(100%,320px);padding:10px 30px 10px 12px;background:var(--rmt-journal-accent);color:var(--rmt-journal-ink);transform:rotate(var(--rmt-note-tilt,0deg));box-shadow:0 3px 8px #0000000f}.rmt-journal-note p{margin:0;white-space:pre-wrap;font-size:14px;line-height:1.7}
+.rmt-journal-note-remove{position:absolute;top:2px;right:4px;width:28px;height:28px;min-height:0!important;padding:0!important;border:0!important;background:transparent!important;box-shadow:none!important;color:inherit!important;font-size:16px;cursor:pointer;opacity:.7}
+.rmt-journal-page-bar{display:flex;align-items:flex-start;justify-content:flex-end;gap:8px}.rmt-journal-page-more{position:relative}.rmt-journal-page-more[open] .rmt-journal-page-more-list{position:absolute;right:0;z-index:5}
+.rmt-journal-note-editor{display:grid;gap:8px;margin:10px 0}.rmt-journal-note-editor textarea{min-height:88px}
+.rmt-journal-pager{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:8px 0 16px}.rmt-journal-pager span{color:var(--rmt-theme-muted);font-size:13px}
+.rmt-journal-add{margin:10px 0 16px}.rmt-journal-add>summary{display:flex;justify-content:center}.rmt-journal-add>summary span{display:inline-flex;align-items:center;gap:6px;min-height:44px;padding:8px 20px;border-radius:999px;border:1px solid var(--rmt-theme-border);background:var(--rmt-theme-surface-solid,var(--rmt-theme-surface))}
+.rmt-journal-steps{margin:10px 0 0;padding-left:1.4em;color:var(--rmt-theme-muted);font-size:13px}.rmt-journal-deco>summary{margin:10px 0;color:var(--rmt-theme-muted);font-size:14px}
+.rmt-journal-annotation{margin:16px 0 0;padding-left:12px;border-left:2px solid var(--rmt-journal-accent);font-family:'LXGW WenKai','Kaiti SC',STKaiti,KaiTi,serif;font-size:15px;line-height:1.8;transform:rotate(-.6deg)}.rmt-journal-annotation span{display:block;font-size:12px;opacity:.7}
+.rmt-journal-layout-photo .rmt-journal-photo{transform:none;max-width:100%;padding:6px}.rmt-journal-layout-photo .rmt-journal-prose{font-size:14px}
+.rmt-journal-layout-quote .rmt-journal-prose{position:relative;padding:4px 0 4px 26px;font-family:'Noto Serif SC',Georgia,serif;font-size:17px;line-height:1.9}.rmt-journal-layout-quote .rmt-journal-prose:before{content:'“';position:absolute;left:0;top:-6px;font-size:34px;opacity:.45}.rmt-journal-layout-quote .rmt-journal-photo{max-width:min(100%,260px)}
+.rmt-journal-layout-timeline .rmt-journal-entry{position:relative;margin-left:10px;padding:0 0 14px 18px;border-left:2px solid var(--rmt-journal-accent)}.rmt-journal-layout-timeline .rmt-journal-entry:before{content:'';position:absolute;left:-7px;top:4px;width:12px;height:12px;border-radius:50%;background:var(--rmt-journal-accent)}
+.rmt-journal-quote{display:grid;gap:8px;margin:10px 0}.rmt-journal-quote textarea{min-height:110px}
 </style>`;
 
-function journalPageHtml(page, index = 0) {
+// r84.174：像实体手帐：顶上一条和纸胶带，日期做成印章，图片是微微歪斜的拍立得，便签贴在页上。
+// editable 只在手帐页本身打开（预览和导出不带删除按钮）。
+function journalPageHtml(page, index = 0, { editable = false } = {}) {
     const colors=journal.journalPalette(page.palette,index);
-    return `<article class="rmt-journal-page" style="background:${colors.paper};color:${colors.ink};border-color:${colors.accent};box-shadow:inset 7px 0 ${colors.accent},0 5px 18px #523d4810"><header><small>${esc(new Date(page.createdAt).toLocaleDateString())}</small><h3>${esc(page.title)}</h3></header>${page.entries.map((entry, i) => `<section class="rmt-journal-entry"><small>${esc(constants.MODE_LABEL[entry.source?.mode] || (entry.source?.mode==='chat'?'聊天末条回复':'已存内容'))}</small><h4>${esc(entry.title)}</h4>${entry.blocks.map((block, j) => block.type === 'text' ? `<p class="rmt-journal-prose">${block.speaker ? `<b>${esc(block.speaker)}</b>\n` : ''}${esc(block.text)}</p>` : block.type === 'image' ? `<figure><img src="${esc(block.url)}" alt="${esc(block.caption || entry.title)}" loading="lazy"><figcaption>${esc(block.caption || '')}</figcaption></figure>` : block.type === 'letterIllustration' ? `<figure>${letterArt.renderLetterIllustration(block.illustration, {idPrefix:`journal-${page.id}-${index}-${i}-${j}`,label:entry.title})}</figure>` : '').join('')}</section>`).join('')}</article>`;
+    let photo = 0;
+    const date = new Date(page.createdAt);
+    const stamp = Number.isFinite(date.getTime()) ? `${date.getMonth() + 1} · ${date.getDate()}` : '';
+    const notes = (page.notes || []).map((note, n) => `<aside class="rmt-journal-note" style="--rmt-note-tilt:${n % 2 ? 2 : -2}deg"><p>${esc(note.text)}</p>${editable ? `<button type="button" class="rmt-journal-note-remove" data-journal-note-remove="${esc(note.id)}" aria-label="撕下这张便签" style="background:transparent!important;border:0!important;box-shadow:none!important;min-width:0!important;min-height:0!important">×</button>` : ''}</aside>`).join('');
+    const layout = journal.JOURNAL_LAYOUTS.some(item => item.id === page.layout) ? page.layout : 'collage';
+    const annotation = page.annotation?.text ? `<p class="rmt-journal-annotation">${esc(page.annotation.text)}${page.annotation.by ? `<span>—— ${esc(page.annotation.by)}</span>` : ''}</p>` : '';
+    return `<article class="rmt-journal-page rmt-journal-layout-${layout}" style="--rmt-journal-paper:${colors.paper};--rmt-journal-ink:${colors.ink};--rmt-journal-accent:${colors.accent};background:${colors.paper};color:${colors.ink};border-color:${colors.accent}"><span class="rmt-journal-tape" aria-hidden="true"></span><header><h3>${esc(page.title)}</h3>${stamp ? `<span class="rmt-journal-stamp" title="${esc(date.toLocaleDateString())}">${stamp}</span>` : ''}${page.favorite ? '<span class="rmt-journal-fav-mark" aria-label="已收藏">★</span>' : ''}</header>${page.entries.map((entry, i) => `<section class="rmt-journal-entry"><small>${esc(constants.MODE_LABEL[entry.source?.mode] || (entry.source?.mode==='chat'?'聊天末条回复':'已存内容'))}</small><h4>${esc(entry.title)}</h4>${entry.blocks.map((block, j) => block.type === 'text' ? `<p class="rmt-journal-prose">${block.speaker ? `<b>${esc(block.speaker)}</b>\n` : ''}${esc(block.text)}</p>` : block.type === 'image' ? `<figure class="rmt-journal-photo" style="--rmt-photo-tilt:${(photo++ % 2) ? 1.5 : -1.5}deg"><img src="${esc(block.url)}" alt="${esc(block.caption || entry.title)}" loading="lazy"><figcaption>${esc(block.caption || entry.title || '')}</figcaption></figure>` : block.type === 'letterIllustration' ? `<figure>${letterArt.renderLetterIllustration(block.illustration, {idPrefix:`journal-${page.id}-${index}-${i}-${j}`,label:entry.title})}</figure>` : '').join('')}</section>`).join('')}${notes}${annotation}</article>`;
+}
+
+function layoutSelect(value = 'collage', pageId = '') {
+    return `<label>版式<select ${pageId ? `data-journal-layout="${esc(pageId)}"` : 'data-journal-layout-new'}>${journal.JOURNAL_LAYOUTS.map(item => `<option value="${item.id}" ${item.id === (value || 'collage') ? 'selected' : ''}>${item.label}</option>`).join('')}</select></label>`;
 }
 
 function journalPaletteControls(value, pageId = '') {
@@ -68635,7 +68864,7 @@ async function openHandJournal() {
     routes.workspace.route='journal'; routes.workspace.tab='content'; routes.workspace.empty=null;
     overlay.topTitle('手帐'); overlay.setBackVisible(true,'内容'); overlay.setRegenerateVisible(false); overlay.setManageVisible(false);
     const body=overlay.bodyEl();
-    body.innerHTML=`${style}<main class="rmt-journal"><h2>手帐</h2><p>把想留下的文字和画面，收在属于你们的册子里。</p><p class="rmt-journal-status" role="status" aria-live="polite">正在读取手帐…</p><section class="rmt-journal-compose" hidden><h3>添一页</h3><div class="rmt-journal-controls"><label>内容来源<select data-journal-source aria-label="手帐内容来源"></select></label><label>这一页的标题<input data-journal-title placeholder="给这一页起个名字"></label></div>${journalPaletteControls()}<div class="rmt-journal-actions"><button class="rmt-btn" data-journal-whole>整页导入 · 预览</button><button class="rmt-btn" data-journal-pick>从已有内容选择制作</button></div><div class="rmt-journal-choices" hidden></div><button class="rmt-btn" data-journal-preview hidden>预览所选内容</button><div class="rmt-journal-actions"><button class="rmt-btn" data-journal-save hidden>保存这一页</button><button class="rmt-btn" data-journal-cancel hidden>取消预览</button></div><div data-journal-draft hidden></div></section><div class="rmt-journal-actions"><button class="rmt-btn" data-journal-export disabled>导出手帐备份</button><button class="rmt-btn" data-journal-import disabled>导入手帐备份</button><input type="file" accept=".json,application/json" data-journal-file hidden></div><small>手帐单独保存在本设备浏览器中，可导出备份迁移。收录已有内容不消耗生成次数。</small><div data-journal-pages></div></main>`;
+    body.innerHTML=`${style}<main class="rmt-journal"><header class="rmt-journal-top"><div><h2>手帐</h2><p>把想留下的文字和画面，收在属于你们的册子里。</p></div><details class="rmt-journal-more"><summary aria-label="更多">⋯</summary><div class="rmt-journal-more-list"><button type="button" class="rmt-btn" data-journal-export disabled>导出手帐备份</button><button type="button" class="rmt-btn" data-journal-import disabled>导入手帐备份</button><button type="button" class="rmt-btn" data-journal-annotate disabled>请他批注这个月的手帐</button><small>手帐单独保存在本设备浏览器中，可导出备份迁移。收录已有内容不消耗生成次数。</small></div></details></header><p class="rmt-journal-status" role="status" aria-live="polite">正在读取手帐…</p><nav class="rmt-journal-filter" data-journal-filters aria-label="按月份筛选"></nav><section class="rmt-journal-book" data-journal-pages></section><div class="rmt-journal-pager" data-journal-pager hidden><button type="button" class="rmt-btn" data-journal-prev>‹ 上一页</button><span data-journal-count></span><button type="button" class="rmt-btn" data-journal-next>下一页 ›</button></div><details class="rmt-journal-add" hidden><summary><span>＋ 添一页</span></summary><section class="rmt-journal-compose"><ol class="rmt-journal-steps"><li>选内容</li><li>看看排版</li><li>保存</li></ol><div class="rmt-journal-controls"><label>内容来源<select data-journal-source aria-label="手帐内容来源"></select></label><label>这一页的标题<input data-journal-title placeholder="给这一页起个名字"></label></div><div class="rmt-journal-quote" data-journal-quote hidden><label>第几楼<select data-journal-quote-floor aria-label="选择聊天楼层"></select></label><label>摘下来的这句（可以删减）<textarea data-journal-quote-text></textarea></label><button class="rmt-btn" data-journal-quote-preview>预览这一句</button></div><div class="rmt-journal-actions" data-journal-import-actions><button class="rmt-btn" data-journal-whole>整页导入 · 预览</button><button class="rmt-btn" data-journal-pick>从已有内容选择制作</button></div><div class="rmt-journal-choices" hidden></div><button class="rmt-btn" data-journal-preview hidden>预览所选内容</button><details class="rmt-journal-deco"><summary>版式、装饰与配色 ›</summary>${layoutSelect()}${journalPaletteControls()}</details><div data-journal-draft hidden></div><div class="rmt-journal-actions"><button class="rmt-btn" data-journal-save hidden>保存这一页</button><button class="rmt-btn" data-journal-cancel hidden>取消预览</button></div></section></details><input type="file" accept=".json,application/json" data-journal-file hidden></main>`;
     const root=body.querySelector('.rmt-journal'), epoch=routes.workspace.epoch;
     const current=()=>{try{return root.isConnected && !host.hidden && state.activeMode==='journal' && state.activeArchiveSnapshot===snapshot && routes.workspace.epoch===epoch && context.chatScopeKey(context.currentCharacterGuard())===liveScope;}catch{return false;}};
     const store=journal.createJournalStore({currentScope:()=>current()?scope:''});
@@ -68654,7 +68883,38 @@ async function openHandJournal() {
 
     const wholeButton = () => root.querySelector('[data-journal-whole]');
     const refreshWholeLabel = () => { const count = selectedEntries().length; if (wholeButton()) wholeButton().textContent = `整页导入 · 预览（${count} 条）`; };
-    const drawPages=()=>{root.querySelector('[data-journal-pages]').innerHTML=pages.map((page, index) => `<div class="rmt-journal-saved">${journalPageHtml(page, index)}<details><summary>调整这一页配色</summary>${journalPaletteControls(journal.journalPalette(page.palette,index),page.id)}</details><div class="rmt-journal-page-tools"><button type="button" class="rmt-btn" data-journal-rename="${esc(page.id)}">改标题</button><button type="button" class="rmt-btn" data-journal-delete="${esc(page.id)}">删除这一页</button></div></div>`).join('')||'<p class="rmt-journal-empty">手帐还是空白的，从上面收下第一段回忆吧。</p>';};
+    // r84.174：一次看一页，左右翻；按月份 / 收藏筛选；每一页的操作收进这一页的 ⋯。
+    let filter='all', currentId='', noteFor='', quoteRows=[];
+    const syncQuote=()=>{const quote=source.value==='chat-quote';root.querySelector('[data-journal-quote]').hidden=!quote;root.querySelector('[data-journal-import-actions]').hidden=quote;
+        if(quote){const floor=Number(root.querySelector('[data-journal-quote-floor]').value);const row=quoteRows.find(item=>item.index===floor);const box=root.querySelector('[data-journal-quote-text]');if(row&&box.dataset.floor!==String(floor)){box.value=row.message.mes;box.dataset.floor=String(floor);}}};
+    const monthKey=page=>{const d=new Date(page.createdAt);return Number.isFinite(d.getTime())?`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`:'';};
+    const shownPages=()=>pages.filter(page=>filter==='all'||(filter==='fav'?page.favorite===true:monthKey(page)===filter));
+    const drawPages=()=>{
+        const months=[...new Set(pages.map(monthKey).filter(Boolean))].sort().reverse();
+        if(filter==='fav'&&!pages.some(page=>page.favorite))filter='all';
+        if(filter!=='all'&&filter!=='fav'&&!months.includes(filter))filter='all';
+        const chip=(value,label)=>`<button type="button" data-journal-filter="${esc(value)}" aria-pressed="${filter===value}">${esc(label)}</button>`;
+        root.querySelector('[data-journal-filters]').innerHTML=pages.length?chip('all',`全部 · ${pages.length} 页`)+(pages.some(page=>page.favorite)?chip('fav','★ 收藏'):'')+months.map(m=>chip(m,`${Number(m.slice(0,4))} 年 ${Number(m.slice(5))} 月`)).join(''):'';
+        const shown=shownPages();
+        let index=shown.findIndex(page=>page.id===currentId);
+        if(index<0)index=shown.length-1;
+        const page=shown[index];currentId=page?.id||'';
+        const whole=page?pages.indexOf(page):0;
+        root.querySelector('[data-journal-pages]').innerHTML=page?`<div class="rmt-journal-saved" data-journal-current="${esc(page.id)}">${journalPageHtml(page, whole, {editable:true})}${noteFor===page.id?`<div class="rmt-journal-note-editor"><textarea data-journal-note-text aria-label="便签内容" placeholder="写点什么，贴在这一页上"></textarea><div class="rmt-journal-actions"><button type="button" class="rmt-btn" data-journal-note-save>贴上</button><button type="button" class="rmt-btn" data-journal-note-cancel>取消</button></div></div>`:''}<div class="rmt-journal-page-bar"><button type="button" class="rmt-btn" data-journal-fav="${esc(page.id)}" aria-pressed="${page.favorite===true}">${page.favorite?'★ 已收藏':'☆ 收藏'}</button><details class="rmt-journal-page-more"><summary aria-label="这一页的更多操作">⋯</summary><div class="rmt-journal-page-more-list"><button type="button" class="rmt-btn" data-journal-note-open="${esc(page.id)}">贴一张便签</button><button type="button" class="rmt-btn" data-journal-rename="${esc(page.id)}">改标题</button>${layoutSelect(page.layout, page.id)}<details><summary>调整这一页配色 ›</summary>${journalPaletteControls(journal.journalPalette(page.palette,whole),page.id)}</details><button type="button" class="rmt-btn" data-journal-delete="${esc(page.id)}">删除这一页</button></div></details></div></div>`:`<p class="rmt-journal-empty">${pages.length?'这一组里还没有页。':'手帐还是空白的，点下面的「＋ 添一页」收下第一段回忆吧。'}</p>`;
+        syncPager();
+        const editor=root.querySelector('[data-journal-note-text]');if(editor)editor.focus();
+    };
+    // 翻页按钮的状态单独算：保存时 setBusy 会把按钮恢复成保存前的样子，保存完要重新对一次。
+    const syncPager=()=>{const shown=shownPages();const index=shown.findIndex(page=>page.id===currentId);
+        root.querySelector('[data-journal-pager]').hidden=shown.length<2;
+        root.querySelector('[data-journal-count]').textContent=shown.length?`${index+1} / ${shown.length}`:'';
+        root.querySelector('[data-journal-prev]').disabled=index<=0;root.querySelector('[data-journal-next]').disabled=index<0||index>=shown.length-1;};
+    const turn=step=>{const shown=shownPages();const index=shown.findIndex(page=>page.id===currentId);const next=shown[index+step];if(next){currentId=next.id;noteFor='';drawPages();}};
+    // 手机上左右滑动翻页；在按钮、输入框和菜单上滑动不算。
+    {let swipe=null;const book=root.querySelector('[data-journal-pages]');
+    book.addEventListener('pointerdown',e=>{swipe=e.target.closest('button,textarea,input,select,summary,details,a')?null:{x:e.clientX,y:e.clientY};});
+    book.addEventListener('pointerup',e=>{if(!swipe||busy)return;const dx=e.clientX-swipe.x,dy=e.clientY-swipe.y;swipe=null;if(Math.abs(dx)>60&&Math.abs(dx)>Math.abs(dy)*1.5)turn(dx<0?1:-1);});
+    book.addEventListener('pointercancel',()=>{swipe=null;});}
     const clearDraft=()=>{pending=null;draft.hidden=true;draft.replaceChildren();for(const key of ['save','cancel'])root.querySelector(`[data-journal-${key}]`).hidden=true;};
     const selectedEntries=()=>entries.filter(entry=>source.value==='*'||(sourceRoutes.get(entry.id)||entry.source.mode)===source.value);
     const readPalette=panel=>({id:panel.querySelector('[data-journal-preset]').value,...Object.fromEntries([...panel.querySelectorAll('[data-journal-color]')].map(input=>[input.dataset.journalColor,input.value]))});
@@ -68665,7 +68925,7 @@ async function openHandJournal() {
         if(!id&&pending){pending=journal.createJournalPage({...pending,palette:colors});draft.innerHTML=journalPageHtml(pending);}
         if(id){const paper=panel.closest('.rmt-journal-saved')?.querySelector('.rmt-journal-page');if(paper){paper.style.background=colors.paper;paper.style.color=colors.ink;paper.style.borderColor=colors.accent;paper.style.boxShadow=`inset 7px 0 ${colors.accent},0 5px 18px #523d4810`;}}
     });
-    const preview=items=>{if(!items.length)return report('先选择想收录的内容。');pending=journal.createJournalPage({title:title.value||`${source.selectedOptions[0]?.textContent || '我们的回忆'}`,entries:items,palette:readPalette(root.querySelector('[data-journal-palette=""]'))});draft.innerHTML=journalPageHtml(pending);draft.hidden=false;root.querySelector('[data-journal-save]').hidden=false;root.querySelector('[data-journal-cancel]').hidden=false;report(`预览已准备好，这一页有 ${items.length} 条。保存后会新增，不会覆盖旧页。`);};
+    const preview=items=>{if(!items.length)return report('先选择想收录的内容。');pending=journal.createJournalPage({title:title.value||`${source.selectedOptions[0]?.textContent || '我们的回忆'}`,entries:items,palette:readPalette(root.querySelector('[data-journal-palette=""]')),layout:root.querySelector('[data-journal-layout-new]')?.value});draft.innerHTML=journalPageHtml(pending);draft.hidden=false;root.querySelector('[data-journal-save]').hidden=false;root.querySelector('[data-journal-cancel]').hidden=false;report(`预览已准备好，这一页有 ${items.length} 条。保存后会新增，不会覆盖旧页。`);};
     const openPicker=()=>{clearDraft();choices.innerHTML=selectedEntries().map(entry=>`<label><input type="checkbox" value="${esc(entry.id)}"><span>${esc(entry.title)}<small>${esc(constants.MODE_LABEL[entry.source.mode] || (entry.source.mode==='chat'?'聊天末条回复':'已存内容'))}</small></span></label>`).join('');choices.hidden=false;root.querySelector('[data-journal-preview]').hidden=false;};
     workspace.syncWorkspaceChrome();
     try {
@@ -68687,17 +68947,52 @@ async function openHandJournal() {
             if (last >= 0) entries.push({id:'chat:last-reply',title:`第 ${last + 1} 楼 · ${chat[last].name || ctx.name2 || 'TA'}`,source:{mode:'chat',id:String(last),title:'聊天末条回复'},blocks:[{type:'text',text:chat[last].mes}]});
         }
         const modes=[...new Set(entries.map(entry=>sourceRoutes.get(entry.id)||entry.source.mode))];
-        source.innerHTML=modes.map(mode=>`<option value="${esc(mode)}">${esc(sourceLabel(mode))}</option>`).join('') + (modes.length > 1 ? '<option value="*">跨模块挑选内容</option>' : '');
+        // r84.175：从聊天摘一句——选一楼，删减成想留下的那句。
+        const chatRows = snapshot ? [] : (Array.isArray(ctx.chat) ? ctx.chat : []).map((message, index) => ({ message, index })).filter(row => row.message && !row.message.is_system && typeof row.message.mes === 'string' && row.message.mes.trim()).slice(-80).reverse();
+        quoteRows = chatRows;
+        source.innerHTML=modes.map(mode=>`<option value="${esc(mode)}">${esc(sourceLabel(mode))}</option>`).join('') + (modes.length > 1 ? '<option value="*">跨模块挑选内容</option>' : '') + (chatRows.length ? '<option value="chat-quote">从聊天摘一句</option>' : '');
+        root.querySelector('[data-journal-quote-floor]').innerHTML=chatRows.map(row=>`<option value="${row.index}">第 ${row.index + 1} 楼 · ${esc(row.message.name || (row.message.is_user ? ctx.name1 : ctx.name2) || '')}</option>`).join('');
+        root.querySelector('[data-journal-annotate]').disabled=!!snapshot;
         refreshWholeLabel();
-        drawPages();root.querySelector('.rmt-journal-compose').hidden=!entries.length;
+        drawPages();root.querySelector('.rmt-journal-add').hidden=!entries.length&&!quoteRows.length;syncQuote();
         root.querySelector('[data-journal-export]').disabled=false;root.querySelector('[data-journal-import]').disabled=false;
         report(entries.length?'':'还没有可收录的已存内容。也可以导入之前导出的手帐备份。');
     }catch(error){report(`手帐读取失败，原数据保留：${error.message}`);return false;}
     title.addEventListener('input',()=>{if(pending){pending=journal.createJournalPage({...pending,title:title.value});draft.querySelector('header h3').textContent=title.value;}});
-    root.addEventListener('change',event=>{if(event.target===source){clearDraft();choices.hidden=true;root.querySelector('[data-journal-preview]').hidden=true;refreshWholeLabel();}});
+    root.addEventListener('change',async event=>{
+        if(event.target===source){clearDraft();choices.hidden=true;root.querySelector('[data-journal-preview]').hidden=true;refreshWholeLabel();syncQuote();return;}
+        if(event.target.matches('[data-journal-quote-floor]')){syncQuote();return;}
+        if(event.target.matches('[data-journal-layout-new]')){if(pending){pending=journal.createJournalPage({...pending,layout:event.target.value});draft.innerHTML=journalPageHtml(pending);}return;}
+        if(event.target.matches('[data-journal-layout]')&&!busy&&current()){const id=event.target.getAttribute('data-journal-layout');try{setBusy(true);await store.layout(scope,id,event.target.value);if(!current())return;pages=await store.read(scope);if(!current())return;drawPages();report('已换这一页的版式。');}catch(error){report(`未完成，原页面保留：${error.message}`);}finally{setBusy(false);syncPager();}}
+    });
     root.addEventListener('click',async event=>{
         const button=event.target.closest('button');if(!button||busy||!current())return;
         try {
+            if(button.hasAttribute('data-journal-quote-preview')){const floor=Number(root.querySelector('[data-journal-quote-floor]').value);const row=quoteRows.find(item=>item.index===floor);const value=root.querySelector('[data-journal-quote-text]').value;if(!row||!value.trim())return report('先选一楼，留下想摘的那句。');const name=row.message.name||(row.message.is_user?ctx.name1:ctx.name2)||'';preview([{id:`quote:${floor}:${Date.now()}`,title:`摘自 ${name} · 第 ${floor+1} 楼`,source:{mode:'chat',id:String(floor),title:'聊天摘句'},blocks:[{type:'text',text:value,...(name?{speaker:name}:{})}]}]);return;}
+            if(button.hasAttribute('data-journal-annotate')){
+                if(snapshot)return report('正在翻看只读档案，回到当前聊天后再请他批注。');
+                const here=pages.find(page=>page.id===currentId)||pages[pages.length-1];if(!here)return report('手帐还是空的。');
+                const month=monthKey(here);const target=pages.filter(page=>monthKey(page)===month&&!page.annotation);
+                if(!target.length)return report('这个月的每一页都已经有他的批注了。');
+                if(!overlay.confirmExplicitAction(`请他批注这个月的 ${target.length} 页？`,`会发 1 次文字请求，一次写完这 ${target.length} 页；已有批注的页不动。`,{}))return;
+                setBusy(true);report('正在请他写批注…');
+                const card=ctx.characters?.[ctx.characterId]||{};const persona=[card.description,card.personality].filter(item=>typeof item==='string'&&item.trim()).join('\n').slice(0,2000);
+                const parsed=await generation_client.generateConfiguredJson(journal.journalAnnotationPrompt(target,{charName:ctx.name2||'角色',userName:ctx.name1||'用户',persona}),{});
+                if(!current())return;
+                const found=journal.parseJournalAnnotations(parsed,target),at=Date.now();
+                const map=Object.fromEntries(Object.entries(found).map(([id,note])=>[id,{text:note,at,by:ctx.name2||''}]));
+                if(!Object.keys(map).length)return report('这次没有收到能用的批注，原页面没有改动。');
+                await store.annotate(scope,map);if(!current())return;pages=await store.read(scope);if(!current())return;drawPages();
+                report(`已写好 ${Object.keys(map).length} 页的批注${Object.keys(map).length<target.length?`，另有 ${target.length-Object.keys(map).length} 页这次没写上，可以再点一次`:''}。`);return;
+            }
+            if(button.hasAttribute('data-journal-filter')){filter=button.getAttribute('data-journal-filter');currentId='';noteFor='';drawPages();return;}
+            if(button.hasAttribute('data-journal-prev')){turn(-1);return;}
+            if(button.hasAttribute('data-journal-next')){turn(1);return;}
+            if(button.hasAttribute('data-journal-fav')){const id=button.getAttribute('data-journal-fav');const page=pages.find(item=>item.id===id);if(!page)return;setBusy(true);await store.favorite(scope,id,page.favorite!==true);if(!current())return;pages=await store.read(scope);if(!current())return;drawPages();report(page.favorite?'已取消收藏。':'已收藏这一页。');return;}
+            if(button.hasAttribute('data-journal-note-open')){noteFor=button.getAttribute('data-journal-note-open');drawPages();return;}
+            if(button.hasAttribute('data-journal-note-cancel')){noteFor='';drawPages();return;}
+            if(button.hasAttribute('data-journal-note-save')){const page=pages.find(item=>item.id===noteFor);const value=root.querySelector('[data-journal-note-text]')?.value||'';if(!page||!value.trim())return report('便签还是空的。');setBusy(true);const note={id:globalThis.crypto?.randomUUID?.()||`note-${Date.now()}`,text:value};await store.notes(scope,page.id,[...(page.notes||[]),note]);if(!current())return;pages=await store.read(scope);if(!current())return;noteFor='';drawPages();report('便签已贴上。');return;}
+            if(button.hasAttribute('data-journal-note-remove')){const noteId=button.getAttribute('data-journal-note-remove');const page=pages.find(item=>(item.notes||[]).some(note=>note.id===noteId));if(!page)return;setBusy(true);await store.notes(scope,page.id,page.notes.filter(note=>note.id!==noteId));if(!current())return;pages=await store.read(scope);if(!current())return;drawPages();report('已撕下这张便签。');return;}
             if(button.hasAttribute('data-journal-whole')){const items=selectedEntries();preview(items);}
             else if(button.hasAttribute('data-journal-color-save')){const panel=button.closest('[data-journal-palette]');setBusy(true);await store.palette(scope,panel.dataset.journalPalette,readPalette(panel));if(!current())return;pages=await store.read(scope);if(!current())return;drawPages();report('已保存这一页的配色。');}
             else if(button.hasAttribute('data-journal-pick'))openPicker();
@@ -68705,16 +69000,16 @@ async function openHandJournal() {
             else if(button.hasAttribute('data-journal-delete')){const id=button.getAttribute('data-journal-delete');if(!pages.some(item=>item.id===id))return;if(!overlay.confirmExplicitAction('删除这一页手帐？','只删除本机手帐里的这一页，不改原来的档案和内容。',{destructive:true}))return;setBusy(true);await store.remove(scope,id);if(!current())return;pages=await store.read(scope);if(!current())return;drawPages();report('已删除这一页。');}
             else if(button.hasAttribute('data-journal-preview')){const ids=new Set([...choices.querySelectorAll('input:checked')].map(input=>input.value));preview(selectedEntries().filter(entry=>ids.has(entry.id)));}
             else if(button.hasAttribute('data-journal-cancel'))clearDraft();
-            else if(button.hasAttribute('data-journal-save')&&pending){setBusy(true);report('正在保存手帐…');const saved=pending;await store.append(scope,[saved]);if(!current())return;pages=await store.read(scope);if(!current())return;clearDraft();drawPages();report('已保存到手帐。');}
+            else if(button.hasAttribute('data-journal-save')&&pending){setBusy(true);report('正在保存手帐…');const saved=pending;await store.append(scope,[saved]);if(!current())return;pages=await store.read(scope);if(!current())return;clearDraft();filter='all';currentId=saved.id;root.querySelector('.rmt-journal-add').open=false;drawPages();report('已保存到手帐。');}
             else if(button.hasAttribute('data-journal-export'))downloadJournal(pages);
             else if(button.hasAttribute('data-journal-import'))root.querySelector('[data-journal-file]').click();
-        }catch(error){report(`未完成，已有手帐和预览保留：${error.message}`);}finally{setBusy(false);}
+        }catch(error){report(`未完成，已有手帐和预览保留：${error.message}`);}finally{setBusy(false);syncPager();}
     });
     root.querySelector('[data-journal-file]').addEventListener('change',async event=>{
         const file=event.target.files?.[0];if(!file||busy)return;
         setBusy(true);
         try{const imported=journal.importJournal(await file.text());if(!current())return;await store.append(scope,imported);if(!current())return;pages=await store.read(scope);if(!current())return;drawPages();report(`已导入手帐备份（${imported.length} 页），原有页面保留。`);}
-        catch(error){report(`导入失败，原手帐保留：${error.message}`);}finally{setBusy(false);event.target.value='';}
+        catch(error){report(`导入失败，原手帐保留：${error.message}`);}finally{setBusy(false);syncPager();event.target.value='';}
     });
     return true;
 }
@@ -68999,6 +69294,7 @@ const generation_imageGeneration = __m_generation_imageGeneration_js;
 const ui_overlay = __m_ui_overlay_js;
 const image_viewer = __m_ui_cgImageViewer_js;
 const ui_generationCompletion = __m_ui_generationCompletion_js;
+const image_menu = __m_ui_imageMenu_js;
 const runtimeState = __m_core_state_js.state;
 
 
@@ -69566,7 +69862,7 @@ function renderHeart() {
             const charDisplayName = core_text.normalizeText(runtimeState.activeArchiveSnapshot?.characterName || core_context.getContext().name2, 120) || '角色';
             const userDisplayName = core_text.normalizeText(runtimeState.activeArchiveSnapshot?.memory?.userName || core_context.getContext().name1, 120) || '你';
             const panels = selected.panels.map((panel, index) => `<article class="rmt-heart-panel"><b>${index + 1}</b><div><small>${core_text.esc(panel.caption || `第 ${index + 1} 格`)}</small><p>${core_text.esc(panel.action)}</p>${panel.charLine ? `<div class="rmt-heart-panel-line"><strong>${core_text.esc(charDisplayName)}</strong>${core_text.esc(panel.charLine)}</div>` : ''}${panel.userLine ? `<div class="rmt-heart-panel-line user"><strong>${core_text.esc(userDisplayName)}</strong>${core_text.esc(panel.userLine)}</div>` : ''}</div></article>`).join('');
-            detail = `<div class="rmt-heart-strip-head"><div><h2>${core_text.esc(selected.title)}</h2><p>${core_text.esc(selected.subtitle)}</p></div><span>${selected.panelCount}格</span></div>${image ? `<div class="rmt-heart-strip-image rmt-heart-strip-image-full">${generation_imageGeneration.cgImageLayerHtml(selected, { lazy: false })}</div><button type="button" class="rmt-btn" data-rmt-action="view-heart-cg">查看完整原图</button>` : `<div class="rmt-heart-strip-image">${generation_imageGeneration.cgImageLayerHtml(selected, { lazy: false })}</div>`}<div class="rmt-heart-strip-actions">${readOnly ? '' : `<button type="button" class="rmt-btn" data-rmt-action="edit-heart-cg-prompt" ${generation_imageGeneration.isCgImageDrawing(core_constants.MODE.HEART, selected.id) ? 'disabled' : ''}>图片设置</button>`}</div><div class="rmt-heart-panels">${panels}</div>`;
+            detail = `<div class="rmt-heart-strip-head"><div><h2>${core_text.esc(selected.title)}</h2><p>${core_text.esc(selected.subtitle)}</p></div><span>${selected.panelCount}格</span></div>${image ? `<div class="rmt-heart-strip-image rmt-heart-strip-image-full">${generation_imageGeneration.cgImageLayerHtml(selected, { lazy: false })}</div>` : `<div class="rmt-heart-strip-image">${generation_imageGeneration.cgImageLayerHtml(selected, { lazy: false })}</div>`}${image_menu.imageMenuHtml(`${image ? '<button type="button" class="rmt-btn" data-rmt-action="view-heart-cg">查看完整原图</button>' : ''}${readOnly ? '' : `<button type="button" class="rmt-btn" data-rmt-action="edit-heart-cg-prompt" ${generation_imageGeneration.isCgImageDrawing(core_constants.MODE.HEART, selected.id) ? 'disabled' : ''}>图片设置</button>`}`)}<div class="rmt-heart-panels">${panels}</div>`;
         } else {
             detail = `<div class="rmt-heart-empty">${readOnly ? '日常一格还没有生成。' : '点击上方按钮单独生成日常一格。'}</div>`;
         }
@@ -69791,7 +70087,17 @@ function installImageMenuDismiss(doc = globalThis.document) {
 
 function imageMenuCss(root) {
     return `
-${root} .rmt-cg-menu-row{display:flex;justify-content:flex-end;align-items:flex-start;margin-top:6px;min-width:0}
+${root} .rmt-body .rmt-expanded-cg .rmt-thumb{aspect-ratio:auto;height:auto;max-height:none;position:relative}
+${root} .rmt-body .rmt-expanded-cg .rmt-thumb .rmt-cg-real{position:relative;inset:auto;display:block;width:100%;height:auto;max-height:80vh;max-height:80dvh;object-fit:contain;margin:0 auto;transform:none;border-radius:16px}
+${root} .rmt-body .rmt-expanded-cg .rmt-thumb .rmt-cg-real[hidden]{display:none!important}
+${root} .rmt-body .rmt-expanded-cg .rmt-thumb:has(.rmt-cg-real:not([hidden])) .rmt-abstract{display:none}
+${root} .rmt-body .rmt-bedtime-plate .rmt-thumb{position:relative;aspect-ratio:auto;height:auto;max-height:none;overflow:visible}
+${root} .rmt-body .rmt-bedtime-plate .rmt-thumb:has(.rmt-cg-real:not([hidden])) .rmt-abstract{display:none}
+${root} .rmt-body .rmt-bedtime-plate .rmt-thumb .rmt-cg-real{border-radius:12px;position:relative;inset:auto;display:block;width:100%;height:auto;max-height:80vh;max-height:80dvh;object-fit:contain}
+${root} .rmt-cg-menu-row{display:flex;justify-content:flex-end;align-items:flex-start;margin-top:4px;min-width:0}
+${root} .rmt-lenticular>.rmt-cg-menu-row{margin:4px 0 2px}
+${root} .rmt-album-card-actions{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-top:8px;min-width:0}
+${root} .rmt-album-card-actions>.rmt-cg-menu-row{margin-top:0;flex:0 1 auto}
 ${root} .rmt-cg-menu{display:flex;flex-direction:column;align-items:flex-end;max-width:100%}
 ${root} .rmt-cg-menu-toggle{list-style:none;display:grid;place-items:center;width:40px;height:40px;border-radius:50%;border:1px solid var(--rmt-theme-border);background:var(--rmt-theme-surface-solid,var(--rmt-theme-surface));color:var(--rmt-theme-text);cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent}
 ${root} .rmt-cg-menu-toggle::-webkit-details-marker{display:none}
@@ -70161,6 +70467,58 @@ __m_ui_inboxView_js.inboxSenderLabel = inboxSenderLabel;
 __m_ui_inboxView_js.closeInboxLetter = closeInboxLetter;
 __m_ui_inboxView_js.renderInbox = renderInbox;
 __m_ui_inboxView_js.assertShownInboxTarget = assertShownInboxTarget;
+}
+
+function __init_ui_journalClip_js() {
+// MODULE: ui/journalClip.js
+const journal = __m_core_handJournal_js;
+const context = __m_core_context_js;
+const constants = __m_core_constants_js;
+const text = __m_core_text_js;
+const runtimeState = __m_core_state_js.state;
+// r84.175 · 「夹进手帐」：把一张图或一封回忆信直接收成手帐里的一页。不发请求，只写本机手帐。
+
+
+
+
+
+const KIND_MODE = [['heart', 'heart'], ['ending', 'ending'], ['past-life', 'pastLives'], ['bedtime', 'bedtime'], ['butterfly', 'butterfly']];
+function clipModeForKind(kind) { return KIND_MODE.find(([prefix]) => String(kind || '').startsWith(prefix))?.[1] || ''; }
+
+function clipPayload({ mode = '', id = '', title = '', url = '', body = '' } = {}) {
+    return text.esc(JSON.stringify({ mode, id: String(id || ''), title: String(title || ''), url: String(url || ''), text: String(body || '') }));
+}
+
+async function clipToJournal(raw) {
+    let payload = null;
+    try { payload = JSON.parse(raw || ''); } catch { payload = null; }
+    if (!payload || typeof payload !== 'object') return false;
+    if (runtimeState.activeArchiveSnapshot) { globalThis.toastr?.info?.('正在翻看只读档案，回到当前聊天后再夹进手帐。', '心迹回廊'); return false; }
+    try {
+        const scope = context.chatScopeKey(context.currentCharacterGuard());
+        const live = () => { try { return context.chatScopeKey(context.currentCharacterGuard()); } catch { return ''; } };
+        const store = journal.createJournalStore({ currentScope: live });
+        const mode = Object.values(constants.MODE).includes(payload.mode) ? payload.mode : 'chat';
+        const title = text.normalizeText(payload.title, 120) || constants.MODE_LABEL?.[mode] || '回忆';
+        const blocks = [];
+        const url = journal.safeJournalImageUrl(payload.url);
+        if (url) blocks.push({ type: 'image', url, caption: title });
+        if (typeof payload.text === 'string' && payload.text.trim()) blocks.push({ type: 'text', text: payload.text });
+        if (!blocks.length) return false;
+        // 夹进来的页标记「等批注」：下一轮自动留忆写回忆时顺便给它写一句，不另发请求。
+        const page = journal.createJournalPage({ title, annotationWanted: true, entries: [{ id: `clip-${Date.now()}`, title, source: { mode, id: payload.id || title, title }, blocks }] });
+        await store.append(scope, [page]);
+        globalThis.toastr?.success?.('已夹进手帐。下一轮自动留忆会顺便让他写一句批注。', '心迹回廊');
+        return true;
+    } catch (error) {
+        globalThis.toastr?.error?.(`没能夹进手帐：${text.safeErrorSummary?.(error) || error?.message || ''}`, '心迹回廊');
+        return false;
+    }
+}
+
+__m_ui_journalClip_js.clipToJournal = clipToJournal;
+__m_ui_journalClip_js.clipModeForKind = clipModeForKind;
+__m_ui_journalClip_js.clipPayload = clipPayload;
 }
 
 function __init_ui_languageView_js() {
@@ -73191,6 +73549,7 @@ const ui_phoneView = __m_ui_phoneView_js;
 const ui_heartView = __m_ui_heartView_js;
 const archive_snapshots = __m_archive_snapshots_js;
 const core_settings = __m_core_settings_js;
+const journal_clip = __m_ui_journalClip_js;
 const runtimeState = __m_core_state_js.state;
 const applyArchiveMobileSafeArea = __m_ui_overlayShell_js.applyArchiveMobileSafeArea;
 const bindOverlayCloseFallback = __m_ui_overlayShell_js.bindOverlayCloseFallback;
@@ -73262,6 +73621,8 @@ function overlayClickRecordTargets(event) {
     const resultOpen = event.target.closest?.('[data-rmt-task-result-open]');
     if (resultOpen) return void archive_library.openGenerationTaskResult(resultOpen.dataset.rmtTaskResultOpen, core_context.getContext(), { snapshot: runtimeState.activeArchiveSnapshot })
         .catch(error => globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊'));
+    const clipButton = event.target.closest?.('[data-rmt-journal-clip]');
+    if (clipButton) return void journal_clip.clipToJournal(clipButton.dataset.rmtJournalClip);
     const pastLivesButton = event.target.closest?.('[data-rmt-past-lives]');
     if (pastLivesButton) return void past_lives_view.handlePastLivesAction(pastLivesButton.dataset.rmtPastLives, pastLivesButton.dataset.rmtPastLivesId);
     const timeStoryButton = event.target.closest?.('[data-rmt-time-story]');
@@ -74264,9 +74625,9 @@ function pastLivesCardHtml(session, descriptor, cache, readOnly = false, { menuB
                 <span class="rmt-lenticular-face">${front ? '前世' : back ? '今生' : '前世 · 今生'}</span>
             </div>
         </div>
+        ${image_menu.imageMenuHtml(`${menuButtons}${readOnly ? '' : `<button type="button" class="rmt-btn" data-card-pick>${pair ? '更换今生' : '挑一张今生'}</button>${pair ? '<button type="button" class="rmt-btn" data-card-clear>移除配对</button>' : ''}`}<button type="button" class="rmt-btn" data-card-tilt hidden>启用倾斜</button>`)}
         <figcaption><div class="rmt-lenticular-controls"><button type="button" data-card-side="0" ${both ? '' : 'disabled'}>前世</button><input type="range" min="0" max="100" value="0" step="1" aria-label="前世与今生" aria-valuetext="前世" ${both ? '' : 'disabled'}><button type="button" data-card-side="100" ${both ? '' : 'disabled'}>今生</button></div>
             <p class="rmt-lenticular-status" role="status">${pair && !back ? '原图已不可用，请重新挑选今生。' : !back ? '今生还没留下画面' : !front ? '生成前世画面后即可切换两面' : '横滑或拖动滑杆，看见另一世'}</p>
-            ${image_menu.imageMenuHtml(`${menuButtons}${readOnly ? '' : `<button type="button" class="rmt-btn" data-card-pick>${pair ? '更换今生' : '挑一张今生'}</button>${pair ? '<button type="button" class="rmt-btn" data-card-clear>移除配对</button>' : ''}`}<button type="button" class="rmt-btn" data-card-tilt hidden>启用倾斜</button>`)}
         </figcaption>
     </figure>`;
 }
@@ -82006,9 +82367,9 @@ ${r} .rmt-voice-page h2{font-size:22px;line-height:1.4}
 ${r} .rmt-body .rmt-inbox button.rmt-mail-drawing[data-rmt-paper]{background:var(--rmt-letter-paper)!important;color:var(--rmt-letter-ink)!important;border-color:var(--rmt-letter-line)!important}
 ${r} .rmt-voice-page>.rmt-mirror-reader>summary{display:none}
 ${r} .rmt-mirror-reader[hidden]{display:none!important}
-${r} .rmt-cg-history-controls{position:absolute;top:10px;left:10px;z-index:8;display:flex;align-items:center;gap:2px;padding:2px 4px;border-radius:22px;background:#fffc;color:#3f3642;box-shadow:0 2px 10px #0002;backdrop-filter:blur(6px)}
-${r} .rmt-cg-history-controls button{display:grid;place-items:center;min-width:36px;min-height:44px;padding:0 6px;border:0;border-radius:20px;background:transparent;color:inherit;font-size:18px;cursor:pointer}
-${r} .rmt-cg-history-controls span{font-size:13px;white-space:nowrap;padding:0 4px}
+${r} .rmt-cg-history-controls{position:relative;inset:auto;z-index:2;display:flex;align-items:center;justify-content:center;gap:2px;width:max-content;max-width:100%;margin:6px auto 0;padding:0;border-radius:0;background:transparent;color:var(--rmt-theme-muted);box-shadow:none;backdrop-filter:none}
+${r} .rmt-cg-history-controls button{display:grid;place-items:center;min-width:32px;min-height:32px;padding:0 4px;border:0;border-radius:16px;background:transparent;color:inherit;font-size:15px;cursor:pointer}
+${r} .rmt-cg-history-controls span{font-size:12px;white-space:nowrap;padding:0 2px}
 ${r} .rmt-language-picture-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px}
 ${r} .rmt-language-picture-grid img{width:100%;height:auto;object-fit:contain}
 `;
@@ -82090,6 +82451,7 @@ __init_core_independentApiConfig_js();
 __init_core_independentApiRequest_js();
 __init_core_independentApi_js();
 __init_core_inputLedger_js();
+__init_core_journalPiggyback_js();
 __init_core_lenticularCards_js();
 __init_core_letterIllustrationV2_js();
 __init_core_letterIllustration_js();
@@ -82269,6 +82631,7 @@ __init_ui_imageMenu_js();
 __init_ui_immersionStyles_js();
 __init_ui_inboxStyles_js();
 __init_ui_inboxView_js();
+__init_ui_journalClip_js();
 __init_ui_languageView_js();
 __init_ui_memoryReveal_js();
 __init_ui_mirrorCallView_js();

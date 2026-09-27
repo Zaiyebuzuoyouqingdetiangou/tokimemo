@@ -28,6 +28,7 @@ import * as generation_imageGeneration from '../generation/imageGeneration.js';
 import * as ui_overlay from './overlay.js';
 import * as image_viewer from './cgImageViewer.js';
 import * as ui_generationCompletion from './generationCompletion.js';
+import * as image_menu from './imageMenu.js';
 
 export function viewHeartStripImage(opener = null) {
     const item = selectedHeartStrip();
@@ -573,7 +574,7 @@ export function renderHeart() {
             const charDisplayName = core_text.normalizeText(runtimeState.activeArchiveSnapshot?.characterName || core_context.getContext().name2, 120) || '角色';
             const userDisplayName = core_text.normalizeText(runtimeState.activeArchiveSnapshot?.memory?.userName || core_context.getContext().name1, 120) || '你';
             const panels = selected.panels.map((panel, index) => `<article class="rmt-heart-panel"><b>${index + 1}</b><div><small>${core_text.esc(panel.caption || `第 ${index + 1} 格`)}</small><p>${core_text.esc(panel.action)}</p>${panel.charLine ? `<div class="rmt-heart-panel-line"><strong>${core_text.esc(charDisplayName)}</strong>${core_text.esc(panel.charLine)}</div>` : ''}${panel.userLine ? `<div class="rmt-heart-panel-line user"><strong>${core_text.esc(userDisplayName)}</strong>${core_text.esc(panel.userLine)}</div>` : ''}</div></article>`).join('');
-            detail = `<div class="rmt-heart-strip-head"><div><h2>${core_text.esc(selected.title)}</h2><p>${core_text.esc(selected.subtitle)}</p></div><span>${selected.panelCount}格</span></div>${image ? `<div class="rmt-heart-strip-image rmt-heart-strip-image-full">${generation_imageGeneration.cgImageLayerHtml(selected, { lazy: false })}</div><button type="button" class="rmt-btn" data-rmt-action="view-heart-cg">查看完整原图</button>` : `<div class="rmt-heart-strip-image">${generation_imageGeneration.cgImageLayerHtml(selected, { lazy: false })}</div>`}<div class="rmt-heart-strip-actions">${readOnly ? '' : `<button type="button" class="rmt-btn" data-rmt-action="edit-heart-cg-prompt" ${generation_imageGeneration.isCgImageDrawing(core_constants.MODE.HEART, selected.id) ? 'disabled' : ''}>图片设置</button>`}</div><div class="rmt-heart-panels">${panels}</div>`;
+            detail = `<div class="rmt-heart-strip-head"><div><h2>${core_text.esc(selected.title)}</h2><p>${core_text.esc(selected.subtitle)}</p></div><span>${selected.panelCount}格</span></div>${image ? `<div class="rmt-heart-strip-image rmt-heart-strip-image-full">${generation_imageGeneration.cgImageLayerHtml(selected, { lazy: false })}</div>` : `<div class="rmt-heart-strip-image">${generation_imageGeneration.cgImageLayerHtml(selected, { lazy: false })}</div>`}${image_menu.imageMenuHtml(`${image ? '<button type="button" class="rmt-btn" data-rmt-action="view-heart-cg">查看完整原图</button>' : ''}${readOnly ? '' : `<button type="button" class="rmt-btn" data-rmt-action="edit-heart-cg-prompt" ${generation_imageGeneration.isCgImageDrawing(core_constants.MODE.HEART, selected.id) ? 'disabled' : ''}>图片设置</button>`}`)}<div class="rmt-heart-panels">${panels}</div>`;
         } else {
             detail = `<div class="rmt-heart-empty">${readOnly ? '日常一格还没有生成。' : '点击上方按钮单独生成日常一格。'}</div>`;
         }

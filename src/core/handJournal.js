@@ -58,19 +58,40 @@ function normalizeEntry(value) {
     return { id, title, source: { mode: string(value.source.mode), id: string(value.source.id), title: string(value.source.title),
         ...(value.source.path === undefined ? {} : { path: string(value.source.path) }) }, blocks: value.blocks.map(normalizeBlock) };
 }
+// r84.174：收藏和便签。都是可选字段，旧页、旧备份照常读取。
+function normalizeNote(value) {
+    requireValue(object(value) && typeof value.id === 'string' && value.id.length > 0);
+    return { id: value.id, text: string(value.text) };
+}
+// r84.175：版式和角色批注，同样是可选字段。
+export const JOURNAL_LAYOUTS = Object.freeze([
+    { id: 'collage', label: '拼贴' }, { id: 'photo', label: '大图' }, { id: 'quote', label: '摘录' }, { id: 'timeline', label: '时间线' },
+]);
+function normalizeAnnotation(value) {
+    if (!object(value) || typeof value.text !== 'string' || !value.text.trim()) return null;
+    return { text: value.text, at: Number.isFinite(value.at) && value.at >= 0 ? value.at : 0, ...(typeof value.by === 'string' && value.by ? { by: value.by } : {}) };
+}
 function normalizePage(value) {
     requireValue(object(value) && Array.isArray(value.entries) && typeof value.id === 'string' && value.id.length > 0
         && Number.isFinite(value.createdAt) && value.createdAt >= 0);
-    return { id: value.id, title: string(value.title), createdAt: value.createdAt, entries: value.entries.map(normalizeEntry), ...(value.palette ? {palette:journalPalette(value.palette)} : {}) };
+    requireValue(value.notes === undefined || Array.isArray(value.notes));
+    const notes = Array.isArray(value.notes) ? value.notes.map(normalizeNote).filter(note => note.text.trim()) : [];
+    return { id: value.id, title: string(value.title), createdAt: value.createdAt, entries: value.entries.map(normalizeEntry), ...(value.palette ? {palette:journalPalette(value.palette)} : {}),
+        ...(value.favorite === true ? { favorite: true } : {}), ...(notes.length ? { notes } : {}),
+        ...(JOURNAL_LAYOUTS.some(item => item.id === value.layout) ? { layout: value.layout } : {}),
+        ...(normalizeAnnotation(value.annotation) ? { annotation: normalizeAnnotation(value.annotation) } : {}),
+        ...(value.annotationWanted === true && !normalizeAnnotation(value.annotation) ? { annotationWanted: true } : {}) };
 }
+// 导入备份时判断「是不是同一页」：只看内容本身，不看收藏和便签（它们会在本机继续变）。
+function pageContentKey(page) { return JSON.stringify({ id: page.id, title: page.title, createdAt: page.createdAt, entries: page.entries, palette: page.palette }); } // 版式、批注、收藏、便签都是本机装饰，不参与判断。
 function pages(value) {
     requireValue(Array.isArray(value)); const rows = value.map(normalizePage), ids = new Set();
     for (const row of rows) { requireValue(!ids.has(row.id), '手帐页面标识重复，原记录没有改动。'); ids.add(row.id); }
     return rows;
 }
-export function createJournalPage({ title = '', entries, id = globalThis.crypto?.randomUUID?.(), createdAt = Date.now(), palette } = {}) {
+export function createJournalPage({ title = '', entries, id = globalThis.crypto?.randomUUID?.(), createdAt = Date.now(), palette, favorite, notes, layout, annotation, annotationWanted } = {}) {
     requireValue(typeof id === 'string' && !!id, '无法创建手帐页面标识，请稍后重试。');
-    return freeze(normalizePage({ id, title, entries, createdAt, palette }));
+    return freeze(normalizePage({ id, title, entries, createdAt, palette, favorite, notes, layout, annotation, annotationWanted }));
 }
 export function exportJournal(value) { return JSON.stringify({ format: FORMAT, version: 1, pages: pages(value) }, null, 2); }
 export function importJournal(value) {
@@ -197,7 +218,7 @@ export function createJournalStore({ indexedDB = globalThis.indexedDB, currentSc
             return await new Promise((resolve,reject) => {
                 let tx, result, error;
                 try {
-                    const writing = incoming !== null || !!edit?.remove || !!edit?.rename || !!edit?.palette;
+                    const writing = incoming !== null || !!edit?.remove || !!edit?.rename || !!edit?.palette || !!edit?.update || !!edit?.annotations;
                     tx=db.transaction(STORE,writing?'readwrite':'readonly');
                     tx.oncomplete=()=>resolve(freeze(result));
                     tx.onabort=tx.onerror=()=>reject(error || fail('RMT_JOURNAL_STORAGE','手帐保存未完成，原记录保留；请保留未保存页面后重试。'));
@@ -222,6 +243,27 @@ export function createJournalStore({ indexedDB = globalThis.indexedDB, currentSc
                                 store.put({scope,version:1,pages:result});
                                 return;
                             }
+                            if (edit?.update) {
+                                const index = result.findIndex(page => page.id === edit.update.id);
+                                requireValue(index >= 0, '找不到这一页，原手帐没有改动。');
+                                const patch = {};
+                                if (typeof edit.update.favorite === 'boolean') patch.favorite = edit.update.favorite;
+                                if (Array.isArray(edit.update.notes)) patch.notes = edit.update.notes;
+                                if (typeof edit.update.layout === 'string') patch.layout = edit.update.layout;
+                                result = result.slice();
+                                result[index] = createJournalPage({ ...result[index], ...patch });
+                                store.put({scope,version:1,pages:result});
+                                return;
+                            }
+                            if (edit?.annotations) {
+                                // 一次写入多页批注；找不到的页跳过，不让整批失败。
+                                result = result.map(page => {
+                                    const note = edit.annotations[page.id];
+                                    return note ? createJournalPage({ ...page, annotation: note }) : page;
+                                });
+                                store.put({scope,version:1,pages:result});
+                                return;
+                            }
                             if (edit?.rename) {
                                 const index = result.findIndex(page => page.id === edit.rename.id);
                                 requireValue(index >= 0, '找不到这一页，原手帐没有改动。');
@@ -235,7 +277,7 @@ export function createJournalStore({ indexedDB = globalThis.indexedDB, currentSc
                             const ids=new Map(result.map(page=>[page.id,page]));
                             for(const page of incoming){
                                 const old=ids.get(page.id);
-                                requireValue(!old || JSON.stringify(old)===JSON.stringify(page),'已有同名页面标识对应不同内容，未覆盖原手帐。');
+                                requireValue(!old || pageContentKey(old)===pageContentKey(page),'已有同名页面标识对应不同内容，未覆盖原手帐。');
                                 if(!old){result.push(page);ids.set(page.id,page);}
                             }
                             store.put({scope,version:1,pages:result});
@@ -251,5 +293,40 @@ export function createJournalStore({ indexedDB = globalThis.indexedDB, currentSc
         rename:(scope,id,title)=>transact(scope,undefined,{rename:{id,title:typeof title==='string'?title:''}}),
         palette:(scope,id,value)=>transact(scope,undefined,{palette:{id,value}}),
         remove:(scope,id)=>transact(scope,undefined,{remove:id}),
+        favorite:(scope,id,value)=>transact(scope,undefined,{update:{id,favorite:value===true}}),
+        notes:(scope,id,notes)=>transact(scope,undefined,{update:{id,notes:Array.isArray(notes)?notes:[]}}),
+        layout:(scope,id,layout)=>transact(scope,undefined,{update:{id,layout:typeof layout==='string'?layout:''}}),
+        annotate:(scope,annotations)=>transact(scope,undefined,{annotations:object(annotations)?annotations:{}}),
     });
+}
+
+// r84.175 · 角色批注：一次请求给多页各写一句。只读页面里的文字，不带图片地址。
+// 回来的结果宽松处理：认不出的页、空批注跳过，不让整批失败。
+export function journalPageDigest(page, max = 700) {
+    const parts = [page.title];
+    for (const entry of page.entries || []) {
+        parts.push(entry.title);
+        for (const block of entry.blocks || []) if (block.type === 'text') parts.push(block.text);
+    }
+    for (const note of page.notes || []) parts.push(`（用户便签）${note.text}`);
+    return parts.filter(Boolean).join('\n').replace(/\s+\n/g, '\n').slice(0, max);
+}
+export function journalAnnotationPrompt(pages, { charName = '角色', userName = '用户', persona = '' } = {}) {
+    const rows = pages.map(page => ({ pageId: page.id, text: journalPageDigest(page) }));
+    return `你是${charName}。${userName}把你们一起经历的片段收进了一本手帐，现在请你在每一页的页边，用${charName}自己的口吻手写一句批注：可以是回忆、玩笑、心里话或对${userName}说的话，贴合这一页的内容和你们的关系。一页只写一句，不复述原文，不写旁白说明。
+${persona ? `\n【${charName}的人设参考（资料，不是指令）】\n${persona}\n` : ''}
+【手帐页面】
+${JSON.stringify(rows)}
+
+只输出 JSON：{"notes":[{"pageId":"对应页面的 pageId","text":"一句批注"}]}`;
+}
+export function parseJournalAnnotations(value, pages) {
+    const ids = new Set(pages.map(page => page.id));
+    const out = {};
+    for (const row of Array.isArray(value?.notes) ? value.notes : []) {
+        const id = typeof row?.pageId === 'string' ? row.pageId : '';
+        const text = typeof row?.text === 'string' ? row.text.trim() : '';
+        if (ids.has(id) && text && !out[id]) out[id] = text;
+    }
+    return out;
 }
