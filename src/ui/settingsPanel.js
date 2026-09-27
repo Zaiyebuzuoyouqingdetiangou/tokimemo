@@ -680,6 +680,7 @@ export function refreshSettingsMemoryStatus({ lightweight = false } = {}) {
 
 export function mountSettings({ homeTarget = null } = {}) {
     ui_styles.ensureSettingsStyles();
+    ui_heartEnvelope.ensureEnvelopePickerStyles();
     if (!homeTarget) {
         document.getElementById(SETTINGS_LAUNCHER_ID)?.remove();
         // The full settings and normal diagnostics entry belong to Hearttrace home.
@@ -826,9 +827,11 @@ export function mountSettings({ homeTarget = null } = {}) {
           ${ui_heartEnvelope.heartEnvelopePickerHtml(core_settings.getPluginSettings().heartEnvelopeSkin)}
           <button type="button" class="menu_button rmt-settings-wide" data-rmt-auto-memory-wizard>打开回忆向导</button>
           <small>向导先接 API、读取范围和档案。已有档案时不会重新建档。</small>
-          <button type="button" class="menu_button rmt-settings-wide" data-rmt-auto-memory-redo="keep">按原来的抽签再写</button>
-          <button type="button" class="menu_button rmt-settings-wide" data-rmt-auto-memory-redo="redraw">重新抽一份</button>
-          <button type="button" class="menu_button rmt-settings-wide" data-rmt-auto-memory-redo="pick">自己选一份</button>
+          <div class="rmt-auto-memory-actions">
+          <button type="button" class="menu_button" data-rmt-auto-memory-redo="keep">按原签再写</button>
+          <button type="button" class="menu_button" data-rmt-auto-memory-redo="redraw">重新抽一份</button>
+          <button type="button" class="menu_button" data-rmt-auto-memory-redo="pick">自己选一份</button>
+          </div>
           <div data-rmt-auto-memory-pick hidden></div>
           <p data-rmt-auto-memory-redo-status role="status"></p>
           <p data-rmt-auto-memory-gate role="status"></p>

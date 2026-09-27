@@ -355,6 +355,7 @@ async function runHostRound() {
             if (result.action === 'drawn' || result.action === 'reuse') stampDrawSource(context, result.drawId);
             ui_countdown.refreshAutoMemoryCountdown();
             finishHostJob(hostJob, result);
+            console.info('[HeartbeatMemories] AM-' + String(result?.action || 'none'), { floor });
             } catch (error) {
                 finishHostJob(hostJob, { action: 'failed' });
                 console.warn('[HeartbeatMemories] due floor skipped', core_text.safeErrorDiagnostic(error));

@@ -41,7 +41,7 @@ export function floorShellCss() {
 .rmt-heart-letter-strip.is-opened b,.rmt-heart-letter-strip.is-opened em{color:var(--rmt-theme-muted)}
 .rmt-letter-dot{flex:0 0 8px;width:8px;height:8px;border-radius:50%;background:var(--rmt-theme-accent-ink)}
 .rmt-heart-letter-seal small{color:#8d6d78;font-size:12px;line-height:1.4}
-.rmt-envelope{display:block;width:min(100%,240px);height:auto;filter:drop-shadow(0 12px 16px rgba(90,24,48,.16))}
+.rmt-heart-letter-paper .rmt-envelope{display:block;width:min(100%,120px);height:auto}
 .rmt-heart-letter.is-writing .rmt-heart-letter-seal{display:flex!important;cursor:default}
 .rmt-heart-letter.is-writing .rmt-heart-letter-paper{display:none!important}
 .rmt-heart-letter-paper{margin-top:8px;min-width:0;height:auto;max-height:none;overflow:visible;padding:14px 16px 12px;border:1px solid var(--rmt-theme-border);border-radius:14px;background:var(--rmt-theme-soft);color:var(--rmt-theme-text)}

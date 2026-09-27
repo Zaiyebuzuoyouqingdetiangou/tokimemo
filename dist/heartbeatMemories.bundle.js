@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 212
-// Source SHA-256: 5af1674629d74119d63193c28095935d2bd697fa71eb32390372c96c48df70c0
+// Source SHA-256: 3b8fae346cc8c15e614c0eba2275460bf02f417a92d5b02d924eb53cc548175d
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -6844,7 +6844,7 @@ function achievementRepairPrompt({ moduleTitle = '', sourceMemoryIds = [], allow
   const ids = (Array.isArray(sourceMemoryIds) ? sourceMemoryIds : []).filter(id => /^M\d{3,6}$/.test(id));
   const evidence = ids.length ? ids.join('、') : '没有可引用的编号';
   const kind = allowHistorical ? 'historical 或 collection' : 'collection';
-  return `只补这一份回忆的成就，不要重写模块正文。模块：${title}。可以引用的记忆编号：${evidence}。
+  return `只补这一份回忆缺少的成就，不要重写已经留下的模块正文，也不要另抽一张签。标识 AM-ACH-REPAIR。模块：${title}。可以引用的记忆编号：${evidence}。
 只返回一个 JSON 对象，不要解释：
 {"title":"不超过40字","description":"一句","unlockCondition":"一句","kind":"${allowHistorical ? 'historical' : 'collection'}","sourceMemoryAnchor":"编号或一句"}
 kind 只能是 ${kind}。没有编号证据就用 collection。`;
@@ -7433,6 +7433,7 @@ async function runHostRound() {
             if (result.action === 'drawn' || result.action === 'reuse') stampDrawSource(context, result.drawId);
             ui_countdown.refreshAutoMemoryCountdown();
             finishHostJob(hostJob, result);
+            console.info('[HeartbeatMemories] AM-' + String(result?.action || 'none'), { floor });
             } catch (error) {
                 finishHostJob(hostJob, { action: 'failed' });
                 console.warn('[HeartbeatMemories] due floor skipped', core_text.safeErrorDiagnostic(error));
@@ -8284,7 +8285,7 @@ function floorShellCss() {
 .rmt-heart-letter-strip.is-opened b,.rmt-heart-letter-strip.is-opened em{color:var(--rmt-theme-muted)}
 .rmt-letter-dot{flex:0 0 8px;width:8px;height:8px;border-radius:50%;background:var(--rmt-theme-accent-ink)}
 .rmt-heart-letter-seal small{color:#8d6d78;font-size:12px;line-height:1.4}
-.rmt-envelope{display:block;width:min(100%,240px);height:auto;filter:drop-shadow(0 12px 16px rgba(90,24,48,.16))}
+.rmt-heart-letter-paper .rmt-envelope{display:block;width:min(100%,120px);height:auto}
 .rmt-heart-letter.is-writing .rmt-heart-letter-seal{display:flex!important;cursor:default}
 .rmt-heart-letter.is-writing .rmt-heart-letter-paper{display:none!important}
 .rmt-heart-letter-paper{margin-top:8px;min-width:0;height:auto;max-height:none;overflow:visible;padding:14px 16px 12px;border:1px solid var(--rmt-theme-border);border-radius:14px;background:var(--rmt-theme-soft);color:var(--rmt-theme-text)}
@@ -31293,10 +31294,10 @@ __m_core_worldPresentation_js.controlledEvidenceContains = controlledEvidenceCon
 function __init_generation_achievementCapture_js() {
 // MODULE: generation/achievementCapture.js
 
-// 只有自动留忆的最后一步才武装。成就字段从正文 JSON 里拆走，不改各模块原来的校验。
+// 自动留忆第一次文本请求才带上成就。成就字段从正文 JSON 里拆走，不改各模块原来的校验。
 
 const SUFFIX = `
-【本轮成就，和上面这份回忆写在同一次 JSON 里】
+【本轮成就，和上面这份回忆写在同一次 JSON 里。两样都在，才算这一份留忆】
 不要另起一份回复，也不要改动原有字段。在原来的 JSON 对象上增加 "achievement"：
 {"title":"不超过20字","description":"一两句说明","unlockCondition":"做到或经历了什么才解锁","kind":"historical或collection","sourceMemoryAnchor":"从本轮档案锚点原样复制"}
 能被本轮真实档案证明的用 historical。推演、模拟、后日谈用 collection。不要解释。`;
@@ -63747,7 +63748,7 @@ const core_constants = __m_core_constants_js;
 // 爱心信的六款信封。只换画法，不改生成提示词。
 
 const TITLES = Object.freeze({
-    pink: '现在 粉色信封',
+    pink: '粉色信封',
     wax: 'A 蜡封信',
     night: 'B 星夜信',
     sakura: 'C 樱花信',
@@ -63847,13 +63848,22 @@ function heartEnvelopeSvg(skin) {
     return svg(BODIES[heartEnvelopeId(skin)]());
 }
 
+const SHORT = Object.freeze({
+    pink: '粉色',
+    wax: '蜡封',
+    night: '星夜',
+    sakura: '樱花',
+    airmail: '航空',
+    wash: '水彩',
+});
+
 function heartEnvelopePickerHtml(selected) {
     const current = heartEnvelopeId(selected);
     const options = core_constants.HEART_ENVELOPE_SKINS.map(id => {
         const on = id === current;
-        return `<label class="rmt-envelope-option${on ? ' is-on' : ''}"><input type="radio" name="rmt-heart-envelope" data-rmt-heart-envelope value="${id}" ${on ? 'checked' : ''}><span class="rmt-envelope-art">${heartEnvelopeSvg(id)}</span><span>${TITLES[id]}</span></label>`;
+        return `<label class="rmt-envelope-option${on ? ' is-on' : ''}"><input type="radio" name="rmt-heart-envelope" data-rmt-heart-envelope value="${id}" ${on ? 'checked' : ''} aria-label="${TITLES[id]}"><span class="rmt-envelope-art">${heartEnvelopeSvg(id)}</span><span>${SHORT[id]}</span></label>`;
     }).join('');
-    return `<details class="rmt-envelope-picker"><summary><span class="rmt-envelope-current" data-rmt-envelope-current>${heartEnvelopeSvg(current)}</span><span><b>信封样式</b><small data-rmt-envelope-current-name>${heartEnvelopeTitle(current)}</small></span></summary><p>点开再选。六款一样大，用在聊天里的那封信上。</p><div class="rmt-envelope-options">${options}</div></details>`;
+    return `<details class="rmt-envelope-picker"><summary><span class="rmt-envelope-current" data-rmt-envelope-current>${heartEnvelopeSvg(current)}</span><span><b>信封样式</b><small data-rmt-envelope-current-name>${heartEnvelopeTitle(current)}</small></span></summary><div class="rmt-envelope-options">${options}</div></details>`;
 }
 
 function paintEnvelopePicker(root, selected) {
@@ -63869,24 +63879,38 @@ function paintEnvelopePicker(root, selected) {
     if (name) name.textContent = heartEnvelopeTitle(current);
 }
 
+function ensureEnvelopePickerStyles() {
+    const id = 'rmt-envelope-picker-style';
+    if (globalThis.document?.getElementById?.(id)) return;
+    const style = globalThis.document?.createElement?.('style');
+    if (!style) return;
+    style.id = id;
+    const root = '#' + core_constants.SETTINGS_ID;
+    style.textContent = heartEnvelopePickerCss(root) + `
+${root} .rmt-auto-memory-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+${root} .rmt-auto-memory-actions .menu_button{width:100%!important;min-height:32px!important;padding:6px 4px!important;font-size:12px}
+`;
+    globalThis.document.head.appendChild(style);
+}
+
 function heartEnvelopePickerCss(root) {
     return `
-${root} .rmt-envelope-picker{border:1px solid var(--rmt-theme-border,#cbdce6);border-radius:16px;margin:0;padding:0;min-width:0;background:var(--rmt-theme-surface-solid,#fff);color:var(--rmt-theme-text,#334155)}
-${root} .rmt-envelope-picker>summary{display:flex;align-items:center;gap:12px;min-height:56px;padding:8px 12px;cursor:pointer;list-style:none}
+${root} .rmt-envelope-picker{border:1px solid var(--rmt-theme-border,#cbdce6);border-radius:12px;margin:0;padding:0;min-width:0;background:var(--rmt-theme-surface-solid,#fff);color:var(--rmt-theme-text,#334155)}
+${root} .rmt-envelope-picker>summary{display:flex;align-items:center;gap:8px;min-height:36px;padding:4px 8px;cursor:pointer;list-style:none}
 ${root} .rmt-envelope-picker>summary::-webkit-details-marker{display:none}
-${root} .rmt-envelope-current{flex:0 0 88px;width:88px}
-${root} .rmt-envelope-current .rmt-envelope{display:block;width:88px;height:auto}
-${root} .rmt-envelope-picker>summary b,${root} .rmt-envelope-picker>summary small{display:block;font-size:14px;line-height:1.4}
-${root} .rmt-envelope-picker>summary small{color:var(--rmt-theme-muted,#59677a);font-size:13px}
-${root} .rmt-envelope-picker p{margin:0;padding:0 12px 8px;font-size:13px;line-height:1.55;color:var(--rmt-theme-muted,#59677a)}
-${root} .rmt-envelope-picker:not([open]) .rmt-envelope-options,${root} .rmt-envelope-picker:not([open])>p{display:none}
-${root} .rmt-envelope-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;padding:0 12px 12px}
-${root} .rmt-envelope-option{position:relative;display:grid;justify-items:center;align-content:start;gap:6px;margin:0;padding:8px;border:1px solid var(--rmt-theme-border,#cbdce6);border-radius:12px;background:var(--rmt-theme-bg,#fff);color:inherit;cursor:pointer;min-height:44px}
+${root} .rmt-envelope-current{flex:0 0 28px;width:28px}
+${root} .rmt-envelope-current .rmt-envelope{display:block;width:28px!important;max-width:28px;height:auto;filter:none}
+${root} .rmt-envelope-picker>summary b,${root} .rmt-envelope-picker>summary small{display:block;font-size:13px;line-height:1.3}
+${root} .rmt-envelope-picker>summary small{color:var(--rmt-theme-muted,#59677a);font-size:12px}
+${root} .rmt-envelope-picker:not([open]) .rmt-envelope-options{display:none}
+${root} .rmt-envelope-options{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:4px;padding:0 6px 6px}
+${root} .rmt-envelope-option{position:relative;display:grid;justify-items:center;align-content:start;gap:2px;margin:0;padding:4px 2px;border:1px solid var(--rmt-theme-border,#cbdce6);border-radius:8px;background:var(--rmt-theme-bg,#fff);color:inherit;cursor:pointer;min-height:0}
 ${root} .rmt-envelope-option input{position:absolute;width:1px;height:1px;margin:0;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%)}
-${root} .rmt-envelope-option .rmt-envelope{display:block;width:100%;height:auto}
-${root} .rmt-envelope-option span:last-child{font-size:12px;line-height:1.35;text-align:center}
-${root} .rmt-envelope-option.is-on{outline:3px solid var(--rmt-theme-accent-ink,#5f5770);outline-offset:2px}
-${root} .rmt-envelope-picker>summary:focus-visible,${root} .rmt-envelope-option:has(input:focus-visible){outline:3px solid var(--rmt-theme-accent-ink,#5f5770);outline-offset:3px}
+${root} .rmt-envelope-option .rmt-envelope{display:block;width:36px!important;max-width:36px;height:auto;filter:none}
+${root} .rmt-envelope-option span:last-child{font-size:11px;line-height:1.2;text-align:center}
+${root} .rmt-envelope-option.is-on{outline:2px solid var(--rmt-theme-accent-ink,#5f5770);outline-offset:1px}
+${root} .rmt-envelope-picker>summary:focus-visible,${root} .rmt-envelope-option:has(input:focus-visible){outline:2px solid var(--rmt-theme-accent-ink,#5f5770);outline-offset:2px}
+@media(max-width:420px){${root} .rmt-envelope-options{grid-template-columns:repeat(3,minmax(0,1fr))}}
 `;
 }
 
@@ -63895,6 +63919,7 @@ __m_ui_heartEnvelope_js.heartEnvelopeTitle = heartEnvelopeTitle;
 __m_ui_heartEnvelope_js.heartEnvelopeSvg = heartEnvelopeSvg;
 __m_ui_heartEnvelope_js.heartEnvelopePickerHtml = heartEnvelopePickerHtml;
 __m_ui_heartEnvelope_js.paintEnvelopePicker = paintEnvelopePicker;
+__m_ui_heartEnvelope_js.ensureEnvelopePickerStyles = ensureEnvelopePickerStyles;
 __m_ui_heartEnvelope_js.heartEnvelopePickerCss = heartEnvelopePickerCss;
 }
 
@@ -64672,7 +64697,7 @@ function showHome({ section = '' } = {}) {
     settings.mountSettings({ homeTarget: body.querySelector('[data-rmt-home-settings]') });
     mountHomeDiagnostics(body.querySelector('.rmt-home'));
     workspace_ui.arrangeSettingsHome(body);
-    if (section && ['api', 'image', 'creative', 'filter', 'theme', 'auto', 'memory', 'reading', 'voice'].includes(section)) {
+    if (section && ['api', 'auto-memory', 'image', 'creative', 'filter', 'theme', 'auto', 'memory', 'reading', 'voice'].includes(section)) {
         const details = body.querySelector(`[data-rmt-settings-section="${section}"]`);
         if (details) { const more = details.closest('.rmt-workspace-more'); if (more) more.open = true; details.open = true; if (section !== 'voice') settings.hydrateSettingsPanel({ memory: section === 'memory' }); details.scrollIntoView?.({ block: 'start' }); }
     }
@@ -70947,6 +70972,7 @@ function refreshSettingsMemoryStatus({ lightweight = false } = {}) {
 
 function mountSettings({ homeTarget = null } = {}) {
     ui_styles.ensureSettingsStyles();
+    ui_heartEnvelope.ensureEnvelopePickerStyles();
     if (!homeTarget) {
         document.getElementById(SETTINGS_LAUNCHER_ID)?.remove();
         // The full settings and normal diagnostics entry belong to Hearttrace home.
@@ -71093,9 +71119,11 @@ function mountSettings({ homeTarget = null } = {}) {
           ${ui_heartEnvelope.heartEnvelopePickerHtml(core_settings.getPluginSettings().heartEnvelopeSkin)}
           <button type="button" class="menu_button rmt-settings-wide" data-rmt-auto-memory-wizard>打开回忆向导</button>
           <small>向导先接 API、读取范围和档案。已有档案时不会重新建档。</small>
-          <button type="button" class="menu_button rmt-settings-wide" data-rmt-auto-memory-redo="keep">按原来的抽签再写</button>
-          <button type="button" class="menu_button rmt-settings-wide" data-rmt-auto-memory-redo="redraw">重新抽一份</button>
-          <button type="button" class="menu_button rmt-settings-wide" data-rmt-auto-memory-redo="pick">自己选一份</button>
+          <div class="rmt-auto-memory-actions">
+          <button type="button" class="menu_button" data-rmt-auto-memory-redo="keep">按原签再写</button>
+          <button type="button" class="menu_button" data-rmt-auto-memory-redo="redraw">重新抽一份</button>
+          <button type="button" class="menu_button" data-rmt-auto-memory-redo="pick">自己选一份</button>
+          </div>
           <div data-rmt-auto-memory-pick hidden></div>
           <p data-rmt-auto-memory-redo-status role="status"></p>
           <p data-rmt-auto-memory-gate role="status"></p>
@@ -76308,8 +76336,11 @@ function arrangeSettingsHome(body) {
         const title = document.createElement('summary'); title.textContent = '更多设置'; more.appendChild(title);
         const sectionBody = document.createElement('div'); sectionBody.className = 'rmt-workspace-more-body'; more.appendChild(sectionBody);
         for (const card of [...content.querySelectorAll(':scope > [data-rmt-settings-section]')]) {
-            if (!['api','theme','image','reading','voice'].includes(card.dataset.rmtSettingsSection)) sectionBody.appendChild(card);
+            if (!['api','auto-memory','theme','image','reading','voice'].includes(card.dataset.rmtSettingsSection)) sectionBody.appendChild(card);
         }
+        const apiCard = content.querySelector(':scope > [data-rmt-settings-section="api"]');
+        const autoCard = content.querySelector(':scope > [data-rmt-settings-section="auto-memory"]');
+        if (apiCard && autoCard) apiCard.after(autoCard);
         if (sectionBody.children.length) content.appendChild(more);
         const preferences = [...content.querySelectorAll(':scope > .rmt-workspace-preferences')];
         for (const duplicate of preferences.slice(1)) duplicate.remove();

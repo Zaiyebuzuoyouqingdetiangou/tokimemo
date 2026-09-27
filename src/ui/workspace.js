@@ -209,8 +209,11 @@ export function arrangeSettingsHome(body) {
         const title = document.createElement('summary'); title.textContent = '更多设置'; more.appendChild(title);
         const sectionBody = document.createElement('div'); sectionBody.className = 'rmt-workspace-more-body'; more.appendChild(sectionBody);
         for (const card of [...content.querySelectorAll(':scope > [data-rmt-settings-section]')]) {
-            if (!['api','theme','image','reading','voice'].includes(card.dataset.rmtSettingsSection)) sectionBody.appendChild(card);
+            if (!['api','auto-memory','theme','image','reading','voice'].includes(card.dataset.rmtSettingsSection)) sectionBody.appendChild(card);
         }
+        const apiCard = content.querySelector(':scope > [data-rmt-settings-section="api"]');
+        const autoCard = content.querySelector(':scope > [data-rmt-settings-section="auto-memory"]');
+        if (apiCard && autoCard) apiCard.after(autoCard);
         if (sectionBody.children.length) content.appendChild(more);
         const preferences = [...content.querySelectorAll(':scope > .rmt-workspace-preferences')];
         for (const duplicate of preferences.slice(1)) duplicate.remove();
