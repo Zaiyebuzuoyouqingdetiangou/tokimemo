@@ -1,3 +1,4 @@
+import * as archive_avatars from './archiveAvatars.js';
 import * as expanded_cg_view from './expandedCgView.js';
 import * as storyParticipants from '../core/participants.js';
 import * as heart_mode from '../modes/heart.js';
@@ -50,8 +51,7 @@ export function heartCharacterAvatarUrl(entry = runtimeState.activeArchiveSnapsh
 
 export function heartUserAvatarUrl(context = core_context.getContext()) {
     try {
-        const raw = core_text.normalizeText(context?.user_avatar || context?.userAvatar || globalThis.user_avatar, 300);
-        return raw ? (context.getThumbnailUrl?.('avatar', raw) || '') : '';
+        return archive_avatars.currentPersonaAvatarUrl(context);
     } catch {
         return '';
     }
@@ -149,7 +149,7 @@ export function renderAvatarDialoguePopup(state = runtimeState.activeAvatarDialo
     const actions = `${language.hasContent ? '<button type="button" class="rmt-btn" data-rmt-action="avatar-talk-again">再说一句</button>' : ''}<button type="button" class="rmt-btn rmt-cg-primary" data-rmt-action="avatar-heart-open">打开角色互动</button>`;
     const message = speech?.text || (language.hasContent ? '当前时段暂无台词。' : '基础语言尚未生成。');
     const label = session ? speech?.label || '角色互动' : 'HEART VOICE';
-    const dialogueIdentity = { characterName: state.characterName || session?.characterName || entry?.characterName || '角色', userName: state.userName || state.snapshot?.memory?.userName || entry?.memory?.userName || session?.userName || '', charAvatar: avatarSrc || '', userAvatar: '' };
+    const dialogueIdentity = { characterName: state.characterName || session?.characterName || entry?.characterName || '角色', userName: state.userName || state.snapshot?.memory?.userName || entry?.memory?.userName || session?.userName || '', charAvatar: avatarSrc || '' };
     const rows = core_dialogue.normalizeDialogueRows([{ speaker: session ? 'char' : 'narrator', text: message }], dialogueIdentity);
     const dialogueHtml = session && (rows.length > 1 || rows[0]?.speaker !== 'char')
         ? renderHeartScriptLines(rows, dialogueIdentity)
@@ -246,11 +246,12 @@ export function selectedHeartStrip() {
 
 export function renderHeartScriptLines(lines, identity = {}) {
     const charAvatar = identity.charAvatar ?? heartCharacterAvatarUrl(runtimeState.activeArchiveSnapshot);
-    const userAvatar = identity.userAvatar ?? heartUserAvatarUrl();
     const route = ui_workspaceState.workspace.route;
     const page = ['language', 'strips', 'fireflies', 'postending'].includes(route) ? route : runtimeState.activeSession?.selectedSeason;
     const sourceMemory = core_cache.generationPageSourceMemory(runtimeState.activeSession, page,
         core_cache.generationPageSourceMemory(runtimeState.activeSession, 'heart', null));
+    const storedUserAvatar = archive_avatars.personaAvatarUrl(sourceMemory?.userAvatar || runtimeState.activeArchiveSnapshot?.memory?.userAvatar, core_context.getContext());
+    const userAvatar = identity.userAvatar || storedUserAvatar || heartUserAvatarUrl();
     const story = storyParticipants.resolveStoryIdentities(sourceMemory || runtimeState.activeArchiveSnapshot?.memory || null, null, runtimeState.activeSession?.participantSnapshot?.people);
     const charName = core_text.normalizeText(identity.characterName ?? story.ownerNames[0] ?? sourceMemory?.characterName ?? runtimeState.activeArchiveSnapshot?.characterName ?? core_context.getContext().name2, 120) || '角色';
     const userName = core_text.normalizeText(identity.userName ?? sourceMemory?.userName ?? runtimeState.activeArchiveSnapshot?.memory?.userName ?? core_context.getContext().name1, 120) || '你';

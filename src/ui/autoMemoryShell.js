@@ -492,7 +492,8 @@ function letterIdentity() {
     let context = null;
     try { context = core_context.getContext(); } catch { context = null; }
     const userFile = archive_avatars.currentUserAvatar(context);
-    const userAvatar = userFile ? (archive_avatars.characterAvatarUrl(userFile, context) || archive_avatars.userAvatarUrl(userFile)) : '';
+    const userAvatar = archive_avatars.currentPersonaAvatarUrl(context)
+        || (userFile ? archive_avatars.personaAvatarUrl(userFile, context) : '');
     let charAvatar = '';
     try {
         const file = archive_snapshots.currentCharacterAvatar(context);

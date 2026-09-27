@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 212
-// Source SHA-256: 3b8fae346cc8c15e614c0eba2275460bf02f417a92d5b02d924eb53cc548175d
+// Source SHA-256: eb6756b05a8afeeca77d0dd4114956b7ef062924e67b7d0fe84f1879186228f5
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -11948,8 +11948,9 @@ function normalizeDialogueRows(raw, { characterName = '', userName = '', userAli
         if (conflictingNames) {
             if (strict) throw core_text.safeUserError('对话中的姓名标记互相冲突，原内容保留；请只重试这篇剧本。', 'RMT_HEART_INCOMPLETE');
             speaker = 'narrator';
-        } else if (nameOwner) speaker = nameOwner;
-        else if (npcName && speaker !== 'npc') speaker = 'narrator';
+        }         else if (nameOwner) speaker = nameOwner;
+        // 已经标明是 user 的台词保留用户气泡。对不上的姓名只拦角色头像，不能把用户行改成旁白。
+        else if (npcName && speaker !== 'npc' && speaker !== 'user') speaker = 'narrator';
         if (speaker === 'npc' && !npcName) speaker = 'narrator';
         const identifiedCharacter = speaker === 'char' ? (nameOwner === 'char' ? npcName : directOwner === 'char' ? name : '') : '';
         if (speaker !== 'npc') npcName = '';
@@ -30324,6 +30325,33 @@ function safeErrorDiagnostic(error) {
     return diagnostic;
 }
 
+function recoveryFailedSummary(error, max) {
+    const status = safeErrorStatus(error);
+    const rawCode = normalizeText(error?.code, 80);
+    const known = SAFE_ERROR_CODE_MESSAGES[rawCode];
+    const coded = known && rawCode !== 'RMT_RECOVERY_FAILED' ? known : '';
+    const trusted = error?.safeToDisplay === true
+        ? sanitizedTrustedErrorMessage(error?.safeUserMessage || error?.message, 180)
+        : '';
+    const plain = trusted || sanitizedTrustedErrorMessage(error?.message, 180);
+    const local = plain
+        && plain !== SAFE_ERROR_CODE_MESSAGES.RMT_RECOVERY_FAILED
+        && plain.length <= 160
+        && !/https?:|\{|\}|\[|<|bearer|\bsk-/i.test(plain)
+        ? plain
+        : '';
+    const lead = coded || local;
+    const tail = [];
+    if (status) tail.push(`HTTP ${status}`);
+    if (/^RMT_[A-Z0-9_]{1,70}$/.test(rawCode) && rawCode !== 'RMT_RECOVERY_FAILED' && !coded) tail.push(rawCode);
+    const sentence = String(lead || '').replace(/。+$/g, '');
+    const extra = tail.length ? tail.join(' · ') : '';
+    if (sentence && extra) return `${sentence}（${extra}）。旧内容保留，可重试。`;
+    if (sentence) return `${sentence}。旧内容保留，可重试。`;
+    if (extra) return `旧内容保留，可重试。（${extra}）`;
+    return SAFE_ERROR_CODE_MESSAGES.RMT_RECOVERY_FAILED;
+}
+
 function safeErrorSummary(error, max = 520) {
     if (core_backupDiagnostics.backupFailureDiagnostic(error)) {
         return normalizeText(core_backupDiagnostics.backupFailureSummary(error).message, max);
@@ -30374,7 +30402,7 @@ function safeErrorSummary(error, max = 520) {
     const blocked = /cloudflare|sorry,? you have been blocked|attention required|unable to access/i.test(raw);
     const unauthorized = /unauthorized|authentication|invalid api key|\b401\b/i.test(raw) || status === 401;
     const forbidden = /forbidden|\b403\b/i.test(raw) || status === 403;
-    if (code && SAFE_ERROR_CODE_MESSAGES[code] && !['RMT_INPUT_BUDGET', 'RMT_RECOVERY_SNAPSHOT_TOO_LARGE', 'RMT_RECOVERY_OVERSIZED', 'RMT_CAPACITY_LOCKED'].includes(code)) {
+    if (code && code !== 'RMT_RECOVERY_FAILED' && SAFE_ERROR_CODE_MESSAGES[code] && !['RMT_INPUT_BUDGET', 'RMT_RECOVERY_SNAPSHOT_TOO_LARGE', 'RMT_RECOVERY_OVERSIZED', 'RMT_CAPACITY_LOCKED'].includes(code)) {
         return normalizeText(SAFE_ERROR_CODE_MESSAGES[code], max);
     }
     if (['RMT_INPUT_BUDGET', 'RMT_RECOVERY_SNAPSHOT_TOO_LARGE', 'RMT_RECOVERY_OVERSIZED', 'RMT_CAPACITY_LOCKED'].includes(code)) {
@@ -30410,7 +30438,7 @@ function safeErrorSummary(error, max = 520) {
     if (/failed to fetch|networkerror|network request failed|load failed|econn(?:reset|refused)|enotfound|fetch failed/i.test(raw)) {
         return '网络连接失败；请检查地址、网络与服务状态后重试。';
     }
-    return SAFE_ERROR_CODE_MESSAGES.RMT_RECOVERY_FAILED;
+    return normalizeText(recoveryFailedSummary(error, max), max);
 }
 
 function cleanArray(value, maxItems = 64, maxChars = 12000) {
@@ -58035,6 +58063,45 @@ function userAvatarUrl(filename) {
     return file ? `/User%20Avatars/${encodeURIComponent(file)}` : '';
 }
 
+function personaAvatarUrl(filename, context) {
+    const file = normalizeAvatarFile(filename);
+    if (!file) return '';
+    try {
+        const thumbnail = thumbnailPath(context?.getThumbnailUrl?.('persona', file));
+        if (thumbnail) return thumbnail;
+    } catch {}
+    return userAvatarUrl(file);
+}
+
+function safeMediaPath(value) {
+    if (typeof value !== 'string') return '';
+    const raw = value.trim();
+    if (!raw || raw.length > 2048 || /[\u0000-\u001f\u007f]/.test(raw)) return '';
+    if (/^(?:blob:|data:image\/)/i.test(raw)) return raw;
+    return thumbnailPath(raw);
+}
+
+function currentPersonaAvatarUrl(context) {
+    const locked = currentUserAvatar(context);
+    if (locked) {
+        const url = personaAvatarUrl(locked, context);
+        if (url) return url;
+    }
+    try {
+        if (typeof getPersonaAvatarPath === 'function') {
+            const direct = safeMediaPath(getPersonaAvatarPath('current'));
+            if (direct) return direct;
+        }
+    } catch {}
+    try {
+        if (typeof getCurrentPersonaId === 'function') {
+            const url = personaAvatarUrl(getCurrentPersonaId(), context);
+            if (url) return url;
+        }
+    } catch {}
+    return '';
+}
+
 function thumbnailPath(value) {
     if (typeof value !== 'string' || value.length > 2048 || /[\u0000-\u001f\u007f\\]/.test(value)) return '';
     const raw = value.trim();
@@ -58073,6 +58140,8 @@ function archiveUserAvatar(memory, entry = null, metadata = null) {
 __m_ui_archiveAvatars_js.normalizeAvatarFile = normalizeAvatarFile;
 __m_ui_archiveAvatars_js.currentUserAvatar = currentUserAvatar;
 __m_ui_archiveAvatars_js.userAvatarUrl = userAvatarUrl;
+__m_ui_archiveAvatars_js.personaAvatarUrl = personaAvatarUrl;
+__m_ui_archiveAvatars_js.currentPersonaAvatarUrl = currentPersonaAvatarUrl;
 __m_ui_archiveAvatars_js.characterAvatarUrl = characterAvatarUrl;
 __m_ui_archiveAvatars_js.archiveUserAvatar = archiveUserAvatar;
 }
@@ -59086,7 +59155,8 @@ function letterIdentity() {
     let context = null;
     try { context = core_context.getContext(); } catch { context = null; }
     const userFile = archive_avatars.currentUserAvatar(context);
-    const userAvatar = userFile ? (archive_avatars.characterAvatarUrl(userFile, context) || archive_avatars.userAvatarUrl(userFile)) : '';
+    const userAvatar = archive_avatars.currentPersonaAvatarUrl(context)
+        || (userFile ? archive_avatars.personaAvatarUrl(userFile, context) : '');
     let charAvatar = '';
     try {
         const file = archive_snapshots.currentCharacterAvatar(context);
@@ -59489,7 +59559,7 @@ function firstBlockReason(item) {
 
 function moduleIcon(id) {
     const path = MODULE_ICON_PATH[id] || 'M6 4h9l3 3v13H6z';
-    return `<svg class="rmt-auto-card-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="${path}"/></svg>`;
+    return `<svg class="rmt-auto-card-icon" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="${path}"/></svg>`;
 }
 
 function moduleHtml() {
@@ -64013,6 +64083,7 @@ __m_ui_heartReaderState_js.enterHeartReader = enterHeartReader;
 
 function __init_ui_heartView_js() {
 // MODULE: ui/heartView.js
+const archive_avatars = __m_ui_archiveAvatars_js;
 const expanded_cg_view = __m_ui_expandedCgView_js;
 const storyParticipants = __m_core_participants_js;
 const heart_mode = __m_modes_heart_js;
@@ -64040,6 +64111,7 @@ const ui_overlay = __m_ui_overlay_js;
 const image_viewer = __m_ui_cgImageViewer_js;
 const ui_generationCompletion = __m_ui_generationCompletion_js;
 const runtimeState = __m_core_state_js.state;
+
 
 
 
@@ -64083,8 +64155,7 @@ function heartCharacterAvatarUrl(entry = runtimeState.activeArchiveSnapshot, con
 
 function heartUserAvatarUrl(context = core_context.getContext()) {
     try {
-        const raw = core_text.normalizeText(context?.user_avatar || context?.userAvatar || globalThis.user_avatar, 300);
-        return raw ? (context.getThumbnailUrl?.('avatar', raw) || '') : '';
+        return archive_avatars.currentPersonaAvatarUrl(context);
     } catch {
         return '';
     }
@@ -64182,7 +64253,7 @@ function renderAvatarDialoguePopup(state = runtimeState.activeAvatarDialogue, { 
     const actions = `${language.hasContent ? '<button type="button" class="rmt-btn" data-rmt-action="avatar-talk-again">再说一句</button>' : ''}<button type="button" class="rmt-btn rmt-cg-primary" data-rmt-action="avatar-heart-open">打开角色互动</button>`;
     const message = speech?.text || (language.hasContent ? '当前时段暂无台词。' : '基础语言尚未生成。');
     const label = session ? speech?.label || '角色互动' : 'HEART VOICE';
-    const dialogueIdentity = { characterName: state.characterName || session?.characterName || entry?.characterName || '角色', userName: state.userName || state.snapshot?.memory?.userName || entry?.memory?.userName || session?.userName || '', charAvatar: avatarSrc || '', userAvatar: '' };
+    const dialogueIdentity = { characterName: state.characterName || session?.characterName || entry?.characterName || '角色', userName: state.userName || state.snapshot?.memory?.userName || entry?.memory?.userName || session?.userName || '', charAvatar: avatarSrc || '' };
     const rows = core_dialogue.normalizeDialogueRows([{ speaker: session ? 'char' : 'narrator', text: message }], dialogueIdentity);
     const dialogueHtml = session && (rows.length > 1 || rows[0]?.speaker !== 'char')
         ? renderHeartScriptLines(rows, dialogueIdentity)
@@ -64279,11 +64350,12 @@ function selectedHeartStrip() {
 
 function renderHeartScriptLines(lines, identity = {}) {
     const charAvatar = identity.charAvatar ?? heartCharacterAvatarUrl(runtimeState.activeArchiveSnapshot);
-    const userAvatar = identity.userAvatar ?? heartUserAvatarUrl();
     const route = ui_workspaceState.workspace.route;
     const page = ['language', 'strips', 'fireflies', 'postending'].includes(route) ? route : runtimeState.activeSession?.selectedSeason;
     const sourceMemory = core_cache.generationPageSourceMemory(runtimeState.activeSession, page,
         core_cache.generationPageSourceMemory(runtimeState.activeSession, 'heart', null));
+    const storedUserAvatar = archive_avatars.personaAvatarUrl(sourceMemory?.userAvatar || runtimeState.activeArchiveSnapshot?.memory?.userAvatar, core_context.getContext());
+    const userAvatar = identity.userAvatar || storedUserAvatar || heartUserAvatarUrl();
     const story = storyParticipants.resolveStoryIdentities(sourceMemory || runtimeState.activeArchiveSnapshot?.memory || null, null, runtimeState.activeSession?.participantSnapshot?.people);
     const charName = core_text.normalizeText(identity.characterName ?? story.ownerNames[0] ?? sourceMemory?.characterName ?? runtimeState.activeArchiveSnapshot?.characterName ?? core_context.getContext().name2, 120) || '角色';
     const userName = core_text.normalizeText(identity.userName ?? sourceMemory?.userName ?? runtimeState.activeArchiveSnapshot?.memory?.userName ?? core_context.getContext().name1, 120) || '你';
@@ -75165,10 +75237,13 @@ ${root} .rmt-portal-ready-dot{color:var(--rmt-theme-accent-ink)!important;backgr
 ${root} :is(.rmt-relations-mode,.rmt-heart){padding:20px!important;max-width:1100px;margin-inline:auto;min-width:0}
 ${root} :is(.rmt-relations-head,.rmt-profile-discoveries,.rmt-profile-discovery,.rmt-profile-worldline-note){padding:20px!important}
 ${root} .rmt-profile-discovery-empty{font-size:13px!important;line-height:1.7!important}
-${root} .rmt-heart-line{background:transparent!important;box-shadow:none!important;gap:12px;margin:18px 0}
+${root} .rmt-heart-line{display:grid!important;grid-template-columns:44px minmax(0,1fr)!important;align-items:start;background:transparent!important;box-shadow:none!important;gap:12px;margin:18px 0}
 ${root} .rmt-heart-line>div{background:var(--rmt-theme-surface-solid)!important;border:1px solid var(--rmt-theme-border);border-radius:6px 20px 20px 20px;padding:14px 18px!important;min-width:0}
-${root} .rmt-heart-line.user{flex-direction:row-reverse;justify-content:flex-start}
-${root} .rmt-heart-line.user>div{background:var(--rmt-theme-soft)!important;border-radius:20px 6px 20px 20px;border-color:var(--rmt-theme-accent-alt)}
+${root} .rmt-heart-line.user{display:grid!important;grid-template-columns:minmax(0,1fr) 44px!important}
+${root} .rmt-heart-line.user .rmt-heart-line-avatar{grid-column:2;grid-row:1}
+${root} .rmt-heart-line.user>div{grid-column:1;grid-row:1;background:var(--rmt-theme-soft)!important;border-radius:20px 6px 20px 20px;border-color:var(--rmt-theme-accent-alt)}
+${root} .rmt-heart-line-avatar{width:44px!important;height:44px!important;min-width:44px;border-radius:50%;overflow:hidden;display:grid!important}
+${root} .rmt-heart-line-avatar img{width:100%!important;height:100%!important;max-width:none!important;object-fit:cover!important;display:block}
 ${root} .rmt-heart-line p{margin:6px 0!important}
 ${root} .rmt-auto-rule{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:6px 12px;padding:12px 0;border-bottom:1px solid var(--rmt-theme-border)}
 ${root} .rmt-auto-rule>label{display:flex;align-items:center;gap:8px;min-width:0;min-height:44px;cursor:pointer}
@@ -76338,9 +76413,8 @@ function arrangeSettingsHome(body) {
         for (const card of [...content.querySelectorAll(':scope > [data-rmt-settings-section]')]) {
             if (!['api','auto-memory','theme','image','reading','voice'].includes(card.dataset.rmtSettingsSection)) sectionBody.appendChild(card);
         }
-        const apiCard = content.querySelector(':scope > [data-rmt-settings-section="api"]');
         const autoCard = content.querySelector(':scope > [data-rmt-settings-section="auto-memory"]');
-        if (apiCard && autoCard) apiCard.after(autoCard);
+        if (autoCard) content.prepend(autoCard);
         if (sectionBody.children.length) content.appendChild(more);
         const preferences = [...content.querySelectorAll(':scope > .rmt-workspace-preferences')];
         for (const duplicate of preferences.slice(1)) duplicate.remove();

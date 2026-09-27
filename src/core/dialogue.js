@@ -129,8 +129,9 @@ export function normalizeDialogueRows(raw, { characterName = '', userName = '', 
         if (conflictingNames) {
             if (strict) throw core_text.safeUserError('对话中的姓名标记互相冲突，原内容保留；请只重试这篇剧本。', 'RMT_HEART_INCOMPLETE');
             speaker = 'narrator';
-        } else if (nameOwner) speaker = nameOwner;
-        else if (npcName && speaker !== 'npc') speaker = 'narrator';
+        }         else if (nameOwner) speaker = nameOwner;
+        // 已经标明是 user 的台词保留用户气泡。对不上的姓名只拦角色头像，不能把用户行改成旁白。
+        else if (npcName && speaker !== 'npc' && speaker !== 'user') speaker = 'narrator';
         if (speaker === 'npc' && !npcName) speaker = 'narrator';
         const identifiedCharacter = speaker === 'char' ? (nameOwner === 'char' ? npcName : directOwner === 'char' ? name : '') : '';
         if (speaker !== 'npc') npcName = '';

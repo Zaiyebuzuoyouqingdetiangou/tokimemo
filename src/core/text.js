@@ -220,6 +220,33 @@ export function safeErrorDiagnostic(error) {
     return diagnostic;
 }
 
+function recoveryFailedSummary(error, max) {
+    const status = safeErrorStatus(error);
+    const rawCode = normalizeText(error?.code, 80);
+    const known = SAFE_ERROR_CODE_MESSAGES[rawCode];
+    const coded = known && rawCode !== 'RMT_RECOVERY_FAILED' ? known : '';
+    const trusted = error?.safeToDisplay === true
+        ? sanitizedTrustedErrorMessage(error?.safeUserMessage || error?.message, 180)
+        : '';
+    const plain = trusted || sanitizedTrustedErrorMessage(error?.message, 180);
+    const local = plain
+        && plain !== SAFE_ERROR_CODE_MESSAGES.RMT_RECOVERY_FAILED
+        && plain.length <= 160
+        && !/https?:|\{|\}|\[|<|bearer|\bsk-/i.test(plain)
+        ? plain
+        : '';
+    const lead = coded || local;
+    const tail = [];
+    if (status) tail.push(`HTTP ${status}`);
+    if (/^RMT_[A-Z0-9_]{1,70}$/.test(rawCode) && rawCode !== 'RMT_RECOVERY_FAILED' && !coded) tail.push(rawCode);
+    const sentence = String(lead || '').replace(/。+$/g, '');
+    const extra = tail.length ? tail.join(' · ') : '';
+    if (sentence && extra) return `${sentence}（${extra}）。旧内容保留，可重试。`;
+    if (sentence) return `${sentence}。旧内容保留，可重试。`;
+    if (extra) return `旧内容保留，可重试。（${extra}）`;
+    return SAFE_ERROR_CODE_MESSAGES.RMT_RECOVERY_FAILED;
+}
+
 export function safeErrorSummary(error, max = 520) {
     if (core_backupDiagnostics.backupFailureDiagnostic(error)) {
         return normalizeText(core_backupDiagnostics.backupFailureSummary(error).message, max);
@@ -270,7 +297,7 @@ export function safeErrorSummary(error, max = 520) {
     const blocked = /cloudflare|sorry,? you have been blocked|attention required|unable to access/i.test(raw);
     const unauthorized = /unauthorized|authentication|invalid api key|\b401\b/i.test(raw) || status === 401;
     const forbidden = /forbidden|\b403\b/i.test(raw) || status === 403;
-    if (code && SAFE_ERROR_CODE_MESSAGES[code] && !['RMT_INPUT_BUDGET', 'RMT_RECOVERY_SNAPSHOT_TOO_LARGE', 'RMT_RECOVERY_OVERSIZED', 'RMT_CAPACITY_LOCKED'].includes(code)) {
+    if (code && code !== 'RMT_RECOVERY_FAILED' && SAFE_ERROR_CODE_MESSAGES[code] && !['RMT_INPUT_BUDGET', 'RMT_RECOVERY_SNAPSHOT_TOO_LARGE', 'RMT_RECOVERY_OVERSIZED', 'RMT_CAPACITY_LOCKED'].includes(code)) {
         return normalizeText(SAFE_ERROR_CODE_MESSAGES[code], max);
     }
     if (['RMT_INPUT_BUDGET', 'RMT_RECOVERY_SNAPSHOT_TOO_LARGE', 'RMT_RECOVERY_OVERSIZED', 'RMT_CAPACITY_LOCKED'].includes(code)) {
@@ -306,7 +333,7 @@ export function safeErrorSummary(error, max = 520) {
     if (/failed to fetch|networkerror|network request failed|load failed|econn(?:reset|refused)|enotfound|fetch failed/i.test(raw)) {
         return '网络连接失败；请检查地址、网络与服务状态后重试。';
     }
-    return SAFE_ERROR_CODE_MESSAGES.RMT_RECOVERY_FAILED;
+    return normalizeText(recoveryFailedSummary(error, max), max);
 }
 
 export function cleanArray(value, maxItems = 64, maxChars = 12000) {
