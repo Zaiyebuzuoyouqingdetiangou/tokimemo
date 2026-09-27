@@ -105,7 +105,6 @@ function moduleLabel(moduleId) {
 
 function finishHostJob(job, result) {
     if (!job?.owned || !job.id) return;
-    const moduleId = result?.snapshot?.modulePlan?.moduleId || '';
     const action = result?.action || 'failed';
     const detail = action === 'noop'
         ? '这一楼没有新的档案，所以没有重抽。'
@@ -118,7 +117,6 @@ function finishHostJob(job, result) {
                     : action === 'drawn'
                         ? '抽中了，这一轮已经写上。'
                         : '这一楼先记着。';
-    if (moduleId) ui_taskCenter.openAutoMemoryJob({ label: moduleLabel(moduleId), detail });
     ui_taskCenter.settleAutoMemoryJob(job.id, action === 'failed' ? 'failed' : 'done', detail);
 }
 

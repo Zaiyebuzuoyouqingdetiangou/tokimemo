@@ -2,6 +2,7 @@
 import * as archive_external from '../archive/externalMemory.js';
 import * as archive_repository from '../archive/repository.js';
 import * as auto_memory_migrate from '../autoMemory/migrateLegacy.js';
+import * as auto_memory_floor from '../autoMemory/floorPace.js';
 import * as auto_memory_plan from '../autoMemory/planStore.js';
 import * as wizard_plan from '../autoMemory/wizardPlan.js';
 import * as core_autoUpdates from '../core/autoUpdates.js';
@@ -411,7 +412,10 @@ async function saveAndStart(context, { enableAuto = false } = {}) {
     try {
         const before = auto_memory_plan.readAutoMemoryMetadata(metadata);
         expected = before ? before.plan.revision : 0;
-        snapshot = wizard_plan.wizardCompletionSnapshot(metadata, draft, Date.now());
+        const latest = core_settings.getPluginSettings().autoMemoryLatestFloor === true;
+        const floor = latest ? auto_memory_floor.assistantFloorCount(context.chat)
+            : (Array.isArray(context.chat) ? context.chat.length : 0);
+        snapshot = wizard_plan.wizardCompletionSnapshot(metadata, draft, Date.now(), floor);
     } catch (error) {
         status(error?.safeToDisplay ? error.safeUserMessage : '这份自动留忆记录没有改写。');
         return;

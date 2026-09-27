@@ -1,15 +1,15 @@
 {
   "display_name": "心迹回廊",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.99.15-r84.60-no-extra-retry",
+  "js": "index.js?heartbeat=0.99.16-r84.61-task-bridge",
   "author": "Toto",
-  "version": "0.99.15",
+  "version": "0.99.16",
   "auto_update": true,
   "minimum_client_version": "1.13.0",
   "hooks": {
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r84.59：镜译移入设置、实时聊天置于互动末尾、独立手帐整页收录与挑选制作。",
+  "description": "r84.61：补回自动留忆任务中心接口，间隔 1 从当前楼开始抽。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }

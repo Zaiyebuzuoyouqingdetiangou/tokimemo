@@ -22,9 +22,66 @@ let painting = false;
 let pumping = false;
 const queue = [];
 const autoRetryUsed = new Map();
+let floorFailure = null;
 const picks = new Set();
 let pickScope = '';
 const QUEUE_STATUS = { queued: '排队', running: '进行中', done: '完成', failed: '失败', cancelled: '已取消' };
+
+export function noteAutoMemoryFloorFailure(info = {}) {
+    const next = {
+        label: info.label || '自动留忆',
+        detail: info.detail || '可以补全没写完的部分，或再试一次。',
+        at: floorFailure?.at || Date.now(),
+    };
+    if (floorFailure && floorFailure.label === next.label && floorFailure.detail === next.detail) return;
+    floorFailure = next;
+    refreshTaskCenterView();
+}
+
+export function clearAutoMemoryFloorFailure() {
+    if (!floorFailure) return;
+    floorFailure = null;
+    refreshTaskCenterView();
+}
+
+export function openAutoMemoryJob({ label = '自动留忆', detail = '正在写这一轮回忆' } = {}) {
+    const scope = currentScope();
+    if (!scope) return { id: '', owned: false };
+    const running = queue.find(item => item.kind === 'auto-memory' && item.scope === scope && item.status === 'running');
+    if (running) {
+        running.label = label || running.label;
+        running.detail = detail;
+        refreshTaskCenterView();
+        return { id: running.id, owned: false };
+    }
+    const item = {
+        id: `auto-memory-${Date.now().toString(36)}-${queue.length}`,
+        kind: 'auto-memory',
+        label,
+        detail,
+        scope,
+        status: 'running',
+        attached: false,
+        at: Date.now(),
+    };
+    queue.push(item);
+    trimQueue();
+    refreshTaskCenterView();
+    return { id: item.id, owned: true };
+}
+
+export function settleAutoMemoryJob(id, status, detail = '') {
+    const item = queue.find(row => row.id === id && row.kind === 'auto-memory');
+    if (!item || item.status !== 'running') return;
+    item.status = status === 'failed' ? 'failed' : status === 'cancelled' ? 'cancelled' : 'done';
+    if (detail) item.detail = detail;
+    trimQueue();
+    refreshTaskCenterView();
+}
+
+function floorRetryActions() {
+    return '<button type="button" class="rmt-btn" data-rmt-action="task-floor-complete">补全没写完的部分</button><button type="button" class="rmt-btn" data-rmt-action="task-floor-retry">重试</button>';
+}
 
 function currentScope() {
     try { return core_context.chatScopeKey(); }
@@ -58,7 +115,7 @@ export function setQueuePick(route, on) {
 }
 
 function queuedForScope(scope = currentScope()) {
-    return queue.filter(item => item.scope === scope && item.status === 'queued');
+    return queue.filter(item => item.scope === scope && item.status === 'queued' && item.kind !== 'auto-memory');
 }
 
 function dropForeignQueue() {
@@ -470,7 +527,17 @@ function collectTaskCards() {
     }
     const scope = currentScope();
     const mine = queue.filter(item => item.scope === scope);
-    mine.filter(item => item.status === 'queued').forEach((item, index) => {
+    for (const item of mine) {
+        if (item.kind !== 'auto-memory' || (item.status !== 'running' && item.status !== 'queued')) continue;
+        cards.push({
+            state: item.status === 'queued' ? 'queued' : 'running',
+            label: item.label,
+            detail: item.detail || '正在写这一轮回忆',
+            at: item.at || Date.now(),
+            actions: '',
+        });
+    }
+    mine.filter(item => item.status === 'queued' && item.kind !== 'auto-memory').forEach((item, index) => {
         if (cards.some(card => sameJob(card, item) && card.state === 'running')) return;
         const existing = cards.find(card => sameJob(card, item));
         const next = {
@@ -503,16 +570,27 @@ function collectTaskCards() {
     }
     for (const item of mine) {
         if (item.status !== 'done' && item.status !== 'failed' && item.status !== 'cancelled') continue;
-        if (cards.some(card => sameJob(card, item))) continue;
+        if (item.kind !== 'auto-memory' && cards.some(card => sameJob(card, item))) continue;
         cards.push({
             state: item.status === 'failed' ? 'failed' : item.status === 'cancelled' ? 'cancelled' : 'done',
             label: item.label,
             mode: item.mode || '',
             pageId: item.pageId || '',
             draftId: item.draftId || '',
-            detail: item.kind === 'recovery' ? '自动重试未完成部分' : '当前聊天 · 串行队列',
-            at: 0,
-            actions: item.status === 'done' || item.status === 'failed' ? openAction({ id: '', mode: item.mode, pageId: item.pageId, label: item.label, outcome: item.status }) : '',
+            detail: item.kind === 'auto-memory' ? (item.detail || '这一轮回忆') : item.kind === 'recovery' ? '自动重试未完成部分' : '当前聊天 · 串行队列',
+            at: item.at || 0,
+            actions: item.kind === 'auto-memory'
+                ? (item.status === 'failed' ? floorRetryActions() : '')
+                : item.status === 'done' || item.status === 'failed' ? openAction({ id: '', mode: item.mode, pageId: item.pageId, label: item.label, outcome: item.status }) : '',
+        });
+    }
+    if (floorFailure) {
+        cards.push({
+            state: 'failed',
+            label: floorFailure.label,
+            detail: floorFailure.detail,
+            at: floorFailure.at,
+            actions: floorRetryActions(),
         });
     }
     return cards.sort((left, right) => (CARD_RANK[left.state] ?? 9) - (CARD_RANK[right.state] ?? 9) || right.at - left.at);
@@ -534,6 +612,11 @@ function paintLiveStrip() {
     }
     for (const row of running) {
         chips.push(`<button type="button" class="rmt-live-chip rmt-live-run" data-rmt-action="tasks"><i></i><b>${esc(row.label)}</b><em>${esc(row.phaseLabel || '进行中')}</em></button>`);
+    }
+    for (const item of queue) {
+        if (item.kind !== 'auto-memory' || item.scope !== currentScope() || item.status !== 'running') continue;
+        if (running.some(row => row.label === item.label)) continue;
+        chips.push(`<button type="button" class="rmt-live-chip rmt-live-run" data-rmt-action="tasks"><i></i><b>${esc(item.label)}</b><em>抽签</em></button>`);
     }
     const failedLabels = failed.map(row => row.label);
     for (const row of failed.slice(0, 4)) {
@@ -715,6 +798,25 @@ export function handleTaskCenterAction(action, actionEl) {
         return;
     }
     if (action === 'task-center-close') return hideTaskCenter();
+    if (action === 'task-floor-complete' || action === 'task-floor-retry') {
+        clearAutoMemoryFloorFailure();
+        const run = action === 'task-floor-complete' ? 'completeFloorRound' : 'retryFloorRound';
+        const waiting = action === 'task-floor-complete' ? '等这楼正文写完，再补这一页。' : '等这楼正文写完，再重写这一页。';
+        void import('../autoMemory/scheduler.js').then(mod => {
+            const fn = mod[run];
+            if (typeof fn !== 'function') throw new Error(`missing ${run}`);
+            return fn();
+        }).then(result => {
+            if (result?.action === 'wait' || result?.action === 'busy') globalThis.toastr?.info?.(waiting, '心迹回廊');
+            else if (result?.action === 'idle') globalThis.toastr?.info?.('这一轮已经没有可以补的了。', '心迹回廊');
+            else if (result?.action === 'due-retry') globalThis.toastr?.info?.('这一楼到点了，正在重新抽签。', '心迹回廊');
+            else if (result?.action === 'failed') globalThis.toastr?.error?.(core_text.safeErrorSummary(result.error) || '这一次还是没写完。', '心迹回廊');
+        }).catch(error => {
+            console.warn('[HeartbeatMemories] floor recovery skipped', core_text.safeErrorDiagnostic(error));
+            globalThis.toastr?.info?.('这次没能重试，请再点一次。', '心迹回廊');
+        });
+        return;
+    }
     if (action === 'task-cancel') {
         const id = actionEl?.dataset?.rmtTaskId || '';
         const row = core_requestCoordinator.listChatTaskSnapshot().find(item => item.id === id && item.running);
