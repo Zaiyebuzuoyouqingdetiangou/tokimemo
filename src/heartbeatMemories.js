@@ -21,6 +21,8 @@ import * as ui_floatingArchive from './ui/floatingArchive.js';
 import * as ui_phoneView from './ui/phoneView.js';
 import * as ui_settingsPanel from './ui/settingsPanel.js';
 import * as ui_styles from './ui/styles.js';
+import * as auto_memory_scheduler from './autoMemory/scheduler.js';
+import * as auto_memory_shell from './ui/autoMemoryShell.js';
 import * as mirror_reader from './ui/mirrorTtsReader.js';
 import * as mirror_call from './ui/mirrorCallView.js';
 
@@ -49,6 +51,8 @@ export function initMemoryTheater() {
         ui_archivePortal.bindGenerationNavigationGuards();
         ui_archivePortal.scheduleMounts(settingsMounted, menuMounted);
         ui_floatingArchive.initFloatingArchive();
+        auto_memory_scheduler.startAutoMemoryScheduler();
+        auto_memory_shell.startAutoMemoryShell();
         // This runs only after the user explicitly loaded the full runtime. It lazily migrates the
         // current chat's existing archive into the independent local backup without touching startup.
         void core_cache.ensureCurrentArchiveBackup().then(reconciled => {
@@ -68,6 +72,8 @@ export function destroyMemoryTheater() {
     mirror_reader.disposeMirrorReader();
     mirror_call.disposeMirrorCall();
     ui_floatingArchive.destroyFloatingArchive();
+    auto_memory_scheduler.stopAutoMemoryScheduler();
+    auto_memory_shell.stopAutoMemoryShell();
     core_diagnosticReport.uninstallRuntimeDiagnostic();
     try { globalThis.__heartbeatMemoriesRemoveDiagnostics?.(); } catch {}
     ui_cgImageViewer.closeCgImageViewer({ restoreFocus: false });

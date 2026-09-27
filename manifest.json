@@ -1,15 +1,15 @@
 {
   "display_name": "心迹回廊",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.99.17-r84.62-chatu8",
+  "js": "index.js?heartbeat=0.99.18-r84.63-automemory",
   "author": "Toto",
-  "version": "0.99.17",
+  "version": "0.99.18",
   "auto_update": true,
   "minimum_client_version": "1.13.0",
   "hooks": {
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r84.62：CG 生图可接智绘姬，失败改道默认关闭。",
+  "description": "r84.63：自动留忆接回运行时；取消智绘姬不再停掉它的其他出图。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }

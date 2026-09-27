@@ -21,7 +21,8 @@ export function formatFloorRemain(left) {
 }
 
 function isAssistantFloor(message) {
-    return !!message && message.is_user !== true;
+    // 系统楼不是角色楼。到点计数和「正文写完没有」用同一条规则，避免系统提示把间隔提前。
+    return !!message && message.is_user !== true && message.is_system !== true;
 }
 
 export function assistantFloorCount(chat) {
@@ -51,7 +52,7 @@ export function chatRangeForAssistantSpan(chat, startCount, endCount) {
 
 // 间隔窗口里的角色楼都保留完整正文。摘要没写到的楼在建档时另附原文，这里不截字。
 export function latestAssistantWindow(messages, interval) {
-    const assistant = (Array.isArray(messages) ? messages : []).filter(item => item && item.role !== 'user' && String(item.text || '').trim());
+    const assistant = (Array.isArray(messages) ? messages : []).filter(item => item && item.role === 'char' && String(item.text || '').trim());
     const count = Math.max(1, Math.floor(Number(interval)) || 1);
     return assistant.slice(-count).map(item => ({ ...item }));
 }

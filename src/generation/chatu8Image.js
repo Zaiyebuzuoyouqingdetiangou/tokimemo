@@ -13,12 +13,6 @@ const EXTENSION_KEY = 'st-chatu8';
 const REQUEST_EVENT = 'generate-image-request';
 const RESPONSE_EVENT = 'generate-image-response';
 const STILL_MODES = new Set(['sd', 'novelai', 'comfyui', 'banana', 'runninghub']);
-const CANCEL_EVENTS = Object.freeze({
-    novelai: ['st_chatu8_cancel_novelai_task'],
-    comfyui: ['st_chatu8_cancel_comfyui_task', 'st_chatu8_cancel_task'],
-    banana: ['st_chatu8_cancel_banana_task'],
-    runninghub: ['st_chatu8_cancel_runninghub_task'],
-});
 const pendingGenerations = new Map();
 const ownErrors = new WeakSet();
 
@@ -29,8 +23,8 @@ const MESSAGES = Object.freeze({
     CH8_INVALID_ARGS: '智绘姬未接受这次画面提示，请检查画面描述后重试。',
     CH8_BACKEND_ERROR: '智绘姬出图失败。旧图已保留；请到智绘姬里查看这次任务。',
     CH8_SAVE_FAILED: '图片已生成，但没有取得可保存的本地路径。旧图已保留，避免重复出图。',
-    CH8_TIMEOUT: '等待智绘姬超过 5 分钟，已请求取消。旧图已保留。',
-    CH8_ABORTED: '已取消接收本次图片，旧图已保留。',
+    CH8_TIMEOUT: '等待智绘姬超过 5 分钟，已停止等待。智绘姬里这次出图可能还在继续，不会连带取消它的其他任务。旧图已保留。',
+    CH8_ABORTED: '已停止等待本次图片。没有取消智绘姬里的其他出图，旧图已保留。',
     CH8_BUSY: '已有两张图片提交给智绘姬，请等其中一张结束后再绘制。',
     CH8_TARGET_BUSY: '这张图片的绘制请求还未结束，请先等待，避免重复出图。',
 });
@@ -81,12 +75,6 @@ function requestId() {
 
 function unlisten(source, event, handler) {
     try { source.removeListener?.(event, handler); } catch {}
-}
-
-function cancelBackend(source, backend) {
-    for (const event of CANCEL_EVENTS[backend] || []) {
-        try { source.emit(event, {}); } catch {}
-    }
 }
 
 function flatPrompt(prompt, promptMetadata) {
@@ -196,7 +184,6 @@ export async function generateChatu8Image(prompt, { signal = null, promptMetadat
                 unlisten(source, RESPONSE_EVENT, onResponse);
                 signal?.removeEventListener('abort', onAbort);
                 clearTimeout(timer);
-                if (code === 'CH8_ABORTED' || code === 'CH8_TIMEOUT') cancelBackend(source, state.backend);
                 reject(chatu8ImageError(code));
             };
             const onResponse = data => {

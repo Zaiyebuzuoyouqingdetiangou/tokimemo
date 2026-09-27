@@ -173,6 +173,8 @@ export const NIGHT_THEME_PALETTE = Object.freeze({
     accent: '#d9a8c1', accentAlt: '#90c9c5', border: '#455269',
 });
 
+export const HEART_ENVELOPE_SKINS = Object.freeze(['pink', 'wax', 'night', 'sakura', 'airmail', 'wash']);
+
 export const DEFAULT_THEME_PALETTE = Object.freeze({
     background: '#f5f4fb',
     surface: '#ffffff',
@@ -208,6 +210,9 @@ export const DEFAULT_SETTINGS = Object.freeze({
     creativeSupplement: '',
     imageGenerationProvider: 'baibai-image',
     imageGenerationFallback: false,
+    autoMemoryLatestFloor: false,
+    autoMemoryIntervalFloors: 5,
+    heartEnvelopeSkin: 'pink',
     cgPromptFormat: 'nai5-natural',
     // Optional r32-style mobile safe-area presentation. Off keeps the long-standing edge-to-edge fullscreen UI.
     ttDisplayMode: false,

@@ -17,6 +17,7 @@ import * as modes_heart from '../modes/heart.js';
 import { state as runtimeState } from '../core/state.js';
 import * as ui_overlay from './overlay.js';
 import * as ui_workspaceState from './workspaceState.js';
+import * as auto_memory_scheduler from '../autoMemory/scheduler.js';
 
 let painting = false;
 let pumping = false;
@@ -800,13 +801,9 @@ export function handleTaskCenterAction(action, actionEl) {
     if (action === 'task-center-close') return hideTaskCenter();
     if (action === 'task-floor-complete' || action === 'task-floor-retry') {
         clearAutoMemoryFloorFailure();
-        const run = action === 'task-floor-complete' ? 'completeFloorRound' : 'retryFloorRound';
+        const run = action === 'task-floor-complete' ? auto_memory_scheduler.completeFloorRound : auto_memory_scheduler.retryFloorRound;
         const waiting = action === 'task-floor-complete' ? '等这楼正文写完，再补这一页。' : '等这楼正文写完，再重写这一页。';
-        void import('../autoMemory/scheduler.js').then(mod => {
-            const fn = mod[run];
-            if (typeof fn !== 'function') throw new Error(`missing ${run}`);
-            return fn();
-        }).then(result => {
+        void Promise.resolve().then(() => run()).then(result => {
             if (result?.action === 'wait' || result?.action === 'busy') globalThis.toastr?.info?.(waiting, '心迹回廊');
             else if (result?.action === 'idle') globalThis.toastr?.info?.('这一轮已经没有可以补的了。', '心迹回廊');
             else if (result?.action === 'due-retry') globalThis.toastr?.info?.('这一楼到点了，正在重新抽签。', '心迹回廊');

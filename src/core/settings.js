@@ -16,6 +16,12 @@ import * as core_autoUpdatePolicy from './autoUpdatePolicy.js';
 import * as creative_supplement from './creativeSupplement.js';
 import * as chat_read_range from './chatReadRange.js';
 
+export function normalizeAutoMemoryInterval(value) {
+    const count = Math.floor(Number(value));
+    if (!Number.isSafeInteger(count) || count < 1 || count > 1000) return 5;
+    return count;
+}
+
 export function normalizeAutoRetryCount(value) {
     const count = Math.floor(Number(value));
     if (!Number.isFinite(count)) return 1;
@@ -64,6 +70,9 @@ export function getPluginSettings(context = core_context.getContext()) {
         imageGenerationManualEnabled: false,
         imageGenerationProvider: settings.imageGenerationProvider === 'chatu8-image' ? 'chatu8-image' : 'baibai-image',
         imageGenerationFallback: settings.imageGenerationFallback === true,
+        autoMemoryLatestFloor: settings.autoMemoryLatestFloor === true,
+        autoMemoryIntervalFloors: normalizeAutoMemoryInterval(settings.autoMemoryIntervalFloors),
+        heartEnvelopeSkin: core_constants.HEART_ENVELOPE_SKINS.includes(settings.heartEnvelopeSkin) ? settings.heartEnvelopeSkin : 'pink',
         cgPromptFormat: cg_format.normalizeCgPromptFormat(settings.cgPromptFormat, 'nai5-natural'),
         autoRetryEnabled: settings.autoRetryEnabled === true,
         autoRetryCount: normalizeAutoRetryCount(settings.autoRetryCount),

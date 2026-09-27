@@ -1,5 +1,5 @@
-const VERSION = '0.99.17';
-const BUILD = '0.99.17-r84.62-chatu8';
+const VERSION = '0.99.18';
+const BUILD = '0.99.18-r84.63-automemory';
 
 const SETTINGS_ID = 'heartbeat_memories_settings';
 const MENU_ID = 'heartbeat_memories_menu_item';

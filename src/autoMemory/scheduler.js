@@ -237,7 +237,7 @@ function gapMessages(context, note) {
     if (start < 1 || end < start) return [];
     const rows = chat_read_range.selectChatReadRange(context, { mode: 'range', start, end, includeHidden: false }).map(row => ({
         index: row.index,
-        role: row.message?.is_user === true ? 'user' : 'char',
+        role: row.message?.is_system === true ? 'system' : row.message?.is_user === true ? 'user' : 'char',
         name: core_text.normalizeText(row.message?.name, 120),
         text: String(row.message?.mes ?? '').replace(/\r\n?/g, '\n').replace(/\u0000/g, '').trim(),
     })).filter(item => item.text);

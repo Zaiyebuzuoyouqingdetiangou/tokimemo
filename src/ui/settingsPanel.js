@@ -26,6 +26,15 @@ import * as ui_archivePortal from './archivePortal.js';
 import * as ui_overlay from './overlay.js';
 import * as ui_scenePicker from './scenePicker.js';
 import * as ui_styles from './styles.js';
+import * as auto_memory_floor from '../autoMemory/floorPace.js';
+import * as auto_memory_plan from '../autoMemory/planStore.js';
+import * as auto_memory_redo from '../autoMemory/redo.js';
+import * as auto_memory_registry from '../autoMemory/moduleRegistry.js';
+import * as auto_memory_scheduler from '../autoMemory/scheduler.js';
+import * as wizard_plan from '../autoMemory/wizardPlan.js';
+import * as auto_memory_wizard from './autoMemoryWizard.js';
+import * as ui_countdown from './autoMemoryCountdown.js';
+import * as ui_heartEnvelope from './heartEnvelope.js';
 import * as mirrorReader from './mirrorTtsReader.js';
 
 let imageProviderEventCleanup = null;
@@ -376,6 +385,78 @@ function refreshThemeUi() {
     if (opacity) opacity.textContent = Math.round(settings.themeAlpha * 100) + '%';
 }
 
+async function saveAutoMemoryPace(panel) {
+    const note = panel.querySelector('[data-rmt-auto-memory-gate]');
+    let context;
+    try { context = core_context.currentCharacterGuard(); }
+    catch { return; }
+    const settings = core_settings.getPluginSettings();
+    const latest = settings.autoMemoryLatestFloor === true;
+    const floor = latest ? auto_memory_floor.assistantFloorCount(context.chat) : (Array.isArray(context.chat) ? context.chat.length : 0);
+    let result;
+    try { result = wizard_plan.pacePatch(context.chatMetadata, { intervalFloors: settings.autoMemoryIntervalFloors, floor }, Date.now()); }
+    catch (error) { if (note) note.textContent = error?.safeToDisplay ? error.safeUserMessage : '间隔没有改。'; return; }
+    if (!result.changed) {
+        if (result.message && note) note.textContent = result.message;
+        ui_countdown.refreshAutoMemoryCountdown();
+        auto_memory_scheduler.nudgeAutoMemoryScheduler();
+        return;
+    }
+    try {
+        const before = auto_memory_plan.readAutoMemoryMetadata(context.chatMetadata);
+        auto_memory_plan.commitAutoMemoryMetadata(context.chatMetadata, result.snapshot, before.plan.revision);
+        await context.saveMetadataDebounced?.();
+    } catch (error) {
+        if (note) note.textContent = error?.safeToDisplay ? error.safeUserMessage : '间隔没有写进当前聊天。';
+        return;
+    }
+    ui_countdown.refreshAutoMemoryCountdown();
+    auto_memory_scheduler.nudgeAutoMemoryScheduler();
+    if (note && result.snapshot?.plan?.enabled) {
+        note.textContent = result.snapshot.plan.intervalFloors === 1
+            ? '已改成每一楼抽取。当前这楼到点了会马上整理。'
+            : `已改成每 ${result.snapshot.plan.intervalFloors} 楼抽一次，从现在重新计。`;
+    }
+}
+
+async function runCurrentMemoryRedo(panel, mode, moduleId) {
+    const status = panel.querySelector('[data-rmt-auto-memory-redo-status]');
+    if (status) status.textContent = '正在重写这一份回忆…';
+    try {
+        const result = await auto_memory_scheduler.regenerateCurrentMemory({ mode, moduleId });
+        if (!status) return;
+        if (result?.action === 'idle') status.textContent = '还没有可以重写的这一份。先等抽签写过一次。';
+        else if (result?.action === 'busy') status.textContent = '这一份正在写，等它停下来再点。';
+        else if (result?.action === 'failed') status.textContent = '这一次没写完。可以再点一次。';
+        else status.textContent = mode === 'redraw' ? '已按新抽到的模块再写。' : mode === 'pick' ? '已按选中的模块再写。' : '已按原来抽中的模块再写。';
+    } catch (error) {
+        if (status) status.textContent = core_text.safeErrorSummary(error);
+    }
+}
+
+async function closeAutoMemoryPlan(panel) {
+    const note = panel.querySelector('[data-rmt-auto-memory-gate]');
+    let context;
+    try { context = core_context.currentCharacterGuard(); }
+    catch (error) { if (note) note.textContent = core_text.safeErrorSummary(error); return; }
+    const metadata = context.chatMetadata;
+    let result;
+    try { result = wizard_plan.disableAutoMemoryPlan(metadata, Date.now()); }
+    catch (error) { if (note) note.textContent = error?.safeToDisplay ? error.safeUserMessage : '这份记录没有改写。'; return; }
+    if (!result.changed) { refreshGenerationSettingsUi(); return; }
+    try {
+        const before = auto_memory_plan.readAutoMemoryMetadata(metadata);
+        auto_memory_plan.commitAutoMemoryMetadata(metadata, result.snapshot, before.plan.revision);
+        await context.saveMetadataDebounced?.();
+    } catch (error) {
+        if (note) note.textContent = error?.safeToDisplay ? error.safeUserMessage : '没有关闭。原来的开关也没有被改写。';
+        return;
+    }
+    try { core_autoUpdates.notifyAutoUpdateSettingsChanged(); } catch {}
+    refreshGenerationSettingsUi();
+    if (note) note.textContent = '自动留忆已关闭。你可以继续手动生成，也可以再打开回忆向导。';
+}
+
 export function refreshGenerationSettingsUi() {
     const panel = document.getElementById(core_constants.SETTINGS_ID);
     if (!panel) return;
@@ -503,6 +584,20 @@ export function refreshGenerationSettingsUi() {
             : connectionMode === 'manual' ? '手动配置未完成'
             : profileConfigured ? '需凭证绑定能力，可改用手动配置' : '一键连接未配置'}`;
     }
+    const intervalInput = panel.querySelector('[data-rmt-auto-memory-interval]');
+    let pacePlan = null;
+    try { pacePlan = auto_memory_plan.readAutoMemoryMetadata(core_context.currentCharacterGuard().chatMetadata)?.plan || null; } catch { pacePlan = null; }
+    if (intervalInput && document.activeElement !== intervalInput) {
+        intervalInput.value = String(pacePlan?.intervalFloors || settings.autoMemoryIntervalFloors);
+    }
+    const latestInput = panel.querySelector('[data-rmt-auto-memory-latest]');
+    if (latestInput) latestInput.checked = settings.autoMemoryLatestFloor === true;
+    ui_heartEnvelope.paintEnvelopePicker(panel, settings.heartEnvelopeSkin);
+    ui_countdown.refreshAutoMemoryCountdown();
+    const restore = panel.querySelector('[data-rmt-auto-memory-restore]');
+    if (restore) restore.hidden = pacePlan?.enabled !== true;
+    const gateNote = panel.querySelector('[data-rmt-auto-memory-gate]');
+    if (gateNote) gateNote.textContent = pacePlan?.enabled === true ? '这一段聊天的自动留忆已打开。到了间隔会抽一份回忆。' : '';
     void refreshModelOptions();
     void refreshManualModelOptions();
 }
@@ -722,6 +817,27 @@ export function mountSettings({ homeTarget = null } = {}) {
           <button type="button" class="menu_button rmt-settings-wide" data-rmt-theme-reset>恢复默认配色</button>
           </div>
         </details>
+        <details class="rmt-settings-card" data-rmt-settings-section="auto-memory">
+          <summary class="rmt-settings-card-head"><span>↻</span><div><b>自动留忆</b><small>和这个角色的回忆 · 向导与间隔</small></div></summary>
+          <div class="rmt-settings-section-body">
+          <p>只在已有档案的当前聊天里运行。打开后从当前楼数起计。</p>
+          <p data-rmt-memory-due hidden></p>
+          <label class="rmt-settings-field"><span>每隔多少楼抽一次</span><input class="text_pole" data-rmt-auto-memory-interval type="number" min="1" max="1000" step="1" value="${core_settings.getPluginSettings().autoMemoryIntervalFloors}" aria-label="每隔多少楼抽一次"></label>
+          <small>到了这个间隔就从勾选的回忆里抽一份。1 到 1000。改完从现在重新计。</small>
+          <label class="rmt-settings-check"><input type="checkbox" data-rmt-auto-memory-latest ${core_settings.getPluginSettings().autoMemoryLatestFloor ? 'checked' : ''}><span>在最新角色楼生成回忆</span></label>
+          <small>勾上后只数角色楼，系统楼不算。间隔是 1 时，只用最新一条角色楼的正文。</small>
+          ${ui_heartEnvelope.heartEnvelopePickerHtml(core_settings.getPluginSettings().heartEnvelopeSkin)}
+          <button type="button" class="menu_button rmt-settings-wide" data-rmt-auto-memory-wizard>打开回忆向导</button>
+          <small>向导先接 API、读取范围和档案。已有档案时不会重新建档。</small>
+          <button type="button" class="menu_button rmt-settings-wide" data-rmt-auto-memory-redo="keep">按原来的抽签再写</button>
+          <button type="button" class="menu_button rmt-settings-wide" data-rmt-auto-memory-redo="redraw">重新抽一份</button>
+          <button type="button" class="menu_button rmt-settings-wide" data-rmt-auto-memory-redo="pick">自己选一份</button>
+          <div data-rmt-auto-memory-pick hidden></div>
+          <p data-rmt-auto-memory-redo-status role="status"></p>
+          <p data-rmt-auto-memory-gate role="status"></p>
+          <button type="button" class="menu_button rmt-settings-wide" data-rmt-auto-memory-restore hidden>关闭自动留忆</button>
+          </div>
+        </details>
         <details class="rmt-settings-card" data-rmt-settings-section="auto">
           <summary class="rmt-settings-card-head"><span>↻</span><div><b>自动更新</b><small>跟随当前聊天 · 每项独立设置</small></div></summary>
           <div class="rmt-settings-section-body">
@@ -871,6 +987,22 @@ export function mountSettings({ homeTarget = null } = {}) {
         if (target.matches?.('[data-rmt-auto-retry-count]')) {
             core_settings.updatePluginSettings({ autoRetryCount: target.value });
             target.value = String(core_settings.getPluginSettings().autoRetryCount);
+            return;
+        }
+        if (target.matches?.('[data-rmt-auto-memory-latest]')) {
+            core_settings.updatePluginSettings({ autoMemoryLatestFloor: !!target.checked });
+            void saveAutoMemoryPace(panel);
+            return;
+        }
+        if (target.matches?.('[data-rmt-auto-memory-interval]')) {
+            core_settings.updatePluginSettings({ autoMemoryIntervalFloors: target.value });
+            target.value = String(core_settings.getPluginSettings().autoMemoryIntervalFloors);
+            void saveAutoMemoryPace(panel);
+            return;
+        }
+        if (target.matches?.('[data-rmt-heart-envelope]')) {
+            const next = core_settings.updatePluginSettings({ heartEnvelopeSkin: target.value });
+            ui_heartEnvelope.paintEnvelopePicker(panel, next.heartEnvelopeSkin);
             return;
         }
         if (target.matches?.('[data-rmt-read-mode], [data-rmt-read-recent], [data-rmt-read-start], [data-rmt-read-end], [data-rmt-read-hidden]')) {
@@ -1133,6 +1265,37 @@ export function mountSettings({ homeTarget = null } = {}) {
             return;
         }
         if (event.target.closest?.('[data-rmt-creative-cancel]')) { refreshCreative(); panel.querySelector('[data-rmt-creative-status]').textContent = '已撤销未保存编辑。'; return; }
+        if (event.target.closest?.('[data-rmt-auto-memory-wizard]')) {
+            auto_memory_wizard.openAutoMemoryWizard();
+            return;
+        }
+        const redoPick = event.target.closest?.('[data-rmt-auto-memory-pick-module]');
+        if (redoPick) {
+            void runCurrentMemoryRedo(panel, 'pick', redoPick.getAttribute('data-rmt-auto-memory-pick-module') || '');
+            return;
+        }
+        const redoButton = event.target.closest?.('[data-rmt-auto-memory-redo]');
+        if (redoButton) {
+            const mode = redoButton.getAttribute('data-rmt-auto-memory-redo') || '';
+            if (mode === 'pick') {
+                const host = panel.querySelector('[data-rmt-auto-memory-pick]');
+                if (host) {
+                    host.hidden = !host.hidden;
+                    if (!host.hidden && !host.childElementCount) {
+                        host.innerHTML = auto_memory_redo.choosableModules(auto_memory_registry.listAutoMemoryModules())
+                            .map(item => `<button type="button" class="menu_button" data-rmt-auto-memory-pick-module="${core_text.esc(item.id)}">${core_text.esc(item.title)}</button>`)
+                            .join('');
+                    }
+                }
+                return;
+            }
+            void runCurrentMemoryRedo(panel, mode, '');
+            return;
+        }
+        if (event.target.closest?.('[data-rmt-auto-memory-restore]')) {
+            void closeAutoMemoryPlan(panel);
+            return;
+        }
         const updateButton = event.target.closest?.('[data-rmt-self-update]');
         if (updateButton) {
             void core_selfUpdater.updateFromButton(updateButton, panel.querySelector('[data-rmt-self-update-status]'), {
