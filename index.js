@@ -1,5 +1,5 @@
-const VERSION = '0.99.21';
-const BUILD = '0.99.21-r84.66-persona-avatar';
+const VERSION = '0.99.22';
+const BUILD = '0.99.22-r84.67-wizard-cards';
 
 const SETTINGS_ID = 'heartbeat_memories_settings';
 const MENU_ID = 'heartbeat_memories_menu_item';

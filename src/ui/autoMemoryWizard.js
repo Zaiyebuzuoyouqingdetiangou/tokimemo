@@ -152,7 +152,7 @@ function firstBlockReason(item) {
 
 function moduleIcon(id) {
     const path = MODULE_ICON_PATH[id] || 'M6 4h9l3 3v13H6z';
-    return `<svg class="rmt-auto-card-icon" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="${path}"/></svg>`;
+    return `<svg class="rmt-auto-card-icon" width="22" height="22" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="${path}"/></svg>`;
 }
 
 function moduleHtml() {
@@ -167,7 +167,7 @@ function moduleHtml() {
         const autoReason = item.autoEligible ? '' : (item.unavailableReason || '暂不可自动生成');
         const block = firstBlockReason(item);
         const firstOn = !block && draft.firstModuleIds.includes(item.id);
-        return `<article class="rmt-auto-card">${moduleIcon(item.id)}<div><h3>${core_text.esc(item.title)}</h3><p>${core_text.esc(item.audience)}</p><span class="rmt-auto-tag">${core_text.esc(requestTag(item))}</span></div><div class="rmt-auto-switches"><label class="rmt-auto-switch"><input type="checkbox" data-rmt-auto-memory-prefer="${core_text.esc(item.id)}" ${autoOn ? 'checked' : ''} ${autoDisabled}><span>自动生成</span></label><label class="rmt-auto-switch"><input type="checkbox" data-rmt-auto-memory-first="${core_text.esc(item.id)}" ${firstOn ? 'checked' : ''} ${block ? 'disabled' : ''}><span>这次先生成</span></label></div>${autoReason ? `<small class="rmt-auto-why">${core_text.esc(autoReason)}</small>` : ''}${block ? `<small class="rmt-auto-why">${core_text.esc(block)}</small>` : ''}</article>`;
+        return `<article class="rmt-auto-card"><header class="rmt-auto-card-head"><span class="rmt-auto-card-mark">${moduleIcon(item.id)}</span><div class="rmt-auto-card-copy"><h3>${core_text.esc(item.title)}</h3><p>${core_text.esc(item.audience)}</p></div></header><div class="rmt-auto-card-foot"><span class="rmt-auto-tag">${core_text.esc(requestTag(item))}</span><div class="rmt-auto-switches"><label class="rmt-auto-switch"><input type="checkbox" data-rmt-auto-memory-prefer="${core_text.esc(item.id)}" ${autoOn ? 'checked' : ''} ${autoDisabled}><span>自动生成</span></label><label class="rmt-auto-switch"><input type="checkbox" data-rmt-auto-memory-first="${core_text.esc(item.id)}" ${firstOn ? 'checked' : ''} ${block ? 'disabled' : ''}><span>这次先生成</span></label></div></div>${autoReason ? `<small class="rmt-auto-why">${core_text.esc(autoReason)}</small>` : ''}${block ? `<small class="rmt-auto-why">${core_text.esc(block)}</small>` : ''}</article>`;
     }).join('');
     const hint = achievement
         ? `<p class="rmt-auto-achieve">${core_text.esc(achievement.audience)}</p>`

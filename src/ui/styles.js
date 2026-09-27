@@ -11,6 +11,7 @@ import * as ui_pastLivesView from './pastLivesView.js';
 import * as time_stories_view from './timeStoriesView.js';
 import * as ui_immersionStyles from './immersionStyles.js';
 import * as ui_readingStyles from './readingStyles.js';
+import * as auto_memory_wizard_styles from './autoMemoryWizardStyles.js';
 
 export function participantPickerCss() {
     const root = '#' + core_constants.OVERLAY_ID;
@@ -1287,6 +1288,7 @@ dialog#${core_constants.OVERLAY_ID}::backdrop{background:transparent}
 #${core_constants.OVERLAY_ID} .rmt-language-scene textarea{width:100%;min-height:96px;font-size:16px}
 #${core_constants.OVERLAY_ID} .rmt-language-scene p{font-size:14px;line-height:1.6}
 `;
+    style.textContent += auto_memory_wizard_styles.wizardCss('#' + core_constants.OVERLAY_ID);
     document.head.appendChild(style);
 }
 

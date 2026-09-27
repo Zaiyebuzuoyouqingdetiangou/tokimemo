@@ -157,6 +157,7 @@
   "ui/autoMemoryCountdown.js",
   "ui/autoMemoryShell.js",
   "ui/autoMemoryWizard.js",
+  "ui/autoMemoryWizardStyles.js",
   "ui/bedtimeView.js",
   "ui/butterflyView.js",
   "ui/calendarPrint.js",
