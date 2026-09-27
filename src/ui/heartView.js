@@ -10,6 +10,7 @@ import * as language_view from './languageView.js';
 import * as archive_groups from '../archive/groups.js';
 import * as archive_library from '../archive/library.js';
 import * as archive_repository from '../archive/repository.js';
+import * as archive_avatars from './archiveAvatars.js';
 import * as archive_snapshots from '../archive/snapshots.js';
 import * as core_cache from '../core/cache.js';
 import * as core_cgImagePatch from '../core/cgImagePatch.js';
@@ -46,8 +47,11 @@ export function heartCharacterAvatarUrl(entry = runtimeState.activeArchiveSnapsh
 
 export function heartUserAvatarUrl(context = core_context.getContext()) {
     try {
-        const raw = core_text.normalizeText(context?.user_avatar || context?.userAvatar || globalThis.user_avatar, 300);
-        return raw ? (context.getThumbnailUrl?.('avatar', raw) || '') : '';
+        const entry = runtimeState.activeArchiveSnapshot;
+        const file = entry ? archive_avatars.archiveUserAvatar(entry.memory, entry)
+            : archive_avatars.currentUserAvatar(context);
+        if (!file) return '';
+        return archive_avatars.personaAvatarUrl(file, context);
     } catch {
         return '';
     }
@@ -558,7 +562,7 @@ export function renderHeart() {
             const paragraphs = thoughts.map(text => `<p>${core_text.esc(text)}</p>`).join('');
             return `<div class="rmt-firefly-whisper ${core_text.esc(selected.color)}"><small>${fireflyMeta(selected.color).icon} ${core_text.esc(fireflyMeta(selected.color).label)}</small><h3>${core_text.esc(selected.title || '旧版心声')}</h3><div class="rmt-firefly-thoughts">${paragraphs}</div></div>`;
         })() : `<div class="rmt-heart-empty">${readOnly ? '这份档案还没有保存萤火虫话题。' : '点亮以后，这里会出现不同颜色的追加约会话题。'}</div>`;
-        content = `<section class="rmt-firefly-shell"><div class="rmt-firefly-head"><div><small>FIREFLY HABITAT</small><h2>萤火虫栖息地</h2></div><span>${voices.length} LIGHTS</span></div><div class="rmt-firefly-field">${points || '<div class="rmt-firefly-empty-stars">✦　·　✧　·　✦</div>'}</div>${pager}<div class="rmt-firefly-legend">${legend}</div>${whisper}</section>`;
+        content = `<section class="rmt-firefly-shell"><div class="rmt-firefly-head"><div><small>FIREFLY HABITAT</small><h2>萤火虫栖息地</h2></div><span>${voices.length} LIGHTS</span></div><div class="rmt-firefly-field">${expanded_cg_view.expandedCgBackdropHtml(session, {kind:'heart-firefly',containerId:'habitat'})}${points || '<div class="rmt-firefly-empty-stars">✦　·　✧　·　✦</div>'}</div>${expanded_cg_view.expandedCgHtml(session, {kind:'heart-firefly',containerId:'habitat'}, readOnly, {showImage:false})}${pager}<div class="rmt-firefly-legend">${legend}</div>${whisper}</section>`;
     } else {
         const selected = selectedHeartStrip();
         if (selected) session.selectedStripId = selected.id;

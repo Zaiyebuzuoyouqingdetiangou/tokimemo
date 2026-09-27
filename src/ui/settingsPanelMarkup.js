@@ -1,19 +1,17 @@
-import { SETTINGS_LAUNCHER_ID, bindManualAutosave, chatReadingSettingsHtml, manualAutosaves, paintCoverageMap, refreshGenerationSettingsUi, refreshImageGenerationSettingsUi, refreshManualModelOptions, refreshModelOptions, refreshReadingSettingsUi, refreshSettingsMemoryStatus, refreshThemeUi, saveManualPanel, voiceSettingsHtml } from './settingsPanelParts.js';
+import * as core_requestCoordinator from '../core/requestCoordinator.js';
 import * as core_settings from '../core/settings.js';
+import { state as runtimeState } from '../core/state.js';
 import * as advanced_ui from './advancedGenerationUi.js';
 import * as cg_format_ui from './cgFormatControl.js';
-import * as core_autoUpdatePolicy from '../core/autoUpdatePolicy.js';
-import * as core_text from '../core/text.js';
-import * as core_constants from '../core/constants.js';
-import { state as runtimeState } from '../core/state.js';
-import * as core_requestCoordinator from '../core/requestCoordinator.js';
+import * as ui_heartEnvelope from './heartEnvelope.js';
 import { SETTINGS_MOUNT_UNHANDLED } from './settingsPanelHome.js';
+import { chatReadingSettingsHtml, voiceSettingsHtml } from './settingsPanelParts.js';
 // ui/settingsPanelHome.js mountSettings 的分组处理（重构阶段 3）。每个函数是原函数里连续的一段语句，一字未改；
 // 返回 SETTINGS_MOUNT_UNHANDLED 表示“这一段没有处理”，原函数接着往下走，和拆分前完全相同。
 
 // 设置页整页 HTML（panel.innerHTML 赋值原样搬出）（原第 13–13 条语句）
 export function renderSettingsPanelMarkup(panel) {
-    panel.innerHTML = `
+  panel.innerHTML = `
       <div class="inline-drawer-toggle inline-drawer-header rmt-settings-header">
         <div><b>心迹回廊</b><small> API SETTINGS</small></div>
         <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
@@ -71,18 +69,19 @@ export function renderSettingsPanelMarkup(panel) {
           <summary class="rmt-settings-card-head"><span>CG</span><div><b>CG 生图</b><small>相簿 · ADV · 日常一格</small></div></summary>
           <div class="rmt-settings-section-body">
             ${cg_format_ui.cgFormatControlHtml()}
-            <label class="rmt-settings-field"><span>生图渠道</span><select class="text_pole" data-rmt-image-generation-provider aria-describedby="rmt-image-provider-status"><option value="baibai-image">柏宝绘 · 公开 API v1</option></select></label>
+            <label class="rmt-settings-field"><span>生图渠道</span><select class="text_pole" data-rmt-image-generation-provider aria-describedby="rmt-image-provider-status"><option value="baibai-image">柏宝绘 · 公开 API v1</option><option value="chatu8-image">智绘姬</option></select></label>
             <p id="rmt-image-provider-status" data-rmt-image-generation-status role="status" aria-live="polite"></p>
-            <p>柏宝绘需单独安装并配置出图渠道。只在点击绘制并确认后出图，失败不会自动换渠道。</p>
+            <label class="rmt-settings-check"><input type="checkbox" data-rmt-image-generation-fallback ${core_settings.getPluginSettings().imageGenerationFallback ? 'checked' : ''}><span>失败时自动改走另一个已连接的生图渠道</span></label>
+            <p>默认关闭。智绘姬沿用它自己已经配好的出图设置，这里不改那些设置。只在点击绘制并确认后出图。</p>
           </div>
         </details>
         <details class="rmt-settings-card" data-rmt-settings-section="creative">
-          <summary class="rmt-settings-card-head"><span>文</span><div><b>创作补充词</b><small>仅用于心迹回廊独立 API</small></div></summary>
+          <summary class="rmt-settings-card-head"><span>文</span><div><b>破限词</b><small>仅用于心迹回廊独立 API；发给模型时仍标为「创作补充词」</small></div></summary>
           <div class="rmt-settings-section-body">
-            <label class="rmt-settings-check"><input type="checkbox" data-rmt-creative-enabled><span>启用创作补充词</span></label>
+            <label class="rmt-settings-check"><input type="checkbox" data-rmt-creative-enabled><span>启用破限词</span></label>
             <label class="rmt-settings-field"><span>文风、氛围与叙事偏好</span><textarea class="text_pole" data-rmt-creative-text maxlength="20000" rows="8" placeholder="例如：少用总结式旁白，让情绪从对白和细节中自然流露。"></textarea></label>
             <p><output data-rmt-creative-count>0 / 20,000</output> 字符。仅随心迹回廊文本生成发送，不写入主聊天、不发送给生图接口；会占用模型输入额度。</p>
-            <div class="rmt-theme-presets"><button type="button" data-rmt-creative-save>保存补充词</button><button type="button" data-rmt-creative-cancel>撤销编辑</button></div>
+            <div class="rmt-theme-presets"><button type="button" data-rmt-creative-save>保存破限词</button><button type="button" data-rmt-creative-cancel>撤销编辑</button></div>
             <div role="status" data-rmt-creative-status></div>
           </div>
         </details>
@@ -116,13 +115,32 @@ export function renderSettingsPanelMarkup(panel) {
           </div>
         </details>
         <details class="rmt-settings-card" data-rmt-settings-section="auto">
-          <summary class="rmt-settings-card-head"><span>↻</span><div><b>自动更新</b><small>跟随当前聊天 · 每项独立设置</small></div></summary>
+          <summary class="rmt-settings-card-head"><span>↻</span><div><b>自动留忆</b><small>和这个角色的回忆 · 向导与间隔</small></div></summary>
           <div class="rmt-settings-section-body">
-          <p>只在已有档案的当前窗口运行。每条聊天消息算一楼，编辑不加楼；开启后从当前楼数起计。</p>
-          <p>“档案同步”收录新聊天；其他模块使用已归档记忆，不改旧内容。会调用独立 API。</p>
-          <div class="rmt-auto-rules">${core_autoUpdatePolicy.AUTO_UPDATE_MODES.map(mode => `<div class="rmt-auto-rule"><label><input type="checkbox" data-rmt-auto-enabled="${mode}"> ${core_text.esc(mode === 'archive' ? '档案同步' : core_constants.MODE_LABEL[mode])}</label><label>每 <input type="number" min="1" max="1000" step="1" data-rmt-auto-every="${mode}" aria-label="${core_text.esc(mode === 'archive' ? '档案同步' : core_constants.MODE_LABEL[mode])}间隔楼层"> 楼</label><small data-rmt-auto-status="${mode}" role="status"></small></div>`).join('')}</div>
-          <small data-rmt-auto-warning role="status"></small>
-          <small>失败后不连续重试，等待下一个间隔；可随时手动生成。不支持跨页任务锁的浏览器仅保留手动操作。</small>
+          <p>只在已有档案的当前聊天里运行。打开后从当前楼数起计。</p>
+          <p data-rmt-memory-due hidden></p>
+          <label class="rmt-settings-field"><span>每隔多少楼抽一次</span><input class="text_pole" data-rmt-auto-memory-interval type="number" min="1" max="1000" step="1" value="${core_settings.getPluginSettings().autoMemoryIntervalFloors}" aria-label="每隔多少楼抽一次"></label>
+          <small>到了这个间隔就从勾选的回忆里抽一份。1 到 1000。改完从现在重新计。</small>
+          <label class="rmt-settings-check"><input type="checkbox" data-rmt-auto-memory-latest ${core_settings.getPluginSettings().autoMemoryLatestFloor ? 'checked' : ''}><span>在最新角色楼生成回忆</span></label>
+          <small>勾上后只数角色楼。间隔是 1 时，只用最新一条角色楼的正文。间隔更大时，这一窗角色楼的正文都会送去建档，不再截短。有摘要时，摘要没写到的楼附上完整正文。</small>
+          <small>打开自动留忆后，需要两次才完整的模块会自动做第二次生成。两次合在一起才是一份完整回忆。手动生成仍看连接设置里的开关。</small>
+          <label class="rmt-settings-check"><input type="checkbox" data-rmt-auto-memory-retry ${core_settings.getPluginSettings().autoRetryEnabled ? 'checked' : ''}><span>失败后自动重试</span></label>
+          <label class="rmt-settings-field"><span>失败后重试次数</span><input class="text_pole" data-rmt-auto-memory-retry-count type="number" min="1" max="5" step="1" value="${core_settings.getPluginSettings().autoRetryCount}" aria-label="失败后重试次数"></label>
+          <small>勾上之后，信上的重试和补成就会自己跑，次数是 1 到 5。没勾就只有点了才发。已经写好的步骤会留着。</small>
+          <small>当前这一份回忆可以再写一遍。下面三个按钮不一样。</small>
+          <button type="button" class="menu_button rmt-settings-wide" data-rmt-auto-memory-redo="keep">按原来的抽签再写</button>
+          <small>还是刚才抽中的那一项，再写一遍。</small>
+          <button type="button" class="menu_button rmt-settings-wide" data-rmt-auto-memory-redo="redraw">重新抽一份</button>
+          <small>丢掉这次抽签，从已勾选的回忆里另抽一项来写。</small>
+          <button type="button" class="menu_button rmt-settings-wide" data-rmt-auto-memory-redo="pick">自己选一份</button>
+          <small>不抽签。点开后从清单里选一项来写。</small>
+          ${ui_heartEnvelope.heartEnvelopePickerHtml(core_settings.getPluginSettings().heartEnvelopeSkin)}
+          <div data-rmt-auto-memory-pick hidden></div>
+          <p data-rmt-auto-memory-redo-status role="status"></p>
+          <button type="button" class="menu_button rmt-settings-wide" data-rmt-auto-memory-wizard>打开回忆向导</button>
+          <small>向导先接 API、读取范围和档案。生图和文字 API 分开配，配完点下一步。结束后再问要不要自动留忆。已有档案时不会重新建档。</small>
+          <p data-rmt-auto-memory-gate role="status"></p>
+          <button type="button" class="menu_button rmt-settings-wide" data-rmt-auto-memory-restore hidden>关闭自动留忆</button>
           </div>
         </details>
         <div class="rmt-settings-card">
@@ -166,5 +184,5 @@ export function renderSettingsPanelMarkup(panel) {
           <button type="button" class="menu_button rmt-open-archive-room" data-rmt-settings-open-archive><i class="fa-solid fa-box-archive"></i><span>打开档案室</span></button>
         </div>
       </div>`;
-    return SETTINGS_MOUNT_UNHANDLED;
+  return SETTINGS_MOUNT_UNHANDLED;
 }

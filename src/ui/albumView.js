@@ -17,6 +17,7 @@ import * as ui_cgPromptEditor from './cgPromptEditor.js';
 import * as ui_overlay from './overlay.js';
 import * as ui_styles from './styles.js';
 import * as ui_generationCompletion from './generationCompletion.js';
+import * as image_menu from './imageMenu.js';
 export function filteredAlbumEntries() {
     if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.ALBUM) return [];
     const category = runtimeState.activeSession.category || '全部';
@@ -277,7 +278,7 @@ export function renderSharedMemory() {
           <button type="button" class="rmt-btn" data-rmt-action="shared-next" ${!comments.length || last ? 'disabled' : ''}>下一句</button>
         </div>
       </div>
-      ${readOnly ? '' : '<div class="rmt-cg-card-actions rmt-cg-memory-actions"><button type="button" class="rmt-btn" data-rmt-action="edit-cg-prompt">图片设置</button></div>'}
+      ${readOnly ? '' : image_menu.imageSetupHtml(`<button type="button" class="rmt-btn" data-rmt-action="edit-cg-prompt">${image_menu.BUNNY_SVG}<span>图片设置</span></button>`)}
       ${generation_imageGeneration.cgImageProgressHtml()}
     </div>`;
     body.querySelector?.('[data-rmt-album-speaker]')?.addEventListener('change', event => {

@@ -106,7 +106,8 @@ dialog#${core_constants.OVERLAY_ID}::backdrop{background:transparent}
 .rmt-task-card[data-state="failed"],.rmt-task-card[data-state="retry"]{border-color:#f0c4c8}
 .rmt-task-main{display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:0}
 .rmt-task-main b{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px}
-.rmt-task-state{flex:0 0 auto;padding:2px 8px;border-radius:999px;background:var(--rmt-theme-soft,#f4e7ee);color:var(--rmt-theme-accent-ink,#9d6d82);font-size:11px;font-weight:800}
+.rmt-task-state{flex:0 0 auto;padding:2px 8px;border:0;border-radius:999px;background:var(--rmt-theme-soft,#f4e7ee);color:var(--rmt-theme-accent-ink,#9d6d82);font:inherit;font-size:11px;font-weight:800}
+button.rmt-task-state{cursor:pointer}
 .rmt-task-state[data-state="running"]{background:#fde7f0;color:#b85b7d}
 .rmt-task-state[data-state="failed"],.rmt-task-state[data-state="retry"]{background:#fde8ea;color:#c24545}
 .rmt-task-state[data-state="done"]{background:#e7f6ee;color:#3d7a55}

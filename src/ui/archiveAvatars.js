@@ -55,6 +55,18 @@ export function characterAvatarUrl(filename, context) {
     return `/characters/${encodeURIComponent(file)}`;
 }
 
+// r84.167：Persona 头像在 User Avatars 里，缩略图类型是 persona。以前按角色头像找（avatar / characters），
+// 永远找不到，图片坏掉后 iPhone 会显示成问号。
+export function personaAvatarUrl(filename, context) {
+    const file = normalizeAvatarFile(filename);
+    if (!file) return '';
+    try {
+        const thumbnail = thumbnailPath(context?.getThumbnailUrl?.('persona', file));
+        if (thumbnail) return thumbnail;
+    } catch {}
+    return userAvatarUrl(file);
+}
+
 export function archiveUserAvatar(memory, entry = null, metadata = null) {
     // Historical identity must never fall through to the currently active chat.
     return normalizeAvatarFile(read(memory, 'userAvatar'))

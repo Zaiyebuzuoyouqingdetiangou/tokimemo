@@ -1,3 +1,4 @@
+import * as expanded_cg_view from './expandedCgView.js';
 import * as contract from '../core/bedtimeContract.js';
 import * as bedtimeMode from '../modes/bedtime.js';
 import * as contextApi from '../core/context.js';
@@ -19,6 +20,8 @@ const readOnly = () => !!runtime().activeArchiveSnapshot && (runtime().activeArc
 const shownMemory = () => runtime().activeArchiveSnapshot?.memory || repository.getImportedMemory(contextApi.getContext());
 const busy = () => runtime().activeArchiveSnapshot ? coordinator.isArchiveTargetModeGenerating(MODE, runtime().activeArchiveSnapshot)
     : coordinator.isModeGenerating(MODE);
+// r84.167：睡前故事的插画做成绘本的一页，放在章节标题下、正文之前；正文首字下沉。只改呈现，不改生图。
+const bedtimePlate = inner => inner ? `<figure class="rmt-bedtime-plate">${inner}</figure>` : '';
 const paragraphs = value => `<p>${esc(value || '').replace(/\n{2,}/g, '</p><p>').replace(/\n/g, '<br>')}</p>`;
 const button = (action, label, id = '', disabled = false) => `<button type="button" class="rmt-btn" data-rmt-bedtime="${action}"${id ? ` data-rmt-bedtime-id="${esc(id)}"` : ''}${disabled ? ' disabled' : ''}>${esc(label)}</button>`;
 
@@ -37,9 +40,9 @@ export function bedtimeHtml(session, { locked = false, generating = false } = {}
             const chapters = selected.chapters || [];
             const chapter = chapters[ui.chapterIndex] || chapters[0];
             const controls = `<div class="rmt-bedtime-page-controls">${button('prev', '上一章', '', ui.chapterIndex <= 0)}<span>${chapters.length ? `${ui.chapterIndex + 1} / ${chapters.length}` : '0 / 0'}</span>${button('next', '下一章', '', ui.chapterIndex >= chapters.length - 1)}</div>`;
-            content = `<article class="rmt-bedtime-reader"><header>${button('library', '返回故事架')}<small>${esc(selected.genre || '题材待完成')} · 睡前故事</small><h2>${esc(selected.title || '未完成的故事')}</h2><p>${esc(selected.premise || '')}</p></header>${storyPartial ? '<p class="rmt-recovery-status" role="status">这一章尚未完成；已收到的正文可以先读，继续会按原草稿补齐，不会重写旧章节。</p>' : ''}${chapter ? `<section class="rmt-bedtime-chapter"><small>第 ${ui.chapterIndex + 1} 章</small><h3>${esc(chapter.title || '本章标题待完成')}</h3>${paragraphs(chapter.text)}</section>${controls}` : '<p role="status">本章正文尚未收到。</p>'}<footer>${locked ? '' : button('continue', generating ? '正在续写…' : '追加下一章', selected.id, generating || storyPartial)}</footer></article>`;
+            content = `<article class="rmt-bedtime-reader"><header>${button('library', '返回故事架')}<small>${esc(selected.genre || '题材待完成')} · 睡前故事</small><h2>${esc(selected.title || '未完成的故事')}</h2><p>${esc(selected.premise || '')}</p></header>${storyPartial ? '<p class="rmt-recovery-status" role="status">这一章尚未完成；已收到的正文可以先读，继续会按原草稿补齐，不会重写旧章节。</p>' : ''}${chapter ? `<section class="rmt-bedtime-chapter"><small>第 ${ui.chapterIndex + 1} 章</small><h3>${esc(chapter.title || '本章标题待完成')}</h3>${bedtimePlate(expanded_cg_view.expandedCgHtml(session, {kind:'bedtime-chapter',containerId:selected.id,slot:'chapter:'+chapter.id}, locked, { placeholder: '<p class="rmt-bedtime-plate-empty">这一章还没有插画</p>' }))}${paragraphs(chapter.text)}</section>${controls}` : '<p role="status">本章正文尚未收到。</p>'}<footer>${locked ? '' : button('continue', generating ? '正在续写…' : '追加下一章', selected.id, generating || storyPartial)}</footer></article>`;
         }
-        return `<section class="rmt-bedtime"><header class="rmt-bedtime-head"><div><small>可连续阅读的虚构作品${locked ? ' · 只读' : ''}</small><h2>睡前故事</h2></div>${ui.view === 'story' ? '' : `<small>已保存 ${session.stories.length} 篇</small>`}</header><p class="rmt-bedtime-note">写一个新故事，或接着喜欢的故事读下一章。</p>${composer}${content}</section>`;
+        return `<section class="rmt-bedtime"><header class="rmt-bedtime-head"><div><small>床边的故事${locked ? ' · 只读' : ''}</small><h2>睡前故事</h2></div>${ui.view === 'story' ? '' : `<small>已保存 ${session.stories.length} 篇</small>`}</header><p class="rmt-bedtime-note">写一个新故事，或接着喜欢的故事读下一章。</p>${composer}${content}</section>`;
     } catch { return '<section class="rmt-bedtime"><p role="status">这份睡前故事暂时无法读取，原内容仍保留。</p></section>'; }
 }
 
@@ -158,6 +161,15 @@ ${root} .rmt-bedtime-empty{text-align:center;padding:48px 18px;border:1px dashed
 ${root} .rmt-bedtime-reader>header{display:grid;gap:5px;margin:20px 0}${root} .rmt-bedtime-reader>header>.rmt-btn{justify-self:start;min-height:44px}
 ${root} .rmt-bedtime-chapter{padding:clamp(20px,4vw,42px);border:1px solid var(--rmt-theme-border);border-radius:20px;background:var(--rmt-theme-surface);box-shadow:0 18px 46px color-mix(in srgb,var(--rmt-theme-text) 7%,transparent)}
 ${root} .rmt-bedtime-chapter>p{font-family:Georgia,'Noto Serif SC',serif;font-size:17px;line-height:2;text-wrap:pretty}
+${root} .rmt-bedtime-plate{margin:14px 0 18px;padding:10px 10px 8px;border:1px solid var(--rmt-theme-border);border-radius:18px;background:var(--rmt-theme-surface-tint)}
+${root} .rmt-bedtime-plate .rmt-thumb{margin:0;border-radius:12px;overflow:hidden}
+${root} .rmt-bedtime-plate .rmt-thumb img{display:block;width:100%;height:auto;border-radius:12px}
+${root} .rmt-bedtime-plate .rmt-cg-card-actions{margin-top:8px}
+${root} .rmt-bedtime-plate figcaption{margin:6px 4px 0;text-align:center;font-family:'LXGW WenKai','Kaiti SC',STKaiti,KaiTi,'Noto Serif SC',serif;font-size:15px;color:var(--rmt-theme-muted)}
+${root} .rmt-bedtime-plate figcaption:empty{display:none}
+${root} .rmt-bedtime-plate-empty{margin:18px 0;text-align:center;color:var(--rmt-theme-muted);font-size:14px}
+${root.replace('[data-rmt-theme-mode]', '[data-rmt-theme-mode][data-rmt-theme-dark="true"]')} .rmt-bedtime-plate{box-shadow:0 0 0 1px var(--rmt-theme-border),0 0 36px color-mix(in srgb,var(--rmt-theme-accent) 16%,transparent)}
+${root} .rmt-bedtime-chapter>p:first-of-type::first-letter{float:left;margin:6px 8px 0 0;font-size:2.6em;line-height:.9;color:var(--rmt-theme-accent-ink)}
 ${root} .rmt-bedtime-page-controls,${root} .rmt-bedtime-reader>footer{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:16px}
 ${root} .rmt-bedtime-page-controls .rmt-btn,${root} .rmt-bedtime-reader>footer .rmt-btn{min-height:44px}
 ${root} .rmt-bedtime button:focus-visible,${root} .rmt-bedtime textarea:focus-visible{outline:3px solid var(--rmt-theme-accent-ink)!important;outline-offset:3px}

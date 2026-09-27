@@ -4,6 +4,8 @@ import * as split_phonePrompts from './phonePrompts.js';
 import * as split_phoneData from './phoneData.js';
 import * as split_phoneIncrement from './phoneIncrement.js';
 import * as split_phoneGeneration from './phoneGeneration.js';
+import * as core_modesBridge from '../core/modesBridge.js';
+import * as generation_modesBridge from '../generation/modesBridge.js';
 // 以下导出已搬到 modes/phoneBasics.js、modes/phoneEvidence.js、modes/phonePrompts.js、modes/phoneData.js、modes/phoneIncrement.js、modes/phoneGeneration.js，这里原样转发，调用方不用改。
 export const PHONE_COMMUNICATION_REPAIR_CONTRACT = split_phoneBasics.PHONE_COMMUNICATION_REPAIR_CONTRACT;
 export const PHONE_LIFESTYLE_REPAIR_CONTRACT = split_phoneBasics.PHONE_LIFESTYLE_REPAIR_CONTRACT;
@@ -38,4 +40,7 @@ export const mergePhoneIncremental = split_phoneIncrement.mergePhoneIncremental;
 export const generatePhoneIncrementalWithRepair = split_phoneGeneration.generatePhoneIncrementalWithRepair;
 export const normalizePhone = split_phoneData.normalizePhone;
 
-
+// 重构清单 C-3（r84.98）：把 core 层要用的函数登记到 core/modesBridge.js（core 不再 import 本文件）。
+core_modesBridge.registerModesBridge({ normalizePhonePlan, normalizePhoneDraftApp, migrateLegacyPhoneSession });
+// 重构清单 C-4（r84.114）：把生成层要用的函数登记到 generation/modesBridge.js（生成层不再 import 本文件）。
+generation_modesBridge.registerGenerationModesBridge({ normalizePhone, phoneHasMissingEntries, generatePhoneMissingWithRepair, generatePhoneIncrementalWithRepair, generatePhoneWithRepair, phoneCompletionSummary, projectPhoneProgress, phoneAppPrompt, assertPhoneReplacementPreservesRecords, normalizePhoneDraftApp });

@@ -1,5 +1,7 @@
+import * as generation_merged from './mergedGeneration.js';
 import * as recovery_source from '../core/recoverySourcePolicy.js';
 import * as cg_policy from './cgPromptPolicy.js';
+import * as cg_format from '../core/cgPromptFormat.js';
 import * as archive_library from '../archive/library.js';
 import * as archive_repository from '../archive/repository.js';
 import * as core_cache from '../core/cache.js';
@@ -11,10 +13,13 @@ import * as generation_recovery from './recovery.js';
 import * as generation_progress from './partialProgress.js';
 import { state as runtimeState } from '../core/state.js';
 import * as core_text from '../core/text.js';
-import * as modes_advEvent from '../modes/advEvent.js';
+// C-4（r84.118）：别名沿用 modes_advEvent，函数体一字不改；实际指向生成层的桥，不再 import ADV 模块。
+import * as modes_advEvent from './modesBridge.js';
 import * as ui_overlay from '../ui/overlay.js';
 import { captureGenerationContent, contentContextSources, fitGenerationContentSnapshot, generationContentContext, snapshotGenerationContent } from './generationContext.js';
 import { recoveryModeTaskScopes, recoverySettingsIdentity } from './generationRequest.js';
+import * as cast_looks from '../core/castLooks.js';
+import * as generation_participants from '../core/generationParticipants.js';
 // 已保存生成的操作：开始恢复、导出与丢弃、ADV 第二步
 // 从 generation/client.js 原样搬出（重构阶段 2），声明文本一字未改；generation/client.js 仍转发原有导出。
 
@@ -30,7 +35,7 @@ export async function beginModeRecovery(mode, context, bank, origin, options = {
             || snapshot.memoryBank.chatId !== bank.chatId || snapshot.memoryBank.archiveRevision !== bank.archiveRevision) {
             throw core_text.safeUserError('原部分成果的完整资料无法核对，旧内容与草稿保留，没有换用当前资料生成。', 'RMT_RECOVERY_SOURCE_SNAPSHOT_MISSING');
         }
-        partialSeed = { snapshot, frozenInputs: structuredClone(parent.frozenInputs || {}) };
+        partialSeed = { snapshot, frozenInputs: structuredClone(parent.frozenInputs || {}), operation: parent.operation };
     }
     let contentSnapshot = generation_recovery.readGenerationContentSnapshot(existing)
         || (!existing ? fitGenerationContentSnapshot(snapshotGenerationContent({ ...(partialSeed?.snapshot || captureGenerationContent(context, bank)),
@@ -43,9 +48,26 @@ export async function beginModeRecovery(mode, context, bank, origin, options = {
     }
     const sourcePolicy = await recovery_source.recoverySourcePolicy(context);
     if (!contentSnapshot && JSON.stringify(recovery_source.recoverySourceValues(context)) !== sourceValues) throw new DOMException('Source changed', 'AbortError');
-    const operation = cg_policy.cgRecoveryOperation(mode, options.operation || { kind: 'mode', mode }, existing,
-        options.cgPromptFormat || core_settings.getPluginSettings(context).cgPromptFormat);
-    cg_policy.bindCgPromptFormat(origin, operation.cgPromptFormat, operation.cgPromptDialect || 'legacy');
+    let castLooksBasis = '';
+    let participantLooks = null;
+    const cgRecipe = existing || (partialSeed ? { operation: partialSeed.operation } : null);
+    if (!cgRecipe && cg_format.cgOperationHasImageFields(mode, options.operation || { kind: 'mode', mode })) {
+        const logical = core_requestCoordinator.logicalGenerationTaskForOrigin(origin);
+        const chosen = options.participantRegeneration || options.operation?.participantRegeneration
+            || (Object.hasOwn(options, 'participantSnapshot') ? options : logical);
+        const snapshot = generation_participants.resolveGenerationParticipantSnapshot({
+            roster: bank.participantsV1 || core_cache.readParticipantRoster(context),
+            ...(chosen && Object.hasOwn(chosen, 'participantSnapshot') ? { frozenSnapshot: chosen.participantSnapshot } : {}),
+        });
+        if (snapshot) {
+            let record = null;
+            try { record = cast_looks.readParticipantLooks(context); } catch { /* Keep selected IDs even without saved looks. */ }
+            participantLooks = cast_looks.participantLooksBasis(record, snapshot);
+        } else { try { castLooksBasis = cast_looks.castLooksBasisText(cast_looks.readCastLooks(context), context); } catch { castLooksBasis = ''; } }
+    }
+    const operation = cg_policy.cgRecoveryOperation(mode, options.operation || { kind: 'mode', mode }, cgRecipe,
+        options.cgPromptFormat || core_settings.getPluginSettings(context).cgPromptFormat, castLooksBasis, participantLooks);
+    cg_policy.bindCgPromptFormat(origin, operation.cgPromptFormat, operation.cgPromptDialect || 'legacy', operation.cgCastLooks || '', operation.cgParticipantLooks);
     if (existing?.operation && await generation_recovery.generationRecoveryDigest(existing.operation) !== await generation_recovery.generationRecoveryDigest(operation)) {
         throw generation_recovery.generationRecoveryMismatch('operation', 'operation', 'RMT_RECOVERY_OPERATION_CHANGED');
     }
@@ -160,6 +182,15 @@ export async function discardSavedGeneration(mode, options = {}) {
         { ...(options.draftId ? { draftId: options.draftId, intent: 'inspect' } : {}), ...(options.pageId ? { pageId: options.pageId } : {}) });
     if (!retained) throw core_text.safeUserError('这份草稿已不在当前档案，请重新打开任务列表查看。', 'RMT_RECOVERY_NOT_FOUND');
     if (!ui_overlay.confirmExplicitAction('放弃这轮未提交草稿？', '如这项任务还在生成，将先停止它。仅清除此轮分段恢复记录，不删除已保存的模块、正式记忆或图片。未提交的成功分段也会放弃，不能恢复；不会自动重新生成。终端原有的逐 App 草稿另行保留。', { destructive: true })) return;
+    if (!snapshot && retained.operation?.kind === 'merged') {
+        const rows = generation_merged.createPendingStore().readForOrigin(generation_merged.currentPendingScope(context));
+        const pending = rows.find(row => (row.origin?.generationRecoveryDraftId || row.id) === retained.draftId);
+        if (pending) {
+            await generation_merged.discardPending(pending.route, pending.id);
+            ui_overlay.showChooser();
+            return true;
+        }
+    }
     const origin = { ...core_context.captureTaskOrigin(context, bank.archiveRevision), archiveTargetEntryId: opts.archiveTarget?.entryId || '' };
     const owners = core_requestCoordinator.queryParticipantGenerationTasks(context, { stableIdentity: true }).filter(task =>
         task.mode === mode && (task.pageId === retained.pageId || task.pageIds.includes(retained.pageId))

@@ -21,7 +21,7 @@ import * as overlay from './overlay.js';
 let editor = null;
 
 export function portraitCgMetadata(item, raw) {
-    if (!item?.cgPortrait || item.cgImage || !raw) return raw;
+    if (!(item?.cgPortrait || item?.__rmtCgDescriptor?.kind === 'heart-firefly') || item.cgImage || !raw) return raw;
     const value = structuredClone(raw);
     const userIds = new Set((value.castSnapshot?.people || []).filter(person=>person.identity==='user').map(person=>person.id));
     if (value.castSnapshot) value.castSnapshot.people = value.castSnapshot.people.filter(person=>person.identity!=='user');
@@ -296,6 +296,9 @@ export function openCgPromptEditor({ heartStrip = false, targetDescriptor = null
         const current = editor;
         const textarea = element.querySelector('[data-rmt-cg-prompt-input]');
         textarea.value = draft;
+        if (!savedImage && !selected.imagePrompt && selected.cgComposedDraft && draft) {
+            element.querySelector('[data-rmt-cg-prompt-status]').textContent = '这条内容生成时没有附带画面描述，上面是按设定和正文里看得见的动作拼的草稿。点「重新构思／提取外貌」可按全文写完整画面并提取外貌，不会生图。';
+        }
         const updateCount = () => {
             element.querySelector('[data-rmt-cg-prompt-count]').textContent = `${textarea.value.length} / ${core_constants.MAX_CG_IMAGE_PROMPT_CHARS} 字符`;
             updatePreparedPreview(current);

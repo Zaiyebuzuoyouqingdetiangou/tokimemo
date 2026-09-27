@@ -66,13 +66,21 @@ const COLOR_TOKENS = Object.freeze({
 const CATEGORY_TOKENS = Object.freeze({
     hairColor: ['发', '髮', '髪', '青丝', '青絲', 'hair'], eyeColor: ['眼', '眸', '瞳', 'eye'], outfitColor: ['穿', '着', '著', '衣', '服', '衫', '裙', '袍', '装', '裝', '裳', '袄', '襖', '襟', '袖', '氅', '斗篷', '披风', '披風', '外套', '大衣', '西装', '西裝', '制服', 'wear', 'shirt', 'dress', 'robe', 'coat', 'suit', 'uniform'],
 });
+// r84.123：信里常见的说法补进同一类场景（今晚、喝点什么、公园、做菜……），类别和画法不变；
+// 信里仍然要真有这些词，没有就不画。
 const SCENE_TOKENS = Object.freeze({
-    read: ['读', '讀', '看书', '看書', '阅读', '閱讀', '読む', 'read', 'book'], tea: ['茶', '咖啡', 'tea', 'coffee'],
-    rain: ['雨', '下雨', 'rain'], photo: ['照片', '拍照', '摄影', '攝影', '写真', 'photo', 'camera'],
-    music: ['音乐', '音樂', '歌', '演奏', '音乐', '音楽', 'music', 'song', 'play'], flower: ['花', 'flower'],
-    gift: ['礼物', '禮物', '赠', '贈', 'プレゼント', 'gift'], window: ['窗', '窓', 'window'], lamp: ['灯', '燈', '明かり', 'lamp', 'light'],
-    cook: ['做饭', '做飯', '料理', '烹饪', '烹飪', 'cook'], walk: ['散步', '走走', '漫步', '歩く', 'walk'],
-    write: ['写', '寫', '便签', '便簽', '便笺', '便箋', '書く', 'write', 'note'],
+    read: ['读', '讀', '看书', '看書', '阅读', '閱讀', '書本', '书本', '书页', '書頁', '翻书', '翻書', '小说', '小說', '诗集', '詩集', '読む', 'read', 'book'],
+    tea: ['茶', '咖啡', '喝', '饮料', '飲料', '热水', '熱水', '牛奶', '可可', '一杯', 'tea', 'coffee', 'drink'],
+    rain: ['雨', '下雨', '撑伞', '撐傘', '雨伞', '雨傘', '淋湿', '淋濕', 'rain'],
+    photo: ['照片', '拍照', '摄影', '攝影', '相片', '合影', '合照', '相册', '相冊', '拍下', '写真', 'photo', 'camera'],
+    music: ['音乐', '音樂', '歌', '演奏', '唱', '琴', '旋律', '曲子', '耳机', '耳機', '音楽', 'music', 'song', 'play'],
+    flower: ['花', 'flower'],
+    gift: ['礼物', '禮物', '赠', '贈', '送你的', '送给你', '送給你', '礼盒', '禮盒', 'プレゼント', 'gift'],
+    window: ['窗', '窓', '阳台', '陽台', 'window'],
+    lamp: ['灯', '燈', '烛', '燭', '今晚', '晚上', '夜里', '夜裡', '夜晚', '深夜', '半夜', '夜色', '月光', '月亮', '星星', '晚安', '明かり', 'lamp', 'light', 'tonight'],
+    cook: ['做饭', '做飯', '料理', '烹饪', '烹飪', '做菜', '煮', '炒菜', '厨房', '廚房', '晚饭', '晚飯', '午饭', '午飯', '早饭', '早飯', '宵夜', '蛋糕', '甜点', '甜點', 'cook'],
+    walk: ['散步', '走走', '漫步', '公园', '公園', '海边', '海邊', '河边', '河邊', '江边', '江邊', '街上', '路上', '并肩', '並肩', '逛', '歩く', 'walk'],
+    write: ['写', '寫', '便签', '便簽', '便笺', '便箋', '信纸', '信紙', '日记', '日記', '钢笔', '鋼筆', '書く', 'write', 'note'],
 });
 
 // 校验要求 scene.evidence 原样包含所选场景的关键词、外观 evidence 原样包含能说明该值的词。
@@ -112,6 +120,9 @@ function includesToken(text, tokens) {
     return tokens.some(token => folded.includes(token.toLocaleLowerCase()));
 }
 function factSupported(fact) {
+    if (fact.kind === 'hairLength' && /\b(?:short|medium|long)(?:[- ]+[a-z]+){0,3}[- ]+hair\b/iu.test(fact.evidence)) {
+        return new RegExp('\\b' + fact.value + '(?:[- ]+[a-z]+){0,3}[- ]+hair\\b', 'iu').test(fact.evidence);
+    }
     const direct = VALUE_TOKENS[fact.kind]?.[fact.value] || [];
     if (direct.length) return includesToken(fact.evidence, direct);
     if (!['hairColor', 'eyeColor', 'outfitColor'].includes(fact.kind)) return false;
@@ -253,15 +264,16 @@ export function render(value, { idPrefix = 'rmt-letter', label = '' } = {}) {
     const semantic = named ? `role="img" aria-labelledby="${titleId}"` : 'aria-hidden="true"';
     const signature = fact(design, 'signatureObject');
     const kind = design.scene.kind;
-    const foreground = design.focus === 'person' ? letterSketch.sketchPerson(design)
+    const contextSetting = kind === 'music' && /钢琴|鋼琴|琴房|piano|唱片|音像|record|vinyl|吉他|guitar/iu.test(design.scene.evidence);
+    const foreground = design.focus === 'person' ? (contextSetting ? `<g transform="translate(-17 25) scale(.86)">${letterSketch.sketchPerson(design)}</g>` : letterSketch.sketchPerson(design))
         : `<g transform="translate(-2 18) scale(1.55)">${signatureObject(signature, 110, 85)}</g>`;
     const held = ['read', 'tea', 'photo', 'flower', 'gift', 'write'].includes(kind);
-    const scene = design.focus === 'person'
+    const scene = design.focus === 'person' && !contextSetting
         ? sceneMotif(kind, held ? 151 : 245, held ? 172 : 192) : '';
     const textureId = `${safeId(idPrefix)}-paper-grain`;
     // A faint, fixed local hatch gives the drawing a pencil finish without
     // filters, remote assets, or injecting provider-generated markup.
-    return `<svg class="rmt-letter-illustration" data-rmt-letter-illustration-version="2" data-rmt-letter-focus="${design.focus}" data-rmt-letter-scene="${kind}" width="320" height="280" viewBox="0 0 320 280" preserveAspectRatio="xMidYMid meet" ${semantic}>${title}<defs><pattern id="${textureId}" patternUnits="userSpaceOnUse" width="5" height="5"><path d="m0 4 4-4" stroke="#997b91" stroke-width=".45" opacity=".12"/></pattern></defs>${letterSketch.sketchBackdrop(kind, colour(fact(design, 'outfitColor'), '#c1a5ba'))}${foreground}${scene}<ellipse cx="166" cy="154" rx="137" ry="119" fill="url(#${textureId})" pointer-events="none"/></svg>`;
+    return `<svg class="rmt-letter-illustration" data-rmt-letter-illustration-version="2" data-rmt-letter-focus="${design.focus}" data-rmt-letter-scene="${kind}" width="320" height="280" viewBox="0 0 320 280" preserveAspectRatio="xMidYMid meet" ${semantic}>${title}<defs><pattern id="${textureId}" patternUnits="userSpaceOnUse" width="5" height="5"><path d="m0 4 4-4" stroke="#997b91" stroke-width=".45" opacity=".12"/></pattern></defs>${letterSketch.sketchBackdrop(kind, colour(fact(design, 'outfitColor'), '#c1a5ba'), design.scene.evidence)}${foreground}${letterSketch.sketchSceneForeground(design)}${scene}<ellipse cx="166" cy="154" rx="137" ry="119" fill="url(#${textureId})" pointer-events="none"/></svg>`;
 }
 
 

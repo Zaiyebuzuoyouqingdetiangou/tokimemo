@@ -4,6 +4,8 @@ const wood = 'var(--rmt-interior-wood)', dark = 'var(--rmt-interior-line)', clot
 const stroke = `fill="none" stroke="${dark}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"`;
 const shadow = '<ellipse cx="0" cy="81" rx="64" ry="12" fill="#00000013"/>';
 export const ROOM_OBJECT_DRAWINGS = Object.freeze({
+    bicycle: `${shadow}<g ${stroke} stroke-width="5"><circle cx="-53" cy="40" r="37"/><circle cx="57" cy="40" r="37"/><path d="M-53 40-23-17 18 40h-71l72-56 38 56M18 40-8-29m-17 0h32M40-27h21l-5 15"/></g>`,
+    guitar: `${shadow}<path d="M-9-75h18v83q47-8 39 26q26 45-9 52h-57q-35-7-9-52q-8-34 18-26z" fill="${wood}" stroke="${dark}" stroke-width="3"/><circle cy="39" r="16" fill="${dark}"/><path d="M-3-75v143m6-143v143M-16 70h32" stroke="${paper}" stroke-width="2"/>`,
     petBed: `${shadow}<ellipse cx="0" cy="65" rx="71" ry="20" fill="${wood}"/><path d="M-63 51q0-65 62-65q59 0 61 65l-15 14h-92z" fill="${cloth}" stroke="${dark}" stroke-width="3"/><path d="M-29 54V26q1-28 29-28q29 0 30 28v29z" fill="${dark}"/><ellipse cy="57" rx="46" ry="13" fill="${paper}"/><path d="M-37 56q34-12 73 0m-57-47-6-11m49 11 6-11" ${stroke} opacity=".5"/>`,
     basket: `${shadow}<path d="M-49 15q-5-59 47-59q54 0 51 59" fill="none" stroke="${wood}" stroke-width="10"/><path d="M-58 12q58-20 116 0l-15 62q-43 24-88 0z" fill="${wood}" stroke="${dark}" stroke-width="3"/><ellipse cy="12" rx="59" ry="16" fill="${dark}"/><ellipse cy="10" rx="53" ry="11" fill="${paper}" opacity=".42"/><g ${stroke} opacity=".6"><path d="M-53 30q52 15 105 0m-99 19q47 17 94 0m-89 20q43 16 84 0M-33 23l6 57M-11 26l3 60m20-60-3 60m25-63-7 57"/></g>`,
     mat: `${shadow}<path d="m-79 39 105-24 59 38-105 28z" fill="${wood}" stroke="${dark}" stroke-width="2"/><g ${stroke} stroke-width="1.5" opacity=".5"><path d="m-66 42 48 31m-32-35 48 31m-31-35 48 31m-31-35 48 31m-31-35 48 31M-63 51l105-24M-50 59 55 35m-92 32 105-24"/></g><path d="m-82 39-6 7m64 38 3 7m110-36 7 5" ${stroke}/>` ,
@@ -30,6 +32,8 @@ export const ROOM_OBJECT_DRAWINGS = Object.freeze({
 });
 
 const kinds = [
+    ['bicycle', /(?:自行车|自行車|单车|單車|山地车|山地車|bicycle|bike)/giu],
+    ['guitar', /(?:吉他|guitar)/giu],
     ['petBed', /(?:猫窝|貓窩|狗窝|狗窩|宠物窝|寵物窩|pet\s*bed|cat\s*bed|dog\s*bed)/giu],
     ['medical', /(?:医疗.{0,8}(?:箱|包)|醫療.{0,8}(?:箱|包)|急救(?:箱|包)|药箱|藥箱|first\s*aid\s*kit|medical\s*kit)/giu],
     ['stairs', /(?:楼梯|樓梯|台阶|臺階|stairs?|staircase)/giu],

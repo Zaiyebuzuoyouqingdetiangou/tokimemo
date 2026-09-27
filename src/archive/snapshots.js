@@ -10,6 +10,7 @@ import * as core_context from '../core/context.js';
 import { state as runtimeState } from '../core/state.js';
 import * as core_text from '../core/text.js';
 import * as ui_overlay from '../ui/overlay.js';
+import * as core_archiveBridge from '../core/archiveBridge.js';
 
 export function memoryStateLabel(state, autoSync = false) {
     if (state.status === 'missing') return '这个聊天窗口还没有自己的“心迹回廊”档案。';
@@ -249,3 +250,6 @@ export function archiveCharacterAvatar(entry, context = core_context.getContext(
     if (!avatar) return '';
     try { return context.getThumbnailUrl?.('avatar', avatar) || ''; } catch { return ''; }
 }
+
+// 重构清单 C-3c（r84.100）：把 core 层要用的函数登记到 core/archiveBridge.js（core 不再 import 本文件）。
+core_archiveBridge.registerArchiveBridge({ scheduleChooserRefresh, rememberCurrentArchiveForOverview, syncArchiveOverviewCurrentRow });

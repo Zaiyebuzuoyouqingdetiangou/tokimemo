@@ -1,4 +1,5 @@
 import * as cg_visual from './cgVisualRules.js';
+import * as participants from './participants.js';
 // Per-chat cast appearance.
 //
 // Stored under its own chat-metadata key, which gives three properties the image prompt
@@ -14,7 +15,8 @@ import * as core_text from './text.js';
 import * as core_digest from './digest.js';
 import * as context_tags from './contextTags.js';
 import { state as runtimeState } from './state.js';
-import * as archive_repository from '../archive/repository.js';
+// C-3c（r84.100）：别名沿用 archive_repository，函数体一字不改；实际指向 core 层的桥，不再 import archive 层。
+import * as archive_repository from './archiveBridge.js';
 
 export const CAST_LOOKS_KEY = 'heartbeatMemoriesCastLooksV1';
 export const CAST_LOOKS_FIELD_LIMIT = 400;
@@ -43,6 +45,19 @@ export function normalizeParticipantLooks(value) {
 
 export function participantLooksSignature(value) {
     return JSON.stringify(normalizeParticipantLooks(value));
+}
+
+// Only explicitly selected IDs enter a new task. Names are display data, never
+// identity keys; retain empty rows so missing looks cannot change the cast.
+export function participantLooksBasis(record, snapshot) {
+    const selected = participants.normalizeParticipantSnapshot(snapshot);
+    if (!selected) return null;
+    return selected.people.map(person => {
+        const row = record?.characters?.find(value => value.participantId === person.id);
+        return { participantId: person.id, name: person.name,
+            tag: core_text.normalizeText(row?.tag, CAST_LOOKS_FIELD_LIMIT),
+            nl: core_text.normalizeText(row?.nl, CAST_LOOKS_FIELD_LIMIT) };
+    });
 }
 
 export function readParticipantLooks(context = null) {
@@ -247,6 +262,18 @@ export function ensureCastLooks(context = null) {
 
 // The single string that reaches an image request. Names bind a look to a person; the
 // event text still supplies clothing, pose and expression.
+// r84.166：交给模块生成当「外貌依据」。按 char/user 标出身份，名字只作辨认，不是指令。
+export function castLooksBasisText(record, context = null) {
+    if (!record) return '';
+    let live = context;
+    if (!live) { try { live = core_context.getContext(); } catch { live = null; } }
+    const looks = record.manual === true ? record : { ...record, char: lookFromDescription(record.char), user: lookFromDescription(record.user) };
+    const rows = [];
+    if (looks.char) rows.push(`char（${core_text.normalizeText(live?.name2, 60) || '角色'}）：${looks.char}`);
+    if (looks.user) rows.push(`user（${core_text.normalizeText(live?.name1, 60) || '用户'}）：${looks.user}`);
+    return core_text.normalizeText(rows.join('\n'), 1600);
+}
+
 export function castLooksPromptLine(record, context = null) {
     if (!record) return '';
     let live = context;

@@ -14,7 +14,7 @@ export function runRecoveryAction(button, key, operation, { label = '处理中�
     const wasDisabled = button?.disabled === true;
     if (button) { button.disabled = true; button.textContent = label; button.setAttribute?.('aria-busy', 'true'); }
     const task = Promise.resolve().then(operation).catch(error => {
-        if (error?.name !== 'AbortError') globalThis.toastr?.error?.(text.safeErrorSummary(error), title, { preventDuplicates: true });
+        if (error?.name !== 'AbortError') globalThis.toastr?.error?.(text.safeErrorSummary(error), title);
     }).finally(() => {
         pending.delete(key);
         if (button) { button.disabled = wasDisabled; button.textContent = original; button.removeAttribute?.('aria-busy'); }

@@ -17,7 +17,8 @@ import * as core_taskTrace from '../core/taskTrace.js';
 import * as core_contextTags from '../core/contextTags.js';
 import * as core_worldPresentation from '../core/worldPresentation.js';
 import * as time_stories from '../core/timeStoriesContract.js';
-import * as modes_relations from '../modes/relations.js';
+// C-4（r84.112）：别名沿用 modes_relations，函数体一字不改；实际指向生成层的桥，不再 import 关系模块。
+import * as modes_relations from './modesBridge.js';
 import * as ui_overlay from '../ui/overlay.js';
 // 生成上下文：内容设置与快照裁剪、世界书扫描词、各玩法参与者快照、世界呈现上下文
 // 从 generation/client.js 原样搬出（重构阶段 2），声明文本一字未改；generation/client.js 仍转发原有导出。

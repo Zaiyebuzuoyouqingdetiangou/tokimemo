@@ -24,6 +24,7 @@ import { finishArchiveTaskTrace, isArchiveCancellation } from './archiveCore.js'
 import { checkedArchiveTaskInput } from './importIdentity.js';
 import { retryCurrentArchiveSave, saveCurrentArchivePendingResults } from './recoveryDrafts.js';
 import { importCurrentChatMemoryOperation } from './importOperation.js';
+import * as core_archiveBridge from '../core/archiveBridge.js';
 // 以下导出已搬到 archive/archiveCore.js、archive/worldInfoSources.js、archive/externalMemory.js、archive/importPrompts.js、archive/importIdentity.js、archive/recoveryDrafts.js、archive/archiveVerdict.js、archive/importOperation.js，这里原样转发，调用方不用改。
 export const archiveSchemaVersion = split_archiveCore.archiveSchemaVersion;
 export const isCompatibleArchive = split_archiveCore.isCompatibleArchive;
@@ -326,11 +327,21 @@ async function runArchiveImportPrepared(context, options, taskTrace, admission) 
             '只保存本批已校验结果，不请求模型、不删除旧记忆；保存成功后才推进批次。', { destructive: false })) return { status: 'cancelled' };
         return saveCurrentArchivePendingResults(context, existing, options.logicalTask, taskTrace);
     }
+    const floorWindowSync = archive_batches.isAutomaticFloorWindowSync(options);
+    if (floorWindowSync && pending?.awaitingCommit) return { status: 'blocked' };
+    // Park a leftover draft so this window can start. Do not set parkPriorDraft:
+    // that flag swallows later import errors and the due floor is marked empty.
+    if (floorWindowSync && pending && !pending.onlyArchivedDrafts) {
+        if (archive_importRecovery.parkArchiveRecovery(hydrationOrigin, 'import', { ignoreActive: true })
+            && !await archive_importRecovery.flushArchiveRecovery(hydrationOrigin, 'import')) {
+            throw new Error('原整理草稿未确认保存，本次没有重新生成。');
+        }
+    }
     let selectedDraft = null, sourceExisting;
     if (options.draftId) selectedDraft = archive_importRecovery.readArchiveRecoveryDraft(hydrationOrigin, options.draftId);
     // A completed pending result already owns its validated content. Its local
     // save retry must precede source-journal admission (including a card rename).
-    else if (!options.restartImport && pending && !pending.onlyArchivedDrafts && !pending.awaitingCommit) {
+    else if (!options.restartImport && !floorWindowSync && pending && !pending.onlyArchivedDrafts && !pending.awaitingCommit) {
         const active = archive_importRecovery.listArchiveRecoveryDrafts(hydrationOrigin, 'import').find(row => !row.paused && row.stage === 'segments');
         if (active) selectedDraft = archive_importRecovery.readArchiveRecoveryDraft(hydrationOrigin, active.draftId);
     }
@@ -376,7 +387,7 @@ async function runArchiveImportPrepared(context, options, taskTrace, admission) 
             continueRecovery: !previousResult, independentResult, nextIndependentBatch: !!previousResult, baseMemoryMissing };
     }
     if (options.commitCompletedOnly && !selectedDraft) throw core_text.safeUserError('没有可先入档的原整理草稿，原记录未改动。', 'RMT_ARCHIVE_DRAFT_NOT_FOUND');
-    if (!selectedDraft && pending && !pending.onlyArchivedDrafts && !options.restartImport) {
+    if (!selectedDraft && pending && !pending.onlyArchivedDrafts && !options.restartImport && !floorWindowSync) {
         if (options.automatic === true) return { status: 'blocked' };
         if (pending.capacityBlocked) {
             globalThis.toastr?.warning?.(pending.notice, '心迹回廊 · 容量边界');
@@ -435,3 +446,6 @@ async function runArchiveImportPrepared(context, options, taskTrace, admission) 
     }
     return result;
 }
+
+// 重构清单 C-3c（r84.100）：把 core 层要用的函数登记到 core/archiveBridge.js（core 不再 import 本文件）。
+core_archiveBridge.registerArchiveBridge({ getImportedMemory, importCurrentChatMemory, requireArchive, getMemoryWorldInfoSelection, migrateDerivedCacheRevision, migrateArchiveInMemory, archiveDeletionFenceKey });

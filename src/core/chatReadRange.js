@@ -65,11 +65,23 @@ function selection(context, settings) {
         rows.push({ index, message, hidden });
         characters += text.length;
     }
-    const modeLabel = range.mode === 'all' ? '全部楼层' : range.mode === 'recent' ? `最近 ${range.recent} 楼` : '指定范围';
-    const boundsLabel = start ? `第 ${start}–${end} 楼` : '无匹配楼层';
+    const span = start ? end - start + 1 : 0;
+    const hiddenNote = range.includeHidden ? '含隐藏对话' : '不含隐藏对话';
+    const windowText = !start
+        ? ''
+        : range.mode === 'recent'
+            ? `最近 ${range.recent} 楼是第 ${start}–${end} 楼，共 ${span} 楼`
+            : range.mode === 'all'
+                ? `当前聊天全部 ${span} 楼（第 ${start}–${end} 楼）`
+                : `指定的第 ${start}–${end} 楼，共 ${span} 楼`;
+    const bodyText = !start
+        ? '没有匹配的楼层，读不到正文。'
+        : rows.length === span
+            ? `${windowText}。这 ${span} 楼都是能读的正文（你和角色的对话）。${hiddenNote}。`
+            : `${windowText}。这 ${span} 楼里有 ${rows.length} 条能读的正文（你和角色的对话），其余楼层空着或不是对话。${hiddenNote}。`;
     return { rows, preview: {
         totalFloors: chat.length, selectedFloors: rows.length, visibleCount, hiddenCount, characters, start, end,
-        label: `${modeLabel} · ${boundsLabel} · 读取 ${rows.length} 条正文 · ${range.includeHidden ? '含隐藏对话' : '不含隐藏对话'}`,
+        label: bodyText,
     } };
 }
 

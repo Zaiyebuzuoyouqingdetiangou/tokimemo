@@ -1,5 +1,5 @@
-const VERSION = '0.99.30';
-const BUILD = '0.99.30-r84.82-wand-icon';
+const VERSION = '0.99.93';
+const BUILD = '0.99.93-r84.172-bunny-menu';
 
 const SETTINGS_ID = 'heartbeat_memories_settings';
 const MENU_ID = 'heartbeat_memories_menu_item';
@@ -478,18 +478,29 @@ function startBootstrapAutoUpdates({ wakeRuntime = () => ensureRuntime('auto-upd
     try {
         context = globalThis.SillyTavern?.getContext?.();
         const raw = context?.extensionSettings?.heartbeatMemories?.autoUpdates;
-        if (!raw || !Object.values(raw).some(rule => rule?.enabled === true)
+        const legacyOn = !!raw && Object.values(raw).some(rule => rule?.enabled === true);
+        const hasPlan = !!context?.chatMetadata && Object.prototype.hasOwnProperty.call(context.chatMetadata, 'autoMemoryPlanV1');
+        if ((!legacyOn && !hasPlan)
             || !context.eventSource?.on || !globalThis.navigator?.locks?.request || !globalThis.localStorage) return Promise.resolve();
     } catch { return Promise.resolve(); }
     const lifetime = bootstrapAutoEpoch;
     // The pure floor policy has no runtime imports. A saved toggle alone never loads the bundle.
     bootstrapAutoPending = import(`./src/core/autoUpdatePolicy.js?heartbeat=${BUILD}`).then(async policy => {
-        if (disabled || runtimeModule || lifetime !== bootstrapAutoEpoch
-            || !policy.hasEnabledAutoUpdates(context.extensionSettings?.heartbeatMemories?.autoUpdates)) return;
+        if (disabled || runtimeModule || lifetime !== bootstrapAutoEpoch) return;
+        const openingFloor = Array.isArray(context.chat) ? context.chat.length : 0;
+        const wakeNow = policy.autoMemoryRuntimeWake(context.chatMetadata, openingFloor);
+        const legacyEnabled = policy.hasEnabledAutoUpdates(context.extensionSettings?.heartbeatMemories?.autoUpdates);
+        let openingGate = { allowLegacy: true, source: 'legacy' };
+        try { openingGate = policy.readLegacySchedulerGate(context.chatMetadata); }
+        catch { openingGate = { allowLegacy: false, source: 'paused-corrupt' }; }
+        if (!wakeNow && !legacyEnabled && openingGate.source !== 'paused-new-plan') return;
         const snapshot = () => {
             try {
                 const current = globalThis.SillyTavern?.getContext?.();
                 if (!current || current.groupId || current.characterId == null || !Array.isArray(current.chat)) return null;
+                const gate = policy.readLegacySchedulerGate(current.chatMetadata);
+                policy.noteLegacySchedulerSource(gate, bootstrapAutoUpdateScope(current));
+                if (!gate.allowLegacy) return null;
                 const rules = policy.normalizeAutoUpdates(current.extensionSettings?.heartbeatMemories?.autoUpdates);
                 if (!policy.hasEnabledAutoUpdates(rules)) return null;
                 const memory = current.chatMetadata?.[MEMORY_KEY];
@@ -515,8 +526,21 @@ function startBootstrapAutoUpdates({ wakeRuntime = () => ensureRuntime('auto-upd
         let timer = 0, stopped = false;
         const listener = () => {
             if (stopped) return Promise.resolve();
+            try {
+                const host = globalThis.SillyTavern?.getContext?.();
+                const hostFloor = Array.isArray(host?.chat) ? host.chat.length : 0;
+                if (policy.autoMemoryRuntimeWake(host?.chatMetadata, hostFloor)) {
+                    stopBootstrapAutoUpdates();
+                    void Promise.resolve().then(wakeRuntime).catch(showBootError);
+                    return Promise.resolve();
+                }
+            } catch {}
             let enabled = false;
-            try { enabled = policy.hasEnabledAutoUpdates(globalThis.SillyTavern?.getContext?.()?.extensionSettings?.heartbeatMemories?.autoUpdates); } catch {}
+            try {
+                const host = globalThis.SillyTavern?.getContext?.();
+                const gate = policy.readLegacySchedulerGate(host?.chatMetadata);
+                enabled = gate.allowLegacy && policy.hasEnabledAutoUpdates(host?.extensionSettings?.heartbeatMemories?.autoUpdates);
+            } catch {}
             if (!enabled) { if (timer) clearInterval(timer); timer = 0; return Promise.resolve(); }
             if (!timer) timer = setInterval(listener, 5000);
             return scheduler.tick().catch(() => {

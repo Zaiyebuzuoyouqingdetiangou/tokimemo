@@ -18,6 +18,9 @@ import * as css_roomMotifsItemsCss from './css/roomMotifsItemsCss.js';
 import * as css_phoneMobileCss from './css/phoneMobileCss.js';
 import * as css_calendarCss from './css/calendarCss.js';
 import * as css_heartProfileTravelCss from './css/heartProfileTravelCss.js';
+import * as ui_autoMemoryWizardStyles from './autoMemoryWizardStyles.js';
+import * as ui_heartEnvelope from './heartEnvelope.js';
+import * as ui_imageMenu from './imageMenu.js';
 
 export function participantPickerCss() {
     const root = '#' + core_constants.OVERLAY_ID;
@@ -186,6 +189,11 @@ export function ensureSettingsStyles() {
 }
 `;
     style.textContent += ui_themeSurfaces.structuralThemeCss('#' + core_constants.SETTINGS_ID);
+    style.textContent += ui_heartEnvelope.heartEnvelopePickerCss('#' + core_constants.SETTINGS_ID);
+    style.textContent += `
+#${core_constants.SETTINGS_ID} [data-rmt-settings-section="auto"] .rmt-settings-section-body > :is(p, small){font-size:14px!important;line-height:1.65!important;margin:0}
+#${core_constants.OVERLAY_ID} #${core_constants.SETTINGS_ID} [data-rmt-settings-section="auto"] .rmt-settings-section-body > :is(p, small){font-size:14px!important;line-height:1.65!important;margin:0}
+`;
     style.textContent += `
 #${core_constants.SETTINGS_ID}_launcher{padding:16px;border:1px solid var(--SmartThemeBorderColor,#cbdce6);border-radius:14px;color:var(--SmartThemeBodyColor,#334155);background:var(--SmartThemeBlurTintColor,#fff);line-height:1.6}
 #${core_constants.SETTINGS_ID}_launcher b{font-size:16px}
@@ -209,7 +217,7 @@ export function ensureSettingsStyles() {
     style.textContent += bedtime_view.bedtimeCss();
     style.textContent += `
 #${core_constants.OVERLAY_ID} .rmt-expanded-cg{margin:16px 0;max-width:100%}
-#${core_constants.OVERLAY_ID} .rmt-expanded-cg .rmt-thumb{height:auto;min-height:160px;max-height:540px;aspect-ratio:3/2;border-radius:16px;overflow:hidden}
+#${core_constants.OVERLAY_ID} .rmt-expanded-cg .rmt-thumb{box-sizing:border-box;width:100%;max-width:100%;min-width:0;height:auto;min-height:120px;max-height:540px;aspect-ratio:16/9;border-radius:16px;overflow:hidden}
 #${core_constants.OVERLAY_ID} .rmt-expanded-cg img{width:100%;height:100%;object-fit:contain}
 #${core_constants.OVERLAY_ID} .rmt-language-scene{padding:16px;margin:12px 0;border:1px solid var(--rmt-theme-border);border-radius:14px}
 #${core_constants.OVERLAY_ID} .rmt-language-scene label{display:grid;gap:8px;margin:12px 0}
@@ -241,6 +249,8 @@ export function ensureStyles() {
         + css_calendarCss.calendarCss()
         + css_heartProfileTravelCss.heartProfileTravelCss();
     style.textContent += ui_inboxStyles.inboxCss('#' + core_constants.OVERLAY_ID);
+    style.textContent += ui_imageMenu.imageMenuCss('#' + core_constants.OVERLAY_ID);
+    ui_imageMenu.installImageMenuDismiss(document);
     style.textContent += ui_pastLivesView.PAST_LIVES_CSS;
     style.textContent += time_stories_view.timeStoriesCss();
     style.textContent += ui_themeSurfaces.structuralThemeCss('#' + core_constants.OVERLAY_ID) + ui_themeSurfaces.structuralThemeCss('.rmt-avatar-dialog-pop[data-rmt-theme-mode]');
@@ -331,6 +341,8 @@ export function ensureStyles() {
 }
 `;
     style.textContent += homeAndReadingCss();
+    style.textContent += ui_autoMemoryWizardStyles.wizardCss('#' + core_constants.OVERLAY_ID);
+    style.textContent += ui_heartEnvelope.heartEnvelopePickerCss('#' + core_constants.OVERLAY_ID);
     style.textContent += participantPickerCss();
     style.textContent += ui_immersionStyles.immersionCss('#' + core_constants.OVERLAY_ID);
     style.textContent += ui_readingStyles.readingCss('#' + core_constants.OVERLAY_ID);
@@ -353,7 +365,7 @@ export function ensureStyles() {
     style.textContent += bedtime_view.bedtimeCss();
     style.textContent += `
 #${core_constants.OVERLAY_ID} .rmt-expanded-cg{margin:16px 0;max-width:100%}
-#${core_constants.OVERLAY_ID} .rmt-expanded-cg .rmt-thumb{height:auto;min-height:160px;max-height:540px;aspect-ratio:3/2;border-radius:16px;overflow:hidden}
+#${core_constants.OVERLAY_ID} .rmt-expanded-cg .rmt-thumb{box-sizing:border-box;width:100%;max-width:100%;min-width:0;height:auto;min-height:120px;max-height:540px;aspect-ratio:16/9;border-radius:16px;overflow:hidden}
 #${core_constants.OVERLAY_ID} .rmt-expanded-cg img{width:100%;height:100%;object-fit:contain}
 #${core_constants.OVERLAY_ID} .rmt-language-scene{padding:16px;margin:12px 0;border:1px solid var(--rmt-theme-border);border-radius:14px}
 #${core_constants.OVERLAY_ID} .rmt-language-scene label{display:grid;gap:8px;margin:12px 0}

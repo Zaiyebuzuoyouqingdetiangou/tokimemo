@@ -19,9 +19,9 @@ const SHAPES = Object.freeze({
 export function roomFigureSvg(profile = {}) {
     return pixelFigure.pixelFigureSvg(profile);
 }
-export function roomInteriorHtml(layout, { figure = {}, personIsHere = false, charName = '', selectedId = '', world = 'neutral', participants = null } = {}) {
+export function roomInteriorHtml(layout, { figure = {}, personIsHere = false, charName = '', selectedId = '', world = 'neutral', participants = null, space = {}, night = false } = {}) {
     if (Array.isArray(participants)) {
-        const interior = roomInteriorHtml(layout, { selectedId, world });
+        const interior = roomInteriorHtml(layout, { selectedId, world, space, night });
         const figures = participants.map(person => `<button type="button" class="rmt-room-resident-figure" data-rmt-action="room-participant" data-rmt-participant-id="${text.esc(person.id)}" aria-label="听${text.esc(person.name)}说话"><svg viewBox="-70 -115 140 220" role="img" aria-label="${text.esc(person.name)}的像素小人">${roomFigureSvg(person.figure)}</svg><b>${text.esc(person.name)}</b></button>`).join('');
         return `<div class="rmt-room-shared-interior">${interior}<div class="rmt-room-resident-figures">${figures}</div></div>`;
     }
@@ -46,7 +46,44 @@ export function roomInteriorHtml(layout, { figure = {}, personIsHere = false, ch
             const number = Math.max(1,Math.floor(Number(entry.number)||start+i+1));
             return `<button type="button" class="rmt-interior-hotspot ${entry.id === selectedId ? 'active' : ''}" style="left:${x}%;top:${y}%" data-rmt-room-id="${text.esc(entry.id)}" aria-pressed="${entry.id===selectedId}" aria-controls="heartbeat_memories_overlay_room_object_detail" aria-label="${number}. ${text.esc(label)}"><span>${number}</span><b>${text.esc(label)}</b></button>`;
         }).join('');
-        panels.push(`<div class="rmt-interior" data-rmt-interior-world="${['historical','scifi','fantasy'].includes(world)?world:'neutral'}"><svg viewBox="0 0 900 550" class="rmt-interior-svg" role="img" aria-label="当前房间的内装示意"><path d="M0 0h900v396l-145-95H145L0 396Z" fill="var(--rmt-interior-wall)"/><path d="M145 0h610v301H145Z" fill="var(--rmt-interior-backwall)"/><path d="m0 396 145-95h610l145 95v154H0Z" fill="var(--rmt-interior-floor)"/><path d="M145 0v301L0 396m755-396v301l145 95M102 330h696M37 375h825M0 428h900M0 488h900M315 301 188 550m284-249-16 249m169-249 127 249" fill="none" stroke="var(--rmt-interior-line)" stroke-opacity=".22" stroke-width="3"/><ellipse cx="455" cy="411" rx="263" ry="72" fill="var(--rmt-interior-fabric)" opacity=".12"/>${world==='scifi'?'<path d="M150 26h600m-600 261h600" stroke="var(--rmt-interior-glass)" stroke-width="5"/>':world==='historical'?'<path d="M145 12h610M156 0v292m586-292v292" stroke="var(--rmt-interior-wood)" stroke-width="12"/>':''}${furniture}${personIsHere ? `<g transform="translate(840 326) scale(.82)">${roomFigureSvg(figure)}</g>`:''}</svg>${hits}${personIsHere ? `<button type="button" class="rmt-interior-person" data-rmt-action="room-presence" aria-label="听${text.esc(charName)}说话">${text.esc(charName)}</button>`:''}</div>`);
+        panels.push(`<div class="rmt-interior" data-rmt-room-architecture="${roomArchitectureKind(space)}" data-rmt-interior-world="${['historical','scifi','fantasy'].includes(world)?world:'neutral'}"><svg viewBox="0 0 900 550" class="rmt-interior-svg" role="img" aria-label="当前房间的内装示意">${roomArchitectureSvg(space, world, night)}${furniture}${personIsHere ? `<g transform="translate(840 326) scale(.82)">${roomFigureSvg(figure)}</g>`:''}</svg>${hits}${personIsHere ? `<button type="button" class="rmt-interior-person" data-rmt-action="room-presence" aria-label="听${text.esc(charName)}说话">${text.esc(charName)}</button>`:''}</div>`);
     }
     return panels.join('');
+}
+
+
+// Space names choose local architecture, never generated SVG or coordinates.
+export function roomArchitectureKind(space = {}) {
+    const name = `${space.label || ''} ${space.spaceType || ''}`;
+    if (/阳台|陽台|露台|游廊|遊廊|balcony|terrace|veranda/iu.test(name)) return 'balcony';
+    if (/庭院|花园|花園|屋顶|屋頂|院子|garden|courtyard|rooftop/iu.test(name)) return 'garden';
+    if (/厨房|廚房|灶房|kitchen/iu.test(name)) return 'kitchen';
+    if (/浴室|洗手间|洗手間|bathroom/iu.test(name)) return 'bathroom';
+    if (/琴房|练习|練習|music|studio/iu.test(name)) return 'music';
+    if (/书房|書房|study|library|office/iu.test(name)) return 'study';
+    if (/客厅|客廳|会客|會客|living|lounge/iu.test(name)) return 'living';
+    if (/卧室|臥室|寝|寢|bedroom/iu.test(name)) return 'bedroom';
+    return 'interior';
+}
+export function roomArchitectureSvg(space = {}, world = 'neutral', night = false) {
+    const kind = roomArchitectureKind(space);
+    const outdoor = ['balcony', 'garden'].includes(kind);
+    const floor = outdoor ? '#c5cfbf' : kind === 'bathroom' ? '#d7e5e5' : kind === 'kitchen' ? '#d9d5c5' : 'var(--rmt-interior-floor)';
+    const shell = outdoor
+        ? '<path d="M0 0h900v550H0z" fill="#cbdde6"/><path d="M0 185q115-82 229 0t225 0t225 0t221 0v201H0z" fill="#aabdaa"/><path d="M0 234q140-63 290 0t310 0t300 0v152H0z" fill="#8fa994"/><circle cx="717" cy="67" r="26" fill="#faf2d7"/>'
+        : '<path d="M0 0h900v396l-145-95H145L0 396Z" fill="var(--rmt-interior-wall)"/><path d="M145 0h610v301H145Z" fill="var(--rmt-interior-backwall)"/>';
+    const litShell = night && outdoor ? shell.replace('#cbdde6', '#273848').replace('#aabdaa', '#3e5a56').replace('#8fa994', '#344b48') : shell;
+    const ground = `<path d="m0 396 145-95h610l145 95v154H0Z" fill="${floor}"/><path d="M102 330h696M37 375h825M0 428h900M0 488h900M315 301 188 550m284-249-16 249m169-249 127 249" fill="none" stroke="var(--rmt-interior-line)" stroke-opacity=".16" stroke-width="3"/>`;
+    const railing = '<g stroke="#edf1e9" fill="none"><path d="M0 246h900M0 318h900" stroke-width="13"/><path d="M40 247v71m82-71v71m82-71v71m82-71v71m82-71v71m82-71v71m82-71v71m82-71v71m82-71v71m82-71v71m82-71v71" stroke-width="7"/></g>';
+    const window = '<rect x="334" y="36" width="220" height="146" rx="4" fill="var(--rmt-interior-glass)" stroke="var(--rmt-interior-wood)" stroke-width="8"/><path d="M444 36v146M334 110h220" stroke="var(--rmt-interior-paper)" stroke-width="5"/>';
+    const wallDetails = kind === 'balcony' ? railing
+        : kind === 'garden' ? '<path d="M48 316V100m0 55q-72-68-29-110q63 4 37 105m3 0q87-91 98-32q-27 51-98 48" fill="#759579" stroke="#6c8269" stroke-width="12"/>'
+        : kind === 'music' ? '<g fill="var(--rmt-interior-wood)" opacity=".65"><path d="M161 24h12v202h-12zm26 0h12v202h-12zm26 0h12v202h-12zm465 0h12v202h-12zm26 0h12v202h-12zm26 0h12v202h-12z"/></g>'+window
+        : kind === 'study' ? window+'<path d="M170 51h112v129H170zM603 51h112v129H603z" fill="var(--rmt-interior-wood)"/><path d="M180 67h90m-90 40h90m-90 40h90m343-80h90m-90 40h90m-90 40h90" stroke="var(--rmt-interior-paper)" stroke-width="15"/>'
+        : kind === 'kitchen' ? '<path d="M163 24h569v94H163zM163 203h569v98H163z" fill="#becaba" stroke="#8c9989" stroke-width="4"/><path d="M163 194h569" stroke="#f4f1e5" stroke-width="19"/><path d="M302 24v94m143-94v94m143-94v94M302 210v91m143-91v91m143-91v91" stroke="#8c9989" stroke-width="3"/>'
+        : kind === 'bathroom' ? '<path d="M145 70h610m-610 70h610m-610 70h610M225 0v301m90-301v301m90-301v301m90-301v301m90-301v301m90-301v301" stroke="#f2f7f5" stroke-width="4"/><ellipse cx="452" cy="126" rx="78" ry="99" fill="#c1dce2" stroke="#f4f6ef" stroke-width="9"/>'
+        : kind === 'living' ? window+'<path d="M285 24h40v177h-40zm281 0h40v177h-40z" fill="var(--rmt-interior-fabric)" opacity=".65"/><ellipse cx="455" cy="411" rx="263" ry="72" fill="var(--rmt-interior-fabric)" opacity=".32"/>'
+        : kind === 'bedroom' ? window+'<path d="M299 27q30 67 9 166m260-166q-27 76-6 166" fill="none" stroke="var(--rmt-interior-fabric)" stroke-width="31" opacity=".6"/>' : window;
+    const trim = !outdoor && world === 'historical' ? '<path d="M145 12h610M156 0v292m586-292v292" stroke="var(--rmt-interior-wood)" stroke-width="12"/>' : !outdoor && world === 'scifi' ? '<path d="M150 26h600m-600 261h600" stroke="var(--rmt-interior-glass)" stroke-width="5"/>' : '';
+    return `<g data-rmt-architecture="${kind}">${litShell}${ground}${wallDetails}${trim}</g>`;
 }

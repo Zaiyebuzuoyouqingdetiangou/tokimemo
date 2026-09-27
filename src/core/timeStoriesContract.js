@@ -3,7 +3,7 @@ import * as safeData from './pastLivesContract.js';
 
 export const TIME_ECHO_MODE = 'timeEcho';
 export const TIME_STORY_VERSION = 1;
-export const TIME_STORY_LIMITS = Object.freeze({ episodes: 48, lines: 120,
+export const TIME_STORY_LIMITS = Object.freeze({ episodes: Number.MAX_SAFE_INTEGER, lines: 120,
     title: 120, prose: 30000, line: 3000, episodeChars: 180000, sessionChars: 1800000 });
 export const TIME_STORY_PALETTES = Object.freeze(['rose', 'blue', 'moss', 'gold', 'plum', 'slate']);
 export const TIME_STORY_PRESENTATIONS = Object.freeze(['modern', 'classical', 'fantasy', 'scifi', 'neutral']);
@@ -25,9 +25,9 @@ export function timeStoryText(value, max = TIME_STORY_LIMITS.prose, required = f
     return result;
 }
 export function timeStoryArray(value, max) {
-    if (!Array.isArray(value) || value.length > max)
-        throw timeStoryError('STRUCTURE', '番外列表缺失或超过本地安全容量；无需凑满数量。');
-    return value;
+    if (!Array.isArray(value)) throw timeStoryError('STRUCTURE', '番外列表缺失；无需凑满数量。');
+    // r84.171：模型多写了几条时只收前面的，不让整步失败。
+    return value.length > max ? value.slice(0, max) : value;
 }
 export function timeStoryData(value, max = TIME_STORY_LIMITS.sessionChars) {
     try { return safeData.pastLivesData(value, max); }

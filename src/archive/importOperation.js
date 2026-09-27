@@ -3,6 +3,7 @@ import * as source_read from './sourceReadGuard.js';
 import * as draft_inputs from './draftInputs.js';
 import * as archive_batches from './importBatches.js';
 import * as archive_coverage from './coverageRanges.js';
+import * as archive_summary from './summaryPreference.js';
 import * as archive_requestBudget from './requestBudget.js';
 import * as core_cache from '../core/cache.js';
 import * as core_constants from '../core/constants.js';
@@ -26,10 +27,24 @@ import { archiveInputAvailable, archiveProfilePrompt, checkedArchiveProfile, fal
 import { admitArchiveBatch, archiveContentContext, archiveRecoverySettingsIdentity, archiveSourceOwnerIdentity, assertBatchCommitIdentity, batchIdentity, captureArchiveTaskInput, checkedArchiveTaskInput, progressExternalMetadata, progressWorldInfo, retainedBatchExternal } from './importIdentity.js';
 import { archiveSourceBank, progressForDraftRow, refreshArchiveRecoveryReading } from './recoveryDrafts.js';
 import { generateArchiveImportSegment } from './archiveVerdict.js';
+import { floorWindowMessages, floorWindowStamp } from './floorWindowCheck.js';
 // 建档主流程：一次建档操作（分批、请求、校验、保存）
 // 从 archive/repository.js 原样搬出（重构阶段 2），声明文本一字未改；archive/repository.js 仍转发原有导出。
 
-export async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic = false, continueRecovery = false, restartImport = false, participantRoster, logicalTask,
+// r84.162：只在旧批次用到的楼不在当前读取范围里时，才补读整段聊天（不按读取范围筛）。
+// 当前范围里的楼仍以 snapshot.messages 为准；补读的楼只供 resolveBatchParts 按哈希核对。
+async function messagesForBatchRefs(progress, snapshot, context, expectedChatId, stillCurrent) {
+    const have = new Set((snapshot.messages || []).map(row => row.index));
+    const missing = (progress?.batches?.[progress.nextBatch] || [])
+        .some(part => (part.refs || []).some(ref => ref.kind === 'chat' && !have.has(ref.index)));
+    if (!missing) return snapshot.messages;
+    const full = await core_context.buildChatSnapshot(context, { completeSource: true, expectedChatId, stillCurrent });
+    const merged = new Map((full.messages || []).map(row => [row.index, row]));
+    for (const row of snapshot.messages || []) merged.set(row.index, row);
+    return [...merged.values()];
+}
+
+export async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic = false, continueRecovery = false, restartImport = false, participantRoster, logicalTask, floorWindow = null,
     draftId = '', selectedDraft = null, commitCompletedOnly = false, partialBase = null, independentResult = false, nextIndependentBatch = false, baseMemoryMissing = false, sceneRecords = null } = {}, preparation) {
     const context = preparation.context;
     const existing = Object.hasOwn(preparation, 'sourceExisting') ? preparation.sourceExisting : preparation.existing;
@@ -96,9 +111,16 @@ export async function importCurrentChatMemoryOperation({ fullRebuild = false, au
         stillCurrent: preparationStillCurrent });
     assertPreparationCurrent();
     const identity = capturedInput?.identity || batchIdentity(context, snapshotForIdentity);
+    const floorWindowSync = archive_batches.isAutomaticFloorWindowSync({
+        automatic, floorWindow, continueRecovery, restartImport, selectedDraft, nextIndependentBatch, draftId,
+    });
     if (progress) {
-        archive_batches.assertIdentity(progress.identity, identity);
+        archive_batches.assertIdentity(progress.identity, identity, { ignoreChatFingerprint: floorWindowSync });
         if (progress.archiveRevision !== (existing?.archiveRevision || '')) throw archive_batches.changedInput('archive');
+        // r84.159：每楼自动建档接着做档案里没做完的批次时，上面已证明角色、Persona、范围、来源选择、配置都没变。
+        // 把这批的聊天身份对到当前聊天，后面各处核对就不会因为聊天后面多了几楼而失败。
+        // 这批自己用到的楼仍由 resolveBatchParts 按每个片段的哈希逐一核对当前聊天，被改就停。
+        if (floorWindowSync && progress.identity?.chat !== identity.chat) progress = { ...progress, identity: { ...progress.identity, chat: identity.chat } };
     }
     if (pinnedInputs?.identity) archive_batches.assertIdentity(pinnedInputs.identity, identity);
     const shouldScan = settings.useCurrentChatExternalMemory || hasMemoryWorldInfoSelection(context);
@@ -166,7 +188,7 @@ export async function importCurrentChatMemoryOperation({ fullRebuild = false, au
     if (!snapshot.chatId) throw new Error('无法识别当前聊天窗口 ID，请先保存或打开一个具体聊天。');
     if (!archiveInputAvailable(snapshot, external)) throw new Error('当前聊天窗口没有可用于创建档案的角色/用户消息或已绑定的外部历史。');
 
-    if (incrementalUpdate && !capturedInput) {
+    if (incrementalUpdate && !capturedInput && !restartImport && !(automatic && floorWindow)) {
         const oldChatFingerprint = archivedChatFingerprint(existing);
         if (!oldChatFingerprint || previousMessageCount > snapshot.totalMessages || snapshot.prefixFingerprint !== oldChatFingerprint
             || (existing?.fullSourceFingerprint && snapshot.fullPrefixFingerprint && snapshot.fullPrefixFingerprint !== existing.fullSourceFingerprint)) {
@@ -181,8 +203,26 @@ export async function importCurrentChatMemoryOperation({ fullRebuild = false, au
     const coverageWindow = archive_coverage.runCoverageWindow(snapshot, { incrementalUpdate, rangeChanged, previousMessageCount });
     // Broader/revised choices may explicitly add older selected floors. The merge below
     // deduplicates already archived content and never deletes records outside the range.
-    const chatInput = sceneOnly ? [] : (progress || restartImport ? snapshot.messages : incrementalUpdate && !rangeChanged ? snapshot.incrementalMessages : snapshot.messages);
+    let chatInput = sceneOnly ? [] : (progress || restartImport ? snapshot.messages : incrementalUpdate && !rangeChanged ? snapshot.incrementalMessages : snapshot.messages);
     const externalChanged = !!progress || restartImport || !incrementalUpdate || core_text.normalizeText(existing?.externalMemoryFingerprint, 240) !== core_text.normalizeText(external.fingerprint, 240);
+    // 自动留忆先建档。有新摘要时，摘要和没被摘要点名的楼一起送出，正文不截断。摘要没更新才只读这一窗。
+    // r84.157：这一窗真的成了聊天来源时，记下窗口起止楼和内容指纹，延后保存只核对这一窗。
+    let windowStamp = null;
+    if (automatic && floorWindow && !progress && !restartImport && !capturedInput && !sceneOnly) {
+        const scoped = floorWindowMessages(context, floorWindow);
+        const source = archive_summary.archiveSourceForDue({
+            summaryChanged: externalChanged,
+            summaryCount: archive_summary.pluginSummaryCount(external),
+        });
+        if (source === 'summary') {
+            const uncovered = archive_summary.uncoveredWindowMessages(scoped, external.records);
+            chatInput = uncovered;
+            if (floorWindowSync) windowStamp = floorWindowStamp(floorWindow, scoped);
+        } else if (scoped.length) {
+            chatInput = scoped;
+            if (floorWindowSync) windowStamp = floorWindowStamp(floorWindow, scoped);
+        }
+    }
     if (!progress && incrementalUpdate && !chatInput.length && !externalChanged) {
         clearMemoryPreflight(context);
         globalThis.toastr?.info?.('当前窗口没有发现新的聊天消息或新的记忆 / 摘要资料；现有档案和全部已生成内容保持不变。', '心迹回廊');
@@ -258,6 +298,7 @@ export async function importCurrentChatMemoryOperation({ fullRebuild = false, au
                     baseUsedChars: incrementalUpdate ? Number(existing?.usedCharacterCount) || 0 : 0,
                     ...(external.ledgerAvailable === false ? { fallbackRecords: external.records } : {}),
                     capacityPending: [], createdAt: Date.now(),
+                    ...(windowStamp ? { floorWindow: windowStamp } : {}),
                     ...(archiveRoster ? { participantRoster: archiveRoster } : {}) };
                 archive_batches.checkedProgress(progress);
             }
@@ -269,7 +310,11 @@ export async function importCurrentChatMemoryOperation({ fullRebuild = false, au
                 && !archive_capacity.canAdmitToHot(existing.memories)) {
                 globalThis.toastr?.info?.('热位已满且均为锁定。本批新结果会进待入档，可导出；已有相簿/ADV/房间仍可生成。', '心迹回廊');
             }
-            const parts = archive_batches.resolveBatchParts(progress, snapshot.messages, external.records);
+            // r84.162：读取范围设成「最近 N 楼」时，档案里没做完的旧批次可能有楼已经滑出范围。
+            // 旧批次按自己记下的楼核对（每个片段有哈希，内容不同仍会停下），不受当前读取范围限制。
+            const partsMessages = capturedInput ? snapshot.messages
+                : await messagesForBatchRefs(progress, snapshot, context, preparation.origin.chatId, preparationStillCurrent);
+            const parts = archive_batches.resolveBatchParts(progress, partsMessages, external.records);
             chunks = parts.filter(part => part.kind === 'chat').map(part => part.data);
             externalChunks = parts.filter(part => part.kind === 'external').map(part => part.data);
             if (!commitCompletedOnly) {
@@ -285,8 +330,11 @@ export async function importCurrentChatMemoryOperation({ fullRebuild = false, au
                 participantRoster: archiveRoster });
         }
         if (progress && taskInputV1) progress.taskInputV1 = structuredClone(taskInputV1);
-        assertPreparationCurrent();
+        const livePreparation = assertPreparationCurrent();
         if (progress) assertBatchCommitIdentity(context, { [archive_batches.IMPORT_PROGRESS_KEY]: progress });
+        // r84.159：保存前（assertBatchSaveCurrent）会做同一项核对。提前到发请求之前，不先花钱再拒绝保存。
+        if ((commitCompletedOnly || receiptBase?.archivePartialDraft) && !floorWindowSync
+            && core_context.completeArchiveChatFingerprint(livePreparation) !== snapshotForIdentity.fullFingerprint) throw archive_batches.changedInput('chat');
         if (!automatic && !continueRecovery) {
             const chatCharacters = chatInput.reduce((sum, item) => sum + item.text.length, 0);
             const externalCharacters = externalChunks.reduce((sum, chunk) => sum + JSON.stringify(chunk).length, 0);
@@ -538,6 +586,7 @@ export async function importCurrentChatMemoryOperation({ fullRebuild = false, au
             const live = core_context.currentCharacterGuard();
             if (!core_context.isCurrentTaskOrigin(origin, live)) throw archive_batches.changedInput('archive');
             if ((commitCompletedOnly || receiptBase?.archivePartialDraft)
+                && !floorWindowSync
                 && core_context.completeArchiveChatFingerprint(live) !== snapshotForIdentity.fullFingerprint) throw archive_batches.changedInput('chat');
             assertBatchCommitIdentity(live, memoryBank);
         };

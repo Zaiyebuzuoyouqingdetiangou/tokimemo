@@ -224,9 +224,13 @@ export const DEFAULT_SETTINGS = Object.freeze({
     autoRetryEnabled: false,
     autoRetryCount: 1,
     autoSecondPass: false,
+    autoMemoryLatestFloor: false,
+    autoMemoryIntervalFloors: 5,
+    heartEnvelopeSkin: 'pink',
     creativeSupplementEnabled: false,
     creativeSupplement: '',
     imageGenerationProvider: 'baibai-image',
+    imageGenerationFallback: false,
     cgPromptFormat: 'nai5-natural',
     // Optional r32-style mobile safe-area presentation. Off keeps the long-standing edge-to-edge fullscreen UI.
     ttDisplayMode: false,
@@ -238,6 +242,8 @@ export const DEFAULT_SETTINGS = Object.freeze({
     // Applies only to newly model-generated derivative content. Never rewrite chat/archive evidence.
     bannedGeneratedPhrases: ['老子'],
 });
+
+export const HEART_ENVELOPE_SKINS = Object.freeze(['pink', 'wax', 'night', 'sakura', 'airmail', 'wash']);
 
 export const MODE = Object.freeze({
     BUTTERFLY: 'butterfly',

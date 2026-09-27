@@ -3,21 +3,39 @@ import * as visual from '../core/cgVisualRules.js';
 // prompt hashes; new tasks record only the two-value UI choice, never content.
 import * as format from '../core/cgPromptFormat.js';
 const bindings = new WeakMap();
-export function bindCgPromptFormat(origin, value, dialect = 'r8420') {
-    if (origin && typeof origin === 'object') bindings.set(origin, { selected: format.normalizeCgPromptFormat(value), dialect });
+export function bindCgPromptFormat(origin, value, dialect = 'r8420', looks = '', participantLooks = null) {
+    if (origin && typeof origin === 'object') bindings.set(origin, { selected: format.normalizeCgPromptFormat(value), dialect,
+        looks: typeof looks === 'string' ? looks : '', participantLooks: Array.isArray(participantLooks) ? structuredClone(participantLooks) : null });
 }
 export function cgPromptForSegment(prompt, options) {
     const binding = options?.origin && bindings.get(options.origin);
     if (!binding?.selected || !format.cgFieldSegment(options.mode, options.taskKey)) return prompt;
+    if (binding.dialect === 'r84168') return prompt + visual.cgParticipantVisualInstructions(binding.selected, options.mode,
+        options.mode === 'heart' && /:(?:strip|strips)$/u.test(options.taskKey), binding.participantLooks || []);
+    // r84.166：新任务。画面字段必写，并附用户确认的人物外貌（随任务冻结在 operation.cgCastLooks）。
+    if (binding.dialect === 'r84166') return prompt + (['album', 'adv'].includes(options.mode) || options.mode === 'heart' && /:(?:strip|strips)$/u.test(options.taskKey)
+        ? visual.cgInitialVisualInstructionsV2(binding.selected, options.mode === 'heart', binding.looks) : visual.cgStoryVisualInstructionsV2(binding.selected, options.mode, binding.looks));
+    if (binding.dialect === 'r8483') return prompt + (['album', 'adv'].includes(options.mode) || options.mode === 'heart' && /:(?:strip|strips)$/u.test(options.taskKey)
+        ? visual.cgInitialVisualInstructions(binding.selected, options.mode === 'heart') : visual.cgStoryVisualInstructions(binding.selected, options.mode));
+    // Recovery journals created before r84.83 must keep their exact prompt hash.
+    const legacySegment = options.mode === 'album' && /:(?:index|album)$/.test(options.taskKey)
+        || options.mode === 'adv' && /:(?:index|event)$/.test(options.taskKey)
+        || options.mode === 'heart' && /:(?:strip|strips)$/.test(options.taskKey);
+    if (!legacySegment) return prompt;
     if (binding.dialect === 'r8420') return prompt + visual.cgInitialVisualInstructions(binding.selected, options.mode === 'heart');
     return prompt + (binding.dialect === 'r8413' ? format.cgFormatFieldDirective : format.legacyCgFormatFieldDirective)(binding.selected);
 }
-export function cgRecoveryOperation(mode, operation, existing, selected) {
+export function cgRecoveryOperation(mode, operation, existing, selected, castLooks = '', participantLooks = null) {
     if (!format.cgOperationHasImageFields(mode, operation)) return operation;
     const value = existing ? format.normalizeCgPromptFormat(existing.operation?.cgPromptFormat) : format.normalizeCgPromptFormat(selected);
-    const { cgPromptFormat: ignored, cgPromptDialect: ignoredDialect, ...base } = operation;
-    const dialect = existing ? existing.operation?.cgPromptDialect : 'r8420';
-    return value ? { ...base, cgPromptFormat: value, ...(['r8413', 'r8420'].includes(dialect) ? { cgPromptDialect: dialect } : {}) } : base;
+    const { cgPromptFormat: ignored, cgPromptDialect: ignoredDialect, cgCastLooks: ignoredLooks, cgParticipantLooks: ignoredPeople, ...base } = operation;
+    // Old journals keep their exact recipe; only new multiplayer tasks use IDs.
+    const dialect = existing ? existing.operation?.cgPromptDialect : Array.isArray(participantLooks) ? 'r84168' : 'r84166';
+    const looks = existing ? existing.operation?.cgCastLooks : String(castLooks || '').slice(0, 1600);
+    const people = existing ? existing.operation?.cgParticipantLooks : participantLooks;
+    return value ? { ...base, cgPromptFormat: value, ...(['r8413', 'r8420', 'r8483', 'r84166', 'r84168'].includes(dialect) ? { cgPromptDialect: dialect } : {}),
+        ...(dialect === 'r84166' && typeof looks === 'string' && looks ? { cgCastLooks: looks } : {}),
+        ...(dialect === 'r84168' && Array.isArray(people) ? { cgParticipantLooks: structuredClone(people) } : {}) } : base;
 }
 
 export function cgSegmentValidator(validator, options) {

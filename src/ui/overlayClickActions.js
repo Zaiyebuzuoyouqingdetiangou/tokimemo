@@ -30,11 +30,39 @@ import * as modes_advEvent from '../modes/advEvent.js';
 import * as ui_phoneView from './phoneView.js';
 import * as modes_items from '../modes/items.js';
 import { OVERLAY_CLICK_UNHANDLED, deleteManagedCategory, navigateBack, openCachedOrGenerate, requestCurrentArchiveFullRebuild, requestCurrentArchiveImport, showChooser } from './overlayCore.js';
+import * as ui_floor from './chatFloorNav.js';
 // ui/overlayCore.js handleOverlayClick 的分组处理（重构阶段 3）。每个函数是原函数里连续的一段语句，一字未改；
 // 返回 OVERLAY_CLICK_UNHANDLED 表示“这一段没有处理”，原函数接着往下走，和拆分前完全相同。
 
 // 按 data-rmt-action 分发：继承、改写、任务、首页 / 档案室、HEART、头像、当前档案、阅读、终端、记忆、角色档案、关系、管理、重建 / 导入、参与者、重新生成（原第 126–187 条语句）
+function revealModuleId(achievementId) {
+    try {
+        const records = core_context.getContext()?.chatMetadata?.revealRecordsV1;
+        const row = [...(Array.isArray(records) ? records : [])].reverse().find(item => item?.achievementId === achievementId && item?.moduleId);
+        return typeof row?.moduleId === 'string' ? row.moduleId : '';
+    } catch { return ''; }
+}
+
 export function overlayArchiveActions(actionEl, action) {
+    if (action === 'achievement-jump') {
+        const floor = Math.floor(Number(actionEl?.dataset?.rmtFloor));
+        if (!Number.isSafeInteger(floor) || floor < 0) {
+            globalThis.toastr?.info?.('这一楼现在翻不到。成就还在这里。', '心迹回廊');
+            return;
+        }
+        closeArchiveOverlayFromUser();
+        const jumped = ui_floor.highlightFloor(floor);
+        if (!jumped.ok) globalThis.toastr?.info?.('这一楼现在翻不到。成就还在这里。', '心迹回廊');
+        return;
+    }
+    if (action === 'achievement-open') {
+        const moduleId = actionEl?.dataset?.rmtMode || revealModuleId(actionEl?.dataset?.rmtAchievementId);
+        if (!moduleId) {
+            globalThis.toastr?.info?.('这段成就就在这一页。', '心迹回廊');
+            return;
+        }
+        return openCachedOrGenerate(moduleId);
+    }
     if (action === 'archive-inheritance-open') {
         archive_inheritance_view.clearArchiveInheritancePreview();
         if (bodyEl()) bodyEl().innerHTML = archive_inheritance_view.archiveInheritancePickerHtml();
@@ -74,7 +102,7 @@ export function overlayArchiveActions(actionEl, action) {
     if (action === 'travel-dialogue-prev') return ui_travelView.travelDialogueStep(-1);
     if (action === 'travel-dialogue-next') return ui_travelView.travelDialogueStep(1);
     if (action === 'travel-dialogue-replay') return ui_travelView.replayTravelDialogue();
-    if (action === 'tasks' || action === 'task-center-close' || action === 'task-cancel' || action === 'task-cancel-current' || action === 'task-open' || action === 'task-second-step' || action === 'task-queue-remove' || action === 'task-clear-done' || action === 'queue-selected' || action === 'generate-together' || action === 'merged-repair' || action === 'merged-resave') {
+    if (action === 'tasks' || action === 'task-center-close' || action === 'task-cancel' || action === 'task-cancel-current' || action === 'task-open' || action === 'task-second-step' || action === 'task-queue-remove' || action === 'task-retry-queue' || action === 'task-clear-done' || action === 'task-dismiss' || action === 'task-retry-state' || action === 'task-floor-complete' || action === 'task-floor-retry' || action === 'task-archive-retry' || action === 'task-archive-restart' || action === 'queue-selected' || action === 'generate-together' || action === 'merged-repair' || action === 'merged-resave' || ['merged-discard', 'merged-new', 'merged-export', 'merged-export-legacy', 'merged-discard-legacy'].includes(action)) {
         return ui_taskCenter.handleTaskCenterAction(action, actionEl);
     }
     if (action === 'close') return closeArchiveOverlayFromUser();

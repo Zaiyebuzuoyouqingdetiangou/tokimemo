@@ -17,6 +17,7 @@ import { clearMemoryPreflight, getImportedMemory, isArchiveCancellation, isCompa
 import { archivedChatFingerprint, normalizeExternalImportedMemories } from './externalMemory.js';
 import { getCurrentUsableMessageCount, normalizeImportedChunk, requireArchive } from './importPrompts.js';
 import { admitArchiveBatch, assertBatchCommitIdentity, batchIdentity, checkedArchiveTaskInput, retainedBatchExternal } from './importIdentity.js';
+import * as archive_floorWindow from './floorWindowCheck.js';
 // 建档恢复：延迟提交、恢复草稿读写、导出、待入档保存与重试
 // 从 archive/repository.js 原样搬出（重构阶段 2），声明文本一字未改；archive/repository.js 仍转发原有导出。
 
@@ -51,8 +52,11 @@ export async function flushDeferredCommitsForCurrentChat() {
                 if (liveCharacterName) bank.characterName = liveCharacterName;
                 const hasBatchCheckpoint = !!bank[archive_batches.IMPORT_PROGRESS_KEY];
                 if (hasBatchCheckpoint) assertBatchCommitIdentity(context, bank, { completedSaveOnly: true });
-                const currentCount = getCurrentUsableMessageCount(context);
-                if (Number(bank?.sourceMessageCount) !== currentCount) {
+                // r84.157：自动每楼窗口建档只核对窗口里那几楼；窗口后面新增的楼不算变化。
+                const floorWindow = archive_floorWindow.bankFloorWindow(bank);
+                const sourceChanged = floorWindow ? !archive_floorWindow.sameFloorWindow(context, floorWindow)
+                    : Number(bank?.sourceMessageCount) !== getCurrentUsableMessageCount(context);
+                if (sourceChanged) {
                     globalThis.toastr?.warning?.(`后台档案已完成，但原聊天在此期间发生变化，因此没有自动覆盖「${bank?.archiveName || '档案'}」。请重新更新档案。`, '心迹回廊');
                     acknowledge = !hasBatchCheckpoint;
                     continue;
@@ -491,7 +495,10 @@ export async function retryCurrentArchiveSave(context, taskTrace) {
         const snapshot = await core_context.buildChatSnapshot(context, { completeSource: !!bank.fullSourceFingerprint, expectedChatId: item.origin.chatId, stillCurrent });
         assertCurrent();
         if (!runtimeState.deferredChatCommits.get(key)?.includes(item)) return { status: 'blocked' };
-        if (!archivedChatFingerprint(bank) || archivedChatFingerprint(bank) !== snapshot.fingerprint
+        // r84.157：自动每楼窗口建档只核对窗口里那几楼；其余（手动、非窗口、旧条目）仍比较整段聊天。
+        const floorWindow = archive_floorWindow.bankFloorWindow(bank);
+        if (floorWindow) archive_floorWindow.assertFloorWindowUnchanged(context, floorWindow);
+        else if (!archivedChatFingerprint(bank) || archivedChatFingerprint(bank) !== snapshot.fingerprint
             || Number(bank.sourceMessageCount) !== snapshot.totalMessages
             || (bank.fullSourceFingerprint && bank.fullSourceFingerprint !== snapshot.fullFingerprint)) {
             throw archive_batches.changedInput('chat');
@@ -546,6 +553,8 @@ export function getCurrentArchiveProfileRecoverySummary(context = core_context.g
 export async function saveCurrentArchivePendingResults(context, existing, logicalTask, taskTrace) {
     const origin = { ...core_context.captureTaskOrigin(context, existing.archiveRevision), archivePresent: true };
     core_requestCoordinator.bindLogicalGenerationTask(logicalTask, origin);
+    // r84.157：自动每楼窗口建档只核对窗口里那几楼；其余仍比较整段聊天。
+    const floorWindow = archive_floorWindow.bankFloorWindow(existing);
     const assertCurrent = () => {
         core_requestCoordinator.assertLogicalGenerationTaskCurrent(logicalTask);
         if (!core_context.isCurrentTaskOrigin(origin)) throw new DOMException('Chat or archive changed', 'AbortError');
@@ -553,7 +562,8 @@ export async function saveCurrentArchivePendingResults(context, existing, logica
             throw archive_batches.changedInput('archive');
         }
         assertBatchCommitIdentity(core_context.currentCharacterGuard(), existing, { completedSaveOnly: true });
-        if (existing.fullSourceFingerprint && core_context.completeArchiveChatFingerprint(core_context.currentCharacterGuard()) !== existing.fullSourceFingerprint) {
+        if (floorWindow) archive_floorWindow.assertFloorWindowUnchanged(core_context.currentCharacterGuard(), floorWindow);
+        else if (existing.fullSourceFingerprint && core_context.completeArchiveChatFingerprint(core_context.currentCharacterGuard()) !== existing.fullSourceFingerprint) {
             throw archive_batches.changedInput('chat');
         }
     };
@@ -566,8 +576,8 @@ export async function saveCurrentArchivePendingResults(context, existing, logica
         const snapshot = await core_context.buildChatSnapshot(context, { completeSource: true, expectedChatId: origin.chatId,
             stillCurrent: () => { assertCurrent(); return true; } });
         assertCurrent();
-        if (Number(existing.sourceMessageCount) !== snapshot.totalMessages
-            || (!existing.fullSourceFingerprint && archivedChatFingerprint(existing) !== snapshot.fingerprint)) throw archive_batches.changedInput('chat');
+        if (!floorWindow && (Number(existing.sourceMessageCount) !== snapshot.totalMessages
+            || (!existing.fullSourceFingerprint && archivedChatFingerprint(existing) !== snapshot.fingerprint))) throw archive_batches.changedInput('chat');
         const captured = checkedArchiveTaskInput(progress.taskInputV1, context, { completedSaveOnly: true });
         const external = captured?.external || await retainedBatchExternal(context, progress);
         assertCurrent();

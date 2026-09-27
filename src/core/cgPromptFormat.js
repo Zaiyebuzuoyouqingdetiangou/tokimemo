@@ -61,10 +61,16 @@ export function cgFieldSegment(mode, taskKey) {
     if (typeof taskKey !== 'string') return false;
     return mode === 'album' && /:(?:index|album)$/u.test(taskKey)
         || mode === 'adv' && /:(?:index|event)$/u.test(taskKey)
-        || mode === 'heart' && /:(?:strip|strips)$/u.test(taskKey);
+        || mode === 'heart' && /:(?:strip|strips|voice|scenario)$/u.test(taskKey)
+        || mode === 'ending' && /:(?:(?:increment-)?route:[^:]+|(?:increment-)?confession)$/u.test(taskKey)
+        || mode === 'bedtime' && taskKey.includes(':bedtime:')
+        || mode === 'pastLives' && taskKey.includes(':past-lives-dossier:')
+        || mode === 'butterfly' && /:(?:slot:\d+|increment|butterfly-prose)$/u.test(taskKey);
 }
 export function cgOperationHasImageFields(mode, op) {
-    return ['album', 'adv'].includes(mode) && op?.kind === 'mode'
+    return ['ending', 'bedtime', 'pastLives', 'butterfly'].includes(mode)
+        || mode === 'heart' && ['mode', 'heart-section', 'heart-season'].includes(op?.kind)
+        || ['album', 'adv'].includes(mode) && op?.kind === 'mode'
         || mode === 'heart' && op?.kind === 'heart-section' && op.part === 'strips'
         || op?.kind === 'content-item' && ['album-entry', 'adv-event', 'heart-strip'].includes(op.target?.type);
 }

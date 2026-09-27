@@ -21,28 +21,46 @@ import * as core_taskTrace from '../core/taskTrace.js';
 import * as core_worldPresentation from '../core/worldPresentation.js';
 import * as generation_normalizers from './normalizers.js';
 import * as generation_prompts from './prompts.js';
-import * as modes_achievements from '../modes/achievements.js';
-import * as modes_advEvent from '../modes/advEvent.js';
-import * as modes_album from '../modes/album.js';
-import * as modes_butterfly from '../modes/butterfly.js';
-import * as modes_calendar from '../modes/calendar.js';
-import * as modes_ending from '../modes/ending.js';
-import * as modes_heart from '../modes/heart.js';
-import * as modes_items from '../modes/items.js';
-import * as modes_cabinet from '../modes/cabinet.js';
-import * as modes_phone from '../modes/phone.js';
-import * as modes_song from '../modes/themeSong.js';
+// C-4（r84.116）：别名沿用 modes_achievements，函数体一字不改；实际指向生成层的桥，不再 import 成就库模块。
+import * as modes_achievements from './modesBridge.js';
+// C-4（r84.118）：别名沿用 modes_advEvent，函数体一字不改；实际指向生成层的桥，不再 import ADV 模块。
+import * as modes_advEvent from './modesBridge.js';
+// C-4（r84.119）：别名沿用 modes_album，函数体一字不改；实际指向生成层的桥，不再 import 相簿模块。
+import * as modes_album from './modesBridge.js';
+// C-4（r84.111）：别名沿用 modes_butterfly，函数体一字不改；实际指向生成层的桥，不再 import 蝴蝶效应模块。
+import * as modes_butterfly from './modesBridge.js';
+// C-4（r84.113）：别名沿用 modes_calendar，函数体一字不改；实际指向生成层的桥，不再 import 日历模块。
+import * as modes_calendar from './modesBridge.js';
+// C-4（r84.117）：别名沿用 modes_ending，函数体一字不改；实际指向生成层的桥，不再 import 结局模块。
+import * as modes_ending from './modesBridge.js';
+// C-4（r84.120）：别名沿用 modes_heart，函数体一字不改；实际指向生成层的桥，不再 import HEART 模块。
+import * as modes_heart from './modesBridge.js';
+// C-4（r84.109）：别名沿用 modes_items，函数体一字不改；实际指向生成层的桥，不再 import 物品模块。
+import * as modes_items from './modesBridge.js';
+// C-4（r84.115）：别名沿用 modes_cabinet，函数体一字不改；实际指向生成层的桥，不再 import 陈列柜模块。
+import * as modes_cabinet from './modesBridge.js';
+// C-4（r84.114）：别名沿用 modes_phone，函数体一字不改；实际指向生成层的桥，不再 import 私人终端模块。
+import * as modes_phone from './modesBridge.js';
+// C-4（r84.106）：别名沿用 modes_song，函数体一字不改；实际指向生成层的桥，不再 import 印象曲模块。
+import * as modes_song from './modesBridge.js';
 import * as song_contract from '../core/themeSongContract.js';
-import * as modes_bedtime from '../modes/bedtime.js';
+// C-4（r84.103）：别名沿用 modes_bedtime，函数体一字不改；实际指向生成层的桥，不再 import 睡前故事模块。
+import * as modes_bedtime from './modesBridge.js';
 import * as bedtime_contract from '../core/bedtimeContract.js';
 import * as heart_reader from '../ui/heartReaderState.js';
-import * as modes_inbox from '../modes/inbox.js';
-import * as modes_pastLives from '../modes/pastLives.js';
-import * as modes_timeStories from '../modes/timeStories.js';
+// C-4（r84.108）：别名沿用 modes_inbox，函数体一字不改；实际指向生成层的桥，不再 import 邮箱模块。
+import * as modes_inbox from './modesBridge.js';
+// C-4（r84.104）：别名沿用 modes_pastLives，函数体一字不改；实际指向生成层的桥，不再 import 前世今生模块。
+import * as modes_pastLives from './modesBridge.js';
+// C-4（r84.105）：别名沿用 modes_timeStories，函数体一字不改；实际指向生成层的桥，不再 import 时间故事模块。
+import * as modes_timeStories from './modesBridge.js';
 import * as time_stories from '../core/timeStoriesContract.js';
-import * as modes_room from '../modes/room.js';
-import * as modes_relations from '../modes/relations.js';
-import * as modes_travel from '../modes/travel.js';
+// C-4（r84.110）：别名沿用 modes_room，函数体一字不改；实际指向生成层的桥，不再 import 房间模块。
+import * as modes_room from './modesBridge.js';
+// C-4（r84.112）：别名沿用 modes_relations，函数体一字不改；实际指向生成层的桥，不再 import 关系模块。
+import * as modes_relations from './modesBridge.js';
+// C-4（r84.107）：别名沿用 modes_travel，函数体一字不改；实际指向生成层的桥，不再 import 出行路线模块。
+import * as modes_travel from './modesBridge.js';
 import * as ui_overlay from '../ui/overlay.js';
 import * as ui_settingsPanel from '../ui/settingsPanel.js';
 import * as ui_contentManager from '../ui/contentManager.js';
@@ -138,7 +156,7 @@ async function generateModeOperation(mode, options = {}) {
     // Capture once, before any archive/network/storage await. A destroyed invocation must never
     // adopt the next runtime lifetime and re-register itself as a fresh paid task.
     const lifecycleEpoch = runtimeState.runtimeLifecycleEpoch;
-    if ([core_constants.MODE.THEME_SONG, core_constants.MODE.BEDTIME].includes(mode) && options.automatic) return { status: 'noop' };
+    if ([core_constants.MODE.THEME_SONG, core_constants.MODE.BEDTIME].includes(mode) && options.automatic && !options.autoMemoryStep) return { status: 'noop' };
     options = { ...options, cgPromptFormat: options.cgPromptFormat || core_settings.getPluginSettings(options.context || core_context.getContext()).cgPromptFormat };
     // Readers may belong to a historical archive while the host stays in another
     // chat. Only that exact, unchanged reader may receive a foreground result.
@@ -211,12 +229,22 @@ async function generateModeOperation(mode, options = {}) {
     let roomSession = null;
     let focusObject = null;
     let previousSession = null;
+    const autoMemorySourceIds = () => (Array.isArray(options.sourceMemoryIds) ? options.sourceMemoryIds : []).filter(id => /^M\d{3,6}$/.test(id));
     const incrementalPart = mode === core_constants.MODE.HEART ? 'dialogues' : 'mode';
+    const autoMemoryHasFreshSources = (session = previousSession) => {
+        if (options.autoMemory !== true) return false;
+        const wanted = autoMemorySourceIds();
+        if (!wanted.length) return false;
+        const record = core_incremental.incrementalPartRecord(session, incrementalPart);
+        const covered = new Set(record?.coveredMemoryIds || []);
+        return wanted.some(id => !covered.has(id));
+    };
     const refreshableCalendar = mode === core_constants.MODE.CALENDAR;
     const refreshableRelations = mode === core_constants.MODE.RELATIONS || mode === core_constants.MODE.CABINET;
     let roomSchemaUpgrade = false;
     let allowPersonaExpansion = options.automatic !== true && [core_constants.MODE.ROOM, core_constants.MODE.ITEMS, core_constants.MODE.TRAVEL].includes(mode);
     const modeHasNoIncrementalWork = () => {
+        if (autoMemoryHasFreshSources()) return false;
         if (replacementTicket) return false;
         if (options.continueRecovery) return false;
         if (allowPersonaExpansion && previousSession) return false;
@@ -256,7 +284,7 @@ async function generateModeOperation(mode, options = {}) {
     // A no-op must not advance the durable mode fence. In another tab, doing so would cancel a
     // real in-flight build for the same frozen archive even though this invocation never calls a
     // provider. Preflight against the freshly revalidated snapshot, then repeat after the CAS.
-    recoveryExisting = options.existing || core_cache.loadGenerationRecovery(mode, context, archiveTarget?.cache,
+    recoveryExisting = options.newTask === true ? null : options.existing || core_cache.loadGenerationRecovery(mode, context, archiveTarget?.cache,
         { ...(options.draftId ? { draftId: options.draftId } : {}), ...(options.pageId ? { pageId: options.pageId } : {}) });
     // The whole-page entry must not resume the newest one-item child instead
     // of its page. Explicit draft buttons and legacy formal-item recovery keep
@@ -266,9 +294,13 @@ async function generateModeOperation(mode, options = {}) {
         recoveryExisting = core_cache.loadGenerationRecovery(mode, context, archiveTarget?.cache,
             { draftId: recoveryExisting.operation.sourceDraftId, pageId: recoveryExisting.pageId });
     }
+    if (recoveryExisting && options.autoMemory === true) {
+        const session = core_cache.loadSession(mode, { context, chatId: expectedChatId, memoryBank: memoryBank, clone: true });
+        if (autoMemoryHasFreshSources(session)) recoveryExisting = null;
+    }
     if (recoveryExisting) {
         if (replacementTicket && !options.continueRecovery) throw new Error('原分段草稿尚未保留到旧版本，本次没有重新请求。');
-        if (options.automatic) return { status: 'noop' };
+        if (options.automatic && !autoMemoryHasFreshSources()) return { status: 'noop' };
         if (recoveryExisting.operation?.kind && recoveryExisting.operation.kind !== 'mode') return continueSavedGeneration(mode,
             { ...options, draftId: recoveryExisting.draftId, pageId: recoveryExisting.pageId });
         if (!options.continueRecovery && !ui_overlay.confirmExplicitAction('继续未完成内容？', '这项还保留着上次的分段草稿。继续只补未完成部分，会使用文本生成额度；取消不会改动草稿或旧内容。', { destructive: false })) return;
@@ -416,6 +448,7 @@ async function generateModeOperation(mode, options = {}) {
             partialReaderStillCurrent: scopedReaderMode ? () => !background && timeReaderVisible() : null,
             contentInputs: { previousSession, roomSession, focusObject, ...(linkedRoomSession ? { linkedRoomSession } : {}) },
             operation: recoveryExisting?.operation || { kind: 'mode', mode, ...(themeSongPlan ? { themeSongPlan } : {}), ...(bedtimePlan ? { bedtimePlan } : {}), inboxDate: inboxDate?.toISOString() || '', calendarDate: calendarCurrentDate,
+                ...(mode === core_constants.MODE.INBOX ? { inboxPlanVersion: 2 } : {}),
                 ...(mode === core_constants.MODE.CALENDAR ? { calendarTimeBasis: 'story' } : {}),
                 allowPersonaExpansion, visualOnly: options.visualOnly === true, fillMissing: options.fillMissing === true, focusObjectId: core_text.normalizeText(options.focusObjectId, 120),
                 ...(replacementTicket ? { participantRegeneration: options.participantRegeneration } : {}) } });
@@ -463,7 +496,8 @@ async function generateModeOperation(mode, options = {}) {
         } else if (mode === core_constants.MODE.BEDTIME) {
             session = await modes_bedtime.generateBedtime(context, memoryBank, origin, taskKey, previousSession, { plan: bedtimePlan, presentationContext });
         } else if (mode === core_constants.MODE.INBOX) {
-            session = await modes_inbox.generateInbox(context, memoryBank, origin, taskKey, previousSession, { presentationContext, date: inboxDate });
+            session = await modes_inbox.generateInbox(context, memoryBank, origin, taskKey, previousSession, { presentationContext, date: inboxDate,
+                legacyStageMatching: !!recoveryExisting && recoveryExisting.operation?.inboxPlanVersion !== 2 });
         } else if (time_stories.isTimeStoryMode(mode)) {
             session = await modes_timeStories.generateTimeStoryWithRepair(mode, context, memoryBank, origin, taskKey, { previousSession, replaceExisting, presentationContext });
         } else if (mode === core_constants.MODE.PAST_LIVES) {
@@ -733,6 +767,7 @@ async function generateModeOperation(mode, options = {}) {
         if (!archiveTarget && mode === core_constants.MODE.PHONE && error?.code === 'RMT_PHONE_DRAFT_AVAILABLE' && runtimeState.activeMode === core_constants.MODE.ROOM && runtimeState.activeSession?.kind === core_constants.MODE.ROOM) {
             modes_room.renderRoom();
         }
+        if (options.autoMemory === true) return null;
         if (archiveTarget && !targetVisible) {
             globalThis.toastr?.error?.(
                 core_text.toastText(`${archiveTarget.characterName} · ${archiveTarget.archiveName} · ${core_constants.MODE_LABEL[mode]}：${safeError}`),

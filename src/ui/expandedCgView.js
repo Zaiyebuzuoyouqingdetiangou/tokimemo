@@ -4,6 +4,7 @@ import * as editor from './cgPromptEditor.js';
 import * as viewer from './cgImageViewer.js';
 import * as text from '../core/text.js';
 import * as state from '../core/state.js';
+import * as image_menu from './imageMenu.js';
 
 export function previousExpandedImagesHtml(session, descriptor) {
     const collection = descriptor.kind === 'heart-voice' ? session?.voiceDramas
@@ -21,14 +22,27 @@ export function previousExpandedImagesHtml(session, descriptor) {
 }
 
 // savedOnly：只在已经存过图片时才显示（用于已停用的整篇入口，避免旧图凭空消失）。
-export function expandedCgHtml(session, input, readOnly = false, { savedOnly = false } = {}) {
+export function expandedCgHtml(session, input, readOnly = false, { savedOnly = false, showImage = true, placeholder = '' } = {}) {
     const descriptor = targets.describeExpandedCgTarget(session, input);
     const resolved = descriptor && targets.expandedCgItem(session, descriptor);
     if (!resolved) return '';
     const saved = images.normalizeCgImageRecord(resolved.item.cgImage);
     if (savedOnly && !saved) return '';
     const attrs = `data-rmt-expanded-cg="${text.esc(JSON.stringify(descriptor))}"`;
-    return `<section class="rmt-expanded-cg">${saved ? `<div class="rmt-thumb">${images.cgImageLayerHtml(resolved.item)}</div>` : ''}<div class="rmt-cg-card-actions">${saved ? `<button type="button" class="rmt-btn" ${attrs} data-rmt-expanded-cg-view="1">查看已保存图片</button>` : ''}${readOnly ? '' : `<button type="button" class="rmt-btn" ${attrs}>${saved ? '编辑画面 / 再画一张' : '设置画面并预览生图'}</button>`}</div>${previousExpandedImagesHtml(session, descriptor)}</section>`;
+    // r84.172：有图时按钮收进图片外右下角的小兔子菜单；还没有图时只留一个带兔子的「设置画面」按钮。
+    const actions = saved ? image_menu.imageMenuHtml(expandedCgButtonsHtml(session, input, readOnly))
+        : readOnly ? '' : image_menu.imageSetupHtml(`<button type="button" class="rmt-btn" ${attrs}>${image_menu.BUNNY_SVG}<span>设置画面并预览生图</span></button>`);
+    return `<section class="rmt-expanded-cg">${saved && showImage ? `<div class="rmt-thumb">${images.cgImageLayerHtml(resolved.item)}</div>` : !saved ? placeholder : ''}${actions}${previousExpandedImagesHtml(session, descriptor)}</section>`;
+}
+
+// 只要按钮（给光栅卡等把图片操作并进同一个兔子菜单用）。
+export function expandedCgButtonsHtml(session, input, readOnly = false) {
+    const descriptor = targets.describeExpandedCgTarget(session, input);
+    const resolved = descriptor && targets.expandedCgItem(session, descriptor);
+    if (!resolved) return '';
+    const saved = images.normalizeCgImageRecord(resolved.item.cgImage);
+    const attrs = `data-rmt-expanded-cg="${text.esc(JSON.stringify(descriptor))}"`;
+    return `${saved ? `<button type="button" class="rmt-btn" ${attrs} data-rmt-expanded-cg-view="1">查看大图</button>` : ''}${readOnly ? '' : `<button type="button" class="rmt-btn" ${attrs}>${saved ? '编辑画面 / 再画一张' : '设置画面并预览生图'}</button>`}`;
 }
 
 export function handleExpandedCgButton(button) {
@@ -40,4 +54,12 @@ export function handleExpandedCgButton(button) {
     if (button.dataset.rmtExpandedCgView === '1') return viewer.openCgImageViewer(resolved.item.cgImage, resolved.item.title, { opener: button });
     if (state.state.activeArchiveSnapshot) return false;
     return editor.openCgPromptEditor({ targetDescriptor: descriptor });
+}
+
+// Place a saved habitat picture under its existing interactive light points.
+export function expandedCgBackdropHtml(session, input) {
+    const descriptor = targets.describeExpandedCgTarget(session, input);
+    const resolved = descriptor && targets.expandedCgItem(session, descriptor);
+    if (!resolved || !images.normalizeCgImageRecord(resolved.item.cgImage)) return '';
+    return `<div class="rmt-cg-backdrop" style="position:absolute;inset:0;border-radius:inherit;overflow:hidden">${images.cgImageLayerHtml(resolved.item)}</div>`;
 }

@@ -8,7 +8,7 @@ const line = `${outline} fill="none"`;
 const get = (design, kind) => design.visualFacts.find(row => row.kind === kind)?.value || '';
 const colour = (value, fallback) => colours[value] || fallback;
 
-export function sketchBackdrop(kind, tone = '#d4b4ce') {
+export function sketchBackdrop(kind, tone = '#d4b4ce', evidence = '') {
     const outside = ['walk','flower','rain'].includes(kind);
     const light = `<ellipse cx="172" cy="153" rx="133" ry="115" fill="${tone}" opacity=".15"/><ellipse cx="172" cy="159" rx="118" ry="108" fill="${tone}" opacity=".09"/>`;
     const frame = ['window','rain','lamp'].includes(kind)
@@ -16,7 +16,8 @@ export function sketchBackdrop(kind, tone = '#d4b4ce') {
     const rain = kind === 'rain' ? `<g stroke="#8aa7bf" stroke-width="2" opacity=".5"><path d="m230 84 3-7m8 19 3-7m9-13 3-7m-24 63 3-7m26 12 3-7m-16-8 3-7"/></g>` : '';
     const ground = `<path d="M45 244q125 22 252-1" fill="none" stroke="${tone}" stroke-width="3" opacity=".55"/>`;
     const botanical = outside ? `<g ${line} opacity=".55"><path d="M51 230q-8-27 4-57m-1 25q-16-20-20-10q0 12 20 13m-3 14q20-24 23-11q-1 10-23 14M281 236q12-20 8-36"/><path d="M57 178q-15-9-11-18q11-5 15 13q-1-18 10-16q9 9-14 21" fill="#b9cfb2"/></g>` : '';
-    return `<g data-rmt-letter-background="${kind}">${light}${frame}${rain}${ground}${botanical}</g>`;
+    const setting = sketchSceneSetting(kind, evidence);
+    return `<g data-rmt-letter-background="${kind}">${light}${frame}${rain}${ground}${botanical}${setting}</g>`;
 }
 
 export function sketchPerson(design) {
@@ -24,10 +25,13 @@ export function sketchPerson(design) {
     const clothing=get(design,'outfitKind'), clothingColour=get(design,'outfitColor'), eye=get(design,'eyeColor');
     const hairFill=colour(hair,'#b8aca4'), dress=colour(clothingColour,'#e6dfd4');
     const kind=design.scene.kind, markers=design.visualFacts.filter(row=>row.kind==='marker').map(row=>row.value);
-    const seated=['read','write','tea','photo','music','cook'].includes(kind);
+    const musicPose = kind === 'music' ? (/钢琴|鋼琴|琴房|piano/iu.test(design.scene.evidence) ? 'piano' : /唱片|音像|record|vinyl/iu.test(design.scene.evidence) ? 'record' : /吉他|guitar/iu.test(design.scene.evidence) ? 'guitar' : '') : '';
+    const seated=['read','write','tea','photo','cook'].includes(kind) || musicPose === 'piano' || musicPose === 'guitar';
     const turn=kind==='write'?-7:kind==='flower'?7:kind==='window'?5:0;
     const hairBottom=length==='long'?172:length==='medium'?131:91;
     const hairKnown=!!(length||style||hair);
+    // Missing appearance is a pencil study, never an assertion of baldness.
+    const unfinishedHair = !hairKnown ? `<g data-rmt-letter-hair="unspecified-pencil" fill="#c0b8b4" opacity=".65" ${outline}><path d="M107 83q-6-52 45-52q49 0 49 50q-28-8-35-22q-19 20-59 24z"/></g>` : '';
     const tail=style==='ponytail'?`<path d="M186 58q61 5 29 70q-14 27 9 32q-37 12-33-31q7-33-5-53" fill="${hairFill}" ${outline}/>`:'';
     const braid=style==='braid'?`<path d="M193 85q18 20 2 33q-14 12 1 22q15 11-1 24q-8 8 0 16" fill="none" stroke="${hairFill}" stroke-width="15"/><path d="M192 105l12 13m-16 11 14 11m-14 10 13 13" ${line}/>`:'';
     const bun=style==='bun'?`<ellipse cx="137" cy="34" rx="21" ry="18" fill="${hairFill}" ${outline}/><path d="M123 35q8-15 21-4" stroke="#fff" fill="none" opacity=".25" stroke-width="3"/>`:'';
@@ -44,7 +48,10 @@ export function sketchPerson(design) {
         : clothing==='ruqun'?`<path d="m128 150h44" stroke="${ink}" stroke-width="4"/><path d="M138 162l-7 58m19-58v60m12-60 7 58" ${line} opacity=".45"/>`
         : clothing==='sweater'?`<g ${line} opacity=".35"><path d="M124 159h52m-54 13h57m-59 13h61m-61 14h63"/></g>`
         : ''; // 角色卡没有写明衣服时不画领口和门襟，避免每封信都是同一件外套
-    const arms=kind==='walk'?`<path d="m125 143-16 26-10 24m76-50 11 19 19-13" stroke="${dress}" stroke-width="17" fill="none" stroke-linecap="round"/><path d="m102 190-5 8m106-51 8-5" stroke="${skin}" stroke-width="12" stroke-linecap="round"/>`
+    const arms=musicPose === 'piano' ? `<g data-rmt-letter-gesture="playing-keys"><path d="m124 144 20 32 58 6m-27-37 24 13 33 20" stroke="${dress}" stroke-width="17" fill="none" stroke-linecap="round"/><path d="m202 182 16 0m14-4 15 3" stroke="${skin}" stroke-width="11" stroke-linecap="round"/><path d="m207 182 2 6m5-6 2 6m23-8 0 6m5-5 1 6" ${line} opacity=".55"/></g>`
+        : musicPose === 'record' ? `<g data-rmt-letter-gesture="selecting-record"><path d="m124 144-13 28 41-17m22-10 26-16 13-28" stroke="${dress}" stroke-width="17" fill="none" stroke-linecap="round"/><path d="m152 155 10-2m51-52 3-8" stroke="${skin}" stroke-width="12" stroke-linecap="round"/></g>`
+        : musicPose === 'guitar' ? `<g data-rmt-letter-gesture="holding-guitar"><path d="m124 144-7 26 40 24m18-49 19 15 12-28" stroke="${dress}" stroke-width="17" fill="none" stroke-linecap="round"/><path d="m157 194 11 6m38-68 2-8" stroke="${skin}" stroke-width="12" stroke-linecap="round"/></g>`
+        : kind==='walk'?`<path d="m125 143-16 26-10 24m76-50 11 19 19-13" stroke="${dress}" stroke-width="17" fill="none" stroke-linecap="round"/><path d="m102 190-5 8m106-51 8-5" stroke="${skin}" stroke-width="12" stroke-linecap="round"/>`
         : ['flower','gift'].includes(kind)?`<path d="m124 144-8 31 24 5m34-36 12 27-26 12" stroke="${dress}" stroke-width="17" fill="none" stroke-linecap="round"/><path d="m139 180 13 2m9 1-11 2" stroke="${skin}" stroke-width="12" stroke-linecap="round"/>`
         : kind==='window'?`<path d="m124 144-5 40 20 5m36-45 16 11 5-37" stroke="${dress}" stroke-width="17" fill="none" stroke-linecap="round"/><path d="m195 120 1-11m-57 79 8 0" stroke="${skin}" stroke-width="12" stroke-linecap="round"/>`
         : `<path d="m124 144-15 34 32 14m34-47 14 32-26 14" stroke="${dress}" stroke-width="17" fill="none" stroke-linecap="round"/><path d="m139 190 10 4m13-3-10 3" stroke="${skin}" stroke-width="12" stroke-linecap="round"/>`;
@@ -63,5 +70,24 @@ export function sketchPerson(design) {
         const body={glasses:`<rect x="117" y="89" width="26" height="21" rx="8"/><rect x="157" y="89" width="26" height="21" rx="8"/><path d="M143 97h14"/>`,freckles:`<path d="m119 110 1 0m6 4 1 0m-7 2 1 0m52-6 1 0m6 4 1 0m-7 2 1 0"/>`,scar:`<path d="m174 89-10 20m5-13 6 2m-9 5 6 2"/>`,earrings:`<circle cx="109" cy="113" r="4"/><circle cx="192" cy="113" r="4"/>`,ribbon:`<path d="M184 51q-25-22-26-3q11 13 26 8q10 15 24 5q8-19-24-10z" fill="#c98d9f"/>`,hat:`<path d="M100 65q49-14 102 1l-13-7-10-25h-54l-12 26z" fill="#b8cbb4"/>`,scarf:`<path d="M124 131q27 12 51-1l2 17q-23 13-54 0zM165 145l7 42 14-6-9-39" fill="#ca98a6"/>`,crown:`<path d="M138 40h24l-3-13h-18z" fill="#d8c27c"/><path d="M132 37h36M150 27v-5"/>`,hairpin:`<path d="M176 52l24-18" stroke-width="3"/><circle cx="202" cy="32" r="4" fill="#c98d9f"/>`,jade:`<path d="M160 188v18"/><circle cx="160" cy="212" r="6" fill="#a9cdb2"/><path d="M157 220l-2 9m5-9v9m3-9 2 9"/>`,fan:`<path d="M101 188l-15-22q17-11 33 0z" fill="#efe3c6"/><path d="M101 188l-8-20m8 20v-22m0 22 8-20"/>`}[value];
         return body?`<g data-rmt-letter-marker="${value}" ${line}>${body}</g>`:'';
     }).join('');
-    return `<g data-rmt-letter-person="true" data-rmt-letter-pose="${kind}" transform="rotate(${turn} 150 170)">${behind}${feet}${body}${details}${back}${face}${fringe}${eyes}${expression}${arms}${marker}</g>`;
+    return `<g data-rmt-letter-person="true" data-rmt-letter-pose="${musicPose||kind}" transform="rotate(${turn} 150 170)">${musicPose === 'piano' ? `<g data-rmt-letter-seat="piano-bench"><path d="M102 218h94v12h-94z" fill="#a395a5"/><path d="M112 230v23m73-23v23" stroke="#756976" stroke-width="5"/></g>` : ''}${behind}${feet}${body}${details}${back}${face}${fringe}${unfinishedHair}${eyes}${expression}${arms}${marker}</g>`;
+}
+
+
+// Detail comes from this letter's scene quote, not the letter ID or random traits.
+export function sketchSceneSetting(kind, evidence = '') {
+    const value = String(evidence);
+    if (kind === 'music' && /钢琴|鋼琴|琴房|piano/iu.test(value)) return `<g data-rmt-letter-setting="piano" ${outline}><path d="M181 153h109v76H181z" fill="#b4a4b3"/><path d="M176 181h121v17H176z" fill="#fffaf1"/><path d="M183 198v43m106-43v43M194 182v9m12-9v9m24-9v9m12-9v9m24-9v9m12-9v9" stroke="${ink}" stroke-width="4"/></g>`;
+    if (kind === 'music' && /唱片|音像|record|vinyl/iu.test(value)) return `<g data-rmt-letter-setting="records" ${line}><path d="M211 53h82v123h-82z" fill="#e5d5c7"/><path d="M211 115h82"/><circle cx="251" cy="85" r="24" fill="#665d70"/><circle cx="251" cy="85" r="8" fill="#dcc3ca"/><path d="M224 128h8v36h-8zm13-4h9v40h-9zm17 8h10v32h-10z" fill="#abbdba"/></g>`;
+    if (kind === 'read' || kind === 'write') return `<g data-rmt-letter-setting="desk" ${line}><path d="M93 205h184m-175 0-3 40m167-40 3 40" stroke="#ac9191" stroke-width="5"/></g>`;
+    if (kind === 'tea' || kind === 'cook') return `<g data-rmt-letter-setting="table" ${line}><ellipse cx="205" cy="212" rx="78" ry="15" fill="#e7cfb3"/><path d="M151 223v24m106-24v24"/></g>`;
+    return '';
+}
+
+export function sketchSceneForeground(design) {
+    if (design.scene.kind !== 'music') return '';
+    const evidence = design.scene.evidence;
+    if (/唱片|音像|record|vinyl/iu.test(evidence)) return `<g data-rmt-letter-held="record" transform="translate(-17 25) scale(.86)" ${outline}><path d="m145 152 29-8 12 35-32 9z" fill="#c6d5c5"/><circle cx="165" cy="166" r="13" fill="#5c5366"/><circle cx="165" cy="166" r="4" fill="#dcb5c0"/><path d="m152 179 10-3" stroke="${skin}" stroke-width="8" stroke-linecap="round"/></g>`;
+    if (/吉他|guitar/iu.test(evidence)) return `<g data-rmt-letter-held="guitar" transform="translate(-17 25) scale(.86)" ${outline}><g transform="rotate(31 170 194)"><path d="M163 108h10v67q28-3 20 23q24 39-17 45q-41-2-23-39q-9-22 10-29z" fill="#d4ae7e"/><circle cx="170" cy="213" r="10" fill="#776374"/><path d="M168 111v120m4-120v120M159 233h23" ${line}/></g><path d="m157 194 11 6m38-68 2-8" stroke="${skin}" stroke-width="12" stroke-linecap="round"/></g>`;
+    return '';
 }

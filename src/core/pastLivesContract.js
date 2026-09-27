@@ -1,7 +1,7 @@
 // Local data and presentation contract. No model-owned markup, selectors or assets.
 export const PAST_LIVES_MODE = 'pastLives';
 export const PAST_LIVES_VERSION = 1;
-export const PAST_LIVES_LIMITS = Object.freeze({ episodes: 48, dossiers: 6, clues: 18, echoes: 12, annotations: 12,
+export const PAST_LIVES_LIMITS = Object.freeze({ episodes: Number.MAX_SAFE_INTEGER, dossiers: 6, clues: 18, echoes: 12, annotations: 12,
     title: 120, prose: 6000, episodeChars: 180000, sessionChars: 1800000 });
 export const PAST_LIVES_CLUE_KINDS = Object.freeze(['object', 'testimony', 'missing', 'note']);
 export const PAST_LIVES_VIEWS = Object.freeze(['library', 'draw', 'dossier', 'echoes', 'closing']);
@@ -24,8 +24,9 @@ export function pastLivesText(value, max = PAST_LIVES_LIMITS.prose, required = f
 }
 
 export function pastLivesArray(value, max) {
-    if (!Array.isArray(value) || value.length > max) throw pastLivesError('STRUCTURE', '番外列表缺失或超过安全容量；不要求凑满数量。');
-    return value;
+    if (!Array.isArray(value)) throw pastLivesError('STRUCTURE', '番外列表缺失；不要求凑满数量。');
+    // r84.171：模型多写了几条（线索、回响、旁批等）时只收前面的，不让整步失败。
+    return value.length > max ? value.slice(0, max) : value;
 }
 
 // A bounded JSON snapshot rejects getters and custom prototypes before any field is read.

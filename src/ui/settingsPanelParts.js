@@ -11,6 +11,12 @@ import * as core_text from '../core/text.js';
 import * as core_theme from '../core/theme.js';
 import * as core_autoUpdatePolicy from '../core/autoUpdatePolicy.js';
 import * as core_autoUpdates from '../core/autoUpdates.js';
+import * as auto_memory_plan from '../autoMemory/planStore.js';
+import * as auto_memory_floor from '../autoMemory/floorPace.js';
+import * as auto_memory_scheduler from '../autoMemory/scheduler.js';
+import * as wizard_plan from '../autoMemory/wizardPlan.js';
+import * as ui_countdown from './autoMemoryCountdown.js';
+import * as ui_heartEnvelope from './heartEnvelope.js';
 // 设置页组件：启动入口、生图 / 语音 / 读取范围设置、模型列表、任务与记忆状态刷新
 // 从 ui/settingsPanel.js 原样搬出（重构阶段 2），声明文本一字未改；ui/settingsPanel.js 仍转发原有导出。
 
@@ -26,7 +32,11 @@ export function refreshImageGenerationSettingsUi() {
     if (choice) choice.value = settings.imageGenerationProvider;
     const statusNode = panel.querySelector('[data-rmt-image-generation-status]');
     const status = generation_imageGeneration.imageGenerationUiState();
-    if (statusNode) statusNode.textContent = status.available ? '柏宝绘已连接 · 公开 API v1' : status.reason || '请单独安装、启用并配置柏宝绘公开 API v1。';
+    if (statusNode) statusNode.textContent = status.available
+        ? (status.provider === 'chatu8-image' ? '智绘姬已连接 · 使用其中已有的出图配置' : '柏宝绘已连接 · 公开 API v1')
+        : status.reason || '请安装并启用柏宝绘或智绘姬后再绘制。';
+    const fallback = panel.querySelector('[data-rmt-image-generation-fallback]');
+    if (fallback) fallback.checked = settings.imageGenerationFallback === true;
 }
 
 export function voiceSettingsHtml() {
@@ -320,9 +330,80 @@ export function refreshThemeUi() {
     if (opacity) opacity.textContent = Math.round(settings.themeAlpha * 100) + '%';
 }
 
+async function onAutoMemoryPaceChange(panel, event) {
+    const target = event.target;
+    if (target.matches?.('[data-rmt-auto-memory-latest]')) {
+        core_settings.updatePluginSettings({ autoMemoryLatestFloor: !!target.checked });
+        await saveAutoMemoryPace(panel);
+        return;
+    }
+    if (target.matches?.('[data-rmt-auto-memory-interval]') && target.closest?.('[data-rmt-settings-section="auto"]')) {
+        core_settings.updatePluginSettings({ autoMemoryIntervalFloors: target.value });
+        target.value = String(core_settings.getPluginSettings().autoMemoryIntervalFloors);
+        await saveAutoMemoryPace(panel);
+        return;
+    }
+    if (target.matches?.('[data-rmt-auto-memory-retry]')) {
+        core_settings.updatePluginSettings({ autoRetryEnabled: !!target.checked });
+        const retry = panel.querySelector('[data-rmt-auto-retry]');
+        if (retry) retry.checked = !!target.checked;
+        return;
+    }
+    if (target.matches?.('[data-rmt-auto-memory-retry-count]')) {
+        core_settings.updatePluginSettings({ autoRetryCount: target.value });
+        const count = String(core_settings.getPluginSettings().autoRetryCount);
+        for (const input of panel.querySelectorAll('[data-rmt-auto-retry-count], [data-rmt-auto-memory-retry-count]')) {
+            input.value = count;
+        }
+        return;
+    }
+    if (target.matches?.('[data-rmt-heart-envelope]')) {
+        const next = core_settings.updatePluginSettings({ heartEnvelopeSkin: target.value });
+        ui_heartEnvelope.paintEnvelopePicker(panel, next.heartEnvelopeSkin);
+    }
+}
+
+async function saveAutoMemoryPace(panel) {
+    const note = panel.querySelector('[data-rmt-auto-memory-gate]');
+    let context;
+    try { context = core_context.currentCharacterGuard(); }
+    catch { return; }
+    const settings = core_settings.getPluginSettings();
+    const latest = settings.autoMemoryLatestFloor === true;
+    const floor = latest ? auto_memory_floor.assistantFloorCount(context.chat) : (Array.isArray(context.chat) ? context.chat.length : 0);
+    const metadata = context.chatMetadata;
+    let result;
+    try { result = wizard_plan.pacePatch(metadata, { intervalFloors: settings.autoMemoryIntervalFloors, floor }, Date.now()); }
+    catch (error) { if (note) note.textContent = error?.safeToDisplay ? error.safeUserMessage : '间隔没有改。'; return; }
+    if (!result.changed) {
+        if (result.message && note) note.textContent = result.message;
+        ui_countdown.refreshAutoMemoryCountdown();
+        return;
+    }
+    try {
+        const before = auto_memory_plan.readAutoMemoryMetadata(metadata);
+        auto_memory_plan.commitAutoMemoryMetadata(metadata, result.snapshot, before.plan.revision);
+        await context.saveMetadataDebounced?.();
+    } catch (error) {
+        if (note) note.textContent = error?.safeToDisplay ? error.safeUserMessage : '间隔没有写进当前聊天。';
+        return;
+    }
+    ui_countdown.refreshAutoMemoryCountdown();
+    auto_memory_scheduler.nudgeAutoMemoryScheduler();
+    if (note && result.snapshot?.plan?.enabled) {
+        note.textContent = result.snapshot.plan.intervalFloors === 1
+            ? '已改成每一楼抽取。当前这楼到点了会马上整理。'
+            : `已改成每 ${result.snapshot.plan.intervalFloors} 楼抽一次，从现在重新计。`;
+    }
+}
+
 export function refreshGenerationSettingsUi() {
     const panel = document.getElementById(core_constants.SETTINGS_ID);
     if (!panel) return;
+    if (panel.dataset.rmtAutoMemoryPaceBound !== '1') {
+        panel.dataset.rmtAutoMemoryPaceBound = '1';
+        panel.addEventListener('change', event => { void onAutoMemoryPaceChange(panel, event); });
+    }
     const settings = core_settings.getPluginSettings();
     refreshThemeUi();
     const connectionMode = settings.apiConnectionMode === 'manual' ? 'manual' : 'profile';
@@ -410,6 +491,26 @@ export function refreshGenerationSettingsUi() {
     const autoRules = core_autoUpdatePolicy.normalizeAutoUpdates(settings.autoUpdates);
     for (const input of panel.querySelectorAll('[data-rmt-auto-enabled]')) input.checked = autoRules[input.dataset.rmtAutoEnabled]?.enabled === true;
     for (const input of panel.querySelectorAll('[data-rmt-auto-every]')) input.value = String(autoRules[input.dataset.rmtAutoEvery]?.every || 20);
+    let gate = { allowLegacy: true, source: 'legacy' };
+    try { gate = core_autoUpdatePolicy.readLegacySchedulerGate(core_context.currentCharacterGuard().chatMetadata); } catch { gate = { allowLegacy: true, source: 'legacy' }; }
+    const paused = gate.allowLegacy !== true;
+    for (const input of panel.querySelectorAll('[data-rmt-auto-enabled], [data-rmt-auto-every]')) input.disabled = paused;
+    const gateNote = panel.querySelector('[data-rmt-auto-memory-gate]');
+    if (gateNote) gateNote.textContent = !paused ? '' : gate.source === 'paused-corrupt'
+        ? '自动留忆记录无法读取，没有改写。'
+        : '这一段聊天的自动留忆已打开。到了间隔会抽一份回忆。';
+    let pacePlan = null;
+    try { pacePlan = auto_memory_plan.readAutoMemoryMetadata(core_context.currentCharacterGuard().chatMetadata)?.plan || null; } catch { pacePlan = null; }
+    const intervalInput = panel.querySelector('[data-rmt-auto-memory-interval]');
+    if (intervalInput && document.activeElement !== intervalInput) {
+        intervalInput.value = String(pacePlan?.intervalFloors || settings.autoMemoryIntervalFloors);
+    }
+    const latestInput = panel.querySelector('[data-rmt-auto-memory-latest]');
+    if (latestInput) latestInput.checked = settings.autoMemoryLatestFloor === true;
+    ui_heartEnvelope.paintEnvelopePicker(panel, settings.heartEnvelopeSkin);
+    ui_countdown.refreshAutoMemoryCountdown();
+    const restore = panel.querySelector('[data-rmt-auto-memory-restore]');
+    if (restore) restore.hidden = gate.source !== 'paused-new-plan';
     const autoWarning = panel.querySelector('[data-rmt-auto-warning]');
     if (autoWarning) autoWarning.textContent = core_autoUpdates.autoUpdateAvailability();
     core_autoUpdates.refreshAutoUpdateStatus();

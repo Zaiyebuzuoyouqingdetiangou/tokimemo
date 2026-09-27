@@ -435,6 +435,13 @@ export function openCachedOrGenerate(mode, options = {}) {
     if (mode === 'journal') return handJournal.openHandJournal();
     if (['mirrorCall','mirrorVoice'].includes(mode)) return workspace_ui.openVoiceModule(mode);
     if (!Object.values(core_constants.MODE).includes(mode)) return;
+    if (options.incrementalSession) {
+        const route = options.workspaceRoute || mode;
+        ui_workspaceState.workspace.route = route; ui_workspaceState.workspace.tab = 'content'; ui_workspaceState.workspace.empty = null;
+        runtimeState.activeMode = mode; runtimeState.activeSession = options.incrementalSession;
+        ui_workspaceState.prepareWorkspaceSession(mode, options.incrementalSession, route);
+        return renderActive();
+    }
     heart_reader.rememberHeartReader();
     const openRequest = ++heartOpenRequest;
     const route = options.workspaceRoute || mode;
@@ -484,8 +491,9 @@ export function openCachedOrGenerate(mode, options = {}) {
 }
 
 export function renderActive() {
+    const floorLive = !!document.querySelector('.rmt-floor-shell [data-rmt-floor-body][data-rmt-floor-live="1"]');
     const overlay = document.getElementById(core_constants.OVERLAY_ID);
-    if (!overlay || overlay.hidden) return;
+    if (!floorLive && (!overlay || overlay.hidden)) return;
     try {
         const scope = core_context.chatScopeKey(core_context.currentCharacterGuard());
         if (runtimeState.renderedChatScope && runtimeState.renderedChatScope !== scope) return;

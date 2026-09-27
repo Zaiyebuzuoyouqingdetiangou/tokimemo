@@ -10,6 +10,7 @@ import * as core_constants from '../core/constants.js';
 import * as core_context from '../core/context.js';
 import * as core_requestCoordinator from '../core/requestCoordinator.js';
 import * as ui_taskCenter from './taskCenter.js';
+import * as ui_countdown from './autoMemoryCountdown.js';
 import * as core_settings from '../core/settings.js';
 import { state as runtimeState } from '../core/state.js';
 import * as core_text from '../core/text.js';
@@ -216,14 +217,29 @@ export function invalidateArchiveViewForChatNavigation(nextChatId = '') {
     }
 }
 
+const FLOOR_WORKSPACE = '.rmt-workspace-catalogue, .rmt-archive-room, .rmt-workspace-page, .rmt-heart, .rmt-album, .rmt-adv, .rmt-ending, .rmt-room-view';
+
 export function bodyEl() {
-    return document.querySelector(`#${core_constants.OVERLAY_ID} .rmt-body`);
+    const overlay = document.getElementById(core_constants.OVERLAY_ID);
+    const overlayOpen = !!(overlay && !overlay.hidden);
+    const floor = document.querySelector('.rmt-floor-shell [data-rmt-floor-body][data-rmt-floor-live="1"]');
+    // 插件开着时，主窗口才是画布。已经误画进信里的目录从信纸上清掉。
+    if (overlayOpen) {
+        document.querySelectorAll('.rmt-floor-shell [data-rmt-floor-body]').forEach(node => {
+            if (node.dataset.rmtFloorLive === '1') node.removeAttribute('data-rmt-floor-live');
+            if (node.querySelector(FLOOR_WORKSPACE)) node.replaceChildren();
+        });
+        return overlay.querySelector('.rmt-body') || document.querySelector(`#${core_constants.OVERLAY_ID} .rmt-body`);
+    }
+    if (floor) return floor;
+    return overlay?.querySelector('.rmt-body') || document.querySelector(`#${core_constants.OVERLAY_ID} .rmt-body`);
 }
 
 export function topTitle(text) {
     const el = document.querySelector(`#${core_constants.OVERLAY_ID} .rmt-topbar-title`);
     if (el) el.textContent = text || '心迹回廊';
     workspace_ui.syncWorkspaceChrome();
+    ui_countdown.refreshAutoMemoryCountdown();
 }
 
 export function setBackVisible(visible, label = '返回上级') {

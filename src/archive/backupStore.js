@@ -4,8 +4,10 @@ import * as core_constants from '../core/constants.js';
 import * as core_context from '../core/context.js';
 import * as core_text from '../core/text.js';
 import * as core_backupDiagnostics from '../core/backupDiagnostics.js';
+import * as core_archiveBridge from '../core/archiveBridge.js';
 
 let databasePromise = null;
+let openedDatabase = null;
 let testBackend = null;
 const backupWriteChains = new Map();
 
@@ -232,11 +234,34 @@ function buildRecord(entry, memory, cache = null) {
     };
 }
 
-function requestValue(request) {
-    return new Promise((resolve, reject) => {
-        request.onsuccess = () => resolve(request.result);
-        request.onerror = () => reject(core_backupDiagnostics.backupFailureError(request.error, 'read', 'transaction'));
-    });
+// iOS Safari 会在页面进后台或存储紧张时关掉 IndexedDB 连接，不一定发 close 事件。
+// 之后在旧连接上开事务报 InvalidStateError，读写请求报 UnknownError。缓存着旧连接，
+// 每次保存都会失败到刷新为止，而刷新会丢掉暂存在页面里、还没回填的生图结果。
+function connectionLost(error) {
+    try { return error?.name === 'InvalidStateError' || error?.name === 'UnknownError'; } catch { return false; }
+}
+
+function forgetDatabase(db) {
+    if (!db || openedDatabase !== db) return;
+    openedDatabase = null;
+    databasePromise = null;
+    try { db.close(); } catch {}
+}
+
+// 只在事务还没开起来时换连接重试：这时什么都没写入。run 必须在开事务的同一轮里发出第一个请求。
+async function backupTransaction(mode, stage, run) {
+    for (let attempt = 0; ; attempt += 1) {
+        const db = await openDatabase();
+        let transaction;
+        try { transaction = db.transaction(core_constants.ARCHIVE_BACKUP_STORE_NAME, mode); }
+        catch (error) {
+            const lost = connectionLost(error);
+            if (lost) forgetDatabase(db);
+            if (lost && attempt === 0) continue;
+            throw stage ? core_backupDiagnostics.backupFailureError(error, stage, 'transaction') : error;
+        }
+        return { db, result: run(transaction) };
+    }
 }
 
 function openDatabase() {
@@ -272,7 +297,10 @@ function openDatabase() {
         request.onsuccess = () => {
             if (settled) { try { request.result?.close(); } catch {} return; }
             settled = true;
-            resolve(request.result);
+            const db = request.result;
+            openedDatabase = db;
+            try { db.onclose = () => forgetDatabase(db); } catch {}
+            resolve(db);
         };
         request.onerror = () => fail(request.error);
         request.onblocked = () => fail(null, 'open', 'blocked');
@@ -282,28 +310,61 @@ function openDatabase() {
     return pending;
 }
 
+function idbReadRecord(transaction, entry) {
+    return new Promise((resolve, reject) => {
+        let settled = false;
+        const finish = (settle, value) => { if (!settled) { settled = true; settle(value); } };
+        try {
+            const identity = normalizedIdentity(entry);
+            const store = transaction.objectStore(core_constants.ARCHIVE_BACKUP_STORE_NAME);
+            transaction.onabort = () => finish(reject, transaction.error);
+            const exactRequest = store.get(identity.entryId);
+            exactRequest.onerror = () => finish(reject, exactRequest.error);
+            exactRequest.onsuccess = () => {
+                if (exactRequest.result) return finish(resolve, exactRequest.result);
+                // 第二次读取在回调里同步发出，不隔 await：回调结束后事务何时失效，各浏览器不一致。
+                try {
+                    const matchesRequest = store.index('chatId').getAll(identity.chatId);
+                    matchesRequest.onerror = () => finish(reject, matchesRequest.error);
+                    matchesRequest.onsuccess = () => {
+                        const matches = matchesRequest.result;
+                        const compatible = (Array.isArray(matches) ? matches : []).filter(item => item?.deleted === true
+                            ? deletionIdentityMatches(item, entry)
+                            : identityMatches(item, entry));
+                        // A legacy entry ID may differ from the newer fingerprint-derived ID. Recover only when the
+                        // chat + stable display identity resolve to exactly one record; ambiguity stays fail-closed.
+                        finish(resolve, compatible.length === 1 ? compatible[0] : null);
+                    };
+                } catch (error) { finish(reject, error); }
+            };
+        } catch (error) { finish(reject, error); }
+    });
+}
+
 async function idbRead(entry) {
-    const db = await openDatabase();
-    try {
-        const identity = normalizedIdentity(entry);
-        const transaction = db.transaction(core_constants.ARCHIVE_BACKUP_STORE_NAME, 'readonly');
-        const store = transaction.objectStore(core_constants.ARCHIVE_BACKUP_STORE_NAME);
-        const exact = await requestValue(store.get(identity.entryId));
-        if (exact) return exact;
-        const matches = await requestValue(store.index('chatId').getAll(identity.chatId));
-        const compatible = (Array.isArray(matches) ? matches : []).filter(item => item?.deleted === true
-            ? deletionIdentityMatches(item, entry)
-            : identityMatches(item, entry));
-        // A legacy entry ID may differ from the newer fingerprint-derived ID. Recover only when the
-        // chat + stable display identity resolve to exactly one record; ambiguity stays fail-closed.
-        return compatible.length === 1 ? compatible[0] : null;
-    } catch (error) { throw core_backupDiagnostics.backupFailureError(error, 'read', 'transaction'); }
+    for (let attempt = 0; ; attempt += 1) {
+        const { db, result } = await backupTransaction('readonly', 'read', transaction => idbReadRecord(transaction, entry));
+        try { return await result; }
+        catch (error) {
+            // 读取没有副作用：连接断了就换新连接再读一次。
+            const lost = connectionLost(error);
+            if (lost) forgetDatabase(db);
+            if (lost && attempt === 0) continue;
+            throw core_backupDiagnostics.backupFailureError(error, 'read', 'transaction');
+        }
+    }
 }
 
 async function idbPut(record, expected = null, options = {}) {
-    const db = await openDatabase();
+    const { db, result } = await backupTransaction('readwrite', 'write', transaction => idbPutRecord(transaction, record, expected, options));
+    return result.catch(error => {
+        if (connectionLost(error)) forgetDatabase(db);
+        throw core_backupDiagnostics.backupFailureError(error, 'write', 'transaction');
+    });
+}
+
+function idbPutRecord(transaction, record, expected, options) {
     return new Promise((resolve, reject) => {
-        const transaction = db.transaction(core_constants.ARCHIVE_BACKUP_STORE_NAME, 'readwrite');
         const store = transaction.objectStore(core_constants.ARCHIVE_BACKUP_STORE_NAME);
         let outcome = false;
         let finalized = false;
@@ -452,7 +513,7 @@ async function idbPut(record, expected = null, options = {}) {
         transaction.oncomplete = () => resolve(outcome);
         transaction.onabort = () => reject(abortReason || transaction.error || core_backupDiagnostics.backupFailureError(null, 'write', 'transaction'));
         transaction.onerror = () => reject(abortReason || transaction.error || core_backupDiagnostics.backupFailureError(null, 'write', 'transaction'));
-    }).catch(error => { throw core_backupDiagnostics.backupFailureError(error, 'write', 'transaction'); });
+    });
 }
 
 async function idbDeleteOne(db, entry) {
@@ -514,14 +575,17 @@ async function idbDeleteOne(db, entry) {
 }
 
 async function idbDelete(entries) {
-    const db = await openDatabase();
+    await openDatabase();
     const targets = (Array.isArray(entries) ? entries : [entries]).filter(Boolean);
     if (!targets.length) return true;
+    return (await backupTransaction('readwrite', '', transaction => idbDeleteRecords(transaction, targets))).result;
+}
+
+function idbDeleteRecords(transaction, targets) {
     return new Promise((resolve, reject) => {
         // A character group is one user-visible deletion. Resolve every exact/legacy alias and
         // write all tombstones in one IndexedDB transaction so an Nth-record failure cannot
         // leave the first N-1 backups silently deleted while the library index remains intact.
-        const transaction = db.transaction(core_constants.ARCHIVE_BACKUP_STORE_NAME, 'readwrite');
         const store = transaction.objectStore(core_constants.ARCHIVE_BACKUP_STORE_NAME);
         const discovered = targets.map(() => ({ exact: null, chat: [] }));
         let pending = targets.length * 2;
@@ -686,3 +750,6 @@ export async function updateArchiveBackupCache(entry, memory, cache, options = {
 export async function deleteArchiveBackup(entries) {
     return backend().delete(entries);
 }
+
+// 重构清单 C-3c（r84.101）：把 core 层要用的函数登记到 core/archiveBridge.js（core 不再 import 本文件）。
+core_archiveBridge.registerArchiveBridge({ readArchiveBackupState, replaceArchiveBackup, seedArchiveBackup, updateArchiveBackupCache });

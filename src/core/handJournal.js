@@ -10,6 +10,22 @@ function requireValue(ok, message = '手帐数据格式不完整，原记录没�
 function string(value) { requireValue(typeof value === 'string'); return value; }
 function freeze(value) { if (value && typeof value === 'object') { Object.values(value).forEach(freeze); Object.freeze(value); } return value; }
 
+export const JOURNAL_PALETTES = Object.freeze([
+    {id:'mint',label:'薄荷晨光',paper:'#f0faf5',ink:'#30544b',accent:'#a5d3bf'},
+    {id:'sky',label:'晴空蓝',paper:'#eef7fc',ink:'#354f68',accent:'#a9cfe4'},
+    {id:'peach',label:'白桃汽水',paper:'#fff3ef',ink:'#714d50',accent:'#efc0b4'},
+    {id:'lilac',label:'丁香花笺',paper:'#f5f1fc',ink:'#584c70',accent:'#c9bcdf'},
+    {id:'lemon',label:'柠檬奶油',paper:'#fffceb',ink:'#666044',accent:'#e6d894'},
+    {id:'rose',label:'蔷薇清露',paper:'#fff2f6',ink:'#6d485b',accent:'#e5b5ca'},
+]);
+export function journalPalette(value, index = 0) {
+    const fallback = JOURNAL_PALETTES[((index % JOURNAL_PALETTES.length) + JOURNAL_PALETTES.length) % JOURNAL_PALETTES.length];
+    const found = JOURNAL_PALETTES.find(item => item.id === value?.id) || fallback;
+    const result = {id: found.id};
+    for (const key of ['paper','ink','accent']) result[key] = /^#[0-9a-f]{6}$/i.test(value?.[key] || '') ? value[key].toLowerCase() : found[key];
+    return result;
+}
+
 export function safeJournalImageUrl(value) {
     if (typeof value !== 'string' || !value || /[\\\u0000-\u001f\u007f]/.test(value)) return '';
     const raw=value.trim();
@@ -45,16 +61,16 @@ function normalizeEntry(value) {
 function normalizePage(value) {
     requireValue(object(value) && Array.isArray(value.entries) && typeof value.id === 'string' && value.id.length > 0
         && Number.isFinite(value.createdAt) && value.createdAt >= 0);
-    return { id: value.id, title: string(value.title), createdAt: value.createdAt, entries: value.entries.map(normalizeEntry) };
+    return { id: value.id, title: string(value.title), createdAt: value.createdAt, entries: value.entries.map(normalizeEntry), ...(value.palette ? {palette:journalPalette(value.palette)} : {}) };
 }
 function pages(value) {
     requireValue(Array.isArray(value)); const rows = value.map(normalizePage), ids = new Set();
     for (const row of rows) { requireValue(!ids.has(row.id), '手帐页面标识重复，原记录没有改动。'); ids.add(row.id); }
     return rows;
 }
-export function createJournalPage({ title = '', entries, id = globalThis.crypto?.randomUUID?.(), createdAt = Date.now() } = {}) {
+export function createJournalPage({ title = '', entries, id = globalThis.crypto?.randomUUID?.(), createdAt = Date.now(), palette } = {}) {
     requireValue(typeof id === 'string' && !!id, '无法创建手帐页面标识，请稍后重试。');
-    return freeze(normalizePage({ id, title, entries, createdAt }));
+    return freeze(normalizePage({ id, title, entries, createdAt, palette }));
 }
 export function exportJournal(value) { return JSON.stringify({ format: FORMAT, version: 1, pages: pages(value) }, null, 2); }
 export function importJournal(value) {
@@ -181,7 +197,7 @@ export function createJournalStore({ indexedDB = globalThis.indexedDB, currentSc
             return await new Promise((resolve,reject) => {
                 let tx, result, error;
                 try {
-                    const writing = incoming !== null || !!edit?.remove || !!edit?.rename;
+                    const writing = incoming !== null || !!edit?.remove || !!edit?.rename || !!edit?.palette;
                     tx=db.transaction(STORE,writing?'readwrite':'readonly');
                     tx.oncomplete=()=>resolve(freeze(result));
                     tx.onabort=tx.onerror=()=>reject(error || fail('RMT_JOURNAL_STORAGE','手帐保存未完成，原记录保留；请保留未保存页面后重试。'));
@@ -195,6 +211,14 @@ export function createJournalStore({ indexedDB = globalThis.indexedDB, currentSc
                             if (edit?.remove) {
                                 requireValue(result.some(page => page.id === edit.remove), '找不到这一页，原手帐没有改动。');
                                 result = result.filter(page => page.id !== edit.remove);
+                                store.put({scope,version:1,pages:result});
+                                return;
+                            }
+                            if (edit?.palette) {
+                                const index = result.findIndex(page => page.id === edit.palette.id);
+                                requireValue(index >= 0, '找不到这一页，原手帐没有改动。');
+                                result = result.slice();
+                                result[index] = createJournalPage({...result[index], palette:edit.palette.value});
                                 store.put({scope,version:1,pages:result});
                                 return;
                             }
@@ -225,6 +249,7 @@ export function createJournalStore({ indexedDB = globalThis.indexedDB, currentSc
         read:scope=>transact(scope),
         append:(scope,value)=>transact(scope,value),
         rename:(scope,id,title)=>transact(scope,undefined,{rename:{id,title:typeof title==='string'?title:''}}),
+        palette:(scope,id,value)=>transact(scope,undefined,{palette:{id,value}}),
         remove:(scope,id)=>transact(scope,undefined,{remove:id}),
     });
 }

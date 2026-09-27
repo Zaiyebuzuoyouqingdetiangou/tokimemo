@@ -1,12 +1,18 @@
-import * as archive_groups from '../archive/groups.js';
-import * as archive_repository from '../archive/repository.js';
+import * as lenticularCards from './lenticularCards.js';
+// C-3c（r84.101）：别名沿用 archive_groups，函数体一字不改；实际指向 core 层的桥，不再 import archive 层。
+import * as archive_groups from './archiveBridge.js';
+// C-3c（r84.101）：别名沿用 archive_repository，函数体一字不改；实际指向 core 层的桥，不再 import archive 层。
+import * as archive_repository from './archiveBridge.js';
 import * as core_constants from './constants.js';
 import * as core_context from './context.js';
 import * as core_requestCoordinator from './requestCoordinator.js';
 import * as core_text from './text.js';
-import * as modes_calendar from '../modes/calendar.js';
-import * as modes_phone from '../modes/phone.js';
-import * as generation_recovery from '../generation/recovery.js';
+// C-3（r84.98）：别名沿用 modes_calendar，函数体一字不改；实际指向 core 层的桥，不再 import modes 层。
+import * as modes_calendar from './modesBridge.js';
+// C-3（r84.98）：别名沿用 modes_phone，函数体一字不改；实际指向 core 层的桥，不再 import modes 层。
+import * as modes_phone from './modesBridge.js';
+// C-3b（r84.99）：别名沿用 generation_recovery，函数体一字不改；实际指向 core 层的桥，不再 import generation 层。
+import * as generation_recovery from './generationBridge.js';
 import * as participant_contract from './participants.js';
 import { ARCHIVE_VERSIONS_CACHE_KEY, GENERATION_DRAFTS_CACHE_KEY, archiveBackupEntryForContext, archiveVersions, assertModeWriteFence, cacheScopeFromContext, clearRecoveryInCache, cloneCacheValue, ensureCacheHydrated, finishGenerationDraftInCache, generationDraftRecords, generationDraftRows, getCache, modeWriteFenceForCache, participantRoster, recoveryCleared, recoveryDraftId, recoveryPageForVersion, rememberRuntimeSessionCache, retainLegacyGenerationDraft, sameProgressItemValue, saveMetadataDurably, serializeArchiveCommitOperation, serializeCacheScopeOperation } from './cacheRecords.js';
 import { commitArchiveCacheMutation, commitLiveCacheMutation } from './cacheCommit.js';
@@ -240,13 +246,18 @@ export function preserveProgressLocalState(incoming, saved) {
         return incoming.map(item => item?.id && byId.has(item.id) ? preserveProgressLocalState(item, byId.get(item.id)) : item);
     }
     const next = { ...incoming };
-    for (const key of ['cgImage', 'cgImageHistory', 'cgPromptDraft', 'cgPromptMetadata', 'favorite', 'readAt', 'unlocked', 'userManaged', ...PROGRESS_READING_FIELDS]) {
+    // r84.170：visual / visuals / previousCgVisuals / fireflyVisual 是卷宗、睡前故事章节、蝴蝶节点、
+    // 结局、萤火虫等「按位置存图」的本地图片。以前只保留 cgImage，任务续写或完成时这些图被模型输出整份覆盖掉，
+    // 表现为图生成过、重启或续写后消失。按内容签名取用的旧图在原文变了时自然不显示，这里照原样带过去即可。
+    for (const key of ['cgImage', 'cgImageHistory', 'cgPromptDraft', 'cgPromptMetadata', 'favorite', 'readAt', 'unlocked', 'userManaged',
+        'visual', 'visuals', 'previousCgVisuals', 'fireflyVisual', ...PROGRESS_READING_FIELDS]) {
         if (Object.hasOwn(saved, key)) next[key] = structuredClone(saved[key]);
     }
     for (const [key, value] of Object.entries(next)) {
         if (Array.isArray(value) && Array.isArray(saved[key])) next[key] = preserveProgressLocalState(value, saved[key]);
         else if (value && typeof value === 'object' && !Array.isArray(value) && saved[key] && typeof saved[key] === 'object'
-            && !['generationSources', 'readableProgress', 'cgImage', 'cgImageHistory', 'cgPromptDraft', 'cgPromptMetadata'].includes(key)) next[key] = preserveProgressLocalState(value, saved[key]);
+            && !['generationSources', 'readableProgress', 'cgImage', 'cgImageHistory', 'cgPromptDraft', 'cgPromptMetadata',
+                'visual', 'visuals', 'previousCgVisuals', 'fireflyVisual'].includes(key)) next[key] = preserveProgressLocalState(value, saved[key]);
     }
     applyProgressOverrides(next, saved.readableProgress);
     if (next.readableProgress) for (const key of ['textOverridesV1', 'clearedFieldsV1', 'manualFieldsV1']) {
@@ -257,7 +268,7 @@ export function preserveProgressLocalState(incoming, saved) {
         applyProgressDeletions(next, deletions);
         if (next.readableProgress) next.readableProgress = { ...next.readableProgress, deletedItems: structuredClone(deletions) };
     }
-    return next;
+    return lenticularCards.preservePastLivesCards(next, saved);
 }
 
 export async function commitGenerationTaskResultMutation(context, draftId, mutate, { expectedTaskOrigin = null, stillCurrent = null, archiveTarget = null, contentOverride = null } = {}) {
@@ -348,7 +359,7 @@ export async function saveGenerationTaskResult(context, mode, session, origin, o
         if (!sourceMemory || !Array.isArray(sourceMemory.memories)) throw core_text.safeUserError('旧草稿没有保留完整原资料，成果与草稿保留，需要明确旧资料的兼容方式。', 'RMT_RECOVERY_SOURCE_SNAPSHOT_MISSING');
         const result = { mode, pageId: options.pageId || record.journal.pageId || recoveryPageForVersion(mode, record.journal.operation),
             createdAt: record.result?.createdAt || Date.now(), entryId: entry.entryId, targetEntry: cloneCacheValue(entry),
-            session: preserveProgressLocalState(cloneCacheValue(session), record.result?.session), sourceMemory: cloneCacheValue(sourceMemory),
+            session: lenticularCards.preservePastLivesCards(preserveProgressLocalState(cloneCacheValue(session), record.result?.session), value[mode]), sourceMemory: cloneCacheValue(sourceMemory),
             sourceContext: cloneCacheValue(snapshot?.fields || {}),
             sourceIdentity: cloneCacheValue(record.journal.sourceIdentity || record.journal.identity),
             targetIdentity: cloneCacheValue(record.journal.identity) };
@@ -687,7 +698,6 @@ export async function saveGenerationRecovery(context, bank, mode, journal, origi
         }
         const journals = { ...(cache[generation_recovery.GENERATION_RECOVERY_CACHE_KEY] || {}) };
         journals[mode] = { ...frozenJournal, [core_constants.SESSION_MODE_WRITE_FENCE_KEY]: fence };
-        if (JSON.stringify(journals).length > 6000000) throw new Error('Recovery storage capacity reached');
         cache[generation_recovery.GENERATION_RECOVERY_CACHE_KEY] = journals;
     };
     return serializeArchiveCommitOperation(entry, memoryBank, async () => {

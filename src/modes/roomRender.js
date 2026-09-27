@@ -429,7 +429,7 @@ export function renderRoom() {
     const petNodes = selectedPets.map(roomPetNodeHtml).join('');
     const petNotes = selectedPets.map(roomPetSummaryHtml).join('');
     const objectLayout = roomObjectLayout(selectedSpace);
-    const hotspots = room_interior.roomInteriorHtml(objectLayout, { figure: figureProfile, personIsHere, charName, selectedId: selected?.id, world: visualProfile.worldStyle });
+    const hotspots = room_interior.roomInteriorHtml(objectLayout, { space: selectedSpace, night: now.getHours() < 6 || now.getHours() >= 18, figure: figureProfile, personIsHere, charName, selectedId: selected?.id, world: visualProfile.worldStyle });
     const objectRail = objectLayout.map(entry => roomObjectLayoutButtonHtml(entry, 'rail', selected?.id, focusId)).join('');
     const map = session.spaces.map(space => {
         const typeLabel = core_text.normalizeText(space.spaceType, 100);
@@ -618,7 +618,7 @@ export function renderRoomParticipants(session = runtimeState.activeSession) {
       <details class="rmt-room-find-person"><summary>找人 · ${slots.length} 人</summary><div class="rmt-room-participants" aria-label="查找人物所在空间">${people}</div></details><nav class="rmt-room-map" aria-label="切换空间">${locations}</nav>
       <div class="rmt-room-location"><b>${e(session.homeName)}</b><span data-rmt-room-clock>${e(roomDaypartState(now).label)} · ${e(roomClockText(now))}</span>${readOnly ? '' : '<button type="button" class="rmt-btn" data-rmt-action="room-refresh-figure">更新人物外形 · 保留房间内容</button><button type="button" class="rmt-btn" data-rmt-action="room-life-refresh">更新今日生活</button>'}</div>
       <div class="rmt-room-flow"><section class="rmt-room-stage"><div class="rmt-room-stage-head"><b>${e(selectedSpace.label)}</b><small>${e(present.length ? `在场：${present.map(slot => slot.name).join("、")}` : "此刻没有已记录的在场者")}</small></div><div class="rmt-room-scene rmt-room-layout-scene" data-rmt-room-beat="${e(current.id)}">
-        ${room_interior.roomInteriorHtml(layout, { selectedId: selected?.id, world: visual.worldStyle, participants: present.map(slot => ({ id: slot.participantId, name: slot.name, figure: room_figure_local.localRoomFigure(slot.visualProfile?.figure || {}, { explicitFields: slot.visualProfile?.explicitFields, ...room_figure_local.roomFigureSources(core_context.getContext(), slot.name, () => {
+        ${room_interior.roomInteriorHtml(layout, { space: selectedSpace, night: now.getHours() < 6 || now.getHours() >= 18, selectedId: selected?.id, world: visual.worldStyle, participants: present.map(slot => ({ id: slot.participantId, name: slot.name, figure: room_figure_local.localRoomFigure(slot.visualProfile?.figure || {}, { explicitFields: slot.visualProfile?.explicitFields, ...room_figure_local.roomFigureSources(core_context.getContext(), slot.name, () => {
             if (runtimeState.activeMode === core_constants.MODE.ROOM && runtimeState.activeSession === session) renderRoom();
         }), worldStyle: visual.worldStyle }) })) })}
         ${(session.pets || []).filter(pet => pet.spaceId === selectedSpace.id).map(roomPetNodeHtml).join('')}</div>

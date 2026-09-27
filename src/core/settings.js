@@ -1,5 +1,6 @@
 import * as manual_credentials from './manualCredentialStore.js';
-import * as source_read from '../archive/sourceReadGuard.js';
+// C-3c（r84.100）：别名沿用 source_read，函数体一字不改；实际指向 core 层的桥，不再 import archive 层。
+import * as source_read from './archiveBridge.js';
 import * as connection_pool from './connectionPool.js';
 import * as advanced_generation from './advancedGeneration.js';
 import * as output_budget from './outputBudget.js';
@@ -16,6 +17,12 @@ import * as core_contextTags from './contextTags.js';
 import * as core_autoUpdatePolicy from './autoUpdatePolicy.js';
 import * as creative_supplement from './creativeSupplement.js';
 import * as chat_read_range from './chatReadRange.js';
+
+export function normalizeAutoMemoryInterval(value) {
+    const count = Math.floor(Number(value));
+    if (!Number.isFinite(count)) return 5;
+    return Math.max(1, Math.min(1000, count));
+}
 
 export function normalizeAutoRetryCount(value) {
     const count = Math.floor(Number(value));
@@ -63,11 +70,15 @@ export function getPluginSettings(context = core_context.getContext()) {
         useCurrentChatExternalMemory: settings.useCurrentChatExternalMemory !== false,
         useActivatedWorldInfo: settings.useActivatedWorldInfo !== false,
         imageGenerationManualEnabled: false,
-        imageGenerationProvider: 'baibai-image',
+        imageGenerationProvider: settings.imageGenerationProvider === 'chatu8-image' ? 'chatu8-image' : 'baibai-image',
+        imageGenerationFallback: settings.imageGenerationFallback === true,
         cgPromptFormat: cg_format.normalizeCgPromptFormat(settings.cgPromptFormat, 'nai5-natural'),
         autoRetryEnabled: settings.autoRetryEnabled === true,
         autoRetryCount: normalizeAutoRetryCount(settings.autoRetryCount),
         autoSecondPass: settings.autoSecondPass === true,
+        autoMemoryLatestFloor: settings.autoMemoryLatestFloor === true,
+        autoMemoryIntervalFloors: normalizeAutoMemoryInterval(settings.autoMemoryIntervalFloors),
+        heartEnvelopeSkin: core_constants.HEART_ENVELOPE_SKINS.includes(settings.heartEnvelopeSkin) ? settings.heartEnvelopeSkin : 'pink',
         creativeSupplementEnabled: settings.creativeSupplementEnabled === true,
         creativeSupplement: creative_supplement.normalizeCreativeSupplement(settings.creativeSupplement),
         ttDisplayMode: settings.ttDisplayMode === true,

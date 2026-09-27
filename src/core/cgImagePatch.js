@@ -2,11 +2,12 @@
 // deferred payload: never replay a stale whole Album / ADV / Heart session.
 import * as constants from './constants.js';
 import * as text from './text.js';
-import * as appearance from '../generation/cgAppearance.js';
+// C-3b（r84.99）：别名沿用 appearance，函数体一字不改；实际指向 core 层的桥，不再 import generation 层。
+import * as appearance from './generationBridge.js';
 import * as cg_visual from './cgVisualRules.js';
 import * as cg_targets from './cgTargets.js';
 
-const IMAGE_MODES = new Set([constants.MODE.ALBUM, constants.MODE.ADV, constants.MODE.HEART, constants.MODE.ENDING]);
+const IMAGE_MODES = new Set([constants.MODE.ALBUM, constants.MODE.ADV, constants.MODE.HEART, constants.MODE.ENDING, constants.MODE.PAST_LIVES, constants.MODE.BEDTIME, constants.MODE.BUTTERFLY]);
 
 export function normalizeCgImageUrl(value) {
     if (typeof value !== 'string' || value.length > 4096 || /[\\\u0000-\u001f\u007f]/.test(value)) return '';
@@ -29,7 +30,7 @@ export function normalizeCgImageRecord(value) {
     if (!url) return null;
     const promptMetadata = appearance.normalizeCgPromptMetadata(value.promptMetadata);
     return { url, prompt: text.normalizeText(value.prompt, constants.MAX_CG_IMAGE_PROMPT_CHARS),
-        provider: value.provider === 'baibai-image' ? 'baibai-image' : constants.CG_IMAGE_PROVIDER,
+        provider: value.provider === 'chatu8-image' ? 'chatu8-image' : value.provider === 'baibai-image' ? 'baibai-image' : constants.CG_IMAGE_PROVIDER,
         generatedAt: Math.max(0, Number(value.generatedAt) || 0),
         ...(promptMetadata ? { promptMetadata } : {}) };
 }
@@ -64,7 +65,8 @@ export function cgItemInSession(mode, session, itemId) {
 }
 
 export function cgItemSignature(item) {
-    const fields = [item?.id, item?.title, item?.date, item?.desc, item?.cgDesc,
+    const compactSource = ['past-life-dossier', 'bedtime-chapter', 'butterfly-node', 'heart-firefly'].includes(item?.__rmtCgDescriptor?.kind);
+    const fields = [item?.id, item?.title, item?.date, compactSource ? item.sourceHash : item?.desc, item?.cgDesc,
         item?.subtitle, item?.imagePrompt, item?.visualSeed, item?.panelCount, item?.panels,
         normalizeCgImageRecord(item?.cgImage)];
     if (item?.sourceHash) fields.push(item.sourceHash);
@@ -80,7 +82,7 @@ export function normalizeCgImagePatch(value) {
         || typeof value.itemId !== 'string' || !value.itemId || value.itemId.length > 240
         || typeof value.expectedSignature !== 'string' || !value.expectedSignature || value.expectedSignature.length > 120000) return null;
     const image = normalizeCgImageRecord(value.image);
-    if (!image || image.provider !== 'baibai-image' || typeof value.image.url !== 'string' || value.image.url.length > 4096) return null;
+    if (!image || (image.provider !== 'baibai-image' && image.provider !== 'chatu8-image') || typeof value.image.url !== 'string' || value.image.url.length > 4096) return null;
     // Deferred writes use the same strict saved-file contract as fresh results.
     // Displaying legacy same-host URLs does not grant permission to write them.
     const savedPath = savedLocalImagePath(value.image.url);
