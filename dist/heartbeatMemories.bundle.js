@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 213
-// Source SHA-256: 83217de3d61eefbdf276ff43ead737f71ddcd6c31b26080ae9ce70858a598d0b
+// Source SHA-256: 6016a79b3eea5cf6669e15611c338b8b4c6921663c940e550d1ecc3f34a2100e
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -42277,7 +42277,7 @@ function renderAchievements() {
         <small>${lockedState
             ? core_text.esc(item.hint)
             : `解锁条件：${core_text.esc(achievementUnlockCondition(item))} · 解锁时间：${core_text.esc(item.unlockedAt || '已解锁')}`}</small>
-        ${jump}
+        ${jump ? `<div class="rmt-achievement-jump">${jump}</div>` : ''}
       </div>
     </article>`;
     }).join('');
@@ -62199,12 +62199,17 @@ function writesMessageText() {
 function highlightFloor(floor, root = document) {
     const value = Math.floor(Number(floor));
     if (!Number.isSafeInteger(value) || value < 0) return { ok: false, mesid: null };
-    const node = messageElement(value, root);
-    if (!node) return { ok: false, mesid: value };
-    root.querySelectorAll?.('.rmt-floor-return')?.forEach(item => item.classList.remove('rmt-floor-return'));
-    node.classList.add('rmt-floor-return');
-    try { node.scrollIntoView({ block: 'center' }); }
-    catch { try { node.scrollIntoView(); } catch { /* 滚动失败只放弃跳转，不改成就。 */ } }
+    const mark = () => {
+        const node = messageElement(value, root);
+        if (!node) return false;
+        root.querySelectorAll?.('.rmt-floor-return')?.forEach(item => item.classList.remove('rmt-floor-return'));
+        node.classList.add('rmt-floor-return');
+        try { node.scrollIntoView({ block: 'center' }); } catch { /* 滚动失败只放弃高亮。 */ }
+        return true;
+    };
+    // /chat-jump 走酒馆自己的楼层滚动，虚拟列表也能翻到。界面先关掉，再移动聊天。
+    try { triggerSlash(`/chat-jump ${value}`); } catch { /* 没有斜杠命令时仍尝试直接滚到已渲染的楼。 */ }
+    if (!mark()) setTimeout(mark, 80);
     return { ok: true, mesid: value };
 }
 
@@ -64957,10 +64962,17 @@ ${root} [data-rmt-paper=lilac]{--rmt-letter-paper:#f4effc;--rmt-letter-ink:#5140
 ${root} [data-rmt-paper=peach]{--rmt-letter-paper:#fff1e7;--rmt-letter-ink:#68442c;--rmt-letter-line:#c59b7c}
 ${root} .rmt-archive-portals>.rmt-archive-portal{min-width:0;grid-column:auto}
 ${root}[data-rmt-theme-mode] .rmt-archive-portals .rmt-portal-open{width:100%;background:transparent!important;border:0!important}
-${root} .rmt-travel-index nav{align-content:start;grid-auto-rows:max-content}
-${root} .rmt-travel-index nav button{height:auto!important;min-height:60px;overflow:visible;align-items:center;padding:12px;box-sizing:border-box}
-${root} .rmt-travel-index nav button>span{min-width:0;display:grid;gap:4px}
-${root} .rmt-travel-index nav :is(b,small){white-space:normal;overflow-wrap:anywhere;line-height:1.5}
+${root} .rmt-travel-layout{grid-template-columns:minmax(0,1fr) minmax(220px,300px)!important;align-items:start}
+${root} .rmt-travel-index nav{display:flex!important;flex-direction:column;align-content:start;gap:8px;overflow:auto;max-height:min(70vh,640px);padding-right:2px}
+${root} .rmt-travel-index nav button{display:grid!important;grid-template-columns:32px minmax(0,1fr)!important;align-items:start!important;gap:10px;height:auto!important;min-height:0!important;overflow:hidden;padding:10px 12px!important;box-sizing:border-box;line-height:1.4!important;text-align:left}
+${root} .rmt-travel-index nav button>i{width:28px;height:28px;margin-top:1px}
+${root} .rmt-travel-index nav button>span{min-width:0;display:grid;gap:2px}
+${root} .rmt-travel-index nav :is(b,small){display:block!important;white-space:normal!important;overflow-wrap:anywhere;letter-spacing:normal!important;line-height:1.45!important}
+${root} .rmt-travel-index nav b{font-size:15px!important;font-weight:650!important}
+${root} .rmt-travel-index nav small{margin:0!important;font-size:12px!important;color:var(--rmt-theme-muted,#6d7c86)!important}
+${root} .rmt-achievement-copy small{display:block}
+${root} .rmt-achievement-jump{margin-top:10px}
+${root} .rmt-achievement-jump .rmt-btn{min-height:36px!important;padding:6px 14px!important}
 ${root} .rmt-phone-detail{padding:12px!important;min-width:0}
 ${root} .rmt-phone-detail-toolbar{margin-bottom:16px;gap:10px;align-items:center}
 ${root} .rmt-phone-detail-toolbar .rmt-btn{min-height:44px;font-size:13px;flex-shrink:0}
@@ -66036,6 +66048,7 @@ const navigation_bookmark = __m_ui_navigationBookmark_js;
 const floating_archive = __m_ui_floatingArchive_js;
 const recovery_view = __m_ui_recoveryView_js;
 const modes_achievements = __m_modes_achievements_js;
+const ui_floor = __m_ui_chatFloorNav_js;
 const modes_album = __m_modes_album_js;
 const modes_butterfly = __m_modes_butterfly_js;
 const modes_calendar = __m_modes_calendar_js;
@@ -67916,6 +67929,16 @@ function handleOverlayClick(event) {
     const actionEl = event.target.closest?.('[data-rmt-action]');
     const action = actionEl?.dataset?.rmtAction;
     if (!action) return;
+    if (action === 'achievement-jump') {
+        const floor = Math.floor(Number(actionEl?.dataset?.rmtFloor));
+        if (!Number.isSafeInteger(floor) || floor < 0) {
+            globalThis.toastr?.info?.('这一楼现在翻不到。成就还在这里。', '心迹回廊');
+            return;
+        }
+        closeArchiveOverlayFromUser();
+        ui_floor.highlightFloor(floor);
+        return;
+    }
     if (!action.startsWith('archive-inheritance-')) archive_inheritance_view.clearArchiveInheritancePreview();
     if (action === 'archive-inheritance-open') {
         archive_inheritance_view.clearArchiveInheritancePreview();

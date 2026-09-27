@@ -234,7 +234,7 @@ export function renderAchievements() {
         <small>${lockedState
             ? core_text.esc(item.hint)
             : `解锁条件：${core_text.esc(achievementUnlockCondition(item))} · 解锁时间：${core_text.esc(item.unlockedAt || '已解锁')}`}</small>
-        ${jump}
+        ${jump ? `<div class="rmt-achievement-jump">${jump}</div>` : ''}
       </div>
     </article>`;
     }).join('');

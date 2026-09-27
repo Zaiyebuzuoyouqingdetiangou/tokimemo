@@ -22,12 +22,17 @@ export function writesMessageText() {
 export function highlightFloor(floor, root = document) {
     const value = Math.floor(Number(floor));
     if (!Number.isSafeInteger(value) || value < 0) return { ok: false, mesid: null };
-    const node = messageElement(value, root);
-    if (!node) return { ok: false, mesid: value };
-    root.querySelectorAll?.('.rmt-floor-return')?.forEach(item => item.classList.remove('rmt-floor-return'));
-    node.classList.add('rmt-floor-return');
-    try { node.scrollIntoView({ block: 'center' }); }
-    catch { try { node.scrollIntoView(); } catch { /* 滚动失败只放弃跳转，不改成就。 */ } }
+    const mark = () => {
+        const node = messageElement(value, root);
+        if (!node) return false;
+        root.querySelectorAll?.('.rmt-floor-return')?.forEach(item => item.classList.remove('rmt-floor-return'));
+        node.classList.add('rmt-floor-return');
+        try { node.scrollIntoView({ block: 'center' }); } catch { /* 滚动失败只放弃高亮。 */ }
+        return true;
+    };
+    // /chat-jump 走酒馆自己的楼层滚动，虚拟列表也能翻到。界面先关掉，再移动聊天。
+    try { triggerSlash(`/chat-jump ${value}`); } catch { /* 没有斜杠命令时仍尝试直接滚到已渲染的楼。 */ }
+    if (!mark()) setTimeout(mark, 80);
     return { ok: true, mesid: value };
 }
 

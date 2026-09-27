@@ -1,5 +1,5 @@
-const VERSION = '0.99.22';
-const BUILD = '0.99.22-r84.67-wizard-cards';
+const VERSION = '0.99.23';
+const BUILD = '0.99.23-r84.68-floor-jump';
 
 const SETTINGS_ID = 'heartbeat_memories_settings';
 const MENU_ID = 'heartbeat_memories_menu_item';

@@ -10,10 +10,17 @@ ${root} [data-rmt-paper=lilac]{--rmt-letter-paper:#f4effc;--rmt-letter-ink:#5140
 ${root} [data-rmt-paper=peach]{--rmt-letter-paper:#fff1e7;--rmt-letter-ink:#68442c;--rmt-letter-line:#c59b7c}
 ${root} .rmt-archive-portals>.rmt-archive-portal{min-width:0;grid-column:auto}
 ${root}[data-rmt-theme-mode] .rmt-archive-portals .rmt-portal-open{width:100%;background:transparent!important;border:0!important}
-${root} .rmt-travel-index nav{align-content:start;grid-auto-rows:max-content}
-${root} .rmt-travel-index nav button{height:auto!important;min-height:60px;overflow:visible;align-items:center;padding:12px;box-sizing:border-box}
-${root} .rmt-travel-index nav button>span{min-width:0;display:grid;gap:4px}
-${root} .rmt-travel-index nav :is(b,small){white-space:normal;overflow-wrap:anywhere;line-height:1.5}
+${root} .rmt-travel-layout{grid-template-columns:minmax(0,1fr) minmax(220px,300px)!important;align-items:start}
+${root} .rmt-travel-index nav{display:flex!important;flex-direction:column;align-content:start;gap:8px;overflow:auto;max-height:min(70vh,640px);padding-right:2px}
+${root} .rmt-travel-index nav button{display:grid!important;grid-template-columns:32px minmax(0,1fr)!important;align-items:start!important;gap:10px;height:auto!important;min-height:0!important;overflow:hidden;padding:10px 12px!important;box-sizing:border-box;line-height:1.4!important;text-align:left}
+${root} .rmt-travel-index nav button>i{width:28px;height:28px;margin-top:1px}
+${root} .rmt-travel-index nav button>span{min-width:0;display:grid;gap:2px}
+${root} .rmt-travel-index nav :is(b,small){display:block!important;white-space:normal!important;overflow-wrap:anywhere;letter-spacing:normal!important;line-height:1.45!important}
+${root} .rmt-travel-index nav b{font-size:15px!important;font-weight:650!important}
+${root} .rmt-travel-index nav small{margin:0!important;font-size:12px!important;color:var(--rmt-theme-muted,#6d7c86)!important}
+${root} .rmt-achievement-copy small{display:block}
+${root} .rmt-achievement-jump{margin-top:10px}
+${root} .rmt-achievement-jump .rmt-btn{min-height:36px!important;padding:6px 14px!important}
 ${root} .rmt-phone-detail{padding:12px!important;min-width:0}
 ${root} .rmt-phone-detail-toolbar{margin-bottom:16px;gap:10px;align-items:center}
 ${root} .rmt-phone-detail-toolbar .rmt-btn{min-height:44px;font-size:13px;flex-shrink:0}

@@ -36,6 +36,7 @@ import * as navigation_bookmark from './navigationBookmark.js';
 import * as floating_archive from './floatingArchive.js';
 import * as recovery_view from './recoveryView.js';
 import * as modes_achievements from '../modes/achievements.js';
+import * as ui_floor from './chatFloorNav.js';
 import * as modes_album from '../modes/album.js';
 import * as modes_butterfly from '../modes/butterfly.js';
 import * as modes_calendar from '../modes/calendar.js';
@@ -1891,6 +1892,16 @@ export function handleOverlayClick(event) {
     const actionEl = event.target.closest?.('[data-rmt-action]');
     const action = actionEl?.dataset?.rmtAction;
     if (!action) return;
+    if (action === 'achievement-jump') {
+        const floor = Math.floor(Number(actionEl?.dataset?.rmtFloor));
+        if (!Number.isSafeInteger(floor) || floor < 0) {
+            globalThis.toastr?.info?.('这一楼现在翻不到。成就还在这里。', '心迹回廊');
+            return;
+        }
+        closeArchiveOverlayFromUser();
+        ui_floor.highlightFloor(floor);
+        return;
+    }
     if (!action.startsWith('archive-inheritance-')) archive_inheritance_view.clearArchiveInheritancePreview();
     if (action === 'archive-inheritance-open') {
         archive_inheritance_view.clearArchiveInheritancePreview();

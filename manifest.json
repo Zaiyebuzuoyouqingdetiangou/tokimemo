@@ -1,15 +1,15 @@
 {
   "display_name": "心迹回廊",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.99.22-r84.67-wizard-cards",
+  "js": "index.js?heartbeat=0.99.23-r84.68-floor-jump",
   "author": "Toto",
-  "version": "0.99.22",
+  "version": "0.99.23",
   "auto_update": true,
   "minimum_client_version": "1.13.0",
   "hooks": {
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r84.67：自动留忆引导里的回忆卡片改成图标格和并排选项。",
+  "description": "r84.68：回到当时会关掉界面并滚到那一楼；出行右侧列表不再叠字。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }
