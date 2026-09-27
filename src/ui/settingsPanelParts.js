@@ -32,7 +32,11 @@ export function refreshImageGenerationSettingsUi() {
     if (choice) choice.value = settings.imageGenerationProvider;
     const statusNode = panel.querySelector('[data-rmt-image-generation-status]');
     const status = generation_imageGeneration.imageGenerationUiState();
-    if (statusNode) statusNode.textContent = status.available ? '柏宝绘已连接 · 公开 API v1' : status.reason || '请单独安装、启用并配置柏宝绘公开 API v1。';
+    if (statusNode) statusNode.textContent = status.available
+        ? (status.provider === 'chatu8-image' ? '智绘姬已连接 · 使用其中已有的出图配置' : '柏宝绘已连接 · 公开 API v1')
+        : status.reason || '请安装并启用柏宝绘或智绘姬后再绘制。';
+    const fallback = panel.querySelector('[data-rmt-image-generation-fallback]');
+    if (fallback) fallback.checked = settings.imageGenerationFallback === true;
 }
 
 export function voiceSettingsHtml() {

@@ -1,0 +1,98 @@
+// Optional DOM event checks, not a rendered-browser or real-device test.
+// HAPPY_DOM_PATH=/absolute/path/to/happy-dom/lib/index.js node --experimental-vm-modules tools/check-lenticular-dom.mjs
+import fs from 'node:fs';
+import path from 'node:path';
+import vm from 'node:vm';
+import assert from 'node:assert/strict';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const { Window } = await import(process.env.HAPPY_DOM_PATH ? pathToFileURL(process.env.HAPPY_DOM_PATH).href : 'happy-dom');
+const win = new Window({ url: 'https://fixture.invalid/', settings: { disableCSSFileLoading: true, disableJavaScriptFileLoading: true } });
+const sandbox = vm.createContext({ console, document: win.document, window: win, MutationObserver: win.MutationObserver, navigator: win.navigator,
+    URL, Blob, TextEncoder, TextDecoder, AbortController, DOMException, performance, queueMicrotask, crypto: globalThis.crypto, setTimeout, clearTimeout, setInterval, clearInterval,
+    location: { origin: 'https://fixture.invalid/', protocol: 'https:' }, localStorage: win.localStorage, structuredClone, btoa, atob });
+const copy = value => vm.runInContext('JSON.parse', sandbox)(JSON.stringify(value)); sandbox.structuredClone = copy;
+const code = fs.readFileSync(path.join(root, 'dist/heartbeatMemories.bundle.js'), 'utf8');
+const files = [...code.matchAll(/^\/\/ MODULE: (.+)$/gm)].map(match => match[1]);
+const exposed = '\nexport const testModules={' + files.map(file => JSON.stringify(file) + ':__m_' + file.replace(/[^a-zA-Z0-9]/g, '_')).join(',') + '};';
+const module = new vm.SourceTextModule(code + exposed, { context: sandbox });
+await module.link(() => { throw new Error('unexpected external import'); }); await module.evaluate();
+const modules = module.namespace.testModules, cards = modules['core/lenticularCards.js'], targets = modules['core/cgTargets.js'];
+const view = modules['ui/pastLivesCard.js'], descriptor = { version: 1, kind: 'past-life-dossier', containerId: 'PL01', slot: 'dossier:D01' };
+let session = copy({ kind: 'pastLives', chatId: 'one', archiveRevision: 'rev', episodes: [{ id: 'PL01', dossiers: [{ id: 'D01', title: '灯下', synopsis: '窗边研墨', clues: [] }], echoes: [{ kind: 'memory', sourceMemoryIds: ['M023'] }] }] });
+const cache = copy({ album: { kind: 'album', chatId: 'one', archiveRevision: 'rev', entries: [{ id: 'AL01', title: '一起看书', desc: '看书', sourceMemoryIds: ['M023'], cgImage: { url: '/user/images/book.png' } }] } });
+const itemId = targets.cgTargetItemId(descriptor);
+targets.cgTargetInSession('pastLives', session, itemId).cgImage = copy({ url: '/user/images/past.png' });
+let saves = 0, requests = 0, rejectPermission = false, resolvePermission = null;
+win.DeviceOrientationEvent = class { static requestPermission() { requests++; return resolvePermission ? new Promise(resolve => { resolvePermission.resolve = resolve; }) : Promise.resolve(rejectPermission ? 'denied' : 'granted'); } };
+modules['core/cache.js'].getCache = () => cache;
+modules['core/context.js'].currentCharacterGuard = () => ({});
+modules['generation/pastLivesCardActions.js'].capturePastLivesCard = () => ({ signature: cards.cardPairSignature(session, itemId) });
+modules['generation/pastLivesCardActions.js'].savePastLivesCard = async (capture, ref) => {
+    saves++; const next = cards.applyPastLivesCardPair(session, itemId, targets.cgTargetInSession('pastLives', session, itemId).sourceHash, capture.signature, ref);
+    assert.ok(next); session = next; return next;
+};
+win.document.body.innerHTML = `<div id="${modules['core/constants.js'].OVERLAY_ID}"><div class="rmt-shell"><div class="rmt-body"></div></div></div>`;
+const host = win.document.body.firstElementChild, body = host.querySelector('.rmt-body');
+const render = (readOnly = false) => {
+    body.innerHTML = view.pastLivesCardHtml(session, descriptor, cache, readOnly);
+    view.bindPastLivesCard(body, session, cache, { readOnly, onChange: render });
+    body.querySelector('.rmt-lenticular-stage').getBoundingClientRect = () => ({ left: 10, top: 0, width: 400, height: 225 });
+};
+const query = selector => win.document.querySelector(selector);
+const tick = async () => { await new Promise(resolve => setTimeout(resolve, 10)); };
+const click = selector => { query(selector).focus(); query(selector).click(); };
+const move = (selector, type, fields) => query(selector).dispatchEvent(new win.PointerEvent(type, { bubbles: true, pointerId: 1, isPrimary: true, ...fields }));
+const orientation = (gamma, beta = 0) => { const event = new win.Event('deviceorientation'); Object.assign(event, { gamma, beta }); win.dispatchEvent(event); };
+const reports = [];
+try {
+    render();
+    assert.equal(requests, 0); assert.equal(saves, 0);
+    assert.equal(query('[type=range]').disabled, true);
+    move('.rmt-lenticular-stage', 'pointermove', { pointerType: 'mouse', clientX: 300 });
+    assert.notEqual(query('.rmt-lenticular-stage').style.getPropertyValue('--card-shine'), '15%');
+    assert.equal(query('.rmt-lenticular-stage').style.getPropertyValue('--card-position'), '0');
+    reports.push('单图仅反光，打开不授权、不写入');
+    click('[data-card-pick]');
+    assert.match(query('[role=dialog]').textContent, /推荐.*M023/);
+    assert.ok(win.document.activeElement === query('[type=search]'), 'focus in picker');
+    query('[type=search]').value = '没有'; query('[type=search]').dispatchEvent(new win.Event('input'));
+    assert.equal(query('.rmt-card-choice'), null);
+    query('[type=search]').value = ''; query('[type=search]').dispatchEvent(new win.Event('input'));
+    click('[data-picker-index="0"]'); await tick();
+    assert.equal(query('[role=dialog]'), null); assert.equal(saves, 1);
+    assert.equal(query('[data-rmt-lenticular]').dataset.cardBoth, 'true');
+    click('[data-card-side="100"]'); assert.equal(query('[type=range]').value, '100');
+    click('[data-card-side="0"]');
+    move('.rmt-lenticular-stage', 'pointerdown', { pointerType: 'touch', clientX: 50, clientY: 20 });
+    move('.rmt-lenticular-stage', 'pointermove', { pointerType: 'touch', clientX: 340, clientY: 22 });
+    move('.rmt-lenticular-stage', 'pointerup', { pointerType: 'touch' });
+    assert.equal(query('[type=range]').value, '100');
+    click('[data-card-side="0"]');
+    move('.rmt-lenticular-stage', 'pointerdown', { pointerType: 'touch', clientX: 50, clientY: 20 });
+    move('.rmt-lenticular-stage', 'pointermove', { pointerType: 'touch', clientX: 52, clientY: 100 });
+    assert.equal(query('[type=range]').value, '0');
+    reports.push('推荐选图/筛选/保存、按钮、横滑、纵向手势保留');
+    click('[data-card-pick]'); win.document.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    assert.equal(query('[role=dialog]'), null);
+    assert.ok(win.document.activeElement === query('[data-card-pick]'), 'focus restored');
+    reports.push('Escape 关闭，焦点返回选图按钮');
+    rejectPermission = true; click('[data-card-tilt]'); await tick();
+    assert.match(query('.rmt-lenticular-status').textContent, /仍可横滑/);
+    rejectPermission = false; click('[data-card-tilt]'); await tick();
+    orientation(0); orientation(20); assert.equal(query('[type=range]').value, '90');
+    const stage = query('.rmt-lenticular-stage'), before = stage.getAttribute('style');
+    host.hidden = true; await tick(); orientation(-20); assert.equal(stage.getAttribute('style'), before);
+    host.hidden = false; render();
+    resolvePermission = {}; click('[data-card-tilt]');
+    const old = query('.rmt-lenticular-stage'); body.innerHTML = ''; await tick();
+    resolvePermission.resolve('granted'); await tick();
+    const previous = old.getAttribute('style'); orientation(40); assert.equal(old.getAttribute('style'), previous);
+    reports.push('拒绝倾斜授权可回退，关闭清理监听，晚到授权不重启监听');
+    resolvePermission = null; render(true); assert.equal(query('[data-card-pick]'), null);
+    render(); query('[data-card-image=present]').dispatchEvent(new win.Event('error'));
+    assert.equal(query('[type=range]').disabled, true); assert.match(query('.rmt-lenticular-status').textContent, /图片暂不可读取/);
+    click('[data-card-clear]'); await tick(); assert.equal(cards.pastLivesCardPair(session, itemId), null); assert.ok(cache.album.entries[0].cgImage);
+    reports.push('只读无写入口，坏图回退，移除配对保留原图');
+    console.log(JSON.stringify({ ok: true, environment: 'happy-dom; no layout engine, not a real browser', checks: reports, saves, explicitPermissionRequests: requests }, null, 2));
+} finally { body.innerHTML = ''; await tick(); await win.happyDOM.abort(); }

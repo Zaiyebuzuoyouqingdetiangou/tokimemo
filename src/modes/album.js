@@ -15,6 +15,7 @@ import * as core_text from '../core/text.js';
 import * as generation_client from '../generation/client.js';
 import * as generation_imageGeneration from '../generation/imageGeneration.js';
 import * as generation_prompts from '../generation/prompts.js';
+import * as generation_modesBridge from '../generation/modesBridge.js';
 
 
 // Per-entry identities omit worldbook prose; full generation sources are frozen
@@ -651,3 +652,8 @@ ${hintLines.join('；')}`, memoryBank, 1);
         hintVisible: false,
     };
 }
+
+// 重构清单 C-4（r84.119）：把生成层要用的函数登记到 generation/modesBridge.js（生成层不再 import 本文件）。
+generation_modesBridge.registerGenerationModesBridge({
+    albumRelationshipScanPrompt, normalizeAlbumRelationshipSnapshot, albumCommentsPrompt, normalizeAlbumCommentsBatch, normalizeAlbumCategory, normalizeAlbumIndex, normalizeAlbum, generateAlbumWithRepair, albumIndexPrompt, projectAlbumProgress,
+});

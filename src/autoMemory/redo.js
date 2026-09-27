@@ -31,7 +31,7 @@ export function achievementRepairPrompt({ moduleTitle = '', sourceMemoryIds = []
   const ids = (Array.isArray(sourceMemoryIds) ? sourceMemoryIds : []).filter(id => /^M\d{3,6}$/.test(id));
   const evidence = ids.length ? ids.join('、') : '没有可引用的编号';
   const kind = allowHistorical ? 'historical 或 collection' : 'collection';
-  return `只补这一份回忆缺少的成就，不要重写已经留下的模块正文，也不要另抽一张签。标识 AM-ACH-REPAIR。模块：${title}。可以引用的记忆编号：${evidence}。
+  return `只补这一份回忆的成就，不要重写模块正文。模块：${title}。可以引用的记忆编号：${evidence}。
 只返回一个 JSON 对象，不要解释：
 {"title":"不超过40字","description":"一句","unlockCondition":"一句","kind":"${allowHistorical ? 'historical' : 'collection'}","sourceMemoryAnchor":"编号或一句"}
 kind 只能是 ${kind}。没有编号证据就用 collection。`;

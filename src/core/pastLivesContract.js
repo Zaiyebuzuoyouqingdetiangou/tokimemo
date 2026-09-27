@@ -90,8 +90,18 @@ export function pastLivesStoredData(value) {
     for (const episode of sequence(raw.episodes, limits.episodes, /^PL\d+$/u)) {
         require(episode.fiction === true); presentation(episode.presentation);
         prose(episode.title, limits.title);
-        prose(episode.opening?.title, limits.title); prose(episode.opening?.motif, 300); prose(episode.opening?.text);
+        prose(episode.opening?.title, limits.title); prose(episode.opening?.motif, 300);
         source(episode.opening);
+        if (episode.opening?.prosePending === true) {
+            require(episode.opening.text === '' || episode.opening.text == null);
+            require(Array.isArray(episode.dossiers) && episode.dossiers.length === 0);
+            require(Array.isArray(episode.echoes) && episode.echoes.length === 0);
+            require(Array.isArray(episode.annotations) && episode.annotations.length === 0);
+            prose(episode.closing?.text, limits.prose, false);
+            prose(episode.closing?.signature, 240, false);
+            continue;
+        }
+        prose(episode.opening?.text);
         const clueIds = new Set();
         for (const dossier of sequence(episode.dossiers, limits.dossiers, /^D\d+$/u)) {
             prose(dossier.title, limits.title); prose(dossier.era, 240, false); prose(dossier.synopsis);

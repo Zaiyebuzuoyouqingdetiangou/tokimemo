@@ -1,3 +1,4 @@
+import * as lenticularCards from './lenticularCards.js';
 // C-3c（r84.101）：别名沿用 archive_groups，函数体一字不改；实际指向 core 层的桥，不再 import archive 层。
 import * as archive_groups from './archiveBridge.js';
 // C-3c（r84.101）：别名沿用 archive_repository，函数体一字不改；实际指向 core 层的桥，不再 import archive 层。
@@ -262,7 +263,7 @@ export function preserveProgressLocalState(incoming, saved) {
         applyProgressDeletions(next, deletions);
         if (next.readableProgress) next.readableProgress = { ...next.readableProgress, deletedItems: structuredClone(deletions) };
     }
-    return next;
+    return lenticularCards.preservePastLivesCards(next, saved);
 }
 
 export async function commitGenerationTaskResultMutation(context, draftId, mutate, { expectedTaskOrigin = null, stillCurrent = null, archiveTarget = null, contentOverride = null } = {}) {
@@ -353,7 +354,7 @@ export async function saveGenerationTaskResult(context, mode, session, origin, o
         if (!sourceMemory || !Array.isArray(sourceMemory.memories)) throw core_text.safeUserError('旧草稿没有保留完整原资料，成果与草稿保留，需要明确旧资料的兼容方式。', 'RMT_RECOVERY_SOURCE_SNAPSHOT_MISSING');
         const result = { mode, pageId: options.pageId || record.journal.pageId || recoveryPageForVersion(mode, record.journal.operation),
             createdAt: record.result?.createdAt || Date.now(), entryId: entry.entryId, targetEntry: cloneCacheValue(entry),
-            session: preserveProgressLocalState(cloneCacheValue(session), record.result?.session), sourceMemory: cloneCacheValue(sourceMemory),
+            session: lenticularCards.preservePastLivesCards(preserveProgressLocalState(cloneCacheValue(session), record.result?.session), value[mode]), sourceMemory: cloneCacheValue(sourceMemory),
             sourceContext: cloneCacheValue(snapshot?.fields || {}),
             sourceIdentity: cloneCacheValue(record.journal.sourceIdentity || record.journal.identity),
             targetIdentity: cloneCacheValue(record.journal.identity) };

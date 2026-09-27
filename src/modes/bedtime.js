@@ -1,8 +1,11 @@
+import * as cg_visual from '../core/cgVisualRules.js';
 // One bounded text request creates one new story or one continuation chapter.
 import * as contract from '../core/bedtimeContract.js';
 import * as contextApi from '../core/context.js';
 import * as text from '../core/text.js';
 import * as generation from '../generation/client.js';
+import * as core_modesBridge from '../core/modesBridge.js';
+import * as generation_modesBridge from '../generation/modesBridge.js';
 
 const limits = () => contract.BEDTIME_LIMITS;
 
@@ -67,7 +70,7 @@ function normalizedChapter(raw, plan) {
     const body = contract.bedtimeText(chapter.text, L.chapterText, true);
     if (/^(?:待续内容|此处省略|正文待补|同上|to be written|content here)[。.!！\s]*$/iu.test(body.trim()))
         throw contract.bedtimeError('INCOMPLETE', '这一章尚未完整返回；已收到的草稿可继续恢复。');
-    return { id: plan.chapterId, title, text: body, createdAt: plan.createdAt };
+    return { id: plan.chapterId, title, text: body, createdAt: plan.createdAt, ...cg_visual.generatedCgSceneFields(chapter) };
 }
 
 export function normalizeGeneratedBedtime(raw, planValue, memory, previous = null, ownerKey = '') {
@@ -154,3 +157,8 @@ export function readableBedtimeProgressSession(value, memory) {
         return value;
     } catch { return null; }
 }
+
+// 重构清单 C-3（r84.98）：把 core 层要用的函数登记到 core/modesBridge.js（core 不再 import 本文件）。
+core_modesBridge.registerModesBridge({ readableBedtimeProgressSession });
+// 重构清单 C-4（r84.103）：把生成层要用的函数登记到 generation/modesBridge.js（生成层不再 import 本文件）。
+generation_modesBridge.registerGenerationModesBridge({ createBedtimePlan, validateBedtimePlan, bedtimePrompt, normalizeGeneratedBedtime, generateBedtime, projectBedtimeProgress });

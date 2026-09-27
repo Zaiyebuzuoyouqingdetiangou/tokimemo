@@ -1,15 +1,22 @@
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
+import * as archive_core from '../archive/archiveCore.js';
+import * as auto_memory_lookback from '../autoMemory/achievementLookback.js';
+import * as auto_memory_plan from '../autoMemory/planStore.js';
+import * as auto_memory_redo from '../autoMemory/redo.js';
 import * as core_cache from '../core/cache.js';
 import * as core_constants from '../core/constants.js';
 import * as core_context from '../core/context.js';
 import * as core_evidence from '../core/evidence.js';
 import * as core_incremental from '../core/incremental.js';
+import * as core_settings from '../core/settings.js';
 import { state as runtimeState } from '../core/state.js';
 import * as core_text from '../core/text.js';
 import * as generation_client from '../generation/client.js';
 import * as generation_prompts from '../generation/prompts.js';
+import * as ui_floor from '../ui/chatFloorNav.js';
 import * as ui_overlay from '../ui/overlay.js';
+import * as generation_modesBridge from '../generation/modesBridge.js';
 
 function achievementUnlockCondition(item) {
     return core_text.normalizeText(item?.unlockCondition, 300)
@@ -73,7 +80,8 @@ ${JSON.stringify(compactAchievementsExisting(previousSession), null, 2)}
 
 export function normalizeAchievements(data, memoryBank, { allowPartial = false, sourceMemoryIds = null } = {}) {
     const allowedTiers = new Set(['bronze', 'silver', 'gold', 'hidden']);
-    const raw = Array.isArray(data?.entries) ? data.entries : [];
+    if (!Array.isArray(data?.entries)) throw new Error('成就库缺少条目列表。');
+    const raw = data.entries;
     const entries = raw.slice(0, core_constants.MAX_DERIVED_CONTENT_ITEMS).map((item, index) => {
         const title = core_text.normalizeText(item?.title, 100);
         const description = core_text.normalizeText(item?.description, 900);
@@ -95,6 +103,9 @@ export function normalizeAchievements(data, memoryBank, { allowPartial = false, 
             if (!sourceMemoryIds.length || !sourceMemoryAnchor) return null;
         }
         const tierRaw = core_text.normalizeText(item?.tier, 20).toLowerCase();
+        const kind = item?.kind === 'historical' || item?.kind === 'collection' ? item.kind : '';
+        const moduleId = core_text.normalizeText(item?.moduleId, 40);
+        const origin = item?.origin === 'auto' ? 'auto' : '';
         return {
             id: core_text.safeId(item?.id, `ACH${String(index + 1).padStart(2, '0')}`),
             title,
@@ -107,9 +118,12 @@ export function normalizeAchievements(data, memoryBank, { allowPartial = false, 
             sourceMemoryIds,
             sourceMemoryAnchor,
             hint: unlocked ? '' : (core_text.normalizeText(item?.hint, 500) || '继续积累新的重要回忆。'),
+            ...(kind ? { kind } : {}),
+            ...(moduleId ? { moduleId } : {}),
+            ...(origin ? { origin } : {}),
         };
     }).filter(item => item && (!sourceMemoryIds || (item.unlocked && core_incremental.usesIncrementalMemoryId(item.sourceMemoryIds, sourceMemoryIds))));
-    if (!allowPartial && !entries.length) throw new Error('成就库没有生成可用条目。');
+    if (!allowPartial && raw.length && !entries.length) throw new Error('成就库没有生成可用条目。');
     return {
         kind: core_constants.MODE.ACHIEVEMENTS,
         title: core_text.normalizeText(data?.title, 100) || '成就库',
@@ -175,15 +189,6 @@ export function mergeAchievementsIncremental(previous, fresh, memoryBank) {
         return { ...item, id };
     });
     const normalized = normalizeAchievements({ title: fresh.title || previous.title || '成就库', entries: dedupedIds }, memoryBank);
-    const kept = new Map(dedupedIds.filter(item => item?.origin === 'auto').map(item => [item.id, item]));
-    for (const item of normalized.entries) {
-        const old = kept.get(item.id);
-        if (!old) continue;
-        item.origin = 'auto';
-        if (old.moduleId) item.moduleId = old.moduleId;
-        const mesid = Math.floor(Number(old.messageIndex));
-        if (Number.isSafeInteger(mesid) && mesid >= 0) item.messageIndex = mesid;
-    }
     // Do not rewrite old cache objects merely to materialize the new presentation field.
     // renderAchievements() supplies the anchor/description fallback until that achievement is
     // genuinely replaced (for example, when a formerly locked goal becomes unlocked).
@@ -207,13 +212,66 @@ export async function generateAchievementsWithRepair(context, memoryBank, origin
     return core_incremental.stampIncrementalCoverage(merged, previous, memoryBank, 'mode', sourceMemoryIds, added);
 }
 
+function intendedLetterMesid(item) {
+    const stored = Math.floor(Number(item?.messageIndex));
+    if (Number.isSafeInteger(stored) && stored >= 0) return stored;
+    try {
+        const context = core_context.getContext();
+        return auto_memory_lookback.autoLetterMesid(item, {
+            snapshot: auto_memory_plan.readAutoMemoryMetadata(context?.chatMetadata),
+            chat: context?.chat,
+            latestFloor: core_settings.getPluginSettings().autoMemoryLatestFloor === true,
+            locate: auto_memory_redo.drawFloorMessage,
+        });
+    } catch {
+        return null;
+    }
+}
+
+function letterMesidForRender(item) {
+    const mesid = intendedLetterMesid(item);
+    if (mesid == null) return null;
+    try {
+        if (auto_memory_lookback.autoLetterOrphaned(item, core_context.getContext()?.chat, { messageIndex: mesid })) return null;
+    } catch { /* 聊天读不到时仍用记下的楼层。 */ }
+    return mesid;
+}
+
+function lookbackHtml(item, bank) {
+    if (!item.unlocked) return '';
+    const look = auto_memory_lookback.achievementLookback(item, bank?.memories, bank?.coveredRanges, {
+        messageIndex: letterMesidForRender(item),
+    });
+    const label = look.kind === 'historical' ? '当时' : '收藏';
+    const period = look.period ? `<small>时期：${core_text.esc(look.period)}</small>` : '';
+    const summary = look.summary ? `<p>${core_text.esc(look.summary)}</p>` : '';
+    const note = look.sourceNote ? `<small>${core_text.esc(look.sourceNote)}</small>` : '';
+    const shown = floor => ui_floor.displayedMesid(floor);
+    const jumpId = look.jumpMesid != null ? look.jumpMesid : shown(look.jumpFloor);
+    const jump = jumpId == null ? '' : `<button type="button" class="rmt-btn" data-rmt-action="achievement-jump" data-rmt-floor="${jumpId}">回到当时</button>`;
+    const floors = look.floors.length > 1 ? `<div>${look.floors.map(floor => {
+        const id = shown(floor);
+        return id == null ? '' : `<button type="button" class="rmt-btn" data-rmt-action="achievement-jump" data-rmt-floor="${id}">#${id}</button>`;
+    }).join('')}</div>` : '';
+    return `<div class="rmt-achievement-lookback"><span>${label}</span>${period}${summary}${note}<button type="button" class="rmt-btn" data-rmt-action="achievement-open" data-rmt-achievement-id="${core_text.esc(item.id)}" data-rmt-mode="${core_text.esc(look.moduleId)}">打开这段回忆</button>${jump}${floors}</div>`;
+}
+
 export function renderAchievements() {
     const session = runtimeState.activeSession;
     if (!session || session.kind !== core_constants.MODE.ACHIEVEMENTS) return;
+    let bank = null;
+    try { bank = archive_core.getImportedMemory(core_context.getContext()); } catch { bank = null; }
     const readOnly = !!runtimeState.activeArchiveSnapshot && runtimeState.activeArchiveReadOnly;
     ui_overlay.setBackVisible(true, runtimeState.activeArchiveSnapshot ? (readOnly ? '只读档案' : '档案') : '当前档案');
     ui_overlay.topTitle('成就库');
-    const unlocked = session.entries.filter(item => item.unlocked);
+    let chat = null;
+    try { chat = core_context.getContext()?.chat; } catch { chat = null; }
+    const unlocked = session.entries.filter(item => {
+        if (!item.unlocked) return false;
+        if (item.origin !== 'auto') return true;
+        const mesid = intendedLetterMesid(item);
+        return !auto_memory_lookback.autoLetterOrphaned(item, chat, { messageIndex: mesid });
+    });
     const locked = session.entries.filter(item => !item.unlocked);
     const tierIcon = tier => ({
         bronze: 'fa-medal',
@@ -221,26 +279,23 @@ export function renderAchievements() {
         gold: 'fa-trophy',
         hidden: 'fa-question',
     })[tier] || 'fa-medal';
-    const cards = (items, lockedState) => items.map(item => {
-        const mesid = item?.origin === 'auto' ? Math.floor(Number(item.messageIndex)) : NaN;
-        const jump = item?.origin === 'auto' && Number.isSafeInteger(mesid) && mesid >= 0
-            ? `<button type="button" class="rmt-btn" data-rmt-action="achievement-jump" data-rmt-floor="${mesid}">回到当时</button>`
-            : '';
-        return `<article class="rmt-achievement-card ${lockedState ? 'locked' : 'unlocked'}">
+    const cards = (items, lockedState) => items.map(item => `<article class="rmt-achievement-card ${lockedState ? 'locked' : 'unlocked'}">
       <div class="rmt-achievement-icon"><i class="fa-solid ${tierIcon(item.tier)}"></i></div>
       <div class="rmt-achievement-copy">
-        <div class="rmt-achievement-title"><b>${core_text.esc(item.title)}</b><span>${core_text.esc(item.category)}</span></div>
+        <div class="rmt-achievement-title"><b>${core_text.esc(item.title)}</b><span>${core_text.esc(item.category)}${item.origin === 'auto' ? ' · 自动' : ''}</span></div>
         <p>${core_text.esc(item.description)}</p>
         <small>${lockedState
             ? core_text.esc(item.hint)
             : `解锁条件：${core_text.esc(achievementUnlockCondition(item))} · 解锁时间：${core_text.esc(item.unlockedAt || '已解锁')}`}</small>
-        ${jump ? `<div class="rmt-achievement-jump">${jump}</div>` : ''}
+        ${lockedState ? '' : lookbackHtml(item, bank)}
       </div>
-    </article>`;
-    }).join('');
+    </article>`).join('');
     ui_overlay.bodyEl().innerHTML = `<div class="rmt-achievements">
       <div class="rmt-achievements-head"><div><h2>${core_text.esc(session.title || '成就库')}</h2><span>${unlocked.length} / ${session.entries.length}</span></div>${readOnly ? '' : '<button type="button" class="rmt-btn" data-rmt-action="regenerate">增量追加成就</button>'}</div>
       <section class="rmt-achievement-section"><h3>已解锁 <span>${unlocked.length}</span></h3><div class="rmt-achievement-grid">${unlocked.length ? cards(unlocked, false) : '<div class="rmt-heart-empty">还没有已解锁成就。</div>'}</div></section>
       <section class="rmt-achievement-section"><h3>未解锁 <span>${locked.length}</span></h3><div class="rmt-achievement-grid">${locked.length ? cards(locked, true) : '<div class="rmt-heart-empty">目前没有未解锁目标。</div>'}</div></section>
     </div>`;
 }
+
+// 重构清单 C-4（r84.116）：把生成层要用的函数登记到 generation/modesBridge.js（生成层不再 import 本文件）。
+generation_modesBridge.registerGenerationModesBridge({ achievementsPrompt, normalizeAchievements, mergeAchievementsIncremental, generateAchievementsWithRepair, projectAchievementsProgress });

@@ -32,7 +32,7 @@ export function showHome({ section = '' } = {}) {
     settings.mountSettings({ homeTarget: body.querySelector('[data-rmt-home-settings]') });
     mountHomeDiagnostics(body.querySelector('.rmt-home'));
     workspace_ui.arrangeSettingsHome(body);
-    if (section && ['api', 'auto-memory', 'image', 'creative', 'filter', 'theme', 'auto', 'memory', 'reading', 'voice'].includes(section)) {
+    if (section && ['api', 'image', 'creative', 'filter', 'theme', 'auto', 'memory', 'reading', 'voice'].includes(section)) {
         const details = body.querySelector(`[data-rmt-settings-section="${section}"]`);
         if (details) { const more = details.closest('.rmt-workspace-more'); if (more) more.open = true; details.open = true; if (section !== 'voice') settings.hydrateSettingsPanel({ memory: section === 'memory' }); details.scrollIntoView?.({ block: 'start' }); }
     }

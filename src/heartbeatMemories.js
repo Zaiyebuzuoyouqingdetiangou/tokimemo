@@ -2,6 +2,11 @@
 // Extracted from r34 without changing archive/cache storage contracts.
 import * as core_cache from './core/cache.js';
 import * as core_autoUpdates from './core/autoUpdates.js';
+import * as auto_memory_registry from './autoMemory/moduleRegistry.js';
+import * as auto_memory_plan from './autoMemory/planStore.js';
+import * as auto_memory_migrate from './autoMemory/migrateLegacy.js';
+import * as auto_memory_scheduler from './autoMemory/scheduler.js';
+import * as ui_autoMemoryShell from './ui/autoMemoryShell.js';
 import * as core_constants from './core/constants.js';
 import * as core_context from './core/context.js';
 import * as core_diagnosticReport from './core/diagnosticReport.js';
@@ -21,10 +26,18 @@ import * as ui_floatingArchive from './ui/floatingArchive.js';
 import * as ui_phoneView from './ui/phoneView.js';
 import * as ui_settingsPanel from './ui/settingsPanel.js';
 import * as ui_styles from './ui/styles.js';
-import * as auto_memory_scheduler from './autoMemory/scheduler.js';
-import * as auto_memory_shell from './ui/autoMemoryShell.js';
 import * as mirror_reader from './ui/mirrorTtsReader.js';
 import * as mirror_call from './ui/mirrorCallView.js';
+import * as core_uiBridge from './core/uiBridge.js';
+import * as ui_overlayForBridge from './ui/overlay.js';
+
+// 重构清单 C-2（r84.97）：core 层要用的 ui 函数在这里登记。每次调用时再按名字去 ui 模块取，
+// 与原来 core 直接 import ui 时一样会用到最新的函数（测试替换也生效）。
+core_uiBridge.registerUiBridge({
+    confirmExplicitAction: (...args) => ui_overlayForBridge.confirmExplicitAction(...args),
+    refreshSettingsTaskStatus: (...args) => ui_settingsPanel.refreshSettingsTaskStatus(...args),
+    refreshSettingsMemoryStatus: (...args) => ui_settingsPanel.refreshSettingsMemoryStatus(...args),
+});
 
 export function openArchiveLibrary(source = 'runtime-api') {
     return ui_archivePortal.safeShowArchiveLibrary(source);
@@ -38,6 +51,15 @@ export function isGenerationBusy() {
     return runtimeState.busy || core_requestCoordinator.hasGenerationTasks() || !!runtimeState.roomLifeRefreshPromise;
 }
 
+// R0 合同随运行时加载，启动时不读不写聊天。旧自动更新仍走原来的调度。
+export function autoMemoryContractSurface() {
+    return {
+        modules: auto_memory_registry.listAutoMemoryModules().map(item => item.id),
+        intervalMax: auto_memory_plan.AUTO_MEMORY_INTERVAL_MAX,
+        canMigrate: typeof auto_memory_migrate.migrateLegacyAutoPreferences === 'function',
+    };
+}
+
 export function initMemoryTheater() {
     core_diagnosticReport.installRuntimeDiagnostic();
     try {
@@ -47,12 +69,12 @@ export function initMemoryTheater() {
         ui_archivePortal.bindChatStateEvents();
         ui_archivePortal.bindDiagnosticCopy();
         core_autoUpdates.startAutoUpdates();
+        auto_memory_scheduler.startAutoMemoryScheduler();
+        ui_autoMemoryShell.startAutoMemoryShell();
         ui_archivePortal.bindRobustArchiveOpenHandlers();
         ui_archivePortal.bindGenerationNavigationGuards();
         ui_archivePortal.scheduleMounts(settingsMounted, menuMounted);
         ui_floatingArchive.initFloatingArchive();
-        auto_memory_scheduler.startAutoMemoryScheduler();
-        auto_memory_shell.startAutoMemoryShell();
         // This runs only after the user explicitly loaded the full runtime. It lazily migrates the
         // current chat's existing archive into the independent local backup without touching startup.
         void core_cache.ensureCurrentArchiveBackup().then(reconciled => {
@@ -72,11 +94,11 @@ export function destroyMemoryTheater() {
     mirror_reader.disposeMirrorReader();
     mirror_call.disposeMirrorCall();
     ui_floatingArchive.destroyFloatingArchive();
-    auto_memory_scheduler.stopAutoMemoryScheduler();
-    auto_memory_shell.stopAutoMemoryShell();
     core_diagnosticReport.uninstallRuntimeDiagnostic();
     try { globalThis.__heartbeatMemoriesRemoveDiagnostics?.(); } catch {}
     ui_cgImageViewer.closeCgImageViewer({ restoreFocus: false });
+    ui_autoMemoryShell.stopAutoMemoryShell();
+    auto_memory_scheduler.stopAutoMemoryScheduler();
     core_autoUpdates.stopAutoUpdates();
     ui_settingsPanel.clearHomeSettingsPanel();
     ui_settingsPanel.unbindImageProviderEvents();

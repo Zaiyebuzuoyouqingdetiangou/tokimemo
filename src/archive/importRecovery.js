@@ -1,3 +1,5 @@
+import * as source_read from './sourceReadGuard.js';
+import * as draft_inputs from './draftInputs.js';
 import * as local_store from '../core/localRecoveryStore.js';
 import * as constants from '../core/constants.js';
 // Draft checkpoints are separate from formal archives and evidence. Lazy local
@@ -10,9 +12,13 @@ import * as taskTrace from '../core/taskTrace.js';
 import * as digest from '../core/digest.js';
 
 export const ARCHIVE_RECOVERY_PAGE_NOTICE = '档案整理草稿仅本页保留，请勿刷新；关闭心迹回廊可保留。';
-export const ARCHIVE_RECOVERY_MAX_DRAFTS = 4;
+// Compatibility export only. Draft admission depends on an acknowledged save,
+// never on how many drafts this page has read from this or another chat.
+export const ARCHIVE_RECOVERY_MAX_DRAFTS = Infinity;
 const drafts = new Map();
 const tickets = new WeakSet();
+// Explicit discard revokes old owners even if durable deletion later fails.
+const discardedEntries = new WeakSet();
 const scopes = new Map();
 const lanes = new Map();
 const loaded = new Set();
@@ -27,7 +33,7 @@ function storageFailure(phase = 'save', cause = null) {
     // Recoverable storage conditions get their exact manual remedy. No automatic
     // retry is added for any of them; the user decides when to save again.
     if (cause?.quota === true || cause?.name === 'QuotaExceededError') {
-        return text.safeUserError('本机存储空间不足，整理草稿未能保存；已停止后续模型请求，成功分段仍在当前页面，原记录未修改。清理浏览器站点数据后可点保存重试。', 'RMT_ARCHIVE_DRAFT_STORAGE');
+        return text.safeUserError('本机存储空间不足，整理草稿未能保存；已停止后续模型请求，成功分段仍在当前页面，原记录未修改。请先导出成果，不要清除本站数据；释放设备空间后可重试保存。', 'RMT_ARCHIVE_DRAFT_STORAGE');
     }
     if (cause?.code === 'RMT_LOCAL_CAS') {
         return text.safeUserError('本机草稿正被另一页面或操作写入，本次没有覆盖任何记录；已停止后续模型请求，成功分段仍在当前页面。请重新打开本页后重试保存。', 'RMT_ARCHIVE_DRAFT_STORAGE');
@@ -35,7 +41,7 @@ function storageFailure(phase = 'save', cause = null) {
     return text.safeUserError('未能把本次整理草稿保存到本机；已停止后续模型请求，成功分段仍在当前页面。请先导出，保存成功前不要刷新。', 'RMT_ARCHIVE_DRAFT_STORAGE');
 }
 function capacityFailure() {
-    return text.safeUserError('本次来源超过本机草稿保存上限（12MB），未请求模型；可缩小读取范围或分批建档，已保留原记录。', 'RMT_ARCHIVE_DRAFT_CAPACITY');
+    return text.safeUserError('整理草稿未能保存，已停止后续请求，原记录保留。请先导出成果，保存成功前不要刷新。', 'RMT_ARCHIVE_DRAFT_CAPACITY');
 }
 export function archiveDraftCapacityFailure() { return capacityFailure(); }
 function ackMismatchFailure() {
@@ -62,6 +68,7 @@ async function saveScope(key) {
         // false/undefined must not be mistaken for a saved checkpoint in a host.
         if (revision !== state.revision + 1) throw ackMismatchFailure();
         state.revision = revision;
+        state.lastFailureCode = '';
         confirmCounts(state, rows);
         for (const [id, saved] of rows) {
             const live = drafts.get(id);
@@ -74,6 +81,8 @@ async function saveScope(key) {
     });
     lanes.set(key, run);
     try { return await run; } catch (error) {
+        const state = scopes.get(key);
+        if (state && error?.code === 'RMT_ARCHIVE_DRAFT_CAPACITY') state.lastFailureCode = error.code;
         for (const [id] of scopeRows(key)) if (drafts.has(id)) drafts.get(id).durable = false;
         // Failures already classified above keep their exact code and guidance.
         if (['RMT_ARCHIVE_DRAFT_STORAGE', 'RMT_ARCHIVE_DRAFT_READ', 'RMT_ARCHIVE_DRAFT_CAPACITY'].includes(error?.code)) throw error;
@@ -82,27 +91,17 @@ async function saveScope(key) {
     finally { if (lanes.get(key) === run) lanes.delete(key); }
 }
 function scheduleSave(key) { void saveScope(key).catch(() => {}); }
-// Pre-flight estimate with the exact serialization and byte limit saveScope
-// applies. Callers can fail before any storage transaction or model request.
-// The authoritative check remains inside saveScope: an in-memory scope may not
-// reflect every stored row until hydration, and the live journal adds bytes.
-export function archiveRecoveryDraftPlanExceedsCapacity(origin, operation = 'import', inputs = null) {
-    const key = draftKey(origin, operation);
-    if (!key || !inputs) return false;
-    const rows = scopeRows(key);
-    const planned = rows.some(([id]) => id === key)
-        ? rows.map(([id, entry]) => [id, id === key ? { ...entry, inputs } : entry])
-        : [...rows, [key, { key, operation, inputs }]];
-    try { return new TextEncoder().encode(JSON.stringify({ version: 1, rows: planned })).byteLength > constants.MAX_CACHE_SOURCE_BYTES; }
-    catch { return false; }
-}
+// Compatibility seam for older callers. No plugin byte ceiling; only an
+// acknowledged storage transaction can decide whether a draft was saved.
+export function archiveRecoveryDraftPlanExceedsCapacity() { return false; }
 export async function flushArchiveRecovery(origin, operation = 'import') {
     const key = draftKey(origin, operation); if (!key) return false;
     if (lanes.has(key)) await lanes.get(key);
     return saveScope(key);
 }
 export function resetArchiveRecoveryMemoryForTests() { drafts.clear(); scopes.clear(); loaded.clear(); lanes.clear(); hydrationLanes.clear(); }
-export async function hydrateArchiveRecovery(origin, operation = 'import', { force = false } = {}) {
+export async function hydrateArchiveRecovery(origin, operation = 'import', { force = false, signal = null } = {}) {
+    if (signal?.aborted) throw new DOMException('Read cancelled', 'AbortError');
     const key = draftKey(origin, operation); if (!key) return false;
     // An unavailable API is not an empty database (notably in embedded hosts).
     // Fail before any paid request instead of silently selecting page-only mode.
@@ -110,20 +109,35 @@ export async function hydrateArchiveRecovery(origin, operation = 'import', { for
     if (loaded.has(key) && !force) return false;
     // Opening the view and clicking continue may overlap. Reuse the same read;
     // neither path may overwrite a live journal with an older storage snapshot.
-    if (hydrationLanes.has(key)) return hydrationLanes.get(key);
-    const read = hydrateArchiveRecoveryScope(key, origin, operation, force);
-    hydrationLanes.set(key, read);
-    try { return await read; }
-    finally { if (hydrationLanes.get(key) === read) hydrationLanes.delete(key); }
+    let lane = hydrationLanes.get(key);
+    if (!lane) {
+        lane = { controller: new AbortController(), read: null };
+        lane.read = hydrateArchiveRecoveryScope(key, origin, operation, force, lane.controller.signal);
+        hydrationLanes.set(key, lane);
+    }
+    const cancel = () => {
+        // Invalidate the shared read, not stored data. A new click must not join
+        // the read the user just cancelled, nor accept its late storage reply.
+        if (hydrationLanes.get(key) === lane) hydrationLanes.delete(key);
+        lane.controller.abort();
+    };
+    signal?.addEventListener?.('abort', cancel, { once: true });
+    try { return await lane.read; }
+    finally {
+        signal?.removeEventListener?.('abort', cancel);
+        if (hydrationLanes.get(key) === lane) hydrationLanes.delete(key);
+    }
 }
-async function hydrateArchiveRecoveryScope(key, origin, operation, force) {
-    const id = `draft:${await recovery.generationRecoveryDigest(key)}`;
+async function hydrateArchiveRecoveryScope(key, origin, operation, force, signal) {
+    const id = `draft:${await source_read.waitForSourceRead(() => recovery.generationRecoveryDigest(key), signal)}`;
     // An explicit reread waits for our current write. It must never replace a
     // newer in-page success or adopt a foreign revision just to overwrite it.
-    if (lanes.has(key)) await lanes.get(key).catch(() => {});
+    if (lanes.has(key)) await source_read.waitForSourceRead(() => lanes.get(key).catch(() => {}), signal);
     const readRevision = scopes.get(key)?.revision;
     let record;
-    try { record = await local_store.readLocalRecoveryRecord(id); } catch { throw storageFailure('read'); }
+    try { record = await source_read.waitForSourceRead(() => local_store.readLocalRecoveryRecord(id), signal); }
+    catch (error) { if (error?.name === 'AbortError') throw error; throw storageFailure('read'); }
+    if (signal.aborted) throw new DOMException('Read cancelled', 'AbortError');
     if (record !== null && (!record || record.key !== id || !Number.isSafeInteger(record.revision) || record.revision < 1)) throw storageFailure('read');
     if (loaded.has(key)) {
         if (!force) return true;
@@ -137,20 +151,21 @@ async function hydrateArchiveRecoveryScope(key, origin, operation, force) {
     const payload = record?.payload;
     if (payload) {
         if (new TextEncoder().encode(JSON.stringify(payload)).byteLength > constants.MAX_CACHE_SOURCE_BYTES
-            || payload.version !== 1 || !Array.isArray(payload.rows) || payload.rows.length > ARCHIVE_RECOVERY_MAX_DRAFTS) throw storageFailure('read');
+            || payload.version !== 1 || !Array.isArray(payload.rows)) throw storageFailure('read');
         const checked = [];
         for (const [rowKey, value] of payload.rows) {
             if (typeof rowKey !== 'string' || (rowKey !== key && !rowKey.startsWith(`${key}:paused:`))
                 || !validStoredEntry(value, key, origin, operation)) throw storageFailure('read');
-            const entry = structuredClone(value); entry.active = false; entry.durable = true;
+            const entry = draft_inputs.compactArchiveEntry(structuredClone(value)); entry.active = false; entry.durable = true;
             // A saved draft is never a formal commit. If the intended bank wasn't
             // committed, replay validated pieces and the normal CAS path on click.
             if (entry.stage === 'awaiting-commit' && entry.committedRevision !== origin.archiveRevision) entry.stage = 'segments';
             checked.push([rowKey, entry]);
         }
-        if (drafts.size + checked.filter(([id]) => !drafts.has(id)).length > ARCHIVE_RECOVERY_MAX_DRAFTS) throw storageFailure('read');
+        if (signal.aborted) throw new DOMException('Read cancelled', 'AbortError');
         for (const [id,entry] of checked) if (!drafts.has(id)) drafts.set(id,entry);
     }
+    if (signal.aborted) throw new DOMException('Read cancelled', 'AbortError');
     const state = { id, revision: record?.revision || 0 };
     confirmCounts(state, payload?.rows || []);
     scopes.set(key, state); loaded.add(key);
@@ -173,13 +188,13 @@ export async function importArchiveRecoveryData(origin, data) {
         || new TextEncoder().encode(JSON.stringify(data)).byteLength > constants.MAX_CACHE_SOURCE_BYTES) throw storageFailure();
     await hydrateArchiveRecovery(origin);
     if (drafts.has(key)) throw text.safeUserError('当前聊天已有整理草稿，导入没有覆盖它。请先导出并明确处理现有草稿。', 'RMT_RECOVERY_BUSY');
-    if (drafts.size + data.pageDrafts.length > ARCHIVE_RECOVERY_MAX_DRAFTS) throw storageFailure();
     const values = data.pageDrafts.map(row => {
         const sourceHash = String(row?.journal?.identity?.archiveRevision || '').replace(/^archive-draft:/, '');
         const entry = { key, operation:'import', sourceHash, fullRebuild: row.fullRebuild === true,
-            stage:'segments', journal: structuredClone(row.journal), active:false, durable:false, importedUnverified:true };
+            stage:'segments', journal: structuredClone(row.journal), active:false, durable:false, importedUnverified:true,
+            ...(row.inputs ? { inputs: structuredClone(row.inputs) } : {}) };
         if (!validStoredEntry(entry, key, origin, 'import')) throw incompatible();
-        return entry;
+        return draft_inputs.compactArchiveEntry(entry);
     });
     // Imported fragments are data, never new evidence authority. Initial dispatch
     // must rebuild current sources and match exact source/request hashes.
@@ -243,10 +258,14 @@ export function archiveRecoverySummary(origin, operation = 'import', { includeAr
     const savedCompleted = scopes.get(draftKey(origin, operation))?.completed?.get(draftKey(origin, operation)) || 0;
     return { operation, fullRebuild: entry.fullRebuild, profileOnly: entry.stage === 'profile-only',
         awaitingCommit: entry.stage === 'awaiting-commit', committedRevision: entry.committedRevision || '',
-        savedCompleted, completed: summary?.completed || 0, truncated: summary?.truncated || 0,
+        savedCompleted, completed: summary?.completed || 0,
+        canCommitComplete: entry.stage === 'segments' && !!entry.inputs?.progress && !!entry.inputs?.taskInputV1
+            && !(entry.fullRebuild && entry.inputs?.baseMemory)
+            && entry.journal.segments.some(row => /^(chat|external):\d+$/.test(row.slot) && row.state === 'complete'),
+        truncated: summary?.truncated || 0,
         canContinue: entry.stage === 'segments' && !!summary?.canContinue,
         canRetry: entry.stage === 'profile-only' || !!summary?.canRetry,
-        failureCode: summary?.failureCode || '', drafts: retained, onlyArchivedDrafts: ['profile-result','archive-result'].includes(entry.stage), pageOnly: entry.durable !== true, notice: entry.durable === true
+        failureCode: scopes.get(draftKey(origin, operation))?.lastFailureCode || summary?.failureCode || '', drafts: retained, onlyArchivedDrafts: ['profile-result','archive-result'].includes(entry.stage), pageOnly: entry.durable !== true, notice: entry.durable === true
             ? '成功分段与原任务输入已保存到本机；刷新后可继续未完成部分，不重做已保存分段。换设备前请导出。'
             : `本机已确认保存 ${savedCompleted} 个成功分段；当前页面共有 ${summary?.completed || 0} 个。尚未确认保存的成果请先导出，不要刷新。` };
 }
@@ -280,11 +299,12 @@ export function archiveRecoveryInputs(origin, operation = 'import') {
     return entry?.stage === 'segments' && !entry.importedUnverified && entry.inputs ? structuredClone(entry.inputs) : null;
 }
 
-export function parkArchiveRecovery(origin, operation = 'import') {
+export function parkArchiveRecovery(origin, operation = 'import', options = {}) {
     const key = draftKey(origin, operation), entry = drafts.get(key);
     if (!entry) return false;
-    if (entry.active || entry.stage === 'awaiting-commit') throw text.safeUserError('请先完成当前请求或仅重试保存；未改动草稿。', 'RMT_RECOVERY_BUSY');
-    if (drafts.size >= ARCHIVE_RECOVERY_MAX_DRAFTS) throw text.safeUserError('本页已保留四份草稿，旧成果没有被挤掉；请先导出并明确处理旧草稿。', 'RMT_RECOVERY_LIMIT');
+    if (entry.stage === 'awaiting-commit') throw text.safeUserError('请先完成当前请求或仅重试保存；未改动草稿。', 'RMT_RECOVERY_BUSY');
+    if (entry.active && options.ignoreActive !== true) throw text.safeUserError('请先完成当前请求或仅重试保存；未改动草稿。', 'RMT_RECOVERY_BUSY');
+    entry.active = false;
     drafts.delete(key);
     drafts.set(`${key}:paused:${Date.now()}:${drafts.size}`, entry);
     scheduleSave(key);
@@ -298,8 +318,9 @@ export function exportArchiveRecovery(origin, operation = 'import') {
 }
 
 export async function beginArchiveRecovery({ origin, operation = 'import', sourceIdentity, sourceFragments = [], settingsIdentity,
-    fullRebuild = false, continueApproved = false, inputs = null, assertCurrent = () => true, onProgress = null, draftId = '', nextIndependentBatch = false } = {}) {
+    fullRebuild = false, continueApproved = false, inputs = null, assertCurrent = () => true, onProgress = null, draftId = '', nextIndependentBatch = false, completedOnly = false } = {}) {
     const storageKey = draftKey(origin, operation);
+    inputs = draft_inputs.compactArchiveInputs(inputs);
     if (!storageKey) throw text.safeUserError('无法确定档案整理草稿属于哪个聊天，本次没有发送请求。', 'RMT_RECOVERY_IDENTITY');
     await hydrateArchiveRecovery(origin, operation);
     if (assertCurrent() === false) throw new DOMException('Archive origin changed', 'AbortError');
@@ -320,11 +341,8 @@ export async function beginArchiveRecovery({ origin, operation = 'import', sourc
     if (priorResult) existing = null;
     if (existing?.active) throw text.safeUserError('这份档案草稿正在处理，请等当前请求结束。', 'RMT_RECOVERY_BUSY');
     if (existing && (!continueApproved || existing.stage !== 'segments')) throw incompatible();
-    if (!existing && !priorResult && drafts.size >= ARCHIVE_RECOVERY_MAX_DRAFTS) {
-        throw text.safeUserError('本页已保留 4 份未完成的档案整理草稿。请先完成或明确放弃其中一份；旧草稿没有被挤掉。', 'RMT_RECOVERY_LIMIT');
-    }
-    if (!Array.isArray(sourceFragments) || sourceFragments.length > recovery.GENERATION_RECOVERY_LIMITS.segments) {
-        throw text.safeUserError('档案整理来源超过本页可保留的分段范围，旧草稿仍保留。', 'RMT_RECOVERY_LIMIT');
+    if (!Array.isArray(sourceFragments)) {
+        throw text.safeUserError('档案整理来源分段格式无效，旧草稿仍保留。', 'RMT_RECOVERY_DATA');
     }
     const sourceHash = await recovery.generationRecoveryDigest({
         identity: await recovery.generationRecoveryDigest(sourceIdentity),
@@ -336,23 +354,22 @@ export async function beginArchiveRecovery({ origin, operation = 'import', sourc
     // Here it is ONLY a draft fingerprint, never an origin for archive/cache writes.
     // An initial import has no bank and must remain that way until normal commit.
     const recoveryOrigin = { ...origin, archiveRevision: `archive-draft:${sourceHash}` };
-    const entry = existing || { key: storageKey, operation, sourceHash, fullRebuild: !!fullRebuild, stage: 'segments', journal: null, active: false,
+    const entry = (existing && (discardedEntries.has(existing) ? { ...existing, active: false } : existing)) || { key: storageKey, operation, sourceHash, fullRebuild: !!fullRebuild, stage: 'segments', journal: null, active: false,
         ...(priorResult ? { archiveResult: structuredClone(priorResult), draftId: inheritedDraftId } : {}) };
     let attached = false;
-    const stillCurrent = () => (!attached || drafts.get(key) === entry) && assertCurrent() !== false;
+    const stillCurrent = () => !discardedEntries.has(entry) && (!attached || drafts.get(key) === entry) && assertCurrent() !== false;
     const handle = await recovery.createGenerationRecovery({ origin: recoveryOrigin,
         mode: operation === 'import' ? 'archive-import' : 'archive-profile', settingsIdentity, pageOnly: false,
         ...(!existing && inputs?.taskInputV1 ? { contentSnapshot: { version: 1, archiveInputsHash: inputsDigest(inputs) } } : {}),
         existing: entry.journal, continueRequested: !!existing, assertCurrent: stillCurrent, onProgress,
         save: async journal => {
-            if (drafts.get(key) !== entry) throw new DOMException('Archive draft cleared', 'AbortError');
+            if (discardedEntries.has(entry) || drafts.get(key) !== entry) throw new DOMException('Archive draft cleared', 'AbortError');
             entry.journal = journal;
             entry.durable = false;
             return saveScope(storageKey);
         } });
     if (drafts.get(key) && drafts.get(key) !== expectedEntry) throw incompatible();
     if (existing?.active) throw text.safeUserError('这份档案草稿正在处理，请等当前请求结束。', 'RMT_RECOVERY_BUSY');
-    if (!existing && !priorResult && drafts.size >= ARCHIVE_RECOVERY_MAX_DRAFTS) throw text.safeUserError('本页档案整理草稿已满，旧草稿仍保留。', 'RMT_RECOVERY_LIMIT');
     if ((!existing || entry.importedUnverified) && inputs) entry.inputs = structuredClone(inputs);
     if (priorResult && expectedEntry.profilePending) {
         const profileCopy = { ...structuredClone(expectedEntry), stage: 'profile-only', active: false,
@@ -368,7 +385,7 @@ export async function beginArchiveRecovery({ origin, operation = 'import', sourc
     try { await saveScope(storageKey); } catch (error) { entry.active = false; throw error; }
     if (assertCurrent() === false) { entry.active = false; throw new DOMException('Archive origin changed', 'AbortError'); }
     recovery.attachGenerationRecovery(recoveryOrigin, handle);
-    const ticket = { key, storageKey, entry, origin: recoveryOrigin, handle, assertCurrent: stillCurrent, released: false };
+    const ticket = { key, storageKey, entry, origin: recoveryOrigin, handle, assertCurrent: stillCurrent, released: false, completedOnly };
     tickets.add(ticket);
     return ticket;
 }
@@ -382,22 +399,29 @@ export async function resumeArchiveImportProfile({ origin, draftId = '', setting
         : drafts.has(key) ? [key, drafts.get(key)] : null;
     if (!found || !(found[1].stage === 'profile-only' || found[1].stage === 'archive-result' && found[1].profilePending)
         || !inputsMatchJournal(found[1])) throw incompatible();
-    const [recordKey, entry] = found;
+    const [recordKey, previousEntry] = found;
+    const entry = discardedEntries.has(previousEntry) ? { ...previousEntry, active: false } : previousEntry;
     if (entry.active) throw text.safeUserError('这份简介正在处理，请等当前请求结束。', 'RMT_RECOVERY_BUSY');
     const recoveryOrigin = { ...origin, ...entry.journal.identity };
-    const stillCurrent = () => drafts.get(recordKey) === entry && assertCurrent() !== false;
+    const stillCurrent = () => !discardedEntries.has(entry) && drafts.get(recordKey) === entry && assertCurrent() !== false;
+    if (entry !== previousEntry) drafts.set(recordKey, entry);
     const handle = await recovery.createGenerationRecovery({ origin: recoveryOrigin, mode: 'archive-import',
         existing: entry.journal, continueRequested: true, settingsIdentity, assertCurrent: stillCurrent, onProgress,
-        save: async journal => { entry.journal = journal; entry.durable = false; return saveScope(key); } });
+        save: async journal => {
+            if (!stillCurrent()) throw new DOMException('Archive draft cleared', 'AbortError');
+            entry.journal = journal; entry.durable = false; return saveScope(key);
+        } });
     entry.active = true;
     recovery.attachGenerationRecovery(recoveryOrigin, handle);
-    const ticket = { key: recordKey, storageKey: key, entry, origin: recoveryOrigin, handle, assertCurrent: stillCurrent, released: false };
+    // r84.94: 原来这里写的是本函数里不存在的 completedOnly（r84.71 起），一调用就 ReferenceError，
+    // 而且发生在 entry.active = true 之后，草稿被卡成“正在处理”、放弃也被拒绝。续写简介不是“仅入档已完成分块”。
+    const ticket = { key: recordKey, storageKey: key, entry, origin: recoveryOrigin, handle, assertCurrent: stillCurrent, released: false, completedOnly: false };
     tickets.add(ticket);
     return ticket;
 }
 
 export async function retainCompletedArchiveProfile(ticket, profile, sourceMemory) {
-    if (!tickets.has(ticket) || ticket.released || drafts.get(ticket.key) !== ticket.entry) throw incompatible();
+    if (!tickets.has(ticket) || ticket.released || discardedEntries.has(ticket.entry) || drafts.get(ticket.key) !== ticket.entry) throw incompatible();
     ticket.entry.profileResult = { profile: structuredClone(profile), sourceMemory: structuredClone(sourceMemory), completedAt: Date.now() };
     if (ticket.entry.archiveResult) {
         Object.assign(ticket.entry.archiveResult.memoryBank, { archiveName: profile.archiveName,
@@ -410,7 +434,7 @@ export async function retainCompletedArchiveProfile(ticket, profile, sourceMemor
 }
 
 export async function retainCompletedArchiveImport(ticket, memoryBank, { sourceMemory = null, profilePending = false, baseMemoryMissing = false } = {}) {
-    if (!tickets.has(ticket) || ticket.released || drafts.get(ticket.key) !== ticket.entry) throw incompatible();
+    if (!tickets.has(ticket) || ticket.released || discardedEntries.has(ticket.entry) || drafts.get(ticket.key) !== ticket.entry) throw incompatible();
     ticket.entry.archiveResult = { memoryBank: structuredClone(memoryBank),
         sourceMemory: sourceMemory ? structuredClone(sourceMemory) : null, completedAt: Date.now(), baseMemoryMissing };
     ticket.entry.profileMemory = structuredClone(Object.fromEntries(['version','chatId','archiveRevision','characterName','userName','memories']
@@ -421,8 +445,49 @@ export async function retainCompletedArchiveImport(ticket, memoryBank, { sourceM
     return { status: 'independent', draftId: archiveDraftId(ticket.key) };
 }
 
+// r84.71: bounded automatic retry for transient transport failures only.
+// Unclassified failures, auth/config/context errors, validation failures and
+// cancellations still stop immediately and keep the draft for the user.
+const ARCHIVE_TRANSIENT_CODES = new Set(['RMT_CONNECTION_SERVER', 'RMT_CONNECTION_NETWORK', 'RMT_CONNECTION_RATE_LIMIT', 'RMT_REQUEST_TIMEOUT']);
+let transientRetryDelays = null;
+export function setArchiveTransientRetryDelaysForTests(value) { transientRetryDelays = Array.isArray(value) ? [...value] : null; }
+export function isArchiveTransientFailure(error) {
+    return !!error && error.name !== 'AbortError' && ARCHIVE_TRANSIENT_CODES.has(error.code);
+}
+function archiveRetryDelay(error, attempt) {
+    const ladder = transientRetryDelays || constants.ARCHIVE_TRANSIENT_RETRY_DELAYS_MS;
+    const base = Number(ladder[Math.min(attempt, ladder.length - 1)]) || 0;
+    const hinted = Number(error?.retryAfterMs);
+    return error?.code === 'RMT_CONNECTION_RATE_LIMIT' && Number.isFinite(hinted) && hinted > 0 && !transientRetryDelays
+        ? Math.min(60000, Math.max(base, hinted)) : base;
+}
+function waitArchiveRetry(ms, signal) {
+    if (!(ms > 0)) return Promise.resolve();
+    return new Promise((resolve, reject) => {
+        if (signal?.aborted) { reject(new DOMException('Cancelled', 'AbortError')); return; }
+        const timer = setTimeout(() => { signal?.removeEventListener?.('abort', onAbort); resolve(); }, ms);
+        const onAbort = () => { clearTimeout(timer); reject(new DOMException('Cancelled', 'AbortError')); };
+        signal?.addEventListener?.('abort', onAbort, { once: true });
+    });
+}
+async function requestArchiveWithTransientRetry(prompt, options, ticket) {
+    const retries = (transientRetryDelays || constants.ARCHIVE_TRANSIENT_RETRY_DELAYS_MS).length;
+    for (let attempt = 0; ; attempt += 1) {
+        try {
+            return await client.generateConfiguredJson(prompt, options);
+        } catch (error) {
+            if (attempt >= retries || !isArchiveTransientFailure(error) || options?.signal?.aborted) throw error;
+            if (error.code === 'RMT_CONNECTION_RATE_LIMIT' && Number(error.retryAfterMs) > 60000) throw error;
+            taskTrace.recordRetry?.(options?.taskTrace, error);
+            await waitArchiveRetry(archiveRetryDelay(error, attempt), options?.signal);
+            if (ticket.assertCurrent() === false) throw new DOMException('Archive recovery origin changed', 'AbortError');
+        }
+    }
+}
+
 export async function requestArchiveRecoverySegment(ticket, slot, prompt, options, validator) {
-    if (!tickets.has(ticket) || ticket.released || drafts.get(ticket.key) !== ticket.entry || !ticket.entry.active) throw incompatible();
+    if (!tickets.has(ticket) || ticket.released || discardedEntries.has(ticket.entry) || drafts.get(ticket.key) !== ticket.entry || !ticket.entry.active) throw incompatible();
+    if (ticket.completedOnly && !ticket.entry.journal.segments.some(row => row.slot === slot && row.state === 'complete')) throw incompatible();
     const checked = async raw => {
         taskTrace.beginStage(options?.taskTrace, 'validate');
         const result = await validator(raw);
@@ -432,10 +497,13 @@ export async function requestArchiveRecoverySegment(ticket, slot, prompt, option
     return recovery.withRecoverySegment(prompt, { ...options, origin: ticket.origin, taskKey: slot }, checked,
         async (effectivePrompt, requestOptions, accepted) => {
             // Archive extraction owns runtimeState.busy, so requestJson's module
-            // task gate is deliberately not used. Same provider/parser, no retries.
+            // task gate is deliberately not used. Same provider/parser; only
+            // transient transport failures are retried (bounded, see above).
             // Apply the archive budget even to legacy page drafts. Do this only
             // at dispatch: keep the recovery identity and source validators intact.
-            const raw = await client.generateConfiguredJson(effectivePrompt, { ...requestOptions, archiveRequestBudget: true });
+            if (ticket.completedOnly) throw incompatible();
+            const raw = await requestArchiveWithTransientRetry(effectivePrompt, { ...requestOptions, archiveRequestBudget: true,
+                timeoutMs: Math.max(Number(requestOptions?.timeoutMs) || 0, constants.ARCHIVE_REQUEST_TIMEOUT_MS) }, ticket);
             if (ticket.assertCurrent() === false) throw new DOMException('Archive recovery origin changed', 'AbortError');
             const result = await checked(raw);
             await accepted(raw);
@@ -444,7 +512,7 @@ export async function requestArchiveRecoverySegment(ticket, slot, prompt, option
 }
 
 export function stageArchiveRecoveryCommit(ticket, revision, { profilePending = false, profileMemory = null } = {}) {
-    if (!tickets.has(ticket) || ticket.released || drafts.get(ticket.key) !== ticket.entry || !revision) return false;
+    if (!tickets.has(ticket) || ticket.released || discardedEntries.has(ticket.entry) || drafts.get(ticket.key) !== ticket.entry || !revision) return false;
     ticket.entry.stage = 'awaiting-commit';
     ticket.entry.committedRevision = String(revision);
     ticket.entry.profilePending = !!profilePending;
@@ -457,7 +525,7 @@ export function stageArchiveRecoveryCommit(ticket, revision, { profilePending = 
 }
 
 export function finishArchiveProfileRecovery(ticket, committedOrigin) {
-    if (!tickets.has(ticket) || ticket.released || drafts.get(ticket.key) !== ticket.entry) return false;
+    if (!tickets.has(ticket) || ticket.released || discardedEntries.has(ticket.entry) || drafts.get(ticket.key) !== ticket.entry) return false;
     drafts.delete(ticket.key);
     // Only this exact task finished. A separately selected/paused profile does
     // not own another import's paid cover checkpoint, even at the same revision.
@@ -485,14 +553,18 @@ export function clearArchiveRecovery(origin, operation = null) {
 }
 
 // Explicit discard awaits the tombstone; failed persistence restores visible data.
-export async function clearArchiveRecoveryDurably(origin, operation = null) {
+export async function clearArchiveRecoveryDurably(origin, operation = null, { explicitDiscard = false } = {}) {
     for (const kind of operation ? [operation] : ['import','profile']) {
         await hydrateArchiveRecovery(origin, kind);
         const key = draftKey(origin, kind);
         if (!key) continue;
         if (lanes.has(key)) await lanes.get(key).catch(() => {});
         const previous = [...drafts].filter(([id]) => id === key || id.startsWith(`${key}:paused:`));
-        if (previous.some(([,entry]) => entry.active)) throw text.safeUserError('当前请求尚未结束，草稿没有清除。', 'RMT_RECOVERY_BUSY');
+        if (!explicitDiscard && previous.some(([,entry]) => entry.active)) throw text.safeUserError('当前请求尚未结束，草稿没有清除。', 'RMT_RECOVERY_BUSY');
+        if (explicitDiscard) for (const [, entry] of previous) {
+            discardedEntries.add(entry);
+            entry.active = false;
+        }
         for (const [id] of previous) drafts.delete(id);
         try { await saveScope(key); }
         catch (error) { for (const [id,entry] of previous) drafts.set(id,entry); throw error; }
@@ -501,5 +573,5 @@ export async function clearArchiveRecoveryDurably(origin, operation = null) {
 }
 
 export function discardArchiveRecovery(origin, operation = null) {
-    return clearArchiveRecoveryDurably(origin, operation);
+    return clearArchiveRecoveryDurably(origin, operation, { explicitDiscard: true });
 }

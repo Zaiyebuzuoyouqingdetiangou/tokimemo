@@ -188,6 +188,10 @@ function phoneConversationNeedsSpeakerRepair(entry, session) {
     return !hasExplicitRole || !roles.has('owner') || !roles.has('contact');
 }
 
+function phoneReadingMeta(value) {
+    return String(value || '').split(/[·|]/).filter(part => !/不代表|非历史|未核验|角色日常演绎|已核对的历史/.test(part)).join(' · ').trim();
+}
+
 export function renderPhoneEntryDetail(entry, app, session = runtimeState.activeSession) {
     if (!entry) return '<div class="rmt-phone-detail rmt-phone-detail-empty">选择一条记录查看详情。</div>';
     if (entry.sourceStatus === 'unavailable') return '<div class="rmt-phone-detail rmt-phone-detail-empty"><button type="button" class="rmt-btn" data-rmt-action="phone-entry-back">← 返回列表</button><h3>本条尚未生成</h3><p>已有内容可以正常阅读；需要时可在终端重试本条。</p></div>';
@@ -208,7 +212,7 @@ export function renderPhoneEntryDetail(entry, app, session = runtimeState.active
     // Layout is owned here; no invented balances, media URLs, or executable app content.
     // Provenance stays on stored entries and is not repeated inside immersive reading.
     let content;
-    if (appKind === 'chat') content = `<section class="rmt-phone-conversation"><header>${title}<p class="rmt-phone-conversation-status">${entry.conversationMode === 'draft' ? '未发送草稿 · 不代表已发生的聊天' : entry.legacyEvidenceUnverified ? '旧版记录 · 来源尚未核验' : entry.basis === '记忆' ? '已核对的历史原话' : '角色日常演绎 · 非历史聊天记录'}</p></header>${body}${messages}${fields}${gallery}</section>`;
+    if (appKind === 'chat') content = `<section class="rmt-phone-conversation"><header>${title}</header>${body}${messages}${fields}${gallery}</section>`;
     else if (['finance', 'store'].includes(appKind)) content = `<article class="rmt-phone-ledger"><header>${badge}<small>${core_text.esc(app?.label || '账本')}</small>${title}</header>${fields}<div class="rmt-phone-ledger-memo">${body}${gallery}${messages}</div></article>`;
     else if (appKind === 'notes') content = `<article class="rmt-phone-notepaper"><header>${title}</header>${body}${fields}${gallery}${messages}</article>`;
     else if (appKind === 'moments') content = `<article class="rmt-phone-feed-post"><header><span class="rmt-phone-contact-avatar" aria-hidden="true">${core_text.esc(String(session?.ownerName || '').slice(0, 1))}</span><b>${core_text.esc(session?.ownerName || '')}</b></header>${title}${body}${gallery}${fields}${messages}</article>`;
@@ -222,7 +226,7 @@ export function renderPhoneEntryDetail(entry, app, session = runtimeState.active
     else if (['location', 'travel'].includes(appKind)) content = `<article class="rmt-phone-route-journal"><header>${badge}${title}</header>${fields}<div class="rmt-phone-route-entry">${body}${gallery}${messages}</div></article>`;
     else if (['games', 'creative'].includes(appKind)) content = `<article class="rmt-phone-collection-card"><header>${badge}${title}</header>${gallery}${fields}${body}${messages}</article>`;
     else content = `<article class="rmt-phone-record"><header>${badge}${title}</header>${fields}${body}${gallery}${messages}</article>`;
-    return `<div class="rmt-phone-detail rmt-phone-detail-${appKind}"><div class="rmt-phone-detail-toolbar"><button type="button" class="rmt-btn" data-rmt-action="phone-entry-back">← 返回${core_text.esc(app?.label || '列表')}</button><span>${core_text.esc(entry.meta || '')}</span></div>${content}</div>`;
+    return `<div class="rmt-phone-detail rmt-phone-detail-${appKind}"><div class="rmt-phone-detail-toolbar"><button type="button" class="rmt-btn" data-rmt-action="phone-entry-back">← 返回${core_text.esc(app?.label || '列表')}</button><span>${core_text.esc(phoneReadingMeta(entry.meta))}</span></div>${content}</div>`;
 }
 
 function phoneStatusBar(now, kind) {
@@ -270,7 +274,7 @@ function renderPhoneHome(session, apps, live, now, kind) {
 
 function phoneEntryKindMarkup(item, kind) {
     const title = core_text.esc(item?.title);
-    const meta = core_text.esc(item?.meta || '');
+    const meta = core_text.esc(phoneReadingMeta(item?.meta));
     const preview = core_text.esc(item?.preview || item?.detail || '');
     const id = core_text.esc(item?.id);
     const messageCount = Array.isArray(item?.messages) ? item.messages.length : 0;
@@ -300,7 +304,7 @@ function renderPhoneAppList(app) {
 }
 
 function renderPhoneDetailPage(entry, app) {
-    return `<section class="rmt-phone-page rmt-phone-app-screen rmt-phone-page-detail">${renderPhoneEntryDetail(entry, app)}</section>`;
+    return `<section class="rmt-phone-page rmt-phone-app-screen rmt-phone-page-detail rmt-phone-page-${phonePresentationKind(app)}">${renderPhoneEntryDetail(entry, app)}</section>`;
 }
 
 export function renderPhone() {

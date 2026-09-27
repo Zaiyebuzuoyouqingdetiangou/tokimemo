@@ -57,7 +57,7 @@ export function renderAlbum() {
             ? `<div class="rmt-cg-card-actions"><button type="button" class="rmt-btn rmt-memory-primary" data-rmt-album-memory="${core_text.esc(item.id)}" aria-label="${core_text.esc(item.title)}：共同回忆">共同回忆</button>${readOnlyArchive ? '' : `<button type="button" class="rmt-btn" data-rmt-album-prompt="${core_text.esc(item.id)}" ${drawing ? 'disabled' : ''} aria-label="${core_text.esc(item.title)}：图片设置">${drawing ? '绘制中…' : '图片设置'}</button>`}</div>`
             : '';
         return `<article class="rmt-card ${item.id === session.selectedId ? 'active' : ''} ${item.unlocked ? '' : 'locked'}" data-rmt-album-id="${core_text.esc(item.id)}">
-      <div class="rmt-thumb">${item.unlocked ? generation_imageGeneration.cgImageLayerHtml(item) : `<div class="rmt-abstract" style="${ui_styles.abstractStyle(item.visualSeed, item.id)}"></div>`}</div>
+      <div class="rmt-thumb">${item.unlocked ? generation_imageGeneration.cgImageLayerHtml(item, { history: false }) : `<div class="rmt-abstract" style="${ui_styles.abstractStyle(item.visualSeed, item.id)}"></div>`}</div>
       <div class="rmt-card-meta">
         <div class="rmt-card-title">${core_text.esc(item.unlocked ? item.title : `（未解锁）${item.title}`)}</div>
         <div class="rmt-card-date">${core_text.esc(item.date)}</div>

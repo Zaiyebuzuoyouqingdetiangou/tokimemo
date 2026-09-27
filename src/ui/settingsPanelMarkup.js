@@ -69,9 +69,10 @@ export function renderSettingsPanelMarkup(panel) {
           <summary class="rmt-settings-card-head"><span>CG</span><div><b>CG 生图</b><small>相簿 · ADV · 日常一格</small></div></summary>
           <div class="rmt-settings-section-body">
             ${cg_format_ui.cgFormatControlHtml()}
-            <label class="rmt-settings-field"><span>生图渠道</span><select class="text_pole" data-rmt-image-generation-provider aria-describedby="rmt-image-provider-status"><option value="baibai-image">柏宝绘 · 公开 API v1</option></select></label>
+            <label class="rmt-settings-field"><span>生图渠道</span><select class="text_pole" data-rmt-image-generation-provider aria-describedby="rmt-image-provider-status"><option value="baibai-image">柏宝绘 · 公开 API v1</option><option value="chatu8-image">智绘姬</option></select></label>
             <p id="rmt-image-provider-status" data-rmt-image-generation-status role="status" aria-live="polite"></p>
-            <p>柏宝绘需单独安装并配置出图渠道。只在点击绘制并确认后出图，失败不会自动换渠道。</p>
+            <label class="rmt-settings-check"><input type="checkbox" data-rmt-image-generation-fallback ${core_settings.getPluginSettings().imageGenerationFallback ? 'checked' : ''}><span>失败时自动改走另一个已连接的生图渠道</span></label>
+            <p>默认关闭。智绘姬沿用它自己已经配好的出图设置，这里不改那些设置。只在点击绘制并确认后出图。</p>
           </div>
         </details>
         <details class="rmt-settings-card" data-rmt-settings-section="creative">

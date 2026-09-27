@@ -1,4 +1,3 @@
-import * as archive_avatars from './archiveAvatars.js';
 import * as expanded_cg_view from './expandedCgView.js';
 import * as storyParticipants from '../core/participants.js';
 import * as heart_mode from '../modes/heart.js';
@@ -11,6 +10,7 @@ import * as language_view from './languageView.js';
 import * as archive_groups from '../archive/groups.js';
 import * as archive_library from '../archive/library.js';
 import * as archive_repository from '../archive/repository.js';
+import * as archive_avatars from './archiveAvatars.js';
 import * as archive_snapshots from '../archive/snapshots.js';
 import * as core_cache from '../core/cache.js';
 import * as core_cgImagePatch from '../core/cgImagePatch.js';
@@ -31,11 +31,7 @@ import * as ui_generationCompletion from './generationCompletion.js';
 
 export function viewHeartStripImage(opener = null) {
     const item = selectedHeartStrip();
-    if (item) return image_viewer.openCgImageViewer(item.cgImage, item.title, {
-        opener,
-        versions: generation_imageGeneration.cgImageVersions(item),
-        currentUrl: generation_imageGeneration.normalizeCgImageRecord(item.cgImage)?.url || '',
-    });
+    if (item) return image_viewer.openCgImageViewer(item.cgImage, item.title, { opener });
     return false;
 }
 
@@ -51,7 +47,11 @@ export function heartCharacterAvatarUrl(entry = runtimeState.activeArchiveSnapsh
 
 export function heartUserAvatarUrl(context = core_context.getContext()) {
     try {
-        return archive_avatars.currentPersonaAvatarUrl(context);
+        const entry = runtimeState.activeArchiveSnapshot;
+        const file = entry ? archive_avatars.archiveUserAvatar(entry.memory, entry)
+            : archive_avatars.currentUserAvatar(context);
+        if (!file) return '';
+        return archive_avatars.personaAvatarUrl(file, context);
     } catch {
         return '';
     }
@@ -149,7 +149,7 @@ export function renderAvatarDialoguePopup(state = runtimeState.activeAvatarDialo
     const actions = `${language.hasContent ? '<button type="button" class="rmt-btn" data-rmt-action="avatar-talk-again">再说一句</button>' : ''}<button type="button" class="rmt-btn rmt-cg-primary" data-rmt-action="avatar-heart-open">打开角色互动</button>`;
     const message = speech?.text || (language.hasContent ? '当前时段暂无台词。' : '基础语言尚未生成。');
     const label = session ? speech?.label || '角色互动' : 'HEART VOICE';
-    const dialogueIdentity = { characterName: state.characterName || session?.characterName || entry?.characterName || '角色', userName: state.userName || state.snapshot?.memory?.userName || entry?.memory?.userName || session?.userName || '', charAvatar: avatarSrc || '' };
+    const dialogueIdentity = { characterName: state.characterName || session?.characterName || entry?.characterName || '角色', userName: state.userName || state.snapshot?.memory?.userName || entry?.memory?.userName || session?.userName || '', charAvatar: avatarSrc || '', userAvatar: '' };
     const rows = core_dialogue.normalizeDialogueRows([{ speaker: session ? 'char' : 'narrator', text: message }], dialogueIdentity);
     const dialogueHtml = session && (rows.length > 1 || rows[0]?.speaker !== 'char')
         ? renderHeartScriptLines(rows, dialogueIdentity)
@@ -246,12 +246,11 @@ export function selectedHeartStrip() {
 
 export function renderHeartScriptLines(lines, identity = {}) {
     const charAvatar = identity.charAvatar ?? heartCharacterAvatarUrl(runtimeState.activeArchiveSnapshot);
+    const userAvatar = identity.userAvatar ?? heartUserAvatarUrl();
     const route = ui_workspaceState.workspace.route;
     const page = ['language', 'strips', 'fireflies', 'postending'].includes(route) ? route : runtimeState.activeSession?.selectedSeason;
     const sourceMemory = core_cache.generationPageSourceMemory(runtimeState.activeSession, page,
         core_cache.generationPageSourceMemory(runtimeState.activeSession, 'heart', null));
-    const storedUserAvatar = archive_avatars.personaAvatarUrl(sourceMemory?.userAvatar || runtimeState.activeArchiveSnapshot?.memory?.userAvatar, core_context.getContext());
-    const userAvatar = identity.userAvatar || storedUserAvatar || heartUserAvatarUrl();
     const story = storyParticipants.resolveStoryIdentities(sourceMemory || runtimeState.activeArchiveSnapshot?.memory || null, null, runtimeState.activeSession?.participantSnapshot?.people);
     const charName = core_text.normalizeText(identity.characterName ?? story.ownerNames[0] ?? sourceMemory?.characterName ?? runtimeState.activeArchiveSnapshot?.characterName ?? core_context.getContext().name2, 120) || '角色';
     const userName = core_text.normalizeText(identity.userName ?? sourceMemory?.userName ?? runtimeState.activeArchiveSnapshot?.memory?.userName ?? core_context.getContext().name1, 120) || '你';
@@ -563,7 +562,7 @@ export function renderHeart() {
             const paragraphs = thoughts.map(text => `<p>${core_text.esc(text)}</p>`).join('');
             return `<div class="rmt-firefly-whisper ${core_text.esc(selected.color)}"><small>${fireflyMeta(selected.color).icon} ${core_text.esc(fireflyMeta(selected.color).label)}</small><h3>${core_text.esc(selected.title || '旧版心声')}</h3><div class="rmt-firefly-thoughts">${paragraphs}</div></div>`;
         })() : `<div class="rmt-heart-empty">${readOnly ? '这份档案还没有保存萤火虫话题。' : '点亮以后，这里会出现不同颜色的追加约会话题。'}</div>`;
-        content = `<section class="rmt-firefly-shell"><div class="rmt-firefly-head"><div><small>FIREFLY HABITAT</small><h2>萤火虫栖息地</h2></div><span>${voices.length} LIGHTS</span></div><div class="rmt-firefly-field">${points || '<div class="rmt-firefly-empty-stars">✦　·　✧　·　✦</div>'}</div>${pager}<div class="rmt-firefly-legend">${legend}</div>${whisper}</section>`;
+        content = `<section class="rmt-firefly-shell"><div class="rmt-firefly-head"><div><small>FIREFLY HABITAT</small><h2>萤火虫栖息地</h2></div><span>${voices.length} LIGHTS</span></div><div class="rmt-firefly-field">${expanded_cg_view.expandedCgBackdropHtml(session, {kind:'heart-firefly',containerId:'habitat'})}${points || '<div class="rmt-firefly-empty-stars">✦　·　✧　·　✦</div>'}</div>${expanded_cg_view.expandedCgHtml(session, {kind:'heart-firefly',containerId:'habitat'}, readOnly, {showImage:false})}${pager}<div class="rmt-firefly-legend">${legend}</div>${whisper}</section>`;
     } else {
         const selected = selectedHeartStrip();
         if (selected) session.selectedStripId = selected.id;

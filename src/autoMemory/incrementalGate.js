@@ -22,23 +22,24 @@ function floorIsDue(floor, nextDueFloor) {
     return Number.isSafeInteger(floor) && Number.isSafeInteger(nextDueFloor) && floor >= nextDueFloor;
 }
 
-export function shouldRetryDueRound() {
-    // 补全只接着当前这张票，到点也不另抽。
-    return false;
+export function shouldRetryDueRound(snapshot, floor) {
+    const plan = snapshot?.plan;
+    if (plan?.enabled !== true) return false;
+    return floorIsDue(floor, plan.nextDueFloor);
 }
 
 export function floorDecision({ enabled = false, floor = 0, interval = 0, nextDueFloor = null, modulePlan = null, activeTicket = null, inflightFloor = null, seenFloor = null } = {}) {
     if (enabled !== true) return { action: 'idle' };
     if (modulePlanOpen(modulePlan)) {
-        // 这一抽还没写完就先补完。下一间隔在它后面排队，不另抽、不换模块。
-        return { action: 'hold', sourceMemoryIds: [...(modulePlan.sourceMemoryIds || [])] };
+        // 间隔还没到，同一轮接着写。到点了就放弃没写完的，另抽一张。
+        if (!floorIsDue(floor, nextDueFloor)) return { action: 'hold', sourceMemoryIds: [...(modulePlan.sourceMemoryIds || [])] };
     } else if (ticketOpen(activeTicket)) {
         const finished = !!modulePlan && !modulePlanOpen(modulePlan);
         const orphan = !modulePlan;
-        const sameFloor = Math.floor(Number(activeTicket.dueFloor)) === Math.floor(Number(floor));
-        // 同一楼接着写。计划写完、或票还开着却丢了计划，到了后面已经到期的楼必须另抽，不能接着旧回忆。
-        const nextRound = (finished || orphan) && !sameFloor && (laterThanTicket(floor, activeTicket) || floorIsDue(floor, nextDueFloor));
-        if (!nextRound) return { action: 'reuse', ticketId: activeTicket.id };
+        // 同一楼接着写。计划写完、或票还开着却丢了计划，到了下一楼就让位另抽。
+        if (!((finished || orphan) && laterThanTicket(floor, activeTicket))) {
+            return { action: 'reuse', ticketId: activeTicket.id };
+        }
     }
     if (Number.isSafeInteger(inflightFloor) && inflightFloor === floor) return { action: 'duplicate' };
     if (nextDueFloor == null) {
@@ -166,35 +167,31 @@ function closeActiveTicket(snapshot, ticket) {
     });
 }
 
+function closeRound(snapshot, ticket) {
+    return auto_memory_plan.parseAutoMemorySnapshot({
+        plan: auto_memory_plan.parseAutoMemoryPlan({ ...snapshot.plan, activeDrawTicketId: null }),
+        revealRecords: snapshot.revealRecords,
+        drawTickets: snapshot.drawTickets.map(row => (ticket && row.id === ticket.id ? { ...row, status: 'completed' } : row)),
+        modulePlan: null,
+    });
+}
+
 // 计划写完了，票却没关（旧版本结算失败留下的）。同一修订里把票关掉，后面的写入照常只加一版。
 function releaseFinishedTicket(snapshot, floor = null) {
     const ticket = activeTicket(snapshot);
     if (!ticketOpen(ticket)) return snapshot;
     const finished = !!snapshot.modulePlan && !modulePlanOpen(snapshot.modulePlan);
-    const sameFloor = floor != null && Math.floor(Number(ticket.dueFloor)) === Math.floor(Number(floor));
-    const dueLater = !sameFloor && (laterThanTicket(floor, ticket) || floorIsDue(floor, snapshot.plan?.nextDueFloor));
-    const orphanLater = !snapshot.modulePlan && dueLater;
+    const orphanLater = !snapshot.modulePlan && laterThanTicket(floor, ticket);
     if (!finished && !orphanLater) return snapshot;
-    if (finished && !dueLater) return snapshot;
+    if (finished && floor != null && !laterThanTicket(floor, ticket)) return snapshot;
     return closeActiveTicket(snapshot, ticket);
 }
 
-function roundStillOpen(snapshot) {
-    if (modulePlanOpen(snapshot?.modulePlan)) return true;
-    // 只拦住这一抽自己的待补成就。别的模块、或同一模块更早那一份，不能挡住下一档抽签。
-    const ids = new Set((snapshot?.modulePlan?.sourceMemoryIds || []).filter(id => /^M\d{3,6}$/.test(id)));
-    const drawId = snapshot?.modulePlan?.drawId || snapshot?.plan?.activeDrawTicketId || '';
-    if (!drawId && !ids.size) return false;
-    return (snapshot?.revealRecords || []).some(row => {
-        if (row?.status !== 'achievement_pending') return false;
-        if (drawId && row.id === drawId) return true;
-        return ids.size > 0 && (row.sourceMemoryIds || []).some(id => ids.has(id));
-    });
-}
-
-// 写完的票可以放下。没写完的一轮留着，到点的新间隔等它结束再抽。
+// 到点的新楼不再接着写没完成的一轮，先把旧计划和旧票放下。
 function abandonDueRound(snapshot, floor = null) {
-    if (roundStillOpen(snapshot)) return snapshot;
+    if (modulePlanOpen(snapshot?.modulePlan) && floorIsDue(floor, snapshot.plan?.nextDueFloor)) {
+        return closeRound(snapshot, activeTicket(snapshot));
+    }
     return releaseFinishedTicket(snapshot, floor);
 }
 
@@ -232,29 +229,9 @@ export async function runAutoMemoryRound(input, io) {
         enabled: plan.enabled, floor: input.floor, interval: plan.intervalFloors, nextDueFloor: plan.nextDueFloor,
         modulePlan: snapshot.modulePlan, activeTicket: activeTicket(snapshot), inflightFloor: input.inflightFloor, seenFloor: input.seenFloor,
     });
-    if (decision.action === 'hold' || roundStillOpen(snapshot)) {
-        const steps = snapshot.modulePlan?.steps || [];
-        const failed = steps.some(step => step.status === 'failed');
-        const due = floorIsDue(input.floor, snapshot.plan?.nextDueFloor);
-        const sourceMemoryIds = decision.sourceMemoryIds || [...(snapshot.modulePlan?.sourceMemoryIds || [])];
-        if (!failed && modulePlanOpen(snapshot.modulePlan) && typeof io.resumeModule === 'function') {
-            const resumed = await io.resumeModule(snapshot);
-            const resumedPlan = resumed?.snapshot?.modulePlan;
-            const finished = resumed
-                && !modulePlanOpen(resumedPlan)
-                && resumed.action !== 'achievement-pending'
-                && resumed.action !== 'failed'
-                && resumed.action !== 'queued'
-                && resumed.action !== 'hold';
-            if (finished) {
-                return { action: resumed.action || 'reveal', moduleRequest: true, snapshot: resumed.snapshot, sourceMemoryIds };
-            }
-        }
-        return {
-            action: due ? 'queued' : 'hold',
-            moduleRequest: false,
-            sourceMemoryIds,
-        };
+    if (decision.action === 'hold') {
+        if (typeof io.resumeModule === 'function') await io.resumeModule(snapshot);
+        return { action: 'hold', moduleRequest: false, sourceMemoryIds: decision.sourceMemoryIds };
     }
     if (decision.action === 'reuse') return resumeTicket(snapshot, activeTicket(snapshot), input, io);
     if (decision.action !== 'arm' && decision.action !== 'due') return { action: decision.action, moduleRequest: false };

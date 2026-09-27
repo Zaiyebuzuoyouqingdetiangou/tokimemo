@@ -58,12 +58,16 @@ function mirrorModuleCss() {
     const style = document.createElement('style');
     style.id = 'rmt-floor-module-css';
     // 插件窗口的根规则（全屏 fixed、100vw、去外边距）也会落到楼层壳上，壳自己的尺寸放在最后压住。
+    // r84.165：r84.164 在 floorShellCss 里去掉的 70vh 内部滚动和 640px 展开宽度，被这里带 !important 的尾部规则盖回去了；
+    // 改在这里：拆开的信 640px（600px 以下占满），信里内容不再限高、宽内容只在信里横向滚动。
     style.textContent = `${copied}
 ${shell_state.floorShellCss()}
 ${roomCss}
 ${shell_state.promoteNarrowLayout(`${copied}\n${roomCss}`)}
 .rmt-floor-shell{position:relative!important;inset:auto!important;z-index:auto!important;height:auto!important;width:min(96%,420px)!important;max-width:100%!important;max-height:none!important;margin:8px auto 12px!important;display:block!important;padding:0!important;border:0!important;background:transparent!important;backdrop-filter:none!important}
-.rmt-floor-shell .rmt-floor-body{position:static!important;inset:auto!important;box-sizing:border-box!important;width:auto!important;max-width:100%!important;height:auto!important;max-height:70vh!important;margin:10px 0 0!important;padding:0!important;display:block!important;border:0!important;background:transparent!important;overflow:auto!important}`;
+.rmt-floor-shell:has(.rmt-heart-letter-paper:not([hidden])){width:min(96%,640px)!important}
+@media (max-width:600px){.rmt-floor-shell,.rmt-floor-shell:has(.rmt-heart-letter-paper:not([hidden])){width:100%!important}}
+.rmt-floor-shell .rmt-floor-body{position:static!important;inset:auto!important;box-sizing:border-box!important;width:auto!important;max-width:100%!important;height:auto!important;max-height:none!important;margin:10px 0 0!important;padding:0!important;display:block!important;border:0!important;background:transparent!important;overflow-x:auto!important;overflow-y:visible!important}`;
     document.head?.appendChild(style);
 }
 
@@ -182,10 +186,14 @@ function viewFor(context) {
     });
 }
 
-function envelopeArt() {
+function envelopeSkin() {
     let skin = 'pink';
     try { skin = core_settings.getPluginSettings().heartEnvelopeSkin; } catch { skin = 'pink'; }
-    return ui_heartEnvelope.heartEnvelopeSvg(skin);
+    return ui_heartEnvelope.heartEnvelopeId(skin);
+}
+
+function envelopeArt() {
+    return ui_heartEnvelope.heartEnvelopeSvg(envelopeSkin());
 }
 
 function markup(view) {
@@ -195,12 +203,18 @@ function markup(view) {
             : '';
         return `<p class="rmt-floor-pace" data-rmt-floor-pace><span>留忆</span><b>${core_text.esc(view.detail)}</b>${gap}</p>`;
     }
-    const repair = '';
-    const complete = (view.canComplete || view.canRepairAchievement)
+    const repair = view.canRepairAchievement
+        ? '<button type="button" class="rmt-btn" data-rmt-floor-achievement>补成就</button>'
+        : '';
+    const complete = view.canComplete
         ? '<button type="button" class="rmt-btn" data-rmt-floor-complete>补全</button>'
         : '';
-    const redo = '';
-    const retry = '';
+    const redo = view.canRedo
+        ? '<button type="button" class="rmt-btn" data-rmt-floor-redo>重试</button>'
+        : '';
+    const retry = view.canRetry
+        ? '<button type="button" class="rmt-btn" data-rmt-floor-retry>重试</button>'
+        : '';
     const actions = repair || complete || redo || retry ? `<div class="rmt-heart-letter-actions">${repair}${complete}${redo}${retry}</div>` : '';
     const revealPaper = view.phase === 'reveal' && view.showReveal;
     const writing = view.phase === 'generating' || view.phase === 'planning';
@@ -222,7 +236,8 @@ function markup(view) {
         : `<button type="button" class="rmt-heart-letter-seal" data-rmt-letter-open aria-label="${esc(revealPaper ? '拆开这封信' : view.detail || '回忆')}">
             ${envelopeArt()}<span class="rmt-letter-seal-text"><b>${revealPaper ? '你获得了一份回忆' : writing ? '回忆正在写' : esc(view.title || moduleTitle)}</b><small data-rmt-letter-detail>${esc(revealPaper ? `${moduleTitle} · 轻点拆信` : (view.detail || (writing ? '正在生成中' : '')))}</small></span>
         </button>`;
-    return `<article class="rmt-heart-letter${writing ? ' is-writing' : ''}${view.compact ? ' is-compact' : ''}">
+    // r84.164：提示条、信纸的颜色跟着设置里选的信封走。
+    return `<article class="rmt-heart-letter${writing ? ' is-writing' : ''}${view.compact ? ' is-compact' : ''}" data-rmt-envelope="${esc(envelopeSkin())}">
         ${seal}
         <div class="rmt-heart-letter-paper" data-rmt-letter-paper hidden>
             ${paper}
@@ -250,7 +265,7 @@ function watchStall(view, context) {
     });
     stallState = { signature: next.signature, since: next.since };
     if (next.stalled) {
-        const detail = '90 秒没有新的进度。可以补全这一抽没写完的部分。';
+        const detail = '90 秒没有新的进度。可以补全没写完的部分，或再试一次。';
         if (!stallNoted) {
             stallNoted = true;
             ui_taskCenter.noteAutoMemoryFloorFailure({ label: view.moduleTitle || '自动留忆', detail });
@@ -268,7 +283,7 @@ function watchStall(view, context) {
     if (view.phase === 'failed') {
         ui_taskCenter.noteAutoMemoryFloorFailure({
             label: view.moduleTitle || '自动留忆',
-            detail: view.detail || '可以补全这一抽没写完的部分。',
+            detail: view.detail || '可以补全没写完的部分，或再试一次。',
         });
     }
     return view;
@@ -343,7 +358,7 @@ function paintHost(host, view) {
     const body = host.querySelector('[data-rmt-floor-body]');
     const contentOpen = view.phase === 'reveal' && (host.dataset.rmtRead === view.revealId || body?.dataset?.rmtLetterRead === '1');
     view.contentOpen = contentOpen;
-    const face = `${view.compact ? 'strip' : 'envelope'}|${view.opened ? 'opened' : ''}`;
+    const face = `${view.compact ? 'strip' : 'envelope'}|${view.opened ? 'opened' : ''}|${envelopeSkin()}`;
     const sameLetter = host.dataset.rmtPhase === view.phase && host.dataset.rmtReveal === view.revealId && host.dataset.rmtPace === (view.phase === 'pace' ? view.detail : '') && host.dataset.rmtOpen === (contentOpen ? '1' : '') && host.dataset.rmtFace === face;
     host.dataset.rmtFace = face;
     host.dataset.rmtPhase = view.phase;
@@ -407,7 +422,7 @@ function paint(context) {
         const shown = globalThis.toastr?.[toast.level]?.(toast.message, toast.title, options);
         const node = shown?.[0] || shown;
         if (node?.style) {
-            try { core_theme.applyThemeToElement(node, core_settings.getPluginSettings(context)); } catch { /* 取不到主题时保留原生颜色。 */ }
+            try { themeToast(node, core_settings.getPluginSettings(context)); } catch { /* 取不到主题时保留原生颜色。 */ }
         }
     }
     ensureCss();
@@ -437,6 +452,23 @@ function paint(context) {
     });
     try { ui_taskCenter.syncLiveTaskStrip(); } catch { /* 任务条刷新失败时，楼层下面的状态仍保留。 */ }
     queueAutomaticRepair(live);
+}
+
+// r84.164：弹出提示跟随心迹回廊的主题。颜色直接写成带 important 的行内样式，
+// 酒馆或美化主题给 toast 写的颜色（包括 !important）都盖不过它。
+function themeToast(node, settings) {
+    const { palette } = core_theme.resolveThemePalette(settings);
+    core_theme.applyThemeToElement(node, settings);
+    const set = (name, value) => node.style.setProperty(name, value, 'important');
+    set('background-color', palette.surface);
+    set('background-image', 'none');
+    set('color', palette.text);
+    set('border-left', `4px solid ${palette.accent}`);
+    set('padding-left', '15px');
+    set('opacity', '1');
+    for (const part of node.querySelectorAll('.toast-title,.toast-message')) {
+        part.style.setProperty('color', palette.text, 'important');
+    }
 }
 
 function queueAutomaticRepair(view) {
@@ -502,8 +534,7 @@ function letterIdentity() {
     let context = null;
     try { context = core_context.getContext(); } catch { context = null; }
     const userFile = archive_avatars.currentUserAvatar(context);
-    const userAvatar = archive_avatars.currentPersonaAvatarUrl(context)
-        || (userFile ? archive_avatars.personaAvatarUrl(userFile, context) : '');
+    const userAvatar = userFile ? archive_avatars.personaAvatarUrl(userFile, context) : '';
     let charAvatar = '';
     try {
         const file = archive_snapshots.currentCharacterAvatar(context);
@@ -517,7 +548,7 @@ function letterIdentity() {
     };
 }
 
-const EMPTY_ROUND = '<p class="rmt-floor-note">这一轮写完了，但是没有新的段落。</p><div class="rmt-heart-letter-actions"><button type="button" class="rmt-btn" data-rmt-floor-complete>补全</button></div>';
+const EMPTY_ROUND = '<p class="rmt-floor-note">这一轮写完了，但是没有新的段落。</p><div class="rmt-heart-letter-actions"><button type="button" class="rmt-btn" data-rmt-floor-complete>补全</button><button type="button" class="rmt-btn" data-rmt-floor-redo>重试</button></div>';
 
 function writeRound(body, moduleId, revealId) {
     const increment = incrementFor(moduleId, revealId);
@@ -620,7 +651,7 @@ function onClick(event) {
         event.preventDefault();
         event.stopPropagation();
         redo.disabled = true;
-        watchFloorAction(auto_memory_scheduler.completeFloorRound(), '等这楼正文写完，再补这一页。').catch(error => {
+        watchFloorAction(auto_memory_scheduler.retryFloorRound(), '等这楼正文写完，再重写这一页。').catch(error => {
             console.warn('[HeartbeatMemories] floor redo skipped', core_text.safeErrorDiagnostic(error));
         }).finally(() => { redo.disabled = false; sync(); });
         return;
@@ -630,7 +661,7 @@ function onClick(event) {
         event.preventDefault();
         event.stopPropagation();
         retry.disabled = true;
-        watchFloorAction(auto_memory_scheduler.completeFloorRound(), '等这楼正文写完，再补这一页。').catch(error => {
+        watchFloorAction(auto_memory_scheduler.resumeFloorPlan(), '等这楼正文写完，再重写这一页。').catch(error => {
             console.warn('[HeartbeatMemories] floor retry skipped', core_text.safeErrorDiagnostic(error));
         }).finally(() => { retry.disabled = false; sync(); });
         return;

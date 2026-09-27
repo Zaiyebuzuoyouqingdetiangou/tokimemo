@@ -1,0 +1,11 @@
+<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>r84.83 letter and room visual review</title>
+<style>body{margin:24px;background:#f7f4fa;color:#423c4d;font:16px system-ui}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:20px}article{background:white;border:1px solid #e3d8df;border-radius:18px;padding:18px}svg{width:100%;height:auto}.rmt-interior{position:relative;--rmt-interior-wood:#b5a088;--rmt-interior-line:#6e6057;--rmt-interior-paper:#f6eee2;--rmt-interior-fabric:#a5adc2;--rmt-interior-glass:#b6d2d9;--rmt-interior-wall:#e2ddd6;--rmt-interior-backwall:#efebe3;--rmt-interior-floor:#c8b6a2}.rmt-interior-hotspot{position:absolute;transform:translate(-50%,-50%);border:1px solid #ccbaca;border-radius:10px;background:#fff9;padding:6px;max-width:100px}.rmt-interior-hotspot b{display:block;font-size:10px}.rmt-letter-illustration{max-height:330px}</style>
+<h1>信中场景与房间空间</h1><p>本地 SVG，示例内容，不调用模型。</p><div id="letters" class="grid"></div><h2>各个空间</h2><div id="rooms" class="grid"></div>
+<script type="module">
+import {render} from '../src/core/letterIllustrationV2.js';import {roomInteriorHtml} from '../src/ui/roomInterior.js';
+const facts=[{kind:'hairLength',value:'short',evidence:'黑色短发'},{kind:'hairColor',value:'black',evidence:'黑色短发'},{kind:'eyeColor',value:'amber',evidence:'琥珀色眼睛'}];
+const letters=[['没有发型资料','音乐响起，琴房的钢琴还温热。',facts.slice(2)],['在音像店挑唱片','街角音像店放着音乐，挑了唱片。',facts],['琴房练习','在琴房的钢琴前演奏音乐。',facts],['吉他旋律','抱起吉他唱歌。',facts]];
+document.querySelector('#letters').innerHTML=letters.map(([title,evidence,visualFacts],i)=>'<article><h3>'+title+'</h3>'+render({version:2,characterName:'岚',focus:'person',visualFacts,scene:{kind:'music',evidence}},{idPrefix:'test'+i})+'</article>').join('');
+const spaces=[['卧室',['单人床','床头书柜']],['老阳台',['老式山地自行车','晾衣架上的黑T恤']],['琴房兼书房练习室',['钢琴','木吉他','书柜']],['客厅',['沙发','茶几']],['厨房',['陶碗','杯子']],['庭院',['草垫','石椅']]];
+document.querySelector('#rooms').innerHTML=spaces.map(([label,items])=>'<article><h3>'+label+'</h3>'+roomInteriorHtml(items.map((label,i)=>({id:'o'+i,number:i+1,item:{label},visualKind:label.includes('床')?'bed':label==='茶几'?'table':label==='杯子'?'cup':'other'})),{space:{label}})+'</article>').join('');
+</script>

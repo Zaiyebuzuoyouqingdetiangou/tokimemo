@@ -33,22 +33,28 @@ export function floorShellCss() {
 .rmt-letter-seal-text{display:grid;gap:2px;min-width:0;flex:1}
 .rmt-letter-seal-text b{font-size:14px;line-height:1.4;font-weight:650;color:#5c463c}
 .rmt-heart-letter.is-compact{width:min(100%,420px)}
-.rmt-heart-letter-strip{gap:8px;padding:6px 14px;border:1px solid var(--rmt-theme-border);border-radius:999px;background:var(--rmt-theme-soft)}
+.rmt-heart-letter-strip{gap:8px;padding:6px 14px;border:1px solid var(--rmt-letter-border);border-radius:999px;background:var(--rmt-letter-soft)}
 .rmt-heart-letter-strip .rmt-envelope{flex:0 0 26px;width:26px;filter:none}
 .rmt-heart-letter-strip .rmt-letter-seal-text{grid-template-columns:auto minmax(0,1fr);align-items:baseline;gap:6px}
 .rmt-heart-letter-strip .rmt-letter-seal-text b{font-size:13px;white-space:nowrap}
 .rmt-heart-letter-strip small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.rmt-heart-letter-strip em{flex:0 0 auto;font-style:normal;font-size:12px;color:var(--rmt-theme-accent-ink)}
+.rmt-heart-letter-strip em{flex:0 0 auto;font-style:normal;font-size:12px;color:var(--rmt-letter-ink)}
 .rmt-heart-letter-strip.is-opened{background:var(--rmt-theme-surface-solid)}
 .rmt-heart-letter-strip.is-opened b,.rmt-heart-letter-strip.is-opened em{color:var(--rmt-theme-muted)}
-.rmt-letter-dot{flex:0 0 8px;width:8px;height:8px;border-radius:50%;background:var(--rmt-theme-accent-ink)}
+.rmt-letter-dot{flex:0 0 8px;width:8px;height:8px;border-radius:50%;background:var(--rmt-letter-accent)}
 .rmt-heart-letter-seal small{color:#8d6d78;font-size:12px;line-height:1.4}
-.rmt-heart-letter-paper .rmt-envelope{display:block;width:min(100%,120px);height:auto}
+.rmt-envelope{display:block;width:min(100%,240px);height:auto;filter:drop-shadow(0 12px 16px rgba(90,24,48,.16))}
 .rmt-heart-letter.is-writing .rmt-heart-letter-seal{display:flex!important;cursor:default}
 .rmt-heart-letter.is-writing .rmt-heart-letter-paper{display:none!important}
-.rmt-heart-letter-paper{margin-top:8px;min-width:0;height:auto;max-height:none;overflow:visible;padding:14px 16px 12px;border:1px solid var(--rmt-theme-border);border-radius:14px;background:var(--rmt-theme-soft);color:var(--rmt-theme-text)}
+.rmt-heart-letter-paper{margin-top:8px;min-width:0;height:auto;max-height:none;overflow:visible;padding:14px 16px 12px;border:1px solid var(--rmt-letter-border);border-radius:14px;background:var(--rmt-letter-soft);color:var(--rmt-theme-text);box-sizing:border-box;max-width:100%}
 .rmt-letter-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 0 8px}
-.rmt-letter-badge{display:inline-block;padding:2px 10px;border-radius:999px;background:var(--rmt-theme-wash);color:var(--rmt-theme-accent-ink);font-size:12px;line-height:1.6}
+.rmt-letter-badge{display:inline-block;padding:2px 10px;border-radius:999px;background:var(--rmt-letter-badge);color:var(--rmt-letter-ink);font-size:12px;line-height:1.6}
+.rmt-heart-letter{--rmt-letter-accent:#d64578;--rmt-letter-soft:#fff2f5;--rmt-letter-border:#f3b4c8;--rmt-letter-ink:#8a2a4c;--rmt-letter-badge:#fde0ea}
+.rmt-heart-letter[data-rmt-envelope="wax"]{--rmt-letter-accent:#a33b3b;--rmt-letter-soft:#fbf6ee;--rmt-letter-border:#e7d3b4;--rmt-letter-ink:#6e2626;--rmt-letter-badge:#f4e3d0}
+.rmt-heart-letter[data-rmt-envelope="night"]{--rmt-letter-accent:#2a3f6e;--rmt-letter-soft:#eef1f8;--rmt-letter-border:#b9c4dc;--rmt-letter-ink:#1c2e52;--rmt-letter-badge:#dde3f0}
+.rmt-heart-letter[data-rmt-envelope="sakura"]{--rmt-letter-accent:#e56b92;--rmt-letter-soft:#fff7f9;--rmt-letter-border:#f7d7e2;--rmt-letter-ink:#8f3556;--rmt-letter-badge:#fbe3eb}
+.rmt-heart-letter[data-rmt-envelope="airmail"]{--rmt-letter-accent:#d64545;--rmt-letter-soft:#fffdf8;--rmt-letter-border:#c9bbaa;--rmt-letter-ink:#23427e;--rmt-letter-badge:#e6ecf7}
+.rmt-heart-letter[data-rmt-envelope="wash"]{--rmt-letter-accent:#9a5bb0;--rmt-letter-soft:#f9f1fb;--rmt-letter-border:#e5d2f4;--rmt-letter-ink:#6b3f7a;--rmt-letter-badge:#f0e2f6}
 .rmt-letter-buttons{display:flex;flex-wrap:wrap;gap:8px;margin:2px 0 0}
 #toast-container>.toast.rmt-heart-toast{background-color:var(--rmt-theme-surface-solid,#fffdf8);background-image:none;padding-left:15px;border-left:4px solid var(--rmt-theme-accent,#e99ab9);color:var(--rmt-theme-text,#5c463c);opacity:1}
 #toast-container>.toast.rmt-heart-toast .toast-title,#toast-container>.toast.rmt-heart-toast .toast-message{color:var(--rmt-theme-text,#5c463c)}
@@ -56,7 +62,12 @@ export function floorShellCss() {
 .rmt-heart-letter-paper [data-rmt-letter-achievement]{font-size:18px;line-height:1.5}
 .rmt-heart-letter-close{margin:0}
 .rmt-heart-letter .rmt-letter-piece h3{margin:16px 0 8px;font-size:16px}
-.rmt-heart-letter .rmt-floor-body{display:block;height:auto;max-height:70vh;max-width:100%;min-width:0;min-height:0;margin-top:10px;overflow:auto}
+.rmt-heart-letter .rmt-floor-body{display:block;height:auto;max-height:none;max-width:100%;min-width:0;min-height:0;margin-top:10px;overflow-x:auto;overflow-y:visible;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain}
+.rmt-heart-letter .rmt-floor-body :is(img,video,canvas,svg,iframe){max-width:100%;height:auto}
+.rmt-heart-letter .rmt-floor-body :is(p,li,dd,blockquote,h1,h2,h3,h4,figcaption){overflow-wrap:anywhere}
+.rmt-heart-letter .rmt-floor-body pre{white-space:pre-wrap;overflow-wrap:anywhere}
+.rmt-heart-letter .rmt-floor-body .rmt-memory-scene{min-height:0}
+@media (max-width:600px){.rmt-floor-shell{width:100%}.rmt-heart-letter:has(.rmt-heart-letter-paper:not([hidden])){width:100%}.rmt-heart-letter-paper{padding:12px 12px 10px}.rmt-letter-buttons .rmt-btn{flex:1 1 auto}}
 .rmt-heart-letter .rmt-floor-note{margin:0 0 10px;font-size:15px;line-height:1.7}
 .rmt-heart-letter .rmt-theme-song,.rmt-heart-letter .rmt-letter-song{display:block;max-width:100%;margin:0;color:var(--rmt-theme-text)}
 .rmt-heart-letter .rmt-letter-song-sheet{margin:0 0 16px;padding:0;border:0;background:transparent}

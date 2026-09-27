@@ -196,15 +196,6 @@ export function archiveActionAfterChoice({ asked = 'keep', rebuild = false, doAr
     return doArchive === true ? 'create' : 'keep';
 }
 
-function duePace(intervalFloors, floor) {
-    const everyFloor = intervalFloors === 1;
-    if (!Number.isSafeInteger(floor) || floor < 0) return { lastCompletedFloor: null, nextDueFloor: null };
-    return {
-        lastCompletedFloor: everyFloor && floor > 0 ? floor - 1 : floor,
-        nextDueFloor: everyFloor && floor > 0 ? floor : floor + intervalFloors,
-    };
-}
-
 export function pacePatch(chatMetadata, { intervalFloors, floor } = {}, now = 0) {
     const existing = auto_memory_plan.readAutoMemoryMetadata(chatMetadata);
     if (!existing?.plan) return { changed: false, snapshot: existing, message: '' };
@@ -212,10 +203,7 @@ export function pacePatch(chatMetadata, { intervalFloors, floor } = {}, now = 0)
     if (!interval.ok) return { changed: false, snapshot: existing, message: interval.message };
     const updatedAt = Number.isSafeInteger(now) && now > existing.plan.updatedAt ? now : existing.plan.updatedAt + 1;
     const armed = existing.plan.enabled === true && Number.isSafeInteger(floor) && floor >= 0;
-    const pace = armed ? duePace(interval.intervalFloors, floor) : {
-        lastCompletedFloor: existing.plan.lastCompletedFloor,
-        nextDueFloor: existing.plan.nextDueFloor,
-    };
+    const everyFloor = interval.intervalFloors === 1;
     return {
         changed: true,
         message: '',
@@ -223,8 +211,10 @@ export function pacePatch(chatMetadata, { intervalFloors, floor } = {}, now = 0)
             plan: auto_memory_plan.parseAutoMemoryPlan({
                 ...existing.plan,
                 intervalFloors: interval.intervalFloors,
-                lastCompletedFloor: pace.lastCompletedFloor,
-                nextDueFloor: pace.nextDueFloor,
+                lastCompletedFloor: !armed ? existing.plan.lastCompletedFloor
+                    : everyFloor && floor > 0 ? floor - 1 : floor,
+                nextDueFloor: !armed ? existing.plan.nextDueFloor
+                    : everyFloor && floor > 0 ? floor : floor + interval.intervalFloors,
                 revision: existing.plan.revision + 1,
                 updatedAt,
             }),
@@ -258,7 +248,7 @@ export function wizardCloseAbortsTasks() {
     return false;
 }
 
-export function wizardCompletionSnapshot(chatMetadata, draft, now = 0, floor = null) {
+export function wizardCompletionSnapshot(chatMetadata, draft, now = 0) {
     const interval = normalizeInterval(draft?.intervalFloors);
     if (!interval.ok) throw auto_memory_plan.createAutoMemoryPlan({ intervalFloors: draft?.intervalFloors });
     const excludedModuleIds = uniqueDrawIds(draft?.excludedModuleIds);
@@ -266,21 +256,17 @@ export function wizardCompletionSnapshot(chatMetadata, draft, now = 0, floor = n
     const preferredModuleIds = uniqueDrawIds(draft?.preferredModuleIds).filter(id => !excludedModuleIds.includes(id));
     const updatedAt = Number.isSafeInteger(now) && now > 0 ? now : 0;
     if (!existing) {
-        const pace = duePace(interval.intervalFloors, floor);
         return auto_memory_plan.parseAutoMemorySnapshot({
             plan: auto_memory_plan.createAutoMemoryPlan({
                 enabled: true, intervalFloors: interval.intervalFloors, preferredModuleIds, excludedModuleIds,
-                lastCompletedFloor: pace.lastCompletedFloor, nextDueFloor: pace.nextDueFloor,
                 legacyPreferencesMigrated: true, updatedAt,
             }),
             revealRecords: [], drawTickets: [], modulePlan: null,
         });
     }
-    const pace = existing.plan.nextDueFloor == null ? duePace(interval.intervalFloors, floor) : null;
     return auto_memory_plan.parseAutoMemorySnapshot({
         plan: auto_memory_plan.parseAutoMemoryPlan({
             ...existing.plan, enabled: true, intervalFloors: interval.intervalFloors, preferredModuleIds, excludedModuleIds,
-            ...(pace ? { lastCompletedFloor: pace.lastCompletedFloor, nextDueFloor: pace.nextDueFloor } : {}),
             legacyPreferencesMigrated: true, revision: existing.plan.revision + 1,
             updatedAt: updatedAt > existing.plan.updatedAt ? updatedAt : existing.plan.updatedAt + 1,
         }),

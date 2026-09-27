@@ -2,7 +2,7 @@
 import * as core_constants from '../core/constants.js';
 
 const TITLES = Object.freeze({
-    pink: '粉色信封',
+    pink: '现在 粉色信封',
     wax: 'A 蜡封信',
     night: 'B 星夜信',
     sakura: 'C 樱花信',
@@ -102,22 +102,13 @@ export function heartEnvelopeSvg(skin) {
     return svg(BODIES[heartEnvelopeId(skin)]());
 }
 
-const SHORT = Object.freeze({
-    pink: '粉色',
-    wax: '蜡封',
-    night: '星夜',
-    sakura: '樱花',
-    airmail: '航空',
-    wash: '水彩',
-});
-
 export function heartEnvelopePickerHtml(selected) {
     const current = heartEnvelopeId(selected);
     const options = core_constants.HEART_ENVELOPE_SKINS.map(id => {
         const on = id === current;
-        return `<label class="rmt-envelope-option${on ? ' is-on' : ''}"><input type="radio" name="rmt-heart-envelope" data-rmt-heart-envelope value="${id}" ${on ? 'checked' : ''} aria-label="${TITLES[id]}"><span class="rmt-envelope-art">${heartEnvelopeSvg(id)}</span><span>${SHORT[id]}</span></label>`;
+        return `<label class="rmt-envelope-option${on ? ' is-on' : ''}"><input type="radio" name="rmt-heart-envelope" data-rmt-heart-envelope value="${id}" ${on ? 'checked' : ''}><span class="rmt-envelope-art">${heartEnvelopeSvg(id)}</span><span>${TITLES[id]}</span></label>`;
     }).join('');
-    return `<details class="rmt-envelope-picker"><summary><span class="rmt-envelope-current" data-rmt-envelope-current>${heartEnvelopeSvg(current)}</span><span><b>信封样式</b><small data-rmt-envelope-current-name>${heartEnvelopeTitle(current)}</small></span></summary><div class="rmt-envelope-options">${options}</div></details>`;
+    return `<details class="rmt-envelope-picker"><summary><span class="rmt-envelope-current" data-rmt-envelope-current>${heartEnvelopeSvg(current)}</span><span><b>信封样式</b><small data-rmt-envelope-current-name>${heartEnvelopeTitle(current)}</small></span></summary><p>点开再选。六款一样大，用在聊天里的那封信上。</p><div class="rmt-envelope-options">${options}</div></details>`;
 }
 
 export function paintEnvelopePicker(root, selected) {
@@ -133,37 +124,23 @@ export function paintEnvelopePicker(root, selected) {
     if (name) name.textContent = heartEnvelopeTitle(current);
 }
 
-export function ensureEnvelopePickerStyles() {
-    const id = 'rmt-envelope-picker-style';
-    if (globalThis.document?.getElementById?.(id)) return;
-    const style = globalThis.document?.createElement?.('style');
-    if (!style) return;
-    style.id = id;
-    const root = '#' + core_constants.SETTINGS_ID;
-    style.textContent = heartEnvelopePickerCss(root) + `
-${root} .rmt-auto-memory-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
-${root} .rmt-auto-memory-actions .menu_button{width:100%!important;min-height:32px!important;padding:6px 4px!important;font-size:12px}
-`;
-    globalThis.document.head.appendChild(style);
-}
-
 export function heartEnvelopePickerCss(root) {
     return `
-${root} .rmt-envelope-picker{border:1px solid var(--rmt-theme-border,#cbdce6);border-radius:12px;margin:0;padding:0;min-width:0;background:var(--rmt-theme-surface-solid,#fff);color:var(--rmt-theme-text,#334155)}
-${root} .rmt-envelope-picker>summary{display:flex;align-items:center;gap:8px;min-height:36px;padding:4px 8px;cursor:pointer;list-style:none}
+${root} .rmt-envelope-picker{border:1px solid var(--rmt-theme-border,#cbdce6);border-radius:16px;margin:0;padding:0;min-width:0;background:var(--rmt-theme-surface-solid,#fff);color:var(--rmt-theme-text,#334155)}
+${root} .rmt-envelope-picker>summary{display:flex;align-items:center;gap:12px;min-height:56px;padding:8px 12px;cursor:pointer;list-style:none}
 ${root} .rmt-envelope-picker>summary::-webkit-details-marker{display:none}
-${root} .rmt-envelope-current{flex:0 0 28px;width:28px}
-${root} .rmt-envelope-current .rmt-envelope{display:block;width:28px!important;max-width:28px;height:auto;filter:none}
-${root} .rmt-envelope-picker>summary b,${root} .rmt-envelope-picker>summary small{display:block;font-size:13px;line-height:1.3}
-${root} .rmt-envelope-picker>summary small{color:var(--rmt-theme-muted,#59677a);font-size:12px}
-${root} .rmt-envelope-picker:not([open]) .rmt-envelope-options{display:none}
-${root} .rmt-envelope-options{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:4px;padding:0 6px 6px}
-${root} .rmt-envelope-option{position:relative;display:grid;justify-items:center;align-content:start;gap:2px;margin:0;padding:4px 2px;border:1px solid var(--rmt-theme-border,#cbdce6);border-radius:8px;background:var(--rmt-theme-bg,#fff);color:inherit;cursor:pointer;min-height:0}
+${root} .rmt-envelope-current{flex:0 0 88px;width:88px}
+${root} .rmt-envelope-current .rmt-envelope{display:block;width:88px;height:auto}
+${root} .rmt-envelope-picker>summary b,${root} .rmt-envelope-picker>summary small{display:block;font-size:14px;line-height:1.4}
+${root} .rmt-envelope-picker>summary small{color:var(--rmt-theme-muted,#59677a);font-size:13px}
+${root} .rmt-envelope-picker p{margin:0;padding:0 12px 8px;font-size:13px;line-height:1.55;color:var(--rmt-theme-muted,#59677a)}
+${root} .rmt-envelope-picker:not([open]) .rmt-envelope-options,${root} .rmt-envelope-picker:not([open])>p{display:none}
+${root} .rmt-envelope-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;padding:0 12px 12px}
+${root} .rmt-envelope-option{position:relative;display:grid;justify-items:center;align-content:start;gap:6px;margin:0;padding:8px;border:1px solid var(--rmt-theme-border,#cbdce6);border-radius:12px;background:var(--rmt-theme-bg,#fff);color:inherit;cursor:pointer;min-height:44px}
 ${root} .rmt-envelope-option input{position:absolute;width:1px;height:1px;margin:0;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%)}
-${root} .rmt-envelope-option .rmt-envelope{display:block;width:36px!important;max-width:36px;height:auto;filter:none}
-${root} .rmt-envelope-option span:last-child{font-size:11px;line-height:1.2;text-align:center}
-${root} .rmt-envelope-option.is-on{outline:2px solid var(--rmt-theme-accent-ink,#5f5770);outline-offset:1px}
-${root} .rmt-envelope-picker>summary:focus-visible,${root} .rmt-envelope-option:has(input:focus-visible){outline:2px solid var(--rmt-theme-accent-ink,#5f5770);outline-offset:2px}
-@media(max-width:420px){${root} .rmt-envelope-options{grid-template-columns:repeat(3,minmax(0,1fr))}}
+${root} .rmt-envelope-option .rmt-envelope{display:block;width:100%;height:auto}
+${root} .rmt-envelope-option span:last-child{font-size:12px;line-height:1.35;text-align:center}
+${root} .rmt-envelope-option.is-on{outline:3px solid var(--rmt-theme-accent-ink,#5f5770);outline-offset:2px}
+${root} .rmt-envelope-picker>summary:focus-visible,${root} .rmt-envelope-option:has(input:focus-visible){outline:3px solid var(--rmt-theme-accent-ink,#5f5770);outline-offset:3px}
 `;
 }

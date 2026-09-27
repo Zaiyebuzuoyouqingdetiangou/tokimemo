@@ -9,11 +9,11 @@ export function archiveMemoryIds(memoryBank) {
     return (Array.isArray(memoryBank?.memories) ? memoryBank.memories : [])
         .map(item => core_text.normalizeText(item?.id, 40))
         .filter(Boolean)
-        .slice(0, core_constants.MAX_MEMORY_ITEMS);
+        .slice(0, core_constants.MAX_STORED_MEMORY_ITEMS);
 }
 
 export function collectSessionEvidenceIds(value, out = new Set(), seen = new WeakSet(), depth = 0) {
-    if (!value || typeof value !== 'object' || depth > 10 || out.size >= core_constants.MAX_MEMORY_ITEMS) return out;
+    if (!value || typeof value !== 'object' || depth > 10) return out;
     if (seen.has(value)) return out;
     if (value.legacyEvidenceUnverified === true) return out;
     seen.add(value);
@@ -23,7 +23,7 @@ export function collectSessionEvidenceIds(value, out = new Set(), seen = new Wea
     }
     for (const [key, item] of Object.entries(value)) {
         if (key === 'sourceMemoryIds' || key === 'sourceArchiveMemoryIds' || key === 'coveredMemoryIds') {
-            for (const id of core_text.cleanArray(item, core_constants.MAX_MEMORY_ITEMS, 40)) out.add(id);
+            for (const id of core_text.cleanArray(item, core_constants.MAX_STORED_MEMORY_ITEMS, 40)) out.add(id);
             continue;
         }
         if (key === 'generationMeta') continue;
@@ -58,7 +58,7 @@ export function incrementalPartRecord(session, part = 'mode') {
     const raw = session?.generationMeta?.parts?.[part];
     if (!raw || typeof raw !== 'object') return null;
     return {
-        coveredMemoryIds: core_text.cleanArray(raw.coveredMemoryIds, core_constants.MAX_MEMORY_ITEMS, 40),
+        coveredMemoryIds: core_text.cleanArray(raw.coveredMemoryIds, core_constants.MAX_STORED_MEMORY_ITEMS, 40),
         archiveRevision: core_text.normalizeText(raw.archiveRevision, 240),
         updatedAt: Math.max(0, Number(raw.updatedAt) || 0),
     };
@@ -104,7 +104,7 @@ export function incrementalArchiveMemoryIds(session, memoryBank, part = 'mode', 
 
 export function usesIncrementalMemoryId(referenceIds, sourceMemoryIds) {
     const allowed = new Set(core_text.cleanArray(sourceMemoryIds, core_constants.MAX_MEMORY_PROMPT_ITEMS, 40));
-    return core_text.cleanArray(referenceIds, core_constants.MAX_MEMORY_ITEMS, 40).some(id => allowed.has(id));
+    return core_text.cleanArray(referenceIds, core_constants.MAX_STORED_MEMORY_ITEMS, 40).some(id => allowed.has(id));
 }
 
 // Creative expansion is not an archive update. Reuse bounded, real evidence
@@ -153,7 +153,7 @@ export function stampIncrementalCoverage(session, previous, memoryBank, part, co
         ? incrementalCoveredMemoryIds(previous, memoryBank, part)
         : [];
     const consumed = previous
-        ? core_text.cleanArray(consumedMemoryIds, core_constants.MAX_MEMORY_ITEMS, 40)
+        ? core_text.cleanArray(consumedMemoryIds, core_constants.MAX_STORED_MEMORY_ITEMS, 40)
         : archiveMemoryIds(memoryBank);
     const coveredMemoryIds = [...new Set([...priorCovered, ...consumed])].filter(id => currentIds.has(id));
     session.generationMeta = {

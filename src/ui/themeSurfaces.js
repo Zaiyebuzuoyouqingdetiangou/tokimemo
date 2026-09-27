@@ -40,13 +40,10 @@ ${root} .rmt-portal-ready-dot{color:var(--rmt-theme-accent-ink)!important;backgr
 ${root} :is(.rmt-relations-mode,.rmt-heart){padding:20px!important;max-width:1100px;margin-inline:auto;min-width:0}
 ${root} :is(.rmt-relations-head,.rmt-profile-discoveries,.rmt-profile-discovery,.rmt-profile-worldline-note){padding:20px!important}
 ${root} .rmt-profile-discovery-empty{font-size:13px!important;line-height:1.7!important}
-${root} .rmt-heart-line{display:grid!important;grid-template-columns:44px minmax(0,1fr)!important;align-items:start;background:transparent!important;box-shadow:none!important;gap:12px;margin:18px 0}
+${root} .rmt-heart-line{background:transparent!important;box-shadow:none!important;gap:12px;margin:18px 0}
 ${root} .rmt-heart-line>div{background:var(--rmt-theme-surface-solid)!important;border:1px solid var(--rmt-theme-border);border-radius:6px 20px 20px 20px;padding:14px 18px!important;min-width:0}
-${root} .rmt-heart-line.user{display:grid!important;grid-template-columns:minmax(0,1fr) 44px!important}
-${root} .rmt-heart-line.user .rmt-heart-line-avatar{grid-column:2;grid-row:1}
-${root} .rmt-heart-line.user>div{grid-column:1;grid-row:1;background:var(--rmt-theme-soft)!important;border-radius:20px 6px 20px 20px;border-color:var(--rmt-theme-accent-alt)}
-${root} .rmt-heart-line-avatar{width:44px!important;height:44px!important;min-width:44px;border-radius:50%;overflow:hidden;display:grid!important}
-${root} .rmt-heart-line-avatar img{width:100%!important;height:100%!important;max-width:none!important;object-fit:cover!important;display:block}
+${root} .rmt-heart-line.user{flex-direction:row-reverse;justify-content:flex-start}
+${root} .rmt-heart-line.user>div{background:var(--rmt-theme-soft)!important;border-radius:20px 6px 20px 20px;border-color:var(--rmt-theme-accent-alt)}
 ${root} .rmt-heart-line p{margin:6px 0!important}
 ${root} .rmt-auto-rule{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:6px 12px;padding:12px 0;border-bottom:1px solid var(--rmt-theme-border)}
 ${root} .rmt-auto-rule>label{display:flex;align-items:center;gap:8px;min-width:0;min-height:44px;cursor:pointer}

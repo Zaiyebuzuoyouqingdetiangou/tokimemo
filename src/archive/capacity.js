@@ -1,5 +1,5 @@
-// Hot 240 + lock + cold archive 100. Rolling eviction is explicit and never
-// silently deletes a locked Mxxx. New memories keep new ids.
+// Formal archives retain every validated result by default. Explicit bounded
+// callers retain the legacy rolling policy; no default admission evicts old IDs.
 import * as core_constants from '../core/constants.js';
 import * as core_text from '../core/text.js';
 import * as story_chronology from '../core/storyChronology.js';
@@ -30,7 +30,7 @@ export function nextMemoryNumber(hot, cold = []) {
 
 export function canAdmitToHot(hot = []) {
     const list = Array.isArray(hot) ? hot : [];
-    if (list.length < core_constants.MAX_MEMORY_ITEMS) return true;
+    if (list.length < core_constants.MAX_STORED_MEMORY_ITEMS) return true;
     return list.some(item => !isMemoryLocked(item));
 }
 
@@ -59,7 +59,7 @@ export function pickUnlockedForEviction(hot, count) {
     return ranked.slice(0, Math.max(0, count)).map(row => row.item);
 }
 
-export function admitColdArchive(cold, incoming, { maxCold = core_constants.MAX_COLD_ARCHIVE_ITEMS } = {}) {
+export function admitColdArchive(cold, incoming, { maxCold = core_constants.MAX_STORED_MEMORY_ITEMS } = {}) {
     const next = [...(Array.isArray(cold) ? cold.map(item => structuredClone(item)) : []),
         ...(Array.isArray(incoming) ? incoming.map(item => structuredClone(item)) : [])];
     const deleted = [];
@@ -85,8 +85,8 @@ export function assignFreshMemoryIds(items, startNumber) {
 }
 
 export function admitArchiveMemories(existingHot, fresh, existingCold = [], {
-    maxHot = core_constants.MAX_MEMORY_ITEMS,
-    maxCold = core_constants.MAX_COLD_ARCHIVE_ITEMS,
+    maxHot = core_constants.MAX_STORED_MEMORY_ITEMS,
+    maxCold = core_constants.MAX_STORED_MEMORY_ITEMS,
     maxEvict = core_constants.MAX_ROLLING_EVICT_PER_BATCH,
 } = {}) {
     const hot = (Array.isArray(existingHot) ? existingHot : []).map(item => structuredClone(item));

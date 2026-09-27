@@ -1,42 +1,46 @@
 {
-  "version": "0.99.91",
-  "build": "0.99.91-r84.163-inbox-recovery",
-  "baseline": "User upload hearttrace-upload(20260927-054101).zip / r84.162",
-  "baselineZipSHA256": "02f2d4ff3ea510a9c736e960cacd4f84e2280ae32d1d67e58fa656bcbd6f2c38",
-  "syntaxFiles": 351,
+  "version": "0.99.93",
+  "build": "0.99.93-r84.169-lenticular",
+  "baseline": "Prior delivered r84.168 complete hearttrace-upload.zip",
+  "baselineZipSHA256": "3aa711d6acc61814c5aea174432f0783cf78bfe7802b57dc20d1415e34778e4b",
+  "syntaxFiles": 362,
   "syntaxExit": 0,
-  "bundleModules": 287,
-  "bundleSha256": "00eedfbdf834d5c94a72b8b689742230face43a6b89fad38f93fe3668a89151a",
+  "bundleModules": 291,
+  "bundleSha256": "549cea3bdae0952050e904498129cfec8a69ac3eed644ef6d355c538bdcc5ec6",
   "bundleRebuildIdentical": true,
-  "sourceSha256": "831ca972c8e341b1bc7ddd8bbfea8601edec3b15e590745bbc4c5e0b7ee3d856",
-  "tests": 279,
-  "pass": 279,
+  "sourceSha256": "cfdded0fee7fb904b7fa47ddd40c1817fdab7737b4bec056ea640611d6410782",
+  "tests": 321,
+  "pass": 321,
   "fail": 0,
   "skipped": 0,
   "regressionTests": 12,
-  "initialRegressionBeforeFix": {
-    "tests": 10,
-    "pass": 4,
-    "fail": 6
-  },
   "undefinedBindings": 0,
   "prematureReads": 0,
   "runtimeExports": 5,
   "undefinedNames": 0,
   "promptProof": {
-    "templateLiterals": 2821,
-    "promptContractDeclarations": 193,
-    "allUnchanged": true,
-    "declarationManifestSHA256": "e595c2dfd55bd12e6611e587881fcbc760bbafc9ed446bcb65898948f920e02d"
+    "allPromptsUnchanged": true,
+    "unchangedDeclarations": 193,
+    "unchangedGenerationAndModeFiles": 74,
+    "identicalRuntimeSamples": 144,
+    "providerCalls": 0,
+    "proofSHA256": "a2efaba1a7b71f836eb95f0b635f36641d5274258074b9e932e3744dcd65ad26"
   },
-  "addedRestrictions": [],
-  "testedEnvironment": "Node v24.19.0, existing runtime harness and actual installation bundle; simulated host/storage/provider boundaries, not a real SillyTavern or TT session.",
-  "refactorGuard": "Pass after reviewing intended inbox recovery/plan changes and snapshot; original r84.162 baseline retained, CSS unchanged.",
-  "finalZipVerification": "Performed after packaging; final ZIP hash and fresh-extraction results are in the separately delivered verification evidence.",
-  "unavailableChecks": [
-    "Real SillyTavern/TT/iPhone",
-    "Real user draft database and live provider",
-    "Independent reviewer/security service"
+  "addedQuantityLimits": [],
+  "pairingGuards": [
+    "Same chat/archive scope only; archive snapshot cards are read-only.",
+    "References bind source item prose and archive revision; changed/deleted sources need repicking.",
+    "Durable origin/write-fence and local edit-revision checks reject stale saves.",
+    "Existing past-lives data capacity/readability contract remains unchanged and is checked before pairing commits."
   ],
-  "githubWrite": "No successful remote write in this conversation."
+  "testedEnvironment": "Node v24.19.0; production bundle in VM with simulated SillyTavern persistence; happy-dom event checks with simulated permission events. Full suite 321/321.",
+  "refactorGuard": "Three existing source files changed, four runtime modules added; intentional card CSS added. Existing-source diff reviewed and current baseline refreshed; no historical baseline copy added.",
+  "finalZipVerification": "See separately delivered evidence: final complete ZIP extraction, per-file hash identity, deterministic rebuild, targeted tests and guard check.",
+  "unavailableChecks": [
+    "Rendered browser screenshots: browser download endpoint returned Site Unavailable.",
+    "Real SillyTavern/TT/iPhone and hardware orientation.",
+    "Real user image database or paid provider/model.",
+    "Independent reviewer/security service."
+  ],
+  "githubWrite": "Not pushed this feature round."
 }

@@ -27,45 +27,6 @@ export function userAvatarUrl(filename) {
     return file ? `/User%20Avatars/${encodeURIComponent(file)}` : '';
 }
 
-export function personaAvatarUrl(filename, context) {
-    const file = normalizeAvatarFile(filename);
-    if (!file) return '';
-    try {
-        const thumbnail = thumbnailPath(context?.getThumbnailUrl?.('persona', file));
-        if (thumbnail) return thumbnail;
-    } catch {}
-    return userAvatarUrl(file);
-}
-
-function safeMediaPath(value) {
-    if (typeof value !== 'string') return '';
-    const raw = value.trim();
-    if (!raw || raw.length > 2048 || /[\u0000-\u001f\u007f]/.test(raw)) return '';
-    if (/^(?:blob:|data:image\/)/i.test(raw)) return raw;
-    return thumbnailPath(raw);
-}
-
-export function currentPersonaAvatarUrl(context) {
-    const locked = currentUserAvatar(context);
-    if (locked) {
-        const url = personaAvatarUrl(locked, context);
-        if (url) return url;
-    }
-    try {
-        if (typeof getPersonaAvatarPath === 'function') {
-            const direct = safeMediaPath(getPersonaAvatarPath('current'));
-            if (direct) return direct;
-        }
-    } catch {}
-    try {
-        if (typeof getCurrentPersonaId === 'function') {
-            const url = personaAvatarUrl(getCurrentPersonaId(), context);
-            if (url) return url;
-        }
-    } catch {}
-    return '';
-}
-
 function thumbnailPath(value) {
     if (typeof value !== 'string' || value.length > 2048 || /[\u0000-\u001f\u007f\\]/.test(value)) return '';
     const raw = value.trim();
@@ -92,6 +53,18 @@ export function characterAvatarUrl(filename, context) {
         if (thumbnail) return thumbnail;
     } catch {}
     return `/characters/${encodeURIComponent(file)}`;
+}
+
+// r84.167：Persona 头像在 User Avatars 里，缩略图类型是 persona。以前按角色头像找（avatar / characters），
+// 永远找不到，图片坏掉后 iPhone 会显示成问号。
+export function personaAvatarUrl(filename, context) {
+    const file = normalizeAvatarFile(filename);
+    if (!file) return '';
+    try {
+        const thumbnail = thumbnailPath(context?.getThumbnailUrl?.('persona', file));
+        if (thumbnail) return thumbnail;
+    } catch {}
+    return userAvatarUrl(file);
 }
 
 export function archiveUserAvatar(memory, entry = null, metadata = null) {

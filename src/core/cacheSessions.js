@@ -1,5 +1,6 @@
 // C-3c（r84.100）：别名沿用 archive_repository，函数体一字不改；实际指向 core 层的桥，不再 import archive 层。
 import * as archive_repository from './archiveBridge.js';
+import * as lenticularCards from './lenticularCards.js';
 // C-3c（r84.100）：别名沿用 archive_snapshots，函数体一字不改；实际指向 core 层的桥，不再 import archive 层。
 import * as archive_snapshots from './archiveBridge.js';
 import * as core_constants from './constants.js';
@@ -148,6 +149,7 @@ export async function commitSessionMutation(mode, expectedChatId, expectedTaskOr
             if (options.completeGeneration === true && expectedTaskOrigin?.generationRecoveryDraftId) {
                 stagedSession = preserveProgressLocalState(stagedSession, generationDraftRecords(cache)[expectedTaskOrigin.generationRecoveryDraftId]?.result?.session);
             }
+            if (options.completeGeneration === true && !replacement) lenticularCards.preservePastLivesCards(stagedSession, cache[mode]);
             delete stagedSession[PARTICIPANT_REPLACEMENT_KEY];
             stagedSession.chatId = expectedChatId;
             stagedSession.archiveRevision = memoryBank.archiveRevision;
@@ -241,6 +243,7 @@ export async function commitDetachedArchiveSessionMutation(target, mode, expecte
             if (options.completeGeneration === true && expectedTaskOrigin?.generationRecoveryDraftId) {
                 stagedSession = preserveProgressLocalState(stagedSession, generationDraftRecords(cache)[expectedTaskOrigin.generationRecoveryDraftId]?.result?.session);
             }
+            if (options.completeGeneration === true && !replacement) lenticularCards.preservePastLivesCards(stagedSession, cache[mode]);
             delete stagedSession[PARTICIPANT_REPLACEMENT_KEY];
             stagedSession.chatId = chatId;
             stagedSession.archiveRevision = revision;

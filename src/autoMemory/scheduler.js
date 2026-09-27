@@ -105,12 +105,11 @@ function moduleLabel(moduleId) {
 
 function finishHostJob(job, result) {
     if (!job?.owned || !job.id) return;
+    const moduleId = result?.snapshot?.modulePlan?.moduleId || '';
     const action = result?.action || 'failed';
     const detail = action === 'noop'
         ? '这一楼没有新的档案，所以没有重抽。'
-            : action === 'queued'
-                ? '上一轮还在补，新的一轮排在后面。'
-                : action === 'hold'
+        : action === 'hold'
             ? '接着写没完成的一轮。'
             : action === 'reuse'
                 ? '接着写上一轮抽中的模块。'
@@ -119,6 +118,7 @@ function finishHostJob(job, result) {
                     : action === 'drawn'
                         ? '抽中了，这一轮已经写上。'
                         : '这一楼先记着。';
+    if (moduleId) ui_taskCenter.openAutoMemoryJob({ label: moduleLabel(moduleId), detail });
     ui_taskCenter.settleAutoMemoryJob(job.id, action === 'failed' ? 'failed' : 'done', detail);
 }
 
@@ -239,7 +239,7 @@ function gapMessages(context, note) {
     if (start < 1 || end < start) return [];
     const rows = chat_read_range.selectChatReadRange(context, { mode: 'range', start, end, includeHidden: false }).map(row => ({
         index: row.index,
-        role: row.message?.is_system === true ? 'system' : row.message?.is_user === true ? 'user' : 'char',
+        role: row.message?.is_user === true ? 'user' : 'char',
         name: core_text.normalizeText(row.message?.name, 120),
         text: String(row.message?.mes ?? '').replace(/\r\n?/g, '\n').replace(/\u0000/g, '').trim(),
     })).filter(item => item.text);
@@ -278,7 +278,6 @@ async function runHostRound() {
     const body = async claim => {
         if (handledFloors.get(scope) === floor || inflightScopes.has(scope)) return;
         inflightScopes.add(scope);
-        let kickNextDue = false;
         try {
             let snapshot;
             try { snapshot = auto_memory_plan.readAutoMemoryMetadata(metadata); }
@@ -300,7 +299,7 @@ async function runHostRound() {
                 ? ui_taskCenter.openAutoMemoryJob({
                     label: '自动留忆',
                     detail: continuing && due
-                        ? '上一轮还在补，新的一轮排在后面。'
+                        ? '上一轮没写完，这一楼到点了，重新抽。'
                         : continuing
                             ? '接着写没完成的一轮。'
                             : '这一楼到点了，正在抽签。',
@@ -341,21 +340,12 @@ async function runHostRound() {
                 startModule: next => runModule(next, persist, core_context.currentCharacterGuard()),
                 resumeModule: current => runModule(current, persist, core_context.currentCharacterGuard()),
             });
-            if (['arm', 'noop', 'drawn', 'reuse', 'failed', 'wait', 'queued', 'hold'].includes(result.action)) {
+            if (['arm', 'noop', 'drawn', 'reuse', 'failed', 'wait'].includes(result.action)) {
                 handledFloors.set(scope, floor);
-            }
-            const planClosed = !auto_memory_gate.modulePlanOpen(result?.snapshot?.modulePlan)
-                && result?.action !== 'achievement-pending'
-                && result?.action !== 'queued'
-                && result?.action !== 'hold';
-            if (planClosed && (result?.action === 'reveal' || result?.action === 'noop' || result?.action === 'drawn' || result?.action === 'saved')) {
-                handledFloors.delete(scope);
-                kickNextDue = true;
             }
             if (result.action === 'drawn' || result.action === 'reuse') stampDrawSource(context, result.drawId);
             ui_countdown.refreshAutoMemoryCountdown();
             finishHostJob(hostJob, result);
-            console.info('[HeartbeatMemories] AM-' + String(result?.action || 'none'), { floor });
             } catch (error) {
                 finishHostJob(hostJob, { action: 'failed' });
                 console.warn('[HeartbeatMemories] due floor skipped', core_text.safeErrorDiagnostic(error));
@@ -363,7 +353,6 @@ async function runHostRound() {
             }
         } finally {
             inflightScopes.delete(scope);
-            if (kickNextDue) scheduleSettledRound();
         }
     };
     const locks = globalThis.navigator?.locks;
@@ -473,27 +462,33 @@ function queueFloorRecovery(kind) {
     return { action: 'wait' };
 }
 
+async function retryDueFloor(context) {
+    const scope = core_context.chatScopeKey(context);
+    handledFloors.delete(scope);
+    await runHostRound();
+    return { action: 'due-retry' };
+}
+
 export async function completeFloorRound() {
     const context = core_context.currentCharacterGuard();
     if (redoInflight) return { action: 'busy' };
     if (storyStillWriting(context)) return queueFloorRecovery('complete');
+    const latest = core_settings.getPluginSettings().autoMemoryLatestFloor === true;
     const snapshot = auto_memory_plan.readAutoMemoryMetadata(context.chatMetadata);
-    const pending = auto_memory_redo.pendingReveal(snapshot);
-    let result = { action: 'idle' };
-    if (auto_memory_gate.modulePlanOpen(snapshot?.modulePlan)) result = await resumeFloorPlan();
-    else if (pending) result = await repairFloorAchievement(context);
-    if (result?.action === 'reveal' || result?.action === 'saved' || result?.action === 'drawn') {
-        handledFloors.delete(core_context.chatScopeKey(context));
-        scheduleSettledRound();
-    }
-    return result;
+    if (auto_memory_gate.shouldRetryDueRound(snapshot, currentPlanFloor(context, latest))) return retryDueFloor(context);
+    const rewritten = await rerollOwnedFloor(null);
+    if (rewritten) return { action: 'rerolled' };
+    if (snapshot?.modulePlan?.steps?.length) return resumeFloorPlan();
+    return regenerateCurrentMemory({ mode: 'keep' });
 }
 
 export async function retryFloorRound() {
     const context = core_context.currentCharacterGuard();
     if (redoInflight) return { action: 'busy' };
     if (storyStillWriting(context)) return queueFloorRecovery('redo');
+    const latest = core_settings.getPluginSettings().autoMemoryLatestFloor === true;
     const snapshot = auto_memory_plan.readAutoMemoryMetadata(context.chatMetadata);
+    if (auto_memory_gate.shouldRetryDueRound(snapshot, currentPlanFloor(context, latest))) return retryDueFloor(context);
     const rewritten = await rerollOwnedFloor(null);
     if (rewritten) return { action: 'rerolled' };
     return regenerateCurrentMemory({ mode: 'keep' });

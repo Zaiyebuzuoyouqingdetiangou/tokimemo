@@ -50,10 +50,11 @@ export function renderInbox() {
         view.filter === 'unread' ? !letter.readAt : view.filter === 'favorite' ? letter.favorite : true);
     const stamp = mailStamp;
     const tab = (id, label) => `<button type="button" class="rmt-btn" data-rmt-inbox="filter" data-rmt-inbox-id="${id}" aria-pressed="${view.filter === id}">${label}</button>`;
+    const drawing = selected ? letterArt.renderLetterIllustration(selected.illustration, { idPrefix: selected.id, label: '随信小画' }) : '';
     const detail = selected ? `<article class="rmt-mail-open">
         <div class="rmt-mail-actions"><button type="button" class="rmt-btn" data-rmt-inbox="back">← 收件箱</button><button type="button" class="rmt-btn" data-rmt-inbox="favorite" data-rmt-inbox-id="${text.esc(selected.id)}" aria-pressed="${selected.favorite}" ${readonly() ? 'disabled' : ''}>${selected.favorite ? '已收藏' : '收藏这封信'}</button></div>
         ${selected.travelSnapshot ? travelView.travelPostcardHtml(selected.travelSnapshot.location, selected.travelSnapshot, { recipient: session.recipient, closeAction: 'inbox-back' })
-            : `<div class="rmt-mail-paper" data-rmt-paper="${inboxPaperTone(selected)}"><header><small>${letterTypeLabel(selected.type)} · TO ${text.esc(session.recipient || '你')} · ${text.esc(stamp(selected.createdAt))}</small><h2>${text.esc(selected.title)}</h2></header><b>${text.esc(selected.greeting)}</b><p>${text.esc(selected.body)}</p><figure class="rmt-letter-illustration" style="margin:24px auto;text-align:center">${letterArt.renderLetterIllustration(selected.illustration, { idPrefix: selected.id, label: '随信小画' })}</figure><footer>${text.esc(selected.closing || inboxSenderLabel(selected, session))}</footer></div>`}
+            : `<div class="rmt-mail-paper" data-rmt-paper="${inboxPaperTone(selected)}"><header><small>${letterTypeLabel(selected.type)} · TO ${text.esc(session.recipient || '你')} · ${text.esc(stamp(selected.createdAt))}</small><h2>${text.esc(selected.title)}</h2></header><b>${text.esc(selected.greeting)}</b><p>${text.esc(selected.body)}</p>${drawing ? `<figure class="rmt-letter-illustration" style="margin:24px auto;text-align:center">${drawing}</figure>` : ''}<footer>${text.esc(selected.closing || inboxSenderLabel(selected, session))}</footer></div>`}
     </article>` : `<nav class="rmt-mail-filters" aria-label="筛选信件">${tab('all','全部')}${tab('unread','未读')}${tab('favorite','收藏')}${tab('gallery','随信画册 · ' + mailGallery.savedMailDrawings(session).length)}</nav>${view.filter === 'gallery' ? inboxGalleryHtml(session) : `<div class="rmt-mail-list">${letters.map(letter =>
         `<button type="button" class="rmt-mail-row ${letter.readAt ? '' : 'is-unread'}" data-rmt-inbox="read" data-rmt-inbox-id="${text.esc(letter.id)}"><span class="rmt-mail-seal" aria-hidden="true">${letter.type === 'travel' ? '▧' : '✉'}</span><span><small>${letterTypeLabel(letter.type)} · ${text.esc(inboxSenderLabel(letter, session))} · ${text.esc(stamp(letter.createdAt))}${letter.favorite ? ' · 收藏' : ''}${!letter.readAt ? ' · 未读' : ''}</small><b>${text.esc(letter.title)}</b><span>${text.esc(letter.body.slice(0, 90))}</span></span><i aria-hidden="true">›</i></button>`).join('') || '<div class="rmt-mail-empty"><span aria-hidden="true">✉</span><h3>信箱里留着位置</h3><p>可以收一封今天的来信，也可以把路线中的明信片收进来。</p></div>'}</div>`}`;
     overlay.bodyEl().innerHTML = `<section class="rmt-inbox"><header class="rmt-mail-header"><div><small>LETTERS TO YOU</small><h2>${text.esc(session.recipient || '你')}的邮箱</h2><p>${session.letters.length} 封来信 · ${session.letters.filter(item => !item.readAt).length} 封未读</p></div><div class="rmt-mail-actions"><button type="button" class="rmt-btn" data-rmt-inbox="receive" ${readonly() ? 'disabled' : ''}>收取新信</button><button type="button" class="rmt-btn" data-rmt-inbox="postcards" ${readonly() ? 'disabled' : ''}>收进路线明信片</button></div></header>${detail}</section>`;
@@ -61,35 +62,36 @@ export function renderInbox() {
 // State changes use the same durable CAS as model output. Navigation never calls saveSession.
 export function assertShownInboxTarget() {
     const shown = runtimeState.activeSession;
-    if (shown?.kind !== 'inbox' || runtimeState.activeMode !== 'inbox') throw new Error('邮箱已关闭。');
+    if (shown?.kind !== 'inbox' || runtimeState.activeMode !== 'inbox') throw text.safeUserError('邮箱已关闭。', 'RMT_INBOX_CLOSED');
     const snapshot = runtimeState.activeArchiveSnapshot;
     if (snapshot) {
         const source = cache.generationPageReadingSource(shown, 'inbox', snapshot.memory);
         if (shown.chatId !== snapshot.chatId || shown.archiveRevision !== snapshot.memory?.archiveRevision
-            || source.session.sender !== source.memoryBank?.characterName || source.session.recipient !== source.memoryBank?.userName) throw new Error('显示的邮箱与目标档案不一致。');
+            || source.session.sender !== source.memoryBank?.characterName || source.session.recipient !== source.memoryBank?.userName) throw text.safeUserError('显示的邮箱与目标档案不一致。', 'RMT_INBOX_TARGET_CHANGED');
         return;
     }
     const context = contextApi.currentCharacterGuard(), memory = repository.requireArchive(context);
     const source = cache.generationPageReadingSource(shown, 'inbox', memory);
     if (shown.chatId !== memory.chatId || shown.archiveRevision !== memory.archiveRevision
         || source.session.sender !== source.memoryBank.characterName || source.session.recipient !== source.memoryBank.userName
-        || (!source.source && shown.ownerKey && shown.ownerKey !== contextApi.currentCharacterRuntimeKey(context))) throw new Error('聊天或角色已切换，请重新打开对应邮箱。');
+        || (!source.source && !inbox.inboxOwnerMatchesContext(shown, context,
+            cache.loadSession('inbox', { context, memoryBank: memory, clone: true })))) throw text.safeUserError('聊天或角色已切换，请重新打开对应邮箱。', 'RMT_INBOX_TARGET_CHANGED');
 }
 export async function mutateInbox(mutator) {
     assertShownInboxTarget();
-    if (readonly()) throw new Error('这份邮箱正在只读查看。');
+    if (readonly()) throw text.safeUserError('这份邮箱正在只读查看。', 'RMT_INBOX_READ_ONLY');
     const lifecycle = runtimeState.runtimeLifecycleEpoch;
     const shown = runtimeState.activeSession;
     const shownScope = sessionScope(shown);
     const snapshot = runtimeState.activeArchiveSnapshot;
     let updated, writeOrigin = null;
-    if (shown?.kind !== 'inbox') throw new Error('邮箱已关闭。');
+    if (shown?.kind !== 'inbox') throw text.safeUserError('邮箱已关闭。', 'RMT_INBOX_CLOSED');
     if (snapshot) {
         const options = library.archiveTargetGenerationOptions(snapshot);
         const target = await options.revalidateArchiveTarget(options.archiveTarget);
         const reading = cache.generationPageReadingSource(shown, 'inbox', target.memory);
         if (shown.chatId !== target.chatId || shown.archiveRevision !== target.memory.archiveRevision
-            || reading.session.sender !== reading.memoryBank.characterName || reading.session.recipient !== reading.memoryBank.userName) throw new Error('显示的邮箱与目标档案不一致。');
+            || reading.session.sender !== reading.memoryBank.characterName || reading.session.recipient !== reading.memoryBank.userName) throw text.safeUserError('显示的邮箱与目标档案不一致。', 'RMT_INBOX_TARGET_CHANGED');
         // Capture the canonical cache fence, including an in-flight generation's fence.
         options.context.chatMetadata[constants.MEMORY_KEY] = target.memory;
         options.context.chatMetadata[constants.CACHE_KEY] = target.cache;
@@ -110,8 +112,9 @@ export async function mutateInbox(mutator) {
         const reading = cache.generationPageReadingSource(shown, 'inbox', memory);
         if (shown.chatId !== memory.chatId || shown.archiveRevision !== memory.archiveRevision
             || reading.session.sender !== reading.memoryBank.characterName || reading.session.recipient !== reading.memoryBank.userName
-            || (!reading.source && shown.ownerKey && shown.ownerKey !== contextApi.currentCharacterRuntimeKey(context)))
-            throw new Error('聊天或角色已切换，请重新打开对应邮箱。');
+            || (!reading.source && !inbox.inboxOwnerMatchesContext(shown, context,
+                cache.loadSession('inbox', { context, memoryBank: memory, clone: true }))))
+            throw text.safeUserError('聊天或角色已切换，请重新打开对应邮箱。', 'RMT_INBOX_TARGET_CHANGED');
         const origin = contextApi.captureTaskOrigin(context, memory.archiveRevision);
         writeOrigin = origin;
         updated = shown.readableProgress?.complete === false && shown.readableProgress.draftId
@@ -120,9 +123,9 @@ export async function mutateInbox(mutator) {
             : await cache.commitSessionMutation('inbox', memory.chatId, origin,
                 (latest, bank) => mutator(latest?.kind === 'inbox' ? latest : inbox.emptyInbox(bank, context),
                     cache.generationPageSourceMemory(latest, 'inbox', bank), cache.getCache(context)), inbox.emptyInbox(memory, context));
-        if (!updated) throw new Error('聊天或档案已经切换，本次操作没有写入。');
+        if (!updated) throw text.safeUserError('聊天或档案已经切换，本次操作没有写入。', 'RMT_INBOX_TARGET_CHANGED');
     }
-    if (!updated) throw new Error('未能确认这次邮箱操作已保存，原信件仍保留。');
+    if (!updated) throw text.safeUserError('未能确认这次邮箱操作已保存，原信件仍保留。', 'RMT_INBOX_SAVE_FAILED');
     if (runtimeState.activeMode === 'inbox' && shownScope === sessionScope(runtimeState.activeSession)
         && (snapshot ? runtimeState.activeArchiveSnapshot?.entryId === snapshot.entryId : !runtimeState.activeArchiveSnapshot && contextApi.isCurrentTaskOrigin(writeOrigin))) {
         runtimeState.activeSession = updated;

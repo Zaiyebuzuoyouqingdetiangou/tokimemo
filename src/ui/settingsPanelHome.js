@@ -658,9 +658,14 @@ function bindSettingsChange(panel, tagDraft, tagStatus, tagState) {
       return;
     }
     if (target.matches?.('[data-rmt-image-generation-provider]')) {
-      core_settings.updatePluginSettings({ imageGenerationProvider: target.value });
+      core_settings.updatePluginSettings({ imageGenerationProvider: target.value === 'chatu8-image' ? 'chatu8-image' : 'baibai-image' });
       refreshImageGenerationSettingsUi();
       generation_imageGeneration.refreshCgImageProviderBars();
+      return;
+    }
+    if (target.matches?.('[data-rmt-image-generation-fallback]')) {
+      core_settings.updatePluginSettings({ imageGenerationFallback: !!target.checked });
+      refreshImageGenerationSettingsUi();
       return;
     }
     if (target.matches?.('[data-rmt-tt-display]')) {

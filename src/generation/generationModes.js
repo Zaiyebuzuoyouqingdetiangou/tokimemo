@@ -229,12 +229,22 @@ async function generateModeOperation(mode, options = {}) {
     let roomSession = null;
     let focusObject = null;
     let previousSession = null;
+    const autoMemorySourceIds = () => (Array.isArray(options.sourceMemoryIds) ? options.sourceMemoryIds : []).filter(id => /^M\d{3,6}$/.test(id));
     const incrementalPart = mode === core_constants.MODE.HEART ? 'dialogues' : 'mode';
+    const autoMemoryHasFreshSources = (session = previousSession) => {
+        if (options.autoMemory !== true) return false;
+        const wanted = autoMemorySourceIds();
+        if (!wanted.length) return false;
+        const record = core_incremental.incrementalPartRecord(session, incrementalPart);
+        const covered = new Set(record?.coveredMemoryIds || []);
+        return wanted.some(id => !covered.has(id));
+    };
     const refreshableCalendar = mode === core_constants.MODE.CALENDAR;
     const refreshableRelations = mode === core_constants.MODE.RELATIONS || mode === core_constants.MODE.CABINET;
     let roomSchemaUpgrade = false;
     let allowPersonaExpansion = options.automatic !== true && [core_constants.MODE.ROOM, core_constants.MODE.ITEMS, core_constants.MODE.TRAVEL].includes(mode);
     const modeHasNoIncrementalWork = () => {
+        if (autoMemoryHasFreshSources()) return false;
         if (replacementTicket) return false;
         if (options.continueRecovery) return false;
         if (allowPersonaExpansion && previousSession) return false;
@@ -284,9 +294,13 @@ async function generateModeOperation(mode, options = {}) {
         recoveryExisting = core_cache.loadGenerationRecovery(mode, context, archiveTarget?.cache,
             { draftId: recoveryExisting.operation.sourceDraftId, pageId: recoveryExisting.pageId });
     }
+    if (recoveryExisting && options.autoMemory === true) {
+        const session = core_cache.loadSession(mode, { context, chatId: expectedChatId, memoryBank: memoryBank, clone: true });
+        if (autoMemoryHasFreshSources(session)) recoveryExisting = null;
+    }
     if (recoveryExisting) {
         if (replacementTicket && !options.continueRecovery) throw new Error('原分段草稿尚未保留到旧版本，本次没有重新请求。');
-        if (options.automatic) return { status: 'noop' };
+        if (options.automatic && !autoMemoryHasFreshSources()) return { status: 'noop' };
         if (recoveryExisting.operation?.kind && recoveryExisting.operation.kind !== 'mode') return continueSavedGeneration(mode,
             { ...options, draftId: recoveryExisting.draftId, pageId: recoveryExisting.pageId });
         if (!options.continueRecovery && !ui_overlay.confirmExplicitAction('继续未完成内容？', '这项还保留着上次的分段草稿。继续只补未完成部分，会使用文本生成额度；取消不会改动草稿或旧内容。', { destructive: false })) return;
