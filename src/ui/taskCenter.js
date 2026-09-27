@@ -462,6 +462,14 @@ function sameJob(left, right) {
     return !!leftLabel && !!rightLabel && (leftLabel === rightLabel || leftLabel.startsWith(rightLabel) || rightLabel.startsWith(leftLabel));
 }
 
+// r84.160：失败的记录可以「移除这条」。只移除任务中心里的这条记录；
+// 草稿（有自己的「放弃这份草稿」）、正式档案、自动留忆进度都不受影响。
+function dismissButton({ taskId = '', queueId = '', floorFailure = false } = {}) {
+    const attr = floorFailure ? 'data-rmt-floor-failure="1"'
+        : taskId ? `data-rmt-task-id="${core_text.esc(taskId)}"` : `data-rmt-queue-id="${core_text.esc(queueId)}"`;
+    return `<button type="button" class="rmt-btn" data-rmt-action="task-dismiss" ${attr}>移除这条</button>`;
+}
+
 function draftCards() {
     let drafts = [];
     try { drafts = core_cache.listGenerationDrafts(); }
@@ -647,7 +655,7 @@ function collectTaskCards() {
             draftId: record.draftId || '',
             detail: [row.chatCaption, row.progressText].filter(Boolean).join(' · '),
             at: Number(record.endedAt) || 0,
-            actions: `${retry}${secondStepButton(record, row.id)}${openAction({ ...record, id: row.id, label: row.label, outcome: record.outcome || state, phase: row.phase })}`,
+            actions: `${retry}${secondStepButton(record, row.id)}${openAction({ ...record, id: row.id, label: row.label, outcome: record.outcome || state, phase: row.phase })}${state === 'failed' ? dismissButton({ taskId: row.id }) : ''}`,
         });
     }
     for (const item of mine) {
@@ -661,13 +669,14 @@ function collectTaskCards() {
             draftId: item.draftId || '',
             detail: item.kind === 'auto-memory' ? (item.detail || '这一轮回忆') : item.kind === 'recovery' ? '自动重试未完成部分' : '当前聊天 · 串行队列',
             at: item.at || 0,
-            actions: item.kind === 'auto-memory'
+            actions: (item.kind === 'auto-memory'
                 ? (item.status === 'failed' ? '<button type="button" class="rmt-btn" data-rmt-action="task-floor-complete">补全没写完的部分</button><button type="button" class="rmt-btn" data-rmt-action="task-floor-retry">重试</button>' : '')
                 : item.status === 'failed'
                 ? `${failedRetryHtml(item.kind === 'recovery' || item.draftId
                     ? { kind: item.kind, mode: item.mode, pageId: item.pageId, draftId: item.draftId, label: item.label }
                     : { queueRoute: item.route, queueId: item.id })}${openAction({ id: '', mode: item.mode, pageId: item.pageId, label: item.label, outcome: item.status })}`
-                : item.status === 'done' ? openAction({ id: '', mode: item.mode, pageId: item.pageId, label: item.label, outcome: item.status }) : '',
+                : item.status === 'done' ? openAction({ id: '', mode: item.mode, pageId: item.pageId, label: item.label, outcome: item.status }) : '')
+                + (item.status === 'failed' ? dismissButton({ queueId: item.id }) : ''),
         });
     }
     pushMissingArchiveRecovery(cards);
@@ -677,7 +686,8 @@ function collectTaskCards() {
             label: floorFailure.label,
             detail: floorFailure.detail,
             at: floorFailure.at,
-            actions: '<button type="button" class="rmt-btn" data-rmt-action="task-floor-complete">补全没写完的部分</button><button type="button" class="rmt-btn" data-rmt-action="task-floor-retry">重试</button>',
+            actions: '<button type="button" class="rmt-btn" data-rmt-action="task-floor-complete">补全没写完的部分</button><button type="button" class="rmt-btn" data-rmt-action="task-floor-retry">重试</button>'
+                + dismissButton({ floorFailure: true }),
         });
     }
     return cards.sort((left, right) => (CARD_RANK[left.state] ?? 9) - (CARD_RANK[right.state] ?? 9) || right.at - left.at);
@@ -1027,6 +1037,19 @@ export function handleTaskCenterAction(action, actionEl) {
         item.attached = false;
         refreshTaskCenterView();
         void pumpQueue();
+        return;
+    }
+    if (action === 'task-dismiss') {
+        const taskId = actionEl?.dataset?.rmtTaskId || '', queueId = actionEl?.dataset?.rmtQueueId || '';
+        let removed = false;
+        if (actionEl?.dataset?.rmtFloorFailure) { removed = !!floorFailure; floorFailure = null; }
+        else if (taskId) removed = core_requestCoordinator.dismissFailedChatTask(taskId);
+        else if (queueId) {
+            const index = queue.findIndex(item => item.id === queueId && item.status === 'failed');
+            if (index >= 0) { queue.splice(index, 1); removed = true; }
+        }
+        refreshTaskCenterView();
+        if (removed) globalThis.toastr?.info?.('已移除这条失败记录。草稿、档案和自动留忆进度都没有动。', '心迹回廊');
         return;
     }
     if (action === 'task-clear-done') {

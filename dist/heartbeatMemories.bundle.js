@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 287
-// Source SHA-256: 6536a8733fbb2f8fe411913ecd03c8014890b2a95ed53fe32884a347ca16f476
+// Source SHA-256: 6c17562afd6e507e12972ee567fd18f1e43645dfe3669ae9bae01de27b732c66
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -30903,6 +30903,15 @@ function clearCompletedChatTasks() {
     return removed;
 }
 
+// r84.160：任务中心里失败的记录可以单独移除。只动这条页面内记录，不碰草稿、档案或自动留忆进度。
+function dismissFailedChatTask(id) {
+    const index = recentChatTasks.findIndex(row => row.id === String(id || '') && (row.outcome === 'failed' || row.phase === 'failed'));
+    if (index < 0) return false;
+    recentChatTasks.splice(index, 1);
+    try { refreshTaskCenter(); } catch {}
+    return true;
+}
+
 function cancelChatTask(id, reason = 'task-center') {
     const row = collectChatTaskRows().find(item => item.id === String(id || '') && item.running);
     if (!row) return { cancelled: 0, reason };
@@ -31271,6 +31280,7 @@ __m_core_requestTaskCenter_js.setTaskCenterRefresh = setTaskCenterRefresh;
 __m_core_requestTaskCenter_js.noteChatTaskPhase = noteChatTaskPhase;
 __m_core_requestTaskCenter_js.rememberStandaloneChatTask = rememberStandaloneChatTask;
 __m_core_requestTaskCenter_js.clearCompletedChatTasks = clearCompletedChatTasks;
+__m_core_requestTaskCenter_js.dismissFailedChatTask = dismissFailedChatTask;
 __m_core_requestTaskCenter_js.cancelChatTask = cancelChatTask;
 __m_core_requestTaskCenter_js.cancelBlockingTasksForScope = cancelBlockingTasksForScope;
 __m_core_requestTaskCenter_js.cancelCurrentChatBlockingTasks = cancelCurrentChatBlockingTasks;
@@ -31335,6 +31345,7 @@ const noteSecondStepOffer = split_requestTasks.noteSecondStepOffer;
 const rememberStandaloneChatTask = split_requestTaskCenter.rememberStandaloneChatTask;
 const settledChatTaskRecord = split_requestTasks.settledChatTaskRecord;
 const clearCompletedChatTasks = split_requestTaskCenter.clearCompletedChatTasks;
+const dismissFailedChatTask = split_requestTaskCenter.dismissFailedChatTask;
 const currentChatBlockingTasks = split_requestTasks.currentChatBlockingTasks;
 const cancelChatTask = split_requestTaskCenter.cancelChatTask;
 const cancelBlockingTasksForScope = split_requestTaskCenter.cancelBlockingTasksForScope;
@@ -31408,6 +31419,7 @@ __m_core_requestCoordinator_js.noteSecondStepOffer = noteSecondStepOffer;
 __m_core_requestCoordinator_js.rememberStandaloneChatTask = rememberStandaloneChatTask;
 __m_core_requestCoordinator_js.settledChatTaskRecord = settledChatTaskRecord;
 __m_core_requestCoordinator_js.clearCompletedChatTasks = clearCompletedChatTasks;
+__m_core_requestCoordinator_js.dismissFailedChatTask = dismissFailedChatTask;
 __m_core_requestCoordinator_js.currentChatBlockingTasks = currentChatBlockingTasks;
 __m_core_requestCoordinator_js.cancelChatTask = cancelChatTask;
 __m_core_requestCoordinator_js.cancelBlockingTasksForScope = cancelBlockingTasksForScope;
@@ -71777,7 +71789,7 @@ function overlayArchiveActions(actionEl, action) {
     if (action === 'travel-dialogue-prev') return ui_travelView.travelDialogueStep(-1);
     if (action === 'travel-dialogue-next') return ui_travelView.travelDialogueStep(1);
     if (action === 'travel-dialogue-replay') return ui_travelView.replayTravelDialogue();
-    if (action === 'tasks' || action === 'task-center-close' || action === 'task-cancel' || action === 'task-cancel-current' || action === 'task-open' || action === 'task-second-step' || action === 'task-queue-remove' || action === 'task-retry-queue' || action === 'task-clear-done' || action === 'task-retry-state' || action === 'task-floor-complete' || action === 'task-floor-retry' || action === 'task-archive-retry' || action === 'task-archive-restart' || action === 'queue-selected' || action === 'generate-together' || action === 'merged-repair' || action === 'merged-resave' || ['merged-discard', 'merged-new', 'merged-export', 'merged-export-legacy', 'merged-discard-legacy'].includes(action)) {
+    if (action === 'tasks' || action === 'task-center-close' || action === 'task-cancel' || action === 'task-cancel-current' || action === 'task-open' || action === 'task-second-step' || action === 'task-queue-remove' || action === 'task-retry-queue' || action === 'task-clear-done' || action === 'task-dismiss' || action === 'task-retry-state' || action === 'task-floor-complete' || action === 'task-floor-retry' || action === 'task-archive-retry' || action === 'task-archive-restart' || action === 'queue-selected' || action === 'generate-together' || action === 'merged-repair' || action === 'merged-resave' || ['merged-discard', 'merged-new', 'merged-export', 'merged-export-legacy', 'merged-discard-legacy'].includes(action)) {
         return ui_taskCenter.handleTaskCenterAction(action, actionEl);
     }
     if (action === 'close') return closeArchiveOverlayFromUser();
@@ -77807,6 +77819,14 @@ function sameJob(left, right) {
     return !!leftLabel && !!rightLabel && (leftLabel === rightLabel || leftLabel.startsWith(rightLabel) || rightLabel.startsWith(leftLabel));
 }
 
+// r84.160：失败的记录可以「移除这条」。只移除任务中心里的这条记录；
+// 草稿（有自己的「放弃这份草稿」）、正式档案、自动留忆进度都不受影响。
+function dismissButton({ taskId = '', queueId = '', floorFailure = false } = {}) {
+    const attr = floorFailure ? 'data-rmt-floor-failure="1"'
+        : taskId ? `data-rmt-task-id="${core_text.esc(taskId)}"` : `data-rmt-queue-id="${core_text.esc(queueId)}"`;
+    return `<button type="button" class="rmt-btn" data-rmt-action="task-dismiss" ${attr}>移除这条</button>`;
+}
+
 function draftCards() {
     let drafts = [];
     try { drafts = core_cache.listGenerationDrafts(); }
@@ -77992,7 +78012,7 @@ function collectTaskCards() {
             draftId: record.draftId || '',
             detail: [row.chatCaption, row.progressText].filter(Boolean).join(' · '),
             at: Number(record.endedAt) || 0,
-            actions: `${retry}${secondStepButton(record, row.id)}${openAction({ ...record, id: row.id, label: row.label, outcome: record.outcome || state, phase: row.phase })}`,
+            actions: `${retry}${secondStepButton(record, row.id)}${openAction({ ...record, id: row.id, label: row.label, outcome: record.outcome || state, phase: row.phase })}${state === 'failed' ? dismissButton({ taskId: row.id }) : ''}`,
         });
     }
     for (const item of mine) {
@@ -78006,13 +78026,14 @@ function collectTaskCards() {
             draftId: item.draftId || '',
             detail: item.kind === 'auto-memory' ? (item.detail || '这一轮回忆') : item.kind === 'recovery' ? '自动重试未完成部分' : '当前聊天 · 串行队列',
             at: item.at || 0,
-            actions: item.kind === 'auto-memory'
+            actions: (item.kind === 'auto-memory'
                 ? (item.status === 'failed' ? '<button type="button" class="rmt-btn" data-rmt-action="task-floor-complete">补全没写完的部分</button><button type="button" class="rmt-btn" data-rmt-action="task-floor-retry">重试</button>' : '')
                 : item.status === 'failed'
                 ? `${failedRetryHtml(item.kind === 'recovery' || item.draftId
                     ? { kind: item.kind, mode: item.mode, pageId: item.pageId, draftId: item.draftId, label: item.label }
                     : { queueRoute: item.route, queueId: item.id })}${openAction({ id: '', mode: item.mode, pageId: item.pageId, label: item.label, outcome: item.status })}`
-                : item.status === 'done' ? openAction({ id: '', mode: item.mode, pageId: item.pageId, label: item.label, outcome: item.status }) : '',
+                : item.status === 'done' ? openAction({ id: '', mode: item.mode, pageId: item.pageId, label: item.label, outcome: item.status }) : '')
+                + (item.status === 'failed' ? dismissButton({ queueId: item.id }) : ''),
         });
     }
     pushMissingArchiveRecovery(cards);
@@ -78022,7 +78043,8 @@ function collectTaskCards() {
             label: floorFailure.label,
             detail: floorFailure.detail,
             at: floorFailure.at,
-            actions: '<button type="button" class="rmt-btn" data-rmt-action="task-floor-complete">补全没写完的部分</button><button type="button" class="rmt-btn" data-rmt-action="task-floor-retry">重试</button>',
+            actions: '<button type="button" class="rmt-btn" data-rmt-action="task-floor-complete">补全没写完的部分</button><button type="button" class="rmt-btn" data-rmt-action="task-floor-retry">重试</button>'
+                + dismissButton({ floorFailure: true }),
         });
     }
     return cards.sort((left, right) => (CARD_RANK[left.state] ?? 9) - (CARD_RANK[right.state] ?? 9) || right.at - left.at);
@@ -78372,6 +78394,19 @@ function handleTaskCenterAction(action, actionEl) {
         item.attached = false;
         refreshTaskCenterView();
         void pumpQueue();
+        return;
+    }
+    if (action === 'task-dismiss') {
+        const taskId = actionEl?.dataset?.rmtTaskId || '', queueId = actionEl?.dataset?.rmtQueueId || '';
+        let removed = false;
+        if (actionEl?.dataset?.rmtFloorFailure) { removed = !!floorFailure; floorFailure = null; }
+        else if (taskId) removed = core_requestCoordinator.dismissFailedChatTask(taskId);
+        else if (queueId) {
+            const index = queue.findIndex(item => item.id === queueId && item.status === 'failed');
+            if (index >= 0) { queue.splice(index, 1); removed = true; }
+        }
+        refreshTaskCenterView();
+        if (removed) globalThis.toastr?.info?.('已移除这条失败记录。草稿、档案和自动留忆进度都没有动。', '心迹回廊');
         return;
     }
     if (action === 'task-clear-done') {

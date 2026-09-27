@@ -31,6 +31,7 @@ export const noteSecondStepOffer = split_requestTasks.noteSecondStepOffer;
 export const rememberStandaloneChatTask = split_requestTaskCenter.rememberStandaloneChatTask;
 export const settledChatTaskRecord = split_requestTasks.settledChatTaskRecord;
 export const clearCompletedChatTasks = split_requestTaskCenter.clearCompletedChatTasks;
+export const dismissFailedChatTask = split_requestTaskCenter.dismissFailedChatTask;
 export const currentChatBlockingTasks = split_requestTasks.currentChatBlockingTasks;
 export const cancelChatTask = split_requestTaskCenter.cancelChatTask;
 export const cancelBlockingTasksForScope = split_requestTaskCenter.cancelBlockingTasksForScope;

@@ -125,6 +125,15 @@ export function clearCompletedChatTasks() {
     return removed;
 }
 
+// r84.160：任务中心里失败的记录可以单独移除。只动这条页面内记录，不碰草稿、档案或自动留忆进度。
+export function dismissFailedChatTask(id) {
+    const index = recentChatTasks.findIndex(row => row.id === String(id || '') && (row.outcome === 'failed' || row.phase === 'failed'));
+    if (index < 0) return false;
+    recentChatTasks.splice(index, 1);
+    try { refreshTaskCenter(); } catch {}
+    return true;
+}
+
 export function cancelChatTask(id, reason = 'task-center') {
     const row = collectChatTaskRows().find(item => item.id === String(id || '') && item.running);
     if (!row) return { cancelled: 0, reason };
