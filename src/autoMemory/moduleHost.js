@@ -67,6 +67,7 @@ function autoIncludesSecondPass(step, plan) {
 
 function stepOptions(step, plan) {
     const options = { automatic: true, background: true, autoMemory: true, autoMemoryStep: step.id };
+    if (Array.isArray(plan.sourceMemoryIds) && plan.sourceMemoryIds.length) options.sourceMemoryIds = [...plan.sourceMemoryIds];
     if (autoIncludesSecondPass(step, plan)) options.secondStep = true;
     if (step.kind === 'slots') options.fillRoomText = true;
     if (step.kind === 'lines') options.fillItemsText = true;

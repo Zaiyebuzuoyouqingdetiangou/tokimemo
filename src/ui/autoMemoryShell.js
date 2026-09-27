@@ -315,11 +315,12 @@ function letterSlots(context) {
         for (const reveal of snapshot.revealRecords || []) {
             if (reveal.status !== 'ready' && reveal.status !== 'opened' && reveal.status !== 'achievement_pending') continue;
             const ticket = ticketForReveal(snapshot, reveal);
-            const located = auto_memory_redo.drawFloorMessage(context.chat, ticket?.dueFloor, latestFloorMode());
+            const pinned = ticket?.id ? auto_memory_redo.findDrawMessage(context.chat, ticket.id) : null;
+            const located = pinned || auto_memory_redo.drawFloorMessage(context.chat, ticket?.dueFloor, latestFloorMode());
             if (!located) continue;
             const view = viewForReveal(context, snapshot, reveal);
             if (view.phase === 'hidden') continue;
-            slots.push({ key: reveal.id, messageIndex: located.index, view: { ...view, opened: reveal.status === 'opened' } });
+            slots.push({ key: reveal.id, drawId: ticket?.id || '', messageIndex: located.index, view: { ...view, opened: reveal.status === 'opened' } });
             seen.add(reveal.id);
         }
     }
@@ -377,7 +378,7 @@ function paintHost(host, view) {
         const seal = host.querySelector('[data-rmt-letter-open]');
         const nextBody = host.querySelector('[data-rmt-floor-body]');
         if (nextPaper) nextPaper.hidden = false;
-        if (seal) seal.hidden = true;
+        if (seal && !seal.classList.contains('rmt-heart-letter-strip')) seal.hidden = true;
         if (nextBody && (contentOpen || nextBody.dataset.rmtLetterRead === '1')) {
             nextBody.dataset.rmtLetterRead = '1';
             writeRound(nextBody, view.moduleId, view.revealId);
@@ -412,15 +413,24 @@ function paint(context) {
     ensureCss();
     mirrorModuleCss();
     const wanted = new Set();
+    let pinsChanged = false;
     for (const slot of slots) {
         const mes = ui_floor.messageElement(slot.messageIndex);
         if (!mes) continue;
+        if (slot.drawId) {
+            const pin = auto_memory_redo.rememberDrawPin(context, slot.drawId, context.chat?.[slot.messageIndex]);
+            if (pin === 'changed') pinsChanged = true;
+        }
         let host = [...mes.querySelectorAll('[data-rmt-floor-shell="1"]')].find(node => node.dataset.rmtLetterKey === slot.key);
         if (!host) host = ui_floor.placeAfterMessage(mes);
         if (!host) continue;
         host.dataset.rmtLetterKey = slot.key;
         wanted.add(host);
         paintHost(host, slot.view);
+    }
+    if (pinsChanged) {
+        context.saveChatDebounced?.();
+        context.saveMetadataDebounced?.();
     }
     document.querySelectorAll('[data-rmt-floor-shell]').forEach(node => {
         if (!wanted.has(node)) node.remove();
@@ -559,9 +569,12 @@ function openReveal(revealId) {
     if (!/^[A-Za-z0-9_-]{8,80}$/.test(revealId || '')) return;
     const seal = document.querySelector(`[data-rmt-floor-shell][data-rmt-reveal="${revealId}"] [data-rmt-letter-open]`);
     if (!seal || seal.hidden) return;
+    const compact = seal.classList.contains('rmt-heart-letter-strip');
     const paper = seal.parentElement?.querySelector('[data-rmt-letter-paper]');
     if (paper) paper.hidden = false;
-    seal.hidden = true;
+    if (!compact) seal.hidden = true;
+    const body = paper?.querySelector?.('[data-rmt-floor-body]');
+    if (compact && body) void openInFloor(body);
 }
 
 function watchFloorAction(promise, waiting) {
@@ -663,9 +676,16 @@ function onClick(event) {
     event.stopPropagation();
     const host = seal.closest?.('[data-rmt-floor-shell]');
     if (host?.dataset?.rmtPhase !== 'reveal') return;
+    const compact = seal.classList.contains('rmt-heart-letter-strip');
     const paper = seal.parentElement?.querySelector('[data-rmt-letter-paper]');
+    if (compact && paper && !paper.hidden) {
+        paper.hidden = true;
+        return;
+    }
     if (paper) paper.hidden = false;
-    seal.hidden = true;
+    if (!compact) seal.hidden = true;
+    const body = paper?.querySelector?.('[data-rmt-floor-body]');
+    if (compact && body) void openInFloor(body);
 }
 function rememberOpened(revealId) {
     if (!revealId) return;

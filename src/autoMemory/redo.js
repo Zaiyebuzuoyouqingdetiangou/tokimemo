@@ -1,6 +1,8 @@
 // 信封上的补成就、未完成重试，以及当前这一份怎么再写。次数沿用插件已有的自动重试档，不再另设一档。
 
 export const SOURCE_STAMP_KEY = 'autoMemorySourceStampV1';
+export const DRAW_PIN_KEY = 'rmt_auto_draw';
+export const DRAW_PIN_LEDGER_KEY = 'autoMemoryDrawPinsV1';
 
 export function shouldAutoRepair({ enabled = false, used = 0, limit = 1 } = {}) {
   if (enabled !== true) return false;
@@ -154,6 +156,55 @@ export function bodyHash(text) {
   let hash = 0;
   for (let index = 0; index < value.length; index += 1) hash = (Math.imul(hash, 33) + value.charCodeAt(index)) >>> 0;
   return `${value.length}:${hash}`;
+}
+
+export function findDrawMessage(chat, drawId) {
+  if (!drawId) return null;
+  const list = Array.isArray(chat) ? chat : [];
+  for (let index = 0; index < list.length; index += 1) {
+    const message = list[index];
+    if (message?.extra?.[DRAW_PIN_KEY] === drawId) return { index, message };
+  }
+  return null;
+}
+
+// 把这一抽钉在那条角色楼上。楼被删掉后，钉和正文一起没了，不能改钉到后面那楼。
+export function rememberDrawPin(context, drawId, message) {
+  if (!context?.chatMetadata || !drawId || !message) return 'absent';
+  const hash = bodyHash(message.mes);
+  const ledger = context.chatMetadata[DRAW_PIN_LEDGER_KEY];
+  const previous = ledger && typeof ledger === 'object' ? ledger[drawId] : null;
+  const pinnedHere = message.extra?.[DRAW_PIN_KEY] === drawId;
+  if (previous?.hash && previous.hash !== hash && !pinnedHere) return 'missing';
+  if (!message.extra || typeof message.extra !== 'object') message.extra = {};
+  let changed = false;
+  if (!pinnedHere) {
+    message.extra[DRAW_PIN_KEY] = drawId;
+    changed = true;
+  }
+  if (!previous || previous.hash !== hash) {
+    context.chatMetadata[DRAW_PIN_LEDGER_KEY] = { ...(ledger && typeof ledger === 'object' ? ledger : {}), [drawId]: { hash } };
+    changed = true;
+  }
+  return changed ? 'changed' : 'pinned';
+}
+
+export function drawRoundLost(context, drawId, message) {
+  if (!drawId) return false;
+  const previous = context?.chatMetadata?.[DRAW_PIN_LEDGER_KEY]?.[drawId];
+  if (!previous?.hash) return false;
+  if (findDrawMessage(context?.chat, drawId)) return false;
+  if (!message) return true;
+  return previous.hash !== bodyHash(message.mes);
+}
+
+export function forgetDrawPin(metadata, drawId) {
+  const ledger = metadata?.[DRAW_PIN_LEDGER_KEY];
+  if (!ledger || !drawId || !Object.prototype.hasOwnProperty.call(ledger, drawId)) return;
+  const next = { ...ledger };
+  delete next[drawId];
+  if (Object.keys(next).length) metadata[DRAW_PIN_LEDGER_KEY] = next;
+  else delete metadata[DRAW_PIN_LEDGER_KEY];
 }
 
 export function sourceStamp(chat, dueFloor, latestFloor, drawId) {

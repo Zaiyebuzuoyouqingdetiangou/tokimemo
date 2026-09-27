@@ -35,10 +35,10 @@ export function floorDecision({ enabled = false, floor = 0, interval = 0, nextDu
     } else if (ticketOpen(activeTicket)) {
         const finished = !!modulePlan && !modulePlanOpen(modulePlan);
         const orphan = !modulePlan;
-        // 同一楼接着写。计划写完、或票还开着却丢了计划，到了下一楼就让位另抽。
-        if (!((finished || orphan) && laterThanTicket(floor, activeTicket))) {
-            return { action: 'reuse', ticketId: activeTicket.id };
-        }
+        const sameFloor = Math.floor(Number(activeTicket.dueFloor)) === Math.floor(Number(floor));
+        // 同一楼接着写。计划写完、或票还开着却丢了计划，到了后面已经到期的楼必须另抽，不能接着旧回忆。
+        const nextRound = (finished || orphan) && !sameFloor && (laterThanTicket(floor, activeTicket) || floorIsDue(floor, nextDueFloor));
+        if (!nextRound) return { action: 'reuse', ticketId: activeTicket.id };
     }
     if (Number.isSafeInteger(inflightFloor) && inflightFloor === floor) return { action: 'duplicate' };
     if (nextDueFloor == null) {
@@ -171,17 +171,25 @@ function releaseFinishedTicket(snapshot, floor = null) {
     const ticket = activeTicket(snapshot);
     if (!ticketOpen(ticket)) return snapshot;
     const finished = !!snapshot.modulePlan && !modulePlanOpen(snapshot.modulePlan);
-    const orphanLater = !snapshot.modulePlan && laterThanTicket(floor, ticket);
+    const sameFloor = floor != null && Math.floor(Number(ticket.dueFloor)) === Math.floor(Number(floor));
+    const dueLater = !sameFloor && (laterThanTicket(floor, ticket) || floorIsDue(floor, snapshot.plan?.nextDueFloor));
+    const orphanLater = !snapshot.modulePlan && dueLater;
     if (!finished && !orphanLater) return snapshot;
-    if (finished && floor != null && !laterThanTicket(floor, ticket)) return snapshot;
+    if (finished && !dueLater) return snapshot;
     return closeActiveTicket(snapshot, ticket);
 }
 
 function roundStillOpen(snapshot) {
     if (modulePlanOpen(snapshot?.modulePlan)) return true;
+    // 只拦住这一抽自己的待补成就。别的模块、或同一模块更早那一份，不能挡住下一档抽签。
+    const ids = new Set((snapshot?.modulePlan?.sourceMemoryIds || []).filter(id => /^M\d{3,6}$/.test(id)));
     const drawId = snapshot?.modulePlan?.drawId || snapshot?.plan?.activeDrawTicketId || '';
-    return (snapshot?.revealRecords || []).some(row => row?.status === 'achievement_pending'
-        && (!drawId || row.id === drawId || row.moduleId === snapshot?.modulePlan?.moduleId));
+    if (!drawId && !ids.size) return false;
+    return (snapshot?.revealRecords || []).some(row => {
+        if (row?.status !== 'achievement_pending') return false;
+        if (drawId && row.id === drawId) return true;
+        return ids.size > 0 && (row.sourceMemoryIds || []).some(id => ids.has(id));
+    });
 }
 
 // 写完的票可以放下。没写完的一轮留着，到点的新间隔等它结束再抽。

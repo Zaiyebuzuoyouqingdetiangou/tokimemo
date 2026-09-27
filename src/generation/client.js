@@ -1413,7 +1413,8 @@ async function generateModeOperation(mode, options = {}) {
     // Capture once, before any archive/network/storage await. A destroyed invocation must never
     // adopt the next runtime lifetime and re-register itself as a fresh paid task.
     const lifecycleEpoch = runtimeState.runtimeLifecycleEpoch;
-    if ([core_constants.MODE.THEME_SONG, core_constants.MODE.BEDTIME].includes(mode) && options.automatic) return { status: 'noop' };
+    // 手动自动刷新仍跳过印象曲和睡前故事。自动留忆抽中的这一步必须发请求，不能直接沿用旧作品。
+    if ([core_constants.MODE.THEME_SONG, core_constants.MODE.BEDTIME].includes(mode) && options.automatic && !options.autoMemoryStep) return { status: 'noop' };
     options = { ...options, cgPromptFormat: options.cgPromptFormat || core_settings.getPluginSettings(options.context || core_context.getContext()).cgPromptFormat };
     // Readers may belong to a historical archive while the host stays in another
     // chat. Only that exact, unchanged reader may receive a foreground result.
@@ -1486,12 +1487,23 @@ async function generateModeOperation(mode, options = {}) {
     let roomSession = null;
     let focusObject = null;
     let previousSession = null;
+    const autoMemorySourceIds = () => (Array.isArray(options.sourceMemoryIds) ? options.sourceMemoryIds : []).filter(id => /^M\d{3,6}$/.test(id));
+    // 没有分块游标时，不能把当前整本档案都当成已经写过。这一抽带来的新编号仍要发请求。
+    const autoMemoryHasFreshSources = (session = previousSession) => {
+        if (options.autoMemory !== true) return false;
+        const wanted = autoMemorySourceIds();
+        if (!wanted.length) return false;
+        const record = core_incremental.incrementalPartRecord(session, incrementalPart);
+        const covered = new Set(record?.coveredMemoryIds || []);
+        return wanted.some(id => !covered.has(id));
+    };
     const incrementalPart = mode === core_constants.MODE.HEART ? 'dialogues' : 'mode';
     const refreshableCalendar = mode === core_constants.MODE.CALENDAR;
     const refreshableRelations = mode === core_constants.MODE.RELATIONS || mode === core_constants.MODE.CABINET;
     let roomSchemaUpgrade = false;
     let allowPersonaExpansion = options.automatic !== true && [core_constants.MODE.ROOM, core_constants.MODE.ITEMS, core_constants.MODE.TRAVEL].includes(mode);
     const modeHasNoIncrementalWork = () => {
+        if (autoMemoryHasFreshSources()) return false;
         if (replacementTicket) return false;
         if (options.continueRecovery) return false;
         if (allowPersonaExpansion && previousSession) return false;
@@ -1541,9 +1553,14 @@ async function generateModeOperation(mode, options = {}) {
         recoveryExisting = core_cache.loadGenerationRecovery(mode, context, archiveTarget?.cache,
             { draftId: recoveryExisting.operation.sourceDraftId, pageId: recoveryExisting.pageId });
     }
+    if (recoveryExisting && options.autoMemory === true) {
+        const session = core_cache.loadSession(mode, { context, chatId: expectedChatId, memoryBank, clone: true });
+        if (autoMemoryHasFreshSources(session)) recoveryExisting = null;
+    }
     if (recoveryExisting) {
         if (replacementTicket && !options.continueRecovery) throw new Error('原分段草稿尚未保留到旧版本，本次没有重新请求。');
-        if (options.automatic) return { status: 'noop' };
+        // 旧草稿只拦住手动的自动刷新。新一抽带了还没写过的档案编号时，不能因为上一份草稿就静默不请求。
+        if (options.automatic && !autoMemoryHasFreshSources()) return { status: 'noop' };
         if (recoveryExisting.operation?.kind && recoveryExisting.operation.kind !== 'mode') return continueSavedGeneration(mode,
             { ...options, draftId: recoveryExisting.draftId, pageId: recoveryExisting.pageId });
         if (!options.continueRecovery && !ui_overlay.confirmExplicitAction('继续未完成内容？', '这项还保留着上次的分段草稿。继续只补未完成部分，会使用文本生成额度；取消不会改动草稿或旧内容。', { destructive: false })) return;

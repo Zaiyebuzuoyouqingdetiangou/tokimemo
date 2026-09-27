@@ -1,5 +1,5 @@
-const VERSION = '0.99.23';
-const BUILD = '0.99.23-r84.68-floor-jump';
+const VERSION = '0.99.25';
+const BUILD = '0.99.25-r84.70-letter-floor';
 
 const SETTINGS_ID = 'heartbeat_memories_settings';
 const MENU_ID = 'heartbeat_memories_menu_item';

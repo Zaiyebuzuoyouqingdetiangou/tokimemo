@@ -25,6 +25,8 @@ export function floorShellCss() {
 .rmt-heart-letter{width:min(100%,260px);max-width:100%;min-width:0;margin:10px 0 4px;color:#5c463c}
 .rmt-heart-letter:has(.rmt-heart-letter-paper:not([hidden])){width:min(100%,640px)}
 .rmt-heart-letter:has(.rmt-heart-letter-paper:not([hidden])) .rmt-heart-letter-seal{display:none}
+.rmt-heart-letter.is-compact:has(.rmt-heart-letter-paper:not([hidden])) .rmt-heart-letter-seal{display:flex}
+.rmt-heart-letter.is-compact .rmt-heart-letter-seal{width:min(100%,420px)}
 .rmt-heart-letter [data-rmt-letter-achievement]{margin:0 0 10px;font-weight:650}
 .rmt-heart-letter-seal{display:flex;align-items:center;gap:12px;width:100%;margin:0;padding:0;border:0;background:transparent;color:#6a4a58;box-shadow:none;font:inherit;text-align:left;cursor:pointer}
 .rmt-heart-letter-seal .rmt-envelope{flex:0 0 72px;width:72px;filter:drop-shadow(0 4px 6px rgba(90,24,48,.14))}

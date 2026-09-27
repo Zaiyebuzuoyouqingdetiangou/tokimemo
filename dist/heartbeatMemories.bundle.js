@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 213
-// Source SHA-256: 6016a79b3eea5cf6669e15611c338b8b4c6921663c940e550d1ecc3f34a2100e
+// Source SHA-256: d82b53cf65fe61840a02d7b78f973e50efba35ef1d3f962734c910d4693122e6
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -4560,10 +4560,10 @@ function floorDecision({ enabled = false, floor = 0, interval = 0, nextDueFloor 
     } else if (ticketOpen(activeTicket)) {
         const finished = !!modulePlan && !modulePlanOpen(modulePlan);
         const orphan = !modulePlan;
-        // 同一楼接着写。计划写完、或票还开着却丢了计划，到了下一楼就让位另抽。
-        if (!((finished || orphan) && laterThanTicket(floor, activeTicket))) {
-            return { action: 'reuse', ticketId: activeTicket.id };
-        }
+        const sameFloor = Math.floor(Number(activeTicket.dueFloor)) === Math.floor(Number(floor));
+        // 同一楼接着写。计划写完、或票还开着却丢了计划，到了后面已经到期的楼必须另抽，不能接着旧回忆。
+        const nextRound = (finished || orphan) && !sameFloor && (laterThanTicket(floor, activeTicket) || floorIsDue(floor, nextDueFloor));
+        if (!nextRound) return { action: 'reuse', ticketId: activeTicket.id };
     }
     if (Number.isSafeInteger(inflightFloor) && inflightFloor === floor) return { action: 'duplicate' };
     if (nextDueFloor == null) {
@@ -4696,17 +4696,25 @@ function releaseFinishedTicket(snapshot, floor = null) {
     const ticket = activeTicket(snapshot);
     if (!ticketOpen(ticket)) return snapshot;
     const finished = !!snapshot.modulePlan && !modulePlanOpen(snapshot.modulePlan);
-    const orphanLater = !snapshot.modulePlan && laterThanTicket(floor, ticket);
+    const sameFloor = floor != null && Math.floor(Number(ticket.dueFloor)) === Math.floor(Number(floor));
+    const dueLater = !sameFloor && (laterThanTicket(floor, ticket) || floorIsDue(floor, snapshot.plan?.nextDueFloor));
+    const orphanLater = !snapshot.modulePlan && dueLater;
     if (!finished && !orphanLater) return snapshot;
-    if (finished && floor != null && !laterThanTicket(floor, ticket)) return snapshot;
+    if (finished && !dueLater) return snapshot;
     return closeActiveTicket(snapshot, ticket);
 }
 
 function roundStillOpen(snapshot) {
     if (modulePlanOpen(snapshot?.modulePlan)) return true;
+    // 只拦住这一抽自己的待补成就。别的模块、或同一模块更早那一份，不能挡住下一档抽签。
+    const ids = new Set((snapshot?.modulePlan?.sourceMemoryIds || []).filter(id => /^M\d{3,6}$/.test(id)));
     const drawId = snapshot?.modulePlan?.drawId || snapshot?.plan?.activeDrawTicketId || '';
-    return (snapshot?.revealRecords || []).some(row => row?.status === 'achievement_pending'
-        && (!drawId || row.id === drawId || row.moduleId === snapshot?.modulePlan?.moduleId));
+    if (!drawId && !ids.size) return false;
+    return (snapshot?.revealRecords || []).some(row => {
+        if (row?.status !== 'achievement_pending') return false;
+        if (drawId && row.id === drawId) return true;
+        return ids.size > 0 && (row.sourceMemoryIds || []).some(id => ids.has(id));
+    });
 }
 
 // 写完的票可以放下。没写完的一轮留着，到点的新间隔等它结束再抽。
@@ -5679,6 +5687,7 @@ function autoIncludesSecondPass(step, plan) {
 
 function stepOptions(step, plan) {
     const options = { automatic: true, background: true, autoMemory: true, autoMemoryStep: step.id };
+    if (Array.isArray(plan.sourceMemoryIds) && plan.sourceMemoryIds.length) options.sourceMemoryIds = [...plan.sourceMemoryIds];
     if (autoIncludesSecondPass(step, plan)) options.secondStep = true;
     if (step.kind === 'slots') options.fillRoomText = true;
     if (step.kind === 'lines') options.fillItemsText = true;
@@ -6817,6 +6826,8 @@ function __init_autoMemory_redo_js() {
 // 信封上的补成就、未完成重试，以及当前这一份怎么再写。次数沿用插件已有的自动重试档，不再另设一档。
 
 const SOURCE_STAMP_KEY = 'autoMemorySourceStampV1';
+const DRAW_PIN_KEY = 'rmt_auto_draw';
+const DRAW_PIN_LEDGER_KEY = 'autoMemoryDrawPinsV1';
 
 function shouldAutoRepair({ enabled = false, used = 0, limit = 1 } = {}) {
   if (enabled !== true) return false;
@@ -6972,6 +6983,55 @@ function bodyHash(text) {
   return `${value.length}:${hash}`;
 }
 
+function findDrawMessage(chat, drawId) {
+  if (!drawId) return null;
+  const list = Array.isArray(chat) ? chat : [];
+  for (let index = 0; index < list.length; index += 1) {
+    const message = list[index];
+    if (message?.extra?.[DRAW_PIN_KEY] === drawId) return { index, message };
+  }
+  return null;
+}
+
+// 把这一抽钉在那条角色楼上。楼被删掉后，钉和正文一起没了，不能改钉到后面那楼。
+function rememberDrawPin(context, drawId, message) {
+  if (!context?.chatMetadata || !drawId || !message) return 'absent';
+  const hash = bodyHash(message.mes);
+  const ledger = context.chatMetadata[DRAW_PIN_LEDGER_KEY];
+  const previous = ledger && typeof ledger === 'object' ? ledger[drawId] : null;
+  const pinnedHere = message.extra?.[DRAW_PIN_KEY] === drawId;
+  if (previous?.hash && previous.hash !== hash && !pinnedHere) return 'missing';
+  if (!message.extra || typeof message.extra !== 'object') message.extra = {};
+  let changed = false;
+  if (!pinnedHere) {
+    message.extra[DRAW_PIN_KEY] = drawId;
+    changed = true;
+  }
+  if (!previous || previous.hash !== hash) {
+    context.chatMetadata[DRAW_PIN_LEDGER_KEY] = { ...(ledger && typeof ledger === 'object' ? ledger : {}), [drawId]: { hash } };
+    changed = true;
+  }
+  return changed ? 'changed' : 'pinned';
+}
+
+function drawRoundLost(context, drawId, message) {
+  if (!drawId) return false;
+  const previous = context?.chatMetadata?.[DRAW_PIN_LEDGER_KEY]?.[drawId];
+  if (!previous?.hash) return false;
+  if (findDrawMessage(context?.chat, drawId)) return false;
+  if (!message) return true;
+  return previous.hash !== bodyHash(message.mes);
+}
+
+function forgetDrawPin(metadata, drawId) {
+  const ledger = metadata?.[DRAW_PIN_LEDGER_KEY];
+  if (!ledger || !drawId || !Object.prototype.hasOwnProperty.call(ledger, drawId)) return;
+  const next = { ...ledger };
+  delete next[drawId];
+  if (Object.keys(next).length) metadata[DRAW_PIN_LEDGER_KEY] = next;
+  else delete metadata[DRAW_PIN_LEDGER_KEY];
+}
+
 function sourceStamp(chat, dueFloor, latestFloor, drawId) {
   const located = drawFloorMessage(chat, dueFloor, latestFloor);
   if (!located || typeof drawId !== 'string' || !drawId) return null;
@@ -7042,6 +7102,10 @@ __m_autoMemory_redo_js.ticketMatchingReveal = ticketMatchingReveal;
 __m_autoMemory_redo_js.ticketLetterMesid = ticketLetterMesid;
 __m_autoMemory_redo_js.drawFloorMessage = drawFloorMessage;
 __m_autoMemory_redo_js.bodyHash = bodyHash;
+__m_autoMemory_redo_js.findDrawMessage = findDrawMessage;
+__m_autoMemory_redo_js.rememberDrawPin = rememberDrawPin;
+__m_autoMemory_redo_js.drawRoundLost = drawRoundLost;
+__m_autoMemory_redo_js.forgetDrawPin = forgetDrawPin;
 __m_autoMemory_redo_js.sourceStamp = sourceStamp;
 __m_autoMemory_redo_js.swipeNeedsRegenerate = swipeNeedsRegenerate;
 __m_autoMemory_redo_js.isSameFloorGeneration = isSameFloorGeneration;
@@ -7049,6 +7113,8 @@ __m_autoMemory_redo_js.createSameFloorGate = createSameFloorGate;
 __m_autoMemory_redo_js.rerollWindow = rerollWindow;
 __m_autoMemory_redo_js.memoriesWithoutIds = memoriesWithoutIds;
 __m_autoMemory_redo_js.SOURCE_STAMP_KEY = SOURCE_STAMP_KEY;
+__m_autoMemory_redo_js.DRAW_PIN_KEY = DRAW_PIN_KEY;
+__m_autoMemory_redo_js.DRAW_PIN_LEDGER_KEY = DRAW_PIN_LEDGER_KEY;
 }
 
 function __init_autoMemory_scheduler_js() {
@@ -7697,10 +7763,13 @@ function stampDrawSource(context, drawId) {
     const ticket = (snapshot?.drawTickets || []).find(item => item.id === drawId) || auto_memory_redo.currentDrawTicket(snapshot);
     if (!ticket) return;
     const latest = core_settings.getPluginSettings().autoMemoryLatestFloor === true;
+    const located = auto_memory_redo.drawFloorMessage(context.chat, ticket.dueFloor, latest);
     const stamp = auto_memory_redo.sourceStamp(context.chat, ticket.dueFloor, latest, ticket.id);
     if (!stamp) return;
     context.chatMetadata[auto_memory_redo.SOURCE_STAMP_KEY] = stamp;
+    const pin = located ? auto_memory_redo.rememberDrawPin(context, ticket.id, located.message) : 'absent';
     context.saveMetadataDebounced?.();
+    if (pin === 'changed') context.saveChatDebounced?.();
 }
 
 function lastStoryIndex(chat) {
@@ -8070,16 +8139,36 @@ async function sweepLostLetters(context) {
     catch { latest = false; }
     const stamp = context.chatMetadata?.[auto_memory_redo.SOURCE_STAMP_KEY] || null;
     const lost = [];
+    const seenTickets = new Set();
+    let pinsChanged = false;
     for (const reveal of snapshot.revealRecords || []) {
         const ticket = auto_memory_redo.ticketMatchingReveal(snapshot, reveal);
+        const drawId = ticket?.id || '';
+        if (drawId && auto_memory_redo.findDrawMessage(context.chat, drawId)) continue;
         const mesid = auto_memory_redo.ticketLetterMesid(context.chat, ticket, latest, stamp);
-        if (mesid == null || !auto_memory_redo.letterBodyGone(context.chat, mesid)) continue;
+        const message = mesid == null ? null : context.chat?.[mesid];
+        const pinLost = !!(drawId && auto_memory_redo.drawRoundLost(context, drawId, message));
+        const bodyGone = mesid != null && auto_memory_redo.letterBodyGone(context.chat, mesid);
+        if (!pinLost && !bodyGone) {
+            if (drawId && message) {
+                const pin = auto_memory_redo.rememberDrawPin(context, drawId, message);
+                if (pin === 'changed') pinsChanged = true;
+            }
+            continue;
+        }
+        if (drawId && seenTickets.has(drawId)) continue;
+        if (drawId) seenTickets.add(drawId);
         lost.push({
             reveal,
             ticket,
-            mesid,
+            mesid: pinLost ? null : mesid,
+            pinLost,
             sourceMemoryIds: ticket?.sourceMemoryIds || reveal.sourceMemoryIds || [],
         });
+    }
+    if (pinsChanged) {
+        context.saveChatDebounced?.();
+        context.saveMetadataDebounced?.();
     }
     let memory = null;
     try { memory = archive_repository.getImportedMemory(context); } catch { memory = null; }
@@ -8110,8 +8199,10 @@ async function sweepLostLetters(context) {
             sourceMemoryIds: row.sourceMemoryIds,
             createdAt: row.reveal?.createdAt || 0,
             frozenAt: snapshot.modulePlan?.drawId === row.ticket?.id ? snapshot.modulePlan.frozenAt : 0,
-            messageIndex: row.mesid,
+            messageIndex: row.pinLost ? null : row.mesid,
         });
+        if (row.ticket?.id) auto_memory_redo.forgetDrawPin(context.chatMetadata, row.ticket.id);
+        if (stamp?.drawId && stamp.drawId === row.ticket?.id) delete context.chatMetadata[auto_memory_redo.SOURCE_STAMP_KEY];
     }
     const dropReveal = new Set(lost.map(row => row.reveal?.id).filter(Boolean));
     const dropTicket = new Set(lost.map(row => row.ticket?.id).filter(Boolean));
@@ -8270,6 +8361,8 @@ function floorShellCss() {
 .rmt-heart-letter{width:min(100%,260px);max-width:100%;min-width:0;margin:10px 0 4px;color:#5c463c}
 .rmt-heart-letter:has(.rmt-heart-letter-paper:not([hidden])){width:min(100%,640px)}
 .rmt-heart-letter:has(.rmt-heart-letter-paper:not([hidden])) .rmt-heart-letter-seal{display:none}
+.rmt-heart-letter.is-compact:has(.rmt-heart-letter-paper:not([hidden])) .rmt-heart-letter-seal{display:flex}
+.rmt-heart-letter.is-compact .rmt-heart-letter-seal{width:min(100%,420px)}
 .rmt-heart-letter [data-rmt-letter-achievement]{margin:0 0 10px;font-weight:650}
 .rmt-heart-letter-seal{display:flex;align-items:center;gap:12px;width:100%;margin:0;padding:0;border:0;background:transparent;color:#6a4a58;box-shadow:none;font:inherit;text-align:left;cursor:pointer}
 .rmt-heart-letter-seal .rmt-envelope{flex:0 0 72px;width:72px;filter:drop-shadow(0 4px 6px rgba(90,24,48,.14))}
@@ -33667,7 +33760,8 @@ async function generateModeOperation(mode, options = {}) {
     // Capture once, before any archive/network/storage await. A destroyed invocation must never
     // adopt the next runtime lifetime and re-register itself as a fresh paid task.
     const lifecycleEpoch = runtimeState.runtimeLifecycleEpoch;
-    if ([core_constants.MODE.THEME_SONG, core_constants.MODE.BEDTIME].includes(mode) && options.automatic) return { status: 'noop' };
+    // 手动自动刷新仍跳过印象曲和睡前故事。自动留忆抽中的这一步必须发请求，不能直接沿用旧作品。
+    if ([core_constants.MODE.THEME_SONG, core_constants.MODE.BEDTIME].includes(mode) && options.automatic && !options.autoMemoryStep) return { status: 'noop' };
     options = { ...options, cgPromptFormat: options.cgPromptFormat || core_settings.getPluginSettings(options.context || core_context.getContext()).cgPromptFormat };
     // Readers may belong to a historical archive while the host stays in another
     // chat. Only that exact, unchanged reader may receive a foreground result.
@@ -33740,12 +33834,23 @@ async function generateModeOperation(mode, options = {}) {
     let roomSession = null;
     let focusObject = null;
     let previousSession = null;
+    const autoMemorySourceIds = () => (Array.isArray(options.sourceMemoryIds) ? options.sourceMemoryIds : []).filter(id => /^M\d{3,6}$/.test(id));
+    // 没有分块游标时，不能把当前整本档案都当成已经写过。这一抽带来的新编号仍要发请求。
+    const autoMemoryHasFreshSources = (session = previousSession) => {
+        if (options.autoMemory !== true) return false;
+        const wanted = autoMemorySourceIds();
+        if (!wanted.length) return false;
+        const record = core_incremental.incrementalPartRecord(session, incrementalPart);
+        const covered = new Set(record?.coveredMemoryIds || []);
+        return wanted.some(id => !covered.has(id));
+    };
     const incrementalPart = mode === core_constants.MODE.HEART ? 'dialogues' : 'mode';
     const refreshableCalendar = mode === core_constants.MODE.CALENDAR;
     const refreshableRelations = mode === core_constants.MODE.RELATIONS || mode === core_constants.MODE.CABINET;
     let roomSchemaUpgrade = false;
     let allowPersonaExpansion = options.automatic !== true && [core_constants.MODE.ROOM, core_constants.MODE.ITEMS, core_constants.MODE.TRAVEL].includes(mode);
     const modeHasNoIncrementalWork = () => {
+        if (autoMemoryHasFreshSources()) return false;
         if (replacementTicket) return false;
         if (options.continueRecovery) return false;
         if (allowPersonaExpansion && previousSession) return false;
@@ -33795,9 +33900,14 @@ async function generateModeOperation(mode, options = {}) {
         recoveryExisting = core_cache.loadGenerationRecovery(mode, context, archiveTarget?.cache,
             { draftId: recoveryExisting.operation.sourceDraftId, pageId: recoveryExisting.pageId });
     }
+    if (recoveryExisting && options.autoMemory === true) {
+        const session = core_cache.loadSession(mode, { context, chatId: expectedChatId, memoryBank, clone: true });
+        if (autoMemoryHasFreshSources(session)) recoveryExisting = null;
+    }
     if (recoveryExisting) {
         if (replacementTicket && !options.continueRecovery) throw new Error('原分段草稿尚未保留到旧版本，本次没有重新请求。');
-        if (options.automatic) return { status: 'noop' };
+        // 旧草稿只拦住手动的自动刷新。新一抽带了还没写过的档案编号时，不能因为上一份草稿就静默不请求。
+        if (options.automatic && !autoMemoryHasFreshSources()) return { status: 'noop' };
         if (recoveryExisting.operation?.kind && recoveryExisting.operation.kind !== 'mode') return continueSavedGeneration(mode,
             { ...options, draftId: recoveryExisting.draftId, pageId: recoveryExisting.pageId });
         if (!options.continueRecovery && !ui_overlay.confirmExplicitAction('继续未完成内容？', '这项还保留着上次的分段草稿。继续只补未完成部分，会使用文本生成额度；取消不会改动草稿或旧内容。', { destructive: false })) return;
@@ -58979,11 +59089,12 @@ function letterSlots(context) {
         for (const reveal of snapshot.revealRecords || []) {
             if (reveal.status !== 'ready' && reveal.status !== 'opened' && reveal.status !== 'achievement_pending') continue;
             const ticket = ticketForReveal(snapshot, reveal);
-            const located = auto_memory_redo.drawFloorMessage(context.chat, ticket?.dueFloor, latestFloorMode());
+            const pinned = ticket?.id ? auto_memory_redo.findDrawMessage(context.chat, ticket.id) : null;
+            const located = pinned || auto_memory_redo.drawFloorMessage(context.chat, ticket?.dueFloor, latestFloorMode());
             if (!located) continue;
             const view = viewForReveal(context, snapshot, reveal);
             if (view.phase === 'hidden') continue;
-            slots.push({ key: reveal.id, messageIndex: located.index, view: { ...view, opened: reveal.status === 'opened' } });
+            slots.push({ key: reveal.id, drawId: ticket?.id || '', messageIndex: located.index, view: { ...view, opened: reveal.status === 'opened' } });
             seen.add(reveal.id);
         }
     }
@@ -59041,7 +59152,7 @@ function paintHost(host, view) {
         const seal = host.querySelector('[data-rmt-letter-open]');
         const nextBody = host.querySelector('[data-rmt-floor-body]');
         if (nextPaper) nextPaper.hidden = false;
-        if (seal) seal.hidden = true;
+        if (seal && !seal.classList.contains('rmt-heart-letter-strip')) seal.hidden = true;
         if (nextBody && (contentOpen || nextBody.dataset.rmtLetterRead === '1')) {
             nextBody.dataset.rmtLetterRead = '1';
             writeRound(nextBody, view.moduleId, view.revealId);
@@ -59076,15 +59187,24 @@ function paint(context) {
     ensureCss();
     mirrorModuleCss();
     const wanted = new Set();
+    let pinsChanged = false;
     for (const slot of slots) {
         const mes = ui_floor.messageElement(slot.messageIndex);
         if (!mes) continue;
+        if (slot.drawId) {
+            const pin = auto_memory_redo.rememberDrawPin(context, slot.drawId, context.chat?.[slot.messageIndex]);
+            if (pin === 'changed') pinsChanged = true;
+        }
         let host = [...mes.querySelectorAll('[data-rmt-floor-shell="1"]')].find(node => node.dataset.rmtLetterKey === slot.key);
         if (!host) host = ui_floor.placeAfterMessage(mes);
         if (!host) continue;
         host.dataset.rmtLetterKey = slot.key;
         wanted.add(host);
         paintHost(host, slot.view);
+    }
+    if (pinsChanged) {
+        context.saveChatDebounced?.();
+        context.saveMetadataDebounced?.();
     }
     document.querySelectorAll('[data-rmt-floor-shell]').forEach(node => {
         if (!wanted.has(node)) node.remove();
@@ -59223,9 +59343,12 @@ function openReveal(revealId) {
     if (!/^[A-Za-z0-9_-]{8,80}$/.test(revealId || '')) return;
     const seal = document.querySelector(`[data-rmt-floor-shell][data-rmt-reveal="${revealId}"] [data-rmt-letter-open]`);
     if (!seal || seal.hidden) return;
+    const compact = seal.classList.contains('rmt-heart-letter-strip');
     const paper = seal.parentElement?.querySelector('[data-rmt-letter-paper]');
     if (paper) paper.hidden = false;
-    seal.hidden = true;
+    if (!compact) seal.hidden = true;
+    const body = paper?.querySelector?.('[data-rmt-floor-body]');
+    if (compact && body) void openInFloor(body);
 }
 
 function watchFloorAction(promise, waiting) {
@@ -59327,9 +59450,16 @@ function onClick(event) {
     event.stopPropagation();
     const host = seal.closest?.('[data-rmt-floor-shell]');
     if (host?.dataset?.rmtPhase !== 'reveal') return;
+    const compact = seal.classList.contains('rmt-heart-letter-strip');
     const paper = seal.parentElement?.querySelector('[data-rmt-letter-paper]');
+    if (compact && paper && !paper.hidden) {
+        paper.hidden = true;
+        return;
+    }
     if (paper) paper.hidden = false;
-    seal.hidden = true;
+    if (!compact) seal.hidden = true;
+    const body = paper?.querySelector?.('[data-rmt-floor-body]');
+    if (compact && body) void openInFloor(body);
 }
 function rememberOpened(revealId) {
     if (!revealId) return;

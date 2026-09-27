@@ -618,10 +618,13 @@ function stampDrawSource(context, drawId) {
     const ticket = (snapshot?.drawTickets || []).find(item => item.id === drawId) || auto_memory_redo.currentDrawTicket(snapshot);
     if (!ticket) return;
     const latest = core_settings.getPluginSettings().autoMemoryLatestFloor === true;
+    const located = auto_memory_redo.drawFloorMessage(context.chat, ticket.dueFloor, latest);
     const stamp = auto_memory_redo.sourceStamp(context.chat, ticket.dueFloor, latest, ticket.id);
     if (!stamp) return;
     context.chatMetadata[auto_memory_redo.SOURCE_STAMP_KEY] = stamp;
+    const pin = located ? auto_memory_redo.rememberDrawPin(context, ticket.id, located.message) : 'absent';
     context.saveMetadataDebounced?.();
+    if (pin === 'changed') context.saveChatDebounced?.();
 }
 
 function lastStoryIndex(chat) {
@@ -991,16 +994,36 @@ async function sweepLostLetters(context) {
     catch { latest = false; }
     const stamp = context.chatMetadata?.[auto_memory_redo.SOURCE_STAMP_KEY] || null;
     const lost = [];
+    const seenTickets = new Set();
+    let pinsChanged = false;
     for (const reveal of snapshot.revealRecords || []) {
         const ticket = auto_memory_redo.ticketMatchingReveal(snapshot, reveal);
+        const drawId = ticket?.id || '';
+        if (drawId && auto_memory_redo.findDrawMessage(context.chat, drawId)) continue;
         const mesid = auto_memory_redo.ticketLetterMesid(context.chat, ticket, latest, stamp);
-        if (mesid == null || !auto_memory_redo.letterBodyGone(context.chat, mesid)) continue;
+        const message = mesid == null ? null : context.chat?.[mesid];
+        const pinLost = !!(drawId && auto_memory_redo.drawRoundLost(context, drawId, message));
+        const bodyGone = mesid != null && auto_memory_redo.letterBodyGone(context.chat, mesid);
+        if (!pinLost && !bodyGone) {
+            if (drawId && message) {
+                const pin = auto_memory_redo.rememberDrawPin(context, drawId, message);
+                if (pin === 'changed') pinsChanged = true;
+            }
+            continue;
+        }
+        if (drawId && seenTickets.has(drawId)) continue;
+        if (drawId) seenTickets.add(drawId);
         lost.push({
             reveal,
             ticket,
-            mesid,
+            mesid: pinLost ? null : mesid,
+            pinLost,
             sourceMemoryIds: ticket?.sourceMemoryIds || reveal.sourceMemoryIds || [],
         });
+    }
+    if (pinsChanged) {
+        context.saveChatDebounced?.();
+        context.saveMetadataDebounced?.();
     }
     let memory = null;
     try { memory = archive_repository.getImportedMemory(context); } catch { memory = null; }
@@ -1031,8 +1054,10 @@ async function sweepLostLetters(context) {
             sourceMemoryIds: row.sourceMemoryIds,
             createdAt: row.reveal?.createdAt || 0,
             frozenAt: snapshot.modulePlan?.drawId === row.ticket?.id ? snapshot.modulePlan.frozenAt : 0,
-            messageIndex: row.mesid,
+            messageIndex: row.pinLost ? null : row.mesid,
         });
+        if (row.ticket?.id) auto_memory_redo.forgetDrawPin(context.chatMetadata, row.ticket.id);
+        if (stamp?.drawId && stamp.drawId === row.ticket?.id) delete context.chatMetadata[auto_memory_redo.SOURCE_STAMP_KEY];
     }
     const dropReveal = new Set(lost.map(row => row.reveal?.id).filter(Boolean));
     const dropTicket = new Set(lost.map(row => row.ticket?.id).filter(Boolean));
