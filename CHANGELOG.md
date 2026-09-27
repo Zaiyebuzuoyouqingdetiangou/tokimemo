@@ -1,3 +1,28 @@
+# 0.99.90 / r84.162 — 聊天里的回忆信改版；旧批次滑出「最近 N 楼」不再误报
+
+用户要求这几项一起修，本版合在一个包里，按项分开写。
+
+**1. 只有最新一楼用信封，旧楼压缩成提示条**
+- `ui/autoMemoryShell.js` 的 `letterSlots`：所有信里，消息位置最靠后的那封用信封，其余标记 `compact`。提示条一行：未拆的带红点、写「未拆」，拆过的变灰、写「已读」（取自揭晓记录的 `opened` 状态）。点提示条直接展开信纸。
+- `paintHost` 把信封 / 提示条和已读状态算进「是否同一封信」的判断，切换时会重画。
+
+**2. 信封变小**
+- 信封从约 240 像素宽缩到 72 像素，放在左边，右边一行字：揭晓时写「你获得了一份回忆」和「模块名 · 轻点拆信」，生成中写「回忆正在写」。设置里的六款信封样式照常可用，只改聊天里的尺寸（设置页的选择器不受影响）。
+
+**3. 信纸改成素笺卡，并可去心迹回廊看**
+- 去掉横线底纹和粗左边线，改成主题色的圆角卡片；顶部是模块名小标签，下面是标题、简介和一排按钮：「打开回忆」（仍在信里展开内容）、「去心迹回廊看」（新）、「收起」。
+- 「去心迹回廊看」打开插件窗口，走 `openCachedOrGenerate` 只打开已保存的模块内容，不会发起生成；同时把这封信记为已读。
+
+**4. 弹出提示颜色跟随插件主题**
+- 仍用酒馆原生弹出提示（「心口一热」），加 `rmt-heart-toast` 类名，并把插件主题颜色写到这条提示上：浅底、主题色左边线、主题文字色。
+
+**5. 读取范围「最近 N 楼」+ 档案里有没做完的旧批次**
+- 旧批次有楼滑出当前读取范围时，`resolveBatchParts` 找不到那几楼，按「聊天正文不一致」停下。现在只在这种情况下，`archive/importOperation.js` 的 `messagesForBatchRefs` 补读整段聊天（不按读取范围筛）给旧批次核对；每个片段仍按哈希核对，楼被改过照样停下、不发请求。只影响不带捕获资料的每楼自动建档路径。
+
+**验证**
+- 新测试 `tools/test-stored-batch-read-range-r84162.mjs`（2 项，改前第 1 项失败）、`tools/test-letter-face-r84162.mjs`（3 项，源码与样式层面；没有在真实酒馆里渲染）。全部测试 267 个，全部通过。verify-runtime：undefinedBindings 0、prematureReads 0。「未定义名字」扫描 0。
+- 护栏报 `importCurrentChatMemoryOperation`、`floorShellCss`（含 CSS 输出）和 `autoMemoryShell.js` 的 `markup` / `letterSlots` / `paintHost` / `paint` / `onClick`，均为本轮有意改动，已重拍；r84.161 基线另存为 `verification/refactor-baseline-r84.161.json`。
+
 # 0.99.90 / r84.161 — 每楼自动建档读窗口时去掉排除的标签
 
 - 现象（用户诊断，r84.160）：聊一句就失败，`RMT_RECOVERY_INPUT_CHANGED`、phase initialization、category chat、0 次请求、1 个分块、已测过预算，两三百毫秒内结束。所有自动留忆随之失败。

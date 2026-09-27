@@ -25,6 +25,8 @@ import * as room_layout from '../modes/roomLayout.js';
 import * as ui_heartEnvelope from './heartEnvelope.js';
 import * as ui_styles from './styles.js';
 import * as ui_taskCenter from './taskCenter.js';
+import * as ui_overlay from './overlay.js';
+import * as core_theme from '../core/theme.js';
 
 let cleanup = null;
 let lastPhase = '';
@@ -208,17 +210,26 @@ function markup(view) {
     const actions = repair || complete || redo || retry ? `<div class="rmt-heart-letter-actions">${repair}${complete}${redo}${retry}</div>` : '';
     const revealPaper = view.phase === 'reveal' && view.showReveal;
     const writing = view.phase === 'generating' || view.phase === 'planning';
-    const caption = revealPaper ? '' : `<small data-rmt-letter-detail>${core_text.esc(view.detail || (writing ? '正在生成中' : ''))}</small>`;
-    const heading = view.title ? `<p data-rmt-letter-achievement>${core_text.esc(view.title)}</p>` : '';
-    const copy = view.achievementCopy ? `<p data-rmt-letter-copy>${core_text.esc(view.achievementCopy)}</p>` : '';
-    const read = `<button type="button" class="rmt-btn" data-rmt-letter-read data-rmt-reveal="${core_text.esc(view.revealId)}" data-rmt-module="${core_text.esc(view.moduleId)}">打开回忆</button>`;
+    const esc = core_text.esc;
+    const moduleTitle = view.moduleTitle || '回忆';
+    const heading = view.title ? `<p data-rmt-letter-achievement>${esc(view.title)}</p>` : '';
+    const copy = view.achievementCopy ? `<p data-rmt-letter-copy>${esc(view.achievementCopy)}</p>` : '';
+    const read = `<button type="button" class="rmt-btn" data-rmt-letter-read data-rmt-reveal="${esc(view.revealId)}" data-rmt-module="${esc(view.moduleId)}">打开回忆</button>`;
+    // r84.162：打开回忆仍在信里直接展开内容；另给一个按钮去心迹回廊看同一份（只打开已保存的，不会重新生成）。
+    const jump = view.moduleId ? `<button type="button" class="rmt-btn" data-rmt-letter-jump data-rmt-reveal="${esc(view.revealId)}" data-rmt-module="${esc(view.moduleId)}">去心迹回廊看</button>` : '';
     const paper = revealPaper
-        ? `<button type="button" class="rmt-btn rmt-heart-letter-close" data-rmt-letter-close>收起这封信</button>${heading}${copy}${read}`
+        ? `<div class="rmt-letter-head"><span class="rmt-letter-badge">${esc(moduleTitle)}</span></div>${heading}${copy}<div class="rmt-letter-buttons">${read}${jump}<button type="button" class="rmt-btn rmt-heart-letter-close" data-rmt-letter-close>收起</button></div>`
         : '';
-    return `<article class="rmt-heart-letter${writing ? ' is-writing' : ''}">
-        <button type="button" class="rmt-heart-letter-seal" data-rmt-letter-open aria-label="${core_text.esc(revealPaper ? '拆开这封信' : view.detail || '回忆')}">
-            ${envelopeArt()}${caption}
-        </button>
+    // r84.162：只有最新一楼用迷你信封；更早的楼压缩成一行提示条，没拆的带红点。
+    const seal = view.compact
+        ? `<button type="button" class="rmt-heart-letter-seal rmt-heart-letter-strip${view.opened ? ' is-opened' : ''}" data-rmt-letter-open aria-label="${esc(revealPaper ? `拆开这封信：${moduleTitle}` : view.detail || '回忆')}">
+            ${view.opened ? '' : '<span class="rmt-letter-dot" aria-hidden="true"></span>'}${envelopeArt()}<span class="rmt-letter-seal-text"><b>回忆 · ${esc(moduleTitle)}</b><small data-rmt-letter-detail>${esc(revealPaper ? (view.title || '') : (view.detail || ''))}</small></span><em>${revealPaper ? (view.opened ? '已读' : '未拆') : ''}</em>
+        </button>`
+        : `<button type="button" class="rmt-heart-letter-seal" data-rmt-letter-open aria-label="${esc(revealPaper ? '拆开这封信' : view.detail || '回忆')}">
+            ${envelopeArt()}<span class="rmt-letter-seal-text"><b>${revealPaper ? '你获得了一份回忆' : writing ? '回忆正在写' : esc(view.title || moduleTitle)}</b><small data-rmt-letter-detail>${esc(revealPaper ? `${moduleTitle} · 轻点拆信` : (view.detail || (writing ? '正在生成中' : '')))}</small></span>
+        </button>`;
+    return `<article class="rmt-heart-letter${writing ? ' is-writing' : ''}${view.compact ? ' is-compact' : ''}">
+        ${seal}
         <div class="rmt-heart-letter-paper" data-rmt-letter-paper hidden>
             ${paper}
             <div class="rmt-floor-body" data-rmt-floor-body data-rmt-reveal="${core_text.esc(view.revealId)}" data-rmt-module="${core_text.esc(view.moduleId)}"></div>
@@ -314,7 +325,7 @@ function letterSlots(context) {
             if (!located) continue;
             const view = viewForReveal(context, snapshot, reveal);
             if (view.phase === 'hidden') continue;
-            slots.push({ key: reveal.id, messageIndex: located.index, view });
+            slots.push({ key: reveal.id, messageIndex: located.index, view: { ...view, opened: reveal.status === 'opened' } });
             seen.add(reveal.id);
         }
     }
@@ -322,9 +333,12 @@ function letterSlots(context) {
     const latest = latestAssistantIndex(context.chat);
     if (latest >= 0 && live.phase !== 'hidden') {
         const existing = live.revealId ? slots.find(slot => slot.key === live.revealId) : null;
-        if (existing) existing.view = live;
+        if (existing) existing.view = { ...live, opened: existing.view.opened === true };
         else slots.push({ key: live.revealId || `live:${latest}`, messageIndex: latest, view: live });
     }
+    // r84.162：最新那一楼用信封，更早的楼都压缩成提示条。
+    const newest = slots.reduce((max, slot) => Math.max(max, slot.messageIndex), -1);
+    for (const slot of slots) slot.view = { ...slot.view, compact: slot.messageIndex < newest };
     return { slots, live };
 }
 
@@ -334,7 +348,9 @@ function paintHost(host, view) {
     const body = host.querySelector('[data-rmt-floor-body]');
     const contentOpen = view.phase === 'reveal' && (host.dataset.rmtRead === view.revealId || body?.dataset?.rmtLetterRead === '1');
     view.contentOpen = contentOpen;
-    const sameLetter = host.dataset.rmtPhase === view.phase && host.dataset.rmtReveal === view.revealId && host.dataset.rmtPace === (view.phase === 'pace' ? view.detail : '') && host.dataset.rmtOpen === (contentOpen ? '1' : '');
+    const face = `${view.compact ? 'strip' : 'envelope'}|${view.opened ? 'opened' : ''}`;
+    const sameLetter = host.dataset.rmtPhase === view.phase && host.dataset.rmtReveal === view.revealId && host.dataset.rmtPace === (view.phase === 'pace' ? view.detail : '') && host.dataset.rmtOpen === (contentOpen ? '1' : '') && host.dataset.rmtFace === face;
+    host.dataset.rmtFace = face;
     host.dataset.rmtPhase = view.phase;
     host.dataset.rmtReveal = view.revealId;
     host.dataset.rmtPace = view.phase === 'pace' ? view.detail : '';
@@ -389,9 +405,15 @@ function paint(context) {
     const toast = shell_state.toastForTransition(lastPhase, live.phase, { line: live.title }, { initial: !sawPhase });
     sawPhase = true;
     lastPhase = live.phase;
+    ensureCss();
     if (toast) {
-        const options = live.revealId ? { onclick: () => openReveal(live.revealId) } : undefined;
-        globalThis.toastr?.[toast.level]?.(toast.message, toast.title, options);
+        // r84.162：仍用酒馆原生弹出提示，颜色跟随插件主题。
+        const options = { toastClass: 'toast rmt-heart-toast', ...(live.revealId ? { onclick: () => openReveal(live.revealId) } : {}) };
+        const shown = globalThis.toastr?.[toast.level]?.(toast.message, toast.title, options);
+        const node = shown?.[0] || shown;
+        if (node?.style) {
+            try { core_theme.applyThemeToElement(node, core_settings.getPluginSettings(context)); } catch { /* 取不到主题时保留原生颜色。 */ }
+        }
     }
     ensureCss();
     mirrorModuleCss();
@@ -613,6 +635,23 @@ function onClick(event) {
         const seal = paper?.parentElement?.querySelector?.('[data-rmt-letter-open]');
         if (paper) paper.hidden = true;
         if (seal) seal.hidden = false;
+        return;
+    }
+    const jump = event.target?.closest?.('[data-rmt-letter-jump]');
+    if (jump) {
+        event.preventDefault();
+        event.stopPropagation();
+        const mode = jump.dataset.rmtModule || '';
+        if (!Object.values(core_constants.MODE).includes(mode)) return;
+        rememberOpened(jump.dataset.rmtReveal || '');
+        try {
+            ui_overlay.openOverlay();
+            void Promise.resolve(ui_overlay.openCachedOrGenerate(mode)).catch(error => {
+                globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊');
+            });
+        } catch (error) {
+            globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊');
+        }
         return;
     }
     const read = event.target?.closest?.('[data-rmt-letter-read]');

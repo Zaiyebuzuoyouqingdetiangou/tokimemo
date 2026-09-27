@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 287
-// Source SHA-256: cc790674da005c61e51e0f958932b6e8c51704c4035c9e43d4ab68533b567095
+// Source SHA-256: e76dbe8d1fc142038b9b4e2df9a57c701aafdf650851ec094080f4c4c5a364de
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -7691,15 +7691,33 @@ function floorShellCss() {
 .rmt-heart-letter:has(.rmt-heart-letter-paper:not([hidden])){width:min(100%,640px)}
 .rmt-heart-letter:has(.rmt-heart-letter-paper:not([hidden])) .rmt-heart-letter-seal{display:none}
 .rmt-heart-letter [data-rmt-letter-achievement]{margin:0 0 10px;font-weight:650}
-.rmt-heart-letter-seal{display:grid;justify-items:center;gap:8px;width:100%;margin:0;padding:0;border:0;background:transparent;color:#6a4a58;box-shadow:none;font:inherit;text-align:center;cursor:pointer}
+.rmt-heart-letter-seal{display:flex;align-items:center;gap:12px;width:100%;margin:0;padding:0;border:0;background:transparent;color:#6a4a58;box-shadow:none;font:inherit;text-align:left;cursor:pointer}
+.rmt-heart-letter-seal .rmt-envelope{flex:0 0 72px;width:72px;filter:drop-shadow(0 4px 6px rgba(90,24,48,.14))}
+.rmt-letter-seal-text{display:grid;gap:2px;min-width:0;flex:1}
+.rmt-letter-seal-text b{font-size:14px;line-height:1.4;font-weight:650;color:#5c463c}
+.rmt-heart-letter.is-compact{width:min(100%,420px)}
+.rmt-heart-letter-strip{gap:8px;padding:6px 14px;border:1px solid var(--rmt-theme-border);border-radius:999px;background:var(--rmt-theme-soft)}
+.rmt-heart-letter-strip .rmt-envelope{flex:0 0 26px;width:26px;filter:none}
+.rmt-heart-letter-strip .rmt-letter-seal-text{grid-template-columns:auto minmax(0,1fr);align-items:baseline;gap:6px}
+.rmt-heart-letter-strip .rmt-letter-seal-text b{font-size:13px;white-space:nowrap}
+.rmt-heart-letter-strip small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rmt-heart-letter-strip em{flex:0 0 auto;font-style:normal;font-size:12px;color:var(--rmt-theme-accent-ink)}
+.rmt-heart-letter-strip.is-opened{background:var(--rmt-theme-surface-solid)}
+.rmt-heart-letter-strip.is-opened b,.rmt-heart-letter-strip.is-opened em{color:var(--rmt-theme-muted)}
+.rmt-letter-dot{flex:0 0 8px;width:8px;height:8px;border-radius:50%;background:var(--rmt-theme-accent-ink)}
 .rmt-heart-letter-seal small{color:#8d6d78;font-size:12px;line-height:1.4}
 .rmt-envelope{display:block;width:min(100%,240px);height:auto;filter:drop-shadow(0 12px 16px rgba(90,24,48,.16))}
-.rmt-heart-letter.is-writing .rmt-heart-letter-seal{display:grid!important;cursor:default}
+.rmt-heart-letter.is-writing .rmt-heart-letter-seal{display:flex!important;cursor:default}
 .rmt-heart-letter.is-writing .rmt-heart-letter-paper{display:none!important}
-.rmt-heart-letter-paper{margin-top:8px;min-width:0;height:auto;max-height:none;overflow:visible;padding:16px 14px 12px;border:1px solid #e6d3c4;border-left:7px solid #e99ab9;border-radius:4px 16px 16px 4px;background:#fff8ee;background-image:repeating-linear-gradient(0deg,transparent,transparent 22px,rgba(180,140,120,.16) 23px);color:var(--rmt-theme-text)}
+.rmt-heart-letter-paper{margin-top:8px;min-width:0;height:auto;max-height:none;overflow:visible;padding:14px 16px 12px;border:1px solid var(--rmt-theme-border);border-radius:14px;background:var(--rmt-theme-soft);color:var(--rmt-theme-text)}
+.rmt-letter-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 0 8px}
+.rmt-letter-badge{display:inline-block;padding:2px 10px;border-radius:999px;background:var(--rmt-theme-wash);color:var(--rmt-theme-accent-ink);font-size:12px;line-height:1.6}
+.rmt-letter-buttons{display:flex;flex-wrap:wrap;gap:8px;margin:2px 0 0}
+#toast-container>.toast.rmt-heart-toast{background-color:var(--rmt-theme-surface-solid,#fffdf8);background-image:none;padding-left:15px;border-left:4px solid var(--rmt-theme-accent,#e99ab9);color:var(--rmt-theme-text,#5c463c);opacity:1}
+#toast-container>.toast.rmt-heart-toast .toast-title,#toast-container>.toast.rmt-heart-toast .toast-message{color:var(--rmt-theme-text,#5c463c)}
 .rmt-heart-letter-paper>p,.rmt-heart-letter-paper [data-rmt-letter-copy]{margin:0 0 10px;font-size:15px;line-height:1.6}
-.rmt-heart-letter-paper [data-rmt-letter-achievement]{font-size:20px;line-height:1.5}
-.rmt-heart-letter-close{margin:0 0 12px}
+.rmt-heart-letter-paper [data-rmt-letter-achievement]{font-size:18px;line-height:1.5}
+.rmt-heart-letter-close{margin:0}
 .rmt-heart-letter .rmt-letter-piece h3{margin:16px 0 8px;font-size:16px}
 .rmt-heart-letter .rmt-floor-body{display:block;height:auto;max-height:70vh;max-width:100%;min-width:0;min-height:0;margin-top:10px;overflow:auto}
 .rmt-heart-letter .rmt-floor-note{margin:0 0 10px;font-size:15px;line-height:1.7}
@@ -24123,6 +24141,19 @@ const floorWindowStamp = __m_archive_floorWindowCheck_js.floorWindowStamp;
 // 建档主流程：一次建档操作（分批、请求、校验、保存）
 // 从 archive/repository.js 原样搬出（重构阶段 2），声明文本一字未改；archive/repository.js 仍转发原有导出。
 
+// r84.162：只在旧批次用到的楼不在当前读取范围里时，才补读整段聊天（不按读取范围筛）。
+// 当前范围里的楼仍以 snapshot.messages 为准；补读的楼只供 resolveBatchParts 按哈希核对。
+async function messagesForBatchRefs(progress, snapshot, context, expectedChatId, stillCurrent) {
+    const have = new Set((snapshot.messages || []).map(row => row.index));
+    const missing = (progress?.batches?.[progress.nextBatch] || [])
+        .some(part => (part.refs || []).some(ref => ref.kind === 'chat' && !have.has(ref.index)));
+    if (!missing) return snapshot.messages;
+    const full = await core_context.buildChatSnapshot(context, { completeSource: true, expectedChatId, stillCurrent });
+    const merged = new Map((full.messages || []).map(row => [row.index, row]));
+    for (const row of snapshot.messages || []) merged.set(row.index, row);
+    return [...merged.values()];
+}
+
 async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic = false, continueRecovery = false, restartImport = false, participantRoster, logicalTask, floorWindow = null,
     draftId = '', selectedDraft = null, commitCompletedOnly = false, partialBase = null, independentResult = false, nextIndependentBatch = false, baseMemoryMissing = false, sceneRecords = null } = {}, preparation) {
     const context = preparation.context;
@@ -24389,7 +24420,11 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
                 && !archive_capacity.canAdmitToHot(existing.memories)) {
                 globalThis.toastr?.info?.('热位已满且均为锁定。本批新结果会进待入档，可导出；已有相簿/ADV/房间仍可生成。', '心迹回廊');
             }
-            const parts = archive_batches.resolveBatchParts(progress, snapshot.messages, external.records);
+            // r84.162：读取范围设成「最近 N 楼」时，档案里没做完的旧批次可能有楼已经滑出范围。
+            // 旧批次按自己记下的楼核对（每个片段有哈希，内容不同仍会停下），不受当前读取范围限制。
+            const partsMessages = capturedInput ? snapshot.messages
+                : await messagesForBatchRefs(progress, snapshot, context, preparation.origin.chatId, preparationStillCurrent);
+            const parts = archive_batches.resolveBatchParts(progress, partsMessages, external.records);
             chunks = parts.filter(part => part.kind === 'chat').map(part => part.data);
             externalChunks = parts.filter(part => part.kind === 'external').map(part => part.data);
             if (!commitCompletedOnly) {
@@ -61496,7 +61531,11 @@ const room_layout = __m_modes_roomLayout_js;
 const ui_heartEnvelope = __m_ui_heartEnvelope_js;
 const ui_styles = __m_ui_styles_js;
 const ui_taskCenter = __m_ui_taskCenter_js;
+const ui_overlay = __m_ui_overlay_js;
+const core_theme = __m_core_theme_js;
 // 外置壳贴在角色楼层下面，点开才展开。档案没写完时不挂壳，也不显示建档进度。
+
+
 
 
 
@@ -61705,17 +61744,26 @@ function markup(view) {
     const actions = repair || complete || redo || retry ? `<div class="rmt-heart-letter-actions">${repair}${complete}${redo}${retry}</div>` : '';
     const revealPaper = view.phase === 'reveal' && view.showReveal;
     const writing = view.phase === 'generating' || view.phase === 'planning';
-    const caption = revealPaper ? '' : `<small data-rmt-letter-detail>${core_text.esc(view.detail || (writing ? '正在生成中' : ''))}</small>`;
-    const heading = view.title ? `<p data-rmt-letter-achievement>${core_text.esc(view.title)}</p>` : '';
-    const copy = view.achievementCopy ? `<p data-rmt-letter-copy>${core_text.esc(view.achievementCopy)}</p>` : '';
-    const read = `<button type="button" class="rmt-btn" data-rmt-letter-read data-rmt-reveal="${core_text.esc(view.revealId)}" data-rmt-module="${core_text.esc(view.moduleId)}">打开回忆</button>`;
+    const esc = core_text.esc;
+    const moduleTitle = view.moduleTitle || '回忆';
+    const heading = view.title ? `<p data-rmt-letter-achievement>${esc(view.title)}</p>` : '';
+    const copy = view.achievementCopy ? `<p data-rmt-letter-copy>${esc(view.achievementCopy)}</p>` : '';
+    const read = `<button type="button" class="rmt-btn" data-rmt-letter-read data-rmt-reveal="${esc(view.revealId)}" data-rmt-module="${esc(view.moduleId)}">打开回忆</button>`;
+    // r84.162：打开回忆仍在信里直接展开内容；另给一个按钮去心迹回廊看同一份（只打开已保存的，不会重新生成）。
+    const jump = view.moduleId ? `<button type="button" class="rmt-btn" data-rmt-letter-jump data-rmt-reveal="${esc(view.revealId)}" data-rmt-module="${esc(view.moduleId)}">去心迹回廊看</button>` : '';
     const paper = revealPaper
-        ? `<button type="button" class="rmt-btn rmt-heart-letter-close" data-rmt-letter-close>收起这封信</button>${heading}${copy}${read}`
+        ? `<div class="rmt-letter-head"><span class="rmt-letter-badge">${esc(moduleTitle)}</span></div>${heading}${copy}<div class="rmt-letter-buttons">${read}${jump}<button type="button" class="rmt-btn rmt-heart-letter-close" data-rmt-letter-close>收起</button></div>`
         : '';
-    return `<article class="rmt-heart-letter${writing ? ' is-writing' : ''}">
-        <button type="button" class="rmt-heart-letter-seal" data-rmt-letter-open aria-label="${core_text.esc(revealPaper ? '拆开这封信' : view.detail || '回忆')}">
-            ${envelopeArt()}${caption}
-        </button>
+    // r84.162：只有最新一楼用迷你信封；更早的楼压缩成一行提示条，没拆的带红点。
+    const seal = view.compact
+        ? `<button type="button" class="rmt-heart-letter-seal rmt-heart-letter-strip${view.opened ? ' is-opened' : ''}" data-rmt-letter-open aria-label="${esc(revealPaper ? `拆开这封信：${moduleTitle}` : view.detail || '回忆')}">
+            ${view.opened ? '' : '<span class="rmt-letter-dot" aria-hidden="true"></span>'}${envelopeArt()}<span class="rmt-letter-seal-text"><b>回忆 · ${esc(moduleTitle)}</b><small data-rmt-letter-detail>${esc(revealPaper ? (view.title || '') : (view.detail || ''))}</small></span><em>${revealPaper ? (view.opened ? '已读' : '未拆') : ''}</em>
+        </button>`
+        : `<button type="button" class="rmt-heart-letter-seal" data-rmt-letter-open aria-label="${esc(revealPaper ? '拆开这封信' : view.detail || '回忆')}">
+            ${envelopeArt()}<span class="rmt-letter-seal-text"><b>${revealPaper ? '你获得了一份回忆' : writing ? '回忆正在写' : esc(view.title || moduleTitle)}</b><small data-rmt-letter-detail>${esc(revealPaper ? `${moduleTitle} · 轻点拆信` : (view.detail || (writing ? '正在生成中' : '')))}</small></span>
+        </button>`;
+    return `<article class="rmt-heart-letter${writing ? ' is-writing' : ''}${view.compact ? ' is-compact' : ''}">
+        ${seal}
         <div class="rmt-heart-letter-paper" data-rmt-letter-paper hidden>
             ${paper}
             <div class="rmt-floor-body" data-rmt-floor-body data-rmt-reveal="${core_text.esc(view.revealId)}" data-rmt-module="${core_text.esc(view.moduleId)}"></div>
@@ -61811,7 +61859,7 @@ function letterSlots(context) {
             if (!located) continue;
             const view = viewForReveal(context, snapshot, reveal);
             if (view.phase === 'hidden') continue;
-            slots.push({ key: reveal.id, messageIndex: located.index, view });
+            slots.push({ key: reveal.id, messageIndex: located.index, view: { ...view, opened: reveal.status === 'opened' } });
             seen.add(reveal.id);
         }
     }
@@ -61819,9 +61867,12 @@ function letterSlots(context) {
     const latest = latestAssistantIndex(context.chat);
     if (latest >= 0 && live.phase !== 'hidden') {
         const existing = live.revealId ? slots.find(slot => slot.key === live.revealId) : null;
-        if (existing) existing.view = live;
+        if (existing) existing.view = { ...live, opened: existing.view.opened === true };
         else slots.push({ key: live.revealId || `live:${latest}`, messageIndex: latest, view: live });
     }
+    // r84.162：最新那一楼用信封，更早的楼都压缩成提示条。
+    const newest = slots.reduce((max, slot) => Math.max(max, slot.messageIndex), -1);
+    for (const slot of slots) slot.view = { ...slot.view, compact: slot.messageIndex < newest };
     return { slots, live };
 }
 
@@ -61831,7 +61882,9 @@ function paintHost(host, view) {
     const body = host.querySelector('[data-rmt-floor-body]');
     const contentOpen = view.phase === 'reveal' && (host.dataset.rmtRead === view.revealId || body?.dataset?.rmtLetterRead === '1');
     view.contentOpen = contentOpen;
-    const sameLetter = host.dataset.rmtPhase === view.phase && host.dataset.rmtReveal === view.revealId && host.dataset.rmtPace === (view.phase === 'pace' ? view.detail : '') && host.dataset.rmtOpen === (contentOpen ? '1' : '');
+    const face = `${view.compact ? 'strip' : 'envelope'}|${view.opened ? 'opened' : ''}`;
+    const sameLetter = host.dataset.rmtPhase === view.phase && host.dataset.rmtReveal === view.revealId && host.dataset.rmtPace === (view.phase === 'pace' ? view.detail : '') && host.dataset.rmtOpen === (contentOpen ? '1' : '') && host.dataset.rmtFace === face;
+    host.dataset.rmtFace = face;
     host.dataset.rmtPhase = view.phase;
     host.dataset.rmtReveal = view.revealId;
     host.dataset.rmtPace = view.phase === 'pace' ? view.detail : '';
@@ -61886,9 +61939,15 @@ function paint(context) {
     const toast = shell_state.toastForTransition(lastPhase, live.phase, { line: live.title }, { initial: !sawPhase });
     sawPhase = true;
     lastPhase = live.phase;
+    ensureCss();
     if (toast) {
-        const options = live.revealId ? { onclick: () => openReveal(live.revealId) } : undefined;
-        globalThis.toastr?.[toast.level]?.(toast.message, toast.title, options);
+        // r84.162：仍用酒馆原生弹出提示，颜色跟随插件主题。
+        const options = { toastClass: 'toast rmt-heart-toast', ...(live.revealId ? { onclick: () => openReveal(live.revealId) } : {}) };
+        const shown = globalThis.toastr?.[toast.level]?.(toast.message, toast.title, options);
+        const node = shown?.[0] || shown;
+        if (node?.style) {
+            try { core_theme.applyThemeToElement(node, core_settings.getPluginSettings(context)); } catch { /* 取不到主题时保留原生颜色。 */ }
+        }
     }
     ensureCss();
     mirrorModuleCss();
@@ -62110,6 +62169,23 @@ function onClick(event) {
         const seal = paper?.parentElement?.querySelector?.('[data-rmt-letter-open]');
         if (paper) paper.hidden = true;
         if (seal) seal.hidden = false;
+        return;
+    }
+    const jump = event.target?.closest?.('[data-rmt-letter-jump]');
+    if (jump) {
+        event.preventDefault();
+        event.stopPropagation();
+        const mode = jump.dataset.rmtModule || '';
+        if (!Object.values(core_constants.MODE).includes(mode)) return;
+        rememberOpened(jump.dataset.rmtReveal || '');
+        try {
+            ui_overlay.openOverlay();
+            void Promise.resolve(ui_overlay.openCachedOrGenerate(mode)).catch(error => {
+                globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊');
+            });
+        } catch (error) {
+            globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊');
+        }
         return;
     }
     const read = event.target?.closest?.('[data-rmt-letter-read]');

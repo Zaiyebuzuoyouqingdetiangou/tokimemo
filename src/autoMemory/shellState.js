@@ -26,15 +26,33 @@ export function floorShellCss() {
 .rmt-heart-letter:has(.rmt-heart-letter-paper:not([hidden])){width:min(100%,640px)}
 .rmt-heart-letter:has(.rmt-heart-letter-paper:not([hidden])) .rmt-heart-letter-seal{display:none}
 .rmt-heart-letter [data-rmt-letter-achievement]{margin:0 0 10px;font-weight:650}
-.rmt-heart-letter-seal{display:grid;justify-items:center;gap:8px;width:100%;margin:0;padding:0;border:0;background:transparent;color:#6a4a58;box-shadow:none;font:inherit;text-align:center;cursor:pointer}
+.rmt-heart-letter-seal{display:flex;align-items:center;gap:12px;width:100%;margin:0;padding:0;border:0;background:transparent;color:#6a4a58;box-shadow:none;font:inherit;text-align:left;cursor:pointer}
+.rmt-heart-letter-seal .rmt-envelope{flex:0 0 72px;width:72px;filter:drop-shadow(0 4px 6px rgba(90,24,48,.14))}
+.rmt-letter-seal-text{display:grid;gap:2px;min-width:0;flex:1}
+.rmt-letter-seal-text b{font-size:14px;line-height:1.4;font-weight:650;color:#5c463c}
+.rmt-heart-letter.is-compact{width:min(100%,420px)}
+.rmt-heart-letter-strip{gap:8px;padding:6px 14px;border:1px solid var(--rmt-theme-border);border-radius:999px;background:var(--rmt-theme-soft)}
+.rmt-heart-letter-strip .rmt-envelope{flex:0 0 26px;width:26px;filter:none}
+.rmt-heart-letter-strip .rmt-letter-seal-text{grid-template-columns:auto minmax(0,1fr);align-items:baseline;gap:6px}
+.rmt-heart-letter-strip .rmt-letter-seal-text b{font-size:13px;white-space:nowrap}
+.rmt-heart-letter-strip small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rmt-heart-letter-strip em{flex:0 0 auto;font-style:normal;font-size:12px;color:var(--rmt-theme-accent-ink)}
+.rmt-heart-letter-strip.is-opened{background:var(--rmt-theme-surface-solid)}
+.rmt-heart-letter-strip.is-opened b,.rmt-heart-letter-strip.is-opened em{color:var(--rmt-theme-muted)}
+.rmt-letter-dot{flex:0 0 8px;width:8px;height:8px;border-radius:50%;background:var(--rmt-theme-accent-ink)}
 .rmt-heart-letter-seal small{color:#8d6d78;font-size:12px;line-height:1.4}
 .rmt-envelope{display:block;width:min(100%,240px);height:auto;filter:drop-shadow(0 12px 16px rgba(90,24,48,.16))}
-.rmt-heart-letter.is-writing .rmt-heart-letter-seal{display:grid!important;cursor:default}
+.rmt-heart-letter.is-writing .rmt-heart-letter-seal{display:flex!important;cursor:default}
 .rmt-heart-letter.is-writing .rmt-heart-letter-paper{display:none!important}
-.rmt-heart-letter-paper{margin-top:8px;min-width:0;height:auto;max-height:none;overflow:visible;padding:16px 14px 12px;border:1px solid #e6d3c4;border-left:7px solid #e99ab9;border-radius:4px 16px 16px 4px;background:#fff8ee;background-image:repeating-linear-gradient(0deg,transparent,transparent 22px,rgba(180,140,120,.16) 23px);color:var(--rmt-theme-text)}
+.rmt-heart-letter-paper{margin-top:8px;min-width:0;height:auto;max-height:none;overflow:visible;padding:14px 16px 12px;border:1px solid var(--rmt-theme-border);border-radius:14px;background:var(--rmt-theme-soft);color:var(--rmt-theme-text)}
+.rmt-letter-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 0 8px}
+.rmt-letter-badge{display:inline-block;padding:2px 10px;border-radius:999px;background:var(--rmt-theme-wash);color:var(--rmt-theme-accent-ink);font-size:12px;line-height:1.6}
+.rmt-letter-buttons{display:flex;flex-wrap:wrap;gap:8px;margin:2px 0 0}
+#toast-container>.toast.rmt-heart-toast{background-color:var(--rmt-theme-surface-solid,#fffdf8);background-image:none;padding-left:15px;border-left:4px solid var(--rmt-theme-accent,#e99ab9);color:var(--rmt-theme-text,#5c463c);opacity:1}
+#toast-container>.toast.rmt-heart-toast .toast-title,#toast-container>.toast.rmt-heart-toast .toast-message{color:var(--rmt-theme-text,#5c463c)}
 .rmt-heart-letter-paper>p,.rmt-heart-letter-paper [data-rmt-letter-copy]{margin:0 0 10px;font-size:15px;line-height:1.6}
-.rmt-heart-letter-paper [data-rmt-letter-achievement]{font-size:20px;line-height:1.5}
-.rmt-heart-letter-close{margin:0 0 12px}
+.rmt-heart-letter-paper [data-rmt-letter-achievement]{font-size:18px;line-height:1.5}
+.rmt-heart-letter-close{margin:0}
 .rmt-heart-letter .rmt-letter-piece h3{margin:16px 0 8px;font-size:16px}
 .rmt-heart-letter .rmt-floor-body{display:block;height:auto;max-height:70vh;max-width:100%;min-width:0;min-height:0;margin-top:10px;overflow:auto}
 .rmt-heart-letter .rmt-floor-note{margin:0 0 10px;font-size:15px;line-height:1.7}

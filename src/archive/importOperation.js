@@ -31,6 +31,19 @@ import { floorWindowMessages, floorWindowStamp } from './floorWindowCheck.js';
 // 建档主流程：一次建档操作（分批、请求、校验、保存）
 // 从 archive/repository.js 原样搬出（重构阶段 2），声明文本一字未改；archive/repository.js 仍转发原有导出。
 
+// r84.162：只在旧批次用到的楼不在当前读取范围里时，才补读整段聊天（不按读取范围筛）。
+// 当前范围里的楼仍以 snapshot.messages 为准；补读的楼只供 resolveBatchParts 按哈希核对。
+async function messagesForBatchRefs(progress, snapshot, context, expectedChatId, stillCurrent) {
+    const have = new Set((snapshot.messages || []).map(row => row.index));
+    const missing = (progress?.batches?.[progress.nextBatch] || [])
+        .some(part => (part.refs || []).some(ref => ref.kind === 'chat' && !have.has(ref.index)));
+    if (!missing) return snapshot.messages;
+    const full = await core_context.buildChatSnapshot(context, { completeSource: true, expectedChatId, stillCurrent });
+    const merged = new Map((full.messages || []).map(row => [row.index, row]));
+    for (const row of snapshot.messages || []) merged.set(row.index, row);
+    return [...merged.values()];
+}
+
 export async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic = false, continueRecovery = false, restartImport = false, participantRoster, logicalTask, floorWindow = null,
     draftId = '', selectedDraft = null, commitCompletedOnly = false, partialBase = null, independentResult = false, nextIndependentBatch = false, baseMemoryMissing = false, sceneRecords = null } = {}, preparation) {
     const context = preparation.context;
@@ -297,7 +310,11 @@ export async function importCurrentChatMemoryOperation({ fullRebuild = false, au
                 && !archive_capacity.canAdmitToHot(existing.memories)) {
                 globalThis.toastr?.info?.('热位已满且均为锁定。本批新结果会进待入档，可导出；已有相簿/ADV/房间仍可生成。', '心迹回廊');
             }
-            const parts = archive_batches.resolveBatchParts(progress, snapshot.messages, external.records);
+            // r84.162：读取范围设成「最近 N 楼」时，档案里没做完的旧批次可能有楼已经滑出范围。
+            // 旧批次按自己记下的楼核对（每个片段有哈希，内容不同仍会停下），不受当前读取范围限制。
+            const partsMessages = capturedInput ? snapshot.messages
+                : await messagesForBatchRefs(progress, snapshot, context, preparation.origin.chatId, preparationStillCurrent);
+            const parts = archive_batches.resolveBatchParts(progress, partsMessages, external.records);
             chunks = parts.filter(part => part.kind === 'chat').map(part => part.data);
             externalChunks = parts.filter(part => part.kind === 'external').map(part => part.data);
             if (!commitCompletedOnly) {
