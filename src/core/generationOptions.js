@@ -1,6 +1,5 @@
 import * as contextApi from './context.js';
-// C-3c（r84.100）：别名沿用 repository，函数体一字不改；实际指向 core 层的桥，不再 import archive 层。
-import * as repository from './archiveBridge.js';
+import * as repository from '../archive/repository.js';
 const PREFIX = 'heartbeatMemoriesComposerV1:';
 const volatile = new Map();
 export function composerScope(context, memory) {

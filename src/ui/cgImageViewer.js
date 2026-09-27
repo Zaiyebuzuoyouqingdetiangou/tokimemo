@@ -21,12 +21,14 @@ export function closeCgImageViewer({ restoreFocus = true } = {}) {
     current.image.removeEventListener('load', current.onLoad);
     current.image.removeEventListener('error', current.onError);
     current.element.remove();
-    if (restoreFocus && current.opener?.isConnected) current.opener.focus();
+    if (restoreFocus && current.opener?.isConnected) current.opener.focus({ preventScroll: true });
     return true;
 }
 
-export function openCgImageViewer(record, title = '原图', { opener = null } = {}) {
+export function openCgImageViewer(record, title = '原图', { opener = null, versions = [], currentUrl = '' } = {}) {
     const imageRecord = image_patch.normalizeCgImageRecord(record);
+    const availableVersions = [...(Array.isArray(versions) ? versions : []), imageRecord].map(item => image_patch.normalizeCgImageRecord(item)).filter(Boolean)
+        .filter((item, index, list) => list.findIndex(other => other.url === item.url) === index);
     if (!imageRecord) {
         globalThis.toastr?.warning?.('这张图片没有可查看的本地路径。', '心迹回廊');
         return false;
@@ -48,17 +50,30 @@ export function openCgImageViewer(record, title = '原图', { opener = null } = 
     element.setAttribute('aria-modal', 'true');
     element.setAttribute('aria-label', '查看原图');
     const toolbar = make('div', 'rmt-cg-viewer-toolbar');
+    const close = make('button', 'rmt-cg-viewer-close', '返回');
+    close.type = 'button';
+    close.setAttribute('aria-label', '关闭原图，返回上一层');
+    const previous = make('button', 'rmt-cg-viewer-prev', '上一张');
+    previous.type = 'button';
     const heading = make('b', 'rmt-cg-viewer-title', core_text.normalizeText(title, 120) || '原图');
+    const count = make('span', 'rmt-cg-viewer-count');
+    const next = make('button', 'rmt-cg-viewer-next', '下一张');
+    next.type = 'button';
     const toggle = make('button', 'rmt-cg-viewer-toggle', '原尺寸');
     toggle.type = 'button';
     toggle.disabled = true;
     toggle.setAttribute('aria-pressed', 'false');
-    const close = make('button', 'rmt-cg-viewer-close', '返回');
-    close.type = 'button';
-    close.setAttribute('aria-label', '关闭原图，返回上一层');
     toolbar.appendChild(close);
     toolbar.appendChild(heading);
     toolbar.appendChild(toggle);
+    const navigation = make('nav', 'rmt-cg-viewer-toolbar rmt-cg-viewer-navigation');
+    navigation.setAttribute('aria-label', '已保存图片历史');
+    navigation.style.justifyContent = 'center';
+    previous.setAttribute('aria-label', '上一张已保存图片');
+    next.setAttribute('aria-label', '下一张已保存图片');
+    navigation.appendChild(previous);
+    navigation.appendChild(count);
+    navigation.appendChild(next);
     const status = make('p', 'rmt-cg-viewer-status', '正在加载图片…');
     status.setAttribute('role', 'status');
     status.setAttribute('aria-live', 'polite');
@@ -74,8 +89,29 @@ export function openCgImageViewer(record, title = '原图', { opener = null } = 
     element.appendChild(toolbar);
     element.appendChild(status);
     element.appendChild(stage);
-    const current = { element, host, document: doc, image, opener: previousOpener, observer: null };
+    element.appendChild(navigation);
+    const current = { element, host, document: doc, image, opener: previousOpener, observer: null, count, previous, next, versions: availableVersions,
+        versionIndex: Math.max(0, availableVersions.findIndex(item => item.url === image_patch.normalizeCgImageUrl(currentUrl || imageRecord?.url))) };
+
     let lastEarlyDismissAt = 0;
+    const syncVersionUi = () => {
+        const multiple = current.versions.length > 1;
+        navigation.hidden = !multiple;
+        navigation.style.display = multiple ? 'flex' : 'none';
+        const item = current.versions[current.versionIndex] || imageRecord;
+        if (current.count) current.count.textContent = multiple ? `${current.versionIndex + 1} / ${current.versions.length}` : '';
+        if (current.previous) current.previous.hidden = !multiple;
+        if (current.next) current.next.hidden = !multiple;
+        if (current.previous) current.previous.disabled = !multiple;
+        if (current.next) current.next.disabled = !multiple;
+        if (item && image.src !== item.url) {
+            status.textContent = '正在加载图片…';
+            status.setAttribute('role', 'status');
+            image.hidden = false;
+            toggle.disabled = true;
+            image.src = item.url;
+        }
+    };
     const dismiss = event => {
         event.preventDefault();
         event.stopImmediatePropagation();
@@ -99,7 +135,7 @@ export function openCgImageViewer(record, title = '原图', { opener = null } = 
     current.onKeydown = event => {
         if (event.key === 'Escape') { dismiss(event); return; }
         if (event.key !== 'Tab') return;
-        const controls = toggle.disabled ? [close, stage] : [close, toggle, stage];
+        const controls = [close, toggle, stage, previous, next].filter(control => !control.hidden && !control.disabled);
         const active = doc.activeElement;
         if (!element.contains(active) || (event.shiftKey && active === controls[0])) {
             event.preventDefault();
@@ -113,6 +149,16 @@ export function openCgImageViewer(record, title = '原图', { opener = null } = 
         // Swallow the trailing synthetic click when the touch fallback just dismissed.
         if (event.target === close) {
             if (Date.now() - lastEarlyDismissAt >= 500) dismiss(event);
+            return;
+        }
+        if (event.target === previous || event.target === next) {
+            if (current.versions.length > 1) {
+                const delta = event.target === previous ? -1 : 1;
+                current.versionIndex = (current.versionIndex + delta + current.versions.length) % current.versions.length;
+                stage.scrollTop = 0;
+                stage.scrollLeft = 0;
+                syncVersionUi();
+            }
             return;
         }
         if (event.target !== toggle || toggle.disabled) return;
@@ -160,7 +206,7 @@ export function openCgImageViewer(record, title = '原图', { opener = null } = 
         current.observer.observe(shell, { childList: true });
         if (body) current.observer.observe(body, { childList: true });
     }
-    image.src = imageRecord.url;
-    close.focus();
+    syncVersionUi();
+    close.focus({ preventScroll: true });
     return true;
 }

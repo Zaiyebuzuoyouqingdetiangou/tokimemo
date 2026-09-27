@@ -1,6 +1,4 @@
 import * as manual_credentials from './manualCredentialStore.js';
-// C-3c（r84.100）：别名沿用 source_read，函数体一字不改；实际指向 core 层的桥，不再 import archive 层。
-import * as source_read from './archiveBridge.js';
 import * as connection_pool from './connectionPool.js';
 import * as advanced_generation from './advancedGeneration.js';
 import * as output_budget from './outputBudget.js';
@@ -17,12 +15,6 @@ import * as core_contextTags from './contextTags.js';
 import * as core_autoUpdatePolicy from './autoUpdatePolicy.js';
 import * as creative_supplement from './creativeSupplement.js';
 import * as chat_read_range from './chatReadRange.js';
-
-export function normalizeAutoMemoryInterval(value) {
-    const count = Math.floor(Number(value));
-    if (!Number.isFinite(count)) return 5;
-    return Math.max(1, Math.min(1000, count));
-}
 
 export function normalizeAutoRetryCount(value) {
     const count = Math.floor(Number(value));
@@ -75,9 +67,6 @@ export function getPluginSettings(context = core_context.getContext()) {
         autoRetryEnabled: settings.autoRetryEnabled === true,
         autoRetryCount: normalizeAutoRetryCount(settings.autoRetryCount),
         autoSecondPass: settings.autoSecondPass === true,
-        autoMemoryLatestFloor: settings.autoMemoryLatestFloor === true,
-        autoMemoryIntervalFloors: normalizeAutoMemoryInterval(settings.autoMemoryIntervalFloors),
-        heartEnvelopeSkin: core_constants.HEART_ENVELOPE_SKINS.includes(settings.heartEnvelopeSkin) ? settings.heartEnvelopeSkin : 'pink',
         creativeSupplementEnabled: settings.creativeSupplementEnabled === true,
         creativeSupplement: creative_supplement.normalizeCreativeSupplement(settings.creativeSupplement),
         ttDisplayMode: settings.ttDisplayMode === true,
@@ -133,12 +122,10 @@ export function updatePluginSettings(patch) {
 
 // Called only by an explicit manual action or before an authorized request.
 // No plaintext is returned to UI, ordinary settings, logs or export paths.
-export async function prepareManualCredential(context = core_context.getContext(), { signal = null } = {}) {
-    if (signal?.aborted) throw new DOMException('Read cancelled', 'AbortError');
+export async function prepareManualCredential(context = core_context.getContext()) {
     const before = getPluginSettings(context);
     if (before.manualApiKey || !before.manualApiSecretRef || before.apiConnectionMode !== 'manual') return;
-    const key = await source_read.waitForSourceRead(() => manual_credentials.readManualCredential(before.manualApiBaseUrl, before.manualApiSecretRef), signal);
-    if (signal?.aborted) throw new DOMException('Read cancelled', 'AbortError');
+    const key = await manual_credentials.readManualCredential(before.manualApiBaseUrl, before.manualApiSecretRef);
     const latest = getPluginSettings(context);
     if (core_context.getContext().extensionSettings !== context.extensionSettings || latest.manualApiBaseUrl !== before.manualApiBaseUrl
         || latest.manualApiSecretRef !== before.manualApiSecretRef || (latest.manualApiKey && latest.manualApiKey !== key)) throw new DOMException('Credential binding changed', 'AbortError');

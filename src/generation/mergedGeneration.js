@@ -1,5 +1,3 @@
-import * as cg_visual from '../core/cgVisualRules.js';
-import * as inbox_art from '../core/letterIllustrationV2.js';
 import * as generationParticipants from '../core/generationParticipants.js';
 import * as participants from '../core/participants.js';
 import * as composerOptions from '../core/generationOptions.js';
@@ -17,19 +15,15 @@ import * as core_text from '../core/text.js';
 import * as song_contract from '../core/themeSongContract.js';
 import * as archive_repository from '../archive/repository.js';
 import * as core_taskTrace from '../core/taskTrace.js';
+import * as core_worldPresentation from '../core/worldPresentation.js';
 import * as generation_client from './client.js';
 import * as generation_prompts from './prompts.js';
 import * as generation_recovery from './recovery.js';
-// C-4（r84.116）：别名沿用 modes_achievements，函数体一字不改；实际指向生成层的桥，不再 import 成就库模块。
-import * as modes_achievements from './modesBridge.js';
-// C-4（r84.115）：别名沿用 modes_cabinet，函数体一字不改；实际指向生成层的桥，不再 import 陈列柜模块。
-import * as modes_cabinet from './modesBridge.js';
-// C-4（r84.108）：别名沿用 modes_inbox，函数体一字不改；实际指向生成层的桥，不再 import 邮箱模块。
-import * as modes_inbox from './modesBridge.js';
-// C-4（r84.106）：别名沿用 modes_themeSong，函数体一字不改；实际指向生成层的桥，不再 import 印象曲模块。
-import * as modes_themeSong from './modesBridge.js';
-// C-4（r84.103）：别名沿用 modes_bedtime，函数体一字不改；实际指向生成层的桥，不再 import 睡前故事模块。
-import * as modes_bedtime from './modesBridge.js';
+import * as modes_achievements from '../modes/achievements.js';
+import * as modes_cabinet from '../modes/cabinet.js';
+import * as modes_inbox from '../modes/inbox.js';
+import * as modes_themeSong from '../modes/themeSong.js';
+import * as modes_bedtime from '../modes/bedtime.js';
 import * as bedtime_contract from '../core/bedtimeContract.js';
 import * as ui_overlay from '../ui/overlay.js';
 import * as ui_workspaceState from '../ui/workspaceState.js';
@@ -107,17 +101,10 @@ export function buildMergeTask(route, context, memoryBank, previous = null, date
         const block = participants.participantPromptBlock(participantSnapshot);
         task.singlePrompt += block;
         task.taskText += block;
-        if (route === 'bedtime') {
-            const visualRules = cg_visual.cgStoryVisualInstructions(core_settings.getPluginSettings().cgPromptFormat, 'bedtime');
-            task.singlePrompt += visualRules;
-            task.taskText += visualRules;
-        }
         const accept = task.accept;
         task.acceptOptions = route === 'inbox' ? { characterEvidence: typeof options.characterEvidence === 'string' ? options.characterEvidence : '' } : {};
         task.accept = raw => {
             const result = accept(raw, task.acceptOptions);
-            result.chatId = core_context.comparableChatId(memoryBank.chatId);
-            result.archiveRevision = memoryBank.archiveRevision;
             result.generationSources = { ...(result.generationSources || {}), [task.mode]: { sourceMemory: structuredClone(memoryBank) } };
             return result;
         };
@@ -172,11 +159,11 @@ function buildMergeTaskBody(route, context, memoryBank, previous, date, options)
     if (route === 'inbox') {
         const plan = options.frozenPlan || modes_inbox.inboxPlan(memoryBank, previous, date);
         if (!plan.length) {
-            const error = core_text.safeUserError('邮箱今天的来信已经收过了，明天再来收新信吧。', 'RMT_LOCAL_OPERATION', { retryable: false });
+            const error = new Error('邮箱今天没有新的可写来信。');
             error.solo = true;
             throw error;
         }
-        const singlePrompt = modes_inbox.inboxPrompt(memoryBank, plan, previous);
+        const singlePrompt = modes_inbox.inboxPrompt(memoryBank, plan);
         return {
             plan, key: 'inbox', route, mode: core_constants.MODE.INBOX, label: routeTitle(route), outputReserve: OUTPUT_RESERVE.inbox,
             singlePrompt, taskText: inboxTaskText(singlePrompt),
@@ -313,6 +300,7 @@ export function pendingScopeMatches(row, scopeOrOrigin) {
     return !!scope && !!rowScope
         && scope.chatId === rowScope.chatId
         && scope.characterKey === rowScope.characterKey
+        && scope.archiveRevision === rowScope.archiveRevision
         && scope.archiveTargetEntryId === rowScope.archiveTargetEntryId;
 }
 
@@ -372,15 +360,6 @@ export function createPendingStore(storage = globalThis.localStorage) {
             const scope = pendingScopeForOrigin(scopeOrOrigin);
             if (!scope) return;
             update(scope.chatId, rows => rows.filter(row => row.id !== id || !pendingScopeMatches(row, scope)));
-        },
-        // 只删除调用方刚导出过的那几条未归属记录；导出之后新出现的记录不受影响，
-        // 有所属人物的记录永远不会被这里删除。
-        discardUnattributed(chatId, ids) {
-            const allowed = new Set((Array.isArray(ids) ? ids : []).filter(Boolean));
-            const targets = new Set(this.readUnattributed(chatId).map(row => row.id).filter(id => allowed.has(id)));
-            if (!targets.size) return 0;
-            update(chatId, rows => rows.filter(row => !targets.has(row.id)));
-            return targets.size;
         },
         exportUnattributed(chatId) {
             return JSON.stringify({ kind: 'hearttrace-merged-unattributed-pending', version: 1, chatId: core_context.comparableChatId(chatId), records: this.readUnattributed(chatId) }, null, 2);
@@ -513,8 +492,8 @@ async function clearFreshJournals(context, memoryBank, opened) {
 }
 
 export function assertMergedSaveIdentity(session, origin, memoryBank) {
-    if (!session || typeof session !== 'object' || !origin?.characterKey || !origin?.archiveRevision || !origin?.chatId || !origin?.modeWriteFences
-        || (session?.chatId && core_context.comparableChatId(session.chatId) !== origin.chatId) || (session?.archiveRevision && session.archiveRevision !== origin.archiveRevision)
+    if (!origin?.characterKey || !origin?.archiveRevision || !origin?.chatId || !origin?.modeWriteFences
+        || session?.chatId !== origin.chatId || session?.archiveRevision !== origin.archiveRevision
         || memoryBank?.chatId !== origin.chatId || memoryBank?.archiveRevision !== origin.archiveRevision) {
         throw core_text.safeUserError('原任务与当前档案不一致，成果仍保留；请回到原档案保存，或导出保留的成果。', 'RMT_MERGED_ORIGIN');
     }
@@ -532,7 +511,7 @@ function saveMergedSession(context, memoryBank, origin) {
     return async (mode, session) => {
         assertMergedSaveIdentity(session, origin, memoryBank);
         assertMergedTarget(origin, context, memoryBank, mode);
-        const committed = await core_cache.commitSession(mode, { ...session, chatId: origin.chatId, archiveRevision: origin.archiveRevision }, origin.chatId, origin);
+        const committed = await core_cache.commitSession(mode, session, origin.chatId, origin);
         if (!committed) throw core_text.safeUserError('这一页的结果已经通过校验，但还没有写上。', 'RMT_MERGED_SAVE');
     };
 }
@@ -624,13 +603,21 @@ export async function startTogether(routes, { confirm = null, date = new Date() 
     for (const route of routes) {
         if (!MERGEABLE_ROUTES.includes(route)) continue;
         const mode = ui_workspaceState.WORKSPACE_ROUTES[route].mode;
+        let openDraft = false;
+        try { openDraft = !!core_cache.loadGenerationRecovery(mode, context); }
+        catch { openDraft = false; }
+        if (openDraft) {
+            held.push({ route, label: routeTitle(route), reason: '这一页还有未提交的生成草稿，先续写或放弃。这次不放进同一次回复，也不会自动另开一项。' });
+            continue;
+        }
         try { tasks.push(buildMergeTask(route, context, memoryBank, previousSession(mode, context, memoryBank), date, frozenOptions[route])); }
         catch (error) { blocked.push({ route, label: routeTitle(route), reason: core_text.safeErrorSummary(error) }); }
     }
     const previewModes = [...new Set(tasks.map(task => task.mode))];
     const previewTerms = [...new Set(previewModes.flatMap(mode => generation_client.generationWorldInfoScanTerms(mode, context)))];
     const envelope = previewModes.length ? await core_cache.buildControlledContextEnvelope(context, { worldInfoScanTerms: previewTerms }) : '';
-    for (const task of tasks) if (task.route === 'inbox') applyInboxEvidence(task, inbox_art.captureEvidence(envelope, task.participantSnapshot, (task.participantSnapshot?.people || []).flatMap(person => (person.sourceRefs || []).map(ref => ref.content)).join('\n')));
+    const inboxCharacterEvidence = core_worldPresentation.controlledCharacterEvidence(envelope);
+    for (const task of tasks) applyInboxEvidence(task, inboxCharacterEvidence);
     const measure = groupTasks => generation_client.composeOutgoingGenerationPrompt(
         assembleMergedPrompt({ sharedBackground, tasks: groupTasks }), context, settings, envelope,
         { enforceGeneratedPhrasePolicy: true });
@@ -775,30 +762,6 @@ export async function resumeMergedGeneration(existing, options = {}) {
         core_taskTrace.endTaskTrace(trace, failure ? 'failed' : 'ok', failure); release();
     }
 }
-export async function discardPending(route, id) {
-    const context = core_context.currentCharacterGuard();
-    const bank = archive_repository.requireArchive(context), pending = createPendingStore();
-    const scope = currentPendingScope(context);
-    const row = pending.readForOrigin(scope).find(item => item.id === id && item.route === route);
-    if (!row) return false;
-    const draftId = row.origin?.generationRecoveryDraftId || row.id;
-    const origin = core_context.captureTaskOrigin(context, bank.archiveRevision);
-    origin.generationRecoveryDraftId = draftId;
-    const tasks = core_requestCoordinator.queryParticipantGenerationTasks(context, { stableIdentity: true })
-        .filter(task => (task.draftId || task.origin?.generationRecoveryDraftId) === draftId);
-    await core_requestCoordinator.cancelParticipantGenerationTasks(tasks.map(task => task.id));
-    if (!core_context.isCurrentTaskOrigin(origin)) throw new DOMException('Discard owner changed', 'AbortError');
-    const journal = core_cache.loadGenerationRecovery(row.mode, context, undefined, { draftId, intent: 'inspect' });
-    const staged = core_cache.listGenerationTaskResults(context).some(item => item.draftId === draftId && item.status === 'awaiting-choice');
-    if (journal || staged) {
-        const saved = await core_cache.saveGenerationRecovery(context, bank, row.mode, null, origin, { draftId, discardDraft: true });
-        if (!saved) throw core_text.safeUserError('草稿删除尚未保存，原成果仍保留。', 'RMT_RECOVERY_DISCARD_STORAGE');
-        if (journal) generation_recovery.discardGenerationRecoveryHeldReplies(journal.identity, row.mode);
-    }
-    pending.removeForOrigin(scope, id);
-    return true;
-}
-
 export async function repairPending(route, id = '') {
     const context = core_context.currentCharacterGuard();
     const memoryBank = archive_repository.requireArchive(context), pending = createPendingStore();
@@ -819,32 +782,6 @@ export async function repairPending(route, id = '') {
     // Renew only this invocation's volatile lifecycle. Original target, version,
     // draft ID and deletion/write fences are never replaced with current values.
     const origin = { ...structuredClone(item.origin || {}), lifecycleEpoch: runtimeState.runtimeLifecycleEpoch };
-    if (item.kind === 'unsaved') {
-        if (!core_context.deferredCommitOriginMatchesContext(origin, context)
-            || core_cache.archiveBackupEntryForContext(context, memoryBank).entryId !== origin.archiveTargetEntryId) {
-            throw core_text.safeUserError('请回到这份成果所属的聊天保存。', 'RMT_MERGED_ORIGIN');
-        }
-        const draftId = origin.generationRecoveryDraftId || item.id;
-        const journal = core_cache.loadGenerationRecovery(item.mode, context, undefined, { draftId, intent: 'inspect' });
-        const already = core_cache.listGenerationTaskResults(context).find(row => row.draftId === draftId && row.mode === item.mode);
-        if (already && ['applied', 'awaiting-choice'].includes(already.status)) {
-            if (already.status === 'awaiting-choice') await core_cache.resolveGenerationTaskResult(context, draftId, 'apply');
-            pending.removeForOrigin(pendingScope, item.id); return { requested: false };
-        }
-        const source = generation_recovery.readGenerationContentSnapshot(journal);
-        if (journal && source?.memoryBank) {
-            assertMergedSaveIdentity(item.session, origin, source.memoryBank);
-            const currentOrigin = { ...core_context.captureTaskOrigin(context, memoryBank.archiveRevision), generationRecoveryDraftId: draftId };
-            const releaseSave = holdModes(context, [item.mode]);
-            try {
-                await core_cache.saveGenerationTaskResult(context, item.mode, { ...item.session, chatId: origin.chatId, archiveRevision: origin.archiveRevision }, currentOrigin,
-                    { draftId, pageId: item.route, memoryBank, sourceMemory: source.memoryBank });
-                await core_cache.resolveGenerationTaskResult(context, draftId, 'apply');
-                pending.removeForOrigin(pendingScope, item.id);
-                return { requested: false };
-            } finally { releaseSave(); }
-        }
-    }
     assertMergedTarget(origin, context, memoryBank, item.mode);
     const release = holdModes(context, [item.mode]);
     const trace = core_taskTrace.startTaskTrace('', item.mode);

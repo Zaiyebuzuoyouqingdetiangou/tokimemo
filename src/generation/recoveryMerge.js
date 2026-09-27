@@ -133,10 +133,10 @@ function view(tree, complete) {
             return node?.array ? Object.values(node.children).filter(child => child?.complete).map(child => data(child, false)) : [];
         } };
 }
-export function mergeRecoveryPartials(raws, schema, { final = false, parsePartial = json_parser.parsePartialJsonObject } = {}) {
+export function mergeRecoveryPartials(raws, schema, { final = false } = {}) {
     const state = { conflicts: new Set(), ignoredNewStrings: new Set() }; let tree = null;
     for (const raw of raws) {
-        const parsed = parsePartial(raw), next = readTree(parsed);
+        const parsed = json_parser.parsePartialJsonObject(raw), next = readTree(parsed);
         if (!tree) tree = next;
         else if (schema) tree = unite(tree, next, schema, state);
         else tree = next;

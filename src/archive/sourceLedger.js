@@ -3,7 +3,6 @@
 // never writes back to, edits, or deletes data in another extension.
 import * as core_constants from '../core/constants.js';
 import * as core_text from '../core/text.js';
-import * as source_read from './sourceReadGuard.js';
 
 let databasePromise = null;
 let testBackend = null;
@@ -57,6 +56,7 @@ function normalizeRevisionList(values) {
         if (!normalized || seen.has(normalized)) continue;
         seen.add(normalized);
         out.push(normalized);
+        if (out.length >= 5000) break;
     }
     return out;
 }
@@ -69,6 +69,7 @@ function normalizeSourceIdList(values) {
         if (!normalized || seen.has(normalized)) continue;
         seen.add(normalized);
         out.push(normalized);
+        if (out.length >= 5000) break;
     }
     return out;
 }
@@ -161,17 +162,7 @@ export function ledgerCurrentRecords(ledger) {
             const allowed = Array.isArray(source?.allowedSourceIds)
                 ? new Set(normalizeSourceIdList(source.allowedSourceIds))
                 : null;
-            // All records in this projection share the same provider descriptor.
-            // Build its retained revision set once, not again for every record;
-            // keep this local so the next projection sees any source revocation.
-            const coverage = normalizeMemorySourceCoverage(source?.coverage);
-            const revision = normalizeMemorySourceRevision(source?.revision);
-            const baselineRevision = normalizeMemorySourceRevision(
-                source?.baselineRevision || (coverage.status === 'complete' ? revision : ''),
-            );
-            const overlayRevisions = new Set(normalizeRevisionList(source?.overlayRevisions));
-            if (coverage.status !== 'complete' && revision) overlayRevisions.add(revision);
-            return [normalizeMemorySourceProvider(source?.provider), { allowed, baselineRevision, overlayRevisions }];
+            return [normalizeMemorySourceProvider(source?.provider), { ...source, allowed }];
         }));
     const projected = (Array.isArray(ledger?.records) ? ledger.records : []).filter(record => {
         const descriptor = sourceByProvider.get(record.provider);
@@ -180,7 +171,13 @@ export function ledgerCurrentRecords(ledger) {
         // when the next read is partial/failed, old baseline rows outside the
         // current UID whitelist may not continue entering generation prompts.
         if (descriptor.allowed && !descriptor.allowed.has(record.sourceId)) return false;
-        const { baselineRevision, overlayRevisions } = descriptor;
+        const coverage = normalizeMemorySourceCoverage(descriptor.coverage);
+        const revision = normalizeMemorySourceRevision(descriptor.revision);
+        const baselineRevision = normalizeMemorySourceRevision(
+            descriptor.baselineRevision || (coverage.status === 'complete' ? revision : ''),
+        );
+        const overlayRevisions = new Set(normalizeRevisionList(descriptor.overlayRevisions));
+        if (coverage.status !== 'complete' && revision) overlayRevisions.add(revision);
         if (!baselineRevision && !overlayRevisions.size) return true;
         const recordBatchRevision = normalizeMemorySourceRevision(record.batchRevision || record.revision);
         return recordBatchRevision === baselineRevision || overlayRevisions.has(recordBatchRevision);
@@ -196,9 +193,12 @@ function normalizeLedger(raw, scope = null) {
     const identity = normalizeMemorySourceScope(raw.scope);
     if (scope && identity.key !== normalizeMemorySourceScope(scope).key) return null;
     const records = [];
+    let chars = 0;
     for (const item of Array.isArray(raw.records) ? raw.records : []) {
         const record = normalizeMemorySourceRecord({ ...item, content: Array.isArray(item?.fragments) ? item.fragments.join('') : item?.content });
         if (!record) continue;
+        chars += record.fragments.join('').length;
+        if (records.length >= core_constants.MAX_MEMORY_SOURCE_LEDGER_RECORDS || chars > core_constants.MAX_MEMORY_SOURCE_LEDGER_CHARS) return null;
         records.push(record);
     }
     const sources = (Array.isArray(raw.sources) ? raw.sources : []).map(source => ({
@@ -236,8 +236,7 @@ function transactionDone(transaction, message) {
 function openDatabase() {
     if (databasePromise) return databasePromise;
     if (!globalThis.indexedDB?.open) return Promise.reject(new Error('当前浏览器没有可用的 IndexedDB，无法保存记忆来源账本。'));
-    let stopped = false;
-    const opening = new Promise((resolve, reject) => {
+    databasePromise = new Promise((resolve, reject) => {
         const request = globalThis.indexedDB.open(core_constants.MEMORY_SOURCE_LEDGER_DB_NAME, core_constants.MEMORY_SOURCE_LEDGER_STORAGE_VERSION);
         request.onupgradeneeded = () => {
             const db = request.result;
@@ -247,53 +246,39 @@ function openDatabase() {
         };
         request.onsuccess = () => {
             const db = request.result;
-            if (stopped) { db.close(); return; }
-            db.onclose = () => { if (databasePromise === pending) databasePromise = null; };
+            db.onclose = () => { databasePromise = null; };
             db.onversionchange = () => {
                 try { db.close(); } catch {}
-                if (databasePromise === pending) databasePromise = null;
+                databasePromise = null;
             };
             resolve(db);
         };
-        request.onerror = () => reject(request.error || new Error('无法打开记忆来源账本。'));
-        request.onblocked = () => reject(new Error('记忆来源账本被旧页面占用。'));
-    });
-    const pending = source_read.boundedSourceRead(() => opening).catch(error => {
+        request.onerror = () => { databasePromise = null; reject(request.error || new Error('无法打开记忆来源账本。')); };
+        request.onblocked = () => { databasePromise = null; reject(new Error('记忆来源账本被旧页面占用。')); };
+    }).catch(error => {
         // A synchronous open() exception rejects the executor too. Never retain
         // that rejected promise for the lifetime of the page.
-        stopped = true;
-        if (databasePromise === pending) databasePromise = null;
+        databasePromise = null;
         throw error;
     });
-    databasePromise = pending;
-    return pending;
+    return databasePromise;
 }
 
-async function finishLedgerTransaction(transaction, request, signal) {
-    try {
-        const [result] = await source_read.boundedSourceRead(() => Promise.all([
-            requestValue(request), transactionDone(transaction, '记忆来源账本事务未完成。'),
-        ]), signal);
-        return result;
-    } catch (error) {
-        // Never let a timed-out/cancelled write commit later behind a new scan.
-        try { transaction.abort(); } catch {}
-        throw error;
-    }
-}
-
-async function idbRead(scope, { signal = null } = {}) {
-    const db = await source_read.waitForSourceRead(openDatabase, signal);
+async function idbRead(scope) {
+    const db = await openDatabase();
     const identity = normalizeMemorySourceScope(scope);
-    const transaction = db.transaction(core_constants.MEMORY_SOURCE_LEDGER_STORE_NAME, 'readonly');
-    return finishLedgerTransaction(transaction, transaction.objectStore(core_constants.MEMORY_SOURCE_LEDGER_STORE_NAME).get(identity.key), signal);
+    return requestValue(db.transaction(core_constants.MEMORY_SOURCE_LEDGER_STORE_NAME, 'readonly')
+        .objectStore(core_constants.MEMORY_SOURCE_LEDGER_STORE_NAME).get(identity.key));
 }
 
-async function idbWrite(ledger, { signal = null } = {}) {
-    const db = await source_read.waitForSourceRead(openDatabase, signal);
+async function idbWrite(ledger) {
+    const db = await openDatabase();
     const transaction = db.transaction(core_constants.MEMORY_SOURCE_LEDGER_STORE_NAME, 'readwrite');
     const request = transaction.objectStore(core_constants.MEMORY_SOURCE_LEDGER_STORE_NAME).put(ledger);
-    await finishLedgerTransaction(transaction, request, signal);
+    await Promise.all([
+        requestValue(request),
+        transactionDone(transaction, '记忆来源账本写入事务未完成。'),
+    ]);
     return true;
 }
 
@@ -302,7 +287,10 @@ async function idbDelete(scope) {
     const identity = normalizeMemorySourceScope(scope);
     const transaction = db.transaction(core_constants.MEMORY_SOURCE_LEDGER_STORE_NAME, 'readwrite');
     const request = transaction.objectStore(core_constants.MEMORY_SOURCE_LEDGER_STORE_NAME).delete(identity.key);
-    await finishLedgerTransaction(transaction, request);
+    await Promise.all([
+        requestValue(request),
+        transactionDone(transaction, '记忆来源账本删除事务未完成。'),
+    ]);
     return true;
 }
 
@@ -315,8 +303,8 @@ export function setMemorySourceLedgerBackendForTests(value = null) {
     ledgerMutationQueues.clear();
 }
 
-export async function readMemorySourceLedger(scope, { signal = null } = {}) {
-    const raw = await source_read.waitForSourceRead(() => backend().read(normalizeMemorySourceScope(scope), { signal }), signal);
+export async function readMemorySourceLedger(scope) {
+    const raw = await backend().read(normalizeMemorySourceScope(scope));
     const ledger = normalizeLedger(raw, scope);
     if (raw != null && !ledger) throw new Error('记忆来源账本校验失败；为避免覆盖旧来源，已停止本次操作。');
     return ledger;
@@ -349,6 +337,11 @@ function mergeMemorySourceLedgerBatch(previous, identity, batch = {}) {
         if (exact.has(key)) continue;
         exact.add(key);
         records.push(record);
+    }
+    let totalChars = 0;
+    for (const record of records) totalChars += record.fragments.join('').length;
+    if (records.length > core_constants.MAX_MEMORY_SOURCE_LEDGER_RECORDS || totalChars > core_constants.MAX_MEMORY_SOURCE_LEDGER_CHARS) {
+        throw new Error('记忆来源账本超过安全上限；没有静默丢弃旧来源。请拆分聊天或减少导入范围。');
     }
     const sources = [...(previous?.sources || [])];
     if (provider) {
@@ -396,26 +389,25 @@ function mergeMemorySourceLedgerBatch(previous, identity, batch = {}) {
     return ledger;
 }
 
-async function upsertMemorySourceLedgerBatchesUnlocked(identity, batches, assertCurrent = () => {}, signal = null) {
+async function upsertMemorySourceLedgerBatchesUnlocked(identity, batches, assertCurrent = () => {}) {
     assertCurrent();
-    let ledger = await readMemorySourceLedger(identity, { signal });
+    let ledger = await readMemorySourceLedger(identity);
     for (const batch of batches) ledger = mergeMemorySourceLedgerBatch(ledger, identity, batch);
     if (!batches.length) return ledger;
     assertCurrent();
-    await backend().write(cloneValue(ledger), { signal });
-    assertCurrent();
+    await backend().write(cloneValue(ledger));
     return normalizeLedger(ledger, identity);
 }
 
-export async function upsertMemorySourceLedger(scope, batch = {}, { assertCurrent = () => {}, signal = null } = {}) {
+export async function upsertMemorySourceLedger(scope, batch = {}, { assertCurrent = () => {} } = {}) {
     const identity = normalizeMemorySourceScope(scope);
-    return runLedgerMutation(identity, () => upsertMemorySourceLedgerBatchesUnlocked(identity, [batch], assertCurrent, signal));
+    return runLedgerMutation(identity, () => upsertMemorySourceLedgerBatchesUnlocked(identity, [batch], assertCurrent));
 }
 
-export async function upsertMemorySourceLedgerBatches(scope, batches = [], { assertCurrent = () => {}, signal = null } = {}) {
+export async function upsertMemorySourceLedgerBatches(scope, batches = [], { assertCurrent = () => {} } = {}) {
     const identity = normalizeMemorySourceScope(scope);
     const list = Array.isArray(batches) ? batches.filter(batch => batch && typeof batch === 'object') : [];
-    return runLedgerMutation(identity, () => upsertMemorySourceLedgerBatchesUnlocked(identity, list, assertCurrent, signal));
+    return runLedgerMutation(identity, () => upsertMemorySourceLedgerBatchesUnlocked(identity, list, assertCurrent));
 }
 
 export async function deleteMemorySourceLedger(scope) {

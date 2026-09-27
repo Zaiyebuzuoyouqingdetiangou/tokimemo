@@ -1,13 +1,10 @@
 import * as contextApi from './context.js';
 import * as settingsApi from './settings.js';
-// C-3c（r84.100）：别名沿用 repository，函数体一字不改；实际指向 core 层的桥，不再 import archive 层。
-import * as repository from './archiveBridge.js';
-// C-3b（r84.99）：别名沿用 recovery，函数体一字不改；实际指向 core 层的桥，不再 import generation 层。
-import * as recovery from './generationBridge.js';
+import * as repository from '../archive/repository.js';
+import * as recovery from '../generation/recovery.js';
 import * as text from './text.js';
 import * as contextTags from './contextTags.js';
-// C-2（r84.97）：别名沿用 ui_overlay，函数体一字不改；实际指向 core 层的桥，不再 import ui 层。
-import * as ui_overlay from './uiBridge.js';
+import * as ui_overlay from '../ui/overlay.js';
 
 let confirmLegacyConfigurationRestart = async () => {
     // Resolve UI only when the user starts recovery, after module initialization.

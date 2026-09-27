@@ -40,10 +40,9 @@ export const ROOM_SESSION_VERSION = 3;
 
 export const TRAVEL_SESSION_VERSION = 4;
 
-// No plugin-defined byte ceiling: actual storage transactions decide success.
-export const MAX_CACHE_COMPRESSED_BASE64_CHARS = Infinity;
+export const MAX_CACHE_COMPRESSED_BASE64_CHARS = 4000000;
 
-export const MAX_CACHE_DECOMPRESSED_BYTES = Infinity;
+export const MAX_CACHE_DECOMPRESSED_BYTES = 12000000;
 
 export const MAX_CACHE_SOURCE_BYTES = MAX_CACHE_DECOMPRESSED_BYTES;
 
@@ -63,24 +62,7 @@ export const MAX_IMPORT_TOTAL_CHARS = 1200000;
 
 export const IMPORT_CHUNK_CHARS = 30000;
 
-// r84.71: a formal archive checkpoint every ~5 chat requests instead of one
-// 1.2M-character batch. A single failed request can no longer hold back the
-// whole chat. Per-request size and model budgets are unchanged.
-export const ARCHIVE_BATCH_CHAT_CHARS = 150000;
-
-// Archive extraction reads ~30k characters per request and can legitimately
-// take longer than ordinary pages on slow proxies. Floor only; never shorter.
-export const ARCHIVE_REQUEST_TIMEOUT_MS = 360000;
-
-// Transient transport failures (5xx / network / timeout / rate limit) get a
-// bounded number of automatic retries for archive extraction only.
-export const ARCHIVE_TRANSIENT_RETRY_DELAYS_MS = Object.freeze([5000, 15000]);
-
 export const MAX_MEMORY_ITEMS = 240;
-
-// Formal storage is not the model's per-request evidence/output budget.
-// Keep MAX_MEMORY_ITEMS bounded for existing prompt consumers only.
-export const MAX_STORED_MEMORY_ITEMS = Infinity;
 
 export const MAX_COLD_ARCHIVE_ITEMS = 100;
 
@@ -130,19 +112,17 @@ export const MEMORY_SOURCE_LEDGER_STORE_NAME = 'sourceLedgers';
 
 export const MEMORY_SOURCE_LEDGER_STORAGE_VERSION = 1;
 
-// Durable source storage has no plugin count/character quota. Per-request
-// batching and actual storage acknowledgements are separate contracts.
-export const MAX_MEMORY_SOURCE_LEDGER_RECORDS = Infinity;
+export const MAX_MEMORY_SOURCE_LEDGER_RECORDS = 8000;
 
-export const MAX_MEMORY_SOURCE_LEDGER_CHARS = Infinity;
+export const MAX_MEMORY_SOURCE_LEDGER_CHARS = 8000000;
 
 export const MAX_MEMORY_SOURCE_FRAGMENT_CHARS = 5200;
 
-export const MAX_MEMORY_FILE_BYTES = Infinity;
+export const MAX_MEMORY_FILE_BYTES = 4000000;
 
-export const MAX_MEMORY_FILE_RECORDS = Infinity;
+export const MAX_MEMORY_FILE_RECORDS = 5000;
 
-export const MAX_MEMORY_FILE_CHARS = Infinity;
+export const MAX_MEMORY_FILE_CHARS = 4000000;
 
 export const ARCHIVE_INDEX_SETTINGS_KEY = 'heartbeatMemoriesArchiveIndexV1';
 
@@ -168,7 +148,7 @@ export const MAX_BANNED_GENERATED_PHRASES = 24;
 
 export const MEMORY_WORLD_INFO_SETTINGS_KEY = 'heartbeatMemoriesMemoryWorldInfoV1';
 
-export const MAX_MEMORY_WORLD_INFO_BOOKS = Infinity;
+export const MAX_MEMORY_WORLD_INFO_BOOKS = 200;
 
 export const MAX_MEMORY_WORLD_INFO_ENTRIES = 160;
 
@@ -224,9 +204,6 @@ export const DEFAULT_SETTINGS = Object.freeze({
     autoRetryEnabled: false,
     autoRetryCount: 1,
     autoSecondPass: false,
-    autoMemoryLatestFloor: false,
-    autoMemoryIntervalFloors: 5,
-    heartEnvelopeSkin: 'pink',
     creativeSupplementEnabled: false,
     creativeSupplement: '',
     imageGenerationProvider: 'baibai-image',
@@ -241,8 +218,6 @@ export const DEFAULT_SETTINGS = Object.freeze({
     // Applies only to newly model-generated derivative content. Never rewrite chat/archive evidence.
     bannedGeneratedPhrases: ['老子'],
 });
-
-export const HEART_ENVELOPE_SKINS = Object.freeze(['pink', 'wax', 'night', 'sakura', 'airmail', 'wash']);
 
 export const MODE = Object.freeze({
     BUTTERFLY: 'butterfly',

@@ -1,5 +1,5 @@
-const VERSION = '0.99.91';
-const BUILD = '0.99.91-r84.163-inbox-recovery';
+const VERSION = '0.99.15';
+const BUILD = '0.99.15-r84.60-no-extra-retry';
 
 const SETTINGS_ID = 'heartbeat_memories_settings';
 const MENU_ID = 'heartbeat_memories_menu_item';
@@ -381,7 +381,7 @@ function mountBootstrapMenu() {
     item.className = 'list-group-item flex-container flexGap5 interactable';
     item.tabIndex = 0;
     item.setAttribute('role', 'button');
-    item.innerHTML = '<span class="rmt-wand-icon" aria-hidden="true" style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;flex:0 0 auto"><svg style="display:block;width:18px;height:18px" focusable="false" viewBox="0 0 32 32" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M10 16C4 2 11 1 14 14M18 14C20 1 27 2 23 16M9 16c-7 11 3 15 9 14s13-8 5-14c-4-3-10-3-14 0Z"/><path d="M12 22h1m6 0h1m-6 4 2 1 2-1"/></svg></span><span>心迹回廊 · 档案室</span>';
+    item.innerHTML = '<i class="fa-solid fa-box-archive"></i><span>心迹回廊 · 档案室</span>';
     item.addEventListener('click', () => requestArchiveOpen('bootstrap-menu-click'));
     item.addEventListener('keydown', event => {
         if (event.key !== 'Enter' && event.key !== ' ') return;
@@ -478,29 +478,18 @@ function startBootstrapAutoUpdates({ wakeRuntime = () => ensureRuntime('auto-upd
     try {
         context = globalThis.SillyTavern?.getContext?.();
         const raw = context?.extensionSettings?.heartbeatMemories?.autoUpdates;
-        const legacyOn = !!raw && Object.values(raw).some(rule => rule?.enabled === true);
-        const hasPlan = !!context?.chatMetadata && Object.prototype.hasOwnProperty.call(context.chatMetadata, 'autoMemoryPlanV1');
-        if ((!legacyOn && !hasPlan)
+        if (!raw || !Object.values(raw).some(rule => rule?.enabled === true)
             || !context.eventSource?.on || !globalThis.navigator?.locks?.request || !globalThis.localStorage) return Promise.resolve();
     } catch { return Promise.resolve(); }
     const lifetime = bootstrapAutoEpoch;
     // The pure floor policy has no runtime imports. A saved toggle alone never loads the bundle.
     bootstrapAutoPending = import(`./src/core/autoUpdatePolicy.js?heartbeat=${BUILD}`).then(async policy => {
-        if (disabled || runtimeModule || lifetime !== bootstrapAutoEpoch) return;
-        const openingFloor = Array.isArray(context.chat) ? context.chat.length : 0;
-        const wakeNow = policy.autoMemoryRuntimeWake(context.chatMetadata, openingFloor);
-        const legacyEnabled = policy.hasEnabledAutoUpdates(context.extensionSettings?.heartbeatMemories?.autoUpdates);
-        let openingGate = { allowLegacy: true, source: 'legacy' };
-        try { openingGate = policy.readLegacySchedulerGate(context.chatMetadata); }
-        catch { openingGate = { allowLegacy: false, source: 'paused-corrupt' }; }
-        if (!wakeNow && !legacyEnabled && openingGate.source !== 'paused-new-plan') return;
+        if (disabled || runtimeModule || lifetime !== bootstrapAutoEpoch
+            || !policy.hasEnabledAutoUpdates(context.extensionSettings?.heartbeatMemories?.autoUpdates)) return;
         const snapshot = () => {
             try {
                 const current = globalThis.SillyTavern?.getContext?.();
                 if (!current || current.groupId || current.characterId == null || !Array.isArray(current.chat)) return null;
-                const gate = policy.readLegacySchedulerGate(current.chatMetadata);
-                policy.noteLegacySchedulerSource(gate, bootstrapAutoUpdateScope(current));
-                if (!gate.allowLegacy) return null;
                 const rules = policy.normalizeAutoUpdates(current.extensionSettings?.heartbeatMemories?.autoUpdates);
                 if (!policy.hasEnabledAutoUpdates(rules)) return null;
                 const memory = current.chatMetadata?.[MEMORY_KEY];
@@ -526,21 +515,8 @@ function startBootstrapAutoUpdates({ wakeRuntime = () => ensureRuntime('auto-upd
         let timer = 0, stopped = false;
         const listener = () => {
             if (stopped) return Promise.resolve();
-            try {
-                const host = globalThis.SillyTavern?.getContext?.();
-                const hostFloor = Array.isArray(host?.chat) ? host.chat.length : 0;
-                if (policy.autoMemoryRuntimeWake(host?.chatMetadata, hostFloor)) {
-                    stopBootstrapAutoUpdates();
-                    void Promise.resolve().then(wakeRuntime).catch(showBootError);
-                    return Promise.resolve();
-                }
-            } catch {}
             let enabled = false;
-            try {
-                const host = globalThis.SillyTavern?.getContext?.();
-                const gate = policy.readLegacySchedulerGate(host?.chatMetadata);
-                enabled = gate.allowLegacy && policy.hasEnabledAutoUpdates(host?.extensionSettings?.heartbeatMemories?.autoUpdates);
-            } catch {}
+            try { enabled = policy.hasEnabledAutoUpdates(globalThis.SillyTavern?.getContext?.()?.extensionSettings?.heartbeatMemories?.autoUpdates); } catch {}
             if (!enabled) { if (timer) clearInterval(timer); timer = 0; return Promise.resolve(); }
             if (!timer) timer = setInterval(listener, 5000);
             return scheduler.tick().catch(() => {

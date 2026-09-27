@@ -7,7 +7,6 @@ import * as context_tags from '../core/contextTags.js';
 import * as cast_looks from '../core/castLooks.js';
 import * as participants from '../core/participants.js';
 import * as cache from '../core/cache.js';
-import * as core_generationBridge from '../core/generationBridge.js';
 
 export const CG_APPEARANCE_TAG_LIMIT = 400;
 export const CG_SCENE_TAG_LIMIT = 600;
@@ -145,23 +144,16 @@ export function buildCgAppearanceInstructions(evidence, promptFormat = '') {
 // overwritten merely because a different look has since been saved for the chat.
 export function initialCgAppearanceMetadata(item, context) {
     if (item?.cgImage) return normalizeCgPromptMetadata(item.cgImage.promptMetadata);
-    const generated = cg_visual.normalizeGeneratedCgDraft(item?.cgPromptDraft);
     const snapshot = participants.selectedParticipantSnapshot(cache.readParticipantRoster(context));
     if (snapshot) {
         const looks = cast_looks.readParticipantLooks(context);
-        return normalizeCgPromptMetadata({ castSnapshot: snapshot,
-            ...(generated && !looks?.characters.some(row => row.tag || row.nl) ? {sceneTags:generated.sceneTags,flatPrompt:generated.flatPrompt} : {}),
-            characters: snapshot.people.map(person => ({
+        return normalizeCgPromptMetadata({ castSnapshot: snapshot, characters: snapshot.people.map(person => ({
             participantId: person.id, tag: looks?.characters.find(row => row.participantId === person.id)?.tag || '',
             nl: looks?.characters.find(row => row.participantId === person.id)?.nl || '',
         })) });
     }
     const looks = cast_looks.readCastLooks(context);
-    if (item?.__rmtCgDescriptor?.kind === 'heart-firefly' && looks?.manual !== true) {
-        const char = captureCgAppearanceEvidence(context).characters.find(row => row.role === 'char');
-        const tag = char?.knownTag || cast_looks.lookFromDescription(looks?.char || char?.description);
-        return normalizeCgPromptMetadata({ characters: [{role:'char',name:context?.name2,tag:tag || '',nl:''}] });
-    }
+    const generated = cg_visual.normalizeGeneratedCgDraft(item?.cgPromptDraft);
     if (generated) {
         const metadata = normalizeCgPromptMetadata({ ...generated, characters: generated.characters.map(row => ({
             ...row, name: row.role === 'char' ? context?.name2 : context?.name1,
@@ -384,6 +376,3 @@ export function formattedCgProviderPrompts(scene, rawMetadata, supportsCharacter
     }) : null;
     return { prompt, nl, ...(characters ? {characters} : {}) };
 }
-
-// 重构清单 C-3b（r84.99）：把 core 层要用的函数登记到 core/generationBridge.js（core 不再 import 本文件）。
-core_generationBridge.registerGenerationBridge({ normalizeCgPromptMetadata });

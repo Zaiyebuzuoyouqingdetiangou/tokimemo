@@ -1,4 +1,3 @@
-import * as expanded_cg_view from './expandedCgView.js';
 import * as contract from '../core/pastLivesContract.js';
 import * as pastLives from '../modes/pastLives.js';
 import * as text from '../core/text.js';
@@ -53,14 +52,14 @@ export function pastLivesHtml(value, { readOnly = false, busy = false, notice = 
             let scene;
             if (ui.view === 'draw') {
                 scene = `<section class="rmt-past-draw ${ui.pastLivesDrawn ? 'is-open' : ''}"><span class="rmt-past-seal" aria-hidden="true">${esc(labels.token)}</span><h3>${esc(selected.title)}</h3>${ui.pastLivesDrawn
-                    ? `<article class="rmt-past-slip"><small>${esc(selected.opening.title)}</small><h3>${esc(selected.opening.motif)}</h3>${paragraphs(selected.opening.text || (selected.opening.prosePending ? '正文待补。引子和来源已经留下，可以再补这一段。' : ''))}</article>${button('tab', '翻开卷宗', 'dossier')}`
+                    ? `<article class="rmt-past-slip"><small>${esc(selected.opening.title)}</small><h3>${esc(selected.opening.motif)}</h3>${paragraphs(selected.opening.text)}</article>${button('tab', '翻开卷宗', 'dossier')}`
                     : `<p>一段故事，正从熟悉的意象里醒来。</p>${button('draw', labels.draw)}${button('skip-draw', '直接入卷')}`}
                     <details class="rmt-past-source"><summary>引子的今生来源</summary><p>${esc(selected.opening.sourceMemoryAnchor)}</p><small>${esc(selected.opening.sourceMemoryIds.join(' · '))}</small></details></section>`;
             } else if (ui.view === 'dossier') {
                 const dossier = selected.dossiers.find(item => item.id === ui.selectedEntryId) || selected.dossiers[0];
                 const chosenClue = dossier?.clues.find(item => item.id === ui.selectedKey);
                 const docket = selected.dossiers.length > 1 ? `<nav class="rmt-past-docket" aria-label="选择卷宗">${selected.dossiers.map(item => button('dossier', item.title, item.id, `aria-pressed="${dossier?.id === item.id}"`)).join('')}</nav>` : '';
-                scene = dossier ? `${docket}<article class="rmt-past-paper"><header><small>虚构卷宗${dossier.era ? ' · ' + esc(dossier.era) : ''}</small><h3>${esc(dossier.title)}</h3></header>${paragraphs(dossier.synopsis)}${expanded_cg_view.expandedCgHtml(session, {kind:'past-life-dossier',containerId:selected.id,slot:'dossier:'+dossier.id}, readOnly)}</article>
+                scene = dossier ? `${docket}<article class="rmt-past-paper"><header><small>虚构卷宗${dossier.era ? ' · ' + esc(dossier.era) : ''}</small><h3>${esc(dossier.title)}</h3></header>${paragraphs(dossier.synopsis)}</article>
                     <div class="rmt-past-clues" aria-label="可阅读的卷宗线索">${dossier.clues.map(clue => `<button type="button" class="rmt-past-clue ${clue.kind === 'missing' ? 'is-missing' : ''}" data-rmt-past-lives="clue" data-rmt-past-lives-id="${esc(clue.id)}" aria-pressed="${chosenClue?.id === clue.id}"><small>${esc(clueLabel(clue.kind))}${readIds.has(clue.id) ? ' · 已读' : ''}</small><b>${esc(clue.title)}</b><span>${clue.kind === 'missing' ? '一处字迹留着空白' : '点开阅读'}</span></button>`).join('')}</div>
                     ${chosenClue ? `<article class="rmt-past-evidence" id="rmt-past-current-evidence"><small>${esc(clueLabel(chosenClue.kind))}${chosenClue.kind === 'testimony' ? ' · ' + esc(chosenClue.speaker === 'char' ? session.characterName : chosenClue.speaker === 'user' ? session.userName : '卷内记述') : ''} · 虚构</small><h3>${esc(chosenClue.title)}</h3>${paragraphs(chosenClue.text)}${chosenClue.kind === 'missing' ? readIds.has(chosenClue.id)
                         ? `<div class="rmt-past-revealed" role="status"><small>字迹已显</small>${paragraphs(chosenClue.revealedText)}</div>`

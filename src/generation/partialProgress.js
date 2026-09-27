@@ -3,56 +3,35 @@
 import * as json_parser from './jsonParser.js';
 import * as recovery_merge from './recoveryMerge.js';
 import * as recovery_adapters from './recoveryAdapters.js';
-// C-4（r84.119）：别名沿用 album，函数体一字不改；实际指向生成层的桥，不再 import 相簿模块。
-import * as album from './modesBridge.js';
-// C-4（r84.111）：别名沿用 butterfly，函数体一字不改；实际指向生成层的桥，不再 import 蝴蝶效应模块。
-import * as butterfly from './modesBridge.js';
-// C-4（r84.117）：别名沿用 ending，函数体一字不改；实际指向生成层的桥，不再 import 结局模块。
-import * as ending from './modesBridge.js';
-// C-4（r84.104）：别名沿用 pastLives，函数体一字不改；实际指向生成层的桥，不再 import 前世今生模块。
-import * as pastLives from './modesBridge.js';
-// C-4（r84.118）：别名沿用 adv，函数体一字不改；实际指向生成层的桥，不再 import ADV 模块。
-import * as adv from './modesBridge.js';
-// C-4（r84.114）：别名沿用 phone，函数体一字不改；实际指向生成层的桥，不再 import 私人终端模块。
-import * as phone from './modesBridge.js';
-// C-4（r84.110）：别名沿用 room，函数体一字不改；实际指向生成层的桥，不再 import 房间模块。
-import * as room from './modesBridge.js';
-// C-4（r84.120）：别名沿用 heart，函数体一字不改；实际指向生成层的桥，不再 import HEART 模块。
-import * as heart from './modesBridge.js';
-// C-4（r84.109）：别名沿用 items，函数体一字不改；实际指向生成层的桥，不再 import 物品模块。
-import * as items from './modesBridge.js';
-// C-4（r84.115）：别名沿用 cabinet，函数体一字不改；实际指向生成层的桥，不再 import 陈列柜模块。
-import * as cabinet from './modesBridge.js';
-// C-4（r84.108）：别名沿用 inbox，函数体一字不改；实际指向生成层的桥，不再 import 邮箱模块。
-import * as inbox from './modesBridge.js';
-// C-4（r84.106）：别名沿用 themeSong，函数体一字不改；实际指向生成层的桥，不再 import 印象曲模块。
-import * as themeSong from './modesBridge.js';
-// C-4（r84.103）：别名沿用 bedtime，函数体一字不改；实际指向生成层的桥，不再 import 睡前故事模块。
-import * as bedtime from './modesBridge.js';
-// C-4（r84.105）：别名沿用 timeStories，函数体一字不改；实际指向生成层的桥，不再 import 时间故事模块。
-import * as timeStories from './modesBridge.js';
-// C-4（r84.107）：别名沿用 travel，函数体一字不改；实际指向生成层的桥，不再 import 出行路线模块。
-import * as travel from './modesBridge.js';
-// C-4（r84.113）：别名沿用 calendar，函数体一字不改；实际指向生成层的桥，不再 import 日历模块。
-import * as calendar from './modesBridge.js';
-// C-4（r84.112）：别名沿用 relations，函数体一字不改；实际指向生成层的桥，不再 import 关系模块。
-import * as relations from './modesBridge.js';
-// C-4（r84.116）：别名沿用 achievements，函数体一字不改；实际指向生成层的桥，不再 import 成就库模块。
-import * as achievements from './modesBridge.js';
+import * as album from '../modes/album.js';
+import * as butterfly from '../modes/butterfly.js';
+import * as ending from '../modes/ending.js';
+import * as pastLives from '../modes/pastLives.js';
+import * as adv from '../modes/advEvent.js';
+import * as phone from '../modes/phone.js';
+import * as room from '../modes/room.js';
+import * as heart from '../modes/heart.js';
+import * as items from '../modes/items.js';
+import * as cabinet from '../modes/cabinet.js';
+import * as inbox from '../modes/inbox.js';
+import * as themeSong from '../modes/themeSong.js';
+import * as bedtime from '../modes/bedtime.js';
+import * as timeStories from '../modes/timeStories.js';
+import * as travel from '../modes/travel.js';
+import * as calendar from '../modes/calendar.js';
+import * as relations from '../modes/relations.js';
+import * as achievements from '../modes/achievements.js';
 
 export function generationProgressSegments(journal, options = {}) {
-    const inboxMode = journal?.identity?.mode === 'inbox';
-    const parsePartial = inboxMode ? json_parser.parseInboxRecoveryObject : json_parser.parsePartialJsonObject;
     return (Array.isArray(journal?.segments) ? journal.segments : []).filter(segment =>
         segment.state === 'complete' || segment.state === 'truncated').map(segment => {
         const latest = segment.state === 'complete' ? segment.rawJson : segment.partial;
         const parsed = segment.retainedPartials?.length
-            ? recovery_merge.mergeRecoveryPartials([...segment.retainedPartials, latest], generationRecoverySchema(journal, segment, options), { final: segment.state === 'complete', parsePartial })
-            : parsePartial(latest);
+            ? recovery_merge.mergeRecoveryPartials([...segment.retainedPartials, latest], generationRecoverySchema(journal, segment, options), { final: segment.state === 'complete' })
+            : json_parser.parsePartialJsonObject(latest);
         return { slot: segment.slot, state: segment.state, contract: segment.contract, value: parsed.value, partialValue: parsed.partialValue,
             complete: segment.state === 'complete' && parsed.complete,
-            items: parsed.items,
-            has: parsed.has, at: parsed.at };
+            items: parsed.items, has: parsed.has, at: parsed.at };
     });
 }
 
@@ -110,13 +89,13 @@ export function generationRecoverySchema(journal, segment, options = {}) {
         operation: journal.operation || {}, createdAt: journal.createdAt, segments: journal.segments || [] });
 }
 
-function rawStrings(raws, parsePartial = json_parser.parsePartialJsonObject) {
+function rawStrings(raws) {
     const values = new Set();
     const visit = value => {
         if (typeof value === 'string') values.add(value.trim());
         else if (value && typeof value === 'object') Object.values(value).forEach(visit);
     };
-    raws.forEach(raw => visit(parsePartial(raw).partialValue));
+    raws.forEach(raw => visit(json_parser.parsePartialJsonObject(raw).partialValue));
     return values;
 }
 function receivedFacts(value, observed, facts = new Map(), field = '') {
@@ -138,16 +117,15 @@ export async function mergeGenerationRecoveryResponse(journal, segment, raw, val
     if (!oldRaws.length) return null;
     const schema = schemaOverride || generationRecoverySchema(journal, segment);
     if (!schema) return null; // No partially readable units in whole-plan stages.
-    const parsePartial = journal?.identity?.mode === 'inbox' ? json_parser.parseInboxRecoveryObject : json_parser.parsePartialJsonObject;
     const nextRaw = JSON.stringify(raw);
-    const merged = recovery_merge.mergeRecoveryPartials([...oldRaws, nextRaw], schema, { final: true, parsePartial });
+    const merged = recovery_merge.mergeRecoveryPartials([...oldRaws, nextRaw], schema, { final: true });
     if (merged.conflicts.length) throw Object.assign(new Error('恢复内容的原人物、证据或父对象与新回复不同；双方草稿已保留，未拼接到错误对象。'),
         { code: 'RMT_RECOVERY_MERGE_CONFLICT', safeToDisplay: true });
     const combined = merged.value;
     const normalized = await validator(combined);
     // Check actual accepted content rather than character counts. A normalizer
     // must not silently slice old or newly accepted records off a merged array.
-    const observedNew = rawStrings([nextRaw], parsePartial);
+    const observedNew = rawStrings([nextRaw]);
     for (const value of merged.ignoredNewStrings) observedNew.delete(value);
     const fresh = await validator(raw);
     if (!containsFacts(receivedFacts(normalized, observedNew), receivedFacts(fresh, observedNew)))
@@ -156,7 +134,7 @@ export async function mergeGenerationRecoveryResponse(journal, segment, raw, val
     const withRow = row => ({ ...journal, segments: journal.segments.map(value => value.slot === row.slot ? row : value) });
     const oldSession = await projectGenerationProgress(journal);
     const newSession = await projectGenerationProgress(withRow({ ...segment, state: 'complete', rawJson: JSON.stringify(combined), retainedPartials: [] }));
-    const observedOld = rawStrings(oldRaws, parsePartial);
+    const observedOld = rawStrings(oldRaws);
     if (oldSession && !containsFacts(receivedFacts(newSession, observedOld), receivedFacts(oldSession, observedOld)))
         throw Object.assign(new Error('本次合并未能保留此前已验证的可读内容；双方草稿已保留，没有重置进度。'),
             { code: 'RMT_RECOVERY_MERGE_CONFLICT', safeToDisplay: true });
