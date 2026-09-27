@@ -229,6 +229,19 @@ export function salvageInboxLetters(raw) {
     return letters.length ? { letters } : null;
 }
 
+// Recovery uses the same received letter fields as the live inbox parser. A
+// broken optional drawing must not hide a closed body from merge/preservation.
+// The original response is still incomplete; only its readable letters close.
+export function parseInboxRecoveryObject(raw) {
+    const parsed = parsePartialJsonObject(raw);
+    if (parsed.complete) return parsed;
+    const salvaged = salvageInboxLetters(raw);
+    if (!salvaged) return parsed;
+    const readable = parsePartialJsonObject(JSON.stringify(salvaged));
+    return { ...readable, complete: false,
+        has: pointer => pointer === '' || pointer === '/letters' ? false : readable.has(pointer) };
+}
+
 export function jsonOutputBudgetSummary({ requestMaxTokens = 0, configuredMaxTokens = 0 } = {}) {
     const requestMax = Math.max(0, Math.floor(Number(requestMaxTokens) || 0));
     const configuredMax = output_budget.normalizeOutputTokens(configuredMaxTokens);

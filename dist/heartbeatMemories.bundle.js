@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 287
-// Source SHA-256: e76dbe8d1fc142038b9b4e2df9a57c701aafdf650851ec094080f4c4c5a364de
+// Source SHA-256: 831ca972c8e341b1bc7ddd8bbfea8601edec3b15e590745bbc4c5e0b7ee3d856
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -38197,6 +38197,7 @@ async function generateModeOperation(mode, options = {}) {
             partialReaderStillCurrent: scopedReaderMode ? () => !background && timeReaderVisible() : null,
             contentInputs: { previousSession, roomSession, focusObject, ...(linkedRoomSession ? { linkedRoomSession } : {}) },
             operation: recoveryExisting?.operation || { kind: 'mode', mode, ...(themeSongPlan ? { themeSongPlan } : {}), ...(bedtimePlan ? { bedtimePlan } : {}), inboxDate: inboxDate?.toISOString() || '', calendarDate: calendarCurrentDate,
+                ...(mode === core_constants.MODE.INBOX ? { inboxPlanVersion: 2 } : {}),
                 ...(mode === core_constants.MODE.CALENDAR ? { calendarTimeBasis: 'story' } : {}),
                 allowPersonaExpansion, visualOnly: options.visualOnly === true, fillMissing: options.fillMissing === true, focusObjectId: core_text.normalizeText(options.focusObjectId, 120),
                 ...(replacementTicket ? { participantRegeneration: options.participantRegeneration } : {}) } });
@@ -38244,7 +38245,8 @@ async function generateModeOperation(mode, options = {}) {
         } else if (mode === core_constants.MODE.BEDTIME) {
             session = await modes_bedtime.generateBedtime(context, memoryBank, origin, taskKey, previousSession, { plan: bedtimePlan, presentationContext });
         } else if (mode === core_constants.MODE.INBOX) {
-            session = await modes_inbox.generateInbox(context, memoryBank, origin, taskKey, previousSession, { presentationContext, date: inboxDate });
+            session = await modes_inbox.generateInbox(context, memoryBank, origin, taskKey, previousSession, { presentationContext, date: inboxDate,
+                legacyStageMatching: !!recoveryExisting && recoveryExisting.operation?.inboxPlanVersion !== 2 });
         } else if (time_stories.isTimeStoryMode(mode)) {
             session = await modes_timeStories.generateTimeStoryWithRepair(mode, context, memoryBank, origin, taskKey, { previousSession, replaceExisting, presentationContext });
         } else if (mode === core_constants.MODE.PAST_LIVES) {
@@ -39007,6 +39009,19 @@ function salvageInboxLetters(raw) {
     return letters.length ? { letters } : null;
 }
 
+// Recovery uses the same received letter fields as the live inbox parser. A
+// broken optional drawing must not hide a closed body from merge/preservation.
+// The original response is still incomplete; only its readable letters close.
+function parseInboxRecoveryObject(raw) {
+    const parsed = parsePartialJsonObject(raw);
+    if (parsed.complete) return parsed;
+    const salvaged = salvageInboxLetters(raw);
+    if (!salvaged) return parsed;
+    const readable = parsePartialJsonObject(JSON.stringify(salvaged));
+    return { ...readable, complete: false,
+        has: pointer => pointer === '' || pointer === '/letters' ? false : readable.has(pointer) };
+}
+
 function jsonOutputBudgetSummary({ requestMaxTokens = 0, configuredMaxTokens = 0 } = {}) {
     const requestMax = Math.max(0, Math.floor(Number(requestMaxTokens) || 0));
     const configuredMax = output_budget.normalizeOutputTokens(configuredMaxTokens);
@@ -39084,6 +39099,7 @@ __m_generation_jsonParser_js.jsonOutputError = jsonOutputError;
 __m_generation_jsonParser_js.extractBalancedJsonObjects = extractBalancedJsonObjects;
 __m_generation_jsonParser_js.parsePartialJsonObject = parsePartialJsonObject;
 __m_generation_jsonParser_js.salvageInboxLetters = salvageInboxLetters;
+__m_generation_jsonParser_js.parseInboxRecoveryObject = parseInboxRecoveryObject;
 __m_generation_jsonParser_js.jsonOutputBudgetSummary = jsonOutputBudgetSummary;
 __m_generation_jsonParser_js.extractJson = extractJson;
 }
@@ -40792,18 +40808,16 @@ const achievements = __m_generation_modesBridge_js;
 
 function generationProgressSegments(journal, options = {}) {
     const inboxMode = journal?.identity?.mode === 'inbox';
+    const parsePartial = inboxMode ? json_parser.parseInboxRecoveryObject : json_parser.parsePartialJsonObject;
     return (Array.isArray(journal?.segments) ? journal.segments : []).filter(segment =>
         segment.state === 'complete' || segment.state === 'truncated').map(segment => {
         const latest = segment.state === 'complete' ? segment.rawJson : segment.partial;
         const parsed = segment.retainedPartials?.length
-            ? recovery_merge.mergeRecoveryPartials([...segment.retainedPartials, latest], generationRecoverySchema(journal, segment, options), { final: segment.state === 'complete' })
-            : json_parser.parsePartialJsonObject(latest);
-        const closedLetters = parsed.items('/letters');
-        const salvagedLetters = inboxMode && typeof latest === 'string' && !closedLetters.length
-            ? json_parser.salvageInboxLetters(latest)?.letters : null;
+            ? recovery_merge.mergeRecoveryPartials([...segment.retainedPartials, latest], generationRecoverySchema(journal, segment, options), { final: segment.state === 'complete', parsePartial })
+            : parsePartial(latest);
         return { slot: segment.slot, state: segment.state, contract: segment.contract, value: parsed.value, partialValue: parsed.partialValue,
             complete: segment.state === 'complete' && parsed.complete,
-            items: pointer => pointer === '/letters' && salvagedLetters?.length ? salvagedLetters : parsed.items(pointer),
+            items: parsed.items,
             has: parsed.has, at: parsed.at };
     });
 }
@@ -40862,13 +40876,13 @@ function generationRecoverySchema(journal, segment, options = {}) {
         operation: journal.operation || {}, createdAt: journal.createdAt, segments: journal.segments || [] });
 }
 
-function rawStrings(raws) {
+function rawStrings(raws, parsePartial = json_parser.parsePartialJsonObject) {
     const values = new Set();
     const visit = value => {
         if (typeof value === 'string') values.add(value.trim());
         else if (value && typeof value === 'object') Object.values(value).forEach(visit);
     };
-    raws.forEach(raw => visit(json_parser.parsePartialJsonObject(raw).partialValue));
+    raws.forEach(raw => visit(parsePartial(raw).partialValue));
     return values;
 }
 function receivedFacts(value, observed, facts = new Map(), field = '') {
@@ -40890,15 +40904,16 @@ async function mergeGenerationRecoveryResponse(journal, segment, raw, validator,
     if (!oldRaws.length) return null;
     const schema = schemaOverride || generationRecoverySchema(journal, segment);
     if (!schema) return null; // No partially readable units in whole-plan stages.
+    const parsePartial = journal?.identity?.mode === 'inbox' ? json_parser.parseInboxRecoveryObject : json_parser.parsePartialJsonObject;
     const nextRaw = JSON.stringify(raw);
-    const merged = recovery_merge.mergeRecoveryPartials([...oldRaws, nextRaw], schema, { final: true });
+    const merged = recovery_merge.mergeRecoveryPartials([...oldRaws, nextRaw], schema, { final: true, parsePartial });
     if (merged.conflicts.length) throw Object.assign(new Error('恢复内容的原人物、证据或父对象与新回复不同；双方草稿已保留，未拼接到错误对象。'),
         { code: 'RMT_RECOVERY_MERGE_CONFLICT', safeToDisplay: true });
     const combined = merged.value;
     const normalized = await validator(combined);
     // Check actual accepted content rather than character counts. A normalizer
     // must not silently slice old or newly accepted records off a merged array.
-    const observedNew = rawStrings([nextRaw]);
+    const observedNew = rawStrings([nextRaw], parsePartial);
     for (const value of merged.ignoredNewStrings) observedNew.delete(value);
     const fresh = await validator(raw);
     if (!containsFacts(receivedFacts(normalized, observedNew), receivedFacts(fresh, observedNew)))
@@ -40907,7 +40922,7 @@ async function mergeGenerationRecoveryResponse(journal, segment, raw, validator,
     const withRow = row => ({ ...journal, segments: journal.segments.map(value => value.slot === row.slot ? row : value) });
     const oldSession = await projectGenerationProgress(journal);
     const newSession = await projectGenerationProgress(withRow({ ...segment, state: 'complete', rawJson: JSON.stringify(combined), retainedPartials: [] }));
-    const observedOld = rawStrings(oldRaws);
+    const observedOld = rawStrings(oldRaws, parsePartial);
     if (oldSession && !containsFacts(receivedFacts(newSession, observedOld), receivedFacts(oldSession, observedOld)))
         throw Object.assign(new Error('本次合并未能保留此前已验证的可读内容；双方草稿已保留，没有重置进度。'),
             { code: 'RMT_RECOVERY_MERGE_CONFLICT', safeToDisplay: true });
@@ -41711,7 +41726,7 @@ function achievementsSchema({ memoryBank }) {
 
 function inboxSchema({ memoryBank, previousSession, operation = {}, frozenInputs = {}, createdAt }) {
     const m = recovery_merge, date = operation.inboxDate || createdAt;
-    const plan = inbox.inboxPlan(memoryBank, previousSession, new Date(date));
+    const plan = inbox.inboxPlan(memoryBank, previousSession, new Date(date), { legacyStageMatching: operation.inboxPlanVersion !== 2 });
     return m.recoveryRecord({ title: { accept: m.recoveryText }, letters: m.recoveryList(m.recoveryItemKey('slot'), null, row => {
         const selected = plan.find(item => item.slot === row?.slot);
         return !!selected && m.recoveryCheck(() => inbox.normalizeInboxLetters({ letters: [row] }, memoryBank, [selected], new Date(date),
@@ -42378,10 +42393,10 @@ function view(tree, complete) {
             return node?.array ? Object.values(node.children).filter(child => child?.complete).map(child => data(child, false)) : [];
         } };
 }
-function mergeRecoveryPartials(raws, schema, { final = false } = {}) {
+function mergeRecoveryPartials(raws, schema, { final = false, parsePartial = json_parser.parsePartialJsonObject } = {}) {
     const state = { conflicts: new Set(), ignoredNewStrings: new Set() }; let tree = null;
     for (const raw of raws) {
-        const parsed = json_parser.parsePartialJsonObject(raw), next = readTree(parsed);
+        const parsed = parsePartial(raw), next = readTree(parsed);
         if (!tree) tree = next;
         else if (schema) tree = unite(tree, next, schema, state);
         else tree = next;
@@ -52193,11 +52208,18 @@ function emptyInbox(memory, context = null) {
         ...(context ? { ownerOrigin: inboxOwnerOrigin(context, memory) } : {}),
         participantNames: frozenParticipantNames(memory), recipient: clean(memory.userName, 120), letters: [] };
 }
-function inboxPlan(memory, previous, date = new Date()) {
+function inboxPlan(memory, previous, date = new Date(), { legacyStageMatching = false } = {}) {
     const sent = new Set((previous?.letters || []).map(letter => letter.eventKey));
     const plan = [];
-    const significant = [...(memory.memories || [])].reverse().find(item =>
-        /初见|相遇|相识|认识|熟悉|熟络|信任|暧昧|告白|确认关系|交往|和好|复合|争执|争吵|冷战|疏远|误会|重逢|分别|告别|分手|约定/u.test([item.title, ...(item.anchors || [])].join(' ')));
+    const significant = [...(memory.memories || [])].reverse().find(item => {
+        const label = [item.title, ...(item.anchors || [])].join(' ');
+        // “复合” as a relationship event, not the prefix of 复合锁阵/材料/函数.
+        // Frozen pre-r84.163 requests retain their original two-letter plan.
+        const reunion = legacyStageMatching
+            ? /复合/u
+            : /复合(?=$|[\s，。！？、；：,.!?;:…“”‘’「」『』（）()\[\]【】]|[了后前时过吧吗呀呢的]|成功|失败|未果|无望|意愿|意向|请求|邀请|计划|可能|机会)/u;
+        return /初见|相遇|相识|认识|熟悉|熟络|信任|暧昧|告白|确认关系|交往|和好|争执|争吵|冷战|疏远|误会|重逢|分别|告别|分手|约定/u.test(label) || reunion.test(label);
+    });
     if (significant) {
         const ref = evidence.normalizeExactMemoryReference([significant.id], significant.anchors?.[0] || significant.title, memory, 1);
         if (ref.sourceMemoryIds.length) {
@@ -52322,7 +52344,7 @@ function mergeInboxLatest(latest, incoming) {
 }
 async function generateInbox(context, memory, origin, taskKey, previous, options = {}) {
     const date = options.date || new Date();
-    const plan = inboxPlan(memory, previous, date);
+    const plan = inboxPlan(memory, previous, date, { legacyStageMatching: options.legacyStageMatching === true });
     if (!plan.length) return previous || emptyInbox(memory);
     const owner = inboxGenerationOwner(previous, context, memory);
     const fresh = await generation.requestValidatedSegment(inboxPrompt(memory, plan, previous), '正在收取寄给你的信…',
@@ -52337,7 +52359,7 @@ function projectInboxProgress({ segments, memoryBank, context, previousSession, 
     if (!segment) return null;
     const date = new Date(operation.inboxDate || createdAt);
     if (!Number.isFinite(date.getTime())) return null;
-    const plan = inboxPlan(memoryBank, previousSession, date);
+    const plan = inboxPlan(memoryBank, previousSession, date, { legacyStageMatching: operation.inboxPlanVersion !== 2 });
     const incoming = emptyInbox(memoryBank, context);
     Object.assign(incoming, inboxGenerationOwner(previousSession, context, memoryBank));
     const seen = new Set();

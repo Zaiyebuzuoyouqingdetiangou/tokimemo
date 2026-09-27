@@ -42,18 +42,16 @@ import * as achievements from './modesBridge.js';
 
 export function generationProgressSegments(journal, options = {}) {
     const inboxMode = journal?.identity?.mode === 'inbox';
+    const parsePartial = inboxMode ? json_parser.parseInboxRecoveryObject : json_parser.parsePartialJsonObject;
     return (Array.isArray(journal?.segments) ? journal.segments : []).filter(segment =>
         segment.state === 'complete' || segment.state === 'truncated').map(segment => {
         const latest = segment.state === 'complete' ? segment.rawJson : segment.partial;
         const parsed = segment.retainedPartials?.length
-            ? recovery_merge.mergeRecoveryPartials([...segment.retainedPartials, latest], generationRecoverySchema(journal, segment, options), { final: segment.state === 'complete' })
-            : json_parser.parsePartialJsonObject(latest);
-        const closedLetters = parsed.items('/letters');
-        const salvagedLetters = inboxMode && typeof latest === 'string' && !closedLetters.length
-            ? json_parser.salvageInboxLetters(latest)?.letters : null;
+            ? recovery_merge.mergeRecoveryPartials([...segment.retainedPartials, latest], generationRecoverySchema(journal, segment, options), { final: segment.state === 'complete', parsePartial })
+            : parsePartial(latest);
         return { slot: segment.slot, state: segment.state, contract: segment.contract, value: parsed.value, partialValue: parsed.partialValue,
             complete: segment.state === 'complete' && parsed.complete,
-            items: pointer => pointer === '/letters' && salvagedLetters?.length ? salvagedLetters : parsed.items(pointer),
+            items: parsed.items,
             has: parsed.has, at: parsed.at };
     });
 }
@@ -112,13 +110,13 @@ export function generationRecoverySchema(journal, segment, options = {}) {
         operation: journal.operation || {}, createdAt: journal.createdAt, segments: journal.segments || [] });
 }
 
-function rawStrings(raws) {
+function rawStrings(raws, parsePartial = json_parser.parsePartialJsonObject) {
     const values = new Set();
     const visit = value => {
         if (typeof value === 'string') values.add(value.trim());
         else if (value && typeof value === 'object') Object.values(value).forEach(visit);
     };
-    raws.forEach(raw => visit(json_parser.parsePartialJsonObject(raw).partialValue));
+    raws.forEach(raw => visit(parsePartial(raw).partialValue));
     return values;
 }
 function receivedFacts(value, observed, facts = new Map(), field = '') {
@@ -140,15 +138,16 @@ export async function mergeGenerationRecoveryResponse(journal, segment, raw, val
     if (!oldRaws.length) return null;
     const schema = schemaOverride || generationRecoverySchema(journal, segment);
     if (!schema) return null; // No partially readable units in whole-plan stages.
+    const parsePartial = journal?.identity?.mode === 'inbox' ? json_parser.parseInboxRecoveryObject : json_parser.parsePartialJsonObject;
     const nextRaw = JSON.stringify(raw);
-    const merged = recovery_merge.mergeRecoveryPartials([...oldRaws, nextRaw], schema, { final: true });
+    const merged = recovery_merge.mergeRecoveryPartials([...oldRaws, nextRaw], schema, { final: true, parsePartial });
     if (merged.conflicts.length) throw Object.assign(new Error('恢复内容的原人物、证据或父对象与新回复不同；双方草稿已保留，未拼接到错误对象。'),
         { code: 'RMT_RECOVERY_MERGE_CONFLICT', safeToDisplay: true });
     const combined = merged.value;
     const normalized = await validator(combined);
     // Check actual accepted content rather than character counts. A normalizer
     // must not silently slice old or newly accepted records off a merged array.
-    const observedNew = rawStrings([nextRaw]);
+    const observedNew = rawStrings([nextRaw], parsePartial);
     for (const value of merged.ignoredNewStrings) observedNew.delete(value);
     const fresh = await validator(raw);
     if (!containsFacts(receivedFacts(normalized, observedNew), receivedFacts(fresh, observedNew)))
@@ -157,7 +156,7 @@ export async function mergeGenerationRecoveryResponse(journal, segment, raw, val
     const withRow = row => ({ ...journal, segments: journal.segments.map(value => value.slot === row.slot ? row : value) });
     const oldSession = await projectGenerationProgress(journal);
     const newSession = await projectGenerationProgress(withRow({ ...segment, state: 'complete', rawJson: JSON.stringify(combined), retainedPartials: [] }));
-    const observedOld = rawStrings(oldRaws);
+    const observedOld = rawStrings(oldRaws, parsePartial);
     if (oldSession && !containsFacts(receivedFacts(newSession, observedOld), receivedFacts(oldSession, observedOld)))
         throw Object.assign(new Error('本次合并未能保留此前已验证的可读内容；双方草稿已保留，没有重置进度。'),
             { code: 'RMT_RECOVERY_MERGE_CONFLICT', safeToDisplay: true });

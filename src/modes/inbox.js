@@ -62,11 +62,18 @@ export function emptyInbox(memory, context = null) {
         ...(context ? { ownerOrigin: inboxOwnerOrigin(context, memory) } : {}),
         participantNames: frozenParticipantNames(memory), recipient: clean(memory.userName, 120), letters: [] };
 }
-export function inboxPlan(memory, previous, date = new Date()) {
+export function inboxPlan(memory, previous, date = new Date(), { legacyStageMatching = false } = {}) {
     const sent = new Set((previous?.letters || []).map(letter => letter.eventKey));
     const plan = [];
-    const significant = [...(memory.memories || [])].reverse().find(item =>
-        /初见|相遇|相识|认识|熟悉|熟络|信任|暧昧|告白|确认关系|交往|和好|复合|争执|争吵|冷战|疏远|误会|重逢|分别|告别|分手|约定/u.test([item.title, ...(item.anchors || [])].join(' ')));
+    const significant = [...(memory.memories || [])].reverse().find(item => {
+        const label = [item.title, ...(item.anchors || [])].join(' ');
+        // “复合” as a relationship event, not the prefix of 复合锁阵/材料/函数.
+        // Frozen pre-r84.163 requests retain their original two-letter plan.
+        const reunion = legacyStageMatching
+            ? /复合/u
+            : /复合(?=$|[\s，。！？、；：,.!?;:…“”‘’「」『』（）()\[\]【】]|[了后前时过吧吗呀呢的]|成功|失败|未果|无望|意愿|意向|请求|邀请|计划|可能|机会)/u;
+        return /初见|相遇|相识|认识|熟悉|熟络|信任|暧昧|告白|确认关系|交往|和好|争执|争吵|冷战|疏远|误会|重逢|分别|告别|分手|约定/u.test(label) || reunion.test(label);
+    });
     if (significant) {
         const ref = evidence.normalizeExactMemoryReference([significant.id], significant.anchors?.[0] || significant.title, memory, 1);
         if (ref.sourceMemoryIds.length) {
@@ -191,7 +198,7 @@ export function mergeInboxLatest(latest, incoming) {
 }
 export async function generateInbox(context, memory, origin, taskKey, previous, options = {}) {
     const date = options.date || new Date();
-    const plan = inboxPlan(memory, previous, date);
+    const plan = inboxPlan(memory, previous, date, { legacyStageMatching: options.legacyStageMatching === true });
     if (!plan.length) return previous || emptyInbox(memory);
     const owner = inboxGenerationOwner(previous, context, memory);
     const fresh = await generation.requestValidatedSegment(inboxPrompt(memory, plan, previous), '正在收取寄给你的信…',
@@ -206,7 +213,7 @@ export function projectInboxProgress({ segments, memoryBank, context, previousSe
     if (!segment) return null;
     const date = new Date(operation.inboxDate || createdAt);
     if (!Number.isFinite(date.getTime())) return null;
-    const plan = inboxPlan(memoryBank, previousSession, date);
+    const plan = inboxPlan(memoryBank, previousSession, date, { legacyStageMatching: operation.inboxPlanVersion !== 2 });
     const incoming = emptyInbox(memoryBank, context);
     Object.assign(incoming, inboxGenerationOwner(previousSession, context, memoryBank));
     const seen = new Set();

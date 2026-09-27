@@ -1,23 +1,42 @@
 {
-  "version": "0.99.90",
-  "build": "0.99.90-r84.162-letter-strips",
-  "baseCommit": "previous delivery hearttrace-upload.zip (0.99.90-r84.161-window-tags)",
-  "syntaxFiles": 350,
+  "version": "0.99.91",
+  "build": "0.99.91-r84.163-inbox-recovery",
+  "baseline": "User upload hearttrace-upload(20260927-054101).zip / r84.162",
+  "baselineZipSHA256": "02f2d4ff3ea510a9c736e960cacd4f84e2280ae32d1d67e58fa656bcbd6f2c38",
+  "syntaxFiles": 351,
   "syntaxExit": 0,
   "bundleModules": 287,
-  "bundleSha256": "43fa3417c20e006eb4a2fd0adc8f8da0b0e696165f9c39e658f34ea224588ba1",
+  "bundleSha256": "00eedfbdf834d5c94a72b8b689742230face43a6b89fad38f93fe3668a89151a",
   "bundleRebuildIdentical": true,
-  "sourceSha256": "e36fabd988e20250b6fab709e6739af7ab49f504ff92886c5e354710c6d8ed70",
-  "tests": 267,
-  "pass": 267,
+  "sourceSha256": "831ca972c8e341b1bc7ddd8bbfea8601edec3b15e590745bbc4c5e0b7ee3d856",
+  "tests": 279,
+  "pass": 279,
   "fail": 0,
-  "failingTests": [],
-  "failingTestsNote": "",
+  "skipped": 0,
+  "regressionTests": 12,
+  "initialRegressionBeforeFix": {
+    "tests": 10,
+    "pass": 4,
+    "fail": 6
+  },
   "undefinedBindings": 0,
   "prematureReads": 0,
   "runtimeExports": 5,
   "undefinedNames": 0,
-  "testedEnvironment": "267 Node tests with --experimental-vm-modules (Node 22). New: test-stored-batch-read-range-r84162 (2, first failed before fix), test-letter-face-r84162 (3, source/CSS level). Letter UI not rendered in a real browser; real SillyTavern, iPhone, TT were not opened.",
-  "refactorGuard": "Intended changes only (importCurrentChatMemoryOperation, floorShellCss incl. CSS output, autoMemoryShell markup/letterSlots/paintHost/paint/onClick). Re-snapshotted; r84.161 baseline kept as verification/refactor-baseline-r84.161.json.",
-  "unavailableChecks": ""
+  "promptProof": {
+    "templateLiterals": 2821,
+    "promptContractDeclarations": 193,
+    "allUnchanged": true,
+    "declarationManifestSHA256": "e595c2dfd55bd12e6611e587881fcbc760bbafc9ed446bcb65898948f920e02d"
+  },
+  "addedRestrictions": [],
+  "testedEnvironment": "Node v24.19.0, existing runtime harness and actual installation bundle; simulated host/storage/provider boundaries, not a real SillyTavern or TT session.",
+  "refactorGuard": "Pass after reviewing intended inbox recovery/plan changes and snapshot; original r84.162 baseline retained, CSS unchanged.",
+  "finalZipVerification": "Performed after packaging; final ZIP hash and fresh-extraction results are in the separately delivered verification evidence.",
+  "unavailableChecks": [
+    "Real SillyTavern/TT/iPhone",
+    "Real user draft database and live provider",
+    "Independent reviewer/security service"
+  ],
+  "githubWrite": "No successful remote write in this conversation."
 }

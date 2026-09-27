@@ -1,5 +1,5 @@
-const VERSION = '0.99.90';
-const BUILD = '0.99.90-r84.162-letter-strips';
+const VERSION = '0.99.91';
+const BUILD = '0.99.91-r84.163-inbox-recovery';
 
 const SETTINGS_ID = 'heartbeat_memories_settings';
 const MENU_ID = 'heartbeat_memories_menu_item';

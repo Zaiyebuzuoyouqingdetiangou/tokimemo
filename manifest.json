@@ -1,15 +1,15 @@
 {
   "display_name": "心迹回廊",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.99.90-r84.162-letter-strips",
+  "js": "index.js?heartbeat=0.99.91-r84.163-inbox-recovery",
   "author": "Toto",
-  "version": "0.99.90",
+  "version": "0.99.91",
   "auto_update": true,
   "minimum_client_version": "1.13.0",
   "hooks": {
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r84.162：最新一楼用迷你信封，旧楼压缩成提示条；信纸改版，可去心迹回廊看。",
+  "description": "r84.163：邮箱草稿完整读取与重试保留原文，修正复合事件误判；兼容旧收信任务。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }

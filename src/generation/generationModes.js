@@ -434,6 +434,7 @@ async function generateModeOperation(mode, options = {}) {
             partialReaderStillCurrent: scopedReaderMode ? () => !background && timeReaderVisible() : null,
             contentInputs: { previousSession, roomSession, focusObject, ...(linkedRoomSession ? { linkedRoomSession } : {}) },
             operation: recoveryExisting?.operation || { kind: 'mode', mode, ...(themeSongPlan ? { themeSongPlan } : {}), ...(bedtimePlan ? { bedtimePlan } : {}), inboxDate: inboxDate?.toISOString() || '', calendarDate: calendarCurrentDate,
+                ...(mode === core_constants.MODE.INBOX ? { inboxPlanVersion: 2 } : {}),
                 ...(mode === core_constants.MODE.CALENDAR ? { calendarTimeBasis: 'story' } : {}),
                 allowPersonaExpansion, visualOnly: options.visualOnly === true, fillMissing: options.fillMissing === true, focusObjectId: core_text.normalizeText(options.focusObjectId, 120),
                 ...(replacementTicket ? { participantRegeneration: options.participantRegeneration } : {}) } });
@@ -481,7 +482,8 @@ async function generateModeOperation(mode, options = {}) {
         } else if (mode === core_constants.MODE.BEDTIME) {
             session = await modes_bedtime.generateBedtime(context, memoryBank, origin, taskKey, previousSession, { plan: bedtimePlan, presentationContext });
         } else if (mode === core_constants.MODE.INBOX) {
-            session = await modes_inbox.generateInbox(context, memoryBank, origin, taskKey, previousSession, { presentationContext, date: inboxDate });
+            session = await modes_inbox.generateInbox(context, memoryBank, origin, taskKey, previousSession, { presentationContext, date: inboxDate,
+                legacyStageMatching: !!recoveryExisting && recoveryExisting.operation?.inboxPlanVersion !== 2 });
         } else if (time_stories.isTimeStoryMode(mode)) {
             session = await modes_timeStories.generateTimeStoryWithRepair(mode, context, memoryBank, origin, taskKey, { previousSession, replaceExisting, presentationContext });
         } else if (mode === core_constants.MODE.PAST_LIVES) {

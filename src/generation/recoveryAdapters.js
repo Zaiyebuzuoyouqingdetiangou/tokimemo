@@ -67,7 +67,7 @@ function achievementsSchema({ memoryBank }) {
 
 function inboxSchema({ memoryBank, previousSession, operation = {}, frozenInputs = {}, createdAt }) {
     const m = recovery_merge, date = operation.inboxDate || createdAt;
-    const plan = inbox.inboxPlan(memoryBank, previousSession, new Date(date));
+    const plan = inbox.inboxPlan(memoryBank, previousSession, new Date(date), { legacyStageMatching: operation.inboxPlanVersion !== 2 });
     return m.recoveryRecord({ title: { accept: m.recoveryText }, letters: m.recoveryList(m.recoveryItemKey('slot'), null, row => {
         const selected = plan.find(item => item.slot === row?.slot);
         return !!selected && m.recoveryCheck(() => inbox.normalizeInboxLetters({ letters: [row] }, memoryBank, [selected], new Date(date),
