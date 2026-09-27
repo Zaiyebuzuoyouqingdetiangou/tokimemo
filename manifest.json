@@ -1,7 +1,7 @@
 {
   "display_name": "心迹回廊",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.99.90-r84.157-window-save",
+  "js": "index.js?heartbeat=0.99.90-r84.159-stored-batch",
   "author": "Toto",
   "version": "0.99.90",
   "auto_update": true,
@@ -10,6 +10,6 @@
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r84.157：每一楼抽取时，建档结果晚一步保存也不再误报聊天不一致。",
+  "description": "r84.159：档案里有没做完的建档批次时，每一楼的自动建档不再秒失败。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }

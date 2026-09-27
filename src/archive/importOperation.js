@@ -104,6 +104,10 @@ export async function importCurrentChatMemoryOperation({ fullRebuild = false, au
     if (progress) {
         archive_batches.assertIdentity(progress.identity, identity, { ignoreChatFingerprint: floorWindowSync });
         if (progress.archiveRevision !== (existing?.archiveRevision || '')) throw archive_batches.changedInput('archive');
+        // r84.159：每楼自动建档接着做档案里没做完的批次时，上面已证明角色、Persona、范围、来源选择、配置都没变。
+        // 把这批的聊天身份对到当前聊天，后面各处核对就不会因为聊天后面多了几楼而失败。
+        // 这批自己用到的楼仍由 resolveBatchParts 按每个片段的哈希逐一核对当前聊天，被改就停。
+        if (floorWindowSync && progress.identity?.chat !== identity.chat) progress = { ...progress, identity: { ...progress.identity, chat: identity.chat } };
     }
     if (pinnedInputs?.identity) archive_batches.assertIdentity(pinnedInputs.identity, identity);
     const shouldScan = settings.useCurrentChatExternalMemory || hasMemoryWorldInfoSelection(context);
@@ -309,8 +313,11 @@ export async function importCurrentChatMemoryOperation({ fullRebuild = false, au
                 participantRoster: archiveRoster });
         }
         if (progress && taskInputV1) progress.taskInputV1 = structuredClone(taskInputV1);
-        assertPreparationCurrent();
+        const livePreparation = assertPreparationCurrent();
         if (progress) assertBatchCommitIdentity(context, { [archive_batches.IMPORT_PROGRESS_KEY]: progress });
+        // r84.159：保存前（assertBatchSaveCurrent）会做同一项核对。提前到发请求之前，不先花钱再拒绝保存。
+        if ((commitCompletedOnly || receiptBase?.archivePartialDraft) && !floorWindowSync
+            && core_context.completeArchiveChatFingerprint(livePreparation) !== snapshotForIdentity.fullFingerprint) throw archive_batches.changedInput('chat');
         if (!automatic && !continueRecovery) {
             const chatCharacters = chatInput.reduce((sum, item) => sum + item.text.length, 0);
             const externalCharacters = externalChunks.reduce((sum, chunk) => sum + JSON.stringify(chunk).length, 0);
