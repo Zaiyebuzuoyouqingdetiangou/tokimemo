@@ -1,5 +1,5 @@
 const VERSION = '0.99.90';
-const BUILD = '0.99.90-r84.160-dismiss-failed';
+const BUILD = '0.99.90-r84.161-window-tags';
 
 const SETTINGS_ID = 'heartbeat_memories_settings';
 const MENU_ID = 'heartbeat_memories_menu_item';

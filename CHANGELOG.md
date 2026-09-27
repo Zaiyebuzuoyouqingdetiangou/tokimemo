@@ -1,3 +1,13 @@
+# 0.99.90 / r84.161 — 每楼自动建档读窗口时去掉排除的标签
+
+- 现象（用户诊断，r84.160）：聊一句就失败，`RMT_RECOVERY_INPUT_CHANGED`、phase initialization、category chat、0 次请求、1 个分块、已测过预算，两三百毫秒内结束。所有自动留忆随之失败。
+- 真正原因：每楼自动建档读窗口的 `floorWindowMessages`（原 `importOperation.js` 的 `windowChatMessages`）直接用楼层原文，没有按设置去掉排除的标签（默认 `thinking`、`UpdateVariable`）。而 `resolveBatchParts` 拿窗口片段的哈希去比对 `snapshot.messages`，后者经过 `filterContextTags`。只要这一楼里有被排除的标签，哈希就对不上，按「聊天正文不一致」停下。另外，被排除的标签内容原来也会被送去建档。
+- 修法：`archive/floorWindowCheck.js` 的 `floorWindowMessages` 按 `tagPolicyForContext` 过滤正文，与 `buildChatSnapshot` 一致。r84.157 的窗口指纹也用这个函数，建档和保存前核对仍是同一读法。
+- 影响：r84.157–r84.160 之间记下的窗口指纹是按未过滤正文算的；如果那时有卡在「待保存」的每楼建档，而楼里带排除标签，重试保存会按严格规则报不一致，需要放弃后重来。
+- 之前几轮的判断需要更正：r84.157 修的延后保存、r84.159 修的半存批次是真实存在的问题，但用户一直遇到的秒失败，主因是这里。测试夹具的聊天没有标签，所以之前没有测出来。
+- 另记一个未修的风险：读取范围设成「最近 N 楼」时，档案里没做完的旧批次如果有楼滑出了范围，`resolveBatchParts` 也会按聊天不一致停下（测试环境复现，未改）。
+- 新测试 `tools/test-floor-window-tags-r84161.mjs`（2 项），改之前都失败，失败码与用户诊断一致。全部测试 262 个，全部通过。verify-runtime：undefinedBindings 0、prematureReads 0。「未定义名字」扫描 0。护栏只报 `floorWindowMessages`（有意改动），已重拍；r84.160 基线另存为 `verification/refactor-baseline-r84.160.json`。
+
 # 0.99.90 / r84.160 — 任务中心里失败的记录可以单独移除
 
 - 失败的任务以前在任务中心里清不掉：「取消当前聊天全部任务」只管正在跑和排队的，「清空已完成」只清完成和已取消的。
