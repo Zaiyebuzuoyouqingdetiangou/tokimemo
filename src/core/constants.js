@@ -207,6 +207,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
     creativeSupplementEnabled: false,
     creativeSupplement: '',
     imageGenerationProvider: 'baibai-image',
+    imageGenerationFallback: false,
     cgPromptFormat: 'nai5-natural',
     // Optional r32-style mobile safe-area presentation. Off keeps the long-standing edge-to-edge fullscreen UI.
     ttDisplayMode: false,

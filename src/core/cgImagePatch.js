@@ -29,7 +29,7 @@ export function normalizeCgImageRecord(value) {
     if (!url) return null;
     const promptMetadata = appearance.normalizeCgPromptMetadata(value.promptMetadata);
     return { url, prompt: text.normalizeText(value.prompt, constants.MAX_CG_IMAGE_PROMPT_CHARS),
-        provider: value.provider === 'baibai-image' ? 'baibai-image' : constants.CG_IMAGE_PROVIDER,
+        provider: value.provider === 'chatu8-image' ? 'chatu8-image' : value.provider === 'baibai-image' ? 'baibai-image' : constants.CG_IMAGE_PROVIDER,
         generatedAt: Math.max(0, Number(value.generatedAt) || 0),
         ...(promptMetadata ? { promptMetadata } : {}) };
 }
@@ -80,7 +80,7 @@ export function normalizeCgImagePatch(value) {
         || typeof value.itemId !== 'string' || !value.itemId || value.itemId.length > 240
         || typeof value.expectedSignature !== 'string' || !value.expectedSignature || value.expectedSignature.length > 120000) return null;
     const image = normalizeCgImageRecord(value.image);
-    if (!image || image.provider !== 'baibai-image' || typeof value.image.url !== 'string' || value.image.url.length > 4096) return null;
+    if (!image || (image.provider !== 'baibai-image' && image.provider !== 'chatu8-image') || typeof value.image.url !== 'string' || value.image.url.length > 4096) return null;
     // Deferred writes use the same strict saved-file contract as fresh results.
     // Displaying legacy same-host URLs does not grant permission to write them.
     const savedPath = savedLocalImagePath(value.image.url);

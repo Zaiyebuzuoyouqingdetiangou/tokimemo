@@ -81,6 +81,7 @@
   "generation/baibaiImage.js",
   "generation/cgAppearance.js",
   "generation/cgPromptPolicy.js",
+  "generation/chatu8Image.js",
   "generation/client.js",
   "generation/contentRegeneration.js",
   "generation/imageGeneration.js",

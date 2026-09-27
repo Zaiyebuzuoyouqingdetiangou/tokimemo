@@ -1,5 +1,5 @@
-const VERSION = '0.99.16';
-const BUILD = '0.99.16-r84.61-task-bridge';
+const VERSION = '0.99.17';
+const BUILD = '0.99.17-r84.62-chatu8';
 
 const SETTINGS_ID = 'heartbeat_memories_settings';
 const MENU_ID = 'heartbeat_memories_menu_item';

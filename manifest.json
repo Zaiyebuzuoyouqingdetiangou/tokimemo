@@ -1,15 +1,15 @@
 {
   "display_name": "心迹回廊",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.99.16-r84.61-task-bridge",
+  "js": "index.js?heartbeat=0.99.17-r84.62-chatu8",
   "author": "Toto",
-  "version": "0.99.16",
+  "version": "0.99.17",
   "auto_update": true,
   "minimum_client_version": "1.13.0",
   "hooks": {
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r84.61：补回自动留忆任务中心接口，间隔 1 从当前楼开始抽。",
+  "description": "r84.62：CG 生图可接智绘姬，失败改道默认关闭。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }

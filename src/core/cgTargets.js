@@ -211,7 +211,7 @@ function safeLocalImage(value) {
     let promptMetadata = null;
     try { const json = JSON.stringify(value.promptMetadata); if (json && json.length <= 12000) promptMetadata = JSON.parse(json); } catch {}
     return { url, prompt: normalized(value.prompt, constants.MAX_CG_IMAGE_PROMPT_CHARS),
-        provider: value.provider === 'baibai-image' ? 'baibai-image' : constants.CG_IMAGE_PROVIDER,
+        provider: value.provider === 'chatu8-image' ? 'chatu8-image' : value.provider === 'baibai-image' ? 'baibai-image' : constants.CG_IMAGE_PROVIDER,
         generatedAt: Math.max(0, Number(value.generatedAt) || 0), ...(promptMetadata ? { promptMetadata } : {}) };
 }
 function safeVisual(value) {

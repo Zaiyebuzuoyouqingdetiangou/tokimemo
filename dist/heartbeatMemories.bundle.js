@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
-// Source modules: 174
-// Source SHA-256: 764881d9311cac89b24be687b4d944a0d29f4cfd14dc9f1971de13d64c837ce6
+// Source modules: 175
+// Source SHA-256: 238c6f5f004886dfcf64348494977e8bd7a6fc506e339deb1b59a40c3556f94f
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_backupStore_js = Object.create(null);
@@ -86,6 +86,7 @@ const __m_core_worldPresentation_js = Object.create(null);
 const __m_generation_baibaiImage_js = Object.create(null);
 const __m_generation_cgAppearance_js = Object.create(null);
 const __m_generation_cgPromptPolicy_js = Object.create(null);
+const __m_generation_chatu8Image_js = Object.create(null);
 const __m_generation_client_js = Object.create(null);
 const __m_generation_contentRegeneration_js = Object.create(null);
 const __m_generation_imageGeneration_js = Object.create(null);
@@ -4632,7 +4633,7 @@ function safeLocalImage(value) {
     let promptMetadata = null;
     try { const json = JSON.stringify(value.promptMetadata); if (json && json.length <= 12000) promptMetadata = JSON.parse(json); } catch {}
     return { url, prompt: normalized(value.prompt, constants.MAX_CG_IMAGE_PROMPT_CHARS),
-        provider: value.provider === 'baibai-image' ? 'baibai-image' : constants.CG_IMAGE_PROVIDER,
+        provider: value.provider === 'chatu8-image' ? 'chatu8-image' : value.provider === 'baibai-image' ? 'baibai-image' : constants.CG_IMAGE_PROVIDER,
         generatedAt: Math.max(0, Number(value.generatedAt) || 0), ...(promptMetadata ? { promptMetadata } : {}) };
 }
 function safeVisual(value) {
@@ -5203,6 +5204,7 @@ const DEFAULT_SETTINGS = Object.freeze({
     creativeSupplementEnabled: false,
     creativeSupplement: '',
     imageGenerationProvider: 'baibai-image',
+    imageGenerationFallback: false,
     cgPromptFormat: 'nai5-natural',
     // Optional r32-style mobile safe-area presentation. Off keeps the long-standing edge-to-edge fullscreen UI.
     ttDisplayMode: false,
@@ -5522,7 +5524,7 @@ function normalizeCgImageRecord(value) {
     if (!url) return null;
     const promptMetadata = appearance.normalizeCgPromptMetadata(value.promptMetadata);
     return { url, prompt: text.normalizeText(value.prompt, constants.MAX_CG_IMAGE_PROMPT_CHARS),
-        provider: value.provider === 'baibai-image' ? 'baibai-image' : constants.CG_IMAGE_PROVIDER,
+        provider: value.provider === 'chatu8-image' ? 'chatu8-image' : value.provider === 'baibai-image' ? 'baibai-image' : constants.CG_IMAGE_PROVIDER,
         generatedAt: Math.max(0, Number(value.generatedAt) || 0),
         ...(promptMetadata ? { promptMetadata } : {}) };
 }
@@ -5573,7 +5575,7 @@ function normalizeCgImagePatch(value) {
         || typeof value.itemId !== 'string' || !value.itemId || value.itemId.length > 240
         || typeof value.expectedSignature !== 'string' || !value.expectedSignature || value.expectedSignature.length > 120000) return null;
     const image = normalizeCgImageRecord(value.image);
-    if (!image || image.provider !== 'baibai-image' || typeof value.image.url !== 'string' || value.image.url.length > 4096) return null;
+    if (!image || (image.provider !== 'baibai-image' && image.provider !== 'chatu8-image') || typeof value.image.url !== 'string' || value.image.url.length > 4096) return null;
     // Deferred writes use the same strict saved-file contract as fresh results.
     // Displaying legacy same-host URLs does not grant permission to write them.
     const savedPath = savedLocalImagePath(value.image.url);
@@ -22434,7 +22436,8 @@ function getPluginSettings(context = core_context.getContext()) {
         useCurrentChatExternalMemory: settings.useCurrentChatExternalMemory !== false,
         useActivatedWorldInfo: settings.useActivatedWorldInfo !== false,
         imageGenerationManualEnabled: false,
-        imageGenerationProvider: 'baibai-image',
+        imageGenerationProvider: settings.imageGenerationProvider === 'chatu8-image' ? 'chatu8-image' : 'baibai-image',
+        imageGenerationFallback: settings.imageGenerationFallback === true,
         cgPromptFormat: cg_format.normalizeCgPromptFormat(settings.cgPromptFormat, 'nai5-natural'),
         autoRetryEnabled: settings.autoRetryEnabled === true,
         autoRetryCount: normalizeAutoRetryCount(settings.autoRetryCount),
@@ -25197,6 +25200,253 @@ __m_generation_cgPromptPolicy_js.cgRecoveryOperation = cgRecoveryOperation;
 __m_generation_cgPromptPolicy_js.cgSegmentValidator = cgSegmentValidator;
 }
 
+function __init_generation_chatu8Image_js() {
+// MODULE: generation/chatu8Image.js
+const image_patch = __m_core_cgImagePatch_js;
+const core_context = __m_core_context_js;
+const core_text = __m_core_text_js;
+const appearance = __m_generation_cgAppearance_js;
+// Calls 智绘姬 through the event it already listens for. Does not read API keys,
+// prompts, or endpoints, and does not write its settings. Width and height are
+// omitted so the user's existing 智绘姬 size stays in effect.
+
+
+
+
+const CHATU8_IMAGE_PROVIDER = 'chatu8-image';
+const CHATU8_IMAGE_TIMEOUT_MS = 300000;
+const CHATU8_IMAGE_CONCURRENCY = 2;
+const EXTENSION_KEY = 'st-chatu8';
+const REQUEST_EVENT = 'generate-image-request';
+const RESPONSE_EVENT = 'generate-image-response';
+const STILL_MODES = new Set(['sd', 'novelai', 'comfyui', 'banana', 'runninghub']);
+const CANCEL_EVENTS = Object.freeze({
+    novelai: ['st_chatu8_cancel_novelai_task'],
+    comfyui: ['st_chatu8_cancel_comfyui_task', 'st_chatu8_cancel_task'],
+    banana: ['st_chatu8_cancel_banana_task'],
+    runninghub: ['st_chatu8_cancel_runninghub_task'],
+});
+const pendingGenerations = new Map();
+const ownErrors = new WeakSet();
+
+const MESSAGES = Object.freeze({
+    CH8_NOT_READY: '未检测到智绘姬。请先安装并启用，配好出图模式后刷新；刚完成加载可点击“重新检测”。',
+    CH8_DISABLED: '智绘姬已安装，但总开关是关的。请在智绘姬里启用后再绘制。',
+    CH8_NOT_CONFIGURED: '智绘姬当前模式不能出静图。请在智绘姬里选好 SD、NovelAI、ComfyUI 或其他出图模式。',
+    CH8_INVALID_ARGS: '智绘姬未接受这次画面提示，请检查画面描述后重试。',
+    CH8_BACKEND_ERROR: '智绘姬出图失败。旧图已保留；请到智绘姬里查看这次任务。',
+    CH8_SAVE_FAILED: '图片已生成，但没有取得可保存的本地路径。旧图已保留，避免重复出图。',
+    CH8_TIMEOUT: '等待智绘姬超过 5 分钟，已请求取消。旧图已保留。',
+    CH8_ABORTED: '已取消接收本次图片，旧图已保留。',
+    CH8_BUSY: '已有两张图片提交给智绘姬，请等其中一张结束后再绘制。',
+    CH8_TARGET_BUSY: '这张图片的绘制请求还未结束，请先等待，避免重复出图。',
+});
+
+function chatu8ImageError(code) {
+    const safeCode = Object.hasOwn(MESSAGES, code) ? code : 'CH8_BACKEND_ERROR';
+    const error = new Error(MESSAGES[safeCode]);
+    error.code = safeCode;
+    error.safeUserMessage = error.message;
+    error.safeToDisplay = true;
+    ownErrors.add(error);
+    if (safeCode === 'CH8_ABORTED') error.name = 'AbortError';
+    return error;
+}
+
+function extensionBag(context) {
+    const settings = context?.extensionSettings;
+    const bag = settings && typeof settings === 'object' ? settings[EXTENSION_KEY] : null;
+    return bag && typeof bag === 'object' ? bag : null;
+}
+
+function chatu8ImageState(context = core_context.getContext()) {
+    try {
+        const bag = extensionBag(context);
+        if (!bag) return { available: false, detected: false, reason: MESSAGES.CH8_NOT_READY, code: 'CH8_NOT_READY', backend: '' };
+        const enabled = bag.scriptEnabled === true || bag.scriptEnabled === 'true';
+        const backend = typeof bag.mode === 'string' && STILL_MODES.has(bag.mode) ? bag.mode : '';
+        if (!enabled) return { available: false, detected: true, reason: MESSAGES.CH8_DISABLED, code: 'CH8_DISABLED', backend };
+        if (!backend) return { available: false, detected: true, reason: MESSAGES.CH8_NOT_CONFIGURED, code: 'CH8_NOT_CONFIGURED', backend: typeof bag.mode === 'string' ? bag.mode : '' };
+        const source = context?.eventSource;
+        if (!source || typeof source.emit !== 'function' || typeof source.on !== 'function') {
+            return { available: false, detected: true, reason: MESSAGES.CH8_NOT_READY, code: 'CH8_NOT_READY', backend };
+        }
+        return { available: true, detected: true, reason: '智绘姬已连接 · 使用其中已有的出图配置', code: '', backend, eventSource: source };
+    } catch {
+        return { available: false, detected: false, reason: MESSAGES.CH8_BACKEND_ERROR, code: 'CH8_BACKEND_ERROR', backend: '' };
+    }
+}
+
+function chatu8ImagePendingCount() { return pendingGenerations.size; }
+function isChatu8ImageTargetPending(targetKey) { return !!targetKey && pendingGenerations.has(targetKey); }
+
+function requestId() {
+    const uuid = globalThis.crypto?.randomUUID?.();
+    if (typeof uuid === 'string' && uuid) return `rmt-${uuid}`;
+    return `rmt-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+}
+
+function unlisten(source, event, handler) {
+    try { source.removeListener?.(event, handler); } catch {}
+}
+
+function cancelBackend(source, backend) {
+    for (const event of CANCEL_EVENTS[backend] || []) {
+        try { source.emit(event, {}); } catch {}
+    }
+}
+
+function flatPrompt(prompt, promptMetadata) {
+    const visual = core_text.normalizeText(prompt, 1800);
+    if (!visual) throw chatu8ImageError('CH8_INVALID_ARGS');
+    const metadata = appearance.normalizeCgPromptMetadata(promptMetadata);
+    const fullVisual = appearance.cgPreparedVisualPrompt(visual, metadata);
+    let primaryPrompt = metadata ? metadata.flatPrompt || fullVisual : visual;
+    primaryPrompt = appearance.cgFlatPromptWithNaturalLooks(primaryPrompt, metadata);
+    const sceneMarker = '\n[SCENE] ';
+    const comicEnd = visual.startsWith('DAILY_COMIC_Q_V1') ? visual.indexOf(sceneMarker) : -1;
+    if (comicEnd > 0 && primaryPrompt !== visual && !primaryPrompt.startsWith('DAILY_COMIC_Q_V1')) {
+        primaryPrompt = `${visual.slice(0, comicEnd)}\n[SCENE] ${primaryPrompt}`.slice(0, appearance.CG_PREPARED_NL_LIMIT);
+    }
+    const formatted = appearance.formattedCgProviderPrompts(visual, metadata, false, '');
+    if (formatted?.prompt) primaryPrompt = formatted.prompt;
+    if (!primaryPrompt) throw chatu8ImageError('CH8_INVALID_ARGS');
+    return primaryPrompt;
+}
+
+function uploadedPath(value) {
+    if (typeof value !== 'string') return '';
+    const trimmed = value.trim();
+    if (!trimmed || trimmed.startsWith('data:')) return '';
+    return image_patch.savedLocalImagePath(/^https?:\/\//i.test(trimmed) || trimmed.startsWith('/') ? trimmed : `/${trimmed}`);
+}
+
+function uploadHeaders(context) {
+    let provided = null;
+    try { provided = typeof context?.getRequestHeaders === 'function' ? context.getRequestHeaders() : null; } catch { provided = null; }
+    if (provided && typeof provided.append === 'function') {
+        try { provided.set('Content-Type', 'application/json'); } catch {}
+        return provided;
+    }
+    return { ...(provided && typeof provided === 'object' ? provided : {}), 'Content-Type': 'application/json' };
+}
+
+function stillFormat(dataUrl) {
+    const head = dataUrl.slice(0, 48).toLowerCase();
+    if (head.startsWith('data:image/jpeg') || head.startsWith('data:image/jpg')) return 'jpeg';
+    if (head.startsWith('data:image/webp')) return 'webp';
+    if (head.startsWith('data:image/gif')) return 'gif';
+    if (head.startsWith('data:image/png')) return 'png';
+    return '';
+}
+
+async function saveStillImage(imageData, context, signal) {
+    const existing = uploadedPath(imageData);
+    if (existing) return existing;
+    if (typeof imageData !== 'string' || !imageData.startsWith('data:image/')) throw chatu8ImageError('CH8_BACKEND_ERROR');
+    const format = stillFormat(imageData);
+    const comma = imageData.indexOf(',');
+    const payload = comma > 0 ? imageData.slice(comma + 1).replace(/\s/g, '') : '';
+    if (!format || !payload) throw chatu8ImageError('CH8_BACKEND_ERROR');
+    let response;
+    try {
+        response = await fetch('/api/images/upload', {
+            method: 'POST',
+            headers: uploadHeaders(context),
+            body: JSON.stringify({ image: payload, format, ch_name: '心迹回廊' }),
+            signal,
+        });
+    } catch (error) {
+        if (signal?.aborted || error?.name === 'AbortError') throw chatu8ImageError('CH8_ABORTED');
+        throw chatu8ImageError('CH8_SAVE_FAILED');
+    }
+    if (!response?.ok) throw chatu8ImageError('CH8_SAVE_FAILED');
+    let body = null;
+    try { body = await response.json(); } catch { body = null; }
+    const path = uploadedPath(body?.path);
+    if (!path) throw chatu8ImageError('CH8_SAVE_FAILED');
+    return path;
+}
+
+async function generateChatu8Image(prompt, { signal = null, promptMetadata = null, onProgress = null, onSettled = null, targetKey = '', context = core_context.getContext() } = {}) {
+    if (signal?.aborted) throw chatu8ImageError('CH8_ABORTED');
+    const state = chatu8ImageState(context);
+    if (!state.available) throw chatu8ImageError(state.code);
+    const reservation = typeof targetKey === 'string' && targetKey ? targetKey : Symbol('image');
+    if (pendingGenerations.has(reservation)) throw chatu8ImageError('CH8_TARGET_BUSY');
+    if (pendingGenerations.size >= CHATU8_IMAGE_CONCURRENCY) throw chatu8ImageError('CH8_BUSY');
+    let scene;
+    try { scene = flatPrompt(prompt, promptMetadata); }
+    catch (error) {
+        if (ownErrors.has(error) || error?.safeToDisplay) throw error;
+        throw chatu8ImageError('CH8_INVALID_ARGS');
+    }
+    const source = state.eventSource;
+    const id = requestId();
+    let settled = false;
+    const finish = () => {
+        if (settled) return;
+        settled = true;
+        pendingGenerations.delete(reservation);
+        try { onSettled?.(); } catch {}
+    };
+    pendingGenerations.set(reservation, id);
+    const report = phase => {
+        if (signal?.aborted || typeof onProgress !== 'function') return;
+        try { onProgress({ phase, providerLabel: '智绘姬' }); } catch {}
+    };
+    try {
+        report('generating');
+        const result = await new Promise((resolve, reject) => {
+            let timer = 0;
+            const stop = code => {
+                unlisten(source, RESPONSE_EVENT, onResponse);
+                signal?.removeEventListener('abort', onAbort);
+                clearTimeout(timer);
+                if (code === 'CH8_ABORTED' || code === 'CH8_TIMEOUT') cancelBackend(source, state.backend);
+                reject(chatu8ImageError(code));
+            };
+            const onResponse = data => {
+                if (!data || data.id !== id) return;
+                unlisten(source, RESPONSE_EVENT, onResponse);
+                signal?.removeEventListener('abort', onAbort);
+                clearTimeout(timer);
+                resolve(data);
+            };
+            const onAbort = () => stop('CH8_ABORTED');
+            if (signal?.aborted) { stop('CH8_ABORTED'); return; }
+            try {
+                source.on(RESPONSE_EVENT, onResponse);
+                signal?.addEventListener('abort', onAbort, { once: true });
+                timer = setTimeout(() => stop('CH8_TIMEOUT'), CHATU8_IMAGE_TIMEOUT_MS);
+                source.emit(REQUEST_EVENT, { id, prompt: scene });
+            } catch { stop('CH8_BACKEND_ERROR'); }
+        });
+        if (signal?.aborted) throw chatu8ImageError('CH8_ABORTED');
+        if (result?.cancelled) throw chatu8ImageError('CH8_ABORTED');
+        if (result?.success !== true || result?.isVideo === true) throw chatu8ImageError('CH8_BACKEND_ERROR');
+        report('saving');
+        const path = await saveStillImage(result.imageData, context, signal);
+        return { url: path, provider: CHATU8_IMAGE_PROVIDER };
+    } catch (error) {
+        if (ownErrors.has(error)) throw error;
+        if (error?.safeToDisplay) throw error;
+        throw chatu8ImageError('CH8_BACKEND_ERROR');
+    } finally {
+        finish();
+    }
+}
+
+__m_generation_chatu8Image_js.generateChatu8Image = generateChatu8Image;
+__m_generation_chatu8Image_js.chatu8ImageError = chatu8ImageError;
+__m_generation_chatu8Image_js.chatu8ImageState = chatu8ImageState;
+__m_generation_chatu8Image_js.chatu8ImagePendingCount = chatu8ImagePendingCount;
+__m_generation_chatu8Image_js.isChatu8ImageTargetPending = isChatu8ImageTargetPending;
+__m_generation_chatu8Image_js.CHATU8_IMAGE_PROVIDER = CHATU8_IMAGE_PROVIDER;
+__m_generation_chatu8Image_js.CHATU8_IMAGE_TIMEOUT_MS = CHATU8_IMAGE_TIMEOUT_MS;
+__m_generation_chatu8Image_js.CHATU8_IMAGE_CONCURRENCY = CHATU8_IMAGE_CONCURRENCY;
+}
+
 function __init_generation_client_js() {
 // MODULE: generation/client.js
 const routePeople = __m_core_routeParticipants_js;
@@ -27933,6 +28183,7 @@ function __init_generation_imageGeneration_js() {
 const cg_visual = __m_core_cgVisualRules_js;
 const cg_format = __m_core_cgPromptFormat_js;
 const baibai_image = __m_generation_baibaiImage_js;
+const chatu8_image = __m_generation_chatu8Image_js;
 const cg_appearance = __m_generation_cgAppearance_js;
 const backup_diagnostics = __m_core_backupDiagnostics_js;
 const archive_library = __m_archive_library_js;
@@ -27976,6 +28227,7 @@ const runtimeState = __m_core_state_js.state;
 
 
 
+
 const IMAGE_GENERATION_COMMAND_NAMES = Object.freeze(['imagine', 'sd', 'img']);
 
 function imageGenerationCommand(context = core_context.getContext()) {
@@ -27990,12 +28242,16 @@ function imageGenerationCommand(context = core_context.getContext()) {
 }
 
 function imageGenerationUiState(context = core_context.getContext()) {
-    {
-        const status = baibai_image.baiBaiImageState();
+    const provider = core_settings.getPluginSettings(context).imageGenerationProvider === chatu8_image.CHATU8_IMAGE_PROVIDER
+        ? chatu8_image.CHATU8_IMAGE_PROVIDER : baibai_image.BAIBAI_IMAGE_PROVIDER;
+    if (provider === chatu8_image.CHATU8_IMAGE_PROVIDER) {
+        const status = chatu8_image.chatu8ImageState(context);
         return { detected: status.detected, available: status.available, reason: status.reason,
-            provider: baibai_image.BAIBAI_IMAGE_PROVIDER, providerLabel: '柏宝绘', manual: false, command: null };
+            provider, providerLabel: '智绘姬', manual: false, command: null };
     }
-
+    const status = baibai_image.baiBaiImageState();
+    return { detected: status.detected, available: status.available, reason: status.reason,
+        provider: baibai_image.BAIBAI_IMAGE_PROVIDER, providerLabel: '柏宝绘', manual: false, command: null };
 }
 
 function sanitizeImageGenerationSlashPrompt(value) {
@@ -28008,15 +28264,43 @@ function sanitizeImageGenerationSlashPrompt(value) {
         .trim();
 }
 
-async function invokeImageGeneration(prompt, context = core_context.getContext(), { signal = null, provider = null, orientation = 'landscape', characterName = '', promptMetadata = null, onProgress = null, onSettled = null, targetKey = '' } = {}) {
-    // Explicit legacy requests must not silently switch providers or invoke /sd.
-    const selectedProvider = provider || baibai_image.BAIBAI_IMAGE_PROVIDER;
+const IMAGE_FALLBACK_BLOCKED = new Set([
+    'BBI_ABORTED', 'BBI_SAVE_FAILED', 'BBI_BUSY', 'BBI_TARGET_BUSY',
+    'CH8_ABORTED', 'CH8_SAVE_FAILED', 'CH8_BUSY', 'CH8_TARGET_BUSY',
+]);
+
+function invokeSelectedImageProvider(selectedProvider, prompt, context, options) {
+    const visual = sanitizeCgVisualText(prompt);
+    if (selectedProvider === chatu8_image.CHATU8_IMAGE_PROVIDER) {
+        return chatu8_image.generateChatu8Image(visual, { ...options, context });
+    }
     if (selectedProvider === baibai_image.BAIBAI_IMAGE_PROVIDER) {
-        return baibai_image.generateBaiBaiImage(sanitizeCgVisualText(prompt), {
-            signal, orientation, characterName: characterName || context?.name2, promptMetadata, onProgress, onSettled, targetKey,
+        return baibai_image.generateBaiBaiImage(visual, {
+            ...options, characterName: options.characterName || context?.name2,
         });
     }
-    throw core_text.safeUserError('本版本仅支持柏宝绘，请启用其公开 API 并刷新；旧渠道图片仍可查看。', 'RMT_IMAGE_PROVIDER_RETIRED');
+    throw core_text.safeUserError('请在设置里选择柏宝绘或智绘姬。旧渠道图片仍可查看。', 'RMT_IMAGE_PROVIDER_RETIRED');
+}
+
+async function invokeImageGeneration(prompt, context = core_context.getContext(), { signal = null, provider = null, orientation = 'landscape', characterName = '', promptMetadata = null, onProgress = null, onSettled = null, targetKey = '' } = {}) {
+    const settings = core_settings.getPluginSettings(context);
+    const selectedProvider = provider === chatu8_image.CHATU8_IMAGE_PROVIDER || provider === baibai_image.BAIBAI_IMAGE_PROVIDER
+        ? provider : settings.imageGenerationProvider;
+    const options = { signal, orientation, characterName, promptMetadata, onProgress, onSettled, targetKey };
+    try {
+        return await invokeSelectedImageProvider(selectedProvider, prompt, context, options);
+    } catch (error) {
+        const code = typeof error?.code === 'string' ? error.code : '';
+        const other = selectedProvider === chatu8_image.CHATU8_IMAGE_PROVIDER
+            ? baibai_image.BAIBAI_IMAGE_PROVIDER : chatu8_image.CHATU8_IMAGE_PROVIDER;
+        const otherReady = other === chatu8_image.CHATU8_IMAGE_PROVIDER
+            ? chatu8_image.chatu8ImageState(context).available : baibai_image.baiBaiImageState().available;
+        if (!settings.imageGenerationFallback || signal?.aborted || code.startsWith('RMT_') || IMAGE_FALLBACK_BLOCKED.has(code) || !otherReady) throw error;
+        const otherLabel = other === chatu8_image.CHATU8_IMAGE_PROVIDER ? '智绘姬' : '柏宝绘';
+        try { onProgress?.({ phase: 'generating', providerLabel: otherLabel }); } catch {}
+        try { globalThis.toastr?.info?.(`当前渠道这次没有出图，已改走${otherLabel}。`, '心迹回廊'); } catch {}
+        return invokeSelectedImageProvider(other, prompt, context, options);
+    }
 }
 
 function normalizeCgImageUrl(value) {
@@ -28087,17 +28371,19 @@ function cgImageReservationKey(mode, itemId, context = core_context.currentChara
 
 function isCgImageDrawing(mode, itemId) {
     try { return runtimeState.activeCgImageTasks.has(cgImageTaskKey(mode, itemId))
-        || baibai_image.isBaiBaiImageTargetPending(cgImageReservationKey(mode, itemId)); }
+        || baibai_image.isBaiBaiImageTargetPending(cgImageReservationKey(mode, itemId))
+        || chatu8_image.isChatu8ImageTargetPending(cgImageReservationKey(mode, itemId)); }
     catch { return false; }
 }
 
 function cgImageStartBlockedReason(mode, itemId, context = core_context.currentCharacterGuard()) {
     const key = cgImageTaskKey(mode, itemId, context);
-    if (runtimeState.activeCgImageTasks.has(key) || baibai_image.isBaiBaiImageTargetPending(cgImageReservationKey(mode, itemId, context))) {
+    const reservation = cgImageReservationKey(mode, itemId, context);
+    if (runtimeState.activeCgImageTasks.has(key) || baibai_image.isBaiBaiImageTargetPending(reservation) || chatu8_image.isChatu8ImageTargetPending(reservation)) {
         return '这张图片的绘制请求还未结束，请先等待，避免重复出图。';
     }
-    if (runtimeState.activeCgImageTasks.size >= baibai_image.BAIBAI_IMAGE_CONCURRENCY
-        || baibai_image.baiBaiImagePendingCount() >= baibai_image.BAIBAI_IMAGE_CONCURRENCY) {
+    const pending = baibai_image.baiBaiImagePendingCount() + chatu8_image.chatu8ImagePendingCount();
+    if (runtimeState.activeCgImageTasks.size >= baibai_image.BAIBAI_IMAGE_CONCURRENCY || pending >= baibai_image.BAIBAI_IMAGE_CONCURRENCY) {
         return '已有两张图片正在绘制，请等其中一张完成后再开始。';
     }
     return '';
@@ -28315,7 +28601,8 @@ async function reconceiveCgImagePrompt(target, { promptFormat = '', appearanceDr
 
 function cgImageProviderBar({ readOnly = false } = {}) {
     const state = imageGenerationUiState();
-    const status = state.provider === baibai_image.BAIBAI_IMAGE_PROVIDER ? state.reason : state.detected
+    const known = state.provider === baibai_image.BAIBAI_IMAGE_PROVIDER || state.provider === chatu8_image.CHATU8_IMAGE_PROVIDER;
+    const status = known ? state.reason : state.detected
         ? 'Image Generation 已连接'
         : state.manual
             ? '已手动勾选 Image Generation · 绘制时尝试 /sd 兜底'
@@ -28340,8 +28627,10 @@ function cgImageProgressHtml() {
 function updateCgImageProgress(taskKey, progress) {
     const task = runtimeState.activeCgImageTasks.get(taskKey);
     if (!task || task.controller.signal.aborted) return;
-    const labels = { queued: '等待柏宝绘出图…', generating: '柏宝绘正在绘制…',
-        'queued-remote': '在 ComfyUI 队列中等待…', retrying: '柏宝绘正在限流等待…', saving: '图片已生成，正在保存…' };
+    if (progress?.providerLabel) task.imageProviderLabel = progress.providerLabel;
+    const who = task.imageProviderLabel || '生图';
+    const labels = { queued: `等待${who}出图…`, generating: `${who}正在绘制…`,
+        'queued-remote': '在队列中等待…', retrying: `${who}正在限流等待…`, saving: '图片已生成，正在保存…' };
     const label = labels[progress?.phase];
     if (!label) return;
     task.imageProgress = label;
@@ -28369,14 +28658,15 @@ function refreshCgImageProviderBars() {
 }
 
 function imageGenerationUnavailableMessage(state = imageGenerationUiState()) {
-    if (state.provider === baibai_image.BAIBAI_IMAGE_PROVIDER) return state.reason;
+    if (state.provider === baibai_image.BAIBAI_IMAGE_PROVIDER || state.provider === chatu8_image.CHATU8_IMAGE_PROVIDER) return state.reason;
     return '请安装或更新柏宝绘，启用公开 API 并刷新页面后重新检测。';
 }
 
 function refreshImageGenerationUi() {
     const state = imageGenerationUiState(core_context.getContext());
     if (runtimeState.activeMode && runtimeState.activeSession) ui_overlay.renderActive();
-    const message = state.provider === baibai_image.BAIBAI_IMAGE_PROVIDER ? state.reason : state.detected
+    const known = state.provider === baibai_image.BAIBAI_IMAGE_PROVIDER || state.provider === chatu8_image.CHATU8_IMAGE_PROVIDER;
+    const message = known ? state.reason : state.detected
         ? '已检测到 SillyTavern Image Generation（/imagine、/sd 或 /img），绘制按钮可以直接使用。'
         : state.manual
             ? '自动检测仍未发现命令，但你已手动勾选 Image Generation；绘制时会使用受控的 /sd quiet=true 兜底。'
@@ -28746,6 +29036,7 @@ async function drawSelectedCgImage({ promptOverride, promptMetadata, promptForma
         itemId,
         origin,
         label: dailyStrip ? '日常一格绘制' : mode === core_constants.MODE.ALBUM ? '相簿 CG 绘制' : 'ADV CG 绘制',
+        imageProviderLabel: imageState.providerLabel || '生图',
         startedAt: Date.now(),
         phase: 'request',
         controller,
@@ -28765,7 +29056,7 @@ async function drawSelectedCgImage({ promptOverride, promptMetadata, promptForma
             onProgress: progress => updateCgImageProgress(taskKey, progress),
         });
         const url = normalizeCgImageUrl(generated?.url);
-        if (!url) throw baibai_image.baiBaiImageError('BBI_SAVE_FAILED');
+        if (!url) throw core_text.safeUserError('图片已生成，但没有取得可保存的本地路径。旧图已保留。', 'RMT_IMAGE_SAVE_FAILED');
         if (runtimeState.cgImageLifecycleEpoch !== lifecycleEpoch) {
             globalThis.toastr?.warning?.('CG 已由生图扩展完成，但插件已重载/停用，因此没有接收旧运行实例的图片结果。', '心迹回廊');
             return;
@@ -59082,7 +59373,11 @@ function refreshImageGenerationSettingsUi() {
     if (choice) choice.value = settings.imageGenerationProvider;
     const statusNode = panel.querySelector('[data-rmt-image-generation-status]');
     const status = generation_imageGeneration.imageGenerationUiState();
-    if (statusNode) statusNode.textContent = status.available ? '柏宝绘已连接 · 公开 API v1' : status.reason || '请单独安装、启用并配置柏宝绘公开 API v1。';
+    if (statusNode) statusNode.textContent = status.available
+        ? (status.provider === 'chatu8-image' ? '智绘姬已连接 · 使用其中已有的出图配置' : '柏宝绘已连接 · 公开 API v1')
+        : status.reason || '请安装并启用柏宝绘或智绘姬后再绘制。';
+    const fallback = panel.querySelector('[data-rmt-image-generation-fallback]');
+    if (fallback) fallback.checked = settings.imageGenerationFallback === true;
 }
 
 function voiceSettingsHtml() {
@@ -59704,9 +59999,10 @@ function mountSettings({ homeTarget = null } = {}) {
           <summary class="rmt-settings-card-head"><span>CG</span><div><b>CG 生图</b><small>相簿 · ADV · 日常一格</small></div></summary>
           <div class="rmt-settings-section-body">
             ${cg_format_ui.cgFormatControlHtml()}
-            <label class="rmt-settings-field"><span>生图渠道</span><select class="text_pole" data-rmt-image-generation-provider aria-describedby="rmt-image-provider-status"><option value="baibai-image">柏宝绘 · 公开 API v1</option></select></label>
+            <label class="rmt-settings-field"><span>生图渠道</span><select class="text_pole" data-rmt-image-generation-provider aria-describedby="rmt-image-provider-status"><option value="baibai-image">柏宝绘 · 公开 API v1</option><option value="chatu8-image">智绘姬</option></select></label>
             <p id="rmt-image-provider-status" data-rmt-image-generation-status role="status" aria-live="polite"></p>
-            <p>柏宝绘需单独安装并配置出图渠道。只在点击绘制并确认后出图，失败不会自动换渠道。</p>
+            <label class="rmt-settings-check"><input type="checkbox" data-rmt-image-generation-fallback ${core_settings.getPluginSettings().imageGenerationFallback ? 'checked' : ''}><span>失败时自动改走另一个已连接的生图渠道</span></label>
+            <p>默认关闭。智绘姬沿用它自己已经配好的出图设置，这里不改那些设置。只在点击绘制并确认后出图。</p>
           </div>
         </details>
         <details class="rmt-settings-card" data-rmt-settings-section="creative">
@@ -60050,9 +60346,14 @@ function mountSettings({ homeTarget = null } = {}) {
             return;
         }
         if (target.matches?.('[data-rmt-image-generation-provider]')) {
-            core_settings.updatePluginSettings({ imageGenerationProvider: target.value });
+            core_settings.updatePluginSettings({ imageGenerationProvider: target.value === 'chatu8-image' ? 'chatu8-image' : 'baibai-image' });
             refreshImageGenerationSettingsUi();
             generation_imageGeneration.refreshCgImageProviderBars();
+            return;
+        }
+        if (target.matches?.('[data-rmt-image-generation-fallback]')) {
+            core_settings.updatePluginSettings({ imageGenerationFallback: !!target.checked });
+            refreshImageGenerationSettingsUi();
             return;
         }
         if (target.matches?.('[data-rmt-tt-display]')) {
@@ -64835,6 +65136,7 @@ __init_core_worldPresentation_js();
 __init_generation_baibaiImage_js();
 __init_generation_cgAppearance_js();
 __init_generation_cgPromptPolicy_js();
+__init_generation_chatu8Image_js();
 __init_generation_client_js();
 __init_generation_contentRegeneration_js();
 __init_generation_imageGeneration_js();

@@ -51,7 +51,11 @@ export function refreshImageGenerationSettingsUi() {
     if (choice) choice.value = settings.imageGenerationProvider;
     const statusNode = panel.querySelector('[data-rmt-image-generation-status]');
     const status = generation_imageGeneration.imageGenerationUiState();
-    if (statusNode) statusNode.textContent = status.available ? '柏宝绘已连接 · 公开 API v1' : status.reason || '请单独安装、启用并配置柏宝绘公开 API v1。';
+    if (statusNode) statusNode.textContent = status.available
+        ? (status.provider === 'chatu8-image' ? '智绘姬已连接 · 使用其中已有的出图配置' : '柏宝绘已连接 · 公开 API v1')
+        : status.reason || '请安装并启用柏宝绘或智绘姬后再绘制。';
+    const fallback = panel.querySelector('[data-rmt-image-generation-fallback]');
+    if (fallback) fallback.checked = settings.imageGenerationFallback === true;
 }
 
 export function voiceSettingsHtml() {
@@ -673,9 +677,10 @@ export function mountSettings({ homeTarget = null } = {}) {
           <summary class="rmt-settings-card-head"><span>CG</span><div><b>CG 生图</b><small>相簿 · ADV · 日常一格</small></div></summary>
           <div class="rmt-settings-section-body">
             ${cg_format_ui.cgFormatControlHtml()}
-            <label class="rmt-settings-field"><span>生图渠道</span><select class="text_pole" data-rmt-image-generation-provider aria-describedby="rmt-image-provider-status"><option value="baibai-image">柏宝绘 · 公开 API v1</option></select></label>
+            <label class="rmt-settings-field"><span>生图渠道</span><select class="text_pole" data-rmt-image-generation-provider aria-describedby="rmt-image-provider-status"><option value="baibai-image">柏宝绘 · 公开 API v1</option><option value="chatu8-image">智绘姬</option></select></label>
             <p id="rmt-image-provider-status" data-rmt-image-generation-status role="status" aria-live="polite"></p>
-            <p>柏宝绘需单独安装并配置出图渠道。只在点击绘制并确认后出图，失败不会自动换渠道。</p>
+            <label class="rmt-settings-check"><input type="checkbox" data-rmt-image-generation-fallback ${core_settings.getPluginSettings().imageGenerationFallback ? 'checked' : ''}><span>失败时自动改走另一个已连接的生图渠道</span></label>
+            <p>默认关闭。智绘姬沿用它自己已经配好的出图设置，这里不改那些设置。只在点击绘制并确认后出图。</p>
           </div>
         </details>
         <details class="rmt-settings-card" data-rmt-settings-section="creative">
@@ -1019,9 +1024,14 @@ export function mountSettings({ homeTarget = null } = {}) {
             return;
         }
         if (target.matches?.('[data-rmt-image-generation-provider]')) {
-            core_settings.updatePluginSettings({ imageGenerationProvider: target.value });
+            core_settings.updatePluginSettings({ imageGenerationProvider: target.value === 'chatu8-image' ? 'chatu8-image' : 'baibai-image' });
             refreshImageGenerationSettingsUi();
             generation_imageGeneration.refreshCgImageProviderBars();
+            return;
+        }
+        if (target.matches?.('[data-rmt-image-generation-fallback]')) {
+            core_settings.updatePluginSettings({ imageGenerationFallback: !!target.checked });
+            refreshImageGenerationSettingsUi();
             return;
         }
         if (target.matches?.('[data-rmt-tt-display]')) {

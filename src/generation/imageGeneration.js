@@ -3,6 +3,7 @@ import * as cg_format from '../core/cgPromptFormat.js';
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
 import * as baibai_image from './baibaiImage.js';
+import * as chatu8_image from './chatu8Image.js';
 import * as cg_appearance from './cgAppearance.js';
 import * as backup_diagnostics from '../core/backupDiagnostics.js';
 import * as archive_library from '../archive/library.js';
@@ -42,12 +43,16 @@ export function imageGenerationCommand(context = core_context.getContext()) {
 }
 
 export function imageGenerationUiState(context = core_context.getContext()) {
-    {
-        const status = baibai_image.baiBaiImageState();
+    const provider = core_settings.getPluginSettings(context).imageGenerationProvider === chatu8_image.CHATU8_IMAGE_PROVIDER
+        ? chatu8_image.CHATU8_IMAGE_PROVIDER : baibai_image.BAIBAI_IMAGE_PROVIDER;
+    if (provider === chatu8_image.CHATU8_IMAGE_PROVIDER) {
+        const status = chatu8_image.chatu8ImageState(context);
         return { detected: status.detected, available: status.available, reason: status.reason,
-            provider: baibai_image.BAIBAI_IMAGE_PROVIDER, providerLabel: '柏宝绘', manual: false, command: null };
+            provider, providerLabel: '智绘姬', manual: false, command: null };
     }
-
+    const status = baibai_image.baiBaiImageState();
+    return { detected: status.detected, available: status.available, reason: status.reason,
+        provider: baibai_image.BAIBAI_IMAGE_PROVIDER, providerLabel: '柏宝绘', manual: false, command: null };
 }
 
 export function sanitizeImageGenerationSlashPrompt(value) {
@@ -60,15 +65,43 @@ export function sanitizeImageGenerationSlashPrompt(value) {
         .trim();
 }
 
-export async function invokeImageGeneration(prompt, context = core_context.getContext(), { signal = null, provider = null, orientation = 'landscape', characterName = '', promptMetadata = null, onProgress = null, onSettled = null, targetKey = '' } = {}) {
-    // Explicit legacy requests must not silently switch providers or invoke /sd.
-    const selectedProvider = provider || baibai_image.BAIBAI_IMAGE_PROVIDER;
+const IMAGE_FALLBACK_BLOCKED = new Set([
+    'BBI_ABORTED', 'BBI_SAVE_FAILED', 'BBI_BUSY', 'BBI_TARGET_BUSY',
+    'CH8_ABORTED', 'CH8_SAVE_FAILED', 'CH8_BUSY', 'CH8_TARGET_BUSY',
+]);
+
+function invokeSelectedImageProvider(selectedProvider, prompt, context, options) {
+    const visual = sanitizeCgVisualText(prompt);
+    if (selectedProvider === chatu8_image.CHATU8_IMAGE_PROVIDER) {
+        return chatu8_image.generateChatu8Image(visual, { ...options, context });
+    }
     if (selectedProvider === baibai_image.BAIBAI_IMAGE_PROVIDER) {
-        return baibai_image.generateBaiBaiImage(sanitizeCgVisualText(prompt), {
-            signal, orientation, characterName: characterName || context?.name2, promptMetadata, onProgress, onSettled, targetKey,
+        return baibai_image.generateBaiBaiImage(visual, {
+            ...options, characterName: options.characterName || context?.name2,
         });
     }
-    throw core_text.safeUserError('本版本仅支持柏宝绘，请启用其公开 API 并刷新；旧渠道图片仍可查看。', 'RMT_IMAGE_PROVIDER_RETIRED');
+    throw core_text.safeUserError('请在设置里选择柏宝绘或智绘姬。旧渠道图片仍可查看。', 'RMT_IMAGE_PROVIDER_RETIRED');
+}
+
+export async function invokeImageGeneration(prompt, context = core_context.getContext(), { signal = null, provider = null, orientation = 'landscape', characterName = '', promptMetadata = null, onProgress = null, onSettled = null, targetKey = '' } = {}) {
+    const settings = core_settings.getPluginSettings(context);
+    const selectedProvider = provider === chatu8_image.CHATU8_IMAGE_PROVIDER || provider === baibai_image.BAIBAI_IMAGE_PROVIDER
+        ? provider : settings.imageGenerationProvider;
+    const options = { signal, orientation, characterName, promptMetadata, onProgress, onSettled, targetKey };
+    try {
+        return await invokeSelectedImageProvider(selectedProvider, prompt, context, options);
+    } catch (error) {
+        const code = typeof error?.code === 'string' ? error.code : '';
+        const other = selectedProvider === chatu8_image.CHATU8_IMAGE_PROVIDER
+            ? baibai_image.BAIBAI_IMAGE_PROVIDER : chatu8_image.CHATU8_IMAGE_PROVIDER;
+        const otherReady = other === chatu8_image.CHATU8_IMAGE_PROVIDER
+            ? chatu8_image.chatu8ImageState(context).available : baibai_image.baiBaiImageState().available;
+        if (!settings.imageGenerationFallback || signal?.aborted || code.startsWith('RMT_') || IMAGE_FALLBACK_BLOCKED.has(code) || !otherReady) throw error;
+        const otherLabel = other === chatu8_image.CHATU8_IMAGE_PROVIDER ? '智绘姬' : '柏宝绘';
+        try { onProgress?.({ phase: 'generating', providerLabel: otherLabel }); } catch {}
+        try { globalThis.toastr?.info?.(`当前渠道这次没有出图，已改走${otherLabel}。`, '心迹回廊'); } catch {}
+        return invokeSelectedImageProvider(other, prompt, context, options);
+    }
 }
 
 export function normalizeCgImageUrl(value) {
@@ -139,17 +172,19 @@ export function cgImageReservationKey(mode, itemId, context = core_context.curre
 
 export function isCgImageDrawing(mode, itemId) {
     try { return runtimeState.activeCgImageTasks.has(cgImageTaskKey(mode, itemId))
-        || baibai_image.isBaiBaiImageTargetPending(cgImageReservationKey(mode, itemId)); }
+        || baibai_image.isBaiBaiImageTargetPending(cgImageReservationKey(mode, itemId))
+        || chatu8_image.isChatu8ImageTargetPending(cgImageReservationKey(mode, itemId)); }
     catch { return false; }
 }
 
 export function cgImageStartBlockedReason(mode, itemId, context = core_context.currentCharacterGuard()) {
     const key = cgImageTaskKey(mode, itemId, context);
-    if (runtimeState.activeCgImageTasks.has(key) || baibai_image.isBaiBaiImageTargetPending(cgImageReservationKey(mode, itemId, context))) {
+    const reservation = cgImageReservationKey(mode, itemId, context);
+    if (runtimeState.activeCgImageTasks.has(key) || baibai_image.isBaiBaiImageTargetPending(reservation) || chatu8_image.isChatu8ImageTargetPending(reservation)) {
         return '这张图片的绘制请求还未结束，请先等待，避免重复出图。';
     }
-    if (runtimeState.activeCgImageTasks.size >= baibai_image.BAIBAI_IMAGE_CONCURRENCY
-        || baibai_image.baiBaiImagePendingCount() >= baibai_image.BAIBAI_IMAGE_CONCURRENCY) {
+    const pending = baibai_image.baiBaiImagePendingCount() + chatu8_image.chatu8ImagePendingCount();
+    if (runtimeState.activeCgImageTasks.size >= baibai_image.BAIBAI_IMAGE_CONCURRENCY || pending >= baibai_image.BAIBAI_IMAGE_CONCURRENCY) {
         return '已有两张图片正在绘制，请等其中一张完成后再开始。';
     }
     return '';
@@ -367,7 +402,8 @@ export async function reconceiveCgImagePrompt(target, { promptFormat = '', appea
 
 export function cgImageProviderBar({ readOnly = false } = {}) {
     const state = imageGenerationUiState();
-    const status = state.provider === baibai_image.BAIBAI_IMAGE_PROVIDER ? state.reason : state.detected
+    const known = state.provider === baibai_image.BAIBAI_IMAGE_PROVIDER || state.provider === chatu8_image.CHATU8_IMAGE_PROVIDER;
+    const status = known ? state.reason : state.detected
         ? 'Image Generation 已连接'
         : state.manual
             ? '已手动勾选 Image Generation · 绘制时尝试 /sd 兜底'
@@ -392,8 +428,10 @@ export function cgImageProgressHtml() {
 export function updateCgImageProgress(taskKey, progress) {
     const task = runtimeState.activeCgImageTasks.get(taskKey);
     if (!task || task.controller.signal.aborted) return;
-    const labels = { queued: '等待柏宝绘出图…', generating: '柏宝绘正在绘制…',
-        'queued-remote': '在 ComfyUI 队列中等待…', retrying: '柏宝绘正在限流等待…', saving: '图片已生成，正在保存…' };
+    if (progress?.providerLabel) task.imageProviderLabel = progress.providerLabel;
+    const who = task.imageProviderLabel || '生图';
+    const labels = { queued: `等待${who}出图…`, generating: `${who}正在绘制…`,
+        'queued-remote': '在队列中等待…', retrying: `${who}正在限流等待…`, saving: '图片已生成，正在保存…' };
     const label = labels[progress?.phase];
     if (!label) return;
     task.imageProgress = label;
@@ -421,14 +459,15 @@ export function refreshCgImageProviderBars() {
 }
 
 export function imageGenerationUnavailableMessage(state = imageGenerationUiState()) {
-    if (state.provider === baibai_image.BAIBAI_IMAGE_PROVIDER) return state.reason;
+    if (state.provider === baibai_image.BAIBAI_IMAGE_PROVIDER || state.provider === chatu8_image.CHATU8_IMAGE_PROVIDER) return state.reason;
     return '请安装或更新柏宝绘，启用公开 API 并刷新页面后重新检测。';
 }
 
 export function refreshImageGenerationUi() {
     const state = imageGenerationUiState(core_context.getContext());
     if (runtimeState.activeMode && runtimeState.activeSession) ui_overlay.renderActive();
-    const message = state.provider === baibai_image.BAIBAI_IMAGE_PROVIDER ? state.reason : state.detected
+    const known = state.provider === baibai_image.BAIBAI_IMAGE_PROVIDER || state.provider === chatu8_image.CHATU8_IMAGE_PROVIDER;
+    const message = known ? state.reason : state.detected
         ? '已检测到 SillyTavern Image Generation（/imagine、/sd 或 /img），绘制按钮可以直接使用。'
         : state.manual
             ? '自动检测仍未发现命令，但你已手动勾选 Image Generation；绘制时会使用受控的 /sd quiet=true 兜底。'
@@ -798,6 +837,7 @@ export async function drawSelectedCgImage({ promptOverride, promptMetadata, prom
         itemId,
         origin,
         label: dailyStrip ? '日常一格绘制' : mode === core_constants.MODE.ALBUM ? '相簿 CG 绘制' : 'ADV CG 绘制',
+        imageProviderLabel: imageState.providerLabel || '生图',
         startedAt: Date.now(),
         phase: 'request',
         controller,
@@ -817,7 +857,7 @@ export async function drawSelectedCgImage({ promptOverride, promptMetadata, prom
             onProgress: progress => updateCgImageProgress(taskKey, progress),
         });
         const url = normalizeCgImageUrl(generated?.url);
-        if (!url) throw baibai_image.baiBaiImageError('BBI_SAVE_FAILED');
+        if (!url) throw core_text.safeUserError('图片已生成，但没有取得可保存的本地路径。旧图已保留。', 'RMT_IMAGE_SAVE_FAILED');
         if (runtimeState.cgImageLifecycleEpoch !== lifecycleEpoch) {
             globalThis.toastr?.warning?.('CG 已由生图扩展完成，但插件已重载/停用，因此没有接收旧运行实例的图片结果。', '心迹回廊');
             return;
