@@ -390,13 +390,15 @@ function albumSurface(session) {
 function advSurface(session) {
     const events = Array.isArray(session.events) ? session.events : [];
     if (!events.length) return '';
-    const list = events.map((item, index) => `<div class="rmt-event"><span class="rmt-event-index">${String(index + 1).padStart(2, '0')}</span><span class="rmt-event-copy"><b>${esc(textOf(item.title))}</b><small>${esc(textOf(item.date))}</small></span></div>`).join('');
-    const picker = `<div class="rmt-adv-mobile-picker"><div class="rmt-adv-picker-status"><b>事件</b><span>${esc(events.map(item => textOf(item.title)).filter(Boolean).join(' · ') || '这一轮')}</span></div></div>`;
-    const reading = events.map(item => {
-        const paras = Array.isArray(item.adv?.paragraphs) ? item.adv.paragraphs : [];
-        return `<div class="rmt-adv-reading-copy"><h3>${esc(textOf(item.title))}</h3>${paras.map(paragraph => `<div class="rmt-adv-para">${esc(textOf(paragraph))}</div>`).join('')}</div>`;
+    // The letter is a read-only view of this round, not the overlay's event
+    // selector. Dedicated classes avoid its three-column picker and tall reader.
+    const reading = events.map((item, index) => {
+        const paras = (Array.isArray(item.adv?.paragraphs) ? item.adv.paragraphs : []).map(textOf).filter(Boolean);
+        const date = textOf(item.date), scene = textOf(item.cgDesc);
+        const pending = paras.length ? (item.progressPending?.length ? '正文尚未完成' : '') : '正文尚未生成';
+        return `<article class="rmt-letter-adv-event"><header><div class="rmt-letter-adv-meta"><span>事件 ${String(index + 1).padStart(2, '0')}</span>${date ? `<span>${esc(date)}</span>` : ''}</div><h3>${esc(textOf(item.title))}</h3></header>${scene ? `<p class="rmt-letter-adv-scene">${esc(scene)}</p>` : ''}${paras.map(paragraph => `<p class="rmt-letter-adv-para">${esc(paragraph)}</p>`).join('')}${pending ? `<p class="rmt-letter-adv-status" role="status">${pending}，可到心迹回廊继续。</p>` : ''}</article>`;
     }).join('');
-    return `<div class="rmt-adv rmt-adv-reading"><aside class="rmt-event-list">${picker}<div class="rmt-event-items">${list}</div></aside><section class="rmt-event-detail"><div class="rmt-adv-reading-layout rmt-adv-text-first">${reading}</section></section></div>`;
+    return `<section class="rmt-letter-adv">${reading}</section>`;
 }
 
 function inboxSurface(session) {

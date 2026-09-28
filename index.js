@@ -1,5 +1,5 @@
-const VERSION = '0.99.95';
-const BUILD = '0.99.95-r84.180-generation-recovery';
+const VERSION = '0.99.96';
+const BUILD = '0.99.96-r84.181-adv-letter-reader';
 
 const SETTINGS_ID = 'heartbeat_memories_settings';
 const MENU_ID = 'heartbeat_memories_menu_item';

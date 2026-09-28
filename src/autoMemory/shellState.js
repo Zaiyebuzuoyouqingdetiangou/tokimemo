@@ -69,6 +69,15 @@ export function floorShellCss() {
 .rmt-heart-letter .rmt-floor-body .rmt-memory-scene{min-height:0}
 @media (max-width:600px){.rmt-floor-shell{width:100%}.rmt-heart-letter:has(.rmt-heart-letter-paper:not([hidden])){width:100%}.rmt-heart-letter-paper{padding:12px 12px 10px}.rmt-letter-buttons .rmt-btn{flex:1 1 auto}}
 .rmt-heart-letter .rmt-floor-note{margin:0 0 10px;font-size:15px;line-height:1.7}
+.rmt-heart-letter .rmt-letter-adv{display:grid;grid-template-columns:minmax(0,1fr);gap:16px;min-width:0;max-width:100%;margin:0}
+.rmt-heart-letter .rmt-letter-adv-event{box-sizing:border-box;min-width:0;max-width:100%;padding:14px;border:1px solid var(--rmt-theme-border);border-radius:12px;background:var(--rmt-theme-surface)}
+.rmt-heart-letter .rmt-letter-adv-meta{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 12px;font-size:12px;line-height:1.6;color:var(--rmt-theme-muted)}
+.rmt-heart-letter .rmt-letter-adv-meta span{min-width:0;overflow-wrap:anywhere}
+.rmt-heart-letter .rmt-letter-adv-event h3{margin:6px 0 12px;font-size:18px;line-height:1.5;white-space:normal;overflow-wrap:anywhere}
+.rmt-heart-letter .rmt-letter-adv-scene,.rmt-heart-letter .rmt-letter-adv-para{margin:0 0 12px;min-height:0;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.9;font-size:16px}
+.rmt-heart-letter .rmt-letter-adv-scene{font-size:14px}
+.rmt-heart-letter .rmt-letter-adv-status{margin:8px 0 0;font-size:13px;line-height:1.7;color:var(--rmt-theme-muted)}
+.rmt-heart-letter .rmt-letter-adv-event>p:last-child{margin-bottom:0}
 .rmt-heart-letter .rmt-theme-song,.rmt-heart-letter .rmt-letter-song{display:block;max-width:100%;margin:0;color:var(--rmt-theme-text)}
 .rmt-heart-letter .rmt-letter-song-sheet{margin:0 0 16px;padding:0;border:0;background:transparent}
 .rmt-heart-letter .rmt-letter-song-title{margin:0 0 8px;font-size:22px;line-height:1.4;font-weight:700;color:var(--rmt-theme-text)}
