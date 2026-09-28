@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
-// Source modules: 296
-// Source SHA-256: 44f10da3b8a6af8d1593a24bee3e008f79808f957f6fce6f5083953a0e716d3f
+// Source modules: 301
+// Source SHA-256: b465b89d9d97acf983fb86a3ee1105797a9b21b13910ef0eff0a2a6e9a32944b
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -26,6 +26,9 @@ const __m_archive_memoryProviders_js = Object.create(null);
 const __m_archive_partialImport_js = Object.create(null);
 const __m_archive_qianqianjie_js = Object.create(null);
 const __m_archive_recoveryDrafts_js = Object.create(null);
+const __m_archive_relay_js = Object.create(null);
+const __m_archive_relayPreparation_js = Object.create(null);
+const __m_archive_relayStore_js = Object.create(null);
 const __m_archive_repository_js = Object.create(null);
 const __m_archive_requestBudget_js = Object.create(null);
 const __m_archive_snapshots_js = Object.create(null);
@@ -57,6 +60,7 @@ const __m_autoMemory_wizardPlan_js = Object.create(null);
 const __m_core_advancedGeneration_js = Object.create(null);
 const __m_core_archiveBridge_js = Object.create(null);
 const __m_core_archiveCover_js = Object.create(null);
+const __m_core_archiveRelayPolicy_js = Object.create(null);
 const __m_core_autoUpdatePolicy_js = Object.create(null);
 const __m_core_autoUpdates_js = Object.create(null);
 const __m_core_backupDiagnostics_js = Object.create(null);
@@ -220,6 +224,7 @@ const __m_ui_albumView_js = Object.create(null);
 const __m_ui_archiveAvatars_js = Object.create(null);
 const __m_ui_archiveInheritance_js = Object.create(null);
 const __m_ui_archivePortal_js = Object.create(null);
+const __m_ui_archiveRelayView_js = Object.create(null);
 const __m_ui_autoMemoryCountdown_js = Object.create(null);
 const __m_ui_autoMemoryShell_js = Object.create(null);
 const __m_ui_autoMemoryWizard_js = Object.create(null);
@@ -310,14 +315,18 @@ const story_chronology = __m_core_storyChronology_js;
 
 
 
-function importedMemoryStableKey(item) {
+function importedMemoryStableKey(item, homeChatId = '') {
     const title = core_text.normalizeText(item?.title, 100).replace(/\s+/g, '').toLowerCase();
     const summary = core_text.normalizeText(item?.summary, 260).replace(/\s+/g, ' ').toLowerCase();
     const anchors = core_text.cleanArray(item?.anchors, 8, 120).map(value => value.replace(/\s+/g, '').toLowerCase()).sort().join('|');
     const sourceKind = core_text.normalizeText(item?.sourceKind, 80) || 'chat';
     const messageRange = sourceKind.startsWith('chat') ? `${Number(item?.messageStart) || 0}-${Number(item?.messageEnd) || 0}` : '';
     const external = core_text.cleanArray(item?.externalSourceIds, 12, 100).sort().join(',');
-    return `${sourceKind}|${messageRange}|${external}|${title}|${anchors || summary}`;
+    // r84.178：跨聊天连续档案的第一步。记忆来自「别的聊天」时，把来源聊天也算进去，
+    // 两个聊天里楼层号相同的片段不会被当成重复。来自本聊天（或没有标来源）时和以前完全一样。
+    const source = core_text.normalizeText(item?.sourceChatId, 240);
+    const lane = source && homeChatId && source !== homeChatId ? `${source}#` : '';
+    return `${lane}${sourceKind}|${messageRange}|${external}|${title}|${anchors || summary}`;
 }
 
 function isMemoryLocked(item) {
@@ -394,15 +403,17 @@ function admitArchiveMemories(existingHot, fresh, existingCold = [], {
     maxHot = core_constants.MAX_STORED_MEMORY_ITEMS,
     maxCold = core_constants.MAX_STORED_MEMORY_ITEMS,
     maxEvict = core_constants.MAX_ROLLING_EVICT_PER_BATCH,
+    homeChatId = '',
 } = {}) {
+    const keyOf = item => importedMemoryStableKey(item, homeChatId);
     const hot = (Array.isArray(existingHot) ? existingHot : []).map(item => structuredClone(item));
-    const seen = new Set(hot.map(importedMemoryStableKey));
-    for (const item of Array.isArray(existingCold) ? existingCold : []) seen.add(importedMemoryStableKey(item));
+    const seen = new Set(hot.map(keyOf));
+    for (const item of Array.isArray(existingCold) ? existingCold : []) seen.add(keyOf(item));
     const unique = [];
     for (const value of Array.isArray(fresh) ? fresh : []) {
         const item = structuredClone(value);
         delete item.id;
-        const key = importedMemoryStableKey(item);
+        const key = keyOf(item);
         if (seen.has(key)) continue;
         seen.add(key);
         unique.push(item);
@@ -479,9 +490,11 @@ __m_archive_capacity_js.findMemoryById = findMemoryById;
 function __init_archive_coverageRanges_js() {
 // MODULE: archive/coverageRanges.js
 const chat_read_range = __m_core_chatReadRange_js;
+const contextApi = __m_core_context_js;
 // Pure archive floor-coverage bookkeeping: which 1-based host floor intervals a
 // bank has actually organized, the gaps inside a selected range, and the next
 // suggested backfill segment. No chat/storage mutation or provider work.
+
 
 const COVERAGE_KINDS = Object.freeze(['backfill', 'incremental', 'full']);
 const COVERAGE_KIND_LABEL = Object.freeze({ backfill: '补录历史', incremental: '增量更新', full: '全量整理' });
@@ -627,11 +640,17 @@ function spansFromFloors(floors) {
     return spans;
 }
 
-function memoryFloorSpans(memories) {
+function memoryFloorSpans(memories, chatId = '') {
     const spans = [];
+    const currentChatId = contextApi.comparableChatId(chatId);
     for (const item of Array.isArray(memories) ? memories : []) {
         const kind = String(item?.sourceKind || 'chat');
         if (kind !== 'chat' && !kind.startsWith('chat')) continue;
+        const sourceChatId = contextApi.comparableChatId(item?.sourceChatId || item?.inheritedArchiveSourceV1?.chatId);
+        // Old single-chat archives did not stamp provenance. Keep their local
+        // coverage; relay preparation stamps their original chat before moving
+        // them, so an A floor can never stand in for B's same-numbered floor.
+        if (currentChatId && sourceChatId && sourceChatId !== currentChatId) continue;
         const start = floor(item?.messageStart), end = floor(item?.messageEnd);
         if (!start || !end || start > end) continue;
         spans.push({ start, end });
@@ -646,9 +665,9 @@ function spanContains(spans, value) {
 // Three visible states, collapsed into runs. A floor already sent through an
 // archive window but never turned into its own Mxxx stays "scanned", so a gap
 // click does not offer to pay for it again.
-function buildFloorCoverage({ totalFloors = 0, memories = [], summaryFloors = [], coveredRanges = [] } = {}) {
+function buildFloorCoverage({ totalFloors = 0, memories = [], summaryFloors = [], coveredRanges = [], chatId = '' } = {}) {
     const total = Math.max(0, Math.floor(Number(totalFloors) || 0));
-    const memory = memoryFloorSpans(memories);
+    const memory = memoryFloorSpans(memories, chatId);
     const summary = spansFromFloors(summaryFloors);
     const scanned = normalizeCoveredRanges(coveredRanges);
     const runs = [];
@@ -2214,6 +2233,335 @@ __m_archive_qianqianjie_js.findQianQianJiePublicApi = findQianQianJiePublicApi;
 __m_archive_qianqianjie_js.qianQianJieBatchIsCurrent = qianQianJieBatchIsCurrent;
 __m_archive_qianqianjie_js.QQJ_PROVIDER = QQJ_PROVIDER;
 __m_archive_qianqianjie_js.QQJ_BRIDGE = QQJ_BRIDGE;
+}
+
+function __init_archive_relayPreparation_js() {
+// MODULE: archive/relayPreparation.js
+const constants = __m_core_constants_js;
+const contextApi = __m_core_context_js;
+const text = __m_core_text_js;
+const archiveCore = __m_archive_archiveCore_js;
+// Explicit relay transport only. No persistence, provider requests or authority
+// changes happen here; the caller must commit the holder fence and both records
+// atomically. Original requests are never rebound to the receiving chat.
+
+
+
+
+const RELAY_SOURCE_CHECKPOINTS_KEY = 'relaySourceCheckpointsV1';
+const RELAY_PRESERVED_DRAFTS_KEY = '__relayPreservedDraftsV1';
+const RECOVERY_KEY = '__generationRecoveryV1';
+const DRAFTS_KEY = '__generationDraftsV2';
+const VERSIONS_KEY = '__archiveVersionsV1';
+const SOURCE_FIELDS = Object.freeze(['sourceMessageCount', 'usedMessageCount', 'usedCharacterCount',
+    'sourceFingerprint', 'fullSourceFingerprint', 'externalMemoryFingerprint', 'externalMemorySources',
+    'externalMemoryRecordCount', 'memoryWorldInfoSources', 'memoryWorldInfoEntryCount', 'chatReadRange',
+    'coverageMode', 'truncated', 'coveredRanges', 'archiveImportProgress', 'archiveImportPaused', 'archivePartialDraft']);
+const rows = value => Array.isArray(value) ? value : [];
+const copy = value => structuredClone(value);
+const chatKey = value => contextApi.comparableChatId(value);
+
+function invalid() {
+    return text.safeUserError('交接资料与来源或目标聊天不一致，原档案没有改动。', 'RMT_RELAY_SOURCE_CHANGED');
+}
+
+function sourceCheckpoint(memory) {
+    return Object.fromEntries(SOURCE_FIELDS.filter(key => Object.hasOwn(memory || {}, key)).map(key => [key, copy(memory[key])]));
+}
+
+function emptyCheckpoint() {
+    return { sourceMessageCount: 0, usedMessageCount: 0, usedCharacterCount: 0, sourceFingerprint: '',
+        fullSourceFingerprint: '', externalMemoryFingerprint: '', externalMemorySources: [], externalMemoryRecordCount: 0,
+        memoryWorldInfoSources: [], memoryWorldInfoEntryCount: 0, chatReadRange: null,
+        coverageMode: 'relay-unread', truncated: false, coveredRanges: [] };
+}
+
+// An explicitly relayed chat has no archived prefix until its first append.
+// This is not permission to skip source validation for an ordinary archive or
+// for a member that has already organized even one source floor/summary.
+function relayHasUnreadCurrentSource(memory) {
+    const marker = memory?.archiveRelayV1, checkpoints = memory?.[RELAY_SOURCE_CHECKPOINTS_KEY];
+    const chatId = chatKey(memory?.chatId);
+    if (!chatId || marker?.version !== 1 || typeof marker.lineageId !== 'string' || !marker.lineageId
+        || !Number.isSafeInteger(marker.epoch) || marker.epoch < 1 || checkpoints?.version !== 1
+        || !Object.hasOwn(checkpoints.chats || {}, chatId)) return false;
+    const empty = value => value?.sourceMessageCount === 0 && value.usedMessageCount === 0 && value.usedCharacterCount === 0
+        && value.sourceFingerprint === '' && value.fullSourceFingerprint === ''
+        && value.externalMemoryFingerprint === '' && value.externalMemoryRecordCount === 0
+        && value.coverageMode === 'relay-unread' && Array.isArray(value.coveredRanges) && value.coveredRanges.length === 0;
+    return empty(memory) && empty(checkpoints.chats[chatId]);
+}
+
+function stampMemorySources(memory, homeChatId) {
+    for (const item of [...rows(memory?.memories), ...rows(memory?.coldArchive)]) {
+        if (item && typeof item === 'object' && !item.sourceChatId) {
+            item.sourceChatId = chatKey(item.inheritedArchiveSourceV1?.chatId) || homeChatId;
+        }
+    }
+}
+
+// A generated page can use a historical evidence snapshot. Its IDs, wording,
+// sourceIdentity and evidence revision remain historical; only the reading
+// container moves. Request journals/contentSnapshot/frozenInputs are untouched.
+function moveMemoryView(memory, sourceChatId, targetChatId, oldRevision = '', newRevision = '') {
+    if (!memory || chatKey(memory.chatId) !== sourceChatId) return;
+    stampMemorySources(memory, sourceChatId);
+    memory.chatId = targetChatId;
+    if (oldRevision && memory.archiveRevision === oldRevision) memory.archiveRevision = newRevision;
+}
+
+function moveSession(session, sourceChatId, targetChatId, oldRevision, newRevision, mapRevision) {
+    if (!session || typeof session !== 'object' || chatKey(session.chatId) !== sourceChatId) return;
+    session.chatId = targetChatId;
+    if (mapRevision && session.archiveRevision === oldRevision) session.archiveRevision = newRevision;
+    if (mapRevision && session.lifePlan?.archiveRevision === oldRevision) session.lifePlan.archiveRevision = newRevision;
+    for (const source of Object.values(session.generationSources || {})) {
+        moveMemoryView(source?.sourceMemory, sourceChatId, targetChatId);
+        if (source?.roomBlueprint?.chatId === sourceChatId) source.roomBlueprint.chatId = targetChatId;
+    }
+    for (const pair of rows(session.lenticularCardsV1)) {
+        const reference = pair?.reference;
+        if (!reference || chatKey(reference.chatId) !== sourceChatId) continue;
+        reference.chatId = targetChatId;
+        // Old saved versions keep their own revision. Current pages and
+        // same-revision task results travel with the current formal bank.
+        if (mapRevision && reference.source !== 'version' && reference.revision === oldRevision) reference.revision = newRevision;
+    }
+}
+
+function moveCacheViews(cache, sourceChatId, targetChatId, oldRevision, newRevision, mapRevision = true) {
+    if (!cache || typeof cache !== 'object') return;
+    if (!cache.chatId || chatKey(cache.chatId) === sourceChatId) cache.chatId = targetChatId;
+    if (mapRevision && (!cache.archiveRevision || cache.archiveRevision === oldRevision)) cache.archiveRevision = newRevision;
+    for (const mode of [...Object.values(constants.MODE), 'timeJourney']) {
+        if (cache[mode]?.kind === mode) moveSession(cache[mode], sourceChatId, targetChatId, oldRevision, newRevision, mapRevision);
+    }
+    for (const record of Object.values(cache[DRAFTS_KEY]?.records || {})) {
+        // Break any in-memory alias between a result and its immutable request
+        // snapshot before moving display locators (JSON storage already does).
+        if (record?.journal) record.journal = copy(record.journal);
+        if (record?.result) record.result = copy(record.result);
+        const result = record?.result;
+        if (!result) continue;
+        // The immutable journal still owns its original chat/requests; result
+        // envelopes are display locators, not permission to resume as B.
+        moveMemoryView(result.sourceMemory, sourceChatId, targetChatId, mapRevision ? oldRevision : '', newRevision);
+        moveSession(result.session, sourceChatId, targetChatId, oldRevision, newRevision, mapRevision);
+    }
+    for (const version of rows(cache[VERSIONS_KEY])) {
+        if (version?.version !== 1 || chatKey(version.memory?.chatId) !== sourceChatId) continue;
+        if (chatKey(version.chatId) === sourceChatId) version.chatId = targetChatId;
+        moveMemoryView(version.memory, sourceChatId, targetChatId);
+        moveCacheViews(version.cache, sourceChatId, targetChatId, oldRevision, newRevision, false);
+        // entry/entryId, drafts and their request identities remain the exact
+        // historical provenance. Reading does not grant old-target write access.
+    }
+}
+
+function relayPreservedDraftRows(cache) {
+    const stored = cache?.[RELAY_PRESERVED_DRAFTS_KEY];
+    if (stored?.version !== 1) return [];
+    return rows(stored.rows).filter(row => row && typeof row.originChatId === 'string'
+        && typeof row.originRevision === 'string' && [RECOVERY_KEY, constants.PHONE_DRAFT_CACHE_KEY].includes(row.key)
+        && Object.hasOwn(row, 'value')).map(copy);
+}
+
+function preserveOriginDrafts(cache, sourceChatId, targetChatId, oldRevision, newRevision) {
+    const preserved = relayPreservedDraftRows(cache);
+    for (const key of [RECOVERY_KEY, constants.PHONE_DRAFT_CACHE_KEY]) {
+        if (!Object.hasOwn(cache, key)) continue;
+        const value = copy(cache[key]);
+        if (!preserved.some(row => row.originChatId === sourceChatId && row.originRevision === oldRevision
+            && row.key === key && JSON.stringify(row.value) === JSON.stringify(value))) {
+            preserved.push({ originChatId: sourceChatId, originRevision: oldRevision, key, value });
+        }
+        delete cache[key];
+    }
+    if (preserved.length) cache[RELAY_PRESERVED_DRAFTS_KEY] = { version: 1, rows: preserved };
+    // On return to the ORIGINAL chat, frozen-input recovery already supports
+    // a newer archive revision. Restore exact journals, never rewrite them.
+    // Phone plans have a strict revision fence and remain read-only otherwise.
+    for (const row of preserved) {
+        if (row.originChatId !== targetChatId || row.restored === true) continue;
+        if (row.key === RECOVERY_KEY) {
+            for (const [mode, journal] of Object.entries(row.value || {})) {
+                if (journal?.identity?.chatId !== targetChatId || !(journal.identity.archiveRevision === newRevision
+                    || journal.contentSnapshot?.memoryBank && Array.isArray(journal.contentSnapshot.memoryBank.memories))) continue;
+                cache[RECOVERY_KEY] ||= {};
+                cache[RECOVERY_KEY][mode] = copy(journal);
+                const draftId = journal.draftId || `legacy:${mode}:${contextApi.stableArchiveHash(JSON.stringify([journal.identity, journal.createdAt]))}`;
+                const pool = cache[DRAFTS_KEY]?.version === 1 ? cache[DRAFTS_KEY] : { version: 1, records: {} };
+                pool.records ||= {};
+                if (!Object.hasOwn(pool.records, draftId)) pool.records[draftId] = { status: 'open', journal: copy(journal) };
+                cache[DRAFTS_KEY] = pool;
+            }
+            row.restored = true;
+        } else if (row.value?.chatId === targetChatId && row.value?.archiveRevision === newRevision) {
+            cache[row.key] = copy(row.value);
+            row.restored = true;
+        }
+    }
+}
+
+function prepareArchiveRelay(snapshot, { chatId, revision, now = Date.now(), previousMemberMemory = null } = {}) {
+    const sourceMemory = snapshot?.memory, sourceChatId = chatKey(sourceMemory?.chatId), targetChatId = chatKey(chatId);
+    const oldRevision = sourceMemory?.archiveRevision;
+    if (!archiveCore.isCompatibleArchive(sourceMemory) || !sourceChatId || !targetChatId || sourceChatId === targetChatId
+        || typeof oldRevision !== 'string' || !oldRevision || typeof revision !== 'string' || !revision
+        || revision === oldRevision || !Number.isFinite(now) || now < 0
+        || snapshot.cache != null && (typeof snapshot.cache !== 'object' || Array.isArray(snapshot.cache))
+        || snapshot.cache?.chatId && chatKey(snapshot.cache.chatId) !== sourceChatId
+        || snapshot.cache?.archiveRevision && snapshot.cache.archiveRevision !== oldRevision
+        || previousMemberMemory && chatKey(previousMemberMemory.chatId) !== targetChatId) throw invalid();
+    const memory = copy(sourceMemory), cache = copy(snapshot.cache || {});
+    const existing = memory[RELAY_SOURCE_CHECKPOINTS_KEY];
+    const chats = existing?.version === 1 && existing.chats && typeof existing.chats === 'object'
+        && !Array.isArray(existing.chats) ? copy(existing.chats) : {};
+    Object.defineProperty(chats, sourceChatId, { value: sourceCheckpoint(sourceMemory), enumerable: true, writable: true, configurable: true });
+    const previous = previousMemberMemory ? sourceCheckpoint(previousMemberMemory)
+        : Object.hasOwn(chats, targetChatId) ? sourceCheckpoint(chats[targetChatId]) : emptyCheckpoint();
+    Object.defineProperty(chats, targetChatId, { value: copy(previous), enumerable: true, writable: true, configurable: true });
+    for (const key of SOURCE_FIELDS) delete memory[key];
+    Object.assign(memory, previous);
+    // These wrappers already follow the archive revision on every ordinary
+    // checkpoint save. On return to the SAME member, move only that commit
+    // envelope; the recipe, source hashes, partial slots and source checkpoint
+    // remain exact, and existing source/character/settings checks still run.
+    const previousRevision = previousMemberMemory?.archiveRevision
+        || previous.archiveImportProgress?.archiveRevision || previous.archivePartialDraft?.revision;
+    if (previousRevision && memory.archiveImportProgress?.archiveRevision === previousRevision) memory.archiveImportProgress.archiveRevision = revision;
+    if (previousRevision && memory.archivePartialDraft?.revision === previousRevision) memory.archivePartialDraft.revision = revision;
+    memory[RELAY_SOURCE_CHECKPOINTS_KEY] = { version: 1, chats };
+    stampMemorySources(memory, sourceChatId);
+    memory.chatId = targetChatId; memory.archiveRevision = revision; memory.updatedAt = now;
+    moveCacheViews(cache, sourceChatId, targetChatId, oldRevision, revision);
+    preserveOriginDrafts(cache, sourceChatId, targetChatId, oldRevision, revision);
+    return { memory, cache };
+}
+
+__m_archive_relayPreparation_js.relayHasUnreadCurrentSource = relayHasUnreadCurrentSource;
+__m_archive_relayPreparation_js.relayPreservedDraftRows = relayPreservedDraftRows;
+__m_archive_relayPreparation_js.prepareArchiveRelay = prepareArchiveRelay;
+__m_archive_relayPreparation_js.RELAY_SOURCE_CHECKPOINTS_KEY = RELAY_SOURCE_CHECKPOINTS_KEY;
+__m_archive_relayPreparation_js.RELAY_PRESERVED_DRAFTS_KEY = RELAY_PRESERVED_DRAFTS_KEY;
+}
+
+function __init_archive_relayStore_js() {
+// MODULE: archive/relayStore.js
+const backup = __m_archive_backupStore_js;
+const policy = __m_core_archiveRelayPolicy_js;
+const constants = __m_core_constants_js;
+const context = __m_core_context_js;
+
+
+
+
+const copy = value => value == null ? value : structuredClone(value);
+const same = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+const checkpointKey = id => `relay-checkpoint:${id}`;
+
+async function readRecord(key) {
+    return backup.archiveBackupTransaction('readonly', tx => new Promise((resolve, reject) => {
+        let result;
+        const request = tx.objectStore(constants.ARCHIVE_BACKUP_STORE_NAME).get(key);
+        request.onsuccess = () => { result = request.result || null; };
+        request.onerror = () => reject(request.error);
+        tx.oncomplete = () => resolve(result);
+        tx.onabort = () => reject(tx.error || policy.relayError('接力登记读取未完成，原内容保留。'));
+    }));
+}
+
+async function readArchiveRelayState(entry) {
+    return backup.readArchiveRelayState(entry);
+}
+
+async function readRelayCheckpoint(id) { return readRecord(checkpointKey(id)); }
+
+async function handoffArchiveBackup(input) {
+    const { sourceEntry, targetEntry, sourceExpected, targetExpected, memory, cache, transferId } = input;
+    const fromKey = policy.relayMemberKey(sourceEntry), toKey = policy.relayMemberKey(targetEntry);
+    if (!transferId || !sourceExpected || fromKey === toKey
+        || !context.archiveStoredAvatar(sourceEntry)
+        || context.archiveStoredAvatar(sourceEntry) !== context.archiveStoredAvatar(targetEntry)
+        || Number(sourceEntry.characterIndexHint) !== Number(targetEntry.characterIndexHint)
+        || context.comparableChatId(memory?.chatId) !== context.comparableChatId(targetEntry.chatId)) {
+        throw policy.relayError('交接身份不一致，没有写入。');
+    }
+    const prepared = backup.prepareArchiveBackupRecord(targetEntry, memory, cache);
+    const result = await backup.archiveBackupTransaction('readwrite', tx => new Promise((resolve, reject) => {
+        const store = tx.objectStore(constants.ARCHIVE_BACKUP_STORE_NAME);
+        const values = new Map();
+        let pending = 0, outcome = null, reason = null;
+        const abort = error => { reason ||= error; try { tx.abort(); } catch { reject(reason); } };
+        const current = () => { if (input.stillCurrent?.() === false) throw policy.relayError('交接期间聊天或角色已切换，原档案保留。'); };
+        const read = (key, request) => {
+            pending++;
+            request.onerror = () => abort(request.error);
+            request.onsuccess = () => { values.set(key, request.result || null); if (--pending === 0) finish(); };
+        };
+        const put = row => { const r = store.put(row); r.onerror = () => abort(r.error); r.onsuccess = () => { try { current(); } catch (e) { abort(e); } }; };
+        const finish = () => {
+            try {
+                current();
+                const oldSource = values.get('source');
+                const oldTarget = values.get('target');
+                if (oldSource?.deleted || oldTarget?.deleted) throw policy.relayError('所选档案已被删除；交接没有写入。');
+                const source = backup.normalizeArchiveBackupRecord(oldSource, sourceEntry);
+                const target = backup.normalizeArchiveBackupRecord(oldTarget, targetEntry);
+                if (!source || !same(source, sourceExpected) || !same(target, targetExpected)) throw policy.relayError('来源或目标档案已更新，请重新预览后确认。');
+                // Exact keys are not enough: an alias/deletion under the same chat wins.
+                for (const [name, entry] of [['sourceAliases', sourceEntry], ['targetAliases', targetEntry]]) {
+                    const aliases = (values.get(name) || []).filter(row => context.archiveStoredAvatar(row) === context.archiveStoredAvatar(entry)
+                        && Number(row.characterIndexHint) === Number(entry.characterIndexHint));
+                    if (aliases.some(row => row.deleted || row.entryId !== entry.entryId)) throw policy.relayError('档案身份或删除记录发生变化，请重新打开档案室。');
+                }
+                const sourceFence = policy.relayFence(values.get('sourceFence'));
+                const targetFence = policy.relayFence(values.get('targetFence'));
+                if (!same(sourceFence, input.sourceFence) || !same(targetFence, input.targetFence)) throw policy.relayError('这份档案已在另一个页面交接，请重新打开。');
+                policy.assertRelayWrite(sourceEntry, sourceFence, source.memory);
+                if (targetFence && (!sourceFence || targetFence.lineageId !== sourceFence.lineageId)) throw policy.relayError('当前聊天已加入另一份连续档案，不能自动合并。');
+                const returning = !!targetFence && targetFence.lineageId === sourceFence?.lineageId;
+                if (target && !returning && input.replaceTarget !== true) throw policy.relayError('当前聊天已有自己的档案，请先导出并明确选择后再接力。');
+                if (values.get('checkpoint')) throw policy.relayError('这次交接已经处理过，请重新打开查看结果。');
+                const epoch = (sourceFence?.epoch || 0) + 1;
+                const lineageId = sourceFence?.lineageId || transferId;
+                const members = copy(sourceFence?.members || [sourceEntry]);
+                if (!members.some(row => policy.relayMemberKey(row) === toKey)) members.push(copy(targetEntry));
+                const marker = { version: 1, lineageId, epoch };
+                prepared.memory.archiveRelayV1 = marker;
+                // This remains a frozen source snapshot, not a second writable archive.
+                const frozen = copy(oldSource);
+                frozen.memory.archiveRelayV1 = marker;
+                const common = { kind: 'archive-relay-member', version: 1, lineageId, epoch, holderKey: toKey, members, transferId };
+                put({ entryId: checkpointKey(transferId), kind: 'archive-relay-checkpoint', version: 1,
+                    transferId, before: copy(source), targetBefore: copy(target), targetMirror: copy(input.targetMirror), after: copy(prepared), createdAt: Date.now() });
+                put(frozen);
+                put(prepared);
+                for (const member of members) put({ ...common, entryId: policy.relayMemberKey(member) });
+                outcome = { status: 'committed', record: prepared, fence: { ...common, entryId: toKey } };
+            } catch (error) { abort(error); }
+        };
+        tx.oncomplete = () => resolve(outcome);
+        tx.onabort = () => reject(reason || tx.error || policy.relayError('交接保存失败，原持有者和原内容保持不变。'));
+        tx.onerror = () => { reason ||= tx.error; };
+        try {
+            current();
+            read('source', store.get(sourceEntry.entryId));
+            read('target', store.get(targetEntry.entryId));
+            read('sourceFence', store.get(fromKey));
+            read('targetFence', store.get(toKey));
+            read('sourceAliases', store.index('chatId').getAll(sourceEntry.chatId));
+            read('targetAliases', store.index('chatId').getAll(targetEntry.chatId));
+            read('checkpoint', store.get(checkpointKey(transferId)));
+        } catch (error) { abort(error); }
+    }));
+    for (const member of result.fence.members) policy.rememberRelayFence(member, { ...result.fence, entryId: policy.relayMemberKey(member) });
+    return result;
+}
+
+__m_archive_relayStore_js.readArchiveRelayState = readArchiveRelayState;
+__m_archive_relayStore_js.readRelayCheckpoint = readRelayCheckpoint;
+__m_archive_relayStore_js.handoffArchiveBackup = handoffArchiveBackup;
 }
 
 function __init_archive_requestBudget_js() {
@@ -8646,8 +8994,10 @@ const core_context = __m_core_context_js;
 const core_text = __m_core_text_js;
 const core_backupDiagnostics = __m_core_backupDiagnostics_js;
 const core_archiveBridge = __m_core_archiveBridge_js;
+const relay_policy = __m_core_archiveRelayPolicy_js;
 // Heartbeat's independent, browser-local archive content store.
 // This module is reachable only from the full runtime bundle; index.js/bootstrap never imports it.
+
 
 
 
@@ -8911,6 +9261,53 @@ async function backupTransaction(mode, stage, run) {
     }
 }
 
+// Relay records and archive records must commit in the SAME database transaction.
+async function archiveBackupTransaction(mode, run) {
+    for (let attempt = 0; ; attempt++) {
+        const { db, result } = await backupTransaction(mode, mode === 'readwrite' ? 'write' : 'read', run);
+        try { return await result; }
+        catch (error) {
+            const lost = connectionLost(error);
+            if (lost) forgetDatabase(db);
+            if (lost && mode === 'readonly' && attempt === 0) continue;
+            // Never replay a write whose outcome may be uncertain.
+            throw error;
+        }
+    }
+}
+
+function prepareArchiveBackupRecord(entry, memory, cache) { return buildRecord(entry, memory, cache); }
+
+function normalizeArchiveBackupRecord(raw, entry) { return normalizeRecord(raw, entry); }
+
+async function readArchiveRelayState(entry) {
+    if (testBackend && typeof testBackend.readRelay !== 'function') return relay_policy.rememberRelayFence(entry, null);
+    const value = testBackend ? await testBackend.readRelay(entry) : await archiveBackupTransaction('readonly', tx => new Promise((resolve, reject) => {
+        let found = null;
+        const request = tx.objectStore(core_constants.ARCHIVE_BACKUP_STORE_NAME).get(relay_policy.relayMemberKey(entry));
+        request.onsuccess = () => { found = request.result || null; };
+        request.onerror = () => reject(request.error);
+        tx.oncomplete = () => resolve(found);
+        tx.onabort = () => reject(tx.error || relay_policy.relayError('接力登记读取失败，原内容保留。'));
+    }));
+    return relay_policy.rememberRelayFence(entry, value);
+}
+
+async function assertArchiveRelayWritable(entry, memory = null) {
+    let fence;
+    try { fence = await readArchiveRelayState(entry); }
+    catch (error) {
+        // An optional relay lookup must not introduce a new preparation/storage
+        // requirement for ordinary chats. Their existing durable-save checks
+        // still apply. Known relay members remain fail-closed, including a
+        // malformed registry; canonical put/delete always check in-transaction.
+        if (memory?.archiveRelayV1 || relay_policy.relayUiState(entry)
+            || String(error?.code || '').startsWith('RMT_RELAY_')) throw error;
+        return null;
+    }
+    return relay_policy.assertRelayWrite(entry, fence, memory);
+}
+
 function openDatabase() {
     if (databasePromise) return databasePromise;
     // Getter/open may throw synchronously in restricted webviews. Every failed
@@ -8957,14 +9354,31 @@ function openDatabase() {
     return pending;
 }
 
-function idbReadRecord(transaction, entry) {
+function idbReadRecord(transaction, entry, withRelay = false) {
     return new Promise((resolve, reject) => {
         let settled = false;
-        const finish = (settle, value) => { if (!settled) { settled = true; settle(value); } };
+        let raw = null, fence = null;
+        const finish = (settle, value) => {
+            if (withRelay && settle === resolve) { raw = value; return; }
+            if (!settled) { settled = true; settle(value); }
+        };
         try {
             const identity = normalizedIdentity(entry);
             const store = transaction.objectStore(core_constants.ARCHIVE_BACKUP_STORE_NAME);
             transaction.onabort = () => finish(reject, transaction.error);
+            if (withRelay) {
+                // Content and holder are one read snapshot, not two transactions.
+                const relayRequest = store.get(relay_policy.relayMemberKey(entry));
+                relayRequest.onerror = () => finish(reject, relayRequest.error);
+                relayRequest.onsuccess = () => { fence = relayRequest.result || null; };
+                transaction.oncomplete = () => {
+                    if (settled) return;
+                    try {
+                        const relay = relay_policy.rememberRelayFence(entry, fence);
+                        settled = true; resolve({ raw, relay });
+                    } catch (error) { finish(reject, error); }
+                };
+            }
             const exactRequest = store.get(identity.entryId);
             exactRequest.onerror = () => finish(reject, exactRequest.error);
             exactRequest.onsuccess = () => {
@@ -8988,9 +9402,9 @@ function idbReadRecord(transaction, entry) {
     });
 }
 
-async function idbRead(entry) {
+async function idbRead(entry, withRelay = false) {
     for (let attempt = 0; ; attempt += 1) {
-        const { db, result } = await backupTransaction('readonly', 'read', transaction => idbReadRecord(transaction, entry));
+        const { db, result } = await backupTransaction('readonly', 'read', transaction => idbReadRecord(transaction, entry, withRelay));
         try { return await result; }
         catch (error) {
             // 读取没有副作用：连接断了就换新连接再读一次。
@@ -9006,6 +9420,7 @@ async function idbPut(record, expected = null, options = {}) {
     const { db, result } = await backupTransaction('readwrite', 'write', transaction => idbPutRecord(transaction, record, expected, options));
     return result.catch(error => {
         if (connectionLost(error)) forgetDatabase(db);
+        if (String(error?.code || '').startsWith('RMT_RELAY_')) throw error;
         throw core_backupDiagnostics.backupFailureError(error, 'write', 'transaction');
     });
 }
@@ -9019,6 +9434,8 @@ function idbPutRecord(transaction, record, expected, options) {
         let chatRecords = [];
         let exactDone = false;
         let matchesDone = false;
+        let relayDone = false;
+        let relayState = null;
         let abortReason = null;
         const abortWith = error => {
             // A request error is often more specific than transaction.error (or
@@ -9029,6 +9446,10 @@ function idbPutRecord(transaction, record, expected, options) {
         };
         const finalizeWrite = () => {
             assertBackupWriteCurrent(options);
+            relay_policy.rememberRelayFence(record, relayState);
+            // Opening a frozen source is a read, not an attempt to take ownership.
+            if (options.seed === true && relay_policy.relayReadOnly(record, relayState)) { outcome = true; return; }
+            const relay = relay_policy.assertRelayWrite(record, relayState, record.memory);
             const aliases = new Map();
             for (const candidate of [exactRaw, ...chatRecords]) {
                 const id = core_text.normalizeText(candidate?.entryId, 120);
@@ -9132,13 +9553,14 @@ function idbPutRecord(transaction, record, expected, options) {
                 return;
             }
             if (!idempotentRetry) {
+                if (relay) record.memory.archiveRelayV1 = { version: 1, lineageId: relay.lineageId, epoch: relay.epoch };
                 const putRequest = store.put(record);
                 if (putRequest) putRequest.onerror = () => abortWith(putRequest.error);
             }
             outcome = true;
         };
         const finalize = () => {
-            if (finalized || !exactDone || !matchesDone) return;
+            if (finalized || !exactDone || !matchesDone || !relayDone) return;
             finalized = true;
             try { finalizeWrite(); }
             catch (error) { abortWith(error); }
@@ -9157,6 +9579,9 @@ function idbPutRecord(transaction, record, expected, options) {
             matchesDone = true;
             finalize();
         };
+        const relayRequest = store.get(relay_policy.relayMemberKey(record));
+        relayRequest.onerror = () => abortWith(relayRequest.error);
+        relayRequest.onsuccess = () => { relayState = relayRequest.result; relayDone = true; finalize(); };
         transaction.oncomplete = () => resolve(outcome);
         transaction.onabort = () => reject(abortReason || transaction.error || core_backupDiagnostics.backupFailureError(null, 'write', 'transaction'));
         transaction.onerror = () => reject(abortReason || transaction.error || core_backupDiagnostics.backupFailureError(null, 'write', 'transaction'));
@@ -9234,8 +9659,8 @@ function idbDeleteRecords(transaction, targets) {
         // write all tombstones in one IndexedDB transaction so an Nth-record failure cannot
         // leave the first N-1 backups silently deleted while the library index remains intact.
         const store = transaction.objectStore(core_constants.ARCHIVE_BACKUP_STORE_NAME);
-        const discovered = targets.map(() => ({ exact: null, chat: [] }));
-        let pending = targets.length * 2;
+        const discovered = targets.map(() => ({ exact: null, chat: [], relay: null }));
+        let pending = targets.length * 3;
         let finalized = false;
         const abort = error => {
             if (error) transaction.__rmtAbortReason = error;
@@ -9245,6 +9670,15 @@ function idbDeleteRecords(transaction, targets) {
             pending -= 1;
             if (pending || finalized) return;
             finalized = true;
+            try {
+                for (let i = 0; i < targets.length; i++) {
+                    const found = discovered[i];
+                    const records = [found.exact, ...found.chat.filter(row => identityMatches(row, targets[i]))].filter(Boolean);
+                    relay_policy.assertRelayWrite(targets[i], found.relay);
+                    for (const record of records) relay_policy.assertRelayWrite(targets[i], found.relay, record.memory);
+                }
+            }
+            catch (error) { abort(error); return; }
             const tombstones = new Map();
             const deletedAt = Date.now();
             for (let index = 0; index < targets.length; index += 1) {
@@ -9291,6 +9725,9 @@ function idbDeleteRecords(transaction, targets) {
             const matchesRequest = store.index('chatId').getAll(identity.chatId);
             matchesRequest.onerror = () => abort(matchesRequest.error || new Error('独立档案备份删除失败。'));
             matchesRequest.onsuccess = () => { discovered[index].chat = Array.isArray(matchesRequest.result) ? matchesRequest.result : []; finishDiscovery(); };
+            const relayRequest = store.get(relay_policy.relayMemberKey(target));
+            relayRequest.onerror = () => abort(relayRequest.error);
+            relayRequest.onsuccess = () => { discovered[index].relay = relayRequest.result; finishDiscovery(); };
         });
         transaction.oncomplete = () => resolve(true);
         transaction.onabort = () => reject(transaction.__rmtAbortReason || transaction.error || new Error('独立档案备份删除失败。'));
@@ -9319,14 +9756,17 @@ async function readArchiveBackup(entry) {
 }
 
 async function readArchiveBackupState(entry) {
-    let raw;
-    try { raw = await backend().read(entry); }
+    let raw, relay;
+    try {
+        if (testBackend) { raw = await testBackend.read(entry); relay = await readArchiveRelayState(entry); }
+        else ({ raw, relay } = await idbRead(entry, true));
+    }
     catch (error) { throw core_backupDiagnostics.annotateBackupFailure(error, 'read'); }
     const exactEntryId = core_text.normalizeText(raw?.entryId, 120) === core_context.archiveIndexEntryId(entry);
     if (raw?.deleted === true && (exactEntryId || deletionIdentityMatches(raw, entry))) {
         return { deleted: true, deletedAt: Math.max(0, Number(raw.deletedAt) || 0), record: null };
     }
-    try { return { deleted: false, deletedAt: 0, record: normalizeRecord(raw, entry) }; }
+    try { return { deleted: false, deletedAt: 0, record: normalizeRecord(raw, entry), relay }; }
     catch (error) { throw core_backupDiagnostics.annotateBackupFailure(error, 'normalize'); }
 }
 
@@ -9401,6 +9841,9 @@ async function deleteArchiveBackup(entries) {
 // 重构清单 C-3c（r84.101）：把 core 层要用的函数登记到 core/archiveBridge.js（core 不再 import 本文件）。
 core_archiveBridge.registerArchiveBridge({ readArchiveBackupState, replaceArchiveBackup, seedArchiveBackup, updateArchiveBackupCache });
 
+__m_archive_backupStore_js.archiveBackupTransaction = archiveBackupTransaction;
+__m_archive_backupStore_js.readArchiveRelayState = readArchiveRelayState;
+__m_archive_backupStore_js.assertArchiveRelayWritable = assertArchiveRelayWritable;
 __m_archive_backupStore_js.readArchiveBackup = readArchiveBackup;
 __m_archive_backupStore_js.readArchiveBackupState = readArchiveBackupState;
 __m_archive_backupStore_js.hasArchiveBackupDeletionFence = hasArchiveBackupDeletionFence;
@@ -9409,6 +9852,8 @@ __m_archive_backupStore_js.seedArchiveBackup = seedArchiveBackup;
 __m_archive_backupStore_js.updateArchiveBackupCache = updateArchiveBackupCache;
 __m_archive_backupStore_js.deleteArchiveBackup = deleteArchiveBackup;
 __m_archive_backupStore_js.hasMatchingArchiveDeletionFence = hasMatchingArchiveDeletionFence;
+__m_archive_backupStore_js.prepareArchiveBackupRecord = prepareArchiveBackupRecord;
+__m_archive_backupStore_js.normalizeArchiveBackupRecord = normalizeArchiveBackupRecord;
 __m_archive_backupStore_js.setArchiveBackupBackendForTests = setArchiveBackupBackendForTests;
 }
 
@@ -9555,6 +10000,80 @@ __m_core_archiveCover_js.normalizeArchiveVerdict = normalizeArchiveVerdict;
 __m_core_archiveCover_js.archiveVerdictText = archiveVerdictText;
 __m_core_archiveCover_js.archiveCoverHtml = archiveCoverHtml;
 __m_core_archiveCover_js.ARCHIVE_INTRO_STYLES = ARCHIVE_INTRO_STYLES;
+}
+
+function __init_core_archiveRelayPolicy_js() {
+// MODULE: core/archiveRelayPolicy.js
+const context = __m_core_context_js;
+const text = __m_core_text_js;
+// A relay is browser-local. These keys never claim a server-side lock.
+
+
+const observed = new Map();
+
+function relayMemberKey(entry) {
+    return `relay-member:${JSON.stringify([context.archiveStoredAvatar(entry), Number(entry?.characterIndexHint), context.comparableChatId(entry?.chatId)])}`;
+}
+
+function relayContextEntry(ctx = context.getContext()) {
+    return { avatar: context.currentCharacterAvatar(ctx), characterIndexHint: Number(ctx?.characterId),
+        chatId: context.comparableChatId(context.getChatId(ctx)) };
+}
+
+function relayError(message, code = 'RMT_RELAY_CONFLICT') {
+    return text.safeUserError(message, code);
+}
+
+function relayFence(value) {
+    if (!value || value.kind !== 'archive-relay-member') return null;
+    if (value.version !== 1 || !value.lineageId || !Number.isSafeInteger(value.epoch) || value.epoch < 1
+        || !Array.isArray(value.members) || !value.members.some(item => relayMemberKey(item) === value.holderKey)
+        || !value.members.some(item => relayMemberKey(item) === value.entryId)) {
+        throw relayError('接力登记暂时无法核对，原档案保留；请先导出备份，不要清除站点数据。');
+    }
+    return value;
+}
+
+function rememberRelayFence(entry, value) {
+    const fence = relayFence(value);
+    observed.set(relayMemberKey(entry), fence);
+    return fence;
+}
+
+function relayUiState(entry) { return observed.get(relayMemberKey(entry)) || null; }
+
+function relayHolder(fence) {
+    return fence?.members?.find(item => relayMemberKey(item) === fence.holderKey) || null;
+}
+
+function relayReadOnly(entry, fence = relayUiState(entry)) {
+    return !!fence && fence.holderKey !== relayMemberKey(entry);
+}
+
+function assertRelayWrite(entry, value, memory = null) {
+    const fence = relayFence(value);
+    if (relayReadOnly(entry, fence)) {
+        throw relayError(`这份连续档案已交给「${relayHolder(fence)?.chatId || '另一个聊天'}」继续；当前只读，请先接回。`, 'RMT_RELAY_READ_ONLY');
+    }
+    const marker = memory?.archiveRelayV1;
+    if (marker && (!fence || marker.lineageId !== fence.lineageId)) {
+        throw relayError('本浏览器没有这份档案的接力登记；请回到原浏览器继续。原内容仍可阅读。', 'RMT_RELAY_LOCAL_ONLY');
+    }
+    if (marker && marker.epoch !== fence.epoch) {
+        throw relayError('交接后档案身份已经更新，旧任务没有写入；请重新打开当前档案。');
+    }
+    return fence;
+}
+
+__m_core_archiveRelayPolicy_js.relayMemberKey = relayMemberKey;
+__m_core_archiveRelayPolicy_js.relayContextEntry = relayContextEntry;
+__m_core_archiveRelayPolicy_js.relayError = relayError;
+__m_core_archiveRelayPolicy_js.relayFence = relayFence;
+__m_core_archiveRelayPolicy_js.rememberRelayFence = rememberRelayFence;
+__m_core_archiveRelayPolicy_js.relayUiState = relayUiState;
+__m_core_archiveRelayPolicy_js.relayHolder = relayHolder;
+__m_core_archiveRelayPolicy_js.relayReadOnly = relayReadOnly;
+__m_core_archiveRelayPolicy_js.assertRelayWrite = assertRelayWrite;
 }
 
 function __init_core_autoUpdatePolicy_js() {
@@ -14731,6 +15250,19 @@ async function boundedJson(response, maxBytes) {
     }
 }
 
+// Some providers place their reasoning in a leading, exact <think> block.
+// Only that wrapper is transport metadata; quoted tags in JSON remain data and
+// arbitrary markup/attributes are still checked by the HTML response guard.
+function finalResponseText(value) {
+    let body = String(value ?? '').replace(/^\uFEFF/, '').trimStart();
+    while (/^<think>/i.test(body)) {
+        const end = /<\/think>/i.exec(body);
+        if (!end) return ''; // An unfinished reasoning block is never an answer.
+        body = body.slice(end.index + end[0].length).trimStart();
+    }
+    return body;
+}
+
 function looksLikeHtmlResponse(value) {
     const body = String(value ?? '').replace(/^\uFEFF/, '').trimStart();
     // A complete JSON document is data, including any quoted markup in its strings.
@@ -15026,19 +15558,28 @@ function assertIndependentResponsePayload(payload) {
     if (payloadHasProviderError(payload)) {
         throw providerEnvelopeFailure(payload, false);
     }
-    const content = extractIndependentResponseContent(payload);
-    if (typeof content !== 'string') {
+    const received = extractIndependentResponseContent(payload);
+    if (typeof received !== 'string') {
         const error = apiError('连接返回的正文结构暂不支持，尚未取得可解析的最终正文；旧内容未改变。请导出诊断报告检查返回形态。', 'RMT_RESPONSE_FORMAT');
         error.retryable = false;
         error.retryableJson = false;
         throw error;
     }
-    if (typeof content === 'string' && looksLikeHtmlResponse(content)) {
+    const content = finalResponseText(received);
+    if (looksLikeHtmlResponse(content)) {
         const error = apiError('专用连接返回了 HTML 页面；响应正文已隐藏。', 'RMT_RESPONSE_HTML');
         error.retryable = false;
         throw error;
     }
-    if (!content.trim()) throw emptyFinalFailure(responseShapeSummary(payload));
+    if (!content.trim()) {
+        const reasoningWrapper = /^<think>/i.test(received.replace(/^\uFEFF/, '').trimStart());
+        const error = emptyFinalFailure({ ...responseShapeSummary(payload),
+            ...(reasoningWrapper ? { reasoningChars: received.length } : {}) });
+        // Recognizing reasoning must not turn the former one-request HTML failure
+        // into a new paid empty-response reroll.
+        if (reasoningWrapper) error.nonRetryable = true;
+        throw error;
+    }
     return content;
 }
 
@@ -15163,6 +15704,7 @@ __m_core_independentApiConfig_js.manualApiHeadersJson = manualApiHeadersJson;
 __m_core_independentApiConfig_js.apiConfigurationFingerprint = apiConfigurationFingerprint;
 __m_core_independentApiConfig_js.manualModelCacheKey = manualModelCacheKey;
 __m_core_independentApiConfig_js.requestHeaders = requestHeaders;
+__m_core_independentApiConfig_js.finalResponseText = finalResponseText;
 __m_core_independentApiConfig_js.looksLikeHtmlResponse = looksLikeHtmlResponse;
 __m_core_independentApiConfig_js.httpFailure = httpFailure;
 __m_core_independentApiConfig_js.providerEnvelopeFailure = providerEnvelopeFailure;
@@ -17421,7 +17963,8 @@ function isValidInputBudgetTokens(value) {
         && count <= constants.MAX_USER_INPUT_BUDGET_TOKENS;
 }
 function migratePersistedInputBudgetTokens(value) {
-    if (Number(value) === constants.LEGACY_DEFAULT_INPUT_BUDGET_TOKENS) return constants.MAX_GENERATION_INPUT_TOKENS;
+    // Old settings do not record whether 32,000 was a default or an explicit
+    // choice. Preserve valid saved values; only absent/invalid values default.
     return normalizeInputBudgetTokens(value);
 }
 function normalizeInputBudgetTokens(value) {
@@ -20580,6 +21123,8 @@ __m_archive_inheritance_js.ARCHIVE_INHERITANCE_VERSION = ARCHIVE_INHERITANCE_VER
 function __init_archive_libraryCharacter_js() {
 // MODULE: archive/libraryCharacter.js
 const archive_groups = __m_archive_groups_js;
+const relay_view = __m_ui_archiveRelayView_js;
+const relay_policy = __m_core_archiveRelayPolicy_js;
 const archive_inheritance = __m_archive_inheritance_js;
 const archive_backupStore = __m_archive_backupStore_js;
 const archive_repository = __m_archive_repository_js;
@@ -20596,6 +21141,8 @@ const archive_avatars = __m_ui_archiveAvatars_js;
 const ui_phoneView = __m_ui_phoneView_js;
 const ui_endingView = __m_ui_endingView_js;
 const runtimeState = __m_core_state_js.state;
+
+
 
 
 
@@ -20646,7 +21193,7 @@ function showArchiveCharacter(groupId) {
         }
     } catch {}
     const rows = entries.map(item => `<button type="button" class="rmt-archive-overview-item" data-rmt-indexed-chat="${core_text.esc(item.chatId)}" data-rmt-indexed-character="${core_text.esc(item.characterKey)}" data-rmt-indexed-entry="${core_text.esc(core_context.archiveIndexEntryId(item))}"><span class="rmt-overview-dot">●</span><span><b>${core_text.esc(item.archiveName)}</b><small>${core_text.esc(item.characterName)} · ${core_text.esc(item.chatId)} · ${item.memoryCount} 条记忆 · ${core_text.esc(ui_overlay.formatArchiveTime(item.updatedAt))}</small></span><i class="fa-solid fa-chevron-right"></i></button>`).join('');
-    body.innerHTML = `<div class="rmt-archive-room">${profileHtml}${inheritHtml}<section class="rmt-archive-card rmt-character-chat-archives"><div class="rmt-character-heart-head"><button type="button" class="rmt-character-heart-avatar" data-rmt-avatar-talk="${core_text.esc(key)}" aria-label="和角色说话">${charAvatar ? `<img src="${core_text.esc(charAvatar)}" alt="">` : '<i class="fa-solid fa-user"></i>'}<span><i class="fa-solid fa-comment-dots"></i></span></button><div><div class="rmt-archive-kicker">CHAT ARCHIVES</div><strong class="rmt-archive-title">${core_text.esc(name)} · 不同聊天世界线</strong></div></div><div style="margin:10px 0"><button type="button" class="rmt-btn" data-rmt-action="archive-group-manager">管理角色分类</button></div><div class="rmt-archive-overview-list" style="max-height:none">${rows || '<div class="rmt-archive-overview-empty">这个角色组还没有已索引档案。</div>'}</div></section></div>`;
+    body.innerHTML = `<div class="rmt-archive-room">${profileHtml}${inheritHtml}${entries.some(entry => archive_inheritance.archiveEntryMatchesInheritanceTarget(entry, context)) ? relay_view.archiveRelayEntryHtml(context) : ''}<section class="rmt-archive-card rmt-character-chat-archives"><div class="rmt-character-heart-head"><button type="button" class="rmt-character-heart-avatar" data-rmt-avatar-talk="${core_text.esc(key)}" aria-label="和角色说话">${charAvatar ? `<img src="${core_text.esc(charAvatar)}" alt="">` : '<i class="fa-solid fa-user"></i>'}<span><i class="fa-solid fa-comment-dots"></i></span></button><div><div class="rmt-archive-kicker">CHAT ARCHIVES</div><strong class="rmt-archive-title">${core_text.esc(name)} · 不同聊天世界线</strong></div></div><div style="margin:10px 0"><button type="button" class="rmt-btn" data-rmt-action="archive-group-manager">管理角色分类</button></div><div class="rmt-archive-overview-list" style="max-height:none">${rows || '<div class="rmt-archive-overview-empty">这个角色组还没有已索引档案。</div>'}</div></section></div>`;
 }
 
 function showArchiveGroupManager() {
@@ -20966,6 +21513,7 @@ function archiveTargetCardFields(context, descriptor) {
 }
 
 function freezeArchiveTarget(snapshot, hostContext = core_context.getContext()) {
+    relay_policy.assertRelayWrite(snapshot, relay_policy.relayUiState(snapshot), snapshot?.memory);
     if (!snapshot?.memory || snapshot.backupOnly) throw new Error('只有源聊天仍可读取的正式档案才能启动后台派生生成。');
     const entryId = core_context.archiveIndexEntryId(snapshot);
     const indexedMatches = archive_groups.getArchiveIndex(hostContext).filter(item =>
@@ -21046,6 +21594,7 @@ async function revalidateArchiveTarget(target, lifecycleEpoch = runtimeState.run
     if (!entry || archive_groups.isArchiveEntryDeletedFromLibrary(entry, context)) throw new Error('目标档案已经被删除或移除，本次旧结果没有写入。');
     const snapshot = await fetchIndexedArchiveSnapshot(entry, context, { force: true, lifecycleEpoch });
     core_context.assertRuntimeLifecycleCurrent(lifecycleEpoch);
+    await archive_backupStore.assertArchiveRelayWritable(entry, snapshot.memory);
     if (snapshot.backupOnly) throw new Error('目标档案的源聊天已不可读取，本次结果没有写入只读备份。');
     if (core_context.comparableChatId(snapshot.chatId) !== core_context.comparableChatId(target?.chatId)
         || core_text.normalizeText(snapshot.memory?.archiveRevision, 240) !== core_text.normalizeText(target?.archiveRevision, 240)) {
@@ -21112,6 +21661,7 @@ __m_archive_libraryCharacter_js.archiveTargetGenerationOptions = archiveTargetGe
 function __init_archive_librarySnapshots_js() {
 // MODULE: archive/librarySnapshots.js
 const archive_backupStore = __m_archive_backupStore_js;
+const relay_policy = __m_core_archiveRelayPolicy_js;
 const archive_repository = __m_archive_repository_js;
 const core_cache = __m_core_cache_js;
 const core_constants = __m_core_constants_js;
@@ -21126,6 +21676,7 @@ const runtimeState = __m_core_state_js.state;
 const archiveTargetGenerationOptions = __m_archive_libraryCharacter_js.archiveTargetGenerationOptions;
 const contentRegenerationDraftHtml = __m_archive_libraryCharacter_js.contentRegenerationDraftHtml;
 const hydrateSnapshotCache = __m_archive_libraryCharacter_js.hydrateSnapshotCache;
+
 
 
 
@@ -21263,6 +21814,7 @@ function syncArchiveTargetSubtask(targetRuntime, snapshot) {
 function archiveSnapshotEditableUi() {
     return !!runtimeState.activeArchiveSnapshot
         && runtimeState.activeArchiveSnapshot.backupOnly !== true
+        && !relay_policy.relayReadOnly(runtimeState.activeArchiveSnapshot)
         && !runtimeState.activeArchiveReadOnly;
 }
 
@@ -21273,6 +21825,12 @@ function snapshotWriteBlockMessage() {
 }
 
 function promoteSnapshotToLiveIfCurrent() {
+    const relayEntry = runtimeState.activeArchiveSnapshot || relay_policy.relayContextEntry();
+    if (relay_policy.relayReadOnly(relayEntry)) {
+        runtimeState.activeArchiveReadOnly = true;
+        globalThis.toastr?.info?.('这份连续档案已交给其他聊天继续；请在档案室接回后再编辑。', '心迹回廊');
+        return false;
+    }
     if (!runtimeState.activeArchiveSnapshot) return true;
     if (runtimeState.activeArchiveSnapshot.historyVersionId) {
         runtimeState.activeArchiveReadOnly = true;
@@ -21317,7 +21875,6 @@ function promoteSnapshotToLiveIfCurrent() {
 }
 
 function requireWritableArchiveAction() {
-    if (!runtimeState.activeArchiveSnapshot) return true;
     return promoteSnapshotToLiveIfCurrent();
 }
 
@@ -21379,6 +21936,8 @@ __m_archive_librarySnapshots_js.archiveVersionDraftsHtml = archiveVersionDraftsH
 function __init_archive_library_js() {
 // MODULE: archive/library.js
 const workspace_ui = __m_ui_workspace_js;
+const relay_view = __m_ui_archiveRelayView_js;
+const relay_policy = __m_core_archiveRelayPolicy_js;
 const archive_groups = __m_archive_groups_js;
 const archive_backupStore = __m_archive_backupStore_js;
 const archive_repository = __m_archive_repository_js;
@@ -21401,6 +21960,8 @@ const split_libraryCharacter = __m_archive_libraryCharacter_js;
 const split_librarySnapshots = __m_archive_librarySnapshots_js;
 const runtimeState = __m_core_state_js.state;
 const snapshotCalendarQuickAccessHtml = __m_archive_librarySnapshots_js.snapshotCalendarQuickAccessHtml;
+
+
 
 
 
@@ -21549,7 +22110,7 @@ async function showArchiveLibrary() {
         }
     } catch {}
     if (!viewStillCurrent()) return;
-    body.innerHTML = `<div class="rmt-archive-room"><section class="rmt-archive-card"><div class="rmt-archive-kicker">MEMORY ARCHIVE LIBRARY</div><strong class="rmt-archive-title">档案室一览</strong><div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="rmt-btn" data-rmt-action="archive-group-manager">管理角色分类</button><button type="button" class="rmt-btn" data-rmt-action="archive-auto-classify">自动分类</button><button type="button" class="rmt-btn" data-rmt-action="rebuild-archive-index">扫描旧版本已有档案</button></div></section>${cards ? `<section class="rmt-archive-portals rmt-character-portals">${cards}</section>` : '<div class="rmt-archive-overview-empty">还没有已索引的档案。当前版本创建/更新档案后会自动加入这里；旧版本档案可点上方按钮手动扫描一次。</div>'}${currentQuick}</div>`;
+    body.innerHTML = `<div class="rmt-archive-room"><section class="rmt-archive-card"><div class="rmt-archive-kicker">MEMORY ARCHIVE LIBRARY</div><strong class="rmt-archive-title">档案室一览</strong><div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="rmt-btn" data-rmt-action="archive-group-manager">管理角色分类</button><button type="button" class="rmt-btn" data-rmt-action="archive-auto-classify">自动分类</button><button type="button" class="rmt-btn" data-rmt-action="rebuild-archive-index">扫描旧版本已有档案</button></div></section>${cards ? `<section class="rmt-archive-portals rmt-character-portals">${cards}</section>` : '<div class="rmt-archive-overview-empty">还没有已索引的档案。当前版本创建/更新档案后会自动加入这里；旧版本档案可点上方按钮手动扫描一次。</div>'}${currentQuick}${relay_view.archiveRelayEntryHtml(archiveContext)}</div>`;
 }
 
 // Saved versions never read /api/chats/get and never enter the live snapshot
@@ -21622,7 +22183,7 @@ function setArchiveReadOnly(readOnly) {
         globalThis.toastr?.info?.('源聊天暂不可读，当前查看只读备份。请重试读取源聊天；备份本身不能解除只读或绑定到其他聊天。', '心迹回廊');
         return showIndexedArchiveSnapshot(runtimeState.activeArchiveSnapshot);
     }
-    runtimeState.activeArchiveReadOnly = readOnly !== false;
+    runtimeState.activeArchiveReadOnly = relay_policy.relayReadOnly(runtimeState.activeArchiveSnapshot) || readOnly !== false;
     if (runtimeState.activeMode && runtimeState.activeSession) ui_overlay.renderActive();
     else showIndexedArchiveSnapshot(runtimeState.activeArchiveSnapshot);
     if (!runtimeState.activeArchiveReadOnly) {
@@ -21641,7 +22202,8 @@ function showIndexedArchiveSnapshot(snapshot = runtimeState.activeArchiveSnapsho
     modes_room.stopRoomClock(); ui_phoneView.stopPhoneClock(); ui_endingView.closeEndingEasterEgg({ restoreFocus: false });
     const isNewSnapshot = runtimeState.activeArchiveSnapshot !== snapshot;
     runtimeState.activeArchiveSnapshot = snapshot;
-    if (isNewSnapshot || snapshot.backupOnly) runtimeState.activeArchiveReadOnly = true;
+    const relayFrozen = relay_policy.relayReadOnly(snapshot);
+    if (isNewSnapshot || snapshot.backupOnly || relayFrozen) runtimeState.activeArchiveReadOnly = true;
     runtimeState.activeMode = null;
     runtimeState.activeSession = null;
     runtimeState.archiveViewLevel = 'snapshot';
@@ -21656,7 +22218,7 @@ function showIndexedArchiveSnapshot(snapshot = runtimeState.activeArchiveSnapsho
     const cachedRead = { chatId: snapshot.chatId, memoryBank: memory, cache: snapshot.cache, clone: false };
     const portals = ui_overlay.readableModePortals(archive_snapshots.baseModeAvailability(cachedRead), cachedRead);
     const generatedCount = portals.filter(item => !!item.session && !item.session.readableProgress).length;
-    const canGenerateDerived = snapshot.backupOnly !== true;
+    const canGenerateDerived = snapshot.backupOnly !== true && !relayFrozen;
     const calendarPortal = portals.find(item => item.mode === core_constants.MODE.CALENDAR) || { session: null };
     const calendarGenerating = core_requestCoordinator.isArchiveTargetModeGenerating(core_constants.MODE.CALENDAR, snapshot);
     const calendarQuick = snapshotCalendarQuickAccessHtml({ generated: !!calendarPortal.session, readOnly: runtimeState.activeArchiveReadOnly, canGenerate: canGenerateDerived, generating: calendarGenerating });
@@ -21686,8 +22248,8 @@ function showIndexedArchiveSnapshot(snapshot = runtimeState.activeArchiveSnapsho
           <div class="rmt-archive-meta">${snapshot.historyVersionId ? `${core_text.esc(new Date(snapshot.historyCreatedAt).toLocaleString())} · ${core_text.esc(snapshot.historyReason || '按选择重新生成前保存')} · 未完成草稿另行保留，不计作完整作品` : snapshot.backupOnly ? `本机备份 · ${core_text.esc(snapshot.sourceError || '源聊天无法读取')}` : (runtimeState.activeArchiveReadOnly ? '当前为只读档案' : '写入前会再次验证目标聊天')}</div>
           ${archiveCoverageText ? `<div class="rmt-archive-meta" data-rmt-archive-coverage>${core_text.esc(archiveCoverageText)}</div>` : ''}
           <div class="rmt-archive-readonly-control">
-            <label><input type="checkbox" data-rmt-readonly-toggle ${runtimeState.activeArchiveReadOnly ? 'checked' : ''} ${snapshot.backupOnly ? 'disabled' : ''}> 只读查看</label>
-            <small>${snapshot.taskResultDraftId ? '按原任务资料查看，当前档案与作品保留' : snapshot.historyVersionId ? '旧版本只读，当前档案与新作品不受影响' : snapshot.backupOnly ? '备份只读，不代表原聊天已删除' : runtimeState.activeArchiveReadOnly ? '关闭只读后可显示编辑操作' : '编辑待命'}</small>
+            <label><input type="checkbox" data-rmt-readonly-toggle ${runtimeState.activeArchiveReadOnly ? 'checked' : ''} ${snapshot.backupOnly || relayFrozen ? 'disabled' : ''}> 只读查看</label>
+            <small>${relayFrozen ? '已交给其他聊天继续，请在档案室接回' : snapshot.taskResultDraftId ? '按原任务资料查看，当前档案与作品保留' : snapshot.historyVersionId ? '旧版本只读，当前档案与新作品不受影响' : snapshot.backupOnly ? '备份只读，不代表原聊天已删除' : runtimeState.activeArchiveReadOnly ? '关闭只读后可显示编辑操作' : '编辑待命'}</small>
             ${snapshot.backupOnly && !snapshot.historyVersionId ? `<button type="button" class="rmt-btn" data-rmt-indexed-character="${core_text.esc(snapshot.characterKey)}" data-rmt-indexed-chat="${core_text.esc(snapshot.chatId)}" data-rmt-indexed-entry="${core_text.esc(snapshot.entryId)}">重试读取源聊天</button>` : ''}
           </div>
         </div>
@@ -21892,6 +22454,158 @@ __m_archive_library_js.snapshotWriteBlockMessage = snapshotWriteBlockMessage;
 __m_archive_library_js.promoteSnapshotToLiveIfCurrent = promoteSnapshotToLiveIfCurrent;
 __m_archive_library_js.requireWritableArchiveAction = requireWritableArchiveAction;
 __m_archive_library_js.archiveVersionDraftsHtml = archiveVersionDraftsHtml;
+}
+
+function __init_archive_relay_js() {
+// MODULE: archive/relay.js
+const backup = __m_archive_backupStore_js;
+const storage = __m_archive_relayStore_js;
+const preparation = __m_archive_relayPreparation_js;
+const inheritance = __m_archive_inheritance_js;
+const groups = __m_archive_groups_js;
+const repository = __m_archive_repository_js;
+const cacheApi = __m_core_cache_js;
+const cacheRecords = __m_core_cacheRecords_js;
+const contextApi = __m_core_context_js;
+const constants = __m_core_constants_js;
+const policy = __m_core_archiveRelayPolicy_js;
+const state = __m_core_state_js.state;
+
+
+
+
+
+
+
+
+
+
+
+
+const copy = value => value == null ? value : structuredClone(value);
+
+function targetMirror(context) {
+    const metadata = context.chatMetadata || {};
+    return { hasMemory: Object.hasOwn(metadata, constants.MEMORY_KEY), memory: copy(metadata[constants.MEMORY_KEY]),
+        hasCache: Object.hasOwn(metadata, constants.CACHE_KEY), cache: copy(metadata[constants.CACHE_KEY]) };
+}
+
+function binding(context) {
+    return { scope: contextApi.chatScopeKey(context), runtimeKey: contextApi.currentCharacterRuntimeKey(context),
+        epoch: state.runtimeLifecycleEpoch, metadata: context.chatMetadata, before: targetMirror(context) };
+}
+
+function stillCurrent(bound) {
+    try {
+        const live = contextApi.currentCharacterGuard();
+        return state.runtimeLifecycleEpoch === bound.epoch && contextApi.chatScopeKey(live) === bound.scope
+            && contextApi.currentCharacterRuntimeKey(live) === bound.runtimeKey && live.chatMetadata === bound.metadata
+            && JSON.stringify(targetMirror(live)) === JSON.stringify(bound.before);
+    } catch { return false; }
+}
+
+function assertCurrent(bound) {
+    if (!stillCurrent(bound)) throw policy.relayError('预览后聊天、角色或目标档案发生变化，请重新预览；没有覆盖当前内容。');
+}
+
+async function relayCandidates(context = contextApi.getContext()) {
+    const ownFence = await storage.readArchiveRelayState(policy.relayContextEntry(context));
+    const candidates = [...inheritance.inheritanceCandidates(context), ...(ownFence?.members || [])];
+    const rows = new Map();
+    for (const entry of candidates) {
+        const fence = await storage.readArchiveRelayState(entry);
+        const holder = policy.relayHolder(fence) || entry;
+        if (inheritance.archiveEntryMatchesInheritanceTarget(holder, context)
+            && contextApi.comparableChatId(holder.chatId) !== contextApi.comparableChatId(contextApi.getChatId(context))) {
+            rows.set(contextApi.archiveIndexEntryId(holder), holder);
+        }
+    }
+    return [...rows.values()];
+}
+
+async function previewArchiveRelay(entryId, { context = contextApi.currentCharacterGuard(), loadSnapshot } = {}) {
+    if (typeof loadSnapshot !== 'function') throw new TypeError('Missing archive reader');
+    await cacheApi.ensureCurrentArchiveBackup(context);
+    const live = contextApi.currentCharacterGuard();
+    if (contextApi.chatScopeKey(live) !== contextApi.chatScopeKey(context)) throw policy.relayError('当前聊天已切换，请重新选择。');
+    const bound = binding(live);
+    let sourceEntry = (await relayCandidates(live)).find(row => contextApi.archiveIndexEntryId(row) === entryId);
+    assertCurrent(bound);
+    if (!sourceEntry) throw policy.relayError('所选档案不属于当前角色，或已从档案室移除。');
+    let source = await backup.readArchiveBackupState(sourceEntry);
+    // A completed local relay is authoritative even when the host's optional
+    // debounced mirror was interrupted. Do not require that mirror to hand back.
+    if (source.relay && source.record && !source.deleted) {
+        policy.assertRelayWrite(sourceEntry, source.relay, source.record.memory);
+    } else {
+        const snapshot = await loadSnapshot(sourceEntry, live, { force: true, lifecycleEpoch: bound.epoch });
+        assertCurrent(bound);
+        if (snapshot.backupOnly || !inheritance.archiveEntryMatchesInheritanceTarget(snapshot, live)) {
+            throw policy.relayError('来源聊天暂时无法核实，保留只读备份；请先重试读取来源。');
+        }
+        await backup.seedArchiveBackup(sourceEntry, snapshot.memory, snapshot.cache, { stillCurrent: () => stillCurrent(bound) });
+        source = await backup.readArchiveBackupState(sourceEntry);
+    }
+    assertCurrent(bound);
+    const targetMemory = repository.getImportedMemory(live);
+    let targetEntry = cacheApi.archiveBackupEntryForContext(live, targetMemory || { chatId: contextApi.getChatId(live) });
+    const target = await backup.readArchiveBackupState(targetEntry);
+    assertCurrent(bound);
+    if (source.deleted || target.deleted || !source.record) throw policy.relayError('来源或目标存在删除记录，请先检查档案。');
+    sourceEntry = { ...sourceEntry, entryId: source.record.entryId };
+    if (target.record) targetEntry = { ...targetEntry, entryId: target.record.entryId };
+    policy.assertRelayWrite(sourceEntry, source.relay, source.record.memory);
+    if (target.relay && target.relay.lineageId !== source.relay?.lineageId) throw policy.relayError('当前聊天已加入另一份连续档案，不会自动合并。');
+    const returning = !!target.relay && target.relay.lineageId === source.relay?.lineageId;
+    const occupied = !returning && (!!target.record || bound.before.hasMemory || bound.before.hasCache);
+    return { version: 1, sourceEntry: copy(sourceEntry), targetEntry: copy(targetEntry), source: source.record,
+        target: target.record, sourceFence: copy(source.relay), targetFence: copy(target.relay), occupied, returning,
+        targetMirror: bound.before, bound };
+}
+
+async function commitArchiveRelay(preview, { replaceTarget = false } = {}) {
+    if (preview?.version !== 1) throw policy.relayError('交接预览已失效，请重新选择。');
+    assertCurrent(preview.bound);
+    const live = contextApi.currentCharacterGuard();
+    if (!(await relayCandidates(live)).some(row => policy.relayMemberKey(row) === policy.relayMemberKey(preview.sourceEntry))) {
+        throw policy.relayError('来源已从档案室移除，请重新选择。');
+    }
+    if (preview.occupied && !replaceTarget) throw policy.relayError('当前已有档案，请先导出并明确选择后再交接。');
+    const hydrated = await cacheRecords.hydrateBackupCacheValue(preview.source.cache, preview.source.memory.chatId, preview.source.memory.archiveRevision);
+    assertCurrent(preview.bound);
+    const transferId = contextApi.stableArchiveHash(`${preview.sourceEntry.entryId}:${preview.targetEntry.entryId}:${Date.now()}:${globalThis.crypto?.randomUUID?.() || Math.random()}`);
+    const revision = `relay-${Date.now()}-${transferId}`;
+    const prepared = preparation.prepareArchiveRelay({ memory: preview.source.memory, cache: hydrated }, {
+        chatId: preview.targetEntry.chatId, revision, previousMemberMemory: preview.returning ? preview.target?.memory : null,
+    });
+    cacheApi.stampCacheCommit(prepared.cache, preview.bound.scope);
+    const packed = await cacheRecords.prepareCommittedCacheBackupValue(prepared.cache);
+    assertCurrent(preview.bound);
+    const result = await storage.handoffArchiveBackup({ sourceEntry: preview.sourceEntry, targetEntry: preview.targetEntry,
+        sourceExpected: preview.source, targetExpected: preview.target, sourceFence: preview.sourceFence, targetFence: preview.targetFence,
+        memory: prepared.memory, cache: packed, transferId, targetMirror: preview.targetMirror, replaceTarget,
+        stillCurrent: () => stillCurrent(preview.bound) });
+    // Commit is complete. A failed/cancelled host mirror must NOT roll back ownership
+    // or report an uncommitted transfer. Reopening B recovers its canonical record.
+    let mirrorQueued = false;
+    if (stillCurrent(preview.bound)) {
+        const current = contextApi.currentCharacterGuard(), scope = preview.bound.scope;
+        current.chatMetadata[constants.MEMORY_KEY] = copy(result.record.memory);
+        current.chatMetadata[constants.CACHE_KEY] = copy(result.record.cache);
+        cacheApi.rememberRuntimeSessionCache(scope, prepared.cache);
+        state.pendingCompressedCacheWrites.delete(scope);
+        if (state.cachePersistTimers.has(scope)) clearTimeout(state.cachePersistTimers.get(scope));
+        state.cachePersistTimers.delete(scope);
+        state.archiveSnapshotCache?.clear?.();
+        try { groups.upsertArchiveIndex(current, result.record.memory, { existingEntryId: result.record.entryId }); } catch {}
+        try { if (typeof current.saveMetadataDebounced === 'function') { await current.saveMetadataDebounced(); mirrorQueued = true; } } catch {}
+    }
+    return { status: 'committed', mirrorQueued, transferId, record: result.record };
+}
+
+__m_archive_relay_js.relayCandidates = relayCandidates;
+__m_archive_relay_js.previewArchiveRelay = previewArchiveRelay;
+__m_archive_relay_js.commitArchiveRelay = commitArchiveRelay;
 }
 
 function __init_archive_snapshots_js() {
@@ -22978,14 +23692,18 @@ function archivedChatFingerprint(memoryBank) {
     return match?.[1] || '';
 }
 
-function importedMemoryStableKey(item) {
+function importedMemoryStableKey(item, homeChatId = '') {
     const title = core_text.normalizeText(item?.title, 100).replace(/\s+/g, '').toLowerCase();
     const summary = core_text.normalizeText(item?.summary, 260).replace(/\s+/g, ' ').toLowerCase();
     const anchors = core_text.cleanArray(item?.anchors, 8, 120).map(value => value.replace(/\s+/g, '').toLowerCase()).sort().join('|');
     const sourceKind = core_text.normalizeText(item?.sourceKind, 80) || 'chat';
     const messageRange = sourceKind.startsWith('chat') ? `${Number(item?.messageStart) || 0}-${Number(item?.messageEnd) || 0}` : '';
     const external = core_text.cleanArray(item?.externalSourceIds, 12, 100).sort().join(',');
-    return `${sourceKind}|${messageRange}|${external}|${title}|${anchors || summary}`;
+    // r84.178：跨聊天连续档案的第一步。记忆来自「别的聊天」时，把来源聊天也算进去，
+    // 两个聊天里楼层号相同的片段不会被当成重复。来自本聊天（或没有标来源）时和以前完全一样。
+    const source = core_text.normalizeText(item?.sourceChatId, 240);
+    const lane = source && homeChatId && source !== homeChatId ? `${source}#` : '';
+    return `${lane}${sourceKind}|${messageRange}|${external}|${title}|${anchors || summary}`;
 }
 
 function appendImportedMemoriesStable(existingMemories, freshMemories, limit = core_constants.MAX_STORED_MEMORY_ITEMS) {
@@ -23544,8 +24262,8 @@ function progressWorldInfo(worldInfo) {
     return { ...structuredClone(worldInfo), entries: (worldInfo.entries || []).filter(row => !row.historySource).map(row => structuredClone(row)) };
 }
 
-function admitArchiveBatch(existingMemories, fresh, existingCold = []) {
-    return archive_capacity.admitArchiveMemories(existingMemories, fresh, existingCold);
+function admitArchiveBatch(existingMemories, fresh, existingCold = [], { homeChatId = '' } = {}) {
+    return archive_capacity.admitArchiveMemories(existingMemories, fresh, existingCold, { homeChatId });
 }
 
 __m_archive_importIdentity_js.retainedBatchExternal = retainedBatchExternal;
@@ -24239,6 +24957,7 @@ __m_archive_recoveryDrafts_js.getCurrentArchiveProfileRecoverySummary = getCurre
 function __init_archive_archiveVerdict_js() {
 // MODULE: archive/archiveVerdict.js
 const source_read = __m_archive_sourceReadGuard_js;
+const backup_store = __m_archive_backupStore_js;
 const core_cache = __m_core_cache_js;
 const core_constants = __m_core_constants_js;
 const core_context = __m_core_context_js;
@@ -24268,6 +24987,7 @@ const archivedRequestJson = __m_archive_recoveryDrafts_js.archivedRequestJson;
 const getCurrentArchiveImportRecoverySummary = __m_archive_recoveryDrafts_js.getCurrentArchiveImportRecoverySummary;
 const getCurrentArchiveProfileRecoverySummary = __m_archive_recoveryDrafts_js.getCurrentArchiveProfileRecoverySummary;
 const refreshArchiveRecoveryReading = __m_archive_recoveryDrafts_js.refreshArchiveRecoveryReading;
+
 
 
 
@@ -24334,6 +25054,7 @@ async function rewriteCurrentArchiveVerdictOperation(taskTrace, options = {}) {
     const context = core_context.currentCharacterGuard();
     const existing = getImportedMemory(context);
     if (!existing) return { status: 'blocked' };
+    await backup_store.assertArchiveRelayWritable(core_cache.archiveBackupEntryForContext(context, existing), existing);
     const memory = structuredClone(existing);
     const origin = core_context.captureTaskOrigin(context, memory.archiveRevision);
     core_requestCoordinator.bindLogicalGenerationTask(options.logicalTask, origin);
@@ -24568,6 +25289,8 @@ const archive_batches = __m_archive_importBatches_js;
 const archive_coverage = __m_archive_coverageRanges_js;
 const archive_summary = __m_archive_summaryPreference_js;
 const archive_requestBudget = __m_archive_requestBudget_js;
+const archive_backupStore = __m_archive_backupStore_js;
+const archive_relayPreparation = __m_archive_relayPreparation_js;
 const core_cache = __m_core_cache_js;
 const core_constants = __m_core_constants_js;
 const cast_looks = __m_core_castLooks_js;
@@ -24641,6 +25364,8 @@ const floorWindowStamp = __m_archive_floorWindowCheck_js.floorWindowStamp;
 
 
 
+
+
 // 建档主流程：一次建档操作（分批、请求、校验、保存）
 // 从 archive/repository.js 原样搬出（重构阶段 2），声明文本一字未改；archive/repository.js 仍转发原有导出。
 
@@ -24686,6 +25411,11 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
         }
         return live;
     };
+    // A relay's frozen member can still be read, but must not pay for a new
+    // archive import. Check the live holder, not a selected draft's old source.
+    await source_read.waitForSourceRead(() => archive_backupStore.assertArchiveRelayWritable(
+        core_cache.archiveBackupEntryForContext(context, preparation.existing), preparation.existing), logicalTask.signal);
+    assertPreparationCurrent();
     const incrementalUpdate = !!existing && !fullRebuild;
     const mergeExisting = partialBase || (incrementalUpdate || commitCompletedOnly ? existing : null);
     const preserveExisting = !!mergeExisting;
@@ -24801,7 +25531,10 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
     if (!snapshot.chatId) throw new Error('无法识别当前聊天窗口 ID，请先保存或打开一个具体聊天。');
     if (!archiveInputAvailable(snapshot, external)) throw new Error('当前聊天窗口没有可用于创建档案的角色/用户消息或已绑定的外部历史。');
 
-    if (incrementalUpdate && !capturedInput && !restartImport && !(automatic && floorWindow)) {
+    const unreadRelaySource = core_context.comparableChatId(existing?.chatId) === snapshot.chatId
+        && existing?.archiveRevision === preparation.existing?.archiveRevision
+        && archive_relayPreparation.relayHasUnreadCurrentSource(existing);
+    if (incrementalUpdate && !capturedInput && !restartImport && !(automatic && floorWindow) && !unreadRelaySource) {
         const oldChatFingerprint = archivedChatFingerprint(existing);
         if (!oldChatFingerprint || previousMessageCount > snapshot.totalMessages || snapshot.prefixFingerprint !== oldChatFingerprint
             || (existing?.fullSourceFingerprint && snapshot.fullPrefixFingerprint && snapshot.fullPrefixFingerprint !== existing.fullSourceFingerprint)) {
@@ -25032,10 +25765,14 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
         }
 
         core_taskTrace.beginStage(taskTrace, 'merge');
+        // r84.178：新整理出的聊天记忆记下它来自哪个聊天（跨聊天连续档案要用）；本聊天的档案里不改变去重和编号。
+        const sourceChatId = core_context.comparableChatId(preparation.origin.chatId);
+        const stamped = sourceChatId ? fresh.map(item => (item?.sourceKind || 'chat').startsWith('chat') && !item.sourceChatId ? { ...item, sourceChatId } : item) : fresh;
         const admitted = admitArchiveBatch(
             mergeExisting?.memories || [],
-            fresh,
+            stamped,
             mergeExisting?.coldArchive || [],
+            { homeChatId: sourceChatId },
         );
         const memories = admitted.memories;
         capacityPending = admitted.pending;
@@ -25134,6 +25871,9 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
         if (!archiveRoster) { try { cast_looks.ensureCastLooks(context); } catch {} }
         if (preserveExisting) profile.archiveName = mergeExisting.archiveName || fallbackArchiveName(memories);
         const now = Date.now();
+        // Keep current formal ownership across normal append/rebuild saves.
+        // An independent old draft remains attached to its own source instead.
+        const relayBaseline = independentResult ? existing : preparation.existing;
         const memoryBank = {
             version: core_constants.MEMORY_VERSION,
             chatId: snapshot.chatId,
@@ -25168,6 +25908,9 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
             memories,
             coldArchive: Array.isArray(admitted.coldArchive) ? admitted.coldArchive : [],
             ...(archiveRoster ? { [participants.PARTICIPANTS_KEY]: archiveRoster } : {}),
+            ...(relayBaseline?.archiveRelayV1 ? { archiveRelayV1: structuredClone(relayBaseline.archiveRelayV1) } : {}),
+            ...(relayBaseline?.[archive_relayPreparation.RELAY_SOURCE_CHECKPOINTS_KEY]
+                ? { [archive_relayPreparation.RELAY_SOURCE_CHECKPOINTS_KEY]: structuredClone(relayBaseline[archive_relayPreparation.RELAY_SOURCE_CHECKPOINTS_KEY]) } : {}),
         };
         const unfinishedProfile = profilePending;
         if (progress) {
@@ -27267,7 +28010,17 @@ function advanceModeWriteFence(cache, mode) {
     return signature;
 }
 
-function recoveryJournalForAdmission(cache, mode, options) {
+function isPreservedRelayJournal(journal, bank) {
+    const chatId = core_context.comparableChatId(bank?.chatId);
+    const originChatId = core_context.comparableChatId(journal?.identity?.chatId);
+    const marker = bank?.archiveRelayV1, checkpoints = bank?.relaySourceCheckpointsV1;
+    return !!chatId && !!originChatId && originChatId !== chatId
+        && marker?.version === 1 && typeof marker.lineageId === 'string' && !!marker.lineageId
+        && Number.isSafeInteger(marker.epoch) && marker.epoch >= 1 && checkpoints?.version === 1
+        && Object.hasOwn(checkpoints.chats || {}, chatId) && Object.hasOwn(checkpoints.chats || {}, originChatId);
+}
+
+function recoveryJournalForAdmission(cache, mode, options, bank) {
     const candidates = Object.entries(generationDraftRecords(cache)).filter(([draftId, record]) => record.status === 'open'
         && record.journal?.identity?.mode === mode && (!options.draftId || draftId === options.draftId)
         && (!options.pageId || (record.journal.pageId || recoveryPageForVersion(mode, record.journal.operation)) === options.pageId))
@@ -27275,7 +28028,12 @@ function recoveryJournalForAdmission(cache, mode, options) {
     const legacy = cache?.[generation_recovery.GENERATION_RECOVERY_CACHE_KEY]?.[mode];
     if (legacy && !recoveryCleared(cache, mode) && (!options.draftId || recoveryDraftId(legacy, mode) === options.draftId)
         && (!options.pageId || (legacy.pageId || recoveryPageForVersion(mode, legacy.operation)) === options.pageId)) candidates.push(legacy);
-    return candidates.sort((left, right) => (right.updatedAt || right.createdAt || 0) - (left.updatedAt || left.createdAt || 0))[0] || null;
+    // A deliberately transported journal is inert in the receiving chat. It is
+    // still available under its original identity for export/handback; only a
+    // normal NEW task ignores it. Explicit retries and same-chat source changes
+    // must still reach the existing recovery identity checks below.
+    return candidates.filter(journal => options.draftId || !isPreservedRelayJournal(journal, bank))
+        .sort((left, right) => (right.updatedAt || right.createdAt || 0) - (left.updatedAt || left.createdAt || 0))[0] || null;
 }
 
 async function claimLiveModeGeneration(mode, context = core_context.currentCharacterGuard(), memoryBank = null, options = {}) {
@@ -27286,7 +28044,7 @@ async function claimLiveModeGeneration(mode, context = core_context.currentChara
     try { await ensureCacheHydrated(context); } catch {}
     // Check the raw retained journal before a changed character makes the normal
     // identity-filtered loader hide it and before advancing any write fence.
-    const rawRecovery = recoveryJournalForAdmission(getCache(context), mode, options);
+    const rawRecovery = recoveryJournalForAdmission(getCache(context), mode, options, bank);
     await recovery_source.assertRecoverySourcePolicy(rawRecovery, context, core_context.captureTaskOrigin(context, bank.archiveRevision));
     const scope = cacheScopeFromContext(context);
     const entry = archiveBackupEntryForContext(context, bank);
@@ -27608,6 +28366,7 @@ function __init_core_cacheArchiveMemory_js() {
 // MODULE: core/cacheArchiveMemory.js
 const archive_groups = __m_core_archiveBridge_js;
 const archive_backupStore = __m_core_archiveBridge_js;
+const relay_policy = __m_core_archiveRelayPolicy_js;
 const archive_repository = __m_core_archiveBridge_js;
 const archive_snapshots = __m_core_archiveBridge_js;
 const core_constants = __m_core_constants_js;
@@ -27655,6 +28414,7 @@ const assertReplacementInCache = __m_core_cacheVersions_js.assertReplacementInCa
 // C-3c（r84.101）：别名沿用 archive_groups，函数体一字不改；实际指向 core 层的桥，不再 import archive 层。
 
 // C-3c（r84.101）：别名沿用 archive_backupStore，函数体一字不改；实际指向 core 层的桥，不再 import archive 层。
+
 
 // C-3c（r84.101）：别名沿用 archive_repository，函数体一字不改；实际指向 core 层的桥，不再 import archive 层。
 
@@ -27872,6 +28632,10 @@ async function saveImportedMemoryOperation(context, memoryBank, expectedChatId =
     const draftSource = cloneCacheValue(participantCache);
     for (const mode of Object.values(core_constants.MODE)) retainLegacyGenerationDraft(draftSource, mode);
     const savedDrafts = draftSource[GENERATION_DRAFTS_CACHE_KEY];
+    // These are exact origin-chat snapshots, not generated sessions. They must
+    // survive independently of whether any completed mode exists, including a
+    // rebuild that intentionally clears the current generated modes.
+    const savedRelayDrafts = draftSource.__relayPreservedDraftsV1;
     if (options.participantRegeneration) assertReplacementInCache(participantCache, previousMemory,
         options.participantRegeneration, '');
     let preservedCache = null;
@@ -27965,6 +28729,13 @@ async function saveImportedMemoryOperation(context, memoryBank, expectedChatId =
         }
         preservedCache[GENERATION_DRAFTS_CACHE_KEY] = cloneCacheValue(savedDrafts);
     }
+    if (savedRelayDrafts) {
+        if (!preservedCache) {
+            preservedCache = { chatId: expectedChatId, archiveRevision: stagedMemory.archiveRevision };
+            stampCacheCommit(preservedCache, initialScope);
+        }
+        preservedCache.__relayPreservedDraftsV1 ||= cloneCacheValue(savedRelayDrafts);
+    }
 
     const storedCache = preservedCache ? await prepareCacheBackupValue(preservedCache) : null;
     currentContext = core_context.currentCharacterGuard();
@@ -27982,7 +28753,7 @@ async function saveImportedMemoryOperation(context, memoryBank, expectedChatId =
     }
     options.assertTaskCurrent?.();
     await archive_backupStore.replaceArchiveBackup(backupEntry, stagedMemory, storedCache, expectedState, {
-        ...((currentRoster || savedVersions.length || savedDrafts) && expectedState.present === true
+        ...((currentRoster || savedVersions.length || savedDrafts || savedRelayDrafts) && expectedState.present === true
             && participantBackup?.archiveRevision === expectedState.revision
             ? { expectedCacheOrder: cacheOrderValue(participantBackup.cache), comparePreviousCache: true } : {}),
         ...(typeof options.assertTaskCurrent === 'function' || options.expectedTaskOrigin
@@ -28177,6 +28948,28 @@ async function ensureCurrentArchiveBackup(context = null) {
         }
         const backupRecord = backupState.record;
         const backupRevision = core_text.normalizeText(backupRecord?.archiveRevision, 240);
+        // The old member remains readable, but opening it must never enter the
+        // normal draft/participant reconciliation writer (or prevent handback).
+        if (backupRecord?.memory && relay_policy.relayReadOnly(backupEntry, backupState.relay)) {
+            const recoveredCache = backupRecord.cache
+                ? await hydrateBackupCacheValue(backupRecord.cache, expectedChatId, backupRevision) : null;
+            try { currentContext = core_context.currentCharacterGuard(); } catch { return false; }
+            if (!originalMirrorStillPresent(currentContext)) return false;
+            const scope = cacheScopeFromContext(currentContext);
+            currentContext.chatMetadata[core_constants.MEMORY_KEY] = cloneCacheValue(backupRecord.memory);
+            runtimeState.pendingCompressedCacheWrites.delete(scope);
+            if (runtimeState.cachePersistTimers.has(scope)) clearTimeout(runtimeState.cachePersistTimers.get(scope));
+            runtimeState.cachePersistTimers.delete(scope);
+            if (recoveredCache) {
+                rememberRuntimeSessionCache(scope, recoveredCache);
+                currentContext.chatMetadata[core_constants.CACHE_KEY] = cloneCacheValue(backupRecord.cache);
+            } else {
+                runtimeState.runtimeSessionCache.delete(scope);
+                delete currentContext.chatMetadata[core_constants.CACHE_KEY];
+            }
+            // This is a reading mirror, not a new canonical content commit.
+            return true;
+        }
         // The awaited IndexedDB commit is canonical. If the page closed before the host's
         // debounced metadata mirror flushed, reopen by promoting the newer canonical memory
         // back into the still-exact chat window. Revisions are opaque identities, so wall-clock
@@ -37823,6 +38616,9 @@ const notifyInputPackingOnce = __m_generation_generationContext_js.notifyInputPa
 // 请求发送：连接错误规范化、组装外发提示词、生成 JSON、请求与分段校验、建档分块请求
 // 从 generation/client.js 原样搬出（重构阶段 2），声明文本一字未改；generation/client.js 仍转发原有导出。
 
+// Received final text stays local to the parsed value; it is never attached to errors/logs.
+const inboxReceivedText = new WeakMap();
+
 async function requestValidatedSegment(prompt, status, options, validator) {
     const logicalTask = core_requestCoordinator.logicalGenerationTaskForOrigin(options?.origin);
     core_requestCoordinator.assertLogicalGenerationTaskCurrent(logicalTask);
@@ -37864,9 +38660,18 @@ async function requestValidatedSegment(prompt, status, options, validator) {
             ? '\n\n【本地校验反馈】' + (core_butterflyContract.butterflyValidationFeedback(lastError) || generation_recovery.generationRetryFeedbackText(lastError?.code, lastError) || core_text.normalizeText(lastError?.repairHint, 600) || (String(lastError.code || '').startsWith('RMT_ROOM_') ? core_text.safeErrorSummary(lastError) : '上一轮结构或完整度没有通过。')) + ' 请严格按原硬性要求重新输出完整 JSON，不要解释，也不要引用这条反馈作为内容。'
             : '';
         try {
-            const raw = generation_achievement.stripAchievementField(await requestJson(`${prompt}${retryNote}`, `${status}${attempt ? `（重试 ${attempt}/${maxAttempts - 1}）` : ''}`, options));
+            const received = await requestJson(`${prompt}${retryNote}`, `${status}${attempt ? `（重试 ${attempt}/${maxAttempts - 1}）` : ''}`, options);
+            const raw = generation_achievement.stripAchievementField(received);
             core_taskTrace.beginStage(options.taskTrace, 'validate');
-            const value = core_requestCoordinator.validateGeneratedSegment(raw, validator);
+            let value;
+            try { value = core_requestCoordinator.validateGeneratedSegment(raw, validator); }
+            catch (error) {
+                if (options.mode !== 'inbox' || !['RMT_INBOX_INCOMPLETE', 'RMT_INBOX_SLOT_INVALID'].includes(error?.code)
+                    || typeof accepted.incompleteInboxResponse !== 'function') throw error;
+                value = await accepted.incompleteInboxResponse(raw, inboxReceivedText.get(received) || JSON.stringify(raw), error);
+                core_taskTrace.markStage(options.taskTrace, 'validate');
+                return value;
+            }
             core_taskTrace.markStage(options.taskTrace, 'validate');
             await accepted(raw);
             return value;
@@ -38225,15 +39030,18 @@ async function generateConfiguredJsonOperation(prompt, options = {}) {
     try { core_independentApi.assertManualStreamComplete(result);
         parsed = generation_jsonParser.extractJson(responsePayload, {
         reasoning: result?.reasoning || '',
+        mode: options.mode,
         requestMaxTokens: responseLength,
         configuredMaxTokens: settings.maxTokens,
     }); } catch (error) {
-        await generation_recovery.recordRecoveryTruncation(options, responsePayload, error);
+        await generation_recovery.recordRecoveryTruncation(options, responsePayload, error,
+            { autoContinue: !(options.mode === 'inbox' && error?.preserveInboxWithoutAutoContinue === true) });
         throw error;
     }
     if (options.enforceGeneratedPhrasePolicy === true) assertNoBannedGeneratedPhrase(parsed, contentSettings, {
         mode: options.mode, settingText: core_worldPresentation.controlledWorldEvidence(contextEnvelope, null),
     });
+    if (options.mode === 'inbox') inboxReceivedText.set(parsed, responsePayload);
     core_taskTrace.markStage(taskTrace, 'parse');
     core_requestCoordinator.noteChatTaskPhase('validate', { taskKey: options.taskKey, origin: options.origin });
     return parsed;
@@ -39697,9 +40505,11 @@ __m_generation_imageGeneration_js.cgEditorSendPreview = cgEditorSendPreview;
 
 function __init_generation_jsonParser_js() {
 // MODULE: generation/jsonParser.js
+const response_config = __m_core_independentApiConfig_js;
 const output_budget = __m_core_outputBudget_js;
 const core_constants = __m_core_constants_js;
 const core_text = __m_core_text_js;
+
 
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
@@ -39747,7 +40557,8 @@ function extractBalancedJsonObjects(text) {
             }
         }
     }
-    return { candidates, hasUnclosedObject: depth > 0 && start >= 0 };
+    return { candidates, hasUnclosedObject: depth > 0 && start >= 0,
+        unclosedObject: depth > 0 && start >= 0 ? text.slice(start) : '' };
 }
 
 // Read only values actually present in a JSON prefix. Unlike a JSON repairer,
@@ -39904,10 +40715,62 @@ function collectInboxLetters(value, letters, seen) {
     letters.push(letter);
 }
 
+// An optional drawing before letters can be malformed even though the mail
+// fields after it are intact. Recognize only the selected object's root key;
+// quoted strings and nested examples cannot qualify another response object.
+function hasInboxRootField(text) {
+    let depth = 0, inString = false, escaped = false, stringStart = -1;
+    for (let i = 0; i < text.length; i += 1) {
+        const char = text[i];
+        if (inString) {
+            if (escaped) escaped = false;
+            else if (char === '\\') escaped = true;
+            else if (char === '"') {
+                inString = false;
+                if (depth === 1 && /^\s*:/.test(text.slice(i + 1))) {
+                    try { if (JSON.parse(text.slice(stringStart, i + 1)) === 'letters') return true; } catch {}
+                }
+            }
+        } else if (char === '"') { inString = true; stringStart = i; }
+        else if (char === '{' || char === '[') depth++;
+        else if (char === '}' || char === ']') depth--;
+    }
+    return false;
+}
+
+// Choose the last actual mailbox, never pool examples with the final answer.
+// Fences have independent boundaries, so unmatched braces in prose do not hide
+// their contents. An unrelated trailing brace cannot displace received letters.
+function inboxResponseCandidate(raw, selection = null) {
+    const text = response_config.finalResponseText(raw);
+    const choices = [];
+    const collect = (body, offset) => {
+        const { candidates, unclosedObject } = extractBalancedJsonObjects(body);
+        let cursor = 0;
+        for (const candidate of [...candidates, ...(unclosedObject ? [unclosedObject] : [])]) {
+            const index = body.indexOf(candidate, cursor);
+            if (index < 0) continue;
+            cursor = index + candidate.length;
+            let complete = false;
+            try { const parsed = JSON.parse(candidate); complete = !!parsed && typeof parsed === 'object' && !Array.isArray(parsed); } catch {}
+            // A later legal non-mail object is still the provider's final answer.
+            // Keep it for the inbox validator to reject, rather than using an example.
+            if (complete || hasInboxRootField(candidate)) choices.push({ text: candidate, position: offset + index, complete });
+        }
+    };
+    collect(text, 0);
+    for (const fence of text.matchAll(/(?:^|\n)[ \t]*```json[ \t]*\n([\s\S]*?)\n[ \t]*```[ \t]*(?=\n|$)/gi)) {
+        collect(fence[1], fence.index + fence[0].indexOf(fence[1]));
+    }
+    choices.sort((a, b) => b.position - a.position);
+    if (selection) selection.suppressedEarlierParsed = choices.some(choice => choice.complete && choice.position < choices[0].position);
+    return choices[0]?.text || '';
+}
+
 // Inbox-only. Reads already-closed letter fields from a broken reply.
 // Does not invent quotes, commas, or missing title/body text.
 function salvageInboxLetters(raw) {
-    const text = typeof raw === 'string' ? raw : '';
+    const text = typeof raw === 'string' ? inboxResponseCandidate(raw) : '';
     if (!looksLikeInboxPayload(text)) return null;
     const letters = [];
     const seen = new Set();
@@ -39934,9 +40797,10 @@ function salvageInboxLetters(raw) {
 // broken optional drawing must not hide a closed body from merge/preservation.
 // The original response is still incomplete; only its readable letters close.
 function parseInboxRecoveryObject(raw) {
-    const parsed = parsePartialJsonObject(raw);
+    const candidate = inboxResponseCandidate(raw);
+    const parsed = parsePartialJsonObject(candidate);
     if (parsed.complete) return parsed;
-    const salvaged = salvageInboxLetters(raw);
+    const salvaged = salvageInboxLetters(candidate);
     if (!salvaged) return parsed;
     const readable = parsePartialJsonObject(JSON.stringify(salvaged));
     return { ...readable, complete: false,
@@ -39953,14 +40817,14 @@ function jsonOutputBudgetSummary({ requestMaxTokens = 0, configuredMaxTokens = 0
     return `${segmentNote}；当前插件设置 ${configuredMax.toLocaleString()} tokens；实际可用额度由所选模型／渠道决定。`;
 }
 
-function extractJson(raw, { reasoning = '', requestMaxTokens = 0, configuredMaxTokens = 0 } = {}) {
+function extractJson(raw, { reasoning = '', requestMaxTokens = 0, configuredMaxTokens = 0, mode = '' } = {}) {
     if (raw != null && typeof raw !== 'string') {
         const error = jsonOutputError('RMT_RESPONSE_FORMAT', '连接返回的正文结构暂不支持，未取得可解析的最终正文；旧内容未改变。');
         error.retryable = false;
         error.retryableJson = false;
         throw error;
     }
-    let text = core_text.normalizeText(raw, core_constants.MAX_GENERATION_OUTPUT_CHARS).replace(/^\uFEFF/, '').trim();
+    let text = response_config.finalResponseText(core_text.normalizeText(raw, core_constants.MAX_GENERATION_OUTPUT_CHARS)).trim();
     const reasoningChars = core_text.normalizeText(reasoning, core_constants.MAX_GENERATION_OUTPUT_CHARS).length;
     const budgetSummary = jsonOutputBudgetSummary({ requestMaxTokens, configuredMaxTokens });
     if (!text) {
@@ -39978,6 +40842,15 @@ function extractJson(raw, { reasoning = '', requestMaxTokens = 0, configuredMaxT
         const parsed = JSON.parse(text);
         if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed;
     } catch {}
+    const inboxSelection = {};
+    const inboxCandidate = mode === 'inbox' ? inboxResponseCandidate(text, inboxSelection) : '';
+    if (inboxCandidate) {
+        try { const parsed = JSON.parse(inboxCandidate); if (parsed && typeof parsed === 'object') return parsed; } catch {}
+        const salvaged = salvageInboxLetters(inboxCandidate);
+        if (salvaged) return salvaged;
+        // Do not fall back to an earlier example when the answer has started.
+        text = inboxCandidate;
+    }
     const fences = [...text.matchAll(/(?:^|\n)[ \t]*```json[ \t]*\n([\s\S]*?)\n[ \t]*```[ \t]*(?=\n|$)/gi)];
     for (let i = fences.length - 1; i >= 0; i -= 1) {
         try {
@@ -39996,11 +40869,15 @@ function extractJson(raw, { reasoning = '', requestMaxTokens = 0, configuredMaxT
     const salvaged = salvageInboxLetters(text);
     if (salvaged) return salvaged;
     if (hasUnclosedObject) {
-        throw jsonOutputError(
+        const error = jsonOutputError(
             'RMT_JSON_TRUNCATED',
             `模型返回的 JSON 疑似被截断：已经出现“{”，但没有完整闭合。${budgetSummary} 如果本段实际上限低于当前插件设置，继续提高全局“最大输出”不会突破该功能自己的分段上限；可只重试这一项，或换用输出更稳定的模型。`,
             { contentChars: text.length, reasoningChars, requestMaxTokens: Math.floor(Number(requestMaxTokens) || 0), configuredMaxTokens: Math.floor(Number(configuredMaxTokens) || 0) },
         );
+        // This newly recognized final answer must be saved without turning the
+        // rejected earlier example into either success or another paid attempt.
+        if (inboxSelection.suppressedEarlierParsed) error.preserveInboxWithoutAutoContinue = true;
+        throw error;
     }
     if (!candidates.length) {
         throw jsonOutputError(
@@ -41841,7 +42718,19 @@ async function mergeGenerationRecoveryResponse(journal, segment, raw, validator,
     // must not silently slice old or newly accepted records off a merged array.
     const observedNew = rawStrings([nextRaw], parsePartial);
     for (const value of merged.ignoredNewStrings) observedNew.delete(value);
-    const fresh = await validator(raw);
+    let fresh;
+    try { fresh = await validator(raw); }
+    catch (error) {
+        // Inbox continuation may return only the missing slots. Validate those
+        // exact received letters in the full original plan; never replace a bad
+        // or extra slot with a preserved letter to manufacture success.
+        const rows = raw?.letters, full = combined?.letters;
+        if (journal?.identity?.mode !== 'inbox' || error?.code !== 'RMT_INBOX_INCOMPLETE'
+            || !Array.isArray(rows) || !rows.length || !Array.isArray(full) || rows.length >= full.length
+            || new Set(rows.map(row => row?.slot)).size !== rows.length
+            || rows.some(row => !full.some(letter => letter?.slot === row?.slot))) throw error;
+        fresh = await validator({ ...combined, letters: full.map(letter => rows.find(row => row.slot === letter.slot) || letter) });
+    }
     if (!containsFacts(receivedFacts(normalized, observedNew), receivedFacts(fresh, observedNew)))
         throw Object.assign(new Error('合并会超过原有内容范围或遗漏本次有效成果；双方草稿已保留，未覆盖旧进度。'),
             { code: 'RMT_RECOVERY_MERGE_CONFLICT', safeToDisplay: true });
@@ -43418,6 +44307,7 @@ __m_generation_recoveryPayload_js.unpackRecoveryPayload = unpackRecoveryPayload;
 
 function __init_generation_recoverySegments_js() {
 // MODULE: generation/recoverySegments.js
+const recovery_merge = __m_generation_recoveryMerge_js;
 const partial_progress = __m_generation_partialProgress_js;
 const COMPATIBILITY_CONTRACTS = __m_generation_recoveryFeedback_js.COMPATIBILITY_CONTRACTS;
 const GENERATION_RECOVERY_LIMITS = __m_generation_recoveryFeedback_js.GENERATION_RECOVERY_LIMITS;
@@ -43446,6 +44336,7 @@ const recoveryFailureCode = __m_generation_recoveryFeedback_js.recoveryFailureCo
 const recoveryIdentity = __m_generation_recoveryFeedback_js.recoveryIdentity;
 const requestTokens = __m_generation_recoveryFeedback_js.requestTokens;
 const validJournal = __m_generation_recoveryFeedback_js.validJournal;
+
 
 
 // 生成恢复流程：创建恢复、冻结输入与请求、续写提示、分段恢复
@@ -43876,6 +44767,33 @@ async function withRecoverySegment(prompt, options, validator, run) {
             accepted = true;
             await publishGenerationRecoveryProgress(handle);
         };
+        // A readable inbox can be incomplete as a plan even when extractJson
+        // recovered its first letter. Preserve the received text before trying a
+        // union with earlier letters. This is local recovery, not an auto request.
+        onAccepted.incompleteInboxResponse = async (raw, original, error) => {
+            if (handle.journal.identity.mode !== 'inbox' || typeof original !== 'string' || !original.trim()) throw error;
+            const saved = await changeJournal(handle, journal => {
+                const prior = journal.segments.find(row => row.slot === slot);
+                const retainedPartials = recovery_merge.retainedRecoveryPartials(prior, original);
+                assertRetainedSize(original, retainedPartials);
+                replaceSegment(journal, { slot, requestHash, state: 'truncated', partial: original,
+                    ...(retainedPartials.length ? { retainedPartials } : {}), failureCode: 'RMT_JSON_TRUNCATED',
+                    failureFeedback: failureFeedback(recoveryFailureCode(error), error),
+                    ...(contract ? { contract } : {}), ...(requestRecord.recipe ? { requestRecipe: requestRecord.recipe } : {}) });
+                journal.failureCode = recoveryFailureCode(error);
+            });
+            if (!saved && !handle.pageOnly) {
+                const failed = recoveryError('RMT_RECOVERY_STORAGE', '本段已返回，但浏览器没有成功保存进度；已停止后续请求。旧内容仍在，请检查本地存储后重试。');
+                if (holdUnsavedReply(handle, slot, original)) noteHeldReplyExport(failed);
+                throw failed;
+            }
+            await publishGenerationRecoveryProgress(handle);
+            // Invalid/duplicate slots must not be hidden by the union's keyed list.
+            if (!Array.isArray(raw?.letters) || raw.letters.some(row => !['stage', 'daily'].includes(row?.slot))
+                || new Set(raw.letters.map(row => row.slot)).size !== raw.letters.length) throw error;
+            await onAccepted(raw);
+            return acceptedValue;
+        };
         try {
             const result = await run(generationContinuationPrompt(prompt, partial), requestOptions, onAccepted);
             checkCurrent(handle);
@@ -43991,7 +44909,7 @@ function setTruncationContinueHandler(handler) {
     truncationContinueHandler = typeof handler === 'function' ? handler : null;
 }
 
-async function recordRecoveryTruncation(options, raw, error) {
+async function recordRecoveryTruncation(options, raw, error, { autoContinue = true } = {}) {
     const record = options?.[TOKEN] && requestTokens.get(options[TOKEN]);
     if (!record || error?.code !== 'RMT_JSON_TRUNCATED' || typeof raw !== 'string' || !raw.trim()) return false;
     if (raw.length > GENERATION_RECOVERY_LIMITS.segmentChars) {
@@ -44023,12 +44941,14 @@ async function recordRecoveryTruncation(options, raw, error) {
     error.retryable = false;
     error.safeToDisplay = true;
     error.safeUserMessage = record.handle.durable
-        ? '本段正文写到一半。已保留写好的部分，并会自动接着补；也可以在任务中心点“继续生成”。'
-        : record.handle.pageOnly ? '本段正文写到一半，草稿暂存在当前页面。请勿刷新；会自动接着补，也可以点“继续生成”。'
+        ? autoContinue ? '本段正文写到一半。已保留写好的部分，并会自动接着补；也可以在任务中心点“继续生成”。'
+            : '本段正文未写完，原始回复已保留；请在任务中心点“继续生成”补齐。'
+        : record.handle.pageOnly ? autoContinue ? '本段正文写到一半，草稿暂存在当前页面。请勿刷新；会自动接着补，也可以点“继续生成”。'
+            : '本段正文未写完，原始回复暂存在当前页面。请勿刷新；可点“继续生成”补齐。'
         : '本段正文未写完，但浏览器没有成功保存这段草稿；旧内容仍在，请检查本地存储后重试。';
     error.message = error.safeUserMessage;
     await publishGenerationRecoveryProgress(record.handle);
-    if (record.handle.durable && typeof truncationContinueHandler === 'function') {
+    if (autoContinue && record.handle.durable && typeof truncationContinueHandler === 'function') {
         const journal = record.handle.journal;
         const summary = generationRecoverySummary(journal);
         if (summary?.canContinue && summary.mode && journal?.draftId) {
@@ -47493,7 +48413,7 @@ function normalizeCabinet(raw, memoryBank) {
 function mergeCabinet(previous, fresh) {
     const items = structuredClone(previous?.items || []);
     const names = new Set(items.map(item => item.name));
-    for (const item of fresh.items) if (!names.has(item.name) && items.length < core_constants.MAX_DERIVED_CONTENT_ITEMS) {
+    for (const item of fresh.items) if (!names.has(item.name)) {
         names.add(item.name);
         items.push({ ...item, id: 'KEEP_' + (items.length + 1) });
     }
@@ -47502,7 +48422,7 @@ function mergeCabinet(previous, fresh) {
 
 function cabinetHtml(session) {
     const esc = core_text.esc;
-    const items = (Array.isArray(session?.items) ? session.items : []).slice(0, core_constants.MAX_DERIVED_CONTENT_ITEMS)
+    const items = (Array.isArray(session?.items) ? session.items : [])
         .filter(item => item && typeof item === 'object').map(item => ({ ...item, sourceMemoryIds: core_text.cleanArray(item.sourceMemoryIds, 8, 40) }));
     return '<section class="rmt-cabinet"><header class="rmt-archive-card"><small>OUR KEEPSAKES</small><h2>两个人的陈列柜</h2><p>把确实留下过的东西，放在这里。</p></header><div class="rmt-cabinet-shelves">' +
         (items.length ? items.map((item, index) => '<details class="rmt-cabinet-piece"><summary><span class="rmt-cabinet-object" aria-hidden="true">' + cabinetObjectArt(item.name) + '</span><small>No. ' + String(index + 1).padStart(2, '0') + '</small><b>' + esc(item.name) + '</b><span>打开回忆</span></summary><div class="rmt-cabinet-detail"><blockquote>' + esc(item.objectEvidence) + '</blockquote><small>' + esc(item.sourceMemoryIds.join(' · ')) + ' · ' + esc(item.sourceMemoryAnchor) + '</small></div></details>').join('')
@@ -63951,13 +64871,8 @@ async function refreshWizardProfileModels(context) {
 }
 
 async function refreshWizardManualModels(root, context) {
-    const current = core_settings.getPluginSettings();
     try {
-        const models = await core_settings.fetchModelsForManualConnection({
-            manualApiBaseUrl: root.querySelector('[data-rmt-manual-api-base]')?.value || current.manualApiBaseUrl,
-            manualApiKey: core_text.normalizeText(root.querySelector('[data-rmt-manual-api-key]')?.value, 4000) || current.manualApiKey,
-            manualApiModel: root.querySelector('[data-rmt-manual-api-model]')?.value || current.manualApiModel,
-        }, { force: true });
+        const models = await core_settings.fetchModelsForManualConnection(settings_parts.manualSettingsFromPanel(root), { force: true });
         manualModels = Array.isArray(models) ? models.filter(Boolean) : [];
         if (!sameChat(context)) return;
         status(manualModels.length ? `已找到 ${manualModels.length} 个模型。` : '没有拉到模型。');
@@ -71562,6 +72477,7 @@ const archive_repository = __m_archive_repository_js;
 const core_cache = __m_core_cache_js;
 const core_constants = __m_core_constants_js;
 const core_context = __m_core_context_js;
+const relay_policy = __m_core_archiveRelayPolicy_js;
 const core_requestCoordinator = __m_core_requestCoordinator_js;
 const ui_taskCenter = __m_ui_taskCenter_js;
 const ui_countdown = __m_ui_autoMemoryCountdown_js;
@@ -71592,6 +72508,7 @@ const workspace_ui = __m_ui_workspace_js;
 const ui_workspaceState = __m_ui_workspaceState_js;
 const toolbarIcons = __m_ui_toolbarIcons_js;
 const runtimeState = __m_core_state_js.state;
+
 
 
 
@@ -72232,12 +73149,15 @@ function emptyArchiveMode(mode, memory, context, stored) {
 }
 
 function decorateReadOnlyModeUi() {
-    if (!runtimeState.activeArchiveSnapshot) return;
+    const entry = runtimeState.activeArchiveSnapshot || relay_policy.relayContextEntry();
+    const frozen = relay_policy.relayReadOnly(entry);
+    if (!runtimeState.activeArchiveSnapshot && !frozen) return;
     const body = bodyEl();
     if (!body || body.querySelector('[data-rmt-readonly-toggle]')) return;
     const control = document.createElement('div');
     control.className = 'rmt-archive-readonly-control';
-    control.innerHTML = `<label><input type="checkbox" data-rmt-readonly-toggle ${runtimeState.activeArchiveReadOnly ? 'checked' : ''}> 只读查看</label>`;
+    if (frozen) control.setAttribute('data-rmt-readonly-toggle', '');
+    control.innerHTML = frozen ? '<span>已交给其他聊天继续 · 只读；可在档案室接回</span>' : `<label><input type="checkbox" data-rmt-readonly-toggle ${runtimeState.activeArchiveReadOnly ? 'checked' : ''}> 只读查看</label>`;
     body.prepend(control);
 }
 
@@ -73409,6 +74329,7 @@ __m_ui_overlayCore_js.OVERLAY_CLICK_UNHANDLED = OVERLAY_CLICK_UNHANDLED;
 function __init_ui_overlayClickActions_js() {
 // MODULE: ui/overlayClickActions.js
 const archive_inheritance_view = __m_ui_archiveInheritance_js;
+const archive_relay_view = __m_ui_archiveRelayView_js;
 const ui_workspaceState = __m_ui_workspaceState_js;
 const core_context = __m_core_context_js;
 const core_text = __m_core_text_js;
@@ -73482,6 +74403,7 @@ const showChooser = __m_ui_overlayCore_js.showChooser;
 
 
 
+
 // ui/overlayCore.js handleOverlayClick 的分组处理（重构阶段 3）。每个函数是原函数里连续的一段语句，一字未改；
 // 返回 OVERLAY_CLICK_UNHANDLED 表示“这一段没有处理”，原函数接着往下走，和拆分前完全相同。
 
@@ -73495,6 +74417,7 @@ function revealModuleId(achievementId) {
 }
 
 function overlayArchiveActions(actionEl, action) {
+    if (action.startsWith('archive-relay-')) return void archive_relay_view.handleArchiveRelayAction(actionEl, action);
     if (action === 'achievement-jump') {
         const floor = Math.floor(Number(actionEl?.dataset?.rmtFloor));
         if (!Number.isSafeInteger(floor) || floor < 0) {
@@ -77025,6 +77948,7 @@ function paintCoverageMap(panel) {
         return;
     }
     const runs = archive_coverage.buildFloorCoverage({
+        chatId: bank.chatId,
         totalFloors: total,
         memories: [...(bank.memories || []), ...(bank.coldArchive || [])],
         summaryFloors: archive_coverage.summaryFloorsFromChat(chat),
@@ -77560,6 +78484,7 @@ __m_ui_settingsPanelParts_js.refreshReadingSettingsUi = refreshReadingSettingsUi
 __m_ui_settingsPanelParts_js.paintCoverageMap = paintCoverageMap;
 __m_ui_settingsPanelParts_js.bindImageProviderEvents = bindImageProviderEvents;
 __m_ui_settingsPanelParts_js.unbindImageProviderEvents = unbindImageProviderEvents;
+__m_ui_settingsPanelParts_js.manualSettingsFromPanel = manualSettingsFromPanel;
 __m_ui_settingsPanelParts_js.bindManualAutosave = bindManualAutosave;
 __m_ui_settingsPanelParts_js.refreshThemeUi = refreshThemeUi;
 __m_ui_settingsPanelParts_js.refreshGenerationSettingsUi = refreshGenerationSettingsUi;
@@ -82398,6 +83323,115 @@ __m_ui_workspaceState_js.workspace = workspace;
 __m_ui_workspaceState_js.WORKSPACE_ROUTES = WORKSPACE_ROUTES;
 }
 
+function __init_ui_archiveRelayView_js() {
+// MODULE: ui/archiveRelayView.js
+const relay = __m_archive_relay_js;
+const store = __m_archive_relayStore_js;
+const preparation = __m_archive_relayPreparation_js;
+const library = __m_archive_library_js;
+const inheritance = __m_archive_inheritance_js;
+const cache = __m_core_cache_js;
+const context = __m_core_context_js;
+const policy = __m_core_archiveRelayPolicy_js;
+const text = __m_core_text_js;
+const repository = __m_archive_repository_js;
+const overlay = __m_ui_overlay_js;
+const workspace = __m_ui_workspaceState_js.workspace;
+const state = __m_core_state_js.state;
+
+
+
+
+
+
+
+
+
+
+
+
+
+let activePreview = null;
+const esc = value => text.esc(String(value ?? ''));
+
+function currentEntry(ctx) { return cache.archiveBackupEntryForContext(ctx, repository.getImportedMemory(ctx) || { chatId: context.getChatId(ctx) }); }
+
+function archiveRelayEntryHtml(ctx = context.getContext()) {
+    if (!context.getChatId(ctx) || ctx.groupId || ctx.characterId == null) return '';
+    const entry = currentEntry(ctx), fence = policy.relayUiState(entry);
+    if (fence) {
+        const frozen = policy.relayReadOnly(entry, fence), holder = policy.relayHolder(fence);
+        return `<section class="rmt-archive-card rmt-relay-status"><b>${frozen ? `已交给 ${esc(holder?.chatId)} 继续 · 只读` : '正在这里继续连续档案'}</b><div class="rmt-current-archive-actions">${frozen ? `<button type="button" class="rmt-btn" data-rmt-action="archive-relay-preview" data-rmt-relay-entry="${esc(holder?.entryId)}">接回当前聊天</button>` : ''}<button type="button" class="rmt-btn" data-rmt-action="archive-relay-backup">导出最近交接备份</button><button type="button" class="rmt-btn" data-rmt-action="archive-relay-drafts">查看原聊天保留草稿</button></div></section>`;
+    }
+    if (!inheritance.inheritanceCandidates(ctx).length) return '';
+    return '<section class="rmt-archive-card"><button type="button" class="rmt-btn" data-rmt-action="archive-relay-open">在这里继续旧聊天的档案…</button></section>';
+}
+
+function archiveRelayPreviewHtml(preview) {
+    const counts = inheritance.archiveInheritanceCounts(preview.source.memory, preview.source.cache);
+    return `<section class="rmt-archive-card"><h2>在这里继续这份档案</h2><p>${esc(preview.source.memory.archiveName || '连续档案')} · ${counts.memories + counts.coldMemories} 条记忆</p><p>${esc(preview.sourceEntry.chatId)} → ${esc(preview.targetEntry.chatId)}</p><p>交接后原聊天只读；已有作品和记忆编号保留。本期接力仅限同一浏览器。</p>${preview.occupied ? '<p>当前聊天已有独立档案。不会合并；请先导出备份并确认，再接入所选档案。</p><button type="button" class="rmt-btn" data-rmt-action="archive-relay-export-target">导出当前档案备份</button><label style="display:block;margin:12px 0"><input type="checkbox" data-rmt-relay-replace-confirm> 我已保存备份，确认将当前聊天接入这份连续档案</label>' : ''}<div class="rmt-current-archive-actions"><button type="button" class="rmt-btn" data-rmt-action="archive-relay-confirm">${preview.returning ? '确认接回这里' : '确认交接'}</button><button type="button" class="rmt-btn" data-rmt-action="library-home">取消，保留现状</button></div></section>`;
+}
+
+function download(value, name) {
+    const url = URL.createObjectURL(new Blob([JSON.stringify(value, null, 2)], { type: 'application/json' }));
+    const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
+}
+
+async function handleArchiveRelayAction(button, action) {
+    const body = overlay.bodyEl(), epoch = workspace.epoch, scope = context.chatScopeKey(context.getContext());
+    const lifecycle = state.runtimeLifecycleEpoch;
+    const here = () => body?.isConnected && overlay.bodyEl() === body && epoch === workspace.epoch
+        && lifecycle === state.runtimeLifecycleEpoch && scope === context.chatScopeKey(context.getContext()) && button.isConnected;
+    button.disabled = true;
+    try {
+        if (action === 'archive-relay-open') {
+            activePreview = null;
+            const rows = await relay.relayCandidates();
+            if (!here()) return;
+            body.innerHTML = `<section class="rmt-archive-card"><h2>选择要继续的档案</h2><p>只列出同一角色当前持有的档案；不复制成另一条世界线。</p><div class="rmt-archive-overview-list">${rows.map(row => `<button type="button" class="rmt-archive-overview-item" data-rmt-action="archive-relay-preview" data-rmt-relay-entry="${esc(row.entryId)}"><span><b>${esc(row.archiveName)}</b><small>${esc(row.chatId)}</small></span><span>继续这份档案 ›</span></button>`).join('') || '<p>没有可交接的同角色档案。</p>'}</div><button type="button" class="rmt-btn" data-rmt-action="library-home">返回</button></section>`;
+        } else if (action === 'archive-relay-preview') {
+            activePreview = null;
+            const preview = await relay.previewArchiveRelay(button.dataset.rmtRelayEntry, { loadSnapshot: library.fetchIndexedArchiveSnapshot });
+            if (!here()) return;
+            activePreview = { preview, exported: false };
+            body.innerHTML = archiveRelayPreviewHtml(preview);
+        } else if (action === 'archive-relay-export-target') {
+            if (!activePreview) throw new Error('预览已失效，请重新选择。');
+            download({ version: 1, kind: 'hearttrace-relay-target-backup', record: activePreview.preview.target, mirror: activePreview.preview.targetMirror }, 'hearttrace-before-relay.json');
+            activePreview.exported = true;
+        } else if (action === 'archive-relay-confirm') {
+            const chosen = activePreview;
+            if (!chosen) throw new Error('预览已失效，请重新选择。');
+            const approved = !chosen.preview.occupied || (chosen.exported && body.querySelector('[data-rmt-relay-replace-confirm]')?.checked === true);
+            if (!approved) throw new Error('请先导出当前档案备份，再勾选确认；现有内容尚未改动。');
+            const result = await relay.commitArchiveRelay(chosen.preview, { replaceTarget: chosen.preview.occupied });
+            activePreview = null;
+            globalThis.toastr?.success?.(result.mirrorQueued ? '交接已保存在本机，可以在这里继续。' : '交接已保存在本机；酒馆附带副本暂未排入保存，重新打开本聊天可读取本机成果。', '心迹回廊');
+            if (here()) await library.showArchiveLibrary();
+        } else if (action === 'archive-relay-backup') {
+            const fence = await store.readArchiveRelayState(currentEntry(context.currentCharacterGuard()));
+            if (!fence) throw new Error('当前聊天没有接力记录。');
+            const checkpoint = await store.readRelayCheckpoint(fence.transferId);
+            if (!here()) return;
+            if (!checkpoint) throw new Error('最近交接备份暂不可读取，请保留页面。');
+            download(checkpoint, 'hearttrace-relay-checkpoint.json');
+        } else if (action === 'archive-relay-drafts') {
+            const ctx = context.currentCharacterGuard();
+            await cache.ensureCacheHydrated(ctx);
+            if (!here()) return;
+            const rows = preparation.relayPreservedDraftRows(cache.getCache(ctx));
+            body.innerHTML = `<section class="rmt-archive-card"><h2>原聊天保留草稿</h2><p>保留原请求与成功片段，不作为当前聊天自动重试。</p>${rows.map(row => `<details><summary>来自 ${esc(row.originChatId)}</summary><pre style="white-space:pre-wrap;overflow-wrap:anywhere">${esc(JSON.stringify(row.value, null, 2))}</pre></details>`).join('') || '<p>没有另外保留的旧请求草稿。</p>'}<button type="button" class="rmt-btn" data-rmt-action="archive-relay-backup">导出完整交接备份</button><button type="button" class="rmt-btn" data-rmt-action="library-home">返回档案室</button></section>`;
+        }
+    } catch (error) { globalThis.toastr?.error?.(text.toastText(text.safeErrorSummary(error)), '心迹回廊'); }
+    finally { if (button.isConnected) button.disabled = false; }
+}
+
+__m_ui_archiveRelayView_js.handleArchiveRelayAction = handleArchiveRelayAction;
+__m_ui_archiveRelayView_js.archiveRelayEntryHtml = archiveRelayEntryHtml;
+__m_ui_archiveRelayView_js.archiveRelayPreviewHtml = archiveRelayPreviewHtml;
+}
+
 function __init_ui_workspaceStyles_js() {
 // MODULE: ui/workspaceStyles.js
 const song_styles = __m_ui_themeSongStyles_js;
@@ -82708,6 +83742,8 @@ __init_archive_memoryFileImport_js();
 __init_archive_memoryProviders_js();
 __init_archive_partialImport_js();
 __init_archive_qianqianjie_js();
+__init_archive_relayPreparation_js();
+__init_archive_relayStore_js();
 __init_archive_requestBudget_js();
 __init_archive_sourceLedger_js();
 __init_archive_storyScenes_js();
@@ -82737,6 +83773,7 @@ __init_core_archiveBridge_js();
 __init_archive_backupStore_js();
 __init_archive_sourceReadGuard_js();
 __init_core_archiveCover_js();
+__init_core_archiveRelayPolicy_js();
 __init_core_autoUpdatePolicy_js();
 __init_core_backupDiagnostics_js();
 __init_core_bedtimeContract_js();
@@ -82802,6 +83839,7 @@ __init_archive_inheritance_js();
 __init_archive_libraryCharacter_js();
 __init_archive_librarySnapshots_js();
 __init_archive_library_js();
+__init_archive_relay_js();
 __init_archive_snapshots_js();
 __init_archive_worldInfoSources_js();
 __init_archive_externalMemory_js();
@@ -82994,6 +84032,7 @@ __init_ui_toolbarIcons_js();
 __init_ui_travelView_js();
 __init_ui_workspace_js();
 __init_ui_workspaceState_js();
+__init_ui_archiveRelayView_js();
 __init_ui_workspaceStyles_js();
 
 export const openArchiveLibrary = __m_heartbeatMemories_js.openArchiveLibrary;

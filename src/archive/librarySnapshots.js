@@ -1,4 +1,5 @@
 import * as archive_backupStore from './backupStore.js';
+import * as relay_policy from '../core/archiveRelayPolicy.js';
 import * as archive_repository from './repository.js';
 import * as core_cache from '../core/cache.js';
 import * as core_constants from '../core/constants.js';
@@ -141,6 +142,7 @@ export function syncArchiveTargetSubtask(targetRuntime, snapshot) {
 export function archiveSnapshotEditableUi() {
     return !!runtimeState.activeArchiveSnapshot
         && runtimeState.activeArchiveSnapshot.backupOnly !== true
+        && !relay_policy.relayReadOnly(runtimeState.activeArchiveSnapshot)
         && !runtimeState.activeArchiveReadOnly;
 }
 
@@ -151,6 +153,12 @@ export function snapshotWriteBlockMessage() {
 }
 
 export function promoteSnapshotToLiveIfCurrent() {
+    const relayEntry = runtimeState.activeArchiveSnapshot || relay_policy.relayContextEntry();
+    if (relay_policy.relayReadOnly(relayEntry)) {
+        runtimeState.activeArchiveReadOnly = true;
+        globalThis.toastr?.info?.('这份连续档案已交给其他聊天继续；请在档案室接回后再编辑。', '心迹回廊');
+        return false;
+    }
     if (!runtimeState.activeArchiveSnapshot) return true;
     if (runtimeState.activeArchiveSnapshot.historyVersionId) {
         runtimeState.activeArchiveReadOnly = true;
@@ -195,7 +203,6 @@ export function promoteSnapshotToLiveIfCurrent() {
 }
 
 export function requireWritableArchiveAction() {
-    if (!runtimeState.activeArchiveSnapshot) return true;
     return promoteSnapshotToLiveIfCurrent();
 }
 

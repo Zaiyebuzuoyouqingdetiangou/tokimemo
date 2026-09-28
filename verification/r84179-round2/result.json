@@ -1,0 +1,531 @@
+{
+  "round": "round2",
+  "startedAt": "2026-09-28T04:16:48.138Z",
+  "root": "/workspace/scratch/987140e68839/feature-r84179.TKpRPT/tokimemo-main",
+  "checks": [
+    {
+      "label": "tests-1",
+      "argv": [
+        "/opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node",
+        "--experimental-vm-modules",
+        "--test",
+        "--test-concurrency=4",
+        "tools/test-archive-bridge-r84100.mjs",
+        "tools/test-auto-memory-r2.mjs",
+        "tools/test-auto-memory-r7.mjs",
+        "tools/test-cg-draft-r84123.mjs",
+        "tools/test-floor-window-deferred-save-r84157.mjs",
+        "tools/test-inbox-json-salvage-r84150.mjs",
+        "tools/test-legacy-archive-inherit-entry.mjs",
+        "tools/test-legacy-mail-art-coverage.mjs",
+        "tools/test-letter-face-r84162.mjs",
+        "tools/test-phone-journal-r8483.mjs",
+        "tools/test-recovery-limits-r8481.mjs",
+        "tools/test-relay-integration-r84179.mjs",
+        "tools/test-task-dismiss-r84160.mjs"
+      ],
+      "exitCode": 0,
+      "signal": null,
+      "durationMs": 7807
+    },
+    {
+      "label": "tests-2",
+      "argv": [
+        "/opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node",
+        "--experimental-vm-modules",
+        "--test",
+        "--test-concurrency=4",
+        "tools/test-archive-lineage-r84178.mjs",
+        "tools/test-auto-memory-r3.mjs",
+        "tools/test-auto-memory-r8.mjs",
+        "tools/test-cg-draft-required-r84166.mjs",
+        "tools/test-floor-window-stored-batch-r84159.mjs",
+        "tools/test-inbox-recovery-r84163.mjs",
+        "tools/test-legacy-archive-partial-flow.mjs",
+        "tools/test-legacy-mail-art-sources.mjs",
+        "tools/test-letter-floor-override-r84165.mjs",
+        "tools/test-profile-resume-r8494.mjs",
+        "tools/test-recovery-r8483.mjs",
+        "tools/test-relay-preparation-r84179.mjs",
+        "tools/test-ui-bridge-r8497.mjs"
+      ],
+      "exitCode": 0,
+      "signal": null,
+      "durationMs": 14336
+    },
+    {
+      "label": "tests-3",
+      "argv": [
+        "/opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node",
+        "--experimental-vm-modules",
+        "--test",
+        "--test-concurrency=4",
+        "tools/test-archive-preparation-r8481.mjs",
+        "tools/test-auto-memory-r4.mjs",
+        "tools/test-auto-memory-r9.mjs",
+        "tools/test-cg-looks-avatar-r84168.mjs",
+        "tools/test-floor-window-tags-r84161.mjs",
+        "tools/test-journal-book-r84174.mjs",
+        "tools/test-legacy-archive-pending-save.mjs",
+        "tools/test-legacy-overlay-click-routing.mjs",
+        "tools/test-letter-room-r8483.mjs",
+        "tools/test-progress-visual-r84170.mjs",
+        "tools/test-recovery-scope-r8460.mjs",
+        "tools/test-relay-storage-r84179.mjs"
+      ],
+      "exitCode": 0,
+      "signal": null,
+      "durationMs": 15705
+    },
+    {
+      "label": "tests-4",
+      "argv": [
+        "/opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node",
+        "--experimental-vm-modules",
+        "--test",
+        "--test-concurrency=4",
+        "tools/test-auto-memory-interval1-r84153.mjs",
+        "tools/test-auto-memory-r5.mjs",
+        "tools/test-avatar-bedtime-r84167.mjs",
+        "tools/test-discard-task-scope-r8480.mjs",
+        "tools/test-generation-bridge-r8499.mjs",
+        "tools/test-journal-extras-r84175.mjs",
+        "tools/test-legacy-archive-resilience.mjs",
+        "tools/test-legacy-room-figure-local.mjs",
+        "tools/test-letter-skin-r84164.mjs",
+        "tools/test-recovery-action-r8460.mjs",
+        "tools/test-relaxed-guards-r84171.mjs",
+        "tools/test-settings-listeners-r8496.mjs"
+      ],
+      "exitCode": 0,
+      "signal": null,
+      "durationMs": 20915
+    },
+    {
+      "label": "tests-5",
+      "argv": [
+        "/opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node",
+        "--experimental-vm-modules",
+        "--test",
+        "--test-concurrency=4",
+        "tools/test-auto-memory-r0.mjs",
+        "tools/test-auto-memory-r5b.mjs",
+        "tools/test-backup-reconnect-r84123.mjs",
+        "tools/test-draft-discard-r8460.mjs",
+        "tools/test-generation-modes-bridge-r84103.mjs",
+        "tools/test-journal-image-r84176.mjs",
+        "tools/test-legacy-butterfly-prompt-r84122.mjs",
+        "tools/test-lenticular-r84169.mjs",
+        "tools/test-mail-identity-r8460.mjs",
+        "tools/test-recovery-actions-integration-r8460.mjs",
+        "tools/test-relay-edges-r84179.mjs",
+        "tools/test-small-fixes-r84177.mjs"
+      ],
+      "exitCode": 0,
+      "signal": null,
+      "durationMs": 5281
+    },
+    {
+      "label": "tests-6",
+      "argv": [
+        "/opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node",
+        "--experimental-vm-modules",
+        "--test",
+        "--test-concurrency=4",
+        "tools/test-auto-memory-r1.mjs",
+        "tools/test-auto-memory-r6.mjs",
+        "tools/test-bunny-menu-r84172.mjs",
+        "tools/test-expanded-cg-r8483.mjs",
+        "tools/test-image-fit-cooldown-r84173.mjs",
+        "tools/test-legacy-archive-draft-capacity.mjs",
+        "tools/test-legacy-heart-firefly-upgrade-prompt.mjs",
+        "tools/test-letter-art-scenes-r84123.mjs",
+        "tools/test-modes-bridge-r8498.mjs",
+        "tools/test-recovery-canonical-r8483.mjs",
+        "tools/test-relay-import-r84179.mjs",
+        "tools/test-stored-batch-read-range-r84162.mjs"
+      ],
+      "exitCode": 0,
+      "signal": null,
+      "durationMs": 4515
+    },
+    {
+      "label": "build-1",
+      "argv": [
+        "/opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node",
+        "tools/build-runtime-bundle.mjs",
+        "."
+      ],
+      "exitCode": 0,
+      "signal": null,
+      "durationMs": 675
+    },
+    {
+      "label": "build-2",
+      "argv": [
+        "/opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node",
+        "tools/build-runtime-bundle.mjs",
+        "."
+      ],
+      "exitCode": 0,
+      "signal": null,
+      "durationMs": 542
+    },
+    {
+      "label": "runtime-syntax",
+      "argv": [
+        "/opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node",
+        "--experimental-vm-modules",
+        "tools/verify-runtime.mjs"
+      ],
+      "exitCode": 0,
+      "signal": null,
+      "durationMs": 21945
+    },
+    {
+      "label": "undefined-names",
+      "argv": [
+        "/opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node",
+        "tools/check-undefined-names.mjs"
+      ],
+      "exitCode": 0,
+      "signal": null,
+      "durationMs": 5659
+    },
+    {
+      "label": "refactor-guard",
+      "argv": [
+        "/opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node",
+        "--experimental-vm-modules",
+        "tools/refactor-guard.mjs",
+        "check"
+      ],
+      "exitCode": 0,
+      "signal": null,
+      "durationMs": 681
+    },
+    {
+      "label": "simulated-dom",
+      "argv": [
+        "/opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node",
+        "--experimental-vm-modules",
+        "tools/check-relay-dom-r84179.mjs"
+      ],
+      "exitCode": 0,
+      "signal": null,
+      "durationMs": 540
+    }
+  ],
+  "nativeBrowser": false,
+  "realProvider": false,
+  "sourceSha256": "69f70812c7d24ad2214f598933077611384d64ddfd973c2695fea79c7b45ad80",
+  "testInventory": [
+    {
+      "file": "tools/test-archive-bridge-r84100.mjs",
+      "sha256": "e5129b4ad66da0123c064cceaf03e01657ba2453fbe5c340ff38e559de3b6a32"
+    },
+    {
+      "file": "tools/test-archive-lineage-r84178.mjs",
+      "sha256": "23c3dd41cd29efa640bcbfd1accf8dcf5f0dc7130fa5d5697066470955f02dc2"
+    },
+    {
+      "file": "tools/test-archive-preparation-r8481.mjs",
+      "sha256": "a7a65d065309b0aa396711a7aaebf590e4aa2c334d44696d0451e4ae99af9aa8"
+    },
+    {
+      "file": "tools/test-auto-memory-interval1-r84153.mjs",
+      "sha256": "f82e6640cb9d8551ea38a3d9ba1b03fcf50568094733926884831cb6762e71cf"
+    },
+    {
+      "file": "tools/test-auto-memory-r0.mjs",
+      "sha256": "86647e0cf69dcf64e9dca9c1946b22e189928945902f5ebd5707860fc5f091c6"
+    },
+    {
+      "file": "tools/test-auto-memory-r1.mjs",
+      "sha256": "f060d8111e0369981bb2b263527ae882651fa0d5f4cc344a24b834e0ac2c0e74"
+    },
+    {
+      "file": "tools/test-auto-memory-r2.mjs",
+      "sha256": "a1d8450c60d66d87991cba669013eafe4d0d7dfc60915dbf179eab6ff3791584"
+    },
+    {
+      "file": "tools/test-auto-memory-r3.mjs",
+      "sha256": "9f9f45ecde31d3a147967801746d4314e73da57da0c59dbc70bd63ada2500ebb"
+    },
+    {
+      "file": "tools/test-auto-memory-r4.mjs",
+      "sha256": "255e857f72b6dd9cf7c7c6c9b389778923c071b69e18a9a9d1ccb761f0cd8314"
+    },
+    {
+      "file": "tools/test-auto-memory-r5.mjs",
+      "sha256": "801b13e48b211259948691fa7f2f19ddc5cc1a496da9f4fd655f99f9f248a4c4"
+    },
+    {
+      "file": "tools/test-auto-memory-r5b.mjs",
+      "sha256": "ace43005735c2553cd1c113e31a324500e636293ecec498b519bf66a533478ba"
+    },
+    {
+      "file": "tools/test-auto-memory-r6.mjs",
+      "sha256": "60602e1daca841d3a3d3879b2b53500bd3804f0af9ceaf80deae3bdb24cbf25a"
+    },
+    {
+      "file": "tools/test-auto-memory-r7.mjs",
+      "sha256": "98e08ca9dee57ea22821373955ff23e0609f321be2b98f61d942ab1e2aa71b83"
+    },
+    {
+      "file": "tools/test-auto-memory-r8.mjs",
+      "sha256": "e744c3c6509205f95a79ec91d1691dec1ed8e72f7daa787106066727726ef766"
+    },
+    {
+      "file": "tools/test-auto-memory-r9.mjs",
+      "sha256": "27b0728cae3f6e4e3e7f5730fe1f4200a7885c6823e22525b0f126b4d3b17fba"
+    },
+    {
+      "file": "tools/test-avatar-bedtime-r84167.mjs",
+      "sha256": "2249de2d8a0716ef622c62d7c004222a0023595123b0b301fc43873f00ef15d8"
+    },
+    {
+      "file": "tools/test-backup-reconnect-r84123.mjs",
+      "sha256": "99f8d5fefdd7c80d863f00b1a3ac5e968d68d1e918aee689131956e1ee43301d"
+    },
+    {
+      "file": "tools/test-bunny-menu-r84172.mjs",
+      "sha256": "d8188993b6a7c871cb889563503b4b15c905bc9bc3d99483ce65d6a63a8922b4"
+    },
+    {
+      "file": "tools/test-cg-draft-r84123.mjs",
+      "sha256": "cf589f005177ad9eda949d2c8be1c3ac96f463c3bb686f1367a55b975ebe4ee6"
+    },
+    {
+      "file": "tools/test-cg-draft-required-r84166.mjs",
+      "sha256": "3ca8f4afa59b7516862f250a99fb526d1200b6234631171d23fe59ce2e8565de"
+    },
+    {
+      "file": "tools/test-cg-looks-avatar-r84168.mjs",
+      "sha256": "318c1249d32548603f40edfb9a08bf3d6d1eecde17b10839d1981fd6b035bb45"
+    },
+    {
+      "file": "tools/test-discard-task-scope-r8480.mjs",
+      "sha256": "a20b969f086f3e57fcde7bf04f76b49c0bf32ce178ef3a0756aea9f46be31774"
+    },
+    {
+      "file": "tools/test-draft-discard-r8460.mjs",
+      "sha256": "90319faaaa447ee1cafb71052a391968f13933ad7259067c2b3b7f6161c93f7f"
+    },
+    {
+      "file": "tools/test-expanded-cg-r8483.mjs",
+      "sha256": "ba1bb270f78c4ff98834a58d1135b558f7eb6659ab253807bbc18ac0575c5032"
+    },
+    {
+      "file": "tools/test-floor-window-deferred-save-r84157.mjs",
+      "sha256": "974165f2c910383812c97e7d0ddb415ff2c33e6e9df1f5af3931a7cc8b32a4f5"
+    },
+    {
+      "file": "tools/test-floor-window-stored-batch-r84159.mjs",
+      "sha256": "d459a3811c430d97a65bb669f9bfd0562c7e527b4cc97d9703cd74aa24ed3e8d"
+    },
+    {
+      "file": "tools/test-floor-window-tags-r84161.mjs",
+      "sha256": "e973024c9cc9e15f9c589c54f47f780d373c8d1749fef8f5a5c4df682707324e"
+    },
+    {
+      "file": "tools/test-generation-bridge-r8499.mjs",
+      "sha256": "68eccb56ea5f48a210a5a9356aa9a6f9ae8b65d1f70e7fddc1dbf66b947dfdff"
+    },
+    {
+      "file": "tools/test-generation-modes-bridge-r84103.mjs",
+      "sha256": "18e6784c79dc22ccb458f7ab9c6f54fafc35317ff37da82e2221645d582eb0f3"
+    },
+    {
+      "file": "tools/test-image-fit-cooldown-r84173.mjs",
+      "sha256": "ba490f6f83551032967e3f130678d73fc9e0b7374cd61a17fde4254827d27da7"
+    },
+    {
+      "file": "tools/test-inbox-json-salvage-r84150.mjs",
+      "sha256": "5b93838f34803d7553c5e2aa1c319bb2bb1dcc2589d4aeaacd9215cfbb2bddeb"
+    },
+    {
+      "file": "tools/test-inbox-recovery-r84163.mjs",
+      "sha256": "4578ea598a83eae59bb633f8c5455a8587a6f2e4cecc9e1bc44f13d378dfb9cb"
+    },
+    {
+      "file": "tools/test-journal-book-r84174.mjs",
+      "sha256": "0fe6537caf8c37ea9372b398fa3a9542e334edcee16758f8b54617f874100a86"
+    },
+    {
+      "file": "tools/test-journal-extras-r84175.mjs",
+      "sha256": "44c33f0df57e0dc2178f35530d30842af60f81414eec3c4cbd328d5ad0d0c473"
+    },
+    {
+      "file": "tools/test-journal-image-r84176.mjs",
+      "sha256": "74a15bea02b45a5b340f6a52651ee36cb639d2e5aa70f60c099862c11bda6928"
+    },
+    {
+      "file": "tools/test-legacy-archive-draft-capacity.mjs",
+      "sha256": "a99278201e94e4f707299c9ebefdbf9293125e9433014ca11712781fff656d6a"
+    },
+    {
+      "file": "tools/test-legacy-archive-inherit-entry.mjs",
+      "sha256": "e22b92b47eda1128b49a1d634c173c7fb472c26edcd0b0d70ad8af167dab69ca"
+    },
+    {
+      "file": "tools/test-legacy-archive-partial-flow.mjs",
+      "sha256": "6030379a2e647e17feffb7d5d14b63cd77f320e35bc66da39f0ac6b4098c2361"
+    },
+    {
+      "file": "tools/test-legacy-archive-pending-save.mjs",
+      "sha256": "c77ea99c20ddd422a7f5b016d7484f623098b6158fc3c401107fc7dd55605a65"
+    },
+    {
+      "file": "tools/test-legacy-archive-resilience.mjs",
+      "sha256": "1725318af00e2d30442b5737e4b449a54e95d08169f9735987bb46a721a6b57e"
+    },
+    {
+      "file": "tools/test-legacy-butterfly-prompt-r84122.mjs",
+      "sha256": "22cd2e5d7a03befa98b808b856c7cd78aa9c0bd276543db9cc48ed696cdf982d"
+    },
+    {
+      "file": "tools/test-legacy-heart-firefly-upgrade-prompt.mjs",
+      "sha256": "e4e746c742da50f3fdccf820e46f242ab8e46886178737a7d839ba866eb7eba7"
+    },
+    {
+      "file": "tools/test-legacy-mail-art-coverage.mjs",
+      "sha256": "e7ec5e9f3e70929be7b9f62445d0dd00dfd57cb6499032220798757afc2ef2f9"
+    },
+    {
+      "file": "tools/test-legacy-mail-art-sources.mjs",
+      "sha256": "f45fd3b7fa0f9d2dc41fca5a3f75e394a6edc9f890d325b1d92fcfaaa130a586"
+    },
+    {
+      "file": "tools/test-legacy-overlay-click-routing.mjs",
+      "sha256": "af22327bd6be35ad18de9c35b1a97e20a65119ae3984f19bfa7a2883e17b9057"
+    },
+    {
+      "file": "tools/test-legacy-room-figure-local.mjs",
+      "sha256": "ef684d4fe3089b36c3f853ef3e556d764056055c9bbc707534437c1ccbbc770e"
+    },
+    {
+      "file": "tools/test-lenticular-r84169.mjs",
+      "sha256": "0672306166989055898cf9bbdf5e8312e838e03d8291288f3b5acf3938e431f4"
+    },
+    {
+      "file": "tools/test-letter-art-scenes-r84123.mjs",
+      "sha256": "ebbd23eb9480709452c34b3256c835d4b07dffa5a2354e4fda5304ff66c2f232"
+    },
+    {
+      "file": "tools/test-letter-face-r84162.mjs",
+      "sha256": "69f504e627b3ba7f19257ab80227160150c0a866e4c0a5fcedd2023b24873e44"
+    },
+    {
+      "file": "tools/test-letter-floor-override-r84165.mjs",
+      "sha256": "9f0f3aaebb442acb4ee5d92a8dfc2b6455fc9ea787d441ccf366aa198380938a"
+    },
+    {
+      "file": "tools/test-letter-room-r8483.mjs",
+      "sha256": "36b12ad54835320eb237cc6421c9c58115418ba17762a2beb7f6c2e6d19ad7e6"
+    },
+    {
+      "file": "tools/test-letter-skin-r84164.mjs",
+      "sha256": "c46d921f4125fbd3cac81786964f25836c099f47cbb148dcb766dd03f4248ea2"
+    },
+    {
+      "file": "tools/test-mail-identity-r8460.mjs",
+      "sha256": "6f693d1db004ecdf12ae6e88fe270f6e443cc69ac91fe24dec6ac151c5bf35a2"
+    },
+    {
+      "file": "tools/test-modes-bridge-r8498.mjs",
+      "sha256": "5ae811e7582b6fbd32b171ba56ca0ea8ac98f491ba9092b197b0a6df01350f9d"
+    },
+    {
+      "file": "tools/test-phone-journal-r8483.mjs",
+      "sha256": "1b00efcd9fd6129601e85c5f76ba80a73e75c2957e38302208e207b4524da523"
+    },
+    {
+      "file": "tools/test-profile-resume-r8494.mjs",
+      "sha256": "cd5e9b2246d1713b13815753ce8acee267b1537c645cf2c9fe56a8a991b32ba0"
+    },
+    {
+      "file": "tools/test-progress-visual-r84170.mjs",
+      "sha256": "6608bd69585dcfe8abec6a44b8bb451be371edfbcbf6b8a1f4cd9b19b9cee4d0"
+    },
+    {
+      "file": "tools/test-recovery-action-r8460.mjs",
+      "sha256": "f3f2e68b3f77231640ae54362dfe7c011f2f9b0d5e28b2a743eea59479b5c10b"
+    },
+    {
+      "file": "tools/test-recovery-actions-integration-r8460.mjs",
+      "sha256": "51f753d3969a6a304c5c910300e38d04bd2a88f6e7d07ff30e86ca2793a8866d"
+    },
+    {
+      "file": "tools/test-recovery-canonical-r8483.mjs",
+      "sha256": "940ef72c903cb1248de90f1040cc16086d50b9208c558bce095025b5b209ed9b"
+    },
+    {
+      "file": "tools/test-recovery-limits-r8481.mjs",
+      "sha256": "2a47d90f974bd4b4e65741f14a0f4c287f3562694a93b35aa2ceadb84159a534"
+    },
+    {
+      "file": "tools/test-recovery-r8483.mjs",
+      "sha256": "4e4452f7c5599b6363b6b7a92305b8fcbf9065566bd53b0d7c9caf0207c0312c"
+    },
+    {
+      "file": "tools/test-recovery-scope-r8460.mjs",
+      "sha256": "d9925f1c0072e522d7f578302fe8fa1e343dedde10a4f750e6e082bd9b9d629c"
+    },
+    {
+      "file": "tools/test-relaxed-guards-r84171.mjs",
+      "sha256": "c957f5c8fe344b3f1eb8bb5ff41278a4ba6bc95566d41051d3cb6683b13f1056"
+    },
+    {
+      "file": "tools/test-relay-edges-r84179.mjs",
+      "sha256": "8bf598f0dd9d5b08127fbbccbc1c31b79c110106cc2c49f541a77c2488d6bec8"
+    },
+    {
+      "file": "tools/test-relay-import-r84179.mjs",
+      "sha256": "5900d09de18e3d6207ac680ce7670d57f24e5e81eb374685442bab957a286da7"
+    },
+    {
+      "file": "tools/test-relay-integration-r84179.mjs",
+      "sha256": "fc49020597d6c8c0447bceeed04da4dd997ec48ad53099b2a7dc7591a0bba43e"
+    },
+    {
+      "file": "tools/test-relay-preparation-r84179.mjs",
+      "sha256": "9a29230cc0a4df8f0d7c29a2bf5f29f1071f3748efe2e63977c1f6cc43c9da6d"
+    },
+    {
+      "file": "tools/test-relay-storage-r84179.mjs",
+      "sha256": "04440373926677871a85962317181e57206d9ee25a6cbafb907a2592d76a639c"
+    },
+    {
+      "file": "tools/test-settings-listeners-r8496.mjs",
+      "sha256": "c8f667e87406a5bb59c0818b8875f6fe8f82eb527a62492df4a0a6ff21cfec45"
+    },
+    {
+      "file": "tools/test-small-fixes-r84177.mjs",
+      "sha256": "7b0f07703af3de4bcd18020ae1ec358878120d122b65fda5cd530b327fe9bc85"
+    },
+    {
+      "file": "tools/test-stored-batch-read-range-r84162.mjs",
+      "sha256": "cefb4ad7f44dd4a4e8d70c8d2857e6652dab6f9927a23df33e4464af4f8454ce"
+    },
+    {
+      "file": "tools/test-task-dismiss-r84160.mjs",
+      "sha256": "5c5cbdb8281a3a91c05397d1237a6f6f69030a44dee1e9fa4cbea224fafdeb58"
+    },
+    {
+      "file": "tools/test-ui-bridge-r8497.mjs",
+      "sha256": "e97fe2e1eae967f6720d57404c4702831c9e837d5a91e130f83980a68bbce1ce"
+    }
+  ],
+  "status": "passed",
+  "finishedAt": "2026-09-28T04:23:58.469Z",
+  "bundleSha256": "df3a411c4a25e90b16c55760ae404f44f8bfbb4f29ffc05ea13337b2c9388649",
+  "tests": {
+    "tests": 387,
+    "pass": 387,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0
+  }
+}

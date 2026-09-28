@@ -1,3 +1,4 @@
+import * as response_config from '../core/independentApiConfig.js';
 import * as output_budget from '../core/outputBudget.js';
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
@@ -46,7 +47,8 @@ export function extractBalancedJsonObjects(text) {
             }
         }
     }
-    return { candidates, hasUnclosedObject: depth > 0 && start >= 0 };
+    return { candidates, hasUnclosedObject: depth > 0 && start >= 0,
+        unclosedObject: depth > 0 && start >= 0 ? text.slice(start) : '' };
 }
 
 // Read only values actually present in a JSON prefix. Unlike a JSON repairer,
@@ -203,10 +205,62 @@ function collectInboxLetters(value, letters, seen) {
     letters.push(letter);
 }
 
+// An optional drawing before letters can be malformed even though the mail
+// fields after it are intact. Recognize only the selected object's root key;
+// quoted strings and nested examples cannot qualify another response object.
+function hasInboxRootField(text) {
+    let depth = 0, inString = false, escaped = false, stringStart = -1;
+    for (let i = 0; i < text.length; i += 1) {
+        const char = text[i];
+        if (inString) {
+            if (escaped) escaped = false;
+            else if (char === '\\') escaped = true;
+            else if (char === '"') {
+                inString = false;
+                if (depth === 1 && /^\s*:/.test(text.slice(i + 1))) {
+                    try { if (JSON.parse(text.slice(stringStart, i + 1)) === 'letters') return true; } catch {}
+                }
+            }
+        } else if (char === '"') { inString = true; stringStart = i; }
+        else if (char === '{' || char === '[') depth++;
+        else if (char === '}' || char === ']') depth--;
+    }
+    return false;
+}
+
+// Choose the last actual mailbox, never pool examples with the final answer.
+// Fences have independent boundaries, so unmatched braces in prose do not hide
+// their contents. An unrelated trailing brace cannot displace received letters.
+function inboxResponseCandidate(raw, selection = null) {
+    const text = response_config.finalResponseText(raw);
+    const choices = [];
+    const collect = (body, offset) => {
+        const { candidates, unclosedObject } = extractBalancedJsonObjects(body);
+        let cursor = 0;
+        for (const candidate of [...candidates, ...(unclosedObject ? [unclosedObject] : [])]) {
+            const index = body.indexOf(candidate, cursor);
+            if (index < 0) continue;
+            cursor = index + candidate.length;
+            let complete = false;
+            try { const parsed = JSON.parse(candidate); complete = !!parsed && typeof parsed === 'object' && !Array.isArray(parsed); } catch {}
+            // A later legal non-mail object is still the provider's final answer.
+            // Keep it for the inbox validator to reject, rather than using an example.
+            if (complete || hasInboxRootField(candidate)) choices.push({ text: candidate, position: offset + index, complete });
+        }
+    };
+    collect(text, 0);
+    for (const fence of text.matchAll(/(?:^|\n)[ \t]*```json[ \t]*\n([\s\S]*?)\n[ \t]*```[ \t]*(?=\n|$)/gi)) {
+        collect(fence[1], fence.index + fence[0].indexOf(fence[1]));
+    }
+    choices.sort((a, b) => b.position - a.position);
+    if (selection) selection.suppressedEarlierParsed = choices.some(choice => choice.complete && choice.position < choices[0].position);
+    return choices[0]?.text || '';
+}
+
 // Inbox-only. Reads already-closed letter fields from a broken reply.
 // Does not invent quotes, commas, or missing title/body text.
 export function salvageInboxLetters(raw) {
-    const text = typeof raw === 'string' ? raw : '';
+    const text = typeof raw === 'string' ? inboxResponseCandidate(raw) : '';
     if (!looksLikeInboxPayload(text)) return null;
     const letters = [];
     const seen = new Set();
@@ -233,9 +287,10 @@ export function salvageInboxLetters(raw) {
 // broken optional drawing must not hide a closed body from merge/preservation.
 // The original response is still incomplete; only its readable letters close.
 export function parseInboxRecoveryObject(raw) {
-    const parsed = parsePartialJsonObject(raw);
+    const candidate = inboxResponseCandidate(raw);
+    const parsed = parsePartialJsonObject(candidate);
     if (parsed.complete) return parsed;
-    const salvaged = salvageInboxLetters(raw);
+    const salvaged = salvageInboxLetters(candidate);
     if (!salvaged) return parsed;
     const readable = parsePartialJsonObject(JSON.stringify(salvaged));
     return { ...readable, complete: false,
@@ -252,14 +307,14 @@ export function jsonOutputBudgetSummary({ requestMaxTokens = 0, configuredMaxTok
     return `${segmentNote}；当前插件设置 ${configuredMax.toLocaleString()} tokens；实际可用额度由所选模型／渠道决定。`;
 }
 
-export function extractJson(raw, { reasoning = '', requestMaxTokens = 0, configuredMaxTokens = 0 } = {}) {
+export function extractJson(raw, { reasoning = '', requestMaxTokens = 0, configuredMaxTokens = 0, mode = '' } = {}) {
     if (raw != null && typeof raw !== 'string') {
         const error = jsonOutputError('RMT_RESPONSE_FORMAT', '连接返回的正文结构暂不支持，未取得可解析的最终正文；旧内容未改变。');
         error.retryable = false;
         error.retryableJson = false;
         throw error;
     }
-    let text = core_text.normalizeText(raw, core_constants.MAX_GENERATION_OUTPUT_CHARS).replace(/^\uFEFF/, '').trim();
+    let text = response_config.finalResponseText(core_text.normalizeText(raw, core_constants.MAX_GENERATION_OUTPUT_CHARS)).trim();
     const reasoningChars = core_text.normalizeText(reasoning, core_constants.MAX_GENERATION_OUTPUT_CHARS).length;
     const budgetSummary = jsonOutputBudgetSummary({ requestMaxTokens, configuredMaxTokens });
     if (!text) {
@@ -277,6 +332,15 @@ export function extractJson(raw, { reasoning = '', requestMaxTokens = 0, configu
         const parsed = JSON.parse(text);
         if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed;
     } catch {}
+    const inboxSelection = {};
+    const inboxCandidate = mode === 'inbox' ? inboxResponseCandidate(text, inboxSelection) : '';
+    if (inboxCandidate) {
+        try { const parsed = JSON.parse(inboxCandidate); if (parsed && typeof parsed === 'object') return parsed; } catch {}
+        const salvaged = salvageInboxLetters(inboxCandidate);
+        if (salvaged) return salvaged;
+        // Do not fall back to an earlier example when the answer has started.
+        text = inboxCandidate;
+    }
     const fences = [...text.matchAll(/(?:^|\n)[ \t]*```json[ \t]*\n([\s\S]*?)\n[ \t]*```[ \t]*(?=\n|$)/gi)];
     for (let i = fences.length - 1; i >= 0; i -= 1) {
         try {
@@ -295,11 +359,15 @@ export function extractJson(raw, { reasoning = '', requestMaxTokens = 0, configu
     const salvaged = salvageInboxLetters(text);
     if (salvaged) return salvaged;
     if (hasUnclosedObject) {
-        throw jsonOutputError(
+        const error = jsonOutputError(
             'RMT_JSON_TRUNCATED',
             `模型返回的 JSON 疑似被截断：已经出现“{”，但没有完整闭合。${budgetSummary} 如果本段实际上限低于当前插件设置，继续提高全局“最大输出”不会突破该功能自己的分段上限；可只重试这一项，或换用输出更稳定的模型。`,
             { contentChars: text.length, reasoningChars, requestMaxTokens: Math.floor(Number(requestMaxTokens) || 0), configuredMaxTokens: Math.floor(Number(configuredMaxTokens) || 0) },
         );
+        // This newly recognized final answer must be saved without turning the
+        // rejected earlier example into either success or another paid attempt.
+        if (inboxSelection.suppressedEarlierParsed) error.preserveInboxWithoutAutoContinue = true;
+        throw error;
     }
     if (!candidates.length) {
         throw jsonOutputError(

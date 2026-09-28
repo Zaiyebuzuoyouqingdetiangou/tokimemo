@@ -1,3 +1,12 @@
+当前版本：0.99.95-r84.180-generation-recovery。
+完整交付：hearttrace-upload.zip，单根 tokimemo-main/；保留构建工具和测试，后续继续修复请提供这份。
+可选精简安装：hearttrace-install.zip，运行代码与完整包逐文件一致，只省略开发和验证资料；不能替代后续开发基线。
+覆盖当前插件目录的代码文件，index.js 与 manifest.json 同级，保留聊天/档案/图片和本机数据，刷新页面后核对版本。本轮未上传 GitHub。
+仍在生成的任务先等待结束；尚未落盘的内容可先导出保留。不要清理站点数据或通过删除档案处理旧草稿。
+以下旧版本说明仅作历史，不代表本次安装身份。
+
+---
+
 本版 0.99.12-r84.57-reviewed：仅覆盖当前心迹回廊插件目录的代码文件，manifest.json 与 index.js 同级。保留聊天、档案与图片；不要清空浏览器数据。刷新后检查版本。实时通话另需镜译 beta/realtime-call，详见 MIRROR-TTS.md。
 
 当前本地候选：0.99.11 / 0.99.11-r84.56-local-repair

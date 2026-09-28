@@ -42,7 +42,7 @@ export function setTruncationContinueHandler(handler) {
     truncationContinueHandler = typeof handler === 'function' ? handler : null;
 }
 
-export async function recordRecoveryTruncation(options, raw, error) {
+export async function recordRecoveryTruncation(options, raw, error, { autoContinue = true } = {}) {
     const record = options?.[TOKEN] && requestTokens.get(options[TOKEN]);
     if (!record || error?.code !== 'RMT_JSON_TRUNCATED' || typeof raw !== 'string' || !raw.trim()) return false;
     if (raw.length > GENERATION_RECOVERY_LIMITS.segmentChars) {
@@ -74,12 +74,14 @@ export async function recordRecoveryTruncation(options, raw, error) {
     error.retryable = false;
     error.safeToDisplay = true;
     error.safeUserMessage = record.handle.durable
-        ? '本段正文写到一半。已保留写好的部分，并会自动接着补；也可以在任务中心点“继续生成”。'
-        : record.handle.pageOnly ? '本段正文写到一半，草稿暂存在当前页面。请勿刷新；会自动接着补，也可以点“继续生成”。'
+        ? autoContinue ? '本段正文写到一半。已保留写好的部分，并会自动接着补；也可以在任务中心点“继续生成”。'
+            : '本段正文未写完，原始回复已保留；请在任务中心点“继续生成”补齐。'
+        : record.handle.pageOnly ? autoContinue ? '本段正文写到一半，草稿暂存在当前页面。请勿刷新；会自动接着补，也可以点“继续生成”。'
+            : '本段正文未写完，原始回复暂存在当前页面。请勿刷新；可点“继续生成”补齐。'
         : '本段正文未写完，但浏览器没有成功保存这段草稿；旧内容仍在，请检查本地存储后重试。';
     error.message = error.safeUserMessage;
     await publishGenerationRecoveryProgress(record.handle);
-    if (record.handle.durable && typeof truncationContinueHandler === 'function') {
+    if (autoContinue && record.handle.durable && typeof truncationContinueHandler === 'function') {
         const journal = record.handle.journal;
         const summary = generationRecoverySummary(journal);
         if (summary?.canContinue && summary.mode && journal?.draftId) {

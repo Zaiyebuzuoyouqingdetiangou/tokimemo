@@ -2,6 +2,7 @@
 import * as archive_groups from './archiveBridge.js';
 // C-3c（r84.101）：别名沿用 archive_backupStore，函数体一字不改；实际指向 core 层的桥，不再 import archive 层。
 import * as archive_backupStore from './archiveBridge.js';
+import * as relay_policy from './archiveRelayPolicy.js';
 // C-3c（r84.101）：别名沿用 archive_repository，函数体一字不改；实际指向 core 层的桥，不再 import archive 层。
 import * as archive_repository from './archiveBridge.js';
 // C-3c（r84.101）：别名沿用 archive_snapshots，函数体一字不改；实际指向 core 层的桥，不再 import archive 层。
@@ -220,6 +221,10 @@ async function saveImportedMemoryOperation(context, memoryBank, expectedChatId =
     const draftSource = cloneCacheValue(participantCache);
     for (const mode of Object.values(core_constants.MODE)) retainLegacyGenerationDraft(draftSource, mode);
     const savedDrafts = draftSource[GENERATION_DRAFTS_CACHE_KEY];
+    // These are exact origin-chat snapshots, not generated sessions. They must
+    // survive independently of whether any completed mode exists, including a
+    // rebuild that intentionally clears the current generated modes.
+    const savedRelayDrafts = draftSource.__relayPreservedDraftsV1;
     if (options.participantRegeneration) assertReplacementInCache(participantCache, previousMemory,
         options.participantRegeneration, '');
     let preservedCache = null;
@@ -313,6 +318,13 @@ async function saveImportedMemoryOperation(context, memoryBank, expectedChatId =
         }
         preservedCache[GENERATION_DRAFTS_CACHE_KEY] = cloneCacheValue(savedDrafts);
     }
+    if (savedRelayDrafts) {
+        if (!preservedCache) {
+            preservedCache = { chatId: expectedChatId, archiveRevision: stagedMemory.archiveRevision };
+            stampCacheCommit(preservedCache, initialScope);
+        }
+        preservedCache.__relayPreservedDraftsV1 ||= cloneCacheValue(savedRelayDrafts);
+    }
 
     const storedCache = preservedCache ? await prepareCacheBackupValue(preservedCache) : null;
     currentContext = core_context.currentCharacterGuard();
@@ -330,7 +342,7 @@ async function saveImportedMemoryOperation(context, memoryBank, expectedChatId =
     }
     options.assertTaskCurrent?.();
     await archive_backupStore.replaceArchiveBackup(backupEntry, stagedMemory, storedCache, expectedState, {
-        ...((currentRoster || savedVersions.length || savedDrafts) && expectedState.present === true
+        ...((currentRoster || savedVersions.length || savedDrafts || savedRelayDrafts) && expectedState.present === true
             && participantBackup?.archiveRevision === expectedState.revision
             ? { expectedCacheOrder: cacheOrderValue(participantBackup.cache), comparePreviousCache: true } : {}),
         ...(typeof options.assertTaskCurrent === 'function' || options.expectedTaskOrigin
@@ -525,6 +537,28 @@ export async function ensureCurrentArchiveBackup(context = null) {
         }
         const backupRecord = backupState.record;
         const backupRevision = core_text.normalizeText(backupRecord?.archiveRevision, 240);
+        // The old member remains readable, but opening it must never enter the
+        // normal draft/participant reconciliation writer (or prevent handback).
+        if (backupRecord?.memory && relay_policy.relayReadOnly(backupEntry, backupState.relay)) {
+            const recoveredCache = backupRecord.cache
+                ? await hydrateBackupCacheValue(backupRecord.cache, expectedChatId, backupRevision) : null;
+            try { currentContext = core_context.currentCharacterGuard(); } catch { return false; }
+            if (!originalMirrorStillPresent(currentContext)) return false;
+            const scope = cacheScopeFromContext(currentContext);
+            currentContext.chatMetadata[core_constants.MEMORY_KEY] = cloneCacheValue(backupRecord.memory);
+            runtimeState.pendingCompressedCacheWrites.delete(scope);
+            if (runtimeState.cachePersistTimers.has(scope)) clearTimeout(runtimeState.cachePersistTimers.get(scope));
+            runtimeState.cachePersistTimers.delete(scope);
+            if (recoveredCache) {
+                rememberRuntimeSessionCache(scope, recoveredCache);
+                currentContext.chatMetadata[core_constants.CACHE_KEY] = cloneCacheValue(backupRecord.cache);
+            } else {
+                runtimeState.runtimeSessionCache.delete(scope);
+                delete currentContext.chatMetadata[core_constants.CACHE_KEY];
+            }
+            // This is a reading mirror, not a new canonical content commit.
+            return true;
+        }
         // The awaited IndexedDB commit is canonical. If the page closed before the host's
         // debounced metadata mirror flushed, reopen by promoting the newer canonical memory
         // back into the still-exact chat window. Revisions are opaque identities, so wall-clock

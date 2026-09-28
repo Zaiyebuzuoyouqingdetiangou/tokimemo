@@ -325,7 +325,17 @@ function advanceModeWriteFence(cache, mode) {
     return signature;
 }
 
-function recoveryJournalForAdmission(cache, mode, options) {
+function isPreservedRelayJournal(journal, bank) {
+    const chatId = core_context.comparableChatId(bank?.chatId);
+    const originChatId = core_context.comparableChatId(journal?.identity?.chatId);
+    const marker = bank?.archiveRelayV1, checkpoints = bank?.relaySourceCheckpointsV1;
+    return !!chatId && !!originChatId && originChatId !== chatId
+        && marker?.version === 1 && typeof marker.lineageId === 'string' && !!marker.lineageId
+        && Number.isSafeInteger(marker.epoch) && marker.epoch >= 1 && checkpoints?.version === 1
+        && Object.hasOwn(checkpoints.chats || {}, chatId) && Object.hasOwn(checkpoints.chats || {}, originChatId);
+}
+
+function recoveryJournalForAdmission(cache, mode, options, bank) {
     const candidates = Object.entries(generationDraftRecords(cache)).filter(([draftId, record]) => record.status === 'open'
         && record.journal?.identity?.mode === mode && (!options.draftId || draftId === options.draftId)
         && (!options.pageId || (record.journal.pageId || recoveryPageForVersion(mode, record.journal.operation)) === options.pageId))
@@ -333,7 +343,12 @@ function recoveryJournalForAdmission(cache, mode, options) {
     const legacy = cache?.[generation_recovery.GENERATION_RECOVERY_CACHE_KEY]?.[mode];
     if (legacy && !recoveryCleared(cache, mode) && (!options.draftId || recoveryDraftId(legacy, mode) === options.draftId)
         && (!options.pageId || (legacy.pageId || recoveryPageForVersion(mode, legacy.operation)) === options.pageId)) candidates.push(legacy);
-    return candidates.sort((left, right) => (right.updatedAt || right.createdAt || 0) - (left.updatedAt || left.createdAt || 0))[0] || null;
+    // A deliberately transported journal is inert in the receiving chat. It is
+    // still available under its original identity for export/handback; only a
+    // normal NEW task ignores it. Explicit retries and same-chat source changes
+    // must still reach the existing recovery identity checks below.
+    return candidates.filter(journal => options.draftId || !isPreservedRelayJournal(journal, bank))
+        .sort((left, right) => (right.updatedAt || right.createdAt || 0) - (left.updatedAt || left.createdAt || 0))[0] || null;
 }
 
 export async function claimLiveModeGeneration(mode, context = core_context.currentCharacterGuard(), memoryBank = null, options = {}) {
@@ -344,7 +359,7 @@ export async function claimLiveModeGeneration(mode, context = core_context.curre
     try { await ensureCacheHydrated(context); } catch {}
     // Check the raw retained journal before a changed character makes the normal
     // identity-filtered loader hide it and before advancing any write fence.
-    const rawRecovery = recoveryJournalForAdmission(getCache(context), mode, options);
+    const rawRecovery = recoveryJournalForAdmission(getCache(context), mode, options, bank);
     await recovery_source.assertRecoverySourcePolicy(rawRecovery, context, core_context.captureTaskOrigin(context, bank.archiveRevision));
     const scope = cacheScopeFromContext(context);
     const entry = archiveBackupEntryForContext(context, bank);

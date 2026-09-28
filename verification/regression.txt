@@ -1,5 +1,8 @@
-r84.169 — final full suite: 321 tests, 321 passed, 0 failed, 0 skipped.
-Node v24.19.0; production VM fixtures.
-12 new lenticular regression tests; DOM interaction checks passed.
-Browser rendering / real ST / TT / iPhone were not tested.
-Full raw logs and prompt proof are in the separately delivered r84.169 evidence ZIP.
+r84.179 — pre-package rounds 1 and 2: each 387 tests, 387 passed, 0 failed, 0 cancelled, 0 skipped.
+Original 355 tests unchanged; 32 new relay tests. All 69 existing test files byte-identical to the uploaded r84.178 ZIP.
+Node v24.19.0; VM fixtures, Happy DOM and simulated IndexedDB transactions.
+Each round: two identical builds, 420 JS/MJS syntax checks, zero undefined bindings/premature reads/undefined names; refactor guard and simulated DOM pass.
+274 named Prompt declarations have equal hashes; full generation/ and modes/ files unchanged.
+Initial preflight failures were fixed without changing old expectations; original logs retained in r84179-preflight/.
+Round 3 runs from a fresh extraction of the final installation ZIP; see the separately delivered r84.179 report and evidence ZIP. The final ZIP is not modified after that check.
+Native browser/IndexedDB, real SillyTavern, TT, iPhone and real model/provider requests were not tested.

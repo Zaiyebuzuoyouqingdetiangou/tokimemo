@@ -1,4 +1,5 @@
 import * as source_read from './sourceReadGuard.js';
+import * as backup_store from './backupStore.js';
 import * as core_cache from '../core/cache.js';
 import * as core_constants from '../core/constants.js';
 import * as core_context from '../core/context.js';
@@ -69,6 +70,7 @@ async function rewriteCurrentArchiveVerdictOperation(taskTrace, options = {}) {
     const context = core_context.currentCharacterGuard();
     const existing = getImportedMemory(context);
     if (!existing) return { status: 'blocked' };
+    await backup_store.assertArchiveRelayWritable(core_cache.archiveBackupEntryForContext(context, existing), existing);
     const memory = structuredClone(existing);
     const origin = core_context.captureTaskOrigin(context, memory.archiveRevision);
     core_requestCoordinator.bindLogicalGenerationTask(options.logicalTask, origin);

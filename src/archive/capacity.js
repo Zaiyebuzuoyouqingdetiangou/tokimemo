@@ -4,14 +4,18 @@ import * as core_constants from '../core/constants.js';
 import * as core_text from '../core/text.js';
 import * as story_chronology from '../core/storyChronology.js';
 
-function importedMemoryStableKey(item) {
+function importedMemoryStableKey(item, homeChatId = '') {
     const title = core_text.normalizeText(item?.title, 100).replace(/\s+/g, '').toLowerCase();
     const summary = core_text.normalizeText(item?.summary, 260).replace(/\s+/g, ' ').toLowerCase();
     const anchors = core_text.cleanArray(item?.anchors, 8, 120).map(value => value.replace(/\s+/g, '').toLowerCase()).sort().join('|');
     const sourceKind = core_text.normalizeText(item?.sourceKind, 80) || 'chat';
     const messageRange = sourceKind.startsWith('chat') ? `${Number(item?.messageStart) || 0}-${Number(item?.messageEnd) || 0}` : '';
     const external = core_text.cleanArray(item?.externalSourceIds, 12, 100).sort().join(',');
-    return `${sourceKind}|${messageRange}|${external}|${title}|${anchors || summary}`;
+    // r84.178：跨聊天连续档案的第一步。记忆来自「别的聊天」时，把来源聊天也算进去，
+    // 两个聊天里楼层号相同的片段不会被当成重复。来自本聊天（或没有标来源）时和以前完全一样。
+    const source = core_text.normalizeText(item?.sourceChatId, 240);
+    const lane = source && homeChatId && source !== homeChatId ? `${source}#` : '';
+    return `${lane}${sourceKind}|${messageRange}|${external}|${title}|${anchors || summary}`;
 }
 
 export function isMemoryLocked(item) {
@@ -88,15 +92,17 @@ export function admitArchiveMemories(existingHot, fresh, existingCold = [], {
     maxHot = core_constants.MAX_STORED_MEMORY_ITEMS,
     maxCold = core_constants.MAX_STORED_MEMORY_ITEMS,
     maxEvict = core_constants.MAX_ROLLING_EVICT_PER_BATCH,
+    homeChatId = '',
 } = {}) {
+    const keyOf = item => importedMemoryStableKey(item, homeChatId);
     const hot = (Array.isArray(existingHot) ? existingHot : []).map(item => structuredClone(item));
-    const seen = new Set(hot.map(importedMemoryStableKey));
-    for (const item of Array.isArray(existingCold) ? existingCold : []) seen.add(importedMemoryStableKey(item));
+    const seen = new Set(hot.map(keyOf));
+    for (const item of Array.isArray(existingCold) ? existingCold : []) seen.add(keyOf(item));
     const unique = [];
     for (const value of Array.isArray(fresh) ? fresh : []) {
         const item = structuredClone(value);
         delete item.id;
-        const key = importedMemoryStableKey(item);
+        const key = keyOf(item);
         if (seen.has(key)) continue;
         seen.add(key);
         unique.push(item);

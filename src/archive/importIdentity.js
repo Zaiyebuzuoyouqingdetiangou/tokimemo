@@ -140,6 +140,6 @@ export function progressWorldInfo(worldInfo) {
     return { ...structuredClone(worldInfo), entries: (worldInfo.entries || []).filter(row => !row.historySource).map(row => structuredClone(row)) };
 }
 
-export function admitArchiveBatch(existingMemories, fresh, existingCold = []) {
-    return archive_capacity.admitArchiveMemories(existingMemories, fresh, existingCold);
+export function admitArchiveBatch(existingMemories, fresh, existingCold = [], { homeChatId = '' } = {}) {
+    return archive_capacity.admitArchiveMemories(existingMemories, fresh, existingCold, { homeChatId });
 }

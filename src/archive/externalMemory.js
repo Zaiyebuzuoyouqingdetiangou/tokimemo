@@ -58,14 +58,18 @@ export function archivedChatFingerprint(memoryBank) {
     return match?.[1] || '';
 }
 
-export function importedMemoryStableKey(item) {
+export function importedMemoryStableKey(item, homeChatId = '') {
     const title = core_text.normalizeText(item?.title, 100).replace(/\s+/g, '').toLowerCase();
     const summary = core_text.normalizeText(item?.summary, 260).replace(/\s+/g, ' ').toLowerCase();
     const anchors = core_text.cleanArray(item?.anchors, 8, 120).map(value => value.replace(/\s+/g, '').toLowerCase()).sort().join('|');
     const sourceKind = core_text.normalizeText(item?.sourceKind, 80) || 'chat';
     const messageRange = sourceKind.startsWith('chat') ? `${Number(item?.messageStart) || 0}-${Number(item?.messageEnd) || 0}` : '';
     const external = core_text.cleanArray(item?.externalSourceIds, 12, 100).sort().join(',');
-    return `${sourceKind}|${messageRange}|${external}|${title}|${anchors || summary}`;
+    // r84.178：跨聊天连续档案的第一步。记忆来自「别的聊天」时，把来源聊天也算进去，
+    // 两个聊天里楼层号相同的片段不会被当成重复。来自本聊天（或没有标来源）时和以前完全一样。
+    const source = core_text.normalizeText(item?.sourceChatId, 240);
+    const lane = source && homeChatId && source !== homeChatId ? `${source}#` : '';
+    return `${lane}${sourceKind}|${messageRange}|${external}|${title}|${anchors || summary}`;
 }
 
 export function appendImportedMemoriesStable(existingMemories, freshMemories, limit = core_constants.MAX_STORED_MEMORY_ITEMS) {
