@@ -54,7 +54,7 @@ const SAFE_ERROR_CODE_MESSAGES = Object.freeze({
     RMT_RECOVERY_SOURCE_CHANGED: '角色卡、Persona 或来源选择与原任务不同；原成果与草稿保留，未发起请求。',
     RMT_ARCHIVE_DRAFT_READ: '本机草稿读取未完成，不能认定没有记录；原记录未修改，本次没有请求模型。请重新读取，不要清数据或重做。',
     RMT_ARCHIVE_DRAFT_CONFLICT: '本机草稿版本已变化；页面成果与本机记录均保留，没有覆盖或重新生成。请先导出本页成果，再重新打开原聊天读取。',
-    RMT_ARCHIVE_DRAFT_STORAGE: '整理草稿尚未确认保存到本机；成功分段仍保留在当前页面，请先导出，勿刷新。',
+    RMT_ARCHIVE_DRAFT_STORAGE: '本批草稿尚未确认保存到本机；请点“保存本页草稿（不生成）”重试。之前已保存的档案仍保留；若仍失败，请先导出，勿刷新。',
     RMT_ARCHIVE_DRAFT_CAPACITY: '整理草稿未能保存，已停止后续请求，原记录保留。请先导出成果，保存成功前不要刷新。',
 
     ...core_backupDiagnostics.BACKUP_FAILURE_MESSAGES,

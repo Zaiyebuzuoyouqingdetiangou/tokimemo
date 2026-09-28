@@ -38,7 +38,7 @@ function storageFailure(phase = 'save', cause = null) {
     if (cause?.code === 'RMT_LOCAL_CAS') {
         return text.safeUserError('本机草稿正被另一页面或操作写入，本次没有覆盖任何记录；已停止后续模型请求，成功分段仍在当前页面。请重新打开本页后重试保存。', 'RMT_ARCHIVE_DRAFT_STORAGE');
     }
-    return text.safeUserError('未能把本次整理草稿保存到本机；已停止后续模型请求，成功分段仍在当前页面。请先导出，保存成功前不要刷新。', 'RMT_ARCHIVE_DRAFT_STORAGE');
+    return text.safeUserError('本批草稿尚未确认保存到本机；请点“保存本页草稿（不生成）”重试。之前已保存的档案仍保留；若仍失败，请先导出，保存成功前不要刷新。', 'RMT_ARCHIVE_DRAFT_STORAGE');
 }
 function capacityFailure() {
     return text.safeUserError('整理草稿未能保存，已停止后续请求，原记录保留。请先导出成果，保存成功前不要刷新。', 'RMT_ARCHIVE_DRAFT_CAPACITY');
@@ -52,6 +52,7 @@ function conflictFailure() {
 }
 function confirmCounts(state, rows) {
     state.completed = new Map(rows.map(([id, entry]) => [id, recovery.generationRecoverySummary(entry.journal)?.completed || 0]));
+    state.confirmedTasks = new Map(rows.map(([id, entry]) => [id, JSON.stringify([entry.sourceHash, entry.journal?.createdAt])]));
 }
 function scopeRows(key) {
     return [...drafts].filter(([id]) => id === key || id.startsWith(`${key}:paused:`)).map(([id,entry]) => [id, { ...entry, active: false, durable: true }]);
@@ -96,7 +97,7 @@ function scheduleSave(key) { void saveScope(key).catch(() => {}); }
 export function archiveRecoveryDraftPlanExceedsCapacity() { return false; }
 export async function flushArchiveRecovery(origin, operation = 'import') {
     const key = draftKey(origin, operation); if (!key) return false;
-    if (lanes.has(key)) await lanes.get(key);
+    if (lanes.has(key)) await lanes.get(key).catch(() => {});
     return saveScope(key);
 }
 export function resetArchiveRecoveryMemoryForTests() { drafts.clear(); scopes.clear(); loaded.clear(); lanes.clear(); hydrationLanes.clear(); }
@@ -253,9 +254,14 @@ export function archiveRecoverySummary(origin, operation = 'import', { includeAr
     const entry = drafts.get(draftKey(origin, operation));
     const retained = listArchiveRecoveryDrafts(origin, operation);
     if (!entry) return includeArchived && retained.length ? { operation, drafts: retained, onlyArchivedDrafts: true, completed: 0,
-        notice: '另起任务前的草稿仍保留，可以打开查看；不会自动请求模型。' } : null;
+        pageOnly: retained.some(row => !row.durable),
+        notice: retained.some(row => !row.durable) ? '旧草稿仍在本页，尚未确认保存；请点“保存本页草稿（不生成）”重试，或先导出，勿刷新。'
+            : '另起任务前的草稿仍保留，可以打开查看；不会自动请求模型。' } : null;
     const summary = recovery.generationRecoverySummary(entry.journal);
-    const savedCompleted = scopes.get(draftKey(origin, operation))?.completed?.get(draftKey(origin, operation)) || 0;
+    const key = draftKey(origin, operation), state = scopes.get(key);
+    const sameSavedTask = state?.confirmedTasks?.get(key) === JSON.stringify([entry.sourceHash, entry.journal?.createdAt]);
+    const savedCompleted = sameSavedTask ? state?.completed?.get(key) || 0 : 0;
+    const completed = summary?.completed || 0;
     return { operation, fullRebuild: entry.fullRebuild, profileOnly: entry.stage === 'profile-only',
         awaitingCommit: entry.stage === 'awaiting-commit', committedRevision: entry.committedRevision || '',
         savedCompleted, completed: summary?.completed || 0,
@@ -267,7 +273,8 @@ export function archiveRecoverySummary(origin, operation = 'import', { includeAr
         canRetry: entry.stage === 'profile-only' || !!summary?.canRetry,
         failureCode: scopes.get(draftKey(origin, operation))?.lastFailureCode || summary?.failureCode || '', drafts: retained, onlyArchivedDrafts: ['profile-result','archive-result'].includes(entry.stage), pageOnly: entry.durable !== true, notice: entry.durable === true
             ? '成功分段与原任务输入已保存到本机；刷新后可继续未完成部分，不重做已保存分段。换设备前请导出。'
-            : `本机已确认保存 ${savedCompleted} 个成功分段；当前页面共有 ${summary?.completed || 0} 个。尚未确认保存的成果请先导出，不要刷新。` };
+            : completed ? `本批当前页面有 ${completed} 个成功分段，其中 ${savedCompleted} 个已确认保存到本机。请点“保存本页草稿（不生成）”；保存确认前可先导出，勿刷新。`
+                : '本批任务输入尚未确认保存，暂未产生新的成功分段；之前已保存的档案与旧草稿仍保留。请点“保存本页草稿（不生成）”重试。' };
 }
 
 // Called only after a real saved bank of exactly this revision is observed.

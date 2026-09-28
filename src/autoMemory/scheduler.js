@@ -340,7 +340,7 @@ async function runHostRound() {
                 startModule: next => runModule(next, persist, core_context.currentCharacterGuard()),
                 resumeModule: current => runModule(current, persist, core_context.currentCharacterGuard()),
             });
-            if (['arm', 'noop', 'drawn', 'reuse', 'failed', 'wait'].includes(result.action)) {
+            if (['arm', 'noop', 'drawn', 'reuse', 'settled', 'failed', 'wait'].includes(result.action)) {
                 handledFloors.set(scope, floor);
             }
             if (result.action === 'drawn' || result.action === 'reuse') stampDrawSource(context, result.drawId);

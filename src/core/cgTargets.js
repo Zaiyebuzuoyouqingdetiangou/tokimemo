@@ -3,12 +3,13 @@ import * as constants from './constants.js';
 import * as text from './text.js';
 import * as photoshoots from './photoshootContract.js';
 import * as cg_image_patch from './cgImagePatch.js';
+import * as song_cover from './themeSongCover.js';
 
 const PREFIX = 'rmtcg2';
-const KINDS = new Set(['heart-voice', 'heart-scenario', 'heart-photoshoot', 'ending-ending', 'ending-epilogue', 'ending-epilogue-scene', 'ending-confession', 'heart-language', 'heart-portrait', 'heart-firefly', 'past-life-dossier', 'bedtime-chapter', 'butterfly-node']);
+const KINDS = new Set(['heart-voice', 'heart-scenario', 'heart-photoshoot', 'ending-ending', 'ending-epilogue', 'ending-epilogue-scene', 'ending-confession', 'heart-language', 'heart-portrait', 'heart-firefly', 'past-life-dossier', 'bedtime-chapter', 'butterfly-node', 'song-cover']);
 const SLOT_BY_KIND = Object.freeze({
     'heart-voice': 'voice', 'heart-scenario': 'scenario', 'heart-photoshoot': 'grid', 'ending-ending': 'ending', 'ending-epilogue': 'epilogue', 'heart-language': 'language',
-    'ending-confession': 'confession', 'heart-portrait': 'portrait', 'heart-firefly': 'habitat', 'butterfly-node': 'scene',
+    'ending-confession': 'confession', 'heart-portrait': 'portrait', 'heart-firefly': 'habitat', 'butterfly-node': 'scene', 'song-cover': 'cover',
 });
 
 function encode(value) { return encodeURIComponent(String(value)); }
@@ -139,6 +140,18 @@ export function cgTargetInSession(mode, session, itemId) {
     }
     if (descriptor.kind.startsWith('heart-') && mode !== constants.MODE.HEART) return null;
     if (descriptor.kind.startsWith('ending-') && mode !== constants.MODE.ENDING) return null;
+    if (descriptor.kind === 'song-cover') {
+        if (mode !== constants.MODE.THEME_SONG) return null;
+        const owner = (session?.songs || []).find(song => safeId(song?.id) === descriptor.containerId);
+        if (!owner) return null;
+        const sourceText = song_cover.songCoverSource(owner);
+        const scene = song_cover.songCoverDraft(owner);
+        const item = facade({ descriptor, visualRef: attachVisual(owner, 'visual'), sourceHash: hash(sourceText),
+            title: owner.title || '角色印象曲', subtitle: '专辑封面', scene, sourceText, composed: scene });
+        item.cgLayout = 'song-cover'; item.cgOrientation = 'portrait';
+        item.cgPortrait = owner.voice !== 'duet' && owner.voice !== 'ensemble';
+        return item;
+    }
     if (descriptor.kind === 'heart-voice' || descriptor.kind === 'heart-scenario') {
         const isVoice = descriptor.kind === 'heart-voice';
         const rows = isVoice ? session?.voiceDramas : session?.scenarioDramas;
@@ -247,7 +260,8 @@ export function resolveCgTargetDescriptor(session, descriptor) {
     if (!normalizedDescriptor) return null;
     const kind = normalizedDescriptor.kind;
     const mode = kind.startsWith('ending-') ? constants.MODE.ENDING : kind === 'past-life-dossier' ? constants.MODE.PAST_LIVES
-        : kind === 'bedtime-chapter' ? constants.MODE.BEDTIME : kind === 'butterfly-node' ? constants.MODE.BUTTERFLY : constants.MODE.HEART;
+        : kind === 'bedtime-chapter' ? constants.MODE.BEDTIME : kind === 'butterfly-node' ? constants.MODE.BUTTERFLY
+            : kind === 'song-cover' ? constants.MODE.THEME_SONG : constants.MODE.HEART;
     const item = cgTargetInSession(mode, session, cgTargetItemId(normalizedDescriptor));
     if (!item || (normalizedDescriptor.sourceHash && item.sourceHash !== normalizedDescriptor.sourceHash)) return null;
     return { mode, session, item, descriptor: item.__rmtCgDescriptor };

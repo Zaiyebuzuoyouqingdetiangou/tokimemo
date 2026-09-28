@@ -233,6 +233,18 @@ function parseList(value, parseItem, max) {
     return rows;
 }
 
+// r84.183：抽签记录只用来算「最近抽到谁」和冷却。以前从不删旧记录，而读取时最多只认 40 条，
+// 所以第 41 次抽签起整份自动留忆计划会被判成损坏、再也不能生成。现在只保留最近的 40 条（当前这轮一定保留）。
+export const DRAW_TICKET_KEEP = 40;
+export function keepRecentDrawTickets(tickets, activeId = '') {
+    const rows = Array.isArray(tickets) ? tickets : [];
+    if (rows.length <= DRAW_TICKET_KEEP) return rows;
+    const recent = rows.slice(-DRAW_TICKET_KEEP);
+    if (!activeId || recent.some(row => row?.id === activeId)) return recent;
+    const active = rows.find(row => row?.id === activeId);
+    return active ? [...recent.slice(1), active] : recent;
+}
+
 export function parseAutoMemorySnapshot(value) {
     exactKeys(value, SNAPSHOT_KEYS);
     const plan = parseAutoMemoryPlan(value.plan);
@@ -242,7 +254,8 @@ export function parseAutoMemorySnapshot(value) {
     if (modulePlan && plan.activeDrawTicketId && modulePlan.drawId !== plan.activeDrawTicketId) throw corrupt();
     return {
         plan,
-        revealRecords: parseList(value.revealRecords, parseRevealRecord, 200),
+        // r84.183：揭晓记录对应聊天里每一封信，不能删；以前 200 封后整份计划被判损坏。不再按封数设上限。
+        revealRecords: parseList(value.revealRecords, parseRevealRecord, Number.MAX_SAFE_INTEGER),
         drawTickets,
         modulePlan,
     };

@@ -5,7 +5,7 @@ import * as constants from '../core/constants.js';
 import * as text from '../core/text.js';
 import { state as runtimeState } from '../core/state.js';
 
-const KIND_MODE = [['heart', 'heart'], ['ending', 'ending'], ['past-life', 'pastLives'], ['bedtime', 'bedtime'], ['butterfly', 'butterfly']];
+const KIND_MODE = [['heart', 'heart'], ['ending', 'ending'], ['past-life', 'pastLives'], ['bedtime', 'bedtime'], ['butterfly', 'butterfly'], ['song-cover', 'themeSong']];
 export function clipModeForKind(kind) { return KIND_MODE.find(([prefix]) => String(kind || '').startsWith(prefix))?.[1] || ''; }
 
 export function clipPayload({ mode = '', id = '', title = '', url = '', body = '' } = {}) {
