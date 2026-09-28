@@ -1,16 +1,16 @@
 {
   "version": "0.99.93",
-  "build": "0.99.93-r84.175-journal-extras",
+  "build": "0.99.93-r84.177-small-fixes",
   "baseline": "Prior delivered r84.168 complete hearttrace-upload.zip",
   "baselineZipSHA256": "3aa711d6acc61814c5aea174432f0783cf78bfe7802b57dc20d1415e34778e4b",
-  "syntaxFiles": 401,
+  "syntaxFiles": 404,
   "syntaxExit": 0,
   "bundleModules": 291,
-  "bundleSha256": "b30b3efad98eefa6b17a9ac852eac07a5873c1c60de868b03b8795654874054e",
+  "bundleSha256": "80453a928ec0beaf123f1d9d2a8fb5697546caf4ee56a515eb264933b94897c9",
   "bundleRebuildIdentical": true,
   "sourceSha256": "cfdded0fee7fb904b7fa47ddd40c1817fdab7737b4bec056ea640611d6410782",
-  "tests": 343,
-  "pass": 343,
+  "tests": 350,
+  "pass": 350,
   "fail": 0,
   "skipped": 0,
   "regressionTests": 12,
@@ -33,7 +33,7 @@
     "Durable origin/write-fence and local edit-revision checks reject stale saves.",
     "Existing past-lives data capacity/readability contract remains unchanged and is checked before pairing commits."
   ],
-  "testedEnvironment": "343 Node tests (Node 22). Journal page exercised in Chromium with real IndexedDB (quote, layout, clip). Annotation requests not sent to a real model. No real SillyTavern, iPhone or TT.",
+  "testedEnvironment": "350 Node tests (Node 22). Credential storage checked in Chromium with real IndexedDB. No WebKit; TT behaviour inferred.",
   "refactorGuard": "Intended changes only. Re-snapshotted.",
   "finalZipVerification": "See separately delivered evidence: final complete ZIP extraction, per-file hash identity, deterministic rebuild, targeted tests and guard check.",
   "unavailableChecks": [
@@ -43,5 +43,5 @@
     "Independent reviewer/security service."
   ],
   "githubWrite": "Not pushed this feature round.",
-  "baseCommit": "r84.174 delivery"
+  "baseCommit": "r84.176 delivery"
 }

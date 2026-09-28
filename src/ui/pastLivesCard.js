@@ -54,7 +54,7 @@ function openPicker(root, entries, selected, commit, onClose) {
         const visible = entries.map((entry, index) => ({ ...entry, index })).filter(entry => (!filter.value || entry.reference.mode === filter.value)
             && [entry.title, entry.label, ...entry.sharedMemoryIds].join(' ').toLocaleLowerCase().includes(query));
         status.textContent = entries.length ? visible.length ? '' : '没有匹配的画面' : '今生还没留下画面。先在其他模块保存一张图，再来挑选。';
-        grid.innerHTML = visible.map(entry => `<button type="button" class="rmt-card-choice" data-picker-index="${entry.index}" aria-pressed="${JSON.stringify(entry.reference) === JSON.stringify(selected)}"><span class="rmt-card-choice-picture"><img src="${esc(entry.image.url)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer"></span><b>${esc(entry.title)}</b><small>${esc(entry.label)}${entry.sourceLabel ? ' · ' + esc(entry.sourceLabel) : ''}</small>${entry.sharedMemoryIds.length ? `<span class="rmt-card-recommend">推荐 · 与本篇回响同源 ${esc(entry.sharedMemoryIds.join('、'))}</span>` : ''}</button>`).join('');
+        grid.innerHTML = visible.map(entry => `<button type="button" class="rmt-card-choice" data-picker-index="${entry.index}" aria-pressed="${JSON.stringify(entry.reference) === JSON.stringify(selected)}"><span class="rmt-card-choice-picture"><img src="${esc(entry.image.url)}" alt="" decoding="async" referrerpolicy="no-referrer"></span><b>${esc(entry.title)}</b><small>${esc(entry.label)}${entry.sourceLabel ? ' · ' + esc(entry.sourceLabel) : ''}</small>${entry.sharedMemoryIds.length ? `<span class="rmt-card-recommend">推荐 · 和这篇今生回响出自同一段记忆</span>` : ''}</button>`).join('');
         for (const img of grid.querySelectorAll('img')) img.addEventListener('error', () => {
             img.hidden = true;
             const button = img.closest('button'); button.disabled = true;
@@ -138,7 +138,8 @@ export function bindPastLivesCard(body, session, stored, { readOnly = false, onC
     });
     stage.addEventListener('pointerdown', event => {
         if (event.isPrimary === false || event.button > 0) return;
-        stopSensor(); drag = { id: event.pointerId, x: event.clientX, y: event.clientY, start: Number(slider.value), horizontal: false };
+        // r84.177：按下时不停倾斜；只有确实横向拖动卡片时才停（竖着滑动页面经过卡片不算）。
+        drag = { id: event.pointerId, x: event.clientX, y: event.clientY, start: Number(slider.value), horizontal: false };
     });
     stage.addEventListener('pointermove', event => {
         if (!live || closePicker) return;
@@ -146,7 +147,7 @@ export function bindPastLivesCard(body, session, stored, { readOnly = false, onC
         if (drag?.id === event.pointerId) {
             const dx = event.clientX - drag.x, dy = event.clientY - drag.y;
             if (!drag.horizontal && Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 8) { drag = null; return; }
-            if (!drag.horizontal && Math.abs(dx) > 8) { drag.horizontal = true; stage.setPointerCapture?.(event.pointerId); }
+            if (!drag.horizontal && Math.abs(dx) > 8) { drag.horizontal = true; stopSensor(); stage.setPointerCapture?.(event.pointerId); }
             if (drag.horizontal) setPosition(drag.start + dx / Math.max(1, rect.width) * 160);
         } else if (event.pointerType === 'mouse' && !sensor) setPosition((event.clientX - rect.left) / Math.max(1, rect.width) * 100);
     });

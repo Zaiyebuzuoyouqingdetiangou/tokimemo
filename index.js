@@ -1,5 +1,5 @@
 const VERSION = '0.99.93';
-const BUILD = '0.99.93-r84.175-journal-extras';
+const BUILD = '0.99.93-r84.177-small-fixes';
 
 const SETTINGS_ID = 'heartbeat_memories_settings';
 const MENU_ID = 'heartbeat_memories_menu_item';

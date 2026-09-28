@@ -10,6 +10,19 @@ function credentialError() {
     Object.assign(error, { code: 'RMT_MANUAL_KEY_STORAGE', safeToDisplay: true, safeUserMessage: error.message, retryable: false, retryableJson: false });
     return error;
 }
+// r84.177：有些内嵌浏览器（如 TT 的 WKWebView）不允许把加密钥匙存进本机数据库。
+// 这不是 Key 错了：本次打开期间照常可用，只是没法存下来。不放宽加密，也不改成明文保存。
+function sessionOnlyError() {
+    const error = new Error('这台设备不支持把 Key 加密存进本机；本次打开期间照常可用，重新打开后需要再填一次，或改用一键配置。');
+    Object.assign(error, { code: 'RMT_MANUAL_KEY_SESSION_ONLY', safeToDisplay: true, safeUserMessage: error.message, retryable: false, retryableJson: false });
+    return error;
+}
+// 设置会随酒馆同步到别的设备，但 Key 只加密存在填写它的那台设备上。
+function notOnDeviceError() {
+    const error = new Error('这台设备还没保存过手动 API 的 Key，请在设置里填一次。');
+    Object.assign(error, { code: 'RMT_MANUAL_KEY_NOT_ON_DEVICE', safeToDisplay: true, safeUserMessage: error.message, retryable: false, retryableJson: false });
+    return error;
+}
 function inLane(id, action) {
     const next = (lanes.get(id) || Promise.resolve()).catch(() => {}).then(action);
     lanes.set(id, next); void next.finally(() => { if (lanes.get(id) === next) lanes.delete(id); }).catch(() => {});
@@ -29,9 +42,10 @@ export async function saveManualCredential(base, value, reference = '') {
             let ciphertext;
             try { ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv, additionalData: new TextEncoder().encode(JSON.stringify([id, base])) }, key, bytes); }
             finally { bytes.fill(0); }
-            await store.compareLocalRecoveryRecord(id, old?.revision || 0, { version: 1, base, key, iv, ciphertext });
+            try { await store.compareLocalRecoveryRecord(id, old?.revision || 0, { version: 1, base, key, iv, ciphertext }); }
+            catch (error) { if (error?.code === 'RMT_LOCAL_CLONE' || error?.name === 'DataCloneError') throw sessionOnlyError(); throw error; }
             return id;
-        } catch { throw credentialError(); }
+        } catch (error) { if (error?.code === 'RMT_MANUAL_KEY_SESSION_ONLY') throw error; throw credentialError(); }
     });
 }
 export async function readManualCredential(base, reference) {
@@ -39,7 +53,9 @@ export async function readManualCredential(base, reference) {
     if (!id) return '';
     try {
         await lanes.get(id);
-        const saved = (await store.readLocalRecoveryRecord(id))?.payload;
+        const record = await store.readLocalRecoveryRecord(id);
+        if (!record) throw notOnDeviceError();
+        const saved = record.payload;
         if (saved?.version !== 1 || saved.base !== base || !saved.key || saved.key.extractable !== false
             || !(saved.iv instanceof Uint8Array) || saved.iv.byteLength !== 12
             || !(saved.ciphertext instanceof ArrayBuffer) || saved.ciphertext.byteLength > 16016) throw credentialError();
@@ -48,7 +64,7 @@ export async function readManualCredential(base, reference) {
         const bytes = new Uint8Array(decrypted);
         try { const value = new TextDecoder('utf-8', { fatal: true }).decode(bytes); if (!value || value.length > 4000) throw credentialError(); return value; }
         finally { bytes.fill(0); }
-    } catch { throw credentialError(); }
+    } catch (error) { if (error?.code === 'RMT_MANUAL_KEY_NOT_ON_DEVICE') throw error; throw credentialError(); }
 }
 export async function clearManualCredential(reference) {
     const id = validManualSecretRef(reference); if (!id) return true;
