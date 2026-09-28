@@ -233,28 +233,33 @@ export function normalizeCgPromptMetadata(value) {
 }
 
 export function normalizeCgPreparedPrompt(raw, evidence) {
-    // r84.183：只要有画面描述就收下。写得太长就截掉；缺场景 tag 或完整提示时用画面描述补上；
-    // 人物外貌对不上时用已保存的外貌，不让这次已经付费的构思整次作废。
-    if (!raw || typeof raw !== 'object' || Array.isArray(raw) || typeof raw.imagePrompt !== 'string') {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)
+        || typeof raw.imagePrompt !== 'string' || raw.imagePrompt.length > SCENE_LIMIT
+        || typeof raw.sceneTags !== 'string' || raw.sceneTags.length > CG_SCENE_TAG_LIMIT
+        || typeof raw.flatPrompt !== 'string' || raw.flatPrompt.length > CG_FLAT_PROMPT_LIMIT
+        || !Array.isArray(raw.characters)) {
         throw text.safeUserError('这次画面与外貌提示没有完整生成，现有草稿已保留。', 'RMT_CG_PROMPT_INVALID');
     }
-    const imagePrompt = plain(raw.imagePrompt, SCENE_LIMIT);
-    if (!imagePrompt) throw text.safeUserError('这次没有得到完整画面提示，现有草稿已保留。', 'RMT_CG_PROMPT_INVALID');
-    const sceneTags = plain(typeof raw.sceneTags === 'string' ? raw.sceneTags : '', CG_SCENE_TAG_LIMIT) || plain(imagePrompt, CG_SCENE_TAG_LIMIT);
-    const flatPrompt = plain(typeof raw.flatPrompt === 'string' ? raw.flatPrompt : '', CG_FLAT_PROMPT_LIMIT) || plain(imagePrompt, CG_FLAT_PROMPT_LIMIT);
-    raw = { ...raw, characters: Array.isArray(raw.characters) ? raw.characters : [] };
+    const imagePrompt = plain(raw.imagePrompt, SCENE_LIMIT), sceneTags = plain(raw.sceneTags, CG_SCENE_TAG_LIMIT);
+    const flatPrompt = plain(raw.flatPrompt, CG_FLAT_PROMPT_LIMIT);
+    if (!imagePrompt || !sceneTags || !flatPrompt) throw text.safeUserError('这次没有得到完整画面提示，现有草稿已保留。', 'RMT_CG_PROMPT_INVALID');
     const sources = Array.isArray(evidence?.characters) ? evidence.characters : [];
     if (evidence?.castSnapshot) {
         const castSnapshot = participants.normalizeParticipantSnapshot(evidence.castSnapshot);
         const knownIds = new Set(castSnapshot.people.map(person => person.id));
         const seen = new Set();
-        // 名单外、重复的人物行直接丢掉。
-        const rows = raw.characters.filter(row => row && knownIds.has(row.participantId) && !seen.has(row.participantId) && seen.add(row.participantId));
+        for (const row of raw.characters) {
+            if (!row || !knownIds.has(row.participantId) || seen.has(row.participantId)) {
+                throw text.safeUserError('生成的人物标识与本图名单不一致，现有草稿已保留。', 'RMT_CG_PROMPT_INVALID');
+            }
+            seen.add(row.participantId);
+        }
         const prepared = castSnapshot.people.flatMap(person => {
             const source = sources.find(row => row.participantId === person.id);
-            const row = rows.find(row => row.participantId === person.id);
-            // 已保存的外貌标签优先，模型改写了也照用保存的那份。
-            if (source?.knownTag) return [{ participantId: person.id, tag: source.knownTag, nl: source.knownNl }];
+            const row = raw.characters.find(row => row.participantId === person.id);
+            if (source?.knownTag && (!row || plain(row.tag, CG_APPEARANCE_TAG_LIMIT) !== source.knownTag)) {
+                throw text.safeUserError('本次外貌与已保存标签不一致，原草稿已保留；请核对后重试。', 'RMT_CG_PROMPT_INVALID');
+            }
             if (!row || (!source?.description && !source?.knownTag && !source?.knownNl)) return [];
             return [{ participantId: person.id, tag: source.knownTag || row.tag, nl: source.knownTag ? source.knownNl : row.nl }];
         });
@@ -275,6 +280,9 @@ export function normalizeCgPreparedPrompt(raw, evidence) {
         const row = matching[0];
         // Silently replacing just tag would leave the contradictory appearance in
         // imagePrompt/flatPrompt. Reject that whole draft rather than send both.
+        if (source.knownTag && plain(row.tag, CG_APPEARANCE_TAG_LIMIT) !== source.knownTag) {
+            throw text.safeUserError('本次外貌与已保存标签不一致，原草稿已保留；请核对后重试。', 'RMT_CG_PROMPT_INVALID');
+        }
         return [{ role, name: source.name, tag: source.knownTag || row.tag,
             nl: source.knownTag ? source.knownNl : row.nl }];
     });

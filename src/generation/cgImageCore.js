@@ -372,9 +372,9 @@ export async function reconceiveCgImagePrompt(target, { promptFormat = '', appea
         context: { ...context }, contextEnvelope: '', origin: target.origin,
     });
     assertCgImageTargetCurrent(target);
-    // r84.183：写得太长不再整次作废（请求已经花了），超出的部分截掉。
     if (!result || typeof result !== 'object' || Array.isArray(result)
-        || typeof result.imagePrompt !== 'string' || !result.imagePrompt.trim()) {
+        || typeof result.imagePrompt !== 'string' || !result.imagePrompt.trim()
+        || result.imagePrompt.length > core_constants.MAX_CG_IMAGE_PROMPT_CHARS) {
         throw core_text.safeUserError('这次画面提示词没有完整生成，请保留现有提示后再试。', 'RMT_CG_PROMPT_INVALID');
     }
     const visual = sanitizeCgVisualText(result.imagePrompt);

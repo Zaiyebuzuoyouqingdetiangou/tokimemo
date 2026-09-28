@@ -31,7 +31,7 @@ export function bedtimeHtml(session, { locked = false, generating = false } = {}
         const ui = contract.bedtimeReadingState(session);
         const selected = session.stories.find(story => story.id === ui.selectedId) || null;
         const storyPartial = selected?.generationIncomplete === true || selected?.chapters?.some(chapter => chapter.generationIncomplete === true);
-        const composer = locked ? '' : `<details class="rmt-bedtime-composer" ${session.stories.length ? '' : 'open'}><summary>写一个新故事</summary><label>题材、气氛或想看的内容（可不填）<textarea data-rmt-bedtime-direction maxlength="${contract.BEDTIME_LIMITS.direction}" placeholder="例如：太空站失窃案；古城里的轻喜剧；由角色自由决定"></textarea></label>${button('new', generating ? '正在写故事…' : '开始新故事', '', generating)}</details>`;
+        const composer = locked ? '' : `<details class="rmt-bedtime-composer" ${session.stories.length ? '' : 'open'}><summary>本次创作要求 / 新故事</summary><label>新篇或续写的要求（可不填）<textarea data-rmt-bedtime-direction maxlength="${contract.BEDTIME_LIMITS.direction}" placeholder="可填写完整指令、问卷、题材或续写方向；留空由角色自由发挥"></textarea></label><p class="rmt-bedtime-note">写新篇点「开始新故事」；接着当前故事写，填好要求后点下方「追加下一章」。</p>${button('new', generating ? '正在写故事…' : '开始新故事', '', generating)}</details>`;
         let content;
         if (ui.view !== 'story' || !selected) {
             content = session.stories.length ? `<nav class="rmt-bedtime-library" aria-label="已保存的睡前故事">${[...session.stories].reverse().map(story => `<button type="button" class="rmt-bedtime-cover" data-rmt-bedtime="open" data-rmt-bedtime-id="${esc(story.id)}"><span aria-hidden="true">☾</span><span><small>${esc(story.genre || '题材待完成')}</small><b>${esc(story.title || '未完成的故事')}</b><small>${story.chapters?.length || 0} 章${story.generationIncomplete || story.chapters?.some(chapter => chapter.generationIncomplete) ? ' · 草稿' : ''}</small></span><span aria-hidden="true">›</span></button>`).join('')}</nav>`
@@ -118,7 +118,8 @@ export async function handleBedtimeAction(action, id = '') {
             if (readOnly() || busy()) return false;
             const direction = overlay.bodyEl()?.querySelector?.('[data-rmt-bedtime-direction]')?.value || '';
             const target = runtime().activeArchiveSnapshot ? library.archiveTargetGenerationOptions(runtime().activeArchiveSnapshot) : {};
-            await generation.generateMode(MODE, { ...target, bedtimeOptions: { action, direction, storyId: action === 'continue' ? id || session.selectedId : '' }, background: false });
+            // These buttons request new content; saved unfinished requests use the recovery banner.
+            await generation.generateMode(MODE, { ...target, newTask: true, bedtimeOptions: { action, direction, storyId: action === 'continue' ? id || session.selectedId : '' }, background: false });
             return true;
         }
         Object.assign(session, contract.bedtimeReadingState(session));
