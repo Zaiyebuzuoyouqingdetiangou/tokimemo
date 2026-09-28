@@ -1,5 +1,5 @@
-const VERSION = '0.99.97';
-const BUILD = '0.99.97-r84.183-unstuck-limits';
+const VERSION = '0.99.98';
+const BUILD = '0.99.98-r84.183-bedtime-directions';
 
 const SETTINGS_ID = 'heartbeat_memories_settings';
 const MENU_ID = 'heartbeat_memories_menu_item';

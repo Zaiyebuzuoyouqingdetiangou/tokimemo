@@ -152,7 +152,7 @@ async function drawFresh(snapshot, fresh, input, io, { keepPace = false } = {}) 
     const next = nextSnapshot(snapshot, {
         ...pace,
         activeDrawTicketId: drawId,
-    }, { drawTickets: auto_memory_plan.keepRecentDrawTickets([...snapshot.drawTickets, ticket], drawId), modulePlan }, input.now);
+    }, { drawTickets: [...snapshot.drawTickets, ticket], modulePlan }, input.now);
     await io.persist(next);
     await io.noteGap?.(null);
     const started = await io.startModule(next);

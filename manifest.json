@@ -1,15 +1,15 @@
 {
   "display_name": "心迹回廊",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.99.97-r84.183-unstuck-limits",
+  "js": "index.js?heartbeat=0.99.98-r84.183-bedtime-directions",
   "author": "Toto",
-  "version": "0.99.97",
+  "version": "0.99.98",
   "auto_update": true,
   "minimum_client_version": "1.13.0",
   "hooks": {
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r84.183：修正自动留忆第 41 次抽签后停摆；构思画面不再因格式小问题整次作废；印象曲封面提示更具体。",
+  "description": "r84.183：窄修睡前故事创作要求；兼容连续番外与自填指令，保留旧任务恢复。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }
