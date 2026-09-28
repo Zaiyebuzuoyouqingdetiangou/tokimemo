@@ -1,4 +1,5 @@
 import * as composerOptions from '../core/generationOptions.js';
+import * as expanded_cg_view from './expandedCgView.js';
 import * as contract from '../core/themeSongContract.js';
 import * as songMode from '../modes/themeSong.js';
 import * as contextApi from '../core/context.js';
@@ -123,7 +124,10 @@ export function renderThemeSongs() {
       <div class="rmt-song-reading-lyrics">${songLyricsReadingHtml(selected.lyrics)}</div>
       <footer class="rmt-song-toolbar">${button('copy-lyrics','复制歌词')}${button('export','导出文本')}${readonly() ? '' : `<button type="button" class="rmt-btn" data-rmt-song="delete" data-rmt-song-id="${esc(selected.id)}" ${busy() ? 'disabled' : ''}>删除这首</button>`}</footer>
       <div data-rmt-song-copy-fallback></div></article>` : formatDetails;
-    const details = displayMode === 'format' ? formatDetails : readDetails;
+    const cover = selected ? `<div class="rmt-song-cover">${expanded_cg_view.expandedCgHtml(session,
+        { kind: 'song-cover', containerId: selected.id }, readonly(),
+        { placeholder: '<div class="rmt-song-cover-empty"><span aria-hidden="true">♫</span><b>专辑封面</b></div>' })}</div>` : '';
+    const details = `<div class="rmt-song-detail">${cover}${displayMode === 'format' ? formatDetails : readDetails}</div>`;
     const switcher = `<div class="rmt-song-display-switch" role="group" aria-label="歌曲显示模式"><button type="button" class="rmt-btn" data-rmt-song="view-read" aria-pressed="${displayMode === 'read'}">阅读模式</button><button type="button" class="rmt-btn" data-rmt-song="view-format" aria-pressed="${displayMode === 'format'}">创作格式</button></div>`;
     const list = session.songs.length ? `<nav class="rmt-song-list" aria-label="已保存的印象曲">${[...session.songs].reverse().map(song => `<button type="button" class="${song.id === selected?.id ? 'active' : ''}" data-rmt-song="select" data-rmt-song-id="${esc(song.id)}" aria-current="${song.id === selected?.id ? 'page' : 'false'}"><span aria-hidden="true">♪</span><span><b>${esc(song.title)}</b><small>${esc(song.singer)}</small></span></button>`).join('')}</nav>` : '';
     const allCache = runtimeState.activeArchiveSnapshot?.cache || cache.getCache(contextApi.getContext());

@@ -1,6 +1,7 @@
-// Bounded text-only creative works. Never a source of historical archive facts.
+// Creative song texts with optional local cover references. Never historical archive facts.
 import * as safeData from './pastLivesContract.js';
 import * as text from './text.js';
+import * as cg_targets from './cgTargets.js';
 export const THEME_SONG_MODE = 'themeSong';
 export const THEME_SONG_VERSION = 1;
 export const SONG_LIMITS = Object.freeze({ songs: 80, title: 120, style: 900, description: 1200,
@@ -75,6 +76,11 @@ export function normalizeStoredThemeSongs(value, memory = null) {
         if (song.subject === 'character' && (song.sourceMemoryIds.length || song.sourceMemoryAnchor)
             || song.subject === 'event' && (!song.sourceMemoryIds.length || !song.sourceMemoryAnchor))
             throw songError('SOURCE', '角色印象与事件来源必须分开，不能补造记忆编号。');
+        if (Object.hasOwn(song, 'visual')) {
+            const visual = cg_targets.normalizeLocalCgSlots(song).visual;
+            if (visual) song.visual = visual;
+            else delete song.visual;
+        }
     }
     raw.selectedId = typeof raw.selectedId === 'string' && used.has(raw.selectedId) ? raw.selectedId : raw.songs[0]?.id || '';
     return raw;
@@ -95,7 +101,11 @@ export function mergeThemeSongs(latest, incoming) {
     for (const song of next.songs) {
         const saved = byId.get(song.id);
         if (saved) {
-            if (JSON.stringify(saved) !== JSON.stringify(song)) throw songError('CONFLICT', '同一首印象曲已被更新，旧作品没有覆盖。');
+            // A cover can finish while another song is being written. Compare the
+            // immutable song text, then keep the latest stored cover untouched.
+            const { visual: savedVisual, ...savedText } = saved;
+            const { visual: incomingVisual, ...incomingText } = song;
+            if (JSON.stringify(savedText) !== JSON.stringify(incomingText)) throw songError('CONFLICT', '同一首印象曲已被更新，旧作品没有覆盖。');
             continue;
         }
         if (previous.songs.length >= SONG_LIMITS.songs) throw songError('LIMIT', '印象曲已到本地容量上限；已有作品保留，请先备份整理。');

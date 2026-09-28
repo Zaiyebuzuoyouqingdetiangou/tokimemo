@@ -36,6 +36,9 @@ export function floorDecision({ enabled = false, floor = 0, interval = 0, nextDu
     } else if (ticketOpen(activeTicket)) {
         const finished = !!modulePlan && !modulePlanOpen(modulePlan);
         const orphan = !modulePlan;
+        // A completed body with an unclosed ticket only needs settlement. Rebuilding
+        // its plan here would create another episode on the very same floor.
+        if (finished && !laterThanTicket(floor, activeTicket)) return { action: 'settle', ticketId: activeTicket.id };
         // 同一楼接着写。计划写完、或票还开着却丢了计划，到了下一楼就让位另抽。
         if (!((finished || orphan) && laterThanTicket(floor, activeTicket))) {
             return { action: 'reuse', ticketId: activeTicket.id };
@@ -149,7 +152,7 @@ async function drawFresh(snapshot, fresh, input, io, { keepPace = false } = {}) 
     const next = nextSnapshot(snapshot, {
         ...pace,
         activeDrawTicketId: drawId,
-    }, { drawTickets: [...snapshot.drawTickets, ticket], modulePlan }, input.now);
+    }, { drawTickets: auto_memory_plan.keepRecentDrawTickets([...snapshot.drawTickets, ticket], drawId), modulePlan }, input.now);
     await io.persist(next);
     await io.noteGap?.(null);
     const started = await io.startModule(next);
@@ -232,6 +235,10 @@ export async function runAutoMemoryRound(input, io) {
     if (decision.action === 'hold') {
         if (typeof io.resumeModule === 'function') await io.resumeModule(snapshot);
         return { action: 'hold', moduleRequest: false, sourceMemoryIds: decision.sourceMemoryIds };
+    }
+    if (decision.action === 'settle') {
+        const settled = typeof io.resumeModule === 'function' ? await io.resumeModule(snapshot) : null;
+        return { action: 'settled', moduleRequest: false, snapshot: settled?.snapshot || snapshot };
     }
     if (decision.action === 'reuse') return resumeTicket(snapshot, activeTicket(snapshot), input, io);
     if (decision.action !== 'arm' && decision.action !== 'due') return { action: decision.action, moduleRequest: false };

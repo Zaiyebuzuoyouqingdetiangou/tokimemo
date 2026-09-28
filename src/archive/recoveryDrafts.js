@@ -420,7 +420,7 @@ export function getCurrentArchiveImportRecoverySummary(context = core_context.ge
             const processed = Math.min(totals.total, totals.processed + pageProcessed);
             const detail = `来源 ${totals.total} 片段 / ${totals.chars.toLocaleString()} 字符；已处理 ${processed}、已正式保存 ${totals.saved}、未完成 ${totals.remaining}（其中待发送 ${totals.total - processed}）。批次 ${totals.currentBatch}/${totals.batches}。`;
             return { ...summary, operation: 'import', profileOnly: false, onlyArchivedDrafts: false, awaitingCommit: false, fullRebuild: false,
-                completed: summary?.completed || 0, canContinue: true, canRetry: true, pageOnly: false,
+                completed: summary?.completed || 0, canContinue: true, canRetry: true, pageOnly: summary?.pageOnly === true,
                 batchProgress: totals, capacityBlocked: false, pendingAdmission: capacity,
                 notice: detail + (capacity ? `本批有 ${totals.pendingMemories} 条已校验结果待保存。点击“保存待入档结果（不生成）”即可正式入档，不请求模型，不删除或顶掉旧记忆。`
                     : '本批完成后会停止；下一批需明确点击。已保存成果现在即可阅读。')

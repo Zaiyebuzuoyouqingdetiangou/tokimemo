@@ -7,7 +7,7 @@ import * as appearance from './generationBridge.js';
 import * as cg_visual from './cgVisualRules.js';
 import * as cg_targets from './cgTargets.js';
 
-const IMAGE_MODES = new Set([constants.MODE.ALBUM, constants.MODE.ADV, constants.MODE.HEART, constants.MODE.ENDING, constants.MODE.PAST_LIVES, constants.MODE.BEDTIME, constants.MODE.BUTTERFLY]);
+const IMAGE_MODES = new Set([constants.MODE.ALBUM, constants.MODE.ADV, constants.MODE.HEART, constants.MODE.ENDING, constants.MODE.PAST_LIVES, constants.MODE.BEDTIME, constants.MODE.BUTTERFLY, constants.MODE.THEME_SONG]);
 
 export function normalizeCgImageUrl(value) {
     if (typeof value !== 'string' || value.length > 4096 || /[\\\u0000-\u001f\u007f]/.test(value)) return '';
@@ -65,7 +65,7 @@ export function cgItemInSession(mode, session, itemId) {
 }
 
 export function cgItemSignature(item) {
-    const compactSource = ['past-life-dossier', 'bedtime-chapter', 'butterfly-node', 'heart-firefly'].includes(item?.__rmtCgDescriptor?.kind);
+    const compactSource = ['past-life-dossier', 'bedtime-chapter', 'butterfly-node', 'heart-firefly', 'song-cover'].includes(item?.__rmtCgDescriptor?.kind);
     const fields = [item?.id, item?.title, item?.date, compactSource ? item.sourceHash : item?.desc, item?.cgDesc,
         item?.subtitle, item?.imagePrompt, item?.visualSeed, item?.panelCount, item?.panels,
         normalizeCgImageRecord(item?.cgImage)];
