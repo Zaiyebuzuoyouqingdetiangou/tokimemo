@@ -1,3 +1,10 @@
+当前版本：0.99.96-r84.181-adv-letter-reader。
+完整包 hearttrace-upload.zip；精简安装包 hearttrace-install.zip 只省略开发/验证资料，运行文件相同。
+保留聊天、档案、图片和本机数据，只更新插件代码，刷新后核对版本。已有 ADV 正文不需重新生成；只有索引的旧条目会显示已有场景和“正文尚未生成”。
+以下 r84.180 及更早内容是历史说明，不代表当前版本。本轮未写 GitHub。
+
+---
+
 当前版本：0.99.95-r84.180-generation-recovery。
 完整交付：hearttrace-upload.zip，单根 tokimemo-main/；保留构建工具和测试，后续继续修复请提供这份。
 可选精简安装：hearttrace-install.zip，运行代码与完整包逐文件一致，只省略开发和验证资料；不能替代后续开发基线。

@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 301
-// Source SHA-256: b465b89d9d97acf983fb86a3ee1105797a9b21b13910ef0eff0a2a6e9a32944b
+// Source SHA-256: 00074cec1252f93720f60ade8caf9b4ed09ee0d2a2f7c7e9179f9db9e2aeb509
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -5004,13 +5004,15 @@ function albumSurface(session) {
 function advSurface(session) {
     const events = Array.isArray(session.events) ? session.events : [];
     if (!events.length) return '';
-    const list = events.map((item, index) => `<div class="rmt-event"><span class="rmt-event-index">${String(index + 1).padStart(2, '0')}</span><span class="rmt-event-copy"><b>${esc(textOf(item.title))}</b><small>${esc(textOf(item.date))}</small></span></div>`).join('');
-    const picker = `<div class="rmt-adv-mobile-picker"><div class="rmt-adv-picker-status"><b>事件</b><span>${esc(events.map(item => textOf(item.title)).filter(Boolean).join(' · ') || '这一轮')}</span></div></div>`;
-    const reading = events.map(item => {
-        const paras = Array.isArray(item.adv?.paragraphs) ? item.adv.paragraphs : [];
-        return `<div class="rmt-adv-reading-copy"><h3>${esc(textOf(item.title))}</h3>${paras.map(paragraph => `<div class="rmt-adv-para">${esc(textOf(paragraph))}</div>`).join('')}</div>`;
+    // The letter is a read-only view of this round, not the overlay's event
+    // selector. Dedicated classes avoid its three-column picker and tall reader.
+    const reading = events.map((item, index) => {
+        const paras = (Array.isArray(item.adv?.paragraphs) ? item.adv.paragraphs : []).map(textOf).filter(Boolean);
+        const date = textOf(item.date), scene = textOf(item.cgDesc);
+        const pending = paras.length ? (item.progressPending?.length ? '正文尚未完成' : '') : '正文尚未生成';
+        return `<article class="rmt-letter-adv-event"><header><div class="rmt-letter-adv-meta"><span>事件 ${String(index + 1).padStart(2, '0')}</span>${date ? `<span>${esc(date)}</span>` : ''}</div><h3>${esc(textOf(item.title))}</h3></header>${scene ? `<p class="rmt-letter-adv-scene">${esc(scene)}</p>` : ''}${paras.map(paragraph => `<p class="rmt-letter-adv-para">${esc(paragraph)}</p>`).join('')}${pending ? `<p class="rmt-letter-adv-status" role="status">${pending}，可到心迹回廊继续。</p>` : ''}</article>`;
     }).join('');
-    return `<div class="rmt-adv rmt-adv-reading"><aside class="rmt-event-list">${picker}<div class="rmt-event-items">${list}</div></aside><section class="rmt-event-detail"><div class="rmt-adv-reading-layout rmt-adv-text-first">${reading}</section></section></div>`;
+    return `<section class="rmt-letter-adv">${reading}</section>`;
 }
 
 function inboxSurface(session) {
@@ -8195,6 +8197,15 @@ function floorShellCss() {
 .rmt-heart-letter .rmt-floor-body .rmt-memory-scene{min-height:0}
 @media (max-width:600px){.rmt-floor-shell{width:100%}.rmt-heart-letter:has(.rmt-heart-letter-paper:not([hidden])){width:100%}.rmt-heart-letter-paper{padding:12px 12px 10px}.rmt-letter-buttons .rmt-btn{flex:1 1 auto}}
 .rmt-heart-letter .rmt-floor-note{margin:0 0 10px;font-size:15px;line-height:1.7}
+.rmt-heart-letter .rmt-letter-adv{display:grid;grid-template-columns:minmax(0,1fr);gap:16px;min-width:0;max-width:100%;margin:0}
+.rmt-heart-letter .rmt-letter-adv-event{box-sizing:border-box;min-width:0;max-width:100%;padding:14px;border:1px solid var(--rmt-theme-border);border-radius:12px;background:var(--rmt-theme-surface)}
+.rmt-heart-letter .rmt-letter-adv-meta{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 12px;font-size:12px;line-height:1.6;color:var(--rmt-theme-muted)}
+.rmt-heart-letter .rmt-letter-adv-meta span{min-width:0;overflow-wrap:anywhere}
+.rmt-heart-letter .rmt-letter-adv-event h3{margin:6px 0 12px;font-size:18px;line-height:1.5;white-space:normal;overflow-wrap:anywhere}
+.rmt-heart-letter .rmt-letter-adv-scene,.rmt-heart-letter .rmt-letter-adv-para{margin:0 0 12px;min-height:0;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.9;font-size:16px}
+.rmt-heart-letter .rmt-letter-adv-scene{font-size:14px}
+.rmt-heart-letter .rmt-letter-adv-status{margin:8px 0 0;font-size:13px;line-height:1.7;color:var(--rmt-theme-muted)}
+.rmt-heart-letter .rmt-letter-adv-event>p:last-child{margin-bottom:0}
 .rmt-heart-letter .rmt-theme-song,.rmt-heart-letter .rmt-letter-song{display:block;max-width:100%;margin:0;color:var(--rmt-theme-text)}
 .rmt-heart-letter .rmt-letter-song-sheet{margin:0 0 16px;padding:0;border:0;background:transparent}
 .rmt-heart-letter .rmt-letter-song-title{margin:0 0 8px;font-size:22px;line-height:1.4;font-weight:700;color:var(--rmt-theme-text)}

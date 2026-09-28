@@ -1,15 +1,15 @@
 {
   "display_name": "心迹回廊",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.99.95-r84.180-generation-recovery",
+  "js": "index.js?heartbeat=0.99.96-r84.181-adv-letter-reader",
   "author": "Toto",
-  "version": "0.99.95",
+  "version": "0.99.96",
   "auto_update": true,
   "minimum_client_version": "1.13.0",
   "hooks": {
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r84.180：修复接力草稿误拦、邮箱部分内容恢复、手动连接与输入预算；陈列柜保留全部已生成物品。",
+  "description": "r84.181：修复信封内 ADV 事件标题挤窄与正文显示，完整保留已生成内容，不改生成请求。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }
