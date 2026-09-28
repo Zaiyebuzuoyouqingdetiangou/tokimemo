@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
-// Source modules: 295
-// Source SHA-256: e223539c4717dd024bc9cecc424cfd9518eb0bcb7fa6eb9a5620a72f9749432e
+// Source modules: 296
+// Source SHA-256: 44f10da3b8a6af8d1593a24bee3e008f79808f957f6fce6f5083953a0e716d3f
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -256,6 +256,7 @@ const __m_ui_immersionStyles_js = Object.create(null);
 const __m_ui_inboxStyles_js = Object.create(null);
 const __m_ui_inboxView_js = Object.create(null);
 const __m_ui_journalClip_js = Object.create(null);
+const __m_ui_journalImage_js = Object.create(null);
 const __m_ui_languageView_js = Object.create(null);
 const __m_ui_memoryReveal_js = Object.create(null);
 const __m_ui_mirrorCallView_js = Object.create(null);
@@ -16831,15 +16832,17 @@ async function compareLocalRecoveryRecord(key, expectedRevision, payload) {
     const db = await database();
     try {
         return await new Promise((resolve, reject) => {
-            const tx = writeTransaction(db, key); let mismatch = false;
+            const tx = writeTransaction(db, key); let mismatch = false, cloneFailed = false;
             const timer = setTimeout(() => { try { tx.abort(); } catch {} reject(failure()); }, 5000);
             const store = tx.objectStore(STORE), request = store.get(key);
             request.onsuccess = () => {
                 if ((request.result?.revision || 0) !== expectedRevision) { mismatch = true; tx.abort(); return; }
-                store.put({ key, revision: expectedRevision + 1, payload });
+                // r84.177：内容本身存不进去（例如内嵌浏览器不允许存加密钥匙）时单独标出来，调用处好给出准确提示。
+                try { store.put({ key, revision: expectedRevision + 1, payload }); }
+                catch (error) { cloneFailed = error?.name === 'DataCloneError'; try { tx.abort(); } catch {} }
             };
             tx.oncomplete = () => { clearTimeout(timer); resolve(expectedRevision + 1); };
-            tx.onabort = tx.onerror = () => { clearTimeout(timer); reject(quotaFailureOf(tx, mismatch ? 'RMT_LOCAL_CAS' : 'RMT_LOCAL_STORAGE')); };
+            tx.onabort = tx.onerror = () => { clearTimeout(timer); reject(cloneFailed ? failure('RMT_LOCAL_CLONE') : quotaFailureOf(tx, mismatch ? 'RMT_LOCAL_CAS' : 'RMT_LOCAL_STORAGE')); };
         });
     } finally { db.close(); }
 }
@@ -16883,6 +16886,19 @@ function credentialError() {
     Object.assign(error, { code: 'RMT_MANUAL_KEY_STORAGE', safeToDisplay: true, safeUserMessage: error.message, retryable: false, retryableJson: false });
     return error;
 }
+// r84.177：有些内嵌浏览器（如 TT 的 WKWebView）不允许把加密钥匙存进本机数据库。
+// 这不是 Key 错了：本次打开期间照常可用，只是没法存下来。不放宽加密，也不改成明文保存。
+function sessionOnlyError() {
+    const error = new Error('这台设备不支持把 Key 加密存进本机；本次打开期间照常可用，重新打开后需要再填一次，或改用一键配置。');
+    Object.assign(error, { code: 'RMT_MANUAL_KEY_SESSION_ONLY', safeToDisplay: true, safeUserMessage: error.message, retryable: false, retryableJson: false });
+    return error;
+}
+// 设置会随酒馆同步到别的设备，但 Key 只加密存在填写它的那台设备上。
+function notOnDeviceError() {
+    const error = new Error('这台设备还没保存过手动 API 的 Key，请在设置里填一次。');
+    Object.assign(error, { code: 'RMT_MANUAL_KEY_NOT_ON_DEVICE', safeToDisplay: true, safeUserMessage: error.message, retryable: false, retryableJson: false });
+    return error;
+}
 function inLane(id, action) {
     const next = (lanes.get(id) || Promise.resolve()).catch(() => {}).then(action);
     lanes.set(id, next); void next.finally(() => { if (lanes.get(id) === next) lanes.delete(id); }).catch(() => {});
@@ -16902,9 +16918,10 @@ async function saveManualCredential(base, value, reference = '') {
             let ciphertext;
             try { ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv, additionalData: new TextEncoder().encode(JSON.stringify([id, base])) }, key, bytes); }
             finally { bytes.fill(0); }
-            await store.compareLocalRecoveryRecord(id, old?.revision || 0, { version: 1, base, key, iv, ciphertext });
+            try { await store.compareLocalRecoveryRecord(id, old?.revision || 0, { version: 1, base, key, iv, ciphertext }); }
+            catch (error) { if (error?.code === 'RMT_LOCAL_CLONE' || error?.name === 'DataCloneError') throw sessionOnlyError(); throw error; }
             return id;
-        } catch { throw credentialError(); }
+        } catch (error) { if (error?.code === 'RMT_MANUAL_KEY_SESSION_ONLY') throw error; throw credentialError(); }
     });
 }
 async function readManualCredential(base, reference) {
@@ -16912,7 +16929,9 @@ async function readManualCredential(base, reference) {
     if (!id) return '';
     try {
         await lanes.get(id);
-        const saved = (await store.readLocalRecoveryRecord(id))?.payload;
+        const record = await store.readLocalRecoveryRecord(id);
+        if (!record) throw notOnDeviceError();
+        const saved = record.payload;
         if (saved?.version !== 1 || saved.base !== base || !saved.key || saved.key.extractable !== false
             || !(saved.iv instanceof Uint8Array) || saved.iv.byteLength !== 12
             || !(saved.ciphertext instanceof ArrayBuffer) || saved.ciphertext.byteLength > 16016) throw credentialError();
@@ -16921,7 +16940,7 @@ async function readManualCredential(base, reference) {
         const bytes = new Uint8Array(decrypted);
         try { const value = new TextDecoder('utf-8', { fatal: true }).decode(bytes); if (!value || value.length > 4000) throw credentialError(); return value; }
         finally { bytes.fill(0); }
-    } catch { throw credentialError(); }
+    } catch (error) { if (error?.code === 'RMT_MANUAL_KEY_NOT_ON_DEVICE') throw error; throw credentialError(); }
 }
 async function clearManualCredential(reference) {
     const id = validManualSecretRef(reference); if (!id) return true;
@@ -32202,7 +32221,14 @@ function saveManualApiConfiguration(candidate, { activate = false } = {}) {
             && getPluginSettings(context).manualApiBaseUrl === base && getPluginSettings(context).manualApiKey === updated.manualApiKey;
         if (!stillCurrent()) throw new DOMException('Manual save superseded', 'AbortError');
         let ref = reference;
-        if (key) ref = await manual_credentials.saveManualCredential(base, key, reference);
+        if (key) {
+            try { ref = await manual_credentials.saveManualCredential(base, key, reference); }
+            catch (error) {
+                if (error?.code !== 'RMT_MANUAL_KEY_SESSION_ONLY') throw error;
+                if (!stillCurrent()) throw new DOMException('Manual save superseded', 'AbortError');
+                return { credentialSaved: false, sessionOnly: true, modelSaved: !!model };
+            }
+        }
         if (!stillCurrent()) {
             // A first save can finish after Clear/endpoint change. Remove its
             // newly-created orphan only; never delete an existing shared ref.
@@ -32816,7 +32842,7 @@ const mergedSegments = new WeakMap();
 const traceParents = new WeakMap();
 const MODES = new Set(['archive', 'archive-profile', 'room', 'album', 'image', 'advEvent', 'heart', 'phone', 'butterfly', 'adv', 'items', 'cabinet', 'inbox', 'themeSong', 'pastLives', 'timeEcho', 'travel', 'ending', 'calendar', 'relations', 'achievements', 'character-profile']);
 const OUTCOMES = new Set(['running', 'ok', 'failed', 'cancelled', 'deferred', 'blocked', 'noop']);
-const CODES = new Set(['RMT_LOCAL_STORAGE','RMT_LOCAL_CAS','RMT_MANUAL_KEY_STORAGE','RMT_ADVANCED_PARAMETERS','RMT_ADVANCED_BACKEND','RMT_RECOVERY_SOURCE_CHANGED','RMT_ARCHIVE_DRAFT_STORAGE','RMT_ARCHIVE_DRAFT_READ','RMT_ARCHIVE_DRAFT_CONFLICT','RMT_ARCHIVE_DRAFT_CAPACITY',
+const CODES = new Set(['RMT_LOCAL_STORAGE','RMT_LOCAL_CAS','RMT_LOCAL_CLONE','RMT_MANUAL_KEY_STORAGE','RMT_MANUAL_KEY_SESSION_ONLY','RMT_MANUAL_KEY_NOT_ON_DEVICE','RMT_ADVANCED_PARAMETERS','RMT_ADVANCED_BACKEND','RMT_RECOVERY_SOURCE_CHANGED','RMT_ARCHIVE_DRAFT_STORAGE','RMT_ARCHIVE_DRAFT_READ','RMT_ARCHIVE_DRAFT_CONFLICT','RMT_ARCHIVE_DRAFT_CAPACITY',
     ...Object.keys(core_backupDiagnostics.BACKUP_FAILURE_MESSAGES),
     'RMT_DEFERRED_QUOTA', 'RMT_DEFERRED_SECURITY', 'RMT_DEFERRED_UNAVAILABLE',
     'RMT_DEFERRED_LIMIT', 'RMT_DEFERRED_SERIALIZE', 'RMT_DEFERRED_UNKNOWN',
@@ -33119,8 +33145,11 @@ function toastText(value, max = 800) {
 
 const SAFE_ERROR_CODE_MESSAGES = Object.freeze({
     RMT_LOCAL_STORAGE: '本机记录未能保存；旧记录与当前页面内容保留，请勿刷新未保存的页面。',
+    RMT_LOCAL_CLONE: '这台设备的浏览器不允许把这类内容存进本机；旧记录与当前页面内容保留。',
     RMT_LOCAL_CAS: '本机记录已被另一操作更新；没有覆盖旧记录，请重新打开后继续。',
     RMT_MANUAL_KEY_STORAGE: 'Key 未能保存或取回；没有明文落盘或借用其他连接。请保留页面并检查本机存储。',
+    RMT_MANUAL_KEY_SESSION_ONLY: '这台设备不支持把 Key 加密存进本机；本次打开期间照常可用，重新打开后需要再填一次，或改用一键配置。',
+    RMT_MANUAL_KEY_NOT_ON_DEVICE: '这台设备还没保存过手动 API 的 Key，请在设置里填一次。',
     RMT_ADVANCED_PARAMETERS: '高级参数无效或包含受保护字段；只允许采样与推理配置，不能覆盖模型、消息、最大输出、连接、Key 或工具。',
     RMT_ADVANCED_BACKEND: '非空排参／附加 JSON 需要手动 API 或自定义 Chat Completions Profile；本次没有改连接或静默忽略参数。',
     RMT_RECOVERY_SOURCE_CHANGED: '角色卡、Persona 或来源选择与原任务不同；原成果与草稿保留，未发起请求。',
@@ -68770,7 +68799,9 @@ const routes = __m_ui_workspaceState_js;
 const room = __m_modes_room_js;
 const phone = __m_ui_phoneView_js;
 const generation_client = __m_generation_client_js;
+const journal_image = __m_ui_journalImage_js;
 const state = __m_core_state_js.state;
+
 
 
 
@@ -68823,6 +68854,7 @@ const style = `<style>
 .rmt-journal-layout-quote .rmt-journal-prose{position:relative;padding:4px 0 4px 26px;font-family:'Noto Serif SC',Georgia,serif;font-size:17px;line-height:1.9}.rmt-journal-layout-quote .rmt-journal-prose:before{content:'“';position:absolute;left:0;top:-6px;font-size:34px;opacity:.45}.rmt-journal-layout-quote .rmt-journal-photo{max-width:min(100%,260px)}
 .rmt-journal-layout-timeline .rmt-journal-entry{position:relative;margin-left:10px;padding:0 0 14px 18px;border-left:2px solid var(--rmt-journal-accent)}.rmt-journal-layout-timeline .rmt-journal-entry:before{content:'';position:absolute;left:-7px;top:4px;width:12px;height:12px;border-radius:50%;background:var(--rmt-journal-accent)}
 .rmt-journal-quote{display:grid;gap:8px;margin:10px 0}.rmt-journal-quote textarea{min-height:110px}
+.rmt-journal-export{display:grid;gap:10px;margin:12px 0;padding:12px;border:1px solid var(--rmt-theme-border);border-radius:14px;background:var(--rmt-theme-surface-solid,var(--rmt-theme-surface))}.rmt-journal-export img{display:block;width:100%;height:auto;max-height:70vh;object-fit:contain;border-radius:10px;background:#f4f1ec;-webkit-touch-callout:default}.rmt-journal-export p{margin:0;font-size:13px;color:var(--rmt-theme-muted)}.rmt-journal-export a.rmt-btn{display:inline-flex;align-items:center;justify-content:center;text-decoration:none}
 </style>`;
 
 // r84.174：像实体手帐：顶上一条和纸胶带，日期做成印章，图片是微微歪斜的拍立得，便签贴在页上。
@@ -68884,7 +68916,8 @@ async function openHandJournal() {
     const wholeButton = () => root.querySelector('[data-journal-whole]');
     const refreshWholeLabel = () => { const count = selectedEntries().length; if (wholeButton()) wholeButton().textContent = `整页导入 · 预览（${count} 条）`; };
     // r84.174：一次看一页，左右翻；按月份 / 收藏筛选；每一页的操作收进这一页的 ⋯。
-    let filter='all', currentId='', noteFor='', quoteRows=[];
+    let filter='all', currentId='', noteFor='', quoteRows=[], exportView=null;
+    const closeExport=()=>{if(exportView){try{URL.revokeObjectURL(exportView.url);}catch{}exportView=null;}};
     const syncQuote=()=>{const quote=source.value==='chat-quote';root.querySelector('[data-journal-quote]').hidden=!quote;root.querySelector('[data-journal-import-actions]').hidden=quote;
         if(quote){const floor=Number(root.querySelector('[data-journal-quote-floor]').value);const row=quoteRows.find(item=>item.index===floor);const box=root.querySelector('[data-journal-quote-text]');if(row&&box.dataset.floor!==String(floor)){box.value=row.message.mes;box.dataset.floor=String(floor);}}};
     const monthKey=page=>{const d=new Date(page.createdAt);return Number.isFinite(d.getTime())?`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`:'';};
@@ -68900,7 +68933,7 @@ async function openHandJournal() {
         if(index<0)index=shown.length-1;
         const page=shown[index];currentId=page?.id||'';
         const whole=page?pages.indexOf(page):0;
-        root.querySelector('[data-journal-pages]').innerHTML=page?`<div class="rmt-journal-saved" data-journal-current="${esc(page.id)}">${journalPageHtml(page, whole, {editable:true})}${noteFor===page.id?`<div class="rmt-journal-note-editor"><textarea data-journal-note-text aria-label="便签内容" placeholder="写点什么，贴在这一页上"></textarea><div class="rmt-journal-actions"><button type="button" class="rmt-btn" data-journal-note-save>贴上</button><button type="button" class="rmt-btn" data-journal-note-cancel>取消</button></div></div>`:''}<div class="rmt-journal-page-bar"><button type="button" class="rmt-btn" data-journal-fav="${esc(page.id)}" aria-pressed="${page.favorite===true}">${page.favorite?'★ 已收藏':'☆ 收藏'}</button><details class="rmt-journal-page-more"><summary aria-label="这一页的更多操作">⋯</summary><div class="rmt-journal-page-more-list"><button type="button" class="rmt-btn" data-journal-note-open="${esc(page.id)}">贴一张便签</button><button type="button" class="rmt-btn" data-journal-rename="${esc(page.id)}">改标题</button>${layoutSelect(page.layout, page.id)}<details><summary>调整这一页配色 ›</summary>${journalPaletteControls(journal.journalPalette(page.palette,whole),page.id)}</details><button type="button" class="rmt-btn" data-journal-delete="${esc(page.id)}">删除这一页</button></div></details></div></div>`:`<p class="rmt-journal-empty">${pages.length?'这一组里还没有页。':'手帐还是空白的，点下面的「＋ 添一页」收下第一段回忆吧。'}</p>`;
+        root.querySelector('[data-journal-pages]').innerHTML=page?`<div class="rmt-journal-saved" data-journal-current="${esc(page.id)}">${journalPageHtml(page, whole, {editable:true})}${noteFor===page.id?`<div class="rmt-journal-note-editor"><textarea data-journal-note-text aria-label="便签内容" placeholder="写点什么，贴在这一页上"></textarea><div class="rmt-journal-actions"><button type="button" class="rmt-btn" data-journal-note-save>贴上</button><button type="button" class="rmt-btn" data-journal-note-cancel>取消</button></div></div>`:''}${exportView&&exportView.pageId===page.id?`<div class="rmt-journal-export"><img src="${esc(exportView.url)}" alt="${esc(page.title)} 的长图"><p>手机上长按图片可以存到相册；电脑上点「下载图片」。${exportView.missing?` 有 ${exportView.missing} 张图存在别的网站上，没能画进去。`:''}</p><div class="rmt-journal-actions">${exportView.canShare?'<button type="button" class="rmt-btn" data-journal-image-share>分享 / 存储</button>':''}<a class="rmt-btn" href="${esc(exportView.url)}" download="${esc(exportView.name)}">下载图片</a><button type="button" class="rmt-btn" data-journal-image-close>关闭</button></div></div>`:''}<div class="rmt-journal-page-bar"><button type="button" class="rmt-btn" data-journal-fav="${esc(page.id)}" aria-pressed="${page.favorite===true}">${page.favorite?'★ 已收藏':'☆ 收藏'}</button><details class="rmt-journal-page-more"><summary aria-label="这一页的更多操作">⋯</summary><div class="rmt-journal-page-more-list"><button type="button" class="rmt-btn" data-journal-note-open="${esc(page.id)}">贴一张便签</button><button type="button" class="rmt-btn" data-journal-image="${esc(page.id)}">存成长图</button><button type="button" class="rmt-btn" data-journal-rename="${esc(page.id)}">改标题</button>${layoutSelect(page.layout, page.id)}<details><summary>调整这一页配色 ›</summary>${journalPaletteControls(journal.journalPalette(page.palette,whole),page.id)}</details><button type="button" class="rmt-btn" data-journal-delete="${esc(page.id)}">删除这一页</button></div></details></div></div>`:`<p class="rmt-journal-empty">${pages.length?'这一组里还没有页。':'手帐还是空白的，点下面的「＋ 添一页」收下第一段回忆吧。'}</p>`;
         syncPager();
         const editor=root.querySelector('[data-journal-note-text]');if(editor)editor.focus();
     };
@@ -68909,7 +68942,7 @@ async function openHandJournal() {
         root.querySelector('[data-journal-pager]').hidden=shown.length<2;
         root.querySelector('[data-journal-count]').textContent=shown.length?`${index+1} / ${shown.length}`:'';
         root.querySelector('[data-journal-prev]').disabled=index<=0;root.querySelector('[data-journal-next]').disabled=index<0||index>=shown.length-1;};
-    const turn=step=>{const shown=shownPages();const index=shown.findIndex(page=>page.id===currentId);const next=shown[index+step];if(next){currentId=next.id;noteFor='';drawPages();}};
+    const turn=step=>{const shown=shownPages();const index=shown.findIndex(page=>page.id===currentId);const next=shown[index+step];if(next){currentId=next.id;noteFor='';closeExport();drawPages();}};
     // 手机上左右滑动翻页；在按钮、输入框和菜单上滑动不算。
     {let swipe=null;const book=root.querySelector('[data-journal-pages]');
     book.addEventListener('pointerdown',e=>{swipe=e.target.closest('button,textarea,input,select,summary,details,a')?null:{x:e.clientX,y:e.clientY};});
@@ -68985,6 +69018,18 @@ async function openHandJournal() {
                 await store.annotate(scope,map);if(!current())return;pages=await store.read(scope);if(!current())return;drawPages();
                 report(`已写好 ${Object.keys(map).length} 页的批注${Object.keys(map).length<target.length?`，另有 ${target.length-Object.keys(map).length} 页这次没写上，可以再点一次`:''}。`);return;
             }
+            if(button.hasAttribute('data-journal-image')){
+                const id=button.getAttribute('data-journal-image');const page=pages.find(item=>item.id===id);if(!page)return;
+                setBusy(true);report('正在画长图…');
+                const made=await journal_image.renderJournalPageImage(page,pages.indexOf(page),{renderIllustration:(value,key)=>letterArt.renderLetterIllustration(value,{idPrefix:`journal-image-${key}`,label:page.title})});
+                if(!current())return;closeExport();
+                const name=`手帐-${(page.title||'一页').replace(/[\\/:*?"<>|]/g,'').slice(0,40)||'一页'}.png`;
+                const file=typeof File==='function'?new File([made.blob],name,{type:'image/png'}):null;
+                exportView={pageId:id,url:URL.createObjectURL(made.blob),name,file,missing:made.missing,canShare:!!(file&&navigator.canShare?.({files:[file]}))};
+                drawPages();report('长图画好了。');return;
+            }
+            if(button.hasAttribute('data-journal-image-close')){closeExport();drawPages();return;}
+            if(button.hasAttribute('data-journal-image-share')){if(!exportView?.file)return;try{await navigator.share({files:[exportView.file],title:exportView.name});}catch(error){if(error?.name!=='AbortError')report('没能打开分享，可以长按图片保存。');}return;}
             if(button.hasAttribute('data-journal-filter')){filter=button.getAttribute('data-journal-filter');currentId='';noteFor='';drawPages();return;}
             if(button.hasAttribute('data-journal-prev')){turn(-1);return;}
             if(button.hasAttribute('data-journal-next')){turn(1);return;}
@@ -70519,6 +70564,278 @@ async function clipToJournal(raw) {
 __m_ui_journalClip_js.clipToJournal = clipToJournal;
 __m_ui_journalClip_js.clipModeForKind = clipModeForKind;
 __m_ui_journalClip_js.clipPayload = clipPayload;
+}
+
+function __init_ui_journalImage_js() {
+// MODULE: ui/journalImage.js
+const journal = __m_core_handJournal_js;
+const constants = __m_core_constants_js;
+// r84.176 · 把一页手帐存成长图。用 Canvas 2D 一笔一笔画出来（不借网页截图），
+// 电脑、手机浏览器和 TT 都能用；不发请求，不上传，只在本机生成图片。
+// 读不到的图片（跨站且不允许读取的）画成一个说明框，其他内容照常导出。
+
+
+const WIDTH = 1080;
+const PAD = 72;
+const INNER = WIDTH - PAD * 2;
+const MAX_AREA = 16_000_000; // iPhone / TT 的画布面积上限附近；超过就整体缩小，不截断内容。
+const SERIF = "'Noto Serif SC','Songti SC','STSong',Georgia,serif";
+const SANS = "-apple-system,'PingFang SC','Microsoft YaHei','Noto Sans SC',sans-serif";
+const HAND = "'LXGW WenKai','Kaiti SC','STKaiti','KaiTi',serif";
+
+function wrap(ctx, text, width) {
+    const lines = [];
+    for (const paragraph of String(text || '').split('\n')) {
+        let line = '';
+        for (const char of Array.from(paragraph)) {
+            const next = line + char;
+            if (line && ctx.measureText(next).width > width) { lines.push(line); line = char.trim() ? char : ''; }
+            else line = next;
+        }
+        lines.push(line);
+    }
+    return lines;
+}
+
+async function loadImage(url) {
+    const safe = journal.safeJournalImageUrl(url);
+    if (!safe) return null;
+    try {
+        const response = await fetch(safe, { credentials: 'same-origin' });
+        if (!response.ok) return null;
+        const blob = await response.blob();
+        const objectUrl = URL.createObjectURL(blob);
+        try {
+            const img = new Image();
+            img.decoding = 'async';
+            await new Promise((resolve, reject) => { img.onload = resolve; img.onerror = reject; img.src = objectUrl; });
+            return { img, dispose: () => URL.revokeObjectURL(objectUrl) };
+        } catch { URL.revokeObjectURL(objectUrl); return null; }
+    } catch { return null; }
+}
+
+async function loadSvg(svgText) {
+    if (typeof svgText !== 'string' || !svgText.includes('<svg')) return null;
+    const blob = new Blob([svgText], { type: 'image/svg+xml' });
+    const objectUrl = URL.createObjectURL(blob);
+    try {
+        const img = new Image();
+        await new Promise((resolve, reject) => { img.onload = resolve; img.onerror = reject; img.src = objectUrl; });
+        return { img, dispose: () => URL.revokeObjectURL(objectUrl) };
+    } catch { URL.revokeObjectURL(objectUrl); return null; }
+}
+
+// 先排版（算出每样东西的位置和总高度），再画。
+function layout(ctx, page, pictures, renderIllustration) {
+    const ops = [];
+    let y = PAD + 40;
+    const text = (value, { font, color, lineHeight, x = PAD, width = INNER, gap = 0 }) => {
+        ctx.font = font;
+        const lines = wrap(ctx, value, width);
+        ops.push({ type: 'text', lines, font, color, lineHeight, x, y });
+        y += lines.length * lineHeight + gap;
+    };
+    ops.push({ type: 'title', y });
+    ctx.font = `600 50px ${SANS}`;
+    const titleLines = wrap(ctx, page.title || '', INNER - 190);
+    ops[0].lines = titleLines;
+    y += titleLines.length * 66 + 18;
+    ops.push({ type: 'rule', y });
+    y += 36;
+    let photo = 0;
+    for (const [entryIndex, entry] of (page.entries || []).entries()) {
+        const label = constants.MODE_LABEL?.[entry.source?.mode] || (entry.source?.mode === 'chat' ? '聊天' : '已存内容');
+        text(label, { font: `26px ${SANS}`, color: 'muted', lineHeight: 38, gap: 6 });
+        if (entry.title) text(entry.title, { font: `600 34px ${SANS}`, color: 'ink', lineHeight: 48, gap: 16 });
+        for (const [blockIndex, block] of (entry.blocks || []).entries()) {
+            if (block.type === 'text') {
+                if (block.speaker) text(block.speaker, { font: `600 32px ${SERIF}`, color: 'ink', lineHeight: 50 });
+                text(block.text, { font: `32px ${SERIF}`, color: 'ink', lineHeight: 56, gap: 22 });
+            } else if (block.type === 'image' || block.type === 'letterIllustration') {
+                const picture = pictures.get(`${entryIndex}:${blockIndex}`);
+                const frame = 22;
+                const w = Math.min(INNER - 40, 820);
+                const h = picture ? Math.round(w * picture.img.naturalHeight / Math.max(1, picture.img.naturalWidth)) : 220;
+                const caption = block.caption || entry.title || '';
+                const tilt = block.type === 'image' ? ((photo++ % 2) ? 1.2 : -1.2) : 0;
+                ops.push({ type: 'photo', y: y + 10, w, h, frame, picture, caption, tilt, illustration: block.type === 'letterIllustration' });
+                y += h + frame * 2 + (caption ? 56 : 24) + 34;
+            }
+        }
+        y += 18;
+    }
+    for (const [index, note] of (page.notes || []).entries()) {
+        ctx.font = `30px ${SANS}`;
+        const lines = wrap(ctx, note.text, 560);
+        const h = lines.length * 48 + 44;
+        ops.push({ type: 'note', y: y + 8, h, lines, tilt: index % 2 ? 1.5 : -1.5 });
+        y += h + 34;
+    }
+    if (page.annotation?.text) {
+        ctx.font = `32px ${HAND}`;
+        const lines = wrap(ctx, page.annotation.text, INNER - 40);
+        const h = lines.length * 56 + (page.annotation.by ? 48 : 0);
+        ops.push({ type: 'annotation', y: y + 10, lines, by: page.annotation.by || '', h });
+        y += h + 40;
+    }
+    return { ops, height: y + PAD };
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+}
+
+function draw(ctx, page, index, plan) {
+    const colors = journal.journalPalette(page.palette, index);
+    const muted = `${colors.ink}b3`;
+    const color = key => key === 'muted' ? muted : colors.ink;
+    ctx.fillStyle = '#f4f1ec';
+    ctx.fillRect(0, 0, WIDTH, plan.height);
+    roundRect(ctx, 24, 24, WIDTH - 48, plan.height - 48, 28);
+    ctx.fillStyle = colors.paper;
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = colors.accent;
+    ctx.stroke();
+    ctx.fillStyle = colors.accent;
+    ctx.fillRect(24, 40, 12, plan.height - 80);
+    ctx.save();
+    ctx.translate(WIDTH / 2, 30);
+    ctx.rotate(-3 * Math.PI / 180);
+    ctx.globalAlpha = 0.8;
+    ctx.fillRect(-110, -18, 220, 40);
+    ctx.restore();
+    const date = new Date(page.createdAt);
+    for (const op of plan.ops) {
+        if (op.type === 'title') {
+            ctx.font = `600 50px ${SANS}`;
+            ctx.fillStyle = colors.ink;
+            ctx.textBaseline = 'top';
+            op.lines.forEach((line, i) => ctx.fillText(line, PAD, op.y + i * 66));
+            if (Number.isFinite(date.getTime())) {
+                ctx.save();
+                ctx.translate(WIDTH - PAD - 90, op.y + 24);
+                ctx.rotate(6 * Math.PI / 180);
+                ctx.globalAlpha = 0.75;
+                ctx.strokeStyle = colors.ink;
+                ctx.lineWidth = 3;
+                roundRect(ctx, -70, -26, 140, 52, 10);
+                ctx.stroke();
+                ctx.font = `28px ${SANS}`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillStyle = colors.ink;
+                ctx.fillText(`${date.getMonth() + 1} · ${date.getDate()}`, 0, 1);
+                ctx.restore();
+            }
+            if (page.favorite) { ctx.font = `36px ${SANS}`; ctx.fillStyle = colors.ink; ctx.textBaseline = 'top'; ctx.fillText('★', WIDTH - PAD - 10, op.y); }
+        } else if (op.type === 'rule') {
+            ctx.save();
+            ctx.setLineDash([10, 10]);
+            ctx.strokeStyle = colors.accent;
+            ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.moveTo(PAD, op.y); ctx.lineTo(WIDTH - PAD, op.y); ctx.stroke();
+            ctx.restore();
+        } else if (op.type === 'text') {
+            ctx.font = op.font;
+            ctx.fillStyle = color(op.color);
+            ctx.textBaseline = 'top';
+            op.lines.forEach((line, i) => ctx.fillText(line, op.x, op.y + i * op.lineHeight));
+        } else if (op.type === 'photo') {
+            const outerW = op.w + op.frame * 2;
+            const outerH = op.h + op.frame * 2 + (op.caption ? 44 : 0);
+            ctx.save();
+            ctx.translate(WIDTH / 2, op.y + outerH / 2);
+            ctx.rotate(op.tilt * Math.PI / 180);
+            ctx.shadowColor = 'rgba(0,0,0,.12)';
+            ctx.shadowBlur = 18;
+            ctx.shadowOffsetY = 6;
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(-outerW / 2, -outerH / 2, outerW, outerH);
+            ctx.shadowColor = 'transparent';
+            ctx.strokeStyle = colors.accent;
+            ctx.lineWidth = 2;
+            ctx.strokeRect(-outerW / 2, -outerH / 2, outerW, outerH);
+            const ix = -op.w / 2, iy = -outerH / 2 + op.frame;
+            if (op.picture) ctx.drawImage(op.picture.img, ix, iy, op.w, op.h);
+            else {
+                ctx.fillStyle = '#ece7df';
+                ctx.fillRect(ix, iy, op.w, op.h);
+                ctx.fillStyle = '#8a7f73';
+                ctx.font = `28px ${SANS}`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(op.illustration ? '这张插画没能导出' : '这张图片存在别的网站上，没能导出', 0, iy + op.h / 2);
+            }
+            if (op.caption) {
+                ctx.fillStyle = '#6b5a50';
+                ctx.font = `26px ${SANS}`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'top';
+                ctx.fillText(op.caption.slice(0, 40), 0, iy + op.h + 14);
+            }
+            ctx.restore();
+        } else if (op.type === 'note') {
+            ctx.save();
+            const w = 640;
+            ctx.translate(WIDTH - PAD - w / 2, op.y + op.h / 2);
+            ctx.rotate(op.tilt * Math.PI / 180);
+            ctx.fillStyle = colors.accent;
+            ctx.fillRect(-w / 2, -op.h / 2, w, op.h);
+            ctx.fillStyle = colors.ink;
+            ctx.font = `30px ${SANS}`;
+            ctx.textBaseline = 'top';
+            op.lines.forEach((line, i) => ctx.fillText(line, -w / 2 + 40, -op.h / 2 + 22 + i * 48));
+            ctx.restore();
+        } else if (op.type === 'annotation') {
+            ctx.fillStyle = colors.accent;
+            ctx.fillRect(PAD, op.y, 4, op.h);
+            ctx.fillStyle = colors.ink;
+            ctx.font = `32px ${HAND}`;
+            ctx.textBaseline = 'top';
+            op.lines.forEach((line, i) => ctx.fillText(line, PAD + 24, op.y + i * 56));
+            if (op.by) { ctx.font = `26px ${HAND}`; ctx.fillStyle = muted; ctx.fillText(`—— ${op.by}`, PAD + 24, op.y + op.lines.length * 56 + 8); }
+        }
+    }
+}
+
+async function renderJournalPageImage(page, index = 0, { renderIllustration = null } = {}) {
+    const pictures = new Map();
+    const disposers = [];
+    try {
+        for (const [entryIndex, entry] of (page.entries || []).entries()) {
+            for (const [blockIndex, block] of (entry.blocks || []).entries()) {
+                let picture = null;
+                if (block.type === 'image') picture = await loadImage(block.url);
+                else if (block.type === 'letterIllustration' && typeof renderIllustration === 'function') {
+                    try { picture = await loadSvg(renderIllustration(block.illustration, `${entryIndex}-${blockIndex}`)); } catch { picture = null; }
+                }
+                if (picture) { pictures.set(`${entryIndex}:${blockIndex}`, picture); disposers.push(picture.dispose); }
+            }
+        }
+        const measure = document.createElement('canvas').getContext('2d');
+        const plan = layout(measure, page, pictures, renderIllustration);
+        const scale = Math.min(1, Math.sqrt(MAX_AREA / (WIDTH * plan.height)));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(WIDTH * scale);
+        canvas.height = Math.round(plan.height * scale);
+        const ctx = canvas.getContext('2d');
+        ctx.scale(scale, scale);
+        draw(ctx, page, index, plan);
+        const blob = await new Promise((resolve, reject) => canvas.toBlob(value => value ? resolve(value) : reject(new Error('浏览器没能生成图片。')), 'image/png'));
+        return { blob, width: canvas.width, height: canvas.height, missing: [...(page.entries || []).entries()].reduce((n, [e, entry]) => n + (entry.blocks || []).filter((b, i) => (b.type === 'image' || b.type === 'letterIllustration') && !pictures.has(`${e}:${i}`)).length, 0) };
+    } finally {
+        for (const dispose of disposers) { try { dispose(); } catch {} }
+    }
+}
+
+__m_ui_journalImage_js.renderJournalPageImage = renderJournalPageImage;
 }
 
 function __init_ui_languageView_js() {
@@ -74653,7 +74970,7 @@ function openPicker(root, entries, selected, commit, onClose) {
         const visible = entries.map((entry, index) => ({ ...entry, index })).filter(entry => (!filter.value || entry.reference.mode === filter.value)
             && [entry.title, entry.label, ...entry.sharedMemoryIds].join(' ').toLocaleLowerCase().includes(query));
         status.textContent = entries.length ? visible.length ? '' : '没有匹配的画面' : '今生还没留下画面。先在其他模块保存一张图，再来挑选。';
-        grid.innerHTML = visible.map(entry => `<button type="button" class="rmt-card-choice" data-picker-index="${entry.index}" aria-pressed="${JSON.stringify(entry.reference) === JSON.stringify(selected)}"><span class="rmt-card-choice-picture"><img src="${esc(entry.image.url)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer"></span><b>${esc(entry.title)}</b><small>${esc(entry.label)}${entry.sourceLabel ? ' · ' + esc(entry.sourceLabel) : ''}</small>${entry.sharedMemoryIds.length ? `<span class="rmt-card-recommend">推荐 · 与本篇回响同源 ${esc(entry.sharedMemoryIds.join('、'))}</span>` : ''}</button>`).join('');
+        grid.innerHTML = visible.map(entry => `<button type="button" class="rmt-card-choice" data-picker-index="${entry.index}" aria-pressed="${JSON.stringify(entry.reference) === JSON.stringify(selected)}"><span class="rmt-card-choice-picture"><img src="${esc(entry.image.url)}" alt="" decoding="async" referrerpolicy="no-referrer"></span><b>${esc(entry.title)}</b><small>${esc(entry.label)}${entry.sourceLabel ? ' · ' + esc(entry.sourceLabel) : ''}</small>${entry.sharedMemoryIds.length ? `<span class="rmt-card-recommend">推荐 · 和这篇今生回响出自同一段记忆</span>` : ''}</button>`).join('');
         for (const img of grid.querySelectorAll('img')) img.addEventListener('error', () => {
             img.hidden = true;
             const button = img.closest('button'); button.disabled = true;
@@ -74737,7 +75054,8 @@ function bindPastLivesCard(body, session, stored, { readOnly = false, onChange =
     });
     stage.addEventListener('pointerdown', event => {
         if (event.isPrimary === false || event.button > 0) return;
-        stopSensor(); drag = { id: event.pointerId, x: event.clientX, y: event.clientY, start: Number(slider.value), horizontal: false };
+        // r84.177：按下时不停倾斜；只有确实横向拖动卡片时才停（竖着滑动页面经过卡片不算）。
+        drag = { id: event.pointerId, x: event.clientX, y: event.clientY, start: Number(slider.value), horizontal: false };
     });
     stage.addEventListener('pointermove', event => {
         if (!live || closePicker) return;
@@ -74745,7 +75063,7 @@ function bindPastLivesCard(body, session, stored, { readOnly = false, onChange =
         if (drag?.id === event.pointerId) {
             const dx = event.clientX - drag.x, dy = event.clientY - drag.y;
             if (!drag.horizontal && Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 8) { drag = null; return; }
-            if (!drag.horizontal && Math.abs(dx) > 8) { drag.horizontal = true; stage.setPointerCapture?.(event.pointerId); }
+            if (!drag.horizontal && Math.abs(dx) > 8) { drag.horizontal = true; stopSensor(); stage.setPointerCapture?.(event.pointerId); }
             if (drag.horizontal) setPosition(drag.start + dx / Math.max(1, rect.width) * 160);
         } else if (event.pointerType === 'mouse' && !sensor) setPosition((event.clientX - rect.left) / Math.max(1, rect.width) * 100);
     });
@@ -76858,8 +77176,10 @@ async function saveManualPanel(panel, activate = false) {
     try {
         const result = await core_settings.saveManualApiConfiguration(candidate, { activate });
         if (keyInput?.value === typedKey) keyInput.value = '';
-        if (keyInput) keyInput.placeholder = result.credentialSaved ? '已加密保存到本机；填写可替换' : 'API Key（可留空）';
-        if (status) status.textContent = result.credentialSaved ? '连接信息与 Key 已保存到本机；刷新后可用。' : '连接信息已保存；未填写 Key。';
+        if (keyInput) keyInput.placeholder = result.credentialSaved ? '已加密保存到本机；填写可替换' : result.sessionOnly ? '本次打开期间可用；重开后需再填' : 'API Key（可留空）';
+        if (status) status.textContent = result.credentialSaved ? '连接信息与 Key 已保存到本机；刷新后可用。'
+            : result.sessionOnly ? '连接信息已保存。这台设备不支持把 Key 加密存进本机：本次打开期间照常可用，重新打开后需要再填一次，或改用一键配置。'
+            : '连接信息已保存；未填写 Key。';
         if (activate) { panel.dataset.rmtApiEditor = 'manual'; panel.dataset.rmtManualDirty = '0'; refreshGenerationSettingsUi(); }
         return result;
     } catch (error) {
@@ -82632,6 +82952,7 @@ __init_ui_immersionStyles_js();
 __init_ui_inboxStyles_js();
 __init_ui_inboxView_js();
 __init_ui_journalClip_js();
+__init_ui_journalImage_js();
 __init_ui_languageView_js();
 __init_ui_memoryReveal_js();
 __init_ui_mirrorCallView_js();

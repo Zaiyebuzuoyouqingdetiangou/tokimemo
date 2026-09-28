@@ -162,7 +162,14 @@ export function saveManualApiConfiguration(candidate, { activate = false } = {})
             && getPluginSettings(context).manualApiBaseUrl === base && getPluginSettings(context).manualApiKey === updated.manualApiKey;
         if (!stillCurrent()) throw new DOMException('Manual save superseded', 'AbortError');
         let ref = reference;
-        if (key) ref = await manual_credentials.saveManualCredential(base, key, reference);
+        if (key) {
+            try { ref = await manual_credentials.saveManualCredential(base, key, reference); }
+            catch (error) {
+                if (error?.code !== 'RMT_MANUAL_KEY_SESSION_ONLY') throw error;
+                if (!stillCurrent()) throw new DOMException('Manual save superseded', 'AbortError');
+                return { credentialSaved: false, sessionOnly: true, modelSaved: !!model };
+            }
+        }
         if (!stillCurrent()) {
             // A first save can finish after Clear/endpoint change. Remove its
             // newly-created orphan only; never delete an existing shared ref.

@@ -1,7 +1,7 @@
 {
   "display_name": "心迹回廊",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.99.93-r84.175-journal-extras",
+  "js": "index.js?heartbeat=0.99.93-r84.177-small-fixes",
   "author": "Toto",
   "version": "0.99.93",
   "auto_update": true,
@@ -10,6 +10,6 @@
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r84.175：手帐版式、从聊天摘句、夹进手帐、角色批注（一次批注多页 / 搭自动留忆顺便写）。",
+  "description": "r84.177：挑今生缩略图、倾斜被滑动打断、手动 Key 在不支持的设备上误报。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }

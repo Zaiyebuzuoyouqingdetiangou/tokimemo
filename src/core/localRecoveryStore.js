@@ -65,15 +65,17 @@ export async function compareLocalRecoveryRecord(key, expectedRevision, payload)
     const db = await database();
     try {
         return await new Promise((resolve, reject) => {
-            const tx = writeTransaction(db, key); let mismatch = false;
+            const tx = writeTransaction(db, key); let mismatch = false, cloneFailed = false;
             const timer = setTimeout(() => { try { tx.abort(); } catch {} reject(failure()); }, 5000);
             const store = tx.objectStore(STORE), request = store.get(key);
             request.onsuccess = () => {
                 if ((request.result?.revision || 0) !== expectedRevision) { mismatch = true; tx.abort(); return; }
-                store.put({ key, revision: expectedRevision + 1, payload });
+                // r84.177：内容本身存不进去（例如内嵌浏览器不允许存加密钥匙）时单独标出来，调用处好给出准确提示。
+                try { store.put({ key, revision: expectedRevision + 1, payload }); }
+                catch (error) { cloneFailed = error?.name === 'DataCloneError'; try { tx.abort(); } catch {} }
             };
             tx.oncomplete = () => { clearTimeout(timer); resolve(expectedRevision + 1); };
-            tx.onabort = tx.onerror = () => { clearTimeout(timer); reject(quotaFailureOf(tx, mismatch ? 'RMT_LOCAL_CAS' : 'RMT_LOCAL_STORAGE')); };
+            tx.onabort = tx.onerror = () => { clearTimeout(timer); reject(cloneFailed ? failure('RMT_LOCAL_CLONE') : quotaFailureOf(tx, mismatch ? 'RMT_LOCAL_CAS' : 'RMT_LOCAL_STORAGE')); };
         });
     } finally { db.close(); }
 }

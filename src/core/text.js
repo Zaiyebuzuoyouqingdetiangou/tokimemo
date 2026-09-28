@@ -44,8 +44,11 @@ export function toastText(value, max = 800) {
 
 const SAFE_ERROR_CODE_MESSAGES = Object.freeze({
     RMT_LOCAL_STORAGE: '本机记录未能保存；旧记录与当前页面内容保留，请勿刷新未保存的页面。',
+    RMT_LOCAL_CLONE: '这台设备的浏览器不允许把这类内容存进本机；旧记录与当前页面内容保留。',
     RMT_LOCAL_CAS: '本机记录已被另一操作更新；没有覆盖旧记录，请重新打开后继续。',
     RMT_MANUAL_KEY_STORAGE: 'Key 未能保存或取回；没有明文落盘或借用其他连接。请保留页面并检查本机存储。',
+    RMT_MANUAL_KEY_SESSION_ONLY: '这台设备不支持把 Key 加密存进本机；本次打开期间照常可用，重新打开后需要再填一次，或改用一键配置。',
+    RMT_MANUAL_KEY_NOT_ON_DEVICE: '这台设备还没保存过手动 API 的 Key，请在设置里填一次。',
     RMT_ADVANCED_PARAMETERS: '高级参数无效或包含受保护字段；只允许采样与推理配置，不能覆盖模型、消息、最大输出、连接、Key 或工具。',
     RMT_ADVANCED_BACKEND: '非空排参／附加 JSON 需要手动 API 或自定义 Chat Completions Profile；本次没有改连接或静默忽略参数。',
     RMT_RECOVERY_SOURCE_CHANGED: '角色卡、Persona 或来源选择与原任务不同；原成果与草稿保留，未发起请求。',

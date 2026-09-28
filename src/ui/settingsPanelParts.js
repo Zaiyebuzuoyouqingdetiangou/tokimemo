@@ -243,8 +243,10 @@ export async function saveManualPanel(panel, activate = false) {
     try {
         const result = await core_settings.saveManualApiConfiguration(candidate, { activate });
         if (keyInput?.value === typedKey) keyInput.value = '';
-        if (keyInput) keyInput.placeholder = result.credentialSaved ? '已加密保存到本机；填写可替换' : 'API Key（可留空）';
-        if (status) status.textContent = result.credentialSaved ? '连接信息与 Key 已保存到本机；刷新后可用。' : '连接信息已保存；未填写 Key。';
+        if (keyInput) keyInput.placeholder = result.credentialSaved ? '已加密保存到本机；填写可替换' : result.sessionOnly ? '本次打开期间可用；重开后需再填' : 'API Key（可留空）';
+        if (status) status.textContent = result.credentialSaved ? '连接信息与 Key 已保存到本机；刷新后可用。'
+            : result.sessionOnly ? '连接信息已保存。这台设备不支持把 Key 加密存进本机：本次打开期间照常可用，重新打开后需要再填一次，或改用一键配置。'
+            : '连接信息已保存；未填写 Key。';
         if (activate) { panel.dataset.rmtApiEditor = 'manual'; panel.dataset.rmtManualDirty = '0'; refreshGenerationSettingsUi(); }
         return result;
     } catch (error) {

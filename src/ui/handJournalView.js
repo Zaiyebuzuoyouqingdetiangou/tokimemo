@@ -10,6 +10,7 @@ import * as routes from './workspaceState.js';
 import * as room from '../modes/room.js';
 import * as phone from './phoneView.js';
 import * as generation_client from '../generation/client.js';
+import * as journal_image from './journalImage.js';
 import { state as state } from '../core/state.js';
 
 const esc = text.esc;
@@ -51,6 +52,7 @@ const style = `<style>
 .rmt-journal-layout-quote .rmt-journal-prose{position:relative;padding:4px 0 4px 26px;font-family:'Noto Serif SC',Georgia,serif;font-size:17px;line-height:1.9}.rmt-journal-layout-quote .rmt-journal-prose:before{content:'“';position:absolute;left:0;top:-6px;font-size:34px;opacity:.45}.rmt-journal-layout-quote .rmt-journal-photo{max-width:min(100%,260px)}
 .rmt-journal-layout-timeline .rmt-journal-entry{position:relative;margin-left:10px;padding:0 0 14px 18px;border-left:2px solid var(--rmt-journal-accent)}.rmt-journal-layout-timeline .rmt-journal-entry:before{content:'';position:absolute;left:-7px;top:4px;width:12px;height:12px;border-radius:50%;background:var(--rmt-journal-accent)}
 .rmt-journal-quote{display:grid;gap:8px;margin:10px 0}.rmt-journal-quote textarea{min-height:110px}
+.rmt-journal-export{display:grid;gap:10px;margin:12px 0;padding:12px;border:1px solid var(--rmt-theme-border);border-radius:14px;background:var(--rmt-theme-surface-solid,var(--rmt-theme-surface))}.rmt-journal-export img{display:block;width:100%;height:auto;max-height:70vh;object-fit:contain;border-radius:10px;background:#f4f1ec;-webkit-touch-callout:default}.rmt-journal-export p{margin:0;font-size:13px;color:var(--rmt-theme-muted)}.rmt-journal-export a.rmt-btn{display:inline-flex;align-items:center;justify-content:center;text-decoration:none}
 </style>`;
 
 // r84.174：像实体手帐：顶上一条和纸胶带，日期做成印章，图片是微微歪斜的拍立得，便签贴在页上。
@@ -112,7 +114,8 @@ export async function openHandJournal() {
     const wholeButton = () => root.querySelector('[data-journal-whole]');
     const refreshWholeLabel = () => { const count = selectedEntries().length; if (wholeButton()) wholeButton().textContent = `整页导入 · 预览（${count} 条）`; };
     // r84.174：一次看一页，左右翻；按月份 / 收藏筛选；每一页的操作收进这一页的 ⋯。
-    let filter='all', currentId='', noteFor='', quoteRows=[];
+    let filter='all', currentId='', noteFor='', quoteRows=[], exportView=null;
+    const closeExport=()=>{if(exportView){try{URL.revokeObjectURL(exportView.url);}catch{}exportView=null;}};
     const syncQuote=()=>{const quote=source.value==='chat-quote';root.querySelector('[data-journal-quote]').hidden=!quote;root.querySelector('[data-journal-import-actions]').hidden=quote;
         if(quote){const floor=Number(root.querySelector('[data-journal-quote-floor]').value);const row=quoteRows.find(item=>item.index===floor);const box=root.querySelector('[data-journal-quote-text]');if(row&&box.dataset.floor!==String(floor)){box.value=row.message.mes;box.dataset.floor=String(floor);}}};
     const monthKey=page=>{const d=new Date(page.createdAt);return Number.isFinite(d.getTime())?`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`:'';};
@@ -128,7 +131,7 @@ export async function openHandJournal() {
         if(index<0)index=shown.length-1;
         const page=shown[index];currentId=page?.id||'';
         const whole=page?pages.indexOf(page):0;
-        root.querySelector('[data-journal-pages]').innerHTML=page?`<div class="rmt-journal-saved" data-journal-current="${esc(page.id)}">${journalPageHtml(page, whole, {editable:true})}${noteFor===page.id?`<div class="rmt-journal-note-editor"><textarea data-journal-note-text aria-label="便签内容" placeholder="写点什么，贴在这一页上"></textarea><div class="rmt-journal-actions"><button type="button" class="rmt-btn" data-journal-note-save>贴上</button><button type="button" class="rmt-btn" data-journal-note-cancel>取消</button></div></div>`:''}<div class="rmt-journal-page-bar"><button type="button" class="rmt-btn" data-journal-fav="${esc(page.id)}" aria-pressed="${page.favorite===true}">${page.favorite?'★ 已收藏':'☆ 收藏'}</button><details class="rmt-journal-page-more"><summary aria-label="这一页的更多操作">⋯</summary><div class="rmt-journal-page-more-list"><button type="button" class="rmt-btn" data-journal-note-open="${esc(page.id)}">贴一张便签</button><button type="button" class="rmt-btn" data-journal-rename="${esc(page.id)}">改标题</button>${layoutSelect(page.layout, page.id)}<details><summary>调整这一页配色 ›</summary>${journalPaletteControls(journal.journalPalette(page.palette,whole),page.id)}</details><button type="button" class="rmt-btn" data-journal-delete="${esc(page.id)}">删除这一页</button></div></details></div></div>`:`<p class="rmt-journal-empty">${pages.length?'这一组里还没有页。':'手帐还是空白的，点下面的「＋ 添一页」收下第一段回忆吧。'}</p>`;
+        root.querySelector('[data-journal-pages]').innerHTML=page?`<div class="rmt-journal-saved" data-journal-current="${esc(page.id)}">${journalPageHtml(page, whole, {editable:true})}${noteFor===page.id?`<div class="rmt-journal-note-editor"><textarea data-journal-note-text aria-label="便签内容" placeholder="写点什么，贴在这一页上"></textarea><div class="rmt-journal-actions"><button type="button" class="rmt-btn" data-journal-note-save>贴上</button><button type="button" class="rmt-btn" data-journal-note-cancel>取消</button></div></div>`:''}${exportView&&exportView.pageId===page.id?`<div class="rmt-journal-export"><img src="${esc(exportView.url)}" alt="${esc(page.title)} 的长图"><p>手机上长按图片可以存到相册；电脑上点「下载图片」。${exportView.missing?` 有 ${exportView.missing} 张图存在别的网站上，没能画进去。`:''}</p><div class="rmt-journal-actions">${exportView.canShare?'<button type="button" class="rmt-btn" data-journal-image-share>分享 / 存储</button>':''}<a class="rmt-btn" href="${esc(exportView.url)}" download="${esc(exportView.name)}">下载图片</a><button type="button" class="rmt-btn" data-journal-image-close>关闭</button></div></div>`:''}<div class="rmt-journal-page-bar"><button type="button" class="rmt-btn" data-journal-fav="${esc(page.id)}" aria-pressed="${page.favorite===true}">${page.favorite?'★ 已收藏':'☆ 收藏'}</button><details class="rmt-journal-page-more"><summary aria-label="这一页的更多操作">⋯</summary><div class="rmt-journal-page-more-list"><button type="button" class="rmt-btn" data-journal-note-open="${esc(page.id)}">贴一张便签</button><button type="button" class="rmt-btn" data-journal-image="${esc(page.id)}">存成长图</button><button type="button" class="rmt-btn" data-journal-rename="${esc(page.id)}">改标题</button>${layoutSelect(page.layout, page.id)}<details><summary>调整这一页配色 ›</summary>${journalPaletteControls(journal.journalPalette(page.palette,whole),page.id)}</details><button type="button" class="rmt-btn" data-journal-delete="${esc(page.id)}">删除这一页</button></div></details></div></div>`:`<p class="rmt-journal-empty">${pages.length?'这一组里还没有页。':'手帐还是空白的，点下面的「＋ 添一页」收下第一段回忆吧。'}</p>`;
         syncPager();
         const editor=root.querySelector('[data-journal-note-text]');if(editor)editor.focus();
     };
@@ -137,7 +140,7 @@ export async function openHandJournal() {
         root.querySelector('[data-journal-pager]').hidden=shown.length<2;
         root.querySelector('[data-journal-count]').textContent=shown.length?`${index+1} / ${shown.length}`:'';
         root.querySelector('[data-journal-prev]').disabled=index<=0;root.querySelector('[data-journal-next]').disabled=index<0||index>=shown.length-1;};
-    const turn=step=>{const shown=shownPages();const index=shown.findIndex(page=>page.id===currentId);const next=shown[index+step];if(next){currentId=next.id;noteFor='';drawPages();}};
+    const turn=step=>{const shown=shownPages();const index=shown.findIndex(page=>page.id===currentId);const next=shown[index+step];if(next){currentId=next.id;noteFor='';closeExport();drawPages();}};
     // 手机上左右滑动翻页；在按钮、输入框和菜单上滑动不算。
     {let swipe=null;const book=root.querySelector('[data-journal-pages]');
     book.addEventListener('pointerdown',e=>{swipe=e.target.closest('button,textarea,input,select,summary,details,a')?null:{x:e.clientX,y:e.clientY};});
@@ -213,6 +216,18 @@ export async function openHandJournal() {
                 await store.annotate(scope,map);if(!current())return;pages=await store.read(scope);if(!current())return;drawPages();
                 report(`已写好 ${Object.keys(map).length} 页的批注${Object.keys(map).length<target.length?`，另有 ${target.length-Object.keys(map).length} 页这次没写上，可以再点一次`:''}。`);return;
             }
+            if(button.hasAttribute('data-journal-image')){
+                const id=button.getAttribute('data-journal-image');const page=pages.find(item=>item.id===id);if(!page)return;
+                setBusy(true);report('正在画长图…');
+                const made=await journal_image.renderJournalPageImage(page,pages.indexOf(page),{renderIllustration:(value,key)=>letterArt.renderLetterIllustration(value,{idPrefix:`journal-image-${key}`,label:page.title})});
+                if(!current())return;closeExport();
+                const name=`手帐-${(page.title||'一页').replace(/[\\/:*?"<>|]/g,'').slice(0,40)||'一页'}.png`;
+                const file=typeof File==='function'?new File([made.blob],name,{type:'image/png'}):null;
+                exportView={pageId:id,url:URL.createObjectURL(made.blob),name,file,missing:made.missing,canShare:!!(file&&navigator.canShare?.({files:[file]}))};
+                drawPages();report('长图画好了。');return;
+            }
+            if(button.hasAttribute('data-journal-image-close')){closeExport();drawPages();return;}
+            if(button.hasAttribute('data-journal-image-share')){if(!exportView?.file)return;try{await navigator.share({files:[exportView.file],title:exportView.name});}catch(error){if(error?.name!=='AbortError')report('没能打开分享，可以长按图片保存。');}return;}
             if(button.hasAttribute('data-journal-filter')){filter=button.getAttribute('data-journal-filter');currentId='';noteFor='';drawPages();return;}
             if(button.hasAttribute('data-journal-prev')){turn(-1);return;}
             if(button.hasAttribute('data-journal-next')){turn(1);return;}
