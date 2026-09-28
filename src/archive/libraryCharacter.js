@@ -1,4 +1,6 @@
 import * as archive_groups from './groups.js';
+import * as relay_view from '../ui/archiveRelayView.js';
+import * as relay_policy from '../core/archiveRelayPolicy.js';
 import * as archive_inheritance from './inheritance.js';
 import * as archive_backupStore from './backupStore.js';
 import * as archive_repository from './repository.js';
@@ -57,7 +59,7 @@ export function showArchiveCharacter(groupId) {
         }
     } catch {}
     const rows = entries.map(item => `<button type="button" class="rmt-archive-overview-item" data-rmt-indexed-chat="${core_text.esc(item.chatId)}" data-rmt-indexed-character="${core_text.esc(item.characterKey)}" data-rmt-indexed-entry="${core_text.esc(core_context.archiveIndexEntryId(item))}"><span class="rmt-overview-dot">●</span><span><b>${core_text.esc(item.archiveName)}</b><small>${core_text.esc(item.characterName)} · ${core_text.esc(item.chatId)} · ${item.memoryCount} 条记忆 · ${core_text.esc(ui_overlay.formatArchiveTime(item.updatedAt))}</small></span><i class="fa-solid fa-chevron-right"></i></button>`).join('');
-    body.innerHTML = `<div class="rmt-archive-room">${profileHtml}${inheritHtml}<section class="rmt-archive-card rmt-character-chat-archives"><div class="rmt-character-heart-head"><button type="button" class="rmt-character-heart-avatar" data-rmt-avatar-talk="${core_text.esc(key)}" aria-label="和角色说话">${charAvatar ? `<img src="${core_text.esc(charAvatar)}" alt="">` : '<i class="fa-solid fa-user"></i>'}<span><i class="fa-solid fa-comment-dots"></i></span></button><div><div class="rmt-archive-kicker">CHAT ARCHIVES</div><strong class="rmt-archive-title">${core_text.esc(name)} · 不同聊天世界线</strong></div></div><div style="margin:10px 0"><button type="button" class="rmt-btn" data-rmt-action="archive-group-manager">管理角色分类</button></div><div class="rmt-archive-overview-list" style="max-height:none">${rows || '<div class="rmt-archive-overview-empty">这个角色组还没有已索引档案。</div>'}</div></section></div>`;
+    body.innerHTML = `<div class="rmt-archive-room">${profileHtml}${inheritHtml}${entries.some(entry => archive_inheritance.archiveEntryMatchesInheritanceTarget(entry, context)) ? relay_view.archiveRelayEntryHtml(context) : ''}<section class="rmt-archive-card rmt-character-chat-archives"><div class="rmt-character-heart-head"><button type="button" class="rmt-character-heart-avatar" data-rmt-avatar-talk="${core_text.esc(key)}" aria-label="和角色说话">${charAvatar ? `<img src="${core_text.esc(charAvatar)}" alt="">` : '<i class="fa-solid fa-user"></i>'}<span><i class="fa-solid fa-comment-dots"></i></span></button><div><div class="rmt-archive-kicker">CHAT ARCHIVES</div><strong class="rmt-archive-title">${core_text.esc(name)} · 不同聊天世界线</strong></div></div><div style="margin:10px 0"><button type="button" class="rmt-btn" data-rmt-action="archive-group-manager">管理角色分类</button></div><div class="rmt-archive-overview-list" style="max-height:none">${rows || '<div class="rmt-archive-overview-empty">这个角色组还没有已索引档案。</div>'}</div></section></div>`;
 }
 
 export function showArchiveGroupManager() {
@@ -377,6 +379,7 @@ function archiveTargetCardFields(context, descriptor) {
 }
 
 export function freezeArchiveTarget(snapshot, hostContext = core_context.getContext()) {
+    relay_policy.assertRelayWrite(snapshot, relay_policy.relayUiState(snapshot), snapshot?.memory);
     if (!snapshot?.memory || snapshot.backupOnly) throw new Error('只有源聊天仍可读取的正式档案才能启动后台派生生成。');
     const entryId = core_context.archiveIndexEntryId(snapshot);
     const indexedMatches = archive_groups.getArchiveIndex(hostContext).filter(item =>
@@ -457,6 +460,7 @@ export async function revalidateArchiveTarget(target, lifecycleEpoch = runtimeSt
     if (!entry || archive_groups.isArchiveEntryDeletedFromLibrary(entry, context)) throw new Error('目标档案已经被删除或移除，本次旧结果没有写入。');
     const snapshot = await fetchIndexedArchiveSnapshot(entry, context, { force: true, lifecycleEpoch });
     core_context.assertRuntimeLifecycleCurrent(lifecycleEpoch);
+    await archive_backupStore.assertArchiveRelayWritable(entry, snapshot.memory);
     if (snapshot.backupOnly) throw new Error('目标档案的源聊天已不可读取，本次结果没有写入只读备份。');
     if (core_context.comparableChatId(snapshot.chatId) !== core_context.comparableChatId(target?.chatId)
         || core_text.normalizeText(snapshot.memory?.archiveRevision, 240) !== core_text.normalizeText(target?.archiveRevision, 240)) {

@@ -149,7 +149,19 @@ export async function mergeGenerationRecoveryResponse(journal, segment, raw, val
     // must not silently slice old or newly accepted records off a merged array.
     const observedNew = rawStrings([nextRaw], parsePartial);
     for (const value of merged.ignoredNewStrings) observedNew.delete(value);
-    const fresh = await validator(raw);
+    let fresh;
+    try { fresh = await validator(raw); }
+    catch (error) {
+        // Inbox continuation may return only the missing slots. Validate those
+        // exact received letters in the full original plan; never replace a bad
+        // or extra slot with a preserved letter to manufacture success.
+        const rows = raw?.letters, full = combined?.letters;
+        if (journal?.identity?.mode !== 'inbox' || error?.code !== 'RMT_INBOX_INCOMPLETE'
+            || !Array.isArray(rows) || !rows.length || !Array.isArray(full) || rows.length >= full.length
+            || new Set(rows.map(row => row?.slot)).size !== rows.length
+            || rows.some(row => !full.some(letter => letter?.slot === row?.slot))) throw error;
+        fresh = await validator({ ...combined, letters: full.map(letter => rows.find(row => row.slot === letter.slot) || letter) });
+    }
     if (!containsFacts(receivedFacts(normalized, observedNew), receivedFacts(fresh, observedNew)))
         throw Object.assign(new Error('合并会超过原有内容范围或遗漏本次有效成果；双方草稿已保留，未覆盖旧进度。'),
             { code: 'RMT_RECOVERY_MERGE_CONFLICT', safeToDisplay: true });

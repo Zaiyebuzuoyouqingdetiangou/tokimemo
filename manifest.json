@@ -1,15 +1,15 @@
 {
   "display_name": "心迹回廊",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.99.93-r84.177-small-fixes",
+  "js": "index.js?heartbeat=0.99.95-r84.180-generation-recovery",
   "author": "Toto",
-  "version": "0.99.93",
+  "version": "0.99.95",
   "auto_update": true,
   "minimum_client_version": "1.13.0",
   "hooks": {
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r84.177：挑今生缩略图、倾斜被滑动打断、手动 Key 在不支持的设备上误报。",
+  "description": "r84.180：修复接力草稿误拦、邮箱部分内容恢复、手动连接与输入预算；陈列柜保留全部已生成物品。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }

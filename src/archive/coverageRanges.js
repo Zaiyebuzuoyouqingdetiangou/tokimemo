@@ -2,6 +2,7 @@
 // bank has actually organized, the gaps inside a selected range, and the next
 // suggested backfill segment. No chat/storage mutation or provider work.
 import * as chat_read_range from '../core/chatReadRange.js';
+import * as contextApi from '../core/context.js';
 
 export const COVERAGE_KINDS = Object.freeze(['backfill', 'incremental', 'full']);
 export const COVERAGE_KIND_LABEL = Object.freeze({ backfill: '补录历史', incremental: '增量更新', full: '全量整理' });
@@ -147,11 +148,17 @@ function spansFromFloors(floors) {
     return spans;
 }
 
-export function memoryFloorSpans(memories) {
+export function memoryFloorSpans(memories, chatId = '') {
     const spans = [];
+    const currentChatId = contextApi.comparableChatId(chatId);
     for (const item of Array.isArray(memories) ? memories : []) {
         const kind = String(item?.sourceKind || 'chat');
         if (kind !== 'chat' && !kind.startsWith('chat')) continue;
+        const sourceChatId = contextApi.comparableChatId(item?.sourceChatId || item?.inheritedArchiveSourceV1?.chatId);
+        // Old single-chat archives did not stamp provenance. Keep their local
+        // coverage; relay preparation stamps their original chat before moving
+        // them, so an A floor can never stand in for B's same-numbered floor.
+        if (currentChatId && sourceChatId && sourceChatId !== currentChatId) continue;
         const start = floor(item?.messageStart), end = floor(item?.messageEnd);
         if (!start || !end || start > end) continue;
         spans.push({ start, end });
@@ -166,9 +173,9 @@ function spanContains(spans, value) {
 // Three visible states, collapsed into runs. A floor already sent through an
 // archive window but never turned into its own Mxxx stays "scanned", so a gap
 // click does not offer to pay for it again.
-export function buildFloorCoverage({ totalFloors = 0, memories = [], summaryFloors = [], coveredRanges = [] } = {}) {
+export function buildFloorCoverage({ totalFloors = 0, memories = [], summaryFloors = [], coveredRanges = [], chatId = '' } = {}) {
     const total = Math.max(0, Math.floor(Number(totalFloors) || 0));
-    const memory = memoryFloorSpans(memories);
+    const memory = memoryFloorSpans(memories, chatId);
     const summary = spansFromFloors(summaryFloors);
     const scanned = normalizeCoveredRanges(coveredRanges);
     const runs = [];

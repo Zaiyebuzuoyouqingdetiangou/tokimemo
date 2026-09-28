@@ -92,6 +92,7 @@ export function paintCoverageMap(panel) {
         return;
     }
     const runs = archive_coverage.buildFloorCoverage({
+        chatId: bank.chatId,
         totalFloors: total,
         memories: [...(bank.memories || []), ...(bank.coldArchive || [])],
         summaryFloors: archive_coverage.summaryFloorsFromChat(chat),
@@ -213,7 +214,7 @@ export async function refreshModelOptions({ fetchRemote = false } = {}) {
     return { models, fallbackOnly };
 }
 
-function manualSettingsFromPanel(panel) {
+export function manualSettingsFromPanel(panel) {
     const current = core_settings.getPluginSettings();
     const keyInput = panel?.querySelector?.('[data-rmt-manual-api-key]');
     const baseInput = panel?.querySelector?.('[data-rmt-manual-api-base]');

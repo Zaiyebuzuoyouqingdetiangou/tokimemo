@@ -1,4 +1,5 @@
 import * as archive_inheritance_view from './archiveInheritance.js';
+import * as archive_relay_view from './archiveRelayView.js';
 import { applyArchiveMobileSafeArea, bindOverlayCloseFallback, bindToolbarMoreMenu, bodyEl, calendarQuickAccessHtml, closeArchiveOverlayFromUser, closeToolbarMoreMenu, confirmExplicitAction, confirmExplicitActionTwice, confirmModeRegeneration, confirmRoomLifeRefresh, decorateReadOnlyModeUi, emptyArchiveMode, formatArchiveTime, isArchiveMobileViewport, loadChooserArchiveRecovery, memoryLockPanelHtml, readableModePortals, requestParticipantSelection, requestParticipantVersions, revealArchiveOverlay, setBackVisible, setManageVisible, setRegenerateVisible, toggleToolbarMoreMenu, toolbarMoreMenu, topTitle } from './overlayShell.js';
 import * as ui_workspaceState from './workspaceState.js';
 import * as core_context from '../core/context.js';
@@ -44,6 +45,7 @@ function revealModuleId(achievementId) {
 }
 
 export function overlayArchiveActions(actionEl, action) {
+    if (action.startsWith('archive-relay-')) return void archive_relay_view.handleArchiveRelayAction(actionEl, action);
     if (action === 'achievement-jump') {
         const floor = Math.floor(Number(actionEl?.dataset?.rmtFloor));
         if (!Number.isSafeInteger(floor) || floor < 0) {

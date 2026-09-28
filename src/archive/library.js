@@ -1,4 +1,6 @@
 import * as workspace_ui from '../ui/workspace.js';
+import * as relay_view from '../ui/archiveRelayView.js';
+import * as relay_policy from '../core/archiveRelayPolicy.js';
 import * as archive_groups from './groups.js';
 import * as archive_backupStore from './backupStore.js';
 import * as archive_repository from './repository.js';
@@ -156,7 +158,7 @@ export async function showArchiveLibrary() {
         }
     } catch {}
     if (!viewStillCurrent()) return;
-    body.innerHTML = `<div class="rmt-archive-room"><section class="rmt-archive-card"><div class="rmt-archive-kicker">MEMORY ARCHIVE LIBRARY</div><strong class="rmt-archive-title">档案室一览</strong><div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="rmt-btn" data-rmt-action="archive-group-manager">管理角色分类</button><button type="button" class="rmt-btn" data-rmt-action="archive-auto-classify">自动分类</button><button type="button" class="rmt-btn" data-rmt-action="rebuild-archive-index">扫描旧版本已有档案</button></div></section>${cards ? `<section class="rmt-archive-portals rmt-character-portals">${cards}</section>` : '<div class="rmt-archive-overview-empty">还没有已索引的档案。当前版本创建/更新档案后会自动加入这里；旧版本档案可点上方按钮手动扫描一次。</div>'}${currentQuick}</div>`;
+    body.innerHTML = `<div class="rmt-archive-room"><section class="rmt-archive-card"><div class="rmt-archive-kicker">MEMORY ARCHIVE LIBRARY</div><strong class="rmt-archive-title">档案室一览</strong><div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="rmt-btn" data-rmt-action="archive-group-manager">管理角色分类</button><button type="button" class="rmt-btn" data-rmt-action="archive-auto-classify">自动分类</button><button type="button" class="rmt-btn" data-rmt-action="rebuild-archive-index">扫描旧版本已有档案</button></div></section>${cards ? `<section class="rmt-archive-portals rmt-character-portals">${cards}</section>` : '<div class="rmt-archive-overview-empty">还没有已索引的档案。当前版本创建/更新档案后会自动加入这里；旧版本档案可点上方按钮手动扫描一次。</div>'}${currentQuick}${relay_view.archiveRelayEntryHtml(archiveContext)}</div>`;
 }
 
 // Saved versions never read /api/chats/get and never enter the live snapshot
@@ -229,7 +231,7 @@ export function setArchiveReadOnly(readOnly) {
         globalThis.toastr?.info?.('源聊天暂不可读，当前查看只读备份。请重试读取源聊天；备份本身不能解除只读或绑定到其他聊天。', '心迹回廊');
         return showIndexedArchiveSnapshot(runtimeState.activeArchiveSnapshot);
     }
-    runtimeState.activeArchiveReadOnly = readOnly !== false;
+    runtimeState.activeArchiveReadOnly = relay_policy.relayReadOnly(runtimeState.activeArchiveSnapshot) || readOnly !== false;
     if (runtimeState.activeMode && runtimeState.activeSession) ui_overlay.renderActive();
     else showIndexedArchiveSnapshot(runtimeState.activeArchiveSnapshot);
     if (!runtimeState.activeArchiveReadOnly) {
@@ -248,7 +250,8 @@ export function showIndexedArchiveSnapshot(snapshot = runtimeState.activeArchive
     modes_room.stopRoomClock(); ui_phoneView.stopPhoneClock(); ui_endingView.closeEndingEasterEgg({ restoreFocus: false });
     const isNewSnapshot = runtimeState.activeArchiveSnapshot !== snapshot;
     runtimeState.activeArchiveSnapshot = snapshot;
-    if (isNewSnapshot || snapshot.backupOnly) runtimeState.activeArchiveReadOnly = true;
+    const relayFrozen = relay_policy.relayReadOnly(snapshot);
+    if (isNewSnapshot || snapshot.backupOnly || relayFrozen) runtimeState.activeArchiveReadOnly = true;
     runtimeState.activeMode = null;
     runtimeState.activeSession = null;
     runtimeState.archiveViewLevel = 'snapshot';
@@ -263,7 +266,7 @@ export function showIndexedArchiveSnapshot(snapshot = runtimeState.activeArchive
     const cachedRead = { chatId: snapshot.chatId, memoryBank: memory, cache: snapshot.cache, clone: false };
     const portals = ui_overlay.readableModePortals(archive_snapshots.baseModeAvailability(cachedRead), cachedRead);
     const generatedCount = portals.filter(item => !!item.session && !item.session.readableProgress).length;
-    const canGenerateDerived = snapshot.backupOnly !== true;
+    const canGenerateDerived = snapshot.backupOnly !== true && !relayFrozen;
     const calendarPortal = portals.find(item => item.mode === core_constants.MODE.CALENDAR) || { session: null };
     const calendarGenerating = core_requestCoordinator.isArchiveTargetModeGenerating(core_constants.MODE.CALENDAR, snapshot);
     const calendarQuick = snapshotCalendarQuickAccessHtml({ generated: !!calendarPortal.session, readOnly: runtimeState.activeArchiveReadOnly, canGenerate: canGenerateDerived, generating: calendarGenerating });
@@ -293,8 +296,8 @@ export function showIndexedArchiveSnapshot(snapshot = runtimeState.activeArchive
           <div class="rmt-archive-meta">${snapshot.historyVersionId ? `${core_text.esc(new Date(snapshot.historyCreatedAt).toLocaleString())} · ${core_text.esc(snapshot.historyReason || '按选择重新生成前保存')} · 未完成草稿另行保留，不计作完整作品` : snapshot.backupOnly ? `本机备份 · ${core_text.esc(snapshot.sourceError || '源聊天无法读取')}` : (runtimeState.activeArchiveReadOnly ? '当前为只读档案' : '写入前会再次验证目标聊天')}</div>
           ${archiveCoverageText ? `<div class="rmt-archive-meta" data-rmt-archive-coverage>${core_text.esc(archiveCoverageText)}</div>` : ''}
           <div class="rmt-archive-readonly-control">
-            <label><input type="checkbox" data-rmt-readonly-toggle ${runtimeState.activeArchiveReadOnly ? 'checked' : ''} ${snapshot.backupOnly ? 'disabled' : ''}> 只读查看</label>
-            <small>${snapshot.taskResultDraftId ? '按原任务资料查看，当前档案与作品保留' : snapshot.historyVersionId ? '旧版本只读，当前档案与新作品不受影响' : snapshot.backupOnly ? '备份只读，不代表原聊天已删除' : runtimeState.activeArchiveReadOnly ? '关闭只读后可显示编辑操作' : '编辑待命'}</small>
+            <label><input type="checkbox" data-rmt-readonly-toggle ${runtimeState.activeArchiveReadOnly ? 'checked' : ''} ${snapshot.backupOnly || relayFrozen ? 'disabled' : ''}> 只读查看</label>
+            <small>${relayFrozen ? '已交给其他聊天继续，请在档案室接回' : snapshot.taskResultDraftId ? '按原任务资料查看，当前档案与作品保留' : snapshot.historyVersionId ? '旧版本只读，当前档案与新作品不受影响' : snapshot.backupOnly ? '备份只读，不代表原聊天已删除' : runtimeState.activeArchiveReadOnly ? '关闭只读后可显示编辑操作' : '编辑待命'}</small>
             ${snapshot.backupOnly && !snapshot.historyVersionId ? `<button type="button" class="rmt-btn" data-rmt-indexed-character="${core_text.esc(snapshot.characterKey)}" data-rmt-indexed-chat="${core_text.esc(snapshot.chatId)}" data-rmt-indexed-entry="${core_text.esc(snapshot.entryId)}">重试读取源聊天</button>` : ''}
           </div>
         </div>

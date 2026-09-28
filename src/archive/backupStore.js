@@ -5,6 +5,7 @@ import * as core_context from '../core/context.js';
 import * as core_text from '../core/text.js';
 import * as core_backupDiagnostics from '../core/backupDiagnostics.js';
 import * as core_archiveBridge from '../core/archiveBridge.js';
+import * as relay_policy from '../core/archiveRelayPolicy.js';
 
 let databasePromise = null;
 let openedDatabase = null;
@@ -264,6 +265,53 @@ async function backupTransaction(mode, stage, run) {
     }
 }
 
+// Relay records and archive records must commit in the SAME database transaction.
+export async function archiveBackupTransaction(mode, run) {
+    for (let attempt = 0; ; attempt++) {
+        const { db, result } = await backupTransaction(mode, mode === 'readwrite' ? 'write' : 'read', run);
+        try { return await result; }
+        catch (error) {
+            const lost = connectionLost(error);
+            if (lost) forgetDatabase(db);
+            if (lost && mode === 'readonly' && attempt === 0) continue;
+            // Never replay a write whose outcome may be uncertain.
+            throw error;
+        }
+    }
+}
+
+export function prepareArchiveBackupRecord(entry, memory, cache) { return buildRecord(entry, memory, cache); }
+
+export function normalizeArchiveBackupRecord(raw, entry) { return normalizeRecord(raw, entry); }
+
+export async function readArchiveRelayState(entry) {
+    if (testBackend && typeof testBackend.readRelay !== 'function') return relay_policy.rememberRelayFence(entry, null);
+    const value = testBackend ? await testBackend.readRelay(entry) : await archiveBackupTransaction('readonly', tx => new Promise((resolve, reject) => {
+        let found = null;
+        const request = tx.objectStore(core_constants.ARCHIVE_BACKUP_STORE_NAME).get(relay_policy.relayMemberKey(entry));
+        request.onsuccess = () => { found = request.result || null; };
+        request.onerror = () => reject(request.error);
+        tx.oncomplete = () => resolve(found);
+        tx.onabort = () => reject(tx.error || relay_policy.relayError('接力登记读取失败，原内容保留。'));
+    }));
+    return relay_policy.rememberRelayFence(entry, value);
+}
+
+export async function assertArchiveRelayWritable(entry, memory = null) {
+    let fence;
+    try { fence = await readArchiveRelayState(entry); }
+    catch (error) {
+        // An optional relay lookup must not introduce a new preparation/storage
+        // requirement for ordinary chats. Their existing durable-save checks
+        // still apply. Known relay members remain fail-closed, including a
+        // malformed registry; canonical put/delete always check in-transaction.
+        if (memory?.archiveRelayV1 || relay_policy.relayUiState(entry)
+            || String(error?.code || '').startsWith('RMT_RELAY_')) throw error;
+        return null;
+    }
+    return relay_policy.assertRelayWrite(entry, fence, memory);
+}
+
 function openDatabase() {
     if (databasePromise) return databasePromise;
     // Getter/open may throw synchronously in restricted webviews. Every failed
@@ -310,14 +358,31 @@ function openDatabase() {
     return pending;
 }
 
-function idbReadRecord(transaction, entry) {
+function idbReadRecord(transaction, entry, withRelay = false) {
     return new Promise((resolve, reject) => {
         let settled = false;
-        const finish = (settle, value) => { if (!settled) { settled = true; settle(value); } };
+        let raw = null, fence = null;
+        const finish = (settle, value) => {
+            if (withRelay && settle === resolve) { raw = value; return; }
+            if (!settled) { settled = true; settle(value); }
+        };
         try {
             const identity = normalizedIdentity(entry);
             const store = transaction.objectStore(core_constants.ARCHIVE_BACKUP_STORE_NAME);
             transaction.onabort = () => finish(reject, transaction.error);
+            if (withRelay) {
+                // Content and holder are one read snapshot, not two transactions.
+                const relayRequest = store.get(relay_policy.relayMemberKey(entry));
+                relayRequest.onerror = () => finish(reject, relayRequest.error);
+                relayRequest.onsuccess = () => { fence = relayRequest.result || null; };
+                transaction.oncomplete = () => {
+                    if (settled) return;
+                    try {
+                        const relay = relay_policy.rememberRelayFence(entry, fence);
+                        settled = true; resolve({ raw, relay });
+                    } catch (error) { finish(reject, error); }
+                };
+            }
             const exactRequest = store.get(identity.entryId);
             exactRequest.onerror = () => finish(reject, exactRequest.error);
             exactRequest.onsuccess = () => {
@@ -341,9 +406,9 @@ function idbReadRecord(transaction, entry) {
     });
 }
 
-async function idbRead(entry) {
+async function idbRead(entry, withRelay = false) {
     for (let attempt = 0; ; attempt += 1) {
-        const { db, result } = await backupTransaction('readonly', 'read', transaction => idbReadRecord(transaction, entry));
+        const { db, result } = await backupTransaction('readonly', 'read', transaction => idbReadRecord(transaction, entry, withRelay));
         try { return await result; }
         catch (error) {
             // 读取没有副作用：连接断了就换新连接再读一次。
@@ -359,6 +424,7 @@ async function idbPut(record, expected = null, options = {}) {
     const { db, result } = await backupTransaction('readwrite', 'write', transaction => idbPutRecord(transaction, record, expected, options));
     return result.catch(error => {
         if (connectionLost(error)) forgetDatabase(db);
+        if (String(error?.code || '').startsWith('RMT_RELAY_')) throw error;
         throw core_backupDiagnostics.backupFailureError(error, 'write', 'transaction');
     });
 }
@@ -372,6 +438,8 @@ function idbPutRecord(transaction, record, expected, options) {
         let chatRecords = [];
         let exactDone = false;
         let matchesDone = false;
+        let relayDone = false;
+        let relayState = null;
         let abortReason = null;
         const abortWith = error => {
             // A request error is often more specific than transaction.error (or
@@ -382,6 +450,10 @@ function idbPutRecord(transaction, record, expected, options) {
         };
         const finalizeWrite = () => {
             assertBackupWriteCurrent(options);
+            relay_policy.rememberRelayFence(record, relayState);
+            // Opening a frozen source is a read, not an attempt to take ownership.
+            if (options.seed === true && relay_policy.relayReadOnly(record, relayState)) { outcome = true; return; }
+            const relay = relay_policy.assertRelayWrite(record, relayState, record.memory);
             const aliases = new Map();
             for (const candidate of [exactRaw, ...chatRecords]) {
                 const id = core_text.normalizeText(candidate?.entryId, 120);
@@ -485,13 +557,14 @@ function idbPutRecord(transaction, record, expected, options) {
                 return;
             }
             if (!idempotentRetry) {
+                if (relay) record.memory.archiveRelayV1 = { version: 1, lineageId: relay.lineageId, epoch: relay.epoch };
                 const putRequest = store.put(record);
                 if (putRequest) putRequest.onerror = () => abortWith(putRequest.error);
             }
             outcome = true;
         };
         const finalize = () => {
-            if (finalized || !exactDone || !matchesDone) return;
+            if (finalized || !exactDone || !matchesDone || !relayDone) return;
             finalized = true;
             try { finalizeWrite(); }
             catch (error) { abortWith(error); }
@@ -510,6 +583,9 @@ function idbPutRecord(transaction, record, expected, options) {
             matchesDone = true;
             finalize();
         };
+        const relayRequest = store.get(relay_policy.relayMemberKey(record));
+        relayRequest.onerror = () => abortWith(relayRequest.error);
+        relayRequest.onsuccess = () => { relayState = relayRequest.result; relayDone = true; finalize(); };
         transaction.oncomplete = () => resolve(outcome);
         transaction.onabort = () => reject(abortReason || transaction.error || core_backupDiagnostics.backupFailureError(null, 'write', 'transaction'));
         transaction.onerror = () => reject(abortReason || transaction.error || core_backupDiagnostics.backupFailureError(null, 'write', 'transaction'));
@@ -587,8 +663,8 @@ function idbDeleteRecords(transaction, targets) {
         // write all tombstones in one IndexedDB transaction so an Nth-record failure cannot
         // leave the first N-1 backups silently deleted while the library index remains intact.
         const store = transaction.objectStore(core_constants.ARCHIVE_BACKUP_STORE_NAME);
-        const discovered = targets.map(() => ({ exact: null, chat: [] }));
-        let pending = targets.length * 2;
+        const discovered = targets.map(() => ({ exact: null, chat: [], relay: null }));
+        let pending = targets.length * 3;
         let finalized = false;
         const abort = error => {
             if (error) transaction.__rmtAbortReason = error;
@@ -598,6 +674,15 @@ function idbDeleteRecords(transaction, targets) {
             pending -= 1;
             if (pending || finalized) return;
             finalized = true;
+            try {
+                for (let i = 0; i < targets.length; i++) {
+                    const found = discovered[i];
+                    const records = [found.exact, ...found.chat.filter(row => identityMatches(row, targets[i]))].filter(Boolean);
+                    relay_policy.assertRelayWrite(targets[i], found.relay);
+                    for (const record of records) relay_policy.assertRelayWrite(targets[i], found.relay, record.memory);
+                }
+            }
+            catch (error) { abort(error); return; }
             const tombstones = new Map();
             const deletedAt = Date.now();
             for (let index = 0; index < targets.length; index += 1) {
@@ -644,6 +729,9 @@ function idbDeleteRecords(transaction, targets) {
             const matchesRequest = store.index('chatId').getAll(identity.chatId);
             matchesRequest.onerror = () => abort(matchesRequest.error || new Error('独立档案备份删除失败。'));
             matchesRequest.onsuccess = () => { discovered[index].chat = Array.isArray(matchesRequest.result) ? matchesRequest.result : []; finishDiscovery(); };
+            const relayRequest = store.get(relay_policy.relayMemberKey(target));
+            relayRequest.onerror = () => abort(relayRequest.error);
+            relayRequest.onsuccess = () => { discovered[index].relay = relayRequest.result; finishDiscovery(); };
         });
         transaction.oncomplete = () => resolve(true);
         transaction.onabort = () => reject(transaction.__rmtAbortReason || transaction.error || new Error('独立档案备份删除失败。'));
@@ -672,14 +760,17 @@ export async function readArchiveBackup(entry) {
 }
 
 export async function readArchiveBackupState(entry) {
-    let raw;
-    try { raw = await backend().read(entry); }
+    let raw, relay;
+    try {
+        if (testBackend) { raw = await testBackend.read(entry); relay = await readArchiveRelayState(entry); }
+        else ({ raw, relay } = await idbRead(entry, true));
+    }
     catch (error) { throw core_backupDiagnostics.annotateBackupFailure(error, 'read'); }
     const exactEntryId = core_text.normalizeText(raw?.entryId, 120) === core_context.archiveIndexEntryId(entry);
     if (raw?.deleted === true && (exactEntryId || deletionIdentityMatches(raw, entry))) {
         return { deleted: true, deletedAt: Math.max(0, Number(raw.deletedAt) || 0), record: null };
     }
-    try { return { deleted: false, deletedAt: 0, record: normalizeRecord(raw, entry) }; }
+    try { return { deleted: false, deletedAt: 0, record: normalizeRecord(raw, entry), relay }; }
     catch (error) { throw core_backupDiagnostics.annotateBackupFailure(error, 'normalize'); }
 }
 

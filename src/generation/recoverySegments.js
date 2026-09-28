@@ -1,3 +1,4 @@
+import * as recovery_merge from './recoveryMerge.js';
 import * as partial_progress from './partialProgress.js';
 import { COMPATIBILITY_CONTRACTS, GENERATION_RECOVERY_LIMITS, TOKEN, canRestartLegacyConfiguration, changeJournal, checkCurrent, currentAttachedJournal, failureFeedback, generationRecoveryDigest, generationRecoveryMismatch, handleBindings, handles, holdUnsavedReply, internalHandles, jsonData, noteHeldReplyExport, persistGenerationRecovery, primitiveString, projectHeldReply, publishGenerationRecoveryProgress, readGenerationContentSnapshot, readableJournal, recoveryError, recoveryFailureCode, recoveryIdentity, requestTokens, validJournal } from './recoveryFeedback.js';
 // 生成恢复流程：创建恢复、冻结输入与请求、续写提示、分段恢复
@@ -427,6 +428,33 @@ export async function withRecoverySegment(prompt, options, validator, run) {
             }
             accepted = true;
             await publishGenerationRecoveryProgress(handle);
+        };
+        // A readable inbox can be incomplete as a plan even when extractJson
+        // recovered its first letter. Preserve the received text before trying a
+        // union with earlier letters. This is local recovery, not an auto request.
+        onAccepted.incompleteInboxResponse = async (raw, original, error) => {
+            if (handle.journal.identity.mode !== 'inbox' || typeof original !== 'string' || !original.trim()) throw error;
+            const saved = await changeJournal(handle, journal => {
+                const prior = journal.segments.find(row => row.slot === slot);
+                const retainedPartials = recovery_merge.retainedRecoveryPartials(prior, original);
+                assertRetainedSize(original, retainedPartials);
+                replaceSegment(journal, { slot, requestHash, state: 'truncated', partial: original,
+                    ...(retainedPartials.length ? { retainedPartials } : {}), failureCode: 'RMT_JSON_TRUNCATED',
+                    failureFeedback: failureFeedback(recoveryFailureCode(error), error),
+                    ...(contract ? { contract } : {}), ...(requestRecord.recipe ? { requestRecipe: requestRecord.recipe } : {}) });
+                journal.failureCode = recoveryFailureCode(error);
+            });
+            if (!saved && !handle.pageOnly) {
+                const failed = recoveryError('RMT_RECOVERY_STORAGE', '本段已返回，但浏览器没有成功保存进度；已停止后续请求。旧内容仍在，请检查本地存储后重试。');
+                if (holdUnsavedReply(handle, slot, original)) noteHeldReplyExport(failed);
+                throw failed;
+            }
+            await publishGenerationRecoveryProgress(handle);
+            // Invalid/duplicate slots must not be hidden by the union's keyed list.
+            if (!Array.isArray(raw?.letters) || raw.letters.some(row => !['stage', 'daily'].includes(row?.slot))
+                || new Set(raw.letters.map(row => row.slot)).size !== raw.letters.length) throw error;
+            await onAccepted(raw);
+            return acceptedValue;
         };
         try {
             const result = await run(generationContinuationPrompt(prompt, partial), requestOptions, onAccepted);

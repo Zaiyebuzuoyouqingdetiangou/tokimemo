@@ -212,6 +212,19 @@ export async function boundedJson(response, maxBytes) {
     }
 }
 
+// Some providers place their reasoning in a leading, exact <think> block.
+// Only that wrapper is transport metadata; quoted tags in JSON remain data and
+// arbitrary markup/attributes are still checked by the HTML response guard.
+export function finalResponseText(value) {
+    let body = String(value ?? '').replace(/^\uFEFF/, '').trimStart();
+    while (/^<think>/i.test(body)) {
+        const end = /<\/think>/i.exec(body);
+        if (!end) return ''; // An unfinished reasoning block is never an answer.
+        body = body.slice(end.index + end[0].length).trimStart();
+    }
+    return body;
+}
+
 export function looksLikeHtmlResponse(value) {
     const body = String(value ?? '').replace(/^\uFEFF/, '').trimStart();
     // A complete JSON document is data, including any quoted markup in its strings.
@@ -507,19 +520,28 @@ export function assertIndependentResponsePayload(payload) {
     if (payloadHasProviderError(payload)) {
         throw providerEnvelopeFailure(payload, false);
     }
-    const content = extractIndependentResponseContent(payload);
-    if (typeof content !== 'string') {
+    const received = extractIndependentResponseContent(payload);
+    if (typeof received !== 'string') {
         const error = apiError('连接返回的正文结构暂不支持，尚未取得可解析的最终正文；旧内容未改变。请导出诊断报告检查返回形态。', 'RMT_RESPONSE_FORMAT');
         error.retryable = false;
         error.retryableJson = false;
         throw error;
     }
-    if (typeof content === 'string' && looksLikeHtmlResponse(content)) {
+    const content = finalResponseText(received);
+    if (looksLikeHtmlResponse(content)) {
         const error = apiError('专用连接返回了 HTML 页面；响应正文已隐藏。', 'RMT_RESPONSE_HTML');
         error.retryable = false;
         throw error;
     }
-    if (!content.trim()) throw emptyFinalFailure(responseShapeSummary(payload));
+    if (!content.trim()) {
+        const reasoningWrapper = /^<think>/i.test(received.replace(/^\uFEFF/, '').trimStart());
+        const error = emptyFinalFailure({ ...responseShapeSummary(payload),
+            ...(reasoningWrapper ? { reasoningChars: received.length } : {}) });
+        // Recognizing reasoning must not turn the former one-request HTML failure
+        // into a new paid empty-response reroll.
+        if (reasoningWrapper) error.nonRetryable = true;
+        throw error;
+    }
     return content;
 }
 

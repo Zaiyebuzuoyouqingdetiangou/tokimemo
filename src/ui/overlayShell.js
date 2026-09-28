@@ -8,6 +8,7 @@ import * as archive_repository from '../archive/repository.js';
 import * as core_cache from '../core/cache.js';
 import * as core_constants from '../core/constants.js';
 import * as core_context from '../core/context.js';
+import * as relay_policy from '../core/archiveRelayPolicy.js';
 import * as core_requestCoordinator from '../core/requestCoordinator.js';
 import * as ui_taskCenter from './taskCenter.js';
 import * as ui_countdown from './autoMemoryCountdown.js';
@@ -663,12 +664,15 @@ export function emptyArchiveMode(mode, memory, context, stored) {
 }
 
 export function decorateReadOnlyModeUi() {
-    if (!runtimeState.activeArchiveSnapshot) return;
+    const entry = runtimeState.activeArchiveSnapshot || relay_policy.relayContextEntry();
+    const frozen = relay_policy.relayReadOnly(entry);
+    if (!runtimeState.activeArchiveSnapshot && !frozen) return;
     const body = bodyEl();
     if (!body || body.querySelector('[data-rmt-readonly-toggle]')) return;
     const control = document.createElement('div');
     control.className = 'rmt-archive-readonly-control';
-    control.innerHTML = `<label><input type="checkbox" data-rmt-readonly-toggle ${runtimeState.activeArchiveReadOnly ? 'checked' : ''}> 只读查看</label>`;
+    if (frozen) control.setAttribute('data-rmt-readonly-toggle', '');
+    control.innerHTML = frozen ? '<span>已交给其他聊天继续 · 只读；可在档案室接回</span>' : `<label><input type="checkbox" data-rmt-readonly-toggle ${runtimeState.activeArchiveReadOnly ? 'checked' : ''}> 只读查看</label>`;
     body.prepend(control);
 }
 

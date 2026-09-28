@@ -30,6 +30,9 @@ import { assertNoBannedGeneratedPhrase, assertPromptBudget, contentContextSource
 // 请求发送：连接错误规范化、组装外发提示词、生成 JSON、请求与分段校验、建档分块请求
 // 从 generation/client.js 原样搬出（重构阶段 2），声明文本一字未改；generation/client.js 仍转发原有导出。
 
+// Received final text stays local to the parsed value; it is never attached to errors/logs.
+const inboxReceivedText = new WeakMap();
+
 export async function requestValidatedSegment(prompt, status, options, validator) {
     const logicalTask = core_requestCoordinator.logicalGenerationTaskForOrigin(options?.origin);
     core_requestCoordinator.assertLogicalGenerationTaskCurrent(logicalTask);
@@ -71,9 +74,18 @@ export async function requestValidatedSegment(prompt, status, options, validator
             ? '\n\n【本地校验反馈】' + (core_butterflyContract.butterflyValidationFeedback(lastError) || generation_recovery.generationRetryFeedbackText(lastError?.code, lastError) || core_text.normalizeText(lastError?.repairHint, 600) || (String(lastError.code || '').startsWith('RMT_ROOM_') ? core_text.safeErrorSummary(lastError) : '上一轮结构或完整度没有通过。')) + ' 请严格按原硬性要求重新输出完整 JSON，不要解释，也不要引用这条反馈作为内容。'
             : '';
         try {
-            const raw = generation_achievement.stripAchievementField(await requestJson(`${prompt}${retryNote}`, `${status}${attempt ? `（重试 ${attempt}/${maxAttempts - 1}）` : ''}`, options));
+            const received = await requestJson(`${prompt}${retryNote}`, `${status}${attempt ? `（重试 ${attempt}/${maxAttempts - 1}）` : ''}`, options);
+            const raw = generation_achievement.stripAchievementField(received);
             core_taskTrace.beginStage(options.taskTrace, 'validate');
-            const value = core_requestCoordinator.validateGeneratedSegment(raw, validator);
+            let value;
+            try { value = core_requestCoordinator.validateGeneratedSegment(raw, validator); }
+            catch (error) {
+                if (options.mode !== 'inbox' || !['RMT_INBOX_INCOMPLETE', 'RMT_INBOX_SLOT_INVALID'].includes(error?.code)
+                    || typeof accepted.incompleteInboxResponse !== 'function') throw error;
+                value = await accepted.incompleteInboxResponse(raw, inboxReceivedText.get(received) || JSON.stringify(raw), error);
+                core_taskTrace.markStage(options.taskTrace, 'validate');
+                return value;
+            }
             core_taskTrace.markStage(options.taskTrace, 'validate');
             await accepted(raw);
             return value;
@@ -432,15 +444,18 @@ async function generateConfiguredJsonOperation(prompt, options = {}) {
     try { core_independentApi.assertManualStreamComplete(result);
         parsed = generation_jsonParser.extractJson(responsePayload, {
         reasoning: result?.reasoning || '',
+        mode: options.mode,
         requestMaxTokens: responseLength,
         configuredMaxTokens: settings.maxTokens,
     }); } catch (error) {
-        await generation_recovery.recordRecoveryTruncation(options, responsePayload, error);
+        await generation_recovery.recordRecoveryTruncation(options, responsePayload, error,
+            { autoContinue: !(options.mode === 'inbox' && error?.preserveInboxWithoutAutoContinue === true) });
         throw error;
     }
     if (options.enforceGeneratedPhrasePolicy === true) assertNoBannedGeneratedPhrase(parsed, contentSettings, {
         mode: options.mode, settingText: core_worldPresentation.controlledWorldEvidence(contextEnvelope, null),
     });
+    if (options.mode === 'inbox') inboxReceivedText.set(parsed, responsePayload);
     core_taskTrace.markStage(taskTrace, 'parse');
     core_requestCoordinator.noteChatTaskPhase('validate', { taskKey: options.taskKey, origin: options.origin });
     return parsed;

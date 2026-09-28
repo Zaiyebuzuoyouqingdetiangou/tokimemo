@@ -5,6 +5,8 @@ import * as archive_batches from './importBatches.js';
 import * as archive_coverage from './coverageRanges.js';
 import * as archive_summary from './summaryPreference.js';
 import * as archive_requestBudget from './requestBudget.js';
+import * as archive_backupStore from './backupStore.js';
+import * as archive_relayPreparation from './relayPreparation.js';
 import * as core_cache from '../core/cache.js';
 import * as core_constants from '../core/constants.js';
 import * as cast_looks from '../core/castLooks.js';
@@ -73,6 +75,11 @@ export async function importCurrentChatMemoryOperation({ fullRebuild = false, au
         }
         return live;
     };
+    // A relay's frozen member can still be read, but must not pay for a new
+    // archive import. Check the live holder, not a selected draft's old source.
+    await source_read.waitForSourceRead(() => archive_backupStore.assertArchiveRelayWritable(
+        core_cache.archiveBackupEntryForContext(context, preparation.existing), preparation.existing), logicalTask.signal);
+    assertPreparationCurrent();
     const incrementalUpdate = !!existing && !fullRebuild;
     const mergeExisting = partialBase || (incrementalUpdate || commitCompletedOnly ? existing : null);
     const preserveExisting = !!mergeExisting;
@@ -188,7 +195,10 @@ export async function importCurrentChatMemoryOperation({ fullRebuild = false, au
     if (!snapshot.chatId) throw new Error('无法识别当前聊天窗口 ID，请先保存或打开一个具体聊天。');
     if (!archiveInputAvailable(snapshot, external)) throw new Error('当前聊天窗口没有可用于创建档案的角色/用户消息或已绑定的外部历史。');
 
-    if (incrementalUpdate && !capturedInput && !restartImport && !(automatic && floorWindow)) {
+    const unreadRelaySource = core_context.comparableChatId(existing?.chatId) === snapshot.chatId
+        && existing?.archiveRevision === preparation.existing?.archiveRevision
+        && archive_relayPreparation.relayHasUnreadCurrentSource(existing);
+    if (incrementalUpdate && !capturedInput && !restartImport && !(automatic && floorWindow) && !unreadRelaySource) {
         const oldChatFingerprint = archivedChatFingerprint(existing);
         if (!oldChatFingerprint || previousMessageCount > snapshot.totalMessages || snapshot.prefixFingerprint !== oldChatFingerprint
             || (existing?.fullSourceFingerprint && snapshot.fullPrefixFingerprint && snapshot.fullPrefixFingerprint !== existing.fullSourceFingerprint)) {
@@ -419,10 +429,14 @@ export async function importCurrentChatMemoryOperation({ fullRebuild = false, au
         }
 
         core_taskTrace.beginStage(taskTrace, 'merge');
+        // r84.178：新整理出的聊天记忆记下它来自哪个聊天（跨聊天连续档案要用）；本聊天的档案里不改变去重和编号。
+        const sourceChatId = core_context.comparableChatId(preparation.origin.chatId);
+        const stamped = sourceChatId ? fresh.map(item => (item?.sourceKind || 'chat').startsWith('chat') && !item.sourceChatId ? { ...item, sourceChatId } : item) : fresh;
         const admitted = admitArchiveBatch(
             mergeExisting?.memories || [],
-            fresh,
+            stamped,
             mergeExisting?.coldArchive || [],
+            { homeChatId: sourceChatId },
         );
         const memories = admitted.memories;
         capacityPending = admitted.pending;
@@ -521,6 +535,9 @@ export async function importCurrentChatMemoryOperation({ fullRebuild = false, au
         if (!archiveRoster) { try { cast_looks.ensureCastLooks(context); } catch {} }
         if (preserveExisting) profile.archiveName = mergeExisting.archiveName || fallbackArchiveName(memories);
         const now = Date.now();
+        // Keep current formal ownership across normal append/rebuild saves.
+        // An independent old draft remains attached to its own source instead.
+        const relayBaseline = independentResult ? existing : preparation.existing;
         const memoryBank = {
             version: core_constants.MEMORY_VERSION,
             chatId: snapshot.chatId,
@@ -555,6 +572,9 @@ export async function importCurrentChatMemoryOperation({ fullRebuild = false, au
             memories,
             coldArchive: Array.isArray(admitted.coldArchive) ? admitted.coldArchive : [],
             ...(archiveRoster ? { [participants.PARTICIPANTS_KEY]: archiveRoster } : {}),
+            ...(relayBaseline?.archiveRelayV1 ? { archiveRelayV1: structuredClone(relayBaseline.archiveRelayV1) } : {}),
+            ...(relayBaseline?.[archive_relayPreparation.RELAY_SOURCE_CHECKPOINTS_KEY]
+                ? { [archive_relayPreparation.RELAY_SOURCE_CHECKPOINTS_KEY]: structuredClone(relayBaseline[archive_relayPreparation.RELAY_SOURCE_CHECKPOINTS_KEY]) } : {}),
         };
         const unfinishedProfile = profilePending;
         if (progress) {

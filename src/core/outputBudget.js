@@ -22,7 +22,8 @@ export function isValidInputBudgetTokens(value) {
         && count <= constants.MAX_USER_INPUT_BUDGET_TOKENS;
 }
 export function migratePersistedInputBudgetTokens(value) {
-    if (Number(value) === constants.LEGACY_DEFAULT_INPUT_BUDGET_TOKENS) return constants.MAX_GENERATION_INPUT_TOKENS;
+    // Old settings do not record whether 32,000 was a default or an explicit
+    // choice. Preserve valid saved values; only absent/invalid values default.
     return normalizeInputBudgetTokens(value);
 }
 export function normalizeInputBudgetTokens(value) {

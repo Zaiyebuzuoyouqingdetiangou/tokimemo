@@ -38,7 +38,7 @@ export function normalizeCabinet(raw, memoryBank) {
 export function mergeCabinet(previous, fresh) {
     const items = structuredClone(previous?.items || []);
     const names = new Set(items.map(item => item.name));
-    for (const item of fresh.items) if (!names.has(item.name) && items.length < core_constants.MAX_DERIVED_CONTENT_ITEMS) {
+    for (const item of fresh.items) if (!names.has(item.name)) {
         names.add(item.name);
         items.push({ ...item, id: 'KEEP_' + (items.length + 1) });
     }
@@ -47,7 +47,7 @@ export function mergeCabinet(previous, fresh) {
 
 export function cabinetHtml(session) {
     const esc = core_text.esc;
-    const items = (Array.isArray(session?.items) ? session.items : []).slice(0, core_constants.MAX_DERIVED_CONTENT_ITEMS)
+    const items = (Array.isArray(session?.items) ? session.items : [])
         .filter(item => item && typeof item === 'object').map(item => ({ ...item, sourceMemoryIds: core_text.cleanArray(item.sourceMemoryIds, 8, 40) }));
     return '<section class="rmt-cabinet"><header class="rmt-archive-card"><small>OUR KEEPSAKES</small><h2>两个人的陈列柜</h2><p>把确实留下过的东西，放在这里。</p></header><div class="rmt-cabinet-shelves">' +
         (items.length ? items.map((item, index) => '<details class="rmt-cabinet-piece"><summary><span class="rmt-cabinet-object" aria-hidden="true">' + cabinetObjectArt(item.name) + '</span><small>No. ' + String(index + 1).padStart(2, '0') + '</small><b>' + esc(item.name) + '</b><span>打开回忆</span></summary><div class="rmt-cabinet-detail"><blockquote>' + esc(item.objectEvidence) + '</blockquote><small>' + esc(item.sourceMemoryIds.join(' · ')) + ' · ' + esc(item.sourceMemoryAnchor) + '</small></div></details>').join('')

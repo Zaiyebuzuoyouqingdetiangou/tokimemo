@@ -562,13 +562,8 @@ async function refreshWizardProfileModels(context) {
 }
 
 async function refreshWizardManualModels(root, context) {
-    const current = core_settings.getPluginSettings();
     try {
-        const models = await core_settings.fetchModelsForManualConnection({
-            manualApiBaseUrl: root.querySelector('[data-rmt-manual-api-base]')?.value || current.manualApiBaseUrl,
-            manualApiKey: core_text.normalizeText(root.querySelector('[data-rmt-manual-api-key]')?.value, 4000) || current.manualApiKey,
-            manualApiModel: root.querySelector('[data-rmt-manual-api-model]')?.value || current.manualApiModel,
-        }, { force: true });
+        const models = await core_settings.fetchModelsForManualConnection(settings_parts.manualSettingsFromPanel(root), { force: true });
         manualModels = Array.isArray(models) ? models.filter(Boolean) : [];
         if (!sameChat(context)) return;
         status(manualModels.length ? `已找到 ${manualModels.length} 个模型。` : '没有拉到模型。');
