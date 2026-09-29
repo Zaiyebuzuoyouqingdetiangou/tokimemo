@@ -13,9 +13,10 @@ import * as extras_collection from '../extras/collection.js';
 import * as extras_intel from '../extras/intel.js';
 import * as extras_waiting from '../extras/waiting.js';
 import * as extras_styles from './extrasStyles.js';
+import * as mv_view from './mvView.js';
 
 const esc = core_text.esc;
-export const EXTRA_MODES = Object.freeze(['collection', 'waiting', 'intel']);
+export const EXTRA_MODES = Object.freeze(['collection', 'waiting', 'intel', 'songMv']);
 const view = { mode: '', sub: 'main', id: '', person: '', recordId: '', dial: [0, 0, 0, 0], wrong: false, loading: false };
 
 export function isExtraMode(mode) {
@@ -53,6 +54,7 @@ function stillShowing(mode, scope) {
 
 export function openExtra(mode, options = {}) {
     if (!isExtraMode(mode)) return false;
+    if (mode === mv_view.MV_MODE) return mv_view.openMv(options);
     const route = mode;
     ui_workspaceState.leaveWorkspaceReader();
     ui_workspaceState.workspace.route = route; ui_workspaceState.workspace.tab = 'content'; ui_workspaceState.workspace.empty = null;
@@ -67,6 +69,7 @@ export function openExtra(mode, options = {}) {
 
 export function renderExtra() {
     if (!isExtraMode(runtimeState.activeMode)) return false;
+    if (runtimeState.activeMode === mv_view.MV_MODE) { mv_view.renderMv(); workspace_ui.syncWorkspaceChrome(); return true; }
     if (view.mode !== runtimeState.activeMode) { view.mode = runtimeState.activeMode; view.sub = 'main'; }
     if (view.mode === 'collection') renderCollection();
     else if (view.mode === 'intel') renderIntel();
@@ -103,6 +106,7 @@ function exportExtraResults() {
 
 export function navigateExtraBack() {
     if (!isExtraMode(runtimeState.activeMode)) return false;
+    if (runtimeState.activeMode === mv_view.MV_MODE) return mv_view.navigateMvBack();
     if (view.mode === 'collection' && view.sub === 'graduation') { view.sub = 'main'; renderExtra(); return true; }
     if (view.mode === 'waiting' && ['note', 'lock'].includes(view.sub)) { view.sub = 'grid'; view.wrong = false; renderExtra(); return true; }
     if (view.mode === 'waiting' && view.sub === 'grid') { view.sub = 'main'; renderExtra(); return true; }
@@ -370,6 +374,7 @@ function tryUnlock() {
 // ---------- 点击与设置 ----------
 
 export function handleExtraClick(event) {
+    if (mv_view.handleMvClick(event)) return true;
     const el = event.target?.closest?.('[data-rmt-extra]');
     if (!el || el.disabled) return false;
     const action = el.dataset.rmtExtra;
@@ -428,6 +433,7 @@ export function handleExtraClick(event) {
 }
 
 export function handleExtraChange(event) {
+    if (mv_view.handleMvChange(event)) return true;
     const input = event.target?.closest?.('[data-rmt-extra-setting]');
     if (!input) return false;
     const key = input.dataset.rmtExtraSetting;

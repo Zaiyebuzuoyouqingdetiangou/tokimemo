@@ -59,6 +59,7 @@ export const WORKSPACE_ROUTES = Object.freeze({
     items: { mode: 'items', title: '他的物品', group: 'life', deep: true },
     timeEcho: { mode: 'timeEcho', title: '时空回响', group: 'stories', deep: true },
     intel: { mode: 'intel', title: '朋友情报', group: 'interaction', manualOnly: true, deep: true },
+    songMv: { mode: 'songMv', title: '做成 MV', group: 'interaction', manualOnly: true, deep: true },
 });
 export function workspaceRoute(mode, preferred = '') {
     return Object.hasOwn(WORKSPACE_ROUTES, preferred) && WORKSPACE_ROUTES[preferred].mode === mode

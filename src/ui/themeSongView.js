@@ -114,7 +114,7 @@ export function renderThemeSongs() {
     const formatDetails = selected ? `<article class="rmt-song-sheet" data-rmt-song-presentation="format"><header><small>${esc(selected.subject === 'event' ? '事件印象曲' : '角色印象曲')} · ${esc(selected.subjectTitle)}</small><h2>${esc(selected.title)}</h2><p><b>演唱者</b> ${esc(selected.singer)} <span>· ${esc(contract.songLanguageLabel(selected))}</span></p><p>${esc(selected.vocalDescription)}</p></header>
       <section class="rmt-song-style"><h3>曲风</h3><p>${esc(selected.styleDescription)}</p><div class="rmt-song-toolbar">${button('copy-title','复制歌名')}${button('copy-style','复制曲风')}</div><pre>${esc(selected.stylePrompt)}</pre></section>
       <section class="rmt-song-lyrics"><div class="rmt-song-toolbar"><h3>${selected.generationIncomplete ? '已收到的歌词 · 未完成' : '完整歌词'}</h3>${button('copy-lyrics','复制歌词')}</div><pre>${esc(selected.lyrics)}</pre></section>
-      <footer class="rmt-song-toolbar">${button('copy-all','复制全部')}${button('export','导出文本')}${readonly() ? '' : `<button type="button" class="rmt-btn" data-rmt-song="delete" data-rmt-song-id="${esc(selected.id)}" ${busy() ? 'disabled' : ''}>删除这首</button>`}</footer>
+      <footer class="rmt-song-toolbar">${button('copy-all','复制全部')}${button('export','导出文本')}${readonly() || selected.generationIncomplete ? '' : `<button type="button" class="rmt-btn" data-rmt-mv="open" data-rmt-mv-id="${esc(selected.id)}">做成 MV</button>`}${readonly() ? '' : `<button type="button" class="rmt-btn" data-rmt-song="delete" data-rmt-song-id="${esc(selected.id)}" ${busy() ? 'disabled' : ''}>删除这首</button>`}</footer>
       <div data-rmt-song-copy-fallback></div></article>` : '<div class="rmt-song-empty"><span aria-hidden="true">♫</span><h3>让故事有自己的旋律</h3><p>为角色写一首，或选一段真实回忆作为起点。</p></div>';
     const readDetails = selected ? `<article class="rmt-song-sheet rmt-song-readable" data-rmt-song-presentation="read"><header>
       <small>${esc(selected.subject === 'event' ? '事件印象曲' : '角色印象曲')} · ${esc(selected.subjectTitle)}</small>
@@ -122,7 +122,7 @@ export function renderThemeSongs() {
       <p class="rmt-song-credit">作者 · 未署名（原创生成）</p>
       <details class="rmt-song-arrangement"><summary>曲风与人声</summary><p>${esc(selected.styleDescription)}</p><p>${esc(selected.vocalDescription)}</p></details></header>
       <div class="rmt-song-reading-lyrics">${songLyricsReadingHtml(selected.lyrics)}</div>
-      <footer class="rmt-song-toolbar">${button('copy-lyrics','复制歌词')}${button('export','导出文本')}${readonly() ? '' : `<button type="button" class="rmt-btn" data-rmt-song="delete" data-rmt-song-id="${esc(selected.id)}" ${busy() ? 'disabled' : ''}>删除这首</button>`}</footer>
+      <footer class="rmt-song-toolbar">${button('copy-lyrics','复制歌词')}${button('export','导出文本')}${readonly() || selected.generationIncomplete ? '' : `<button type="button" class="rmt-btn" data-rmt-mv="open" data-rmt-mv-id="${esc(selected.id)}">做成 MV</button>`}${readonly() ? '' : `<button type="button" class="rmt-btn" data-rmt-song="delete" data-rmt-song-id="${esc(selected.id)}" ${busy() ? 'disabled' : ''}>删除这首</button>`}</footer>
       <div data-rmt-song-copy-fallback></div></article>` : formatDetails;
     const cover = selected ? `<div class="rmt-song-cover">${expanded_cg_view.expandedCgHtml(session,
         { kind: 'song-cover', containerId: selected.id }, readonly(),

@@ -30,6 +30,7 @@ import * as mirror_reader from './ui/mirrorTtsReader.js';
 import * as mirror_call from './ui/mirrorCallView.js';
 import * as core_uiBridge from './core/uiBridge.js';
 import * as ui_overlayForBridge from './ui/overlay.js';
+import * as mv_view from './ui/mvView.js';
 
 // 重构清单 C-2（r84.97）：core 层要用的 ui 函数在这里登记。每次调用时再按名字去 ui 模块取，
 // 与原来 core 直接 import ui 时一样会用到最新的函数（测试替换也生效）。
@@ -91,6 +92,7 @@ export function initMemoryTheater() {
 }
 
 export function destroyMemoryTheater() {
+    mv_view.disposeMv();
     mirror_reader.disposeMirrorReader();
     mirror_call.disposeMirrorCall();
     ui_floatingArchive.destroyFloatingArchive();

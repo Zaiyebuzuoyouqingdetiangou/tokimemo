@@ -4,8 +4,8 @@ import * as text from './text.js';
 import * as cg_targets from './cgTargets.js';
 export const THEME_SONG_MODE = 'themeSong';
 export const THEME_SONG_VERSION = 1;
-export const SONG_LIMITS = Object.freeze({ songs: 80, title: 120, style: 900, description: 1200,
-    vocal: 400, lyrics: 5000, direction: 400, songChars: 14000, sessionChars: 1200000 });
+export const SONG_LIMITS = Object.freeze({ songs: Number.MAX_SAFE_INTEGER, title: 120, style: 900, description: 1200,
+    vocal: 400, lyrics: 5000, direction: 400, songChars: 14000, sessionChars: Number.MAX_SAFE_INTEGER });
 export const SONG_LANGUAGES = Object.freeze({ zh: '中文', ja: '日语', en: '英语', ko: '韩语', custom: '自定义' });
 export const SONG_VOICES = Object.freeze({ char: '角色独唱', duet: '双人合唱', narrator: '旁观者演唱', ensemble: '群像' });
 export function songError(code, message) { return text.safeUserError(message, `RMT_SONG_${code}`); }
