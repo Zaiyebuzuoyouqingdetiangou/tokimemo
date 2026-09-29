@@ -20,6 +20,7 @@ import { normalizeRoomVisualProfile, roomNarrativeClaimsSharedHistory, roomVisua
 import { roomClockText, roomDaypartState, roomDeepAvailability, roomLayoutCss, roomLayoutVariant, roomMotifToken, roomObjectLayout, roomObjectLayoutButtonHtml, roomObjectSafeForPresentation, roomPetNodeHtml, roomPetSummaryHtml, roomSceneClass } from './roomLayout.js';
 import { fallbackRoomLifePlan, localDateKey, normalizeRoomLifePlan, normalizeRoomVisualState, normalizeTemporaryRoomObjects, roomLifeBeat, roomLifePrompt, roomParticipantSlots, roomPreservedLifeHtml } from './roomLife.js';
 import { roomCandidateRepairSlots } from './roomData.js';
+import * as extras_view from '../ui/extrasView.js';
 // 房间页面：渲染、时钟、选择与多人房间视图、生活日程生成入口
 // 从 modes/room.js 原样搬出（重构阶段 2），声明文本一字未改；modes/room.js 仍转发原有导出。
 
@@ -516,6 +517,7 @@ export function renderRoom() {
         if (typeof body.insertAdjacentHTML === 'function') body.insertAdjacentHTML('afterbegin', readingNotice);
         else body.innerHTML = readingNotice + body.innerHTML;
     }
+    extras_view.decorateRoom(ui_overlay.bodyEl());
     startRoomClock();
 }
 
@@ -631,5 +633,6 @@ export function renderRoomParticipants(session = runtimeState.activeSession) {
         if (typeof body.insertAdjacentHTML === 'function') body.insertAdjacentHTML('afterbegin', readingNotice);
         else body.innerHTML = readingNotice + body.innerHTML;
     }
+    extras_view.decorateRoom(ui_overlay.bodyEl());
     startRoomClock();
 }

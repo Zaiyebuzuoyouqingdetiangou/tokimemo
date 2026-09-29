@@ -535,9 +535,7 @@ export async function assertPromptBudget(context, prompt, { skipTokenCount = fal
         error.inputBudget = { chars: prompt.length, tokens, tokensKnown, budgetTokens, charCap };
         return error;
     };
-    if (prompt.length > charCap) {
-        throw budgetError(`本次输入 ${prompt.length.toLocaleString()} 字符，预算 ${budgetTokens.toLocaleString()} tokens，字符顶 ${charCap.toLocaleString()}。tokens 未知，已按字符安全顶判断。已在发送前拦截。`);
-    }
+    // Character estimates cannot reject a request whose real token count fits.
     let tokens = null;
     let tokensKnown = false;
     if (!skipTokenCount && typeof context.getTokenCountAsync === 'function') {
@@ -563,7 +561,7 @@ export async function assertPromptBudget(context, prompt, { skipTokenCount = fal
             tokens = null;
             tokensKnown = false;
             core_taskTrace.markStage(taskTrace, 'token-count-fallback');
-            console.warn('[HeartbeatMemories] input token count unavailable; using character budget only', core_text.safeErrorDiagnostic(error));
+            console.warn('[HeartbeatMemories] input token count unavailable; proceeding without an estimated hard cutoff', core_text.safeErrorDiagnostic(error));
         }
     }
     if (signal?.aborted) throw core_requestCoordinator.createGenerationAbortError();

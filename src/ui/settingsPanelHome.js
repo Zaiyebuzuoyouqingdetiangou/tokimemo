@@ -629,7 +629,7 @@ function bindSettingsChange(panel, tagDraft, tagStatus, tagState) {
     if (target.matches?.('[data-rmt-api-input-budget]')) {
       if (target.validity?.badInput || (target.value.trim() && !output_budget.isValidInputBudgetTokens(target.value))) {
         globalThis.toastr?.warning?.(
-          '输入预算请填写 8000–200000 的整数；原设置未改动。打开设置 → 输入预算，不是最大输出。',
+          '输入预算请填写正整数（不超过 JavaScript 安全整数范围）；原设置未改动。打开设置 → 输入预算，不是最大输出。',
           '心迹回廊',
         );
         target.value = String(core_settings.getPluginSettings().inputBudgetTokens);

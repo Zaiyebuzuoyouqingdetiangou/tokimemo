@@ -623,7 +623,7 @@ export async function readProfileCompletion(result, { signal = null } = {}) {
             const reasoning = responseField(responseField(item.value, 'state'), 'reasoning');
             reasoningChars = Math.max(reasoningChars, typeof reasoning === 'string' ? reasoning.length : 0);
             if (next.length > core_constants.MAX_GENERATION_OUTPUT_CHARS
-                || new TextEncoder().encode(next).byteLength > core_constants.MAX_MANUAL_API_RESPONSE_BYTES
+                || (Number.isFinite(core_constants.MAX_MANUAL_API_RESPONSE_BYTES) && new TextEncoder().encode(next).byteLength > core_constants.MAX_MANUAL_API_RESPONSE_BYTES)
                 || reasoningChars > core_constants.MAX_MANUAL_API_RESPONSE_BYTES) throw apiError('流式响应超过安全范围。', 'RMT_MANUAL_RESPONSE_TOO_LARGE');
             content = next;
         }

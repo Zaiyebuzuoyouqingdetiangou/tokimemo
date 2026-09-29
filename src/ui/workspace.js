@@ -21,6 +21,7 @@ import { state as state } from '../core/state.js';
 import * as ui_taskCenter from './taskCenter.js';
 import * as ui_workspaceState from './workspaceState.js';
 import * as generation_merged from '../generation/mergedGeneration.js';
+import * as extras_view from './extrasView.js';
 const esc = text.esc;
 const GROUPS = [['memory', '回忆'], ['life', '生活'], ['interaction', '互动'], ['stories', '番外']];
 const ALIAS_META = {
@@ -32,6 +33,8 @@ const ALIAS_META = {
     strips: { icon: 'fa-images', accent: 'album', subtitle: '两个人的日常片刻' },
     postending: { icon: 'fa-book-open', accent: 'ending', subtitle: '未来生活的独立小剧场' },
     heart: { subtitle: '春夏秋冬的小剧场' }, ending: { subtitle: '结局路线与告白回看' },
+    collection: { icon: 'fa-chart-pie', accent: 'achievements', subtitle: '已点亮的回忆 · 毕业结算' },
+    waiting: { icon: 'fa-house-chimney-window', accent: 'room', subtitle: '你不在的日子里，他的一天' },
 };
 export function syncWorkspaceChrome() {
     const host = globalThis.document?.getElementById?.(constants.OVERLAY_ID);
@@ -117,10 +120,11 @@ export function workspaceCatalogueHtml(portals = [], snapshot = null, { ready: a
         const running = snapshot ? coordinator.isArchiveTargetModeGenerating(spec.mode, snapshot) : coordinator.isModeGenerating(spec.mode);
         const ready = routeHasContent(key, session);
         const progress = generationStatus.routeGenerationStatus(key, spec.mode, session, { running, hasContent: ready, snapshot });
-        const status = spec.manualOnly ? '点击进入' : (progress.state === 'done' || progress.state === 'empty' ? countStatus(key, session) : progress.label)
+        const extraInfo = extras_view.isExtraMode(spec.mode) ? extras_view.extraCardInfo(key) : null;
+        const status = extraInfo ? extraInfo.status : spec.manualOnly ? '点击进入' : (progress.state === 'done' || progress.state === 'empty' ? countStatus(key, session) : progress.label)
             + (generation_merged.MERGEABLE_ROUTES.includes(key) ? ' · 可合并' : '');
         const queueable = canQueue && spec.mode && !spec.deep && !spec.manualOnly;
-        return `<article class="rmt-archive-portal rmt-workspace-card ${ready ? 'ready' : 'empty'} rmt-archive-portal-${esc(meta.accent)}"><button type="button" class="rmt-portal-open" data-rmt-workspace-route="${key}"><span class="rmt-portal-avatar"><i class="fa-solid ${esc(meta.icon)}" aria-hidden="true"></i></span><span class="rmt-portal-title">${esc(spec.title)}</span><span class="rmt-portal-subtitle">${esc(meta.subtitle)}</span><span class="rmt-portal-status">${esc(status)}</span><span class="rmt-workspace-enter" aria-hidden="true">›</span></button>${queueable ? ui_taskCenter.queuePickHtml(key) + routePeople.routePeopleHtml(key) : ''}</article>`;
+        return `<article class="rmt-archive-portal rmt-workspace-card ${ready ? 'ready' : 'empty'}${extraInfo?.off ? ' rmt-x-off' : ''} rmt-archive-portal-${esc(meta.accent)}"><button type="button" class="rmt-portal-open" data-rmt-workspace-route="${key}"><span class="rmt-portal-avatar"><i class="fa-solid ${esc(meta.icon)}" aria-hidden="true"></i></span><span class="rmt-portal-title">${esc(spec.title)}</span><span class="rmt-portal-subtitle">${esc(meta.subtitle)}</span><span class="rmt-portal-status">${esc(status)}</span><span class="rmt-workspace-enter" aria-hidden="true">›</span></button>${queueable ? ui_taskCenter.queuePickHtml(key) + routePeople.routePeopleHtml(key) : ''}</article>`;
     }).join('');
     let pendingBar = '';
     if (canQueue) {

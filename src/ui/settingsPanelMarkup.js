@@ -49,8 +49,8 @@ export function renderSettingsPanelMarkup(panel) {
           </div>
           <div class="rmt-api-grid">
             <label class="rmt-settings-field"><span>最大输出</span><input class="text_pole" data-rmt-api-max-tokens type="number" min="1" step="1" placeholder="默认 60000"></label>
-            <label class="rmt-settings-field"><span>输入预算</span><input class="text_pole" data-rmt-api-input-budget type="number" min="8000" max="200000" step="1" placeholder="默认 60000"></label>
-            <small>最大输出是模型最多写多长，默认 60000，不拦输入。输入预算是发送前本地保险，默认 60000 tokens，范围 8000–200000，越大越贵；与最大输出无关。</small>
+            <label class="rmt-settings-field"><span>输入预算</span><input class="text_pole" data-rmt-api-input-budget type="number" min="1" step="1" placeholder="默认 60000"></label>
+            <small>最大输出是模型最多写多长，默认 60000，不拦输入。输入预算默认 60000 tokens，可填写正整数；计数可用时按此预算检查，计数不可用时不按字符数拦截。实际容量由模型服务决定，与最大输出无关。</small>
             <label class="rmt-settings-field"><span>温度</span><input class="text_pole" data-rmt-api-temperature type="number" min="0" max="2" step="0.1"></label>
             <small data-rmt-temperature-note></small>
           </div>

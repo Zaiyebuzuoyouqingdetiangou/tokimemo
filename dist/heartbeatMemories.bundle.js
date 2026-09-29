@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
-// Source modules: 302
-// Source SHA-256: b4978c41f0fb38f52d7b9e8d2f7daf9f13b3a5f6a22f2ec3fdc010fea693ccb4
+// Source modules: 308
+// Source SHA-256: 66e5f26beef780f3d1e854d86002ada537e95cd7b6988b8f15ba74ec53c3a1c2
 // Build: python3 verification/build.py <source-root>
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -141,6 +141,10 @@ const __m_core_themeSongCover_js = Object.create(null);
 const __m_core_timeStoriesContract_js = Object.create(null);
 const __m_core_uiBridge_js = Object.create(null);
 const __m_core_worldPresentation_js = Object.create(null);
+const __m_extras_collection_js = Object.create(null);
+const __m_extras_intel_js = Object.create(null);
+const __m_extras_store_js = Object.create(null);
+const __m_extras_waiting_js = Object.create(null);
 const __m_generation_achievementCapture_js = Object.create(null);
 const __m_generation_baibaiImage_js = Object.create(null);
 const __m_generation_cgAppearance_js = Object.create(null);
@@ -248,6 +252,8 @@ const __m_ui_css_roomCss_js = Object.create(null);
 const __m_ui_css_roomMotifsItemsCss_js = Object.create(null);
 const __m_ui_endingView_js = Object.create(null);
 const __m_ui_expandedCgView_js = Object.create(null);
+const __m_ui_extrasStyles_js = Object.create(null);
+const __m_ui_extrasView_js = Object.create(null);
 const __m_ui_floatingArchive_js = Object.create(null);
 const __m_ui_floatingAvatarButton_js = Object.create(null);
 const __m_ui_generationCompletion_js = Object.create(null);
@@ -11776,7 +11782,7 @@ const MAX_MEMORY_PROMPT_ITEMS = 64;
 
 const DERIVED_INCREMENTAL_SCHEMA_VERSION = 1;
 
-const MAX_DERIVED_CONTENT_ITEMS = MAX_MEMORY_ITEMS;
+const MAX_DERIVED_CONTENT_ITEMS = Infinity;
 
 const MAX_INCREMENTAL_EXISTING_INDEX_ITEMS = 120;
 
@@ -11784,16 +11790,15 @@ const MAX_GENERATION_INPUT_TOKENS = 60000;
 
 const LEGACY_DEFAULT_INPUT_BUDGET_TOKENS = 32000;
 
-// Bounds for the user-adjustable input budget. Values outside this range are refused
-// at save time so a mistyped number cannot run away; per-request cost scales with input.
-const MIN_USER_INPUT_BUDGET_TOKENS = 8000;
+// Preserve the user-selected positive safe integer; this is not a model capability.
+const MIN_USER_INPUT_BUDGET_TOKENS = 1;
 
-const MAX_USER_INPUT_BUDGET_TOKENS = 200000;
+const MAX_USER_INPUT_BUDGET_TOKENS = Number.MAX_SAFE_INTEGER;
 
 // Legacy per-feature sizing hint only; never clamp the user's output setting to it.
 const MAX_GENERATION_OUTPUT_TOKENS = 60000;
 
-const MAX_GENERATION_OUTPUT_CHARS = 600000;
+const MAX_GENERATION_OUTPUT_CHARS = Infinity;
 
 const MAX_GENERATION_INPUT_CHARS = 180000;
 
@@ -12069,7 +12074,7 @@ const MAX_GENERATION_REQUEST_TIMEOUT_MS = 1200000;
 
 const MANUAL_API_MODEL_LIST_TIMEOUT_MS = 30000;
 
-const MAX_MANUAL_API_RESPONSE_BYTES = 4000000;
+const MAX_MANUAL_API_RESPONSE_BYTES = Infinity;
 
 const SEGMENT_REQUEST_CONCURRENCY = 2;
 
@@ -15749,7 +15754,7 @@ async function readProfileCompletion(result, { signal = null } = {}) {
             const reasoning = responseField(responseField(item.value, 'state'), 'reasoning');
             reasoningChars = Math.max(reasoningChars, typeof reasoning === 'string' ? reasoning.length : 0);
             if (next.length > core_constants.MAX_GENERATION_OUTPUT_CHARS
-                || new TextEncoder().encode(next).byteLength > core_constants.MAX_MANUAL_API_RESPONSE_BYTES
+                || (Number.isFinite(core_constants.MAX_MANUAL_API_RESPONSE_BYTES) && new TextEncoder().encode(next).byteLength > core_constants.MAX_MANUAL_API_RESPONSE_BYTES)
                 || reasoningChars > core_constants.MAX_MANUAL_API_RESPONSE_BYTES) throw apiError('流式响应超过安全范围。', 'RMT_MANUAL_RESPONSE_TOO_LARGE');
             content = next;
         }
@@ -18060,7 +18065,7 @@ function normalizeInputBudgetTokens(value) {
 }
 function generationInputCharCap(budgetTokens) {
     const tokens = normalizeInputBudgetTokens(budgetTokens);
-    return Math.min(600000, tokens * 3);
+    return Math.min(Number.MAX_SAFE_INTEGER, tokens * 3);
 }
 
 __m_core_outputBudget_js.isValidOutputTokens = isValidOutputTokens;
@@ -38561,9 +38566,7 @@ async function assertPromptBudget(context, prompt, { skipTokenCount = false, sig
         error.inputBudget = { chars: prompt.length, tokens, tokensKnown, budgetTokens, charCap };
         return error;
     };
-    if (prompt.length > charCap) {
-        throw budgetError(`本次输入 ${prompt.length.toLocaleString()} 字符，预算 ${budgetTokens.toLocaleString()} tokens，字符顶 ${charCap.toLocaleString()}。tokens 未知，已按字符安全顶判断。已在发送前拦截。`);
-    }
+    // Character estimates cannot reject a request whose real token count fits.
     let tokens = null;
     let tokensKnown = false;
     if (!skipTokenCount && typeof context.getTokenCountAsync === 'function') {
@@ -38589,7 +38592,7 @@ async function assertPromptBudget(context, prompt, { skipTokenCount = false, sig
             tokens = null;
             tokensKnown = false;
             core_taskTrace.markStage(taskTrace, 'token-count-fallback');
-            console.warn('[HeartbeatMemories] input token count unavailable; using character budget only', core_text.safeErrorDiagnostic(error));
+            console.warn('[HeartbeatMemories] input token count unavailable; proceeding without an estimated hard cutoff', core_text.safeErrorDiagnostic(error));
         }
     }
     if (signal?.aborted) throw core_requestCoordinator.createGenerationAbortError();
@@ -46995,7 +46998,7 @@ const ALBUM_RELATIONSHIP_HINT_RE = /(?:喜欢|爱|恋|暧昧|告白|表白|交�
 // incremental slice. Keep every memory id plus one exact, locally verifiable anchor; add a bounded
 // synopsis for likely relationship records and the recent tail so the full request remains safe.
 function albumRelationshipArchiveSlice(memoryBank) {
-    const memories = (Array.isArray(memoryBank?.memories) ? memoryBank.memories : []).slice(0, core_constants.MAX_MEMORY_ITEMS);
+    const memories = Array.isArray(memoryBank?.memories) ? memoryBank.memories : [];
     const indexed = memories.map((item, index) => {
         const title = core_text.normalizeText(item?.title, 100);
         const anchors = core_text.cleanArray(item?.anchors, 6, 100);
@@ -57660,6 +57663,7 @@ const core_context = __m_core_context_js;
 const core_evidence = __m_core_evidence_js;
 const core_text = __m_core_text_js;
 const ui_overlay = __m_ui_overlay_js;
+const extras_view = __m_ui_extrasView_js;
 const runtimeState = __m_core_state_js.state;
 const MAX_DYNAMIC_RELATIONS = __m_modes_characterProfile_js.MAX_DYNAMIC_RELATIONS;
 const PROFILE_DISCOVERY_LABELS = __m_modes_characterProfile_js.PROFILE_DISCOVERY_LABELS;
@@ -58077,6 +58081,7 @@ function renderRelations() {
       ${cardRelationSourcesHtml(profile?.relationships || [], session.settingRelationships || [])}
       ${relationGardenHtml({ characterName, avatarUrl, participantNames: session.participantNames || [], sharedRelations: [...(session.settingRelationships || []), ...(profile?.relationships || [])], dynamicRelations: session.relationships || [], selectedKey, selectedOwner })}
     </div>`;
+    extras_view.decorateRelationDetail(ui_overlay.bodyEl());
 }
 
 __m_modes_relationsView_js.normalizeRelations = normalizeRelations;
@@ -60395,6 +60400,7 @@ const room_interior = __m_ui_roomInterior_js;
 const room_figure_local = __m_modes_roomFigureLocal_js;
 const recovery_view = __m_ui_recoveryView_js;
 const ui_generationCompletion = __m_ui_generationCompletion_js;
+const extras_view = __m_ui_extrasView_js;
 const runtimeState = __m_core_state_js.state;
 const normalizeRoomVisualProfile = __m_modes_roomProfile_js.normalizeRoomVisualProfile;
 const roomNarrativeClaimsSharedHistory = __m_modes_roomProfile_js.roomNarrativeClaimsSharedHistory;
@@ -60931,6 +60937,7 @@ function renderRoom() {
         if (typeof body.insertAdjacentHTML === 'function') body.insertAdjacentHTML('afterbegin', readingNotice);
         else body.innerHTML = readingNotice + body.innerHTML;
     }
+    extras_view.decorateRoom(ui_overlay.bodyEl());
     startRoomClock();
 }
 
@@ -61046,6 +61053,7 @@ function renderRoomParticipants(session = runtimeState.activeSession) {
         if (typeof body.insertAdjacentHTML === 'function') body.insertAdjacentHTML('afterbegin', readingNotice);
         else body.innerHTML = readingNotice + body.innerHTML;
     }
+    extras_view.decorateRoom(ui_overlay.bodyEl());
     startRoomClock();
 }
 
@@ -71387,6 +71395,7 @@ const generation = __m_generation_client_js;
 const overlay = __m_ui_overlay_js;
 const travelView = __m_ui_travelView_js;
 const mailGallery = __m_core_mailGallery_js;
+const extras_view = __m_ui_extrasView_js;
 const runtimeState = __m_core_state_js.state;
 
 
@@ -71442,6 +71451,7 @@ function renderInbox() {
     </article>` : `<nav class="rmt-mail-filters" aria-label="筛选信件">${tab('all','全部')}${tab('unread','未读')}${tab('favorite','收藏')}${tab('gallery','随信画册 · ' + mailGallery.savedMailDrawings(session).length)}</nav>${view.filter === 'gallery' ? inboxGalleryHtml(session) : `<div class="rmt-mail-list">${letters.map(letter =>
         `<button type="button" class="rmt-mail-row ${letter.readAt ? '' : 'is-unread'}" data-rmt-inbox="read" data-rmt-inbox-id="${text.esc(letter.id)}"><span class="rmt-mail-seal" aria-hidden="true">${letter.type === 'travel' ? '▧' : '✉'}</span><span><small>${letterTypeLabel(letter.type)} · ${text.esc(inboxSenderLabel(letter, session))} · ${text.esc(stamp(letter.createdAt))}${letter.favorite ? ' · 收藏' : ''}${!letter.readAt ? ' · 未读' : ''}</small><b>${text.esc(letter.title)}</b><span>${text.esc(letter.body.slice(0, 90))}</span></span><i aria-hidden="true">›</i></button>`).join('') || '<div class="rmt-mail-empty"><span aria-hidden="true">✉</span><h3>信箱里留着位置</h3><p>可以收一封今天的来信，也可以把路线中的明信片收进来。</p></div>'}</div>`}`;
     overlay.bodyEl().innerHTML = `<section class="rmt-inbox"><header class="rmt-mail-header"><div><small>LETTERS TO YOU</small><h2>${text.esc(session.recipient || '你')}的邮箱</h2><p>${session.letters.length} 封来信 · ${session.letters.filter(item => !item.readAt).length} 封未读</p></div><div class="rmt-mail-actions"><button type="button" class="rmt-btn" data-rmt-inbox="receive" ${readonly() ? 'disabled' : ''}>收取新信</button><button type="button" class="rmt-btn" data-rmt-inbox="postcards" ${readonly() ? 'disabled' : ''}>收进路线明信片</button></div></header>${detail}</section>`;
+    extras_view.decorateInbox(overlay.bodyEl(), !selected);
 }
 // State changes use the same durable CAS as model output. Navigation never calls saveSession.
 function assertShownInboxTarget() {
@@ -73763,6 +73773,7 @@ const workspace_ui = __m_ui_workspace_js;
 const language_view = __m_ui_languageView_js;
 const ui_workspaceState = __m_ui_workspaceState_js;
 const toolbarIcons = __m_ui_toolbarIcons_js;
+const extras_view = __m_ui_extrasView_js;
 const dispatch_overlayClickTargets = __m_ui_overlayClickTargets_js;
 const dispatch_overlayClickActions = __m_ui_overlayClickActions_js;
 const runtimeState = __m_core_state_js.state;
@@ -73894,6 +73905,7 @@ function navigateBack() {
     if (time_stories.isTimeStoryMode(runtimeState.activeMode) && time_stories_view.closeTimeStoryDetail()) return;
     if (runtimeState.activeMode === core_constants.MODE.TIME_ECHO) return openCachedOrGenerate(core_constants.MODE.PHONE);
     if (cg_editor.hasCgPromptEditor()) return cg_editor.closeCgPromptEditor();
+    if (extras_view.navigateExtraBack()) return;
     if (runtimeState.endingEasterEggRuntime) return ui_endingView.closeEndingEasterEgg();
     if (runtimeState.contentManagerOpen) {
         runtimeState.contentManagerOpen = false;
@@ -74195,6 +74207,7 @@ let heartOpenRequest = 0;
 function openCachedOrGenerate(mode, options = {}) {
     if (mode === 'journal') return handJournal.openHandJournal();
     if (['mirrorCall','mirrorVoice'].includes(mode)) return workspace_ui.openVoiceModule(mode);
+    if (extras_view.isExtraMode(mode)) return extras_view.openExtra(mode, options);
     if (!Object.values(core_constants.MODE).includes(mode)) return;
     if (options.incrementalSession) {
         const route = options.workspaceRoute || mode;
@@ -74260,6 +74273,7 @@ function renderActive() {
         if (runtimeState.renderedChatScope && runtimeState.renderedChatScope !== scope) return;
     } catch { return; }
     if (['mirrorCall', 'mirrorVoice', 'journal'].includes(runtimeState.activeMode)) return;
+    if (extras_view.isExtraMode(runtimeState.activeMode)) return void extras_view.renderExtra();
     if (workspace_ui.renderEmptyWorkspace()) return;
     image_viewer.closeCgImageViewer({ restoreFocus: false });
     runtimeState.contentManagerOpen = false;
@@ -74341,6 +74355,7 @@ function handleOverlayClick(event) {
     const moreMenu = toolbarMoreMenu(overlay);
     if (!moreMenu?.hidden && !event.target.closest?.('[data-rmt-toolbar-more-menu]')) closeToolbarMoreMenu(overlay);
     else if (!moreMenu?.hidden && event.target.closest?.('[data-rmt-toolbar-more-menu] [data-rmt-action],[data-rmt-toolbar-more-menu] [data-reader],[data-rmt-toolbar-more-menu] [data-rmt-workspace-route]')) closeToolbarMoreMenu(overlay);
+    if (extras_view.handleExtraClick(event)) return;
     if (dispatch_overlayClickTargets.overlayClickRecordTargets(event) !== OVERLAY_CLICK_UNHANDLED) return;
     if (dispatch_overlayClickTargets.overlayClickPageTargets(event) !== OVERLAY_CLICK_UNHANDLED) return;
 
@@ -74356,6 +74371,7 @@ async function handleOverlayChange(event) {
     const dateInput = event.target.closest?.('[data-rmt-memory-date]');
     if (dateInput) return void applyMemoryPatch(dateInput.dataset.rmtMemoryDate, { date: dateInput.value });
     if (cg_format_ui.handleCgFormatChange(event)) return;
+    if (extras_view.handleExtraChange(event)) return;
     if (workspace_ui.handleWorkspaceChange(event) || language_view.handleLanguageChange(event)) return;
     const advSelectEl = event.target.closest?.('[data-rmt-adv-select]');
     if (advSelectEl) return ui_advEventView.advSelect(advSelectEl.value);
@@ -79293,7 +79309,7 @@ function bindSettingsChange(panel, tagDraft, tagStatus, tagState) {
     if (target.matches?.('[data-rmt-api-input-budget]')) {
       if (target.validity?.badInput || (target.value.trim() && !output_budget.isValidInputBudgetTokens(target.value))) {
         globalThis.toastr?.warning?.(
-          '输入预算请填写 8000–200000 的整数；原设置未改动。打开设置 → 输入预算，不是最大输出。',
+          '输入预算请填写正整数（不超过 JavaScript 安全整数范围）；原设置未改动。打开设置 → 输入预算，不是最大输出。',
           '心迹回廊',
         );
         target.value = String(core_settings.getPluginSettings().inputBudgetTokens);
@@ -79897,8 +79913,8 @@ function renderSettingsPanelMarkup(panel) {
           </div>
           <div class="rmt-api-grid">
             <label class="rmt-settings-field"><span>最大输出</span><input class="text_pole" data-rmt-api-max-tokens type="number" min="1" step="1" placeholder="默认 60000"></label>
-            <label class="rmt-settings-field"><span>输入预算</span><input class="text_pole" data-rmt-api-input-budget type="number" min="8000" max="200000" step="1" placeholder="默认 60000"></label>
-            <small>最大输出是模型最多写多长，默认 60000，不拦输入。输入预算是发送前本地保险，默认 60000 tokens，范围 8000–200000，越大越贵；与最大输出无关。</small>
+            <label class="rmt-settings-field"><span>输入预算</span><input class="text_pole" data-rmt-api-input-budget type="number" min="1" step="1" placeholder="默认 60000"></label>
+            <small>最大输出是模型最多写多长，默认 60000，不拦输入。输入预算默认 60000 tokens，可填写正整数；计数可用时按此预算检查，计数不可用时不按字符数拦截。实际容量由模型服务决定，与最大输出无关。</small>
             <label class="rmt-settings-field"><span>温度</span><input class="text_pole" data-rmt-api-temperature type="number" min="0" max="2" step="0.1"></label>
             <small data-rmt-temperature-note></small>
           </div>
@@ -83060,6 +83076,7 @@ const cgEditor = __m_ui_cgPromptEditor_js;
 const ui_taskCenter = __m_ui_taskCenter_js;
 const ui_workspaceState = __m_ui_workspaceState_js;
 const generation_merged = __m_generation_mergedGeneration_js;
+const extras_view = __m_ui_extrasView_js;
 const state = __m_core_state_js.state;
 
 
@@ -83092,6 +83109,8 @@ const ALIAS_META = {
     strips: { icon: 'fa-images', accent: 'album', subtitle: '两个人的日常片刻' },
     postending: { icon: 'fa-book-open', accent: 'ending', subtitle: '未来生活的独立小剧场' },
     heart: { subtitle: '春夏秋冬的小剧场' }, ending: { subtitle: '结局路线与告白回看' },
+    collection: { icon: 'fa-chart-pie', accent: 'achievements', subtitle: '已点亮的回忆 · 毕业结算' },
+    waiting: { icon: 'fa-house-chimney-window', accent: 'room', subtitle: '你不在的日子里，他的一天' },
 };
 function syncWorkspaceChrome() {
     const host = globalThis.document?.getElementById?.(constants.OVERLAY_ID);
@@ -83177,10 +83196,11 @@ function workspaceCatalogueHtml(portals = [], snapshot = null, { ready: archiveR
         const running = snapshot ? coordinator.isArchiveTargetModeGenerating(spec.mode, snapshot) : coordinator.isModeGenerating(spec.mode);
         const ready = routeHasContent(key, session);
         const progress = generationStatus.routeGenerationStatus(key, spec.mode, session, { running, hasContent: ready, snapshot });
-        const status = spec.manualOnly ? '点击进入' : (progress.state === 'done' || progress.state === 'empty' ? countStatus(key, session) : progress.label)
+        const extraInfo = extras_view.isExtraMode(spec.mode) ? extras_view.extraCardInfo(key) : null;
+        const status = extraInfo ? extraInfo.status : spec.manualOnly ? '点击进入' : (progress.state === 'done' || progress.state === 'empty' ? countStatus(key, session) : progress.label)
             + (generation_merged.MERGEABLE_ROUTES.includes(key) ? ' · 可合并' : '');
         const queueable = canQueue && spec.mode && !spec.deep && !spec.manualOnly;
-        return `<article class="rmt-archive-portal rmt-workspace-card ${ready ? 'ready' : 'empty'} rmt-archive-portal-${esc(meta.accent)}"><button type="button" class="rmt-portal-open" data-rmt-workspace-route="${key}"><span class="rmt-portal-avatar"><i class="fa-solid ${esc(meta.icon)}" aria-hidden="true"></i></span><span class="rmt-portal-title">${esc(spec.title)}</span><span class="rmt-portal-subtitle">${esc(meta.subtitle)}</span><span class="rmt-portal-status">${esc(status)}</span><span class="rmt-workspace-enter" aria-hidden="true">›</span></button>${queueable ? ui_taskCenter.queuePickHtml(key) + routePeople.routePeopleHtml(key) : ''}</article>`;
+        return `<article class="rmt-archive-portal rmt-workspace-card ${ready ? 'ready' : 'empty'}${extraInfo?.off ? ' rmt-x-off' : ''} rmt-archive-portal-${esc(meta.accent)}"><button type="button" class="rmt-portal-open" data-rmt-workspace-route="${key}"><span class="rmt-portal-avatar"><i class="fa-solid ${esc(meta.icon)}" aria-hidden="true"></i></span><span class="rmt-portal-title">${esc(spec.title)}</span><span class="rmt-portal-subtitle">${esc(meta.subtitle)}</span><span class="rmt-portal-status">${esc(status)}</span><span class="rmt-workspace-enter" aria-hidden="true">›</span></button>${queueable ? ui_taskCenter.queuePickHtml(key) + routePeople.routePeopleHtml(key) : ''}</article>`;
     }).join('');
     let pendingBar = '';
     if (canQueue) {
@@ -83407,10 +83427,12 @@ const WORKSPACE_ROUTES = Object.freeze({
     album: { mode: 'album', title: '回忆相簿', group: 'memory' },
     adv: { mode: 'adv', title: 'ADV EVENT', group: 'memory' },
     cabinet: { mode: 'cabinet', title: '两个人的陈列柜', group: 'memory' },
+    collection: { mode: 'collection', title: '回忆收集率', group: 'memory', manualOnly: true },
     room: { mode: 'room', title: '他的房间', group: 'life' },
     phone: { mode: 'phone', title: '他的私人终端', group: 'life' },
     inbox: { mode: 'inbox', title: '你的邮箱', group: 'life' },
     travel: { mode: 'travel', title: '他的出行路线', group: 'life' },
+    waiting: { mode: 'waiting', title: '他在等你', group: 'life', manualOnly: true },
     mirrorVoice: { mode:'mirrorVoice', title:'镜译 · 语音设置', group:'settings', manualOnly:true, deep:true },
     themeSong: { mode: 'themeSong', title: '角色印象曲', group: 'interaction' },
     bedtime: { mode: 'bedtime', title: '睡前故事', group: 'stories' },
@@ -83429,6 +83451,7 @@ const WORKSPACE_ROUTES = Object.freeze({
     journal: { mode:'journal', title:'手帐', group:'life', manualOnly:true },
     items: { mode: 'items', title: '他的物品', group: 'life', deep: true },
     timeEcho: { mode: 'timeEcho', title: '时空回响', group: 'stories', deep: true },
+    intel: { mode: 'intel', title: '朋友情报', group: 'interaction', manualOnly: true, deep: true },
 });
 function workspaceRoute(mode, preferred = '') {
     return Object.hasOwn(WORKSPACE_ROUTES, preferred) && WORKSPACE_ROUTES[preferred].mode === mode
@@ -83879,6 +83902,1449 @@ __m_ui_workspaceStyles_js.workspaceCss = workspaceCss;
 __m_ui_workspaceStyles_js.capsuleCss = capsuleCss;
 }
 
+function __init_extras_store_js() {
+// MODULE: extras/store.js
+const core_context = __m_core_context_js;
+const archive_repository = __m_archive_repository_js;
+const core_text = __m_core_text_js;
+// 朋友情报 / 他在等你：每个聊天窗口一份小数据。
+// 写入顺序与外貌设定相同：先写本机副本，再交给酒馆的 debounced metadata；从不直接 saveChat。
+// 生成完成时如果用户已经切到别的聊天，只写本机副本，回到原聊天时合并，不会写进别的窗口。
+
+
+
+const EXTRAS_KEY = 'heartbeatMemoriesExtrasV1';
+const LOCAL_PREFIX = 'heartbeatMemoriesExtrasV1:';
+const pendingByScope = new Map();
+const volatileByScope = new Map();
+let recordSequence = 0;
+const MAX_INTEL_RECORDS = Infinity;
+const MAX_WAITING_RECORDS = Infinity;
+const WAITING_DAY_OPTIONS = Object.freeze([3, 7, 14]);
+
+function extraRecordId(prefix = 'EXTRA') {
+    const unique = globalThis.crypto?.randomUUID?.()
+        || `${Date.now().toString(36)}_${(++recordSequence).toString(36)}_${Math.random().toString(36).slice(2)}`;
+    return `${prefix}_${unique}`;
+}
+
+function defaultWaitingSettings() {
+    return { enabled: false, days: 7, showInbox: true, showRoom: true };
+}
+
+function emptyExtras() {
+    return { version: 1, updatedAt: 0, intel: [], waiting: { settings: defaultWaitingSettings(), records: [] } };
+}
+
+function normalizeWaitingSettings(value) {
+    const base = defaultWaitingSettings();
+    const source = value && typeof value === 'object' ? value : {};
+    const days = Number(source.days);
+    return {
+        enabled: source.enabled === true,
+        days: WAITING_DAY_OPTIONS.includes(days) ? days : base.days,
+        showInbox: source.showInbox !== false,
+        showRoom: source.showRoom !== false,
+    };
+}
+
+function normalizeExtras(value) {
+    const out = emptyExtras();
+    if (!value || typeof value !== 'object') return out;
+    out.updatedAt = Math.max(0, Number(value.updatedAt) || 0);
+    out.intel = (Array.isArray(value.intel) ? value.intel : []).filter(item => item && typeof item === 'object' && item.id)
+        .slice(0, MAX_INTEL_RECORDS);
+    const waiting = value.waiting && typeof value.waiting === 'object' ? value.waiting : {};
+    out.waiting = {
+        settings: normalizeWaitingSettings(waiting.settings),
+        settingsUpdatedAt: Math.max(0, Number(waiting.settingsUpdatedAt) || 0),
+        records: (Array.isArray(waiting.records) ? waiting.records : []).filter(item => item && typeof item === 'object' && item.id)
+            .slice(0, MAX_WAITING_RECORDS),
+    };
+    return out;
+}
+
+function localKey(scope) {
+    return LOCAL_PREFIX + core_text.normalizeText(scope, 400);
+}
+
+function readLocal(scope) {
+    try {
+        const raw = globalThis.localStorage?.getItem(localKey(scope));
+        if (typeof raw !== 'string') return null;
+        return normalizeExtras(JSON.parse(raw));
+    } catch { return null; }
+}
+
+function writeLocal(scope, value) {
+    try {
+        const serialized = JSON.stringify(value);
+        globalThis.localStorage?.setItem(localKey(scope), serialized);
+        return globalThis.localStorage?.getItem(localKey(scope)) === serialized;
+    } catch { return false; }
+}
+
+function mergeById(left = [], right = [], limit) {
+    const map = new Map();
+    for (const item of [...left, ...right]) {
+        const previous = map.get(item.id);
+        if (!previous || (Number(item.updatedAt || item.createdAt) || 0) >= (Number(previous.updatedAt || previous.createdAt) || 0)) map.set(item.id, item);
+    }
+    return [...map.values()].sort((a, b) => (Number(b.createdAt) || 0) - (Number(a.createdAt) || 0)).slice(0, limit);
+}
+
+function mergeExtras(a, b) {
+    const left = normalizeExtras(a);
+    const right = normalizeExtras(b);
+    const settingsSource = (right.waiting.settingsUpdatedAt || 0) >= (left.waiting.settingsUpdatedAt || 0) ? right.waiting : left.waiting;
+    return {
+        version: 1,
+        updatedAt: Math.max(left.updatedAt, right.updatedAt),
+        intel: mergeById(left.intel, right.intel, MAX_INTEL_RECORDS),
+        waiting: {
+            settings: { ...settingsSource.settings },
+            settingsUpdatedAt: settingsSource.settingsUpdatedAt || 0,
+            records: mergeById(left.waiting.records, right.waiting.records, MAX_WAITING_RECORDS),
+        },
+    };
+}
+
+function extrasScope(context = core_context.currentCharacterGuard()) {
+    return core_context.chatScopeKey(context);
+}
+
+function readExtras(context = core_context.currentCharacterGuard()) {
+    const scope = extrasScope(context);
+    const stored = context?.chatMetadata?.[EXTRAS_KEY];
+    return mergeExtras(mergeExtras(stored, readLocal(scope)), volatileByScope.get(scope));
+}
+
+// mutate 收到一份拷贝，改完返回；scope 不是当前聊天时只落本机副本。
+function updateExtras(scope, mutate) {
+    let live = null;
+    try { live = core_context.currentCharacterGuard(); } catch { live = null; }
+    const isLive = !!live && extrasScope(live) === scope;
+    const base = isLive ? readExtras(live) : mergeExtras(volatileByScope.get(scope), readLocal(scope));
+    const next = normalizeExtras(mutate(structuredClone(base)) || base);
+    next.updatedAt = Date.now();
+    volatileByScope.set(scope, structuredClone(next));
+    const localSaved = writeLocal(scope, next);
+    if (isLive) {
+        live.chatMetadata[EXTRAS_KEY] = next;
+        try { Promise.resolve(live.saveMetadataDebounced?.()).catch(() => {}); } catch { /* Keep the local/volatile copy. */ }
+    }
+    if (!localSaved) throw core_text.safeUserError('本机保存未确认，改动暂留在当前页面；请先导出备份，不要刷新。', 'RMT_EXTRAS_SAVE_FAILED');
+    return next;
+}
+
+// Keep paid responses independently of the active chat. Only confirmed local
+// writes count as durable: a debounced metadata call is not a disk receipt.
+function pendingKey(scope) { return localKey(scope) + ':pending'; }
+
+function pendingExtras(scope) {
+    const rows = new Map();
+    try {
+        const saved = JSON.parse(globalThis.localStorage?.getItem(pendingKey(scope)) || '[]');
+        for (const item of Array.isArray(saved) ? saved : []) {
+            if (item?.id && item.scope === scope && ['intel', 'waiting'].includes(item.kind)) rows.set(item.id, item);
+        }
+    } catch { /* In-memory results remain available when storage is unavailable. */ }
+    for (const item of pendingByScope.get(scope) || []) rows.set(item.id, item);
+    const result = [...rows.values()];
+    pendingByScope.set(scope, result);
+    return structuredClone(result);
+}
+
+function writePending(scope, rows) {
+    pendingByScope.set(scope, structuredClone(rows));
+    try {
+        const raw = JSON.stringify(rows);
+        globalThis.localStorage?.setItem(pendingKey(scope), raw);
+        return globalThis.localStorage?.getItem(pendingKey(scope)) === raw;
+    } catch { return false; }
+}
+
+function stageExtraResult({ scope, kind, origin, base, record, raw }) {
+    const item = { id: record?.id || extraRecordId(), scope, kind,
+        origin: structuredClone(origin), base: normalizeExtras(base), record: record || null, raw,
+        createdAt: Date.now() };
+    const durable = writePending(scope, [...pendingExtras(scope), item]);
+    return { item, durable };
+}
+
+async function retryExtraSave(scope, id) {
+    const item = pendingExtras(scope).find(row => row.id === id);
+    if (!item) return { pending: false, scope };
+    const held = reason => ({ pending: true, scope, record: item.record, reason,
+        durable: writePending(scope, pendingExtras(scope)) });
+    if (!item.record) return held('结果格式需要检查，请导出原始结果；不会自动重新生成。');
+    let live;
+    try { live = core_context.currentCharacterGuard(); } catch { return held('回到原聊天后可仅重试保存。'); }
+    if (extrasScope(live) !== scope || !core_context.deferredCommitOriginMatchesContext(item.origin, live)) {
+        return held('回到原角色、原聊天后可仅重试保存。');
+    }
+    let memory;
+    try { memory = archive_repository.requireArchive(live); } catch { return held('原档案已不可用，结果保留供导出。'); }
+    if (!item.origin.archiveRevision || memory.archiveRevision !== item.origin.archiveRevision) {
+        return held('档案版本已改变，结果保留供导出，不写入新版档案。');
+    }
+    const next = mergeExtras(item.base, readExtras(live));
+    if (item.kind === 'intel') next.intel = mergeById(next.intel, [item.record], Infinity);
+    else next.waiting.records = mergeById(next.waiting.records, [item.record], Infinity);
+    next.updatedAt = Date.now();
+    volatileByScope.set(scope, structuredClone(next));
+    const saved = writeLocal(scope, next);
+    live.chatMetadata[EXTRAS_KEY] = next;
+    try { await live.saveMetadataDebounced?.(); } catch { /* Confirmed local copy can restore the result. */ }
+    if (!saved) return held('保存未确认；结果暂留当前页面，可仅重试保存或导出。请勿刷新。');
+    writePending(scope, pendingExtras(scope).filter(row => row.id !== id));
+    return { pending: false, scope, record: item.record, durable: true };
+}
+
+function exportExtras(context = core_context.currentCharacterGuard()) {
+    const scope = extrasScope(context);
+    return JSON.stringify({ version: 1, scope, extras: readExtras(context), pending: pendingExtras(scope) }, null, 2);
+}
+
+__m_extras_store_js.retryExtraSave = retryExtraSave;
+__m_extras_store_js.extraRecordId = extraRecordId;
+__m_extras_store_js.defaultWaitingSettings = defaultWaitingSettings;
+__m_extras_store_js.normalizeExtras = normalizeExtras;
+__m_extras_store_js.extrasScope = extrasScope;
+__m_extras_store_js.readExtras = readExtras;
+__m_extras_store_js.updateExtras = updateExtras;
+__m_extras_store_js.pendingExtras = pendingExtras;
+__m_extras_store_js.stageExtraResult = stageExtraResult;
+__m_extras_store_js.exportExtras = exportExtras;
+__m_extras_store_js.EXTRAS_KEY = EXTRAS_KEY;
+__m_extras_store_js.MAX_INTEL_RECORDS = MAX_INTEL_RECORDS;
+__m_extras_store_js.MAX_WAITING_RECORDS = MAX_WAITING_RECORDS;
+__m_extras_store_js.WAITING_DAY_OPTIONS = WAITING_DAY_OPTIONS;
+}
+
+function __init_extras_collection_js() {
+// MODULE: extras/collection.js
+const core_cache = __m_core_cache_js;
+const core_constants = __m_core_constants_js;
+const core_context = __m_core_context_js;
+const core_text = __m_core_text_js;
+const archive_repository = __m_archive_repository_js;
+const runtimeState = __m_core_state_js.state;
+// 回忆收集率：只读取已保存的内容，全部在本地统计，不发请求、不写档案。
+
+
+
+
+
+
+const list = value => Array.isArray(value) ? value : [];
+
+function sourceOptions() {
+    const snapshot = runtimeState.activeArchiveSnapshot;
+    if (snapshot) return { options: { chatId: snapshot.chatId, memoryBank: snapshot.memory, cache: snapshot.cache || {}, clone: false, includePartial: true }, memory: snapshot.memory, context: null };
+    const context = core_context.currentCharacterGuard();
+    const memory = archive_repository.requireArchive(context);
+    return { options: { context, memoryBank: memory, clone: false, includePartial: true }, memory, context };
+}
+
+async function prepareCollectionSource() {
+    if (runtimeState.activeArchiveSnapshot) return;
+    const context = core_context.currentCharacterGuard();
+    if (core_cache.isCompressedCacheRecord(context.chatMetadata?.[core_constants.CACHE_KEY])) await core_cache.ensureCacheHydrated(context);
+}
+
+function load(mode, options) {
+    try { return core_cache.loadSession(mode, options); } catch { return null; }
+}
+
+function parseChatTime(value) {
+    if (typeof value === 'number' && Number.isFinite(value)) return value > 1e12 ? value : value * 1000;
+    const raw = core_text.normalizeText(value, 80);
+    if (!raw) return 0;
+    const direct = Date.parse(raw);
+    if (Number.isFinite(direct)) return direct;
+    const m = raw.match(/^([A-Za-z]+)\s+(\d{1,2}),\s*(\d{4})\s+(\d{1,2}):(\d{2})\s*(am|pm)?$/i);
+    if (!m) return 0;
+    let hour = Number(m[4]) % 12;
+    if (/pm/i.test(m[6] || '')) hour += 12;
+    if (!m[6]) hour = Number(m[4]);
+    const parsed = Date.parse(`${m[1]} ${m[2]}, ${m[3]} ${String(hour).padStart(2, '0')}:${m[5]}:00`);
+    return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function messageTime(message) {
+    return parseChatTime(message?.send_date) || parseChatTime(message?.gen_finished) || parseChatTime(message?.extra?.gen_finished) || 0;
+}
+
+function chatSpanDays(context) {
+    const chat = list(context?.chat);
+    const first = chat.map(messageTime).find(Boolean) || 0;
+    let last = 0;
+    for (let i = chat.length - 1; i >= 0 && !last; i -= 1) last = messageTime(chat[i]);
+    if (!first || !last || last < first) return 0;
+    return Math.max(1, Math.round((last - first) / 86400000) + 1);
+}
+
+function computeCollection() {
+    const { options, memory, context } = sourceOptions();
+    const album = load(core_constants.MODE.ALBUM, options);
+    const adv = load(core_constants.MODE.ADV, options);
+    const achievements = load(core_constants.MODE.ACHIEVEMENTS, options);
+    const ending = load(core_constants.MODE.ENDING, options);
+    const heart = load(core_constants.MODE.HEART, options);
+    const inbox = load(core_constants.MODE.INBOX, options);
+    const bedtime = load(core_constants.MODE.BEDTIME, options);
+    const song = load(core_constants.MODE.THEME_SONG, options);
+    const cabinet = load(core_constants.MODE.CABINET, options);
+    const travel = load(core_constants.MODE.TRAVEL, options);
+    const albumEntries = list(album?.entries);
+    const advEvents = list(adv?.events);
+    const achievementEntries = list(achievements?.entries);
+    const endingRoutes = list(ending?.endings);
+    const rows = [
+        { id: 'album', name: '回忆相簿 CG', got: albumEntries.filter(item => item?.unlocked).length, total: albumEntries.length },
+        { id: 'adv', name: 'ADV EVENT 正文', got: advEvents.filter(item => item?.adv).length, total: advEvents.length },
+        { id: 'achievements', name: '成就', got: achievementEntries.filter(item => item?.unlocked).length, total: achievementEntries.length },
+        { id: 'ending', name: 'ENDING 路线', got: endingRoutes.filter(item => item?.available).length, total: endingRoutes.length },
+    ].filter(row => row.total > 0);
+    const got = rows.reduce((sum, row) => sum + row.got, 0);
+    const total = rows.reduce((sum, row) => sum + row.total, 0);
+    const counts = [
+        { id: 'fireflies', name: '萤火虫', value: list(heart?.fireflyVoices).length, unit: '颗' },
+        { id: 'letters', name: '收到的信', value: list(inbox?.letters).length, unit: '封' },
+        { id: 'strips', name: '日常一格', value: list(heart?.dailyStrips).length, unit: '格' },
+        { id: 'stories', name: '睡前故事', value: list(bedtime?.stories).length, unit: '篇' },
+        { id: 'songs', name: '角色印象曲', value: list(song?.songs).length, unit: '首' },
+        { id: 'cabinet', name: '陈列柜', value: list(cabinet?.items).length, unit: '件' },
+        { id: 'places', name: '去过的地方', value: list(travel?.locations).length, unit: '处' },
+    ];
+    const recent = albumEntries.filter(item => item?.unlocked).slice(-3).reverse().map(item => ({ kind: 'CG', title: core_text.normalizeText(item.title, 40) }));
+    const memories = list(memory?.memories);
+    const firstCg = albumEntries.find(item => item?.unlocked);
+    const recommended = endingRoutes.find(item => item?.id === ending?.recommendedEndingId) || endingRoutes.find(item => item?.available);
+    return {
+        rows, got, total,
+        percent: total ? Math.round(got / total * 100) : 0,
+        counts, recent,
+        graduation: {
+            characterName: core_text.normalizeText(memory?.characterName || context?.name2, 80) || '他',
+            userName: core_text.normalizeText(memory?.userName || context?.name1, 80) || '你',
+            days: context ? chatSpanDays(context) : 0,
+            memoryCount: memories.length,
+            firstMemory: memories[0] ? `${memories[0].id} · ${core_text.normalizeText(memories[0].title, 60)}` : '',
+            lastMemory: memories.length ? `${memories[memories.length - 1].id} · ${core_text.normalizeText(memories[memories.length - 1].title, 60)}` : '',
+            firstCg: firstCg ? core_text.normalizeText(firstCg.title, 60) : '',
+            firstPlace: core_text.normalizeText(list(travel?.locations)[0]?.name, 60),
+            route: recommended ? core_text.normalizeText(recommended.title, 60) : '',
+        },
+    };
+}
+
+function collectionCardStatus() {
+    try {
+        const data = computeCollection();
+        return data.total ? `已点亮 ${data.percent}% · ${data.got} / ${data.total}` : '内容生成后在这里统计';
+    } catch { return '先建立当前聊天档案'; }
+}
+
+__m_extras_collection_js.prepareCollectionSource = prepareCollectionSource;
+__m_extras_collection_js.messageTime = messageTime;
+__m_extras_collection_js.chatSpanDays = chatSpanDays;
+__m_extras_collection_js.computeCollection = computeCollection;
+__m_extras_collection_js.collectionCardStatus = collectionCardStatus;
+}
+
+function __init_extras_intel_js() {
+// MODULE: extras/intel.js
+const core_cache = __m_core_cache_js;
+const core_constants = __m_core_constants_js;
+const core_context = __m_core_context_js;
+const core_evidence = __m_core_evidence_js;
+const core_text = __m_core_text_js;
+const archive_repository = __m_archive_repository_js;
+const generation_client = __m_generation_client_js;
+const generation_prompts = __m_generation_prompts_js;
+const modes_relations = __m_modes_relations_js;
+const extras_store = __m_extras_store_js;
+// 朋友情报：从人际庭园的人物出发，请 TA 用自己的口吻讲“他提起你的样子”。
+// 事实只认档案；编号对不上档案时不报错，改标为“生活设定”。温度等生成参数完全沿用用户设置。
+
+
+
+
+
+
+
+
+
+
+const SECTION_KINDS = Object.freeze(['mention', 'seen', 'advice']);
+const running = new Set();
+
+function personKey(name) {
+    return core_text.normalizeText(name, 120).toLocaleLowerCase();
+}
+
+// 只收非用户的人物；同名合并，本世界线资料优先。
+function intelPeople(context = core_context.currentCharacterGuard()) {
+    const memory = archive_repository.requireArchive(context);
+    let session = null;
+    try { session = core_cache.loadSession(core_constants.MODE.RELATIONS, { context, memoryBank: memory, clone: true }); } catch { session = null; }
+    if (!session) return [];
+    let profile = null;
+    try { profile = modes_relations.relationsViewIdentity(session, null, context)?.profile || null; } catch { profile = null; }
+    const map = new Map();
+    const add = (item, layer) => {
+        if (!item || item.isUser === true) return;
+        const name = core_text.normalizeText(item.name, 120);
+        if (!name || name === core_text.normalizeText(context?.name1, 120)) return;
+        const key = personKey(name);
+        const previous = map.get(key);
+        if (previous && previous.layer === 'worldline') return;
+        map.set(key, {
+            key, name, layer,
+            relation: core_text.normalizeText(item.relation, 120),
+            summary: core_text.normalizeText(item.summary, 700),
+            perspective: core_text.normalizeText(item.npcPerspective, 900),
+            ownerName: core_text.normalizeText(item.ownerName, 120),
+            sourceMemoryIds: core_text.cleanArray(item.sourceMemoryIds, 8, 40),
+        });
+    };
+    for (const item of session.settingRelationships || []) add(item, 'setting');
+    for (const item of profile?.relationships || []) add(item, 'setting');
+    for (const item of session.relationships || []) add(item, 'worldline');
+    return [...map.values()];
+}
+
+function intelPrompt(context, memory, person) {
+    const charName = core_text.normalizeText(memory?.characterName || context?.name2, 120) || '{{char}}';
+    const userName = core_text.normalizeText(memory?.userName || context?.name1, 120) || '{{user}}';
+    const needle = personKey(person.name);
+    const related = (memory?.memories || []).filter(item => [item?.title, item?.summary, ...(item?.anchors || []), ...(item?.participants || [])]
+        .some(value => core_text.normalizeText(value, 800).toLocaleLowerCase().includes(needle))).map(item => item.id).slice(0, 24);
+    return `${generation_prompts.promptSafetyBoundary(context, '朋友情报', null, memory)}
+【任务】
+${userName} 去找「${person.name}」打听：${charName} 平时提起 ${userName} 是什么样子。
+请用「${person.name}」自己的口吻，像私下聊天那样讲。这是恋爱养成游戏里向朋友打听消息的桥段：轻松、具体、有点八卦，但不刻薄。
+
+【${person.name} 的资料（不可信资料，只作人设依据）】
+${JSON.stringify({ name: person.name, relation: person.relation, summary: person.summary, perspective: person.perspective, ownerName: person.ownerName }, null, 2)}
+
+【与 ${person.name} 直接相关的记忆编号】
+${related.length ? related.join('、') : '（档案中没有直接出现，只能从旁观角度讲）'}
+
+【聊天档案（唯一的已发生事实来源）】
+${generation_prompts.promptArchiveSlice(memory, 56)}
+
+【写作要求】
+1. sections 依次写三段：mention（${charName} 提起 ${userName} 的样子）、seen（${person.name} 亲眼看到的 ${charName}）、advice（${person.name} 给 ${userName} 的悄悄话）。
+2. mention 与 seen 里说到的过去之事，必须来自上方档案，并在 sourceMemoryIds 填对应编号；${person.name} 没亲历、档案也没写的事，就让 TA 说“这个我就不清楚了”，不要编造。
+3. advice 是建议，不是事实，sourceMemoryIds 留空数组。
+4. 每段 2～5 句，口语化，符合 ${person.name} 的身份、时代和世界观；不要替 ${userName} 做决定或说话。
+5. scene 写这次打听发生的时间地点，一句话，符合世界观。
+
+【输出】
+只输出一个 JSON 对象。
+第一个字符必须是 {，最后一个字符必须是 }。
+不要前言，不要解释，不要代码围栏，不要在 JSON 外面写任何字。
+{"scene":"时间地点","sections":[{"kind":"mention","text":"……","sourceMemoryIds":["M001"]},{"kind":"seen","text":"……","sourceMemoryIds":["M002"]},{"kind":"advice","text":"……","sourceMemoryIds":[]}]}`;
+}
+
+function normalizeIntel(data, memory, person) {
+    const raw = Array.isArray(data?.sections) ? data.sections : [];
+    const sections = SECTION_KINDS.map(kind => {
+        const item = raw.find(row => core_text.normalizeText(row?.kind, 20) === kind) || null;
+        const text = core_text.normalizeText(item?.text, 1600);
+        if (!text) return null;
+        const ids = kind === 'advice' ? [] : core_evidence.normalizeSourceMemoryIds(item?.sourceMemoryIds, memory, 0);
+        return { kind, text, sourceMemoryIds: ids };
+    }).filter(Boolean);
+    // 模型没按 kind 写时，按顺序兜底，不因为格式小偏差丢掉整次结果。
+    if (!sections.length) {
+        raw.slice(0, 3).forEach((item, index) => {
+            const text = core_text.normalizeText(item?.text, 1600);
+            if (text) sections.push({ kind: SECTION_KINDS[index], text, sourceMemoryIds: index === 2 ? [] : core_evidence.normalizeSourceMemoryIds(item?.sourceMemoryIds, memory, 0) });
+        });
+    }
+    if (!sections.length) throw core_text.safeUserError(`这次没有收到${person.name}的回答，可以再问一次。`, 'RMT_INTEL_EMPTY');
+    return { scene: core_text.normalizeText(data?.scene, 120), sections };
+}
+
+function isIntelRunning(scope, key) {
+    return running.has(`${scope}\u001f${key}`);
+}
+
+async function askIntel(personName, { onSettled } = {}) {
+    const context = core_context.currentCharacterGuard();
+    const memory = structuredClone(archive_repository.requireArchive(context));
+    const person = intelPeople(context).find(item => item.name === personName);
+    if (!person) throw core_text.safeUserError('人际庭园里找不到这个人，请刷新人际庭园后再试。', 'RMT_INTEL_PERSON');
+    const scope = extras_store.extrasScope(context);
+    const base = structuredClone(extras_store.readExtras(context));
+    const runKey = `${scope}\u001f${person.key}`;
+    if (running.has(runKey)) throw core_text.safeUserError(`已经在向${person.name}打听了，稍等一下。`, 'RMT_INTEL_RUNNING');
+    running.add(runKey);
+    try {
+        const origin = core_context.captureTaskOrigin(context, memory.archiveRevision || '');
+        const data = await generation_client.requestJson(intelPrompt(context, memory, person), `正在向${person.name}打听…`, {
+            mode: 'intel', taskKey: `extras:intel:${runKey}`, context, origin,
+        });
+        let result;
+        try { result = normalizeIntel(data, memory, person); }
+        catch (error) {
+            const held = extras_store.stageExtraResult({ scope, kind: 'intel', origin, base, raw: data });
+            return { pending: true, scope, record: null, durable: held.durable,
+                reason: '已收到结果，但格式需要检查。请导出原始结果，不会自动重新生成。' };
+        }
+        const createdAt = Date.now();
+        const record = { id: extras_store.extraRecordId('INTEL'), createdAt, person: person.name, relation: person.relation, ...result };
+        record.archiveRevision = origin.archiveRevision;
+        extras_store.stageExtraResult({ scope, kind: 'intel', origin, base, record, raw: data });
+        return await extras_store.retryExtraSave(scope, record.id);
+    } finally {
+        running.delete(runKey);
+        try { onSettled?.(); } catch {}
+    }
+}
+
+__m_extras_intel_js.askIntel = askIntel;
+__m_extras_intel_js.intelPeople = intelPeople;
+__m_extras_intel_js.intelPrompt = intelPrompt;
+__m_extras_intel_js.normalizeIntel = normalizeIntel;
+__m_extras_intel_js.isIntelRunning = isIntelRunning;
+}
+
+function __init_extras_waiting_js() {
+// MODULE: extras/waiting.js
+const core_context = __m_core_context_js;
+const core_evidence = __m_core_evidence_js;
+const core_text = __m_core_text_js;
+const archive_repository = __m_archive_repository_js;
+const generation_client = __m_generation_client_js;
+const generation_prompts = __m_generation_prompts_js;
+const extras_store = __m_extras_store_js;
+const extras_collection = __m_extras_collection_js;
+// 他在等你：用户离开聊天一段时间后，看看他这几天的样子。
+// 生成永远由用户点击触发；密码与线索对不上时把那一格改成普通点位，不让整次失败。
+
+
+
+
+
+
+
+
+let runningScope = '';
+
+function lastChatTime(context = core_context.currentCharacterGuard()) {
+    const chat = Array.isArray(context?.chat) ? context.chat : [];
+    for (let i = chat.length - 1; i >= 0; i -= 1) {
+        const time = extras_collection.messageTime(chat[i]);
+        if (time) return time;
+    }
+    return 0;
+}
+
+function awayState(context = core_context.currentCharacterGuard(), now = Date.now()) {
+    const last = lastChatTime(context);
+    if (!last) return { known: false, last: 0, days: 0 };
+    return { known: true, last, days: Math.max(0, Math.floor((now - last) / 86400000)) };
+}
+
+function waitingSettings(context = core_context.currentCharacterGuard()) {
+    return extras_store.readExtras(context).waiting.settings;
+}
+
+function saveWaitingSettings(patch, context = core_context.currentCharacterGuard()) {
+    const scope = extras_store.extrasScope(context);
+    return extras_store.updateExtras(scope, draft => {
+        draft.waiting.settings = { ...draft.waiting.settings, ...patch };
+        draft.waiting.settingsUpdatedAt = Date.now();
+        return draft;
+    }).waiting.settings;
+}
+
+function latestWaitingRecord(context = core_context.currentCharacterGuard()) {
+    return extras_store.readExtras(context).waiting.records[0] || null;
+}
+
+// 痕迹只属于这一次离开：用户之后又聊了天，邮箱和房间里就不再显示它。
+function activeTrace(context = core_context.currentCharacterGuard()) {
+    const settings = waitingSettings(context);
+    if (!settings.enabled) return null;
+    const record = latestWaitingRecord(context);
+    if (!record) return null;
+    const away = awayState(context);
+    if (away.known && record.absenceAnchor && away.last !== record.absenceAnchor) return null;
+    return record;
+}
+
+function waitingCardStatus(context) {
+    try {
+        const ctx = context || core_context.currentCharacterGuard();
+        const settings = waitingSettings(ctx);
+        if (!settings.enabled) return { off: true, text: '已关闭 · 点击进入开启' };
+        const away = awayState(ctx);
+        const trace = activeTrace(ctx);
+        if (trace) return { off: false, text: `离开第 ${trace.awayDays} 天 · 有新的痕迹` };
+        if (away.known && away.days >= settings.days) return { off: false, text: `你离开 ${away.days} 天了 · 去看看他` };
+        return { off: false, text: away.known ? `已开启 · 上次聊天在 ${away.days} 天前` : '已开启' };
+    } catch { return { off: true, text: '先打开一个角色聊天' }; }
+}
+
+function isWaitingRunning(scope) {
+    return runningScope === scope;
+}
+
+function waitingPrompt(context, memory, away) {
+    const charName = core_text.normalizeText(memory?.characterName || context?.name2, 120) || '{{char}}';
+    const userName = core_text.normalizeText(memory?.userName || context?.name1, 120) || '{{user}}';
+    const days = away.known ? away.days : 0;
+    return `${generation_prompts.promptSafetyBoundary(context, '你不在的时候', null, memory)}
+【任务】
+${userName} 已经 ${days} 天没来了。写 ${charName} 在 ${userName} 不在的这一天里的样子，像恋爱养成游戏里偷偷看到的日常切片。
+基调是想念：安静、克制、具体，可以带一点孤单或别扭，但不写埋怨、不写催促、不写关系倒退，也不写监视或病态。
+
+【聊天档案（唯一的已发生事实来源）】
+${generation_prompts.promptArchiveSlice(memory, 56)}
+
+【写作要求】
+1. points 写 7 个公开点位：多数是他生活中的固定地点（符合世界观与身份，如书房、玄关、阳台），1～2 个是随身或外出切片（如回家路上、工作途中）。
+2. locked 写 2 个上锁点位：他最不想被看到的一面，比如藏起来的东西、没发出去的话。每个都要有 4 位数字密码 code。
+3. 每个密码必须藏在某个公开点位的 detail 原文里，以数字形式出现（例如台历上圈着 9 月 17 日 → 0917；闹钟定在 06:30 → 0630），clueFrom 填那个公开点位的 id；locked 的 hint 用一句话暗示去哪里找，不直接写出数字。
+4. 每个点位：name（地点）、time（当天时刻，如 21:40）、state（此刻的他）、detail（细节）、voice（心里话，他的口吻）。涉及与 ${userName} 过去共同发生的事，sourceMemoryIds 填档案编号；纯生活推想留空数组。
+5. letter 是一封他写了但没寄出的短信或短笺，3～6 句，body 用换行分句；roomNode 是他房间里此刻的一个画面：time、text、line（一句自言自语）。
+6. 不替 ${userName} 说话或行动。
+
+【输出】
+只输出一个 JSON 对象。
+第一个字符必须是 {，最后一个字符必须是 }。
+不要前言，不要解释，不要代码围栏，不要在 JSON 外面写任何字。
+{"points":[{"id":"P1","name":"书桌","time":"20:05","state":"……","detail":"……台历上 9 月 17 日被圈了两圈……","voice":"……","sourceMemoryIds":[]}],"locked":[{"id":"L1","name":"抽屉最深处","time":"","hint":"……","code":"0917","clueFrom":"P1","state":"……","detail":"……","voice":"……","sourceMemoryIds":[]}],"letter":{"title":"没寄出的信","body":"……"},"roomNode":{"time":"21:40","text":"……","line":"……"}}`;
+}
+
+function normalizePoint(item, index, memory, prefix) {
+    const name = core_text.normalizeText(item?.name, 40);
+    const state = core_text.normalizeText(item?.state, 600);
+    if (!name || !state) return null;
+    return {
+        id: core_text.safeId(item?.id, `${prefix}${index + 1}`),
+        name,
+        time: core_text.normalizeText(item?.time, 12),
+        state,
+        detail: core_text.normalizeText(item?.detail, 800),
+        voice: core_text.normalizeText(item?.voice, 400),
+        sourceMemoryIds: core_evidence.normalizeSourceMemoryIds(item?.sourceMemoryIds, memory, 0),
+    };
+}
+
+// 线索里能读出的四位数：连续四位数字，或相邻两个数字各补成两位（9 月 17 日 → 0917，06:30 → 0630）。
+function clueCodes(text) {
+    const numbers = String(text || '').match(/\d+/g) || [];
+    const codes = new Set();
+    for (const value of numbers) {
+        for (let i = 0; i + 4 <= value.length; i += 1) codes.add(value.slice(i, i + 4));
+    }
+    for (let i = 0; i + 1 < numbers.length; i += 1) {
+        if (numbers[i].length <= 2 && numbers[i + 1].length <= 2) codes.add(numbers[i].padStart(2, '0') + numbers[i + 1].padStart(2, '0'));
+    }
+    return codes;
+}
+
+function normalizeWaiting(data, memory) {
+    const points = (Array.isArray(data?.points) ? data.points : []).slice(0, 8).map((item, index) => normalizePoint(item, index, memory, 'P')).filter(Boolean);
+    const locked = [];
+    for (const [index, item] of (Array.isArray(data?.locked) ? data.locked : []).slice(0, 2).entries()) {
+        const point = normalizePoint(item, index, memory, 'L');
+        if (!point) continue;
+        const code = core_text.normalizeText(item?.code, 8).replace(/\D/g, '');
+        const clue = points.find(row => row.id === core_text.normalizeText(item?.clueFrom, 40)) || null;
+        const findable = code.length === 4 && (clue ? clueCodes(clue.detail).has(code) : points.some(row => clueCodes(row.detail).has(code)));
+        if (findable) locked.push({ ...point, code, hint: core_text.normalizeText(item?.hint, 120) || '线索藏在别的地方。', clueFrom: clue?.id || '' });
+        else points.push({ ...point, id: `${point.id}_OPEN`, wasLocked: true });
+    }
+    if (!points.length) throw core_text.safeUserError('这次没有收到他这几天的样子，可以再试一次。', 'RMT_WAITING_EMPTY');
+    const letterBody = core_text.normalizeText(data?.letter?.body, 1200);
+    return {
+        points,
+        locked,
+        letter: letterBody ? { title: core_text.normalizeText(data?.letter?.title, 40) || '没寄出的信', body: letterBody } : null,
+        roomNode: core_text.normalizeText(data?.roomNode?.text, 400) ? {
+            time: core_text.normalizeText(data?.roomNode?.time, 12),
+            text: core_text.normalizeText(data?.roomNode?.text, 400),
+            line: core_text.normalizeText(data?.roomNode?.line, 200),
+        } : null,
+    };
+}
+
+async function generateWaiting({ onSettled } = {}) {
+    const context = core_context.currentCharacterGuard();
+    const memory = structuredClone(archive_repository.requireArchive(context));
+    const scope = extras_store.extrasScope(context);
+    const base = structuredClone(extras_store.readExtras(context));
+    if (runningScope) throw core_text.safeUserError('正在看他这几天的样子，稍等一下。', 'RMT_WAITING_RUNNING');
+    runningScope = scope;
+    try {
+        const away = awayState(context);
+        const origin = core_context.captureTaskOrigin(context, memory.archiveRevision || '');
+        const data = await generation_client.requestJson(waitingPrompt(context, memory, away), '正在看他这几天的样子…', {
+            mode: 'waiting', taskKey: `extras:waiting:${scope}`, context, origin,
+        });
+        let result;
+        try { result = normalizeWaiting(data, memory); }
+        catch (error) {
+            const held = extras_store.stageExtraResult({ scope, kind: 'waiting', origin, base, raw: data });
+            return { pending: true, scope, record: null, durable: held.durable,
+                reason: '已收到结果，但格式需要检查。请导出原始结果，不会自动重新生成。' };
+        }
+        const createdAt = Date.now();
+        const record = { id: extras_store.extraRecordId('WAIT'), createdAt, awayDays: away.days, absenceAnchor: away.last, unlocked: [], ...result };
+        record.archiveRevision = origin.archiveRevision;
+        extras_store.stageExtraResult({ scope, kind: 'waiting', origin, base, record, raw: data });
+        return await extras_store.retryExtraSave(scope, record.id);
+    } finally {
+        runningScope = '';
+        try { onSettled?.(); } catch {}
+    }
+}
+
+function markUnlocked(recordId, lockedId, context = core_context.currentCharacterGuard()) {
+    const scope = extras_store.extrasScope(context);
+    extras_store.updateExtras(scope, draft => {
+        const record = draft.waiting.records.find(item => item.id === recordId);
+        if (record) {
+            record.unlocked = [...new Set([...(record.unlocked || []), lockedId])];
+            record.updatedAt = Date.now();
+        }
+        return draft;
+    });
+}
+
+__m_extras_waiting_js.generateWaiting = generateWaiting;
+__m_extras_waiting_js.lastChatTime = lastChatTime;
+__m_extras_waiting_js.awayState = awayState;
+__m_extras_waiting_js.waitingSettings = waitingSettings;
+__m_extras_waiting_js.saveWaitingSettings = saveWaitingSettings;
+__m_extras_waiting_js.latestWaitingRecord = latestWaitingRecord;
+__m_extras_waiting_js.activeTrace = activeTrace;
+__m_extras_waiting_js.waitingCardStatus = waitingCardStatus;
+__m_extras_waiting_js.isWaitingRunning = isWaitingRunning;
+__m_extras_waiting_js.clueCodes = clueCodes;
+__m_extras_waiting_js.normalizeWaiting = normalizeWaiting;
+__m_extras_waiting_js.markUnlocked = markUnlocked;
+}
+
+function __init_ui_extrasStyles_js() {
+// MODULE: ui/extrasStyles.js
+const core_constants = __m_core_constants_js;
+// 新页面样式：只作用于 .rmt-x-* 类名，颜色跟随档案室主题变量；夜色页面固定配色。
+
+const STYLE_ID = 'heartbeat_memories_extras_styles';
+
+function extrasCss(root = '#' + core_constants.OVERLAY_ID) {
+    const r = root;
+    const text = 'var(--rmt-theme-text,#34495d)';
+    const muted = 'var(--rmt-theme-muted,#586b7c)';
+    const accent = 'var(--rmt-theme-accent,#ce729c)';
+    const ink = 'var(--rmt-theme-accent-ink,#a8527a)';
+    const border = 'var(--rmt-theme-border,#cfdae5)';
+    const surface = 'var(--rmt-theme-surface-solid,#fff)';
+    return `
+${r} .rmt-x-page{display:flex;flex-direction:column;gap:16px;padding:14px 4px 28px;color:${text};max-width:760px;margin:0 auto;box-sizing:border-box}
+${r} .rmt-x-head{display:flex;flex-direction:column;gap:4px;padding:0 4px}
+${r} .rmt-x-head small{font-size:11px;letter-spacing:3px;color:${muted}}
+${r} .rmt-x-head h2{margin:0;font-size:26px;font-weight:700;color:${text}}
+${r} .rmt-x-head p,${r} .rmt-x-note{margin:0;font-size:13px;line-height:1.7;color:${muted}}
+${r} .rmt-x-card{display:flex;flex-direction:column;gap:12px;background:${surface};border:1px solid ${border};border-radius:18px;padding:16px}
+${r} .rmt-x-card h3,${r} .rmt-x-block h3,${r} .rmt-x-section-title{margin:0;font-size:15px;font-weight:600;color:${text}}
+${r} .rmt-x-block{display:flex;flex-direction:column;gap:10px}
+${r} .rmt-x-card-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+${r} .rmt-x-card-head small{font-size:12px;color:${muted}}
+${r} .rmt-x-card hr,${r} .rmt-x-paper hr{border:0;height:1px;background:${border};margin:2px 0;width:100%}
+${r} .rmt-x-primary{min-height:46px;border:0;border-radius:14px;background:${ink};color:#fff;font-size:15px;font-weight:600;cursor:pointer;padding:0 16px;display:flex;align-items:center;justify-content:center;gap:8px;width:100%}
+${r} .rmt-x-primary:disabled{opacity:.6;cursor:default}
+${r} .rmt-x-primary.rmt-x-dark{background:${text}}
+${r} .rmt-x-secondary{min-height:44px;border:1px solid ${border};border-radius:12px;background:${surface};color:${text};font-size:14px;cursor:pointer;padding:0 14px}
+${r} .rmt-x-ring-card{flex-direction:row;align-items:center;gap:18px;flex-wrap:wrap}
+${r} .rmt-x-ring{position:relative;width:140px;height:140px;flex-shrink:0}
+${r} .rmt-x-ring svg{width:140px;height:140px}
+${r} .rmt-x-ring circle{fill:none;stroke-width:12}
+${r} .rmt-x-ring-bg{stroke:${border};opacity:.55}
+${r} .rmt-x-ring-fg{stroke:${accent};stroke-linecap:round}
+${r} .rmt-x-ring>div{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+${r} .rmt-x-ring b{font-size:32px;font-weight:700;color:${text}}
+${r} .rmt-x-ring small{font-size:12px;color:${muted}}
+${r} .rmt-x-ring-copy{display:flex;flex-direction:column;gap:6px;min-width:150px;flex:1}
+${r} .rmt-x-ring-copy p{margin:0;font-size:14px;line-height:1.7;color:${text}}
+${r} .rmt-x-ring-copy b{font-size:20px}
+${r} .rmt-x-row{display:flex;flex-direction:column;gap:6px}
+${r} .rmt-x-row-head{display:flex;justify-content:space-between;font-size:14px;color:${text}}
+${r} .rmt-x-row-head span:last-child{font-size:13px;color:${muted}}
+${r} .rmt-x-bar{height:8px;border-radius:999px;background:${border};overflow:hidden}
+${r} .rmt-x-bar i{display:block;height:100%;border-radius:999px;background:${accent}}
+${r} .rmt-x-counts{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px}
+${r} .rmt-x-count{display:flex;flex-direction:column;gap:2px;padding:10px 12px;border-radius:12px;background:var(--rmt-theme-bg,#f5f4fb)}
+${r} .rmt-x-count small{font-size:12px;color:${muted}}
+${r} .rmt-x-count b{font-size:17px;color:${text}}
+${r} .rmt-x-recent{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+${r} .rmt-x-recent-item{display:flex;flex-direction:column;gap:6px;font-size:12px;color:${text}}
+${r} .rmt-x-recent-tile{height:84px;border-radius:12px;background:linear-gradient(160deg,#c9d8e6,#efd6e1);display:flex;align-items:flex-end;padding:6px;box-sizing:border-box}
+${r} .rmt-x-recent-tile em{font-style:normal;font-size:11px;color:#fff;background:rgba(52,73,93,.72);border-radius:6px;padding:2px 6px}
+${r} .rmt-x-grad{display:flex;flex-direction:column;align-items:center;gap:26px;text-align:center;padding:48px 24px 32px;background:#1f2a44;color:#f6efe6;border-radius:18px;margin:8px auto;max-width:560px;box-sizing:border-box;font-family:'Noto Serif SC','Songti SC',serif}
+${r} .rmt-x-grad-title{display:flex;flex-direction:column;align-items:center;gap:10px}
+${r} .rmt-x-grad-title small{font-size:12px;letter-spacing:6px;color:#c9b8a6}
+${r} .rmt-x-grad-title b{font-size:28px}
+${r} .rmt-x-grad-title i{width:36px;height:1px;background:#f0b7a4}
+${r} .rmt-x-grad-title span{font-size:17px}
+${r} .rmt-x-credit{display:flex;flex-direction:column;gap:6px}
+${r} .rmt-x-credit small,${r} .rmt-x-grad-last small{font-size:12px;letter-spacing:3px;color:#c9b8a6}
+${r} .rmt-x-credit b{font-size:18px;font-weight:500;line-height:1.6}
+${r} .rmt-x-grad-last{display:flex;flex-direction:column;gap:8px;padding:16px 20px;border:1px solid #45557a;border-radius:16px}
+${r} .rmt-x-grad-last b{font-size:15px;font-weight:500;line-height:1.8}
+${r} .rmt-x-grad-thanks{font-size:14px;letter-spacing:4px;color:#f0b7a4}
+${r} .rmt-x-secondary.rmt-x-on-dark{background:transparent;border-color:#6a7aa0;color:#f6efe6;font-family:inherit}
+${r} .rmt-x-people{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:10px}
+${r} .rmt-x-person{display:flex;flex-direction:column;align-items:center;gap:4px;padding:12px 6px;border-radius:14px;cursor:pointer;color:${text};background:${surface};border:1px solid ${border};min-height:44px}
+${r} .rmt-x-person.active{border:2px solid ${ink}}
+${r} .rmt-x-person b{font-size:14px}
+${r} .rmt-x-person small{font-size:11px;color:${muted};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
+${r} .rmt-x-avatar{border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0}
+${r} .rmt-x-avatar[data-tone=rose]{background:#f3dbe6;color:#8a3f63}
+${r} .rmt-x-avatar[data-tone=teal]{background:#dcecea;color:#2f6b66}
+${r} .rmt-x-avatar[data-tone=lilac]{background:#e4e3f3;color:#4b4a7a}
+${r} .rmt-x-avatar[data-tone=peach]{background:#f6e2d2;color:#8a5230}
+${r} .rmt-x-avatar[data-tone=sky]{background:#dbe7f3;color:#34587a}
+${r} .rmt-x-avatar[data-tone=sage]{background:#e0ecd9;color:#44633a}
+${r} .rmt-x-paper{display:flex;flex-direction:column;gap:12px;background:#fffaf2;border:1px solid #ecdcc3;border-radius:18px;padding:18px;color:#3a3346}
+${r} .rmt-x-paper-head{display:flex;align-items:center;gap:10px}
+${r} .rmt-x-paper-head div{display:flex;flex-direction:column;gap:2px}
+${r} .rmt-x-paper-head b{font-size:17px}
+${r} .rmt-x-paper-head small{font-size:12px;color:#6b5a44}
+${r} .rmt-x-paper hr{background:#ecdcc3}
+${r} .rmt-x-sec{display:flex;flex-direction:column;gap:6px}
+${r} .rmt-x-sec small{font-size:12px;font-weight:600;letter-spacing:1px;color:#a8527a}
+${r} .rmt-x-sec p,${r} .rmt-x-letter p{margin:0;font-size:15px;line-height:1.85;white-space:pre-wrap}
+${r} .rmt-x-chips{display:flex;gap:6px;flex-wrap:wrap}
+${r} .rmt-x-chip{font-size:11px;color:#2f6b66;background:#e2f0ee;border-radius:999px;padding:3px 9px}
+${r} .rmt-x-chip.muted{color:#5d5566;background:#ecebf1}
+${r} .rmt-x-chip.warm{color:#6b5a44;background:#f1e7d8}
+${r} .rmt-x-list-row{display:flex;align-items:center;gap:12px;min-height:56px;padding:10px 14px;background:${surface};border:1px solid ${border};border-radius:14px;color:${text};cursor:pointer;text-align:left;width:100%}
+${r} .rmt-x-list-row span{display:flex;flex-direction:column;gap:2px;flex:1;min-width:0}
+${r} .rmt-x-list-row b{font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+${r} .rmt-x-list-row small{font-size:12px;color:${muted}}
+${r} .rmt-x-list-row>i{font-style:normal;color:${muted}}
+${r} .rmt-x-ask-wrap{display:flex;flex-direction:column;gap:6px;margin-top:10px}
+${r} .rmt-x-ask-wrap small{font-size:12px;color:${muted};text-align:center}
+${r} .rmt-x-entry{display:flex;align-items:center;gap:14px;padding:16px;background:#262b40;border:0;border-radius:18px;color:#f3eee6;cursor:pointer;text-align:left;width:100%}
+${r} .rmt-x-entry>span:nth-child(2){display:flex;flex-direction:column;gap:3px;flex:1}
+${r} .rmt-x-entry b{font-size:17px}
+${r} .rmt-x-entry small{font-size:12px;color:#d8d2e4}
+${r} .rmt-x-entry em{font-style:normal;color:#f2c38b;font-size:20px}
+${r} .rmt-x-entry-grid{width:52px;height:52px;border-radius:14px;background:#3a4058;display:grid;grid-template-columns:repeat(3,1fr);gap:3px;padding:8px;box-sizing:border-box;flex-shrink:0}
+${r} .rmt-x-entry-grid i{border-radius:2px;background:#4b4466}
+${r} .rmt-x-entry-grid i[data-i="4"]{background:#f2c38b}
+${r} .rmt-x-entry-grid i[data-i="7"],${r} .rmt-x-entry-grid i[data-i="8"]{background:#2f3450}
+${r} .rmt-x-switch-row{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:44px}
+${r} .rmt-x-switch-row span{display:flex;flex-direction:column;gap:2px}
+${r} .rmt-x-switch-row b{font-size:15px}
+${r} .rmt-x-switch-row small{font-size:12px;color:${muted}}
+${r} .rmt-x-switch{position:relative;width:52px;height:32px;border:0;border-radius:999px;background:#b7c3cf;cursor:pointer;flex-shrink:0;padding:0}
+${r} .rmt-x-switch i{position:absolute;top:4px;left:4px;width:24px;height:24px;border-radius:50%;background:#fff;transition:left .15s}
+${r} .rmt-x-switch.on{background:${ink}}
+${r} .rmt-x-switch.on i{left:24px}
+${r} .rmt-x-field{display:flex;flex-direction:column;gap:10px}
+${r} .rmt-x-field>b{font-size:14px}
+${r} .rmt-x-segs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+${r} .rmt-x-seg{height:44px;border-radius:12px;font-size:14px;cursor:pointer;color:${text};background:${surface};border:1px solid ${border}}
+${r} .rmt-x-seg.active{color:#fff;background:${text};border-color:${text}}
+${r} .rmt-x-check{display:flex;align-items:center;gap:10px;min-height:44px;font-size:14px;cursor:pointer}
+${r} .rmt-x-check input{width:20px;height:20px;accent-color:#a8527a}
+${r} .rmt-x-node small{font-size:12px;color:${muted}}
+${r} .rmt-x-node p{margin:0;font-size:15px;line-height:1.8}
+${r} .rmt-x-node em{font-style:normal;font-size:13px;color:${ink}}
+${r} .rmt-x-letter-head{display:flex;justify-content:space-between;align-items:center;gap:8px}
+${r} .rmt-x-letter-head small{font-size:12px;color:#6b5a44}
+${r} .rmt-x-letter p{font-family:'Noto Serif SC','Songti SC',serif;font-size:16px;line-height:1.9}
+${r} .rmt-x-night{display:flex;flex-direction:column;gap:16px;background:#262b40;color:#f3eee6;border-radius:18px;padding:16px;margin:8px auto;max-width:640px;box-sizing:border-box}
+${r} .rmt-x-night header{display:flex;flex-direction:column;gap:6px}
+${r} .rmt-x-night h2{margin:0;font-size:26px;font-weight:700;color:#f3eee6}
+${r} .rmt-x-night p{margin:0;font-size:14px;line-height:1.7;color:#d8d2e4}
+${r} .rmt-x-now{align-self:flex-end;display:flex;align-items:center;gap:6px;font-size:12px;color:#d8d2e4}
+${r} .rmt-x-now i{width:8px;height:8px;border-radius:50%;background:#f2c38b;animation:rmt-x-breathe 2.4s ease-in-out infinite}
+@keyframes rmt-x-breathe{0%,100%{opacity:1}50%{opacity:.35}}
+@media (prefers-reduced-motion:reduce){${r} .rmt-x-now i{animation:none}}
+${r} .rmt-x-tiles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+${r} .rmt-x-tile,${r} .rmt-x-hero{background-image:repeating-linear-gradient(0deg,rgba(255,255,255,.04) 0 1px,transparent 1px 3px)}
+${r} .rmt-x-tile{display:flex;flex-direction:column;justify-content:space-between;align-items:flex-start;gap:6px;height:108px;padding:10px;box-sizing:border-box;border-radius:14px;cursor:pointer;color:#f3eee6;border:1px solid rgba(255,255,255,.08);text-align:left}
+${r} .rmt-x-tile b{font-size:13px;font-weight:600;width:100%}
+${r} .rmt-x-tile-top{display:flex;justify-content:space-between;align-items:center;width:100%}
+${r} .rmt-x-tile-top small{font-size:10px;color:#d8d2e4}
+${r} .rmt-x-tile-top i{color:#f2c38b;font-size:12px}
+${r} .rmt-x-tile.locked{background-color:#2f3450;border:1px dashed #f2c38b}
+${r} .rmt-x-tile.empty{background-color:#3a4058;border:1px dashed #5d6480;cursor:default;color:#b9b4c7;font-size:11px}
+${r} [data-tone="0"].rmt-x-tile:not(.locked),${r} .rmt-x-hero[data-tone="0"]{background-color:#4a5372}
+${r} [data-tone="1"].rmt-x-tile:not(.locked),${r} .rmt-x-hero[data-tone="1"]{background-color:#5a4f6e}
+${r} [data-tone="2"].rmt-x-tile:not(.locked),${r} .rmt-x-hero[data-tone="2"]{background-color:#44607a}
+${r} [data-tone="3"].rmt-x-tile:not(.locked),${r} .rmt-x-hero[data-tone="3"]{background-color:#4b4466}
+${r} [data-tone="4"].rmt-x-tile:not(.locked),${r} .rmt-x-hero[data-tone="4"]{background-color:#3f5a5c}
+${r} [data-tone="5"].rmt-x-tile:not(.locked),${r} .rmt-x-hero[data-tone="5"]{background-color:#55506a}
+${r} .rmt-x-hint{display:flex;gap:10px;align-items:flex-start;padding:12px 14px;background:#313752;border-radius:12px;font-size:12px;line-height:1.7;color:#d8d2e4}
+${r} .rmt-x-hint i{color:#f2c38b;margin-top:3px}
+${r} .rmt-x-hero{height:150px;border-radius:16px;display:flex;align-items:flex-end;padding:12px;box-sizing:border-box}
+${r} .rmt-x-hero span{font-size:11px;color:#f3eee6;background:rgba(38,43,64,.7);border-radius:6px;padding:3px 8px}
+${r} .rmt-x-unlocked{font-size:12px!important;letter-spacing:2px;color:#f2c38b!important}
+${r} .rmt-x-sheet{display:flex;flex-direction:column;gap:14px;background:#fbf6ee;color:#3a3346;border-radius:16px;padding:18px}
+${r} .rmt-x-sheet small{font-size:11px;letter-spacing:2px;color:#8a5a3b}
+${r} .rmt-x-sheet p{margin:4px 0 0;font-size:15px;line-height:1.85;color:#3a3346;white-space:pre-wrap}
+${r} .rmt-x-sheet .rmt-x-voice{font-family:'Noto Serif SC','Songti SC',serif;font-size:16px;color:#6e3553}
+${r} .rmt-x-lock{align-items:center;text-align:center}
+${r} .rmt-x-lock-icon{font-size:34px;color:#f2c38b}
+${r} .rmt-x-dials{display:flex;gap:10px;justify-content:center}
+${r} .rmt-x-dials>div{display:flex;flex-direction:column;align-items:center;gap:4px}
+${r} .rmt-x-dials button{width:56px;height:44px;border:0;border-radius:10px;background:#313752;color:#f3eee6;cursor:pointer}
+${r} .rmt-x-dials b{width:56px;height:64px;border-radius:12px;background:#fbf6ee;color:#3a3346;display:flex;align-items:center;justify-content:center;font-size:30px}
+${r} .rmt-x-wrong{color:#f2b3a6!important;font-size:13px!important}
+${r} .rmt-x-primary.rmt-x-lamp{background:#f2c38b;color:#262b40}
+${r} .rmt-archive-portal.rmt-x-off{opacity:.55}
+${r} .rmt-archive-portal.rmt-x-off:hover,${r} .rmt-archive-portal.rmt-x-off:focus-within{opacity:.8}
+`;
+}
+
+function ensureExtrasStyles() {
+    if (typeof document === 'undefined' || document.getElementById(STYLE_ID)) return;
+    const style = document.createElement('style');
+    style.id = STYLE_ID;
+    style.textContent = extrasCss();
+    document.head.appendChild(style);
+}
+
+__m_ui_extrasStyles_js.extrasCss = extrasCss;
+__m_ui_extrasStyles_js.ensureExtrasStyles = ensureExtrasStyles;
+}
+
+function __init_ui_extrasView_js() {
+// MODULE: ui/extrasView.js
+const core_constants = __m_core_constants_js;
+const core_context = __m_core_context_js;
+const core_text = __m_core_text_js;
+const archive_repository = __m_archive_repository_js;
+const overlay = __m_ui_overlay_js;
+const ui_workspaceState = __m_ui_workspaceState_js;
+const workspace_ui = __m_ui_workspace_js;
+const extras_store = __m_extras_store_js;
+const extras_collection = __m_extras_collection_js;
+const extras_intel = __m_extras_intel_js;
+const extras_waiting = __m_extras_waiting_js;
+const extras_styles = __m_ui_extrasStyles_js;
+const runtimeState = __m_core_state_js.state;
+// 新页面：回忆收集率（含毕业结算）、朋友情报、他在等你（含你不在的时候）。
+// 页面自己渲染、自己处理点击；只通过 overlay 的公开函数换标题和返回键，不碰其他模块的会话数据。
+
+
+
+
+
+const esc = core_text.esc;
+const EXTRA_MODES = Object.freeze(['collection', 'waiting', 'intel']);
+const view = { mode: '', sub: 'main', id: '', person: '', recordId: '', dial: [0, 0, 0, 0], wrong: false, loading: false };
+
+function isExtraMode(mode) {
+    return EXTRA_MODES.includes(mode);
+}
+
+function body() { return overlay.bodyEl(); }
+
+function currentContext() {
+    try { return core_context.currentCharacterGuard(); } catch { return null; }
+}
+
+function readOnlyTarget() {
+    return !!runtimeState.activeArchiveSnapshot;
+}
+
+function chrome(title, backLabel) {
+    extras_styles.ensureExtrasStyles();
+    overlay.topTitle(title);
+    overlay.setBackVisible(true, backLabel);
+    overlay.setManageVisible(false);
+    overlay.setRegenerateVisible(false);
+}
+
+function toastError(error) {
+    if (error?.name === 'AbortError') return;
+    globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心迹回廊');
+}
+
+function stillShowing(mode, scope) {
+    const context = currentContext();
+    return runtimeState.activeMode === mode && !!context && extras_store.extrasScope(context) === scope
+        && !document.getElementById(core_constants.OVERLAY_ID)?.hidden;
+}
+
+function openExtra(mode, options = {}) {
+    if (!isExtraMode(mode)) return false;
+    const route = mode;
+    ui_workspaceState.leaveWorkspaceReader();
+    ui_workspaceState.workspace.route = route; ui_workspaceState.workspace.tab = 'content'; ui_workspaceState.workspace.empty = null;
+    runtimeState.activeMode = mode; runtimeState.activeSession = null;
+    view.mode = mode; view.sub = options.sub || 'main'; view.id = ''; view.recordId = ''; view.wrong = false;
+    if (mode === 'intel') view.person = core_text.normalizeText(options.person, 120);
+    overlay.openOverlay();
+    renderExtra();
+    const el = body(); if (el) el.scrollTop = 0;
+    return true;
+}
+
+function renderExtra() {
+    if (!isExtraMode(runtimeState.activeMode)) return false;
+    if (view.mode !== runtimeState.activeMode) { view.mode = runtimeState.activeMode; view.sub = 'main'; }
+    if (view.mode === 'collection') renderCollection();
+    else if (view.mode === 'intel') renderIntel();
+    else renderWaiting();
+    renderExtraRecovery();
+    workspace_ui.syncWorkspaceChrome();
+    return true;
+}
+
+function renderExtraRecovery() {
+    const context = currentContext();
+    if (!context || readOnlyTarget() || !body()) return;
+    const scope = extras_store.extrasScope(context);
+    const rows = extras_store.pendingExtras(scope);
+    const panel = document.createElement('section');
+    panel.className = 'rmt-x-card';
+    panel.innerHTML = `${rows.length ? `<h3>待保存的生成结果（${rows.length}）</h3><p>结果已保留。保存失败时请先导出再刷新；重试保存不会请求模型。档案已变化的结果只供导出。</p>${rows.map(row => `<button type="button" class="rmt-btn" data-rmt-extra="retry-save" data-rmt-extra-id="${esc(row.id)}">仅重试保存 · ${esc(row.kind === 'intel' ? '朋友情报' : '他在等你')}</button>`).join('')}` : ''}<button type="button" class="rmt-btn" data-rmt-extra="export-results">导出全部记录与待保存结果</button>`;
+    body().prepend(panel);
+}
+
+function showExtraSaveResult(result, message) {
+    if (result.pending) {
+        globalThis.toastr?.warning?.(`${result.reason || '结果等待保存。'}${result.durable ? '' : ' 请先导出，刷新会丢失页面内副本。'}`, '心迹回廊');
+    } else globalThis.toastr?.success?.(message, '心迹回廊');
+}
+
+function exportExtraResults() {
+    const url = URL.createObjectURL(new Blob([extras_store.exportExtras()], { type: 'application/json' }));
+    const link = document.createElement('a');
+    link.href = url; link.download = `hearttrace-extras-${Date.now()}.json`;
+    document.body.append(link); link.click(); link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
+}
+
+function navigateExtraBack() {
+    if (!isExtraMode(runtimeState.activeMode)) return false;
+    if (view.mode === 'collection' && view.sub === 'graduation') { view.sub = 'main'; renderExtra(); return true; }
+    if (view.mode === 'waiting' && ['note', 'lock'].includes(view.sub)) { view.sub = 'grid'; view.wrong = false; renderExtra(); return true; }
+    if (view.mode === 'waiting' && view.sub === 'grid') { view.sub = 'main'; renderExtra(); return true; }
+    if (view.mode === 'intel') { openGarden(); return true; }
+    return false;
+}
+
+function openGarden() {
+    ui_workspaceState.leaveWorkspaceReader();
+    void overlay.openCachedOrGenerate(core_constants.MODE.RELATIONS, { workspaceRoute: 'relations' });
+}
+
+function emptyPage(title, message, action = '') {
+    const el = body(); if (!el) return;
+    el.innerHTML = `<main class="rmt-x-page"><header class="rmt-x-head"><h2>${esc(title)}</h2><p>${esc(message)}</p></header>${action}</main>`;
+}
+
+// ---------- 回忆收集率 ----------
+
+function renderCollection() {
+    if (view.sub === 'graduation') return renderGraduation();
+    chrome('回忆收集率', '内容');
+    const el = body(); if (!el) return;
+    if (!view.loading) {
+        view.loading = true;
+        el.innerHTML = '<div class="rmt-loading"><div class="rmt-loading-card"><div class="rmt-spinner"></div><b>正在统计…</b></div></div>';
+        extras_collection.prepareCollectionSource().catch(() => {}).finally(() => {
+            if (runtimeState.activeMode === 'collection') renderExtra();
+            view.loading = false;
+        });
+        return;
+    }
+    let data;
+    try { data = extras_collection.computeCollection(); }
+    catch { return emptyPage('回忆收集率', '先为当前聊天建立档案，生成内容后这里会开始统计。', '<button type="button" class="rmt-btn" data-rmt-workspace-tab="archive">前往当前档案</button>'); }
+    const circumference = 2 * Math.PI * 60;
+    const dash = `${(circumference * data.percent / 100).toFixed(1)} ${circumference.toFixed(1)}`;
+    const rows = data.rows.map(row => `<div class="rmt-x-row"><div class="rmt-x-row-head"><span>${esc(row.name)}</span><span>${row.got} / ${row.total}</span></div><div class="rmt-x-bar"><i style="width:${row.total ? Math.round(row.got / row.total * 100) : 0}%"></i></div></div>`).join('');
+    const counts = data.counts.map(item => `<div class="rmt-x-count"><small>${esc(item.name)}</small><b>${item.value} ${esc(item.unit)}</b></div>`).join('');
+    const recent = data.recent.length ? `<section class="rmt-x-block"><h3>最近点亮</h3><div class="rmt-x-recent">${data.recent.map(item => `<div class="rmt-x-recent-item"><span class="rmt-x-recent-tile"><em>${esc(item.kind)}</em></span><small>${esc(item.title)}</small></div>`).join('')}</div></section>` : '';
+    el.innerHTML = `<main class="rmt-x-page">
+      <header class="rmt-x-head"><small>COLLECTION</small><h2>回忆收集率</h2><p>两个人一起点亮过的东西。全部在本地统计，不发请求。</p></header>
+      <section class="rmt-x-card rmt-x-ring-card">
+        <div class="rmt-x-ring"><svg viewBox="0 0 140 140" aria-hidden="true"><circle cx="70" cy="70" r="60" class="rmt-x-ring-bg"></circle><circle cx="70" cy="70" r="60" class="rmt-x-ring-fg" stroke-dasharray="${dash}" transform="rotate(-90 70 70)"></circle></svg><div><b>${data.percent}%</b><small>已点亮</small></div></div>
+        <div class="rmt-x-ring-copy">${data.total ? `<p>共 <b>${data.got}</b> / ${data.total}</p><p>${data.total - data.got > 0 ? `离“全部点亮”还差 ${data.total - data.got} 个。` : '全部点亮了。'}</p>` : '<p>相簿、ADV、成就、ENDING 生成后，这里开始计算百分比。</p>'}</div>
+      </section>
+      ${rows ? `<section class="rmt-x-card"><h3>分项</h3>${rows}</section>` : ''}
+      <section class="rmt-x-card"><h3>收藏数量</h3><p class="rmt-x-note">可以一直追加的内容只记数量，不算进百分比。</p><div class="rmt-x-counts">${counts}</div></section>
+      ${recent}
+      <button type="button" class="rmt-x-primary rmt-x-dark" data-rmt-extra="graduation">查看毕业结算</button>
+    </main>`;
+}
+
+function renderGraduation() {
+    chrome('毕业结算', '回忆收集率');
+    const el = body(); if (!el) return;
+    let data;
+    try { data = extras_collection.computeCollection(); } catch { view.sub = 'main'; return renderCollection(); }
+    const g = data.graduation;
+    const fireflies = data.counts.find(item => item.id === 'fireflies')?.value || 0;
+    const letters = data.counts.find(item => item.id === 'letters')?.value || 0;
+    const credits = [
+        g.days ? ['一起走过', `${g.days} 天 · ${g.memoryCount} 条记忆`] : ['一起留下', `${g.memoryCount} 条记忆`],
+        g.firstMemory ? ['最初的记忆', g.firstMemory] : null,
+        g.firstCg ? ['第一张 CG', g.firstCg] : null,
+        g.firstPlace ? ['一起去过的地方', g.firstPlace] : null,
+        fireflies ? ['点亮的萤火虫', `${fireflies} 颗`] : null,
+        letters ? ['收到的信', `${letters} 封`] : null,
+        g.route ? ['当前路线', g.route] : null,
+        data.total ? ['回忆收集率', `${data.percent}%`] : null,
+    ].filter(Boolean);
+    el.innerHTML = `<main class="rmt-x-grad">
+      <div class="rmt-x-grad-title"><small>GRADUATION</small><b>心迹回廊</b><i></i><span>${esc(g.characterName)} 与 ${esc(g.userName)}</span></div>
+      ${credits.map(([label, value]) => `<div class="rmt-x-credit"><small>${esc(label)}</small><b>${esc(value)}</b></div>`).join('')}
+      ${g.lastMemory ? `<div class="rmt-x-grad-last"><small>档案里最后一条</small><b>${esc(g.lastMemory)}</b></div>` : ''}
+      <div class="rmt-x-grad-thanks">Thank you for this story</div>
+      <button type="button" class="rmt-x-secondary rmt-x-on-dark" data-rmt-extra="collection-main">返回收集率</button>
+    </main>`;
+}
+
+// ---------- 朋友情报 ----------
+
+function avatarTone(name) {
+    const tones = ['rose', 'teal', 'lilac', 'peach', 'sky', 'sage'];
+    let h = 0; for (const ch of String(name)) h = (h * 31 + ch.codePointAt(0)) >>> 0;
+    return tones[h % tones.length];
+}
+
+function avatar(name, size = 40) {
+    const initial = Array.from(core_text.normalizeText(name, 40))[0] || '?';
+    return `<span class="rmt-x-avatar" data-tone="${avatarTone(name)}" style="width:${size}px;height:${size}px;font-size:${Math.round(size * 0.42)}px">${esc(initial)}</span>`;
+}
+
+function sourceChips(ids, fallback) {
+    return ids?.length ? `<div class="rmt-x-chips">${ids.map((id, i) => `<span class="rmt-x-chip">${i ? '' : '依据 '}${esc(id)}</span>`).join('')}</div>` : `<div class="rmt-x-chips"><span class="rmt-x-chip muted">${esc(fallback)}</span></div>`;
+}
+
+function renderIntel() {
+    chrome('朋友情报', '人际庭园');
+    const context = currentContext();
+    if (!context || readOnlyTarget()) return emptyPage('朋友情报', '朋友情报只在当前聊天里使用。请回到当前聊天，从人际庭园打开。');
+    let people = [];
+    try { archive_repository.requireArchive(context); people = extras_intel.intelPeople(context); }
+    catch { return emptyPage('朋友情报', '先为当前聊天建立档案，再生成人际庭园。', '<button type="button" class="rmt-btn" data-rmt-workspace-tab="archive">前往当前档案</button>'); }
+    if (!people.length) return emptyPage('朋友情报', '人际庭园里还没有可以打听的人。先生成或刷新人际庭园。', '<button type="button" class="rmt-btn" data-rmt-extra="intel-garden">打开人际庭园</button>');
+    if (!people.some(p => p.name === view.person)) view.person = people[0].name;
+    const scope = extras_store.extrasScope(context);
+    const extras = extras_store.readExtras(context);
+    const current = people.find(p => p.name === view.person);
+    const running = extras_intel.isIntelRunning(scope, current.key);
+    const record = extras.intel.find(item => item.id === view.recordId) || extras.intel.find(item => item.person === current.name) || null;
+    const labels = { mention: '他提起你的样子', seen: `${record?.person || current.name}看到的`, advice: '悄悄话' };
+    const result = record ? `<section class="rmt-x-paper">
+        <div class="rmt-x-paper-head">${avatar(record.person, 40)}<div><b>${esc(record.person)}的情报</b><small>${esc(record.scene || new Date(record.createdAt).toLocaleDateString('zh-CN'))}</small></div></div>
+        ${record.sections.map((section, index) => `${index ? '<hr>' : ''}<div class="rmt-x-sec"><small>${esc(labels[section.kind] || '')}</small><p>${esc(section.text)}</p>${section.kind === 'advice' ? '<div class="rmt-x-chips"><span class="rmt-x-chip muted">建议 · 不写入档案</span></div>' : sourceChips(section.sourceMemoryIds, '生活设定')}</div>`).join('')}
+      </section>` : `<section class="rmt-x-card"><p class="rmt-x-note">还没向${esc(current.name)}打听过。</p></section>`;
+    const history = extras.intel.slice(0, 12).map(item => `<button type="button" class="rmt-x-list-row" data-rmt-extra="intel-record" data-rmt-extra-id="${esc(item.id)}">${avatar(item.person, 36)}<span><b>${esc((item.sections[0]?.text || '').slice(0, 22))}${(item.sections[0]?.text || '').length > 22 ? '…' : ''}</b><small>${esc(item.person)} · ${esc(new Date(item.createdAt).toLocaleDateString('zh-CN'))}</small></span><i aria-hidden="true">›</i></button>`).join('');
+    const el = body(); if (!el) return;
+    el.innerHTML = `<main class="rmt-x-page">
+      <header class="rmt-x-head"><small>INTEL</small><h2>朋友情报</h2><p>去问问身边的人，他提起你的时候，是什么样子。</p></header>
+      <section class="rmt-x-card">
+        <div class="rmt-x-card-head"><h3>向谁打听</h3><small>在庭园里选中的人</small></div>
+        <div class="rmt-x-people">${people.slice(0, 18).map(p => `<button type="button" class="rmt-x-person${p.name === current.name ? ' active' : ''}" aria-pressed="${p.name === current.name}" data-rmt-extra="intel-pick" data-rmt-extra-person="${esc(p.name)}">${avatar(p.name, 40)}<b>${esc(p.name)}</b><small>${esc(p.relation || (p.layer === 'setting' ? '设定人物' : '本世界线'))}</small></button>`).join('')}</div>
+        <button type="button" class="rmt-x-primary" data-rmt-extra="intel-ask" ${running ? 'disabled' : ''}>${running ? `正在向${esc(current.name)}打听…` : `去找${esc(current.name)}打听一下`}</button>
+        <p class="rmt-x-note">只会说档案里真实发生过的事。没有依据的部分，${esc(current.name)}会说“这个我就不清楚了”。</p>
+      </section>
+      ${result}
+      ${history ? `<section class="rmt-x-block"><h3>以前打听到的</h3>${history}</section>` : ''}
+    </main>`;
+}
+
+async function askIntel() {
+    const context = currentContext(); if (!context) return;
+    const scope = extras_store.extrasScope(context);
+    const person = view.person;
+    const rerender = () => { if (stillShowing('intel', scope)) renderExtra(); };
+    try {
+        const promise = extras_intel.askIntel(person, { onSettled: rerender });
+        rerender();
+        const result = await promise;
+        if (!result.pending && stillShowing('intel', scope) && view.person === person) view.recordId = result.record.id;
+        rerender();
+        showExtraSaveResult(result, `${core_text.toastText(person, 60)}的情报已经收好。`);
+    } catch (error) { toastError(error); rerender(); }
+}
+
+// ---------- 他在等你 ----------
+
+function renderWaiting() {
+    if (view.sub === 'grid' || view.sub === 'note' || view.sub === 'lock') return renderWaitingGrid();
+    chrome('他在等你', '内容');
+    const context = currentContext();
+    if (!context || readOnlyTarget()) return emptyPage('他在等你', '这个功能只在当前聊天里使用。');
+    let memoryReady = true;
+    try { archive_repository.requireArchive(context); } catch { memoryReady = false; }
+    const scope = extras_store.extrasScope(context);
+    const settings = extras_waiting.waitingSettings(context);
+    const away = extras_waiting.awayState(context);
+    const record = extras_waiting.latestWaitingRecord(context);
+    const running = extras_waiting.isWaitingRunning(scope);
+    const lockedCount = record ? record.locked.filter(item => !(record.unlocked || []).includes(item.id)).length : 0;
+    const entry = record ? `<button type="button" class="rmt-x-entry" data-rmt-extra="waiting-grid">
+        <span class="rmt-x-entry-grid" aria-hidden="true">${Array.from({ length: 9 }, (_, i) => `<i data-i="${i}"></i>`).join('')}</span>
+        <span><b>你不在的时候</b><small>离开第 ${record.awayDays} 天 · ${record.points.length} 处有记录${lockedCount ? ` · ${lockedCount} 处上锁` : ''}</small></span><em aria-hidden="true">›</em></button>` : '';
+    const generate = settings.enabled && memoryReady ? `<button type="button" class="rmt-x-primary" data-rmt-extra="waiting-generate" ${running ? 'disabled' : ''}>${running ? '正在看他这几天…' : record ? '再看看他这几天' : '看看他这几天'}</button>
+        <p class="rmt-x-note">${away.known ? `上次聊天在 ${away.days} 天前。` : '没能读出上次聊天的时间，会按“刚离开”来写。'}${away.known && away.days < settings.days ? `还没到你设的 ${settings.days} 天，也可以先看一次。` : ''}</p>` : (!memoryReady ? '<p class="rmt-x-note">先为当前聊天建立档案。</p>' : '');
+    const dayButtons = extras_store.WAITING_DAY_OPTIONS.map(n => `<button type="button" class="rmt-x-seg${settings.days === n ? ' active' : ''}" aria-pressed="${settings.days === n}" data-rmt-extra="waiting-days" data-rmt-extra-id="${n}">${n} 天</button>`).join('');
+    const options = settings.enabled ? `<hr><div class="rmt-x-field"><b>离开多久后开始</b><div class="rmt-x-segs">${dayButtons}</div></div>
+      <div class="rmt-x-field"><b>出现在哪里</b>
+        <label class="rmt-x-check"><input type="checkbox" data-rmt-extra-setting="showInbox" ${settings.showInbox ? 'checked' : ''}><span>你的邮箱 · 一封没寄出的信</span></label>
+        <label class="rmt-x-check"><input type="checkbox" data-rmt-extra-setting="showRoom" ${settings.showRoom ? 'checked' : ''}><span>他的房间 · 今日生活里的一个节点</span></label></div>` : '';
+    const preview = record && (record.roomNode || record.letter) ? `<h3 class="rmt-x-section-title">效果预览 · 离开第 ${record.awayDays} 天</h3>
+      ${record.roomNode ? roomNodeHtml(record.roomNode) : ''}${record.letter ? letterHtml(record.letter) : ''}` : '';
+    const el = body(); if (!el) return;
+    el.innerHTML = `<main class="rmt-x-page">
+      <header class="rmt-x-head"><small>WAITING</small><h2>他在等你</h2><p>你离开一阵子，他的房间和信里会留下一点痕迹。</p></header>
+      ${entry}
+      <section class="rmt-x-card">
+        <div class="rmt-x-switch-row"><span><b>开启“他在等你”</b><small>默认关闭 · 只对当前聊天生效</small></span>
+          <button type="button" role="switch" aria-checked="${settings.enabled}" aria-label="开启他在等你" class="rmt-x-switch${settings.enabled ? ' on' : ''}" data-rmt-extra="waiting-toggle"><i></i></button></div>
+        ${options}
+        ${generate}
+      </section>
+      ${preview}
+    </main>`;
+}
+
+function roomNodeHtml(node) {
+    return `<section class="rmt-x-card rmt-x-node"><small><i class="fa-solid fa-house" aria-hidden="true"></i> 他的房间 · 今日生活${node.time ? ` · ${esc(node.time)}` : ''}</small><p>${esc(node.text)}</p>${node.line ? `<em>“${esc(node.line)}”</em>` : ''}</section>`;
+}
+
+function letterHtml(letter, extra = '') {
+    return `<section class="rmt-x-paper rmt-x-letter"><div class="rmt-x-letter-head"><small><i class="fa-solid fa-envelope" aria-hidden="true"></i> 你的邮箱 · ${esc(letter.title || '没寄出的信')}</small><span class="rmt-x-chip warm">不写入档案</span></div><p>${esc(letter.body)}</p>${extra}</section>`;
+}
+
+function currentWaitingRecord() {
+    const context = currentContext();
+    return context ? extras_waiting.latestWaitingRecord(context) : null;
+}
+
+function renderWaitingGrid() {
+    const record = currentWaitingRecord();
+    if (!record) { view.sub = 'main'; return renderWaiting(); }
+    chrome('你不在的时候', view.sub === 'grid' ? '他在等你' : '全部房间');
+    const unlocked = new Set(record.unlocked || []);
+    const cells = [
+        ...record.points.map(item => ({ ...item, locked: false })),
+        ...record.locked.map(item => ({ ...item, locked: !unlocked.has(item.id), wasLocked: true })),
+    ];
+    const el = body(); if (!el) return;
+    const nowLine = `<div class="rmt-x-now"><i></i>离开第 ${record.awayDays} 天</div>`;
+    if (view.sub === 'grid') {
+        const tiles = cells.slice(0, 9).map((cell, i) => `<button type="button" class="rmt-x-tile${cell.locked ? ' locked' : ''}" data-tone="${i % 6}" data-rmt-extra="waiting-cell" data-rmt-extra-id="${esc(cell.id)}" aria-label="${esc(cell.name)}${cell.locked ? '，已上锁' : ''}"><span class="rmt-x-tile-top"><small>${cell.locked ? '??:??' : esc(cell.time || '--:--')}</small>${cell.locked ? '<i class="fa-solid fa-lock" aria-hidden="true"></i>' : ''}</span><b>${esc(cell.name)}</b></button>`);
+        while (tiles.length < 9) tiles.push('<div class="rmt-x-tile empty"><span class="rmt-x-tile-top"><small>--:--</small></span><span>[ 还没有记录 ]</span></div>');
+        el.innerHTML = `<main class="rmt-x-night">${nowLine}<header><h2>你不在的时候</h2><p>点开一处，看看他那天在那里做了什么。</p></header>
+          <div class="rmt-x-tiles">${tiles.join('')}</div>
+          ${record.locked.length ? '<div class="rmt-x-hint"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i><span>有的地方上了锁。密码就藏在其他房间的细节里。</span></div>' : ''}</main>`;
+        return;
+    }
+    const cell = cells.find(item => item.id === view.id);
+    if (!cell) { view.sub = 'grid'; return renderWaitingGrid(); }
+    if (view.sub === 'lock' && cell.locked) {
+        el.innerHTML = `<main class="rmt-x-night rmt-x-lock">${nowLine}<i class="fa-solid fa-lock rmt-x-lock-icon" aria-hidden="true"></i><h2>${esc(cell.name)}</h2><p>${esc(cell.hint || '线索藏在别的地方。')}</p>
+          <div class="rmt-x-dials">${view.dial.map((v, i) => `<div><button type="button" aria-label="第 ${i + 1} 位加一" data-rmt-extra="waiting-dial-up" data-rmt-extra-id="${i}"><i class="fa-solid fa-chevron-up"></i></button><b>${v}</b><button type="button" aria-label="第 ${i + 1} 位减一" data-rmt-extra="waiting-dial-down" data-rmt-extra-id="${i}"><i class="fa-solid fa-chevron-down"></i></button></div>`).join('')}</div>
+          ${view.wrong ? '<p class="rmt-x-wrong" role="status">不是这个。再去别的房间看看？</p>' : ''}
+          <button type="button" class="rmt-x-primary rmt-x-lamp" data-rmt-extra="waiting-unlock">打开</button></main>`;
+        return;
+    }
+    el.innerHTML = `<main class="rmt-x-night">${nowLine}
+      <div class="rmt-x-hero" data-tone="${Math.max(0, cells.indexOf(cell)) % 6}"><span>${esc(cell.name)} · ${esc(cell.time || '--:--')}</span></div>
+      ${cell.wasLocked ? '<p class="rmt-x-unlocked">已解锁 · 他最不想被看到的一面</p>' : ''}
+      <section class="rmt-x-sheet">
+        <div><small>此刻的他</small><p>${esc(cell.state)}</p></div>
+        ${cell.detail ? `<div><small>细节</small><p>${esc(cell.detail)}</p></div>` : ''}
+        ${cell.voice ? `<div><small>心里话</small><p class="rmt-x-voice">${esc(cell.voice)}</p></div>` : ''}
+        <div class="rmt-x-chips">${cell.sourceMemoryIds?.length ? `<span class="rmt-x-chip">依据 ${esc(cell.sourceMemoryIds.join(' · '))}</span>` : '<span class="rmt-x-chip muted">生活设定</span>'}<span class="rmt-x-chip warm">不写入档案</span></div>
+      </section></main>`;
+}
+
+async function generateWaiting() {
+    const context = currentContext(); if (!context) return;
+    const scope = extras_store.extrasScope(context);
+    const rerender = () => { if (stillShowing('waiting', scope)) renderExtra(); };
+    try {
+        const promise = extras_waiting.generateWaiting({ onSettled: rerender });
+        rerender();
+        const result = await promise;
+        if (!result.pending && stillShowing('waiting', scope)) { view.sub = 'grid'; view.id = ''; }
+        rerender();
+        showExtraSaveResult(result, '他这几天的样子已经收好。');
+    } catch (error) { toastError(error); rerender(); }
+}
+
+function tryUnlock() {
+    const record = currentWaitingRecord();
+    const cell = record?.locked.find(item => item.id === view.id);
+    if (!cell) return;
+    if (view.dial.join('') === cell.code) {
+        try { extras_waiting.markUnlocked(record.id, cell.id); } catch (error) { toastError(error); }
+        view.sub = 'note'; view.wrong = false;
+    } else view.wrong = true;
+    renderExtra();
+}
+
+// ---------- 点击与设置 ----------
+
+function handleExtraClick(event) {
+    const el = event.target?.closest?.('[data-rmt-extra]');
+    if (!el || el.disabled) return false;
+    const action = el.dataset.rmtExtra;
+    const id = el.dataset.rmtExtraId || '';
+    event.preventDefault?.();
+    if (action === 'intel-open') { openExtra('intel', { person: el.dataset.rmtExtraPerson }); return true; }
+    if (action === 'waiting-open-grid') { openExtra('waiting', { sub: 'grid' }); return true; }
+    if (action === 'intel-garden') { openGarden(); return true; }
+    if (!isExtraMode(runtimeState.activeMode)) return true;
+    if (action === 'export-results') {
+        try { exportExtraResults(); } catch (error) { toastError(error); }
+        return true;
+    }
+    if (action === 'retry-save') {
+        const context = currentContext();
+        if (context && !readOnlyTarget()) {
+            el.disabled = true;
+            void extras_store.retryExtraSave(extras_store.extrasScope(context), id)
+                .then(result => showExtraSaveResult(result, '结果已经收好。'))
+                .catch(toastError).finally(renderExtra);
+        }
+        return true;
+    }
+    if (action === 'graduation') { view.sub = 'graduation'; renderExtra(); body().scrollTop = 0; }
+    else if (action === 'collection-main') { view.sub = 'main'; renderExtra(); }
+    else if (action === 'intel-pick') { view.person = el.dataset.rmtExtraPerson || ''; view.recordId = ''; renderExtra(); }
+    else if (action === 'intel-ask') void askIntel();
+    else if (action === 'intel-record') {
+        const context = currentContext();
+        const record = context && extras_store.readExtras(context).intel.find(item => item.id === id);
+        if (record) { view.person = record.person; view.recordId = record.id; renderExtra(); body().scrollTop = 0; }
+    }
+    else if (action === 'waiting-toggle' || action === 'waiting-days') {
+        try {
+            const current = extras_waiting.waitingSettings();
+            extras_waiting.saveWaitingSettings(action === 'waiting-toggle' ? { enabled: !current.enabled } : { days: Number(id) });
+        } catch (error) { toastError(error); }
+        renderExtra();
+    }
+    else if (action === 'waiting-generate') void generateWaiting();
+    else if (action === 'waiting-grid') { view.sub = 'grid'; renderExtra(); body().scrollTop = 0; }
+    else if (action === 'waiting-cell') {
+        const record = currentWaitingRecord();
+        const locked = record?.locked.find(item => item.id === id);
+        view.id = id; view.wrong = false;
+        view.sub = locked && !(record.unlocked || []).includes(id) ? 'lock' : 'note';
+        if (view.sub === 'lock') view.dial = [0, 0, 0, 0];
+        renderExtra(); body().scrollTop = 0;
+    }
+    else if (action === 'waiting-dial-up' || action === 'waiting-dial-down') {
+        const i = Number(id);
+        if (i >= 0 && i < 4) { view.dial[i] = (view.dial[i] + (action === 'waiting-dial-up' ? 1 : 9)) % 10; view.wrong = false; renderExtra(); }
+    }
+    else if (action === 'waiting-unlock') tryUnlock();
+    return true;
+}
+
+function handleExtraChange(event) {
+    const input = event.target?.closest?.('[data-rmt-extra-setting]');
+    if (!input) return false;
+    const key = input.dataset.rmtExtraSetting;
+    if (!['showInbox', 'showRoom'].includes(key)) return true;
+    try { extras_waiting.saveWaitingSettings({ [key]: !!input.checked }); } catch (error) { toastError(error); }
+    return true;
+}
+
+// ---------- 内容目录卡片 ----------
+
+function extraCardInfo(key) {
+    extras_styles.ensureExtrasStyles();
+    if (key === 'collection') return { status: extras_collection.collectionCardStatus(), off: false };
+    if (key === 'waiting') {
+        if (readOnlyTarget()) return { status: '只在当前聊天使用', off: true };
+        const info = extras_waiting.waitingCardStatus();
+        return { status: info.text, off: info.off };
+    }
+    return null;
+}
+
+// ---------- 挂到其他页面的小入口 ----------
+
+function decorateRelationDetail(host) {
+    try {
+        if (readOnlyTarget() || !host?.querySelector) return;
+        const detail = host.querySelector('.rmt-relation-detail');
+        const head = detail?.querySelector('.rmt-relation-detail-head');
+        if (!detail || !head || head.querySelector('span')) return;
+        const name = core_text.normalizeText(head.querySelector('b')?.textContent, 120);
+        const context = currentContext();
+        if (!name || !context) return;
+        const person = extras_intel.intelPeople(context).find(item => item.name === name);
+        if (!person) return;
+        const count = extras_store.readExtras(context).intel.filter(item => item.person === name).length;
+        extras_styles.ensureExtrasStyles();
+        const wrap = document.createElement('div');
+        wrap.className = 'rmt-x-ask-wrap';
+        wrap.innerHTML = `<button type="button" class="rmt-x-primary" data-rmt-extra="intel-open" data-rmt-extra-person="${esc(name)}"><i class="fa-regular fa-comment-dots" aria-hidden="true"></i> 向${esc(name)}打听他的事</button>${count ? `<small>已打听过 ${count} 次</small>` : ''}`;
+        detail.appendChild(wrap);
+    } catch { /* 装饰失败不影响人际庭园本身。 */ }
+}
+
+function decorateInbox(host, listView) {
+    try {
+        if (!listView || readOnlyTarget() || !host?.querySelector) return;
+        const context = currentContext(); if (!context) return;
+        const settings = extras_waiting.waitingSettings(context);
+        const trace = extras_waiting.activeTrace(context);
+        if (!settings.showInbox || !trace?.letter) return;
+        extras_styles.ensureExtrasStyles();
+        const header = host.querySelector('.rmt-mail-header');
+        const card = document.createElement('div');
+        card.innerHTML = letterHtml(trace.letter, '<button type="button" class="rmt-x-secondary" data-rmt-extra="waiting-open-grid">看看你不在的时候</button>');
+        if (header) header.after(card.firstElementChild); else host.prepend(card.firstElementChild);
+    } catch { /* 邮箱照常显示。 */ }
+}
+
+function decorateRoom(host) {
+    try {
+        if (readOnlyTarget() || !host?.querySelector) return;
+        const context = currentContext(); if (!context) return;
+        const settings = extras_waiting.waitingSettings(context);
+        const trace = extras_waiting.activeTrace(context);
+        if (!settings.showRoom || !trace?.roomNode) return;
+        extras_styles.ensureExtrasStyles();
+        const card = document.createElement('div');
+        card.innerHTML = roomNodeHtml(trace.roomNode).replace('</section>', '<button type="button" class="rmt-x-secondary" data-rmt-extra="waiting-open-grid">看看你不在的时候</button></section>');
+        const node = card.firstElementChild;
+        const style = host.querySelector(':scope > style');
+        if (style) style.after(node); else host.prepend(node);
+    } catch { /* 房间照常显示。 */ }
+}
+
+__m_ui_extrasView_js.isExtraMode = isExtraMode;
+__m_ui_extrasView_js.openExtra = openExtra;
+__m_ui_extrasView_js.renderExtra = renderExtra;
+__m_ui_extrasView_js.navigateExtraBack = navigateExtraBack;
+__m_ui_extrasView_js.handleExtraClick = handleExtraClick;
+__m_ui_extrasView_js.handleExtraChange = handleExtraChange;
+__m_ui_extrasView_js.extraCardInfo = extraCardInfo;
+__m_ui_extrasView_js.decorateRelationDetail = decorateRelationDetail;
+__m_ui_extrasView_js.decorateInbox = decorateInbox;
+__m_ui_extrasView_js.decorateRoom = decorateRoom;
+__m_ui_extrasView_js.EXTRA_MODES = EXTRA_MODES;
+}
+
 __init_core_themeSongCover_js();
 __init_archive_capacity_js();
 __init_archive_coverageRanges_js();
@@ -84181,6 +85647,12 @@ __init_ui_workspace_js();
 __init_ui_workspaceState_js();
 __init_ui_archiveRelayView_js();
 __init_ui_workspaceStyles_js();
+__init_extras_store_js();
+__init_extras_collection_js();
+__init_extras_intel_js();
+__init_extras_waiting_js();
+__init_ui_extrasStyles_js();
+__init_ui_extrasView_js();
 
 export const openArchiveLibrary = __m_heartbeatMemories_js.openArchiveLibrary;
 export const openSettingsHome = __m_heartbeatMemories_js.openSettingsHome;

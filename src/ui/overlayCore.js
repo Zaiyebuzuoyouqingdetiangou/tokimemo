@@ -55,6 +55,7 @@ import * as workspace_ui from './workspace.js';
 import * as language_view from './languageView.js';
 import * as ui_workspaceState from './workspaceState.js';
 import * as toolbarIcons from './toolbarIcons.js';
+import * as extras_view from './extrasView.js';
 import { applyArchiveMobileSafeArea, bindOverlayCloseFallback, bindToolbarMoreMenu, bodyEl, calendarQuickAccessHtml, closeArchiveOverlayFromUser, closeToolbarMoreMenu, confirmExplicitAction, confirmExplicitActionTwice, confirmModeRegeneration, confirmRoomLifeRefresh, decorateReadOnlyModeUi, emptyArchiveMode, formatArchiveTime, isArchiveMobileViewport, loadChooserArchiveRecovery, memoryLockPanelHtml, readableModePortals, requestParticipantSelection, requestParticipantVersions, revealArchiveOverlay, setBackVisible, setManageVisible, setRegenerateVisible, toggleToolbarMoreMenu, toolbarMoreMenu, topTitle } from './overlayShell.js';
 import { deleteManagedTarget, recategorizeManagedTarget, refreshMemoryWorldInfoBookControls, regenerateManagedCategory, regenerateManagedTarget } from './overlayManage.js';
 import * as dispatch_overlayClickTargets from './overlayClickTargets.js';
@@ -133,6 +134,7 @@ export function navigateBack() {
     if (time_stories.isTimeStoryMode(runtimeState.activeMode) && time_stories_view.closeTimeStoryDetail()) return;
     if (runtimeState.activeMode === core_constants.MODE.TIME_ECHO) return openCachedOrGenerate(core_constants.MODE.PHONE);
     if (cg_editor.hasCgPromptEditor()) return cg_editor.closeCgPromptEditor();
+    if (extras_view.navigateExtraBack()) return;
     if (runtimeState.endingEasterEggRuntime) return ui_endingView.closeEndingEasterEgg();
     if (runtimeState.contentManagerOpen) {
         runtimeState.contentManagerOpen = false;
@@ -434,6 +436,7 @@ let heartOpenRequest = 0;
 export function openCachedOrGenerate(mode, options = {}) {
     if (mode === 'journal') return handJournal.openHandJournal();
     if (['mirrorCall','mirrorVoice'].includes(mode)) return workspace_ui.openVoiceModule(mode);
+    if (extras_view.isExtraMode(mode)) return extras_view.openExtra(mode, options);
     if (!Object.values(core_constants.MODE).includes(mode)) return;
     if (options.incrementalSession) {
         const route = options.workspaceRoute || mode;
@@ -499,6 +502,7 @@ export function renderActive() {
         if (runtimeState.renderedChatScope && runtimeState.renderedChatScope !== scope) return;
     } catch { return; }
     if (['mirrorCall', 'mirrorVoice', 'journal'].includes(runtimeState.activeMode)) return;
+    if (extras_view.isExtraMode(runtimeState.activeMode)) return void extras_view.renderExtra();
     if (workspace_ui.renderEmptyWorkspace()) return;
     image_viewer.closeCgImageViewer({ restoreFocus: false });
     runtimeState.contentManagerOpen = false;
@@ -580,6 +584,7 @@ export function handleOverlayClick(event) {
     const moreMenu = toolbarMoreMenu(overlay);
     if (!moreMenu?.hidden && !event.target.closest?.('[data-rmt-toolbar-more-menu]')) closeToolbarMoreMenu(overlay);
     else if (!moreMenu?.hidden && event.target.closest?.('[data-rmt-toolbar-more-menu] [data-rmt-action],[data-rmt-toolbar-more-menu] [data-reader],[data-rmt-toolbar-more-menu] [data-rmt-workspace-route]')) closeToolbarMoreMenu(overlay);
+    if (extras_view.handleExtraClick(event)) return;
     if (dispatch_overlayClickTargets.overlayClickRecordTargets(event) !== OVERLAY_CLICK_UNHANDLED) return;
     if (dispatch_overlayClickTargets.overlayClickPageTargets(event) !== OVERLAY_CLICK_UNHANDLED) return;
 
@@ -595,6 +600,7 @@ export async function handleOverlayChange(event) {
     const dateInput = event.target.closest?.('[data-rmt-memory-date]');
     if (dateInput) return void applyMemoryPatch(dateInput.dataset.rmtMemoryDate, { date: dateInput.value });
     if (cg_format_ui.handleCgFormatChange(event)) return;
+    if (extras_view.handleExtraChange(event)) return;
     if (workspace_ui.handleWorkspaceChange(event) || language_view.handleLanguageChange(event)) return;
     const advSelectEl = event.target.closest?.('[data-rmt-adv-select]');
     if (advSelectEl) return ui_advEventView.advSelect(advSelectEl.value);
