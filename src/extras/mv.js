@@ -879,7 +879,8 @@ export async function drawAsset(songId, key) {
     try {
         const seed = found.group?.seed || 0;
         const base = {
-            orientation: found.kind === 'motif' || normalizeSettings(record.settings).ratio === '9:16' ? 'portrait' : 'landscape',
+            // 人物层永远竖画：横构图里画单人时模型会把人复制成左右两份；横屏成片由本地合成。
+            orientation: found.kind !== 'bg' || normalizeSettings(record.settings).ratio === '9:16' ? 'portrait' : 'landscape',
             characterName: context?.name2 || '', targetKey: runKey, seed,
         };
         const metadata = found.kind === 'char' ? assetMetadata(record, found, context) : null;

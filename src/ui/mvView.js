@@ -1386,12 +1386,17 @@ function drawSceneV2(g, record, song, rows, index, t, w, h) {
     const person = cutoutFor(diff?.image?.url);
     if (person) {
         const breathe = 1 + 0.004 * Math.sin(t * Math.PI * 2 / 3.4);
+        // 人物按竖图放进画面：高度撑满（按景别放大或缩小），左右位置按分镜；横屏也不会被拉成两份。
+        const pw = person.naturalWidth, ph = person.naturalHeight;
+        const factor = { close: 1.35, medium: 1.05, full: 0.95, wide: 0.6 }[group.scale] || 1.05;
+        const dh = h * factor, dw = pw * (dh / ph);
+        const side = w > h ? 0.18 : 0.1;
+        const cxp = { left: 0.5 - side, right: 0.5 + side, center: 0.5 }[group.position] || 0.5;
+        const dx = w * cxp - dw / 2, dy = group.scale === 'close' ? h - dh * 0.9 : h - dh;
         // 同一构图里的差分对齐到这一组第一张：人物大小和脚底位置保持一致，换表情时不跳位。
         const ref = (group.diffs || []).map(dd => cutMeta.get(dd.image?.url)).find(Boolean);
         const cur = cutMeta.get(diff.image.url);
-        const r = Math.max(w / person.naturalWidth, h / person.naturalHeight);
-        const ox = (w - person.naturalWidth * r) / 2, oy = (h - person.naturalHeight * r) / 2;
-        const map = m => [ox + m.cx * person.naturalWidth * r, oy + m.bottom * person.naturalHeight * r];
+        const map = m => [dx + m.cx * dw, dy + m.bottom * dh];
         g.save();
         g.translate(w / 2, h); g.scale(push * breathe, push * breathe); g.translate(-w / 2, -h);
         if (ref && cur && ref !== cur) {
@@ -1399,7 +1404,7 @@ function drawSceneV2(g, record, song, rows, index, t, w, h) {
             const [tx, ty] = map(ref); const [cx, cy] = map(cur);
             g.translate(tx, ty); g.scale(s, s); g.translate(-cx, -cy);
         }
-        drawCover(g, person, w, h, 1, 0, 0);
+        g.drawImage(person, dx, dy, dw, dh);
         g.restore();
     }
     // 统一光色：用封面中间色轻轻叠一层柔光，让人物和背景更像同一张画。
