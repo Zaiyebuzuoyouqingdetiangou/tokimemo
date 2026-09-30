@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 311
-// Source SHA-256: a8223f5ef5fa5bace2b87c103bebcfbe95831786c530c6b1461bd082d033a6f6
+// Source SHA-256: 9b58076e4f31bd184157a4c44956844c776ce468799e1157c0293dc380b3970e
 // Build: python3 verification/build.py <source-root>
 
 const __m_core_themeSongCover_js = Object.create(null);
@@ -86319,7 +86319,8 @@ function shotTimeline(record, song) {
         const own = shots.filter(shot => shot.sectionIndex === index);
         const span = time.end - time.start;
         const phaseFactor = { prep: 0.7, action: 0.6, settle: 1.3, still: 1 };
-        const weights = own.map(shot => Math.min(3, Math.max(1, Number(shot.hold) || 1)) * (phaseFactor[shot.phase] || 1));
+        const quick = record?.tegaki?.template === 'quick';
+        const weights = own.map(shot => quick ? 1 : Math.min(3, Math.max(1, Number(shot.hold) || 1)) * (phaseFactor[shot.phase] || 1));
         const sum = weights.reduce((a, b) => a + b, 0) || 1;
         let acc = 0;
         own.forEach((shot, k) => { const a = acc; acc += weights[k]; rows.push({ shot, start: time.start + span * a / sum, end: time.start + span * acc / sum, sectionIndex: index }); });
@@ -86645,9 +86646,9 @@ const TEGAKI_FONTS = Object.freeze({
 });
 const TEGAKI_LYRICS = Object.freeze({ vertical: '竖排', subtitle: '字幕', big: '大字', none: '不显示' });
 const TEGAKI_PRESETS = Object.freeze({
-    classic: { name: '手书经典', desc: '同一构图内直接换张，构图之间淡入，歌词大字', rhythm: 'line', lyric: 'big', motion: () => 'still' },
-    gentle: { name: '抒情慢拍', desc: '每个构图缓慢推近，淡入淡出，字幕歌词', rhythm: 'line', lyric: 'subtitle', motion: () => 'push' },
-    bright: { name: '明快跟拍', desc: '画面不动，背景光随拍子轻轻呼吸，歌词大字', rhythm: 'beat', lyric: 'big', motion: () => 'still' },
+    quick: { name: '一人一句快切', desc: '每句歌词一张，干脆直切，节奏紧', rhythm: 'line', lyric: 'subtitle', template: 'quick' },
+    flash: { name: '白闪卡点', desc: '换构图时白闪，副歌每小节轻闪一下', rhythm: 'line', lyric: 'big', template: 'flash' },
+    slow: { name: '抒情慢镜', desc: '构图之间淡入，画面缓慢推近，停留更久', rhythm: 'line', lyric: 'subtitle', template: 'slow' },
 });
 
 function tegakiOptions(record) {
@@ -86657,6 +86658,7 @@ function tegakiOptions(record) {
         rhythm: Object.hasOwn(TEGAKI_RHYTHMS, value.rhythm) ? value.rhythm : 'line',
         lyric: Object.hasOwn(TEGAKI_LYRICS, value.lyric) ? value.lyric : (record?.subtitles === false ? 'none' : 'subtitle'),
         preset: Object.hasOwn(TEGAKI_PRESETS, value.preset) ? value.preset : '',
+        template: ['quick', 'flash', 'slow'].includes(value.template) ? value.template : '',
         font: Object.hasOwn(TEGAKI_FONTS, value.font) ? value.font : 'sans',
         rangeFrom: Math.max(0, Math.round(Number(value.rangeFrom) || 0)),
         rangeTo: Math.max(0, Math.round(Number(value.rangeTo) || 0)),
@@ -86690,19 +86692,22 @@ function shotsInRange(record, song) {
     return shotTimeline(record, song).rows.filter(row => row.end > range.start + 0.01 && row.start < range.end - 0.01).map(row => row.shot);
 }
 
+// 节奏模板：参考描改手书的固定套路，一次排好全部镜头的切换方式与停留；之后仍可逐镜修改。
 function applyTegakiPreset(songId, presetId, song) {
     const preset = TEGAKI_PRESETS[presetId];
     if (!preset) return null;
-    const sections = parseSections(song.lyrics);
     const context = core_context.currentCharacterGuard();
     return writeMv(scopeOf(context), songId, current => {
         if (!current) return current;
-        current.tegaki = { ...(current.tegaki || {}), rhythm: preset.rhythm, lyric: preset.lyric, preset: presetId };
-        for (const shot of list(current.shots)) {
-            const chorus = isChorusTag(sections[shot.sectionIndex]?.tag);
-            shot.motion = preset.motion(chorus);
-            shot.cut = shot.groupNext ? 'fade' : (shot.group ? 'cut' : 'fade');
-        }
+        current.tegaki = { ...(current.tegaki || {}), rhythm: preset.rhythm, lyric: preset.lyric, preset: presetId, template: preset.template };
+        const shots = list(current.shots);
+        shots.forEach((shot, i) => {
+            const next = shots[i + 1];
+            const change = !next || !shot.group || next.group !== shot.group;
+            shot.cut = preset.template === 'quick' || !change ? 'cut' : preset.template === 'flash' ? 'flash' : 'fade';
+            shot.motion = preset.template === 'slow' ? 'push' : 'still';
+        });
+        for (const g of list(current.groups)) g.motion = preset.template === 'slow' ? 'push' : 'still';
         return current;
     });
 }
@@ -86728,6 +86733,7 @@ function tegakiGrammar(sections, keep, charName = '{{char}}') {
 - 每组的景别和机位要不同：特写（手、眼、物件）、近景、中景、全身、远景、背影、低机位、俯视都可以；人物位置不要总在正中间，position 写 left / center / right，scale 写 close / medium / full / wide。
 - 每一张差分都是单独的一张图，只画一个瞬间：characterPrompt 与 diff.change 里每个人只写一个姿势，不要在同一张里写多个姿势、多个表情或“三连”。
 - 每组 1～3 张人物差分（diffs），是同一机位下一个动作的连续过程（伸手前→伸手→猫碰到手；握剑柄→出剑→收剑），不是随便换表情。同组 characterPrompt 相同，diff.change 只写这一刻的动作和表情。
+- 景别要有特写：眼睛、手、剑柄、物件这类细节特写，和远景、全景、近景交替使用，不要全是半身和全身。
 - 每组 1～2 张背景（bgs）：同一个地点，第二张可以是时间或光线的变化（白天→黄昏、晴→雨），也可以是远近不同。背景只有场景，没有人物。
 - 副歌可以有一个主视觉组，重复的副歌复用它；其余段落尽量用新的构图，尾奏可以回到开头的构图。
 - 每组写 link：最后一张怎样承接下一组（视线、手、飘动的衣角或发带）。
@@ -86764,6 +86770,8 @@ function buildShots(raw, memory, sectionCount, settings) {
             link: core_text.normalizeText(g?.link, 160), seed: 0, bg: null,
             position: ['left', 'center', 'right'].includes(g?.position) ? g.position : 'center',
             transition: ['cut', 'fade', 'flash'].includes(g?.transition) ? g.transition : 'cut',
+            // full = 人物、道具与背景在同一张完整场景图里（默认，最稳）；cutout = 白底人物抠图叠到背景上。
+            layer: 'full',
             scale: ['close', 'medium', 'full', 'wide'].includes(g?.scale) ? g.scale : 'medium',
             bgs: (list(g?.bgs).length ? list(g.bgs) : [{ label: '场景', prompt: g?.backgroundPrompt }]).slice(0, 2).map((b, k) => ({
                 id: `B${k + 1}`, rawId: core_text.normalizeText(b?.id, 20) || `B${k + 1}`,
@@ -86798,7 +86806,10 @@ function buildShots(raw, memory, sectionCount, settings) {
         const nextGroup = shots[i + 1] && groups.find(g => g.id === shots[i + 1].group);
         shots[i].cut = !shots[i + 1] || shots[i + 1].group === shots[i].group ? 'cut' : (nextGroup?.transition || 'cut');
     }
-    for (const g of groups) g.bgs = g.bgs.map(({ rawId, ...rest }) => rest);
+    for (const g of groups) {
+        g.bgs = g.bgs.map(({ rawId, ...rest }) => rest);
+        for (const d of g.diffs) d.bg = shots.find(s => s.group === g.id && s.diff === d.id)?.bg || 'B1';
+    }
     const motifPrompt = core_text.normalizeText(raw?.motif?.prompt, 300);
     return {
         version: 2, groups, shots,
@@ -86830,8 +86841,9 @@ function assetKeys(record, song = null) {
     for (const g of record.groups) {
         const diffs = g.diffs.filter(d => !used || used.has(`${g.id}:${d.id}`));
         if (!diffs.length) continue;
-        const bgIds = list(g.bgs).length ? list(g.bgs).filter(b => record.shots.some(s => s.group === g.id && (s.bg || 'B1') === b.id && (!used || used.has(`${g.id}:${s.diff}`)))).map(b => b.id) : ['bg'];
-        keys.push(...(bgIds.length ? bgIds : [list(g.bgs)[0]?.id || 'bg']).map(id => `${g.id}:${id}`), ...diffs.map(d => `${g.id}:${d.id}`));
+        const bgIds = g.layer === 'full' ? [] : list(g.bgs).length ? list(g.bgs).filter(b => record.shots.some(s => s.group === g.id && (s.bg || 'B1') === b.id && (!used || used.has(`${g.id}:${s.diff}`)))).map(b => b.id) : ['bg'];
+        const bgKeys = g.layer === 'full' ? [] : (bgIds.length ? bgIds : [list(g.bgs)[0]?.id || 'bg']);
+        keys.push(...bgKeys.map(id => `${g.id}:${id}`), ...diffs.map(d => `${g.id}:${d.id}`));
     }
     if (record.motif) keys.push('motif');
     return keys;
@@ -86858,7 +86870,9 @@ function assetPrompt(record, key, context) {
     const size = { close: 'close-up shot', medium: 'medium shot, waist up', full: 'full body shot', wide: 'wide shot, small figure' }[found.group.scale] || '';
     return [style, ratio, found.group.characterPrompt, found.diff.change, place, size, lookLine ? `fixed appearance, keep consistent: ${lookLine}` : '', wardrobeLine(record, hasChar, hasUser), back,
         hasChar && hasUser ? `duo, two people${record?.wardrobe?.user ? '' : ', different outfits'}, different hairstyles` : 'solo, single figure',
-        'white background, simple background'].filter(Boolean).join(', ');
+        found.group.layer === 'full'
+            ? [era, (list(found.group.bgs).find(b => b.id === found.diff.bg) || list(found.group.bgs)[0])?.prompt || found.group.backgroundPrompt, 'detailed background, full scene'].filter(Boolean).join(', ')
+            : 'white background, simple background'].filter(Boolean).join(', ');
 }
 
 // 双人画面按角色分别给外貌（与 CG 相同的 characters 结构），避免两个人长成同一张脸。
@@ -86891,7 +86905,7 @@ async function drawAsset(songId, key) {
         const seed = found.group?.seed || 0;
         const base = {
             // 人物层永远竖画：横构图里画单人时模型会把人复制成左右两份；横屏成片由本地合成。
-            orientation: found.kind !== 'bg' || normalizeSettings(record.settings).ratio === '9:16' ? 'portrait' : 'landscape',
+            orientation: (found.kind === 'motif' || (found.kind === 'char' && found.group.layer !== 'full')) || normalizeSettings(record.settings).ratio === '9:16' ? 'portrait' : 'landscape',
             characterName: context?.name2 || '', targetKey: runKey, seed,
         };
         const metadata = found.kind === 'char' ? assetMetadata(record, found, context) : null;
@@ -86909,6 +86923,25 @@ async function drawAsset(songId, key) {
             return { image: { url, at: Date.now() }, ...(Number.isInteger(used) && used > 0 ? { seed: used } : {}) };
         });
     } finally { running.delete(runKey); }
+}
+
+
+function setAssetSplit(songId, key, split) {
+    const context = core_context.currentCharacterGuard();
+    return writeMv(scopeOf(context), songId, current => {
+        const found = assetOf(current, key);
+        if (found?.image) found.image = { ...found.image, split: ['auto', 'none', 'left', 'right', 'top', 'bottom'].includes(split) ? split : 'auto' };
+        return current;
+    });
+}
+
+function setGroupLayer(songId, groupId, layer) {
+    const context = core_context.currentCharacterGuard();
+    return writeMv(scopeOf(context), songId, current => {
+        const g = list(current?.groups).find(x => x.id === groupId);
+        if (g) g.layer = layer === 'cutout' ? 'cutout' : 'full';
+        return current;
+    });
 }
 __m_extras_mv_js.motionOf = motionOf;
 __m_extras_mv_js.readMvStore = readMvStore;
@@ -86956,6 +86989,8 @@ __m_extras_mv_js.assetKeys = assetKeys;
 __m_extras_mv_js.assetPrompt = assetPrompt;
 __m_extras_mv_js.isAssetDrawing = isAssetDrawing;
 __m_extras_mv_js.drawAsset = drawAsset;
+__m_extras_mv_js.setAssetSplit = setAssetSplit;
+__m_extras_mv_js.setGroupLayer = setGroupLayer;
 __m_extras_mv_js.MV_KEY = MV_KEY;
 __m_extras_mv_js.MV_STYLES = MV_STYLES;
 __m_extras_mv_js.MV_APPEAR = MV_APPEAR;
@@ -87194,6 +87229,15 @@ ${r} .rmt-mv-palette>div{display:flex;flex-direction:column;gap:6px;flex:1}
 ${r} .rmt-mv-palette>div span{display:flex;gap:6px}
 ${r} .rmt-mv-palette>div i{width:22px;height:22px;border-radius:6px;display:block}
 ${r} .rmt-mv-palette>small{font-size:12px;color:var(--rmt-theme-muted,#586b7c);text-align:right}
+${r} .rmt-mv-split{margin-top:4px;min-height:32px;max-width:92px;font-size:11px;border-radius:8px;border:1px solid var(--rmt-theme-border,#cfdae5);background:var(--rmt-theme-surface-solid,#fff);color:var(--rmt-theme-text,#34495d)}
+${r} .rmt-mv-inspect summary{cursor:pointer;font-size:13px;font-weight:600;padding:6px 0}
+${r} .rmt-mv-inspect-row{display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-top:1px dashed var(--rmt-theme-border,#cfdae5)}
+${r} .rmt-mv-inspect-row figure{margin:0;display:flex;flex-direction:column;align-items:center;gap:2px}
+${r} .rmt-mv-inspect-row img{width:72px;height:108px;object-fit:contain;border-radius:8px;background:#e9edf2}
+${r} .rmt-mv-inspect-row figure.cut img{background:repeating-conic-gradient(#e6e9f0 0 25%,#fff 0 50%) 0 0/10px 10px}
+${r} .rmt-mv-inspect-row figcaption{font-size:10px;color:var(--rmt-theme-muted,#586b7c)}
+${r} .rmt-mv-inspect-row>div{display:flex;flex-direction:column;gap:3px;font-size:12px;min-width:0}
+${r} .rmt-mv-inspect-row small{font-size:11px;color:var(--rmt-theme-muted,#586b7c)}
 ${r} .rmt-mv-range-selects{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
 ${r} .rmt-mv-range-selects label{display:flex;flex-direction:column;gap:4px;font-size:12px}
 ${r} .rmt-mv-range-selects select{min-height:40px;border-radius:10px;border:1px solid var(--rmt-theme-border,#cfdae5);padding:0 8px;font:inherit;font-size:13px;background:var(--rmt-theme-surface-solid,#fff);color:var(--rmt-theme-text,#34495d)}
@@ -87557,8 +87601,8 @@ function tegakiControls(record, song) {
     const range = mv.playRange(record, song);
     const seg2 = (action, map, value) => Object.entries(map).map(([id, label]) => btn(action, label, { id, cls: 'rmt-x-seg' + (value === id ? ' active' : ''), extra: ` aria-pressed="${value === id}"` })).join('');
     const presets = Object.entries(mv.TEGAKI_PRESETS).map(([id, p]) => `<button type="button" class="rmt-mv-choice${o.preset === id ? ' on' : ''}" aria-pressed="${o.preset === id}" data-rmt-mv="tegaki-preset" data-rmt-mv-id="${id}"><span><b>${esc(p.name)}</b><small>${esc(p.desc)}</small></span></button>`).join('');
-    return `<b style="font-size:14px">新手一键配置</b><div class="rmt-mv-presets">${presets}</div>
-      <p class="rmt-x-note">一键设好全部镜头的动作、切换方式和歌词样式；之后仍可逐镜修改。</p>
+    return `<b style="font-size:14px">节奏模板</b><div class="rmt-mv-presets">${presets}</div>
+      <p class="rmt-x-note">参考常见手书套路，一次排好全部镜头的切换方式、停留和歌词样式；之后仍可逐镜修改。</p>
       <b style="font-size:14px">截取哪一段</b>${rangePicker('record', o, mv.parseSections(song.lyrics))}
       <p class="rmt-x-note">现在：${mv.formatTime(range.start)}–${mv.formatTime(range.end)}（约 ${Math.max(0, Math.round(range.end - range.start))} 秒）。</p>
       <b style="font-size:14px">切换节奏</b><div class="rmt-mv-grid2">${seg2('tegaki-rhythm', mv.TEGAKI_RHYTHMS, o.rhythm)}</div>
@@ -88130,6 +88174,8 @@ function handleMvClick(event) {
         else if (action === 'draw') void runDraw(id);
         else if (action === 'draw-all') void drawAll();
         else if (action === 'draw-asset') void runAsset(id);
+        else if (action === 'group-layer') { const [gid, layer] = id.split(':'); mv.setGroupLayer(view.songId, gid, layer); renderMv(); }
+        else if (action === 'inspect') { view.inspect = view.inspect === id ? '' : id; setTimeout(() => renderMv(), 0); }
         else if (action === 'draw-group') { const keys = mv.assetKeys(record, currentSong()).filter(k => k.startsWith(id + ':') && !mv.assetOf(record, k)?.image?.url); void (async () => { for (const key of keys) { if (view.stopAll) break; await runAsset(key); } })(); }
         else if (action === 'tegaki-preset') { mv.applyTegakiPreset(view.songId, id, currentSong()); toastOk('已按“' + (mv.TEGAKI_PRESETS[id]?.name || '') + '”配好镜头。'); renderMv(); }
         else if (action === 'tegaki-range') { mv.patchTegaki(view.songId, { range: id }); renderMv(); }
@@ -88233,6 +88279,11 @@ function handleMvChange(event) {
         renderMv();
         return true;
     }
+    if (input?.matches?.('[data-rmt-mv-split]')) {
+        try { mv.setAssetSplit(view.songId, input.dataset.rmtMvSplit, input.value); } catch (error) { toastError(error); }
+        renderMv(); drawNow();
+        return true;
+    }
     if (input?.matches?.('[data-rmt-mv-wardrobe]')) {
         const key = input.dataset.rmtMvWardrobe;
         if (['era', 'char', 'user'].includes(key)) { try { mv.patchWardrobe(view.songId, { [key]: core_text.normalizeText(input.value, 300) }); } catch (error) { toastError(error); } }
@@ -88262,7 +88313,30 @@ function assetTile(record, key, label) {
     const url = found?.image?.url || '';
     const drawing = mv.isAssetDrawing(mv.mvScope(ctx()), view.songId, key);
     const cut = found?.kind !== 'bg';
-    return `<button type="button" class="rmt-mv-asset${url ? ' done' : ''}${cut ? ' cut' : ''}" data-rmt-mv="draw-asset" data-rmt-mv-id="${esc(key)}" ${drawing || view.drawingAll ? 'disabled' : ''} aria-label="${esc(label)}：${url ? '重画' : '画'}这一张">${url ? `<img src="${esc(url)}" alt="">` : ''}<i>${drawing ? '画…' : url ? '已画' : '未画'}</i></button><small>${esc(label)}</small>`;
+    const splitSelect = '';
+    return `<button type="button" class="rmt-mv-asset${url ? ' done' : ''}${cut && found?.group?.layer !== 'full' ? ' cut' : ''}" data-rmt-mv="draw-asset" data-rmt-mv-id="${esc(key)}" ${drawing || view.drawingAll ? 'disabled' : ''} aria-label="${esc(label)}：${url ? '重画' : '画'}这一张">${url ? `<img src="${esc(url)}" alt="">` : ''}<i>${drawing ? '画…' : url ? '已画' : '未画'}</i></button><small>${esc(label)}</small>${splitSelect}`;
+}
+
+// 素材检查：原图 → 拼图拆分 → 抠图结果 → 播放时的用法，逐张对照。
+function inspectHtml(record, g, diffs) {
+    const rows = diffs.filter(d => d.image?.url).map(d => {
+        const raw = imageFor(d.image.url);
+        const override = d.image.split || 'auto';
+        const crop = raw ? cropFor(d.image.url, raw, override) : null;
+        if (g.layer !== 'full' && raw) cutoutFor(d.image.url, override);
+        const meta = cutMeta.get(d.image.url);
+        const cut = cutouts.get(d.image.url + '|' + override);
+        const splitText = { none: '不拆', left: '左半', right: '右半', top: '上半', bottom: '下半' };
+        const use = g.layer === 'full' ? '完整画面' : meta?.failed ? '抠图失败 → 按完整画面显示' : meta ? '分层（叠在背景上）' : '处理中…';
+        return `<div class="rmt-mv-inspect-row"><figure><img src="${esc(d.image.url)}" alt=""><figcaption>原图</figcaption></figure>
+          ${g.layer !== 'full' && cut?.src ? `<figure class="cut"><img src="${esc(cut.src)}" alt=""><figcaption>抠图后</figcaption></figure>` : ''}
+          <div><b>${esc(d.label)}</b><small>拆分：${crop ? `${esc(splitText[crop.split] || '不拆')}${override === 'auto' ? '（自动）' : '（手动）'}` : '图片载入中'}</small>
+          ${g.layer !== 'full' && meta && !meta.tainted ? `<small>抠掉的白底：${Math.round((meta.clearRatio || 0) * 100)}%</small>` : ''}${meta?.tainted ? '<small>外站图片读不了像素，按原图显示</small>' : ''}<small>播放时：${use}</small></div></div>`;
+    }).join('');
+    const layerTools = `<div class="rmt-mv-actions">${btn('group-layer', g.layer === 'full' ? '现在：完整画面 · 改为分层抠图' : '现在：分层抠图 · 改为完整画面', { id: `${g.id}:${g.layer === 'full' ? 'cutout' : 'full'}` })}</div>
+      <p class="rmt-x-note">${g.layer === 'full' ? '完整画面：人物、道具和场景在同一张图里（推荐）。改成分层后需要重画成白底人物。' : '分层抠图：白底人物抠图后叠到背景上；抠不干净的图会自动按完整画面显示。'}</p>`;
+    const splitTools = diffs.filter(d => d.image?.url).map(d => `<label class="rmt-mv-look"><span>${esc(d.label)} · 拼图拆分</span><select class="rmt-mv-split" data-rmt-mv-split="${esc(g.id + ':' + d.id)}">${[['auto', '自动'], ['none', '不拆'], ['left', '取左半'], ['right', '取右半'], ['top', '取上半'], ['bottom', '取下半']].map(([v, l]) => `<option value="${v}"${(d.image.split || 'auto') === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label>`).join('');
+    return `<details class="rmt-mv-inspect"${view.inspect === g.id ? ' open' : ''}><summary data-rmt-mv="inspect" data-rmt-mv-id="${esc(g.id)}">素材检查（画面有问题时再打开）</summary>${rows}${splitTools}${layerTools}</details>`;
 }
 
 function renderGroupsBoard(song, record) {
@@ -88288,6 +88362,7 @@ function renderGroupsBoard(song, record) {
         const missing = [...(bgIds.length ? bgIds : ['bg']).map(id => `${g.id}:${id}`), ...usedDiffs.map(d => `${g.id}:${d.id}`)].filter(k => !mv.assetOf(record, k)?.image?.url).length;
         return `<article class="rmt-mv-gcard"><div class="rmt-x-row-head"><b class="rmt-mv-gname">构图 ${shown} · ${esc(g.composition || '')}</b><span>${esc(secNames)} · ${frames.length} 句</span></div>
           <div class="rmt-mv-assets">${bgTiles}<span class="rmt-mv-plus">+</span>${usedDiffs.map(d => `<div>${assetTile(record, `${g.id}:${d.id}`, d.label)}</div>`).join('')}</div>
+          ${inspectHtml(record, g, usedDiffs)}
           ${lyrics ? `<div class="rmt-mv-lyric"><p>${esc(lyrics)}</p></div>` : ''}
           <div class="rmt-mv-actions">${btn('draw-group', missing ? `画这一组剩下的 ${missing} 张` : '这一组已画好', { id: g.id, disabled: !missing || view.drawingAll, cls: missing ? 'rmt-x-primary' : 'rmt-x-secondary' })}</div>
           <p class="rmt-x-note">点任意一张缩略图可以单独重画。</p>
@@ -88318,19 +88393,60 @@ const cutouts = new Map();
 const cutMeta = new Map();
 const palettes = new Map();
 
+// 拼图识别：模型偶尔把同一人物画成左右或上下两格。缩小成灰度图比较两半，几乎一样就只取一格。
+const panelCache = new Map();
+function detectPanels(img) {
+    try {
+        const n = 48, c = document.createElement('canvas'); c.width = n; c.height = n;
+        const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(img, 0, 0, n, n);
+        const d = g.getImageData(0, 0, n, n).data;
+        const v = (x, y) => { const i = (y * n + x) * 4; return 0.3 * d[i] + 0.59 * d[i + 1] + 0.11 * d[i + 2]; };
+        let lr = 0, tb = 0, spread = 0, mean = 0;
+        for (let y = 0; y < n; y += 1) for (let x = 0; x < n; x += 1) mean += v(x, y);
+        mean /= n * n;
+        for (let y = 0; y < n; y += 1) for (let x = 0; x < n / 2; x += 1) { lr += Math.abs(v(x, y) - v(x + n / 2, y)); spread += Math.abs(v(x, y) - mean); }
+        for (let y = 0; y < n / 2; y += 1) for (let x = 0; x < n; x += 1) tb += Math.abs(v(x, y) - v(x, y + n / 2));
+        const half = n * n / 2;
+        lr /= half; tb /= half; spread = Math.max(1, spread / half);
+        // 两半差异远小于画面本身的起伏，才判为重复拼图；普通双人同框两边人物不同，不会被误拆。
+        if (lr < 16 && lr < spread * 0.35 && lr <= tb) return { split: 'left', score: lr };
+        if (tb < 16 && tb < spread * 0.35) return { split: 'top', score: tb };
+        return { split: 'none', score: Math.min(lr, tb) };
+    } catch { return { split: 'none', score: -1 }; }
+}
+
+function cropFor(url, img, override) {
+    let auto = panelCache.get(url);
+    if (!auto) { auto = detectPanels(img); panelCache.set(url, auto); }
+    const split = override && override !== 'auto' ? override : auto.split;
+    const w = img.naturalWidth, h = img.naturalHeight;
+    const rect = { left: [0, 0, w / 2, h], right: [w / 2, 0, w / 2, h], top: [0, 0, w, h / 2], bottom: [0, h / 2, w, h / 2] }[split] || [0, 0, w, h];
+    return { split, auto: auto.split, rect };
+}
+
+function drawCropCover(g, img, rect, w, h, scale = 1) {
+    const [sx, sy, sw, sh] = rect;
+    const r = Math.max(w / sw, h / sh) * scale;
+    const dw = sw * r, dh = sh * r;
+    g.drawImage(img, sx, sy, sw, sh, (w - dw) / 2, (h - dh) / 2, dw, dh);
+}
+
 // 白底人物：从四边向内漫水填充近白色像素并设为透明；外站图片读不了像素时直接用原图。
-function cutoutFor(url) {
+function cutoutFor(url, override = 'auto') {
     if (!url) return null;
-    const ready = cutouts.get(url);
+    const cacheKey = url + '|' + override;
+    const ready = cutouts.get(cacheKey);
     if (ready) return ready.complete && ready.naturalWidth ? ready : null;
     const src = imageFor(url);
     if (!src) return null;
     try {
-        const scale = Math.min(1, 1400 / Math.max(src.naturalWidth, src.naturalHeight));
-        const cw = Math.max(1, Math.round(src.naturalWidth * scale)), ch = Math.max(1, Math.round(src.naturalHeight * scale));
+        const crop = cropFor(url, src, override);
+        const [sx, sy, sw, sh] = crop.rect;
+        const scale = Math.min(1, 1400 / Math.max(sw, sh));
+        const cw = Math.max(1, Math.round(sw * scale)), ch = Math.max(1, Math.round(sh * scale));
         const canvas = document.createElement('canvas'); canvas.width = cw; canvas.height = ch;
         const g = canvas.getContext('2d', { willReadFrequently: true });
-        g.drawImage(src, 0, 0, cw, ch);
+        g.drawImage(src, sx, sy, sw, sh, 0, 0, cw, ch);
         const img = g.getImageData(0, 0, cw, ch);
         const d = img.data;
         const white = p => { const i = p * 4; const mn = Math.min(d[i], d[i + 1], d[i + 2]); return mn > 228 && Math.max(d[i], d[i + 1], d[i + 2]) - mn < 26; };
@@ -88377,14 +88493,19 @@ function cutoutFor(url) {
         for (let y = 0; y < ch; y += 2) for (let x = 0; x < cw; x += 2) {
             if (d[(y * cw + x) * 4 + 3] > 40) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
         }
-        if (x1 > x0 && y1 > y0) cutMeta.set(url, { cx: (x0 + x1) / 2 / cw, bottom: y1 / ch, height: (y1 - y0) / ch });
+        let clear = 0;
+        for (let p = 0; p < cw * ch; p += 7) if (d[p * 4 + 3] === 0) clear += 1;
+        const clearRatio = clear / Math.ceil(cw * ch / 7);
+        // 抠掉的面积太少，说明这张不是白底人物（背景没被识别成白色）：按完整画面显示，不拿去叠背景。
+        cutMeta.set(url, { cx: (x1 + x0) / 2 / cw, bottom: y1 / ch, height: Math.max(0.01, (y1 - y0) / ch), clearRatio, split: crop.split, autoSplit: crop.auto, failed: clearRatio < 0.15 || !(x1 > x0 && y1 > y0) });
         const out = new Image();
-        out.onload = () => drawNow();
+        out.onload = () => { drawNow(); if (view.inspect && runtimeState.activeMode === MV_MODE) renderMv(); };
         out.src = canvas.toDataURL('image/png');
-        cutouts.set(url, out);
+        cutouts.set(cacheKey, out);
         return null;
     } catch {
-        cutouts.set(url, src);
+        cutMeta.set(url, { failed: true, clearRatio: 0, split: 'none', autoSplit: 'none', tainted: true });
+        cutouts.set(cacheKey, src);
         return src;
     }
 }
@@ -88425,7 +88546,16 @@ function drawSceneV2(g, record, song, rows, index, t, w, h) {
     const bg = imageFor(bgRow?.image?.url || group?.bg?.url);
     if (bg) drawCover(g, bg, w, h, push, 0, 0);
     const diff = group?.diffs.find(d => d.id === row.shot.diff);
-    const person = cutoutFor(diff?.image?.url);
+    const override = diff?.image?.split || 'auto';
+    const raw = imageFor(diff?.image?.url);
+    const meta = cutMeta.get(diff?.image?.url);
+    // 完整场景图（或抠图失败的图）：整张作为镜头，不叠背景、不抠白。
+    if (raw && (group?.layer === 'full' || meta?.failed)) {
+        drawCropCover(g, raw, cropFor(diff.image.url, raw, override).rect, w, h, push);
+        g.save(); g.globalCompositeOperation = 'soft-light'; g.globalAlpha = 0.1; g.fillStyle = coverPalette(song)[1]; g.fillRect(0, 0, w, h); g.restore();
+        return;
+    }
+    const person = group?.layer === 'full' ? null : cutoutFor(diff?.image?.url, override);
     if (person) {
         const breathe = 1 + 0.004 * Math.sin(t * Math.PI * 2 / 3.4);
         // 人物按竖图放进画面：高度撑满（按景别放大或缩小），左右位置按分镜；横屏也不会被拉成两份。
@@ -88524,6 +88654,11 @@ function renderFrameV2(canvas, record, song, t) {
         g.save(); g.font = `${font.weight} ${Math.round(Math.min(w, h) * 0.05)}px ${font.stack}`; g.textAlign = 'center';
         g.lineWidth = 3; g.strokeStyle = 'rgba(30,26,40,.6)'; g.fillStyle = '#fff';
         g.strokeText(row.shot.lyric, w / 2, h * 0.92); g.fillText(row.shot.lyric, w / 2, h * 0.92); g.restore();
+    }
+    // 白闪卡点模板：副歌里每小节第一拍轻闪一下。
+    if (topt.template === 'flash' && isChorusSection(song, row.sectionIndex)) {
+        const inBar = (t - row.start) % (beatLen * 4);
+        if (inBar < 0.12 && t - row.start > 0.2) { g.save(); g.globalAlpha = 0.35 * (1 - inBar / 0.12); g.fillStyle = '#fff'; g.fillRect(0, 0, w, h); g.restore(); }
     }
     // 卡点：副歌里每小节第一拍，关键词轻轻弹出一次。
     if (record.keyword && isChorusSection(song, row.sectionIndex)) {

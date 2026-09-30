@@ -308,7 +308,8 @@ export function shotTimeline(record, song) {
         const own = shots.filter(shot => shot.sectionIndex === index);
         const span = time.end - time.start;
         const phaseFactor = { prep: 0.7, action: 0.6, settle: 1.3, still: 1 };
-        const weights = own.map(shot => Math.min(3, Math.max(1, Number(shot.hold) || 1)) * (phaseFactor[shot.phase] || 1));
+        const quick = record?.tegaki?.template === 'quick';
+        const weights = own.map(shot => quick ? 1 : Math.min(3, Math.max(1, Number(shot.hold) || 1)) * (phaseFactor[shot.phase] || 1));
         const sum = weights.reduce((a, b) => a + b, 0) || 1;
         let acc = 0;
         own.forEach((shot, k) => { const a = acc; acc += weights[k]; rows.push({ shot, start: time.start + span * a / sum, end: time.start + span * acc / sum, sectionIndex: index }); });
@@ -634,9 +635,9 @@ export const TEGAKI_FONTS = Object.freeze({
 });
 export const TEGAKI_LYRICS = Object.freeze({ vertical: '竖排', subtitle: '字幕', big: '大字', none: '不显示' });
 export const TEGAKI_PRESETS = Object.freeze({
-    classic: { name: '手书经典', desc: '同一构图内直接换张，构图之间淡入，歌词大字', rhythm: 'line', lyric: 'big', motion: () => 'still' },
-    gentle: { name: '抒情慢拍', desc: '每个构图缓慢推近，淡入淡出，字幕歌词', rhythm: 'line', lyric: 'subtitle', motion: () => 'push' },
-    bright: { name: '明快跟拍', desc: '画面不动，背景光随拍子轻轻呼吸，歌词大字', rhythm: 'beat', lyric: 'big', motion: () => 'still' },
+    quick: { name: '一人一句快切', desc: '每句歌词一张，干脆直切，节奏紧', rhythm: 'line', lyric: 'subtitle', template: 'quick' },
+    flash: { name: '白闪卡点', desc: '换构图时白闪，副歌每小节轻闪一下', rhythm: 'line', lyric: 'big', template: 'flash' },
+    slow: { name: '抒情慢镜', desc: '构图之间淡入，画面缓慢推近，停留更久', rhythm: 'line', lyric: 'subtitle', template: 'slow' },
 });
 
 export function tegakiOptions(record) {
@@ -646,6 +647,7 @@ export function tegakiOptions(record) {
         rhythm: Object.hasOwn(TEGAKI_RHYTHMS, value.rhythm) ? value.rhythm : 'line',
         lyric: Object.hasOwn(TEGAKI_LYRICS, value.lyric) ? value.lyric : (record?.subtitles === false ? 'none' : 'subtitle'),
         preset: Object.hasOwn(TEGAKI_PRESETS, value.preset) ? value.preset : '',
+        template: ['quick', 'flash', 'slow'].includes(value.template) ? value.template : '',
         font: Object.hasOwn(TEGAKI_FONTS, value.font) ? value.font : 'sans',
         rangeFrom: Math.max(0, Math.round(Number(value.rangeFrom) || 0)),
         rangeTo: Math.max(0, Math.round(Number(value.rangeTo) || 0)),
@@ -679,19 +681,22 @@ export function shotsInRange(record, song) {
     return shotTimeline(record, song).rows.filter(row => row.end > range.start + 0.01 && row.start < range.end - 0.01).map(row => row.shot);
 }
 
+// 节奏模板：参考描改手书的固定套路，一次排好全部镜头的切换方式与停留；之后仍可逐镜修改。
 export function applyTegakiPreset(songId, presetId, song) {
     const preset = TEGAKI_PRESETS[presetId];
     if (!preset) return null;
-    const sections = parseSections(song.lyrics);
     const context = core_context.currentCharacterGuard();
     return writeMv(scopeOf(context), songId, current => {
         if (!current) return current;
-        current.tegaki = { ...(current.tegaki || {}), rhythm: preset.rhythm, lyric: preset.lyric, preset: presetId };
-        for (const shot of list(current.shots)) {
-            const chorus = isChorusTag(sections[shot.sectionIndex]?.tag);
-            shot.motion = preset.motion(chorus);
-            shot.cut = shot.groupNext ? 'fade' : (shot.group ? 'cut' : 'fade');
-        }
+        current.tegaki = { ...(current.tegaki || {}), rhythm: preset.rhythm, lyric: preset.lyric, preset: presetId, template: preset.template };
+        const shots = list(current.shots);
+        shots.forEach((shot, i) => {
+            const next = shots[i + 1];
+            const change = !next || !shot.group || next.group !== shot.group;
+            shot.cut = preset.template === 'quick' || !change ? 'cut' : preset.template === 'flash' ? 'flash' : 'fade';
+            shot.motion = preset.template === 'slow' ? 'push' : 'still';
+        });
+        for (const g of list(current.groups)) g.motion = preset.template === 'slow' ? 'push' : 'still';
         return current;
     });
 }
@@ -717,6 +722,7 @@ function tegakiGrammar(sections, keep, charName = '{{char}}') {
 - 每组的景别和机位要不同：特写（手、眼、物件）、近景、中景、全身、远景、背影、低机位、俯视都可以；人物位置不要总在正中间，position 写 left / center / right，scale 写 close / medium / full / wide。
 - 每一张差分都是单独的一张图，只画一个瞬间：characterPrompt 与 diff.change 里每个人只写一个姿势，不要在同一张里写多个姿势、多个表情或“三连”。
 - 每组 1～3 张人物差分（diffs），是同一机位下一个动作的连续过程（伸手前→伸手→猫碰到手；握剑柄→出剑→收剑），不是随便换表情。同组 characterPrompt 相同，diff.change 只写这一刻的动作和表情。
+- 景别要有特写：眼睛、手、剑柄、物件这类细节特写，和远景、全景、近景交替使用，不要全是半身和全身。
 - 每组 1～2 张背景（bgs）：同一个地点，第二张可以是时间或光线的变化（白天→黄昏、晴→雨），也可以是远近不同。背景只有场景，没有人物。
 - 副歌可以有一个主视觉组，重复的副歌复用它；其余段落尽量用新的构图，尾奏可以回到开头的构图。
 - 每组写 link：最后一张怎样承接下一组（视线、手、飘动的衣角或发带）。
@@ -753,6 +759,8 @@ export function buildShots(raw, memory, sectionCount, settings) {
             link: core_text.normalizeText(g?.link, 160), seed: 0, bg: null,
             position: ['left', 'center', 'right'].includes(g?.position) ? g.position : 'center',
             transition: ['cut', 'fade', 'flash'].includes(g?.transition) ? g.transition : 'cut',
+            // full = 人物、道具与背景在同一张完整场景图里（默认，最稳）；cutout = 白底人物抠图叠到背景上。
+            layer: 'full',
             scale: ['close', 'medium', 'full', 'wide'].includes(g?.scale) ? g.scale : 'medium',
             bgs: (list(g?.bgs).length ? list(g.bgs) : [{ label: '场景', prompt: g?.backgroundPrompt }]).slice(0, 2).map((b, k) => ({
                 id: `B${k + 1}`, rawId: core_text.normalizeText(b?.id, 20) || `B${k + 1}`,
@@ -787,7 +795,10 @@ export function buildShots(raw, memory, sectionCount, settings) {
         const nextGroup = shots[i + 1] && groups.find(g => g.id === shots[i + 1].group);
         shots[i].cut = !shots[i + 1] || shots[i + 1].group === shots[i].group ? 'cut' : (nextGroup?.transition || 'cut');
     }
-    for (const g of groups) g.bgs = g.bgs.map(({ rawId, ...rest }) => rest);
+    for (const g of groups) {
+        g.bgs = g.bgs.map(({ rawId, ...rest }) => rest);
+        for (const d of g.diffs) d.bg = shots.find(s => s.group === g.id && s.diff === d.id)?.bg || 'B1';
+    }
     const motifPrompt = core_text.normalizeText(raw?.motif?.prompt, 300);
     return {
         version: 2, groups, shots,
@@ -819,8 +830,9 @@ export function assetKeys(record, song = null) {
     for (const g of record.groups) {
         const diffs = g.diffs.filter(d => !used || used.has(`${g.id}:${d.id}`));
         if (!diffs.length) continue;
-        const bgIds = list(g.bgs).length ? list(g.bgs).filter(b => record.shots.some(s => s.group === g.id && (s.bg || 'B1') === b.id && (!used || used.has(`${g.id}:${s.diff}`)))).map(b => b.id) : ['bg'];
-        keys.push(...(bgIds.length ? bgIds : [list(g.bgs)[0]?.id || 'bg']).map(id => `${g.id}:${id}`), ...diffs.map(d => `${g.id}:${d.id}`));
+        const bgIds = g.layer === 'full' ? [] : list(g.bgs).length ? list(g.bgs).filter(b => record.shots.some(s => s.group === g.id && (s.bg || 'B1') === b.id && (!used || used.has(`${g.id}:${s.diff}`)))).map(b => b.id) : ['bg'];
+        const bgKeys = g.layer === 'full' ? [] : (bgIds.length ? bgIds : [list(g.bgs)[0]?.id || 'bg']);
+        keys.push(...bgKeys.map(id => `${g.id}:${id}`), ...diffs.map(d => `${g.id}:${d.id}`));
     }
     if (record.motif) keys.push('motif');
     return keys;
@@ -847,7 +859,9 @@ export function assetPrompt(record, key, context) {
     const size = { close: 'close-up shot', medium: 'medium shot, waist up', full: 'full body shot', wide: 'wide shot, small figure' }[found.group.scale] || '';
     return [style, ratio, found.group.characterPrompt, found.diff.change, place, size, lookLine ? `fixed appearance, keep consistent: ${lookLine}` : '', wardrobeLine(record, hasChar, hasUser), back,
         hasChar && hasUser ? `duo, two people${record?.wardrobe?.user ? '' : ', different outfits'}, different hairstyles` : 'solo, single figure',
-        'white background, simple background'].filter(Boolean).join(', ');
+        found.group.layer === 'full'
+            ? [era, (list(found.group.bgs).find(b => b.id === found.diff.bg) || list(found.group.bgs)[0])?.prompt || found.group.backgroundPrompt, 'detailed background, full scene'].filter(Boolean).join(', ')
+            : 'white background, simple background'].filter(Boolean).join(', ');
 }
 
 // 双人画面按角色分别给外貌（与 CG 相同的 characters 结构），避免两个人长成同一张脸。
@@ -880,7 +894,7 @@ export async function drawAsset(songId, key) {
         const seed = found.group?.seed || 0;
         const base = {
             // 人物层永远竖画：横构图里画单人时模型会把人复制成左右两份；横屏成片由本地合成。
-            orientation: found.kind !== 'bg' || normalizeSettings(record.settings).ratio === '9:16' ? 'portrait' : 'landscape',
+            orientation: (found.kind === 'motif' || (found.kind === 'char' && found.group.layer !== 'full')) || normalizeSettings(record.settings).ratio === '9:16' ? 'portrait' : 'landscape',
             characterName: context?.name2 || '', targetKey: runKey, seed,
         };
         const metadata = found.kind === 'char' ? assetMetadata(record, found, context) : null;
@@ -898,4 +912,23 @@ export async function drawAsset(songId, key) {
             return { image: { url, at: Date.now() }, ...(Number.isInteger(used) && used > 0 ? { seed: used } : {}) };
         });
     } finally { running.delete(runKey); }
+}
+
+
+export function setAssetSplit(songId, key, split) {
+    const context = core_context.currentCharacterGuard();
+    return writeMv(scopeOf(context), songId, current => {
+        const found = assetOf(current, key);
+        if (found?.image) found.image = { ...found.image, split: ['auto', 'none', 'left', 'right', 'top', 'bottom'].includes(split) ? split : 'auto' };
+        return current;
+    });
+}
+
+export function setGroupLayer(songId, groupId, layer) {
+    const context = core_context.currentCharacterGuard();
+    return writeMv(scopeOf(context), songId, current => {
+        const g = list(current?.groups).find(x => x.id === groupId);
+        if (g) g.layer = layer === 'cutout' ? 'cutout' : 'full';
+        return current;
+    });
 }

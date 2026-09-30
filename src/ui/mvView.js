@@ -152,6 +152,15 @@ ${r} .rmt-mv-palette>div{display:flex;flex-direction:column;gap:6px;flex:1}
 ${r} .rmt-mv-palette>div span{display:flex;gap:6px}
 ${r} .rmt-mv-palette>div i{width:22px;height:22px;border-radius:6px;display:block}
 ${r} .rmt-mv-palette>small{font-size:12px;color:var(--rmt-theme-muted,#586b7c);text-align:right}
+${r} .rmt-mv-split{margin-top:4px;min-height:32px;max-width:92px;font-size:11px;border-radius:8px;border:1px solid var(--rmt-theme-border,#cfdae5);background:var(--rmt-theme-surface-solid,#fff);color:var(--rmt-theme-text,#34495d)}
+${r} .rmt-mv-inspect summary{cursor:pointer;font-size:13px;font-weight:600;padding:6px 0}
+${r} .rmt-mv-inspect-row{display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-top:1px dashed var(--rmt-theme-border,#cfdae5)}
+${r} .rmt-mv-inspect-row figure{margin:0;display:flex;flex-direction:column;align-items:center;gap:2px}
+${r} .rmt-mv-inspect-row img{width:72px;height:108px;object-fit:contain;border-radius:8px;background:#e9edf2}
+${r} .rmt-mv-inspect-row figure.cut img{background:repeating-conic-gradient(#e6e9f0 0 25%,#fff 0 50%) 0 0/10px 10px}
+${r} .rmt-mv-inspect-row figcaption{font-size:10px;color:var(--rmt-theme-muted,#586b7c)}
+${r} .rmt-mv-inspect-row>div{display:flex;flex-direction:column;gap:3px;font-size:12px;min-width:0}
+${r} .rmt-mv-inspect-row small{font-size:11px;color:var(--rmt-theme-muted,#586b7c)}
 ${r} .rmt-mv-range-selects{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
 ${r} .rmt-mv-range-selects label{display:flex;flex-direction:column;gap:4px;font-size:12px}
 ${r} .rmt-mv-range-selects select{min-height:40px;border-radius:10px;border:1px solid var(--rmt-theme-border,#cfdae5);padding:0 8px;font:inherit;font-size:13px;background:var(--rmt-theme-surface-solid,#fff);color:var(--rmt-theme-text,#34495d)}
@@ -515,8 +524,8 @@ function tegakiControls(record, song) {
     const range = mv.playRange(record, song);
     const seg2 = (action, map, value) => Object.entries(map).map(([id, label]) => btn(action, label, { id, cls: 'rmt-x-seg' + (value === id ? ' active' : ''), extra: ` aria-pressed="${value === id}"` })).join('');
     const presets = Object.entries(mv.TEGAKI_PRESETS).map(([id, p]) => `<button type="button" class="rmt-mv-choice${o.preset === id ? ' on' : ''}" aria-pressed="${o.preset === id}" data-rmt-mv="tegaki-preset" data-rmt-mv-id="${id}"><span><b>${esc(p.name)}</b><small>${esc(p.desc)}</small></span></button>`).join('');
-    return `<b style="font-size:14px">新手一键配置</b><div class="rmt-mv-presets">${presets}</div>
-      <p class="rmt-x-note">一键设好全部镜头的动作、切换方式和歌词样式；之后仍可逐镜修改。</p>
+    return `<b style="font-size:14px">节奏模板</b><div class="rmt-mv-presets">${presets}</div>
+      <p class="rmt-x-note">参考常见手书套路，一次排好全部镜头的切换方式、停留和歌词样式；之后仍可逐镜修改。</p>
       <b style="font-size:14px">截取哪一段</b>${rangePicker('record', o, mv.parseSections(song.lyrics))}
       <p class="rmt-x-note">现在：${mv.formatTime(range.start)}–${mv.formatTime(range.end)}（约 ${Math.max(0, Math.round(range.end - range.start))} 秒）。</p>
       <b style="font-size:14px">切换节奏</b><div class="rmt-mv-grid2">${seg2('tegaki-rhythm', mv.TEGAKI_RHYTHMS, o.rhythm)}</div>
@@ -1088,6 +1097,8 @@ export function handleMvClick(event) {
         else if (action === 'draw') void runDraw(id);
         else if (action === 'draw-all') void drawAll();
         else if (action === 'draw-asset') void runAsset(id);
+        else if (action === 'group-layer') { const [gid, layer] = id.split(':'); mv.setGroupLayer(view.songId, gid, layer); renderMv(); }
+        else if (action === 'inspect') { view.inspect = view.inspect === id ? '' : id; setTimeout(() => renderMv(), 0); }
         else if (action === 'draw-group') { const keys = mv.assetKeys(record, currentSong()).filter(k => k.startsWith(id + ':') && !mv.assetOf(record, k)?.image?.url); void (async () => { for (const key of keys) { if (view.stopAll) break; await runAsset(key); } })(); }
         else if (action === 'tegaki-preset') { mv.applyTegakiPreset(view.songId, id, currentSong()); toastOk('已按“' + (mv.TEGAKI_PRESETS[id]?.name || '') + '”配好镜头。'); renderMv(); }
         else if (action === 'tegaki-range') { mv.patchTegaki(view.songId, { range: id }); renderMv(); }
@@ -1191,6 +1202,11 @@ export function handleMvChange(event) {
         renderMv();
         return true;
     }
+    if (input?.matches?.('[data-rmt-mv-split]')) {
+        try { mv.setAssetSplit(view.songId, input.dataset.rmtMvSplit, input.value); } catch (error) { toastError(error); }
+        renderMv(); drawNow();
+        return true;
+    }
     if (input?.matches?.('[data-rmt-mv-wardrobe]')) {
         const key = input.dataset.rmtMvWardrobe;
         if (['era', 'char', 'user'].includes(key)) { try { mv.patchWardrobe(view.songId, { [key]: core_text.normalizeText(input.value, 300) }); } catch (error) { toastError(error); } }
@@ -1220,7 +1236,30 @@ function assetTile(record, key, label) {
     const url = found?.image?.url || '';
     const drawing = mv.isAssetDrawing(mv.mvScope(ctx()), view.songId, key);
     const cut = found?.kind !== 'bg';
-    return `<button type="button" class="rmt-mv-asset${url ? ' done' : ''}${cut ? ' cut' : ''}" data-rmt-mv="draw-asset" data-rmt-mv-id="${esc(key)}" ${drawing || view.drawingAll ? 'disabled' : ''} aria-label="${esc(label)}：${url ? '重画' : '画'}这一张">${url ? `<img src="${esc(url)}" alt="">` : ''}<i>${drawing ? '画…' : url ? '已画' : '未画'}</i></button><small>${esc(label)}</small>`;
+    const splitSelect = '';
+    return `<button type="button" class="rmt-mv-asset${url ? ' done' : ''}${cut && found?.group?.layer !== 'full' ? ' cut' : ''}" data-rmt-mv="draw-asset" data-rmt-mv-id="${esc(key)}" ${drawing || view.drawingAll ? 'disabled' : ''} aria-label="${esc(label)}：${url ? '重画' : '画'}这一张">${url ? `<img src="${esc(url)}" alt="">` : ''}<i>${drawing ? '画…' : url ? '已画' : '未画'}</i></button><small>${esc(label)}</small>${splitSelect}`;
+}
+
+// 素材检查：原图 → 拼图拆分 → 抠图结果 → 播放时的用法，逐张对照。
+function inspectHtml(record, g, diffs) {
+    const rows = diffs.filter(d => d.image?.url).map(d => {
+        const raw = imageFor(d.image.url);
+        const override = d.image.split || 'auto';
+        const crop = raw ? cropFor(d.image.url, raw, override) : null;
+        if (g.layer !== 'full' && raw) cutoutFor(d.image.url, override);
+        const meta = cutMeta.get(d.image.url);
+        const cut = cutouts.get(d.image.url + '|' + override);
+        const splitText = { none: '不拆', left: '左半', right: '右半', top: '上半', bottom: '下半' };
+        const use = g.layer === 'full' ? '完整画面' : meta?.failed ? '抠图失败 → 按完整画面显示' : meta ? '分层（叠在背景上）' : '处理中…';
+        return `<div class="rmt-mv-inspect-row"><figure><img src="${esc(d.image.url)}" alt=""><figcaption>原图</figcaption></figure>
+          ${g.layer !== 'full' && cut?.src ? `<figure class="cut"><img src="${esc(cut.src)}" alt=""><figcaption>抠图后</figcaption></figure>` : ''}
+          <div><b>${esc(d.label)}</b><small>拆分：${crop ? `${esc(splitText[crop.split] || '不拆')}${override === 'auto' ? '（自动）' : '（手动）'}` : '图片载入中'}</small>
+          ${g.layer !== 'full' && meta && !meta.tainted ? `<small>抠掉的白底：${Math.round((meta.clearRatio || 0) * 100)}%</small>` : ''}${meta?.tainted ? '<small>外站图片读不了像素，按原图显示</small>' : ''}<small>播放时：${use}</small></div></div>`;
+    }).join('');
+    const layerTools = `<div class="rmt-mv-actions">${btn('group-layer', g.layer === 'full' ? '现在：完整画面 · 改为分层抠图' : '现在：分层抠图 · 改为完整画面', { id: `${g.id}:${g.layer === 'full' ? 'cutout' : 'full'}` })}</div>
+      <p class="rmt-x-note">${g.layer === 'full' ? '完整画面：人物、道具和场景在同一张图里（推荐）。改成分层后需要重画成白底人物。' : '分层抠图：白底人物抠图后叠到背景上；抠不干净的图会自动按完整画面显示。'}</p>`;
+    const splitTools = diffs.filter(d => d.image?.url).map(d => `<label class="rmt-mv-look"><span>${esc(d.label)} · 拼图拆分</span><select class="rmt-mv-split" data-rmt-mv-split="${esc(g.id + ':' + d.id)}">${[['auto', '自动'], ['none', '不拆'], ['left', '取左半'], ['right', '取右半'], ['top', '取上半'], ['bottom', '取下半']].map(([v, l]) => `<option value="${v}"${(d.image.split || 'auto') === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label>`).join('');
+    return `<details class="rmt-mv-inspect"${view.inspect === g.id ? ' open' : ''}><summary data-rmt-mv="inspect" data-rmt-mv-id="${esc(g.id)}">素材检查（画面有问题时再打开）</summary>${rows}${splitTools}${layerTools}</details>`;
 }
 
 function renderGroupsBoard(song, record) {
@@ -1246,6 +1285,7 @@ function renderGroupsBoard(song, record) {
         const missing = [...(bgIds.length ? bgIds : ['bg']).map(id => `${g.id}:${id}`), ...usedDiffs.map(d => `${g.id}:${d.id}`)].filter(k => !mv.assetOf(record, k)?.image?.url).length;
         return `<article class="rmt-mv-gcard"><div class="rmt-x-row-head"><b class="rmt-mv-gname">构图 ${shown} · ${esc(g.composition || '')}</b><span>${esc(secNames)} · ${frames.length} 句</span></div>
           <div class="rmt-mv-assets">${bgTiles}<span class="rmt-mv-plus">+</span>${usedDiffs.map(d => `<div>${assetTile(record, `${g.id}:${d.id}`, d.label)}</div>`).join('')}</div>
+          ${inspectHtml(record, g, usedDiffs)}
           ${lyrics ? `<div class="rmt-mv-lyric"><p>${esc(lyrics)}</p></div>` : ''}
           <div class="rmt-mv-actions">${btn('draw-group', missing ? `画这一组剩下的 ${missing} 张` : '这一组已画好', { id: g.id, disabled: !missing || view.drawingAll, cls: missing ? 'rmt-x-primary' : 'rmt-x-secondary' })}</div>
           <p class="rmt-x-note">点任意一张缩略图可以单独重画。</p>
@@ -1276,19 +1316,60 @@ const cutouts = new Map();
 const cutMeta = new Map();
 const palettes = new Map();
 
+// 拼图识别：模型偶尔把同一人物画成左右或上下两格。缩小成灰度图比较两半，几乎一样就只取一格。
+const panelCache = new Map();
+function detectPanels(img) {
+    try {
+        const n = 48, c = document.createElement('canvas'); c.width = n; c.height = n;
+        const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(img, 0, 0, n, n);
+        const d = g.getImageData(0, 0, n, n).data;
+        const v = (x, y) => { const i = (y * n + x) * 4; return 0.3 * d[i] + 0.59 * d[i + 1] + 0.11 * d[i + 2]; };
+        let lr = 0, tb = 0, spread = 0, mean = 0;
+        for (let y = 0; y < n; y += 1) for (let x = 0; x < n; x += 1) mean += v(x, y);
+        mean /= n * n;
+        for (let y = 0; y < n; y += 1) for (let x = 0; x < n / 2; x += 1) { lr += Math.abs(v(x, y) - v(x + n / 2, y)); spread += Math.abs(v(x, y) - mean); }
+        for (let y = 0; y < n / 2; y += 1) for (let x = 0; x < n; x += 1) tb += Math.abs(v(x, y) - v(x, y + n / 2));
+        const half = n * n / 2;
+        lr /= half; tb /= half; spread = Math.max(1, spread / half);
+        // 两半差异远小于画面本身的起伏，才判为重复拼图；普通双人同框两边人物不同，不会被误拆。
+        if (lr < 16 && lr < spread * 0.35 && lr <= tb) return { split: 'left', score: lr };
+        if (tb < 16 && tb < spread * 0.35) return { split: 'top', score: tb };
+        return { split: 'none', score: Math.min(lr, tb) };
+    } catch { return { split: 'none', score: -1 }; }
+}
+
+function cropFor(url, img, override) {
+    let auto = panelCache.get(url);
+    if (!auto) { auto = detectPanels(img); panelCache.set(url, auto); }
+    const split = override && override !== 'auto' ? override : auto.split;
+    const w = img.naturalWidth, h = img.naturalHeight;
+    const rect = { left: [0, 0, w / 2, h], right: [w / 2, 0, w / 2, h], top: [0, 0, w, h / 2], bottom: [0, h / 2, w, h / 2] }[split] || [0, 0, w, h];
+    return { split, auto: auto.split, rect };
+}
+
+function drawCropCover(g, img, rect, w, h, scale = 1) {
+    const [sx, sy, sw, sh] = rect;
+    const r = Math.max(w / sw, h / sh) * scale;
+    const dw = sw * r, dh = sh * r;
+    g.drawImage(img, sx, sy, sw, sh, (w - dw) / 2, (h - dh) / 2, dw, dh);
+}
+
 // 白底人物：从四边向内漫水填充近白色像素并设为透明；外站图片读不了像素时直接用原图。
-function cutoutFor(url) {
+function cutoutFor(url, override = 'auto') {
     if (!url) return null;
-    const ready = cutouts.get(url);
+    const cacheKey = url + '|' + override;
+    const ready = cutouts.get(cacheKey);
     if (ready) return ready.complete && ready.naturalWidth ? ready : null;
     const src = imageFor(url);
     if (!src) return null;
     try {
-        const scale = Math.min(1, 1400 / Math.max(src.naturalWidth, src.naturalHeight));
-        const cw = Math.max(1, Math.round(src.naturalWidth * scale)), ch = Math.max(1, Math.round(src.naturalHeight * scale));
+        const crop = cropFor(url, src, override);
+        const [sx, sy, sw, sh] = crop.rect;
+        const scale = Math.min(1, 1400 / Math.max(sw, sh));
+        const cw = Math.max(1, Math.round(sw * scale)), ch = Math.max(1, Math.round(sh * scale));
         const canvas = document.createElement('canvas'); canvas.width = cw; canvas.height = ch;
         const g = canvas.getContext('2d', { willReadFrequently: true });
-        g.drawImage(src, 0, 0, cw, ch);
+        g.drawImage(src, sx, sy, sw, sh, 0, 0, cw, ch);
         const img = g.getImageData(0, 0, cw, ch);
         const d = img.data;
         const white = p => { const i = p * 4; const mn = Math.min(d[i], d[i + 1], d[i + 2]); return mn > 228 && Math.max(d[i], d[i + 1], d[i + 2]) - mn < 26; };
@@ -1335,14 +1416,19 @@ function cutoutFor(url) {
         for (let y = 0; y < ch; y += 2) for (let x = 0; x < cw; x += 2) {
             if (d[(y * cw + x) * 4 + 3] > 40) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
         }
-        if (x1 > x0 && y1 > y0) cutMeta.set(url, { cx: (x0 + x1) / 2 / cw, bottom: y1 / ch, height: (y1 - y0) / ch });
+        let clear = 0;
+        for (let p = 0; p < cw * ch; p += 7) if (d[p * 4 + 3] === 0) clear += 1;
+        const clearRatio = clear / Math.ceil(cw * ch / 7);
+        // 抠掉的面积太少，说明这张不是白底人物（背景没被识别成白色）：按完整画面显示，不拿去叠背景。
+        cutMeta.set(url, { cx: (x1 + x0) / 2 / cw, bottom: y1 / ch, height: Math.max(0.01, (y1 - y0) / ch), clearRatio, split: crop.split, autoSplit: crop.auto, failed: clearRatio < 0.15 || !(x1 > x0 && y1 > y0) });
         const out = new Image();
-        out.onload = () => drawNow();
+        out.onload = () => { drawNow(); if (view.inspect && runtimeState.activeMode === MV_MODE) renderMv(); };
         out.src = canvas.toDataURL('image/png');
-        cutouts.set(url, out);
+        cutouts.set(cacheKey, out);
         return null;
     } catch {
-        cutouts.set(url, src);
+        cutMeta.set(url, { failed: true, clearRatio: 0, split: 'none', autoSplit: 'none', tainted: true });
+        cutouts.set(cacheKey, src);
         return src;
     }
 }
@@ -1383,7 +1469,16 @@ function drawSceneV2(g, record, song, rows, index, t, w, h) {
     const bg = imageFor(bgRow?.image?.url || group?.bg?.url);
     if (bg) drawCover(g, bg, w, h, push, 0, 0);
     const diff = group?.diffs.find(d => d.id === row.shot.diff);
-    const person = cutoutFor(diff?.image?.url);
+    const override = diff?.image?.split || 'auto';
+    const raw = imageFor(diff?.image?.url);
+    const meta = cutMeta.get(diff?.image?.url);
+    // 完整场景图（或抠图失败的图）：整张作为镜头，不叠背景、不抠白。
+    if (raw && (group?.layer === 'full' || meta?.failed)) {
+        drawCropCover(g, raw, cropFor(diff.image.url, raw, override).rect, w, h, push);
+        g.save(); g.globalCompositeOperation = 'soft-light'; g.globalAlpha = 0.1; g.fillStyle = coverPalette(song)[1]; g.fillRect(0, 0, w, h); g.restore();
+        return;
+    }
+    const person = group?.layer === 'full' ? null : cutoutFor(diff?.image?.url, override);
     if (person) {
         const breathe = 1 + 0.004 * Math.sin(t * Math.PI * 2 / 3.4);
         // 人物按竖图放进画面：高度撑满（按景别放大或缩小），左右位置按分镜；横屏也不会被拉成两份。
@@ -1482,6 +1577,11 @@ function renderFrameV2(canvas, record, song, t) {
         g.save(); g.font = `${font.weight} ${Math.round(Math.min(w, h) * 0.05)}px ${font.stack}`; g.textAlign = 'center';
         g.lineWidth = 3; g.strokeStyle = 'rgba(30,26,40,.6)'; g.fillStyle = '#fff';
         g.strokeText(row.shot.lyric, w / 2, h * 0.92); g.fillText(row.shot.lyric, w / 2, h * 0.92); g.restore();
+    }
+    // 白闪卡点模板：副歌里每小节第一拍轻闪一下。
+    if (topt.template === 'flash' && isChorusSection(song, row.sectionIndex)) {
+        const inBar = (t - row.start) % (beatLen * 4);
+        if (inBar < 0.12 && t - row.start > 0.2) { g.save(); g.globalAlpha = 0.35 * (1 - inBar / 0.12); g.fillStyle = '#fff'; g.fillRect(0, 0, w, h); g.restore(); }
     }
     // 卡点：副歌里每小节第一拍，关键词轻轻弹出一次。
     if (record.keyword && isChorusSection(song, row.sectionIndex)) {
