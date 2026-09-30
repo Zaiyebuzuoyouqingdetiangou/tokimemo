@@ -96,15 +96,25 @@ function persistStore(scope, store, live = null) {
 export function pendingMv(scope) {
     if (!pendingByScope.has(scope)) {
         let rows = [];
-        try { rows = JSON.parse(globalThis.localStorage?.getItem(LOCAL_PREFIX + scope + ':pending') || '[]'); } catch {}
-        pendingByScope.set(scope, Array.isArray(rows) ? rows.filter(row => row?.scope === scope && row?.id) : []);
+        let raw = '';
+        try { raw = globalThis.localStorage?.getItem(LOCAL_PREFIX + scope + ':pending') || '[]'; rows = JSON.parse(raw); } catch {}
+        const valid = Array.isArray(rows) ? rows.filter(row => row?.scope === scope && row?.id) : [];
+        pendingByScope.set(scope, valid);
+        // 旧版本写下的待保存记录可能每条都带整份存档，读到后立刻瘦身写回，腾出本机空间。
+        if (valid.some(row => row?.base)) { try { globalThis.localStorage?.setItem(LOCAL_PREFIX + scope + ':pending', JSON.stringify(slimPending(valid))); } catch {} }
     }
     return structuredClone(pendingByScope.get(scope));
 }
 
+// 待保存结果写入本机时不带整份 MV 存档快照（base）：每条都带一份会很快撑满本机空间，
+// 导致后面所有结果都“本机保存未能确认”、重画也存不进去。base 只留在本页内存里。
+function slimPending(rows) {
+    return rows.map(row => { const { base, ...rest } = row || {}; return rest; });
+}
+
 function savePending(scope, rows) {
     pendingByScope.set(scope, structuredClone(rows));
-    return confirmedWrite(LOCAL_PREFIX + scope + ':pending', rows);
+    return confirmedWrite(LOCAL_PREFIX + scope + ':pending', slimPending(rows));
 }
 
 function songSignature(song) {

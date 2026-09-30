@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 311
-// Source SHA-256: 094cb25a5abfc297a0dc3ef38409cfa553abd44f30d7d5871edad0f81280040a
+// Source SHA-256: c194632acb51bfb42e0c8851e02b98aa592573a717b76d8151ea2541ad7cb83c
 // Build: python3 verification/build.py <source-root>
 
 const __m_core_themeSongCover_js = Object.create(null);
@@ -25824,13 +25824,17 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
         if (mismatch(snapshot)) {
             // 只是隐藏 / 取消隐藏了楼层时，内容并没变：换一种隐藏楼层口径重算基线，对得上就按那种口径继续。
             let matched = null;
+            const alternates = [];
             for (const hiddenMode of ['exclude', 'include']) {
                 const alternate = await core_context.buildChatSnapshot(context, { ...snapshotOptions, hiddenMode });
+                alternates.push(alternate);
                 const prefixOnly = { ...alternate, fullPrefixFingerprint: '' };
                 if (!mismatch(alternate) || (!mismatch(prefixOnly) && hiddenMode === 'exclude')) { matched = alternate; break; }
             }
-            // 用户确认“以当前聊天为新基线”时：已归档的前 N 层不再核对，只整理之后新增的楼层；已有记忆不改动。
-            if (!matched && acceptBaseline && previousMessageCount <= snapshot.totalMessages) matched = snapshot;
+            // 用户明确选择“以当前聊天为新基线”时：已归档的前 N 层不再核对，只整理之后新增的楼层；已有记忆不改动。
+            // 隐藏楼层会让楼层数变少，所以优先选楼层数足够的口径。
+            if (!matched && acceptBaseline) matched = [snapshot, ...alternates].find(value => previousMessageCount <= value.totalMessages) || null;
+            if (!matched && acceptBaseline) throw core_text.safeUserError('当前聊天的楼层比上次整理时还少，无法接着整理；可以先取消隐藏楼层再试。', 'RMT_ARCHIVE_PREFIX_CHANGED');
             if (!matched) throw core_text.safeUserError('旧档案与当前聊天历史基线不一致，本次保留旧成果；请恢复原聊天历史后继续，或另行保留当前来源。', 'RMT_ARCHIVE_PREFIX_CHANGED');
             snapshot = matched;
             try { globalThis.toastr?.info?.('检测到隐藏楼层有变化，旧消息内容未变，已按原基线继续增量更新。', '心迹回廊'); } catch {}
@@ -75013,6 +75017,34 @@ const showChooser = __m_ui_overlayCore_js.showChooser;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 // ui/overlayCore.js handleOverlayClick 的分组处理（重构阶段 3）。每个函数是原函数里连续的一段语句，一字未改；
 // 返回 OVERLAY_CLICK_UNHANDLED 表示“这一段没有处理”，原函数接着往下走，和拆分前完全相同。
 
@@ -75243,6 +75275,13 @@ function overlayArchiveActions(actionEl, action) {
     if (action === 'manage-delete-target') return void deleteManagedTarget(actionEl.dataset.rmtManageType, actionEl.dataset.rmtManageId, actionEl.dataset.rmtManageParent);
     if (action === 'rebuild-archive-index') return void archive_library.rebuildArchiveIndexFromExisting();
     if (action === 'import-memory') return requestCurrentArchiveImport();
+    if (action === 'import-memory-rebase') {
+        // 按钮上已写清后果，点击即同意；不再依赖可能被宿主拦截的确认框。
+        void archive_repository.importCurrentChatMemory({ fullRebuild: false, acceptBaseline: true }).catch(error => {
+            globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心迹回廊');
+        });
+        return;
+    }
     if (action === 'participants-picker') return void requestParticipantSelection().catch(error => globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心迹回廊'));
     if (action === 'participants-versions') return void requestParticipantVersions().catch(error => globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心迹回廊'));
     if (action === 'full-rebuild-memory') return requestCurrentArchiveFullRebuild();
@@ -75359,11 +75398,9 @@ function overlayPageActions(actionEl, action) {
     if (action === 'adv-next') return ui_advEventView.advStep(1);
     return OVERLAY_CLICK_UNHANDLED;
 }
-
 __m_ui_overlayClickActions_js.overlayArchiveActions = overlayArchiveActions;
 __m_ui_overlayClickActions_js.overlayPageActions = overlayPageActions;
 }
-
 
 function __init_ui_overlayClickTargets_js() {
 // MODULE: ui/overlayClickTargets.js
@@ -83746,7 +83783,10 @@ function arrangeArchiveWorkspace(body, { portals = [], ready = false, snapshot =
             const quick = document.createElement('div');
             quick.className = 'rmt-archive-quick-update';
             quick.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap;margin:0 0 12px';
-            quick.innerHTML = '<button type="button" class="rmt-btn" data-rmt-action="import-memory">增量更新当前窗口档案</button>';
+            quick.innerHTML = '<button type="button" class="rmt-btn" data-rmt-action="import-memory">增量更新当前窗口档案</button>'
+                + '<details class="rmt-archive-rebase" style="flex-basis:100%;font-size:13px"><summary>更新一直提示“历史基线不一致”？</summary>'
+                + '<p style="margin:6px 0">隐藏、编辑或删除过比较早的消息时会出现。可以以当前聊天为新基线，只整理上次之后新增的楼层；已有记忆和生成内容都不变，旧楼层的改动不会重新整理。</p>'
+                + '<button type="button" class="rmt-btn" data-rmt-action="import-memory-rebase">以当前聊天为新基线继续更新</button></details>';
             main.appendChild(quick);
         }
         if (sources) {
@@ -86060,15 +86100,25 @@ function persistStore(scope, store, live = null) {
 function pendingMv(scope) {
     if (!pendingByScope.has(scope)) {
         let rows = [];
-        try { rows = JSON.parse(globalThis.localStorage?.getItem(LOCAL_PREFIX + scope + ':pending') || '[]'); } catch {}
-        pendingByScope.set(scope, Array.isArray(rows) ? rows.filter(row => row?.scope === scope && row?.id) : []);
+        let raw = '';
+        try { raw = globalThis.localStorage?.getItem(LOCAL_PREFIX + scope + ':pending') || '[]'; rows = JSON.parse(raw); } catch {}
+        const valid = Array.isArray(rows) ? rows.filter(row => row?.scope === scope && row?.id) : [];
+        pendingByScope.set(scope, valid);
+        // 旧版本写下的待保存记录可能每条都带整份存档，读到后立刻瘦身写回，腾出本机空间。
+        if (valid.some(row => row?.base)) { try { globalThis.localStorage?.setItem(LOCAL_PREFIX + scope + ':pending', JSON.stringify(slimPending(valid))); } catch {} }
     }
     return structuredClone(pendingByScope.get(scope));
 }
 
+// 待保存结果写入本机时不带整份 MV 存档快照（base）：每条都带一份会很快撑满本机空间，
+// 导致后面所有结果都“本机保存未能确认”、重画也存不进去。base 只留在本页内存里。
+function slimPending(rows) {
+    return rows.map(row => { const { base, ...rest } = row || {}; return rest; });
+}
+
 function savePending(scope, rows) {
     pendingByScope.set(scope, structuredClone(rows));
-    return confirmedWrite(LOCAL_PREFIX + scope + ':pending', rows);
+    return confirmedWrite(LOCAL_PREFIX + scope + ':pending', slimPending(rows));
 }
 
 function songSignature(song) {

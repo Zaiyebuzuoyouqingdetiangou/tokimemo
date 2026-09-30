@@ -171,7 +171,10 @@ export function arrangeArchiveWorkspace(body, { portals = [], ready = false, sna
             const quick = document.createElement('div');
             quick.className = 'rmt-archive-quick-update';
             quick.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap;margin:0 0 12px';
-            quick.innerHTML = '<button type="button" class="rmt-btn" data-rmt-action="import-memory">增量更新当前窗口档案</button>';
+            quick.innerHTML = '<button type="button" class="rmt-btn" data-rmt-action="import-memory">增量更新当前窗口档案</button>'
+                + '<details class="rmt-archive-rebase" style="flex-basis:100%;font-size:13px"><summary>更新一直提示“历史基线不一致”？</summary>'
+                + '<p style="margin:6px 0">隐藏、编辑或删除过比较早的消息时会出现。可以以当前聊天为新基线，只整理上次之后新增的楼层；已有记忆和生成内容都不变，旧楼层的改动不会重新整理。</p>'
+                + '<button type="button" class="rmt-btn" data-rmt-action="import-memory-rebase">以当前聊天为新基线继续更新</button></details>';
             main.appendChild(quick);
         }
         if (sources) {

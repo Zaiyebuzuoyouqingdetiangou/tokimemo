@@ -206,13 +206,17 @@ export async function importCurrentChatMemoryOperation({ fullRebuild = false, au
         if (mismatch(snapshot)) {
             // 只是隐藏 / 取消隐藏了楼层时，内容并没变：换一种隐藏楼层口径重算基线，对得上就按那种口径继续。
             let matched = null;
+            const alternates = [];
             for (const hiddenMode of ['exclude', 'include']) {
                 const alternate = await core_context.buildChatSnapshot(context, { ...snapshotOptions, hiddenMode });
+                alternates.push(alternate);
                 const prefixOnly = { ...alternate, fullPrefixFingerprint: '' };
                 if (!mismatch(alternate) || (!mismatch(prefixOnly) && hiddenMode === 'exclude')) { matched = alternate; break; }
             }
-            // 用户确认“以当前聊天为新基线”时：已归档的前 N 层不再核对，只整理之后新增的楼层；已有记忆不改动。
-            if (!matched && acceptBaseline && previousMessageCount <= snapshot.totalMessages) matched = snapshot;
+            // 用户明确选择“以当前聊天为新基线”时：已归档的前 N 层不再核对，只整理之后新增的楼层；已有记忆不改动。
+            // 隐藏楼层会让楼层数变少，所以优先选楼层数足够的口径。
+            if (!matched && acceptBaseline) matched = [snapshot, ...alternates].find(value => previousMessageCount <= value.totalMessages) || null;
+            if (!matched && acceptBaseline) throw core_text.safeUserError('当前聊天的楼层比上次整理时还少，无法接着整理；可以先取消隐藏楼层再试。', 'RMT_ARCHIVE_PREFIX_CHANGED');
             if (!matched) throw core_text.safeUserError('旧档案与当前聊天历史基线不一致，本次保留旧成果；请恢复原聊天历史后继续，或另行保留当前来源。', 'RMT_ARCHIVE_PREFIX_CHANGED');
             snapshot = matched;
             try { globalThis.toastr?.info?.('检测到隐藏楼层有变化，旧消息内容未变，已按原基线继续增量更新。', '心迹回廊'); } catch {}
