@@ -1,7 +1,7 @@
 {
   "display_name": "心迹回廊",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.99.99-r84.189-tegaki-range",
+  "js": "index.js?heartbeat=0.99.99-r84.191-tegaki-pv",
   "author": "Toto",
   "version": "0.99.99",
   "auto_update": true,
@@ -10,6 +10,6 @@
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r84.189：手书先选段落、歌词字体、印象曲分镜不再要求记忆依据；毕业纪念册、他在等你开关、收集率缩略图。",
+  "description": "r84.191：手书 v2（印象曲 PV）：构图卡片、背景加白底人物差分、自动抠图、封面取色、竖排歌词、片头片尾与卡点；柏宝绘自动沿用构图种子。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }

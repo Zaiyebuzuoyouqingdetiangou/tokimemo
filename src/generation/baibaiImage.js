@@ -70,7 +70,7 @@ function publicFailure(error) {
 export function baiBaiImagePendingCount() { return pendingGenerations.size; }
 export function isBaiBaiImageTargetPending(targetKey) { return !!targetKey && pendingGenerations.has(targetKey); }
 
-export async function generateBaiBaiImage(prompt, { signal = null, orientation = 'landscape', characterName = '', promptMetadata = null, onProgress = null, onSettled = null, targetKey = '' } = {}) {
+export async function generateBaiBaiImage(prompt, { signal = null, orientation = 'landscape', characterName = '', promptMetadata = null, onProgress = null, onSettled = null, targetKey = '', seed = 0 } = {}) {
     if (signal?.aborted) throw baiBaiImageError('BBI_ABORTED');
     const state = baiBaiImageState();
     if (!state.available) throw baiBaiImageError(state.code);
@@ -105,6 +105,8 @@ export async function generateBaiBaiImage(prompt, { signal = null, orientation =
         request.characters = metadata.characters.filter(character => character.tag || (metadata.castSnapshot && character.nl))
             .map(({ name, tag, nl }) => ({ name, tag, ...(nl ? { nl } : {}) }));
     }
+    // 柏宝绘公开 API v1：seed 为正整数时按它出图，省略时按用户自己的柏宝绘设置。
+    if (Number.isInteger(seed) && seed > 0) request.seed = seed;
     const formatted = appearance.formattedCgProviderPrompts(visual, metadata, state.supportsCharacters, state.backend);
     if (formatted) {
         request.prompt = formatted.prompt; request.nl = formatted.nl;
@@ -146,7 +148,8 @@ export async function generateBaiBaiImage(prompt, { signal = null, orientation =
         const path = savedImagePath(result?.path);
         if (!path) throw baiBaiImageError('BBI_SAVE_FAILED');
         // Drop the potentially multi-MB dataUrl; only durable image references enter archive metadata.
-        return { url: path, provider: BAIBAI_IMAGE_PROVIDER };
+        const usedSeed = Number(result?.seed);
+        return { url: path, provider: BAIBAI_IMAGE_PROVIDER, ...(Number.isInteger(usedSeed) && usedSeed > 0 ? { seed: usedSeed } : {}) };
     } catch (error) {
         if (!providerPromise) pendingGenerations.delete(reservation); // synchronous API failure
         if (ownErrors.has(error)) throw error;

@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 311
-// Source SHA-256: 1784d27422ee921fd8e0a9e60592008917f5984aa750ab9f1a2fd1faec1de537
+// Source SHA-256: 7222c48ae28deafd7c040bb600c9c16acbd6056a395904c9c360e6bc5a7fdb05
 // Build: python3 verification/build.py <source-root>
 
 const __m_core_themeSongCover_js = Object.create(null);
@@ -35532,6 +35532,7 @@ const appearance = __m_generation_cgAppearance_js;
 
 
 
+
 const BAIBAI_IMAGE_PROVIDER = 'baibai-image';
 const BAIBAI_IMAGE_TIMEOUT_MS = 300000;
 const BAIBAI_IMAGE_CONCURRENCY = 2;
@@ -35598,7 +35599,7 @@ function publicFailure(error) {
 function baiBaiImagePendingCount() { return pendingGenerations.size; }
 function isBaiBaiImageTargetPending(targetKey) { return !!targetKey && pendingGenerations.has(targetKey); }
 
-async function generateBaiBaiImage(prompt, { signal = null, orientation = 'landscape', characterName = '', promptMetadata = null, onProgress = null, onSettled = null, targetKey = '' } = {}) {
+async function generateBaiBaiImage(prompt, { signal = null, orientation = 'landscape', characterName = '', promptMetadata = null, onProgress = null, onSettled = null, targetKey = '', seed = 0 } = {}) {
     if (signal?.aborted) throw baiBaiImageError('BBI_ABORTED');
     const state = baiBaiImageState();
     if (!state.available) throw baiBaiImageError(state.code);
@@ -35633,6 +35634,8 @@ async function generateBaiBaiImage(prompt, { signal = null, orientation = 'lands
         request.characters = metadata.characters.filter(character => character.tag || (metadata.castSnapshot && character.nl))
             .map(({ name, tag, nl }) => ({ name, tag, ...(nl ? { nl } : {}) }));
     }
+    // 柏宝绘公开 API v1：seed 为正整数时按它出图，省略时按用户自己的柏宝绘设置。
+    if (Number.isInteger(seed) && seed > 0) request.seed = seed;
     const formatted = appearance.formattedCgProviderPrompts(visual, metadata, state.supportsCharacters, state.backend);
     if (formatted) {
         request.prompt = formatted.prompt; request.nl = formatted.nl;
@@ -35674,7 +35677,8 @@ async function generateBaiBaiImage(prompt, { signal = null, orientation = 'lands
         const path = savedImagePath(result?.path);
         if (!path) throw baiBaiImageError('BBI_SAVE_FAILED');
         // Drop the potentially multi-MB dataUrl; only durable image references enter archive metadata.
-        return { url: path, provider: BAIBAI_IMAGE_PROVIDER };
+        const usedSeed = Number(result?.seed);
+        return { url: path, provider: BAIBAI_IMAGE_PROVIDER, ...(Number.isInteger(usedSeed) && usedSeed > 0 ? { seed: usedSeed } : {}) };
     } catch (error) {
         if (!providerPromise) pendingGenerations.delete(reservation); // synchronous API failure
         if (ownErrors.has(error)) throw error;
@@ -35684,17 +35688,15 @@ async function generateBaiBaiImage(prompt, { signal = null, orientation = 'lands
         signal?.removeEventListener('abort', onAbort);
     }
 }
-
-__m_generation_baibaiImage_js.generateBaiBaiImage = generateBaiBaiImage;
 __m_generation_baibaiImage_js.baiBaiImageError = baiBaiImageError;
 __m_generation_baibaiImage_js.baiBaiImageState = baiBaiImageState;
 __m_generation_baibaiImage_js.baiBaiImagePendingCount = baiBaiImagePendingCount;
 __m_generation_baibaiImage_js.isBaiBaiImageTargetPending = isBaiBaiImageTargetPending;
+__m_generation_baibaiImage_js.generateBaiBaiImage = generateBaiBaiImage;
 __m_generation_baibaiImage_js.BAIBAI_IMAGE_PROVIDER = BAIBAI_IMAGE_PROVIDER;
 __m_generation_baibaiImage_js.BAIBAI_IMAGE_TIMEOUT_MS = BAIBAI_IMAGE_TIMEOUT_MS;
 __m_generation_baibaiImage_js.BAIBAI_IMAGE_CONCURRENCY = BAIBAI_IMAGE_CONCURRENCY;
 }
-
 
 function __init_generation_cgAppearance_js() {
 // MODULE: generation/cgAppearance.js
@@ -36182,6 +36184,16 @@ const runtimeState = __m_core_state_js.state;
 
 
 
+
+
+
+
+
+
+
+
+
+
 // CG 生图基础：生图命令与界面状态、图片地址与记录规范化、历史、提示词清洗、调用生图
 // 从 generation/imageGeneration.js 原样搬出（重构阶段 2），声明文本一字未改；generation/imageGeneration.js 仍转发原有导出。
 
@@ -36229,7 +36241,8 @@ const IMAGE_FALLBACK_BLOCKED = new Set([
 function invokeSelectedImageProvider(selectedProvider, prompt, context, options) {
     const visual = sanitizeCgVisualText(prompt);
     if (selectedProvider === chatu8_image.CHATU8_IMAGE_PROVIDER) {
-        return chatu8_image.generateChatu8Image(visual, { ...options, context });
+        const { seed: _seed, ...rest } = options;
+        return chatu8_image.generateChatu8Image(visual, { ...rest, context });
     }
     if (selectedProvider === baibai_image.BAIBAI_IMAGE_PROVIDER) {
         return baibai_image.generateBaiBaiImage(visual, {
@@ -36239,11 +36252,12 @@ function invokeSelectedImageProvider(selectedProvider, prompt, context, options)
     throw core_text.safeUserError('请在设置里选择柏宝绘或智绘姬。旧渠道图片仍可查看。', 'RMT_IMAGE_PROVIDER_RETIRED');
 }
 
-async function invokeImageGeneration(prompt, context = core_context.getContext(), { signal = null, provider = null, orientation = 'landscape', characterName = '', promptMetadata = null, onProgress = null, onSettled = null, targetKey = '' } = {}) {
+async function invokeImageGeneration(prompt, context = core_context.getContext(), { signal = null, provider = null, orientation = 'landscape', characterName = '', promptMetadata = null, onProgress = null, onSettled = null, targetKey = '', seed = 0 } = {}) {
     const settings = core_settings.getPluginSettings(context);
     const selectedProvider = provider === chatu8_image.CHATU8_IMAGE_PROVIDER || provider === baibai_image.BAIBAI_IMAGE_PROVIDER
         ? provider : settings.imageGenerationProvider;
-    const options = { signal, orientation, characterName, promptMetadata, onProgress, onSettled, targetKey };
+    // seed 只交给柏宝绘（公开 API 支持单次 seed）；智绘姬没有公开的单次 seed 接口，不传。
+    const options = { signal, orientation, characterName, promptMetadata, onProgress, onSettled, targetKey, seed: Number.isInteger(seed) && seed > 0 ? seed : 0 };
     try {
         return await invokeSelectedImageProvider(selectedProvider, prompt, context, options);
     } catch (error) {
@@ -36815,15 +36829,10 @@ function abortActiveCgImageTasks() {
 // It is deliberately page-local: origin/fence/signature checks are still required
 // before a retry, and a plugin reload invalidates every retained capability.
 const pendingCgImages = new Map();
-
-__m_generation_cgImageCore_js.invokeImageGeneration = invokeImageGeneration;
-__m_generation_cgImageCore_js.reconceiveCgImagePrompt = reconceiveCgImagePrompt;
-__m_generation_cgImageCore_js.prepareLanguageCgTarget = prepareLanguageCgTarget;
-__m_generation_cgImageCore_js.prepareLanguagePortraitTarget = prepareLanguagePortraitTarget;
-__m_generation_cgImageCore_js.preparePhotoshootTarget = preparePhotoshootTarget;
 __m_generation_cgImageCore_js.imageGenerationCommand = imageGenerationCommand;
 __m_generation_cgImageCore_js.imageGenerationUiState = imageGenerationUiState;
 __m_generation_cgImageCore_js.sanitizeImageGenerationSlashPrompt = sanitizeImageGenerationSlashPrompt;
+__m_generation_cgImageCore_js.invokeImageGeneration = invokeImageGeneration;
 __m_generation_cgImageCore_js.normalizeCgImageUrl = normalizeCgImageUrl;
 __m_generation_cgImageCore_js.normalizeCgImageRecord = normalizeCgImageRecord;
 __m_generation_cgImageCore_js.normalizeCgImageHistory = normalizeCgImageHistory;
@@ -36843,6 +36852,7 @@ __m_generation_cgImageCore_js.captureCgImageTarget = captureCgImageTarget;
 __m_generation_cgImageCore_js.isCgImageTargetCurrent = isCgImageTargetCurrent;
 __m_generation_cgImageCore_js.assertCgImageTargetCurrent = assertCgImageTargetCurrent;
 __m_generation_cgImageCore_js.buildCgReconceptPrompt = buildCgReconceptPrompt;
+__m_generation_cgImageCore_js.reconceiveCgImagePrompt = reconceiveCgImagePrompt;
 __m_generation_cgImageCore_js.cgImageProviderBar = cgImageProviderBar;
 __m_generation_cgImageCore_js.cgImageProgressHtml = cgImageProgressHtml;
 __m_generation_cgImageCore_js.updateCgImageProgress = updateCgImageProgress;
@@ -36854,6 +36864,9 @@ __m_generation_cgImageCore_js.refreshImageGenerationUi = refreshImageGenerationU
 __m_generation_cgImageCore_js.indexedArchiveMatchesCurrentChat = indexedArchiveMatchesCurrentChat;
 __m_generation_cgImageCore_js.resolveCgImageTargetDescriptor = resolveCgImageTargetDescriptor;
 __m_generation_cgImageCore_js.selectedCgTarget = selectedCgTarget;
+__m_generation_cgImageCore_js.prepareLanguageCgTarget = prepareLanguageCgTarget;
+__m_generation_cgImageCore_js.prepareLanguagePortraitTarget = prepareLanguagePortraitTarget;
+__m_generation_cgImageCore_js.preparePhotoshootTarget = preparePhotoshootTarget;
 __m_generation_cgImageCore_js.renderCurrentCgMode = renderCurrentCgMode;
 __m_generation_cgImageCore_js.renderCapturedCgMode = renderCapturedCgMode;
 __m_generation_cgImageCore_js.deferCgSessionIfOriginChanged = deferCgSessionIfOriginChanged;
@@ -36863,7 +36876,6 @@ __m_generation_cgImageCore_js.IMAGE_GENERATION_COMMAND_NAMES = IMAGE_GENERATION_
 __m_generation_cgImageCore_js.DEFAULT_LANGUAGE_PORTRAIT = DEFAULT_LANGUAGE_PORTRAIT;
 __m_generation_cgImageCore_js.pendingCgImages = pendingCgImages;
 }
-
 
 function __init_generation_cgImageActions_js() {
 // MODULE: generation/cgImageActions.js
@@ -85881,7 +85893,9 @@ const MV_STYLES = Object.freeze({
     ],
 });
 const MV_APPEAR = Object.freeze({ face: '露脸出镜', back: '只拍背影或手', none: '不出镜' });
-const MV_MOTIONS = Object.freeze({ still: '不动', push: '慢慢推近', pan: '左右平移', sway: '轻轻晃动' });
+const MV_MOTIONS = Object.freeze({ still: '不动', push: '缓慢推近' });
+// 旧数据里的平移、晃动一律按“缓慢推近 / 不动”播放，画面不再左右上下跑。
+function motionOf(value) { return value === 'still' || value === 'sway' ? 'still' : 'push'; }
 const MV_CUTS = Object.freeze({ cut: '直接切', fade: '淡入淡出', flash: '闪白' });
 
 const running = new Set();
@@ -85980,6 +85994,7 @@ function resultBasis(record, kind, shotId) {
     if (kind === 'story') {
         return JSON.stringify(record ? { settings: record.settings, shots: record.shots } : null);
     }
+    if (kind === 'asset') return JSON.stringify(assetOf(record, shotId)?.image || null);
     return JSON.stringify(list(record?.shots).find(shot => shot.id === shotId) || null);
 }
 
@@ -86013,7 +86028,12 @@ async function retryMvSave(scope, id) {
     if (!list(current?.appliedResults).includes(row.id)) {
         if (resultBasis(current, row.kind, row.shotId) !== row.expected) return held('分镜或图片已有新修改');
         if (row.kind === 'story') next = { timing: { taps: {}, shift: 0 }, duration: 0, ...next, ...row.patch };
-        else {
+        else if (row.kind === 'asset') {
+            const found = assetOf(next, row.shotId);
+            if (!found) return held('原构图已不存在');
+            found.image = row.patch.image;
+            if (found.group && row.patch.seed && !found.group.seed) found.group.seed = row.patch.seed;
+        } else {
             const shot = list(next?.shots).find(value => value.id === row.shotId);
             if (!shot) return held('原镜头已不存在');
             Object.assign(shot, row.patch);
@@ -86137,7 +86157,10 @@ function shotTimeline(record, song) {
     times.forEach((time, index) => {
         const own = shots.filter(shot => shot.sectionIndex === index);
         const span = time.end - time.start;
-        own.forEach((shot, k) => rows.push({ shot, start: time.start + span * k / own.length, end: time.start + span * (k + 1) / own.length, sectionIndex: index }));
+        const weights = own.map(shot => Math.min(3, Math.max(1, Number(shot.hold) || 1)));
+        const sum = weights.reduce((a, b) => a + b, 0) || 1;
+        let acc = 0;
+        own.forEach((shot, k) => { const a = acc; acc += weights[k]; rows.push({ shot, start: time.start + span * a / sum, end: time.start + span * acc / sum, sectionIndex: index }); });
     });
     // 没有镜头的段落不留空白：前一镜一直停到下一镜开始；第一镜从 0 秒开始。
     if (rows.length) rows[0].start = 0;
@@ -86219,7 +86242,7 @@ function storyboardPrompt(context, memory, song, settings) {
 为已写好的角色印象曲「${song.title}」写一张 MV 分镜表。画面风格：${styleOf(settings).name}；比例：${settings.ratio === '9:16' ? '竖屏 9:16' : '横屏 16:9'}。
 歌词、曲风不改。画面跟着歌词的意象、情绪和故事走，可以是意象、想象或象征画面，不需要对应聊天档案，也不要逐条复述聊天里的事件。人物外貌、身份和世界观以角色设定为准。
 出镜：${charName} 是主角。${appear}不替 ${userName} 新增台词、承诺或决定。
-${settings.output === 'video' ? '' : '这是手书：只为下面列出的段落写镜头，其他段落不写。'}
+${settings.output === 'video' ? '' : tegakiGrammar(parseSections(song.lyrics), keep, charName)}${settings.output === 'video' ? '' : ``}
 
 【歌曲】
 曲风：${core_text.normalizeText(song.styleDescription || song.stylePrompt, 600)}
@@ -86227,23 +86250,47 @@ ${settings.output === 'video' ? '' : '这是手书：只为下面列出的段落
 ${JSON.stringify(sections)}
 
 【写作要求】
-1. 按段落写镜头：${settings.output === 'video' ? '每段 1～3 镜' : '手书节奏：每句歌词一镜'}，纯器乐段 1 镜。每镜 sectionIndex 指向所在段落；lyric 抄写这一镜对应的那一句原歌词（器乐段留空）。
+${settings.output === 'video' ? `1. 按段落写镜头：${settings.output === 'video' ? '每段 1～3 镜' : '手书节奏：每句歌词一镜'}，纯器乐段 1 镜。每镜 sectionIndex 指向所在段落；lyric 抄写这一镜对应的那一句原歌词（器乐段留空）。
 2. plain：用一句大白话写这一镜画面，让不懂拍摄的人也看得懂。
 3. who：画面里有谁，只能是 "char"、"both"、"user"、"none" 之一。
 4. shot：景别的大白话，如“近景：看到脸”“中景：看到上半身”“远景：看到整个场景”。move：镜头怎么动的大白话，如“镜头慢慢推近”“镜头慢慢往右移”“镜头不动”。motion：从 still、push、pan、sway 里选一个最接近的。
 5. imagePrompt：这一镜第一张图的英文画面描述（人物动作、表情、场景、光线、构图），不写人物外貌细节，不写文字、字幕、Logo。
 6. videoZh / videoEn：给视频工具的描述，中文与英文各一份，写清画面里有什么、镜头怎么动、光线，结尾写时长约 5 秒；不写歌词原文。
 
+` : ''}7. wardrobe：先按角色设定与世界观定下统一的时代场景与衣着（英文，具体到款式、颜色、材质），古代背景就写古装，不写现代服装；era 写时代与场所，char 写 ${charName} 的衣着${settings.appear === 'none' ? '' : `，user 写 ${userName} 的衣着`}。
+
 【输出】
 只输出一个 JSON 对象。
 第一个字符必须是 {，最后一个字符必须是 }。
 不要前言，不要解释，不要代码围栏，不要在 JSON 外面写任何字。
-{"shots":[{"sectionIndex":0,"lyric":"","plain":"……","who":"char","shot":"中景：看到上半身","move":"镜头慢慢推近","motion":"push","imagePrompt":"……","videoZh":"……","videoEn":"……"}]}`;
+${settings.output === 'video'
+        ? '{"wardrobe":{"era":"……","char":"……","user":"……"},"shots":[{"sectionIndex":0,"lyric":"","plain":"……","who":"char","shot":"中景：看到上半身","move":"镜头慢慢推近","motion":"push","imagePrompt":"……","videoZh":"……","videoEn":"……"}]}'
+        : '{"wardrobe":{"era":"……","char":"……","user":"……"},"keyword":"副歌里最有分量的词","motif":{"name":"竹叶","prompt":"english: one decorative element"},"groups":[{"id":"G1","composition":"半身 · 人物居中","backgroundPrompt":"english: empty scenery only","characterPrompt":"english: framing, pose base, who","who":"char","motion":"still","link":"下一组如何承接","diffs":[{"id":"D1","label":"垂眼","change":"english: only expression / gaze / hand change"}]}],"frames":[{"sectionIndex":1,"lyric":"原句","group":"G1","diff":"D1","hold":1}]}'}`;
+}
+
+// 手书：少数构图，每个构图里几张连续变化的画（闭眼→睁眼→偏头），摊平成镜头。
+function flattenGroups(data) {
+    const out = [];
+    list(data?.groups).forEach((group, g) => {
+        const frames = list(group?.frames).filter(f => core_text.normalizeText(f?.plain, 300));
+        frames.forEach((frame, k) => out.push({
+            ...frame,
+            group: `G${g + 1}`, groupIndex: k, groupSize: frames.length, groupNext: k === frames.length - 1,
+            composition: core_text.normalizeText(group?.composition, 120),
+            compositionPrompt: core_text.normalizeText(group?.compositionPrompt, 600),
+            link: k === frames.length - 1 ? core_text.normalizeText(group?.link, 160) : '',
+            imagePrompt: [core_text.normalizeText(group?.compositionPrompt, 600), core_text.normalizeText(frame?.change, 400)].filter(Boolean).join(', '),
+            shot: core_text.normalizeText(group?.composition, 60), move: '',
+            motion: group?.motion === 'push' ? 'push' : 'still',
+        }));
+    });
+    return out;
 }
 
 function normalizeShots(data, memory, sectionCount) {
     const shots = [];
-    for (const item of list(data?.shots)) {
+    const source = list(data?.groups).length ? flattenGroups(data) : list(data?.shots);
+    for (const item of source) {
         const plain = core_text.normalizeText(item?.plain, 300);
         if (!plain) continue;
         const index = Math.min(Math.max(0, Math.round(Number(item?.sectionIndex) || 0)), Math.max(0, sectionCount - 1));
@@ -86255,8 +86302,10 @@ function normalizeShots(data, memory, sectionCount) {
             who: ['char', 'both', 'user', 'none'].includes(item?.who) ? item.who : 'char',
             shot: core_text.normalizeText(item?.shot, 40),
             move: core_text.normalizeText(item?.move, 40),
-            motion: Object.hasOwn(MV_MOTIONS, item?.motion) ? item.motion : 'push',
-            cut: 'fade',
+            motion: motionOf(item?.motion),
+            cut: item?.group ? (item.groupNext ? 'fade' : 'cut') : 'fade',
+            ...(item?.group ? { group: item.group, groupIndex: item.groupIndex, groupSize: item.groupSize, groupNext: !!item.groupNext, composition: item.composition, compositionPrompt: item.compositionPrompt, link: item.link } : {}),
+            hold: Math.min(3, Math.max(1, Math.round(Number(item?.hold) || 1))),
             imagePrompt: core_text.normalizeText(item?.imagePrompt, 900),
             videoZh: core_text.normalizeText(item?.videoZh, 900),
             videoEn: core_text.normalizeText(item?.videoEn, 1200),
@@ -86265,7 +86314,7 @@ function normalizeShots(data, memory, sectionCount) {
             videoDone: false,
         });
     }
-    shots.sort((a, b) => a.sectionIndex - b.sectionIndex);
+    if (!list(data?.groups).length) shots.sort((a, b) => a.sectionIndex - b.sectionIndex);
     if (!shots.length) throw core_text.safeUserError('这次没有收到可用的镜头，可以再试一次。', 'RMT_MV_EMPTY');
     return shots;
 }
@@ -86287,8 +86336,13 @@ async function generateStoryboard(songId, settingsInput) {
         return holdResult(target, 'story', '', data, raw => {
             const previous = target.base.songs[songId];
             return { id: songId, createdAt: previous?.createdAt || Date.now(), settings,
-                shots: normalizeShots(raw, memory, parseSections(song.lyrics).length),
-                tegaki: { ...(previous?.tegaki || {}), range: settings.range, rangeFrom: settings.rangeFrom, rangeTo: settings.rangeTo },
+                ...buildShots(raw, memory, parseSections(song.lyrics).length, settings),
+                tegaki: { ...(previous?.tegaki || {}), range: settings.range, rangeFrom: settings.rangeFrom, rangeTo: settings.rangeTo, ...(settings.output === 'tegaki' ? { lyric: 'vertical' } : {}) },
+                wardrobe: {
+                    era: core_text.normalizeText(raw?.wardrobe?.era, 200) || previous?.wardrobe?.era || '',
+                    char: core_text.normalizeText(raw?.wardrobe?.char, 300) || previous?.wardrobe?.char || '',
+                    user: core_text.normalizeText(raw?.wardrobe?.user, 300) || previous?.wardrobe?.user || '',
+                },
                 songTitle: song.title };
         });
     } finally { running.delete(key); }
@@ -86337,6 +86391,17 @@ function frameNeedsUserLooks(record, context) {
     return !core_text.normalizeText(looks?.user, 200);
 }
 
+// 衣着与时代：外貌设定只有长相，这里统一补上符合世界观的服装，所有镜头一致。
+function wardrobeLine(record, hasChar, hasUser) {
+    const w = record?.wardrobe || {};
+    const parts = [];
+    if (w.era) parts.push(`setting: ${w.era}`);
+    if (hasChar && w.char) parts.push(`${hasUser ? 'the main character' : 'the character'} wears ${w.char}`);
+    if (hasUser && w.user) parts.push(`${hasChar ? 'the second person' : 'the person'} wears ${w.user}`);
+    if (parts.length) parts.push('same outfits in every frame, period-accurate clothing only');
+    return parts.join(', ');
+}
+
 function framePrompt(record, shot, context) {
     const settings = normalizeSettings(record?.settings);
     const looks = core_castLooks.readCastLooks(context);
@@ -86351,6 +86416,7 @@ function framePrompt(record, shot, context) {
         settings.ratio === '9:16' ? 'vertical 9:16 composition' : 'horizontal 16:9 composition',
         shot.imagePrompt || shot.plain,
         lookLine ? `fixed appearance, keep consistent: ${lookLine}` : '',
+        wardrobeLine(record, hasChar, hasUser),
         userRule, noUser,
         'no text, no subtitles, no logo, no watermark',
     ].filter(Boolean).join(', ');
@@ -86403,15 +86469,15 @@ function mvScope(context) { return scopeOf(context); }
 const TEGAKI_RANGES = Object.freeze({ chorus: '第一段副歌', verseChorus: '一段主歌 + 副歌', full: '整首' });
 const TEGAKI_RHYTHMS = Object.freeze({ line: '每句一换', beat: '跟着拍子切' });
 const TEGAKI_FONTS = Object.freeze({
-    kai: { name: '手写感', stack: '"Kaiti SC","STKaiti","KaiTi","BiauKai","Kaiti TC",serif' },
-    song: { name: '书卷', stack: '"Songti SC","STSong","Noto Serif SC","Source Han Serif SC","SimSun",serif' },
-    round: { name: '圆润', stack: '"Yuanti SC","PingFang SC","Hiragino Sans GB","Noto Sans SC",sans-serif' },
+    sans: { name: '清爽', stack: '"PingFang SC","Hiragino Sans GB","Noto Sans SC","Source Han Sans SC","Microsoft YaHei",sans-serif', weight: 600 },
+    song: { name: '书卷', stack: '"Songti SC","STSong","Noto Serif SC","Source Han Serif SC","SimSun",serif', weight: 600 },
+    round: { name: '圆润', stack: '"Yuanti SC","PingFang SC","Hiragino Sans GB","Noto Sans SC",sans-serif', weight: 500 },
 });
-const TEGAKI_LYRICS = Object.freeze({ subtitle: '字幕', big: '手书大字', none: '不显示' });
+const TEGAKI_LYRICS = Object.freeze({ vertical: '竖排', subtitle: '字幕', big: '大字', none: '不显示' });
 const TEGAKI_PRESETS = Object.freeze({
-    classic: { name: '手书经典', desc: '跟拍子快切、歌词大字，最像手书', rhythm: 'beat', lyric: 'big', motion: () => 'still', cut: () => 'cut' },
-    gentle: { name: '抒情慢拍', desc: '每句一换、淡入淡出、轻轻推近', rhythm: 'line', lyric: 'subtitle', motion: chorus => chorus ? 'sway' : 'push', cut: () => 'fade' },
-    bright: { name: '明快跟拍', desc: '副歌跟拍切换，其余轻推', rhythm: 'beat', lyric: 'big', motion: () => 'push', cut: chorus => chorus ? 'cut' : 'fade' },
+    classic: { name: '手书经典', desc: '同一构图内直接换张，构图之间淡入，歌词大字', rhythm: 'line', lyric: 'big', motion: () => 'still' },
+    gentle: { name: '抒情慢拍', desc: '每个构图缓慢推近，淡入淡出，字幕歌词', rhythm: 'line', lyric: 'subtitle', motion: () => 'push' },
+    bright: { name: '明快跟拍', desc: '画面不动，背景光随拍子轻轻呼吸，歌词大字', rhythm: 'beat', lyric: 'big', motion: () => 'still' },
 });
 
 function tegakiOptions(record) {
@@ -86421,7 +86487,7 @@ function tegakiOptions(record) {
         rhythm: Object.hasOwn(TEGAKI_RHYTHMS, value.rhythm) ? value.rhythm : 'line',
         lyric: Object.hasOwn(TEGAKI_LYRICS, value.lyric) ? value.lyric : (record?.subtitles === false ? 'none' : 'subtitle'),
         preset: Object.hasOwn(TEGAKI_PRESETS, value.preset) ? value.preset : '',
-        font: Object.hasOwn(TEGAKI_FONTS, value.font) ? value.font : 'kai',
+        font: Object.hasOwn(TEGAKI_FONTS, value.font) ? value.font : 'sans',
         rangeFrom: Math.max(0, Math.round(Number(value.rangeFrom) || 0)),
         rangeTo: Math.max(0, Math.round(Number(value.rangeTo) || 0)),
     };
@@ -86464,16 +86530,164 @@ function applyTegakiPreset(songId, presetId, song) {
         current.tegaki = { ...(current.tegaki || {}), rhythm: preset.rhythm, lyric: preset.lyric, preset: presetId };
         for (const shot of list(current.shots)) {
             const chorus = isChorusTag(sections[shot.sectionIndex]?.tag);
-            shot.motion = preset.motion(chorus); shot.cut = preset.cut(chorus);
+            shot.motion = preset.motion(chorus);
+            shot.cut = shot.groupNext ? 'fade' : (shot.group ? 'cut' : 'fade');
         }
         return current;
     });
+}
+
+function patchWardrobe(songId, patch) {
+    const context = core_context.currentCharacterGuard();
+    return writeMv(scopeOf(context), songId, current => current ? Object.assign(current, { wardrobe: { ...(current.wardrobe || {}), ...patch } }) : current);
 }
 
 function patchTegaki(songId, patch) {
     const context = core_context.currentCharacterGuard();
     return writeMv(scopeOf(context), songId, current => current ? Object.assign(current, { tegaki: { ...(current.tegaki || {}), ...patch } }) : current);
 }
+
+
+// ---------- 手书 v2：印象曲 PV（背景 + 白底人物差分 + 意象） ----------
+
+function tegakiGrammar(sections, keep, charName = '{{char}}') {
+    const rows = keep.map(i => `${i}:${sections[i]?.tag || ''}`).join('，');
+    return `这是这首印象曲的手书 PV。只为这些段落写：${rows}。
+手书不换场景讲故事，而是少数构图的连续变化：
+- 一共 3～5 个构图组（groups）。每组画一张 backgroundPrompt（只有场景、没有人物）和 2～4 张人物差分（diffs）。同组差分的 characterPrompt 完全相同（同一构图、机位、人物位置、姿势基础），diff.change 只写表情、视线、手势、头发这一处变化。
+- 段落语法：主歌以 ${charName} 半身为主、一句一张差分；导歌推到近景（眼睛、手、随身物件）；副歌是主视觉（选择了双人出镜时两人同框），重复的副歌必须复用同一个构图组和它的差分；桥段用反差构图（逆光、剪影或单色）；尾奏回到主歌的构图组。
+- 每组写 link：最后一张如何承接下一组（眼睛接眼睛、手接手、飘动的头发带到下一构图），不要跳到完全不同的空间。
+- frames 是时间顺序：选中段落里的每一句歌词各一条（lyric 抄原句），器乐段一条（lyric 留空）；每条指向 group 与 diff；关键画面 hold 写 2 或 3。
+- keyword：从副歌里挑一个 2～4 字、最有分量的词。motif：从歌词里挑一个可以漂浮的意象（花瓣、雨滴、竹叶、雪、萤火之类），prompt 用英文只描述这一个小元素。
+`;
+}
+
+function isV2(record) { return record?.version === 2 && Array.isArray(record?.groups); }
+
+function buildShots(raw, memory, sectionCount, settings) {
+    if (settings.output === 'video' || !list(raw?.groups).some(g => list(g?.diffs).length)) return { shots: normalizeShots(raw, memory, sectionCount) };
+    const idMap = new Map();
+    const groups = [];
+    list(raw.groups).slice(0, 8).forEach(g => {
+        const diffs = list(g?.diffs).slice(0, 5).map((d, k) => ({
+            id: `D${k + 1}`, rawId: core_text.normalizeText(d?.id, 20) || `D${k + 1}`,
+            label: core_text.normalizeText(d?.label, 20) || `差分 ${k + 1}`,
+            change: core_text.normalizeText(d?.change, 300), image: null,
+        }));
+        if (!diffs.length) return;
+        const id = `G${groups.length + 1}`;
+        idMap.set(core_text.normalizeText(g?.id, 20) || id, { id, diffs });
+        groups.push({
+            id, composition: core_text.normalizeText(g?.composition, 60),
+            backgroundPrompt: core_text.normalizeText(g?.backgroundPrompt, 600),
+            characterPrompt: core_text.normalizeText(g?.characterPrompt, 600),
+            who: ['char', 'both', 'user', 'none'].includes(g?.who) ? g.who : 'char',
+            motion: g?.motion === 'push' ? 'push' : 'still',
+            link: core_text.normalizeText(g?.link, 160), seed: 0, bg: null,
+            diffs: diffs.map(({ rawId, ...rest }) => rest),
+        });
+    });
+    const shots = [];
+    for (const f of list(raw.frames)) {
+        const ref = idMap.get(core_text.normalizeText(f?.group, 20)) || [...idMap.values()][0];
+        if (!ref) continue;
+        const rawDiff = core_text.normalizeText(f?.diff, 20);
+        const diff = ref.diffs.find(d => d.rawId === rawDiff) || ref.diffs[Math.max(0, Number(String(rawDiff).replace(/\D/g, '')) - 1)] || ref.diffs[0];
+        const group = groups.find(g => g.id === ref.id);
+        shots.push({
+            id: `F${shots.length + 1}_${Date.now().toString(36)}`,
+            sectionIndex: Math.min(Math.max(0, Math.round(Number(f?.sectionIndex) || 0)), Math.max(0, sectionCount - 1)),
+            lyric: core_text.normalizeText(f?.lyric, 200),
+            plain: `${group.composition || group.id} · ${diff.label}`,
+            group: ref.id, diff: diff.id, who: group.who,
+            hold: Math.min(3, Math.max(1, Math.round(Number(f?.hold) || 1))),
+            motion: group.motion, cut: 'cut', image: null, videoDone: false,
+        });
+    }
+    if (!groups.length || !shots.length) throw core_text.safeUserError('这次没有收到可用的构图，可以再试一次。', 'RMT_MV_EMPTY');
+    for (let i = 0; i < shots.length; i += 1) shots[i].cut = shots[i + 1] && shots[i + 1].group === shots[i].group ? 'cut' : 'fade';
+    const motifPrompt = core_text.normalizeText(raw?.motif?.prompt, 300);
+    return {
+        version: 2, groups, shots,
+        keyword: Array.from(core_text.normalizeText(raw?.keyword, 12)).slice(0, 6).join(''),
+        motif: motifPrompt ? { name: core_text.normalizeText(raw?.motif?.name, 20), prompt: motifPrompt, image: null } : null,
+    };
+}
+
+// key: "G1:bg" / "G1:D2" / "motif"
+function assetOf(record, key) {
+    if (!record) return null;
+    if (key === 'motif') return record.motif ? { kind: 'motif', target: record.motif, get image() { return record.motif.image; }, set image(v) { record.motif.image = v; } } : null;
+    const [gid, part] = String(key).split(':');
+    const group = list(record.groups).find(g => g.id === gid);
+    if (!group) return null;
+    if (part === 'bg') return { kind: 'bg', group, get image() { return group.bg; }, set image(v) { group.bg = v; } };
+    const diff = list(group.diffs).find(d => d.id === part);
+    return diff ? { kind: 'char', group, diff, get image() { return diff.image; }, set image(v) { diff.image = v; } } : null;
+}
+
+function assetKeys(record, song = null) {
+    if (!isV2(record)) return [];
+    let used = null;
+    if (song) { try { used = new Set(shotsInRange(record, song).map(s => `${s.group}:${s.diff}`)); } catch { used = null; } }
+    const keys = [];
+    for (const g of record.groups) {
+        const diffs = g.diffs.filter(d => !used || used.has(`${g.id}:${d.id}`));
+        if (!diffs.length) continue;
+        keys.push(`${g.id}:bg`, ...diffs.map(d => `${g.id}:${d.id}`));
+    }
+    if (record.motif) keys.push('motif');
+    return keys;
+}
+
+function assetPrompt(record, key, context) {
+    const settings = normalizeSettings(record?.settings);
+    const found = assetOf(record, key);
+    if (!found) return '';
+    const style = styleOf(settings).prompt;
+    const ratio = settings.ratio === '9:16' ? 'vertical 9:16 composition' : 'horizontal 16:9 composition';
+    const era = record?.wardrobe?.era ? `setting: ${record.wardrobe.era}` : '';
+    if (found.kind === 'motif') return [style, found.target.prompt, 'a single small decorative element, isolated on a pure white background, no scenery, no people, no text'].filter(Boolean).join(', ');
+    if (found.kind === 'bg') return [style, ratio, era, found.group.backgroundPrompt, 'scenery only, empty scene, no people, no characters, no text, no logo'].filter(Boolean).join(', ');
+    const who = found.group.who;
+    const hasChar = who === 'char' || who === 'both';
+    const hasUser = settings.appear !== 'none' && (who === 'both' || who === 'user');
+    const looks = core_castLooks.readCastLooks(context);
+    const people = { ...(looks || {}), char: hasChar ? looks?.char || '' : '', user: hasUser ? looks?.user || '' : '' };
+    const lookLine = hasChar || hasUser ? core_castLooks.castLooksPromptLine(people, context) : '';
+    const back = settings.appear === 'back' && hasUser ? `${hasChar ? 'the second person' : 'the person'} is shown only from behind, hands or silhouette, face not visible` : '';
+    return [style, ratio, found.group.characterPrompt, found.diff.change, lookLine ? `fixed appearance, keep consistent: ${lookLine}` : '', wardrobeLine(record, hasChar, hasUser), back,
+        hasChar && hasUser ? 'exactly two people' : 'only one person',
+        'isolated on a pure white background, plain white backdrop, no scenery, clean silhouette edges, no text'].filter(Boolean).join(', ');
+}
+
+function isAssetDrawing(scope, songId, key) { return running.has(`asset:${scope}:${songId}:${key}`); }
+
+async function drawAsset(songId, key) {
+    const context = core_context.currentCharacterGuard();
+    const target = captureMvTarget(context, songId);
+    const { scope } = target;
+    const record = structuredClone(target.base.songs[songId] || null);
+    const found = assetOf(record, key);
+    if (!found) return null;
+    const runKey = `asset:${scope}:${songId}:${key}`;
+    if (running.has(runKey)) return null;
+    running.add(runKey);
+    try {
+        const seed = found.group?.seed || 0;
+        const result = await cg_core.invokeImageGeneration(assetPrompt(record, key, context), context, {
+            orientation: found.kind === 'motif' || normalizeSettings(record.settings).ratio === '9:16' ? 'portrait' : 'landscape',
+            characterName: context?.name2 || '', targetKey: runKey, seed,
+        });
+        return holdResult(target, 'asset', key, result, raw => {
+            const url = cg_core.normalizeCgImageUrl(typeof raw === 'string' ? raw : raw?.url);
+            if (!url) throw core_text.safeUserError('这次没有拿到可用图片。', 'RMT_MV_FRAME');
+            const used = Number(raw?.seed);
+            return { image: { url, at: Date.now() }, ...(Number.isInteger(used) && used > 0 ? { seed: used } : {}) };
+        });
+    } finally { running.delete(runKey); }
+}
+__m_extras_mv_js.motionOf = motionOf;
 __m_extras_mv_js.readMvStore = readMvStore;
 __m_extras_mv_js.readMv = readMv;
 __m_extras_mv_js.pendingMv = pendingMv;
@@ -86493,10 +86707,13 @@ __m_extras_mv_js.timetableText = timetableText;
 __m_extras_mv_js.srtText = srtText;
 __m_extras_mv_js.normalizeSettings = normalizeSettings;
 __m_extras_mv_js.selectedSectionIndexes = selectedSectionIndexes;
+__m_extras_mv_js.flattenGroups = flattenGroups;
+__m_extras_mv_js.normalizeShots = normalizeShots;
 __m_extras_mv_js.isMvRunning = isMvRunning;
 __m_extras_mv_js.generateStoryboard = generateStoryboard;
 __m_extras_mv_js.rewriteShot = rewriteShot;
 __m_extras_mv_js.frameNeedsUserLooks = frameNeedsUserLooks;
+__m_extras_mv_js.wardrobeLine = wardrobeLine;
 __m_extras_mv_js.framePrompt = framePrompt;
 __m_extras_mv_js.isFrameDrawing = isFrameDrawing;
 __m_extras_mv_js.drawFrame = drawFrame;
@@ -86507,7 +86724,15 @@ __m_extras_mv_js.tegakiOptions = tegakiOptions;
 __m_extras_mv_js.playRange = playRange;
 __m_extras_mv_js.shotsInRange = shotsInRange;
 __m_extras_mv_js.applyTegakiPreset = applyTegakiPreset;
+__m_extras_mv_js.patchWardrobe = patchWardrobe;
 __m_extras_mv_js.patchTegaki = patchTegaki;
+__m_extras_mv_js.isV2 = isV2;
+__m_extras_mv_js.buildShots = buildShots;
+__m_extras_mv_js.assetOf = assetOf;
+__m_extras_mv_js.assetKeys = assetKeys;
+__m_extras_mv_js.assetPrompt = assetPrompt;
+__m_extras_mv_js.isAssetDrawing = isAssetDrawing;
+__m_extras_mv_js.drawAsset = drawAsset;
 __m_extras_mv_js.MV_KEY = MV_KEY;
 __m_extras_mv_js.MV_STYLES = MV_STYLES;
 __m_extras_mv_js.MV_APPEAR = MV_APPEAR;
@@ -86617,9 +86842,16 @@ const audioTried = new Set();
 const audioLoads = new Map();
 
 // 用户自己的图存在本机；url 来自生图渠道。两者都没有时返回空字符串。
-function hasImg(shot) { return !!(shot?.image?.url || shot?.image?.local); }
+function v2Diff(shot) {
+    const record = view.cache?.record;
+    if (!shot?.group || !mv.isV2(record)) return null;
+    return record.groups.find(g => g.id === shot.group)?.diffs.find(d => d.id === shot.diff) || null;
+}
+function hasImg(shot) { const d = v2Diff(shot); if (d) return !!d.image?.url; return !!(shot?.image?.url || shot?.image?.local); }
 
 function imgUrl(shot) {
+    const d = v2Diff(shot);
+    if (d) return d.image?.url || '';
     if (shot?.image?.url) return shot.image.url;
     const key = shot?.image?.local;
     if (!key) return '';
@@ -86716,6 +86948,29 @@ ${r} .rmt-mv-choice b{font-size:15px}
 ${r} .rmt-mv-choice small{font-size:12px;line-height:1.5;color:var(--rmt-theme-muted,#586b7c)}
 ${r} .rmt-mv-choice em{font-style:normal;font-size:12px;font-weight:600;color:#2f6b66}
 ${r} .rmt-mv-grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+${r} .rmt-mv-group{display:flex;flex-direction:column;gap:2px;padding:10px 4px 0}
+${r} .rmt-mv-group b{font-size:14px;color:#8a3f63}
+${r} .rmt-mv-group span{font-size:12px;color:var(--rmt-theme-muted,#586b7c)}
+${r} .rmt-mv-link{font-size:12px;color:#8a5a3b;padding:0 8px}
+${r} .rmt-mv-look input{width:100%;box-sizing:border-box;min-height:40px;border:1px solid var(--rmt-theme-border,#cfdae5);border-radius:10px;padding:0 10px;font:inherit;font-size:14px;background:var(--rmt-theme-surface-solid,#fff);color:var(--rmt-theme-text,#34495d)}
+${r} .rmt-mv-gcard{display:flex;flex-direction:column;gap:10px;border-radius:18px;padding:14px;background:var(--rmt-theme-surface-solid,#fff);border:1px solid var(--rmt-theme-border,#cfdae5)}
+${r} .rmt-mv-gname{color:#8a3f63}
+${r} .rmt-mv-assets{display:flex;gap:8px;align-items:flex-end;overflow-x:auto;padding-bottom:2px}
+${r} .rmt-mv-assets>div{display:flex;flex-direction:column;align-items:center;gap:4px;flex-shrink:0}
+${r} .rmt-mv-assets small{font-size:11px;color:var(--rmt-theme-muted,#586b7c)}
+${r} .rmt-mv-plus{font-size:18px;color:#b7c3cf;padding-bottom:28px}
+${r} .rmt-mv-asset{position:relative;width:62px;height:96px;border-radius:10px;overflow:hidden;padding:0;cursor:pointer;border:1px solid var(--rmt-theme-border,#cfdae5);background:repeating-linear-gradient(135deg,#e6e9f0 0 6px,#f2f4f8 6px 12px)}
+${r} .rmt-mv-asset.cut.done{background:repeating-conic-gradient(#eef0f4 0 25%,#ffffff 0 50%) 0 0/12px 12px}
+${r} .rmt-mv-asset img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+${r} .rmt-mv-asset i{position:absolute;left:4px;top:4px;font-style:normal;font-size:10px;border-radius:4px;padding:1px 5px;background:#ecebf1;color:#5d5566}
+${r} .rmt-mv-asset.done i{background:#e2f0ee;color:#2f6b66}
+${r} .rmt-mv-palette{display:flex;gap:12px;align-items:center;background:var(--rmt-theme-surface-solid,#fff);border:1px solid var(--rmt-theme-border,#cfdae5);border-radius:16px;padding:12px 14px}
+${r} .rmt-mv-cover{width:52px;height:52px;border-radius:10px;overflow:hidden;flex-shrink:0;background:linear-gradient(150deg,#2f3a45,#7d8fa3)}
+${r} .rmt-mv-cover img{width:100%;height:100%;object-fit:cover}
+${r} .rmt-mv-palette>div{display:flex;flex-direction:column;gap:6px;flex:1}
+${r} .rmt-mv-palette>div span{display:flex;gap:6px}
+${r} .rmt-mv-palette>div i{width:22px;height:22px;border-radius:6px;display:block}
+${r} .rmt-mv-palette>small{font-size:12px;color:var(--rmt-theme-muted,#586b7c);text-align:right}
 ${r} .rmt-mv-range-selects{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
 ${r} .rmt-mv-range-selects label{display:flex;flex-direction:column;gap:4px;font-size:12px}
 ${r} .rmt-mv-range-selects select{min-height:40px;border-radius:10px;border:1px solid var(--rmt-theme-border,#cfdae5);padding:0 8px;font:inherit;font-size:13px;background:var(--rmt-theme-surface-solid,#fff);color:var(--rmt-theme-text,#34495d)}
@@ -86946,6 +87201,7 @@ function thumb(shot, record, label) {
 }
 
 function renderBoard(song, record) {
+    if (mv.isV2(record)) return renderGroupsBoard(song, record);
     const context = ctx();
     const scope = mv.mvScope(context);
     const tegaki = view.mode === 'tegaki';
@@ -86964,6 +87220,8 @@ function renderBoard(song, record) {
         if (!own.length) return '';
         return `<div class="rmt-mv-lyric"><small>${esc(section.name)}</small><p>${esc(section.lines.slice(0, 2).join('\n') || '（器乐）')}</p></div>` + own.map(shot => {
             number += 1;
+            const groupHead = shot.group && shot.groupIndex === 0 ? `<div class="rmt-mv-group"><b>构图 ${esc(shot.group.slice(1))}</b><span>${esc(shot.composition || '')}${shot.groupSize ? ` · ${shot.groupSize} 张连续变化` : ''}</span></div>` : '';
+            const groupLink = shot.groupNext && shot.link ? `<div class="rmt-mv-link">↓ 承接：${esc(shot.link)}</div>` : '';
             const drawing = mv.isFrameDrawing(scope, view.songId, shot.id);
             const ok = tegaki ? !!imgUrl(shot) : shot.videoDone;
             const status = tegaki ? (imgUrl(shot) ? '✓ 画好了' : '○ 还没画') : (shot.videoDone ? '✓ 视频做好了' : imgUrl(shot) ? '○ 视频还没做' : '○ 还没画图');
@@ -86971,9 +87229,15 @@ function renderBoard(song, record) {
               <div class="rmt-mv-shot-copy"><small>${esc(shot.shot || '')}${shot.move ? ' · ' + esc(shot.move) : ''}</small><b>${esc(shot.plain)}</b>
               <div class="rmt-x-chips"><span class="rmt-x-chip muted">${esc(who[shot.who] || '他')}</span><span class="rmt-x-chip${ok ? '' : ' muted'}">${status}</span></div></div></div>
               <div class="rmt-mv-actions">${btn('draw', drawing ? '正在画…' : imgUrl(shot) ? '重画这张' : '画这一张', { id: shot.id, disabled: drawing || view.drawingAll, cls: imgUrl(shot) ? 'rmt-x-secondary' : 'rmt-x-primary' })}
-              ${!tegaki ? btn('open-shot', shot.videoDone ? '再看看' : '去生成视频', { id: shot.id, cls: 'rmt-x-primary rmt-x-dark' }) : uploadLabel(shot.id, '用自己的图')}</div></article>`;
+              ${!tegaki ? btn('open-shot', shot.videoDone ? '再看看' : '去生成视频', { id: shot.id, cls: 'rmt-x-primary rmt-x-dark' }) : uploadLabel(shot.id, '用自己的图')}</div></article>${groupLink}`.replace(/^/, () => groupHead);
         }).join('');
     }).join('');
+    const wd = record.wardrobe || {};
+    const wardrobeCard = `<details class="rmt-x-card"${wd.char || wd.user || wd.era ? '' : ' open'}><summary><b>时代与衣着</b>（每一张都用同一套）</summary>
+      <label class="rmt-mv-look"><span>时代 / 场景</span><input type="text" maxlength="200" data-rmt-mv-wardrobe="era" value="${esc(wd.era || '')}" placeholder="例如 ancient Chinese wuxia, bamboo forest sect"></label>
+      <label class="rmt-mv-look"><span>他的衣着</span><input type="text" maxlength="300" data-rmt-mv-wardrobe="char" value="${esc(wd.char || '')}" placeholder="例如 white layered hanfu robe, silver hairpin"></label>
+      ${mv.normalizeSettings(record.settings).appear === 'none' ? '' : `<label class="rmt-mv-look"><span>你的衣着</span><input type="text" maxlength="300" data-rmt-mv-wardrobe="user" value="${esc(wd.user || '')}" placeholder="例如 pale pink ruqun dress, jade hairpin"></label>`}
+      <p class="rmt-x-note">外貌设定只管长相；衣着在这里统一，写分镜时会按角色设定和世界观自动填好，可以改。用英文写效果最稳。改完之后重画的图才会生效。</p></details>`;
     const warn = mv.frameNeedsUserLooks(record, context) && shots.some(s => s.who === 'both' || s.who === 'user')
         ? `<div class="rmt-mv-warn">还没有填写你的外貌，画出来的你可能每张不一样。</div>${looksEditor()}` : '';
     const rangeCard = tegaki ? (() => {
@@ -86988,6 +87252,7 @@ function renderBoard(song, record) {
     page('镜头清单', '印象曲', `${head(song.title, '镜头清单', `${shots.length} 镜 · ${mv.normalizeSettings(record.settings).ratio === '9:16' ? '竖屏' : '横屏'}。同一张分镜表，可以做成手书，也可以做成视频。`)}
       <div class="rmt-mv-toggle">${['tegaki', 'video'].map(m => `<button type="button" class="${view.mode === m ? 'on' : ''}" aria-pressed="${view.mode === m}" data-rmt-mv="mode" data-rmt-mv-id="${m}">${m === 'tegaki' ? '手书' : '视频'}</button>`).join('')}</div>
       ${rangeCard}
+      ${wardrobeCard}
       <section class="rmt-x-card"><div class="rmt-x-row-head"><b>${tegaki ? `已画好 ${drawn} / ${shots.length} 张` : `视频已做好 ${videos} / ${shots.length} 镜`}</b><span>${tegaki ? '画好的图两边通用' : '先画第一张图再做视频'}</span></div>
         <div class="rmt-x-bar"><i style="width:${shots.length ? Math.round(done / shots.length * 100) : 0}%"></i></div>${tools}</section>
       ${warn}${groups}
@@ -87153,7 +87418,7 @@ async function preloadImages(record) {
             const url = imgUrl(shot);
             if (hasImg(shot) && !url) throw new Error('Local image unavailable');
             return url;
-        }).filter(Boolean))];
+        }).concat(mv.isV2(record) ? mv.assetKeys(record).map(k => mv.assetOf(record, k)?.image?.url).concat(view.cache?.song?.cgImage?.url || '') : []).filter(Boolean))];
         await Promise.all(urls.map(url => new Promise((resolve, reject) => {
             let img = images.get(url);
             if (!img) { img = new Image(); img.src = url; images.set(url, img); }
@@ -87186,22 +87451,26 @@ function beatVariant(row, t) {
     return { k, since: Math.max(0, t - row.start) - k * frameCtx.beat, variant: k % 4 };
 }
 
+// 手书的镜头运动：同一构图组共用一条缓慢推近（最多 5%），换张不会让画面跳；不再左右上下移动。
+function groupSpan(rows, index) {
+    const id = rows[index]?.shot?.group;
+    if (!id) return { start: rows[index].start, end: rows[index].end };
+    let a = index, b = index;
+    while (a > 0 && rows[a - 1].shot.group === id) a -= 1;
+    while (b < rows.length - 1 && rows[b + 1].shot.group === id) b += 1;
+    return { start: rows[a].start, end: rows[b].end };
+}
+
 function drawShot(g, row, rows, index, t, w, h) {
     let img = null;
     for (let i = index; i >= 0 && !img; i -= 1) img = imageFor(imgUrl(rows[i].shot));
-    const p = Math.min(1, Math.max(0, (t - row.start) / Math.max(0.1, row.end - row.start)));
     g.fillStyle = '#fbf6ee'; g.fillRect(0, 0, w, h);
-    const beat = beatVariant(row, t);
-    if (img && beat && beat.variant) {
-        if (beat.variant === 1) drawCover(g, img, w, h, 1.08, 0, h * 0.02);
-        else if (beat.variant === 2) drawCover(g, img, w, h, 1.06, -w * 0.02, 0);
-        else drawCover(g, img, w, h, 1.1, w * 0.015, -h * 0.015);
-    } else if (img) {
-        const motion = row.shot.motion;
-        if (motion === 'push') drawCover(g, img, w, h, 1 + 0.12 * p, 0, 0);
-        else if (motion === 'pan') drawCover(g, img, w, h, 1.15, (p - 0.5) * w * 0.12, 0);
-        else if (motion === 'sway') drawCover(g, img, w, h, 1.06, Math.sin(t * 1.3) * w * 0.012, Math.cos(t * 1.1) * h * 0.008);
-        else drawCover(g, img, w, h, 1, 0, 0);
+    if (img) {
+        const span = groupSpan(rows, index);
+        const p = Math.min(1, Math.max(0, (t - span.start) / Math.max(0.1, span.end - span.start)));
+        const lead = rows.findIndex(r => r.shot.group && r.shot.group === row.shot.group);
+        const motion = mv.motionOf((lead >= 0 ? rows[lead] : row).shot.motion);
+        drawCover(g, img, w, h, motion === 'push' ? 1 + 0.05 * p : 1, 0, 0);
     } else {
         g.fillStyle = '#8b95a3'; g.font = `${Math.round(w * 0.04)}px sans-serif`; g.textAlign = 'center';
         wrap(g, row.shot.plain, w / 2, h / 2, w * 0.8, w * 0.055);
@@ -87216,27 +87485,28 @@ function wrap(g, text, x, y, max, lineHeight) {
     lines.slice(0, 4).forEach((l, i) => g.fillText(l, x, y + (i - (Math.min(lines.length, 4) - 1) / 2) * lineHeight));
 }
 
-function drawBigLyric(g, text, w, h, since, fontId = 'kai') {
-    const size = Math.round(Math.min(w, h) * 0.078);
-    const stack = (mv.TEGAKI_FONTS[fontId] || mv.TEGAKI_FONTS.kai).stack;
+function drawBigLyric(g, text, w, h, since, fontId = 'sans') {
+    const font = mv.TEGAKI_FONTS[fontId] || mv.TEGAKI_FONTS.sans;
+    const size = Math.round(Math.min(w, h) * 0.07);
     const chars = Array.from(String(text));
-    const perLine = Math.max(4, Math.floor(w * 0.8 / size));
+    const perLine = Math.max(4, Math.floor(w * 0.78 / size));
     const lines = [];
     for (let i = 0; i < chars.length && lines.length < 3; i += perLine) lines.push(chars.slice(i, i + perLine).join(''));
     g.save();
-    g.translate(w / 2, h * 0.7); g.rotate(-0.025);
+    g.translate(w / 2, h * 0.72);
     g.globalAlpha = Math.min(1, since / 0.35);
-    g.font = `500 ${size}px ${stack}`;
-    g.textAlign = 'center';
-    g.shadowColor = 'rgba(20,16,28,.55)'; g.shadowBlur = size * 0.35; g.shadowOffsetY = size * 0.04;
+    g.font = `${font.weight} ${size}px ${font.stack}`;
+    g.textAlign = 'center'; g.lineJoin = 'round';
     lines.forEach((line, i) => {
-        const y = (i - (lines.length - 1) / 2) * size * 1.3;
+        const y = (i - (lines.length - 1) / 2) * size * 1.35;
+        g.lineWidth = Math.max(2, size * 0.12); g.strokeStyle = 'rgba(30,26,40,.55)'; g.strokeText(line, 0, y);
         g.fillStyle = '#fffdf8'; g.fillText(line, 0, y);
     });
     g.restore();
 }
 
 function renderFrame(canvas, record, song, t) {
+    if (mv.isV2(record)) return renderFrameV2(canvas, record, song, t);
     const g = canvas.getContext('2d');
     const w = canvas.width, h = canvas.height;
     const topt = mv.tegakiOptions(record);
@@ -87255,7 +87525,12 @@ function renderFrame(canvas, record, song, t) {
         g.save(); g.globalAlpha = 1 - since / 0.3; g.fillStyle = '#fff'; g.fillRect(0, 0, w, h); g.restore();
     }
     const beat = beatVariant(row, t);
-    if (beat && beat.k > 0 && beat.since < 0.08) { g.save(); g.globalAlpha = 0.18 * (1 - beat.since / 0.08); g.fillStyle = '#fff'; g.fillRect(0, 0, w, h); g.restore(); }
+    if (beat) {
+        const pulse = Math.max(0, 1 - beat.since / (frameCtx.beat * 0.6));
+        const glow = g.createRadialGradient(w / 2, h * 0.45, 0, w / 2, h * 0.45, Math.max(w, h) * 0.7);
+        glow.addColorStop(0, `rgba(255,248,236,${0.14 * pulse})`); glow.addColorStop(1, 'rgba(255,248,236,0)');
+        g.save(); g.fillStyle = glow; g.fillRect(0, 0, w, h); g.restore();
+    }
     if (topt.lyric === 'big' && row.shot.lyric) drawBigLyric(g, row.shot.lyric, w, h, since, topt.font);
     if (topt.lyric === 'subtitle' && row.shot.lyric) {
         let size = Math.round(Math.min(w, h) * 0.055), lines = [];
@@ -87270,7 +87545,7 @@ function renderFrame(canvas, record, song, t) {
             return result;
         };
         do {
-            g.font = `500 ${size}px ${(mv.TEGAKI_FONTS[topt.font] || mv.TEGAKI_FONTS.kai).stack}`;
+            g.font = `${(mv.TEGAKI_FONTS[topt.font] || mv.TEGAKI_FONTS.sans).weight} ${size}px ${(mv.TEGAKI_FONTS[topt.font] || mv.TEGAKI_FONTS.sans).stack}`;
             lines = split();
             if (lines.length * size * 1.35 <= h * 0.32 || size <= 1) break;
             size -= 1;
@@ -87525,7 +87800,33 @@ async function runDraw(shotId) {
     if (isView(opened)) renderMv();
 }
 
+async function drawAllAssets() {
+    const record0 = currentRecord();
+    const keys = mv.assetKeys(record0, view.cache?.song).filter(key => !mv.assetOf(record0, key)?.image?.url);
+    const queue = {}; view.drawQueue = queue;
+    view.drawingAll = true; view.stopAll = false;
+    renderMv();
+    try {
+        for (const key of keys) {
+            if (view.stopAll || view.drawQueue !== queue) break;
+            const result = await mv.drawAsset(view.songId, key);
+            reportResult(result);
+            if (result?.pending) break;
+            if (runtimeState.activeMode === MV_MODE) renderMv();
+        }
+    } catch (error) { toastError(error); }
+    if (view.drawQueue === queue) view.drawingAll = false;
+    if (runtimeState.activeMode === MV_MODE) renderMv();
+}
+
+async function runAsset(key) {
+    try { const p = mv.drawAsset(view.songId, key); renderMv(); reportResult(await p); }
+    catch (error) { toastError(error); }
+    if (runtimeState.activeMode === MV_MODE) renderMv();
+}
+
 async function drawAll() {
+    if (mv.isV2(currentRecord())) return drawAllAssets();
     const opened = viewTarget();
     const record0 = currentRecord();
     let shots = structuredClone(record0?.shots || []);
@@ -87589,6 +87890,8 @@ function handleMvClick(event) {
         else if (action === 'mode') { view.mode = id === 'video' ? 'video' : 'tegaki'; renderMv(); }
         else if (action === 'draw') void runDraw(id);
         else if (action === 'draw-all') void drawAll();
+        else if (action === 'draw-asset') void runAsset(id);
+        else if (action === 'draw-group') { const keys = mv.assetKeys(record, currentSong()).filter(k => k.startsWith(id + ':') && !mv.assetOf(record, k)?.image?.url); void (async () => { for (const key of keys) { if (view.stopAll) break; await runAsset(key); } })(); }
         else if (action === 'tegaki-preset') { mv.applyTegakiPreset(view.songId, id, currentSong()); toastOk('已按“' + (mv.TEGAKI_PRESETS[id]?.name || '') + '”配好镜头。'); renderMv(); }
         else if (action === 'tegaki-range') { mv.patchTegaki(view.songId, { range: id }); renderMv(); }
         else if (action === 'tegaki-rhythm') { mv.patchTegaki(view.songId, { rhythm: id, preset: '' }); renderMv(); }
@@ -87682,6 +87985,11 @@ function handleMvChange(event) {
         renderMv();
         return true;
     }
+    if (input?.matches?.('[data-rmt-mv-wardrobe]')) {
+        const key = input.dataset.rmtMvWardrobe;
+        if (['era', 'char', 'user'].includes(key)) { try { mv.patchWardrobe(view.songId, { [key]: core_text.normalizeText(input.value, 300) }); } catch (error) { toastError(error); } }
+        return true;
+    }
     if (input?.matches?.('[data-rmt-mv-range]')) {
         const key = input.dataset.rmtMvRange === 'to' ? 'rangeTo' : 'rangeFrom';
         const value = Math.max(0, Number(input.value) || 0);
@@ -87697,6 +88005,247 @@ function handleMvChange(event) {
         return true;
     }
     return false;
+}
+
+// ---------- 手书 v2：构图卡片 ----------
+
+function assetTile(record, key, label) {
+    const found = mv.assetOf(record, key);
+    const url = found?.image?.url || '';
+    const drawing = mv.isAssetDrawing(mv.mvScope(ctx()), view.songId, key);
+    const cut = found?.kind !== 'bg';
+    return `<button type="button" class="rmt-mv-asset${url ? ' done' : ''}${cut ? ' cut' : ''}" data-rmt-mv="draw-asset" data-rmt-mv-id="${esc(key)}" ${drawing || view.drawingAll ? 'disabled' : ''} aria-label="${esc(label)}：${url ? '重画' : '画'}这一张">${url ? `<img src="${esc(url)}" alt="">` : ''}<i>${drawing ? '画…' : url ? '已画' : '未画'}</i></button><small>${esc(label)}</small>`;
+}
+
+function renderGroupsBoard(song, record) {
+    const sections = mv.parseSections(song.lyrics);
+    const keys = mv.assetKeys(record, song);
+    const drawn = keys.filter(k => mv.assetOf(record, k)?.image?.url).length;
+    const remaining = keys.length - drawn;
+    const palette = coverPalette(song);
+    const o = mv.tegakiOptions(record);
+    let inRangeList;
+    try { inRangeList = mv.shotsInRange(record, song).map(s => s.id); } catch { inRangeList = record.shots.map(s => s.id); }
+    const inRange = new Set(inRangeList);
+    let shown = 0;
+    const cards = record.groups.map(g => {
+        const frames = record.shots.filter(s => s.group === g.id && inRange.has(s.id));
+        if (!frames.length) return '';
+        shown += 1;
+        const secNames = [...new Set(frames.map(s => sections[s.sectionIndex]?.name).filter(Boolean))].join('、');
+        const usedDiffs = g.diffs.filter(d => frames.some(s => s.diff === d.id));
+        const lyrics = frames.filter(s => s.lyric).slice(0, 8).map(s => `${g.diffs.find(d => d.id === s.diff)?.label || ''}｜${s.lyric}`).join('\n');
+        const missing = [`${g.id}:bg`, ...usedDiffs.map(d => `${g.id}:${d.id}`)].filter(k => !mv.assetOf(record, k)?.image?.url).length;
+        return `<article class="rmt-mv-gcard"><div class="rmt-x-row-head"><b class="rmt-mv-gname">构图 ${shown} · ${esc(g.composition || '')}</b><span>${esc(secNames)} · ${frames.length} 句</span></div>
+          <div class="rmt-mv-assets"><div>${assetTile(record, `${g.id}:bg`, '背景')}</div><span class="rmt-mv-plus">+</span>${usedDiffs.map(d => `<div>${assetTile(record, `${g.id}:${d.id}`, d.label)}</div>`).join('')}</div>
+          ${lyrics ? `<div class="rmt-mv-lyric"><p>${esc(lyrics)}</p></div>` : ''}
+          <div class="rmt-mv-actions">${btn('draw-group', missing ? `画这一组剩下的 ${missing} 张` : '这一组已画好', { id: g.id, disabled: !missing || view.drawingAll, cls: missing ? 'rmt-x-primary' : 'rmt-x-secondary' })}</div>
+          <p class="rmt-x-note">点任意一张缩略图可以单独重画。</p>
+          ${g.link ? `<div class="rmt-mv-link">↓ 承接：${esc(g.link)}</div>` : ''}</article>`;
+    }).join('');
+    const motif = record.motif ? `<section class="rmt-x-card"><div class="rmt-x-row-head"><b>意象：${esc(record.motif.name || '装饰')}</b><span>副歌时漂浮</span></div><div class="rmt-mv-assets"><div>${assetTile(record, 'motif', '意象')}</div></div></section>` : '';
+    const wd = record.wardrobe || {};
+    const wardrobe = `<details class="rmt-x-card"${wd.char || wd.era ? '' : ' open'}><summary><b>时代与衣着</b>（每一张都用同一套）</summary>
+      <label class="rmt-mv-look"><span>时代 / 场景</span><input type="text" maxlength="200" data-rmt-mv-wardrobe="era" value="${esc(wd.era || '')}"></label>
+      <label class="rmt-mv-look"><span>他的衣着</span><input type="text" maxlength="300" data-rmt-mv-wardrobe="char" value="${esc(wd.char || '')}"></label>
+      ${mv.normalizeSettings(record.settings).appear === 'none' ? '' : `<label class="rmt-mv-look"><span>你的衣着</span><input type="text" maxlength="300" data-rmt-mv-wardrobe="user" value="${esc(wd.user || '')}"></label>`}
+      <p class="rmt-x-note">改完之后重画的图才会生效。</p></details>`;
+    const warn = mv.frameNeedsUserLooks(record, ctx()) && record.groups.some(g => g.who === 'both' || g.who === 'user') ? `<div class="rmt-mv-warn">还没有填写你的外貌，画出来的你可能每张不一样。</div>${looksEditor()}` : '';
+    page('构图卡片', '印象曲', `${head(song.title + ' · 手书', '构图卡片', '每张卡片是一个构图：背景只画一张，人物在白底上画几张差分，播放时自动抠掉白底叠在背景上。')}
+      <section class="rmt-mv-palette"><span class="rmt-mv-cover">${song.cgImage?.url ? `<img src="${esc(song.cgImage.url)}" alt="">` : ''}</span><div><b>从封面取色</b><span>${palette.map(c => `<i style="background:${c}"></i>`).join('')}</span></div><small>片头片尾<br>用封面</small></section>
+      <section class="rmt-x-card"><b>做哪一段</b>${rangePicker('record', o, sections)}</section>
+      <section class="rmt-x-card"><div class="rmt-x-row-head"><b>已画 ${drawn} / ${keys.length} 张</b><span>${esc(mv.playRange(record, song).label)}</span></div>
+        <div class="rmt-x-bar"><i style="width:${keys.length ? Math.round(drawn / keys.length * 100) : 0}%"></i></div>
+        ${remaining ? btn(view.drawingAll ? 'draw-stop' : 'draw-all', view.drawingAll ? '停止连续绘制' : `一次画完剩下的 ${remaining} 张（会用 ${remaining} 次生图）`) : ''}
+        ${btn('go-tegaki', '去剪辑台预览', { cls: 'rmt-x-primary' })}</section>
+      ${wardrobe}${warn}${cards || '<p class="rmt-x-note">选中的段落里还没有构图，可以重新写分镜。</p>'}${motif}
+      <div class="rmt-mv-actions">${btn('rewrite-board', '重新写分镜')}</div>`);
+}
+
+// ---------- 手书 v2：抠图、取色、渲染 ----------
+
+const cutouts = new Map();
+const palettes = new Map();
+
+// 白底人物：从四边向内漫水填充近白色像素并设为透明；外站图片读不了像素时直接用原图。
+function cutoutFor(url) {
+    if (!url) return null;
+    const ready = cutouts.get(url);
+    if (ready) return ready.complete && ready.naturalWidth ? ready : null;
+    const src = imageFor(url);
+    if (!src) return null;
+    try {
+        const scale = Math.min(1, 1400 / Math.max(src.naturalWidth, src.naturalHeight));
+        const cw = Math.max(1, Math.round(src.naturalWidth * scale)), ch = Math.max(1, Math.round(src.naturalHeight * scale));
+        const canvas = document.createElement('canvas'); canvas.width = cw; canvas.height = ch;
+        const g = canvas.getContext('2d', { willReadFrequently: true });
+        g.drawImage(src, 0, 0, cw, ch);
+        const img = g.getImageData(0, 0, cw, ch);
+        const d = img.data;
+        const white = p => { const i = p * 4; const mn = Math.min(d[i], d[i + 1], d[i + 2]); return mn > 228 && Math.max(d[i], d[i + 1], d[i + 2]) - mn < 26; };
+        const seen = new Uint8Array(cw * ch);
+        const stack = [];
+        for (let x = 0; x < cw; x += 1) stack.push(x, (ch - 1) * cw + x);
+        for (let y = 0; y < ch; y += 1) stack.push(y * cw, y * cw + cw - 1);
+        while (stack.length) {
+            const p = stack.pop();
+            if (seen[p]) continue;
+            seen[p] = 1;
+            if (!white(p)) continue;
+            d[p * 4 + 3] = 0;
+            const x = p % cw;
+            if (x > 0) stack.push(p - 1);
+            if (x < cw - 1) stack.push(p + 1);
+            if (p >= cw) stack.push(p - cw);
+            if (p < cw * (ch - 1)) stack.push(p + cw);
+        }
+        for (let p = 0; p < cw * ch; p += 1) {
+            if (d[p * 4 + 3] === 0) continue;
+            const x = p % cw;
+            const edge = (x > 0 && d[(p - 1) * 4 + 3] === 0) || (x < cw - 1 && d[(p + 1) * 4 + 3] === 0) || (p >= cw && d[(p - cw) * 4 + 3] === 0) || (p < cw * (ch - 1) && d[(p + cw) * 4 + 3] === 0);
+            if (edge && Math.min(d[p * 4], d[p * 4 + 1], d[p * 4 + 2]) > 190) d[p * 4 + 3] = 110;
+        }
+        g.putImageData(img, 0, 0);
+        const out = new Image();
+        out.onload = () => drawNow();
+        out.src = canvas.toDataURL('image/png');
+        cutouts.set(url, out);
+        return null;
+    } catch {
+        cutouts.set(url, src);
+        return src;
+    }
+}
+
+function coverPalette(song) {
+    const fallback = ['#2f3a45', '#7d8fa3', '#f1e6d6'];
+    const url = song?.cgImage?.url;
+    if (!url) return fallback;
+    if (palettes.has(url)) return palettes.get(url);
+    const img = imageFor(url);
+    if (!img) return fallback;
+    try {
+        const c = document.createElement('canvas'); c.width = 24; c.height = 24;
+        const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(img, 0, 0, 24, 24);
+        const d = g.getImageData(0, 0, 24, 24).data;
+        const px = [];
+        for (let i = 0; i < d.length; i += 4) px.push([d[i], d[i + 1], d[i + 2]]);
+        const lum = p => 0.2126 * p[0] + 0.7152 * p[1] + 0.0722 * p[2];
+        px.sort((a, b) => lum(a) - lum(b));
+        const avg = arr => { const s = arr.reduce((a, p) => [a[0] + p[0], a[1] + p[1], a[2] + p[2]], [0, 0, 0]); return `rgb(${s.map(v => Math.round(v / Math.max(1, arr.length))).join(',')})`; };
+        const n = px.length;
+        const result = [avg(px.slice(0, Math.floor(n * 0.2))), avg(px.slice(Math.floor(n * 0.4), Math.floor(n * 0.6))), avg(px.slice(Math.floor(n * 0.85)))];
+        palettes.set(url, result);
+        return result;
+    } catch { palettes.set(url, fallback); return fallback; }
+}
+
+function isChorusSection(song, index) { return /^(final )?chorus|^hook/i.test(mv.parseSections(song.lyrics)[index]?.tag || ''); }
+
+function drawSceneV2(g, record, song, rows, index, t, w, h) {
+    const row = rows[index];
+    const group = record.groups.find(x => x.id === row.shot.group);
+    g.fillStyle = coverPalette(song)[0]; g.fillRect(0, 0, w, h);
+    const span = groupSpan(rows, index);
+    const p = Math.min(1, Math.max(0, (t - span.start) / Math.max(0.1, span.end - span.start)));
+    const push = group?.motion === 'push' ? 1 + 0.03 * p : 1;
+    const bg = imageFor(group?.bg?.url);
+    if (bg) drawCover(g, bg, w, h, push, 0, 0);
+    const diff = group?.diffs.find(d => d.id === row.shot.diff);
+    const person = cutoutFor(diff?.image?.url);
+    if (person) {
+        const breathe = 1 + 0.006 * Math.sin(t * Math.PI * 2 / 3.4);
+        g.save(); g.translate(w / 2, h); g.scale(push * breathe, push * breathe); g.translate(-w / 2, -h);
+        drawCover(g, person, w, h, 1, 0, 0);
+        g.restore();
+    }
+}
+
+function drawMotif(g, record, song, row, t, w, h) {
+    if (!record.motif?.image?.url || !isChorusSection(song, row.sectionIndex)) return;
+    const img = cutoutFor(record.motif.image.url);
+    if (!img) return;
+    const size = Math.min(w, h) * 0.09;
+    for (let i = 0; i < 7; i += 1) {
+        const x = ((i + 0.5) / 7) * w + Math.sin(t * 0.6 + i * 1.7) * w * 0.04;
+        const y = ((t * (0.05 + (i % 3) * 0.02) + i * 0.17) % 1.15) * h - size;
+        g.save(); g.globalAlpha = 0.85; g.translate(x, y); g.rotate(Math.sin(t * 0.8 + i) * 0.6);
+        g.drawImage(img, -size / 2, -size / 2, size, size * img.naturalHeight / Math.max(1, img.naturalWidth));
+        g.restore();
+    }
+}
+
+function drawVerticalLyric(g, text, w, h, since, color, fontStack) {
+    const chars = Array.from(String(text || '')).filter(c => c.trim());
+    if (!chars.length) return;
+    const size = Math.round(Math.min(w, h) * 0.058);
+    const perCol = Math.max(4, Math.floor(h * 0.62 / (size * 1.12)));
+    const shown = Math.min(chars.length, Math.ceil(Math.max(0, since) / 0.07));
+    g.save();
+    g.font = `600 ${size}px ${fontStack}`; g.textAlign = 'center'; g.textBaseline = 'top';
+    g.shadowColor = 'rgba(0,0,0,.45)'; g.shadowBlur = size * 0.3; g.fillStyle = color;
+    for (let i = 0; i < shown; i += 1) {
+        const col = Math.floor(i / perCol), r = i % perCol;
+        g.fillText(chars[i], w * 0.88 - col * size * 1.35, h * 0.08 + r * size * 1.12);
+    }
+    g.restore();
+}
+
+function drawTitleCard(g, song, w, h, alpha) {
+    const palette = coverPalette(song);
+    g.save(); g.globalAlpha = Math.max(0, Math.min(1, alpha));
+    g.fillStyle = palette[0]; g.fillRect(0, 0, w, h);
+    const cover = imageFor(song.cgImage?.url);
+    const size = Math.min(w, h) * 0.56;
+    if (cover) { g.save(); g.shadowColor = 'rgba(0,0,0,.4)'; g.shadowBlur = 30; g.drawImage(cover, (w - size) / 2, h * 0.32 - size / 2, size, size); g.restore(); }
+    g.fillStyle = palette[2]; g.textAlign = 'center';
+    g.font = `700 ${Math.round(Math.min(w, h) * 0.075)}px ${mv.TEGAKI_FONTS.song.stack}`;
+    g.fillText(song.title || '', w / 2, h * 0.32 + size / 2 + Math.min(w, h) * 0.13);
+    g.font = `500 ${Math.round(Math.min(w, h) * 0.032)}px ${mv.TEGAKI_FONTS.sans.stack}`;
+    g.fillText('角色印象曲', w / 2, h * 0.32 + size / 2 + Math.min(w, h) * 0.2);
+    g.restore();
+}
+
+function renderFrameV2(canvas, record, song, t) {
+    const g = canvas.getContext('2d');
+    const w = canvas.width, h = canvas.height;
+    const topt = mv.tegakiOptions(record);
+    const beatLen = 60 / (mv.songBpm(song) || 90);
+    const { rows, total } = mv.shotTimeline(record, song);
+    if (!rows.length) return total;
+    let index = rows.findIndex(r => t >= r.start && t < r.end);
+    if (index < 0) index = t < rows[0].start ? 0 : rows.length - 1;
+    const row = rows[index];
+    drawSceneV2(g, record, song, rows, index, t, w, h);
+    const prev = rows[index - 1];
+    const since = t - row.start;
+    if (prev && prev.shot.group !== row.shot.group && since < 0.5) { g.save(); g.globalAlpha = 1 - since / 0.5; drawSceneV2(g, record, song, rows, index - 1, t, w, h); g.restore(); }
+    drawMotif(g, record, song, row, t, w, h);
+    const palette = coverPalette(song);
+    const font = mv.TEGAKI_FONTS[topt.font] || mv.TEGAKI_FONTS.sans;
+    if (topt.lyric === 'vertical') drawVerticalLyric(g, row.shot.lyric, w, h, since, palette[2], mv.TEGAKI_FONTS.song.stack);
+    else if (topt.lyric === 'big' && row.shot.lyric) drawBigLyric(g, row.shot.lyric, w, h, since, topt.font);
+    else if (topt.lyric === 'subtitle' && row.shot.lyric) {
+        g.save(); g.font = `${font.weight} ${Math.round(Math.min(w, h) * 0.05)}px ${font.stack}`; g.textAlign = 'center';
+        g.lineWidth = 3; g.strokeStyle = 'rgba(30,26,40,.6)'; g.fillStyle = '#fff';
+        g.strokeText(row.shot.lyric, w / 2, h * 0.92); g.fillText(row.shot.lyric, w / 2, h * 0.92); g.restore();
+    }
+    // 卡点：副歌里每小节第一拍，关键词轻轻弹出一次。
+    if (record.keyword && isChorusSection(song, row.sectionIndex)) {
+        const bar = beatLen * 4;
+        const inBar = (t - row.start) % bar;
+        const pop = inBar < 0.25 ? 1.12 - 0.12 * (inBar / 0.25) : 1;
+        g.save(); g.translate(w * 0.08, h * 0.86); g.scale(pop, pop);
+        g.font = `700 ${Math.round(Math.min(w, h) * 0.13)}px ${mv.TEGAKI_FONTS.song.stack}`; g.textAlign = 'left';
+        g.shadowColor = 'rgba(0,0,0,.5)'; g.shadowBlur = 16; g.fillStyle = palette[2]; g.globalAlpha = 0.92;
+        g.fillText(record.keyword, 0, 0); g.restore();
+    }
+    // 片头片尾：播放范围开头 3.5 秒是封面，结尾 2.5 秒淡回封面。
+    const range = mv.playRange(record, song);
+    const fromStart = t - range.start, toEnd = range.end - t;
+    if (fromStart < 3.5) drawTitleCard(g, song, w, h, fromStart < 3 ? 1 : 1 - (fromStart - 3) / 0.5);
+    else if (toEnd < 2.5) drawTitleCard(g, song, w, h, (2.5 - toEnd) / 1.2);
+    return total;
 }
 __m_ui_mvView_js.openMv = openMv;
 __m_ui_mvView_js.navigateMvBack = navigateMvBack;

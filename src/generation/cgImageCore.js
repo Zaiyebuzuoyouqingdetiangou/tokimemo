@@ -76,7 +76,8 @@ const IMAGE_FALLBACK_BLOCKED = new Set([
 function invokeSelectedImageProvider(selectedProvider, prompt, context, options) {
     const visual = sanitizeCgVisualText(prompt);
     if (selectedProvider === chatu8_image.CHATU8_IMAGE_PROVIDER) {
-        return chatu8_image.generateChatu8Image(visual, { ...options, context });
+        const { seed: _seed, ...rest } = options;
+        return chatu8_image.generateChatu8Image(visual, { ...rest, context });
     }
     if (selectedProvider === baibai_image.BAIBAI_IMAGE_PROVIDER) {
         return baibai_image.generateBaiBaiImage(visual, {
@@ -86,11 +87,12 @@ function invokeSelectedImageProvider(selectedProvider, prompt, context, options)
     throw core_text.safeUserError('请在设置里选择柏宝绘或智绘姬。旧渠道图片仍可查看。', 'RMT_IMAGE_PROVIDER_RETIRED');
 }
 
-export async function invokeImageGeneration(prompt, context = core_context.getContext(), { signal = null, provider = null, orientation = 'landscape', characterName = '', promptMetadata = null, onProgress = null, onSettled = null, targetKey = '' } = {}) {
+export async function invokeImageGeneration(prompt, context = core_context.getContext(), { signal = null, provider = null, orientation = 'landscape', characterName = '', promptMetadata = null, onProgress = null, onSettled = null, targetKey = '', seed = 0 } = {}) {
     const settings = core_settings.getPluginSettings(context);
     const selectedProvider = provider === chatu8_image.CHATU8_IMAGE_PROVIDER || provider === baibai_image.BAIBAI_IMAGE_PROVIDER
         ? provider : settings.imageGenerationProvider;
-    const options = { signal, orientation, characterName, promptMetadata, onProgress, onSettled, targetKey };
+    // seed 只交给柏宝绘（公开 API 支持单次 seed）；智绘姬没有公开的单次 seed 接口，不传。
+    const options = { signal, orientation, characterName, promptMetadata, onProgress, onSettled, targetKey, seed: Number.isInteger(seed) && seed > 0 ? seed : 0 };
     try {
         return await invokeSelectedImageProvider(selectedProvider, prompt, context, options);
     } catch (error) {
