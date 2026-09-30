@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 311
-// Source SHA-256: 3d302d31d0a423937843edb090a26a81160235e26137773e706189d3eeead0c5
+// Source SHA-256: 1784d27422ee921fd8e0a9e60592008917f5984aa750ab9f1a2fd1faec1de537
 // Build: python3 verification/build.py <source-root>
 
 const __m_core_themeSongCover_js = Object.create(null);
@@ -84551,6 +84551,7 @@ const runtimeState = __m_core_state_js.state;
 
 
 
+
 const list = value => Array.isArray(value) ? value : [];
 
 function sourceOptions() {
@@ -84632,7 +84633,10 @@ function computeCollection() {
         { id: 'cabinet', name: '陈列柜', value: list(cabinet?.items).length, unit: '件' },
         { id: 'places', name: '去过的地方', value: list(travel?.locations).length, unit: '处' },
     ];
-    const recent = albumEntries.filter(item => item?.unlocked).slice(-3).reverse().map(item => ({ kind: 'CG', title: core_text.normalizeText(item.title, 40) }));
+    const cgUrl = item => { const url = item?.cgImage?.url; return typeof url === 'string' && /^(\/|https?:|blob:|data:image\/)/.test(url) ? url : ''; };
+    const unlockedCg = albumEntries.filter(item => item?.unlocked);
+    const withImage = unlockedCg.filter(cgUrl);
+    const recent = (withImage.length ? withImage : unlockedCg).slice(-3).reverse().map(item => ({ kind: 'CG', title: core_text.normalizeText(item.title, 40), url: cgUrl(item) }));
     const memories = list(memory?.memories);
     const firstCg = albumEntries.find(item => item?.unlocked);
     const recommended = endingRoutes.find(item => item?.id === ending?.recommendedEndingId) || endingRoutes.find(item => item?.available);
@@ -84660,14 +84664,12 @@ function collectionCardStatus() {
         return data.total ? `已点亮 ${data.percent}% · ${data.got} / ${data.total}` : '内容生成后在这里统计';
     } catch { return '先建立当前聊天档案'; }
 }
-
 __m_extras_collection_js.prepareCollectionSource = prepareCollectionSource;
 __m_extras_collection_js.messageTime = messageTime;
 __m_extras_collection_js.chatSpanDays = chatSpanDays;
 __m_extras_collection_js.computeCollection = computeCollection;
 __m_extras_collection_js.collectionCardStatus = collectionCardStatus;
 }
-
 
 function __init_extras_intel_js() {
 // MODULE: extras/intel.js
@@ -85224,6 +85226,37 @@ ${r} .rmt-x-dials b{width:56px;height:64px;border-radius:12px;background:#fbf6ee
 ${r} .rmt-x-wrong{color:#f2b3a6!important;font-size:13px!important}
 ${r} .rmt-x-primary.rmt-x-lamp{background:#f2c38b;color:#262b40}
 ${r} .rmt-archive-portal.rmt-x-off{opacity:.72}
+${r} .rmt-x-recent-tile{position:relative;overflow:hidden}
+${r} .rmt-x-recent-tile img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+${r} .rmt-x-recent-tile em{position:relative}
+${r} button.rmt-x-toggle{display:inline-flex!important;align-items:center;gap:8px;min-height:44px;padding:0 14px 0 8px!important;border-radius:999px!important;border:2px solid #b7c3cf!important;background:#ffffff!important;color:#586b7c!important;font-size:14px!important;font-weight:600;cursor:pointer;flex-shrink:0}
+${r} button.rmt-x-toggle i{width:28px;height:28px;border-radius:50%;background:#b7c3cf!important;display:block}
+${r} button.rmt-x-toggle.on{border-color:#a8527a!important;background:#fbf0f5!important;color:#8a3f63!important}
+${r} button.rmt-x-toggle.on i{background:#a8527a!important}
+${r} .rmt-x-cert-page{display:flex;flex-direction:column;gap:14px;padding:14px 4px 28px;max-width:560px;margin:0 auto;box-sizing:border-box}
+${r} .rmt-x-cert{background:#fffaf1!important;border-radius:20px;padding:10px;box-shadow:0 8px 24px rgba(80,60,40,.12);background-image:radial-gradient(circle at 20% 0%,rgba(242,195,139,.18),transparent 45%),radial-gradient(circle at 90% 100%,rgba(206,114,156,.14),transparent 50%)!important}
+${r} .rmt-x-cert-frame{border:1.5px solid #d9c3a3;outline:1px solid #eadcc6;outline-offset:-6px;border-radius:14px;padding:26px 18px 20px;display:flex;flex-direction:column;gap:20px}
+${r} .rmt-x-cert *{color:#3d3346!important}
+${r} .rmt-x-cert-head{display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center}
+${r} .rmt-x-cert-head small{font-size:11px;letter-spacing:4px;color:#a0845f!important}
+${r} .rmt-x-cert-head h2{margin:0;font-family:"Noto Serif SC","Songti SC",serif;font-size:26px;font-weight:700;color:#3d3346!important}
+${r} .rmt-x-cert-names{margin:0;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;justify-content:center;font-family:"Noto Serif SC","Songti SC",serif}
+${r} .rmt-x-cert-names b{font-size:20px;color:#8a3f63!important}
+${r} .rmt-x-cert-names span{font-size:14px;color:#8b7a66!important}
+${r} .rmt-x-cert-ribbon{width:64px;height:8px;border-radius:999px;background:linear-gradient(90deg,#f2c38b,#e7a9c4)!important}
+${r} .rmt-x-cert-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+${r} .rmt-x-cert-stats div{display:flex;flex-direction:column;align-items:center;gap:2px;padding:12px 4px;border-radius:14px;background:#ffffff!important;border:1px solid #efe2cf}
+${r} .rmt-x-cert-stats b{font-size:24px;font-weight:700;color:#8a3f63!important;font-family:"Noto Serif SC","Songti SC",serif}
+${r} .rmt-x-cert-stats b small{font-size:12px;margin-left:2px;color:#8a3f63!important}
+${r} .rmt-x-cert-stats span{font-size:11px;color:#7a6a58!important;text-align:center}
+${r} .rmt-x-cert-lines{margin:0;padding:0;list-style:none;display:flex;flex-direction:column}
+${r} .rmt-x-cert-lines li{display:flex;flex-direction:column;gap:3px;padding:10px 2px;border-bottom:1px dashed #e6d6bf}
+${r} .rmt-x-cert-lines li:last-child{border-bottom:0}
+${r} .rmt-x-cert-lines span{font-size:11px;letter-spacing:2px;color:#a0845f!important}
+${r} .rmt-x-cert-lines b{font-size:15px;font-weight:600;line-height:1.6;color:#3d3346!important}
+${r} .rmt-x-cert-foot{display:flex;flex-direction:column;align-items:center;gap:4px;padding-top:4px}
+${r} .rmt-x-cert-foot span{font-family:"Noto Serif SC","Songti SC",serif;font-size:14px;letter-spacing:2px;color:#8a3f63!important}
+${r} .rmt-x-cert-foot small{font-size:12px;color:#8b7a66!important}
 ${r} .rmt-x-grad,${r} .rmt-x-grad *{color:#f6efe6!important}
 ${r} .rmt-x-grad small{color:#d9c9b6!important}
 ${r} .rmt-x-grad .rmt-x-grad-thanks{color:#f4bfad!important}
@@ -85276,6 +85309,16 @@ const mv_view = __m_ui_mvView_js;
 const runtimeState = __m_core_state_js.state;
 // 新页面：回忆收集率（含毕业结算）、朋友情报、他在等你（含你不在的时候）。
 // 页面自己渲染、自己处理点击；只通过 overlay 的公开函数换标题和返回键，不碰其他模块的会话数据。
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -85412,7 +85455,7 @@ function renderCollection() {
     const dash = `${(circumference * data.percent / 100).toFixed(1)} ${circumference.toFixed(1)}`;
     const rows = data.rows.map(row => `<div class="rmt-x-row"><div class="rmt-x-row-head"><span>${esc(row.name)}</span><span>${row.got} / ${row.total}</span></div><div class="rmt-x-bar"><i style="width:${row.total ? Math.round(row.got / row.total * 100) : 0}%"></i></div></div>`).join('');
     const counts = data.counts.map(item => `<div class="rmt-x-count"><small>${esc(item.name)}</small><b>${item.value} ${esc(item.unit)}</b></div>`).join('');
-    const recent = data.recent.length ? `<section class="rmt-x-block"><h3>最近点亮</h3><div class="rmt-x-recent">${data.recent.map(item => `<div class="rmt-x-recent-item"><span class="rmt-x-recent-tile"><em>${esc(item.kind)}</em></span><small>${esc(item.title)}</small></div>`).join('')}</div></section>` : '';
+    const recent = data.recent.length ? `<section class="rmt-x-block"><h3>最近点亮</h3><div class="rmt-x-recent">${data.recent.map(item => `<div class="rmt-x-recent-item"><span class="rmt-x-recent-tile">${item.url ? `<img src="${esc(item.url)}" alt="" loading="lazy">` : ''}<em>${esc(item.kind)}</em></span><small>${esc(item.title)}</small></div>`).join('')}</div></section>` : '';
     el.innerHTML = `<main class="rmt-x-page">
       <header class="rmt-x-head"><small>COLLECTION</small><h2>回忆收集率</h2><p>两个人一起点亮过的东西。全部在本地统计，不发请求。</p></header>
       <section class="rmt-x-card rmt-x-ring-card">
@@ -85432,25 +85475,33 @@ function renderGraduation() {
     let data;
     try { data = extras_collection.computeCollection(); } catch { view.sub = 'main'; return renderCollection(); }
     const g = data.graduation;
-    const fireflies = data.counts.find(item => item.id === 'fireflies')?.value || 0;
-    const letters = data.counts.find(item => item.id === 'letters')?.value || 0;
-    const credits = [
-        g.days ? ['一起走过', `${g.days} 天 · ${g.memoryCount} 条记忆`] : ['一起留下', `${g.memoryCount} 条记忆`],
+    const count = id => data.counts.find(item => item.id === id)?.value || 0;
+    const stats = [
+        g.days ? [String(g.days), '天', '一起走过'] : null,
+        [String(g.memoryCount), '条', '共同的记忆'],
+        data.total ? [String(data.percent), '%', '回忆收集率'] : null,
+        count('fireflies') ? [String(count('fireflies')), '颗', '点亮的萤火虫'] : null,
+        count('letters') ? [String(count('letters')), '封', '收到的信'] : null,
+        count('places') ? [String(count('places')), '处', '去过的地方'] : null,
+    ].filter(Boolean).slice(0, 6);
+    const lines = [
         g.firstMemory ? ['最初的记忆', g.firstMemory] : null,
         g.firstCg ? ['第一张 CG', g.firstCg] : null,
         g.firstPlace ? ['一起去过的地方', g.firstPlace] : null,
-        fireflies ? ['点亮的萤火虫', `${fireflies} 颗`] : null,
-        letters ? ['收到的信', `${letters} 封`] : null,
         g.route ? ['当前路线', g.route] : null,
-        data.total ? ['回忆收集率', `${data.percent}%`] : null,
+        g.lastMemory ? ['档案里最后一条', g.lastMemory] : null,
     ].filter(Boolean);
-    el.innerHTML = `<main class="rmt-x-grad">
-      <div class="rmt-x-grad-title"><small>GRADUATION</small><b>心迹回廊</b><i></i><span>${esc(g.characterName)} 与 ${esc(g.userName)}</span></div>
-      ${credits.map(([label, value]) => `<div class="rmt-x-credit"><small>${esc(label)}</small><b>${esc(value)}</b></div>`).join('')}
-      ${g.lastMemory ? `<div class="rmt-x-grad-last"><small>档案里最后一条</small><b>${esc(g.lastMemory)}</b></div>` : ''}
-      <div class="rmt-x-grad-thanks">Thank you for this story</div>
-      <button type="button" class="rmt-x-secondary rmt-x-on-dark" data-rmt-extra="collection-main">返回收集率</button>
-    </main>`;
+    const today = new Date();
+    el.innerHTML = `<main class="rmt-x-cert-page"><article class="rmt-x-cert">
+      <div class="rmt-x-cert-frame">
+        <header class="rmt-x-cert-head"><small>GRADUATION · 心迹回廊</small><h2>毕业纪念册</h2>
+          <p class="rmt-x-cert-names"><b>${esc(g.characterName)}</b><span>与</span><b>${esc(g.userName)}</b></p>
+          <i class="rmt-x-cert-ribbon" aria-hidden="true"></i></header>
+        <div class="rmt-x-cert-stats">${stats.map(([n, unit, label]) => `<div><b>${esc(n)}<small>${esc(unit)}</small></b><span>${esc(label)}</span></div>`).join('')}</div>
+        <ol class="rmt-x-cert-lines">${lines.map(([label, value]) => `<li><span>${esc(label)}</span><b>${esc(value)}</b></li>`).join('')}</ol>
+        <footer class="rmt-x-cert-foot"><span>Thank you for this story</span><small>${today.getFullYear()} 年 ${today.getMonth() + 1} 月 ${today.getDate()} 日</small></footer>
+      </div></article>
+      <button type="button" class="rmt-x-secondary" data-rmt-extra="collection-main">返回收集率</button></main>`;
 }
 
 // ---------- 朋友情报 ----------
@@ -85552,7 +85603,7 @@ function renderWaiting() {
       ${entry}
       <section class="rmt-x-card">
         <div class="rmt-x-switch-row"><span><b>开启“他在等你”</b><small>默认关闭 · 只对当前聊天生效</small></span>
-          <button type="button" role="switch" aria-checked="${settings.enabled}" aria-label="开启他在等你" class="rmt-x-switch${settings.enabled ? ' on' : ''}" data-rmt-extra="waiting-toggle"><i></i></button></div>
+          <button type="button" role="switch" aria-checked="${settings.enabled}" aria-label="开启他在等你" class="rmt-x-toggle${settings.enabled ? ' on' : ''}" data-rmt-extra="waiting-toggle"><i aria-hidden="true"></i><span>${settings.enabled ? '已开启' : '点此开启'}</span></button></div>
         ${options}
         ${generate}
       </section>
@@ -85773,7 +85824,6 @@ function decorateRoom(host) {
         if (style) style.after(node); else host.prepend(node);
     } catch { /* 房间照常显示。 */ }
 }
-
 __m_ui_extrasView_js.isExtraMode = isExtraMode;
 __m_ui_extrasView_js.openExtra = openExtra;
 __m_ui_extrasView_js.renderExtra = renderExtra;
@@ -85786,7 +85836,6 @@ __m_ui_extrasView_js.decorateInbox = decorateInbox;
 __m_ui_extrasView_js.decorateRoom = decorateRoom;
 __m_ui_extrasView_js.EXTRA_MODES = EXTRA_MODES;
 }
-
 
 function __init_extras_mv_js() {
 // MODULE: extras/mv.js
@@ -86135,28 +86184,47 @@ function normalizeSettings(value) {
         appear: Object.hasOwn(MV_APPEAR, value?.appear) ? value.appear : 'face',
         ratio: value?.ratio === '16:9' ? '16:9' : '9:16',
         lang: ['zh', 'en', 'both'].includes(value?.lang) ? value.lang : 'zh',
+        range: ['chorus', 'verseChorus', 'full', 'custom'].includes(value?.range) ? value.range : 'verseChorus',
+        rangeFrom: Math.max(0, Math.round(Number(value?.rangeFrom) || 0)),
+        rangeTo: Math.max(0, Math.round(Number(value?.rangeTo) || 0)),
     };
+}
+
+// 按段落下标选范围：手书只做选中的这一段，视频做整首。
+function selectedSectionIndexes(sections, range, from = 0, to = 0) {
+    const all = sections.map((_, i) => i);
+    if (!sections.length || range === 'full') return all;
+    if (range === 'custom') {
+        const a = Math.min(from, to), b = Math.max(from, to);
+        return all.filter(i => i >= a && i <= Math.min(b, sections.length - 1));
+    }
+    const chorus = sections.findIndex(s => isChorusTag(s.tag));
+    if (chorus < 0) return all;
+    if (range === 'chorus') return [chorus];
+    let first = chorus;
+    for (let i = chorus - 1; i >= 0; i -= 1) { if (/^verse/i.test(sections[i].tag)) { first = i; break; } }
+    return all.filter(i => i >= first && i <= chorus);
 }
 
 function storyboardPrompt(context, memory, song, settings) {
     const charName = core_text.normalizeText(memory?.characterName || context?.name2, 120) || '{{char}}';
     const userName = core_text.normalizeText(memory?.userName || context?.name1, 120) || '{{user}}';
-    const sections = parseSections(song.lyrics).map((s, i) => ({ index: i, section: s.tag, lines: s.lines }));
+    const parsed = parseSections(song.lyrics);
+    const keep = settings.output === 'video' ? parsed.map((_, i) => i) : selectedSectionIndexes(parsed, settings.range, settings.rangeFrom, settings.rangeTo);
+    const sections = parsed.map((s, i) => ({ index: i, section: s.tag, lines: s.lines })).filter(s => keep.includes(s.index));
     const appear = settings.appear === 'face' ? `${userName} 可以露脸出镜。`
         : settings.appear === 'back' ? `${userName} 只能以背影、手或剪影出现，不画正脸。` : `${userName} 不出现在画面里。`;
     return `${generation_prompts.promptSafetyBoundary(context, 'MV 分镜', null, memory)}
 【任务】
 为已写好的角色印象曲「${song.title}」写一张 MV 分镜表。画面风格：${styleOf(settings).name}；比例：${settings.ratio === '9:16' ? '竖屏 9:16' : '横屏 16:9'}。
-歌词、曲风不改。歌里的比喻和愿望不是已经发生的事；画面可以是意象、回忆或想象，但凡是写成“过去真实发生”的共同经历，必须来自档案并填 sourceMemoryIds。
-出镜：${charName} 是主角。${appear}不替 ${userName} 新增台词、承诺或决定，${userName} 的动作只写歌词或档案里有依据的。
+歌词、曲风不改。画面跟着歌词的意象、情绪和故事走，可以是意象、想象或象征画面，不需要对应聊天档案，也不要逐条复述聊天里的事件。人物外貌、身份和世界观以角色设定为准。
+出镜：${charName} 是主角。${appear}不替 ${userName} 新增台词、承诺或决定。
+${settings.output === 'video' ? '' : '这是手书：只为下面列出的段落写镜头，其他段落不写。'}
 
 【歌曲】
 曲风：${core_text.normalizeText(song.styleDescription || song.stylePrompt, 600)}
 段落（sectionIndex 从 0 开始）：
 ${JSON.stringify(sections)}
-
-【聊天档案（已发生事实的唯一来源）】
-${generation_prompts.promptArchiveSlice(memory, 40)}
 
 【写作要求】
 1. 按段落写镜头：${settings.output === 'video' ? '每段 1～3 镜' : '手书节奏：每句歌词一镜'}，纯器乐段 1 镜。每镜 sectionIndex 指向所在段落；lyric 抄写这一镜对应的那一句原歌词（器乐段留空）。
@@ -86170,7 +86238,7 @@ ${generation_prompts.promptArchiveSlice(memory, 40)}
 只输出一个 JSON 对象。
 第一个字符必须是 {，最后一个字符必须是 }。
 不要前言，不要解释，不要代码围栏，不要在 JSON 外面写任何字。
-{"shots":[{"sectionIndex":0,"lyric":"","plain":"……","who":"char","shot":"中景：看到上半身","move":"镜头慢慢推近","motion":"push","imagePrompt":"……","videoZh":"……","videoEn":"……","sourceMemoryIds":[]}]}`;
+{"shots":[{"sectionIndex":0,"lyric":"","plain":"……","who":"char","shot":"中景：看到上半身","move":"镜头慢慢推近","motion":"push","imagePrompt":"……","videoZh":"……","videoEn":"……"}]}`;
 }
 
 function normalizeShots(data, memory, sectionCount) {
@@ -86220,6 +86288,7 @@ async function generateStoryboard(songId, settingsInput) {
             const previous = target.base.songs[songId];
             return { id: songId, createdAt: previous?.createdAt || Date.now(), settings,
                 shots: normalizeShots(raw, memory, parseSections(song.lyrics).length),
+                tegaki: { ...(previous?.tegaki || {}), range: settings.range, rangeFrom: settings.rangeFrom, rangeTo: settings.rangeTo },
                 songTitle: song.title };
         });
     } finally { running.delete(key); }
@@ -86333,20 +86402,28 @@ function mvScope(context) { return scopeOf(context); }
 
 const TEGAKI_RANGES = Object.freeze({ chorus: '第一段副歌', verseChorus: '一段主歌 + 副歌', full: '整首' });
 const TEGAKI_RHYTHMS = Object.freeze({ line: '每句一换', beat: '跟着拍子切' });
+const TEGAKI_FONTS = Object.freeze({
+    kai: { name: '手写感', stack: '"Kaiti SC","STKaiti","KaiTi","BiauKai","Kaiti TC",serif' },
+    song: { name: '书卷', stack: '"Songti SC","STSong","Noto Serif SC","Source Han Serif SC","SimSun",serif' },
+    round: { name: '圆润', stack: '"Yuanti SC","PingFang SC","Hiragino Sans GB","Noto Sans SC",sans-serif' },
+});
 const TEGAKI_LYRICS = Object.freeze({ subtitle: '字幕', big: '手书大字', none: '不显示' });
 const TEGAKI_PRESETS = Object.freeze({
     classic: { name: '手书经典', desc: '跟拍子快切、歌词大字，最像手书', rhythm: 'beat', lyric: 'big', motion: () => 'still', cut: () => 'cut' },
     gentle: { name: '抒情慢拍', desc: '每句一换、淡入淡出、轻轻推近', rhythm: 'line', lyric: 'subtitle', motion: chorus => chorus ? 'sway' : 'push', cut: () => 'fade' },
-    bright: { name: '明快跟拍', desc: '副歌闪白切换、画面推近', rhythm: 'beat', lyric: 'big', motion: () => 'push', cut: chorus => chorus ? 'flash' : 'cut' },
+    bright: { name: '明快跟拍', desc: '副歌跟拍切换，其余轻推', rhythm: 'beat', lyric: 'big', motion: () => 'push', cut: chorus => chorus ? 'cut' : 'fade' },
 });
 
 function tegakiOptions(record) {
     const value = record?.tegaki || {};
     return {
-        range: Object.hasOwn(TEGAKI_RANGES, value.range) ? value.range : 'verseChorus',
+        range: Object.hasOwn(TEGAKI_RANGES, value.range) || value.range === 'custom' ? value.range : (record?.settings?.range || 'verseChorus'),
         rhythm: Object.hasOwn(TEGAKI_RHYTHMS, value.rhythm) ? value.rhythm : 'line',
         lyric: Object.hasOwn(TEGAKI_LYRICS, value.lyric) ? value.lyric : (record?.subtitles === false ? 'none' : 'subtitle'),
         preset: Object.hasOwn(TEGAKI_PRESETS, value.preset) ? value.preset : '',
+        font: Object.hasOwn(TEGAKI_FONTS, value.font) ? value.font : 'kai',
+        rangeFrom: Math.max(0, Math.round(Number(value.rangeFrom) || 0)),
+        rangeTo: Math.max(0, Math.round(Number(value.rangeTo) || 0)),
     };
 }
 
@@ -86358,6 +86435,12 @@ function playRange(record, song) {
     const option = tegakiOptions(record).range;
     const whole = { start: 0, end: total, label: TEGAKI_RANGES.full };
     if (option === 'full') return whole;
+    if (option === 'custom') {
+        const o = record?.tegaki || {};
+        const idx = selectedSectionIndexes(sections, 'custom', o.rangeFrom, o.rangeTo);
+        if (!idx.length) return whole;
+        return { start: times[idx[0]].start, end: times[idx.at(-1)].end, label: `${sections[idx[0]].name} → ${sections[idx.at(-1)].name}` };
+    }
     const chorus = sections.findIndex(s => isChorusTag(s.tag));
     if (chorus < 0) return whole;
     if (option === 'chorus') return { start: times[chorus].start, end: times[chorus].end, label: TEGAKI_RANGES.chorus };
@@ -86409,6 +86492,7 @@ __m_extras_mv_js.formatTime = formatTime;
 __m_extras_mv_js.timetableText = timetableText;
 __m_extras_mv_js.srtText = srtText;
 __m_extras_mv_js.normalizeSettings = normalizeSettings;
+__m_extras_mv_js.selectedSectionIndexes = selectedSectionIndexes;
 __m_extras_mv_js.isMvRunning = isMvRunning;
 __m_extras_mv_js.generateStoryboard = generateStoryboard;
 __m_extras_mv_js.rewriteShot = rewriteShot;
@@ -86431,6 +86515,7 @@ __m_extras_mv_js.MV_MOTIONS = MV_MOTIONS;
 __m_extras_mv_js.MV_CUTS = MV_CUTS;
 __m_extras_mv_js.TEGAKI_RANGES = TEGAKI_RANGES;
 __m_extras_mv_js.TEGAKI_RHYTHMS = TEGAKI_RHYTHMS;
+__m_extras_mv_js.TEGAKI_FONTS = TEGAKI_FONTS;
 __m_extras_mv_js.TEGAKI_LYRICS = TEGAKI_LYRICS;
 __m_extras_mv_js.TEGAKI_PRESETS = TEGAKI_PRESETS;
 }
@@ -86631,6 +86716,9 @@ ${r} .rmt-mv-choice b{font-size:15px}
 ${r} .rmt-mv-choice small{font-size:12px;line-height:1.5;color:var(--rmt-theme-muted,#586b7c)}
 ${r} .rmt-mv-choice em{font-style:normal;font-size:12px;font-weight:600;color:#2f6b66}
 ${r} .rmt-mv-grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+${r} .rmt-mv-range-selects{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+${r} .rmt-mv-range-selects label{display:flex;flex-direction:column;gap:4px;font-size:12px}
+${r} .rmt-mv-range-selects select{min-height:40px;border-radius:10px;border:1px solid var(--rmt-theme-border,#cfdae5);padding:0 8px;font:inherit;font-size:13px;background:var(--rmt-theme-surface-solid,#fff);color:var(--rmt-theme-text,#34495d)}
 ${r} .rmt-mv-presets{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
 ${r} .rmt-mv-toggle{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;padding:4px;background:#e9e7f2;border-radius:14px}
 ${r} .rmt-mv-toggle button{height:40px;border-radius:10px;border:0;font-size:14px;font-weight:600;cursor:pointer;background:transparent;color:#586b7c}
@@ -86800,6 +86888,16 @@ function btn(action, label, { cls = 'rmt-x-secondary', id = '', disabled = false
 
 // ---------- ① 三步开始 ----------
 
+function rangePicker(scope, state, sections) {
+    const ranges = { chorus: '第一段副歌', verseChorus: '一段主歌 + 副歌', full: '整首', custom: '自己选' };
+    const idx = mv.selectedSectionIndexes(sections, state.range, state.rangeFrom, state.rangeTo);
+    const buttons = Object.entries(ranges).map(([id, label]) => btn('range-pick', label, { id, cls: 'rmt-x-seg' + (state.range === id ? ' active' : ''), extra: ` aria-pressed="${state.range === id}" data-rmt-mv-scope="${scope}"` })).join('');
+    const options = value => sections.map((s, i) => `<option value="${i}"${i === value ? ' selected' : ''}>${i + 1}. ${esc(s.name)}${s.lines[0] ? ' · ' + esc(Array.from(s.lines[0]).slice(0, 10).join('')) : ''}</option>`).join('');
+    const custom = state.range === 'custom' ? `<div class="rmt-mv-range-selects"><label>从<select data-rmt-mv-range="from" data-rmt-mv-scope="${scope}">${options(state.rangeFrom)}</select></label><label>到<select data-rmt-mv-range="to" data-rmt-mv-scope="${scope}">${options(state.rangeTo)}</select></label></div>` : '';
+    const lines = idx.reduce((n, i) => n + (sections[i]?.lines.length || 1), 0);
+    return `<div class="rmt-mv-grid2">${buttons}</div>${custom}<p class="rmt-x-note">这次做：${idx.length ? esc(sections[idx[0]].name) + (idx.length > 1 ? ' → ' + esc(sections[idx.at(-1)].name) : '') : '整首'} · ${idx.length} 段 · 约 ${lines} 句歌词。手书通常只做一段，镜头少、节奏紧。</p>`;
+}
+
 function renderSetup(song, record) {
     const d = view.draft || mv.normalizeSettings(null);
     const steps = ['做成什么', '画风与出镜', '确认'].map((label, i) => `<span class="${view.step === i + 1 ? 'on' : view.step > i + 1 ? 'done' : ''}"><b>${view.step > i + 1 ? '✓' : i + 1}</b>${label}</span>`).join('');
@@ -86810,7 +86908,8 @@ function renderSetup(song, record) {
           ${choice('set-output', 'video', d.output === 'video', '视频 · 进阶', '画面真正动起来，像电影片段。', '需要把提示词拿到视频工具里生成')}`;
     } else if (view.step === 2) {
         const styles = mv.MV_STYLES[d.output];
-        content = `<h3 class="rmt-x-section-title">画风</h3><div class="rmt-mv-grid2">${styles.map(s => choice('set-style', s.id, d.style === s.id, s.name, s.desc)).join('')}</div>
+        const sectionsForRange = mv.parseSections(song.lyrics);
+        content = `${d.output === 'tegaki' ? `<h3 class="rmt-x-section-title">做哪一段</h3>${rangePicker('draft', d, sectionsForRange)}` : ''}<h3 class="rmt-x-section-title">画风</h3><div class="rmt-mv-grid2">${styles.map(s => choice('set-style', s.id, d.style === s.id, s.name, s.desc)).join('')}</div>
           <h3 class="rmt-x-section-title">你要出镜吗？</h3>
           ${choice('set-appear', 'face', d.appear === 'face', '露脸出镜', '按你填写的外貌来画。')}
           ${choice('set-appear', 'back', d.appear === 'back', '只拍背影或手', '有你的存在感，但不画脸。')}
@@ -86870,18 +86969,25 @@ function renderBoard(song, record) {
             const status = tegaki ? (imgUrl(shot) ? '✓ 画好了' : '○ 还没画') : (shot.videoDone ? '✓ 视频做好了' : imgUrl(shot) ? '○ 视频还没做' : '○ 还没画图');
             return `<article class="rmt-mv-shot${ok ? ' done' : ''}"><div class="rmt-mv-shot-row">${thumb(shot, record, `第 ${number} 镜`)}
               <div class="rmt-mv-shot-copy"><small>${esc(shot.shot || '')}${shot.move ? ' · ' + esc(shot.move) : ''}</small><b>${esc(shot.plain)}</b>
-              <div class="rmt-x-chips"><span class="rmt-x-chip muted">${esc(who[shot.who] || '他')}</span><span class="rmt-x-chip${ok ? '' : ' muted'}">${status}</span>${shot.sourceMemoryIds?.length ? `<span class="rmt-x-chip">依据 ${esc(shot.sourceMemoryIds.join(' · '))}</span>` : ''}</div></div></div>
+              <div class="rmt-x-chips"><span class="rmt-x-chip muted">${esc(who[shot.who] || '他')}</span><span class="rmt-x-chip${ok ? '' : ' muted'}">${status}</span></div></div></div>
               <div class="rmt-mv-actions">${btn('draw', drawing ? '正在画…' : imgUrl(shot) ? '重画这张' : '画这一张', { id: shot.id, disabled: drawing || view.drawingAll, cls: imgUrl(shot) ? 'rmt-x-secondary' : 'rmt-x-primary' })}
               ${!tegaki ? btn('open-shot', shot.videoDone ? '再看看' : '去生成视频', { id: shot.id, cls: 'rmt-x-primary rmt-x-dark' }) : uploadLabel(shot.id, '用自己的图')}</div></article>`;
         }).join('');
     }).join('');
     const warn = mv.frameNeedsUserLooks(record, context) && shots.some(s => s.who === 'both' || s.who === 'user')
         ? `<div class="rmt-mv-warn">还没有填写你的外貌，画出来的你可能每张不一样。</div>${looksEditor()}` : '';
+    const rangeCard = tegaki ? (() => {
+        const o = mv.tegakiOptions(record);
+        const want = mv.selectedSectionIndexes(sections, o.range, o.rangeFrom, o.rangeTo);
+        const missing = want.filter(i => !shots.some(s => s.sectionIndex === i)).length;
+        return `<section class="rmt-x-card"><b>做哪一段</b>${rangePicker('record', o, sections)}${missing ? `<div class="rmt-mv-warn">选中的段落里有 ${missing} 段还没有镜头。${btn('rewrite-board', '按这一段重新写分镜', { cls: 'rmt-x-secondary' })}</div>` : ''}</section>`;
+    })() : '';
     const tools = tegaki ? `${remaining ? btn(view.drawingAll ? 'draw-stop' : 'draw-all', view.drawingAll ? '停止连续绘制' : `一次画完剩下的 ${remaining} 张（会用 ${remaining} 次生图）`) : ''}
         ${btn('go-tegaki', '去手书剪辑台', { cls: 'rmt-x-primary' })}<p class="rmt-x-note">没画的镜头在剪辑台里会先用上一张代替，随时能预览。</p>`
         : `${btn('go-finish', '全部做完后：拼成 MV', { cls: 'rmt-x-primary rmt-x-dark' })}`;
     page('镜头清单', '印象曲', `${head(song.title, '镜头清单', `${shots.length} 镜 · ${mv.normalizeSettings(record.settings).ratio === '9:16' ? '竖屏' : '横屏'}。同一张分镜表，可以做成手书，也可以做成视频。`)}
       <div class="rmt-mv-toggle">${['tegaki', 'video'].map(m => `<button type="button" class="${view.mode === m ? 'on' : ''}" aria-pressed="${view.mode === m}" data-rmt-mv="mode" data-rmt-mv-id="${m}">${m === 'tegaki' ? '手书' : '视频'}</button>`).join('')}</div>
+      ${rangeCard}
       <section class="rmt-x-card"><div class="rmt-x-row-head"><b>${tegaki ? `已画好 ${drawn} / ${shots.length} 张` : `视频已做好 ${videos} / ${shots.length} 镜`}</b><span>${tegaki ? '画好的图两边通用' : '先画第一张图再做视频'}</span></div>
         <div class="rmt-x-bar"><i style="width:${shots.length ? Math.round(done / shots.length * 100) : 0}%"></i></div>${tools}</section>
       ${warn}${groups}
@@ -86902,7 +87008,7 @@ function renderShot(song, record) {
     const prompts = settings.lang === 'both' ? [['中文', shot.videoZh], ['English', shot.videoEn]] : settings.lang === 'en' ? [['', shot.videoEn || shot.videoZh]] : [['', shot.videoZh || shot.videoEn]];
     const promptHtml = prompts.map(([label, text], i) => `${label ? `<small class="rmt-x-note">${label}</small>` : ''}<div class="rmt-mv-prompt">${esc(text)}</div>${btn('copy', copied ? '✓ 已复制' : '复制这段话', { id: String(i), cls: copied ? 'rmt-x-secondary' : 'rmt-x-primary' })}`).join('');
     page(`第 ${index + 1} 镜`, '镜头清单', `${head(`视频 · 第 ${index + 1} / ${shots.length} 镜`, shot.plain, shot.lyric ? `对应歌词：${shot.lyric}` : '')}
-      <div class="rmt-x-chips">${shot.shot ? `<span class="rmt-x-chip muted">${esc(shot.shot)}</span>` : ''}${shot.move ? `<span class="rmt-x-chip muted">${esc(shot.move)}</span>` : ''}${shot.sourceMemoryIds?.length ? `<span class="rmt-x-chip">来自回忆 ${esc(shot.sourceMemoryIds.join(' · '))}</span>` : ''}</div>
+      <div class="rmt-x-chips">${shot.shot ? `<span class="rmt-x-chip muted">${esc(shot.shot)}</span>` : ''}${shot.move ? `<span class="rmt-x-chip muted">${esc(shot.move)}</span>` : ''}</div>
       ${step(1, '画第一张图', '先画出这一镜开头的样子。视频工具会照着这张图让画面动起来，人物才不会变脸。',
         `<div class="rmt-mv-shot-row">${thumb(shot, record, imgUrl(shot) ? '第一张图' : '还没画')}<div class="rmt-mv-shot-copy">${btn('draw', drawing ? '正在画…' : imgUrl(shot) ? '✓ 已画好 · 重画' : '画第一张图', { id: shot.id, disabled: drawing, cls: imgUrl(shot) ? 'rmt-x-secondary' : 'rmt-x-primary' })}
          ${imgUrl(shot) ? `<a class="rmt-x-secondary" style="display:flex;align-items:center;justify-content:center;text-decoration:none" href="${esc(imgUrl(shot))}" download target="_blank" rel="noopener">保存图片</a>` : ''}${uploadLabel(shot.id)}</div></div>`, !!imgUrl(shot))}
@@ -86965,10 +87071,11 @@ function tegakiControls(record, song) {
     const presets = Object.entries(mv.TEGAKI_PRESETS).map(([id, p]) => `<button type="button" class="rmt-mv-choice${o.preset === id ? ' on' : ''}" aria-pressed="${o.preset === id}" data-rmt-mv="tegaki-preset" data-rmt-mv-id="${id}"><span><b>${esc(p.name)}</b><small>${esc(p.desc)}</small></span></button>`).join('');
     return `<b style="font-size:14px">新手一键配置</b><div class="rmt-mv-presets">${presets}</div>
       <p class="rmt-x-note">一键设好全部镜头的动作、切换方式和歌词样式；之后仍可逐镜修改。</p>
-      <b style="font-size:14px">截取哪一段</b><div class="rmt-x-segs">${seg2('tegaki-range', mv.TEGAKI_RANGES, o.range)}</div>
-      <p class="rmt-x-note">现在：${esc(range.label)} · ${mv.formatTime(range.start)}–${mv.formatTime(range.end)}（约 ${Math.max(0, Math.round(range.end - range.start))} 秒）。手书通常只做一段，不必整首。</p>
+      <b style="font-size:14px">截取哪一段</b>${rangePicker('record', o, mv.parseSections(song.lyrics))}
+      <p class="rmt-x-note">现在：${mv.formatTime(range.start)}–${mv.formatTime(range.end)}（约 ${Math.max(0, Math.round(range.end - range.start))} 秒）。</p>
       <b style="font-size:14px">切换节奏</b><div class="rmt-mv-grid2">${seg2('tegaki-rhythm', mv.TEGAKI_RHYTHMS, o.rhythm)}</div>
-      <b style="font-size:14px">歌词</b><div class="rmt-x-segs">${seg2('tegaki-lyric', mv.TEGAKI_LYRICS, o.lyric)}</div>`;
+      <b style="font-size:14px">歌词</b><div class="rmt-x-segs">${seg2('tegaki-lyric', mv.TEGAKI_LYRICS, o.lyric)}</div>
+      ${o.lyric === 'none' ? '' : `<b style="font-size:14px">字体</b><div class="rmt-x-segs">${seg2('tegaki-font', Object.fromEntries(Object.entries(mv.TEGAKI_FONTS).map(([k, v]) => [k, v.name])), o.font)}</div><p class="rmt-x-note">字体用设备自带的，不同手机效果会略有差异。</p>`}`;
 }
 
 function renderTegaki(song, record) {
@@ -87086,9 +87193,9 @@ function drawShot(g, row, rows, index, t, w, h) {
     g.fillStyle = '#fbf6ee'; g.fillRect(0, 0, w, h);
     const beat = beatVariant(row, t);
     if (img && beat && beat.variant) {
-        if (beat.variant === 1) drawCover(g, img, w, h, 1.22, 0, h * 0.06);
-        else if (beat.variant === 2) drawCover(g, img, w, h, 1.12, -w * 0.05, 0);
-        else drawCover(g, img, w, h, 1.35, w * 0.03, -h * 0.04);
+        if (beat.variant === 1) drawCover(g, img, w, h, 1.08, 0, h * 0.02);
+        else if (beat.variant === 2) drawCover(g, img, w, h, 1.06, -w * 0.02, 0);
+        else drawCover(g, img, w, h, 1.1, w * 0.015, -h * 0.015);
     } else if (img) {
         const motion = row.shot.motion;
         if (motion === 'push') drawCover(g, img, w, h, 1 + 0.12 * p, 0, 0);
@@ -87109,22 +87216,22 @@ function wrap(g, text, x, y, max, lineHeight) {
     lines.slice(0, 4).forEach((l, i) => g.fillText(l, x, y + (i - (Math.min(lines.length, 4) - 1) / 2) * lineHeight));
 }
 
-function drawBigLyric(g, text, w, h, since) {
-    const size = Math.round(Math.min(w, h) * 0.1);
+function drawBigLyric(g, text, w, h, since, fontId = 'kai') {
+    const size = Math.round(Math.min(w, h) * 0.078);
+    const stack = (mv.TEGAKI_FONTS[fontId] || mv.TEGAKI_FONTS.kai).stack;
     const chars = Array.from(String(text));
-    const perLine = Math.max(4, Math.floor(w * 0.82 / size));
+    const perLine = Math.max(4, Math.floor(w * 0.8 / size));
     const lines = [];
     for (let i = 0; i < chars.length && lines.length < 3; i += perLine) lines.push(chars.slice(i, i + perLine).join(''));
-    const shown = Math.min(1, since / 0.25);
     g.save();
-    g.translate(w / 2, h * 0.64); g.rotate(-0.045);
-    g.globalAlpha = shown;
-    g.font = `900 ${size}px "Noto Sans SC","PingFang SC","Hiragino Sans GB",sans-serif`;
-    g.textAlign = 'center'; g.lineJoin = 'round';
+    g.translate(w / 2, h * 0.7); g.rotate(-0.025);
+    g.globalAlpha = Math.min(1, since / 0.35);
+    g.font = `500 ${size}px ${stack}`;
+    g.textAlign = 'center';
+    g.shadowColor = 'rgba(20,16,28,.55)'; g.shadowBlur = size * 0.35; g.shadowOffsetY = size * 0.04;
     lines.forEach((line, i) => {
-        const y = (i - (lines.length - 1) / 2) * size * 1.15;
-        g.lineWidth = size * 0.28; g.strokeStyle = 'rgba(28,24,36,.9)'; g.strokeText(line, 0, y);
-        g.fillStyle = '#fff'; g.fillText(line, 0, y);
+        const y = (i - (lines.length - 1) / 2) * size * 1.3;
+        g.fillStyle = '#fffdf8'; g.fillText(line, 0, y);
     });
     g.restore();
 }
@@ -87148,8 +87255,8 @@ function renderFrame(canvas, record, song, t) {
         g.save(); g.globalAlpha = 1 - since / 0.3; g.fillStyle = '#fff'; g.fillRect(0, 0, w, h); g.restore();
     }
     const beat = beatVariant(row, t);
-    if (beat && beat.k > 0 && beat.since < 0.08) { g.save(); g.globalAlpha = 0.45 * (1 - beat.since / 0.08); g.fillStyle = '#fff'; g.fillRect(0, 0, w, h); g.restore(); }
-    if (topt.lyric === 'big' && row.shot.lyric) drawBigLyric(g, row.shot.lyric, w, h, since);
+    if (beat && beat.k > 0 && beat.since < 0.08) { g.save(); g.globalAlpha = 0.18 * (1 - beat.since / 0.08); g.fillStyle = '#fff'; g.fillRect(0, 0, w, h); g.restore(); }
+    if (topt.lyric === 'big' && row.shot.lyric) drawBigLyric(g, row.shot.lyric, w, h, since, topt.font);
     if (topt.lyric === 'subtitle' && row.shot.lyric) {
         let size = Math.round(Math.min(w, h) * 0.055), lines = [];
         const split = () => {
@@ -87163,7 +87270,7 @@ function renderFrame(canvas, record, song, t) {
             return result;
         };
         do {
-            g.font = `600 ${size}px "Noto Serif SC","Songti SC",serif`;
+            g.font = `500 ${size}px ${(mv.TEGAKI_FONTS[topt.font] || mv.TEGAKI_FONTS.kai).stack}`;
             lines = split();
             if (lines.length * size * 1.35 <= h * 0.32 || size <= 1) break;
             size -= 1;
@@ -87428,7 +87535,7 @@ async function drawAll() {
     renderMv();
     try {
         for (const shot of shots) {
-            if (view.stopAll || !isView(opened)) break;
+            if (view.stopAll || view.drawQueue !== queue) break;
             if (hasImg(shot)) continue;
             const result = await mv.drawFrame(opened.songId, shot.id);
             reportResult(result);
@@ -87478,13 +87585,23 @@ function handleMvClick(event) {
             p.then(result => { reportResult(result, '分镜写好了。'); if (isView(opened)) { if (result?.pending) renderMv(); else { view.mode = settings.output; go('board'); } } })
                 .catch(error => { toastError(error); if (isView(opened)) renderMv(); });
         }
-        else if (action === 'rewrite-board') { view.step = 1; view.draft = mv.normalizeSettings(record?.settings); go('setup'); }
+        else if (action === 'rewrite-board') { view.step = 1; view.draft = mv.normalizeSettings({ ...(record?.settings || {}), ...(record?.tegaki?.range ? { range: record.tegaki.range, rangeFrom: record.tegaki.rangeFrom, rangeTo: record.tegaki.rangeTo } : {}) }); go('setup'); }
         else if (action === 'mode') { view.mode = id === 'video' ? 'video' : 'tegaki'; renderMv(); }
         else if (action === 'draw') void runDraw(id);
         else if (action === 'draw-all') void drawAll();
         else if (action === 'tegaki-preset') { mv.applyTegakiPreset(view.songId, id, currentSong()); toastOk('已按“' + (mv.TEGAKI_PRESETS[id]?.name || '') + '”配好镜头。'); renderMv(); }
         else if (action === 'tegaki-range') { mv.patchTegaki(view.songId, { range: id }); renderMv(); }
         else if (action === 'tegaki-rhythm') { mv.patchTegaki(view.songId, { rhythm: id, preset: '' }); renderMv(); }
+        else if (action === 'tegaki-font') { mv.patchTegaki(view.songId, { font: id }); renderMv(); }
+        else if (action === 'range-pick') {
+            const sections = mv.parseSections(currentSong().lyrics);
+            const source = el.dataset.rmtMvScope === 'draft' ? view.draft : mv.tegakiOptions(currentRecord());
+            const extra = {};
+            if (id === 'custom') { const idx = mv.selectedSectionIndexes(sections, source.range, source.rangeFrom, source.rangeTo); extra.rangeFrom = idx[0] || 0; extra.rangeTo = idx.at(-1) ?? Math.max(0, sections.length - 1); }
+            if (el.dataset.rmtMvScope === 'draft') { view.draft = mv.normalizeSettings({ ...view.draft, range: id, ...extra }); }
+            else mv.patchTegaki(view.songId, { range: id, ...extra });
+            renderMv();
+        }
         else if (action === 'tegaki-lyric') { mv.patchTegaki(view.songId, { lyric: id, preset: '' }); renderMv(); }
         else if (action === 'draw-stop') { view.stopAll = true; globalThis.toastr?.info?.('画完正在画的这一张后停止。', '心迹回廊 · MV'); }
         else if (action === 'go-tegaki') go('tegaki');
@@ -87562,6 +87679,16 @@ function handleMvChange(event) {
         localUrls.set(key, URL.createObjectURL(file));
         void mv_media.putMedia(key, file, file.name).then(ok => { if (!ok) globalThis.toastr?.info?.('这台设备没能记住这张图，刷新后需要重新选择。', '心迹回廊 · MV'); });
         try { mv.patchShot(view.songId, shotId, { image: { local: key, at: Date.now() } }); } catch (error) { toastError(error); }
+        renderMv();
+        return true;
+    }
+    if (input?.matches?.('[data-rmt-mv-range]')) {
+        const key = input.dataset.rmtMvRange === 'to' ? 'rangeTo' : 'rangeFrom';
+        const value = Math.max(0, Number(input.value) || 0);
+        try {
+            if (input.dataset.rmtMvScope === 'draft') view.draft = mv.normalizeSettings({ ...view.draft, [key]: value });
+            else mv.patchTegaki(view.songId, { [key]: value });
+        } catch (error) { toastError(error); }
         renderMv();
         return true;
     }

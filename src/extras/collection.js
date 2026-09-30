@@ -87,7 +87,10 @@ export function computeCollection() {
         { id: 'cabinet', name: '陈列柜', value: list(cabinet?.items).length, unit: '件' },
         { id: 'places', name: '去过的地方', value: list(travel?.locations).length, unit: '处' },
     ];
-    const recent = albumEntries.filter(item => item?.unlocked).slice(-3).reverse().map(item => ({ kind: 'CG', title: core_text.normalizeText(item.title, 40) }));
+    const cgUrl = item => { const url = item?.cgImage?.url; return typeof url === 'string' && /^(\/|https?:|blob:|data:image\/)/.test(url) ? url : ''; };
+    const unlockedCg = albumEntries.filter(item => item?.unlocked);
+    const withImage = unlockedCg.filter(cgUrl);
+    const recent = (withImage.length ? withImage : unlockedCg).slice(-3).reverse().map(item => ({ kind: 'CG', title: core_text.normalizeText(item.title, 40), url: cgUrl(item) }));
     const memories = list(memory?.memories);
     const firstCg = albumEntries.find(item => item?.unlocked);
     const recommended = endingRoutes.find(item => item?.id === ending?.recommendedEndingId) || endingRoutes.find(item => item?.available);

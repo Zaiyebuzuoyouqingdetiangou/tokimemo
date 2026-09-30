@@ -1,7 +1,7 @@
 {
   "display_name": "心迹回廊",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.99.99-r84.188-tegaki-rhythm",
+  "js": "index.js?heartbeat=0.99.99-r84.189-tegaki-range",
   "author": "Toto",
   "version": "0.99.99",
   "auto_update": true,
@@ -10,6 +10,6 @@
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r84.188：手书节奏与截段、沿用原有画风、毕业结算可读性、世界书搜索。",
+  "description": "r84.189：手书先选段落、歌词字体、印象曲分镜不再要求记忆依据；毕业纪念册、他在等你开关、收集率缩略图。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }

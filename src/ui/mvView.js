@@ -122,6 +122,9 @@ ${r} .rmt-mv-choice b{font-size:15px}
 ${r} .rmt-mv-choice small{font-size:12px;line-height:1.5;color:var(--rmt-theme-muted,#586b7c)}
 ${r} .rmt-mv-choice em{font-style:normal;font-size:12px;font-weight:600;color:#2f6b66}
 ${r} .rmt-mv-grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+${r} .rmt-mv-range-selects{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+${r} .rmt-mv-range-selects label{display:flex;flex-direction:column;gap:4px;font-size:12px}
+${r} .rmt-mv-range-selects select{min-height:40px;border-radius:10px;border:1px solid var(--rmt-theme-border,#cfdae5);padding:0 8px;font:inherit;font-size:13px;background:var(--rmt-theme-surface-solid,#fff);color:var(--rmt-theme-text,#34495d)}
 ${r} .rmt-mv-presets{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
 ${r} .rmt-mv-toggle{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;padding:4px;background:#e9e7f2;border-radius:14px}
 ${r} .rmt-mv-toggle button{height:40px;border-radius:10px;border:0;font-size:14px;font-weight:600;cursor:pointer;background:transparent;color:#586b7c}
@@ -291,6 +294,16 @@ function btn(action, label, { cls = 'rmt-x-secondary', id = '', disabled = false
 
 // ---------- ① 三步开始 ----------
 
+function rangePicker(scope, state, sections) {
+    const ranges = { chorus: '第一段副歌', verseChorus: '一段主歌 + 副歌', full: '整首', custom: '自己选' };
+    const idx = mv.selectedSectionIndexes(sections, state.range, state.rangeFrom, state.rangeTo);
+    const buttons = Object.entries(ranges).map(([id, label]) => btn('range-pick', label, { id, cls: 'rmt-x-seg' + (state.range === id ? ' active' : ''), extra: ` aria-pressed="${state.range === id}" data-rmt-mv-scope="${scope}"` })).join('');
+    const options = value => sections.map((s, i) => `<option value="${i}"${i === value ? ' selected' : ''}>${i + 1}. ${esc(s.name)}${s.lines[0] ? ' · ' + esc(Array.from(s.lines[0]).slice(0, 10).join('')) : ''}</option>`).join('');
+    const custom = state.range === 'custom' ? `<div class="rmt-mv-range-selects"><label>从<select data-rmt-mv-range="from" data-rmt-mv-scope="${scope}">${options(state.rangeFrom)}</select></label><label>到<select data-rmt-mv-range="to" data-rmt-mv-scope="${scope}">${options(state.rangeTo)}</select></label></div>` : '';
+    const lines = idx.reduce((n, i) => n + (sections[i]?.lines.length || 1), 0);
+    return `<div class="rmt-mv-grid2">${buttons}</div>${custom}<p class="rmt-x-note">这次做：${idx.length ? esc(sections[idx[0]].name) + (idx.length > 1 ? ' → ' + esc(sections[idx.at(-1)].name) : '') : '整首'} · ${idx.length} 段 · 约 ${lines} 句歌词。手书通常只做一段，镜头少、节奏紧。</p>`;
+}
+
 function renderSetup(song, record) {
     const d = view.draft || mv.normalizeSettings(null);
     const steps = ['做成什么', '画风与出镜', '确认'].map((label, i) => `<span class="${view.step === i + 1 ? 'on' : view.step > i + 1 ? 'done' : ''}"><b>${view.step > i + 1 ? '✓' : i + 1}</b>${label}</span>`).join('');
@@ -301,7 +314,8 @@ function renderSetup(song, record) {
           ${choice('set-output', 'video', d.output === 'video', '视频 · 进阶', '画面真正动起来，像电影片段。', '需要把提示词拿到视频工具里生成')}`;
     } else if (view.step === 2) {
         const styles = mv.MV_STYLES[d.output];
-        content = `<h3 class="rmt-x-section-title">画风</h3><div class="rmt-mv-grid2">${styles.map(s => choice('set-style', s.id, d.style === s.id, s.name, s.desc)).join('')}</div>
+        const sectionsForRange = mv.parseSections(song.lyrics);
+        content = `${d.output === 'tegaki' ? `<h3 class="rmt-x-section-title">做哪一段</h3>${rangePicker('draft', d, sectionsForRange)}` : ''}<h3 class="rmt-x-section-title">画风</h3><div class="rmt-mv-grid2">${styles.map(s => choice('set-style', s.id, d.style === s.id, s.name, s.desc)).join('')}</div>
           <h3 class="rmt-x-section-title">你要出镜吗？</h3>
           ${choice('set-appear', 'face', d.appear === 'face', '露脸出镜', '按你填写的外貌来画。')}
           ${choice('set-appear', 'back', d.appear === 'back', '只拍背影或手', '有你的存在感，但不画脸。')}
@@ -361,18 +375,25 @@ function renderBoard(song, record) {
             const status = tegaki ? (imgUrl(shot) ? '✓ 画好了' : '○ 还没画') : (shot.videoDone ? '✓ 视频做好了' : imgUrl(shot) ? '○ 视频还没做' : '○ 还没画图');
             return `<article class="rmt-mv-shot${ok ? ' done' : ''}"><div class="rmt-mv-shot-row">${thumb(shot, record, `第 ${number} 镜`)}
               <div class="rmt-mv-shot-copy"><small>${esc(shot.shot || '')}${shot.move ? ' · ' + esc(shot.move) : ''}</small><b>${esc(shot.plain)}</b>
-              <div class="rmt-x-chips"><span class="rmt-x-chip muted">${esc(who[shot.who] || '他')}</span><span class="rmt-x-chip${ok ? '' : ' muted'}">${status}</span>${shot.sourceMemoryIds?.length ? `<span class="rmt-x-chip">依据 ${esc(shot.sourceMemoryIds.join(' · '))}</span>` : ''}</div></div></div>
+              <div class="rmt-x-chips"><span class="rmt-x-chip muted">${esc(who[shot.who] || '他')}</span><span class="rmt-x-chip${ok ? '' : ' muted'}">${status}</span></div></div></div>
               <div class="rmt-mv-actions">${btn('draw', drawing ? '正在画…' : imgUrl(shot) ? '重画这张' : '画这一张', { id: shot.id, disabled: drawing || view.drawingAll, cls: imgUrl(shot) ? 'rmt-x-secondary' : 'rmt-x-primary' })}
               ${!tegaki ? btn('open-shot', shot.videoDone ? '再看看' : '去生成视频', { id: shot.id, cls: 'rmt-x-primary rmt-x-dark' }) : uploadLabel(shot.id, '用自己的图')}</div></article>`;
         }).join('');
     }).join('');
     const warn = mv.frameNeedsUserLooks(record, context) && shots.some(s => s.who === 'both' || s.who === 'user')
         ? `<div class="rmt-mv-warn">还没有填写你的外貌，画出来的你可能每张不一样。</div>${looksEditor()}` : '';
+    const rangeCard = tegaki ? (() => {
+        const o = mv.tegakiOptions(record);
+        const want = mv.selectedSectionIndexes(sections, o.range, o.rangeFrom, o.rangeTo);
+        const missing = want.filter(i => !shots.some(s => s.sectionIndex === i)).length;
+        return `<section class="rmt-x-card"><b>做哪一段</b>${rangePicker('record', o, sections)}${missing ? `<div class="rmt-mv-warn">选中的段落里有 ${missing} 段还没有镜头。${btn('rewrite-board', '按这一段重新写分镜', { cls: 'rmt-x-secondary' })}</div>` : ''}</section>`;
+    })() : '';
     const tools = tegaki ? `${remaining ? btn(view.drawingAll ? 'draw-stop' : 'draw-all', view.drawingAll ? '停止连续绘制' : `一次画完剩下的 ${remaining} 张（会用 ${remaining} 次生图）`) : ''}
         ${btn('go-tegaki', '去手书剪辑台', { cls: 'rmt-x-primary' })}<p class="rmt-x-note">没画的镜头在剪辑台里会先用上一张代替，随时能预览。</p>`
         : `${btn('go-finish', '全部做完后：拼成 MV', { cls: 'rmt-x-primary rmt-x-dark' })}`;
     page('镜头清单', '印象曲', `${head(song.title, '镜头清单', `${shots.length} 镜 · ${mv.normalizeSettings(record.settings).ratio === '9:16' ? '竖屏' : '横屏'}。同一张分镜表，可以做成手书，也可以做成视频。`)}
       <div class="rmt-mv-toggle">${['tegaki', 'video'].map(m => `<button type="button" class="${view.mode === m ? 'on' : ''}" aria-pressed="${view.mode === m}" data-rmt-mv="mode" data-rmt-mv-id="${m}">${m === 'tegaki' ? '手书' : '视频'}</button>`).join('')}</div>
+      ${rangeCard}
       <section class="rmt-x-card"><div class="rmt-x-row-head"><b>${tegaki ? `已画好 ${drawn} / ${shots.length} 张` : `视频已做好 ${videos} / ${shots.length} 镜`}</b><span>${tegaki ? '画好的图两边通用' : '先画第一张图再做视频'}</span></div>
         <div class="rmt-x-bar"><i style="width:${shots.length ? Math.round(done / shots.length * 100) : 0}%"></i></div>${tools}</section>
       ${warn}${groups}
@@ -393,7 +414,7 @@ function renderShot(song, record) {
     const prompts = settings.lang === 'both' ? [['中文', shot.videoZh], ['English', shot.videoEn]] : settings.lang === 'en' ? [['', shot.videoEn || shot.videoZh]] : [['', shot.videoZh || shot.videoEn]];
     const promptHtml = prompts.map(([label, text], i) => `${label ? `<small class="rmt-x-note">${label}</small>` : ''}<div class="rmt-mv-prompt">${esc(text)}</div>${btn('copy', copied ? '✓ 已复制' : '复制这段话', { id: String(i), cls: copied ? 'rmt-x-secondary' : 'rmt-x-primary' })}`).join('');
     page(`第 ${index + 1} 镜`, '镜头清单', `${head(`视频 · 第 ${index + 1} / ${shots.length} 镜`, shot.plain, shot.lyric ? `对应歌词：${shot.lyric}` : '')}
-      <div class="rmt-x-chips">${shot.shot ? `<span class="rmt-x-chip muted">${esc(shot.shot)}</span>` : ''}${shot.move ? `<span class="rmt-x-chip muted">${esc(shot.move)}</span>` : ''}${shot.sourceMemoryIds?.length ? `<span class="rmt-x-chip">来自回忆 ${esc(shot.sourceMemoryIds.join(' · '))}</span>` : ''}</div>
+      <div class="rmt-x-chips">${shot.shot ? `<span class="rmt-x-chip muted">${esc(shot.shot)}</span>` : ''}${shot.move ? `<span class="rmt-x-chip muted">${esc(shot.move)}</span>` : ''}</div>
       ${step(1, '画第一张图', '先画出这一镜开头的样子。视频工具会照着这张图让画面动起来，人物才不会变脸。',
         `<div class="rmt-mv-shot-row">${thumb(shot, record, imgUrl(shot) ? '第一张图' : '还没画')}<div class="rmt-mv-shot-copy">${btn('draw', drawing ? '正在画…' : imgUrl(shot) ? '✓ 已画好 · 重画' : '画第一张图', { id: shot.id, disabled: drawing, cls: imgUrl(shot) ? 'rmt-x-secondary' : 'rmt-x-primary' })}
          ${imgUrl(shot) ? `<a class="rmt-x-secondary" style="display:flex;align-items:center;justify-content:center;text-decoration:none" href="${esc(imgUrl(shot))}" download target="_blank" rel="noopener">保存图片</a>` : ''}${uploadLabel(shot.id)}</div></div>`, !!imgUrl(shot))}
@@ -456,10 +477,11 @@ function tegakiControls(record, song) {
     const presets = Object.entries(mv.TEGAKI_PRESETS).map(([id, p]) => `<button type="button" class="rmt-mv-choice${o.preset === id ? ' on' : ''}" aria-pressed="${o.preset === id}" data-rmt-mv="tegaki-preset" data-rmt-mv-id="${id}"><span><b>${esc(p.name)}</b><small>${esc(p.desc)}</small></span></button>`).join('');
     return `<b style="font-size:14px">新手一键配置</b><div class="rmt-mv-presets">${presets}</div>
       <p class="rmt-x-note">一键设好全部镜头的动作、切换方式和歌词样式；之后仍可逐镜修改。</p>
-      <b style="font-size:14px">截取哪一段</b><div class="rmt-x-segs">${seg2('tegaki-range', mv.TEGAKI_RANGES, o.range)}</div>
-      <p class="rmt-x-note">现在：${esc(range.label)} · ${mv.formatTime(range.start)}–${mv.formatTime(range.end)}（约 ${Math.max(0, Math.round(range.end - range.start))} 秒）。手书通常只做一段，不必整首。</p>
+      <b style="font-size:14px">截取哪一段</b>${rangePicker('record', o, mv.parseSections(song.lyrics))}
+      <p class="rmt-x-note">现在：${mv.formatTime(range.start)}–${mv.formatTime(range.end)}（约 ${Math.max(0, Math.round(range.end - range.start))} 秒）。</p>
       <b style="font-size:14px">切换节奏</b><div class="rmt-mv-grid2">${seg2('tegaki-rhythm', mv.TEGAKI_RHYTHMS, o.rhythm)}</div>
-      <b style="font-size:14px">歌词</b><div class="rmt-x-segs">${seg2('tegaki-lyric', mv.TEGAKI_LYRICS, o.lyric)}</div>`;
+      <b style="font-size:14px">歌词</b><div class="rmt-x-segs">${seg2('tegaki-lyric', mv.TEGAKI_LYRICS, o.lyric)}</div>
+      ${o.lyric === 'none' ? '' : `<b style="font-size:14px">字体</b><div class="rmt-x-segs">${seg2('tegaki-font', Object.fromEntries(Object.entries(mv.TEGAKI_FONTS).map(([k, v]) => [k, v.name])), o.font)}</div><p class="rmt-x-note">字体用设备自带的，不同手机效果会略有差异。</p>`}`;
 }
 
 function renderTegaki(song, record) {
@@ -577,9 +599,9 @@ function drawShot(g, row, rows, index, t, w, h) {
     g.fillStyle = '#fbf6ee'; g.fillRect(0, 0, w, h);
     const beat = beatVariant(row, t);
     if (img && beat && beat.variant) {
-        if (beat.variant === 1) drawCover(g, img, w, h, 1.22, 0, h * 0.06);
-        else if (beat.variant === 2) drawCover(g, img, w, h, 1.12, -w * 0.05, 0);
-        else drawCover(g, img, w, h, 1.35, w * 0.03, -h * 0.04);
+        if (beat.variant === 1) drawCover(g, img, w, h, 1.08, 0, h * 0.02);
+        else if (beat.variant === 2) drawCover(g, img, w, h, 1.06, -w * 0.02, 0);
+        else drawCover(g, img, w, h, 1.1, w * 0.015, -h * 0.015);
     } else if (img) {
         const motion = row.shot.motion;
         if (motion === 'push') drawCover(g, img, w, h, 1 + 0.12 * p, 0, 0);
@@ -600,22 +622,22 @@ function wrap(g, text, x, y, max, lineHeight) {
     lines.slice(0, 4).forEach((l, i) => g.fillText(l, x, y + (i - (Math.min(lines.length, 4) - 1) / 2) * lineHeight));
 }
 
-function drawBigLyric(g, text, w, h, since) {
-    const size = Math.round(Math.min(w, h) * 0.1);
+function drawBigLyric(g, text, w, h, since, fontId = 'kai') {
+    const size = Math.round(Math.min(w, h) * 0.078);
+    const stack = (mv.TEGAKI_FONTS[fontId] || mv.TEGAKI_FONTS.kai).stack;
     const chars = Array.from(String(text));
-    const perLine = Math.max(4, Math.floor(w * 0.82 / size));
+    const perLine = Math.max(4, Math.floor(w * 0.8 / size));
     const lines = [];
     for (let i = 0; i < chars.length && lines.length < 3; i += perLine) lines.push(chars.slice(i, i + perLine).join(''));
-    const shown = Math.min(1, since / 0.25);
     g.save();
-    g.translate(w / 2, h * 0.64); g.rotate(-0.045);
-    g.globalAlpha = shown;
-    g.font = `900 ${size}px "Noto Sans SC","PingFang SC","Hiragino Sans GB",sans-serif`;
-    g.textAlign = 'center'; g.lineJoin = 'round';
+    g.translate(w / 2, h * 0.7); g.rotate(-0.025);
+    g.globalAlpha = Math.min(1, since / 0.35);
+    g.font = `500 ${size}px ${stack}`;
+    g.textAlign = 'center';
+    g.shadowColor = 'rgba(20,16,28,.55)'; g.shadowBlur = size * 0.35; g.shadowOffsetY = size * 0.04;
     lines.forEach((line, i) => {
-        const y = (i - (lines.length - 1) / 2) * size * 1.15;
-        g.lineWidth = size * 0.28; g.strokeStyle = 'rgba(28,24,36,.9)'; g.strokeText(line, 0, y);
-        g.fillStyle = '#fff'; g.fillText(line, 0, y);
+        const y = (i - (lines.length - 1) / 2) * size * 1.3;
+        g.fillStyle = '#fffdf8'; g.fillText(line, 0, y);
     });
     g.restore();
 }
@@ -639,8 +661,8 @@ function renderFrame(canvas, record, song, t) {
         g.save(); g.globalAlpha = 1 - since / 0.3; g.fillStyle = '#fff'; g.fillRect(0, 0, w, h); g.restore();
     }
     const beat = beatVariant(row, t);
-    if (beat && beat.k > 0 && beat.since < 0.08) { g.save(); g.globalAlpha = 0.45 * (1 - beat.since / 0.08); g.fillStyle = '#fff'; g.fillRect(0, 0, w, h); g.restore(); }
-    if (topt.lyric === 'big' && row.shot.lyric) drawBigLyric(g, row.shot.lyric, w, h, since);
+    if (beat && beat.k > 0 && beat.since < 0.08) { g.save(); g.globalAlpha = 0.18 * (1 - beat.since / 0.08); g.fillStyle = '#fff'; g.fillRect(0, 0, w, h); g.restore(); }
+    if (topt.lyric === 'big' && row.shot.lyric) drawBigLyric(g, row.shot.lyric, w, h, since, topt.font);
     if (topt.lyric === 'subtitle' && row.shot.lyric) {
         let size = Math.round(Math.min(w, h) * 0.055), lines = [];
         const split = () => {
@@ -654,7 +676,7 @@ function renderFrame(canvas, record, song, t) {
             return result;
         };
         do {
-            g.font = `600 ${size}px "Noto Serif SC","Songti SC",serif`;
+            g.font = `500 ${size}px ${(mv.TEGAKI_FONTS[topt.font] || mv.TEGAKI_FONTS.kai).stack}`;
             lines = split();
             if (lines.length * size * 1.35 <= h * 0.32 || size <= 1) break;
             size -= 1;
@@ -919,7 +941,7 @@ async function drawAll() {
     renderMv();
     try {
         for (const shot of shots) {
-            if (view.stopAll || !isView(opened)) break;
+            if (view.stopAll || view.drawQueue !== queue) break;
             if (hasImg(shot)) continue;
             const result = await mv.drawFrame(opened.songId, shot.id);
             reportResult(result);
@@ -969,13 +991,23 @@ export function handleMvClick(event) {
             p.then(result => { reportResult(result, '分镜写好了。'); if (isView(opened)) { if (result?.pending) renderMv(); else { view.mode = settings.output; go('board'); } } })
                 .catch(error => { toastError(error); if (isView(opened)) renderMv(); });
         }
-        else if (action === 'rewrite-board') { view.step = 1; view.draft = mv.normalizeSettings(record?.settings); go('setup'); }
+        else if (action === 'rewrite-board') { view.step = 1; view.draft = mv.normalizeSettings({ ...(record?.settings || {}), ...(record?.tegaki?.range ? { range: record.tegaki.range, rangeFrom: record.tegaki.rangeFrom, rangeTo: record.tegaki.rangeTo } : {}) }); go('setup'); }
         else if (action === 'mode') { view.mode = id === 'video' ? 'video' : 'tegaki'; renderMv(); }
         else if (action === 'draw') void runDraw(id);
         else if (action === 'draw-all') void drawAll();
         else if (action === 'tegaki-preset') { mv.applyTegakiPreset(view.songId, id, currentSong()); toastOk('已按“' + (mv.TEGAKI_PRESETS[id]?.name || '') + '”配好镜头。'); renderMv(); }
         else if (action === 'tegaki-range') { mv.patchTegaki(view.songId, { range: id }); renderMv(); }
         else if (action === 'tegaki-rhythm') { mv.patchTegaki(view.songId, { rhythm: id, preset: '' }); renderMv(); }
+        else if (action === 'tegaki-font') { mv.patchTegaki(view.songId, { font: id }); renderMv(); }
+        else if (action === 'range-pick') {
+            const sections = mv.parseSections(currentSong().lyrics);
+            const source = el.dataset.rmtMvScope === 'draft' ? view.draft : mv.tegakiOptions(currentRecord());
+            const extra = {};
+            if (id === 'custom') { const idx = mv.selectedSectionIndexes(sections, source.range, source.rangeFrom, source.rangeTo); extra.rangeFrom = idx[0] || 0; extra.rangeTo = idx.at(-1) ?? Math.max(0, sections.length - 1); }
+            if (el.dataset.rmtMvScope === 'draft') { view.draft = mv.normalizeSettings({ ...view.draft, range: id, ...extra }); }
+            else mv.patchTegaki(view.songId, { range: id, ...extra });
+            renderMv();
+        }
         else if (action === 'tegaki-lyric') { mv.patchTegaki(view.songId, { lyric: id, preset: '' }); renderMv(); }
         else if (action === 'draw-stop') { view.stopAll = true; globalThis.toastr?.info?.('画完正在画的这一张后停止。', '心迹回廊 · MV'); }
         else if (action === 'go-tegaki') go('tegaki');
@@ -1053,6 +1085,16 @@ export function handleMvChange(event) {
         localUrls.set(key, URL.createObjectURL(file));
         void mv_media.putMedia(key, file, file.name).then(ok => { if (!ok) globalThis.toastr?.info?.('这台设备没能记住这张图，刷新后需要重新选择。', '心迹回廊 · MV'); });
         try { mv.patchShot(view.songId, shotId, { image: { local: key, at: Date.now() } }); } catch (error) { toastError(error); }
+        renderMv();
+        return true;
+    }
+    if (input?.matches?.('[data-rmt-mv-range]')) {
+        const key = input.dataset.rmtMvRange === 'to' ? 'rangeTo' : 'rangeFrom';
+        const value = Math.max(0, Number(input.value) || 0);
+        try {
+            if (input.dataset.rmtMvScope === 'draft') view.draft = mv.normalizeSettings({ ...view.draft, [key]: value });
+            else mv.patchTegaki(view.songId, { [key]: value });
+        } catch (error) { toastError(error); }
         renderMv();
         return true;
     }

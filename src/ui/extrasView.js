@@ -146,7 +146,7 @@ function renderCollection() {
     const dash = `${(circumference * data.percent / 100).toFixed(1)} ${circumference.toFixed(1)}`;
     const rows = data.rows.map(row => `<div class="rmt-x-row"><div class="rmt-x-row-head"><span>${esc(row.name)}</span><span>${row.got} / ${row.total}</span></div><div class="rmt-x-bar"><i style="width:${row.total ? Math.round(row.got / row.total * 100) : 0}%"></i></div></div>`).join('');
     const counts = data.counts.map(item => `<div class="rmt-x-count"><small>${esc(item.name)}</small><b>${item.value} ${esc(item.unit)}</b></div>`).join('');
-    const recent = data.recent.length ? `<section class="rmt-x-block"><h3>最近点亮</h3><div class="rmt-x-recent">${data.recent.map(item => `<div class="rmt-x-recent-item"><span class="rmt-x-recent-tile"><em>${esc(item.kind)}</em></span><small>${esc(item.title)}</small></div>`).join('')}</div></section>` : '';
+    const recent = data.recent.length ? `<section class="rmt-x-block"><h3>最近点亮</h3><div class="rmt-x-recent">${data.recent.map(item => `<div class="rmt-x-recent-item"><span class="rmt-x-recent-tile">${item.url ? `<img src="${esc(item.url)}" alt="" loading="lazy">` : ''}<em>${esc(item.kind)}</em></span><small>${esc(item.title)}</small></div>`).join('')}</div></section>` : '';
     el.innerHTML = `<main class="rmt-x-page">
       <header class="rmt-x-head"><small>COLLECTION</small><h2>回忆收集率</h2><p>两个人一起点亮过的东西。全部在本地统计，不发请求。</p></header>
       <section class="rmt-x-card rmt-x-ring-card">
@@ -166,25 +166,33 @@ function renderGraduation() {
     let data;
     try { data = extras_collection.computeCollection(); } catch { view.sub = 'main'; return renderCollection(); }
     const g = data.graduation;
-    const fireflies = data.counts.find(item => item.id === 'fireflies')?.value || 0;
-    const letters = data.counts.find(item => item.id === 'letters')?.value || 0;
-    const credits = [
-        g.days ? ['一起走过', `${g.days} 天 · ${g.memoryCount} 条记忆`] : ['一起留下', `${g.memoryCount} 条记忆`],
+    const count = id => data.counts.find(item => item.id === id)?.value || 0;
+    const stats = [
+        g.days ? [String(g.days), '天', '一起走过'] : null,
+        [String(g.memoryCount), '条', '共同的记忆'],
+        data.total ? [String(data.percent), '%', '回忆收集率'] : null,
+        count('fireflies') ? [String(count('fireflies')), '颗', '点亮的萤火虫'] : null,
+        count('letters') ? [String(count('letters')), '封', '收到的信'] : null,
+        count('places') ? [String(count('places')), '处', '去过的地方'] : null,
+    ].filter(Boolean).slice(0, 6);
+    const lines = [
         g.firstMemory ? ['最初的记忆', g.firstMemory] : null,
         g.firstCg ? ['第一张 CG', g.firstCg] : null,
         g.firstPlace ? ['一起去过的地方', g.firstPlace] : null,
-        fireflies ? ['点亮的萤火虫', `${fireflies} 颗`] : null,
-        letters ? ['收到的信', `${letters} 封`] : null,
         g.route ? ['当前路线', g.route] : null,
-        data.total ? ['回忆收集率', `${data.percent}%`] : null,
+        g.lastMemory ? ['档案里最后一条', g.lastMemory] : null,
     ].filter(Boolean);
-    el.innerHTML = `<main class="rmt-x-grad">
-      <div class="rmt-x-grad-title"><small>GRADUATION</small><b>心迹回廊</b><i></i><span>${esc(g.characterName)} 与 ${esc(g.userName)}</span></div>
-      ${credits.map(([label, value]) => `<div class="rmt-x-credit"><small>${esc(label)}</small><b>${esc(value)}</b></div>`).join('')}
-      ${g.lastMemory ? `<div class="rmt-x-grad-last"><small>档案里最后一条</small><b>${esc(g.lastMemory)}</b></div>` : ''}
-      <div class="rmt-x-grad-thanks">Thank you for this story</div>
-      <button type="button" class="rmt-x-secondary rmt-x-on-dark" data-rmt-extra="collection-main">返回收集率</button>
-    </main>`;
+    const today = new Date();
+    el.innerHTML = `<main class="rmt-x-cert-page"><article class="rmt-x-cert">
+      <div class="rmt-x-cert-frame">
+        <header class="rmt-x-cert-head"><small>GRADUATION · 心迹回廊</small><h2>毕业纪念册</h2>
+          <p class="rmt-x-cert-names"><b>${esc(g.characterName)}</b><span>与</span><b>${esc(g.userName)}</b></p>
+          <i class="rmt-x-cert-ribbon" aria-hidden="true"></i></header>
+        <div class="rmt-x-cert-stats">${stats.map(([n, unit, label]) => `<div><b>${esc(n)}<small>${esc(unit)}</small></b><span>${esc(label)}</span></div>`).join('')}</div>
+        <ol class="rmt-x-cert-lines">${lines.map(([label, value]) => `<li><span>${esc(label)}</span><b>${esc(value)}</b></li>`).join('')}</ol>
+        <footer class="rmt-x-cert-foot"><span>Thank you for this story</span><small>${today.getFullYear()} 年 ${today.getMonth() + 1} 月 ${today.getDate()} 日</small></footer>
+      </div></article>
+      <button type="button" class="rmt-x-secondary" data-rmt-extra="collection-main">返回收集率</button></main>`;
 }
 
 // ---------- 朋友情报 ----------
@@ -286,7 +294,7 @@ function renderWaiting() {
       ${entry}
       <section class="rmt-x-card">
         <div class="rmt-x-switch-row"><span><b>开启“他在等你”</b><small>默认关闭 · 只对当前聊天生效</small></span>
-          <button type="button" role="switch" aria-checked="${settings.enabled}" aria-label="开启他在等你" class="rmt-x-switch${settings.enabled ? ' on' : ''}" data-rmt-extra="waiting-toggle"><i></i></button></div>
+          <button type="button" role="switch" aria-checked="${settings.enabled}" aria-label="开启他在等你" class="rmt-x-toggle${settings.enabled ? ' on' : ''}" data-rmt-extra="waiting-toggle"><i aria-hidden="true"></i><span>${settings.enabled ? '已开启' : '点此开启'}</span></button></div>
         ${options}
         ${generate}
       </section>

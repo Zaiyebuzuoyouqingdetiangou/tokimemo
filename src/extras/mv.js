@@ -333,28 +333,47 @@ export function normalizeSettings(value) {
         appear: Object.hasOwn(MV_APPEAR, value?.appear) ? value.appear : 'face',
         ratio: value?.ratio === '16:9' ? '16:9' : '9:16',
         lang: ['zh', 'en', 'both'].includes(value?.lang) ? value.lang : 'zh',
+        range: ['chorus', 'verseChorus', 'full', 'custom'].includes(value?.range) ? value.range : 'verseChorus',
+        rangeFrom: Math.max(0, Math.round(Number(value?.rangeFrom) || 0)),
+        rangeTo: Math.max(0, Math.round(Number(value?.rangeTo) || 0)),
     };
+}
+
+// 按段落下标选范围：手书只做选中的这一段，视频做整首。
+export function selectedSectionIndexes(sections, range, from = 0, to = 0) {
+    const all = sections.map((_, i) => i);
+    if (!sections.length || range === 'full') return all;
+    if (range === 'custom') {
+        const a = Math.min(from, to), b = Math.max(from, to);
+        return all.filter(i => i >= a && i <= Math.min(b, sections.length - 1));
+    }
+    const chorus = sections.findIndex(s => isChorusTag(s.tag));
+    if (chorus < 0) return all;
+    if (range === 'chorus') return [chorus];
+    let first = chorus;
+    for (let i = chorus - 1; i >= 0; i -= 1) { if (/^verse/i.test(sections[i].tag)) { first = i; break; } }
+    return all.filter(i => i >= first && i <= chorus);
 }
 
 function storyboardPrompt(context, memory, song, settings) {
     const charName = core_text.normalizeText(memory?.characterName || context?.name2, 120) || '{{char}}';
     const userName = core_text.normalizeText(memory?.userName || context?.name1, 120) || '{{user}}';
-    const sections = parseSections(song.lyrics).map((s, i) => ({ index: i, section: s.tag, lines: s.lines }));
+    const parsed = parseSections(song.lyrics);
+    const keep = settings.output === 'video' ? parsed.map((_, i) => i) : selectedSectionIndexes(parsed, settings.range, settings.rangeFrom, settings.rangeTo);
+    const sections = parsed.map((s, i) => ({ index: i, section: s.tag, lines: s.lines })).filter(s => keep.includes(s.index));
     const appear = settings.appear === 'face' ? `${userName} 可以露脸出镜。`
         : settings.appear === 'back' ? `${userName} 只能以背影、手或剪影出现，不画正脸。` : `${userName} 不出现在画面里。`;
     return `${generation_prompts.promptSafetyBoundary(context, 'MV 分镜', null, memory)}
 【任务】
 为已写好的角色印象曲「${song.title}」写一张 MV 分镜表。画面风格：${styleOf(settings).name}；比例：${settings.ratio === '9:16' ? '竖屏 9:16' : '横屏 16:9'}。
-歌词、曲风不改。歌里的比喻和愿望不是已经发生的事；画面可以是意象、回忆或想象，但凡是写成“过去真实发生”的共同经历，必须来自档案并填 sourceMemoryIds。
-出镜：${charName} 是主角。${appear}不替 ${userName} 新增台词、承诺或决定，${userName} 的动作只写歌词或档案里有依据的。
+歌词、曲风不改。画面跟着歌词的意象、情绪和故事走，可以是意象、想象或象征画面，不需要对应聊天档案，也不要逐条复述聊天里的事件。人物外貌、身份和世界观以角色设定为准。
+出镜：${charName} 是主角。${appear}不替 ${userName} 新增台词、承诺或决定。
+${settings.output === 'video' ? '' : '这是手书：只为下面列出的段落写镜头，其他段落不写。'}
 
 【歌曲】
 曲风：${core_text.normalizeText(song.styleDescription || song.stylePrompt, 600)}
 段落（sectionIndex 从 0 开始）：
 ${JSON.stringify(sections)}
-
-【聊天档案（已发生事实的唯一来源）】
-${generation_prompts.promptArchiveSlice(memory, 40)}
 
 【写作要求】
 1. 按段落写镜头：${settings.output === 'video' ? '每段 1～3 镜' : '手书节奏：每句歌词一镜'}，纯器乐段 1 镜。每镜 sectionIndex 指向所在段落；lyric 抄写这一镜对应的那一句原歌词（器乐段留空）。
@@ -368,7 +387,7 @@ ${generation_prompts.promptArchiveSlice(memory, 40)}
 只输出一个 JSON 对象。
 第一个字符必须是 {，最后一个字符必须是 }。
 不要前言，不要解释，不要代码围栏，不要在 JSON 外面写任何字。
-{"shots":[{"sectionIndex":0,"lyric":"","plain":"……","who":"char","shot":"中景：看到上半身","move":"镜头慢慢推近","motion":"push","imagePrompt":"……","videoZh":"……","videoEn":"……","sourceMemoryIds":[]}]}`;
+{"shots":[{"sectionIndex":0,"lyric":"","plain":"……","who":"char","shot":"中景：看到上半身","move":"镜头慢慢推近","motion":"push","imagePrompt":"……","videoZh":"……","videoEn":"……"}]}`;
 }
 
 function normalizeShots(data, memory, sectionCount) {
@@ -418,6 +437,7 @@ export async function generateStoryboard(songId, settingsInput) {
             const previous = target.base.songs[songId];
             return { id: songId, createdAt: previous?.createdAt || Date.now(), settings,
                 shots: normalizeShots(raw, memory, parseSections(song.lyrics).length),
+                tegaki: { ...(previous?.tegaki || {}), range: settings.range, rangeFrom: settings.rangeFrom, rangeTo: settings.rangeTo },
                 songTitle: song.title };
         });
     } finally { running.delete(key); }
@@ -531,20 +551,28 @@ export function mvScope(context) { return scopeOf(context); }
 
 export const TEGAKI_RANGES = Object.freeze({ chorus: '第一段副歌', verseChorus: '一段主歌 + 副歌', full: '整首' });
 export const TEGAKI_RHYTHMS = Object.freeze({ line: '每句一换', beat: '跟着拍子切' });
+export const TEGAKI_FONTS = Object.freeze({
+    kai: { name: '手写感', stack: '"Kaiti SC","STKaiti","KaiTi","BiauKai","Kaiti TC",serif' },
+    song: { name: '书卷', stack: '"Songti SC","STSong","Noto Serif SC","Source Han Serif SC","SimSun",serif' },
+    round: { name: '圆润', stack: '"Yuanti SC","PingFang SC","Hiragino Sans GB","Noto Sans SC",sans-serif' },
+});
 export const TEGAKI_LYRICS = Object.freeze({ subtitle: '字幕', big: '手书大字', none: '不显示' });
 export const TEGAKI_PRESETS = Object.freeze({
     classic: { name: '手书经典', desc: '跟拍子快切、歌词大字，最像手书', rhythm: 'beat', lyric: 'big', motion: () => 'still', cut: () => 'cut' },
     gentle: { name: '抒情慢拍', desc: '每句一换、淡入淡出、轻轻推近', rhythm: 'line', lyric: 'subtitle', motion: chorus => chorus ? 'sway' : 'push', cut: () => 'fade' },
-    bright: { name: '明快跟拍', desc: '副歌闪白切换、画面推近', rhythm: 'beat', lyric: 'big', motion: () => 'push', cut: chorus => chorus ? 'flash' : 'cut' },
+    bright: { name: '明快跟拍', desc: '副歌跟拍切换，其余轻推', rhythm: 'beat', lyric: 'big', motion: () => 'push', cut: chorus => chorus ? 'cut' : 'fade' },
 });
 
 export function tegakiOptions(record) {
     const value = record?.tegaki || {};
     return {
-        range: Object.hasOwn(TEGAKI_RANGES, value.range) ? value.range : 'verseChorus',
+        range: Object.hasOwn(TEGAKI_RANGES, value.range) || value.range === 'custom' ? value.range : (record?.settings?.range || 'verseChorus'),
         rhythm: Object.hasOwn(TEGAKI_RHYTHMS, value.rhythm) ? value.rhythm : 'line',
         lyric: Object.hasOwn(TEGAKI_LYRICS, value.lyric) ? value.lyric : (record?.subtitles === false ? 'none' : 'subtitle'),
         preset: Object.hasOwn(TEGAKI_PRESETS, value.preset) ? value.preset : '',
+        font: Object.hasOwn(TEGAKI_FONTS, value.font) ? value.font : 'kai',
+        rangeFrom: Math.max(0, Math.round(Number(value.rangeFrom) || 0)),
+        rangeTo: Math.max(0, Math.round(Number(value.rangeTo) || 0)),
     };
 }
 
@@ -556,6 +584,12 @@ export function playRange(record, song) {
     const option = tegakiOptions(record).range;
     const whole = { start: 0, end: total, label: TEGAKI_RANGES.full };
     if (option === 'full') return whole;
+    if (option === 'custom') {
+        const o = record?.tegaki || {};
+        const idx = selectedSectionIndexes(sections, 'custom', o.rangeFrom, o.rangeTo);
+        if (!idx.length) return whole;
+        return { start: times[idx[0]].start, end: times[idx.at(-1)].end, label: `${sections[idx[0]].name} → ${sections[idx.at(-1)].name}` };
+    }
     const chorus = sections.findIndex(s => isChorusTag(s.tag));
     if (chorus < 0) return whole;
     if (option === 'chorus') return { start: times[chorus].start, end: times[chorus].end, label: TEGAKI_RANGES.chorus };
