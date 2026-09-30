@@ -1009,7 +1009,6 @@ async function drawAllAssets() {
             if (view.stopAll || view.drawQueue !== queue) break;
             const result = await mv.drawAsset(view.songId, key);
             reportResult(result);
-            if (result?.pending) break;
             if (runtimeState.activeMode === MV_MODE) renderMv();
         }
     } catch (error) { toastError(error); }

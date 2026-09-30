@@ -85,10 +85,11 @@ function confirmedWrite(key, value) {
 
 function persistStore(scope, store, live = null) {
     volatileByScope.set(scope, structuredClone(store));
-    const durable = confirmedWrite(LOCAL_PREFIX + scope, store);
+    let durable = confirmedWrite(LOCAL_PREFIX + scope, store);
     if (live && scopeOf(live) === scope) {
         live.chatMetadata[MV_KEY] = store;
-        try { Promise.resolve(live.saveMetadataDebounced?.()).catch(() => {}); } catch { /* Local/journal copy survives. */ }
+        // 聊天 metadata 才是正式保存位置；本机副本写不进去（手机本机空间满）时不再判为保存失败。
+        try { Promise.resolve(live.saveMetadataDebounced?.()).catch(() => {}); durable = durable || typeof live.saveMetadataDebounced === 'function'; } catch { /* Local/journal copy survives. */ }
     }
     return durable;
 }
@@ -130,11 +131,12 @@ export function captureMvTarget(context, songId) {
 }
 
 function targetContext(target) {
+    // MV 分镜与图片只依赖这首歌本身；档案更新（记忆变多）不会让已画好的图失效。
     try {
         const live = core_context.currentCharacterGuard();
-        if (scopeOf(live) !== target.scope || !core_context.deferredCommitOriginMatchesContext(target.origin, live)) return null;
-        const { song, memory } = loadSong(live, target.songId);
-        return memory.archiveRevision === target.origin.archiveRevision && songSignature(song) === songSignature(target.song) ? live : null;
+        if (scopeOf(live) !== target.scope) return null;
+        const { song } = loadSong(live, target.songId);
+        return songSignature(song) === songSignature(target.song) ? live : null;
     } catch { return null; }
 }
 
@@ -567,7 +569,7 @@ export function framePrompt(record, shot, context) {
     const people = { ...(looks || {}), char: hasChar ? looks?.char || '' : '', user: hasUser ? looks?.user || '' : '' };
     const lookLine = hasChar || hasUser ? core_castLooks.castLooksPromptLine(people, context) : '';
     const userRule = settings.appear === 'back' && hasUser ? `${hasChar ? 'the second person' : 'the person'} is shown only from behind, hands or silhouette, face not visible` : '';
-    const noUser = !hasChar && !hasUser ? 'empty scene, no people in frame' : hasChar && hasUser ? 'exactly two people in frame' : 'only one person in frame';
+    const noUser = !hasChar && !hasUser ? 'scenery, no humans' : hasChar && hasUser ? 'duo, two people' : 'solo';
     return [
         styleOf(settings).prompt,
         settings.ratio === '9:16' ? 'vertical 9:16 composition' : 'horizontal 16:9 composition',
@@ -575,7 +577,7 @@ export function framePrompt(record, shot, context) {
         lookLine ? `fixed appearance, keep consistent: ${lookLine}` : '',
         wardrobeLine(record, hasChar, hasUser),
         userRule, noUser,
-        'no text, no subtitles, no logo, no watermark',
+
     ].filter(Boolean).join(', ');
 }
 
@@ -713,6 +715,7 @@ function tegakiGrammar(sections, keep, charName = '{{char}}') {
 手书要把歌词里发生的事“演出来”：遮住字幕，观众也能看懂他做了什么、是什么性格。不要一直用同一个半身立绘轮换表情。
 - 构图组（groups）= 一个事件或一个情绪节点，一共 5～9 组。歌词讲到的人物、动物、物件和动作必须出现在画面里（讲到喂猫就要有猫、蹲下、递食物；讲到师父叮嘱，可以是门口告别、师父在画外）。
 - 每组的景别和机位要不同：特写（手、眼、物件）、近景、中景、全身、远景、背影、低机位、俯视都可以；人物位置不要总在正中间，position 写 left / center / right，scale 写 close / medium / full / wide。
+- 每一张差分都是单独的一张图，只画一个瞬间：characterPrompt 与 diff.change 里每个人只写一个姿势，不要在同一张里写多个姿势、多个表情或“三连”。
 - 每组 1～3 张人物差分（diffs），是同一机位下一个动作的连续过程（伸手前→伸手→猫碰到手；握剑柄→出剑→收剑），不是随便换表情。同组 characterPrompt 相同，diff.change 只写这一刻的动作和表情。
 - 每组 1～2 张背景（bgs）：同一个地点，第二张可以是时间或光线的变化（白天→黄昏、晴→雨），也可以是远近不同。背景只有场景，没有人物。
 - 副歌可以有一个主视觉组，重复的副歌复用它；其余段落尽量用新的构图，尾奏可以回到开头的构图。
@@ -830,8 +833,9 @@ export function assetPrompt(record, key, context) {
     const style = styleOf(settings).prompt;
     const ratio = settings.ratio === '9:16' ? 'vertical 9:16 composition' : 'horizontal 16:9 composition';
     const era = record?.wardrobe?.era ? `setting: ${record.wardrobe.era}` : '';
-    if (found.kind === 'motif') return [style, found.target.prompt, 'a single small decorative element, isolated on a pure white background, no scenery, no people, no text'].filter(Boolean).join(', ');
-    if (found.kind === 'bg') return [style, ratio, era, found.bgRow?.prompt || found.group.backgroundPrompt, 'scenery only, empty scene, no people, no characters, no text, no logo'].filter(Boolean).join(', ');
+    // 只写正向词：tag 模型会把“no multiple views”“no people”里的词当成要画的内容。
+    if (found.kind === 'motif') return [style, found.target.prompt, 'single object, still life, white background, simple background, no humans'].filter(Boolean).join(', ');
+    if (found.kind === 'bg') return [style, ratio, era, found.bgRow?.prompt || found.group.backgroundPrompt, 'scenery, landscape, no humans'].filter(Boolean).join(', ');
     const who = found.group.who;
     const hasChar = who === 'char' || who === 'both';
     const hasUser = settings.appear !== 'none' && (who === 'both' || who === 'user');
@@ -842,9 +846,8 @@ export function assetPrompt(record, key, context) {
     const place = { left: 'character placed on the left third of the frame', right: 'character placed on the right third of the frame', center: '' }[found.group.position] || '';
     const size = { close: 'close-up shot', medium: 'medium shot, waist up', full: 'full body shot', wide: 'wide shot, small figure' }[found.group.scale] || '';
     return [style, ratio, found.group.characterPrompt, found.diff.change, place, size, lookLine ? `fixed appearance, keep consistent: ${lookLine}` : '', wardrobeLine(record, hasChar, hasUser), back,
-        hasChar && hasUser ? `exactly two different people${record?.wardrobe?.user ? '' : ', the second person wears clearly different clothes from the main character'}, different faces and hairstyles` : 'solo, only one person',
-        'a single moment, one pose per person, not a character sheet, no multiple views, no split panels, no duplicated figures',
-        'isolated on a pure white background, plain white backdrop, no scenery, clean silhouette edges, no text'].filter(Boolean).join(', ');
+        hasChar && hasUser ? `duo, two people${record?.wardrobe?.user ? '' : ', different outfits'}, different hairstyles` : 'solo, single figure',
+        'white background, simple background'].filter(Boolean).join(', ');
 }
 
 // 双人画面按角色分别给外貌（与 CG 相同的 characters 结构），避免两个人长成同一张脸。

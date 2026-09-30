@@ -1,7 +1,7 @@
 {
   "display_name": "心迹回廊",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.99.99-r84.196-floor-baseline",
+  "js": "index.js?heartbeat=0.99.99-r84.197-mv-save-tags",
   "author": "Toto",
   "version": "0.99.99",
   "auto_update": true,
@@ -10,6 +10,6 @@
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r84.196：新基线按楼层号继续增量更新；印象曲可删除；MV 分角色外貌被拒时自动退回重画。",
+  "description": "r84.197：MV 保存以聊天为准、档案更新不再让图片失效、连续绘制不中断；差分提示词去掉反向词，避免一张图画出多个姿势。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }
