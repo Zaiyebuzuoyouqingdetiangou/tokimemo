@@ -93,7 +93,11 @@ export async function buildChatSnapshot(context = currentCharacterGuard(), optio
     for (let index = 0; index < rawChat.length; index += 1) {
         const message = rawChat[index];
         const text = core_text.normalizeText(message?.mes, 8000);
-        if (text && isArchiveDialogueMessage(message, context)) {
+        // hiddenMode 只用于核对旧档案基线：exclude = 旧版不收隐藏楼层；include = 隐藏楼层一律按对话算。
+        const dialogue = options.hiddenMode === 'exclude' ? !message?.is_system
+            : options.hiddenMode === 'include' ? (!message?.is_system || (typeof message?.is_user === 'boolean' && !['system', 'tool', 'developer'].includes(message?.role) && !message?.extra?.type && !message?.extra?.uses_system_ui))
+            : isArchiveDialogueMessage(message, context);
+        if (text && dialogue) {
             const isUser = message?.is_user === true;
             const item = {
                 index: index + 1,

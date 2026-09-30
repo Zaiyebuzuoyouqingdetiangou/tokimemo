@@ -181,7 +181,7 @@ export async function importCurrentChatMemoryOperation({ fullRebuild = false, au
     const participantSnapshot = participants.selectedParticipantSnapshot(archiveRoster);
 
     const previousMessageCount = incrementalUpdate ? Math.max(0, Number(existing?.sourceMessageCount) || 0) : 0;
-    const snapshot = capturedInput?.snapshot || await core_context.buildChatSnapshot(context, {
+    const snapshotOptions = {
         completeSource: !legacyDraft,
         prefixCount: previousMessageCount,
         readRange: settings.chatReadRange,
@@ -191,7 +191,8 @@ export async function importCurrentChatMemoryOperation({ fullRebuild = false, au
                 && core_context.isCurrentTaskOrigin(preparation.origin, core_context.currentCharacterGuard()); }
             catch { return false; }
         },
-    });
+    };
+    let snapshot = capturedInput?.snapshot || await core_context.buildChatSnapshot(context, snapshotOptions);
     if (!snapshot.chatId) throw new Error('无法识别当前聊天窗口 ID，请先保存或打开一个具体聊天。');
     if (!archiveInputAvailable(snapshot, external)) throw new Error('当前聊天窗口没有可用于创建档案的角色/用户消息或已绑定的外部历史。');
 
@@ -200,9 +201,19 @@ export async function importCurrentChatMemoryOperation({ fullRebuild = false, au
         && archive_relayPreparation.relayHasUnreadCurrentSource(existing);
     if (incrementalUpdate && !capturedInput && !restartImport && !(automatic && floorWindow) && !unreadRelaySource) {
         const oldChatFingerprint = archivedChatFingerprint(existing);
-        if (!oldChatFingerprint || previousMessageCount > snapshot.totalMessages || snapshot.prefixFingerprint !== oldChatFingerprint
-            || (existing?.fullSourceFingerprint && snapshot.fullPrefixFingerprint && snapshot.fullPrefixFingerprint !== existing.fullSourceFingerprint)) {
-            throw core_text.safeUserError('旧档案与当前聊天历史基线不一致，本次保留旧成果；请恢复原聊天历史后继续，或另行保留当前来源。', 'RMT_ARCHIVE_PREFIX_CHANGED');
+        const mismatch = value => !oldChatFingerprint || previousMessageCount > value.totalMessages || value.prefixFingerprint !== oldChatFingerprint
+            || (existing?.fullSourceFingerprint && value.fullPrefixFingerprint && value.fullPrefixFingerprint !== existing.fullSourceFingerprint);
+        if (mismatch(snapshot)) {
+            // 只是隐藏 / 取消隐藏了楼层时，内容并没变：换一种隐藏楼层口径重算基线，对得上就按那种口径继续。
+            let matched = null;
+            for (const hiddenMode of ['exclude', 'include']) {
+                const alternate = await core_context.buildChatSnapshot(context, { ...snapshotOptions, hiddenMode });
+                const prefixOnly = { ...alternate, fullPrefixFingerprint: '' };
+                if (!mismatch(alternate) || (!mismatch(prefixOnly) && hiddenMode === 'exclude')) { matched = alternate; break; }
+            }
+            if (!matched) throw core_text.safeUserError('旧档案与当前聊天历史基线不一致，本次保留旧成果；请恢复原聊天历史后继续，或另行保留当前来源。', 'RMT_ARCHIVE_PREFIX_CHANGED');
+            snapshot = matched;
+            try { globalThis.toastr?.info?.('检测到隐藏楼层有变化，旧消息内容未变，已按原基线继续增量更新。', '心迹回廊'); } catch {}
         }
     }
 

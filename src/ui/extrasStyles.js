@@ -168,6 +168,19 @@ ${r} .rmt-x-dials b{width:56px;height:64px;border-radius:12px;background:#fbf6ee
 ${r} .rmt-x-wrong{color:#f2b3a6!important;font-size:13px!important}
 ${r} .rmt-x-primary.rmt-x-lamp{background:#f2c38b;color:#262b40}
 ${r} .rmt-archive-portal.rmt-x-off{opacity:.72}
+${r} .rmt-x-night{--rmt-content-ink:#f3eee6}
+${r} .rmt-x-night .rmt-x-sheet{--rmt-content-ink:#3a3346}
+${r} .rmt-x-night-top{display:flex;justify-content:space-between;align-items:center;gap:8px}
+${r} button.rmt-x-back{min-height:44px;padding:0 14px!important;border-radius:999px!important;border:1px solid rgba(243,238,230,.35)!important;background:rgba(243,238,230,.08)!important;color:#f3eee6!important;-webkit-text-fill-color:#f3eee6!important;font-size:14px!important;cursor:pointer}
+${r} .rmt-x-night .rmt-x-now{align-self:auto;letter-spacing:1px;color:#f2b3a6!important;-webkit-text-fill-color:#f2b3a6!important}
+${r} .rmt-x-now i{background:#e0605a!important}
+${r} .rmt-x-cam{font-style:normal;font-size:10px;letter-spacing:1px;color:#f2b3a6!important;-webkit-text-fill-color:#f2b3a6!important;animation:rmt-x-breathe 1.6s ease-in-out infinite}
+${r} .rmt-x-tile{position:relative;overflow:hidden}
+${r} .rmt-x-tile::after,${r} .rmt-x-peep::after{content:"";position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse at center,transparent 45%,rgba(10,10,20,.55) 100%),repeating-linear-gradient(0deg,rgba(255,255,255,.05) 0 1px,transparent 1px 3px)}
+${r} .rmt-x-peep{position:relative;overflow:hidden;height:190px!important;justify-content:space-between;flex-direction:column;align-items:flex-start!important;gap:6px}
+${r} .rmt-x-peep::before{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(90deg,rgba(8,8,14,.92) 0 12%,transparent 30% 70%,rgba(8,8,14,.92) 88% 100%)}
+${r} .rmt-x-peep>*{position:relative;z-index:1}
+${r} .rmt-x-hero span{color:#f3eee6!important;-webkit-text-fill-color:#f3eee6!important}
 ${r} .rmt-x-recent-tile{position:relative;overflow:hidden}
 ${r} .rmt-x-recent-tile img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 ${r} .rmt-x-recent-tile em{position:relative}

@@ -552,9 +552,9 @@ function renderTegaki(song, record) {
         ${btn('go-sync', `对时间 · 已点 ${tapped} / ${sections.length} 段${tapped < sections.length ? '，其余用估计时间' : ''}`, { cls: 'rmt-x-primary rmt-x-dark' })}</section>
       <section class="rmt-x-card"><b>导出</b>
         ${exporting ? `<div class="rmt-x-row-head"><span>正在录制…</span><span data-rmt-mv-export-time>0:00</span></div><div class="rmt-x-bar"><i data-rmt-mv-export-bar style="width:0%"></i></div><p class="rmt-x-note">请不要切到其他页面或锁屏。</p>${btn('export-stop', '停止导出')}`
-          : `${support.ok ? btn('export', `导出成视频（.${support.ext}）`, { cls: 'rmt-x-primary', disabled: !audioBySong.has(audioKey()) }) : '<div class="rmt-mv-warn">这台设备不能直接导出视频。可以用下面的录屏模式，配合手机自带的录屏功能录下来。</div>'}
+          : `${support.ok ? btn('export', audioBySong.has(audioKey()) ? `导出成视频（.${support.ext}）` : `导出无声视频（.${support.ext}）`, { cls: 'rmt-x-primary' }) : '<div class="rmt-mv-warn">这台设备不能直接导出视频。可以用下面的录屏模式，配合手机自带的录屏功能录下来。</div>'}
              ${btn('record-mode', '录屏模式（全屏播放）', { disabled: !audioBySong.has(audioKey()) })}
-             <p class="rmt-x-note">${audioBySong.has(audioKey()) ? '导出会从头播放一遍，歌多长就要等多久。期间请停留在这个页面。' : '先放入歌曲，才能导出或录屏。'}${support.ok && support.ext === 'webm' ? ' 这台设备导出的是 .webm，剪映等 App 一般可以直接导入。' : ''}</p>`}</section>`);
+             <p class="rmt-x-note">${audioBySong.has(audioKey()) ? '导出会从头播放一遍，歌多长就要等多久。期间请停留在这个页面。' : '没放入歌曲也能导出无声视频，之后在剪辑 App 里配上歌；录屏模式需要先放入歌曲。'}${support.ok && support.ext === 'webm' ? ' 这台设备导出的是 .webm，剪映等 App 一般可以直接导入。' : ''}</p>`}</section>`);
 }
 
 // ---------- 对时间 ----------
@@ -826,13 +826,26 @@ export function disposeMv() {
 
 // ---------- 导出与录屏 ----------
 
+function silentClock() {
+    let base = 0, started = 0, playing = false;
+    return {
+        readyState: 4, onended: null, silent: true,
+        get currentTime() { return playing ? base + (performance.now() - started) / 1000 : base; },
+        set currentTime(value) { base = Number(value) || 0; started = performance.now(); },
+        get paused() { return !playing; }, get ended() { return false; },
+        async play() { started = performance.now(); playing = true; },
+        pause() { if (playing) { base = this.currentTime; playing = false; } },
+        addEventListener() {}, removeEventListener() {}, dispatchEvent() { return true; },
+    };
+}
+
 async function exportVideo() {
     if (player.exporting) return;
     const opened = viewTarget(), sub = view.sub;
     const entry = audioBySong.get(audioKey());
     const support = exportSupport();
     const record = structuredClone(currentRecord()); const song = structuredClone(currentSong());
-    if (!entry || !support.ok || !record) return;
+    if (!support.ok || !record) return;
     stopPlayback();
     const state = { cancelled: false, tracks: [], raf: 0, recorder: null, audio: null, ac: null, canvas: null };
     player.exporting = state;
@@ -864,15 +877,19 @@ async function exportVideo() {
         canvas.style.cssText = 'position:fixed;left:-20000px;top:0;width:10px;height:10px;pointer-events:none';
         document.body.appendChild(canvas);
         const AC = globalThis.AudioContext || globalThis.webkitAudioContext;
-        const audio = state.audio = new Audio(entry.url);
+        // 没有放入歌曲时导出无声视频：用本地时钟代替音频的播放进度。
+        const audio = state.audio = entry ? new Audio(entry.url) : silentClock();
         const video = canvas.captureStream(30);
         state.tracks.push(...video.getTracks());
-        const ac = state.ac = new AC();
-        const source = ac.createMediaElementSource(audio);
-        const dest = ac.createMediaStreamDestination();
-        state.tracks.push(...dest.stream.getTracks());
-        source.connect(dest); source.connect(ac.destination);
-        const stream = new MediaStream([...video.getVideoTracks(), ...dest.stream.getAudioTracks()]);
+        let stream = new MediaStream(video.getVideoTracks());
+        if (entry) {
+            const ac = state.ac = new AC();
+            const source = ac.createMediaElementSource(audio);
+            const dest = ac.createMediaStreamDestination();
+            state.tracks.push(...dest.stream.getTracks());
+            source.connect(dest); source.connect(ac.destination);
+            stream = new MediaStream([...video.getVideoTracks(), ...dest.stream.getAudioTracks()]);
+        }
         const recorder = state.recorder = new MediaRecorder(stream, { mimeType: support.mime, videoBitsPerSecond: 5_000_000 });
         recorder.ondataavailable = event => { if (event.data?.size) chunks.push(event.data); };
         recorder.onstop = finish;
@@ -887,14 +904,14 @@ async function exportVideo() {
             const bar = document.querySelector('[data-rmt-mv-export-bar]');
             if (bar) bar.style.width = `${Math.min(100, t / Math.max(1, total) * 100)}%`;
             const label = document.querySelector('[data-rmt-mv-export-time]');
-            if (label) label.textContent = `${mv.formatTime(t)} / ${mv.formatTime(entry.duration || total)}`;
+            if (label) label.textContent = `${mv.formatTime(t)} / ${mv.formatTime(entry?.duration || total)}`;
             state.raf = requestAnimationFrame(loop);
         };
         audio.onended = () => { if (recorder.state !== 'inactive') recorder.stop(); };
         if (audio.readyState < 1) await new Promise(resolve => { audio.addEventListener('loadedmetadata', resolve, { once: true }); audio.addEventListener('error', resolve, { once: true }); });
         audio.currentTime = range.start;
         renderMv(); renderFrame(canvas, record, song, range.start); recorder.start(1000);
-        await ac.resume?.();
+        await state.ac?.resume?.();
         if (!current()) { stopExport(); return; }
         await audio.play();
         if (!current()) { audio.pause(); stopExport(); return; }
@@ -1216,9 +1233,11 @@ function renderGroupsBoard(song, record) {
         const secNames = [...new Set(frames.map(s => sections[s.sectionIndex]?.name).filter(Boolean))].join('、');
         const usedDiffs = g.diffs.filter(d => frames.some(s => s.diff === d.id));
         const lyrics = frames.filter(s => s.lyric).slice(0, 8).map(s => `${g.diffs.find(d => d.id === s.diff)?.label || ''}｜${s.lyric}`).join('\n');
-        const missing = [`${g.id}:bg`, ...usedDiffs.map(d => `${g.id}:${d.id}`)].filter(k => !mv.assetOf(record, k)?.image?.url).length;
+        const bgIds = (g.bgs || []).length ? g.bgs.filter(b => frames.some(s => (s.bg || 'B1') === b.id)).map(b => b.id) : ['bg'];
+        const bgTiles = (bgIds.length ? bgIds : ['bg']).map(id => `<div>${assetTile(record, `${g.id}:${id}`, (g.bgs || []).find(b => b.id === id)?.label ? '背景·' + g.bgs.find(b => b.id === id).label : '背景')}</div>`).join('');
+        const missing = [...(bgIds.length ? bgIds : ['bg']).map(id => `${g.id}:${id}`), ...usedDiffs.map(d => `${g.id}:${d.id}`)].filter(k => !mv.assetOf(record, k)?.image?.url).length;
         return `<article class="rmt-mv-gcard"><div class="rmt-x-row-head"><b class="rmt-mv-gname">构图 ${shown} · ${esc(g.composition || '')}</b><span>${esc(secNames)} · ${frames.length} 句</span></div>
-          <div class="rmt-mv-assets"><div>${assetTile(record, `${g.id}:bg`, '背景')}</div><span class="rmt-mv-plus">+</span>${usedDiffs.map(d => `<div>${assetTile(record, `${g.id}:${d.id}`, d.label)}</div>`).join('')}</div>
+          <div class="rmt-mv-assets">${bgTiles}<span class="rmt-mv-plus">+</span>${usedDiffs.map(d => `<div>${assetTile(record, `${g.id}:${d.id}`, d.label)}</div>`).join('')}</div>
           ${lyrics ? `<div class="rmt-mv-lyric"><p>${esc(lyrics)}</p></div>` : ''}
           <div class="rmt-mv-actions">${btn('draw-group', missing ? `画这一组剩下的 ${missing} 张` : '这一组已画好', { id: g.id, disabled: !missing || view.drawingAll, cls: missing ? 'rmt-x-primary' : 'rmt-x-secondary' })}</div>
           <p class="rmt-x-note">点任意一张缩略图可以单独重画。</p>
@@ -1280,6 +1299,22 @@ function cutoutFor(url) {
             if (p >= cw) stack.push(p - cw);
             if (p < cw * (ch - 1)) stack.push(p + cw);
         }
+        // 手臂内侧、衣摆间这类被包住的白底：只去掉面积够大、非常白的区域，保留衣服上的小块白色细节。
+        const pure = p => { const i = p * 4; const mn = Math.min(d[i], d[i + 1], d[i + 2]); return d[i + 3] !== 0 && mn > 240 && Math.max(d[i], d[i + 1], d[i + 2]) - mn < 14; };
+        const minArea = Math.max(250, Math.round(cw * ch * 0.0015));
+        const mark = new Uint8Array(cw * ch);
+        for (let start = 0; start < cw * ch; start += 1) {
+            if (mark[start] || !pure(start)) continue;
+            const region = []; const q = [start]; mark[start] = 1;
+            while (q.length) {
+                const p = q.pop(); region.push(p);
+                const x = p % cw;
+                for (const n of [x > 0 ? p - 1 : -1, x < cw - 1 ? p + 1 : -1, p >= cw ? p - cw : -1, p < cw * (ch - 1) ? p + cw : -1]) {
+                    if (n >= 0 && !mark[n] && pure(n)) { mark[n] = 1; q.push(n); }
+                }
+            }
+            if (region.length >= minArea) for (const p of region) d[p * 4 + 3] = 0;
+        }
         for (let p = 0; p < cw * ch; p += 1) {
             if (d[p * 4 + 3] === 0) continue;
             const x = p % cw;
@@ -1330,7 +1365,8 @@ function drawSceneV2(g, record, song, rows, index, t, w, h) {
     const span = groupSpan(rows, index);
     const p = Math.min(1, Math.max(0, (t - span.start) / Math.max(0.1, span.end - span.start)));
     const push = group?.motion === 'push' ? 1 + 0.03 * p : 1;
-    const bg = imageFor(group?.bg?.url);
+    const bgRow = (group?.bgs || []).find(b => b.id === (row.shot.bg || 'B1')) || (group?.bgs || [])[0];
+    const bg = imageFor(bgRow?.image?.url || group?.bg?.url);
     if (bg) drawCover(g, bg, w, h, push, 0, 0);
     const diff = group?.diffs.find(d => d.id === row.shot.diff);
     const person = cutoutFor(diff?.image?.url);

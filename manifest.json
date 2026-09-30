@@ -1,7 +1,7 @@
 {
   "display_name": "心迹回廊",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.99.99-r84.191-tegaki-pv",
+  "js": "index.js?heartbeat=0.99.99-r84.193-hidden-floors",
   "author": "Toto",
   "version": "0.99.99",
   "auto_update": true,
@@ -10,6 +10,6 @@
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r84.191：手书 v2（印象曲 PV）：构图卡片、背景加白底人物差分、自动抠图、封面取色、竖排歌词、片头片尾与卡点；柏宝绘自动沿用构图种子。",
+  "description": "r84.193：隐藏楼层后增量更新不再误报基线不一致；私人终端气泡文字可读。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }

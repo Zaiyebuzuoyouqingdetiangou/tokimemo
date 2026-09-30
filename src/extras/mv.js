@@ -10,6 +10,7 @@ import * as archive_repository from '../archive/repository.js';
 import * as generation_client from '../generation/client.js';
 import * as generation_prompts from '../generation/prompts.js';
 import * as cg_core from '../generation/cgImageCore.js';
+import * as cg_appearance from '../generation/cgAppearance.js';
 
 export const MV_KEY = 'heartbeatMemoriesMvV1';
 const LOCAL_PREFIX = 'heartbeatMemoriesMvV1:';
@@ -402,7 +403,7 @@ ${settings.output === 'video' ? `1. 按段落写镜头：${settings.output === '
 不要前言，不要解释，不要代码围栏，不要在 JSON 外面写任何字。
 ${settings.output === 'video'
         ? '{"wardrobe":{"era":"……","char":"……","user":"……"},"shots":[{"sectionIndex":0,"lyric":"","plain":"……","who":"char","shot":"中景：看到上半身","move":"镜头慢慢推近","motion":"push","imagePrompt":"……","videoZh":"……","videoEn":"……"}]}'
-        : '{"wardrobe":{"era":"……","char":"……","user":"……"},"keyword":"副歌里最有分量的词","motif":{"name":"竹叶","prompt":"english: one decorative element"},"groups":[{"id":"G1","composition":"半身 · 人物居中","backgroundPrompt":"english: empty scenery only","characterPrompt":"english: framing, pose base, who","who":"char","motion":"still","link":"下一组如何承接","diffs":[{"id":"D1","label":"垂眼","change":"english: only expression / gaze / hand change"}]}],"frames":[{"sectionIndex":1,"lyric":"原句","group":"G1","diff":"D1","hold":1}]}'}`;
+        : '{"wardrobe":{"era":"……","char":"……","user":"……"},"keyword":"副歌里最有分量的词","motif":{"name":"竹叶","prompt":"english: one decorative element"},"groups":[{"id":"G1","composition":"低机位 · 蹲下喂猫 · 人物在左","position":"left","scale":"full","characterPrompt":"english: camera angle, framing, pose base, who and what is in frame","who":"char","motion":"still","link":"下一组如何承接","bgs":[{"id":"B1","label":"午后","prompt":"english: empty scenery only"}],"diffs":[{"id":"D1","label":"伸手前","change":"english: this moment of the action"}]}],"frames":[{"sectionIndex":1,"lyric":"原句","group":"G1","diff":"D1","bg":"B1","hold":1}]}'}`;
 }
 
 // 手书：少数构图，每个构图里几张连续变化的画（闭眼→睁眼→偏头），摊平成镜头。
@@ -474,7 +475,7 @@ export async function generateStoryboard(songId, settingsInput) {
             const previous = target.base.songs[songId];
             return { id: songId, createdAt: previous?.createdAt || Date.now(), settings,
                 ...buildShots(raw, memory, parseSections(song.lyrics).length, settings),
-                tegaki: { ...(previous?.tegaki || {}), range: settings.range, rangeFrom: settings.rangeFrom, rangeTo: settings.rangeTo, ...(settings.output === 'tegaki' ? { lyric: 'vertical' } : {}) },
+                tegaki: { ...(previous?.tegaki || {}), range: settings.range, rangeFrom: settings.rangeFrom, rangeTo: settings.rangeTo, ...(settings.output === 'tegaki' ? { lyric: 'subtitle' } : {}) },
                 wardrobe: {
                     era: core_text.normalizeText(raw?.wardrobe?.era, 200) || previous?.wardrobe?.era || '',
                     char: core_text.normalizeText(raw?.wardrobe?.char, 300) || previous?.wardrobe?.char || '',
@@ -690,12 +691,15 @@ export function patchTegaki(songId, patch) {
 function tegakiGrammar(sections, keep, charName = '{{char}}') {
     const rows = keep.map(i => `${i}:${sections[i]?.tag || ''}`).join('，');
     return `这是这首印象曲的手书 PV。只为这些段落写：${rows}。
-手书不换场景讲故事，而是少数构图的连续变化：
-- 一共 3～5 个构图组（groups）。每组画一张 backgroundPrompt（只有场景、没有人物）和 2～4 张人物差分（diffs）。同组差分的 characterPrompt 完全相同（同一构图、机位、人物位置、姿势基础），diff.change 只写表情、视线、手势、头发这一处变化。
-- 段落语法：主歌以 ${charName} 半身为主、一句一张差分；导歌推到近景（眼睛、手、随身物件）；副歌是主视觉（选择了双人出镜时两人同框），重复的副歌必须复用同一个构图组和它的差分；桥段用反差构图（逆光、剪影或单色）；尾奏回到主歌的构图组。
-- 每组写 link：最后一张如何承接下一组（眼睛接眼睛、手接手、飘动的头发带到下一构图），不要跳到完全不同的空间。
-- frames 是时间顺序：选中段落里的每一句歌词各一条（lyric 抄原句），器乐段一条（lyric 留空）；每条指向 group 与 diff；关键画面 hold 写 2 或 3。
-- keyword：从副歌里挑一个 2～4 字、最有分量的词。motif：从歌词里挑一个可以漂浮的意象（花瓣、雨滴、竹叶、雪、萤火之类），prompt 用英文只描述这一个小元素。
+手书要把歌词里发生的事“演出来”：遮住字幕，观众也能看懂他做了什么、是什么性格。不要一直用同一个半身立绘轮换表情。
+- 构图组（groups）= 一个事件或一个情绪节点，一共 5～9 组。歌词讲到的人物、动物、物件和动作必须出现在画面里（讲到喂猫就要有猫、蹲下、递食物；讲到师父叮嘱，可以是门口告别、师父在画外）。
+- 每组的景别和机位要不同：特写（手、眼、物件）、近景、中景、全身、远景、背影、低机位、俯视都可以；人物位置不要总在正中间，position 写 left / center / right，scale 写 close / medium / full / wide。
+- 每组 1～3 张人物差分（diffs），是同一机位下一个动作的连续过程（伸手前→伸手→猫碰到手；握剑柄→出剑→收剑），不是随便换表情。同组 characterPrompt 相同，diff.change 只写这一刻的动作和表情。
+- 每组 1～2 张背景（bgs）：同一个地点，第二张可以是时间或光线的变化（白天→黄昏、晴→雨），也可以是远近不同。背景只有场景，没有人物。
+- 副歌可以有一个主视觉组，重复的副歌复用它；其余段落尽量用新的构图，尾奏可以回到开头的构图。
+- 每组写 link：最后一张怎样承接下一组（视线、手、飘动的衣角或发带）。
+- frames 按时间顺序：选中段落里的每一句歌词一条（lyric 抄原句），器乐段一条（lyric 留空），指向 group、diff 和 bg；动作连续的几句可以短，关键表情 hold 写 2 或 3。
+- keyword：副歌里一个 2～4 字、最有分量的词。motif：歌词里一个可以漂浮的意象，prompt 用英文只描述这一个小元素。
 `;
 }
 
@@ -721,6 +725,13 @@ export function buildShots(raw, memory, sectionCount, settings) {
             who: ['char', 'both', 'user', 'none'].includes(g?.who) ? g.who : 'char',
             motion: g?.motion === 'push' ? 'push' : 'still',
             link: core_text.normalizeText(g?.link, 160), seed: 0, bg: null,
+            position: ['left', 'center', 'right'].includes(g?.position) ? g.position : 'center',
+            scale: ['close', 'medium', 'full', 'wide'].includes(g?.scale) ? g.scale : 'medium',
+            bgs: (list(g?.bgs).length ? list(g.bgs) : [{ label: '场景', prompt: g?.backgroundPrompt }]).slice(0, 2).map((b, k) => ({
+                id: `B${k + 1}`, rawId: core_text.normalizeText(b?.id, 20) || `B${k + 1}`,
+                label: core_text.normalizeText(b?.label, 20) || (k ? '变化' : '场景'),
+                prompt: core_text.normalizeText(b?.prompt, 600) || core_text.normalizeText(g?.backgroundPrompt, 600), image: null,
+            })),
             diffs: diffs.map(({ rawId, ...rest }) => rest),
         });
     });
@@ -731,18 +742,21 @@ export function buildShots(raw, memory, sectionCount, settings) {
         const rawDiff = core_text.normalizeText(f?.diff, 20);
         const diff = ref.diffs.find(d => d.rawId === rawDiff) || ref.diffs[Math.max(0, Number(String(rawDiff).replace(/\D/g, '')) - 1)] || ref.diffs[0];
         const group = groups.find(g => g.id === ref.id);
+        const rawBg = core_text.normalizeText(f?.bg, 20);
+        const bgRow = group.bgs.find(b => b.rawId === rawBg) || group.bgs[Math.max(0, Number(String(rawBg).replace(/\D/g, '')) - 1)] || group.bgs[0];
         shots.push({
             id: `F${shots.length + 1}_${Date.now().toString(36)}`,
             sectionIndex: Math.min(Math.max(0, Math.round(Number(f?.sectionIndex) || 0)), Math.max(0, sectionCount - 1)),
             lyric: core_text.normalizeText(f?.lyric, 200),
             plain: `${group.composition || group.id} · ${diff.label}`,
-            group: ref.id, diff: diff.id, who: group.who,
+            group: ref.id, diff: diff.id, bg: bgRow.id, who: group.who,
             hold: Math.min(3, Math.max(1, Math.round(Number(f?.hold) || 1))),
             motion: group.motion, cut: 'cut', image: null, videoDone: false,
         });
     }
     if (!groups.length || !shots.length) throw core_text.safeUserError('这次没有收到可用的构图，可以再试一次。', 'RMT_MV_EMPTY');
     for (let i = 0; i < shots.length; i += 1) shots[i].cut = shots[i + 1] && shots[i + 1].group === shots[i].group ? 'cut' : 'fade';
+    for (const g of groups) g.bgs = g.bgs.map(({ rawId, ...rest }) => rest);
     const motifPrompt = core_text.normalizeText(raw?.motif?.prompt, 300);
     return {
         version: 2, groups, shots,
@@ -758,7 +772,10 @@ export function assetOf(record, key) {
     const [gid, part] = String(key).split(':');
     const group = list(record.groups).find(g => g.id === gid);
     if (!group) return null;
-    if (part === 'bg') return { kind: 'bg', group, get image() { return group.bg; }, set image(v) { group.bg = v; } };
+    const bgs = list(group.bgs);
+    if (part === 'bg' && !bgs.length) return { kind: 'bg', group, get image() { return group.bg; }, set image(v) { group.bg = v; } };
+    const bgRow = part === 'bg' ? bgs[0] : bgs.find(b => b.id === part);
+    if (bgRow) return { kind: 'bg', group, bgRow, get image() { return bgRow.image; }, set image(v) { bgRow.image = v; } };
     const diff = list(group.diffs).find(d => d.id === part);
     return diff ? { kind: 'char', group, diff, get image() { return diff.image; }, set image(v) { diff.image = v; } } : null;
 }
@@ -771,7 +788,8 @@ export function assetKeys(record, song = null) {
     for (const g of record.groups) {
         const diffs = g.diffs.filter(d => !used || used.has(`${g.id}:${d.id}`));
         if (!diffs.length) continue;
-        keys.push(`${g.id}:bg`, ...diffs.map(d => `${g.id}:${d.id}`));
+        const bgIds = list(g.bgs).length ? list(g.bgs).filter(b => record.shots.some(s => s.group === g.id && (s.bg || 'B1') === b.id && (!used || used.has(`${g.id}:${s.diff}`)))).map(b => b.id) : ['bg'];
+        keys.push(...(bgIds.length ? bgIds : [list(g.bgs)[0]?.id || 'bg']).map(id => `${g.id}:${id}`), ...diffs.map(d => `${g.id}:${d.id}`));
     }
     if (record.motif) keys.push('motif');
     return keys;
@@ -785,7 +803,7 @@ export function assetPrompt(record, key, context) {
     const ratio = settings.ratio === '9:16' ? 'vertical 9:16 composition' : 'horizontal 16:9 composition';
     const era = record?.wardrobe?.era ? `setting: ${record.wardrobe.era}` : '';
     if (found.kind === 'motif') return [style, found.target.prompt, 'a single small decorative element, isolated on a pure white background, no scenery, no people, no text'].filter(Boolean).join(', ');
-    if (found.kind === 'bg') return [style, ratio, era, found.group.backgroundPrompt, 'scenery only, empty scene, no people, no characters, no text, no logo'].filter(Boolean).join(', ');
+    if (found.kind === 'bg') return [style, ratio, era, found.bgRow?.prompt || found.group.backgroundPrompt, 'scenery only, empty scene, no people, no characters, no text, no logo'].filter(Boolean).join(', ');
     const who = found.group.who;
     const hasChar = who === 'char' || who === 'both';
     const hasUser = settings.appear !== 'none' && (who === 'both' || who === 'user');
@@ -793,9 +811,25 @@ export function assetPrompt(record, key, context) {
     const people = { ...(looks || {}), char: hasChar ? looks?.char || '' : '', user: hasUser ? looks?.user || '' : '' };
     const lookLine = hasChar || hasUser ? core_castLooks.castLooksPromptLine(people, context) : '';
     const back = settings.appear === 'back' && hasUser ? `${hasChar ? 'the second person' : 'the person'} is shown only from behind, hands or silhouette, face not visible` : '';
-    return [style, ratio, found.group.characterPrompt, found.diff.change, lookLine ? `fixed appearance, keep consistent: ${lookLine}` : '', wardrobeLine(record, hasChar, hasUser), back,
+    const place = { left: 'character placed on the left third of the frame', right: 'character placed on the right third of the frame', center: '' }[found.group.position] || '';
+    const size = { close: 'close-up shot', medium: 'medium shot, waist up', full: 'full body shot', wide: 'wide shot, small figure' }[found.group.scale] || '';
+    return [style, ratio, found.group.characterPrompt, found.diff.change, place, size, lookLine ? `fixed appearance, keep consistent: ${lookLine}` : '', wardrobeLine(record, hasChar, hasUser), back,
         hasChar && hasUser ? 'exactly two people' : 'only one person',
         'isolated on a pure white background, plain white backdrop, no scenery, clean silhouette edges, no text'].filter(Boolean).join(', ');
+}
+
+// 双人画面按角色分别给外貌（与 CG 相同的 characters 结构），避免两个人长成同一张脸。
+function assetMetadata(record, found, context) {
+    const settings = normalizeSettings(record?.settings);
+    const who = found.group.who;
+    const roles = [];
+    if (who === 'char' || who === 'both') roles.push('char');
+    if (settings.appear !== 'none' && (who === 'both' || who === 'user')) roles.push('user');
+    const looks = core_castLooks.readCastLooks(context);
+    const tag = role => looks?.manual === true ? looks?.[role] || '' : core_castLooks.lookFromDescription(looks?.[role]);
+    try {
+        return cg_appearance.normalizeCgPromptMetadata({ characters: roles.map(role => ({ role, name: role === 'char' ? context?.name2 : context?.name1, tag: tag(role), nl: '' })) });
+    } catch { return null; }
 }
 
 export function isAssetDrawing(scope, songId, key) { return running.has(`asset:${scope}:${songId}:${key}`); }
@@ -815,6 +849,7 @@ export async function drawAsset(songId, key) {
         const result = await cg_core.invokeImageGeneration(assetPrompt(record, key, context), context, {
             orientation: found.kind === 'motif' || normalizeSettings(record.settings).ratio === '9:16' ? 'portrait' : 'landscape',
             characterName: context?.name2 || '', targetKey: runKey, seed,
+            ...(found.kind === 'char' ? { promptMetadata: assetMetadata(record, found, context) } : {}),
         });
         return holdResult(target, 'asset', key, result, raw => {
             const url = cg_core.normalizeCgImageUrl(typeof raw === 'string' ? raw : raw?.url);

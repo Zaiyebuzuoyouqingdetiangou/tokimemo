@@ -325,11 +325,12 @@ function renderWaitingGrid() {
         ...record.locked.map(item => ({ ...item, locked: !unlocked.has(item.id), wasLocked: true })),
     ];
     const el = body(); if (!el) return;
-    const nowLine = `<div class="rmt-x-now"><i></i>离开第 ${record.awayDays} 天</div>`;
+    const topRow = (label, action) => `<div class="rmt-x-night-top"><button type="button" class="rmt-x-back" data-rmt-extra="${action}">‹ ${label}</button><div class="rmt-x-now"><i></i>REC · 离开第 ${record.awayDays} 天</div></div>`;
+    const nowLine = topRow('回到全部房间', 'waiting-grid');
     if (view.sub === 'grid') {
-        const tiles = cells.slice(0, 9).map((cell, i) => `<button type="button" class="rmt-x-tile${cell.locked ? ' locked' : ''}" data-tone="${i % 6}" data-rmt-extra="waiting-cell" data-rmt-extra-id="${esc(cell.id)}" aria-label="${esc(cell.name)}${cell.locked ? '，已上锁' : ''}"><span class="rmt-x-tile-top"><small>${cell.locked ? '??:??' : esc(cell.time || '--:--')}</small>${cell.locked ? '<i class="fa-solid fa-lock" aria-hidden="true"></i>' : ''}</span><b>${esc(cell.name)}</b></button>`);
+        const tiles = cells.slice(0, 9).map((cell, i) => `<button type="button" class="rmt-x-tile${cell.locked ? ' locked' : ''}" data-tone="${i % 6}" data-rmt-extra="waiting-cell" data-rmt-extra-id="${esc(cell.id)}" aria-label="${esc(cell.name)}${cell.locked ? '，已上锁' : ''}"><span class="rmt-x-tile-top"><small>${cell.locked ? '??:??' : esc(cell.time || '--:--')}</small>${cell.locked ? '<i class="fa-solid fa-lock" aria-hidden="true"></i>' : `<em class="rmt-x-cam">● ${String(i + 1).padStart(2, '0')}</em>`}</span><b>${esc(cell.name)}</b></button>`);
         while (tiles.length < 9) tiles.push('<div class="rmt-x-tile empty"><span class="rmt-x-tile-top"><small>--:--</small></span><span>[ 还没有记录 ]</span></div>');
-        el.innerHTML = `<main class="rmt-x-night">${nowLine}<header><h2>你不在的时候</h2><p>点开一处，看看他那天在那里做了什么。</p></header>
+        el.innerHTML = `<main class="rmt-x-night">${topRow('他在等你', 'waiting-main')}<header><h2>你不在的时候</h2><p>他不知道你在看。点开一处，看看他那天在那里做了什么。</p></header>
           <div class="rmt-x-tiles">${tiles.join('')}</div>
           ${record.locked.length ? '<div class="rmt-x-hint"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i><span>有的地方上了锁。密码就藏在其他房间的细节里。</span></div>' : ''}</main>`;
         return;
@@ -344,7 +345,7 @@ function renderWaitingGrid() {
         return;
     }
     el.innerHTML = `<main class="rmt-x-night">${nowLine}
-      <div class="rmt-x-hero" data-tone="${Math.max(0, cells.indexOf(cell)) % 6}"><span>${esc(cell.name)} · ${esc(cell.time || '--:--')}</span></div>
+      <div class="rmt-x-hero rmt-x-peep" data-tone="${Math.max(0, cells.indexOf(cell)) % 6}"><em class="rmt-x-cam">● 偷看中</em><span>${esc(cell.name)} · ${esc(cell.time || '--:--')}</span></div>
       ${cell.wasLocked ? '<p class="rmt-x-unlocked">已解锁 · 他最不想被看到的一面</p>' : ''}
       <section class="rmt-x-sheet">
         <div><small>此刻的他</small><p>${esc(cell.state)}</p></div>
@@ -423,6 +424,7 @@ export function handleExtraClick(event) {
         renderExtra();
     }
     else if (action === 'waiting-generate') void generateWaiting();
+    else if (action === 'waiting-main') { view.sub = 'main'; renderExtra(); body().scrollTop = 0; }
     else if (action === 'waiting-grid') { view.sub = 'grid'; renderExtra(); body().scrollTop = 0; }
     else if (action === 'waiting-cell') {
         const record = currentWaitingRecord();

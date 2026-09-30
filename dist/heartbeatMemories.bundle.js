@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 311
-// Source SHA-256: 7222c48ae28deafd7c040bb600c9c16acbd6056a395904c9c360e6bc5a7fdb05
+// Source SHA-256: c91c840403443a571ea646233f23da8241b7acff9f2835c7ae8bb5b68379ba65
 // Build: python3 verification/build.py <source-root>
 
 const __m_core_themeSongCover_js = Object.create(null);
@@ -25640,6 +25640,14 @@ const floorWindowStamp = __m_archive_floorWindowCheck_js.floorWindowStamp;
 
 
 
+
+
+
+
+
+
+
+
 // 建档主流程：一次建档操作（分批、请求、校验、保存）
 // 从 archive/repository.js 原样搬出（重构阶段 2），声明文本一字未改；archive/repository.js 仍转发原有导出。
 
@@ -25791,7 +25799,7 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
     const participantSnapshot = participants.selectedParticipantSnapshot(archiveRoster);
 
     const previousMessageCount = incrementalUpdate ? Math.max(0, Number(existing?.sourceMessageCount) || 0) : 0;
-    const snapshot = capturedInput?.snapshot || await core_context.buildChatSnapshot(context, {
+    const snapshotOptions = {
         completeSource: !legacyDraft,
         prefixCount: previousMessageCount,
         readRange: settings.chatReadRange,
@@ -25801,7 +25809,8 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
                 && core_context.isCurrentTaskOrigin(preparation.origin, core_context.currentCharacterGuard()); }
             catch { return false; }
         },
-    });
+    };
+    let snapshot = capturedInput?.snapshot || await core_context.buildChatSnapshot(context, snapshotOptions);
     if (!snapshot.chatId) throw new Error('无法识别当前聊天窗口 ID，请先保存或打开一个具体聊天。');
     if (!archiveInputAvailable(snapshot, external)) throw new Error('当前聊天窗口没有可用于创建档案的角色/用户消息或已绑定的外部历史。');
 
@@ -25810,9 +25819,19 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
         && archive_relayPreparation.relayHasUnreadCurrentSource(existing);
     if (incrementalUpdate && !capturedInput && !restartImport && !(automatic && floorWindow) && !unreadRelaySource) {
         const oldChatFingerprint = archivedChatFingerprint(existing);
-        if (!oldChatFingerprint || previousMessageCount > snapshot.totalMessages || snapshot.prefixFingerprint !== oldChatFingerprint
-            || (existing?.fullSourceFingerprint && snapshot.fullPrefixFingerprint && snapshot.fullPrefixFingerprint !== existing.fullSourceFingerprint)) {
-            throw core_text.safeUserError('旧档案与当前聊天历史基线不一致，本次保留旧成果；请恢复原聊天历史后继续，或另行保留当前来源。', 'RMT_ARCHIVE_PREFIX_CHANGED');
+        const mismatch = value => !oldChatFingerprint || previousMessageCount > value.totalMessages || value.prefixFingerprint !== oldChatFingerprint
+            || (existing?.fullSourceFingerprint && value.fullPrefixFingerprint && value.fullPrefixFingerprint !== existing.fullSourceFingerprint);
+        if (mismatch(snapshot)) {
+            // 只是隐藏 / 取消隐藏了楼层时，内容并没变：换一种隐藏楼层口径重算基线，对得上就按那种口径继续。
+            let matched = null;
+            for (const hiddenMode of ['exclude', 'include']) {
+                const alternate = await core_context.buildChatSnapshot(context, { ...snapshotOptions, hiddenMode });
+                const prefixOnly = { ...alternate, fullPrefixFingerprint: '' };
+                if (!mismatch(alternate) || (!mismatch(prefixOnly) && hiddenMode === 'exclude')) { matched = alternate; break; }
+            }
+            if (!matched) throw core_text.safeUserError('旧档案与当前聊天历史基线不一致，本次保留旧成果；请恢复原聊天历史后继续，或另行保留当前来源。', 'RMT_ARCHIVE_PREFIX_CHANGED');
+            snapshot = matched;
+            try { globalThis.toastr?.info?.('检测到隐藏楼层有变化，旧消息内容未变，已按原基线继续增量更新。', '心迹回廊'); } catch {}
         }
     }
 
@@ -26317,10 +26336,8 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
         runtimeState.activeTaskLabel = '';
     }
 }
-
 __m_archive_importOperation_js.importCurrentChatMemoryOperation = importCurrentChatMemoryOperation;
 }
-
 
 function __init_archive_repository_js() {
 // MODULE: archive/repository.js
@@ -31222,6 +31239,11 @@ const runtimeState = __m_core_state_js.state;
 
 
 
+
+
+
+
+
 const adaptHostContext = host_compatibility.createHostContextAdapter({ getEpoch: () => runtimeState.runtimeLifecycleEpoch });
 
 function getContext() {
@@ -31304,7 +31326,11 @@ async function buildChatSnapshot(context = currentCharacterGuard(), options = {}
     for (let index = 0; index < rawChat.length; index += 1) {
         const message = rawChat[index];
         const text = core_text.normalizeText(message?.mes, 8000);
-        if (text && isArchiveDialogueMessage(message, context)) {
+        // hiddenMode 只用于核对旧档案基线：exclude = 旧版不收隐藏楼层；include = 隐藏楼层一律按对话算。
+        const dialogue = options.hiddenMode === 'exclude' ? !message?.is_system
+            : options.hiddenMode === 'include' ? (!message?.is_system || (typeof message?.is_user === 'boolean' && !['system', 'tool', 'developer'].includes(message?.role) && !message?.extra?.type && !message?.extra?.uses_system_ui))
+            : isArchiveDialogueMessage(message, context);
+        if (text && dialogue) {
             const isUser = message?.is_user === true;
             const item = {
                 index: index + 1,
@@ -31634,8 +31660,6 @@ function isCurrentTaskRunOrigin(origin, context = getContext()) {
         return false;
     }
 }
-
-__m_core_context_js.buildChatSnapshot = buildChatSnapshot;
 __m_core_context_js.getContext = getContext;
 __m_core_context_js.currentCharacterGuard = currentCharacterGuard;
 __m_core_context_js.getChatId = getChatId;
@@ -31643,6 +31667,7 @@ __m_core_context_js.yieldToUi = yieldToUi;
 __m_core_context_js.runtimeLifecycleStillCurrent = runtimeLifecycleStillCurrent;
 __m_core_context_js.assertRuntimeLifecycleCurrent = assertRuntimeLifecycleCurrent;
 __m_core_context_js.isArchiveDialogueMessage = isArchiveDialogueMessage;
+__m_core_context_js.buildChatSnapshot = buildChatSnapshot;
 __m_core_context_js.completeArchiveChatFingerprint = completeArchiveChatFingerprint;
 __m_core_context_js.comparableChatId = comparableChatId;
 __m_core_context_js.contextCharacterAvatar = contextCharacterAvatar;
@@ -31665,7 +31690,6 @@ __m_core_context_js.taskOriginCharacterMatches = taskOriginCharacterMatches;
 __m_core_context_js.isCurrentTaskOrigin = isCurrentTaskOrigin;
 __m_core_context_js.isCurrentTaskRunOrigin = isCurrentTaskRunOrigin;
 }
-
 
 function __init_core_requestTasks_js() {
 // MODULE: core/requestTasks.js
@@ -82487,7 +82511,6 @@ __m_ui_themeSongView_js.renderThemeSongs = renderThemeSongs;
 
 function __init_ui_themeSurfaces_js() {
 // MODULE: ui/themeSurfaces.js
-
 // Structural surfaces share one palette; illustrated scenes retain their own local art colours.
 function structuralThemeCss(root) {
     root += '[data-rmt-theme-mode]';
@@ -82504,7 +82527,7 @@ function structuralThemeCss(root) {
         'items-toolbar','item-node','item-detail','travel-head','travel-index','travel-dialogue','travel-dialogue-bubble','cg-provider-bar','cabinet-detail','cabinet-piece','theme-preview'
     ];
     const surfaces = surface.map(name => root + ' .rmt-' + name).join(',');
-    const art = ':not(.rmt-crt,.rmt-crt *,.rmt-room-scene,.rmt-room-scene *,.rmt-phone-screen,.rmt-phone-screen *,.rmt-travel-artifact,.rmt-travel-artifact *,.rmt-travel-postcard,.rmt-travel-postcard *,.rmt-ending-easter-layer,.rmt-ending-easter-layer *,.rmt-calendar-holiday-art,.rmt-calendar-holiday-art *,.rmt-firefly-field,.rmt-firefly-field *)';
+    const art = ':not(.rmt-crt,.rmt-crt *,.rmt-room-scene,.rmt-room-scene *,.rmt-phone-screen,.rmt-phone-screen *,.rmt-travel-artifact,.rmt-travel-artifact *,.rmt-travel-postcard,.rmt-travel-postcard *,.rmt-ending-easter-layer,.rmt-ending-easter-layer *,.rmt-calendar-holiday-art,.rmt-calendar-holiday-art *,.rmt-firefly-field,.rmt-firefly-field *,.rmt-x-night,.rmt-x-night *,.rmt-x-entry,.rmt-x-entry *,.rmt-x-grad,.rmt-x-grad *)';
     return `
 ${root}{--gs-ink:var(--rmt-theme-text);--gs-muted:var(--rmt-theme-muted);--gs-paper:var(--rmt-theme-surface-solid);--gs-paper-blue:var(--rmt-theme-soft);--gs-line:var(--rmt-theme-border);color:var(--rmt-theme-text)!important;-webkit-text-fill-color:currentColor!important;font-family:system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif!important;font-size:15px!important;font-weight:400!important;line-height:1.6;text-shadow:none!important;filter:none!important;opacity:1!important}
 ${root} .rmt-shell{--gs-ink:var(--rmt-theme-text);--gs-muted:var(--rmt-theme-muted);--gs-paper:var(--rmt-theme-surface-solid);--gs-paper-blue:var(--rmt-theme-soft);--gs-line:var(--rmt-theme-border)}
@@ -82512,6 +82535,8 @@ ${surfaces}{background:var(--rmt-theme-surface-alpha)!important;color:var(--rmt-
 ${root} :is(.rmt-album,.rmt-adv,.rmt-room-view,.rmt-travel,.rmt-heart-drama-layout,.rmt-archive-room){background:var(--rmt-theme-bg)!important}
 ${root} :is(p,b,strong,small,span,label,blockquote,h1,h2,h3,summary,legend,div[class^="rmt-"],div[class*=" rmt-"])${art}{color:var(--rmt-content-ink,var(--rmt-theme-text))!important;-webkit-text-fill-color:currentColor!important;text-shadow:none!important;font-family:system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif!important;font-weight:400!important;letter-spacing:normal;overflow-wrap:anywhere}
 ${root} :is(h1,h2,h3,b,strong,.rmt-topbar-title)${art}{font-weight:600!important}
+${root} :is(.rmt-phone-message,.rmt-phone-message-owner,.rmt-phone-message-contact){--rmt-content-ink:var(--rmt-screen-ink,var(--rmt-theme-text))}
+${root}[data-rmt-theme-dark="true"] :is(.rmt-phone-message-owner,.rmt-phone-entry.active){--rmt-content-ink:var(--rmt-theme-wash-ink,var(--rmt-theme-text))}
 ${root} :is(h1,h2,h3)${art}{line-height:1.4!important;margin-block:12px 16px}
 ${root} :is(h1,h2)${art}{font-size:22px!important}
 ${root} h3${art}{font-size:18px!important}
@@ -82633,10 +82658,8 @@ ${root} .rmt-easter-envelope{min-height:85px!important;background:linear-gradien
 ${root} .rmt-easter-seal{border-radius:50%!important;justify-self:center;background:#74494f!important;color:#fff!important}
 `;
 }
-
 __m_ui_themeSurfaces_js.structuralThemeCss = structuralThemeCss;
 }
-
 
 function __init_ui_timeStoriesView_js() {
 // MODULE: ui/timeStoriesView.js
@@ -85238,6 +85261,19 @@ ${r} .rmt-x-dials b{width:56px;height:64px;border-radius:12px;background:#fbf6ee
 ${r} .rmt-x-wrong{color:#f2b3a6!important;font-size:13px!important}
 ${r} .rmt-x-primary.rmt-x-lamp{background:#f2c38b;color:#262b40}
 ${r} .rmt-archive-portal.rmt-x-off{opacity:.72}
+${r} .rmt-x-night{--rmt-content-ink:#f3eee6}
+${r} .rmt-x-night .rmt-x-sheet{--rmt-content-ink:#3a3346}
+${r} .rmt-x-night-top{display:flex;justify-content:space-between;align-items:center;gap:8px}
+${r} button.rmt-x-back{min-height:44px;padding:0 14px!important;border-radius:999px!important;border:1px solid rgba(243,238,230,.35)!important;background:rgba(243,238,230,.08)!important;color:#f3eee6!important;-webkit-text-fill-color:#f3eee6!important;font-size:14px!important;cursor:pointer}
+${r} .rmt-x-night .rmt-x-now{align-self:auto;letter-spacing:1px;color:#f2b3a6!important;-webkit-text-fill-color:#f2b3a6!important}
+${r} .rmt-x-now i{background:#e0605a!important}
+${r} .rmt-x-cam{font-style:normal;font-size:10px;letter-spacing:1px;color:#f2b3a6!important;-webkit-text-fill-color:#f2b3a6!important;animation:rmt-x-breathe 1.6s ease-in-out infinite}
+${r} .rmt-x-tile{position:relative;overflow:hidden}
+${r} .rmt-x-tile::after,${r} .rmt-x-peep::after{content:"";position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse at center,transparent 45%,rgba(10,10,20,.55) 100%),repeating-linear-gradient(0deg,rgba(255,255,255,.05) 0 1px,transparent 1px 3px)}
+${r} .rmt-x-peep{position:relative;overflow:hidden;height:190px!important;justify-content:space-between;flex-direction:column;align-items:flex-start!important;gap:6px}
+${r} .rmt-x-peep::before{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(90deg,rgba(8,8,14,.92) 0 12%,transparent 30% 70%,rgba(8,8,14,.92) 88% 100%)}
+${r} .rmt-x-peep>*{position:relative;z-index:1}
+${r} .rmt-x-hero span{color:#f3eee6!important;-webkit-text-fill-color:#f3eee6!important}
 ${r} .rmt-x-recent-tile{position:relative;overflow:hidden}
 ${r} .rmt-x-recent-tile img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 ${r} .rmt-x-recent-tile em{position:relative}
@@ -85646,11 +85682,12 @@ function renderWaitingGrid() {
         ...record.locked.map(item => ({ ...item, locked: !unlocked.has(item.id), wasLocked: true })),
     ];
     const el = body(); if (!el) return;
-    const nowLine = `<div class="rmt-x-now"><i></i>离开第 ${record.awayDays} 天</div>`;
+    const topRow = (label, action) => `<div class="rmt-x-night-top"><button type="button" class="rmt-x-back" data-rmt-extra="${action}">‹ ${label}</button><div class="rmt-x-now"><i></i>REC · 离开第 ${record.awayDays} 天</div></div>`;
+    const nowLine = topRow('回到全部房间', 'waiting-grid');
     if (view.sub === 'grid') {
-        const tiles = cells.slice(0, 9).map((cell, i) => `<button type="button" class="rmt-x-tile${cell.locked ? ' locked' : ''}" data-tone="${i % 6}" data-rmt-extra="waiting-cell" data-rmt-extra-id="${esc(cell.id)}" aria-label="${esc(cell.name)}${cell.locked ? '，已上锁' : ''}"><span class="rmt-x-tile-top"><small>${cell.locked ? '??:??' : esc(cell.time || '--:--')}</small>${cell.locked ? '<i class="fa-solid fa-lock" aria-hidden="true"></i>' : ''}</span><b>${esc(cell.name)}</b></button>`);
+        const tiles = cells.slice(0, 9).map((cell, i) => `<button type="button" class="rmt-x-tile${cell.locked ? ' locked' : ''}" data-tone="${i % 6}" data-rmt-extra="waiting-cell" data-rmt-extra-id="${esc(cell.id)}" aria-label="${esc(cell.name)}${cell.locked ? '，已上锁' : ''}"><span class="rmt-x-tile-top"><small>${cell.locked ? '??:??' : esc(cell.time || '--:--')}</small>${cell.locked ? '<i class="fa-solid fa-lock" aria-hidden="true"></i>' : `<em class="rmt-x-cam">● ${String(i + 1).padStart(2, '0')}</em>`}</span><b>${esc(cell.name)}</b></button>`);
         while (tiles.length < 9) tiles.push('<div class="rmt-x-tile empty"><span class="rmt-x-tile-top"><small>--:--</small></span><span>[ 还没有记录 ]</span></div>');
-        el.innerHTML = `<main class="rmt-x-night">${nowLine}<header><h2>你不在的时候</h2><p>点开一处，看看他那天在那里做了什么。</p></header>
+        el.innerHTML = `<main class="rmt-x-night">${topRow('他在等你', 'waiting-main')}<header><h2>你不在的时候</h2><p>他不知道你在看。点开一处，看看他那天在那里做了什么。</p></header>
           <div class="rmt-x-tiles">${tiles.join('')}</div>
           ${record.locked.length ? '<div class="rmt-x-hint"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i><span>有的地方上了锁。密码就藏在其他房间的细节里。</span></div>' : ''}</main>`;
         return;
@@ -85665,7 +85702,7 @@ function renderWaitingGrid() {
         return;
     }
     el.innerHTML = `<main class="rmt-x-night">${nowLine}
-      <div class="rmt-x-hero" data-tone="${Math.max(0, cells.indexOf(cell)) % 6}"><span>${esc(cell.name)} · ${esc(cell.time || '--:--')}</span></div>
+      <div class="rmt-x-hero rmt-x-peep" data-tone="${Math.max(0, cells.indexOf(cell)) % 6}"><em class="rmt-x-cam">● 偷看中</em><span>${esc(cell.name)} · ${esc(cell.time || '--:--')}</span></div>
       ${cell.wasLocked ? '<p class="rmt-x-unlocked">已解锁 · 他最不想被看到的一面</p>' : ''}
       <section class="rmt-x-sheet">
         <div><small>此刻的他</small><p>${esc(cell.state)}</p></div>
@@ -85744,6 +85781,7 @@ function handleExtraClick(event) {
         renderExtra();
     }
     else if (action === 'waiting-generate') void generateWaiting();
+    else if (action === 'waiting-main') { view.sub = 'main'; renderExtra(); body().scrollTop = 0; }
     else if (action === 'waiting-grid') { view.sub = 'grid'; renderExtra(); body().scrollTop = 0; }
     else if (action === 'waiting-cell') {
         const record = currentWaitingRecord();
@@ -85861,8 +85899,10 @@ const archive_repository = __m_archive_repository_js;
 const generation_client = __m_generation_client_js;
 const generation_prompts = __m_generation_prompts_js;
 const cg_core = __m_generation_cgImageCore_js;
+const cg_appearance = __m_generation_cgAppearance_js;
 // 印象曲 MV：同一张分镜表可以做成手书（插件内播放与导出）或视频（提示词交给视频工具）。
 // 写分镜是一次文字请求；首帧由用户逐张手动绘制。数据按聊天、按歌保存，不写入正式档案。
+
 
 
 
@@ -86265,7 +86305,7 @@ ${settings.output === 'video' ? `1. 按段落写镜头：${settings.output === '
 不要前言，不要解释，不要代码围栏，不要在 JSON 外面写任何字。
 ${settings.output === 'video'
         ? '{"wardrobe":{"era":"……","char":"……","user":"……"},"shots":[{"sectionIndex":0,"lyric":"","plain":"……","who":"char","shot":"中景：看到上半身","move":"镜头慢慢推近","motion":"push","imagePrompt":"……","videoZh":"……","videoEn":"……"}]}'
-        : '{"wardrobe":{"era":"……","char":"……","user":"……"},"keyword":"副歌里最有分量的词","motif":{"name":"竹叶","prompt":"english: one decorative element"},"groups":[{"id":"G1","composition":"半身 · 人物居中","backgroundPrompt":"english: empty scenery only","characterPrompt":"english: framing, pose base, who","who":"char","motion":"still","link":"下一组如何承接","diffs":[{"id":"D1","label":"垂眼","change":"english: only expression / gaze / hand change"}]}],"frames":[{"sectionIndex":1,"lyric":"原句","group":"G1","diff":"D1","hold":1}]}'}`;
+        : '{"wardrobe":{"era":"……","char":"……","user":"……"},"keyword":"副歌里最有分量的词","motif":{"name":"竹叶","prompt":"english: one decorative element"},"groups":[{"id":"G1","composition":"低机位 · 蹲下喂猫 · 人物在左","position":"left","scale":"full","characterPrompt":"english: camera angle, framing, pose base, who and what is in frame","who":"char","motion":"still","link":"下一组如何承接","bgs":[{"id":"B1","label":"午后","prompt":"english: empty scenery only"}],"diffs":[{"id":"D1","label":"伸手前","change":"english: this moment of the action"}]}],"frames":[{"sectionIndex":1,"lyric":"原句","group":"G1","diff":"D1","bg":"B1","hold":1}]}'}`;
 }
 
 // 手书：少数构图，每个构图里几张连续变化的画（闭眼→睁眼→偏头），摊平成镜头。
@@ -86337,7 +86377,7 @@ async function generateStoryboard(songId, settingsInput) {
             const previous = target.base.songs[songId];
             return { id: songId, createdAt: previous?.createdAt || Date.now(), settings,
                 ...buildShots(raw, memory, parseSections(song.lyrics).length, settings),
-                tegaki: { ...(previous?.tegaki || {}), range: settings.range, rangeFrom: settings.rangeFrom, rangeTo: settings.rangeTo, ...(settings.output === 'tegaki' ? { lyric: 'vertical' } : {}) },
+                tegaki: { ...(previous?.tegaki || {}), range: settings.range, rangeFrom: settings.rangeFrom, rangeTo: settings.rangeTo, ...(settings.output === 'tegaki' ? { lyric: 'subtitle' } : {}) },
                 wardrobe: {
                     era: core_text.normalizeText(raw?.wardrobe?.era, 200) || previous?.wardrobe?.era || '',
                     char: core_text.normalizeText(raw?.wardrobe?.char, 300) || previous?.wardrobe?.char || '',
@@ -86553,12 +86593,15 @@ function patchTegaki(songId, patch) {
 function tegakiGrammar(sections, keep, charName = '{{char}}') {
     const rows = keep.map(i => `${i}:${sections[i]?.tag || ''}`).join('，');
     return `这是这首印象曲的手书 PV。只为这些段落写：${rows}。
-手书不换场景讲故事，而是少数构图的连续变化：
-- 一共 3～5 个构图组（groups）。每组画一张 backgroundPrompt（只有场景、没有人物）和 2～4 张人物差分（diffs）。同组差分的 characterPrompt 完全相同（同一构图、机位、人物位置、姿势基础），diff.change 只写表情、视线、手势、头发这一处变化。
-- 段落语法：主歌以 ${charName} 半身为主、一句一张差分；导歌推到近景（眼睛、手、随身物件）；副歌是主视觉（选择了双人出镜时两人同框），重复的副歌必须复用同一个构图组和它的差分；桥段用反差构图（逆光、剪影或单色）；尾奏回到主歌的构图组。
-- 每组写 link：最后一张如何承接下一组（眼睛接眼睛、手接手、飘动的头发带到下一构图），不要跳到完全不同的空间。
-- frames 是时间顺序：选中段落里的每一句歌词各一条（lyric 抄原句），器乐段一条（lyric 留空）；每条指向 group 与 diff；关键画面 hold 写 2 或 3。
-- keyword：从副歌里挑一个 2～4 字、最有分量的词。motif：从歌词里挑一个可以漂浮的意象（花瓣、雨滴、竹叶、雪、萤火之类），prompt 用英文只描述这一个小元素。
+手书要把歌词里发生的事“演出来”：遮住字幕，观众也能看懂他做了什么、是什么性格。不要一直用同一个半身立绘轮换表情。
+- 构图组（groups）= 一个事件或一个情绪节点，一共 5～9 组。歌词讲到的人物、动物、物件和动作必须出现在画面里（讲到喂猫就要有猫、蹲下、递食物；讲到师父叮嘱，可以是门口告别、师父在画外）。
+- 每组的景别和机位要不同：特写（手、眼、物件）、近景、中景、全身、远景、背影、低机位、俯视都可以；人物位置不要总在正中间，position 写 left / center / right，scale 写 close / medium / full / wide。
+- 每组 1～3 张人物差分（diffs），是同一机位下一个动作的连续过程（伸手前→伸手→猫碰到手；握剑柄→出剑→收剑），不是随便换表情。同组 characterPrompt 相同，diff.change 只写这一刻的动作和表情。
+- 每组 1～2 张背景（bgs）：同一个地点，第二张可以是时间或光线的变化（白天→黄昏、晴→雨），也可以是远近不同。背景只有场景，没有人物。
+- 副歌可以有一个主视觉组，重复的副歌复用它；其余段落尽量用新的构图，尾奏可以回到开头的构图。
+- 每组写 link：最后一张怎样承接下一组（视线、手、飘动的衣角或发带）。
+- frames 按时间顺序：选中段落里的每一句歌词一条（lyric 抄原句），器乐段一条（lyric 留空），指向 group、diff 和 bg；动作连续的几句可以短，关键表情 hold 写 2 或 3。
+- keyword：副歌里一个 2～4 字、最有分量的词。motif：歌词里一个可以漂浮的意象，prompt 用英文只描述这一个小元素。
 `;
 }
 
@@ -86584,6 +86627,13 @@ function buildShots(raw, memory, sectionCount, settings) {
             who: ['char', 'both', 'user', 'none'].includes(g?.who) ? g.who : 'char',
             motion: g?.motion === 'push' ? 'push' : 'still',
             link: core_text.normalizeText(g?.link, 160), seed: 0, bg: null,
+            position: ['left', 'center', 'right'].includes(g?.position) ? g.position : 'center',
+            scale: ['close', 'medium', 'full', 'wide'].includes(g?.scale) ? g.scale : 'medium',
+            bgs: (list(g?.bgs).length ? list(g.bgs) : [{ label: '场景', prompt: g?.backgroundPrompt }]).slice(0, 2).map((b, k) => ({
+                id: `B${k + 1}`, rawId: core_text.normalizeText(b?.id, 20) || `B${k + 1}`,
+                label: core_text.normalizeText(b?.label, 20) || (k ? '变化' : '场景'),
+                prompt: core_text.normalizeText(b?.prompt, 600) || core_text.normalizeText(g?.backgroundPrompt, 600), image: null,
+            })),
             diffs: diffs.map(({ rawId, ...rest }) => rest),
         });
     });
@@ -86594,18 +86644,21 @@ function buildShots(raw, memory, sectionCount, settings) {
         const rawDiff = core_text.normalizeText(f?.diff, 20);
         const diff = ref.diffs.find(d => d.rawId === rawDiff) || ref.diffs[Math.max(0, Number(String(rawDiff).replace(/\D/g, '')) - 1)] || ref.diffs[0];
         const group = groups.find(g => g.id === ref.id);
+        const rawBg = core_text.normalizeText(f?.bg, 20);
+        const bgRow = group.bgs.find(b => b.rawId === rawBg) || group.bgs[Math.max(0, Number(String(rawBg).replace(/\D/g, '')) - 1)] || group.bgs[0];
         shots.push({
             id: `F${shots.length + 1}_${Date.now().toString(36)}`,
             sectionIndex: Math.min(Math.max(0, Math.round(Number(f?.sectionIndex) || 0)), Math.max(0, sectionCount - 1)),
             lyric: core_text.normalizeText(f?.lyric, 200),
             plain: `${group.composition || group.id} · ${diff.label}`,
-            group: ref.id, diff: diff.id, who: group.who,
+            group: ref.id, diff: diff.id, bg: bgRow.id, who: group.who,
             hold: Math.min(3, Math.max(1, Math.round(Number(f?.hold) || 1))),
             motion: group.motion, cut: 'cut', image: null, videoDone: false,
         });
     }
     if (!groups.length || !shots.length) throw core_text.safeUserError('这次没有收到可用的构图，可以再试一次。', 'RMT_MV_EMPTY');
     for (let i = 0; i < shots.length; i += 1) shots[i].cut = shots[i + 1] && shots[i + 1].group === shots[i].group ? 'cut' : 'fade';
+    for (const g of groups) g.bgs = g.bgs.map(({ rawId, ...rest }) => rest);
     const motifPrompt = core_text.normalizeText(raw?.motif?.prompt, 300);
     return {
         version: 2, groups, shots,
@@ -86621,7 +86674,10 @@ function assetOf(record, key) {
     const [gid, part] = String(key).split(':');
     const group = list(record.groups).find(g => g.id === gid);
     if (!group) return null;
-    if (part === 'bg') return { kind: 'bg', group, get image() { return group.bg; }, set image(v) { group.bg = v; } };
+    const bgs = list(group.bgs);
+    if (part === 'bg' && !bgs.length) return { kind: 'bg', group, get image() { return group.bg; }, set image(v) { group.bg = v; } };
+    const bgRow = part === 'bg' ? bgs[0] : bgs.find(b => b.id === part);
+    if (bgRow) return { kind: 'bg', group, bgRow, get image() { return bgRow.image; }, set image(v) { bgRow.image = v; } };
     const diff = list(group.diffs).find(d => d.id === part);
     return diff ? { kind: 'char', group, diff, get image() { return diff.image; }, set image(v) { diff.image = v; } } : null;
 }
@@ -86634,7 +86690,8 @@ function assetKeys(record, song = null) {
     for (const g of record.groups) {
         const diffs = g.diffs.filter(d => !used || used.has(`${g.id}:${d.id}`));
         if (!diffs.length) continue;
-        keys.push(`${g.id}:bg`, ...diffs.map(d => `${g.id}:${d.id}`));
+        const bgIds = list(g.bgs).length ? list(g.bgs).filter(b => record.shots.some(s => s.group === g.id && (s.bg || 'B1') === b.id && (!used || used.has(`${g.id}:${s.diff}`)))).map(b => b.id) : ['bg'];
+        keys.push(...(bgIds.length ? bgIds : [list(g.bgs)[0]?.id || 'bg']).map(id => `${g.id}:${id}`), ...diffs.map(d => `${g.id}:${d.id}`));
     }
     if (record.motif) keys.push('motif');
     return keys;
@@ -86648,7 +86705,7 @@ function assetPrompt(record, key, context) {
     const ratio = settings.ratio === '9:16' ? 'vertical 9:16 composition' : 'horizontal 16:9 composition';
     const era = record?.wardrobe?.era ? `setting: ${record.wardrobe.era}` : '';
     if (found.kind === 'motif') return [style, found.target.prompt, 'a single small decorative element, isolated on a pure white background, no scenery, no people, no text'].filter(Boolean).join(', ');
-    if (found.kind === 'bg') return [style, ratio, era, found.group.backgroundPrompt, 'scenery only, empty scene, no people, no characters, no text, no logo'].filter(Boolean).join(', ');
+    if (found.kind === 'bg') return [style, ratio, era, found.bgRow?.prompt || found.group.backgroundPrompt, 'scenery only, empty scene, no people, no characters, no text, no logo'].filter(Boolean).join(', ');
     const who = found.group.who;
     const hasChar = who === 'char' || who === 'both';
     const hasUser = settings.appear !== 'none' && (who === 'both' || who === 'user');
@@ -86656,9 +86713,25 @@ function assetPrompt(record, key, context) {
     const people = { ...(looks || {}), char: hasChar ? looks?.char || '' : '', user: hasUser ? looks?.user || '' : '' };
     const lookLine = hasChar || hasUser ? core_castLooks.castLooksPromptLine(people, context) : '';
     const back = settings.appear === 'back' && hasUser ? `${hasChar ? 'the second person' : 'the person'} is shown only from behind, hands or silhouette, face not visible` : '';
-    return [style, ratio, found.group.characterPrompt, found.diff.change, lookLine ? `fixed appearance, keep consistent: ${lookLine}` : '', wardrobeLine(record, hasChar, hasUser), back,
+    const place = { left: 'character placed on the left third of the frame', right: 'character placed on the right third of the frame', center: '' }[found.group.position] || '';
+    const size = { close: 'close-up shot', medium: 'medium shot, waist up', full: 'full body shot', wide: 'wide shot, small figure' }[found.group.scale] || '';
+    return [style, ratio, found.group.characterPrompt, found.diff.change, place, size, lookLine ? `fixed appearance, keep consistent: ${lookLine}` : '', wardrobeLine(record, hasChar, hasUser), back,
         hasChar && hasUser ? 'exactly two people' : 'only one person',
         'isolated on a pure white background, plain white backdrop, no scenery, clean silhouette edges, no text'].filter(Boolean).join(', ');
+}
+
+// 双人画面按角色分别给外貌（与 CG 相同的 characters 结构），避免两个人长成同一张脸。
+function assetMetadata(record, found, context) {
+    const settings = normalizeSettings(record?.settings);
+    const who = found.group.who;
+    const roles = [];
+    if (who === 'char' || who === 'both') roles.push('char');
+    if (settings.appear !== 'none' && (who === 'both' || who === 'user')) roles.push('user');
+    const looks = core_castLooks.readCastLooks(context);
+    const tag = role => looks?.manual === true ? looks?.[role] || '' : core_castLooks.lookFromDescription(looks?.[role]);
+    try {
+        return cg_appearance.normalizeCgPromptMetadata({ characters: roles.map(role => ({ role, name: role === 'char' ? context?.name2 : context?.name1, tag: tag(role), nl: '' })) });
+    } catch { return null; }
 }
 
 function isAssetDrawing(scope, songId, key) { return running.has(`asset:${scope}:${songId}:${key}`); }
@@ -86678,6 +86751,7 @@ async function drawAsset(songId, key) {
         const result = await cg_core.invokeImageGeneration(assetPrompt(record, key, context), context, {
             orientation: found.kind === 'motif' || normalizeSettings(record.settings).ratio === '9:16' ? 'portrait' : 'landscape',
             characterName: context?.name2 || '', targetKey: runKey, seed,
+            ...(found.kind === 'char' ? { promptMetadata: assetMetadata(record, found, context) } : {}),
         });
         return holdResult(target, 'asset', key, result, raw => {
             const url = cg_core.normalizeCgImageUrl(typeof raw === 'string' ? raw : raw?.url);
@@ -87371,9 +87445,9 @@ function renderTegaki(song, record) {
         ${btn('go-sync', `对时间 · 已点 ${tapped} / ${sections.length} 段${tapped < sections.length ? '，其余用估计时间' : ''}`, { cls: 'rmt-x-primary rmt-x-dark' })}</section>
       <section class="rmt-x-card"><b>导出</b>
         ${exporting ? `<div class="rmt-x-row-head"><span>正在录制…</span><span data-rmt-mv-export-time>0:00</span></div><div class="rmt-x-bar"><i data-rmt-mv-export-bar style="width:0%"></i></div><p class="rmt-x-note">请不要切到其他页面或锁屏。</p>${btn('export-stop', '停止导出')}`
-          : `${support.ok ? btn('export', `导出成视频（.${support.ext}）`, { cls: 'rmt-x-primary', disabled: !audioBySong.has(audioKey()) }) : '<div class="rmt-mv-warn">这台设备不能直接导出视频。可以用下面的录屏模式，配合手机自带的录屏功能录下来。</div>'}
+          : `${support.ok ? btn('export', audioBySong.has(audioKey()) ? `导出成视频（.${support.ext}）` : `导出无声视频（.${support.ext}）`, { cls: 'rmt-x-primary' }) : '<div class="rmt-mv-warn">这台设备不能直接导出视频。可以用下面的录屏模式，配合手机自带的录屏功能录下来。</div>'}
              ${btn('record-mode', '录屏模式（全屏播放）', { disabled: !audioBySong.has(audioKey()) })}
-             <p class="rmt-x-note">${audioBySong.has(audioKey()) ? '导出会从头播放一遍，歌多长就要等多久。期间请停留在这个页面。' : '先放入歌曲，才能导出或录屏。'}${support.ok && support.ext === 'webm' ? ' 这台设备导出的是 .webm，剪映等 App 一般可以直接导入。' : ''}</p>`}</section>`);
+             <p class="rmt-x-note">${audioBySong.has(audioKey()) ? '导出会从头播放一遍，歌多长就要等多久。期间请停留在这个页面。' : '没放入歌曲也能导出无声视频，之后在剪辑 App 里配上歌；录屏模式需要先放入歌曲。'}${support.ok && support.ext === 'webm' ? ' 这台设备导出的是 .webm，剪映等 App 一般可以直接导入。' : ''}</p>`}</section>`);
 }
 
 // ---------- 对时间 ----------
@@ -87645,13 +87719,26 @@ function disposeMv() {
 
 // ---------- 导出与录屏 ----------
 
+function silentClock() {
+    let base = 0, started = 0, playing = false;
+    return {
+        readyState: 4, onended: null, silent: true,
+        get currentTime() { return playing ? base + (performance.now() - started) / 1000 : base; },
+        set currentTime(value) { base = Number(value) || 0; started = performance.now(); },
+        get paused() { return !playing; }, get ended() { return false; },
+        async play() { started = performance.now(); playing = true; },
+        pause() { if (playing) { base = this.currentTime; playing = false; } },
+        addEventListener() {}, removeEventListener() {}, dispatchEvent() { return true; },
+    };
+}
+
 async function exportVideo() {
     if (player.exporting) return;
     const opened = viewTarget(), sub = view.sub;
     const entry = audioBySong.get(audioKey());
     const support = exportSupport();
     const record = structuredClone(currentRecord()); const song = structuredClone(currentSong());
-    if (!entry || !support.ok || !record) return;
+    if (!support.ok || !record) return;
     stopPlayback();
     const state = { cancelled: false, tracks: [], raf: 0, recorder: null, audio: null, ac: null, canvas: null };
     player.exporting = state;
@@ -87683,15 +87770,19 @@ async function exportVideo() {
         canvas.style.cssText = 'position:fixed;left:-20000px;top:0;width:10px;height:10px;pointer-events:none';
         document.body.appendChild(canvas);
         const AC = globalThis.AudioContext || globalThis.webkitAudioContext;
-        const audio = state.audio = new Audio(entry.url);
+        // 没有放入歌曲时导出无声视频：用本地时钟代替音频的播放进度。
+        const audio = state.audio = entry ? new Audio(entry.url) : silentClock();
         const video = canvas.captureStream(30);
         state.tracks.push(...video.getTracks());
-        const ac = state.ac = new AC();
-        const source = ac.createMediaElementSource(audio);
-        const dest = ac.createMediaStreamDestination();
-        state.tracks.push(...dest.stream.getTracks());
-        source.connect(dest); source.connect(ac.destination);
-        const stream = new MediaStream([...video.getVideoTracks(), ...dest.stream.getAudioTracks()]);
+        let stream = new MediaStream(video.getVideoTracks());
+        if (entry) {
+            const ac = state.ac = new AC();
+            const source = ac.createMediaElementSource(audio);
+            const dest = ac.createMediaStreamDestination();
+            state.tracks.push(...dest.stream.getTracks());
+            source.connect(dest); source.connect(ac.destination);
+            stream = new MediaStream([...video.getVideoTracks(), ...dest.stream.getAudioTracks()]);
+        }
         const recorder = state.recorder = new MediaRecorder(stream, { mimeType: support.mime, videoBitsPerSecond: 5_000_000 });
         recorder.ondataavailable = event => { if (event.data?.size) chunks.push(event.data); };
         recorder.onstop = finish;
@@ -87706,14 +87797,14 @@ async function exportVideo() {
             const bar = document.querySelector('[data-rmt-mv-export-bar]');
             if (bar) bar.style.width = `${Math.min(100, t / Math.max(1, total) * 100)}%`;
             const label = document.querySelector('[data-rmt-mv-export-time]');
-            if (label) label.textContent = `${mv.formatTime(t)} / ${mv.formatTime(entry.duration || total)}`;
+            if (label) label.textContent = `${mv.formatTime(t)} / ${mv.formatTime(entry?.duration || total)}`;
             state.raf = requestAnimationFrame(loop);
         };
         audio.onended = () => { if (recorder.state !== 'inactive') recorder.stop(); };
         if (audio.readyState < 1) await new Promise(resolve => { audio.addEventListener('loadedmetadata', resolve, { once: true }); audio.addEventListener('error', resolve, { once: true }); });
         audio.currentTime = range.start;
         renderMv(); renderFrame(canvas, record, song, range.start); recorder.start(1000);
-        await ac.resume?.();
+        await state.ac?.resume?.();
         if (!current()) { stopExport(); return; }
         await audio.play();
         if (!current()) { audio.pause(); stopExport(); return; }
@@ -88035,9 +88126,11 @@ function renderGroupsBoard(song, record) {
         const secNames = [...new Set(frames.map(s => sections[s.sectionIndex]?.name).filter(Boolean))].join('、');
         const usedDiffs = g.diffs.filter(d => frames.some(s => s.diff === d.id));
         const lyrics = frames.filter(s => s.lyric).slice(0, 8).map(s => `${g.diffs.find(d => d.id === s.diff)?.label || ''}｜${s.lyric}`).join('\n');
-        const missing = [`${g.id}:bg`, ...usedDiffs.map(d => `${g.id}:${d.id}`)].filter(k => !mv.assetOf(record, k)?.image?.url).length;
+        const bgIds = (g.bgs || []).length ? g.bgs.filter(b => frames.some(s => (s.bg || 'B1') === b.id)).map(b => b.id) : ['bg'];
+        const bgTiles = (bgIds.length ? bgIds : ['bg']).map(id => `<div>${assetTile(record, `${g.id}:${id}`, (g.bgs || []).find(b => b.id === id)?.label ? '背景·' + g.bgs.find(b => b.id === id).label : '背景')}</div>`).join('');
+        const missing = [...(bgIds.length ? bgIds : ['bg']).map(id => `${g.id}:${id}`), ...usedDiffs.map(d => `${g.id}:${d.id}`)].filter(k => !mv.assetOf(record, k)?.image?.url).length;
         return `<article class="rmt-mv-gcard"><div class="rmt-x-row-head"><b class="rmt-mv-gname">构图 ${shown} · ${esc(g.composition || '')}</b><span>${esc(secNames)} · ${frames.length} 句</span></div>
-          <div class="rmt-mv-assets"><div>${assetTile(record, `${g.id}:bg`, '背景')}</div><span class="rmt-mv-plus">+</span>${usedDiffs.map(d => `<div>${assetTile(record, `${g.id}:${d.id}`, d.label)}</div>`).join('')}</div>
+          <div class="rmt-mv-assets">${bgTiles}<span class="rmt-mv-plus">+</span>${usedDiffs.map(d => `<div>${assetTile(record, `${g.id}:${d.id}`, d.label)}</div>`).join('')}</div>
           ${lyrics ? `<div class="rmt-mv-lyric"><p>${esc(lyrics)}</p></div>` : ''}
           <div class="rmt-mv-actions">${btn('draw-group', missing ? `画这一组剩下的 ${missing} 张` : '这一组已画好', { id: g.id, disabled: !missing || view.drawingAll, cls: missing ? 'rmt-x-primary' : 'rmt-x-secondary' })}</div>
           <p class="rmt-x-note">点任意一张缩略图可以单独重画。</p>
@@ -88099,6 +88192,22 @@ function cutoutFor(url) {
             if (p >= cw) stack.push(p - cw);
             if (p < cw * (ch - 1)) stack.push(p + cw);
         }
+        // 手臂内侧、衣摆间这类被包住的白底：只去掉面积够大、非常白的区域，保留衣服上的小块白色细节。
+        const pure = p => { const i = p * 4; const mn = Math.min(d[i], d[i + 1], d[i + 2]); return d[i + 3] !== 0 && mn > 240 && Math.max(d[i], d[i + 1], d[i + 2]) - mn < 14; };
+        const minArea = Math.max(250, Math.round(cw * ch * 0.0015));
+        const mark = new Uint8Array(cw * ch);
+        for (let start = 0; start < cw * ch; start += 1) {
+            if (mark[start] || !pure(start)) continue;
+            const region = []; const q = [start]; mark[start] = 1;
+            while (q.length) {
+                const p = q.pop(); region.push(p);
+                const x = p % cw;
+                for (const n of [x > 0 ? p - 1 : -1, x < cw - 1 ? p + 1 : -1, p >= cw ? p - cw : -1, p < cw * (ch - 1) ? p + cw : -1]) {
+                    if (n >= 0 && !mark[n] && pure(n)) { mark[n] = 1; q.push(n); }
+                }
+            }
+            if (region.length >= minArea) for (const p of region) d[p * 4 + 3] = 0;
+        }
         for (let p = 0; p < cw * ch; p += 1) {
             if (d[p * 4 + 3] === 0) continue;
             const x = p % cw;
@@ -88149,7 +88258,8 @@ function drawSceneV2(g, record, song, rows, index, t, w, h) {
     const span = groupSpan(rows, index);
     const p = Math.min(1, Math.max(0, (t - span.start) / Math.max(0.1, span.end - span.start)));
     const push = group?.motion === 'push' ? 1 + 0.03 * p : 1;
-    const bg = imageFor(group?.bg?.url);
+    const bgRow = (group?.bgs || []).find(b => b.id === (row.shot.bg || 'B1')) || (group?.bgs || [])[0];
+    const bg = imageFor(bgRow?.image?.url || group?.bg?.url);
     if (bg) drawCover(g, bg, w, h, push, 0, 0);
     const diff = group?.diffs.find(d => d.id === row.shot.diff);
     const person = cutoutFor(diff?.image?.url);
