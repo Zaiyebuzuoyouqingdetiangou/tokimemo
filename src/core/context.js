@@ -70,7 +70,8 @@ export async function buildChatSnapshot(context = currentCharacterGuard(), optio
     const tagPolicy = core_contextTags.tagPolicyForContext(context);
     const usable = [];
     const fullSignatures = [];
-    const prefixCount = Math.max(0, Math.floor(Number(options.prefixCount) || 0));
+    let prefixCount = Math.max(0, Math.floor(Number(options.prefixCount) || 0));
+    const prefixFloor = Math.max(0, Math.floor(Number(options.prefixFloor) || 0));
     let fingerprint = 2166136261;
     let prefixFingerprint = 2166136261;
     const mix = (state, value) => {
@@ -118,6 +119,8 @@ export async function buildChatSnapshot(context = currentCharacterGuard(), optio
         }
     }
     const totalMessages = usable.length;
+    // 以楼层号定基线：上次整理到第 N 楼，就把第 N 楼及以前的对话都当作已整理。
+    if (prefixFloor > 0) prefixCount = usable.filter(item => item.index <= prefixFloor).length;
     fingerprint = mix(fingerprint, String(totalMessages));
     if (prefixCount > 0) prefixFingerprint = mix(prefixFingerprint, String(Math.min(prefixCount, totalMessages)));
 

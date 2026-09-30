@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 311
-// Source SHA-256: c194632acb51bfb42e0c8851e02b98aa592573a717b76d8151ea2541ad7cb83c
+// Source SHA-256: 650d8cc29cb2134ad03aaad6a051f9d8763a6adbd9c35868e0186dfe17548375
 // Build: python3 verification/build.py <source-root>
 
 const __m_core_themeSongCover_js = Object.create(null);
@@ -25834,7 +25834,11 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
             // 用户明确选择“以当前聊天为新基线”时：已归档的前 N 层不再核对，只整理之后新增的楼层；已有记忆不改动。
             // 隐藏楼层会让楼层数变少，所以优先选楼层数足够的口径。
             if (!matched && acceptBaseline) matched = [snapshot, ...alternates].find(value => previousMessageCount <= value.totalMessages) || null;
-            if (!matched && acceptBaseline) throw core_text.safeUserError('当前聊天的楼层比上次整理时还少，无法接着整理；可以先取消隐藏楼层再试。', 'RMT_ARCHIVE_PREFIX_CHANGED');
+            // 有些档案记下的是“整理到第几楼”而不是对话条数（从续写草稿提交时），条数永远对不上。
+            // 这时按楼层号定基线：第 N 楼及以前算已整理，之后的楼层算新增。
+            if (!matched && acceptBaseline) {
+                matched = await core_context.buildChatSnapshot(context, { ...snapshotOptions, hiddenMode: 'include', prefixCount: 0, prefixFloor: previousMessageCount });
+            }
             if (!matched) throw core_text.safeUserError('旧档案与当前聊天历史基线不一致，本次保留旧成果；请恢复原聊天历史后继续，或另行保留当前来源。', 'RMT_ARCHIVE_PREFIX_CHANGED');
             snapshot = matched;
             try { globalThis.toastr?.info?.('检测到隐藏楼层有变化，旧消息内容未变，已按原基线继续增量更新。', '心迹回廊'); } catch {}
@@ -31309,7 +31313,8 @@ async function buildChatSnapshot(context = currentCharacterGuard(), options = {}
     const tagPolicy = core_contextTags.tagPolicyForContext(context);
     const usable = [];
     const fullSignatures = [];
-    const prefixCount = Math.max(0, Math.floor(Number(options.prefixCount) || 0));
+    let prefixCount = Math.max(0, Math.floor(Number(options.prefixCount) || 0));
+    const prefixFloor = Math.max(0, Math.floor(Number(options.prefixFloor) || 0));
     let fingerprint = 2166136261;
     let prefixFingerprint = 2166136261;
     const mix = (state, value) => {
@@ -31357,6 +31362,8 @@ async function buildChatSnapshot(context = currentCharacterGuard(), options = {}
         }
     }
     const totalMessages = usable.length;
+    // 以楼层号定基线：上次整理到第 N 楼，就把第 N 楼及以前的对话都当作已整理。
+    if (prefixFloor > 0) prefixCount = usable.filter(item => item.index <= prefixFloor).length;
     fingerprint = mix(fingerprint, String(totalMessages));
     if (prefixCount > 0) prefixFingerprint = mix(prefixFingerprint, String(Math.min(prefixCount, totalMessages)));
 
@@ -82481,7 +82488,9 @@ async function deleteThemeSong(id) {
     if (!overlay.confirmExplicitActionTwice(`删除「${targetSong.title}」？`, '只删除这首印象曲；其他歌曲、档案和聊天保持不变。', { destructive: true })) return false;
     if (runtimeState.activeMode !== MODE || runtimeState.activeSession !== shown || runtimeState.activeArchiveSnapshot !== snapshot
         || scope(assertThemeSongReader()) !== shownScope || readonly() || busy()) return false;
-    const fingerprint = JSON.stringify(targetSong);
+    // 封面等画面字段在读写之间可能被重新整理，比较时只看歌曲本身，避免“已变化”误报导致删不掉。
+    const stable = song => { const { visual, ...rest } = song || {}; return JSON.stringify([rest.id, rest.createdAt, rest.title, rest.lyrics]); };
+    const fingerprint = stable(targetSong);
     const sameView = () => runtimeState.activeMode === MODE && scope(runtimeState.activeSession) === shownScope
         && (runtimeState.activeArchiveSnapshot?.entryId || '') === (snapshot?.entryId || '') && contextApi.runtimeLifecycleStillCurrent(lifecycle);
     const mutate = (latest, memory) => {
@@ -82492,7 +82501,7 @@ async function deleteThemeSong(id) {
             if (!songMode.readableThemeSongProgressSession(source.session, source.memoryBank)) throw contract.songError('SOURCE', '这份歌曲草稿暂时无法读取，原内容仍保留。');
             current = structuredClone(latest);
         } else current = contract.normalizeStoredThemeSongs(latest);
-        if (JSON.stringify(current.songs.find(song => song.id === id)) !== fingerprint) throw contract.songError('CONFLICT', '这首印象曲已变化，请重新确认。');
+        if (stable(current.songs.find(song => song.id === id)) !== fingerprint) throw contract.songError('CONFLICT', '这首印象曲已变化，请重新确认。');
         current.songs = current.songs.filter(song => song.id !== id);
         if (current.selectedId === id) current.selectedId = current.songs[0]?.id || '';
         return current;
@@ -82586,17 +82595,15 @@ async function handleThemeSongAction(action, id = '') {
         }
     } catch (error) { globalThis.toastr?.error?.(text.safeErrorSummary(error), '角色印象曲'); }
 }
-
-__m_ui_themeSongView_js.deleteThemeSong = deleteThemeSong;
-__m_ui_themeSongView_js.handleThemeSongAction = handleThemeSongAction;
 __m_ui_themeSongView_js.themeSongDisplayMode = themeSongDisplayMode;
 __m_ui_themeSongView_js.songLyricsReadingHtml = songLyricsReadingHtml;
 __m_ui_themeSongView_js.assertThemeSongReader = assertThemeSongReader;
 __m_ui_themeSongView_js.syncSongLanguageInput = syncSongLanguageInput;
 __m_ui_themeSongView_js.captureSongComposer = captureSongComposer;
 __m_ui_themeSongView_js.renderThemeSongs = renderThemeSongs;
+__m_ui_themeSongView_js.deleteThemeSong = deleteThemeSong;
+__m_ui_themeSongView_js.handleThemeSongAction = handleThemeSongAction;
 }
-
 
 function __init_ui_themeSurfaces_js() {
 // MODULE: ui/themeSurfaces.js
@@ -86879,11 +86886,18 @@ async function drawAsset(songId, key) {
     running.add(runKey);
     try {
         const seed = found.group?.seed || 0;
-        const result = await cg_core.invokeImageGeneration(assetPrompt(record, key, context), context, {
+        const base = {
             orientation: found.kind === 'motif' || normalizeSettings(record.settings).ratio === '9:16' ? 'portrait' : 'landscape',
             characterName: context?.name2 || '', targetKey: runKey, seed,
-            ...(found.kind === 'char' ? { promptMetadata: assetMetadata(record, found, context) } : {}),
-        });
+        };
+        const metadata = found.kind === 'char' ? assetMetadata(record, found, context) : null;
+        let result;
+        try { result = await cg_core.invokeImageGeneration(assetPrompt(record, key, context), context, { ...base, ...(metadata ? { promptMetadata: metadata } : {}) }); }
+        catch (error) {
+            // 分角色外貌不被渠道接受时，退回普通提示词再画一次，不让整张图失败。
+            if (!metadata || error?.name === 'AbortError' || /ABORT/.test(String(error?.code || ''))) throw error;
+            result = await cg_core.invokeImageGeneration(assetPrompt(record, key, context), context, base);
+        }
         return holdResult(target, 'asset', key, result, raw => {
             const url = cg_core.normalizeCgImageUrl(typeof raw === 'string' ? raw : raw?.url);
             if (!url) throw core_text.safeUserError('这次没有拿到可用图片。', 'RMT_MV_FRAME');

@@ -1,7 +1,7 @@
 {
   "display_name": "心迹回廊",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.99.99-r84.195-baseline-storage",
+  "js": "index.js?heartbeat=0.99.99-r84.196-floor-baseline",
   "author": "Toto",
   "version": "0.99.99",
   "auto_update": true,
@@ -10,6 +10,6 @@
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r84.195：以当前聊天为新基线继续更新（按钮直达）；MV 待保存记录瘦身，修复本机保存未能确认与无法重画。",
+  "description": "r84.196：新基线按楼层号继续增量更新；印象曲可删除；MV 分角色外貌被拒时自动退回重画。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }

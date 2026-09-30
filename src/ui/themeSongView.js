@@ -157,7 +157,9 @@ export async function deleteThemeSong(id) {
     if (!overlay.confirmExplicitActionTwice(`删除「${targetSong.title}」？`, '只删除这首印象曲；其他歌曲、档案和聊天保持不变。', { destructive: true })) return false;
     if (runtimeState.activeMode !== MODE || runtimeState.activeSession !== shown || runtimeState.activeArchiveSnapshot !== snapshot
         || scope(assertThemeSongReader()) !== shownScope || readonly() || busy()) return false;
-    const fingerprint = JSON.stringify(targetSong);
+    // 封面等画面字段在读写之间可能被重新整理，比较时只看歌曲本身，避免“已变化”误报导致删不掉。
+    const stable = song => { const { visual, ...rest } = song || {}; return JSON.stringify([rest.id, rest.createdAt, rest.title, rest.lyrics]); };
+    const fingerprint = stable(targetSong);
     const sameView = () => runtimeState.activeMode === MODE && scope(runtimeState.activeSession) === shownScope
         && (runtimeState.activeArchiveSnapshot?.entryId || '') === (snapshot?.entryId || '') && contextApi.runtimeLifecycleStillCurrent(lifecycle);
     const mutate = (latest, memory) => {
@@ -168,7 +170,7 @@ export async function deleteThemeSong(id) {
             if (!songMode.readableThemeSongProgressSession(source.session, source.memoryBank)) throw contract.songError('SOURCE', '这份歌曲草稿暂时无法读取，原内容仍保留。');
             current = structuredClone(latest);
         } else current = contract.normalizeStoredThemeSongs(latest);
-        if (JSON.stringify(current.songs.find(song => song.id === id)) !== fingerprint) throw contract.songError('CONFLICT', '这首印象曲已变化，请重新确认。');
+        if (stable(current.songs.find(song => song.id === id)) !== fingerprint) throw contract.songError('CONFLICT', '这首印象曲已变化，请重新确认。');
         current.songs = current.songs.filter(song => song.id !== id);
         if (current.selectedId === id) current.selectedId = current.songs[0]?.id || '';
         return current;

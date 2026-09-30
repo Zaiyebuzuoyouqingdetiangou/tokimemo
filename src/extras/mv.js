@@ -875,11 +875,18 @@ export async function drawAsset(songId, key) {
     running.add(runKey);
     try {
         const seed = found.group?.seed || 0;
-        const result = await cg_core.invokeImageGeneration(assetPrompt(record, key, context), context, {
+        const base = {
             orientation: found.kind === 'motif' || normalizeSettings(record.settings).ratio === '9:16' ? 'portrait' : 'landscape',
             characterName: context?.name2 || '', targetKey: runKey, seed,
-            ...(found.kind === 'char' ? { promptMetadata: assetMetadata(record, found, context) } : {}),
-        });
+        };
+        const metadata = found.kind === 'char' ? assetMetadata(record, found, context) : null;
+        let result;
+        try { result = await cg_core.invokeImageGeneration(assetPrompt(record, key, context), context, { ...base, ...(metadata ? { promptMetadata: metadata } : {}) }); }
+        catch (error) {
+            // 分角色外貌不被渠道接受时，退回普通提示词再画一次，不让整张图失败。
+            if (!metadata || error?.name === 'AbortError' || /ABORT/.test(String(error?.code || ''))) throw error;
+            result = await cg_core.invokeImageGeneration(assetPrompt(record, key, context), context, base);
+        }
         return holdResult(target, 'asset', key, result, raw => {
             const url = cg_core.normalizeCgImageUrl(typeof raw === 'string' ? raw : raw?.url);
             if (!url) throw core_text.safeUserError('这次没有拿到可用图片。', 'RMT_MV_FRAME');
