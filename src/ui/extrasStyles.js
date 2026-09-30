@@ -167,7 +167,26 @@ ${r} .rmt-x-dials button{width:56px;height:44px;border:0;border-radius:10px;back
 ${r} .rmt-x-dials b{width:56px;height:64px;border-radius:12px;background:#fbf6ee;color:#3a3346;display:flex;align-items:center;justify-content:center;font-size:30px}
 ${r} .rmt-x-wrong{color:#f2b3a6!important;font-size:13px!important}
 ${r} .rmt-x-primary.rmt-x-lamp{background:#f2c38b;color:#262b40}
-${r} .rmt-archive-portal.rmt-x-off{opacity:.55}
+${r} .rmt-archive-portal.rmt-x-off{opacity:.72}
+${r} .rmt-x-grad,${r} .rmt-x-grad *{color:#f6efe6!important}
+${r} .rmt-x-grad small{color:#d9c9b6!important}
+${r} .rmt-x-grad .rmt-x-grad-thanks{color:#f4bfad!important}
+${r} .rmt-x-night,${r} .rmt-x-night h2,${r} .rmt-x-night b,${r} .rmt-x-night span,${r} .rmt-x-night small{color:#f3eee6!important}
+${r} .rmt-x-night p{color:#e2ddeb!important}
+${r} .rmt-x-night .rmt-x-sheet,${r} .rmt-x-night .rmt-x-sheet p,${r} .rmt-x-night .rmt-x-sheet span{color:#3a3346!important}
+${r} .rmt-x-night .rmt-x-sheet small{color:#8a5a3b!important}
+${r} .rmt-x-night .rmt-x-sheet .rmt-x-voice{color:#6e3553!important}
+${r} .rmt-x-night .rmt-x-sheet .rmt-x-chip{color:#2f6b66!important}
+${r} .rmt-x-night .rmt-x-sheet .rmt-x-chip.warm{color:#6b5a44!important}
+${r} .rmt-x-night .rmt-x-sheet .rmt-x-chip.muted{color:#5d5566!important}
+${r} .rmt-x-night .rmt-x-dials b{color:#3a3346!important}
+${r} .rmt-x-night .rmt-x-lamp{color:#262b40!important}
+${r} .rmt-x-night .rmt-x-wrong{color:#f2b3a6!important}
+${r} .rmt-x-night .rmt-x-unlocked{color:#f2c38b!important}
+${r} .rmt-x-grad .rmt-x-secondary.rmt-x-on-dark{color:#f6efe6!important}
+${r} .rmt-x-entry b{color:#f3eee6!important}
+${r} .rmt-x-entry small{color:#d8d2e4!important}
+${r} .rmt-x-entry em{color:#f2c38b!important}
 ${r} .rmt-archive-portal.rmt-x-off:hover,${r} .rmt-archive-portal.rmt-x-off:focus-within{opacity:.8}
 `;
 }

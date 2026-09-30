@@ -1,42 +1,24 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 311
-// Source SHA-256: 1d841bed3227ea3df75eb3dfc65838b7466fcb3b6e06869b5dd829fe14681079
-// Build: python3 tools/verification/build.py <source-root>
+// Source SHA-256: 3d302d31d0a423937843edb090a26a81160235e26137773e706189d3eeead0c5
+// Build: python3 verification/build.py <source-root>
 
-const __m_archive_archiveCore_js = Object.create(null);
-const __m_archive_archiveVerdict_js = Object.create(null);
-const __m_archive_backupStore_js = Object.create(null);
+const __m_core_themeSongCover_js = Object.create(null);
 const __m_archive_capacity_js = Object.create(null);
 const __m_archive_coverageRanges_js = Object.create(null);
 const __m_archive_draftInputs_js = Object.create(null);
-const __m_archive_externalMemory_js = Object.create(null);
 const __m_archive_floorWindowCheck_js = Object.create(null);
-const __m_archive_groups_js = Object.create(null);
-const __m_archive_importBatches_js = Object.create(null);
-const __m_archive_importIdentity_js = Object.create(null);
-const __m_archive_importOperation_js = Object.create(null);
-const __m_archive_importPrompts_js = Object.create(null);
 const __m_archive_importRecovery_js = Object.create(null);
-const __m_archive_inheritance_js = Object.create(null);
-const __m_archive_library_js = Object.create(null);
-const __m_archive_libraryCharacter_js = Object.create(null);
-const __m_archive_librarySnapshots_js = Object.create(null);
 const __m_archive_memoryFileImport_js = Object.create(null);
 const __m_archive_memoryProviders_js = Object.create(null);
 const __m_archive_partialImport_js = Object.create(null);
 const __m_archive_qianqianjie_js = Object.create(null);
-const __m_archive_recoveryDrafts_js = Object.create(null);
-const __m_archive_relay_js = Object.create(null);
 const __m_archive_relayPreparation_js = Object.create(null);
 const __m_archive_relayStore_js = Object.create(null);
-const __m_archive_repository_js = Object.create(null);
 const __m_archive_requestBudget_js = Object.create(null);
-const __m_archive_snapshots_js = Object.create(null);
 const __m_archive_sourceLedger_js = Object.create(null);
-const __m_archive_sourceReadGuard_js = Object.create(null);
 const __m_archive_storyScenes_js = Object.create(null);
 const __m_archive_summaryPreference_js = Object.create(null);
-const __m_archive_worldInfoSources_js = Object.create(null);
 const __m_autoMemory_achievementLibrary_js = Object.create(null);
 const __m_autoMemory_achievementLookback_js = Object.create(null);
 const __m_autoMemory_combinedResult_js = Object.create(null);
@@ -59,23 +41,14 @@ const __m_autoMemory_streamGate_js = Object.create(null);
 const __m_autoMemory_wizardPlan_js = Object.create(null);
 const __m_core_advancedGeneration_js = Object.create(null);
 const __m_core_archiveBridge_js = Object.create(null);
+const __m_archive_backupStore_js = Object.create(null);
+const __m_archive_sourceReadGuard_js = Object.create(null);
 const __m_core_archiveCover_js = Object.create(null);
 const __m_core_archiveRelayPolicy_js = Object.create(null);
 const __m_core_autoUpdatePolicy_js = Object.create(null);
-const __m_core_autoUpdates_js = Object.create(null);
 const __m_core_backupDiagnostics_js = Object.create(null);
 const __m_core_bedtimeContract_js = Object.create(null);
 const __m_core_butterflyContract_js = Object.create(null);
-const __m_core_butterflyLegacyRecovery_js = Object.create(null);
-const __m_core_cache_js = Object.create(null);
-const __m_core_cacheArchiveMemory_js = Object.create(null);
-const __m_core_cacheCommit_js = Object.create(null);
-const __m_core_cacheGenerationDrafts_js = Object.create(null);
-const __m_core_cacheRecords_js = Object.create(null);
-const __m_core_cacheSessions_js = Object.create(null);
-const __m_core_cacheVersions_js = Object.create(null);
-const __m_core_castLooks_js = Object.create(null);
-const __m_core_cgImagePatch_js = Object.create(null);
 const __m_core_cgPromptFormat_js = Object.create(null);
 const __m_core_cgTargets_js = Object.create(null);
 const __m_core_cgVisualRules_js = Object.create(null);
@@ -83,7 +56,8 @@ const __m_core_characterDescriptor_js = Object.create(null);
 const __m_core_chatReadRange_js = Object.create(null);
 const __m_core_connectionPool_js = Object.create(null);
 const __m_core_constants_js = Object.create(null);
-const __m_core_context_js = Object.create(null);
+const __m_archive_importBatches_js = Object.create(null);
+const __m_core_cgImagePatch_js = Object.create(null);
 const __m_core_contextTags_js = Object.create(null);
 const __m_core_controlledSources_js = Object.create(null);
 const __m_core_creativeSupplement_js = Object.create(null);
@@ -93,6 +67,7 @@ const __m_core_dialogue_js = Object.create(null);
 const __m_core_digest_js = Object.create(null);
 const __m_core_evidence_js = Object.create(null);
 const __m_core_generationBridge_js = Object.create(null);
+const __m_core_butterflyLegacyRecovery_js = Object.create(null);
 const __m_core_generationOptions_js = Object.create(null);
 const __m_core_generationParticipants_js = Object.create(null);
 const __m_core_generationStatus_js = Object.create(null);
@@ -100,14 +75,14 @@ const __m_core_handJournal_js = Object.create(null);
 const __m_core_heartLanguage_js = Object.create(null);
 const __m_core_hostCompatibility_js = Object.create(null);
 const __m_core_incremental_js = Object.create(null);
-const __m_core_independentApi_js = Object.create(null);
 const __m_core_independentApiConfig_js = Object.create(null);
 const __m_core_independentApiRequest_js = Object.create(null);
+const __m_core_independentApi_js = Object.create(null);
 const __m_core_inputLedger_js = Object.create(null);
 const __m_core_journalPiggyback_js = Object.create(null);
 const __m_core_lenticularCards_js = Object.create(null);
-const __m_core_letterIllustration_js = Object.create(null);
 const __m_core_letterIllustrationV2_js = Object.create(null);
+const __m_core_letterIllustration_js = Object.create(null);
 const __m_core_letterSketch_js = Object.create(null);
 const __m_core_localRecoveryStore_js = Object.create(null);
 const __m_core_mailGallery_js = Object.create(null);
@@ -125,41 +100,60 @@ const __m_core_recoveryPayload_js = Object.create(null);
 const __m_core_recoveryRegistry_js = Object.create(null);
 const __m_core_recoverySourcePolicy_js = Object.create(null);
 const __m_core_relationshipSafety_js = Object.create(null);
-const __m_core_requestCoordinator_js = Object.create(null);
-const __m_core_requestTaskCenter_js = Object.create(null);
-const __m_core_requestTasks_js = Object.create(null);
 const __m_core_routeParticipants_js = Object.create(null);
 const __m_core_selfUpdater_js = Object.create(null);
-const __m_core_settings_js = Object.create(null);
 const __m_core_state_js = Object.create(null);
+const __m_archive_archiveCore_js = Object.create(null);
+const __m_archive_groups_js = Object.create(null);
+const __m_archive_importPrompts_js = Object.create(null);
+const __m_archive_inheritance_js = Object.create(null);
+const __m_archive_libraryCharacter_js = Object.create(null);
+const __m_archive_librarySnapshots_js = Object.create(null);
+const __m_archive_library_js = Object.create(null);
+const __m_archive_relay_js = Object.create(null);
+const __m_archive_snapshots_js = Object.create(null);
+const __m_archive_worldInfoSources_js = Object.create(null);
+const __m_archive_externalMemory_js = Object.create(null);
+const __m_archive_importIdentity_js = Object.create(null);
+const __m_archive_recoveryDrafts_js = Object.create(null);
+const __m_archive_archiveVerdict_js = Object.create(null);
+const __m_archive_importOperation_js = Object.create(null);
+const __m_archive_repository_js = Object.create(null);
+const __m_core_autoUpdates_js = Object.create(null);
+const __m_core_cacheRecords_js = Object.create(null);
+const __m_core_cacheCommit_js = Object.create(null);
+const __m_core_cacheVersions_js = Object.create(null);
+const __m_core_cacheArchiveMemory_js = Object.create(null);
+const __m_core_cacheGenerationDrafts_js = Object.create(null);
+const __m_core_cacheSessions_js = Object.create(null);
+const __m_core_cache_js = Object.create(null);
+const __m_core_castLooks_js = Object.create(null);
+const __m_core_context_js = Object.create(null);
+const __m_core_requestTasks_js = Object.create(null);
+const __m_core_requestTaskCenter_js = Object.create(null);
+const __m_core_requestCoordinator_js = Object.create(null);
+const __m_core_settings_js = Object.create(null);
 const __m_core_storyChronology_js = Object.create(null);
 const __m_core_taskTrace_js = Object.create(null);
 const __m_core_text_js = Object.create(null);
 const __m_core_theme_js = Object.create(null);
 const __m_core_themeSongContract_js = Object.create(null);
-const __m_core_themeSongCover_js = Object.create(null);
 const __m_core_timeStoriesContract_js = Object.create(null);
 const __m_core_uiBridge_js = Object.create(null);
 const __m_core_worldPresentation_js = Object.create(null);
-const __m_extras_collection_js = Object.create(null);
-const __m_extras_intel_js = Object.create(null);
-const __m_extras_mv_js = Object.create(null);
-const __m_extras_mvMedia_js = Object.create(null);
-const __m_extras_store_js = Object.create(null);
-const __m_extras_waiting_js = Object.create(null);
 const __m_generation_achievementCapture_js = Object.create(null);
 const __m_generation_baibaiImage_js = Object.create(null);
 const __m_generation_cgAppearance_js = Object.create(null);
-const __m_generation_cgImageActions_js = Object.create(null);
 const __m_generation_cgImageCore_js = Object.create(null);
+const __m_generation_cgImageActions_js = Object.create(null);
 const __m_generation_cgPromptPolicy_js = Object.create(null);
 const __m_generation_chatu8Image_js = Object.create(null);
-const __m_generation_client_js = Object.create(null);
 const __m_generation_contentRegeneration_js = Object.create(null);
 const __m_generation_generationContext_js = Object.create(null);
-const __m_generation_generationModes_js = Object.create(null);
 const __m_generation_generationRequest_js = Object.create(null);
 const __m_generation_generationSavedActions_js = Object.create(null);
+const __m_generation_generationModes_js = Object.create(null);
+const __m_generation_client_js = Object.create(null);
 const __m_generation_imageGeneration_js = Object.create(null);
 const __m_generation_jsonParser_js = Object.create(null);
 const __m_generation_jsonShapeExamples_js = Object.create(null);
@@ -169,61 +163,61 @@ const __m_generation_normalizers_js = Object.create(null);
 const __m_generation_partialProgress_js = Object.create(null);
 const __m_generation_pastLivesCardActions_js = Object.create(null);
 const __m_generation_prompts_js = Object.create(null);
-const __m_generation_recovery_js = Object.create(null);
 const __m_generation_recoveryAdapters_js = Object.create(null);
 const __m_generation_recoveryFeedback_js = Object.create(null);
 const __m_generation_recoveryMerge_js = Object.create(null);
 const __m_generation_recoveryPayload_js = Object.create(null);
 const __m_generation_recoverySegments_js = Object.create(null);
+const __m_generation_recovery_js = Object.create(null);
 const __m_generation_requestTemperature_js = Object.create(null);
 const __m_heartbeatMemories_js = Object.create(null);
 const __m_modes_achievements_js = Object.create(null);
-const __m_modes_advEvent_js = Object.create(null);
 const __m_modes_advEventData_js = Object.create(null);
 const __m_modes_advEventGeneration_js = Object.create(null);
+const __m_modes_advEvent_js = Object.create(null);
 const __m_modes_album_js = Object.create(null);
 const __m_modes_bedtime_js = Object.create(null);
 const __m_modes_butterfly_js = Object.create(null);
 const __m_modes_cabinet_js = Object.create(null);
-const __m_modes_calendar_js = Object.create(null);
 const __m_modes_calendarBasics_js = Object.create(null);
 const __m_modes_calendarData_js = Object.create(null);
+const __m_modes_calendar_js = Object.create(null);
 const __m_modes_characterProfile_js = Object.create(null);
-const __m_modes_ending_js = Object.create(null);
 const __m_modes_endingData_js = Object.create(null);
 const __m_modes_endingGeneration_js = Object.create(null);
-const __m_modes_heart_js = Object.create(null);
+const __m_modes_ending_js = Object.create(null);
 const __m_modes_heartData_js = Object.create(null);
-const __m_modes_heartGeneration_js = Object.create(null);
 const __m_modes_heartPrompts_js = Object.create(null);
 const __m_modes_heartRuntime_js = Object.create(null);
+const __m_modes_heartGeneration_js = Object.create(null);
+const __m_modes_heart_js = Object.create(null);
 const __m_modes_inbox_js = Object.create(null);
 const __m_modes_items_js = Object.create(null);
 const __m_modes_pastLives_js = Object.create(null);
-const __m_modes_phone_js = Object.create(null);
 const __m_modes_phoneBasics_js = Object.create(null);
-const __m_modes_phoneData_js = Object.create(null);
 const __m_modes_phoneEvidence_js = Object.create(null);
-const __m_modes_phoneGeneration_js = Object.create(null);
+const __m_modes_phoneData_js = Object.create(null);
 const __m_modes_phoneIncrement_js = Object.create(null);
 const __m_modes_phonePrompts_js = Object.create(null);
+const __m_modes_phoneGeneration_js = Object.create(null);
+const __m_modes_phone_js = Object.create(null);
 const __m_modes_postcardDesign_js = Object.create(null);
-const __m_modes_relations_js = Object.create(null);
 const __m_modes_relationsView_js = Object.create(null);
-const __m_modes_room_js = Object.create(null);
-const __m_modes_roomData_js = Object.create(null);
+const __m_modes_relations_js = Object.create(null);
 const __m_modes_roomFigureLocal_js = Object.create(null);
-const __m_modes_roomLayout_js = Object.create(null);
-const __m_modes_roomLife_js = Object.create(null);
-const __m_modes_roomParticipantData_js = Object.create(null);
 const __m_modes_roomPets_js = Object.create(null);
 const __m_modes_roomProfile_js = Object.create(null);
+const __m_modes_roomLayout_js = Object.create(null);
+const __m_modes_roomParticipantData_js = Object.create(null);
+const __m_modes_roomLife_js = Object.create(null);
+const __m_modes_roomData_js = Object.create(null);
 const __m_modes_roomRender_js = Object.create(null);
+const __m_modes_room_js = Object.create(null);
 const __m_modes_themeSong_js = Object.create(null);
 const __m_modes_timeStories_js = Object.create(null);
-const __m_modes_travel_js = Object.create(null);
-const __m_modes_travelGeneration_js = Object.create(null);
 const __m_modes_travelScenes_js = Object.create(null);
+const __m_modes_travelGeneration_js = Object.create(null);
+const __m_modes_travel_js = Object.create(null);
 const __m_ui_advEventView_js = Object.create(null);
 const __m_ui_advancedGenerationUi_js = Object.create(null);
 const __m_ui_albumCategory_js = Object.create(null);
@@ -231,7 +225,6 @@ const __m_ui_albumView_js = Object.create(null);
 const __m_ui_archiveAvatars_js = Object.create(null);
 const __m_ui_archiveInheritance_js = Object.create(null);
 const __m_ui_archivePortal_js = Object.create(null);
-const __m_ui_archiveRelayView_js = Object.create(null);
 const __m_ui_autoMemoryCountdown_js = Object.create(null);
 const __m_ui_autoMemoryShell_js = Object.create(null);
 const __m_ui_autoMemoryWizard_js = Object.create(null);
@@ -254,8 +247,6 @@ const __m_ui_css_roomCss_js = Object.create(null);
 const __m_ui_css_roomMotifsItemsCss_js = Object.create(null);
 const __m_ui_endingView_js = Object.create(null);
 const __m_ui_expandedCgView_js = Object.create(null);
-const __m_ui_extrasStyles_js = Object.create(null);
-const __m_ui_extrasView_js = Object.create(null);
 const __m_ui_floatingArchive_js = Object.create(null);
 const __m_ui_floatingAvatarButton_js = Object.create(null);
 const __m_ui_generationCompletion_js = Object.create(null);
@@ -275,15 +266,14 @@ const __m_ui_languageView_js = Object.create(null);
 const __m_ui_memoryReveal_js = Object.create(null);
 const __m_ui_mirrorCallView_js = Object.create(null);
 const __m_ui_mirrorTtsReader_js = Object.create(null);
-const __m_ui_mvView_js = Object.create(null);
 const __m_ui_navigationBookmark_js = Object.create(null);
-const __m_ui_overlay_js = Object.create(null);
+const __m_ui_overlayShell_js = Object.create(null);
+const __m_ui_overlayManage_js = Object.create(null);
+const __m_ui_overlayCore_js = Object.create(null);
 const __m_ui_overlayClickActions_js = Object.create(null);
 const __m_ui_overlayClickTargets_js = Object.create(null);
-const __m_ui_overlayCore_js = Object.create(null);
-const __m_ui_overlayManage_js = Object.create(null);
 const __m_ui_overlayPartial_js = Object.create(null);
-const __m_ui_overlayShell_js = Object.create(null);
+const __m_ui_overlay_js = Object.create(null);
 const __m_ui_participantPicker_js = Object.create(null);
 const __m_ui_pastLivesCard_css_js = Object.create(null);
 const __m_ui_pastLivesCard_js = Object.create(null);
@@ -299,10 +289,10 @@ const __m_ui_roomObjectDrawing_js = Object.create(null);
 const __m_ui_roomPixelFigure_js = Object.create(null);
 const __m_ui_routeParticipants_js = Object.create(null);
 const __m_ui_scenePicker_js = Object.create(null);
-const __m_ui_settingsPanel_js = Object.create(null);
-const __m_ui_settingsPanelHome_js = Object.create(null);
-const __m_ui_settingsPanelMarkup_js = Object.create(null);
 const __m_ui_settingsPanelParts_js = Object.create(null);
+const __m_ui_settingsPanelHome_js = Object.create(null);
+const __m_ui_settingsPanel_js = Object.create(null);
+const __m_ui_settingsPanelMarkup_js = Object.create(null);
 const __m_ui_styles_js = Object.create(null);
 const __m_ui_taskCenter_js = Object.create(null);
 const __m_ui_themeSongStyles_js = Object.create(null);
@@ -313,7 +303,17 @@ const __m_ui_toolbarIcons_js = Object.create(null);
 const __m_ui_travelView_js = Object.create(null);
 const __m_ui_workspace_js = Object.create(null);
 const __m_ui_workspaceState_js = Object.create(null);
+const __m_ui_archiveRelayView_js = Object.create(null);
 const __m_ui_workspaceStyles_js = Object.create(null);
+const __m_extras_store_js = Object.create(null);
+const __m_extras_collection_js = Object.create(null);
+const __m_extras_intel_js = Object.create(null);
+const __m_extras_waiting_js = Object.create(null);
+const __m_ui_extrasStyles_js = Object.create(null);
+const __m_ui_extrasView_js = Object.create(null);
+const __m_extras_mv_js = Object.create(null);
+const __m_extras_mvMedia_js = Object.create(null);
+const __m_ui_mvView_js = Object.create(null);
 
 function __init_core_themeSongCover_js() {
 // MODULE: core/themeSongCover.js
@@ -361,6 +361,7 @@ __m_core_themeSongCover_js.songCoverDraft = songCoverDraft;
 __m_core_themeSongCover_js.songCoverReconceptPrompt = songCoverReconceptPrompt;
 __m_core_themeSongCover_js.SONG_COVER_DIRECTION = SONG_COVER_DIRECTION;
 }
+
 
 function __init_archive_capacity_js() {
 // MODULE: archive/capacity.js
@@ -543,6 +544,7 @@ __m_archive_capacity_js.capacityNotice = capacityNotice;
 __m_archive_capacity_js.evidenceMemories = evidenceMemories;
 __m_archive_capacity_js.findMemoryById = findMemoryById;
 }
+
 
 function __init_archive_coverageRanges_js() {
 // MODULE: archive/coverageRanges.js
@@ -792,6 +794,7 @@ __m_archive_coverageRanges_js.COVERAGE_KIND_LABEL = COVERAGE_KIND_LABEL;
 __m_archive_coverageRanges_js.OPERATION_KIND_LABEL = OPERATION_KIND_LABEL;
 }
 
+
 function __init_archive_draftInputs_js() {
 // MODULE: archive/draftInputs.js
 const digest = __m_core_digest_js;
@@ -852,6 +855,7 @@ __m_archive_draftInputs_js.inputHash = inputHash;
 __m_archive_draftInputs_js.compactArchiveInputs = compactArchiveInputs;
 __m_archive_draftInputs_js.compactArchiveEntry = compactArchiveEntry;
 }
+
 
 function __init_archive_floorWindowCheck_js() {
 // MODULE: archive/floorWindowCheck.js
@@ -926,6 +930,7 @@ __m_archive_floorWindowCheck_js.bankFloorWindow = bankFloorWindow;
 __m_archive_floorWindowCheck_js.sameFloorWindow = sameFloorWindow;
 __m_archive_floorWindowCheck_js.assertFloorWindowUnchanged = assertFloorWindowUnchanged;
 }
+
 
 function __init_archive_importRecovery_js() {
 // MODULE: archive/importRecovery.js
@@ -1552,6 +1557,7 @@ __m_archive_importRecovery_js.ARCHIVE_RECOVERY_PAGE_NOTICE = ARCHIVE_RECOVERY_PA
 __m_archive_importRecovery_js.ARCHIVE_RECOVERY_MAX_DRAFTS = ARCHIVE_RECOVERY_MAX_DRAFTS;
 }
 
+
 function __init_archive_memoryFileImport_js() {
 // MODULE: archive/memoryFileImport.js
 const core_text = __m_core_text_js;
@@ -1771,6 +1777,7 @@ function assertMemoryFilePreviewBinding(preview, binding) {
 __m_archive_memoryFileImport_js.previewMemoryFile = previewMemoryFile;
 __m_archive_memoryFileImport_js.assertMemoryFilePreviewBinding = assertMemoryFilePreviewBinding;
 }
+
 
 function __init_archive_memoryProviders_js() {
 // MODULE: archive/memoryProviders.js
@@ -2122,6 +2129,7 @@ __m_archive_memoryProviders_js.findBaibaoPublicApi = findBaibaoPublicApi;
 __m_archive_memoryProviders_js.readBaibaoCurrentChat = readBaibaoCurrentChat;
 }
 
+
 function __init_archive_partialImport_js() {
 // MODULE: archive/partialImport.js
 const inputs = __m_archive_draftInputs_js;
@@ -2177,6 +2185,7 @@ __m_archive_partialImport_js.completeSlots = completeSlots;
 __m_archive_partialImport_js.partialReceipt = partialReceipt;
 __m_archive_partialImport_js.partialProgress = partialProgress;
 }
+
 
 function __init_archive_qianqianjie_js() {
 // MODULE: archive/qianqianjie.js
@@ -2298,6 +2307,7 @@ __m_archive_qianqianjie_js.qianQianJieBatchIsCurrent = qianQianJieBatchIsCurrent
 __m_archive_qianqianjie_js.QQJ_PROVIDER = QQJ_PROVIDER;
 __m_archive_qianqianjie_js.QQJ_BRIDGE = QQJ_BRIDGE;
 }
+
 
 function __init_archive_relayPreparation_js() {
 // MODULE: archive/relayPreparation.js
@@ -2510,6 +2520,7 @@ __m_archive_relayPreparation_js.RELAY_SOURCE_CHECKPOINTS_KEY = RELAY_SOURCE_CHEC
 __m_archive_relayPreparation_js.RELAY_PRESERVED_DRAFTS_KEY = RELAY_PRESERVED_DRAFTS_KEY;
 }
 
+
 function __init_archive_relayStore_js() {
 // MODULE: archive/relayStore.js
 const backup = __m_archive_backupStore_js;
@@ -2628,6 +2639,7 @@ __m_archive_relayStore_js.readRelayCheckpoint = readRelayCheckpoint;
 __m_archive_relayStore_js.handoffArchiveBackup = handoffArchiveBackup;
 }
 
+
 function __init_archive_requestBudget_js() {
 // MODULE: archive/requestBudget.js
 const output_budget = __m_core_outputBudget_js;
@@ -2726,6 +2738,7 @@ __m_archive_requestBudget_js.composeArchiveRequest = composeArchiveRequest;
 __m_archive_requestBudget_js.publicBudget = publicBudget;
 __m_archive_requestBudget_js.assertArchiveRequestBudget = assertArchiveRequestBudget;
 }
+
 
 function __init_archive_sourceLedger_js() {
 // MODULE: archive/sourceLedger.js
@@ -3190,6 +3203,7 @@ __m_archive_sourceLedger_js.setMemorySourceLedgerBackendForTests = setMemorySour
 __m_archive_sourceLedger_js.memorySourceLedgerSummary = memorySourceLedgerSummary;
 }
 
+
 function __init_archive_storyScenes_js() {
 // MODULE: archive/storyScenes.js
 const core_constants = __m_core_constants_js;
@@ -3432,6 +3446,7 @@ __m_archive_storyScenes_js.estimateDatePrompt = estimateDatePrompt;
 __m_archive_storyScenes_js.SCENE_BATCH_SIZE = SCENE_BATCH_SIZE;
 }
 
+
 function __init_archive_summaryPreference_js() {
 // MODULE: archive/summaryPreference.js
 
@@ -3487,6 +3502,7 @@ __m_archive_summaryPreference_js.pluginSummaryCount = pluginSummaryCount;
 __m_archive_summaryPreference_js.archiveSourceForDue = archiveSourceForDue;
 __m_archive_summaryPreference_js.uncoveredWindowMessages = uncoveredWindowMessages;
 }
+
 
 function __init_autoMemory_achievementLibrary_js() {
 // MODULE: autoMemory/achievementLibrary.js
@@ -3682,6 +3698,7 @@ __m_autoMemory_achievementLibrary_js.dropAutoRound = dropAutoRound;
 __m_autoMemory_achievementLibrary_js.saveAutoAchievement = saveAutoAchievement;
 }
 
+
 function __init_autoMemory_achievementLookback_js() {
 // MODULE: autoMemory/achievementLookback.js
 
@@ -3809,6 +3826,7 @@ __m_autoMemory_achievementLookback_js.autoLetterMesid = autoLetterMesid;
 __m_autoMemory_achievementLookback_js.achievementLookback = achievementLookback;
 __m_autoMemory_achievementLookback_js.autoLetterOrphaned = autoLetterOrphaned;
 }
+
 
 function __init_autoMemory_combinedResult_js() {
 // MODULE: autoMemory/combinedResult.js
@@ -4043,6 +4061,7 @@ __m_autoMemory_combinedResult_js.repairAchievementRequest = repairAchievementReq
 __m_autoMemory_combinedResult_js.replacePendingAchievement = replacePendingAchievement;
 }
 
+
 function __init_autoMemory_draw_js() {
 // MODULE: autoMemory/draw.js
 
@@ -4157,6 +4176,7 @@ __m_autoMemory_draw_js.newMemoryIds = newMemoryIds;
 __m_autoMemory_draw_js.incrementalImportOptions = incrementalImportOptions;
 }
 
+
 function __init_autoMemory_floorPace_js() {
 // MODULE: autoMemory/floorPace.js
 
@@ -4262,6 +4282,7 @@ __m_autoMemory_floorPace_js.countdownLabel = countdownLabel;
 __m_autoMemory_floorPace_js.assistantBodyReady = assistantBodyReady;
 __m_autoMemory_floorPace_js.assistantStillTyping = assistantStillTyping;
 }
+
 
 function __init_autoMemory_gapFill_js() {
 // MODULE: autoMemory/gapFill.js
@@ -4393,6 +4414,7 @@ __m_autoMemory_gapFill_js.ACHIEVEMENT_TITLE_KEY = ACHIEVEMENT_TITLE_KEY;
 __m_autoMemory_gapFill_js.ACHIEVEMENT_COPY_KEY = ACHIEVEMENT_COPY_KEY;
 __m_autoMemory_gapFill_js.PENDING_ACHIEVEMENT_KEY = PENDING_ACHIEVEMENT_KEY;
 }
+
 
 function __init_autoMemory_incrementalGate_js() {
 // MODULE: autoMemory/incrementalGate.js
@@ -4679,6 +4701,7 @@ __m_autoMemory_incrementalGate_js.floorDecision = floorDecision;
 __m_autoMemory_incrementalGate_js.roundGuard = roundGuard;
 __m_autoMemory_incrementalGate_js.autoMemoryLockName = autoMemoryLockName;
 }
+
 
 function __init_autoMemory_incrementalView_js() {
 // MODULE: autoMemory/incrementalView.js
@@ -5320,6 +5343,7 @@ __m_autoMemory_incrementalView_js.sessionWithoutRound = sessionWithoutRound;
 __m_autoMemory_incrementalView_js.roundReadingHtml = roundReadingHtml;
 }
 
+
 function __init_autoMemory_instanceLease_js() {
 // MODULE: autoMemory/instanceLease.js
 
@@ -5412,6 +5436,7 @@ __m_autoMemory_instanceLease_js.LEASE_TTL_MS = LEASE_TTL_MS;
 __m_autoMemory_instanceLease_js.LEASE_HEARTBEAT_MS = LEASE_HEARTBEAT_MS;
 }
 
+
 function __init_autoMemory_migrateLegacy_js() {
 // MODULE: autoMemory/migrateLegacy.js
 const auto_update_policy = __m_core_autoUpdatePolicy_js;
@@ -5469,6 +5494,7 @@ function migrateLegacyAutoPreferences(existingPlanRaw, legacyAutoUpdates, now = 
 
 __m_autoMemory_migrateLegacy_js.migrateLegacyAutoPreferences = migrateLegacyAutoPreferences;
 }
+
 
 function __init_autoMemory_moduleHost_js() {
 // MODULE: autoMemory/moduleHost.js
@@ -5608,6 +5634,7 @@ __m_autoMemory_moduleHost_js.runModulePlan = runModulePlan;
 __m_autoMemory_moduleHost_js.roomReady = roomReady;
 __m_autoMemory_moduleHost_js.collectModuleFacts = collectModuleFacts;
 }
+
 
 function __init_autoMemory_modulePlans_js() {
 // MODULE: autoMemory/modulePlans.js
@@ -5823,6 +5850,7 @@ __m_autoMemory_modulePlans_js.addRoomRepair = addRoomRepair;
 __m_autoMemory_modulePlans_js.ROOM_REPAIR_LIMIT = ROOM_REPAIR_LIMIT;
 __m_autoMemory_modulePlans_js.PHONE_APP_CONCURRENCY = PHONE_APP_CONCURRENCY;
 }
+
 
 function __init_autoMemory_moduleRegistry_js() {
 // MODULE: autoMemory/moduleRegistry.js
@@ -6045,6 +6073,7 @@ __m_autoMemory_moduleRegistry_js.isAutoMemoryDrawModule = isAutoMemoryDrawModule
 __m_autoMemory_moduleRegistry_js.autoMemoryRuntimeCandidates = autoMemoryRuntimeCandidates;
 }
 
+
 function __init_autoMemory_moduleRunner_js() {
 // MODULE: autoMemory/moduleRunner.js
 const auto_memory_combined = __m_autoMemory_combinedResult_js;
@@ -6178,6 +6207,7 @@ async function runPending(snapshot, io) {
 
 __m_autoMemory_moduleRunner_js.runPending = runPending;
 }
+
 
 function __init_autoMemory_planStore_js() {
 // MODULE: autoMemory/planStore.js
@@ -6688,6 +6718,7 @@ __m_autoMemory_planStore_js.AUTO_MEMORY_INTERVAL_MIN = AUTO_MEMORY_INTERVAL_MIN;
 __m_autoMemory_planStore_js.AUTO_MEMORY_INTERVAL_MAX = AUTO_MEMORY_INTERVAL_MAX;
 }
 
+
 function __init_autoMemory_redo_js() {
 // MODULE: autoMemory/redo.js
 
@@ -6984,6 +7015,7 @@ __m_autoMemory_redo_js.SOURCE_STAMP_KEY = SOURCE_STAMP_KEY;
 __m_autoMemory_redo_js.DRAW_PIN_KEY = DRAW_PIN_KEY;
 __m_autoMemory_redo_js.DRAW_PIN_LEDGER_KEY = DRAW_PIN_LEDGER_KEY;
 }
+
 
 function __init_autoMemory_scheduler_js() {
 // MODULE: autoMemory/scheduler.js
@@ -8195,6 +8227,7 @@ __m_autoMemory_scheduler_js.stopAutoMemoryScheduler = stopAutoMemoryScheduler;
 __m_autoMemory_scheduler_js.startAutoMemoryScheduler = startAutoMemoryScheduler;
 }
 
+
 function __init_autoMemory_shellState_js() {
 // MODULE: autoMemory/shellState.js
 const auto_memory_floor = __m_autoMemory_floorPace_js;
@@ -8538,6 +8571,7 @@ __m_autoMemory_shellState_js.shellView = shellView;
 __m_autoMemory_shellState_js.GENERATION_STALL_MS = GENERATION_STALL_MS;
 }
 
+
 function __init_autoMemory_streamGate_js() {
 // MODULE: autoMemory/streamGate.js
 
@@ -8588,6 +8622,7 @@ __m_autoMemory_streamGate_js.stopButtonOpen = stopButtonOpen;
 __m_autoMemory_streamGate_js.hostGenerationOpen = hostGenerationOpen;
 __m_autoMemory_streamGate_js.generationOpen = generationOpen;
 }
+
 
 function __init_autoMemory_wizardPlan_js() {
 // MODULE: autoMemory/wizardPlan.js
@@ -8896,6 +8931,7 @@ __m_autoMemory_wizardPlan_js.wizardCompletionSnapshot = wizardCompletionSnapshot
 __m_autoMemory_wizardPlan_js.WIZARD_STEPS = WIZARD_STEPS;
 }
 
+
 function __init_core_advancedGeneration_js() {
 // MODULE: core/advancedGeneration.js
 const text = __m_core_text_js;
@@ -8977,6 +9013,7 @@ __m_core_advancedGeneration_js.EXCLUDABLE_PARAMETERS = EXCLUDABLE_PARAMETERS;
 __m_core_advancedGeneration_js.REASONING_EFFORTS = REASONING_EFFORTS;
 __m_core_advancedGeneration_js.ADVANCED_MAX_BYTES = ADVANCED_MAX_BYTES;
 }
+
 
 function __init_core_archiveBridge_js() {
 // MODULE: core/archiveBridge.js
@@ -9068,6 +9105,7 @@ __m_core_archiveBridge_js.isCurrentCharacterDeletedFromLibrary = isCurrentCharac
 __m_core_archiveBridge_js.rememberCurrentArchiveForOverview = rememberCurrentArchiveForOverview;
 __m_core_archiveBridge_js.syncArchiveOverviewCurrentRow = syncArchiveOverviewCurrentRow;
 }
+
 
 function __init_archive_backupStore_js() {
 // MODULE: archive/backupStore.js
@@ -9939,6 +9977,7 @@ __m_archive_backupStore_js.normalizeArchiveBackupRecord = normalizeArchiveBackup
 __m_archive_backupStore_js.setArchiveBackupBackendForTests = setArchiveBackupBackendForTests;
 }
 
+
 function __init_archive_sourceReadGuard_js() {
 // MODULE: archive/sourceReadGuard.js
 const contextApi = __m_core_context_js;
@@ -10008,6 +10047,7 @@ __m_archive_sourceReadGuard_js.createSourceReadGuard = createSourceReadGuard;
 __m_archive_sourceReadGuard_js.waitForSourceRead = waitForSourceRead;
 __m_archive_sourceReadGuard_js.boundedSourceRead = boundedSourceRead;
 }
+
 
 function __init_core_archiveCover_js() {
 // MODULE: core/archiveCover.js
@@ -10084,6 +10124,7 @@ __m_core_archiveCover_js.archiveCoverHtml = archiveCoverHtml;
 __m_core_archiveCover_js.ARCHIVE_INTRO_STYLES = ARCHIVE_INTRO_STYLES;
 }
 
+
 function __init_core_archiveRelayPolicy_js() {
 // MODULE: core/archiveRelayPolicy.js
 const context = __m_core_context_js;
@@ -10157,6 +10198,7 @@ __m_core_archiveRelayPolicy_js.relayHolder = relayHolder;
 __m_core_archiveRelayPolicy_js.relayReadOnly = relayReadOnly;
 __m_core_archiveRelayPolicy_js.assertRelayWrite = assertRelayWrite;
 }
+
 
 function __init_core_autoUpdatePolicy_js() {
 // MODULE: core/autoUpdatePolicy.js
@@ -10324,6 +10366,7 @@ __m_core_autoUpdatePolicy_js.AUTO_UPDATE_MODES = AUTO_UPDATE_MODES;
 __m_core_autoUpdatePolicy_js.autoUpdateStorageKey = autoUpdateStorageKey;
 }
 
+
 function __init_core_backupDiagnostics_js() {
 // MODULE: core/backupDiagnostics.js
 
@@ -10487,6 +10530,7 @@ __m_core_backupDiagnostics_js.backupDiagnosticSnapshot = backupDiagnosticSnapsho
 __m_core_backupDiagnostics_js.backupFailureSummary = backupFailureSummary;
 __m_core_backupDiagnostics_js.BACKUP_FAILURE_MESSAGES = BACKUP_FAILURE_MESSAGES;
 }
+
 
 function __init_core_bedtimeContract_js() {
 // MODULE: core/bedtimeContract.js
@@ -10677,6 +10721,7 @@ __m_core_bedtimeContract_js.BEDTIME_VERSION = BEDTIME_VERSION;
 __m_core_bedtimeContract_js.BEDTIME_LIMITS = BEDTIME_LIMITS;
 }
 
+
 function __init_core_butterflyContract_js() {
 // MODULE: core/butterflyContract.js
 
@@ -10764,6 +10809,7 @@ __m_core_butterflyContract_js.BUTTERFLY_LIMITS = BUTTERFLY_LIMITS;
 __m_core_butterflyContract_js.BUTTERFLY_READABLE_R62_CONTRACT = BUTTERFLY_READABLE_R62_CONTRACT;
 __m_core_butterflyContract_js.BUTTERFLY_GENERATION_CONTRACT = BUTTERFLY_GENERATION_CONTRACT;
 }
+
 
 function __init_core_cgPromptFormat_js() {
 // MODULE: core/cgPromptFormat.js
@@ -10883,6 +10929,7 @@ __m_core_cgPromptFormat_js.formatDailyComicPrompt = formatDailyComicPrompt;
 __m_core_cgPromptFormat_js.formatPhotoshootPrompt = formatPhotoshootPrompt;
 __m_core_cgPromptFormat_js.CG_PROMPT_FORMATS = CG_PROMPT_FORMATS;
 }
+
 
 function __init_core_cgTargets_js() {
 // MODULE: core/cgTargets.js
@@ -11295,6 +11342,7 @@ __m_core_cgTargets_js.normalizeLanguagePortrait = normalizeLanguagePortrait;
 __m_core_cgTargets_js.normalizeLanguageCgVisuals = normalizeLanguageCgVisuals;
 }
 
+
 function __init_core_cgVisualRules_js() {
 // MODULE: core/cgVisualRules.js
 const text = __m_core_text_js;
@@ -11503,6 +11551,7 @@ __m_core_cgVisualRules_js.cgParticipantVisualInstructions = cgParticipantVisualI
 __m_core_cgVisualRules_js.CG_VISUAL_AUTHORING_RULES = CG_VISUAL_AUTHORING_RULES;
 }
 
+
 function __init_core_characterDescriptor_js() {
 // MODULE: core/characterDescriptor.js
 const core_context = __m_core_context_js;
@@ -11531,6 +11580,7 @@ function characterDescriptor(context, index) {
 }
 __m_core_characterDescriptor_js.characterDescriptor = characterDescriptor;
 }
+
 
 function __init_core_chatReadRange_js() {
 // MODULE: core/chatReadRange.js
@@ -11641,6 +11691,7 @@ __m_core_chatReadRange_js.readRangePreview = readRangePreview;
 __m_core_chatReadRange_js.DEFAULT_CHAT_READ_RANGE = DEFAULT_CHAT_READ_RANGE;
 }
 
+
 function __init_core_connectionPool_js() {
 // MODULE: core/connectionPool.js
 const text = __m_core_text_js;
@@ -11689,6 +11740,7 @@ __m_core_connectionPool_js.connectionPoolSettings = connectionPoolSettings;
 __m_core_connectionPool_js.connectionPoolFingerprint = connectionPoolFingerprint;
 __m_core_connectionPool_js.selectConnectionTransport = selectConnectionTransport;
 }
+
 
 function __init_core_constants_js() {
 // MODULE: core/constants.js
@@ -12214,6 +12266,7 @@ __m_core_constants_js.ARCHIVE_SNAPSHOT_CACHE_MAX = ARCHIVE_SNAPSHOT_CACHE_MAX;
 __m_core_constants_js.RUNTIME_SESSION_CACHE_MAX = RUNTIME_SESSION_CACHE_MAX;
 }
 
+
 function __init_archive_importBatches_js() {
 // MODULE: archive/importBatches.js
 const constants = __m_core_constants_js;
@@ -12527,6 +12580,7 @@ __m_archive_importBatches_js.IMPORT_PROGRESS_KEY = IMPORT_PROGRESS_KEY;
 __m_archive_importBatches_js.IMPORT_BATCH_VERSION = IMPORT_BATCH_VERSION;
 }
 
+
 function __init_core_cgImagePatch_js() {
 // MODULE: core/cgImagePatch.js
 const constants = __m_core_constants_js;
@@ -12721,6 +12775,7 @@ __m_core_cgImagePatch_js.isSameImageHost = isSameImageHost;
 __m_core_cgImagePatch_js.savedLocalImagePath = savedLocalImagePath;
 }
 
+
 function __init_core_contextTags_js() {
 // MODULE: core/contextTags.js
 
@@ -12913,6 +12968,7 @@ __m_core_contextTags_js.scanContextTags = scanContextTags;
 __m_core_contextTags_js.DEFAULT_EXCLUDED_TAGS = DEFAULT_EXCLUDED_TAGS;
 }
 
+
 function __init_core_controlledSources_js() {
 // MODULE: core/controlledSources.js
 
@@ -13082,6 +13138,7 @@ __m_core_controlledSources_js.participantIndexPeople = participantIndexPeople;
 __m_core_controlledSources_js.assembleControlledSources = assembleControlledSources;
 }
 
+
 function __init_core_creativeSupplement_js() {
 // MODULE: core/creativeSupplement.js
 
@@ -13111,6 +13168,7 @@ __m_core_creativeSupplement_js.normalizeCreativeSupplement = normalizeCreativeSu
 __m_core_creativeSupplement_js.creativeSupplementBlock = creativeSupplementBlock;
 __m_core_creativeSupplement_js.MAX_CREATIVE_SUPPLEMENT_CHARS = MAX_CREATIVE_SUPPLEMENT_CHARS;
 }
+
 
 function __init_core_deferredCommitStore_js() {
 // MODULE: core/deferredCommitStore.js
@@ -13322,6 +13380,7 @@ __m_core_deferredCommitStore_js.DEFERRED_COMMIT_STORE_MAX_BYTES = DEFERRED_COMMI
 __m_core_deferredCommitStore_js.DEFERRED_COMMIT_STORE_MAX_AGE_MS = DEFERRED_COMMIT_STORE_MAX_AGE_MS;
 }
 
+
 function __init_core_diagnosticReport_js() {
 // MODULE: core/diagnosticReport.js
 const core_constants = __m_core_constants_js;
@@ -13505,6 +13564,7 @@ __m_core_diagnosticReport_js.diagnosticReportText = diagnosticReportText;
 __m_core_diagnosticReport_js.installRuntimeDiagnostic = installRuntimeDiagnostic;
 __m_core_diagnosticReport_js.uninstallRuntimeDiagnostic = uninstallRuntimeDiagnostic;
 }
+
 
 function __init_core_dialogue_js() {
 // MODULE: core/dialogue.js
@@ -13763,6 +13823,7 @@ __m_core_dialogue_js.normalizeDialogueRows = normalizeDialogueRows;
 __m_core_dialogue_js.DIALOGUE_CONTRACT = DIALOGUE_CONTRACT;
 }
 
+
 function __init_core_digest_js() {
 // MODULE: core/digest.js
 
@@ -13820,6 +13881,7 @@ async function sha256Text(input) {
 __m_core_digest_js.sha256Text = sha256Text;
 __m_core_digest_js.sha256Bytes = sha256Bytes;
 }
+
 
 function __init_core_evidence_js() {
 // MODULE: core/evidence.js
@@ -13966,6 +14028,7 @@ __m_core_evidence_js.roomReferencedMemoryIds = roomReferencedMemoryIds;
 __m_core_evidence_js.isSearchableRoomObject = isSearchableRoomObject;
 }
 
+
 function __init_core_generationBridge_js() {
 // MODULE: core/generationBridge.js
 
@@ -14029,6 +14092,7 @@ __m_core_generationBridge_js.generationRecoveryProgress = generationRecoveryProg
 __m_core_generationBridge_js.generationRecoveryForOrigin = generationRecoveryForOrigin;
 __m_core_generationBridge_js.GENERATION_RECOVERY_CACHE_KEY = GENERATION_RECOVERY_CACHE_KEY;
 }
+
 
 function __init_core_butterflyLegacyRecovery_js() {
 // MODULE: core/butterflyLegacyRecovery.js
@@ -14275,6 +14339,7 @@ __m_core_butterflyLegacyRecovery_js.legacyButterflySlotPrompt = legacyButterflyS
 __m_core_butterflyLegacyRecovery_js.legacyButterflyIncrementPrompt = legacyButterflyIncrementPrompt;
 }
 
+
 function __init_core_generationOptions_js() {
 // MODULE: core/generationOptions.js
 const contextApi = __m_core_context_js;
@@ -14304,6 +14369,7 @@ __m_core_generationOptions_js.composerScope = composerScope;
 __m_core_generationOptions_js.readSongOptions = readSongOptions;
 __m_core_generationOptions_js.writeSongOptions = writeSongOptions;
 }
+
 
 function __init_core_generationParticipants_js() {
 // MODULE: core/generationParticipants.js
@@ -14358,6 +14424,7 @@ __m_core_generationParticipants_js.resolveGenerationParticipantSnapshot = resolv
 __m_core_generationParticipants_js.deriveGenerationParticipantMemoryBank = deriveGenerationParticipantMemoryBank;
 }
 
+
 function __init_core_generationStatus_js() {
 // MODULE: core/generationStatus.js
 
@@ -14392,6 +14459,7 @@ __m_core_generationStatus_js.resolveGenerationStatus = resolveGenerationStatus;
 __m_core_generationStatus_js.sessionHasPendingParts = sessionHasPendingParts;
 __m_core_generationStatus_js.GENERATION_STATUS_LABELS = GENERATION_STATUS_LABELS;
 }
+
 
 function __init_core_handJournal_js() {
 // MODULE: core/handJournal.js
@@ -14744,6 +14812,7 @@ __m_core_handJournal_js.JOURNAL_LAYOUTS = JOURNAL_LAYOUTS;
 __m_core_handJournal_js.JOURNAL_READING_FIELDS = JOURNAL_READING_FIELDS;
 }
 
+
 function __init_core_heartLanguage_js() {
 // MODULE: core/heartLanguage.js
 const constants = __m_core_constants_js;
@@ -14801,6 +14870,7 @@ __m_core_heartLanguage_js.makeHeartShell = makeHeartShell;
 __m_core_heartLanguage_js.readableHeartSession = readableHeartSession;
 __m_core_heartLanguage_js.heartCollectionIssues = heartCollectionIssues;
 }
+
 
 function __init_core_hostCompatibility_js() {
 // MODULE: core/hostCompatibility.js
@@ -14905,6 +14975,7 @@ __m_core_hostCompatibility_js.readArchiveRowMetadata = readArchiveRowMetadata;
 __m_core_hostCompatibility_js.isAdaptedWorldInfoNameReader = isAdaptedWorldInfoNameReader;
 __m_core_hostCompatibility_js.createHostContextAdapter = createHostContextAdapter;
 }
+
 
 function __init_core_incremental_js() {
 // MODULE: core/incremental.js
@@ -15125,6 +15196,7 @@ __m_core_incremental_js.normalizedContentKey = normalizedContentKey;
 __m_core_incremental_js.uniqueGeneratedId = uniqueGeneratedId;
 __m_core_incremental_js.incrementalBatchId = incrementalBatchId;
 }
+
 
 function __init_core_independentApiConfig_js() {
 // MODULE: core/independentApiConfig.js
@@ -15824,6 +15896,7 @@ __m_core_independentApiConfig_js.MANUAL_STATUS_ENDPOINT = MANUAL_STATUS_ENDPOINT
 __m_core_independentApiConfig_js.MANUAL_GENERATE_ENDPOINT = MANUAL_GENERATE_ENDPOINT;
 }
 
+
 function __init_core_independentApiRequest_js() {
 // MODULE: core/independentApiRequest.js
 const manual_credentials = __m_core_manualCredentialStore_js;
@@ -16285,6 +16358,7 @@ __m_core_independentApiRequest_js.fetchManualApiModels = fetchManualApiModels;
 __m_core_independentApiRequest_js.requestManualApiCompletion = requestManualApiCompletion;
 }
 
+
 function __init_core_independentApi_js() {
 // MODULE: core/independentApi.js
 const split_independentApiConfig = __m_core_independentApiConfig_js;
@@ -16340,6 +16414,7 @@ __m_core_independentApi_js.readProfileCompletion = readProfileCompletion;
 __m_core_independentApi_js.fetchManualApiModels = fetchManualApiModels;
 __m_core_independentApi_js.requestManualApiCompletion = requestManualApiCompletion;
 }
+
 
 function __init_core_inputLedger_js() {
 // MODULE: core/inputLedger.js
@@ -16507,6 +16582,7 @@ __m_core_inputLedger_js.preflightDetailText = preflightDetailText;
 __m_core_inputLedger_js.LEDGER_SECTION_NAMES = LEDGER_SECTION_NAMES;
 }
 
+
 function __init_core_journalPiggyback_js() {
 // MODULE: core/journalPiggyback.js
 const journal = __m_core_handJournal_js;
@@ -16540,6 +16616,7 @@ async function saveJournalNotes(scope, notes, by = '') {
 __m_core_journalPiggyback_js.wantedJournalPages = wantedJournalPages;
 __m_core_journalPiggyback_js.saveJournalNotes = saveJournalNotes;
 }
+
 
 function __init_core_lenticularCards_js() {
 // MODULE: core/lenticularCards.js
@@ -16731,6 +16808,7 @@ __m_core_lenticularCards_js.applyPastLivesCardPair = applyPastLivesCardPair;
 __m_core_lenticularCards_js.preservePastLivesCards = preservePastLivesCards;
 __m_core_lenticularCards_js.LENTICULAR_KEY = LENTICULAR_KEY;
 }
+
 
 function __init_core_letterIllustrationV2_js() {
 // MODULE: core/letterIllustrationV2.js
@@ -17109,6 +17187,7 @@ __m_core_letterIllustrationV2_js.VERSION = VERSION;
 __m_core_letterIllustrationV2_js.CONTRACT = CONTRACT;
 }
 
+
 function __init_core_letterIllustration_js() {
 // MODULE: core/letterIllustration.js
 const v2 = __m_core_letterIllustrationV2_js;
@@ -17297,6 +17376,7 @@ __m_core_letterIllustration_js.MAX_LETTER_ILLUSTRATION_ACCESSORIES = MAX_LETTER_
 __m_core_letterIllustration_js.LETTER_ILLUSTRATION_CONTRACT = LETTER_ILLUSTRATION_CONTRACT;
 }
 
+
 function __init_core_letterSketch_js() {
 // MODULE: core/letterSketch.js
 
@@ -17400,6 +17480,7 @@ __m_core_letterSketch_js.sketchSceneSetting = sketchSceneSetting;
 __m_core_letterSketch_js.sketchSceneForeground = sketchSceneForeground;
 }
 
+
 function __init_core_localRecoveryStore_js() {
 // MODULE: core/localRecoveryStore.js
 
@@ -17491,6 +17572,7 @@ __m_core_localRecoveryStore_js.setLocalRecoveryBackendForTests = setLocalRecover
 __m_core_localRecoveryStore_js.localRecoveryStorageAvailable = localRecoveryStorageAvailable;
 }
 
+
 function __init_core_mailGallery_js() {
 // MODULE: core/mailGallery.js
 const letterIllustration = __m_core_letterIllustration_js;
@@ -17508,6 +17590,7 @@ function savedMailDrawings(session) {
 
 __m_core_mailGallery_js.savedMailDrawings = savedMailDrawings;
 }
+
 
 function __init_core_manualCredentialStore_js() {
 // MODULE: core/manualCredentialStore.js
@@ -17593,6 +17676,7 @@ __m_core_manualCredentialStore_js.readManualCredential = readManualCredential;
 __m_core_manualCredentialStore_js.clearManualCredential = clearManualCredential;
 __m_core_manualCredentialStore_js.validManualSecretRef = validManualSecretRef;
 }
+
 
 function __init_core_mirrorCall_js() {
 // MODULE: core/mirrorCall.js
@@ -17795,6 +17879,7 @@ __m_core_mirrorCall_js.inspectMirrorCall = inspectMirrorCall;
 __m_core_mirrorCall_js.createMirrorCall = createMirrorCall;
 }
 
+
 function __init_core_mirrorTts_js() {
 // MODULE: core/mirrorTts.js
 
@@ -17896,6 +17981,7 @@ __m_core_mirrorTts_js.createMirrorReader = createMirrorReader;
 __m_core_mirrorTts_js.MAX_MIRROR_TEXT = MAX_MIRROR_TEXT;
 }
 
+
 function __init_core_modesBridge_js() {
 // MODULE: core/modesBridge.js
 
@@ -17965,6 +18051,7 @@ __m_core_modesBridge_js.renderRoom = renderRoom;
 __m_core_modesBridge_js.mergeDeferredHeartPatches = mergeDeferredHeartPatches;
 }
 
+
 function __init_core_narrativeAuthority_js() {
 // MODULE: core/narrativeAuthority.js
 const core_text = __m_core_text_js;
@@ -18032,6 +18119,7 @@ __m_core_narrativeAuthority_js.narrativeClaimsSharedHistory = narrativeClaimsSha
 __m_core_narrativeAuthority_js.NARRATIVE_AUTHORITY_PROMPT = NARRATIVE_AUTHORITY_PROMPT;
 }
 
+
 function __init_core_outputBudget_js() {
 // MODULE: core/outputBudget.js
 const constants = __m_core_constants_js;
@@ -18078,6 +18166,7 @@ __m_core_outputBudget_js.migratePersistedInputBudgetTokens = migratePersistedInp
 __m_core_outputBudget_js.normalizeInputBudgetTokens = normalizeInputBudgetTokens;
 __m_core_outputBudget_js.generationInputCharCap = generationInputCharCap;
 }
+
 
 function __init_core_participants_js() {
 // MODULE: core/participants.js
@@ -18342,6 +18431,7 @@ __m_core_participants_js.participantName = participantName;
 __m_core_participants_js.PARTICIPANTS_KEY = PARTICIPANTS_KEY;
 }
 
+
 function __init_core_pastLivesContract_js() {
 // MODULE: core/pastLivesContract.js
 
@@ -18531,6 +18621,7 @@ __m_core_pastLivesContract_js.PAST_LIVES_CLUE_KINDS = PAST_LIVES_CLUE_KINDS;
 __m_core_pastLivesContract_js.PAST_LIVES_VIEWS = PAST_LIVES_VIEWS;
 }
 
+
 function __init_core_photoshootContract_js() {
 // MODULE: core/photoshootContract.js
 const text = __m_core_text_js;
@@ -18588,6 +18679,7 @@ __m_core_photoshootContract_js.photoshootLabel = photoshootLabel;
 __m_core_photoshootContract_js.PHOTOSHOOT_ROUTE = PHOTOSHOOT_ROUTE;
 __m_core_photoshootContract_js.PHOTOSHOOT_CAPTURE = PHOTOSHOOT_CAPTURE;
 }
+
 
 function __init_core_presentExpression_js() {
 // MODULE: core/presentExpression.js
@@ -18812,6 +18904,7 @@ __m_core_presentExpression_js.renderPresentExpressionText = renderPresentExpress
 __m_core_presentExpression_js.PRESENT_EXPRESSION_SCHEMA = PRESENT_EXPRESSION_SCHEMA;
 }
 
+
 function __init_core_recoveryPayload_js() {
 // MODULE: core/recoveryPayload.js
 
@@ -18896,6 +18989,7 @@ function unpackRecoveryPayload(journal, requestChars) {
 __m_core_recoveryPayload_js.packRecoveryPayload = packRecoveryPayload;
 __m_core_recoveryPayload_js.unpackRecoveryPayload = unpackRecoveryPayload;
 }
+
 
 function __init_core_recoveryRegistry_js() {
 // MODULE: core/recoveryRegistry.js
@@ -19236,6 +19330,7 @@ __m_core_recoveryRegistry_js.COMPATIBILITY_CONTRACTS = COMPATIBILITY_CONTRACTS;
 __m_core_recoveryRegistry_js.RETRY_FEEDBACK = RETRY_FEEDBACK;
 }
 
+
 function __init_core_recoverySourcePolicy_js() {
 // MODULE: core/recoverySourcePolicy.js
 const contextApi = __m_core_context_js;
@@ -19355,6 +19450,7 @@ __m_core_recoverySourcePolicy_js.setLegacyConfigurationRestartConfirmation = set
 __m_core_recoverySourcePolicy_js.recoverySettingsIdentity = recoverySettingsIdentity;
 __m_core_recoverySourcePolicy_js.recoverySourceValues = recoverySourceValues;
 }
+
 
 function __init_core_relationshipSafety_js() {
 // MODULE: core/relationshipSafety.js
@@ -19525,6 +19621,7 @@ __m_core_relationshipSafety_js.explicitPairRelationship = explicitPairRelationsh
 __m_core_relationshipSafety_js.presentRelationshipAllows = presentRelationshipAllows;
 }
 
+
 function __init_core_routeParticipants_js() {
 // MODULE: core/routeParticipants.js
 const contextApi = __m_core_context_js;
@@ -19576,6 +19673,7 @@ __m_core_routeParticipants_js.readRoutePeople = readRoutePeople;
 __m_core_routeParticipants_js.writeRoutePeople = writeRoutePeople;
 __m_core_routeParticipants_js.captureRoutePeople = captureRoutePeople;
 }
+
 
 function __init_core_selfUpdater_js() {
 // MODULE: core/selfUpdater.js
@@ -19675,6 +19773,7 @@ __m_core_selfUpdater_js.isProjectRemote = isProjectRemote;
 __m_core_selfUpdater_js.INSTALLED_BUILD = INSTALLED_BUILD;
 }
 
+
 function __init_core_state_js() {
 // MODULE: core/state.js
 const core_deferredCommitStore = __m_core_deferredCommitStore_js;
@@ -19761,6 +19860,7 @@ const state = {
 
 __m_core_state_js.state = state;
 }
+
 
 function __init_archive_archiveCore_js() {
 // MODULE: archive/archiveCore.js
@@ -19900,6 +20000,7 @@ __m_archive_archiveCore_js.clearMemoryPreflight = clearMemoryPreflight;
 __m_archive_archiveCore_js.finishArchiveTaskTrace = finishArchiveTaskTrace;
 __m_archive_archiveCore_js.isArchiveCancellation = isArchiveCancellation;
 }
+
 
 function __init_archive_groups_js() {
 // MODULE: archive/groups.js
@@ -20702,6 +20803,7 @@ __m_archive_groups_js.upsertArchiveIndex = upsertArchiveIndex;
 __m_archive_groups_js.characterDescriptor = characterDescriptor;
 }
 
+
 function __init_archive_importPrompts_js() {
 // MODULE: archive/importPrompts.js
 const core_archiveCover = __m_core_archiveCover_js;
@@ -20945,6 +21047,7 @@ __m_archive_importPrompts_js.archiveProfilePrompt = archiveProfilePrompt;
 __m_archive_importPrompts_js.normalizeArchiveProfile = normalizeArchiveProfile;
 __m_archive_importPrompts_js.checkedArchiveProfile = checkedArchiveProfile;
 }
+
 
 function __init_archive_inheritance_js() {
 // MODULE: archive/inheritance.js
@@ -21240,6 +21343,7 @@ __m_archive_inheritance_js.archiveInheritanceCounts = archiveInheritanceCounts;
 __m_archive_inheritance_js.prepareInheritedArchive = prepareInheritedArchive;
 __m_archive_inheritance_js.ARCHIVE_INHERITANCE_VERSION = ARCHIVE_INHERITANCE_VERSION;
 }
+
 
 function __init_archive_libraryCharacter_js() {
 // MODULE: archive/libraryCharacter.js
@@ -21779,6 +21883,7 @@ __m_archive_libraryCharacter_js.freezeArchiveTarget = freezeArchiveTarget;
 __m_archive_libraryCharacter_js.archiveTargetGenerationOptions = archiveTargetGenerationOptions;
 }
 
+
 function __init_archive_librarySnapshots_js() {
 // MODULE: archive/librarySnapshots.js
 const archive_backupStore = __m_archive_backupStore_js;
@@ -22053,6 +22158,7 @@ __m_archive_librarySnapshots_js.requireWritableArchiveAction = requireWritableAr
 __m_archive_librarySnapshots_js.snapshotCalendarQuickAccessHtml = snapshotCalendarQuickAccessHtml;
 __m_archive_librarySnapshots_js.archiveVersionDraftsHtml = archiveVersionDraftsHtml;
 }
+
 
 function __init_archive_library_js() {
 // MODULE: archive/library.js
@@ -22577,6 +22683,7 @@ __m_archive_library_js.requireWritableArchiveAction = requireWritableArchiveActi
 __m_archive_library_js.archiveVersionDraftsHtml = archiveVersionDraftsHtml;
 }
 
+
 function __init_archive_relay_js() {
 // MODULE: archive/relay.js
 const backup = __m_archive_backupStore_js;
@@ -22728,6 +22835,7 @@ __m_archive_relay_js.relayCandidates = relayCandidates;
 __m_archive_relay_js.previewArchiveRelay = previewArchiveRelay;
 __m_archive_relay_js.commitArchiveRelay = commitArchiveRelay;
 }
+
 
 function __init_archive_snapshots_js() {
 // MODULE: archive/snapshots.js
@@ -23012,6 +23120,7 @@ __m_archive_snapshots_js.baseModeAvailability = baseModeAvailability;
 __m_archive_snapshots_js.archiveCharacterAvatar = archiveCharacterAvatar;
 }
 
+
 function __init_archive_worldInfoSources_js() {
 // MODULE: archive/worldInfoSources.js
 const context_tags = __m_core_contextTags_js;
@@ -23029,6 +23138,11 @@ const runtimeState = __m_core_state_js.state;
 const clearMemoryPreflight = __m_archive_archiveCore_js.clearMemoryPreflight;
 const safeOwnDataEntries = __m_archive_archiveCore_js.safeOwnDataEntries;
 const safeOwnDataValue = __m_archive_archiveCore_js.safeOwnDataValue;
+
+
+
+
+
 
 
 
@@ -23628,6 +23742,41 @@ async function showMemoryWorldInfoPicker() {
     modal.className = 'rmt-memory-wi-picker';
     modal.innerHTML = `<div class="rmt-memory-wi-picker-card"><div class="rmt-memory-wi-picker-head"><div><b>记忆相关世界书</b><small>整本导入，或展开后精确选择条目</small></div><button type="button" class="rmt-btn" data-rmt-action="memory-worldinfo-close" aria-label="关闭世界书选择">完成／关闭</button></div><div class="rmt-memory-wi-picker-scroll"><div class="rmt-memory-wi-picker-note">记录已发生剧情的书，请选“作为历史摘要”；普通设定书保持不勾选。历史来源完整保存在本地账本，本次建档用量会另行显示。</div><div class="rmt-memory-wi-books">${names.length ? names.map(name => { const book=selected.get(name); const precise=book && !book.all ? book.entryUids.length : 0; return `<section class="rmt-memory-wi-book" data-rmt-memory-wi-book="${core_text.esc(name)}"><div class="rmt-memory-wi-book-row"><label><input type="checkbox" data-rmt-memory-wi-all="${core_text.esc(name)}" ${book?.all ? 'checked' : ''}> <b>${core_text.esc(name)}</b> · 整本导入</label><button type="button" class="rmt-btn" data-rmt-action="memory-worldinfo-expand" data-rmt-memory-world="${core_text.esc(name)}">展开条目${precise ? ` · 已选${precise}` : ''}</button></div><label class="rmt-settings-check"><input type="checkbox" data-rmt-memory-wi-history="${core_text.esc(name)}" ${book?.historySource ? 'checked' : ''} ${book ? '' : 'disabled'}> 作为历史摘要</label><div class="rmt-memory-wi-entry-list" hidden></div></section>`; }).join('') : '<div class="rmt-memory-wi-empty">当前没有可读取的世界书。</div>'}</div></div></div>`;
     overlay.appendChild(modal);
+    attachMemoryWorldInfoSearch(modal, names.length);
+}
+
+// 书很多时按名称或已展开条目的文字筛选；只影响显示，不改变任何勾选。
+function attachMemoryWorldInfoSearch(modal, count) {
+    const scroll = modal.querySelector('.rmt-memory-wi-picker-scroll');
+    if (!scroll || count < 2) return;
+    const box = document.createElement('div');
+    box.className = 'rmt-memory-wi-search';
+    box.style.cssText = 'position:sticky;top:0;z-index:1;padding:6px 0 8px;background:inherit';
+    box.innerHTML = '<input type="search" autocomplete="off" aria-label="搜索世界书或条目" placeholder="搜索世界书名，或已展开的条目" style="width:100%;box-sizing:border-box;min-height:40px;border-radius:10px;padding:0 12px;font:inherit"><small class="rmt-memory-wi-search-count" style="display:block;margin-top:4px;opacity:.75"></small>';
+    scroll.prepend(box);
+    const input = box.querySelector('input');
+    const counter = box.querySelector('small');
+    const apply = () => {
+        const query = input.value.trim().toLocaleLowerCase();
+        let shown = 0;
+        for (const section of modal.querySelectorAll('[data-rmt-memory-wi-book]')) {
+            const name = String(section.dataset.rmtMemoryWiBook || '').toLocaleLowerCase();
+            const entries = [...section.querySelectorAll('.rmt-memory-wi-entry')];
+            let entryHit = false;
+            for (const entry of entries) {
+                const hit = !query || entry.textContent.toLocaleLowerCase().includes(query);
+                entry.hidden = !!query && !hit && !name.includes(query);
+                entryHit ||= !!query && hit;
+            }
+            const visible = !query || name.includes(query) || entryHit;
+            section.hidden = !visible;
+            if (visible) shown += 1;
+        }
+        counter.textContent = query ? `找到 ${shown} 本` : '';
+    };
+    input.addEventListener('input', apply);
+    input.addEventListener('search', apply);
+    modal.addEventListener('rmt-wi-entries-loaded', apply);
 }
 
 async function expandMemoryWorldInfoBook(button) {
@@ -23647,6 +23796,7 @@ async function expandMemoryWorldInfoBook(button) {
     } catch (error) {
         list.textContent = `读取失败：${core_text.toastText(core_text.safeErrorSummary(error))}`;
     }
+    try { section.closest('.rmt-memory-wi-picker')?.dispatchEvent(new Event('rmt-wi-entries-loaded')); } catch {}
 }
 
 function normalizeExternalMemoryRecords(records, { complete = false, tagPolicy = null } = {}) {
@@ -23707,21 +23857,15 @@ function normalizeExternalMemoryRecords(records, { complete = false, tagPolicy =
     }
     return out;
 }
-
+__m_archive_worldInfoSources_js.memorySourceScopeForContext = memorySourceScopeForContext;
 __m_archive_worldInfoSources_js.currentMemorySourceLedger = currentMemorySourceLedger;
 __m_archive_worldInfoSources_js.currentMemorySourceLedgerSummary = currentMemorySourceLedgerSummary;
+__m_archive_worldInfoSources_js.emptyMemoryWorldInfo = emptyMemoryWorldInfo;
+__m_archive_worldInfoSources_js.externalMemoryFromSourceLedger = externalMemoryFromSourceLedger;
 __m_archive_worldInfoSources_js.currentMemorySourceLedgerExternal = currentMemorySourceLedgerExternal;
 __m_archive_worldInfoSources_js.previewCurrentChatMemoryFile = previewCurrentChatMemoryFile;
 __m_archive_worldInfoSources_js.commitCurrentChatMemoryFilePreview = commitCurrentChatMemoryFilePreview;
 __m_archive_worldInfoSources_js.clearCurrentChatImportedSources = clearCurrentChatImportedSources;
-__m_archive_worldInfoSources_js.loadMemoryWorldInfoBook = loadMemoryWorldInfoBook;
-__m_archive_worldInfoSources_js.collectSelectedMemoryWorldInfo = collectSelectedMemoryWorldInfo;
-__m_archive_worldInfoSources_js.syncSelectedWorldInfoHistoryLedger = syncSelectedWorldInfoHistoryLedger;
-__m_archive_worldInfoSources_js.showMemoryWorldInfoPicker = showMemoryWorldInfoPicker;
-__m_archive_worldInfoSources_js.expandMemoryWorldInfoBook = expandMemoryWorldInfoBook;
-__m_archive_worldInfoSources_js.memorySourceScopeForContext = memorySourceScopeForContext;
-__m_archive_worldInfoSources_js.emptyMemoryWorldInfo = emptyMemoryWorldInfo;
-__m_archive_worldInfoSources_js.externalMemoryFromSourceLedger = externalMemoryFromSourceLedger;
 __m_archive_worldInfoSources_js.normalizeMemoryWorldInfoBook = normalizeMemoryWorldInfoBook;
 __m_archive_worldInfoSources_js.getMemoryWorldInfoSelection = getMemoryWorldInfoSelection;
 __m_archive_worldInfoSources_js.setMemoryWorldInfoSelection = setMemoryWorldInfoSelection;
@@ -23730,9 +23874,14 @@ __m_archive_worldInfoSources_js.memoryWorldInfoSelectionSummary = memoryWorldInf
 __m_archive_worldInfoSources_js.hasMemoryWorldInfoSelection = hasMemoryWorldInfoSelection;
 __m_archive_worldInfoSources_js.normalizeMemoryWorldInfoEntry = normalizeMemoryWorldInfoEntry;
 __m_archive_worldInfoSources_js.worldInfoEntriesFromData = worldInfoEntriesFromData;
+__m_archive_worldInfoSources_js.loadMemoryWorldInfoBook = loadMemoryWorldInfoBook;
+__m_archive_worldInfoSources_js.collectSelectedMemoryWorldInfo = collectSelectedMemoryWorldInfo;
 __m_archive_worldInfoSources_js.selectedWorldInfoHistoryBatch = selectedWorldInfoHistoryBatch;
 __m_archive_worldInfoSources_js.selectedWorldInfoHistoryBatches = selectedWorldInfoHistoryBatches;
+__m_archive_worldInfoSources_js.syncSelectedWorldInfoHistoryLedger = syncSelectedWorldInfoHistoryLedger;
 __m_archive_worldInfoSources_js.memoryWorldInfoPromptBlock = memoryWorldInfoPromptBlock;
+__m_archive_worldInfoSources_js.showMemoryWorldInfoPicker = showMemoryWorldInfoPicker;
+__m_archive_worldInfoSources_js.expandMemoryWorldInfoBook = expandMemoryWorldInfoBook;
 __m_archive_worldInfoSources_js.normalizeExternalMemoryRecords = normalizeExternalMemoryRecords;
 }
 
@@ -24225,6 +24374,7 @@ __m_archive_externalMemory_js.externalMemoryImportPrompt = externalMemoryImportP
 __m_archive_externalMemory_js.normalizeExternalImportedMemories = normalizeExternalImportedMemories;
 }
 
+
 function __init_archive_importIdentity_js() {
 // MODULE: archive/importIdentity.js
 const advanced_generation = __m_core_advancedGeneration_js;
@@ -24399,6 +24549,7 @@ __m_archive_importIdentity_js.progressExternalMetadata = progressExternalMetadat
 __m_archive_importIdentity_js.progressWorldInfo = progressWorldInfo;
 __m_archive_importIdentity_js.admitArchiveBatch = admitArchiveBatch;
 }
+
 
 function __init_archive_recoveryDrafts_js() {
 // MODULE: archive/recoveryDrafts.js
@@ -25075,6 +25226,7 @@ __m_archive_recoveryDrafts_js.getCurrentArchiveImportRecoverySummary = getCurren
 __m_archive_recoveryDrafts_js.getCurrentArchiveProfileRecoverySummary = getCurrentArchiveProfileRecoverySummary;
 }
 
+
 function __init_archive_archiveVerdict_js() {
 // MODULE: archive/archiveVerdict.js
 const source_read = __m_archive_sourceReadGuard_js;
@@ -25400,6 +25552,7 @@ async function continueImportedArchiveProfile(context, memory, origin, draft, op
 __m_archive_archiveVerdict_js.generateArchiveImportSegment = generateArchiveImportSegment;
 __m_archive_archiveVerdict_js.rewriteCurrentArchiveVerdict = rewriteCurrentArchiveVerdict;
 }
+
 
 function __init_archive_importOperation_js() {
 // MODULE: archive/importOperation.js
@@ -26168,6 +26321,7 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
 __m_archive_importOperation_js.importCurrentChatMemoryOperation = importCurrentChatMemoryOperation;
 }
 
+
 function __init_archive_repository_js() {
 // MODULE: archive/repository.js
 const partial_import = __m_archive_partialImport_js;
@@ -26719,6 +26873,7 @@ __m_archive_repository_js.generateArchiveImportSegment = generateArchiveImportSe
 __m_archive_repository_js.rewriteCurrentArchiveVerdict = rewriteCurrentArchiveVerdict;
 }
 
+
 function __init_core_autoUpdates_js() {
 // MODULE: core/autoUpdates.js
 const core_autoUpdatePolicy = __m_core_autoUpdatePolicy_js;
@@ -26849,6 +27004,7 @@ __m_core_autoUpdates_js.autoUpdateAvailability = autoUpdateAvailability;
 __m_core_autoUpdates_js.startAutoUpdates = startAutoUpdates;
 __m_core_autoUpdates_js.stopAutoUpdates = stopAutoUpdates;
 }
+
 
 function __init_core_cacheRecords_js() {
 // MODULE: core/cacheRecords.js
@@ -27760,6 +27916,7 @@ __m_core_cacheRecords_js.PARTICIPANT_REPLACEMENT_KEY = PARTICIPANT_REPLACEMENT_K
 __m_core_cacheRecords_js.VERSION_PAGE_MODES = VERSION_PAGE_MODES;
 }
 
+
 function __init_core_cacheCommit_js() {
 // MODULE: core/cacheCommit.js
 const recovery_source = __m_core_recoverySourcePolicy_js;
@@ -28292,6 +28449,7 @@ __m_core_cacheCommit_js.scheduleCompressedCachePersist = scheduleCompressedCache
 __m_core_cacheCommit_js.scheduleLegacyCacheCompressionIdle = scheduleLegacyCacheCompressionIdle;
 }
 
+
 function __init_core_cacheVersions_js() {
 // MODULE: core/cacheVersions.js
 const archive_backupStore = __m_core_archiveBridge_js;
@@ -28482,6 +28640,7 @@ __m_core_cacheVersions_js.saveArchiveVersion = saveArchiveVersion;
 __m_core_cacheVersions_js.assertArchiveVersionReplacement = assertArchiveVersionReplacement;
 __m_core_cacheVersions_js.assertReplacementInCache = assertReplacementInCache;
 }
+
 
 function __init_core_cacheArchiveMemory_js() {
 // MODULE: core/cacheArchiveMemory.js
@@ -29223,6 +29382,7 @@ __m_core_cacheArchiveMemory_js.selectSingleParticipantCard = selectSinglePartici
 __m_core_cacheArchiveMemory_js.saveImportedMemory = saveImportedMemory;
 __m_core_cacheArchiveMemory_js.ensureCurrentArchiveBackup = ensureCurrentArchiveBackup;
 }
+
 
 function __init_core_cacheGenerationDrafts_js() {
 // MODULE: core/cacheGenerationDrafts.js
@@ -30029,6 +30189,7 @@ __m_core_cacheGenerationDrafts_js.loadGenerationRecovery = loadGenerationRecover
 __m_core_cacheGenerationDrafts_js.loadReadableGenerationProgress = loadReadableGenerationProgress;
 }
 
+
 function __init_core_cacheSessions_js() {
 // MODULE: core/cacheSessions.js
 const archive_repository = __m_core_archiveBridge_js;
@@ -30460,6 +30621,7 @@ __m_core_cacheSessions_js.saveSession = saveSession;
 __m_core_cacheSessions_js.loadSession = loadSession;
 }
 
+
 function __init_core_cache_js() {
 // MODULE: core/cache.js
 const core_constants = __m_core_constants_js;
@@ -30721,6 +30883,7 @@ __m_core_cache_js.flushSessionCacheNow = flushSessionCacheNow;
 __m_core_cache_js.loadReadableGenerationProgress = loadReadableGenerationProgress;
 __m_core_cache_js.loadSession = loadSession;
 }
+
 
 function __init_core_castLooks_js() {
 // MODULE: core/castLooks.js
@@ -31038,6 +31201,7 @@ __m_core_castLooks_js.CAST_LOOKS_KEY = CAST_LOOKS_KEY;
 __m_core_castLooks_js.CAST_LOOKS_FIELD_LIMIT = CAST_LOOKS_FIELD_LIMIT;
 __m_core_castLooks_js.PARTICIPANT_LOOKS_KEY = PARTICIPANT_LOOKS_KEY;
 }
+
 
 function __init_core_context_js() {
 // MODULE: core/context.js
@@ -31501,6 +31665,7 @@ __m_core_context_js.taskOriginCharacterMatches = taskOriginCharacterMatches;
 __m_core_context_js.isCurrentTaskOrigin = isCurrentTaskOrigin;
 __m_core_context_js.isCurrentTaskRunOrigin = isCurrentTaskRunOrigin;
 }
+
 
 function __init_core_requestTasks_js() {
 // MODULE: core/requestTasks.js
@@ -32256,6 +32421,7 @@ __m_core_requestTasks_js.recentChatTasks = recentChatTasks;
 __m_core_requestTasks_js.TASK_PHASE_LABEL = TASK_PHASE_LABEL;
 }
 
+
 function __init_core_requestTaskCenter_js() {
 // MODULE: core/requestTaskCenter.js
 const archive_snapshots = __m_core_archiveBridge_js;
@@ -32806,6 +32972,7 @@ __m_core_requestTaskCenter_js.MAX_SEGMENT_ATTEMPTS = MAX_SEGMENT_ATTEMPTS;
 __m_core_requestTaskCenter_js.MAX_RATE_LIMIT_ATTEMPTS = MAX_RATE_LIMIT_ATTEMPTS;
 }
 
+
 function __init_core_requestCoordinator_js() {
 // MODULE: core/requestCoordinator.js
 const split_requestTasks = __m_core_requestTasks_js;
@@ -32959,6 +33126,7 @@ __m_core_requestCoordinator_js.setAutoRetryHandler = setAutoRetryHandler;
 __m_core_requestCoordinator_js.noteRetryableGeneration = noteRetryableGeneration;
 __m_core_requestCoordinator_js.refreshConcurrentTaskUi = refreshConcurrentTaskUi;
 }
+
 
 function __init_core_settings_js() {
 // MODULE: core/settings.js
@@ -33657,6 +33825,7 @@ __m_core_settings_js.profileFingerprint = profileFingerprint;
 __m_core_settings_js.uniqueImportedProfileName = uniqueImportedProfileName;
 }
 
+
 function __init_core_storyChronology_js() {
 // MODULE: core/storyChronology.js
 
@@ -33730,6 +33899,7 @@ function sortByStoryDate(items) {
 __m_core_storyChronology_js.comparableStoryDate = comparableStoryDate;
 __m_core_storyChronology_js.sortByStoryDate = sortByStoryDate;
 }
+
 
 function __init_core_taskTrace_js() {
 // MODULE: core/taskTrace.js
@@ -34009,6 +34179,7 @@ __m_core_taskTrace_js.endTaskTrace = endTaskTrace;
 __m_core_taskTrace_js.taskTraceSnapshot = taskTraceSnapshot;
 __m_core_taskTrace_js.clearTaskTrace = clearTaskTrace;
 }
+
 
 function __init_core_text_js() {
 // MODULE: core/text.js
@@ -34379,6 +34550,7 @@ __m_core_text_js.hashString = hashString;
 __m_core_text_js.safeId = safeId;
 }
 
+
 function __init_core_theme_js() {
 // MODULE: core/theme.js
 const core_constants = __m_core_constants_js;
@@ -34592,6 +34764,7 @@ __m_core_theme_js.resolveThemePalette = resolveThemePalette;
 __m_core_theme_js.applyThemeToElement = applyThemeToElement;
 }
 
+
 function __init_core_themeSongContract_js() {
 // MODULE: core/themeSongContract.js
 const safeData = __m_core_pastLivesContract_js;
@@ -34739,6 +34912,7 @@ __m_core_themeSongContract_js.SONG_LANGUAGES = SONG_LANGUAGES;
 __m_core_themeSongContract_js.SONG_VOICES = SONG_VOICES;
 }
 
+
 function __init_core_timeStoriesContract_js() {
 // MODULE: core/timeStoriesContract.js
 const safeData = __m_core_pastLivesContract_js;
@@ -34854,6 +35028,7 @@ __m_core_timeStoriesContract_js.TIME_STORY_PALETTES = TIME_STORY_PALETTES;
 __m_core_timeStoriesContract_js.TIME_STORY_PRESENTATIONS = TIME_STORY_PRESENTATIONS;
 }
 
+
 function __init_core_uiBridge_js() {
 // MODULE: core/uiBridge.js
 
@@ -34884,6 +35059,7 @@ __m_core_uiBridge_js.confirmExplicitAction = confirmExplicitAction;
 __m_core_uiBridge_js.refreshSettingsTaskStatus = refreshSettingsTaskStatus;
 __m_core_uiBridge_js.refreshSettingsMemoryStatus = refreshSettingsMemoryStatus;
 }
+
 
 function __init_core_worldPresentation_js() {
 // MODULE: core/worldPresentation.js
@@ -35263,6 +35439,7 @@ __m_core_worldPresentation_js.resolveWorldPresentation = resolveWorldPresentatio
 __m_core_worldPresentation_js.controlledEvidenceContains = controlledEvidenceContains;
 }
 
+
 function __init_generation_achievementCapture_js() {
 // MODULE: generation/achievementCapture.js
 
@@ -35343,6 +35520,7 @@ __m_generation_achievementCapture_js.stripAchievementField = stripAchievementFie
 __m_generation_achievementCapture_js.takeJournalNotes = takeJournalNotes;
 __m_generation_achievementCapture_js.finishAchievementCapture = finishAchievementCapture;
 }
+
 
 function __init_generation_baibaiImage_js() {
 // MODULE: generation/baibaiImage.js
@@ -35516,6 +35694,7 @@ __m_generation_baibaiImage_js.BAIBAI_IMAGE_PROVIDER = BAIBAI_IMAGE_PROVIDER;
 __m_generation_baibaiImage_js.BAIBAI_IMAGE_TIMEOUT_MS = BAIBAI_IMAGE_TIMEOUT_MS;
 __m_generation_baibaiImage_js.BAIBAI_IMAGE_CONCURRENCY = BAIBAI_IMAGE_CONCURRENCY;
 }
+
 
 function __init_generation_cgAppearance_js() {
 // MODULE: generation/cgAppearance.js
@@ -35947,6 +36126,7 @@ __m_generation_cgAppearance_js.CG_SCENE_TAG_LIMIT = CG_SCENE_TAG_LIMIT;
 __m_generation_cgAppearance_js.CG_PREPARED_NL_LIMIT = CG_PREPARED_NL_LIMIT;
 __m_generation_cgAppearance_js.CG_FLAT_PROMPT_LIMIT = CG_FLAT_PROMPT_LIMIT;
 }
+
 
 function __init_generation_cgImageCore_js() {
 // MODULE: generation/cgImageCore.js
@@ -36684,6 +36864,7 @@ __m_generation_cgImageCore_js.DEFAULT_LANGUAGE_PORTRAIT = DEFAULT_LANGUAGE_PORTR
 __m_generation_cgImageCore_js.pendingCgImages = pendingCgImages;
 }
 
+
 function __init_generation_cgImageActions_js() {
 // MODULE: generation/cgImageActions.js
 const cg_format = __m_core_cgPromptFormat_js;
@@ -37131,6 +37312,7 @@ __m_generation_cgImageActions_js.prepareCgSendParts = prepareCgSendParts;
 __m_generation_cgImageActions_js.cgEditorSendPreview = cgEditorSendPreview;
 }
 
+
 function __init_generation_cgPromptPolicy_js() {
 // MODULE: generation/cgPromptPolicy.js
 const visual = __m_core_cgVisualRules_js;
@@ -37187,6 +37369,7 @@ __m_generation_cgPromptPolicy_js.cgPromptForSegment = cgPromptForSegment;
 __m_generation_cgPromptPolicy_js.cgRecoveryOperation = cgRecoveryOperation;
 __m_generation_cgPromptPolicy_js.cgSegmentValidator = cgSegmentValidator;
 }
+
 
 function __init_generation_chatu8Image_js() {
 // MODULE: generation/chatu8Image.js
@@ -37421,6 +37604,7 @@ __m_generation_chatu8Image_js.CHATU8_IMAGE_PROVIDER = CHATU8_IMAGE_PROVIDER;
 __m_generation_chatu8Image_js.CHATU8_IMAGE_TIMEOUT_MS = CHATU8_IMAGE_TIMEOUT_MS;
 __m_generation_chatu8Image_js.CHATU8_IMAGE_CONCURRENCY = CHATU8_IMAGE_CONCURRENCY;
 }
+
 
 function __init_generation_contentRegeneration_js() {
 // MODULE: generation/contentRegeneration.js
@@ -38038,6 +38222,7 @@ __m_generation_contentRegeneration_js.mergeRegeneratedContentTarget = mergeRegen
 __m_generation_contentRegeneration_js.sameEvidence = sameEvidence;
 __m_generation_contentRegeneration_js.normalizeRegeneratedButterflyNode = normalizeRegeneratedButterflyNode;
 }
+
 
 function __init_generation_generationContext_js() {
 // MODULE: generation/generationContext.js
@@ -38696,6 +38881,7 @@ __m_generation_generationContext_js.TOKEN_COUNT_TIMEOUT_MS = TOKEN_COUNT_TIMEOUT
 __m_generation_generationContext_js.GENERATED_PHRASE_EVIDENCE_KEYS = GENERATED_PHRASE_EVIDENCE_KEYS;
 }
 
+
 function __init_generation_generationRequest_js() {
 // MODULE: generation/generationRequest.js
 const connection_pool = __m_core_connectionPool_js;
@@ -39305,6 +39491,7 @@ __m_generation_generationRequest_js.recoverySettingsIdentity = recoverySettingsI
 __m_generation_generationRequest_js.recoveryModeTaskScopes = recoveryModeTaskScopes;
 }
 
+
 function __init_generation_generationSavedActions_js() {
 // MODULE: generation/generationSavedActions.js
 const generation_merged = __m_generation_mergedGeneration_js;
@@ -39561,6 +39748,7 @@ __m_generation_generationSavedActions_js.exportSavedGeneration = exportSavedGene
 __m_generation_generationSavedActions_js.discardSavedGeneration = discardSavedGeneration;
 __m_generation_generationSavedActions_js.startAdvScriptSecondStep = startAdvScriptSecondStep;
 }
+
 
 function __init_generation_generationModes_js() {
 // MODULE: generation/generationModes.js
@@ -40430,6 +40618,7 @@ __m_generation_generationModes_js.generateMode = generateMode;
 __m_generation_generationModes_js.autoContinuedDrafts = autoContinuedDrafts;
 }
 
+
 function __init_generation_client_js() {
 // MODULE: generation/client.js
 const generation_recovery = __m_generation_recovery_js;
@@ -40528,6 +40717,7 @@ __m_generation_client_js.discardSavedGeneration = discardSavedGeneration;
 __m_generation_client_js.generateMode = generateMode;
 __m_generation_client_js.startAdvScriptSecondStep = startAdvScriptSecondStep;
 }
+
 
 function __init_generation_imageGeneration_js() {
 // MODULE: generation/imageGeneration.js
@@ -40644,6 +40834,7 @@ __m_generation_imageGeneration_js.handleOverlayMediaError = handleOverlayMediaEr
 __m_generation_imageGeneration_js.prepareCgSendParts = prepareCgSendParts;
 __m_generation_imageGeneration_js.cgEditorSendPreview = cgEditorSendPreview;
 }
+
 
 function __init_generation_jsonParser_js() {
 // MODULE: generation/jsonParser.js
@@ -41044,6 +41235,7 @@ __m_generation_jsonParser_js.jsonOutputBudgetSummary = jsonOutputBudgetSummary;
 __m_generation_jsonParser_js.extractJson = extractJson;
 }
 
+
 function __init_generation_jsonShapeExamples_js() {
 // MODULE: generation/jsonShapeExamples.js
 
@@ -41252,6 +41444,7 @@ function jsonShapeExampleBlock(prompt) {
 
 __m_generation_jsonShapeExamples_js.jsonShapeExampleBlock = jsonShapeExampleBlock;
 }
+
 
 function __init_generation_mergedGeneration_js() {
 // MODULE: generation/mergedGeneration.js
@@ -42189,6 +42382,7 @@ __m_generation_mergedGeneration_js.MERGEABLE_ROUTES = MERGEABLE_ROUTES;
 __m_generation_mergedGeneration_js.MERGED_NOW = MERGED_NOW;
 }
 
+
 function __init_generation_modesBridge_js() {
 // MODULE: generation/modesBridge.js
 
@@ -42606,6 +42800,7 @@ __m_generation_modesBridge_js.projectHeartProgress = projectHeartProgress;
 __m_generation_modesBridge_js.ENDING_CONFESSION_HINT_RE = ENDING_CONFESSION_HINT_RE;
 }
 
+
 function __init_generation_normalizers_js() {
 // MODULE: generation/normalizers.js
 const song_contract = __m_core_themeSongContract_js;
@@ -42686,6 +42881,7 @@ function normalizeByMode(mode, data, memoryBank, context = null) {
 
 __m_generation_normalizers_js.normalizeByMode = normalizeByMode;
 }
+
 
 function __init_generation_partialProgress_js() {
 // MODULE: generation/partialProgress.js
@@ -42892,6 +43088,7 @@ __m_generation_partialProgress_js.generationProgressSegments = generationProgres
 __m_generation_partialProgress_js.generationRecoverySchema = generationRecoverySchema;
 }
 
+
 function __init_generation_pastLivesCardActions_js() {
 // MODULE: generation/pastLivesCardActions.js
 const text = __m_core_text_js;
@@ -42946,6 +43143,7 @@ async function savePastLivesCard(captured, reference) {
 __m_generation_pastLivesCardActions_js.savePastLivesCard = savePastLivesCard;
 __m_generation_pastLivesCardActions_js.capturePastLivesCard = capturePastLivesCard;
 }
+
 
 function __init_generation_prompts_js() {
 // MODULE: generation/prompts.js
@@ -43651,6 +43849,7 @@ __m_generation_prompts_js.multiplayerRoomPrompt = multiplayerRoomPrompt;
 __m_generation_prompts_js.PROMPTS = PROMPTS;
 }
 
+
 function __init_generation_recoveryAdapters_js() {
 // MODULE: generation/recoveryAdapters.js
 const recovery_merge = __m_generation_recoveryMerge_js;
@@ -43896,6 +44095,7 @@ function recoveryProgressSchema(mode, input) {
 
 __m_generation_recoveryAdapters_js.recoveryProgressSchema = recoveryProgressSchema;
 }
+
 
 function __init_generation_recoveryFeedback_js() {
 // MODULE: generation/recoveryFeedback.js
@@ -44268,6 +44468,7 @@ __m_generation_recoveryFeedback_js.internalHandles = internalHandles;
 __m_generation_recoveryFeedback_js.TOKEN = TOKEN;
 }
 
+
 function __init_generation_recoveryMerge_js() {
 // MODULE: generation/recoveryMerge.js
 const json_parser = __m_generation_jsonParser_js;
@@ -44434,6 +44635,7 @@ __m_generation_recoveryMerge_js.mergeRecoveryPartials = mergeRecoveryPartials;
 __m_generation_recoveryMerge_js.retainedRecoveryPartials = retainedRecoveryPartials;
 }
 
+
 function __init_generation_recoveryPayload_js() {
 // MODULE: generation/recoveryPayload.js
 const packRecoveryPayloadMoved = __m_core_recoveryPayload_js.packRecoveryPayload;
@@ -44446,6 +44648,7 @@ const unpackRecoveryPayload = unpackRecoveryPayloadMoved;
 __m_generation_recoveryPayload_js.packRecoveryPayload = packRecoveryPayload;
 __m_generation_recoveryPayload_js.unpackRecoveryPayload = unpackRecoveryPayload;
 }
+
 
 function __init_generation_recoverySegments_js() {
 // MODULE: generation/recoverySegments.js
@@ -44993,6 +45196,7 @@ __m_generation_recoverySegments_js.generationContinuationPrompt = generationCont
 __m_generation_recoverySegments_js.assertRetainedSize = assertRetainedSize;
 }
 
+
 function __init_generation_recovery_js() {
 // MODULE: generation/recovery.js
 const recovery_merge = __m_generation_recoveryMerge_js;
@@ -45143,6 +45347,7 @@ __m_generation_recovery_js.withRecoverySegment = withRecoverySegment;
 __m_generation_recovery_js.noteGenerationRecoveryFailure = noteGenerationRecoveryFailure;
 }
 
+
 function __init_generation_requestTemperature_js() {
 // MODULE: generation/requestTemperature.js
 
@@ -45158,6 +45363,7 @@ function resolveRequestTemperature(options = {}, settings = {}) {
 
 __m_generation_requestTemperature_js.resolveRequestTemperature = resolveRequestTemperature;
 }
+
 
 function __init_heartbeatMemories_js() {
 // MODULE: heartbeatMemories.js
@@ -45407,6 +45613,7 @@ __m_heartbeatMemories_js.autoMemoryContractSurface = autoMemoryContractSurface;
 __m_heartbeatMemories_js.initMemoryTheater = initMemoryTheater;
 __m_heartbeatMemories_js.destroyMemoryTheater = destroyMemoryTheater;
 }
+
 
 function __init_modes_achievements_js() {
 // MODULE: modes/achievements.js
@@ -45732,6 +45939,7 @@ __m_modes_achievements_js.achievementMergeKeys = achievementMergeKeys;
 __m_modes_achievements_js.mergeAchievementsIncremental = mergeAchievementsIncremental;
 __m_modes_achievements_js.renderAchievements = renderAchievements;
 }
+
 
 function __init_modes_advEventData_js() {
 // MODULE: modes/advEventData.js
@@ -46378,6 +46586,7 @@ __m_modes_advEventData_js.showAdvFailure = showAdvFailure;
 __m_modes_advEventData_js.refreshAdvArchiveTarget = refreshAdvArchiveTarget;
 }
 
+
 function __init_modes_advEventGeneration_js() {
 // MODULE: modes/advEventGeneration.js
 const core_constants = __m_core_constants_js;
@@ -46823,6 +47032,7 @@ __m_modes_advEventGeneration_js.repairFailedAdvForSession = repairFailedAdvForSe
 __m_modes_advEventGeneration_js.generateAdvForSelected = generateAdvForSelected;
 }
 
+
 function __init_modes_advEvent_js() {
 // MODULE: modes/advEvent.js
 const split_advEventData = __m_modes_advEventData_js;
@@ -46875,6 +47085,7 @@ __m_modes_advEvent_js.generateAllAdvForSession = generateAllAdvForSession;
 __m_modes_advEvent_js.repairFailedAdvForSession = repairFailedAdvForSession;
 __m_modes_advEvent_js.generateAdvForSelected = generateAdvForSelected;
 }
+
 
 function __init_modes_album_js() {
 // MODULE: modes/album.js
@@ -47571,6 +47782,7 @@ __m_modes_album_js.mergeAlbumIncremental = mergeAlbumIncremental;
 __m_modes_album_js.normalizeAlbum = normalizeAlbum;
 }
 
+
 function __init_modes_bedtime_js() {
 // MODULE: modes/bedtime.js
 const cg_visual = __m_core_cgVisualRules_js;
@@ -47773,6 +47985,7 @@ __m_modes_bedtime_js.normalizeGeneratedBedtime = normalizeGeneratedBedtime;
 __m_modes_bedtime_js.projectBedtimeProgress = projectBedtimeProgress;
 __m_modes_bedtime_js.readableBedtimeProgressSession = readableBedtimeProgressSession;
 }
+
 
 function __init_modes_butterfly_js() {
 // MODULE: modes/butterfly.js
@@ -48530,6 +48743,7 @@ __m_modes_butterfly_js.mergeButterflyIncremental = mergeButterflyIncremental;
 __m_modes_butterfly_js.BUTTERFLY_PRIMARY_AXES = BUTTERFLY_PRIMARY_AXES;
 }
 
+
 function __init_modes_cabinet_js() {
 // MODULE: modes/cabinet.js
 const core_constants = __m_core_constants_js;
@@ -48633,6 +48847,7 @@ __m_modes_cabinet_js.cabinetObjectArt = cabinetObjectArt;
 __m_modes_cabinet_js.renderCabinet = renderCabinet;
 __m_modes_cabinet_js.projectCabinetProgress = projectCabinetProgress;
 }
+
 
 function __init_modes_calendarBasics_js() {
 // MODULE: modes/calendarBasics.js
@@ -49429,6 +49644,7 @@ __m_modes_calendarBasics_js.HOLIDAY_CARD_STROKES = HOLIDAY_CARD_STROKES;
 __m_modes_calendarBasics_js.HOLIDAY_CARD_FLOWS = HOLIDAY_CARD_FLOWS;
 }
 
+
 function __init_modes_calendarData_js() {
 // MODULE: modes/calendarData.js
 const core_constants = __m_core_constants_js;
@@ -49898,6 +50114,7 @@ __m_modes_calendarData_js.normalizeCalendar = normalizeCalendar;
 __m_modes_calendarData_js.projectCalendarProgress = projectCalendarProgress;
 }
 
+
 function __init_modes_calendar_js() {
 // MODULE: modes/calendar.js
 const split_calendarBasics = __m_modes_calendarBasics_js;
@@ -49978,6 +50195,7 @@ __m_modes_calendar_js.mergeCalendarRefresh = mergeCalendarRefresh;
 __m_modes_calendar_js.normalizeCalendar = normalizeCalendar;
 __m_modes_calendar_js.projectCalendarProgress = projectCalendarProgress;
 }
+
 
 function __init_modes_characterProfile_js() {
 // MODULE: modes/characterProfile.js
@@ -50608,6 +50826,7 @@ __m_modes_characterProfile_js.RELATION_LAYERS = RELATION_LAYERS;
 __m_modes_characterProfile_js.RELATION_STATES = RELATION_STATES;
 }
 
+
 function __init_modes_endingData_js() {
 // MODULE: modes/endingData.js
 const cg_visual = __m_core_cgVisualRules_js;
@@ -51212,6 +51431,7 @@ __m_modes_endingData_js.ENDING_CONFESSION_HINT_RE = ENDING_CONFESSION_HINT_RE;
 __m_modes_endingData_js.ENDING_EASTER_EGG_MODULES = ENDING_EASTER_EGG_MODULES;
 }
 
+
 function __init_modes_endingGeneration_js() {
 // MODULE: modes/endingGeneration.js
 const cg_visual = __m_core_cgVisualRules_js;
@@ -51599,6 +51819,7 @@ __m_modes_endingGeneration_js.mergeEndingIncremental = mergeEndingIncremental;
 __m_modes_endingGeneration_js.normalizeEnding = normalizeEnding;
 }
 
+
 function __init_modes_ending_js() {
 // MODULE: modes/ending.js
 const split_endingData = __m_modes_endingData_js;
@@ -51662,6 +51883,7 @@ __m_modes_ending_js.generateEndingWithRepair = generateEndingWithRepair;
 __m_modes_ending_js.normalizeEndingConfessionReplays = normalizeEndingConfessionReplays;
 __m_modes_ending_js.normalizeEnding = normalizeEnding;
 }
+
 
 function __init_modes_heartData_js() {
 // MODULE: modes/heartData.js
@@ -52461,6 +52683,7 @@ __m_modes_heartData_js.normalizeHeartPhotoshoots = normalizeHeartPhotoshoots;
 __m_modes_heartData_js.normalizeHeart = normalizeHeart;
 }
 
+
 function __init_modes_heartPrompts_js() {
 // MODULE: modes/heartPrompts.js
 const core_constants = __m_core_constants_js;
@@ -52765,6 +52988,7 @@ __m_modes_heartPrompts_js.categoryLanguagePrompt = categoryLanguagePrompt;
 __m_modes_heartPrompts_js.partsDialoguesReady = partsDialoguesReady;
 __m_modes_heartPrompts_js.heartSeasonRequestBase = heartSeasonRequestBase;
 }
+
 
 function __init_modes_heartRuntime_js() {
 // MODULE: modes/heartRuntime.js
@@ -53339,6 +53563,7 @@ __m_modes_heartRuntime_js.nextHeartDramaBatchId = nextHeartDramaBatchId;
 __m_modes_heartRuntime_js.HEART_REGENERATION_PAGES = HEART_REGENERATION_PAGES;
 }
 
+
 function __init_modes_heartGeneration_js() {
 // MODULE: modes/heartGeneration.js
 const archive_library = __m_archive_library_js;
@@ -53401,6 +53626,10 @@ const recoveryStopsHeart = __m_modes_heartRuntime_js.recoveryStopsHeart;
 const refreshHeartArchiveTarget = __m_modes_heartRuntime_js.refreshHeartArchiveTarget;
 const runOrdinaryHeartLogicalTask = __m_modes_heartRuntime_js.runOrdinaryHeartLogicalTask;
 const startHeartRecovery = __m_modes_heartRuntime_js.startHeartRecovery;
+
+
+
+
 
 
 
@@ -53538,12 +53767,24 @@ async function regenerateHeartPage(page, options = {}) {
     }
 }
 
+// 温馨小番外：沿用日常一格的格式与图片约束，只换掉“由新增档案触发”的要求。
+function heartFreeStripPrompt(context, memoryBank, base) {
+    const existing = (Array.isArray(base?.dailyStrips) ? base.dailyStrips : []).slice(-60).map(item => ({ title: item.title, subtitle: item.subtitle }));
+    return `${heartStripsPrompt(context, memoryBank, base, null, null)}
+【这一次是温馨小番外】
+不需要对应新增记忆，不复述已发生的事件，也不当作已经发生的事实；按两人的人设、关系现状和世界观，写一段日常里可能发生的轻松、温暖的小片段，可以是季节、天气、吃饭、散步、一起发呆这类小事。
+避免与下列已有日常一格的标题和梗重复：${JSON.stringify(existing)}
+只输出 JSON。`;
+}
+
 async function generateHeartSection(part, options = {}) {
     if (heartParticipantRegeneration(options)) return regenerateHeartPage(part === 'seasons' ? runtimeState.activeSession?.selectedSeason || 'postending' : part, options);
     const sourceSession = options.backgroundTarget?.session || runtimeState.activeSession;
     if (!sourceSession || sourceSession.kind !== core_constants.MODE.HEART) return;
     if (part === 'seasons') return generateHeartSeasonSection(sourceSession.selectedSeason || 'postending', options);
     if (part === 'fireflies') return generateHeartFirefliesSection(options);
+    // 温馨小番外：不需要新增记忆，也不消耗“从新增档案追加”的进度。
+    if (part === 'strips-free') { part = 'strips'; options = { ...options, freeStrip: true }; }
     if (!['dialogues', 'strips'].includes(part)) return;
     return runOrdinaryHeartLogicalTask(part === 'dialogues' ? 'language' : part, options,
         logicalTask => generateHeartSectionOperation(part, options, logicalTask));
@@ -53554,6 +53795,7 @@ async function generateHeartSectionOperation(part, options, logicalTask) {
     let resumeFull = options.existing?.operation?.dialogueMode === 'full';
     let category = languageCategory(options.existing?.operation?.languageCategory || options.languageCategory);
     if (!normalizedPart) return;
+    const freeStrip = normalizedPart === 'strips' && (options.freeStrip === true || options.existing?.operation?.freeStrip === true);
     const targetHint = heartPreparationTargetHint();
     let targetRuntime;
     try { targetRuntime = await prepareHeartSubtaskRuntime(`part:${normalizedPart}`, logicalTask, options.backgroundTarget); }
@@ -53586,7 +53828,7 @@ async function generateHeartSectionOperation(part, options, logicalTask) {
     let sourceMemoryIds = core_incremental.derivedExpansionMemoryIds(base, memoryBank, normalizedPart);
     let fullDialogues = normalizedPart === 'dialogues'
         && (options.replaceDialogues === true || resumeFull || !partsDialoguesReady(base));
-    if (!sourceMemoryIds.length && !fullDialogues) {
+    if (!sourceMemoryIds.length && !fullDialogues && !freeStrip) {
         await clearCommittedHeartRecovery(targetRuntime, base, { kind: 'heart-section', part: normalizedPart });
         globalThis.toastr?.info?.(heartTargetMessage(targetRuntime, `当前档案没有尚未用于${normalizedPart === 'dialogues' ? '基础语言' : '日常一格'}的新记忆。`), '心迹回廊');
         return;
@@ -53608,7 +53850,7 @@ async function generateHeartSectionOperation(part, options, logicalTask) {
     sourceMemoryIds = core_incremental.derivedExpansionMemoryIds(base, memoryBank, normalizedPart);
     fullDialogues = normalizedPart === 'dialogues'
         && (options.replaceDialogues === true || resumeFull || !partsDialoguesReady(base));
-    if (!sourceMemoryIds.length && !fullDialogues) {
+    if (!sourceMemoryIds.length && !fullDialogues && !freeStrip) {
         await clearCommittedHeartRecovery(targetRuntime, base, { kind: 'heart-section', part: normalizedPart });
         globalThis.toastr?.info?.(heartTargetMessage(targetRuntime, '另一项较新的任务已经覆盖这些新增记忆，本次没有重复生成。'), '心迹回廊');
         runtimeState.activeModeBuildScopes.delete(taskKey);
@@ -53619,7 +53861,7 @@ async function generateHeartSectionOperation(part, options, logicalTask) {
         globalThis.toastr?.info?.('基础语言已被另一任务更新，请重新确认；旧内容保留。', '心迹回廊');
         return;
     }
-    const coverage = {
+    const coverage = freeStrip ? { revisit: true } : {
         revisit: !!base && !core_incremental.incrementalArchiveMemoryIds(base, memoryBank, normalizedPart).length,
         coveragePart: normalizedPart,
         sourceMemoryIds,
@@ -53629,7 +53871,7 @@ async function generateHeartSectionOperation(part, options, logicalTask) {
     origin = targetRuntime.origin;
     core_requestCoordinator.refreshConcurrentTaskUi(core_constants.MODE.HEART, origin);
     try {
-        const recovery = await startHeartRecovery(targetRuntime, { kind: 'heart-section', part: normalizedPart, ...(normalizedPart === 'dialogues' ? { dialogueMode: fullDialogues ? 'full' : 'increment', ...(category ? { languageCategory: category } : {}) } : {}) }, options);
+        const recovery = await startHeartRecovery(targetRuntime, { kind: 'heart-section', part: normalizedPart, ...(freeStrip ? { freeStrip: true } : {}), ...(normalizedPart === 'dialogues' ? { dialogueMode: fullDialogues ? 'full' : 'increment', ...(category ? { languageCategory: category } : {}) } : {}) }, options);
         context = recovery.contentContext; memoryBank = recovery.contentBank;
         base = recovery.contentInputs?.baseSession || base;
         let persisted;
@@ -53659,13 +53901,14 @@ async function generateHeartSectionOperation(part, options, logicalTask) {
             }
         } else {
             const batch = await requestHeartPart(
-                heartStripsPrompt(context, memoryBank, base, base, sourceMemoryIds) + core_incremental.derivedExpansionDirective(base, memoryBank, 'strips'),
-                '角色互动 · 追加日常一格',
+                freeStrip ? heartFreeStripPrompt(context, memoryBank, base)
+                    : heartStripsPrompt(context, memoryBank, base, base, sourceMemoryIds) + core_incremental.derivedExpansionDirective(base, memoryBank, 'strips'),
+                freeStrip ? '角色互动 · 温馨小番外' : '角色互动 · 追加日常一格',
                 { maxTokens: 5000, context, origin, taskKey: `${taskKey}:strips`, mode: core_constants.MODE.HEART, background: true },
                 raw => normalizeHeartCollectionBatch(raw, 'strips'),
             );
-            const batchId = core_incremental.incrementalBatchId('strips', sourceMemoryIds);
-            const enriched = batch.items.map(item => ({ ...item, sourceArchiveMemoryIds: sourceMemoryIds, incrementBatchId: batchId, generatedAt: Date.now() }));
+            const batchId = freeStrip ? `free:${Date.now().toString(36)}` : core_incremental.incrementalBatchId('strips', sourceMemoryIds);
+            const enriched = batch.items.map(item => ({ ...item, sourceArchiveMemoryIds: freeStrip ? [] : sourceMemoryIds, incrementBatchId: batchId, ...(freeStrip ? { freeStrip: true } : {}), generatedAt: Date.now() }));
             persisted = await persistHeartPartialPatch('strips', { type: 'strips', dailyStrips: enriched, rejectedCount: batch.rejectedCount, ...coverage }, base, memoryBank, origin, expectedChatId, expectedArchiveRevision, targetRuntime);
         }
         await finishHeartRecovery(targetRuntime, persisted?.committed);
@@ -54057,7 +54300,6 @@ async function generateHeartSeasonSectionOperation(normalizedSeason, options, lo
         refreshHeartArchiveTarget(targetRuntime);
     }
 }
-
 __m_modes_heartGeneration_js.regenerateHeartPage = regenerateHeartPage;
 __m_modes_heartGeneration_js.generateHeartSection = generateHeartSection;
 __m_modes_heartGeneration_js.generateHeartFirefliesSection = generateHeartFirefliesSection;
@@ -54195,6 +54437,7 @@ __m_modes_heart_js.normalizeHeartScript = normalizeHeartScript;
 __m_modes_heart_js.normalizeHeartPhotoshoots = normalizeHeartPhotoshoots;
 __m_modes_heart_js.normalizeHeart = normalizeHeart;
 }
+
 
 function __init_modes_inbox_js() {
 // MODULE: modes/inbox.js
@@ -54498,6 +54741,7 @@ __m_modes_inbox_js.projectInboxProgress = projectInboxProgress;
 __m_modes_inbox_js.postcardInboxItem = postcardInboxItem;
 __m_modes_inbox_js.INBOX_VERSION = INBOX_VERSION;
 }
+
 
 function __init_modes_items_js() {
 // MODULE: modes/items.js
@@ -54973,6 +55217,7 @@ __m_modes_items_js.itemsSelectNode = itemsSelectNode;
 __m_modes_items_js.itemsOpenSelected = itemsOpenSelected;
 __m_modes_items_js.itemsBack = itemsBack;
 }
+
 
 function __init_modes_pastLives_js() {
 // MODULE: modes/pastLives.js
@@ -55479,6 +55724,7 @@ __m_modes_pastLives_js.PAST_LIVES_VERSION = PAST_LIVES_VERSION;
 __m_modes_pastLives_js.PAST_LIVES_MODE = PAST_LIVES_MODE;
 }
 
+
 function __init_modes_phoneBasics_js() {
 // MODULE: modes/phoneBasics.js
 const core_constants = __m_core_constants_js;
@@ -55790,6 +56036,7 @@ __m_modes_phoneBasics_js.PHONE_DEVICE_LABEL = PHONE_DEVICE_LABEL;
 __m_modes_phoneBasics_js.PHONE_COMMUNICATION_REPAIR_CONTRACT = PHONE_COMMUNICATION_REPAIR_CONTRACT;
 __m_modes_phoneBasics_js.PHONE_LIFESTYLE_REPAIR_CONTRACT = PHONE_LIFESTYLE_REPAIR_CONTRACT;
 }
+
 
 function __init_modes_phoneEvidence_js() {
 // MODULE: modes/phoneEvidence.js
@@ -56149,6 +56396,7 @@ __m_modes_phoneEvidence_js.phoneSpeaksAsUser = phoneSpeaksAsUser;
 __m_modes_phoneEvidence_js.phoneInferredEntryAllowed = phoneInferredEntryAllowed;
 __m_modes_phoneEvidence_js.phoneEntryBasis = phoneEntryBasis;
 }
+
 
 function __init_modes_phoneData_js() {
 // MODULE: modes/phoneData.js
@@ -56854,6 +57102,7 @@ __m_modes_phoneData_js.mergePhoneMissingEntries = mergePhoneMissingEntries;
 __m_modes_phoneData_js.normalizePhone = normalizePhone;
 }
 
+
 function __init_modes_phoneIncrement_js() {
 // MODULE: modes/phoneIncrement.js
 const core_constants = __m_core_constants_js;
@@ -57030,6 +57279,7 @@ __m_modes_phoneIncrement_js.phoneEntryKey = phoneEntryKey;
 __m_modes_phoneIncrement_js.mergePhoneIncremental = mergePhoneIncremental;
 }
 
+
 function __init_modes_phonePrompts_js() {
 // MODULE: modes/phonePrompts.js
 const core_constants = __m_core_constants_js;
@@ -57203,6 +57453,7 @@ __m_modes_phonePrompts_js.phoneMissingThreadPlan = phoneMissingThreadPlan;
 __m_modes_phonePrompts_js.compactPhoneExisting = compactPhoneExisting;
 __m_modes_phonePrompts_js.phoneIncrementPlanPrompt = phoneIncrementPlanPrompt;
 }
+
 
 function __init_modes_phoneGeneration_js() {
 // MODULE: modes/phoneGeneration.js
@@ -57464,6 +57715,7 @@ __m_modes_phoneGeneration_js.generatePhoneMissingWithRepair = generatePhoneMissi
 __m_modes_phoneGeneration_js.generatePhoneIncrementalWithRepair = generatePhoneIncrementalWithRepair;
 }
 
+
 function __init_modes_phone_js() {
 // MODULE: modes/phone.js
 const split_phoneBasics = __m_modes_phoneBasics_js;
@@ -57554,6 +57806,7 @@ __m_modes_phone_js.mergePhoneIncremental = mergePhoneIncremental;
 __m_modes_phone_js.generatePhoneIncrementalWithRepair = generatePhoneIncrementalWithRepair;
 __m_modes_phone_js.normalizePhone = normalizePhone;
 }
+
 
 function __init_modes_postcardDesign_js() {
 // MODULE: modes/postcardDesign.js
@@ -57683,6 +57936,7 @@ __m_modes_postcardDesign_js.DESIGN_KINDS = DESIGN_KINDS;
 __m_modes_postcardDesign_js.DESIGN_LAYERS = DESIGN_LAYERS;
 __m_modes_postcardDesign_js.DESIGN_PALETTES = DESIGN_PALETTES;
 }
+
 
 function __init_modes_relationsView_js() {
 // MODULE: modes/relationsView.js
@@ -58126,6 +58380,7 @@ __m_modes_relationsView_js.worldlineDiscoveriesHtml = worldlineDiscoveriesHtml;
 __m_modes_relationsView_js.renderRelations = renderRelations;
 }
 
+
 function __init_modes_relations_js() {
 // MODULE: modes/relations.js
 const split_characterProfile = __m_modes_characterProfile_js;
@@ -58196,6 +58451,7 @@ __m_modes_relations_js.characterProfileHtml = characterProfileHtml;
 __m_modes_relations_js.worldlineDiscoveriesHtml = worldlineDiscoveriesHtml;
 __m_modes_relations_js.renderRelations = renderRelations;
 }
+
 
 function __init_modes_roomFigureLocal_js() {
 // MODULE: modes/roomFigureLocal.js
@@ -58480,6 +58736,7 @@ __m_modes_roomFigureLocal_js.localRoomFigure = localRoomFigure;
 __m_modes_roomFigureLocal_js.roomFigureSources = roomFigureSources;
 }
 
+
 function __init_modes_roomPets_js() {
 // MODULE: modes/roomPets.js
 const core_constants = __m_core_constants_js;
@@ -58648,6 +58905,7 @@ __m_modes_roomPets_js.normalizeRoomPets = normalizeRoomPets;
 __m_modes_roomPets_js.roomRequiredPetSpecies = roomRequiredPetSpecies;
 __m_modes_roomPets_js.ROOM_PET_SPECIES = ROOM_PET_SPECIES;
 }
+
 
 function __init_modes_roomProfile_js() {
 // MODULE: modes/roomProfile.js
@@ -58877,6 +59135,7 @@ __m_modes_roomProfile_js.normalizeRoomVisualProfile = normalizeRoomVisualProfile
 __m_modes_roomProfile_js.roomVisualIdentitySeed = roomVisualIdentitySeed;
 __m_modes_roomProfile_js.ROOM_VISUAL_VALUES = ROOM_VISUAL_VALUES;
 }
+
 
 function __init_modes_roomLayout_js() {
 // MODULE: modes/roomLayout.js
@@ -59153,6 +59412,7 @@ __m_modes_roomLayout_js.roomObjectSafeForPresentation = roomObjectSafeForPresent
 __m_modes_roomLayout_js.roomDeepAvailability = roomDeepAvailability;
 }
 
+
 function __init_modes_roomParticipantData_js() {
 // MODULE: modes/roomParticipantData.js
 const core_constants = __m_core_constants_js;
@@ -59242,6 +59502,7 @@ __m_modes_roomParticipantData_js.participantVisualProfile = participantVisualPro
 __m_modes_roomParticipantData_js.normalizeRoomResidents = normalizeRoomResidents;
 __m_modes_roomParticipantData_js.mergeRoomParticipantState = mergeRoomParticipantState;
 }
+
 
 function __init_modes_roomLife_js() {
 // MODULE: modes/roomLife.js
@@ -59663,6 +59924,7 @@ __m_modes_roomLife_js.roomPreservedLifeHtml = roomPreservedLifeHtml;
 __m_modes_roomLife_js.normalizeRoomParticipantsLifePlan = normalizeRoomParticipantsLifePlan;
 __m_modes_roomLife_js.roomParticipantSlots = roomParticipantSlots;
 }
+
 
 function __init_modes_roomData_js() {
 // MODULE: modes/roomData.js
@@ -60411,6 +60673,7 @@ __m_modes_roomData_js.mergeRoomIncremental = mergeRoomIncremental;
 __m_modes_roomData_js.preserveRoomLinkedContent = preserveRoomLinkedContent;
 }
 
+
 function __init_modes_roomRender_js() {
 // MODULE: modes/roomRender.js
 const archive_library = __m_archive_library_js;
@@ -61104,6 +61367,7 @@ __m_modes_roomRender_js.roomSelectParticipant = roomSelectParticipant;
 __m_modes_roomRender_js.renderRoomParticipants = renderRoomParticipants;
 }
 
+
 function __init_modes_room_js() {
 // MODULE: modes/room.js
 const split_roomProfile = __m_modes_roomProfile_js;
@@ -61273,6 +61537,7 @@ __m_modes_room_js.roomSelectParticipant = roomSelectParticipant;
 __m_modes_room_js.renderRoomParticipants = renderRoomParticipants;
 }
 
+
 function __init_modes_themeSong_js() {
 // MODULE: modes/themeSong.js
 const contract = __m_core_themeSongContract_js;
@@ -61441,6 +61706,7 @@ __m_modes_themeSong_js.normalizeGeneratedSong = normalizeGeneratedSong;
 __m_modes_themeSong_js.projectThemeSongProgress = projectThemeSongProgress;
 __m_modes_themeSong_js.readableThemeSongProgressSession = readableThemeSongProgressSession;
 }
+
 
 function __init_modes_timeStories_js() {
 // MODULE: modes/timeStories.js
@@ -61691,6 +61957,7 @@ __m_modes_timeStories_js.timeStoryPrompt = timeStoryPrompt;
 __m_modes_timeStories_js.projectTimeStoriesProgress = projectTimeStoriesProgress;
 __m_modes_timeStories_js.readableTimeStoriesProgressSession = readableTimeStoriesProgressSession;
 }
+
 
 function __init_modes_travelScenes_js() {
 // MODULE: modes/travelScenes.js
@@ -62206,6 +62473,7 @@ __m_modes_travelScenes_js.NEAR_MARKER_POSITIONS = NEAR_MARKER_POSITIONS;
 __m_modes_travelScenes_js.FAR_MARKER_POSITIONS = FAR_MARKER_POSITIONS;
 }
 
+
 function __init_modes_travelGeneration_js() {
 // MODULE: modes/travelGeneration.js
 const postcard_design = __m_modes_postcardDesign_js;
@@ -62495,6 +62763,7 @@ __m_modes_travelGeneration_js.travelMarkerPosition = travelMarkerPosition;
 __m_modes_travelGeneration_js.travelMarkerPositions = travelMarkerPositions;
 }
 
+
 function __init_modes_travel_js() {
 // MODULE: modes/travel.js
 const split_travelScenes = __m_modes_travelScenes_js;
@@ -62546,6 +62815,7 @@ __m_modes_travel_js.generateTravelWithRepair = generateTravelWithRepair;
 __m_modes_travel_js.travelMarkerPosition = travelMarkerPosition;
 __m_modes_travel_js.travelMarkerPositions = travelMarkerPositions;
 }
+
 
 function __init_ui_advEventView_js() {
 // MODULE: ui/advEventView.js
@@ -62672,6 +62942,7 @@ __m_ui_advEventView_js.advEventStep = advEventStep;
 __m_ui_advEventView_js.advStep = advStep;
 }
 
+
 function __init_ui_advancedGenerationUi_js() {
 // MODULE: ui/advancedGenerationUi.js
 const advanced = __m_core_advancedGeneration_js;
@@ -62738,6 +63009,7 @@ __m_ui_advancedGenerationUi_js.advancedGenerationHtml = advancedGenerationHtml;
 __m_ui_advancedGenerationUi_js.bindAdvancedGenerationUi = bindAdvancedGenerationUi;
 }
 
+
 function __init_ui_albumCategory_js() {
 // MODULE: ui/albumCategory.js
 
@@ -62763,6 +63035,7 @@ __m_ui_albumCategory_js.albumIsPrivate = albumIsPrivate;
 __m_ui_albumCategory_js.albumDisplayCategory = albumDisplayCategory;
 __m_ui_albumCategory_js.ALBUM_DISPLAY_CATEGORIES = ALBUM_DISPLAY_CATEGORIES;
 }
+
 
 function __init_ui_albumView_js() {
 // MODULE: ui/albumView.js
@@ -63085,6 +63358,7 @@ __m_ui_albumView_js.albumSpeakerSnapshot = albumSpeakerSnapshot;
 __m_ui_albumView_js.renderSharedMemory = renderSharedMemory;
 }
 
+
 function __init_ui_archiveAvatars_js() {
 // MODULE: ui/archiveAvatars.js
 
@@ -63172,6 +63446,7 @@ __m_ui_archiveAvatars_js.personaAvatarUrl = personaAvatarUrl;
 __m_ui_archiveAvatars_js.archiveUserAvatar = archiveUserAvatar;
 }
 
+
 function __init_ui_archiveInheritance_js() {
 // MODULE: ui/archiveInheritance.js
 const archive_inheritance = __m_archive_inheritance_js;
@@ -63234,6 +63509,7 @@ __m_ui_archiveInheritance_js.archiveInheritancePickerHtml = archiveInheritancePi
 __m_ui_archiveInheritance_js.archiveInheritancePreviewHtml = archiveInheritancePreviewHtml;
 __m_ui_archiveInheritance_js.clearArchiveInheritancePreview = clearArchiveInheritancePreview;
 }
+
 
 function __init_ui_archivePortal_js() {
 // MODULE: ui/archivePortal.js
@@ -63620,6 +63896,7 @@ __m_ui_archivePortal_js.scheduleMounts = scheduleMounts;
 __m_ui_archivePortal_js.showHome = showHome;
 }
 
+
 function __init_ui_autoMemoryCountdown_js() {
 // MODULE: ui/autoMemoryCountdown.js
 const auto_memory_floor = __m_autoMemory_floorPace_js;
@@ -63657,6 +63934,7 @@ function refreshAutoMemoryCountdown() {
 
 __m_ui_autoMemoryCountdown_js.refreshAutoMemoryCountdown = refreshAutoMemoryCountdown;
 }
+
 
 function __init_ui_autoMemoryShell_js() {
 // MODULE: ui/autoMemoryShell.js
@@ -64466,6 +64744,7 @@ __m_ui_autoMemoryShell_js.stopAutoMemoryShell = stopAutoMemoryShell;
 __m_ui_autoMemoryShell_js.startAutoMemoryShell = startAutoMemoryShell;
 }
 
+
 function __init_ui_autoMemoryWizard_js() {
 // MODULE: ui/autoMemoryWizard.js
 const archive_external = __m_archive_externalMemory_js;
@@ -65262,6 +65541,7 @@ function openAutoMemoryWizard() {
 __m_ui_autoMemoryWizard_js.openAutoMemoryWizard = openAutoMemoryWizard;
 }
 
+
 function __init_ui_autoMemoryWizardStyles_js() {
 // MODULE: ui/autoMemoryWizardStyles.js
 
@@ -65330,6 +65610,7 @@ ${root} [data-rmt-auto-memory-root] :is(button,input,select,summary):focus-visib
 
 __m_ui_autoMemoryWizardStyles_js.wizardCss = wizardCss;
 }
+
 
 function __init_ui_bedtimeView_js() {
 // MODULE: ui/bedtimeView.js
@@ -65533,6 +65814,7 @@ __m_ui_bedtimeView_js.closeBedtimeDetail = closeBedtimeDetail;
 __m_ui_bedtimeView_js.bedtimeCss = bedtimeCss;
 }
 
+
 function __init_ui_butterflyView_js() {
 // MODULE: ui/butterflyView.js
 const expanded_cg_view = __m_ui_expandedCgView_js;
@@ -65622,6 +65904,7 @@ function selectButterflyNode(index) {
 __m_ui_butterflyView_js.renderButterfly = renderButterfly;
 __m_ui_butterflyView_js.selectButterflyNode = selectButterflyNode;
 }
+
 
 function __init_ui_calendarPrint_js() {
 // MODULE: ui/calendarPrint.js
@@ -65788,6 +66071,7 @@ __m_ui_calendarPrint_js.waitForCalendarPrintAssets = waitForCalendarPrintAssets;
 __m_ui_calendarPrint_js.printCalendarSelection = printCalendarSelection;
 __m_ui_calendarPrint_js.CALENDAR_PRINT_BLOCKS = CALENDAR_PRINT_BLOCKS;
 }
+
 
 function __init_ui_calendarView_js() {
 // MODULE: ui/calendarView.js
@@ -66434,6 +66718,7 @@ __m_ui_calendarView_js.selectCalendarPending = selectCalendarPending;
 __m_ui_calendarView_js.renderCalendar = renderCalendar;
 }
 
+
 function __init_ui_cgFormatControl_js() {
 // MODULE: ui/cgFormatControl.js
 const settings = __m_core_settings_js;
@@ -66468,6 +66753,7 @@ __m_ui_cgFormatControl_js.cgFormatVisible = cgFormatVisible;
 __m_ui_cgFormatControl_js.mountCgFormatControl = mountCgFormatControl;
 __m_ui_cgFormatControl_js.handleCgFormatChange = handleCgFormatChange;
 }
+
 
 function __init_ui_cgImageViewer_js() {
 // MODULE: ui/cgImageViewer.js
@@ -66644,6 +66930,7 @@ __m_ui_cgImageViewer_js.hasCgImageViewer = hasCgImageViewer;
 __m_ui_cgImageViewer_js.closeCgImageViewer = closeCgImageViewer;
 __m_ui_cgImageViewer_js.openCgImageViewer = openCgImageViewer;
 }
+
 
 function __init_ui_cgPromptEditor_js() {
 // MODULE: ui/cgPromptEditor.js
@@ -67208,6 +67495,7 @@ __m_ui_cgPromptEditor_js.closeCgPromptEditor = closeCgPromptEditor;
 __m_ui_cgPromptEditor_js.openCgPromptEditor = openCgPromptEditor;
 }
 
+
 function __init_ui_chatFloorNav_js() {
 // MODULE: ui/chatFloorNav.js
 
@@ -67267,6 +67555,7 @@ __m_ui_chatFloorNav_js.writesMessageText = writesMessageText;
 __m_ui_chatFloorNav_js.highlightFloor = highlightFloor;
 __m_ui_chatFloorNav_js.displayedMesid = displayedMesid;
 }
+
 
 function __init_ui_contentManager_js() {
 // MODULE: ui/contentManager.js
@@ -67824,6 +68113,7 @@ __m_ui_contentManager_js.managementTargetsForSession = managementTargetsForSessi
 __m_ui_contentManager_js.renderContentManager = renderContentManager;
 }
 
+
 function __init_ui_css_butterflyAlbumAdvCss_js() {
 // MODULE: ui/css/butterflyAlbumAdvCss.js
 
@@ -68063,6 +68353,7 @@ function butterflyAlbumAdvCss() {
 __m_ui_css_butterflyAlbumAdvCss_js.butterflyAlbumAdvCss = butterflyAlbumAdvCss;
 }
 
+
 function __init_ui_css_calendarCss_js() {
 // MODULE: ui/css/calendarCss.js
 
@@ -68105,6 +68396,7 @@ function calendarCss() {
 
 __m_ui_css_calendarCss_js.calendarCss = calendarCss;
 }
+
 
 function __init_ui_css_heartProfileTravelCss_js() {
 // MODULE: ui/css/heartProfileTravelCss.js
@@ -68173,6 +68465,7 @@ function heartProfileTravelCss() {
 
 __m_ui_css_heartProfileTravelCss_js.heartProfileTravelCss = heartProfileTravelCss;
 }
+
 
 function __init_ui_css_overlayShellCss_js() {
 // MODULE: ui/css/overlayShellCss.js
@@ -68390,6 +68683,7 @@ button.rmt-task-state{cursor:pointer}
 __m_ui_css_overlayShellCss_js.overlayShellCss = overlayShellCss;
 }
 
+
 function __init_ui_css_phoneMobileCss_js() {
 // MODULE: ui/css/phoneMobileCss.js
 const core_constants = __m_core_constants_js;
@@ -68547,6 +68841,7 @@ function phoneMobileCss() {
 
 __m_ui_css_phoneMobileCss_js.phoneMobileCss = phoneMobileCss;
 }
+
 
 function __init_ui_css_roomCss_js() {
 // MODULE: ui/css/roomCss.js
@@ -68758,6 +69053,7 @@ function roomCss() {
 __m_ui_css_roomCss_js.roomCss = roomCss;
 }
 
+
 function __init_ui_css_roomMotifsItemsCss_js() {
 // MODULE: ui/css/roomMotifsItemsCss.js
 const core_constants = __m_core_constants_js;
@@ -68869,6 +69165,7 @@ function roomMotifsItemsCss() {
 
 __m_ui_css_roomMotifsItemsCss_js.roomMotifsItemsCss = roomMotifsItemsCss;
 }
+
 
 function __init_ui_endingView_js() {
 // MODULE: ui/endingView.js
@@ -69404,6 +69701,7 @@ __m_ui_endingView_js.endingConfessionStep = endingConfessionStep;
 __m_ui_endingView_js.replayEndingConfession = replayEndingConfession;
 }
 
+
 function __init_ui_expandedCgView_js() {
 // MODULE: ui/expandedCgView.js
 const targets = __m_core_cgTargets_js;
@@ -69496,6 +69794,7 @@ __m_ui_expandedCgView_js.expandedCgButtonsHtml = expandedCgButtonsHtml;
 __m_ui_expandedCgView_js.handleExpandedCgButton = handleExpandedCgButton;
 __m_ui_expandedCgView_js.expandedCgBackdropHtml = expandedCgBackdropHtml;
 }
+
 
 function __init_ui_floatingArchive_js() {
 // MODULE: ui/floatingArchive.js
@@ -69682,6 +69981,7 @@ __m_ui_floatingArchive_js.initFloatingArchive = initFloatingArchive;
 __m_ui_floatingArchive_js.destroyFloatingArchive = destroyFloatingArchive;
 }
 
+
 function __init_ui_floatingAvatarButton_js() {
 // MODULE: ui/floatingAvatarButton.js
 
@@ -69795,6 +70095,7 @@ function createFloatingAvatarButton({ onOpen, onMove, position = null } = {}) {
 __m_ui_floatingAvatarButton_js.createFloatingAvatarButton = createFloatingAvatarButton;
 }
 
+
 function __init_ui_generationCompletion_js() {
 // MODULE: ui/generationCompletion.js
 const core_text = __m_core_text_js;
@@ -69848,6 +70149,7 @@ __m_ui_generationCompletion_js.generationCompletionHtml = generationCompletionHt
 __m_ui_generationCompletion_js.countPendingGenerationItems = countPendingGenerationItems;
 }
 
+
 function __init_ui_generationStatus_js() {
 // MODULE: ui/generationStatus.js
 const cache = __m_core_cache_js;
@@ -69880,6 +70182,7 @@ __m_ui_generationStatus_js.currentPendingRows = currentPendingRows;
 __m_ui_generationStatus_js.currentUnattributedPendingRows = currentUnattributedPendingRows;
 __m_ui_generationStatus_js.routeGenerationStatus = routeGenerationStatus;
 }
+
 
 function __init_ui_handJournalView_js() {
 // MODULE: ui/handJournalView.js
@@ -70161,6 +70464,7 @@ __m_ui_handJournalView_js.journalPageHtml = journalPageHtml;
 __m_ui_handJournalView_js.journalPaletteControls = journalPaletteControls;
 }
 
+
 function __init_ui_heartEnvelope_js() {
 // MODULE: ui/heartEnvelope.js
 const core_constants = __m_core_constants_js;
@@ -70318,6 +70622,7 @@ __m_ui_heartEnvelope_js.paintEnvelopePicker = paintEnvelopePicker;
 __m_ui_heartEnvelope_js.heartEnvelopePickerCss = heartEnvelopePickerCss;
 }
 
+
 function __init_ui_heartReaderState_js() {
 // MODULE: ui/heartReaderState.js
 const context = __m_core_context_js;
@@ -70406,6 +70711,7 @@ __m_ui_heartReaderState_js.clearHeartReaderPositions = clearHeartReaderPositions
 __m_ui_heartReaderState_js.enterHeartReader = enterHeartReader;
 }
 
+
 function __init_ui_heartView_js() {
 // MODULE: ui/heartView.js
 const expanded_cg_view = __m_ui_expandedCgView_js;
@@ -70446,6 +70752,16 @@ const runtimeState = __m_core_state_js.state;
 
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -70928,7 +71244,7 @@ function renderHeart() {
                 const label = legacyCount ? `升级旧版萤火虫（${legacyCount}）` : session.fireflyVoices?.length ? '解锁新的萤火虫' : '点亮萤火虫栖息地';
                 return `<button type="button" class="rmt-btn" data-rmt-action="heart-generate-part" data-rmt-heart-part="fireflies">${core_text.esc(label)}</button>`;
             })()
-            : `<button type="button" class="rmt-btn" data-rmt-action="heart-generate-part" data-rmt-heart-part="strips">${parts.strips ? '从新增档案追加日常一格' : '生成日常一格'}</button>`;
+            : `<button type="button" class="rmt-btn" data-rmt-action="heart-generate-part" data-rmt-heart-part="strips">${parts.strips ? '从新增档案追加日常一格' : '生成日常一格'}</button><button type="button" class="rmt-btn" data-rmt-action="heart-generate-part" data-rmt-heart-part="strips-free" title="不需要新记忆，按人设和关系写一段温馨小番外">追加日常一格</button>`;
     const rejected = core_heartLanguage.heartCollectionIssues(session)[view] || 0;
     const retryItems = !canGenerateDerived || !rejected ? '' : `<details class="rmt-heart-language"><summary>最近一次有 ${rejected} 条未通过校验</summary><p>已有内容照常阅读；不会自动补数。</p><button type="button" class="rmt-btn" data-rmt-action="heart-generate-part" data-rmt-heart-part="${view}">重试未完成条目</button></details>`;
     const topActions = `<div class="rmt-heart-top-actions">${generationButton}</div>${retryItems}`;
@@ -71014,10 +71330,6 @@ function renderHeart() {
     ui_overlay.bodyEl().innerHTML = `<div class="rmt-heart">${recovery_view.readableProgressHtml(session)}${summary}${tabs}${content}</div>`;
     cg_format_ui.mountCgFormatControl(ui_overlay.bodyEl(), 'heart', view === 'strips' ? 'strips' : '', readOnly);
 }
-
-__m_ui_heartView_js.showAvatarDialogueForCharacter = showAvatarDialogueForCharacter;
-__m_ui_heartView_js.drawHeartStripImage = drawHeartStripImage;
-__m_ui_heartView_js.clearHeartStripImage = clearHeartStripImage;
 __m_ui_heartView_js.viewHeartStripImage = viewHeartStripImage;
 __m_ui_heartView_js.heartCharacterAvatarUrl = heartCharacterAvatarUrl;
 __m_ui_heartView_js.heartUserAvatarUrl = heartUserAvatarUrl;
@@ -71026,6 +71338,7 @@ __m_ui_heartView_js.heartMmDd = heartMmDd;
 __m_ui_heartView_js.chooseHeartLine = chooseHeartLine;
 __m_ui_heartView_js.selectHeartGreeting = selectHeartGreeting;
 __m_ui_heartView_js.renderAvatarDialoguePopup = renderAvatarDialoguePopup;
+__m_ui_heartView_js.showAvatarDialogueForCharacter = showAvatarDialogueForCharacter;
 __m_ui_heartView_js.openHeartFromAvatar = openHeartFromAvatar;
 __m_ui_heartView_js.openHeartMode = openHeartMode;
 __m_ui_heartView_js.confirmHeartLanguageReplacement = confirmHeartLanguageReplacement;
@@ -71036,6 +71349,8 @@ __m_ui_heartView_js.selectedHeartScenario = selectedHeartScenario;
 __m_ui_heartView_js.selectedHeartStrip = selectedHeartStrip;
 __m_ui_heartView_js.renderHeartScriptLines = renderHeartScriptLines;
 __m_ui_heartView_js.heartStripImagePrompt = heartStripImagePrompt;
+__m_ui_heartView_js.drawHeartStripImage = drawHeartStripImage;
+__m_ui_heartView_js.clearHeartStripImage = clearHeartStripImage;
 __m_ui_heartView_js.heartSetView = heartSetView;
 __m_ui_heartView_js.heartSetSeason = heartSetSeason;
 __m_ui_heartView_js.heartSelectVoice = heartSelectVoice;
@@ -71191,6 +71506,7 @@ __m_ui_homeView_js.showHome = showHome;
 __m_ui_homeView_js.mountHomeDiagnostics = mountHomeDiagnostics;
 }
 
+
 function __init_ui_imageMenu_js() {
 // MODULE: ui/imageMenu.js
 
@@ -71262,6 +71578,7 @@ __m_ui_imageMenu_js.imageMenuCss = imageMenuCss;
 __m_ui_imageMenu_js.BUNNY_SVG = BUNNY_SVG;
 }
 
+
 function __init_ui_immersionStyles_js() {
 // MODULE: ui/immersionStyles.js
 
@@ -71331,6 +71648,7 @@ ${root} .rmt-phone-conversation .rmt-phone-message p{font-size:16px!important}
 
 __m_ui_immersionStyles_js.immersionCss = immersionCss;
 }
+
 
 function __init_ui_inboxStyles_js() {
 // MODULE: ui/inboxStyles.js
@@ -71419,6 +71737,7 @@ ${root} .rmt-room-person[data-rmt-hair-shape=long] .rmt-room-hair:after{height:8
 
 __m_ui_inboxStyles_js.inboxCss = inboxCss;
 }
+
 
 function __init_ui_inboxView_js() {
 // MODULE: ui/inboxView.js
@@ -71612,6 +71931,7 @@ __m_ui_inboxView_js.renderInbox = renderInbox;
 __m_ui_inboxView_js.assertShownInboxTarget = assertShownInboxTarget;
 }
 
+
 function __init_ui_journalClip_js() {
 // MODULE: ui/journalClip.js
 const journal = __m_core_handJournal_js;
@@ -71663,6 +71983,7 @@ __m_ui_journalClip_js.clipToJournal = clipToJournal;
 __m_ui_journalClip_js.clipModeForKind = clipModeForKind;
 __m_ui_journalClip_js.clipPayload = clipPayload;
 }
+
 
 function __init_ui_journalImage_js() {
 // MODULE: ui/journalImage.js
@@ -71936,6 +72257,7 @@ async function renderJournalPageImage(page, index = 0, { renderIllustration = nu
 __m_ui_journalImage_js.renderJournalPageImage = renderJournalPageImage;
 }
 
+
 function __init_ui_languageView_js() {
 // MODULE: ui/languageView.js
 const cg_targets = __m_core_cgTargets_js;
@@ -72044,6 +72366,7 @@ __m_ui_languageView_js.handleLanguageClick = handleLanguageClick;
 __m_ui_languageView_js.handleLanguageChange = handleLanguageChange;
 }
 
+
 function __init_ui_memoryReveal_js() {
 // MODULE: ui/memoryReveal.js
 const auto_memory_plan = __m_autoMemory_planStore_js;
@@ -72078,6 +72401,7 @@ __m_ui_memoryReveal_js.firstReveal = firstReveal;
 __m_ui_memoryReveal_js.floorMountPlan = floorMountPlan;
 __m_ui_memoryReveal_js.markRevealOpened = markRevealOpened;
 }
+
 
 function __init_ui_mirrorCallView_js() {
 // MODULE: ui/mirrorCallView.js
@@ -72234,6 +72558,7 @@ __m_ui_mirrorCallView_js.describeCurrentCall = describeCurrentCall;
 __m_ui_mirrorCallView_js.disposeMirrorCall = disposeMirrorCall;
 __m_ui_mirrorCallView_js.mountMirrorCall = mountMirrorCall;
 }
+
 
 function __init_ui_mirrorTtsReader_js() {
 // MODULE: ui/mirrorTtsReader.js
@@ -72418,6 +72743,7 @@ __m_ui_mirrorTtsReader_js.collectReadingNodes = collectReadingNodes;
 __m_ui_mirrorTtsReader_js.disposeMirrorReader = disposeMirrorReader;
 __m_ui_mirrorTtsReader_js.mountMirrorReader = mountMirrorReader;
 }
+
 
 function __init_ui_navigationBookmark_js() {
 // MODULE: ui/navigationBookmark.js
@@ -72647,6 +72973,7 @@ __m_ui_navigationBookmark_js.restoreReadingPosition = restoreReadingPosition;
 __m_ui_navigationBookmark_js.hasIndexedReadingPosition = hasIndexedReadingPosition;
 __m_ui_navigationBookmark_js.clearReadingPositions = clearReadingPositions;
 }
+
 
 function __init_ui_overlayShell_js() {
 // MODULE: ui/overlayShell.js
@@ -73484,6 +73811,7 @@ __m_ui_overlayShell_js.markUserManaged = markUserManaged;
 __m_ui_overlayShell_js.managedItemFromSession = managedItemFromSession;
 }
 
+
 function __init_ui_overlayManage_js() {
 // MODULE: ui/overlayManage.js
 const archive_library = __m_archive_library_js;
@@ -73756,6 +74084,7 @@ __m_ui_overlayManage_js.recategorizeManagedTarget = recategorizeManagedTarget;
 __m_ui_overlayManage_js.regenerateManagedCategory = regenerateManagedCategory;
 __m_ui_overlayManage_js.refreshMemoryWorldInfoBookControls = refreshMemoryWorldInfoBookControls;
 }
+
 
 function __init_ui_overlayCore_js() {
 // MODULE: ui/overlayCore.js
@@ -74517,6 +74846,7 @@ __m_ui_overlayCore_js.handleOverlayClick = handleOverlayClick;
 __m_ui_overlayCore_js.OVERLAY_CLICK_UNHANDLED = OVERLAY_CLICK_UNHANDLED;
 }
 
+
 function __init_ui_overlayClickActions_js() {
 // MODULE: ui/overlayClickActions.js
 const archive_inheritance_view = __m_ui_archiveInheritance_js;
@@ -74946,6 +75276,7 @@ __m_ui_overlayClickActions_js.overlayArchiveActions = overlayArchiveActions;
 __m_ui_overlayClickActions_js.overlayPageActions = overlayPageActions;
 }
 
+
 function __init_ui_overlayClickTargets_js() {
 // MODULE: ui/overlayClickTargets.js
 const recovery_action = __m_ui_recoveryAction_js;
@@ -75305,6 +75636,7 @@ __m_ui_overlayClickTargets_js.overlayClickRecordTargets = overlayClickRecordTarg
 __m_ui_overlayClickTargets_js.overlayClickPageTargets = overlayClickPageTargets;
 }
 
+
 function __init_ui_overlayPartial_js() {
 // MODULE: ui/overlayPartial.js
 const heart_reader = __m_ui_heartReaderState_js;
@@ -75481,6 +75813,7 @@ __m_ui_overlayPartial_js.openPartialTaskSession = openPartialTaskSession;
 __m_ui_overlayPartial_js.refreshSavedActiveSession = refreshSavedActiveSession;
 }
 
+
 function __init_ui_overlay_js() {
 // MODULE: ui/overlay.js
 const split_overlayShell = __m_ui_overlayShell_js;
@@ -75598,6 +75931,7 @@ __m_ui_overlay_js.renderActive = renderActive;
 __m_ui_overlay_js.handleOverlayClick = handleOverlayClick;
 __m_ui_overlay_js.handleOverlayChange = handleOverlayChange;
 }
+
 
 function __init_ui_participantPicker_js() {
 // MODULE: ui/participantPicker.js
@@ -75970,6 +76304,7 @@ __m_ui_participantPicker_js.showParticipantVersions = showParticipantVersions;
 __m_ui_participantPicker_js.chooseGenerationTaskResult = chooseGenerationTaskResult;
 }
 
+
 function __init_ui_pastLivesCard_css_js() {
 // MODULE: ui/pastLivesCard.css.js
 
@@ -76017,6 +76352,7 @@ ${root} .rmt-lenticular :focus-visible,${root} .rmt-card-picker :focus-visible{o
 
 __m_ui_pastLivesCard_css_js.pastLivesCardCss = pastLivesCardCss;
 }
+
 
 function __init_ui_pastLivesCard_js() {
 // MODULE: ui/pastLivesCard.js
@@ -76246,6 +76582,7 @@ __m_ui_pastLivesCard_js.pastLivesCardHtml = pastLivesCardHtml;
 __m_ui_pastLivesCard_js.bindPastLivesCard = bindPastLivesCard;
 }
 
+
 function __init_ui_pastLivesReading_css_js() {
 // MODULE: ui/pastLivesReading.css.js
 
@@ -76306,6 +76643,7 @@ ${root} .rmt-past-tabs>.rmt-btn{font-size:13px!important}
 
 __m_ui_pastLivesReading_css_js.pastLivesReadingCss = pastLivesReadingCss;
 }
+
 
 function __init_ui_pastLivesView_js() {
 // MODULE: ui/pastLivesView.js
@@ -76586,6 +76924,7 @@ __m_ui_pastLivesView_js.closePastLivesDetail = closePastLivesDetail;
 __m_ui_pastLivesView_js.pastLivesCss = pastLivesCss;
 __m_ui_pastLivesView_js.PAST_LIVES_CSS = PAST_LIVES_CSS;
 }
+
 
 function __init_ui_phoneView_js() {
 // MODULE: ui/phoneView.js
@@ -76984,6 +77323,7 @@ __m_ui_phoneView_js.phoneSelectEntry = phoneSelectEntry;
 __m_ui_phoneView_js.phoneEntryBack = phoneEntryBack;
 }
 
+
 function __init_ui_postcardDesignView_js() {
 // MODULE: ui/postcardDesignView.js
 const design_contract = __m_modes_postcardDesign_js;
@@ -77179,6 +77519,7 @@ __m_ui_postcardDesignView_js.renderPostcardDesignFallback = renderPostcardDesign
 __m_ui_postcardDesignView_js.postcardDesignCss = postcardDesignCss;
 }
 
+
 function __init_ui_readingStyles_js() {
 // MODULE: ui/readingStyles.js
 
@@ -77271,6 +77612,7 @@ ${root} :is(.rmt-memory-scene,.rmt-adv) :is(button,select,summary):focus-visible
 __m_ui_readingStyles_js.readingCss = readingCss;
 }
 
+
 function __init_ui_recoveryAction_js() {
 // MODULE: ui/recoveryAction.js
 const text = __m_core_text_js;
@@ -77301,6 +77643,7 @@ function runRecoveryAction(button, key, operation, { label = '处理中…', tit
 __m_ui_recoveryAction_js.recoveryActionKey = recoveryActionKey;
 __m_ui_recoveryAction_js.runRecoveryAction = runRecoveryAction;
 }
+
 
 function __init_ui_recoveryView_js() {
 // MODULE: ui/recoveryView.js
@@ -77431,6 +77774,7 @@ __m_ui_recoveryView_js.recoveryBannerHtml = recoveryBannerHtml;
 __m_ui_recoveryView_js.archiveRecoveryHtml = archiveRecoveryHtml;
 }
 
+
 function __init_ui_roomInterior_js() {
 // MODULE: ui/roomInterior.js
 const pixelFigure = __m_ui_roomPixelFigure_js;
@@ -77532,6 +77876,7 @@ __m_ui_roomInterior_js.roomArchitectureKind = roomArchitectureKind;
 __m_ui_roomInterior_js.roomArchitectureSvg = roomArchitectureSvg;
 }
 
+
 function __init_ui_roomObjectDrawing_js() {
 // MODULE: ui/roomObjectDrawing.js
 
@@ -77607,6 +77952,7 @@ __m_ui_roomObjectDrawing_js.roomDrawingKind = roomDrawingKind;
 __m_ui_roomObjectDrawing_js.ROOM_OBJECT_DRAWINGS = ROOM_OBJECT_DRAWINGS;
 }
 
+
 function __init_ui_roomPixelFigure_js() {
 // MODULE: ui/roomPixelFigure.js
 
@@ -77677,6 +78023,7 @@ function detailSvg(detail, { rect, hair, skin, coat, x, bodyWidth }) {
 __m_ui_roomPixelFigure_js.pixelFigureSvg = pixelFigureSvg;
 }
 
+
 function __init_ui_routeParticipants_js() {
 // MODULE: ui/routeParticipants.js
 const choices = __m_core_routeParticipants_js;
@@ -77710,6 +78057,7 @@ function handleRoutePeopleChange(event) {
 __m_ui_routeParticipants_js.routePeopleHtml = routePeopleHtml;
 __m_ui_routeParticipants_js.handleRoutePeopleChange = handleRoutePeopleChange;
 }
+
 
 function __init_ui_scenePicker_js() {
 // MODULE: ui/scenePicker.js
@@ -78035,6 +78383,7 @@ __m_ui_scenePicker_js.handleScenePickerEvent = handleScenePickerEvent;
 __m_ui_scenePicker_js.mountScenePicker = mountScenePicker;
 __m_ui_scenePicker_js.refreshScenePicker = refreshScenePicker;
 }
+
 
 function __init_ui_settingsPanelParts_js() {
 // MODULE: ui/settingsPanelParts.js
@@ -78686,6 +79035,7 @@ __m_ui_settingsPanelParts_js.refreshSettingsMemoryStatus = refreshSettingsMemory
 __m_ui_settingsPanelParts_js.SETTINGS_LAUNCHER_ID = SETTINGS_LAUNCHER_ID;
 __m_ui_settingsPanelParts_js.manualAutosaves = manualAutosaves;
 }
+
 
 function __init_ui_settingsPanelHome_js() {
 // MODULE: ui/settingsPanelHome.js
@@ -79854,6 +80204,7 @@ __m_ui_settingsPanelHome_js.SETTINGS_BIND_UNHANDLED = SETTINGS_BIND_UNHANDLED;
 __m_ui_settingsPanelHome_js.SETTINGS_MOUNT_UNHANDLED = SETTINGS_MOUNT_UNHANDLED;
 }
 
+
 function __init_ui_settingsPanel_js() {
 // MODULE: ui/settingsPanel.js
 const split_settingsPanelParts = __m_ui_settingsPanelParts_js;
@@ -79895,6 +80246,7 @@ __m_ui_settingsPanel_js.refreshSettingsTaskStatus = refreshSettingsTaskStatus;
 __m_ui_settingsPanel_js.refreshSettingsMemoryStatus = refreshSettingsMemoryStatus;
 __m_ui_settingsPanel_js.mountSettings = mountSettings;
 }
+
 
 function __init_ui_settingsPanelMarkup_js() {
 // MODULE: ui/settingsPanelMarkup.js
@@ -80100,6 +80452,7 @@ function renderSettingsPanelMarkup(panel) {
 
 __m_ui_settingsPanelMarkup_js.renderSettingsPanelMarkup = renderSettingsPanelMarkup;
 }
+
 
 function __init_ui_styles_js() {
 // MODULE: ui/styles.js
@@ -80522,6 +80875,7 @@ __m_ui_styles_js.ensureSettingsStyles = ensureSettingsStyles;
 __m_ui_styles_js.ensureStyles = ensureStyles;
 __m_ui_styles_js.abstractStyle = abstractStyle;
 }
+
 
 function __init_ui_taskCenter_js() {
 // MODULE: ui/taskCenter.js
@@ -81760,6 +82114,7 @@ __m_ui_taskCenter_js.syncTaskCenterChrome = syncTaskCenterChrome;
 __m_ui_taskCenter_js.handleTaskCenterAction = handleTaskCenterAction;
 }
 
+
 function __init_ui_themeSongStyles_js() {
 // MODULE: ui/themeSongStyles.js
 
@@ -81823,6 +82178,7 @@ ${root} .rmt-song-arrangement:not([open])>p{display:none}
 
 __m_ui_themeSongStyles_js.themeSongCss = themeSongCss;
 }
+
 
 function __init_ui_themeSongView_js() {
 // MODULE: ui/themeSongView.js
@@ -82116,6 +82472,7 @@ __m_ui_themeSongView_js.captureSongComposer = captureSongComposer;
 __m_ui_themeSongView_js.renderThemeSongs = renderThemeSongs;
 }
 
+
 function __init_ui_themeSurfaces_js() {
 // MODULE: ui/themeSurfaces.js
 
@@ -82267,6 +82624,7 @@ ${root} .rmt-easter-seal{border-radius:50%!important;justify-self:center;backgro
 
 __m_ui_themeSurfaces_js.structuralThemeCss = structuralThemeCss;
 }
+
 
 function __init_ui_timeStoriesView_js() {
 // MODULE: ui/timeStoriesView.js
@@ -82514,6 +82872,7 @@ __m_ui_timeStoriesView_js.handleTimeStoryAction = handleTimeStoryAction;
 __m_ui_timeStoriesView_js.timeStoriesCss = timeStoriesCss;
 }
 
+
 function __init_ui_toolbarIcons_js() {
 // MODULE: ui/toolbarIcons.js
 
@@ -82540,6 +82899,7 @@ function toolbarIcon(name) {
 __m_ui_toolbarIcons_js.toolbarIcon = toolbarIcon;
 __m_ui_toolbarIcons_js.TOOLBAR_ICON_NAMES = TOOLBAR_ICON_NAMES;
 }
+
 
 function __init_ui_travelView_js() {
 // MODULE: ui/travelView.js
@@ -83101,6 +83461,7 @@ __m_ui_travelView_js.travelDialogueStep = travelDialogueStep;
 __m_ui_travelView_js.replayTravelDialogue = replayTravelDialogue;
 }
 
+
 function __init_ui_workspace_js() {
 // MODULE: ui/workspace.js
 const routePeople = __m_ui_routeParticipants_js;
@@ -83435,6 +83796,7 @@ __m_ui_workspace_js.handleWorkspaceChange = handleWorkspaceChange;
 __m_ui_workspace_js.openVoiceModule = openVoiceModule;
 }
 
+
 function __init_ui_workspaceState_js() {
 // MODULE: ui/workspaceState.js
 
@@ -83539,6 +83901,7 @@ __m_ui_workspaceState_js.workspaceManagementScope = workspaceManagementScope;
 __m_ui_workspaceState_js.workspace = workspace;
 __m_ui_workspaceState_js.WORKSPACE_ROUTES = WORKSPACE_ROUTES;
 }
+
 
 function __init_ui_archiveRelayView_js() {
 // MODULE: ui/archiveRelayView.js
@@ -83648,6 +84011,7 @@ __m_ui_archiveRelayView_js.handleArchiveRelayAction = handleArchiveRelayAction;
 __m_ui_archiveRelayView_js.archiveRelayEntryHtml = archiveRelayEntryHtml;
 __m_ui_archiveRelayView_js.archiveRelayPreviewHtml = archiveRelayPreviewHtml;
 }
+
 
 function __init_ui_workspaceStyles_js() {
 // MODULE: ui/workspaceStyles.js
@@ -83950,6 +84314,7 @@ __m_ui_workspaceStyles_js.workspaceCss = workspaceCss;
 __m_ui_workspaceStyles_js.capsuleCss = capsuleCss;
 }
 
+
 function __init_extras_store_js() {
 // MODULE: extras/store.js
 const core_context = __m_core_context_js;
@@ -84170,6 +84535,7 @@ __m_extras_store_js.MAX_WAITING_RECORDS = MAX_WAITING_RECORDS;
 __m_extras_store_js.WAITING_DAY_OPTIONS = WAITING_DAY_OPTIONS;
 }
 
+
 function __init_extras_collection_js() {
 // MODULE: extras/collection.js
 const core_cache = __m_core_cache_js;
@@ -84301,6 +84667,7 @@ __m_extras_collection_js.chatSpanDays = chatSpanDays;
 __m_extras_collection_js.computeCollection = computeCollection;
 __m_extras_collection_js.collectionCardStatus = collectionCardStatus;
 }
+
 
 function __init_extras_intel_js() {
 // MODULE: extras/intel.js
@@ -84461,6 +84828,7 @@ __m_extras_intel_js.intelPrompt = intelPrompt;
 __m_extras_intel_js.normalizeIntel = normalizeIntel;
 __m_extras_intel_js.isIntelRunning = isIntelRunning;
 }
+
 
 function __init_extras_waiting_js() {
 // MODULE: extras/waiting.js
@@ -84682,10 +85050,12 @@ __m_extras_waiting_js.normalizeWaiting = normalizeWaiting;
 __m_extras_waiting_js.markUnlocked = markUnlocked;
 }
 
+
 function __init_ui_extrasStyles_js() {
 // MODULE: ui/extrasStyles.js
 const core_constants = __m_core_constants_js;
 // 新页面样式：只作用于 .rmt-x-* 类名，颜色跟随档案室主题变量；夜色页面固定配色。
+
 
 const STYLE_ID = 'heartbeat_memories_extras_styles';
 
@@ -84853,7 +85223,26 @@ ${r} .rmt-x-dials button{width:56px;height:44px;border:0;border-radius:10px;back
 ${r} .rmt-x-dials b{width:56px;height:64px;border-radius:12px;background:#fbf6ee;color:#3a3346;display:flex;align-items:center;justify-content:center;font-size:30px}
 ${r} .rmt-x-wrong{color:#f2b3a6!important;font-size:13px!important}
 ${r} .rmt-x-primary.rmt-x-lamp{background:#f2c38b;color:#262b40}
-${r} .rmt-archive-portal.rmt-x-off{opacity:.55}
+${r} .rmt-archive-portal.rmt-x-off{opacity:.72}
+${r} .rmt-x-grad,${r} .rmt-x-grad *{color:#f6efe6!important}
+${r} .rmt-x-grad small{color:#d9c9b6!important}
+${r} .rmt-x-grad .rmt-x-grad-thanks{color:#f4bfad!important}
+${r} .rmt-x-night,${r} .rmt-x-night h2,${r} .rmt-x-night b,${r} .rmt-x-night span,${r} .rmt-x-night small{color:#f3eee6!important}
+${r} .rmt-x-night p{color:#e2ddeb!important}
+${r} .rmt-x-night .rmt-x-sheet,${r} .rmt-x-night .rmt-x-sheet p,${r} .rmt-x-night .rmt-x-sheet span{color:#3a3346!important}
+${r} .rmt-x-night .rmt-x-sheet small{color:#8a5a3b!important}
+${r} .rmt-x-night .rmt-x-sheet .rmt-x-voice{color:#6e3553!important}
+${r} .rmt-x-night .rmt-x-sheet .rmt-x-chip{color:#2f6b66!important}
+${r} .rmt-x-night .rmt-x-sheet .rmt-x-chip.warm{color:#6b5a44!important}
+${r} .rmt-x-night .rmt-x-sheet .rmt-x-chip.muted{color:#5d5566!important}
+${r} .rmt-x-night .rmt-x-dials b{color:#3a3346!important}
+${r} .rmt-x-night .rmt-x-lamp{color:#262b40!important}
+${r} .rmt-x-night .rmt-x-wrong{color:#f2b3a6!important}
+${r} .rmt-x-night .rmt-x-unlocked{color:#f2c38b!important}
+${r} .rmt-x-grad .rmt-x-secondary.rmt-x-on-dark{color:#f6efe6!important}
+${r} .rmt-x-entry b{color:#f3eee6!important}
+${r} .rmt-x-entry small{color:#d8d2e4!important}
+${r} .rmt-x-entry em{color:#f2c38b!important}
 ${r} .rmt-archive-portal.rmt-x-off:hover,${r} .rmt-archive-portal.rmt-x-off:focus-within{opacity:.8}
 `;
 }
@@ -84865,7 +85254,6 @@ function ensureExtrasStyles() {
     style.textContent = extrasCss();
     document.head.appendChild(style);
 }
-
 __m_ui_extrasStyles_js.extrasCss = extrasCss;
 __m_ui_extrasStyles_js.ensureExtrasStyles = ensureExtrasStyles;
 }
@@ -85399,6 +85787,7 @@ __m_ui_extrasView_js.decorateRoom = decorateRoom;
 __m_ui_extrasView_js.EXTRA_MODES = EXTRA_MODES;
 }
 
+
 function __init_extras_mv_js() {
 // MODULE: extras/mv.js
 const core_cache = __m_core_cache_js;
@@ -85423,16 +85812,19 @@ const cg_core = __m_generation_cgImageCore_js;
 
 
 
+
 const MV_KEY = 'heartbeatMemoriesMvV1';
 const LOCAL_PREFIX = 'heartbeatMemoriesMvV1:';
 const MV_STYLES = Object.freeze({
     tegaki: [
-        { id: 'line', name: '线稿手书', desc: '黑白线条加一两种颜色，最有手书味。', prompt: 'hand-drawn tegaki MV frame, clean black line art with one or two soft accent colors, flat shading, paper texture background' },
+        { id: 'keep', name: '沿用原有画风', desc: '用生图渠道里已设好的画风和画师串，不额外加颜色。', prompt: '' },
+        { id: 'line', name: '线稿手书', desc: '黑白线条加一两种颜色，最有手书味。', prompt: 'hand-drawn tegaki MV frame, clean line art, minimal flat coloring, muted palette, paper texture background' },
         { id: 'water', name: '水彩', desc: '晕染的淡彩，温柔。', prompt: 'hand-drawn watercolor illustration, soft bleeding pastel washes, light paper texture' },
         { id: 'pastel', name: '粉彩厚涂', desc: '颜色饱满，像插画。', prompt: 'painterly anime illustration, soft thick pastel paint, rich but gentle colors' },
         { id: 'mono', name: '单色剪影', desc: '只用一个颜色，氛围感强。', prompt: 'monochrome single-color illustration, strong silhouettes, minimal shapes, atmospheric' },
     ],
     video: [
+        { id: 'keep', name: '沿用原有画风', desc: '用生图渠道里已设好的画风和画师串。', prompt: '' },
         { id: 'film', name: '电影感', desc: '光影讲究，最稳。', prompt: 'cinematic film still, natural lighting, shallow depth of field, subtle film grain' },
         { id: 'soft', name: '日系清新', desc: '明亮柔和。', prompt: 'bright soft Japanese film look, airy pastel light, gentle haze' },
         { id: 'anime', name: '动画风', desc: '像番剧片头。', prompt: 'high quality anime key visual, clean cel shading, vivid light' },
@@ -85767,7 +86159,7 @@ ${JSON.stringify(sections)}
 ${generation_prompts.promptArchiveSlice(memory, 40)}
 
 【写作要求】
-1. 按段落写镜头：每段 1～3 镜，纯器乐段 1 镜。每镜 sectionIndex 指向所在段落；lyric 抄写这一镜对应的那一句原歌词（器乐段留空）。
+1. 按段落写镜头：${settings.output === 'video' ? '每段 1～3 镜' : '手书节奏：每句歌词一镜'}，纯器乐段 1 镜。每镜 sectionIndex 指向所在段落；lyric 抄写这一镜对应的那一句原歌词（器乐段留空）。
 2. plain：用一句大白话写这一镜画面，让不懂拍摄的人也看得懂。
 3. who：画面里有谁，只能是 "char"、"both"、"user"、"none" 之一。
 4. shot：景别的大白话，如“近景：看到脸”“中景：看到上半身”“远景：看到整个场景”。move：镜头怎么动的大白话，如“镜头慢慢推近”“镜头慢慢往右移”“镜头不动”。motion：从 still、push、pan、sway 里选一个最接近的。
@@ -85937,14 +86329,73 @@ function patchRecord(songId, patch, target = null) {
 
 function mvScope(context) { return scopeOf(context); }
 
-__m_extras_mv_js.retryMvSave = retryMvSave;
-__m_extras_mv_js.generateStoryboard = generateStoryboard;
-__m_extras_mv_js.rewriteShot = rewriteShot;
-__m_extras_mv_js.drawFrame = drawFrame;
+// ---------- 手书节奏 ----------
+
+const TEGAKI_RANGES = Object.freeze({ chorus: '第一段副歌', verseChorus: '一段主歌 + 副歌', full: '整首' });
+const TEGAKI_RHYTHMS = Object.freeze({ line: '每句一换', beat: '跟着拍子切' });
+const TEGAKI_LYRICS = Object.freeze({ subtitle: '字幕', big: '手书大字', none: '不显示' });
+const TEGAKI_PRESETS = Object.freeze({
+    classic: { name: '手书经典', desc: '跟拍子快切、歌词大字，最像手书', rhythm: 'beat', lyric: 'big', motion: () => 'still', cut: () => 'cut' },
+    gentle: { name: '抒情慢拍', desc: '每句一换、淡入淡出、轻轻推近', rhythm: 'line', lyric: 'subtitle', motion: chorus => chorus ? 'sway' : 'push', cut: () => 'fade' },
+    bright: { name: '明快跟拍', desc: '副歌闪白切换、画面推近', rhythm: 'beat', lyric: 'big', motion: () => 'push', cut: chorus => chorus ? 'flash' : 'cut' },
+});
+
+function tegakiOptions(record) {
+    const value = record?.tegaki || {};
+    return {
+        range: Object.hasOwn(TEGAKI_RANGES, value.range) ? value.range : 'verseChorus',
+        rhythm: Object.hasOwn(TEGAKI_RHYTHMS, value.rhythm) ? value.rhythm : 'line',
+        lyric: Object.hasOwn(TEGAKI_LYRICS, value.lyric) ? value.lyric : (record?.subtitles === false ? 'none' : 'subtitle'),
+        preset: Object.hasOwn(TEGAKI_PRESETS, value.preset) ? value.preset : '',
+    };
+}
+
+const isChorusTag = tag => /^(final )?chorus|^hook/i.test(String(tag || ''));
+
+// 手书通常只截一段：按段落时间取范围，找不到副歌时退回整首。
+function playRange(record, song) {
+    const { sections, times, total } = shotTimeline(record, song);
+    const option = tegakiOptions(record).range;
+    const whole = { start: 0, end: total, label: TEGAKI_RANGES.full };
+    if (option === 'full') return whole;
+    const chorus = sections.findIndex(s => isChorusTag(s.tag));
+    if (chorus < 0) return whole;
+    if (option === 'chorus') return { start: times[chorus].start, end: times[chorus].end, label: TEGAKI_RANGES.chorus };
+    let first = chorus;
+    for (let i = chorus - 1; i >= 0; i -= 1) { if (/^verse/i.test(sections[i].tag)) { first = i; break; } }
+    return { start: times[first].start, end: times[chorus].end, label: TEGAKI_RANGES.verseChorus };
+}
+
+function shotsInRange(record, song) {
+    const range = playRange(record, song);
+    return shotTimeline(record, song).rows.filter(row => row.end > range.start + 0.01 && row.start < range.end - 0.01).map(row => row.shot);
+}
+
+function applyTegakiPreset(songId, presetId, song) {
+    const preset = TEGAKI_PRESETS[presetId];
+    if (!preset) return null;
+    const sections = parseSections(song.lyrics);
+    const context = core_context.currentCharacterGuard();
+    return writeMv(scopeOf(context), songId, current => {
+        if (!current) return current;
+        current.tegaki = { ...(current.tegaki || {}), rhythm: preset.rhythm, lyric: preset.lyric, preset: presetId };
+        for (const shot of list(current.shots)) {
+            const chorus = isChorusTag(sections[shot.sectionIndex]?.tag);
+            shot.motion = preset.motion(chorus); shot.cut = preset.cut(chorus);
+        }
+        return current;
+    });
+}
+
+function patchTegaki(songId, patch) {
+    const context = core_context.currentCharacterGuard();
+    return writeMv(scopeOf(context), songId, current => current ? Object.assign(current, { tegaki: { ...(current.tegaki || {}), ...patch } }) : current);
+}
 __m_extras_mv_js.readMvStore = readMvStore;
 __m_extras_mv_js.readMv = readMv;
 __m_extras_mv_js.pendingMv = pendingMv;
 __m_extras_mv_js.captureMvTarget = captureMvTarget;
+__m_extras_mv_js.retryMvSave = retryMvSave;
 __m_extras_mv_js.exportMvRecovery = exportMvRecovery;
 __m_extras_mv_js.writeMv = writeMv;
 __m_extras_mv_js.loadSong = loadSong;
@@ -85959,17 +86410,29 @@ __m_extras_mv_js.timetableText = timetableText;
 __m_extras_mv_js.srtText = srtText;
 __m_extras_mv_js.normalizeSettings = normalizeSettings;
 __m_extras_mv_js.isMvRunning = isMvRunning;
+__m_extras_mv_js.generateStoryboard = generateStoryboard;
+__m_extras_mv_js.rewriteShot = rewriteShot;
 __m_extras_mv_js.frameNeedsUserLooks = frameNeedsUserLooks;
 __m_extras_mv_js.framePrompt = framePrompt;
 __m_extras_mv_js.isFrameDrawing = isFrameDrawing;
+__m_extras_mv_js.drawFrame = drawFrame;
 __m_extras_mv_js.patchShot = patchShot;
 __m_extras_mv_js.patchRecord = patchRecord;
 __m_extras_mv_js.mvScope = mvScope;
+__m_extras_mv_js.tegakiOptions = tegakiOptions;
+__m_extras_mv_js.playRange = playRange;
+__m_extras_mv_js.shotsInRange = shotsInRange;
+__m_extras_mv_js.applyTegakiPreset = applyTegakiPreset;
+__m_extras_mv_js.patchTegaki = patchTegaki;
 __m_extras_mv_js.MV_KEY = MV_KEY;
 __m_extras_mv_js.MV_STYLES = MV_STYLES;
 __m_extras_mv_js.MV_APPEAR = MV_APPEAR;
 __m_extras_mv_js.MV_MOTIONS = MV_MOTIONS;
 __m_extras_mv_js.MV_CUTS = MV_CUTS;
+__m_extras_mv_js.TEGAKI_RANGES = TEGAKI_RANGES;
+__m_extras_mv_js.TEGAKI_RHYTHMS = TEGAKI_RHYTHMS;
+__m_extras_mv_js.TEGAKI_LYRICS = TEGAKI_LYRICS;
+__m_extras_mv_js.TEGAKI_PRESETS = TEGAKI_PRESETS;
 }
 
 function __init_extras_mvMedia_js() {
@@ -86030,6 +86493,7 @@ __m_extras_mvMedia_js.deleteMedia = deleteMedia;
 __m_extras_mvMedia_js.mediaKey = mediaKey;
 }
 
+
 function __init_ui_mvView_js() {
 // MODULE: ui/mvView.js
 const core_constants = __m_core_constants_js;
@@ -86045,6 +86509,14 @@ const archive_repository = __m_archive_repository_js;
 const runtimeState = __m_core_state_js.state;
 // 印象曲 MV 页面：三步开始、镜头清单、对时间、手书剪辑台、视频单镜、拼成 MV。
 // 播放和导出都在本机进行；歌曲文件只在这次打开期间留在内存里，不上传、不写入聊天。
+
+
+
+
+
+
+
+
 
 
 
@@ -86159,6 +86631,7 @@ ${r} .rmt-mv-choice b{font-size:15px}
 ${r} .rmt-mv-choice small{font-size:12px;line-height:1.5;color:var(--rmt-theme-muted,#586b7c)}
 ${r} .rmt-mv-choice em{font-style:normal;font-size:12px;font-weight:600;color:#2f6b66}
 ${r} .rmt-mv-grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+${r} .rmt-mv-presets{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
 ${r} .rmt-mv-toggle{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;padding:4px;background:#e9e7f2;border-radius:14px}
 ${r} .rmt-mv-toggle button{height:40px;border-radius:10px;border:0;font-size:14px;font-weight:600;cursor:pointer;background:transparent;color:#586b7c}
 ${r} .rmt-mv-toggle button.on{background:#fff;color:#34495d}
@@ -86382,7 +86855,9 @@ function renderBoard(song, record) {
     const videos = shots.filter(s => s.videoDone).length;
     const done = tegaki ? drawn : videos;
     const sections = mv.parseSections(song.lyrics);
-    const remaining = shots.length - drawn;
+    let rangeShots = shots;
+    if (tegaki) { try { rangeShots = mv.shotsInRange(record, song); } catch { rangeShots = shots; } }
+    const remaining = rangeShots.filter(s => !hasImg(s)).length;
     const who = { char: '他', both: mv.normalizeSettings(record.settings).appear === 'back' ? '他 · 你（背影）' : '他 · 你', user: '你', none: '空镜' };
     let number = 0;
     const groups = sections.map((section, index) => {
@@ -86483,6 +86958,19 @@ function exportSupport() {
     return found ? { ok: true, mime: found[0], ext: found[1] } : { ok: false, mime: '', ext: '' };
 }
 
+function tegakiControls(record, song) {
+    const o = mv.tegakiOptions(record);
+    const range = mv.playRange(record, song);
+    const seg2 = (action, map, value) => Object.entries(map).map(([id, label]) => btn(action, label, { id, cls: 'rmt-x-seg' + (value === id ? ' active' : ''), extra: ` aria-pressed="${value === id}"` })).join('');
+    const presets = Object.entries(mv.TEGAKI_PRESETS).map(([id, p]) => `<button type="button" class="rmt-mv-choice${o.preset === id ? ' on' : ''}" aria-pressed="${o.preset === id}" data-rmt-mv="tegaki-preset" data-rmt-mv-id="${id}"><span><b>${esc(p.name)}</b><small>${esc(p.desc)}</small></span></button>`).join('');
+    return `<b style="font-size:14px">新手一键配置</b><div class="rmt-mv-presets">${presets}</div>
+      <p class="rmt-x-note">一键设好全部镜头的动作、切换方式和歌词样式；之后仍可逐镜修改。</p>
+      <b style="font-size:14px">截取哪一段</b><div class="rmt-x-segs">${seg2('tegaki-range', mv.TEGAKI_RANGES, o.range)}</div>
+      <p class="rmt-x-note">现在：${esc(range.label)} · ${mv.formatTime(range.start)}–${mv.formatTime(range.end)}（约 ${Math.max(0, Math.round(range.end - range.start))} 秒）。手书通常只做一段，不必整首。</p>
+      <b style="font-size:14px">切换节奏</b><div class="rmt-mv-grid2">${seg2('tegaki-rhythm', mv.TEGAKI_RHYTHMS, o.rhythm)}</div>
+      <b style="font-size:14px">歌词</b><div class="rmt-x-segs">${seg2('tegaki-lyric', mv.TEGAKI_LYRICS, o.lyric)}</div>`;
+}
+
 function renderTegaki(song, record) {
     const [w, h] = canvasSize(record);
     const { rows, sections } = mv.shotTimeline(record, song);
@@ -86507,7 +86995,7 @@ function renderTegaki(song, record) {
         <b style="font-size:14px">切到下一镜时</b><div class="rmt-x-segs">${seg('set-cut', mv.MV_CUTS, sel.shot.cut || 'fade')}</div>
         <div class="rmt-mv-actions">${btn('draw', mv.isFrameDrawing(mv.mvScope(ctx()), view.songId, sel.shot.id) ? '正在画…' : imgUrl(sel.shot) ? '重画这张' : '画这一张', { id: sel.shot.id, disabled: mv.isFrameDrawing(mv.mvScope(ctx()), view.songId, sel.shot.id) })}${uploadLabel(sel.shot.id)}</div></section>` : ''}
       <section class="rmt-x-card"><b>歌曲与字幕</b>${audioCard(song)}
-        <label class="rmt-x-check"><input type="checkbox" data-rmt-mv-subtitles ${record.subtitles === false ? '' : 'checked'}><span>在画面下方显示歌词</span></label>
+        ${tegakiControls(record, song)}
         ${btn('go-sync', `对时间 · 已点 ${tapped} / ${sections.length} 段${tapped < sections.length ? '，其余用估计时间' : ''}`, { cls: 'rmt-x-primary rmt-x-dark' })}</section>
       <section class="rmt-x-card"><b>导出</b>
         ${exporting ? `<div class="rmt-x-row-head"><span>正在录制…</span><span data-rmt-mv-export-time>0:00</span></div><div class="rmt-x-bar"><i data-rmt-mv-export-bar style="width:0%"></i></div><p class="rmt-x-note">请不要切到其他页面或锁屏。</p>${btn('export-stop', '停止导出')}`
@@ -86582,12 +87070,26 @@ function drawCover(g, img, w, h, scale, dx, dy) {
     g.drawImage(img, (w - iw) / 2 + dx, (h - ih) / 2 + dy, iw, ih);
 }
 
+let frameCtx = { rhythm: 'line', beat: 1.3 };
+
+// 跟拍子切：同一张图在每两拍换一个构图，镜头多了却不用多画图。
+function beatVariant(row, t) {
+    if (frameCtx.rhythm !== 'beat') return null;
+    const k = Math.floor(Math.max(0, t - row.start) / frameCtx.beat);
+    return { k, since: Math.max(0, t - row.start) - k * frameCtx.beat, variant: k % 4 };
+}
+
 function drawShot(g, row, rows, index, t, w, h) {
     let img = null;
     for (let i = index; i >= 0 && !img; i -= 1) img = imageFor(imgUrl(rows[i].shot));
     const p = Math.min(1, Math.max(0, (t - row.start) / Math.max(0.1, row.end - row.start)));
     g.fillStyle = '#fbf6ee'; g.fillRect(0, 0, w, h);
-    if (img) {
+    const beat = beatVariant(row, t);
+    if (img && beat && beat.variant) {
+        if (beat.variant === 1) drawCover(g, img, w, h, 1.22, 0, h * 0.06);
+        else if (beat.variant === 2) drawCover(g, img, w, h, 1.12, -w * 0.05, 0);
+        else drawCover(g, img, w, h, 1.35, w * 0.03, -h * 0.04);
+    } else if (img) {
         const motion = row.shot.motion;
         if (motion === 'push') drawCover(g, img, w, h, 1 + 0.12 * p, 0, 0);
         else if (motion === 'pan') drawCover(g, img, w, h, 1.15, (p - 0.5) * w * 0.12, 0);
@@ -86607,9 +87109,31 @@ function wrap(g, text, x, y, max, lineHeight) {
     lines.slice(0, 4).forEach((l, i) => g.fillText(l, x, y + (i - (Math.min(lines.length, 4) - 1) / 2) * lineHeight));
 }
 
+function drawBigLyric(g, text, w, h, since) {
+    const size = Math.round(Math.min(w, h) * 0.1);
+    const chars = Array.from(String(text));
+    const perLine = Math.max(4, Math.floor(w * 0.82 / size));
+    const lines = [];
+    for (let i = 0; i < chars.length && lines.length < 3; i += perLine) lines.push(chars.slice(i, i + perLine).join(''));
+    const shown = Math.min(1, since / 0.25);
+    g.save();
+    g.translate(w / 2, h * 0.64); g.rotate(-0.045);
+    g.globalAlpha = shown;
+    g.font = `900 ${size}px "Noto Sans SC","PingFang SC","Hiragino Sans GB",sans-serif`;
+    g.textAlign = 'center'; g.lineJoin = 'round';
+    lines.forEach((line, i) => {
+        const y = (i - (lines.length - 1) / 2) * size * 1.15;
+        g.lineWidth = size * 0.28; g.strokeStyle = 'rgba(28,24,36,.9)'; g.strokeText(line, 0, y);
+        g.fillStyle = '#fff'; g.fillText(line, 0, y);
+    });
+    g.restore();
+}
+
 function renderFrame(canvas, record, song, t) {
     const g = canvas.getContext('2d');
     const w = canvas.width, h = canvas.height;
+    const topt = mv.tegakiOptions(record);
+    frameCtx = { rhythm: topt.rhythm, beat: 120 / (mv.songBpm(song) || 90) };
     const { rows, total } = mv.shotTimeline(record, song);
     if (!rows.length) return total;
     let index = rows.findIndex(r => t >= r.start && t < r.end);
@@ -86623,7 +87147,10 @@ function renderFrame(canvas, record, song, t) {
     } else if (prev && prev.shot.cut === 'flash' && since < 0.3) {
         g.save(); g.globalAlpha = 1 - since / 0.3; g.fillStyle = '#fff'; g.fillRect(0, 0, w, h); g.restore();
     }
-    if (record.subtitles !== false && row.shot.lyric) {
+    const beat = beatVariant(row, t);
+    if (beat && beat.k > 0 && beat.since < 0.08) { g.save(); g.globalAlpha = 0.45 * (1 - beat.since / 0.08); g.fillStyle = '#fff'; g.fillRect(0, 0, w, h); g.restore(); }
+    if (topt.lyric === 'big' && row.shot.lyric) drawBigLyric(g, row.shot.lyric, w, h, since);
+    if (topt.lyric === 'subtitle' && row.shot.lyric) {
         let size = Math.round(Math.min(w, h) * 0.055), lines = [];
         const split = () => {
             const result = []; let line = '';
@@ -86668,6 +87195,12 @@ function drawNow() {
     if (rec) renderFrame(rec, record, song, t);
 }
 
+function currentRange() {
+    if (view.sub === 'sync') return { start: 0, end: Infinity };
+    const record = view.cache?.record, song = view.cache?.song;
+    try { return record && song ? mv.playRange(record, song) : { start: 0, end: Infinity }; } catch { return { start: 0, end: Infinity }; }
+}
+
 function ensureLoop() {
     if (player.raf) return;
     const tick = () => {
@@ -86676,7 +87209,7 @@ function ensureLoop() {
         if (!player.playing && !player.exporting) return;
         drawNow();
         const audio = player.audio;
-        if (audio && audio.ended && !player.exporting) { player.playing = false; renderMv(); return; }
+        if (audio && !player.exporting && (audio.ended || (!player.recording && audio.currentTime >= currentRange().end))) { audio.pause(); player.playing = false; renderMv(); return; }
         player.raf = requestAnimationFrame(tick);
     };
     player.raf = requestAnimationFrame(tick);
@@ -86703,7 +87236,8 @@ async function togglePlay() {
         if (audio) audio.pause(); else player.clockOffset = pausedAt;
     } else {
         player.playing = true;
-        if (audio) { if (audio.ended) audio.currentTime = 0; try { await audio.play(); } catch (error) { player.playing = false; toastError(error); } }
+        const range = currentRange();
+        if (audio) { if (audio.ended || audio.currentTime < range.start - 0.05 || audio.currentTime >= range.end - 0.05) audio.currentTime = range.start; try { await audio.play(); } catch (error) { player.playing = false; toastError(error); } }
         else player.clockStart = performance.now();
         if (!isView(opened)) { audio?.pause(); return; }
         ensureLoop();
@@ -86781,9 +87315,11 @@ async function exportVideo() {
         recorder.onstop = finish;
         recorder.onerror = () => { state.cancelled = true; stopExport(); toastError(core_text.safeUserError('视频录制失败，可以改用录屏模式。', 'RMT_MV_EXPORT')); };
         const total = mv.shotTimeline(record, song).total;
+        const range = mv.playRange(record, song);
         const loop = () => {
             if (!current()) { stopExport(); return; }
             const t = audio.currentTime || 0;
+            if (t >= range.end - 0.02) { try { audio.pause(); } catch {} if (recorder.state !== 'inactive') recorder.stop(); return; }
             try { renderFrame(canvas, record, song, t); } catch (error) { stopExport(); toastError(error); return; }
             const bar = document.querySelector('[data-rmt-mv-export-bar]');
             if (bar) bar.style.width = `${Math.min(100, t / Math.max(1, total) * 100)}%`;
@@ -86792,7 +87328,9 @@ async function exportVideo() {
             state.raf = requestAnimationFrame(loop);
         };
         audio.onended = () => { if (recorder.state !== 'inactive') recorder.stop(); };
-        renderMv(); renderFrame(canvas, record, song, 0); recorder.start(1000);
+        if (audio.readyState < 1) await new Promise(resolve => { audio.addEventListener('loadedmetadata', resolve, { once: true }); audio.addEventListener('error', resolve, { once: true }); });
+        audio.currentTime = range.start;
+        renderMv(); renderFrame(canvas, record, song, range.start); recorder.start(1000);
         await ac.resume?.();
         if (!current()) { stopExport(); return; }
         await audio.play();
@@ -86837,7 +87375,10 @@ function recordMode() {
         clearInterval(timer); count.remove();
         const audio = audioElement();
         if (!audio) { exit(); return; }
-        audio.currentTime = 0;
+        const range = currentRange();
+        audio.currentTime = range.start;
+        const stopAt = () => { if (audio.currentTime >= range.end - 0.02) { audio.pause(); audio.dispatchEvent(new Event('ended')); } else if (!audio.paused) requestAnimationFrame(stopAt); };
+        requestAnimationFrame(stopAt);
         player.playing = true;
         try { await audio.play(); } catch (error) { toastError(error); }
         if (!isView(opened) || player.recording?.shell !== shell) { audio.pause(); return; }
@@ -86879,7 +87420,9 @@ async function runDraw(shotId) {
 
 async function drawAll() {
     const opened = viewTarget();
-    const shots = structuredClone(currentRecord()?.shots || []);
+    const record0 = currentRecord();
+    let shots = structuredClone(record0?.shots || []);
+    if (view.mode === 'tegaki' && view.cache?.song) { try { const ids = new Set(mv.shotsInRange(record0, view.cache.song).map(s => s.id)); shots = shots.filter(s => ids.has(s.id)); } catch {} }
     const queue = {}; view.drawQueue = queue;
     view.drawingAll = true; view.stopAll = false;
     renderMv();
@@ -86939,6 +87482,10 @@ function handleMvClick(event) {
         else if (action === 'mode') { view.mode = id === 'video' ? 'video' : 'tegaki'; renderMv(); }
         else if (action === 'draw') void runDraw(id);
         else if (action === 'draw-all') void drawAll();
+        else if (action === 'tegaki-preset') { mv.applyTegakiPreset(view.songId, id, currentSong()); toastOk('已按“' + (mv.TEGAKI_PRESETS[id]?.name || '') + '”配好镜头。'); renderMv(); }
+        else if (action === 'tegaki-range') { mv.patchTegaki(view.songId, { range: id }); renderMv(); }
+        else if (action === 'tegaki-rhythm') { mv.patchTegaki(view.songId, { rhythm: id, preset: '' }); renderMv(); }
+        else if (action === 'tegaki-lyric') { mv.patchTegaki(view.songId, { lyric: id, preset: '' }); renderMv(); }
         else if (action === 'draw-stop') { view.stopAll = true; globalThis.toastr?.info?.('画完正在画的这一张后停止。', '心迹回廊 · MV'); }
         else if (action === 'go-tegaki') go('tegaki');
         else if (action === 'go-finish') go('finish');
@@ -87024,7 +87571,6 @@ function handleMvChange(event) {
     }
     return false;
 }
-
 __m_ui_mvView_js.openMv = openMv;
 __m_ui_mvView_js.navigateMvBack = navigateMvBack;
 __m_ui_mvView_js.renderMv = renderMv;

@@ -122,6 +122,7 @@ ${r} .rmt-mv-choice b{font-size:15px}
 ${r} .rmt-mv-choice small{font-size:12px;line-height:1.5;color:var(--rmt-theme-muted,#586b7c)}
 ${r} .rmt-mv-choice em{font-style:normal;font-size:12px;font-weight:600;color:#2f6b66}
 ${r} .rmt-mv-grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+${r} .rmt-mv-presets{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
 ${r} .rmt-mv-toggle{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;padding:4px;background:#e9e7f2;border-radius:14px}
 ${r} .rmt-mv-toggle button{height:40px;border-radius:10px;border:0;font-size:14px;font-weight:600;cursor:pointer;background:transparent;color:#586b7c}
 ${r} .rmt-mv-toggle button.on{background:#fff;color:#34495d}
@@ -345,7 +346,9 @@ function renderBoard(song, record) {
     const videos = shots.filter(s => s.videoDone).length;
     const done = tegaki ? drawn : videos;
     const sections = mv.parseSections(song.lyrics);
-    const remaining = shots.length - drawn;
+    let rangeShots = shots;
+    if (tegaki) { try { rangeShots = mv.shotsInRange(record, song); } catch { rangeShots = shots; } }
+    const remaining = rangeShots.filter(s => !hasImg(s)).length;
     const who = { char: '他', both: mv.normalizeSettings(record.settings).appear === 'back' ? '他 · 你（背影）' : '他 · 你', user: '你', none: '空镜' };
     let number = 0;
     const groups = sections.map((section, index) => {
@@ -446,6 +449,19 @@ function exportSupport() {
     return found ? { ok: true, mime: found[0], ext: found[1] } : { ok: false, mime: '', ext: '' };
 }
 
+function tegakiControls(record, song) {
+    const o = mv.tegakiOptions(record);
+    const range = mv.playRange(record, song);
+    const seg2 = (action, map, value) => Object.entries(map).map(([id, label]) => btn(action, label, { id, cls: 'rmt-x-seg' + (value === id ? ' active' : ''), extra: ` aria-pressed="${value === id}"` })).join('');
+    const presets = Object.entries(mv.TEGAKI_PRESETS).map(([id, p]) => `<button type="button" class="rmt-mv-choice${o.preset === id ? ' on' : ''}" aria-pressed="${o.preset === id}" data-rmt-mv="tegaki-preset" data-rmt-mv-id="${id}"><span><b>${esc(p.name)}</b><small>${esc(p.desc)}</small></span></button>`).join('');
+    return `<b style="font-size:14px">新手一键配置</b><div class="rmt-mv-presets">${presets}</div>
+      <p class="rmt-x-note">一键设好全部镜头的动作、切换方式和歌词样式；之后仍可逐镜修改。</p>
+      <b style="font-size:14px">截取哪一段</b><div class="rmt-x-segs">${seg2('tegaki-range', mv.TEGAKI_RANGES, o.range)}</div>
+      <p class="rmt-x-note">现在：${esc(range.label)} · ${mv.formatTime(range.start)}–${mv.formatTime(range.end)}（约 ${Math.max(0, Math.round(range.end - range.start))} 秒）。手书通常只做一段，不必整首。</p>
+      <b style="font-size:14px">切换节奏</b><div class="rmt-mv-grid2">${seg2('tegaki-rhythm', mv.TEGAKI_RHYTHMS, o.rhythm)}</div>
+      <b style="font-size:14px">歌词</b><div class="rmt-x-segs">${seg2('tegaki-lyric', mv.TEGAKI_LYRICS, o.lyric)}</div>`;
+}
+
 function renderTegaki(song, record) {
     const [w, h] = canvasSize(record);
     const { rows, sections } = mv.shotTimeline(record, song);
@@ -470,7 +486,7 @@ function renderTegaki(song, record) {
         <b style="font-size:14px">切到下一镜时</b><div class="rmt-x-segs">${seg('set-cut', mv.MV_CUTS, sel.shot.cut || 'fade')}</div>
         <div class="rmt-mv-actions">${btn('draw', mv.isFrameDrawing(mv.mvScope(ctx()), view.songId, sel.shot.id) ? '正在画…' : imgUrl(sel.shot) ? '重画这张' : '画这一张', { id: sel.shot.id, disabled: mv.isFrameDrawing(mv.mvScope(ctx()), view.songId, sel.shot.id) })}${uploadLabel(sel.shot.id)}</div></section>` : ''}
       <section class="rmt-x-card"><b>歌曲与字幕</b>${audioCard(song)}
-        <label class="rmt-x-check"><input type="checkbox" data-rmt-mv-subtitles ${record.subtitles === false ? '' : 'checked'}><span>在画面下方显示歌词</span></label>
+        ${tegakiControls(record, song)}
         ${btn('go-sync', `对时间 · 已点 ${tapped} / ${sections.length} 段${tapped < sections.length ? '，其余用估计时间' : ''}`, { cls: 'rmt-x-primary rmt-x-dark' })}</section>
       <section class="rmt-x-card"><b>导出</b>
         ${exporting ? `<div class="rmt-x-row-head"><span>正在录制…</span><span data-rmt-mv-export-time>0:00</span></div><div class="rmt-x-bar"><i data-rmt-mv-export-bar style="width:0%"></i></div><p class="rmt-x-note">请不要切到其他页面或锁屏。</p>${btn('export-stop', '停止导出')}`
@@ -545,12 +561,26 @@ function drawCover(g, img, w, h, scale, dx, dy) {
     g.drawImage(img, (w - iw) / 2 + dx, (h - ih) / 2 + dy, iw, ih);
 }
 
+let frameCtx = { rhythm: 'line', beat: 1.3 };
+
+// 跟拍子切：同一张图在每两拍换一个构图，镜头多了却不用多画图。
+function beatVariant(row, t) {
+    if (frameCtx.rhythm !== 'beat') return null;
+    const k = Math.floor(Math.max(0, t - row.start) / frameCtx.beat);
+    return { k, since: Math.max(0, t - row.start) - k * frameCtx.beat, variant: k % 4 };
+}
+
 function drawShot(g, row, rows, index, t, w, h) {
     let img = null;
     for (let i = index; i >= 0 && !img; i -= 1) img = imageFor(imgUrl(rows[i].shot));
     const p = Math.min(1, Math.max(0, (t - row.start) / Math.max(0.1, row.end - row.start)));
     g.fillStyle = '#fbf6ee'; g.fillRect(0, 0, w, h);
-    if (img) {
+    const beat = beatVariant(row, t);
+    if (img && beat && beat.variant) {
+        if (beat.variant === 1) drawCover(g, img, w, h, 1.22, 0, h * 0.06);
+        else if (beat.variant === 2) drawCover(g, img, w, h, 1.12, -w * 0.05, 0);
+        else drawCover(g, img, w, h, 1.35, w * 0.03, -h * 0.04);
+    } else if (img) {
         const motion = row.shot.motion;
         if (motion === 'push') drawCover(g, img, w, h, 1 + 0.12 * p, 0, 0);
         else if (motion === 'pan') drawCover(g, img, w, h, 1.15, (p - 0.5) * w * 0.12, 0);
@@ -570,9 +600,31 @@ function wrap(g, text, x, y, max, lineHeight) {
     lines.slice(0, 4).forEach((l, i) => g.fillText(l, x, y + (i - (Math.min(lines.length, 4) - 1) / 2) * lineHeight));
 }
 
+function drawBigLyric(g, text, w, h, since) {
+    const size = Math.round(Math.min(w, h) * 0.1);
+    const chars = Array.from(String(text));
+    const perLine = Math.max(4, Math.floor(w * 0.82 / size));
+    const lines = [];
+    for (let i = 0; i < chars.length && lines.length < 3; i += perLine) lines.push(chars.slice(i, i + perLine).join(''));
+    const shown = Math.min(1, since / 0.25);
+    g.save();
+    g.translate(w / 2, h * 0.64); g.rotate(-0.045);
+    g.globalAlpha = shown;
+    g.font = `900 ${size}px "Noto Sans SC","PingFang SC","Hiragino Sans GB",sans-serif`;
+    g.textAlign = 'center'; g.lineJoin = 'round';
+    lines.forEach((line, i) => {
+        const y = (i - (lines.length - 1) / 2) * size * 1.15;
+        g.lineWidth = size * 0.28; g.strokeStyle = 'rgba(28,24,36,.9)'; g.strokeText(line, 0, y);
+        g.fillStyle = '#fff'; g.fillText(line, 0, y);
+    });
+    g.restore();
+}
+
 function renderFrame(canvas, record, song, t) {
     const g = canvas.getContext('2d');
     const w = canvas.width, h = canvas.height;
+    const topt = mv.tegakiOptions(record);
+    frameCtx = { rhythm: topt.rhythm, beat: 120 / (mv.songBpm(song) || 90) };
     const { rows, total } = mv.shotTimeline(record, song);
     if (!rows.length) return total;
     let index = rows.findIndex(r => t >= r.start && t < r.end);
@@ -586,7 +638,10 @@ function renderFrame(canvas, record, song, t) {
     } else if (prev && prev.shot.cut === 'flash' && since < 0.3) {
         g.save(); g.globalAlpha = 1 - since / 0.3; g.fillStyle = '#fff'; g.fillRect(0, 0, w, h); g.restore();
     }
-    if (record.subtitles !== false && row.shot.lyric) {
+    const beat = beatVariant(row, t);
+    if (beat && beat.k > 0 && beat.since < 0.08) { g.save(); g.globalAlpha = 0.45 * (1 - beat.since / 0.08); g.fillStyle = '#fff'; g.fillRect(0, 0, w, h); g.restore(); }
+    if (topt.lyric === 'big' && row.shot.lyric) drawBigLyric(g, row.shot.lyric, w, h, since);
+    if (topt.lyric === 'subtitle' && row.shot.lyric) {
         let size = Math.round(Math.min(w, h) * 0.055), lines = [];
         const split = () => {
             const result = []; let line = '';
@@ -631,6 +686,12 @@ function drawNow() {
     if (rec) renderFrame(rec, record, song, t);
 }
 
+function currentRange() {
+    if (view.sub === 'sync') return { start: 0, end: Infinity };
+    const record = view.cache?.record, song = view.cache?.song;
+    try { return record && song ? mv.playRange(record, song) : { start: 0, end: Infinity }; } catch { return { start: 0, end: Infinity }; }
+}
+
 function ensureLoop() {
     if (player.raf) return;
     const tick = () => {
@@ -639,7 +700,7 @@ function ensureLoop() {
         if (!player.playing && !player.exporting) return;
         drawNow();
         const audio = player.audio;
-        if (audio && audio.ended && !player.exporting) { player.playing = false; renderMv(); return; }
+        if (audio && !player.exporting && (audio.ended || (!player.recording && audio.currentTime >= currentRange().end))) { audio.pause(); player.playing = false; renderMv(); return; }
         player.raf = requestAnimationFrame(tick);
     };
     player.raf = requestAnimationFrame(tick);
@@ -666,7 +727,8 @@ async function togglePlay() {
         if (audio) audio.pause(); else player.clockOffset = pausedAt;
     } else {
         player.playing = true;
-        if (audio) { if (audio.ended) audio.currentTime = 0; try { await audio.play(); } catch (error) { player.playing = false; toastError(error); } }
+        const range = currentRange();
+        if (audio) { if (audio.ended || audio.currentTime < range.start - 0.05 || audio.currentTime >= range.end - 0.05) audio.currentTime = range.start; try { await audio.play(); } catch (error) { player.playing = false; toastError(error); } }
         else player.clockStart = performance.now();
         if (!isView(opened)) { audio?.pause(); return; }
         ensureLoop();
@@ -744,9 +806,11 @@ async function exportVideo() {
         recorder.onstop = finish;
         recorder.onerror = () => { state.cancelled = true; stopExport(); toastError(core_text.safeUserError('视频录制失败，可以改用录屏模式。', 'RMT_MV_EXPORT')); };
         const total = mv.shotTimeline(record, song).total;
+        const range = mv.playRange(record, song);
         const loop = () => {
             if (!current()) { stopExport(); return; }
             const t = audio.currentTime || 0;
+            if (t >= range.end - 0.02) { try { audio.pause(); } catch {} if (recorder.state !== 'inactive') recorder.stop(); return; }
             try { renderFrame(canvas, record, song, t); } catch (error) { stopExport(); toastError(error); return; }
             const bar = document.querySelector('[data-rmt-mv-export-bar]');
             if (bar) bar.style.width = `${Math.min(100, t / Math.max(1, total) * 100)}%`;
@@ -755,7 +819,9 @@ async function exportVideo() {
             state.raf = requestAnimationFrame(loop);
         };
         audio.onended = () => { if (recorder.state !== 'inactive') recorder.stop(); };
-        renderMv(); renderFrame(canvas, record, song, 0); recorder.start(1000);
+        if (audio.readyState < 1) await new Promise(resolve => { audio.addEventListener('loadedmetadata', resolve, { once: true }); audio.addEventListener('error', resolve, { once: true }); });
+        audio.currentTime = range.start;
+        renderMv(); renderFrame(canvas, record, song, range.start); recorder.start(1000);
         await ac.resume?.();
         if (!current()) { stopExport(); return; }
         await audio.play();
@@ -800,7 +866,10 @@ function recordMode() {
         clearInterval(timer); count.remove();
         const audio = audioElement();
         if (!audio) { exit(); return; }
-        audio.currentTime = 0;
+        const range = currentRange();
+        audio.currentTime = range.start;
+        const stopAt = () => { if (audio.currentTime >= range.end - 0.02) { audio.pause(); audio.dispatchEvent(new Event('ended')); } else if (!audio.paused) requestAnimationFrame(stopAt); };
+        requestAnimationFrame(stopAt);
         player.playing = true;
         try { await audio.play(); } catch (error) { toastError(error); }
         if (!isView(opened) || player.recording?.shell !== shell) { audio.pause(); return; }
@@ -842,7 +911,9 @@ async function runDraw(shotId) {
 
 async function drawAll() {
     const opened = viewTarget();
-    const shots = structuredClone(currentRecord()?.shots || []);
+    const record0 = currentRecord();
+    let shots = structuredClone(record0?.shots || []);
+    if (view.mode === 'tegaki' && view.cache?.song) { try { const ids = new Set(mv.shotsInRange(record0, view.cache.song).map(s => s.id)); shots = shots.filter(s => ids.has(s.id)); } catch {} }
     const queue = {}; view.drawQueue = queue;
     view.drawingAll = true; view.stopAll = false;
     renderMv();
@@ -902,6 +973,10 @@ export function handleMvClick(event) {
         else if (action === 'mode') { view.mode = id === 'video' ? 'video' : 'tegaki'; renderMv(); }
         else if (action === 'draw') void runDraw(id);
         else if (action === 'draw-all') void drawAll();
+        else if (action === 'tegaki-preset') { mv.applyTegakiPreset(view.songId, id, currentSong()); toastOk('已按“' + (mv.TEGAKI_PRESETS[id]?.name || '') + '”配好镜头。'); renderMv(); }
+        else if (action === 'tegaki-range') { mv.patchTegaki(view.songId, { range: id }); renderMv(); }
+        else if (action === 'tegaki-rhythm') { mv.patchTegaki(view.songId, { rhythm: id, preset: '' }); renderMv(); }
+        else if (action === 'tegaki-lyric') { mv.patchTegaki(view.songId, { lyric: id, preset: '' }); renderMv(); }
         else if (action === 'draw-stop') { view.stopAll = true; globalThis.toastr?.info?.('画完正在画的这一张后停止。', '心迹回廊 · MV'); }
         else if (action === 'go-tegaki') go('tegaki');
         else if (action === 'go-finish') go('finish');

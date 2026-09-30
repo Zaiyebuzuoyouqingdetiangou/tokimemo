@@ -15,12 +15,14 @@ export const MV_KEY = 'heartbeatMemoriesMvV1';
 const LOCAL_PREFIX = 'heartbeatMemoriesMvV1:';
 export const MV_STYLES = Object.freeze({
     tegaki: [
-        { id: 'line', name: '线稿手书', desc: '黑白线条加一两种颜色，最有手书味。', prompt: 'hand-drawn tegaki MV frame, clean black line art with one or two soft accent colors, flat shading, paper texture background' },
+        { id: 'keep', name: '沿用原有画风', desc: '用生图渠道里已设好的画风和画师串，不额外加颜色。', prompt: '' },
+        { id: 'line', name: '线稿手书', desc: '黑白线条加一两种颜色，最有手书味。', prompt: 'hand-drawn tegaki MV frame, clean line art, minimal flat coloring, muted palette, paper texture background' },
         { id: 'water', name: '水彩', desc: '晕染的淡彩，温柔。', prompt: 'hand-drawn watercolor illustration, soft bleeding pastel washes, light paper texture' },
         { id: 'pastel', name: '粉彩厚涂', desc: '颜色饱满，像插画。', prompt: 'painterly anime illustration, soft thick pastel paint, rich but gentle colors' },
         { id: 'mono', name: '单色剪影', desc: '只用一个颜色，氛围感强。', prompt: 'monochrome single-color illustration, strong silhouettes, minimal shapes, atmospheric' },
     ],
     video: [
+        { id: 'keep', name: '沿用原有画风', desc: '用生图渠道里已设好的画风和画师串。', prompt: '' },
         { id: 'film', name: '电影感', desc: '光影讲究，最稳。', prompt: 'cinematic film still, natural lighting, shallow depth of field, subtle film grain' },
         { id: 'soft', name: '日系清新', desc: '明亮柔和。', prompt: 'bright soft Japanese film look, airy pastel light, gentle haze' },
         { id: 'anime', name: '动画风', desc: '像番剧片头。', prompt: 'high quality anime key visual, clean cel shading, vivid light' },
@@ -355,7 +357,7 @@ ${JSON.stringify(sections)}
 ${generation_prompts.promptArchiveSlice(memory, 40)}
 
 【写作要求】
-1. 按段落写镜头：每段 1～3 镜，纯器乐段 1 镜。每镜 sectionIndex 指向所在段落；lyric 抄写这一镜对应的那一句原歌词（器乐段留空）。
+1. 按段落写镜头：${settings.output === 'video' ? '每段 1～3 镜' : '手书节奏：每句歌词一镜'}，纯器乐段 1 镜。每镜 sectionIndex 指向所在段落；lyric 抄写这一镜对应的那一句原歌词（器乐段留空）。
 2. plain：用一句大白话写这一镜画面，让不懂拍摄的人也看得懂。
 3. who：画面里有谁，只能是 "char"、"both"、"user"、"none" 之一。
 4. shot：景别的大白话，如“近景：看到脸”“中景：看到上半身”“远景：看到整个场景”。move：镜头怎么动的大白话，如“镜头慢慢推近”“镜头慢慢往右移”“镜头不动”。motion：从 still、push、pan、sway 里选一个最接近的。
@@ -524,3 +526,66 @@ export function patchRecord(songId, patch, target = null) {
 }
 
 export function mvScope(context) { return scopeOf(context); }
+
+// ---------- 手书节奏 ----------
+
+export const TEGAKI_RANGES = Object.freeze({ chorus: '第一段副歌', verseChorus: '一段主歌 + 副歌', full: '整首' });
+export const TEGAKI_RHYTHMS = Object.freeze({ line: '每句一换', beat: '跟着拍子切' });
+export const TEGAKI_LYRICS = Object.freeze({ subtitle: '字幕', big: '手书大字', none: '不显示' });
+export const TEGAKI_PRESETS = Object.freeze({
+    classic: { name: '手书经典', desc: '跟拍子快切、歌词大字，最像手书', rhythm: 'beat', lyric: 'big', motion: () => 'still', cut: () => 'cut' },
+    gentle: { name: '抒情慢拍', desc: '每句一换、淡入淡出、轻轻推近', rhythm: 'line', lyric: 'subtitle', motion: chorus => chorus ? 'sway' : 'push', cut: () => 'fade' },
+    bright: { name: '明快跟拍', desc: '副歌闪白切换、画面推近', rhythm: 'beat', lyric: 'big', motion: () => 'push', cut: chorus => chorus ? 'flash' : 'cut' },
+});
+
+export function tegakiOptions(record) {
+    const value = record?.tegaki || {};
+    return {
+        range: Object.hasOwn(TEGAKI_RANGES, value.range) ? value.range : 'verseChorus',
+        rhythm: Object.hasOwn(TEGAKI_RHYTHMS, value.rhythm) ? value.rhythm : 'line',
+        lyric: Object.hasOwn(TEGAKI_LYRICS, value.lyric) ? value.lyric : (record?.subtitles === false ? 'none' : 'subtitle'),
+        preset: Object.hasOwn(TEGAKI_PRESETS, value.preset) ? value.preset : '',
+    };
+}
+
+const isChorusTag = tag => /^(final )?chorus|^hook/i.test(String(tag || ''));
+
+// 手书通常只截一段：按段落时间取范围，找不到副歌时退回整首。
+export function playRange(record, song) {
+    const { sections, times, total } = shotTimeline(record, song);
+    const option = tegakiOptions(record).range;
+    const whole = { start: 0, end: total, label: TEGAKI_RANGES.full };
+    if (option === 'full') return whole;
+    const chorus = sections.findIndex(s => isChorusTag(s.tag));
+    if (chorus < 0) return whole;
+    if (option === 'chorus') return { start: times[chorus].start, end: times[chorus].end, label: TEGAKI_RANGES.chorus };
+    let first = chorus;
+    for (let i = chorus - 1; i >= 0; i -= 1) { if (/^verse/i.test(sections[i].tag)) { first = i; break; } }
+    return { start: times[first].start, end: times[chorus].end, label: TEGAKI_RANGES.verseChorus };
+}
+
+export function shotsInRange(record, song) {
+    const range = playRange(record, song);
+    return shotTimeline(record, song).rows.filter(row => row.end > range.start + 0.01 && row.start < range.end - 0.01).map(row => row.shot);
+}
+
+export function applyTegakiPreset(songId, presetId, song) {
+    const preset = TEGAKI_PRESETS[presetId];
+    if (!preset) return null;
+    const sections = parseSections(song.lyrics);
+    const context = core_context.currentCharacterGuard();
+    return writeMv(scopeOf(context), songId, current => {
+        if (!current) return current;
+        current.tegaki = { ...(current.tegaki || {}), rhythm: preset.rhythm, lyric: preset.lyric, preset: presetId };
+        for (const shot of list(current.shots)) {
+            const chorus = isChorusTag(sections[shot.sectionIndex]?.tag);
+            shot.motion = preset.motion(chorus); shot.cut = preset.cut(chorus);
+        }
+        return current;
+    });
+}
+
+export function patchTegaki(songId, patch) {
+    const context = core_context.currentCharacterGuard();
+    return writeMv(scopeOf(context), songId, current => current ? Object.assign(current, { tegaki: { ...(current.tegaki || {}), ...patch } }) : current);
+}
