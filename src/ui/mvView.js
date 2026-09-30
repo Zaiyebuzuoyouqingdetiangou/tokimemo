@@ -541,7 +541,7 @@ function renderTegaki(song, record) {
     page('手书剪辑台', '镜头清单', `${head(`手书 · ${song.title}`, '手书剪辑台', '放入歌曲就能预览。每一张怎么动，点下面的缩略图来改。')}
       <div class="rmt-mv-canvas-wrap" style="width:${w > h ? '100%' : 'min(100%, 300px)'}"><canvas data-rmt-mv-canvas width="${w}" height="${h}"></canvas></div>
       <div class="rmt-mv-bar"><button type="button" class="rmt-mv-play" data-rmt-mv="play" aria-label="${player.playing ? '暂停' : '播放'}" ${exporting ? 'disabled' : ''}>${player.playing ? '❚❚' : '▶'}</button>
-        <div class="rmt-mv-track"><div><i data-rmt-mv-progress></i></div><div style="display:flex;justify-content:space-between;background:none;height:auto"><span data-rmt-mv-time>0:00</span><span>${mv.formatTime(mv.shotTimeline(record, song).total)}</span></div></div></div>
+        <div class="rmt-mv-track" data-rmt-mv="seek" role="slider" aria-label="拖到这里播放" style="cursor:pointer"><div><i data-rmt-mv-progress></i></div><div style="display:flex;justify-content:space-between;background:none;height:auto"><span data-rmt-mv-time>0:00</span><span>${mv.formatTime(mv.shotTimeline(record, song).total)}</span></div></div></div>
       <div class="rmt-mv-strip">${strip}</div>
       ${sel ? `<section class="rmt-x-card"><div class="rmt-x-row-head"><b>第 ${selIndex + 1} 镜怎么动</b><span>${mv.formatTime(sel.start, true)}–${mv.formatTime(sel.end, true)}${imgUrl(sel.shot) ? '' : ' · 还没画，先用上一张'}</span></div>
         <div class="rmt-mv-grid2">${seg('set-motion', mv.MV_MOTIONS, sel.shot.motion)}</div>
@@ -1124,6 +1124,15 @@ export function handleMvClick(event) {
         else if (action === 'download-table') download(new Blob([mv.timetableText(record, currentSong())], { type: 'text/plain;charset=utf-8' }), `${safeName(currentSong().title)}-镜头时间表.txt`);
         else if (action === 'download-srt') download(new Blob([mv.srtText(record, currentSong())], { type: 'application/x-subrip;charset=utf-8' }), `${safeName(currentSong().title)}.srt`);
         else if (action === 'select-shot') { view.selected = id; renderMv(); }
+        else if (action === 'seek') {
+            // 跳转：画面、差分和字幕都读同一个播放时间，跳到哪里就从哪里对齐。
+            const rect = el.getBoundingClientRect();
+            const ratio = Math.min(1, Math.max(0, ((event.clientX ?? rect.left) - rect.left) / Math.max(1, rect.width)));
+            const time = ratio * mv.shotTimeline(record, currentSong()).total;
+            const audio = audioElement();
+            if (audio) audio.currentTime = time; else { player.clockOffset = time; player.clockStart = performance.now(); }
+            drawNow();
+        }
         else if (action === 'save-looks') {
             const context = ctx();
             const memory = archive_repository.requireArchive(context);
@@ -1265,6 +1274,7 @@ function renderGroupsBoard(song, record) {
 // ---------- 手书 v2：抠图、取色、渲染 ----------
 
 const cutouts = new Map();
+const cutMeta = new Map();
 const palettes = new Map();
 
 // 白底人物：从四边向内漫水填充近白色像素并设为透明；外站图片读不了像素时直接用原图。
@@ -1322,6 +1332,11 @@ function cutoutFor(url) {
             if (edge && Math.min(d[p * 4], d[p * 4 + 1], d[p * 4 + 2]) > 190) d[p * 4 + 3] = 110;
         }
         g.putImageData(img, 0, 0);
+        let x0 = cw, y0 = ch, x1 = -1, y1 = -1;
+        for (let y = 0; y < ch; y += 2) for (let x = 0; x < cw; x += 2) {
+            if (d[(y * cw + x) * 4 + 3] > 40) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+        }
+        if (x1 > x0 && y1 > y0) cutMeta.set(url, { cx: (x0 + x1) / 2 / cw, bottom: y1 / ch, height: (y1 - y0) / ch });
         const out = new Image();
         out.onload = () => drawNow();
         out.src = canvas.toDataURL('image/png');
@@ -1371,11 +1386,25 @@ function drawSceneV2(g, record, song, rows, index, t, w, h) {
     const diff = group?.diffs.find(d => d.id === row.shot.diff);
     const person = cutoutFor(diff?.image?.url);
     if (person) {
-        const breathe = 1 + 0.006 * Math.sin(t * Math.PI * 2 / 3.4);
-        g.save(); g.translate(w / 2, h); g.scale(push * breathe, push * breathe); g.translate(-w / 2, -h);
+        const breathe = 1 + 0.004 * Math.sin(t * Math.PI * 2 / 3.4);
+        // 同一构图里的差分对齐到这一组第一张：人物大小和脚底位置保持一致，换表情时不跳位。
+        const ref = (group.diffs || []).map(dd => cutMeta.get(dd.image?.url)).find(Boolean);
+        const cur = cutMeta.get(diff.image.url);
+        const r = Math.max(w / person.naturalWidth, h / person.naturalHeight);
+        const ox = (w - person.naturalWidth * r) / 2, oy = (h - person.naturalHeight * r) / 2;
+        const map = m => [ox + m.cx * person.naturalWidth * r, oy + m.bottom * person.naturalHeight * r];
+        g.save();
+        g.translate(w / 2, h); g.scale(push * breathe, push * breathe); g.translate(-w / 2, -h);
+        if (ref && cur && ref !== cur) {
+            const s = Math.min(1.18, Math.max(0.85, ref.height / Math.max(0.01, cur.height)));
+            const [tx, ty] = map(ref); const [cx, cy] = map(cur);
+            g.translate(tx, ty); g.scale(s, s); g.translate(-cx, -cy);
+        }
         drawCover(g, person, w, h, 1, 0, 0);
         g.restore();
     }
+    // 统一光色：用封面中间色轻轻叠一层柔光，让人物和背景更像同一张画。
+    g.save(); g.globalCompositeOperation = 'soft-light'; g.globalAlpha = 0.14; g.fillStyle = coverPalette(song)[1]; g.fillRect(0, 0, w, h); g.restore();
 }
 
 function drawMotif(g, record, song, row, t, w, h) {
@@ -1436,7 +1465,10 @@ function renderFrameV2(canvas, record, song, t) {
     drawSceneV2(g, record, song, rows, index, t, w, h);
     const prev = rows[index - 1];
     const since = t - row.start;
-    if (prev && prev.shot.group !== row.shot.group && since < 0.5) { g.save(); g.globalAlpha = 1 - since / 0.5; drawSceneV2(g, record, song, rows, index - 1, t, w, h); g.restore(); }
+    if (prev && prev.shot.group !== row.shot.group) {
+        if (prev.shot.cut === 'fade' && since < 0.35) { g.save(); g.globalAlpha = 1 - since / 0.35; drawSceneV2(g, record, song, rows, index - 1, t, w, h); g.restore(); }
+        else if (prev.shot.cut === 'flash' && since < 0.16) { g.save(); g.globalAlpha = 0.85 * (1 - since / 0.16); g.fillStyle = '#fff'; g.fillRect(0, 0, w, h); g.restore(); }
+    }
     drawMotif(g, record, song, row, t, w, h);
     const palette = coverPalette(song);
     const font = mv.TEGAKI_FONTS[topt.font] || mv.TEGAKI_FONTS.sans;

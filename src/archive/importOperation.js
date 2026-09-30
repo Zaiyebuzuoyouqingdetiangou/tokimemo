@@ -47,7 +47,7 @@ async function messagesForBatchRefs(progress, snapshot, context, expectedChatId,
 }
 
 export async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic = false, continueRecovery = false, restartImport = false, participantRoster, logicalTask, floorWindow = null,
-    draftId = '', selectedDraft = null, commitCompletedOnly = false, partialBase = null, independentResult = false, nextIndependentBatch = false, baseMemoryMissing = false, sceneRecords = null } = {}, preparation) {
+    draftId = '', selectedDraft = null, commitCompletedOnly = false, partialBase = null, independentResult = false, nextIndependentBatch = false, baseMemoryMissing = false, sceneRecords = null, acceptBaseline = false } = {}, preparation) {
     const context = preparation.context;
     const existing = Object.hasOwn(preparation, 'sourceExisting') ? preparation.sourceExisting : preparation.existing;
     // Capture before any await; a later chat/Persona switch cannot rebind this bank.
@@ -211,6 +211,8 @@ export async function importCurrentChatMemoryOperation({ fullRebuild = false, au
                 const prefixOnly = { ...alternate, fullPrefixFingerprint: '' };
                 if (!mismatch(alternate) || (!mismatch(prefixOnly) && hiddenMode === 'exclude')) { matched = alternate; break; }
             }
+            // 用户确认“以当前聊天为新基线”时：已归档的前 N 层不再核对，只整理之后新增的楼层；已有记忆不改动。
+            if (!matched && acceptBaseline && previousMessageCount <= snapshot.totalMessages) matched = snapshot;
             if (!matched) throw core_text.safeUserError('旧档案与当前聊天历史基线不一致，本次保留旧成果；请恢复原聊天历史后继续，或另行保留当前来源。', 'RMT_ARCHIVE_PREFIX_CHANGED');
             snapshot = matched;
             try { globalThis.toastr?.info?.('检测到隐藏楼层有变化，旧消息内容未变，已按原基线继续增量更新。', '心迹回廊'); } catch {}

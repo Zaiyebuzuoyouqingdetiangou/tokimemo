@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 311
-// Source SHA-256: c91c840403443a571ea646233f23da8241b7acff9f2835c7ae8bb5b68379ba65
+// Source SHA-256: 094cb25a5abfc297a0dc3ef38409cfa553abd44f30d7d5871edad0f81280040a
 // Build: python3 verification/build.py <source-root>
 
 const __m_core_themeSongCover_js = Object.create(null);
@@ -25665,7 +25665,7 @@ async function messagesForBatchRefs(progress, snapshot, context, expectedChatId,
 }
 
 async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic = false, continueRecovery = false, restartImport = false, participantRoster, logicalTask, floorWindow = null,
-    draftId = '', selectedDraft = null, commitCompletedOnly = false, partialBase = null, independentResult = false, nextIndependentBatch = false, baseMemoryMissing = false, sceneRecords = null } = {}, preparation) {
+    draftId = '', selectedDraft = null, commitCompletedOnly = false, partialBase = null, independentResult = false, nextIndependentBatch = false, baseMemoryMissing = false, sceneRecords = null, acceptBaseline = false } = {}, preparation) {
     const context = preparation.context;
     const existing = Object.hasOwn(preparation, 'sourceExisting') ? preparation.sourceExisting : preparation.existing;
     // Capture before any await; a later chat/Persona switch cannot rebind this bank.
@@ -25829,6 +25829,8 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
                 const prefixOnly = { ...alternate, fullPrefixFingerprint: '' };
                 if (!mismatch(alternate) || (!mismatch(prefixOnly) && hiddenMode === 'exclude')) { matched = alternate; break; }
             }
+            // 用户确认“以当前聊天为新基线”时：已归档的前 N 层不再核对，只整理之后新增的楼层；已有记忆不改动。
+            if (!matched && acceptBaseline && previousMessageCount <= snapshot.totalMessages) matched = snapshot;
             if (!matched) throw core_text.safeUserError('旧档案与当前聊天历史基线不一致，本次保留旧成果；请恢复原聊天历史后继续，或另行保留当前来源。', 'RMT_ARCHIVE_PREFIX_CHANGED');
             snapshot = matched;
             try { globalThis.toastr?.info?.('检测到隐藏楼层有变化，旧消息内容未变，已按原基线继续增量更新。', '心迹回廊'); } catch {}
@@ -74238,6 +74240,46 @@ const regenerateManagedTarget = __m_ui_overlayManage_js.regenerateManagedTarget;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 // handleOverlayClick 的连续语句分组放在 ui/overlayClickTargets.js、ui/overlayClickActions.js；分组函数返回它表示“没处理”，接着往下走。
 const OVERLAY_CLICK_UNHANDLED = Symbol('OVERLAY_CLICK_UNHANDLED');
 // 主窗口核心：打开与导航、建档入口、任务结果呈现、页面渲染、点击与变更事件分发
@@ -74381,10 +74423,22 @@ function requestCurrentArchiveImport({ cardTypeConfirmed = false, participantRos
         ? '默认只整理“上次档案之后新增的聊天”和发生变化的当前窗口记忆/摘要。已有 Mxxx 记忆 ID 不重排，已生成的回忆相簿、CG、ADV、房间、ENDING、储物、私人终端会继续保留。若检测到旧聊天被编辑/删除，本次会停止并保留成果，说明变更类别，由你选择如何处理。'
         : '这会读取当前聊天窗口并建立一份只属于这个窗口的心迹回廊档案。聊天正文不会被修改；之后也只有你手动更新时档案才会变化。';
     if (!confirmExplicitAction(title, detail, { destructive: false })) return false;
-    void archive_repository.importCurrentChatMemory({ fullRebuild: false,
-        ...(participantRoster !== undefined ? { participantRoster } : {}),
-    }).catch(error => {
+    const run = (extra = {}) => archive_repository.importCurrentChatMemory({ fullRebuild: false,
+        ...(participantRoster !== undefined ? { participantRoster } : {}), ...extra,
+    });
+    void run().catch(error => {
         console.error('[HeartbeatMemories] current archive import action failed', core_text.safeErrorDiagnostic(error));
+        if (error?.code === 'RMT_ARCHIVE_PREFIX_CHANGED' && existing) {
+            // 旧楼层和上次整理时不一样（常见于隐藏 / 编辑过旧消息）：让用户选择以当前聊天为新基线继续。
+            const ok = confirmExplicitAction('旧楼层和上次整理时不一样',
+                '可能隐藏、编辑或删除过比较早的消息。要以当前聊天为新基线，只整理上次之后新增的楼层吗？已有的 Mxxx 记忆和所有生成内容都不会改动；旧楼层的改动不会重新整理进档案。', { destructive: false });
+            if (ok) {
+                void run({ acceptBaseline: true }).catch(retryError => {
+                    globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(retryError)), '心迹回廊');
+                });
+                return;
+            }
+        }
         globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心迹回廊');
     });
     return true;
@@ -74866,22 +74920,20 @@ async function handleOverlayChange(event) {
         return;
     }
 }
-
-__m_ui_overlayCore_js.presentGenerationTaskResult = presentGenerationTaskResult;
-__m_ui_overlayCore_js.applyMemoryPatch = applyMemoryPatch;
-__m_ui_overlayCore_js.deleteManagedCategory = deleteManagedCategory;
-__m_ui_overlayCore_js.handleOverlayChange = handleOverlayChange;
 __m_ui_overlayCore_js.openOverlay = openOverlay;
 __m_ui_overlayCore_js.navigateBack = navigateBack;
 __m_ui_overlayCore_js.requestCurrentArchiveImport = requestCurrentArchiveImport;
+__m_ui_overlayCore_js.presentGenerationTaskResult = presentGenerationTaskResult;
 __m_ui_overlayCore_js.requestCurrentArchiveFullRebuild = requestCurrentArchiveFullRebuild;
+__m_ui_overlayCore_js.applyMemoryPatch = applyMemoryPatch;
 __m_ui_overlayCore_js.showChooser = showChooser;
 __m_ui_overlayCore_js.openCachedOrGenerate = openCachedOrGenerate;
 __m_ui_overlayCore_js.renderActive = renderActive;
+__m_ui_overlayCore_js.deleteManagedCategory = deleteManagedCategory;
 __m_ui_overlayCore_js.handleOverlayClick = handleOverlayClick;
+__m_ui_overlayCore_js.handleOverlayChange = handleOverlayChange;
 __m_ui_overlayCore_js.OVERLAY_CLICK_UNHANDLED = OVERLAY_CLICK_UNHANDLED;
 }
-
 
 function __init_ui_overlayClickActions_js() {
 // MODULE: ui/overlayClickActions.js
@@ -83541,6 +83593,10 @@ const state = __m_core_state_js.state;
 
 
 
+
+
+
+
 const esc = text.esc;
 const GROUPS = [['memory', '回忆'], ['life', '生活'], ['interaction', '互动'], ['stories', '番外']];
 const ALIAS_META = {
@@ -83685,6 +83741,14 @@ function arrangeArchiveWorkspace(body, { portals = [], ready = false, snapshot =
         const heading = document.createElement('header'); heading.className = 'rmt-workspace-section-head';
         const title = document.createElement('h2'); title.textContent = snapshot ? '档案概览' : ready ? '当前档案' : '为当前聊天建立档案';
         heading.appendChild(title); main.appendChild(heading);
+        if (ready && !snapshot) {
+            // 增量更新放到“当前档案”页最上面，不必再从文件夹入口里找。
+            const quick = document.createElement('div');
+            quick.className = 'rmt-archive-quick-update';
+            quick.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap;margin:0 0 12px';
+            quick.innerHTML = '<button type="button" class="rmt-btn" data-rmt-action="import-memory">增量更新当前窗口档案</button>';
+            main.appendChild(quick);
+        }
         if (sources) {
             const sourceTitle = document.createElement('h3'); sourceTitle.textContent = '记忆来源'; sources.prepend(sourceTitle);
             const sourceHelp = document.createElement('p'); sourceHelp.className = 'rmt-source-note'; sourceHelp.textContent = '聊天正文是建档来源；记忆 / 摘要为可选补充。'; sourceTitle.after(sourceHelp);
@@ -83816,7 +83880,6 @@ function openVoiceModule(route) {
     mirrorCall.mountMirrorCall(host, body.firstElementChild);
     syncWorkspaceChrome(); body.scrollTop = 0; return true;
 }
-
 __m_ui_workspace_js.syncWorkspaceChrome = syncWorkspaceChrome;
 __m_ui_workspace_js.workspaceNavHtml = workspaceNavHtml;
 __m_ui_workspace_js.openWorkspaceTab = openWorkspaceTab;
@@ -83830,7 +83893,6 @@ __m_ui_workspace_js.handleWorkspaceClick = handleWorkspaceClick;
 __m_ui_workspace_js.handleWorkspaceChange = handleWorkspaceChange;
 __m_ui_workspace_js.openVoiceModule = openVoiceModule;
 }
-
 
 function __init_ui_workspaceState_js() {
 // MODULE: ui/workspaceState.js
@@ -86197,13 +86259,22 @@ function shotTimeline(record, song) {
     times.forEach((time, index) => {
         const own = shots.filter(shot => shot.sectionIndex === index);
         const span = time.end - time.start;
-        const weights = own.map(shot => Math.min(3, Math.max(1, Number(shot.hold) || 1)));
+        const phaseFactor = { prep: 0.7, action: 0.6, settle: 1.3, still: 1 };
+        const weights = own.map(shot => Math.min(3, Math.max(1, Number(shot.hold) || 1)) * (phaseFactor[shot.phase] || 1));
         const sum = weights.reduce((a, b) => a + b, 0) || 1;
         let acc = 0;
         own.forEach((shot, k) => { const a = acc; acc += weights[k]; rows.push({ shot, start: time.start + span * a / sum, end: time.start + span * acc / sum, sectionIndex: index }); });
     });
     // 没有镜头的段落不留空白：前一镜一直停到下一镜开始；第一镜从 0 秒开始。
     if (rows.length) rows[0].start = 0;
+    // 构图卡片版：镜头切点吸附到最近的拍点，画面跟着音乐切，而不是等时长轮播。
+    if (record?.version === 2 && rows.length > 1) {
+        const beat = 60 / (songBpm(song) || 90);
+        for (let i = 1; i < rows.length; i += 1) {
+            const snapped = Math.round(rows[i].start / beat) * beat;
+            if (snapped > rows[i - 1].start + beat * 0.5 && (i + 1 >= rows.length || snapped < rows[i + 1].start - beat * 0.5)) rows[i].start = snapped;
+        }
+    }
     for (let i = 0; i < rows.length; i += 1) rows[i].end = i + 1 < rows.length ? rows[i + 1].start : Math.max(rows[i].end, total);
     return { rows, sections, times, total };
 }
@@ -86297,7 +86368,7 @@ ${settings.output === 'video' ? `1. 按段落写镜头：${settings.output === '
 5. imagePrompt：这一镜第一张图的英文画面描述（人物动作、表情、场景、光线、构图），不写人物外貌细节，不写文字、字幕、Logo。
 6. videoZh / videoEn：给视频工具的描述，中文与英文各一份，写清画面里有什么、镜头怎么动、光线，结尾写时长约 5 秒；不写歌词原文。
 
-` : ''}7. wardrobe：先按角色设定与世界观定下统一的时代场景与衣着（英文，具体到款式、颜色、材质），古代背景就写古装，不写现代服装；era 写时代与场所，char 写 ${charName} 的衣着${settings.appear === 'none' ? '' : `，user 写 ${userName} 的衣着`}。
+` : ''}7. wardrobe：先按角色设定与世界观定下统一的时代场景与衣着（英文，具体到款式、颜色、材质），古代背景就写古装，不写现代服装；两个人的衣着必须明显不同（款式、主色都不同）；era 写时代与场所，char 写 ${charName} 的衣着${settings.appear === 'none' ? '' : `，user 写 ${userName} 的衣着`}。
 
 【输出】
 只输出一个 JSON 对象。
@@ -86305,7 +86376,7 @@ ${settings.output === 'video' ? `1. 按段落写镜头：${settings.output === '
 不要前言，不要解释，不要代码围栏，不要在 JSON 外面写任何字。
 ${settings.output === 'video'
         ? '{"wardrobe":{"era":"……","char":"……","user":"……"},"shots":[{"sectionIndex":0,"lyric":"","plain":"……","who":"char","shot":"中景：看到上半身","move":"镜头慢慢推近","motion":"push","imagePrompt":"……","videoZh":"……","videoEn":"……"}]}'
-        : '{"wardrobe":{"era":"……","char":"……","user":"……"},"keyword":"副歌里最有分量的词","motif":{"name":"竹叶","prompt":"english: one decorative element"},"groups":[{"id":"G1","composition":"低机位 · 蹲下喂猫 · 人物在左","position":"left","scale":"full","characterPrompt":"english: camera angle, framing, pose base, who and what is in frame","who":"char","motion":"still","link":"下一组如何承接","bgs":[{"id":"B1","label":"午后","prompt":"english: empty scenery only"}],"diffs":[{"id":"D1","label":"伸手前","change":"english: this moment of the action"}]}],"frames":[{"sectionIndex":1,"lyric":"原句","group":"G1","diff":"D1","bg":"B1","hold":1}]}'}`;
+        : '{"wardrobe":{"era":"……","char":"……","user":"……"},"keyword":"副歌里最有分量的词","motif":{"name":"竹叶","prompt":"english: one decorative element"},"groups":[{"id":"G1","composition":"低机位 · 蹲下喂猫 · 人物在左","position":"left","scale":"full","characterPrompt":"english: camera angle, framing, pose base, who and what is in frame","who":"char","motion":"still","transition":"cut","link":"下一组如何承接","bgs":[{"id":"B1","label":"午后","prompt":"english: empty scenery only"}],"diffs":[{"id":"D1","label":"伸手前","change":"english: this moment of the action"}]}],"frames":[{"sectionIndex":1,"lyric":"原句","group":"G1","diff":"D1","bg":"B1","hold":1,"phase":"prep"}]}'}`;
 }
 
 // 手书：少数构图，每个构图里几张连续变化的画（闭眼→睁眼→偏头），摊平成镜头。
@@ -86601,6 +86672,10 @@ function tegakiGrammar(sections, keep, charName = '{{char}}') {
 - 副歌可以有一个主视觉组，重复的副歌复用它；其余段落尽量用新的构图，尾奏可以回到开头的构图。
 - 每组写 link：最后一张怎样承接下一组（视线、手、飘动的衣角或发带）。
 - frames 按时间顺序：选中段落里的每一句歌词一条（lyric 抄原句），器乐段一条（lyric 留空），指向 group、diff 和 bg；动作连续的几句可以短，关键表情 hold 写 2 或 3。
+- 先想清楚每组的事件、情绪、景别和衔接，再写画面；远景、近景、细节特写和两人互动镜头都要有，少用相似的半身立绘。不必每句歌词都换图，一句也可以延续上一张。
+- 动作要有过程：frame.phase 写 prep（准备）、action（发生）、settle（收势停顿）或 still（静止）；不要让动态姿势长时间停着，也不要让两张差分来回往返。
+- transition 写这一组开始时怎么切入：动作衔接用 cut（干脆），回忆或时间流逝用 fade，强烈情绪转折可用 flash；不要整片都用同一种。
+- 两人同框时 characterPrompt 必须分别写清两个人的性别、相对位置、发型和衣着差异，两人外貌和衣服明显不同；单人镜头只写一个人。
 - keyword：副歌里一个 2～4 字、最有分量的词。motif：歌词里一个可以漂浮的意象，prompt 用英文只描述这一个小元素。
 `;
 }
@@ -86628,6 +86703,7 @@ function buildShots(raw, memory, sectionCount, settings) {
             motion: g?.motion === 'push' ? 'push' : 'still',
             link: core_text.normalizeText(g?.link, 160), seed: 0, bg: null,
             position: ['left', 'center', 'right'].includes(g?.position) ? g.position : 'center',
+            transition: ['cut', 'fade', 'flash'].includes(g?.transition) ? g.transition : 'cut',
             scale: ['close', 'medium', 'full', 'wide'].includes(g?.scale) ? g.scale : 'medium',
             bgs: (list(g?.bgs).length ? list(g.bgs) : [{ label: '场景', prompt: g?.backgroundPrompt }]).slice(0, 2).map((b, k) => ({
                 id: `B${k + 1}`, rawId: core_text.normalizeText(b?.id, 20) || `B${k + 1}`,
@@ -86653,11 +86729,15 @@ function buildShots(raw, memory, sectionCount, settings) {
             plain: `${group.composition || group.id} · ${diff.label}`,
             group: ref.id, diff: diff.id, bg: bgRow.id, who: group.who,
             hold: Math.min(3, Math.max(1, Math.round(Number(f?.hold) || 1))),
+            phase: ['prep', 'action', 'settle', 'still'].includes(f?.phase) ? f.phase : 'still',
             motion: group.motion, cut: 'cut', image: null, videoDone: false,
         });
     }
     if (!groups.length || !shots.length) throw core_text.safeUserError('这次没有收到可用的构图，可以再试一次。', 'RMT_MV_EMPTY');
-    for (let i = 0; i < shots.length; i += 1) shots[i].cut = shots[i + 1] && shots[i + 1].group === shots[i].group ? 'cut' : 'fade';
+    for (let i = 0; i < shots.length; i += 1) {
+        const nextGroup = shots[i + 1] && groups.find(g => g.id === shots[i + 1].group);
+        shots[i].cut = !shots[i + 1] || shots[i + 1].group === shots[i].group ? 'cut' : (nextGroup?.transition || 'cut');
+    }
     for (const g of groups) g.bgs = g.bgs.map(({ rawId, ...rest }) => rest);
     const motifPrompt = core_text.normalizeText(raw?.motif?.prompt, 300);
     return {
@@ -86716,7 +86796,8 @@ function assetPrompt(record, key, context) {
     const place = { left: 'character placed on the left third of the frame', right: 'character placed on the right third of the frame', center: '' }[found.group.position] || '';
     const size = { close: 'close-up shot', medium: 'medium shot, waist up', full: 'full body shot', wide: 'wide shot, small figure' }[found.group.scale] || '';
     return [style, ratio, found.group.characterPrompt, found.diff.change, place, size, lookLine ? `fixed appearance, keep consistent: ${lookLine}` : '', wardrobeLine(record, hasChar, hasUser), back,
-        hasChar && hasUser ? 'exactly two people' : 'only one person',
+        hasChar && hasUser ? `exactly two different people${record?.wardrobe?.user ? '' : ', the second person wears clearly different clothes from the main character'}, different faces and hairstyles` : 'solo, only one person',
+        'a single moment, one pose per person, not a character sheet, no multiple views, no split panels, no duplicated figures',
         'isolated on a pure white background, plain white backdrop, no scenery, clean silhouette edges, no text'].filter(Boolean).join(', ');
 }
 
@@ -87434,7 +87515,7 @@ function renderTegaki(song, record) {
     page('手书剪辑台', '镜头清单', `${head(`手书 · ${song.title}`, '手书剪辑台', '放入歌曲就能预览。每一张怎么动，点下面的缩略图来改。')}
       <div class="rmt-mv-canvas-wrap" style="width:${w > h ? '100%' : 'min(100%, 300px)'}"><canvas data-rmt-mv-canvas width="${w}" height="${h}"></canvas></div>
       <div class="rmt-mv-bar"><button type="button" class="rmt-mv-play" data-rmt-mv="play" aria-label="${player.playing ? '暂停' : '播放'}" ${exporting ? 'disabled' : ''}>${player.playing ? '❚❚' : '▶'}</button>
-        <div class="rmt-mv-track"><div><i data-rmt-mv-progress></i></div><div style="display:flex;justify-content:space-between;background:none;height:auto"><span data-rmt-mv-time>0:00</span><span>${mv.formatTime(mv.shotTimeline(record, song).total)}</span></div></div></div>
+        <div class="rmt-mv-track" data-rmt-mv="seek" role="slider" aria-label="拖到这里播放" style="cursor:pointer"><div><i data-rmt-mv-progress></i></div><div style="display:flex;justify-content:space-between;background:none;height:auto"><span data-rmt-mv-time>0:00</span><span>${mv.formatTime(mv.shotTimeline(record, song).total)}</span></div></div></div>
       <div class="rmt-mv-strip">${strip}</div>
       ${sel ? `<section class="rmt-x-card"><div class="rmt-x-row-head"><b>第 ${selIndex + 1} 镜怎么动</b><span>${mv.formatTime(sel.start, true)}–${mv.formatTime(sel.end, true)}${imgUrl(sel.shot) ? '' : ' · 还没画，先用上一张'}</span></div>
         <div class="rmt-mv-grid2">${seg('set-motion', mv.MV_MOTIONS, sel.shot.motion)}</div>
@@ -88017,6 +88098,15 @@ function handleMvClick(event) {
         else if (action === 'download-table') download(new Blob([mv.timetableText(record, currentSong())], { type: 'text/plain;charset=utf-8' }), `${safeName(currentSong().title)}-镜头时间表.txt`);
         else if (action === 'download-srt') download(new Blob([mv.srtText(record, currentSong())], { type: 'application/x-subrip;charset=utf-8' }), `${safeName(currentSong().title)}.srt`);
         else if (action === 'select-shot') { view.selected = id; renderMv(); }
+        else if (action === 'seek') {
+            // 跳转：画面、差分和字幕都读同一个播放时间，跳到哪里就从哪里对齐。
+            const rect = el.getBoundingClientRect();
+            const ratio = Math.min(1, Math.max(0, ((event.clientX ?? rect.left) - rect.left) / Math.max(1, rect.width)));
+            const time = ratio * mv.shotTimeline(record, currentSong()).total;
+            const audio = audioElement();
+            if (audio) audio.currentTime = time; else { player.clockOffset = time; player.clockStart = performance.now(); }
+            drawNow();
+        }
         else if (action === 'save-looks') {
             const context = ctx();
             const memory = archive_repository.requireArchive(context);
@@ -88158,6 +88248,7 @@ function renderGroupsBoard(song, record) {
 // ---------- 手书 v2：抠图、取色、渲染 ----------
 
 const cutouts = new Map();
+const cutMeta = new Map();
 const palettes = new Map();
 
 // 白底人物：从四边向内漫水填充近白色像素并设为透明；外站图片读不了像素时直接用原图。
@@ -88215,6 +88306,11 @@ function cutoutFor(url) {
             if (edge && Math.min(d[p * 4], d[p * 4 + 1], d[p * 4 + 2]) > 190) d[p * 4 + 3] = 110;
         }
         g.putImageData(img, 0, 0);
+        let x0 = cw, y0 = ch, x1 = -1, y1 = -1;
+        for (let y = 0; y < ch; y += 2) for (let x = 0; x < cw; x += 2) {
+            if (d[(y * cw + x) * 4 + 3] > 40) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+        }
+        if (x1 > x0 && y1 > y0) cutMeta.set(url, { cx: (x0 + x1) / 2 / cw, bottom: y1 / ch, height: (y1 - y0) / ch });
         const out = new Image();
         out.onload = () => drawNow();
         out.src = canvas.toDataURL('image/png');
@@ -88264,11 +88360,25 @@ function drawSceneV2(g, record, song, rows, index, t, w, h) {
     const diff = group?.diffs.find(d => d.id === row.shot.diff);
     const person = cutoutFor(diff?.image?.url);
     if (person) {
-        const breathe = 1 + 0.006 * Math.sin(t * Math.PI * 2 / 3.4);
-        g.save(); g.translate(w / 2, h); g.scale(push * breathe, push * breathe); g.translate(-w / 2, -h);
+        const breathe = 1 + 0.004 * Math.sin(t * Math.PI * 2 / 3.4);
+        // 同一构图里的差分对齐到这一组第一张：人物大小和脚底位置保持一致，换表情时不跳位。
+        const ref = (group.diffs || []).map(dd => cutMeta.get(dd.image?.url)).find(Boolean);
+        const cur = cutMeta.get(diff.image.url);
+        const r = Math.max(w / person.naturalWidth, h / person.naturalHeight);
+        const ox = (w - person.naturalWidth * r) / 2, oy = (h - person.naturalHeight * r) / 2;
+        const map = m => [ox + m.cx * person.naturalWidth * r, oy + m.bottom * person.naturalHeight * r];
+        g.save();
+        g.translate(w / 2, h); g.scale(push * breathe, push * breathe); g.translate(-w / 2, -h);
+        if (ref && cur && ref !== cur) {
+            const s = Math.min(1.18, Math.max(0.85, ref.height / Math.max(0.01, cur.height)));
+            const [tx, ty] = map(ref); const [cx, cy] = map(cur);
+            g.translate(tx, ty); g.scale(s, s); g.translate(-cx, -cy);
+        }
         drawCover(g, person, w, h, 1, 0, 0);
         g.restore();
     }
+    // 统一光色：用封面中间色轻轻叠一层柔光，让人物和背景更像同一张画。
+    g.save(); g.globalCompositeOperation = 'soft-light'; g.globalAlpha = 0.14; g.fillStyle = coverPalette(song)[1]; g.fillRect(0, 0, w, h); g.restore();
 }
 
 function drawMotif(g, record, song, row, t, w, h) {
@@ -88329,7 +88439,10 @@ function renderFrameV2(canvas, record, song, t) {
     drawSceneV2(g, record, song, rows, index, t, w, h);
     const prev = rows[index - 1];
     const since = t - row.start;
-    if (prev && prev.shot.group !== row.shot.group && since < 0.5) { g.save(); g.globalAlpha = 1 - since / 0.5; drawSceneV2(g, record, song, rows, index - 1, t, w, h); g.restore(); }
+    if (prev && prev.shot.group !== row.shot.group) {
+        if (prev.shot.cut === 'fade' && since < 0.35) { g.save(); g.globalAlpha = 1 - since / 0.35; drawSceneV2(g, record, song, rows, index - 1, t, w, h); g.restore(); }
+        else if (prev.shot.cut === 'flash' && since < 0.16) { g.save(); g.globalAlpha = 0.85 * (1 - since / 0.16); g.fillStyle = '#fff'; g.fillRect(0, 0, w, h); g.restore(); }
+    }
     drawMotif(g, record, song, row, t, w, h);
     const palette = coverPalette(song);
     const font = mv.TEGAKI_FONTS[topt.font] || mv.TEGAKI_FONTS.sans;

@@ -203,10 +203,22 @@ export function requestCurrentArchiveImport({ cardTypeConfirmed = false, partici
         ? '默认只整理“上次档案之后新增的聊天”和发生变化的当前窗口记忆/摘要。已有 Mxxx 记忆 ID 不重排，已生成的回忆相簿、CG、ADV、房间、ENDING、储物、私人终端会继续保留。若检测到旧聊天被编辑/删除，本次会停止并保留成果，说明变更类别，由你选择如何处理。'
         : '这会读取当前聊天窗口并建立一份只属于这个窗口的心迹回廊档案。聊天正文不会被修改；之后也只有你手动更新时档案才会变化。';
     if (!confirmExplicitAction(title, detail, { destructive: false })) return false;
-    void archive_repository.importCurrentChatMemory({ fullRebuild: false,
-        ...(participantRoster !== undefined ? { participantRoster } : {}),
-    }).catch(error => {
+    const run = (extra = {}) => archive_repository.importCurrentChatMemory({ fullRebuild: false,
+        ...(participantRoster !== undefined ? { participantRoster } : {}), ...extra,
+    });
+    void run().catch(error => {
         console.error('[HeartbeatMemories] current archive import action failed', core_text.safeErrorDiagnostic(error));
+        if (error?.code === 'RMT_ARCHIVE_PREFIX_CHANGED' && existing) {
+            // 旧楼层和上次整理时不一样（常见于隐藏 / 编辑过旧消息）：让用户选择以当前聊天为新基线继续。
+            const ok = confirmExplicitAction('旧楼层和上次整理时不一样',
+                '可能隐藏、编辑或删除过比较早的消息。要以当前聊天为新基线，只整理上次之后新增的楼层吗？已有的 Mxxx 记忆和所有生成内容都不会改动；旧楼层的改动不会重新整理进档案。', { destructive: false });
+            if (ok) {
+                void run({ acceptBaseline: true }).catch(retryError => {
+                    globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(retryError)), '心迹回廊');
+                });
+                return;
+            }
+        }
         globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心迹回廊');
     });
     return true;

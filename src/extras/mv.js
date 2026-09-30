@@ -295,13 +295,22 @@ export function shotTimeline(record, song) {
     times.forEach((time, index) => {
         const own = shots.filter(shot => shot.sectionIndex === index);
         const span = time.end - time.start;
-        const weights = own.map(shot => Math.min(3, Math.max(1, Number(shot.hold) || 1)));
+        const phaseFactor = { prep: 0.7, action: 0.6, settle: 1.3, still: 1 };
+        const weights = own.map(shot => Math.min(3, Math.max(1, Number(shot.hold) || 1)) * (phaseFactor[shot.phase] || 1));
         const sum = weights.reduce((a, b) => a + b, 0) || 1;
         let acc = 0;
         own.forEach((shot, k) => { const a = acc; acc += weights[k]; rows.push({ shot, start: time.start + span * a / sum, end: time.start + span * acc / sum, sectionIndex: index }); });
     });
     // 没有镜头的段落不留空白：前一镜一直停到下一镜开始；第一镜从 0 秒开始。
     if (rows.length) rows[0].start = 0;
+    // 构图卡片版：镜头切点吸附到最近的拍点，画面跟着音乐切，而不是等时长轮播。
+    if (record?.version === 2 && rows.length > 1) {
+        const beat = 60 / (songBpm(song) || 90);
+        for (let i = 1; i < rows.length; i += 1) {
+            const snapped = Math.round(rows[i].start / beat) * beat;
+            if (snapped > rows[i - 1].start + beat * 0.5 && (i + 1 >= rows.length || snapped < rows[i + 1].start - beat * 0.5)) rows[i].start = snapped;
+        }
+    }
     for (let i = 0; i < rows.length; i += 1) rows[i].end = i + 1 < rows.length ? rows[i + 1].start : Math.max(rows[i].end, total);
     return { rows, sections, times, total };
 }
@@ -395,7 +404,7 @@ ${settings.output === 'video' ? `1. 按段落写镜头：${settings.output === '
 5. imagePrompt：这一镜第一张图的英文画面描述（人物动作、表情、场景、光线、构图），不写人物外貌细节，不写文字、字幕、Logo。
 6. videoZh / videoEn：给视频工具的描述，中文与英文各一份，写清画面里有什么、镜头怎么动、光线，结尾写时长约 5 秒；不写歌词原文。
 
-` : ''}7. wardrobe：先按角色设定与世界观定下统一的时代场景与衣着（英文，具体到款式、颜色、材质），古代背景就写古装，不写现代服装；era 写时代与场所，char 写 ${charName} 的衣着${settings.appear === 'none' ? '' : `，user 写 ${userName} 的衣着`}。
+` : ''}7. wardrobe：先按角色设定与世界观定下统一的时代场景与衣着（英文，具体到款式、颜色、材质），古代背景就写古装，不写现代服装；两个人的衣着必须明显不同（款式、主色都不同）；era 写时代与场所，char 写 ${charName} 的衣着${settings.appear === 'none' ? '' : `，user 写 ${userName} 的衣着`}。
 
 【输出】
 只输出一个 JSON 对象。
@@ -403,7 +412,7 @@ ${settings.output === 'video' ? `1. 按段落写镜头：${settings.output === '
 不要前言，不要解释，不要代码围栏，不要在 JSON 外面写任何字。
 ${settings.output === 'video'
         ? '{"wardrobe":{"era":"……","char":"……","user":"……"},"shots":[{"sectionIndex":0,"lyric":"","plain":"……","who":"char","shot":"中景：看到上半身","move":"镜头慢慢推近","motion":"push","imagePrompt":"……","videoZh":"……","videoEn":"……"}]}'
-        : '{"wardrobe":{"era":"……","char":"……","user":"……"},"keyword":"副歌里最有分量的词","motif":{"name":"竹叶","prompt":"english: one decorative element"},"groups":[{"id":"G1","composition":"低机位 · 蹲下喂猫 · 人物在左","position":"left","scale":"full","characterPrompt":"english: camera angle, framing, pose base, who and what is in frame","who":"char","motion":"still","link":"下一组如何承接","bgs":[{"id":"B1","label":"午后","prompt":"english: empty scenery only"}],"diffs":[{"id":"D1","label":"伸手前","change":"english: this moment of the action"}]}],"frames":[{"sectionIndex":1,"lyric":"原句","group":"G1","diff":"D1","bg":"B1","hold":1}]}'}`;
+        : '{"wardrobe":{"era":"……","char":"……","user":"……"},"keyword":"副歌里最有分量的词","motif":{"name":"竹叶","prompt":"english: one decorative element"},"groups":[{"id":"G1","composition":"低机位 · 蹲下喂猫 · 人物在左","position":"left","scale":"full","characterPrompt":"english: camera angle, framing, pose base, who and what is in frame","who":"char","motion":"still","transition":"cut","link":"下一组如何承接","bgs":[{"id":"B1","label":"午后","prompt":"english: empty scenery only"}],"diffs":[{"id":"D1","label":"伸手前","change":"english: this moment of the action"}]}],"frames":[{"sectionIndex":1,"lyric":"原句","group":"G1","diff":"D1","bg":"B1","hold":1,"phase":"prep"}]}'}`;
 }
 
 // 手书：少数构图，每个构图里几张连续变化的画（闭眼→睁眼→偏头），摊平成镜头。
@@ -699,6 +708,10 @@ function tegakiGrammar(sections, keep, charName = '{{char}}') {
 - 副歌可以有一个主视觉组，重复的副歌复用它；其余段落尽量用新的构图，尾奏可以回到开头的构图。
 - 每组写 link：最后一张怎样承接下一组（视线、手、飘动的衣角或发带）。
 - frames 按时间顺序：选中段落里的每一句歌词一条（lyric 抄原句），器乐段一条（lyric 留空），指向 group、diff 和 bg；动作连续的几句可以短，关键表情 hold 写 2 或 3。
+- 先想清楚每组的事件、情绪、景别和衔接，再写画面；远景、近景、细节特写和两人互动镜头都要有，少用相似的半身立绘。不必每句歌词都换图，一句也可以延续上一张。
+- 动作要有过程：frame.phase 写 prep（准备）、action（发生）、settle（收势停顿）或 still（静止）；不要让动态姿势长时间停着，也不要让两张差分来回往返。
+- transition 写这一组开始时怎么切入：动作衔接用 cut（干脆），回忆或时间流逝用 fade，强烈情绪转折可用 flash；不要整片都用同一种。
+- 两人同框时 characterPrompt 必须分别写清两个人的性别、相对位置、发型和衣着差异，两人外貌和衣服明显不同；单人镜头只写一个人。
 - keyword：副歌里一个 2～4 字、最有分量的词。motif：歌词里一个可以漂浮的意象，prompt 用英文只描述这一个小元素。
 `;
 }
@@ -726,6 +739,7 @@ export function buildShots(raw, memory, sectionCount, settings) {
             motion: g?.motion === 'push' ? 'push' : 'still',
             link: core_text.normalizeText(g?.link, 160), seed: 0, bg: null,
             position: ['left', 'center', 'right'].includes(g?.position) ? g.position : 'center',
+            transition: ['cut', 'fade', 'flash'].includes(g?.transition) ? g.transition : 'cut',
             scale: ['close', 'medium', 'full', 'wide'].includes(g?.scale) ? g.scale : 'medium',
             bgs: (list(g?.bgs).length ? list(g.bgs) : [{ label: '场景', prompt: g?.backgroundPrompt }]).slice(0, 2).map((b, k) => ({
                 id: `B${k + 1}`, rawId: core_text.normalizeText(b?.id, 20) || `B${k + 1}`,
@@ -751,11 +765,15 @@ export function buildShots(raw, memory, sectionCount, settings) {
             plain: `${group.composition || group.id} · ${diff.label}`,
             group: ref.id, diff: diff.id, bg: bgRow.id, who: group.who,
             hold: Math.min(3, Math.max(1, Math.round(Number(f?.hold) || 1))),
+            phase: ['prep', 'action', 'settle', 'still'].includes(f?.phase) ? f.phase : 'still',
             motion: group.motion, cut: 'cut', image: null, videoDone: false,
         });
     }
     if (!groups.length || !shots.length) throw core_text.safeUserError('这次没有收到可用的构图，可以再试一次。', 'RMT_MV_EMPTY');
-    for (let i = 0; i < shots.length; i += 1) shots[i].cut = shots[i + 1] && shots[i + 1].group === shots[i].group ? 'cut' : 'fade';
+    for (let i = 0; i < shots.length; i += 1) {
+        const nextGroup = shots[i + 1] && groups.find(g => g.id === shots[i + 1].group);
+        shots[i].cut = !shots[i + 1] || shots[i + 1].group === shots[i].group ? 'cut' : (nextGroup?.transition || 'cut');
+    }
     for (const g of groups) g.bgs = g.bgs.map(({ rawId, ...rest }) => rest);
     const motifPrompt = core_text.normalizeText(raw?.motif?.prompt, 300);
     return {
@@ -814,7 +832,8 @@ export function assetPrompt(record, key, context) {
     const place = { left: 'character placed on the left third of the frame', right: 'character placed on the right third of the frame', center: '' }[found.group.position] || '';
     const size = { close: 'close-up shot', medium: 'medium shot, waist up', full: 'full body shot', wide: 'wide shot, small figure' }[found.group.scale] || '';
     return [style, ratio, found.group.characterPrompt, found.diff.change, place, size, lookLine ? `fixed appearance, keep consistent: ${lookLine}` : '', wardrobeLine(record, hasChar, hasUser), back,
-        hasChar && hasUser ? 'exactly two people' : 'only one person',
+        hasChar && hasUser ? `exactly two different people${record?.wardrobe?.user ? '' : ', the second person wears clearly different clothes from the main character'}, different faces and hairstyles` : 'solo, only one person',
+        'a single moment, one pose per person, not a character sheet, no multiple views, no split panels, no duplicated figures',
         'isolated on a pure white background, plain white backdrop, no scenery, clean silhouette edges, no text'].filter(Boolean).join(', ');
 }
 

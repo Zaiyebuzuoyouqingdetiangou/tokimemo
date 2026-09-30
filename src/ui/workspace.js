@@ -166,6 +166,14 @@ export function arrangeArchiveWorkspace(body, { portals = [], ready = false, sna
         const heading = document.createElement('header'); heading.className = 'rmt-workspace-section-head';
         const title = document.createElement('h2'); title.textContent = snapshot ? '档案概览' : ready ? '当前档案' : '为当前聊天建立档案';
         heading.appendChild(title); main.appendChild(heading);
+        if (ready && !snapshot) {
+            // 增量更新放到“当前档案”页最上面，不必再从文件夹入口里找。
+            const quick = document.createElement('div');
+            quick.className = 'rmt-archive-quick-update';
+            quick.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap;margin:0 0 12px';
+            quick.innerHTML = '<button type="button" class="rmt-btn" data-rmt-action="import-memory">增量更新当前窗口档案</button>';
+            main.appendChild(quick);
+        }
         if (sources) {
             const sourceTitle = document.createElement('h3'); sourceTitle.textContent = '记忆来源'; sources.prepend(sourceTitle);
             const sourceHelp = document.createElement('p'); sourceHelp.className = 'rmt-source-note'; sourceHelp.textContent = '聊天正文是建档来源；记忆 / 摘要为可选补充。'; sourceTitle.after(sourceHelp);

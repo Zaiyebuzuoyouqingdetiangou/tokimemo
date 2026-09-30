@@ -1,7 +1,7 @@
 {
   "display_name": "心迹回廊",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.99.99-r84.193-hidden-floors",
+  "js": "index.js?heartbeat=0.99.99-r84.194-tegaki-quality",
   "author": "Toto",
   "version": "0.99.99",
   "auto_update": true,
@@ -10,6 +10,6 @@
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r84.193：隐藏楼层后增量更新不再误报基线不一致；私人终端气泡文字可读。",
+  "description": "r84.194：增量更新可按当前聊天为新基线继续、入口移到当前档案页；手书差分对齐、动作节奏、拍点切镜、按内容转场、光色统一、双人区分。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }
