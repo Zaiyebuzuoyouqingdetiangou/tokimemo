@@ -1,7 +1,7 @@
 {
   "display_name": "心迹回廊",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.99.99-r84.211-mv-transport-errors",
+  "js": "index.js?heartbeat=0.99.99-r84.212-mv-cast-directions",
   "author": "Toto",
   "version": "0.99.99",
   "auto_update": true,
@@ -10,6 +10,6 @@
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r84.211：修复后端 524 错误被当作分镜 JSON 解析的误报；诊断记录 MV 和 HTTP 状态；保留续写及片段导出，不调整生成参数。",
+  "description": "r84.212：MV 本曲多人名单、世界书选人及逐镜人物绑定；六类分镜与自动混合，按歌曲资料本地推荐；保留已有素材、分段续做及片段导出。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }

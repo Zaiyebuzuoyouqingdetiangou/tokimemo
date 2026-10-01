@@ -100,7 +100,7 @@ export function chooseRandomParticipantId(roster, { excludedIds = [], random = M
 // Selection is local until the caller explicitly commits it. Loading books, naming
 // people, toggling checkboxes and closing this dialog never request generation.
 export async function showParticipantPicker({ context = contextApi.currentCharacterGuard(), roster,
-    onConfirm, requireSelection = false, title = '选择加入回廊的人物', confirmLabel = '保存人物名单' } = {}) {
+    onConfirm, requireSelection = false, title = '选择加入回廊的人物', confirmLabel = '保存人物名单', selectionLabel = '加入回廊', intro = '' } = {}) {
     const originalScope = contextApi.chatScopeKey(context);
     if (roster === undefined) {
         if (repository.getImportedMemory(context)) await cache.ensureCurrentArchiveBackup(context);
@@ -112,7 +112,7 @@ export async function showParticipantPicker({ context = contextApi.currentCharac
     const draft = initial || { version: 1, cardType: 'multi', revision: '', people: [], selectedIds: [] };
     const current = dialog(context, title, `
       <p>勾选世界书中的人物条目，核对下方姓名。一个条目可以加入多个人物，也可以为同一人物补充多个条目。</p>
-      <p>选人、改名不调用生成 API。人物设定不会作为已经发生的剧情写入记忆。</p>
+      <p>${intro ? text.esc(intro) : '选人、改名不调用生成 API。人物设定不会作为已经发生的剧情写入记忆。'}</p>
       <label class="rmt-participant-book-label">世界书<select data-rmt-participant-book aria-label="人物来源世界书"><option value="">正在读取世界书列表…</option></select></label>
        <div class="rmt-participant-entries" data-rmt-participant-entries></div>
        <h3>人物名单</h3><div data-rmt-participant-people></div>
@@ -135,7 +135,7 @@ export async function showParticipantPicker({ context = contextApi.currentCharac
     function renderPeople() {
         current.element.querySelector('[data-rmt-participant-people]').innerHTML = draft.people.length ? draft.people.map((person, index) => `
           <article class="rmt-participant-person" data-rmt-participant-person="${index}">
-            <label class="rmt-participant-select"><input type="checkbox" data-rmt-participant-selected="${index}" ${selected(person.id) ? 'checked' : ''}> 加入回廊</label>
+            <label class="rmt-participant-select"><input type="checkbox" data-rmt-participant-selected="${index}" ${selected(person.id) ? 'checked' : ''}> ${text.esc(selectionLabel)}</label>
             <label>人物名字<input type="text" data-rmt-participant-name="${index}" value="${text.esc(person.name)}"></label>
             <small>${person.sourceRefs.length ? person.sourceRefs.map(ref => `${text.esc(ref.world)} · ${text.esc(ref.title)} (#${text.esc(ref.uid)})`).join('<br>') : '手动补充，未关联世界书条目'}</small>
             ${person.sourceRefs.length ? `<button type="button" class="rmt-btn" data-rmt-participant-duplicate="${index}">这些条目里还有其他人物</button>` : ''}
