@@ -1,7 +1,7 @@
 {
   "display_name": "心迹回廊",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.99.99-r84.208-poster-intro",
+  "js": "index.js?heartbeat=0.99.99-r84.209-mv-continue-clips",
   "author": "Toto",
   "version": "0.99.99",
   "auto_update": true,
@@ -10,6 +10,6 @@
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r84.208：封面方向移到图片设置、横版封面完整显示；手书前奏显示海报与歌名直到第一句歌词；分镜加入特写组与最小差分。",
+  "description": "r84.209：手书可继续补写所选范围内缺少的分镜并保留原图；导出可独立选择已完成片段或起止段落；修复分镜构图结果截断。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }
