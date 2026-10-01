@@ -1,7 +1,7 @@
 {
   "display_name": "心迹回廊",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.99.99-r84.213-mv-host-errors",
+  "js": "index.js?heartbeat=0.99.99-r84.209-redraw-chunks",
   "author": "Toto",
   "version": "0.99.99",
   "auto_update": true,
@@ -10,6 +10,6 @@
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r84.213：修复 TT 将接口失败包装成正常分镜回复后的 JSON 误报，识别中英错误前缀及宿主错误标记；保留多人分镜、类型推荐、续做及片段导出。",
+  "description": "r84.209：手书重画换新种子、整组换一版；导出在插件内切换页面时继续；分镜分批写并可续写。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }
