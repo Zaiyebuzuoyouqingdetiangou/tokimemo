@@ -389,6 +389,21 @@ export function handleExtraClick(event) {
     const action = el.dataset.rmtExtra;
     const id = el.dataset.rmtExtraId || '';
     event.preventDefault?.();
+    if (action === 'song-cover-orient') {
+        const [songId, orientation] = id.split(':');
+        try {
+            const context = currentContext();
+            if (context && songId) {
+                const map = { ...(context.chatMetadata.heartbeatMemoriesSongCoverV1 || {}) };
+                map[songId] = orientation === 'landscape' ? 'landscape' : 'portrait';
+                context.chatMetadata.heartbeatMemoriesSongCoverV1 = map;
+                context.saveMetadataDebounced?.();
+                globalThis.toastr?.success?.(orientation === 'landscape' ? '封面改为横版，下次画封面时生效。' : '封面改为竖版，下次画封面时生效。', '心迹回廊');
+                void overlay.renderActive?.();
+            }
+        } catch (error) { toastError(error); }
+        return true;
+    }
     if (action === 'intel-open') { openExtra('intel', { person: el.dataset.rmtExtraPerson }); return true; }
     if (action === 'waiting-open-grid') { openExtra('waiting', { sub: 'grid' }); return true; }
     if (action === 'intel-garden') { openGarden(); return true; }

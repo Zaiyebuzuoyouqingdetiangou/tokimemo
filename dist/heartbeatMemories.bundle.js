@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 312
-// Source SHA-256: b55cee53563f4b068b088488e8a7d1d513ef88687518b83a4036502227cd6674
+// Source SHA-256: 884f75ff49c491de99d28d2343bfe34d18a38a7966838b60c2990b0668006690
 // Build: python3 verification/build.py <source-root>
 
 const __m_core_themeSongCover_js = Object.create(null);
@@ -10946,6 +10946,7 @@ const song_cover = __m_core_themeSongCover_js;
 
 
 
+
 const PREFIX = 'rmtcg2';
 const KINDS = new Set(['heart-voice', 'heart-scenario', 'heart-photoshoot', 'ending-ending', 'ending-epilogue', 'ending-epilogue-scene', 'ending-confession', 'heart-language', 'heart-portrait', 'heart-firefly', 'past-life-dossier', 'bedtime-chapter', 'butterfly-node', 'song-cover']);
 const SLOT_BY_KIND = Object.freeze({
@@ -11089,7 +11090,10 @@ function cgTargetInSession(mode, session, itemId) {
         const scene = song_cover.songCoverDraft(owner);
         const item = facade({ descriptor, visualRef: attachVisual(owner, 'visual'), sourceHash: hash(sourceText),
             title: owner.title || '角色印象曲', subtitle: '专辑封面', scene, sourceText, composed: scene });
-        item.cgLayout = 'song-cover'; item.cgOrientation = 'portrait';
+        // 封面方向由用户为每首歌选择（竖版 / 横版），默认竖版。
+        let orientation = 'portrait';
+        try { orientation = globalThis.SillyTavern?.getContext?.()?.chatMetadata?.heartbeatMemoriesSongCoverV1?.[owner.id] === 'landscape' ? 'landscape' : 'portrait'; } catch { orientation = 'portrait'; }
+        item.cgLayout = 'song-cover'; item.cgOrientation = orientation;
         item.cgPortrait = owner.voice !== 'duet' && owner.voice !== 'ensemble';
         return item;
     }
@@ -11328,7 +11332,6 @@ function normalizeLanguageCgVisuals(value, greetings = null) {
     }
     return rows;
 }
-
 __m_core_cgTargets_js.heartLanguageLineHash = heartLanguageLineHash;
 __m_core_cgTargets_js.normalizeCgTargetDescriptor = normalizeCgTargetDescriptor;
 __m_core_cgTargets_js.cgTargetItemId = cgTargetItemId;
@@ -11342,7 +11345,6 @@ __m_core_cgTargets_js.normalizeLocalCgSlots = normalizeLocalCgSlots;
 __m_core_cgTargets_js.normalizeLanguagePortrait = normalizeLanguagePortrait;
 __m_core_cgTargets_js.normalizeLanguageCgVisuals = normalizeLanguageCgVisuals;
 }
-
 
 function __init_core_cgVisualRules_js() {
 // MODULE: core/cgVisualRules.js
@@ -82458,7 +82460,11 @@ function renderThemeSongs() {
       <div data-rmt-song-copy-fallback></div></article>` : formatDetails;
     const cover = selected ? `<div class="rmt-song-cover">${expanded_cg_view.expandedCgHtml(session,
         { kind: 'song-cover', containerId: selected.id }, readonly(),
-        { placeholder: '<div class="rmt-song-cover-empty"><span aria-hidden="true">♫</span><b>专辑封面</b></div>' })}</div>` : '';
+        { placeholder: '<div class="rmt-song-cover-empty"><span aria-hidden="true">♫</span><b>专辑封面</b></div>' })}</div>${readonly() ? '' : (() => {
+            let current = 'portrait';
+            try { current = globalThis.SillyTavern?.getContext?.()?.chatMetadata?.heartbeatMemoriesSongCoverV1?.[selected.id] === 'landscape' ? 'landscape' : 'portrait'; } catch {}
+            return `<div class="rmt-song-cover-orient" style="display:flex;gap:8px;align-items:center;margin-top:8px;font-size:13px"><span>封面方向</span>${[['portrait', '竖版'], ['landscape', '横版']].map(([v, l]) => `<button type="button" class="rmt-btn${current === v ? ' active' : ''}" aria-pressed="${current === v}" data-rmt-extra="song-cover-orient" data-rmt-extra-id="${esc(selected.id)}:${v}">${l}</button>`).join('')}<small style="opacity:.75">下次画封面时生效</small></div>`;
+        })()}` : '';
     const details = `<div class="rmt-song-detail">${cover}${displayMode === 'format' ? formatDetails : readDetails}</div>`;
     const switcher = `<div class="rmt-song-display-switch" role="group" aria-label="歌曲显示模式"><button type="button" class="rmt-btn" data-rmt-song="view-read" aria-pressed="${displayMode === 'read'}">阅读模式</button><button type="button" class="rmt-btn" data-rmt-song="view-format" aria-pressed="${displayMode === 'format'}">创作格式</button></div>`;
     const list = session.songs.length ? `<nav class="rmt-song-list" aria-label="已保存的印象曲">${[...session.songs].reverse().map(song => `<button type="button" class="${song.id === selected?.id ? 'active' : ''}" data-rmt-song="select" data-rmt-song-id="${esc(song.id)}" aria-current="${song.id === selected?.id ? 'page' : 'false'}"><span aria-hidden="true">♪</span><span><b>${esc(song.title)}</b><small>${esc(song.singer)}</small></span></button>`).join('')}</nav>` : '';
@@ -85431,6 +85437,15 @@ ${r} .rmt-x-peep{position:relative;overflow:hidden;height:190px!important;justif
 ${r} .rmt-x-peep::before{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(90deg,rgba(8,8,14,.92) 0 12%,transparent 30% 70%,rgba(8,8,14,.92) 88% 100%)}
 ${r} .rmt-x-peep>*{position:relative;z-index:1}
 ${r} .rmt-x-hero span{color:#f3eee6!important;-webkit-text-fill-color:#f3eee6!important}
+${r} .rmt-x-night .rmt-x-sheet{background:#0e1319!important;border:1px solid #2a3846;border-radius:10px;--rmt-content-ink:#d6e6e0;position:relative;overflow:hidden;font-family:ui-monospace,"SFMono-Regular",Menlo,"PingFang SC",monospace}
+${r} .rmt-x-night .rmt-x-sheet::before{content:"";position:absolute;inset:0;pointer-events:none;background:repeating-linear-gradient(0deg,rgba(255,255,255,.035) 0 1px,transparent 1px 3px),radial-gradient(ellipse at center,transparent 55%,rgba(0,0,0,.45) 100%)}
+${r} .rmt-x-night .rmt-x-sheet>*{position:relative}
+${r} .rmt-x-night .rmt-x-sheet small{color:#78d3b2!important;-webkit-text-fill-color:#78d3b2!important;letter-spacing:3px}
+${r} .rmt-x-night .rmt-x-sheet small::before{content:"▸ ";}
+${r} .rmt-x-night .rmt-x-sheet p,${r} .rmt-x-night .rmt-x-sheet span{color:#d6e6e0!important;-webkit-text-fill-color:#d6e6e0!important}
+${r} .rmt-x-night .rmt-x-sheet .rmt-x-voice{color:#f2c38b!important;-webkit-text-fill-color:#f2c38b!important;font-family:inherit!important}
+${r} .rmt-x-night .rmt-x-sheet .rmt-x-chip{background:rgba(120,211,178,.12)!important;color:#78d3b2!important;-webkit-text-fill-color:#78d3b2!important;border:1px solid rgba(120,211,178,.3)}
+${r} .rmt-x-night .rmt-x-sheet .rmt-x-chip.warm,${r} .rmt-x-night .rmt-x-sheet .rmt-x-chip.muted{background:rgba(242,195,139,.1)!important;color:#e9c9a0!important;-webkit-text-fill-color:#e9c9a0!important;border-color:rgba(242,195,139,.3)}
 ${r} .rmt-x-recent-tile{position:relative;overflow:hidden}
 ${r} .rmt-x-recent-tile img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 ${r} .rmt-x-recent-tile em{position:relative}
@@ -85903,6 +85918,21 @@ function handleExtraClick(event) {
     const action = el.dataset.rmtExtra;
     const id = el.dataset.rmtExtraId || '';
     event.preventDefault?.();
+    if (action === 'song-cover-orient') {
+        const [songId, orientation] = id.split(':');
+        try {
+            const context = currentContext();
+            if (context && songId) {
+                const map = { ...(context.chatMetadata.heartbeatMemoriesSongCoverV1 || {}) };
+                map[songId] = orientation === 'landscape' ? 'landscape' : 'portrait';
+                context.chatMetadata.heartbeatMemoriesSongCoverV1 = map;
+                context.saveMetadataDebounced?.();
+                globalThis.toastr?.success?.(orientation === 'landscape' ? '封面改为横版，下次画封面时生效。' : '封面改为竖版，下次画封面时生效。', '心迹回廊');
+                void overlay.renderActive?.();
+            }
+        } catch (error) { toastError(error); }
+        return true;
+    }
     if (action === 'intel-open') { openExtra('intel', { person: el.dataset.rmtExtraPerson }); return true; }
     if (action === 'waiting-open-grid') { openExtra('waiting', { sub: 'grid' }); return true; }
     if (action === 'intel-garden') { openGarden(); return true; }
@@ -86373,6 +86403,23 @@ function shotTimeline(record, song) {
         let acc = 0;
         own.forEach((shot, k) => { const a = acc; acc += weights[k]; rows.push({ shot, start: time.start + span * a / sum, end: time.start + span * acc / sum, sectionIndex: index }); });
     });
+    // 逐句对时间：用户边听边点每一句的开头，对应歌词的镜头直接从点下的时间开始。
+    const lineTaps = record?.timing?.lineTaps || {};
+    if (Object.keys(lineTaps).length) {
+        const used = new Map();
+        for (const row of rows) {
+            const lines = sections[row.sectionIndex]?.lines || [];
+            const text = String(row.shot?.lyric || '').trim();
+            if (!text) continue;
+            const from = used.get(row.sectionIndex) || 0;
+            let idx = lines.findIndex((line, i) => i >= from && line.trim() === text);
+            if (idx < 0) idx = lines.findIndex(line => line.trim() === text);
+            if (idx < 0) continue;
+            used.set(row.sectionIndex, idx + 1);
+            const tap = Number(lineTaps[`${row.sectionIndex}:${idx}`]);
+            if (Number.isFinite(tap) && tap >= 0) row.lineTap = tap;
+        }
+    }
     // 没有镜头的段落不留空白：前一镜一直停到下一镜开始；第一镜从 0 秒开始。
     if (rows.length) rows[0].start = 0;
     // 构图卡片版：镜头切点吸附到最近的拍点，画面跟着音乐切，而不是等时长轮播。
@@ -86382,6 +86429,12 @@ function shotTimeline(record, song) {
             const snapped = Math.round(rows[i].start / beat) * beat;
             if (snapped > rows[i - 1].start + beat * 0.5 && (i + 1 >= rows.length || snapped < rows[i + 1].start - beat * 0.5)) rows[i].start = snapped;
         }
+    }
+    // 点过的句子以点下的时间为准（只要不早于上一镜），优先级高于估计和拍点吸附。
+    for (let i = 0; i < rows.length; i += 1) {
+        if (rows[i].lineTap === undefined) continue;
+        const prev = i > 0 ? rows[i - 1].start : -1;
+        if (rows[i].lineTap > prev) rows[i].start = rows[i].lineTap;
     }
     for (let i = 0; i < rows.length; i += 1) rows[i].end = i + 1 < rows.length ? rows[i + 1].start : Math.max(rows[i].end, total);
     return { rows, sections, times, total };
@@ -86993,6 +87046,17 @@ function setGroupLayer(songId, groupId, layer) {
         return current;
     });
 }
+
+
+// 逐句对时间用的歌词清单：按段落顺序列出（只列当前截取范围内的段落）。
+function syncLines(record, song) {
+    const sections = parseSections(song.lyrics);
+    const o = tegakiOptions(record);
+    const keep = new Set(selectedSectionIndexes(sections, o.range, o.rangeFrom, o.rangeTo));
+    const out = [];
+    sections.forEach((s, si) => { if (keep.has(si)) s.lines.forEach((line, li) => out.push({ key: `${si}:${li}`, text: line, section: s.name })); });
+    return out;
+}
 __m_extras_mv_js.motionOf = motionOf;
 __m_extras_mv_js.readMvStore = readMvStore;
 __m_extras_mv_js.readMv = readMv;
@@ -87041,6 +87105,7 @@ __m_extras_mv_js.isAssetDrawing = isAssetDrawing;
 __m_extras_mv_js.drawAsset = drawAsset;
 __m_extras_mv_js.setAssetSplit = setAssetSplit;
 __m_extras_mv_js.setGroupLayer = setGroupLayer;
+__m_extras_mv_js.syncLines = syncLines;
 __m_extras_mv_js.MV_KEY = MV_KEY;
 __m_extras_mv_js.MV_STYLES = MV_STYLES;
 __m_extras_mv_js.MV_APPEAR = MV_APPEAR;
@@ -87699,11 +87764,15 @@ function renderTegaki(song, record) {
         <b style="font-size:14px">切到下一镜时</b><div class="rmt-x-segs">${seg('set-cut', mv.MV_CUTS, sel.shot.cut || 'fade')}</div>
         <div class="rmt-mv-actions">${btn('draw', mv.isFrameDrawing(mv.mvScope(ctx()), view.songId, sel.shot.id) ? '正在画…' : imgUrl(sel.shot) ? '重画这张' : '画这一张', { id: sel.shot.id, disabled: mv.isFrameDrawing(mv.mvScope(ctx()), view.songId, sel.shot.id) })}${uploadLabel(sel.shot.id)}</div></section>` : ''}
       ${audioBySong.has(audioKey()) ? (() => {
-        const secs = mv.parseSections(song.lyrics);
-        const first = secs.findIndex(s => s.lines.length);
-        const taps = record.timing?.taps || {};
-        if (first < 0 || (taps[first] !== undefined && taps[first] !== null)) return '';
-        return `<section class="rmt-mv-warn"><b>前奏对不上歌词？</b><span>播放歌曲，听到第一句歌词开唱时点一下下面的按钮，整首的字幕和画面会一起对齐。</span>${btn('tap-vocal', '第一句歌词开唱了', { cls: 'rmt-x-primary', id: String(first) })}</section>`;
+        const lines = mv.syncLines(record, song);
+        if (!lines.length) return '';
+        const taps = record.timing?.lineTaps || {};
+        const done = lines.filter(l => Number.isFinite(Number(taps[l.key]))).length;
+        const next = lines.find(l => !Number.isFinite(Number(taps[l.key])));
+        return `<section class="rmt-x-card rmt-mv-linesync"><div class="rmt-x-row-head"><b>逐句对时间（最准）</b><span>${done} / ${lines.length} 句</span></div>
+          <p class="rmt-x-note">点播放，每唱到新的一句就点一下大按钮。字幕和画面会按你点的时间切换；没点到的句子仍用估计时间。</p>
+          ${next ? `<div class="rmt-mv-lyric"><small>下一句 · ${esc(next.section)}</small><p>${esc(next.text)}</p></div>${btn('tap-line', '这一句开始了', { cls: 'rmt-x-primary', id: next.key })}` : '<p class="rmt-x-note">全部对好了。</p>'}
+          <div class="rmt-mv-actions">${btn('tap-line-undo', '撤销上一句')}${btn('tap-line-reset', '全部重来')}</div></section>`;
       })() : ''}
       <section class="rmt-x-card"><b>歌曲与字幕</b>${audioCard(song)}
         ${tegakiControls(record, song)}
@@ -88314,6 +88383,18 @@ function handleMvClick(event) {
             const taps = record.timing?.taps || {};
             const next = sections.findIndex((_, i) => taps[i] === undefined || taps[i] === null);
             if (next >= 0) { setTap(next, Math.round(currentTime() * 10) / 10); renderMv(); }
+        }
+        else if (action === 'tap-line' || action === 'tap-line-undo' || action === 'tap-line-reset') {
+            const lineTaps = { ...(record.timing?.lineTaps || {}) };
+            if (action === 'tap-line') {
+                if (!player.playing) { toastOk('先点播放，唱到这一句时再点。'); return true; }
+                lineTaps[id] = Math.round(currentTime() * 10) / 10;
+            } else if (action === 'tap-line-undo') {
+                const order = mv.syncLines(record, currentSong()).map(l => l.key).filter(k => lineTaps[k] !== undefined);
+                if (order.length) delete lineTaps[order.at(-1)];
+            } else { for (const k of Object.keys(lineTaps)) delete lineTaps[k]; }
+            mv.patchRecord(view.songId, { timing: { ...(record.timing || {}), lineTaps } });
+            renderMv();
         }
         else if (action === 'tap-vocal') {
             if (!player.playing) { toastOk('先点播放，听到第一句歌词时再点。'); }

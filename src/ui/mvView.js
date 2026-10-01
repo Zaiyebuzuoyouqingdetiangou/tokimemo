@@ -572,11 +572,15 @@ function renderTegaki(song, record) {
         <b style="font-size:14px">切到下一镜时</b><div class="rmt-x-segs">${seg('set-cut', mv.MV_CUTS, sel.shot.cut || 'fade')}</div>
         <div class="rmt-mv-actions">${btn('draw', mv.isFrameDrawing(mv.mvScope(ctx()), view.songId, sel.shot.id) ? '正在画…' : imgUrl(sel.shot) ? '重画这张' : '画这一张', { id: sel.shot.id, disabled: mv.isFrameDrawing(mv.mvScope(ctx()), view.songId, sel.shot.id) })}${uploadLabel(sel.shot.id)}</div></section>` : ''}
       ${audioBySong.has(audioKey()) ? (() => {
-        const secs = mv.parseSections(song.lyrics);
-        const first = secs.findIndex(s => s.lines.length);
-        const taps = record.timing?.taps || {};
-        if (first < 0 || (taps[first] !== undefined && taps[first] !== null)) return '';
-        return `<section class="rmt-mv-warn"><b>前奏对不上歌词？</b><span>播放歌曲，听到第一句歌词开唱时点一下下面的按钮，整首的字幕和画面会一起对齐。</span>${btn('tap-vocal', '第一句歌词开唱了', { cls: 'rmt-x-primary', id: String(first) })}</section>`;
+        const lines = mv.syncLines(record, song);
+        if (!lines.length) return '';
+        const taps = record.timing?.lineTaps || {};
+        const done = lines.filter(l => Number.isFinite(Number(taps[l.key]))).length;
+        const next = lines.find(l => !Number.isFinite(Number(taps[l.key])));
+        return `<section class="rmt-x-card rmt-mv-linesync"><div class="rmt-x-row-head"><b>逐句对时间（最准）</b><span>${done} / ${lines.length} 句</span></div>
+          <p class="rmt-x-note">点播放，每唱到新的一句就点一下大按钮。字幕和画面会按你点的时间切换；没点到的句子仍用估计时间。</p>
+          ${next ? `<div class="rmt-mv-lyric"><small>下一句 · ${esc(next.section)}</small><p>${esc(next.text)}</p></div>${btn('tap-line', '这一句开始了', { cls: 'rmt-x-primary', id: next.key })}` : '<p class="rmt-x-note">全部对好了。</p>'}
+          <div class="rmt-mv-actions">${btn('tap-line-undo', '撤销上一句')}${btn('tap-line-reset', '全部重来')}</div></section>`;
       })() : ''}
       <section class="rmt-x-card"><b>歌曲与字幕</b>${audioCard(song)}
         ${tegakiControls(record, song)}
@@ -1187,6 +1191,18 @@ export function handleMvClick(event) {
             const taps = record.timing?.taps || {};
             const next = sections.findIndex((_, i) => taps[i] === undefined || taps[i] === null);
             if (next >= 0) { setTap(next, Math.round(currentTime() * 10) / 10); renderMv(); }
+        }
+        else if (action === 'tap-line' || action === 'tap-line-undo' || action === 'tap-line-reset') {
+            const lineTaps = { ...(record.timing?.lineTaps || {}) };
+            if (action === 'tap-line') {
+                if (!player.playing) { toastOk('先点播放，唱到这一句时再点。'); return true; }
+                lineTaps[id] = Math.round(currentTime() * 10) / 10;
+            } else if (action === 'tap-line-undo') {
+                const order = mv.syncLines(record, currentSong()).map(l => l.key).filter(k => lineTaps[k] !== undefined);
+                if (order.length) delete lineTaps[order.at(-1)];
+            } else { for (const k of Object.keys(lineTaps)) delete lineTaps[k]; }
+            mv.patchRecord(view.songId, { timing: { ...(record.timing || {}), lineTaps } });
+            renderMv();
         }
         else if (action === 'tap-vocal') {
             if (!player.playing) { toastOk('先点播放，听到第一句歌词时再点。'); }

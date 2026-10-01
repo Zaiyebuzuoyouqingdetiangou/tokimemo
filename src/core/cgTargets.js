@@ -148,7 +148,10 @@ export function cgTargetInSession(mode, session, itemId) {
         const scene = song_cover.songCoverDraft(owner);
         const item = facade({ descriptor, visualRef: attachVisual(owner, 'visual'), sourceHash: hash(sourceText),
             title: owner.title || '角色印象曲', subtitle: '专辑封面', scene, sourceText, composed: scene });
-        item.cgLayout = 'song-cover'; item.cgOrientation = 'portrait';
+        // 封面方向由用户为每首歌选择（竖版 / 横版），默认竖版。
+        let orientation = 'portrait';
+        try { orientation = globalThis.SillyTavern?.getContext?.()?.chatMetadata?.heartbeatMemoriesSongCoverV1?.[owner.id] === 'landscape' ? 'landscape' : 'portrait'; } catch { orientation = 'portrait'; }
+        item.cgLayout = 'song-cover'; item.cgOrientation = orientation;
         item.cgPortrait = owner.voice !== 'duet' && owner.voice !== 'ensemble';
         return item;
     }

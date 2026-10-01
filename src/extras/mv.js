@@ -314,6 +314,23 @@ export function shotTimeline(record, song) {
         let acc = 0;
         own.forEach((shot, k) => { const a = acc; acc += weights[k]; rows.push({ shot, start: time.start + span * a / sum, end: time.start + span * acc / sum, sectionIndex: index }); });
     });
+    // 逐句对时间：用户边听边点每一句的开头，对应歌词的镜头直接从点下的时间开始。
+    const lineTaps = record?.timing?.lineTaps || {};
+    if (Object.keys(lineTaps).length) {
+        const used = new Map();
+        for (const row of rows) {
+            const lines = sections[row.sectionIndex]?.lines || [];
+            const text = String(row.shot?.lyric || '').trim();
+            if (!text) continue;
+            const from = used.get(row.sectionIndex) || 0;
+            let idx = lines.findIndex((line, i) => i >= from && line.trim() === text);
+            if (idx < 0) idx = lines.findIndex(line => line.trim() === text);
+            if (idx < 0) continue;
+            used.set(row.sectionIndex, idx + 1);
+            const tap = Number(lineTaps[`${row.sectionIndex}:${idx}`]);
+            if (Number.isFinite(tap) && tap >= 0) row.lineTap = tap;
+        }
+    }
     // 没有镜头的段落不留空白：前一镜一直停到下一镜开始；第一镜从 0 秒开始。
     if (rows.length) rows[0].start = 0;
     // 构图卡片版：镜头切点吸附到最近的拍点，画面跟着音乐切，而不是等时长轮播。
@@ -323,6 +340,12 @@ export function shotTimeline(record, song) {
             const snapped = Math.round(rows[i].start / beat) * beat;
             if (snapped > rows[i - 1].start + beat * 0.5 && (i + 1 >= rows.length || snapped < rows[i + 1].start - beat * 0.5)) rows[i].start = snapped;
         }
+    }
+    // 点过的句子以点下的时间为准（只要不早于上一镜），优先级高于估计和拍点吸附。
+    for (let i = 0; i < rows.length; i += 1) {
+        if (rows[i].lineTap === undefined) continue;
+        const prev = i > 0 ? rows[i - 1].start : -1;
+        if (rows[i].lineTap > prev) rows[i].start = rows[i].lineTap;
     }
     for (let i = 0; i < rows.length; i += 1) rows[i].end = i + 1 < rows.length ? rows[i + 1].start : Math.max(rows[i].end, total);
     return { rows, sections, times, total };
@@ -933,4 +956,15 @@ export function setGroupLayer(songId, groupId, layer) {
         if (g) g.layer = layer === 'cutout' ? 'cutout' : 'full';
         return current;
     });
+}
+
+
+// 逐句对时间用的歌词清单：按段落顺序列出（只列当前截取范围内的段落）。
+export function syncLines(record, song) {
+    const sections = parseSections(song.lyrics);
+    const o = tegakiOptions(record);
+    const keep = new Set(selectedSectionIndexes(sections, o.range, o.rangeFrom, o.rangeTo));
+    const out = [];
+    sections.forEach((s, si) => { if (keep.has(si)) s.lines.forEach((line, li) => out.push({ key: `${si}:${li}`, text: line, section: s.name })); });
+    return out;
 }
