@@ -1,0 +1,83 @@
+✔ api check names the next action and interval stays an integer (3.020217ms)
+✔ unadapted modules stay out of the draw and off by default (2.151545ms)
+✔ archive and module request counts stay separate (0.465537ms)
+✔ first queue drops a bad id and one failure leaves the others (0.42004ms)
+✔ wizard completion round-trips and does not rewrite corrupt or old settings (2.429344ms)
+✔ task center floor retry uses the bundled scheduler, not a dynamic import (6.266287ms)
+✔ one reveal id is shared and a floor mount does not write the message (1.717414ms)
+✔ opening a reveal marks it read once and can be opened again (1.130609ms)
+(node:21) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ 前世卷宗：一个兔子菜单，里面有图片操作和挑今生；没有另起一排按钮 (365.771468ms)
+✔ 去掉出戏的说明：虚构、真实来源、Mxxx 编号 (321.865936ms)
+✔ 其他模块的图：有图时兔子菜单，没图时只留一个带兔子的设置按钮；样式和收起已接上 (3.200693ms)
+(node:37) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ detailed first-draft policy covers seasons, postending, ending increments and new image modes without changing old journal prompts (364.076222ms)
+✔ first voice draft retains authored scene and appearance through normalization and editor metadata (272.207589ms)
+✔ new image modes persist independent images/history, detect changed story and keep long chapters sendable (514.56782ms)
+✔ three ending epilogue images retain their own detailed first prompt (334.810552ms)
+✔ chapter continuation preserves a concurrently saved picture and UI renders new controls (397.611863ms)
+✔ group card keeps first scene fields without assigning char traits to arbitrary participant IDs; together bedtime includes optional fields (378.433994ms)
+(node:59) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ 冷却：上一轮刚抽到的模块这一轮不抽；只剩它一个时照常抽 (364.681004ms)
+✔ 久未抽到的加权从上次抽中之后算，抽中后清零 (285.962887ms)
+✔ 图片完整显示：图框跟着图片的比例，不裁切；历史切换在图片下面、变小 (1.458362ms)
+✔ 兔子在包图的框外：睡前故事只把图片包进绘本页；光栅卡的兔子紧贴图片下方 (1.257576ms)
+✔ 心跳四格和相簿卡片的图片操作也收进兔子 (1.501646ms)
+✔ old duplicated source exceeds 12MB; projection fits without deleting authoritative text (515.168515ms)
+✔ a different embedded task is never silently removed (0.460409ms)
+✔ tampered task/input hash is rejected, not resealed (0.999245ms)
+✔ legacy entry projection preserves source hash, request hashes and complete replies (0.641036ms)
+✔ modern draft persists, reloads, and remains bounded; CAS acknowledgement is used (701.055969ms)
+✔ nonredundant drafts above the former 12MB boundary save, reload and import (1800.861616ms)
+✔ actual storage quota failure keeps the draft available and never reports durable success (2.735436ms)
+✔ local-only recovery cannot dispatch an incomplete slot (11.679254ms)
+✔ partial commit leaves failed middle ranges and batch unfinished (2.122261ms)
+✔ half of a split floor is never marked covered (0.654856ms)
+✔ invalid duplicate and out-of-range partial indexes are rejected (0.481661ms)
+✔ receipt cannot be reused for altered replies, a changed revision, or another draft (0.5285ms)
+✔ an unknown complete slot cannot be marked as covered or committed (0.175359ms)
+✔ cache compression and decompression round-trip data above the former storage ceiling (162.925886ms)
+✔ compressed data above former 4M base64 boundary remains readable (301.507383ms)
+✔ formal checkpoint and independent backup accept more than 12MB without bypassing write acknowledgement (89.591641ms)
+(node:83) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ legacy firefly upgrade prompt builds with the frozen memory bank (107.200307ms)
+✔ an evening letter without the old scene words now gets a drawing from its own text (3.805526ms)
+✔ common letter phrasings map to the existing scene kinds (2.168009ms)
+✔ letters without a drawable scene still get no drawing (1.657726ms)
+✔ the letter page no longer prints a reason when there is no drawing (4.301477ms)
+(node:103) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ core files import no modes module (7.001221ms)
+✔ in the real bundle every bridged function is registered and is the modes function itself (101.640517ms)
+✔ an unregistered name fails loudly instead of guessing (1.102467ms)
+(node:109) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ real canonical save-only updates current revision, preserves prior page and original source (345.998131ms)
+✔ real staged save survives failed apply, retries once, and already-applied pending cleanup is idempotent (312.732759ms)
+✔ real canonical empty achievements save and reopen remains valid (271.619642ms)
+✔ real canonical discard after failed apply closes only pending result and preserves current page (268.652619ms)
+✔ new-task duplicate key is reserved synchronously until the first task settles (302.352736ms)
+(node:123) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ 真实导入：首次 B 从自己的第 1 楼续编，保留 A 编号、来源和生成缓存；之后仍校验 B 前缀 (316.370246ms)
+✔ 普通空前缀、错误成员检查点、已读过的 B 均不能冒用首次接力例外 (496.125471ms)
+✔ 只读 A 在付费导入之前被拒绝，包括主聊天镜像尚无接力标记的情况 (305.165117ms)
+✔ 未接力建档原流程可提交，不添加任何接力标记或检查点 (214.265313ms)
+✔ B 追加后接回 A，只处理 A 新楼层，A 原检查点与 B 的记忆均保留 (262.51058ms)
+✔ 明确完全重建也保留当前接力归属，不把成员变成未登记档案 (253.833802ms)
+(node:139) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ 旧批次有楼滑出最近 N 楼：下一楼自动建档把这批做完 (1209.814332ms)
+✔ 旧批次滑出范围的楼被改：仍然停下，不发请求 (965.561227ms)
+ℹ tests 59
+ℹ suites 0
+ℹ pass 59
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 4639.174417

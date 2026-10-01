@@ -39,6 +39,7 @@ import * as modes_timeStories from '../modes/timeStories.js';
 import * as workspace_ui from './workspace.js';
 import * as ui_workspaceState from './workspaceState.js';
 import * as toolbarIcons from './toolbarIcons.js';
+import * as mv_view from './mvView.js';
 // 主窗口外壳：手机安全区、打开 / 关闭 / 返回、聊天切换失效、通用小部件
 // 从 ui/overlay.js 原样搬出（重构阶段 2），声明文本一字未改；ui/overlay.js 仍转发原有导出。
 
@@ -161,6 +162,7 @@ export function revealArchiveOverlay(overlay) {
 }
 
 export function closeOverlay(options = {}) {
+    mv_view.disposeMv();
     archive_inheritance_view.clearArchiveInheritancePreview();
     mirror_reader.disposeMirrorReader();
     mirror_call.disposeMirrorCall();

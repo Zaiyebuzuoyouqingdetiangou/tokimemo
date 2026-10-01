@@ -262,6 +262,13 @@ export function overlayArchiveActions(actionEl, action) {
     if (action === 'manage-delete-target') return void deleteManagedTarget(actionEl.dataset.rmtManageType, actionEl.dataset.rmtManageId, actionEl.dataset.rmtManageParent);
     if (action === 'rebuild-archive-index') return void archive_library.rebuildArchiveIndexFromExisting();
     if (action === 'import-memory') return requestCurrentArchiveImport();
+    if (action === 'import-memory-rebase') {
+        // 按钮上已写清后果，点击即同意；不再依赖可能被宿主拦截的确认框。
+        void archive_repository.importCurrentChatMemory({ fullRebuild: false, acceptBaseline: true }).catch(error => {
+            globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心迹回廊');
+        });
+        return;
+    }
     if (action === 'participants-picker') return void requestParticipantSelection().catch(error => globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心迹回廊'));
     if (action === 'participants-versions') return void requestParticipantVersions().catch(error => globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心迹回廊'));
     if (action === 'full-rebuild-memory') return requestCurrentArchiveFullRebuild();

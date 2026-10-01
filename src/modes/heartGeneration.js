@@ -139,12 +139,24 @@ export async function regenerateHeartPage(page, options = {}) {
     }
 }
 
+// 温馨小番外：沿用日常一格的格式与图片约束，只换掉“由新增档案触发”的要求。
+function heartFreeStripPrompt(context, memoryBank, base) {
+    const existing = (Array.isArray(base?.dailyStrips) ? base.dailyStrips : []).slice(-60).map(item => ({ title: item.title, subtitle: item.subtitle }));
+    return `${heartStripsPrompt(context, memoryBank, base, null, null)}
+【这一次是温馨小番外】
+不需要对应新增记忆，不复述已发生的事件，也不当作已经发生的事实；按两人的人设、关系现状和世界观，写一段日常里可能发生的轻松、温暖的小片段，可以是季节、天气、吃饭、散步、一起发呆这类小事。
+避免与下列已有日常一格的标题和梗重复：${JSON.stringify(existing)}
+只输出 JSON。`;
+}
+
 export async function generateHeartSection(part, options = {}) {
     if (heartParticipantRegeneration(options)) return regenerateHeartPage(part === 'seasons' ? runtimeState.activeSession?.selectedSeason || 'postending' : part, options);
     const sourceSession = options.backgroundTarget?.session || runtimeState.activeSession;
     if (!sourceSession || sourceSession.kind !== core_constants.MODE.HEART) return;
     if (part === 'seasons') return generateHeartSeasonSection(sourceSession.selectedSeason || 'postending', options);
     if (part === 'fireflies') return generateHeartFirefliesSection(options);
+    // 温馨小番外：不需要新增记忆，也不消耗“从新增档案追加”的进度。
+    if (part === 'strips-free') { part = 'strips'; options = { ...options, freeStrip: true }; }
     if (!['dialogues', 'strips'].includes(part)) return;
     return runOrdinaryHeartLogicalTask(part === 'dialogues' ? 'language' : part, options,
         logicalTask => generateHeartSectionOperation(part, options, logicalTask));
@@ -155,6 +167,7 @@ async function generateHeartSectionOperation(part, options, logicalTask) {
     let resumeFull = options.existing?.operation?.dialogueMode === 'full';
     let category = languageCategory(options.existing?.operation?.languageCategory || options.languageCategory);
     if (!normalizedPart) return;
+    const freeStrip = normalizedPart === 'strips' && (options.freeStrip === true || options.existing?.operation?.freeStrip === true);
     const targetHint = heartPreparationTargetHint();
     let targetRuntime;
     try { targetRuntime = await prepareHeartSubtaskRuntime(`part:${normalizedPart}`, logicalTask, options.backgroundTarget); }
@@ -187,7 +200,7 @@ async function generateHeartSectionOperation(part, options, logicalTask) {
     let sourceMemoryIds = core_incremental.derivedExpansionMemoryIds(base, memoryBank, normalizedPart);
     let fullDialogues = normalizedPart === 'dialogues'
         && (options.replaceDialogues === true || resumeFull || !partsDialoguesReady(base));
-    if (!sourceMemoryIds.length && !fullDialogues) {
+    if (!sourceMemoryIds.length && !fullDialogues && !freeStrip) {
         await clearCommittedHeartRecovery(targetRuntime, base, { kind: 'heart-section', part: normalizedPart });
         globalThis.toastr?.info?.(heartTargetMessage(targetRuntime, `当前档案没有尚未用于${normalizedPart === 'dialogues' ? '基础语言' : '日常一格'}的新记忆。`), '心迹回廊');
         return;
@@ -209,7 +222,7 @@ async function generateHeartSectionOperation(part, options, logicalTask) {
     sourceMemoryIds = core_incremental.derivedExpansionMemoryIds(base, memoryBank, normalizedPart);
     fullDialogues = normalizedPart === 'dialogues'
         && (options.replaceDialogues === true || resumeFull || !partsDialoguesReady(base));
-    if (!sourceMemoryIds.length && !fullDialogues) {
+    if (!sourceMemoryIds.length && !fullDialogues && !freeStrip) {
         await clearCommittedHeartRecovery(targetRuntime, base, { kind: 'heart-section', part: normalizedPart });
         globalThis.toastr?.info?.(heartTargetMessage(targetRuntime, '另一项较新的任务已经覆盖这些新增记忆，本次没有重复生成。'), '心迹回廊');
         runtimeState.activeModeBuildScopes.delete(taskKey);
@@ -220,7 +233,7 @@ async function generateHeartSectionOperation(part, options, logicalTask) {
         globalThis.toastr?.info?.('基础语言已被另一任务更新，请重新确认；旧内容保留。', '心迹回廊');
         return;
     }
-    const coverage = {
+    const coverage = freeStrip ? { revisit: true } : {
         revisit: !!base && !core_incremental.incrementalArchiveMemoryIds(base, memoryBank, normalizedPart).length,
         coveragePart: normalizedPart,
         sourceMemoryIds,
@@ -230,7 +243,7 @@ async function generateHeartSectionOperation(part, options, logicalTask) {
     origin = targetRuntime.origin;
     core_requestCoordinator.refreshConcurrentTaskUi(core_constants.MODE.HEART, origin);
     try {
-        const recovery = await startHeartRecovery(targetRuntime, { kind: 'heart-section', part: normalizedPart, ...(normalizedPart === 'dialogues' ? { dialogueMode: fullDialogues ? 'full' : 'increment', ...(category ? { languageCategory: category } : {}) } : {}) }, options);
+        const recovery = await startHeartRecovery(targetRuntime, { kind: 'heart-section', part: normalizedPart, ...(freeStrip ? { freeStrip: true } : {}), ...(normalizedPart === 'dialogues' ? { dialogueMode: fullDialogues ? 'full' : 'increment', ...(category ? { languageCategory: category } : {}) } : {}) }, options);
         context = recovery.contentContext; memoryBank = recovery.contentBank;
         base = recovery.contentInputs?.baseSession || base;
         let persisted;
@@ -260,13 +273,14 @@ async function generateHeartSectionOperation(part, options, logicalTask) {
             }
         } else {
             const batch = await requestHeartPart(
-                heartStripsPrompt(context, memoryBank, base, base, sourceMemoryIds) + core_incremental.derivedExpansionDirective(base, memoryBank, 'strips'),
-                '角色互动 · 追加日常一格',
+                freeStrip ? heartFreeStripPrompt(context, memoryBank, base)
+                    : heartStripsPrompt(context, memoryBank, base, base, sourceMemoryIds) + core_incremental.derivedExpansionDirective(base, memoryBank, 'strips'),
+                freeStrip ? '角色互动 · 温馨小番外' : '角色互动 · 追加日常一格',
                 { maxTokens: 5000, context, origin, taskKey: `${taskKey}:strips`, mode: core_constants.MODE.HEART, background: true },
                 raw => normalizeHeartCollectionBatch(raw, 'strips'),
             );
-            const batchId = core_incremental.incrementalBatchId('strips', sourceMemoryIds);
-            const enriched = batch.items.map(item => ({ ...item, sourceArchiveMemoryIds: sourceMemoryIds, incrementBatchId: batchId, generatedAt: Date.now() }));
+            const batchId = freeStrip ? `free:${Date.now().toString(36)}` : core_incremental.incrementalBatchId('strips', sourceMemoryIds);
+            const enriched = batch.items.map(item => ({ ...item, sourceArchiveMemoryIds: freeStrip ? [] : sourceMemoryIds, incrementBatchId: batchId, ...(freeStrip ? { freeStrip: true } : {}), generatedAt: Date.now() }));
             persisted = await persistHeartPartialPatch('strips', { type: 'strips', dailyStrips: enriched, rejectedCount: batch.rejectedCount, ...coverage }, base, memoryBank, origin, expectedChatId, expectedArchiveRevision, targetRuntime);
         }
         await finishHeartRecovery(targetRuntime, persisted?.committed);

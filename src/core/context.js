@@ -70,7 +70,8 @@ export async function buildChatSnapshot(context = currentCharacterGuard(), optio
     const tagPolicy = core_contextTags.tagPolicyForContext(context);
     const usable = [];
     const fullSignatures = [];
-    const prefixCount = Math.max(0, Math.floor(Number(options.prefixCount) || 0));
+    let prefixCount = Math.max(0, Math.floor(Number(options.prefixCount) || 0));
+    const prefixFloor = Math.max(0, Math.floor(Number(options.prefixFloor) || 0));
     let fingerprint = 2166136261;
     let prefixFingerprint = 2166136261;
     const mix = (state, value) => {
@@ -93,7 +94,11 @@ export async function buildChatSnapshot(context = currentCharacterGuard(), optio
     for (let index = 0; index < rawChat.length; index += 1) {
         const message = rawChat[index];
         const text = core_text.normalizeText(message?.mes, 8000);
-        if (text && isArchiveDialogueMessage(message, context)) {
+        // hiddenMode 只用于核对旧档案基线：exclude = 旧版不收隐藏楼层；include = 隐藏楼层一律按对话算。
+        const dialogue = options.hiddenMode === 'exclude' ? !message?.is_system
+            : options.hiddenMode === 'include' ? (!message?.is_system || (typeof message?.is_user === 'boolean' && !['system', 'tool', 'developer'].includes(message?.role) && !message?.extra?.type && !message?.extra?.uses_system_ui))
+            : isArchiveDialogueMessage(message, context);
+        if (text && dialogue) {
             const isUser = message?.is_user === true;
             const item = {
                 index: index + 1,
@@ -114,6 +119,8 @@ export async function buildChatSnapshot(context = currentCharacterGuard(), optio
         }
     }
     const totalMessages = usable.length;
+    // 以楼层号定基线：上次整理到第 N 楼，就把第 N 楼及以前的对话都当作已整理。
+    if (prefixFloor > 0) prefixCount = usable.filter(item => item.index <= prefixFloor).length;
     fingerprint = mix(fingerprint, String(totalMessages));
     if (prefixCount > 0) prefixFingerprint = mix(prefixFingerprint, String(Math.min(prefixCount, totalMessages)));
 

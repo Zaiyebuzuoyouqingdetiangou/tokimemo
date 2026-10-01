@@ -90,7 +90,7 @@ export const MAX_MEMORY_PROMPT_ITEMS = 64;
 
 export const DERIVED_INCREMENTAL_SCHEMA_VERSION = 1;
 
-export const MAX_DERIVED_CONTENT_ITEMS = MAX_MEMORY_ITEMS;
+export const MAX_DERIVED_CONTENT_ITEMS = Infinity;
 
 export const MAX_INCREMENTAL_EXISTING_INDEX_ITEMS = 120;
 
@@ -98,16 +98,15 @@ export const MAX_GENERATION_INPUT_TOKENS = 60000;
 
 export const LEGACY_DEFAULT_INPUT_BUDGET_TOKENS = 32000;
 
-// Bounds for the user-adjustable input budget. Values outside this range are refused
-// at save time so a mistyped number cannot run away; per-request cost scales with input.
-export const MIN_USER_INPUT_BUDGET_TOKENS = 8000;
+// Preserve the user-selected positive safe integer; this is not a model capability.
+export const MIN_USER_INPUT_BUDGET_TOKENS = 1;
 
-export const MAX_USER_INPUT_BUDGET_TOKENS = 200000;
+export const MAX_USER_INPUT_BUDGET_TOKENS = Number.MAX_SAFE_INTEGER;
 
 // Legacy per-feature sizing hint only; never clamp the user's output setting to it.
 export const MAX_GENERATION_OUTPUT_TOKENS = 60000;
 
-export const MAX_GENERATION_OUTPUT_CHARS = 600000;
+export const MAX_GENERATION_OUTPUT_CHARS = Infinity;
 
 export const MAX_GENERATION_INPUT_CHARS = 180000;
 
@@ -383,7 +382,7 @@ export const MAX_GENERATION_REQUEST_TIMEOUT_MS = 1200000;
 
 export const MANUAL_API_MODEL_LIST_TIMEOUT_MS = 30000;
 
-export const MAX_MANUAL_API_RESPONSE_BYTES = 4000000;
+export const MAX_MANUAL_API_RESPONSE_BYTES = Infinity;
 
 export const SEGMENT_REQUEST_CONCURRENCY = 2;
 

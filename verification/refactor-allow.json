@@ -1,0 +1,15 @@
+{
+  "note": "r84.96 的两条记录说明 mountSettings 相对 r84.92 基线为什么可以不同。r84.122 已重拍 verification/refactor-baseline.json，对照当前基线时这两条不会再被用到。r84.123 因界面样式和几处函数有意改动再次重拍，r84.122 的基线另存为 verification/refactor-baseline-r84.122.json。CSS 输出和初始化绑定仍然不能放行。",
+  "entries": [
+    {
+      "round": "r84.96",
+      "declaration": "ui/settingsPanelHome.js:mountSettings",
+      "reason": "重构清单 4-B（r84.96，用户授权）：设置页“改设置”“点按钮”两个监听器原样搬成 mountSettings 同文件里的具名函数 bindSettingsChange / bindSettingsClick；唯一改写是把 tagChoices / tagScanned / tagEdited / tagScanEpoch 四个局部变量改成共享对象 tagState 的属性。tools/test-settings-listeners-r8496.mjs 逐步还原后与 r84.95 逐字相同。"
+    },
+    {
+      "round": "r84.96",
+      "declaration": "ui/settingsPanel.js:mountSettings",
+      "reason": "重构清单 4-B（r84.96，用户授权）：设置页“改设置”“点按钮”两个监听器原样搬成 mountSettings 同文件里的具名函数 bindSettingsChange / bindSettingsClick；唯一改写是把 tagChoices / tagScanned / tagEdited / tagScanEpoch 四个局部变量改成共享对象 tagState 的属性。tools/test-settings-listeners-r8496.mjs 逐步还原后与 r84.95 逐字相同。"
+    }
+  ]
+}

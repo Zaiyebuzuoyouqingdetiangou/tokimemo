@@ -31,5 +31,5 @@ export function normalizeInputBudgetTokens(value) {
 }
 export function generationInputCharCap(budgetTokens) {
     const tokens = normalizeInputBudgetTokens(budgetTokens);
-    return Math.min(600000, tokens * 3);
+    return Math.min(Number.MAX_SAFE_INTEGER, tokens * 3);
 }

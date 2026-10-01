@@ -134,7 +134,7 @@ const ALBUM_RELATIONSHIP_HINT_RE = /(?:喜欢|爱|恋|暧昧|告白|表白|交�
 // incremental slice. Keep every memory id plus one exact, locally verifiable anchor; add a bounded
 // synopsis for likely relationship records and the recent tail so the full request remains safe.
 export function albumRelationshipArchiveSlice(memoryBank) {
-    const memories = (Array.isArray(memoryBank?.memories) ? memoryBank.memories : []).slice(0, core_constants.MAX_MEMORY_ITEMS);
+    const memories = Array.isArray(memoryBank?.memories) ? memoryBank.memories : [];
     const indexed = memories.map((item, index) => {
         const title = core_text.normalizeText(item?.title, 100);
         const anchors = core_text.cleanArray(item?.anchors, 6, 100);

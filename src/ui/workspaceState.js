@@ -34,10 +34,12 @@ export const WORKSPACE_ROUTES = Object.freeze({
     album: { mode: 'album', title: '回忆相簿', group: 'memory' },
     adv: { mode: 'adv', title: 'ADV EVENT', group: 'memory' },
     cabinet: { mode: 'cabinet', title: '两个人的陈列柜', group: 'memory' },
+    collection: { mode: 'collection', title: '回忆收集率', group: 'memory', manualOnly: true },
     room: { mode: 'room', title: '他的房间', group: 'life' },
     phone: { mode: 'phone', title: '他的私人终端', group: 'life' },
     inbox: { mode: 'inbox', title: '你的邮箱', group: 'life' },
     travel: { mode: 'travel', title: '他的出行路线', group: 'life' },
+    waiting: { mode: 'waiting', title: '他在等你', group: 'life', manualOnly: true },
     mirrorVoice: { mode:'mirrorVoice', title:'镜译 · 语音设置', group:'settings', manualOnly:true, deep:true },
     themeSong: { mode: 'themeSong', title: '角色印象曲', group: 'interaction' },
     bedtime: { mode: 'bedtime', title: '睡前故事', group: 'stories' },
@@ -56,6 +58,8 @@ export const WORKSPACE_ROUTES = Object.freeze({
     journal: { mode:'journal', title:'手帐', group:'life', manualOnly:true },
     items: { mode: 'items', title: '他的物品', group: 'life', deep: true },
     timeEcho: { mode: 'timeEcho', title: '时空回响', group: 'stories', deep: true },
+    intel: { mode: 'intel', title: '朋友情报', group: 'interaction', manualOnly: true, deep: true },
+    songMv: { mode: 'songMv', title: '做成 MV', group: 'interaction', manualOnly: true, deep: true },
 });
 export function workspaceRoute(mode, preferred = '') {
     return Object.hasOwn(WORKSPACE_ROUTES, preferred) && WORKSPACE_ROUTES[preferred].mode === mode

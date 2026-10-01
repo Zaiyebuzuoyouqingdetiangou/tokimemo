@@ -499,7 +499,7 @@ export function renderHeart() {
                 const label = legacyCount ? `升级旧版萤火虫（${legacyCount}）` : session.fireflyVoices?.length ? '解锁新的萤火虫' : '点亮萤火虫栖息地';
                 return `<button type="button" class="rmt-btn" data-rmt-action="heart-generate-part" data-rmt-heart-part="fireflies">${core_text.esc(label)}</button>`;
             })()
-            : `<button type="button" class="rmt-btn" data-rmt-action="heart-generate-part" data-rmt-heart-part="strips">${parts.strips ? '从新增档案追加日常一格' : '生成日常一格'}</button>`;
+            : `<button type="button" class="rmt-btn" data-rmt-action="heart-generate-part" data-rmt-heart-part="strips">${parts.strips ? '从新增档案追加日常一格' : '生成日常一格'}</button><button type="button" class="rmt-btn" data-rmt-action="heart-generate-part" data-rmt-heart-part="strips-free" title="不需要新记忆，按人设和关系写一段温馨小番外">追加日常一格</button>`;
     const rejected = core_heartLanguage.heartCollectionIssues(session)[view] || 0;
     const retryItems = !canGenerateDerived || !rejected ? '' : `<details class="rmt-heart-language"><summary>最近一次有 ${rejected} 条未通过校验</summary><p>已有内容照常阅读；不会自动补数。</p><button type="button" class="rmt-btn" data-rmt-action="heart-generate-part" data-rmt-heart-part="${view}">重试未完成条目</button></details>`;
     const topActions = `<div class="rmt-heart-top-actions">${generationButton}</div>${retryItems}`;

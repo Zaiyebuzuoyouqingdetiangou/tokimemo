@@ -6,6 +6,7 @@ import * as core_evidence from '../core/evidence.js';
 import { state as runtimeState } from '../core/state.js';
 import * as core_text from '../core/text.js';
 import * as ui_overlay from '../ui/overlay.js';
+import * as extras_view from '../ui/extrasView.js';
 import { MAX_DYNAMIC_RELATIONS, PROFILE_DISCOVERY_LABELS, PROFILE_FACT_ORDER, RELATION_LAYERS, RELATION_STATES, archiveCharacterProfileKey, factValueBackedByEvidence, foldEvidence, getCharacterProfile, normalizeProfileFactLabel, normalizeSettingRelationships, relationParticipantNames } from './characterProfile.js';
 // 关系：关系数据规范化与进度、关系层合并、关系花园与页面渲染
 // 从 modes/relations.js 原样搬出（重构阶段 2），声明文本一字未改；modes/relations.js 仍转发原有导出。
@@ -404,4 +405,5 @@ export function renderRelations() {
       ${cardRelationSourcesHtml(profile?.relationships || [], session.settingRelationships || [])}
       ${relationGardenHtml({ characterName, avatarUrl, participantNames: session.participantNames || [], sharedRelations: [...(session.settingRelationships || []), ...(profile?.relationships || [])], dynamicRelations: session.relationships || [], selectedKey, selectedOwner })}
     </div>`;
+    extras_view.decorateRelationDetail(ui_overlay.bodyEl());
 }

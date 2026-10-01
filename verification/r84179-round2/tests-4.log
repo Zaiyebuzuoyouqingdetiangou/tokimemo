@@ -1,0 +1,66 @@
+✔ interval-1 floor sync does not treat append-only chat growth as a new source (1.892553ms)
+✔ interval-1 sync does not swallow import errors behind parkPriorDraft (4.878418ms)
+✔ setting interval 1 makes the current finished floor due and a blocked import stays visible (1.031081ms)
+✔ adapted modules count complete only when every step is done (1.413426ms)
+✔ a combined response saves the module and one reveal without a second achievement request (1.244766ms)
+✔ achievement failure keeps the module and does not open a reveal (0.297118ms)
+✔ an empty inbox plan is a noop and a historical achievement without memories is refused (0.377476ms)
+(node:21) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ Persona 头像：缩略图类型 persona，拿不到时回退 User Avatars (247.022677ms)
+✔ 角色互动对白和聊天里的信都用 Persona 头像，不再按角色头像找用户 (6.497938ms)
+✔ 睡前故事：插画在正文之前，绘本页样式存在 (231.73641ms)
+✔ explicit discard can find the same card owner after edits without selecting another chat or avatar (2.551625ms)
+✔ a selected retry owns its draft from preparation through origin rebinding (0.562871ms)
+(node:51) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ core files import no generation module (6.381526ms)
+✔ in the real bundle every bridged generation function is registered; the recovery cache key keeps its value (103.980131ms)
+✔ an unregistered name fails loudly instead of guessing (1.217647ms)
+(node:57) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ 一次批注多页：提示里带各页文字；回来的结果宽松收下 (318.994537ms)
+✔ 批注写入：清掉「等批注」；找不到的页跳过；版式可换可存 (260.489403ms)
+✔ 搭便车：只在最后一步、有等批注的页时加这一段；字段从正文里拆走 (268.874606ms)
+✔ 界面：版式、摘句、批注按钮、夹进手帐都接上了 (2.495152ms)
+(node:71) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ r84.71 default batches checkpoint about every 150k characters at request boundaries, cover only on the last batch (4782.390876ms)
+✔ transient 502 / network failures are retried automatically and the batch still completes (884.277348ms)
+✔ transient retries are bounded; more consecutive failures stop and keep the draft (318.66076ms)
+✔ unclassified connection failures are not retried automatically (338.449037ms)
+✔ a failed chunk automatically saves the successful chunks without a model request; retry sends only the rest (5949.333786ms)
+✔ automatic partial save does not repeat when nothing new succeeded (4765.380573ms)
+✔ rebuilt runtime bundle: transient retry, small batches and automatic partial save (3441.57654ms)
+✔ card appearance becomes figure fields (hair, outfit colour, eyes, accessories) (9.860839ms)
+✔ negations, user lines and other people are not read as the character (3.624117ms)
+✔ order: verified room fields > card > world book > identity guess (1.774888ms)
+✔ pixel figure draws the new fields from code-owned colours only (0.8203ms)
+✔ local figure never asks the model (1.628608ms)
+✔ English words match whole words only (that/childhood/himself/image/pursuit/abroad/wardrobe) (3.170478ms)
+✔ clauses about the user or other people are not the character (0.957994ms)
+✔ identity guess needs an identity statement about the character (0.436695ms)
+✔ 弹出提示按心迹回廊主题写行内 important 颜色 (4.261923ms)
+(node:95) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ 信封、提示条、信纸都跟着设置里的信封样式 (256.468185ms)
+✔ 展开内容：不再套一层 70vh 的内部滚动；宽内容在信里横向滚动，不撑破页面 (199.097816ms)
+✔ legacy buttons without draft ids stay distinct by page, mode, and chat (1.144088ms)
+✔ repeated taps share one pending operation and one error; next explicit attempt remains available (1.639248ms)
+✔ unrelated draft actions proceed independently and cancellation creates no error toast (0.231541ms)
+(node:119) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ 结尾部分：坏的一条回响、坏的一句话都不再让整步失败 (326.088339ms)
+✔ 认不出的线索类型按旁记收下 (207.654771ms)
+✔ 不再按篇数拒绝写新篇 (223.259271ms)
+✔ 时空信笺：媒介不在列表里时改用默认媒介；关系检查只去掉命中的句子 (0.743217ms)
+✔ 模型多写了几条时只收前面的，不让整步失败 (211.099234ms)
+✔ the two listener functions only receive constants or the shared tagState object (0.978554ms)
+ℹ tests 46
+ℹ suites 0
+ℹ pass 46
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 20862.992514

@@ -1,3 +1,5 @@
+import * as core_selfUpdater from '../core/selfUpdater.js';
+import * as core_text from '../core/text.js';
 import * as core_requestCoordinator from '../core/requestCoordinator.js';
 import * as core_settings from '../core/settings.js';
 import { state as runtimeState } from '../core/state.js';
@@ -49,8 +51,8 @@ export function renderSettingsPanelMarkup(panel) {
           </div>
           <div class="rmt-api-grid">
             <label class="rmt-settings-field"><span>最大输出</span><input class="text_pole" data-rmt-api-max-tokens type="number" min="1" step="1" placeholder="默认 60000"></label>
-            <label class="rmt-settings-field"><span>输入预算</span><input class="text_pole" data-rmt-api-input-budget type="number" min="8000" max="200000" step="1" placeholder="默认 60000"></label>
-            <small>最大输出是模型最多写多长，默认 60000，不拦输入。输入预算是发送前本地保险，默认 60000 tokens，范围 8000–200000，越大越贵；与最大输出无关。</small>
+            <label class="rmt-settings-field"><span>输入预算</span><input class="text_pole" data-rmt-api-input-budget type="number" min="1" step="1" placeholder="默认 60000"></label>
+            <small>最大输出是模型最多写多长，默认 60000，不拦输入。输入预算默认 60000 tokens，可填写正整数；计数可用时按此预算检查，计数不可用时不按字符数拦截。实际容量由模型服务决定，与最大输出无关。</small>
             <label class="rmt-settings-field"><span>温度</span><input class="text_pole" data-rmt-api-temperature type="number" min="0" max="2" step="0.1"></label>
             <small data-rmt-temperature-note></small>
           </div>
@@ -144,8 +146,9 @@ export function renderSettingsPanelMarkup(panel) {
           </div>
         </details>
         <div class="rmt-settings-card">
+          <small data-rmt-installed-version>当前版本：${core_text.esc(core_selfUpdater.installedVersion())}</small>
           <button type="button" class="menu_button rmt-settings-wide" data-rmt-self-update>检查并更新插件</button>
-          <small data-rmt-self-update-status role="status">强制检查已发布更新 · 完成后手动刷新页面</small>
+          <small data-rmt-self-update-status role="status">检查当前安装分支 · 更新后刷新页面</small>
         </div>
         <details class="rmt-settings-card rmt-api-box" data-rmt-settings-section="memory">
           <summary class="rmt-settings-card-head"><span>MEM</span><div><b>记忆来源</b><small>当前角色 · 当前聊天</small></div></summary>

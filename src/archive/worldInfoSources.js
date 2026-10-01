@@ -602,6 +602,41 @@ export async function showMemoryWorldInfoPicker() {
     modal.className = 'rmt-memory-wi-picker';
     modal.innerHTML = `<div class="rmt-memory-wi-picker-card"><div class="rmt-memory-wi-picker-head"><div><b>记忆相关世界书</b><small>整本导入，或展开后精确选择条目</small></div><button type="button" class="rmt-btn" data-rmt-action="memory-worldinfo-close" aria-label="关闭世界书选择">完成／关闭</button></div><div class="rmt-memory-wi-picker-scroll"><div class="rmt-memory-wi-picker-note">记录已发生剧情的书，请选“作为历史摘要”；普通设定书保持不勾选。历史来源完整保存在本地账本，本次建档用量会另行显示。</div><div class="rmt-memory-wi-books">${names.length ? names.map(name => { const book=selected.get(name); const precise=book && !book.all ? book.entryUids.length : 0; return `<section class="rmt-memory-wi-book" data-rmt-memory-wi-book="${core_text.esc(name)}"><div class="rmt-memory-wi-book-row"><label><input type="checkbox" data-rmt-memory-wi-all="${core_text.esc(name)}" ${book?.all ? 'checked' : ''}> <b>${core_text.esc(name)}</b> · 整本导入</label><button type="button" class="rmt-btn" data-rmt-action="memory-worldinfo-expand" data-rmt-memory-world="${core_text.esc(name)}">展开条目${precise ? ` · 已选${precise}` : ''}</button></div><label class="rmt-settings-check"><input type="checkbox" data-rmt-memory-wi-history="${core_text.esc(name)}" ${book?.historySource ? 'checked' : ''} ${book ? '' : 'disabled'}> 作为历史摘要</label><div class="rmt-memory-wi-entry-list" hidden></div></section>`; }).join('') : '<div class="rmt-memory-wi-empty">当前没有可读取的世界书。</div>'}</div></div></div>`;
     overlay.appendChild(modal);
+    attachMemoryWorldInfoSearch(modal, names.length);
+}
+
+// 书很多时按名称或已展开条目的文字筛选；只影响显示，不改变任何勾选。
+function attachMemoryWorldInfoSearch(modal, count) {
+    const scroll = modal.querySelector('.rmt-memory-wi-picker-scroll');
+    if (!scroll || count < 2) return;
+    const box = document.createElement('div');
+    box.className = 'rmt-memory-wi-search';
+    box.style.cssText = 'position:sticky;top:0;z-index:1;padding:6px 0 8px;background:inherit';
+    box.innerHTML = '<input type="search" autocomplete="off" aria-label="搜索世界书或条目" placeholder="搜索世界书名，或已展开的条目" style="width:100%;box-sizing:border-box;min-height:40px;border-radius:10px;padding:0 12px;font:inherit"><small class="rmt-memory-wi-search-count" style="display:block;margin-top:4px;opacity:.75"></small>';
+    scroll.prepend(box);
+    const input = box.querySelector('input');
+    const counter = box.querySelector('small');
+    const apply = () => {
+        const query = input.value.trim().toLocaleLowerCase();
+        let shown = 0;
+        for (const section of modal.querySelectorAll('[data-rmt-memory-wi-book]')) {
+            const name = String(section.dataset.rmtMemoryWiBook || '').toLocaleLowerCase();
+            const entries = [...section.querySelectorAll('.rmt-memory-wi-entry')];
+            let entryHit = false;
+            for (const entry of entries) {
+                const hit = !query || entry.textContent.toLocaleLowerCase().includes(query);
+                entry.hidden = !!query && !hit && !name.includes(query);
+                entryHit ||= !!query && hit;
+            }
+            const visible = !query || name.includes(query) || entryHit;
+            section.hidden = !visible;
+            if (visible) shown += 1;
+        }
+        counter.textContent = query ? `找到 ${shown} 本` : '';
+    };
+    input.addEventListener('input', apply);
+    input.addEventListener('search', apply);
+    modal.addEventListener('rmt-wi-entries-loaded', apply);
 }
 
 export async function expandMemoryWorldInfoBook(button) {
@@ -621,6 +656,7 @@ export async function expandMemoryWorldInfoBook(button) {
     } catch (error) {
         list.textContent = `读取失败：${core_text.toastText(core_text.safeErrorSummary(error))}`;
     }
+    try { section.closest('.rmt-memory-wi-picker')?.dispatchEvent(new Event('rmt-wi-entries-loaded')); } catch {}
 }
 
 export function normalizeExternalMemoryRecords(records, { complete = false, tagPolicy = null } = {}) {
