@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 315
-// Source SHA-256: cdb9981ea5a471292d809f4bd390ed6976a8ad5f0c4f5b5686c353e80479e5a3
+// Source SHA-256: 805276ae87e27f551d4b3f669c45831c5084b881a25586b2f2268e521bcf242e
 // Build: python3 tools/verification/build.py <source-root>
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -15736,15 +15736,27 @@ function httpFailure(response) {
     return error;
 }
 
-// Some hosts wrap a backend failure in choices.message.content with finish_reason=stop.
-// Recognize only explicit transport-error prefixes with an HTTP error status. Any
-// JSON opener keeps the existing parser/recovery path, so valid or partial generated
-// data mentioning an error can never become a newly rejected transport response.
-function transportErrorTextStatus(value) {
-    if (typeof value !== 'string' || /[{\[]/.test(value)) return 0;
-    const body = value.replace(/^\uFEFF/, '').trim();
+// TT returns synthetic choices/stop completions on backend failure. Its localized
+// [API 错误] label is not a JSON array opener. Only unwrap a complete, known label
+// line; retain any actual JSON (including partial data) on the ordinary parser path.
+// A canonical host error envelope is authoritative even if its body contains JSON.
+function transportErrorTextInfo(value, hostEnvelope = false) {
+    const none = { status: 0, hostError: false };
+    if (typeof value !== 'string') return none;
+    let body = value.replace(/^\uFEFF/, '').trim();
+    const label = /^\[API (?:Error|错误|錯誤)\][ \t]*(?:\r?\n|$)/i.exec(body);
+    const wrapper = label || (hostEnvelope ? /^\[[^\]\r\n]+\][ \t]*\r?\n/.exec(body) : null);
+    if (wrapper) body = body.slice(wrapper[0].length).trimStart();
+    if (!hostEnvelope && /[{\[]/.test(body)) return none;
     const match = /^(?:(?:failed to generate(?: chat completion)?|internal error|error)\s*:\s*)*(?:custom openai endpoint failed with status\s+|(?:http(?:\/\d(?:\.\d)?)?(?: error)?|status(?: code)?|error code)\s*[:=]?\s*)([45]\d{2})\b/i.exec(body);
-    return Number(match?.[1]) || 0;
+    return { status: Number(match?.[1]) || 0, hostError: !!label || hostEnvelope };
+}
+
+function isHostErrorCompletion(payload) {
+    const id = responseField(payload, 'id');
+    return typeof id === 'string' && /^tauritavern-error-\d+$/.test(id)
+        && ['chat.completion', 'chat.completion.chunk'].includes(responseField(payload, 'object'))
+        && Array.isArray(responseField(payload, 'choices'));
 }
 
 function providerEnvelopeFailure(payload, manual = true) {
@@ -15752,12 +15764,15 @@ function providerEnvelopeFailure(payload, manual = true) {
     const seen = new Set();
     let status = 0, typeStatus = 0, textStatus = 0, quota = false;
     const visit = (node, depth) => {
-        if (typeof node === 'string') { if (!textStatus) textStatus = transportErrorTextStatus(node); return; }
+        if (typeof node === 'string') { if (!textStatus) textStatus = transportErrorTextInfo(node).status; return; }
         if (!node || typeof node !== 'object' || seen.has(node) || depth > 4 || seen.size >= 24) return;
         seen.add(node);
+        if (!textStatus && isHostErrorCompletion(node)) {
+            textStatus = transportErrorTextInfo(finalResponseSelection(node).text, true).status;
+        }
         for (const key of ['message', 'detail']) {
             const descriptor = Object.getOwnPropertyDescriptor(node, key);
-            if (!textStatus && descriptor && 'value' in descriptor) textStatus = transportErrorTextStatus(descriptor.value);
+            if (!textStatus && descriptor && 'value' in descriptor) textStatus = transportErrorTextInfo(descriptor.value).status;
         }
         for (const key of ['status', 'statusCode', 'code', 'type']) {
             const descriptor = Object.getOwnPropertyDescriptor(node, key);
@@ -15994,6 +16009,7 @@ function payloadHasProviderError(payload) {
     const visit = (node, depth) => {
         if (!node || typeof node !== 'object' || seen.has(node) || depth > 4) return false;
         seen.add(node);
+        if (isHostErrorCompletion(node)) return true;
         if (presentError(node.error) || presentError(node.errors) || node.ok === false || node.success === false) return true;
         for (const value of [node.status, node.statusCode, node.code]) {
             const numeric = Number(value);
@@ -16025,9 +16041,10 @@ function assertIndependentResponsePayload(payload) {
         error.retryable = false;
         throw error;
     }
-    const transportStatus = transportErrorTextStatus(content);
-    if (transportStatus) {
-        const error = apiError('模型服务返回错误状态；详情已隐藏。', 'RMT_PROVIDER_STATUS', transportStatus);
+    const transport = transportErrorTextInfo(content);
+    if (transport.status || transport.hostError) {
+        const error = apiError('模型服务返回错误状态；详情已隐藏。', transport.status ? 'RMT_PROVIDER_STATUS' : 'RMT_CONNECTION_FAILED', transport.status);
+        if (!transport.status) error.retryable = false;
         transportFailures.set(error, { shape: 'error', finalChars: 0, reasoningChars: 0, finishReason: 'none' });
         throw error;
     }
