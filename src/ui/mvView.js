@@ -11,10 +11,6 @@ import * as mv from '../extras/mv.js';
 import * as mv_media from '../extras/mvMedia.js';
 import * as core_castLooks from '../core/castLooks.js';
 import * as archive_repository from '../archive/repository.js';
-import * as mv_cast from '../extras/mvCast.js';
-import * as mv_direction from '../extras/mvDirection.js';
-import * as cast_controls from './mvCastControls.js';
-import * as participant_picker from './participantPicker.js';
 
 const esc = core_text.esc;
 export const MV_MODE = 'songMv';
@@ -27,14 +23,15 @@ const audioTried = new Set();
 const audioLoads = new Map();
 
 // 用户自己的图存在本机；url 来自生图渠道。两者都没有时返回空字符串。
-function v2Diff(shot, record = view.cache?.record) {
+function v2Diff(shot) {
+    const record = view.cache?.record;
     if (!shot?.group || !mv.isV2(record)) return null;
     return record.groups.find(g => g.id === shot.group)?.diffs.find(d => d.id === shot.diff) || null;
 }
 function hasImg(shot) { const d = v2Diff(shot); if (d) return !!d.image?.url; return !!(shot?.image?.url || shot?.image?.local); }
 
-function imgUrl(shot, record = view.cache?.record) {
-    const d = v2Diff(shot, record);
+function imgUrl(shot) {
+    const d = v2Diff(shot);
     if (d) return d.image?.url || '';
     if (shot?.image?.url) return shot.image.url;
     const key = shot?.image?.local;
@@ -138,11 +135,7 @@ ${r} .rmt-mv-group{display:flex;flex-direction:column;gap:2px;padding:10px 4px 0
 ${r} .rmt-mv-group b{font-size:14px;color:#8a3f63}
 ${r} .rmt-mv-group span{font-size:12px;color:var(--rmt-theme-muted,#586b7c)}
 ${r} .rmt-mv-link{font-size:12px;color:#8a5a3b;padding:0 8px}
-${r} .rmt-mv-look input,${r} .rmt-mv-look select{width:100%;min-width:0;box-sizing:border-box;min-height:44px;border:1px solid var(--rmt-theme-border,#cfdae5);border-radius:10px;padding:0 10px;font:inherit;font-size:14px;background:var(--rmt-theme-surface-solid,#fff);color:var(--rmt-theme-text,#34495d)}
-${r} .rmt-mv-cast-person{padding:10px 0;border-top:1px dashed var(--rmt-theme-border,#cfdae5);overflow-wrap:anywhere;min-width:0}
-${r} .rmt-mv-cast-person>small{display:block}
-${r} [data-rmt-mv-binding-person]>label:first-child{display:flex;align-items:center;gap:8px;min-height:44px}
-${r} [data-rmt-mv-binding="selected"]{width:20px;height:20px;flex-shrink:0}
+${r} .rmt-mv-look input{width:100%;box-sizing:border-box;min-height:40px;border:1px solid var(--rmt-theme-border,#cfdae5);border-radius:10px;padding:0 10px;font:inherit;font-size:14px;background:var(--rmt-theme-surface-solid,#fff);color:var(--rmt-theme-text,#34495d)}
 ${r} .rmt-mv-gcard{display:flex;flex-direction:column;gap:10px;border-radius:18px;padding:14px;background:var(--rmt-theme-surface-solid,#fff);border:1px solid var(--rmt-theme-border,#cfdae5)}
 ${r} .rmt-mv-gname{color:#8a3f63}
 ${r} .rmt-mv-assets{display:flex;gap:8px;align-items:flex-end;overflow-x:auto;padding-bottom:2px}
@@ -260,7 +253,6 @@ export function openMv(options = {}) {
     disposeMv();
     view.songId = songId; view.scope = mv.mvScope(context);
     const record = mv.readMv(context, view.songId);
-    view.castDraft = mv_cast.initialMvCast(context, record);
     view.sub = record?.shots?.length ? 'board' : 'setup';
     view.step = 1; view.draft = mv.normalizeSettings(record?.settings); view.mode = view.draft.output; view.shotId = ''; view.copied = '';
     overlay.openOverlay();
@@ -271,7 +263,6 @@ export function openMv(options = {}) {
 
 export function navigateMvBack() {
     if (runtimeState.activeMode !== MV_MODE) return false;
-    stopExport();
     stopPlayback();
     const record = currentRecord();
     if (view.sub === 'setup' && view.step > 1) { view.step -= 1; renderMv(); return true; }
@@ -366,28 +357,9 @@ function rangePicker(scope, state, sections) {
     return `<div class="rmt-mv-grid2">${buttons}</div>${custom}<p class="rmt-x-note">这次做：${idx.length ? esc(sections[idx[0]].name) + (idx.length > 1 ? ' → ' + esc(sections[idx.at(-1)].name) : '') : '整首'} · ${idx.length} 段 · 约 ${lines} 句歌词。手书通常只做一段，镜头少、节奏紧。</p>`;
 }
 
-function continueControl(record, song) {
-    const missing = mv.missingStoryboardSections(record, song);
-    const busy = mv.isMvRunning(`story:${view.scope}:${view.songId}`);
-    return missing.length ? `<p class="rmt-x-note">所选范围还有 ${missing.length} 段没有分镜，已有分镜和图片会保留。</p>${btn('continue-board', busy ? '正在补写分镜…' : `继续分镜 · 补上 ${missing.length} 段`, { cls: 'rmt-x-primary', disabled: busy })}`
-        : '<p class="rmt-x-note">所选范围已有分镜；想继续后面的段落，可以把范围改为整首。</p>';
-}
-
-function exportControls(record, song) {
-    const sections = mv.parseSections(song.lyrics);
-    const o = mv.exportOptions(record, song);
-    const idx = mv.selectedSectionIndexes(sections, o.range, o.rangeFrom, o.rangeTo);
-    const options = value => sections.map((s, i) => `<option value="${i}"${i === value ? ' selected' : ''}>${i + 1}. ${esc(s.name)}</option>`).join('');
-    const ready = mv.completedMvRanges(record, song);
-    const range = mv.exportRange(record, song);
-    return `<b style="font-size:14px">导出哪一段</b><div class="rmt-mv-actions">${btn('export-range', '整首', { id: 'full' })}${ready.map(r => btn('export-range', `已完成：${r.rangeFrom + 1}–${r.rangeTo + 1} 段`, { id: `${r.rangeFrom}:${r.rangeTo}` })).join('')}</div>
-      <div class="rmt-mv-range-selects"><label>从<select data-rmt-mv-export-range="from">${options(idx[0] ?? 0)}</select></label><label>到<select data-rmt-mv-export-range="to">${options(idx.at(-1) ?? 0)}</select></label></div>
-      <p class="rmt-x-note">导出第 ${(idx[0] ?? 0) + 1}–${(idx.at(-1) ?? 0) + 1} 段 · ${mv.formatTime(range.start)}–${mv.formatTime(range.end)}（约 ${Math.max(0, Math.round(range.end - range.start))} 秒）。只截取这一段的画面和声音，不改变制作范围。</p>`;
-}
-
 function renderSetup(song, record) {
     const d = view.draft || mv.normalizeSettings(null);
-    const steps = ['做成什么', '分镜与出镜', '确认'].map((label, i) => `<span class="${view.step === i + 1 ? 'on' : view.step > i + 1 ? 'done' : ''}"><b>${view.step > i + 1 ? '✓' : i + 1}</b>${label}</span>`).join('');
+    const steps = ['做成什么', '画风与出镜', '确认'].map((label, i) => `<span class="${view.step === i + 1 ? 'on' : view.step > i + 1 ? 'done' : ''}"><b>${view.step > i + 1 ? '✓' : i + 1}</b>${label}</span>`).join('');
     let content = '';
     if (view.step === 1) {
         content = `<h3 class="rmt-x-section-title">做成什么？</h3>
@@ -396,14 +368,13 @@ function renderSetup(song, record) {
     } else if (view.step === 2) {
         const styles = mv.MV_STYLES[d.output];
         const sectionsForRange = mv.parseSections(song.lyrics);
-        content = `${d.output === 'tegaki' ? `<h3 class="rmt-x-section-title">做哪一段</h3>${rangePicker('draft', d, sectionsForRange)}` : ''}
-          ${cast_controls.directionControls(song, d)}
-          ${cast_controls.castControls(view.castDraft, d)}
-          <h3 class="rmt-x-section-title">画风</h3><div class="rmt-mv-grid2">${styles.map(s => choice('set-style', s.id, d.style === s.id, s.name, s.desc)).join('')}</div>
-          ${view.castDraft?.people.some(person => person.identity === 'user' && view.castDraft.selectedIds.includes(person.id)) ? `<h3 class="rmt-x-section-title">你要出镜吗？</h3>
+        content = `${d.output === 'tegaki' ? `<h3 class="rmt-x-section-title">做哪一段</h3>${rangePicker('draft', d, sectionsForRange)}` : ''}<h3 class="rmt-x-section-title">画风</h3><div class="rmt-mv-grid2">${styles.map(s => choice('set-style', s.id, d.style === s.id, s.name, s.desc)).join('')}</div>
+          <h3 class="rmt-x-section-title">你要出镜吗？</h3>
           ${choice('set-appear', 'face', d.appear === 'face', '露脸出镜', '按你填写的外貌来画。')}
           ${choice('set-appear', 'back', d.appear === 'back', '只拍背影或手', '有你的存在感，但不画脸。')}
-          ${choice('set-appear', 'none', d.appear === 'none', '不出镜', '不画用户，其他已选人物不受影响。')}` : ''}
+          ${choice('set-appear', 'none', d.appear === 'none', '不出镜', '画面里只有他。')}
+          ${d.appear !== 'none' && mv.frameNeedsUserLooks({ settings: d }, ctx()) ? '<div class="rmt-mv-warn">还没有填写你的外貌。在下面补上，每一张里的你才会长得一样；不填也能继续。</div>' : ''}
+          ${looksEditor()}
           <h3 class="rmt-x-section-title">比例</h3><div class="rmt-mv-grid2">${choice('set-ratio', '9:16', d.ratio === '9:16', '竖屏 9:16', '手机看')}${choice('set-ratio', '16:9', d.ratio === '16:9', '横屏 16:9', '电脑看')}</div>
           ${d.output === 'video' ? `<h3 class="rmt-x-section-title">你打算用什么做视频？</h3>
             ${choice('set-lang', 'zh', d.lang === 'zh', '国内的视频 App', '比如可灵、即梦。提示词用中文写。')}
@@ -411,8 +382,7 @@ function renderSetup(song, record) {
             ${choice('set-lang', 'both', d.lang === 'both', '还没想好', '中英文都给你，到时候挑一个复制。')}` : ''}`;
     } else {
         const style = mv.MV_STYLES[d.output].find(s => s.id === d.style);
-        const lines = [['做成', d.output === 'video' ? '视频' : '手书'], ['分镜类型', mv_direction.directionOf(d.storyType).name], ['画风', style?.name || ''],
-            ['出镜人物', mv_cast.selectedMvPeople(view.castDraft, d).map(person => person.name || '未命名').join('、') || '空镜'], ['比例', d.ratio === '9:16' ? '竖屏 9:16' : '横屏 16:9'],
+        const lines = [['做成', d.output === 'video' ? '视频' : '手书'], ['画风', style?.name || ''], ['你', mv.MV_APPEAR[d.appear]], ['比例', d.ratio === '9:16' ? '竖屏 9:16' : '横屏 16:9'],
             ['写分镜', '1 次文字请求'], ['画图', '之后由你逐张手动画']];
         content = `<section class="rmt-x-card">${lines.map(([k, v]) => `<div class="rmt-x-row-head"><span>${esc(k)}</span><b>${esc(v)}</b></div>`).join('')}</section>
           <p class="rmt-x-note">生成分镜时不会画图。画几张、什么时候画，都由你在下一页决定。${record?.shots?.length ? '重新写分镜会替换现在的镜头，已画的图不会保留在新镜头上。' : ''}</p>`;
@@ -461,8 +431,7 @@ function renderBoard(song, record) {
             const status = tegaki ? (imgUrl(shot) ? '✓ 画好了' : '○ 还没画') : (shot.videoDone ? '✓ 视频做好了' : imgUrl(shot) ? '○ 视频还没做' : '○ 还没画图');
             return `<article class="rmt-mv-shot${ok ? ' done' : ''}"><div class="rmt-mv-shot-row">${thumb(shot, record, `第 ${number} 镜`)}
               <div class="rmt-mv-shot-copy"><small>${esc(shot.shot || '')}${shot.move ? ' · ' + esc(shot.move) : ''}</small><b>${esc(shot.plain)}</b>
-              <div class="rmt-x-chips"><span class="rmt-x-chip muted">${esc(mv_cast.castLabel(record, shot) || who[shot.who] || '他')}</span><span class="rmt-x-chip${ok ? '' : ' muted'}">${status}</span></div></div></div>
-              ${cast_controls.shotCastControls(record, shot)}
+              <div class="rmt-x-chips"><span class="rmt-x-chip muted">${esc(who[shot.who] || '他')}</span><span class="rmt-x-chip${ok ? '' : ' muted'}">${status}</span></div></div></div>
               <div class="rmt-mv-actions">${btn('draw', drawing ? '正在画…' : imgUrl(shot) ? '重画这张' : '画这一张', { id: shot.id, disabled: drawing || view.drawingAll, cls: imgUrl(shot) ? 'rmt-x-secondary' : 'rmt-x-primary' })}
               ${!tegaki ? btn('open-shot', shot.videoDone ? '再看看' : '去生成视频', { id: shot.id, cls: 'rmt-x-primary rmt-x-dark' }) : uploadLabel(shot.id, '用自己的图')}</div></article>${groupLink}`.replace(/^/, () => groupHead);
         }).join('');
@@ -470,14 +439,16 @@ function renderBoard(song, record) {
     const wd = record.wardrobe || {};
     const wardrobeCard = `<details class="rmt-x-card"${wd.char || wd.user || wd.era ? '' : ' open'}><summary><b>时代与衣着</b>（每一张都用同一套）</summary>
       <label class="rmt-mv-look"><span>时代 / 场景</span><input type="text" maxlength="200" data-rmt-mv-wardrobe="era" value="${esc(wd.era || '')}" placeholder="例如 ancient Chinese wuxia, bamboo forest sect"></label>
-      ${record.cast ? '' : `<label class="rmt-mv-look"><span>他的衣着</span><input type="text" maxlength="300" data-rmt-mv-wardrobe="char" value="${esc(wd.char || '')}" placeholder="例如 white layered hanfu robe, silver hairpin"></label>
-      ${mv.normalizeSettings(record.settings).appear === 'none' ? '' : `<label class="rmt-mv-look"><span>你的衣着</span><input type="text" maxlength="300" data-rmt-mv-wardrobe="user" value="${esc(wd.user || '')}" placeholder="例如 pale pink ruqun dress, jade hairpin"></label>`}`}
+      <label class="rmt-mv-look"><span>他的衣着</span><input type="text" maxlength="300" data-rmt-mv-wardrobe="char" value="${esc(wd.char || '')}" placeholder="例如 white layered hanfu robe, silver hairpin"></label>
+      ${mv.normalizeSettings(record.settings).appear === 'none' ? '' : `<label class="rmt-mv-look"><span>你的衣着</span><input type="text" maxlength="300" data-rmt-mv-wardrobe="user" value="${esc(wd.user || '')}" placeholder="例如 pale pink ruqun dress, jade hairpin"></label>`}
       <p class="rmt-x-note">外貌设定只管长相；衣着在这里统一，写分镜时会按角色设定和世界观自动填好，可以改。用英文写效果最稳。改完之后重画的图才会生效。</p></details>`;
     const warn = mv.frameNeedsUserLooks(record, context) && shots.some(s => s.who === 'both' || s.who === 'user')
         ? `<div class="rmt-mv-warn">还没有填写你的外貌，画出来的你可能每张不一样。</div>${looksEditor()}` : '';
     const rangeCard = tegaki ? (() => {
         const o = mv.tegakiOptions(record);
-        return `<section class="rmt-x-card"><b>做哪一段</b>${rangePicker('record', o, sections)}${continueControl(record, song)}</section>`;
+        const want = mv.selectedSectionIndexes(sections, o.range, o.rangeFrom, o.rangeTo);
+        const missing = want.filter(i => !shots.some(s => s.sectionIndex === i)).length;
+        return `<section class="rmt-x-card"><b>做哪一段</b>${rangePicker('record', o, sections)}${missing ? `<div class="rmt-mv-warn">选中的段落里有 ${missing} 段还没有镜头。已画好的不会动。${btn('continue-board', view.continuing ? '正在续写…' : '给没写的段落续写分镜', { cls: 'rmt-x-primary', disabled: !!view.continuing })}</div>` : ''}</section>`;
     })() : '';
     const tools = tegaki ? `${remaining ? btn(view.drawingAll ? 'draw-stop' : 'draw-all', view.drawingAll ? '停止连续绘制' : `一次画完剩下的 ${remaining} 张（会用 ${remaining} 次生图）`) : ''}
         ${btn('go-tegaki', '去手书剪辑台', { cls: 'rmt-x-primary' })}<p class="rmt-x-note">没画的镜头在剪辑台里会先用上一张代替，随时能预览。</p>`
@@ -485,8 +456,6 @@ function renderBoard(song, record) {
     page('镜头清单', '印象曲', `${head(song.title, '镜头清单', `${shots.length} 镜 · ${mv.normalizeSettings(record.settings).ratio === '9:16' ? '竖屏' : '横屏'}。同一张分镜表，可以做成手书，也可以做成视频。`)}
       <div class="rmt-mv-toggle">${['tegaki', 'video'].map(m => `<button type="button" class="${view.mode === m ? 'on' : ''}" aria-pressed="${view.mode === m}" data-rmt-mv="mode" data-rmt-mv-id="${m}">${m === 'tegaki' ? '手书' : '视频'}</button>`).join('')}</div>
       ${rangeCard}
-      ${cast_controls.directionControls(song, record.settings, 'record')}
-      ${record.cast ? cast_controls.castControls(record.cast, record.settings, wd, 'record') : btn('edit-cast', '设置本曲人物／世界书')}
       ${wardrobeCard}
       <section class="rmt-x-card"><div class="rmt-x-row-head"><b>${tegaki ? `已画好 ${drawn} / ${shots.length} 张` : `视频已做好 ${videos} / ${shots.length} 镜`}</b><span>${tegaki ? '画好的图两边通用' : '先画第一张图再做视频'}</span></div>
         <div class="rmt-x-bar"><i style="width:${shots.length ? Math.round(done / shots.length * 100) : 0}%"></i></div>${tools}</section>
@@ -615,11 +584,11 @@ function renderTegaki(song, record) {
       <section class="rmt-x-card"><b>歌曲与字幕</b>${audioCard(song)}
         ${tegakiControls(record, song)}
         ${btn('go-sync', `对时间 · 已点 ${tapped} / ${sections.length} 段${tapped < sections.length ? '，其余用估计时间' : ''}`, { cls: 'rmt-x-primary rmt-x-dark' })}</section>
-      <section class="rmt-x-card"><b>导出</b>${exporting ? '' : exportControls(record, song)}
+      <section class="rmt-x-card"><b>导出</b>
         ${exporting ? `<div class="rmt-x-row-head"><span>正在录制…</span><span data-rmt-mv-export-time>0:00</span></div><div class="rmt-x-bar"><i data-rmt-mv-export-bar style="width:0%"></i></div><p class="rmt-x-note">请不要切到其他页面或锁屏。</p>${btn('export-stop', '停止导出')}`
           : `${support.ok ? btn('export', audioBySong.has(audioKey()) ? `导出成视频（.${support.ext}）` : `导出无声视频（.${support.ext}）`, { cls: 'rmt-x-primary' }) : '<div class="rmt-mv-warn">这台设备不能直接导出视频。可以用下面的录屏模式，配合手机自带的录屏功能录下来。</div>'}
              ${btn('record-mode', '录屏模式（全屏播放）', { disabled: !audioBySong.has(audioKey()) })}
-             <p class="rmt-x-note">${audioBySong.has(audioKey()) ? '导出会播放一遍所选片段，片段多长就要等多久。期间请停留在这个页面。' : '没放入歌曲也能导出所选片段的无声视频，之后在剪辑 App 里配上歌；录屏模式需要先放入歌曲。'}${support.ok && support.ext === 'webm' ? ' 这台设备导出的是 .webm，剪映等 App 一般可以直接导入。' : ''}</p>`}</section>`);
+             <p class="rmt-x-note">${audioBySong.has(audioKey()) ? '导出会从头播放一遍，歌多长就要等多久。期间请停留在这个页面。' : '没放入歌曲也能导出无声视频，之后在剪辑 App 里配上歌；录屏模式需要先放入歌曲。'}${support.ok && support.ext === 'webm' ? ' 这台设备导出的是 .webm，剪映等 App 一般可以直接导入。' : ''}</p>`}</section>`);
 }
 
 // ---------- 对时间 ----------
@@ -655,17 +624,16 @@ function imageFor(url) {
 }
 
 // Resolve local blobs before decoding images; timeouts stop export rather than silently omit frames.
-async function preloadImages(record, song) {
+async function preloadImages(record) {
     let timer;
-    const shots = mv.shotsInRange(record, song);
     const load = async () => {
-        for (const shot of shots) imgUrl(shot, record);
-        await Promise.all((shots).map(shot => loadingLocal.get(shot.image?.local)).filter(Boolean));
-        const urls = [...new Set((shots).map(shot => {
-            const url = imgUrl(shot, record);
-            if ((mv.isV2(record) ? v2Diff(shot, record)?.image?.url : shot.image?.url || shot.image?.local) && !url) throw new Error('Local image unavailable');
+        for (const shot of record?.shots || []) imgUrl(shot);
+        await Promise.all((record?.shots || []).map(shot => loadingLocal.get(shot.image?.local)).filter(Boolean));
+        const urls = [...new Set((record?.shots || []).map(shot => {
+            const url = imgUrl(shot);
+            if (hasImg(shot) && !url) throw new Error('Local image unavailable');
             return url;
-        }).concat(mv.isV2(record) ? mv.assetKeys(record, song).map(k => mv.assetOf(record, k)?.image?.url).concat(coverUrl(song) || '') : []).filter(Boolean))];
+        }).concat(mv.isV2(record) ? mv.assetKeys(record).map(k => mv.assetOf(record, k)?.image?.url).concat(coverUrl(view.cache?.song) || '') : []).filter(Boolean))];
         await Promise.all(urls.map(url => new Promise((resolve, reject) => {
             let img = images.get(url);
             if (!img) { img = new Image(); img.src = url; images.set(url, img); }
@@ -758,7 +726,7 @@ function renderFrame(canvas, record, song, t) {
     const w = canvas.width, h = canvas.height;
     const topt = mv.tegakiOptions(record);
     frameCtx = { rhythm: topt.rhythm, beat: 120 / (mv.songBpm(song) || 90) };
-    const { rows, total } = mv.playbackTimeline(record, song);
+    const { rows, total } = mv.shotTimeline(record, song);
     if (!rows.length) return total;
     let index = rows.findIndex(r => t >= r.start && t < r.end);
     if (index < 0) index = t < rows[0].start ? 0 : rows.length - 1;
@@ -821,7 +789,7 @@ function drawNow() {
     const bar = document.querySelector('[data-rmt-mv-progress]');
     if (bar) bar.style.width = `${Math.min(100, t / Math.max(1, total) * 100)}%`;
     const rec = document.querySelector('.rmt-mv-rec canvas');
-    if (rec) renderFrame(rec, player.recording?.record || record, player.recording?.song || song, t);
+    if (rec) renderFrame(rec, record, song, t);
 }
 
 function currentRange() {
@@ -910,13 +878,12 @@ async function exportVideo() {
     const opened = viewTarget(), sub = view.sub;
     const entry = audioBySong.get(audioKey());
     const support = exportSupport();
-    const song = structuredClone(currentSong());
-    if (!support.ok || !currentRecord() || !song) return;
-    const record = mv.exportRecord(currentRecord(), song);
+    const record = structuredClone(currentRecord()); const song = structuredClone(currentSong());
+    if (!support.ok || !record) return;
     stopPlayback();
     const state = { cancelled: false, tracks: [], raf: 0, recorder: null, audio: null, ac: null, canvas: null };
     player.exporting = state;
-    const current = () => !state.cancelled && player.exporting === state && isView(opened) && view.sub === sub;
+    const current = () => { if (state.cancelled || player.exporting !== state) return false; const c = ctx(); return !!c && mv.mvScope(c) === opened.scope; };
     const chunks = [];
     const finish = () => {
         if (state.finished) return;
@@ -936,7 +903,7 @@ async function exportVideo() {
     };
     state.finish = finish;
     try {
-        await preloadImages(record, song);
+        await preloadImages(record);
         if (!current()) { state.cancelled = true; finish(); return; }
         const [w, h] = canvasSize(record);
         const canvas = document.createElement('canvas'); canvas.width = w; canvas.height = h;
@@ -961,22 +928,21 @@ async function exportVideo() {
         recorder.ondataavailable = event => { if (event.data?.size) chunks.push(event.data); };
         recorder.onstop = finish;
         recorder.onerror = () => { state.cancelled = true; stopExport(); toastError(core_text.safeUserError('视频录制失败，可以改用录屏模式。', 'RMT_MV_EXPORT')); };
+        const total = mv.shotTimeline(record, song).total;
         const range = mv.playRange(record, song);
-        const total = Math.max(0, range.end - range.start);
         const loop = () => {
             if (!current()) { stopExport(); return; }
             const t = audio.currentTime || 0;
             if (t >= range.end - 0.02) { try { audio.pause(); } catch {} if (recorder.state !== 'inactive') recorder.stop(); return; }
             try { renderFrame(canvas, record, song, t); } catch (error) { stopExport(); toastError(error); return; }
             const bar = document.querySelector('[data-rmt-mv-export-bar]');
-            if (bar) bar.style.width = `${Math.min(100, Math.max(0, t - range.start) / Math.max(1, total) * 100)}%`;
+            if (bar) bar.style.width = `${Math.min(100, t / Math.max(1, total) * 100)}%`;
             const label = document.querySelector('[data-rmt-mv-export-time]');
-            if (label) label.textContent = `${mv.formatTime(Math.max(0, t - range.start))} / ${mv.formatTime(total)}`;
+            if (label) label.textContent = `${mv.formatTime(t)} / ${mv.formatTime(entry?.duration || total)}`;
             state.raf = requestAnimationFrame(loop);
         };
         audio.onended = () => { if (recorder.state !== 'inactive') recorder.stop(); };
         if (audio.readyState < 1) await new Promise(resolve => { audio.addEventListener('loadedmetadata', resolve, { once: true }); audio.addEventListener('error', resolve, { once: true }); });
-        if (!current()) { stopExport(); return; }
         audio.currentTime = range.start;
         renderMv(); renderFrame(canvas, record, song, range.start); recorder.start(1000);
         await state.ac?.resume?.();
@@ -999,10 +965,8 @@ function stopExport() {
 function recordMode() {
     const opened = viewTarget();
     const entry = audioBySong.get(audioKey());
-    const song = structuredClone(currentSong());
-    if (!entry || !currentRecord() || !song) return;
-    const record = mv.exportRecord(currentRecord(), song);
-    const range = mv.playRange(record, song);
+    const record = currentRecord();
+    if (!entry || !record) return;
     stopPlayback();
     const [w, h] = canvasSize(record);
     const shell = document.createElement('div');
@@ -1015,7 +979,7 @@ function recordMode() {
         if (event.target.closest('button')) return exit();
         if (!shell.querySelector('button')) { const b = document.createElement('button'); b.type = 'button'; b.textContent = '退出'; shell.appendChild(b); setTimeout(() => b.remove(), 2500); }
     });
-    player.clockOffset = range.start;
+    player.clockOffset = 0;
     drawNow();
     let n = 3;
     const timer = setInterval(async () => {
@@ -1025,16 +989,17 @@ function recordMode() {
         clearInterval(timer); count.remove();
         const audio = audioElement();
         if (!audio) { exit(); return; }
+        const range = currentRange();
         audio.currentTime = range.start;
         const stopAt = () => { if (audio.currentTime >= range.end - 0.02) { audio.pause(); audio.dispatchEvent(new Event('ended')); } else if (!audio.paused) requestAnimationFrame(stopAt); };
+        requestAnimationFrame(stopAt);
         player.playing = true;
         try { await audio.play(); } catch (error) { toastError(error); }
         if (!isView(opened) || player.recording?.shell !== shell) { audio.pause(); return; }
-        requestAnimationFrame(stopAt);
         audio.onended = () => { player.playing = false; const done = document.createElement('button'); done.type = 'button'; done.textContent = '录好了 · 退出'; shell.appendChild(done); };
         ensureLoop();
     }, 1000);
-    player.recording = { timer, shell, record, song };
+    player.recording = { timer, shell };
 }
 
 function download(blob, name) {
@@ -1085,8 +1050,11 @@ async function drawAllAssets() {
     if (runtimeState.activeMode === MV_MODE) renderMv();
 }
 
-async function runAsset(key) {
-    try { const p = mv.drawAsset(view.songId, key); renderMv(); reportResult(await p); }
+async function runAsset(key, options = {}) {
+    // 已经画过的图再点一次：换一个随机种子，不然同一种子同一提示词会画出一模一样的图。
+    const record = currentRecord();
+    const fresh = options.fresh ?? !!mv.assetOf(record, key)?.image?.url;
+    try { const p = mv.drawAsset(view.songId, key, { fresh }); renderMv(); reportResult(await p); }
     catch (error) { toastError(error); }
     if (runtimeState.activeMode === MV_MODE) renderMv();
 }
@@ -1143,60 +1111,59 @@ export function handleMvClick(event) {
         else if (action === 'set-appear') { d.appear = id; renderMv(); }
         else if (action === 'set-ratio') { d.ratio = id; renderMv(); }
         else if (action === 'set-lang') { d.lang = id; renderMv(); }
-        else if (action === 'use-recommended-type') {
-            const storyType = mv_direction.recommendDirections(currentSong())[0].id;
-            if (el.dataset.rmtMvScope === 'record') mv.patchRecord(view.songId, { settings: { ...record.settings, storyType } });
-            else d.storyType = storyType;
-            renderMv();
-        }
-        else if (action === 'edit-cast') {
-            const target = mv.captureMvTarget(ctx(), view.songId);
-            const expected = JSON.stringify(record?.cast || null);
-            const before = view.sub === 'setup' ? view.castDraft : record?.cast || view.castDraft;
-            const sub = view.sub;
-            void participant_picker.showParticipantPicker({ context: ctx(), roster: before, title: '本曲人物 · 世界书导入', selectionLabel: '用于本曲',
-                confirmLabel: '保存本曲名单', intro: '只保存本曲人物，不改变档案名单；选人不调用生成 API。',
-                onConfirm: selected => {
-                    if (!isView(opened) || view.sub !== sub) return false;
-                    const next = mv_cast.mergeMvCast(before, selected);
-                    const saved = mv.saveMvCast(opened.songId, next, target, expected);
-                    if (!saved) return false;
-                    view.castDraft = structuredClone(saved.cast); renderMv(); return true;
-                },
-            }).catch(toastError);
-        }
-        else if (action === 'use-archive-cast' || action === 'add-cast-user') {
-            const before = view.sub === 'setup' ? view.castDraft : record?.cast || view.castDraft;
-            const next = action === 'add-cast-user' ? mv_cast.addMvUser(ctx(), before) : mv_cast.initialMvCast(ctx());
-            const saved = mv.saveMvCast(view.songId, next);
-            if (saved) view.castDraft = structuredClone(saved.cast);
-            renderMv();
-        }
         else if (action === 'setup-prev') { view.step = Math.max(1, view.step - 1); renderMv(); }
         else if (action === 'setup-next') { view.step = Math.min(3, view.step + 1); renderMv(); }
         else if (action === 'setup-generate') {
             const settings = mv.normalizeSettings(d);
-            const p = mv.generateStoryboard(view.songId, settings, view.castDraft);
+            const p = mv.generateStoryboard(view.songId, settings);
             renderMv();
-            p.then(result => { reportResult(result, '分镜写好了。'); if (isView(opened)) { if (result?.pending) renderMv(); else { view.mode = settings.output; go('board'); } } })
+            p.then(async result => {
+                reportResult(result, settings.output === 'video' ? '分镜写好了。' : '');
+                if (isView(opened) && !result?.pending) { view.mode = settings.output; go('board'); }
+                // 手书分镜分批写：第一批写好后自动接着写剩下的段落，失败时保留已写好的部分，可以再点“续写”。
+                if (settings.output !== 'video' && !result?.pending) {
+                    view.continuing = true; if (runtimeState.activeMode === MV_MODE) renderMv();
+                    try {
+                        for (let round = 0; round < 20 && mv.missingSections(currentRecord(), currentSong()).length; round += 1) {
+                            const more = await mv.continueStoryboard(view.songId);
+                            if (more?.pending) break;
+                            if (runtimeState.activeMode === MV_MODE) renderMv();
+                        }
+                        toastOk('分镜写好了。');
+                    } catch (error) { toastError(error); }
+                    view.continuing = false;
+                }
+                if (runtimeState.activeMode === MV_MODE) renderMv();
+            })
                 .catch(error => { toastError(error); if (isView(opened)) renderMv(); });
         }
-        else if (action === 'rewrite-board') { view.step = 1; view.castDraft = mv_cast.initialMvCast(ctx(), record); view.draft = mv.normalizeSettings({ ...(record?.settings || {}), ...(record?.tegaki?.range ? { range: record.tegaki.range, rangeFrom: record.tegaki.rangeFrom, rangeTo: record.tegaki.rangeTo } : {}) }); go('setup'); }
-        else if (action === 'continue-board') {
-            const p = mv.continueStoryboard(view.songId);
-            renderMv();
-            p.then(result => { reportResult(result, result?.alreadyComplete ? '所选段落已有分镜。' : '分镜已补上，已有图片已保留。'); if (isView(opened)) renderMv(); })
-                .catch(error => { toastError(error); if (isView(opened)) renderMv(); });
-        }
-        else if (action === 'export-range') {
-            const [rangeFrom, rangeTo] = id.split(':').map(Number);
-            mv.patchRecord(view.songId, { exportRange: id === 'full' ? { range: 'full' } : { range: 'custom', rangeFrom, rangeTo } });
-            renderMv();
-        }
+        else if (action === 'rewrite-board') { view.step = 1; view.draft = mv.normalizeSettings({ ...(record?.settings || {}), ...(record?.tegaki?.range ? { range: record.tegaki.range, rangeFrom: record.tegaki.rangeFrom, rangeTo: record.tegaki.rangeTo } : {}) }); go('setup'); }
         else if (action === 'mode') { view.mode = id === 'video' ? 'video' : 'tegaki'; renderMv(); }
         else if (action === 'draw') void runDraw(id);
         else if (action === 'draw-all') void drawAll();
         else if (action === 'draw-asset') void runAsset(id);
+        else if (action === 'redraw-group') {
+            // 整组换一版：清掉这组的种子，第一张随机出新种子，后面的差分沿用它，保持整组一致。
+            mv.resetGroupSeed(view.songId, id);
+            const keys = mv.assetKeys(currentRecord(), currentSong()).filter(k => k.startsWith(id + ':'));
+            void (async () => { for (const key of keys) { if (view.stopAll) break; await runAsset(key, { fresh: false }); } })();
+        }
+        else if (action === 'continue-board') {
+            view.continuing = true; renderMv();
+            void (async () => {
+                try {
+                    for (let round = 0; round < 20; round += 1) {
+                        const result = await mv.continueStoryboard(view.songId);
+                        reportResult(result, '');
+                        if (result?.pending || !mv.missingSections(currentRecord(), currentSong()).length) break;
+                        if (runtimeState.activeMode === MV_MODE) renderMv();
+                    }
+                    toastOk('分镜续写好了。');
+                } catch (error) { if (!/都已经有分镜/.test(String(error?.message))) toastError(error); }
+                view.continuing = false;
+                if (runtimeState.activeMode === MV_MODE) renderMv();
+            })();
+        }
         else if (action === 'group-layer') { const [gid, layer] = id.split(':'); mv.setGroupLayer(view.songId, gid, layer); renderMv(); }
         else if (action === 'inspect') { view.inspect = view.inspect === id ? '' : id; setTimeout(() => renderMv(), 0); }
         else if (action === 'draw-group') { const keys = mv.assetKeys(record, currentSong()).filter(k => k.startsWith(id + ':') && !mv.assetOf(record, k)?.image?.url); void (async () => { for (const key of keys) { if (view.stopAll) break; await runAsset(key); } })(); }
@@ -1299,67 +1266,6 @@ export function handleMvClick(event) {
 
 export function handleMvChange(event) {
     const input = event.target;
-    if (input?.matches?.('[data-rmt-mv-story-type]')) {
-        const storyType = mv_direction.directionOf(input.value).id;
-        try {
-            if (input.dataset.rmtMvScope === 'record') { const record = currentRecord(); mv.patchRecord(view.songId, { settings: { ...record.settings, storyType } }); }
-            else view.draft = mv.normalizeSettings({ ...view.draft, storyType });
-        } catch (error) { toastError(error); }
-        renderMv(); return true;
-    }
-    if (input?.matches?.('[data-rmt-mv-person-look]')) {
-        try {
-            const record = currentRecord();
-            const cast = structuredClone(input.dataset.rmtMvScope === 'draft' ? view.castDraft : record?.cast || view.castDraft);
-            const id = input.dataset.rmtMvPersonLook;
-            if (cast?.people.some(person => person.id === id)) {
-                cast.appearances = [...(cast.appearances || []).filter(row => row.participantId !== id), { participantId: id, tag: input.value, nl: '', manual: true }];
-                const saved = mv.saveMvCast(view.songId, cast);
-                if (saved) view.castDraft = structuredClone(saved.cast);
-            }
-        } catch (error) { toastError(error); }
-        return true;
-    }
-    if (input?.matches?.('[data-rmt-mv-person-outfit]')) {
-        try {
-            const record = currentRecord(), id = input.dataset.rmtMvPersonOutfit;
-            if (record?.cast?.people.some(person => person.id === id)) mv.patchWardrobe(view.songId, { characters: [
-                ...(record.wardrobe?.characters || []).filter(row => row.participantId !== id), { participantId: id, clothing: input.value },
-            ] });
-        } catch (error) { toastError(error); }
-        return true;
-    }
-    if (input?.matches?.('[data-rmt-mv-binding]')) {
-        try {
-            const panel = input.closest('[data-rmt-mv-binding-group]');
-            if (panel) {
-                const cast = [...panel.querySelectorAll('[data-rmt-mv-binding-person]')].flatMap(row => {
-                    if (!row.querySelector('[data-rmt-mv-binding="selected"]')?.checked) return [];
-                    const field = key => row.querySelector(`[data-rmt-mv-binding="${key}"]`)?.value || '';
-                    return [{ participantId: row.dataset.rmtMvBindingPerson, position: field('position'), action: field('action'), visible: field('visible') || 'full' }];
-                });
-                mv.patchMvShotCast(view.songId, panel.dataset.rmtMvBindingGroup, cast);
-                if (input.type === 'checkbox') {
-                    const groupId = panel.dataset.rmtMvBindingGroup;
-                    renderMv();
-                    for (const next of document.querySelectorAll('[data-rmt-mv-binding-group]')) {
-                        if (next.dataset.rmtMvBindingGroup === groupId) next.open = true;
-                    }
-                }
-            }
-        } catch (error) { toastError(error); }
-        return true;
-    }
-    if (input?.matches?.('[data-rmt-mv-export-range]')) {
-        const record = currentRecord(), song = currentSong();
-        if (!record || !song) return true;
-        const o = mv.exportOptions(record, song);
-        const idx = mv.selectedSectionIndexes(mv.parseSections(song.lyrics), o.range, o.rangeFrom, o.rangeTo);
-        const key = input.dataset.rmtMvExportRange === 'to' ? 'rangeTo' : 'rangeFrom';
-        try { mv.patchRecord(view.songId, { exportRange: { range: 'custom', rangeFrom: idx[0] ?? 0, rangeTo: idx.at(-1) ?? 0, [key]: Math.max(0, Number(input.value) || 0) } }); } catch (error) { toastError(error); }
-        renderMv();
-        return true;
-    }
     if (input?.matches?.('[data-rmt-mv-audio]')) {
         const file = input.files?.[0];
         if (file) acceptAudio(file, file.name, true);
@@ -1461,11 +1367,10 @@ function renderGroupsBoard(song, record) {
         const bgTiles = (g.layer === 'full' ? [] : bgIds.length ? bgIds : ['bg']).map(id => `<div>${assetTile(record, `${g.id}:${id}`, (g.bgs || []).find(b => b.id === id)?.label ? '背景·' + g.bgs.find(b => b.id === id).label : '背景')}</div>`).join('');
         const missing = [...(g.layer === 'full' ? [] : bgIds.length ? bgIds : ['bg']).map(id => `${g.id}:${id}`), ...usedDiffs.map(d => `${g.id}:${d.id}`)].filter(k => !mv.assetOf(record, k)?.image?.url).length;
         return `<article class="rmt-mv-gcard"><div class="rmt-x-row-head"><b class="rmt-mv-gname">构图 ${shown} · ${esc(g.composition || '')}</b><span>${esc(secNames)} · ${frames.length} 句</span></div>
-          ${cast_controls.shotCastControls(record, g)}
           <div class="rmt-mv-assets">${bgTiles}${bgTiles ? '<span class="rmt-mv-plus">+</span>' : ''}${usedDiffs.map(d => `<div>${assetTile(record, `${g.id}:${d.id}`, d.label)}</div>`).join('')}</div>
           ${inspectHtml(record, g, usedDiffs)}
           ${lyrics ? `<div class="rmt-mv-lyric"><p>${esc(lyrics)}</p></div>` : ''}
-          <div class="rmt-mv-actions">${btn('draw-group', missing ? `画这一组剩下的 ${missing} 张` : '这一组已画好', { id: g.id, disabled: !missing || view.drawingAll, cls: missing ? 'rmt-x-primary' : 'rmt-x-secondary' })}</div>
+          <div class="rmt-mv-actions">${missing ? btn('draw-group', `画这一组剩下的 ${missing} 张`, { id: g.id, disabled: view.drawingAll, cls: 'rmt-x-primary' }) : btn('redraw-group', '整组换一版', { id: g.id, disabled: view.drawingAll })}</div>
           <p class="rmt-x-note">点任意一张缩略图可以单独重画。</p>
           ${g.link ? `<div class="rmt-mv-link">↓ 承接：${esc(g.link)}</div>` : ''}</article>`;
     }).join('');
@@ -1473,20 +1378,18 @@ function renderGroupsBoard(song, record) {
     const wd = record.wardrobe || {};
     const wardrobe = `<details class="rmt-x-card"${wd.char || wd.era ? '' : ' open'}><summary><b>时代与衣着</b>（每一张都用同一套）</summary>
       <label class="rmt-mv-look"><span>时代 / 场景</span><input type="text" maxlength="200" data-rmt-mv-wardrobe="era" value="${esc(wd.era || '')}"></label>
-      ${record.cast ? '' : `<label class="rmt-mv-look"><span>他的衣着</span><input type="text" maxlength="300" data-rmt-mv-wardrobe="char" value="${esc(wd.char || '')}"></label>
-      ${mv.normalizeSettings(record.settings).appear === 'none' ? '' : `<label class="rmt-mv-look"><span>你的衣着</span><input type="text" maxlength="300" data-rmt-mv-wardrobe="user" value="${esc(wd.user || '')}"></label>`}`}
+      <label class="rmt-mv-look"><span>他的衣着</span><input type="text" maxlength="300" data-rmt-mv-wardrobe="char" value="${esc(wd.char || '')}"></label>
+      ${mv.normalizeSettings(record.settings).appear === 'none' ? '' : `<label class="rmt-mv-look"><span>你的衣着</span><input type="text" maxlength="300" data-rmt-mv-wardrobe="user" value="${esc(wd.user || '')}"></label>`}
       <p class="rmt-x-note">改完之后重画的图才会生效。</p></details>`;
     const warn = mv.frameNeedsUserLooks(record, ctx()) && record.groups.some(g => g.who === 'both' || g.who === 'user') ? `<div class="rmt-mv-warn">还没有填写你的外貌，画出来的你可能每张不一样。</div>${looksEditor()}` : '';
-    page('构图卡片', '印象曲', `${head(song.title + ' · 手书', '构图卡片', '按歌曲安排关键画面，需要时复用素材或追加差分。')}
+    page('构图卡片', '印象曲', `${head(song.title + ' · 手书', '构图卡片', '每张卡片是一个构图：同一个机位里画几张连续变化的完整画面，播放时按歌词切换。')}
       <section class="rmt-mv-palette"><span class="rmt-mv-cover">${coverUrl(song) ? `<img src="${esc(coverUrl(song))}" alt="">` : ''}</span><div><b>从封面取色</b><span>${palette.map(c => `<i style="background:${c}"></i>`).join('')}</span></div><small>片头片尾<br>用封面</small></section>
-      <section class="rmt-x-card"><b>做哪一段</b>${rangePicker('record', o, sections)}${continueControl(record, song)}</section>
-      ${cast_controls.directionControls(song, record.settings, 'record')}
-      ${record.cast ? cast_controls.castControls(record.cast, record.settings, wd, 'record') : btn('edit-cast', '设置本曲人物／世界书')}
+      <section class="rmt-x-card"><b>做哪一段</b>${rangePicker('record', o, sections)}${(() => { const miss = mv.missingSections(record, song); return miss.length ? `<div class="rmt-mv-warn">选中的段落里有 ${miss.length} 段还没有分镜。已画好的不会动。${btn('continue-board', view.continuing ? '正在续写…' : '给没写的段落续写分镜', { cls: 'rmt-x-primary', disabled: !!view.continuing })}</div>` : ''; })()}</section>
       <section class="rmt-x-card"><div class="rmt-x-row-head"><b>已画 ${drawn} / ${keys.length} 张</b><span>${esc(mv.playRange(record, song).label)}</span></div>
         <div class="rmt-x-bar"><i style="width:${keys.length ? Math.round(drawn / keys.length * 100) : 0}%"></i></div>
         ${remaining ? btn(view.drawingAll ? 'draw-stop' : 'draw-all', view.drawingAll ? '停止连续绘制' : `一次画完剩下的 ${remaining} 张（会用 ${remaining} 次生图）`) : ''}
         ${btn('go-tegaki', '去剪辑台预览', { cls: 'rmt-x-primary' })}</section>
-      ${wardrobe}${warn}${cards || '<p class="rmt-x-note">选中的段落里还没有构图，点上面的“继续分镜”即可补上。</p>'}${motif}
+      ${wardrobe}${warn}${cards || '<p class="rmt-x-note">选中的段落里还没有构图，可以重新写分镜。</p>'}${motif}
       <div class="rmt-mv-actions">${btn('rewrite-board', '重新写分镜')}</div>`);
 }
 
@@ -1761,7 +1664,7 @@ function renderFrameV2(canvas, record, song, t) {
     const w = canvas.width, h = canvas.height;
     const topt = mv.tegakiOptions(record);
     const beatLen = 60 / (mv.songBpm(song) || 90);
-    const { rows, total } = mv.playbackTimeline(record, song);
+    const { rows, total } = mv.shotTimeline(record, song);
     if (!rows.length) return total;
     let index = rows.findIndex(r => t >= r.start && t < r.end);
     if (index < 0) index = t < rows[0].start ? 0 : rows.length - 1;

@@ -1,5 +1,5 @@
 const VERSION = '0.99.99';
-const BUILD = '0.99.99-r84.213-mv-host-errors';
+const BUILD = '0.99.99-r84.209-redraw-chunks';
 
 const SETTINGS_ID = 'heartbeat_memories_settings';
 const MENU_ID = 'heartbeat_memories_menu_item';
