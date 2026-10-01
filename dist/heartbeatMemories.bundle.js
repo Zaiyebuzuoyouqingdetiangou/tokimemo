@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 312
-// Source SHA-256: c0b323252cb5ab4daf525de3af3e42d8a1336d676e1e443fddb48f2929721489
+// Source SHA-256: ac15ba3b05a533b0d8d2eded1719a183a704e3fddadaea2610252898ee9cc435
 // Build: python3 tools/verification/build.py <source-root>
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -15398,13 +15398,29 @@ function httpFailure(response) {
     return error;
 }
 
+// Some hosts wrap a backend failure in choices.message.content with finish_reason=stop.
+// Recognize only explicit transport-error prefixes with an HTTP error status. Any
+// JSON opener keeps the existing parser/recovery path, so valid or partial generated
+// data mentioning an error can never become a newly rejected transport response.
+function transportErrorTextStatus(value) {
+    if (typeof value !== 'string' || /[{\[]/.test(value)) return 0;
+    const body = value.replace(/^\uFEFF/, '').trim();
+    const match = /^(?:(?:failed to generate(?: chat completion)?|internal error|error)\s*:\s*)*(?:custom openai endpoint failed with status\s+|(?:http(?:\/\d(?:\.\d)?)?(?: error)?|status(?: code)?|error code)\s*[:=]?\s*)([45]\d{2})\b/i.exec(body);
+    return Number(match?.[1]) || 0;
+}
+
 function providerEnvelopeFailure(payload, manual = true) {
     // Read only bounded error metadata. Never propagate a provider message/body as a cause.
     const seen = new Set();
-    let status = 0, typeStatus = 0, quota = false;
+    let status = 0, typeStatus = 0, textStatus = 0, quota = false;
     const visit = (node, depth) => {
+        if (typeof node === 'string') { if (!textStatus) textStatus = transportErrorTextStatus(node); return; }
         if (!node || typeof node !== 'object' || seen.has(node) || depth > 4 || seen.size >= 24) return;
         seen.add(node);
+        for (const key of ['message', 'detail']) {
+            const descriptor = Object.getOwnPropertyDescriptor(node, key);
+            if (!textStatus && descriptor && 'value' in descriptor) textStatus = transportErrorTextStatus(descriptor.value);
+        }
         for (const key of ['status', 'statusCode', 'code', 'type']) {
             const descriptor = Object.getOwnPropertyDescriptor(node, key);
             const value = descriptor && 'value' in descriptor ? descriptor.value : null;
@@ -15432,7 +15448,7 @@ function providerEnvelopeFailure(payload, manual = true) {
         error.retryable = false;
         return error;
     }
-    if (status || typeStatus) return apiError('模型服务返回错误状态；详情已隐藏。', 'RMT_PROVIDER_STATUS', status || typeStatus);
+    if (status || typeStatus || textStatus) return apiError('模型服务返回错误状态；详情已隐藏。', 'RMT_PROVIDER_STATUS', status || typeStatus || textStatus);
     const error = apiError('专用连接返回了错误状态，请检查服务配置后重试。', manual ? 'RMT_MANUAL_PROVIDER_ERROR' : 'RMT_CONNECTION_FAILED');
     error.retryable = false;
     return error;
@@ -15669,6 +15685,12 @@ function assertIndependentResponsePayload(payload) {
     if (looksLikeHtmlResponse(content)) {
         const error = apiError('专用连接返回了 HTML 页面；响应正文已隐藏。', 'RMT_RESPONSE_HTML');
         error.retryable = false;
+        throw error;
+    }
+    const transportStatus = transportErrorTextStatus(content);
+    if (transportStatus) {
+        const error = apiError('模型服务返回错误状态；详情已隐藏。', 'RMT_PROVIDER_STATUS', transportStatus);
+        transportFailures.set(error, { shape: 'error', finalChars: 0, reasoningChars: 0, finishReason: 'none' });
         throw error;
     }
     if (!content.trim()) {
@@ -33822,7 +33844,7 @@ const trace = [];
 const stageStarts = new WeakMap();
 const mergedSegments = new WeakMap();
 const traceParents = new WeakMap();
-const MODES = new Set(['archive', 'archive-profile', 'room', 'album', 'image', 'advEvent', 'heart', 'phone', 'butterfly', 'adv', 'items', 'cabinet', 'inbox', 'themeSong', 'pastLives', 'timeEcho', 'travel', 'ending', 'calendar', 'relations', 'achievements', 'character-profile']);
+const MODES = new Set(['archive', 'archive-profile', 'room', 'album', 'image', 'advEvent', 'heart', 'phone', 'butterfly', 'adv', 'items', 'cabinet', 'inbox', 'themeSong', 'songMv', 'pastLives', 'timeEcho', 'travel', 'ending', 'calendar', 'relations', 'achievements', 'character-profile']);
 const OUTCOMES = new Set(['running', 'ok', 'failed', 'cancelled', 'deferred', 'blocked', 'noop']);
 const CODES = new Set(['RMT_LOCAL_STORAGE','RMT_LOCAL_CAS','RMT_LOCAL_CLONE','RMT_MANUAL_KEY_STORAGE','RMT_MANUAL_KEY_SESSION_ONLY','RMT_MANUAL_KEY_NOT_ON_DEVICE','RMT_ADVANCED_PARAMETERS','RMT_ADVANCED_BACKEND','RMT_RECOVERY_SOURCE_CHANGED','RMT_ARCHIVE_DRAFT_STORAGE','RMT_ARCHIVE_DRAFT_READ','RMT_ARCHIVE_DRAFT_CONFLICT','RMT_ARCHIVE_DRAFT_CAPACITY',
     ...Object.keys(core_backupDiagnostics.BACKUP_FAILURE_MESSAGES),
@@ -33991,6 +34013,8 @@ function markChunks(entry, { total = 0, ok = 0, failed = 0, pending = 0 } = {}) 
 
 function recordTaskFailure(entry, error) {
     if (!entry || !error) return entry;
+    const status = error.status;
+    if (Number.isInteger(status) && status >= 400 && status <= 599) entry.httpStatus = status;
     if (['RMT_RECOVERY_INPUT_CHANGED', 'RMT_RECOVERY_SOURCE_CHANGED', 'RMT_RECOVERY_OPERATION_CHANGED'].includes(error.code)) {
         entry.recovery = {
             phase: RECOVERY_PHASES.has(error.recoveryPhase) ? error.recoveryPhase : 'initialization',
@@ -34030,6 +34054,7 @@ function snapshotEntries(entries, includeRequests = false) {
         outcome: OUTCOMES.has(entry.outcome) ? entry.outcome : 'failed',
         ms: bounded((entry.endedAt || Date.now()) - entry.startedAt, MAX_DURATION_MS),
         code: CODES.has(entry.code) || entry.code === 'RMT_UNCODED' ? entry.code : '',
+        ...(Number.isInteger(entry.httpStatus) && entry.httpStatus >= 400 && entry.httpStatus <= 599 ? { httpStatus: entry.httpStatus } : {}),
         field: STAGES.includes(entry.field) ? entry.field : '',
         activeStage: STAGES.includes(entry.activeStage) ? entry.activeStage : '',
         providerRequests: count(entry.providerRequests),
@@ -38986,7 +39011,7 @@ function normalizeConnectionManagerError(error) {
         code = 'RMT_CONNECTION_INVALID_REQUEST';
         message = `上游拒绝了本段请求${technical}。请检查所选模型是否支持当前 Connection Manager 请求格式与最大输出；本段不会自动重试。`;
         retryable = false;
-    } else if (status === 408 || status === 504 || /(gateway timeout|request timeout|timed out|etimedout)/i.test(hints)) {
+    } else if (status === 408 || status === 504 || status === 524 || /(gateway timeout|request timeout|timed out|etimedout)/i.test(hints)) {
         code = 'RMT_CONNECTION_SERVER';
         message = `模型服务或代理响应超时${technical}。可以稍后重试，旧内容仍会保留。`;
         retryable = true;
@@ -85871,9 +85896,19 @@ async function retryMvSave(scope, id) {
     };
     const live = targetContext(row);
     if (!live) return held('原聊天、档案或歌曲已变化');
-    if (!row.patch) return held(row.reason || '返回内容尚不能保存');
     const store = mergeStores(row.base, readMvStore(live));
     const current = store.songs[row.songId] || null;
+    // A saved paid response may predate the section-index compatibility fix.
+    // Re-prepare it locally; retrying save must never send another model request.
+    if (!row.patch && row.kind === 'append' && current && resultBasis(current, row.kind, row.shotId) === row.expected) {
+        try {
+            const { memory } = loadSong(live, row.songId);
+            const missing = list(row.appendSections).length ? row.appendSections : missingStoryboardSections(current, row.song);
+            row.patch = continuationPatch(row.raw, current, memory, row.song, normalizeSettings(current.settings), missing);
+            savePending(scope, pendingMv(scope).map(value => value.id === id ? row : value));
+        } catch (error) { row.reason = core_text.safeErrorSummary(error); }
+    }
+    if (!row.patch) return held(row.reason || '返回内容尚不能保存');
     let next = current ? structuredClone(current) : null;
     if (!list(current?.appliedResults).includes(row.id)) {
         if (resultBasis(current, row.kind, row.shotId) !== row.expected) return held('分镜或图片已有新修改');
@@ -86216,9 +86251,36 @@ function missingStoryboardSections(record, song) {
     return indexes.filter(i => !list(record?.shots).some(s => s.sectionIndex === i));
 }
 
+// Models may number a returned batch from zero/one even when the prompt uses song indexes.
+// Prefer the actual lyric; retain the original index when there is no reliable correction.
+function alignContinuationSections(raw, song, missing) {
+    const copy = structuredClone(raw);
+    const frames = list(copy?.frames).length ? copy.frames : list(copy?.groups).length
+        ? copy.groups.flatMap(g => list(g?.frames)) : list(copy?.shots);
+    const lyricKey = value => core_text.normalizeText(value, 200).normalize('NFKC').replace(/[\s，。！？、,.!?“”"'‘’：:；;]/g, '');
+    const sections = parseSections(song.lyrics);
+    const matches = frames.map(f => {
+        const text = lyricKey(f?.lyric);
+        return text ? sections.map((s, i) => s.lines.some(line => lyricKey(line) === text) ? i : -1).filter(i => i >= 0) : [];
+    });
+    const schemes = [i => i, i => missing[i], i => missing[i - 1], i => i - 1];
+    const compatible = schemes.filter(map => frames.every((f, k) => {
+        const n = Number(f?.sectionIndex), index = map(n);
+        return Number.isInteger(n) && missing.includes(index) && (!matches[k].length || matches[k].includes(index));
+    }));
+    const scheme = compatible.includes(schemes[0]) ? schemes[0] : compatible.length === 1 ? compatible[0] : null;
+    frames.forEach((f, k) => {
+        if (!f || typeof f !== 'object') return;
+        const own = matches[k].filter(i => missing.includes(i));
+        if (own.length === 1) f.sectionIndex = own[0];
+        else if (scheme) f.sectionIndex = scheme(Number(f.sectionIndex));
+    });
+    return copy;
+}
+
 // Append new work using fresh identifiers; never replace existing drawings or timing.
-function continuationPatch(raw, previous, memory, sectionCount, settings, missing) {
-    const built = buildShots(raw, memory, sectionCount, settings);
+function continuationPatch(raw, previous, memory, song, settings, missing) {
+    const built = buildShots(alignContinuationSections(raw, song, missing), memory, parseSections(song.lyrics).length, settings);
     let shots = built.shots.filter(s => missing.includes(s.sectionIndex));
     if (!shots.length) throw core_text.safeUserError('返回的分镜没有包含待补段落，原分镜已保留，可导出这次返回内容。', 'RMT_MV_EMPTY');
     let groups = list(built.groups);
@@ -86270,7 +86332,7 @@ async function continueStoryboard(songId) {
         const prompt = storyboardPrompt(context, memory, song, settings, missing)
             + `\n【接着已有分镜补写】\n只补上面列出的段落，sectionIndex 沿用歌曲原编号。已有分镜和图片会保留；新构图在保存时自动分配编号。沿用已有时代、衣着和意象，并衔接已有画面：\n${JSON.stringify(continuity)}`;
         const data = await generation_client.requestJson(prompt, '正在补写剩余分镜…', { mode: 'songMv', taskKey: `extras:mv:${key}`, context, origin });
-        return holdResult(target, 'append', '', data, raw => continuationPatch(raw, previous, memory, parseSections(song.lyrics).length, settings, missing));
+        return holdResult({ ...target, appendSections: missing }, 'append', '', data, raw => continuationPatch(raw, previous, memory, song, settings, missing));
     } finally { running.delete(key); }
 }
 

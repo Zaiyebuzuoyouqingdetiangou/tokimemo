@@ -18,7 +18,7 @@ const trace = [];
 const stageStarts = new WeakMap();
 const mergedSegments = new WeakMap();
 const traceParents = new WeakMap();
-const MODES = new Set(['archive', 'archive-profile', 'room', 'album', 'image', 'advEvent', 'heart', 'phone', 'butterfly', 'adv', 'items', 'cabinet', 'inbox', 'themeSong', 'pastLives', 'timeEcho', 'travel', 'ending', 'calendar', 'relations', 'achievements', 'character-profile']);
+const MODES = new Set(['archive', 'archive-profile', 'room', 'album', 'image', 'advEvent', 'heart', 'phone', 'butterfly', 'adv', 'items', 'cabinet', 'inbox', 'themeSong', 'songMv', 'pastLives', 'timeEcho', 'travel', 'ending', 'calendar', 'relations', 'achievements', 'character-profile']);
 const OUTCOMES = new Set(['running', 'ok', 'failed', 'cancelled', 'deferred', 'blocked', 'noop']);
 const CODES = new Set(['RMT_LOCAL_STORAGE','RMT_LOCAL_CAS','RMT_LOCAL_CLONE','RMT_MANUAL_KEY_STORAGE','RMT_MANUAL_KEY_SESSION_ONLY','RMT_MANUAL_KEY_NOT_ON_DEVICE','RMT_ADVANCED_PARAMETERS','RMT_ADVANCED_BACKEND','RMT_RECOVERY_SOURCE_CHANGED','RMT_ARCHIVE_DRAFT_STORAGE','RMT_ARCHIVE_DRAFT_READ','RMT_ARCHIVE_DRAFT_CONFLICT','RMT_ARCHIVE_DRAFT_CAPACITY',
     ...Object.keys(core_backupDiagnostics.BACKUP_FAILURE_MESSAGES),
@@ -187,6 +187,8 @@ export function markChunks(entry, { total = 0, ok = 0, failed = 0, pending = 0 }
 
 export function recordTaskFailure(entry, error) {
     if (!entry || !error) return entry;
+    const status = error.status;
+    if (Number.isInteger(status) && status >= 400 && status <= 599) entry.httpStatus = status;
     if (['RMT_RECOVERY_INPUT_CHANGED', 'RMT_RECOVERY_SOURCE_CHANGED', 'RMT_RECOVERY_OPERATION_CHANGED'].includes(error.code)) {
         entry.recovery = {
             phase: RECOVERY_PHASES.has(error.recoveryPhase) ? error.recoveryPhase : 'initialization',
@@ -226,6 +228,7 @@ function snapshotEntries(entries, includeRequests = false) {
         outcome: OUTCOMES.has(entry.outcome) ? entry.outcome : 'failed',
         ms: bounded((entry.endedAt || Date.now()) - entry.startedAt, MAX_DURATION_MS),
         code: CODES.has(entry.code) || entry.code === 'RMT_UNCODED' ? entry.code : '',
+        ...(Number.isInteger(entry.httpStatus) && entry.httpStatus >= 400 && entry.httpStatus <= 599 ? { httpStatus: entry.httpStatus } : {}),
         field: STAGES.includes(entry.field) ? entry.field : '',
         activeStage: STAGES.includes(entry.activeStage) ? entry.activeStage : '',
         providerRequests: count(entry.providerRequests),

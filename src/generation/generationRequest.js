@@ -185,7 +185,7 @@ export function normalizeConnectionManagerError(error) {
         code = 'RMT_CONNECTION_INVALID_REQUEST';
         message = `上游拒绝了本段请求${technical}。请检查所选模型是否支持当前 Connection Manager 请求格式与最大输出；本段不会自动重试。`;
         retryable = false;
-    } else if (status === 408 || status === 504 || /(gateway timeout|request timeout|timed out|etimedout)/i.test(hints)) {
+    } else if (status === 408 || status === 504 || status === 524 || /(gateway timeout|request timeout|timed out|etimedout)/i.test(hints)) {
         code = 'RMT_CONNECTION_SERVER';
         message = `模型服务或代理响应超时${technical}。可以稍后重试，旧内容仍会保留。`;
         retryable = true;
