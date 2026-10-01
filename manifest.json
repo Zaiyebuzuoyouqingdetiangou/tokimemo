@@ -1,7 +1,7 @@
 {
   "display_name": "心迹回廊",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.99.99-r84.200-rhythm-templates",
+  "js": "index.js?heartbeat=0.99.99-r84.204-mv-open-fix",
   "author": "Toto",
   "version": "0.99.99",
   "auto_update": true,
@@ -10,6 +10,6 @@
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r84.200：新手书分镜统一完整画面，分层与拆分收进素材检查；新增节奏模板（一人一句快切、白闪卡点、抒情慢镜）。",
+  "description": "r84.204：修复更新后“做成 MV”打不开；MV 页出错时显示原因而不是没反应。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }

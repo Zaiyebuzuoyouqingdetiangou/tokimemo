@@ -716,9 +716,11 @@ export function patchTegaki(songId, patch) {
 
 function tegakiGrammar(sections, keep, charName = '{{char}}') {
     const rows = keep.map(i => `${i}:${sections[i]?.tag || ''}`).join('，');
+    const lineCount = keep.reduce((n, i) => n + Math.max(1, sections[i]?.lines.length || 0), 0);
+    const groupHint = `${Math.max(4, Math.round(lineCount / 3))}～${Math.max(6, Math.round(lineCount / 2))}`;
     return `这是这首印象曲的手书 PV。只为这些段落写：${rows}。
 手书要把歌词里发生的事“演出来”：遮住字幕，观众也能看懂他做了什么、是什么性格。不要一直用同一个半身立绘轮换表情。
-- 构图组（groups）= 一个事件或一个情绪节点，一共 5～9 组。歌词讲到的人物、动物、物件和动作必须出现在画面里（讲到喂猫就要有猫、蹲下、递食物；讲到师父叮嘱，可以是门口告别、师父在画外）。
+- 构图组（groups）= 一个事件或一个情绪节点。选中的段落一共约 ${lineCount} 句歌词，大约安排 ${groupHint} 组（按内容可多可少）；段落越长组越多，不要整首歌只用几张图反复轮换。歌词讲到的人物、动物、物件和动作必须出现在画面里（讲到喂猫就要有猫、蹲下、递食物；讲到师父叮嘱，可以是门口告别、师父在画外）。
 - 每组的景别和机位要不同：特写（手、眼、物件）、近景、中景、全身、远景、背影、低机位、俯视都可以；人物位置不要总在正中间，position 写 left / center / right，scale 写 close / medium / full / wide。
 - 每一张差分都是单独的一张图，只画一个瞬间：characterPrompt 与 diff.change 里每个人只写一个姿势，不要在同一张里写多个姿势、多个表情或“三连”。
 - 每组 1～3 张人物差分（diffs），是同一机位下一个动作的连续过程（伸手前→伸手→猫碰到手；握剑柄→出剑→收剑），不是随便换表情。同组 characterPrompt 相同，diff.change 只写这一刻的动作和表情。

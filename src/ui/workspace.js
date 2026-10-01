@@ -22,6 +22,7 @@ import * as ui_taskCenter from './taskCenter.js';
 import * as ui_workspaceState from './workspaceState.js';
 import * as generation_merged from '../generation/mergedGeneration.js';
 import * as extras_view from './extrasView.js';
+import * as archive_file from '../archive/archiveFile.js';
 const esc = text.esc;
 const GROUPS = [['memory', '回忆'], ['life', '生活'], ['interaction', '互动'], ['stories', '番外']];
 const ALIAS_META = {
@@ -176,6 +177,51 @@ export function arrangeArchiveWorkspace(body, { portals = [], ready = false, sna
                 + '<p style="margin:6px 0">隐藏、编辑或删除过比较早的消息时会出现。可以以当前聊天为新基线，只整理上次之后新增的楼层；已有记忆和生成内容都不变，旧楼层的改动不会重新整理。</p>'
                 + '<button type="button" class="rmt-btn" data-rmt-action="import-memory-rebase">以当前聊天为新基线继续更新</button></details>';
             main.appendChild(quick);
+            // 档案文件：折腾数据库、建检查点前先导出一份，丢了也能导回来。
+            const fileRow = document.createElement('div');
+            fileRow.className = 'rmt-archive-file';
+            fileRow.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:0 0 12px';
+            fileRow.innerHTML = '<button type="button" class="rmt-btn">导出档案文件</button><small style="flex-basis:100%;opacity:.8">把记忆和全部生成内容存成一个文件；建检查点、复制聊天或折腾数据库前建议先导出。</small>';
+            fileRow.querySelector('button').addEventListener('click', () => {
+                archive_file.exportArchiveFile().then(r => globalThis.toastr?.success?.(`已导出 ${r.memories} 条记忆和全部生成内容。`, '心迹回廊'))
+                    .catch(error => globalThis.toastr?.error?.(text.toastText(text.safeErrorSummary(error)), '心迹回廊'));
+            });
+            main.appendChild(fileRow);
+        } else if (!ready && !snapshot) {
+            let foreign = null;
+            try { foreign = archive_file.foreignArchiveInChat(); } catch { foreign = null; }
+            if (foreign) {
+                // 检查点 / 复制聊天：档案数据其实被一起复制过来了，只是聊天指纹换了。
+                const adopt = document.createElement('section');
+                adopt.className = 'rmt-archive-adopt';
+                adopt.style.cssText = 'display:flex;flex-direction:column;gap:8px;margin:0 0 12px;padding:12px;border-radius:14px;border:2px solid var(--rmt-theme-accent,#ce729c)';
+                adopt.innerHTML = `<b>发现复制过来的档案</b><small>这个聊天里带着“${text.esc(foreign.archiveName || '心迹回廊档案')}”（${foreign.memories} 条记忆），通常是检查点或复制聊天时一起复制来的；因为聊天换了指纹，所以没有直接显示。</small>`
+                    + '<label style="display:flex;gap:8px;align-items:center;font-size:14px"><input type="checkbox" checked data-same-history><span>这个聊天就是原聊天的副本（只整理之后的新楼层）</span></label>'
+                    + '<button type="button" class="rmt-btn">接到当前聊天</button>';
+                adopt.querySelector('button').addEventListener('click', () => {
+                    const sameHistory = !!adopt.querySelector('[data-same-history]')?.checked;
+                    archive_file.adoptForeignArchive({ sameHistory })
+                        .then(r => { globalThis.toastr?.success?.(`已接管 ${r.memories} 条记忆和全部生成内容。`, '心迹回廊'); try { openWorkspaceTab('archive'); } catch {} })
+                        .catch(error => globalThis.toastr?.error?.(text.toastText(text.safeErrorSummary(error)), '心迹回廊'));
+                });
+                main.appendChild(adopt);
+            }
+            // 没有档案的聊天：可以从之前导出的档案文件导入（检查点副本、复制出来的聊天）。
+            const box = document.createElement('section');
+            box.className = 'rmt-archive-file-import';
+            box.style.cssText = 'display:flex;flex-direction:column;gap:8px;margin:0 0 12px;padding:12px;border-radius:14px;border:1px dashed var(--rmt-theme-border,#cfdae5)';
+            box.innerHTML = '<b>从档案文件导入</b><small>适合检查点副本、复制出来的聊天，或数据库恢复后档案不见了的情况。</small>'
+                + '<label style="display:flex;gap:8px;align-items:center;font-size:14px"><input type="checkbox" checked data-same-history><span>这个聊天就是导出时那个聊天的副本（只整理之后的新楼层）</span></label>'
+                + '<label class="rmt-btn" style="position:relative;display:inline-flex;align-items:center;justify-content:center;cursor:pointer">选择档案文件<input type="file" accept=".json,application/json" style="position:absolute;inset:0;opacity:0"></label>';
+            box.querySelector('input[type=file]').addEventListener('change', event => {
+                const file = event.target.files?.[0];
+                if (!file) return;
+                const sameHistory = !!box.querySelector('[data-same-history]')?.checked;
+                file.text().then(text => archive_file.importArchiveFile(text, { sameHistory }))
+                    .then(r => { globalThis.toastr?.success?.(`已导入 ${r.memories} 条记忆和全部生成内容。`, '心迹回廊'); try { openWorkspaceTab('archive'); } catch {} })
+                    .catch(error => globalThis.toastr?.error?.(text.toastText(text.safeErrorSummary(error)), '心迹回廊'));
+            });
+            main.appendChild(box);
         }
         if (sources) {
             const sourceTitle = document.createElement('h3'); sourceTitle.textContent = '记忆来源'; sources.prepend(sourceTitle);

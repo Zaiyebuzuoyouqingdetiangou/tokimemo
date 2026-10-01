@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
-// Source modules: 311
-// Source SHA-256: 9b58076e4f31bd184157a4c44956844c776ce468799e1157c0293dc380b3970e
+// Source modules: 312
+// Source SHA-256: b55cee53563f4b068b088488e8a7d1d513ef88687518b83a4036502227cd6674
 // Build: python3 verification/build.py <source-root>
 
 const __m_core_themeSongCover_js = Object.create(null);
@@ -314,6 +314,7 @@ const __m_ui_extrasView_js = Object.create(null);
 const __m_extras_mv_js = Object.create(null);
 const __m_extras_mvMedia_js = Object.create(null);
 const __m_ui_mvView_js = Object.create(null);
+const __m_archive_archiveFile_js = Object.create(null);
 
 function __init_core_themeSongCover_js() {
 // MODULE: core/themeSongCover.js
@@ -83616,6 +83617,7 @@ const ui_taskCenter = __m_ui_taskCenter_js;
 const ui_workspaceState = __m_ui_workspaceState_js;
 const generation_merged = __m_generation_mergedGeneration_js;
 const extras_view = __m_ui_extrasView_js;
+const archive_file = __m_archive_archiveFile_js;
 const state = __m_core_state_js.state;
 
 
@@ -83624,6 +83626,7 @@ const state = __m_core_state_js.state;
 
 // Production workspace: delegates every data operation to the existing module entry points.
 // This file contains no sample records, generation prompts, or alternate persistence path.
+
 
 
 
@@ -83795,6 +83798,51 @@ function arrangeArchiveWorkspace(body, { portals = [], ready = false, snapshot =
                 + '<p style="margin:6px 0">隐藏、编辑或删除过比较早的消息时会出现。可以以当前聊天为新基线，只整理上次之后新增的楼层；已有记忆和生成内容都不变，旧楼层的改动不会重新整理。</p>'
                 + '<button type="button" class="rmt-btn" data-rmt-action="import-memory-rebase">以当前聊天为新基线继续更新</button></details>';
             main.appendChild(quick);
+            // 档案文件：折腾数据库、建检查点前先导出一份，丢了也能导回来。
+            const fileRow = document.createElement('div');
+            fileRow.className = 'rmt-archive-file';
+            fileRow.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:0 0 12px';
+            fileRow.innerHTML = '<button type="button" class="rmt-btn">导出档案文件</button><small style="flex-basis:100%;opacity:.8">把记忆和全部生成内容存成一个文件；建检查点、复制聊天或折腾数据库前建议先导出。</small>';
+            fileRow.querySelector('button').addEventListener('click', () => {
+                archive_file.exportArchiveFile().then(r => globalThis.toastr?.success?.(`已导出 ${r.memories} 条记忆和全部生成内容。`, '心迹回廊'))
+                    .catch(error => globalThis.toastr?.error?.(text.toastText(text.safeErrorSummary(error)), '心迹回廊'));
+            });
+            main.appendChild(fileRow);
+        } else if (!ready && !snapshot) {
+            let foreign = null;
+            try { foreign = archive_file.foreignArchiveInChat(); } catch { foreign = null; }
+            if (foreign) {
+                // 检查点 / 复制聊天：档案数据其实被一起复制过来了，只是聊天指纹换了。
+                const adopt = document.createElement('section');
+                adopt.className = 'rmt-archive-adopt';
+                adopt.style.cssText = 'display:flex;flex-direction:column;gap:8px;margin:0 0 12px;padding:12px;border-radius:14px;border:2px solid var(--rmt-theme-accent,#ce729c)';
+                adopt.innerHTML = `<b>发现复制过来的档案</b><small>这个聊天里带着“${text.esc(foreign.archiveName || '心迹回廊档案')}”（${foreign.memories} 条记忆），通常是检查点或复制聊天时一起复制来的；因为聊天换了指纹，所以没有直接显示。</small>`
+                    + '<label style="display:flex;gap:8px;align-items:center;font-size:14px"><input type="checkbox" checked data-same-history><span>这个聊天就是原聊天的副本（只整理之后的新楼层）</span></label>'
+                    + '<button type="button" class="rmt-btn">接到当前聊天</button>';
+                adopt.querySelector('button').addEventListener('click', () => {
+                    const sameHistory = !!adopt.querySelector('[data-same-history]')?.checked;
+                    archive_file.adoptForeignArchive({ sameHistory })
+                        .then(r => { globalThis.toastr?.success?.(`已接管 ${r.memories} 条记忆和全部生成内容。`, '心迹回廊'); try { openWorkspaceTab('archive'); } catch {} })
+                        .catch(error => globalThis.toastr?.error?.(text.toastText(text.safeErrorSummary(error)), '心迹回廊'));
+                });
+                main.appendChild(adopt);
+            }
+            // 没有档案的聊天：可以从之前导出的档案文件导入（检查点副本、复制出来的聊天）。
+            const box = document.createElement('section');
+            box.className = 'rmt-archive-file-import';
+            box.style.cssText = 'display:flex;flex-direction:column;gap:8px;margin:0 0 12px;padding:12px;border-radius:14px;border:1px dashed var(--rmt-theme-border,#cfdae5)';
+            box.innerHTML = '<b>从档案文件导入</b><small>适合检查点副本、复制出来的聊天，或数据库恢复后档案不见了的情况。</small>'
+                + '<label style="display:flex;gap:8px;align-items:center;font-size:14px"><input type="checkbox" checked data-same-history><span>这个聊天就是导出时那个聊天的副本（只整理之后的新楼层）</span></label>'
+                + '<label class="rmt-btn" style="position:relative;display:inline-flex;align-items:center;justify-content:center;cursor:pointer">选择档案文件<input type="file" accept=".json,application/json" style="position:absolute;inset:0;opacity:0"></label>';
+            box.querySelector('input[type=file]').addEventListener('change', event => {
+                const file = event.target.files?.[0];
+                if (!file) return;
+                const sameHistory = !!box.querySelector('[data-same-history]')?.checked;
+                file.text().then(text => archive_file.importArchiveFile(text, { sameHistory }))
+                    .then(r => { globalThis.toastr?.success?.(`已导入 ${r.memories} 条记忆和全部生成内容。`, '心迹回廊'); try { openWorkspaceTab('archive'); } catch {} })
+                    .catch(error => globalThis.toastr?.error?.(text.toastText(text.safeErrorSummary(error)), '心迹回廊'));
+            });
+            main.appendChild(box);
         }
         if (sources) {
             const sourceTitle = document.createElement('h3'); sourceTitle.textContent = '记忆来源'; sources.prepend(sourceTitle);
@@ -86727,9 +86775,11 @@ function patchTegaki(songId, patch) {
 
 function tegakiGrammar(sections, keep, charName = '{{char}}') {
     const rows = keep.map(i => `${i}:${sections[i]?.tag || ''}`).join('，');
+    const lineCount = keep.reduce((n, i) => n + Math.max(1, sections[i]?.lines.length || 0), 0);
+    const groupHint = `${Math.max(4, Math.round(lineCount / 3))}～${Math.max(6, Math.round(lineCount / 2))}`;
     return `这是这首印象曲的手书 PV。只为这些段落写：${rows}。
 手书要把歌词里发生的事“演出来”：遮住字幕，观众也能看懂他做了什么、是什么性格。不要一直用同一个半身立绘轮换表情。
-- 构图组（groups）= 一个事件或一个情绪节点，一共 5～9 组。歌词讲到的人物、动物、物件和动作必须出现在画面里（讲到喂猫就要有猫、蹲下、递食物；讲到师父叮嘱，可以是门口告别、师父在画外）。
+- 构图组（groups）= 一个事件或一个情绪节点。选中的段落一共约 ${lineCount} 句歌词，大约安排 ${groupHint} 组（按内容可多可少）；段落越长组越多，不要整首歌只用几张图反复轮换。歌词讲到的人物、动物、物件和动作必须出现在画面里（讲到喂猫就要有猫、蹲下、递食物；讲到师父叮嘱，可以是门口告别、师父在画外）。
 - 每组的景别和机位要不同：特写（手、眼、物件）、近景、中景、全身、远景、背影、低机位、俯视都可以；人物位置不要总在正中间，position 写 left / center / right，scale 写 close / medium / full / wide。
 - 每一张差分都是单独的一张图，只画一个瞬间：characterPrompt 与 diff.change 里每个人只写一个姿势，不要在同一张里写多个姿势、多个表情或“三连”。
 - 每组 1～3 张人物差分（diffs），是同一机位下一个动作的连续过程（伸手前→伸手→猫碰到手；握剑柄→出剑→收剑），不是随便换表情。同组 characterPrompt 相同，diff.change 只写这一刻的动作和表情。
@@ -87135,7 +87185,9 @@ function isView(target = viewTarget()) {
 function restoreAudio() {
     const context = ctx();
     if (!context || audioBySong.has(audioKey())) return;
-    const target = mv.captureMvTarget(context, view.songId);
+    // 恢复歌曲只是顺手的便利；读不到时静默跳过，绝不能让整页打不开。
+    let target;
+    try { target = mv.captureMvTarget(context, view.songId); } catch { return; }
     const key = audioKey(target);
     if (audioTried.has(key)) return;
     audioTried.add(key);
@@ -87362,6 +87414,19 @@ function currentSong() { const c = ctx(); return c ? mv.loadSong(c, view.songId)
 // ---------- 渲染 ----------
 
 function renderMv() {
+    try { renderMvUnsafe(); }
+    catch (error) {
+        console.error('[HeartbeatMemories] MV page failed', error);
+        try {
+            overlay.topTitle('做成 MV'); overlay.setBackVisible(true, '印象曲');
+            const el = body();
+            if (el) el.innerHTML = `<main class="rmt-x-page"><header class="rmt-x-head"><h2>这一页没能打开</h2><p>${esc(core_text.safeErrorSummary(error))}</p><p class="rmt-x-note">${esc(String(error?.message || error).slice(0, 300))}</p></header></main>`;
+        } catch {}
+        toastError(error);
+    }
+}
+
+function renderMvUnsafe() {
     if (!isView()) { disposeMv(); return; }
     ensureStyles();
     overlay.setManageVisible(false); overlay.setRegenerateVisible(false);
@@ -87633,6 +87698,13 @@ function renderTegaki(song, record) {
         <div class="rmt-mv-grid2">${seg('set-motion', mv.MV_MOTIONS, sel.shot.motion)}</div>
         <b style="font-size:14px">切到下一镜时</b><div class="rmt-x-segs">${seg('set-cut', mv.MV_CUTS, sel.shot.cut || 'fade')}</div>
         <div class="rmt-mv-actions">${btn('draw', mv.isFrameDrawing(mv.mvScope(ctx()), view.songId, sel.shot.id) ? '正在画…' : imgUrl(sel.shot) ? '重画这张' : '画这一张', { id: sel.shot.id, disabled: mv.isFrameDrawing(mv.mvScope(ctx()), view.songId, sel.shot.id) })}${uploadLabel(sel.shot.id)}</div></section>` : ''}
+      ${audioBySong.has(audioKey()) ? (() => {
+        const secs = mv.parseSections(song.lyrics);
+        const first = secs.findIndex(s => s.lines.length);
+        const taps = record.timing?.taps || {};
+        if (first < 0 || (taps[first] !== undefined && taps[first] !== null)) return '';
+        return `<section class="rmt-mv-warn"><b>前奏对不上歌词？</b><span>播放歌曲，听到第一句歌词开唱时点一下下面的按钮，整首的字幕和画面会一起对齐。</span>${btn('tap-vocal', '第一句歌词开唱了', { cls: 'rmt-x-primary', id: String(first) })}</section>`;
+      })() : ''}
       <section class="rmt-x-card"><b>歌曲与字幕</b>${audioCard(song)}
         ${tegakiControls(record, song)}
         ${btn('go-sync', `对时间 · 已点 ${tapped} / ${sections.length} 段${tapped < sections.length ? '，其余用估计时间' : ''}`, { cls: 'rmt-x-primary rmt-x-dark' })}</section>
@@ -87685,7 +87757,7 @@ async function preloadImages(record) {
             const url = imgUrl(shot);
             if (hasImg(shot) && !url) throw new Error('Local image unavailable');
             return url;
-        }).concat(mv.isV2(record) ? mv.assetKeys(record).map(k => mv.assetOf(record, k)?.image?.url).concat(view.cache?.song?.cgImage?.url || '') : []).filter(Boolean))];
+        }).concat(mv.isV2(record) ? mv.assetKeys(record).map(k => mv.assetOf(record, k)?.image?.url).concat(coverUrl(view.cache?.song) || '') : []).filter(Boolean))];
         await Promise.all(urls.map(url => new Promise((resolve, reject) => {
             let img = images.get(url);
             if (!img) { img = new Image(); img.src = url; images.set(url, img); }
@@ -88243,6 +88315,10 @@ function handleMvClick(event) {
             const next = sections.findIndex((_, i) => taps[i] === undefined || taps[i] === null);
             if (next >= 0) { setTap(next, Math.round(currentTime() * 10) / 10); renderMv(); }
         }
+        else if (action === 'tap-vocal') {
+            if (!player.playing) { toastOk('先点播放，听到第一句歌词时再点。'); }
+            else { setTap(Number(id) || 0, Math.round(currentTime() * 10) / 10); toastOk('已对齐：之后的段落会跟着一起移动，需要时可以在“对时间”里细调。'); renderMv(); }
+        }
         else if (action === 'tap-undo') {
             const taps = { ...(record.timing?.taps || {}) };
             const keys = Object.keys(taps).filter(k => taps[k] !== null && taps[k] !== undefined).map(Number).sort((a, b) => b - a);
@@ -88357,11 +88433,11 @@ function renderGroupsBoard(song, record) {
         const secNames = [...new Set(frames.map(s => sections[s.sectionIndex]?.name).filter(Boolean))].join('、');
         const usedDiffs = g.diffs.filter(d => frames.some(s => s.diff === d.id));
         const lyrics = frames.filter(s => s.lyric).slice(0, 8).map(s => `${g.diffs.find(d => d.id === s.diff)?.label || ''}｜${s.lyric}`).join('\n');
-        const bgIds = (g.bgs || []).length ? g.bgs.filter(b => frames.some(s => (s.bg || 'B1') === b.id)).map(b => b.id) : ['bg'];
-        const bgTiles = (bgIds.length ? bgIds : ['bg']).map(id => `<div>${assetTile(record, `${g.id}:${id}`, (g.bgs || []).find(b => b.id === id)?.label ? '背景·' + g.bgs.find(b => b.id === id).label : '背景')}</div>`).join('');
-        const missing = [...(bgIds.length ? bgIds : ['bg']).map(id => `${g.id}:${id}`), ...usedDiffs.map(d => `${g.id}:${d.id}`)].filter(k => !mv.assetOf(record, k)?.image?.url).length;
+        const bgIds = g.layer === 'full' ? [] : (g.bgs || []).length ? g.bgs.filter(b => frames.some(s => (s.bg || 'B1') === b.id)).map(b => b.id) : ['bg'];
+        const bgTiles = (g.layer === 'full' ? [] : bgIds.length ? bgIds : ['bg']).map(id => `<div>${assetTile(record, `${g.id}:${id}`, (g.bgs || []).find(b => b.id === id)?.label ? '背景·' + g.bgs.find(b => b.id === id).label : '背景')}</div>`).join('');
+        const missing = [...(g.layer === 'full' ? [] : bgIds.length ? bgIds : ['bg']).map(id => `${g.id}:${id}`), ...usedDiffs.map(d => `${g.id}:${d.id}`)].filter(k => !mv.assetOf(record, k)?.image?.url).length;
         return `<article class="rmt-mv-gcard"><div class="rmt-x-row-head"><b class="rmt-mv-gname">构图 ${shown} · ${esc(g.composition || '')}</b><span>${esc(secNames)} · ${frames.length} 句</span></div>
-          <div class="rmt-mv-assets">${bgTiles}<span class="rmt-mv-plus">+</span>${usedDiffs.map(d => `<div>${assetTile(record, `${g.id}:${d.id}`, d.label)}</div>`).join('')}</div>
+          <div class="rmt-mv-assets">${bgTiles}${bgTiles ? '<span class="rmt-mv-plus">+</span>' : ''}${usedDiffs.map(d => `<div>${assetTile(record, `${g.id}:${d.id}`, d.label)}</div>`).join('')}</div>
           ${inspectHtml(record, g, usedDiffs)}
           ${lyrics ? `<div class="rmt-mv-lyric"><p>${esc(lyrics)}</p></div>` : ''}
           <div class="rmt-mv-actions">${btn('draw-group', missing ? `画这一组剩下的 ${missing} 张` : '这一组已画好', { id: g.id, disabled: !missing || view.drawingAll, cls: missing ? 'rmt-x-primary' : 'rmt-x-secondary' })}</div>
@@ -88376,8 +88452,8 @@ function renderGroupsBoard(song, record) {
       ${mv.normalizeSettings(record.settings).appear === 'none' ? '' : `<label class="rmt-mv-look"><span>你的衣着</span><input type="text" maxlength="300" data-rmt-mv-wardrobe="user" value="${esc(wd.user || '')}"></label>`}
       <p class="rmt-x-note">改完之后重画的图才会生效。</p></details>`;
     const warn = mv.frameNeedsUserLooks(record, ctx()) && record.groups.some(g => g.who === 'both' || g.who === 'user') ? `<div class="rmt-mv-warn">还没有填写你的外貌，画出来的你可能每张不一样。</div>${looksEditor()}` : '';
-    page('构图卡片', '印象曲', `${head(song.title + ' · 手书', '构图卡片', '每张卡片是一个构图：背景只画一张，人物在白底上画几张差分，播放时自动抠掉白底叠在背景上。')}
-      <section class="rmt-mv-palette"><span class="rmt-mv-cover">${song.cgImage?.url ? `<img src="${esc(song.cgImage.url)}" alt="">` : ''}</span><div><b>从封面取色</b><span>${palette.map(c => `<i style="background:${c}"></i>`).join('')}</span></div><small>片头片尾<br>用封面</small></section>
+    page('构图卡片', '印象曲', `${head(song.title + ' · 手书', '构图卡片', '每张卡片是一个构图：同一个机位里画几张连续变化的完整画面，播放时按歌词切换。')}
+      <section class="rmt-mv-palette"><span class="rmt-mv-cover">${coverUrl(song) ? `<img src="${esc(coverUrl(song))}" alt="">` : ''}</span><div><b>从封面取色</b><span>${palette.map(c => `<i style="background:${c}"></i>`).join('')}</span></div><small>片头片尾<br>用封面</small></section>
       <section class="rmt-x-card"><b>做哪一段</b>${rangePicker('record', o, sections)}</section>
       <section class="rmt-x-card"><div class="rmt-x-row-head"><b>已画 ${drawn} / ${keys.length} 张</b><span>${esc(mv.playRange(record, song).label)}</span></div>
         <div class="rmt-x-bar"><i style="width:${keys.length ? Math.round(drawn / keys.length * 100) : 0}%"></i></div>
@@ -88394,6 +88470,9 @@ const cutMeta = new Map();
 const palettes = new Map();
 
 // 拼图识别：模型偶尔把同一人物画成左右或上下两格。缩小成灰度图比较两半，几乎一样就只取一格。
+// 封面就是给这首印象曲画的专辑封面（存在 song.visual.cgImage）。
+function coverUrl(song) { return song?.visual?.cgImage?.url || song?.cgImage?.url || ''; }
+
 const panelCache = new Map();
 function detectPanels(img) {
     try {
@@ -88512,7 +88591,7 @@ function cutoutFor(url, override = 'auto') {
 
 function coverPalette(song) {
     const fallback = ['#2f3a45', '#7d8fa3', '#f1e6d6'];
-    const url = song?.cgImage?.url;
+    const url = coverUrl(song);
     if (!url) return fallback;
     if (palettes.has(url)) return palettes.get(url);
     const img = imageFor(url);
@@ -88617,7 +88696,7 @@ function drawTitleCard(g, song, w, h, alpha) {
     const palette = coverPalette(song);
     g.save(); g.globalAlpha = Math.max(0, Math.min(1, alpha));
     g.fillStyle = palette[0]; g.fillRect(0, 0, w, h);
-    const cover = imageFor(song.cgImage?.url);
+    const cover = imageFor(coverUrl(song));
     const size = Math.min(w, h) * 0.56;
     if (cover) { g.save(); g.shadowColor = 'rgba(0,0,0,.4)'; g.shadowBlur = 30; g.drawImage(cover, (w - size) / 2, h * 0.32 - size / 2, size, size); g.restore(); }
     g.fillStyle = palette[2]; g.textAlign = 'center';
@@ -88685,6 +88764,152 @@ __m_ui_mvView_js.disposeMv = disposeMv;
 __m_ui_mvView_js.handleMvClick = handleMvClick;
 __m_ui_mvView_js.handleMvChange = handleMvChange;
 __m_ui_mvView_js.MV_MODE = MV_MODE;
+}
+
+function __init_archive_archiveFile_js() {
+// MODULE: archive/archiveFile.js
+const core_cache = __m_core_cache_js;
+const core_constants = __m_core_constants_js;
+const core_context = __m_core_context_js;
+const core_text = __m_core_text_js;
+const archive_repository = __m_archive_repository_js;
+const archive_inheritance = __m_archive_inheritance_js;
+// 档案文件：把当前聊天的心迹回廊档案（记忆 + 全部生成内容 + 本插件的聊天附加数据）导出成一个文件，
+// 再导入到另一个没有档案的聊天（例如检查点副本、复制出来的聊天）。图片按地址保存，换一台酒馆需要图片仍在原位置。
+
+
+
+
+
+
+
+const ARCHIVE_FILE_FORMAT = 'hearttrace-archive-file';
+const EXCLUDED_KEYS = new Set([core_constants.MEMORY_KEY, core_constants.CACHE_KEY]);
+
+function clone(value) { return value === undefined ? undefined : JSON.parse(JSON.stringify(value)); }
+
+// 本插件写在聊天里的其他数据（外貌、他在等你、朋友情报、MV 等），键名都以 heartbeatMemories 开头。
+function pluginMetadata(context) {
+    const out = {};
+    for (const [key, value] of Object.entries(context?.chatMetadata || {})) {
+        if (!key.startsWith('heartbeatMemories') || EXCLUDED_KEYS.has(key)) continue;
+        try { out[key] = clone(value); } catch { /* 无法序列化的项跳过。 */ }
+    }
+    return out;
+}
+
+async function buildArchiveFile(context = core_context.currentCharacterGuard()) {
+    const memory = archive_repository.requireArchive(context);
+    let cache = null;
+    try { cache = await core_cache.ensureCacheHydrated(context); } catch { cache = null; }
+    if (!cache || typeof cache !== 'object') cache = core_cache.getCache(context) || {};
+    if (core_cache.isCompressedCacheRecord(cache)) throw core_text.safeUserError('生成内容还没有读取完成，请稍后再导出。', 'RMT_ARCHIVE_FILE_CACHE');
+    return {
+        format: ARCHIVE_FILE_FORMAT,
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        characterName: core_text.normalizeText(context?.name2, 120),
+        sourceChatId: core_text.normalizeText(core_context.getChatId(context), 240),
+        memory: clone(memory),
+        cache: clone(cache),
+        metadata: pluginMetadata(context),
+    };
+}
+
+async function exportArchiveFile(context = core_context.currentCharacterGuard()) {
+    const data = await buildArchiveFile(context);
+    const name = `${core_text.normalizeText(data.memory.archiveName || data.characterName || 'Hearttrace', 40).replace(/[\\/:*?"<>|]+/g, '_')}-心迹回廊档案-${data.exportedAt.slice(0, 10)}.json`;
+    const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a'); link.href = url; link.download = name; link.hidden = true;
+    try { document.body.appendChild(link); link.click(); } finally { link.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000); }
+    return { name, memories: Array.isArray(data.memory.memories) ? data.memory.memories.length : 0 };
+}
+
+function parseArchiveFile(text) {
+    let data;
+    try { data = JSON.parse(text); } catch { throw core_text.safeUserError('这个文件不是心迹回廊的档案文件。', 'RMT_ARCHIVE_FILE_FORMAT'); }
+    if (data?.format !== ARCHIVE_FILE_FORMAT || data?.version !== 1 || !data.memory) throw core_text.safeUserError('这个文件不是心迹回廊的档案文件。', 'RMT_ARCHIVE_FILE_FORMAT');
+    if (!archive_repository.isCompatibleArchive(data.memory)) throw core_text.safeUserError('文件里的档案格式无法在这个版本中读取。', 'RMT_ARCHIVE_FILE_FORMAT');
+    return data;
+}
+
+// 当前聊天里带着别的聊天的档案（酒馆的检查点 / 复制聊天会连同插件数据一起复制，但聊天 ID 变了，
+// 插件按“一个窗口一个指纹”就把它当成别人的档案隐藏起来）。
+function foreignArchiveInChat(context = core_context.currentCharacterGuard()) {
+    const memory = context?.chatMetadata?.[core_constants.MEMORY_KEY];
+    if (!memory || typeof memory !== 'object') return null;
+    const current = core_context.comparableChatId(core_context.getChatId(context));
+    const owner = core_context.comparableChatId(memory.chatId);
+    if (!current || !owner || owner === current) return null;
+    return { memory, memories: Array.isArray(memory.memories) ? memory.memories.length : 0, archiveName: core_text.normalizeText(memory.archiveName, 120) };
+}
+
+async function installArchiveData(data, { sameHistory, context }) {
+    const chatId = core_context.comparableChatId(core_context.getChatId(context));
+    if (!chatId) throw core_text.safeUserError('无法识别当前聊天，请先打开一个具体的聊天。', 'RMT_ARCHIVE_FILE_CHAT');
+    const existing = context?.chatMetadata?.[core_constants.MEMORY_KEY];
+    if (existing && core_context.comparableChatId(existing.chatId) === chatId) {
+        throw core_text.safeUserError('当前聊天已经有档案了。请在没有档案的聊天里导入，避免覆盖现有内容。', 'RMT_ARCHIVE_FILE_OCCUPIED');
+    }
+    const entryId = `file-${core_context.stableArchiveHash(`${data.sourceChatId}\u001f${data.memory.archiveRevision || ''}\u001f${data.exportedAt}`)}`;
+    const prepared = archive_inheritance.prepareInheritedArchive({ entryId, memory: data.memory, cache: data.cache || {} }, context);
+    if (sameHistory) {
+        const snapshot = await core_context.buildChatSnapshot(context, { completeSource: true, expectedChatId: core_context.getChatId(context) });
+        prepared.memory.sourceMessageCount = snapshot.totalMessages;
+        prepared.memory.sourceFingerprint = `${snapshot.fingerprint}:`;
+        if (snapshot.fullFingerprint) prepared.memory.fullSourceFingerprint = snapshot.fullFingerprint;
+    }
+    // 复制过来的旧绑定先取下（已读进 prepared），写入失败时原样放回。
+    const backup = { memory: context.chatMetadata[core_constants.MEMORY_KEY], cache: context.chatMetadata[core_constants.CACHE_KEY] };
+    if (backup.memory) { delete context.chatMetadata[core_constants.MEMORY_KEY]; delete context.chatMetadata[core_constants.CACHE_KEY]; }
+    let saved;
+    try {
+        saved = await core_cache.saveImportedMemory(context, prepared.memory, chatId, {
+            expectedPreviousArchiveState: { present: false },
+            explicitCreate: true,
+            expectedTaskOrigin: { ...core_context.captureTaskOrigin(context, ''), startedAt: prepared.memory.createdAt, archivePresent: false },
+            initialCache: prepared.cache,
+        });
+    } catch (error) {
+        if (backup.memory && !context.chatMetadata[core_constants.MEMORY_KEY]) {
+            context.chatMetadata[core_constants.MEMORY_KEY] = backup.memory;
+            if (backup.cache !== undefined) context.chatMetadata[core_constants.CACHE_KEY] = backup.cache;
+        }
+        throw error;
+    }
+    for (const [key, value] of Object.entries(data.metadata || {})) {
+        if (!key.startsWith('heartbeatMemories') || EXCLUDED_KEYS.has(key)) continue;
+        if (context.chatMetadata[key] === undefined) context.chatMetadata[key] = value;
+    }
+    try { context.saveMetadataDebounced?.(); } catch { /* 档案本体已经保存。 */ }
+    return { memories: Array.isArray(saved?.memories) ? saved.memories.length : 0 };
+}
+
+// sameHistory：当前聊天就是导出时那个聊天的副本（检查点、复制）。这时把当前聊天全部楼层视为已整理，
+// 之后只整理新增的楼层；否则当作“在新聊天里继续这份档案”，当前聊天的楼层之后会被整理成新的记忆。
+async function importArchiveFile(text, { sameHistory = true, context = core_context.currentCharacterGuard() } = {}) {
+    return installArchiveData(parseArchiveFile(text), { sameHistory, context });
+}
+
+// 接管检查点 / 复制聊天里带过来的档案：直接用聊天里已有的那份数据，不需要文件。
+async function adoptForeignArchive({ sameHistory = true, context = core_context.currentCharacterGuard() } = {}) {
+    const foreign = foreignArchiveInChat(context);
+    if (!foreign) throw core_text.safeUserError('这个聊天里没有可以接管的档案。', 'RMT_ARCHIVE_FILE_FORMAT');
+    if (!archive_repository.isCompatibleArchive(foreign.memory)) throw core_text.safeUserError('带过来的档案格式无法在这个版本中读取。', 'RMT_ARCHIVE_FILE_FORMAT');
+    const stored = context.chatMetadata[core_constants.CACHE_KEY];
+    let cache = {};
+    if (core_cache.isCompressedCacheRecord(stored)) cache = await core_cache.gunzipJson(stored.data) || {};
+    else if (stored && typeof stored === 'object') cache = clone(stored);
+    return installArchiveData({ memory: clone(foreign.memory), cache, metadata: {}, sourceChatId: foreign.memory.chatId, exportedAt: String(foreign.memory.updatedAt || Date.now()) }, { sameHistory, context });
+}
+__m_archive_archiveFile_js.buildArchiveFile = buildArchiveFile;
+__m_archive_archiveFile_js.exportArchiveFile = exportArchiveFile;
+__m_archive_archiveFile_js.parseArchiveFile = parseArchiveFile;
+__m_archive_archiveFile_js.foreignArchiveInChat = foreignArchiveInChat;
+__m_archive_archiveFile_js.importArchiveFile = importArchiveFile;
+__m_archive_archiveFile_js.adoptForeignArchive = adoptForeignArchive;
+__m_archive_archiveFile_js.ARCHIVE_FILE_FORMAT = ARCHIVE_FILE_FORMAT;
 }
 
 __init_core_themeSongCover_js();
@@ -88998,6 +89223,7 @@ __init_ui_extrasView_js();
 __init_extras_mv_js();
 __init_extras_mvMedia_js();
 __init_ui_mvView_js();
+__init_archive_archiveFile_js();
 
 export const openArchiveLibrary = __m_heartbeatMemories_js.openArchiveLibrary;
 export const openSettingsHome = __m_heartbeatMemories_js.openSettingsHome;
