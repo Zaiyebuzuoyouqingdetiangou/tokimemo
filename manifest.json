@@ -1,7 +1,7 @@
 {
   "display_name": "心迹回廊",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.99.99-r84.215-song-writing-save",
+  "js": "index.js?heartbeat=0.99.99-r84.216-mv-restore-safe-continue",
   "author": "Toto",
   "version": "0.99.99",
   "auto_update": true,
@@ -10,6 +10,6 @@
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r84.215：改进角色印象曲的可唱性、副歌记忆点和编曲提示词；修复 MV 宿主保存失败仍误报成功。保留 r84.214 的对时间与夜间配色修复。",
+  "description": "r84.216：恢复分镜类型、歌曲推荐、多人／世界书设置和片段导出；修复自动续写及覆盖已画图片。保留重画、对时间、夜间模式、写歌和保存修复。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }

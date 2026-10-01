@@ -260,13 +260,44 @@ export function httpFailure(response) {
     return error;
 }
 
+// TT returns synthetic choices/stop completions on backend failure. Its localized
+// [API 错误] label is not a JSON array opener. Only unwrap a complete, known label
+// line; retain any actual JSON (including partial data) on the ordinary parser path.
+// A canonical host error envelope is authoritative even if its body contains JSON.
+function transportErrorTextInfo(value, hostEnvelope = false) {
+    const none = { status: 0, hostError: false };
+    if (typeof value !== 'string') return none;
+    let body = value.replace(/^\uFEFF/, '').trim();
+    const label = /^\[API (?:Error|错误|錯誤)\][ \t]*(?:\r?\n|$)/i.exec(body);
+    const wrapper = label || (hostEnvelope ? /^\[[^\]\r\n]+\][ \t]*\r?\n/.exec(body) : null);
+    if (wrapper) body = body.slice(wrapper[0].length).trimStart();
+    if (!hostEnvelope && /[{\[]/.test(body)) return none;
+    const match = /^(?:(?:failed to generate(?: chat completion)?|internal error|error)\s*:\s*)*(?:custom openai endpoint failed with status\s+|(?:http(?:\/\d(?:\.\d)?)?(?: error)?|status(?: code)?|error code)\s*[:=]?\s*)([45]\d{2})\b/i.exec(body);
+    return { status: Number(match?.[1]) || 0, hostError: !!label || hostEnvelope };
+}
+
+function isHostErrorCompletion(payload) {
+    const id = responseField(payload, 'id');
+    return typeof id === 'string' && /^tauritavern-error-\d+$/.test(id)
+        && ['chat.completion', 'chat.completion.chunk'].includes(responseField(payload, 'object'))
+        && Array.isArray(responseField(payload, 'choices'));
+}
+
 export function providerEnvelopeFailure(payload, manual = true) {
     // Read only bounded error metadata. Never propagate a provider message/body as a cause.
     const seen = new Set();
-    let status = 0, typeStatus = 0, quota = false;
+    let status = 0, typeStatus = 0, textStatus = 0, quota = false;
     const visit = (node, depth) => {
+        if (typeof node === 'string') { if (!textStatus) textStatus = transportErrorTextInfo(node).status; return; }
         if (!node || typeof node !== 'object' || seen.has(node) || depth > 4 || seen.size >= 24) return;
         seen.add(node);
+        if (!textStatus && isHostErrorCompletion(node)) {
+            textStatus = transportErrorTextInfo(finalResponseSelection(node).text, true).status;
+        }
+        for (const key of ['message', 'detail']) {
+            const descriptor = Object.getOwnPropertyDescriptor(node, key);
+            if (!textStatus && descriptor && 'value' in descriptor) textStatus = transportErrorTextInfo(descriptor.value).status;
+        }
         for (const key of ['status', 'statusCode', 'code', 'type']) {
             const descriptor = Object.getOwnPropertyDescriptor(node, key);
             const value = descriptor && 'value' in descriptor ? descriptor.value : null;
@@ -294,7 +325,7 @@ export function providerEnvelopeFailure(payload, manual = true) {
         error.retryable = false;
         return error;
     }
-    if (status || typeStatus) return apiError('模型服务返回错误状态；详情已隐藏。', 'RMT_PROVIDER_STATUS', status || typeStatus);
+    if (status || typeStatus || textStatus) return apiError('模型服务返回错误状态；详情已隐藏。', 'RMT_PROVIDER_STATUS', status || typeStatus || textStatus);
     const error = apiError('专用连接返回了错误状态，请检查服务配置后重试。', manual ? 'RMT_MANUAL_PROVIDER_ERROR' : 'RMT_CONNECTION_FAILED');
     error.retryable = false;
     return error;
@@ -502,6 +533,7 @@ export function payloadHasProviderError(payload) {
     const visit = (node, depth) => {
         if (!node || typeof node !== 'object' || seen.has(node) || depth > 4) return false;
         seen.add(node);
+        if (isHostErrorCompletion(node)) return true;
         if (presentError(node.error) || presentError(node.errors) || node.ok === false || node.success === false) return true;
         for (const value of [node.status, node.statusCode, node.code]) {
             const numeric = Number(value);
@@ -531,6 +563,13 @@ export function assertIndependentResponsePayload(payload) {
     if (looksLikeHtmlResponse(content)) {
         const error = apiError('专用连接返回了 HTML 页面；响应正文已隐藏。', 'RMT_RESPONSE_HTML');
         error.retryable = false;
+        throw error;
+    }
+    const transport = transportErrorTextInfo(content);
+    if (transport.status || transport.hostError) {
+        const error = apiError('模型服务返回错误状态；详情已隐藏。', transport.status ? 'RMT_PROVIDER_STATUS' : 'RMT_CONNECTION_FAILED', transport.status);
+        if (!transport.status) error.retryable = false;
+        transportFailures.set(error, { shape: 'error', finalChars: 0, reasoningChars: 0, finishReason: 'none' });
         throw error;
     }
     if (!content.trim()) {
