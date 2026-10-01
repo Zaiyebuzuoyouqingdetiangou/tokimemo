@@ -181,6 +181,15 @@ ${r} .rmt-x-peep{position:relative;overflow:hidden;height:190px!important;justif
 ${r} .rmt-x-peep::before{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(90deg,rgba(8,8,14,.92) 0 12%,transparent 30% 70%,rgba(8,8,14,.92) 88% 100%)}
 ${r} .rmt-x-peep>*{position:relative;z-index:1}
 ${r} .rmt-x-hero span{color:#f3eee6!important;-webkit-text-fill-color:#f3eee6!important}
+${r} .rmt-x-night .rmt-x-sheet{background:#0e1319!important;border:1px solid #2a3846;border-radius:10px;--rmt-content-ink:#d6e6e0;position:relative;overflow:hidden;font-family:ui-monospace,"SFMono-Regular",Menlo,"PingFang SC",monospace}
+${r} .rmt-x-night .rmt-x-sheet::before{content:"";position:absolute;inset:0;pointer-events:none;background:repeating-linear-gradient(0deg,rgba(255,255,255,.035) 0 1px,transparent 1px 3px),radial-gradient(ellipse at center,transparent 55%,rgba(0,0,0,.45) 100%)}
+${r} .rmt-x-night .rmt-x-sheet>*{position:relative}
+${r} .rmt-x-night .rmt-x-sheet small{color:#78d3b2!important;-webkit-text-fill-color:#78d3b2!important;letter-spacing:3px}
+${r} .rmt-x-night .rmt-x-sheet small::before{content:"▸ ";}
+${r} .rmt-x-night .rmt-x-sheet p,${r} .rmt-x-night .rmt-x-sheet span{color:#d6e6e0!important;-webkit-text-fill-color:#d6e6e0!important}
+${r} .rmt-x-night .rmt-x-sheet .rmt-x-voice{color:#f2c38b!important;-webkit-text-fill-color:#f2c38b!important;font-family:inherit!important}
+${r} .rmt-x-night .rmt-x-sheet .rmt-x-chip{background:rgba(120,211,178,.12)!important;color:#78d3b2!important;-webkit-text-fill-color:#78d3b2!important;border:1px solid rgba(120,211,178,.3)}
+${r} .rmt-x-night .rmt-x-sheet .rmt-x-chip.warm,${r} .rmt-x-night .rmt-x-sheet .rmt-x-chip.muted{background:rgba(242,195,139,.1)!important;color:#e9c9a0!important;-webkit-text-fill-color:#e9c9a0!important;border-color:rgba(242,195,139,.3)}
 ${r} .rmt-x-recent-tile{position:relative;overflow:hidden}
 ${r} .rmt-x-recent-tile img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 ${r} .rmt-x-recent-tile em{position:relative}

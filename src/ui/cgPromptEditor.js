@@ -262,7 +262,11 @@ export function openCgPromptEditor({ heartStrip = false, targetDescriptor = null
         element.innerHTML = `<section class="rmt-cg-prompt-dialog" role="dialog" aria-modal="true" aria-labelledby="rmt-cg-prompt-title" aria-describedby="rmt-cg-prompt-help" tabindex="-1">
           <div class="rmt-cg-prompt-head"><h2 id="rmt-cg-prompt-title">图片设置</h2><button type="button" class="rmt-btn" data-rmt-cg-prompt-action="close" aria-label="关闭图片设置">关闭</button></div>
           <p class="rmt-cg-prompt-event">${core_text.esc(selected.title)}</p>
-          <label class="rmt-cg-format"><span>生图提示词格式</span><select data-rmt-cg-editor-format aria-label="当前图片提示词格式">${cg_format_ui.cgFormatOptions(promptFormat)}</select><small>只指导重新构思的写法，不限制手动提示；切换不发请求，实际模型在生图插件中选择。</small></label>
+          <label class="rmt-cg-format"><span>生图提示词格式</span><select data-rmt-cg-editor-format aria-label="当前图片提示词格式">${cg_format_ui.cgFormatOptions(promptFormat)}</select><small>只指导重新构思的写法，不限制手动提示；切换不发请求，实际模型在生图插件中选择。</small></label>${targetDescriptor?.kind === 'song-cover' ? (() => {
+            let current = 'portrait';
+            try { current = globalThis.SillyTavern?.getContext?.()?.chatMetadata?.heartbeatMemoriesSongCoverV1?.[targetDescriptor.containerId] === 'landscape' ? 'landscape' : 'portrait'; } catch {}
+            return `<label class="rmt-cg-format"><span>封面方向</span><select data-rmt-cg-editor-orient="${core_text.esc(targetDescriptor.containerId)}" aria-label="封面方向"><option value="portrait"${current === 'portrait' ? ' selected' : ''}>竖版</option><option value="landscape"${current === 'landscape' ? ' selected' : ''}>横版</option></select><small>下一次画这首歌的封面时生效。</small></label>`;
+        })() : ''}
           <details class="rmt-cg-prompt-scene"><summary>查看这条回忆</summary><p>${core_text.esc(selected.cgSourceText || selected.cgDesc || selected.desc || selected.subtitle || '')}</p></details>
           <label for="rmt-cg-prompt-input">将发送给生图插件的画面描述</label>
           <textarea id="rmt-cg-prompt-input" data-rmt-cg-prompt-input rows="8" maxlength="${core_constants.MAX_CG_IMAGE_PROMPT_CHARS}" aria-describedby="rmt-cg-prompt-help rmt-cg-prompt-count"></textarea>

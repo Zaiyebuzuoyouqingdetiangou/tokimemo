@@ -141,6 +141,10 @@ function targetContext(target) {
 }
 
 function resultBasis(record, kind, shotId) {
+    if (kind === 'append') return JSON.stringify(record ? {
+        createdAt: record.createdAt, version: record.version, settings: record.settings,
+        shots: list(record.shots).map(s => [s.id, s.sectionIndex, s.group, s.diff]),
+    } : null);
     if (kind === 'story') {
         return JSON.stringify(record ? { settings: record.settings, shots: record.shots } : null);
     }
@@ -178,6 +182,10 @@ export async function retryMvSave(scope, id) {
     if (!list(current?.appliedResults).includes(row.id)) {
         if (resultBasis(current, row.kind, row.shotId) !== row.expected) return held('分镜或图片已有新修改');
         if (row.kind === 'story') next = { timing: { taps: {}, shift: 0 }, duration: 0, ...next, ...row.patch };
+        else if (row.kind === 'append') {
+            next.shots = [...list(next.shots), ...row.patch.shots].sort((a, b) => a.sectionIndex - b.sectionIndex);
+            if (isV2(next)) next.groups = [...next.groups, ...row.patch.groups];
+        }
         else if (row.kind === 'asset') {
             const found = assetOf(next, row.shotId);
             if (!found) return held('原构图已不存在');
@@ -314,6 +322,23 @@ export function shotTimeline(record, song) {
         let acc = 0;
         own.forEach((shot, k) => { const a = acc; acc += weights[k]; rows.push({ shot, start: time.start + span * a / sum, end: time.start + span * acc / sum, sectionIndex: index }); });
     });
+    // 逐句对时间：用户边听边点每一句的开头，对应歌词的镜头直接从点下的时间开始。
+    const lineTaps = record?.timing?.lineTaps || {};
+    if (Object.keys(lineTaps).length) {
+        const used = new Map();
+        for (const row of rows) {
+            const lines = sections[row.sectionIndex]?.lines || [];
+            const text = String(row.shot?.lyric || '').trim();
+            if (!text) continue;
+            const from = used.get(row.sectionIndex) || 0;
+            let idx = lines.findIndex((line, i) => i >= from && line.trim() === text);
+            if (idx < 0) idx = lines.findIndex(line => line.trim() === text);
+            if (idx < 0) continue;
+            used.set(row.sectionIndex, idx + 1);
+            const tap = Number(lineTaps[`${row.sectionIndex}:${idx}`]);
+            if (Number.isFinite(tap) && tap >= 0) row.lineTap = tap;
+        }
+    }
     // 没有镜头的段落不留空白：前一镜一直停到下一镜开始；第一镜从 0 秒开始。
     if (rows.length) rows[0].start = 0;
     // 构图卡片版：镜头切点吸附到最近的拍点，画面跟着音乐切，而不是等时长轮播。
@@ -323,6 +348,12 @@ export function shotTimeline(record, song) {
             const snapped = Math.round(rows[i].start / beat) * beat;
             if (snapped > rows[i - 1].start + beat * 0.5 && (i + 1 >= rows.length || snapped < rows[i + 1].start - beat * 0.5)) rows[i].start = snapped;
         }
+    }
+    // 点过的句子以点下的时间为准（只要不早于上一镜），优先级高于估计和拍点吸附。
+    for (let i = 0; i < rows.length; i += 1) {
+        if (rows[i].lineTap === undefined) continue;
+        const prev = i > 0 ? rows[i - 1].start : -1;
+        if (rows[i].lineTap > prev) rows[i].start = rows[i].lineTap;
     }
     for (let i = 0; i < rows.length; i += 1) rows[i].end = i + 1 < rows.length ? rows[i + 1].start : Math.max(rows[i].end, total);
     return { rows, sections, times, total };
@@ -389,11 +420,11 @@ export function selectedSectionIndexes(sections, range, from = 0, to = 0) {
     return all.filter(i => i >= first && i <= chorus);
 }
 
-function storyboardPrompt(context, memory, song, settings) {
+function storyboardPrompt(context, memory, song, settings, sectionIndexes = null) {
     const charName = core_text.normalizeText(memory?.characterName || context?.name2, 120) || '{{char}}';
     const userName = core_text.normalizeText(memory?.userName || context?.name1, 120) || '{{user}}';
     const parsed = parseSections(song.lyrics);
-    const keep = settings.output === 'video' ? parsed.map((_, i) => i) : selectedSectionIndexes(parsed, settings.range, settings.rangeFrom, settings.rangeTo);
+    const keep = sectionIndexes || (settings.output === 'video' ? parsed.map((_, i) => i) : selectedSectionIndexes(parsed, settings.range, settings.rangeFrom, settings.rangeTo));
     const sections = parsed.map((s, i) => ({ index: i, section: s.tag, lines: s.lines })).filter(s => keep.includes(s.index));
     const appear = settings.appear === 'face' ? `${userName} 可以露脸出镜。`
         : settings.appear === 'back' ? `${userName} 只能以背影、手或剪影出现，不画正脸。` : `${userName} 不出现在画面里。`;
@@ -480,6 +511,72 @@ export function normalizeShots(data, memory, sectionCount) {
 }
 
 export function isMvRunning(key) { return running.has(key); }
+
+export function missingStoryboardSections(record, song) {
+    const sections = parseSections(song.lyrics);
+    const o = tegakiOptions(record);
+    const indexes = record?.settings?.output === 'video' ? sections.map((_, i) => i)
+        : selectedSectionIndexes(sections, o.range, o.rangeFrom, o.rangeTo);
+    return indexes.filter(i => !list(record?.shots).some(s => s.sectionIndex === i));
+}
+
+// Append new work using fresh identifiers; never replace existing drawings or timing.
+function continuationPatch(raw, previous, memory, sectionCount, settings, missing) {
+    const built = buildShots(raw, memory, sectionCount, settings);
+    let shots = built.shots.filter(s => missing.includes(s.sectionIndex));
+    if (!shots.length) throw core_text.safeUserError('返回的分镜没有包含待补段落，原分镜已保留，可导出这次返回内容。', 'RMT_MV_EMPTY');
+    let groups = list(built.groups);
+    if (isV2(previous) && !isV2(built)) {
+        groups = shots.map((s, i) => ({
+            id: `G${i + 1}`, composition: s.plain, characterPrompt: s.imagePrompt, who: s.who,
+            motion: s.motion, transition: s.cut, layer: 'full', position: 'center', scale: 'medium', seed: 0,
+            bgs: [{ id: 'B1', prompt: '', image: null }],
+            diffs: [{ id: 'D1', label: s.plain, change: '', bg: 'B1', image: null }],
+        }));
+        shots = shots.map((s, i) => ({ ...s, group: groups[i].id, diff: 'D1', bg: 'B1' }));
+    } else if (!isV2(previous) && isV2(built)) {
+        shots = shots.map(s => {
+            const g = groups.find(g => g.id === s.group);
+            const d = g.diffs.find(d => d.id === s.diff);
+            return { ...s, imagePrompt: [g.characterPrompt, d.change, g.bgs.find(b => b.id === s.bg)?.prompt].filter(Boolean).join(', '), composition: g.composition };
+        });
+    }
+    const usedGroups = new Set([...list(previous.groups).map(g => g.id), ...list(previous.shots).map(s => s.group)]);
+    const groupMap = new Map();
+    let groupNumber = 1;
+    for (const id of new Set(shots.map(s => s.group).filter(Boolean))) {
+        while (usedGroups.has(`G${groupNumber}`)) groupNumber += 1;
+        const next = `G${groupNumber++}`;
+        usedGroups.add(next); groupMap.set(id, next);
+    }
+    const prefix = `C${Date.now().toString(36)}_${++resultSequence}`;
+    return {
+        shots: shots.map((s, i) => ({ ...s, id: `${prefix}_${i + 1}`, ...(s.group ? { group: groupMap.get(s.group) } : {}) })),
+        groups: groups.filter(g => groupMap.has(g.id)).map(g => ({ ...g, id: groupMap.get(g.id) })),
+    };
+}
+
+export async function continueStoryboard(songId) {
+    const context = core_context.currentCharacterGuard();
+    const target = captureMvTarget(context, songId);
+    const { song, memory, scope, origin } = target;
+    const previous = target.base.songs[songId];
+    if (!previous) return null;
+    const missing = missingStoryboardSections(previous, song);
+    if (!missing.length) return { pending: false, scope, record: previous, alreadyComplete: true };
+    const key = `story:${scope}:${songId}`;
+    if (running.has(key)) throw core_text.safeUserError('分镜正在写，稍等一下。', 'RMT_MV_RUNNING');
+    const settings = normalizeSettings(previous.settings);
+    running.add(key);
+    try {
+        const continuity = { wardrobe: previous.wardrobe || {}, keyword: previous.keyword || '', motif: previous.motif ? { name: previous.motif.name, prompt: previous.motif.prompt } : null,
+            lastScene: list(previous.shots).filter(s => s.sectionIndex < missing[0]).at(-1)?.plain || '' };
+        const prompt = storyboardPrompt(context, memory, song, settings, missing)
+            + `\n【接着已有分镜补写】\n只补上面列出的段落，sectionIndex 沿用歌曲原编号。已有分镜和图片会保留；新构图在保存时自动分配编号。沿用已有时代、衣着和意象，并衔接已有画面：\n${JSON.stringify(continuity)}`;
+        const data = await generation_client.requestJson(prompt, '正在补写剩余分镜…', { mode: 'songMv', taskKey: `extras:mv:${key}`, context, origin });
+        return holdResult(target, 'append', '', data, raw => continuationPatch(raw, previous, memory, parseSections(song.lyrics).length, settings, missing));
+    } finally { running.delete(key); }
+}
 
 export async function generateStoryboard(songId, settingsInput) {
     const context = core_context.currentCharacterGuard();
@@ -677,8 +774,56 @@ export function playRange(record, song) {
 }
 
 export function shotsInRange(record, song) {
-    const range = playRange(record, song);
-    return shotTimeline(record, song).rows.filter(row => row.end > range.start + 0.01 && row.start < range.end - 0.01).map(row => row.shot);
+    const o = tegakiOptions(record);
+    const indexes = selectedSectionIndexes(parseSections(song.lyrics), o.range, o.rangeFrom, o.rangeTo);
+    return list(record?.shots).filter(shot => indexes.includes(shot.sectionIndex));
+}
+
+// Completed clips are contiguous runs of sections with all their scene images ready.
+// Motifs and the cover remain optional; manually chosen ranges may include unfinished shots.
+export function completedMvRanges(record, song) {
+    const sections = parseSections(song.lyrics);
+    const done = sections.map((_, i) => {
+        const shots = list(record?.shots).filter(s => s.sectionIndex === i);
+        return shots.length > 0 && shots.every(s => {
+            if (!isV2(record)) return !!(s.image?.url || s.image?.local);
+            const g = record.groups.find(g => g.id === s.group);
+            return !!assetOf(record, `${s.group}:${s.diff}`)?.image?.url
+                && (g?.layer === 'full' || !!assetOf(record, `${s.group}:${s.bg || 'bg'}`)?.image?.url);
+        });
+    });
+    const ranges = [];
+    done.forEach((ready, i) => {
+        if (!ready) return;
+        const last = ranges.at(-1);
+        if (last && last.rangeTo === i - 1) last.rangeTo = i;
+        else ranges.push({ range: 'custom', rangeFrom: i, rangeTo: i });
+    });
+    return ranges;
+}
+
+export function exportOptions(record, song) {
+    return record?.exportRange || completedMvRanges(record, song)[0] || tegakiOptions(record);
+}
+
+export function exportRange(record, song) {
+    return playRange({ ...record, tegaki: { ...record?.tegaki, ...exportOptions(record, song) } }, song);
+}
+
+export function exportRecord(record, song) {
+    const copy = structuredClone(record);
+    copy.tegaki = { ...copy.tegaki, ...exportOptions(record, song) };
+    // Filter only after calculating the original timeline, preserving lyric taps and beat snapping.
+    copy.clipSectionIndexes = [...new Set(shotsInRange(copy, song).map(s => s.sectionIndex))];
+    const sections = parseSections(song.lyrics);
+    if (!copy.clipSectionIndexes.some(i => isChorusTag(sections[i]?.tag))) copy.motif = null;
+    return copy;
+}
+
+export function playbackTimeline(record, song) {
+    const timeline = shotTimeline(record, song);
+    if (!Array.isArray(record?.clipSectionIndexes)) return timeline;
+    return { ...timeline, rows: timeline.rows.filter(row => record.clipSectionIndexes.includes(row.sectionIndex)) };
 }
 
 // 节奏模板：参考描改手书的固定套路，一次排好全部镜头的切换方式与停留；之后仍可逐镜修改。
@@ -724,6 +869,8 @@ function tegakiGrammar(sections, keep, charName = '{{char}}') {
 - 每组的景别和机位要不同：特写（手、眼、物件）、近景、中景、全身、远景、背影、低机位、俯视都可以；人物位置不要总在正中间，position 写 left / center / right，scale 写 close / medium / full / wide。
 - 每一张差分都是单独的一张图，只画一个瞬间：characterPrompt 与 diff.change 里每个人只写一个姿势，不要在同一张里写多个姿势、多个表情或“三连”。
 - 每组 1～3 张人物差分（diffs），是同一机位下一个动作的连续过程（伸手前→伸手→猫碰到手；握剑柄→出剑→收剑），不是随便换表情。同组 characterPrompt 相同，diff.change 只写这一刻的动作和表情。
+- 歌词里出现的身体细节和小物件要给特写组：唱到交握的手，就有一组只拍两只手；唱到发带、剑穗、信、伞，就拍那个物件。特写组同样写进 groups，characterPrompt 写清只拍局部。
+- 情绪细节用“最小差分”：同一构图连续两三张，只改一处，其余完全不变。比如前一张面无表情，后一张一切相同、只多了一滴眼泪；或者前一张闭眼、后一张只是睁开眼。这种差分的 diff.change 只写变化的那一处，不重写姿势和场景。
 - 景别要有特写：眼睛、手、剑柄、物件这类细节特写，和远景、全景、近景交替使用，不要全是半身和全身。
 - 每组 1～2 张背景（bgs）：同一个地点，第二张可以是时间或光线的变化（白天→黄昏、晴→雨），也可以是远近不同。背景只有场景，没有人物。
 - 副歌可以有一个主视觉组，重复的副歌复用它；其余段落尽量用新的构图，尾奏可以回到开头的构图。
@@ -743,8 +890,8 @@ export function buildShots(raw, memory, sectionCount, settings) {
     if (settings.output === 'video' || !list(raw?.groups).some(g => list(g?.diffs).length)) return { shots: normalizeShots(raw, memory, sectionCount) };
     const idMap = new Map();
     const groups = [];
-    list(raw.groups).slice(0, 8).forEach(g => {
-        const diffs = list(g?.diffs).slice(0, 5).map((d, k) => ({
+    list(raw.groups).forEach(g => {
+        const diffs = list(g?.diffs).map((d, k) => ({
             id: `D${k + 1}`, rawId: core_text.normalizeText(d?.id, 20) || `D${k + 1}`,
             label: core_text.normalizeText(d?.label, 20) || `差分 ${k + 1}`,
             change: core_text.normalizeText(d?.change, 300), image: null,
@@ -764,7 +911,7 @@ export function buildShots(raw, memory, sectionCount, settings) {
             // full = 人物、道具与背景在同一张完整场景图里（默认，最稳）；cutout = 白底人物抠图叠到背景上。
             layer: 'full',
             scale: ['close', 'medium', 'full', 'wide'].includes(g?.scale) ? g.scale : 'medium',
-            bgs: (list(g?.bgs).length ? list(g.bgs) : [{ label: '场景', prompt: g?.backgroundPrompt }]).slice(0, 2).map((b, k) => ({
+            bgs: (list(g?.bgs).length ? list(g.bgs) : [{ label: '场景', prompt: g?.backgroundPrompt }]).map((b, k) => ({
                 id: `B${k + 1}`, rawId: core_text.normalizeText(b?.id, 20) || `B${k + 1}`,
                 label: core_text.normalizeText(b?.label, 20) || (k ? '变化' : '场景'),
                 prompt: core_text.normalizeText(b?.prompt, 600) || core_text.normalizeText(g?.backgroundPrompt, 600), image: null,
@@ -933,4 +1080,15 @@ export function setGroupLayer(songId, groupId, layer) {
         if (g) g.layer = layer === 'cutout' ? 'cutout' : 'full';
         return current;
     });
+}
+
+
+// 逐句对时间用的歌词清单：按段落顺序列出（只列当前截取范围内的段落）。
+export function syncLines(record, song) {
+    const sections = parseSections(song.lyrics);
+    const o = tegakiOptions(record);
+    const keep = new Set(selectedSectionIndexes(sections, o.range, o.rangeFrom, o.rangeTo));
+    const out = [];
+    sections.forEach((s, si) => { if (keep.has(si)) s.lines.forEach((line, li) => out.push({ key: `${si}:${li}`, text: line, section: s.name })); });
+    return out;
 }

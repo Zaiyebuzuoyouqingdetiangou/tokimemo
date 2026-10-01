@@ -23,15 +23,14 @@ const audioTried = new Set();
 const audioLoads = new Map();
 
 // 用户自己的图存在本机；url 来自生图渠道。两者都没有时返回空字符串。
-function v2Diff(shot) {
-    const record = view.cache?.record;
+function v2Diff(shot, record = view.cache?.record) {
     if (!shot?.group || !mv.isV2(record)) return null;
     return record.groups.find(g => g.id === shot.group)?.diffs.find(d => d.id === shot.diff) || null;
 }
 function hasImg(shot) { const d = v2Diff(shot); if (d) return !!d.image?.url; return !!(shot?.image?.url || shot?.image?.local); }
 
-function imgUrl(shot) {
-    const d = v2Diff(shot);
+function imgUrl(shot, record = view.cache?.record) {
+    const d = v2Diff(shot, record);
     if (d) return d.image?.url || '';
     if (shot?.image?.url) return shot.image.url;
     const key = shot?.image?.local;
@@ -58,7 +57,9 @@ function isView(target = viewTarget()) {
 function restoreAudio() {
     const context = ctx();
     if (!context || audioBySong.has(audioKey())) return;
-    const target = mv.captureMvTarget(context, view.songId);
+    // 恢复歌曲只是顺手的便利；读不到时静默跳过，绝不能让整页打不开。
+    let target;
+    try { target = mv.captureMvTarget(context, view.songId); } catch { return; }
     const key = audioKey(target);
     if (audioTried.has(key)) return;
     audioTried.add(key);
@@ -285,6 +286,19 @@ function currentSong() { const c = ctx(); return c ? mv.loadSong(c, view.songId)
 // ---------- 渲染 ----------
 
 export function renderMv() {
+    try { renderMvUnsafe(); }
+    catch (error) {
+        console.error('[HeartbeatMemories] MV page failed', error);
+        try {
+            overlay.topTitle('做成 MV'); overlay.setBackVisible(true, '印象曲');
+            const el = body();
+            if (el) el.innerHTML = `<main class="rmt-x-page"><header class="rmt-x-head"><h2>这一页没能打开</h2><p>${esc(core_text.safeErrorSummary(error))}</p><p class="rmt-x-note">${esc(String(error?.message || error).slice(0, 300))}</p></header></main>`;
+        } catch {}
+        toastError(error);
+    }
+}
+
+function renderMvUnsafe() {
     if (!isView()) { disposeMv(); return; }
     ensureStyles();
     overlay.setManageVisible(false); overlay.setRegenerateVisible(false);
@@ -341,6 +355,25 @@ function rangePicker(scope, state, sections) {
     const custom = state.range === 'custom' ? `<div class="rmt-mv-range-selects"><label>从<select data-rmt-mv-range="from" data-rmt-mv-scope="${scope}">${options(state.rangeFrom)}</select></label><label>到<select data-rmt-mv-range="to" data-rmt-mv-scope="${scope}">${options(state.rangeTo)}</select></label></div>` : '';
     const lines = idx.reduce((n, i) => n + (sections[i]?.lines.length || 1), 0);
     return `<div class="rmt-mv-grid2">${buttons}</div>${custom}<p class="rmt-x-note">这次做：${idx.length ? esc(sections[idx[0]].name) + (idx.length > 1 ? ' → ' + esc(sections[idx.at(-1)].name) : '') : '整首'} · ${idx.length} 段 · 约 ${lines} 句歌词。手书通常只做一段，镜头少、节奏紧。</p>`;
+}
+
+function continueControl(record, song) {
+    const missing = mv.missingStoryboardSections(record, song);
+    const busy = mv.isMvRunning(`story:${view.scope}:${view.songId}`);
+    return missing.length ? `<p class="rmt-x-note">所选范围还有 ${missing.length} 段没有分镜，已有分镜和图片会保留。</p>${btn('continue-board', busy ? '正在补写分镜…' : `继续分镜 · 补上 ${missing.length} 段`, { cls: 'rmt-x-primary', disabled: busy })}`
+        : '<p class="rmt-x-note">所选范围已有分镜；想继续后面的段落，可以把范围改为整首。</p>';
+}
+
+function exportControls(record, song) {
+    const sections = mv.parseSections(song.lyrics);
+    const o = mv.exportOptions(record, song);
+    const idx = mv.selectedSectionIndexes(sections, o.range, o.rangeFrom, o.rangeTo);
+    const options = value => sections.map((s, i) => `<option value="${i}"${i === value ? ' selected' : ''}>${i + 1}. ${esc(s.name)}</option>`).join('');
+    const ready = mv.completedMvRanges(record, song);
+    const range = mv.exportRange(record, song);
+    return `<b style="font-size:14px">导出哪一段</b><div class="rmt-mv-actions">${btn('export-range', '整首', { id: 'full' })}${ready.map(r => btn('export-range', `已完成：${r.rangeFrom + 1}–${r.rangeTo + 1} 段`, { id: `${r.rangeFrom}:${r.rangeTo}` })).join('')}</div>
+      <div class="rmt-mv-range-selects"><label>从<select data-rmt-mv-export-range="from">${options(idx[0] ?? 0)}</select></label><label>到<select data-rmt-mv-export-range="to">${options(idx.at(-1) ?? 0)}</select></label></div>
+      <p class="rmt-x-note">导出第 ${(idx[0] ?? 0) + 1}–${(idx.at(-1) ?? 0) + 1} 段 · ${mv.formatTime(range.start)}–${mv.formatTime(range.end)}（约 ${Math.max(0, Math.round(range.end - range.start))} 秒）。只截取这一段的画面和声音，不改变制作范围。</p>`;
 }
 
 function renderSetup(song, record) {
@@ -432,9 +465,7 @@ function renderBoard(song, record) {
         ? `<div class="rmt-mv-warn">还没有填写你的外貌，画出来的你可能每张不一样。</div>${looksEditor()}` : '';
     const rangeCard = tegaki ? (() => {
         const o = mv.tegakiOptions(record);
-        const want = mv.selectedSectionIndexes(sections, o.range, o.rangeFrom, o.rangeTo);
-        const missing = want.filter(i => !shots.some(s => s.sectionIndex === i)).length;
-        return `<section class="rmt-x-card"><b>做哪一段</b>${rangePicker('record', o, sections)}${missing ? `<div class="rmt-mv-warn">选中的段落里有 ${missing} 段还没有镜头。${btn('rewrite-board', '按这一段重新写分镜', { cls: 'rmt-x-secondary' })}</div>` : ''}</section>`;
+        return `<section class="rmt-x-card"><b>做哪一段</b>${rangePicker('record', o, sections)}${continueControl(record, song)}</section>`;
     })() : '';
     const tools = tegaki ? `${remaining ? btn(view.drawingAll ? 'draw-stop' : 'draw-all', view.drawingAll ? '停止连续绘制' : `一次画完剩下的 ${remaining} 张（会用 ${remaining} 次生图）`) : ''}
         ${btn('go-tegaki', '去手书剪辑台', { cls: 'rmt-x-primary' })}<p class="rmt-x-note">没画的镜头在剪辑台里会先用上一张代替，随时能预览。</p>`
@@ -557,20 +588,24 @@ function renderTegaki(song, record) {
         <b style="font-size:14px">切到下一镜时</b><div class="rmt-x-segs">${seg('set-cut', mv.MV_CUTS, sel.shot.cut || 'fade')}</div>
         <div class="rmt-mv-actions">${btn('draw', mv.isFrameDrawing(mv.mvScope(ctx()), view.songId, sel.shot.id) ? '正在画…' : imgUrl(sel.shot) ? '重画这张' : '画这一张', { id: sel.shot.id, disabled: mv.isFrameDrawing(mv.mvScope(ctx()), view.songId, sel.shot.id) })}${uploadLabel(sel.shot.id)}</div></section>` : ''}
       ${audioBySong.has(audioKey()) ? (() => {
-        const secs = mv.parseSections(song.lyrics);
-        const first = secs.findIndex(s => s.lines.length);
-        const taps = record.timing?.taps || {};
-        if (first < 0 || (taps[first] !== undefined && taps[first] !== null)) return '';
-        return `<section class="rmt-mv-warn"><b>前奏对不上歌词？</b><span>播放歌曲，听到第一句歌词开唱时点一下下面的按钮，整首的字幕和画面会一起对齐。</span>${btn('tap-vocal', '第一句歌词开唱了', { cls: 'rmt-x-primary', id: String(first) })}</section>`;
+        const lines = mv.syncLines(record, song);
+        if (!lines.length) return '';
+        const taps = record.timing?.lineTaps || {};
+        const done = lines.filter(l => Number.isFinite(Number(taps[l.key]))).length;
+        const next = lines.find(l => !Number.isFinite(Number(taps[l.key])));
+        return `<section class="rmt-x-card rmt-mv-linesync"><div class="rmt-x-row-head"><b>逐句对时间（最准）</b><span>${done} / ${lines.length} 句</span></div>
+          <p class="rmt-x-note">点播放，每唱到新的一句就点一下大按钮。字幕和画面会按你点的时间切换；没点到的句子仍用估计时间。</p>
+          ${next ? `<div class="rmt-mv-lyric"><small>下一句 · ${esc(next.section)}</small><p>${esc(next.text)}</p></div>${btn('tap-line', '这一句开始了', { cls: 'rmt-x-primary', id: next.key })}` : '<p class="rmt-x-note">全部对好了。</p>'}
+          <div class="rmt-mv-actions">${btn('tap-line-undo', '撤销上一句')}${btn('tap-line-reset', '全部重来')}</div></section>`;
       })() : ''}
       <section class="rmt-x-card"><b>歌曲与字幕</b>${audioCard(song)}
         ${tegakiControls(record, song)}
         ${btn('go-sync', `对时间 · 已点 ${tapped} / ${sections.length} 段${tapped < sections.length ? '，其余用估计时间' : ''}`, { cls: 'rmt-x-primary rmt-x-dark' })}</section>
-      <section class="rmt-x-card"><b>导出</b>
+      <section class="rmt-x-card"><b>导出</b>${exporting ? '' : exportControls(record, song)}
         ${exporting ? `<div class="rmt-x-row-head"><span>正在录制…</span><span data-rmt-mv-export-time>0:00</span></div><div class="rmt-x-bar"><i data-rmt-mv-export-bar style="width:0%"></i></div><p class="rmt-x-note">请不要切到其他页面或锁屏。</p>${btn('export-stop', '停止导出')}`
           : `${support.ok ? btn('export', audioBySong.has(audioKey()) ? `导出成视频（.${support.ext}）` : `导出无声视频（.${support.ext}）`, { cls: 'rmt-x-primary' }) : '<div class="rmt-mv-warn">这台设备不能直接导出视频。可以用下面的录屏模式，配合手机自带的录屏功能录下来。</div>'}
              ${btn('record-mode', '录屏模式（全屏播放）', { disabled: !audioBySong.has(audioKey()) })}
-             <p class="rmt-x-note">${audioBySong.has(audioKey()) ? '导出会从头播放一遍，歌多长就要等多久。期间请停留在这个页面。' : '没放入歌曲也能导出无声视频，之后在剪辑 App 里配上歌；录屏模式需要先放入歌曲。'}${support.ok && support.ext === 'webm' ? ' 这台设备导出的是 .webm，剪映等 App 一般可以直接导入。' : ''}</p>`}</section>`);
+             <p class="rmt-x-note">${audioBySong.has(audioKey()) ? '导出会播放一遍所选片段，片段多长就要等多久。期间请停留在这个页面。' : '没放入歌曲也能导出所选片段的无声视频，之后在剪辑 App 里配上歌；录屏模式需要先放入歌曲。'}${support.ok && support.ext === 'webm' ? ' 这台设备导出的是 .webm，剪映等 App 一般可以直接导入。' : ''}</p>`}</section>`);
 }
 
 // ---------- 对时间 ----------
@@ -606,16 +641,17 @@ function imageFor(url) {
 }
 
 // Resolve local blobs before decoding images; timeouts stop export rather than silently omit frames.
-async function preloadImages(record) {
+async function preloadImages(record, song) {
     let timer;
+    const shots = mv.shotsInRange(record, song);
     const load = async () => {
-        for (const shot of record?.shots || []) imgUrl(shot);
-        await Promise.all((record?.shots || []).map(shot => loadingLocal.get(shot.image?.local)).filter(Boolean));
-        const urls = [...new Set((record?.shots || []).map(shot => {
-            const url = imgUrl(shot);
-            if (hasImg(shot) && !url) throw new Error('Local image unavailable');
+        for (const shot of shots) imgUrl(shot, record);
+        await Promise.all((shots).map(shot => loadingLocal.get(shot.image?.local)).filter(Boolean));
+        const urls = [...new Set((shots).map(shot => {
+            const url = imgUrl(shot, record);
+            if ((mv.isV2(record) ? v2Diff(shot, record)?.image?.url : shot.image?.url || shot.image?.local) && !url) throw new Error('Local image unavailable');
             return url;
-        }).concat(mv.isV2(record) ? mv.assetKeys(record).map(k => mv.assetOf(record, k)?.image?.url).concat(coverUrl(view.cache?.song) || '') : []).filter(Boolean))];
+        }).concat(mv.isV2(record) ? mv.assetKeys(record, song).map(k => mv.assetOf(record, k)?.image?.url).concat(coverUrl(song) || '') : []).filter(Boolean))];
         await Promise.all(urls.map(url => new Promise((resolve, reject) => {
             let img = images.get(url);
             if (!img) { img = new Image(); img.src = url; images.set(url, img); }
@@ -708,7 +744,7 @@ function renderFrame(canvas, record, song, t) {
     const w = canvas.width, h = canvas.height;
     const topt = mv.tegakiOptions(record);
     frameCtx = { rhythm: topt.rhythm, beat: 120 / (mv.songBpm(song) || 90) };
-    const { rows, total } = mv.shotTimeline(record, song);
+    const { rows, total } = mv.playbackTimeline(record, song);
     if (!rows.length) return total;
     let index = rows.findIndex(r => t >= r.start && t < r.end);
     if (index < 0) index = t < rows[0].start ? 0 : rows.length - 1;
@@ -771,7 +807,7 @@ function drawNow() {
     const bar = document.querySelector('[data-rmt-mv-progress]');
     if (bar) bar.style.width = `${Math.min(100, t / Math.max(1, total) * 100)}%`;
     const rec = document.querySelector('.rmt-mv-rec canvas');
-    if (rec) renderFrame(rec, record, song, t);
+    if (rec) renderFrame(rec, player.recording?.record || record, player.recording?.song || song, t);
 }
 
 function currentRange() {
@@ -860,8 +896,9 @@ async function exportVideo() {
     const opened = viewTarget(), sub = view.sub;
     const entry = audioBySong.get(audioKey());
     const support = exportSupport();
-    const record = structuredClone(currentRecord()); const song = structuredClone(currentSong());
-    if (!support.ok || !record) return;
+    const song = structuredClone(currentSong());
+    if (!support.ok || !currentRecord() || !song) return;
+    const record = mv.exportRecord(currentRecord(), song);
     stopPlayback();
     const state = { cancelled: false, tracks: [], raf: 0, recorder: null, audio: null, ac: null, canvas: null };
     player.exporting = state;
@@ -885,7 +922,7 @@ async function exportVideo() {
     };
     state.finish = finish;
     try {
-        await preloadImages(record);
+        await preloadImages(record, song);
         if (!current()) { state.cancelled = true; finish(); return; }
         const [w, h] = canvasSize(record);
         const canvas = document.createElement('canvas'); canvas.width = w; canvas.height = h;
@@ -910,21 +947,22 @@ async function exportVideo() {
         recorder.ondataavailable = event => { if (event.data?.size) chunks.push(event.data); };
         recorder.onstop = finish;
         recorder.onerror = () => { state.cancelled = true; stopExport(); toastError(core_text.safeUserError('视频录制失败，可以改用录屏模式。', 'RMT_MV_EXPORT')); };
-        const total = mv.shotTimeline(record, song).total;
         const range = mv.playRange(record, song);
+        const total = Math.max(0, range.end - range.start);
         const loop = () => {
             if (!current()) { stopExport(); return; }
             const t = audio.currentTime || 0;
             if (t >= range.end - 0.02) { try { audio.pause(); } catch {} if (recorder.state !== 'inactive') recorder.stop(); return; }
             try { renderFrame(canvas, record, song, t); } catch (error) { stopExport(); toastError(error); return; }
             const bar = document.querySelector('[data-rmt-mv-export-bar]');
-            if (bar) bar.style.width = `${Math.min(100, t / Math.max(1, total) * 100)}%`;
+            if (bar) bar.style.width = `${Math.min(100, Math.max(0, t - range.start) / Math.max(1, total) * 100)}%`;
             const label = document.querySelector('[data-rmt-mv-export-time]');
-            if (label) label.textContent = `${mv.formatTime(t)} / ${mv.formatTime(entry?.duration || total)}`;
+            if (label) label.textContent = `${mv.formatTime(Math.max(0, t - range.start))} / ${mv.formatTime(total)}`;
             state.raf = requestAnimationFrame(loop);
         };
         audio.onended = () => { if (recorder.state !== 'inactive') recorder.stop(); };
         if (audio.readyState < 1) await new Promise(resolve => { audio.addEventListener('loadedmetadata', resolve, { once: true }); audio.addEventListener('error', resolve, { once: true }); });
+        if (!current()) { stopExport(); return; }
         audio.currentTime = range.start;
         renderMv(); renderFrame(canvas, record, song, range.start); recorder.start(1000);
         await state.ac?.resume?.();
@@ -947,8 +985,10 @@ function stopExport() {
 function recordMode() {
     const opened = viewTarget();
     const entry = audioBySong.get(audioKey());
-    const record = currentRecord();
-    if (!entry || !record) return;
+    const song = structuredClone(currentSong());
+    if (!entry || !currentRecord() || !song) return;
+    const record = mv.exportRecord(currentRecord(), song);
+    const range = mv.playRange(record, song);
     stopPlayback();
     const [w, h] = canvasSize(record);
     const shell = document.createElement('div');
@@ -961,7 +1001,7 @@ function recordMode() {
         if (event.target.closest('button')) return exit();
         if (!shell.querySelector('button')) { const b = document.createElement('button'); b.type = 'button'; b.textContent = '退出'; shell.appendChild(b); setTimeout(() => b.remove(), 2500); }
     });
-    player.clockOffset = 0;
+    player.clockOffset = range.start;
     drawNow();
     let n = 3;
     const timer = setInterval(async () => {
@@ -971,17 +1011,16 @@ function recordMode() {
         clearInterval(timer); count.remove();
         const audio = audioElement();
         if (!audio) { exit(); return; }
-        const range = currentRange();
         audio.currentTime = range.start;
         const stopAt = () => { if (audio.currentTime >= range.end - 0.02) { audio.pause(); audio.dispatchEvent(new Event('ended')); } else if (!audio.paused) requestAnimationFrame(stopAt); };
-        requestAnimationFrame(stopAt);
         player.playing = true;
         try { await audio.play(); } catch (error) { toastError(error); }
         if (!isView(opened) || player.recording?.shell !== shell) { audio.pause(); return; }
+        requestAnimationFrame(stopAt);
         audio.onended = () => { player.playing = false; const done = document.createElement('button'); done.type = 'button'; done.textContent = '录好了 · 退出'; shell.appendChild(done); };
         ensureLoop();
     }, 1000);
-    player.recording = { timer, shell };
+    player.recording = { timer, shell, record, song };
 }
 
 function download(blob, name) {
@@ -1100,6 +1139,17 @@ export function handleMvClick(event) {
                 .catch(error => { toastError(error); if (isView(opened)) renderMv(); });
         }
         else if (action === 'rewrite-board') { view.step = 1; view.draft = mv.normalizeSettings({ ...(record?.settings || {}), ...(record?.tegaki?.range ? { range: record.tegaki.range, rangeFrom: record.tegaki.rangeFrom, rangeTo: record.tegaki.rangeTo } : {}) }); go('setup'); }
+        else if (action === 'continue-board') {
+            const p = mv.continueStoryboard(view.songId);
+            renderMv();
+            p.then(result => { reportResult(result, result?.alreadyComplete ? '所选段落已有分镜。' : '分镜已补上，已有图片已保留。'); if (isView(opened)) renderMv(); })
+                .catch(error => { toastError(error); if (isView(opened)) renderMv(); });
+        }
+        else if (action === 'export-range') {
+            const [rangeFrom, rangeTo] = id.split(':').map(Number);
+            mv.patchRecord(view.songId, { exportRange: id === 'full' ? { range: 'full' } : { range: 'custom', rangeFrom, rangeTo } });
+            renderMv();
+        }
         else if (action === 'mode') { view.mode = id === 'video' ? 'video' : 'tegaki'; renderMv(); }
         else if (action === 'draw') void runDraw(id);
         else if (action === 'draw-all') void drawAll();
@@ -1173,6 +1223,18 @@ export function handleMvClick(event) {
             const next = sections.findIndex((_, i) => taps[i] === undefined || taps[i] === null);
             if (next >= 0) { setTap(next, Math.round(currentTime() * 10) / 10); renderMv(); }
         }
+        else if (action === 'tap-line' || action === 'tap-line-undo' || action === 'tap-line-reset') {
+            const lineTaps = { ...(record.timing?.lineTaps || {}) };
+            if (action === 'tap-line') {
+                if (!player.playing) { toastOk('先点播放，唱到这一句时再点。'); return true; }
+                lineTaps[id] = Math.round(currentTime() * 10) / 10;
+            } else if (action === 'tap-line-undo') {
+                const order = mv.syncLines(record, currentSong()).map(l => l.key).filter(k => lineTaps[k] !== undefined);
+                if (order.length) delete lineTaps[order.at(-1)];
+            } else { for (const k of Object.keys(lineTaps)) delete lineTaps[k]; }
+            mv.patchRecord(view.songId, { timing: { ...(record.timing || {}), lineTaps } });
+            renderMv();
+        }
         else if (action === 'tap-vocal') {
             if (!player.playing) { toastOk('先点播放，听到第一句歌词时再点。'); }
             else { setTap(Number(id) || 0, Math.round(currentTime() * 10) / 10); toastOk('已对齐：之后的段落会跟着一起移动，需要时可以在“对时间”里细调。'); renderMv(); }
@@ -1194,6 +1256,16 @@ export function handleMvClick(event) {
 
 export function handleMvChange(event) {
     const input = event.target;
+    if (input?.matches?.('[data-rmt-mv-export-range]')) {
+        const record = currentRecord(), song = currentSong();
+        if (!record || !song) return true;
+        const o = mv.exportOptions(record, song);
+        const idx = mv.selectedSectionIndexes(mv.parseSections(song.lyrics), o.range, o.rangeFrom, o.rangeTo);
+        const key = input.dataset.rmtMvExportRange === 'to' ? 'rangeTo' : 'rangeFrom';
+        try { mv.patchRecord(view.songId, { exportRange: { range: 'custom', rangeFrom: idx[0] ?? 0, rangeTo: idx.at(-1) ?? 0, [key]: Math.max(0, Number(input.value) || 0) } }); } catch (error) { toastError(error); }
+        renderMv();
+        return true;
+    }
     if (input?.matches?.('[data-rmt-mv-audio]')) {
         const file = input.files?.[0];
         if (file) acceptAudio(file, file.name, true);
@@ -1291,11 +1363,11 @@ function renderGroupsBoard(song, record) {
         const secNames = [...new Set(frames.map(s => sections[s.sectionIndex]?.name).filter(Boolean))].join('、');
         const usedDiffs = g.diffs.filter(d => frames.some(s => s.diff === d.id));
         const lyrics = frames.filter(s => s.lyric).slice(0, 8).map(s => `${g.diffs.find(d => d.id === s.diff)?.label || ''}｜${s.lyric}`).join('\n');
-        const bgIds = (g.bgs || []).length ? g.bgs.filter(b => frames.some(s => (s.bg || 'B1') === b.id)).map(b => b.id) : ['bg'];
-        const bgTiles = (bgIds.length ? bgIds : ['bg']).map(id => `<div>${assetTile(record, `${g.id}:${id}`, (g.bgs || []).find(b => b.id === id)?.label ? '背景·' + g.bgs.find(b => b.id === id).label : '背景')}</div>`).join('');
-        const missing = [...(bgIds.length ? bgIds : ['bg']).map(id => `${g.id}:${id}`), ...usedDiffs.map(d => `${g.id}:${d.id}`)].filter(k => !mv.assetOf(record, k)?.image?.url).length;
+        const bgIds = g.layer === 'full' ? [] : (g.bgs || []).length ? g.bgs.filter(b => frames.some(s => (s.bg || 'B1') === b.id)).map(b => b.id) : ['bg'];
+        const bgTiles = (g.layer === 'full' ? [] : bgIds.length ? bgIds : ['bg']).map(id => `<div>${assetTile(record, `${g.id}:${id}`, (g.bgs || []).find(b => b.id === id)?.label ? '背景·' + g.bgs.find(b => b.id === id).label : '背景')}</div>`).join('');
+        const missing = [...(g.layer === 'full' ? [] : bgIds.length ? bgIds : ['bg']).map(id => `${g.id}:${id}`), ...usedDiffs.map(d => `${g.id}:${d.id}`)].filter(k => !mv.assetOf(record, k)?.image?.url).length;
         return `<article class="rmt-mv-gcard"><div class="rmt-x-row-head"><b class="rmt-mv-gname">构图 ${shown} · ${esc(g.composition || '')}</b><span>${esc(secNames)} · ${frames.length} 句</span></div>
-          <div class="rmt-mv-assets">${bgTiles}<span class="rmt-mv-plus">+</span>${usedDiffs.map(d => `<div>${assetTile(record, `${g.id}:${d.id}`, d.label)}</div>`).join('')}</div>
+          <div class="rmt-mv-assets">${bgTiles}${bgTiles ? '<span class="rmt-mv-plus">+</span>' : ''}${usedDiffs.map(d => `<div>${assetTile(record, `${g.id}:${d.id}`, d.label)}</div>`).join('')}</div>
           ${inspectHtml(record, g, usedDiffs)}
           ${lyrics ? `<div class="rmt-mv-lyric"><p>${esc(lyrics)}</p></div>` : ''}
           <div class="rmt-mv-actions">${btn('draw-group', missing ? `画这一组剩下的 ${missing} 张` : '这一组已画好', { id: g.id, disabled: !missing || view.drawingAll, cls: missing ? 'rmt-x-primary' : 'rmt-x-secondary' })}</div>
@@ -1310,14 +1382,14 @@ function renderGroupsBoard(song, record) {
       ${mv.normalizeSettings(record.settings).appear === 'none' ? '' : `<label class="rmt-mv-look"><span>你的衣着</span><input type="text" maxlength="300" data-rmt-mv-wardrobe="user" value="${esc(wd.user || '')}"></label>`}
       <p class="rmt-x-note">改完之后重画的图才会生效。</p></details>`;
     const warn = mv.frameNeedsUserLooks(record, ctx()) && record.groups.some(g => g.who === 'both' || g.who === 'user') ? `<div class="rmt-mv-warn">还没有填写你的外貌，画出来的你可能每张不一样。</div>${looksEditor()}` : '';
-    page('构图卡片', '印象曲', `${head(song.title + ' · 手书', '构图卡片', '每张卡片是一个构图：背景只画一张，人物在白底上画几张差分，播放时自动抠掉白底叠在背景上。')}
-      <section class="rmt-mv-palette"><span class="rmt-mv-cover">${coverUrl(song) ? `<img src="${esc(song.cgImage.url)}" alt="">` : ''}</span><div><b>从封面取色</b><span>${palette.map(c => `<i style="background:${c}"></i>`).join('')}</span></div><small>片头片尾<br>用封面</small></section>
-      <section class="rmt-x-card"><b>做哪一段</b>${rangePicker('record', o, sections)}</section>
+    page('构图卡片', '印象曲', `${head(song.title + ' · 手书', '构图卡片', '每张卡片是一个构图：同一个机位里画几张连续变化的完整画面，播放时按歌词切换。')}
+      <section class="rmt-mv-palette"><span class="rmt-mv-cover">${coverUrl(song) ? `<img src="${esc(coverUrl(song))}" alt="">` : ''}</span><div><b>从封面取色</b><span>${palette.map(c => `<i style="background:${c}"></i>`).join('')}</span></div><small>片头片尾<br>用封面</small></section>
+      <section class="rmt-x-card"><b>做哪一段</b>${rangePicker('record', o, sections)}${continueControl(record, song)}</section>
       <section class="rmt-x-card"><div class="rmt-x-row-head"><b>已画 ${drawn} / ${keys.length} 张</b><span>${esc(mv.playRange(record, song).label)}</span></div>
         <div class="rmt-x-bar"><i style="width:${keys.length ? Math.round(drawn / keys.length * 100) : 0}%"></i></div>
         ${remaining ? btn(view.drawingAll ? 'draw-stop' : 'draw-all', view.drawingAll ? '停止连续绘制' : `一次画完剩下的 ${remaining} 张（会用 ${remaining} 次生图）`) : ''}
         ${btn('go-tegaki', '去剪辑台预览', { cls: 'rmt-x-primary' })}</section>
-      ${wardrobe}${warn}${cards || '<p class="rmt-x-note">选中的段落里还没有构图，可以重新写分镜。</p>'}${motif}
+      ${wardrobe}${warn}${cards || '<p class="rmt-x-note">选中的段落里还没有构图，点上面的“继续分镜”即可补上。</p>'}${motif}
       <div class="rmt-mv-actions">${btn('rewrite-board', '重新写分镜')}</div>`);
 }
 
@@ -1555,13 +1627,35 @@ function drawTitleCard(g, song, w, h, alpha) {
     g.save(); g.globalAlpha = Math.max(0, Math.min(1, alpha));
     g.fillStyle = palette[0]; g.fillRect(0, 0, w, h);
     const cover = imageFor(coverUrl(song));
-    const size = Math.min(w, h) * 0.56;
-    if (cover) { g.save(); g.shadowColor = 'rgba(0,0,0,.4)'; g.shadowBlur = 30; g.drawImage(cover, (w - size) / 2, h * 0.32 - size / 2, size, size); g.restore(); }
+    const titleSize = Math.round(Math.min(w, h) * 0.075);
+    if (cover && cover.naturalWidth > cover.naturalHeight && w >= h) {
+        // 横版海报配横屏：整张铺满，底部压暗放歌名。
+        drawCover(g, cover, w, h, 1, 0, 0);
+        const shade = g.createLinearGradient(0, h * 0.55, 0, h);
+        shade.addColorStop(0, 'rgba(0,0,0,0)'); shade.addColorStop(1, 'rgba(0,0,0,.65)');
+        g.fillStyle = shade; g.fillRect(0, 0, w, h);
+        g.fillStyle = '#fff'; g.textAlign = 'left';
+        g.font = `700 ${titleSize}px ${mv.TEGAKI_FONTS.song.stack}`;
+        g.fillText(song.title || '', w * 0.06, h * 0.86);
+        g.font = `500 ${Math.round(titleSize * 0.42)}px ${mv.TEGAKI_FONTS.sans.stack}`;
+        g.fillText('角色印象曲', w * 0.06, h * 0.86 + titleSize * 0.8);
+        g.restore();
+        return;
+    }
+    // 其他情况：按海报原比例完整显示，不裁成方形。
+    let bottom = h * 0.5;
+    if (cover) {
+        const s = Math.min((w * 0.72) / cover.naturalWidth, (h * 0.62) / cover.naturalHeight);
+        const cw = cover.naturalWidth * s, ch = cover.naturalHeight * s;
+        const top = Math.max(h * 0.06, (h - ch - titleSize * 2.4) / 2);
+        g.save(); g.shadowColor = 'rgba(0,0,0,.4)'; g.shadowBlur = 30; g.drawImage(cover, (w - cw) / 2, top, cw, ch); g.restore();
+        bottom = top + ch;
+    }
     g.fillStyle = palette[2]; g.textAlign = 'center';
-    g.font = `700 ${Math.round(Math.min(w, h) * 0.075)}px ${mv.TEGAKI_FONTS.song.stack}`;
-    g.fillText(song.title || '', w / 2, h * 0.32 + size / 2 + Math.min(w, h) * 0.13);
-    g.font = `500 ${Math.round(Math.min(w, h) * 0.032)}px ${mv.TEGAKI_FONTS.sans.stack}`;
-    g.fillText('角色印象曲', w / 2, h * 0.32 + size / 2 + Math.min(w, h) * 0.2);
+    g.font = `700 ${titleSize}px ${mv.TEGAKI_FONTS.song.stack}`;
+    g.fillText(song.title || '', w / 2, bottom + titleSize * 1.3);
+    g.font = `500 ${Math.round(titleSize * 0.42)}px ${mv.TEGAKI_FONTS.sans.stack}`;
+    g.fillText('角色印象曲', w / 2, bottom + titleSize * 2.1);
     g.restore();
 }
 
@@ -1570,7 +1664,7 @@ function renderFrameV2(canvas, record, song, t) {
     const w = canvas.width, h = canvas.height;
     const topt = mv.tegakiOptions(record);
     const beatLen = 60 / (mv.songBpm(song) || 90);
-    const { rows, total } = mv.shotTimeline(record, song);
+    const { rows, total } = mv.playbackTimeline(record, song);
     if (!rows.length) return total;
     let index = rows.findIndex(r => t >= r.start && t < r.end);
     if (index < 0) index = t < rows[0].start ? 0 : rows.length - 1;
@@ -1607,10 +1701,16 @@ function renderFrameV2(canvas, record, song, t) {
         g.shadowColor = 'rgba(0,0,0,.5)'; g.shadowBlur = 16; g.fillStyle = palette[2]; g.globalAlpha = 0.92;
         g.fillText(record.keyword, 0, 0); g.restore();
     }
-    // 片头片尾：播放范围开头 3.5 秒是封面，结尾 2.5 秒淡回封面。
+    // 片头：第一句歌词开唱之前一直是海报加歌名；片尾最后 2.5 秒淡回海报。
     const range = mv.playRange(record, song);
-    const fromStart = t - range.start, toEnd = range.end - t;
-    if (fromStart < 3.5) drawTitleCard(g, song, w, h, fromStart < 3 ? 1 : 1 - (fromStart - 3) / 0.5);
+    const timeline = mv.shotTimeline(record, song);
+    const lineTaps = record.timing?.lineTaps || {};
+    const firstSection = timeline.sections.findIndex((s, i) => s.lines.length && timeline.times[i].end > range.start);
+    const tapped = firstSection >= 0 ? Number(lineTaps[`${firstSection}:0`]) : NaN;
+    const firstLyric = Number.isFinite(tapped) ? tapped : firstSection >= 0 ? timeline.times[firstSection].start : range.start;
+    const titleEnd = Math.min(range.end, Math.max(range.start, firstLyric));
+    const toEnd = range.end - t;
+    if (titleEnd - range.start >= 1 && t < titleEnd) drawTitleCard(g, song, w, h, t > titleEnd - 0.5 ? (titleEnd - t) / 0.5 : 1);
     else if (toEnd < 2.5) drawTitleCard(g, song, w, h, (2.5 - toEnd) / 1.2);
     return total;
 }
