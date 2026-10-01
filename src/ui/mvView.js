@@ -14,7 +14,7 @@ import * as archive_repository from '../archive/repository.js';
 
 const esc = core_text.esc;
 export const MV_MODE = 'songMv';
-const view = { songId: '', scope: '', epoch: 0, sub: 'board', step: 1, draft: null, mode: 'tegaki', shotId: '', copied: '', selected: '', drawingAll: false, stopAll: false, tapIndex: 0 };
+const view = { songId: '', scope: '', epoch: 0, sub: 'board', step: 1, draft: null, mode: 'tegaki', shotId: '', copied: '', selected: '', drawingAll: false, stopAll: false, tapIndex: -1, tapUndo: [] };
 const audioBySong = new Map();
 const images = new Map();
 const localUrls = new Map();
@@ -122,10 +122,10 @@ function ensureStyles() {
     style.textContent = `
 ${r} .rmt-mv-steps{display:flex;gap:6px}
 ${r} .rmt-mv-steps span{flex:1;display:flex;align-items:center;justify-content:center;gap:5px;height:40px;border-radius:999px;font-size:12px;border:1px solid var(--rmt-theme-border,#cfdae5);background:var(--rmt-theme-surface-solid,#fff);color:var(--rmt-theme-text,#34495d)}
-${r} .rmt-mv-steps span.on{background:var(--rmt-theme-text,#34495d);color:#fff;border-color:var(--rmt-theme-text,#34495d)}
-${r} .rmt-mv-steps span.done{background:#e2f0ee}
+${r} .rmt-mv-steps span.on{--rmt-content-ink:var(--rmt-theme-wash-ink,#34495d);background:var(--rmt-theme-wash,#fbf0f5);color:var(--rmt-content-ink);border-color:var(--rmt-theme-accent-ink,#a8527a)}
+${r} .rmt-mv-steps span.done{background:var(--rmt-theme-soft,#e2f0ee)}
 ${r} .rmt-mv-choice{display:flex;gap:12px;align-items:center;padding:12px 14px;min-height:56px;border-radius:14px;cursor:pointer;background:var(--rmt-theme-surface-solid,#fff);border:1px solid var(--rmt-theme-border,#cfdae5);color:var(--rmt-theme-text,#34495d);text-align:left;width:100%}
-${r} .rmt-mv-choice.on{border:2px solid var(--rmt-theme-accent-ink,#a8527a);background:#fbf0f5}
+${r} .rmt-mv-choice.on{border:2px solid var(--rmt-theme-accent-ink,#a8527a);background:var(--rmt-theme-wash,#fbf0f5)}
 ${r} .rmt-mv-choice span{display:flex;flex-direction:column;gap:3px;flex:1}
 ${r} .rmt-mv-choice b{font-size:15px}
 ${r} .rmt-mv-choice small{font-size:12px;line-height:1.5;color:var(--rmt-theme-muted,#586b7c)}
@@ -167,11 +167,11 @@ ${r} .rmt-mv-range-selects{display:grid;grid-template-columns:repeat(2,minmax(0,
 ${r} .rmt-mv-range-selects label{display:flex;flex-direction:column;gap:4px;font-size:12px}
 ${r} .rmt-mv-range-selects select{min-height:40px;border-radius:10px;border:1px solid var(--rmt-theme-border,#cfdae5);padding:0 8px;font:inherit;font-size:13px;background:var(--rmt-theme-surface-solid,#fff);color:var(--rmt-theme-text,#34495d)}
 ${r} .rmt-mv-presets{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
-${r} .rmt-mv-toggle{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;padding:4px;background:#e9e7f2;border-radius:14px}
+${r} .rmt-mv-toggle{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;padding:4px;background:var(--rmt-theme-soft,#e9e7f2);border-radius:14px}
 ${r} .rmt-mv-toggle button{height:40px;border-radius:10px;border:0;font-size:14px;font-weight:600;cursor:pointer;background:transparent;color:#586b7c}
 ${r} .rmt-mv-toggle button.on{background:#fff;color:#34495d}
-${r} .rmt-mv-lyric{padding:12px 14px;background:#fffaf2;border:1px solid #ecdcc3;border-radius:14px;display:flex;flex-direction:column;gap:4px;color:#6b5a44}
-${r} .rmt-mv-lyric small{font-size:11px;letter-spacing:2px;color:#8a5a3b}
+${r} .rmt-mv-lyric{--rmt-content-ink:var(--rmt-paper-letter-ink,#6b5a44);padding:12px 14px;background:var(--rmt-paper-letter,#fffaf2);border:1px solid var(--rmt-theme-border,#ecdcc3);border-radius:14px;display:flex;flex-direction:column;gap:4px;color:var(--rmt-content-ink)}
+${r} .rmt-mv-lyric small{font-size:11px;letter-spacing:2px;color:var(--rmt-content-ink)}
 ${r} .rmt-mv-lyric p{margin:0;font-size:14px;line-height:1.8;white-space:pre-line}
 ${r} .rmt-mv-shot{display:flex;flex-direction:column;gap:12px;border-radius:16px;padding:14px;background:var(--rmt-theme-surface-solid,#fff);border:1px solid var(--rmt-theme-border,#cfdae5)}
 ${r} .rmt-mv-shot.done{border-color:#b9dcd6}
@@ -196,23 +196,25 @@ ${r} .rmt-mv-strip{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px}
 ${r} .rmt-mv-strip button{height:86px;flex-shrink:0;border-radius:10px;cursor:pointer;border:1px solid var(--rmt-theme-border,#cfdae5);padding:0;overflow:hidden;position:relative;background:repeating-linear-gradient(135deg,#e6e9f0 0 6px,#f2f4f8 6px 12px)}
 ${r} .rmt-mv-strip button.on{border:2px solid #a8527a}
 ${r} .rmt-mv-strip img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
-${r} .rmt-mv-strip span{position:absolute;left:4px;top:4px;font-size:10px;background:rgba(255,255,255,.85);color:#34495d;border-radius:4px;padding:1px 4px}
+${r} .rmt-mv-strip span{--rmt-content-ink:#34495d;position:absolute;left:4px;top:4px;font-size:10px;background:#fff;color:var(--rmt-content-ink);border-radius:4px;padding:1px 4px}
 ${r} .rmt-mv-tap{width:100%;height:110px;border:0;border-radius:20px;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;color:#fff;background:#a8527a}
 ${r} .rmt-mv-tap.done{background:#2f6b66}
+${r}[data-rmt-theme-mode] button.rmt-mv-tap.rmt-mv-tap{--rmt-content-ink:var(--rmt-theme-wash-ink);background:var(--rmt-theme-wash)!important;color:var(--rmt-content-ink)!important;border:2px solid var(--rmt-theme-accent-ink)!important}
 ${r} .rmt-mv-tap small{font-size:13px;opacity:.85}
 ${r} .rmt-mv-tap b{font-size:22px}
 ${r} .rmt-mv-clock{font-size:34px;font-weight:700}
-${r} .rmt-mv-sec{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:14px;background:var(--rmt-theme-surface-solid,#fff);border:1px solid var(--rmt-theme-border,#cfdae5)}
-${r} .rmt-mv-sec.cur{border:2px solid #a8527a}
-${r} .rmt-mv-sec>i{width:26px;height:26px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;font-style:normal;background:#fbf0f5;color:#a8527a}
-${r} .rmt-mv-sec.tapped>i{background:#ce729c;color:#fff}
-${r} .rmt-mv-sec>div{display:flex;flex-direction:column;gap:2px;flex:1;min-width:0}
-${r} .rmt-mv-sec>div small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;color:var(--rmt-theme-muted,#586b7c)}
-${r} .rmt-mv-sec>em{font-style:normal;font-size:15px;font-weight:700;color:#8b95a3;text-align:right}
-${r} .rmt-mv-sec.tapped>em{color:#a8527a}
+${r} .rmt-mv-sec{display:flex;align-items:center;gap:8px;padding:0 8px 0 0;border-radius:14px;background:var(--rmt-theme-surface-solid,#fff);border:1px solid var(--rmt-theme-border,#cfdae5)}
+${r} .rmt-mv-sec.cur{border:2px solid var(--rmt-theme-accent-ink,#a8527a)}
+${r} .rmt-mv-section-pick{display:flex;align-items:center;gap:12px;padding:10px 12px;border:0;border-radius:12px;flex:1;min-width:0;text-align:left;cursor:pointer;font:inherit;color:var(--rmt-theme-text,#34495d);background:var(--rmt-theme-surface-solid,#fff)}
+${r} .rmt-mv-section-pick>i{width:26px;height:26px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;font-style:normal;background:#fbf0f5;color:#a8527a}
+${r} .rmt-mv-sec.tapped .rmt-mv-section-pick>i{background:#ce729c;color:#fff}
+${r} .rmt-mv-section-copy{display:flex;flex-direction:column;gap:2px;flex:1;min-width:0}
+${r} .rmt-mv-section-copy small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;color:var(--rmt-theme-muted,#586b7c)}
+${r} .rmt-mv-section-pick>em{font-style:normal;font-size:15px;font-weight:700;color:var(--rmt-theme-muted,#8b95a3);text-align:right;flex-shrink:0}
+${r} .rmt-mv-sec.tapped .rmt-mv-section-pick>em{color:var(--rmt-theme-accent-ink,#a8527a)}
 ${r} .rmt-mv-sec>span{display:flex;flex-direction:column;gap:4px}
 ${r} .rmt-mv-sec>span button{width:40px;height:30px;border:1px solid var(--rmt-theme-border,#cfdae5);background:#fff;border-radius:8px;font-size:12px;cursor:pointer;color:#34495d}
-${r} .rmt-mv-prompt{padding:12px;background:#f5f4fb;border-radius:12px;font-size:14px;line-height:1.75;white-space:pre-wrap;word-break:break-word;color:var(--rmt-theme-text,#34495d)}
+${r} .rmt-mv-prompt{padding:12px;background:var(--rmt-theme-soft,#f5f4fb);border-radius:12px;font-size:14px;line-height:1.75;white-space:pre-wrap;word-break:break-word;color:var(--rmt-theme-text,#34495d)}
 ${r} .rmt-mv-step{display:flex;flex-direction:column;gap:12px;border-radius:16px;padding:16px;background:var(--rmt-theme-surface-solid,#fff);border:1px solid var(--rmt-theme-border,#cfdae5)}
 ${r} .rmt-mv-step.on{border:2px solid #a8527a}
 ${r} .rmt-mv-step.done{border-color:#b9dcd6}
@@ -221,14 +223,14 @@ ${r} .rmt-mv-step header i{width:28px;height:28px;border-radius:50%;display:flex
 ${r} .rmt-mv-step.done header i{background:#2f6b66;color:#fff}
 ${r} .rmt-mv-step ol{margin:0;padding-left:20px;font-size:14px;line-height:1.9}
 ${r} .rmt-mv-dots{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}
-${r} .rmt-mv-dots span{height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;background:#f5f4fb;color:#8b95a3;border:1px dashed var(--rmt-theme-border,#cfdae5)}
-${r} .rmt-mv-dots span.ok{background:#e2f0ee;color:#2f6b66;border-style:solid;border-color:#e2f0ee}
-${r} .rmt-mv-warn{display:flex;flex-direction:column;gap:6px;padding:12px 14px;background:#fff6ec;border:1px solid #f0d9bd;border-radius:12px;font-size:13px;line-height:1.7;color:#7a5530}
-${r} .rmt-mv-info{padding:12px 14px;background:#eef5f4;border-radius:12px;font-size:12px;line-height:1.7;color:#2f5f5b}
-${r} .rmt-mv-file{display:flex;align-items:center;gap:12px;padding:10px 12px;background:#f5f4fb;border-radius:12px}
+${r} .rmt-mv-dots span{height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;background:var(--rmt-theme-soft,#f5f4fb);color:var(--rmt-theme-muted,#8b95a3);border:1px dashed var(--rmt-theme-border,#cfdae5)}
+${r} .rmt-mv-dots span.ok{--rmt-content-ink:var(--rmt-theme-wash-ink,#2f6b66);background:var(--rmt-theme-wash,#e2f0ee);color:var(--rmt-content-ink);border-style:solid;border-color:var(--rmt-theme-accent-ink,#2f6b66)}
+${r} .rmt-mv-warn{--rmt-content-ink:var(--rmt-paper-note-ink,#7a5530);display:flex;flex-direction:column;gap:6px;padding:12px 14px;background:var(--rmt-paper-note,#fff6ec);border:1px solid var(--rmt-theme-border,#f0d9bd);border-radius:12px;font-size:13px;line-height:1.7;color:var(--rmt-content-ink)}
+${r} .rmt-mv-info{--rmt-content-ink:var(--rmt-theme-wash-ink,#2f5f5b);padding:12px 14px;background:var(--rmt-theme-wash,#eef5f4);border-radius:12px;font-size:12px;line-height:1.7;color:var(--rmt-content-ink)}
+${r} .rmt-mv-file{display:flex;align-items:center;gap:12px;padding:10px 12px;background:var(--rmt-theme-soft,#f5f4fb);border-radius:12px}
 ${r} .rmt-mv-file div{display:flex;flex-direction:column;gap:2px;flex:1;min-width:0}
 ${r} .rmt-mv-file small{font-size:12px;color:var(--rmt-theme-muted,#586b7c)}
-${r} .rmt-mv-file label{min-height:36px;padding:0 12px;border:1px solid var(--rmt-theme-border,#cfdae5);background:#fff;border-radius:10px;font-size:13px;display:flex;align-items:center;cursor:pointer;color:#34495d}
+${r} .rmt-mv-file label{min-height:36px;padding:0 12px;border:1px solid var(--rmt-theme-border,#cfdae5);background:var(--rmt-theme-surface-solid,#fff);border-radius:10px;font-size:13px;display:flex;align-items:center;cursor:pointer;color:var(--rmt-theme-text,#34495d)}
 ${r} .rmt-mv-file input,${r} .rmt-mv-upload input{position:absolute;width:1px;height:1px;opacity:0}
 ${r} .rmt-mv-upload{position:relative;display:flex;align-items:center;justify-content:center;cursor:pointer}
 ${r} .rmt-mv-look{display:flex;flex-direction:column;gap:6px;font-size:13px;margin-top:10px}
@@ -254,7 +256,7 @@ export function openMv(options = {}) {
     view.songId = songId; view.scope = mv.mvScope(context);
     const record = mv.readMv(context, view.songId);
     view.sub = record?.shots?.length ? 'board' : 'setup';
-    view.step = 1; view.draft = mv.normalizeSettings(record?.settings); view.mode = view.draft.output; view.shotId = ''; view.copied = '';
+    view.step = 1; view.draft = mv.normalizeSettings(record?.settings); view.mode = view.draft.output; view.shotId = ''; view.copied = ''; view.tapIndex = -1; view.tapUndo = [];
     overlay.openOverlay();
     renderMv();
     const el = body(); if (el) el.scrollTop = 0;
@@ -593,11 +595,16 @@ function renderTegaki(song, record) {
 
 // ---------- 对时间 ----------
 
+function syncTapIndex(sections, taps) {
+    if (Number.isInteger(view.tapIndex) && view.tapIndex >= 0 && view.tapIndex < sections.length) return view.tapIndex;
+    return sections.findIndex((_, i) => taps[i] === undefined || taps[i] === null);
+}
+
 function renderSync(song, record) {
     const sections = mv.parseSections(song.lyrics);
     const { sections: times } = mv.sectionTimes(record, sections, mv.songBpm(song));
     const taps = record.timing?.taps || {};
-    const next = sections.findIndex((_, i) => taps[i] === undefined || taps[i] === null);
+    const next = syncTapIndex(sections, taps);
     const bpm = mv.songBpm(song);
     const hasAudio = audioBySong.has(audioKey());
     page('对时间', '剪辑台', `${head(`${song.title}${bpm ? ` · ${bpm} BPM` : ''}`, '对时间', `放歌，每到新的一段开头，就点一下大按钮。一共 ${sections.length} 下，段落里的镜头会自动排好。`)}
@@ -607,10 +614,10 @@ function renderSync(song, record) {
         <button type="button" class="rmt-mv-tap${next < 0 ? ' done' : ''}" data-rmt-mv="tap" ${!hasAudio || next < 0 ? 'disabled' : ''}><small>${!hasAudio ? '先放入歌曲' : next < 0 ? '全部点完了' : '听到这一段开始时点'}</small><b>${next < 0 ? '✓ 时间对好了' : esc(sections[next].name) + '开始了'}</b></button>
         <div class="rmt-mv-actions" style="width:100%">${btn('play', player.playing ? '暂停' : '播放', { disabled: !hasAudio })}${btn('tap-undo', '撤销上一下')}</div>
       </section>
-      ${sections.map((section, i) => `<div class="rmt-mv-sec${times[i].tapped ? ' tapped' : ''}${i === next ? ' cur' : ''}"><i>${times[i].tapped ? '✓' : i + 1}</i><div><b>${esc(section.name)}</b><small>${esc(section.lines[0] || '（器乐）')}</small></div>
-        <em>${mv.formatTime(times[i].start, true)}<br><small class="rmt-x-note">${times[i].tapped ? '你点的' : '估计'}</small></em>
+      ${sections.map((section, i) => `<div class="rmt-mv-sec${times[i].tapped ? ' tapped' : ''}${i === next ? ' cur' : ''}"><button type="button" class="rmt-mv-section-pick" data-rmt-mv="select-section" data-rmt-mv-id="${i}" aria-pressed="${i === next}" aria-label="选择${esc(section.name)}对时间"><i>${times[i].tapped ? '✓' : i + 1}</i><span class="rmt-mv-section-copy"><b>${esc(section.name)}</b><small>${esc(section.lines[0] || '（器乐）')}</small></span>
+        <em>${mv.formatTime(times[i].start, true)}<br><small class="rmt-x-note">${times[i].tapped ? '你点的' : '估计'}</small></em></button>
         ${times[i].tapped && i > 0 ? `<span>${btn('nudge', '-0.5', { id: `${i}:-0.5`, cls: '' })}${btn('nudge', '+0.5', { id: `${i}:0.5`, cls: '' })}</span>` : ''}</div>`).join('')}
-      <p class="rmt-x-note">不想点也没关系：估计时间可以直接用。只点副歌开头，通常就已经很准了。</p>
+      <p class="rmt-x-note">点选段落后，听到开头时再点上方大按钮；已对好的段落也能重新选。其余段落仍用估计时间。</p>
       <div class="rmt-mv-actions">${btn('tap-reset', '从头再点')}${btn('go-tegaki', '完成，去预览', { cls: 'rmt-x-primary' })}</div>`);
 }
 
@@ -1089,7 +1096,8 @@ function setTap(index, value) {
     const low = before === undefined ? 0 : taps[before] + (index - before) * 0.5;
     const high = after === undefined ? Infinity : taps[after] - (after - index) * 0.5;
     value = Math.max(low, Math.min(value, high));
-    mv.patchRecord(view.songId, { timing: { ...(currentRecord()?.timing || {}), taps: { ...(currentRecord()?.timing?.taps || {}), [index]: value } } });
+    mv.patchRecord(view.songId, { timing: { ...(currentRecord()?.timing || {}), taps: { ...taps, [index]: value } } });
+    view.tapUndo.push({ ...taps });
 }
 
 export function handleMvClick(event) {
@@ -1227,11 +1235,16 @@ export function handleMvClick(event) {
         else if (action === 'export') void exportVideo();
         else if (action === 'export-stop') stopExport();
         else if (action === 'record-mode') recordMode();
+        else if (action === 'select-section') {
+            const index = Number(id);
+            const sections = mv.parseSections(currentSong().lyrics);
+            if (Number.isInteger(index) && index >= 0 && index < sections.length) { view.tapIndex = index; renderMv(); }
+        }
         else if (action === 'tap') {
             const sections = mv.parseSections(currentSong().lyrics);
             const taps = record.timing?.taps || {};
-            const next = sections.findIndex((_, i) => taps[i] === undefined || taps[i] === null);
-            if (next >= 0) { setTap(next, Math.round(currentTime() * 10) / 10); renderMv(); }
+            const next = syncTapIndex(sections, taps);
+            if (next >= 0) { setTap(next, Math.round(currentTime() * 10) / 10); view.tapIndex = -1; renderMv(); }
         }
         else if (action === 'tap-line' || action === 'tap-line-undo' || action === 'tap-line-reset') {
             const lineTaps = { ...(record.timing?.lineTaps || {}) };
@@ -1250,11 +1263,17 @@ export function handleMvClick(event) {
             else { setTap(Number(id) || 0, Math.round(currentTime() * 10) / 10); toastOk('已对齐：之后的段落会跟着一起移动，需要时可以在“对时间”里细调。'); renderMv(); }
         }
         else if (action === 'tap-undo') {
-            const taps = { ...(record.timing?.taps || {}) };
+            const previous = view.tapUndo.at(-1);
+            const taps = previous ? { ...previous } : { ...(record.timing?.taps || {}) };
             const keys = Object.keys(taps).filter(k => taps[k] !== null && taps[k] !== undefined).map(Number).sort((a, b) => b - a);
-            if (keys.length) { delete taps[keys[0]]; mv.patchRecord(view.songId, { timing: { ...(record.timing || {}), taps } }); renderMv(); }
+            if (previous || keys.length) {
+                if (!previous) delete taps[keys[0]];
+                mv.patchRecord(view.songId, { timing: { ...(record.timing || {}), taps } });
+                if (previous) view.tapUndo.pop();
+                view.tapIndex = -1; renderMv();
+            }
         }
-        else if (action === 'tap-reset') { mv.patchRecord(view.songId, { timing: { taps: {}, shift: 0 } }); renderMv(); }
+        else if (action === 'tap-reset') { mv.patchRecord(view.songId, { timing: { taps: {}, shift: 0 } }); view.tapIndex = -1; view.tapUndo = []; renderMv(); }
         else if (action === 'nudge') {
             const [index, delta] = id.split(':').map(Number);
             const value = Number(record.timing?.taps?.[index]);
