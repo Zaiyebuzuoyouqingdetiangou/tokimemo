@@ -1,7 +1,7 @@
 {
   "display_name": "心迹回廊",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.99.99-r84.209-redraw-chunks",
+  "js": "index.js?heartbeat=0.99.99-r84.215-song-writing-save",
   "author": "Toto",
   "version": "0.99.99",
   "auto_update": true,
@@ -10,6 +10,6 @@
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r84.209：手书重画换新种子、整组换一版；导出在插件内切换页面时继续；分镜分批写并可续写。",
+  "description": "r84.215：改进角色印象曲的可唱性、副歌记忆点和编曲提示词；修复 MV 宿主保存失败仍误报成功。保留 r84.214 的对时间与夜间配色修复。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }

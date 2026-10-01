@@ -83,13 +83,22 @@ function confirmedWrite(key, value) {
     } catch { return false; }
 }
 
-function persistStore(scope, store, live = null) {
+function persistStore(scope, store, live = null, waitForMetadata = false) {
     volatileByScope.set(scope, structuredClone(store));
     let durable = confirmedWrite(LOCAL_PREFIX + scope, store);
     if (live && scopeOf(live) === scope) {
         live.chatMetadata[MV_KEY] = store;
-        // 聊天 metadata 才是正式保存位置；本机副本写不进去（手机本机空间满）时不再判为保存失败。
-        try { Promise.resolve(live.saveMetadataDebounced?.()).catch(() => {}); durable = durable || typeof live.saveMetadataDebounced === 'function'; } catch { /* Local/journal copy survives. */ }
+        // 本机副本失败时仍可用宿主保存；已生成结果须等待宿主返回的 Promise，不能把拒绝误报为成功。
+        // 普通同步编辑保留原返回类型；返回 void 的宿主 debounce 沿用“已提交保存”语义。
+        try {
+            if (typeof live.saveMetadataDebounced === 'function') {
+                const saved = live.saveMetadataDebounced();
+                if (waitForMetadata && !durable && typeof saved?.then === 'function')
+                    return Promise.resolve(saved).then(result => result !== false, () => false);
+                Promise.resolve(saved).catch(() => {});
+                durable = durable || saved !== false;
+            }
+        } catch { /* Local/journal copy survives. */ }
     }
     return durable;
 }
@@ -193,7 +202,7 @@ export async function retryMvSave(scope, id) {
         next.updatedAt = Math.max(Date.now(), (current?.updatedAt || 0) + 1);
         store.songs[row.songId] = next;
     }
-    if (!persistStore(scope, store, live)) return held('本机保存未能确认');
+    if (!await persistStore(scope, store, live, true)) return held('保存未能确认');
     savePending(scope, pendingMv(scope).filter(value => value.id !== id));
     return { pending: false, durable: true, scope, record: next };
 }
