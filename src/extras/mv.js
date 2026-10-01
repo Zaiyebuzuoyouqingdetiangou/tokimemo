@@ -175,9 +175,19 @@ export async function retryMvSave(scope, id) {
     };
     const live = targetContext(row);
     if (!live) return held('原聊天、档案或歌曲已变化');
-    if (!row.patch) return held(row.reason || '返回内容尚不能保存');
     const store = mergeStores(row.base, readMvStore(live));
     const current = store.songs[row.songId] || null;
+    // A saved paid response may predate the section-index compatibility fix.
+    // Re-prepare it locally; retrying save must never send another model request.
+    if (!row.patch && row.kind === 'append' && current && resultBasis(current, row.kind, row.shotId) === row.expected) {
+        try {
+            const { memory } = loadSong(live, row.songId);
+            const missing = list(row.appendSections).length ? row.appendSections : missingStoryboardSections(current, row.song);
+            row.patch = continuationPatch(row.raw, current, memory, row.song, normalizeSettings(current.settings), missing);
+            savePending(scope, pendingMv(scope).map(value => value.id === id ? row : value));
+        } catch (error) { row.reason = core_text.safeErrorSummary(error); }
+    }
+    if (!row.patch) return held(row.reason || '返回内容尚不能保存');
     let next = current ? structuredClone(current) : null;
     if (!list(current?.appliedResults).includes(row.id)) {
         if (resultBasis(current, row.kind, row.shotId) !== row.expected) return held('分镜或图片已有新修改');
@@ -520,9 +530,36 @@ export function missingStoryboardSections(record, song) {
     return indexes.filter(i => !list(record?.shots).some(s => s.sectionIndex === i));
 }
 
+// Models may number a returned batch from zero/one even when the prompt uses song indexes.
+// Prefer the actual lyric; retain the original index when there is no reliable correction.
+function alignContinuationSections(raw, song, missing) {
+    const copy = structuredClone(raw);
+    const frames = list(copy?.frames).length ? copy.frames : list(copy?.groups).length
+        ? copy.groups.flatMap(g => list(g?.frames)) : list(copy?.shots);
+    const lyricKey = value => core_text.normalizeText(value, 200).normalize('NFKC').replace(/[\s，。！？、,.!?“”"'‘’：:；;]/g, '');
+    const sections = parseSections(song.lyrics);
+    const matches = frames.map(f => {
+        const text = lyricKey(f?.lyric);
+        return text ? sections.map((s, i) => s.lines.some(line => lyricKey(line) === text) ? i : -1).filter(i => i >= 0) : [];
+    });
+    const schemes = [i => i, i => missing[i], i => missing[i - 1], i => i - 1];
+    const compatible = schemes.filter(map => frames.every((f, k) => {
+        const n = Number(f?.sectionIndex), index = map(n);
+        return Number.isInteger(n) && missing.includes(index) && (!matches[k].length || matches[k].includes(index));
+    }));
+    const scheme = compatible.includes(schemes[0]) ? schemes[0] : compatible.length === 1 ? compatible[0] : null;
+    frames.forEach((f, k) => {
+        if (!f || typeof f !== 'object') return;
+        const own = matches[k].filter(i => missing.includes(i));
+        if (own.length === 1) f.sectionIndex = own[0];
+        else if (scheme) f.sectionIndex = scheme(Number(f.sectionIndex));
+    });
+    return copy;
+}
+
 // Append new work using fresh identifiers; never replace existing drawings or timing.
-function continuationPatch(raw, previous, memory, sectionCount, settings, missing) {
-    const built = buildShots(raw, memory, sectionCount, settings);
+function continuationPatch(raw, previous, memory, song, settings, missing) {
+    const built = buildShots(alignContinuationSections(raw, song, missing), memory, parseSections(song.lyrics).length, settings);
     let shots = built.shots.filter(s => missing.includes(s.sectionIndex));
     if (!shots.length) throw core_text.safeUserError('返回的分镜没有包含待补段落，原分镜已保留，可导出这次返回内容。', 'RMT_MV_EMPTY');
     let groups = list(built.groups);
@@ -574,7 +611,7 @@ export async function continueStoryboard(songId) {
         const prompt = storyboardPrompt(context, memory, song, settings, missing)
             + `\n【接着已有分镜补写】\n只补上面列出的段落，sectionIndex 沿用歌曲原编号。已有分镜和图片会保留；新构图在保存时自动分配编号。沿用已有时代、衣着和意象，并衔接已有画面：\n${JSON.stringify(continuity)}`;
         const data = await generation_client.requestJson(prompt, '正在补写剩余分镜…', { mode: 'songMv', taskKey: `extras:mv:${key}`, context, origin });
-        return holdResult(target, 'append', '', data, raw => continuationPatch(raw, previous, memory, parseSections(song.lyrics).length, settings, missing));
+        return holdResult({ ...target, appendSections: missing }, 'append', '', data, raw => continuationPatch(raw, previous, memory, song, settings, missing));
     } finally { running.delete(key); }
 }
 

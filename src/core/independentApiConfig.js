@@ -260,13 +260,29 @@ export function httpFailure(response) {
     return error;
 }
 
+// Some hosts wrap a backend failure in choices.message.content with finish_reason=stop.
+// Recognize only explicit transport-error prefixes with an HTTP error status. Any
+// JSON opener keeps the existing parser/recovery path, so valid or partial generated
+// data mentioning an error can never become a newly rejected transport response.
+function transportErrorTextStatus(value) {
+    if (typeof value !== 'string' || /[{\[]/.test(value)) return 0;
+    const body = value.replace(/^\uFEFF/, '').trim();
+    const match = /^(?:(?:failed to generate(?: chat completion)?|internal error|error)\s*:\s*)*(?:custom openai endpoint failed with status\s+|(?:http(?:\/\d(?:\.\d)?)?(?: error)?|status(?: code)?|error code)\s*[:=]?\s*)([45]\d{2})\b/i.exec(body);
+    return Number(match?.[1]) || 0;
+}
+
 export function providerEnvelopeFailure(payload, manual = true) {
     // Read only bounded error metadata. Never propagate a provider message/body as a cause.
     const seen = new Set();
-    let status = 0, typeStatus = 0, quota = false;
+    let status = 0, typeStatus = 0, textStatus = 0, quota = false;
     const visit = (node, depth) => {
+        if (typeof node === 'string') { if (!textStatus) textStatus = transportErrorTextStatus(node); return; }
         if (!node || typeof node !== 'object' || seen.has(node) || depth > 4 || seen.size >= 24) return;
         seen.add(node);
+        for (const key of ['message', 'detail']) {
+            const descriptor = Object.getOwnPropertyDescriptor(node, key);
+            if (!textStatus && descriptor && 'value' in descriptor) textStatus = transportErrorTextStatus(descriptor.value);
+        }
         for (const key of ['status', 'statusCode', 'code', 'type']) {
             const descriptor = Object.getOwnPropertyDescriptor(node, key);
             const value = descriptor && 'value' in descriptor ? descriptor.value : null;
@@ -294,7 +310,7 @@ export function providerEnvelopeFailure(payload, manual = true) {
         error.retryable = false;
         return error;
     }
-    if (status || typeStatus) return apiError('模型服务返回错误状态；详情已隐藏。', 'RMT_PROVIDER_STATUS', status || typeStatus);
+    if (status || typeStatus || textStatus) return apiError('模型服务返回错误状态；详情已隐藏。', 'RMT_PROVIDER_STATUS', status || typeStatus || textStatus);
     const error = apiError('专用连接返回了错误状态，请检查服务配置后重试。', manual ? 'RMT_MANUAL_PROVIDER_ERROR' : 'RMT_CONNECTION_FAILED');
     error.retryable = false;
     return error;
@@ -531,6 +547,12 @@ export function assertIndependentResponsePayload(payload) {
     if (looksLikeHtmlResponse(content)) {
         const error = apiError('专用连接返回了 HTML 页面；响应正文已隐藏。', 'RMT_RESPONSE_HTML');
         error.retryable = false;
+        throw error;
+    }
+    const transportStatus = transportErrorTextStatus(content);
+    if (transportStatus) {
+        const error = apiError('模型服务返回错误状态；详情已隐藏。', 'RMT_PROVIDER_STATUS', transportStatus);
+        transportFailures.set(error, { shape: 'error', finalChars: 0, reasoningChars: 0, finishReason: 'none' });
         throw error;
     }
     if (!content.trim()) {

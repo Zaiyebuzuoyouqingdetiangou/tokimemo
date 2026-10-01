@@ -1,5 +1,5 @@
 const VERSION = '0.99.99';
-const BUILD = '0.99.99-r84.209-mv-continue-clips';
+const BUILD = '0.99.99-r84.211-mv-transport-errors';
 
 const SETTINGS_ID = 'heartbeat_memories_settings';
 const MENU_ID = 'heartbeat_memories_menu_item';
