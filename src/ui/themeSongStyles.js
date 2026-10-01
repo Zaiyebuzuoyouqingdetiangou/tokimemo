@@ -19,8 +19,8 @@ ${root} .rmt-theme-song textarea{min-height:200px;resize:vertical}
 ${root} .rmt-song-layout{display:grid;grid-template-columns:minmax(0,1fr);gap:16px;min-width:0}
 ${root} .rmt-song-detail{min-width:0}
 ${root} .rmt-song-cover{max-width:480px;margin:0 auto 20px;min-width:0}
-${root} .rmt-song-cover .rmt-thumb{aspect-ratio:3/4;min-height:0;overflow:hidden;border-radius:16px}
-${root} .rmt-song-cover .rmt-thumb img{width:100%;height:100%;object-fit:contain}
+${root} .rmt-song-cover .rmt-thumb{aspect-ratio:auto;min-height:0;overflow:hidden;border-radius:16px}
+${root} .rmt-song-cover .rmt-thumb img{width:100%;height:auto;display:block;object-fit:contain}
 ${root} .rmt-song-cover-empty{display:grid;place-content:center;gap:8px;text-align:center;min-height:150px;border-radius:16px;background:var(--rmt-theme-soft);color:var(--rmt-theme-accent-ink);border:1px solid var(--rmt-theme-border)}
 ${root} .rmt-song-cover-empty>span{font-size:40px}
 ${root} .rmt-song-layout.has-songs{grid-template-columns:minmax(150px,0.8fr) minmax(0,2.4fr)}

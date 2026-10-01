@@ -1,7 +1,7 @@
 {
   "display_name": "心迹回廊",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.99.99-r84.207-tidy",
+  "js": "index.js?heartbeat=0.99.99-r84.208-poster-intro",
   "author": "Toto",
   "version": "0.99.99",
   "auto_update": true,
@@ -10,6 +10,6 @@
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r84.206：手书逐句对时间；印象曲封面可选横版 / 竖版；你不在的时候改为监控面板配色。",
+  "description": "r84.208：封面方向移到图片设置、横版封面完整显示；手书前奏显示海报与歌名直到第一句歌词；分镜加入特写组与最小差分。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }

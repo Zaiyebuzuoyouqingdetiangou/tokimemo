@@ -1586,13 +1586,35 @@ function drawTitleCard(g, song, w, h, alpha) {
     g.save(); g.globalAlpha = Math.max(0, Math.min(1, alpha));
     g.fillStyle = palette[0]; g.fillRect(0, 0, w, h);
     const cover = imageFor(coverUrl(song));
-    const size = Math.min(w, h) * 0.56;
-    if (cover) { g.save(); g.shadowColor = 'rgba(0,0,0,.4)'; g.shadowBlur = 30; g.drawImage(cover, (w - size) / 2, h * 0.32 - size / 2, size, size); g.restore(); }
+    const titleSize = Math.round(Math.min(w, h) * 0.075);
+    if (cover && cover.naturalWidth > cover.naturalHeight && w >= h) {
+        // 横版海报配横屏：整张铺满，底部压暗放歌名。
+        drawCover(g, cover, w, h, 1, 0, 0);
+        const shade = g.createLinearGradient(0, h * 0.55, 0, h);
+        shade.addColorStop(0, 'rgba(0,0,0,0)'); shade.addColorStop(1, 'rgba(0,0,0,.65)');
+        g.fillStyle = shade; g.fillRect(0, 0, w, h);
+        g.fillStyle = '#fff'; g.textAlign = 'left';
+        g.font = `700 ${titleSize}px ${mv.TEGAKI_FONTS.song.stack}`;
+        g.fillText(song.title || '', w * 0.06, h * 0.86);
+        g.font = `500 ${Math.round(titleSize * 0.42)}px ${mv.TEGAKI_FONTS.sans.stack}`;
+        g.fillText('角色印象曲', w * 0.06, h * 0.86 + titleSize * 0.8);
+        g.restore();
+        return;
+    }
+    // 其他情况：按海报原比例完整显示，不裁成方形。
+    let bottom = h * 0.5;
+    if (cover) {
+        const s = Math.min((w * 0.72) / cover.naturalWidth, (h * 0.62) / cover.naturalHeight);
+        const cw = cover.naturalWidth * s, ch = cover.naturalHeight * s;
+        const top = Math.max(h * 0.06, (h - ch - titleSize * 2.4) / 2);
+        g.save(); g.shadowColor = 'rgba(0,0,0,.4)'; g.shadowBlur = 30; g.drawImage(cover, (w - cw) / 2, top, cw, ch); g.restore();
+        bottom = top + ch;
+    }
     g.fillStyle = palette[2]; g.textAlign = 'center';
-    g.font = `700 ${Math.round(Math.min(w, h) * 0.075)}px ${mv.TEGAKI_FONTS.song.stack}`;
-    g.fillText(song.title || '', w / 2, h * 0.32 + size / 2 + Math.min(w, h) * 0.13);
-    g.font = `500 ${Math.round(Math.min(w, h) * 0.032)}px ${mv.TEGAKI_FONTS.sans.stack}`;
-    g.fillText('角色印象曲', w / 2, h * 0.32 + size / 2 + Math.min(w, h) * 0.2);
+    g.font = `700 ${titleSize}px ${mv.TEGAKI_FONTS.song.stack}`;
+    g.fillText(song.title || '', w / 2, bottom + titleSize * 1.3);
+    g.font = `500 ${Math.round(titleSize * 0.42)}px ${mv.TEGAKI_FONTS.sans.stack}`;
+    g.fillText('角色印象曲', w / 2, bottom + titleSize * 2.1);
     g.restore();
 }
 
@@ -1638,10 +1660,16 @@ function renderFrameV2(canvas, record, song, t) {
         g.shadowColor = 'rgba(0,0,0,.5)'; g.shadowBlur = 16; g.fillStyle = palette[2]; g.globalAlpha = 0.92;
         g.fillText(record.keyword, 0, 0); g.restore();
     }
-    // 片头片尾：播放范围开头 3.5 秒是封面，结尾 2.5 秒淡回封面。
+    // 片头：第一句歌词开唱之前一直是海报加歌名；片尾最后 2.5 秒淡回海报。
     const range = mv.playRange(record, song);
-    const fromStart = t - range.start, toEnd = range.end - t;
-    if (fromStart < 3.5) drawTitleCard(g, song, w, h, fromStart < 3 ? 1 : 1 - (fromStart - 3) / 0.5);
+    const timeline = mv.shotTimeline(record, song);
+    const lineTaps = record.timing?.lineTaps || {};
+    const firstSection = timeline.sections.findIndex((s, i) => s.lines.length && timeline.times[i].end > range.start);
+    const tapped = firstSection >= 0 ? Number(lineTaps[`${firstSection}:0`]) : NaN;
+    const firstLyric = Number.isFinite(tapped) ? tapped : firstSection >= 0 ? timeline.times[firstSection].start : range.start;
+    const titleEnd = Math.min(range.end, Math.max(range.start, firstLyric));
+    const toEnd = range.end - t;
+    if (titleEnd - range.start >= 1 && t < titleEnd) drawTitleCard(g, song, w, h, t > titleEnd - 0.5 ? (titleEnd - t) / 0.5 : 1);
     else if (toEnd < 2.5) drawTitleCard(g, song, w, h, (2.5 - toEnd) / 1.2);
     return total;
 }

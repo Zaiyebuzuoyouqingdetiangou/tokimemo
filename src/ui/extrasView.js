@@ -458,6 +458,18 @@ export function handleExtraClick(event) {
 }
 
 export function handleExtraChange(event) {
+    const orient = event.target?.closest?.('[data-rmt-cg-editor-orient]');
+    if (orient) {
+        try {
+            const context = currentContext();
+            const songId = orient.dataset.rmtCgEditorOrient;
+            if (context && songId) {
+                context.chatMetadata.heartbeatMemoriesSongCoverV1 = { ...(context.chatMetadata.heartbeatMemoriesSongCoverV1 || {}), [songId]: orient.value === 'landscape' ? 'landscape' : 'portrait' };
+                context.saveMetadataDebounced?.();
+            }
+        } catch (error) { toastError(error); }
+        return true;
+    }
     if (mv_view.handleMvChange(event)) return true;
     const input = event.target?.closest?.('[data-rmt-extra-setting]');
     if (!input) return false;

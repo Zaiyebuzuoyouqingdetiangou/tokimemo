@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 312
-// Source SHA-256: 884f75ff49c491de99d28d2343bfe34d18a38a7966838b60c2990b0668006690
+// Source SHA-256: 33b9a266b2756dfd6b07b750708d8799a60f4a5a2638faa91fd8ebb0f0b50701
 // Build: python3 verification/build.py <source-root>
 
 const __m_core_themeSongCover_js = Object.create(null);
@@ -67012,6 +67012,17 @@ const runtimeState = __m_core_state_js.state;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
 let editor = null;
 
 function portraitCgMetadata(item, raw) {
@@ -67256,7 +67267,11 @@ function openCgPromptEditor({ heartStrip = false, targetDescriptor = null } = {}
         element.innerHTML = `<section class="rmt-cg-prompt-dialog" role="dialog" aria-modal="true" aria-labelledby="rmt-cg-prompt-title" aria-describedby="rmt-cg-prompt-help" tabindex="-1">
           <div class="rmt-cg-prompt-head"><h2 id="rmt-cg-prompt-title">图片设置</h2><button type="button" class="rmt-btn" data-rmt-cg-prompt-action="close" aria-label="关闭图片设置">关闭</button></div>
           <p class="rmt-cg-prompt-event">${core_text.esc(selected.title)}</p>
-          <label class="rmt-cg-format"><span>生图提示词格式</span><select data-rmt-cg-editor-format aria-label="当前图片提示词格式">${cg_format_ui.cgFormatOptions(promptFormat)}</select><small>只指导重新构思的写法，不限制手动提示；切换不发请求，实际模型在生图插件中选择。</small></label>
+          <label class="rmt-cg-format"><span>生图提示词格式</span><select data-rmt-cg-editor-format aria-label="当前图片提示词格式">${cg_format_ui.cgFormatOptions(promptFormat)}</select><small>只指导重新构思的写法，不限制手动提示；切换不发请求，实际模型在生图插件中选择。</small></label>${targetDescriptor?.kind === 'song-cover' ? (() => {
+            let current = 'portrait';
+            try { current = globalThis.SillyTavern?.getContext?.()?.chatMetadata?.heartbeatMemoriesSongCoverV1?.[targetDescriptor.containerId] === 'landscape' ? 'landscape' : 'portrait'; } catch {}
+            return `<label class="rmt-cg-format"><span>封面方向</span><select data-rmt-cg-editor-orient="${core_text.esc(targetDescriptor.containerId)}" aria-label="封面方向"><option value="portrait"${current === 'portrait' ? ' selected' : ''}>竖版</option><option value="landscape"${current === 'landscape' ? ' selected' : ''}>横版</option></select><small>下一次画这首歌的封面时生效。</small></label>`;
+        })() : ''}
           <details class="rmt-cg-prompt-scene"><summary>查看这条回忆</summary><p>${core_text.esc(selected.cgSourceText || selected.cgDesc || selected.desc || selected.subtitle || '')}</p></details>
           <label for="rmt-cg-prompt-input">将发送给生图插件的画面描述</label>
           <textarea id="rmt-cg-prompt-input" data-rmt-cg-prompt-input rows="8" maxlength="${core_constants.MAX_CG_IMAGE_PROMPT_CHARS}" aria-describedby="rmt-cg-prompt-help rmt-cg-prompt-count"></textarea>
@@ -67538,15 +67553,13 @@ async function handleCgPromptEditorAction(action) {
         if (editor === current) busyEditor(false);
     }
 }
-
-__m_ui_cgPromptEditor_js.handleCgHistoryAction = handleCgHistoryAction;
-__m_ui_cgPromptEditor_js.handleCgPromptEditorAction = handleCgPromptEditorAction;
 __m_ui_cgPromptEditor_js.portraitCgMetadata = portraitCgMetadata;
 __m_ui_cgPromptEditor_js.hasCgPromptEditor = hasCgPromptEditor;
 __m_ui_cgPromptEditor_js.closeCgPromptEditor = closeCgPromptEditor;
 __m_ui_cgPromptEditor_js.openCgPromptEditor = openCgPromptEditor;
+__m_ui_cgPromptEditor_js.handleCgHistoryAction = handleCgHistoryAction;
+__m_ui_cgPromptEditor_js.handleCgPromptEditorAction = handleCgPromptEditorAction;
 }
-
 
 function __init_ui_chatFloorNav_js() {
 // MODULE: ui/chatFloorNav.js
@@ -82252,7 +82265,6 @@ __m_ui_taskCenter_js.handleTaskCenterAction = handleTaskCenterAction;
 
 function __init_ui_themeSongStyles_js() {
 // MODULE: ui/themeSongStyles.js
-
 function themeSongCss(root) {
     return `
 ${root} .rmt-theme-song{max-width:1000px;margin:auto;min-width:0;color:var(--rmt-theme-text)}
@@ -82274,8 +82286,8 @@ ${root} .rmt-theme-song textarea{min-height:200px;resize:vertical}
 ${root} .rmt-song-layout{display:grid;grid-template-columns:minmax(0,1fr);gap:16px;min-width:0}
 ${root} .rmt-song-detail{min-width:0}
 ${root} .rmt-song-cover{max-width:480px;margin:0 auto 20px;min-width:0}
-${root} .rmt-song-cover .rmt-thumb{aspect-ratio:3/4;min-height:0;overflow:hidden;border-radius:16px}
-${root} .rmt-song-cover .rmt-thumb img{width:100%;height:100%;object-fit:contain}
+${root} .rmt-song-cover .rmt-thumb{aspect-ratio:auto;min-height:0;overflow:hidden;border-radius:16px}
+${root} .rmt-song-cover .rmt-thumb img{width:100%;height:auto;display:block;object-fit:contain}
 ${root} .rmt-song-cover-empty{display:grid;place-content:center;gap:8px;text-align:center;min-height:150px;border-radius:16px;background:var(--rmt-theme-soft);color:var(--rmt-theme-accent-ink);border:1px solid var(--rmt-theme-border)}
 ${root} .rmt-song-cover-empty>span{font-size:40px}
 ${root} .rmt-song-layout.has-songs{grid-template-columns:minmax(150px,0.8fr) minmax(0,2.4fr)}
@@ -82310,10 +82322,8 @@ ${root} .rmt-song-arrangement:not([open])>p{display:none}
 @media(max-width:350px){${root} .rmt-song-form{grid-template-columns:minmax(0,1fr)}${root} .rmt-song-list{grid-template-columns:minmax(0,1fr)}}
 `;
 }
-
 __m_ui_themeSongStyles_js.themeSongCss = themeSongCss;
 }
-
 
 function __init_ui_themeSongView_js() {
 // MODULE: ui/themeSongView.js
@@ -82460,11 +82470,7 @@ function renderThemeSongs() {
       <div data-rmt-song-copy-fallback></div></article>` : formatDetails;
     const cover = selected ? `<div class="rmt-song-cover">${expanded_cg_view.expandedCgHtml(session,
         { kind: 'song-cover', containerId: selected.id }, readonly(),
-        { placeholder: '<div class="rmt-song-cover-empty"><span aria-hidden="true">♫</span><b>专辑封面</b></div>' })}</div>${readonly() ? '' : (() => {
-            let current = 'portrait';
-            try { current = globalThis.SillyTavern?.getContext?.()?.chatMetadata?.heartbeatMemoriesSongCoverV1?.[selected.id] === 'landscape' ? 'landscape' : 'portrait'; } catch {}
-            return `<div class="rmt-song-cover-orient" style="display:flex;gap:8px;align-items:center;margin-top:8px;font-size:13px"><span>封面方向</span>${[['portrait', '竖版'], ['landscape', '横版']].map(([v, l]) => `<button type="button" class="rmt-btn${current === v ? ' active' : ''}" aria-pressed="${current === v}" data-rmt-extra="song-cover-orient" data-rmt-extra-id="${esc(selected.id)}:${v}">${l}</button>`).join('')}<small style="opacity:.75">下次画封面时生效</small></div>`;
-        })()}` : '';
+        { placeholder: '<div class="rmt-song-cover-empty"><span aria-hidden="true">♫</span><b>专辑封面</b></div>' })}</div>` : '';
     const details = `<div class="rmt-song-detail">${cover}${displayMode === 'format' ? formatDetails : readDetails}</div>`;
     const switcher = `<div class="rmt-song-display-switch" role="group" aria-label="歌曲显示模式"><button type="button" class="rmt-btn" data-rmt-song="view-read" aria-pressed="${displayMode === 'read'}">阅读模式</button><button type="button" class="rmt-btn" data-rmt-song="view-format" aria-pressed="${displayMode === 'format'}">创作格式</button></div>`;
     const list = session.songs.length ? `<nav class="rmt-song-list" aria-label="已保存的印象曲">${[...session.songs].reverse().map(song => `<button type="button" class="${song.id === selected?.id ? 'active' : ''}" data-rmt-song="select" data-rmt-song-id="${esc(song.id)}" aria-current="${song.id === selected?.id ? 'page' : 'false'}"><span aria-hidden="true">♪</span><span><b>${esc(song.title)}</b><small>${esc(song.singer)}</small></span></button>`).join('')}</nav>` : '';
@@ -85987,6 +85993,18 @@ function handleExtraClick(event) {
 }
 
 function handleExtraChange(event) {
+    const orient = event.target?.closest?.('[data-rmt-cg-editor-orient]');
+    if (orient) {
+        try {
+            const context = currentContext();
+            const songId = orient.dataset.rmtCgEditorOrient;
+            if (context && songId) {
+                context.chatMetadata.heartbeatMemoriesSongCoverV1 = { ...(context.chatMetadata.heartbeatMemoriesSongCoverV1 || {}), [songId]: orient.value === 'landscape' ? 'landscape' : 'portrait' };
+                context.saveMetadataDebounced?.();
+            }
+        } catch (error) { toastError(error); }
+        return true;
+    }
     if (mv_view.handleMvChange(event)) return true;
     const input = event.target?.closest?.('[data-rmt-extra-setting]');
     if (!input) return false;
@@ -86836,6 +86854,8 @@ function tegakiGrammar(sections, keep, charName = '{{char}}') {
 - 每组的景别和机位要不同：特写（手、眼、物件）、近景、中景、全身、远景、背影、低机位、俯视都可以；人物位置不要总在正中间，position 写 left / center / right，scale 写 close / medium / full / wide。
 - 每一张差分都是单独的一张图，只画一个瞬间：characterPrompt 与 diff.change 里每个人只写一个姿势，不要在同一张里写多个姿势、多个表情或“三连”。
 - 每组 1～3 张人物差分（diffs），是同一机位下一个动作的连续过程（伸手前→伸手→猫碰到手；握剑柄→出剑→收剑），不是随便换表情。同组 characterPrompt 相同，diff.change 只写这一刻的动作和表情。
+- 歌词里出现的身体细节和小物件要给特写组：唱到交握的手，就有一组只拍两只手；唱到发带、剑穗、信、伞，就拍那个物件。特写组同样写进 groups，characterPrompt 写清只拍局部。
+- 情绪细节用“最小差分”：同一构图连续两三张，只改一处，其余完全不变。比如前一张面无表情，后一张一切相同、只多了一滴眼泪；或者前一张闭眼、后一张只是睁开眼。这种差分的 diff.change 只写变化的那一处，不重写姿势和场景。
 - 景别要有特写：眼睛、手、剑柄、物件这类细节特写，和远景、全景、近景交替使用，不要全是半身和全身。
 - 每组 1～2 张背景（bgs）：同一个地点，第二张可以是时间或光线的变化（白天→黄昏、晴→雨），也可以是远近不同。背景只有场景，没有人物。
 - 副歌可以有一个主视觉组，重复的副歌复用它；其余段落尽量用新的构图，尾奏可以回到开头的构图。
@@ -88778,13 +88798,35 @@ function drawTitleCard(g, song, w, h, alpha) {
     g.save(); g.globalAlpha = Math.max(0, Math.min(1, alpha));
     g.fillStyle = palette[0]; g.fillRect(0, 0, w, h);
     const cover = imageFor(coverUrl(song));
-    const size = Math.min(w, h) * 0.56;
-    if (cover) { g.save(); g.shadowColor = 'rgba(0,0,0,.4)'; g.shadowBlur = 30; g.drawImage(cover, (w - size) / 2, h * 0.32 - size / 2, size, size); g.restore(); }
+    const titleSize = Math.round(Math.min(w, h) * 0.075);
+    if (cover && cover.naturalWidth > cover.naturalHeight && w >= h) {
+        // 横版海报配横屏：整张铺满，底部压暗放歌名。
+        drawCover(g, cover, w, h, 1, 0, 0);
+        const shade = g.createLinearGradient(0, h * 0.55, 0, h);
+        shade.addColorStop(0, 'rgba(0,0,0,0)'); shade.addColorStop(1, 'rgba(0,0,0,.65)');
+        g.fillStyle = shade; g.fillRect(0, 0, w, h);
+        g.fillStyle = '#fff'; g.textAlign = 'left';
+        g.font = `700 ${titleSize}px ${mv.TEGAKI_FONTS.song.stack}`;
+        g.fillText(song.title || '', w * 0.06, h * 0.86);
+        g.font = `500 ${Math.round(titleSize * 0.42)}px ${mv.TEGAKI_FONTS.sans.stack}`;
+        g.fillText('角色印象曲', w * 0.06, h * 0.86 + titleSize * 0.8);
+        g.restore();
+        return;
+    }
+    // 其他情况：按海报原比例完整显示，不裁成方形。
+    let bottom = h * 0.5;
+    if (cover) {
+        const s = Math.min((w * 0.72) / cover.naturalWidth, (h * 0.62) / cover.naturalHeight);
+        const cw = cover.naturalWidth * s, ch = cover.naturalHeight * s;
+        const top = Math.max(h * 0.06, (h - ch - titleSize * 2.4) / 2);
+        g.save(); g.shadowColor = 'rgba(0,0,0,.4)'; g.shadowBlur = 30; g.drawImage(cover, (w - cw) / 2, top, cw, ch); g.restore();
+        bottom = top + ch;
+    }
     g.fillStyle = palette[2]; g.textAlign = 'center';
-    g.font = `700 ${Math.round(Math.min(w, h) * 0.075)}px ${mv.TEGAKI_FONTS.song.stack}`;
-    g.fillText(song.title || '', w / 2, h * 0.32 + size / 2 + Math.min(w, h) * 0.13);
-    g.font = `500 ${Math.round(Math.min(w, h) * 0.032)}px ${mv.TEGAKI_FONTS.sans.stack}`;
-    g.fillText('角色印象曲', w / 2, h * 0.32 + size / 2 + Math.min(w, h) * 0.2);
+    g.font = `700 ${titleSize}px ${mv.TEGAKI_FONTS.song.stack}`;
+    g.fillText(song.title || '', w / 2, bottom + titleSize * 1.3);
+    g.font = `500 ${Math.round(titleSize * 0.42)}px ${mv.TEGAKI_FONTS.sans.stack}`;
+    g.fillText('角色印象曲', w / 2, bottom + titleSize * 2.1);
     g.restore();
 }
 
@@ -88830,10 +88872,16 @@ function renderFrameV2(canvas, record, song, t) {
         g.shadowColor = 'rgba(0,0,0,.5)'; g.shadowBlur = 16; g.fillStyle = palette[2]; g.globalAlpha = 0.92;
         g.fillText(record.keyword, 0, 0); g.restore();
     }
-    // 片头片尾：播放范围开头 3.5 秒是封面，结尾 2.5 秒淡回封面。
+    // 片头：第一句歌词开唱之前一直是海报加歌名；片尾最后 2.5 秒淡回海报。
     const range = mv.playRange(record, song);
-    const fromStart = t - range.start, toEnd = range.end - t;
-    if (fromStart < 3.5) drawTitleCard(g, song, w, h, fromStart < 3 ? 1 : 1 - (fromStart - 3) / 0.5);
+    const timeline = mv.shotTimeline(record, song);
+    const lineTaps = record.timing?.lineTaps || {};
+    const firstSection = timeline.sections.findIndex((s, i) => s.lines.length && timeline.times[i].end > range.start);
+    const tapped = firstSection >= 0 ? Number(lineTaps[`${firstSection}:0`]) : NaN;
+    const firstLyric = Number.isFinite(tapped) ? tapped : firstSection >= 0 ? timeline.times[firstSection].start : range.start;
+    const titleEnd = Math.min(range.end, Math.max(range.start, firstLyric));
+    const toEnd = range.end - t;
+    if (titleEnd - range.start >= 1 && t < titleEnd) drawTitleCard(g, song, w, h, t > titleEnd - 0.5 ? (titleEnd - t) / 0.5 : 1);
     else if (toEnd < 2.5) drawTitleCard(g, song, w, h, (2.5 - toEnd) / 1.2);
     return total;
 }
