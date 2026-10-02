@@ -60,3 +60,54 @@ export function alphaBounds(data, width, height) {
     }
     return x1 >= x0 ? { cx: (x1 + x0) / 2 / width, bottom: y1 / height, height: Math.max(1, y1 - y0 + 1) / height } : null;
 }
+
+// Decorative sprites only. Keep genuine alpha and enclosed white details;
+// flattening a background does not establish that the foreground was recovered.
+export function prepareMotifPixels(data, width, height) {
+    const count = width * height;
+    const corners = [0, width - 1, count - width, count - 1];
+    let visible = false;
+    for (let p = 0; p < count; p++) if (data[p * 4 + 3] > 8) { visible = true; break; }
+    if (!visible) return { status: 'empty' };
+    if (corners.every(p => data[p * 4 + 3] <= 8)) return { status: 'transparent', data };
+    const rgb = corners.map(p => [...data.slice(p * 4, p * 4 + 3)]);
+    const matte = [0, 1, 2].map(k => rgb.reduce((sum, color) => sum + color[k], 0) / 4);
+    const white = Math.min(...matte) >= 228 && Math.max(...matte) - Math.min(...matte) < 26;
+    const blue = matte[2] > 160 && matte[2] - matte[0] > 120 && matte[2] - matte[1] > 100;
+    const close = p => data[p * 4 + 3] <= 8 || matte.every((v, k) => Math.abs(v - data[p * 4 + k]) <= 30);
+    if ((!white && !blue) || !corners.every(close)) return { status: 'needs-edit' };
+    // Background evidence comes from a consistent perimeter, not removed area.
+    let border = 0, matching = 0;
+    const edge = [];
+    for (let x = 0; x < width; x++) edge.push(x, (height - 1) * width + x);
+    for (let y = 1; y < height - 1; y++) edge.push(y * width, y * width + width - 1);
+    for (const p of edge) { border++; if (close(p)) matching++; }
+    if (matching < border * 0.95) return { status: 'needs-edit' };
+    const out = new Uint8ClampedArray(data), seen = new Uint8Array(count), removed = new Uint8Array(count);
+    const queue = [...edge];
+    const neighbours = (p, add) => {
+        const x = p % width;
+        if (x > 0) add(p - 1); if (x + 1 < width) add(p + 1);
+        if (p >= width) add(p - width); if (p + width < count) add(p + width);
+    };
+    while (queue.length) {
+        const p = queue.pop(); if (seen[p]) continue; seen[p] = 1;
+        if (!close(p)) continue;
+        removed[p] = 1; out[p * 4 + 3] = 0;
+        neighbours(p, n => { if (!seen[n]) queue.push(n); });
+    }
+    // Unmix only the one-pixel outer fringe; never recolour an enclosed white part.
+    for (let p = 0; p < count; p++) {
+        if (removed[p]) continue;
+        let fringe = false; neighbours(p, n => { if (removed[n]) fringe = true; });
+        if (!fringe) continue;
+        const i = p * 4;
+        const alpha = Math.max(...matte.map((v, k) => Math.abs(data[i + k] - v) / Math.max(1, data[i + k] < v ? v : 255 - v)));
+        if (alpha <= 0 || alpha >= 0.98) continue;
+        out[i + 3] = Math.round(data[i + 3] * alpha);
+        for (let k = 0; k < 3; k++) out[i + k] = Math.max(0, Math.min(255, Math.round((data[i + k] - matte[k] * (1 - alpha)) / alpha)));
+    }
+    if (!alphaBounds(out, width, height)) return { status: 'empty' };
+    if (!corners.every(p => out[p * 4 + 3] <= 8)) return { status: 'needs-edit' };
+    return { status: 'prepared', data: out };
+}

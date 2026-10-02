@@ -1,5 +1,5 @@
-const VERSION = '1.0.4';
-const BUILD = '1.0.4-r84.221-mv-media-sync';
+const VERSION = '1.0.5';
+const BUILD = '1.0.5-r84.222-mv-motif-alpha';
 
 const SETTINGS_ID = 'heartbeat_memories_settings';
 const MENU_ID = 'heartbeat_memories_menu_item';

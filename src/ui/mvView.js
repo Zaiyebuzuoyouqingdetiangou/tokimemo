@@ -114,6 +114,7 @@ async function openAssetEditor(key) {
     if (!isView(opened) || view.sub !== 'asset-editor' || token !== editSequence) return;
     const host = body().querySelector('[data-rmt-mv-editor-host]'); if (!host) return;
     assetEditor = image_editor.mountAssetEditor(host, {
+        motif: key === 'motif',
         sourceUrl, imageUrl, image, prompt: mv.assetPrompt(record, key, ctx()), defaultPrompt: mv.defaultAssetPrompt(record, key, ctx()),
         onClose: () => { if (isView(opened) && token === editSequence) closeAssetEditor(); },
         onSave: async draft => {
@@ -727,6 +728,7 @@ function renderTegaki(song, record) {
     const seg = (action, map, value) => Object.entries(map).map(([id, label]) => btn(action, label, { id, cls: 'rmt-x-seg' + (value === id ? ' active' : ''), extra: ` aria-pressed="${value === id}"` })).join('');
     page('手书剪辑台', '镜头清单', `${head(`手书 · ${song.title}`, '手书剪辑台', '放入歌曲就能预览。每一张怎么动，点下面的缩略图来改。')}
       <div class="rmt-mv-canvas-wrap" style="width:${w > h ? '100%' : 'min(100%, 300px)'}"><canvas data-rmt-mv-canvas width="${w}" height="${h}"></canvas></div>
+      ${mv.isV2(record) && mv.tegakiOptions(record).showMotif ? motifNotice(record) : ''}
       <div class="rmt-mv-bar"><button type="button" class="rmt-mv-play" data-rmt-mv="play" aria-label="${player.playing ? '暂停' : '播放'}" ${exporting ? 'disabled' : ''}>${player.playing ? '❚❚' : '▶'}</button>
         <div class="rmt-mv-track" data-rmt-mv="seek" role="slider" aria-label="拖到这里播放" style="cursor:pointer"><div><i data-rmt-mv-progress></i></div><div style="display:flex;justify-content:space-between;background:none;height:auto"><span data-rmt-mv-time>0:00</span><span>${mv.formatTime(mv.shotTimeline(record, song).total)}</span></div></div></div>
       <div class="rmt-mv-strip">${strip}</div>
@@ -1638,7 +1640,8 @@ export function handleMvChange(event) {
 
 function assetTile(record, key, label) {
     const found = mv.assetOf(record, key);
-    const url = assetImageUrl(found?.image);
+    const sprite = key === 'motif' ? motifForRange(record) : null;
+    const url = sprite?.preview || assetImageUrl(found?.image);
     const exists = mv.hasAssetImage(found?.image);
     const drawing = mv.isAssetDrawing(mv.mvScope(ctx()), view.songId, key);
     const cut = found?.kind !== 'bg';
@@ -1691,7 +1694,7 @@ function renderGroupsBoard(song, record) {
           <p class="rmt-x-note">点任意一张缩略图可以单独重画。</p>
           ${g.link ? `<div class="rmt-mv-link">↓ 承接：${esc(g.link)}</div>` : ''}</article>`;
     }).join('');
-    const motif = record.motif ? `<section class="rmt-x-card"><div class="rmt-x-row-head"><b>意象：${esc(record.motif.name || '装饰')}</b><span>副歌时漂浮</span></div><div class="rmt-mv-assets"><div>${assetTile(record, 'motif', '意象')}</div></div></section>` : '';
+    const motif = record.motif ? `<section class="rmt-x-card"><div class="rmt-x-row-head"><b>意象：${esc(record.motif.name || '装饰')}</b><span>副歌时漂浮</span></div><div class="rmt-mv-assets"><div>${assetTile(record, 'motif', '意象')}</div></div>${motifNotice(record)}</section>` : '';
     const wd = record.wardrobe || {};
     const wardrobe = `<details class="rmt-x-card"${wd.char || wd.era ? '' : ' open'}><summary><b>时代与衣着</b>（每一张都用同一套）</summary>
       <label class="rmt-mv-look"><span>时代 / 场景</span><input type="text" maxlength="200" data-rmt-mv-wardrobe="era" value="${esc(wd.era || '')}"></label>
@@ -1716,6 +1719,54 @@ function renderGroupsBoard(song, record) {
 
 const cutMeta = new Map();
 const palettes = new Map();
+const motifSprites = new Map();
+
+function motifSprite(image) {
+    const url = assetImageUrl(image);
+    if (!url) return null;
+    const cached = motifSprites.get(url);
+    if (cached && cached.status !== 'loading') return cached;
+    const src = imageFor(url);
+    if (!src) {
+        if (!cached && images.has(url)) {
+            motifSprites.set(url, { status: 'loading' });
+            const pending = images.get(url), before = pending.onload;
+            const refresh = () => { if (runtimeState.activeMode === MV_MODE && assetImageUrl(view.cache?.record?.motif?.image) === url) renderMv(); };
+            pending.onload = event => { motifSprites.delete(url); before?.(event); refresh(); };
+            pending.onerror = () => { motifSprites.set(url, { status: 'unreadable' }); refresh(); };
+        }
+        return null;
+    }
+    let result;
+    try {
+        // These tiny overlays use a bounded working raster, never overwrite the source.
+        const scale = Math.min(1, 768 / Math.max(src.naturalWidth, src.naturalHeight));
+        const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(src.naturalWidth * scale)); c.height = Math.max(1, Math.round(src.naturalHeight * scale));
+        const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(src, 0, 0, c.width, c.height);
+        const pixels = g.getImageData(0, 0, c.width, c.height);
+        const prepared = image_tools.prepareMotifPixels(pixels.data, c.width, c.height);
+        result = { status: prepared.status };
+        if (prepared.status === 'transparent') result = { status: 'transparent', image: src, preview: url };
+        else if (prepared.data) {
+            pixels.data.set(prepared.data); g.putImageData(pixels, 0, 0);
+            result = { status: 'prepared', image: c, preview: c.toDataURL('image/png') };
+        }
+    } catch { result = { status: 'unreadable' }; }
+    motifSprites.set(url, result);
+    return result;
+}
+
+function motifForRange(record) {
+    const song = currentSong();
+    if (!song || !mv.tegakiOptions(record).showMotif || !mv.shotsInRange(record, song).some(row => isChorusSection(song, row.sectionIndex))) return null;
+    return motifSprite(record?.motif?.image);
+}
+
+function motifNotice(record) {
+    const sprite = motifForRange(record);
+    if (!sprite || ['loading', 'transparent', 'prepared'].includes(sprite.status)) return '';
+    return `<div class="rmt-x-note">意象背景尚未分离，暂不叠加。${btn('edit-asset', '处理意象背景', { id: 'motif' })}</div>`;
+}
 
 // 拼图识别：模型偶尔把同一人物画成左右或上下两格。缩小成灰度图比较两半，几乎一样就只取一格。
 // 封面就是给这首印象曲画的专辑封面（存在 song.visual.cgImage）。
@@ -1853,14 +1904,14 @@ function drawSceneV2(g, record, song, rows, index, t, w, h) {
 
 function drawMotif(g, record, song, row, t, w, h) {
     if (!mv.hasAssetImage(record.motif?.image) || !isChorusSection(song, row.sectionIndex)) return;
-    const img = layerImage(record.motif.image) || imageFor(assetImageUrl(record.motif.image));
+    const img = motifSprite(record.motif.image)?.image;
     if (!img) return;
     const size = Math.min(w, h) * 0.09;
     for (let i = 0; i < 7; i += 1) {
         const x = ((i + 0.5) / 7) * w + Math.sin(t * 0.6 + i * 1.7) * w * 0.04;
         const y = ((t * (0.05 + (i % 3) * 0.02) + i * 0.17) % 1.15) * h - size;
         g.save(); g.globalAlpha = 0.85; g.translate(x, y); g.rotate(Math.sin(t * 0.8 + i) * 0.6);
-        g.drawImage(img, -size / 2, -size / 2, size, size * img.naturalHeight / Math.max(1, img.naturalWidth));
+        g.drawImage(img, -size / 2, -size / 2, size, size * (img.naturalHeight || img.height) / Math.max(1, img.naturalWidth || img.width));
         g.restore();
     }
 }

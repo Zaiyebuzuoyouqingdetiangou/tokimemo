@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 317
-// Source SHA-256: 2aedde64d3da42b1dd5503ba381815c5dfa2d8cde4d01d1c8b05f79eb006aae3
+// Source SHA-256: 2d3ae405f3abdec0d4c1c57cd80d2dddfef58adaa3c393af64a090f5c4bbf0ce
 // Build: python3 tools/verification/build.py <source-root>
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -660,12 +660,64 @@ function alphaBounds(data, width, height) {
     return x1 >= x0 ? { cx: (x1 + x0) / 2 / width, bottom: y1 / height, height: Math.max(1, y1 - y0 + 1) / height } : null;
 }
 
+// Decorative sprites only. Keep genuine alpha and enclosed white details;
+// flattening a background does not establish that the foreground was recovered.
+function prepareMotifPixels(data, width, height) {
+    const count = width * height;
+    const corners = [0, width - 1, count - width, count - 1];
+    let visible = false;
+    for (let p = 0; p < count; p++) if (data[p * 4 + 3] > 8) { visible = true; break; }
+    if (!visible) return { status: 'empty' };
+    if (corners.every(p => data[p * 4 + 3] <= 8)) return { status: 'transparent', data };
+    const rgb = corners.map(p => [...data.slice(p * 4, p * 4 + 3)]);
+    const matte = [0, 1, 2].map(k => rgb.reduce((sum, color) => sum + color[k], 0) / 4);
+    const white = Math.min(...matte) >= 228 && Math.max(...matte) - Math.min(...matte) < 26;
+    const blue = matte[2] > 160 && matte[2] - matte[0] > 120 && matte[2] - matte[1] > 100;
+    const close = p => data[p * 4 + 3] <= 8 || matte.every((v, k) => Math.abs(v - data[p * 4 + k]) <= 30);
+    if ((!white && !blue) || !corners.every(close)) return { status: 'needs-edit' };
+    // Background evidence comes from a consistent perimeter, not removed area.
+    let border = 0, matching = 0;
+    const edge = [];
+    for (let x = 0; x < width; x++) edge.push(x, (height - 1) * width + x);
+    for (let y = 1; y < height - 1; y++) edge.push(y * width, y * width + width - 1);
+    for (const p of edge) { border++; if (close(p)) matching++; }
+    if (matching < border * 0.95) return { status: 'needs-edit' };
+    const out = new Uint8ClampedArray(data), seen = new Uint8Array(count), removed = new Uint8Array(count);
+    const queue = [...edge];
+    const neighbours = (p, add) => {
+        const x = p % width;
+        if (x > 0) add(p - 1); if (x + 1 < width) add(p + 1);
+        if (p >= width) add(p - width); if (p + width < count) add(p + width);
+    };
+    while (queue.length) {
+        const p = queue.pop(); if (seen[p]) continue; seen[p] = 1;
+        if (!close(p)) continue;
+        removed[p] = 1; out[p * 4 + 3] = 0;
+        neighbours(p, n => { if (!seen[n]) queue.push(n); });
+    }
+    // Unmix only the one-pixel outer fringe; never recolour an enclosed white part.
+    for (let p = 0; p < count; p++) {
+        if (removed[p]) continue;
+        let fringe = false; neighbours(p, n => { if (removed[n]) fringe = true; });
+        if (!fringe) continue;
+        const i = p * 4;
+        const alpha = Math.max(...matte.map((v, k) => Math.abs(data[i + k] - v) / Math.max(1, data[i + k] < v ? v : 255 - v)));
+        if (alpha <= 0 || alpha >= 0.98) continue;
+        out[i + 3] = Math.round(data[i + 3] * alpha);
+        for (let k = 0; k < 3; k++) out[i + k] = Math.max(0, Math.min(255, Math.round((data[i + k] - matte[k] * (1 - alpha)) / alpha)));
+    }
+    if (!alphaBounds(out, width, height)) return { status: 'empty' };
+    if (!corners.every(p => out[p * 4 + 3] <= 8)) return { status: 'needs-edit' };
+    return { status: 'prepared', data: out };
+}
+
 __m_extras_mvImageTools_js.normalizeCrop = normalizeCrop;
 __m_extras_mvImageTools_js.gridCrop = gridCrop;
 __m_extras_mvImageTools_js.pixelRect = pixelRect;
 __m_extras_mvImageTools_js.eraseEdgeWhite = eraseEdgeWhite;
 __m_extras_mvImageTools_js.paintAlpha = paintAlpha;
 __m_extras_mvImageTools_js.alphaBounds = alphaBounds;
+__m_extras_mvImageTools_js.prepareMotifPixels = prepareMotifPixels;
 }
 
 function __init_ui_mvCastControls_js() {
@@ -740,7 +792,7 @@ function mountAssetEditor(host, options) {
       <div class="rmt-mv-editor-tools"><button type="button" data-edit="select">1 · 选单格</button><button type="button" data-edit="paint">2 · 处理背景</button></div>
       <div data-select-tools><label>拼图排列 <select data-grid><option value="free">手动框选</option><option value="1:1">整张</option><option value="2:1">上下两格</option><option value="3:1">上下三格</option><option value="4:1">上下四格</option><option value="1:2">左右两格</option><option value="1:3">左右三格</option><option value="1:4">左右四格</option><option value="2:2">四宫格</option><option value="3:3">九宫格</option></select></label>
       <p class="rmt-x-note" data-selection-note>拖动框选画面，或选择排列后点选一格。</p><button type="button" data-edit="apply-crop">使用选中画面</button></div>
-      <div data-paint-tools hidden><div class="rmt-mv-editor-tools"><button type="button" data-edit="auto">尝试去白底</button><button type="button" data-edit="erase" aria-pressed="true">擦除</button><button type="button" data-edit="restore" aria-pressed="false">恢复</button><button type="button" data-edit="undo">撤销</button><button type="button" data-edit="reset">还原选中画面</button></div>
+      <div data-paint-tools hidden><div class="rmt-mv-editor-tools"><button type="button" data-edit="auto">${options.motif ? '尝试去背景' : '尝试去白底'}</button><button type="button" data-edit="erase" aria-pressed="true">擦除</button><button type="button" data-edit="restore" aria-pressed="false">恢复</button><button type="button" data-edit="undo">撤销</button><button type="button" data-edit="reset">还原选中画面</button></div>
       <label>笔刷 <input data-brush type="range" min="1" max="100" value="20"></label>
       <label><input data-layer type="checkbox">使用此透明图叠背景</label><p class="rmt-x-note">先看预览再保存；自动处理可能误删白纱、白衣，可用恢复笔刷修回。</p></div>
       <label>放大 <input data-zoom type="range" min="1" max="4" step="0.25" value="1"></label><div class="rmt-mv-editor-tools"><button type="button" data-edit="pan">移动画布</button></div>
@@ -881,7 +933,12 @@ function mountAssetEditor(host, options) {
             layer().checked = last.layer; changed = true; restoreOriginal = false; show();
         } return; }
         if (action === 'reset' && original) { pushUndo(); working = duplicate(original); compactUndo(); layer().checked = false; changed = true; restoreOriginal = false; show(); return; }
-        if (action === 'auto' && working) { pushUndo(); working.data.set(pixels.eraseEdgeWhite(working.data, working.width, working.height)); compactUndo(); changed = true; restoreOriginal = false; layer().checked = true; show(); say('这是去白底预览，请检查边缘和白色衣物；不满意可撤销或用恢复笔刷。'); return; }
+        if (action === 'auto' && working) {
+            const data = options.motif ? pixels.prepareMotifPixels(working.data, working.width, working.height).data : pixels.eraseEdgeWhite(working.data, working.width, working.height);
+            if (!data) { say('未能分离意象背景，可用擦除笔刷处理或导入透明图。'); return; }
+            pushUndo(); working.data.set(data); compactUndo(); changed = true; restoreOriginal = false; layer().checked = true; show();
+            say(options.motif ? '已处理意象背景，请检查边缘后保存。' : '这是去白底预览，请检查边缘和白色衣物；不满意可撤销或用恢复笔刷。'); return;
+        }
         if (action === 'original') {
             // Restore the saved original reference without rewriting or deleting its pixels.
             restoreOriginal = true; changed = true; selectionDirty = false; sourceBlob = null; crop = { x: 0, y: 0, w: 1, h: 1 }; history.length = 0;
@@ -916,6 +973,14 @@ function mountAssetEditor(host, options) {
                 const img = await load(options.imageUrl); if (!active || token !== loadToken) return;
                 const c = makeCanvas(original.width, original.height); c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
                 working = c.getContext('2d').getImageData(0, 0, c.width, c.height); layer().checked = options.image.editMode === 'cutout'; stage = 'paint';
+            }
+            if (options.motif) {
+                const prepared = pixels.prepareMotifPixels(working.data, working.width, working.height);
+                if (prepared.data) {
+                    working.data.set(prepared.data); layer().checked = true; stage = 'paint';
+                    // Saving confirms the derived PNG; the original reference is retained.
+                    changed = prepared.status === 'prepared';
+                }
             }
             show(); say('');
         } catch { if (active && token === loadToken) { show(); say('无法读取图片像素，可导入本机图片继续处理；提示词仍可编辑。'); } }
@@ -87562,6 +87627,14 @@ function assetPrompt(record, key, context, appearance = true) {
     return typeof custom === 'string' && custom.trim() ? custom : defaultAssetPrompt(record, key, context, appearance);
 }
 
+function motifRecipe(motif) {
+    // Remove background tags only from the generated default description.
+    // User-edited complete prompts bypass this function through assetPrompt.
+    const description = String(motif?.prompt || '').replace(/\b(?:white|transparent|simple) background\b\s*,?\s*/gi, '').trim().replace(/,\s*$/, '');
+    const light = /雪|霜|冰|白|云|雲|棉|\b(?:snow\w*|frost\w*|ice|white|cloud\w*|cotton)\b/i.test(`${motif?.name || ''} ${description}`);
+    return [description, `single object, still life, centered, fully visible, clear margin, ${light ? 'solid blue background' : 'white background'}, flat simple background, no humans`];
+}
+
 function defaultAssetPrompt(record, key, context, appearance = true) {
     const settings = normalizeSettings(record?.settings);
     const found = assetOf(record, key);
@@ -87570,7 +87643,7 @@ function defaultAssetPrompt(record, key, context, appearance = true) {
     const ratio = settings.ratio === '9:16' ? 'vertical 9:16 composition' : 'horizontal 16:9 composition';
     const era = record?.wardrobe?.era ? `setting: ${record.wardrobe.era}` : '';
     // 只写正向词：tag 模型会把“no multiple views”“no people”里的词当成要画的内容。
-    if (found.kind === 'motif') return [style, found.target.prompt, 'single object, still life, white background, simple background, no humans'].filter(Boolean).join(', ');
+    if (found.kind === 'motif') return [style, ...motifRecipe(found.target)].filter(Boolean).join(', ');
     if (found.kind === 'bg') return [style, ratio, era, found.bgRow?.prompt || found.group.backgroundPrompt, 'scenery, landscape, no humans'].filter(Boolean).join(', ');
     if (record?.cast && Array.isArray(found.group.cast)) {
         const actors = mv_cast.shotPeople(record, found.group);
@@ -87985,6 +88058,7 @@ async function openAssetEditor(key) {
     if (!isView(opened) || view.sub !== 'asset-editor' || token !== editSequence) return;
     const host = body().querySelector('[data-rmt-mv-editor-host]'); if (!host) return;
     assetEditor = image_editor.mountAssetEditor(host, {
+        motif: key === 'motif',
         sourceUrl, imageUrl, image, prompt: mv.assetPrompt(record, key, ctx()), defaultPrompt: mv.defaultAssetPrompt(record, key, ctx()),
         onClose: () => { if (isView(opened) && token === editSequence) closeAssetEditor(); },
         onSave: async draft => {
@@ -88598,6 +88672,7 @@ function renderTegaki(song, record) {
     const seg = (action, map, value) => Object.entries(map).map(([id, label]) => btn(action, label, { id, cls: 'rmt-x-seg' + (value === id ? ' active' : ''), extra: ` aria-pressed="${value === id}"` })).join('');
     page('手书剪辑台', '镜头清单', `${head(`手书 · ${song.title}`, '手书剪辑台', '放入歌曲就能预览。每一张怎么动，点下面的缩略图来改。')}
       <div class="rmt-mv-canvas-wrap" style="width:${w > h ? '100%' : 'min(100%, 300px)'}"><canvas data-rmt-mv-canvas width="${w}" height="${h}"></canvas></div>
+      ${mv.isV2(record) && mv.tegakiOptions(record).showMotif ? motifNotice(record) : ''}
       <div class="rmt-mv-bar"><button type="button" class="rmt-mv-play" data-rmt-mv="play" aria-label="${player.playing ? '暂停' : '播放'}" ${exporting ? 'disabled' : ''}>${player.playing ? '❚❚' : '▶'}</button>
         <div class="rmt-mv-track" data-rmt-mv="seek" role="slider" aria-label="拖到这里播放" style="cursor:pointer"><div><i data-rmt-mv-progress></i></div><div style="display:flex;justify-content:space-between;background:none;height:auto"><span data-rmt-mv-time>0:00</span><span>${mv.formatTime(mv.shotTimeline(record, song).total)}</span></div></div></div>
       <div class="rmt-mv-strip">${strip}</div>
@@ -89509,7 +89584,8 @@ function handleMvChange(event) {
 
 function assetTile(record, key, label) {
     const found = mv.assetOf(record, key);
-    const url = assetImageUrl(found?.image);
+    const sprite = key === 'motif' ? motifForRange(record) : null;
+    const url = sprite?.preview || assetImageUrl(found?.image);
     const exists = mv.hasAssetImage(found?.image);
     const drawing = mv.isAssetDrawing(mv.mvScope(ctx()), view.songId, key);
     const cut = found?.kind !== 'bg';
@@ -89562,7 +89638,7 @@ function renderGroupsBoard(song, record) {
           <p class="rmt-x-note">点任意一张缩略图可以单独重画。</p>
           ${g.link ? `<div class="rmt-mv-link">↓ 承接：${esc(g.link)}</div>` : ''}</article>`;
     }).join('');
-    const motif = record.motif ? `<section class="rmt-x-card"><div class="rmt-x-row-head"><b>意象：${esc(record.motif.name || '装饰')}</b><span>副歌时漂浮</span></div><div class="rmt-mv-assets"><div>${assetTile(record, 'motif', '意象')}</div></div></section>` : '';
+    const motif = record.motif ? `<section class="rmt-x-card"><div class="rmt-x-row-head"><b>意象：${esc(record.motif.name || '装饰')}</b><span>副歌时漂浮</span></div><div class="rmt-mv-assets"><div>${assetTile(record, 'motif', '意象')}</div></div>${motifNotice(record)}</section>` : '';
     const wd = record.wardrobe || {};
     const wardrobe = `<details class="rmt-x-card"${wd.char || wd.era ? '' : ' open'}><summary><b>时代与衣着</b>（每一张都用同一套）</summary>
       <label class="rmt-mv-look"><span>时代 / 场景</span><input type="text" maxlength="200" data-rmt-mv-wardrobe="era" value="${esc(wd.era || '')}"></label>
@@ -89587,6 +89663,54 @@ function renderGroupsBoard(song, record) {
 
 const cutMeta = new Map();
 const palettes = new Map();
+const motifSprites = new Map();
+
+function motifSprite(image) {
+    const url = assetImageUrl(image);
+    if (!url) return null;
+    const cached = motifSprites.get(url);
+    if (cached && cached.status !== 'loading') return cached;
+    const src = imageFor(url);
+    if (!src) {
+        if (!cached && images.has(url)) {
+            motifSprites.set(url, { status: 'loading' });
+            const pending = images.get(url), before = pending.onload;
+            const refresh = () => { if (runtimeState.activeMode === MV_MODE && assetImageUrl(view.cache?.record?.motif?.image) === url) renderMv(); };
+            pending.onload = event => { motifSprites.delete(url); before?.(event); refresh(); };
+            pending.onerror = () => { motifSprites.set(url, { status: 'unreadable' }); refresh(); };
+        }
+        return null;
+    }
+    let result;
+    try {
+        // These tiny overlays use a bounded working raster, never overwrite the source.
+        const scale = Math.min(1, 768 / Math.max(src.naturalWidth, src.naturalHeight));
+        const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(src.naturalWidth * scale)); c.height = Math.max(1, Math.round(src.naturalHeight * scale));
+        const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(src, 0, 0, c.width, c.height);
+        const pixels = g.getImageData(0, 0, c.width, c.height);
+        const prepared = image_tools.prepareMotifPixels(pixels.data, c.width, c.height);
+        result = { status: prepared.status };
+        if (prepared.status === 'transparent') result = { status: 'transparent', image: src, preview: url };
+        else if (prepared.data) {
+            pixels.data.set(prepared.data); g.putImageData(pixels, 0, 0);
+            result = { status: 'prepared', image: c, preview: c.toDataURL('image/png') };
+        }
+    } catch { result = { status: 'unreadable' }; }
+    motifSprites.set(url, result);
+    return result;
+}
+
+function motifForRange(record) {
+    const song = currentSong();
+    if (!song || !mv.tegakiOptions(record).showMotif || !mv.shotsInRange(record, song).some(row => isChorusSection(song, row.sectionIndex))) return null;
+    return motifSprite(record?.motif?.image);
+}
+
+function motifNotice(record) {
+    const sprite = motifForRange(record);
+    if (!sprite || ['loading', 'transparent', 'prepared'].includes(sprite.status)) return '';
+    return `<div class="rmt-x-note">意象背景尚未分离，暂不叠加。${btn('edit-asset', '处理意象背景', { id: 'motif' })}</div>`;
+}
 
 // 拼图识别：模型偶尔把同一人物画成左右或上下两格。缩小成灰度图比较两半，几乎一样就只取一格。
 // 封面就是给这首印象曲画的专辑封面（存在 song.visual.cgImage）。
@@ -89724,14 +89848,14 @@ function drawSceneV2(g, record, song, rows, index, t, w, h) {
 
 function drawMotif(g, record, song, row, t, w, h) {
     if (!mv.hasAssetImage(record.motif?.image) || !isChorusSection(song, row.sectionIndex)) return;
-    const img = layerImage(record.motif.image) || imageFor(assetImageUrl(record.motif.image));
+    const img = motifSprite(record.motif.image)?.image;
     if (!img) return;
     const size = Math.min(w, h) * 0.09;
     for (let i = 0; i < 7; i += 1) {
         const x = ((i + 0.5) / 7) * w + Math.sin(t * 0.6 + i * 1.7) * w * 0.04;
         const y = ((t * (0.05 + (i % 3) * 0.02) + i * 0.17) % 1.15) * h - size;
         g.save(); g.globalAlpha = 0.85; g.translate(x, y); g.rotate(Math.sin(t * 0.8 + i) * 0.6);
-        g.drawImage(img, -size / 2, -size / 2, size, size * img.naturalHeight / Math.max(1, img.naturalWidth));
+        g.drawImage(img, -size / 2, -size / 2, size, size * (img.naturalHeight || img.height) / Math.max(1, img.naturalWidth || img.width));
         g.restore();
     }
 }

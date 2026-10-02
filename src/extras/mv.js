@@ -1194,6 +1194,14 @@ export function assetPrompt(record, key, context, appearance = true) {
     return typeof custom === 'string' && custom.trim() ? custom : defaultAssetPrompt(record, key, context, appearance);
 }
 
+function motifRecipe(motif) {
+    // Remove background tags only from the generated default description.
+    // User-edited complete prompts bypass this function through assetPrompt.
+    const description = String(motif?.prompt || '').replace(/\b(?:white|transparent|simple) background\b\s*,?\s*/gi, '').trim().replace(/,\s*$/, '');
+    const light = /雪|霜|冰|白|云|雲|棉|\b(?:snow\w*|frost\w*|ice|white|cloud\w*|cotton)\b/i.test(`${motif?.name || ''} ${description}`);
+    return [description, `single object, still life, centered, fully visible, clear margin, ${light ? 'solid blue background' : 'white background'}, flat simple background, no humans`];
+}
+
 export function defaultAssetPrompt(record, key, context, appearance = true) {
     const settings = normalizeSettings(record?.settings);
     const found = assetOf(record, key);
@@ -1202,7 +1210,7 @@ export function defaultAssetPrompt(record, key, context, appearance = true) {
     const ratio = settings.ratio === '9:16' ? 'vertical 9:16 composition' : 'horizontal 16:9 composition';
     const era = record?.wardrobe?.era ? `setting: ${record.wardrobe.era}` : '';
     // 只写正向词：tag 模型会把“no multiple views”“no people”里的词当成要画的内容。
-    if (found.kind === 'motif') return [style, found.target.prompt, 'single object, still life, white background, simple background, no humans'].filter(Boolean).join(', ');
+    if (found.kind === 'motif') return [style, ...motifRecipe(found.target)].filter(Boolean).join(', ');
     if (found.kind === 'bg') return [style, ratio, era, found.bgRow?.prompt || found.group.backgroundPrompt, 'scenery, landscape, no humans'].filter(Boolean).join(', ');
     if (record?.cast && Array.isArray(found.group.cast)) {
         const actors = mv_cast.shotPeople(record, found.group);
