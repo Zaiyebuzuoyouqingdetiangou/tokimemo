@@ -164,14 +164,16 @@ function resultBasis(record, kind, shotId) {
             storyRevision: record.storyRevision, settings: record.settings, shots: record.shots,
             groups: record.groups, motif: record.motif, keyword: record.keyword,
             wardrobe: record.wardrobe, tegaki: record.tegaki,
+            ...(record.assetPrompts ? { assetPrompts: record.assetPrompts } : {}),
             ...(record.cast ? { cast: record.cast } : {}),
         } : null);
     }
-    if (kind === 'asset') {
+    if (kind === 'asset' || kind === 'assetEdit') {
         const found = assetOf(record, shotId);
         // Appending other groups or completing a sibling image does not change
         // this asset's identity; replacing the storyboard does.
-        return JSON.stringify({ storyRevision: record?.storyRevision, image: found?.image || null });
+        return JSON.stringify({ storyRevision: record?.storyRevision, image: found?.image || null,
+            ...(record?.assetPrompts?.[shotId] !== undefined ? { prompt: record.assetPrompts[shotId] } : {}) });
     }
     return JSON.stringify(list(record?.shots).find(shot => shot.id === shotId) || null);
 }
@@ -231,7 +233,7 @@ export async function retryMvSave(scope, id) {
     let next = current ? structuredClone(current) : null;
     if (!list(current?.appliedResults).includes(row.id)) {
         if (!resultStillCurrent(current, row, expected)) return held('分镜或图片已有新修改，或旧暂存无法确认现有素材版本');
-        if (row.kind === 'story') next = { timing: { taps: {}, shift: 0 }, duration: 0, ...next, ...row.patch, storyRevision: row.id };
+        if (row.kind === 'story') next = { timing: { taps: {}, shift: 0 }, duration: 0, ...next, ...row.patch, assetPrompts: {}, storyRevision: row.id };
         else if (row.kind === 'append') {
             next.shots = [...list(next.shots), ...row.patch.shots].sort((a, b) => a.sectionIndex - b.sectionIndex);
             if (isV2(next)) next.groups = [...next.groups, ...row.patch.groups];
@@ -239,10 +241,15 @@ export async function retryMvSave(scope, id) {
             if (row.patch.wardrobeCharacters) next.wardrobe = { ...next.wardrobe,
                 characters: castWardrobe(next.cast, { wardrobe: { characters: row.patch.wardrobeCharacters } }, next.wardrobe, true) };
         }
-        else if (row.kind === 'asset') {
+        else if (row.kind === 'asset' || row.kind === 'assetEdit') {
             const found = assetOf(next, row.shotId);
             if (!found) return held('原构图已不存在');
-            found.image = row.patch.image;
+            if (Object.prototype.hasOwnProperty.call(row.patch, 'image')) found.image = row.patch.image;
+            if (Object.prototype.hasOwnProperty.call(row.patch, 'prompt')) {
+                next.assetPrompts = { ...next.assetPrompts };
+                if (row.patch.prompt === null) delete next.assetPrompts[row.shotId];
+                else next.assetPrompts[row.shotId] = row.patch.prompt;
+            }
             if (found.group && row.patch.seed && !found.group.seed) found.group.seed = row.patch.seed;
         } else {
             const shot = list(next?.shots).find(value => value.id === row.shotId);
@@ -935,8 +942,8 @@ export function completedMvRanges(record, song) {
         return shots.length > 0 && shots.every(s => {
             if (!isV2(record)) return !!(s.image?.url || s.image?.local);
             const g = record.groups.find(g => g.id === s.group);
-            return !!assetOf(record, `${s.group}:${s.diff}`)?.image?.url
-                && (g?.layer === 'full' || !!assetOf(record, `${s.group}:${s.bg || 'bg'}`)?.image?.url);
+            return hasAssetImage(assetOf(record, `${s.group}:${s.diff}`)?.image)
+                && (g?.layer === 'full' || hasAssetImage(assetOf(record, `${s.group}:${s.bg || 'bg'}`)?.image));
         });
     });
     const ranges = [];
@@ -1157,7 +1164,14 @@ export function assetKeys(record, song = null) {
     return keys;
 }
 
+export function hasAssetImage(image) { return !!(image?.url || image?.local); }
+
 export function assetPrompt(record, key, context, appearance = true) {
+    const custom = record?.assetPrompts?.[key];
+    return typeof custom === 'string' && custom.trim() ? custom : defaultAssetPrompt(record, key, context, appearance);
+}
+
+export function defaultAssetPrompt(record, key, context, appearance = true) {
     const settings = normalizeSettings(record?.settings);
     const found = assetOf(record, key);
     if (!found) return '';
@@ -1228,7 +1242,8 @@ export async function drawAsset(songId, key, { fresh = false } = {}) {
             orientation: (found.kind === 'motif' || (found.kind === 'char' && found.group.layer !== 'full')) || normalizeSettings(record.settings).ratio === '9:16' ? 'portrait' : 'landscape',
             characterName: context?.name2 || '', targetKey: runKey, seed,
         };
-        const metadata = found.kind === 'char' ? assetMetadata(record, found, context) : null;
+        // A saved custom prompt is the complete previewed text; do not append hidden cast text.
+        const metadata = found.kind === 'char' && !record.assetPrompts?.[key] ? assetMetadata(record, found, context) : null;
         let result;
         try { result = await cg_core.invokeImageGeneration(assetPrompt(record, key, context, !(record.cast && metadata)), context, { ...base, ...(metadata ? { promptMetadata: metadata } : {}) }); }
         catch (error) {
@@ -1252,6 +1267,29 @@ export function setAssetSplit(songId, key, split) {
         const found = assetOf(current, key);
         if (found?.image) found.image = { ...found.image, split: ['auto', 'none', 'left', 'right', 'top', 'bottom'].includes(split) ? split : 'auto' };
         return current;
+    });
+}
+
+export function captureAssetEdit(songId, key) {
+    const target = captureMvTarget(core_context.currentCharacterGuard(), songId);
+    if (!assetOf(target.base.songs[songId], key)) throw core_text.safeUserError('找不到这张素材。', 'RMT_MV_FRAME');
+    return { ...target, assetKey: key };
+}
+
+export async function saveAssetEdit(target, patch) {
+    // Capture was made when opening the editor, before file decoding or IndexedDB writes.
+    // Reuse the result journal so rejected/late saves never overwrite a different storyboard.
+    return holdResult(target, 'assetEdit', target.assetKey, patch, raw => {
+        const out = {};
+        if (Object.prototype.hasOwnProperty.call(raw, 'image')) {
+            if (!hasAssetImage(raw.image)) throw core_text.safeUserError('没有可保存的图片。', 'RMT_MV_FRAME');
+            out.image = raw.image;
+        }
+        if (Object.prototype.hasOwnProperty.call(raw, 'prompt')) {
+            if (raw.prompt !== null && (typeof raw.prompt !== 'string' || !raw.prompt.trim())) throw core_text.safeUserError('提示词为空，可选择恢复默认。', 'RMT_MV_PROMPT');
+            out.prompt = raw.prompt;
+        }
+        return out;
     });
 }
 

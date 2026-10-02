@@ -15,6 +15,8 @@ import * as mv_cast from '../extras/mvCast.js';
 import * as mv_direction from '../extras/mvDirection.js';
 import * as cast_controls from './mvCastControls.js';
 import * as participant_picker from './participantPicker.js';
+import * as image_editor from './mvImageEditor.js';
+import * as image_tools from '../extras/mvImageTools.js';
 
 const esc = core_text.esc;
 export const MV_MODE = 'songMv';
@@ -25,19 +27,25 @@ const localUrls = new Map();
 const loadingLocal = new Map();
 const audioTried = new Set();
 const audioLoads = new Map();
+let assetEditor = null;
+let editSequence = 0;
+let mediaSequence = 0;
 
 // 用户自己的图存在本机；url 来自生图渠道。两者都没有时返回空字符串。
 function v2Diff(shot, record = view.cache?.record) {
     if (!shot?.group || !mv.isV2(record)) return null;
     return record.groups.find(g => g.id === shot.group)?.diffs.find(d => d.id === shot.diff) || null;
 }
-function hasImg(shot) { const d = v2Diff(shot); if (d) return !!d.image?.url; return !!(shot?.image?.url || shot?.image?.local); }
+function hasImg(shot) { const d = v2Diff(shot); return mv.hasAssetImage(d ? d.image : shot?.image); }
 
 function imgUrl(shot, record = view.cache?.record) {
     const d = v2Diff(shot, record);
-    if (d) return d.image?.url || '';
-    if (shot?.image?.url) return shot.image.url;
-    const key = shot?.image?.local;
+    return assetImageUrl(d ? d.image : shot?.image);
+}
+
+function assetImageUrl(image) {
+    if (image?.url) return image.url;
+    const key = image?.local;
     if (!key) return '';
     if (localUrls.has(key)) return localUrls.get(key);
     if (!loadingLocal.has(key)) {
@@ -47,6 +55,56 @@ function imgUrl(shot, record = view.cache?.record) {
         loadingLocal.set(key, pending);
     }
     return '';
+}
+
+async function resolveAssetImage(image) {
+    assetImageUrl(image);
+    if (image?.local) await loadingLocal.get(image.local);
+    return assetImageUrl(image);
+}
+
+function closeAssetEditor() {
+    assetEditor?.dispose(); assetEditor = null;
+    if (view.sub === 'asset-editor') { view.sub = 'board'; renderMv(); }
+}
+
+async function openAssetEditor(key) {
+    const opened = viewTarget(), target = mv.captureAssetEdit(view.songId, key);
+    const record = target.base.songs[target.songId], found = mv.assetOf(record, key);
+    stopPlayback(); assetEditor?.dispose(); assetEditor = null;
+    const token = ++editSequence;
+    view.sub = 'asset-editor'; page('编辑素材', '构图卡片', '<section data-rmt-mv-editor-host>正在打开素材…</section>');
+    const image = found.image, original = image?.original || image;
+    const [sourceUrl, imageUrl] = await Promise.all([resolveAssetImage(original), resolveAssetImage(image)]);
+    if (!isView(opened) || view.sub !== 'asset-editor' || token !== editSequence) return;
+    const host = body().querySelector('[data-rmt-mv-editor-host]'); if (!host) return;
+    assetEditor = image_editor.mountAssetEditor(host, {
+        sourceUrl, imageUrl, image, prompt: mv.assetPrompt(record, key, ctx()), defaultPrompt: mv.defaultAssetPrompt(record, key, ctx()),
+        onClose: () => { if (isView(opened)) closeAssetEditor(); },
+        onSave: async draft => {
+            if (!isView(opened) || token !== editSequence) return false;
+            const patch = { prompt: draft.prompt };
+            if (draft.image) {
+                if (draft.image.restoreOriginal) {
+                    if (!original) return false;
+                    patch.image = { ...original, split: 'none', editMode: 'full', at: Date.now() };
+                } else {
+                    const persist = async (blob, suffix) => {
+                        const mediaKey = mv_media.mediaKey('img', target.scope, target.songId, `${key}:${Date.now()}:${++mediaSequence}:${suffix}`);
+                        // Do not overwrite the previous blob or commit a reference before its transaction succeeds.
+                        if (!await mv_media.putMedia(mediaKey, blob, 'hearttrace-frame.png')) throw core_text.safeUserError('图片未能保存，可先下载 PNG。', 'RMT_MV_SAVE_FAILED');
+                        localUrls.set(mediaKey, URL.createObjectURL(blob)); return { local: mediaKey };
+                    };
+                    const sourceRef = draft.image.sourceBlob ? await persist(draft.image.sourceBlob, 'original') : draft.image.originalRef;
+                    const result = await persist(draft.image.blob, 'edited');
+                    patch.image = { ...result, original: sourceRef, crop: draft.image.crop, editMode: draft.image.mode, split: 'none', at: Date.now() };
+                }
+            }
+            const result = await mv.saveAssetEdit(target, patch);
+            reportResult(result, '素材修改已保存。');
+            return !result?.pending;
+        },
+    });
 }
 
 function audioKey(target = view) { return mv_media.mediaKey('audio', target.scope, target.songId); }
@@ -240,6 +298,18 @@ ${r} .rmt-mv-file small{font-size:12px;color:var(--rmt-theme-muted,#586b7c)}
 ${r} .rmt-mv-file label{min-height:36px;padding:0 12px;border:1px solid var(--rmt-theme-border,#cfdae5);background:var(--rmt-theme-surface-solid,#fff);border-radius:10px;font-size:13px;display:flex;align-items:center;cursor:pointer;color:var(--rmt-theme-text,#34495d)}
 ${r} .rmt-mv-file input,${r} .rmt-mv-upload input{position:absolute;width:1px;height:1px;opacity:0}
 ${r} .rmt-mv-upload{position:relative;display:flex;align-items:center;justify-content:center;cursor:pointer}
+${r} .rmt-mv-edit-open{font:inherit;font-size:12px;min-height:44px;border:1px solid var(--rmt-theme-border,#cfdae5);border-radius:8px;background:var(--rmt-theme-surface-solid,#fff);color:var(--rmt-theme-text,#34495d);padding:4px 8px}
+${r} .rmt-mv-editor{min-width:0;overflow:hidden;color:var(--rmt-theme-text,#34495d)}
+${r} .rmt-mv-editor [hidden]{display:none!important}
+${r} .rmt-mv-editor label{display:flex;flex-direction:column;gap:6px;margin:8px 0;min-width:0}
+${r} .rmt-mv-editor textarea,${r} .rmt-mv-editor select{box-sizing:border-box;width:100%;min-width:0;min-height:44px;padding:8px;border:1px solid var(--rmt-theme-border,#cfdae5);border-radius:8px;background:var(--rmt-theme-surface-solid,#fff);color:var(--rmt-theme-text,#34495d);font:inherit}
+${r} .rmt-mv-editor-tools{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0}
+${r} .rmt-mv-editor-tools button,${r} .rmt-mv-editor-upload{font:inherit;min-height:44px;padding:8px 12px;border-radius:10px;border:1px solid var(--rmt-theme-border,#cfdae5);background:var(--rmt-theme-surface-solid,#fff);color:var(--rmt-theme-text,#34495d);cursor:pointer;box-sizing:border-box}
+${r} .rmt-mv-editor-tools button[aria-pressed="true"]{border:2px solid var(--rmt-theme-accent-ink,#a8527a)}
+${r} .rmt-mv-editor-upload{position:relative;justify-content:center}
+${r} .rmt-mv-editor-upload input{position:absolute;width:1px;height:1px;opacity:0}
+${r} .rmt-mv-editor-viewport{overflow:auto;max-height:60vh;min-height:80px;max-width:100%;background:repeating-conic-gradient(#b7bec7 0 25%,#fff 0 50%) 0 0/16px 16px}
+${r} [data-editor-canvas]{display:block;height:auto;touch-action:none}
 ${r} .rmt-mv-look{display:flex;flex-direction:column;gap:6px;font-size:13px;margin-top:10px}
 ${r} .rmt-mv-look textarea{width:100%;box-sizing:border-box;border:1px solid var(--rmt-theme-border,#cfdae5);border-radius:10px;padding:8px 10px;font:inherit;font-size:14px;background:var(--rmt-theme-surface-solid,#fff);color:var(--rmt-theme-text,#34495d)}
 .rmt-mv-rec{position:fixed;inset:0;z-index:2147483000;background:#000;display:flex;align-items:center;justify-content:center}
@@ -275,6 +345,7 @@ export function navigateMvBack() {
     if (runtimeState.activeMode !== MV_MODE) return false;
     stopExport();
     stopPlayback();
+    if (view.sub === 'asset-editor') { closeAssetEditor(); return true; }
     const record = currentRecord();
     if (view.sub === 'setup' && view.step > 1) { view.step -= 1; renderMv(); return true; }
     if (['shot', 'sync', 'tegaki', 'finish'].includes(view.sub) || (view.sub === 'setup' && record?.shots?.length)) {
@@ -311,6 +382,7 @@ export function renderMv() {
 
 function renderMvUnsafe() {
     if (!isView()) { disposeMv(); return; }
+    if (view.sub === 'asset-editor') return; // Image loads and background jobs must not erase an unsaved draft.
     ensureStyles();
     overlay.setManageVisible(false); overlay.setRegenerateVisible(false);
     let song;
@@ -666,13 +738,19 @@ async function preloadImages(record, song) {
     let timer;
     const shots = mv.shotsInRange(record, song);
     const load = async () => {
+        const assets = mv.isV2(record) ? mv.assetKeys(record, song).map(k => mv.assetOf(record, k)?.image).filter(Boolean) : [];
+        await Promise.all(assets.map(resolveAssetImage));
         for (const shot of shots) imgUrl(shot, record);
         await Promise.all((shots).map(shot => loadingLocal.get(shot.image?.local)).filter(Boolean));
         const urls = [...new Set((shots).map(shot => {
             const url = imgUrl(shot, record);
-            if ((mv.isV2(record) ? v2Diff(shot, record)?.image?.url : shot.image?.url || shot.image?.local) && !url) throw new Error('Local image unavailable');
+            if (mv.hasAssetImage(mv.isV2(record) ? v2Diff(shot, record)?.image : shot.image) && !url) throw new Error('Local image unavailable');
             return url;
-        }).concat(mv.isV2(record) ? mv.assetKeys(record, song).map(k => mv.assetOf(record, k)?.image?.url).concat(coverUrl(song) || '') : []).filter(Boolean))];
+        }).concat(assets.map(image => {
+            const url = assetImageUrl(image);
+            if (mv.hasAssetImage(image) && !url) throw new Error('Local image unavailable');
+            return url;
+        }), mv.isV2(record) ? [coverUrl(song) || ''] : []).filter(Boolean))];
         await Promise.all(urls.map(url => new Promise((resolve, reject) => {
             let img = images.get(url);
             if (!img) { img = new Image(); img.src = url; images.set(url, img); }
@@ -891,6 +969,7 @@ export function stopPlayback() {
 }
 
 export function disposeMv() {
+    assetEditor?.dispose(); assetEditor = null; editSequence++;
     view.epoch += 1;
     view.stopAll = true; view.drawingAll = false; view.drawQueue = null;
     stopPlayback(); stopExport();
@@ -1076,7 +1155,7 @@ async function runDraw(shotId) {
 
 async function drawAllAssets() {
     const record0 = currentRecord();
-    const keys = mv.assetKeys(record0, view.cache?.song).filter(key => !mv.assetOf(record0, key)?.image?.url);
+    const keys = mv.assetKeys(record0, view.cache?.song).filter(key => !mv.hasAssetImage(mv.assetOf(record0, key)?.image));
     return drawAssetQueue(keys);
 }
 
@@ -1110,7 +1189,7 @@ async function runAsset(key, options = {}) {
     const opened = viewTarget();
     // 已经画过的图再点一次：换一个随机种子，不然同一种子同一提示词会画出一模一样的图。
     const record = currentRecord();
-    const fresh = options.fresh ?? !!mv.assetOf(record, key)?.image?.url;
+    const fresh = options.fresh ?? mv.hasAssetImage(mv.assetOf(record, key)?.image);
     try { const p = mv.drawAsset(opened.songId, key, { fresh }); renderMv(); reportResult(await p); }
     catch (error) { toastError(error); }
     if (isView(opened)) renderMv();
@@ -1228,11 +1307,12 @@ export function handleMvClick(event) {
         else if (action === 'draw') void runDraw(id);
         else if (action === 'draw-all') void drawAll();
         else if (action === 'draw-asset') void runAsset(id);
+        else if (action === 'edit-asset') void openAssetEditor(id).catch(toastError);
         else if (action === 'group-layer') { const [gid, layer] = id.split(':'); mv.setGroupLayer(view.songId, gid, layer); renderMv(); }
         else if (action === 'inspect') { view.inspect = view.inspect === id ? '' : id; setTimeout(() => renderMv(), 0); }
         else if (action === 'draw-group' || action === 'redraw-group') {
             const redraw = action === 'redraw-group';
-            const keys = mv.assetKeys(record, currentSong()).filter(k => k.startsWith(id + ':') && (redraw || !mv.assetOf(record, k)?.image?.url));
+            const keys = mv.assetKeys(record, currentSong()).filter(k => k.startsWith(id + ':') && (redraw || !mv.hasAssetImage(mv.assetOf(record, k)?.image)));
             void drawAssetQueue(keys, redraw ? id : '');
         }
         else if (action === 'tegaki-preset') { mv.applyTegakiPreset(view.songId, id, currentSong()); toastOk('已按“' + (mv.TEGAKI_PRESETS[id]?.name || '') + '”配好镜头。'); renderMv(); }
@@ -1456,39 +1536,33 @@ export function handleMvChange(event) {
 
 function assetTile(record, key, label) {
     const found = mv.assetOf(record, key);
-    const url = found?.image?.url || '';
+    const url = assetImageUrl(found?.image);
+    const exists = mv.hasAssetImage(found?.image);
     const drawing = mv.isAssetDrawing(mv.mvScope(ctx()), view.songId, key);
     const cut = found?.kind !== 'bg';
-    const splitSelect = '';
-    return `<button type="button" class="rmt-mv-asset${url ? ' done' : ''}${cut && found?.group?.layer !== 'full' ? ' cut' : ''}" data-rmt-mv="draw-asset" data-rmt-mv-id="${esc(key)}" ${drawing || view.drawingAll ? 'disabled' : ''} aria-label="${esc(label)}：${url ? '重画' : '画'}这一张">${url ? `<img src="${esc(url)}" alt="">` : ''}<i>${drawing ? '画…' : url ? '已画' : '未画'}</i></button><small>${esc(label)}</small>${splitSelect}`;
+    const splitSelect = btn('edit-asset', '编辑素材', { id: key, cls: 'rmt-mv-edit-open' });
+    return `<button type="button" class="rmt-mv-asset${exists ? ' done' : ''}${cut && found?.group?.layer !== 'full' ? ' cut' : ''}" data-rmt-mv="draw-asset" data-rmt-mv-id="${esc(key)}" ${drawing || view.drawingAll ? 'disabled' : ''} aria-label="${esc(label)}：${exists ? '重画' : '画'}这一张">${url ? `<img src="${esc(url)}" alt="">` : ''}<i>${drawing ? '画…' : exists ? '已画' : '未画'}</i></button><small>${esc(label)}</small>${splitSelect}`;
 }
 
 // 素材检查：原图 → 拼图拆分 → 抠图结果 → 播放时的用法，逐张对照。
 function inspectHtml(record, g, diffs) {
-    const rows = diffs.filter(d => d.image?.url).map(d => {
-        const raw = imageFor(d.image.url);
-        const override = d.image.split || 'auto';
-        const crop = raw ? cropFor(d.image.url, raw, override) : null;
-        if (g.layer !== 'full' && raw) cutoutFor(d.image.url, override);
-        const meta = cutMeta.get(d.image.url);
-        const cut = cutouts.get(d.image.url + '|' + override);
-        const splitText = { none: '不拆', left: '左半', right: '右半', top: '上半', bottom: '下半' };
-        const use = g.layer === 'full' ? '完整画面' : meta?.failed ? '抠图失败 → 按完整画面显示' : meta ? '分层（叠在背景上）' : '处理中…';
-        return `<div class="rmt-mv-inspect-row"><figure><img src="${esc(d.image.url)}" alt=""><figcaption>原图</figcaption></figure>
-          ${g.layer !== 'full' && cut?.src ? `<figure class="cut"><img src="${esc(cut.src)}" alt=""><figcaption>抠图后</figcaption></figure>` : ''}
-          <div><b>${esc(d.label)}</b><small>拆分：${crop ? `${esc(splitText[crop.split] || '不拆')}${override === 'auto' ? '（自动）' : '（手动）'}` : '图片载入中'}</small>
-          ${g.layer !== 'full' && meta && !meta.tainted ? `<small>抠掉的白底：${Math.round((meta.clearRatio || 0) * 100)}%</small>` : ''}${meta?.tainted ? '<small>外站图片读不了像素，按原图显示</small>' : ''}<small>播放时：${use}</small></div></div>`;
+    const rows = diffs.filter(d => mv.hasAssetImage(d.image)).map(d => {
+        const url = assetImageUrl(d.image), original = assetImageUrl(d.image.original || d.image);
+        const layered = d.image.editMode === 'cutout';
+        return `<div class="rmt-mv-inspect-row"><figure>${original ? `<img src="${esc(original)}" alt="原图">` : ''}<figcaption>原图</figcaption></figure>
+          <figure class="cut">${url ? `<img src="${esc(url)}" alt="当前素材">` : ''}<figcaption>当前素材</figcaption></figure>
+          <div><b>${esc(d.label)}</b><small>${d.image.crop ? '已手动选定画面' : '可在编辑素材中选单格'}</small><small>播放时：${layered ? '使用已确认的透明图叠背景' : '完整画面'}</small>
+          ${btn('edit-asset', '选单格／抠图／提示词', { id: `${g.id}:${d.id}` })}</div></div>`;
     }).join('');
-    const layerTools = `<div class="rmt-mv-actions">${btn('group-layer', g.layer === 'full' ? '现在：完整画面 · 改为分层抠图' : '现在：分层抠图 · 改为完整画面', { id: `${g.id}:${g.layer === 'full' ? 'cutout' : 'full'}` })}</div>
-      <p class="rmt-x-note">${g.layer === 'full' ? '完整画面：人物、道具和场景在同一张图里（推荐）。改成分层后需要重画成白底人物。' : '分层抠图：白底人物抠图后叠到背景上；抠不干净的图会自动按完整画面显示。'}</p>`;
-    const splitTools = diffs.filter(d => d.image?.url).map(d => `<label class="rmt-mv-look"><span>${esc(d.label)} · 拼图拆分</span><select class="rmt-mv-split" data-rmt-mv-split="${esc(g.id + ':' + d.id)}">${[['auto', '自动'], ['none', '不拆'], ['left', '取左半'], ['right', '取右半'], ['top', '取上半'], ['bottom', '取下半']].map(([v, l]) => `<option value="${v}"${(d.image.split || 'auto') === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label>`).join('');
-    return `<details class="rmt-mv-inspect"${view.inspect === g.id ? ' open' : ''}><summary data-rmt-mv="inspect" data-rmt-mv-id="${esc(g.id)}">素材检查（画面有问题时再打开）</summary>${rows}${splitTools}${layerTools}</details>`;
+    const layerTools = `<div class="rmt-mv-actions">${btn('group-layer', g.layer === 'full' ? '绘图方式：完整画面 · 改为分层素材' : '绘图方式：分层素材 · 改为完整画面', { id: `${g.id}:${g.layer === 'full' ? 'cutout' : 'full'}` })}</div>
+      <p class="rmt-x-note">自动去白底仅供预览；编辑素材中确认保存的透明图才会叠背景。</p>`;
+    return `<details class="rmt-mv-inspect"${view.inspect === g.id ? ' open' : ''}><summary data-rmt-mv="inspect" data-rmt-mv-id="${esc(g.id)}">素材检查（画面有问题时再打开）</summary>${rows}${layerTools}</details>`;
 }
 
 function renderGroupsBoard(song, record) {
     const sections = mv.parseSections(song.lyrics);
     const keys = mv.assetKeys(record, song);
-    const drawn = keys.filter(k => mv.assetOf(record, k)?.image?.url).length;
+    const drawn = keys.filter(k => mv.hasAssetImage(mv.assetOf(record, k)?.image)).length;
     const remaining = keys.length - drawn;
     const palette = coverPalette(song);
     const o = mv.tegakiOptions(record);
@@ -1505,7 +1579,7 @@ function renderGroupsBoard(song, record) {
         const lyrics = frames.filter(s => s.lyric).slice(0, 8).map(s => `${g.diffs.find(d => d.id === s.diff)?.label || ''}｜${s.lyric}`).join('\n');
         const bgIds = g.layer === 'full' ? [] : (g.bgs || []).length ? g.bgs.filter(b => frames.some(s => (s.bg || 'B1') === b.id)).map(b => b.id) : ['bg'];
         const bgTiles = (g.layer === 'full' ? [] : bgIds.length ? bgIds : ['bg']).map(id => `<div>${assetTile(record, `${g.id}:${id}`, (g.bgs || []).find(b => b.id === id)?.label ? '背景·' + g.bgs.find(b => b.id === id).label : '背景')}</div>`).join('');
-        const missing = [...(g.layer === 'full' ? [] : bgIds.length ? bgIds : ['bg']).map(id => `${g.id}:${id}`), ...usedDiffs.map(d => `${g.id}:${d.id}`)].filter(k => !mv.assetOf(record, k)?.image?.url).length;
+        const missing = [...(g.layer === 'full' ? [] : bgIds.length ? bgIds : ['bg']).map(id => `${g.id}:${id}`), ...usedDiffs.map(d => `${g.id}:${d.id}`)].filter(k => !mv.hasAssetImage(mv.assetOf(record, k)?.image)).length;
         return `<article class="rmt-mv-gcard"><div class="rmt-x-row-head"><b class="rmt-mv-gname">构图 ${shown} · ${esc(g.composition || '')}</b><span>${esc(secNames)} · ${frames.length} 句</span></div>
           ${cast_controls.shotCastControls(record, g)}
           <div class="rmt-mv-assets">${bgTiles}${bgTiles ? '<span class="rmt-mv-plus">+</span>' : ''}${usedDiffs.map(d => `<div>${assetTile(record, `${g.id}:${d.id}`, d.label)}</div>`).join('')}</div>
@@ -1538,7 +1612,6 @@ function renderGroupsBoard(song, record) {
 
 // ---------- 手书 v2：抠图、取色、渲染 ----------
 
-const cutouts = new Map();
 const cutMeta = new Map();
 const palettes = new Map();
 
@@ -1583,83 +1656,20 @@ function drawCropCover(g, img, rect, w, h, scale = 1) {
     g.drawImage(img, sx, sy, sw, sh, (w - dw) / 2, (h - dh) / 2, dw, dh);
 }
 
-// 白底人物：从四边向内漫水填充近白色像素并设为透明；外站图片读不了像素时直接用原图。
-function cutoutFor(url, override = 'auto') {
-    if (!url) return null;
-    const cacheKey = url + '|' + override;
-    const ready = cutouts.get(cacheKey);
-    if (ready) return ready.complete && ready.naturalWidth ? ready : null;
-    const src = imageFor(url);
+// Only a user-confirmed edited/imported transparent image is used as a layer.
+// Metadata describes alignment, never whether a cutout is "successful".
+function layerImage(image) {
+    if (image?.editMode !== 'cutout') return null;
+    const url = assetImageUrl(image), src = imageFor(url);
     if (!src) return null;
-    try {
-        const crop = cropFor(url, src, override);
-        const [sx, sy, sw, sh] = crop.rect;
-        const scale = Math.min(1, 1400 / Math.max(sw, sh));
-        const cw = Math.max(1, Math.round(sw * scale)), ch = Math.max(1, Math.round(sh * scale));
-        const canvas = document.createElement('canvas'); canvas.width = cw; canvas.height = ch;
-        const g = canvas.getContext('2d', { willReadFrequently: true });
-        g.drawImage(src, sx, sy, sw, sh, 0, 0, cw, ch);
-        const img = g.getImageData(0, 0, cw, ch);
-        const d = img.data;
-        const white = p => { const i = p * 4; const mn = Math.min(d[i], d[i + 1], d[i + 2]); return mn > 228 && Math.max(d[i], d[i + 1], d[i + 2]) - mn < 26; };
-        const seen = new Uint8Array(cw * ch);
-        const stack = [];
-        for (let x = 0; x < cw; x += 1) stack.push(x, (ch - 1) * cw + x);
-        for (let y = 0; y < ch; y += 1) stack.push(y * cw, y * cw + cw - 1);
-        while (stack.length) {
-            const p = stack.pop();
-            if (seen[p]) continue;
-            seen[p] = 1;
-            if (!white(p)) continue;
-            d[p * 4 + 3] = 0;
-            const x = p % cw;
-            if (x > 0) stack.push(p - 1);
-            if (x < cw - 1) stack.push(p + 1);
-            if (p >= cw) stack.push(p - cw);
-            if (p < cw * (ch - 1)) stack.push(p + cw);
-        }
-        // 手臂内侧、衣摆间这类被包住的白底：只去掉面积够大、非常白的区域，保留衣服上的小块白色细节。
-        const pure = p => { const i = p * 4; const mn = Math.min(d[i], d[i + 1], d[i + 2]); return d[i + 3] !== 0 && mn > 240 && Math.max(d[i], d[i + 1], d[i + 2]) - mn < 14; };
-        const minArea = Math.max(250, Math.round(cw * ch * 0.0015));
-        const mark = new Uint8Array(cw * ch);
-        for (let start = 0; start < cw * ch; start += 1) {
-            if (mark[start] || !pure(start)) continue;
-            const region = []; const q = [start]; mark[start] = 1;
-            while (q.length) {
-                const p = q.pop(); region.push(p);
-                const x = p % cw;
-                for (const n of [x > 0 ? p - 1 : -1, x < cw - 1 ? p + 1 : -1, p >= cw ? p - cw : -1, p < cw * (ch - 1) ? p + cw : -1]) {
-                    if (n >= 0 && !mark[n] && pure(n)) { mark[n] = 1; q.push(n); }
-                }
-            }
-            if (region.length >= minArea) for (const p of region) d[p * 4 + 3] = 0;
-        }
-        for (let p = 0; p < cw * ch; p += 1) {
-            if (d[p * 4 + 3] === 0) continue;
-            const x = p % cw;
-            const edge = (x > 0 && d[(p - 1) * 4 + 3] === 0) || (x < cw - 1 && d[(p + 1) * 4 + 3] === 0) || (p >= cw && d[(p - cw) * 4 + 3] === 0) || (p < cw * (ch - 1) && d[(p + cw) * 4 + 3] === 0);
-            if (edge && Math.min(d[p * 4], d[p * 4 + 1], d[p * 4 + 2]) > 190) d[p * 4 + 3] = 110;
-        }
-        g.putImageData(img, 0, 0);
-        let x0 = cw, y0 = ch, x1 = -1, y1 = -1;
-        for (let y = 0; y < ch; y += 2) for (let x = 0; x < cw; x += 2) {
-            if (d[(y * cw + x) * 4 + 3] > 40) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
-        }
-        let clear = 0;
-        for (let p = 0; p < cw * ch; p += 7) if (d[p * 4 + 3] === 0) clear += 1;
-        const clearRatio = clear / Math.ceil(cw * ch / 7);
-        // 抠掉的面积太少，说明这张不是白底人物（背景没被识别成白色）：按完整画面显示，不拿去叠背景。
-        cutMeta.set(url, { cx: (x1 + x0) / 2 / cw, bottom: y1 / ch, height: Math.max(0.01, (y1 - y0) / ch), clearRatio, split: crop.split, autoSplit: crop.auto, failed: clearRatio < 0.15 || !(x1 > x0 && y1 > y0) });
-        const out = new Image();
-        out.onload = () => { drawNow(); if (view.inspect && runtimeState.activeMode === MV_MODE) renderMv(); };
-        out.src = canvas.toDataURL('image/png');
-        cutouts.set(cacheKey, out);
-        return null;
-    } catch {
-        cutMeta.set(url, { failed: true, clearRatio: 0, split: 'none', autoSplit: 'none', tainted: true });
-        cutouts.set(cacheKey, src);
-        return src;
+    if (!cutMeta.has(url)) {
+        try {
+            const c = document.createElement('canvas'); c.width = src.naturalWidth; c.height = src.naturalHeight;
+            const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(src, 0, 0);
+            cutMeta.set(url, image_tools.alphaBounds(g.getImageData(0, 0, c.width, c.height).data, c.width, c.height));
+        } catch { cutMeta.set(url, null); }
     }
+    return src;
 }
 
 function coverPalette(song) {
@@ -1695,19 +1705,18 @@ function drawSceneV2(g, record, song, rows, index, t, w, h) {
     const p = Math.min(1, Math.max(0, (t - span.start) / Math.max(0.1, span.end - span.start)));
     const push = group?.motion === 'push' ? 1 + 0.03 * p : 1;
     const bgRow = (group?.bgs || []).find(b => b.id === (row.shot.bg || 'B1')) || (group?.bgs || [])[0];
-    const bg = imageFor(bgRow?.image?.url || group?.bg?.url);
+    const bg = imageFor(assetImageUrl(bgRow?.image || group?.bg));
     if (bg) drawCover(g, bg, w, h, push, 0, 0);
     const diff = group?.diffs.find(d => d.id === row.shot.diff);
     const override = diff?.image?.split || 'auto';
-    const raw = imageFor(diff?.image?.url);
-    const meta = cutMeta.get(diff?.image?.url);
-    // 完整场景图（或抠图失败的图）：整张作为镜头，不叠背景、不抠白。
-    if (raw && (group?.layer === 'full' || meta?.failed)) {
-        drawCropCover(g, raw, cropFor(diff.image.url, raw, override).rect, w, h, push);
+    const url = assetImageUrl(diff?.image), raw = imageFor(url);
+    // Unconfirmed legacy images stay intact. Confirmed edited PNGs use their saved pixels.
+    if (raw && diff?.image?.editMode !== 'cutout') {
+        drawCropCover(g, raw, cropFor(url, raw, override).rect, w, h, push);
         g.save(); g.globalCompositeOperation = 'soft-light'; g.globalAlpha = 0.1; g.fillStyle = coverPalette(song)[1]; g.fillRect(0, 0, w, h); g.restore();
         return;
     }
-    const person = group?.layer === 'full' ? null : cutoutFor(diff?.image?.url, override);
+    const person = layerImage(diff?.image);
     if (person) {
         const breathe = 1 + 0.004 * Math.sin(t * Math.PI * 2 / 3.4);
         // 人物按竖图放进画面：高度撑满（按景别放大或缩小），左右位置按分镜；横屏也不会被拉成两份。
@@ -1718,8 +1727,8 @@ function drawSceneV2(g, record, song, rows, index, t, w, h) {
         const cxp = { left: 0.5 - side, right: 0.5 + side, center: 0.5 }[group.position] || 0.5;
         const dx = w * cxp - dw / 2, dy = group.scale === 'close' ? h - dh * 0.9 : h - dh;
         // 同一构图里的差分对齐到这一组第一张：人物大小和脚底位置保持一致，换表情时不跳位。
-        const ref = (group.diffs || []).map(dd => cutMeta.get(dd.image?.url)).find(Boolean);
-        const cur = cutMeta.get(diff.image.url);
+        const ref = (group.diffs || []).map(dd => cutMeta.get(assetImageUrl(dd.image))).find(Boolean);
+        const cur = cutMeta.get(url);
         const map = m => [dx + m.cx * dw, dy + m.bottom * dh];
         g.save();
         g.translate(w / 2, h); g.scale(push * breathe, push * breathe); g.translate(-w / 2, -h);
@@ -1736,8 +1745,8 @@ function drawSceneV2(g, record, song, rows, index, t, w, h) {
 }
 
 function drawMotif(g, record, song, row, t, w, h) {
-    if (!record.motif?.image?.url || !isChorusSection(song, row.sectionIndex)) return;
-    const img = cutoutFor(record.motif.image.url);
+    if (!mv.hasAssetImage(record.motif?.image) || !isChorusSection(song, row.sectionIndex)) return;
+    const img = layerImage(record.motif.image) || imageFor(assetImageUrl(record.motif.image));
     if (!img) return;
     const size = Math.min(w, h) * 0.09;
     for (let i = 0; i < 7; i += 1) {
