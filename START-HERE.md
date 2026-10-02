@@ -1,9 +1,21 @@
-# 心迹回廊 1.0
+# 心迹回廊 1.0.2
 
-当前版本：`1.0.0`，构建：`1.0.0-r84.217-mv-material-editor`。
-本轮以已交付 r84.216 完整 ZIP 为唯一基线，不切换分支，不使用旧包覆盖新功能。
+当前版本：`1.0.2`，构建：`1.0.2-r84.219-mv-overlay-controls`。
+本轮以已交付 1.0.1 / r84.218 完整 ZIP 为唯一基线，在独立副本修改。
 
 ## 本轮改动
+
+入口：手书剪辑台 → 歌曲与字幕。
+
+- 片尾只在所选片段的结尾显示；拖到片段之后的镜头不再被海报遮挡。新增「片尾时长（秒）」，默认 2.5 秒，0 为关闭；最多占最后一个镜头的一半。
+- 短镜头的淡入淡出、闪白转场最多占当前镜头四分之一，保留其余时间看清画面；长镜头的原有转场时长不变。新旧两种 MV 均适用，不改镜头时间轴。
+- 「副歌关键词」「漂浮装饰」可分别关闭；歌词选「不显示」时也隐藏关键词。装饰默认仍显示，旧素材无需重新生成。
+- 预览、全屏录制及导出共用渲染规则；导出沿用开始时的设置，不受中途修改干扰。
+
+保留 1.0.1 的「片头时长（秒）」：默认 2 秒、0 关闭，最多占首镜头一半并在开唱时结束。
+未改任何歌曲、分镜或生图 Prompt；已有图片、歌词、分镜和打点不变，不新增生成限制或收费请求。
+
+## 保留的 1.0 素材编辑
 
 入口：做成 MV → 构图卡片 → 每张缩略图下面的「编辑素材」。背景、人物、意象都可编辑；未画的素材也能先改提示词或导入图片。
 
@@ -45,7 +57,7 @@ MV 数据导出包含分镜、图片引用和待保存结果，本机音频/上�
 Node.js 24、Python 3；像素测试使用 `@napi-rs/canvas`（可由 CODEX_PRIMARY_RUNTIME_NODE_MODULES 指向已安装目录）。
 
 ```bash
-BASELINE_ROOT=/绝对路径/r84.216/tokimemo-main LEGACY_MV_ROOT=/绝对路径/r84.209/tokimemo-main JOURNAL_BASELINE_ROOT=/绝对路径/r84.215/tokimemo-main python3 tools/verification/verify-material-round.py . /绝对路径/检查结果
+BASELINE_ROOT=/绝对路径/r84.218/tokimemo-main LEGACY_MV_ROOT=/绝对路径/r84.209/tokimemo-main JOURNAL_BASELINE_ROOT=/绝对路径/r84.215/tokimemo-main python3 tools/verification/verify-overlays-round.py . /绝对路径/检查结果
 ```
 
 每轮执行全部回归、原生 Canvas 像素与 PNG 测试、全部 JS/MJS 语法、模块绑定、默认 Prompt 字节对照、源文件差异、两次确定性构建、ZIP CRC 与逐文件字节检查。最后一轮从最终 ZIP 全新解压执行。
