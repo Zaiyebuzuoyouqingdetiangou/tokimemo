@@ -1,15 +1,15 @@
 {
   "display_name": "心迹回廊",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.99.99-r84.216-mv-restore-safe-continue",
+  "js": "index.js?heartbeat=1.0.0-r84.217-mv-material-editor",
   "author": "Toto",
-  "version": "0.99.99",
+  "version": "1.0.0",
   "auto_update": true,
   "minimum_client_version": "1.13.0",
   "hooks": {
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r84.216：恢复分镜类型、歌曲推荐、多人／世界书设置和片段导出；修复自动续写及覆盖已画图片。保留重画、对时间、夜间模式、写歌和保存修复。",
+  "description": "1.0：手书素材可选单格、框选裁切、手动擦除／恢复、导入透明图和编辑单张提示词；保留分镜类型、多人卡、继续分镜和片段导出。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }
