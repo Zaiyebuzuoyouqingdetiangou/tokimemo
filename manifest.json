@@ -1,15 +1,15 @@
 {
   "display_name": "心迹回廊",
   "loading_order": 110,
-  "js": "index.js?heartbeat=1.0.3-r84.220-mv-navigation",
+  "js": "index.js?heartbeat=1.0.4-r84.221-mv-media-sync",
   "author": "Toto",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "auto_update": true,
   "minimum_client_version": "1.13.0",
   "hooks": {
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "1.0.3：手书编辑保存后回到原图位置，预览与对时间逐层返回；移除相簿缩略图旁的小兔子，图片设置保留在共同回忆详情。",
+  "description": "1.0.4：修复手书单镜导入图、重画图未显示及已完成片段识别；修复按段对时间撤销后不能继续打点。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }

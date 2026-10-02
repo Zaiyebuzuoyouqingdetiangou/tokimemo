@@ -152,6 +152,8 @@ function targetContext(target) {
 }
 
 function resultBasis(record, kind, shotId) {
+    if (kind === 'frameEdit') return JSON.stringify({ storyRevision: record?.storyRevision,
+        shot: list(record?.shots).find(shot => shot.id === shotId) || null });
     if (kind === 'append') return JSON.stringify(record ? {
         createdAt: record.createdAt, version: record.version, storyRevision: record.storyRevision, settings: record.settings,
         shots: list(record.shots).map(s => [s.id, s.sectionIndex, s.group, s.diff]),
@@ -946,6 +948,7 @@ export function completedMvRanges(record, song) {
     const done = sections.map((_, i) => {
         const shots = list(record?.shots).filter(s => s.sectionIndex === i);
         return shots.length > 0 && shots.every(s => {
+            if (hasAssetImage(s.image)) return true;
             if (!isV2(record)) return !!(s.image?.url || s.image?.local);
             const g = record.groups.find(g => g.id === s.group);
             return hasAssetImage(assetOf(record, `${s.group}:${s.diff}`)?.image)
@@ -1171,6 +1174,20 @@ export function assetKeys(record, song = null) {
 }
 
 export function hasAssetImage(image) { return !!(image?.url || image?.local); }
+
+// A user import or single-shot redraw belongs to this shot, even when siblings
+// share one v2 composition. Reading it must not depend on how it was created.
+export function shotImage(record, shot) {
+    if (hasAssetImage(shot?.image) || !isV2(record)) return shot?.image || null;
+    return assetOf(record, `${shot?.group}:${shot?.diff}`)?.image || null;
+}
+
+export async function saveFrameImage(target, shotId, image) {
+    return holdResult(target, 'frameEdit', shotId, image, raw => {
+        if (!hasAssetImage(raw)) throw core_text.safeUserError('没有可保存的图片。', 'RMT_MV_FRAME');
+        return { image: raw };
+    });
+}
 
 export function assetPrompt(record, key, context, appearance = true) {
     const custom = record?.assetPrompts?.[key];

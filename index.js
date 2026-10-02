@@ -1,5 +1,5 @@
-const VERSION = '1.0.3';
-const BUILD = '1.0.3-r84.220-mv-navigation';
+const VERSION = '1.0.4';
+const BUILD = '1.0.4-r84.221-mv-media-sync';
 
 const SETTINGS_ID = 'heartbeat_memories_settings';
 const MENU_ID = 'heartbeat_memories_menu_item';

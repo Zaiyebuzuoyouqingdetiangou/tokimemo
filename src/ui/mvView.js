@@ -25,6 +25,7 @@ const audioBySong = new Map();
 const images = new Map();
 const localUrls = new Map();
 const loadingLocal = new Map();
+const imageImports = new Map();
 const audioTried = new Set();
 const audioLoads = new Map();
 let assetEditor = null;
@@ -69,15 +70,10 @@ function restoreParentPage() {
 }
 
 // 用户自己的图存在本机；url 来自生图渠道。两者都没有时返回空字符串。
-function v2Diff(shot, record = view.cache?.record) {
-    if (!shot?.group || !mv.isV2(record)) return null;
-    return record.groups.find(g => g.id === shot.group)?.diffs.find(d => d.id === shot.diff) || null;
-}
-function hasImg(shot) { const d = v2Diff(shot); return mv.hasAssetImage(d ? d.image : shot?.image); }
+function hasImg(shot) { return mv.hasAssetImage(mv.shotImage(view.cache?.record, shot)); }
 
 function imgUrl(shot, record = view.cache?.record) {
-    const d = v2Diff(shot, record);
-    return assetImageUrl(d ? d.image : shot?.image);
+    return assetImageUrl(mv.shotImage(record, shot));
 }
 
 function assetImageUrl(image) {
@@ -193,7 +189,9 @@ function acceptAudio(blob, name, persist, target = mv.captureMvTarget(ctx(), vie
 }
 
 function uploadLabel(shotId, label = '换用自己的图') {
-    return `<label class="rmt-x-secondary rmt-mv-upload">${label}<input type="file" accept="image/*" data-rmt-mv-image data-rmt-mv-id="${esc(shotId)}"></label>`;
+    const record = view.cache?.record, shot = record?.shots?.find(s => s.id === shotId);
+    return `<label class="rmt-x-secondary rmt-mv-upload">${label}<input type="file" accept="image/*" data-rmt-mv-image data-rmt-mv-id="${esc(shotId)}"></label>`
+        + (mv.isV2(record) && mv.hasAssetImage(shot?.image) ? btn('use-group-image', '恢复构图素材', { id: shotId }) : '');
 }
 
 function looksEditor() {
@@ -799,19 +797,20 @@ async function preloadImages(record, song) {
     let timer;
     const shots = mv.shotsInRange(record, song);
     const load = async () => {
-        const assets = mv.isV2(record) ? mv.assetKeys(record, song).map(k => mv.assetOf(record, k)?.image).filter(Boolean) : [];
+        const assets = shots.flatMap(shot => {
+            const image = mv.shotImage(record, shot);
+            if (!mv.isV2(record) || mv.hasAssetImage(shot.image)) return [image];
+            const group = record.groups.find(g => g.id === shot.group);
+            const bg = group?.bgs?.find(b => b.id === (shot.bg || 'B1')) || group?.bgs?.[0];
+            return [image, bg?.image || group?.bg];
+        }).filter(Boolean);
+        if (mv.isV2(record) && mv.tegakiOptions(record).showMotif) assets.push(record.motif?.image);
         await Promise.all(assets.map(resolveAssetImage));
-        for (const shot of shots) imgUrl(shot, record);
-        await Promise.all((shots).map(shot => loadingLocal.get(shot.image?.local)).filter(Boolean));
-        const urls = [...new Set((shots).map(shot => {
-            const url = imgUrl(shot, record);
-            if (mv.hasAssetImage(mv.isV2(record) ? v2Diff(shot, record)?.image : shot.image) && !url) throw new Error('Local image unavailable');
-            return url;
-        }).concat(assets.map(image => {
+        const urls = [...new Set(assets.map(image => {
             const url = assetImageUrl(image);
             if (mv.hasAssetImage(image) && !url) throw new Error('Local image unavailable');
             return url;
-        }), mv.isV2(record) ? [coverUrl(song) || ''] : []).filter(Boolean))];
+        }).concat(mv.isV2(record) ? [coverUrl(song) || ''] : []).filter(Boolean))];
         await Promise.all(urls.map(url => new Promise((resolve, reject) => {
             let img = images.get(url);
             if (!img) { img = new Image(); img.src = url; images.set(url, img); }
@@ -1299,7 +1298,7 @@ function setTap(index, value) {
     const high = after === undefined ? Infinity : taps[after] - (after - index) * 0.5;
     value = Math.max(low, Math.min(value, high));
     mv.patchRecord(view.songId, { timing: { ...(currentRecord()?.timing || {}), taps: { ...taps, [index]: value } } });
-    view.tapUndo.push({ ...taps });
+    view.tapUndo.push({ taps: { ...taps }, index });
 }
 
 export function handleMvClick(event) {
@@ -1418,6 +1417,12 @@ export function handleMvClick(event) {
         else if (action === 'download-table') download(new Blob([mv.timetableText(record, currentSong())], { type: 'text/plain;charset=utf-8' }), `${safeName(currentSong().title)}-镜头时间表.txt`);
         else if (action === 'download-srt') download(new Blob([mv.srtText(record, currentSong())], { type: 'application/x-subrip;charset=utf-8' }), `${safeName(currentSong().title)}.srt`);
         else if (action === 'select-shot') { view.selected = id; renderMv(); }
+        else if (action === 'use-group-image') {
+            if (mv.isV2(record) && record.shots.some(s => s.id === id)) {
+                imageImports.delete(mv_media.mediaKey('img', opened.scope, opened.songId, id));
+                mv.patchShot(view.songId, id, { image: null }); renderMv();
+            }
+        }
         else if (action === 'seek') {
             // 跳转：画面、差分和字幕都读同一个播放时间，跳到哪里就从哪里对齐。
             const rect = el.getBoundingClientRect();
@@ -1473,13 +1478,13 @@ export function handleMvClick(event) {
         }
         else if (action === 'tap-undo') {
             const previous = view.tapUndo.at(-1);
-            const taps = previous ? { ...previous } : { ...(record.timing?.taps || {}) };
+            const taps = previous ? { ...previous.taps } : { ...(record.timing?.taps || {}) };
             const keys = Object.keys(taps).filter(k => taps[k] !== null && taps[k] !== undefined).map(Number).sort((a, b) => b - a);
             if (previous || keys.length) {
                 if (!previous) delete taps[keys[0]];
                 mv.patchRecord(view.songId, { timing: { ...(record.timing || {}), taps } });
                 if (previous) view.tapUndo.pop();
-                view.tapIndex = -1; renderMv();
+                view.tapIndex = previous ? previous.index : keys[0]; renderMv();
             }
         }
         else if (action === 'tap-reset') { mv.patchRecord(view.songId, { timing: { taps: {}, shift: 0 } }); view.tapIndex = -1; view.tapUndo = []; renderMv(); }
@@ -1584,12 +1589,22 @@ export function handleMvChange(event) {
         const context = ctx();
         if (!file || !context || !shotId) return true;
         if (!/^image\//.test(file.type || '')) { toastError(core_text.safeUserError('请选择图片文件。', 'RMT_MV_IMAGE')); return true; }
-        const key = mv_media.mediaKey('img', mv.mvScope(context), view.songId, shotId);
-        const old = localUrls.get(key); if (old) { try { URL.revokeObjectURL(old); } catch {} }
-        localUrls.set(key, URL.createObjectURL(file));
-        void mv_media.putMedia(key, file, file.name).then(ok => { if (!ok) globalThis.toastr?.info?.('这台设备没能记住这张图，刷新后需要重新选择。', '心迹回廊 · MV'); });
-        try { mv.patchShot(view.songId, shotId, { image: { local: key, at: Date.now() } }); } catch (error) { toastError(error); }
-        renderMv();
+        try {
+            const target = mv.captureMvTarget(context, view.songId), opened = viewTarget();
+            if (!target.base.songs[target.songId]?.shots?.some(s => s.id === shotId)) return true;
+            const slot = mv_media.mediaKey('img', target.scope, target.songId, shotId);
+            const key = mv_media.mediaKey('img', target.scope, target.songId, `${shotId}:${Date.now()}:${++mediaSequence}`);
+            imageImports.set(slot, key);
+            // Save new bytes without replacing the old blob. Bind the commit to the
+            // captured shot, and ignore a file superseded by another manual import.
+            void mv_media.putMedia(key, file, file.name).then(async ok => {
+                if (imageImports.get(slot) !== key) return;
+                if (!ok) throw core_text.safeUserError('图片未能保存，原图已保留，请重试。', 'RMT_MV_SAVE_FAILED');
+                localUrls.set(key, URL.createObjectURL(file));
+                reportResult(await mv.saveFrameImage(target, shotId, { local: key, at: Date.now() }), '图片已保存。');
+                if (isView(opened)) renderMv();
+            }).catch(toastError).finally(() => { if (imageImports.get(slot) === key) imageImports.delete(slot); });
+        } catch (error) { toastError(error); }
         return true;
     }
     if (input?.matches?.('[data-rmt-mv-split]')) {
@@ -1791,6 +1806,11 @@ function drawSceneV2(g, record, song, rows, index, t, w, h) {
     const span = groupSpan(rows, index);
     const p = Math.min(1, Math.max(0, (t - span.start) / Math.max(0.1, span.end - span.start)));
     const push = group?.motion === 'push' ? 1 + 0.03 * p : 1;
+    if (mv.hasAssetImage(row.shot.image)) {
+        const own = imageFor(assetImageUrl(row.shot.image));
+        if (own) drawCover(g, own, w, h, push, 0, 0);
+        return;
+    }
     const bgRow = (group?.bgs || []).find(b => b.id === (row.shot.bg || 'B1')) || (group?.bgs || [])[0];
     const bg = imageFor(assetImageUrl(bgRow?.image || group?.bg));
     if (bg) drawCover(g, bg, w, h, push, 0, 0);
