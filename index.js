@@ -1,5 +1,5 @@
-const VERSION = '1.0.2';
-const BUILD = '1.0.2-r84.219-mv-overlay-controls';
+const VERSION = '1.0.3';
+const BUILD = '1.0.3-r84.220-mv-navigation';
 
 const SETTINGS_ID = 'heartbeat_memories_settings';
 const MENU_ID = 'heartbeat_memories_menu_item';

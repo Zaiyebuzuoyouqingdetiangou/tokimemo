@@ -1,15 +1,15 @@
 {
   "display_name": "心迹回廊",
   "loading_order": 110,
-  "js": "index.js?heartbeat=1.0.2-r84.219-mv-overlay-controls",
+  "js": "index.js?heartbeat=1.0.3-r84.220-mv-navigation",
   "author": "Toto",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "auto_update": true,
   "minimum_client_version": "1.13.0",
   "hooks": {
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "1.0.2：修复片尾越界遮挡，片尾时长可调或关闭；短镜头缩短转场，副歌关键词与漂浮装饰可关闭，预览导出一致。",
+  "description": "1.0.3：手书编辑保存后回到原图位置，预览与对时间逐层返回；移除相簿缩略图旁的小兔子，图片设置保留在共同回忆详情。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }

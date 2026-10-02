@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 317
-// Source SHA-256: 8a3ba50b68261f69e069c66cda9c4685c7d0e49806de81589e6440c64b4deee8
+// Source SHA-256: 62fbc1042b124d69aa364adbdcdb3e72e19aec3aadeb23d7496d486f692c6503
 // Build: python3 tools/verification/build.py <source-root>
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -63541,6 +63541,7 @@ const runtimeState = __m_core_state_js.state;
 
 
 
+const albumReturnPositions = new WeakMap();
 function filteredAlbumEntries() {
     if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.ALBUM) return [];
     const category = runtimeState.activeSession.category || '全部';
@@ -63557,6 +63558,7 @@ function renderAlbum() {
     const session = runtimeState.activeSession;
     if (!session || session.kind !== core_constants.MODE.ALBUM) return;
     if (session.sharedMemory) return renderSharedMemory();
+    ui_overlay.setBackVisible(true, '内容');
     ui_overlay.topTitle(core_constants.MODE_LABEL[core_constants.MODE.ALBUM]);
     const list = filteredAlbumEntries();
     const totalPages = Math.max(1, Math.ceil(list.length / session.pageSize));
@@ -63576,9 +63578,8 @@ function renderAlbum() {
     const pendingComments = ui_generationCompletion.countPendingGenerationItems(session.entries, item => item?.unlocked && item?.progressPending?.includes('共同回忆'));
     const filters = ui_albumCategory.ALBUM_DISPLAY_CATEGORIES.map(cat => `<button type="button" class="rmt-btn ${session.category === cat ? 'active' : ''}" data-rmt-category="${cat}">${cat}</button>`).join('');
     const cards = pageItems.map(item => {
-        const drawing = item.unlocked && !readOnlyArchive && generation_imageGeneration.isCgImageDrawing(core_constants.MODE.ALBUM, item.id);
         const cardActions = item.unlocked
-            ? `<div class="rmt-album-card-actions"><button type="button" class="rmt-btn rmt-memory-primary" data-rmt-album-memory="${core_text.esc(item.id)}" aria-label="${core_text.esc(item.title)}：共同回忆">共同回忆</button>${readOnlyArchive ? '' : image_menu.imageMenuHtml(`<button type="button" class="rmt-btn" data-rmt-album-prompt="${core_text.esc(item.id)}" ${drawing ? 'disabled' : ''} aria-label="${core_text.esc(item.title)}：图片设置">${drawing ? '绘制中…' : '图片设置'}</button>${item.cgImage?.url ? `<button type="button" class="rmt-btn" data-rmt-journal-clip="${journal_clip.clipPayload({ mode: 'album', id: item.id, title: item.title, url: item.cgImage.url, body: item.desc || '' })}">夹进手帐</button>` : ''}`, { label: `${core_text.esc(item.title)}：图片操作` })}</div>`
+            ? `<div class="rmt-album-card-actions"><button type="button" class="rmt-btn rmt-memory-primary" data-rmt-album-memory="${core_text.esc(item.id)}" aria-label="${core_text.esc(item.title)}：共同回忆">共同回忆</button></div>`
             : '';
         return `<article class="rmt-card ${item.id === session.selectedId ? 'active' : ''} ${item.unlocked ? '' : 'locked'}" data-rmt-album-id="${core_text.esc(item.id)}">
       <div class="rmt-thumb">${item.unlocked ? generation_imageGeneration.cgImageLayerHtml(item, { history: false }) : `<div class="rmt-abstract" style="${ui_styles.abstractStyle(item.visualSeed, item.id)}"></div>`}</div>
@@ -63724,9 +63725,21 @@ function enterSharedMemory() {
     if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.ALBUM) return;
     const item = selectedAlbumEntry();
     if (!item?.unlocked) return;
+    if (!runtimeState.activeSession.sharedMemory) albumReturnPositions.set(runtimeState.activeSession, ui_overlay.bodyEl()?.scrollTop || 0);
     runtimeState.activeSession.sharedMemory = true;
     runtimeState.activeSession.dialogueIndex = 0;
     renderSharedMemory();
+    const body = ui_overlay.bodyEl(); if (body) body.scrollTop = 0;
+}
+
+function closeSharedMemory() {
+    const session = runtimeState.activeSession;
+    if (session?.kind !== core_constants.MODE.ALBUM || !session.sharedMemory) return false;
+    session.sharedMemory = false;
+    renderAlbum();
+    const body = ui_overlay.bodyEl(); if (body) body.scrollTop = albumReturnPositions.get(session) || 0;
+    albumReturnPositions.delete(session);
+    return true;
 }
 
 function albumSpeakerSnapshot(item, session = runtimeState.activeSession) {
@@ -63787,6 +63800,7 @@ function renderSharedMemory() {
     ui_overlay.topTitle(`共同回忆 · ${item.title}`);
     const body = ui_overlay.bodyEl();
     body.innerHTML = `<div class="rmt-memory-scene">
+      <button type="button" class="rmt-btn" data-rmt-action="back">← 返回回忆相簿</button>
       <div class="rmt-memory-cg rmt-reading-image${generation_imageGeneration.normalizeCgImageRecord(item.cgImage) ? ' rmt-reading-image-saved' : ''}">
         ${generation_imageGeneration.cgImageLayerHtml(item, { lazy: false })}
       </div>
@@ -63801,7 +63815,7 @@ function renderSharedMemory() {
           <button type="button" class="rmt-btn" data-rmt-action="shared-next" ${!comments.length || last ? 'disabled' : ''}>下一句</button>
         </div>
       </div>
-      ${readOnly ? '' : image_menu.imageSetupHtml(`<button type="button" class="rmt-btn" data-rmt-action="edit-cg-prompt">${image_menu.BUNNY_SVG}<span>图片设置</span></button>`)}
+      ${readOnly ? '' : image_menu.imageSetupHtml(`<button type="button" class="rmt-btn" data-rmt-action="edit-cg-prompt"><span>图片设置</span></button>${item.cgImage?.url ? `<button type="button" class="rmt-btn" data-rmt-journal-clip="${journal_clip.clipPayload({ mode: 'album', id: item.id, title: item.title, url: item.cgImage.url, body: item.desc || '' })}">夹进手帐</button>` : ''}`)}
       ${generation_imageGeneration.cgImageProgressHtml()}
     </div>`;
     body.querySelector?.('[data-rmt-album-speaker]')?.addEventListener('change', event => {
@@ -63824,6 +63838,7 @@ __m_ui_albumView_js.albumFilter = albumFilter;
 __m_ui_albumView_js.albumPage = albumPage;
 __m_ui_albumView_js.showAlbumHint = showAlbumHint;
 __m_ui_albumView_js.enterSharedMemory = enterSharedMemory;
+__m_ui_albumView_js.closeSharedMemory = closeSharedMemory;
 __m_ui_albumView_js.albumSpeakerSnapshot = albumSpeakerSnapshot;
 __m_ui_albumView_js.renderSharedMemory = renderSharedMemory;
 }
@@ -74704,8 +74719,7 @@ function navigateBack() {
     if (runtimeState.activeMode === core_constants.MODE.TRAVEL && runtimeState.activeSession?.selectedLocationId) return ui_travelView.closeTravelDetail();
     if (runtimeState.activeMode === core_constants.MODE.ITEMS) return modes_room.returnToRoomFromDeep();
     if (runtimeState.activeMode === core_constants.MODE.ALBUM && runtimeState.activeSession?.kind === core_constants.MODE.ALBUM && runtimeState.activeSession.sharedMemory) {
-        runtimeState.activeSession.sharedMemory = false;
-        return ui_albumView.renderAlbum();
+        return ui_albumView.closeSharedMemory();
     }
     if (runtimeState.activeMode) return workspace_ui.openWorkspaceTab('content');
     if (runtimeState.archiveViewLevel === 'snapshot' && runtimeState.activeArchiveSnapshot) {
@@ -87868,6 +87882,43 @@ const audioLoads = new Map();
 let assetEditor = null;
 let editSequence = 0;
 let mediaSequence = 0;
+// Navigation is local to this opened song, never part of the saved MV/archive.
+const navigation = [];
+let renderedPage = '';
+
+function capturePagePosition(assetKey = '') {
+    const el = body();
+    if (!el) return null;
+    const anchors = [...(el.querySelectorAll?.('[data-rmt-mv-anchor]') || [])];
+    const top = el.getBoundingClientRect?.().top || 0;
+    const anchor = assetKey ? anchors.find(node => node.dataset.rmtMvAnchor === assetKey)
+        : anchors.find(node => node.getBoundingClientRect?.().bottom > top);
+    return { top: el.scrollTop, left: el.scrollLeft || 0,
+        anchor: anchor?.dataset.rmtMvAnchor, offset: anchor?.getBoundingClientRect?.().top - top,
+        // Inspection expansion is controlled by view.inspect; never undo its click.
+        details: [...(el.querySelectorAll?.('details:not(.rmt-mv-inspect)') || [])].map(node => node.open),
+        strips: [...(el.querySelectorAll?.('.rmt-mv-assets, .rmt-mv-strip') || [])].map(node => node.scrollLeft) };
+}
+
+function restorePagePosition(position) {
+    const el = body();
+    if (!el || !position) return;
+    const details = [...(el.querySelectorAll?.('details:not(.rmt-mv-inspect)') || [])];
+    if (details.length === position.details.length) details.forEach((node, i) => { node.open = position.details[i]; });
+    [...(el.querySelectorAll?.('.rmt-mv-assets, .rmt-mv-strip') || [])].forEach((node, i) => { node.scrollLeft = position.strips[i] || 0; });
+    el.scrollTop = position.top; el.scrollLeft = position.left;
+    const anchor = [...(el.querySelectorAll?.('[data-rmt-mv-anchor]') || [])].find(node => node.dataset.rmtMvAnchor === position.anchor);
+    if (anchor && Number.isFinite(position.offset) && anchor.getBoundingClientRect) {
+        el.scrollTop += anchor.getBoundingClientRect().top - (el.getBoundingClientRect?.().top || 0) - position.offset;
+    }
+}
+
+function currentPage(assetKey = '') { return { sub: view.sub, shotId: view.shotId, position: capturePagePosition(assetKey) }; }
+function restoreParentPage() {
+    const parent = navigation.pop() || { sub: 'board', shotId: '' };
+    Object.assign(view, { sub: parent.sub, shotId: parent.shotId });
+    renderMv(); restorePagePosition(parent.position);
+}
 
 // 用户自己的图存在本机；url 来自生图渠道。两者都没有时返回空字符串。
 function v2Diff(shot, record = view.cache?.record) {
@@ -87903,7 +87954,7 @@ async function resolveAssetImage(image) {
 
 function closeAssetEditor() {
     assetEditor?.dispose(); assetEditor = null;
-    if (view.sub === 'asset-editor') { view.sub = 'board'; renderMv(); }
+    if (view.sub === 'asset-editor') restoreParentPage();
 }
 
 async function openAssetEditor(key) {
@@ -87911,14 +87962,16 @@ async function openAssetEditor(key) {
     const record = target.base.songs[target.songId], found = mv.assetOf(record, key);
     stopPlayback(); assetEditor?.dispose(); assetEditor = null;
     const token = ++editSequence;
+    if (view.sub !== 'asset-editor') navigation.push(currentPage(key));
     view.sub = 'asset-editor'; page('编辑素材', '构图卡片', '<section data-rmt-mv-editor-host>正在打开素材…</section>');
+    if (body()) body().scrollTop = 0;
     const image = found.image, original = image?.original || image;
     const [sourceUrl, imageUrl] = await Promise.all([resolveAssetImage(original), resolveAssetImage(image)]);
     if (!isView(opened) || view.sub !== 'asset-editor' || token !== editSequence) return;
     const host = body().querySelector('[data-rmt-mv-editor-host]'); if (!host) return;
     assetEditor = image_editor.mountAssetEditor(host, {
         sourceUrl, imageUrl, image, prompt: mv.assetPrompt(record, key, ctx()), defaultPrompt: mv.defaultAssetPrompt(record, key, ctx()),
-        onClose: () => { if (isView(opened)) closeAssetEditor(); },
+        onClose: () => { if (isView(opened) && token === editSequence) closeAssetEditor(); },
         onSave: async draft => {
             if (!isView(opened) || token !== editSequence) return false;
             const patch = { prompt: draft.prompt };
@@ -88188,6 +88241,7 @@ function navigateMvBack() {
     if (view.sub === 'asset-editor') { closeAssetEditor(); return true; }
     const record = currentRecord();
     if (view.sub === 'setup' && view.step > 1) { view.step -= 1; renderMv(); return true; }
+    if (navigation.length) { restoreParentPage(); return true; }
     if (['shot', 'sync', 'tegaki', 'finish'].includes(view.sub) || (view.sub === 'setup' && record?.shots?.length)) {
         view.sub = view.sub === 'sync' ? 'tegaki' : 'board'; renderMv(); return true;
     }
@@ -88197,9 +88251,19 @@ function navigateMvBack() {
 
 function go(sub, extra = {}) {
     if (sub !== 'tegaki' && sub !== 'sync') stopPlayback();
+    let position;
+    if (sub === 'board') {
+        position = navigation.find(entry => entry.sub === 'board')?.position;
+        navigation.length = 0; // A successful first generation is not a child of its wizard.
+    } else if (sub !== view.sub) {
+        const existing = navigation.findIndex(entry => entry.sub === sub);
+        if (existing >= 0) position = navigation.splice(existing)[0].position;
+        else navigation.push(currentPage());
+    }
     Object.assign(view, { sub }, extra);
     renderMv();
     const el = body(); if (el) el.scrollTop = 0;
+    restorePagePosition(position);
 }
 
 function currentRecord() { const c = ctx(); return c ? mv.readMv(c, view.songId) : null; }
@@ -88208,7 +88272,9 @@ function currentSong() { const c = ctx(); return c ? mv.loadSong(c, view.songId)
 // ---------- 渲染 ----------
 
 function renderMv() {
-    try { renderMvUnsafe(); }
+    const previous = view.sub;
+    const position = renderedPage === previous && previous !== 'asset-editor' ? capturePagePosition() : null;
+    try { renderMvUnsafe(); if (isView() && view.sub === previous) restorePagePosition(position); }
     catch (error) {
         console.error('[HeartbeatMemories] MV page failed', error);
         try {
@@ -88246,8 +88312,12 @@ function renderMvUnsafe() {
 }
 
 function page(title, back, html) {
+    if (navigation.at(-1)?.sub === 'shot') back = '镜头详情';
+    if (view.sub === 'setup' && view.step > 1) back = '上一步';
     overlay.topTitle(title); overlay.setBackVisible(true, back);
-    body().innerHTML = `<main class="rmt-x-page">${recoveryPanel()}${html}<details class="rmt-x-card"><summary>MV 备份</summary>${btn('export-recovery', '导出 MV 数据与暂存结果')}</details></main>`;
+    const returnButton = view.sub !== 'board' ? btn('back', `← 返回${esc(back)}`) : '';
+    body().innerHTML = `<main class="rmt-x-page">${returnButton}${recoveryPanel()}${html}<details class="rmt-x-card"><summary>MV 备份</summary>${btn('export-recovery', '导出 MV 数据与暂存结果')}</details></main>`;
+    renderedPage = view.sub;
 }
 
 function recoveryPanel() {
@@ -88819,6 +88889,7 @@ function stopPlayback() {
 
 function disposeMv() {
     assetEditor?.dispose(); assetEditor = null; editSequence++;
+    navigation.length = 0; renderedPage = '';
     view.epoch += 1;
     view.stopAll = true; view.drawingAll = false; view.drawQueue = null;
     stopPlayback(); stopExport();
@@ -89095,7 +89166,8 @@ function handleMvClick(event) {
     const record = currentRecord();
     const opened = viewTarget();
     try {
-        if (action === 'retry-save') { void mv.retryMvSave(opened.scope, id).then(result => { reportResult(result, '结果已保存。'); if (isView(opened)) renderMv(); }).catch(toastError); }
+        if (action === 'back') navigateMvBack();
+        else if (action === 'retry-save') { void mv.retryMvSave(opened.scope, id).then(result => { reportResult(result, '结果已保存。'); if (isView(opened)) renderMv(); }).catch(toastError); }
         else if (action === 'export-recovery') download(new Blob([mv.exportMvRecovery(opened.scope)], { type: 'application/json' }), 'Hearttrace-MV-backup.json');
         else if (action === 'set-output') { d.output = id === 'video' ? 'video' : 'tegaki'; view.draft = mv.normalizeSettings(d); renderMv(); }
         else if (action === 'set-style') { d.style = id; renderMv(); }
@@ -89408,7 +89480,7 @@ function assetTile(record, key, label) {
     const drawing = mv.isAssetDrawing(mv.mvScope(ctx()), view.songId, key);
     const cut = found?.kind !== 'bg';
     const splitSelect = btn('edit-asset', '编辑素材', { id: key, cls: 'rmt-mv-edit-open' });
-    return `<button type="button" class="rmt-mv-asset${exists ? ' done' : ''}${cut && found?.group?.layer !== 'full' ? ' cut' : ''}" data-rmt-mv="draw-asset" data-rmt-mv-id="${esc(key)}" ${drawing || view.drawingAll ? 'disabled' : ''} aria-label="${esc(label)}：${exists ? '重画' : '画'}这一张">${url ? `<img src="${esc(url)}" alt="">` : ''}<i>${drawing ? '画…' : exists ? '已画' : '未画'}</i></button><small>${esc(label)}</small>${splitSelect}`;
+    return `<button type="button" class="rmt-mv-asset${exists ? ' done' : ''}${cut && found?.group?.layer !== 'full' ? ' cut' : ''}" data-rmt-mv-anchor="${esc(key)}" data-rmt-mv="draw-asset" data-rmt-mv-id="${esc(key)}" ${drawing || view.drawingAll ? 'disabled' : ''} aria-label="${esc(label)}：${exists ? '重画' : '画'}这一张">${url ? `<img src="${esc(url)}" alt="">` : ''}<i>${drawing ? '画…' : exists ? '已画' : '未画'}</i></button><small>${esc(label)}</small>${splitSelect}`;
 }
 
 // 素材检查：原图 → 拼图拆分 → 抠图结果 → 播放时的用法，逐张对照。

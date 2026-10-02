@@ -1,9 +1,16 @@
-# 心迹回廊 1.0.2
+# 心迹回廊 1.0.3
 
-当前版本：`1.0.2`，构建：`1.0.2-r84.219-mv-overlay-controls`。
-本轮以已交付 1.0.1 / r84.218 完整 ZIP 为唯一基线，在独立副本修改。
+当前版本：`1.0.3`，构建：`1.0.3-r84.220-mv-navigation`。
+本轮以已交付 1.0.2 / r84.219 完整 ZIP 为唯一基线，在独立副本修改。
 
 ## 本轮改动
+
+- 手书编辑素材（提示词、单格、抠图等）保存或返回后，恢复原图所在位置，同时恢复素材检查的展开状态和缩略图横向位置；异步图片加载引起的同页刷新也保留位置。
+- 手书剪辑台、对时间、镜头详情及编辑素材增加页面内返回入口，按打开路径逐层返回，不必绕回互动入口；退出歌曲后清理临时路径，旧编辑器迟到回调不能关闭新编辑器。
+- 去掉回忆相簿缩略图旁的小兔子菜单。图片设置和「夹进手帐」保留在共同回忆详情；详情可直接返回相簿并恢复列表位置。
+- 歌曲、分镜、生图 Prompt、生成与存储规则均未改；保存不自动生成、重画或覆盖别的图片。Suno 双人／群像格式仅作调研建议，见 `dev/archive/1.0.3-suno-formats.txt`，没有暗改已生成歌词或复制内容。
+
+## 保留 1.0.2 的遮挡修复
 
 入口：手书剪辑台 → 歌曲与字幕。
 
@@ -57,7 +64,7 @@ MV 数据导出包含分镜、图片引用和待保存结果，本机音频/上�
 Node.js 24、Python 3；像素测试使用 `@napi-rs/canvas`（可由 CODEX_PRIMARY_RUNTIME_NODE_MODULES 指向已安装目录）。
 
 ```bash
-BASELINE_ROOT=/绝对路径/r84.218/tokimemo-main LEGACY_MV_ROOT=/绝对路径/r84.209/tokimemo-main JOURNAL_BASELINE_ROOT=/绝对路径/r84.215/tokimemo-main python3 tools/verification/verify-overlays-round.py . /绝对路径/检查结果
+BASELINE_ROOT=/绝对路径/r84.219/tokimemo-main LEGACY_MV_ROOT=/绝对路径/r84.209/tokimemo-main JOURNAL_BASELINE_ROOT=/绝对路径/r84.215/tokimemo-main python3 tools/verification/verify-navigation-round.py . /绝对路径/检查结果
 ```
 
 每轮执行全部回归、原生 Canvas 像素与 PNG 测试、全部 JS/MJS 语法、模块绑定、默认 Prompt 字节对照、源文件差异、两次确定性构建、ZIP CRC 与逐文件字节检查。最后一轮从最终 ZIP 全新解压执行。
