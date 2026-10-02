@@ -311,6 +311,8 @@ ${r} .rmt-mv-editor-upload input{position:absolute;width:1px;height:1px;opacity:
 ${r} .rmt-mv-editor-viewport{overflow:auto;max-height:60vh;min-height:80px;max-width:100%;background:repeating-conic-gradient(#b7bec7 0 25%,#fff 0 50%) 0 0/16px 16px}
 ${r} [data-editor-canvas]{display:block;height:auto;touch-action:none}
 ${r} .rmt-mv-look{display:flex;flex-direction:column;gap:6px;font-size:13px;margin-top:10px}
+${r} .rmt-mv-check{display:flex;align-items:center;gap:10px;min-height:44px;font-size:14px;cursor:pointer}
+${r} .rmt-mv-check input[type="checkbox"]{width:18px;height:18px;min-height:18px;flex:0 0 18px;margin:0}
 ${r} .rmt-mv-look textarea{width:100%;box-sizing:border-box;border:1px solid var(--rmt-theme-border,#cfdae5);border-radius:10px;padding:8px 10px;font:inherit;font-size:14px;background:var(--rmt-theme-surface-solid,#fff);color:var(--rmt-theme-text,#34495d)}
 .rmt-mv-rec{position:fixed;inset:0;z-index:2147483000;background:#000;display:flex;align-items:center;justify-content:center}
 .rmt-mv-rec canvas{max-width:100vw;max-height:100vh;width:auto;height:auto}
@@ -647,8 +649,11 @@ function tegakiControls(record, song) {
       <p class="rmt-x-note">参考常见手书套路，一次排好全部镜头的切换方式、停留和歌词样式；之后仍可逐镜修改。</p>
       <b style="font-size:14px">截取哪一段</b>${rangePicker('record', o, mv.parseSections(song.lyrics))}
       <p class="rmt-x-note">现在：${mv.formatTime(range.start)}–${mv.formatTime(range.end)}（约 ${Math.max(0, Math.round(range.end - range.start))} 秒）。</p>
+      ${mv.isV2(record) ? `<label class="rmt-mv-look"><span>片头时长（秒）</span><input type="number" min="0" step="0.5" inputmode="decimal" data-rmt-mv-intro-seconds value="${o.introSeconds}"></label><p class="rmt-x-note">0 为关闭；最多占首镜头的一半，开唱时自动结束。</p>` : ''}
+      ${mv.isV2(record) ? `<label class="rmt-mv-look"><span>片尾时长（秒）</span><input type="number" min="0" step="0.5" inputmode="decimal" data-rmt-mv-outro-seconds value="${o.outroSeconds}"></label><p class="rmt-x-note">0 为关闭；只在所选片段末尾显示，最多占最后一个镜头的一半。</p>` : ''}
       <b style="font-size:14px">切换节奏</b><div class="rmt-mv-grid2">${seg2('tegaki-rhythm', mv.TEGAKI_RHYTHMS, o.rhythm)}</div>
       <b style="font-size:14px">歌词</b><div class="rmt-x-segs">${seg2('tegaki-lyric', mv.TEGAKI_LYRICS, o.lyric)}</div>
+      ${mv.isV2(record) ? `<label class="rmt-mv-check"><input type="checkbox" data-rmt-mv-overlay="keyword" ${o.showKeyword ? 'checked' : ''}>副歌关键词（随歌词隐藏）</label><label class="rmt-mv-check"><input type="checkbox" data-rmt-mv-overlay="motif" ${o.showMotif ? 'checked' : ''}>漂浮装饰</label>` : ''}
       ${o.lyric === 'none' ? '' : `<b style="font-size:14px">字体</b><div class="rmt-x-segs">${seg2('tegaki-font', Object.fromEntries(Object.entries(mv.TEGAKI_FONTS).map(([k, v]) => [k, v.name])), o.font)}</div><p class="rmt-x-note">字体用设备自带的，不同手机效果会略有差异。</p>`}`;
 }
 
@@ -837,6 +842,11 @@ function drawBigLyric(g, text, w, h, since, fontId = 'sans') {
     g.restore();
 }
 
+// Short shots need time without the previous image or white flash covering them.
+function transitionDuration(row, seconds) {
+    return Math.min(seconds, Math.max(0, row.end - row.start) / 4);
+}
+
 function renderFrame(canvas, record, song, t) {
     if (mv.isV2(record)) return renderFrameV2(canvas, record, song, t);
     const g = canvas.getContext('2d');
@@ -851,10 +861,11 @@ function renderFrame(canvas, record, song, t) {
     drawShot(g, row, rows, index, t, w, h);
     const prev = rows[index - 1];
     const since = t - row.start;
-    if (prev && (prev.shot.cut || 'fade') === 'fade' && since < 0.45) {
-        g.save(); g.globalAlpha = 1 - since / 0.45; drawShot(g, prev, rows, index - 1, t, w, h); g.restore();
-    } else if (prev && prev.shot.cut === 'flash' && since < 0.3) {
-        g.save(); g.globalAlpha = 1 - since / 0.3; g.fillStyle = '#fff'; g.fillRect(0, 0, w, h); g.restore();
+    const fadeDuration = transitionDuration(row, 0.45), flashDuration = transitionDuration(row, 0.3);
+    if (prev && since >= 0 && (prev.shot.cut || 'fade') === 'fade' && since < fadeDuration) {
+        g.save(); g.globalAlpha = 1 - since / fadeDuration; drawShot(g, prev, rows, index - 1, t, w, h); g.restore();
+    } else if (prev && since >= 0 && prev.shot.cut === 'flash' && since < flashDuration) {
+        g.save(); g.globalAlpha = 1 - since / flashDuration; g.fillStyle = '#fff'; g.fillRect(0, 0, w, h); g.restore();
     }
     const beat = beatVariant(row, t);
     if (beat) {
@@ -1425,6 +1436,24 @@ export function handleMvClick(event) {
 
 export function handleMvChange(event) {
     const input = event.target;
+    if (input?.matches?.('[data-rmt-mv-overlay]')) {
+        const key = input.dataset.rmtMvOverlay === 'keyword' ? 'showKeyword' : input.dataset.rmtMvOverlay === 'motif' ? 'showMotif' : '';
+        if (key) {
+            try { mv.patchTegaki(view.songId, { [key]: Boolean(input.checked) }); } catch (error) { toastError(error); }
+            renderMv();
+        }
+        return true;
+    }
+    if (input?.matches?.('[data-rmt-mv-intro-seconds]') || input?.matches?.('[data-rmt-mv-outro-seconds]')) {
+        const key = input.matches('[data-rmt-mv-outro-seconds]') ? 'outroSeconds' : 'introSeconds';
+        const seconds = String(input.value ?? '').trim() ? Number(input.value) : NaN;
+        if (Number.isFinite(seconds) && seconds >= 0) {
+            try { mv.patchTegaki(view.songId, { [key]: seconds }); } catch (error) { toastError(error); }
+        }
+        input.value = String(mv.tegakiOptions(currentRecord())[key]);
+        renderMv();
+        return true;
+    }
     if (input?.matches?.('[data-rmt-mv-story-type]')) {
         const storyType = mv_direction.directionOf(input.value).id;
         try {
@@ -1824,11 +1853,12 @@ function renderFrameV2(canvas, record, song, t) {
     drawSceneV2(g, record, song, rows, index, t, w, h);
     const prev = rows[index - 1];
     const since = t - row.start;
-    if (prev && prev.shot.group !== row.shot.group) {
-        if (prev.shot.cut === 'fade' && since < 0.35) { g.save(); g.globalAlpha = 1 - since / 0.35; drawSceneV2(g, record, song, rows, index - 1, t, w, h); g.restore(); }
-        else if (prev.shot.cut === 'flash' && since < 0.16) { g.save(); g.globalAlpha = 0.85 * (1 - since / 0.16); g.fillStyle = '#fff'; g.fillRect(0, 0, w, h); g.restore(); }
+    const fadeDuration = transitionDuration(row, 0.35), flashDuration = transitionDuration(row, 0.16);
+    if (prev && since >= 0 && prev.shot.group !== row.shot.group) {
+        if (prev.shot.cut === 'fade' && since < fadeDuration) { g.save(); g.globalAlpha = 1 - since / fadeDuration; drawSceneV2(g, record, song, rows, index - 1, t, w, h); g.restore(); }
+        else if (prev.shot.cut === 'flash' && since < flashDuration) { g.save(); g.globalAlpha = 0.85 * (1 - since / flashDuration); g.fillStyle = '#fff'; g.fillRect(0, 0, w, h); g.restore(); }
     }
-    drawMotif(g, record, song, row, t, w, h);
+    if (topt.showMotif) drawMotif(g, record, song, row, t, w, h);
     const palette = coverPalette(song);
     const font = mv.TEGAKI_FONTS[topt.font] || mv.TEGAKI_FONTS.sans;
     if (topt.lyric === 'vertical') drawVerticalLyric(g, row.shot.lyric, w, h, since, palette[2], mv.TEGAKI_FONTS.song.stack);
@@ -1844,7 +1874,7 @@ function renderFrameV2(canvas, record, song, t) {
         if (inBar < 0.12 && t - row.start > 0.2) { g.save(); g.globalAlpha = 0.35 * (1 - inBar / 0.12); g.fillStyle = '#fff'; g.fillRect(0, 0, w, h); g.restore(); }
     }
     // 卡点：副歌里每小节第一拍，关键词轻轻弹出一次。
-    if (record.keyword && isChorusSection(song, row.sectionIndex)) {
+    if (topt.showKeyword && topt.lyric !== 'none' && record.keyword && isChorusSection(song, row.sectionIndex)) {
         const bar = beatLen * 4;
         const inBar = (t - row.start) % bar;
         const pop = inBar < 0.25 ? 1.12 - 0.12 * (inBar / 0.25) : 1;
@@ -1853,16 +1883,24 @@ function renderFrameV2(canvas, record, song, t) {
         g.shadowColor = 'rgba(0,0,0,.5)'; g.shadowBlur = 16; g.fillStyle = palette[2]; g.globalAlpha = 0.92;
         g.fillText(record.keyword, 0, 0); g.restore();
     }
-    // 片头：第一句歌词开唱之前一直是海报加歌名；片尾最后 2.5 秒淡回海报。
+    // 片头时长独立于前奏；给首镜头至少留一半时间，不改镜头、歌词或音频时间轴。
     const range = mv.playRange(record, song);
     const timeline = mv.shotTimeline(record, song);
     const lineTaps = record.timing?.lineTaps || {};
     const firstSection = timeline.sections.findIndex((s, i) => s.lines.length && timeline.times[i].end > range.start);
     const tapped = firstSection >= 0 ? Number(lineTaps[`${firstSection}:0`]) : NaN;
     const firstLyric = Number.isFinite(tapped) ? tapped : firstSection >= 0 ? timeline.times[firstSection].start : range.start;
-    const titleEnd = Math.min(range.end, Math.max(range.start, firstLyric));
+    const firstRow = rows.find(r => r.end > range.start && r.start < range.end);
+    const firstSpan = firstRow ? Math.max(0, Math.min(firstRow.end, range.end) - Math.max(firstRow.start, range.start)) : 0;
+    const titleDuration = Math.min(topt.introSeconds, firstSpan / 2, Math.max(0, firstLyric - range.start));
+    const titleEnd = range.start + titleDuration;
+    const fade = Math.min(0.5, titleDuration / 2);
+    const lastRow = rows.filter(r => r.end > range.start && r.start < range.end).at(-1);
+    const lastSpan = lastRow ? Math.max(0, Math.min(lastRow.end, range.end) - Math.max(lastRow.start, range.start)) : 0;
+    const outroDuration = Math.min(topt.outroSeconds, lastSpan / 2);
     const toEnd = range.end - t;
-    if (titleEnd - range.start >= 1 && t < titleEnd) drawTitleCard(g, song, w, h, t > titleEnd - 0.5 ? (titleEnd - t) / 0.5 : 1);
-    else if (toEnd < 2.5) drawTitleCard(g, song, w, h, (2.5 - toEnd) / 1.2);
+    if (titleDuration > 0 && t >= range.start && t < titleEnd) drawTitleCard(g, song, w, h, Math.min(1, (titleEnd - t) / fade));
+    // Scrubbing past a selected clip must not leave its ending card over later shots.
+    else if (outroDuration > 0 && t >= range.start && toEnd >= 0 && toEnd < outroDuration) drawTitleCard(g, song, w, h, (outroDuration - toEnd) / Math.min(1.2, outroDuration / 2));
     return total;
 }

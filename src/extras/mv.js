@@ -893,6 +893,8 @@ export const TEGAKI_PRESETS = Object.freeze({
 
 export function tegakiOptions(record) {
     const value = record?.tegaki || {};
+    const introSeconds = value.introSeconds == null || value.introSeconds === '' ? NaN : Number(value.introSeconds);
+    const outroSeconds = value.outroSeconds == null || value.outroSeconds === '' ? NaN : Number(value.outroSeconds);
     return {
         range: Object.hasOwn(TEGAKI_RANGES, value.range) || value.range === 'custom' ? value.range : (record?.settings?.range || 'verseChorus'),
         rhythm: Object.hasOwn(TEGAKI_RHYTHMS, value.rhythm) ? value.rhythm : 'line',
@@ -900,6 +902,10 @@ export function tegakiOptions(record) {
         preset: Object.hasOwn(TEGAKI_PRESETS, value.preset) ? value.preset : '',
         template: ['quick', 'flash', 'slow'].includes(value.template) ? value.template : '',
         font: Object.hasOwn(TEGAKI_FONTS, value.font) ? value.font : 'sans',
+        introSeconds: Number.isFinite(introSeconds) && introSeconds >= 0 ? introSeconds : 2,
+        outroSeconds: Number.isFinite(outroSeconds) && outroSeconds >= 0 ? outroSeconds : 2.5,
+        showKeyword: value.showKeyword !== false,
+        showMotif: value.showMotif !== false,
         rangeFrom: Math.max(0, Math.round(Number(value.rangeFrom) || 0)),
         rangeTo: Math.max(0, Math.round(Number(value.rangeTo) || 0)),
     };
