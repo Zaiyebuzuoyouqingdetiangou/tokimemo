@@ -72,8 +72,13 @@ export function syncWorkspaceChrome() {
     if (target) { const badge = document.createElement('small'); badge.textContent = target; crumb.append(badge); }
 }
 export function workspaceNavHtml() {
+    const icons = {
+        settings: '<path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3"/><circle cx="15" cy="17" r="3"/>',
+        archive: '<path d="M5 4h14v16H5zM9 8h6M9 12h6M9 16h3"/>',
+        content: '<path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z"/>',
+    };
     return '<nav class="rmt-workspace-tabs" aria-label="心迹回廊主导航">' + [['settings','设置'],['archive','当前档案'],['content','内容']]
-        .map(([key,label]) => `<button type="button" data-rmt-workspace-tab="${key}">${label}</button>`).join('')
+        .map(([key,label]) => `<button type="button" data-rmt-workspace-tab="${key}"><svg class="rmt-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${icons[key]}</svg><span>${label}</span></button>`).join('')
         + '</nav><div class="rmt-workspace-location" hidden></div>';
 }
 export function openWorkspaceTab(tab) {
@@ -115,6 +120,14 @@ export function workspaceCatalogueHtml(portals = [], snapshot = null, { ready: a
     ui_workspaceState.loadWorkspacePreferences();
     const sessionMap = new Map(portals.map(item => [item.mode, item.session]));
     const canQueue = archiveReady && !snapshot;
+    // A shortcut to an existing reader, backed by the same scoped sessions as the cards.
+    const featured = Object.entries(ui_workspaceState.WORKSPACE_ROUTES).find(([key, spec]) =>
+        !spec.deep && !spec.manualOnly && spec.group === ui_workspaceState.workspace.group && routeHasContent(key, sessionMap.get(spec.mode)));
+    const featuredHtml = featured ? (() => {
+        const [key, spec] = featured;
+        const meta = { ...snapshots.modePortalMeta(spec.mode), ...(ALIAS_META[key] || {}) };
+        return `<section class="rmt-workspace-featured"><div><small>${esc(GROUPS.find(([group]) => group === spec.group)?.[1] || '内容')} · 已有内容</small><h3>${esc(spec.title)}</h3><p>${esc(meta.subtitle)}</p><button type="button" class="rmt-btn" data-rmt-workspace-route="${key}">打开${esc(spec.title)} <span aria-hidden="true">→</span></button></div><i class="fa-solid ${esc(meta.icon)}" aria-hidden="true"></i></section>`;
+    })() : '';
     const cards = Object.entries(ui_workspaceState.WORKSPACE_ROUTES).filter(([,spec]) => !spec.deep && spec.group === ui_workspaceState.workspace.group).map(([key,spec]) => {
         const meta = { ...snapshots.modePortalMeta(spec.mode), ...(ALIAS_META[key] || {}) };
         const session = sessionMap.get(spec.mode);
@@ -141,8 +154,8 @@ export function workspaceCatalogueHtml(portals = [], snapshot = null, { ready: a
             if (legacy.length) pendingBar += `<div class="rmt-queue-bar"><small>有 ${legacy.length} 条旧暂存记录缺少所属人物，已保留，不会显示为当前人物内容。</small><button type="button" class="rmt-btn" data-rmt-action="merged-export-legacy">导出旧暂存记录</button></div>`;
         } catch { pendingBar = '<div class="rmt-queue-bar" role="alert">暂存区读取失败，旧数据没有清空。<button type="button" class="rmt-btn" data-rmt-action="merged-export-legacy">导出旧暂存记录</button></div>'; }
     }
-    const queueBar = canQueue ? `<div class="rmt-queue-bar"><button type="button" class="rmt-btn" data-rmt-action="queue-selected">把勾选的项目排进任务中心</button><button type="button" class="rmt-btn" data-rmt-action="generate-together">一起生成</button><details class="rmt-together-help"><summary aria-label="一起生成说明">?</summary><p>同一请求可合并陈列柜、成就库、邮箱、印象曲和睡前故事。其他页面保留各自生成步骤，安排为独立请求。发送前可查看分组和预计请求数。</p></details></div>${pendingBar}` : '';
-    return `<section class="rmt-workspace-catalogue"><header class="rmt-workspace-section-head"><div><h2>内容</h2><p>选择你想看的那一页</p></div><div class="rmt-layout-switch" aria-label="目录显示方式">${[['cards','卡片'],['list','列表']].map(([k,t])=>`<button type="button" data-rmt-workspace-layout="${k}" aria-pressed="${ui_workspaceState.workspace.layout === k}" class="${ui_workspaceState.workspace.layout === k ? 'active' : ''}">${t}</button>`).join('')}</div></header><nav class="rmt-workspace-groups" aria-label="内容分组">${GROUPS.map(([k,t])=>`<button type="button" data-rmt-workspace-group="${k}" class="${ui_workspaceState.workspace.group === k ? 'active' : ''}" aria-current="${ui_workspaceState.workspace.group === k ? 'page' : 'false'}">${t}</button>`).join('')}</nav>${queueBar}<div class="rmt-archive-portals rmt-workspace-portals" data-rmt-layout="${ui_workspaceState.workspace.layout}">${cards}</div></section>`;
+    const queueBar = canQueue ? `<div class="rmt-queue-bar rmt-catalogue-queue"><button type="button" class="rmt-btn" data-rmt-action="queue-selected" title="把勾选的项目排进任务中心">加入任务队列</button><button type="button" class="rmt-btn" data-rmt-action="generate-together">一起生成</button><details class="rmt-together-help"><summary aria-label="一起生成说明">?</summary><p>同一请求可合并陈列柜、成就库、邮箱、印象曲和睡前故事。其他页面保留各自生成步骤，安排为独立请求。发送前可查看分组和预计请求数。</p></details></div>` : '';
+    return `<section class="rmt-workspace-catalogue"><header class="rmt-workspace-section-head"><div><h2>内容</h2><p>选择你想看的那一页</p></div><div class="rmt-layout-switch" aria-label="目录显示方式">${[['cards','卡片'],['list','列表']].map(([k,t])=>`<button type="button" data-rmt-workspace-layout="${k}" aria-pressed="${ui_workspaceState.workspace.layout === k}" class="${ui_workspaceState.workspace.layout === k ? 'active' : ''}">${t}</button>`).join('')}</div></header>${featuredHtml}<nav class="rmt-workspace-groups" aria-label="内容分组">${GROUPS.map(([k,t])=>`<button type="button" data-rmt-workspace-group="${k}" class="${ui_workspaceState.workspace.group === k ? 'active' : ''}" aria-current="${ui_workspaceState.workspace.group === k ? 'page' : 'false'}">${t}</button>`).join('')}</nav>${pendingBar}<div class="rmt-archive-portals rmt-workspace-portals" data-rmt-layout="${ui_workspaceState.workspace.layout}">${cards}</div>${queueBar}</section>`;
 }
 // Move existing validated markup, never replace the underlying archive or task objects.
 export function arrangeArchiveWorkspace(body, { portals = [], ready = false, snapshot = null } = {}) {

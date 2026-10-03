@@ -1,5 +1,5 @@
 const UPDATE_STATE = Symbol.for('heartbeatMemories.selfUpdate');
-export const INSTALLED_BUILD = '0.99.99-r84.187-mv-update-recovery';
+export const INSTALLED_BUILD = '1.0.11-r84.228-ui-refresh';
 const PROJECT_REMOTE = 'https://github.com/zaiyebuzuoyouqingdetiangou/tokimemo';
 function updateError(message) { const error = new Error(message); error.userMessage = message; return error; }
 

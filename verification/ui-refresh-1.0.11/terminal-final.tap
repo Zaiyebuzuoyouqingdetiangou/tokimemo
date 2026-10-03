@@ -1,0 +1,32 @@
+✔ ordinary ledger is retained even when provider labels it memory and uses no timing keywords (112.116795ms)
+✔ all ordinary app kinds accept persona content without memory quotes or new mandatory fields (95.046828ms)
+✔ the final phone normalizer does not turn a validated ledger back into source excerpts (99.819645ms)
+✔ actual joint history still needs evidence and is never downgraded into ordinary life (106.746313ms)
+✔ known contact can use name and a present note without a telephone or address (104.185094ms)
+✔ unknown contacts and invented private fields remain rejected (109.201301ms)
+✔ terminal prompt supplies contact identity and app-shaped records without UI disclaimers (96.965493ms)
+✔ old recap repair is offered without mutating or dropping saved rows (98.146532ms)
+✔ explicit repair requests only recap or missing slots and persists the successful replacement (107.553805ms)
+✔ repair errors and failed saves never mutate the previous session (105.447167ms)
+✔ historical chat and contact records are not rewritten by the ordinary app repair (97.559092ms)
+✔ app lists expose ledger fields and named contact cards, escaping model text (102.670322ms)
+✔ legacy recap labels are absent in list and detail while source data remains unchanged (103.638647ms)
+✔ empty app has a working generation action and read-only app has no paid action (107.907522ms)
+✔ new expression direction is available manually, recommended by fit, and does not force unrelated songs (109.492711ms)
+✔ expression storyboard uses the existing one-request schema, saves type, and reuses assets (113.703397ms)
+✔ expression selector remains reachable for existing storyboards without requesting generation (125.259505ms)
+✔ MV shortcut is above composer, song list and cover, keeps the selected song ID and sends no requests (111.513722ms)
+✔ MV shortcut stays hidden for incomplete, absent or read-only songs (113.803635ms)
+✔ a completely empty legacy app can be filled instead of exposing a no-op button (116.969243ms)
+✔ unusable replacement is not presented as a completed recap repair (113.09067ms)
+✔ saved terminal directory continuation preserves completed apps and requests the pending app only (115.339535ms)
+✔ one bad contact never hides a valid sibling, and malformed optional fields do not throw a TypeError (115.128804ms)
+✔ new top MV button opens the selected song through the existing event handler without generating (121.121806ms)
+ℹ tests 24
+ℹ suites 0
+ℹ pass 24
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2612.293082

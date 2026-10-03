@@ -32,7 +32,7 @@ export function setWorkspacePreference(key, value) {
 export function leaveWorkspaceReader() { workspace.epoch++; workspace.empty = null; workspace.route = ''; }
 export const WORKSPACE_ROUTES = Object.freeze({
     album: { mode: 'album', title: '回忆相簿', group: 'memory' },
-    adv: { mode: 'adv', title: 'ADV EVENT', group: 'memory' },
+    adv: { mode: 'adv', title: '剧情回放', group: 'memory' },
     cabinet: { mode: 'cabinet', title: '两个人的陈列柜', group: 'memory' },
     collection: { mode: 'collection', title: '回忆收集率', group: 'memory', manualOnly: true },
     room: { mode: 'room', title: '他的房间', group: 'life' },
@@ -50,7 +50,7 @@ export const WORKSPACE_ROUTES = Object.freeze({
     relations: { mode: 'relations', title: '人际庭园', group: 'interaction' },
     achievements: { mode: 'achievements', title: '成就库', group: 'interaction' },
     mirrorCall: { mode:'mirrorCall', title:'想和现在的 TA 聊天吗？', group:'interaction', manualOnly:true },
-    ending: { mode: 'ending', title: 'ENDING', group: 'stories' },
+    ending: { mode: 'ending', title: '结局', group: 'stories' },
     postending: { mode: 'heart', title: '未来 / 后日谈', group: 'stories', view: 'seasons', season: 'postending' },
     butterfly: { mode: 'butterfly', title: '蝴蝶效应', group: 'stories' },
     pastLives: { mode: 'pastLives', title: '前世今生', group: 'stories' },

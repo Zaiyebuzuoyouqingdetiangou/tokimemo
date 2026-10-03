@@ -1,0 +1,24 @@
+✔ saving an MV prompt returns to its picture without changing images or generating (125.657184ms)
+✔ toolbar returns from material editor to the same picture and leaves unsaved prompt unchanged (101.587689ms)
+✔ same-page image completion rerenders keep the current scroll position (96.903892ms)
+✔ preview and timing return one level at a time, restoring each parent position (108.312832ms)
+✔ page-local return works through the overlay click dispatcher without exiting to interactions (109.560651ms)
+✔ old editor callbacks cannot restore the previous song page after leaving and reopening (110.239089ms)
+✔ picture anchor, expanded inspection and horizontal thumbnails survive changed layout (104.809618ms)
+✔ completed timing navigation does not make a preview/timing back loop (106.40885ms)
+✔ preserving page state never reverses an explicit inspection expand/collapse click (110.928012ms)
+✔ closed editor callbacks cannot dismiss a newer editor in the same song (105.00286ms)
+✔ rapid repeated edit clicks still return once to the original picture (114.28216ms)
+✔ the first successful storyboard becomes the root instead of returning to the generate wizard (115.282305ms)
+✔ pending save keeps the editor open and still allows returning without losing the original picture (113.265051ms)
+✔ album thumbnails have no rabbit menu but retain memory and detail image actions (122.578944ms)
+✔ album detail has a local return and toolbar returns to the scrolled album (133.961162ms)
+✔ read-only album hides write actions and a different album cannot inherit the return position (136.698553ms)
+ℹ tests 16
+ℹ suites 0
+ℹ pass 16
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1823.683216

@@ -1,0 +1,1169 @@
+{
+  "layouts": [
+    {
+      "width": 320,
+      "theme": "default",
+      "route": "settings",
+      "text": "设置\n\n角色 · 连接、主题与生成参数\n\n↻\n自动留忆\n和这个角色的回忆 · 向导与间隔\nVOICE\n镜译 · 语音设置\n连接与朗读音色\nAPI\n独立 API\n一键配置 · 手动配置\nREAD\n聊天读取范围\n按原始楼号选择 · 不改旧档案\nCG\nCG 生图\n相簿 · ADV · 日常一格\nUI\n界面",
+      "body": {
+        "x": 0,
+        "y": 61,
+        "w": 320,
+        "h": 773,
+        "bottom": 834
+      },
+      "nav": {
+        "x": 0,
+        "y": 834,
+        "w": 320,
+        "h": 66,
+        "bottom": 900
+      },
+      "client": 320,
+      "scroll": 320,
+      "visible": true,
+      "controls": 46
+    },
+    {
+      "width": 320,
+      "theme": "default",
+      "route": "content",
+      "text": "内容\n\n选择你想看的那一页\n\n卡片\n列表\n回忆 · 已有内容\n回忆相簿\n\n共同回忆与 CG 收藏\n\n打开回忆相簿\n→\n回忆\n生活\n互动\n番外\n回忆相簿\n共同回忆与 CG 收藏\n已有 4 项内容\n剧情回放\n重要事件与长篇回放\n尚未生成 · 可先进入\n两个人的陈列柜\n真实记忆中的共同物件\n尚未生成 · ",
+      "body": {
+        "x": 0,
+        "y": 61,
+        "w": 320,
+        "h": 773,
+        "bottom": 834
+      },
+      "nav": {
+        "x": 0,
+        "y": 834,
+        "w": 320,
+        "h": 66,
+        "bottom": 900
+      },
+      "client": 320,
+      "scroll": 320,
+      "visible": true,
+      "controls": 13
+    },
+    {
+      "width": 320,
+      "theme": "default",
+      "route": "archive",
+      "text": "当前档案\n增量更新当前窗口档案\n更新一直提示“历史基线不一致”？\n导出档案文件\n把记忆和全部生成内容存成一个文件；建检查点、复制聊天或折腾数据库前建议先导出。\n记忆来源\n\n聊天正文是建档来源；记忆 / 摘要为可选补充。\n\n读取外部记忆 / 摘要\n扫描记忆 / 摘要\n选择记忆世界书\n当前没有检测到可读",
+      "body": {
+        "x": 0,
+        "y": 61,
+        "w": 320,
+        "h": 773,
+        "bottom": 834
+      },
+      "nav": {
+        "x": 0,
+        "y": 834,
+        "w": 320,
+        "h": 66,
+        "bottom": 900
+      },
+      "client": 320,
+      "scroll": 320,
+      "visible": true,
+      "controls": 13
+    },
+    {
+      "width": 320,
+      "theme": "default",
+      "route": "themeSong",
+      "text": "♫\n角色印象曲\n\n已收录 2 首\n\n生成歌曲文本与编曲说明，不生成音频。\n\n阅读模式\n创作格式\n做成 MV\n创作方向\n♪\n雨后\n角色\n♪\n故事的回声\n角色\n角色印象曲 · 角色\n故事的回声\n\n演唱者 · 角色\n\n作者 · 未署名（原创生成）\n\n曲风与人声\n主歌 1\n\n雨落以后，灯还亮着\n你在街口，回",
+      "body": {
+        "x": 0,
+        "y": 98,
+        "w": 320,
+        "h": 736,
+        "bottom": 834
+      },
+      "nav": {
+        "x": 0,
+        "y": 834,
+        "w": 320,
+        "h": 66,
+        "bottom": 900
+      },
+      "client": 320,
+      "scroll": 320,
+      "visible": true,
+      "controls": 12
+    },
+    {
+      "width": 320,
+      "theme": "default",
+      "route": "album",
+      "text": "生图提示词格式\nNAI 4.5 · 英文 Tag\nNAI 5 · 自然语言\n只选提示词写法；实际生图模型仍在生图插件中选择。\n已解锁 4 / 总数 4\n全部\n日常\n约会\n私密\n结局\n待分类\nCG 实图\n未检测到柏宝绘公开 API v1。若已安装柏宝绘，请更新到支持公开接口的版本，启用后刷新页面；刚完",
+      "body": {
+        "x": 0,
+        "y": 98,
+        "w": 320,
+        "h": 736,
+        "bottom": 834
+      },
+      "nav": {
+        "x": 0,
+        "y": 834,
+        "w": 320,
+        "h": 66,
+        "bottom": 900
+      },
+      "client": 320,
+      "scroll": 320,
+      "visible": true,
+      "controls": 13
+    },
+    {
+      "width": 320,
+      "theme": "default",
+      "route": "songMv",
+      "text": "故事的回声 · 手书\n构图卡片\n\n按歌曲安排关键画面，需要时复用素材或追加差分。\n\n从封面取色\n片头片尾\n用封面\n做哪一段\n第一段副歌\n一段主歌 + 副歌\n整首\n自己选\n\n这次做：主歌 1 → 尾奏 · 3 段 · 约 5 句歌词。手书通常只做一段，镜头少、节奏紧。\n\n所选范围已有分镜；想继续后面的",
+      "body": {
+        "x": 0,
+        "y": 98,
+        "w": 320,
+        "h": 736,
+        "bottom": 834
+      },
+      "nav": {
+        "x": 0,
+        "y": 834,
+        "w": 320,
+        "h": 66,
+        "bottom": 900
+      },
+      "client": 320,
+      "scroll": 320,
+      "visible": true,
+      "controls": 59
+    },
+    {
+      "width": 320,
+      "theme": "night",
+      "route": "settings",
+      "text": "设置\n\n角色 · 连接、主题与生成参数\n\n↻\n自动留忆\n和这个角色的回忆 · 向导与间隔\nVOICE\n镜译 · 语音设置\n连接与朗读音色\nAPI\n独立 API\n一键配置 · 手动配置\nREAD\n聊天读取范围\n按原始楼号选择 · 不改旧档案\nCG\nCG 生图\n相簿 · ADV · 日常一格\nUI\n界面",
+      "body": {
+        "x": 0,
+        "y": 61,
+        "w": 320,
+        "h": 773,
+        "bottom": 834
+      },
+      "nav": {
+        "x": 0,
+        "y": 834,
+        "w": 320,
+        "h": 66,
+        "bottom": 900
+      },
+      "client": 320,
+      "scroll": 320,
+      "visible": true,
+      "controls": 46
+    },
+    {
+      "width": 320,
+      "theme": "night",
+      "route": "content",
+      "text": "内容\n\n选择你想看的那一页\n\n卡片\n列表\n回忆 · 已有内容\n回忆相簿\n\n共同回忆与 CG 收藏\n\n打开回忆相簿\n→\n回忆\n生活\n互动\n番外\n回忆相簿\n共同回忆与 CG 收藏\n已有 4 项内容\n剧情回放\n重要事件与长篇回放\n尚未生成 · 可先进入\n两个人的陈列柜\n真实记忆中的共同物件\n尚未生成 · ",
+      "body": {
+        "x": 0,
+        "y": 61,
+        "w": 320,
+        "h": 773,
+        "bottom": 834
+      },
+      "nav": {
+        "x": 0,
+        "y": 834,
+        "w": 320,
+        "h": 66,
+        "bottom": 900
+      },
+      "client": 320,
+      "scroll": 320,
+      "visible": true,
+      "controls": 13
+    },
+    {
+      "width": 320,
+      "theme": "night",
+      "route": "archive",
+      "text": "当前档案\n增量更新当前窗口档案\n更新一直提示“历史基线不一致”？\n导出档案文件\n把记忆和全部生成内容存成一个文件；建检查点、复制聊天或折腾数据库前建议先导出。\n记忆来源\n\n聊天正文是建档来源；记忆 / 摘要为可选补充。\n\n读取外部记忆 / 摘要\n扫描记忆 / 摘要\n选择记忆世界书\n当前没有检测到可读",
+      "body": {
+        "x": 0,
+        "y": 61,
+        "w": 320,
+        "h": 773,
+        "bottom": 834
+      },
+      "nav": {
+        "x": 0,
+        "y": 834,
+        "w": 320,
+        "h": 66,
+        "bottom": 900
+      },
+      "client": 320,
+      "scroll": 320,
+      "visible": true,
+      "controls": 13
+    },
+    {
+      "width": 320,
+      "theme": "night",
+      "route": "themeSong",
+      "text": "♫\n角色印象曲\n\n已收录 2 首\n\n生成歌曲文本与编曲说明，不生成音频。\n\n阅读模式\n创作格式\n做成 MV\n创作方向\n♪\n雨后\n角色\n♪\n故事的回声\n角色\n角色印象曲 · 角色\n故事的回声\n\n演唱者 · 角色\n\n作者 · 未署名（原创生成）\n\n曲风与人声\n主歌 1\n\n雨落以后，灯还亮着\n你在街口，回",
+      "body": {
+        "x": 0,
+        "y": 98,
+        "w": 320,
+        "h": 736,
+        "bottom": 834
+      },
+      "nav": {
+        "x": 0,
+        "y": 834,
+        "w": 320,
+        "h": 66,
+        "bottom": 900
+      },
+      "client": 320,
+      "scroll": 320,
+      "visible": true,
+      "controls": 12
+    },
+    {
+      "width": 320,
+      "theme": "night",
+      "route": "album",
+      "text": "生图提示词格式\nNAI 4.5 · 英文 Tag\nNAI 5 · 自然语言\n只选提示词写法；实际生图模型仍在生图插件中选择。\n已解锁 4 / 总数 4\n全部\n日常\n约会\n私密\n结局\n待分类\nCG 实图\n未检测到柏宝绘公开 API v1。若已安装柏宝绘，请更新到支持公开接口的版本，启用后刷新页面；刚完",
+      "body": {
+        "x": 0,
+        "y": 98,
+        "w": 320,
+        "h": 736,
+        "bottom": 834
+      },
+      "nav": {
+        "x": 0,
+        "y": 834,
+        "w": 320,
+        "h": 66,
+        "bottom": 900
+      },
+      "client": 320,
+      "scroll": 320,
+      "visible": true,
+      "controls": 13
+    },
+    {
+      "width": 320,
+      "theme": "night",
+      "route": "songMv",
+      "text": "故事的回声 · 手书\n构图卡片\n\n按歌曲安排关键画面，需要时复用素材或追加差分。\n\n从封面取色\n片头片尾\n用封面\n做哪一段\n第一段副歌\n一段主歌 + 副歌\n整首\n自己选\n\n这次做：主歌 1 → 尾奏 · 3 段 · 约 5 句歌词。手书通常只做一段，镜头少、节奏紧。\n\n所选范围已有分镜；想继续后面的",
+      "body": {
+        "x": 0,
+        "y": 98,
+        "w": 320,
+        "h": 736,
+        "bottom": 834
+      },
+      "nav": {
+        "x": 0,
+        "y": 834,
+        "w": 320,
+        "h": 66,
+        "bottom": 900
+      },
+      "client": 320,
+      "scroll": 320,
+      "visible": true,
+      "controls": 59
+    },
+    {
+      "width": 390,
+      "theme": "default",
+      "route": "settings",
+      "text": "设置\n\n角色 · 连接、主题与生成参数\n\n↻\n自动留忆\n和这个角色的回忆 · 向导与间隔\nVOICE\n镜译 · 语音设置\n连接与朗读音色\nAPI\n独立 API\n一键配置 · 手动配置\nREAD\n聊天读取范围\n按原始楼号选择 · 不改旧档案\nCG\nCG 生图\n相簿 · ADV · 日常一格\nUI\n界面",
+      "body": {
+        "x": 0,
+        "y": 61,
+        "w": 390,
+        "h": 773,
+        "bottom": 834
+      },
+      "nav": {
+        "x": 0,
+        "y": 834,
+        "w": 390,
+        "h": 66,
+        "bottom": 900
+      },
+      "client": 390,
+      "scroll": 390,
+      "visible": true,
+      "controls": 46
+    },
+    {
+      "width": 390,
+      "theme": "default",
+      "route": "content",
+      "text": "内容\n\n选择你想看的那一页\n\n卡片\n列表\n回忆 · 已有内容\n回忆相簿\n\n共同回忆与 CG 收藏\n\n打开回忆相簿\n→\n回忆\n生活\n互动\n番外\n回忆相簿\n共同回忆与 CG 收藏\n已有 4 项内容\n剧情回放\n重要事件与长篇回放\n尚未生成 · 可先进入\n两个人的陈列柜\n真实记忆中的共同物件\n尚未生成 · ",
+      "body": {
+        "x": 0,
+        "y": 61,
+        "w": 390,
+        "h": 773,
+        "bottom": 834
+      },
+      "nav": {
+        "x": 0,
+        "y": 834,
+        "w": 390,
+        "h": 66,
+        "bottom": 900
+      },
+      "client": 390,
+      "scroll": 390,
+      "visible": true,
+      "controls": 13
+    },
+    {
+      "width": 390,
+      "theme": "default",
+      "route": "archive",
+      "text": "当前档案\n增量更新当前窗口档案\n更新一直提示“历史基线不一致”？\n导出档案文件\n把记忆和全部生成内容存成一个文件；建检查点、复制聊天或折腾数据库前建议先导出。\n记忆来源\n\n聊天正文是建档来源；记忆 / 摘要为可选补充。\n\n读取外部记忆 / 摘要\n扫描记忆 / 摘要\n选择记忆世界书\n当前没有检测到可读",
+      "body": {
+        "x": 0,
+        "y": 61,
+        "w": 390,
+        "h": 773,
+        "bottom": 834
+      },
+      "nav": {
+        "x": 0,
+        "y": 834,
+        "w": 390,
+        "h": 66,
+        "bottom": 900
+      },
+      "client": 390,
+      "scroll": 390,
+      "visible": true,
+      "controls": 13
+    },
+    {
+      "width": 390,
+      "theme": "default",
+      "route": "themeSong",
+      "text": "♫\n角色印象曲\n\n已收录 2 首\n\n生成歌曲文本与编曲说明，不生成音频。\n\n阅读模式\n创作格式\n做成 MV\n创作方向\n♪\n雨后\n角色\n♪\n故事的回声\n角色\n角色印象曲 · 角色\n故事的回声\n\n演唱者 · 角色\n\n作者 · 未署名（原创生成）\n\n曲风与人声\n主歌 1\n\n雨落以后，灯还亮着\n你在街口，回",
+      "body": {
+        "x": 0,
+        "y": 98,
+        "w": 390,
+        "h": 736,
+        "bottom": 834
+      },
+      "nav": {
+        "x": 0,
+        "y": 834,
+        "w": 390,
+        "h": 66,
+        "bottom": 900
+      },
+      "client": 390,
+      "scroll": 390,
+      "visible": true,
+      "controls": 12
+    },
+    {
+      "width": 390,
+      "theme": "default",
+      "route": "album",
+      "text": "生图提示词格式\nNAI 4.5 · 英文 Tag\nNAI 5 · 自然语言\n只选提示词写法；实际生图模型仍在生图插件中选择。\n已解锁 4 / 总数 4\n全部\n日常\n约会\n私密\n结局\n待分类\nCG 实图\n未检测到柏宝绘公开 API v1。若已安装柏宝绘，请更新到支持公开接口的版本，启用后刷新页面；刚完",
+      "body": {
+        "x": 0,
+        "y": 98,
+        "w": 390,
+        "h": 736,
+        "bottom": 834
+      },
+      "nav": {
+        "x": 0,
+        "y": 834,
+        "w": 390,
+        "h": 66,
+        "bottom": 900
+      },
+      "client": 390,
+      "scroll": 390,
+      "visible": true,
+      "controls": 13
+    },
+    {
+      "width": 390,
+      "theme": "default",
+      "route": "songMv",
+      "text": "故事的回声 · 手书\n构图卡片\n\n按歌曲安排关键画面，需要时复用素材或追加差分。\n\n从封面取色\n片头片尾\n用封面\n做哪一段\n第一段副歌\n一段主歌 + 副歌\n整首\n自己选\n\n这次做：主歌 1 → 尾奏 · 3 段 · 约 5 句歌词。手书通常只做一段，镜头少、节奏紧。\n\n所选范围已有分镜；想继续后面的",
+      "body": {
+        "x": 0,
+        "y": 98,
+        "w": 390,
+        "h": 736,
+        "bottom": 834
+      },
+      "nav": {
+        "x": 0,
+        "y": 834,
+        "w": 390,
+        "h": 66,
+        "bottom": 900
+      },
+      "client": 390,
+      "scroll": 390,
+      "visible": true,
+      "controls": 59
+    },
+    {
+      "width": 390,
+      "theme": "night",
+      "route": "settings",
+      "text": "设置\n\n角色 · 连接、主题与生成参数\n\n↻\n自动留忆\n和这个角色的回忆 · 向导与间隔\nVOICE\n镜译 · 语音设置\n连接与朗读音色\nAPI\n独立 API\n一键配置 · 手动配置\nREAD\n聊天读取范围\n按原始楼号选择 · 不改旧档案\nCG\nCG 生图\n相簿 · ADV · 日常一格\nUI\n界面",
+      "body": {
+        "x": 0,
+        "y": 61,
+        "w": 390,
+        "h": 773,
+        "bottom": 834
+      },
+      "nav": {
+        "x": 0,
+        "y": 834,
+        "w": 390,
+        "h": 66,
+        "bottom": 900
+      },
+      "client": 390,
+      "scroll": 390,
+      "visible": true,
+      "controls": 46
+    },
+    {
+      "width": 390,
+      "theme": "night",
+      "route": "content",
+      "text": "内容\n\n选择你想看的那一页\n\n卡片\n列表\n回忆 · 已有内容\n回忆相簿\n\n共同回忆与 CG 收藏\n\n打开回忆相簿\n→\n回忆\n生活\n互动\n番外\n回忆相簿\n共同回忆与 CG 收藏\n已有 4 项内容\n剧情回放\n重要事件与长篇回放\n尚未生成 · 可先进入\n两个人的陈列柜\n真实记忆中的共同物件\n尚未生成 · ",
+      "body": {
+        "x": 0,
+        "y": 61,
+        "w": 390,
+        "h": 773,
+        "bottom": 834
+      },
+      "nav": {
+        "x": 0,
+        "y": 834,
+        "w": 390,
+        "h": 66,
+        "bottom": 900
+      },
+      "client": 390,
+      "scroll": 390,
+      "visible": true,
+      "controls": 13
+    },
+    {
+      "width": 390,
+      "theme": "night",
+      "route": "archive",
+      "text": "当前档案\n增量更新当前窗口档案\n更新一直提示“历史基线不一致”？\n导出档案文件\n把记忆和全部生成内容存成一个文件；建检查点、复制聊天或折腾数据库前建议先导出。\n记忆来源\n\n聊天正文是建档来源；记忆 / 摘要为可选补充。\n\n读取外部记忆 / 摘要\n扫描记忆 / 摘要\n选择记忆世界书\n当前没有检测到可读",
+      "body": {
+        "x": 0,
+        "y": 61,
+        "w": 390,
+        "h": 773,
+        "bottom": 834
+      },
+      "nav": {
+        "x": 0,
+        "y": 834,
+        "w": 390,
+        "h": 66,
+        "bottom": 900
+      },
+      "client": 390,
+      "scroll": 390,
+      "visible": true,
+      "controls": 13
+    },
+    {
+      "width": 390,
+      "theme": "night",
+      "route": "themeSong",
+      "text": "♫\n角色印象曲\n\n已收录 2 首\n\n生成歌曲文本与编曲说明，不生成音频。\n\n阅读模式\n创作格式\n做成 MV\n创作方向\n♪\n雨后\n角色\n♪\n故事的回声\n角色\n角色印象曲 · 角色\n故事的回声\n\n演唱者 · 角色\n\n作者 · 未署名（原创生成）\n\n曲风与人声\n主歌 1\n\n雨落以后，灯还亮着\n你在街口，回",
+      "body": {
+        "x": 0,
+        "y": 98,
+        "w": 390,
+        "h": 736,
+        "bottom": 834
+      },
+      "nav": {
+        "x": 0,
+        "y": 834,
+        "w": 390,
+        "h": 66,
+        "bottom": 900
+      },
+      "client": 390,
+      "scroll": 390,
+      "visible": true,
+      "controls": 12
+    },
+    {
+      "width": 390,
+      "theme": "night",
+      "route": "album",
+      "text": "生图提示词格式\nNAI 4.5 · 英文 Tag\nNAI 5 · 自然语言\n只选提示词写法；实际生图模型仍在生图插件中选择。\n已解锁 4 / 总数 4\n全部\n日常\n约会\n私密\n结局\n待分类\nCG 实图\n未检测到柏宝绘公开 API v1。若已安装柏宝绘，请更新到支持公开接口的版本，启用后刷新页面；刚完",
+      "body": {
+        "x": 0,
+        "y": 98,
+        "w": 390,
+        "h": 736,
+        "bottom": 834
+      },
+      "nav": {
+        "x": 0,
+        "y": 834,
+        "w": 390,
+        "h": 66,
+        "bottom": 900
+      },
+      "client": 390,
+      "scroll": 390,
+      "visible": true,
+      "controls": 13
+    },
+    {
+      "width": 390,
+      "theme": "night",
+      "route": "songMv",
+      "text": "故事的回声 · 手书\n构图卡片\n\n按歌曲安排关键画面，需要时复用素材或追加差分。\n\n从封面取色\n片头片尾\n用封面\n做哪一段\n第一段副歌\n一段主歌 + 副歌\n整首\n自己选\n\n这次做：主歌 1 → 尾奏 · 3 段 · 约 5 句歌词。手书通常只做一段，镜头少、节奏紧。\n\n所选范围已有分镜；想继续后面的",
+      "body": {
+        "x": 0,
+        "y": 98,
+        "w": 390,
+        "h": 736,
+        "bottom": 834
+      },
+      "nav": {
+        "x": 0,
+        "y": 834,
+        "w": 390,
+        "h": 66,
+        "bottom": 900
+      },
+      "client": 390,
+      "scroll": 390,
+      "visible": true,
+      "controls": 59
+    },
+    {
+      "width": 768,
+      "theme": "default",
+      "route": "settings",
+      "text": "设置\n\n角色 · 连接、主题与生成参数\n\n↻\n自动留忆\n和这个角色的回忆 · 向导与间隔\nVOICE\n镜译 · 语音设置\n连接与朗读音色\nAPI\n独立 API\n一键配置 · 手动配置\nREAD\n聊天读取范围\n按原始楼号选择 · 不改旧档案\nCG\nCG 生图\n相簿 · ADV · 日常一格\nUI\n界面",
+      "body": {
+        "x": 25,
+        "y": 163,
+        "w": 718,
+        "h": 691,
+        "bottom": 854
+      },
+      "nav": {
+        "x": 25,
+        "y": 110,
+        "w": 718,
+        "h": 53,
+        "bottom": 163
+      },
+      "client": 703,
+      "scroll": 703,
+      "visible": true,
+      "controls": 46
+    },
+    {
+      "width": 768,
+      "theme": "default",
+      "route": "content",
+      "text": "内容\n\n选择你想看的那一页\n\n卡片\n列表\n回忆 · 已有内容\n回忆相簿\n\n共同回忆与 CG 收藏\n\n打开回忆相簿\n→\n回忆\n生活\n互动\n番外\n回忆相簿\n共同回忆与 CG 收藏\n已有 4 项内容\n剧情回放\n重要事件与长篇回放\n尚未生成 · 可先进入\n两个人的陈列柜\n真实记忆中的共同物件\n尚未生成 · ",
+      "body": {
+        "x": 25,
+        "y": 163,
+        "w": 718,
+        "h": 691,
+        "bottom": 854
+      },
+      "nav": {
+        "x": 25,
+        "y": 110,
+        "w": 718,
+        "h": 53,
+        "bottom": 163
+      },
+      "client": 703,
+      "scroll": 703,
+      "visible": true,
+      "controls": 13
+    },
+    {
+      "width": 768,
+      "theme": "default",
+      "route": "archive",
+      "text": "当前档案\n增量更新当前窗口档案\n更新一直提示“历史基线不一致”？\n导出档案文件\n把记忆和全部生成内容存成一个文件；建检查点、复制聊天或折腾数据库前建议先导出。\n记忆来源\n\n聊天正文是建档来源；记忆 / 摘要为可选补充。\n\n读取外部记忆 / 摘要\n扫描记忆 / 摘要\n选择记忆世界书\n当前没有检测到可读",
+      "body": {
+        "x": 25,
+        "y": 163,
+        "w": 718,
+        "h": 691,
+        "bottom": 854
+      },
+      "nav": {
+        "x": 25,
+        "y": 110,
+        "w": 718,
+        "h": 53,
+        "bottom": 163
+      },
+      "client": 703,
+      "scroll": 703,
+      "visible": true,
+      "controls": 13
+    },
+    {
+      "width": 768,
+      "theme": "default",
+      "route": "themeSong",
+      "text": "♫\n角色印象曲\n\n已收录 2 首\n\n生成歌曲文本与编曲说明，不生成音频。\n\n阅读模式\n创作格式\n做成 MV\n创作方向\n♪\n雨后\n角色\n♪\n故事的回声\n角色\n角色印象曲 · 角色\n故事的回声\n\n演唱者 · 角色\n\n作者 · 未署名（原创生成）\n\n曲风与人声\n主歌 1\n\n雨落以后，灯还亮着\n你在街口，回",
+      "body": {
+        "x": 25,
+        "y": 202,
+        "w": 718,
+        "h": 652,
+        "bottom": 854
+      },
+      "nav": {
+        "x": 25,
+        "y": 110,
+        "w": 718,
+        "h": 53,
+        "bottom": 163
+      },
+      "client": 703,
+      "scroll": 703,
+      "visible": true,
+      "controls": 12
+    },
+    {
+      "width": 768,
+      "theme": "default",
+      "route": "album",
+      "text": "生图提示词格式\nNAI 4.5 · 英文 Tag\nNAI 5 · 自然语言\n只选提示词写法；实际生图模型仍在生图插件中选择。\n已解锁 4 / 总数 4\n全部\n日常\n约会\n私密\n结局\n待分类\nCG 实图\n未检测到柏宝绘公开 API v1。若已安装柏宝绘，请更新到支持公开接口的版本，启用后刷新页面；刚完",
+      "body": {
+        "x": 25,
+        "y": 202,
+        "w": 718,
+        "h": 652,
+        "bottom": 854
+      },
+      "nav": {
+        "x": 25,
+        "y": 110,
+        "w": 718,
+        "h": 53,
+        "bottom": 163
+      },
+      "client": 703,
+      "scroll": 703,
+      "visible": true,
+      "controls": 13
+    },
+    {
+      "width": 768,
+      "theme": "default",
+      "route": "songMv",
+      "text": "故事的回声 · 手书\n构图卡片\n\n按歌曲安排关键画面，需要时复用素材或追加差分。\n\n从封面取色\n片头片尾\n用封面\n做哪一段\n第一段副歌\n一段主歌 + 副歌\n整首\n自己选\n\n这次做：主歌 1 → 尾奏 · 3 段 · 约 5 句歌词。手书通常只做一段，镜头少、节奏紧。\n\n所选范围已有分镜；想继续后面的",
+      "body": {
+        "x": 25,
+        "y": 202,
+        "w": 718,
+        "h": 652,
+        "bottom": 854
+      },
+      "nav": {
+        "x": 25,
+        "y": 110,
+        "w": 718,
+        "h": 53,
+        "bottom": 163
+      },
+      "client": 703,
+      "scroll": 703,
+      "visible": true,
+      "controls": 59
+    },
+    {
+      "width": 768,
+      "theme": "night",
+      "route": "settings",
+      "text": "设置\n\n角色 · 连接、主题与生成参数\n\n↻\n自动留忆\n和这个角色的回忆 · 向导与间隔\nVOICE\n镜译 · 语音设置\n连接与朗读音色\nAPI\n独立 API\n一键配置 · 手动配置\nREAD\n聊天读取范围\n按原始楼号选择 · 不改旧档案\nCG\nCG 生图\n相簿 · ADV · 日常一格\nUI\n界面",
+      "body": {
+        "x": 25,
+        "y": 163,
+        "w": 718,
+        "h": 691,
+        "bottom": 854
+      },
+      "nav": {
+        "x": 25,
+        "y": 110,
+        "w": 718,
+        "h": 53,
+        "bottom": 163
+      },
+      "client": 703,
+      "scroll": 703,
+      "visible": true,
+      "controls": 46
+    },
+    {
+      "width": 768,
+      "theme": "night",
+      "route": "content",
+      "text": "内容\n\n选择你想看的那一页\n\n卡片\n列表\n回忆 · 已有内容\n回忆相簿\n\n共同回忆与 CG 收藏\n\n打开回忆相簿\n→\n回忆\n生活\n互动\n番外\n回忆相簿\n共同回忆与 CG 收藏\n已有 4 项内容\n剧情回放\n重要事件与长篇回放\n尚未生成 · 可先进入\n两个人的陈列柜\n真实记忆中的共同物件\n尚未生成 · ",
+      "body": {
+        "x": 25,
+        "y": 163,
+        "w": 718,
+        "h": 691,
+        "bottom": 854
+      },
+      "nav": {
+        "x": 25,
+        "y": 110,
+        "w": 718,
+        "h": 53,
+        "bottom": 163
+      },
+      "client": 703,
+      "scroll": 703,
+      "visible": true,
+      "controls": 13
+    },
+    {
+      "width": 768,
+      "theme": "night",
+      "route": "archive",
+      "text": "当前档案\n增量更新当前窗口档案\n更新一直提示“历史基线不一致”？\n导出档案文件\n把记忆和全部生成内容存成一个文件；建检查点、复制聊天或折腾数据库前建议先导出。\n记忆来源\n\n聊天正文是建档来源；记忆 / 摘要为可选补充。\n\n读取外部记忆 / 摘要\n扫描记忆 / 摘要\n选择记忆世界书\n当前没有检测到可读",
+      "body": {
+        "x": 25,
+        "y": 163,
+        "w": 718,
+        "h": 691,
+        "bottom": 854
+      },
+      "nav": {
+        "x": 25,
+        "y": 110,
+        "w": 718,
+        "h": 53,
+        "bottom": 163
+      },
+      "client": 703,
+      "scroll": 703,
+      "visible": true,
+      "controls": 13
+    },
+    {
+      "width": 768,
+      "theme": "night",
+      "route": "themeSong",
+      "text": "♫\n角色印象曲\n\n已收录 2 首\n\n生成歌曲文本与编曲说明，不生成音频。\n\n阅读模式\n创作格式\n做成 MV\n创作方向\n♪\n雨后\n角色\n♪\n故事的回声\n角色\n角色印象曲 · 角色\n故事的回声\n\n演唱者 · 角色\n\n作者 · 未署名（原创生成）\n\n曲风与人声\n主歌 1\n\n雨落以后，灯还亮着\n你在街口，回",
+      "body": {
+        "x": 25,
+        "y": 202,
+        "w": 718,
+        "h": 652,
+        "bottom": 854
+      },
+      "nav": {
+        "x": 25,
+        "y": 110,
+        "w": 718,
+        "h": 53,
+        "bottom": 163
+      },
+      "client": 703,
+      "scroll": 703,
+      "visible": true,
+      "controls": 12
+    },
+    {
+      "width": 768,
+      "theme": "night",
+      "route": "album",
+      "text": "生图提示词格式\nNAI 4.5 · 英文 Tag\nNAI 5 · 自然语言\n只选提示词写法；实际生图模型仍在生图插件中选择。\n已解锁 4 / 总数 4\n全部\n日常\n约会\n私密\n结局\n待分类\nCG 实图\n未检测到柏宝绘公开 API v1。若已安装柏宝绘，请更新到支持公开接口的版本，启用后刷新页面；刚完",
+      "body": {
+        "x": 25,
+        "y": 202,
+        "w": 718,
+        "h": 652,
+        "bottom": 854
+      },
+      "nav": {
+        "x": 25,
+        "y": 110,
+        "w": 718,
+        "h": 53,
+        "bottom": 163
+      },
+      "client": 703,
+      "scroll": 703,
+      "visible": true,
+      "controls": 13
+    },
+    {
+      "width": 768,
+      "theme": "night",
+      "route": "songMv",
+      "text": "故事的回声 · 手书\n构图卡片\n\n按歌曲安排关键画面，需要时复用素材或追加差分。\n\n从封面取色\n片头片尾\n用封面\n做哪一段\n第一段副歌\n一段主歌 + 副歌\n整首\n自己选\n\n这次做：主歌 1 → 尾奏 · 3 段 · 约 5 句歌词。手书通常只做一段，镜头少、节奏紧。\n\n所选范围已有分镜；想继续后面的",
+      "body": {
+        "x": 25,
+        "y": 202,
+        "w": 718,
+        "h": 652,
+        "bottom": 854
+      },
+      "nav": {
+        "x": 25,
+        "y": 110,
+        "w": 718,
+        "h": 53,
+        "bottom": 163
+      },
+      "client": 703,
+      "scroll": 703,
+      "visible": true,
+      "controls": 59
+    },
+    {
+      "width": 1366,
+      "theme": "default",
+      "route": "settings",
+      "text": "设置\n\n角色 · 连接、主题与生成参数\n\n↻\n自动留忆\n和这个角色的回忆 · 向导与间隔\nVOICE\n镜译 · 语音设置\n连接与朗读音色\nAPI\n独立 API\n一键配置 · 手动配置\nREAD\n聊天读取范围\n按原始楼号选择 · 不改旧档案\nCG\nCG 生图\n相簿 · ADV · 日常一格\nUI\n界面",
+      "body": {
+        "x": 84,
+        "y": 163,
+        "w": 1198,
+        "h": 691,
+        "bottom": 854
+      },
+      "nav": {
+        "x": 84,
+        "y": 110,
+        "w": 1198,
+        "h": 53,
+        "bottom": 163
+      },
+      "client": 1183,
+      "scroll": 1183,
+      "visible": true,
+      "controls": 46
+    },
+    {
+      "width": 1366,
+      "theme": "default",
+      "route": "content",
+      "text": "内容\n\n选择你想看的那一页\n\n卡片\n列表\n回忆 · 已有内容\n回忆相簿\n\n共同回忆与 CG 收藏\n\n打开回忆相簿\n→\n回忆\n生活\n互动\n番外\n回忆相簿\n共同回忆与 CG 收藏\n已有 4 项内容\n剧情回放\n重要事件与长篇回放\n尚未生成 · 可先进入\n两个人的陈列柜\n真实记忆中的共同物件\n尚未生成 · ",
+      "body": {
+        "x": 84,
+        "y": 163,
+        "w": 1198,
+        "h": 691,
+        "bottom": 854
+      },
+      "nav": {
+        "x": 84,
+        "y": 110,
+        "w": 1198,
+        "h": 53,
+        "bottom": 163
+      },
+      "client": 1183,
+      "scroll": 1183,
+      "visible": true,
+      "controls": 13
+    },
+    {
+      "width": 1366,
+      "theme": "default",
+      "route": "archive",
+      "text": "当前档案\n增量更新当前窗口档案\n更新一直提示“历史基线不一致”？\n导出档案文件\n把记忆和全部生成内容存成一个文件；建检查点、复制聊天或折腾数据库前建议先导出。\n记忆来源\n\n聊天正文是建档来源；记忆 / 摘要为可选补充。\n\n读取外部记忆 / 摘要\n扫描记忆 / 摘要\n选择记忆世界书\n当前没有检测到可读",
+      "body": {
+        "x": 84,
+        "y": 163,
+        "w": 1198,
+        "h": 691,
+        "bottom": 854
+      },
+      "nav": {
+        "x": 84,
+        "y": 110,
+        "w": 1198,
+        "h": 53,
+        "bottom": 163
+      },
+      "client": 1183,
+      "scroll": 1183,
+      "visible": true,
+      "controls": 13
+    },
+    {
+      "width": 1366,
+      "theme": "default",
+      "route": "themeSong",
+      "text": "♫\n角色印象曲\n\n已收录 2 首\n\n生成歌曲文本与编曲说明，不生成音频。\n\n阅读模式\n创作格式\n做成 MV\n创作方向\n♪\n雨后\n角色\n♪\n故事的回声\n角色\n角色印象曲 · 角色\n故事的回声\n\n演唱者 · 角色\n\n作者 · 未署名（原创生成）\n\n曲风与人声\n主歌 1\n\n雨落以后，灯还亮着\n你在街口，回",
+      "body": {
+        "x": 84,
+        "y": 202,
+        "w": 1198,
+        "h": 652,
+        "bottom": 854
+      },
+      "nav": {
+        "x": 84,
+        "y": 110,
+        "w": 1198,
+        "h": 53,
+        "bottom": 163
+      },
+      "client": 1183,
+      "scroll": 1183,
+      "visible": true,
+      "controls": 12
+    },
+    {
+      "width": 1366,
+      "theme": "default",
+      "route": "album",
+      "text": "生图提示词格式\nNAI 4.5 · 英文 Tag\nNAI 5 · 自然语言\n只选提示词写法；实际生图模型仍在生图插件中选择。\n已解锁 4 / 总数 4\n全部\n日常\n约会\n私密\n结局\n待分类\nCG 实图\n未检测到柏宝绘公开 API v1。若已安装柏宝绘，请更新到支持公开接口的版本，启用后刷新页面；刚完",
+      "body": {
+        "x": 84,
+        "y": 202,
+        "w": 1198,
+        "h": 652,
+        "bottom": 854
+      },
+      "nav": {
+        "x": 84,
+        "y": 110,
+        "w": 1198,
+        "h": 53,
+        "bottom": 163
+      },
+      "client": 1183,
+      "scroll": 1183,
+      "visible": true,
+      "controls": 13
+    },
+    {
+      "width": 1366,
+      "theme": "default",
+      "route": "songMv",
+      "text": "故事的回声 · 手书\n构图卡片\n\n按歌曲安排关键画面，需要时复用素材或追加差分。\n\n从封面取色\n片头片尾\n用封面\n做哪一段\n第一段副歌\n一段主歌 + 副歌\n整首\n自己选\n\n这次做：主歌 1 → 尾奏 · 3 段 · 约 5 句歌词。手书通常只做一段，镜头少、节奏紧。\n\n所选范围已有分镜；想继续后面的",
+      "body": {
+        "x": 84,
+        "y": 202,
+        "w": 1198,
+        "h": 652,
+        "bottom": 854
+      },
+      "nav": {
+        "x": 84,
+        "y": 110,
+        "w": 1198,
+        "h": 53,
+        "bottom": 163
+      },
+      "client": 1183,
+      "scroll": 1183,
+      "visible": true,
+      "controls": 59
+    },
+    {
+      "width": 1366,
+      "theme": "night",
+      "route": "settings",
+      "text": "设置\n\n角色 · 连接、主题与生成参数\n\n↻\n自动留忆\n和这个角色的回忆 · 向导与间隔\nVOICE\n镜译 · 语音设置\n连接与朗读音色\nAPI\n独立 API\n一键配置 · 手动配置\nREAD\n聊天读取范围\n按原始楼号选择 · 不改旧档案\nCG\nCG 生图\n相簿 · ADV · 日常一格\nUI\n界面",
+      "body": {
+        "x": 84,
+        "y": 163,
+        "w": 1198,
+        "h": 691,
+        "bottom": 854
+      },
+      "nav": {
+        "x": 84,
+        "y": 110,
+        "w": 1198,
+        "h": 53,
+        "bottom": 163
+      },
+      "client": 1183,
+      "scroll": 1183,
+      "visible": true,
+      "controls": 46
+    },
+    {
+      "width": 1366,
+      "theme": "night",
+      "route": "content",
+      "text": "内容\n\n选择你想看的那一页\n\n卡片\n列表\n回忆 · 已有内容\n回忆相簿\n\n共同回忆与 CG 收藏\n\n打开回忆相簿\n→\n回忆\n生活\n互动\n番外\n回忆相簿\n共同回忆与 CG 收藏\n已有 4 项内容\n剧情回放\n重要事件与长篇回放\n尚未生成 · 可先进入\n两个人的陈列柜\n真实记忆中的共同物件\n尚未生成 · ",
+      "body": {
+        "x": 84,
+        "y": 163,
+        "w": 1198,
+        "h": 691,
+        "bottom": 854
+      },
+      "nav": {
+        "x": 84,
+        "y": 110,
+        "w": 1198,
+        "h": 53,
+        "bottom": 163
+      },
+      "client": 1183,
+      "scroll": 1183,
+      "visible": true,
+      "controls": 13
+    },
+    {
+      "width": 1366,
+      "theme": "night",
+      "route": "archive",
+      "text": "当前档案\n增量更新当前窗口档案\n更新一直提示“历史基线不一致”？\n导出档案文件\n把记忆和全部生成内容存成一个文件；建检查点、复制聊天或折腾数据库前建议先导出。\n记忆来源\n\n聊天正文是建档来源；记忆 / 摘要为可选补充。\n\n读取外部记忆 / 摘要\n扫描记忆 / 摘要\n选择记忆世界书\n当前没有检测到可读",
+      "body": {
+        "x": 84,
+        "y": 163,
+        "w": 1198,
+        "h": 691,
+        "bottom": 854
+      },
+      "nav": {
+        "x": 84,
+        "y": 110,
+        "w": 1198,
+        "h": 53,
+        "bottom": 163
+      },
+      "client": 1183,
+      "scroll": 1183,
+      "visible": true,
+      "controls": 13
+    },
+    {
+      "width": 1366,
+      "theme": "night",
+      "route": "themeSong",
+      "text": "♫\n角色印象曲\n\n已收录 2 首\n\n生成歌曲文本与编曲说明，不生成音频。\n\n阅读模式\n创作格式\n做成 MV\n创作方向\n♪\n雨后\n角色\n♪\n故事的回声\n角色\n角色印象曲 · 角色\n故事的回声\n\n演唱者 · 角色\n\n作者 · 未署名（原创生成）\n\n曲风与人声\n主歌 1\n\n雨落以后，灯还亮着\n你在街口，回",
+      "body": {
+        "x": 84,
+        "y": 202,
+        "w": 1198,
+        "h": 652,
+        "bottom": 854
+      },
+      "nav": {
+        "x": 84,
+        "y": 110,
+        "w": 1198,
+        "h": 53,
+        "bottom": 163
+      },
+      "client": 1183,
+      "scroll": 1183,
+      "visible": true,
+      "controls": 12
+    },
+    {
+      "width": 1366,
+      "theme": "night",
+      "route": "album",
+      "text": "生图提示词格式\nNAI 4.5 · 英文 Tag\nNAI 5 · 自然语言\n只选提示词写法；实际生图模型仍在生图插件中选择。\n已解锁 4 / 总数 4\n全部\n日常\n约会\n私密\n结局\n待分类\nCG 实图\n未检测到柏宝绘公开 API v1。若已安装柏宝绘，请更新到支持公开接口的版本，启用后刷新页面；刚完",
+      "body": {
+        "x": 84,
+        "y": 202,
+        "w": 1198,
+        "h": 652,
+        "bottom": 854
+      },
+      "nav": {
+        "x": 84,
+        "y": 110,
+        "w": 1198,
+        "h": 53,
+        "bottom": 163
+      },
+      "client": 1183,
+      "scroll": 1183,
+      "visible": true,
+      "controls": 13
+    },
+    {
+      "width": 1366,
+      "theme": "night",
+      "route": "songMv",
+      "text": "故事的回声 · 手书\n构图卡片\n\n按歌曲安排关键画面，需要时复用素材或追加差分。\n\n从封面取色\n片头片尾\n用封面\n做哪一段\n第一段副歌\n一段主歌 + 副歌\n整首\n自己选\n\n这次做：主歌 1 → 尾奏 · 3 段 · 约 5 句歌词。手书通常只做一段，镜头少、节奏紧。\n\n所选范围已有分镜；想继续后面的",
+      "body": {
+        "x": 84,
+        "y": 202,
+        "w": 1198,
+        "h": 652,
+        "bottom": 854
+      },
+      "nav": {
+        "x": 84,
+        "y": 110,
+        "w": 1198,
+        "h": 53,
+        "bottom": 163
+      },
+      "client": 1183,
+      "scroll": 1183,
+      "visible": true,
+      "controls": 59
+    }
+  ],
+  "flows": [
+    "bottom navigation → category → saved song; single MV action; creative draft survives reading/creation switch; empty cover",
+    "task panel and more menu open through original delegated handlers",
+    {
+      "flow": "MV prompt save restores picture scroll position",
+      "scroll": 2865,
+      "restored": 2865
+    },
+    "MV preview → timing → section select → back one level → board"
+  ],
+  "errors": [],
+  "requests": [],
+  "toasts": []
+}

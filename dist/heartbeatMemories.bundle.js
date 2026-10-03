@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
-// Source modules: 318
-// Source SHA-256: 3118eddfa488aab777cb432bdc389f1012c69d44b4d37e25194a16915abe55ee
+// Source modules: 322
+// Source SHA-256: 6e1e2218a74d1ddb4334535b6a3e49d002217dabf1ee6f319124e46f30a3791a
 // Build: python3 tools/verification/build.py <source-root>
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -149,6 +149,7 @@ const __m_extras_mvCast_js = Object.create(null);
 const __m_extras_mvDirection_js = Object.create(null);
 const __m_extras_mvImageTools_js = Object.create(null);
 const __m_extras_mvMedia_js = Object.create(null);
+const __m_extras_mvStage_js = Object.create(null);
 const __m_extras_mvStillPrompt_js = Object.create(null);
 const __m_extras_store_js = Object.create(null);
 const __m_extras_waiting_js = Object.create(null);
@@ -282,6 +283,8 @@ const __m_ui_mirrorCallView_js = Object.create(null);
 const __m_ui_mirrorTtsReader_js = Object.create(null);
 const __m_ui_mvCastControls_js = Object.create(null);
 const __m_ui_mvImageEditor_js = Object.create(null);
+const __m_ui_mvRefreshStyles_js = Object.create(null);
+const __m_ui_mvStageCanvas_js = Object.create(null);
 const __m_ui_mvView_js = Object.create(null);
 const __m_ui_navigationBookmark_js = Object.create(null);
 const __m_ui_overlay_js = Object.create(null);
@@ -319,6 +322,7 @@ const __m_ui_timeStoriesView_js = Object.create(null);
 const __m_ui_toolbarIcons_js = Object.create(null);
 const __m_ui_travelView_js = Object.create(null);
 const __m_ui_workspace_js = Object.create(null);
+const __m_ui_workspaceRefreshStyles_js = Object.create(null);
 const __m_ui_workspaceState_js = Object.create(null);
 const __m_ui_workspaceStyles_js = Object.create(null);
 
@@ -543,7 +547,7 @@ const MV_DIRECTIONS = Object.freeze([
     { id: 'interaction', name: '关系互动', desc: '视线、距离与双方反应', rule: '用视线对应、正反打、动作与接收动作、距离变化表现人物关系；清楚写谁对谁做什么。可以各自单人或同框，不把合唱等同于全员同框，不擅定恋爱关系；只有一人时也可用画外对象与反应。' },
     { id: 'impact', name: '高燃快切', desc: '强弱对比、卡点与关键姿势', rule: '主歌蓄势、副歌集中爆发；用全景与局部反差、关键动作姿势和干脆切换建立节奏。需要时同一句歌词可以有多个短镜头，冲击后留一处停顿；不把挥剑、奔跑等姿势长时间悬停，不强制闪白或战斗。' },
     { id: 'loop', name: '节奏循环', desc: '复用构图、姿势循环与节拍变化', rule: '设计能重复使用的构图和关键姿势，frames 可以回到先前的 group/diff 形成节奏循环；重复时用背景、视线或意象变化推进，不为循环重复生出相同素材。静态关键姿势剪辑不冒充连续舞蹈动画。' },
-    { id: 'expression', name: '表情卡拍', desc: '重复姿势、重拍换脸与局部插镜', rule: '以角色朝向观众的表演为主线：建立可反复返回的正面或半身主构图，人物轮廓清楚，背景用贴合世界观的简洁色块、几何图形或舞台空间。副歌的记忆点用反复出现的手势与有明显反差的表情承载，主歌收敛，重音处干脆切换；别把它处理成逐句换景的剧情插画或只微微皱眉的近似肖像。表情反差必须来自角色，不强加假笑、病娇、伤口、恐怖、悲剧或脱衣。\n在 frames 里实际编排节奏单元：主构图的一个姿势短停→另一个清楚的表情/手势→眼、手或剪影的短插镜→回到先前姿势，重复乐句复用原 group/diff，并在关键处用新表情或明暗变化打破循环。按歌曲伸缩这个单元，不逐句机械重复这一顺序；重复素材由 frames 引用，不重复生成。短插镜用较小 hold，主姿势较长 hold；同一句歌词可以有多个 frame，直接切换后有重点停顿。\n同机位的不同表情写成独立 diff.imagePrompt，每个 diff 是单张单格静态图，前后两种表情是两次独立生图，再由 frames 顺序切换。换机位、改变主体大小或局部特写另建 group。图形背景与光影也要写进实际 bgs/imagePrompt，不能只在 link 里解释风格。主歌与副歌保留疏密反差，不把每帧都写成柔光精修大头照。只用现有 frames、hold、motion、transition 组织静态关键画面；生图不写歌词或大字，文字由播放器字幕承载。构图和顺序为当前歌曲独立设计，不照搬参考作品的人物、服装、紫黑配色或具体镜头顺序。' },
+    { id: 'expression', name: '表情卡拍', desc: '共享舞台、角色表演与文字卡拍', rule: '围绕可反复返回的主舞台安排角色面向观众的表演。人物以轮廓明确、有性格的半身或全身姿势建立记忆点，手势、视线与表情一起表达；一个姿势可保持数秒，让文字、背景图形继续变化。背景持续跨越多个姿势与歌词，同一素材反复引用，不逐句重新画场景。\n重复乐句沿用主构图与标志姿势，根据歌曲情绪改变表情、光色、文字或道具，形成呼应与变奏。剧情镜头与局部特写用于需要的转折，不套“换脸→特写→返回”的固定流程。主歌与副歌的疏密、明暗和表演强度服务当前歌曲。\n每种姿势或表情各自生成为单张单格静态图；人物、共享背景、文字分开制作并在时间轴上编排，生图不写歌词。保留角色身份、衣着和画风，表情反差来自角色与歌词，不强加假笑、伤口、恐怖或脱衣；为这首歌原创构图与顺序。' },
     { id: 'reveal', name: '悬念反转', desc: '遮蔽信息、伏笔与回收', rule: '先用局部、背影、画外或遮挡保留信息，再以全景、反向视点或意象重现揭示。转折前后重用视觉线索而改变含义；不强加恐怖、死亡、悲剧或设定外事件。' },
 ]);
 
@@ -723,6 +727,110 @@ __m_extras_mvImageTools_js.eraseEdgeWhite = eraseEdgeWhite;
 __m_extras_mvImageTools_js.paintAlpha = paintAlpha;
 __m_extras_mvImageTools_js.alphaBounds = alphaBounds;
 __m_extras_mvImageTools_js.prepareMotifPixels = prepareMotifPixels;
+}
+
+function __init_extras_mvStage_js() {
+// MODULE: extras/mvStage.js
+
+// Optional stage data: saved images remain owned by one background, independent of poses.
+// No provider calls, generated code, storage migrations, or time-axis edits here.
+const list = value => Array.isArray(value) ? value : [];
+const text = value => typeof value === 'string' ? value.trim() : '';
+const choice = (value, values, fallback) => values.includes(value) ? value : fallback;
+const BACKGROUNDS = Object.freeze({ solid: '纯色', rays: '放射线', stripes: '斜纹', window: '窗格', paper: '纸纹', image: '绘制背景' });
+const LAYOUTS = Object.freeze({ sides: '两侧', stack: '叠字', banner: '横排', none: '隐藏' });
+
+function prepare(raw, existing = null) {
+    const backgrounds = [], ids = new Map();
+    const existingIds = new Set(list(existing?.backgrounds).map(b => b.id));
+    const used = new Set(existingIds);
+    let number = 1;
+    for (const source of list(raw?.backgrounds)) {
+        if (!source || typeof source !== 'object') continue;
+        const sourceId = text(source.id);
+        // A continuation may restate a shared background. Its saved art wins.
+        if (existingIds.has(sourceId)) { ids.set(sourceId, sourceId); continue; }
+        if (sourceId && ids.has(sourceId)) continue;
+        while (used.has(`S${number}`)) number++;
+        const id = `S${number++}`; used.add(id);
+        ids.set(sourceId || id, id);
+        const colors = list(source.colors).filter(c => typeof c === 'string' && /^#[0-9a-f]{6}$/iu.test(c));
+        backgrounds.push({ id, label: text(source.label) || '共享背景',
+            kind: choice(source.kind, Object.keys(BACKGROUNDS), source.prompt ? 'image' : 'solid'),
+            colors: [colors[0] || '#203047', colors[1] || '#e4d6bb', colors[2] || '#bd6683'],
+            motion: choice(source.motion, ['still', 'rotate', 'drift'], 'still'),
+            prompt: text(source.prompt), image: null });
+    }
+    const resolve = value => ids.get(text(value)) || (list(existing?.backgrounds).some(b => b.id === value) ? value : '');
+    return { backgrounds, resolve };
+}
+
+function cue(value, fallback, resolve) {
+    const background = resolve(value?.background) || fallback;
+    if (!background) return null;
+    return { background, text: text(value?.text),
+        layout: choice(value?.layout, Object.keys(LAYOUTS), 'sides'),
+        depth: value?.depth === 'front' ? 'front' : 'back',
+        entrance: choice(value?.entrance, ['cut', 'pop', 'slide'], 'cut'),
+        tone: choice(value?.tone, ['base', 'accent', 'dark'], 'base'), shadow: value?.shadow === true };
+}
+
+function background(record, shot) {
+    const group = list(record?.groups).find(g => g.id === shot?.group);
+    const id = shot?.stage?.background || group?.stageBackground;
+    return list(record?.stage?.backgrounds).find(b => b.id === id) || null;
+}
+
+function usedBackgrounds(record, shots = record?.shots) {
+    const ids = new Set(list(shots).map(s => background(record, s)?.id).filter(Boolean));
+    return list(record?.stage?.backgrounds).filter(b => ids.has(b.id));
+}
+
+function characterKey(row) {
+    const s = row?.shot;
+    return s?.image?.url || s?.image?.local ? `shot:${s.id}` : `${s?.group}:${s?.diff}`;
+}
+
+function textKey(row) {
+    const cue = row?.shot?.stage || {};
+    return JSON.stringify([cue.text || row?.shot?.lyric || '', cue.layout || 'sides', cue.depth || 'back']);
+}
+
+// Derive every layer from the song clock, including seeking and excerpt export.
+// A lyric boundary does not restart the background or an unchanged character pose.
+function state(record, rows, index, time) {
+    const row = rows[index], bg = background(record, row?.shot);
+    if (!bg) return null;
+    let poseStart = index, textStart = index;
+    while (poseStart > 0 && characterKey(rows[poseStart - 1]) === characterKey(row)) poseStart--;
+    while (textStart > 0 && textKey(rows[textStart - 1]) === textKey(row)) textStart--;
+    const origin = rows.find(r => background(record, r.shot)?.id === bg.id)?.start || 0;
+    const value = row.shot.stage || {};
+    return { background: bg, cue: value, active: time >= row.start,
+        backgroundTime: Math.max(0, time - origin),
+        poseTime: Math.max(0, time - rows[poseStart].start),
+        entrance: rows[poseStart].shot.stage?.entrance || 'cut',
+        textTime: Math.max(0, time - rows[textStart].start),
+        text: value.text || row.shot.lyric || '' };
+}
+
+function prompt() {
+    return `【共享舞台编排】
+本类型先设计可反复使用的舞台和角色标志姿势，再安排哪些层变化、哪些层保持。背景、人物、文字分别编排；换歌词、换姿势不等于换背景，一个姿势可以跨多句保持。
+- stage.backgrounds 是跨构图、跨段落共用的背景，每个只定义一次。kind 可选 solid、rays、stripes、window、paper（本地绘制）或 image（另画一张背景）；colors 为三个 #RRGGBB 颜色，motion 为 still、rotate 或 drift。配色图案服务歌曲与角色世界观。背景运动持续，不随每次人物切换重启。
+- groups.stageBackground 引用共享背景 id；这些组的人物会单独绘制并经用户确认抠图后叠上背景。diff.imagePrompt 只写该人物层的机位、唯一静态姿势与表情，场景放在共享背景里。全景剧情插入可用 layer:"full" 与自己的 bgs；局部插镜按表达需要安排，不套固定顺序。
+- frames.stage 可写 background（沿用时可省）、text（摘取对应歌词的关键词或原句）、layout（sides 两侧、stack 叠字、banner 横排、none）、depth（back 人物后方、front 前方）、entrance（cut、pop、slide）、tone（base、accent、dark）、shadow（是否有偏移剪影）。文字给脸和关键手势留白，不在生图里绘制文字。
+- 同一 group/diff 在连续多个 frame 出现时，人物保持，只换文字；再次使用背景或人物直接引用原 id，不重复生成。同一段落内也可以保持一套背景，重复副歌沿用主姿势并按歌词情绪变奏。先让一个有性格的姿势成立，再在需要时换表情，不每拍都生新图。\n`;
+}
+
+__m_extras_mvStage_js.prepare = prepare;
+__m_extras_mvStage_js.cue = cue;
+__m_extras_mvStage_js.background = background;
+__m_extras_mvStage_js.usedBackgrounds = usedBackgrounds;
+__m_extras_mvStage_js.state = state;
+__m_extras_mvStage_js.prompt = prompt;
+__m_extras_mvStage_js.BACKGROUNDS = BACKGROUNDS;
+__m_extras_mvStage_js.LAYOUTS = LAYOUTS;
 }
 
 function __init_extras_mvStillPrompt_js() {
@@ -1048,6 +1156,460 @@ function mountAssetEditor(host, options) {
 }
 
 __m_ui_mvImageEditor_js.mountAssetEditor = mountAssetEditor;
+}
+
+function __init_ui_mvRefreshStyles_js() {
+// MODULE: ui/mvRefreshStyles.js
+
+// Presentation only. MV navigation, assets, timing and canvas sizing stay with
+// their existing owners; the workspace scope also outranks lazy MV styles.
+function mvRefreshCss(root) {
+    const p = `${root} .rmt-song-mv`;
+    return `
+${p}{--rmt-mv-tile-width:160px;max-width:960px;width:100%;min-width:0;gap:18px;padding:6px 0 24px}
+${p}>*{min-width:0}
+${p} .rmt-x-head{gap:7px;padding:4px 0 10px}
+${p} .rmt-x-head small{--rmt-content-ink:var(--rmt-theme-muted);font-size:12px!important;letter-spacing:.03em}
+${p} .rmt-x-head h2{margin:0!important;font-size:25px!important;line-height:1.35!important}
+${p} .rmt-x-head p,${p} .rmt-x-note{--rmt-content-ink:var(--rmt-theme-muted);font-size:13px!important;line-height:1.7!important;margin:0}
+${p} .rmt-x-section-title{margin:8px 0 0!important;font-size:16px!important}
+${p} .rmt-x-card,${p} .rmt-mv-gcard,${p} .rmt-mv-shot,${p} .rmt-mv-step{min-width:0;gap:14px;padding:18px;border:1px solid var(--rmt-theme-border);border-radius:16px;background:var(--rmt-theme-surface-solid);box-shadow:none}
+${p} details.rmt-x-card{display:block}
+${p} details.rmt-x-card[open]>*+*{margin-top:14px}
+${p} summary{min-height:28px;line-height:1.6;cursor:pointer;overflow-wrap:anywhere}
+${p} .rmt-x-row-head{gap:12px;align-items:flex-start;line-height:1.6}
+${p} .rmt-x-row-head>b{flex:1;min-width:0}
+${p} .rmt-x-row-head>span{--rmt-content-ink:var(--rmt-theme-muted);flex:0 1 40%;min-width:0;text-align:right;font-size:12px!important}
+${p} button,${p} .rmt-mv-upload{min-width:0;white-space:normal;overflow-wrap:anywhere;box-sizing:border-box;box-shadow:none}
+${p} .rmt-x-primary,${p} .rmt-x-secondary,${p} .rmt-x-seg,${p} .rmt-mv-edit-open{min-height:44px;height:auto;padding:10px 13px;border-radius:11px;line-height:1.5!important;font-size:14px!important}
+${p} .rmt-x-primary{--rmt-content-ink:var(--rmt-theme-surface-solid);background:var(--rmt-theme-accent-ink)!important;color:var(--rmt-theme-surface-solid)!important;border:1px solid var(--rmt-theme-accent-ink)!important}
+${p} .rmt-x-secondary{background:var(--rmt-theme-surface-solid)!important;border:1px solid var(--rmt-theme-border)!important}
+${p} :is(.rmt-x-seg.active,.rmt-mv-choice.on,.rmt-mv-toggle button.on){--rmt-content-ink:var(--rmt-theme-wash-ink);background:var(--rmt-theme-wash)!important;color:var(--rmt-theme-wash-ink)!important;border-color:var(--rmt-theme-accent-ink)!important;box-shadow:inset 0 0 0 1px var(--rmt-theme-accent-ink)}
+${p} .rmt-mv-actions{min-width:0;display:flex;flex-wrap:wrap;gap:8px;align-items:stretch}
+${p} .rmt-mv-actions>*{flex:1 1 132px;min-width:0;max-width:100%}
+${p} .rmt-mv-actions>label{display:flex;flex-direction:column;gap:6px;font-size:13px}
+${p} .rmt-mv-actions>label.rmt-mv-upload{flex-direction:row;align-items:center}
+${p} .rmt-mv-grid2,${p} .rmt-mv-range-selects{gap:10px;min-width:0}
+${p} .rmt-mv-steps{gap:6px;padding:5px;border-radius:13px;background:var(--rmt-theme-soft)}
+${p} .rmt-mv-steps span{height:auto;min-height:44px;box-sizing:border-box;padding:7px 6px;border-radius:9px;border:1px solid transparent;background:transparent;text-align:center;line-height:1.45;font-size:12px}
+${p} .rmt-mv-steps span.on{background:var(--rmt-theme-surface-solid);border-color:var(--rmt-theme-border);--rmt-content-ink:var(--rmt-theme-accent-ink);box-shadow:0 2px 8px var(--rmt-theme-shadow)}
+${p} .rmt-mv-steps span.done{background:transparent;--rmt-content-ink:var(--rmt-theme-muted)}
+${p} .rmt-mv-choice{height:auto;min-height:86px;padding:16px;border-radius:13px;align-items:flex-start;border-width:1px}
+${p} .rmt-mv-choice span{gap:7px;min-width:0}
+${p} .rmt-mv-choice b{font-size:15px!important}
+${p} .rmt-mv-choice small{--rmt-content-ink:var(--rmt-theme-muted);font-size:12px!important;line-height:1.65}
+${p} .rmt-mv-choice em{font-size:12px;color:var(--rmt-theme-accent-ink)}
+${p} .rmt-mv-choice.on small{--rmt-content-ink:var(--rmt-theme-wash-ink)}
+${p} .rmt-mv-look{gap:7px;margin:4px 0 0;font-size:13px}
+${p} .rmt-mv-look :is(input,select,textarea),${p} .rmt-mv-range-selects select{min-width:0;width:100%;min-height:44px;box-sizing:border-box;padding:10px 12px;border-radius:10px;border:1px solid var(--rmt-theme-border);background:var(--rmt-theme-surface-solid);color:var(--rmt-theme-text);line-height:1.55!important}
+${p} .rmt-mv-look textarea{resize:vertical;min-height:84px}
+${p} .rmt-mv-cast-person{padding:14px 0;border-top:1px solid var(--rmt-theme-border)}
+${p} .rmt-mv-cast-person>*+*{margin-top:7px}
+${p} .rmt-mv-cast-person:last-child{padding-bottom:0}
+${p} .rmt-mv-gname{--rmt-content-ink:var(--rmt-theme-text);font-size:16px!important;line-height:1.65}
+${p} .rmt-mv-group{padding:9px 0 0;gap:5px}
+${p} .rmt-mv-group b{--rmt-content-ink:var(--rmt-theme-accent-ink)}
+${p} .rmt-mv-link{--rmt-content-ink:var(--rmt-theme-muted);font-size:12px;padding:0;line-height:1.7}
+${p} .rmt-mv-assets{gap:12px;min-width:0;max-width:100%;padding:2px 2px 7px;align-items:flex-start;overscroll-behavior-x:contain}
+${p} .rmt-mv-assets>div{width:var(--rmt-mv-tile-width);max-width:100%;flex:0 0 var(--rmt-mv-tile-width);gap:7px;align-items:stretch}
+${p} .rmt-mv-assets small{--rmt-content-ink:var(--rmt-theme-text);font-size:13px!important;line-height:1.55;text-align:left;overflow-wrap:anywhere}
+${p} button.rmt-mv-asset{width:100%;height:120px;min-height:96px;padding:0;border-radius:11px;background:var(--rmt-theme-soft)!important;border:1px solid var(--rmt-theme-border)!important;flex:none}
+${p} .rmt-mv-asset.cut.done{background:repeating-conic-gradient(var(--rmt-theme-soft) 0 25%,var(--rmt-theme-surface-solid) 0 50%) 0 0/14px 14px!important}
+${p} .rmt-mv-asset img{object-fit:contain}
+${p} .rmt-mv-asset i{top:7px;left:7px;padding:3px 7px;font-size:10px;line-height:1.35;border-radius:5px;background:var(--rmt-theme-surface-solid);color:var(--rmt-theme-muted);box-shadow:0 1px 4px var(--rmt-theme-shadow)}
+${p} .rmt-mv-asset.done i{background:var(--rmt-theme-wash);color:var(--rmt-theme-wash-ink)}
+${p} .rmt-mv-edit-open{width:100%;padding:8px 10px;background:transparent!important;color:var(--rmt-theme-accent-ink)!important;font-size:13px!important}
+${p} .rmt-mv-plus{align-self:center;padding:0 0 62px;font-size:20px;--rmt-content-ink:var(--rmt-theme-muted)}
+${p} .rmt-mv-inspect{padding-top:3px}
+${p} .rmt-mv-inspect summary{padding:7px 0;font-size:13px}
+${p} .rmt-mv-inspect-row{display:grid;grid-template-columns:76px 76px minmax(0,1fr);gap:10px;align-items:start;padding:14px 0;border-top:1px solid var(--rmt-theme-border)}
+${p} .rmt-mv-inspect-row figure{min-width:0;gap:6px}
+${p} .rmt-mv-inspect-row img{width:100%;height:108px;background:var(--rmt-theme-soft)}
+${p} .rmt-mv-inspect-row figure.cut img{background:repeating-conic-gradient(var(--rmt-theme-soft) 0 25%,var(--rmt-theme-surface-solid) 0 50%) 0 0/12px 12px}
+${p} .rmt-mv-inspect-row>div{gap:7px;min-width:0}
+${p} .rmt-mv-inspect-row figcaption{--rmt-content-ink:var(--rmt-theme-muted);font-size:11px!important}
+${p} .rmt-mv-lyric{--rmt-content-ink:var(--rmt-theme-text);background:var(--rmt-theme-soft);border:0;border-radius:10px;padding:12px 14px}
+${p} .rmt-mv-lyric p{font-size:14px!important;line-height:1.9!important}
+${p} .rmt-mv-lyric small{--rmt-content-ink:var(--rmt-theme-muted);font-size:12px!important}
+${p} .rmt-mv-palette{gap:14px;padding:15px 16px;border-radius:14px}
+${p} .rmt-mv-palette>div{min-width:0}
+${p} .rmt-mv-palette>div span{flex-wrap:wrap}
+${p} .rmt-mv-palette>div i{width:20px;height:20px;border-radius:5px;border:1px solid var(--rmt-theme-border)}
+${p} .rmt-mv-cover{width:60px;height:70px;border-radius:10px}
+${p} .rmt-mv-toggle{gap:4px;padding:4px;border-radius:12px}
+${p} .rmt-mv-toggle button{height:auto;min-height:44px;padding:9px 12px;border:1px solid transparent;border-radius:9px}
+${p} .rmt-mv-thumb{width:82px;height:126px;border-radius:11px}
+${p} .rmt-mv-thumb.wide{width:126px;height:82px}
+${p} .rmt-mv-shot-copy{gap:8px}
+${p} .rmt-mv-shot-copy b{font-size:15px!important;line-height:1.65}
+${p} .rmt-mv-prompt{padding:16px;border:1px solid var(--rmt-theme-border);border-radius:11px;line-height:1.9;overflow-wrap:anywhere}
+${p} .rmt-mv-bar{padding:10px 12px;border-radius:14px;gap:12px}
+${p} .rmt-mv-play{min-width:44px;border:0!important;border-radius:50%;--rmt-content-ink:var(--rmt-theme-surface-solid);background:var(--rmt-theme-accent-ink)!important;color:var(--rmt-theme-surface-solid)!important}
+${p} .rmt-mv-track{min-width:0;gap:7px}
+${p} .rmt-mv-track>div{background:var(--rmt-theme-soft)}
+${p} .rmt-mv-track>div i{background:var(--rmt-theme-accent-ink)}
+${p} .rmt-mv-strip{gap:9px;padding:3px 2px 8px;overscroll-behavior-x:contain}
+${p} .rmt-mv-strip button{border-radius:10px;background:var(--rmt-theme-soft)!important}
+${p} .rmt-mv-strip button.on{border-color:var(--rmt-theme-accent-ink)!important;box-shadow:0 0 0 2px var(--rmt-theme-accent-ink)}
+${p} .rmt-mv-strip span{--rmt-content-ink:var(--rmt-theme-text);max-width:calc(100% - 8px);box-sizing:border-box;background:var(--rmt-theme-surface-solid);padding:3px 5px;line-height:1.35;font-size:10px}
+${p} button.rmt-mv-tap.rmt-mv-tap{height:152px;min-height:152px;border-radius:16px;padding:16px;gap:9px;line-height:1.5;box-shadow:none}
+${p} .rmt-mv-tap b{font-size:21px!important;line-height:1.5}
+${p} .rmt-mv-tap small{font-size:13px!important}
+${p} .rmt-mv-clock{font-size:32px;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+${p} .rmt-mv-sec{min-width:0;gap:6px;border-radius:13px;border-width:1px;padding:0 7px 0 0}
+${p} .rmt-mv-sec.cur{border-color:var(--rmt-theme-accent-ink);box-shadow:inset 0 0 0 1px var(--rmt-theme-accent-ink)}
+${p} .rmt-mv-section-pick{min-height:78px;gap:10px;padding:12px 10px;border-radius:12px;align-items:center}
+${p} .rmt-mv-section-pick>i{width:27px;height:27px;background:var(--rmt-theme-wash);color:var(--rmt-theme-wash-ink)}
+${p} .rmt-mv-sec.tapped .rmt-mv-section-pick>i{background:var(--rmt-theme-accent-ink);color:var(--rmt-theme-surface-solid)}
+${p} .rmt-mv-section-copy{gap:5px}
+${p} .rmt-mv-section-copy b{font-size:14px!important}
+${p} .rmt-mv-section-copy small{font-size:12px!important}
+${p} .rmt-mv-section-pick>em{font-size:14px;font-variant-numeric:tabular-nums}
+${p} .rmt-mv-sec>span{flex:none;gap:4px;padding-block:5px}
+${p} .rmt-mv-sec>span button{min-width:44px;width:44px;min-height:44px;height:44px;border-radius:8px;padding:5px;font-size:11px!important}
+${p} .rmt-mv-file{gap:12px;padding:14px;border-radius:12px}
+${p} .rmt-mv-file label{flex:none;min-height:44px;line-height:1.4}
+${p} .rmt-mv-file b{overflow-wrap:anywhere}
+${p} .rmt-mv-editor{position:relative;overflow:visible;padding:18px;gap:12px;border-radius:16px}
+${p} .rmt-mv-editor label{gap:8px;line-height:1.55;font-size:13px}
+${p} .rmt-mv-editor :is(textarea,select){padding:12px;border-radius:10px;line-height:1.7!important}
+${p} .rmt-mv-editor textarea{min-height:174px;resize:vertical}
+${p} .rmt-mv-editor input[type="range"]{width:100%;margin:3px 0;accent-color:var(--rmt-theme-accent-ink)}
+${p} .rmt-mv-editor-tools{gap:8px;margin:0;align-items:stretch}
+${p} .rmt-mv-editor-tools button,${p} .rmt-mv-editor-upload,${p} .rmt-mv-editor button[data-edit="apply-crop"]{min-height:44px;box-sizing:border-box;border:1px solid var(--rmt-theme-border);border-radius:10px;padding:10px 12px;line-height:1.45!important;font-size:13px!important;background:var(--rmt-theme-surface-solid);color:var(--rmt-theme-text)}
+${p} .rmt-mv-editor-tools button[aria-pressed="true"]{border-color:var(--rmt-theme-accent-ink);border-width:1px;box-shadow:inset 0 0 0 1px var(--rmt-theme-accent-ink)}
+${p} .rmt-mv-editor-upload{margin:0;justify-content:center;color:var(--rmt-theme-accent-ink)!important}
+${p} .rmt-mv-editor>.rmt-mv-editor-tools:first-child{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;padding:4px;border-radius:12px;background:var(--rmt-theme-soft)}
+${p} .rmt-mv-editor>.rmt-mv-editor-tools:first-child button{border-color:transparent;border-radius:9px}
+${p} .rmt-mv-editor-viewport{border:1px solid var(--rmt-theme-border);border-radius:12px;box-sizing:border-box;background:repeating-conic-gradient(var(--rmt-theme-soft) 0 25%,var(--rmt-theme-surface-solid) 0 50%) 0 0/16px 16px}
+${p} .rmt-mv-editor [data-editor-status]{--rmt-content-ink:var(--rmt-theme-muted);font-size:13px!important;line-height:1.65!important;min-height:0;margin:0}
+${p} .rmt-mv-editor [data-paint-tools]>label+label{flex-direction:row;align-items:center;gap:10px;min-height:44px}
+${p} .rmt-mv-editor>.rmt-mv-editor-tools:last-of-type{position:sticky;bottom:0;z-index:3;display:flex;gap:10px;margin:6px -1px 0;padding:14px 1px 10px;background:var(--rmt-theme-surface-solid);border-top:1px solid var(--rmt-theme-border);box-shadow:0 -6px 14px var(--rmt-theme-shadow)}
+${p} .rmt-mv-editor>.rmt-mv-editor-tools:last-of-type>button{flex:1 1 0;min-width:0}
+${p} .rmt-mv-editor button[data-edit="save"]{--rmt-content-ink:var(--rmt-theme-surface-solid);background:var(--rmt-theme-accent-ink)!important;color:var(--rmt-theme-surface-solid)!important;border-color:var(--rmt-theme-accent-ink)!important}
+${p} :is(button,select,textarea,input,summary):focus-visible{outline:2px solid var(--rmt-theme-accent-ink)!important;outline-offset:3px}
+@media(min-width:1100px){
+  ${p}{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:start}
+  ${p}>*{grid-column:1/-1}
+  ${p}>.rmt-mv-gcard{grid-column:auto;height:100%;box-sizing:border-box}
+}
+@media(max-width:700px){
+  ${p}{--rmt-mv-tile-width:min(160px,calc((100vw - 96px)/2));gap:16px;padding-top:2px}
+  ${p} .rmt-x-card,${p} .rmt-mv-gcard,${p} .rmt-mv-shot,${p} .rmt-mv-step{padding:16px;gap:12px}
+  ${p} .rmt-x-head h2{font-size:23px!important}
+  ${p} .rmt-mv-choice{padding:13px;min-height:82px}
+  ${p} .rmt-mv-assets{gap:10px}
+  ${p} button.rmt-mv-asset{height:calc(var(--rmt-mv-tile-width) * .78)}
+  ${p} .rmt-mv-inspect-row{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  ${p} .rmt-mv-inspect-row img{height:132px}
+  ${p} .rmt-mv-inspect-row>div{grid-column:1/-1}
+  ${p} .rmt-mv-inspect-row>div>button{align-self:flex-start}
+  ${p} .rmt-mv-steps span{gap:4px;font-size:11px}
+  ${p} .rmt-mv-palette{padding:13px;gap:12px}
+  ${p} .rmt-mv-palette>small{font-size:11px!important}
+  ${p} .rmt-mv-thumb.wide{width:106px;height:76px}
+  ${p} .rmt-mv-shot-row{gap:10px}
+  ${p} .rmt-mv-editor{padding:15px}
+  ${p} .rmt-mv-editor-tools>button,${p} .rmt-mv-editor-upload{flex:1 1 120px}
+  ${p} .rmt-mv-editor>.rmt-mv-editor-tools:last-of-type{padding:12px 1px 10px}
+}
+@media(max-width:360px){
+  ${p} .rmt-mv-choice{padding:11px}
+  ${p} .rmt-mv-choice b{font-size:14px!important}
+  ${p} .rmt-mv-section-pick{gap:7px;padding-inline:8px}
+  ${p} .rmt-mv-section-pick>i{width:24px;height:24px}
+  ${p} .rmt-mv-section-pick>em{font-size:12px}
+  ${p} .rmt-mv-file{gap:9px;padding:12px}
+  ${p} .rmt-mv-file label{padding-inline:9px}
+}
+`;
+}
+
+__m_ui_mvRefreshStyles_js.mvRefreshCss = mvRefreshCss;
+}
+
+function __init_ui_mvStageCanvas_js() {
+// MODULE: ui/mvStageCanvas.js
+
+// Deterministic Canvas layers shared by preview, screen recording and export.
+// The model supplies only enumerated scene data; it never supplies executable drawing code.
+function drawBackground(g, background, w, h, time, tone = 'base', picture = null) {
+    const colors = background.colors || ['#203047', '#e4d6bb', '#bd6683'];
+    const base = tone === 'accent' ? colors[2] : colors[0];
+    g.save(); g.fillStyle = base; g.fillRect(0, 0, w, h);
+    if (picture && background.kind === 'image') {
+        const moving = background.motion !== 'still';
+        const r = Math.max(w / picture.naturalWidth, h / picture.naturalHeight) * (moving ? 1.08 : 1);
+        g.save(); g.translate(w / 2, h / 2);
+        if (background.motion === 'rotate') g.rotate(Math.sin(time * 0.45) * 0.02);
+        if (background.motion === 'drift') g.translate(Math.sin(time * 0.45) * w * 0.015, 0);
+        g.drawImage(picture, -picture.naturalWidth * r / 2, -picture.naturalHeight * r / 2, picture.naturalWidth * r, picture.naturalHeight * r);
+        g.restore();
+        if (tone === 'accent') { g.globalAlpha = 0.2; g.fillStyle = colors[2]; g.fillRect(0, 0, w, h); g.globalAlpha = 1; }
+    } else {
+        const kind = background.kind, size = Math.hypot(w, h);
+        const angle = background.motion === 'rotate' ? time * 0.09 : 0;
+        const drift = background.motion === 'drift' ? Math.sin(time * 0.45) * w * 0.025 : 0;
+        g.save(); g.translate(w / 2 + drift, h / 2); g.rotate(angle);
+        g.fillStyle = colors[1];
+        if (kind === 'rays') {
+            for (let i = 0; i < 12; i++) {
+                const a = i * Math.PI / 6, b = a + Math.PI / 12;
+                g.beginPath(); g.moveTo(0, 0); g.lineTo(Math.cos(a) * size, Math.sin(a) * size);
+                g.lineTo(Math.cos(b) * size, Math.sin(b) * size); g.closePath(); g.fill();
+            }
+        } else if (kind === 'stripes') {
+            g.rotate(-0.4); const step = Math.min(w, h) * 0.16;
+            for (let x = -size; x < size; x += step) g.fillRect(x, -size, step * 0.4, size * 2);
+        } else if (kind === 'window') {
+            g.globalAlpha = 0.4; const step = Math.min(w, h) * 0.22, line = Math.max(2, Math.min(w, h) * 0.008);
+            for (let x = -size; x < size; x += step) g.fillRect(x, -size, line, size * 2);
+            for (let y = -size; y < size; y += step * 1.4) g.fillRect(-size, y, size * 2, line);
+        } else if (kind === 'paper') {
+            g.globalAlpha = 0.13;
+            for (let i = 0; i < 150; i++) {
+                const x = ((i * 137) % 997) / 997 * size * 2 - size;
+                const y = ((i * 293) % 991) / 991 * size * 2 - size;
+                g.fillRect(x, y, Math.max(1, w * 0.012), Math.max(1, h * 0.002));
+            }
+        }
+        g.restore();
+    }
+    if (tone === 'dark') { g.globalAlpha = 0.48; g.fillStyle = '#080c15'; g.fillRect(0, 0, w, h); }
+    g.restore();
+}
+
+function linesFor(g, value, width) {
+    const lines = []; let line = '';
+    for (const c of Array.from(value)) {
+        if (c === '\n' || (line && g.measureText(line + c).width > width)) { lines.push(line); line = c === '\n' ? '' : c; }
+        else line += c;
+    }
+    if (line) lines.push(line);
+    return lines;
+}
+
+function drawText(g, state, group, w, h, font, forceFront = false) {
+    if (!state?.active || !state.text || state.cue.layout === 'none') return;
+    const layout = forceFront ? 'banner' : state.cue.layout || 'sides';
+    const color = state.background.colors?.[1] || '#fffdf8';
+    const front = forceFront || state.cue.depth === 'front';
+    const width = w * (layout === 'banner' ? 0.82 : layout === 'stack' ? 0.38 : 0.28);
+    const maxHeight = h * (layout === 'banner' ? 0.16 : 0.65);
+    let size = Math.min(w, h) * (layout === 'banner' ? 0.065 : 0.14);
+    g.save(); g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineJoin = 'round';
+    g.font = `${font.weight} ${size}px ${font.stack}`;
+    let lines = linesFor(g, state.text, width);
+    // Fit the actual text inside its reserved area; no clipping or lost words.
+    while (lines.length * size * 1.2 > maxHeight && size > 2) {
+        size *= 0.88; g.font = `${font.weight} ${size}px ${font.stack}`; lines = linesFor(g, state.text, width);
+    }
+    const points = layout === 'sides' ? [w * 0.18, w * 0.82]
+        : [layout === 'stack' ? w * (group?.position === 'right' ? 0.24 : 0.76) : w / 2];
+    const y = layout === 'banner' ? h * 0.83 : h * 0.44;
+    g.fillStyle = color; g.strokeStyle = '#141722'; g.lineWidth = Math.max(1, size * (front ? 0.09 : 0.035));
+    const count = layout === 'stack' ? Math.min(lines.length, 1 + Math.floor(state.textTime / 0.24)) : lines.length;
+    for (const x of points) for (let i = 0; i < count; i++) {
+        const yy = y + (i - (lines.length - 1) / 2) * size * 1.2;
+        g.strokeText(lines[i], x, yy); g.fillText(lines[i], x, yy);
+    }
+    g.restore();
+}
+
+function poseTransform(state, w, h) {
+    const progress = Math.min(1, state.poseTime / 0.24);
+    if (state.entrance === 'pop') return { x: 0, y: 0, scale: 1 + 0.055 * Math.sin(progress * Math.PI) };
+    if (state.entrance === 'slide') return { x: -w * 0.08 * (1 - progress) ** 3, y: 0, scale: 1 };
+    return { x: 0, y: 0, scale: 1 };
+}
+
+__m_ui_mvStageCanvas_js.drawBackground = drawBackground;
+__m_ui_mvStageCanvas_js.drawText = drawText;
+__m_ui_mvStageCanvas_js.poseTransform = poseTransform;
+}
+
+function __init_ui_workspaceRefreshStyles_js() {
+// MODULE: ui/workspaceRefreshStyles.js
+const mvStyles = __m_ui_mvRefreshStyles_js;
+
+// Presentation only. Existing actions, native form controls and source scopes remain in their owners.
+function workspaceRefreshCss(root = '#heartbeat_memories_overlay') {
+    const r = root + '.rmt-workspace[data-rmt-theme-mode]';
+    return `
+${r}{--rmt-ui-line:color-mix(in srgb,var(--rmt-theme-border) 50%,var(--rmt-theme-surface-solid));--rmt-ui-shadow:0 6px 22px var(--rmt-theme-shadow);padding:24px!important}
+${r} .rmt-shell{width:min(1200px,100%)!important;height:90dvh!important;max-height:calc(100dvh - 48px)!important;border:1px solid var(--rmt-ui-line)!important;border-radius:22px!important;outline:0!important;box-shadow:0 24px 80px #0e152b38!important;background:var(--rmt-theme-surface-alpha)!important}
+${r} .rmt-shell:before{display:none!important}
+${r} .rmt-topbar{min-height:64px!important;gap:6px!important;padding:9px 20px!important;flex-wrap:nowrap!important;flex-shrink:0;background:var(--rmt-theme-surface-solid)!important;border-bottom:1px solid var(--rmt-ui-line)!important;box-shadow:none!important}
+${r} .rmt-topbar:before,${r} .rmt-topbar:after,${r} .rmt-topbar-title:after{display:none!important}
+${r} .rmt-topbar-title{font-size:17px!important;font-weight:650!important;letter-spacing:.02em!important;flex:1 1 auto!important;max-width:none!important}
+${r} .rmt-topbar>button{border:0!important;border-radius:12px!important;box-shadow:none!important;background:transparent!important;width:44px!important;height:44px!important;min-height:44px!important;min-width:44px!important;padding:0!important;flex:0 0 44px!important}
+${r} .rmt-topbar>button:hover{background:var(--rmt-theme-soft)!important;transform:none!important}
+${r} .rmt-topbar>button[data-rmt-action="toolbar-more"]{display:grid!important;place-items:center!important}
+${r} .rmt-live-chip{border-radius:8px!important;box-shadow:none!important}
+${r} .rmt-live-chip i{animation:none!important;box-shadow:none!important}
+${r} .rmt-topbar .rmt-task-count{top:0!important;right:0!important}
+${r} .rmt-workspace-tabs{display:flex!important;justify-content:center;gap:24px;padding:0 24px!important;border-bottom:1px solid var(--rmt-ui-line)!important;background:var(--rmt-theme-surface-solid)!important;flex-shrink:0}
+${r} .rmt-workspace-tabs button{position:relative;display:flex;align-items:center;justify-content:center;gap:8px;min-width:104px;min-height:52px!important;padding:10px 16px!important;border:0!important;border-radius:0!important;background:transparent!important;box-shadow:none!important;color:var(--rmt-theme-muted)!important;font-size:14px!important;font-weight:500!important}
+${r} .rmt-workspace-tabs button span{color:inherit!important}
+${r} .rmt-workspace-tabs button.active{color:var(--rmt-theme-accent-ink)!important;background:transparent!important;--rmt-content-ink:var(--rmt-theme-accent-ink)}
+${r} .rmt-workspace-tabs button.active:after{content:"";position:absolute;bottom:0;left:18px;right:18px;height:3px;border-radius:3px 3px 0 0;background:var(--rmt-theme-accent-ink)}
+${r} .rmt-nav-icon{width:20px;height:20px;flex:none;pointer-events:none}
+${r} .rmt-workspace-location{min-height:34px!important;padding:3px 24px!important;gap:8px!important;background:var(--rmt-theme-surface-solid)!important;border-bottom:1px solid var(--rmt-ui-line)!important;flex-shrink:0;font-size:12px!important}
+${r} .rmt-workspace-location .rmt-crumb-button{min-height:32px!important;padding:3px 0!important;font-size:12px!important;border:0!important;background:transparent!important;color:var(--rmt-theme-accent-ink)!important}
+${r} .rmt-workspace-location>span{font-size:12px!important;color:var(--rmt-theme-muted)!important}
+${r} .rmt-workspace-location small{border-radius:6px;padding:2px 7px;background:var(--rmt-theme-soft);font-size:11px!important}
+${r} .rmt-body{padding:28px 32px!important;min-width:0;background:var(--rmt-theme-bg)!important;scroll-padding-block:16px;overscroll-behavior:contain}
+${r} .rmt-body>:is(.rmt-workspace-page,.rmt-home){max-width:1080px!important}
+${r} .rmt-btn,${r} .rmt-body button.rmt-btn{border-radius:11px!important;box-shadow:none!important;padding:10px 15px!important;font-size:14px!important;font-weight:500!important;transition:background .15s ease,border-color .15s ease!important}
+${r} .rmt-btn:hover{transform:none!important}
+${r} .rmt-btn:disabled{opacity:.5!important}
+${r} :is(.rmt-workspace-section-head,.rmt-home-heading){margin-bottom:24px!important;padding:0!important}
+${r} :is(.rmt-workspace-section-head h2,.rmt-home-heading h1){font-size:26px!important;line-height:1.35!important;margin:0 0 6px!important;letter-spacing:.02em!important}
+${r} :is(.rmt-workspace-section-head p,.rmt-home-heading p){font-size:14px!important;line-height:1.6!important;color:var(--rmt-theme-muted)!important;margin:0!important}
+${r} .rmt-layout-switch{display:flex!important;gap:2px!important;flex-wrap:nowrap!important;padding:3px;background:var(--rmt-theme-surface-solid)!important;border:1px solid var(--rmt-ui-line);border-radius:10px}
+${r} .rmt-layout-switch button{min-height:38px!important;min-width:46px;padding:6px 9px!important;border:0!important;border-radius:7px!important;background:transparent!important;box-shadow:none!important;font-size:13px!important}
+${r} .rmt-layout-switch button.active{background:var(--rmt-theme-soft)!important;color:var(--rmt-theme-accent-ink)!important}
+${r} .rmt-workspace-featured{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:28px 32px;margin:0 0 24px;border:1px solid var(--rmt-ui-line);border-radius:18px;background:var(--rmt-theme-soft);overflow:hidden}
+${r} .rmt-workspace-featured>div{min-width:0}
+${r} .rmt-workspace-featured small{color:var(--rmt-theme-accent-ink)!important;font-size:12px!important;letter-spacing:.04em!important}
+${r} .rmt-workspace-featured h3{font-size:26px!important;margin:6px 0 7px!important;line-height:1.35!important}
+${r} .rmt-workspace-featured p{font-size:14px!important;color:var(--rmt-theme-muted)!important;line-height:1.6!important;margin:0 0 16px!important}
+${r} .rmt-workspace-featured>.fa-solid{font-size:clamp(42px,5vw,74px);color:var(--rmt-theme-accent-ink);opacity:.25;padding:12px;flex:none}
+${r} .rmt-workspace-featured .rmt-btn{gap:16px;background:var(--rmt-theme-surface-solid)!important;border-color:var(--rmt-ui-line)!important}
+${r} .rmt-workspace-groups{display:flex!important;gap:4px!important;margin:0 0 18px!important;padding:0 0 6px;border-bottom:1px solid var(--rmt-ui-line)}
+${r} .rmt-workspace-groups button{border:0!important;border-radius:9px!important;padding:9px 18px!important;min-height:44px!important;background:transparent!important;box-shadow:none!important;font-size:14px!important;color:var(--rmt-theme-muted)!important}
+${r} .rmt-workspace-groups button.active{color:var(--rmt-theme-accent-ink)!important;background:var(--rmt-theme-soft)!important}
+${r} .rmt-workspace-portals{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:14px!important;margin:0!important;padding:0!important}
+${r} .rmt-workspace-card{position:relative;border:1px solid var(--rmt-ui-line)!important;border-radius:15px!important;background:var(--rmt-theme-surface-solid)!important;box-shadow:none!important;overflow:hidden!important;min-width:0;transform:none!important}
+${r} .rmt-workspace-card:hover{border-color:var(--rmt-theme-accent)!important;box-shadow:none!important;transform:none!important}
+${r} .rmt-workspace-card:before,${r} .rmt-workspace-card:after{display:none!important}
+${r} .rmt-workspace-card .rmt-portal-open{display:grid!important;grid-template-columns:38px minmax(0,1fr)!important;grid-template-areas:"icon title" "icon subtitle" "icon status"!important;align-items:start!important;align-content:start;gap:5px 13px!important;min-height:140px!important;padding:23px 20px!important;background:transparent!important;border:0!important;border-radius:0!important;box-shadow:none!important;text-align:left!important;width:100%!important;height:auto!important}
+${r} .rmt-workspace-card:has(.rmt-queue-pick) .rmt-portal-open{padding-right:42px!important}
+${r} .rmt-workspace-card .rmt-portal-avatar{grid-area:icon!important;position:static!important;width:38px!important;height:38px!important;min-width:38px!important;border-radius:11px!important;margin:0!important;background:var(--rmt-theme-soft)!important;color:var(--rmt-theme-accent-ink)!important;box-shadow:none!important;transform:none!important}
+${r} .rmt-workspace-card .rmt-portal-avatar i{font-size:20px!important;color:var(--rmt-theme-accent-ink)!important}
+${r} .rmt-workspace-card .rmt-portal-title{grid-area:title!important;font-size:16px!important;font-weight:600!important;line-height:1.5!important;color:var(--rmt-theme-text)!important;text-align:left!important;margin:0!important}
+${r} .rmt-workspace-card .rmt-portal-subtitle{grid-area:subtitle!important;font-size:13px!important;line-height:1.6!important;text-align:left!important;color:var(--rmt-theme-muted)!important;margin:0!important;max-width:none!important}
+${r} .rmt-workspace-card .rmt-portal-status{grid-area:status!important;font-size:12px!important;line-height:1.6!important;text-align:left!important;color:var(--rmt-theme-muted)!important;padding:0!important;margin:4px 0 0!important;border:0!important;background:transparent!important;white-space:normal!important}
+${r} .rmt-workspace-card.ready .rmt-portal-status{color:var(--rmt-theme-accent-ink)!important}
+${r} .rmt-workspace-card .rmt-workspace-enter{display:none!important}
+${r} .rmt-workspace-card .rmt-queue-pick{position:absolute!important;right:2px!important;top:3px!important;min-height:44px!important;width:36px!important;min-width:36px!important;margin:0!important;padding:0!important;border:0!important;background:transparent!important;box-shadow:none!important}
+${r} .rmt-route-people{padding:0 18px 10px!important;border-top:1px solid var(--rmt-ui-line);margin:0 12px!important}
+${r} .rmt-route-people summary{font-size:12px!important}
+${r} .rmt-workspace-portals[data-rmt-layout="list"]{grid-template-columns:1fr!important}
+${r} .rmt-workspace-portals[data-rmt-layout="list"] .rmt-portal-open{grid-template-columns:38px minmax(0,1fr)!important;min-height:96px!important;padding:17px 52px 17px 19px!important}
+${r} .rmt-workspace-portals[data-rmt-layout="list"] .rmt-portal-subtitle{display:block!important}
+${r} .rmt-catalogue-queue{position:sticky;bottom:-12px;z-index:6;display:flex;justify-content:flex-end;gap:8px;margin:20px 0 0!important;padding:12px;border:1px solid var(--rmt-ui-line);border-radius:13px;background:var(--rmt-theme-surface-solid);box-shadow:var(--rmt-ui-shadow)}
+${r} .rmt-catalogue-queue [data-rmt-action="queue-selected"]{margin-right:auto!important}
+${r} .rmt-catalogue-queue [data-rmt-action="generate-together"]{background:var(--rmt-theme-soft)!important;color:var(--rmt-theme-accent-ink)!important}
+${r} .rmt-catalogue-queue .rmt-together-help p{top:auto!important;bottom:100%;right:0;max-width:calc(100vw - 60px)}
+${r} .rmt-home .rmt-settings-content{display:grid!important;grid-template-columns:1fr 1fr!important;align-items:start;gap:14px!important;background:transparent!important;padding:0!important}
+${r} .rmt-home .rmt-settings-content>details:not([open]){align-self:stretch}
+${r} .rmt-home .rmt-settings-content>:is(details[open],.rmt-workspace-more,.rmt-mirror-reader){grid-column:1/-1}
+${r} .rmt-home .rmt-settings-card{margin:0!important;box-shadow:none!important;border:1px solid var(--rmt-ui-line)!important;border-radius:14px!important;background:var(--rmt-theme-surface-solid)!important;min-width:0}
+${r} .rmt-home .rmt-settings-card-head{padding:18px 20px!important;min-height:86px!important;gap:14px!important}
+${r} .rmt-home .rmt-settings-card-head>span{width:36px!important;height:36px!important;border-radius:11px!important;background:var(--rmt-theme-soft)!important;color:var(--rmt-theme-accent-ink)!important}
+${r} .rmt-home .rmt-settings-card-head b{font-size:16px!important}
+${r} .rmt-home .rmt-settings-card-head small{font-size:12px!important;line-height:1.6!important;color:var(--rmt-theme-muted)!important}
+${r} .rmt-home details[open]>.rmt-settings-card-head{background:var(--rmt-theme-surface-solid)!important;--rmt-content-ink:var(--rmt-theme-text);border-bottom-color:var(--rmt-ui-line)!important}
+${r} .rmt-settings-section-body :is(input:not([type=checkbox]):not([type=radio]):not([type=color]):not([type=range]):not([type=file]),select,textarea){border-radius:9px!important;border:1px solid var(--rmt-ui-line)!important;background:var(--rmt-theme-bg)!important;min-width:0!important;width:100%;font-size:16px!important;box-shadow:none!important}
+${r} .rmt-settings-section-body .menu_button{border-radius:10px!important;box-shadow:none!important;padding:10px 13px!important;min-height:44px!important;white-space:normal!important}
+${r} .rmt-api-source-card{min-height:112px!important;gap:5px!important;padding:17px!important;box-shadow:none!important;border-radius:12px!important}
+${r} .rmt-api-source-card b{font-size:16px!important}
+${r} .rmt-api-source-card small{font-size:12px!important}
+${r} :is(.rmt-api-source-panel,.rmt-api-status){border-radius:10px!important;box-shadow:none!important;border-color:var(--rmt-ui-line)!important}
+${r} .rmt-workspace-more{border:1px solid var(--rmt-ui-line)!important;border-radius:14px!important;padding:0!important;background:var(--rmt-theme-surface-solid)!important}
+${r} .rmt-workspace-more>summary{padding:17px 20px!important;font-size:15px!important;min-height:54px;cursor:pointer}
+${r} .rmt-workspace-more-body{padding:0 14px 14px!important;display:grid;gap:12px}
+${r} .rmt-workspace-page .rmt-memory-gate{margin:20px 0!important;padding:24px!important;border-radius:16px!important;border:1px solid var(--rmt-ui-line)!important;box-shadow:none!important;background:var(--rmt-theme-surface-solid)!important}
+${r} .rmt-workspace-page .rmt-memory-gate:before,${r} .rmt-workspace-page .rmt-memory-gate:after{display:none!important}
+${r} :is(.rmt-external-memory-row,.rmt-archive-file-import,.rmt-archive-adopt){border-radius:14px!important;border-color:var(--rmt-ui-line)!important;box-shadow:none!important}
+${r} .rmt-archive-summary-preview{font-size:16px!important;line-height:1.9!important}
+${r} :is(.rmt-archive-quick-update,.rmt-archive-file){gap:10px!important}
+${r} .rmt-archive-full-details>summary,${r} .rmt-archive-tools>summary{min-height:44px;align-content:center;color:var(--rmt-theme-accent-ink)!important}
+${r} :is(.rmt-character-card,.rmt-archive-group-entry,.rmt-manage-row){border-radius:14px!important;border-color:var(--rmt-ui-line)!important;box-shadow:none!important}
+${r} .rmt-task-center{top:64px!important;border-radius:16px!important;border-color:var(--rmt-ui-line)!important;box-shadow:0 14px 48px #10182738!important;padding:18px!important}
+${r} .rmt-task-card{border-radius:12px!important;border-color:var(--rmt-ui-line)!important;padding:14px!important;margin-bottom:10px!important}
+${r} .rmt-task-center .rmt-btn{min-height:44px!important;border-radius:9px!important;padding:8px 12px!important;font-size:13px!important}
+${r} .rmt-cg-prompt-dialog{border-radius:18px!important;border-color:var(--rmt-ui-line)!important;padding:24px!important;box-shadow:0 20px 70px #0004!important}
+${r} .rmt-cg-prompt-head{position:sticky;top:-24px;z-index:4;padding:12px 0;background:var(--rmt-theme-surface-solid)!important}
+${r} .rmt-cg-prompt-head #rmt-cg-prompt-title{font-size:20px!important}
+${r} .rmt-cg-prompt-actions{position:sticky;bottom:-24px;z-index:4;background:var(--rmt-theme-surface-solid);border-top:1px solid var(--rmt-ui-line);padding:14px 0 4px!important}
+${r} .rmt-participant-dialog{border-radius:18px!important;border-color:var(--rmt-ui-line)!important}
+${r} .rmt-cg-prompt-dialog :is(textarea,input),${r} .rmt-participant-dialog :is(textarea,input:not([type=checkbox])){background:var(--rmt-theme-bg)!important;border-color:var(--rmt-ui-line)!important}
+${r} .rmt-body :is(.rmt-album,.rmt-adv,.rmt-room-view,.rmt-travel,.rmt-heart,.rmt-relations-mode){max-width:1080px;margin-inline:auto}
+${r} .rmt-album .rmt-card{border-radius:14px!important;border-color:var(--rmt-ui-line)!important;box-shadow:none!important;overflow:hidden}
+${r} .rmt-album .rmt-card .rmt-thumb{border-radius:10px!important}
+${r} .rmt-album .rmt-card .rmt-cg-caption{padding:15px!important}
+${r} .rmt-recovery-status{border-radius:10px!important;box-shadow:none!important}
+${r} :is(.rmt-home,.rmt-workspace-catalogue) [hidden],${r} .rmt-shell>[hidden],${r} .rmt-topbar>[hidden]{display:none!important}
+@media(max-width:1000px){
+ ${r} .rmt-workspace-portals{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+}
+@media(max-width:760px){
+ ${r},${r}.rmt-workspace-expanded{padding:0!important;padding-top:max(env(safe-area-inset-top,0px),var(--rmt-mobile-safe-top,0px))!important;height:100vh!important;height:100dvh!important;max-height:100dvh!important;align-items:stretch!important}
+ ${r} .rmt-shell,${r}.rmt-workspace-expanded .rmt-shell{width:100%!important;height:100%!important;max-height:100%!important;border-radius:0!important;border:0!important;box-shadow:none!important}
+ ${r} .rmt-topbar{order:0;min-height:60px!important;padding:8px 12px!important;gap:2px!important}
+ ${r} .rmt-topbar-title{font-size:16px!important;letter-spacing:0!important}
+ ${r} .rmt-topbar>button{width:44px!important;min-width:44px!important;max-width:44px!important;height:44px!important;flex:0 0 44px!important}
+ ${r} .rmt-topbar>button:is([data-rmt-action="workspace-expand"],[data-rmt-action="regenerate"],[data-rmt-action="manage"]){display:none!important}
+ ${r} .rmt-workspace-tabs{order:10;gap:0!important;justify-content:space-around;padding:4px 12px calc(5px + env(safe-area-inset-bottom,0px))!important;border-top:1px solid var(--rmt-ui-line)!important;border-bottom:0!important;position:relative;z-index:8}
+ ${r} .rmt-workspace-tabs button{flex:1;min-width:0;flex-direction:column;gap:3px;padding:6px 4px!important;min-height:56px!important;font-size:11px!important;line-height:1.25!important}
+ ${r} .rmt-workspace-tabs button.active:after{display:none}
+ ${r} .rmt-workspace-tabs button.active .rmt-nav-icon{background:var(--rmt-theme-soft);box-shadow:0 0 0 5px var(--rmt-theme-soft);border-radius:5px}
+ ${r} .rmt-workspace-tabs .rmt-nav-icon{width:21px;height:21px}
+ ${r} .rmt-workspace-location{order:1;padding:2px 16px!important;min-height:30px!important}
+ ${r} .rmt-body{order:2;flex:1 1 auto!important;min-height:0!important;padding:22px 17px 24px!important;scrollbar-gutter:auto!important}
+ ${r} :is(.rmt-workspace-section-head,.rmt-home-heading){margin-bottom:20px!important}
+ ${r} :is(.rmt-workspace-section-head h2,.rmt-home-heading h1){font-size:24px!important}
+ ${r} .rmt-workspace-featured{padding:22px!important;margin-bottom:20px;gap:10px;border-radius:15px}
+ ${r} .rmt-workspace-featured h3{font-size:23px!important}
+ ${r} .rmt-workspace-featured>.fa-solid{font-size:42px;padding:4px}
+ ${r} .rmt-workspace-featured .rmt-btn{font-size:13px!important}
+ ${r} .rmt-workspace-groups{gap:2px!important}
+ ${r} .rmt-workspace-groups button{flex:1;min-width:0;padding:8px!important;font-size:14px!important}
+ ${r} .rmt-workspace-portals{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:10px!important}
+ ${r} .rmt-workspace-card .rmt-portal-open{grid-template-columns:minmax(0,1fr)!important;grid-template-areas:"icon" "title" "subtitle" "status"!important;min-height:158px!important;padding:16px 14px 13px!important;gap:5px!important}
+ ${r} .rmt-workspace-card:has(.rmt-queue-pick) .rmt-portal-open{padding-right:14px!important}
+ ${r} .rmt-workspace-card .rmt-portal-avatar{width:30px!important;height:30px!important;min-width:30px!important;margin-bottom:5px!important;border-radius:8px!important}
+ ${r} .rmt-workspace-card .rmt-portal-avatar i{font-size:18px!important}
+ ${r} .rmt-workspace-card .rmt-portal-title{font-size:14px!important}
+ ${r} .rmt-workspace-card .rmt-portal-subtitle{font-size:12px!important}
+ ${r} .rmt-workspace-card .rmt-portal-status{font-size:11px!important;line-height:1.5!important}
+ ${r} .rmt-workspace-portals[data-rmt-layout="list"] .rmt-portal-open{grid-template-areas:"icon title" "icon subtitle" "icon status"!important;grid-template-columns:34px minmax(0,1fr)!important;gap:4px 12px!important;min-height:108px!important;padding:16px 43px 16px 16px!important}
+ ${r} .rmt-route-people{padding:0 2px 8px!important;margin-inline:12px!important}
+ ${r} .rmt-route-people summary{font-size:11px!important}
+ ${r} .rmt-catalogue-queue{bottom:-12px;padding:10px;gap:6px;margin-top:16px!important;border-radius:11px}
+ ${r} .rmt-catalogue-queue .rmt-btn{font-size:12px!important;padding:9px 10px!important}
+ ${r} .rmt-catalogue-queue .rmt-together-help summary{width:34px}
+ ${r} .rmt-home .rmt-settings-content{grid-template-columns:minmax(0,1fr)!important;gap:12px!important}
+ ${r} .rmt-home .rmt-settings-card-head{min-height:80px!important;padding:16px!important}
+ ${r} .rmt-home .rmt-settings-card .rmt-settings-section-body{padding:16px!important;gap:16px!important}
+ ${r} .rmt-workspace-page .rmt-memory-gate{padding:20px!important}
+ ${r} .rmt-task-center{top:60px!important;right:10px!important;width:calc(100% - 20px)!important;max-height:calc(100% - 144px - env(safe-area-inset-bottom,0px))!important;padding:14px!important}
+ ${r} .rmt-cg-prompt-backdrop{align-items:flex-end!important;padding:0!important;padding-top:max(16px,env(safe-area-inset-top,0px),var(--rmt-mobile-safe-top,0px))!important}
+ ${r} .rmt-cg-prompt-dialog{width:100%!important;max-width:none!important;max-height:94dvh!important;border-radius:20px 20px 0 0!important;padding:18px 18px calc(18px + env(safe-area-inset-bottom,0px))!important}
+ ${r} .rmt-cg-prompt-head{top:-18px;padding:8px 0 12px!important}
+ ${r} .rmt-cg-prompt-actions{bottom:calc(-18px - env(safe-area-inset-bottom,0px));padding-bottom:calc(12px + env(safe-area-inset-bottom,0px))!important;flex-direction:row!important}
+ ${r} .rmt-cg-prompt-actions .rmt-btn{width:auto!important;flex:1 1 120px!important;font-size:14px!important}
+ ${r} .rmt-participant-dialog{width:100%!important;max-height:94dvh!important;border-radius:20px!important}
+}
+@media(max-width:359px){
+ ${r} .rmt-topbar{padding-inline:6px!important;gap:0!important}
+ ${r} .rmt-topbar-title{font-size:14px!important}
+ ${r} .rmt-body{padding-inline:13px!important}
+ ${r} .rmt-workspace-featured{padding:18px!important}
+ ${r} .rmt-workspace-featured>.fa-solid{display:none}
+ ${r} .rmt-workspace-card .rmt-portal-open{padding-inline:12px!important}
+ ${r} .rmt-catalogue-queue{padding:8px}
+}
+@media(prefers-reduced-motion:reduce){
+ ${r} :is(.rmt-btn,.rmt-workspace-card,.rmt-live-chip i){animation:none!important;transition:none!important;scroll-behavior:auto!important}
+}
+${mvStyles.mvRefreshCss(r)}
+`;
+}
+
+__m_ui_workspaceRefreshStyles_js.workspaceRefreshCss = workspaceRefreshCss;
 }
 
 function __init_core_themeSongCover_js() {
@@ -20358,7 +20920,7 @@ function __init_core_selfUpdater_js() {
 // MODULE: core/selfUpdater.js
 
 const UPDATE_STATE = Symbol.for('heartbeatMemories.selfUpdate');
-const INSTALLED_BUILD = '0.99.99-r84.187-mv-update-recovery';
+const INSTALLED_BUILD = '1.0.11-r84.228-ui-refresh';
 const PROJECT_REMOTE = 'https://github.com/zaiyebuzuoyouqingdetiangou/tokimemo';
 function updateError(message) { const error = new Error(message); error.userMessage = message; return error; }
 
@@ -81066,6 +81628,7 @@ function __init_ui_styles_js() {
 // MODULE: ui/styles.js
 const bedtime_view = __m_ui_bedtimeView_js;
 const ui_workspaceStyles = __m_ui_workspaceStyles_js;
+const ui_workspaceRefreshStyles = __m_ui_workspaceRefreshStyles_js;
 const postcard_design_view = __m_ui_postcardDesignView_js;
 const core_constants = __m_core_constants_js;
 const core_text = __m_core_text_js;
@@ -81085,6 +81648,7 @@ const css_heartProfileTravelCss = __m_ui_css_heartProfileTravelCss_js;
 const ui_autoMemoryWizardStyles = __m_ui_autoMemoryWizardStyles_js;
 const ui_heartEnvelope = __m_ui_heartEnvelope_js;
 const ui_imageMenu = __m_ui_imageMenu_js;
+
 
 
 
@@ -81458,6 +82022,7 @@ function ensureStyles() {
 #${core_constants.OVERLAY_ID} .rmt-language-scene textarea{width:100%;min-height:96px;font-size:16px}
 #${core_constants.OVERLAY_ID} .rmt-language-scene p{font-size:14px;line-height:1.6}
 `;
+    style.textContent += ui_workspaceRefreshStyles.workspaceRefreshCss('#' + core_constants.OVERLAY_ID);
     document.head.appendChild(style);
 }
 
@@ -82725,60 +83290,118 @@ function __init_ui_themeSongStyles_js() {
 // MODULE: ui/themeSongStyles.js
 
 function themeSongCss(root) {
+    root += ' .rmt-body';
     return `
 ${root} .rmt-theme-song{max-width:1000px;margin:auto;min-width:0;color:var(--rmt-theme-text)}
-${root} .rmt-song-heading{display:flex;align-items:center;gap:14px;margin-bottom:8px}
-${root} .rmt-song-heading h2{font-size:24px;margin:0 0 5px}
-${root} .rmt-song-heading p,${root} .rmt-song-note{font-size:14px;color:var(--rmt-theme-muted);margin:0;line-height:1.7}
-${root} .rmt-song-emblem{width:54px;height:54px;display:grid;place-items:center;flex:none;border-radius:50%;font-size:30px;border:1px solid var(--rmt-theme-border);background:var(--rmt-theme-soft);color:var(--rmt-theme-accent-ink)}
-${root} .rmt-song-composer{background:var(--rmt-theme-surface-solid);border:1px solid var(--rmt-theme-border);border-radius:18px;padding:0 18px;margin:18px 0}
-${root} .rmt-song-composer>summary{cursor:pointer;min-height:52px;display:flex;align-items:center;gap:8px;font-weight:600}
-${root} .rmt-song-composer>summary:before{content:'›'}
-${root} .rmt-song-composer[open]>summary:before{content:'⌄'}
+${root} .rmt-song-heading{display:flex;align-items:center;gap:12px;margin-bottom:8px}
+${root} .rmt-song-heading h2{font-size:25px!important;margin:0 0 3px!important}
+${root} .rmt-song-heading p,${root} .rmt-song-note{font-size:13px!important;color:var(--rmt-theme-muted)!important;margin:0;line-height:1.7!important}
+${root} .rmt-song-emblem{width:42px;height:42px;display:grid;place-items:center;flex:none;border-radius:13px;font-size:24px;background:var(--rmt-theme-soft);color:var(--rmt-theme-accent-ink)!important}
+${root} .rmt-song-composer{background:var(--rmt-theme-surface-solid);border:1px solid var(--rmt-theme-border);border-radius:14px;padding:0 18px;margin:18px 0 24px}
+${root} .rmt-song-composer>summary{cursor:pointer;min-height:48px;display:flex;align-items:center;gap:9px;font-weight:600!important;font-size:14px;list-style:none}
+${root} .rmt-song-composer>summary::-webkit-details-marker{display:none}
+${root} .rmt-song-composer>summary:after{content:'';margin-left:auto;width:7px;height:7px;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:rotate(45deg);flex:none}
+${root} .rmt-song-composer[open]>summary:after{transform:rotate(225deg)}
 ${root} .rmt-song-composer:not([open])>.rmt-song-form{display:none}
-${root} .rmt-song-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;padding:4px 0 18px}
-${root} .rmt-song-form label{display:grid;gap:7px;font-size:14px;min-width:0}
+${root} .rmt-song-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;padding:8px 0 18px}
+${root} .rmt-song-form label{display:grid;gap:7px;font-size:13px;min-width:0}
 ${root} .rmt-song-form [data-rmt-song-custom-row][hidden]{display:none!important}
 ${root} .rmt-song-wide{grid-column:1/-1}
-${root} .rmt-theme-song :is(input,select,textarea){width:100%;max-width:100%;min-width:0;box-sizing:border-box;min-height:44px;border:1px solid var(--rmt-theme-border);border-radius:10px;color:var(--rmt-theme-text);background:var(--rmt-theme-surface-solid);padding:10px;font:inherit}
-${root} .rmt-theme-song textarea{min-height:200px;resize:vertical}
-${root} .rmt-song-layout{display:grid;grid-template-columns:minmax(0,1fr);gap:16px;min-width:0}
+${root} .rmt-theme-song :is(input,select,textarea){width:100%;max-width:100%;min-width:0;box-sizing:border-box;min-height:44px;border:1px solid var(--rmt-theme-border);border-radius:9px;color:var(--rmt-theme-text);background:var(--rmt-theme-surface-solid);padding:10px 12px;font:inherit;font-size:16px!important}
+${root} .rmt-theme-song textarea{min-height:180px;resize:vertical;line-height:1.7!important}
+${root} .rmt-theme-song textarea[data-rmt-song-direction]{min-height:96px}
+${root} .rmt-theme-song .rmt-btn{min-height:44px;border-radius:10px!important;box-shadow:none!important;padding:9px 14px!important;max-width:100%;font-size:14px!important;white-space:normal!important}
+${root} .rmt-theme-song .rmt-song-write,${root} .rmt-theme-song .rmt-song-mv-open{background:var(--rmt-theme-accent-ink)!important;border-color:var(--rmt-theme-accent-ink)!important;color:var(--rmt-theme-surface-solid)!important;--rmt-content-ink:var(--rmt-theme-surface-solid);font-weight:600!important}
+${root} .rmt-song-write{justify-self:start;grid-column:1/-1;min-width:130px}
+${root} .rmt-theme-song :is(button,input,select,textarea):disabled{opacity:.55!important;cursor:default}
+${root} .rmt-song-layout{display:grid;grid-template-columns:minmax(0,1fr);gap:28px;min-width:0}
+${root} .rmt-song-layout.has-songs{grid-template-columns:minmax(145px,0.65fr) minmax(0,2.5fr)}
 ${root} .rmt-song-detail{min-width:0}
-${root} .rmt-song-cover{max-width:480px;margin:0 auto 20px;min-width:0}
-${root} .rmt-song-cover .rmt-thumb{aspect-ratio:auto;min-height:0;overflow:hidden;border-radius:16px}
-${root} .rmt-song-cover .rmt-thumb img{width:100%;height:auto;display:block;object-fit:contain}
-${root} .rmt-song-cover-empty{display:grid;place-content:center;gap:8px;text-align:center;min-height:150px;border-radius:16px;background:var(--rmt-theme-soft);color:var(--rmt-theme-accent-ink);border:1px solid var(--rmt-theme-border)}
-${root} .rmt-song-cover-empty>span{font-size:40px}
-${root} .rmt-song-layout.has-songs{grid-template-columns:minmax(150px,0.8fr) minmax(0,2.4fr)}
-${root} .rmt-song-list{display:flex;flex-direction:column;gap:8px;min-width:0}
-${root} .rmt-song-list>button{display:flex;align-items:center;text-align:left;gap:10px;min-height:62px;white-space:normal;overflow-wrap:anywhere;min-width:0;width:100%;border:1px solid var(--rmt-theme-border);background:var(--rmt-theme-surface-solid);border-radius:14px;color:var(--rmt-theme-text);padding:12px;cursor:pointer;font:inherit}
-${root} .rmt-song-list>button.active{border-color:var(--rmt-theme-accent-ink);background:var(--rmt-theme-soft)}
-${root} .rmt-song-list b{display:block;font-size:15px}${root} .rmt-song-list small{display:block;margin-top:5px;font-size:12px;color:var(--rmt-theme-muted)}
-${root} .rmt-song-sheet,${root} .rmt-song-empty{min-width:0;border-radius:18px;padding:24px;border:1px solid var(--rmt-theme-border);background:var(--rmt-theme-surface-solid);color:var(--rmt-theme-text)}
-${root} .rmt-song-sheet header{border-bottom:1px solid var(--rmt-theme-border);padding-bottom:18px}
-${root} .rmt-song-sheet small{color:var(--rmt-theme-muted)}${root} .rmt-song-sheet h2{font-size:26px;line-height:1.4;overflow-wrap:anywhere;margin:12px 0}
-${root} .rmt-song-sheet h3{font-size:17px;margin:0 0 10px}${root} .rmt-song-sheet p{font-size:15px;line-height:1.8;margin:6px 0}
-${root} .rmt-song-sheet :is(.rmt-song-style,.rmt-song-lyrics){padding-top:20px}
-${root} .rmt-song-sheet pre{white-space:pre-wrap;overflow-wrap:anywhere;word-break:normal;font:inherit;line-height:1.9;font-size:16px;background:none;border:0;color:inherit;margin:12px 0 20px;padding:0}
-${root} .rmt-song-style pre{font-size:14px;padding:14px;border:1px solid var(--rmt-theme-border);border-radius:12px;background:var(--rmt-theme-soft)}
+${root} .rmt-song-list{display:flex;flex-direction:column;gap:6px;min-width:0;align-self:start}
+${root} .rmt-song-list>button{display:flex;align-items:center;text-align:left;gap:10px;min-height:62px;white-space:normal;overflow-wrap:anywhere;min-width:0;width:100%;border:1px solid transparent;background:transparent!important;border-radius:11px;color:var(--rmt-theme-text);padding:11px 12px;cursor:pointer;font:inherit;box-shadow:none!important}
+${root} .rmt-song-list>button.active{border-color:var(--rmt-theme-border)!important;background:var(--rmt-theme-soft)!important;--rmt-content-ink:var(--rmt-theme-text);color:var(--rmt-theme-text)!important}
+${root} .rmt-song-list>button>span:first-child{color:var(--rmt-theme-accent-ink)!important;flex:none}
+${root} .rmt-song-list b{display:block;font-size:14px!important}
+${root} .rmt-song-list small{display:block;margin-top:4px;font-size:12px!important;color:var(--rmt-theme-muted)!important}
+${root} .rmt-song-sheet,${root} .rmt-song-empty{min-width:0;color:var(--rmt-theme-text);background:var(--rmt-theme-surface-solid);border:1px solid var(--rmt-theme-border);border-radius:18px;padding:24px}
+${root} .rmt-song-summary{display:grid;grid-template-columns:minmax(100px,160px) minmax(0,1fr);align-items:start;gap:22px;padding-bottom:8px;border:0}
+${root} .rmt-song-meta{min-width:0;align-self:center;text-align:left}
+${root} .rmt-song-meta>small{font-size:12px!important;color:var(--rmt-theme-muted)!important}
+${root} .rmt-song-meta h2{font-size:28px!important;line-height:1.4!important;overflow-wrap:anywhere;margin:7px 0 9px!important}
+${root} .rmt-song-meta p{font-size:13px!important;line-height:1.75!important;margin:4px 0;color:var(--rmt-theme-muted)!important}
+${root} .rmt-song-meta .rmt-song-credit{font-size:11px!important}
+${root} .rmt-song-cover{min-width:0;max-width:none;margin:0}
+${root} .rmt-song-cover .rmt-expanded-cg{margin:0}
+${root} .rmt-song-cover .rmt-thumb{aspect-ratio:auto;min-height:0;overflow:hidden;border-radius:12px}
+${root} .rmt-song-cover .rmt-thumb img{width:100%;height:auto;display:block;object-fit:contain;border-radius:12px}
+${root} .rmt-song-cover-empty{display:grid;place-content:center;gap:7px;text-align:center;min-height:150px;border-radius:12px;background:var(--rmt-theme-soft);color:var(--rmt-theme-accent-ink)!important;border:1px solid var(--rmt-theme-border)}
+${root} .rmt-song-cover-empty>span{font-size:34px;color:var(--rmt-theme-accent-ink)!important}
+${root} .rmt-song-cover-empty>b{font-size:12px!important}
+${root} .rmt-song-cover .rmt-cg-menu-row{justify-content:flex-start}
+${root} .rmt-song-cover .rmt-cg-menu{align-items:flex-start;width:100%}
+${root} .rmt-song-cover .rmt-cg-menu-toggle{width:auto;min-height:44px;height:auto;display:flex;gap:5px;border:0;border-radius:7px;background:transparent!important;color:var(--rmt-theme-accent-ink)!important;font-size:12px;padding:0 3px}
+${root} .rmt-song-cover .rmt-cg-menu-toggle:after{content:'封面设置'}
+${root} .rmt-song-cover .rmt-cg-menu-toggle .rmt-bunny-icon{display:none}
+${root} .rmt-song-cover .rmt-cg-menu-single .rmt-btn{flex:1 1 auto!important;max-width:100%;min-width:0;font-size:12px!important;padding:8px 6px!important;text-align:left;border:0!important;background:transparent!important;color:var(--rmt-theme-accent-ink)!important}
+${root} .rmt-song-cover .rmt-cg-menu-single .rmt-bunny-icon{display:none}
+${root} .rmt-song-cover .rmt-cg-menu-list{box-sizing:border-box;width:100%;padding:4px}
+${root} .rmt-song-cover .rmt-cg-menu-list .rmt-btn{font-size:12px!important;padding:8px!important}
+${root} .rmt-song-display-switch{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:8px 0 24px;padding:12px 0 15px;border-bottom:1px solid var(--rmt-theme-border);position:sticky;top:0;z-index:5;background:var(--rmt-theme-surface-solid)}
+${root} .rmt-song-display-options{display:flex;align-items:center;gap:2px;padding:3px;border-radius:11px;background:var(--rmt-theme-soft);min-width:0}
+${root} .rmt-song-display-options .rmt-btn{border:1px solid transparent!important;padding:8px 11px!important;border-radius:8px!important;background:transparent!important;color:var(--rmt-theme-muted)!important}
+${root} .rmt-song-display-options .rmt-btn[aria-pressed="true"]{border-color:var(--rmt-theme-border)!important;background:var(--rmt-theme-surface-solid)!important;color:var(--rmt-theme-accent-ink)!important;box-shadow:0 1px 3px var(--rmt-theme-shadow)!important}
+${root} .rmt-song-sheet h3{font-size:17px!important;margin:0 0 10px!important}
+${root} .rmt-song-sheet p{font-size:15px;line-height:1.8;margin:6px 0}
+${root} .rmt-song-sheet :is(.rmt-song-style,.rmt-song-lyrics){padding-top:4px}
+${root} .rmt-song-sheet pre{white-space:pre-wrap;overflow-wrap:anywhere;word-break:normal;font:inherit;line-height:1.9;font-size:16px;background:none;border:0;color:inherit;margin:12px 0 24px;padding:0}
+${root} .rmt-song-style pre{font-size:14px;padding:16px;border:1px solid var(--rmt-theme-border);border-radius:10px;background:var(--rmt-theme-soft)}
 ${root} .rmt-song-toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-${root} .rmt-song-toolbar h3{margin:0 auto 0 0}${root} .rmt-song-toolbar button{min-height:44px;font-size:14px!important;max-width:100%;white-space:normal!important}
+${root} .rmt-song-toolbar h3{margin:0 auto 0 0!important}
 ${root} .rmt-song-sheet footer{border-top:1px solid var(--rmt-theme-border);padding-top:18px}
-${root} .rmt-song-empty{text-align:center;padding:32px 20px}${root} .rmt-song-empty>span{font-size:36px;color:var(--rmt-theme-accent-ink)}
-${root} .rmt-theme-song :is(button,input,select,textarea,summary):focus-visible{outline:2px solid var(--rmt-theme-accent-ink);outline-offset:3px}
-${root} .rmt-song-display-switch{display:flex;gap:8px;flex-wrap:wrap;margin:16px 0}
-${root} .rmt-song-display-switch button[aria-pressed="true"]{border-color:var(--rmt-theme-accent-ink)!important;box-shadow:inset 0 0 0 1px var(--rmt-theme-accent-ink)!important}
-${root} .rmt-song-readable header{text-align:center}
-${root} .rmt-song-readable h2{font-size:30px;margin:16px 0}
-${root} .rmt-song-readable .rmt-song-credit{font-size:13px;color:var(--rmt-theme-muted)}
-${root} .rmt-song-reading-lyrics{max-width:38em;margin:24px auto 32px}
+${root} .rmt-song-sheet footer [data-rmt-song="delete"]{margin-left:auto;background:transparent!important;border-color:transparent!important;color:var(--rmt-theme-muted)!important}
+${root} .rmt-song-empty{text-align:center;padding:42px 24px}
+${root} .rmt-song-empty>span{font-size:36px;color:var(--rmt-theme-accent-ink)!important}
+${root} .rmt-theme-song :is(button,input,select,textarea,summary):focus-visible{outline:2px solid var(--rmt-theme-accent-ink)!important;outline-offset:3px}
+${root} .rmt-song-reading-lyrics{max-width:38em;margin:0 auto 32px}
 ${root} .rmt-song-stanza{margin:28px 0}
-${root} .rmt-song-stanza h3{font-size:13px;color:var(--rmt-theme-muted);margin:0 0 10px;font-weight:500}
-${root} .rmt-song-stanza p{white-space:pre-wrap;overflow-wrap:anywhere;font-size:17px;line-height:2.1;margin:0}
-${root} .rmt-song-arrangement>summary{min-height:44px;cursor:pointer;padding-top:12px;box-sizing:border-box}
+${root} .rmt-song-stanza:first-child{margin-top:0}
+${root} .rmt-song-stanza h3{font-size:12px!important;color:var(--rmt-theme-muted)!important;margin:0 0 12px!important;font-weight:500!important}
+${root} .rmt-song-stanza p{white-space:pre-wrap;overflow-wrap:anywhere;font-size:16px!important;line-height:2.15!important;margin:0}
+${root} .rmt-song-arrangement>summary{min-height:44px;cursor:pointer;padding:9px 0;box-sizing:border-box;color:var(--rmt-theme-accent-ink)!important;font-size:13px}
 ${root} .rmt-song-arrangement:not([open])>p{display:none}
-@media(max-width:640px){${root} .rmt-song-layout.has-songs{grid-template-columns:minmax(0,1fr)}${root} .rmt-song-sheet{padding:18px}${root} .rmt-song-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}${root} .rmt-song-list>button{height:100%}${root} .rmt-song-heading h2{font-size:22px}}
-@media(max-width:350px){${root} .rmt-song-form{grid-template-columns:minmax(0,1fr)}${root} .rmt-song-list{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:760px){
+${root} .rmt-song-layout.has-songs{grid-template-columns:minmax(0,1fr);gap:18px}
+${root} .rmt-song-list{display:flex;flex-direction:row;overflow:auto;gap:8px;padding-bottom:3px;scrollbar-width:thin}
+${root} .rmt-song-list>button{flex:0 0 auto;max-width:190px;width:auto;min-width:118px;min-height:52px;padding:8px 11px}
+${root} .rmt-song-list b{font-size:13px!important}
+${root} .rmt-song-list small{font-size:11px!important}
+${root} .rmt-song-sheet{padding:20px}
+${root} .rmt-song-summary{grid-template-columns:110px minmax(0,1fr);gap:18px}
+${root} .rmt-song-meta h2{font-size:24px!important}
+${root} .rmt-song-cover-empty{min-height:126px}
+}
+@media(max-width:480px){
+${root} .rmt-song-heading h2{font-size:24px!important}
+${root} .rmt-song-sheet{padding:0;border:0;border-radius:0;background:transparent}
+${root} .rmt-song-summary{grid-template-columns:108px minmax(0,1fr);gap:17px}
+${root} .rmt-song-meta h2{font-size:22px!important}
+${root} .rmt-song-meta>small{font-size:11px!important}
+${root} .rmt-song-meta p{font-size:12px!important}
+${root} .rmt-song-display-switch{margin:8px 0 24px;gap:8px;background:var(--rmt-theme-bg)}
+${root} .rmt-song-display-options .rmt-btn{font-size:13px!important;padding:8px 9px!important}
+${root} .rmt-song-mv-open{font-size:13px!important;padding-inline:12px!important}
+${root} .rmt-song-composer{padding:0 14px;margin:17px 0 20px}
+${root} .rmt-song-stanza p{font-size:16px!important;line-height:2.15!important}
+}
+@media(max-width:350px){
+${root} .rmt-song-form{grid-template-columns:minmax(0,1fr)}
+${root} .rmt-song-summary{grid-template-columns:90px minmax(0,1fr);gap:13px}
+${root} .rmt-song-meta h2{font-size:20px!important}
+${root} .rmt-song-cover-empty{min-height:108px}
+${root} .rmt-song-display-options .rmt-btn{font-size:12px!important;padding-inline:7px!important}
+${root} .rmt-theme-song .rmt-song-mv-open{font-size:12px!important;padding-inline:10px!important}
+${root} .rmt-song-sheet footer [data-rmt-song="delete"]{margin-left:0}
+}
 `;
 }
 
@@ -82912,29 +83535,29 @@ function renderThemeSongs() {
       <label>歌词语言<select data-rmt-song-language ${disabled ? 'disabled' : ''}>${options}</select></label>
       <label data-rmt-song-custom-row hidden>语言<input data-rmt-song-custom-language maxlength="40" disabled></label>
       <label>演唱者设定<select data-rmt-song-voice ${disabled ? 'disabled' : ''}>${voices}</select></label>
-      <label class="rmt-song-wide">想要的感觉（可不填）<input data-rmt-song-direction maxlength="400" placeholder="例如：克制的钢琴抒情，副歌逐渐明亮" ${disabled ? 'disabled' : ''}></label>
+      <label class="rmt-song-wide">想要的感觉（可不填）<textarea data-rmt-song-direction maxlength="400" rows="3" placeholder="例如：克制的钢琴抒情，副歌逐渐明亮" ${disabled ? 'disabled' : ''}></textarea></label>
       <button type="button" class="rmt-btn rmt-song-write" data-rmt-song="generate" ${disabled ? 'disabled' : ''}>${busy() ? '正在写歌…' : session.songs.length ? '新写一首' : '创作印象曲'}</button></div></details>`;
     const button = (action, label) => `<button type="button" class="rmt-btn" data-rmt-song="${action}" data-rmt-song-id="${esc(selected.id)}">${label}</button>`;
     const mvButton = selected && !readonly() && !selected.generationIncomplete
-        ? `<button type="button" class="rmt-btn" data-rmt-mv="open" data-rmt-mv-id="${esc(selected.id)}">做成 MV</button>` : '';
-    const formatDetails = selected ? `<article class="rmt-song-sheet" data-rmt-song-presentation="format"><header><small>${esc(selected.subject === 'event' ? '事件印象曲' : '角色印象曲')} · ${esc(selected.subjectTitle)}</small><h2>${esc(selected.title)}</h2><p><b>演唱者</b> ${esc(selected.singer)} <span>· ${esc(contract.songLanguageLabel(selected))}</span></p><p>${esc(selected.vocalDescription)}</p></header>
+        ? `<button type="button" class="rmt-btn rmt-song-mv-open" data-rmt-mv="open" data-rmt-mv-id="${esc(selected.id)}">做成 MV</button>` : '';
+    const switcher = `<div class="rmt-song-display-switch" role="group" aria-label="歌曲操作"><div class="rmt-song-display-options"><button type="button" class="rmt-btn" data-rmt-song="view-read" aria-pressed="${displayMode === 'read'}">阅读模式</button><button type="button" class="rmt-btn" data-rmt-song="view-format" aria-pressed="${displayMode === 'format'}">创作格式</button></div>${mvButton}</div>`;
+    const cover = selected ? `<div class="rmt-song-cover">${expanded_cg_view.expandedCgHtml(session,
+        { kind: 'song-cover', containerId: selected.id }, readonly(),
+        { placeholder: '<div class="rmt-song-cover-empty"><span aria-hidden="true">♫</span><b>专辑封面</b></div>' })}</div>` : '';
+    const formatDetails = selected ? `<article class="rmt-song-sheet" data-rmt-song-presentation="format"><header class="rmt-song-summary">${cover}<div class="rmt-song-meta"><small>${esc(selected.subject === 'event' ? '事件印象曲' : '角色印象曲')} · ${esc(selected.subjectTitle)}</small><h2>${esc(selected.title)}</h2><p><b>演唱者</b> ${esc(selected.singer)} <span>· ${esc(contract.songLanguageLabel(selected))}</span></p><p>${esc(selected.vocalDescription)}</p></div></header>
       <section class="rmt-song-style"><h3>曲风</h3><p>${esc(selected.styleDescription)}</p><div class="rmt-song-toolbar">${button('copy-title','复制歌名')}${button('copy-style','复制曲风')}</div><pre>${esc(selected.stylePrompt)}</pre></section>
       <section class="rmt-song-lyrics"><div class="rmt-song-toolbar"><h3>${selected.generationIncomplete ? '已收到的歌词 · 未完成' : '完整歌词'}</h3>${button('copy-lyrics','复制歌词')}</div><pre>${esc(selected.lyrics)}</pre></section>
       <footer class="rmt-song-toolbar">${button('copy-all','复制全部')}${button('export','导出文本')}${readonly() ? '' : `<button type="button" class="rmt-btn" data-rmt-song="delete" data-rmt-song-id="${esc(selected.id)}" ${busy() ? 'disabled' : ''}>删除这首</button>`}</footer>
       <div data-rmt-song-copy-fallback></div></article>` : '<div class="rmt-song-empty"><span aria-hidden="true">♫</span><h3>让故事有自己的旋律</h3><p>为角色写一首，或选一段真实回忆作为起点。</p></div>';
-    const readDetails = selected ? `<article class="rmt-song-sheet rmt-song-readable" data-rmt-song-presentation="read"><header>
+    const readDetails = selected ? `<article class="rmt-song-sheet rmt-song-readable" data-rmt-song-presentation="read"><header class="rmt-song-summary">${cover}<div class="rmt-song-meta">
       <small>${esc(selected.subject === 'event' ? '事件印象曲' : '角色印象曲')} · ${esc(selected.subjectTitle)}</small>
       <h2>${esc(selected.title)}</h2><p>演唱者 · ${esc(selected.singer)}</p>
       <p class="rmt-song-credit">作者 · 未署名（原创生成）</p>
-      <details class="rmt-song-arrangement"><summary>曲风与人声</summary><p>${esc(selected.styleDescription)}</p><p>${esc(selected.vocalDescription)}</p></details></header>
+      <details class="rmt-song-arrangement"><summary>曲风与人声</summary><p>${esc(selected.styleDescription)}</p><p>${esc(selected.vocalDescription)}</p></details></div></header>
       <div class="rmt-song-reading-lyrics">${songLyricsReadingHtml(selected.lyrics)}</div>
       <footer class="rmt-song-toolbar">${button('copy-lyrics','复制歌词')}${button('export','导出文本')}${readonly() ? '' : `<button type="button" class="rmt-btn" data-rmt-song="delete" data-rmt-song-id="${esc(selected.id)}" ${busy() ? 'disabled' : ''}>删除这首</button>`}</footer>
       <div data-rmt-song-copy-fallback></div></article>` : formatDetails;
-    const cover = selected ? `<div class="rmt-song-cover">${expanded_cg_view.expandedCgHtml(session,
-        { kind: 'song-cover', containerId: selected.id }, readonly(),
-        { placeholder: '<div class="rmt-song-cover-empty"><span aria-hidden="true">♫</span><b>专辑封面</b></div>' })}</div>` : '';
-    const details = `<div class="rmt-song-detail">${cover}${displayMode === 'format' ? formatDetails : readDetails}</div>`;
-    const switcher = `<div class="rmt-song-display-switch" role="group" aria-label="歌曲操作"><button type="button" class="rmt-btn" data-rmt-song="view-read" aria-pressed="${displayMode === 'read'}">阅读模式</button><button type="button" class="rmt-btn" data-rmt-song="view-format" aria-pressed="${displayMode === 'format'}">创作格式</button>${mvButton}</div>`;
+    const details = `<div class="rmt-song-detail">${displayMode === 'format' ? formatDetails : readDetails}</div>`;
     const list = session.songs.length ? `<nav class="rmt-song-list" aria-label="已保存的印象曲">${[...session.songs].reverse().map(song => `<button type="button" class="${song.id === selected?.id ? 'active' : ''}" data-rmt-song="select" data-rmt-song-id="${esc(song.id)}" aria-current="${song.id === selected?.id ? 'page' : 'false'}"><span aria-hidden="true">♪</span><span><b>${esc(song.title)}</b><small>${esc(song.singer)}</small></span></button>`).join('')}</nav>` : '';
     const allCache = runtimeState.activeArchiveSnapshot?.cache || cache.getCache(contextApi.getContext());
     const recovery = recoveryView.recoveryBannerHtml(allCache, memory, { readOnly: readonly() });
@@ -84162,8 +84785,13 @@ function syncWorkspaceChrome() {
     if (target) { const badge = document.createElement('small'); badge.textContent = target; crumb.append(badge); }
 }
 function workspaceNavHtml() {
+    const icons = {
+        settings: '<path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3"/><circle cx="15" cy="17" r="3"/>',
+        archive: '<path d="M5 4h14v16H5zM9 8h6M9 12h6M9 16h3"/>',
+        content: '<path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z"/>',
+    };
     return '<nav class="rmt-workspace-tabs" aria-label="心迹回廊主导航">' + [['settings','设置'],['archive','当前档案'],['content','内容']]
-        .map(([key,label]) => `<button type="button" data-rmt-workspace-tab="${key}">${label}</button>`).join('')
+        .map(([key,label]) => `<button type="button" data-rmt-workspace-tab="${key}"><svg class="rmt-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${icons[key]}</svg><span>${label}</span></button>`).join('')
         + '</nav><div class="rmt-workspace-location" hidden></div>';
 }
 function openWorkspaceTab(tab) {
@@ -84205,6 +84833,14 @@ function workspaceCatalogueHtml(portals = [], snapshot = null, { ready: archiveR
     ui_workspaceState.loadWorkspacePreferences();
     const sessionMap = new Map(portals.map(item => [item.mode, item.session]));
     const canQueue = archiveReady && !snapshot;
+    // A shortcut to an existing reader, backed by the same scoped sessions as the cards.
+    const featured = Object.entries(ui_workspaceState.WORKSPACE_ROUTES).find(([key, spec]) =>
+        !spec.deep && !spec.manualOnly && spec.group === ui_workspaceState.workspace.group && routeHasContent(key, sessionMap.get(spec.mode)));
+    const featuredHtml = featured ? (() => {
+        const [key, spec] = featured;
+        const meta = { ...snapshots.modePortalMeta(spec.mode), ...(ALIAS_META[key] || {}) };
+        return `<section class="rmt-workspace-featured"><div><small>${esc(GROUPS.find(([group]) => group === spec.group)?.[1] || '内容')} · 已有内容</small><h3>${esc(spec.title)}</h3><p>${esc(meta.subtitle)}</p><button type="button" class="rmt-btn" data-rmt-workspace-route="${key}">打开${esc(spec.title)} <span aria-hidden="true">→</span></button></div><i class="fa-solid ${esc(meta.icon)}" aria-hidden="true"></i></section>`;
+    })() : '';
     const cards = Object.entries(ui_workspaceState.WORKSPACE_ROUTES).filter(([,spec]) => !spec.deep && spec.group === ui_workspaceState.workspace.group).map(([key,spec]) => {
         const meta = { ...snapshots.modePortalMeta(spec.mode), ...(ALIAS_META[key] || {}) };
         const session = sessionMap.get(spec.mode);
@@ -84231,8 +84867,8 @@ function workspaceCatalogueHtml(portals = [], snapshot = null, { ready: archiveR
             if (legacy.length) pendingBar += `<div class="rmt-queue-bar"><small>有 ${legacy.length} 条旧暂存记录缺少所属人物，已保留，不会显示为当前人物内容。</small><button type="button" class="rmt-btn" data-rmt-action="merged-export-legacy">导出旧暂存记录</button></div>`;
         } catch { pendingBar = '<div class="rmt-queue-bar" role="alert">暂存区读取失败，旧数据没有清空。<button type="button" class="rmt-btn" data-rmt-action="merged-export-legacy">导出旧暂存记录</button></div>'; }
     }
-    const queueBar = canQueue ? `<div class="rmt-queue-bar"><button type="button" class="rmt-btn" data-rmt-action="queue-selected">把勾选的项目排进任务中心</button><button type="button" class="rmt-btn" data-rmt-action="generate-together">一起生成</button><details class="rmt-together-help"><summary aria-label="一起生成说明">?</summary><p>同一请求可合并陈列柜、成就库、邮箱、印象曲和睡前故事。其他页面保留各自生成步骤，安排为独立请求。发送前可查看分组和预计请求数。</p></details></div>${pendingBar}` : '';
-    return `<section class="rmt-workspace-catalogue"><header class="rmt-workspace-section-head"><div><h2>内容</h2><p>选择你想看的那一页</p></div><div class="rmt-layout-switch" aria-label="目录显示方式">${[['cards','卡片'],['list','列表']].map(([k,t])=>`<button type="button" data-rmt-workspace-layout="${k}" aria-pressed="${ui_workspaceState.workspace.layout === k}" class="${ui_workspaceState.workspace.layout === k ? 'active' : ''}">${t}</button>`).join('')}</div></header><nav class="rmt-workspace-groups" aria-label="内容分组">${GROUPS.map(([k,t])=>`<button type="button" data-rmt-workspace-group="${k}" class="${ui_workspaceState.workspace.group === k ? 'active' : ''}" aria-current="${ui_workspaceState.workspace.group === k ? 'page' : 'false'}">${t}</button>`).join('')}</nav>${queueBar}<div class="rmt-archive-portals rmt-workspace-portals" data-rmt-layout="${ui_workspaceState.workspace.layout}">${cards}</div></section>`;
+    const queueBar = canQueue ? `<div class="rmt-queue-bar rmt-catalogue-queue"><button type="button" class="rmt-btn" data-rmt-action="queue-selected" title="把勾选的项目排进任务中心">加入任务队列</button><button type="button" class="rmt-btn" data-rmt-action="generate-together">一起生成</button><details class="rmt-together-help"><summary aria-label="一起生成说明">?</summary><p>同一请求可合并陈列柜、成就库、邮箱、印象曲和睡前故事。其他页面保留各自生成步骤，安排为独立请求。发送前可查看分组和预计请求数。</p></details></div>` : '';
+    return `<section class="rmt-workspace-catalogue"><header class="rmt-workspace-section-head"><div><h2>内容</h2><p>选择你想看的那一页</p></div><div class="rmt-layout-switch" aria-label="目录显示方式">${[['cards','卡片'],['list','列表']].map(([k,t])=>`<button type="button" data-rmt-workspace-layout="${k}" aria-pressed="${ui_workspaceState.workspace.layout === k}" class="${ui_workspaceState.workspace.layout === k ? 'active' : ''}">${t}</button>`).join('')}</div></header>${featuredHtml}<nav class="rmt-workspace-groups" aria-label="内容分组">${GROUPS.map(([k,t])=>`<button type="button" data-rmt-workspace-group="${k}" class="${ui_workspaceState.workspace.group === k ? 'active' : ''}" aria-current="${ui_workspaceState.workspace.group === k ? 'page' : 'false'}">${t}</button>`).join('')}</nav>${pendingBar}<div class="rmt-archive-portals rmt-workspace-portals" data-rmt-layout="${ui_workspaceState.workspace.layout}">${cards}</div>${queueBar}</section>`;
 }
 // Move existing validated markup, never replace the underlying archive or task objects.
 function arrangeArchiveWorkspace(body, { portals = [], ready = false, snapshot = null } = {}) {
@@ -84496,7 +85132,7 @@ function setWorkspacePreference(key, value) {
 function leaveWorkspaceReader() { workspace.epoch++; workspace.empty = null; workspace.route = ''; }
 const WORKSPACE_ROUTES = Object.freeze({
     album: { mode: 'album', title: '回忆相簿', group: 'memory' },
-    adv: { mode: 'adv', title: 'ADV EVENT', group: 'memory' },
+    adv: { mode: 'adv', title: '剧情回放', group: 'memory' },
     cabinet: { mode: 'cabinet', title: '两个人的陈列柜', group: 'memory' },
     collection: { mode: 'collection', title: '回忆收集率', group: 'memory', manualOnly: true },
     room: { mode: 'room', title: '他的房间', group: 'life' },
@@ -84514,7 +85150,7 @@ const WORKSPACE_ROUTES = Object.freeze({
     relations: { mode: 'relations', title: '人际庭园', group: 'interaction' },
     achievements: { mode: 'achievements', title: '成就库', group: 'interaction' },
     mirrorCall: { mode:'mirrorCall', title:'想和现在的 TA 聊天吗？', group:'interaction', manualOnly:true },
-    ending: { mode: 'ending', title: 'ENDING', group: 'stories' },
+    ending: { mode: 'ending', title: '结局', group: 'stories' },
     postending: { mode: 'heart', title: '未来 / 后日谈', group: 'stories', view: 'seasons', season: 'postending' },
     butterfly: { mode: 'butterfly', title: '蝴蝶效应', group: 'stories' },
     pastLives: { mode: 'pastLives', title: '前世今生', group: 'stories' },
@@ -86551,8 +87187,10 @@ const cg_appearance = __m_generation_cgAppearance_js;
 const mv_cast = __m_extras_mvCast_js;
 const mv_direction = __m_extras_mvDirection_js;
 const mv_still = __m_extras_mvStillPrompt_js;
+const mv_stage = __m_extras_mvStage_js;
 // 印象曲 MV：同一张分镜表可以做成手书（插件内播放与导出）或视频（提示词交给视频工具）。
 // 写分镜是一次文字请求；首帧由用户逐张手动绘制。数据按聊天、按歌保存，不写入正式档案。
+
 
 
 
@@ -86718,6 +87356,7 @@ function resultBasis(record, kind, shotId) {
         return JSON.stringify(record ? {
             storyRevision: record.storyRevision, settings: record.settings, shots: record.shots,
             groups: record.groups, motif: record.motif, keyword: record.keyword,
+            ...(record.stage ? { stage: record.stage } : {}),
             wardrobe: record.wardrobe, tegaki: record.tegaki,
             ...(record.assetPrompts ? { assetPrompts: record.assetPrompts } : {}),
             ...(record.cast ? { cast: record.cast } : {}),
@@ -86728,6 +87367,7 @@ function resultBasis(record, kind, shotId) {
         // Appending other groups or completing a sibling image does not change
         // this asset's identity; replacing the storyboard does.
         return JSON.stringify({ storyRevision: record?.storyRevision, image: found?.image || null,
+            ...(String(shotId).startsWith('stage:') && found?.bgRow ? { background: { ...found.bgRow, image: null } } : {}),
             ...(record?.assetPrompts?.[shotId] !== undefined ? { prompt: record.assetPrompts[shotId] } : {}) });
     }
     return JSON.stringify(list(record?.shots).find(shot => shot.id === shotId) || null);
@@ -86804,6 +87444,7 @@ async function retryMvSave(scope, id) {
         else if (row.kind === 'append') {
             next.shots = [...list(next.shots), ...row.patch.shots].sort((a, b) => a.sectionIndex - b.sectionIndex);
             if (isV2(next)) next.groups = [...next.groups, ...row.patch.groups];
+            if (row.patch.stage) next.stage = { version: 1, backgrounds: [...list(next.stage?.backgrounds), ...row.patch.stage.backgrounds] };
             if (row.patch.cast) next.cast = row.patch.cast;
             if (row.patch.wardrobeCharacters) next.wardrobe = { ...next.wardrobe,
                 characters: castWardrobe(next.cast, { wardrobe: { characters: row.patch.wardrobeCharacters } }, next.wardrobe, true) };
@@ -87120,26 +87761,27 @@ function storyboardPrompt(context, memory, song, settings, sectionIndexes = null
     const exampleActor = firstPerson?.name || charName;
     const exampleSection = sections[0]?.index || 0, exampleLyric = sections[0]?.lines?.[0] || '原句';
     const expressionCast = visible => cast ? { cast: firstPerson ? [{ participantId: firstPerson.id, position: 'center', action: '', visible }] : [] } : { who: 'char' };
-    const expressionExample = settings.storyType === 'expression' ? JSON.stringify({
+    const expressionExample = settings.output === 'tegaki' && settings.storyType === 'expression' ? JSON.stringify({
         wardrobe: JSON.parse(exampleWardrobe), keyword: '关键词',
+        stage: { backgrounds: [{ id: 'S1', label: '主舞台', kind: 'window', colors: ['#263d48', '#ecdfbd', '#b05b49'], motion: 'drift' }] },
         groups: [
-            { id: 'G1', composition: '正面半身主构图', position: 'center', scale: 'medium',
-                characterPrompt: 'front view, centered waist-up framing, graphic stage lighting', ...expressionCast('full'),
-                motion: 'still', transition: 'cut', bgs: [{ id: 'B1', prompt: 'simple geometric stage background' }],
-                diffs: [
-                    { id: 'D1', label: '摊手笑', change: '摊开的双手停在腰侧，开朗笑容', imagePrompt: `front view, centered waist-up ${exampleActor}, open palms held at waist level, broad cheerful smile, graphic stage lighting` },
-                    { id: 'D2', label: '收手凝视', change: '手臂垂下，平静直视', imagePrompt: `front view, centered waist-up ${exampleActor}, arms held at sides, closed mouth and level calm gaze, graphic stage lighting` },
+            { id: 'G1', composition: '正面半身主姿势', stageBackground: 'S1', position: 'center', scale: 'medium',
+                characterPrompt: 'front view, centered waist-up framing', ...expressionCast('full'),
+                motion: 'still', transition: 'cut', diffs: [
+                    { id: 'D1', label: '摊手笑', change: '摊开的双手停在腰侧，开朗笑容', imagePrompt: `front view, waist-up ${exampleActor}, open palms held at waist level, broad cheerful smile` },
+                    { id: 'D2', label: '收手凝视', change: '手臂垂下，平静直视', imagePrompt: `front view, waist-up ${exampleActor}, arms held at sides, closed mouth and level calm gaze` },
                 ] },
-            { id: 'G2', composition: '眼睛局部插镜', position: 'center', scale: 'close',
-                characterPrompt: 'extreme close-up, crop on eyes', ...expressionCast('face'),
-                motion: 'still', transition: 'cut', bgs: [],
-                diffs: [{ id: 'D1', label: '目光', change: '目光停在正前方', imagePrompt: `extreme close-up on the eyes of ${exampleActor}, steady forward gaze, sharply defined light` }] },
+            { id: 'G2', composition: '侧身抱臂', stageBackground: 'S1', position: 'left', scale: 'medium',
+                characterPrompt: 'three-quarter view, waist-up framing', ...expressionCast('full'),
+                motion: 'still', transition: 'cut',
+                diffs: [{ id: 'D1', label: '抱臂侧望', change: '抱臂，侧头望向观众', imagePrompt: `three-quarter waist-up ${exampleActor}, crossed arms, steady gaze toward viewer` }] },
         ],
         frames: [
-            { sectionIndex: exampleSection, lyric: exampleLyric, group: 'G1', diff: 'D1', bg: 'B1', hold: 1 },
-            { sectionIndex: exampleSection, lyric: exampleLyric, group: 'G1', diff: 'D2', bg: 'B1', hold: 0.5 },
-            { sectionIndex: exampleSection, lyric: exampleLyric, group: 'G2', diff: 'D1', hold: 0.25 },
-            { sectionIndex: exampleSection, lyric: exampleLyric, group: 'G1', diff: 'D1', bg: 'B1', hold: 1 },
+            { sectionIndex: exampleSection, lyric: exampleLyric, group: 'G1', diff: 'D1', hold: 1, stage: { text: exampleLyric, layout: 'sides', entrance: 'pop' } },
+            { sectionIndex: exampleSection, lyric: exampleLyric, group: 'G1', diff: 'D1', hold: 1, stage: { text: exampleLyric, layout: 'stack' } },
+            { sectionIndex: exampleSection, lyric: sections[0]?.lines?.[1] || exampleLyric, group: 'G2', diff: 'D1', hold: 2, stage: { layout: 'banner', entrance: 'slide', shadow: true } },
+            { sectionIndex: sections[1]?.index ?? exampleSection, lyric: sections[1]?.lines?.[0] || exampleLyric, group: 'G1', diff: 'D2', hold: 2, stage: { layout: 'sides', tone: 'dark' } },
+            { sectionIndex: sections[1]?.index ?? exampleSection, lyric: sections[1]?.lines?.[1] || exampleLyric, group: 'G1', diff: 'D1', hold: 2, stage: { layout: 'sides', tone: 'accent', entrance: 'pop' } },
         ],
     }) : '';
     return `${generation_prompts.promptSafetyBoundary(context, 'MV 分镜', null, memory)}
@@ -87148,7 +87790,7 @@ function storyboardPrompt(context, memory, song, settings, sectionIndexes = null
 歌词、曲风不改。画面跟着歌词的意象、情绪和故事走，可以是意象、想象或象征画面，不需要对应聊天档案，也不要逐条复述聊天里的事件。人物外貌、身份和世界观以角色设定为准。
 ${cast ? mv_cast.castPrompt(cast, settings) : `出镜：${charName} 是主角。${appear}不替 ${userName} 新增台词、承诺或决定。`}
 ${mv_direction.directionPrompt(settings.storyType, song)}
-${settings.output === 'video' ? '' : tegakiGrammar(parseSections(song.lyrics), keep, charName)}${settings.output === 'video' ? '' : ``}
+${settings.output === 'video' ? '' : tegakiGrammar(parseSections(song.lyrics), keep, charName, settings.storyType)}
 
 【歌曲】
 曲风：${core_text.normalizeText(song.styleDescription || song.stylePrompt, 600)}
@@ -87268,7 +87910,7 @@ function alignContinuationSections(raw, song, missing) {
 
 // Append new work using fresh identifiers; never replace existing drawings or timing.
 function continuationPatch(raw, previous, memory, song, settings, missing) {
-    const built = buildShots(alignContinuationSections(raw, song, missing), memory, parseSections(song.lyrics).length, settings, previous.cast || null, { existingGroups: isV2(previous) ? previous.groups : [] });
+    const built = buildShots(alignContinuationSections(raw, song, missing), memory, parseSections(song.lyrics).length, settings, previous.cast || null, { existingGroups: isV2(previous) ? previous.groups : [], existingStage: previous.stage });
     let shots = built.shots.filter(s => missing.includes(s.sectionIndex));
     if (!shots.length) throw core_text.safeUserError('返回的分镜没有包含待补段落，原分镜已保留，可导出这次返回内容。', 'RMT_MV_EMPTY');
     let groups = list(built.groups);
@@ -87300,6 +87942,7 @@ function continuationPatch(raw, previous, memory, song, settings, missing) {
     return {
         shots: shots.map(({ reuseGroup, ...s }, i) => ({ ...s, id: `${prefix}_${i + 1}`, ...(s.group ? { group: reuseGroup ? s.group : groupMap.get(s.group) } : {}) })),
         groups: groups.filter(g => groupMap.has(g.id)).map(g => ({ ...g, id: groupMap.get(g.id) })),
+        ...(built.stage ? { stage: built.stage } : {}),
         ...(previous.cast ? { cast: mv_cast.generatedMvCast(previous.cast, raw), wardrobeCharacters: castWardrobe(previous.cast, raw, previous.wardrobe, true) } : {}),
     };
 }
@@ -87319,7 +87962,8 @@ async function continueStoryboard(songId) {
     running.add(key);
     try {
         const continuity = { wardrobe: previous.wardrobe || {}, keyword: previous.keyword || '', motif: previous.motif ? { name: previous.motif.name, prompt: previous.motif.prompt } : null,
-            reusableGroups: list(previous.groups).map(g => ({ id: g.id, composition: g.composition, diffs: list(g.diffs).map(d => ({ id: d.id, label: d.label })) })),
+            reusableGroups: list(previous.groups).map(g => ({ id: g.id, composition: g.composition, ...(g.stageBackground ? { stageBackground: g.stageBackground } : {}), diffs: list(g.diffs).map(d => ({ id: d.id, label: d.label })) })),
+            ...(previous.stage ? { reusableBackgrounds: previous.stage.backgrounds.map(({ image, ...b }) => b) } : {}),
             lastScene: list(previous.shots).filter(s => s.sectionIndex < missing[0]).at(-1)?.plain || '' };
         const prompt = storyboardPrompt(context, memory, song, settings, missing, previous.cast || null)
             + `\n【接着已有分镜补写】\n只补上面列出的段落，sectionIndex 沿用歌曲原编号。已有分镜和图片会保留；新构图在保存时自动分配编号。重复的画面可在 frames 引用 reusableGroups 的原 group/diff，不必重写该 group；新画面使用新构图。沿用已有时代、衣着和意象，并衔接已有画面：\n${JSON.stringify(continuity)}`;
@@ -87343,10 +87987,11 @@ async function generateStoryboard(songId, settingsInput, castInput = undefined) 
             mode: 'songMv', taskKey: `extras:mv:${key}`, context, origin,
         });
         return await holdResult(target, 'story', '', data, raw => {
+            const built = buildShots(raw, memory, parseSections(song.lyrics).length, settings, cast);
             return { id: songId, createdAt: previous?.createdAt || Date.now(), settings,
-                ...buildShots(raw, memory, parseSections(song.lyrics).length, settings, cast),
+                ...built, stage: built.stage || null,
                 ...(cast ? { cast: mv_cast.generatedMvCast(cast, raw) } : {}),
-                tegaki: { ...(previous?.tegaki || {}), range: settings.range, rangeFrom: settings.rangeFrom, rangeTo: settings.rangeTo, ...(settings.output === 'tegaki' ? { lyric: 'subtitle' } : {}) },
+                tegaki: { ...(previous?.tegaki || {}), range: settings.range, rangeFrom: settings.rangeFrom, rangeTo: settings.rangeTo, ...(settings.output === 'tegaki' ? { lyric: built.stage ? 'stage' : 'subtitle' } : {}) },
                 wardrobe: {
                     era: core_text.normalizeText(raw?.wardrobe?.era, 200) || previous?.wardrobe?.era || '',
                     char: core_text.normalizeText(raw?.wardrobe?.char, 300) || previous?.wardrobe?.char || '',
@@ -87478,7 +88123,15 @@ function framePrompt(record, shot, context, appearance = true) {
     ].filter(Boolean).join(', ');
 }
 
-function isFrameDrawing(scope, songId, shotId) { return running.has(`frame:${scope}:${songId}:${shotId}`); }
+function isFrameDrawing(scope, songId, shotId) {
+    if (running.has(`frame:${scope}:${songId}:${shotId}`)) return true;
+    try {
+        const context = core_context.currentCharacterGuard();
+        if (scopeOf(context) !== scope) return false;
+        const record = readMv(context, songId), shot = list(record?.shots).find(s => s.id === shotId);
+        return !!mv_stage.background(record, shot) && running.has(`asset:${scope}:${songId}:${shot?.group}:${shot?.diff}`);
+    } catch { return false; }
+}
 
 async function drawFrame(songId, shotId) {
     const context = core_context.currentCharacterGuard();
@@ -87487,6 +88140,8 @@ async function drawFrame(songId, shotId) {
     const record = structuredClone(target.base.songs[songId] || null);
     const shot = list(record?.shots).find(item => item.id === shotId);
     if (!shot) return null;
+    if (mv_stage.background(record, shot) && !hasAssetImage(shot.image))
+        return drawAsset(songId, `${shot.group}:${shot.diff}`, { fresh: true });
     const key = `frame:${scope}:${songId}:${shotId}`;
     if (running.has(key)) return null;
     running.add(key);
@@ -87495,7 +88150,7 @@ async function drawFrame(songId, shotId) {
         const custom = found && record.assetPrompts?.[`${shot.group}:${shot.diff}`]?.trim();
         const metadata = custom ? null : found ? assetMetadata(record, found, context) : record.cast ? mv_cast.castMetadata(record, shot) : null;
         const result = await cg_core.invokeImageGeneration(framePrompt(record, shot, context, !metadata), context, {
-            orientation: normalizeSettings(record.settings).ratio === '9:16' ? 'portrait' : 'landscape',
+            orientation: (found?.group?.stageBackground && found.group.layer !== 'full') || normalizeSettings(record.settings).ratio === '9:16' ? 'portrait' : 'landscape',
             characterName: context?.name2 || '', targetKey: key, singlePrompt: true,
             ...(metadata ? { promptMetadata: metadata } : {}),
         });
@@ -87533,7 +88188,7 @@ const TEGAKI_FONTS = Object.freeze({
     song: { name: '书卷', stack: '"Songti SC","STSong","Noto Serif SC","Source Han Serif SC","SimSun",serif', weight: 600 },
     round: { name: '圆润', stack: '"Yuanti SC","PingFang SC","Hiragino Sans GB","Noto Sans SC",sans-serif', weight: 500 },
 });
-const TEGAKI_LYRICS = Object.freeze({ vertical: '竖排', subtitle: '字幕', big: '大字', none: '不显示' });
+const TEGAKI_LYRICS = Object.freeze({ stage: '舞台编排', vertical: '竖排', subtitle: '字幕', big: '大字', none: '不显示' });
 const TEGAKI_PRESETS = Object.freeze({
     quick: { name: '一人一句快切', desc: '每句歌词一张，干脆直切，节奏紧', rhythm: 'line', lyric: 'subtitle', template: 'quick' },
     flash: { name: '白闪卡点', desc: '换构图时白闪，副歌每小节轻闪一下', rhythm: 'line', lyric: 'big', template: 'flash' },
@@ -87598,6 +88253,8 @@ function completedMvRanges(record, song) {
             if (hasAssetImage(s.image)) return true;
             if (!isV2(record)) return !!(s.image?.url || s.image?.local);
             const g = record.groups.find(g => g.id === s.group);
+            const stage = mv_stage.background(record, s), image = assetOf(record, `${s.group}:${s.diff}`)?.image;
+            if (stage) return hasAssetImage(image) && (image.editMode !== 'cutout' || stage.kind !== 'image' || hasAssetImage(stage.image));
             return hasAssetImage(assetOf(record, `${s.group}:${s.diff}`)?.image)
                 && (g?.layer === 'full' || hasAssetImage(assetOf(record, `${s.group}:${s.bg || 'bg'}`)?.image));
         });
@@ -87672,7 +88329,7 @@ function patchTegaki(songId, patch) {
 
 // ---------- 手书 v2：印象曲 PV（背景 + 白底人物差分 + 意象） ----------
 
-function tegakiGrammar(sections, keep, charName = '{{char}}') {
+function tegakiGrammar(sections, keep, charName = '{{char}}', direction = '') {
     const rows = keep.map(i => `${i}:${sections[i]?.tag || ''}`).join('，');
     const lineCount = keep.reduce((n, i) => n + Math.max(1, sections[i]?.lines.length || 0), 0);
     return `这是这首印象曲的手书 PV。只为这些段落写：${rows}。
@@ -87685,13 +88342,14 @@ function tegakiGrammar(sections, keep, charName = '{{char}}') {
 - diffs 可以只用一张关键画；只有同机位连续动作、情绪最小差分、明显反差或节奏循环确实需要时才加图，不强求每组闭眼→睁眼。
 - 局部特写写清画面裁切；只拍手就不要为了显示头发、眼睛或服装画出整个人。物件或环境空镜明确不出人，不硬塞主角。
 - bgs 写同一个镜头需要的场景，环境变化确有作用时再增加背景；只描述场景，不混入人物。
-- 副歌可以有一个主视觉组，重复的副歌复用它；其余段落尽量用新的构图，尾奏可以回到开头的构图。
+${direction === 'expression' ? '- 主舞台与角色姿势可以跨歌词、跨段落持续使用；主歌与副歌靠表演、文字、明暗与疏密区分，重现的姿势按歌词情绪变奏。' : '- 副歌可以有一个主视觉组，重复的副歌复用它；其余段落尽量用新的构图，尾奏可以回到开头的构图。'}
 - link 简写下一镜如何承接，并把对应视线、位置或物件落实在前后两组的画面描述；link 不是可执行动画指令。
 - frames 按实际播放顺序指向 group、diff 和 bg，sectionIndex 是歌曲原段落编号。lyric 使用对应原句（器乐留空）；一句可有多个短镜，也可多句复用一个素材。hold 是段内相对停留权重，短镜可用 0.5，普通用 1，重点停留可更长，不是秒数。已对过的时间由用户打点优先。
 - frame.phase 可写 prep（准备）、action（发生）、settle（收势）或 still（静止）。循环类型可以回到前一个差分；其他类型只在表达需要时重复。不要靠长时间悬停动态姿势代替动作过程。
 - transition 按表达选 cut / fade / flash，motion 用 still / push；不强制混用全部转场或闪白。图像是静态关键姿势，连续动作靠剪辑而非假称视频动画。
 - 多人镜头分别写清每个人的位置、动作与互动对象，人数由出场名单决定。不得为制造差异改人物的设定外貌、衣服、性别或关系。
-- keyword：副歌里一个 2～4 字、最有分量的词。motif：歌词里一个可以漂浮的意象，prompt 用英文只描述这一个小元素。
+${direction === 'expression' ? '- keyword 可以摘取歌词关键词；漂浮 motif 按歌曲需要选用。舞台背景、人物、文字自身已经能形成节奏，不要求每首叠加粒子。' : '- keyword：副歌里一个 2～4 字、最有分量的词。motif：歌词里一个可以漂浮的意象，prompt 用英文只描述这一个小元素。'}
+${direction === 'expression' ? mv_stage.prompt() : ''}
 `;
 }
 
@@ -87700,6 +88358,7 @@ function isV2(record) { return record?.version === 2 && Array.isArray(record?.gr
 function buildShots(raw, memory, sectionCount, settings, cast = null, opts = {}) {
     if (cast?.existingGroups) { opts = cast; cast = null; }
     const existingGroups = list(opts.existingGroups);
+    const stagePlan = mv_stage.prepare(settings.storyType === 'expression' ? raw?.stage : null, opts.existingStage);
     const reusesExisting = list(raw?.frames).some(f => existingGroups.some(g => g.id === f?.group));
     if (settings.output === 'video' || (!list(raw?.groups).some(g => list(g?.diffs).length) && !reusesExisting)) return { shots: normalizeShots(raw, memory, sectionCount, settings, cast) };
     const defaults = mv_direction.directionDefaults(settings.storyType);
@@ -87714,6 +88373,7 @@ function buildShots(raw, memory, sectionCount, settings, cast = null, opts = {})
         }));
         if (!diffs.length) return;
         const id = `G${existingGroups.length + groups.length + 1}`;
+        const stageBackground = stagePlan.resolve(g?.stageBackground);
         idMap.set(core_text.normalizeText(g?.id, 20) || id, { id, diffs });
         groups.push({
             id, composition: core_text.normalizeText(g?.composition, 60),
@@ -87726,7 +88386,8 @@ function buildShots(raw, memory, sectionCount, settings, cast = null, opts = {})
             position: ['left', 'center', 'right'].includes(g?.position) ? g.position : 'center',
             transition: ['cut', 'fade', 'flash'].includes(g?.transition) ? g.transition : defaults.transition,
             // full = 人物、道具与背景在同一张完整场景图里（默认，最稳）；cutout = 白底人物抠图叠到背景上。
-            layer: 'full',
+            layer: stageBackground && g?.layer !== 'full' ? 'cutout' : 'full',
+            ...(stageBackground ? { stageBackground } : {}),
             scale: ['close', 'medium', 'full', 'wide'].includes(g?.scale) ? g.scale : 'medium',
             bgs: (list(g?.bgs).length ? list(g.bgs) : [{ label: '场景', prompt: g?.backgroundPrompt }]).map((b, k) => ({
                 id: `B${k + 1}`, rawId: core_text.normalizeText(b?.id, 20) || `B${k + 1}`,
@@ -87742,11 +88403,13 @@ function buildShots(raw, memory, sectionCount, settings, cast = null, opts = {})
         const old = !idMap.has(rawGroup) ? existingGroups.find(g => g.id === rawGroup) : null;
         if (old) {
             const diff = list(old.diffs).find(d => d.id === core_text.normalizeText(f?.diff, 20)) || list(old.diffs)[0];
+            const stage = mv_stage.cue(f?.stage, old.stageBackground, stagePlan.resolve);
             if (diff) shots.push({
                 id: `F${shots.length + 1}_${Date.now().toString(36)}`, reuseGroup: true,
                 sectionIndex: Math.min(Math.max(0, Math.round(Number(f?.sectionIndex) || 0)), Math.max(0, sectionCount - 1)),
                 lyric: core_text.normalizeText(f?.lyric, 200), plain: `${old.composition || old.id} · ${diff.label}`,
                 group: old.id, diff: diff.id, bg: diff.bg || 'B1', who: old.who,
+                ...(stage ? { stage } : {}),
                 ...(old.cast ? { cast: old.cast, ...(old.castUnresolved ? { castUnresolved: true } : {}) } : {}),
                 hold: Math.min(3, Math.max(1, Math.round(Number(f?.hold) || 1))),
                 ...(settings.storyType && Number.isFinite(Number(f?.hold)) && Number(f.hold) > 0 ? { timingWeight: Number(f.hold) } : {}),
@@ -87762,12 +88425,14 @@ function buildShots(raw, memory, sectionCount, settings, cast = null, opts = {})
         const group = groups.find(g => g.id === ref.id);
         const rawBg = core_text.normalizeText(f?.bg, 20);
         const bgRow = group.bgs.find(b => b.rawId === rawBg) || group.bgs[Math.max(0, Number(String(rawBg).replace(/\D/g, '')) - 1)] || group.bgs[0];
+        const stage = mv_stage.cue(f?.stage, group.stageBackground, stagePlan.resolve);
         shots.push({
             id: `F${shots.length + 1}_${Date.now().toString(36)}`,
             sectionIndex: Math.min(Math.max(0, Math.round(Number(f?.sectionIndex) || 0)), Math.max(0, sectionCount - 1)),
             lyric: core_text.normalizeText(f?.lyric, 200),
             plain: `${group.composition || group.id} · ${diff.label}`,
             group: ref.id, diff: diff.id, bg: bgRow.id, who: group.who,
+            ...(stage ? { stage } : {}),
             ...(group.cast ? { cast: group.cast, ...(group.castUnresolved ? { castUnresolved: true } : {}) } : {}),
             hold: Math.min(3, Math.max(1, Math.round(Number(f?.hold) || 1))),
             ...(settings.storyType && Number.isFinite(Number(f?.hold)) && Number(f.hold) > 0 ? { timingWeight: Number(f.hold) } : {}),
@@ -87787,6 +88452,7 @@ function buildShots(raw, memory, sectionCount, settings, cast = null, opts = {})
     const motifPrompt = core_text.normalizeText(raw?.motif?.prompt, 300);
     return {
         version: 2, groups, shots,
+        ...(stagePlan.backgrounds.length ? { stage: { version: 1, backgrounds: stagePlan.backgrounds } } : {}),
         keyword: Array.from(core_text.normalizeText(raw?.keyword, 12)).slice(0, 6).join(''),
         motif: motifPrompt ? { name: core_text.normalizeText(raw?.motif?.name, 20), prompt: motifPrompt, image: null } : null,
     };
@@ -87795,6 +88461,10 @@ function buildShots(raw, memory, sectionCount, settings, cast = null, opts = {})
 // key: "G1:bg" / "G1:D2" / "motif"
 function assetOf(record, key) {
     if (!record) return null;
+    if (String(key).startsWith('stage:')) {
+        const bgRow = list(record.stage?.backgrounds).find(b => b.id === String(key).slice(6));
+        return bgRow ? { kind: 'bg', bgRow, get image() { return bgRow.image; }, set image(v) { bgRow.image = v; if (v) bgRow.kind = 'image'; } } : null;
+    }
     if (key === 'motif') return record.motif ? { kind: 'motif', target: record.motif, get image() { return record.motif.image; }, set image(v) { record.motif.image = v; } } : null;
     const [gid, part] = String(key).split(':');
     const group = list(record.groups).find(g => g.id === gid);
@@ -87811,12 +88481,13 @@ function assetKeys(record, song = null) {
     if (!isV2(record)) return [];
     let used = null;
     if (song) { try { used = new Set(shotsInRange(record, song).map(s => `${s.group}:${s.diff}`)); } catch { used = null; } }
-    const keys = [];
+    const keys = mv_stage.usedBackgrounds(record, song ? shotsInRange(record, song) : record.shots)
+        .filter(b => b.kind === 'image').map(b => `stage:${b.id}`);
     for (const g of record.groups) {
         const diffs = g.diffs.filter(d => !used || used.has(`${g.id}:${d.id}`));
         if (!diffs.length) continue;
         const bgIds = g.layer === 'full' ? [] : list(g.bgs).length ? list(g.bgs).filter(b => record.shots.some(s => s.group === g.id && (s.bg || 'B1') === b.id && (!used || used.has(`${g.id}:${s.diff}`)))).map(b => b.id) : ['bg'];
-        const bgKeys = g.layer === 'full' ? [] : (bgIds.length ? bgIds : [list(g.bgs)[0]?.id || 'bg']);
+        const bgKeys = g.layer === 'full' || g.stageBackground ? [] : (bgIds.length ? bgIds : [list(g.bgs)[0]?.id || 'bg']);
         keys.push(...bgKeys.map(id => `${g.id}:${id}`), ...diffs.map(d => `${g.id}:${d.id}`));
     }
     if (record.motif) keys.push('motif');
@@ -87857,11 +88528,12 @@ function defaultAssetPrompt(record, key, context, appearance = true) {
     const found = assetOf(record, key);
     if (!found) return '';
     const style = styleOf(settings).prompt;
-    const ratio = settings.ratio === '9:16' ? 'vertical 9:16 composition' : 'horizontal 16:9 composition';
+    const ratio = found.kind === 'char' && found.group.stageBackground && found.group.layer !== 'full'
+        ? 'portrait character illustration' : settings.ratio === '9:16' ? 'vertical 9:16 composition' : 'horizontal 16:9 composition';
     const era = record?.wardrobe?.era ? `setting: ${record.wardrobe.era}` : '';
     // 只写正向词：tag 模型会把“no multiple views”“no people”里的词当成要画的内容。
     if (found.kind === 'motif') return [style, ...motifRecipe(found.target)].filter(Boolean).join(', ');
-    if (found.kind === 'bg') return [style, ratio, era, found.bgRow?.prompt || found.group.backgroundPrompt, 'scenery, landscape, no humans'].filter(Boolean).join(', ');
+    if (found.kind === 'bg') return [style, ratio, era, found.bgRow?.prompt || found.group?.backgroundPrompt, 'scenery, landscape, no humans'].filter(Boolean).join(', ');
     if (record?.cast && Array.isArray(found.group.cast)) {
         const actors = mv_cast.shotPeople(record, found.group);
         const localCrop = actors.some(person => person.visible === 'hands' || person.visible === 'face');
@@ -87983,6 +88655,31 @@ function setGroupLayer(songId, groupId, layer) {
     });
 }
 
+function patchStageBackground(songId, id, patch) {
+    const context = core_context.currentCharacterGuard();
+    return writeMv(scopeOf(context), songId, current => {
+        const bg = list(current?.stage?.backgrounds).find(b => b.id === id);
+        if (!bg) return current;
+        if (Object.hasOwn(mv_stage.BACKGROUNDS, patch?.kind)) bg.kind = patch.kind;
+        if (['still', 'rotate', 'drift'].includes(patch?.motion)) bg.motion = patch.motion;
+        if (Array.isArray(patch?.colors)) bg.colors = bg.colors.map((c, i) => /^#[0-9a-f]{6}$/iu.test(patch.colors[i]) ? patch.colors[i] : c);
+        return current;
+    });
+}
+
+function patchStageCue(songId, shotId, patch) {
+    const context = core_context.currentCharacterGuard();
+    return writeMv(scopeOf(context), songId, current => {
+        const shot = list(current?.shots).find(s => s.id === shotId);
+        if (!shot) return current;
+        const bg = mv_stage.background(current, shot);
+        if (!bg) return current;
+        shot.stage = mv_stage.cue({ ...shot.stage, ...patch }, bg.id,
+            id => list(current.stage?.backgrounds).some(b => b.id === id) ? id : '');
+        return current;
+    });
+}
+
 
 // 逐句对时间用的歌词清单：按段落顺序列出（只列当前截取范围内的段落）。
 function syncLines(record, song) {
@@ -88080,6 +88777,8 @@ __m_extras_mv_js.isAssetDrawing = isAssetDrawing;
 __m_extras_mv_js.setAssetSplit = setAssetSplit;
 __m_extras_mv_js.captureAssetEdit = captureAssetEdit;
 __m_extras_mv_js.setGroupLayer = setGroupLayer;
+__m_extras_mv_js.patchStageBackground = patchStageBackground;
+__m_extras_mv_js.patchStageCue = patchStageCue;
 __m_extras_mv_js.syncLines = syncLines;
 __m_extras_mv_js.resetGroupSeed = resetGroupSeed;
 __m_extras_mv_js.firstChunk = firstChunk;
@@ -88168,6 +88867,8 @@ const core_castLooks = __m_core_castLooks_js;
 const archive_repository = __m_archive_repository_js;
 const mv_cast = __m_extras_mvCast_js;
 const mv_direction = __m_extras_mvDirection_js;
+const mv_stage = __m_extras_mvStage_js;
+const stage_canvas = __m_ui_mvStageCanvas_js;
 const cast_controls = __m_ui_mvCastControls_js;
 const participant_picker = __m_ui_participantPicker_js;
 const image_editor = __m_ui_mvImageEditor_js;
@@ -88624,7 +89325,7 @@ function page(title, back, html) {
     if (view.sub === 'setup' && view.step > 1) back = '上一步';
     overlay.topTitle(title); overlay.setBackVisible(true, back);
     const returnButton = view.sub !== 'board' ? btn('back', `← 返回${esc(back)}`) : '';
-    body().innerHTML = `<main class="rmt-x-page">${returnButton}${recoveryPanel()}${html}<details class="rmt-x-card"><summary>MV 备份</summary>${btn('export-recovery', '导出 MV 数据与暂存结果')}</details></main>`;
+    body().innerHTML = `<main class="rmt-x-page rmt-song-mv">${returnButton}${recoveryPanel()}${html}<details class="rmt-x-card"><summary>MV 备份</summary>${btn('export-recovery', '导出 MV 数据与暂存结果')}</details></main>`;
     renderedPage = view.sub;
 }
 
@@ -88868,9 +89569,24 @@ function tegakiControls(record, song) {
       ${mv.isV2(record) ? `<label class="rmt-mv-look"><span>片头时长（秒）</span><input type="number" min="0" step="0.5" inputmode="decimal" data-rmt-mv-intro-seconds value="${o.introSeconds}"></label><p class="rmt-x-note">0 为关闭；最多占首镜头的一半，开唱时自动结束。</p>` : ''}
       ${mv.isV2(record) ? `<label class="rmt-mv-look"><span>片尾时长（秒）</span><input type="number" min="0" step="0.5" inputmode="decimal" data-rmt-mv-outro-seconds value="${o.outroSeconds}"></label><p class="rmt-x-note">0 为关闭；只在所选片段末尾显示，最多占最后一个镜头的一半。</p>` : ''}
       <b style="font-size:14px">切换节奏</b><div class="rmt-mv-grid2">${seg2('tegaki-rhythm', mv.TEGAKI_RHYTHMS, o.rhythm)}</div>
-      <b style="font-size:14px">歌词</b><div class="rmt-x-segs">${seg2('tegaki-lyric', mv.TEGAKI_LYRICS, o.lyric)}</div>
+      <b style="font-size:14px">歌词</b><div class="rmt-x-segs">${seg2('tegaki-lyric', Object.fromEntries(Object.entries(mv.TEGAKI_LYRICS).filter(([key]) => key !== 'stage' || record.stage)), o.lyric)}</div>
       ${mv.isV2(record) ? `<label class="rmt-mv-check"><input type="checkbox" data-rmt-mv-overlay="keyword" ${o.showKeyword ? 'checked' : ''}>副歌关键词（随歌词隐藏）</label><label class="rmt-mv-check"><input type="checkbox" data-rmt-mv-overlay="motif" ${o.showMotif ? 'checked' : ''}>漂浮装饰</label>` : ''}
       ${o.lyric === 'none' ? '' : `<b style="font-size:14px">字体</b><div class="rmt-x-segs">${seg2('tegaki-font', Object.fromEntries(Object.entries(mv.TEGAKI_FONTS).map(([k, v]) => [k, v.name])), o.font)}</div><p class="rmt-x-note">字体用设备自带的，不同手机效果会略有差异。</p>`}`;
+}
+
+function stageShotControls(record, shot) {
+    const bg = mv_stage.background(record, shot);
+    if (!bg) return '';
+    const cue = shot.stage || {};
+    const select = (field, label, values, value) => `<label class="rmt-mv-look"><span>${label}</span><select data-rmt-mv-stage-cue="${field}" data-shot="${esc(shot.id)}">${Object.entries(values).map(([id, name]) => `<option value="${esc(id)}"${id === value ? ' selected' : ''}>${esc(name)}</option>`).join('')}</select></label>`;
+    return `<details><summary>舞台编排</summary>
+      ${select('background', '共享背景', Object.fromEntries(record.stage.backgrounds.map(b => [b.id, b.label])), bg.id)}
+      <label class="rmt-mv-look"><span>画面文字</span><input type="text" data-rmt-mv-stage-cue="text" data-shot="${esc(shot.id)}" value="${esc(cue.text || '')}" placeholder="${esc(shot.lyric || '')}"></label>
+      ${select('layout', '文字位置', mv_stage.LAYOUTS, cue.layout || 'sides')}
+      ${select('depth', '文字层', { back: '人物后方', front: '人物前方' }, cue.depth || 'back')}
+      ${select('entrance', '人物入场', { cut: '直接切', pop: '轻弹入', slide: '滑入' }, cue.entrance || 'cut')}
+      ${select('tone', '背景变化', { base: '原配色', accent: '强调色', dark: '压暗' }, cue.tone || 'base')}
+      <label class="rmt-mv-check"><input type="checkbox" data-rmt-mv-stage-cue="shadow" data-shot="${esc(shot.id)}"${cue.shadow ? ' checked' : ''}>人物剪影</label></details>`;
 }
 
 function renderTegaki(song, record) {
@@ -88896,6 +89612,8 @@ function renderTegaki(song, record) {
       ${sel ? `<section class="rmt-x-card"><div class="rmt-x-row-head"><b>第 ${selIndex + 1} 镜怎么动</b><span>${mv.formatTime(sel.start, true)}–${mv.formatTime(sel.end, true)}${imgUrl(sel.shot) ? '' : ' · 还没画，先用上一张'}</span></div>
         <div class="rmt-mv-grid2">${seg('set-motion', mv.MV_MOTIONS, sel.shot.motion)}</div>
         <b style="font-size:14px">切到下一镜时</b><div class="rmt-x-segs">${seg('set-cut', mv.MV_CUTS, sel.shot.cut || 'fade')}</div>
+        ${stageShotControls(record, sel.shot)}
+        ${mv_stage.background(record, sel.shot) && !mv.hasAssetImage(sel.shot.image) ? btn('edit-asset', '编辑人物素材', { id: `${sel.shot.group}:${sel.shot.diff}` }) : ''}
         <div class="rmt-mv-actions">${btn('draw', mv.isFrameDrawing(mv.mvScope(ctx()), view.songId, sel.shot.id) ? '正在画…' : imgUrl(sel.shot) ? '重画这张' : '画这一张', { id: sel.shot.id, disabled: mv.isFrameDrawing(mv.mvScope(ctx()), view.songId, sel.shot.id) })}${uploadLabel(sel.shot.id)}</div></section>` : ''}
       ${audioBySong.has(audioKey()) ? (() => {
         const lines = mv.syncLines(record, song);
@@ -88962,9 +89680,12 @@ async function preloadImages(record, song) {
     const load = async () => {
         const assets = shots.flatMap(shot => {
             const image = mv.shotImage(record, shot);
-            if (!mv.isV2(record) || mv.hasAssetImage(shot.image)) return [image];
+            if (!mv.isV2(record) || (mv.hasAssetImage(shot.image) && (!mv_stage.background(record, shot) || shot.image.editMode !== 'cutout'))) return [image];
+            if (mv_stage.background(record, shot) && mv.hasAssetImage(image) && image.editMode !== 'cutout') return [image];
             const group = record.groups.find(g => g.id === shot.group);
-            const bg = group?.bgs?.find(b => b.id === (shot.bg || 'B1')) || group?.bgs?.[0];
+            const stageBg = mv_stage.background(record, shot);
+            if (stageBg && stageBg.kind !== 'image') return [image];
+            const bg = stageBg || group?.bgs?.find(b => b.id === (shot.bg || 'B1')) || group?.bgs?.[0];
             return [image, bg?.image || group?.bg];
         }).filter(Boolean);
         if (mv.isV2(record) && mv.tegakiOptions(record).showMotif) assets.push(record.motif?.image);
@@ -89199,6 +89920,7 @@ function stopPlayback() {
 
 function disposeMv() {
     assetEditor?.dispose(); assetEditor = null; editSequence++;
+    stageShadows.clear();
     navigation.length = 0; renderedPage = '';
     view.epoch += 1;
     view.stopAll = true; view.drawingAll = false; view.drawQueue = null;
@@ -89662,6 +90384,28 @@ function handleMvClick(event) {
 
 function handleMvChange(event) {
     const input = event.target;
+    if (input?.matches?.('[data-rmt-mv-stage-cue]')) {
+        const field = input.dataset.rmtMvStageCue;
+        try { const updated = mv.patchStageCue(view.songId, input.dataset.shot, { [field]: field === 'shadow' ? Boolean(input.checked) : input.value });
+            if (view.cache) view.cache.record = updated; drawNow(); }
+        catch (error) { toastError(error); }
+        return true;
+    }
+    if (input?.matches?.('[data-rmt-mv-stage-bg]')) {
+        const field = input.dataset.rmtMvStageBg, id = input.dataset.background;
+        try {
+            let patch = { [field]: input.value };
+            if (/^color[0-2]$/.test(field)) {
+                const bg = currentRecord()?.stage?.backgrounds.find(b => b.id === id);
+                if (!bg) return true;
+                const colors = [...bg.colors]; colors[Number(field.at(-1))] = input.value; patch = { colors };
+            }
+            mv.patchStageBackground(view.songId, id, patch);
+            view.stageBackgroundOpen = id;
+            const scroll = body()?.scrollTop || 0; renderMv(); if (body()) body().scrollTop = scroll;
+        } catch (error) { toastError(error); }
+        return true;
+    }
     if (input?.matches?.('[data-rmt-mv-overlay]')) {
         const key = input.dataset.rmtMvOverlay === 'keyword' ? 'showKeyword' : input.dataset.rmtMvOverlay === 'motif' ? 'showMotif' : '';
         if (key) {
@@ -89806,8 +90550,9 @@ function assetTile(record, key, label) {
     const exists = mv.hasAssetImage(found?.image);
     const drawing = mv.isAssetDrawing(mv.mvScope(ctx()), view.songId, key);
     const cut = found?.kind !== 'bg';
+    const awaitingCutout = exists && found?.group?.stageBackground && found.group.layer !== 'full' && found.image.editMode !== 'cutout';
     const splitSelect = btn('edit-asset', '编辑素材', { id: key, cls: 'rmt-mv-edit-open' });
-    return `<button type="button" class="rmt-mv-asset${exists ? ' done' : ''}${cut && found?.group?.layer !== 'full' ? ' cut' : ''}" data-rmt-mv-anchor="${esc(key)}" data-rmt-mv="draw-asset" data-rmt-mv-id="${esc(key)}" ${drawing || view.drawingAll ? 'disabled' : ''} aria-label="${esc(label)}：${exists ? '重画' : '画'}这一张">${url ? `<img src="${esc(url)}" alt="">` : ''}<i>${drawing ? '画…' : exists ? '已画' : '未画'}</i></button><small>${esc(label)}</small>${splitSelect}`;
+    return `<button type="button" class="rmt-mv-asset${exists ? ' done' : ''}${cut && found?.group?.layer !== 'full' ? ' cut' : ''}" data-rmt-mv-anchor="${esc(key)}" data-rmt-mv="draw-asset" data-rmt-mv-id="${esc(key)}" ${drawing || view.drawingAll ? 'disabled' : ''} aria-label="${esc(label)}：${exists ? '重画' : '画'}这一张">${url ? `<img src="${esc(url)}" alt="">` : ''}<i>${drawing ? '画…' : awaitingCutout ? '待抠图' : exists ? '已画' : '未画'}</i></button><small>${esc(label)}</small>${splitSelect}`;
 }
 
 // 素材检查：原图 → 拼图拆分 → 抠图结果 → 播放时的用法，逐张对照。
@@ -89823,6 +90568,25 @@ function inspectHtml(record, g, diffs) {
     const layerTools = `<div class="rmt-mv-actions">${btn('group-layer', g.layer === 'full' ? '绘图方式：完整画面 · 改为分层素材' : '绘图方式：分层素材 · 改为完整画面', { id: `${g.id}:${g.layer === 'full' ? 'cutout' : 'full'}` })}</div>
       <p class="rmt-x-note">自动去白底仅供预览；编辑素材中确认保存的透明图才会叠背景。</p>`;
     return `<details class="rmt-mv-inspect"${view.inspect === g.id ? ' open' : ''}><summary data-rmt-mv="inspect" data-rmt-mv-id="${esc(g.id)}">素材检查（画面有问题时再打开）</summary>${rows}${layerTools}</details>`;
+}
+
+function sharedBackgroundsHtml(record, shots) {
+    const backgrounds = mv_stage.usedBackgrounds(record, shots);
+    if (!backgrounds.length) return '';
+    const tiles = backgrounds.map(bg => {
+        const key = `stage:${bg.id}`;
+        let preview = bg.kind === 'image' ? assetImageUrl(bg.image) : '';
+        if (!preview) {
+            try { const c = document.createElement('canvas'); c.width = 320; c.height = 180;
+                stage_canvas.drawBackground(c.getContext('2d'), bg, 320, 180, 0); preview = c.toDataURL('image/png'); } catch { /* Host without Canvas preview. */ }
+        }
+        const select = (field, label, values, value) => `<label class="rmt-mv-look"><span>${label}</span><select data-rmt-mv-stage-bg="${field}" data-background="${esc(bg.id)}">${Object.entries(values).map(([id, name]) => `<option value="${esc(id)}"${id === value ? ' selected' : ''}>${esc(name)}</option>`).join('')}</select></label>`;
+        return `<div><div class="rmt-mv-assets"><div>${bg.kind === 'image' ? assetTile(record, key, bg.label)
+            : `<button type="button" class="rmt-mv-asset done" data-rmt-mv-anchor="${esc(key)}" data-rmt-mv="edit-asset" data-rmt-mv-id="${esc(key)}">${preview ? `<img src="${esc(preview)}" alt="">` : ''}<i>本地绘制</i></button><small>${esc(bg.label)}</small>${btn('edit-asset', '替换背景', { id: key })}`}</div></div>
+          <details${view.stageBackgroundOpen === bg.id ? ' open' : ''}><summary>背景样式</summary>${select('kind', '图案', mv_stage.BACKGROUNDS, bg.kind)}${select('motion', '背景运动', { still: '不动', rotate: '缓慢旋转', drift: '轻微移动' }, bg.motion)}
+          <div class="rmt-mv-actions">${bg.colors.map((c, i) => `<label>配色 ${i + 1}<input type="color" value="${esc(c)}" data-rmt-mv-stage-bg="color${i}" data-background="${esc(bg.id)}"></label>`).join('')}</div></details></div>`;
+    }).join('');
+    return `<section class="rmt-x-card"><b>共享背景</b>${tiles}</section>`;
 }
 
 function renderGroupsBoard(song, record) {
@@ -89843,11 +90607,13 @@ function renderGroupsBoard(song, record) {
         const secNames = [...new Set(frames.map(s => sections[s.sectionIndex]?.name).filter(Boolean))].join('、');
         const usedDiffs = g.diffs.filter(d => frames.some(s => s.diff === d.id));
         const lyrics = frames.filter(s => s.lyric).slice(0, 8).map(s => `${g.diffs.find(d => d.id === s.diff)?.label || ''}｜${s.lyric}`).join('\n');
-        const bgIds = g.layer === 'full' ? [] : (g.bgs || []).length ? g.bgs.filter(b => frames.some(s => (s.bg || 'B1') === b.id)).map(b => b.id) : ['bg'];
-        const bgTiles = (g.layer === 'full' ? [] : bgIds.length ? bgIds : ['bg']).map(id => `<div>${assetTile(record, `${g.id}:${id}`, (g.bgs || []).find(b => b.id === id)?.label ? '背景·' + g.bgs.find(b => b.id === id).label : '背景')}</div>`).join('');
-        const missing = [...(g.layer === 'full' ? [] : bgIds.length ? bgIds : ['bg']).map(id => `${g.id}:${id}`), ...usedDiffs.map(d => `${g.id}:${d.id}`)].filter(k => !mv.hasAssetImage(mv.assetOf(record, k)?.image)).length;
+        const bgIds = g.layer === 'full' || g.stageBackground ? [] : (g.bgs || []).length ? g.bgs.filter(b => frames.some(s => (s.bg || 'B1') === b.id)).map(b => b.id) : ['bg'];
+        const bgKeys = g.layer === 'full' || g.stageBackground ? [] : bgIds.length ? bgIds : ['bg'];
+        const bgTiles = bgKeys.map(id => `<div>${assetTile(record, `${g.id}:${id}`, (g.bgs || []).find(b => b.id === id)?.label ? '背景·' + g.bgs.find(b => b.id === id).label : '背景')}</div>`).join('');
+        const missing = [...bgKeys.map(id => `${g.id}:${id}`), ...usedDiffs.map(d => `${g.id}:${d.id}`)].filter(k => !mv.hasAssetImage(mv.assetOf(record, k)?.image)).length;
         return `<article class="rmt-mv-gcard"><div class="rmt-x-row-head"><b class="rmt-mv-gname">构图 ${shown} · ${esc(g.composition || '')}</b><span>${esc(secNames)} · ${frames.length} 句</span></div>
           ${cast_controls.shotCastControls(record, g)}
+          ${g.stageBackground ? `<small>背景：${mv_stage.usedBackgrounds(record, frames).map(b => esc(b.label)).join('、')} · 共用</small>` : ''}
           <div class="rmt-mv-assets">${bgTiles}${bgTiles ? '<span class="rmt-mv-plus">+</span>' : ''}${usedDiffs.map(d => `<div>${assetTile(record, `${g.id}:${d.id}`, d.label)}</div>`).join('')}</div>
           ${inspectHtml(record, g, usedDiffs)}
           ${lyrics ? `<div class="rmt-mv-lyric"><p>${esc(lyrics)}</p></div>` : ''}
@@ -89872,13 +90638,14 @@ function renderGroupsBoard(song, record) {
         <div class="rmt-x-bar"><i style="width:${keys.length ? Math.round(drawn / keys.length * 100) : 0}%"></i></div>
         ${remaining ? btn(view.drawingAll ? 'draw-stop' : 'draw-all', view.drawingAll ? '停止连续绘制' : `一次画完剩下的 ${remaining} 张（会用 ${remaining} 次生图）`) : ''}
         ${btn('go-tegaki', '去剪辑台预览', { cls: 'rmt-x-primary' })}</section>
-      ${wardrobe}${warn}${cards || '<p class="rmt-x-note">选中的段落里还没有构图，点上面的“继续分镜”即可补上。</p>'}${motif}
+      ${wardrobe}${warn}${sharedBackgroundsHtml(record, record.shots.filter(s => inRange.has(s.id)))}${cards || '<p class="rmt-x-note">选中的段落里还没有构图，点上面的“继续分镜”即可补上。</p>'}${motif}
       <div class="rmt-mv-actions">${btn('rewrite-board', '重新写分镜')}</div>`);
 }
 
 // ---------- 手书 v2：抠图、取色、渲染 ----------
 
 const cutMeta = new Map();
+const cutAlpha = new Map();
 const palettes = new Map();
 const motifSprites = new Map();
 
@@ -89972,7 +90739,7 @@ function drawCropCover(g, img, rect, w, h, scale = 1) {
 
 // Only a user-confirmed edited/imported transparent image is used as a layer.
 // Metadata describes alignment, never whether a cutout is "successful".
-function layerImage(image) {
+function layerImage(image, requireAlpha = false) {
     if (image?.editMode !== 'cutout') return null;
     const url = assetImageUrl(image), src = imageFor(url);
     if (!src) return null;
@@ -89980,9 +90747,15 @@ function layerImage(image) {
         try {
             const c = document.createElement('canvas'); c.width = src.naturalWidth; c.height = src.naturalHeight;
             const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(src, 0, 0);
-            cutMeta.set(url, image_tools.alphaBounds(g.getImageData(0, 0, c.width, c.height).data, c.width, c.height));
-        } catch { cutMeta.set(url, null); }
+            const pixels = g.getImageData(0, 0, c.width, c.height).data;
+            cutMeta.set(url, image_tools.alphaBounds(pixels, c.width, c.height));
+            // Actual alpha is a file property, never a claim that a cutout is clean.
+            let hasAlpha = false;
+            for (let i = 3; i < pixels.length; i += 4) if (pixels[i] < 255) { hasAlpha = true; break; }
+            cutAlpha.set(url, hasAlpha);
+        } catch { cutMeta.set(url, null); cutAlpha.set(url, false); }
     }
+    if (requireAlpha && !cutAlpha.get(url)) return null;
     return src;
 }
 
@@ -90011,56 +90784,89 @@ function coverPalette(song) {
 
 function isChorusSection(song, index) { return /^(final )?chorus|^hook/i.test(mv.parseSections(song.lyrics)[index]?.tag || ''); }
 
+const stageShadows = new Map();
+function silhouette(url, source) {
+    if (!stageShadows.has(url)) {
+        const c = document.createElement('canvas'); c.width = source.naturalWidth; c.height = source.naturalHeight;
+        const g = c.getContext('2d'); g.drawImage(source, 0, 0); g.globalCompositeOperation = 'source-in';
+        g.fillStyle = '#10131c'; g.fillRect(0, 0, c.width, c.height); stageShadows.set(url, c);
+    }
+    return stageShadows.get(url);
+}
+
 function drawSceneV2(g, record, song, rows, index, t, w, h) {
     const row = rows[index];
     const group = record.groups.find(x => x.id === row.shot.group);
+    const stageRows = record.stage && Array.isArray(record.clipSectionIndexes) ? mv.shotTimeline(record, song).rows : rows;
+    const stageIndex = stageRows === rows ? index : stageRows.findIndex(r => r.shot.id === row.shot.id);
+    const stage = mv_stage.state(record, stageRows, stageIndex, t);
+    const options = mv.tegakiOptions(record);
+    const font = mv.TEGAKI_FONTS[options.font] || mv.TEGAKI_FONTS.sans;
+    const stageText = depth => {
+        if (options.lyric === 'stage' && (stage?.cue.depth || 'back') === depth)
+            stage_canvas.drawText(g, stage, group, w, h, font);
+    };
+    const opaqueText = () => {
+        if (options.lyric === 'stage') stage_canvas.drawText(g, stage, group, w, h, font, true);
+    };
     g.fillStyle = coverPalette(song)[0]; g.fillRect(0, 0, w, h);
-    const span = groupSpan(rows, index);
+    const span = stage ? groupSpan(stageRows, stageIndex) : groupSpan(rows, index);
     const p = Math.min(1, Math.max(0, (t - span.start) / Math.max(0.1, span.end - span.start)));
     const push = group?.motion === 'push' ? 1 + 0.03 * p : 1;
-    if (mv.hasAssetImage(row.shot.image)) {
-        const own = imageFor(assetImageUrl(row.shot.image));
+    const ownImage = mv.hasAssetImage(row.shot.image) ? row.shot.image : null;
+    if (ownImage && (!stage || ownImage.editMode !== 'cutout')) {
+        const own = imageFor(assetImageUrl(ownImage));
         if (own) drawCover(g, own, w, h, push, 0, 0);
-        return;
+        opaqueText(); return;
     }
     const bgRow = (group?.bgs || []).find(b => b.id === (row.shot.bg || 'B1')) || (group?.bgs || [])[0];
-    const bg = imageFor(assetImageUrl(bgRow?.image || group?.bg));
-    if (bg) drawCover(g, bg, w, h, push, 0, 0);
-    const diff = group?.diffs.find(d => d.id === row.shot.diff);
-    const override = diff?.image?.split || 'auto';
-    const url = assetImageUrl(diff?.image), raw = imageFor(url);
-    // Unconfirmed legacy images stay intact. Confirmed edited PNGs use their saved pixels.
-    if (raw && diff?.image?.editMode !== 'cutout') {
-        drawCropCover(g, raw, cropFor(url, raw, override).rect, w, h, push);
-        g.save(); g.globalCompositeOperation = 'soft-light'; g.globalAlpha = 0.1; g.fillStyle = coverPalette(song)[1]; g.fillRect(0, 0, w, h); g.restore();
-        return;
+    if (stage) stage_canvas.drawBackground(g, stage.background, w, h, stage.backgroundTime, stage.cue.tone,
+        stage.background.kind === 'image' ? imageFor(assetImageUrl(stage.background.image)) : null);
+    else {
+        const bg = imageFor(assetImageUrl(bgRow?.image || group?.bg));
+        if (bg) drawCover(g, bg, w, h, push, 0, 0);
     }
-    const person = layerImage(diff?.image);
+    const diff = group?.diffs.find(d => d.id === row.shot.diff);
+    const art = ownImage || diff?.image;
+    const override = art?.split || 'auto';
+    const url = assetImageUrl(art), raw = imageFor(url);
+    const person = layerImage(art, !!stage);
+    // Unconfirmed images remain intact; a white matte is never treated as transparency.
+    if (raw && (art?.editMode !== 'cutout' || (stage && !person))) {
+        drawCropCover(g, raw, cropFor(url, raw, override).rect, w, h, push);
+        if (!stage) { g.save(); g.globalCompositeOperation = 'soft-light'; g.globalAlpha = 0.1; g.fillStyle = coverPalette(song)[1]; g.fillRect(0, 0, w, h); g.restore(); }
+        opaqueText(); return;
+    }
+    stageText('back');
     if (person) {
-        const breathe = 1 + 0.004 * Math.sin(t * Math.PI * 2 / 3.4);
-        // 人物按竖图放进画面：高度撑满（按景别放大或缩小），左右位置按分镜；横屏也不会被拉成两份。
+        const breathe = stage ? 1 : 1 + 0.004 * Math.sin(t * Math.PI * 2 / 3.4);
         const pw = person.naturalWidth, ph = person.naturalHeight;
         const factor = { close: 1.35, medium: 1.05, full: 0.95, wide: 0.6 }[group.scale] || 1.05;
         const dh = h * factor, dw = pw * (dh / ph);
         const side = w > h ? 0.18 : 0.1;
         const cxp = { left: 0.5 - side, right: 0.5 + side, center: 0.5 }[group.position] || 0.5;
         const dx = w * cxp - dw / 2, dy = group.scale === 'close' ? h - dh * 0.9 : h - dh;
-        // 同一构图里的差分对齐到这一组第一张：人物大小和脚底位置保持一致，换表情时不跳位。
         const ref = (group.diffs || []).map(dd => cutMeta.get(assetImageUrl(dd.image))).find(Boolean);
         const cur = cutMeta.get(url);
         const map = m => [dx + m.cx * dw, dy + m.bottom * dh];
         g.save();
+        if (stage?.active) {
+            const motion = stage_canvas.poseTransform(stage, w, h);
+            g.translate(motion.x, motion.y); g.translate(w * cxp, h); g.scale(motion.scale, motion.scale); g.translate(-w * cxp, -h);
+        }
         g.translate(w / 2, h); g.scale(push * breathe, push * breathe); g.translate(-w / 2, -h);
         if (ref && cur && ref !== cur) {
             const s = Math.min(1.18, Math.max(0.85, ref.height / Math.max(0.01, cur.height)));
             const [tx, ty] = map(ref); const [cx, cy] = map(cur);
             g.translate(tx, ty); g.scale(s, s); g.translate(-cx, -cy);
         }
-        g.drawImage(person, dx, dy, dw, dh);
-        g.restore();
+        if (stage?.cue.shadow) {
+            g.save(); g.globalAlpha = 0.7; g.drawImage(silhouette(url, person), dx - w * 0.055, dy, dw, dh); g.restore();
+        }
+        g.drawImage(person, dx, dy, dw, dh); g.restore();
     }
-    // 统一光色：用封面中间色轻轻叠一层柔光，让人物和背景更像同一张画。
-    g.save(); g.globalCompositeOperation = 'soft-light'; g.globalAlpha = 0.14; g.fillStyle = coverPalette(song)[1]; g.fillRect(0, 0, w, h); g.restore();
+    stageText('front');
+    if (!stage) { g.save(); g.globalCompositeOperation = 'soft-light'; g.globalAlpha = 0.14; g.fillStyle = coverPalette(song)[1]; g.fillRect(0, 0, w, h); g.restore(); }
 }
 
 function drawMotif(g, record, song, row, t, w, h) {
@@ -90153,7 +90959,7 @@ function renderFrameV2(canvas, record, song, t) {
     const font = mv.TEGAKI_FONTS[topt.font] || mv.TEGAKI_FONTS.sans;
     if (since >= 0 && topt.lyric === 'vertical') drawVerticalLyric(g, row.shot.lyric, w, h, since, palette[2], mv.TEGAKI_FONTS.song.stack);
     else if (since >= 0 && topt.lyric === 'big' && row.shot.lyric) drawBigLyric(g, row.shot.lyric, w, h, since, topt.font);
-    else if (since >= 0 && topt.lyric === 'subtitle' && row.shot.lyric) {
+    else if (since >= 0 && (topt.lyric === 'subtitle' || (topt.lyric === 'stage' && !mv_stage.background(record, row.shot))) && row.shot.lyric) {
         g.save(); g.font = `${font.weight} ${Math.round(Math.min(w, h) * 0.05)}px ${font.stack}`; g.textAlign = 'center';
         g.lineWidth = 3; g.strokeStyle = 'rgba(30,26,40,.6)'; g.fillStyle = '#fff';
         g.strokeText(row.shot.lyric, w / 2, h * 0.92); g.fillText(row.shot.lyric, w / 2, h * 0.92); g.restore();
@@ -90164,7 +90970,7 @@ function renderFrameV2(canvas, record, song, t) {
         if (inBar < 0.12 && t - row.start > 0.2) { g.save(); g.globalAlpha = 0.35 * (1 - inBar / 0.12); g.fillStyle = '#fff'; g.fillRect(0, 0, w, h); g.restore(); }
     }
     // 卡点：副歌里每小节第一拍，关键词轻轻弹出一次。
-    if (since >= 0 && topt.showKeyword && topt.lyric !== 'none' && record.keyword && isChorusSection(song, row.sectionIndex)) {
+    if (since >= 0 && topt.showKeyword && topt.lyric !== 'none' && topt.lyric !== 'stage' && record.keyword && isChorusSection(song, row.sectionIndex)) {
         const bar = beatLen * 4;
         const inBar = (t - row.start) % bar;
         const pop = inBar < 0.25 ? 1.12 - 0.12 * (inBar / 0.25) : 1;
@@ -90354,9 +91160,13 @@ __m_archive_archiveFile_js.ARCHIVE_FILE_FORMAT = ARCHIVE_FILE_FORMAT;
 __init_extras_mvCast_js();
 __init_extras_mvDirection_js();
 __init_extras_mvImageTools_js();
+__init_extras_mvStage_js();
 __init_extras_mvStillPrompt_js();
 __init_ui_mvCastControls_js();
 __init_ui_mvImageEditor_js();
+__init_ui_mvRefreshStyles_js();
+__init_ui_mvStageCanvas_js();
+__init_ui_workspaceRefreshStyles_js();
 __init_core_themeSongCover_js();
 __init_archive_capacity_js();
 __init_archive_coverageRanges_js();
