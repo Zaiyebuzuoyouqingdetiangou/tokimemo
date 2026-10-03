@@ -352,26 +352,77 @@ export function estimatedStarts(sections, bpm, duration = 0) {
     return { starts, total: duration > 0 ? duration : total };
 }
 
-// 用户打过点的段用打点时间；没打点的段跟着前一个打点一起平移。
+// Stored taps are absolute audio times; absent values must not become a zero tap.
+function tapTime(value) {
+    if (value === null || value === undefined || value === '') return NaN;
+    const n = Number(value);
+    return Number.isFinite(n) && n >= 0 ? n : NaN;
+}
+
+// Keep anchors fixed and fit only unmarked starts between them. Source records stay unchanged.
+function fitTimedStarts(starts, marks, total) {
+    if (!starts.length) return { starts: [], total };
+    const anchors = [];
+    for (let i = 0; i < starts.length; i++) {
+        const time = marks.get(i);
+        if (Number.isFinite(time) && (i === 0 ? time >= 0 : time > 0) && (!anchors.length || time > anchors.at(-1).time)) anchors.push({ index: i, time });
+    }
+    const initialHold = !anchors.length || anchors[0].index > 0;
+    if (initialHold) anchors.unshift({ index: 0, time: 0 });
+    const end = Math.max(total, anchors.at(-1).time + 0.001);
+    const base = [...starts, Math.max(total, starts.at(-1) + 0.001)];
+    if (initialHold) base[0] = 0;
+    anchors.push({ index: starts.length, time: end });
+    const result = [...starts];
+    for (let a = 0; a + 1 < anchors.length; a++) {
+        const left = anchors[a], right = anchors[a + 1];
+        const span = base[right.index] - base[left.index];
+        result[left.index] = left.time;
+        for (let i = left.index + 1; i < right.index; i++) {
+            const fraction = span > 0 ? (base[i] - base[left.index]) / span : (i - left.index) / (right.index - left.index);
+            result[i] = left.time + (right.time - left.time) * fraction;
+        }
+    }
+    return { starts: result, total: end };
+}
+
+// Section marks and first-line marks both constrain estimates; estimates never displace a later mark.
 export function sectionTimes(record, sections, bpm) {
     const duration = Number(record?.duration) || 0;
     const { starts, total } = estimatedStarts(sections, bpm, duration);
-    const taps = record?.timing?.taps || {};
+    const taps = record?.timing?.taps || {}, lineTaps = record?.timing?.lineTaps || {};
     const shift = Number.isFinite(Number(record?.timing?.shift)) ? Number(record.timing.shift) : 0;
-    const out = [];
-    let delta = 0;
-    for (let i = 0; i < sections.length; i += 1) {
-        const tapped = Number.isFinite(Number(taps[i])) && taps[i] !== null && taps[i] !== undefined;
-        if (tapped) delta = Number(taps[i]) - starts[i];
-        out.push({ start: Math.max(i ? out[i - 1].start + 0.5 : 0, (tapped ? Number(taps[i]) : starts[i] + delta) + shift), tapped, estimate: starts[i] });
+    const marks = new Map(), tapped = [];
+    let previous = -1;
+    for (let i = 0; i < sections.length; i++) {
+        const sectionTap = tapTime(taps[i]), lineTap = tapTime(lineTaps[`${i}:0`]);
+        tapped[i] = Number.isFinite(sectionTap);
+        let time = tapped[i] ? Math.max(0, sectionTap + shift) : lineTap;
+        if (!Number.isFinite(time)) continue;
+        // Old reversed section marks must remain playable without rewriting the saved marks.
+        if (time <= previous) time = previous + 0.5;
+        marks.set(i, time); previous = time;
     }
-    for (let i = 0; i < out.length; i += 1) out[i].end = i + 1 < out.length ? Math.max(out[i].start + 0.5, out[i + 1].start) : Math.max(out[i].start + 1, total + shift);
-    return { sections: out, total: Math.max(total + shift, out.at(-1)?.end || 0) };
+    let fit;
+    if (marks.size) {
+        if (!marks.has(0)) marks.set(0, Math.max(0, shift));
+        fit = fitTimedStarts(starts, marks, Math.max(total + shift, previous + 1));
+    } else {
+        // An untimed old song keeps its existing global offset instead of being stretched.
+        const shifted = [];
+        starts.forEach((start, i) => shifted.push(Math.max(i ? shifted[i - 1] + 0.5 : 0, start + shift)));
+        fit = { starts: shifted, total: Math.max(total + shift, shifted.length ? shifted.at(-1) + 1 : 0) };
+    }
+    const out = fit.starts.map((start, i) => ({ start, tapped: tapped[i], estimate: starts[i] }));
+    for (let i = 0; i < out.length; i++) out[i].end = i + 1 < out.length ? out[i + 1].start : fit.total;
+    return { sections: out, total: fit.total };
 }
 
 export function shotTimeline(record, song) {
     const sections = parseSections(song.lyrics);
-    const { sections: times, total } = sectionTimes(record, sections, songBpm(song));
+    const sectionTimeline = sectionTimes(record, sections, songBpm(song));
+    const times = sectionTimeline.sections;
+    let total = sectionTimeline.total;
     const shots = list(record?.shots);
     const rows = [];
     times.forEach((time, index) => {
@@ -389,40 +440,42 @@ export function shotTimeline(record, song) {
         let acc = 0;
         own.forEach((shot, k) => { const a = acc; acc += weights[k]; rows.push({ shot, start: time.start + span * a / sum, end: time.start + span * acc / sum, sectionIndex: index }); });
     });
-    // 逐句对时间：用户边听边点每一句的开头，对应歌词的镜头直接从点下的时间开始。
+    // A line can have several drawings. Only its first drawing anchors the line;
+    // the remaining drawings share the interval up to the next marked line.
     const lineTaps = record?.timing?.lineTaps || {};
-    if (Object.keys(lineTaps).length) {
-        const used = new Map();
-        for (const row of rows) {
-            const lines = sections[row.sectionIndex]?.lines || [];
-            const text = String(row.shot?.lyric || '').trim();
-            if (!text) continue;
-            const from = used.get(row.sectionIndex) || 0;
-            let idx = lines.findIndex((line, i) => i >= from && line.trim() === text);
-            if (idx < 0) idx = lines.findIndex(line => line.trim() === text);
-            if (idx < 0) continue;
-            used.set(row.sectionIndex, idx + 1);
-            const tap = Number(lineTaps[`${row.sectionIndex}:${idx}`]);
-            if (Number.isFinite(tap) && tap >= 0) row.lineTap = tap;
-        }
+    const keyText = value => String(value || '').trim().replace(/[\s\p{P}]+/gu, '');
+    const used = new Map(), markedLines = new Set(), marks = new Map();
+    for (let i = 0; i < rows.length; i++) {
+        const row = rows[i], section = row.sectionIndex;
+        if ((i === 0 || rows[i - 1].sectionIndex !== section) && times[section].tapped) marks.set(i, times[section].start);
+        const lines = (sections[section]?.lines || []).map(keyText), text = keyText(row.shot?.lyric);
+        if (!text) continue;
+        const last = used.get(section);
+        let index = last?.text === text && lines[last.index + 1] !== text ? last.index
+            : lines.findIndex((line, j) => j > (last?.index ?? -1) && line === text);
+        if (index < 0) index = lines.findIndex(line => line === text);
+        if (index < 0) continue;
+        used.set(section, { index, text });
+        const key = `${section}:${index}`, time = tapTime(lineTaps[key]);
+        if (!Number.isFinite(time) || markedLines.has(key)) continue;
+        markedLines.add(key); row.lineTap = time; marks.set(i, time);
     }
-    // 没有镜头的段落不留空白：前一镜一直停到下一镜开始；第一镜从 0 秒开始。
-    if (rows.length) rows[0].start = 0;
-    // 构图卡片版：镜头切点吸附到最近的拍点，画面跟着音乐切，而不是等时长轮播。
+    if (rows.length) {
+        const fit = fitTimedStarts(rows.map(row => row.start), marks, total);
+        rows.forEach((row, i) => { row.start = fit.starts[i]; });
+        total = fit.total;
+    }
+    // Snap only automatically placed cuts. Explicit section and lyric times are exact.
     if (record?.version === 2 && rows.length > 1) {
         const beat = 60 / (songBpm(song) || 90);
         for (let i = 1; i < rows.length; i += 1) {
+            if (marks.has(i)) continue;
             const snapped = Math.round(rows[i].start / beat) * beat;
-            if (snapped > rows[i - 1].start + beat * 0.5 && (i + 1 >= rows.length || snapped < rows[i + 1].start - beat * 0.5)) rows[i].start = snapped;
+            if (snapped > rows[i - 1].start + beat * 0.5 && (i + 1 >= rows.length || snapped < rows[i + 1].start - beat * 0.5) && snapped < total) rows[i].start = snapped;
         }
     }
-    // 点过的句子以点下的时间为准（只要不早于上一镜），优先级高于估计和拍点吸附。
-    for (let i = 0; i < rows.length; i += 1) {
-        if (rows[i].lineTap === undefined) continue;
-        const prev = i > 0 ? rows[i - 1].start : -1;
-        if (rows[i].lineTap > prev) rows[i].start = rows[i].lineTap;
-    }
-    for (let i = 0; i < rows.length; i += 1) rows[i].end = i + 1 < rows.length ? rows[i + 1].start : Math.max(rows[i].end, total);
+    for (let i = 0; i < rows.length; i++) rows[i].end = i + 1 < rows.length ? rows[i + 1].start : Math.max(total, rows[i].start + 0.001);
+
     return { rows, sections, times, total };
 }
 
