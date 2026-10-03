@@ -931,8 +931,8 @@ function renderFrame(canvas, record, song, t) {
         glow.addColorStop(0, `rgba(255,248,236,${0.14 * pulse})`); glow.addColorStop(1, 'rgba(255,248,236,0)');
         g.save(); g.fillStyle = glow; g.fillRect(0, 0, w, h); g.restore();
     }
-    if (since >= 0 && topt.lyric === 'big' && row.shot.lyric) drawBigLyric(g, row.shot.lyric, w, h, since, topt.font);
-    if (since >= 0 && topt.lyric === 'subtitle' && row.shot.lyric) {
+    if (topt.lyric === 'big' && row.shot.lyric) drawBigLyric(g, row.shot.lyric, w, h, since, topt.font);
+    if (topt.lyric === 'subtitle' && row.shot.lyric) {
         let size = Math.round(Math.min(w, h) * 0.055), lines = [];
         const split = () => {
             const result = []; let line = '';
@@ -1987,12 +1987,12 @@ function renderFrameV2(canvas, record, song, t) {
         if (prev.shot.cut === 'fade' && since < fadeDuration) { g.save(); g.globalAlpha = 1 - since / fadeDuration; drawSceneV2(g, record, song, rows, index - 1, t, w, h); g.restore(); }
         else if (prev.shot.cut === 'flash' && since < flashDuration) { g.save(); g.globalAlpha = 0.85 * (1 - since / flashDuration); g.fillStyle = '#fff'; g.fillRect(0, 0, w, h); g.restore(); }
     }
-    if (since >= 0 && topt.showMotif) drawMotif(g, record, song, row, t, w, h);
+    if (topt.showMotif) drawMotif(g, record, song, row, t, w, h);
     const palette = coverPalette(song);
     const font = mv.TEGAKI_FONTS[topt.font] || mv.TEGAKI_FONTS.sans;
-    if (since >= 0 && topt.lyric === 'vertical') drawVerticalLyric(g, row.shot.lyric, w, h, since, palette[2], mv.TEGAKI_FONTS.song.stack);
-    else if (since >= 0 && topt.lyric === 'big' && row.shot.lyric) drawBigLyric(g, row.shot.lyric, w, h, since, topt.font);
-    else if (since >= 0 && topt.lyric === 'subtitle' && row.shot.lyric) {
+    if (topt.lyric === 'vertical') drawVerticalLyric(g, row.shot.lyric, w, h, since, palette[2], mv.TEGAKI_FONTS.song.stack);
+    else if (topt.lyric === 'big' && row.shot.lyric) drawBigLyric(g, row.shot.lyric, w, h, since, topt.font);
+    else if (topt.lyric === 'subtitle' && row.shot.lyric) {
         g.save(); g.font = `${font.weight} ${Math.round(Math.min(w, h) * 0.05)}px ${font.stack}`; g.textAlign = 'center';
         g.lineWidth = 3; g.strokeStyle = 'rgba(30,26,40,.6)'; g.fillStyle = '#fff';
         g.strokeText(row.shot.lyric, w / 2, h * 0.92); g.fillText(row.shot.lyric, w / 2, h * 0.92); g.restore();
@@ -2003,7 +2003,7 @@ function renderFrameV2(canvas, record, song, t) {
         if (inBar < 0.12 && t - row.start > 0.2) { g.save(); g.globalAlpha = 0.35 * (1 - inBar / 0.12); g.fillStyle = '#fff'; g.fillRect(0, 0, w, h); g.restore(); }
     }
     // 卡点：副歌里每小节第一拍，关键词轻轻弹出一次。
-    if (since >= 0 && topt.showKeyword && topt.lyric !== 'none' && record.keyword && isChorusSection(song, row.sectionIndex)) {
+    if (topt.showKeyword && topt.lyric !== 'none' && record.keyword && isChorusSection(song, row.sectionIndex)) {
         const bar = beatLen * 4;
         const inBar = (t - row.start) % bar;
         const pop = inBar < 0.25 ? 1.12 - 0.12 * (inBar / 0.25) : 1;

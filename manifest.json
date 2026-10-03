@@ -1,15 +1,15 @@
 {
-    "display_name": "心迹回廊",
-    "loading_order": 110,
-    "js": "index.js?heartbeat=1.0.6-r84.223-mv-tap-clock",
-    "author": "Toto",
-    "version": "1.0.6",
-    "auto_update": true,
-    "minimum_client_version": "1.13.0",
-    "hooks": {
-        "disable": "onDisable",
-        "clean": "onClean"
-    },
-    "description": "心迹回廊：修复手书手动打点被自动排镜打乱、负时长、跳镜及片段导出错位。",
-    "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
+  "display_name": "心迹回廊",
+  "loading_order": 110,
+  "js": "index.js?heartbeat=1.0.5-r84.222-mv-motif-alpha",
+  "author": "Toto",
+  "version": "1.0.5",
+  "auto_update": true,
+  "minimum_client_version": "1.13.0",
+  "hooks": {
+    "disable": "onDisable",
+    "clean": "onClean"
+  },
+  "description": "1.0.5：修复手书意象白底方块，意象单独去背景并同步预览、编辑和导出；白色意象使用对比底色，保留原图与手动编辑。",
+  "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }
