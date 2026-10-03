@@ -53,6 +53,10 @@ export function inferPhoneContactName(entry, memoryBank) {
     const ownerName = phoneConversationOwnerName(memoryBank);
     const explicit = core_text.normalizeText(entry?.contactName, 100).trim();
     if (explicit && explicit !== ownerName && !isGenericOwnerLabel(explicit) && !isGenericContactLabel(explicit)) return explicit;
+    // Contact cards often name the person in fields instead of a chat-only field.
+    const nameField = !entry?.messages?.length && (Array.isArray(entry?.fields) ? entry.fields : []).find(field => /^(?:姓名|名字|名称|name)$/iu.test(String(field?.label || '').trim()));
+    const fieldName = core_text.normalizeText(nameField?.value, 100).trim();
+    if (fieldName && fieldName !== ownerName && !isGenericContactLabel(fieldName)) return fieldName;
 
     const story = phoneStory(memoryBank);
     const title = core_text.normalizeText(entry?.title, 100).trim();
@@ -318,7 +322,7 @@ export function phoneEntryBasis(entry, kind, conversation, memoryBank, options =
     const unquoted = text.replace(/[“「『"][^”」』"\n]*[”」』"]/gu, '');
     // A quoted "tomorrow" inside an already-recorded conversation is not a future
     // frame for that transcript. Ambiguous retrospective records keep memory rules.
-    if (!/(?:正在|现在|今天|今日|明早|明晚|明天|后天|下周|下次|待会|等会|稍后|计划|准备|待办|提醒|草稿|未发送|想和|想陪|要不要)/u.test(unquoted)) return declared;
+    if (kind === 'chat' && !/(?:正在|现在|今天|今日|明早|明晚|明天|后天|下周|下次|待会|等会|稍后|计划|准备|待办|提醒|草稿|未发送|想和|想陪|要不要)/u.test(unquoted)) return declared;
     // "basis" is a model hint, not authority. Current life content does not become
     // a historical transcript merely because that hint says memory. Never downgrade
     // actual joint history or user transcript/contact fields to avoid their checks.

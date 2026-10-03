@@ -147,5 +147,21 @@ export function phoneMobileCss() {
 .rmt-phone-page .rmt-phone-detail,.rmt-phone-page .rmt-phone-list{background:transparent!important;color:inherit!important;border-color:var(--rmt-app-accent)}
 .rmt-phone-page .rmt-phone-message{background:#fff;color:#304a3e;border:1px solid #d5e4d8;max-width:85%;border-radius:14px 14px 14px 3px}.rmt-phone-page .rmt-phone-message-owner{background:#d4eacb;margin-left:auto;border-radius:14px 14px 3px 14px}
 .rmt-phone-notepaper,.rmt-phone-book-page{padding:20px;line-height:1.9;background:repeating-linear-gradient(transparent 0 29px,#c9b88922 29px 30px);border-left:3px solid var(--rmt-app-accent)}.rmt-phone-ledger .rmt-phone-fields>div{border-bottom:1px dashed var(--rmt-app-accent);padding:14px 4px}.rmt-phone-record-art{margin:20px auto;width:150px;height:150px;border-radius:50%;display:grid;place-items:center;font-size:35px;background:repeating-radial-gradient(circle,#201e31 0 5px,#51415f 6px 7px);color:#ead5fa}.rmt-phone-track-card{text-align:center}.rmt-phone-photo-record figure{min-height:150px;display:grid;place-items:center;background:#ffffff0a;border:1px solid #ffffff22;padding:20px}.rmt-phone-feed-post{border-top:3px solid var(--rmt-app-accent);padding:18px 4px}.rmt-phone-document{padding:18px;background:#ffffff88;border-top:5px solid var(--rmt-app-accent)}.rmt-phone-route-entry{border-left:3px dotted var(--rmt-app-accent);padding-left:18px}.rmt-phone-page .rmt-phone-entry{color:inherit!important;background:transparent!important;border-color:var(--rmt-app-accent)!important}.rmt-phone-page-notes .rmt-phone-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px}.rmt-phone-page-notes .rmt-phone-entry{padding:16px!important;border:1px solid #e5d69c!important;box-shadow:2px 3px 0 #e5d69c44}
+
+/* App lists use their own content structure; all colors follow the app surface. */
+.rmt-phone-page{--rmt-screen-muted:color-mix(in srgb,var(--rmt-app-ink) 78%,var(--rmt-app-paper));--rmt-screen-accent:var(--rmt-app-ink)}
+.rmt-phone-app-overview{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:16px 4px 8px;border-bottom:2px solid var(--rmt-app-accent)}
+.rmt-phone-app-overview>b{font-size:18px}.rmt-phone-app-overview>span{font-size:12px;color:var(--rmt-screen-muted)}
+.rmt-phone-page .rmt-phone-list{min-width:0}.rmt-phone-page .rmt-phone-entry-main>b,.rmt-phone-page .rmt-phone-entry-main>span{white-space:normal!important;overflow-wrap:anywhere}
+.rmt-phone-page-finance .rmt-phone-list,.rmt-phone-page-store .rmt-phone-list{border:0!important;padding:0!important}
+.rmt-phone-page-finance .rmt-phone-entry,.rmt-phone-page-store .rmt-phone-entry{gap:12px;padding:18px 4px!important;border-bottom:1px dashed var(--rmt-app-accent)!important}
+.rmt-phone-page .rmt-phone-ledger-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;white-space:normal;overflow:visible;width:100%}
+.rmt-phone-page .rmt-phone-ledger-fields>span{display:grid;gap:4px;white-space:normal;padding:8px;background:color-mix(in srgb,var(--rmt-app-accent) 18%,transparent);border-radius:8px}
+.rmt-phone-ledger-fields small{font-size:11px}.rmt-phone-ledger-fields b{font-size:13px;overflow-wrap:anywhere;color:var(--rmt-app-ink)}
+.rmt-phone-page-contacts .rmt-phone-list{display:grid;gap:12px;border:0!important;padding:8px 0!important}
+.rmt-phone-page-contacts .rmt-phone-entry{grid-template-columns:40px minmax(0,1fr);padding:16px 12px!important;border:1px solid var(--rmt-app-accent)!important;border-left-width:4px!important;border-radius:12px}
+.rmt-phone-page-contacts .rmt-phone-entry-main>b{font-size:16px}.rmt-phone-page-contacts .rmt-phone-entry-main>span{font-size:13px;line-height:1.6}
+.rmt-phone-page .rmt-phone-entry-main>span{line-height:1.65}.rmt-phone-page-finance .rmt-phone-entry-main>b,.rmt-phone-page-store .rmt-phone-entry-main>b{font-size:15px}.rmt-phone-page-finance .rmt-phone-entry-main>span,.rmt-phone-page-store .rmt-phone-entry-main>span{font-size:13px}
+.rmt-phone-app-start{display:grid;place-items:center;gap:18px;padding:40px 16px}.rmt-phone-page .rmt-phone-app-start .rmt-btn{background:var(--rmt-app-paper);color:var(--rmt-app-ink);border-color:var(--rmt-app-accent)}
 `;
 }

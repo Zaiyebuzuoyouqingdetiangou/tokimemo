@@ -251,7 +251,7 @@ async function generateModeOperation(mode, options = {}) {
         if (mode === core_constants.MODE.INBOX) return !modes_inbox.inboxPlan(memoryBank, previousSession, inboxDate).length;
         if (mode === core_constants.MODE.ROOM && options.visualOnly && previousSession) return false;
         if (mode === core_constants.MODE.PHONE && options.fillMissing) {
-            if (options.continueDraft) throw new Error('私人终端还有已保存的续写草稿，请先从档案入口继续生成；补旧终端不会清除这份草稿。');
+            if (options.continueDraft) return false;
             return !modes_phone.phoneHasMissingEntries(previousSession);
         }
         if (!previousSession || refreshableCalendar || refreshableRelations || core_constants.CREATIVE_EXPANSION_MODES.includes(mode) || (mode === core_constants.MODE.PHONE && options.continueDraft === true)) return false;
@@ -531,7 +531,7 @@ async function generateModeOperation(mode, options = {}) {
         } else if (mode === core_constants.MODE.HEART) {
             session = await modes_heart.generateHeartWithRepair(context, memoryBank, origin, taskKey, { replaceExisting });
         } else if (mode === core_constants.MODE.PHONE) {
-            session = previousSession && options.fillMissing
+            session = previousSession && options.fillMissing && options.continueDraft !== true
                 ? await modes_phone.generatePhoneMissingWithRepair(context, memoryBank, origin, taskKey, previousSession, { presentationContext,
                     savePartial: async partial => {
                         partial.chatId = expectedChatId; partial.archiveRevision = expectedArchiveRevision;

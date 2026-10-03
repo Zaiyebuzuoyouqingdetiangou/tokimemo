@@ -61,7 +61,7 @@ UNTRUSTED_APP_PLAN_JSON:\n${JSON.stringify(app, null, 2)}
 受控档案人物显示名（有多人名单时不得用卡名代替）：${JSON.stringify(phoneControlledOwnerNames(memoryBank, { ownerMembers: app.ownerMembers, controlledEvidence: app.ownerMembers?.map(row => row.sourceEvidence).join('\n') }))}
 
 严格输出：
-{"app":{"id":"与 UNTRUSTED_APP_PLAN_JSON.id 完全相同","label":"与计划相同","kind":"与计划相同","summary":"...","entries":[{"id":"计划中的原 id","title":"计划中的标题","meta":"...","preview":"列表预览","detail":"详情正文","contactName":"聊天对象实际显示名；非 chat 可空","messages":[{"speakerRole":"owner|contact","speaker":"实际姓名","time":"...","text":"..."}],"fields":[],"imageCaption":"","basis":"设定","sourceMemoryIds":[],"sourceMemoryAnchor":"","sourceMemoryEvidence":"basis=记忆时从该 Mxxx 原样复制的直接证据","sourceSettingEvidence":"basis=设定时从受控角色卡/世界书原样复制的直接证据"}]}}
+{"app":{"id":"与 UNTRUSTED_APP_PLAN_JSON.id 完全相同","label":"与计划相同","kind":"与计划相同","summary":"...","entries":[{"id":"计划中的原 id","title":"计划中的标题","meta":"...","preview":"列表预览","detail":"详情正文","contactName":"chat/contacts 对象实际姓名；其他 kind 可空","messages":[{"speakerRole":"owner|contact","speaker":"实际姓名","time":"...","text":"..."}],"fields":[],"imageCaption":"","basis":"设定","sourceMemoryIds":[],"sourceMemoryAnchor":"","sourceMemoryEvidence":"basis=记忆时从该 Mxxx 原样复制的直接证据","sourceSettingEvidence":"basis=设定时从受控角色卡/世界书原样复制的直接证据"}]}}
 
 硬性要求：
 - UNTRUSTED_APP_PLAN_JSON 中的 ${app.entries.length} 个 entry id 是本次候选目录，可只返回有合适完整内容的条目；不必凑数。返回条目必须使用计划中的原 id，不能改 id 或添加计划外 id；每项必须有 preview，且 detail/messages/fields/imageCaption 至少一种有实质内容。
@@ -71,7 +71,8 @@ UNTRUSTED_APP_PLAN_JSON:\n${JSON.stringify(app, null, 2)}
 - basis=记忆 时必须提供当前档案中有效 sourceMemoryIds + sourceMemoryAnchor${sourceMemoryIds ? '，并至少引用一个 incrementalMemoryIds' : ''}，并把直接支持条目的 Mxxx 原句逐字放入 sourceMemoryEvidence；chat 的联系人和每条消息、contacts 的每个字段值都必须在该原句或所引 Mxxx 中逐字出现，不能用真实 id/anchor 替无关新事实洗白。sourceSettingEvidence 留空。basis=设定/推演 不得冒充已经发生的共同历史，也不得替 {{user}} 生成其从未说过的消息。
 - kind=chat：与当前用户只写 conversationMode=draft、basis=推演、主人一侧至少一条未发送草稿，不要求双向，绝不生成用户发言。已知普通 NPC 的当下日常可写 conversationMode=daily、至少2条双向消息，标为日常演绎。已发生双向原话仅 basis=记忆、conversationMode=history，每句和说话人归属都须在所引 Mxxx 逐字核对；摘要不支持的原话降为主人未发送草稿，不冒充历史。speakerRole 用 owner/contact；组卡 owner 使用 UNTRUSTED_APP_PLAN_JSON.ownerMembers 中的成员真名，不能把卡名作为所有成员姓名。contacts 私密字段仍只接受有据历史。
 - 设备所属角色卡名是 ${phoneStory(memoryBank, context).cardName}；当前用户是 ${phoneStory(memoryBank, context).userDisplay}。${phoneStory(memoryBank, context).compatNote}如果聊天对象就是当前用户，contactName 用档案里的显示名，只输出主人草稿，不替用户写消息。
-- kind=contacts 可收录受控人设/世界书明确存在的普通联系人，basis=设定，sourceSettingEvidence 逐字引述该联系人的设定。至少1个字段，职业/身份/关系必须由该联系人同一句设定明确支持；备注可以是当下计划。不编电话号码、地址、账号等私密字段；这些仍只接受 basis=记忆 的原文证据。gallery 用 imageCaption 写纯文字照片说明。
+- 内容以该应用主人的口吻与用途组织，不写第三人称剧情回顾，不用“剧情摘录”作标题，也不在正文解释“人设推演/非真实记录”。来源只放 basis/source 字段。账目以项目、用途、类别、备注等 fields 呈现，不需要编造未知金额；购物写选品和偏好，笔记写主人自己的便笺，阅读写书签或读后感，工作写正在处理的事项。字段不足时仍可保留完整正文，不额外凑字段。
+- kind=contacts 可收录受控人设/世界书明确存在的普通联系人，basis=设定，sourceSettingEvidence 逐字引述该联系人的设定。明确填写 contactName=此人的姓名，title 使用姓名或称呼，fields 使用 {"label":"姓名","value":"此人的姓名"} 等对象。职业/身份/关系有直接依据才填写；只有姓名明确时，用姓名加主人的联络打算/待问事项（备注），不要因为没有电话或地址把整张名帖置空。备注可以是当下计划。不编电话号码、地址、账号等私密字段；这些仍只接受 basis=记忆 的原文证据。gallery 用 imageCaption 写纯文字照片说明。
 - kind=notes/work/study/reading/books/files/research/creative/finance/tools：这是 ${phoneStory(memoryBank, context).ownerNames.join('、') || '档案人物'} 自己在用的记录，不是角色卡名称的备忘。当前用户是 ${phoneStory(memoryBank, context).userDisplay}。${phoneStory(memoryBank, context).compatNote}写主人自己的待办、摘录、工作学习或账目；提及用户时用档案显示名，不要替用户写已发送留言。
 - 禁止前任/前女友；禁止 {{char}} 与 {{user}} 之外的恋爱/婚姻对象。不输出 URL、HTML 或脚本。只输出 JSON。
 ${app.kind === 'chat' ? PHONE_COMMUNICATION_REPAIR_CONTRACT : PHONE_LIFESTYLE_REPAIR_CONTRACT}`;

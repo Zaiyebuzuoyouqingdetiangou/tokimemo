@@ -230,6 +230,12 @@ export function unavailablePhoneEntry(id) {
 
 export function isUnavailablePhoneEntry(entry) { return entry?.unavailable === true || entry?.sourceStatus === 'unavailable'; }
 
+// Only the old normalizer's synthetic recap slots are eligible for manual repair.
+// Readable records stay in storage until a usable replacement for that ID exists.
+export function isPhoneRecapEntry(entry) {
+    return !isUnavailablePhoneEntry(entry) && /^剧情摘录\s*\d*$/u.test(String(entry?.title || '').trim());
+}
+
 export function assertPhoneConversation(messages, { userThread = false } = {}) {
     if (userThread) {
         if (!messages.some(message => message.speakerRole === 'owner')) {

@@ -7,7 +7,7 @@ import * as core_settings from '../core/settings.js';
 import * as core_text from '../core/text.js';
 import * as core_worldPresentation from '../core/worldPresentation.js';
 import * as generation_client from '../generation/client.js';
-import { isPhonePlaceholderTitle, isUnavailablePhoneEntry, phoneRecoveryContract, phoneStory, unavailablePhoneEntry } from './phoneBasics.js';
+import { isPhonePlaceholderTitle, isPhoneRecapEntry, isUnavailablePhoneEntry, phoneRecoveryContract, phoneStory, unavailablePhoneEntry } from './phoneBasics.js';
 import { noPhoneConversation } from './phoneEvidence.js';
 import { phoneAppPrompt, phoneIncrementPlanPrompt, phoneMissingThreadPlan, phonePlanPrompt } from './phonePrompts.js';
 import { mergePhoneMissingEntries, normalizePhone, normalizePhoneDraftApp, normalizePhonePlan, phoneCompletionSummary } from './phoneData.js';
@@ -155,13 +155,14 @@ export async function generatePhoneMissingWithRepair(context, memoryBank, origin
     const presentation = options.presentationContext || {};
     let acceptedAny = false, contentFailure = null;
     for (const app of previous.apps || []) {
-        const entries = (app.entries || []).filter(isUnavailablePhoneEntry);
+        const entries = (app.entries || []).filter(entry => isUnavailablePhoneEntry(entry) || (!['chat', 'contacts'].includes(app.kind) && isPhoneRecapEntry(entry)));
+        if (!app.entries?.length) entries.push({ id: core_text.safeId(app.id + '_E01', 'E01'), title: '', sourceStatus: 'unavailable' });
         if (!entries.length) continue;
         const planApp = app.kind === 'chat'
-            ? phoneMissingThreadPlan(app, previous, memoryBank, { controlledEvidence: presentation.settingEvidence || '', context })
+            ? phoneMissingThreadPlan({ ...app, entries }, previous, memoryBank, { controlledEvidence: presentation.settingEvidence || '', context })
             : { ...app, incremental: true, entries: entries.map(item => ({
                 id: item.id,
-                title: isPhonePlaceholderTitle(item.title)
+                title: isPhonePlaceholderTitle(item.title) || isPhoneRecapEntry(item)
                     ? `${phoneStory(memoryBank, context).ownerNames[0] || '主人'}的${app.label}`
                     : item.title,
                 meta: item.meta || '日常',
@@ -182,7 +183,12 @@ export async function generatePhoneMissingWithRepair(context, memoryBank, origin
             continue;
         }
         if (app.kind === 'chat') fresh.omittedEntryIds = [...new Set([...(fresh.omittedEntryIds || []), ...(planApp.omittedEntryIds || [])])];
-        session.apps = session.apps.map(item => item.id === app.id ? mergePhoneMissingEntries(item, fresh) : item);
+        const merged = mergePhoneMissingEntries(app, fresh);
+        if (JSON.stringify(merged) === JSON.stringify(app)) {
+            contentFailure = core_text.safeUserError('本次没有收到新的应用内容；原记录保留。', 'RMT_PHONE_EVIDENCE');
+            continue;
+        }
+        session.apps = session.apps.map(item => item.id === app.id ? merged : item);
         if (options.savePartial && await options.savePartial(session) === false) {
             throw core_text.safeUserError('无法确认补齐内容已保存，本次已停止。', 'RMT_PHONE_DRAFT_UNAVAILABLE');
         }

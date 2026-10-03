@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 317
-// Source SHA-256: c41f27a915bb706e3fb9d78274aa5385405f17df94e7639c579e830796225873
+// Source SHA-256: 20b4746bb2a68c02eb884a3099531c1564a8cc1d6a13ea721e15a76461051298
 // Build: python3 tools/verification/build.py <source-root>
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -541,6 +541,7 @@ const MV_DIRECTIONS = Object.freeze([
     { id: 'interaction', name: '关系互动', desc: '视线、距离与双方反应', rule: '用视线对应、正反打、动作与接收动作、距离变化表现人物关系；清楚写谁对谁做什么。可以各自单人或同框，不把合唱等同于全员同框，不擅定恋爱关系；只有一人时也可用画外对象与反应。' },
     { id: 'impact', name: '高燃快切', desc: '强弱对比、卡点与关键姿势', rule: '主歌蓄势、副歌集中爆发；用全景与局部反差、关键动作姿势和干脆切换建立节奏。需要时同一句歌词可以有多个短镜头，冲击后留一处停顿；不把挥剑、奔跑等姿势长时间悬停，不强制闪白或战斗。' },
     { id: 'loop', name: '节奏循环', desc: '复用构图、姿势循环与节拍变化', rule: '设计能重复使用的构图和关键姿势，frames 可以回到先前的 group/diff 形成节奏循环；重复时用背景、视线或意象变化推进，不为循环重复生出相同素材。静态关键姿势剪辑不冒充连续舞蹈动画。' },
+    { id: 'expression', name: '表情卡拍', desc: '表情反差、重复构图与局部快切', rule: '以角色的表演和情绪反差串起节奏：建立正面或半身主构图，主歌用视线、手势、眼睛与手部特写蓄势，副歌随重音切换笑容、收敛、错愕等有明确差别的表情姿势。重复乐句可回到同一 group/diff，再用一个新的表情或背景变化打破循环；不要每句重新生成近似肖像。可穿插剪影、负空间、图形背景、明暗或冷暖反差，重要转折短暂停住。对照来自人物本身，不强加病娇、伤口、恐怖、悲剧或脱衣，不照搬参考作品的人物、服装和紫黑配色。每个 diff 是单张单格；换机位、改变主体大小或局部特写另建 group，不把多个表情画进同一张拼图。只用现有 frames、hold、motion、transition 组织静态关键画面，不要求连续动画或逐字口型；文字由播放器字幕承载，生图不写歌词或大字。' },
     { id: 'reveal', name: '悬念反转', desc: '遮蔽信息、伏笔与回收', rule: '先用局部、背影、画外或遮挡保留信息，再以全景、反向视点或意象重现揭示。转折前后重用视觉线索而改变含义；不强加恐怖、死亡、悲剧或设定外事件。' },
 ]);
 
@@ -559,6 +560,7 @@ function recommendDirections(song = {}) {
         ['interaction', /对唱|应答|互动|对话|duet|call.and.response|dialogue/iu, '人声有对唱或应答', 7],
         ['impact', /高燃|激昂|摇滚|金属|战歌|爆发|rock|metal|anthem|energetic|drum.and.bass/iu, '曲风有强烈爆发感', 7],
         ['loop', /循环|舞曲|律动|洗脑|loop|dance|groov|funk|disco/iu, '曲风强调循环律动', 7],
+        ['expression', /表情|面具|假笑|笑脸|戏谑|黑色幽默|反差|暗黑流行|怪诞|animation meme|dark pop|theatrical pop|happy face/iu, '歌曲适合表情反差与重复卡拍', 9],
         ['reveal', /反转|悬疑|悬念|诡异|不可靠叙述|suspense|mystery|unreliable|twist/iu, '歌曲含悬念或反转倾向', 9],
     ];
     for (const [id, pattern, reason, score] of rules) if (pattern.test(style)) add(id, score, reason);
@@ -569,6 +571,7 @@ function recommendDirections(song = {}) {
     else if (bpm >= 145) add('impact', 3, `标注速度 ${bpm} BPM，适合短镜头`);
     if (/月光|风|雨|旧信|花|影|moon|rain|shadow|letter/iu.test(lyrics)) add('lyrical', 1, '歌词有可呼应的视觉意象');
     if (/后来|从前|终于|离开|归来|then|returned|long ago/iu.test(lyrics)) add('narrative', 2, '歌词有时间或事件推进');
+    if (/面具|假笑|强颜欢笑|笑脸|笑着.*(?:哭|泪)|put on a happy face|hide.*(?:tears|smile)/iu.test(lyrics)) add('expression', 5, '歌词有外在表情与内心的反差');
     const lines = lyrics.split(/\r?\n/u).map(line => line.trim()).filter(line => line && !/^\[.*\]$/u.test(line));
     if (lines.length > 2 && new Set(lines).size < lines.length * 0.75) add('loop', 2, '歌词有明显重复段句');
     const matched = rows.filter(row => row.score > 0).sort((a, b) => b.score - a.score);
@@ -40661,7 +40664,7 @@ async function generateModeOperation(mode, options = {}) {
         if (mode === core_constants.MODE.INBOX) return !modes_inbox.inboxPlan(memoryBank, previousSession, inboxDate).length;
         if (mode === core_constants.MODE.ROOM && options.visualOnly && previousSession) return false;
         if (mode === core_constants.MODE.PHONE && options.fillMissing) {
-            if (options.continueDraft) throw new Error('私人终端还有已保存的续写草稿，请先从档案入口继续生成；补旧终端不会清除这份草稿。');
+            if (options.continueDraft) return false;
             return !modes_phone.phoneHasMissingEntries(previousSession);
         }
         if (!previousSession || refreshableCalendar || refreshableRelations || core_constants.CREATIVE_EXPANSION_MODES.includes(mode) || (mode === core_constants.MODE.PHONE && options.continueDraft === true)) return false;
@@ -40941,7 +40944,7 @@ async function generateModeOperation(mode, options = {}) {
         } else if (mode === core_constants.MODE.HEART) {
             session = await modes_heart.generateHeartWithRepair(context, memoryBank, origin, taskKey, { replaceExisting });
         } else if (mode === core_constants.MODE.PHONE) {
-            session = previousSession && options.fillMissing
+            session = previousSession && options.fillMissing && options.continueDraft !== true
                 ? await modes_phone.generatePhoneMissingWithRepair(context, memoryBank, origin, taskKey, previousSession, { presentationContext,
                     savePartial: async partial => {
                         partial.chatId = expectedChatId; partial.archiveRevision = expectedArchiveRevision;
@@ -56521,6 +56524,12 @@ function unavailablePhoneEntry(id) {
 
 function isUnavailablePhoneEntry(entry) { return entry?.unavailable === true || entry?.sourceStatus === 'unavailable'; }
 
+// Only the old normalizer's synthetic recap slots are eligible for manual repair.
+// Readable records stay in storage until a usable replacement for that ID exists.
+function isPhoneRecapEntry(entry) {
+    return !isUnavailablePhoneEntry(entry) && /^剧情摘录\s*\d*$/u.test(String(entry?.title || '').trim());
+}
+
 function assertPhoneConversation(messages, { userThread = false } = {}) {
     if (userThread) {
         if (!messages.some(message => message.speakerRole === 'owner')) {
@@ -56578,6 +56587,7 @@ __m_modes_phoneBasics_js.isExcludedPhoneApp = isExcludedPhoneApp;
 __m_modes_phoneBasics_js.phoneAppLimits = phoneAppLimits;
 __m_modes_phoneBasics_js.unavailablePhoneEntry = unavailablePhoneEntry;
 __m_modes_phoneBasics_js.isUnavailablePhoneEntry = isUnavailablePhoneEntry;
+__m_modes_phoneBasics_js.isPhoneRecapEntry = isPhoneRecapEntry;
 __m_modes_phoneBasics_js.assertPhoneConversation = assertPhoneConversation;
 __m_modes_phoneBasics_js.phoneStory = phoneStory;
 __m_modes_phoneBasics_js.isPhoneUserName = isPhoneUserName;
@@ -56665,6 +56675,10 @@ function inferPhoneContactName(entry, memoryBank) {
     const ownerName = phoneConversationOwnerName(memoryBank);
     const explicit = core_text.normalizeText(entry?.contactName, 100).trim();
     if (explicit && explicit !== ownerName && !isGenericOwnerLabel(explicit) && !isGenericContactLabel(explicit)) return explicit;
+    // Contact cards often name the person in fields instead of a chat-only field.
+    const nameField = !entry?.messages?.length && (Array.isArray(entry?.fields) ? entry.fields : []).find(field => /^(?:姓名|名字|名称|name)$/iu.test(String(field?.label || '').trim()));
+    const fieldName = core_text.normalizeText(nameField?.value, 100).trim();
+    if (fieldName && fieldName !== ownerName && !isGenericContactLabel(fieldName)) return fieldName;
 
     const story = phoneStory(memoryBank);
     const title = core_text.normalizeText(entry?.title, 100).trim();
@@ -56930,7 +56944,7 @@ function phoneEntryBasis(entry, kind, conversation, memoryBank, options = {}) {
     const unquoted = text.replace(/[“「『"][^”」』"\n]*[”」』"]/gu, '');
     // A quoted "tomorrow" inside an already-recorded conversation is not a future
     // frame for that transcript. Ambiguous retrospective records keep memory rules.
-    if (!/(?:正在|现在|今天|今日|明早|明晚|明天|后天|下周|下次|待会|等会|稍后|计划|准备|待办|提醒|草稿|未发送|想和|想陪|要不要)/u.test(unquoted)) return declared;
+    if (kind === 'chat' && !/(?:正在|现在|今天|今日|明早|明晚|明天|后天|下周|下次|待会|等会|稍后|计划|准备|待办|提醒|草稿|未发送|想和|想陪|要不要)/u.test(unquoted)) return declared;
     // "basis" is a model hint, not authority. Current life content does not become
     // a historical transcript merely because that hint says memory. Never downgrade
     // actual joint history or user transcript/contact fields to avoid their checks.
@@ -56969,6 +56983,7 @@ const assertPhoneConversation = __m_modes_phoneBasics_js.assertPhoneConversation
 const isExcludedPhoneApp = __m_modes_phoneBasics_js.isExcludedPhoneApp;
 const isGenericOwnerLabel = __m_modes_phoneBasics_js.isGenericOwnerLabel;
 const isPhoneUserName = __m_modes_phoneBasics_js.isPhoneUserName;
+const isPhoneRecapEntry = __m_modes_phoneBasics_js.isPhoneRecapEntry;
 const isUnavailablePhoneEntry = __m_modes_phoneBasics_js.isUnavailablePhoneEntry;
 const normalizePhoneAppIcon = __m_modes_phoneBasics_js.normalizePhoneAppIcon;
 const normalizePhoneAppKind = __m_modes_phoneBasics_js.normalizePhoneAppKind;
@@ -57440,26 +57455,28 @@ function normalizePhoneDraftApp(data, planApp, memoryBank, deviceKind, sourceMem
 function phoneHasMissingEntries(session) {
     return !!session?.apps?.some(app => {
         const omitted = new Set(app.omittedEntryIds || []);
-        return app.entries?.some(entry => isUnavailablePhoneEntry(entry) && !omitted.has(entry.id));
+        if (!app.entries?.length) return true;
+        return app.entries?.some(entry => (isUnavailablePhoneEntry(entry) || (!['chat', 'contacts'].includes(app.kind) && isPhoneRecapEntry(entry))) && !omitted.has(entry.id));
     });
 }
 
 function phoneCompletionSummary(value) {
     const planned = Array.isArray(value?.plan?.apps) ? value.plan.apps : (Array.isArray(value?.apps) ? value.apps : []);
     const completed = Array.isArray(value?.completedApps) ? value.completedApps : (Array.isArray(value?.apps) ? value.apps : []);
-    let readableItems = 0, totalItems = 0, missingItems = 0, omittedItems = 0, completeApps = 0;
+    let readableItems = 0, totalItems = 0, missingItems = 0, omittedItems = 0, completeApps = 0, repairItems = 0;
     for (const app of planned) {
         const entries = Array.isArray(app?.entries) ? app.entries : [];
         const saved = completed.find(item => item.id === app.id);
         const readable = entries.filter(entry => saved?.entries?.some(item => item.id === entry.id && !isUnavailablePhoneEntry(item))).length;
         const omitted = value?.plan ? entries.filter(entry => !saved?.entries?.some(item => item.id === entry.id)
             && saved?.omittedEntryIds?.includes(entry.id)).length : 0;
-        const pending = entries.length - readable - omitted;
-        totalItems += entries.length; readableItems += readable; missingItems += pending;
+        const pending = Math.max(1, entries.length) - readable - omitted;
+        repairItems += ['chat', 'contacts'].includes(app.kind) ? 0 : (saved?.entries || []).filter(isPhoneRecapEntry).length;
+        totalItems += Math.max(1, entries.length); readableItems += readable; missingItems += pending;
         omittedItems += value?.plan ? omitted : (saved?.omittedEntryIds?.length || 0);
         if (saved && !pending) completeApps++;
     }
-    return { readableItems, totalItems, missingItems, omittedItems,
+    return { readableItems, totalItems, missingItems, omittedItems, repairItems,
         completeApps, totalApps: planned.length, partial: readableItems > 0 && missingItems > 0 };
 }
 
@@ -57467,9 +57484,12 @@ function mergePhoneMissingEntries(previous, fresh) {
     const merged = structuredClone(previous);
     merged.entries = (previous.entries || []).filter(entry => !isUnavailablePhoneEntry(entry) || !fresh.omittedEntryIds?.includes(entry.id)).map(entry => {
         const replacement = fresh.entries?.find(item => item.id === entry.id);
-        return isUnavailablePhoneEntry(entry) && replacement && !isUnavailablePhoneEntry(replacement)
+        return (isUnavailablePhoneEntry(entry) || (!['chat', 'contacts'].includes(previous.kind) && isPhoneRecapEntry(entry))) && replacement && !isUnavailablePhoneEntry(replacement) && !isPhoneRecapEntry(replacement)
             ? structuredClone(replacement) : structuredClone(entry);
     });
+    if (!previous.entries?.length && fresh.id === previous.id) {
+        merged.entries = (fresh.entries || []).filter(entry => !isUnavailablePhoneEntry(entry) && !isPhoneRecapEntry(entry)).map(entry => structuredClone(entry));
+    }
     if (previous.kind === 'chat') {
         merged.ownerMembers = structuredClone(fresh.ownerMembers || previous.ownerMembers || []);
         merged.omittedEntryIds = [...new Set([...(previous.omittedEntryIds || []), ...(fresh.omittedEntryIds || [])])];
@@ -57919,7 +57939,7 @@ UNTRUSTED_APP_PLAN_JSON:\n${JSON.stringify(app, null, 2)}
 受控档案人物显示名（有多人名单时不得用卡名代替）：${JSON.stringify(phoneControlledOwnerNames(memoryBank, { ownerMembers: app.ownerMembers, controlledEvidence: app.ownerMembers?.map(row => row.sourceEvidence).join('\n') }))}
 
 严格输出：
-{"app":{"id":"与 UNTRUSTED_APP_PLAN_JSON.id 完全相同","label":"与计划相同","kind":"与计划相同","summary":"...","entries":[{"id":"计划中的原 id","title":"计划中的标题","meta":"...","preview":"列表预览","detail":"详情正文","contactName":"聊天对象实际显示名；非 chat 可空","messages":[{"speakerRole":"owner|contact","speaker":"实际姓名","time":"...","text":"..."}],"fields":[],"imageCaption":"","basis":"设定","sourceMemoryIds":[],"sourceMemoryAnchor":"","sourceMemoryEvidence":"basis=记忆时从该 Mxxx 原样复制的直接证据","sourceSettingEvidence":"basis=设定时从受控角色卡/世界书原样复制的直接证据"}]}}
+{"app":{"id":"与 UNTRUSTED_APP_PLAN_JSON.id 完全相同","label":"与计划相同","kind":"与计划相同","summary":"...","entries":[{"id":"计划中的原 id","title":"计划中的标题","meta":"...","preview":"列表预览","detail":"详情正文","contactName":"chat/contacts 对象实际姓名；其他 kind 可空","messages":[{"speakerRole":"owner|contact","speaker":"实际姓名","time":"...","text":"..."}],"fields":[],"imageCaption":"","basis":"设定","sourceMemoryIds":[],"sourceMemoryAnchor":"","sourceMemoryEvidence":"basis=记忆时从该 Mxxx 原样复制的直接证据","sourceSettingEvidence":"basis=设定时从受控角色卡/世界书原样复制的直接证据"}]}}
 
 硬性要求：
 - UNTRUSTED_APP_PLAN_JSON 中的 ${app.entries.length} 个 entry id 是本次候选目录，可只返回有合适完整内容的条目；不必凑数。返回条目必须使用计划中的原 id，不能改 id 或添加计划外 id；每项必须有 preview，且 detail/messages/fields/imageCaption 至少一种有实质内容。
@@ -57929,7 +57949,8 @@ UNTRUSTED_APP_PLAN_JSON:\n${JSON.stringify(app, null, 2)}
 - basis=记忆 时必须提供当前档案中有效 sourceMemoryIds + sourceMemoryAnchor${sourceMemoryIds ? '，并至少引用一个 incrementalMemoryIds' : ''}，并把直接支持条目的 Mxxx 原句逐字放入 sourceMemoryEvidence；chat 的联系人和每条消息、contacts 的每个字段值都必须在该原句或所引 Mxxx 中逐字出现，不能用真实 id/anchor 替无关新事实洗白。sourceSettingEvidence 留空。basis=设定/推演 不得冒充已经发生的共同历史，也不得替 {{user}} 生成其从未说过的消息。
 - kind=chat：与当前用户只写 conversationMode=draft、basis=推演、主人一侧至少一条未发送草稿，不要求双向，绝不生成用户发言。已知普通 NPC 的当下日常可写 conversationMode=daily、至少2条双向消息，标为日常演绎。已发生双向原话仅 basis=记忆、conversationMode=history，每句和说话人归属都须在所引 Mxxx 逐字核对；摘要不支持的原话降为主人未发送草稿，不冒充历史。speakerRole 用 owner/contact；组卡 owner 使用 UNTRUSTED_APP_PLAN_JSON.ownerMembers 中的成员真名，不能把卡名作为所有成员姓名。contacts 私密字段仍只接受有据历史。
 - 设备所属角色卡名是 ${phoneStory(memoryBank, context).cardName}；当前用户是 ${phoneStory(memoryBank, context).userDisplay}。${phoneStory(memoryBank, context).compatNote}如果聊天对象就是当前用户，contactName 用档案里的显示名，只输出主人草稿，不替用户写消息。
-- kind=contacts 可收录受控人设/世界书明确存在的普通联系人，basis=设定，sourceSettingEvidence 逐字引述该联系人的设定。至少1个字段，职业/身份/关系必须由该联系人同一句设定明确支持；备注可以是当下计划。不编电话号码、地址、账号等私密字段；这些仍只接受 basis=记忆 的原文证据。gallery 用 imageCaption 写纯文字照片说明。
+- 内容以该应用主人的口吻与用途组织，不写第三人称剧情回顾，不用“剧情摘录”作标题，也不在正文解释“人设推演/非真实记录”。来源只放 basis/source 字段。账目以项目、用途、类别、备注等 fields 呈现，不需要编造未知金额；购物写选品和偏好，笔记写主人自己的便笺，阅读写书签或读后感，工作写正在处理的事项。字段不足时仍可保留完整正文，不额外凑字段。
+- kind=contacts 可收录受控人设/世界书明确存在的普通联系人，basis=设定，sourceSettingEvidence 逐字引述该联系人的设定。明确填写 contactName=此人的姓名，title 使用姓名或称呼，fields 使用 {"label":"姓名","value":"此人的姓名"} 等对象。职业/身份/关系有直接依据才填写；只有姓名明确时，用姓名加主人的联络打算/待问事项（备注），不要因为没有电话或地址把整张名帖置空。备注可以是当下计划。不编电话号码、地址、账号等私密字段；这些仍只接受 basis=记忆 的原文证据。gallery 用 imageCaption 写纯文字照片说明。
 - kind=notes/work/study/reading/books/files/research/creative/finance/tools：这是 ${phoneStory(memoryBank, context).ownerNames.join('、') || '档案人物'} 自己在用的记录，不是角色卡名称的备忘。当前用户是 ${phoneStory(memoryBank, context).userDisplay}。${phoneStory(memoryBank, context).compatNote}写主人自己的待办、摘录、工作学习或账目；提及用户时用档案显示名，不要替用户写已发送留言。
 - 禁止前任/前女友；禁止 {{char}} 与 {{user}} 之外的恋爱/婚姻对象。不输出 URL、HTML 或脚本。只输出 JSON。
 ${app.kind === 'chat' ? PHONE_COMMUNICATION_REPAIR_CONTRACT : PHONE_LIFESTYLE_REPAIR_CONTRACT}`;
@@ -58020,6 +58041,7 @@ const core_text = __m_core_text_js;
 const core_worldPresentation = __m_core_worldPresentation_js;
 const generation_client = __m_generation_client_js;
 const isPhonePlaceholderTitle = __m_modes_phoneBasics_js.isPhonePlaceholderTitle;
+const isPhoneRecapEntry = __m_modes_phoneBasics_js.isPhoneRecapEntry;
 const isUnavailablePhoneEntry = __m_modes_phoneBasics_js.isUnavailablePhoneEntry;
 const phoneRecoveryContract = __m_modes_phoneBasics_js.phoneRecoveryContract;
 const phoneStory = __m_modes_phoneBasics_js.phoneStory;
@@ -58193,13 +58215,14 @@ async function generatePhoneMissingWithRepair(context, memoryBank, origin, taskK
     const presentation = options.presentationContext || {};
     let acceptedAny = false, contentFailure = null;
     for (const app of previous.apps || []) {
-        const entries = (app.entries || []).filter(isUnavailablePhoneEntry);
+        const entries = (app.entries || []).filter(entry => isUnavailablePhoneEntry(entry) || (!['chat', 'contacts'].includes(app.kind) && isPhoneRecapEntry(entry)));
+        if (!app.entries?.length) entries.push({ id: core_text.safeId(app.id + '_E01', 'E01'), title: '', sourceStatus: 'unavailable' });
         if (!entries.length) continue;
         const planApp = app.kind === 'chat'
-            ? phoneMissingThreadPlan(app, previous, memoryBank, { controlledEvidence: presentation.settingEvidence || '', context })
+            ? phoneMissingThreadPlan({ ...app, entries }, previous, memoryBank, { controlledEvidence: presentation.settingEvidence || '', context })
             : { ...app, incremental: true, entries: entries.map(item => ({
                 id: item.id,
-                title: isPhonePlaceholderTitle(item.title)
+                title: isPhonePlaceholderTitle(item.title) || isPhoneRecapEntry(item)
                     ? `${phoneStory(memoryBank, context).ownerNames[0] || '主人'}的${app.label}`
                     : item.title,
                 meta: item.meta || '日常',
@@ -58220,7 +58243,12 @@ async function generatePhoneMissingWithRepair(context, memoryBank, origin, taskK
             continue;
         }
         if (app.kind === 'chat') fresh.omittedEntryIds = [...new Set([...(fresh.omittedEntryIds || []), ...(planApp.omittedEntryIds || [])])];
-        session.apps = session.apps.map(item => item.id === app.id ? mergePhoneMissingEntries(item, fresh) : item);
+        const merged = mergePhoneMissingEntries(app, fresh);
+        if (JSON.stringify(merged) === JSON.stringify(app)) {
+            contentFailure = core_text.safeUserError('本次没有收到新的应用内容；原记录保留。', 'RMT_PHONE_EVIDENCE');
+            continue;
+        }
+        session.apps = session.apps.map(item => item.id === app.id ? merged : item);
         if (options.savePartial && await options.savePartial(session) === false) {
             throw core_text.safeUserError('无法确认补齐内容已保存，本次已停止。', 'RMT_PHONE_DRAFT_UNAVAILABLE');
         }
@@ -69369,6 +69397,22 @@ function phoneMobileCss() {
 .rmt-phone-page .rmt-phone-detail,.rmt-phone-page .rmt-phone-list{background:transparent!important;color:inherit!important;border-color:var(--rmt-app-accent)}
 .rmt-phone-page .rmt-phone-message{background:#fff;color:#304a3e;border:1px solid #d5e4d8;max-width:85%;border-radius:14px 14px 14px 3px}.rmt-phone-page .rmt-phone-message-owner{background:#d4eacb;margin-left:auto;border-radius:14px 14px 3px 14px}
 .rmt-phone-notepaper,.rmt-phone-book-page{padding:20px;line-height:1.9;background:repeating-linear-gradient(transparent 0 29px,#c9b88922 29px 30px);border-left:3px solid var(--rmt-app-accent)}.rmt-phone-ledger .rmt-phone-fields>div{border-bottom:1px dashed var(--rmt-app-accent);padding:14px 4px}.rmt-phone-record-art{margin:20px auto;width:150px;height:150px;border-radius:50%;display:grid;place-items:center;font-size:35px;background:repeating-radial-gradient(circle,#201e31 0 5px,#51415f 6px 7px);color:#ead5fa}.rmt-phone-track-card{text-align:center}.rmt-phone-photo-record figure{min-height:150px;display:grid;place-items:center;background:#ffffff0a;border:1px solid #ffffff22;padding:20px}.rmt-phone-feed-post{border-top:3px solid var(--rmt-app-accent);padding:18px 4px}.rmt-phone-document{padding:18px;background:#ffffff88;border-top:5px solid var(--rmt-app-accent)}.rmt-phone-route-entry{border-left:3px dotted var(--rmt-app-accent);padding-left:18px}.rmt-phone-page .rmt-phone-entry{color:inherit!important;background:transparent!important;border-color:var(--rmt-app-accent)!important}.rmt-phone-page-notes .rmt-phone-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px}.rmt-phone-page-notes .rmt-phone-entry{padding:16px!important;border:1px solid #e5d69c!important;box-shadow:2px 3px 0 #e5d69c44}
+
+/* App lists use their own content structure; all colors follow the app surface. */
+.rmt-phone-page{--rmt-screen-muted:color-mix(in srgb,var(--rmt-app-ink) 78%,var(--rmt-app-paper));--rmt-screen-accent:var(--rmt-app-ink)}
+.rmt-phone-app-overview{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:16px 4px 8px;border-bottom:2px solid var(--rmt-app-accent)}
+.rmt-phone-app-overview>b{font-size:18px}.rmt-phone-app-overview>span{font-size:12px;color:var(--rmt-screen-muted)}
+.rmt-phone-page .rmt-phone-list{min-width:0}.rmt-phone-page .rmt-phone-entry-main>b,.rmt-phone-page .rmt-phone-entry-main>span{white-space:normal!important;overflow-wrap:anywhere}
+.rmt-phone-page-finance .rmt-phone-list,.rmt-phone-page-store .rmt-phone-list{border:0!important;padding:0!important}
+.rmt-phone-page-finance .rmt-phone-entry,.rmt-phone-page-store .rmt-phone-entry{gap:12px;padding:18px 4px!important;border-bottom:1px dashed var(--rmt-app-accent)!important}
+.rmt-phone-page .rmt-phone-ledger-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;white-space:normal;overflow:visible;width:100%}
+.rmt-phone-page .rmt-phone-ledger-fields>span{display:grid;gap:4px;white-space:normal;padding:8px;background:color-mix(in srgb,var(--rmt-app-accent) 18%,transparent);border-radius:8px}
+.rmt-phone-ledger-fields small{font-size:11px}.rmt-phone-ledger-fields b{font-size:13px;overflow-wrap:anywhere;color:var(--rmt-app-ink)}
+.rmt-phone-page-contacts .rmt-phone-list{display:grid;gap:12px;border:0!important;padding:8px 0!important}
+.rmt-phone-page-contacts .rmt-phone-entry{grid-template-columns:40px minmax(0,1fr);padding:16px 12px!important;border:1px solid var(--rmt-app-accent)!important;border-left-width:4px!important;border-radius:12px}
+.rmt-phone-page-contacts .rmt-phone-entry-main>b{font-size:16px}.rmt-phone-page-contacts .rmt-phone-entry-main>span{font-size:13px;line-height:1.6}
+.rmt-phone-page .rmt-phone-entry-main>span{line-height:1.65}.rmt-phone-page-finance .rmt-phone-entry-main>b,.rmt-phone-page-store .rmt-phone-entry-main>b{font-size:15px}.rmt-phone-page-finance .rmt-phone-entry-main>span,.rmt-phone-page-store .rmt-phone-entry-main>span{font-size:13px}
+.rmt-phone-app-start{display:grid;place-items:center;gap:18px;padding:40px 16px}.rmt-phone-page .rmt-phone-app-start .rmt-btn{background:var(--rmt-app-paper);color:var(--rmt-app-ink);border-color:var(--rmt-app-accent)}
 `;
 }
 
@@ -77441,7 +77485,6 @@ const modes_phone = __m_modes_phone_js;
 const modes_room = __m_modes_room_js;
 const ui_overlay = __m_ui_overlay_js;
 const recovery_view = __m_ui_recoveryView_js;
-const ui_generationCompletion = __m_ui_generationCompletion_js;
 const runtimeState = __m_core_state_js.state;
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
@@ -77629,9 +77672,16 @@ function phoneReadingMeta(value) {
     return String(value || '').split(/[·|]/).filter(part => !/不代表|非历史|未核验|角色日常演绎|已核对的历史/.test(part)).join(' · ').trim();
 }
 
+function phoneReadingEntry(entry, app) {
+    if (!/^剧情摘录\s*\d*$/u.test(String(entry?.title || '').trim())) return entry;
+    const label = { finance: '收支记录', store: '选物记录', notes: '随手记', reading: '阅读札记', books: '阅读札记' }[app?.kind] || app?.label || '记录';
+    return { ...entry, title: entry.contactName || label };
+}
+
 function renderPhoneEntryDetail(entry, app, session = runtimeState.activeSession) {
     if (!entry) return '<div class="rmt-phone-detail rmt-phone-detail-empty">选择一条记录查看详情。</div>';
     if (entry.sourceStatus === 'unavailable') return '<div class="rmt-phone-detail rmt-phone-detail-empty"><button type="button" class="rmt-btn" data-rmt-action="phone-entry-back">← 返回列表</button><h3>本条尚未生成</h3><p>已有内容可以正常阅读；需要时可在终端重试本条。</p></div>';
+    entry = phoneReadingEntry(entry, app);
     const appKind = phonePresentationKind(app);
     const messages = entry.messages?.length ? `<div class="rmt-phone-chat-thread">${entry.messages.map(message => {
         const role = phoneRenderedSpeakerRole(message, session);
@@ -77718,9 +77768,12 @@ function phoneEntryKindMarkup(item, kind) {
     const open = content => `<button type="button" class="rmt-phone-entry rmt-phone-entry-${kind}" data-rmt-phone-entry="${id}">${content}</button>`;
     if (kind === 'chat') return open(`<i class="rmt-phone-entry-avatar" aria-hidden="true">${title.slice(0, 1)}</i><span class="rmt-phone-entry-main"><b>${title}</b><small>${meta}</small><span>${preview}</span></span>${messageCount ? `<em>${messageCount}</em>` : ''}`);
     if (['gallery', 'camera'].includes(kind)) return open(`<span class="rmt-phone-entry-thumb" aria-hidden="true"><i class="fa-solid fa-image"></i></span><b>${title}</b><small>${meta}</small><span>${core_text.esc(item?.imageCaption || item?.preview || '')}</span>`);
-    if (kind === 'contacts') return open(`<i class="rmt-phone-entry-avatar rmt-phone-entry-avatar-contact" aria-hidden="true">${title.slice(0, 1)}</i><span class="rmt-phone-entry-main"><b>${title}</b><small>${meta}</small><span>${preview}</span></span>`);
+    if (kind === 'contacts') return open(`<i class="rmt-phone-entry-avatar rmt-phone-entry-avatar-contact" aria-hidden="true">${core_text.esc(String(item.contactName || item.title || '').slice(0, 1))}</i><span class="rmt-phone-entry-main"><b>${core_text.esc(item.contactName || item.title)}</b><small>${meta}</small><span>${preview}</span></span>`);
     if (kind === 'music') return open(`<i class="rmt-phone-entry-symbol fa-solid fa-music" aria-hidden="true"></i><span class="rmt-phone-entry-main"><b>${title}</b><small>${meta}</small><span>${preview}</span></span>`);
-    if (kind === 'finance') return open(`<span class="rmt-phone-entry-main"><small>${meta || 'LEDGER'}</small><b>${title}</b><span>${preview}</span></span>`);
+    if (kind === 'finance' || kind === 'store') {
+        const fields = (Array.isArray(item.fields) ? item.fields : []).slice(0, 4).map(field => `<span><small>${core_text.esc(field.label)}</small><b>${core_text.esc(field.value)}</b></span>`).join('');
+        return open(`<span class="rmt-phone-entry-main"><small>${meta}</small><b>${title}</b><span>${preview}</span></span>${fields ? `<span class="rmt-phone-ledger-fields">${fields}</span>` : ''}`);
+    }
     if (kind === 'moments') return open(`<span class="rmt-phone-entry-feedmark" aria-hidden="true"></span><span class="rmt-phone-entry-main"><b>${title}</b><span>${preview}</span><small>${meta}</small></span>`);
     if (['reading', 'books'].includes(kind)) return open(`<span class="rmt-phone-book-spine" aria-hidden="true">BOOK</span><span class="rmt-phone-entry-main"><b>${title}</b><small>${meta}</small><span>${preview}</span></span>`);
     if (kind === 'notes') return open(`<span class="rmt-phone-note-sheet"><small>${meta}</small><b>${title}</b><span>${preview}</span></span>`);
@@ -77729,15 +77782,18 @@ function phoneEntryKindMarkup(item, kind) {
     return open(`<b>${title}</b><small>${meta}</small><span>${preview}</span>${messageCount ? `<em>${messageCount}</em>` : ''}`);
 }
 
-function renderPhoneAppList(app) {
+function renderPhoneAppList(app, writable = !runtimeState.activeArchiveSnapshot || (!runtimeState.activeArchiveReadOnly && !runtimeState.activeArchiveSnapshot.backupOnly)) {
     if (!app) return '<section class="rmt-phone-page rmt-phone-page-empty">这里暂时没有可读入口。</section>';
     const kind = phonePresentationKind(app);
     const readable = (app.entries || []).filter(item => item.sourceStatus !== 'unavailable');
-    const entries = readable.map(item => phoneEntryKindMarkup(item, kind)).join('');
+    const entries = readable.map(item => phoneEntryKindMarkup(phoneReadingEntry(item, app), kind)).join('');
     const legacyNotice = app.legacyEvidenceUnverified === true
         ? '<div class="rmt-phone-legacy-notice">此分区含旧版内容 · 证据未重新核验</div>'
         : '';
-    return `<section class="rmt-phone-page rmt-phone-app-screen rmt-phone-page-list rmt-phone-page-${kind}"><div class="rmt-phone-page-header"><button type="button" class="rmt-phone-page-back" data-rmt-action="phone-home" data-rmt-phone-app="${PHONE_HOME_APP_ID}" aria-label="返回主页">‹</button>${phoneIconHtml(app)}<div><b>${core_text.esc(app.label)}</b><small>${core_text.esc(app.summary || `${readable.length} 项`)}</small></div></div><div class="rmt-phone-list rmt-phone-list-${kind}">${entries || '<div class="rmt-phone-list-empty">这个 App 暂无可读内容；可选择重试，其他 App 不受影响。</div>'}</div></section>`;
+    const captions = { finance: '收支簿', contacts: '名帖', notes: '便笺', store: '选物清单', music: '收藏曲目', reading: '书架', books: '书架', work: '工作台', study: '学习札记', research: '资料索引', files: '文件夹', browser: '收藏夹', gallery: '影像册', camera: '影像册', moments: '近况', creative: '作品集', games: '游戏收藏' };
+    const overview = `<div class="rmt-phone-app-overview"><b>${core_text.esc(captions[kind] || app.label)}</b><span>${readable.length} ${kind === 'contacts' ? '位' : '项'}</span></div>`;
+    const empty = `<div class="rmt-phone-app-start">${phoneIconHtml(app)}${writable ? '<button type="button" class="rmt-btn" data-rmt-action="phone-fill-missing">生成内容</button>' : '<span>尚未写入</span>'}</div>`;
+    return `<section class="rmt-phone-page rmt-phone-app-screen rmt-phone-page-list rmt-phone-page-${kind}"><div class="rmt-phone-page-header"><button type="button" class="rmt-phone-page-back" data-rmt-action="phone-home" data-rmt-phone-app="${PHONE_HOME_APP_ID}" aria-label="返回主页">‹</button>${phoneIconHtml(app)}<div><b>${core_text.esc(app.label)}</b><small>${core_text.esc(app.summary || '')}</small></div></div>${overview}<div class="rmt-phone-list rmt-phone-list-${kind}">${entries || empty}</div></section>`;
 }
 
 function renderPhoneDetailPage(entry, app) {
@@ -77772,13 +77828,13 @@ function renderPhone() {
         `rmt-phone-density-${profile.density}`,
         `rmt-phone-shell-${profile.shellTone}`,
     ].join(' ');
-    const phoneWritable = !runtimeState.activeArchiveSnapshot || !runtimeState.activeArchiveReadOnly;
+    const phoneWritable = !runtimeState.activeArchiveSnapshot || (!runtimeState.activeArchiveReadOnly && !runtimeState.activeArchiveSnapshot.backupOnly);
     const incrementalButton = phoneWritable
         ? '<button type="button" class="rmt-btn rmt-phone-increment" data-rmt-action="regenerate"><i class="fa-solid fa-plus"></i> 追加生成</button>'
         : '<button type="button" class="rmt-btn rmt-phone-increment" disabled title="关闭只读查看后可增量追加"><i class="fa-solid fa-lock"></i> 只读 · 无法增量</button>';
     const reversePrivacyGate = `<section class="rmt-reverse-terminal-gate" aria-label="反查终端隐私状态"><i class="fa-solid fa-user-shield" aria-hidden="true"></i><div><b>反查终端 · 隐私保护未开放</b><p>当前架构还不能可靠区分用户人设、正式档案与模拟内容，所以不会替你生成私人事实。</p></div><span>BLOCKED SAFELY</span></section>`;
     const completion = modes_phone.phoneCompletionSummary({ apps });
-    const sourceNotice = recovery_view.readableProgressHtml(session) + `<div class="rmt-phone-draft-status"><span role="status">已有 ${completion.readableItems} 项内容</span>${ui_generationCompletion.generationCompletionHtml({ missing: completion.missingItems, unit: '条终端记录', action: 'phone-fill-missing', label: '重试未完成项', readOnly: !phoneWritable, message: `另有 ${completion.missingItems} 项未通过校验；已有内容照常阅读。`, className: 'rmt-phone-completion' })}</div>`;
+    const sourceNotice = recovery_view.readableProgressHtml(session) + `<div class="rmt-phone-draft-status"><span role="status">已有 ${completion.readableItems} 项内容</span>${phoneWritable && completion.missingItems + completion.repairItems > 0 ? '<button type="button" class="rmt-btn" data-rmt-action="phone-fill-missing">完善应用内容</button>' : ''}</div>`;
     ui_overlay.bodyEl().innerHTML = `<div class="rmt-room-deep-toolbar"><button type="button" class="rmt-btn" data-rmt-action="back">← 返回档案</button>${incrementalButton}</div>${sourceNotice}<div class="rmt-phone"><div class="rmt-phone-shell rmt-device-${kind} rmt-phone-view-${view} ${profileClasses}" data-rmt-phone-daypart="${core_text.esc(live.key)}">${phoneHardware(kind)}<div class="rmt-phone-screen">${phoneStatusBar(now, kind)}<main class="rmt-phone-content rmt-phone-content-single">${page}</main></div></div></div>`;
     startPhoneClock();
 }
@@ -77822,6 +77878,7 @@ __m_ui_phoneView_js.phoneLiveState = phoneLiveState;
 __m_ui_phoneView_js.stopPhoneClock = stopPhoneClock;
 __m_ui_phoneView_js.startPhoneClock = startPhoneClock;
 __m_ui_phoneView_js.renderPhoneEntryDetail = renderPhoneEntryDetail;
+__m_ui_phoneView_js.renderPhoneAppList = renderPhoneAppList;
 __m_ui_phoneView_js.renderPhone = renderPhone;
 __m_ui_phoneView_js.phoneSelectApp = phoneSelectApp;
 __m_ui_phoneView_js.phoneHome = phoneHome;
@@ -82799,10 +82856,12 @@ function renderThemeSongs() {
       <label class="rmt-song-wide">想要的感觉（可不填）<input data-rmt-song-direction maxlength="400" placeholder="例如：克制的钢琴抒情，副歌逐渐明亮" ${disabled ? 'disabled' : ''}></label>
       <button type="button" class="rmt-btn rmt-song-write" data-rmt-song="generate" ${disabled ? 'disabled' : ''}>${busy() ? '正在写歌…' : session.songs.length ? '新写一首' : '创作印象曲'}</button></div></details>`;
     const button = (action, label) => `<button type="button" class="rmt-btn" data-rmt-song="${action}" data-rmt-song-id="${esc(selected.id)}">${label}</button>`;
+    const mvButton = selected && !readonly() && !selected.generationIncomplete
+        ? `<button type="button" class="rmt-btn" data-rmt-mv="open" data-rmt-mv-id="${esc(selected.id)}">做成 MV</button>` : '';
     const formatDetails = selected ? `<article class="rmt-song-sheet" data-rmt-song-presentation="format"><header><small>${esc(selected.subject === 'event' ? '事件印象曲' : '角色印象曲')} · ${esc(selected.subjectTitle)}</small><h2>${esc(selected.title)}</h2><p><b>演唱者</b> ${esc(selected.singer)} <span>· ${esc(contract.songLanguageLabel(selected))}</span></p><p>${esc(selected.vocalDescription)}</p></header>
       <section class="rmt-song-style"><h3>曲风</h3><p>${esc(selected.styleDescription)}</p><div class="rmt-song-toolbar">${button('copy-title','复制歌名')}${button('copy-style','复制曲风')}</div><pre>${esc(selected.stylePrompt)}</pre></section>
       <section class="rmt-song-lyrics"><div class="rmt-song-toolbar"><h3>${selected.generationIncomplete ? '已收到的歌词 · 未完成' : '完整歌词'}</h3>${button('copy-lyrics','复制歌词')}</div><pre>${esc(selected.lyrics)}</pre></section>
-      <footer class="rmt-song-toolbar">${button('copy-all','复制全部')}${button('export','导出文本')}${readonly() || selected.generationIncomplete ? '' : `<button type="button" class="rmt-btn" data-rmt-mv="open" data-rmt-mv-id="${esc(selected.id)}">做成 MV</button>`}${readonly() ? '' : `<button type="button" class="rmt-btn" data-rmt-song="delete" data-rmt-song-id="${esc(selected.id)}" ${busy() ? 'disabled' : ''}>删除这首</button>`}</footer>
+      <footer class="rmt-song-toolbar">${button('copy-all','复制全部')}${button('export','导出文本')}${mvButton}${readonly() ? '' : `<button type="button" class="rmt-btn" data-rmt-song="delete" data-rmt-song-id="${esc(selected.id)}" ${busy() ? 'disabled' : ''}>删除这首</button>`}</footer>
       <div data-rmt-song-copy-fallback></div></article>` : '<div class="rmt-song-empty"><span aria-hidden="true">♫</span><h3>让故事有自己的旋律</h3><p>为角色写一首，或选一段真实回忆作为起点。</p></div>';
     const readDetails = selected ? `<article class="rmt-song-sheet rmt-song-readable" data-rmt-song-presentation="read"><header>
       <small>${esc(selected.subject === 'event' ? '事件印象曲' : '角色印象曲')} · ${esc(selected.subjectTitle)}</small>
@@ -82810,13 +82869,13 @@ function renderThemeSongs() {
       <p class="rmt-song-credit">作者 · 未署名（原创生成）</p>
       <details class="rmt-song-arrangement"><summary>曲风与人声</summary><p>${esc(selected.styleDescription)}</p><p>${esc(selected.vocalDescription)}</p></details></header>
       <div class="rmt-song-reading-lyrics">${songLyricsReadingHtml(selected.lyrics)}</div>
-      <footer class="rmt-song-toolbar">${button('copy-lyrics','复制歌词')}${button('export','导出文本')}${readonly() || selected.generationIncomplete ? '' : `<button type="button" class="rmt-btn" data-rmt-mv="open" data-rmt-mv-id="${esc(selected.id)}">做成 MV</button>`}${readonly() ? '' : `<button type="button" class="rmt-btn" data-rmt-song="delete" data-rmt-song-id="${esc(selected.id)}" ${busy() ? 'disabled' : ''}>删除这首</button>`}</footer>
+      <footer class="rmt-song-toolbar">${button('copy-lyrics','复制歌词')}${button('export','导出文本')}${mvButton}${readonly() ? '' : `<button type="button" class="rmt-btn" data-rmt-song="delete" data-rmt-song-id="${esc(selected.id)}" ${busy() ? 'disabled' : ''}>删除这首</button>`}</footer>
       <div data-rmt-song-copy-fallback></div></article>` : formatDetails;
     const cover = selected ? `<div class="rmt-song-cover">${expanded_cg_view.expandedCgHtml(session,
         { kind: 'song-cover', containerId: selected.id }, readonly(),
         { placeholder: '<div class="rmt-song-cover-empty"><span aria-hidden="true">♫</span><b>专辑封面</b></div>' })}</div>` : '';
     const details = `<div class="rmt-song-detail">${cover}${displayMode === 'format' ? formatDetails : readDetails}</div>`;
-    const switcher = `<div class="rmt-song-display-switch" role="group" aria-label="歌曲显示模式"><button type="button" class="rmt-btn" data-rmt-song="view-read" aria-pressed="${displayMode === 'read'}">阅读模式</button><button type="button" class="rmt-btn" data-rmt-song="view-format" aria-pressed="${displayMode === 'format'}">创作格式</button></div>`;
+    const switcher = `<div class="rmt-song-display-switch" role="group" aria-label="歌曲操作"><button type="button" class="rmt-btn" data-rmt-song="view-read" aria-pressed="${displayMode === 'read'}">阅读模式</button><button type="button" class="rmt-btn" data-rmt-song="view-format" aria-pressed="${displayMode === 'format'}">创作格式</button>${mvButton}</div>`;
     const list = session.songs.length ? `<nav class="rmt-song-list" aria-label="已保存的印象曲">${[...session.songs].reverse().map(song => `<button type="button" class="${song.id === selected?.id ? 'active' : ''}" data-rmt-song="select" data-rmt-song-id="${esc(song.id)}" aria-current="${song.id === selected?.id ? 'page' : 'false'}"><span aria-hidden="true">♪</span><span><b>${esc(song.title)}</b><small>${esc(song.singer)}</small></span></button>`).join('')}</nav>` : '';
     const allCache = runtimeState.activeArchiveSnapshot?.cache || cache.getCache(contextApi.getContext());
     const recovery = recoveryView.recoveryBannerHtml(allCache, memory, { readOnly: readonly() });
