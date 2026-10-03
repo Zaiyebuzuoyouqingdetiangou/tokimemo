@@ -961,7 +961,8 @@ export async function drawFrame(songId, shotId) {
         const custom = found && record.assetPrompts?.[`${shot.group}:${shot.diff}`]?.trim();
         const metadata = custom ? null : found ? assetMetadata(record, found, context) : record.cast ? mv_cast.castMetadata(record, shot) : null;
         const result = await cg_core.invokeImageGeneration(framePrompt(record, shot, context, !metadata), context, {
-            orientation: (found?.group?.stageBackground && found.group.layer !== 'full') || normalizeSettings(record.settings).ratio === '9:16' ? 'portrait' : 'landscape',
+            orientation: normalizeSettings(record.settings).ratio === '9:16' ? 'portrait' : 'landscape',
+            respectOrientation: true,
             characterName: context?.name2 || '', targetKey: key, singlePrompt: true,
             ...(metadata ? { promptMetadata: metadata } : {}),
         });
@@ -1339,8 +1340,7 @@ export function defaultAssetPrompt(record, key, context, appearance = true) {
     const found = assetOf(record, key);
     if (!found) return '';
     const style = styleOf(settings).prompt;
-    const ratio = found.kind === 'char' && found.group.stageBackground && found.group.layer !== 'full'
-        ? 'portrait character illustration' : settings.ratio === '9:16' ? 'vertical 9:16 composition' : 'horizontal 16:9 composition';
+    const ratio = settings.ratio === '9:16' ? 'vertical 9:16 composition' : 'horizontal 16:9 composition';
     const era = record?.wardrobe?.era ? `setting: ${record.wardrobe.era}` : '';
     // 只写正向词：tag 模型会把“no multiple views”“no people”里的词当成要画的内容。
     if (found.kind === 'motif') return [style, ...motifRecipe(found.target)].filter(Boolean).join(', ');
@@ -1402,8 +1402,9 @@ export async function drawAsset(songId, key, { fresh = false } = {}) {
     try {
         const seed = fresh ? 0 : (found.group?.seed || 0);
         const base = {
-            // 人物层永远竖画：横构图里画单人时模型会把人复制成左右两份；横屏成片由本地合成。
-            orientation: (found.kind === 'motif' || (found.kind === 'char' && found.group.layer !== 'full')) || normalizeSettings(record.settings).ratio === '9:16' ? 'portrait' : 'landscape',
+            // 场景和人物差分都遵守本曲画幅；意象仍是独立的抠图素材。
+            orientation: found.kind === 'motif' || normalizeSettings(record.settings).ratio === '9:16' ? 'portrait' : 'landscape',
+            respectOrientation: found.kind !== 'motif',
             characterName: context?.name2 || '', targetKey: runKey, seed, singlePrompt: true,
         };
         // A saved custom prompt is the complete previewed text; do not append hidden cast text.

@@ -1,0 +1,11 @@
+{
+  "source": "https://raw.githubusercontent.com/damoshen123/st-chatu8/main/index.js",
+  "retrieved": "2026-10-03 UTC",
+  "sha256": "c979ea3edee6601f401f0100fe482b8a441a0ffaf99bd363ed627697b5a408a0",
+  "event": "generate-image-request",
+  "fields_checked": [
+    "width",
+    "height"
+  ],
+  "inspection": "NovelAI/SD/ComfyUI/Banana/RunningHub handlers accept request width and height; NovelAI and SD use provided values ahead of global sizes. No third-party source copied into runtime."
+}

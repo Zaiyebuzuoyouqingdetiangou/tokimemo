@@ -1,0 +1,180 @@
+TAP version 13
+# Subtest: 1–4 completed then full range appends 5–8 and preserves paid assets, settings and timing
+ok 1 - 1–4 completed then full range appends 5–8 and preserves paid assets, settings and timing
+  ---
+  duration_ms: 161.457726
+  type: 'test'
+  ...
+# Subtest: export defaults to completed 1–4 and remains independent when making full song
+ok 2 - export defaults to completed 1–4 and remains independent when making full song
+  ---
+  duration_ms: 93.798519
+  type: 'test'
+  ...
+# Subtest: continuation only supplies missing global section indexes and existing wardrobe to the request
+ok 3 - continuation only supplies missing global section indexes and existing wardrobe to the request
+  ---
+  duration_ms: 108.795191
+  type: 'test'
+  ...
+# Subtest: no missing sections makes no paid request; duplicate clicks share the existing story lock
+ok 4 - no missing sections makes no paid request; duplicate clicks share the existing story lock
+  ---
+  duration_ms: 112.674119
+  type: 'test'
+  ...
+# Subtest: a short model reply can be continued again without losing either completed batch
+ok 5 - a short model reply can be continued again without losing either completed batch
+  ---
+  duration_ms: 136.212783
+  type: 'test'
+  ...
+# Subtest: append merges concurrent drawing, timing, wardrobe, export and range edits
+ok 6 - append merges concurrent drawing, timing, wardrobe, export and range edits
+  ---
+  duration_ms: 137.69344
+  type: 'test'
+  ...
+# Subtest: regeneration while append is running holds paid append instead of overwriting the replacement
+ok 7 - regeneration while append is running holds paid append instead of overwriting the replacement
+  ---
+  duration_ms: 120.507579
+  type: 'test'
+  ...
+# Subtest: switching chat journals append; fresh runtime can save it once without another request
+ok 8 - switching chat journals append; fresh runtime can save it once without another request
+  ---
+  duration_ms: 262.140884
+  type: 'test'
+  ...
+# Subtest: request failure and malformed/out-of-range paid results keep all existing images
+ok 9 - request failure and malformed/out-of-range paid results keep all existing images
+  ---
+  duration_ms: 353.578623
+  type: 'test'
+  ...
+# Subtest: legacy shots accept new v2 continuation while preserving existing local images
+ok 10 - legacy shots accept new v2 continuation while preserving existing local images
+  ---
+  duration_ms: 119.639725
+  type: 'test'
+  ...
+# Subtest: legacy flat model reply can append to v2 without making new shots undrawable
+ok 11 - legacy flat model reply can append to v2 without making new shots undrawable
+  ---
+  duration_ms: 169.727773
+  type: 'test'
+  ...
+# Subtest: normalization retains more than 8 groups, 5 diffs and 2 backgrounds without remapping to first
+ok 12 - normalization retains more than 8 groups, 5 diffs and 2 backgrounds without remapping to first
+  ---
+  duration_ms: 123.459092
+  type: 'test'
+  ...
+# Subtest: range generation no longer treats a stretched previous shot as part of an empty section
+ok 13 - range generation no longer treats a stretched previous shot as part of an empty section
+  ---
+  duration_ms: 118.554732
+  type: 'test'
+  ...
+# Subtest: completed clips exclude holes, undrawn diffs and missing cutout backgrounds; optional motif is not a gate
+ok 14 - completed clips exclude holes, undrawn diffs and missing cutout backgrounds; optional motif is not a gate
+  ---
+  duration_ms: 105.538564
+  type: 'test'
+  ...
+# Subtest: custom partial export uses section times, supports reverse selection, and keeps source data untouched
+ok 15 - custom partial export uses section times, supports reverse selection, and keeps source data untouched
+  ---
+  duration_ms: 104.258706
+  type: 'test'
+  ...
+# Subtest: manual full/unfinished export is still available and export choice survives save/reload
+ok 16 - manual full/unfinished export is still available and export choice survives save/reload
+  ---
+  duration_ms: 256.121335
+  type: 'test'
+  ...
+# Subtest: v2 UI displays continuation, invokes it once, and renders both saved and appended groups
+ok 17 - v2 UI displays continuation, invokes it once, and renders both saved and appended groups
+  ---
+  duration_ms: 139.63214
+  type: 'test'
+  ...
+# Subtest: export UI selects a completed clip independently of generation range and offers later clips separately
+ok 18 - export UI selects a completed clip independently of generation range and offers later clips separately
+  ---
+  duration_ms: 144.415452
+  type: 'test'
+  ...
+# Subtest: audio export seeks selected start, omits broken out-of-range image and stops at selected end
+ok 19 - audio export seeks selected start, omits broken out-of-range image and stops at selected end
+  ---
+  duration_ms: 138.174568
+  type: 'test'
+  ...
+# Subtest: silent export uses the same chosen clip length instead of the whole song
+ok 20 - silent export uses the same chosen clip length instead of the whole song
+  ---
+  duration_ms: 133.498128
+  type: 'test'
+  ...
+# Subtest: selected unavailable image reports export failure, and explicit stop releases recorder resources
+ok 21 - selected unavailable image reports export failure, and explicit stop releases recorder resources
+  ---
+  duration_ms: 136.992779
+  type: 'test'
+  ...
+# Subtest: recording fallback seeks and stops at its separately selected clip
+ok 22 - recording fallback seeks and stops at its separately selected clip
+  ---
+  duration_ms: 135.424775
+  type: 'test'
+  ...
+# Subtest: storage outage retains the paid append and save-only retry is idempotent without another generation
+ok 23 - storage outage retains the paid append and save-only retry is idempotent without another generation
+  ---
+  duration_ms: 124.090874
+  type: 'test'
+  ...
+# Subtest: paid asset finishing after append still saves to the original group
+ok 24 - paid asset finishing after append still saves to the original group
+  ---
+  duration_ms: 130.338233
+  type: 'test'
+  ...
+# Subtest: export progress starts at zero and measures only the chosen duration
+ok 25 - export progress starts at zero and measures only the chosen duration
+  ---
+  duration_ms: 139.797796
+  type: 'test'
+  ...
+# Subtest: leaving during audio metadata wait cannot restart a cancelled export
+ok 26 - leaving during audio metadata wait cannot restart a cancelled export
+  ---
+  duration_ms: 137.457913
+  type: 'test'
+  ...
+# Subtest: a verse-only export does not preload a motif that is only rendered in the chorus
+ok 27 - a verse-only export does not preload a motif that is only rendered in the chorus
+  ---
+  duration_ms: 134.842223
+  type: 'test'
+  ...
+# Subtest: clipping preserves original first-shot timing and beat/lyric boundaries instead of recalculating from zero
+ok 28 - clipping preserves original first-shot timing and beat/lyric boundaries instead of recalculating from zero
+  ---
+  duration_ms: 118.399377
+  type: 'test'
+  ...
+1..28
+# tests 28
+# suites 0
+# pass 28
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 4108.614277
+(node:14) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)

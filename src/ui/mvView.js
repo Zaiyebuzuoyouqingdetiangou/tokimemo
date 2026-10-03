@@ -248,8 +248,9 @@ ${r} .rmt-mv-assets>div{display:flex;flex-direction:column;align-items:center;ga
 ${r} .rmt-mv-assets small{font-size:11px;color:var(--rmt-theme-muted,#586b7c)}
 ${r} .rmt-mv-plus{font-size:18px;color:#b7c3cf;padding-bottom:28px}
 ${r} .rmt-mv-asset{position:relative;width:62px;height:96px;border-radius:10px;overflow:hidden;padding:0;cursor:pointer;border:1px solid var(--rmt-theme-border,#cfdae5);background:repeating-linear-gradient(135deg,#e6e9f0 0 6px,#f2f4f8 6px 12px)}
+${r} .rmt-mv-asset.wide{width:110px;height:62px}
 ${r} .rmt-mv-asset.cut.done{background:repeating-conic-gradient(#eef0f4 0 25%,#ffffff 0 50%) 0 0/12px 12px}
-${r} .rmt-mv-asset img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+${r} .rmt-mv-asset img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
 ${r} .rmt-mv-asset i{position:absolute;left:4px;top:4px;font-style:normal;font-size:10px;border-radius:4px;padding:1px 5px;background:#ecebf1;color:#5d5566}
 ${r} .rmt-mv-asset.done i{background:#e2f0ee;color:#2f6b66}
 ${r} .rmt-mv-palette{display:flex;gap:12px;align-items:center;background:var(--rmt-theme-surface-solid,#fff);border:1px solid var(--rmt-theme-border,#cfdae5);border-radius:16px;padding:12px 14px}
@@ -1689,10 +1690,11 @@ function assetTile(record, key, label) {
     const url = sprite?.preview || assetImageUrl(found?.image);
     const exists = mv.hasAssetImage(found?.image);
     const drawing = mv.isAssetDrawing(mv.mvScope(ctx()), view.songId, key);
+    const wide = found?.kind !== 'motif' && mv.normalizeSettings(record.settings).ratio === '16:9';
     const cut = found?.kind !== 'bg';
     const awaitingCutout = exists && found?.group?.stageBackground && found.group.layer !== 'full' && found.image.editMode !== 'cutout';
     const splitSelect = btn('edit-asset', '编辑素材', { id: key, cls: 'rmt-mv-edit-open' });
-    return `<button type="button" class="rmt-mv-asset${exists ? ' done' : ''}${cut && found?.group?.layer !== 'full' ? ' cut' : ''}" data-rmt-mv-anchor="${esc(key)}" data-rmt-mv="draw-asset" data-rmt-mv-id="${esc(key)}" ${drawing || view.drawingAll ? 'disabled' : ''} aria-label="${esc(label)}：${exists ? '重画' : '画'}这一张">${url ? `<img src="${esc(url)}" alt="">` : ''}<i>${drawing ? '画…' : awaitingCutout ? '待抠图' : exists ? '已画' : '未画'}</i></button><small>${esc(label)}</small>${splitSelect}`;
+    return `<button type="button" class="rmt-mv-asset${wide ? ' wide' : ''}${exists ? ' done' : ''}${cut && found?.group?.layer !== 'full' ? ' cut' : ''}" data-rmt-mv-anchor="${esc(key)}" data-rmt-mv="draw-asset" data-rmt-mv-id="${esc(key)}" ${drawing || view.drawingAll ? 'disabled' : ''} aria-label="${esc(label)}：${exists ? '重画' : '画'}这一张">${url ? `<img src="${esc(url)}" alt="">` : ''}<i>${drawing ? '画…' : awaitingCutout ? '待抠图' : exists ? '已画' : '未画'}</i></button><small>${esc(label)}</small>${splitSelect}`;
 }
 
 // 素材检查：原图 → 拼图拆分 → 抠图结果 → 播放时的用法，逐张对照。
@@ -1713,16 +1715,17 @@ function inspectHtml(record, g, diffs) {
 function sharedBackgroundsHtml(record, shots) {
     const backgrounds = mv_stage.usedBackgrounds(record, shots);
     if (!backgrounds.length) return '';
+    const wide = mv.normalizeSettings(record.settings).ratio === '16:9';
     const tiles = backgrounds.map(bg => {
         const key = `stage:${bg.id}`;
         let preview = bg.kind === 'image' ? assetImageUrl(bg.image) : '';
         if (!preview) {
-            try { const c = document.createElement('canvas'); c.width = 320; c.height = 180;
-                stage_canvas.drawBackground(c.getContext('2d'), bg, 320, 180, 0); preview = c.toDataURL('image/png'); } catch { /* Host without Canvas preview. */ }
+            try { const c = document.createElement('canvas'); c.width = wide ? 320 : 180; c.height = wide ? 180 : 320;
+                stage_canvas.drawBackground(c.getContext('2d'), bg, c.width, c.height, 0); preview = c.toDataURL('image/png'); } catch { /* Host without Canvas preview. */ }
         }
         const select = (field, label, values, value) => `<label class="rmt-mv-look"><span>${label}</span><select data-rmt-mv-stage-bg="${field}" data-background="${esc(bg.id)}">${Object.entries(values).map(([id, name]) => `<option value="${esc(id)}"${id === value ? ' selected' : ''}>${esc(name)}</option>`).join('')}</select></label>`;
         return `<div><div class="rmt-mv-assets"><div>${bg.kind === 'image' ? assetTile(record, key, bg.label)
-            : `<button type="button" class="rmt-mv-asset done" data-rmt-mv-anchor="${esc(key)}" data-rmt-mv="edit-asset" data-rmt-mv-id="${esc(key)}">${preview ? `<img src="${esc(preview)}" alt="">` : ''}<i>本地绘制</i></button><small>${esc(bg.label)}</small>${btn('edit-asset', '替换背景', { id: key })}`}</div></div>
+            : `<button type="button" class="rmt-mv-asset${wide ? ' wide' : ''} done" data-rmt-mv-anchor="${esc(key)}" data-rmt-mv="edit-asset" data-rmt-mv-id="${esc(key)}">${preview ? `<img src="${esc(preview)}" alt="">` : ''}<i>本地绘制</i></button><small>${esc(bg.label)}</small>${btn('edit-asset', '替换背景', { id: key })}`}</div></div>
           <details${view.stageBackgroundOpen === bg.id ? ' open' : ''}><summary>背景样式</summary>${select('kind', '图案', mv_stage.BACKGROUNDS, bg.kind)}${select('motion', '背景运动', { still: '不动', rotate: '缓慢旋转', drift: '轻微移动' }, bg.motion)}
           <div class="rmt-mv-actions">${bg.colors.map((c, i) => `<label>配色 ${i + 1}<input type="color" value="${esc(c)}" data-rmt-mv-stage-bg="color${i}" data-background="${esc(bg.id)}"></label>`).join('')}</div></details></div>`;
     }).join('');

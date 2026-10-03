@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 320
-// Source SHA-256: cdab54ca9b14028245bd0309c93bc5a7dee28d267bfd190cccf27ab8f4d6d497
+// Source SHA-256: 2276750446ef01fc74c362682ae6d3c179b14b39c2ad303ae23197ae98d203ef
 // Build: python3 tools/verification/build.py <source-root>
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -20564,7 +20564,7 @@ function __init_core_selfUpdater_js() {
 // MODULE: core/selfUpdater.js
 
 const UPDATE_STATE = Symbol.for('heartbeatMemories.selfUpdate');
-const INSTALLED_BUILD = '0.99.99-r84.187-mv-update-recovery';
+const INSTALLED_BUILD = '1.0.12-r84.229-mv-ratio';
 const PROJECT_REMOTE = 'https://github.com/zaiyebuzuoyouqingdetiangou/tokimemo';
 function updateError(message) { const error = new Error(message); error.userMessage = message; return error; }
 
@@ -37116,12 +37116,12 @@ function invokeSelectedImageProvider(selectedProvider, prompt, context, options)
     throw core_text.safeUserError('请在设置里选择柏宝绘或智绘姬。旧渠道图片仍可查看。', 'RMT_IMAGE_PROVIDER_RETIRED');
 }
 
-async function invokeImageGeneration(prompt, context = core_context.getContext(), { signal = null, provider = null, orientation = 'landscape', characterName = '', promptMetadata = null, onProgress = null, onSettled = null, targetKey = '', seed = 0, singlePrompt = false } = {}) {
+async function invokeImageGeneration(prompt, context = core_context.getContext(), { signal = null, provider = null, orientation = 'landscape', respectOrientation = false, characterName = '', promptMetadata = null, onProgress = null, onSettled = null, targetKey = '', seed = 0, singlePrompt = false } = {}) {
     const settings = core_settings.getPluginSettings(context);
     const selectedProvider = provider === chatu8_image.CHATU8_IMAGE_PROVIDER || provider === baibai_image.BAIBAI_IMAGE_PROVIDER
         ? provider : settings.imageGenerationProvider;
     // seed 只交给柏宝绘（公开 API 支持单次 seed）；智绘姬没有公开的单次 seed 接口，不传。
-    const options = { signal, orientation, characterName, promptMetadata, onProgress, onSettled, targetKey, singlePrompt, seed: Number.isInteger(seed) && seed > 0 ? seed : 0 };
+    const options = { signal, orientation, respectOrientation, characterName, promptMetadata, onProgress, onSettled, targetKey, singlePrompt, seed: Number.isInteger(seed) && seed > 0 ? seed : 0 };
     try {
         return await invokeSelectedImageProvider(selectedProvider, prompt, context, options);
     } catch (error) {
@@ -38253,8 +38253,8 @@ const core_context = __m_core_context_js;
 const core_text = __m_core_text_js;
 const appearance = __m_generation_cgAppearance_js;
 // Calls 智绘姬 through the event it already listens for. Does not read API keys,
-// prompts, or endpoints, and does not write its settings. Width and height are
-// omitted so the user's existing 智绘姬 size stays in effect.
+// prompts, or endpoints, and does not write its settings. Ordinary CG keeps its
+// existing size; an explicit MV orientation overrides only this request's size.
 
 
 
@@ -38402,7 +38402,25 @@ async function saveStillImage(imageData, context, signal) {
     return path;
 }
 
-async function generateChatu8Image(prompt, { signal = null, promptMetadata = null, onProgress = null, onSettled = null, targetKey = '', context = core_context.getContext() } = {}) {
+function orientedSize(context, backend, orientation) {
+    const bag = extensionBag(context);
+    const keys = { novelai: ['novelai_width', 'novelai_height'], sd: ['sd_cwidth', 'sd_cheight'], comfyui: ['comfyui_width', 'comfyui_height'] }[backend];
+    const width = Number(keys && bag?.[keys[0]]), height = Number(keys && bag?.[keys[1]]);
+    let long = 1216, short = 832;
+    if (Number.isSafeInteger(width) && width > 0 && Number.isSafeInteger(height) && height > 0) {
+        long = Math.max(width, height); short = Math.min(width, height);
+        if (long === short) {
+            // Keep approximately the configured pixel area, aligned for image
+            // backends. A square preset must not swallow an explicit MV choice.
+            const area = width * height;
+            long = Math.max(128, Math.floor(Math.sqrt(area * 16 / 9) / 64) * 64);
+            short = Math.max(64, Math.floor(area / long / 64) * 64);
+        }
+    }
+    return orientation === 'portrait' ? { width: short, height: long } : { width: long, height: short };
+}
+
+async function generateChatu8Image(prompt, { signal = null, orientation = 'landscape', respectOrientation = false, promptMetadata = null, onProgress = null, onSettled = null, targetKey = '', context = core_context.getContext() } = {}) {
     if (signal?.aborted) throw chatu8ImageError('CH8_ABORTED');
     const state = chatu8ImageState(context);
     if (!state.available) throw chatu8ImageError(state.code);
@@ -38452,7 +38470,7 @@ async function generateChatu8Image(prompt, { signal = null, promptMetadata = nul
                 source.on(RESPONSE_EVENT, onResponse);
                 signal?.addEventListener('abort', onAbort, { once: true });
                 timer = setTimeout(() => stop('CH8_TIMEOUT'), CHATU8_IMAGE_TIMEOUT_MS);
-                source.emit(REQUEST_EVENT, { id, prompt: scene });
+                source.emit(REQUEST_EVENT, { id, prompt: scene, ...(respectOrientation ? orientedSize(context, state.backend, orientation) : {}) });
             } catch { stop('CH8_BACKEND_ERROR'); }
         });
         if (signal?.aborted) throw chatu8ImageError('CH8_ABORTED');
@@ -87720,7 +87738,8 @@ async function drawFrame(songId, shotId) {
         const custom = found && record.assetPrompts?.[`${shot.group}:${shot.diff}`]?.trim();
         const metadata = custom ? null : found ? assetMetadata(record, found, context) : record.cast ? mv_cast.castMetadata(record, shot) : null;
         const result = await cg_core.invokeImageGeneration(framePrompt(record, shot, context, !metadata), context, {
-            orientation: (found?.group?.stageBackground && found.group.layer !== 'full') || normalizeSettings(record.settings).ratio === '9:16' ? 'portrait' : 'landscape',
+            orientation: normalizeSettings(record.settings).ratio === '9:16' ? 'portrait' : 'landscape',
+            respectOrientation: true,
             characterName: context?.name2 || '', targetKey: key, singlePrompt: true,
             ...(metadata ? { promptMetadata: metadata } : {}),
         });
@@ -88098,8 +88117,7 @@ function defaultAssetPrompt(record, key, context, appearance = true) {
     const found = assetOf(record, key);
     if (!found) return '';
     const style = styleOf(settings).prompt;
-    const ratio = found.kind === 'char' && found.group.stageBackground && found.group.layer !== 'full'
-        ? 'portrait character illustration' : settings.ratio === '9:16' ? 'vertical 9:16 composition' : 'horizontal 16:9 composition';
+    const ratio = settings.ratio === '9:16' ? 'vertical 9:16 composition' : 'horizontal 16:9 composition';
     const era = record?.wardrobe?.era ? `setting: ${record.wardrobe.era}` : '';
     // 只写正向词：tag 模型会把“no multiple views”“no people”里的词当成要画的内容。
     if (found.kind === 'motif') return [style, ...motifRecipe(found.target)].filter(Boolean).join(', ');
@@ -88161,8 +88179,9 @@ async function drawAsset(songId, key, { fresh = false } = {}) {
     try {
         const seed = fresh ? 0 : (found.group?.seed || 0);
         const base = {
-            // 人物层永远竖画：横构图里画单人时模型会把人复制成左右两份；横屏成片由本地合成。
-            orientation: (found.kind === 'motif' || (found.kind === 'char' && found.group.layer !== 'full')) || normalizeSettings(record.settings).ratio === '9:16' ? 'portrait' : 'landscape',
+            // 场景和人物差分都遵守本曲画幅；意象仍是独立的抠图素材。
+            orientation: found.kind === 'motif' || normalizeSettings(record.settings).ratio === '9:16' ? 'portrait' : 'landscape',
+            respectOrientation: found.kind !== 'motif',
             characterName: context?.name2 || '', targetKey: runKey, seed, singlePrompt: true,
         };
         // A saved custom prompt is the complete previewed text; do not append hidden cast text.
@@ -88678,8 +88697,9 @@ ${r} .rmt-mv-assets>div{display:flex;flex-direction:column;align-items:center;ga
 ${r} .rmt-mv-assets small{font-size:11px;color:var(--rmt-theme-muted,#586b7c)}
 ${r} .rmt-mv-plus{font-size:18px;color:#b7c3cf;padding-bottom:28px}
 ${r} .rmt-mv-asset{position:relative;width:62px;height:96px;border-radius:10px;overflow:hidden;padding:0;cursor:pointer;border:1px solid var(--rmt-theme-border,#cfdae5);background:repeating-linear-gradient(135deg,#e6e9f0 0 6px,#f2f4f8 6px 12px)}
+${r} .rmt-mv-asset.wide{width:110px;height:62px}
 ${r} .rmt-mv-asset.cut.done{background:repeating-conic-gradient(#eef0f4 0 25%,#ffffff 0 50%) 0 0/12px 12px}
-${r} .rmt-mv-asset img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+${r} .rmt-mv-asset img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
 ${r} .rmt-mv-asset i{position:absolute;left:4px;top:4px;font-style:normal;font-size:10px;border-radius:4px;padding:1px 5px;background:#ecebf1;color:#5d5566}
 ${r} .rmt-mv-asset.done i{background:#e2f0ee;color:#2f6b66}
 ${r} .rmt-mv-palette{display:flex;gap:12px;align-items:center;background:var(--rmt-theme-surface-solid,#fff);border:1px solid var(--rmt-theme-border,#cfdae5);border-radius:16px;padding:12px 14px}
@@ -90119,10 +90139,11 @@ function assetTile(record, key, label) {
     const url = sprite?.preview || assetImageUrl(found?.image);
     const exists = mv.hasAssetImage(found?.image);
     const drawing = mv.isAssetDrawing(mv.mvScope(ctx()), view.songId, key);
+    const wide = found?.kind !== 'motif' && mv.normalizeSettings(record.settings).ratio === '16:9';
     const cut = found?.kind !== 'bg';
     const awaitingCutout = exists && found?.group?.stageBackground && found.group.layer !== 'full' && found.image.editMode !== 'cutout';
     const splitSelect = btn('edit-asset', '编辑素材', { id: key, cls: 'rmt-mv-edit-open' });
-    return `<button type="button" class="rmt-mv-asset${exists ? ' done' : ''}${cut && found?.group?.layer !== 'full' ? ' cut' : ''}" data-rmt-mv-anchor="${esc(key)}" data-rmt-mv="draw-asset" data-rmt-mv-id="${esc(key)}" ${drawing || view.drawingAll ? 'disabled' : ''} aria-label="${esc(label)}：${exists ? '重画' : '画'}这一张">${url ? `<img src="${esc(url)}" alt="">` : ''}<i>${drawing ? '画…' : awaitingCutout ? '待抠图' : exists ? '已画' : '未画'}</i></button><small>${esc(label)}</small>${splitSelect}`;
+    return `<button type="button" class="rmt-mv-asset${wide ? ' wide' : ''}${exists ? ' done' : ''}${cut && found?.group?.layer !== 'full' ? ' cut' : ''}" data-rmt-mv-anchor="${esc(key)}" data-rmt-mv="draw-asset" data-rmt-mv-id="${esc(key)}" ${drawing || view.drawingAll ? 'disabled' : ''} aria-label="${esc(label)}：${exists ? '重画' : '画'}这一张">${url ? `<img src="${esc(url)}" alt="">` : ''}<i>${drawing ? '画…' : awaitingCutout ? '待抠图' : exists ? '已画' : '未画'}</i></button><small>${esc(label)}</small>${splitSelect}`;
 }
 
 // 素材检查：原图 → 拼图拆分 → 抠图结果 → 播放时的用法，逐张对照。
@@ -90143,16 +90164,17 @@ function inspectHtml(record, g, diffs) {
 function sharedBackgroundsHtml(record, shots) {
     const backgrounds = mv_stage.usedBackgrounds(record, shots);
     if (!backgrounds.length) return '';
+    const wide = mv.normalizeSettings(record.settings).ratio === '16:9';
     const tiles = backgrounds.map(bg => {
         const key = `stage:${bg.id}`;
         let preview = bg.kind === 'image' ? assetImageUrl(bg.image) : '';
         if (!preview) {
-            try { const c = document.createElement('canvas'); c.width = 320; c.height = 180;
-                stage_canvas.drawBackground(c.getContext('2d'), bg, 320, 180, 0); preview = c.toDataURL('image/png'); } catch { /* Host without Canvas preview. */ }
+            try { const c = document.createElement('canvas'); c.width = wide ? 320 : 180; c.height = wide ? 180 : 320;
+                stage_canvas.drawBackground(c.getContext('2d'), bg, c.width, c.height, 0); preview = c.toDataURL('image/png'); } catch { /* Host without Canvas preview. */ }
         }
         const select = (field, label, values, value) => `<label class="rmt-mv-look"><span>${label}</span><select data-rmt-mv-stage-bg="${field}" data-background="${esc(bg.id)}">${Object.entries(values).map(([id, name]) => `<option value="${esc(id)}"${id === value ? ' selected' : ''}>${esc(name)}</option>`).join('')}</select></label>`;
         return `<div><div class="rmt-mv-assets"><div>${bg.kind === 'image' ? assetTile(record, key, bg.label)
-            : `<button type="button" class="rmt-mv-asset done" data-rmt-mv-anchor="${esc(key)}" data-rmt-mv="edit-asset" data-rmt-mv-id="${esc(key)}">${preview ? `<img src="${esc(preview)}" alt="">` : ''}<i>本地绘制</i></button><small>${esc(bg.label)}</small>${btn('edit-asset', '替换背景', { id: key })}`}</div></div>
+            : `<button type="button" class="rmt-mv-asset${wide ? ' wide' : ''} done" data-rmt-mv-anchor="${esc(key)}" data-rmt-mv="edit-asset" data-rmt-mv-id="${esc(key)}">${preview ? `<img src="${esc(preview)}" alt="">` : ''}<i>本地绘制</i></button><small>${esc(bg.label)}</small>${btn('edit-asset', '替换背景', { id: key })}`}</div></div>
           <details${view.stageBackgroundOpen === bg.id ? ' open' : ''}><summary>背景样式</summary>${select('kind', '图案', mv_stage.BACKGROUNDS, bg.kind)}${select('motion', '背景运动', { still: '不动', rotate: '缓慢旋转', drift: '轻微移动' }, bg.motion)}
           <div class="rmt-mv-actions">${bg.colors.map((c, i) => `<label>配色 ${i + 1}<input type="color" value="${esc(c)}" data-rmt-mv-stage-bg="color${i}" data-background="${esc(bg.id)}"></label>`).join('')}</div></details></div>`;
     }).join('');
