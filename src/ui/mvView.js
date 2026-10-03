@@ -465,7 +465,7 @@ function page(title, back, html) {
     if (view.sub === 'setup' && view.step > 1) back = '上一步';
     overlay.topTitle(title); overlay.setBackVisible(true, back);
     const returnButton = view.sub !== 'board' ? btn('back', `← 返回${esc(back)}`) : '';
-    body().innerHTML = `<main class="rmt-x-page rmt-song-mv">${returnButton}${recoveryPanel()}${html}<details class="rmt-x-card"><summary>MV 备份</summary>${btn('export-recovery', '导出 MV 数据与暂存结果')}</details></main>`;
+    body().innerHTML = `<main class="rmt-x-page">${returnButton}${recoveryPanel()}${html}<details class="rmt-x-card"><summary>MV 备份</summary>${btn('export-recovery', '导出 MV 数据与暂存结果')}</details></main>`;
     renderedPage = view.sub;
 }
 

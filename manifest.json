@@ -1,15 +1,15 @@
 {
     "display_name": "心迹回廊",
     "loading_order": 110,
-    "js": "index.js?heartbeat=1.0.11-r84.228-ui-refresh",
+    "js": "index.js?heartbeat=1.0.10-r84.227-mv-shared-stage",
     "author": "Toto",
-    "version": "1.0.11",
+    "version": "1.0.10",
     "auto_update": true,
     "minimum_client_version": "1.13.0",
     "hooks": {
         "disable": "onDisable",
         "clean": "onClean"
     },
-    "description": "心迹回廊：新版移动导航、内容目录、歌曲与手书工作台；保留原有功能和数据兼容。",
+    "description": "心迹回廊：表情卡拍支持共享背景、独立人物姿势与文字编排，预览和片段导出沿用歌曲定点。",
     "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }

@@ -1,5 +1,5 @@
-const VERSION = '1.0.11';
-const BUILD = '1.0.11-r84.228-ui-refresh';
+const VERSION = '1.0.10';
+const BUILD = '1.0.10-r84.227-mv-shared-stage';
 
 const SETTINGS_ID = 'heartbeat_memories_settings';
 const MENU_ID = 'heartbeat_memories_menu_item';

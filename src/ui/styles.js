@@ -1,6 +1,5 @@
 import * as bedtime_view from './bedtimeView.js';
 import * as ui_workspaceStyles from './workspaceStyles.js';
-import * as ui_workspaceRefreshStyles from './workspaceRefreshStyles.js';
 import * as postcard_design_view from './postcardDesignView.js';
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
@@ -373,7 +372,6 @@ export function ensureStyles() {
 #${core_constants.OVERLAY_ID} .rmt-language-scene textarea{width:100%;min-height:96px;font-size:16px}
 #${core_constants.OVERLAY_ID} .rmt-language-scene p{font-size:14px;line-height:1.6}
 `;
-    style.textContent += ui_workspaceRefreshStyles.workspaceRefreshCss('#' + core_constants.OVERLAY_ID);
     document.head.appendChild(style);
 }
 
