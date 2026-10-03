@@ -13,6 +13,7 @@ import * as cg_core from '../generation/cgImageCore.js';
 import * as cg_appearance from '../generation/cgAppearance.js';
 import * as mv_cast from './mvCast.js';
 import * as mv_direction from './mvDirection.js';
+import * as mv_still from './mvStillPrompt.js';
 
 export const MV_KEY = 'heartbeatMemoriesMvV1';
 const LOCAL_PREFIX = 'heartbeatMemoriesMvV1:';
@@ -181,6 +182,7 @@ function resultBasis(record, kind, shotId) {
 }
 
 function resultStillCurrent(record, row, expected) {
+    if (row.frameAssetKey && row.frameAssetBasis !== resultBasis(record, 'asset', row.frameAssetKey)) return false;
     if (resultBasis(record, row.kind, row.shotId) === expected) return true;
     if (row.basisVersion || row.base?.songs || record?.storyRevision) return false;
     // Disk journals in older releases omitted the base. Keep their image-save
@@ -198,6 +200,17 @@ async function holdResult(target, kind, shotId, raw, prepare) {
     const row = { ...savedTarget, kind, shotId, raw: structuredClone(raw),
         id: `MV_${Date.now().toString(36)}_${++resultSequence}_${Math.random().toString(36).slice(2)}`,
         createdAt: Date.now(), basisVersion: 2, expected: resultBasis(target.base.songs[target.songId], kind, shotId), patch: null };
+    // A v2 player redraw now uses the asset's current prompt too. Retain that
+    // dependency so a later manual edit wins; old journals need no migration.
+    const sourceRecord = target.base.songs[target.songId];
+    if (kind === 'frame' && isV2(sourceRecord)) {
+        const shot = list(sourceRecord.shots).find(value => value.id === shotId);
+        const key = `${shot?.group}:${shot?.diff}`;
+        if (assetOf(sourceRecord, key)) {
+            row.frameAssetKey = key;
+            row.frameAssetBasis = resultBasis(sourceRecord, 'asset', key);
+        }
+    }
     // Journal first: even a malformed paid response must remain exportable.
     savePending(row.scope, [...pendingMv(row.scope), row]);
     try { row.patch = prepare(raw); }
@@ -550,8 +563,33 @@ function storyboardPrompt(context, memory, song, settings, sectionIndexes = null
     const appear = settings.appear === 'face' ? `${userName} 可以露脸出镜。`
         : settings.appear === 'back' ? `${userName} 只能以背影、手或剪影出现，不画正脸。` : `${userName} 不出现在画面里。`;
     const firstPerson = cast && mv_cast.selectedMvPeople(cast, settings)[0];
-    const exampleBinding = cast ? `"cast":${JSON.stringify(firstPerson ? [{ participantId: firstPerson.id, position: 'left', action: '这一人的动作及互动对象', visible: 'full' }] : [])}` : '"who":"char"';
+    const exampleBinding = cast ? `"cast":${JSON.stringify(firstPerson ? [{ participantId: firstPerson.id, position: 'left', action: settings.output === 'video' ? '这一人的动作及互动对象' : '共同站位或互动关系；表情与当下动作写在各 diff.imagePrompt', visible: 'full' }] : [])}` : '"who":"char"';
     const exampleWardrobe = cast ? JSON.stringify({ era: '……', characters: firstPerson ? [{ participantId: firstPerson.id, clothing: '有依据的本曲衣着' }] : [] }) : '{"era":"……","char":"……","user":"……"}';
+    const exampleActor = firstPerson?.name || charName;
+    const exampleSection = sections[0]?.index || 0, exampleLyric = sections[0]?.lines?.[0] || '原句';
+    const expressionCast = visible => cast ? { cast: firstPerson ? [{ participantId: firstPerson.id, position: 'center', action: '', visible }] : [] } : { who: 'char' };
+    const expressionExample = settings.storyType === 'expression' ? JSON.stringify({
+        wardrobe: JSON.parse(exampleWardrobe), keyword: '关键词',
+        groups: [
+            { id: 'G1', composition: '正面半身主构图', position: 'center', scale: 'medium',
+                characterPrompt: 'front view, centered waist-up framing, graphic stage lighting', ...expressionCast('full'),
+                motion: 'still', transition: 'cut', bgs: [{ id: 'B1', prompt: 'simple geometric stage background' }],
+                diffs: [
+                    { id: 'D1', label: '摊手笑', change: '摊开的双手停在腰侧，开朗笑容', imagePrompt: `front view, centered waist-up ${exampleActor}, open palms held at waist level, broad cheerful smile, graphic stage lighting` },
+                    { id: 'D2', label: '收手凝视', change: '手臂垂下，平静直视', imagePrompt: `front view, centered waist-up ${exampleActor}, arms held at sides, closed mouth and level calm gaze, graphic stage lighting` },
+                ] },
+            { id: 'G2', composition: '眼睛局部插镜', position: 'center', scale: 'close',
+                characterPrompt: 'extreme close-up, crop on eyes', ...expressionCast('face'),
+                motion: 'still', transition: 'cut', bgs: [],
+                diffs: [{ id: 'D1', label: '目光', change: '目光停在正前方', imagePrompt: `extreme close-up on the eyes of ${exampleActor}, steady forward gaze, sharply defined light` }] },
+        ],
+        frames: [
+            { sectionIndex: exampleSection, lyric: exampleLyric, group: 'G1', diff: 'D1', bg: 'B1', hold: 1 },
+            { sectionIndex: exampleSection, lyric: exampleLyric, group: 'G1', diff: 'D2', bg: 'B1', hold: 0.5 },
+            { sectionIndex: exampleSection, lyric: exampleLyric, group: 'G2', diff: 'D1', hold: 0.25 },
+            { sectionIndex: exampleSection, lyric: exampleLyric, group: 'G1', diff: 'D1', bg: 'B1', hold: 1 },
+        ],
+    }) : '';
     return `${generation_prompts.promptSafetyBoundary(context, 'MV 分镜', null, memory)}
 【任务】
 为已写好的角色印象曲「${song.title}」写一张 MV 分镜表。画面风格：${styleOf(settings).name}；比例：${settings.ratio === '9:16' ? '竖屏 9:16' : '横屏 16:9'}。
@@ -583,7 +621,7 @@ ${settings.output === 'video' ? `1. 按段落写镜头：${settings.output === '
 ${cast ? '以下仅为结构示例，实际每镜的 cast 按出场人物填写，不局限于示例中的一个人。顶层可加 appearances:[{"participantId":"原始ID","tag":"有依据的稳定外貌","nl":"可空"}]；wardrobe 使用 era 和 characters，不用 char/user 代替 NPC。' : ''}
 ${settings.output === 'video'
         ? `{"wardrobe":${exampleWardrobe},"shots":[{"sectionIndex":0,"lyric":"","plain":"……",${exampleBinding},"shot":"中景：看到上半身","move":"镜头慢慢推近","motion":"push","imagePrompt":"……","videoZh":"……","videoEn":"……"}]}`
-        : `{"wardrobe":${exampleWardrobe},"keyword":"副歌里最有分量的词","motif":{"name":"竹叶","prompt":"english: one decorative element"},"groups":[{"id":"G1","composition":"低机位 · 蹲下喂猫 · 人物在左","position":"left","scale":"full","characterPrompt":"english: camera angle, framing, pose base, who and what is in frame",${exampleBinding},"motion":"still","transition":"cut","link":"下一组如何承接","bgs":[{"id":"B1","label":"午后","prompt":"english: empty scenery only"}],"diffs":[{"id":"D1","label":"伸手前","change":"english: this moment of the action"}]}],"frames":[{"sectionIndex":0,"lyric":"原句","group":"G1","diff":"D1","bg":"B1","hold":1,"phase":"prep"}]}`}`;
+        : expressionExample || `{"wardrobe":${exampleWardrobe},"keyword":"副歌里最有分量的词","motif":{"name":"竹叶","prompt":"english: one decorative element"},"groups":[{"id":"G1","composition":"低机位 · 蹲下喂猫 · 人物在左","position":"left","scale":"full","characterPrompt":"low angle medium shot, subject on the left, warm afternoon light",${exampleBinding},"motion":"still","transition":"cut","link":"下一组如何承接","bgs":[{"id":"B1","label":"午后","prompt":"english: empty scenery only"}],"diffs":[{"id":"D1","label":"伸手前","change":"伸出的手停在半空","imagePrompt":"low angle medium shot, the named character on the left with one hand extended toward the cat, warm afternoon light"}]}],"frames":[{"sectionIndex":0,"lyric":"原句","group":"G1","diff":"D1","bg":"B1","hold":1,"phase":"prep"}]}`}`;
 }
 
 // 手书：少数构图，每个构图里几张连续变化的画（闭眼→睁眼→偏头），摊平成镜头。
@@ -695,7 +733,7 @@ function continuationPatch(raw, previous, memory, song, settings, missing) {
         shots = shots.map(s => {
             const g = groups.find(g => g.id === s.group);
             const d = g.diffs.find(d => d.id === s.diff);
-            return { ...s, imagePrompt: [g.characterPrompt, d.change, g.bgs.find(b => b.id === s.bg)?.prompt].filter(Boolean).join(', '), composition: g.composition };
+            return { ...s, imagePrompt: mv_still.joinStillPrompt([mv_still.stillScene(g, d), g.bgs.find(b => b.id === s.bg)?.prompt]), composition: g.composition };
         });
     }
     const usedGroups = new Set([...list(previous.groups).map(g => g.id), ...list(previous.shots).map(s => s.group)]);
@@ -864,6 +902,8 @@ export function wardrobeLine(record, hasChar, hasUser) {
 }
 
 export function framePrompt(record, shot, context, appearance = true) {
+    if (isV2(record) && assetOf(record, `${shot?.group}:${shot?.diff}`))
+        return assetPrompt(record, `${shot.group}:${shot.diff}`, context, appearance);
     const settings = normalizeSettings(record?.settings);
     if (record?.cast && Array.isArray(shot?.cast)) return [styleOf(settings).prompt,
         settings.ratio === '9:16' ? 'vertical 9:16 composition' : 'horizontal 16:9 composition',
@@ -872,7 +912,7 @@ export function framePrompt(record, shot, context, appearance = true) {
     const hasChar = shot.who === 'char' || shot.who === 'both';
     const hasUser = settings.appear !== 'none' && (shot.who === 'both' || shot.who === 'user');
     const people = { ...(looks || {}), char: hasChar ? looks?.char || '' : '', user: hasUser ? looks?.user || '' : '' };
-    const lookLine = hasChar || hasUser ? core_castLooks.castLooksPromptLine(people, context) : '';
+    const lookLine = appearance && (hasChar || hasUser) ? core_castLooks.castLooksPromptLine(people, context) : '';
     const userRule = settings.appear === 'back' && hasUser ? `${hasChar ? 'the second person' : 'the person'} is shown only from behind, hands or silhouette, face not visible` : '';
     const noUser = !hasChar && !hasUser ? 'scenery, no humans' : hasChar && hasUser ? 'duo, two people' : 'solo';
     return [
@@ -899,10 +939,12 @@ export async function drawFrame(songId, shotId) {
     if (running.has(key)) return null;
     running.add(key);
     try {
-        const metadata = record.cast ? mv_cast.castMetadata(record, shot) : null;
+        const found = isV2(record) ? assetOf(record, `${shot.group}:${shot.diff}`) : null;
+        const custom = found && record.assetPrompts?.[`${shot.group}:${shot.diff}`]?.trim();
+        const metadata = custom ? null : found ? assetMetadata(record, found, context) : record.cast ? mv_cast.castMetadata(record, shot) : null;
         const result = await cg_core.invokeImageGeneration(framePrompt(record, shot, context, !metadata), context, {
             orientation: normalizeSettings(record.settings).ratio === '9:16' ? 'portrait' : 'landscape',
-            characterName: context?.name2 || '', targetKey: key,
+            characterName: context?.name2 || '', targetKey: key, singlePrompt: true,
             ...(metadata ? { promptMetadata: metadata } : {}),
         });
         return await holdResult(target, 'frame', shotId, result, raw => {
@@ -1085,8 +1127,10 @@ function tegakiGrammar(sections, keep, charName = '{{char}}') {
 画面围绕所选分镜类型组织，让观众理解情绪、事件或节奏；不是连续相似的精修肖像。歌词的比喻不必字面演出，空镜与留白也能推进表达。
 - 构图组（groups）是一个清楚的镜头构图。选中段落约 ${lineCount} 句歌词，按表达需要安排，不规定组数或差分比例；换机位或出场人物变化时另建组。同一素材可以复用，不重复画相同内容。
 - 景别服务内容：特写（手、眼、物件）、近景、中景、全身、远景、背影、低机位、俯视都可用，不要求每种都出现。position 写 left / center / right，scale 写 close / medium / full / wide。
-- 每一张差分都是单独的一张图，只画一个瞬间：characterPrompt 与 diff.change 里每个人只写一个姿势，不要在同一张里写多个姿势、多个表情或“三连”。
-- diffs 可以只用一张关键画；只有同机位连续动作、情绪最小差分或节奏循环确实需要时才加图。同组 characterPrompt 是共同构图，diff.change 写这一刻的动作与表情，不强求每组闭眼→睁眼。
+- 每一张差分都是单独的一张图，只画一个瞬间。characterPrompt 只写同组共用的机位、裁切、方位与光线，不预先写任何差分的表情或动作；group.cast.action 只写共同站位与互动关系，不写“从呆愣转为认真”等变化过程。
+- 每个 diff.imagePrompt 写这张图独立完整的英文静态画面：沿用共同机位、方位、光线，逐人绑定姓名与当下唯一姿势、表情、互动对象。它会替代基础描述和差分说明，不是追加段落。稳定外貌由程序按人物补齐，不在这里重写发色、发型、瞳色；背景使用 bgs，不写 english: 前缀。diff.change 只作本张静态状态的短说明，不重复完整生图词。
+- 需要表现“惊讶→笃定”时，写两个 diff：D1 的 imagePrompt 只有惊讶，D2 的 imagePrompt 只有笃定，并让两个 frame 分别引用；每个 diff 会分别请求并保存一张图片。绝不在同一个 imagePrompt 里写 before/after、from/to、starting to change 或前后两个表情。相同姿势再出现时，frame 直接复用原 diff。
+- diffs 可以只用一张关键画；只有同机位连续动作、情绪最小差分、明显反差或节奏循环确实需要时才加图，不强求每组闭眼→睁眼。
 - 局部特写写清画面裁切；只拍手就不要为了显示头发、眼睛或服装画出整个人。物件或环境空镜明确不出人，不硬塞主角。
 - bgs 写同一个镜头需要的场景，环境变化确有作用时再增加背景；只描述场景，不混入人物。
 - 副歌可以有一个主视觉组，重复的副歌复用它；其余段落尽量用新的构图，尾奏可以回到开头的构图。
@@ -1114,6 +1158,7 @@ export function buildShots(raw, memory, sectionCount, settings, cast = null, opt
             id: `D${k + 1}`, rawId: core_text.normalizeText(d?.id, 20) || `D${k + 1}`,
             label: core_text.normalizeText(d?.label, 20) || `差分 ${k + 1}`,
             change: core_text.normalizeText(d?.change, 300), image: null,
+            ...(core_text.normalizeText(d?.imagePrompt, 1200) ? { imagePrompt: mv_still.cleanStillText(core_text.normalizeText(d.imagePrompt, 1200)) } : {}),
         }));
         if (!diffs.length) return;
         const id = `G${existingGroups.length + groups.length + 1}`;
@@ -1271,25 +1316,25 @@ export function defaultAssetPrompt(record, key, context, appearance = true) {
         const size = localCrop || !actors.length ? '' : { close: 'close-up shot', medium: 'medium shot', full: 'full body shot', wide: 'wide shot' }[found.group.scale] || '';
         const place = actors.length === 1 && !actors[0].position && ['left', 'right'].includes(found.group.position)
             ? `subject on the ${found.group.position} of the frame` : '';
-        return [style, ratio, found.group.characterPrompt, found.diff.change ? `current moment: ${found.diff.change}` : '', size, place,
-        mv_cast.castVisual(record, found.group, { appearance }),
+        return mv_still.joinStillPrompt([style, ratio, 'single illustration, one captured instant', mv_still.stillScene(found.group, found.diff, actors.length === 1), size, place,
+        mv_cast.castVisual(record, mv_still.stillCast(found.group, found.diff), { appearance }),
         found.group.layer === 'full' ? [era, (list(found.group.bgs).find(b => b.id === found.diff.bg) || list(found.group.bgs)[0])?.prompt || found.group.backgroundPrompt].filter(Boolean).join(', ')
-            : 'white background, simple background'].filter(Boolean).join('\n');
+            : 'white background, simple background']);
     }
     const who = found.group.who;
     const hasChar = who === 'char' || who === 'both';
     const hasUser = settings.appear !== 'none' && (who === 'both' || who === 'user');
     const looks = core_castLooks.readCastLooks(context);
     const people = { ...(looks || {}), char: hasChar ? looks?.char || '' : '', user: hasUser ? looks?.user || '' : '' };
-    const lookLine = hasChar || hasUser ? core_castLooks.castLooksPromptLine(people, context) : '';
+    const lookLine = appearance && (hasChar || hasUser) ? core_castLooks.castLooksPromptLine(people, context) : '';
     const back = settings.appear === 'back' && hasUser ? `${hasChar ? 'the second person' : 'the person'} is shown only from behind, hands or silhouette, face not visible` : '';
     const place = { left: 'character placed on the left third of the frame', right: 'character placed on the right third of the frame', center: '' }[found.group.position] || '';
     const size = { close: 'close-up shot', medium: 'medium shot, waist up', full: 'full body shot', wide: 'wide shot, small figure' }[found.group.scale] || '';
-    return [style, ratio, found.group.characterPrompt, found.diff.change, place, size, lookLine ? `fixed appearance, keep consistent: ${lookLine}` : '', wardrobeLine(record, hasChar, hasUser), back,
+    return mv_still.joinStillPrompt([style, ratio, 'single illustration, one captured instant', mv_still.stillScene(found.group, found.diff, hasChar !== hasUser), place, size, lookLine ? `fixed appearance, keep consistent: ${lookLine}` : '', wardrobeLine(record, hasChar, hasUser), back,
         hasChar && hasUser ? 'duo, two people' : hasChar || hasUser ? 'solo, single figure' : 'scenery, no humans',
         found.group.layer === 'full'
             ? [era, (list(found.group.bgs).find(b => b.id === found.diff.bg) || list(found.group.bgs)[0])?.prompt || found.group.backgroundPrompt, 'detailed background, full scene'].filter(Boolean).join(', ')
-            : 'white background, simple background'].filter(Boolean).join(', ');
+            : 'white background, simple background']);
 }
 
 // 双人画面按角色分别给外貌（与 CG 相同的 characters 结构），避免两个人长成同一张脸。
@@ -1324,12 +1369,12 @@ export async function drawAsset(songId, key, { fresh = false } = {}) {
         const base = {
             // 人物层永远竖画：横构图里画单人时模型会把人复制成左右两份；横屏成片由本地合成。
             orientation: (found.kind === 'motif' || (found.kind === 'char' && found.group.layer !== 'full')) || normalizeSettings(record.settings).ratio === '9:16' ? 'portrait' : 'landscape',
-            characterName: context?.name2 || '', targetKey: runKey, seed,
+            characterName: context?.name2 || '', targetKey: runKey, seed, singlePrompt: true,
         };
         // A saved custom prompt is the complete previewed text; do not append hidden cast text.
         const metadata = found.kind === 'char' && !record.assetPrompts?.[key] ? assetMetadata(record, found, context) : null;
         let result;
-        try { result = await cg_core.invokeImageGeneration(assetPrompt(record, key, context, !(record.cast && metadata)), context, { ...base, ...(metadata ? { promptMetadata: metadata } : {}) }); }
+        try { result = await cg_core.invokeImageGeneration(assetPrompt(record, key, context, !metadata), context, { ...base, ...(metadata ? { promptMetadata: metadata } : {}) }); }
         catch (error) {
             // 分角色外貌不被渠道接受时，退回普通提示词再画一次，不让整张图失败。
             if (record.cast || !metadata || error?.name === 'AbortError' || /ABORT/.test(String(error?.code || ''))) throw error;

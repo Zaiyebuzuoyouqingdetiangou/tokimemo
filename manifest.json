@@ -1,15 +1,15 @@
 {
     "display_name": "心迹回廊",
     "loading_order": 110,
-    "js": "index.js?heartbeat=1.0.7-r84.224-terminal-expression",
+    "js": "index.js?heartbeat=1.0.9-r84.226-mv-single-still",
     "author": "Toto",
-    "version": "1.0.7",
+    "version": "1.0.9",
     "auto_update": true,
     "minimum_client_version": "1.13.0",
     "hooks": {
         "disable": "onDisable",
         "clean": "onClean"
     },
-    "description": "心迹回廊：修复私人终端应用正文与名帖，新增表情卡拍分镜和歌曲顶部 MV 入口。",
+    "description": "心迹回廊：修复手书多表情提示词混合与 NAI 重复提交，细化表情卡拍分镜。",
     "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }
