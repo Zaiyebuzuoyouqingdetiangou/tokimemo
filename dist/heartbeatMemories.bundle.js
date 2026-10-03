@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 317
-// Source SHA-256: 8a3ba50b68261f69e069c66cda9c4685c7d0e49806de81589e6440c64b4deee8
+// Source SHA-256: c41f27a915bb706e3fb9d78274aa5385405f17df94e7639c579e830796225873
 // Build: python3 tools/verification/build.py <source-root>
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -660,12 +660,64 @@ function alphaBounds(data, width, height) {
     return x1 >= x0 ? { cx: (x1 + x0) / 2 / width, bottom: y1 / height, height: Math.max(1, y1 - y0 + 1) / height } : null;
 }
 
+// Decorative sprites only. Keep genuine alpha and enclosed white details;
+// flattening a background does not establish that the foreground was recovered.
+function prepareMotifPixels(data, width, height) {
+    const count = width * height;
+    const corners = [0, width - 1, count - width, count - 1];
+    let visible = false;
+    for (let p = 0; p < count; p++) if (data[p * 4 + 3] > 8) { visible = true; break; }
+    if (!visible) return { status: 'empty' };
+    if (corners.every(p => data[p * 4 + 3] <= 8)) return { status: 'transparent', data };
+    const rgb = corners.map(p => [...data.slice(p * 4, p * 4 + 3)]);
+    const matte = [0, 1, 2].map(k => rgb.reduce((sum, color) => sum + color[k], 0) / 4);
+    const white = Math.min(...matte) >= 228 && Math.max(...matte) - Math.min(...matte) < 26;
+    const blue = matte[2] > 160 && matte[2] - matte[0] > 120 && matte[2] - matte[1] > 100;
+    const close = p => data[p * 4 + 3] <= 8 || matte.every((v, k) => Math.abs(v - data[p * 4 + k]) <= 30);
+    if ((!white && !blue) || !corners.every(close)) return { status: 'needs-edit' };
+    // Background evidence comes from a consistent perimeter, not removed area.
+    let border = 0, matching = 0;
+    const edge = [];
+    for (let x = 0; x < width; x++) edge.push(x, (height - 1) * width + x);
+    for (let y = 1; y < height - 1; y++) edge.push(y * width, y * width + width - 1);
+    for (const p of edge) { border++; if (close(p)) matching++; }
+    if (matching < border * 0.95) return { status: 'needs-edit' };
+    const out = new Uint8ClampedArray(data), seen = new Uint8Array(count), removed = new Uint8Array(count);
+    const queue = [...edge];
+    const neighbours = (p, add) => {
+        const x = p % width;
+        if (x > 0) add(p - 1); if (x + 1 < width) add(p + 1);
+        if (p >= width) add(p - width); if (p + width < count) add(p + width);
+    };
+    while (queue.length) {
+        const p = queue.pop(); if (seen[p]) continue; seen[p] = 1;
+        if (!close(p)) continue;
+        removed[p] = 1; out[p * 4 + 3] = 0;
+        neighbours(p, n => { if (!seen[n]) queue.push(n); });
+    }
+    // Unmix only the one-pixel outer fringe; never recolour an enclosed white part.
+    for (let p = 0; p < count; p++) {
+        if (removed[p]) continue;
+        let fringe = false; neighbours(p, n => { if (removed[n]) fringe = true; });
+        if (!fringe) continue;
+        const i = p * 4;
+        const alpha = Math.max(...matte.map((v, k) => Math.abs(data[i + k] - v) / Math.max(1, data[i + k] < v ? v : 255 - v)));
+        if (alpha <= 0 || alpha >= 0.98) continue;
+        out[i + 3] = Math.round(data[i + 3] * alpha);
+        for (let k = 0; k < 3; k++) out[i + k] = Math.max(0, Math.min(255, Math.round((data[i + k] - matte[k] * (1 - alpha)) / alpha)));
+    }
+    if (!alphaBounds(out, width, height)) return { status: 'empty' };
+    if (!corners.every(p => out[p * 4 + 3] <= 8)) return { status: 'needs-edit' };
+    return { status: 'prepared', data: out };
+}
+
 __m_extras_mvImageTools_js.normalizeCrop = normalizeCrop;
 __m_extras_mvImageTools_js.gridCrop = gridCrop;
 __m_extras_mvImageTools_js.pixelRect = pixelRect;
 __m_extras_mvImageTools_js.eraseEdgeWhite = eraseEdgeWhite;
 __m_extras_mvImageTools_js.paintAlpha = paintAlpha;
 __m_extras_mvImageTools_js.alphaBounds = alphaBounds;
+__m_extras_mvImageTools_js.prepareMotifPixels = prepareMotifPixels;
 }
 
 function __init_ui_mvCastControls_js() {
@@ -740,7 +792,7 @@ function mountAssetEditor(host, options) {
       <div class="rmt-mv-editor-tools"><button type="button" data-edit="select">1 · 选单格</button><button type="button" data-edit="paint">2 · 处理背景</button></div>
       <div data-select-tools><label>拼图排列 <select data-grid><option value="free">手动框选</option><option value="1:1">整张</option><option value="2:1">上下两格</option><option value="3:1">上下三格</option><option value="4:1">上下四格</option><option value="1:2">左右两格</option><option value="1:3">左右三格</option><option value="1:4">左右四格</option><option value="2:2">四宫格</option><option value="3:3">九宫格</option></select></label>
       <p class="rmt-x-note" data-selection-note>拖动框选画面，或选择排列后点选一格。</p><button type="button" data-edit="apply-crop">使用选中画面</button></div>
-      <div data-paint-tools hidden><div class="rmt-mv-editor-tools"><button type="button" data-edit="auto">尝试去白底</button><button type="button" data-edit="erase" aria-pressed="true">擦除</button><button type="button" data-edit="restore" aria-pressed="false">恢复</button><button type="button" data-edit="undo">撤销</button><button type="button" data-edit="reset">还原选中画面</button></div>
+      <div data-paint-tools hidden><div class="rmt-mv-editor-tools"><button type="button" data-edit="auto">${options.motif ? '尝试去背景' : '尝试去白底'}</button><button type="button" data-edit="erase" aria-pressed="true">擦除</button><button type="button" data-edit="restore" aria-pressed="false">恢复</button><button type="button" data-edit="undo">撤销</button><button type="button" data-edit="reset">还原选中画面</button></div>
       <label>笔刷 <input data-brush type="range" min="1" max="100" value="20"></label>
       <label><input data-layer type="checkbox">使用此透明图叠背景</label><p class="rmt-x-note">先看预览再保存；自动处理可能误删白纱、白衣，可用恢复笔刷修回。</p></div>
       <label>放大 <input data-zoom type="range" min="1" max="4" step="0.25" value="1"></label><div class="rmt-mv-editor-tools"><button type="button" data-edit="pan">移动画布</button></div>
@@ -881,7 +933,12 @@ function mountAssetEditor(host, options) {
             layer().checked = last.layer; changed = true; restoreOriginal = false; show();
         } return; }
         if (action === 'reset' && original) { pushUndo(); working = duplicate(original); compactUndo(); layer().checked = false; changed = true; restoreOriginal = false; show(); return; }
-        if (action === 'auto' && working) { pushUndo(); working.data.set(pixels.eraseEdgeWhite(working.data, working.width, working.height)); compactUndo(); changed = true; restoreOriginal = false; layer().checked = true; show(); say('这是去白底预览，请检查边缘和白色衣物；不满意可撤销或用恢复笔刷。'); return; }
+        if (action === 'auto' && working) {
+            const data = options.motif ? pixels.prepareMotifPixels(working.data, working.width, working.height).data : pixels.eraseEdgeWhite(working.data, working.width, working.height);
+            if (!data) { say('未能分离意象背景，可用擦除笔刷处理或导入透明图。'); return; }
+            pushUndo(); working.data.set(data); compactUndo(); changed = true; restoreOriginal = false; layer().checked = true; show();
+            say(options.motif ? '已处理意象背景，请检查边缘后保存。' : '这是去白底预览，请检查边缘和白色衣物；不满意可撤销或用恢复笔刷。'); return;
+        }
         if (action === 'original') {
             // Restore the saved original reference without rewriting or deleting its pixels.
             restoreOriginal = true; changed = true; selectionDirty = false; sourceBlob = null; crop = { x: 0, y: 0, w: 1, h: 1 }; history.length = 0;
@@ -916,6 +973,14 @@ function mountAssetEditor(host, options) {
                 const img = await load(options.imageUrl); if (!active || token !== loadToken) return;
                 const c = makeCanvas(original.width, original.height); c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
                 working = c.getContext('2d').getImageData(0, 0, c.width, c.height); layer().checked = options.image.editMode === 'cutout'; stage = 'paint';
+            }
+            if (options.motif) {
+                const prepared = pixels.prepareMotifPixels(working.data, working.width, working.height);
+                if (prepared.data) {
+                    working.data.set(prepared.data); layer().checked = true; stage = 'paint';
+                    // Saving confirms the derived PNG; the original reference is retained.
+                    changed = prepared.status === 'prepared';
+                }
             }
             show(); say('');
         } catch { if (active && token === loadToken) { show(); say('无法读取图片像素，可导入本机图片继续处理；提示词仍可编辑。'); } }
@@ -63541,6 +63606,7 @@ const runtimeState = __m_core_state_js.state;
 
 
 
+const albumReturnPositions = new WeakMap();
 function filteredAlbumEntries() {
     if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.ALBUM) return [];
     const category = runtimeState.activeSession.category || '全部';
@@ -63557,6 +63623,7 @@ function renderAlbum() {
     const session = runtimeState.activeSession;
     if (!session || session.kind !== core_constants.MODE.ALBUM) return;
     if (session.sharedMemory) return renderSharedMemory();
+    ui_overlay.setBackVisible(true, '内容');
     ui_overlay.topTitle(core_constants.MODE_LABEL[core_constants.MODE.ALBUM]);
     const list = filteredAlbumEntries();
     const totalPages = Math.max(1, Math.ceil(list.length / session.pageSize));
@@ -63576,9 +63643,8 @@ function renderAlbum() {
     const pendingComments = ui_generationCompletion.countPendingGenerationItems(session.entries, item => item?.unlocked && item?.progressPending?.includes('共同回忆'));
     const filters = ui_albumCategory.ALBUM_DISPLAY_CATEGORIES.map(cat => `<button type="button" class="rmt-btn ${session.category === cat ? 'active' : ''}" data-rmt-category="${cat}">${cat}</button>`).join('');
     const cards = pageItems.map(item => {
-        const drawing = item.unlocked && !readOnlyArchive && generation_imageGeneration.isCgImageDrawing(core_constants.MODE.ALBUM, item.id);
         const cardActions = item.unlocked
-            ? `<div class="rmt-album-card-actions"><button type="button" class="rmt-btn rmt-memory-primary" data-rmt-album-memory="${core_text.esc(item.id)}" aria-label="${core_text.esc(item.title)}：共同回忆">共同回忆</button>${readOnlyArchive ? '' : image_menu.imageMenuHtml(`<button type="button" class="rmt-btn" data-rmt-album-prompt="${core_text.esc(item.id)}" ${drawing ? 'disabled' : ''} aria-label="${core_text.esc(item.title)}：图片设置">${drawing ? '绘制中…' : '图片设置'}</button>${item.cgImage?.url ? `<button type="button" class="rmt-btn" data-rmt-journal-clip="${journal_clip.clipPayload({ mode: 'album', id: item.id, title: item.title, url: item.cgImage.url, body: item.desc || '' })}">夹进手帐</button>` : ''}`, { label: `${core_text.esc(item.title)}：图片操作` })}</div>`
+            ? `<div class="rmt-album-card-actions"><button type="button" class="rmt-btn rmt-memory-primary" data-rmt-album-memory="${core_text.esc(item.id)}" aria-label="${core_text.esc(item.title)}：共同回忆">共同回忆</button></div>`
             : '';
         return `<article class="rmt-card ${item.id === session.selectedId ? 'active' : ''} ${item.unlocked ? '' : 'locked'}" data-rmt-album-id="${core_text.esc(item.id)}">
       <div class="rmt-thumb">${item.unlocked ? generation_imageGeneration.cgImageLayerHtml(item, { history: false }) : `<div class="rmt-abstract" style="${ui_styles.abstractStyle(item.visualSeed, item.id)}"></div>`}</div>
@@ -63724,9 +63790,21 @@ function enterSharedMemory() {
     if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.ALBUM) return;
     const item = selectedAlbumEntry();
     if (!item?.unlocked) return;
+    if (!runtimeState.activeSession.sharedMemory) albumReturnPositions.set(runtimeState.activeSession, ui_overlay.bodyEl()?.scrollTop || 0);
     runtimeState.activeSession.sharedMemory = true;
     runtimeState.activeSession.dialogueIndex = 0;
     renderSharedMemory();
+    const body = ui_overlay.bodyEl(); if (body) body.scrollTop = 0;
+}
+
+function closeSharedMemory() {
+    const session = runtimeState.activeSession;
+    if (session?.kind !== core_constants.MODE.ALBUM || !session.sharedMemory) return false;
+    session.sharedMemory = false;
+    renderAlbum();
+    const body = ui_overlay.bodyEl(); if (body) body.scrollTop = albumReturnPositions.get(session) || 0;
+    albumReturnPositions.delete(session);
+    return true;
 }
 
 function albumSpeakerSnapshot(item, session = runtimeState.activeSession) {
@@ -63787,6 +63865,7 @@ function renderSharedMemory() {
     ui_overlay.topTitle(`共同回忆 · ${item.title}`);
     const body = ui_overlay.bodyEl();
     body.innerHTML = `<div class="rmt-memory-scene">
+      <button type="button" class="rmt-btn" data-rmt-action="back">← 返回回忆相簿</button>
       <div class="rmt-memory-cg rmt-reading-image${generation_imageGeneration.normalizeCgImageRecord(item.cgImage) ? ' rmt-reading-image-saved' : ''}">
         ${generation_imageGeneration.cgImageLayerHtml(item, { lazy: false })}
       </div>
@@ -63801,7 +63880,7 @@ function renderSharedMemory() {
           <button type="button" class="rmt-btn" data-rmt-action="shared-next" ${!comments.length || last ? 'disabled' : ''}>下一句</button>
         </div>
       </div>
-      ${readOnly ? '' : image_menu.imageSetupHtml(`<button type="button" class="rmt-btn" data-rmt-action="edit-cg-prompt">${image_menu.BUNNY_SVG}<span>图片设置</span></button>`)}
+      ${readOnly ? '' : image_menu.imageSetupHtml(`<button type="button" class="rmt-btn" data-rmt-action="edit-cg-prompt"><span>图片设置</span></button>${item.cgImage?.url ? `<button type="button" class="rmt-btn" data-rmt-journal-clip="${journal_clip.clipPayload({ mode: 'album', id: item.id, title: item.title, url: item.cgImage.url, body: item.desc || '' })}">夹进手帐</button>` : ''}`)}
       ${generation_imageGeneration.cgImageProgressHtml()}
     </div>`;
     body.querySelector?.('[data-rmt-album-speaker]')?.addEventListener('change', event => {
@@ -63824,6 +63903,7 @@ __m_ui_albumView_js.albumFilter = albumFilter;
 __m_ui_albumView_js.albumPage = albumPage;
 __m_ui_albumView_js.showAlbumHint = showAlbumHint;
 __m_ui_albumView_js.enterSharedMemory = enterSharedMemory;
+__m_ui_albumView_js.closeSharedMemory = closeSharedMemory;
 __m_ui_albumView_js.albumSpeakerSnapshot = albumSpeakerSnapshot;
 __m_ui_albumView_js.renderSharedMemory = renderSharedMemory;
 }
@@ -74704,8 +74784,7 @@ function navigateBack() {
     if (runtimeState.activeMode === core_constants.MODE.TRAVEL && runtimeState.activeSession?.selectedLocationId) return ui_travelView.closeTravelDetail();
     if (runtimeState.activeMode === core_constants.MODE.ITEMS) return modes_room.returnToRoomFromDeep();
     if (runtimeState.activeMode === core_constants.MODE.ALBUM && runtimeState.activeSession?.kind === core_constants.MODE.ALBUM && runtimeState.activeSession.sharedMemory) {
-        runtimeState.activeSession.sharedMemory = false;
-        return ui_albumView.renderAlbum();
+        return ui_albumView.closeSharedMemory();
     }
     if (runtimeState.activeMode) return workspace_ui.openWorkspaceTab('content');
     if (runtimeState.archiveViewLevel === 'snapshot' && runtimeState.activeArchiveSnapshot) {
@@ -86506,6 +86585,8 @@ function targetContext(target) {
 }
 
 function resultBasis(record, kind, shotId) {
+    if (kind === 'frameEdit') return JSON.stringify({ storyRevision: record?.storyRevision,
+        shot: list(record?.shots).find(shot => shot.id === shotId) || null });
     if (kind === 'append') return JSON.stringify(record ? {
         createdAt: record.createdAt, version: record.version, storyRevision: record.storyRevision, settings: record.settings,
         shots: list(record.shots).map(s => [s.id, s.sectionIndex, s.group, s.diff]),
@@ -86704,26 +86785,77 @@ function estimatedStarts(sections, bpm, duration = 0) {
     return { starts, total: duration > 0 ? duration : total };
 }
 
-// 用户打过点的段用打点时间；没打点的段跟着前一个打点一起平移。
+// Stored taps are absolute audio times; absent values must not become a zero tap.
+function tapTime(value) {
+    if (value === null || value === undefined || value === '') return NaN;
+    const n = Number(value);
+    return Number.isFinite(n) && n >= 0 ? n : NaN;
+}
+
+// Keep anchors fixed and fit only unmarked starts between them. Source records stay unchanged.
+function fitTimedStarts(starts, marks, total) {
+    if (!starts.length) return { starts: [], total };
+    const anchors = [];
+    for (let i = 0; i < starts.length; i++) {
+        const time = marks.get(i);
+        if (Number.isFinite(time) && (i === 0 ? time >= 0 : time > 0) && (!anchors.length || time > anchors.at(-1).time)) anchors.push({ index: i, time });
+    }
+    const initialHold = !anchors.length || anchors[0].index > 0;
+    if (initialHold) anchors.unshift({ index: 0, time: 0 });
+    const end = Math.max(total, anchors.at(-1).time + 0.001);
+    const base = [...starts, Math.max(total, starts.at(-1) + 0.001)];
+    if (initialHold) base[0] = 0;
+    anchors.push({ index: starts.length, time: end });
+    const result = [...starts];
+    for (let a = 0; a + 1 < anchors.length; a++) {
+        const left = anchors[a], right = anchors[a + 1];
+        const span = base[right.index] - base[left.index];
+        result[left.index] = left.time;
+        for (let i = left.index + 1; i < right.index; i++) {
+            const fraction = span > 0 ? (base[i] - base[left.index]) / span : (i - left.index) / (right.index - left.index);
+            result[i] = left.time + (right.time - left.time) * fraction;
+        }
+    }
+    return { starts: result, total: end };
+}
+
+// Section marks and first-line marks both constrain estimates; estimates never displace a later mark.
 function sectionTimes(record, sections, bpm) {
     const duration = Number(record?.duration) || 0;
     const { starts, total } = estimatedStarts(sections, bpm, duration);
-    const taps = record?.timing?.taps || {};
+    const taps = record?.timing?.taps || {}, lineTaps = record?.timing?.lineTaps || {};
     const shift = Number.isFinite(Number(record?.timing?.shift)) ? Number(record.timing.shift) : 0;
-    const out = [];
-    let delta = 0;
-    for (let i = 0; i < sections.length; i += 1) {
-        const tapped = Number.isFinite(Number(taps[i])) && taps[i] !== null && taps[i] !== undefined;
-        if (tapped) delta = Number(taps[i]) - starts[i];
-        out.push({ start: Math.max(i ? out[i - 1].start + 0.5 : 0, (tapped ? Number(taps[i]) : starts[i] + delta) + shift), tapped, estimate: starts[i] });
+    const marks = new Map(), tapped = [];
+    let previous = -1;
+    for (let i = 0; i < sections.length; i++) {
+        const sectionTap = tapTime(taps[i]), lineTap = tapTime(lineTaps[`${i}:0`]);
+        tapped[i] = Number.isFinite(sectionTap);
+        let time = tapped[i] ? Math.max(0, sectionTap + shift) : lineTap;
+        if (!Number.isFinite(time)) continue;
+        // Old reversed section marks must remain playable without rewriting the saved marks.
+        if (time <= previous) time = previous + 0.5;
+        marks.set(i, time); previous = time;
     }
-    for (let i = 0; i < out.length; i += 1) out[i].end = i + 1 < out.length ? Math.max(out[i].start + 0.5, out[i + 1].start) : Math.max(out[i].start + 1, total + shift);
-    return { sections: out, total: Math.max(total + shift, out.at(-1)?.end || 0) };
+    let fit;
+    if (marks.size) {
+        if (!marks.has(0)) marks.set(0, Math.max(0, shift));
+        fit = fitTimedStarts(starts, marks, Math.max(total + shift, previous + 1));
+    } else {
+        // An untimed old song keeps its existing global offset instead of being stretched.
+        const shifted = [];
+        starts.forEach((start, i) => shifted.push(Math.max(i ? shifted[i - 1] + 0.5 : 0, start + shift)));
+        fit = { starts: shifted, total: Math.max(total + shift, shifted.length ? shifted.at(-1) + 1 : 0) };
+    }
+    const out = fit.starts.map((start, i) => ({ start, tapped: tapped[i], estimate: starts[i] }));
+    for (let i = 0; i < out.length; i++) out[i].end = i + 1 < out.length ? out[i + 1].start : fit.total;
+    return { sections: out, total: fit.total };
 }
 
 function shotTimeline(record, song) {
     const sections = parseSections(song.lyrics);
-    const { sections: times, total } = sectionTimes(record, sections, songBpm(song));
+    const sectionTimeline = sectionTimes(record, sections, songBpm(song));
+    const times = sectionTimeline.sections;
+    let total = sectionTimeline.total;
     const shots = list(record?.shots);
     const rows = [];
     times.forEach((time, index) => {
@@ -86741,40 +86873,42 @@ function shotTimeline(record, song) {
         let acc = 0;
         own.forEach((shot, k) => { const a = acc; acc += weights[k]; rows.push({ shot, start: time.start + span * a / sum, end: time.start + span * acc / sum, sectionIndex: index }); });
     });
-    // 逐句对时间：用户边听边点每一句的开头，对应歌词的镜头直接从点下的时间开始。
+    // A line can have several drawings. Only its first drawing anchors the line;
+    // the remaining drawings share the interval up to the next marked line.
     const lineTaps = record?.timing?.lineTaps || {};
-    if (Object.keys(lineTaps).length) {
-        const used = new Map();
-        for (const row of rows) {
-            const lines = sections[row.sectionIndex]?.lines || [];
-            const text = String(row.shot?.lyric || '').trim();
-            if (!text) continue;
-            const from = used.get(row.sectionIndex) || 0;
-            let idx = lines.findIndex((line, i) => i >= from && line.trim() === text);
-            if (idx < 0) idx = lines.findIndex(line => line.trim() === text);
-            if (idx < 0) continue;
-            used.set(row.sectionIndex, idx + 1);
-            const tap = Number(lineTaps[`${row.sectionIndex}:${idx}`]);
-            if (Number.isFinite(tap) && tap >= 0) row.lineTap = tap;
-        }
+    const keyText = value => String(value || '').trim().replace(/[\s\p{P}]+/gu, '');
+    const used = new Map(), markedLines = new Set(), marks = new Map();
+    for (let i = 0; i < rows.length; i++) {
+        const row = rows[i], section = row.sectionIndex;
+        if ((i === 0 || rows[i - 1].sectionIndex !== section) && times[section].tapped) marks.set(i, times[section].start);
+        const lines = (sections[section]?.lines || []).map(keyText), text = keyText(row.shot?.lyric);
+        if (!text) continue;
+        const last = used.get(section);
+        let index = last?.text === text && lines[last.index + 1] !== text ? last.index
+            : lines.findIndex((line, j) => j > (last?.index ?? -1) && line === text);
+        if (index < 0) index = lines.findIndex(line => line === text);
+        if (index < 0) continue;
+        used.set(section, { index, text });
+        const key = `${section}:${index}`, time = tapTime(lineTaps[key]);
+        if (!Number.isFinite(time) || markedLines.has(key)) continue;
+        markedLines.add(key); row.lineTap = time; marks.set(i, time);
     }
-    // 没有镜头的段落不留空白：前一镜一直停到下一镜开始；第一镜从 0 秒开始。
-    if (rows.length) rows[0].start = 0;
-    // 构图卡片版：镜头切点吸附到最近的拍点，画面跟着音乐切，而不是等时长轮播。
+    if (rows.length) {
+        const fit = fitTimedStarts(rows.map(row => row.start), marks, total);
+        rows.forEach((row, i) => { row.start = fit.starts[i]; });
+        total = fit.total;
+    }
+    // Snap only automatically placed cuts. Explicit section and lyric times are exact.
     if (record?.version === 2 && rows.length > 1) {
         const beat = 60 / (songBpm(song) || 90);
         for (let i = 1; i < rows.length; i += 1) {
+            if (marks.has(i)) continue;
             const snapped = Math.round(rows[i].start / beat) * beat;
-            if (snapped > rows[i - 1].start + beat * 0.5 && (i + 1 >= rows.length || snapped < rows[i + 1].start - beat * 0.5)) rows[i].start = snapped;
+            if (snapped > rows[i - 1].start + beat * 0.5 && (i + 1 >= rows.length || snapped < rows[i + 1].start - beat * 0.5) && snapped < total) rows[i].start = snapped;
         }
     }
-    // 点过的句子以点下的时间为准（只要不早于上一镜），优先级高于估计和拍点吸附。
-    for (let i = 0; i < rows.length; i += 1) {
-        if (rows[i].lineTap === undefined) continue;
-        const prev = i > 0 ? rows[i - 1].start : -1;
-        if (rows[i].lineTap > prev) rows[i].start = rows[i].lineTap;
-    }
-    for (let i = 0; i < rows.length; i += 1) rows[i].end = i + 1 < rows.length ? rows[i + 1].start : Math.max(rows[i].end, total);
+    for (let i = 0; i < rows.length; i++) rows[i].end = i + 1 < rows.length ? rows[i + 1].start : Math.max(total, rows[i].start + 0.001);
+
     return { rows, sections, times, total };
 }
 
@@ -87300,6 +87434,7 @@ function completedMvRanges(record, song) {
     const done = sections.map((_, i) => {
         const shots = list(record?.shots).filter(s => s.sectionIndex === i);
         return shots.length > 0 && shots.every(s => {
+            if (hasAssetImage(s.image)) return true;
             if (!isV2(record)) return !!(s.image?.url || s.image?.local);
             const g = record.groups.find(g => g.id === s.group);
             return hasAssetImage(assetOf(record, `${s.group}:${s.diff}`)?.image)
@@ -87526,9 +87661,31 @@ function assetKeys(record, song = null) {
 
 function hasAssetImage(image) { return !!(image?.url || image?.local); }
 
+// A user import or single-shot redraw belongs to this shot, even when siblings
+// share one v2 composition. Reading it must not depend on how it was created.
+function shotImage(record, shot) {
+    if (hasAssetImage(shot?.image) || !isV2(record)) return shot?.image || null;
+    return assetOf(record, `${shot?.group}:${shot?.diff}`)?.image || null;
+}
+
+async function saveFrameImage(target, shotId, image) {
+    return holdResult(target, 'frameEdit', shotId, image, raw => {
+        if (!hasAssetImage(raw)) throw core_text.safeUserError('没有可保存的图片。', 'RMT_MV_FRAME');
+        return { image: raw };
+    });
+}
+
 function assetPrompt(record, key, context, appearance = true) {
     const custom = record?.assetPrompts?.[key];
     return typeof custom === 'string' && custom.trim() ? custom : defaultAssetPrompt(record, key, context, appearance);
+}
+
+function motifRecipe(motif) {
+    // Remove background tags only from the generated default description.
+    // User-edited complete prompts bypass this function through assetPrompt.
+    const description = String(motif?.prompt || '').replace(/\b(?:white|transparent|simple) background\b\s*,?\s*/gi, '').trim().replace(/,\s*$/, '');
+    const light = /雪|霜|冰|白|云|雲|棉|\b(?:snow\w*|frost\w*|ice|white|cloud\w*|cotton)\b/i.test(`${motif?.name || ''} ${description}`);
+    return [description, `single object, still life, centered, fully visible, clear margin, ${light ? 'solid blue background' : 'white background'}, flat simple background, no humans`];
 }
 
 function defaultAssetPrompt(record, key, context, appearance = true) {
@@ -87539,7 +87696,7 @@ function defaultAssetPrompt(record, key, context, appearance = true) {
     const ratio = settings.ratio === '9:16' ? 'vertical 9:16 composition' : 'horizontal 16:9 composition';
     const era = record?.wardrobe?.era ? `setting: ${record.wardrobe.era}` : '';
     // 只写正向词：tag 模型会把“no multiple views”“no people”里的词当成要画的内容。
-    if (found.kind === 'motif') return [style, found.target.prompt, 'single object, still life, white background, simple background, no humans'].filter(Boolean).join(', ');
+    if (found.kind === 'motif') return [style, ...motifRecipe(found.target)].filter(Boolean).join(', ');
     if (found.kind === 'bg') return [style, ratio, era, found.bgRow?.prompt || found.group.backgroundPrompt, 'scenery, landscape, no humans'].filter(Boolean).join(', ');
     if (record?.cast && Array.isArray(found.group.cast)) {
         const actors = mv_cast.shotPeople(record, found.group);
@@ -87701,6 +87858,7 @@ __m_extras_mv_js.continueStoryboard = continueStoryboard;
 __m_extras_mv_js.generateStoryboard = generateStoryboard;
 __m_extras_mv_js.rewriteShot = rewriteShot;
 __m_extras_mv_js.drawFrame = drawFrame;
+__m_extras_mv_js.saveFrameImage = saveFrameImage;
 __m_extras_mv_js.drawAsset = drawAsset;
 __m_extras_mv_js.saveAssetEdit = saveAssetEdit;
 __m_extras_mv_js.motionOf = motionOf;
@@ -87751,6 +87909,7 @@ __m_extras_mv_js.buildShots = buildShots;
 __m_extras_mv_js.assetOf = assetOf;
 __m_extras_mv_js.assetKeys = assetKeys;
 __m_extras_mv_js.hasAssetImage = hasAssetImage;
+__m_extras_mv_js.shotImage = shotImage;
 __m_extras_mv_js.assetPrompt = assetPrompt;
 __m_extras_mv_js.defaultAssetPrompt = defaultAssetPrompt;
 __m_extras_mv_js.isAssetDrawing = isAssetDrawing;
@@ -87863,22 +88022,55 @@ const audioBySong = new Map();
 const images = new Map();
 const localUrls = new Map();
 const loadingLocal = new Map();
+const imageImports = new Map();
 const audioTried = new Set();
 const audioLoads = new Map();
 let assetEditor = null;
 let editSequence = 0;
 let mediaSequence = 0;
+// Navigation is local to this opened song, never part of the saved MV/archive.
+const navigation = [];
+let renderedPage = '';
+
+function capturePagePosition(assetKey = '') {
+    const el = body();
+    if (!el) return null;
+    const anchors = [...(el.querySelectorAll?.('[data-rmt-mv-anchor]') || [])];
+    const top = el.getBoundingClientRect?.().top || 0;
+    const anchor = assetKey ? anchors.find(node => node.dataset.rmtMvAnchor === assetKey)
+        : anchors.find(node => node.getBoundingClientRect?.().bottom > top);
+    return { top: el.scrollTop, left: el.scrollLeft || 0,
+        anchor: anchor?.dataset.rmtMvAnchor, offset: anchor?.getBoundingClientRect?.().top - top,
+        // Inspection expansion is controlled by view.inspect; never undo its click.
+        details: [...(el.querySelectorAll?.('details:not(.rmt-mv-inspect)') || [])].map(node => node.open),
+        strips: [...(el.querySelectorAll?.('.rmt-mv-assets, .rmt-mv-strip') || [])].map(node => node.scrollLeft) };
+}
+
+function restorePagePosition(position) {
+    const el = body();
+    if (!el || !position) return;
+    const details = [...(el.querySelectorAll?.('details:not(.rmt-mv-inspect)') || [])];
+    if (details.length === position.details.length) details.forEach((node, i) => { node.open = position.details[i]; });
+    [...(el.querySelectorAll?.('.rmt-mv-assets, .rmt-mv-strip') || [])].forEach((node, i) => { node.scrollLeft = position.strips[i] || 0; });
+    el.scrollTop = position.top; el.scrollLeft = position.left;
+    const anchor = [...(el.querySelectorAll?.('[data-rmt-mv-anchor]') || [])].find(node => node.dataset.rmtMvAnchor === position.anchor);
+    if (anchor && Number.isFinite(position.offset) && anchor.getBoundingClientRect) {
+        el.scrollTop += anchor.getBoundingClientRect().top - (el.getBoundingClientRect?.().top || 0) - position.offset;
+    }
+}
+
+function currentPage(assetKey = '') { return { sub: view.sub, shotId: view.shotId, position: capturePagePosition(assetKey) }; }
+function restoreParentPage() {
+    const parent = navigation.pop() || { sub: 'board', shotId: '' };
+    Object.assign(view, { sub: parent.sub, shotId: parent.shotId });
+    renderMv(); restorePagePosition(parent.position);
+}
 
 // 用户自己的图存在本机；url 来自生图渠道。两者都没有时返回空字符串。
-function v2Diff(shot, record = view.cache?.record) {
-    if (!shot?.group || !mv.isV2(record)) return null;
-    return record.groups.find(g => g.id === shot.group)?.diffs.find(d => d.id === shot.diff) || null;
-}
-function hasImg(shot) { const d = v2Diff(shot); return mv.hasAssetImage(d ? d.image : shot?.image); }
+function hasImg(shot) { return mv.hasAssetImage(mv.shotImage(view.cache?.record, shot)); }
 
 function imgUrl(shot, record = view.cache?.record) {
-    const d = v2Diff(shot, record);
-    return assetImageUrl(d ? d.image : shot?.image);
+    return assetImageUrl(mv.shotImage(record, shot));
 }
 
 function assetImageUrl(image) {
@@ -87903,7 +88095,7 @@ async function resolveAssetImage(image) {
 
 function closeAssetEditor() {
     assetEditor?.dispose(); assetEditor = null;
-    if (view.sub === 'asset-editor') { view.sub = 'board'; renderMv(); }
+    if (view.sub === 'asset-editor') restoreParentPage();
 }
 
 async function openAssetEditor(key) {
@@ -87911,14 +88103,17 @@ async function openAssetEditor(key) {
     const record = target.base.songs[target.songId], found = mv.assetOf(record, key);
     stopPlayback(); assetEditor?.dispose(); assetEditor = null;
     const token = ++editSequence;
+    if (view.sub !== 'asset-editor') navigation.push(currentPage(key));
     view.sub = 'asset-editor'; page('编辑素材', '构图卡片', '<section data-rmt-mv-editor-host>正在打开素材…</section>');
+    if (body()) body().scrollTop = 0;
     const image = found.image, original = image?.original || image;
     const [sourceUrl, imageUrl] = await Promise.all([resolveAssetImage(original), resolveAssetImage(image)]);
     if (!isView(opened) || view.sub !== 'asset-editor' || token !== editSequence) return;
     const host = body().querySelector('[data-rmt-mv-editor-host]'); if (!host) return;
     assetEditor = image_editor.mountAssetEditor(host, {
+        motif: key === 'motif',
         sourceUrl, imageUrl, image, prompt: mv.assetPrompt(record, key, ctx()), defaultPrompt: mv.defaultAssetPrompt(record, key, ctx()),
-        onClose: () => { if (isView(opened)) closeAssetEditor(); },
+        onClose: () => { if (isView(opened) && token === editSequence) closeAssetEditor(); },
         onSave: async draft => {
             if (!isView(opened) || token !== editSequence) return false;
             const patch = { prompt: draft.prompt };
@@ -87992,7 +88187,9 @@ function acceptAudio(blob, name, persist, target = mv.captureMvTarget(ctx(), vie
 }
 
 function uploadLabel(shotId, label = '换用自己的图') {
-    return `<label class="rmt-x-secondary rmt-mv-upload">${label}<input type="file" accept="image/*" data-rmt-mv-image data-rmt-mv-id="${esc(shotId)}"></label>`;
+    const record = view.cache?.record, shot = record?.shots?.find(s => s.id === shotId);
+    return `<label class="rmt-x-secondary rmt-mv-upload">${label}<input type="file" accept="image/*" data-rmt-mv-image data-rmt-mv-id="${esc(shotId)}"></label>`
+        + (mv.isV2(record) && mv.hasAssetImage(shot?.image) ? btn('use-group-image', '恢复构图素材', { id: shotId }) : '');
 }
 
 function looksEditor() {
@@ -88188,6 +88385,7 @@ function navigateMvBack() {
     if (view.sub === 'asset-editor') { closeAssetEditor(); return true; }
     const record = currentRecord();
     if (view.sub === 'setup' && view.step > 1) { view.step -= 1; renderMv(); return true; }
+    if (navigation.length) { restoreParentPage(); return true; }
     if (['shot', 'sync', 'tegaki', 'finish'].includes(view.sub) || (view.sub === 'setup' && record?.shots?.length)) {
         view.sub = view.sub === 'sync' ? 'tegaki' : 'board'; renderMv(); return true;
     }
@@ -88197,9 +88395,19 @@ function navigateMvBack() {
 
 function go(sub, extra = {}) {
     if (sub !== 'tegaki' && sub !== 'sync') stopPlayback();
+    let position;
+    if (sub === 'board') {
+        position = navigation.find(entry => entry.sub === 'board')?.position;
+        navigation.length = 0; // A successful first generation is not a child of its wizard.
+    } else if (sub !== view.sub) {
+        const existing = navigation.findIndex(entry => entry.sub === sub);
+        if (existing >= 0) position = navigation.splice(existing)[0].position;
+        else navigation.push(currentPage());
+    }
     Object.assign(view, { sub }, extra);
     renderMv();
     const el = body(); if (el) el.scrollTop = 0;
+    restorePagePosition(position);
 }
 
 function currentRecord() { const c = ctx(); return c ? mv.readMv(c, view.songId) : null; }
@@ -88208,7 +88416,9 @@ function currentSong() { const c = ctx(); return c ? mv.loadSong(c, view.songId)
 // ---------- 渲染 ----------
 
 function renderMv() {
-    try { renderMvUnsafe(); }
+    const previous = view.sub;
+    const position = renderedPage === previous && previous !== 'asset-editor' ? capturePagePosition() : null;
+    try { renderMvUnsafe(); if (isView() && view.sub === previous) restorePagePosition(position); }
     catch (error) {
         console.error('[HeartbeatMemories] MV page failed', error);
         try {
@@ -88246,8 +88456,12 @@ function renderMvUnsafe() {
 }
 
 function page(title, back, html) {
+    if (navigation.at(-1)?.sub === 'shot') back = '镜头详情';
+    if (view.sub === 'setup' && view.step > 1) back = '上一步';
     overlay.topTitle(title); overlay.setBackVisible(true, back);
-    body().innerHTML = `<main class="rmt-x-page">${recoveryPanel()}${html}<details class="rmt-x-card"><summary>MV 备份</summary>${btn('export-recovery', '导出 MV 数据与暂存结果')}</details></main>`;
+    const returnButton = view.sub !== 'board' ? btn('back', `← 返回${esc(back)}`) : '';
+    body().innerHTML = `<main class="rmt-x-page">${returnButton}${recoveryPanel()}${html}<details class="rmt-x-card"><summary>MV 备份</summary>${btn('export-recovery', '导出 MV 数据与暂存结果')}</details></main>`;
+    renderedPage = view.sub;
 }
 
 function recoveryPanel() {
@@ -88511,6 +88725,7 @@ function renderTegaki(song, record) {
     const seg = (action, map, value) => Object.entries(map).map(([id, label]) => btn(action, label, { id, cls: 'rmt-x-seg' + (value === id ? ' active' : ''), extra: ` aria-pressed="${value === id}"` })).join('');
     page('手书剪辑台', '镜头清单', `${head(`手书 · ${song.title}`, '手书剪辑台', '放入歌曲就能预览。每一张怎么动，点下面的缩略图来改。')}
       <div class="rmt-mv-canvas-wrap" style="width:${w > h ? '100%' : 'min(100%, 300px)'}"><canvas data-rmt-mv-canvas width="${w}" height="${h}"></canvas></div>
+      ${mv.isV2(record) && mv.tegakiOptions(record).showMotif ? motifNotice(record) : ''}
       <div class="rmt-mv-bar"><button type="button" class="rmt-mv-play" data-rmt-mv="play" aria-label="${player.playing ? '暂停' : '播放'}" ${exporting ? 'disabled' : ''}>${player.playing ? '❚❚' : '▶'}</button>
         <div class="rmt-mv-track" data-rmt-mv="seek" role="slider" aria-label="拖到这里播放" style="cursor:pointer"><div><i data-rmt-mv-progress></i></div><div style="display:flex;justify-content:space-between;background:none;height:auto"><span data-rmt-mv-time>0:00</span><span>${mv.formatTime(mv.shotTimeline(record, song).total)}</span></div></div></div>
       <div class="rmt-mv-strip">${strip}</div>
@@ -88581,19 +88796,20 @@ async function preloadImages(record, song) {
     let timer;
     const shots = mv.shotsInRange(record, song);
     const load = async () => {
-        const assets = mv.isV2(record) ? mv.assetKeys(record, song).map(k => mv.assetOf(record, k)?.image).filter(Boolean) : [];
+        const assets = shots.flatMap(shot => {
+            const image = mv.shotImage(record, shot);
+            if (!mv.isV2(record) || mv.hasAssetImage(shot.image)) return [image];
+            const group = record.groups.find(g => g.id === shot.group);
+            const bg = group?.bgs?.find(b => b.id === (shot.bg || 'B1')) || group?.bgs?.[0];
+            return [image, bg?.image || group?.bg];
+        }).filter(Boolean);
+        if (mv.isV2(record) && mv.tegakiOptions(record).showMotif) assets.push(record.motif?.image);
         await Promise.all(assets.map(resolveAssetImage));
-        for (const shot of shots) imgUrl(shot, record);
-        await Promise.all((shots).map(shot => loadingLocal.get(shot.image?.local)).filter(Boolean));
-        const urls = [...new Set((shots).map(shot => {
-            const url = imgUrl(shot, record);
-            if (mv.hasAssetImage(mv.isV2(record) ? v2Diff(shot, record)?.image : shot.image) && !url) throw new Error('Local image unavailable');
-            return url;
-        }).concat(assets.map(image => {
+        const urls = [...new Set(assets.map(image => {
             const url = assetImageUrl(image);
             if (mv.hasAssetImage(image) && !url) throw new Error('Local image unavailable');
             return url;
-        }), mv.isV2(record) ? [coverUrl(song) || ''] : []).filter(Boolean))];
+        }).concat(mv.isV2(record) ? [coverUrl(song) || ''] : []).filter(Boolean))];
         await Promise.all(urls.map(url => new Promise((resolve, reject) => {
             let img = images.get(url);
             if (!img) { img = new Image(); img.src = url; images.set(url, img); }
@@ -88712,8 +88928,8 @@ function renderFrame(canvas, record, song, t) {
         glow.addColorStop(0, `rgba(255,248,236,${0.14 * pulse})`); glow.addColorStop(1, 'rgba(255,248,236,0)');
         g.save(); g.fillStyle = glow; g.fillRect(0, 0, w, h); g.restore();
     }
-    if (topt.lyric === 'big' && row.shot.lyric) drawBigLyric(g, row.shot.lyric, w, h, since, topt.font);
-    if (topt.lyric === 'subtitle' && row.shot.lyric) {
+    if (since >= 0 && topt.lyric === 'big' && row.shot.lyric) drawBigLyric(g, row.shot.lyric, w, h, since, topt.font);
+    if (since >= 0 && topt.lyric === 'subtitle' && row.shot.lyric) {
         let size = Math.round(Math.min(w, h) * 0.055), lines = [];
         const split = () => {
             const result = []; let line = '';
@@ -88819,6 +89035,7 @@ function stopPlayback() {
 
 function disposeMv() {
     assetEditor?.dispose(); assetEditor = null; editSequence++;
+    navigation.length = 0; renderedPage = '';
     view.epoch += 1;
     view.stopAll = true; view.drawingAll = false; view.drawQueue = null;
     stopPlayback(); stopExport();
@@ -89080,7 +89297,7 @@ function setTap(index, value) {
     const high = after === undefined ? Infinity : taps[after] - (after - index) * 0.5;
     value = Math.max(low, Math.min(value, high));
     mv.patchRecord(view.songId, { timing: { ...(currentRecord()?.timing || {}), taps: { ...taps, [index]: value } } });
-    view.tapUndo.push({ ...taps });
+    view.tapUndo.push({ taps: { ...taps }, index });
 }
 
 function handleMvClick(event) {
@@ -89095,7 +89312,8 @@ function handleMvClick(event) {
     const record = currentRecord();
     const opened = viewTarget();
     try {
-        if (action === 'retry-save') { void mv.retryMvSave(opened.scope, id).then(result => { reportResult(result, '结果已保存。'); if (isView(opened)) renderMv(); }).catch(toastError); }
+        if (action === 'back') navigateMvBack();
+        else if (action === 'retry-save') { void mv.retryMvSave(opened.scope, id).then(result => { reportResult(result, '结果已保存。'); if (isView(opened)) renderMv(); }).catch(toastError); }
         else if (action === 'export-recovery') download(new Blob([mv.exportMvRecovery(opened.scope)], { type: 'application/json' }), 'Hearttrace-MV-backup.json');
         else if (action === 'set-output') { d.output = id === 'video' ? 'video' : 'tegaki'; view.draft = mv.normalizeSettings(d); renderMv(); }
         else if (action === 'set-style') { d.style = id; renderMv(); }
@@ -89198,6 +89416,12 @@ function handleMvClick(event) {
         else if (action === 'download-table') download(new Blob([mv.timetableText(record, currentSong())], { type: 'text/plain;charset=utf-8' }), `${safeName(currentSong().title)}-镜头时间表.txt`);
         else if (action === 'download-srt') download(new Blob([mv.srtText(record, currentSong())], { type: 'application/x-subrip;charset=utf-8' }), `${safeName(currentSong().title)}.srt`);
         else if (action === 'select-shot') { view.selected = id; renderMv(); }
+        else if (action === 'use-group-image') {
+            if (mv.isV2(record) && record.shots.some(s => s.id === id)) {
+                imageImports.delete(mv_media.mediaKey('img', opened.scope, opened.songId, id));
+                mv.patchShot(view.songId, id, { image: null }); renderMv();
+            }
+        }
         else if (action === 'seek') {
             // 跳转：画面、差分和字幕都读同一个播放时间，跳到哪里就从哪里对齐。
             const rect = el.getBoundingClientRect();
@@ -89253,13 +89477,13 @@ function handleMvClick(event) {
         }
         else if (action === 'tap-undo') {
             const previous = view.tapUndo.at(-1);
-            const taps = previous ? { ...previous } : { ...(record.timing?.taps || {}) };
+            const taps = previous ? { ...previous.taps } : { ...(record.timing?.taps || {}) };
             const keys = Object.keys(taps).filter(k => taps[k] !== null && taps[k] !== undefined).map(Number).sort((a, b) => b - a);
             if (previous || keys.length) {
                 if (!previous) delete taps[keys[0]];
                 mv.patchRecord(view.songId, { timing: { ...(record.timing || {}), taps } });
                 if (previous) view.tapUndo.pop();
-                view.tapIndex = -1; renderMv();
+                view.tapIndex = previous ? previous.index : keys[0]; renderMv();
             }
         }
         else if (action === 'tap-reset') { mv.patchRecord(view.songId, { timing: { taps: {}, shift: 0 } }); view.tapIndex = -1; view.tapUndo = []; renderMv(); }
@@ -89364,12 +89588,22 @@ function handleMvChange(event) {
         const context = ctx();
         if (!file || !context || !shotId) return true;
         if (!/^image\//.test(file.type || '')) { toastError(core_text.safeUserError('请选择图片文件。', 'RMT_MV_IMAGE')); return true; }
-        const key = mv_media.mediaKey('img', mv.mvScope(context), view.songId, shotId);
-        const old = localUrls.get(key); if (old) { try { URL.revokeObjectURL(old); } catch {} }
-        localUrls.set(key, URL.createObjectURL(file));
-        void mv_media.putMedia(key, file, file.name).then(ok => { if (!ok) globalThis.toastr?.info?.('这台设备没能记住这张图，刷新后需要重新选择。', '心迹回廊 · MV'); });
-        try { mv.patchShot(view.songId, shotId, { image: { local: key, at: Date.now() } }); } catch (error) { toastError(error); }
-        renderMv();
+        try {
+            const target = mv.captureMvTarget(context, view.songId), opened = viewTarget();
+            if (!target.base.songs[target.songId]?.shots?.some(s => s.id === shotId)) return true;
+            const slot = mv_media.mediaKey('img', target.scope, target.songId, shotId);
+            const key = mv_media.mediaKey('img', target.scope, target.songId, `${shotId}:${Date.now()}:${++mediaSequence}`);
+            imageImports.set(slot, key);
+            // Save new bytes without replacing the old blob. Bind the commit to the
+            // captured shot, and ignore a file superseded by another manual import.
+            void mv_media.putMedia(key, file, file.name).then(async ok => {
+                if (imageImports.get(slot) !== key) return;
+                if (!ok) throw core_text.safeUserError('图片未能保存，原图已保留，请重试。', 'RMT_MV_SAVE_FAILED');
+                localUrls.set(key, URL.createObjectURL(file));
+                reportResult(await mv.saveFrameImage(target, shotId, { local: key, at: Date.now() }), '图片已保存。');
+                if (isView(opened)) renderMv();
+            }).catch(toastError).finally(() => { if (imageImports.get(slot) === key) imageImports.delete(slot); });
+        } catch (error) { toastError(error); }
         return true;
     }
     if (input?.matches?.('[data-rmt-mv-split]')) {
@@ -89403,12 +89637,13 @@ function handleMvChange(event) {
 
 function assetTile(record, key, label) {
     const found = mv.assetOf(record, key);
-    const url = assetImageUrl(found?.image);
+    const sprite = key === 'motif' ? motifForRange(record) : null;
+    const url = sprite?.preview || assetImageUrl(found?.image);
     const exists = mv.hasAssetImage(found?.image);
     const drawing = mv.isAssetDrawing(mv.mvScope(ctx()), view.songId, key);
     const cut = found?.kind !== 'bg';
     const splitSelect = btn('edit-asset', '编辑素材', { id: key, cls: 'rmt-mv-edit-open' });
-    return `<button type="button" class="rmt-mv-asset${exists ? ' done' : ''}${cut && found?.group?.layer !== 'full' ? ' cut' : ''}" data-rmt-mv="draw-asset" data-rmt-mv-id="${esc(key)}" ${drawing || view.drawingAll ? 'disabled' : ''} aria-label="${esc(label)}：${exists ? '重画' : '画'}这一张">${url ? `<img src="${esc(url)}" alt="">` : ''}<i>${drawing ? '画…' : exists ? '已画' : '未画'}</i></button><small>${esc(label)}</small>${splitSelect}`;
+    return `<button type="button" class="rmt-mv-asset${exists ? ' done' : ''}${cut && found?.group?.layer !== 'full' ? ' cut' : ''}" data-rmt-mv-anchor="${esc(key)}" data-rmt-mv="draw-asset" data-rmt-mv-id="${esc(key)}" ${drawing || view.drawingAll ? 'disabled' : ''} aria-label="${esc(label)}：${exists ? '重画' : '画'}这一张">${url ? `<img src="${esc(url)}" alt="">` : ''}<i>${drawing ? '画…' : exists ? '已画' : '未画'}</i></button><small>${esc(label)}</small>${splitSelect}`;
 }
 
 // 素材检查：原图 → 拼图拆分 → 抠图结果 → 播放时的用法，逐张对照。
@@ -89456,7 +89691,7 @@ function renderGroupsBoard(song, record) {
           <p class="rmt-x-note">点任意一张缩略图可以单独重画。</p>
           ${g.link ? `<div class="rmt-mv-link">↓ 承接：${esc(g.link)}</div>` : ''}</article>`;
     }).join('');
-    const motif = record.motif ? `<section class="rmt-x-card"><div class="rmt-x-row-head"><b>意象：${esc(record.motif.name || '装饰')}</b><span>副歌时漂浮</span></div><div class="rmt-mv-assets"><div>${assetTile(record, 'motif', '意象')}</div></div></section>` : '';
+    const motif = record.motif ? `<section class="rmt-x-card"><div class="rmt-x-row-head"><b>意象：${esc(record.motif.name || '装饰')}</b><span>副歌时漂浮</span></div><div class="rmt-mv-assets"><div>${assetTile(record, 'motif', '意象')}</div></div>${motifNotice(record)}</section>` : '';
     const wd = record.wardrobe || {};
     const wardrobe = `<details class="rmt-x-card"${wd.char || wd.era ? '' : ' open'}><summary><b>时代与衣着</b>（每一张都用同一套）</summary>
       <label class="rmt-mv-look"><span>时代 / 场景</span><input type="text" maxlength="200" data-rmt-mv-wardrobe="era" value="${esc(wd.era || '')}"></label>
@@ -89481,6 +89716,54 @@ function renderGroupsBoard(song, record) {
 
 const cutMeta = new Map();
 const palettes = new Map();
+const motifSprites = new Map();
+
+function motifSprite(image) {
+    const url = assetImageUrl(image);
+    if (!url) return null;
+    const cached = motifSprites.get(url);
+    if (cached && cached.status !== 'loading') return cached;
+    const src = imageFor(url);
+    if (!src) {
+        if (!cached && images.has(url)) {
+            motifSprites.set(url, { status: 'loading' });
+            const pending = images.get(url), before = pending.onload;
+            const refresh = () => { if (runtimeState.activeMode === MV_MODE && assetImageUrl(view.cache?.record?.motif?.image) === url) renderMv(); };
+            pending.onload = event => { motifSprites.delete(url); before?.(event); refresh(); };
+            pending.onerror = () => { motifSprites.set(url, { status: 'unreadable' }); refresh(); };
+        }
+        return null;
+    }
+    let result;
+    try {
+        // These tiny overlays use a bounded working raster, never overwrite the source.
+        const scale = Math.min(1, 768 / Math.max(src.naturalWidth, src.naturalHeight));
+        const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(src.naturalWidth * scale)); c.height = Math.max(1, Math.round(src.naturalHeight * scale));
+        const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(src, 0, 0, c.width, c.height);
+        const pixels = g.getImageData(0, 0, c.width, c.height);
+        const prepared = image_tools.prepareMotifPixels(pixels.data, c.width, c.height);
+        result = { status: prepared.status };
+        if (prepared.status === 'transparent') result = { status: 'transparent', image: src, preview: url };
+        else if (prepared.data) {
+            pixels.data.set(prepared.data); g.putImageData(pixels, 0, 0);
+            result = { status: 'prepared', image: c, preview: c.toDataURL('image/png') };
+        }
+    } catch { result = { status: 'unreadable' }; }
+    motifSprites.set(url, result);
+    return result;
+}
+
+function motifForRange(record) {
+    const song = currentSong();
+    if (!song || !mv.tegakiOptions(record).showMotif || !mv.shotsInRange(record, song).some(row => isChorusSection(song, row.sectionIndex))) return null;
+    return motifSprite(record?.motif?.image);
+}
+
+function motifNotice(record) {
+    const sprite = motifForRange(record);
+    if (!sprite || ['loading', 'transparent', 'prepared'].includes(sprite.status)) return '';
+    return `<div class="rmt-x-note">意象背景尚未分离，暂不叠加。${btn('edit-asset', '处理意象背景', { id: 'motif' })}</div>`;
+}
 
 // 拼图识别：模型偶尔把同一人物画成左右或上下两格。缩小成灰度图比较两半，几乎一样就只取一格。
 // 封面就是给这首印象曲画的专辑封面（存在 song.visual.cgImage）。
@@ -89571,6 +89854,11 @@ function drawSceneV2(g, record, song, rows, index, t, w, h) {
     const span = groupSpan(rows, index);
     const p = Math.min(1, Math.max(0, (t - span.start) / Math.max(0.1, span.end - span.start)));
     const push = group?.motion === 'push' ? 1 + 0.03 * p : 1;
+    if (mv.hasAssetImage(row.shot.image)) {
+        const own = imageFor(assetImageUrl(row.shot.image));
+        if (own) drawCover(g, own, w, h, push, 0, 0);
+        return;
+    }
     const bgRow = (group?.bgs || []).find(b => b.id === (row.shot.bg || 'B1')) || (group?.bgs || [])[0];
     const bg = imageFor(assetImageUrl(bgRow?.image || group?.bg));
     if (bg) drawCover(g, bg, w, h, push, 0, 0);
@@ -89613,14 +89901,14 @@ function drawSceneV2(g, record, song, rows, index, t, w, h) {
 
 function drawMotif(g, record, song, row, t, w, h) {
     if (!mv.hasAssetImage(record.motif?.image) || !isChorusSection(song, row.sectionIndex)) return;
-    const img = layerImage(record.motif.image) || imageFor(assetImageUrl(record.motif.image));
+    const img = motifSprite(record.motif.image)?.image;
     if (!img) return;
     const size = Math.min(w, h) * 0.09;
     for (let i = 0; i < 7; i += 1) {
         const x = ((i + 0.5) / 7) * w + Math.sin(t * 0.6 + i * 1.7) * w * 0.04;
         const y = ((t * (0.05 + (i % 3) * 0.02) + i * 0.17) % 1.15) * h - size;
         g.save(); g.globalAlpha = 0.85; g.translate(x, y); g.rotate(Math.sin(t * 0.8 + i) * 0.6);
-        g.drawImage(img, -size / 2, -size / 2, size, size * img.naturalHeight / Math.max(1, img.naturalWidth));
+        g.drawImage(img, -size / 2, -size / 2, size, size * (img.naturalHeight || img.height) / Math.max(1, img.naturalWidth || img.width));
         g.restore();
     }
 }
@@ -89696,12 +89984,12 @@ function renderFrameV2(canvas, record, song, t) {
         if (prev.shot.cut === 'fade' && since < fadeDuration) { g.save(); g.globalAlpha = 1 - since / fadeDuration; drawSceneV2(g, record, song, rows, index - 1, t, w, h); g.restore(); }
         else if (prev.shot.cut === 'flash' && since < flashDuration) { g.save(); g.globalAlpha = 0.85 * (1 - since / flashDuration); g.fillStyle = '#fff'; g.fillRect(0, 0, w, h); g.restore(); }
     }
-    if (topt.showMotif) drawMotif(g, record, song, row, t, w, h);
+    if (since >= 0 && topt.showMotif) drawMotif(g, record, song, row, t, w, h);
     const palette = coverPalette(song);
     const font = mv.TEGAKI_FONTS[topt.font] || mv.TEGAKI_FONTS.sans;
-    if (topt.lyric === 'vertical') drawVerticalLyric(g, row.shot.lyric, w, h, since, palette[2], mv.TEGAKI_FONTS.song.stack);
-    else if (topt.lyric === 'big' && row.shot.lyric) drawBigLyric(g, row.shot.lyric, w, h, since, topt.font);
-    else if (topt.lyric === 'subtitle' && row.shot.lyric) {
+    if (since >= 0 && topt.lyric === 'vertical') drawVerticalLyric(g, row.shot.lyric, w, h, since, palette[2], mv.TEGAKI_FONTS.song.stack);
+    else if (since >= 0 && topt.lyric === 'big' && row.shot.lyric) drawBigLyric(g, row.shot.lyric, w, h, since, topt.font);
+    else if (since >= 0 && topt.lyric === 'subtitle' && row.shot.lyric) {
         g.save(); g.font = `${font.weight} ${Math.round(Math.min(w, h) * 0.05)}px ${font.stack}`; g.textAlign = 'center';
         g.lineWidth = 3; g.strokeStyle = 'rgba(30,26,40,.6)'; g.fillStyle = '#fff';
         g.strokeText(row.shot.lyric, w / 2, h * 0.92); g.fillText(row.shot.lyric, w / 2, h * 0.92); g.restore();
@@ -89712,7 +90000,7 @@ function renderFrameV2(canvas, record, song, t) {
         if (inBar < 0.12 && t - row.start > 0.2) { g.save(); g.globalAlpha = 0.35 * (1 - inBar / 0.12); g.fillStyle = '#fff'; g.fillRect(0, 0, w, h); g.restore(); }
     }
     // 卡点：副歌里每小节第一拍，关键词轻轻弹出一次。
-    if (topt.showKeyword && topt.lyric !== 'none' && record.keyword && isChorusSection(song, row.sectionIndex)) {
+    if (since >= 0 && topt.showKeyword && topt.lyric !== 'none' && record.keyword && isChorusSection(song, row.sectionIndex)) {
         const bar = beatLen * 4;
         const inBar = (t - row.start) % bar;
         const pop = inBar < 0.25 ? 1.12 - 0.12 * (inBar / 0.25) : 1;

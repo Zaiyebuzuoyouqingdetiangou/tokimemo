@@ -19,6 +19,7 @@ import * as ui_styles from './styles.js';
 import * as ui_generationCompletion from './generationCompletion.js';
 import * as image_menu from './imageMenu.js';
 import * as journal_clip from './journalClip.js';
+const albumReturnPositions = new WeakMap();
 export function filteredAlbumEntries() {
     if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.ALBUM) return [];
     const category = runtimeState.activeSession.category || '全部';
@@ -35,6 +36,7 @@ export function renderAlbum() {
     const session = runtimeState.activeSession;
     if (!session || session.kind !== core_constants.MODE.ALBUM) return;
     if (session.sharedMemory) return renderSharedMemory();
+    ui_overlay.setBackVisible(true, '内容');
     ui_overlay.topTitle(core_constants.MODE_LABEL[core_constants.MODE.ALBUM]);
     const list = filteredAlbumEntries();
     const totalPages = Math.max(1, Math.ceil(list.length / session.pageSize));
@@ -54,9 +56,8 @@ export function renderAlbum() {
     const pendingComments = ui_generationCompletion.countPendingGenerationItems(session.entries, item => item?.unlocked && item?.progressPending?.includes('共同回忆'));
     const filters = ui_albumCategory.ALBUM_DISPLAY_CATEGORIES.map(cat => `<button type="button" class="rmt-btn ${session.category === cat ? 'active' : ''}" data-rmt-category="${cat}">${cat}</button>`).join('');
     const cards = pageItems.map(item => {
-        const drawing = item.unlocked && !readOnlyArchive && generation_imageGeneration.isCgImageDrawing(core_constants.MODE.ALBUM, item.id);
         const cardActions = item.unlocked
-            ? `<div class="rmt-album-card-actions"><button type="button" class="rmt-btn rmt-memory-primary" data-rmt-album-memory="${core_text.esc(item.id)}" aria-label="${core_text.esc(item.title)}：共同回忆">共同回忆</button>${readOnlyArchive ? '' : image_menu.imageMenuHtml(`<button type="button" class="rmt-btn" data-rmt-album-prompt="${core_text.esc(item.id)}" ${drawing ? 'disabled' : ''} aria-label="${core_text.esc(item.title)}：图片设置">${drawing ? '绘制中…' : '图片设置'}</button>${item.cgImage?.url ? `<button type="button" class="rmt-btn" data-rmt-journal-clip="${journal_clip.clipPayload({ mode: 'album', id: item.id, title: item.title, url: item.cgImage.url, body: item.desc || '' })}">夹进手帐</button>` : ''}`, { label: `${core_text.esc(item.title)}：图片操作` })}</div>`
+            ? `<div class="rmt-album-card-actions"><button type="button" class="rmt-btn rmt-memory-primary" data-rmt-album-memory="${core_text.esc(item.id)}" aria-label="${core_text.esc(item.title)}：共同回忆">共同回忆</button></div>`
             : '';
         return `<article class="rmt-card ${item.id === session.selectedId ? 'active' : ''} ${item.unlocked ? '' : 'locked'}" data-rmt-album-id="${core_text.esc(item.id)}">
       <div class="rmt-thumb">${item.unlocked ? generation_imageGeneration.cgImageLayerHtml(item, { history: false }) : `<div class="rmt-abstract" style="${ui_styles.abstractStyle(item.visualSeed, item.id)}"></div>`}</div>
@@ -202,9 +203,21 @@ export function enterSharedMemory() {
     if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.ALBUM) return;
     const item = selectedAlbumEntry();
     if (!item?.unlocked) return;
+    if (!runtimeState.activeSession.sharedMemory) albumReturnPositions.set(runtimeState.activeSession, ui_overlay.bodyEl()?.scrollTop || 0);
     runtimeState.activeSession.sharedMemory = true;
     runtimeState.activeSession.dialogueIndex = 0;
     renderSharedMemory();
+    const body = ui_overlay.bodyEl(); if (body) body.scrollTop = 0;
+}
+
+export function closeSharedMemory() {
+    const session = runtimeState.activeSession;
+    if (session?.kind !== core_constants.MODE.ALBUM || !session.sharedMemory) return false;
+    session.sharedMemory = false;
+    renderAlbum();
+    const body = ui_overlay.bodyEl(); if (body) body.scrollTop = albumReturnPositions.get(session) || 0;
+    albumReturnPositions.delete(session);
+    return true;
 }
 
 export function albumSpeakerSnapshot(item, session = runtimeState.activeSession) {
@@ -265,6 +278,7 @@ export function renderSharedMemory() {
     ui_overlay.topTitle(`共同回忆 · ${item.title}`);
     const body = ui_overlay.bodyEl();
     body.innerHTML = `<div class="rmt-memory-scene">
+      <button type="button" class="rmt-btn" data-rmt-action="back">← 返回回忆相簿</button>
       <div class="rmt-memory-cg rmt-reading-image${generation_imageGeneration.normalizeCgImageRecord(item.cgImage) ? ' rmt-reading-image-saved' : ''}">
         ${generation_imageGeneration.cgImageLayerHtml(item, { lazy: false })}
       </div>
@@ -279,7 +293,7 @@ export function renderSharedMemory() {
           <button type="button" class="rmt-btn" data-rmt-action="shared-next" ${!comments.length || last ? 'disabled' : ''}>下一句</button>
         </div>
       </div>
-      ${readOnly ? '' : image_menu.imageSetupHtml(`<button type="button" class="rmt-btn" data-rmt-action="edit-cg-prompt">${image_menu.BUNNY_SVG}<span>图片设置</span></button>`)}
+      ${readOnly ? '' : image_menu.imageSetupHtml(`<button type="button" class="rmt-btn" data-rmt-action="edit-cg-prompt"><span>图片设置</span></button>${item.cgImage?.url ? `<button type="button" class="rmt-btn" data-rmt-journal-clip="${journal_clip.clipPayload({ mode: 'album', id: item.id, title: item.title, url: item.cgImage.url, body: item.desc || '' })}">夹进手帐</button>` : ''}`)}
       ${generation_imageGeneration.cgImageProgressHtml()}
     </div>`;
     body.querySelector?.('[data-rmt-album-speaker]')?.addEventListener('change', event => {

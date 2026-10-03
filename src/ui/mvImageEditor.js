@@ -6,7 +6,7 @@ export function mountAssetEditor(host, options) {
       <div class="rmt-mv-editor-tools"><button type="button" data-edit="select">1 · 选单格</button><button type="button" data-edit="paint">2 · 处理背景</button></div>
       <div data-select-tools><label>拼图排列 <select data-grid><option value="free">手动框选</option><option value="1:1">整张</option><option value="2:1">上下两格</option><option value="3:1">上下三格</option><option value="4:1">上下四格</option><option value="1:2">左右两格</option><option value="1:3">左右三格</option><option value="1:4">左右四格</option><option value="2:2">四宫格</option><option value="3:3">九宫格</option></select></label>
       <p class="rmt-x-note" data-selection-note>拖动框选画面，或选择排列后点选一格。</p><button type="button" data-edit="apply-crop">使用选中画面</button></div>
-      <div data-paint-tools hidden><div class="rmt-mv-editor-tools"><button type="button" data-edit="auto">尝试去白底</button><button type="button" data-edit="erase" aria-pressed="true">擦除</button><button type="button" data-edit="restore" aria-pressed="false">恢复</button><button type="button" data-edit="undo">撤销</button><button type="button" data-edit="reset">还原选中画面</button></div>
+      <div data-paint-tools hidden><div class="rmt-mv-editor-tools"><button type="button" data-edit="auto">${options.motif ? '尝试去背景' : '尝试去白底'}</button><button type="button" data-edit="erase" aria-pressed="true">擦除</button><button type="button" data-edit="restore" aria-pressed="false">恢复</button><button type="button" data-edit="undo">撤销</button><button type="button" data-edit="reset">还原选中画面</button></div>
       <label>笔刷 <input data-brush type="range" min="1" max="100" value="20"></label>
       <label><input data-layer type="checkbox">使用此透明图叠背景</label><p class="rmt-x-note">先看预览再保存；自动处理可能误删白纱、白衣，可用恢复笔刷修回。</p></div>
       <label>放大 <input data-zoom type="range" min="1" max="4" step="0.25" value="1"></label><div class="rmt-mv-editor-tools"><button type="button" data-edit="pan">移动画布</button></div>
@@ -147,7 +147,12 @@ export function mountAssetEditor(host, options) {
             layer().checked = last.layer; changed = true; restoreOriginal = false; show();
         } return; }
         if (action === 'reset' && original) { pushUndo(); working = duplicate(original); compactUndo(); layer().checked = false; changed = true; restoreOriginal = false; show(); return; }
-        if (action === 'auto' && working) { pushUndo(); working.data.set(pixels.eraseEdgeWhite(working.data, working.width, working.height)); compactUndo(); changed = true; restoreOriginal = false; layer().checked = true; show(); say('这是去白底预览，请检查边缘和白色衣物；不满意可撤销或用恢复笔刷。'); return; }
+        if (action === 'auto' && working) {
+            const data = options.motif ? pixels.prepareMotifPixels(working.data, working.width, working.height).data : pixels.eraseEdgeWhite(working.data, working.width, working.height);
+            if (!data) { say('未能分离意象背景，可用擦除笔刷处理或导入透明图。'); return; }
+            pushUndo(); working.data.set(data); compactUndo(); changed = true; restoreOriginal = false; layer().checked = true; show();
+            say(options.motif ? '已处理意象背景，请检查边缘后保存。' : '这是去白底预览，请检查边缘和白色衣物；不满意可撤销或用恢复笔刷。'); return;
+        }
         if (action === 'original') {
             // Restore the saved original reference without rewriting or deleting its pixels.
             restoreOriginal = true; changed = true; selectionDirty = false; sourceBlob = null; crop = { x: 0, y: 0, w: 1, h: 1 }; history.length = 0;
@@ -182,6 +187,14 @@ export function mountAssetEditor(host, options) {
                 const img = await load(options.imageUrl); if (!active || token !== loadToken) return;
                 const c = makeCanvas(original.width, original.height); c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
                 working = c.getContext('2d').getImageData(0, 0, c.width, c.height); layer().checked = options.image.editMode === 'cutout'; stage = 'paint';
+            }
+            if (options.motif) {
+                const prepared = pixels.prepareMotifPixels(working.data, working.width, working.height);
+                if (prepared.data) {
+                    working.data.set(prepared.data); layer().checked = true; stage = 'paint';
+                    // Saving confirms the derived PNG; the original reference is retained.
+                    changed = prepared.status === 'prepared';
+                }
             }
             show(); say('');
         } catch { if (active && token === loadToken) { show(); say('无法读取图片像素，可导入本机图片继续处理；提示词仍可编辑。'); } }

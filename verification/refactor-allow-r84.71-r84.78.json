@@ -1,0 +1,50 @@
+{
+  "note": "Declarations whose text may differ from verification/refactor-baseline.json. CSS output and init bindings are still checked and must match.",
+  "entries": [
+    {
+      "round": "r84.73",
+      "declaration": "ui/styles.js:ensureStyles",
+      "reason": "主 CSS 字符串（原第 229–1170 行）原样拆到 ui/css/*.js 七个函数，按原顺序拼接；输出由 css 指纹证明逐字相同。"
+    },
+    {
+      "round": "r84.74",
+      "declaration": "archive/library.js:showArchiveCharacter",
+      "reason": "功能改动（用户要求）：当前聊天无档案且本角色页有可继承旧档案时，在角色页固定显示“从这个角色的旧聊天继承…”入口。只新增这一块，其余渲染不变。"
+    },
+    {
+      "round": "r84.75",
+      "declaration": "modes/room.js:renderRoom",
+      "reason": "功能改动（用户要求，dev/active/room-figure）：房间 Q 版小人按人设显示——本地读角色卡、角色卡内嵌/绑定世界书，都没写时按身份推断（用户 2026-09-25 授权）；不请求模型、不写回存档。 这里只把小人外形换成 roomFigureLocal.localRoomFigure 的结果。"
+    },
+    {
+      "round": "r84.75",
+      "declaration": "modes/room.js:renderRoomParticipants",
+      "reason": "功能改动（用户要求，dev/active/room-figure）：房间 Q 版小人按人设显示——本地读角色卡、角色卡内嵌/绑定世界书，都没写时按身份推断（用户 2026-09-25 授权）；不请求模型、不写回存档。 这里只把小人外形换成 roomFigureLocal.localRoomFigure 的结果。"
+    },
+    {
+      "round": "r84.75",
+      "declaration": "ui/roomPixelFigure.js:pixelFigureSvg",
+      "reason": "功能改动（用户要求，dev/active/room-figure）：房间 Q 版小人按人设显示——本地读角色卡、角色卡内嵌/绑定世界书，都没写时按身份推断（用户 2026-09-25 授权）；不请求模型、不写回存档。 像素小人新增衣服颜色、瞳色、中长发/寸头/兜帽和 8 种配饰的画法；颜色全部来自代码色板。"
+    },
+    {
+      "round": "r84.77",
+      "declaration": "modes/heart.js:heartFireflyUpgradePrompt",
+      "reason": "修旧问题（用户要求，r84.71 起就有）：旧版萤火虫升级提示词引用了未定义的 memoryBank，一调用就 ReferenceError。改为由调用方传入本次冻结的 memoryBank，与同文件其他 HEART 提示词一致。"
+    },
+    {
+      "round": "r84.77",
+      "declaration": "modes/heart.js:generateHeartFirefliesSectionOperation",
+      "reason": "修旧问题（用户要求，r84.71 起就有）：旧版萤火虫升级提示词引用了未定义的 memoryBank，一调用就 ReferenceError。改为由调用方传入本次冻结的 memoryBank，与同文件其他 HEART 提示词一致。 这里只多传一个参数。"
+    },
+    {
+      "round": "r84.78",
+      "declaration": "ui/overlay.js:handleOverlayClick",
+      "reason": "重构阶段 3（用户授权）：111 个分支的点击分发原样拆成 4 组连续语句（ui/overlayClickTargets.js、ui/overlayClickActions.js），原函数改为依次调用。tests/dispatch-split-identity.test.mjs 把调用换回函数体后与 r84.71 基线逐字相同；tests/overlay-click-routing.test.mjs 在拆分前后的打包产物上结果一致。"
+    },
+    {
+      "round": "r84.78",
+      "declaration": "ui/settingsPanel.js:mountSettings",
+      "reason": "重构阶段 3（用户授权）：设置页整页 HTML 那一条语句（约 15KB）原样搬到 ui/settingsPanelMarkup.js，原处改为调用。tests/dispatch-split-identity.test.mjs 拼回后与 r84.71 基线逐字相同。另外两个大事件处理函数共用可变局部变量 tagScanEpoch，不能原样搬，保留原处。"
+    }
+  ]
+}

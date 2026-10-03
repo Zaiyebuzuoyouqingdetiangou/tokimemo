@@ -144,8 +144,7 @@ export function navigateBack() {
     if (runtimeState.activeMode === core_constants.MODE.TRAVEL && runtimeState.activeSession?.selectedLocationId) return ui_travelView.closeTravelDetail();
     if (runtimeState.activeMode === core_constants.MODE.ITEMS) return modes_room.returnToRoomFromDeep();
     if (runtimeState.activeMode === core_constants.MODE.ALBUM && runtimeState.activeSession?.kind === core_constants.MODE.ALBUM && runtimeState.activeSession.sharedMemory) {
-        runtimeState.activeSession.sharedMemory = false;
-        return ui_albumView.renderAlbum();
+        return ui_albumView.closeSharedMemory();
     }
     if (runtimeState.activeMode) return workspace_ui.openWorkspaceTab('content');
     if (runtimeState.archiveViewLevel === 'snapshot' && runtimeState.activeArchiveSnapshot) {
