@@ -1,5 +1,5 @@
-const VERSION = '1.0.5';
-const BUILD = '1.0.5-r84.222-mv-motif-alpha';
+const VERSION = '1.0.6';
+const BUILD = '1.0.6-r84.223-mv-tap-clock';
 
 const SETTINGS_ID = 'heartbeat_memories_settings';
 const MENU_ID = 'heartbeat_memories_menu_item';
