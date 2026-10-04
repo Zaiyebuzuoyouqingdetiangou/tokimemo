@@ -1,5 +1,5 @@
-const VERSION = '1.0.6';
-const BUILD = '1.0.6-r84.223-mv-tap-clock';
+const VERSION = '1.0.19';
+const BUILD = '1.0.19-r84.236-framing-paths';
 
 const SETTINGS_ID = 'heartbeat_memories_settings';
 const MENU_ID = 'heartbeat_memories_menu_item';

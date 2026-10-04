@@ -23,7 +23,16 @@ ${root} .rmt-song-cover .rmt-thumb{aspect-ratio:auto;min-height:0;overflow:hidde
 ${root} .rmt-song-cover .rmt-thumb img{width:100%;height:auto;display:block;object-fit:contain}
 ${root} .rmt-song-cover-empty{display:grid;place-content:center;gap:8px;text-align:center;min-height:150px;border-radius:16px;background:var(--rmt-theme-soft);color:var(--rmt-theme-accent-ink);border:1px solid var(--rmt-theme-border)}
 ${root} .rmt-song-cover-empty>span{font-size:40px}
-${root} .rmt-song-layout.has-songs{grid-template-columns:minmax(150px,0.8fr) minmax(0,2.4fr)}
+${root} .rmt-song-layout.has-songs{grid-template-columns:minmax(0,1fr)}
+${root} .rmt-song-library{min-width:0;border:1px solid var(--rmt-theme-border);border-radius:16px;background:var(--rmt-theme-surface-solid);padding:0 14px}
+${root} .rmt-song-library>summary{min-height:52px;cursor:pointer;display:flex;align-items:center;gap:10px;padding:10px 0;font-weight:600;list-style:none}
+${root} .rmt-song-library>summary::-webkit-details-marker{display:none}
+${root} .rmt-song-library>summary:before{content:'›';flex:none}
+${root} .rmt-song-library[open]>summary:before{content:'⌄'}
+${root} .rmt-song-library>summary>span{flex:none}
+${root} .rmt-song-library>summary>small{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-left:auto;color:var(--rmt-theme-muted);font-weight:400}
+${root} .rmt-song-library:not([open])>.rmt-song-list{display:none}
+${root} .rmt-song-library[open]>.rmt-song-list{display:flex;max-height:55vh;overflow:auto;padding:0 0 14px;overscroll-behavior:contain}
 ${root} .rmt-song-list{display:flex;flex-direction:column;gap:8px;min-width:0}
 ${root} .rmt-song-list>button{display:flex;align-items:center;text-align:left;gap:10px;min-height:62px;white-space:normal;overflow-wrap:anywhere;min-width:0;width:100%;border:1px solid var(--rmt-theme-border);background:var(--rmt-theme-surface-solid);border-radius:14px;color:var(--rmt-theme-text);padding:12px;cursor:pointer;font:inherit}
 ${root} .rmt-song-list>button.active{border-color:var(--rmt-theme-accent-ink);background:var(--rmt-theme-soft)}

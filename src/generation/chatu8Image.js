@@ -1,6 +1,6 @@
 // Calls 智绘姬 through the event it already listens for. Does not read API keys,
-// prompts, or endpoints, and does not write its settings. Width and height are
-// omitted so the user's existing 智绘姬 size stays in effect.
+// prompts, or endpoints, and does not write its settings. Ordinary CG keeps its
+// existing size; an explicit MV orientation overrides only this request's size.
 import * as image_patch from '../core/cgImagePatch.js';
 import * as core_context from '../core/context.js';
 import * as core_text from '../core/text.js';
@@ -149,7 +149,25 @@ async function saveStillImage(imageData, context, signal) {
     return path;
 }
 
-export async function generateChatu8Image(prompt, { signal = null, promptMetadata = null, onProgress = null, onSettled = null, targetKey = '', context = core_context.getContext() } = {}) {
+function orientedSize(context, backend, orientation) {
+    const bag = extensionBag(context);
+    const keys = { novelai: ['novelai_width', 'novelai_height'], sd: ['sd_cwidth', 'sd_cheight'], comfyui: ['comfyui_width', 'comfyui_height'] }[backend];
+    const width = Number(keys && bag?.[keys[0]]), height = Number(keys && bag?.[keys[1]]);
+    let long = 1216, short = 832;
+    if (Number.isSafeInteger(width) && width > 0 && Number.isSafeInteger(height) && height > 0) {
+        long = Math.max(width, height); short = Math.min(width, height);
+        if (long === short) {
+            // Keep approximately the configured pixel area, aligned for image
+            // backends. A square preset must not swallow an explicit MV choice.
+            const area = width * height;
+            long = Math.max(128, Math.floor(Math.sqrt(area * 16 / 9) / 64) * 64);
+            short = Math.max(64, Math.floor(area / long / 64) * 64);
+        }
+    }
+    return orientation === 'portrait' ? { width: short, height: long } : { width: long, height: short };
+}
+
+export async function generateChatu8Image(prompt, { signal = null, orientation = 'landscape', respectOrientation = false, promptMetadata = null, onProgress = null, onSettled = null, targetKey = '', context = core_context.getContext() } = {}) {
     if (signal?.aborted) throw chatu8ImageError('CH8_ABORTED');
     const state = chatu8ImageState(context);
     if (!state.available) throw chatu8ImageError(state.code);
@@ -199,7 +217,7 @@ export async function generateChatu8Image(prompt, { signal = null, promptMetadat
                 source.on(RESPONSE_EVENT, onResponse);
                 signal?.addEventListener('abort', onAbort, { once: true });
                 timer = setTimeout(() => stop('CH8_TIMEOUT'), CHATU8_IMAGE_TIMEOUT_MS);
-                source.emit(REQUEST_EVENT, { id, prompt: scene });
+                source.emit(REQUEST_EVENT, { id, prompt: scene, ...(respectOrientation ? orientedSize(context, state.backend, orientation) : {}) });
             } catch { stop('CH8_BACKEND_ERROR'); }
         });
         if (signal?.aborted) throw chatu8ImageError('CH8_ABORTED');

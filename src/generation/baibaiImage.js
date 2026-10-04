@@ -70,7 +70,7 @@ function publicFailure(error) {
 export function baiBaiImagePendingCount() { return pendingGenerations.size; }
 export function isBaiBaiImageTargetPending(targetKey) { return !!targetKey && pendingGenerations.has(targetKey); }
 
-export async function generateBaiBaiImage(prompt, { signal = null, orientation = 'landscape', characterName = '', promptMetadata = null, onProgress = null, onSettled = null, targetKey = '', seed = 0 } = {}) {
+export async function generateBaiBaiImage(prompt, { signal = null, orientation = 'landscape', characterName = '', promptMetadata = null, onProgress = null, onSettled = null, targetKey = '', seed = 0, singlePrompt = false } = {}) {
     if (signal?.aborted) throw baiBaiImageError('BBI_ABORTED');
     const state = baiBaiImageState();
     if (!state.available) throw baiBaiImageError(state.code);
@@ -113,6 +113,9 @@ export async function generateBaiBaiImage(prompt, { signal = null, orientation =
         if (formatted.characters) request.characters = formatted.characters;
         else delete request.characters;
     }
+    // NAI's character-capable path concatenates prompt and nl. MV has one
+    // complete scene already; appearance stays in its character channel.
+    if (singlePrompt && state.backend === 'nai' && state.supportsCharacters) request.nl = '';
     const controller = new AbortController();
     let timer;
     let stopped = false;

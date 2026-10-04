@@ -13,6 +13,8 @@ import * as cg_core from '../generation/cgImageCore.js';
 import * as cg_appearance from '../generation/cgAppearance.js';
 import * as mv_cast from './mvCast.js';
 import * as mv_direction from './mvDirection.js';
+import * as mv_still from './mvStillPrompt.js';
+import * as mv_stage from './mvStage.js';
 
 export const MV_KEY = 'heartbeatMemoriesMvV1';
 const LOCAL_PREFIX = 'heartbeatMemoriesMvV1:';
@@ -165,6 +167,7 @@ function resultBasis(record, kind, shotId) {
         return JSON.stringify(record ? {
             storyRevision: record.storyRevision, settings: record.settings, shots: record.shots,
             groups: record.groups, motif: record.motif, keyword: record.keyword,
+            ...(record.stage ? { stage: record.stage } : {}),
             wardrobe: record.wardrobe, tegaki: record.tegaki,
             ...(record.assetPrompts ? { assetPrompts: record.assetPrompts } : {}),
             ...(record.cast ? { cast: record.cast } : {}),
@@ -175,12 +178,14 @@ function resultBasis(record, kind, shotId) {
         // Appending other groups or completing a sibling image does not change
         // this asset's identity; replacing the storyboard does.
         return JSON.stringify({ storyRevision: record?.storyRevision, image: found?.image || null,
+            ...(String(shotId).startsWith('stage:') && found?.bgRow ? { background: { ...found.bgRow, image: null } } : {}),
             ...(record?.assetPrompts?.[shotId] !== undefined ? { prompt: record.assetPrompts[shotId] } : {}) });
     }
     return JSON.stringify(list(record?.shots).find(shot => shot.id === shotId) || null);
 }
 
 function resultStillCurrent(record, row, expected) {
+    if (row.frameAssetKey && row.frameAssetBasis !== resultBasis(record, 'asset', row.frameAssetKey)) return false;
     if (resultBasis(record, row.kind, row.shotId) === expected) return true;
     if (row.basisVersion || row.base?.songs || record?.storyRevision) return false;
     // Disk journals in older releases omitted the base. Keep their image-save
@@ -198,6 +203,17 @@ async function holdResult(target, kind, shotId, raw, prepare) {
     const row = { ...savedTarget, kind, shotId, raw: structuredClone(raw),
         id: `MV_${Date.now().toString(36)}_${++resultSequence}_${Math.random().toString(36).slice(2)}`,
         createdAt: Date.now(), basisVersion: 2, expected: resultBasis(target.base.songs[target.songId], kind, shotId), patch: null };
+    // A v2 player redraw now uses the asset's current prompt too. Retain that
+    // dependency so a later manual edit wins; old journals need no migration.
+    const sourceRecord = target.base.songs[target.songId];
+    if (kind === 'frame' && isV2(sourceRecord)) {
+        const shot = list(sourceRecord.shots).find(value => value.id === shotId);
+        const key = `${shot?.group}:${shot?.diff}`;
+        if (assetOf(sourceRecord, key)) {
+            row.frameAssetKey = key;
+            row.frameAssetBasis = resultBasis(sourceRecord, 'asset', key);
+        }
+    }
     // Journal first: even a malformed paid response must remain exportable.
     savePending(row.scope, [...pendingMv(row.scope), row]);
     try { row.patch = prepare(raw); }
@@ -239,6 +255,7 @@ export async function retryMvSave(scope, id) {
         else if (row.kind === 'append') {
             next.shots = [...list(next.shots), ...row.patch.shots].sort((a, b) => a.sectionIndex - b.sectionIndex);
             if (isV2(next)) next.groups = [...next.groups, ...row.patch.groups];
+            if (row.patch.stage) next.stage = { version: 1, backgrounds: [...list(next.stage?.backgrounds), ...row.patch.stage.backgrounds] };
             if (row.patch.cast) next.cast = row.patch.cast;
             if (row.patch.wardrobeCharacters) next.wardrobe = { ...next.wardrobe,
                 characters: castWardrobe(next.cast, { wardrobe: { characters: row.patch.wardrobeCharacters } }, next.wardrobe, true) };
@@ -550,15 +567,41 @@ function storyboardPrompt(context, memory, song, settings, sectionIndexes = null
     const appear = settings.appear === 'face' ? `${userName} 可以露脸出镜。`
         : settings.appear === 'back' ? `${userName} 只能以背影、手或剪影出现，不画正脸。` : `${userName} 不出现在画面里。`;
     const firstPerson = cast && mv_cast.selectedMvPeople(cast, settings)[0];
-    const exampleBinding = cast ? `"cast":${JSON.stringify(firstPerson ? [{ participantId: firstPerson.id, position: 'left', action: '这一人的动作及互动对象', visible: 'full' }] : [])}` : '"who":"char"';
+    const exampleBinding = cast ? `"cast":${JSON.stringify(firstPerson ? [{ participantId: firstPerson.id, position: 'left', action: settings.output === 'video' ? '这一人的动作及互动对象' : '共同站位或互动关系；表情与当下动作写在各 diff.imagePrompt', visible: 'full' }] : [])}` : '"who":"char"';
     const exampleWardrobe = cast ? JSON.stringify({ era: '……', characters: firstPerson ? [{ participantId: firstPerson.id, clothing: '有依据的本曲衣着' }] : [] }) : '{"era":"……","char":"……","user":"……"}';
+    const exampleActor = firstPerson?.name || charName;
+    const exampleSection = sections[0]?.index || 0, exampleLyric = sections[0]?.lines?.[0] || '原句';
+    const expressionCast = visible => cast ? { cast: firstPerson ? [{ participantId: firstPerson.id, position: 'center', action: '', visible }] : [] } : { who: 'char' };
+    const expressionExample = settings.output === 'tegaki' && settings.storyType === 'expression' ? JSON.stringify({
+        wardrobe: JSON.parse(exampleWardrobe), keyword: '关键词',
+        stage: { backgrounds: [{ id: 'S1', label: '主舞台', kind: 'image', prompt: 'quiet room, soft light through a window, painterly scenery, open space in the center', colors: ['#263d48', '#ecdfbd', '#b05b49'], motion: 'still' }] },
+        groups: [
+            { id: 'G1', composition: '正面半身主姿势', stageBackground: 'S1', position: 'center', scale: 'medium',
+                characterPrompt: 'front view, centered waist-up framing', ...expressionCast('full'),
+                motion: 'still', transition: 'cut', diffs: [
+                    { id: 'D1', label: '摊手笑', change: '摊开的双手停在腰侧，开朗笑容', imagePrompt: `front view, waist-up ${exampleActor}, open palms held at waist level, broad cheerful smile` },
+                    { id: 'D2', label: '收手凝视', change: '手臂垂下，平静直视', imagePrompt: `front view, waist-up ${exampleActor}, arms held at sides, closed mouth and level calm gaze` },
+                ] },
+            { id: 'G2', composition: '侧身抱臂', stageBackground: 'S1', position: 'left', scale: 'medium',
+                characterPrompt: 'three-quarter view, waist-up framing', ...expressionCast('full'),
+                motion: 'still', transition: 'cut',
+                diffs: [{ id: 'D1', label: '抱臂侧望', change: '抱臂，侧头望向观众', imagePrompt: `three-quarter waist-up ${exampleActor}, crossed arms, steady gaze toward viewer` }] },
+        ],
+        frames: [
+            { sectionIndex: exampleSection, lyric: exampleLyric, group: 'G1', diff: 'D1', hold: 1, stage: { text: exampleLyric, layout: 'sides', entrance: 'pop' } },
+            { sectionIndex: exampleSection, lyric: exampleLyric, group: 'G1', diff: 'D1', hold: 1, stage: { text: exampleLyric, layout: 'stack' } },
+            { sectionIndex: exampleSection, lyric: sections[0]?.lines?.[1] || exampleLyric, group: 'G2', diff: 'D1', hold: 2, stage: { layout: 'banner', entrance: 'slide', shadow: true } },
+            { sectionIndex: sections[1]?.index ?? exampleSection, lyric: sections[1]?.lines?.[0] || exampleLyric, group: 'G1', diff: 'D2', hold: 2, stage: { layout: 'sides', tone: 'dark' } },
+            { sectionIndex: sections[1]?.index ?? exampleSection, lyric: sections[1]?.lines?.[1] || exampleLyric, group: 'G1', diff: 'D1', hold: 2, stage: { layout: 'sides', tone: 'accent', entrance: 'pop' } },
+        ],
+    }) : '';
     return `${generation_prompts.promptSafetyBoundary(context, 'MV 分镜', null, memory)}
 【任务】
 为已写好的角色印象曲「${song.title}」写一张 MV 分镜表。画面风格：${styleOf(settings).name}；比例：${settings.ratio === '9:16' ? '竖屏 9:16' : '横屏 16:9'}。
 歌词、曲风不改。画面跟着歌词的意象、情绪和故事走，可以是意象、想象或象征画面，不需要对应聊天档案，也不要逐条复述聊天里的事件。人物外貌、身份和世界观以角色设定为准。
 ${cast ? mv_cast.castPrompt(cast, settings) : `出镜：${charName} 是主角。${appear}不替 ${userName} 新增台词、承诺或决定。`}
 ${mv_direction.directionPrompt(settings.storyType, song)}
-${settings.output === 'video' ? '' : tegakiGrammar(parseSections(song.lyrics), keep, charName)}${settings.output === 'video' ? '' : ``}
+${settings.output === 'video' ? '' : tegakiGrammar(parseSections(song.lyrics), keep, charName, settings.storyType)}
 
 【歌曲】
 曲风：${core_text.normalizeText(song.styleDescription || song.stylePrompt, 600)}
@@ -583,7 +626,7 @@ ${settings.output === 'video' ? `1. 按段落写镜头：${settings.output === '
 ${cast ? '以下仅为结构示例，实际每镜的 cast 按出场人物填写，不局限于示例中的一个人。顶层可加 appearances:[{"participantId":"原始ID","tag":"有依据的稳定外貌","nl":"可空"}]；wardrobe 使用 era 和 characters，不用 char/user 代替 NPC。' : ''}
 ${settings.output === 'video'
         ? `{"wardrobe":${exampleWardrobe},"shots":[{"sectionIndex":0,"lyric":"","plain":"……",${exampleBinding},"shot":"中景：看到上半身","move":"镜头慢慢推近","motion":"push","imagePrompt":"……","videoZh":"……","videoEn":"……"}]}`
-        : `{"wardrobe":${exampleWardrobe},"keyword":"副歌里最有分量的词","motif":{"name":"竹叶","prompt":"english: one decorative element"},"groups":[{"id":"G1","composition":"低机位 · 蹲下喂猫 · 人物在左","position":"left","scale":"full","characterPrompt":"english: camera angle, framing, pose base, who and what is in frame",${exampleBinding},"motion":"still","transition":"cut","link":"下一组如何承接","bgs":[{"id":"B1","label":"午后","prompt":"english: empty scenery only"}],"diffs":[{"id":"D1","label":"伸手前","change":"english: this moment of the action"}]}],"frames":[{"sectionIndex":0,"lyric":"原句","group":"G1","diff":"D1","bg":"B1","hold":1,"phase":"prep"}]}`}`;
+        : expressionExample || `{"wardrobe":${exampleWardrobe},"keyword":"副歌里最有分量的词","motif":{"name":"竹叶","prompt":"english: one decorative element"},"groups":[{"id":"G1","composition":"低机位 · 蹲下喂猫 · 人物在左","position":"left","scale":"full","characterPrompt":"low angle medium shot, subject on the left, warm afternoon light",${exampleBinding},"motion":"still","transition":"cut","link":"下一组如何承接","bgs":[{"id":"B1","label":"午后","prompt":"english: empty scenery only"}],"diffs":[{"id":"D1","label":"伸手前","change":"伸出的手停在半空","imagePrompt":"low angle medium shot, the named character on the left with one hand extended toward the cat, warm afternoon light"}]}],"frames":[{"sectionIndex":0,"lyric":"原句","group":"G1","diff":"D1","bg":"B1","hold":1,"phase":"prep"}]}`}`;
 }
 
 // 手书：少数构图，每个构图里几张连续变化的画（闭眼→睁眼→偏头），摊平成镜头。
@@ -678,7 +721,7 @@ function alignContinuationSections(raw, song, missing) {
 
 // Append new work using fresh identifiers; never replace existing drawings or timing.
 function continuationPatch(raw, previous, memory, song, settings, missing) {
-    const built = buildShots(alignContinuationSections(raw, song, missing), memory, parseSections(song.lyrics).length, settings, previous.cast || null, { existingGroups: isV2(previous) ? previous.groups : [] });
+    const built = buildShots(alignContinuationSections(raw, song, missing), memory, parseSections(song.lyrics).length, settings, previous.cast || null, { existingGroups: isV2(previous) ? previous.groups : [], existingStage: previous.stage });
     let shots = built.shots.filter(s => missing.includes(s.sectionIndex));
     if (!shots.length) throw core_text.safeUserError('返回的分镜没有包含待补段落，原分镜已保留，可导出这次返回内容。', 'RMT_MV_EMPTY');
     let groups = list(built.groups);
@@ -695,7 +738,7 @@ function continuationPatch(raw, previous, memory, song, settings, missing) {
         shots = shots.map(s => {
             const g = groups.find(g => g.id === s.group);
             const d = g.diffs.find(d => d.id === s.diff);
-            return { ...s, imagePrompt: [g.characterPrompt, d.change, g.bgs.find(b => b.id === s.bg)?.prompt].filter(Boolean).join(', '), composition: g.composition };
+            return { ...s, imagePrompt: mv_still.joinStillPrompt([mv_still.stillScene(g, d), g.bgs.find(b => b.id === s.bg)?.prompt]), composition: g.composition };
         });
     }
     const usedGroups = new Set([...list(previous.groups).map(g => g.id), ...list(previous.shots).map(s => s.group)]);
@@ -710,6 +753,7 @@ function continuationPatch(raw, previous, memory, song, settings, missing) {
     return {
         shots: shots.map(({ reuseGroup, ...s }, i) => ({ ...s, id: `${prefix}_${i + 1}`, ...(s.group ? { group: reuseGroup ? s.group : groupMap.get(s.group) } : {}) })),
         groups: groups.filter(g => groupMap.has(g.id)).map(g => ({ ...g, id: groupMap.get(g.id) })),
+        ...(built.stage ? { stage: built.stage } : {}),
         ...(previous.cast ? { cast: mv_cast.generatedMvCast(previous.cast, raw), wardrobeCharacters: castWardrobe(previous.cast, raw, previous.wardrobe, true) } : {}),
     };
 }
@@ -729,7 +773,8 @@ export async function continueStoryboard(songId) {
     running.add(key);
     try {
         const continuity = { wardrobe: previous.wardrobe || {}, keyword: previous.keyword || '', motif: previous.motif ? { name: previous.motif.name, prompt: previous.motif.prompt } : null,
-            reusableGroups: list(previous.groups).map(g => ({ id: g.id, composition: g.composition, diffs: list(g.diffs).map(d => ({ id: d.id, label: d.label })) })),
+            reusableGroups: list(previous.groups).map(g => ({ id: g.id, composition: g.composition, ...(g.stageBackground ? { stageBackground: g.stageBackground } : {}), diffs: list(g.diffs).map(d => ({ id: d.id, label: d.label })) })),
+            ...(previous.stage ? { reusableBackgrounds: previous.stage.backgrounds.map(({ image, ...b }) => b) } : {}),
             lastScene: list(previous.shots).filter(s => s.sectionIndex < missing[0]).at(-1)?.plain || '' };
         const prompt = storyboardPrompt(context, memory, song, settings, missing, previous.cast || null)
             + `\n【接着已有分镜补写】\n只补上面列出的段落，sectionIndex 沿用歌曲原编号。已有分镜和图片会保留；新构图在保存时自动分配编号。重复的画面可在 frames 引用 reusableGroups 的原 group/diff，不必重写该 group；新画面使用新构图。沿用已有时代、衣着和意象，并衔接已有画面：\n${JSON.stringify(continuity)}`;
@@ -753,10 +798,11 @@ export async function generateStoryboard(songId, settingsInput, castInput = unde
             mode: 'songMv', taskKey: `extras:mv:${key}`, context, origin,
         });
         return await holdResult(target, 'story', '', data, raw => {
+            const built = buildShots(raw, memory, parseSections(song.lyrics).length, settings, cast);
             return { id: songId, createdAt: previous?.createdAt || Date.now(), settings,
-                ...buildShots(raw, memory, parseSections(song.lyrics).length, settings, cast),
+                ...built, stage: built.stage || null,
                 ...(cast ? { cast: mv_cast.generatedMvCast(cast, raw) } : {}),
-                tegaki: { ...(previous?.tegaki || {}), range: settings.range, rangeFrom: settings.rangeFrom, rangeTo: settings.rangeTo, ...(settings.output === 'tegaki' ? { lyric: 'subtitle' } : {}) },
+                tegaki: { ...(previous?.tegaki || {}), range: settings.range, rangeFrom: settings.rangeFrom, rangeTo: settings.rangeTo, ...(settings.output === 'tegaki' ? { lyric: built.stage ? 'stage' : 'subtitle' } : {}) },
                 wardrobe: {
                     era: core_text.normalizeText(raw?.wardrobe?.era, 200) || previous?.wardrobe?.era || '',
                     char: core_text.normalizeText(raw?.wardrobe?.char, 300) || previous?.wardrobe?.char || '',
@@ -864,6 +910,8 @@ export function wardrobeLine(record, hasChar, hasUser) {
 }
 
 export function framePrompt(record, shot, context, appearance = true) {
+    if (isV2(record) && assetOf(record, `${shot?.group}:${shot?.diff}`))
+        return assetPrompt(record, `${shot.group}:${shot.diff}`, context, appearance);
     const settings = normalizeSettings(record?.settings);
     if (record?.cast && Array.isArray(shot?.cast)) return [styleOf(settings).prompt,
         settings.ratio === '9:16' ? 'vertical 9:16 composition' : 'horizontal 16:9 composition',
@@ -872,7 +920,7 @@ export function framePrompt(record, shot, context, appearance = true) {
     const hasChar = shot.who === 'char' || shot.who === 'both';
     const hasUser = settings.appear !== 'none' && (shot.who === 'both' || shot.who === 'user');
     const people = { ...(looks || {}), char: hasChar ? looks?.char || '' : '', user: hasUser ? looks?.user || '' : '' };
-    const lookLine = hasChar || hasUser ? core_castLooks.castLooksPromptLine(people, context) : '';
+    const lookLine = appearance && (hasChar || hasUser) ? core_castLooks.castLooksPromptLine(people, context) : '';
     const userRule = settings.appear === 'back' && hasUser ? `${hasChar ? 'the second person' : 'the person'} is shown only from behind, hands or silhouette, face not visible` : '';
     const noUser = !hasChar && !hasUser ? 'scenery, no humans' : hasChar && hasUser ? 'duo, two people' : 'solo';
     return [
@@ -886,7 +934,15 @@ export function framePrompt(record, shot, context, appearance = true) {
     ].filter(Boolean).join(', ');
 }
 
-export function isFrameDrawing(scope, songId, shotId) { return running.has(`frame:${scope}:${songId}:${shotId}`); }
+export function isFrameDrawing(scope, songId, shotId) {
+    if (running.has(`frame:${scope}:${songId}:${shotId}`)) return true;
+    try {
+        const context = core_context.currentCharacterGuard();
+        if (scopeOf(context) !== scope) return false;
+        const record = readMv(context, songId), shot = list(record?.shots).find(s => s.id === shotId);
+        return !!mv_stage.background(record, shot) && running.has(`asset:${scope}:${songId}:${shot?.group}:${shot?.diff}`);
+    } catch { return false; }
+}
 
 export async function drawFrame(songId, shotId) {
     const context = core_context.currentCharacterGuard();
@@ -895,14 +951,19 @@ export async function drawFrame(songId, shotId) {
     const record = structuredClone(target.base.songs[songId] || null);
     const shot = list(record?.shots).find(item => item.id === shotId);
     if (!shot) return null;
+    if (mv_stage.background(record, shot) && !hasAssetImage(shot.image))
+        return drawAsset(songId, `${shot.group}:${shot.diff}`, { fresh: true });
     const key = `frame:${scope}:${songId}:${shotId}`;
     if (running.has(key)) return null;
     running.add(key);
     try {
-        const metadata = record.cast ? mv_cast.castMetadata(record, shot) : null;
+        const found = isV2(record) ? assetOf(record, `${shot.group}:${shot.diff}`) : null;
+        const custom = found && record.assetPrompts?.[`${shot.group}:${shot.diff}`]?.trim();
+        const metadata = custom ? null : found ? assetMetadata(record, found, context) : record.cast ? mv_cast.castMetadata(record, shot) : null;
         const result = await cg_core.invokeImageGeneration(framePrompt(record, shot, context, !metadata), context, {
             orientation: normalizeSettings(record.settings).ratio === '9:16' ? 'portrait' : 'landscape',
-            characterName: context?.name2 || '', targetKey: key,
+            respectOrientation: true,
+            characterName: context?.name2 || '', targetKey: key, singlePrompt: true,
             ...(metadata ? { promptMetadata: metadata } : {}),
         });
         return await holdResult(target, 'frame', shotId, result, raw => {
@@ -939,7 +1000,7 @@ export const TEGAKI_FONTS = Object.freeze({
     song: { name: '书卷', stack: '"Songti SC","STSong","Noto Serif SC","Source Han Serif SC","SimSun",serif', weight: 600 },
     round: { name: '圆润', stack: '"Yuanti SC","PingFang SC","Hiragino Sans GB","Noto Sans SC",sans-serif', weight: 500 },
 });
-export const TEGAKI_LYRICS = Object.freeze({ vertical: '竖排', subtitle: '字幕', big: '大字', none: '不显示' });
+export const TEGAKI_LYRICS = Object.freeze({ stage: '舞台编排', vertical: '竖排', subtitle: '字幕', big: '大字', none: '不显示' });
 export const TEGAKI_PRESETS = Object.freeze({
     quick: { name: '一人一句快切', desc: '每句歌词一张，干脆直切，节奏紧', rhythm: 'line', lyric: 'subtitle', template: 'quick' },
     flash: { name: '白闪卡点', desc: '换构图时白闪，副歌每小节轻闪一下', rhythm: 'line', lyric: 'big', template: 'flash' },
@@ -1001,9 +1062,11 @@ export function completedMvRanges(record, song) {
     const done = sections.map((_, i) => {
         const shots = list(record?.shots).filter(s => s.sectionIndex === i);
         return shots.length > 0 && shots.every(s => {
-            if (hasAssetImage(s.image)) return true;
+            if (hasAssetImage(s.image) && (!isV2(record) || !mv_stage.background(record, s) || s.image.editMode === 'full')) return true;
             if (!isV2(record)) return !!(s.image?.url || s.image?.local);
             const g = record.groups.find(g => g.id === s.group);
+            const stage = mv_stage.background(record, s), image = shotImage(record, s);
+            if (stage) return hasAssetImage(image) && ((g?.layer === 'full' && image.editMode !== 'cutout') || image.editMode === 'full' || stage.kind !== 'image' || hasAssetImage(stage.image));
             return hasAssetImage(assetOf(record, `${s.group}:${s.diff}`)?.image)
                 && (g?.layer === 'full' || hasAssetImage(assetOf(record, `${s.group}:${s.bg || 'bg'}`)?.image));
         });
@@ -1078,24 +1141,27 @@ export function patchTegaki(songId, patch) {
 
 // ---------- 手书 v2：印象曲 PV（背景 + 白底人物差分 + 意象） ----------
 
-function tegakiGrammar(sections, keep, charName = '{{char}}') {
+function tegakiGrammar(sections, keep, charName = '{{char}}', direction = '') {
     const rows = keep.map(i => `${i}:${sections[i]?.tag || ''}`).join('，');
     const lineCount = keep.reduce((n, i) => n + Math.max(1, sections[i]?.lines.length || 0), 0);
     return `这是这首印象曲的手书 PV。只为这些段落写：${rows}。
 画面围绕所选分镜类型组织，让观众理解情绪、事件或节奏；不是连续相似的精修肖像。歌词的比喻不必字面演出，空镜与留白也能推进表达。
 - 构图组（groups）是一个清楚的镜头构图。选中段落约 ${lineCount} 句歌词，按表达需要安排，不规定组数或差分比例；换机位或出场人物变化时另建组。同一素材可以复用，不重复画相同内容。
 - 景别服务内容：特写（手、眼、物件）、近景、中景、全身、远景、背影、低机位、俯视都可用，不要求每种都出现。position 写 left / center / right，scale 写 close / medium / full / wide。
-- 每一张差分都是单独的一张图，只画一个瞬间：characterPrompt 与 diff.change 里每个人只写一个姿势，不要在同一张里写多个姿势、多个表情或“三连”。
-- diffs 可以只用一张关键画；只有同机位连续动作、情绪最小差分或节奏循环确实需要时才加图。同组 characterPrompt 是共同构图，diff.change 写这一刻的动作与表情，不强求每组闭眼→睁眼。
+- 每一张差分都是单独的一张图，只画一个瞬间。characterPrompt 只写同组共用的机位、裁切、方位与光线，不预先写任何差分的表情或动作；group.cast.action 只写共同站位与互动关系，不写“从呆愣转为认真”等变化过程。
+- 每个 diff.imagePrompt 写这张图独立完整的英文静态画面：沿用共同机位、方位、光线，逐人绑定姓名与当下唯一姿势、表情、互动对象。它会替代基础描述和差分说明，不是追加段落。稳定外貌由程序按人物补齐，不在这里重写发色、发型、瞳色；背景使用 bgs，不写 english: 前缀。diff.change 只作本张静态状态的短说明，不重复完整生图词。
+- 需要表现“惊讶→笃定”时，写两个 diff：D1 的 imagePrompt 只有惊讶，D2 的 imagePrompt 只有笃定，并让两个 frame 分别引用；每个 diff 会分别请求并保存一张图片。绝不在同一个 imagePrompt 里写 before/after、from/to、starting to change 或前后两个表情。相同姿势再出现时，frame 直接复用原 diff。
+- diffs 可以只用一张关键画；只有同机位连续动作、情绪最小差分、明显反差或节奏循环确实需要时才加图，不强求每组闭眼→睁眼。
 - 局部特写写清画面裁切；只拍手就不要为了显示头发、眼睛或服装画出整个人。物件或环境空镜明确不出人，不硬塞主角。
 - bgs 写同一个镜头需要的场景，环境变化确有作用时再增加背景；只描述场景，不混入人物。
-- 副歌可以有一个主视觉组，重复的副歌复用它；其余段落尽量用新的构图，尾奏可以回到开头的构图。
+${direction === 'expression' ? '- 主舞台与角色姿势可以跨歌词、跨段落持续使用；主歌与副歌靠表演、文字、明暗与疏密区分，重现的姿势按歌词情绪变奏。' : '- 副歌可以有一个主视觉组，重复的副歌复用它；其余段落尽量用新的构图，尾奏可以回到开头的构图。'}
 - link 简写下一镜如何承接，并把对应视线、位置或物件落实在前后两组的画面描述；link 不是可执行动画指令。
 - frames 按实际播放顺序指向 group、diff 和 bg，sectionIndex 是歌曲原段落编号。lyric 使用对应原句（器乐留空）；一句可有多个短镜，也可多句复用一个素材。hold 是段内相对停留权重，短镜可用 0.5，普通用 1，重点停留可更长，不是秒数。已对过的时间由用户打点优先。
 - frame.phase 可写 prep（准备）、action（发生）、settle（收势）或 still（静止）。循环类型可以回到前一个差分；其他类型只在表达需要时重复。不要靠长时间悬停动态姿势代替动作过程。
 - transition 按表达选 cut / fade / flash，motion 用 still / push；不强制混用全部转场或闪白。图像是静态关键姿势，连续动作靠剪辑而非假称视频动画。
 - 多人镜头分别写清每个人的位置、动作与互动对象，人数由出场名单决定。不得为制造差异改人物的设定外貌、衣服、性别或关系。
-- keyword：副歌里一个 2～4 字、最有分量的词。motif：歌词里一个可以漂浮的意象，prompt 用英文只描述这一个小元素。
+${direction === 'expression' ? '- keyword 可以摘取歌词关键词；漂浮 motif 按歌曲需要选用。舞台背景、人物、文字自身已经能形成节奏，不要求每首叠加粒子。' : '- keyword：副歌里一个 2～4 字、最有分量的词。motif：歌词里一个可以漂浮的意象，prompt 用英文只描述这一个小元素。'}
+${direction === 'expression' ? mv_stage.prompt() : ''}
 `;
 }
 
@@ -1104,6 +1170,7 @@ export function isV2(record) { return record?.version === 2 && Array.isArray(rec
 export function buildShots(raw, memory, sectionCount, settings, cast = null, opts = {}) {
     if (cast?.existingGroups) { opts = cast; cast = null; }
     const existingGroups = list(opts.existingGroups);
+    const stagePlan = mv_stage.prepare(settings.storyType === 'expression' ? raw?.stage : null, opts.existingStage);
     const reusesExisting = list(raw?.frames).some(f => existingGroups.some(g => g.id === f?.group));
     if (settings.output === 'video' || (!list(raw?.groups).some(g => list(g?.diffs).length) && !reusesExisting)) return { shots: normalizeShots(raw, memory, sectionCount, settings, cast) };
     const defaults = mv_direction.directionDefaults(settings.storyType);
@@ -1114,9 +1181,11 @@ export function buildShots(raw, memory, sectionCount, settings, cast = null, opt
             id: `D${k + 1}`, rawId: core_text.normalizeText(d?.id, 20) || `D${k + 1}`,
             label: core_text.normalizeText(d?.label, 20) || `差分 ${k + 1}`,
             change: core_text.normalizeText(d?.change, 300), image: null,
+            ...(core_text.normalizeText(d?.imagePrompt, 1200) ? { imagePrompt: mv_still.cleanStillText(core_text.normalizeText(d.imagePrompt, 1200)) } : {}),
         }));
         if (!diffs.length) return;
         const id = `G${existingGroups.length + groups.length + 1}`;
+        const stageBackground = stagePlan.resolve(g?.stageBackground);
         idMap.set(core_text.normalizeText(g?.id, 20) || id, { id, diffs });
         groups.push({
             id, composition: core_text.normalizeText(g?.composition, 60),
@@ -1129,7 +1198,8 @@ export function buildShots(raw, memory, sectionCount, settings, cast = null, opt
             position: ['left', 'center', 'right'].includes(g?.position) ? g.position : 'center',
             transition: ['cut', 'fade', 'flash'].includes(g?.transition) ? g.transition : defaults.transition,
             // full = 人物、道具与背景在同一张完整场景图里（默认，最稳）；cutout = 白底人物抠图叠到背景上。
-            layer: 'full',
+            layer: stageBackground && g?.layer !== 'full' ? 'cutout' : 'full',
+            ...(stageBackground ? { stageBackground } : {}),
             scale: ['close', 'medium', 'full', 'wide'].includes(g?.scale) ? g.scale : 'medium',
             bgs: (list(g?.bgs).length ? list(g.bgs) : [{ label: '场景', prompt: g?.backgroundPrompt }]).map((b, k) => ({
                 id: `B${k + 1}`, rawId: core_text.normalizeText(b?.id, 20) || `B${k + 1}`,
@@ -1145,11 +1215,13 @@ export function buildShots(raw, memory, sectionCount, settings, cast = null, opt
         const old = !idMap.has(rawGroup) ? existingGroups.find(g => g.id === rawGroup) : null;
         if (old) {
             const diff = list(old.diffs).find(d => d.id === core_text.normalizeText(f?.diff, 20)) || list(old.diffs)[0];
+            const stage = mv_stage.cue(f?.stage, old.stageBackground, stagePlan.resolve);
             if (diff) shots.push({
                 id: `F${shots.length + 1}_${Date.now().toString(36)}`, reuseGroup: true,
                 sectionIndex: Math.min(Math.max(0, Math.round(Number(f?.sectionIndex) || 0)), Math.max(0, sectionCount - 1)),
                 lyric: core_text.normalizeText(f?.lyric, 200), plain: `${old.composition || old.id} · ${diff.label}`,
                 group: old.id, diff: diff.id, bg: diff.bg || 'B1', who: old.who,
+                ...(stage ? { stage } : {}),
                 ...(old.cast ? { cast: old.cast, ...(old.castUnresolved ? { castUnresolved: true } : {}) } : {}),
                 hold: Math.min(3, Math.max(1, Math.round(Number(f?.hold) || 1))),
                 ...(settings.storyType && Number.isFinite(Number(f?.hold)) && Number(f.hold) > 0 ? { timingWeight: Number(f.hold) } : {}),
@@ -1165,12 +1237,14 @@ export function buildShots(raw, memory, sectionCount, settings, cast = null, opt
         const group = groups.find(g => g.id === ref.id);
         const rawBg = core_text.normalizeText(f?.bg, 20);
         const bgRow = group.bgs.find(b => b.rawId === rawBg) || group.bgs[Math.max(0, Number(String(rawBg).replace(/\D/g, '')) - 1)] || group.bgs[0];
+        const stage = mv_stage.cue(f?.stage, group.stageBackground, stagePlan.resolve);
         shots.push({
             id: `F${shots.length + 1}_${Date.now().toString(36)}`,
             sectionIndex: Math.min(Math.max(0, Math.round(Number(f?.sectionIndex) || 0)), Math.max(0, sectionCount - 1)),
             lyric: core_text.normalizeText(f?.lyric, 200),
             plain: `${group.composition || group.id} · ${diff.label}`,
             group: ref.id, diff: diff.id, bg: bgRow.id, who: group.who,
+            ...(stage ? { stage } : {}),
             ...(group.cast ? { cast: group.cast, ...(group.castUnresolved ? { castUnresolved: true } : {}) } : {}),
             hold: Math.min(3, Math.max(1, Math.round(Number(f?.hold) || 1))),
             ...(settings.storyType && Number.isFinite(Number(f?.hold)) && Number(f.hold) > 0 ? { timingWeight: Number(f.hold) } : {}),
@@ -1190,6 +1264,7 @@ export function buildShots(raw, memory, sectionCount, settings, cast = null, opt
     const motifPrompt = core_text.normalizeText(raw?.motif?.prompt, 300);
     return {
         version: 2, groups, shots,
+        ...(stagePlan.backgrounds.length ? { stage: { version: 1, backgrounds: stagePlan.backgrounds } } : {}),
         keyword: Array.from(core_text.normalizeText(raw?.keyword, 12)).slice(0, 6).join(''),
         motif: motifPrompt ? { name: core_text.normalizeText(raw?.motif?.name, 20), prompt: motifPrompt, image: null } : null,
     };
@@ -1198,6 +1273,10 @@ export function buildShots(raw, memory, sectionCount, settings, cast = null, opt
 // key: "G1:bg" / "G1:D2" / "motif"
 export function assetOf(record, key) {
     if (!record) return null;
+    if (String(key).startsWith('stage:')) {
+        const bgRow = list(record.stage?.backgrounds).find(b => b.id === String(key).slice(6));
+        return bgRow ? { kind: 'bg', bgRow, get image() { return bgRow.image; }, set image(v) { bgRow.image = v; if (v) bgRow.kind = 'image'; } } : null;
+    }
     if (key === 'motif') return record.motif ? { kind: 'motif', target: record.motif, get image() { return record.motif.image; }, set image(v) { record.motif.image = v; } } : null;
     const [gid, part] = String(key).split(':');
     const group = list(record.groups).find(g => g.id === gid);
@@ -1214,12 +1293,13 @@ export function assetKeys(record, song = null) {
     if (!isV2(record)) return [];
     let used = null;
     if (song) { try { used = new Set(shotsInRange(record, song).map(s => `${s.group}:${s.diff}`)); } catch { used = null; } }
-    const keys = [];
+    const keys = mv_stage.usedBackgrounds(record, song ? shotsInRange(record, song) : record.shots)
+        .filter(b => b.kind === 'image').map(b => `stage:${b.id}`);
     for (const g of record.groups) {
         const diffs = g.diffs.filter(d => !used || used.has(`${g.id}:${d.id}`));
         if (!diffs.length) continue;
         const bgIds = g.layer === 'full' ? [] : list(g.bgs).length ? list(g.bgs).filter(b => record.shots.some(s => s.group === g.id && (s.bg || 'B1') === b.id && (!used || used.has(`${g.id}:${s.diff}`)))).map(b => b.id) : ['bg'];
-        const bgKeys = g.layer === 'full' ? [] : (bgIds.length ? bgIds : [list(g.bgs)[0]?.id || 'bg']);
+        const bgKeys = g.layer === 'full' || g.stageBackground ? [] : (bgIds.length ? bgIds : [list(g.bgs)[0]?.id || 'bg']);
         keys.push(...bgKeys.map(id => `${g.id}:${id}`), ...diffs.map(d => `${g.id}:${d.id}`));
     }
     if (record.motif) keys.push('motif');
@@ -1264,32 +1344,32 @@ export function defaultAssetPrompt(record, key, context, appearance = true) {
     const era = record?.wardrobe?.era ? `setting: ${record.wardrobe.era}` : '';
     // 只写正向词：tag 模型会把“no multiple views”“no people”里的词当成要画的内容。
     if (found.kind === 'motif') return [style, ...motifRecipe(found.target)].filter(Boolean).join(', ');
-    if (found.kind === 'bg') return [style, ratio, era, found.bgRow?.prompt || found.group.backgroundPrompt, 'scenery, landscape, no humans'].filter(Boolean).join(', ');
+    if (found.kind === 'bg') return [style, ratio, era, found.bgRow?.prompt || found.group?.backgroundPrompt || found.bgRow?.label, 'scenery, landscape, no humans'].filter(Boolean).join(', ');
     if (record?.cast && Array.isArray(found.group.cast)) {
         const actors = mv_cast.shotPeople(record, found.group);
         const localCrop = actors.some(person => person.visible === 'hands' || person.visible === 'face');
         const size = localCrop || !actors.length ? '' : { close: 'close-up shot', medium: 'medium shot', full: 'full body shot', wide: 'wide shot' }[found.group.scale] || '';
         const place = actors.length === 1 && !actors[0].position && ['left', 'right'].includes(found.group.position)
             ? `subject on the ${found.group.position} of the frame` : '';
-        return [style, ratio, found.group.characterPrompt, found.diff.change ? `current moment: ${found.diff.change}` : '', size, place,
-        mv_cast.castVisual(record, found.group, { appearance }),
+        return mv_still.joinStillPrompt([style, ratio, 'single illustration, one captured instant', mv_still.stillScene(found.group, found.diff, actors.length === 1), size, place,
+        mv_cast.castVisual(record, mv_still.stillCast(found.group, found.diff), { appearance }),
         found.group.layer === 'full' ? [era, (list(found.group.bgs).find(b => b.id === found.diff.bg) || list(found.group.bgs)[0])?.prompt || found.group.backgroundPrompt].filter(Boolean).join(', ')
-            : 'white background, simple background'].filter(Boolean).join('\n');
+            : 'isolated subject, flat uniform white background, clear silhouette, margin around the subject']);
     }
     const who = found.group.who;
     const hasChar = who === 'char' || who === 'both';
     const hasUser = settings.appear !== 'none' && (who === 'both' || who === 'user');
     const looks = core_castLooks.readCastLooks(context);
     const people = { ...(looks || {}), char: hasChar ? looks?.char || '' : '', user: hasUser ? looks?.user || '' : '' };
-    const lookLine = hasChar || hasUser ? core_castLooks.castLooksPromptLine(people, context) : '';
+    const lookLine = appearance && (hasChar || hasUser) ? core_castLooks.castLooksPromptLine(people, context) : '';
     const back = settings.appear === 'back' && hasUser ? `${hasChar ? 'the second person' : 'the person'} is shown only from behind, hands or silhouette, face not visible` : '';
     const place = { left: 'character placed on the left third of the frame', right: 'character placed on the right third of the frame', center: '' }[found.group.position] || '';
     const size = { close: 'close-up shot', medium: 'medium shot, waist up', full: 'full body shot', wide: 'wide shot, small figure' }[found.group.scale] || '';
-    return [style, ratio, found.group.characterPrompt, found.diff.change, place, size, lookLine ? `fixed appearance, keep consistent: ${lookLine}` : '', wardrobeLine(record, hasChar, hasUser), back,
+    return mv_still.joinStillPrompt([style, ratio, 'single illustration, one captured instant', mv_still.stillScene(found.group, found.diff, hasChar !== hasUser), place, size, lookLine ? `fixed appearance, keep consistent: ${lookLine}` : '', wardrobeLine(record, hasChar, hasUser), back,
         hasChar && hasUser ? 'duo, two people' : hasChar || hasUser ? 'solo, single figure' : 'scenery, no humans',
         found.group.layer === 'full'
             ? [era, (list(found.group.bgs).find(b => b.id === found.diff.bg) || list(found.group.bgs)[0])?.prompt || found.group.backgroundPrompt, 'detailed background, full scene'].filter(Boolean).join(', ')
-            : 'white background, simple background'].filter(Boolean).join(', ');
+            : 'isolated subject, flat uniform white background, clear silhouette, margin around the subject']);
 }
 
 // 双人画面按角色分别给外貌（与 CG 相同的 characters 结构），避免两个人长成同一张脸。
@@ -1322,14 +1402,15 @@ export async function drawAsset(songId, key, { fresh = false } = {}) {
     try {
         const seed = fresh ? 0 : (found.group?.seed || 0);
         const base = {
-            // 人物层永远竖画：横构图里画单人时模型会把人复制成左右两份；横屏成片由本地合成。
-            orientation: (found.kind === 'motif' || (found.kind === 'char' && found.group.layer !== 'full')) || normalizeSettings(record.settings).ratio === '9:16' ? 'portrait' : 'landscape',
-            characterName: context?.name2 || '', targetKey: runKey, seed,
+            // 场景和人物差分都遵守本曲画幅；意象仍是独立的抠图素材。
+            orientation: found.kind === 'motif' || normalizeSettings(record.settings).ratio === '9:16' ? 'portrait' : 'landscape',
+            respectOrientation: found.kind !== 'motif',
+            characterName: context?.name2 || '', targetKey: runKey, seed, singlePrompt: true,
         };
         // A saved custom prompt is the complete previewed text; do not append hidden cast text.
         const metadata = found.kind === 'char' && !record.assetPrompts?.[key] ? assetMetadata(record, found, context) : null;
         let result;
-        try { result = await cg_core.invokeImageGeneration(assetPrompt(record, key, context, !(record.cast && metadata)), context, { ...base, ...(metadata ? { promptMetadata: metadata } : {}) }); }
+        try { result = await cg_core.invokeImageGeneration(assetPrompt(record, key, context, !metadata), context, { ...base, ...(metadata ? { promptMetadata: metadata } : {}) }); }
         catch (error) {
             // 分角色外貌不被渠道接受时，退回普通提示词再画一次，不让整张图失败。
             if (record.cast || !metadata || error?.name === 'AbortError' || /ABORT/.test(String(error?.code || ''))) throw error;
@@ -1382,6 +1463,31 @@ export function setGroupLayer(songId, groupId, layer) {
     return writeMv(scopeOf(context), songId, current => {
         const g = list(current?.groups).find(x => x.id === groupId);
         if (g) g.layer = layer === 'cutout' ? 'cutout' : 'full';
+        return current;
+    });
+}
+
+export function patchStageBackground(songId, id, patch) {
+    const context = core_context.currentCharacterGuard();
+    return writeMv(scopeOf(context), songId, current => {
+        const bg = list(current?.stage?.backgrounds).find(b => b.id === id);
+        if (!bg) return current;
+        if (Object.hasOwn(mv_stage.BACKGROUNDS, patch?.kind)) bg.kind = patch.kind;
+        if (['still', 'rotate', 'drift'].includes(patch?.motion)) bg.motion = patch.motion;
+        if (Array.isArray(patch?.colors)) bg.colors = bg.colors.map((c, i) => /^#[0-9a-f]{6}$/iu.test(patch.colors[i]) ? patch.colors[i] : c);
+        return current;
+    });
+}
+
+export function patchStageCue(songId, shotId, patch) {
+    const context = core_context.currentCharacterGuard();
+    return writeMv(scopeOf(context), songId, current => {
+        const shot = list(current?.shots).find(s => s.id === shotId);
+        if (!shot) return current;
+        const bg = mv_stage.background(current, shot);
+        if (!bg) return current;
+        shot.stage = mv_stage.cue({ ...shot.stage, ...patch }, bg.id,
+            id => list(current.stage?.backgrounds).some(b => b.id === id) ? id : '');
         return current;
     });
 }

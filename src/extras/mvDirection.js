@@ -6,6 +6,7 @@ export const MV_DIRECTIONS = Object.freeze([
     { id: 'interaction', name: '关系互动', desc: '视线、距离与双方反应', rule: '用视线对应、正反打、动作与接收动作、距离变化表现人物关系；清楚写谁对谁做什么。可以各自单人或同框，不把合唱等同于全员同框，不擅定恋爱关系；只有一人时也可用画外对象与反应。' },
     { id: 'impact', name: '高燃快切', desc: '强弱对比、卡点与关键姿势', rule: '主歌蓄势、副歌集中爆发；用全景与局部反差、关键动作姿势和干脆切换建立节奏。需要时同一句歌词可以有多个短镜头，冲击后留一处停顿；不把挥剑、奔跑等姿势长时间悬停，不强制闪白或战斗。' },
     { id: 'loop', name: '节奏循环', desc: '复用构图、姿势循环与节拍变化', rule: '设计能重复使用的构图和关键姿势，frames 可以回到先前的 group/diff 形成节奏循环；重复时用背景、视线或意象变化推进，不为循环重复生出相同素材。静态关键姿势剪辑不冒充连续舞蹈动画。' },
+    { id: 'expression', name: '表情卡拍', desc: '共享舞台、角色表演与文字卡拍', rule: '围绕可反复返回的主舞台安排角色面向观众的表演。人物以轮廓明确、有性格的半身或全身姿势建立记忆点，手势、视线与表情一起表达；一个姿势可保持数秒，让文字、背景图形继续变化。背景持续跨越多个姿势与歌词，同一素材反复引用，不逐句重新画场景。\n重复乐句沿用主构图与标志姿势，根据歌曲情绪改变表情、光色、文字或道具，形成呼应与变奏。剧情镜头与局部特写用于需要的转折，不套“换脸→特写→返回”的固定流程。主歌与副歌的疏密、明暗和表演强度服务当前歌曲。\n每种姿势或表情各自生成为单张单格静态图；人物、共享背景、文字分开制作并在时间轴上编排，生图不写歌词。保留角色身份、衣着和画风，表情反差来自角色与歌词，不强加假笑、伤口、恐怖或脱衣；为这首歌原创构图与顺序。' },
     { id: 'reveal', name: '悬念反转', desc: '遮蔽信息、伏笔与回收', rule: '先用局部、背影、画外或遮挡保留信息，再以全景、反向视点或意象重现揭示。转折前后重用视觉线索而改变含义；不强加恐怖、死亡、悲剧或设定外事件。' },
 ]);
 
@@ -24,6 +25,7 @@ export function recommendDirections(song = {}) {
         ['interaction', /对唱|应答|互动|对话|duet|call.and.response|dialogue/iu, '人声有对唱或应答', 7],
         ['impact', /高燃|激昂|摇滚|金属|战歌|爆发|rock|metal|anthem|energetic|drum.and.bass/iu, '曲风有强烈爆发感', 7],
         ['loop', /循环|舞曲|律动|洗脑|loop|dance|groov|funk|disco/iu, '曲风强调循环律动', 7],
+        ['expression', /表情|面具|假笑|笑脸|戏谑|黑色幽默|反差|暗黑流行|怪诞|animation meme|dark pop|theatrical pop|happy face/iu, '歌曲适合表情反差与重复卡拍', 9],
         ['reveal', /反转|悬疑|悬念|诡异|不可靠叙述|suspense|mystery|unreliable|twist/iu, '歌曲含悬念或反转倾向', 9],
     ];
     for (const [id, pattern, reason, score] of rules) if (pattern.test(style)) add(id, score, reason);
@@ -34,6 +36,7 @@ export function recommendDirections(song = {}) {
     else if (bpm >= 145) add('impact', 3, `标注速度 ${bpm} BPM，适合短镜头`);
     if (/月光|风|雨|旧信|花|影|moon|rain|shadow|letter/iu.test(lyrics)) add('lyrical', 1, '歌词有可呼应的视觉意象');
     if (/后来|从前|终于|离开|归来|then|returned|long ago/iu.test(lyrics)) add('narrative', 2, '歌词有时间或事件推进');
+    if (/面具|假笑|强颜欢笑|笑脸|笑着.*(?:哭|泪)|put on a happy face|hide.*(?:tears|smile)/iu.test(lyrics)) add('expression', 5, '歌词有外在表情与内心的反差');
     const lines = lyrics.split(/\r?\n/u).map(line => line.trim()).filter(line => line && !/^\[.*\]$/u.test(line));
     if (lines.length > 2 && new Set(lines).size < lines.length * 0.75) add('loop', 2, '歌词有明显重复段句');
     const matched = rows.filter(row => row.score > 0).sort((a, b) => b.score - a.score);

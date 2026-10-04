@@ -116,7 +116,8 @@ export function bindShotCast(raw, cast, settings = {}) {
     const explicit = Array.isArray(raw?.cast);
     let input = explicit ? raw.cast : [];
     if (!explicit && raw?.who !== 'none') {
-        const scene = [raw?.plain, raw?.composition, raw?.characterPrompt, raw?.imagePrompt].map(text).join(' ');
+        const scene = [raw?.plain, raw?.composition, raw?.characterPrompt, raw?.imagePrompt,
+            ...list(raw?.diffs).map(diff => diff?.imagePrompt)].map(text).join(' ');
         let matched = people.filter(person => person.name && scene.includes(person.name) && people.filter(p => p.name === person.name).length === 1);
         if (!matched.length && people.length === 1) matched = people;
         if (!matched.length && raw?.who === 'both' && people.length === 2) matched = people;

@@ -3,7 +3,7 @@ import * as core_evidence from '../core/evidence.js';
 import * as core_incremental from '../core/incremental.js';
 import * as core_text from '../core/text.js';
 import * as core_worldPresentation from '../core/worldPresentation.js';
-import { PHONE_DEVICE_LABEL, PHONE_KIND_LABEL, PHONE_RESERVED_APP_IDS, PHONE_VIEW_VALUES, assertPhoneConversation, isExcludedPhoneApp, isGenericOwnerLabel, isPhoneUserName, isUnavailablePhoneEntry, normalizePhoneAppIcon, normalizePhoneAppKind, normalizePhoneUiProfile, phoneAppLimits, phoneConversationOwnerName, phoneStory, unavailablePhoneEntry, verifiedPhoneOwnerMembers } from './phoneBasics.js';
+import { PHONE_DEVICE_LABEL, PHONE_KIND_LABEL, PHONE_RESERVED_APP_IDS, PHONE_VIEW_VALUES, assertPhoneConversation, isExcludedPhoneApp, isGenericOwnerLabel, isPhoneUserName, isPhoneRecapEntry, isUnavailablePhoneEntry, normalizePhoneAppIcon, normalizePhoneAppKind, normalizePhoneUiProfile, phoneAppLimits, phoneConversationOwnerName, phoneStory, unavailablePhoneEntry, verifiedPhoneOwnerMembers } from './phoneBasics.js';
 import { applyPhoneChatContract, inferPhoneContactName, noPhoneConversation, normalizePhoneConversationMessages, normalizePhoneMemoryEvidence, normalizePhoneSettingEvidence, phoneControlledOwnerNames, phoneDisplayText, phoneEntryBasis, phoneInferredEntryAllowed, phoneMemoryStructuredFactsSupported, phoneReferencedMemoryText, phoneSpeaksAsUser, sanitizePhoneMemoryMessageTimes } from './phoneEvidence.js';
 // 私人终端数据：旧会话迁移、条目与草稿规范化、规划规范化、补缺与完成度
 // 从 modes/phone.js 原样搬出（重构阶段 2），声明文本一字未改；modes/phone.js 仍转发原有导出。
@@ -446,26 +446,28 @@ export function normalizePhoneDraftApp(data, planApp, memoryBank, deviceKind, so
 export function phoneHasMissingEntries(session) {
     return !!session?.apps?.some(app => {
         const omitted = new Set(app.omittedEntryIds || []);
-        return app.entries?.some(entry => isUnavailablePhoneEntry(entry) && !omitted.has(entry.id));
+        if (!app.entries?.length) return true;
+        return app.entries?.some(entry => (isUnavailablePhoneEntry(entry) || (!['chat', 'contacts'].includes(app.kind) && isPhoneRecapEntry(entry))) && !omitted.has(entry.id));
     });
 }
 
 export function phoneCompletionSummary(value) {
     const planned = Array.isArray(value?.plan?.apps) ? value.plan.apps : (Array.isArray(value?.apps) ? value.apps : []);
     const completed = Array.isArray(value?.completedApps) ? value.completedApps : (Array.isArray(value?.apps) ? value.apps : []);
-    let readableItems = 0, totalItems = 0, missingItems = 0, omittedItems = 0, completeApps = 0;
+    let readableItems = 0, totalItems = 0, missingItems = 0, omittedItems = 0, completeApps = 0, repairItems = 0;
     for (const app of planned) {
         const entries = Array.isArray(app?.entries) ? app.entries : [];
         const saved = completed.find(item => item.id === app.id);
         const readable = entries.filter(entry => saved?.entries?.some(item => item.id === entry.id && !isUnavailablePhoneEntry(item))).length;
         const omitted = value?.plan ? entries.filter(entry => !saved?.entries?.some(item => item.id === entry.id)
             && saved?.omittedEntryIds?.includes(entry.id)).length : 0;
-        const pending = entries.length - readable - omitted;
-        totalItems += entries.length; readableItems += readable; missingItems += pending;
+        const pending = Math.max(1, entries.length) - readable - omitted;
+        repairItems += ['chat', 'contacts'].includes(app.kind) ? 0 : (saved?.entries || []).filter(isPhoneRecapEntry).length;
+        totalItems += Math.max(1, entries.length); readableItems += readable; missingItems += pending;
         omittedItems += value?.plan ? omitted : (saved?.omittedEntryIds?.length || 0);
         if (saved && !pending) completeApps++;
     }
-    return { readableItems, totalItems, missingItems, omittedItems,
+    return { readableItems, totalItems, missingItems, omittedItems, repairItems,
         completeApps, totalApps: planned.length, partial: readableItems > 0 && missingItems > 0 };
 }
 
@@ -473,9 +475,12 @@ export function mergePhoneMissingEntries(previous, fresh) {
     const merged = structuredClone(previous);
     merged.entries = (previous.entries || []).filter(entry => !isUnavailablePhoneEntry(entry) || !fresh.omittedEntryIds?.includes(entry.id)).map(entry => {
         const replacement = fresh.entries?.find(item => item.id === entry.id);
-        return isUnavailablePhoneEntry(entry) && replacement && !isUnavailablePhoneEntry(replacement)
+        return (isUnavailablePhoneEntry(entry) || (!['chat', 'contacts'].includes(previous.kind) && isPhoneRecapEntry(entry))) && replacement && !isUnavailablePhoneEntry(replacement) && !isPhoneRecapEntry(replacement)
             ? structuredClone(replacement) : structuredClone(entry);
     });
+    if (!previous.entries?.length && fresh.id === previous.id) {
+        merged.entries = (fresh.entries || []).filter(entry => !isUnavailablePhoneEntry(entry) && !isPhoneRecapEntry(entry)).map(entry => structuredClone(entry));
+    }
     if (previous.kind === 'chat') {
         merged.ownerMembers = structuredClone(fresh.ownerMembers || previous.ownerMembers || []);
         merged.omittedEntryIds = [...new Set([...(previous.omittedEntryIds || []), ...(fresh.omittedEntryIds || [])])];

@@ -1,15 +1,15 @@
 {
     "display_name": "心迹回廊",
     "loading_order": 110,
-    "js": "index.js?heartbeat=1.0.6-r84.223-mv-tap-clock",
+    "js": "index.js?heartbeat=1.0.19-r84.236-framing-paths",
     "author": "Toto",
-    "version": "1.0.6",
+    "version": "1.0.19",
     "auto_update": true,
     "minimum_client_version": "1.13.0",
     "hooks": {
         "disable": "onDisable",
         "clean": "onClean"
     },
-    "description": "心迹回廊：修复手书手动打点被自动排镜打乱、负时长、跳镜及片段导出错位。",
+    "description": "心迹回廊：保留老 UI，收纳歌曲列表，改善抠图、手书人物落位和舞台字幕。",
     "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }

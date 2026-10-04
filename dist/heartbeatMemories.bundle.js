@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
-// Source modules: 317
-// Source SHA-256: c41f27a915bb706e3fb9d78274aa5385405f17df94e7639c579e830796225873
+// Source modules: 321
+// Source SHA-256: 339fbfb648915e11f81c7b21c5a9e0007be9f309195cea422c132724c6e82fd6
 // Build: python3 tools/verification/build.py <source-root>
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -149,6 +149,8 @@ const __m_extras_mvCast_js = Object.create(null);
 const __m_extras_mvDirection_js = Object.create(null);
 const __m_extras_mvImageTools_js = Object.create(null);
 const __m_extras_mvMedia_js = Object.create(null);
+const __m_extras_mvStage_js = Object.create(null);
+const __m_extras_mvStillPrompt_js = Object.create(null);
 const __m_extras_store_js = Object.create(null);
 const __m_extras_waiting_js = Object.create(null);
 const __m_generation_achievementCapture_js = Object.create(null);
@@ -280,7 +282,9 @@ const __m_ui_memoryReveal_js = Object.create(null);
 const __m_ui_mirrorCallView_js = Object.create(null);
 const __m_ui_mirrorTtsReader_js = Object.create(null);
 const __m_ui_mvCastControls_js = Object.create(null);
+const __m_ui_mvEditorUi_js = Object.create(null);
 const __m_ui_mvImageEditor_js = Object.create(null);
+const __m_ui_mvStageCanvas_js = Object.create(null);
 const __m_ui_mvView_js = Object.create(null);
 const __m_ui_navigationBookmark_js = Object.create(null);
 const __m_ui_overlay_js = Object.create(null);
@@ -443,7 +447,8 @@ function bindShotCast(raw, cast, settings = {}) {
     const explicit = Array.isArray(raw?.cast);
     let input = explicit ? raw.cast : [];
     if (!explicit && raw?.who !== 'none') {
-        const scene = [raw?.plain, raw?.composition, raw?.characterPrompt, raw?.imagePrompt].map(text).join(' ');
+        const scene = [raw?.plain, raw?.composition, raw?.characterPrompt, raw?.imagePrompt,
+            ...list(raw?.diffs).map(diff => diff?.imagePrompt)].map(text).join(' ');
         let matched = people.filter(person => person.name && scene.includes(person.name) && people.filter(p => p.name === person.name).length === 1);
         if (!matched.length && people.length === 1) matched = people;
         if (!matched.length && raw?.who === 'both' && people.length === 2) matched = people;
@@ -541,6 +546,7 @@ const MV_DIRECTIONS = Object.freeze([
     { id: 'interaction', name: '关系互动', desc: '视线、距离与双方反应', rule: '用视线对应、正反打、动作与接收动作、距离变化表现人物关系；清楚写谁对谁做什么。可以各自单人或同框，不把合唱等同于全员同框，不擅定恋爱关系；只有一人时也可用画外对象与反应。' },
     { id: 'impact', name: '高燃快切', desc: '强弱对比、卡点与关键姿势', rule: '主歌蓄势、副歌集中爆发；用全景与局部反差、关键动作姿势和干脆切换建立节奏。需要时同一句歌词可以有多个短镜头，冲击后留一处停顿；不把挥剑、奔跑等姿势长时间悬停，不强制闪白或战斗。' },
     { id: 'loop', name: '节奏循环', desc: '复用构图、姿势循环与节拍变化', rule: '设计能重复使用的构图和关键姿势，frames 可以回到先前的 group/diff 形成节奏循环；重复时用背景、视线或意象变化推进，不为循环重复生出相同素材。静态关键姿势剪辑不冒充连续舞蹈动画。' },
+    { id: 'expression', name: '表情卡拍', desc: '共享舞台、角色表演与文字卡拍', rule: '围绕可反复返回的主舞台安排角色面向观众的表演。人物以轮廓明确、有性格的半身或全身姿势建立记忆点，手势、视线与表情一起表达；一个姿势可保持数秒，让文字、背景图形继续变化。背景持续跨越多个姿势与歌词，同一素材反复引用，不逐句重新画场景。\n重复乐句沿用主构图与标志姿势，根据歌曲情绪改变表情、光色、文字或道具，形成呼应与变奏。剧情镜头与局部特写用于需要的转折，不套“换脸→特写→返回”的固定流程。主歌与副歌的疏密、明暗和表演强度服务当前歌曲。\n每种姿势或表情各自生成为单张单格静态图；人物、共享背景、文字分开制作并在时间轴上编排，生图不写歌词。保留角色身份、衣着和画风，表情反差来自角色与歌词，不强加假笑、伤口、恐怖或脱衣；为这首歌原创构图与顺序。' },
     { id: 'reveal', name: '悬念反转', desc: '遮蔽信息、伏笔与回收', rule: '先用局部、背影、画外或遮挡保留信息，再以全景、反向视点或意象重现揭示。转折前后重用视觉线索而改变含义；不强加恐怖、死亡、悲剧或设定外事件。' },
 ]);
 
@@ -559,6 +565,7 @@ function recommendDirections(song = {}) {
         ['interaction', /对唱|应答|互动|对话|duet|call.and.response|dialogue/iu, '人声有对唱或应答', 7],
         ['impact', /高燃|激昂|摇滚|金属|战歌|爆发|rock|metal|anthem|energetic|drum.and.bass/iu, '曲风有强烈爆发感', 7],
         ['loop', /循环|舞曲|律动|洗脑|loop|dance|groov|funk|disco/iu, '曲风强调循环律动', 7],
+        ['expression', /表情|面具|假笑|笑脸|戏谑|黑色幽默|反差|暗黑流行|怪诞|animation meme|dark pop|theatrical pop|happy face/iu, '歌曲适合表情反差与重复卡拍', 9],
         ['reveal', /反转|悬疑|悬念|诡异|不可靠叙述|suspense|mystery|unreliable|twist/iu, '歌曲含悬念或反转倾向', 9],
     ];
     for (const [id, pattern, reason, score] of rules) if (pattern.test(style)) add(id, score, reason);
@@ -569,6 +576,7 @@ function recommendDirections(song = {}) {
     else if (bpm >= 145) add('impact', 3, `标注速度 ${bpm} BPM，适合短镜头`);
     if (/月光|风|雨|旧信|花|影|moon|rain|shadow|letter/iu.test(lyrics)) add('lyrical', 1, '歌词有可呼应的视觉意象');
     if (/后来|从前|终于|离开|归来|then|returned|long ago/iu.test(lyrics)) add('narrative', 2, '歌词有时间或事件推进');
+    if (/面具|假笑|强颜欢笑|笑脸|笑着.*(?:哭|泪)|put on a happy face|hide.*(?:tears|smile)/iu.test(lyrics)) add('expression', 5, '歌词有外在表情与内心的反差');
     const lines = lyrics.split(/\r?\n/u).map(line => line.trim()).filter(line => line && !/^\[.*\]$/u.test(line));
     if (lines.length > 2 && new Set(lines).size < lines.length * 0.75) add('loop', 2, '歌词有明显重复段句');
     const matched = rows.filter(row => row.score > 0).sort((a, b) => b.score - a.score);
@@ -657,7 +665,189 @@ function alphaBounds(data, width, height) {
         if (data[(y * width + x) * 4 + 3] <= 40) continue;
         x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y);
     }
-    return x1 >= x0 ? { cx: (x1 + x0) / 2 / width, bottom: y1 / height, height: Math.max(1, y1 - y0 + 1) / height } : null;
+    return x1 >= x0 ? { cx: (x1 + x0 + 1) / 2 / width, bottom: (y1 + 1) / height,
+        x: x0 / width, top: y0 / height, width: (x1 - x0 + 1) / width, height: (y1 - y0 + 1) / height } : null;
+}
+
+// A deliberate click removes one connected patch only. It never treats every
+// white pixel as background; the editor keeps undo and the unmodified source.
+function eraseMatteAt(data, width, height, x, y) {
+    const out = new Uint8ClampedArray(data), count = width * height;
+    if (!count || data.length !== count * 4) return out;
+    const start = Math.max(0, Math.min(height - 1, Math.floor(y))) * width + Math.max(0, Math.min(width - 1, Math.floor(x)));
+    const color = Array.from(data.slice(start * 4, start * 4 + 3));
+    if (data[start * 4 + 3] <= 8) return out;
+    const seen = new Uint8Array(count), queue = new Uint32Array(count); let head = 0, tail = 1; queue[0] = start; seen[start] = 1;
+    const add = p => { if (!seen[p]) { seen[p] = 1; queue[tail++] = p; } };
+    while (head < tail) {
+        const p = queue[head++], i = p * 4;
+        if (data[i + 3] <= 8 || color.some((v, k) => Math.abs(v - data[i + k]) > 24)) continue;
+        out[i + 3] = 0; seen[p] = 2;
+        if (p % width) add(p - 1); if (p % width + 1 < width) add(p + 1);
+        if (p >= width) add(p - width); if (p + width < count) add(p + width);
+    }
+    softenMatteEdge(out, width, height, color, p => seen[p] === 2);
+    return out;
+}
+
+function softenMatteEdge(out, width, height, matte, cleared) {
+    const count = width * height;
+    for (let p = 0; p < count; p++) {
+        if (!out[p * 4 + 3]) continue;
+        const edge = p % width && cleared(p - 1) || p % width + 1 < width && cleared(p + 1)
+            || p >= width && cleared(p - width) || p + width < count && cleared(p + width);
+        if (!edge) continue;
+        const i = p * 4;
+        const a = Math.max(...matte.map((v, k) => Math.abs(out[i + k] - v) / Math.max(1, out[i + k] < v ? v : 255 - v)));
+        if (a <= 0 || a >= .98) continue;
+        out[i + 3] = Math.min(out[i + 3], Math.round(255 * a));
+        for (let k = 0; k < 3; k++) out[i + k] = Math.max(0, Math.min(255, Math.round((out[i + k] - matte[k] * (1 - a)) / a)));
+    }
+}
+
+// Conservative pockets beside a solo torso: protect the head, central white
+// garments, detailed/shaded regions and multi-person silhouettes. Ambiguous
+// whites are left for the editor's connected-region click, not guessed away.
+function clearMattePockets(data, width, height, matte, multiple = false, buffers = null) {
+    // Callers supply a derived buffer. Reuse flood-fill storage so opening a
+    // large character image does not allocate another full-resolution queue.
+    const out = data, bounds = alphaBounds(data, width, height);
+    if (!bounds || multiple) return out;
+    const count = width * height, seen = buffers?.seen || new Uint8Array(count), queue = buffers?.queue || new Uint32Array(count);
+    seen.fill(0);
+    const candidate = p => data[p * 4 + 3] >= 250 && matte.every((v, k) => Math.abs(v - data[p * 4 + k]) <= 10);
+    const cx = bounds.cx * width, fw = bounds.width * width, top = bounds.top * height, fh = bounds.height * height;
+    for (let start = 0; start < count; start++) {
+        if (seen[start] || !candidate(start)) continue;
+        let head = 0, tail = 1, x0 = width, y0 = height, x1 = -1, y1 = -1, sumX = 0, sumY = 0, open = false;
+        queue[0] = start; seen[start] = 1;
+        const add = p => { if (data[p * 4 + 3] <= 40) open = true; if (!seen[p] && candidate(p)) { seen[p] = 1; queue[tail++] = p; } };
+        while (head < tail) {
+            const p = queue[head++], x = p % width, y = Math.floor(p / width);
+            x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); sumX += x; sumY += y;
+            if (!x || x === width - 1 || !y || y === height - 1) open = true;
+            if (x) add(p - 1); if (x + 1 < width) add(p + 1); if (y) add(p - width); if (y + 1 < height) add(p + width);
+        }
+        const yy = (sumY / tail - top) / fh, offset = Math.abs(sumX / tail - cx) / fw;
+        const central = x0 < cx + fw * .09 && x1 > cx - fw * .09;
+        const irregular = tail / ((x1 - x0 + 1) * (y1 - y0 + 1)) < .88;
+        if (open || central || !irregular || yy < .34 || yy > .86 || offset < .16
+            || tail < Math.max(16, fw * fh * .003) || tail > fw * fh * .12) continue;
+        for (let i = 0; i < tail; i++) { out[queue[i] * 4 + 3] = 0; seen[queue[i]] = 2; }
+    }
+    softenMatteEdge(out, width, height, matte, p => seen[p] === 2);
+    return out;
+}
+
+// Character layers: accept real alpha, or a uniform light matte connected to
+// the perimeter. Never select a panel or infer success from removed area.
+function prepareCharacterPixels(data, width, height, { multiple = false, manual = false, allowPanel = false } = {}) {
+    const count = width * height;
+    if (!count || data.length !== count * 4) return { status: 'empty' };
+    const bounds = alphaBounds(data, width, height);
+    if (!bounds) return { status: 'empty' };
+    const edges = [[], [], [], []];
+    for (let x = 0; x < width; x++) { edges[0].push(x); edges[1].push(count - width + x); }
+    for (let y = 0; y < height; y++) { edges[2].push(y * width); edges[3].push(y * width + width - 1); }
+    const edge = edges.flat(), corners = [0, width - 1, count - width, count - 1];
+    // Existing alpha is kept exactly; a manually edited mask is never re-keyed.
+    if (edge.some(p => data[p * 4 + 3] < 250) || (manual && data.some((v, i) => i % 4 === 3 && v < 255)))
+        return { status: 'transparent', data };
+    if (manual) return { status: 'needs-edit' };
+    const matte = [0, 1, 2].map(k => corners.reduce((sum, p) => sum + data[p * 4 + k], 0) / 4);
+    const neutral = Math.min(...matte) >= 180 && Math.max(...matte) - Math.min(...matte) <= 20;
+    const blue = matte[2] > 160 && matte[2] - matte[0] > 120 && matte[2] - matte[1] > 100;
+    const close = p => matte.every((v, k) => Math.abs(v - data[p * 4 + k]) <= 24);
+    if ((!neutral && !blue) || !corners.every(close) || edges.filter(row => row.filter(close).length >= row.length * .9).length < 3)
+        return { status: 'needs-edit' };
+    const out = new Uint8ClampedArray(data), seen = new Uint8Array(count), removed = new Uint8Array(count), queue = new Uint32Array(count);
+    let head = 0, tail = 0;
+    const add = p => { if (!seen[p]) { seen[p] = 1; queue[tail++] = p; } };
+    const neighbours = (p, visit) => {
+        if (p % width) visit(p - 1); if (p % width + 1 < width) visit(p + 1);
+        if (p >= width) visit(p - width); if (p + width < count) visit(p + width);
+    };
+    edge.forEach(add);
+    while (head < tail) {
+        const p = queue[head++]; if (!close(p)) continue;
+        removed[p] = 1; out[p * 4 + 3] = 0; neighbours(p, add);
+    }
+    const rows = new Uint32Array(height), columns = new Uint32Array(width);
+    let x0 = width, y0 = height, x1 = -1, y1 = -1, foreground = 0;
+    for (let p = 0; p < count; p++) if (!removed[p]) {
+        const x = p % width, y = Math.floor(p / width); rows[y]++; columns[x]++; foreground++;
+        x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y);
+    }
+    if (!foreground) return { status: 'empty' };
+    // A white border around an opaque illustration is not a character cutout.
+    const lineSolid = (from, length, step) => {
+        let n = 0; for (let i = 0; i < length; i++) if (!removed[from + i * step]) n++;
+        return n >= length * .9;
+    };
+    const borderOnly = lineSolid(y0 * width + x0, x1 - x0 + 1, 1) && lineSolid(y1 * width + x0, x1 - x0 + 1, 1)
+        && lineSolid(y0 * width + x0, y1 - y0 + 1, width) && lineSolid(y0 * width + x1, y1 - y0 + 1, width);
+    if (borderOnly && !allowPanel) return { status: 'needs-edit' };
+    // Separated, substantial figures may be a contact sheet. Keep it intact
+    // until a cell is chosen; never guess the upper/left half.
+    const separated = projection => {
+        let before = 0, gap = 0;
+        for (const n of projection) {
+            if (!n) gap++; else gap = 0;
+            before += n;
+            if (gap >= Math.max(2, Math.ceil(projection.length * .015)) && before > foreground * .25 && foreground - before > foreground * .25) return true;
+        }
+        return false;
+    };
+    if (separated(rows) || (!multiple && separated(columns))) return { status: 'needs-selection' };
+    // Unmix the outer fringe only; enclosed whites (eyes, clothing) stay intact.
+    for (let p = 0; p < count; p++) {
+        if (removed[p]) continue;
+        let fringe = false; neighbours(p, n => { if (removed[n]) fringe = true; });
+        if (!fringe) continue;
+        const i = p * 4;
+        const alpha = Math.max(...matte.map((v, k) => Math.abs(data[i + k] - v) / Math.max(1, data[i + k] < v ? v : 255 - v)));
+        if (alpha <= 0 || alpha >= .98) continue;
+        out[i + 3] = Math.round(data[i + 3] * alpha);
+        for (let k = 0; k < 3; k++) out[i + k] = Math.max(0, Math.min(255, Math.round((data[i + k] - matte[k] * (1 - alpha)) / alpha)));
+    }
+    return { status: 'prepared', data: borderOnly ? out : clearMattePockets(out, width, height, matte, multiple, { seen, queue }), ...(borderOnly ? { borderOnly: true } : {}) };
+}
+
+// Explicit, reversible editor action. A panel's outer matte can be cleared,
+// but this must never grant automatic character-layer permission in playback.
+function prepareCutoutPixels(data, width, height, { multiple = false, reference = data } = {}) {
+    const result = prepareCharacterPixels(data, width, height, { multiple, allowPanel: true });
+    if (!result.data || result.borderOnly || result.status !== 'transparent' || multiple) return result;
+    // Repeated explicit cleanup may use the retained source to identify the old
+    // matte. Existing transparency and manual erasures are never filled back in.
+    const count = width * height, corners = [0, width - 1, count - width, count - 1];
+    if (reference.length !== data.length) return result;
+    const matte = [0, 1, 2].map(k => corners.reduce((sum, p) => sum + reference[p * 4 + k], 0) / 4);
+    const neutral = Math.min(...matte) >= 180 && Math.max(...matte) - Math.min(...matte) <= 20;
+    if (!neutral || !corners.every(p => matte.every((v, k) => Math.abs(v - reference[p * 4 + k]) <= 16))) return result;
+    const out = clearMattePockets(new Uint8ClampedArray(result.data), width, height, matte);
+    const changed = out.some((value, i) => value !== data[i]);
+    return { ...result, status: changed ? 'prepared' : result.status, data: out };
+}
+
+// Only remove padding around a rectangular picture for the thumbnail. A real
+// character silhouette keeps its canvas and full-body framing. No source edits.
+function previewContentRect(data, width, height) {
+    const prepared = prepareCutoutPixels(data, width, height, { multiple: true });
+    if (!prepared.data) return null;
+    const mask = prepared.data;
+    let x0 = width, y0 = height, x1 = -1, y1 = -1;
+    const solid = (x, y) => mask[(y * width + x) * 4 + 3] > 40;
+    for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) if (solid(x, y)) {
+        x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y);
+    }
+    if (x1 < x0 || (x0 === 0 && y0 === 0 && x1 === width - 1 && y1 === height - 1)) return null;
+    let top = 0, bottom = 0, left = 0, right = 0;
+    for (let x = x0; x <= x1; x++) { top += solid(x, y0); bottom += solid(x, y1); }
+    for (let y = y0; y <= y1; y++) { left += solid(x0, y); right += solid(x1, y); }
+    const w = x1 - x0 + 1, h = y1 - y0 + 1;
+    if (top < w * .9 || bottom < w * .9 || left < h * .9 || right < h * .9) return null;
+    return { x: x0, y: y0, w, h };
 }
 
 // Decorative sprites only. Keep genuine alpha and enclosed white details;
@@ -717,7 +907,171 @@ __m_extras_mvImageTools_js.pixelRect = pixelRect;
 __m_extras_mvImageTools_js.eraseEdgeWhite = eraseEdgeWhite;
 __m_extras_mvImageTools_js.paintAlpha = paintAlpha;
 __m_extras_mvImageTools_js.alphaBounds = alphaBounds;
+__m_extras_mvImageTools_js.eraseMatteAt = eraseMatteAt;
+__m_extras_mvImageTools_js.prepareCharacterPixels = prepareCharacterPixels;
+__m_extras_mvImageTools_js.prepareCutoutPixels = prepareCutoutPixels;
+__m_extras_mvImageTools_js.previewContentRect = previewContentRect;
 __m_extras_mvImageTools_js.prepareMotifPixels = prepareMotifPixels;
+}
+
+function __init_extras_mvStage_js() {
+// MODULE: extras/mvStage.js
+
+// Optional stage data: saved images remain owned by one background, independent of poses.
+// No provider calls, generated code, storage migrations, or time-axis edits here.
+const list = value => Array.isArray(value) ? value : [];
+const text = value => typeof value === 'string' ? value.trim() : '';
+const choice = (value, values, fallback) => values.includes(value) ? value : fallback;
+const BACKGROUNDS = Object.freeze({ solid: '纯色', rays: '放射线', stripes: '斜纹', window: '窗格', paper: '纸纹', image: '绘制背景' });
+const LAYOUTS = Object.freeze({ sides: '两侧', stack: '叠字', banner: '横排', none: '隐藏' });
+
+function prepare(raw, existing = null) {
+    const backgrounds = [], ids = new Map();
+    const existingIds = new Set(list(existing?.backgrounds).map(b => b.id));
+    const used = new Set(existingIds);
+    let number = 1;
+    for (const source of list(raw?.backgrounds)) {
+        if (!source || typeof source !== 'object') continue;
+        const sourceId = text(source.id);
+        // A continuation may restate a shared background. Its saved art wins.
+        if (existingIds.has(sourceId)) { ids.set(sourceId, sourceId); continue; }
+        if (sourceId && ids.has(sourceId)) continue;
+        while (used.has(`S${number}`)) number++;
+        const id = `S${number++}`; used.add(id);
+        ids.set(sourceId || id, id);
+        const colors = list(source.colors).filter(c => typeof c === 'string' && /^#[0-9a-f]{6}$/iu.test(c));
+        backgrounds.push({ id, label: text(source.label) || '共享背景',
+            // Model-created backgrounds are real image assets. Saved/manual
+            // patterns are read as-is and remain available in the style picker.
+            kind: 'image',
+            colors: [colors[0] || '#203047', colors[1] || '#e4d6bb', colors[2] || '#bd6683'],
+            motion: choice(source.motion, ['still', 'rotate', 'drift'], 'still'),
+            prompt: text(source.prompt), image: null });
+    }
+    const resolve = value => ids.get(text(value)) || (list(existing?.backgrounds).some(b => b.id === value) ? value : '');
+    return { backgrounds, resolve };
+}
+
+function cue(value, fallback, resolve) {
+    const background = resolve(value?.background) || fallback;
+    if (!background) return null;
+    return { background, text: text(value?.text),
+        layout: choice(value?.layout, Object.keys(LAYOUTS), 'sides'),
+        depth: value?.depth === 'front' ? 'front' : 'back',
+        entrance: choice(value?.entrance, ['cut', 'pop', 'slide'], 'cut'),
+        tone: choice(value?.tone, ['base', 'accent', 'dark'], 'base'), shadow: value?.shadow === true };
+}
+
+function background(record, shot) {
+    const group = list(record?.groups).find(g => g.id === shot?.group);
+    const id = shot?.stage?.background || group?.stageBackground;
+    return list(record?.stage?.backgrounds).find(b => b.id === id) || null;
+}
+
+function usedBackgrounds(record, shots = record?.shots) {
+    const ids = new Set(list(shots).map(s => background(record, s)?.id).filter(Boolean));
+    return list(record?.stage?.backgrounds).filter(b => ids.has(b.id));
+}
+
+function characterKey(row) {
+    const s = row?.shot;
+    return s?.image?.url || s?.image?.local ? `shot:${s.id}` : `${s?.group}:${s?.diff}`;
+}
+
+function textKey(row) {
+    const cue = row?.shot?.stage || {};
+    return JSON.stringify([cue.text || row?.shot?.lyric || '', cue.layout || 'sides', cue.depth || 'back']);
+}
+
+// Derive every layer from the song clock, including seeking and excerpt export.
+// A lyric boundary does not restart the background or an unchanged character pose.
+function state(record, rows, index, time) {
+    const row = rows[index], bg = background(record, row?.shot);
+    if (!bg) return null;
+    let poseStart = index, textStart = index;
+    while (poseStart > 0 && characterKey(rows[poseStart - 1]) === characterKey(row)) poseStart--;
+    while (textStart > 0 && textKey(rows[textStart - 1]) === textKey(row)) textStart--;
+    const origin = rows.find(r => background(record, r.shot)?.id === bg.id)?.start || 0;
+    const value = row.shot.stage || {};
+    return { background: bg, cue: value, active: time >= row.start,
+        backgroundTime: Math.max(0, time - origin),
+        poseTime: Math.max(0, time - rows[poseStart].start),
+        entrance: rows[poseStart].shot.stage?.entrance || 'cut',
+        textTime: Math.max(0, time - rows[textStart].start),
+        text: value.text || row.shot.lyric || '', lyric: row.shot.lyric || '' };
+}
+
+function prompt() {
+    return `【共享舞台编排】
+本类型先设计可反复使用的舞台和角色标志姿势，再安排哪些层变化、哪些层保持。背景、人物、文字分别编排；换歌词、换姿势不等于换背景，一个姿势可以跨多句保持。
+- stage.backgrounds 是跨构图、跨段落共用的背景，每个只定义一次，kind 写 image。prompt 用英文写清空间、场景、色彩与光线，按歌曲和角色世界观设计可复用的绘制背景；不把场景简化成程序绘制的放射线或色块。colors 为三个 #RRGGBB 参考色，motion 默认 still，确实需要时可选 drift。背景持续，不随每次人物切换重启。
+- groups.stageBackground 引用共享背景 id；这些组的人物单独绘制，透明图直接叠背景，纯色底自动分离。diff.imagePrompt 只写该人物层的机位、唯一静态姿势与表情，场景放在共享背景里。全景剧情插入可用 layer:"full" 与自己的 bgs；局部插镜按表达需要安排，不套固定顺序。
+- frames.stage 可写 background（沿用时可省）、text（摘取对应歌词的关键词或原句）、layout（sides 两侧、stack 叠字、banner 横排、none）、depth（back 人物后方、front 前方）、entrance（cut、pop、slide）、tone（base、accent、dark）、shadow（是否有偏移剪影）。文字给脸和关键手势留白，不在生图里绘制文字。
+- 同一 group/diff 在连续多个 frame 出现时，人物保持，只换文字；再次使用背景或人物直接引用原 id，不重复生成。同一段落内也可以保持一套背景，重复副歌沿用主姿势并按歌词情绪变奏。先让一个有性格的姿势成立，再在需要时换表情，不每拍都生新图。\n`;
+}
+
+__m_extras_mvStage_js.prepare = prepare;
+__m_extras_mvStage_js.cue = cue;
+__m_extras_mvStage_js.background = background;
+__m_extras_mvStage_js.usedBackgrounds = usedBackgrounds;
+__m_extras_mvStage_js.state = state;
+__m_extras_mvStage_js.prompt = prompt;
+__m_extras_mvStage_js.BACKGROUNDS = BACKGROUNDS;
+__m_extras_mvStage_js.LAYOUTS = LAYOUTS;
+}
+
+function __init_extras_mvStillPrompt_js() {
+// MODULE: extras/mvStillPrompt.js
+
+// Each asset is one still. A complete per-diff description supersedes the
+// group's reference pose; old boards remain readable without a new model call.
+const text = value => typeof value === 'string' ? value.trim() : '';
+function cleanStillText(value) {
+    return text(value).replace(/\benglish\s*:\s*/giu, '').trim();
+}
+const expression = /\b(?:smil\w*|smirk\w*|grin\w*|frown\w*|furrow\w*|surpris\w*|startl\w*|gaze|expression|(?:eyes?|eyebrows?|brows?)\s+(?:(?:slightly|wide|tightly|gently)\s+)?(?:open\w*|clos\w*|widen\w*|narrow\w*|raised|lowered))\b|表情|微笑|皱眉|驚|惊|呆愣|睁眼|闭眼/iu;
+const camera = /\b(?:close[ -]?up|shot|framing|angle|composition|view|crop)\b|特写|机位|构图|景别/iu;
+
+function stillScene(group, diff, singlePerson = false) {
+    const complete = cleanStillText(diff?.imagePrompt);
+    if (complete) return complete;
+    const moment = cleanStillText(diff?.change);
+    let shared = cleanStillText(group?.characterPrompt);
+    if (!moment) return shared;
+    // Only replace recognisable facial-state clauses for a single actor. Never
+    // guess which of several people an old unbound change belongs to, or drop
+    // a clause containing framing. New boards use complete imagePrompt instead.
+    if (singlePerson && expression.test(moment)) shared = shared.split(/[,，;；\n]+/u)
+        .map(part => part.trim()).filter(part => part && (!expression.test(part) || camera.test(part))).join(', ');
+    return [...new Set([shared, moment].filter(Boolean))].join('\n');
+}
+
+function stillCast(group, diff) {
+    if (!Array.isArray(group?.cast)) return group;
+    const complete = !!text(diff?.imagePrompt);
+    const moment = cleanStillText(diff?.change);
+    return { ...group, cast: group.cast.map(person => ({ ...person,
+        // The full per-diff scene already binds every actor's current action.
+        // In legacy solo expression shots the old action often describes the
+        // whole transition; it must not compete with the selected still.
+        action: complete || group.cast.length === 1 && expression.test(moment) ? '' : person.action,
+    })) };
+}
+
+function joinStillPrompt(parts) {
+    const seen = new Set();
+    return parts.map(cleanStillText).filter(part => {
+        if (!part) return false;
+        const key = part.toLocaleLowerCase().replace(/\s+/gu, ' ');
+        if (seen.has(key)) return false;
+        seen.add(key); return true;
+    }).join('\n');
+}
+
+__m_extras_mvStillPrompt_js.cleanStillText = cleanStillText;
+__m_extras_mvStillPrompt_js.stillScene = stillScene;
+__m_extras_mvStillPrompt_js.stillCast = stillCast;
+__m_extras_mvStillPrompt_js.joinStillPrompt = joinStillPrompt;
 }
 
 function __init_ui_mvCastControls_js() {
@@ -782,6 +1136,119 @@ __m_ui_mvCastControls_js.castControls = castControls;
 __m_ui_mvCastControls_js.shotCastControls = shotCastControls;
 }
 
+function __init_ui_mvEditorUi_js() {
+// MODULE: ui/mvEditorUi.js
+
+// Editor-only presentation. All actions continue through mvView and the existing
+// song-scoped storage, image editor, audio player and export implementations.
+function editorMarkup(o) {
+    const { esc, btn, song, tab, panels, width, height, strip, stripNav, selectedLabel, time, total, playing, audio, exporting, drawer, drawerHtml } = o;
+    const tabs = [['shots', '分镜'], ['timing', '定段 · 定句'], ['look', '画面']].map(([id, label]) =>
+        btn('editor-tab', label, { id, cls: 'rmt-mve-tab' + (tab === id ? ' on' : ''), extra: ` aria-pressed="${tab === id}"` })).join('');
+    return `<header class="rmt-mve-head"><div><small>手书剪辑台</small><h2>${esc(song.title)}</h2></div><div class="rmt-mve-head-actions">${btn('editor-drawer', '导出', { id: 'export', cls: 'rmt-x-primary' })}${btn('editor-drawer', '更多', { id: 'more' })}</div></header>
+      <div class="rmt-mve-layout-scope"><div class="rmt-mve-workspace" data-editor-tab="${tab}"><section class="rmt-mve-preview" aria-label="手书预览">
+        <div class="rmt-mv-canvas-wrap${width < height ? ' portrait' : ''}"><canvas data-rmt-mv-canvas width="${width}" height="${height}"></canvas></div>
+        <div class="rmt-mve-transport"><button type="button" class="rmt-mv-play" data-rmt-mv="play" aria-label="${playing ? '暂停' : '播放'}"${exporting ? ' disabled' : ''}>${playing ? '❚❚' : '▶'}</button><span class="rmt-mve-clock" data-rmt-mv-time>${esc(time)}</span><input type="range" min="0" max="${total}" step="0.1" value="${o.seconds}" data-rmt-mv-seek aria-label="播放位置"${exporting ? ' disabled' : ''}><small>${esc(o.totalLabel)}</small>${btn('editor-drawer', '歌曲', { id: 'audio' })}</div>
+        <div class="rmt-mve-meta"><span data-rmt-mv-current>${esc(selectedLabel)}</span><span>${audio ? '本机歌曲已接入' : '未放入歌曲 · 可静音预览'}</span></div>
+        <div class="rmt-mve-filmstrip" data-rmt-mv-filmstrip><div class="rmt-mv-strip">${strip}</div>${stripNav}</div>
+      </section><section class="rmt-mve-tools"><nav class="rmt-mve-tabs" aria-label="剪辑工作区">${tabs}</nav><div class="rmt-mve-panel"${tab === 'shots' ? ' data-rmt-mv-shot-panel' : ''}>${panels[tab] || panels.shots}</div></section></div></div>
+      ${drawer ? `<div class="rmt-mve-sheet-shade"><section class="rmt-mve-sheet" role="dialog" aria-modal="true" aria-label="${esc({ export: '导出手书', more: '素材与项目', audio: '歌曲' }[drawer] || '选项')}"><header><b>${esc({ export: '导出手书', more: '素材与项目', audio: '歌曲' }[drawer] || '选项')}</b>${btn('editor-drawer', '关闭', { extra: ' aria-label="关闭选项面板"' })}</header><div>${drawerHtml}</div></section></div>` : ''}`;
+}
+
+function editorCss(root) {
+    const r = root;
+    return `
+${r} .rmt-x-page.rmt-mv-editor{max-width:1160px;width:100%;gap:18px;padding:8px 4px 24px}
+${r} .rmt-mve-layout-scope{min-width:0;width:100%;container-type:inline-size}
+${r} .rmt-mve-back{align-self:flex-start;width:auto;min-height:40px;padding:4px 0;border:0;background:none;color:var(--rmt-theme-muted,#63788f);font-size:12px;cursor:pointer}
+${r} .rmt-mve-head{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:2px 0 14px;border-bottom:1px solid var(--rmt-theme-border,#cddfed)}
+${r} .rmt-mve-head>div:first-child{min-width:0;flex:1}
+${r} .rmt-mve-head small{display:block;font-size:12px;color:var(--rmt-theme-muted,#63788f);margin-bottom:5px}
+${r} .rmt-mve-head h2{font-size:20px;line-height:1.4;margin:0;overflow-wrap:anywhere;color:var(--rmt-theme-text,#294762)}
+${r} .rmt-mve-head-actions{display:flex;gap:8px;flex:none}
+${r} .rmt-mve-head-actions button{width:auto;min-height:42px;font-size:13px;border-radius:10px;padding:0 15px}
+${r} .rmt-mve-workspace{display:grid;grid-template-columns:minmax(0,1fr);align-items:start;gap:18px;min-width:0}
+${r} .rmt-mve-preview,${r} .rmt-mve-tools{min-width:0}
+${r} .rmt-mve-preview .rmt-mv-canvas-wrap{width:100%;border-radius:13px;margin:0;overflow:hidden;background:var(--rmt-theme-soft,#e7f1fa)}
+${r} .rmt-mve-preview .rmt-mv-canvas-wrap.portrait{width:min(100%,300px);margin:0 auto}
+${r} .rmt-mve-preview canvas{display:block;width:100%;height:auto}
+${r} .rmt-mve-transport{display:flex;align-items:center;gap:10px;padding:10px 0 3px;min-width:0}
+${r} .rmt-mve-transport .rmt-mv-play{width:42px;min-width:42px;height:42px;min-height:42px;border-radius:50%;font-size:15px;background:var(--rmt-theme-soft,#e3eef9);color:var(--rmt-theme-text,#294762);border:1px solid var(--rmt-theme-border,#cddfed)}
+${r} .rmt-mve-clock{font-size:12px;white-space:nowrap;font-variant-numeric:tabular-nums}
+${r} .rmt-mve-transport input[type=range]{appearance:none!important;-webkit-appearance:none!important;display:block;flex:1;width:0;min-width:28px;height:44px!important;min-height:44px!important;max-height:44px!important;margin:0!important;padding:0!important;border:0!important;border-radius:0!important;background:transparent!important;box-shadow:none!important;filter:none!important;cursor:pointer}
+${r} .rmt-mve-transport input[type=range]::-webkit-slider-runnable-track{height:6px;border:0;border-radius:999px;box-shadow:none;background:linear-gradient(to right,var(--rmt-theme-accent,#bc779d) 0%,var(--rmt-theme-accent,#bc779d) var(--rmt-mv-seek,0%),var(--rmt-theme-border,#cddfed) var(--rmt-mv-seek,0%),var(--rmt-theme-border,#cddfed) 100%)}
+${r} .rmt-mve-transport input[type=range]::-webkit-slider-thumb{-webkit-appearance:none!important;appearance:none!important;width:18px!important;height:18px!important;margin-top:-6px!important;border:2px solid var(--rmt-theme-surface-solid,#fff)!important;border-radius:50%!important;background:var(--rmt-theme-accent-ink,#4f769d)!important;box-shadow:0 1px 4px #0002!important}
+${r} .rmt-mve-transport input[type=range]::-moz-range-track{height:6px;border:0;border-radius:999px;background:var(--rmt-theme-border,#cddfed)}
+${r} .rmt-mve-transport input[type=range]::-moz-range-progress{height:6px;border-radius:999px;background:var(--rmt-theme-accent,#bc779d)}
+${r} .rmt-mve-transport input[type=range]::-moz-range-thumb{width:14px;height:14px;border:2px solid var(--rmt-theme-surface-solid,#fff);border-radius:50%;background:var(--rmt-theme-accent-ink,#4f769d);box-shadow:0 1px 4px #0002}
+${r} .rmt-mve-transport>small{font-size:11px;color:var(--rmt-theme-muted,#63788f)}
+${r} .rmt-mve-transport>button:last-child{font-size:12px;min-height:40px;padding:0 10px;border-radius:9px}
+${r} .rmt-mve-meta{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:11px;color:var(--rmt-theme-muted,#63788f);padding:4px 1px 14px;flex-wrap:wrap}
+${r} .rmt-mve-tools{background:var(--rmt-theme-surface-solid,#fff);border:1px solid var(--rmt-theme-border,#cddfed);border-radius:14px;overflow:hidden}
+${r} .rmt-mve-tabs{display:grid;grid-template-columns:1fr 1.3fr 1fr;gap:4px;padding:6px;background:var(--rmt-theme-soft,#e7f1fa)}
+${r} .rmt-mve-tab{border:0;background:transparent;color:var(--rmt-theme-muted,#63788f);border-radius:9px;min-height:43px;font-size:13px;padding:0 8px;cursor:pointer}
+${r} .rmt-mve-tab.on{background:var(--rmt-theme-surface-solid,#fff);color:var(--rmt-theme-text,#294762);font-weight:600}
+${r} .rmt-mve-panel{padding:18px;display:flex;flex-direction:column;gap:13px;min-width:0}
+${r} .rmt-mve-panel .rmt-x-card{padding:0;border:0;background:transparent}
+${r} .rmt-mve-panel .rmt-x-row-head{align-items:center;gap:9px;flex-wrap:wrap}
+${r} .rmt-mve-panel .rmt-mv-grid2{grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
+${r} .rmt-mve-panel button{font-size:13px}
+${r} .rmt-mve-panel .rmt-x-segs{display:flex;gap:7px;flex-wrap:wrap}
+${r} .rmt-mve-panel .rmt-x-seg{min-height:42px;height:auto;flex:1 0 75px;padding:7px 10px;font-size:12px}
+${r} .rmt-mve-panel details{border-top:1px solid var(--rmt-theme-border,#cddfed);padding:10px 0 0;min-width:0}
+${r} .rmt-mve-panel summary{cursor:pointer;min-height:36px;font-size:13px}
+${r} .rmt-mve-panel details>div{display:flex;flex-direction:column;gap:12px;padding-top:12px}
+${r} .rmt-mve-panel input:not([type=checkbox]):not([type=range]),${r} .rmt-mve-panel select{font-size:16px}
+${r} .rmt-mve-filmstrip .rmt-mv-strip{gap:7px;padding:4px 2px 10px}
+${r} .rmt-mve-filmstrip .rmt-mv-strip>button{display:grid;grid-template-rows:72px 26px;box-sizing:border-box;width:84px!important;min-width:84px;height:102px;flex:0 0 84px;padding:0!important;border-radius:9px;overflow:hidden;background:var(--rmt-theme-surface-solid,#fff)}
+${r} .rmt-mve-filmstrip .rmt-mv-strip>button img{position:static!important;inset:auto!important;grid-row:1;display:block;height:72px!important;width:100%!important;min-height:0;max-height:72px;object-fit:contain;align-self:center}
+${r} .rmt-mve-filmstrip .rmt-mv-strip>button>span{position:static;grid-row:2;display:flex;align-items:center;justify-content:center;box-sizing:border-box;background:var(--rmt-theme-surface-solid,#fff);padding:2px;border-radius:0;color:var(--rmt-theme-text,#294762);font-size:11px;line-height:1.3;white-space:nowrap}
+${r} .rmt-mve-filmstrip .rmt-mv-strip>button[aria-current=true]{border-color:var(--rmt-theme-accent-ink,#4f769d)!important;box-shadow:0 0 0 1px var(--rmt-theme-accent-ink,#4f769d)}
+${r} .rmt-mve-strip-nav{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:11px;color:var(--rmt-theme-muted,#63788f)}
+${r} .rmt-mve-strip-nav button{font-size:11px;padding:0 10px;min-height:36px}
+${r} .rmt-mve-sync-list{display:flex;flex-direction:column;gap:0;border-top:1px solid var(--rmt-theme-border,#cddfed)}
+${r} .rmt-mve-sync-group{border-bottom:1px solid var(--rmt-theme-border,#cddfed)}
+${r} .rmt-mve-section{display:flex;align-items:center;gap:4px}
+${r} .rmt-mve-section-pick{display:flex;align-items:center;gap:10px;min-height:48px;flex:1;min-width:0;border:0;border-radius:8px;background:transparent;color:var(--rmt-theme-text,#294762);padding:8px;text-align:left;cursor:pointer}
+${r} .rmt-mve-section-pick b{font-size:13px;flex:1;overflow-wrap:anywhere}
+${r} .rmt-mve-section-pick small{font-size:10px;flex:none;color:var(--rmt-theme-muted,#63788f)}
+${r} .rmt-mve-section-pick time{font-size:11px;font-variant-numeric:tabular-nums;white-space:nowrap}
+${r} .rmt-mve-fold{border:0;background:transparent;min-width:40px;min-height:44px;color:var(--rmt-theme-text,#294762);cursor:pointer}
+${r} .rmt-mve-lines{margin:0 0 10px 10px;padding-left:10px;border-left:1px solid var(--rmt-theme-border,#cddfed);display:flex;flex-direction:column;gap:5px}
+${r} .rmt-mve-line{border:1px solid transparent;border-radius:9px;background:transparent;color:var(--rmt-theme-text,#294762);display:flex;align-items:center;justify-content:space-between;gap:12px;text-align:left;min-height:56px;padding:10px;cursor:pointer}
+${r} .rmt-mve-line>span{font-size:13px;line-height:1.65;flex:1;min-width:0;overflow-wrap:anywhere}
+${r} .rmt-mve-line>small{display:flex;flex-direction:column;gap:4px;text-align:right;flex:none;font-size:11px;color:var(--rmt-theme-muted,#63788f)}
+${r} .rmt-mve-line em{font-style:normal;font-size:10px}
+${r} .rmt-mve-line.on,${r} .rmt-mve-section-pick.on{border-color:var(--rmt-theme-border,#cddfed);background:var(--rmt-theme-soft,#e7f1fa);color:var(--rmt-theme-text,#294762)}
+${r} .rmt-mve-timing-actions{display:flex;gap:8px}
+${r} .rmt-mve-timing-actions>button:first-child{flex:1}
+${r} .rmt-mv-editor .rmt-mv-tap{width:auto;height:auto;min-height:48px;max-width:none;border-radius:10px;padding:10px 14px;font-size:14px;flex:1}
+${r} .rmt-mv-editor .rmt-mv-tap b{font-size:14px;line-height:1.4}
+${r} .rmt-mve-nudge{display:flex;align-items:center;justify-content:center;gap:6px;flex-wrap:wrap}
+${r} .rmt-mve-nudge button{min-height:38px;font-size:11px;padding:0 8px}
+${r} .rmt-mve-nudge input{width:85px;min-height:38px;border:1px solid var(--rmt-theme-border,#cddfed);border-radius:8px;background:var(--rmt-theme-surface-solid,#fff);color:var(--rmt-theme-text,#294762);text-align:center}
+${r} .rmt-mve-sheet-shade{position:fixed;inset:0;z-index:2147482990;background:rgba(20,35,50,.42);display:flex;align-items:center;justify-content:center;padding:14px;padding:calc(env(safe-area-inset-top,0px) + 14px) 14px calc(env(safe-area-inset-bottom,0px) + 14px);box-sizing:border-box}
+${r} .rmt-mve-sheet{width:min(100%,560px);max-height:85vh;overflow:auto;border-radius:18px;border:1px solid var(--rmt-theme-border,#cddfed);background:var(--rmt-theme-surface-solid,#fff);color:var(--rmt-theme-text,#294762);box-shadow:0 15px 65px rgba(0,0,0,.2);overscroll-behavior:contain}
+${r} .rmt-mve-sheet>header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 18px;border-bottom:1px solid var(--rmt-theme-border,#cddfed)}
+${r} .rmt-mve-sheet>div{padding:18px;display:flex;flex-direction:column;gap:14px}
+${r} .rmt-mve-sheet button{font-size:14px}
+${r} .rmt-mve-sheet .rmt-mv-file{flex-wrap:wrap;gap:10px}
+${r} .rmt-mve-sheet .rmt-mv-file>div{min-width:120px;overflow-wrap:anywhere}
+${r} .rmt-mv-editor button:focus-visible,${r} .rmt-mv-editor input:focus-visible{outline:2px solid var(--rmt-theme-accent-ink,#4f769d);outline-offset:2px}
+${r} .rmt-mve-group-fold{border:1px solid var(--rmt-theme-border,#cddfed);border-radius:14px;background:var(--rmt-theme-surface-solid,#fff);padding:12px}
+${r} .rmt-mve-group-fold summary{min-height:44px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:14px;list-style:none}
+${r} .rmt-mve-group-fold .rmt-mv-gcard{border:0;padding:12px 0 0}
+@media(min-width:960px){${r} .rmt-mve-workspace{grid-template-columns:minmax(0,1fr) 340px}}
+@supports(container-type:inline-size){${r} .rmt-mve-workspace{grid-template-columns:minmax(0,1fr)}@container (min-width:780px){${r} .rmt-mve-workspace{grid-template-columns:minmax(0,1fr) 340px}}}
+@media(max-width:600px){${r} .rmt-mve-head h2{font-size:17px}${r} .rmt-mve-head-actions button{padding:0 10px;font-size:12px}${r} .rmt-mve-panel{padding:14px}${r} .rmt-mve-transport{gap:7px}${r} .rmt-mve-transport>small{font-size:11px!important;white-space:nowrap}${r} .rmt-mve-workspace:not([data-editor-tab=shots]) .rmt-mve-filmstrip{display:none}${r} .rmt-mve-sheet{max-height:88vh}${r} .rmt-mve-head{padding-bottom:10px}}
+@container (max-width:700px){${r} .rmt-mve-workspace:not([data-editor-tab=shots]) .rmt-mve-filmstrip{display:none}}
+`;
+}
+
+__m_ui_mvEditorUi_js.editorMarkup = editorMarkup;
+__m_ui_mvEditorUi_js.editorCss = editorCss;
+}
+
 function __init_ui_mvImageEditor_js() {
 // MODULE: ui/mvImageEditor.js
 const pixels = __m_extras_mvImageTools_js;
@@ -789,10 +1256,10 @@ const pixels = __m_extras_mvImageTools_js;
 // Isolated editor: drafts and undo buffers live here until an explicit save.
 function mountAssetEditor(host, options) {
     host.innerHTML = `<section class="rmt-mv-editor rmt-x-card">
-      <div class="rmt-mv-editor-tools"><button type="button" data-edit="select">1 · 选单格</button><button type="button" data-edit="paint">2 · 处理背景</button></div>
+      <div class="rmt-mv-editor-tools"><button type="button" data-edit="auto">一键抠图</button><button type="button" data-edit="select">1 · 选单格</button><button type="button" data-edit="paint">2 · 处理背景</button></div>
       <div data-select-tools><label>拼图排列 <select data-grid><option value="free">手动框选</option><option value="1:1">整张</option><option value="2:1">上下两格</option><option value="3:1">上下三格</option><option value="4:1">上下四格</option><option value="1:2">左右两格</option><option value="1:3">左右三格</option><option value="1:4">左右四格</option><option value="2:2">四宫格</option><option value="3:3">九宫格</option></select></label>
       <p class="rmt-x-note" data-selection-note>拖动框选画面，或选择排列后点选一格。</p><button type="button" data-edit="apply-crop">使用选中画面</button></div>
-      <div data-paint-tools hidden><div class="rmt-mv-editor-tools"><button type="button" data-edit="auto">${options.motif ? '尝试去背景' : '尝试去白底'}</button><button type="button" data-edit="erase" aria-pressed="true">擦除</button><button type="button" data-edit="restore" aria-pressed="false">恢复</button><button type="button" data-edit="undo">撤销</button><button type="button" data-edit="reset">还原选中画面</button></div>
+      <div data-paint-tools hidden><div class="rmt-mv-editor-tools"><button type="button" data-edit="erase" aria-pressed="true">擦除</button><button type="button" data-edit="region" aria-pressed="false">点除残底</button><button type="button" data-edit="restore" aria-pressed="false">恢复</button><button type="button" data-edit="undo">撤销</button><button type="button" data-edit="reset">还原选中画面</button></div>
       <label>笔刷 <input data-brush type="range" min="1" max="100" value="20"></label>
       <label><input data-layer type="checkbox">使用此透明图叠背景</label><p class="rmt-x-note">先看预览再保存；自动处理可能误删白纱、白衣，可用恢复笔刷修回。</p></div>
       <label>放大 <input data-zoom type="range" min="1" max="4" step="0.25" value="1"></label><div class="rmt-mv-editor-tools"><button type="button" data-edit="pan">移动画布</button></div>
@@ -856,6 +1323,24 @@ function mountAssetEditor(host, options) {
         catch { say('这张图片无法读取像素。可先下载原图，再从“导入图片”打开；提示词仍可编辑。'); }
     }
     function pushUndo() { if (working) history.push({ data: duplicate(working), layer: layer().checked }); }
+    function autoCutout() {
+        if (!working) { say('请先载入图片。'); return; }
+        if (selectionDirty) { say('请先点“使用选中画面”，再一键抠图。'); return; }
+        stage = 'paint';
+        const prepared = pixels.prepareCutoutPixels(working.data, working.width, working.height, { multiple: options.multipleCharacters, reference: original?.data || working.data });
+        if (!prepared.data) {
+            show();
+            say(prepared.status === 'needs-selection' ? '这张像是多格图，请先选单格，再一键抠图。'
+                : prepared.status === 'empty' ? '未能分离背景：没有识别到可保留的画面，图片未改动。'
+                : '未能分离背景，图片未改动；可用擦除笔刷或导入透明图。');
+            return;
+        }
+        pushUndo(); working.data.set(prepared.data); compactUndo();
+        changed = true; restoreOriginal = false; layer().checked = true; show();
+        say(prepared.borderOnly ? '已去掉外侧白边，画面内部仍保留；请检查后保存。'
+            : prepared.status === 'transparent' ? '当前已是透明底，可保存或下载 PNG。'
+            : '透明底预览已生成，请检查边缘后保存；可撤销或用恢复笔刷。');
+    }
     function compactUndo() {
         const last = history.at(-1); if (!last?.data || !working) return;
         const before = last.data.data, after = working.data;
@@ -877,7 +1362,13 @@ function mountAssetEditor(host, options) {
     canvas.addEventListener('pointerdown', event => {
         if (busy || panning || !source || pointerId !== null) return;
         event.preventDefault(); pointerId = event.pointerId; canvas.setPointerCapture?.(pointerId); anchor = point(event);
-        if (stage === 'paint' && working) { pushUndo(); paint(anchor, anchor); }
+        if (stage === 'paint' && working) {
+            pushUndo();
+            if (brush === 'region') {
+                working.data.set(pixels.eraseMatteAt(working.data, working.width, working.height, anchor.x, anchor.y));
+                changed = true; restoreOriginal = false; layer().checked = true; show();
+            } else paint(anchor, anchor);
+        }
         else if (grid !== 'free') {
             const [rows, cols] = grid.split(':').map(Number);
             crop = pixels.gridCrop(rows, cols, Math.min(rows - 1, Math.floor(anchor.y / canvas.height * rows)) * cols + Math.min(cols - 1, Math.floor(anchor.x / canvas.width * cols))); selectionDirty = true; show();
@@ -886,7 +1377,7 @@ function mountAssetEditor(host, options) {
     canvas.addEventListener('pointermove', event => {
         if (event.pointerId !== pointerId || !anchor) return;
         event.preventDefault(); const next = point(event);
-        if (stage === 'paint' && working) { paint(anchor, next); anchor = next; }
+        if (stage === 'paint' && working) { if (brush !== 'region') paint(anchor, next); anchor = next; }
         else if (grid === 'free') {
             crop = pixels.normalizeCrop({ x: Math.min(anchor.x, next.x) / canvas.width, y: Math.min(anchor.y, next.y) / canvas.height, w: Math.abs(next.x - anchor.x) / canvas.width, h: Math.abs(next.y - anchor.y) / canvas.height }) || crop; selectionDirty = true; show();
         }
@@ -924,8 +1415,8 @@ function mountAssetEditor(host, options) {
         if (action === 'select') { stage = 'select'; show(); return; }
         if (action === 'paint') { if (!working || selectionDirty) applyCrop(); else { stage = 'paint'; show(); } return; }
         if (action === 'apply-crop') { applyCrop(); return; }
-        if (action === 'erase' || action === 'restore') {
-            brush = action; for (const value of ['erase', 'restore']) find(`[data-edit="${value}"]`).setAttribute('aria-pressed', String(value === brush)); return;
+        if (action === 'erase' || action === 'restore' || action === 'region') {
+            brush = action; for (const value of ['erase', 'restore', 'region']) find(`[data-edit="${value}"]`).setAttribute('aria-pressed', String(value === brush)); return;
         }
         if (action === 'undo') { const last = history.pop(); if (last) {
             if (last.data) working = last.data;
@@ -933,12 +1424,7 @@ function mountAssetEditor(host, options) {
             layer().checked = last.layer; changed = true; restoreOriginal = false; show();
         } return; }
         if (action === 'reset' && original) { pushUndo(); working = duplicate(original); compactUndo(); layer().checked = false; changed = true; restoreOriginal = false; show(); return; }
-        if (action === 'auto' && working) {
-            const data = options.motif ? pixels.prepareMotifPixels(working.data, working.width, working.height).data : pixels.eraseEdgeWhite(working.data, working.width, working.height);
-            if (!data) { say('未能分离意象背景，可用擦除笔刷处理或导入透明图。'); return; }
-            pushUndo(); working.data.set(data); compactUndo(); changed = true; restoreOriginal = false; layer().checked = true; show();
-            say(options.motif ? '已处理意象背景，请检查边缘后保存。' : '这是去白底预览，请检查边缘和白色衣物；不满意可撤销或用恢复笔刷。'); return;
-        }
+        if (action === 'auto') { autoCutout(); return; }
         if (action === 'original') {
             // Restore the saved original reference without rewriting or deleting its pixels.
             restoreOriginal = true; changed = true; selectionDirty = false; sourceBlob = null; crop = { x: 0, y: 0, w: 1, h: 1 }; history.length = 0;
@@ -974,7 +1460,7 @@ function mountAssetEditor(host, options) {
                 const c = makeCanvas(original.width, original.height); c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
                 working = c.getContext('2d').getImageData(0, 0, c.width, c.height); layer().checked = options.image.editMode === 'cutout'; stage = 'paint';
             }
-            if (options.motif) {
+            if (options.motif && !options.autoCutout) {
                 const prepared = pixels.prepareMotifPixels(working.data, working.width, working.height);
                 if (prepared.data) {
                     working.data.set(prepared.data); layer().checked = true; stage = 'paint';
@@ -982,13 +1468,213 @@ function mountAssetEditor(host, options) {
                     changed = prepared.status === 'prepared';
                 }
             }
+            if (options.autoCharacter && !options.autoCutout && !options.image?.editMode) {
+                const prepared = pixels.prepareCharacterPixels(working.data, working.width, working.height, { multiple: options.multipleCharacters });
+                if (prepared.data) {
+                    working.data.set(prepared.data); layer().checked = true; stage = 'paint';
+                    // The current PNG can be downloaded immediately. A prompt-only
+                    // save does not commit a replacement image or touch its source.
+                }
+            }
             show(); say('');
+            if (options.autoCutout) autoCutout();
         } catch { if (active && token === loadToken) { show(); say('无法读取图片像素，可导入本机图片继续处理；提示词仍可编辑。'); } }
     })();
     return { ready, dispose() { active = false; loadToken++; for (const url of urls) URL.revokeObjectURL(url); history.length = 0; } };
 }
 
 __m_ui_mvImageEditor_js.mountAssetEditor = mountAssetEditor;
+}
+
+function __init_ui_mvStageCanvas_js() {
+// MODULE: ui/mvStageCanvas.js
+
+// Deterministic Canvas layers shared by preview, screen recording and export.
+// The model supplies only enumerated scene data; it never supplies executable drawing code.
+function drawBackground(g, background, w, h, time, tone = 'base', picture = null) {
+    const colors = background.colors || ['#203047', '#e4d6bb', '#bd6683'];
+    const base = tone === 'accent' ? colors[2] : colors[0];
+    g.save(); g.fillStyle = base; g.fillRect(0, 0, w, h);
+    if (picture && background.kind === 'image') {
+        const moving = background.motion !== 'still';
+        const r = Math.max(w / picture.naturalWidth, h / picture.naturalHeight) * (moving ? 1.08 : 1);
+        g.save(); g.translate(w / 2, h / 2);
+        if (background.motion === 'rotate') g.rotate(Math.sin(time * 0.45) * 0.02);
+        if (background.motion === 'drift') g.translate(Math.sin(time * 0.45) * w * 0.015, 0);
+        g.drawImage(picture, -picture.naturalWidth * r / 2, -picture.naturalHeight * r / 2, picture.naturalWidth * r, picture.naturalHeight * r);
+        g.restore();
+        if (tone === 'accent') { g.globalAlpha = 0.2; g.fillStyle = colors[2]; g.fillRect(0, 0, w, h); g.globalAlpha = 1; }
+    } else {
+        const kind = background.kind, size = Math.hypot(w, h);
+        const angle = background.motion === 'rotate' ? time * 0.09 : 0;
+        const drift = background.motion === 'drift' ? Math.sin(time * 0.45) * w * 0.025 : 0;
+        g.save(); g.translate(w / 2 + drift, h / 2); g.rotate(angle);
+        g.fillStyle = colors[1];
+        if (kind === 'rays') {
+            for (let i = 0; i < 12; i++) {
+                const a = i * Math.PI / 6, b = a + Math.PI / 12;
+                g.beginPath(); g.moveTo(0, 0); g.lineTo(Math.cos(a) * size, Math.sin(a) * size);
+                g.lineTo(Math.cos(b) * size, Math.sin(b) * size); g.closePath(); g.fill();
+            }
+        } else if (kind === 'stripes') {
+            g.rotate(-0.4); const step = Math.min(w, h) * 0.16;
+            for (let x = -size; x < size; x += step) g.fillRect(x, -size, step * 0.4, size * 2);
+        } else if (kind === 'window') {
+            g.globalAlpha = 0.4; const step = Math.min(w, h) * 0.22, line = Math.max(2, Math.min(w, h) * 0.008);
+            for (let x = -size; x < size; x += step) g.fillRect(x, -size, line, size * 2);
+            for (let y = -size; y < size; y += step * 1.4) g.fillRect(-size, y, size * 2, line);
+        } else if (kind === 'paper') {
+            g.globalAlpha = 0.13;
+            for (let i = 0; i < 150; i++) {
+                const x = ((i * 137) % 997) / 997 * size * 2 - size;
+                const y = ((i * 293) % 991) / 991 * size * 2 - size;
+                g.fillRect(x, y, Math.max(1, w * 0.012), Math.max(1, h * 0.002));
+            }
+        }
+        g.restore();
+    }
+    if (tone === 'dark') { g.globalAlpha = 0.48; g.fillStyle = '#080c15'; g.fillRect(0, 0, w, h); }
+    g.restore();
+}
+
+function words(value) {
+    try { return Array.from(new Intl.Segmenter('zh', { granularity: 'word' }).segment(value), x => x.segment); }
+    catch { return value.match(/[a-zA-Z0-9]+|\s+|[^\s]/gu) || []; }
+}
+
+function linesFor(g, value, width, splitLongWords = false) {
+    const lines = []; let line = '';
+    const put = token => {
+        if (splitLongWords && g.measureText(token).width > width && Array.from(token).length > 1) { for (const ch of token) put(ch); return; }
+        if (line && g.measureText(line + token).width > width && !/^[，。！？、；：,.!?;:]+$/u.test(token)) {
+            lines.push(line.trim()); line = token.trimStart();
+        } else line += token;
+    };
+    for (const [i, paragraph] of String(value).split('\n').entries()) {
+        if (i && line) { lines.push(line.trim()); line = ''; }
+        for (const token of words(paragraph)) put(token);
+    }
+    if (line.trim()) lines.push(line.trim());
+    return lines;
+}
+
+function divideText(value) {
+    const tokens = words(value), mid = value.length / 2;
+    if (tokens.length < 2 || value.length < 5) return [value];
+    let length = 0, best = 1, score = Infinity;
+    for (let i = 1; i < tokens.length; i++) {
+        length += tokens[i - 1].length;
+        if (/^[，。！？、；：,.!?;:]/u.test(tokens[i])) continue;
+        const distance = Math.abs(length - mid) - (/\s|[，。！？、；：,.!?;:]$/u.test(tokens[i - 1]) ? 1.5 : 0);
+        if (distance < score) { score = distance; best = i; }
+    }
+    return [tokens.slice(0, best).join('').trim(), tokens.slice(best).join('').trim()].filter(Boolean);
+}
+
+function textRegions(state, group, w, h, subject = null, forceFront = false) {
+    let layout = forceFront ? 'banner' : state.cue.layout || 'sides';
+    const margin = w * .05, gap = w * .025;
+    const left = subject ? Math.max(0, subject.x - gap - margin) : w * .28;
+    const rightX = subject ? Math.min(w - margin, subject.x + subject.width + gap) : w * .67;
+    const right = subject ? Math.max(0, w - margin - rightX) : w * .28;
+    const regions = [];
+    if (layout !== 'banner') {
+        if (layout === 'sides' && left >= w * .16 && right >= w * .16) {
+            const parts = divideText(state.text);
+            if (parts.length === 2) regions.push({ text: parts[0], x: margin + left / 2, width: left }, { text: parts[1], x: rightX + right / 2, width: right });
+            else { const useLeft = left >= right; regions.push({ text: state.text, x: useLeft ? margin + left / 2 : rightX + right / 2, width: useLeft ? left : right }); }
+        } else {
+            const useLeft = subject ? left >= right : group?.position === 'right';
+            const width = useLeft ? left : right;
+            if (width >= w * .18) regions.push({ text: state.text, x: useLeft ? margin + left / 2 : rightX + right / 2, width });
+            else layout = 'banner';
+        }
+    }
+    if (layout === 'banner') return { layout, front: true, regions: [{ text: state.text, x: w / 2, width: w * .88 }] };
+    return { layout, front: state.cue.depth === 'front', regions };
+}
+
+function drawText(g, state, group, w, h, font, forceFront = false, options = {}) {
+    if (!state?.active || !state.text || state.cue.layout === 'none') return;
+    g.save();
+    let plan = textRegions(state, group, w, h, options.subject, forceFront);
+    let size = Math.min(w, h) * (plan.layout === 'banner' ? .055 : .105), fitted;
+    const fit = () => {
+        g.font = `${font.weight} ${size}px ${font.stack}`;
+        return plan.regions.map(r => ({ ...r, lines: linesFor(g, r.text, r.width) }));
+    };
+    const oversized = height => fitted.some(r => r.lines.length * size * 1.25 > height || r.lines.some(line => g.measureText(line).width > r.width));
+    fitted = fit();
+    while (oversized(h * (plan.layout === 'banner' ? .24 : .55)) && size > Math.min(w, h) * .045) {
+        size *= .92; fitted = fit();
+    }
+    if (plan.layout !== 'banner' && oversized(h * .55)) {
+        plan = textRegions(state, group, w, h, options.subject, true); size = Math.min(w, h) * .055; fitted = fit();
+    }
+    // Very long lyrics wrap without dropping words. Only the display size changes.
+    while (oversized(h * .28) && plan.layout === 'banner' && size > 2) { size *= .92; fitted = fit(); }
+    if (size <= 2) fitted = plan.regions.map(r => ({ ...r, lines: linesFor(g, r.text, r.width, true) }));
+    if ((options.suppressBanner && plan.layout === 'banner') || (options.pass && options.pass !== (plan.front ? 'front' : 'back'))) { g.restore(); return; }
+    g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineJoin = 'round';
+    g.font = `${font.weight} ${size}px ${font.stack}`;
+    const candidate = /^#[0-9a-f]{6}$/iu.test(state.background.colors?.[1] || '') ? state.background.colors[1] : '#fffdf8';
+    const rgb = [1, 3, 5].map(i => parseInt(candidate.slice(i, i + 2), 16));
+    const dark = rgb[0] * .2126 + rgb[1] * .7152 + rgb[2] * .0722 < 135;
+    g.fillStyle = plan.layout === 'banner' ? '#fffdf8' : candidate;
+    g.strokeStyle = plan.layout === 'banner' || !dark ? 'rgba(15,18,25,.92)' : 'rgba(255,253,248,.95)';
+    g.lineWidth = Math.max(2, size * .11); g.shadowColor = 'rgba(0,0,0,.35)'; g.shadowBlur = size * .09;
+    for (const r of fitted) {
+        const lineHeight = size * 1.25;
+        const y = plan.layout === 'banner' ? h * .91 - (r.lines.length - 1) * lineHeight / 2 : h * .38;
+        for (let i = 0; i < r.lines.length; i++) {
+            const yy = y + (i - (r.lines.length - 1) / 2) * lineHeight;
+            g.strokeText(r.lines[i], r.x, yy); g.fillText(r.lines[i], r.x, yy);
+        }
+    }
+    g.restore();
+}
+
+// Layout uses the visible subject rather than the transparent canvas margins.
+function foregroundPlacement(bounds, pw, ph, group, w, h) {
+    const b = bounds || { cx: .5, bottom: 1, top: 0, x: 0, width: 1, height: 1 };
+    const factor = { close: 1.22, medium: 1.02, full: .84, wide: .56 }[group?.scale] || 1.02;
+    const body = group?.scale === 'full' || group?.scale === 'wide';
+    const foot = body ? (group.scale === 'wide' ? .91 : .95) : 1.035;
+    const scale = Math.min(h * factor / Math.max(1, ph * b.height), w * (body ? .88 : 1.04) / Math.max(1, pw * (b.width || 1)));
+    const visibleW = pw * (b.width || 1) * scale;
+    const nominal = w * ({ left: .32, right: .68, center: .5 }[group?.position] || .5);
+    const cx = visibleW >= w * .95 ? w / 2 : Math.max(visibleW / 2 + w * .025, Math.min(w - visibleW / 2 - w * .025, nominal));
+    const x = cx - pw * b.cx * scale, y = h * foot - ph * b.bottom * scale;
+    return { x, y, width: pw * scale, height: ph * scale, foot: h * foot, grounded: body,
+        subject: { x: x + pw * (b.x || 0) * scale, y: y + ph * (b.top || 0) * scale, width: visibleW, height: ph * b.height * scale } };
+}
+
+function isDetailInsert(group, diff, shot = null) {
+    // Generation already used these fields to compose a close-up. Do not
+    // require a particular translated label, or magnify that composition again.
+    const cast = Array.isArray(shot?.cast) ? shot.cast : group?.cast;
+    if (cast?.length && cast.every(p => ['hands', 'face'].includes(p.visible))) return true;
+    if (group?.scale === 'close' || shot?.scale === 'close') return true;
+    const description = [group?.composition, diff?.imagePrompt || group?.characterPrompt,
+        diff?.label, diff?.change, shot?.composition, shot?.shot, shot?.imagePrompt, shot?.plain].filter(Boolean).join(' ');
+    // Hand-holding and expressive eyes in a full-body scene are not enough:
+    // the text must actually request a local crop or close-up.
+    return /(?:眼睛|双眼|眼部|脸部|面部|人脸|手部|双手|牵手|手指|嘴唇|唇部|泪痣|物件|局部).{0,12}特写|特写.{0,12}(?:眼睛|双眼|眼部|脸部|面部|人脸|手部|双手|牵手|手指|嘴唇|唇部|泪痣|物件|局部)|\bextreme\s+close[ -]?up\b|\b(?:eyes?|hands?|fingers?|wrists?|face|facial|lips?|objects?)\b[^.!?\n]{0,32}\bclose[ -]?up\b|\bclose[ -]?up\b[^.!?\n]{0,32}\b(?:eyes?|hands?|fingers?|wrists?|face|lips?|objects?)\b|\bonly\s+(?:the\s+)?(?:hands?|eyes?|face|lips?)\s+(?:in\s+(?:the\s+)?frame|visible)\b/iu.test(description);
+}
+
+function poseTransform(state, w, h) {
+    const progress = Math.min(1, state.poseTime / 0.24);
+    if (state.entrance === 'pop') return { x: 0, y: 0, scale: 1 + 0.055 * Math.sin(progress * Math.PI) };
+    if (state.entrance === 'slide') return { x: -w * 0.08 * (1 - progress) ** 3, y: 0, scale: 1 };
+    return { x: 0, y: 0, scale: 1 };
+}
+
+__m_ui_mvStageCanvas_js.drawBackground = drawBackground;
+__m_ui_mvStageCanvas_js.textRegions = textRegions;
+__m_ui_mvStageCanvas_js.drawText = drawText;
+__m_ui_mvStageCanvas_js.foregroundPlacement = foregroundPlacement;
+__m_ui_mvStageCanvas_js.isDetailInsert = isDetailInsert;
+__m_ui_mvStageCanvas_js.poseTransform = poseTransform;
 }
 
 function __init_core_themeSongCover_js() {
@@ -20299,7 +20985,7 @@ function __init_core_selfUpdater_js() {
 // MODULE: core/selfUpdater.js
 
 const UPDATE_STATE = Symbol.for('heartbeatMemories.selfUpdate');
-const INSTALLED_BUILD = '0.99.99-r84.187-mv-update-recovery';
+const INSTALLED_BUILD = '1.0.15-r84.232-mv-cutout-preview';
 const PROJECT_REMOTE = 'https://github.com/zaiyebuzuoyouqingdetiangou/tokimemo';
 function updateError(message) { const error = new Error(message); error.userMessage = message; return error; }
 
@@ -36205,7 +36891,7 @@ function publicFailure(error) {
 function baiBaiImagePendingCount() { return pendingGenerations.size; }
 function isBaiBaiImageTargetPending(targetKey) { return !!targetKey && pendingGenerations.has(targetKey); }
 
-async function generateBaiBaiImage(prompt, { signal = null, orientation = 'landscape', characterName = '', promptMetadata = null, onProgress = null, onSettled = null, targetKey = '', seed = 0 } = {}) {
+async function generateBaiBaiImage(prompt, { signal = null, orientation = 'landscape', characterName = '', promptMetadata = null, onProgress = null, onSettled = null, targetKey = '', seed = 0, singlePrompt = false } = {}) {
     if (signal?.aborted) throw baiBaiImageError('BBI_ABORTED');
     const state = baiBaiImageState();
     if (!state.available) throw baiBaiImageError(state.code);
@@ -36248,6 +36934,9 @@ async function generateBaiBaiImage(prompt, { signal = null, orientation = 'lands
         if (formatted.characters) request.characters = formatted.characters;
         else delete request.characters;
     }
+    // NAI's character-capable path concatenates prompt and nl. MV has one
+    // complete scene already; appearance stays in its character channel.
+    if (singlePrompt && state.backend === 'nai' && state.supportsCharacters) request.nl = '';
     const controller = new AbortController();
     let timer;
     let stopped = false;
@@ -36848,12 +37537,12 @@ function invokeSelectedImageProvider(selectedProvider, prompt, context, options)
     throw core_text.safeUserError('请在设置里选择柏宝绘或智绘姬。旧渠道图片仍可查看。', 'RMT_IMAGE_PROVIDER_RETIRED');
 }
 
-async function invokeImageGeneration(prompt, context = core_context.getContext(), { signal = null, provider = null, orientation = 'landscape', characterName = '', promptMetadata = null, onProgress = null, onSettled = null, targetKey = '', seed = 0 } = {}) {
+async function invokeImageGeneration(prompt, context = core_context.getContext(), { signal = null, provider = null, orientation = 'landscape', respectOrientation = false, characterName = '', promptMetadata = null, onProgress = null, onSettled = null, targetKey = '', seed = 0, singlePrompt = false } = {}) {
     const settings = core_settings.getPluginSettings(context);
     const selectedProvider = provider === chatu8_image.CHATU8_IMAGE_PROVIDER || provider === baibai_image.BAIBAI_IMAGE_PROVIDER
         ? provider : settings.imageGenerationProvider;
     // seed 只交给柏宝绘（公开 API 支持单次 seed）；智绘姬没有公开的单次 seed 接口，不传。
-    const options = { signal, orientation, characterName, promptMetadata, onProgress, onSettled, targetKey, seed: Number.isInteger(seed) && seed > 0 ? seed : 0 };
+    const options = { signal, orientation, respectOrientation, characterName, promptMetadata, onProgress, onSettled, targetKey, singlePrompt, seed: Number.isInteger(seed) && seed > 0 ? seed : 0 };
     try {
         return await invokeSelectedImageProvider(selectedProvider, prompt, context, options);
     } catch (error) {
@@ -37985,8 +38674,8 @@ const core_context = __m_core_context_js;
 const core_text = __m_core_text_js;
 const appearance = __m_generation_cgAppearance_js;
 // Calls 智绘姬 through the event it already listens for. Does not read API keys,
-// prompts, or endpoints, and does not write its settings. Width and height are
-// omitted so the user's existing 智绘姬 size stays in effect.
+// prompts, or endpoints, and does not write its settings. Ordinary CG keeps its
+// existing size; an explicit MV orientation overrides only this request's size.
 
 
 
@@ -38134,7 +38823,25 @@ async function saveStillImage(imageData, context, signal) {
     return path;
 }
 
-async function generateChatu8Image(prompt, { signal = null, promptMetadata = null, onProgress = null, onSettled = null, targetKey = '', context = core_context.getContext() } = {}) {
+function orientedSize(context, backend, orientation) {
+    const bag = extensionBag(context);
+    const keys = { novelai: ['novelai_width', 'novelai_height'], sd: ['sd_cwidth', 'sd_cheight'], comfyui: ['comfyui_width', 'comfyui_height'] }[backend];
+    const width = Number(keys && bag?.[keys[0]]), height = Number(keys && bag?.[keys[1]]);
+    let long = 1216, short = 832;
+    if (Number.isSafeInteger(width) && width > 0 && Number.isSafeInteger(height) && height > 0) {
+        long = Math.max(width, height); short = Math.min(width, height);
+        if (long === short) {
+            // Keep approximately the configured pixel area, aligned for image
+            // backends. A square preset must not swallow an explicit MV choice.
+            const area = width * height;
+            long = Math.max(128, Math.floor(Math.sqrt(area * 16 / 9) / 64) * 64);
+            short = Math.max(64, Math.floor(area / long / 64) * 64);
+        }
+    }
+    return orientation === 'portrait' ? { width: short, height: long } : { width: long, height: short };
+}
+
+async function generateChatu8Image(prompt, { signal = null, orientation = 'landscape', respectOrientation = false, promptMetadata = null, onProgress = null, onSettled = null, targetKey = '', context = core_context.getContext() } = {}) {
     if (signal?.aborted) throw chatu8ImageError('CH8_ABORTED');
     const state = chatu8ImageState(context);
     if (!state.available) throw chatu8ImageError(state.code);
@@ -38184,7 +38891,7 @@ async function generateChatu8Image(prompt, { signal = null, promptMetadata = nul
                 source.on(RESPONSE_EVENT, onResponse);
                 signal?.addEventListener('abort', onAbort, { once: true });
                 timer = setTimeout(() => stop('CH8_TIMEOUT'), CHATU8_IMAGE_TIMEOUT_MS);
-                source.emit(REQUEST_EVENT, { id, prompt: scene });
+                source.emit(REQUEST_EVENT, { id, prompt: scene, ...(respectOrientation ? orientedSize(context, state.backend, orientation) : {}) });
             } catch { stop('CH8_BACKEND_ERROR'); }
         });
         if (signal?.aborted) throw chatu8ImageError('CH8_ABORTED');
@@ -40661,7 +41368,7 @@ async function generateModeOperation(mode, options = {}) {
         if (mode === core_constants.MODE.INBOX) return !modes_inbox.inboxPlan(memoryBank, previousSession, inboxDate).length;
         if (mode === core_constants.MODE.ROOM && options.visualOnly && previousSession) return false;
         if (mode === core_constants.MODE.PHONE && options.fillMissing) {
-            if (options.continueDraft) throw new Error('私人终端还有已保存的续写草稿，请先从档案入口继续生成；补旧终端不会清除这份草稿。');
+            if (options.continueDraft) return false;
             return !modes_phone.phoneHasMissingEntries(previousSession);
         }
         if (!previousSession || refreshableCalendar || refreshableRelations || core_constants.CREATIVE_EXPANSION_MODES.includes(mode) || (mode === core_constants.MODE.PHONE && options.continueDraft === true)) return false;
@@ -40941,7 +41648,7 @@ async function generateModeOperation(mode, options = {}) {
         } else if (mode === core_constants.MODE.HEART) {
             session = await modes_heart.generateHeartWithRepair(context, memoryBank, origin, taskKey, { replaceExisting });
         } else if (mode === core_constants.MODE.PHONE) {
-            session = previousSession && options.fillMissing
+            session = previousSession && options.fillMissing && options.continueDraft !== true
                 ? await modes_phone.generatePhoneMissingWithRepair(context, memoryBank, origin, taskKey, previousSession, { presentationContext,
                     savePartial: async partial => {
                         partial.chatId = expectedChatId; partial.archiveRevision = expectedArchiveRevision;
@@ -56521,6 +57228,12 @@ function unavailablePhoneEntry(id) {
 
 function isUnavailablePhoneEntry(entry) { return entry?.unavailable === true || entry?.sourceStatus === 'unavailable'; }
 
+// Only the old normalizer's synthetic recap slots are eligible for manual repair.
+// Readable records stay in storage until a usable replacement for that ID exists.
+function isPhoneRecapEntry(entry) {
+    return !isUnavailablePhoneEntry(entry) && /^剧情摘录\s*\d*$/u.test(String(entry?.title || '').trim());
+}
+
 function assertPhoneConversation(messages, { userThread = false } = {}) {
     if (userThread) {
         if (!messages.some(message => message.speakerRole === 'owner')) {
@@ -56578,6 +57291,7 @@ __m_modes_phoneBasics_js.isExcludedPhoneApp = isExcludedPhoneApp;
 __m_modes_phoneBasics_js.phoneAppLimits = phoneAppLimits;
 __m_modes_phoneBasics_js.unavailablePhoneEntry = unavailablePhoneEntry;
 __m_modes_phoneBasics_js.isUnavailablePhoneEntry = isUnavailablePhoneEntry;
+__m_modes_phoneBasics_js.isPhoneRecapEntry = isPhoneRecapEntry;
 __m_modes_phoneBasics_js.assertPhoneConversation = assertPhoneConversation;
 __m_modes_phoneBasics_js.phoneStory = phoneStory;
 __m_modes_phoneBasics_js.isPhoneUserName = isPhoneUserName;
@@ -56665,6 +57379,10 @@ function inferPhoneContactName(entry, memoryBank) {
     const ownerName = phoneConversationOwnerName(memoryBank);
     const explicit = core_text.normalizeText(entry?.contactName, 100).trim();
     if (explicit && explicit !== ownerName && !isGenericOwnerLabel(explicit) && !isGenericContactLabel(explicit)) return explicit;
+    // Contact cards often name the person in fields instead of a chat-only field.
+    const nameField = !entry?.messages?.length && (Array.isArray(entry?.fields) ? entry.fields : []).find(field => /^(?:姓名|名字|名称|name)$/iu.test(String(field?.label || '').trim()));
+    const fieldName = core_text.normalizeText(nameField?.value, 100).trim();
+    if (fieldName && fieldName !== ownerName && !isGenericContactLabel(fieldName)) return fieldName;
 
     const story = phoneStory(memoryBank);
     const title = core_text.normalizeText(entry?.title, 100).trim();
@@ -56930,7 +57648,7 @@ function phoneEntryBasis(entry, kind, conversation, memoryBank, options = {}) {
     const unquoted = text.replace(/[“「『"][^”」』"\n]*[”」』"]/gu, '');
     // A quoted "tomorrow" inside an already-recorded conversation is not a future
     // frame for that transcript. Ambiguous retrospective records keep memory rules.
-    if (!/(?:正在|现在|今天|今日|明早|明晚|明天|后天|下周|下次|待会|等会|稍后|计划|准备|待办|提醒|草稿|未发送|想和|想陪|要不要)/u.test(unquoted)) return declared;
+    if (kind === 'chat' && !/(?:正在|现在|今天|今日|明早|明晚|明天|后天|下周|下次|待会|等会|稍后|计划|准备|待办|提醒|草稿|未发送|想和|想陪|要不要)/u.test(unquoted)) return declared;
     // "basis" is a model hint, not authority. Current life content does not become
     // a historical transcript merely because that hint says memory. Never downgrade
     // actual joint history or user transcript/contact fields to avoid their checks.
@@ -56969,6 +57687,7 @@ const assertPhoneConversation = __m_modes_phoneBasics_js.assertPhoneConversation
 const isExcludedPhoneApp = __m_modes_phoneBasics_js.isExcludedPhoneApp;
 const isGenericOwnerLabel = __m_modes_phoneBasics_js.isGenericOwnerLabel;
 const isPhoneUserName = __m_modes_phoneBasics_js.isPhoneUserName;
+const isPhoneRecapEntry = __m_modes_phoneBasics_js.isPhoneRecapEntry;
 const isUnavailablePhoneEntry = __m_modes_phoneBasics_js.isUnavailablePhoneEntry;
 const normalizePhoneAppIcon = __m_modes_phoneBasics_js.normalizePhoneAppIcon;
 const normalizePhoneAppKind = __m_modes_phoneBasics_js.normalizePhoneAppKind;
@@ -57440,26 +58159,28 @@ function normalizePhoneDraftApp(data, planApp, memoryBank, deviceKind, sourceMem
 function phoneHasMissingEntries(session) {
     return !!session?.apps?.some(app => {
         const omitted = new Set(app.omittedEntryIds || []);
-        return app.entries?.some(entry => isUnavailablePhoneEntry(entry) && !omitted.has(entry.id));
+        if (!app.entries?.length) return true;
+        return app.entries?.some(entry => (isUnavailablePhoneEntry(entry) || (!['chat', 'contacts'].includes(app.kind) && isPhoneRecapEntry(entry))) && !omitted.has(entry.id));
     });
 }
 
 function phoneCompletionSummary(value) {
     const planned = Array.isArray(value?.plan?.apps) ? value.plan.apps : (Array.isArray(value?.apps) ? value.apps : []);
     const completed = Array.isArray(value?.completedApps) ? value.completedApps : (Array.isArray(value?.apps) ? value.apps : []);
-    let readableItems = 0, totalItems = 0, missingItems = 0, omittedItems = 0, completeApps = 0;
+    let readableItems = 0, totalItems = 0, missingItems = 0, omittedItems = 0, completeApps = 0, repairItems = 0;
     for (const app of planned) {
         const entries = Array.isArray(app?.entries) ? app.entries : [];
         const saved = completed.find(item => item.id === app.id);
         const readable = entries.filter(entry => saved?.entries?.some(item => item.id === entry.id && !isUnavailablePhoneEntry(item))).length;
         const omitted = value?.plan ? entries.filter(entry => !saved?.entries?.some(item => item.id === entry.id)
             && saved?.omittedEntryIds?.includes(entry.id)).length : 0;
-        const pending = entries.length - readable - omitted;
-        totalItems += entries.length; readableItems += readable; missingItems += pending;
+        const pending = Math.max(1, entries.length) - readable - omitted;
+        repairItems += ['chat', 'contacts'].includes(app.kind) ? 0 : (saved?.entries || []).filter(isPhoneRecapEntry).length;
+        totalItems += Math.max(1, entries.length); readableItems += readable; missingItems += pending;
         omittedItems += value?.plan ? omitted : (saved?.omittedEntryIds?.length || 0);
         if (saved && !pending) completeApps++;
     }
-    return { readableItems, totalItems, missingItems, omittedItems,
+    return { readableItems, totalItems, missingItems, omittedItems, repairItems,
         completeApps, totalApps: planned.length, partial: readableItems > 0 && missingItems > 0 };
 }
 
@@ -57467,9 +58188,12 @@ function mergePhoneMissingEntries(previous, fresh) {
     const merged = structuredClone(previous);
     merged.entries = (previous.entries || []).filter(entry => !isUnavailablePhoneEntry(entry) || !fresh.omittedEntryIds?.includes(entry.id)).map(entry => {
         const replacement = fresh.entries?.find(item => item.id === entry.id);
-        return isUnavailablePhoneEntry(entry) && replacement && !isUnavailablePhoneEntry(replacement)
+        return (isUnavailablePhoneEntry(entry) || (!['chat', 'contacts'].includes(previous.kind) && isPhoneRecapEntry(entry))) && replacement && !isUnavailablePhoneEntry(replacement) && !isPhoneRecapEntry(replacement)
             ? structuredClone(replacement) : structuredClone(entry);
     });
+    if (!previous.entries?.length && fresh.id === previous.id) {
+        merged.entries = (fresh.entries || []).filter(entry => !isUnavailablePhoneEntry(entry) && !isPhoneRecapEntry(entry)).map(entry => structuredClone(entry));
+    }
     if (previous.kind === 'chat') {
         merged.ownerMembers = structuredClone(fresh.ownerMembers || previous.ownerMembers || []);
         merged.omittedEntryIds = [...new Set([...(previous.omittedEntryIds || []), ...(fresh.omittedEntryIds || [])])];
@@ -57919,7 +58643,7 @@ UNTRUSTED_APP_PLAN_JSON:\n${JSON.stringify(app, null, 2)}
 受控档案人物显示名（有多人名单时不得用卡名代替）：${JSON.stringify(phoneControlledOwnerNames(memoryBank, { ownerMembers: app.ownerMembers, controlledEvidence: app.ownerMembers?.map(row => row.sourceEvidence).join('\n') }))}
 
 严格输出：
-{"app":{"id":"与 UNTRUSTED_APP_PLAN_JSON.id 完全相同","label":"与计划相同","kind":"与计划相同","summary":"...","entries":[{"id":"计划中的原 id","title":"计划中的标题","meta":"...","preview":"列表预览","detail":"详情正文","contactName":"聊天对象实际显示名；非 chat 可空","messages":[{"speakerRole":"owner|contact","speaker":"实际姓名","time":"...","text":"..."}],"fields":[],"imageCaption":"","basis":"设定","sourceMemoryIds":[],"sourceMemoryAnchor":"","sourceMemoryEvidence":"basis=记忆时从该 Mxxx 原样复制的直接证据","sourceSettingEvidence":"basis=设定时从受控角色卡/世界书原样复制的直接证据"}]}}
+{"app":{"id":"与 UNTRUSTED_APP_PLAN_JSON.id 完全相同","label":"与计划相同","kind":"与计划相同","summary":"...","entries":[{"id":"计划中的原 id","title":"计划中的标题","meta":"...","preview":"列表预览","detail":"详情正文","contactName":"chat/contacts 对象实际姓名；其他 kind 可空","messages":[{"speakerRole":"owner|contact","speaker":"实际姓名","time":"...","text":"..."}],"fields":[],"imageCaption":"","basis":"设定","sourceMemoryIds":[],"sourceMemoryAnchor":"","sourceMemoryEvidence":"basis=记忆时从该 Mxxx 原样复制的直接证据","sourceSettingEvidence":"basis=设定时从受控角色卡/世界书原样复制的直接证据"}]}}
 
 硬性要求：
 - UNTRUSTED_APP_PLAN_JSON 中的 ${app.entries.length} 个 entry id 是本次候选目录，可只返回有合适完整内容的条目；不必凑数。返回条目必须使用计划中的原 id，不能改 id 或添加计划外 id；每项必须有 preview，且 detail/messages/fields/imageCaption 至少一种有实质内容。
@@ -57929,7 +58653,8 @@ UNTRUSTED_APP_PLAN_JSON:\n${JSON.stringify(app, null, 2)}
 - basis=记忆 时必须提供当前档案中有效 sourceMemoryIds + sourceMemoryAnchor${sourceMemoryIds ? '，并至少引用一个 incrementalMemoryIds' : ''}，并把直接支持条目的 Mxxx 原句逐字放入 sourceMemoryEvidence；chat 的联系人和每条消息、contacts 的每个字段值都必须在该原句或所引 Mxxx 中逐字出现，不能用真实 id/anchor 替无关新事实洗白。sourceSettingEvidence 留空。basis=设定/推演 不得冒充已经发生的共同历史，也不得替 {{user}} 生成其从未说过的消息。
 - kind=chat：与当前用户只写 conversationMode=draft、basis=推演、主人一侧至少一条未发送草稿，不要求双向，绝不生成用户发言。已知普通 NPC 的当下日常可写 conversationMode=daily、至少2条双向消息，标为日常演绎。已发生双向原话仅 basis=记忆、conversationMode=history，每句和说话人归属都须在所引 Mxxx 逐字核对；摘要不支持的原话降为主人未发送草稿，不冒充历史。speakerRole 用 owner/contact；组卡 owner 使用 UNTRUSTED_APP_PLAN_JSON.ownerMembers 中的成员真名，不能把卡名作为所有成员姓名。contacts 私密字段仍只接受有据历史。
 - 设备所属角色卡名是 ${phoneStory(memoryBank, context).cardName}；当前用户是 ${phoneStory(memoryBank, context).userDisplay}。${phoneStory(memoryBank, context).compatNote}如果聊天对象就是当前用户，contactName 用档案里的显示名，只输出主人草稿，不替用户写消息。
-- kind=contacts 可收录受控人设/世界书明确存在的普通联系人，basis=设定，sourceSettingEvidence 逐字引述该联系人的设定。至少1个字段，职业/身份/关系必须由该联系人同一句设定明确支持；备注可以是当下计划。不编电话号码、地址、账号等私密字段；这些仍只接受 basis=记忆 的原文证据。gallery 用 imageCaption 写纯文字照片说明。
+- 内容以该应用主人的口吻与用途组织，不写第三人称剧情回顾，不用“剧情摘录”作标题，也不在正文解释“人设推演/非真实记录”。来源只放 basis/source 字段。账目以项目、用途、类别、备注等 fields 呈现，不需要编造未知金额；购物写选品和偏好，笔记写主人自己的便笺，阅读写书签或读后感，工作写正在处理的事项。字段不足时仍可保留完整正文，不额外凑字段。
+- kind=contacts 可收录受控人设/世界书明确存在的普通联系人，basis=设定，sourceSettingEvidence 逐字引述该联系人的设定。明确填写 contactName=此人的姓名，title 使用姓名或称呼，fields 使用 {"label":"姓名","value":"此人的姓名"} 等对象。职业/身份/关系有直接依据才填写；只有姓名明确时，用姓名加主人的联络打算/待问事项（备注），不要因为没有电话或地址把整张名帖置空。备注可以是当下计划。不编电话号码、地址、账号等私密字段；这些仍只接受 basis=记忆 的原文证据。gallery 用 imageCaption 写纯文字照片说明。
 - kind=notes/work/study/reading/books/files/research/creative/finance/tools：这是 ${phoneStory(memoryBank, context).ownerNames.join('、') || '档案人物'} 自己在用的记录，不是角色卡名称的备忘。当前用户是 ${phoneStory(memoryBank, context).userDisplay}。${phoneStory(memoryBank, context).compatNote}写主人自己的待办、摘录、工作学习或账目；提及用户时用档案显示名，不要替用户写已发送留言。
 - 禁止前任/前女友；禁止 {{char}} 与 {{user}} 之外的恋爱/婚姻对象。不输出 URL、HTML 或脚本。只输出 JSON。
 ${app.kind === 'chat' ? PHONE_COMMUNICATION_REPAIR_CONTRACT : PHONE_LIFESTYLE_REPAIR_CONTRACT}`;
@@ -58020,6 +58745,7 @@ const core_text = __m_core_text_js;
 const core_worldPresentation = __m_core_worldPresentation_js;
 const generation_client = __m_generation_client_js;
 const isPhonePlaceholderTitle = __m_modes_phoneBasics_js.isPhonePlaceholderTitle;
+const isPhoneRecapEntry = __m_modes_phoneBasics_js.isPhoneRecapEntry;
 const isUnavailablePhoneEntry = __m_modes_phoneBasics_js.isUnavailablePhoneEntry;
 const phoneRecoveryContract = __m_modes_phoneBasics_js.phoneRecoveryContract;
 const phoneStory = __m_modes_phoneBasics_js.phoneStory;
@@ -58193,13 +58919,14 @@ async function generatePhoneMissingWithRepair(context, memoryBank, origin, taskK
     const presentation = options.presentationContext || {};
     let acceptedAny = false, contentFailure = null;
     for (const app of previous.apps || []) {
-        const entries = (app.entries || []).filter(isUnavailablePhoneEntry);
+        const entries = (app.entries || []).filter(entry => isUnavailablePhoneEntry(entry) || (!['chat', 'contacts'].includes(app.kind) && isPhoneRecapEntry(entry)));
+        if (!app.entries?.length) entries.push({ id: core_text.safeId(app.id + '_E01', 'E01'), title: '', sourceStatus: 'unavailable' });
         if (!entries.length) continue;
         const planApp = app.kind === 'chat'
-            ? phoneMissingThreadPlan(app, previous, memoryBank, { controlledEvidence: presentation.settingEvidence || '', context })
+            ? phoneMissingThreadPlan({ ...app, entries }, previous, memoryBank, { controlledEvidence: presentation.settingEvidence || '', context })
             : { ...app, incremental: true, entries: entries.map(item => ({
                 id: item.id,
-                title: isPhonePlaceholderTitle(item.title)
+                title: isPhonePlaceholderTitle(item.title) || isPhoneRecapEntry(item)
                     ? `${phoneStory(memoryBank, context).ownerNames[0] || '主人'}的${app.label}`
                     : item.title,
                 meta: item.meta || '日常',
@@ -58220,7 +58947,12 @@ async function generatePhoneMissingWithRepair(context, memoryBank, origin, taskK
             continue;
         }
         if (app.kind === 'chat') fresh.omittedEntryIds = [...new Set([...(fresh.omittedEntryIds || []), ...(planApp.omittedEntryIds || [])])];
-        session.apps = session.apps.map(item => item.id === app.id ? mergePhoneMissingEntries(item, fresh) : item);
+        const merged = mergePhoneMissingEntries(app, fresh);
+        if (JSON.stringify(merged) === JSON.stringify(app)) {
+            contentFailure = core_text.safeUserError('本次没有收到新的应用内容；原记录保留。', 'RMT_PHONE_EVIDENCE');
+            continue;
+        }
+        session.apps = session.apps.map(item => item.id === app.id ? merged : item);
         if (options.savePartial && await options.savePartial(session) === false) {
             throw core_text.safeUserError('无法确认补齐内容已保存，本次已停止。', 'RMT_PHONE_DRAFT_UNAVAILABLE');
         }
@@ -69369,6 +70101,22 @@ function phoneMobileCss() {
 .rmt-phone-page .rmt-phone-detail,.rmt-phone-page .rmt-phone-list{background:transparent!important;color:inherit!important;border-color:var(--rmt-app-accent)}
 .rmt-phone-page .rmt-phone-message{background:#fff;color:#304a3e;border:1px solid #d5e4d8;max-width:85%;border-radius:14px 14px 14px 3px}.rmt-phone-page .rmt-phone-message-owner{background:#d4eacb;margin-left:auto;border-radius:14px 14px 3px 14px}
 .rmt-phone-notepaper,.rmt-phone-book-page{padding:20px;line-height:1.9;background:repeating-linear-gradient(transparent 0 29px,#c9b88922 29px 30px);border-left:3px solid var(--rmt-app-accent)}.rmt-phone-ledger .rmt-phone-fields>div{border-bottom:1px dashed var(--rmt-app-accent);padding:14px 4px}.rmt-phone-record-art{margin:20px auto;width:150px;height:150px;border-radius:50%;display:grid;place-items:center;font-size:35px;background:repeating-radial-gradient(circle,#201e31 0 5px,#51415f 6px 7px);color:#ead5fa}.rmt-phone-track-card{text-align:center}.rmt-phone-photo-record figure{min-height:150px;display:grid;place-items:center;background:#ffffff0a;border:1px solid #ffffff22;padding:20px}.rmt-phone-feed-post{border-top:3px solid var(--rmt-app-accent);padding:18px 4px}.rmt-phone-document{padding:18px;background:#ffffff88;border-top:5px solid var(--rmt-app-accent)}.rmt-phone-route-entry{border-left:3px dotted var(--rmt-app-accent);padding-left:18px}.rmt-phone-page .rmt-phone-entry{color:inherit!important;background:transparent!important;border-color:var(--rmt-app-accent)!important}.rmt-phone-page-notes .rmt-phone-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px}.rmt-phone-page-notes .rmt-phone-entry{padding:16px!important;border:1px solid #e5d69c!important;box-shadow:2px 3px 0 #e5d69c44}
+
+/* App lists use their own content structure; all colors follow the app surface. */
+.rmt-phone-page{--rmt-screen-muted:color-mix(in srgb,var(--rmt-app-ink) 78%,var(--rmt-app-paper));--rmt-screen-accent:var(--rmt-app-ink)}
+.rmt-phone-app-overview{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:16px 4px 8px;border-bottom:2px solid var(--rmt-app-accent)}
+.rmt-phone-app-overview>b{font-size:18px}.rmt-phone-app-overview>span{font-size:12px;color:var(--rmt-screen-muted)}
+.rmt-phone-page .rmt-phone-list{min-width:0}.rmt-phone-page .rmt-phone-entry-main>b,.rmt-phone-page .rmt-phone-entry-main>span{white-space:normal!important;overflow-wrap:anywhere}
+.rmt-phone-page-finance .rmt-phone-list,.rmt-phone-page-store .rmt-phone-list{border:0!important;padding:0!important}
+.rmt-phone-page-finance .rmt-phone-entry,.rmt-phone-page-store .rmt-phone-entry{gap:12px;padding:18px 4px!important;border-bottom:1px dashed var(--rmt-app-accent)!important}
+.rmt-phone-page .rmt-phone-ledger-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;white-space:normal;overflow:visible;width:100%}
+.rmt-phone-page .rmt-phone-ledger-fields>span{display:grid;gap:4px;white-space:normal;padding:8px;background:color-mix(in srgb,var(--rmt-app-accent) 18%,transparent);border-radius:8px}
+.rmt-phone-ledger-fields small{font-size:11px}.rmt-phone-ledger-fields b{font-size:13px;overflow-wrap:anywhere;color:var(--rmt-app-ink)}
+.rmt-phone-page-contacts .rmt-phone-list{display:grid;gap:12px;border:0!important;padding:8px 0!important}
+.rmt-phone-page-contacts .rmt-phone-entry{grid-template-columns:40px minmax(0,1fr);padding:16px 12px!important;border:1px solid var(--rmt-app-accent)!important;border-left-width:4px!important;border-radius:12px}
+.rmt-phone-page-contacts .rmt-phone-entry-main>b{font-size:16px}.rmt-phone-page-contacts .rmt-phone-entry-main>span{font-size:13px;line-height:1.6}
+.rmt-phone-page .rmt-phone-entry-main>span{line-height:1.65}.rmt-phone-page-finance .rmt-phone-entry-main>b,.rmt-phone-page-store .rmt-phone-entry-main>b{font-size:15px}.rmt-phone-page-finance .rmt-phone-entry-main>span,.rmt-phone-page-store .rmt-phone-entry-main>span{font-size:13px}
+.rmt-phone-app-start{display:grid;place-items:center;gap:18px;padding:40px 16px}.rmt-phone-page .rmt-phone-app-start .rmt-btn{background:var(--rmt-app-paper);color:var(--rmt-app-ink);border-color:var(--rmt-app-accent)}
 `;
 }
 
@@ -77441,7 +78189,6 @@ const modes_phone = __m_modes_phone_js;
 const modes_room = __m_modes_room_js;
 const ui_overlay = __m_ui_overlay_js;
 const recovery_view = __m_ui_recoveryView_js;
-const ui_generationCompletion = __m_ui_generationCompletion_js;
 const runtimeState = __m_core_state_js.state;
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
@@ -77629,9 +78376,16 @@ function phoneReadingMeta(value) {
     return String(value || '').split(/[·|]/).filter(part => !/不代表|非历史|未核验|角色日常演绎|已核对的历史/.test(part)).join(' · ').trim();
 }
 
+function phoneReadingEntry(entry, app) {
+    if (!/^剧情摘录\s*\d*$/u.test(String(entry?.title || '').trim())) return entry;
+    const label = { finance: '收支记录', store: '选物记录', notes: '随手记', reading: '阅读札记', books: '阅读札记' }[app?.kind] || app?.label || '记录';
+    return { ...entry, title: entry.contactName || label };
+}
+
 function renderPhoneEntryDetail(entry, app, session = runtimeState.activeSession) {
     if (!entry) return '<div class="rmt-phone-detail rmt-phone-detail-empty">选择一条记录查看详情。</div>';
     if (entry.sourceStatus === 'unavailable') return '<div class="rmt-phone-detail rmt-phone-detail-empty"><button type="button" class="rmt-btn" data-rmt-action="phone-entry-back">← 返回列表</button><h3>本条尚未生成</h3><p>已有内容可以正常阅读；需要时可在终端重试本条。</p></div>';
+    entry = phoneReadingEntry(entry, app);
     const appKind = phonePresentationKind(app);
     const messages = entry.messages?.length ? `<div class="rmt-phone-chat-thread">${entry.messages.map(message => {
         const role = phoneRenderedSpeakerRole(message, session);
@@ -77718,9 +78472,12 @@ function phoneEntryKindMarkup(item, kind) {
     const open = content => `<button type="button" class="rmt-phone-entry rmt-phone-entry-${kind}" data-rmt-phone-entry="${id}">${content}</button>`;
     if (kind === 'chat') return open(`<i class="rmt-phone-entry-avatar" aria-hidden="true">${title.slice(0, 1)}</i><span class="rmt-phone-entry-main"><b>${title}</b><small>${meta}</small><span>${preview}</span></span>${messageCount ? `<em>${messageCount}</em>` : ''}`);
     if (['gallery', 'camera'].includes(kind)) return open(`<span class="rmt-phone-entry-thumb" aria-hidden="true"><i class="fa-solid fa-image"></i></span><b>${title}</b><small>${meta}</small><span>${core_text.esc(item?.imageCaption || item?.preview || '')}</span>`);
-    if (kind === 'contacts') return open(`<i class="rmt-phone-entry-avatar rmt-phone-entry-avatar-contact" aria-hidden="true">${title.slice(0, 1)}</i><span class="rmt-phone-entry-main"><b>${title}</b><small>${meta}</small><span>${preview}</span></span>`);
+    if (kind === 'contacts') return open(`<i class="rmt-phone-entry-avatar rmt-phone-entry-avatar-contact" aria-hidden="true">${core_text.esc(String(item.contactName || item.title || '').slice(0, 1))}</i><span class="rmt-phone-entry-main"><b>${core_text.esc(item.contactName || item.title)}</b><small>${meta}</small><span>${preview}</span></span>`);
     if (kind === 'music') return open(`<i class="rmt-phone-entry-symbol fa-solid fa-music" aria-hidden="true"></i><span class="rmt-phone-entry-main"><b>${title}</b><small>${meta}</small><span>${preview}</span></span>`);
-    if (kind === 'finance') return open(`<span class="rmt-phone-entry-main"><small>${meta || 'LEDGER'}</small><b>${title}</b><span>${preview}</span></span>`);
+    if (kind === 'finance' || kind === 'store') {
+        const fields = (Array.isArray(item.fields) ? item.fields : []).slice(0, 4).map(field => `<span><small>${core_text.esc(field.label)}</small><b>${core_text.esc(field.value)}</b></span>`).join('');
+        return open(`<span class="rmt-phone-entry-main"><small>${meta}</small><b>${title}</b><span>${preview}</span></span>${fields ? `<span class="rmt-phone-ledger-fields">${fields}</span>` : ''}`);
+    }
     if (kind === 'moments') return open(`<span class="rmt-phone-entry-feedmark" aria-hidden="true"></span><span class="rmt-phone-entry-main"><b>${title}</b><span>${preview}</span><small>${meta}</small></span>`);
     if (['reading', 'books'].includes(kind)) return open(`<span class="rmt-phone-book-spine" aria-hidden="true">BOOK</span><span class="rmt-phone-entry-main"><b>${title}</b><small>${meta}</small><span>${preview}</span></span>`);
     if (kind === 'notes') return open(`<span class="rmt-phone-note-sheet"><small>${meta}</small><b>${title}</b><span>${preview}</span></span>`);
@@ -77729,15 +78486,18 @@ function phoneEntryKindMarkup(item, kind) {
     return open(`<b>${title}</b><small>${meta}</small><span>${preview}</span>${messageCount ? `<em>${messageCount}</em>` : ''}`);
 }
 
-function renderPhoneAppList(app) {
+function renderPhoneAppList(app, writable = !runtimeState.activeArchiveSnapshot || (!runtimeState.activeArchiveReadOnly && !runtimeState.activeArchiveSnapshot.backupOnly)) {
     if (!app) return '<section class="rmt-phone-page rmt-phone-page-empty">这里暂时没有可读入口。</section>';
     const kind = phonePresentationKind(app);
     const readable = (app.entries || []).filter(item => item.sourceStatus !== 'unavailable');
-    const entries = readable.map(item => phoneEntryKindMarkup(item, kind)).join('');
+    const entries = readable.map(item => phoneEntryKindMarkup(phoneReadingEntry(item, app), kind)).join('');
     const legacyNotice = app.legacyEvidenceUnverified === true
         ? '<div class="rmt-phone-legacy-notice">此分区含旧版内容 · 证据未重新核验</div>'
         : '';
-    return `<section class="rmt-phone-page rmt-phone-app-screen rmt-phone-page-list rmt-phone-page-${kind}"><div class="rmt-phone-page-header"><button type="button" class="rmt-phone-page-back" data-rmt-action="phone-home" data-rmt-phone-app="${PHONE_HOME_APP_ID}" aria-label="返回主页">‹</button>${phoneIconHtml(app)}<div><b>${core_text.esc(app.label)}</b><small>${core_text.esc(app.summary || `${readable.length} 项`)}</small></div></div><div class="rmt-phone-list rmt-phone-list-${kind}">${entries || '<div class="rmt-phone-list-empty">这个 App 暂无可读内容；可选择重试，其他 App 不受影响。</div>'}</div></section>`;
+    const captions = { finance: '收支簿', contacts: '名帖', notes: '便笺', store: '选物清单', music: '收藏曲目', reading: '书架', books: '书架', work: '工作台', study: '学习札记', research: '资料索引', files: '文件夹', browser: '收藏夹', gallery: '影像册', camera: '影像册', moments: '近况', creative: '作品集', games: '游戏收藏' };
+    const overview = `<div class="rmt-phone-app-overview"><b>${core_text.esc(captions[kind] || app.label)}</b><span>${readable.length} ${kind === 'contacts' ? '位' : '项'}</span></div>`;
+    const empty = `<div class="rmt-phone-app-start">${phoneIconHtml(app)}${writable ? '<button type="button" class="rmt-btn" data-rmt-action="phone-fill-missing">生成内容</button>' : '<span>尚未写入</span>'}</div>`;
+    return `<section class="rmt-phone-page rmt-phone-app-screen rmt-phone-page-list rmt-phone-page-${kind}"><div class="rmt-phone-page-header"><button type="button" class="rmt-phone-page-back" data-rmt-action="phone-home" data-rmt-phone-app="${PHONE_HOME_APP_ID}" aria-label="返回主页">‹</button>${phoneIconHtml(app)}<div><b>${core_text.esc(app.label)}</b><small>${core_text.esc(app.summary || '')}</small></div></div>${overview}<div class="rmt-phone-list rmt-phone-list-${kind}">${entries || empty}</div></section>`;
 }
 
 function renderPhoneDetailPage(entry, app) {
@@ -77772,13 +78532,13 @@ function renderPhone() {
         `rmt-phone-density-${profile.density}`,
         `rmt-phone-shell-${profile.shellTone}`,
     ].join(' ');
-    const phoneWritable = !runtimeState.activeArchiveSnapshot || !runtimeState.activeArchiveReadOnly;
+    const phoneWritable = !runtimeState.activeArchiveSnapshot || (!runtimeState.activeArchiveReadOnly && !runtimeState.activeArchiveSnapshot.backupOnly);
     const incrementalButton = phoneWritable
         ? '<button type="button" class="rmt-btn rmt-phone-increment" data-rmt-action="regenerate"><i class="fa-solid fa-plus"></i> 追加生成</button>'
         : '<button type="button" class="rmt-btn rmt-phone-increment" disabled title="关闭只读查看后可增量追加"><i class="fa-solid fa-lock"></i> 只读 · 无法增量</button>';
     const reversePrivacyGate = `<section class="rmt-reverse-terminal-gate" aria-label="反查终端隐私状态"><i class="fa-solid fa-user-shield" aria-hidden="true"></i><div><b>反查终端 · 隐私保护未开放</b><p>当前架构还不能可靠区分用户人设、正式档案与模拟内容，所以不会替你生成私人事实。</p></div><span>BLOCKED SAFELY</span></section>`;
     const completion = modes_phone.phoneCompletionSummary({ apps });
-    const sourceNotice = recovery_view.readableProgressHtml(session) + `<div class="rmt-phone-draft-status"><span role="status">已有 ${completion.readableItems} 项内容</span>${ui_generationCompletion.generationCompletionHtml({ missing: completion.missingItems, unit: '条终端记录', action: 'phone-fill-missing', label: '重试未完成项', readOnly: !phoneWritable, message: `另有 ${completion.missingItems} 项未通过校验；已有内容照常阅读。`, className: 'rmt-phone-completion' })}</div>`;
+    const sourceNotice = recovery_view.readableProgressHtml(session) + `<div class="rmt-phone-draft-status"><span role="status">已有 ${completion.readableItems} 项内容</span>${phoneWritable && completion.missingItems + completion.repairItems > 0 ? '<button type="button" class="rmt-btn" data-rmt-action="phone-fill-missing">完善应用内容</button>' : ''}</div>`;
     ui_overlay.bodyEl().innerHTML = `<div class="rmt-room-deep-toolbar"><button type="button" class="rmt-btn" data-rmt-action="back">← 返回档案</button>${incrementalButton}</div>${sourceNotice}<div class="rmt-phone"><div class="rmt-phone-shell rmt-device-${kind} rmt-phone-view-${view} ${profileClasses}" data-rmt-phone-daypart="${core_text.esc(live.key)}">${phoneHardware(kind)}<div class="rmt-phone-screen">${phoneStatusBar(now, kind)}<main class="rmt-phone-content rmt-phone-content-single">${page}</main></div></div></div>`;
     startPhoneClock();
 }
@@ -77822,6 +78582,7 @@ __m_ui_phoneView_js.phoneLiveState = phoneLiveState;
 __m_ui_phoneView_js.stopPhoneClock = stopPhoneClock;
 __m_ui_phoneView_js.startPhoneClock = startPhoneClock;
 __m_ui_phoneView_js.renderPhoneEntryDetail = renderPhoneEntryDetail;
+__m_ui_phoneView_js.renderPhoneAppList = renderPhoneAppList;
 __m_ui_phoneView_js.renderPhone = renderPhone;
 __m_ui_phoneView_js.phoneSelectApp = phoneSelectApp;
 __m_ui_phoneView_js.phoneHome = phoneHome;
@@ -82633,7 +83394,16 @@ ${root} .rmt-song-cover .rmt-thumb{aspect-ratio:auto;min-height:0;overflow:hidde
 ${root} .rmt-song-cover .rmt-thumb img{width:100%;height:auto;display:block;object-fit:contain}
 ${root} .rmt-song-cover-empty{display:grid;place-content:center;gap:8px;text-align:center;min-height:150px;border-radius:16px;background:var(--rmt-theme-soft);color:var(--rmt-theme-accent-ink);border:1px solid var(--rmt-theme-border)}
 ${root} .rmt-song-cover-empty>span{font-size:40px}
-${root} .rmt-song-layout.has-songs{grid-template-columns:minmax(150px,0.8fr) minmax(0,2.4fr)}
+${root} .rmt-song-layout.has-songs{grid-template-columns:minmax(0,1fr)}
+${root} .rmt-song-library{min-width:0;border:1px solid var(--rmt-theme-border);border-radius:16px;background:var(--rmt-theme-surface-solid);padding:0 14px}
+${root} .rmt-song-library>summary{min-height:52px;cursor:pointer;display:flex;align-items:center;gap:10px;padding:10px 0;font-weight:600;list-style:none}
+${root} .rmt-song-library>summary::-webkit-details-marker{display:none}
+${root} .rmt-song-library>summary:before{content:'›';flex:none}
+${root} .rmt-song-library[open]>summary:before{content:'⌄'}
+${root} .rmt-song-library>summary>span{flex:none}
+${root} .rmt-song-library>summary>small{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-left:auto;color:var(--rmt-theme-muted);font-weight:400}
+${root} .rmt-song-library:not([open])>.rmt-song-list{display:none}
+${root} .rmt-song-library[open]>.rmt-song-list{display:flex;max-height:55vh;overflow:auto;padding:0 0 14px;overscroll-behavior:contain}
 ${root} .rmt-song-list{display:flex;flex-direction:column;gap:8px;min-width:0}
 ${root} .rmt-song-list>button{display:flex;align-items:center;text-align:left;gap:10px;min-height:62px;white-space:normal;overflow-wrap:anywhere;min-width:0;width:100%;border:1px solid var(--rmt-theme-border);background:var(--rmt-theme-surface-solid);border-radius:14px;color:var(--rmt-theme-text);padding:12px;cursor:pointer;font:inherit}
 ${root} .rmt-song-list>button.active{border-color:var(--rmt-theme-accent-ink);background:var(--rmt-theme-soft)}
@@ -82799,10 +83569,12 @@ function renderThemeSongs() {
       <label class="rmt-song-wide">想要的感觉（可不填）<input data-rmt-song-direction maxlength="400" placeholder="例如：克制的钢琴抒情，副歌逐渐明亮" ${disabled ? 'disabled' : ''}></label>
       <button type="button" class="rmt-btn rmt-song-write" data-rmt-song="generate" ${disabled ? 'disabled' : ''}>${busy() ? '正在写歌…' : session.songs.length ? '新写一首' : '创作印象曲'}</button></div></details>`;
     const button = (action, label) => `<button type="button" class="rmt-btn" data-rmt-song="${action}" data-rmt-song-id="${esc(selected.id)}">${label}</button>`;
+    const mvButton = selected && !readonly() && !selected.generationIncomplete
+        ? `<button type="button" class="rmt-btn" data-rmt-mv="open" data-rmt-mv-id="${esc(selected.id)}">做成 MV</button>` : '';
     const formatDetails = selected ? `<article class="rmt-song-sheet" data-rmt-song-presentation="format"><header><small>${esc(selected.subject === 'event' ? '事件印象曲' : '角色印象曲')} · ${esc(selected.subjectTitle)}</small><h2>${esc(selected.title)}</h2><p><b>演唱者</b> ${esc(selected.singer)} <span>· ${esc(contract.songLanguageLabel(selected))}</span></p><p>${esc(selected.vocalDescription)}</p></header>
       <section class="rmt-song-style"><h3>曲风</h3><p>${esc(selected.styleDescription)}</p><div class="rmt-song-toolbar">${button('copy-title','复制歌名')}${button('copy-style','复制曲风')}</div><pre>${esc(selected.stylePrompt)}</pre></section>
       <section class="rmt-song-lyrics"><div class="rmt-song-toolbar"><h3>${selected.generationIncomplete ? '已收到的歌词 · 未完成' : '完整歌词'}</h3>${button('copy-lyrics','复制歌词')}</div><pre>${esc(selected.lyrics)}</pre></section>
-      <footer class="rmt-song-toolbar">${button('copy-all','复制全部')}${button('export','导出文本')}${readonly() || selected.generationIncomplete ? '' : `<button type="button" class="rmt-btn" data-rmt-mv="open" data-rmt-mv-id="${esc(selected.id)}">做成 MV</button>`}${readonly() ? '' : `<button type="button" class="rmt-btn" data-rmt-song="delete" data-rmt-song-id="${esc(selected.id)}" ${busy() ? 'disabled' : ''}>删除这首</button>`}</footer>
+      <footer class="rmt-song-toolbar">${button('copy-all','复制全部')}${button('export','导出文本')}${readonly() ? '' : `<button type="button" class="rmt-btn" data-rmt-song="delete" data-rmt-song-id="${esc(selected.id)}" ${busy() ? 'disabled' : ''}>删除这首</button>`}</footer>
       <div data-rmt-song-copy-fallback></div></article>` : '<div class="rmt-song-empty"><span aria-hidden="true">♫</span><h3>让故事有自己的旋律</h3><p>为角色写一首，或选一段真实回忆作为起点。</p></div>';
     const readDetails = selected ? `<article class="rmt-song-sheet rmt-song-readable" data-rmt-song-presentation="read"><header>
       <small>${esc(selected.subject === 'event' ? '事件印象曲' : '角色印象曲')} · ${esc(selected.subjectTitle)}</small>
@@ -82810,19 +83582,19 @@ function renderThemeSongs() {
       <p class="rmt-song-credit">作者 · 未署名（原创生成）</p>
       <details class="rmt-song-arrangement"><summary>曲风与人声</summary><p>${esc(selected.styleDescription)}</p><p>${esc(selected.vocalDescription)}</p></details></header>
       <div class="rmt-song-reading-lyrics">${songLyricsReadingHtml(selected.lyrics)}</div>
-      <footer class="rmt-song-toolbar">${button('copy-lyrics','复制歌词')}${button('export','导出文本')}${readonly() || selected.generationIncomplete ? '' : `<button type="button" class="rmt-btn" data-rmt-mv="open" data-rmt-mv-id="${esc(selected.id)}">做成 MV</button>`}${readonly() ? '' : `<button type="button" class="rmt-btn" data-rmt-song="delete" data-rmt-song-id="${esc(selected.id)}" ${busy() ? 'disabled' : ''}>删除这首</button>`}</footer>
+      <footer class="rmt-song-toolbar">${button('copy-lyrics','复制歌词')}${button('export','导出文本')}${readonly() ? '' : `<button type="button" class="rmt-btn" data-rmt-song="delete" data-rmt-song-id="${esc(selected.id)}" ${busy() ? 'disabled' : ''}>删除这首</button>`}</footer>
       <div data-rmt-song-copy-fallback></div></article>` : formatDetails;
     const cover = selected ? `<div class="rmt-song-cover">${expanded_cg_view.expandedCgHtml(session,
         { kind: 'song-cover', containerId: selected.id }, readonly(),
         { placeholder: '<div class="rmt-song-cover-empty"><span aria-hidden="true">♫</span><b>专辑封面</b></div>' })}</div>` : '';
-    const details = `<div class="rmt-song-detail">${cover}${displayMode === 'format' ? formatDetails : readDetails}</div>`;
-    const switcher = `<div class="rmt-song-display-switch" role="group" aria-label="歌曲显示模式"><button type="button" class="rmt-btn" data-rmt-song="view-read" aria-pressed="${displayMode === 'read'}">阅读模式</button><button type="button" class="rmt-btn" data-rmt-song="view-format" aria-pressed="${displayMode === 'format'}">创作格式</button></div>`;
-    const list = session.songs.length ? `<nav class="rmt-song-list" aria-label="已保存的印象曲">${[...session.songs].reverse().map(song => `<button type="button" class="${song.id === selected?.id ? 'active' : ''}" data-rmt-song="select" data-rmt-song-id="${esc(song.id)}" aria-current="${song.id === selected?.id ? 'page' : 'false'}"><span aria-hidden="true">♪</span><span><b>${esc(song.title)}</b><small>${esc(song.singer)}</small></span></button>`).join('')}</nav>` : '';
+    const switcher = `<div class="rmt-song-display-switch" role="group" aria-label="歌曲操作"><button type="button" class="rmt-btn" data-rmt-song="view-read" aria-pressed="${displayMode === 'read'}">阅读模式</button><button type="button" class="rmt-btn" data-rmt-song="view-format" aria-pressed="${displayMode === 'format'}">创作格式</button>${mvButton}</div>`;
+    const details = `<div class="rmt-song-detail"${selected ? ` data-rmt-current-song="${esc(selected.id)}"` : ''}>${selected ? switcher : ''}${cover}${displayMode === 'format' ? formatDetails : readDetails}</div>`;
+    const list = session.songs.length ? `<details class="rmt-song-library"><summary><span>歌曲列表 · ${session.songs.length} 首</span><small>${esc(selected?.title || '')}</small></summary><nav class="rmt-song-list" aria-label="已保存的印象曲">${[...session.songs].reverse().map(song => `<button type="button" class="${song.id === selected?.id ? 'active' : ''}" data-rmt-song="select" data-rmt-song-id="${esc(song.id)}" aria-current="${song.id === selected?.id ? 'page' : 'false'}"><span aria-hidden="true">♪</span><span><b>${esc(song.title)}</b><small>${esc(song.singer)}</small></span></button>`).join('')}</nav></details>` : '';
     const allCache = runtimeState.activeArchiveSnapshot?.cache || cache.getCache(contextApi.getContext());
     const recovery = recoveryView.recoveryBannerHtml(allCache, memory, { readOnly: readonly() });
     const partial = selected?.generationIncomplete ? '<p class="rmt-recovery-status" role="status">这首歌尚未写完；已收到的歌名、曲风和歌词分别保留，空白部分仍待生成。</p>' : '';
     const completedCount = session.songs.filter(song => !song.generationIncomplete).length;
-    overlay.bodyEl().innerHTML = `<main class="rmt-theme-song"><header class="rmt-song-heading"><div class="rmt-song-emblem" aria-hidden="true">♫</div><div><h2>角色印象曲</h2><p>${session.songs.length ? `已收录 ${completedCount} 首${completedCount < session.songs.length ? ' · 另有未完成草稿' : ''}` : '歌名 · 曲风 · 完整歌词'}</p></div></header><p class="rmt-song-note">生成歌曲文本与编曲说明，不生成音频。</p>${partial}${switcher}${recovery}${form}<div class="rmt-song-layout ${list ? 'has-songs' : ''}">${list}${details}</div></main>`;
+    overlay.bodyEl().innerHTML = `<main class="rmt-theme-song"><header class="rmt-song-heading"><div class="rmt-song-emblem" aria-hidden="true">♫</div><div><h2>角色印象曲</h2><p>${session.songs.length ? `已收录 ${completedCount} 首${completedCount < session.songs.length ? ' · 另有未完成草稿' : ''}` : '歌名 · 曲风 · 完整歌词'}</p></div></header><p class="rmt-song-note">生成歌曲文本与编曲说明，不生成音频。</p>${partial}${recovery}${form}<div class="rmt-song-layout ${list ? 'has-songs' : ''}">${list}${details}</div></main>`;
     const body = overlay.bodyEl(), draft = composerOptions.readSongOptions(contextApi.getContext(), memory);
     const fields = { subject: draft.subject === 'event' ? `event:${draft.eventId}` : 'character', language: draft.language || 'zh',
         'custom-language': draft.customLanguage || '', voice: draft.voice || 'char', direction: draft.direction || '' };
@@ -86432,8 +87204,12 @@ const cg_core = __m_generation_cgImageCore_js;
 const cg_appearance = __m_generation_cgAppearance_js;
 const mv_cast = __m_extras_mvCast_js;
 const mv_direction = __m_extras_mvDirection_js;
+const mv_still = __m_extras_mvStillPrompt_js;
+const mv_stage = __m_extras_mvStage_js;
 // 印象曲 MV：同一张分镜表可以做成手书（插件内播放与导出）或视频（提示词交给视频工具）。
 // 写分镜是一次文字请求；首帧由用户逐张手动绘制。数据按聊天、按歌保存，不写入正式档案。
+
+
 
 
 
@@ -86598,6 +87374,7 @@ function resultBasis(record, kind, shotId) {
         return JSON.stringify(record ? {
             storyRevision: record.storyRevision, settings: record.settings, shots: record.shots,
             groups: record.groups, motif: record.motif, keyword: record.keyword,
+            ...(record.stage ? { stage: record.stage } : {}),
             wardrobe: record.wardrobe, tegaki: record.tegaki,
             ...(record.assetPrompts ? { assetPrompts: record.assetPrompts } : {}),
             ...(record.cast ? { cast: record.cast } : {}),
@@ -86608,12 +87385,14 @@ function resultBasis(record, kind, shotId) {
         // Appending other groups or completing a sibling image does not change
         // this asset's identity; replacing the storyboard does.
         return JSON.stringify({ storyRevision: record?.storyRevision, image: found?.image || null,
+            ...(String(shotId).startsWith('stage:') && found?.bgRow ? { background: { ...found.bgRow, image: null } } : {}),
             ...(record?.assetPrompts?.[shotId] !== undefined ? { prompt: record.assetPrompts[shotId] } : {}) });
     }
     return JSON.stringify(list(record?.shots).find(shot => shot.id === shotId) || null);
 }
 
 function resultStillCurrent(record, row, expected) {
+    if (row.frameAssetKey && row.frameAssetBasis !== resultBasis(record, 'asset', row.frameAssetKey)) return false;
     if (resultBasis(record, row.kind, row.shotId) === expected) return true;
     if (row.basisVersion || row.base?.songs || record?.storyRevision) return false;
     // Disk journals in older releases omitted the base. Keep their image-save
@@ -86631,6 +87410,17 @@ async function holdResult(target, kind, shotId, raw, prepare) {
     const row = { ...savedTarget, kind, shotId, raw: structuredClone(raw),
         id: `MV_${Date.now().toString(36)}_${++resultSequence}_${Math.random().toString(36).slice(2)}`,
         createdAt: Date.now(), basisVersion: 2, expected: resultBasis(target.base.songs[target.songId], kind, shotId), patch: null };
+    // A v2 player redraw now uses the asset's current prompt too. Retain that
+    // dependency so a later manual edit wins; old journals need no migration.
+    const sourceRecord = target.base.songs[target.songId];
+    if (kind === 'frame' && isV2(sourceRecord)) {
+        const shot = list(sourceRecord.shots).find(value => value.id === shotId);
+        const key = `${shot?.group}:${shot?.diff}`;
+        if (assetOf(sourceRecord, key)) {
+            row.frameAssetKey = key;
+            row.frameAssetBasis = resultBasis(sourceRecord, 'asset', key);
+        }
+    }
     // Journal first: even a malformed paid response must remain exportable.
     savePending(row.scope, [...pendingMv(row.scope), row]);
     try { row.patch = prepare(raw); }
@@ -86672,6 +87462,7 @@ async function retryMvSave(scope, id) {
         else if (row.kind === 'append') {
             next.shots = [...list(next.shots), ...row.patch.shots].sort((a, b) => a.sectionIndex - b.sectionIndex);
             if (isV2(next)) next.groups = [...next.groups, ...row.patch.groups];
+            if (row.patch.stage) next.stage = { version: 1, backgrounds: [...list(next.stage?.backgrounds), ...row.patch.stage.backgrounds] };
             if (row.patch.cast) next.cast = row.patch.cast;
             if (row.patch.wardrobeCharacters) next.wardrobe = { ...next.wardrobe,
                 characters: castWardrobe(next.cast, { wardrobe: { characters: row.patch.wardrobeCharacters } }, next.wardrobe, true) };
@@ -86983,15 +87774,41 @@ function storyboardPrompt(context, memory, song, settings, sectionIndexes = null
     const appear = settings.appear === 'face' ? `${userName} 可以露脸出镜。`
         : settings.appear === 'back' ? `${userName} 只能以背影、手或剪影出现，不画正脸。` : `${userName} 不出现在画面里。`;
     const firstPerson = cast && mv_cast.selectedMvPeople(cast, settings)[0];
-    const exampleBinding = cast ? `"cast":${JSON.stringify(firstPerson ? [{ participantId: firstPerson.id, position: 'left', action: '这一人的动作及互动对象', visible: 'full' }] : [])}` : '"who":"char"';
+    const exampleBinding = cast ? `"cast":${JSON.stringify(firstPerson ? [{ participantId: firstPerson.id, position: 'left', action: settings.output === 'video' ? '这一人的动作及互动对象' : '共同站位或互动关系；表情与当下动作写在各 diff.imagePrompt', visible: 'full' }] : [])}` : '"who":"char"';
     const exampleWardrobe = cast ? JSON.stringify({ era: '……', characters: firstPerson ? [{ participantId: firstPerson.id, clothing: '有依据的本曲衣着' }] : [] }) : '{"era":"……","char":"……","user":"……"}';
+    const exampleActor = firstPerson?.name || charName;
+    const exampleSection = sections[0]?.index || 0, exampleLyric = sections[0]?.lines?.[0] || '原句';
+    const expressionCast = visible => cast ? { cast: firstPerson ? [{ participantId: firstPerson.id, position: 'center', action: '', visible }] : [] } : { who: 'char' };
+    const expressionExample = settings.output === 'tegaki' && settings.storyType === 'expression' ? JSON.stringify({
+        wardrobe: JSON.parse(exampleWardrobe), keyword: '关键词',
+        stage: { backgrounds: [{ id: 'S1', label: '主舞台', kind: 'image', prompt: 'quiet room, soft light through a window, painterly scenery, open space in the center', colors: ['#263d48', '#ecdfbd', '#b05b49'], motion: 'still' }] },
+        groups: [
+            { id: 'G1', composition: '正面半身主姿势', stageBackground: 'S1', position: 'center', scale: 'medium',
+                characterPrompt: 'front view, centered waist-up framing', ...expressionCast('full'),
+                motion: 'still', transition: 'cut', diffs: [
+                    { id: 'D1', label: '摊手笑', change: '摊开的双手停在腰侧，开朗笑容', imagePrompt: `front view, waist-up ${exampleActor}, open palms held at waist level, broad cheerful smile` },
+                    { id: 'D2', label: '收手凝视', change: '手臂垂下，平静直视', imagePrompt: `front view, waist-up ${exampleActor}, arms held at sides, closed mouth and level calm gaze` },
+                ] },
+            { id: 'G2', composition: '侧身抱臂', stageBackground: 'S1', position: 'left', scale: 'medium',
+                characterPrompt: 'three-quarter view, waist-up framing', ...expressionCast('full'),
+                motion: 'still', transition: 'cut',
+                diffs: [{ id: 'D1', label: '抱臂侧望', change: '抱臂，侧头望向观众', imagePrompt: `three-quarter waist-up ${exampleActor}, crossed arms, steady gaze toward viewer` }] },
+        ],
+        frames: [
+            { sectionIndex: exampleSection, lyric: exampleLyric, group: 'G1', diff: 'D1', hold: 1, stage: { text: exampleLyric, layout: 'sides', entrance: 'pop' } },
+            { sectionIndex: exampleSection, lyric: exampleLyric, group: 'G1', diff: 'D1', hold: 1, stage: { text: exampleLyric, layout: 'stack' } },
+            { sectionIndex: exampleSection, lyric: sections[0]?.lines?.[1] || exampleLyric, group: 'G2', diff: 'D1', hold: 2, stage: { layout: 'banner', entrance: 'slide', shadow: true } },
+            { sectionIndex: sections[1]?.index ?? exampleSection, lyric: sections[1]?.lines?.[0] || exampleLyric, group: 'G1', diff: 'D2', hold: 2, stage: { layout: 'sides', tone: 'dark' } },
+            { sectionIndex: sections[1]?.index ?? exampleSection, lyric: sections[1]?.lines?.[1] || exampleLyric, group: 'G1', diff: 'D1', hold: 2, stage: { layout: 'sides', tone: 'accent', entrance: 'pop' } },
+        ],
+    }) : '';
     return `${generation_prompts.promptSafetyBoundary(context, 'MV 分镜', null, memory)}
 【任务】
 为已写好的角色印象曲「${song.title}」写一张 MV 分镜表。画面风格：${styleOf(settings).name}；比例：${settings.ratio === '9:16' ? '竖屏 9:16' : '横屏 16:9'}。
 歌词、曲风不改。画面跟着歌词的意象、情绪和故事走，可以是意象、想象或象征画面，不需要对应聊天档案，也不要逐条复述聊天里的事件。人物外貌、身份和世界观以角色设定为准。
 ${cast ? mv_cast.castPrompt(cast, settings) : `出镜：${charName} 是主角。${appear}不替 ${userName} 新增台词、承诺或决定。`}
 ${mv_direction.directionPrompt(settings.storyType, song)}
-${settings.output === 'video' ? '' : tegakiGrammar(parseSections(song.lyrics), keep, charName)}${settings.output === 'video' ? '' : ``}
+${settings.output === 'video' ? '' : tegakiGrammar(parseSections(song.lyrics), keep, charName, settings.storyType)}
 
 【歌曲】
 曲风：${core_text.normalizeText(song.styleDescription || song.stylePrompt, 600)}
@@ -87016,7 +87833,7 @@ ${settings.output === 'video' ? `1. 按段落写镜头：${settings.output === '
 ${cast ? '以下仅为结构示例，实际每镜的 cast 按出场人物填写，不局限于示例中的一个人。顶层可加 appearances:[{"participantId":"原始ID","tag":"有依据的稳定外貌","nl":"可空"}]；wardrobe 使用 era 和 characters，不用 char/user 代替 NPC。' : ''}
 ${settings.output === 'video'
         ? `{"wardrobe":${exampleWardrobe},"shots":[{"sectionIndex":0,"lyric":"","plain":"……",${exampleBinding},"shot":"中景：看到上半身","move":"镜头慢慢推近","motion":"push","imagePrompt":"……","videoZh":"……","videoEn":"……"}]}`
-        : `{"wardrobe":${exampleWardrobe},"keyword":"副歌里最有分量的词","motif":{"name":"竹叶","prompt":"english: one decorative element"},"groups":[{"id":"G1","composition":"低机位 · 蹲下喂猫 · 人物在左","position":"left","scale":"full","characterPrompt":"english: camera angle, framing, pose base, who and what is in frame",${exampleBinding},"motion":"still","transition":"cut","link":"下一组如何承接","bgs":[{"id":"B1","label":"午后","prompt":"english: empty scenery only"}],"diffs":[{"id":"D1","label":"伸手前","change":"english: this moment of the action"}]}],"frames":[{"sectionIndex":0,"lyric":"原句","group":"G1","diff":"D1","bg":"B1","hold":1,"phase":"prep"}]}`}`;
+        : expressionExample || `{"wardrobe":${exampleWardrobe},"keyword":"副歌里最有分量的词","motif":{"name":"竹叶","prompt":"english: one decorative element"},"groups":[{"id":"G1","composition":"低机位 · 蹲下喂猫 · 人物在左","position":"left","scale":"full","characterPrompt":"low angle medium shot, subject on the left, warm afternoon light",${exampleBinding},"motion":"still","transition":"cut","link":"下一组如何承接","bgs":[{"id":"B1","label":"午后","prompt":"english: empty scenery only"}],"diffs":[{"id":"D1","label":"伸手前","change":"伸出的手停在半空","imagePrompt":"low angle medium shot, the named character on the left with one hand extended toward the cat, warm afternoon light"}]}],"frames":[{"sectionIndex":0,"lyric":"原句","group":"G1","diff":"D1","bg":"B1","hold":1,"phase":"prep"}]}`}`;
 }
 
 // 手书：少数构图，每个构图里几张连续变化的画（闭眼→睁眼→偏头），摊平成镜头。
@@ -87111,7 +87928,7 @@ function alignContinuationSections(raw, song, missing) {
 
 // Append new work using fresh identifiers; never replace existing drawings or timing.
 function continuationPatch(raw, previous, memory, song, settings, missing) {
-    const built = buildShots(alignContinuationSections(raw, song, missing), memory, parseSections(song.lyrics).length, settings, previous.cast || null, { existingGroups: isV2(previous) ? previous.groups : [] });
+    const built = buildShots(alignContinuationSections(raw, song, missing), memory, parseSections(song.lyrics).length, settings, previous.cast || null, { existingGroups: isV2(previous) ? previous.groups : [], existingStage: previous.stage });
     let shots = built.shots.filter(s => missing.includes(s.sectionIndex));
     if (!shots.length) throw core_text.safeUserError('返回的分镜没有包含待补段落，原分镜已保留，可导出这次返回内容。', 'RMT_MV_EMPTY');
     let groups = list(built.groups);
@@ -87128,7 +87945,7 @@ function continuationPatch(raw, previous, memory, song, settings, missing) {
         shots = shots.map(s => {
             const g = groups.find(g => g.id === s.group);
             const d = g.diffs.find(d => d.id === s.diff);
-            return { ...s, imagePrompt: [g.characterPrompt, d.change, g.bgs.find(b => b.id === s.bg)?.prompt].filter(Boolean).join(', '), composition: g.composition };
+            return { ...s, imagePrompt: mv_still.joinStillPrompt([mv_still.stillScene(g, d), g.bgs.find(b => b.id === s.bg)?.prompt]), composition: g.composition };
         });
     }
     const usedGroups = new Set([...list(previous.groups).map(g => g.id), ...list(previous.shots).map(s => s.group)]);
@@ -87143,6 +87960,7 @@ function continuationPatch(raw, previous, memory, song, settings, missing) {
     return {
         shots: shots.map(({ reuseGroup, ...s }, i) => ({ ...s, id: `${prefix}_${i + 1}`, ...(s.group ? { group: reuseGroup ? s.group : groupMap.get(s.group) } : {}) })),
         groups: groups.filter(g => groupMap.has(g.id)).map(g => ({ ...g, id: groupMap.get(g.id) })),
+        ...(built.stage ? { stage: built.stage } : {}),
         ...(previous.cast ? { cast: mv_cast.generatedMvCast(previous.cast, raw), wardrobeCharacters: castWardrobe(previous.cast, raw, previous.wardrobe, true) } : {}),
     };
 }
@@ -87162,7 +87980,8 @@ async function continueStoryboard(songId) {
     running.add(key);
     try {
         const continuity = { wardrobe: previous.wardrobe || {}, keyword: previous.keyword || '', motif: previous.motif ? { name: previous.motif.name, prompt: previous.motif.prompt } : null,
-            reusableGroups: list(previous.groups).map(g => ({ id: g.id, composition: g.composition, diffs: list(g.diffs).map(d => ({ id: d.id, label: d.label })) })),
+            reusableGroups: list(previous.groups).map(g => ({ id: g.id, composition: g.composition, ...(g.stageBackground ? { stageBackground: g.stageBackground } : {}), diffs: list(g.diffs).map(d => ({ id: d.id, label: d.label })) })),
+            ...(previous.stage ? { reusableBackgrounds: previous.stage.backgrounds.map(({ image, ...b }) => b) } : {}),
             lastScene: list(previous.shots).filter(s => s.sectionIndex < missing[0]).at(-1)?.plain || '' };
         const prompt = storyboardPrompt(context, memory, song, settings, missing, previous.cast || null)
             + `\n【接着已有分镜补写】\n只补上面列出的段落，sectionIndex 沿用歌曲原编号。已有分镜和图片会保留；新构图在保存时自动分配编号。重复的画面可在 frames 引用 reusableGroups 的原 group/diff，不必重写该 group；新画面使用新构图。沿用已有时代、衣着和意象，并衔接已有画面：\n${JSON.stringify(continuity)}`;
@@ -87186,10 +88005,11 @@ async function generateStoryboard(songId, settingsInput, castInput = undefined) 
             mode: 'songMv', taskKey: `extras:mv:${key}`, context, origin,
         });
         return await holdResult(target, 'story', '', data, raw => {
+            const built = buildShots(raw, memory, parseSections(song.lyrics).length, settings, cast);
             return { id: songId, createdAt: previous?.createdAt || Date.now(), settings,
-                ...buildShots(raw, memory, parseSections(song.lyrics).length, settings, cast),
+                ...built, stage: built.stage || null,
                 ...(cast ? { cast: mv_cast.generatedMvCast(cast, raw) } : {}),
-                tegaki: { ...(previous?.tegaki || {}), range: settings.range, rangeFrom: settings.rangeFrom, rangeTo: settings.rangeTo, ...(settings.output === 'tegaki' ? { lyric: 'subtitle' } : {}) },
+                tegaki: { ...(previous?.tegaki || {}), range: settings.range, rangeFrom: settings.rangeFrom, rangeTo: settings.rangeTo, ...(settings.output === 'tegaki' ? { lyric: built.stage ? 'stage' : 'subtitle' } : {}) },
                 wardrobe: {
                     era: core_text.normalizeText(raw?.wardrobe?.era, 200) || previous?.wardrobe?.era || '',
                     char: core_text.normalizeText(raw?.wardrobe?.char, 300) || previous?.wardrobe?.char || '',
@@ -87297,6 +88117,8 @@ function wardrobeLine(record, hasChar, hasUser) {
 }
 
 function framePrompt(record, shot, context, appearance = true) {
+    if (isV2(record) && assetOf(record, `${shot?.group}:${shot?.diff}`))
+        return assetPrompt(record, `${shot.group}:${shot.diff}`, context, appearance);
     const settings = normalizeSettings(record?.settings);
     if (record?.cast && Array.isArray(shot?.cast)) return [styleOf(settings).prompt,
         settings.ratio === '9:16' ? 'vertical 9:16 composition' : 'horizontal 16:9 composition',
@@ -87305,7 +88127,7 @@ function framePrompt(record, shot, context, appearance = true) {
     const hasChar = shot.who === 'char' || shot.who === 'both';
     const hasUser = settings.appear !== 'none' && (shot.who === 'both' || shot.who === 'user');
     const people = { ...(looks || {}), char: hasChar ? looks?.char || '' : '', user: hasUser ? looks?.user || '' : '' };
-    const lookLine = hasChar || hasUser ? core_castLooks.castLooksPromptLine(people, context) : '';
+    const lookLine = appearance && (hasChar || hasUser) ? core_castLooks.castLooksPromptLine(people, context) : '';
     const userRule = settings.appear === 'back' && hasUser ? `${hasChar ? 'the second person' : 'the person'} is shown only from behind, hands or silhouette, face not visible` : '';
     const noUser = !hasChar && !hasUser ? 'scenery, no humans' : hasChar && hasUser ? 'duo, two people' : 'solo';
     return [
@@ -87319,7 +88141,15 @@ function framePrompt(record, shot, context, appearance = true) {
     ].filter(Boolean).join(', ');
 }
 
-function isFrameDrawing(scope, songId, shotId) { return running.has(`frame:${scope}:${songId}:${shotId}`); }
+function isFrameDrawing(scope, songId, shotId) {
+    if (running.has(`frame:${scope}:${songId}:${shotId}`)) return true;
+    try {
+        const context = core_context.currentCharacterGuard();
+        if (scopeOf(context) !== scope) return false;
+        const record = readMv(context, songId), shot = list(record?.shots).find(s => s.id === shotId);
+        return !!mv_stage.background(record, shot) && running.has(`asset:${scope}:${songId}:${shot?.group}:${shot?.diff}`);
+    } catch { return false; }
+}
 
 async function drawFrame(songId, shotId) {
     const context = core_context.currentCharacterGuard();
@@ -87328,14 +88158,19 @@ async function drawFrame(songId, shotId) {
     const record = structuredClone(target.base.songs[songId] || null);
     const shot = list(record?.shots).find(item => item.id === shotId);
     if (!shot) return null;
+    if (mv_stage.background(record, shot) && !hasAssetImage(shot.image))
+        return drawAsset(songId, `${shot.group}:${shot.diff}`, { fresh: true });
     const key = `frame:${scope}:${songId}:${shotId}`;
     if (running.has(key)) return null;
     running.add(key);
     try {
-        const metadata = record.cast ? mv_cast.castMetadata(record, shot) : null;
+        const found = isV2(record) ? assetOf(record, `${shot.group}:${shot.diff}`) : null;
+        const custom = found && record.assetPrompts?.[`${shot.group}:${shot.diff}`]?.trim();
+        const metadata = custom ? null : found ? assetMetadata(record, found, context) : record.cast ? mv_cast.castMetadata(record, shot) : null;
         const result = await cg_core.invokeImageGeneration(framePrompt(record, shot, context, !metadata), context, {
             orientation: normalizeSettings(record.settings).ratio === '9:16' ? 'portrait' : 'landscape',
-            characterName: context?.name2 || '', targetKey: key,
+            respectOrientation: true,
+            characterName: context?.name2 || '', targetKey: key, singlePrompt: true,
             ...(metadata ? { promptMetadata: metadata } : {}),
         });
         return await holdResult(target, 'frame', shotId, result, raw => {
@@ -87372,7 +88207,7 @@ const TEGAKI_FONTS = Object.freeze({
     song: { name: '书卷', stack: '"Songti SC","STSong","Noto Serif SC","Source Han Serif SC","SimSun",serif', weight: 600 },
     round: { name: '圆润', stack: '"Yuanti SC","PingFang SC","Hiragino Sans GB","Noto Sans SC",sans-serif', weight: 500 },
 });
-const TEGAKI_LYRICS = Object.freeze({ vertical: '竖排', subtitle: '字幕', big: '大字', none: '不显示' });
+const TEGAKI_LYRICS = Object.freeze({ stage: '舞台编排', vertical: '竖排', subtitle: '字幕', big: '大字', none: '不显示' });
 const TEGAKI_PRESETS = Object.freeze({
     quick: { name: '一人一句快切', desc: '每句歌词一张，干脆直切，节奏紧', rhythm: 'line', lyric: 'subtitle', template: 'quick' },
     flash: { name: '白闪卡点', desc: '换构图时白闪，副歌每小节轻闪一下', rhythm: 'line', lyric: 'big', template: 'flash' },
@@ -87434,9 +88269,11 @@ function completedMvRanges(record, song) {
     const done = sections.map((_, i) => {
         const shots = list(record?.shots).filter(s => s.sectionIndex === i);
         return shots.length > 0 && shots.every(s => {
-            if (hasAssetImage(s.image)) return true;
+            if (hasAssetImage(s.image) && (!isV2(record) || !mv_stage.background(record, s) || s.image.editMode === 'full')) return true;
             if (!isV2(record)) return !!(s.image?.url || s.image?.local);
             const g = record.groups.find(g => g.id === s.group);
+            const stage = mv_stage.background(record, s), image = shotImage(record, s);
+            if (stage) return hasAssetImage(image) && ((g?.layer === 'full' && image.editMode !== 'cutout') || image.editMode === 'full' || stage.kind !== 'image' || hasAssetImage(stage.image));
             return hasAssetImage(assetOf(record, `${s.group}:${s.diff}`)?.image)
                 && (g?.layer === 'full' || hasAssetImage(assetOf(record, `${s.group}:${s.bg || 'bg'}`)?.image));
         });
@@ -87511,24 +88348,27 @@ function patchTegaki(songId, patch) {
 
 // ---------- 手书 v2：印象曲 PV（背景 + 白底人物差分 + 意象） ----------
 
-function tegakiGrammar(sections, keep, charName = '{{char}}') {
+function tegakiGrammar(sections, keep, charName = '{{char}}', direction = '') {
     const rows = keep.map(i => `${i}:${sections[i]?.tag || ''}`).join('，');
     const lineCount = keep.reduce((n, i) => n + Math.max(1, sections[i]?.lines.length || 0), 0);
     return `这是这首印象曲的手书 PV。只为这些段落写：${rows}。
 画面围绕所选分镜类型组织，让观众理解情绪、事件或节奏；不是连续相似的精修肖像。歌词的比喻不必字面演出，空镜与留白也能推进表达。
 - 构图组（groups）是一个清楚的镜头构图。选中段落约 ${lineCount} 句歌词，按表达需要安排，不规定组数或差分比例；换机位或出场人物变化时另建组。同一素材可以复用，不重复画相同内容。
 - 景别服务内容：特写（手、眼、物件）、近景、中景、全身、远景、背影、低机位、俯视都可用，不要求每种都出现。position 写 left / center / right，scale 写 close / medium / full / wide。
-- 每一张差分都是单独的一张图，只画一个瞬间：characterPrompt 与 diff.change 里每个人只写一个姿势，不要在同一张里写多个姿势、多个表情或“三连”。
-- diffs 可以只用一张关键画；只有同机位连续动作、情绪最小差分或节奏循环确实需要时才加图。同组 characterPrompt 是共同构图，diff.change 写这一刻的动作与表情，不强求每组闭眼→睁眼。
+- 每一张差分都是单独的一张图，只画一个瞬间。characterPrompt 只写同组共用的机位、裁切、方位与光线，不预先写任何差分的表情或动作；group.cast.action 只写共同站位与互动关系，不写“从呆愣转为认真”等变化过程。
+- 每个 diff.imagePrompt 写这张图独立完整的英文静态画面：沿用共同机位、方位、光线，逐人绑定姓名与当下唯一姿势、表情、互动对象。它会替代基础描述和差分说明，不是追加段落。稳定外貌由程序按人物补齐，不在这里重写发色、发型、瞳色；背景使用 bgs，不写 english: 前缀。diff.change 只作本张静态状态的短说明，不重复完整生图词。
+- 需要表现“惊讶→笃定”时，写两个 diff：D1 的 imagePrompt 只有惊讶，D2 的 imagePrompt 只有笃定，并让两个 frame 分别引用；每个 diff 会分别请求并保存一张图片。绝不在同一个 imagePrompt 里写 before/after、from/to、starting to change 或前后两个表情。相同姿势再出现时，frame 直接复用原 diff。
+- diffs 可以只用一张关键画；只有同机位连续动作、情绪最小差分、明显反差或节奏循环确实需要时才加图，不强求每组闭眼→睁眼。
 - 局部特写写清画面裁切；只拍手就不要为了显示头发、眼睛或服装画出整个人。物件或环境空镜明确不出人，不硬塞主角。
 - bgs 写同一个镜头需要的场景，环境变化确有作用时再增加背景；只描述场景，不混入人物。
-- 副歌可以有一个主视觉组，重复的副歌复用它；其余段落尽量用新的构图，尾奏可以回到开头的构图。
+${direction === 'expression' ? '- 主舞台与角色姿势可以跨歌词、跨段落持续使用；主歌与副歌靠表演、文字、明暗与疏密区分，重现的姿势按歌词情绪变奏。' : '- 副歌可以有一个主视觉组，重复的副歌复用它；其余段落尽量用新的构图，尾奏可以回到开头的构图。'}
 - link 简写下一镜如何承接，并把对应视线、位置或物件落实在前后两组的画面描述；link 不是可执行动画指令。
 - frames 按实际播放顺序指向 group、diff 和 bg，sectionIndex 是歌曲原段落编号。lyric 使用对应原句（器乐留空）；一句可有多个短镜，也可多句复用一个素材。hold 是段内相对停留权重，短镜可用 0.5，普通用 1，重点停留可更长，不是秒数。已对过的时间由用户打点优先。
 - frame.phase 可写 prep（准备）、action（发生）、settle（收势）或 still（静止）。循环类型可以回到前一个差分；其他类型只在表达需要时重复。不要靠长时间悬停动态姿势代替动作过程。
 - transition 按表达选 cut / fade / flash，motion 用 still / push；不强制混用全部转场或闪白。图像是静态关键姿势，连续动作靠剪辑而非假称视频动画。
 - 多人镜头分别写清每个人的位置、动作与互动对象，人数由出场名单决定。不得为制造差异改人物的设定外貌、衣服、性别或关系。
-- keyword：副歌里一个 2～4 字、最有分量的词。motif：歌词里一个可以漂浮的意象，prompt 用英文只描述这一个小元素。
+${direction === 'expression' ? '- keyword 可以摘取歌词关键词；漂浮 motif 按歌曲需要选用。舞台背景、人物、文字自身已经能形成节奏，不要求每首叠加粒子。' : '- keyword：副歌里一个 2～4 字、最有分量的词。motif：歌词里一个可以漂浮的意象，prompt 用英文只描述这一个小元素。'}
+${direction === 'expression' ? mv_stage.prompt() : ''}
 `;
 }
 
@@ -87537,6 +88377,7 @@ function isV2(record) { return record?.version === 2 && Array.isArray(record?.gr
 function buildShots(raw, memory, sectionCount, settings, cast = null, opts = {}) {
     if (cast?.existingGroups) { opts = cast; cast = null; }
     const existingGroups = list(opts.existingGroups);
+    const stagePlan = mv_stage.prepare(settings.storyType === 'expression' ? raw?.stage : null, opts.existingStage);
     const reusesExisting = list(raw?.frames).some(f => existingGroups.some(g => g.id === f?.group));
     if (settings.output === 'video' || (!list(raw?.groups).some(g => list(g?.diffs).length) && !reusesExisting)) return { shots: normalizeShots(raw, memory, sectionCount, settings, cast) };
     const defaults = mv_direction.directionDefaults(settings.storyType);
@@ -87547,9 +88388,11 @@ function buildShots(raw, memory, sectionCount, settings, cast = null, opts = {})
             id: `D${k + 1}`, rawId: core_text.normalizeText(d?.id, 20) || `D${k + 1}`,
             label: core_text.normalizeText(d?.label, 20) || `差分 ${k + 1}`,
             change: core_text.normalizeText(d?.change, 300), image: null,
+            ...(core_text.normalizeText(d?.imagePrompt, 1200) ? { imagePrompt: mv_still.cleanStillText(core_text.normalizeText(d.imagePrompt, 1200)) } : {}),
         }));
         if (!diffs.length) return;
         const id = `G${existingGroups.length + groups.length + 1}`;
+        const stageBackground = stagePlan.resolve(g?.stageBackground);
         idMap.set(core_text.normalizeText(g?.id, 20) || id, { id, diffs });
         groups.push({
             id, composition: core_text.normalizeText(g?.composition, 60),
@@ -87562,7 +88405,8 @@ function buildShots(raw, memory, sectionCount, settings, cast = null, opts = {})
             position: ['left', 'center', 'right'].includes(g?.position) ? g.position : 'center',
             transition: ['cut', 'fade', 'flash'].includes(g?.transition) ? g.transition : defaults.transition,
             // full = 人物、道具与背景在同一张完整场景图里（默认，最稳）；cutout = 白底人物抠图叠到背景上。
-            layer: 'full',
+            layer: stageBackground && g?.layer !== 'full' ? 'cutout' : 'full',
+            ...(stageBackground ? { stageBackground } : {}),
             scale: ['close', 'medium', 'full', 'wide'].includes(g?.scale) ? g.scale : 'medium',
             bgs: (list(g?.bgs).length ? list(g.bgs) : [{ label: '场景', prompt: g?.backgroundPrompt }]).map((b, k) => ({
                 id: `B${k + 1}`, rawId: core_text.normalizeText(b?.id, 20) || `B${k + 1}`,
@@ -87578,11 +88422,13 @@ function buildShots(raw, memory, sectionCount, settings, cast = null, opts = {})
         const old = !idMap.has(rawGroup) ? existingGroups.find(g => g.id === rawGroup) : null;
         if (old) {
             const diff = list(old.diffs).find(d => d.id === core_text.normalizeText(f?.diff, 20)) || list(old.diffs)[0];
+            const stage = mv_stage.cue(f?.stage, old.stageBackground, stagePlan.resolve);
             if (diff) shots.push({
                 id: `F${shots.length + 1}_${Date.now().toString(36)}`, reuseGroup: true,
                 sectionIndex: Math.min(Math.max(0, Math.round(Number(f?.sectionIndex) || 0)), Math.max(0, sectionCount - 1)),
                 lyric: core_text.normalizeText(f?.lyric, 200), plain: `${old.composition || old.id} · ${diff.label}`,
                 group: old.id, diff: diff.id, bg: diff.bg || 'B1', who: old.who,
+                ...(stage ? { stage } : {}),
                 ...(old.cast ? { cast: old.cast, ...(old.castUnresolved ? { castUnresolved: true } : {}) } : {}),
                 hold: Math.min(3, Math.max(1, Math.round(Number(f?.hold) || 1))),
                 ...(settings.storyType && Number.isFinite(Number(f?.hold)) && Number(f.hold) > 0 ? { timingWeight: Number(f.hold) } : {}),
@@ -87598,12 +88444,14 @@ function buildShots(raw, memory, sectionCount, settings, cast = null, opts = {})
         const group = groups.find(g => g.id === ref.id);
         const rawBg = core_text.normalizeText(f?.bg, 20);
         const bgRow = group.bgs.find(b => b.rawId === rawBg) || group.bgs[Math.max(0, Number(String(rawBg).replace(/\D/g, '')) - 1)] || group.bgs[0];
+        const stage = mv_stage.cue(f?.stage, group.stageBackground, stagePlan.resolve);
         shots.push({
             id: `F${shots.length + 1}_${Date.now().toString(36)}`,
             sectionIndex: Math.min(Math.max(0, Math.round(Number(f?.sectionIndex) || 0)), Math.max(0, sectionCount - 1)),
             lyric: core_text.normalizeText(f?.lyric, 200),
             plain: `${group.composition || group.id} · ${diff.label}`,
             group: ref.id, diff: diff.id, bg: bgRow.id, who: group.who,
+            ...(stage ? { stage } : {}),
             ...(group.cast ? { cast: group.cast, ...(group.castUnresolved ? { castUnresolved: true } : {}) } : {}),
             hold: Math.min(3, Math.max(1, Math.round(Number(f?.hold) || 1))),
             ...(settings.storyType && Number.isFinite(Number(f?.hold)) && Number(f.hold) > 0 ? { timingWeight: Number(f.hold) } : {}),
@@ -87623,6 +88471,7 @@ function buildShots(raw, memory, sectionCount, settings, cast = null, opts = {})
     const motifPrompt = core_text.normalizeText(raw?.motif?.prompt, 300);
     return {
         version: 2, groups, shots,
+        ...(stagePlan.backgrounds.length ? { stage: { version: 1, backgrounds: stagePlan.backgrounds } } : {}),
         keyword: Array.from(core_text.normalizeText(raw?.keyword, 12)).slice(0, 6).join(''),
         motif: motifPrompt ? { name: core_text.normalizeText(raw?.motif?.name, 20), prompt: motifPrompt, image: null } : null,
     };
@@ -87631,6 +88480,10 @@ function buildShots(raw, memory, sectionCount, settings, cast = null, opts = {})
 // key: "G1:bg" / "G1:D2" / "motif"
 function assetOf(record, key) {
     if (!record) return null;
+    if (String(key).startsWith('stage:')) {
+        const bgRow = list(record.stage?.backgrounds).find(b => b.id === String(key).slice(6));
+        return bgRow ? { kind: 'bg', bgRow, get image() { return bgRow.image; }, set image(v) { bgRow.image = v; if (v) bgRow.kind = 'image'; } } : null;
+    }
     if (key === 'motif') return record.motif ? { kind: 'motif', target: record.motif, get image() { return record.motif.image; }, set image(v) { record.motif.image = v; } } : null;
     const [gid, part] = String(key).split(':');
     const group = list(record.groups).find(g => g.id === gid);
@@ -87647,12 +88500,13 @@ function assetKeys(record, song = null) {
     if (!isV2(record)) return [];
     let used = null;
     if (song) { try { used = new Set(shotsInRange(record, song).map(s => `${s.group}:${s.diff}`)); } catch { used = null; } }
-    const keys = [];
+    const keys = mv_stage.usedBackgrounds(record, song ? shotsInRange(record, song) : record.shots)
+        .filter(b => b.kind === 'image').map(b => `stage:${b.id}`);
     for (const g of record.groups) {
         const diffs = g.diffs.filter(d => !used || used.has(`${g.id}:${d.id}`));
         if (!diffs.length) continue;
         const bgIds = g.layer === 'full' ? [] : list(g.bgs).length ? list(g.bgs).filter(b => record.shots.some(s => s.group === g.id && (s.bg || 'B1') === b.id && (!used || used.has(`${g.id}:${s.diff}`)))).map(b => b.id) : ['bg'];
-        const bgKeys = g.layer === 'full' ? [] : (bgIds.length ? bgIds : [list(g.bgs)[0]?.id || 'bg']);
+        const bgKeys = g.layer === 'full' || g.stageBackground ? [] : (bgIds.length ? bgIds : [list(g.bgs)[0]?.id || 'bg']);
         keys.push(...bgKeys.map(id => `${g.id}:${id}`), ...diffs.map(d => `${g.id}:${d.id}`));
     }
     if (record.motif) keys.push('motif');
@@ -87697,32 +88551,32 @@ function defaultAssetPrompt(record, key, context, appearance = true) {
     const era = record?.wardrobe?.era ? `setting: ${record.wardrobe.era}` : '';
     // 只写正向词：tag 模型会把“no multiple views”“no people”里的词当成要画的内容。
     if (found.kind === 'motif') return [style, ...motifRecipe(found.target)].filter(Boolean).join(', ');
-    if (found.kind === 'bg') return [style, ratio, era, found.bgRow?.prompt || found.group.backgroundPrompt, 'scenery, landscape, no humans'].filter(Boolean).join(', ');
+    if (found.kind === 'bg') return [style, ratio, era, found.bgRow?.prompt || found.group?.backgroundPrompt || found.bgRow?.label, 'scenery, landscape, no humans'].filter(Boolean).join(', ');
     if (record?.cast && Array.isArray(found.group.cast)) {
         const actors = mv_cast.shotPeople(record, found.group);
         const localCrop = actors.some(person => person.visible === 'hands' || person.visible === 'face');
         const size = localCrop || !actors.length ? '' : { close: 'close-up shot', medium: 'medium shot', full: 'full body shot', wide: 'wide shot' }[found.group.scale] || '';
         const place = actors.length === 1 && !actors[0].position && ['left', 'right'].includes(found.group.position)
             ? `subject on the ${found.group.position} of the frame` : '';
-        return [style, ratio, found.group.characterPrompt, found.diff.change ? `current moment: ${found.diff.change}` : '', size, place,
-        mv_cast.castVisual(record, found.group, { appearance }),
+        return mv_still.joinStillPrompt([style, ratio, 'single illustration, one captured instant', mv_still.stillScene(found.group, found.diff, actors.length === 1), size, place,
+        mv_cast.castVisual(record, mv_still.stillCast(found.group, found.diff), { appearance }),
         found.group.layer === 'full' ? [era, (list(found.group.bgs).find(b => b.id === found.diff.bg) || list(found.group.bgs)[0])?.prompt || found.group.backgroundPrompt].filter(Boolean).join(', ')
-            : 'white background, simple background'].filter(Boolean).join('\n');
+            : 'isolated subject, flat uniform white background, clear silhouette, margin around the subject']);
     }
     const who = found.group.who;
     const hasChar = who === 'char' || who === 'both';
     const hasUser = settings.appear !== 'none' && (who === 'both' || who === 'user');
     const looks = core_castLooks.readCastLooks(context);
     const people = { ...(looks || {}), char: hasChar ? looks?.char || '' : '', user: hasUser ? looks?.user || '' : '' };
-    const lookLine = hasChar || hasUser ? core_castLooks.castLooksPromptLine(people, context) : '';
+    const lookLine = appearance && (hasChar || hasUser) ? core_castLooks.castLooksPromptLine(people, context) : '';
     const back = settings.appear === 'back' && hasUser ? `${hasChar ? 'the second person' : 'the person'} is shown only from behind, hands or silhouette, face not visible` : '';
     const place = { left: 'character placed on the left third of the frame', right: 'character placed on the right third of the frame', center: '' }[found.group.position] || '';
     const size = { close: 'close-up shot', medium: 'medium shot, waist up', full: 'full body shot', wide: 'wide shot, small figure' }[found.group.scale] || '';
-    return [style, ratio, found.group.characterPrompt, found.diff.change, place, size, lookLine ? `fixed appearance, keep consistent: ${lookLine}` : '', wardrobeLine(record, hasChar, hasUser), back,
+    return mv_still.joinStillPrompt([style, ratio, 'single illustration, one captured instant', mv_still.stillScene(found.group, found.diff, hasChar !== hasUser), place, size, lookLine ? `fixed appearance, keep consistent: ${lookLine}` : '', wardrobeLine(record, hasChar, hasUser), back,
         hasChar && hasUser ? 'duo, two people' : hasChar || hasUser ? 'solo, single figure' : 'scenery, no humans',
         found.group.layer === 'full'
             ? [era, (list(found.group.bgs).find(b => b.id === found.diff.bg) || list(found.group.bgs)[0])?.prompt || found.group.backgroundPrompt, 'detailed background, full scene'].filter(Boolean).join(', ')
-            : 'white background, simple background'].filter(Boolean).join(', ');
+            : 'isolated subject, flat uniform white background, clear silhouette, margin around the subject']);
 }
 
 // 双人画面按角色分别给外貌（与 CG 相同的 characters 结构），避免两个人长成同一张脸。
@@ -87755,14 +88609,15 @@ async function drawAsset(songId, key, { fresh = false } = {}) {
     try {
         const seed = fresh ? 0 : (found.group?.seed || 0);
         const base = {
-            // 人物层永远竖画：横构图里画单人时模型会把人复制成左右两份；横屏成片由本地合成。
-            orientation: (found.kind === 'motif' || (found.kind === 'char' && found.group.layer !== 'full')) || normalizeSettings(record.settings).ratio === '9:16' ? 'portrait' : 'landscape',
-            characterName: context?.name2 || '', targetKey: runKey, seed,
+            // 场景和人物差分都遵守本曲画幅；意象仍是独立的抠图素材。
+            orientation: found.kind === 'motif' || normalizeSettings(record.settings).ratio === '9:16' ? 'portrait' : 'landscape',
+            respectOrientation: found.kind !== 'motif',
+            characterName: context?.name2 || '', targetKey: runKey, seed, singlePrompt: true,
         };
         // A saved custom prompt is the complete previewed text; do not append hidden cast text.
         const metadata = found.kind === 'char' && !record.assetPrompts?.[key] ? assetMetadata(record, found, context) : null;
         let result;
-        try { result = await cg_core.invokeImageGeneration(assetPrompt(record, key, context, !(record.cast && metadata)), context, { ...base, ...(metadata ? { promptMetadata: metadata } : {}) }); }
+        try { result = await cg_core.invokeImageGeneration(assetPrompt(record, key, context, !metadata), context, { ...base, ...(metadata ? { promptMetadata: metadata } : {}) }); }
         catch (error) {
             // 分角色外貌不被渠道接受时，退回普通提示词再画一次，不让整张图失败。
             if (record.cast || !metadata || error?.name === 'AbortError' || /ABORT/.test(String(error?.code || ''))) throw error;
@@ -87815,6 +88670,31 @@ function setGroupLayer(songId, groupId, layer) {
     return writeMv(scopeOf(context), songId, current => {
         const g = list(current?.groups).find(x => x.id === groupId);
         if (g) g.layer = layer === 'cutout' ? 'cutout' : 'full';
+        return current;
+    });
+}
+
+function patchStageBackground(songId, id, patch) {
+    const context = core_context.currentCharacterGuard();
+    return writeMv(scopeOf(context), songId, current => {
+        const bg = list(current?.stage?.backgrounds).find(b => b.id === id);
+        if (!bg) return current;
+        if (Object.hasOwn(mv_stage.BACKGROUNDS, patch?.kind)) bg.kind = patch.kind;
+        if (['still', 'rotate', 'drift'].includes(patch?.motion)) bg.motion = patch.motion;
+        if (Array.isArray(patch?.colors)) bg.colors = bg.colors.map((c, i) => /^#[0-9a-f]{6}$/iu.test(patch.colors[i]) ? patch.colors[i] : c);
+        return current;
+    });
+}
+
+function patchStageCue(songId, shotId, patch) {
+    const context = core_context.currentCharacterGuard();
+    return writeMv(scopeOf(context), songId, current => {
+        const shot = list(current?.shots).find(s => s.id === shotId);
+        if (!shot) return current;
+        const bg = mv_stage.background(current, shot);
+        if (!bg) return current;
+        shot.stage = mv_stage.cue({ ...shot.stage, ...patch }, bg.id,
+            id => list(current.stage?.backgrounds).some(b => b.id === id) ? id : '');
         return current;
     });
 }
@@ -87916,6 +88796,8 @@ __m_extras_mv_js.isAssetDrawing = isAssetDrawing;
 __m_extras_mv_js.setAssetSplit = setAssetSplit;
 __m_extras_mv_js.captureAssetEdit = captureAssetEdit;
 __m_extras_mv_js.setGroupLayer = setGroupLayer;
+__m_extras_mv_js.patchStageBackground = patchStageBackground;
+__m_extras_mv_js.patchStageCue = patchStageCue;
 __m_extras_mv_js.syncLines = syncLines;
 __m_extras_mv_js.resetGroupSeed = resetGroupSeed;
 __m_extras_mv_js.firstChunk = firstChunk;
@@ -88004,10 +88886,13 @@ const core_castLooks = __m_core_castLooks_js;
 const archive_repository = __m_archive_repository_js;
 const mv_cast = __m_extras_mvCast_js;
 const mv_direction = __m_extras_mvDirection_js;
+const mv_stage = __m_extras_mvStage_js;
+const stage_canvas = __m_ui_mvStageCanvas_js;
 const cast_controls = __m_ui_mvCastControls_js;
 const participant_picker = __m_ui_participantPicker_js;
 const image_editor = __m_ui_mvImageEditor_js;
 const image_tools = __m_extras_mvImageTools_js;
+const editor_ui = __m_ui_mvEditorUi_js;
 const runtimeState = __m_core_state_js.state;
 // 印象曲 MV 页面：三步开始、镜头清单、对时间、手书剪辑台、视频单镜、拼成 MV。
 // 播放和导出都在本机进行；歌曲文件只在这次打开期间留在内存里，不上传、不写入聊天。
@@ -88031,6 +88916,31 @@ let mediaSequence = 0;
 // Navigation is local to this opened song, never part of the saved MV/archive.
 const navigation = [];
 let renderedPage = '';
+let imageRefreshTimer = 0;
+let imageLayoutPending = false;
+
+function queueImageRefresh(layout = false) {
+    imageLayoutPending = imageLayoutPending || layout;
+    if (imageRefreshTimer) return;
+    const opened = viewTarget();
+    imageRefreshTimer = setTimeout(() => {
+        imageRefreshTimer = 0; const repaint = imageLayoutPending; imageLayoutPending = false;
+        if (!isView(opened) || view.sub === 'asset-editor') return;
+        if (repaint && view.sub === 'board') renderMv(); else drawNow();
+    }, 24);
+}
+
+function cacheValue(map, key, value, limit) {
+    map.delete(key); map.set(key, value);
+    while (map.size > limit) map.delete(map.keys().next().value);
+    return value;
+}
+
+function assetPreviewHtml(image) {
+    if (!mv.hasAssetImage(image)) return '';
+    const url = assetImageUrl(image);
+    return `<img${url ? ` src="${esc(url)}"` : ''}${image.local ? ` data-rmt-mv-local="${esc(image.local)}"` : ''} alt="" loading="lazy" decoding="async">`;
+}
 
 function capturePagePosition(assetKey = '') {
     const el = body();
@@ -88042,14 +88952,14 @@ function capturePagePosition(assetKey = '') {
     return { top: el.scrollTop, left: el.scrollLeft || 0,
         anchor: anchor?.dataset.rmtMvAnchor, offset: anchor?.getBoundingClientRect?.().top - top,
         // Inspection expansion is controlled by view.inspect; never undo its click.
-        details: [...(el.querySelectorAll?.('details:not(.rmt-mv-inspect)') || [])].map(node => node.open),
+        details: [...(el.querySelectorAll?.('details:not(.rmt-mv-inspect):not(.rmt-mve-group-fold)') || [])].map(node => node.open),
         strips: [...(el.querySelectorAll?.('.rmt-mv-assets, .rmt-mv-strip') || [])].map(node => node.scrollLeft) };
 }
 
 function restorePagePosition(position) {
     const el = body();
     if (!el || !position) return;
-    const details = [...(el.querySelectorAll?.('details:not(.rmt-mv-inspect)') || [])];
+    const details = [...(el.querySelectorAll?.('details:not(.rmt-mv-inspect):not(.rmt-mve-group-fold)') || [])];
     if (details.length === position.details.length) details.forEach((node, i) => { node.open = position.details[i]; });
     [...(el.querySelectorAll?.('.rmt-mv-assets, .rmt-mv-strip') || [])].forEach((node, i) => { node.scrollLeft = position.strips[i] || 0; });
     el.scrollTop = position.top; el.scrollLeft = position.left;
@@ -88079,9 +88989,14 @@ function assetImageUrl(image) {
     if (!key) return '';
     if (localUrls.has(key)) return localUrls.get(key);
     if (!loadingLocal.has(key)) {
+        const epoch = view.epoch;
         const pending = mv_media.getMedia(key).then(row => {
-            if (row?.blob) { localUrls.set(key, URL.createObjectURL(row.blob)); if (runtimeState.activeMode === MV_MODE) renderMv(); }
-        }).catch(() => {}).finally(() => loadingLocal.delete(key));
+            if (row?.blob && epoch === view.epoch) {
+                const url = URL.createObjectURL(row.blob); localUrls.set(key, url);
+                for (const node of body()?.querySelectorAll?.('[data-rmt-mv-local]') || []) if (node.dataset.rmtMvLocal === key) node.src = url;
+                queueImageRefresh(view.sub === 'board');
+            }
+        }).catch(() => {}).finally(() => { if (loadingLocal.get(key) === pending) loadingLocal.delete(key); });
         loadingLocal.set(key, pending);
     }
     return '';
@@ -88098,7 +89013,7 @@ function closeAssetEditor() {
     if (view.sub === 'asset-editor') restoreParentPage();
 }
 
-async function openAssetEditor(key) {
+async function openAssetEditor(key, autoCutout = false) {
     const opened = viewTarget(), target = mv.captureAssetEdit(view.songId, key);
     const record = target.base.songs[target.songId], found = mv.assetOf(record, key);
     stopPlayback(); assetEditor?.dispose(); assetEditor = null;
@@ -88111,7 +89026,8 @@ async function openAssetEditor(key) {
     if (!isView(opened) || view.sub !== 'asset-editor' || token !== editSequence) return;
     const host = body().querySelector('[data-rmt-mv-editor-host]'); if (!host) return;
     assetEditor = image_editor.mountAssetEditor(host, {
-        motif: key === 'motif',
+        motif: key === 'motif', autoCutout, autoCharacter: !autoCutout && found.kind === 'char' && found.group.layer !== 'full' && image?.editMode !== 'full',
+        multipleCharacters: found.group?.who === 'both' || (found.group?.cast?.length || 0) > 1,
         sourceUrl, imageUrl, image, prompt: mv.assetPrompt(record, key, ctx()), defaultPrompt: mv.defaultAssetPrompt(record, key, ctx()),
         onClose: () => { if (isView(opened) && token === editSequence) closeAssetEditor(); },
         onSave: async draft => {
@@ -88242,9 +89158,21 @@ ${r} .rmt-mv-assets{display:flex;gap:8px;align-items:flex-end;overflow-x:auto;pa
 ${r} .rmt-mv-assets>div{display:flex;flex-direction:column;align-items:center;gap:4px;flex-shrink:0}
 ${r} .rmt-mv-assets small{font-size:11px;color:var(--rmt-theme-muted,#586b7c)}
 ${r} .rmt-mv-plus{font-size:18px;color:#b7c3cf;padding-bottom:28px}
-${r} .rmt-mv-asset{position:relative;width:62px;height:96px;border-radius:10px;overflow:hidden;padding:0;cursor:pointer;border:1px solid var(--rmt-theme-border,#cfdae5);background:repeating-linear-gradient(135deg,#e6e9f0 0 6px,#f2f4f8 6px 12px)}
-${r} .rmt-mv-asset.cut.done{background:repeating-conic-gradient(#eef0f4 0 25%,#ffffff 0 50%) 0 0/12px 12px}
-${r} .rmt-mv-asset img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+${r} .rmt-mv-asset{position:relative;box-sizing:border-box;flex-shrink:0;width:62px;height:auto;min-width:0;min-height:0;max-height:none;aspect-ratio:9/16;border-radius:10px;overflow:hidden;padding:0;cursor:pointer;border:1px solid var(--rmt-theme-border,#cfdae5);background:repeating-linear-gradient(135deg,#e6e9f0 0 6px,#f2f4f8 6px 12px)}
+${r} .rmt-mv-asset.wide{box-sizing:border-box;flex-shrink:0;width:160px;height:auto;min-width:0;min-height:0;max-height:none;aspect-ratio:16/9;padding:0}
+${r} .rmt-mv-background-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:12px;margin-top:10px}
+${r} .rmt-mv-background-tile{display:grid;grid-template-columns:auto minmax(0,1fr);gap:6px 10px;align-items:start;min-width:0}
+${r} .rmt-mv-background-tile .rmt-mv-assets{overflow:visible}
+${r} .rmt-mv-background-tile .rmt-mv-asset.wide{width:110px}
+${r} .rmt-mv-background-tile .rmt-mv-actions{margin:0;gap:6px}
+${r} .rmt-mv-background-tile .rmt-mv-actions button{padding:6px 9px;min-height:36px;font-size:12px}
+${r} .rmt-mv-background-tile>details{grid-column:1/-1;min-width:0;font-size:12px}
+${r} .rmt-mv-background-tile>details[open]{padding-top:6px}
+${r} .rmt-mv-asset.cut.done{background:repeating-conic-gradient(#dce0e6 0 25%,#ffffff 0 50%) 0 0/12px 12px!important}
+${r} .rmt-mv-asset-actions{display:flex;flex-wrap:wrap;gap:4px;justify-content:center;max-width:160px}
+${r} .rmt-mv-asset-actions .rmt-btn{padding:6px 8px;font-size:12px;min-height:40px}
+${r} .rmt-mv-asset img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
+${r} .rmt-mv-asset.wide img{display:block;min-width:0;min-height:0;max-width:none;max-height:none;margin:0;padding:0;object-fit:cover;object-position:center}
 ${r} .rmt-mv-asset i{position:absolute;left:4px;top:4px;font-style:normal;font-size:10px;border-radius:4px;padding:1px 5px;background:#ecebf1;color:#5d5566}
 ${r} .rmt-mv-asset.done i{background:#e2f0ee;color:#2f6b66}
 ${r} .rmt-mv-palette{display:flex;gap:12px;align-items:center;background:var(--rmt-theme-surface-solid,#fff);border:1px solid var(--rmt-theme-border,#cfdae5);border-radius:16px;padding:12px 14px}
@@ -88258,7 +89186,10 @@ ${r} .rmt-mv-split{margin-top:4px;min-height:32px;max-width:92px;font-size:11px;
 ${r} .rmt-mv-inspect summary{cursor:pointer;font-size:13px;font-weight:600;padding:6px 0}
 ${r} .rmt-mv-inspect-row{display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-top:1px dashed var(--rmt-theme-border,#cfdae5)}
 ${r} .rmt-mv-inspect-row figure{margin:0;display:flex;flex-direction:column;align-items:center;gap:2px}
-${r} .rmt-mv-inspect-row img{width:72px;height:108px;object-fit:contain;border-radius:8px;background:#e9edf2}
+${r} .rmt-mv-inspect-row img{width:72px;height:auto;aspect-ratio:9/16;object-fit:contain;border-radius:8px;background:#e9edf2}
+${r} .rmt-mv-inspect-row.wide{flex-wrap:wrap}
+${r} .rmt-mv-inspect-row.wide img{width:110px;height:auto;aspect-ratio:16/9}
+${r} .rmt-mv-inspect-row.wide figure.cut img{object-fit:cover}
 ${r} .rmt-mv-inspect-row figure.cut img{background:repeating-conic-gradient(#e6e9f0 0 25%,#fff 0 50%) 0 0/10px 10px}
 ${r} .rmt-mv-inspect-row figcaption{font-size:10px;color:var(--rmt-theme-muted,#586b7c)}
 ${r} .rmt-mv-inspect-row>div{display:flex;flex-direction:column;gap:3px;font-size:12px;min-width:0}
@@ -88276,8 +89207,8 @@ ${r} .rmt-mv-lyric p{margin:0;font-size:14px;line-height:1.8;white-space:pre-lin
 ${r} .rmt-mv-shot{display:flex;flex-direction:column;gap:12px;border-radius:16px;padding:14px;background:var(--rmt-theme-surface-solid,#fff);border:1px solid var(--rmt-theme-border,#cfdae5)}
 ${r} .rmt-mv-shot.done{border-color:#b9dcd6}
 ${r} .rmt-mv-shot-row{display:flex;gap:12px}
-${r} .rmt-mv-thumb{width:64px;height:114px;flex-shrink:0;border-radius:10px;overflow:hidden;background:repeating-linear-gradient(135deg,#e6e9f0 0 6px,#f2f4f8 6px 12px);display:flex;align-items:flex-end;justify-content:flex-start;position:relative}
-${r} .rmt-mv-thumb.wide{width:114px;height:64px}
+${r} .rmt-mv-thumb{width:64px;height:auto;aspect-ratio:9/16;flex-shrink:0;align-self:flex-start;border-radius:10px;overflow:hidden;background:repeating-linear-gradient(135deg,#e6e9f0 0 6px,#f2f4f8 6px 12px);display:flex;align-items:flex-end;justify-content:flex-start;position:relative}
+${r} .rmt-mv-thumb.wide{width:114px;aspect-ratio:16/9}
 ${r} .rmt-mv-thumb img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 ${r} .rmt-mv-thumb i{position:relative;font-style:normal;font-size:10px;color:#f3eee6;background:rgba(29,27,38,.7);border-radius:4px;padding:2px 5px;margin:4px}
 ${r} .rmt-mv-shot-copy{display:flex;flex-direction:column;gap:6px;flex:1;min-width:0}
@@ -88353,6 +89284,7 @@ ${r} .rmt-mv-look textarea{width:100%;box-sizing:border-box;border:1px solid var
 .rmt-mv-rec canvas{max-width:100vw;max-height:100vh;width:auto;height:auto}
 .rmt-mv-rec b{position:absolute;color:#fff;font-size:72px;font-family:sans-serif}
 .rmt-mv-rec button{position:absolute;top:calc(env(safe-area-inset-top,0px) + 12px);right:12px;min-height:44px;padding:0 16px;border-radius:12px;border:0;background:rgba(255,255,255,.9);color:#000;font-size:15px}
+${editor_ui.editorCss(r)}
 `;
     document.head.appendChild(style);
 }
@@ -88370,7 +89302,9 @@ function openMv(options = {}) {
     view.songId = songId; view.scope = mv.mvScope(context);
     const record = mv.readMv(context, view.songId);
     view.castDraft = mv_cast.initialMvCast(context, record);
-    view.sub = record?.shots?.length ? 'board' : 'setup';
+    const ready = record?.shots?.length && mv.normalizeSettings(record.settings).output === 'tegaki' && record.shots.some(s => mv.hasAssetImage(mv.shotImage(record, s)));
+    view.sub = record?.shots?.length ? options.page === 'board' || !ready ? 'board' : 'tegaki' : 'setup';
+    view.editorTab = 'shots'; view.editorDrawer = ''; view.editorTiming = { kind: 'line', key: '' }; view.editorSection = null; view.editorUndo = []; view.editorAutoNext = true; view.stripStart = 0; view.editorPlayhead = ''; view.inspect = ''; view.groupOpen = '';
     view.step = 1; view.draft = mv.normalizeSettings(record?.settings); view.mode = view.draft.output; view.shotId = ''; view.copied = ''; view.tapIndex = -1; view.tapUndo = [];
     overlay.openOverlay();
     renderMv();
@@ -88459,8 +89393,9 @@ function page(title, back, html) {
     if (navigation.at(-1)?.sub === 'shot') back = '镜头详情';
     if (view.sub === 'setup' && view.step > 1) back = '上一步';
     overlay.topTitle(title); overlay.setBackVisible(true, back);
-    const returnButton = view.sub !== 'board' ? btn('back', `← 返回${esc(back)}`) : '';
-    body().innerHTML = `<main class="rmt-x-page">${returnButton}${recoveryPanel()}${html}<details class="rmt-x-card"><summary>MV 备份</summary>${btn('export-recovery', '导出 MV 数据与暂存结果')}</details></main>`;
+    const editor = view.sub === 'tegaki' || view.sub === 'sync';
+    const returnButton = view.sub !== 'board' ? btn('back', `← 返回${esc(back)}`, editor ? { cls: 'rmt-mve-back' } : {}) : '';
+    body().innerHTML = `<main class="rmt-x-page${editor ? ' rmt-mv-editor' : ''}">${returnButton}${recoveryPanel()}${html}${editor ? '' : `<details class="rmt-x-card"><summary>MV 备份</summary>${btn('export-recovery', '导出 MV 数据与暂存结果')}</details>`}</main>`;
     renderedPage = view.sub;
 }
 
@@ -88559,7 +89494,7 @@ function choice(action, value, on, title, desc, note = '') {
 
 function thumb(shot, record, label) {
     const wide = mv.normalizeSettings(record.settings).ratio === '16:9';
-    return `<span class="rmt-mv-thumb${wide ? ' wide' : ''}">${imgUrl(shot) ? `<img src="${esc(imgUrl(shot))}" alt="" loading="lazy">` : ''}<i>${esc(label)}</i></span>`;
+    return `<span class="rmt-mv-thumb${wide ? ' wide' : ''}">${imgUrl(shot) ? `<img src="${esc(thumbnailPreview(imgUrl(shot)))}" alt="" loading="lazy">` : ''}<i>${esc(label)}</i></span>`;
 }
 
 function renderBoard(song, record) {
@@ -88697,61 +89632,171 @@ function tegakiControls(record, song) {
     const range = mv.playRange(record, song);
     const seg2 = (action, map, value) => Object.entries(map).map(([id, label]) => btn(action, label, { id, cls: 'rmt-x-seg' + (value === id ? ' active' : ''), extra: ` aria-pressed="${value === id}"` })).join('');
     const presets = Object.entries(mv.TEGAKI_PRESETS).map(([id, p]) => `<button type="button" class="rmt-mv-choice${o.preset === id ? ' on' : ''}" aria-pressed="${o.preset === id}" data-rmt-mv="tegaki-preset" data-rmt-mv-id="${id}"><span><b>${esc(p.name)}</b><small>${esc(p.desc)}</small></span></button>`).join('');
-    return `<b style="font-size:14px">节奏模板</b><div class="rmt-mv-presets">${presets}</div>
-      <p class="rmt-x-note">参考常见手书套路，一次排好全部镜头的切换方式、停留和歌词样式；之后仍可逐镜修改。</p>
-      <b style="font-size:14px">截取哪一段</b>${rangePicker('record', o, mv.parseSections(song.lyrics))}
-      <p class="rmt-x-note">现在：${mv.formatTime(range.start)}–${mv.formatTime(range.end)}（约 ${Math.max(0, Math.round(range.end - range.start))} 秒）。</p>
-      ${mv.isV2(record) ? `<label class="rmt-mv-look"><span>片头时长（秒）</span><input type="number" min="0" step="0.5" inputmode="decimal" data-rmt-mv-intro-seconds value="${o.introSeconds}"></label><p class="rmt-x-note">0 为关闭；最多占首镜头的一半，开唱时自动结束。</p>` : ''}
-      ${mv.isV2(record) ? `<label class="rmt-mv-look"><span>片尾时长（秒）</span><input type="number" min="0" step="0.5" inputmode="decimal" data-rmt-mv-outro-seconds value="${o.outroSeconds}"></label><p class="rmt-x-note">0 为关闭；只在所选片段末尾显示，最多占最后一个镜头的一半。</p>` : ''}
-      <b style="font-size:14px">切换节奏</b><div class="rmt-mv-grid2">${seg2('tegaki-rhythm', mv.TEGAKI_RHYTHMS, o.rhythm)}</div>
-      <b style="font-size:14px">歌词</b><div class="rmt-x-segs">${seg2('tegaki-lyric', mv.TEGAKI_LYRICS, o.lyric)}</div>
+    return `${mv.isV2(record) ? `<b>片头与片尾</b><label class="rmt-mv-look"><span>片头时长（秒）</span><input type="number" min="0" step="0.5" inputmode="decimal" data-rmt-mv-intro-seconds value="${o.introSeconds}"></label><label class="rmt-mv-look"><span>片尾时长（秒）</span><input type="number" min="0" step="0.5" inputmode="decimal" data-rmt-mv-outro-seconds value="${o.outroSeconds}"></label><p class="rmt-x-note">0 为关闭。片头最多占首镜头一半，开唱时结束；片尾最多占所选片段末镜头一半。</p>` : ''}
+      <details open><summary>字幕与装饰</summary><div><b>歌词样式</b><div class="rmt-x-segs">${seg2('tegaki-lyric', Object.fromEntries(Object.entries(mv.TEGAKI_LYRICS).filter(([key]) => key !== 'stage' || record.stage)), o.lyric)}</div>
       ${mv.isV2(record) ? `<label class="rmt-mv-check"><input type="checkbox" data-rmt-mv-overlay="keyword" ${o.showKeyword ? 'checked' : ''}>副歌关键词（随歌词隐藏）</label><label class="rmt-mv-check"><input type="checkbox" data-rmt-mv-overlay="motif" ${o.showMotif ? 'checked' : ''}>漂浮装饰</label>` : ''}
-      ${o.lyric === 'none' ? '' : `<b style="font-size:14px">字体</b><div class="rmt-x-segs">${seg2('tegaki-font', Object.fromEntries(Object.entries(mv.TEGAKI_FONTS).map(([k, v]) => [k, v.name])), o.font)}</div><p class="rmt-x-note">字体用设备自带的，不同手机效果会略有差异。</p>`}`;
+      ${o.lyric === 'none' ? '' : `<b>字体</b><div class="rmt-x-segs">${seg2('tegaki-font', Object.fromEntries(Object.entries(mv.TEGAKI_FONTS).map(([k, v]) => [k, v.name])), o.font)}</div><p class="rmt-x-note">字体用设备自带的，不同手机效果会略有差异。</p>`}${motifNotice(record)}</div></details>
+      <details><summary>节奏模板与切换</summary><div><div class="rmt-mv-presets">${presets}</div><p class="rmt-x-note">模板会统一修改镜头切换、停留和歌词样式；之后仍可逐镜调整。</p><b>切换节奏</b><div class="rmt-mv-grid2">${seg2('tegaki-rhythm', mv.TEGAKI_RHYTHMS, o.rhythm)}</div></div></details>
+      <details><summary>截取范围 · ${mv.formatTime(range.start)}–${mv.formatTime(range.end)}</summary><div>${rangePicker('record', o, mv.parseSections(song.lyrics))}<p class="rmt-x-note">约 ${Math.max(0, Math.round(range.end - range.start))} 秒。只改变预览范围，不删除其他分镜。</p></div></details>`;
+}
+
+function stageShotControls(record, shot) {
+    const bg = mv_stage.background(record, shot);
+    if (!bg) return '';
+    const cue = shot.stage || {};
+    const select = (field, label, values, value) => `<label class="rmt-mv-look"><span>${label}</span><select data-rmt-mv-stage-cue="${field}" data-shot="${esc(shot.id)}">${Object.entries(values).map(([id, name]) => `<option value="${esc(id)}"${id === value ? ' selected' : ''}>${esc(name)}</option>`).join('')}</select></label>`;
+    return `<details><summary>舞台编排</summary>
+      ${select('background', '共享背景', Object.fromEntries(record.stage.backgrounds.map(b => [b.id, b.label])), bg.id)}
+      <label class="rmt-mv-look"><span>画面文字</span><input type="text" data-rmt-mv-stage-cue="text" data-shot="${esc(shot.id)}" value="${esc(cue.text || '')}" placeholder="${esc(shot.lyric || '')}"></label>
+      ${select('layout', '文字位置', mv_stage.LAYOUTS, cue.layout || 'sides')}
+      ${select('depth', '文字层', { back: '人物后方', front: '人物前方' }, cue.depth || 'back')}
+      ${select('entrance', '人物入场', { cut: '直接切', pop: '轻弹入', slide: '滑入' }, cue.entrance || 'cut')}
+      ${select('tone', '背景变化', { base: '原配色', accent: '强调色', dark: '压暗' }, cue.tone || 'base')}
+      <label class="rmt-mv-check"><input type="checkbox" data-rmt-mv-stage-cue="shadow" data-shot="${esc(shot.id)}"${cue.shadow ? ' checked' : ''}>人物剪影</label></details>`;
+}
+
+function markedTime(value) { return value !== null && value !== undefined && value !== '' && Number.isFinite(Number(value)) && Number(value) >= 0; }
+
+function editorTimingTarget(record, song) {
+    const timeline = mv.shotTimeline(record, song), sections = timeline.sections, times = timeline.times;
+    const selected = view.editorTiming || { kind: 'line', key: '' };
+    if (selected.kind === 'section') {
+        const index = syncTapIndex(sections, record.timing?.taps || {});
+        return { kind: 'section', index, time: times[index]?.start || 0, label: index < 0 ? '全部段落已对齐' : sections[index].name };
+    }
+    const lines = mv.syncLines(record, song);
+    const line = lines.find(l => l.key === selected.key) || (selected.complete ? null : lines.find(l => !markedTime(record.timing?.lineTaps?.[l.key])));
+    if (!line) return { kind: 'line', key: '', index: -1, time: 0, label: '全部句子已对齐' };
+    const [index, li] = line.key.split(':').map(Number);
+    const estimate = times[index] ? times[index].start + (times[index].end - times[index].start) * li / Math.max(1, sections[index].lines.length) : 0;
+    return { kind: 'line', key: line.key, index, time: markedTime(record.timing?.lineTaps?.[line.key]) ? Number(record.timing.lineTaps[line.key]) : estimate, label: line.text, section: line.section };
+}
+
+function saveEditorTime(value, advance = false) {
+    const record = currentRecord(), song = currentSong(), target = editorTimingTarget(record, song);
+    if (!Number.isFinite(value) || value < 0 || target.index < 0) return;
+    if (target.kind === 'section') {
+        setTap(target.index, Math.round((value - (Number(record.timing?.shift) || 0)) * 10) / 10);
+        view.tapIndex = target.index;
+        if (advance && view.editorAutoNext !== false) view.editorTiming = { kind: 'line', key: mv.syncLines(record, song).find(l => l.key.startsWith(target.index + ':'))?.key || '' };
+    } else {
+        const timing = structuredClone(record.timing || {}), lineTaps = { ...(timing.lineTaps || {}), [target.key]: Math.round(value * 10) / 10 };
+        mv.patchRecord(view.songId, { timing: { ...timing, lineTaps } });
+        view.editorUndo.push({ timing, selected: { ...view.editorTiming }, tapIndex: view.tapIndex });
+        if (advance && view.editorAutoNext !== false) {
+            const lines = mv.syncLines(record, song), next = lines[lines.findIndex(l => l.key === target.key) + 1];
+            view.editorTiming = { kind: 'line', key: next?.key || '', complete: !next };
+            if (next) view.editorSection = Number(next.key.split(':')[0]);
+        }
+    }
+    renderMv();
+}
+
+function editorTimingPanel(song, record) {
+    const { sections, times } = mv.shotTimeline(record, song), lines = mv.syncLines(record, song);
+    const taps = record.timing?.taps || {}, lineTaps = record.timing?.lineTaps || {};
+    const target = editorTimingTarget(record, song);
+    const open = Number.isInteger(view.editorSection) ? view.editorSection : Math.max(0, target.index);
+    const groups = sections.map((s, i) => {
+        const own = lines.filter(l => Number(l.key.split(':')[0]) === i);
+        const picked = target.kind === 'section' && target.index === i;
+        return `<div class="rmt-mve-sync-group"><div class="rmt-mve-section"><button type="button" class="rmt-mve-section-pick${picked ? ' on' : ''}" data-rmt-mv="select-section" data-rmt-mv-id="${i}" aria-pressed="${picked}"><small>段</small><b>${esc(s.name)}</b><time>${mv.formatTime(times[i].start, true)}</time><small>${markedTime(taps[i]) ? '已定' : '估计'}</small></button>${btn('editor-section', open === i ? '⌄' : '›', { id: String(i), cls: 'rmt-mve-fold', extra: ` aria-label="${open === i ? '收起' : '展开'}歌词" aria-expanded="${open === i}"` })}</div>
+          ${open === i ? `<div class="rmt-mve-lines">${own.map(l => {
+            const li = Number(l.key.split(':')[1]), done = markedTime(lineTaps[l.key]);
+            const time = done ? Number(lineTaps[l.key]) : times[i].start + (times[i].end - times[i].start) * li / Math.max(1, s.lines.length);
+            const active = target.kind === 'line' && target.key === l.key;
+            return `<button type="button" class="rmt-mve-line${active ? ' on' : ''}" data-rmt-mv="editor-line" data-rmt-mv-id="${l.key}" aria-pressed="${active}"><span>${esc(l.text)}</span><small><time>${mv.formatTime(time, true)}</time><em>${done ? '已定' : '估计'}</em></small></button>`;
+        }).join('') || '<p class="rmt-x-note">当前截取范围内没有这一段的歌词。</p>'}</div>` : ''}</div>`;
+    }).join('');
+    const sectionMode = target.kind === 'section';
+    const legacy = view.sub === 'sync' && sectionMode;
+    return `<div class="rmt-x-row-head"><b>定段与定句</b><span>${Object.values(taps).filter(markedTime).length} 段 · ${lines.filter(l => markedTime(lineTaps[l.key])).length} / ${lines.length} 句</span></div>
+      <p class="rmt-x-note">点段名定段，点歌词定句，共用上方播放器。</p><div class="rmt-mve-sync-list">${groups}</div>
+      <small class="rmt-x-note">${target.index < 0 ? esc(target.label) : `${sectionMode ? '正在定段' : '正在定句'} · ${esc(sectionMode ? target.label : target.section)}`}</small>
+      <div class="rmt-mve-timing-actions">${legacy ? `<button type="button" class="rmt-mv-tap${target.index < 0 ? ' done' : ''}" data-rmt-mv="tap" ${!audioBySong.has(audioKey()) || target.index < 0 ? 'disabled' : ''}><b>${target.index < 0 ? '✓ 时间对好了' : esc(target.label) + '开始了'}</b></button>` : btn('editor-mark', sectionMode ? '这一段开始了' : '这一句开始了', { cls: 'rmt-x-primary', disabled: target.index < 0 || player.exporting })}${btn('editor-undo', '撤销', { disabled: !view.editorUndo.length || player.exporting })}</div>
+      ${target.index < 0 ? '' : `<div class="rmt-mve-nudge">${btn('editor-nudge', '−0.1 秒', { id: '-0.1' })}<input type="number" step="0.1" min="0" inputmode="decimal" value="${Math.round(target.time * 10) / 10}" data-rmt-mv-editor-time aria-label="选中标记的开始秒数">${btn('editor-nudge', '+0.1 秒', { id: '0.1' })}</div>`}
+      <label class="rmt-mv-check"><input type="checkbox" data-rmt-mv-editor-next ${view.editorAutoNext !== false ? 'checked' : ''}>定好后自动选下一句</label>
+      <details><summary>重置与细调</summary><div>${btn('tap-line-reset', '清空逐句打点')}${btn('tap-reset', '清空全部打点')}</div></details>`;
+}
+
+function editorSheet(song, record) {
+    if (view.editorDrawer === 'audio') return audioCard(song);
+    if (view.editorDrawer === 'more') return `${btn('go-board', '素材库 · 图片编辑 · 抠图')}${btn('go-board', '补充分镜与图片')}${btn('download-table', '下载镜头时间表')}${btn('download-srt', '下载歌词字幕')}${btn('export-recovery', '导出 MV 数据与暂存结果')}${recoveryPanel()}`;
+    if (view.editorDrawer !== 'export') return '';
+    const support = exportSupport(), exporting = player.exporting;
+    return exporting ? `<div class="rmt-x-row-head"><b>正在导出</b><span data-rmt-mv-export-time>0:00</span></div><div class="rmt-x-bar"><i data-rmt-mv-export-bar style="width:0%"></i></div><p class="rmt-x-note">请留在本页，不要锁屏。</p>${btn('export-stop', '停止导出')}`
+      : `${exportControls(record, song)}${support.ok ? btn('export', audioBySong.has(audioKey()) ? `导出视频（.${support.ext}）` : `导出无声视频（.${support.ext}）`, { cls: 'rmt-x-primary' }) : '<p class="rmt-mv-warn">此环境不支持直接导出视频，可使用下面的录屏模式。</p>'}
+        ${btn('record-mode', '录屏模式（全屏播放）', { disabled: !audioBySong.has(audioKey()) })}<p class="rmt-x-note">导出会播放一遍所选片段，请不要切页或锁屏。</p>`;
+}
+
+function editorShotPanel(song, record, sel, selIndex) {
+    const seg = (action, map, value) => Object.entries(map).map(([id, label]) => btn(action, label, { id, cls: 'rmt-x-seg' + (value === id ? ' active' : ''), extra: ` aria-pressed="${value === id}"` })).join('');
+    const assetKey = sel?.shot.group && sel?.shot.diff ? `${sel.shot.group}:${sel.shot.diff}` : '';
+    const asset = assetKey ? mv.assetOf(record, assetKey) : null;
+    return sel ? `<div class="rmt-x-row-head"><b>第 ${selIndex + 1} 镜</b><span>${mv.formatTime(sel.start, true)}–${mv.formatTime(sel.end, true)}</span></div><p class="rmt-x-note">${esc(sel.shot.lyric || sel.shot.plain || '')}</p>
+      <b>镜头运动</b><div class="rmt-mv-grid2">${seg('set-motion', mv.MV_MOTIONS, sel.shot.motion)}</div><b>切到下一镜</b><div class="rmt-x-segs">${seg('set-cut', mv.MV_CUTS, sel.shot.cut || 'fade')}</div>
+      ${asset && !mv.hasAssetImage(sel.shot.image) ? `<div class="rmt-mv-actions">${btn('edit-asset', '图片编辑 · 选单格 · 修边', { id: assetKey })}${btn('cutout-asset', '一键抠图', { id: assetKey })}</div>` : ''}
+      ${stageShotControls(record, sel.shot)}<details><summary>图片与生成</summary><div>${btn('draw', mv.isFrameDrawing(mv.mvScope(ctx()), view.songId, sel.shot.id) ? '正在画…' : hasImg(sel.shot) ? '重画这一镜' : '画这一镜', { id: sel.shot.id, disabled: mv.isFrameDrawing(mv.mvScope(ctx()), view.songId, sel.shot.id) })}${uploadLabel(sel.shot.id)}${sel.shot.image && asset ? btn('use-group-image', '恢复使用构图素材', { id: sel.shot.id }) : ''}${btn('go-board', '素材库与背景编辑')}</div></details>` : '';
+}
+
+function editorStrip(rows, record) {
+    // A window in the thumbnail list, not a limit on saved/generated frames.
+    const start = Math.max(0, Math.min(view.stripStart || 0, Math.max(0, rows.length - 1)));
+    const strip = rows.slice(start, start + 12).map((row, i) => `<button type="button" class="${row.shot.id === view.selected ? 'on' : ''}" aria-label="第 ${start + i + 1} 镜" data-rmt-mv="select-shot" data-rmt-mv-id="${esc(row.shot.id)}">${assetPreviewHtml(mv.shotImage(record, row.shot))}<span>${start + i + 1} · ${(row.end - row.start).toFixed(1)}秒</span></button>`).join('');
+    const stripNav = `<div class="rmt-mve-strip-nav">${btn('editor-strip', '上一组', { id: String(Math.max(0, start - 12)), disabled: start === 0 })}<span>${start + 1}–${Math.min(rows.length, start + 12)} / ${rows.length} 镜</span>${btn('editor-strip', '下一组', { id: String(start + 12), disabled: start + 12 >= rows.length })}</div>`;
+    return { strip, stripNav };
 }
 
 function renderTegaki(song, record) {
-    const [w, h] = canvasSize(record);
-    const { rows, sections } = mv.shotTimeline(record, song);
+    const [w, h] = canvasSize(record), { rows, total } = mv.shotTimeline(record, song);
     if (!view.selected || !record.shots.some(s => s.id === view.selected)) view.selected = record.shots[0]?.id || '';
-    const selIndex = rows.findIndex(r => r.shot.id === view.selected);
-    const sel = rows[selIndex] || rows[0];
-    const tapped = Object.values(record.timing?.taps || {}).filter(v => v !== null && v !== undefined).length;
-    const support = exportSupport();
-    const exporting = player.exporting;
-    const strip = rows.map((row, i) => {
-        const width = Math.max(48, Math.min(160, Math.round((row.end - row.start) * 9)));
-        return `<button type="button" class="${row.shot.id === view.selected ? 'on' : ''}" style="width:${width}px" aria-label="第 ${i + 1} 镜" data-rmt-mv="select-shot" data-rmt-mv-id="${esc(row.shot.id)}">${imgUrl(row.shot) ? `<img src="${esc(imgUrl(row.shot))}" alt="">` : ''}<span>${i + 1} · ${(row.end - row.start).toFixed(1)}s</span></button>`;
-    }).join('');
+    const selIndex = Math.max(0, rows.findIndex(r => r.shot.id === view.selected)), sel = rows[selIndex];
+    const tab = view.sub === 'sync' ? 'timing' : view.editorTab || 'shots';
+    const { strip, stripNav } = editorStrip(rows, record);
     const seg = (action, map, value) => Object.entries(map).map(([id, label]) => btn(action, label, { id, cls: 'rmt-x-seg' + (value === id ? ' active' : ''), extra: ` aria-pressed="${value === id}"` })).join('');
-    page('手书剪辑台', '镜头清单', `${head(`手书 · ${song.title}`, '手书剪辑台', '放入歌曲就能预览。每一张怎么动，点下面的缩略图来改。')}
-      <div class="rmt-mv-canvas-wrap" style="width:${w > h ? '100%' : 'min(100%, 300px)'}"><canvas data-rmt-mv-canvas width="${w}" height="${h}"></canvas></div>
-      ${mv.isV2(record) && mv.tegakiOptions(record).showMotif ? motifNotice(record) : ''}
-      <div class="rmt-mv-bar"><button type="button" class="rmt-mv-play" data-rmt-mv="play" aria-label="${player.playing ? '暂停' : '播放'}" ${exporting ? 'disabled' : ''}>${player.playing ? '❚❚' : '▶'}</button>
-        <div class="rmt-mv-track" data-rmt-mv="seek" role="slider" aria-label="拖到这里播放" style="cursor:pointer"><div><i data-rmt-mv-progress></i></div><div style="display:flex;justify-content:space-between;background:none;height:auto"><span data-rmt-mv-time>0:00</span><span>${mv.formatTime(mv.shotTimeline(record, song).total)}</span></div></div></div>
-      <div class="rmt-mv-strip">${strip}</div>
-      ${sel ? `<section class="rmt-x-card"><div class="rmt-x-row-head"><b>第 ${selIndex + 1} 镜怎么动</b><span>${mv.formatTime(sel.start, true)}–${mv.formatTime(sel.end, true)}${imgUrl(sel.shot) ? '' : ' · 还没画，先用上一张'}</span></div>
-        <div class="rmt-mv-grid2">${seg('set-motion', mv.MV_MOTIONS, sel.shot.motion)}</div>
-        <b style="font-size:14px">切到下一镜时</b><div class="rmt-x-segs">${seg('set-cut', mv.MV_CUTS, sel.shot.cut || 'fade')}</div>
-        <div class="rmt-mv-actions">${btn('draw', mv.isFrameDrawing(mv.mvScope(ctx()), view.songId, sel.shot.id) ? '正在画…' : imgUrl(sel.shot) ? '重画这张' : '画这一张', { id: sel.shot.id, disabled: mv.isFrameDrawing(mv.mvScope(ctx()), view.songId, sel.shot.id) })}${uploadLabel(sel.shot.id)}</div></section>` : ''}
-      ${audioBySong.has(audioKey()) ? (() => {
-        const lines = mv.syncLines(record, song);
-        if (!lines.length) return '';
-        const taps = record.timing?.lineTaps || {};
-        const done = lines.filter(l => Number.isFinite(Number(taps[l.key]))).length;
-        const next = lines.find(l => !Number.isFinite(Number(taps[l.key])));
-        return `<section class="rmt-x-card rmt-mv-linesync"><div class="rmt-x-row-head"><b>逐句对时间（最准）</b><span>${done} / ${lines.length} 句</span></div>
-          <p class="rmt-x-note">点播放，每唱到新的一句就点一下大按钮。字幕和画面会按你点的时间切换；没点到的句子仍用估计时间。</p>
-          ${next ? `<div class="rmt-mv-lyric"><small>下一句 · ${esc(next.section)}</small><p>${esc(next.text)}</p></div>${btn('tap-line', '这一句开始了', { cls: 'rmt-x-primary', id: next.key })}` : '<p class="rmt-x-note">全部对好了。</p>'}
-          <div class="rmt-mv-actions">${btn('tap-line-undo', '撤销上一句')}${btn('tap-line-reset', '全部重来')}</div></section>`;
-      })() : ''}
-      <section class="rmt-x-card"><b>歌曲与字幕</b>${audioCard(song)}
-        ${tegakiControls(record, song)}
-        ${btn('go-sync', `对时间 · 已点 ${tapped} / ${sections.length} 段${tapped < sections.length ? '，其余用估计时间' : ''}`, { cls: 'rmt-x-primary rmt-x-dark' })}</section>
-      <section class="rmt-x-card"><b>导出</b>${exporting ? '' : exportControls(record, song)}
-        ${exporting ? `<div class="rmt-x-row-head"><span>正在录制…</span><span data-rmt-mv-export-time>0:00</span></div><div class="rmt-x-bar"><i data-rmt-mv-export-bar style="width:0%"></i></div><p class="rmt-x-note">请不要切到其他页面或锁屏。</p>${btn('export-stop', '停止导出')}`
-          : `${support.ok ? btn('export', audioBySong.has(audioKey()) ? `导出成视频（.${support.ext}）` : `导出无声视频（.${support.ext}）`, { cls: 'rmt-x-primary' }) : '<div class="rmt-mv-warn">这台设备不能直接导出视频。可以用下面的录屏模式，配合手机自带的录屏功能录下来。</div>'}
-             ${btn('record-mode', '录屏模式（全屏播放）', { disabled: !audioBySong.has(audioKey()) })}
-             <p class="rmt-x-note">${audioBySong.has(audioKey()) ? '导出会播放一遍所选片段，片段多长就要等多久。期间请停留在这个页面。' : '没放入歌曲也能导出所选片段的无声视频，之后在剪辑 App 里配上歌；录屏模式需要先放入歌曲。'}${support.ok && support.ext === 'webm' ? ' 这台设备导出的是 .webm，剪映等 App 一般可以直接导入。' : ''}</p>`}</section>`);
+    const panels = {};
+    // Only the active tab is constructed: folded/hidden tools do no image work.
+    if (tab === 'shots') panels.shots = editorShotPanel(song, record, sel, selIndex);
+    if (tab === 'timing') panels.timing = editorTimingPanel(song, record);
+    if (tab === 'look') panels.look = `<div class="rmt-x-row-head"><b>整支手书的样子</b><span>全片设置</span></div><div class="rmt-x-segs">${seg('editor-ratio', { '16:9': '横屏 16:9', '9:16': '竖屏 9:16' }, mv.normalizeSettings(record.settings).ratio)}</div>${tegakiControls(record, song)}`;
+    const html = editor_ui.editorMarkup({ esc, btn, song, tab, panels, width: w, height: h, strip, stripNav,
+        selectedLabel: `第 ${selIndex + 1} 镜 · ${rows.length} 镜`, time: mv.formatTime(currentTime(), true), seconds: currentTime(), total, totalLabel: mv.formatTime(total),
+        playing: player.playing, audio: audioBySong.has(audioKey()), exporting: player.exporting, drawer: view.editorDrawer, drawerHtml: editorSheet(song, record) });
+    page('手书剪辑台', '素材库', html);
+    bindEditorControls();
+}
+
+function seekEditor(time) {
+    const total = mv.shotTimeline(view.cache.record, view.cache.song).total;
+    time = Math.max(0, Math.min(total, Number(time) || 0));
+    const audio = audioElement();
+    if (audio) audio.currentTime = time; else { player.clockOffset = time; player.clockStart = performance.now(); }
+    view.editorPlayhead = ''; drawNow();
+}
+
+function bindEditorControls() {
+    const root = body()?.querySelector?.('.rmt-mv-editor');
+    if (!root?.addEventListener) return;
+    root.addEventListener('input', event => { if (event.target.matches?.('[data-rmt-mv-seek]') && !player.exporting) seekEditor(event.target.value); });
+    root.addEventListener('keydown', event => {
+        const sheet = root.querySelector('.rmt-mve-sheet');
+        if (event.key === 'Escape' && view.editorDrawer) {
+            event.preventDefault(); event.stopPropagation(); const previous = view.editorDrawer; view.editorDrawer = ''; renderMv();
+            body()?.querySelector?.(`[data-rmt-mv="editor-drawer"][data-rmt-mv-id="${previous}"]`)?.focus?.(); return;
+        }
+        if (sheet && event.key === 'Tab') {
+            const nodes = [...sheet.querySelectorAll('button:not([disabled]),input:not([disabled]),select:not([disabled]),a[href]')];
+            const first = nodes[0], last = nodes.at(-1);
+            if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+            else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+        }
+        const tab = event.target.closest?.('[data-rmt-mv="editor-tab"]');
+        if (tab && ['ArrowLeft', 'ArrowRight'].includes(event.key)) {
+            event.preventDefault(); const ids = ['shots', 'timing', 'look'], next = ids[(ids.indexOf(tab.dataset.rmtMvId) + (event.key === 'ArrowRight' ? 1 : 2)) % 3];
+            view.editorTab = next; if (view.sub === 'sync') view.sub = 'tegaki'; renderMv();
+            body()?.querySelector?.(`[data-rmt-mv="editor-tab"][data-rmt-mv-id="${next}"]`)?.focus();
+        }
+    });
 }
 
 // ---------- 对时间 ----------
@@ -88762,24 +89807,7 @@ function syncTapIndex(sections, taps) {
 }
 
 function renderSync(song, record) {
-    const sections = mv.parseSections(song.lyrics);
-    const { sections: times } = mv.sectionTimes(record, sections, mv.songBpm(song));
-    const taps = record.timing?.taps || {};
-    const next = syncTapIndex(sections, taps);
-    const bpm = mv.songBpm(song);
-    const hasAudio = audioBySong.has(audioKey());
-    page('对时间', '剪辑台', `${head(`${song.title}${bpm ? ` · ${bpm} BPM` : ''}`, '对时间', `放歌，每到新的一段开头，就点一下大按钮。一共 ${sections.length} 下，段落里的镜头会自动排好。`)}
-      ${audioCard(song)}
-      <section class="rmt-x-card" style="align-items:center">
-        <div><span class="rmt-mv-clock" data-rmt-mv-time>0:00</span> <small class="rmt-x-note">/ ${mv.formatTime(audioBySong.get(audioKey())?.duration || 0)}</small></div>
-        <button type="button" class="rmt-mv-tap${next < 0 ? ' done' : ''}" data-rmt-mv="tap" ${!hasAudio || next < 0 ? 'disabled' : ''}><small>${!hasAudio ? '先放入歌曲' : next < 0 ? '全部点完了' : '听到这一段开始时点'}</small><b>${next < 0 ? '✓ 时间对好了' : esc(sections[next].name) + '开始了'}</b></button>
-        <div class="rmt-mv-actions" style="width:100%">${btn('play', player.playing ? '暂停' : '播放', { disabled: !hasAudio })}${btn('tap-undo', '撤销上一下')}</div>
-      </section>
-      ${sections.map((section, i) => `<div class="rmt-mv-sec${times[i].tapped ? ' tapped' : ''}${i === next ? ' cur' : ''}"><button type="button" class="rmt-mv-section-pick" data-rmt-mv="select-section" data-rmt-mv-id="${i}" aria-pressed="${i === next}" aria-label="选择${esc(section.name)}对时间"><i>${times[i].tapped ? '✓' : i + 1}</i><span class="rmt-mv-section-copy"><b>${esc(section.name)}</b><small>${esc(section.lines[0] || '（器乐）')}</small></span>
-        <em>${mv.formatTime(times[i].start, true)}<br><small class="rmt-x-note">${times[i].tapped ? '你点的' : '估计'}</small></em></button>
-        ${times[i].tapped && i > 0 ? `<span>${btn('nudge', '-0.5', { id: `${i}:-0.5`, cls: '' })}${btn('nudge', '+0.5', { id: `${i}:0.5`, cls: '' })}</span>` : ''}</div>`).join('')}
-      <p class="rmt-x-note">点选段落后，听到开头时再点上方大按钮；已对好的段落也能重新选。其余段落仍用估计时间。</p>
-      <div class="rmt-mv-actions">${btn('tap-reset', '从头再点')}${btn('go-tegaki', '完成，去预览', { cls: 'rmt-x-primary' })}</div>`);
+    renderTegaki(song, record);
 }
 
 // ---------- 画布与播放 ----------
@@ -88787,7 +89815,15 @@ function renderSync(song, record) {
 function imageFor(url) {
     if (!url) return null;
     let img = images.get(url);
-    if (!img) { img = new Image(); img.decoding = 'async'; img.onload = () => drawNow(); img.src = url; images.set(url, img); }
+    if (!img) {
+        const opened = viewTarget();
+        img = new Image(); img.decoding = 'async';
+        img.onload = () => { if (isView(opened)) queueImageRefresh(); };
+        img.src = url; images.set(url, img);
+    }
+    if (img.complete && img.naturalWidth && !player.exporting) {
+        cacheValue(images, url, img, 16);
+    }
     return img.complete && img.naturalWidth ? img : null;
 }
 
@@ -88798,9 +89834,14 @@ async function preloadImages(record, song) {
     const load = async () => {
         const assets = shots.flatMap(shot => {
             const image = mv.shotImage(record, shot);
-            if (!mv.isV2(record) || mv.hasAssetImage(shot.image)) return [image];
+            if (!mv.isV2(record)) return [image];
             const group = record.groups.find(g => g.id === shot.group);
-            const bg = group?.bgs?.find(b => b.id === (shot.bg || 'B1')) || group?.bgs?.[0];
+            const diff = group?.diffs.find(d => d.id === shot.diff);
+            const detail = stage_canvas.isDetailInsert(group, diff, shot);
+            if (!detail && (image?.editMode === 'full' || (group?.layer === 'full' && image?.editMode !== 'cutout') || (mv.hasAssetImage(shot.image) && !mv_stage.background(record, shot)))) return [image];
+            const stageBg = mv_stage.background(record, shot);
+            if (stageBg && stageBg.kind !== 'image') return [image];
+            const bg = stageBg || group?.bgs?.find(b => b.id === (shot.bg || 'B1')) || group?.bgs?.[0];
             return [image, bg?.image || group?.bg];
         }).filter(Boolean);
         if (mv.isV2(record) && mv.tegakiOptions(record).showMotif) assets.push(record.motif?.image);
@@ -88853,15 +89894,20 @@ function groupSpan(rows, index) {
 }
 
 function drawShot(g, row, rows, index, t, w, h) {
-    let img = null;
-    for (let i = index; i >= 0 && !img; i -= 1) img = imageFor(imgUrl(rows[i].shot));
+    let img = null, sourceShot = row.shot;
+    for (let i = index; i >= 0 && !img; i -= 1) {
+        sourceShot = rows[i].shot; img = imageFor(imgUrl(sourceShot));
+    }
     g.fillStyle = '#fbf6ee'; g.fillRect(0, 0, w, h);
     if (img) {
         const span = groupSpan(rows, index);
         const p = Math.min(1, Math.max(0, (t - span.start) / Math.max(0.1, span.end - span.start)));
         const lead = rows.findIndex(r => r.shot.group && r.shot.group === row.shot.group);
         const motion = mv.motionOf((lead >= 0 ? rows[lead] : row).shot.motion);
-        drawCover(g, img, w, h, motion === 'push' ? 1 + 0.05 * p : 1, 0, 0);
+        if (stage_canvas.isDetailInsert(null, null, sourceShot)) {
+            drawFittedInsert(g, img, cropFor(img.src, img, mv.shotImage(view.cache?.record, sourceShot)?.split).rect,
+                w, h, motion === 'push' ? (1 + 0.05 * p) / 1.05 : 1);
+        } else drawCover(g, img, w, h, motion === 'push' ? 1 + 0.05 * p : 1, 0, 0);
     } else {
         g.fillStyle = '#8b95a3'; g.font = `${Math.round(w * 0.04)}px sans-serif`; g.textAlign = 'center';
         wrap(g, row.shot.plain, w / 2, h / 2, w * 0.8, w * 0.055);
@@ -88958,6 +90004,46 @@ function renderFrame(canvas, record, song, t) {
     return total;
 }
 
+function syncEditorPlayback(record, song, t) {
+    if (view.sub !== 'tegaki' && view.sub !== 'sync') return;
+    const { rows } = mv.shotTimeline(record, song), playback = mv.playbackTimeline(record, song).rows;
+    if (!playback.length) return;
+    let index = playback.findIndex(r => t >= r.start && t < r.end);
+    if (index < 0) index = t < playback[0].start ? 0 : playback.length - 1;
+    const row = playback[index], number = rows.findIndex(r => r.shot.id === row.shot.id) + 1;
+    const label = document.querySelector('[data-rmt-mv-current]');
+    const text = `播放 · 第 ${number} 镜 / ${rows.length} 镜`;
+    if (label && label.textContent !== text) label.textContent = text;
+    const changed = view.editorPlayhead !== row.shot.id;
+    view.editorPlayhead = row.shot.id;
+    // Do not replace a focused field, an image draft, or the timing workspace.
+    const editing = document.activeElement?.closest?.('.rmt-mve-tools')
+        && document.activeElement?.matches?.('input,select,textarea,[contenteditable="true"]');
+    const follow = view.sub === 'tegaki' && (view.editorTab || 'shots') === 'shots' && !view.editorDrawer && !editing;
+    if (follow && view.selected !== row.shot.id) {
+        view.selected = row.shot.id;
+        const panel = body()?.querySelector?.('[data-rmt-mv-shot-panel]');
+        if (panel) panel.innerHTML = editorShotPanel(song, record, row, number - 1);
+    }
+    if (follow && changed) {
+        const start = view.stripStart || 0;
+        if (number - 1 < start || number - 1 >= start + 12) {
+            view.stripStart = Math.floor((number - 1) / 12) * 12;
+            const film = body()?.querySelector?.('[data-rmt-mv-filmstrip]');
+            if (film) { const { strip, stripNav } = editorStrip(rows, record); film.innerHTML = `<div class="rmt-mv-strip">${strip}</div>${stripNav}`; }
+        }
+    }
+    for (const button of document.querySelectorAll('.rmt-mve-filmstrip [data-rmt-mv="select-shot"]')) {
+        const current = button.dataset.rmtMvId === row.shot.id;
+        if (button.getAttribute?.('aria-current') !== String(current)) button.setAttribute('aria-current', String(current));
+        button.classList?.toggle('on', button.dataset.rmtMvId === view.selected);
+        if (follow && changed && current) {
+            const strip = button.parentElement;
+            if (strip) strip.scrollLeft = Math.max(0, button.offsetLeft - strip.offsetLeft - (strip.clientWidth - button.offsetWidth) / 2);
+        }
+    }
+}
+
 function drawNow() {
     if (!isView()) return;
     const canvas = document.querySelector('[data-rmt-mv-canvas]');
@@ -88970,12 +90056,18 @@ function drawNow() {
     const total = canvas ? renderFrame(canvas, record, song, t) : mv.shotTimeline(record, song).total;
     const bar = document.querySelector('[data-rmt-mv-progress]');
     if (bar) bar.style.width = `${Math.min(100, t / Math.max(1, total) * 100)}%`;
+    const slider = document.querySelector('[data-rmt-mv-seek]');
+    if (slider) {
+        if (document.activeElement !== slider) slider.value = String(t);
+        slider.style?.setProperty?.('--rmt-mv-seek', `${Math.min(100, Math.max(0, Number(slider.value) || 0) / Math.max(1, total) * 100)}%`);
+    }
+    syncEditorPlayback(record, song, t);
     const rec = document.querySelector('.rmt-mv-rec canvas');
     if (rec) renderFrame(rec, player.recording?.record || record, player.recording?.song || song, t);
 }
 
 function currentRange() {
-    if (view.sub === 'sync') return { start: 0, end: Infinity };
+    if (view.sub === 'sync' || (view.sub === 'tegaki' && view.editorTab === 'timing')) return { start: 0, end: Infinity };
     const record = view.cache?.record, song = view.cache?.song;
     try { return record && song ? mv.playRange(record, song) : { start: 0, end: Infinity }; } catch { return { start: 0, end: Infinity }; }
 }
@@ -89035,6 +90127,14 @@ function stopPlayback() {
 
 function disposeMv() {
     assetEditor?.dispose(); assetEditor = null; editSequence++;
+    stageShadows.clear(); characterSprites.clear(); thumbnailPreviews.clear();
+    motifSprites.clear(); palettes.clear();
+    if (imageRefreshTimer) clearTimeout(imageRefreshTimer);
+    imageRefreshTimer = 0; imageLayoutPending = false;
+    for (const image of images.values()) { image.onload = null; image.onerror = null; }
+    images.clear(); loadingLocal.clear();
+    for (const url of localUrls.values()) { try { URL.revokeObjectURL(url); } catch {} }
+    localUrls.clear();
     navigation.length = 0; renderedPage = '';
     view.epoch += 1;
     view.stopAll = true; view.drawingAll = false; view.drawQueue = null;
@@ -89290,6 +90390,7 @@ async function drawAll() {
 }
 
 function setTap(index, value) {
+    const previousTiming = structuredClone(currentRecord()?.timing || {});
     const taps = currentRecord()?.timing?.taps || {};
     const before = Object.keys(taps).map(Number).filter(i => i < index && Number.isFinite(taps[i])).sort((a, b) => b - a)[0];
     const after = Object.keys(taps).map(Number).filter(i => i > index && Number.isFinite(taps[i])).sort((a, b) => a - b)[0];
@@ -89298,6 +90399,7 @@ function setTap(index, value) {
     value = Math.max(low, Math.min(value, high));
     mv.patchRecord(view.songId, { timing: { ...(currentRecord()?.timing || {}), taps: { ...taps, [index]: value } } });
     view.tapUndo.push({ taps: { ...taps }, index });
+    view.editorUndo.push({ timing: previousTiming, selected: { ...view.editorTiming }, tapIndex: index });
 }
 
 function handleMvClick(event) {
@@ -89313,6 +90415,26 @@ function handleMvClick(event) {
     const opened = viewTarget();
     try {
         if (action === 'back') navigateMvBack();
+        else if (action === 'editor-tab') {
+            if (['shots', 'timing', 'look'].includes(id)) { view.editorTab = id; if (view.sub === 'sync') view.sub = 'tegaki'; view.editorDrawer = ''; renderMv(); }
+        }
+        else if (action === 'editor-drawer') {
+            const previous = view.editorDrawer;
+            view.editorDrawer = ['export', 'more', 'audio'].includes(id) ? id : ''; renderMv();
+            body()?.querySelector?.(view.editorDrawer ? '.rmt-mve-sheet button' : `[data-rmt-mv="editor-drawer"][data-rmt-mv-id="${previous}"]`)?.focus?.();
+        }
+        else if (action === 'editor-strip') { const start = Number(id); if (Number.isInteger(start) && start >= 0 && start < record.shots.length) { view.stripStart = start; renderMv(); } }
+        else if (action === 'editor-section') { const index = Number(id); if (Number.isInteger(index) && index >= 0 && index < mv.parseSections(currentSong().lyrics).length) { view.editorSection = view.editorSection === index ? -1 : index; renderMv(); } }
+        else if (action === 'editor-line') { if (mv.syncLines(record, currentSong()).some(l => l.key === id)) { view.editorTiming = { kind: 'line', key: id }; view.editorSection = Number(id.split(':')[0]); renderMv(); } }
+        else if (action === 'editor-mark') saveEditorTime(currentTime(), true);
+        else if (action === 'editor-nudge') { const delta = Number(id); if (Number.isFinite(delta)) saveEditorTime(Math.max(0, editorTimingTarget(record, currentSong()).time + delta)); }
+        else if (action === 'editor-undo') {
+            const previous = view.editorUndo.at(-1);
+            if (previous) { mv.patchRecord(view.songId, { timing: previous.timing }); view.editorUndo.pop(); view.editorTiming = previous.selected; view.tapIndex = previous.tapIndex; view.editorSection = editorTimingTarget(currentRecord(), currentSong()).index; renderMv(); }
+        }
+        else if (action === 'editor-ratio') { if (['16:9', '9:16'].includes(id)) { mv.patchRecord(view.songId, { settings: { ...record.settings, ratio: id } }); renderMv(); } }
+        else if (action === 'go-board') { view.editorDrawer = ''; go('board'); }
+        else if (action === 'group-open') { if (record.groups?.some(g => g.id === id)) { view.groupOpen = view.groupOpen === id ? '' : id; view.inspect = ''; renderMv(); } }
         else if (action === 'retry-save') { void mv.retryMvSave(opened.scope, id).then(result => { reportResult(result, '结果已保存。'); if (isView(opened)) renderMv(); }).catch(toastError); }
         else if (action === 'export-recovery') download(new Blob([mv.exportMvRecovery(opened.scope)], { type: 'application/json' }), 'Hearttrace-MV-backup.json');
         else if (action === 'set-output') { d.output = id === 'video' ? 'video' : 'tegaki'; view.draft = mv.normalizeSettings(d); renderMv(); }
@@ -89375,8 +90497,9 @@ function handleMvClick(event) {
         else if (action === 'draw-all') void drawAll();
         else if (action === 'draw-asset') void runAsset(id);
         else if (action === 'edit-asset') void openAssetEditor(id).catch(toastError);
+        else if (action === 'cutout-asset') void openAssetEditor(id, true).catch(toastError);
         else if (action === 'group-layer') { const [gid, layer] = id.split(':'); mv.setGroupLayer(view.songId, gid, layer); renderMv(); }
-        else if (action === 'inspect') { view.inspect = view.inspect === id ? '' : id; setTimeout(() => renderMv(), 0); }
+        else if (action === 'inspect') { view.groupOpen = id; view.inspect = view.inspect === id ? '' : id; setTimeout(() => { if (isView(opened)) renderMv(); }, 0); }
         else if (action === 'draw-group' || action === 'redraw-group') {
             const redraw = action === 'redraw-group';
             const keys = mv.assetKeys(record, currentSong()).filter(k => k.startsWith(id + ':') && (redraw || !mv.hasAssetImage(mv.assetOf(record, k)?.image)));
@@ -89399,7 +90522,7 @@ function handleMvClick(event) {
         else if (action === 'draw-stop') { view.stopAll = true; globalThis.toastr?.info?.('画完正在画的这一张后停止。', '心迹回廊 · MV'); }
         else if (action === 'go-tegaki') go('tegaki');
         else if (action === 'go-finish') go('finish');
-        else if (action === 'go-sync') go('sync');
+        else if (action === 'go-sync') { view.editorTiming = { kind: 'section' }; go('sync'); }
         else if (action === 'open-shot') { view.copied = ''; go('shot', { shotId: id }); }
         else if (action === 'copy') {
             const shot = record.shots.find(s => s.id === view.shotId);
@@ -89415,7 +90538,7 @@ function handleMvClick(event) {
         }
         else if (action === 'download-table') download(new Blob([mv.timetableText(record, currentSong())], { type: 'text/plain;charset=utf-8' }), `${safeName(currentSong().title)}-镜头时间表.txt`);
         else if (action === 'download-srt') download(new Blob([mv.srtText(record, currentSong())], { type: 'application/x-subrip;charset=utf-8' }), `${safeName(currentSong().title)}.srt`);
-        else if (action === 'select-shot') { view.selected = id; renderMv(); }
+        else if (action === 'select-shot') { const row = mv.shotTimeline(record, currentSong()).rows.find(r => r.shot.id === id); if (row) { view.selected = id; seekEditor(row.start); renderMv(); } }
         else if (action === 'use-group-image') {
             if (mv.isV2(record) && record.shots.some(s => s.id === id)) {
                 imageImports.delete(mv_media.mediaKey('img', opened.scope, opened.songId, id));
@@ -89451,7 +90574,7 @@ function handleMvClick(event) {
         else if (action === 'select-section') {
             const index = Number(id);
             const sections = mv.parseSections(currentSong().lyrics);
-            if (Number.isInteger(index) && index >= 0 && index < sections.length) { view.tapIndex = index; renderMv(); }
+            if (Number.isInteger(index) && index >= 0 && index < sections.length) { view.tapIndex = index; view.editorTiming = { kind: 'section' }; view.editorSection = index; renderMv(); }
         }
         else if (action === 'tap') {
             const sections = mv.parseSections(currentSong().lyrics);
@@ -89469,6 +90592,8 @@ function handleMvClick(event) {
                 if (order.length) delete lineTaps[order.at(-1)];
             } else { for (const k of Object.keys(lineTaps)) delete lineTaps[k]; }
             mv.patchRecord(view.songId, { timing: { ...(record.timing || {}), lineTaps } });
+            view.editorUndo.push({ timing: structuredClone(record.timing || {}), selected: { ...view.editorTiming }, tapIndex: view.tapIndex });
+            if (action === 'tap-line-reset') view.editorTiming = { kind: 'line', key: '' };
             renderMv();
         }
         else if (action === 'tap-vocal') {
@@ -89486,7 +90611,11 @@ function handleMvClick(event) {
                 view.tapIndex = previous ? previous.index : keys[0]; renderMv();
             }
         }
-        else if (action === 'tap-reset') { mv.patchRecord(view.songId, { timing: { taps: {}, shift: 0 } }); view.tapIndex = -1; view.tapUndo = []; renderMv(); }
+        else if (action === 'tap-reset') {
+            mv.patchRecord(view.songId, { timing: { taps: {}, shift: 0 } });
+            view.editorUndo.push({ timing: structuredClone(record.timing || {}), selected: { ...view.editorTiming }, tapIndex: view.tapIndex });
+            view.tapIndex = -1; view.tapUndo = []; view.editorTiming = { kind: view.sub === 'sync' ? 'section' : 'line', key: '' }; renderMv();
+        }
         else if (action === 'nudge') {
             const [index, delta] = id.split(':').map(Number);
             const value = Number(record.timing?.taps?.[index]);
@@ -89498,6 +90627,31 @@ function handleMvClick(event) {
 
 function handleMvChange(event) {
     const input = event.target;
+    if (input?.matches?.('[data-rmt-mv-seek]')) { if (!player.exporting && view.cache?.record) seekEditor(input.value); return true; }
+    if (input?.matches?.('[data-rmt-mv-editor-time]')) { try { if (String(input.value).trim() && !player.exporting) saveEditorTime(Number(input.value)); } catch (error) { toastError(error); } return true; }
+    if (input?.matches?.('[data-rmt-mv-editor-next]')) { view.editorAutoNext = !!input.checked; return true; }
+    if (input?.matches?.('[data-rmt-mv-stage-cue]')) {
+        const field = input.dataset.rmtMvStageCue;
+        try { const updated = mv.patchStageCue(view.songId, input.dataset.shot, { [field]: field === 'shadow' ? Boolean(input.checked) : input.value });
+            if (view.cache) view.cache.record = updated; drawNow(); }
+        catch (error) { toastError(error); }
+        return true;
+    }
+    if (input?.matches?.('[data-rmt-mv-stage-bg]')) {
+        const field = input.dataset.rmtMvStageBg, id = input.dataset.background;
+        try {
+            let patch = { [field]: input.value };
+            if (/^color[0-2]$/.test(field)) {
+                const bg = currentRecord()?.stage?.backgrounds.find(b => b.id === id);
+                if (!bg) return true;
+                const colors = [...bg.colors]; colors[Number(field.at(-1))] = input.value; patch = { colors };
+            }
+            mv.patchStageBackground(view.songId, id, patch);
+            view.stageBackgroundOpen = id;
+            const scroll = body()?.scrollTop || 0; renderMv(); if (body()) body().scrollTop = scroll;
+        } catch (error) { toastError(error); }
+        return true;
+    }
     if (input?.matches?.('[data-rmt-mv-overlay]')) {
         const key = input.dataset.rmtMvOverlay === 'keyword' ? 'showKeyword' : input.dataset.rmtMvOverlay === 'motif' ? 'showMotif' : '';
         if (key) {
@@ -89637,28 +90791,51 @@ function handleMvChange(event) {
 
 function assetTile(record, key, label) {
     const found = mv.assetOf(record, key);
-    const sprite = key === 'motif' ? motifForRange(record) : null;
-    const url = sprite?.preview || assetImageUrl(found?.image);
+    // Opening a material list must not cut out every full-resolution picture.
+    // The small padding-only preview is made only for the expanded group.
+    const url = thumbnailPreview(assetImageUrl(found?.image));
     const exists = mv.hasAssetImage(found?.image);
     const drawing = mv.isAssetDrawing(mv.mvScope(ctx()), view.songId, key);
-    const cut = found?.kind !== 'bg';
-    const splitSelect = btn('edit-asset', '编辑素材', { id: key, cls: 'rmt-mv-edit-open' });
-    return `<button type="button" class="rmt-mv-asset${exists ? ' done' : ''}${cut && found?.group?.layer !== 'full' ? ' cut' : ''}" data-rmt-mv-anchor="${esc(key)}" data-rmt-mv="draw-asset" data-rmt-mv-id="${esc(key)}" ${drawing || view.drawingAll ? 'disabled' : ''} aria-label="${esc(label)}：${exists ? '重画' : '画'}这一张">${url ? `<img src="${esc(url)}" alt="">` : ''}<i>${drawing ? '画…' : exists ? '已画' : '未画'}</i></button><small>${esc(label)}</small>${splitSelect}`;
+    const wide = mv.normalizeSettings(record.settings).ratio === '16:9';
+    const splitSelect = `<div class="rmt-mv-asset-actions">${btn('edit-asset', '编辑素材', { id: key, cls: 'rmt-mv-edit-open' })}${exists && found?.kind !== 'bg' ? btn('cutout-asset', '一键抠图', { id: key, disabled: drawing || view.drawingAll }) : ''}</div>`;
+    return `<button type="button" class="rmt-mv-asset${wide ? ' wide' : ''}${exists ? ' done' : ''}" data-rmt-mv-anchor="${esc(key)}" data-rmt-mv="draw-asset" data-rmt-mv-id="${esc(key)}" ${drawing || view.drawingAll ? 'disabled' : ''} aria-label="${esc(label)}：${exists ? '重画' : '画'}这一张">${url ? `<img src="${esc(url)}" alt="" loading="lazy" decoding="async">` : ''}<i>${drawing ? '画…' : exists ? '已画' : '未画'}</i></button><small>${esc(label)}</small>${splitSelect}`;
 }
 
 // 素材检查：原图 → 拼图拆分 → 抠图结果 → 播放时的用法，逐张对照。
 function inspectHtml(record, g, diffs) {
-    const rows = diffs.filter(d => mv.hasAssetImage(d.image)).map(d => {
-        const url = assetImageUrl(d.image), original = assetImageUrl(d.image.original || d.image);
-        const layered = d.image.editMode === 'cutout';
-        return `<div class="rmt-mv-inspect-row"><figure>${original ? `<img src="${esc(original)}" alt="原图">` : ''}<figcaption>原图</figcaption></figure>
+    const rows = (view.inspect === g.id ? diffs : []).filter(d => mv.hasAssetImage(d.image)).map(d => {
+        const sprite = characterSprite(d.image, g);
+        const url = inspectionPreview(sprite, assetImageUrl(d.image)), original = assetImageUrl(d.image.original || d.image);
+        const layered = !!sprite?.image;
+        return `<div class="rmt-mv-inspect-row${mv.normalizeSettings(record.settings).ratio === '16:9' ? ' wide' : ''}"><figure>${original ? `<img src="${esc(original)}" alt="原图">` : ''}<figcaption>原图</figcaption></figure>
           <figure class="cut">${url ? `<img src="${esc(url)}" alt="当前素材">` : ''}<figcaption>当前素材</figcaption></figure>
-          <div><b>${esc(d.label)}</b><small>${d.image.crop ? '已手动选定画面' : '可在编辑素材中选单格'}</small><small>播放时：${layered ? '使用已确认的透明图叠背景' : '完整画面'}</small>
+          <div><b>${esc(d.label)}</b><small>${d.image.crop ? '已手动选定画面' : '可在编辑素材中选单格'}</small><small>播放时：${layered ? '透明人物叠背景' : '完整画面'}</small>
           ${btn('edit-asset', '选单格／抠图／提示词', { id: `${g.id}:${d.id}` })}</div></div>`;
     }).join('');
     const layerTools = `<div class="rmt-mv-actions">${btn('group-layer', g.layer === 'full' ? '绘图方式：完整画面 · 改为分层素材' : '绘图方式：分层素材 · 改为完整画面', { id: `${g.id}:${g.layer === 'full' ? 'cutout' : 'full'}` })}</div>
-      <p class="rmt-x-note">自动去白底仅供预览；编辑素材中确认保存的透明图才会叠背景。</p>`;
+      <p class="rmt-x-note">透明素材直接使用，纯色底自动处理；拼图或复杂背景可在编辑素材中调整。</p>`;
     return `<details class="rmt-mv-inspect"${view.inspect === g.id ? ' open' : ''}><summary data-rmt-mv="inspect" data-rmt-mv-id="${esc(g.id)}">素材检查（画面有问题时再打开）</summary>${rows}${layerTools}</details>`;
+}
+
+function sharedBackgroundsHtml(record, shots) {
+    const backgrounds = mv_stage.usedBackgrounds(record, shots);
+    if (!backgrounds.length) return '';
+    const wide = mv.normalizeSettings(record.settings).ratio === '16:9';
+    const tiles = backgrounds.map(bg => {
+        const key = `stage:${bg.id}`, drawn = bg.kind === 'image' && mv.hasAssetImage(bg.image);
+        const drawing = mv.isAssetDrawing(mv.mvScope(ctx()), view.songId, key);
+        let preview = bg.kind === 'image' ? thumbnailPreview(assetImageUrl(bg.image)) : '';
+        if (bg.kind !== 'image') {
+            try { const c = document.createElement('canvas'); c.width = wide ? 320 : 180; c.height = wide ? 180 : 320;
+                stage_canvas.drawBackground(c.getContext('2d'), bg, c.width, c.height, 0); preview = c.toDataURL('image/png'); } catch { /* Host without Canvas preview. */ }
+        }
+        const select = (field, label, values, value) => `<label class="rmt-mv-look"><span>${label}</span><select data-rmt-mv-stage-bg="${field}" data-background="${esc(bg.id)}">${Object.entries(values).map(([id, name]) => `<option value="${esc(id)}"${id === value ? ' selected' : ''}>${esc(name)}</option>`).join('')}</select></label>`;
+        return `<div class="rmt-mv-background-tile"><div class="rmt-mv-assets"><div><button type="button" class="rmt-mv-asset${wide ? ' wide' : ''}${drawn ? ' done' : ''}" data-rmt-mv-anchor="${esc(key)}" data-rmt-mv="draw-asset" data-rmt-mv-id="${esc(key)}" aria-label="${esc(bg.label)}：${drawn ? '重画背景' : '生成背景'}" ${drawing || view.drawingAll ? 'disabled' : ''}>${preview ? `<img src="${esc(preview)}" alt="">` : ''}<i>${drawing ? '画…' : bg.kind !== 'image' ? '本地图案' : drawn ? '已画' : '未画'}</i></button></div></div>
+          <div><b>${esc(bg.label)}</b><div class="rmt-mv-actions">${btn('draw-asset', drawn ? '重画背景' : '生成背景', { id: key, disabled: drawing || view.drawingAll })}${btn('edit-asset', '编辑素材', { id: key })}</div></div>
+          <details${view.stageBackgroundOpen === bg.id ? ' open' : ''}><summary>背景样式</summary>${select('kind', '背景类型', mv_stage.BACKGROUNDS, bg.kind)}${select('motion', '背景运动', { still: '不动', rotate: '缓慢旋转', drift: '轻微移动' }, bg.motion)}
+          <div class="rmt-mv-actions">${bg.colors.map((c, i) => `<label>配色 ${i + 1}<input type="color" value="${esc(c)}" data-rmt-mv-stage-bg="color${i}" data-background="${esc(bg.id)}"></label>`).join('')}</div></details></div>`;
+    }).join('');
+    return `<section class="rmt-x-card rmt-mv-backgrounds"><b>共享背景</b><div class="rmt-mv-background-grid">${tiles}</div></section>`;
 }
 
 function renderGroupsBoard(song, record) {
@@ -89678,18 +90855,23 @@ function renderGroupsBoard(song, record) {
         shown += 1;
         const secNames = [...new Set(frames.map(s => sections[s.sectionIndex]?.name).filter(Boolean))].join('、');
         const usedDiffs = g.diffs.filter(d => frames.some(s => s.diff === d.id));
+        const open = view.groupOpen === g.id || view.inspect === g.id;
+        const summary = `<summary data-rmt-mv="group-open" data-rmt-mv-id="${esc(g.id)}" aria-expanded="${open}"><b>构图 ${shown} · ${esc(g.composition || '')}</b><small>${esc(secNames)} · ${frames.length} 句 ${open ? '⌄' : '›'}</small></summary>`;
+        if (!open) return `<details class="rmt-mve-group-fold">${summary}</details>`;
         const lyrics = frames.filter(s => s.lyric).slice(0, 8).map(s => `${g.diffs.find(d => d.id === s.diff)?.label || ''}｜${s.lyric}`).join('\n');
-        const bgIds = g.layer === 'full' ? [] : (g.bgs || []).length ? g.bgs.filter(b => frames.some(s => (s.bg || 'B1') === b.id)).map(b => b.id) : ['bg'];
-        const bgTiles = (g.layer === 'full' ? [] : bgIds.length ? bgIds : ['bg']).map(id => `<div>${assetTile(record, `${g.id}:${id}`, (g.bgs || []).find(b => b.id === id)?.label ? '背景·' + g.bgs.find(b => b.id === id).label : '背景')}</div>`).join('');
-        const missing = [...(g.layer === 'full' ? [] : bgIds.length ? bgIds : ['bg']).map(id => `${g.id}:${id}`), ...usedDiffs.map(d => `${g.id}:${d.id}`)].filter(k => !mv.hasAssetImage(mv.assetOf(record, k)?.image)).length;
-        return `<article class="rmt-mv-gcard"><div class="rmt-x-row-head"><b class="rmt-mv-gname">构图 ${shown} · ${esc(g.composition || '')}</b><span>${esc(secNames)} · ${frames.length} 句</span></div>
+        const bgIds = g.layer === 'full' || g.stageBackground ? [] : (g.bgs || []).length ? g.bgs.filter(b => frames.some(s => (s.bg || 'B1') === b.id)).map(b => b.id) : ['bg'];
+        const bgKeys = g.layer === 'full' || g.stageBackground ? [] : bgIds.length ? bgIds : ['bg'];
+        const bgTiles = bgKeys.map(id => `<div>${assetTile(record, `${g.id}:${id}`, (g.bgs || []).find(b => b.id === id)?.label ? '背景·' + g.bgs.find(b => b.id === id).label : '背景')}</div>`).join('');
+        const missing = [...bgKeys.map(id => `${g.id}:${id}`), ...usedDiffs.map(d => `${g.id}:${d.id}`)].filter(k => !mv.hasAssetImage(mv.assetOf(record, k)?.image)).length;
+        return `<details class="rmt-mve-group-fold" open>${summary}<article class="rmt-mv-gcard">
           ${cast_controls.shotCastControls(record, g)}
+          ${g.stageBackground ? `<small>背景：${mv_stage.usedBackgrounds(record, frames).map(b => esc(b.label)).join('、')} · 共用</small>` : ''}
           <div class="rmt-mv-assets">${bgTiles}${bgTiles ? '<span class="rmt-mv-plus">+</span>' : ''}${usedDiffs.map(d => `<div>${assetTile(record, `${g.id}:${d.id}`, d.label)}</div>`).join('')}</div>
           ${inspectHtml(record, g, usedDiffs)}
           ${lyrics ? `<div class="rmt-mv-lyric"><p>${esc(lyrics)}</p></div>` : ''}
           <div class="rmt-mv-actions">${missing ? btn('draw-group', `画这一组剩下的 ${missing} 张`, { id: g.id, disabled: view.drawingAll, cls: 'rmt-x-primary' }) : btn('redraw-group', '整组换一版', { id: g.id, disabled: view.drawingAll })}</div>
           <p class="rmt-x-note">点任意一张缩略图可以单独重画。</p>
-          ${g.link ? `<div class="rmt-mv-link">↓ 承接：${esc(g.link)}</div>` : ''}</article>`;
+          ${g.link ? `<div class="rmt-mv-link">↓ 承接：${esc(g.link)}</div>` : ''}</article></details>`;
     }).join('');
     const motif = record.motif ? `<section class="rmt-x-card"><div class="rmt-x-row-head"><b>意象：${esc(record.motif.name || '装饰')}</b><span>副歌时漂浮</span></div><div class="rmt-mv-assets"><div>${assetTile(record, 'motif', '意象')}</div></div>${motifNotice(record)}</section>` : '';
     const wd = record.wardrobe || {};
@@ -89708,15 +90890,46 @@ function renderGroupsBoard(song, record) {
         <div class="rmt-x-bar"><i style="width:${keys.length ? Math.round(drawn / keys.length * 100) : 0}%"></i></div>
         ${remaining ? btn(view.drawingAll ? 'draw-stop' : 'draw-all', view.drawingAll ? '停止连续绘制' : `一次画完剩下的 ${remaining} 张（会用 ${remaining} 次生图）`) : ''}
         ${btn('go-tegaki', '去剪辑台预览', { cls: 'rmt-x-primary' })}</section>
-      ${wardrobe}${warn}${cards || '<p class="rmt-x-note">选中的段落里还没有构图，点上面的“继续分镜”即可补上。</p>'}${motif}
+      ${wardrobe}${warn}${sharedBackgroundsHtml(record, record.shots.filter(s => inRange.has(s.id)))}${cards || '<p class="rmt-x-note">选中的段落里还没有构图，点上面的“继续分镜”即可补上。</p>'}${motif}
       <div class="rmt-mv-actions">${btn('rewrite-board', '重新写分镜')}</div>`);
 }
 
 // ---------- 手书 v2：抠图、取色、渲染 ----------
 
-const cutMeta = new Map();
+const characterSprites = new Map();
 const palettes = new Map();
 const motifSprites = new Map();
+const thumbnailPreviews = new Map();
+
+function thumbnailPreview(url) {
+    if (!url) return '';
+    if (thumbnailPreviews.has(url)) return thumbnailPreviews.get(url);
+    const src = imageFor(url);
+    thumbnailPreviews.set(url, url);
+    if (!src) {
+        const pending = images.get(url);
+        if (pending) {
+            const before = pending.onload;
+            pending.onload = event => {
+                thumbnailPreviews.delete(url); before?.(event);
+                if (isView() && view.sub === 'board') queueImageRefresh(true);
+            };
+        }
+        return url;
+    }
+    try {
+        const scale = Math.min(1, 512 / Math.max(src.naturalWidth, src.naturalHeight));
+        const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(src.naturalWidth * scale)); c.height = Math.max(1, Math.round(src.naturalHeight * scale));
+        const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(src, 0, 0, c.width, c.height);
+        const rect = image_tools.previewContentRect(g.getImageData(0, 0, c.width, c.height).data, c.width, c.height);
+        if (rect) {
+            const cropped = document.createElement('canvas'); cropped.width = rect.w; cropped.height = rect.h;
+            cropped.getContext('2d').drawImage(c, rect.x, rect.y, rect.w, rect.h, 0, 0, rect.w, rect.h);
+            cacheValue(thumbnailPreviews, url, cropped.toDataURL('image/png'), 32);
+        }
+    } catch { /* Pixel access unavailable: retain the original preview and editor. */ }
+    return thumbnailPreviews.get(url);
+}
 
 function motifSprite(image) {
     const url = assetImageUrl(image);
@@ -89728,7 +90941,7 @@ function motifSprite(image) {
         if (!cached && images.has(url)) {
             motifSprites.set(url, { status: 'loading' });
             const pending = images.get(url), before = pending.onload;
-            const refresh = () => { if (runtimeState.activeMode === MV_MODE && assetImageUrl(view.cache?.record?.motif?.image) === url) renderMv(); };
+            const refresh = () => { if (runtimeState.activeMode === MV_MODE && assetImageUrl(view.cache?.record?.motif?.image) === url) queueImageRefresh(); };
             pending.onload = event => { motifSprites.delete(url); before?.(event); refresh(); };
             pending.onerror = () => { motifSprites.set(url, { status: 'unreadable' }); refresh(); };
         }
@@ -89746,57 +90959,27 @@ function motifSprite(image) {
         if (prepared.status === 'transparent') result = { status: 'transparent', image: src, preview: url };
         else if (prepared.data) {
             pixels.data.set(prepared.data); g.putImageData(pixels, 0, 0);
-            result = { status: 'prepared', image: c, preview: c.toDataURL('image/png') };
+            result = { status: 'prepared', image: c };
         }
     } catch { result = { status: 'unreadable' }; }
     motifSprites.set(url, result);
     return result;
 }
 
-function motifForRange(record) {
-    const song = currentSong();
-    if (!song || !mv.tegakiOptions(record).showMotif || !mv.shotsInRange(record, song).some(row => isChorusSection(song, row.sectionIndex))) return null;
-    return motifSprite(record?.motif?.image);
-}
-
 function motifNotice(record) {
-    const sprite = motifForRange(record);
+    const sprite = motifSprites.get(assetImageUrl(record?.motif?.image));
     if (!sprite || ['loading', 'transparent', 'prepared'].includes(sprite.status)) return '';
     return `<div class="rmt-x-note">意象背景尚未分离，暂不叠加。${btn('edit-asset', '处理意象背景', { id: 'motif' })}</div>`;
 }
 
-// 拼图识别：模型偶尔把同一人物画成左右或上下两格。缩小成灰度图比较两半，几乎一样就只取一格。
-// 封面就是给这首印象曲画的专辑封面（存在 song.visual.cgImage）。
+// The album cover belongs to the song. Character cells are chosen in the editor.
 function coverUrl(song) { return song?.visual?.cgImage?.url || song?.cgImage?.url || ''; }
 
-const panelCache = new Map();
-function detectPanels(img) {
-    try {
-        const n = 48, c = document.createElement('canvas'); c.width = n; c.height = n;
-        const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(img, 0, 0, n, n);
-        const d = g.getImageData(0, 0, n, n).data;
-        const v = (x, y) => { const i = (y * n + x) * 4; return 0.3 * d[i] + 0.59 * d[i + 1] + 0.11 * d[i + 2]; };
-        let lr = 0, tb = 0, spread = 0, mean = 0;
-        for (let y = 0; y < n; y += 1) for (let x = 0; x < n; x += 1) mean += v(x, y);
-        mean /= n * n;
-        for (let y = 0; y < n; y += 1) for (let x = 0; x < n / 2; x += 1) { lr += Math.abs(v(x, y) - v(x + n / 2, y)); spread += Math.abs(v(x, y) - mean); }
-        for (let y = 0; y < n / 2; y += 1) for (let x = 0; x < n; x += 1) tb += Math.abs(v(x, y) - v(x, y + n / 2));
-        const half = n * n / 2;
-        lr /= half; tb /= half; spread = Math.max(1, spread / half);
-        // 两半差异远小于画面本身的起伏，才判为重复拼图；普通双人同框两边人物不同，不会被误拆。
-        if (lr < 16 && lr < spread * 0.35 && lr <= tb) return { split: 'left', score: lr };
-        if (tb < 16 && tb < spread * 0.35) return { split: 'top', score: tb };
-        return { split: 'none', score: Math.min(lr, tb) };
-    } catch { return { split: 'none', score: -1 }; }
-}
-
 function cropFor(url, img, override) {
-    let auto = panelCache.get(url);
-    if (!auto) { auto = detectPanels(img); panelCache.set(url, auto); }
-    const split = override && override !== 'auto' ? override : auto.split;
+    const split = ['left', 'right', 'top', 'bottom'].includes(override) ? override : 'none';
     const w = img.naturalWidth, h = img.naturalHeight;
     const rect = { left: [0, 0, w / 2, h], right: [w / 2, 0, w / 2, h], top: [0, 0, w, h / 2], bottom: [0, h / 2, w, h / 2] }[split] || [0, 0, w, h];
-    return { split, auto: auto.split, rect };
+    return { split, rect };
 }
 
 function drawCropCover(g, img, rect, w, h, scale = 1) {
@@ -89806,20 +90989,60 @@ function drawCropCover(g, img, rect, w, h, scale = 1) {
     g.drawImage(img, sx, sy, sw, sh, (w - dw) / 2, (h - dh) / 2, dw, dh);
 }
 
-// Only a user-confirmed edited/imported transparent image is used as a layer.
-// Metadata describes alignment, never whether a cutout is "successful".
-function layerImage(image) {
-    if (image?.editMode !== 'cutout') return null;
-    const url = assetImageUrl(image), src = imageFor(url);
+// All foreground paths use this for an already composed local insert, including
+// complete pictures and unreadable/opaque cutout fallbacks. Preserve the whole
+// selected cell. Backgrounds and standing stage actors keep their own placement.
+function drawFittedInsert(g, img, rect, w, h, zoom = 1) {
+    const [sx, sy, sw, sh] = rect;
+    const scale = Math.min(w / sw, h / sh) * Math.min(1, Math.max(0.01, zoom));
+    const width = sw * scale, height = sh * scale, x = (w - width) / 2, y = (h - height) / 2;
+    g.drawImage(img, sx, sy, sw, sh, x, y, width, height);
+    return { x, y, width, height };
+}
+
+// A bounded, display-only derived copy serves playback and export; originals
+// and manually saved masks are never overwritten by automatic processing.
+function characterSprite(image, group) {
+    if (!image || image.editMode === 'full' || (group?.layer === 'full' && image.editMode !== 'cutout')) return null;
+    const url = assetImageUrl(image);
+    if (!url) return null;
+    const multiple = group?.who === 'both' || (group?.cast?.length || 0) > 1;
+    const key = JSON.stringify([url, image.editMode || '', image.split || 'none', multiple]);
+    const cached = characterSprites.get(key);
+    if (cached) return cacheValue(characterSprites, key, cached, 8);
+    const src = imageFor(url);
     if (!src) return null;
-    if (!cutMeta.has(url)) {
-        try {
-            const c = document.createElement('canvas'); c.width = src.naturalWidth; c.height = src.naturalHeight;
-            const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(src, 0, 0);
-            cutMeta.set(url, image_tools.alphaBounds(g.getImageData(0, 0, c.width, c.height).data, c.width, c.height));
-        } catch { cutMeta.set(url, null); }
-    }
-    return src;
+    let result;
+    try {
+        const crop = cropFor(url, src, image.split);
+        // Playback/export output is 960px. Process only a display-sized derived
+        // raster; the editor and saved originals remain at full resolution.
+        const scale = Math.min(1, 960 / Math.max(crop.rect[2], crop.rect[3]));
+        const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(crop.rect[2] * scale)); c.height = Math.max(1, Math.round(crop.rect[3] * scale));
+        const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(src, ...crop.rect, 0, 0, c.width, c.height);
+        const pixels = g.getImageData(0, 0, c.width, c.height);
+        const prepared = image_tools.prepareCharacterPixels(pixels.data, c.width, c.height, { multiple, manual: image.editMode === 'cutout' });
+        result = { status: prepared.status, key };
+        if (prepared.data) {
+            const unchanged = prepared.status === 'transparent' && crop.split === 'none';
+            if (!unchanged) { pixels.data.set(prepared.data); g.putImageData(pixels, 0, 0); }
+            result = { ...result, image: unchanged ? src : c, source: url,
+                bounds: image_tools.alphaBounds(prepared.data, c.width, c.height) };
+        }
+    } catch { result = { status: 'unreadable', key }; }
+    return cacheValue(characterSprites, key, result, 8);
+}
+
+function inspectionPreview(sprite, fallback) {
+    if (!sprite?.image || sprite.image.naturalWidth) return fallback;
+    if (sprite.preview) return sprite.preview;
+    try {
+        const src = sprite.image, scale = Math.min(1, 320 / Math.max(src.width, src.height));
+        const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(src.width * scale)); c.height = Math.max(1, Math.round(src.height * scale));
+        c.getContext('2d').drawImage(src, 0, 0, c.width, c.height);
+        sprite.preview = c.toDataURL('image/png');
+        return sprite.preview;
+    } catch { return fallback; }
 }
 
 function coverPalette(song) {
@@ -89847,56 +91070,110 @@ function coverPalette(song) {
 
 function isChorusSection(song, index) { return /^(final )?chorus|^hook/i.test(mv.parseSections(song.lyrics)[index]?.tag || ''); }
 
-function drawSceneV2(g, record, song, rows, index, t, w, h) {
+const stageShadows = new Map();
+function silhouette(url, source) {
+    if (!stageShadows.has(url)) {
+        const c = document.createElement('canvas'); c.width = source.naturalWidth || source.width; c.height = source.naturalHeight || source.height;
+        const g = c.getContext('2d'); g.drawImage(source, 0, 0); g.globalCompositeOperation = 'source-in';
+        g.fillStyle = '#10131c'; g.fillRect(0, 0, c.width, c.height); stageShadows.set(url, c);
+    }
+    return stageShadows.get(url);
+}
+
+function drawSceneText(g, info, record, w, h, pass) {
+    if (!info?.stage || mv.tegakiOptions(record).lyric !== 'stage') return;
+    const { stage, group, subject, opaque } = info;
+    const font = mv.TEGAKI_FONTS[mv.tegakiOptions(record).font] || mv.TEGAKI_FONTS.sans;
+    const main = opaque ? { ...stage, text: stage.lyric || stage.text } : stage;
+    const normal = value => String(value || '').replace(/[\s\p{P}\p{S}]/gu, '');
+    const separateLyric = !opaque && stage.lyric && normal(stage.text) !== normal(stage.lyric);
+    // A crowded keyword layout must not fall back onto the full lyric's lane.
+    stage_canvas.drawText(g, main, group, w, h, font, opaque, { subject, pass, suppressBanner: !!separateLyric });
+    // Keywords may remain behind the actor, but the only copy of a complete
+    // lyric must never be hidden there. Full lyric text is drawn once in front.
+    if (separateLyric && pass === 'front')
+        stage_canvas.drawText(g, { ...stage, text: stage.lyric }, group, w, h, font, true);
+}
+
+function drawSceneV2(g, record, song, rows, index, t, w, h, showText = true) {
     const row = rows[index];
     const group = record.groups.find(x => x.id === row.shot.group);
+    const stageRows = record.stage && Array.isArray(record.clipSectionIndexes) ? mv.shotTimeline(record, song).rows : rows;
+    const stageIndex = stageRows === rows ? index : stageRows.findIndex(r => r.shot.id === row.shot.id);
+    const stage = mv_stage.state(record, stageRows, stageIndex, t);
+    const info = { stage, group, subject: null, opaque: false };
     g.fillStyle = coverPalette(song)[0]; g.fillRect(0, 0, w, h);
-    const span = groupSpan(rows, index);
+    const span = stage ? groupSpan(stageRows, stageIndex) : groupSpan(rows, index);
     const p = Math.min(1, Math.max(0, (t - span.start) / Math.max(0.1, span.end - span.start)));
     const push = group?.motion === 'push' ? 1 + 0.03 * p : 1;
-    if (mv.hasAssetImage(row.shot.image)) {
-        const own = imageFor(assetImageUrl(row.shot.image));
+    const diff = group?.diffs.find(d => d.id === row.shot.diff);
+    const detail = stage_canvas.isDetailInsert(group, diff, row.shot);
+    const ownImage = mv.hasAssetImage(row.shot.image) ? row.shot.image : null;
+    const ownFull = ownImage && (!stage || ownImage.editMode === 'full' || (group?.layer === 'full' && ownImage.editMode !== 'cutout'));
+    if (!detail && ownFull) {
+        const own = imageFor(assetImageUrl(ownImage));
         if (own) drawCover(g, own, w, h, push, 0, 0);
-        return;
+        info.opaque = true; return info;
     }
     const bgRow = (group?.bgs || []).find(b => b.id === (row.shot.bg || 'B1')) || (group?.bgs || [])[0];
-    const bg = imageFor(assetImageUrl(bgRow?.image || group?.bg));
-    if (bg) drawCover(g, bg, w, h, push, 0, 0);
-    const diff = group?.diffs.find(d => d.id === row.shot.diff);
-    const override = diff?.image?.split || 'auto';
-    const url = assetImageUrl(diff?.image), raw = imageFor(url);
-    // Unconfirmed legacy images stay intact. Confirmed edited PNGs use their saved pixels.
-    if (raw && diff?.image?.editMode !== 'cutout') {
+    if (stage) stage_canvas.drawBackground(g, stage.background, w, h, stage.backgroundTime, stage.cue.tone,
+        stage.background.kind === 'image' ? imageFor(assetImageUrl(stage.background.image)) : null);
+    else {
+        const bg = imageFor(assetImageUrl(bgRow?.image || group?.bg));
+        if (bg) drawCover(g, bg, w, h, push, 0, 0);
+    }
+    const art = ownImage || diff?.image;
+    const override = art?.split || 'auto';
+    const url = assetImageUrl(art), raw = imageFor(url);
+    const sprite = ownFull ? null : characterSprite(art, group), person = sprite?.image;
+    if (detail && (person || raw)) {
+        // Run before every cover fallback: full images, single-shot overrides,
+        // failed cutouts and old non-stage records need the same composition.
+        const source = person || raw;
+        const pw = source.naturalWidth || source.width, ph = source.naturalHeight || source.height;
+        const rect = person ? [0, 0, pw, ph] : cropFor(url, source, override).rect;
+        const zoom = group?.motion === 'push' ? push / 1.03 : 1;
+        // Local inserts use foreground captions, so no text is lost beneath
+        // an opaque saved picture or an unprocessed matte.
+        info.opaque = true;
+        info.subject = drawFittedInsert(g, source, rect, w, h, zoom);
+        return info;
+    }
+    if (raw && !person) {
         drawCropCover(g, raw, cropFor(url, raw, override).rect, w, h, push);
-        g.save(); g.globalCompositeOperation = 'soft-light'; g.globalAlpha = 0.1; g.fillStyle = coverPalette(song)[1]; g.fillRect(0, 0, w, h); g.restore();
-        return;
+        if (!stage) { g.save(); g.globalCompositeOperation = 'soft-light'; g.globalAlpha = 0.1; g.fillStyle = coverPalette(song)[1]; g.fillRect(0, 0, w, h); g.restore(); }
+        info.opaque = true; return info;
     }
-    const person = layerImage(diff?.image);
     if (person) {
-        const breathe = 1 + 0.004 * Math.sin(t * Math.PI * 2 / 3.4);
-        // 人物按竖图放进画面：高度撑满（按景别放大或缩小），左右位置按分镜；横屏也不会被拉成两份。
-        const pw = person.naturalWidth, ph = person.naturalHeight;
-        const factor = { close: 1.35, medium: 1.05, full: 0.95, wide: 0.6 }[group.scale] || 1.05;
-        const dh = h * factor, dw = pw * (dh / ph);
-        const side = w > h ? 0.18 : 0.1;
-        const cxp = { left: 0.5 - side, right: 0.5 + side, center: 0.5 }[group.position] || 0.5;
-        const dx = w * cxp - dw / 2, dy = group.scale === 'close' ? h - dh * 0.9 : h - dh;
-        // 同一构图里的差分对齐到这一组第一张：人物大小和脚底位置保持一致，换表情时不跳位。
-        const ref = (group.diffs || []).map(dd => cutMeta.get(assetImageUrl(dd.image))).find(Boolean);
-        const cur = cutMeta.get(url);
-        const map = m => [dx + m.cx * dw, dy + m.bottom * dh];
+        const breathe = stage ? 1 : 1 + 0.004 * Math.sin(t * Math.PI * 2 / 3.4);
+        const pw = person.naturalWidth || person.width, ph = person.naturalHeight || person.height;
+        const placement = stage_canvas.foregroundPlacement(sprite.bounds, pw, ph, group, w, h);
+        const { x: dx, y: dy, width: dw, height: dh } = placement;
+        // Reserve the maximum push/pop extent so letters do not disappear
+        // behind a moving arm between two frames of the same shot.
+        const reserve = w * .045, slide = stage?.entrance === 'slide' ? w * .08 : 0;
+        info.subject = { ...placement.subject, x: placement.subject.x - reserve - slide, width: placement.subject.width + reserve * 2 + slide };
+        if (showText) drawSceneText(g, info, record, w, h, 'back');
         g.save();
-        g.translate(w / 2, h); g.scale(push * breathe, push * breathe); g.translate(-w / 2, -h);
-        if (ref && cur && ref !== cur) {
-            const s = Math.min(1.18, Math.max(0.85, ref.height / Math.max(0.01, cur.height)));
-            const [tx, ty] = map(ref); const [cx, cy] = map(cur);
-            g.translate(tx, ty); g.scale(s, s); g.translate(-cx, -cy);
+        if (stage?.active) {
+            const motion = stage_canvas.poseTransform(stage, w, h);
+            g.translate(motion.x, motion.y); g.translate(w / 2, placement.foot); g.scale(motion.scale, motion.scale); g.translate(-w / 2, -placement.foot);
         }
-        g.drawImage(person, dx, dy, dw, dh);
-        g.restore();
-    }
-    // 统一光色：用封面中间色轻轻叠一层柔光，让人物和背景更像同一张画。
-    g.save(); g.globalCompositeOperation = 'soft-light'; g.globalAlpha = 0.14; g.fillStyle = coverPalette(song)[1]; g.fillRect(0, 0, w, h); g.restore();
+        g.translate(w / 2, placement.foot); g.scale(push * breathe, push * breathe); g.translate(-w / 2, -placement.foot);
+        if (stage && placement.grounded) {
+            // A small ground contact anchors full-body/wide shots; no duplicate
+            // upright silhouette floating alongside the actor.
+            const sx = placement.subject.x + placement.subject.width / 2;
+            const sw = Math.min(placement.subject.width * .3, h * .18);
+            g.save(); g.globalAlpha *= stage.cue.shadow ? .24 : .14; g.fillStyle = '#161c23';
+            g.beginPath(); g.ellipse(sx, placement.foot, sw, Math.max(2, h * .009), 0, 0, Math.PI * 2); g.fill(); g.restore();
+        } else if (stage?.cue.shadow) {
+            g.save(); g.globalAlpha *= .16; g.drawImage(silhouette(sprite.key, person), dx - w * .006, dy, dw, dh); g.restore();
+        }
+        g.drawImage(person, dx, dy, dw, dh); g.restore();
+    } else if (showText) drawSceneText(g, info, record, w, h, 'back');
+    if (!stage) { g.save(); g.globalCompositeOperation = 'soft-light'; g.globalAlpha = 0.14; g.fillStyle = coverPalette(song)[1]; g.fillRect(0, 0, w, h); g.restore(); }
+    return info;
 }
 
 function drawMotif(g, record, song, row, t, w, h) {
@@ -89976,20 +91253,21 @@ function renderFrameV2(canvas, record, song, t) {
     let index = rows.findIndex(r => t >= r.start && t < r.end);
     if (index < 0) index = t < rows[0].start ? 0 : rows.length - 1;
     const row = rows[index];
-    drawSceneV2(g, record, song, rows, index, t, w, h);
+    const stageInfo = drawSceneV2(g, record, song, rows, index, t, w, h);
     const prev = rows[index - 1];
     const since = t - row.start;
     const fadeDuration = transitionDuration(row, 0.35), flashDuration = transitionDuration(row, 0.16);
     if (prev && since >= 0 && prev.shot.group !== row.shot.group) {
-        if (prev.shot.cut === 'fade' && since < fadeDuration) { g.save(); g.globalAlpha = 1 - since / fadeDuration; drawSceneV2(g, record, song, rows, index - 1, t, w, h); g.restore(); }
+        if (prev.shot.cut === 'fade' && since < fadeDuration) { g.save(); g.globalAlpha = 1 - since / fadeDuration; drawSceneV2(g, record, song, rows, index - 1, t, w, h, false); g.restore(); }
         else if (prev.shot.cut === 'flash' && since < flashDuration) { g.save(); g.globalAlpha = 0.85 * (1 - since / flashDuration); g.fillStyle = '#fff'; g.fillRect(0, 0, w, h); g.restore(); }
     }
+    drawSceneText(g, stageInfo, record, w, h, 'front');
     if (since >= 0 && topt.showMotif) drawMotif(g, record, song, row, t, w, h);
     const palette = coverPalette(song);
     const font = mv.TEGAKI_FONTS[topt.font] || mv.TEGAKI_FONTS.sans;
     if (since >= 0 && topt.lyric === 'vertical') drawVerticalLyric(g, row.shot.lyric, w, h, since, palette[2], mv.TEGAKI_FONTS.song.stack);
     else if (since >= 0 && topt.lyric === 'big' && row.shot.lyric) drawBigLyric(g, row.shot.lyric, w, h, since, topt.font);
-    else if (since >= 0 && topt.lyric === 'subtitle' && row.shot.lyric) {
+    else if (since >= 0 && (topt.lyric === 'subtitle' || (topt.lyric === 'stage' && !mv_stage.background(record, row.shot))) && row.shot.lyric) {
         g.save(); g.font = `${font.weight} ${Math.round(Math.min(w, h) * 0.05)}px ${font.stack}`; g.textAlign = 'center';
         g.lineWidth = 3; g.strokeStyle = 'rgba(30,26,40,.6)'; g.fillStyle = '#fff';
         g.strokeText(row.shot.lyric, w / 2, h * 0.92); g.fillText(row.shot.lyric, w / 2, h * 0.92); g.restore();
@@ -90000,7 +91278,7 @@ function renderFrameV2(canvas, record, song, t) {
         if (inBar < 0.12 && t - row.start > 0.2) { g.save(); g.globalAlpha = 0.35 * (1 - inBar / 0.12); g.fillStyle = '#fff'; g.fillRect(0, 0, w, h); g.restore(); }
     }
     // 卡点：副歌里每小节第一拍，关键词轻轻弹出一次。
-    if (since >= 0 && topt.showKeyword && topt.lyric !== 'none' && record.keyword && isChorusSection(song, row.sectionIndex)) {
+    if (since >= 0 && topt.showKeyword && topt.lyric !== 'none' && topt.lyric !== 'stage' && record.keyword && isChorusSection(song, row.sectionIndex)) {
         const bar = beatLen * 4;
         const inBar = (t - row.start) % bar;
         const pop = inBar < 0.25 ? 1.12 - 0.12 * (inBar / 0.25) : 1;
@@ -90190,8 +91468,12 @@ __m_archive_archiveFile_js.ARCHIVE_FILE_FORMAT = ARCHIVE_FILE_FORMAT;
 __init_extras_mvCast_js();
 __init_extras_mvDirection_js();
 __init_extras_mvImageTools_js();
+__init_extras_mvStage_js();
+__init_extras_mvStillPrompt_js();
 __init_ui_mvCastControls_js();
+__init_ui_mvEditorUi_js();
 __init_ui_mvImageEditor_js();
+__init_ui_mvStageCanvas_js();
 __init_core_themeSongCover_js();
 __init_archive_capacity_js();
 __init_archive_coverageRanges_js();
