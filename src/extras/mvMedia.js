@@ -32,8 +32,8 @@ export function mediaKey(kind, scope, songId, shotId = '') {
     return [kind, scope, songId, shotId].join('\u001f');
 }
 
-export async function putMedia(key, blob, name = '') {
-    try { await run('readwrite', store => store.put({ key, blob, name, type: blob?.type || '', at: Date.now() })); return true; }
+export async function putMedia(key, blob, name = '', details = {}) {
+    try { await run('readwrite', store => store.put({ key, blob, name, type: blob?.type || '', at: Date.now(), ...(details.sourceUrl ? { sourceUrl: details.sourceUrl } : {}) })); return true; }
     catch { return false; }
 }
 

@@ -1,0 +1,51 @@
+{
+  "version": "1.0.20",
+  "build": "1.0.20-r84.237-music-link-trial",
+  "baseline": "1.0.19-r84.236-framing-paths",
+  "baseline_zip_sha256": "282c291c5407c481ce5f0d77ff0be4b4d0e2b1f3414e25d8c021b024a4c1e740",
+  "release_status": "trial; Suno real integration unverified",
+  "new_checks": {
+    "tests": 29,
+    "pass": 29,
+    "fail": 0
+  },
+  "existing_affected_baseline": {
+    "tests": 98,
+    "pass": 96,
+    "fail": 2
+  },
+  "final_combined": {
+    "tests": 127,
+    "pass": 125,
+    "fail": 2
+  },
+  "new_regressions_in_compared_set": 0,
+  "unchanged_failures": [
+    "revision drift journals paid result and survives a fresh runtime",
+    "frame cast is the exact intersection of shot people and appearance preference"
+  ],
+  "failure_payloads_identical": true,
+  "full_suite": "incomplete: both 55-second wrapper timeouts",
+  "syntax_files": 406,
+  "syntax_failures": 0,
+  "relative_imports": 2604,
+  "runtime": {
+    "prematureReads": [],
+    "undefinedBindings": [],
+    "rootExports": 6
+  },
+  "deterministic_rebuild": true,
+  "bundle_sha256": "b7310135fdddbb7df4725174733c24298f605962d7f87b97b0b5cd4a9c3159a0",
+  "source_sha256": "d12d5c591869c37cd3864fea1e3d34568abe37d1fca6d41da3bb7478344ab790",
+  "production_source_changes": [
+    "src/extras/mvMedia.js",
+    "src/extras/mvMusicLink.js",
+    "src/ui/mvView.js"
+  ],
+  "unchanged_existing_source_files": 349,
+  "prompts_unchanged": true,
+  "mvStageCanvas_unchanged": true,
+  "real_plugin_Suno_tested": false,
+  "iphone_TT_tested": false,
+  "github_writes": false
+}
