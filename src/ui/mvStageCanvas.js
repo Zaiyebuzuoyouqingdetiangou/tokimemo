@@ -158,11 +158,17 @@ export function foregroundPlacement(bounds, pw, ph, group, w, h) {
         subject: { x: x + pw * (b.x || 0) * scale, y: y + ph * (b.top || 0) * scale, width: visibleW, height: ph * b.height * scale } };
 }
 
-export function isDetailInsert(group, diff) {
-    const description = `${group?.composition || ''} ${diff?.imagePrompt || ''} ${diff?.label || ''}`;
-    const detail = /(?:眼睛|双眼|眼部|手部|手指|嘴唇|唇部|泪痣|物件|局部).{0,12}特写|特写.{0,12}(?:眼睛|双眼|眼部|手部|手指|嘴唇|唇部|泪痣|物件)|\bextreme\s+close[ -]?up\b|\b(?:eyes?|hands?|lips?|object)\s+close[ -]?up\b|\bclose[ -]?up\s+(?:of|on)\s+(?:the\s+)?(?:eyes?|hands?|lips?|object)\b/iu.test(description);
-    const local = group?.scale === 'close' && group?.cast?.length && group.cast.every(p => ['hands', 'face'].includes(p.visible));
-    return !!(detail || local);
+export function isDetailInsert(group, diff, shot = null) {
+    // Generation already used these fields to compose a close-up. Do not
+    // require a particular translated label, or magnify that composition again.
+    const cast = Array.isArray(shot?.cast) ? shot.cast : group?.cast;
+    if (cast?.length && cast.every(p => ['hands', 'face'].includes(p.visible))) return true;
+    if (group?.scale === 'close' || shot?.scale === 'close') return true;
+    const description = [group?.composition, diff?.imagePrompt || group?.characterPrompt,
+        diff?.label, diff?.change, shot?.composition, shot?.shot, shot?.imagePrompt, shot?.plain].filter(Boolean).join(' ');
+    // Hand-holding and expressive eyes in a full-body scene are not enough:
+    // the text must actually request a local crop or close-up.
+    return /(?:眼睛|双眼|眼部|脸部|面部|人脸|手部|双手|牵手|手指|嘴唇|唇部|泪痣|物件|局部).{0,12}特写|特写.{0,12}(?:眼睛|双眼|眼部|脸部|面部|人脸|手部|双手|牵手|手指|嘴唇|唇部|泪痣|物件|局部)|\bextreme\s+close[ -]?up\b|\b(?:eyes?|hands?|fingers?|wrists?|face|facial|lips?|objects?)\b[^.!?\n]{0,32}\bclose[ -]?up\b|\bclose[ -]?up\b[^.!?\n]{0,32}\b(?:eyes?|hands?|fingers?|wrists?|face|lips?|objects?)\b|\bonly\s+(?:the\s+)?(?:hands?|eyes?|face|lips?)\s+(?:in\s+(?:the\s+)?frame|visible)\b/iu.test(description);
 }
 
 export function poseTransform(state, w, h) {

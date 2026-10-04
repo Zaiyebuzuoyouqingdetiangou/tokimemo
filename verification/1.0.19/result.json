@@ -1,0 +1,40 @@
+{
+  "version": "1.0.19",
+  "build": "1.0.19-r84.236-framing-paths",
+  "baseline": "1.0.18-r84.235-editor-framing",
+  "baseline_new_checks": {
+    "tests": 21,
+    "pass": 4,
+    "fail": 17
+  },
+  "candidate_new_checks": {
+    "tests": 21,
+    "pass": 21,
+    "fail": 0
+  },
+  "affected_suite": {
+    "tests": 241,
+    "pass": 239,
+    "fail": 2
+  },
+  "failures_unchanged_from_baseline": [
+    "revision drift journals paid result and survives a fresh runtime",
+    "frame cast is the exact intersection of shot people and appearance preference"
+  ],
+  "syntax": {
+    "source_files": 351,
+    "entry_and_bundle": "passed",
+    "relative_imports": 2507
+  },
+  "runtime": {
+    "prematureReads": [],
+    "undefinedBindings": [],
+    "rootExports": 6
+  },
+  "bundle_sha256": "62dcb5a3b8d3d8029e43a424d73011aacd33118b956ed756f459d9499c65bdb2",
+  "production_source_changes": [
+    "src/ui/mvView.js",
+    "src/ui/mvStageCanvas.js"
+  ],
+  "real_browser_iphone_TT_tested": false
+}

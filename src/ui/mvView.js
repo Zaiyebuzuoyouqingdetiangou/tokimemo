@@ -957,7 +957,9 @@ async function preloadImages(record, song) {
             const image = mv.shotImage(record, shot);
             if (!mv.isV2(record)) return [image];
             const group = record.groups.find(g => g.id === shot.group);
-            if (image?.editMode === 'full' || (group?.layer === 'full' && image?.editMode !== 'cutout') || (mv.hasAssetImage(shot.image) && !mv_stage.background(record, shot))) return [image];
+            const diff = group?.diffs.find(d => d.id === shot.diff);
+            const detail = stage_canvas.isDetailInsert(group, diff, shot);
+            if (!detail && (image?.editMode === 'full' || (group?.layer === 'full' && image?.editMode !== 'cutout') || (mv.hasAssetImage(shot.image) && !mv_stage.background(record, shot)))) return [image];
             const stageBg = mv_stage.background(record, shot);
             if (stageBg && stageBg.kind !== 'image') return [image];
             const bg = stageBg || group?.bgs?.find(b => b.id === (shot.bg || 'B1')) || group?.bgs?.[0];
@@ -1013,15 +1015,20 @@ function groupSpan(rows, index) {
 }
 
 function drawShot(g, row, rows, index, t, w, h) {
-    let img = null;
-    for (let i = index; i >= 0 && !img; i -= 1) img = imageFor(imgUrl(rows[i].shot));
+    let img = null, sourceShot = row.shot;
+    for (let i = index; i >= 0 && !img; i -= 1) {
+        sourceShot = rows[i].shot; img = imageFor(imgUrl(sourceShot));
+    }
     g.fillStyle = '#fbf6ee'; g.fillRect(0, 0, w, h);
     if (img) {
         const span = groupSpan(rows, index);
         const p = Math.min(1, Math.max(0, (t - span.start) / Math.max(0.1, span.end - span.start)));
         const lead = rows.findIndex(r => r.shot.group && r.shot.group === row.shot.group);
         const motion = mv.motionOf((lead >= 0 ? rows[lead] : row).shot.motion);
-        drawCover(g, img, w, h, motion === 'push' ? 1 + 0.05 * p : 1, 0, 0);
+        if (stage_canvas.isDetailInsert(null, null, sourceShot)) {
+            drawFittedInsert(g, img, cropFor(img.src, img, mv.shotImage(view.cache?.record, sourceShot)?.split).rect,
+                w, h, motion === 'push' ? (1 + 0.05 * p) / 1.05 : 1);
+        } else drawCover(g, img, w, h, motion === 'push' ? 1 + 0.05 * p : 1, 0, 0);
     } else {
         g.fillStyle = '#8b95a3'; g.font = `${Math.round(w * 0.04)}px sans-serif`; g.textAlign = 'center';
         wrap(g, row.shot.plain, w / 2, h / 2, w * 0.8, w * 0.055);
@@ -2103,6 +2110,17 @@ function drawCropCover(g, img, rect, w, h, scale = 1) {
     g.drawImage(img, sx, sy, sw, sh, (w - dw) / 2, (h - dh) / 2, dw, dh);
 }
 
+// All foreground paths use this for an already composed local insert, including
+// complete pictures and unreadable/opaque cutout fallbacks. Preserve the whole
+// selected cell. Backgrounds and standing stage actors keep their own placement.
+function drawFittedInsert(g, img, rect, w, h, zoom = 1) {
+    const [sx, sy, sw, sh] = rect;
+    const scale = Math.min(w / sw, h / sh) * Math.min(1, Math.max(0.01, zoom));
+    const width = sw * scale, height = sh * scale, x = (w - width) / 2, y = (h - height) / 2;
+    g.drawImage(img, sx, sy, sw, sh, x, y, width, height);
+    return { x, y, width, height };
+}
+
 // A bounded, display-only derived copy serves playback and export; originals
 // and manually saved masks are never overwritten by automatic processing.
 function characterSprite(image, group) {
@@ -2209,8 +2227,11 @@ function drawSceneV2(g, record, song, rows, index, t, w, h, showText = true) {
     const span = stage ? groupSpan(stageRows, stageIndex) : groupSpan(rows, index);
     const p = Math.min(1, Math.max(0, (t - span.start) / Math.max(0.1, span.end - span.start)));
     const push = group?.motion === 'push' ? 1 + 0.03 * p : 1;
+    const diff = group?.diffs.find(d => d.id === row.shot.diff);
+    const detail = stage_canvas.isDetailInsert(group, diff, row.shot);
     const ownImage = mv.hasAssetImage(row.shot.image) ? row.shot.image : null;
-    if (ownImage && (!stage || ownImage.editMode === 'full' || (group?.layer === 'full' && ownImage.editMode !== 'cutout'))) {
+    const ownFull = ownImage && (!stage || ownImage.editMode === 'full' || (group?.layer === 'full' && ownImage.editMode !== 'cutout'));
+    if (!detail && ownFull) {
         const own = imageFor(assetImageUrl(ownImage));
         if (own) drawCover(g, own, w, h, push, 0, 0);
         info.opaque = true; return info;
@@ -2222,30 +2243,27 @@ function drawSceneV2(g, record, song, rows, index, t, w, h, showText = true) {
         const bg = imageFor(assetImageUrl(bgRow?.image || group?.bg));
         if (bg) drawCover(g, bg, w, h, push, 0, 0);
     }
-    const diff = group?.diffs.find(d => d.id === row.shot.diff);
     const art = ownImage || diff?.image;
     const override = art?.split || 'auto';
     const url = assetImageUrl(art), raw = imageFor(url);
-    const sprite = characterSprite(art, group), person = sprite?.image;
+    const sprite = ownFull ? null : characterSprite(art, group), person = sprite?.image;
+    if (detail && (person || raw)) {
+        // Run before every cover fallback: full images, single-shot overrides,
+        // failed cutouts and old non-stage records need the same composition.
+        const source = person || raw;
+        const pw = source.naturalWidth || source.width, ph = source.naturalHeight || source.height;
+        const rect = person ? [0, 0, pw, ph] : cropFor(url, source, override).rect;
+        const zoom = group?.motion === 'push' ? push / 1.03 : 1;
+        // Local inserts use foreground captions, so no text is lost beneath
+        // an opaque saved picture or an unprocessed matte.
+        info.opaque = true;
+        info.subject = drawFittedInsert(g, source, rect, w, h, zoom);
+        return info;
+    }
     if (raw && !person) {
         drawCropCover(g, raw, cropFor(url, raw, override).rect, w, h, push);
         if (!stage) { g.save(); g.globalCompositeOperation = 'soft-light'; g.globalAlpha = 0.1; g.fillStyle = coverPalette(song)[1]; g.fillRect(0, 0, w, h); g.restore(); }
         info.opaque = true; return info;
-    }
-    if (person && stage_canvas.isDetailInsert(group, diff)) {
-        // A local insert is an already composed image, not a standing actor.
-        // Preserve its whole selected cell and aspect ratio; never zoom into
-        // an opaque interior merely to hide transparent edges.
-        const pw = person.naturalWidth || person.width, ph = person.naturalHeight || person.height;
-        // A gentle push may grow into the fitted frame, never past its edges.
-        const scale = Math.min(w / pw, h / ph) * (group?.motion === 'push' ? push / 1.03 : 1);
-        const dw = pw * scale, dh = ph * scale;
-        const dx = (w - dw) / 2, dy = (h - dh) / 2, b = sprite.bounds;
-        info.subject = { x: dx + (b?.x || 0) * dw, y: dy + (b?.top || 0) * dh,
-            width: (b?.width || 1) * dw, height: (b?.height || 1) * dh };
-        if (showText) drawSceneText(g, info, record, w, h, 'back');
-        g.drawImage(person, dx, dy, dw, dh);
-        return info;
     }
     if (person) {
         const breathe = stage ? 1 : 1 + 0.004 * Math.sin(t * Math.PI * 2 / 3.4);

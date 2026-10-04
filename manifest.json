@@ -1,9 +1,9 @@
 {
     "display_name": "心迹回廊",
     "loading_order": 110,
-    "js": "index.js?heartbeat=1.0.18-r84.235-editor-framing",
+    "js": "index.js?heartbeat=1.0.19-r84.236-framing-paths",
     "author": "Toto",
-    "version": "1.0.18",
+    "version": "1.0.19",
     "auto_update": true,
     "minimum_client_version": "1.13.0",
     "hooks": {
