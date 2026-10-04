@@ -1,0 +1,206 @@
+TAP version 13
+# (node:12) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: paid storyboard switch + quota preserves raw and old metadata; save-only retry is idempotent
+ok 1 - paid storyboard switch + quota preserves raw and old metadata; save-only retry is idempotent
+  ---
+  duration_ms: 217.951907
+  type: 'test'
+  ...
+# Subtest: revision drift journals paid result and survives a fresh runtime
+not ok 2 - revision drift journals paid result and survives a fresh runtime
+  ---
+  duration_ms: 222.336461
+  type: 'test'
+  location: '/workspace/scratch/59771f6e8e39/hearttrace-editor-1.0.18/tokimemo-main/tools/verification/mv-update-regression.mjs:13:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    
+    false !== true
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///workspace/scratch/59771f6e8e39/hearttrace-editor-1.0.18/tokimemo-main/tools/verification/mv-update-regression.mjs:13:231)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+# Subtest: song deletion and text changes cannot receive a late paid result
+ok 3 - song deletion and text changes cannot receive a late paid result
+  ---
+  duration_ms: 374.002776
+  type: 'test'
+  ...
+# Subtest: absent/silent local storage and rejected metadata never claim durable success
+ok 4 - absent/silent local storage and rejected metadata never claim durable success
+  ---
+  duration_ms: 228.603959
+  type: 'test'
+  ...
+# Subtest: malformed paid storyboard remains exportable with no automatic new request
+ok 5 - malformed paid storyboard remains exportable with no automatic new request
+  ---
+  duration_ms: 194.169075
+  type: 'test'
+  ...
+# Subtest: late generated frame never overwrites a newer manual image
+ok 6 - late generated frame never overwrites a newer manual image
+  ---
+  duration_ms: 189.065423
+  type: 'test'
+  ...
+# Subtest: late rewrite detects shot edits and keeps paid rewrite
+ok 7 - late rewrite detects shot edits and keeps paid rewrite
+  ---
+  duration_ms: 215.26779
+  type: 'test'
+  ...
+# Subtest: legacy reversed taps produce strictly positive non-overlapping SRT times
+ok 8 - legacy reversed taps produce strictly positive non-overlapping SRT times
+  ---
+  duration_ms: 191.425109
+  type: 'test'
+  ...
+# Subtest: frame cast is the exact intersection of shot people and appearance preference
+not ok 9 - frame cast is the exact intersection of shot people and appearance preference
+  ---
+  duration_ms: 205.000058
+  type: 'test'
+  location: '/workspace/scratch/59771f6e8e39/hearttrace-editor-1.0.18/tokimemo-main/tools/verification/mv-update-regression.mjs:20:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /no people/. Input:
+    
+    'vertical 9:16 composition, empty room, scenery, no humans'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual: 'vertical 9:16 composition, empty room, scenery, no humans'
+  operator: 'match'
+  stack: |-
+    TestContext.<anonymous> (file:///workspace/scratch/59771f6e8e39/hearttrace-editor-1.0.18/tokimemo-main/tools/verification/mv-update-regression.mjs:20:585)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+# Subtest: delayed audio restore cannot change another chat/song filename or duration
+ok 10 - delayed audio restore cannot change another chat/song filename or duration
+  ---
+  duration_ms: 226.656895
+  type: 'test'
+  ...
+# Subtest: audio with same song id is isolated by chat and late restore loses to manual upload
+ok 11 - audio with same song id is isolated by chat and late restore loses to manual upload
+  ---
+  duration_ms: 308.850899
+  type: 'test'
+  ...
+# Subtest: leaving MV while playing stops audio and never renders over another route
+ok 12 - leaving MV while playing stops audio and never renders over another route
+  ---
+  duration_ms: 197.784391
+  type: 'test'
+  ...
+# Subtest: record countdown is cancelled on exit and cannot play later
+ok 13 - record countdown is cancelled on exit and cannot play later
+  ---
+  duration_ms: 184.503162
+  type: 'test'
+  ...
+# Subtest: canvas subtitles preserve the entire lyric instead of clipping to 24 characters
+ok 14 - canvas subtitles preserve the entire lyric instead of clipping to 24 characters
+  ---
+  duration_ms: 312.075831
+  type: 'test'
+  ...
+# Subtest: public tap nudge cannot cross the next marked section
+ok 15 - public tap nudge cannot cross the next marked section
+  ---
+  duration_ms: 282.943673
+  type: 'test'
+  ...
+# Subtest: updater accepts same project SSH remote and reverse-proxy prefix with JSON/CSRF intact
+ok 16 - updater accepts same project SSH remote and reverse-proxy prefix with JSON/CSRF intact
+  ---
+  duration_ms: 325.897339
+  type: 'test'
+  ...
+# Subtest: updater independently verifies the resulting commit instead of trusting update response
+ok 17 - updater independently verifies the resulting commit instead of trusting update response
+  ---
+  duration_ms: 198.588529
+  type: 'test'
+  ...
+# Subtest: up-to-date branch makes no update POST and shows actual loaded build
+ok 18 - up-to-date branch makes no update POST and shows actual loaded build
+  ---
+  duration_ms: 196.1463
+  type: 'test'
+  ...
+# Subtest: wrong remote, ZIP, denied permissions and cross-origin path never pull code
+ok 19 - wrong remote, ZIP, denied permissions and cross-origin path never pull code
+  ---
+  duration_ms: 194.784247
+  type: 'test'
+  ...
+# Subtest: concurrent update clicks share a single update and release failed button
+ok 20 - concurrent update clicks share a single update and release failed button
+  ---
+  duration_ms: 204.330352
+  type: 'test'
+  ...
+# Subtest: song plan and storage retain song 81 and cumulative text beyond 1.2M
+ok 21 - song plan and storage retain song 81 and cumulative text beyond 1.2M
+  ---
+  duration_ms: 355.621736
+  type: 'test'
+  ...
+# Subtest: leaving during active export stops recorder, audio and tracks without redrawing another page
+ok 22 - leaving during active export stops recorder, audio and tracks without redrawing another page
+  ---
+  duration_ms: 264.427382
+  type: 'test'
+  ...
+# Subtest: export waits for local image blobs and cannot start after leaving during preload
+ok 23 - export waits for local image blobs and cannot start after leaving during preload
+  ---
+  duration_ms: 234.9432
+  type: 'test'
+  ...
+# Subtest: settings updater entry renders escaped complete running version independently of update status
+ok 24 - settings updater entry renders escaped complete running version independently of update status
+  ---
+  duration_ms: 315.501651
+  type: 'test'
+  ...
+# Subtest: normal paid frame saves once and survives metadata failure through confirmed local copy
+ok 25 - normal paid frame saves once and survives metadata failure through confirmed local copy
+  ---
+  duration_ms: 518.422832
+  type: 'test'
+  ...
+# Subtest: storyboard saves alongside newer audio duration/timing without reverting either
+ok 26 - storyboard saves alongside newer audio duration/timing without reverting either
+  ---
+  duration_ms: 250.092362
+  type: 'test'
+  ...
+# Subtest: MV backup includes old metadata-only records before the first local write
+ok 27 - MV backup includes old metadata-only records before the first local write
+  ---
+  duration_ms: 228.899584
+  type: 'test'
+  ...
+1..27
+# tests 27
+# suites 0
+# pass 25
+# fail 2
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 7228.151645

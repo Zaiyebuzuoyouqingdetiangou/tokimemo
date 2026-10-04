@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 321
-// Source SHA-256: da3af6b04f16614a67d41927708f06433c51b2b7fc39181f32dcf1709191302e
+// Source SHA-256: 06948bb3ff4f8f063bd97bb8e98e071e0db8582d2178c45f64020d4d1b77573e
 // Build: python3 tools/verification/build.py <source-root>
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -1149,9 +1149,9 @@ function editorMarkup(o) {
       <div class="rmt-mve-layout-scope"><div class="rmt-mve-workspace" data-editor-tab="${tab}"><section class="rmt-mve-preview" aria-label="手书预览">
         <div class="rmt-mv-canvas-wrap${width < height ? ' portrait' : ''}"><canvas data-rmt-mv-canvas width="${width}" height="${height}"></canvas></div>
         <div class="rmt-mve-transport"><button type="button" class="rmt-mv-play" data-rmt-mv="play" aria-label="${playing ? '暂停' : '播放'}"${exporting ? ' disabled' : ''}>${playing ? '❚❚' : '▶'}</button><span class="rmt-mve-clock" data-rmt-mv-time>${esc(time)}</span><input type="range" min="0" max="${total}" step="0.1" value="${o.seconds}" data-rmt-mv-seek aria-label="播放位置"${exporting ? ' disabled' : ''}><small>${esc(o.totalLabel)}</small>${btn('editor-drawer', '歌曲', { id: 'audio' })}</div>
-        <div class="rmt-mve-meta"><span>${esc(selectedLabel)}</span><span>${audio ? '本机歌曲已接入' : '未放入歌曲 · 可静音预览'}</span></div>
-        <div class="rmt-mve-filmstrip"><div class="rmt-mv-strip">${strip}</div>${stripNav}</div>
-      </section><section class="rmt-mve-tools"><nav class="rmt-mve-tabs" aria-label="剪辑工作区">${tabs}</nav><div class="rmt-mve-panel">${panels[tab] || panels.shots}</div></section></div></div>
+        <div class="rmt-mve-meta"><span data-rmt-mv-current>${esc(selectedLabel)}</span><span>${audio ? '本机歌曲已接入' : '未放入歌曲 · 可静音预览'}</span></div>
+        <div class="rmt-mve-filmstrip" data-rmt-mv-filmstrip><div class="rmt-mv-strip">${strip}</div>${stripNav}</div>
+      </section><section class="rmt-mve-tools"><nav class="rmt-mve-tabs" aria-label="剪辑工作区">${tabs}</nav><div class="rmt-mve-panel"${tab === 'shots' ? ' data-rmt-mv-shot-panel' : ''}>${panels[tab] || panels.shots}</div></section></div></div>
       ${drawer ? `<div class="rmt-mve-sheet-shade"><section class="rmt-mve-sheet" role="dialog" aria-modal="true" aria-label="${esc({ export: '导出手书', more: '素材与项目', audio: '歌曲' }[drawer] || '选项')}"><header><b>${esc({ export: '导出手书', more: '素材与项目', audio: '歌曲' }[drawer] || '选项')}</b>${btn('editor-drawer', '关闭', { extra: ' aria-label="关闭选项面板"' })}</header><div>${drawerHtml}</div></section></div>` : ''}`;
 }
 
@@ -1175,7 +1175,12 @@ ${r} .rmt-mve-preview canvas{display:block;width:100%;height:auto}
 ${r} .rmt-mve-transport{display:flex;align-items:center;gap:10px;padding:10px 0 3px;min-width:0}
 ${r} .rmt-mve-transport .rmt-mv-play{width:42px;min-width:42px;height:42px;min-height:42px;border-radius:50%;font-size:15px;background:var(--rmt-theme-soft,#e3eef9);color:var(--rmt-theme-text,#294762);border:1px solid var(--rmt-theme-border,#cddfed)}
 ${r} .rmt-mve-clock{font-size:12px;white-space:nowrap;font-variant-numeric:tabular-nums}
-${r} .rmt-mve-transport input[type=range]{flex:1;width:0;min-width:28px;height:44px;padding:0;accent-color:var(--rmt-theme-accent,#bc779d);cursor:pointer}
+${r} .rmt-mve-transport input[type=range]{appearance:none!important;-webkit-appearance:none!important;display:block;flex:1;width:0;min-width:28px;height:44px!important;min-height:44px!important;max-height:44px!important;margin:0!important;padding:0!important;border:0!important;border-radius:0!important;background:transparent!important;box-shadow:none!important;filter:none!important;cursor:pointer}
+${r} .rmt-mve-transport input[type=range]::-webkit-slider-runnable-track{height:6px;border:0;border-radius:999px;box-shadow:none;background:linear-gradient(to right,var(--rmt-theme-accent,#bc779d) 0%,var(--rmt-theme-accent,#bc779d) var(--rmt-mv-seek,0%),var(--rmt-theme-border,#cddfed) var(--rmt-mv-seek,0%),var(--rmt-theme-border,#cddfed) 100%)}
+${r} .rmt-mve-transport input[type=range]::-webkit-slider-thumb{-webkit-appearance:none!important;appearance:none!important;width:18px!important;height:18px!important;margin-top:-6px!important;border:2px solid var(--rmt-theme-surface-solid,#fff)!important;border-radius:50%!important;background:var(--rmt-theme-accent-ink,#4f769d)!important;box-shadow:0 1px 4px #0002!important}
+${r} .rmt-mve-transport input[type=range]::-moz-range-track{height:6px;border:0;border-radius:999px;background:var(--rmt-theme-border,#cddfed)}
+${r} .rmt-mve-transport input[type=range]::-moz-range-progress{height:6px;border-radius:999px;background:var(--rmt-theme-accent,#bc779d)}
+${r} .rmt-mve-transport input[type=range]::-moz-range-thumb{width:14px;height:14px;border:2px solid var(--rmt-theme-surface-solid,#fff);border-radius:50%;background:var(--rmt-theme-accent-ink,#4f769d);box-shadow:0 1px 4px #0002}
 ${r} .rmt-mve-transport>small{font-size:11px;color:var(--rmt-theme-muted,#63788f)}
 ${r} .rmt-mve-transport>button:last-child{font-size:12px;min-height:40px;padding:0 10px;border-radius:9px}
 ${r} .rmt-mve-meta{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:11px;color:var(--rmt-theme-muted,#63788f);padding:4px 1px 14px;flex-wrap:wrap}
@@ -1195,9 +1200,10 @@ ${r} .rmt-mve-panel summary{cursor:pointer;min-height:36px;font-size:13px}
 ${r} .rmt-mve-panel details>div{display:flex;flex-direction:column;gap:12px;padding-top:12px}
 ${r} .rmt-mve-panel input:not([type=checkbox]):not([type=range]),${r} .rmt-mve-panel select{font-size:16px}
 ${r} .rmt-mve-filmstrip .rmt-mv-strip{gap:7px;padding:4px 2px 10px}
-${r} .rmt-mve-filmstrip .rmt-mv-strip>button{width:84px!important;min-width:84px;height:102px;flex:0 0 84px;border-radius:9px;overflow:hidden;background:var(--rmt-theme-surface-solid,#fff)}
-${r} .rmt-mve-filmstrip .rmt-mv-strip>button img{display:block;height:72px;width:100%;object-fit:cover}
-${r} .rmt-mve-filmstrip .rmt-mv-strip>button>span{position:static;display:block;background:transparent;padding:5px 2px;border-radius:0;color:var(--rmt-theme-text,#294762);font-size:11px;line-height:1.3}
+${r} .rmt-mve-filmstrip .rmt-mv-strip>button{display:grid;grid-template-rows:72px 26px;box-sizing:border-box;width:84px!important;min-width:84px;height:102px;flex:0 0 84px;padding:0!important;border-radius:9px;overflow:hidden;background:var(--rmt-theme-surface-solid,#fff)}
+${r} .rmt-mve-filmstrip .rmt-mv-strip>button img{position:static!important;inset:auto!important;grid-row:1;display:block;height:72px!important;width:100%!important;min-height:0;max-height:72px;object-fit:contain;align-self:center}
+${r} .rmt-mve-filmstrip .rmt-mv-strip>button>span{position:static;grid-row:2;display:flex;align-items:center;justify-content:center;box-sizing:border-box;background:var(--rmt-theme-surface-solid,#fff);padding:2px;border-radius:0;color:var(--rmt-theme-text,#294762);font-size:11px;line-height:1.3;white-space:nowrap}
+${r} .rmt-mve-filmstrip .rmt-mv-strip>button[aria-current=true]{border-color:var(--rmt-theme-accent-ink,#4f769d)!important;box-shadow:0 0 0 1px var(--rmt-theme-accent-ink,#4f769d)}
 ${r} .rmt-mve-strip-nav{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:11px;color:var(--rmt-theme-muted,#63788f)}
 ${r} .rmt-mve-strip-nav button{font-size:11px;padding:0 10px;min-height:36px}
 ${r} .rmt-mve-sync-list{display:flex;flex-direction:column;gap:0;border-top:1px solid var(--rmt-theme-border,#cddfed)}
@@ -1234,7 +1240,7 @@ ${r} .rmt-mve-group-fold summary{min-height:44px;cursor:pointer;display:flex;ali
 ${r} .rmt-mve-group-fold .rmt-mv-gcard{border:0;padding:12px 0 0}
 @media(min-width:960px){${r} .rmt-mve-workspace{grid-template-columns:minmax(0,1fr) 340px}}
 @supports(container-type:inline-size){${r} .rmt-mve-workspace{grid-template-columns:minmax(0,1fr)}@container (min-width:780px){${r} .rmt-mve-workspace{grid-template-columns:minmax(0,1fr) 340px}}}
-@media(max-width:600px){${r} .rmt-mve-head h2{font-size:17px}${r} .rmt-mve-head-actions button{padding:0 10px;font-size:12px}${r} .rmt-mve-panel{padding:14px}${r} .rmt-mve-transport{gap:7px}${r} .rmt-mve-transport>small{display:none}${r} .rmt-mve-workspace:not([data-editor-tab=shots]) .rmt-mve-filmstrip{display:none}${r} .rmt-mve-sheet{max-height:88vh}${r} .rmt-mve-head{padding-bottom:10px}}
+@media(max-width:600px){${r} .rmt-mve-head h2{font-size:17px}${r} .rmt-mve-head-actions button{padding:0 10px;font-size:12px}${r} .rmt-mve-panel{padding:14px}${r} .rmt-mve-transport{gap:7px}${r} .rmt-mve-transport>small{font-size:11px!important;white-space:nowrap}${r} .rmt-mve-workspace:not([data-editor-tab=shots]) .rmt-mve-filmstrip{display:none}${r} .rmt-mve-sheet{max-height:88vh}${r} .rmt-mve-head{padding-bottom:10px}}
 @container (max-width:700px){${r} .rmt-mve-workspace:not([data-editor-tab=shots]) .rmt-mve-filmstrip{display:none}}
 `;
 }
@@ -89292,7 +89298,7 @@ function openMv(options = {}) {
     view.castDraft = mv_cast.initialMvCast(context, record);
     const ready = record?.shots?.length && mv.normalizeSettings(record.settings).output === 'tegaki' && record.shots.some(s => mv.hasAssetImage(mv.shotImage(record, s)));
     view.sub = record?.shots?.length ? options.page === 'board' || !ready ? 'board' : 'tegaki' : 'setup';
-    view.editorTab = 'shots'; view.editorDrawer = ''; view.editorTiming = { kind: 'line', key: '' }; view.editorSection = null; view.editorUndo = []; view.editorAutoNext = true; view.stripStart = 0; view.inspect = ''; view.groupOpen = '';
+    view.editorTab = 'shots'; view.editorDrawer = ''; view.editorTiming = { kind: 'line', key: '' }; view.editorSection = null; view.editorUndo = []; view.editorAutoNext = true; view.stripStart = 0; view.editorPlayhead = ''; view.inspect = ''; view.groupOpen = '';
     view.step = 1; view.draft = mv.normalizeSettings(record?.settings); view.mode = view.draft.output; view.shotId = ''; view.copied = ''; view.tapIndex = -1; view.tapUndo = [];
     overlay.openOverlay();
     renderMv();
@@ -89717,24 +89723,34 @@ function editorSheet(song, record) {
         ${btn('record-mode', '录屏模式（全屏播放）', { disabled: !audioBySong.has(audioKey()) })}<p class="rmt-x-note">导出会播放一遍所选片段，请不要切页或锁屏。</p>`;
 }
 
+function editorShotPanel(song, record, sel, selIndex) {
+    const seg = (action, map, value) => Object.entries(map).map(([id, label]) => btn(action, label, { id, cls: 'rmt-x-seg' + (value === id ? ' active' : ''), extra: ` aria-pressed="${value === id}"` })).join('');
+    const assetKey = sel?.shot.group && sel?.shot.diff ? `${sel.shot.group}:${sel.shot.diff}` : '';
+    const asset = assetKey ? mv.assetOf(record, assetKey) : null;
+    return sel ? `<div class="rmt-x-row-head"><b>第 ${selIndex + 1} 镜</b><span>${mv.formatTime(sel.start, true)}–${mv.formatTime(sel.end, true)}</span></div><p class="rmt-x-note">${esc(sel.shot.lyric || sel.shot.plain || '')}</p>
+      <b>镜头运动</b><div class="rmt-mv-grid2">${seg('set-motion', mv.MV_MOTIONS, sel.shot.motion)}</div><b>切到下一镜</b><div class="rmt-x-segs">${seg('set-cut', mv.MV_CUTS, sel.shot.cut || 'fade')}</div>
+      ${asset && !mv.hasAssetImage(sel.shot.image) ? `<div class="rmt-mv-actions">${btn('edit-asset', '图片编辑 · 选单格 · 修边', { id: assetKey })}${btn('cutout-asset', '一键抠图', { id: assetKey })}</div>` : ''}
+      ${stageShotControls(record, sel.shot)}<details><summary>图片与生成</summary><div>${btn('draw', mv.isFrameDrawing(mv.mvScope(ctx()), view.songId, sel.shot.id) ? '正在画…' : hasImg(sel.shot) ? '重画这一镜' : '画这一镜', { id: sel.shot.id, disabled: mv.isFrameDrawing(mv.mvScope(ctx()), view.songId, sel.shot.id) })}${uploadLabel(sel.shot.id)}${sel.shot.image && asset ? btn('use-group-image', '恢复使用构图素材', { id: sel.shot.id }) : ''}${btn('go-board', '素材库与背景编辑')}</div></details>` : '';
+}
+
+function editorStrip(rows, record) {
+    // A window in the thumbnail list, not a limit on saved/generated frames.
+    const start = Math.max(0, Math.min(view.stripStart || 0, Math.max(0, rows.length - 1)));
+    const strip = rows.slice(start, start + 12).map((row, i) => `<button type="button" class="${row.shot.id === view.selected ? 'on' : ''}" aria-label="第 ${start + i + 1} 镜" data-rmt-mv="select-shot" data-rmt-mv-id="${esc(row.shot.id)}">${assetPreviewHtml(mv.shotImage(record, row.shot))}<span>${start + i + 1} · ${(row.end - row.start).toFixed(1)}秒</span></button>`).join('');
+    const stripNav = `<div class="rmt-mve-strip-nav">${btn('editor-strip', '上一组', { id: String(Math.max(0, start - 12)), disabled: start === 0 })}<span>${start + 1}–${Math.min(rows.length, start + 12)} / ${rows.length} 镜</span>${btn('editor-strip', '下一组', { id: String(start + 12), disabled: start + 12 >= rows.length })}</div>`;
+    return { strip, stripNav };
+}
+
 function renderTegaki(song, record) {
     const [w, h] = canvasSize(record), { rows, total } = mv.shotTimeline(record, song);
     if (!view.selected || !record.shots.some(s => s.id === view.selected)) view.selected = record.shots[0]?.id || '';
     const selIndex = Math.max(0, rows.findIndex(r => r.shot.id === view.selected)), sel = rows[selIndex];
     const tab = view.sub === 'sync' ? 'timing' : view.editorTab || 'shots';
-    // A window in the thumbnail list, not a limit on saved/generated frames.
-    const start = Math.max(0, Math.min(view.stripStart || 0, Math.max(0, rows.length - 1)));
-    const strip = rows.slice(start, start + 12).map((row, i) => `<button type="button" class="${row.shot.id === view.selected ? 'on' : ''}" aria-label="第 ${start + i + 1} 镜" data-rmt-mv="select-shot" data-rmt-mv-id="${esc(row.shot.id)}">${assetPreviewHtml(mv.shotImage(record, row.shot))}<span>${start + i + 1} · ${(row.end - row.start).toFixed(1)}秒</span></button>`).join('');
-    const stripNav = `<div class="rmt-mve-strip-nav">${btn('editor-strip', '上一组', { id: String(Math.max(0, start - 12)), disabled: start === 0 })}<span>${start + 1}–${Math.min(rows.length, start + 12)} / ${rows.length} 镜</span>${btn('editor-strip', '下一组', { id: String(start + 12), disabled: start + 12 >= rows.length })}</div>`;
+    const { strip, stripNav } = editorStrip(rows, record);
     const seg = (action, map, value) => Object.entries(map).map(([id, label]) => btn(action, label, { id, cls: 'rmt-x-seg' + (value === id ? ' active' : ''), extra: ` aria-pressed="${value === id}"` })).join('');
-    const assetKey = sel?.shot.group && sel?.shot.diff ? `${sel.shot.group}:${sel.shot.diff}` : '';
-    const asset = assetKey ? mv.assetOf(record, assetKey) : null;
     const panels = {};
     // Only the active tab is constructed: folded/hidden tools do no image work.
-    if (tab === 'shots') panels.shots = sel ? `<div class="rmt-x-row-head"><b>第 ${selIndex + 1} 镜</b><span>${mv.formatTime(sel.start, true)}–${mv.formatTime(sel.end, true)}</span></div><p class="rmt-x-note">${esc(sel.shot.lyric || sel.shot.plain || '')}</p>
-      <b>镜头运动</b><div class="rmt-mv-grid2">${seg('set-motion', mv.MV_MOTIONS, sel.shot.motion)}</div><b>切到下一镜</b><div class="rmt-x-segs">${seg('set-cut', mv.MV_CUTS, sel.shot.cut || 'fade')}</div>
-      ${asset && !mv.hasAssetImage(sel.shot.image) ? `<div class="rmt-mv-actions">${btn('edit-asset', '图片编辑 · 选单格 · 修边', { id: assetKey })}${btn('cutout-asset', '一键抠图', { id: assetKey })}</div>` : ''}
-      ${stageShotControls(record, sel.shot)}<details><summary>图片与生成</summary><div>${btn('draw', mv.isFrameDrawing(mv.mvScope(ctx()), view.songId, sel.shot.id) ? '正在画…' : hasImg(sel.shot) ? '重画这一镜' : '画这一镜', { id: sel.shot.id, disabled: mv.isFrameDrawing(mv.mvScope(ctx()), view.songId, sel.shot.id) })}${uploadLabel(sel.shot.id)}${sel.shot.image && asset ? btn('use-group-image', '恢复使用构图素材', { id: sel.shot.id }) : ''}${btn('go-board', '素材库与背景编辑')}</div></details>` : '';
+    if (tab === 'shots') panels.shots = editorShotPanel(song, record, sel, selIndex);
     if (tab === 'timing') panels.timing = editorTimingPanel(song, record);
     if (tab === 'look') panels.look = `<div class="rmt-x-row-head"><b>整支手书的样子</b><span>全片设置</span></div><div class="rmt-x-segs">${seg('editor-ratio', { '16:9': '横屏 16:9', '9:16': '竖屏 9:16' }, mv.normalizeSettings(record.settings).ratio)}</div>${tegakiControls(record, song)}`;
     const html = editor_ui.editorMarkup({ esc, btn, song, tab, panels, width: w, height: h, strip, stripNav,
@@ -89749,7 +89765,7 @@ function seekEditor(time) {
     time = Math.max(0, Math.min(total, Number(time) || 0));
     const audio = audioElement();
     if (audio) audio.currentTime = time; else { player.clockOffset = time; player.clockStart = performance.now(); }
-    drawNow();
+    view.editorPlayhead = ''; drawNow();
 }
 
 function bindEditorControls() {
@@ -89975,6 +89991,46 @@ function renderFrame(canvas, record, song, t) {
     return total;
 }
 
+function syncEditorPlayback(record, song, t) {
+    if (view.sub !== 'tegaki' && view.sub !== 'sync') return;
+    const { rows } = mv.shotTimeline(record, song), playback = mv.playbackTimeline(record, song).rows;
+    if (!playback.length) return;
+    let index = playback.findIndex(r => t >= r.start && t < r.end);
+    if (index < 0) index = t < playback[0].start ? 0 : playback.length - 1;
+    const row = playback[index], number = rows.findIndex(r => r.shot.id === row.shot.id) + 1;
+    const label = document.querySelector('[data-rmt-mv-current]');
+    const text = `播放 · 第 ${number} 镜 / ${rows.length} 镜`;
+    if (label && label.textContent !== text) label.textContent = text;
+    const changed = view.editorPlayhead !== row.shot.id;
+    view.editorPlayhead = row.shot.id;
+    // Do not replace a focused field, an image draft, or the timing workspace.
+    const editing = document.activeElement?.closest?.('.rmt-mve-tools')
+        && document.activeElement?.matches?.('input,select,textarea,[contenteditable="true"]');
+    const follow = view.sub === 'tegaki' && (view.editorTab || 'shots') === 'shots' && !view.editorDrawer && !editing;
+    if (follow && view.selected !== row.shot.id) {
+        view.selected = row.shot.id;
+        const panel = body()?.querySelector?.('[data-rmt-mv-shot-panel]');
+        if (panel) panel.innerHTML = editorShotPanel(song, record, row, number - 1);
+    }
+    if (follow && changed) {
+        const start = view.stripStart || 0;
+        if (number - 1 < start || number - 1 >= start + 12) {
+            view.stripStart = Math.floor((number - 1) / 12) * 12;
+            const film = body()?.querySelector?.('[data-rmt-mv-filmstrip]');
+            if (film) { const { strip, stripNav } = editorStrip(rows, record); film.innerHTML = `<div class="rmt-mv-strip">${strip}</div>${stripNav}`; }
+        }
+    }
+    for (const button of document.querySelectorAll('.rmt-mve-filmstrip [data-rmt-mv="select-shot"]')) {
+        const current = button.dataset.rmtMvId === row.shot.id;
+        if (button.getAttribute?.('aria-current') !== String(current)) button.setAttribute('aria-current', String(current));
+        button.classList?.toggle('on', button.dataset.rmtMvId === view.selected);
+        if (follow && changed && current) {
+            const strip = button.parentElement;
+            if (strip) strip.scrollLeft = Math.max(0, button.offsetLeft - strip.offsetLeft - (strip.clientWidth - button.offsetWidth) / 2);
+        }
+    }
+}
+
 function drawNow() {
     if (!isView()) return;
     const canvas = document.querySelector('[data-rmt-mv-canvas]');
@@ -89988,7 +90044,11 @@ function drawNow() {
     const bar = document.querySelector('[data-rmt-mv-progress]');
     if (bar) bar.style.width = `${Math.min(100, t / Math.max(1, total) * 100)}%`;
     const slider = document.querySelector('[data-rmt-mv-seek]');
-    if (slider && document.activeElement !== slider) slider.value = String(t);
+    if (slider) {
+        if (document.activeElement !== slider) slider.value = String(t);
+        slider.style?.setProperty?.('--rmt-mv-seek', `${Math.min(100, Math.max(0, Number(slider.value) || 0) / Math.max(1, total) * 100)}%`);
+    }
+    syncEditorPlayback(record, song, t);
     const rec = document.querySelector('.rmt-mv-rec canvas');
     if (rec) renderFrame(rec, player.recording?.record || record, player.recording?.song || song, t);
 }
@@ -90465,7 +90525,7 @@ function handleMvClick(event) {
         }
         else if (action === 'download-table') download(new Blob([mv.timetableText(record, currentSong())], { type: 'text/plain;charset=utf-8' }), `${safeName(currentSong().title)}-镜头时间表.txt`);
         else if (action === 'download-srt') download(new Blob([mv.srtText(record, currentSong())], { type: 'application/x-subrip;charset=utf-8' }), `${safeName(currentSong().title)}.srt`);
-        else if (action === 'select-shot') { const row = mv.shotTimeline(record, currentSong()).rows.find(r => r.shot.id === id); if (row) { view.selected = id; renderMv(); seekEditor(row.start); } }
+        else if (action === 'select-shot') { const row = mv.shotTimeline(record, currentSong()).rows.find(r => r.shot.id === id); if (row) { view.selected = id; seekEditor(row.start); renderMv(); } }
         else if (action === 'use-group-image') {
             if (mv.isV2(record) && record.shots.some(s => s.id === id)) {
                 imageImports.delete(mv_media.mediaKey('img', opened.scope, opened.songId, id));
@@ -90996,35 +91056,6 @@ function silhouette(url, source) {
     return stageShadows.get(url);
 }
 
-function detailRect(sprite, ratio) {
-    if (!sprite.detailRects) sprite.detailRects = new Map();
-    if (sprite.detailRects.has(ratio)) return sprite.detailRects.get(ratio);
-    const image = sprite.image, pw = image.naturalWidth || image.width, ph = image.naturalHeight || image.height;
-    const b = sprite.bounds, cx = b ? b.cx * pw : pw / 2, cy = b ? (b.top + b.height / 2) * ph : ph / 2;
-    let rw = b ? b.width * pw : pw, rh = b ? b.height * ph : ph;
-    if (rw / rh > ratio) rw = rh * ratio; else rh = rw / ratio;
-    // Find an opaque crop inside a local insert such as an eye-shaped mask.
-    // Only the preview/export crop changes; the paid source is retained.
-    try {
-        const c = document.createElement('canvas'); c.width = 160; c.height = Math.max(1, Math.round(160 * ph / pw));
-        const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(image, 0, 0, c.width, c.height);
-        const pixels = g.getImageData(0, 0, c.width, c.height).data;
-        const solid = (x, y) => pixels[(Math.max(0, Math.min(c.height - 1, Math.floor(y / ph * c.height))) * c.width
-            + Math.max(0, Math.min(c.width - 1, Math.floor(x / pw * c.width)))) * 4 + 3] > 235;
-        for (let attempt = 0; attempt < 16; attempt++) {
-            let ok = true;
-            for (let i = 0; i <= 20; i++) {
-                const dx = (i / 20 - .5) * rw, dy = (i / 20 - .5) * rh;
-                if (!solid(cx + dx, cy - rh / 2) || !solid(cx + dx, cy + rh / 2)
-                    || !solid(cx - rw / 2, cy + dy) || !solid(cx + rw / 2, cy + dy)) { ok = false; break; }
-            }
-            if (ok) break;
-            rw *= .95; rh *= .95;
-        }
-    } catch { /* Keep a centered crop if a canvas cannot expose pixels. */ }
-    const rect = [cx - rw / 2, cy - rh / 2, rw, rh]; sprite.detailRects.set(ratio, rect); return rect;
-}
-
 function drawSceneText(g, info, record, w, h, pass) {
     if (!info?.stage || mv.tegakiOptions(record).lyric !== 'stage') return;
     const { stage, group, subject, opaque } = info;
@@ -91075,8 +91106,19 @@ function drawSceneV2(g, record, song, rows, index, t, w, h, showText = true) {
         info.opaque = true; return info;
     }
     if (person && stage_canvas.isDetailInsert(group, diff)) {
-        drawCropCover(g, person, detailRect(sprite, w / h), w, h, push);
-        info.opaque = true; return info;
+        // A local insert is an already composed image, not a standing actor.
+        // Preserve its whole selected cell and aspect ratio; never zoom into
+        // an opaque interior merely to hide transparent edges.
+        const pw = person.naturalWidth || person.width, ph = person.naturalHeight || person.height;
+        // A gentle push may grow into the fitted frame, never past its edges.
+        const scale = Math.min(w / pw, h / ph) * (group?.motion === 'push' ? push / 1.03 : 1);
+        const dw = pw * scale, dh = ph * scale;
+        const dx = (w - dw) / 2, dy = (h - dh) / 2, b = sprite.bounds;
+        info.subject = { x: dx + (b?.x || 0) * dw, y: dy + (b?.top || 0) * dh,
+            width: (b?.width || 1) * dw, height: (b?.height || 1) * dh };
+        if (showText) drawSceneText(g, info, record, w, h, 'back');
+        g.drawImage(person, dx, dy, dw, dh);
+        return info;
     }
     if (person) {
         const breathe = stage ? 1 : 1 + 0.004 * Math.sin(t * Math.PI * 2 / 3.4);

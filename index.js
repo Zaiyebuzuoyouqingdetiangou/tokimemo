@@ -1,5 +1,5 @@
-const VERSION = '1.0.17';
-const BUILD = '1.0.17-r84.234-editor-responsive';
+const VERSION = '1.0.18';
+const BUILD = '1.0.18-r84.235-editor-framing';
 
 const SETTINGS_ID = 'heartbeat_memories_settings';
 const MENU_ID = 'heartbeat_memories_menu_item';

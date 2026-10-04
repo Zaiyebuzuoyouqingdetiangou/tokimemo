@@ -8,9 +8,9 @@ export function editorMarkup(o) {
       <div class="rmt-mve-layout-scope"><div class="rmt-mve-workspace" data-editor-tab="${tab}"><section class="rmt-mve-preview" aria-label="手书预览">
         <div class="rmt-mv-canvas-wrap${width < height ? ' portrait' : ''}"><canvas data-rmt-mv-canvas width="${width}" height="${height}"></canvas></div>
         <div class="rmt-mve-transport"><button type="button" class="rmt-mv-play" data-rmt-mv="play" aria-label="${playing ? '暂停' : '播放'}"${exporting ? ' disabled' : ''}>${playing ? '❚❚' : '▶'}</button><span class="rmt-mve-clock" data-rmt-mv-time>${esc(time)}</span><input type="range" min="0" max="${total}" step="0.1" value="${o.seconds}" data-rmt-mv-seek aria-label="播放位置"${exporting ? ' disabled' : ''}><small>${esc(o.totalLabel)}</small>${btn('editor-drawer', '歌曲', { id: 'audio' })}</div>
-        <div class="rmt-mve-meta"><span>${esc(selectedLabel)}</span><span>${audio ? '本机歌曲已接入' : '未放入歌曲 · 可静音预览'}</span></div>
-        <div class="rmt-mve-filmstrip"><div class="rmt-mv-strip">${strip}</div>${stripNav}</div>
-      </section><section class="rmt-mve-tools"><nav class="rmt-mve-tabs" aria-label="剪辑工作区">${tabs}</nav><div class="rmt-mve-panel">${panels[tab] || panels.shots}</div></section></div></div>
+        <div class="rmt-mve-meta"><span data-rmt-mv-current>${esc(selectedLabel)}</span><span>${audio ? '本机歌曲已接入' : '未放入歌曲 · 可静音预览'}</span></div>
+        <div class="rmt-mve-filmstrip" data-rmt-mv-filmstrip><div class="rmt-mv-strip">${strip}</div>${stripNav}</div>
+      </section><section class="rmt-mve-tools"><nav class="rmt-mve-tabs" aria-label="剪辑工作区">${tabs}</nav><div class="rmt-mve-panel"${tab === 'shots' ? ' data-rmt-mv-shot-panel' : ''}>${panels[tab] || panels.shots}</div></section></div></div>
       ${drawer ? `<div class="rmt-mve-sheet-shade"><section class="rmt-mve-sheet" role="dialog" aria-modal="true" aria-label="${esc({ export: '导出手书', more: '素材与项目', audio: '歌曲' }[drawer] || '选项')}"><header><b>${esc({ export: '导出手书', more: '素材与项目', audio: '歌曲' }[drawer] || '选项')}</b>${btn('editor-drawer', '关闭', { extra: ' aria-label="关闭选项面板"' })}</header><div>${drawerHtml}</div></section></div>` : ''}`;
 }
 
@@ -34,7 +34,12 @@ ${r} .rmt-mve-preview canvas{display:block;width:100%;height:auto}
 ${r} .rmt-mve-transport{display:flex;align-items:center;gap:10px;padding:10px 0 3px;min-width:0}
 ${r} .rmt-mve-transport .rmt-mv-play{width:42px;min-width:42px;height:42px;min-height:42px;border-radius:50%;font-size:15px;background:var(--rmt-theme-soft,#e3eef9);color:var(--rmt-theme-text,#294762);border:1px solid var(--rmt-theme-border,#cddfed)}
 ${r} .rmt-mve-clock{font-size:12px;white-space:nowrap;font-variant-numeric:tabular-nums}
-${r} .rmt-mve-transport input[type=range]{flex:1;width:0;min-width:28px;height:44px;padding:0;accent-color:var(--rmt-theme-accent,#bc779d);cursor:pointer}
+${r} .rmt-mve-transport input[type=range]{appearance:none!important;-webkit-appearance:none!important;display:block;flex:1;width:0;min-width:28px;height:44px!important;min-height:44px!important;max-height:44px!important;margin:0!important;padding:0!important;border:0!important;border-radius:0!important;background:transparent!important;box-shadow:none!important;filter:none!important;cursor:pointer}
+${r} .rmt-mve-transport input[type=range]::-webkit-slider-runnable-track{height:6px;border:0;border-radius:999px;box-shadow:none;background:linear-gradient(to right,var(--rmt-theme-accent,#bc779d) 0%,var(--rmt-theme-accent,#bc779d) var(--rmt-mv-seek,0%),var(--rmt-theme-border,#cddfed) var(--rmt-mv-seek,0%),var(--rmt-theme-border,#cddfed) 100%)}
+${r} .rmt-mve-transport input[type=range]::-webkit-slider-thumb{-webkit-appearance:none!important;appearance:none!important;width:18px!important;height:18px!important;margin-top:-6px!important;border:2px solid var(--rmt-theme-surface-solid,#fff)!important;border-radius:50%!important;background:var(--rmt-theme-accent-ink,#4f769d)!important;box-shadow:0 1px 4px #0002!important}
+${r} .rmt-mve-transport input[type=range]::-moz-range-track{height:6px;border:0;border-radius:999px;background:var(--rmt-theme-border,#cddfed)}
+${r} .rmt-mve-transport input[type=range]::-moz-range-progress{height:6px;border-radius:999px;background:var(--rmt-theme-accent,#bc779d)}
+${r} .rmt-mve-transport input[type=range]::-moz-range-thumb{width:14px;height:14px;border:2px solid var(--rmt-theme-surface-solid,#fff);border-radius:50%;background:var(--rmt-theme-accent-ink,#4f769d);box-shadow:0 1px 4px #0002}
 ${r} .rmt-mve-transport>small{font-size:11px;color:var(--rmt-theme-muted,#63788f)}
 ${r} .rmt-mve-transport>button:last-child{font-size:12px;min-height:40px;padding:0 10px;border-radius:9px}
 ${r} .rmt-mve-meta{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:11px;color:var(--rmt-theme-muted,#63788f);padding:4px 1px 14px;flex-wrap:wrap}
@@ -54,9 +59,10 @@ ${r} .rmt-mve-panel summary{cursor:pointer;min-height:36px;font-size:13px}
 ${r} .rmt-mve-panel details>div{display:flex;flex-direction:column;gap:12px;padding-top:12px}
 ${r} .rmt-mve-panel input:not([type=checkbox]):not([type=range]),${r} .rmt-mve-panel select{font-size:16px}
 ${r} .rmt-mve-filmstrip .rmt-mv-strip{gap:7px;padding:4px 2px 10px}
-${r} .rmt-mve-filmstrip .rmt-mv-strip>button{width:84px!important;min-width:84px;height:102px;flex:0 0 84px;border-radius:9px;overflow:hidden;background:var(--rmt-theme-surface-solid,#fff)}
-${r} .rmt-mve-filmstrip .rmt-mv-strip>button img{display:block;height:72px;width:100%;object-fit:cover}
-${r} .rmt-mve-filmstrip .rmt-mv-strip>button>span{position:static;display:block;background:transparent;padding:5px 2px;border-radius:0;color:var(--rmt-theme-text,#294762);font-size:11px;line-height:1.3}
+${r} .rmt-mve-filmstrip .rmt-mv-strip>button{display:grid;grid-template-rows:72px 26px;box-sizing:border-box;width:84px!important;min-width:84px;height:102px;flex:0 0 84px;padding:0!important;border-radius:9px;overflow:hidden;background:var(--rmt-theme-surface-solid,#fff)}
+${r} .rmt-mve-filmstrip .rmt-mv-strip>button img{position:static!important;inset:auto!important;grid-row:1;display:block;height:72px!important;width:100%!important;min-height:0;max-height:72px;object-fit:contain;align-self:center}
+${r} .rmt-mve-filmstrip .rmt-mv-strip>button>span{position:static;grid-row:2;display:flex;align-items:center;justify-content:center;box-sizing:border-box;background:var(--rmt-theme-surface-solid,#fff);padding:2px;border-radius:0;color:var(--rmt-theme-text,#294762);font-size:11px;line-height:1.3;white-space:nowrap}
+${r} .rmt-mve-filmstrip .rmt-mv-strip>button[aria-current=true]{border-color:var(--rmt-theme-accent-ink,#4f769d)!important;box-shadow:0 0 0 1px var(--rmt-theme-accent-ink,#4f769d)}
 ${r} .rmt-mve-strip-nav{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:11px;color:var(--rmt-theme-muted,#63788f)}
 ${r} .rmt-mve-strip-nav button{font-size:11px;padding:0 10px;min-height:36px}
 ${r} .rmt-mve-sync-list{display:flex;flex-direction:column;gap:0;border-top:1px solid var(--rmt-theme-border,#cddfed)}
@@ -93,7 +99,7 @@ ${r} .rmt-mve-group-fold summary{min-height:44px;cursor:pointer;display:flex;ali
 ${r} .rmt-mve-group-fold .rmt-mv-gcard{border:0;padding:12px 0 0}
 @media(min-width:960px){${r} .rmt-mve-workspace{grid-template-columns:minmax(0,1fr) 340px}}
 @supports(container-type:inline-size){${r} .rmt-mve-workspace{grid-template-columns:minmax(0,1fr)}@container (min-width:780px){${r} .rmt-mve-workspace{grid-template-columns:minmax(0,1fr) 340px}}}
-@media(max-width:600px){${r} .rmt-mve-head h2{font-size:17px}${r} .rmt-mve-head-actions button{padding:0 10px;font-size:12px}${r} .rmt-mve-panel{padding:14px}${r} .rmt-mve-transport{gap:7px}${r} .rmt-mve-transport>small{display:none}${r} .rmt-mve-workspace:not([data-editor-tab=shots]) .rmt-mve-filmstrip{display:none}${r} .rmt-mve-sheet{max-height:88vh}${r} .rmt-mve-head{padding-bottom:10px}}
+@media(max-width:600px){${r} .rmt-mve-head h2{font-size:17px}${r} .rmt-mve-head-actions button{padding:0 10px;font-size:12px}${r} .rmt-mve-panel{padding:14px}${r} .rmt-mve-transport{gap:7px}${r} .rmt-mve-transport>small{font-size:11px!important;white-space:nowrap}${r} .rmt-mve-workspace:not([data-editor-tab=shots]) .rmt-mve-filmstrip{display:none}${r} .rmt-mve-sheet{max-height:88vh}${r} .rmt-mve-head{padding-bottom:10px}}
 @container (max-width:700px){${r} .rmt-mve-workspace:not([data-editor-tab=shots]) .rmt-mve-filmstrip{display:none}}
 `;
 }
