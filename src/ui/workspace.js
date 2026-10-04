@@ -1,3 +1,4 @@
+import * as content_selection_ui from './contentSelection.js';
 import * as routePeople from './routeParticipants.js';
 import * as mirrorReader from './mirrorTtsReader.js';
 import * as mirrorCall from './mirrorCallView.js';
@@ -307,13 +308,16 @@ export function renderEmptyWorkspace() {
     const message = empty.stored ? '已有内容暂时无法安全读取，原数据保留。'
         : !empty.memoryReady ? (empty.noChat ? '先打开一个角色聊天；这里可以浏览功能。' : '生成内容需要先建立当前聊天档案。')
         : '这里还没有内容。';
+    const selectionBar = empty.memoryReady && !empty.stored && !readOnly && !permanentlyReadOnly
+        ? content_selection_ui.contentSelectionHtml(empty.mode) : '';
     const actions = empty.stored ? '<button type="button" class="rmt-btn" data-rmt-workspace-tab="archive">检查档案</button>'
         : !empty.memoryReady ? '<button type="button" class="rmt-btn" data-rmt-workspace-tab="archive">前往建立档案</button>'
         : permanentlyReadOnly ? '<span>独立备份仅供阅读</span>'
         : readOnly ? '<span>当前为只读查看；需要操作时可关闭只读。</span>'
-        : `<button type="button" class="rmt-btn" data-rmt-generate-mode="${esc(empty.mode)}" data-rmt-reader-generation="true">生成${esc(label)}</button>`;
+        : selectionBar || `<button type="button" class="rmt-btn" data-rmt-generate-mode="${esc(empty.mode)}" data-rmt-reader-generation="true">生成${esc(label)}</button>`;
     const body = overlay.bodyEl(); if (!body) return false;
     body.innerHTML = `${cg_format_ui.cgFormatVisible(empty.mode, ui_workspaceState.workspace.route) ? cg_format_ui.cgFormatControlHtml({readOnly: !!state.activeArchiveSnapshot && state.activeArchiveReadOnly}) : ''}<section class="rmt-workspace-empty"><h2>${esc(label)}</h2><p>${esc(message)}</p><div>${actions}</div></section>`;
+    content_selection_ui.mountContentSelection(body, empty.mode);
     overlay.topTitle(label); overlay.setBackVisible(true,'内容'); overlay.setManageVisible(false); overlay.setRegenerateVisible(false);
     overlay.decorateReadOnlyModeUi(); syncWorkspaceChrome(); return true;
 }

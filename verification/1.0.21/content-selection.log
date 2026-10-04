@@ -1,0 +1,48 @@
+(node:13) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ album: first 500-memory request sends 48 and records 48, not all 500 (218.683314ms)
+✔ album: manual 300-memory range reaches prompt and validates last item (180.983441ms)
+✔ album: old blanket coverage does not hide unused memories; old work is immutable (159.969367ms)
+✔ album: valid empty first result advances material only, without follow-up calls (189.187503ms)
+✔ album: malformed/failed result never changes old coverage or work (187.217606ms)
+✔ album: selected evidence cannot accept a different archive row (178.202993ms)
+✔ album: duplicate paid output is discarded while historical image/text stays exact (179.230154ms)
+✔ album: recovery schema and partial reader use frozen selected bank (188.555383ms)
+✔ adv: first 500-memory request sends 48 and records 48, not all 500 (205.198158ms)
+✔ adv: manual 300-memory range reaches prompt and validates last item (212.596993ms)
+✔ adv: old blanket coverage does not hide unused memories; old work is immutable (191.257155ms)
+✔ adv: valid empty first result advances material only, without follow-up calls (271.704117ms)
+✔ adv: malformed/failed result never changes old coverage or work (298.66114ms)
+✔ adv: selected evidence cannot accept a different archive row (193.533061ms)
+✔ adv: duplicate paid output is discarded while historical image/text stays exact (203.142326ms)
+✔ adv: recovery schema and partial reader use frozen selected bank (207.537619ms)
+✔ cold-tier selection participates without changing the original bank (224.636738ms)
+✔ expired manual selection stops before a provider request (219.613297ms)
+✔ manual selection is isolated by mode, chat, avatar, archive target and revision (227.913633ms)
+✔ completion clears only its exact applied request; failed or newer choices survive (261.176562ms)
+✔ frozen plan survives serialization and does not adopt a later form selection (664.839003ms)
+✔ empty and nonexistent selections are rejected without replacing an applied request (246.769485ms)
+✔ legacy paid journal keeps its original prompt sampling, but stamps only 48 actual inputs (273.179011ms)
+✔ creative prompt templates are byte-for-byte unchanged from the delivered 1.0.20 source (2.213021ms)
+✔ UI: opening first-generation selection is local, collapsed and uses existing generate action (280.710321ms)
+✔ UI: apply a range before generation, paginate and keep exact mode-specific request (295.342404ms)
+✔ UI: invalid and empty ranges cannot replace chosen material; automatic restore works (270.58686ms)
+✔ UI: individual checkboxes change the applied set (276.942095ms)
+✔ UI: stale archive blocks both selection and paid generation (275.477144ms)
+✔ UI: completed selection resets to automatic only for its matching request (276.19452ms)
+✔ UI: unsupported modes and read-only or backup pages do not expose selection controls (280.508712ms)
+✔ album: public generateMode freezes applied selection into recovery and commits matching coverage (722.51761ms)
+✔ adv: public generateMode freezes applied selection into recovery and commits matching coverage (667.785342ms)
+✔ album: second-step dialogue keeps selected coverage instead of marking a new batch (882.866082ms)
+✔ paid album index survives a fresh runtime and resumes original range with zero new provider calls (1587.504688ms)
+✔ album: existing reader mounts selection alongside original reading controls (307.91058ms)
+✔ adv: existing reader mounts selection alongside original reading controls (294.717574ms)
+✔ UI: imported metadata and archive titles cannot insert HTML through the selection panel (302.881773ms)
+ℹ tests 38
+ℹ suites 0
+ℹ pass 38
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 12313.682671

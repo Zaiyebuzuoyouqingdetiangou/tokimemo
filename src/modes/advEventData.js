@@ -1,3 +1,4 @@
+import * as content_selection from '../core/contentSelection.js';
 import * as cg_visual from '../core/cgVisualRules.js';
 import * as archive_library from '../archive/library.js';
 import * as archive_repository from '../archive/repository.js';
@@ -232,9 +233,10 @@ export function normalizeAdvBatch(data, events, options = {}) {
 }
 
 export function projectAdvProgress({ segments = [], memoryBank, previousSession = null, contentInputs = {}, operation = {} }) {
+    const indexBank = content_selection.selectionEvidenceBank(memoryBank, operation.contentSelectionPlan);
     const base = previousSession || contentInputs?.previousSession || contentInputs?.baseSession || contentInputs?.session;
     const index = segments.find(segment => /:index$/u.test(segment.slot));
-    let session = index ? normalizeEventList({ ...index.value, events: index.items('/events') }, memoryBank, { allowPartial: true })
+    let session = index ? normalizeEventList({ ...index.value, events: index.items('/events') }, indexBank, { allowPartial: true })
         : base?.kind === core_constants.MODE.ADV ? structuredClone(base) : null;
     if (!session?.events?.length) return null;
     const relevantIds = new Set(operation.eventIds || (operation.eventId ? [operation.eventId] : session.events.map(event => event.id)));
@@ -326,9 +328,9 @@ export function compactAdvExisting(session) {
     }));
 }
 
-export function advImportantIndexPrompt(context, memoryBank, previousSession = null, sourceMemoryIds = null) {
-    const revisit = !!previousSession && !core_incremental.incrementalArchiveMemoryIds(previousSession, memoryBank).length;
-    const archiveBlock = previousSession
+export function advImportantIndexPrompt(context, memoryBank, previousSession = null, sourceMemoryIds = null, selectionPlan = null) {
+    const revisit = selectionPlan ? selectionPlan.revisit : !!previousSession && !core_incremental.incrementalArchiveMemoryIds(previousSession, memoryBank).length;
+    const archiveBlock = selectionPlan ? content_selection.selectionPromptArchive(memoryBank, selectionPlan) : previousSession
         ? core_incremental.incrementalArchiveSlice(memoryBank, sourceMemoryIds, core_constants.MAX_MEMORY_PROMPT_ITEMS)
         : generation_prompts.promptArchiveSlice(memoryBank, 48);
     return `${generation_prompts.promptSafetyBoundary(context, 'ADV EVENT 重要事件索引', null, memoryBank)}
@@ -386,15 +388,24 @@ export function mergeAdvIncremental(previous, fresh, memoryBank) {
 }
 
 export async function generateAdvIndexWithRepair(context, memoryBank, origin, expectedChatId, taskKey, options = {}) {
-    const previous = options.replaceExisting === true ? null : core_cache.loadSession(core_constants.MODE.ADV, { context, chatId: expectedChatId, memoryBank, clone: true });
-    const sourceMemoryIds = core_incremental.derivedExpansionMemoryIds(previous, memoryBank, 'mode');
+    const previous = Object.hasOwn(options, 'previousSession') ? options.previousSession : options.replaceExisting === true ? null : core_cache.loadSession(core_constants.MODE.ADV, { context, chatId: expectedChatId, memoryBank, clone: true });
+    const selectionPlan = options.legacyContentSelection ? content_selection.legacyContentSelectionPlan(memoryBank, previous)
+        : options.contentSelectionPlan ? content_selection.validateContentSelectionPlan(options.contentSelectionPlan, memoryBank)
+            : content_selection.createContentSelectionPlan(memoryBank, previous, options.contentSelectionRequest);
+    const sourceMemoryIds = selectionPlan.memoryIds;
+    const promptPlan = options.legacyContentSelection ? null : selectionPlan;
+    const indexBank = promptPlan ? content_selection.selectionEvidenceBank(memoryBank, selectionPlan) : memoryBank;
     const fresh = await generation_client.requestValidatedSegment(
-        advImportantIndexPrompt(context, memoryBank, previous, sourceMemoryIds),
+        advImportantIndexPrompt(context, memoryBank, previous, sourceMemoryIds, promptPlan),
         previous ? 'ADV EVENT · 正在从新增档案挑选新节点…' : 'ADV EVENT · 正在挑选重要节点…',
         { maxTokens: 5500, temperatureCeiling: 0.35, context, origin, taskKey: `${taskKey}:index`, mode: core_constants.MODE.ADV, background: true },
-        raw => normalizeEventList(raw, memoryBank, { allowPartial: !!previous, sourceMemoryIds: previous ? sourceMemoryIds : null }),
+        raw => {
+            if (promptPlan && !Array.isArray(raw?.events)) throw new Error('剧情事件返回缺少条目列表。');
+            return normalizeEventList(raw, indexBank, { allowPartial: promptPlan ? raw.events.length === 0 : !!previous,
+                sourceMemoryIds: promptPlan ? null : previous ? sourceMemoryIds : null });
+        },
     );
-    const revisit = previous && !core_incremental.incrementalArchiveMemoryIds(previous, memoryBank).length;
+    const revisit = selectionPlan.revisit;
     if (revisit) {
         const round = (Number(previous?.generationMeta?.expansionRound) || 0) + 1;
         const titles = new Set(previous.events.map(item => core_text.normalizeText(item.title, 120).toLowerCase()));
@@ -404,8 +415,8 @@ export async function generateAdvIndexWithRepair(context, memoryBank, origin, ex
     }
     const merged = mergeAdvIncremental(previous, fresh, memoryBank);
     const added = Math.max(0, merged.events.length - (previous?.events?.length || 0));
-    core_incremental.stampIncrementalCoverage(merged, previous, memoryBank, 'mode', sourceMemoryIds, added);
-    if (revisit) merged.generationMeta.expansionRound = (Number(previous?.generationMeta?.expansionRound) || 0) + 1;
+    content_selection.stampContentSelection(merged, previous, memoryBank, selectionPlan, added);
+    if (revisit && options.legacyContentSelection) merged.generationMeta.expansionRound = (Number(previous?.generationMeta?.expansionRound) || 0) + 1;
     if (merged.events?.some(event => !event.adv?.paragraphs?.length)) {
         if (core_settings.getPluginSettings().autoSecondPass === true) {
             const task = core_requestCoordinator.logicalGenerationTaskForOrigin(origin);
