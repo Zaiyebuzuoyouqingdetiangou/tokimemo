@@ -1,3 +1,4 @@
+import * as content_selection_ui from './contentSelection.js';
 import * as cg_format_ui from './cgFormatControl.js';
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
@@ -59,10 +60,11 @@ export function renderAdvMode() {
     const mobilePicker = `<div class="rmt-adv-mobile-picker"><button type="button" class="rmt-btn" data-rmt-action="adv-event-prev" aria-label="上一个事件" ${selectedIndex <= 0 ? 'disabled' : ''}>‹</button><select data-rmt-adv-select aria-label="选择 ADV EVENT 事件">${options}</select><button type="button" class="rmt-btn" data-rmt-action="adv-event-next" aria-label="下一个事件" ${selectedIndex >= session.events.length - 1 ? 'disabled' : ''}>›</button></div>`;
 
     const body = ui_overlay.bodyEl();
-    const expandButton = canGenerateDerived && completedAdv >= session.events.length && session.events.length < core_constants.MAX_DERIVED_CONTENT_ITEMS
+    const expandButton = readOnlyArchive && canGenerateDerived && completedAdv >= session.events.length && session.events.length < core_constants.MAX_DERIVED_CONTENT_ITEMS
         ? '<button type="button" class="rmt-btn" data-rmt-generate-mode="adv" data-rmt-regenerate="true">同一记忆 · 追加新镜头</button>' : '';
     const libraryTools = `<details class="rmt-adv-library-tools"><summary>生成与补全 · ${completedAdv}/${session.events.length}</summary><div>${bulkBar}${expandButton}${generation_imageGeneration.cgImageProviderBar({ readOnly: readOnlyArchive })}</div></details>`;
-    body.innerHTML = `<div class="rmt-adv ${reading ? 'rmt-adv-reading' : 'rmt-cg-only'}"><aside class="rmt-event-list">${mobilePicker}${libraryTools}<div class="rmt-event-items">${list}</div></aside><section class="rmt-event-detail">${session.readableProgress?.complete === false ? '<p role="status">未完成 · 已生成的事件和正文可继续阅读。</p>' : ''}${selected?.progressPending?.length ? '<p role="status">这篇 ADV 正文尚未完成。</p>' : ''}${detail}</section><div class="rmt-inline-status" hidden></div></div>`;
+    body.innerHTML = `${content_selection_ui.contentSelectionHtml(core_constants.MODE.ADV, { readOnly: readOnlyArchive })}<div class="rmt-adv ${reading ? 'rmt-adv-reading' : 'rmt-cg-only'}"><aside class="rmt-event-list">${mobilePicker}${libraryTools}<div class="rmt-event-items">${list}</div></aside><section class="rmt-event-detail">${session.readableProgress?.complete === false ? '<p role="status">未完成 · 已生成的事件和正文可继续阅读。</p>' : ''}${selected?.progressPending?.length ? '<p role="status">这篇 ADV 正文尚未完成。</p>' : ''}${detail}</section><div class="rmt-inline-status" hidden></div></div>`;
+    content_selection_ui.mountContentSelection(body, core_constants.MODE.ADV, session);
     cg_format_ui.mountCgFormatControl(body, 'adv', '', readOnlyArchive);
 }
 

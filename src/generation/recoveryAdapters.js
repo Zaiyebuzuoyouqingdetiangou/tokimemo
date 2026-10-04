@@ -1,3 +1,4 @@
+import * as content_selection from '../core/contentSelection.js';
 // Domain-specific recovery schemas. These are not a generic object/array merge:
 // every collection path, identity and parent binding is owned by the extension.
 // Existing mode normalizers and reading projectors remain the authority.
@@ -41,7 +42,8 @@ function projectOne(project, input, raw) {
     } catch { return null; }
 }
 
-function albumSchema({ slot, memoryBank, frozenInputs = {} }) {
+function albumSchema({ slot, memoryBank, frozenInputs = {}, operation = {} }) {
+    memoryBank = content_selection.selectionEvidenceBank(memoryBank, operation.contentSelectionPlan);
     const m = recovery_merge;
     if (/:index$/u.test(slot)) return m.recoveryRecord({ title: { accept: m.recoveryText },
         entries: m.recoveryList(m.recoveryItemKey('id', 'title'), null, row => m.recoveryCheck(() =>
@@ -140,7 +142,8 @@ function calendarSchema() {
         .map(key => [key, m.recoveryList(dated, null)])));
 }
 
-function advEventSchema({ slot, memoryBank }) {
+function advEventSchema({ slot, memoryBank, operation = {} }) {
+    memoryBank = content_selection.selectionEvidenceBank(memoryBank, operation.contentSelectionPlan);
     const m = recovery_merge;
     if (/:index$/u.test(slot)) return m.recoveryRecord({ title: { accept: m.recoveryText },
         events: m.recoveryList(m.recoveryItemKey('id', 'title'), null, row => m.recoveryCheck(() => advEvent.normalizeEventCandidate(row, 0, memoryBank))) });

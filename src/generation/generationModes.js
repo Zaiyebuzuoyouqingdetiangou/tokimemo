@@ -1,3 +1,4 @@
+import * as content_selection from '../core/contentSelection.js';
 import * as routePeople from '../core/routeParticipants.js';
 import * as composerOptions from '../core/generationOptions.js';
 import * as generation_merged from './mergedGeneration.js';
@@ -119,6 +120,12 @@ export async function continueSavedGeneration(mode, options = {}) {
 export async function generateMode(mode, options = {}) {
     if (!Object.values(core_constants.MODE).includes(mode)) return;
     const context = options.context || core_context.currentCharacterGuard();
+    if (content_selection.supportsContentSelection(mode) && !options.automatic && !options.secondStep
+        && !Object.hasOwn(options, 'contentSelectionRequest')) {
+        const bank = options.archiveTarget?.memory || archive_repository.getImportedMemory(context);
+        const saved = core_cache.loadSession(mode, { context, memoryBank: bank, clone: false });
+        options = { ...options, contentSelectionRequest: content_selection.readContentSelectionRequest(context, bank, mode, saved) };
+    }
     if (!Object.hasOwn(options, 'participantSnapshot') && !options.existing && !options.draftId && !options.participantRegeneration && !options.archiveTarget
         && !core_cache.loadGenerationRecovery(mode, context)) {
         options = { ...options, participantSnapshot: routePeople.captureRoutePeople(options.workspaceRoute || mode, context, archive_repository.getImportedMemory(context)) };
@@ -179,6 +186,7 @@ async function generateModeOperation(mode, options = {}) {
     };
     let themeSongPlan = null;
     let bedtimePlan = null;
+    let contentSelectionPlan = null;
     let inboxDate = mode === core_constants.MODE.INBOX ? new Date() : null;
     core_context.assertRuntimeLifecycleCurrent(lifecycleEpoch);
     const background = options.background === true;
@@ -413,6 +421,13 @@ async function generateModeOperation(mode, options = {}) {
             if (!options.automatic) reportNoIncrementalWork();
             return options.automatic ? { status: 'noop' } : undefined;
         }
+        if (content_selection.supportsContentSelection(mode) && !options.secondStep) {
+            const frozen = generation_recovery.readGenerationContentSnapshot(recoveryExisting);
+            contentSelectionPlan = recoveryExisting
+                ? (recoveryExisting.operation?.contentSelectionPlan
+                    ? content_selection.validateContentSelectionPlan(recoveryExisting.operation.contentSelectionPlan, frozen?.memoryBank || memoryBank) : null)
+                : content_selection.createContentSelectionPlan(memoryBank, previousSession, options.contentSelectionRequest);
+        }
         if (mode === core_constants.MODE.THEME_SONG) {
             const stored = core_cache.getCache(context);
             if (!previousSession && stored?.[mode] && !replacementTicket) throw song_contract.songError('SOURCE', '已有印象曲暂不可读取，原作品保留。');
@@ -447,7 +462,7 @@ async function generateModeOperation(mode, options = {}) {
         recoveryHandle = await beginModeRecovery(mode, context, memoryBank, origin, { ...options, archiveTarget, stillCurrent: archiveTargetStillCurrent, existing: recoveryExisting, replaceExisting,
             partialReaderStillCurrent: scopedReaderMode ? () => !background && timeReaderVisible() : null,
             contentInputs: { previousSession, roomSession, focusObject, ...(linkedRoomSession ? { linkedRoomSession } : {}) },
-            operation: recoveryExisting?.operation || { kind: 'mode', mode, ...(themeSongPlan ? { themeSongPlan } : {}), ...(bedtimePlan ? { bedtimePlan } : {}), inboxDate: inboxDate?.toISOString() || '', calendarDate: calendarCurrentDate,
+            operation: recoveryExisting?.operation || { kind: 'mode', mode, ...(contentSelectionPlan ? { contentSelectionPlan } : {}), ...(themeSongPlan ? { themeSongPlan } : {}), ...(bedtimePlan ? { bedtimePlan } : {}), inboxDate: inboxDate?.toISOString() || '', calendarDate: calendarCurrentDate,
                 ...(mode === core_constants.MODE.INBOX ? { inboxPlanVersion: 2 } : {}),
                 ...(mode === core_constants.MODE.CALENDAR ? { calendarTimeBasis: 'story' } : {}),
                 allowPersonaExpansion, visualOnly: options.visualOnly === true, fillMissing: options.fillMissing === true, focusObjectId: core_text.normalizeText(options.focusObjectId, 120),
@@ -503,7 +518,7 @@ async function generateModeOperation(mode, options = {}) {
         } else if (mode === core_constants.MODE.PAST_LIVES) {
             session = await modes_pastLives.generatePastLivesWithRepair(context, memoryBank, origin, taskKey, { previousSession, replaceExisting, presentationContext, secondStep: options.secondStep === true });
         } else if (mode === core_constants.MODE.ADV) {
-            session = await modes_advEvent.generateAdvIndexWithRepair(context, memoryBank, origin, expectedChatId, taskKey, { replaceExisting });
+            session = await modes_advEvent.generateAdvIndexWithRepair(context, memoryBank, origin, expectedChatId, taskKey, { replaceExisting, previousSession, contentSelectionPlan, legacyContentSelection: !!recoveryExisting && !contentSelectionPlan });
         } else if (mode === core_constants.MODE.BUTTERFLY && options.fillButterflyText && previousSession) {
             session = await modes_butterfly.fillButterflyProse(context, memoryBank, origin, taskKey, previousSession);
         } else if (mode === core_constants.MODE.BUTTERFLY) {
@@ -527,7 +542,7 @@ async function generateModeOperation(mode, options = {}) {
         } else if (mode === core_constants.MODE.ENDING) {
             session = await modes_ending.generateEndingWithRepair(context, memoryBank, origin, taskKey, { replaceExisting, secondStep: options.secondStep === true });
         } else if (mode === core_constants.MODE.ALBUM) {
-            session = await modes_album.generateAlbumWithRepair(context, memoryBank, origin, taskKey, { replaceExisting, participantSnapshot, secondStep: options.secondStep === true });
+            session = await modes_album.generateAlbumWithRepair(context, memoryBank, origin, taskKey, { replaceExisting, previousSession, participantSnapshot, secondStep: options.secondStep === true, contentSelectionPlan, legacyContentSelection: !!recoveryExisting && !contentSelectionPlan });
         } else if (mode === core_constants.MODE.HEART) {
             session = await modes_heart.generateHeartWithRepair(context, memoryBank, origin, taskKey, { replaceExisting });
         } else if (mode === core_constants.MODE.PHONE) {

@@ -1,3 +1,4 @@
+import * as content_selection_ui from './contentSelection.js';
 import * as modes_album from '../modes/album.js';
 import * as core_participants from '../core/participants.js';
 import * as core_cache from '../core/cache.js';
@@ -96,6 +97,7 @@ export function renderAlbum() {
     </aside>` : '<aside class="rmt-info">当前分类没有条目。</aside>';
     const body = ui_overlay.bodyEl();
     body.innerHTML = `<div class="rmt-album">
+      ${content_selection_ui.contentSelectionHtml(core_constants.MODE.ALBUM, { readOnly: readOnlyArchive })}
       ${ui_generationCompletion.generationCompletionHtml({ missing: pendingComments, unit: '组共同回忆对白', generateMode: core_constants.MODE.ALBUM, actionData: { 'data-rmt-completion': 'album-comments' }, label: '补全共同回忆', readOnly: readOnlyArchive, message: `有 ${pendingComments} 张已解锁相簿仍缺少共同回忆对白；已保存画面和对白保持原样。`, className: 'rmt-album-completion' })}${session.readableProgress?.complete === false && !pendingComments ? '<p role="status">未完成 · 已生成的画面和对白已保留，可继续阅读。</p>' : ''}
       <div class="rmt-album-head"><h2>${core_text.esc(session.title)}</h2><span class="rmt-count">已解锁 ${unlocked} / 总数 ${session.entries.length}</span><div class="rmt-filter">${filters}</div></div>
       ${generation_imageGeneration.cgImageProviderBar({ readOnly: readOnlyArchive })}
@@ -106,6 +108,7 @@ export function renderAlbum() {
         ${info}
       </div>
     </div>`;
+    content_selection_ui.mountContentSelection(body, core_constants.MODE.ALBUM, session);
     body.querySelector?.('[data-rmt-album-category]')?.addEventListener?.('change', event => {
         const select = event.currentTarget;
         void albumSetCategory(select.dataset.rmtAlbumCategory, select.value)

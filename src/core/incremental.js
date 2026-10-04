@@ -117,8 +117,8 @@ export function derivedExpansionMemoryIds(session, memoryBank, part = 'mode') {
     return [...ids.slice(offset), ...ids.slice(0, offset)].slice(0, core_constants.MAX_MEMORY_PROMPT_ITEMS);
 }
 
-export function derivedExpansionDirective(session, memoryBank, part = 'mode') {
-    if (!session || incrementalArchiveMemoryIds(session, memoryBank, part).length) return '';
+export function derivedExpansionDirective(session, memoryBank, part = 'mode', revisit = null) {
+    if (!session || (revisit === null ? incrementalArchiveMemoryIds(session, memoryBank, part).length : !revisit)) return '';
     return '\n【本次生成意图：同一档案扩写】没有新历史、没有新关系进展。上文的“新增”仅指派生篇章：可以使用同一 Mxxx 的新镜头、内心侧面、日常模拟或假设后日谈；不要以旧锚点为由拒绝扩写。不能重复已有文本，不能编造过去事件；关系状态、双方态度和已解锁资格保持当前档案不变。所有新内容仍须符合原 schema 和证据校验。\n';
 }
 

@@ -1,5 +1,5 @@
-const VERSION = '1.0.19';
-const BUILD = '1.0.19-r84.236-framing-paths';
+const VERSION = '1.0.21';
+const BUILD = '1.0.21-r84.238-content-scope';
 
 const SETTINGS_ID = 'heartbeat_memories_settings';
 const MENU_ID = 'heartbeat_memories_menu_item';

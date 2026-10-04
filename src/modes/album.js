@@ -1,3 +1,4 @@
+import * as content_selection from '../core/contentSelection.js';
 import * as core_participants from '../core/participants.js';
 import * as cg_visual from '../core/cgVisualRules.js';
 import * as story_chronology from '../core/storyChronology.js';
@@ -78,19 +79,20 @@ export function compactAlbumExisting(session) {
 
 // A reading projection is separate from the complete-result validator and from
 // the canonical album. Only closed JSON records can supply new content here.
-export function projectAlbumProgress({ segments = [], memoryBank, frozenInputs = {} }) {
+export function projectAlbumProgress({ segments = [], memoryBank, frozenInputs = {}, operation = {} }) {
+    const indexBank = content_selection.selectionEvidenceBank(memoryBank, operation.contentSelectionPlan);
     const participantSnapshot = core_participants.normalizeParticipantSnapshot(frozenInputs['participants:album'] || null);
     const index = segments.find(segment => /:index$/u.test(segment.slot));
     if (!index) return null;
     const rows = index.items('/entries');
     const entries = [];
     const unlockedSeed = rows.find(row => {
-        try { return row.unlocked && normalizeAlbumIndex({ entries: [row] }, memoryBank).entries.length; } catch { return false; }
+        try { return row.unlocked && normalizeAlbumIndex({ entries: [row] }, indexBank).entries.length; } catch { return false; }
     });
     for (const [i, row] of rows.entries()) {
         try {
             const raw = { ...row, id: row.id || `CG${String(i + 1).padStart(2, '0')}` };
-            const normalized = normalizeAlbumIndex({ entries: raw.unlocked ? [raw] : [unlockedSeed, raw].filter(Boolean) }, memoryBank).entries;
+            const normalized = normalizeAlbumIndex({ entries: raw.unlocked ? [raw] : [unlockedSeed, raw].filter(Boolean) }, indexBank).entries;
             const item = normalized.find(entry => entry.id === core_text.safeId(raw.id, ''));
             if (item) entries.push(item);
         } catch {}
@@ -268,8 +270,8 @@ export function normalizeAlbumRelationshipSnapshot(data, memoryBank, participant
     };
 }
 
-export function albumIndexPrompt(context, memoryBank, previousSession = null, sourceMemoryIds = null) {
-    const archiveBlock = previousSession
+export function albumIndexPrompt(context, memoryBank, previousSession = null, sourceMemoryIds = null, selectionPlan = null) {
+    const archiveBlock = selectionPlan ? content_selection.selectionPromptArchive(memoryBank, selectionPlan) : previousSession
         ? core_incremental.incrementalArchiveSlice(memoryBank, sourceMemoryIds, core_constants.MAX_MEMORY_PROMPT_ITEMS)
         : generation_prompts.promptArchiveSlice(memoryBank, 48);
     return `${generation_prompts.promptSafetyBoundary(context, '回忆相簿 / 重要 CG 节点', core_participants.archivePeopleNames(memoryBank), memoryBank)}
@@ -478,25 +480,35 @@ export function mergeAlbumIncremental(previous, fresh, memoryBank) {
 
 export async function generateAlbumWithRepair(context, memoryBank, origin, taskKey, options = {}) {
     const participantSnapshot = core_participants.normalizeParticipantSnapshot(options.participantSnapshot || null);
-    const previous = options.replaceExisting === true ? null : core_cache.loadSession(core_constants.MODE.ALBUM, { context, chatId: core_context.getChatId(context), memoryBank, clone: true });
+    const previous = Object.hasOwn(options, 'previousSession') ? options.previousSession : options.replaceExisting === true ? null : core_cache.loadSession(core_constants.MODE.ALBUM, { context, chatId: core_context.getChatId(context), memoryBank, clone: true });
     const fillCommentsNow = options.secondStep === true || core_settings.getPluginSettings().autoSecondPass === true;
     if (options.secondStep === true && previous?.entries?.length) {
         return fillAlbumComments(context, memoryBank, origin, taskKey, previous, participantSnapshot);
     }
-    const sourceMemoryIds = core_incremental.derivedExpansionMemoryIds(previous, memoryBank, 'mode');
+    const selectionPlan = options.legacyContentSelection ? content_selection.legacyContentSelectionPlan(memoryBank, previous)
+        : options.contentSelectionPlan ? content_selection.validateContentSelectionPlan(options.contentSelectionPlan, memoryBank)
+            : content_selection.createContentSelectionPlan(memoryBank, previous, options.contentSelectionRequest);
+    const sourceMemoryIds = selectionPlan.memoryIds;
+    const promptPlan = options.legacyContentSelection ? null : selectionPlan;
+    const indexBank = promptPlan ? content_selection.selectionEvidenceBank(memoryBank, selectionPlan) : memoryBank;
     const index = await generation_client.requestValidatedSegment(
-        albumIndexPrompt(context, memoryBank, previous, sourceMemoryIds) + core_incremental.derivedExpansionDirective(previous, memoryBank),
+        albumIndexPrompt(context, memoryBank, previous, sourceMemoryIds, promptPlan) + core_incremental.derivedExpansionDirective(previous, memoryBank, 'mode', selectionPlan.revisit),
         previous ? '回忆相簿 1/3 · 正在从新增档案挑选新 CG…' : '回忆相簿 1/3 · 正在挑选重要 CG 节点…',
         { maxTokens: 5500, temperatureCeiling: 0.35, context, origin, taskKey: `${taskKey}:index`, mode: core_constants.MODE.ALBUM, background: true },
-        raw => normalizeAlbumIndex(raw, memoryBank, previous ? sourceMemoryIds : null),
+        raw => {
+            if (promptPlan && !Array.isArray(raw?.entries)) throw new Error('相簿返回缺少条目列表。');
+            return normalizeAlbumIndex(raw, indexBank, promptPlan ? null : previous ? sourceMemoryIds : null);
+        },
     );
-    const revisit = previous && !core_incremental.incrementalArchiveMemoryIds(previous, memoryBank).length;
+    const revisit = selectionPlan.revisit;
     if (revisit) {
         const titles = new Set(previous.entries.map(item => core_incremental.normalizedContentKey(item.title, 120)));
         index.entries = index.entries.filter(item => item.unlocked && !titles.has(core_incremental.normalizedContentKey(item.title, 120)));
     }
-    if (previous && !index.entries.length) {
-        return core_incremental.stampIncrementalCoverage(structuredClone(previous), previous, memoryBank, 'mode', sourceMemoryIds, 0);
+    if (!index.entries.length) {
+        const empty = previous ? structuredClone(previous) : { kind: core_constants.MODE.ALBUM, title: index.title || '回忆相簿',
+            entries: [], category: '全部', page: 1, pageSize: 6, selectedId: '', sharedMemory: false, dialogueIndex: 0, hintVisible: false };
+        return content_selection.stampContentSelection(empty, previous, memoryBank, selectionPlan, 0);
     }
     if (!fillCommentsNow) {
         const fresh = normalizeAlbum({
@@ -509,7 +521,7 @@ export async function generateAlbumWithRepair(context, memoryBank, origin, taskK
         });
         const merged = mergeAlbumIncremental(previous, fresh, memoryBank);
         const added = Math.max(0, merged.entries.length - (previous?.entries?.length || 0));
-        return core_incremental.stampIncrementalCoverage(merged, previous, memoryBank, 'mode', sourceMemoryIds, added);
+        return content_selection.stampContentSelection(merged, previous, memoryBank, selectionPlan, added);
     }
     core_requestCoordinator.noteSecondStepOffer(origin, null);
     const unlocked = index.entries.filter(item => item.unlocked);
@@ -543,7 +555,7 @@ export async function generateAlbumWithRepair(context, memoryBank, origin, taskK
     if (revisit) fresh.entries = fresh.entries.map(item => ({ ...item, expansionRound: (Number(previous.generationMeta?.expansionRound) || 0) + 1 }));
     const merged = mergeAlbumIncremental(previous, fresh, memoryBank);
     const added = Math.max(0, merged.entries.length - (previous?.entries?.length || 0));
-    return core_incremental.stampIncrementalCoverage(merged, previous, memoryBank, 'mode', sourceMemoryIds, added);
+    return content_selection.stampContentSelection(merged, previous, memoryBank, selectionPlan, added);
 }
 
 async function fillAlbumComments(context, memoryBank, origin, taskKey, previous, participantSnapshot) {
@@ -581,6 +593,8 @@ async function fillAlbumComments(context, memoryBank, origin, taskKey, previous,
             };
         }),
     }, memoryBank);
+    // Filling dialogue does not scan a new material batch. Preserve its cursor.
+    if (previous.generationMeta) fresh.generationMeta = structuredClone(previous.generationMeta);
     return fresh;
 }
 

@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
-// Source modules: 321
-// Source SHA-256: 339fbfb648915e11f81c7b21c5a9e0007be9f309195cea422c132724c6e82fd6
+// Source modules: 324
+// Source SHA-256: 7283a1f177821b6e123543cdffc65326712050bac2ede4c1511b1cbc60d819b3
 // Build: python3 tools/verification/build.py <source-root>
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -84,6 +84,7 @@ const __m_core_characterDescriptor_js = Object.create(null);
 const __m_core_chatReadRange_js = Object.create(null);
 const __m_core_connectionPool_js = Object.create(null);
 const __m_core_constants_js = Object.create(null);
+const __m_core_contentSelection_js = Object.create(null);
 const __m_core_context_js = Object.create(null);
 const __m_core_contextTags_js = Object.create(null);
 const __m_core_controlledSources_js = Object.create(null);
@@ -149,6 +150,7 @@ const __m_extras_mvCast_js = Object.create(null);
 const __m_extras_mvDirection_js = Object.create(null);
 const __m_extras_mvImageTools_js = Object.create(null);
 const __m_extras_mvMedia_js = Object.create(null);
+const __m_extras_mvMusicLink_js = Object.create(null);
 const __m_extras_mvStage_js = Object.create(null);
 const __m_extras_mvStillPrompt_js = Object.create(null);
 const __m_extras_store_js = Object.create(null);
@@ -251,6 +253,7 @@ const __m_ui_cgImageViewer_js = Object.create(null);
 const __m_ui_cgPromptEditor_js = Object.create(null);
 const __m_ui_chatFloorNav_js = Object.create(null);
 const __m_ui_contentManager_js = Object.create(null);
+const __m_ui_contentSelection_js = Object.create(null);
 const __m_ui_css_butterflyAlbumAdvCss_js = Object.create(null);
 const __m_ui_css_calendarCss_js = Object.create(null);
 const __m_ui_css_heartProfileTravelCss_js = Object.create(null);
@@ -324,6 +327,164 @@ const __m_ui_travelView_js = Object.create(null);
 const __m_ui_workspace_js = Object.create(null);
 const __m_ui_workspaceState_js = Object.create(null);
 const __m_ui_workspaceStyles_js = Object.create(null);
+
+function __init_core_contentSelection_js() {
+// MODULE: core/contentSelection.js
+const constants = __m_core_constants_js;
+const contextTools = __m_core_context_js;
+const evidence = __m_core_evidence_js;
+const incremental = __m_core_incremental_js;
+const text = __m_core_text_js;
+// Material selection for album / ADV. Output counts are never coverage cursors.
+
+
+
+
+
+const requests = new Map();
+let requestSerial = 0;
+
+function supportsContentSelection(mode) {
+    return mode === constants.MODE.ALBUM || mode === constants.MODE.ADV;
+}
+
+function selectionMemories(bank) {
+    const seen = new Set();
+    return [...(bank?.memories || []), ...(bank?.coldArchive || [])].filter(row => {
+        const id = text.normalizeText(row?.id, 40);
+        if (!id || seen.has(id)) return false;
+        seen.add(id);
+        return true;
+    });
+}
+
+function contentSelectionStatus(session, bank) {
+    const rows = selectionMemories(bank);
+    const valid = new Set(rows.map(row => row.id));
+    const record = session?.generationMeta?.contentSelection;
+    const used = [...incremental.collectSessionEvidenceIds(session?.entries || session?.events || [])].filter(id => valid.has(id));
+    // Older cursors stamped the entire bank, even when only 48 rows were sent.
+    // Keep the works, but only their explicit references are confirmed material.
+    const scanned = record?.schemaVersion === 1 ? text.cleanArray(record.scannedMemoryIds, Infinity, 40) : [];
+    const scannedMemoryIds = [...new Set([...scanned, ...used])].filter(id => valid.has(id));
+    const covered = new Set(scannedMemoryIds);
+    return { rows, scannedMemoryIds, pendingMemoryIds: rows.map(row => row.id).filter(id => !covered.has(id)),
+        legacyUnknown: record?.schemaVersion === 1 ? record.legacyUnknown === true : !!session };
+}
+
+function requestScope(context, bank, mode) {
+    return JSON.stringify([contextTools.chatScopeKey(context), context?.__rmtArchiveTargetEntryId || '', bank?.archiveRevision || '', mode]);
+}
+
+function readContentSelectionRequest(context, bank, mode, session = null) {
+    const key = requestScope(context, bank, mode);
+    const request = requests.get(key);
+    if (request && session?.generationMeta?.contentSelection?.last?.requestKey === request.requestKey) {
+        requests.delete(key);
+        return null;
+    }
+    return request ? structuredClone(request) : null;
+}
+
+function setContentSelectionRequest(context, bank, mode, memoryIds) {
+    if (!supportsContentSelection(mode)) throw new Error('此内容暂不支持选择范围。');
+    const key = requestScope(context, bank, mode);
+    if (memoryIds === null) { requests.delete(key); return null; }
+    const request = { archiveRevision: bank?.archiveRevision || '', memoryIds: [...new Set(memoryIds)],
+        requestKey: `${Date.now()}:${++requestSerial}` };
+    createContentSelectionPlan(bank, null, request);
+    requests.set(key, request);
+    return structuredClone(request);
+}
+
+function createContentSelectionPlan(bank, previous, request = null) {
+    const status = contentSelectionStatus(previous, bank);
+    let memoryIds, revisit = false;
+    if (request) {
+        if (request.archiveRevision !== (bank?.archiveRevision || '')) throw new Error('档案已更新，请重新确认选材范围。');
+        memoryIds = text.cleanArray(request.memoryIds, Infinity, 40);
+        const valid = new Set(status.rows.map(row => row.id));
+        if (!memoryIds.length || memoryIds.some(id => !valid.has(id))) throw new Error('选材范围已失效，请重新选择条目。');
+        revisit = !!previous && memoryIds.every(id => status.scannedMemoryIds.includes(id));
+    } else {
+        memoryIds = status.pendingMemoryIds.slice(0, previous ? constants.MAX_MEMORY_PROMPT_ITEMS : 48);
+        if (!memoryIds.length && previous) {
+            revisit = true;
+            const ids = status.rows.map(row => row.id);
+            const offset = (Number(previous.generationMeta?.expansionRound) || 0) * 12 % Math.max(1, ids.length);
+            memoryIds = [...ids.slice(offset), ...ids.slice(0, offset)].slice(0, constants.MAX_MEMORY_PROMPT_ITEMS);
+        }
+    }
+    if (!memoryIds.length) throw new Error('档案中还没有可选材的记忆条目。');
+    return { schemaVersion: 1, archiveRevision: bank?.archiveRevision || '', memoryIds,
+        selectionKind: request ? 'manual' : 'auto', revisit, requestKey: request?.requestKey || '' };
+}
+
+function validateContentSelectionPlan(plan, bank) {
+    const valid = new Set(selectionMemories(bank).map(row => row.id));
+    if (plan?.schemaVersion !== 1 || plan.archiveRevision !== (bank?.archiveRevision || '')
+        || !Array.isArray(plan.memoryIds) || !plan.memoryIds.length || plan.memoryIds.some(id => !valid.has(id))) {
+        throw new Error('本次选材与保存的档案不一致，请检查原任务；未发起新的生成。');
+    }
+    return structuredClone(plan);
+}
+
+function selectionEvidenceBank(bank, plan) {
+    if (!plan) return bank;
+    validateContentSelectionPlan(plan, bank);
+    const ids = new Set(plan.memoryIds);
+    return { ...bank, memories: selectionMemories(bank).filter(row => ids.has(row.id)), coldArchive: [] };
+}
+
+function selectionPromptArchive(bank, plan) {
+    const selected = selectionEvidenceBank(bank, plan);
+    const memories = [];
+    // Preserve the existing per-record evidence format without silently sampling
+    // a manual range at 48, 64 or 240 records. The existing input budget still applies.
+    for (let i = 0; i < selected.memories.length; i += constants.MAX_MEMORY_ITEMS) {
+        const chunk = selected.memories.slice(i, i + constants.MAX_MEMORY_ITEMS);
+        memories.push(...evidence.memoryPayload({ ...selected, memories: chunk }, chunk.map(row => row.id), chunk.length));
+    }
+    return JSON.stringify({ archiveName: text.normalizeText(bank?.archiveName, 120),
+        archiveSummary: text.normalizeText(bank?.archiveSummary, 1200), archiveKeywords: text.cleanArray(bank?.archiveKeywords, 8, 80),
+        incrementalMemoryIds: plan.memoryIds, memories }, null, 2);
+}
+
+function legacyContentSelectionPlan(bank, previous) {
+    const ids = previous ? incremental.derivedExpansionMemoryIds(previous, bank, 'mode')
+        : evidence.memoryPayload(bank, null, 48).map(row => row.id);
+    return { schemaVersion: 1, archiveRevision: bank?.archiveRevision || '', memoryIds: ids,
+        selectionKind: 'legacy', revisit: !!previous && !incremental.incrementalArchiveMemoryIds(previous, bank).length, requestKey: '' };
+}
+
+function stampContentSelection(session, previous, bank, plan, added = 0) {
+    const status = contentSelectionStatus(previous, bank);
+    const valid = new Set(status.rows.map(row => row.id));
+    const scannedMemoryIds = [...new Set([...status.scannedMemoryIds, ...plan.memoryIds])].filter(id => valid.has(id));
+    const prior = structuredClone(session.generationMeta || previous?.generationMeta || {});
+    const updatedAt = Date.now();
+    const last = { memoryIds: [...plan.memoryIds], selectionKind: plan.selectionKind, requestKey: plan.requestKey,
+        added: Math.max(0, Number(added) || 0), updatedAt };
+    session.generationMeta = { ...prior, schemaVersion: constants.DERIVED_INCREMENTAL_SCHEMA_VERSION,
+        expansionRound: (Number(prior.expansionRound) || 0) + (plan.revisit && added > 0 ? 1 : 0),
+        parts: { ...(prior.parts || {}), mode: { coveredMemoryIds: scannedMemoryIds, archiveRevision: bank?.archiveRevision || '', updatedAt } },
+        contentSelection: { schemaVersion: 1, scannedMemoryIds, legacyUnknown: status.legacyUnknown, last },
+        lastUpdate: { part: 'mode', derivedExpansion: plan.revisit, consumedMemoryIds: [...plan.memoryIds], added: last.added, updatedAt } };
+    return session;
+}
+
+__m_core_contentSelection_js.supportsContentSelection = supportsContentSelection;
+__m_core_contentSelection_js.selectionMemories = selectionMemories;
+__m_core_contentSelection_js.contentSelectionStatus = contentSelectionStatus;
+__m_core_contentSelection_js.readContentSelectionRequest = readContentSelectionRequest;
+__m_core_contentSelection_js.setContentSelectionRequest = setContentSelectionRequest;
+__m_core_contentSelection_js.createContentSelectionPlan = createContentSelectionPlan;
+__m_core_contentSelection_js.validateContentSelectionPlan = validateContentSelectionPlan;
+__m_core_contentSelection_js.selectionEvidenceBank = selectionEvidenceBank;
+__m_core_contentSelection_js.selectionPromptArchive = selectionPromptArchive;
+__m_core_contentSelection_js.legacyContentSelectionPlan = legacyContentSelectionPlan;
+__m_core_contentSelection_js.stampContentSelection = stampContentSelection;
+}
 
 function __init_extras_mvCast_js() {
 // MODULE: extras/mvCast.js
@@ -914,6 +1075,116 @@ __m_extras_mvImageTools_js.previewContentRect = previewContentRect;
 __m_extras_mvImageTools_js.prepareMotifPixels = prepareMotifPixels;
 }
 
+function __init_extras_mvMusicLink_js() {
+// MODULE: extras/mvMusicLink.js
+
+// 用户主动导入音乐链接；只读取链接响应和网页公开的音频标签。
+// 不执行网页脚本，不调用站点私有接口，不使用代理或现成登录凭据。
+function linkError(message, code, status = 0) {
+    return Object.assign(new Error(message), { code, status });
+}
+
+function musicUrl(value, base) {
+    let url;
+    try { url = new URL(String(value || '').trim(), base); }
+    catch { throw linkError('请粘贴完整的音乐链接。', 'RMT_MV_LINK_URL'); }
+    const local = ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
+    if (url.username || url.password || (url.protocol !== 'https:' && !(url.protocol === 'http:' && local))) {
+        throw linkError('请使用 HTTPS 音乐链接。', 'RMT_MV_LINK_URL');
+    }
+    url.hash = '';
+    return url.href;
+}
+
+function decodeAttribute(value) {
+    return String(value || '').replace(/&(#x[0-9a-f]+|#\d+|amp|quot|apos|lt|gt);/gi, (full, entity) => {
+        const named = { amp: '&', quot: '"', apos: "'", lt: '<', gt: '>' };
+        if (entity[0] !== '#') return named[entity.toLowerCase()] || full;
+        const point = /^#x/i.test(entity) ? parseInt(entity.slice(2), 16) : Number(entity.slice(1));
+        return point > 0 && point <= 0x10ffff && !(point >= 0xd800 && point <= 0xdfff) ? String.fromCodePoint(point) : full;
+    });
+}
+
+function attributes(tag) {
+    const result = Object.create(null);
+    for (const match of tag.matchAll(/([^\s=<>"'`]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s<>"'`]+))/g)) {
+        const name = match[1].toLowerCase();
+        if (!(name in result)) result[name] = decodeAttribute(match[2] ?? match[3] ?? match[4]);
+    }
+    return result;
+}
+
+function publicMusicSource(html, base) {
+    // Strip inert text containers first: an example or script string is not a published media tag.
+    const clean = String(html || '').replace(/<!--[\s\S]*?(?:-->|$)|<(script|style|textarea|template)\b[^>]*>[\s\S]*?(?:<\/\1\s*>|$)/gi, '');
+    const metas = [...clean.matchAll(/<meta\b(?:"[^"]*"|'[^']*'|[^'">])*\/?\s*>/gi)].map(match => attributes(match[0]));
+    const title = metas.find(meta => String(meta.property || meta.name).toLowerCase() === 'og:title')?.content || '';
+    const sources = [];
+    for (const key of ['og:audio:secure_url', 'og:audio:url', 'og:audio', 'twitter:player:stream']) {
+        for (const meta of metas) if (String(meta.property || meta.name).toLowerCase() === key && meta.content) sources.push(meta.content);
+    }
+    for (const match of clean.matchAll(/<audio\b(?:"[^"]*"|'[^']*'|[^'">])*>([\s\S]*?)(?:<\/audio\s*>|$)/gi)) {
+        const opening = match[0].match(/^<audio\b(?:"[^"]*"|'[^']*'|[^'">])*>/i)?.[0] || '';
+        const direct = attributes(opening).src;
+        if (direct) sources.push(direct);
+        for (const source of match[1].matchAll(/<source\b(?:"[^"]*"|'[^']*'|[^'">])*\/?\s*>/gi)) {
+            const attr = attributes(source[0]);
+            if (attr.src && (!attr.type || attr.type.toLowerCase().startsWith('audio/'))) sources.push(attr.src);
+        }
+    }
+    for (const source of sources) {
+        try {
+            const url = musicUrl(source, base);
+            if (url !== musicUrl(base)) return { url, title: title.replace(/\s+/g, ' ').trim().slice(0, 120) };
+        } catch {} // Invalid published candidates never become requests.
+    }
+    return null;
+}
+
+function musicLinkName(url) {
+    const parsed = new URL(url);
+    let name = parsed.pathname.split('/').filter(Boolean).at(-1) || '';
+    try { name = decodeURIComponent(name); } catch {}
+    return /\.(?:mp3|m4a|mp4|aac|wav|ogg|opus|flac|webm)$/i.test(name) ? name.slice(0, 80) : '链接歌曲';
+}
+
+async function readMusicLink(value, { signal, fetcher = globalThis.fetch } = {}) {
+    const sourceUrl = musicUrl(value);
+    const get = async url => {
+        signal?.throwIfAborted?.();
+        let response;
+        try { response = await fetcher(url, { method: 'GET', mode: 'cors', credentials: 'omit', referrerPolicy: 'no-referrer', signal }); }
+        catch (error) {
+            if (signal?.aborted || error?.name === 'AbortError') throw error;
+            throw linkError('链接读取失败，可能是网络或网站不允许跨站读取。原有歌曲未替换。', 'RMT_MV_LINK_NETWORK');
+        }
+        if (!response.ok) throw linkError(`音乐网站返回 ${response.status}，本次未导入。原有歌曲未替换。`, 'RMT_MV_LINK_HTTP', response.status);
+        const finalUrl = musicUrl(response.url || url);
+        return { response, finalUrl };
+    };
+    let { response, finalUrl } = await get(sourceUrl);
+    let name = musicLinkName(finalUrl);
+    if (/^(?:text\/html|application\/xhtml\+xml)\b/i.test(response.headers.get('content-type') || '')) {
+        const published = publicMusicSource(await response.text(), finalUrl);
+        if (!published) throw linkError('歌曲网页没有提供可导入的公开音频地址。原有歌曲未替换。', 'RMT_MV_LINK_PAGE');
+        ({ response, finalUrl } = await get(published.url));
+        name = published.title || musicLinkName(finalUrl);
+    }
+    if (/^(?:text\/|application\/(?:json|xml|xhtml))/i.test(response.headers.get('content-type') || '')) {
+        throw linkError('链接返回的不是音频文件。原有歌曲未替换。', 'RMT_MV_LINK_TYPE');
+    }
+    const blob = await response.blob();
+    signal?.throwIfAborted?.();
+    if (!blob.size) throw linkError('链接返回了空文件。原有歌曲未替换。', 'RMT_MV_LINK_EMPTY');
+    return { blob, name, sourceUrl };
+}
+
+__m_extras_mvMusicLink_js.readMusicLink = readMusicLink;
+__m_extras_mvMusicLink_js.musicUrl = musicUrl;
+__m_extras_mvMusicLink_js.publicMusicSource = publicMusicSource;
+__m_extras_mvMusicLink_js.musicLinkName = musicLinkName;
+}
+
 function __init_extras_mvStage_js() {
 // MODULE: extras/mvStage.js
 
@@ -1072,6 +1343,149 @@ __m_extras_mvStillPrompt_js.cleanStillText = cleanStillText;
 __m_extras_mvStillPrompt_js.stillScene = stillScene;
 __m_extras_mvStillPrompt_js.stillCast = stillCast;
 __m_extras_mvStillPrompt_js.joinStillPrompt = joinStillPrompt;
+}
+
+function __init_ui_contentSelection_js() {
+// MODULE: ui/contentSelection.js
+const selection = __m_core_contentSelection_js;
+const constants = __m_core_constants_js;
+const contextTools = __m_core_context_js;
+const text = __m_core_text_js;
+const runtime = __m_core_state_js;
+const repository = __m_archive_repository_js;
+const library = __m_archive_library_js;
+
+
+
+
+
+
+
+function contentSelectionHtml(mode, { readOnly = false } = {}) {
+    if (readOnly || runtime.state.activeArchiveSnapshot?.backupOnly || !selection.supportsContentSelection(mode)) return '';
+    return `<section class="rmt-content-selection" data-rmt-content-selection="${text.esc(mode)}" aria-label="生成选材"></section>`;
+}
+
+function mountContentSelection(container, mode, session = null) {
+    const root = container?.querySelector?.('[data-rmt-content-selection]');
+    if (!root) return;
+    let context, bank;
+    try {
+        const target = runtime.state.activeArchiveSnapshot ? library.archiveTargetGenerationOptions(runtime.state.activeArchiveSnapshot) : null;
+        context = target?.context || contextTools.currentCharacterGuard();
+        bank = target?.archiveTarget?.memory || repository.getImportedMemory(context);
+    } catch { root.textContent = '暂时无法读取选材范围，请检查当前档案。'; return; }
+    const status = selection.contentSelectionStatus(session, bank);
+    const rows = status.rows;
+    if (!rows.length) { root.textContent = '档案中还没有可选材的记忆条目。'; return; }
+    let request = selection.readContentSelectionRequest(context, bank, mode, session);
+    let selected = new Set(request?.memoryIds || selection.createContentSelectionPlan(bank, session).memoryIds);
+    let page = 0, dirty = false, rangeDirty = false;
+    const pageSize = 6;
+    const esc = text.esc;
+    const capturedScope = contextTools.chatScopeKey(context);
+    const capturedTarget = context?.__rmtArchiveTargetEntryId || '';
+    const capturedRevision = bank?.archiveRevision;
+    const currentScope = () => {
+        try {
+            const target = runtime.state.activeArchiveSnapshot ? library.archiveTargetGenerationOptions(runtime.state.activeArchiveSnapshot) : null;
+            const now = target?.context || contextTools.currentCharacterGuard();
+            const currentBank = target?.archiveTarget?.memory || repository.getImportedMemory(now);
+            return contextTools.chatScopeKey(now) === capturedScope
+                && (now?.__rmtArchiveTargetEntryId || '') === capturedTarget
+                && currentBank?.archiveRevision === capturedRevision;
+        } catch { return false; }
+    };
+    const notice = message => { root.querySelector('[data-cs-notice]').textContent = message; };
+    const selectionLabel = () => request ? `本次使用已选的 ${request.memoryIds.length} 条`
+        : status.pendingMemoryIds.length ? `自动从未确认选材的条目中继续 · 还剩 ${status.pendingMemoryIds.length} 条`
+            : '已选材一遍，可继续寻找同一记忆的新镜头';
+    const paintRows = () => {
+        const host = root.querySelector('[data-cs-rows]');
+        host.innerHTML = rows.slice(page * pageSize, (page + 1) * pageSize).map((row, offset) => {
+            const index = page * pageSize + offset;
+            return `<label class="rmt-cs-row"><input type="checkbox" data-cs-row="${index}" ${selected.has(row.id) ? 'checked' : ''}><span><b>第 ${index + 1} 条 · ${esc(row.title || '未命名记忆')}</b><small>${esc(row.date || '日期未记录')}${status.scannedMemoryIds.includes(row.id) ? ' · 已确认选材' : ''}</small></span></label>`;
+        }).join('');
+        root.querySelector('[data-cs-page]').textContent = `${page + 1} / ${Math.ceil(rows.length / pageSize)}`;
+        root.querySelector('[data-cs-action="prev"]').disabled = page === 0;
+        root.querySelector('[data-cs-action="next"]').disabled = (page + 1) * pageSize >= rows.length;
+        root.querySelector('[data-cs-count]').textContent = `已勾选 ${selected.size} 条`;
+    };
+    const selectedIndexes = rows.map((row, index) => selected.has(row.id) ? index + 1 : 0).filter(Boolean);
+    const savedLast = session?.generationMeta?.contentSelection?.last;
+    const last = Array.isArray(savedLast?.memoryIds) ? { memoryIds: savedLast.memoryIds,
+        added: Number.isSafeInteger(savedLast.added) && savedLast.added >= 0 ? savedLast.added : 0 } : null;
+    const works = (session?.entries || session?.events || []).length;
+    root.innerHTML = `<style>
+        .rmt-content-selection{margin:0 0 16px;padding:14px;border:1px solid var(--rmt-theme-border,#ddd);border-radius:12px;background:var(--rmt-theme-surface-solid,#fff);color:var(--rmt-theme-text,#333);text-align:left;min-width:0}
+        .rmt-cs-head,.rmt-cs-actions,.rmt-cs-range{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+        .rmt-cs-head{justify-content:space-between}.rmt-cs-head small,.rmt-cs-row small{display:block;color:var(--rmt-theme-muted,#666);margin-top:4px}
+        .rmt-content-selection p{font-size:13px;line-height:1.6;margin:8px 0}.rmt-content-selection summary{cursor:pointer;min-height:44px;display:flex;align-items:center;font-size:14px}
+        .rmt-content-selection input[type=number]{width:80px;min-height:44px;font-size:16px;box-sizing:border-box;color:inherit;background:var(--rmt-theme-bg,#fff);border:1px solid var(--rmt-theme-border,#ddd);border-radius:8px;padding:6px}
+        .rmt-content-selection .rmt-btn{min-height:44px;white-space:normal}.rmt-cs-row{display:flex;gap:10px;align-items:center;min-height:54px;padding:6px 0;border-bottom:1px solid var(--rmt-theme-border,#ddd);cursor:pointer}
+        .rmt-cs-row input{width:20px;height:20px;flex:none}.rmt-cs-row span{min-width:0}.rmt-cs-row b{font-size:13px;overflow-wrap:anywhere}.rmt-cs-row small{font-size:12px}
+        .rmt-cs-actions{margin-top:10px}.rmt-content-selection [data-cs-notice]{color:var(--rmt-theme-accent-ink,#845160)}
+        @media(max-width:480px){.rmt-cs-head>button{width:100%}.rmt-content-selection{padding:12px}.rmt-cs-actions .rmt-btn{flex:1}}
+    </style>
+    <div class="rmt-cs-head"><div><b>已收录 ${works} ${mode === constants.MODE.ALBUM ? '张' : '篇'}</b><small>已确认选材 ${status.scannedMemoryIds.length} / ${rows.length} 条</small></div><button type="button" class="rmt-btn" data-rmt-generate-mode="${esc(mode)}"${session ? '' : ' data-rmt-reader-generation="true"'}>${session ? '继续补充' : '开始生成'}</button></div>
+    <p data-cs-summary>${esc(selectionLabel())}</p>
+    ${status.legacyUnknown ? '<p>旧作品已保留；旧版未准确记录选材进度，其余条目仍可选择。</p>' : ''}
+    ${last ? `<p>上次选材 ${last.memoryIds.length} 条，新增 ${last.added} ${mode === constants.MODE.ALBUM ? '张' : '篇'}${last.added === 0 ? '；没有新增作品，可继续下一批' : ''}。</p>` : ''}
+    <details data-cs-panel><summary>选择范围</summary><p>按当前档案条目顺序选择，也可以逐条勾选。选材数量不等于作品数量。</p>
+      <div class="rmt-cs-range"><label>从 <input type="number" data-cs-start min="1" max="${rows.length}" value="${selectedIndexes[0] || 1}" aria-label="起始条目"></label><label>到 <input type="number" data-cs-end min="1" max="${rows.length}" value="${selectedIndexes.at(-1) || Math.min(rows.length, 48)}" aria-label="结束条目"></label><button type="button" class="rmt-btn" data-cs-action="range">勾选此范围</button></div>
+      <details><summary>查看并勾选条目</summary><div data-cs-rows></div><div class="rmt-cs-actions"><button type="button" class="rmt-btn" data-cs-action="prev">上一页</button><span data-cs-page></span><button type="button" class="rmt-btn" data-cs-action="next">下一页</button></div><div class="rmt-cs-actions"><button type="button" class="rmt-btn" data-cs-action="all">全选</button><button type="button" class="rmt-btn" data-cs-action="none">清空选择</button></div></details>
+      <p data-cs-count></p><div class="rmt-cs-actions"><button type="button" class="rmt-btn" data-cs-action="apply">应用选择</button><button type="button" class="rmt-btn" data-cs-action="auto">恢复自动选材</button></div>
+    </details><p data-cs-notice role="status" aria-live="polite"></p>`;
+    paintRows();
+    root.addEventListener('input', event => {
+        if (event.target.matches?.('[data-cs-start],[data-cs-end]')) { dirty = true; rangeDirty = true; notice('修改后请先勾选此范围，再应用选择。'); }
+    });
+    root.addEventListener('change', event => {
+        if (!event.target.matches?.('[data-cs-row]')) return;
+        const row = rows[Number(event.target.dataset.csRow)];
+        if (!row) return;
+        event.target.checked ? selected.add(row.id) : selected.delete(row.id);
+        dirty = true; rangeDirty = false; paintRows(); notice('选择已修改，点击“应用选择”后生效。');
+    });
+    root.addEventListener('click', event => {
+        const button = event.target.closest?.('button');
+        if (!button || button.disabled) return;
+        if (button.hasAttribute('data-rmt-generate-mode')) {
+            if (!currentScope() || dirty) {
+                event.preventDefault(); event.stopPropagation();
+                notice(dirty ? '请先应用选择，或恢复自动选材。' : '档案已切换或更新，请重新打开此内容页。');
+                root.querySelector('[data-cs-panel]').open = true;
+            }
+            return;
+        }
+        const action = button.dataset.csAction;
+        if (!action) return;
+        event.preventDefault(); event.stopPropagation();
+        if (!currentScope()) { notice('档案已切换或更新，请重新打开此内容页。'); return; }
+        if (action === 'prev' || action === 'next') { page += action === 'prev' ? -1 : 1; paintRows(); return; }
+        if (action === 'range') {
+            const start = Number(root.querySelector('[data-cs-start]').value), end = Number(root.querySelector('[data-cs-end]').value);
+            if (!Number.isInteger(start) || !Number.isInteger(end) || start < 1 || end < start || end > rows.length) { notice(`请输入 1～${rows.length} 之间的有效范围。`); return; }
+            selected = new Set(rows.slice(start - 1, end).map(row => row.id)); page = Math.floor((start - 1) / pageSize); dirty = true; rangeDirty = false;
+        } else if (action === 'all' || action === 'none') { selected = new Set(action === 'all' ? rows.map(row => row.id) : []); dirty = true; rangeDirty = false;
+        } else if (action === 'auto') {
+            request = selection.setContentSelectionRequest(context, bank, mode, null);
+            selected = new Set(selection.createContentSelectionPlan(bank, session).memoryIds); dirty = false; rangeDirty = false;
+            root.querySelector('[data-cs-summary]').textContent = selectionLabel(); notice('已恢复自动选材。');
+        } else if (action === 'apply') {
+            if (rangeDirty) { notice('请先点击“勾选此范围”，再应用选择。'); return; }
+            try { request = selection.setContentSelectionRequest(context, bank, mode, [...selected]); }
+            catch (error) { notice(error.message); return; }
+            dirty = false; root.querySelector('[data-cs-summary]').textContent = selectionLabel();
+            root.querySelector('[data-cs-panel]').open = false; notice('范围已应用；点击生成后使用，完成后恢复自动选材。');
+        }
+        paintRows();
+        if (dirty) notice('选择已修改，点击“应用选择”后生效。');
+    });
+}
+
+__m_ui_contentSelection_js.contentSelectionHtml = contentSelectionHtml;
+__m_ui_contentSelection_js.mountContentSelection = mountContentSelection;
 }
 
 function __init_ui_mvCastControls_js() {
@@ -16395,8 +16809,8 @@ function derivedExpansionMemoryIds(session, memoryBank, part = 'mode') {
     return [...ids.slice(offset), ...ids.slice(0, offset)].slice(0, core_constants.MAX_MEMORY_PROMPT_ITEMS);
 }
 
-function derivedExpansionDirective(session, memoryBank, part = 'mode') {
-    if (!session || incrementalArchiveMemoryIds(session, memoryBank, part).length) return '';
+function derivedExpansionDirective(session, memoryBank, part = 'mode', revisit = null) {
+    if (!session || (revisit === null ? incrementalArchiveMemoryIds(session, memoryBank, part).length : !revisit)) return '';
     return '\n【本次生成意图：同一档案扩写】没有新历史、没有新关系进展。上文的“新增”仅指派生篇章：可以使用同一 Mxxx 的新镜头、内心侧面、日常模拟或假设后日谈；不要以旧锚点为由拒绝扩写。不能重复已有文本，不能编造过去事件；关系状态、双方态度和已解锁资格保持当前档案不变。所有新内容仍须符合原 schema 和证据校验。\n';
 }
 
@@ -41061,6 +41475,7 @@ __m_generation_generationSavedActions_js.startAdvScriptSecondStep = startAdvScri
 
 function __init_generation_generationModes_js() {
 // MODULE: generation/generationModes.js
+const content_selection = __m_core_contentSelection_js;
 const routePeople = __m_core_routeParticipants_js;
 const composerOptions = __m_core_generationOptions_js;
 const generation_merged = __m_generation_mergedGeneration_js;
@@ -41120,6 +41535,7 @@ const modeTaskTraces = __m_generation_generationContext_js.modeTaskTraces;
 const requestValidatedSegment = __m_generation_generationRequest_js.requestValidatedSegment;
 const beginModeRecovery = __m_generation_generationSavedActions_js.beginModeRecovery;
 const startAdvScriptSecondStep = __m_generation_generationSavedActions_js.startAdvScriptSecondStep;
+
 
 
 
@@ -41236,6 +41652,12 @@ async function continueSavedGeneration(mode, options = {}) {
 async function generateMode(mode, options = {}) {
     if (!Object.values(core_constants.MODE).includes(mode)) return;
     const context = options.context || core_context.currentCharacterGuard();
+    if (content_selection.supportsContentSelection(mode) && !options.automatic && !options.secondStep
+        && !Object.hasOwn(options, 'contentSelectionRequest')) {
+        const bank = options.archiveTarget?.memory || archive_repository.getImportedMemory(context);
+        const saved = core_cache.loadSession(mode, { context, memoryBank: bank, clone: false });
+        options = { ...options, contentSelectionRequest: content_selection.readContentSelectionRequest(context, bank, mode, saved) };
+    }
     if (!Object.hasOwn(options, 'participantSnapshot') && !options.existing && !options.draftId && !options.participantRegeneration && !options.archiveTarget
         && !core_cache.loadGenerationRecovery(mode, context)) {
         options = { ...options, participantSnapshot: routePeople.captureRoutePeople(options.workspaceRoute || mode, context, archive_repository.getImportedMemory(context)) };
@@ -41296,6 +41718,7 @@ async function generateModeOperation(mode, options = {}) {
     };
     let themeSongPlan = null;
     let bedtimePlan = null;
+    let contentSelectionPlan = null;
     let inboxDate = mode === core_constants.MODE.INBOX ? new Date() : null;
     core_context.assertRuntimeLifecycleCurrent(lifecycleEpoch);
     const background = options.background === true;
@@ -41530,6 +41953,13 @@ async function generateModeOperation(mode, options = {}) {
             if (!options.automatic) reportNoIncrementalWork();
             return options.automatic ? { status: 'noop' } : undefined;
         }
+        if (content_selection.supportsContentSelection(mode) && !options.secondStep) {
+            const frozen = generation_recovery.readGenerationContentSnapshot(recoveryExisting);
+            contentSelectionPlan = recoveryExisting
+                ? (recoveryExisting.operation?.contentSelectionPlan
+                    ? content_selection.validateContentSelectionPlan(recoveryExisting.operation.contentSelectionPlan, frozen?.memoryBank || memoryBank) : null)
+                : content_selection.createContentSelectionPlan(memoryBank, previousSession, options.contentSelectionRequest);
+        }
         if (mode === core_constants.MODE.THEME_SONG) {
             const stored = core_cache.getCache(context);
             if (!previousSession && stored?.[mode] && !replacementTicket) throw song_contract.songError('SOURCE', '已有印象曲暂不可读取，原作品保留。');
@@ -41564,7 +41994,7 @@ async function generateModeOperation(mode, options = {}) {
         recoveryHandle = await beginModeRecovery(mode, context, memoryBank, origin, { ...options, archiveTarget, stillCurrent: archiveTargetStillCurrent, existing: recoveryExisting, replaceExisting,
             partialReaderStillCurrent: scopedReaderMode ? () => !background && timeReaderVisible() : null,
             contentInputs: { previousSession, roomSession, focusObject, ...(linkedRoomSession ? { linkedRoomSession } : {}) },
-            operation: recoveryExisting?.operation || { kind: 'mode', mode, ...(themeSongPlan ? { themeSongPlan } : {}), ...(bedtimePlan ? { bedtimePlan } : {}), inboxDate: inboxDate?.toISOString() || '', calendarDate: calendarCurrentDate,
+            operation: recoveryExisting?.operation || { kind: 'mode', mode, ...(contentSelectionPlan ? { contentSelectionPlan } : {}), ...(themeSongPlan ? { themeSongPlan } : {}), ...(bedtimePlan ? { bedtimePlan } : {}), inboxDate: inboxDate?.toISOString() || '', calendarDate: calendarCurrentDate,
                 ...(mode === core_constants.MODE.INBOX ? { inboxPlanVersion: 2 } : {}),
                 ...(mode === core_constants.MODE.CALENDAR ? { calendarTimeBasis: 'story' } : {}),
                 allowPersonaExpansion, visualOnly: options.visualOnly === true, fillMissing: options.fillMissing === true, focusObjectId: core_text.normalizeText(options.focusObjectId, 120),
@@ -41620,7 +42050,7 @@ async function generateModeOperation(mode, options = {}) {
         } else if (mode === core_constants.MODE.PAST_LIVES) {
             session = await modes_pastLives.generatePastLivesWithRepair(context, memoryBank, origin, taskKey, { previousSession, replaceExisting, presentationContext, secondStep: options.secondStep === true });
         } else if (mode === core_constants.MODE.ADV) {
-            session = await modes_advEvent.generateAdvIndexWithRepair(context, memoryBank, origin, expectedChatId, taskKey, { replaceExisting });
+            session = await modes_advEvent.generateAdvIndexWithRepair(context, memoryBank, origin, expectedChatId, taskKey, { replaceExisting, previousSession, contentSelectionPlan, legacyContentSelection: !!recoveryExisting && !contentSelectionPlan });
         } else if (mode === core_constants.MODE.BUTTERFLY && options.fillButterflyText && previousSession) {
             session = await modes_butterfly.fillButterflyProse(context, memoryBank, origin, taskKey, previousSession);
         } else if (mode === core_constants.MODE.BUTTERFLY) {
@@ -41644,7 +42074,7 @@ async function generateModeOperation(mode, options = {}) {
         } else if (mode === core_constants.MODE.ENDING) {
             session = await modes_ending.generateEndingWithRepair(context, memoryBank, origin, taskKey, { replaceExisting, secondStep: options.secondStep === true });
         } else if (mode === core_constants.MODE.ALBUM) {
-            session = await modes_album.generateAlbumWithRepair(context, memoryBank, origin, taskKey, { replaceExisting, participantSnapshot, secondStep: options.secondStep === true });
+            session = await modes_album.generateAlbumWithRepair(context, memoryBank, origin, taskKey, { replaceExisting, previousSession, participantSnapshot, secondStep: options.secondStep === true, contentSelectionPlan, legacyContentSelection: !!recoveryExisting && !contentSelectionPlan });
         } else if (mode === core_constants.MODE.HEART) {
             session = await modes_heart.generateHeartWithRepair(context, memoryBank, origin, taskKey, { replaceExisting });
         } else if (mode === core_constants.MODE.PHONE) {
@@ -45150,6 +45580,7 @@ __m_generation_prompts_js.PROMPTS = PROMPTS;
 
 function __init_generation_recoveryAdapters_js() {
 // MODULE: generation/recoveryAdapters.js
+const content_selection = __m_core_contentSelection_js;
 const recovery_merge = __m_generation_recoveryMerge_js;
 const json_parser = __m_generation_jsonParser_js;
 const core_constants = __m_core_constants_js;
@@ -45167,6 +45598,7 @@ const relations = __m_generation_modesBridge_js;
 const advEvent = __m_generation_modesBridge_js;
 const timeStories = __m_generation_modesBridge_js;
 const heart = __m_generation_modesBridge_js;
+
 // Domain-specific recovery schemas. These are not a generic object/array merge:
 // every collection path, identity and parent binding is owned by the extension.
 // Existing mode normalizers and reading projectors remain the authority.
@@ -45209,7 +45641,8 @@ function projectOne(project, input, raw) {
     } catch { return null; }
 }
 
-function albumSchema({ slot, memoryBank, frozenInputs = {} }) {
+function albumSchema({ slot, memoryBank, frozenInputs = {}, operation = {} }) {
+    memoryBank = content_selection.selectionEvidenceBank(memoryBank, operation.contentSelectionPlan);
     const m = recovery_merge;
     if (/:index$/u.test(slot)) return m.recoveryRecord({ title: { accept: m.recoveryText },
         entries: m.recoveryList(m.recoveryItemKey('id', 'title'), null, row => m.recoveryCheck(() =>
@@ -45308,7 +45741,8 @@ function calendarSchema() {
         .map(key => [key, m.recoveryList(dated, null)])));
 }
 
-function advEventSchema({ slot, memoryBank }) {
+function advEventSchema({ slot, memoryBank, operation = {} }) {
+    memoryBank = content_selection.selectionEvidenceBank(memoryBank, operation.contentSelectionPlan);
     const m = recovery_merge;
     if (/:index$/u.test(slot)) return m.recoveryRecord({ title: { accept: m.recoveryText },
         events: m.recoveryList(m.recoveryItemKey('id', 'title'), null, row => m.recoveryCheck(() => advEvent.normalizeEventCandidate(row, 0, memoryBank))) });
@@ -47232,6 +47666,7 @@ __m_modes_achievements_js.renderAchievements = renderAchievements;
 
 function __init_modes_advEventData_js() {
 // MODULE: modes/advEventData.js
+const content_selection = __m_core_contentSelection_js;
 const cg_visual = __m_core_cgVisualRules_js;
 const archive_library = __m_archive_library_js;
 const archive_repository = __m_archive_repository_js;
@@ -47249,6 +47684,7 @@ const generation_prompts = __m_generation_prompts_js;
 const generation_recovery = __m_generation_recovery_js;
 const ui_overlay = __m_ui_overlay_js;
 const runtimeState = __m_core_state_js.state;
+
 
 
 
@@ -47477,9 +47913,10 @@ function normalizeAdvBatch(data, events, options = {}) {
 }
 
 function projectAdvProgress({ segments = [], memoryBank, previousSession = null, contentInputs = {}, operation = {} }) {
+    const indexBank = content_selection.selectionEvidenceBank(memoryBank, operation.contentSelectionPlan);
     const base = previousSession || contentInputs?.previousSession || contentInputs?.baseSession || contentInputs?.session;
     const index = segments.find(segment => /:index$/u.test(segment.slot));
-    let session = index ? normalizeEventList({ ...index.value, events: index.items('/events') }, memoryBank, { allowPartial: true })
+    let session = index ? normalizeEventList({ ...index.value, events: index.items('/events') }, indexBank, { allowPartial: true })
         : base?.kind === core_constants.MODE.ADV ? structuredClone(base) : null;
     if (!session?.events?.length) return null;
     const relevantIds = new Set(operation.eventIds || (operation.eventId ? [operation.eventId] : session.events.map(event => event.id)));
@@ -47571,9 +48008,9 @@ function compactAdvExisting(session) {
     }));
 }
 
-function advImportantIndexPrompt(context, memoryBank, previousSession = null, sourceMemoryIds = null) {
-    const revisit = !!previousSession && !core_incremental.incrementalArchiveMemoryIds(previousSession, memoryBank).length;
-    const archiveBlock = previousSession
+function advImportantIndexPrompt(context, memoryBank, previousSession = null, sourceMemoryIds = null, selectionPlan = null) {
+    const revisit = selectionPlan ? selectionPlan.revisit : !!previousSession && !core_incremental.incrementalArchiveMemoryIds(previousSession, memoryBank).length;
+    const archiveBlock = selectionPlan ? content_selection.selectionPromptArchive(memoryBank, selectionPlan) : previousSession
         ? core_incremental.incrementalArchiveSlice(memoryBank, sourceMemoryIds, core_constants.MAX_MEMORY_PROMPT_ITEMS)
         : generation_prompts.promptArchiveSlice(memoryBank, 48);
     return `${generation_prompts.promptSafetyBoundary(context, 'ADV EVENT 重要事件索引', null, memoryBank)}
@@ -47631,15 +48068,24 @@ function mergeAdvIncremental(previous, fresh, memoryBank) {
 }
 
 async function generateAdvIndexWithRepair(context, memoryBank, origin, expectedChatId, taskKey, options = {}) {
-    const previous = options.replaceExisting === true ? null : core_cache.loadSession(core_constants.MODE.ADV, { context, chatId: expectedChatId, memoryBank, clone: true });
-    const sourceMemoryIds = core_incremental.derivedExpansionMemoryIds(previous, memoryBank, 'mode');
+    const previous = Object.hasOwn(options, 'previousSession') ? options.previousSession : options.replaceExisting === true ? null : core_cache.loadSession(core_constants.MODE.ADV, { context, chatId: expectedChatId, memoryBank, clone: true });
+    const selectionPlan = options.legacyContentSelection ? content_selection.legacyContentSelectionPlan(memoryBank, previous)
+        : options.contentSelectionPlan ? content_selection.validateContentSelectionPlan(options.contentSelectionPlan, memoryBank)
+            : content_selection.createContentSelectionPlan(memoryBank, previous, options.contentSelectionRequest);
+    const sourceMemoryIds = selectionPlan.memoryIds;
+    const promptPlan = options.legacyContentSelection ? null : selectionPlan;
+    const indexBank = promptPlan ? content_selection.selectionEvidenceBank(memoryBank, selectionPlan) : memoryBank;
     const fresh = await generation_client.requestValidatedSegment(
-        advImportantIndexPrompt(context, memoryBank, previous, sourceMemoryIds),
+        advImportantIndexPrompt(context, memoryBank, previous, sourceMemoryIds, promptPlan),
         previous ? 'ADV EVENT · 正在从新增档案挑选新节点…' : 'ADV EVENT · 正在挑选重要节点…',
         { maxTokens: 5500, temperatureCeiling: 0.35, context, origin, taskKey: `${taskKey}:index`, mode: core_constants.MODE.ADV, background: true },
-        raw => normalizeEventList(raw, memoryBank, { allowPartial: !!previous, sourceMemoryIds: previous ? sourceMemoryIds : null }),
+        raw => {
+            if (promptPlan && !Array.isArray(raw?.events)) throw new Error('剧情事件返回缺少条目列表。');
+            return normalizeEventList(raw, indexBank, { allowPartial: promptPlan ? raw.events.length === 0 : !!previous,
+                sourceMemoryIds: promptPlan ? null : previous ? sourceMemoryIds : null });
+        },
     );
-    const revisit = previous && !core_incremental.incrementalArchiveMemoryIds(previous, memoryBank).length;
+    const revisit = selectionPlan.revisit;
     if (revisit) {
         const round = (Number(previous?.generationMeta?.expansionRound) || 0) + 1;
         const titles = new Set(previous.events.map(item => core_text.normalizeText(item.title, 120).toLowerCase()));
@@ -47649,8 +48095,8 @@ async function generateAdvIndexWithRepair(context, memoryBank, origin, expectedC
     }
     const merged = mergeAdvIncremental(previous, fresh, memoryBank);
     const added = Math.max(0, merged.events.length - (previous?.events?.length || 0));
-    core_incremental.stampIncrementalCoverage(merged, previous, memoryBank, 'mode', sourceMemoryIds, added);
-    if (revisit) merged.generationMeta.expansionRound = (Number(previous?.generationMeta?.expansionRound) || 0) + 1;
+    content_selection.stampContentSelection(merged, previous, memoryBank, selectionPlan, added);
+    if (revisit && options.legacyContentSelection) merged.generationMeta.expansionRound = (Number(previous?.generationMeta?.expansionRound) || 0) + 1;
     if (merged.events?.some(event => !event.adv?.paragraphs?.length)) {
         if (core_settings.getPluginSettings().autoSecondPass === true) {
             const task = core_requestCoordinator.logicalGenerationTaskForOrigin(origin);
@@ -48375,6 +48821,7 @@ __m_modes_advEvent_js.generateAdvForSelected = generateAdvForSelected;
 
 function __init_modes_album_js() {
 // MODULE: modes/album.js
+const content_selection = __m_core_contentSelection_js;
 const core_participants = __m_core_participants_js;
 const cg_visual = __m_core_cgVisualRules_js;
 const story_chronology = __m_core_storyChronology_js;
@@ -48391,6 +48838,7 @@ const generation_client = __m_generation_client_js;
 const generation_imageGeneration = __m_generation_imageGeneration_js;
 const generation_prompts = __m_generation_prompts_js;
 const generation_modesBridge = __m_generation_modesBridge_js;
+
 
 
 
@@ -48469,19 +48917,20 @@ function compactAlbumExisting(session) {
 
 // A reading projection is separate from the complete-result validator and from
 // the canonical album. Only closed JSON records can supply new content here.
-function projectAlbumProgress({ segments = [], memoryBank, frozenInputs = {} }) {
+function projectAlbumProgress({ segments = [], memoryBank, frozenInputs = {}, operation = {} }) {
+    const indexBank = content_selection.selectionEvidenceBank(memoryBank, operation.contentSelectionPlan);
     const participantSnapshot = core_participants.normalizeParticipantSnapshot(frozenInputs['participants:album'] || null);
     const index = segments.find(segment => /:index$/u.test(segment.slot));
     if (!index) return null;
     const rows = index.items('/entries');
     const entries = [];
     const unlockedSeed = rows.find(row => {
-        try { return row.unlocked && normalizeAlbumIndex({ entries: [row] }, memoryBank).entries.length; } catch { return false; }
+        try { return row.unlocked && normalizeAlbumIndex({ entries: [row] }, indexBank).entries.length; } catch { return false; }
     });
     for (const [i, row] of rows.entries()) {
         try {
             const raw = { ...row, id: row.id || `CG${String(i + 1).padStart(2, '0')}` };
-            const normalized = normalizeAlbumIndex({ entries: raw.unlocked ? [raw] : [unlockedSeed, raw].filter(Boolean) }, memoryBank).entries;
+            const normalized = normalizeAlbumIndex({ entries: raw.unlocked ? [raw] : [unlockedSeed, raw].filter(Boolean) }, indexBank).entries;
             const item = normalized.find(entry => entry.id === core_text.safeId(raw.id, ''));
             if (item) entries.push(item);
         } catch {}
@@ -48659,8 +49108,8 @@ function normalizeAlbumRelationshipSnapshot(data, memoryBank, participantSnapsho
     };
 }
 
-function albumIndexPrompt(context, memoryBank, previousSession = null, sourceMemoryIds = null) {
-    const archiveBlock = previousSession
+function albumIndexPrompt(context, memoryBank, previousSession = null, sourceMemoryIds = null, selectionPlan = null) {
+    const archiveBlock = selectionPlan ? content_selection.selectionPromptArchive(memoryBank, selectionPlan) : previousSession
         ? core_incremental.incrementalArchiveSlice(memoryBank, sourceMemoryIds, core_constants.MAX_MEMORY_PROMPT_ITEMS)
         : generation_prompts.promptArchiveSlice(memoryBank, 48);
     return `${generation_prompts.promptSafetyBoundary(context, '回忆相簿 / 重要 CG 节点', core_participants.archivePeopleNames(memoryBank), memoryBank)}
@@ -48869,25 +49318,35 @@ function mergeAlbumIncremental(previous, fresh, memoryBank) {
 
 async function generateAlbumWithRepair(context, memoryBank, origin, taskKey, options = {}) {
     const participantSnapshot = core_participants.normalizeParticipantSnapshot(options.participantSnapshot || null);
-    const previous = options.replaceExisting === true ? null : core_cache.loadSession(core_constants.MODE.ALBUM, { context, chatId: core_context.getChatId(context), memoryBank, clone: true });
+    const previous = Object.hasOwn(options, 'previousSession') ? options.previousSession : options.replaceExisting === true ? null : core_cache.loadSession(core_constants.MODE.ALBUM, { context, chatId: core_context.getChatId(context), memoryBank, clone: true });
     const fillCommentsNow = options.secondStep === true || core_settings.getPluginSettings().autoSecondPass === true;
     if (options.secondStep === true && previous?.entries?.length) {
         return fillAlbumComments(context, memoryBank, origin, taskKey, previous, participantSnapshot);
     }
-    const sourceMemoryIds = core_incremental.derivedExpansionMemoryIds(previous, memoryBank, 'mode');
+    const selectionPlan = options.legacyContentSelection ? content_selection.legacyContentSelectionPlan(memoryBank, previous)
+        : options.contentSelectionPlan ? content_selection.validateContentSelectionPlan(options.contentSelectionPlan, memoryBank)
+            : content_selection.createContentSelectionPlan(memoryBank, previous, options.contentSelectionRequest);
+    const sourceMemoryIds = selectionPlan.memoryIds;
+    const promptPlan = options.legacyContentSelection ? null : selectionPlan;
+    const indexBank = promptPlan ? content_selection.selectionEvidenceBank(memoryBank, selectionPlan) : memoryBank;
     const index = await generation_client.requestValidatedSegment(
-        albumIndexPrompt(context, memoryBank, previous, sourceMemoryIds) + core_incremental.derivedExpansionDirective(previous, memoryBank),
+        albumIndexPrompt(context, memoryBank, previous, sourceMemoryIds, promptPlan) + core_incremental.derivedExpansionDirective(previous, memoryBank, 'mode', selectionPlan.revisit),
         previous ? '回忆相簿 1/3 · 正在从新增档案挑选新 CG…' : '回忆相簿 1/3 · 正在挑选重要 CG 节点…',
         { maxTokens: 5500, temperatureCeiling: 0.35, context, origin, taskKey: `${taskKey}:index`, mode: core_constants.MODE.ALBUM, background: true },
-        raw => normalizeAlbumIndex(raw, memoryBank, previous ? sourceMemoryIds : null),
+        raw => {
+            if (promptPlan && !Array.isArray(raw?.entries)) throw new Error('相簿返回缺少条目列表。');
+            return normalizeAlbumIndex(raw, indexBank, promptPlan ? null : previous ? sourceMemoryIds : null);
+        },
     );
-    const revisit = previous && !core_incremental.incrementalArchiveMemoryIds(previous, memoryBank).length;
+    const revisit = selectionPlan.revisit;
     if (revisit) {
         const titles = new Set(previous.entries.map(item => core_incremental.normalizedContentKey(item.title, 120)));
         index.entries = index.entries.filter(item => item.unlocked && !titles.has(core_incremental.normalizedContentKey(item.title, 120)));
     }
-    if (previous && !index.entries.length) {
-        return core_incremental.stampIncrementalCoverage(structuredClone(previous), previous, memoryBank, 'mode', sourceMemoryIds, 0);
+    if (!index.entries.length) {
+        const empty = previous ? structuredClone(previous) : { kind: core_constants.MODE.ALBUM, title: index.title || '回忆相簿',
+            entries: [], category: '全部', page: 1, pageSize: 6, selectedId: '', sharedMemory: false, dialogueIndex: 0, hintVisible: false };
+        return content_selection.stampContentSelection(empty, previous, memoryBank, selectionPlan, 0);
     }
     if (!fillCommentsNow) {
         const fresh = normalizeAlbum({
@@ -48900,7 +49359,7 @@ async function generateAlbumWithRepair(context, memoryBank, origin, taskKey, opt
         });
         const merged = mergeAlbumIncremental(previous, fresh, memoryBank);
         const added = Math.max(0, merged.entries.length - (previous?.entries?.length || 0));
-        return core_incremental.stampIncrementalCoverage(merged, previous, memoryBank, 'mode', sourceMemoryIds, added);
+        return content_selection.stampContentSelection(merged, previous, memoryBank, selectionPlan, added);
     }
     core_requestCoordinator.noteSecondStepOffer(origin, null);
     const unlocked = index.entries.filter(item => item.unlocked);
@@ -48934,7 +49393,7 @@ async function generateAlbumWithRepair(context, memoryBank, origin, taskKey, opt
     if (revisit) fresh.entries = fresh.entries.map(item => ({ ...item, expansionRound: (Number(previous.generationMeta?.expansionRound) || 0) + 1 }));
     const merged = mergeAlbumIncremental(previous, fresh, memoryBank);
     const added = Math.max(0, merged.entries.length - (previous?.entries?.length || 0));
-    return core_incremental.stampIncrementalCoverage(merged, previous, memoryBank, 'mode', sourceMemoryIds, added);
+    return content_selection.stampContentSelection(merged, previous, memoryBank, selectionPlan, added);
 }
 
 async function fillAlbumComments(context, memoryBank, origin, taskKey, previous, participantSnapshot) {
@@ -48972,6 +49431,8 @@ async function fillAlbumComments(context, memoryBank, origin, taskKey, previous,
             };
         }),
     }, memoryBank);
+    // Filling dialogue does not scan a new material batch. Preserve its cursor.
+    if (previous.generationMeta) fresh.generationMeta = structuredClone(previous.generationMeta);
     return fresh;
 }
 
@@ -64089,6 +64550,7 @@ __m_modes_travel_js.travelMarkerPositions = travelMarkerPositions;
 
 function __init_ui_advEventView_js() {
 // MODULE: ui/advEventView.js
+const content_selection_ui = __m_ui_contentSelection_js;
 const cg_format_ui = __m_ui_cgFormatControl_js;
 const core_constants = __m_core_constants_js;
 const core_context = __m_core_context_js;
@@ -64096,6 +64558,7 @@ const core_text = __m_core_text_js;
 const generation_imageGeneration = __m_generation_imageGeneration_js;
 const ui_overlay = __m_ui_overlay_js;
 const runtimeState = __m_core_state_js.state;
+
 
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
@@ -64153,10 +64616,11 @@ function renderAdvMode() {
     const mobilePicker = `<div class="rmt-adv-mobile-picker"><button type="button" class="rmt-btn" data-rmt-action="adv-event-prev" aria-label="上一个事件" ${selectedIndex <= 0 ? 'disabled' : ''}>‹</button><select data-rmt-adv-select aria-label="选择 ADV EVENT 事件">${options}</select><button type="button" class="rmt-btn" data-rmt-action="adv-event-next" aria-label="下一个事件" ${selectedIndex >= session.events.length - 1 ? 'disabled' : ''}>›</button></div>`;
 
     const body = ui_overlay.bodyEl();
-    const expandButton = canGenerateDerived && completedAdv >= session.events.length && session.events.length < core_constants.MAX_DERIVED_CONTENT_ITEMS
+    const expandButton = readOnlyArchive && canGenerateDerived && completedAdv >= session.events.length && session.events.length < core_constants.MAX_DERIVED_CONTENT_ITEMS
         ? '<button type="button" class="rmt-btn" data-rmt-generate-mode="adv" data-rmt-regenerate="true">同一记忆 · 追加新镜头</button>' : '';
     const libraryTools = `<details class="rmt-adv-library-tools"><summary>生成与补全 · ${completedAdv}/${session.events.length}</summary><div>${bulkBar}${expandButton}${generation_imageGeneration.cgImageProviderBar({ readOnly: readOnlyArchive })}</div></details>`;
-    body.innerHTML = `<div class="rmt-adv ${reading ? 'rmt-adv-reading' : 'rmt-cg-only'}"><aside class="rmt-event-list">${mobilePicker}${libraryTools}<div class="rmt-event-items">${list}</div></aside><section class="rmt-event-detail">${session.readableProgress?.complete === false ? '<p role="status">未完成 · 已生成的事件和正文可继续阅读。</p>' : ''}${selected?.progressPending?.length ? '<p role="status">这篇 ADV 正文尚未完成。</p>' : ''}${detail}</section><div class="rmt-inline-status" hidden></div></div>`;
+    body.innerHTML = `${content_selection_ui.contentSelectionHtml(core_constants.MODE.ADV, { readOnly: readOnlyArchive })}<div class="rmt-adv ${reading ? 'rmt-adv-reading' : 'rmt-cg-only'}"><aside class="rmt-event-list">${mobilePicker}${libraryTools}<div class="rmt-event-items">${list}</div></aside><section class="rmt-event-detail">${session.readableProgress?.complete === false ? '<p role="status">未完成 · 已生成的事件和正文可继续阅读。</p>' : ''}${selected?.progressPending?.length ? '<p role="status">这篇 ADV 正文尚未完成。</p>' : ''}${detail}</section><div class="rmt-inline-status" hidden></div></div>`;
+    content_selection_ui.mountContentSelection(body, core_constants.MODE.ADV, session);
     cg_format_ui.mountCgFormatControl(body, 'adv', '', readOnlyArchive);
 }
 
@@ -64306,6 +64770,7 @@ __m_ui_albumCategory_js.ALBUM_DISPLAY_CATEGORIES = ALBUM_DISPLAY_CATEGORIES;
 
 function __init_ui_albumView_js() {
 // MODULE: ui/albumView.js
+const content_selection_ui = __m_ui_contentSelection_js;
 const modes_album = __m_modes_album_js;
 const core_participants = __m_core_participants_js;
 const core_cache = __m_core_cache_js;
@@ -64325,6 +64790,7 @@ const ui_generationCompletion = __m_ui_generationCompletion_js;
 const image_menu = __m_ui_imageMenu_js;
 const journal_clip = __m_ui_journalClip_js;
 const runtimeState = __m_core_state_js.state;
+
 
 
 
@@ -64415,6 +64881,7 @@ function renderAlbum() {
     </aside>` : '<aside class="rmt-info">当前分类没有条目。</aside>';
     const body = ui_overlay.bodyEl();
     body.innerHTML = `<div class="rmt-album">
+      ${content_selection_ui.contentSelectionHtml(core_constants.MODE.ALBUM, { readOnly: readOnlyArchive })}
       ${ui_generationCompletion.generationCompletionHtml({ missing: pendingComments, unit: '组共同回忆对白', generateMode: core_constants.MODE.ALBUM, actionData: { 'data-rmt-completion': 'album-comments' }, label: '补全共同回忆', readOnly: readOnlyArchive, message: `有 ${pendingComments} 张已解锁相簿仍缺少共同回忆对白；已保存画面和对白保持原样。`, className: 'rmt-album-completion' })}${session.readableProgress?.complete === false && !pendingComments ? '<p role="status">未完成 · 已生成的画面和对白已保留，可继续阅读。</p>' : ''}
       <div class="rmt-album-head"><h2>${core_text.esc(session.title)}</h2><span class="rmt-count">已解锁 ${unlocked} / 总数 ${session.entries.length}</span><div class="rmt-filter">${filters}</div></div>
       ${generation_imageGeneration.cgImageProviderBar({ readOnly: readOnlyArchive })}
@@ -64425,6 +64892,7 @@ function renderAlbum() {
         ${info}
       </div>
     </div>`;
+    content_selection_ui.mountContentSelection(body, core_constants.MODE.ALBUM, session);
     body.querySelector?.('[data-rmt-album-category]')?.addEventListener?.('change', event => {
         const select = event.currentTarget;
         void albumSetCategory(select.dataset.rmtAlbumCategory, select.value)
@@ -84724,6 +85192,7 @@ __m_ui_travelView_js.replayTravelDialogue = replayTravelDialogue;
 
 function __init_ui_workspace_js() {
 // MODULE: ui/workspace.js
+const content_selection_ui = __m_ui_contentSelection_js;
 const routePeople = __m_ui_routeParticipants_js;
 const mirrorReader = __m_ui_mirrorTtsReader_js;
 const mirrorCall = __m_ui_mirrorCallView_js;
@@ -84747,6 +85216,7 @@ const generation_merged = __m_generation_mergedGeneration_js;
 const extras_view = __m_ui_extrasView_js;
 const archive_file = __m_archive_archiveFile_js;
 const state = __m_core_state_js.state;
+
 
 
 
@@ -85051,13 +85521,16 @@ function renderEmptyWorkspace() {
     const message = empty.stored ? '已有内容暂时无法安全读取，原数据保留。'
         : !empty.memoryReady ? (empty.noChat ? '先打开一个角色聊天；这里可以浏览功能。' : '生成内容需要先建立当前聊天档案。')
         : '这里还没有内容。';
+    const selectionBar = empty.memoryReady && !empty.stored && !readOnly && !permanentlyReadOnly
+        ? content_selection_ui.contentSelectionHtml(empty.mode) : '';
     const actions = empty.stored ? '<button type="button" class="rmt-btn" data-rmt-workspace-tab="archive">检查档案</button>'
         : !empty.memoryReady ? '<button type="button" class="rmt-btn" data-rmt-workspace-tab="archive">前往建立档案</button>'
         : permanentlyReadOnly ? '<span>独立备份仅供阅读</span>'
         : readOnly ? '<span>当前为只读查看；需要操作时可关闭只读。</span>'
-        : `<button type="button" class="rmt-btn" data-rmt-generate-mode="${esc(empty.mode)}" data-rmt-reader-generation="true">生成${esc(label)}</button>`;
+        : selectionBar || `<button type="button" class="rmt-btn" data-rmt-generate-mode="${esc(empty.mode)}" data-rmt-reader-generation="true">生成${esc(label)}</button>`;
     const body = overlay.bodyEl(); if (!body) return false;
     body.innerHTML = `${cg_format_ui.cgFormatVisible(empty.mode, ui_workspaceState.workspace.route) ? cg_format_ui.cgFormatControlHtml({readOnly: !!state.activeArchiveSnapshot && state.activeArchiveReadOnly}) : ''}<section class="rmt-workspace-empty"><h2>${esc(label)}</h2><p>${esc(message)}</p><div>${actions}</div></section>`;
+    content_selection_ui.mountContentSelection(body, empty.mode);
     overlay.topTitle(label); overlay.setBackVisible(true,'内容'); overlay.setManageVisible(false); overlay.setRegenerateVisible(false);
     overlay.decorateReadOnlyModeUi(); syncWorkspaceChrome(); return true;
 }
@@ -88851,8 +89324,8 @@ function mediaKey(kind, scope, songId, shotId = '') {
     return [kind, scope, songId, shotId].join('\u001f');
 }
 
-async function putMedia(key, blob, name = '') {
-    try { await run('readwrite', store => store.put({ key, blob, name, type: blob?.type || '', at: Date.now() })); return true; }
+async function putMedia(key, blob, name = '', details = {}) {
+    try { await run('readwrite', store => store.put({ key, blob, name, type: blob?.type || '', at: Date.now(), ...(details.sourceUrl ? { sourceUrl: details.sourceUrl } : {}) })); return true; }
     catch { return false; }
 }
 
@@ -88882,6 +89355,7 @@ const ui_workspaceState = __m_ui_workspaceState_js;
 const extras_styles = __m_ui_extrasStyles_js;
 const mv = __m_extras_mv_js;
 const mv_media = __m_extras_mvMedia_js;
+const music_link = __m_extras_mvMusicLink_js;
 const core_castLooks = __m_core_castLooks_js;
 const archive_repository = __m_archive_repository_js;
 const mv_cast = __m_extras_mvCast_js;
@@ -88895,7 +89369,7 @@ const image_tools = __m_extras_mvImageTools_js;
 const editor_ui = __m_ui_mvEditorUi_js;
 const runtimeState = __m_core_state_js.state;
 // 印象曲 MV 页面：三步开始、镜头清单、对时间、手书剪辑台、视频单镜、拼成 MV。
-// 播放和导出都在本机进行；歌曲文件只在这次打开期间留在内存里，不上传、不写入聊天。
+// 播放和导出都使用本机音轨；歌曲保存在本机媒体库，不上传、不写入聊天。
 
 
 
@@ -88910,6 +89384,7 @@ const loadingLocal = new Map();
 const imageImports = new Map();
 const audioTried = new Set();
 const audioLoads = new Map();
+let musicLinkImport = null;
 let assetEditor = null;
 let editSequence = 0;
 let mediaSequence = 0;
@@ -89077,29 +89552,102 @@ function restoreAudio() {
     const token = {};
     audioLoads.set(key, token);
     void mv_media.getMedia(key).then(row => {
-        if (row?.blob && audioLoads.get(key) === token) acceptAudio(row.blob, row.name || '已保存的歌曲', false, target, token);
+        if (row?.blob && audioLoads.get(key) === token) acceptAudio(row.blob, row.name || '已保存的歌曲', false, target, token, { sourceUrl: row.sourceUrl || '' });
     }).catch(() => audioTried.delete(key));
 }
 
-function acceptAudio(blob, name, persist, target = mv.captureMvTarget(ctx(), view.songId), token = {}) {
+function acceptAudio(blob, name, persist, target = mv.captureMvTarget(ctx(), view.songId), token = {}, details = {}) {
     const key = audioKey(target);
     const opened = viewTarget();
+    if (audioLoads.get(key) !== token) audioLoads.get(key)?.cancel?.();
     audioLoads.set(key, token);
     const url = URL.createObjectURL(blob);
     const probe = new Audio(); probe.preload = 'metadata';
-    probe.onloadedmetadata = () => {
-        if (audioLoads.get(key) !== token) { URL.revokeObjectURL(url); return; }
-        const duration = Number.isFinite(probe.duration) ? probe.duration : 0;
-        const old = audioBySong.get(key);
-        if (old) { try { URL.revokeObjectURL(old.url); } catch {} }
-        if (isView(opened) && audioKey() === key) { stopPlayback(); player.audio = null; }
-        audioBySong.set(key, { url, name: core_text.normalizeText(name, 80), duration, target });
-        try { mv.patchRecord(target.songId, { duration }, target); } catch (error) { toastError(error); }
-        if (persist) void mv_media.putMedia(key, blob, name).then(ok => { if (!ok) globalThis.toastr?.info?.('这台设备没能记住这首歌，下次打开需要重新选择。', '心迹回廊 · MV'); });
-        if (isView(opened) && audioKey() === key) renderMv();
-    };
-    probe.onerror = () => { URL.revokeObjectURL(url); audioTried.delete(key); if (isView(opened)) toastError(core_text.safeUserError('这个文件没法播放，换一个音频文件试试。', 'RMT_MV_AUDIO')); };
-    probe.src = url;
+    return new Promise(resolve => {
+        let settled = false;
+        const finish = (ok, error) => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            token.signal?.removeEventListener('abort', cancel);
+            delete token.cancel;
+            probe.onloadedmetadata = null; probe.onerror = null;
+            try { probe.removeAttribute?.('src'); probe.load?.(); } catch {}
+            if (!ok) {
+                URL.revokeObjectURL(url);
+                if (audioLoads.get(key) === token) audioTried.delete(key);
+                if (error && isView(opened) && audioLoads.get(key) === token) toastError(error);
+            }
+            resolve(ok);
+        };
+        const cancel = () => finish(false);
+        token.cancel = cancel;
+        const timer = details.sourceUrl ? setTimeout(() => finish(false, core_text.safeUserError('音频读取超时，原有歌曲未替换。', 'RMT_MV_AUDIO_TIMEOUT')), 30000) : 0;
+        token.signal?.addEventListener('abort', cancel, { once: true });
+        probe.onloadedmetadata = () => {
+            if (settled || audioLoads.get(key) !== token || token.signal?.aborted || (details.sourceUrl && !isView(opened))) { finish(false); return; }
+            const duration = Number.isFinite(probe.duration) ? probe.duration : 0;
+            if (details.sourceUrl && duration <= 0) { finish(false, core_text.safeUserError('这段音频无法取得完整时长，原有歌曲未替换。', 'RMT_MV_AUDIO')); return; }
+            try {
+                const updated = mv.patchRecord(target.songId, { duration }, target);
+                if (details.sourceUrl && !updated) { finish(false, core_text.safeUserError('当前歌曲已变化，音频未替换。', 'RMT_MV_AUDIO')); return; }
+            }
+            catch (error) { finish(false, error); return; }
+            const old = audioBySong.get(key);
+            if (isView(opened) && audioKey() === key) { stopPlayback(); player.audio = null; }
+            audioBySong.set(key, { url, name: core_text.normalizeText(name, 80), duration, target, sourceUrl: details.sourceUrl || '' });
+            if (old) { try { URL.revokeObjectURL(old.url); } catch {} }
+            if (persist) void mv_media.putMedia(key, blob, name, details).then(ok => { if (!ok && isView(opened)) globalThis.toastr?.info?.('这台设备没能记住这首歌，下次打开需要重新选择。', '心迹回廊 · MV'); });
+            finish(true);
+            if (isView(opened) && audioKey() === key) renderMv();
+        };
+        probe.onerror = () => finish(false, core_text.safeUserError('这段音频没法播放，原有歌曲未替换。', 'RMT_MV_AUDIO'));
+        if (token.signal?.aborted) cancel(); else probe.src = url;
+    });
+}
+
+function cancelMusicLink() {
+    const pending = musicLinkImport;
+    musicLinkImport = null;
+    pending?.controller.abort();
+    if (pending && audioLoads.get(pending.key) === pending.token) audioLoads.delete(pending.key);
+    if (pending && !audioBySong.has(pending.key)) audioTried.delete(pending.key);
+    view.musicLinkStatus = '';
+}
+
+async function importMusicLink(value) {
+    const opened = viewTarget();
+    if (!isView(opened) || player.exporting) return;
+    let sourceUrl;
+    try { sourceUrl = music_link.musicUrl(value); }
+    catch (error) { view.musicLinkStatus = error.message; renderMv(); return; }
+    cancelMusicLink();
+    const target = mv.captureMvTarget(ctx(), opened.songId), key = audioKey(target);
+    const controller = new AbortController(), token = { signal: controller.signal };
+    audioLoads.get(key)?.cancel?.();
+    audioLoads.set(key, token); audioTried.add(key);
+    const pending = musicLinkImport = { key, controller, token };
+    view.musicLinkInput = sourceUrl; view.musicLinkStatus = '正在读取音乐…';
+    renderMv();
+    let timedOut = false;
+    const timer = setTimeout(() => { timedOut = true; controller.abort(); }, 60000);
+    try {
+        const media = await music_link.readMusicLink(sourceUrl, { signal: controller.signal });
+        if (musicLinkImport !== pending || !isView(opened) || controller.signal.aborted) return;
+        view.musicLinkStatus = '正在检查音频…'; renderMv();
+        const ok = await acceptAudio(media.blob, media.name, true, target, token, { sourceUrl: media.sourceUrl });
+        if (musicLinkImport === pending && isView(opened)) view.musicLinkStatus = ok ? '已导入，与画面共用播放进度。' : '音频未能导入，原有歌曲未替换。';
+    } catch (error) {
+        if (musicLinkImport === pending && isView(opened)) view.musicLinkStatus = timedOut ? '音乐读取超时，原有歌曲未替换。' : controller.signal.aborted ? '' : /^RMT_MV_LINK_/.test(error?.code || '') ? String(error.message) : '音乐读取失败，原有歌曲未替换。';
+    } finally {
+        clearTimeout(timer);
+        if (musicLinkImport === pending) {
+            musicLinkImport = null;
+            if (!audioBySong.has(key)) audioTried.delete(key);
+            if (timedOut && isView(opened)) view.musicLinkStatus = '音乐读取超时，原有歌曲未替换。';
+            if (isView(opened)) renderMv();
+        }
+    }
 }
 
 function uploadLabel(shotId, label = '换用自己的图') {
@@ -89263,6 +89811,11 @@ ${r} .rmt-mv-file div{display:flex;flex-direction:column;gap:2px;flex:1;min-widt
 ${r} .rmt-mv-file small{font-size:12px;color:var(--rmt-theme-muted,#586b7c)}
 ${r} .rmt-mv-file label{min-height:36px;padding:0 12px;border:1px solid var(--rmt-theme-border,#cfdae5);background:var(--rmt-theme-surface-solid,#fff);border-radius:10px;font-size:13px;display:flex;align-items:center;cursor:pointer;color:var(--rmt-theme-text,#34495d)}
 ${r} .rmt-mv-file input,${r} .rmt-mv-upload input{position:absolute;width:1px;height:1px;opacity:0}
+${r} .rmt-mv-music-link{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:10px}
+${r} .rmt-mv-music-link label{flex:1 1 100%;font-size:13px}
+${r} .rmt-mv-music-link input{flex:1 1 180px;min-width:0;width:100%;box-sizing:border-box;min-height:44px;padding:8px 10px;border:1px solid var(--rmt-theme-border,#cfdae5);border-radius:10px;background:var(--rmt-theme-surface-solid,#fff);color:var(--rmt-theme-text,#34495d);font:inherit;font-size:16px}
+${r} .rmt-mv-music-link button{flex:0 0 auto;min-height:44px}
+${r} .rmt-mv-music-link .rmt-x-note{flex:1 1 100%;margin:0;overflow-wrap:anywhere}
 ${r} .rmt-mv-upload{position:relative;display:flex;align-items:center;justify-content:center;cursor:pointer}
 ${r} .rmt-mv-edit-open{font:inherit;font-size:12px;min-height:44px;border:1px solid var(--rmt-theme-border,#cfdae5);border-radius:8px;background:var(--rmt-theme-surface-solid,#fff);color:var(--rmt-theme-text,#34495d);padding:4px 8px}
 ${r} .rmt-mv-editor{min-width:0;overflow:hidden;color:var(--rmt-theme-text,#34495d)}
@@ -89300,6 +89853,7 @@ function openMv(options = {}) {
     const songId = core_text.normalizeText(options.songId, 120) || view.songId;
     disposeMv();
     view.songId = songId; view.scope = mv.mvScope(context);
+    view.musicLinkInput = null; view.musicLinkStatus = '';
     const record = mv.readMv(context, view.songId);
     view.castDraft = mv_cast.initialMvCast(context, record);
     const ready = record?.shots?.length && mv.normalizeSettings(record.settings).output === 'tegaki' && record.shots.some(s => mv.hasAssetImage(mv.shotImage(record, s)));
@@ -89544,7 +90098,7 @@ function renderBoard(song, record) {
     })() : '';
     const tools = tegaki ? `${remaining ? btn(view.drawingAll ? 'draw-stop' : 'draw-all', view.drawingAll ? '停止连续绘制' : `一次画完剩下的 ${remaining} 张（会用 ${remaining} 次生图）`) : ''}
         ${btn('go-tegaki', '去手书剪辑台', { cls: 'rmt-x-primary' })}<p class="rmt-x-note">没画的镜头在剪辑台里会先用上一张代替，随时能预览。</p>`
-        : `${btn('go-finish', '全部做完后：拼成 MV', { cls: 'rmt-x-primary rmt-x-dark' })}`;
+        : `${btn('music-preview', '配乐与预览')}${btn('go-finish', '全部做完后：拼成 MV', { cls: 'rmt-x-primary rmt-x-dark' })}`;
     page('镜头清单', '印象曲', `${head(song.title, '镜头清单', `${shots.length} 镜 · ${mv.normalizeSettings(record.settings).ratio === '9:16' ? '竖屏' : '横屏'}。同一张分镜表，可以做成手书，也可以做成视频。`)}
       <div class="rmt-mv-toggle">${['tegaki', 'video'].map(m => `<button type="button" class="${view.mode === m ? 'on' : ''}" aria-pressed="${view.mode === m}" data-rmt-mv="mode" data-rmt-mv-id="${m}">${m === 'tegaki' ? '手书' : '视频'}</button>`).join('')}</div>
       ${rangeCard}
@@ -89613,8 +90167,13 @@ function canvasSize(record) {
 
 function audioCard(song) {
     const audio = audioBySong.get(audioKey());
-    return `<div class="rmt-mv-file"><span aria-hidden="true">♫</span><div><b>${esc(audio ? audio.name : '还没有放入歌曲')}</b><small>${audio ? `${mv.formatTime(audio.duration)} · 只在本机使用，不上传` : `把 Suno 下载的「${esc(song.title)}」放进来`}</small></div>
-      <label>${audio ? '换一首' : '选择文件'}<input type="file" accept="audio/*,.mp3,.m4a,.wav,.ogg" data-rmt-mv-audio></label></div>`;
+    const busy = !!musicLinkImport, value = view.musicLinkInput ?? audio?.sourceUrl ?? '';
+    return `<div class="rmt-mv-file"><span aria-hidden="true">♫</span><div><b>${esc(audio ? audio.name : '还没有放入歌曲')}</b><small>${audio ? `${mv.formatTime(audio.duration)} · 只在本机使用，不上传` : `为「${esc(song.title)}」选择文件或导入音乐链接`}</small></div>
+      <label>${audio ? '换一首' : '选择文件'}<input type="file" accept="audio/*,.mp3,.m4a,.wav,.ogg" data-rmt-mv-audio></label></div>
+      <div class="rmt-mv-music-link" data-rmt-mv-link-box><label for="rmt-mv-music-link">音乐链接（试验）</label>
+      <input id="rmt-mv-music-link" type="url" inputmode="url" autocomplete="off" spellcheck="false" data-rmt-mv-music-link value="${esc(value)}" placeholder="粘贴 Suno 歌曲链接或音频直链"${busy ? ' disabled' : ''}>
+      ${busy ? btn('audio-link-cancel', '取消') : btn('audio-link', '导入链接', { disabled: !!player.exporting })}
+      <p class="rmt-x-note" role="status" aria-live="polite">${esc(view.musicLinkStatus || 'Suno 分享链接试接中；成功后与画面共用播放进度。')}</p></div>`;
 }
 
 function exportSupport() {
@@ -89777,8 +90336,16 @@ function seekEditor(time) {
 function bindEditorControls() {
     const root = body()?.querySelector?.('.rmt-mv-editor');
     if (!root?.addEventListener) return;
-    root.addEventListener('input', event => { if (event.target.matches?.('[data-rmt-mv-seek]') && !player.exporting) seekEditor(event.target.value); });
+    root.addEventListener('input', event => {
+        if (event.target.matches?.('[data-rmt-mv-seek]') && !player.exporting) seekEditor(event.target.value);
+        if (event.target.matches?.('[data-rmt-mv-music-link]')) view.musicLinkInput = event.target.value;
+    });
     root.addEventListener('keydown', event => {
+        if (event.key === 'Enter' && event.target.matches?.('[data-rmt-mv-music-link]')) {
+            event.preventDefault();
+            if (!musicLinkImport && !player.exporting) void importMusicLink(event.target.value).catch(toastError);
+            return;
+        }
         const sheet = root.querySelector('.rmt-mve-sheet');
         if (event.key === 'Escape' && view.editorDrawer) {
             event.preventDefault(); event.stopPropagation(); const previous = view.editorDrawer; view.editorDrawer = ''; renderMv();
@@ -90126,6 +90693,7 @@ function stopPlayback() {
 }
 
 function disposeMv() {
+    cancelMusicLink();
     assetEditor?.dispose(); assetEditor = null; editSequence++;
     stageShadows.clear(); characterSprites.clear(); thumbnailPreviews.clear();
     motifSprites.clear(); palettes.clear();
@@ -90159,6 +90727,7 @@ function silentClock() {
 
 async function exportVideo() {
     if (player.exporting) return;
+    cancelMusicLink();
     const opened = viewTarget(), sub = view.sub;
     const entry = audioBySong.get(audioKey());
     const support = exportSupport();
@@ -90415,6 +90984,11 @@ function handleMvClick(event) {
     const opened = viewTarget();
     try {
         if (action === 'back') navigateMvBack();
+        else if (action === 'audio-link') {
+            const input = body()?.querySelector?.('[data-rmt-mv-music-link]');
+            void importMusicLink(input?.value ?? view.musicLinkInput ?? '').catch(toastError);
+        }
+        else if (action === 'audio-link-cancel') { cancelMusicLink(); renderMv(); }
         else if (action === 'editor-tab') {
             if (['shots', 'timing', 'look'].includes(id)) { view.editorTab = id; if (view.sub === 'sync') view.sub = 'tegaki'; view.editorDrawer = ''; renderMv(); }
         }
@@ -90521,6 +91095,7 @@ function handleMvClick(event) {
         else if (action === 'tegaki-lyric') { mv.patchTegaki(view.songId, { lyric: id, preset: '' }); renderMv(); }
         else if (action === 'draw-stop') { view.stopAll = true; globalThis.toastr?.info?.('画完正在画的这一张后停止。', '心迹回廊 · MV'); }
         else if (action === 'go-tegaki') go('tegaki');
+        else if (action === 'music-preview') { view.editorDrawer = 'audio'; go('tegaki'); }
         else if (action === 'go-finish') go('finish');
         else if (action === 'go-sync') { view.editorTiming = { kind: 'section' }; go('sync'); }
         else if (action === 'open-shot') { view.copied = ''; go('shot', { shotId: id }); }
@@ -90627,6 +91202,7 @@ function handleMvClick(event) {
 
 function handleMvChange(event) {
     const input = event.target;
+    if (input?.matches?.('[data-rmt-mv-music-link]')) { view.musicLinkInput = input.value; return true; }
     if (input?.matches?.('[data-rmt-mv-seek]')) { if (!player.exporting && view.cache?.record) seekEditor(input.value); return true; }
     if (input?.matches?.('[data-rmt-mv-editor-time]')) { try { if (String(input.value).trim() && !player.exporting) saveEditorTime(Number(input.value)); } catch (error) { toastError(error); } return true; }
     if (input?.matches?.('[data-rmt-mv-editor-next]')) { view.editorAutoNext = !!input.checked; return true; }
@@ -90733,7 +91309,7 @@ function handleMvChange(event) {
     }
     if (input?.matches?.('[data-rmt-mv-audio]')) {
         const file = input.files?.[0];
-        if (file) acceptAudio(file, file.name, true);
+        if (file) { cancelMusicLink(); view.musicLinkInput = ''; void acceptAudio(file, file.name, true); }
         return true;
     }
     if (input?.matches?.('[data-rmt-mv-image]')) {
@@ -91465,11 +92041,14 @@ __m_archive_archiveFile_js.foreignArchiveInChat = foreignArchiveInChat;
 __m_archive_archiveFile_js.ARCHIVE_FILE_FORMAT = ARCHIVE_FILE_FORMAT;
 }
 
+__init_core_contentSelection_js();
 __init_extras_mvCast_js();
 __init_extras_mvDirection_js();
 __init_extras_mvImageTools_js();
+__init_extras_mvMusicLink_js();
 __init_extras_mvStage_js();
 __init_extras_mvStillPrompt_js();
+__init_ui_contentSelection_js();
 __init_ui_mvCastControls_js();
 __init_ui_mvEditorUi_js();
 __init_ui_mvImageEditor_js();
