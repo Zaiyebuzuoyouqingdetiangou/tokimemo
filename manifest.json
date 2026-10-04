@@ -1,15 +1,15 @@
 {
     "display_name": "心迹回廊",
     "loading_order": 110,
-    "js": "index.js?heartbeat=1.0.21-r84.238-content-scope",
+    "js": "index.js?heartbeat=1.0.22-r84.239-link-recovery",
     "author": "Toto",
-    "version": "1.0.21",
+    "version": "1.0.22",
     "auto_update": true,
     "minimum_client_version": "1.13.0",
     "hooks": {
         "disable": "onDisable",
         "clean": "onClean"
     },
-    "description": "心迹回廊：保留既有剪辑台，新增统一音轨的音乐链接导入试验。",
+    "description": "心迹回廊：优化音乐链接加载、相簿补全恢复与任务刷新，保留既有剪辑台。",
     "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }

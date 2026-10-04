@@ -1,5 +1,5 @@
-const VERSION = '1.0.21';
-const BUILD = '1.0.21-r84.238-content-scope';
+const VERSION = '1.0.22';
+const BUILD = '1.0.22-r84.239-link-recovery';
 
 const SETTINGS_ID = 'heartbeat_memories_settings';
 const MENU_ID = 'heartbeat_memories_menu_item';

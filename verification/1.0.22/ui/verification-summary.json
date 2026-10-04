@@ -1,0 +1,26 @@
+{
+  "scope": "UI capsules and task chrome repeated draft reads",
+  "bundleVersion": "1.0.22",
+  "candidateTests": {
+    "task-ui-refresh": {
+      "passed": 6,
+      "failed": 0
+    },
+    "content-selection": {
+      "passed": 38,
+      "failed": 0
+    }
+  },
+  "baselineTaskUiTests": {
+    "passed": 1,
+    "failed": 5
+  },
+  "verification": "Synthetic host and DOM on the shipped bundle; real iPhone/TT behavior and full user archive remain unverified.",
+  "hashes": {
+    "dist/heartbeatMemories.bundle.js": "9aed9b3a2a4d5cdc3575589db034216f1bbe07dc8d06e184dd3118957f40c5ad",
+    "src/ui/contentSelection.js": "f80160ea4d91d3540962f355ef677481aec9745db592d8b0297d1bb4b52751d3",
+    "src/ui/taskCenter.js": "e007986c0cb62475302ecaa6e807d7cba92ebffb68b9c4730f755b41540e2750",
+    "tools/verification/task-ui-refresh-regression.mjs": "3d8ee3bc965e7ee5a81a81fb0d1af6835f268fabe19879cc9ce9b74658bf45db",
+    "tools/verification/task-ui-refresh-probe.mjs": "88ff65291f75550dc66558753491a63ac19f1fc35c0189481fe7bcb7cbd3f4dd"
+  }
+}

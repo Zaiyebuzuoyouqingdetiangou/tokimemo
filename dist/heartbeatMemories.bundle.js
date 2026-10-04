@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 324
-// Source SHA-256: 7283a1f177821b6e123543cdffc65326712050bac2ede4c1511b1cbc60d819b3
+// Source SHA-256: 0f9af9613c9424bccaf8d675b17146b5012da522f947fb78d22e2e748bd31bfe
 // Build: python3 tools/verification/build.py <source-root>
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -1078,8 +1078,8 @@ __m_extras_mvImageTools_js.prepareMotifPixels = prepareMotifPixels;
 function __init_extras_mvMusicLink_js() {
 // MODULE: extras/mvMusicLink.js
 
-// 用户主动导入音乐链接；只读取链接响应和网页公开的音频标签。
-// 不执行网页脚本，不调用站点私有接口，不使用代理或现成登录凭据。
+// 用户主动导入音乐链接：公开媒体元数据 → 当前剪辑台的单一音轨。
+// 尝试酒馆已有的同源 CORS 路由；不启用宿主设置，不转发登录凭据。
 function linkError(message, code, status = 0) {
     return Object.assign(new Error(message), { code, status });
 }
@@ -1123,6 +1123,24 @@ function publicMusicSource(html, base) {
     for (const key of ['og:audio:secure_url', 'og:audio:url', 'og:audio', 'twitter:player:stream']) {
         for (const meta of metas) if (String(meta.property || meta.name).toLowerCase() === key && meta.content) sources.push(meta.content);
     }
+    // JSON-LD 是页面公开的结构化媒体描述，只解析 JSON，绝不执行脚本。
+    const descriptors = String(html || '').replace(/<!--[\s\S]*?(?:-->|$)|<(style|textarea|template)\b[^>]*>[\s\S]*?(?:<\/\1\s*>|$)/gi, '');
+    for (const match of descriptors.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi)) {
+        if (attributes(match[1]).type?.toLowerCase() !== 'application/ld+json') continue;
+        try {
+            const pending = [JSON.parse(match[2])];
+            while (pending.length) {
+                const item = pending.pop();
+                if (!item || typeof item !== 'object') continue;
+                if (Array.isArray(item)) { pending.push(...item); continue; }
+                const types = Array.isArray(item['@type']) ? item['@type'] : [item['@type']];
+                if (types.some(type => /^(?:https?:\/\/schema\.org\/)?AudioObject$/i.test(type || '')) && typeof item.contentUrl === 'string') sources.push(item.contentUrl);
+                if (item['@graph']) pending.push(item['@graph']);
+                if (item.audio) pending.push(item.audio);
+                if (item.associatedMedia) pending.push(item.associatedMedia);
+            }
+        } catch {} // A malformed optional descriptor is not a reason to discard normal media tags.
+    }
     for (const match of clean.matchAll(/<audio\b(?:"[^"]*"|'[^']*'|[^'">])*>([\s\S]*?)(?:<\/audio\s*>|$)/gi)) {
         const opening = match[0].match(/^<audio\b(?:"[^"]*"|'[^']*'|[^'">])*>/i)?.[0] || '';
         const direct = attributes(opening).src;
@@ -1135,10 +1153,53 @@ function publicMusicSource(html, base) {
     for (const source of sources) {
         try {
             const url = musicUrl(source, base);
+            if (/\/(?:silence\.(?:mp3|wav)|api\/forbidden)\/?(?:\?|$)/i.test(new URL(url).pathname)) continue;
             if (url !== musicUrl(base)) return { url, title: title.replace(/\s+/g, ' ').trim().slice(0, 120) };
         } catch {} // Invalid published candidates never become requests.
     }
     return null;
+}
+
+function sunoSongPage(html, base) {
+    const origin = new URL(base);
+    if (!/^(?:www\.)?suno\.com$/i.test(origin.hostname)) return '';
+    const clean = String(html || '').replace(/<!--[\s\S]*?(?:-->|$)|<(script|style|textarea|template)\b[^>]*>[\s\S]*?(?:<\/\1\s*>|$)/gi, '');
+    for (const match of clean.matchAll(/<(?:meta|link)\b(?:"[^"]*"|'[^']*'|[^'">])*\/?\s*>/gi)) {
+        const attr = attributes(match[0]);
+        const value = (attr.property || '').toLowerCase() === 'og:url' ? attr.content : (attr.rel || '').toLowerCase() === 'canonical' ? attr.href : '';
+        if (!value) continue;
+        try {
+            const url = new URL(musicUrl(value, base));
+            if (/^(?:www\.)?suno\.com$/i.test(url.hostname) && /^\/song\/[0-9a-f-]{36}\/?$/i.test(url.pathname)) return url.href;
+        } catch {}
+    }
+    return '';
+}
+
+function abortReason(signal) { return signal?.reason || new DOMException('已取消', 'AbortError'); }
+
+// Some WebView fetch bridges do not settle their promise when aborted. The UI
+// must still leave its loading state; late responses cannot commit a new track.
+function waitMusicRequest(promise, signal) {
+    if (!signal) return promise;
+    return new Promise((resolve, reject) => {
+        if (signal.aborted) { Promise.resolve(promise).catch(() => {}); reject(abortReason(signal)); return; }
+        const cancel = () => { signal.removeEventListener('abort', cancel); reject(abortReason(signal)); };
+        signal.addEventListener('abort', cancel, { once: true });
+        Promise.resolve(promise).then(value => { signal.removeEventListener('abort', cancel); resolve(value); }, error => { signal.removeEventListener('abort', cancel); reject(error); });
+    });
+}
+
+function sunoPublicHost(url) {
+    const parsed = new URL(url);
+    return parsed.protocol === 'https:' && !parsed.port && /^(?:(?:www\.)?suno\.com|cdn\d*\.suno\.(?:ai|com))$/i.test(parsed.hostname);
+}
+
+function hostProxyAvailable() {
+    // TT's published API does not promise /proxy or generic native HTTP. Do not
+    // guess Rust commands or import private host modules to manufacture it.
+    return /^(?:https?:)$/.test(globalThis.location?.protocol || '') && !globalThis.__TAURITAVERN__
+        && typeof globalThis.SillyTavern?.getContext === 'function';
 }
 
 function musicLinkName(url) {
@@ -1148,32 +1209,68 @@ function musicLinkName(url) {
     return /\.(?:mp3|m4a|mp4|aac|wav|ogg|opus|flac|webm)$/i.test(name) ? name.slice(0, 80) : '链接歌曲';
 }
 
-async function readMusicLink(value, { signal, fetcher = globalThis.fetch } = {}) {
+async function readMusicLink(value, { signal, fetcher = globalThis.fetch, allowStreaming = true, hostProxy = hostProxyAvailable() } = {}) {
     const sourceUrl = musicUrl(value);
+    let proxyUnavailable = false;
     const get = async url => {
         signal?.throwIfAborted?.();
         let response;
-        try { response = await fetcher(url, { method: 'GET', mode: 'cors', credentials: 'omit', referrerPolicy: 'no-referrer', signal }); }
+        try { response = await waitMusicRequest(fetcher(url, { method: 'GET', mode: 'cors', credentials: 'omit', referrerPolicy: 'no-referrer', signal }), signal); }
         catch (error) {
             if (signal?.aborted || error?.name === 'AbortError') throw error;
+            if (hostProxy && !proxyUnavailable && sunoPublicHost(url)) {
+                try {
+                    // ST documents /proxy/:url(*). Omit credentials because the
+                    // host forwards request headers; no Basic Auth may escape.
+                    response = await waitMusicRequest(fetcher('/proxy/' + encodeURIComponent(url), { method: 'GET', credentials: 'omit', referrerPolicy: 'no-referrer', signal }), signal);
+                    if ([401, 404, 405, 501].includes(response.status)) { proxyUnavailable = true; response = null; }
+                } catch (proxyError) {
+                    if (signal?.aborted || proxyError?.name === 'AbortError') throw proxyError;
+                    proxyUnavailable = true;
+                }
+            }
+            if (response) {
+                if (!response.ok) throw linkError(`音乐网站返回 ${response.status}，本次未导入。原有歌曲未替换。`, 'RMT_MV_LINK_HTTP', response.status);
+                return { response, finalUrl: url };
+            }
             throw linkError('链接读取失败，可能是网络或网站不允许跨站读取。原有歌曲未替换。', 'RMT_MV_LINK_NETWORK');
         }
         if (!response.ok) throw linkError(`音乐网站返回 ${response.status}，本次未导入。原有歌曲未替换。`, 'RMT_MV_LINK_HTTP', response.status);
         const finalUrl = musicUrl(response.url || url);
         return { response, finalUrl };
     };
-    let { response, finalUrl } = await get(sourceUrl);
+    let response, finalUrl;
+    try { ({ response, finalUrl } = await get(sourceUrl)); }
+    catch (error) {
+        if (allowStreaming && error?.code === 'RMT_MV_LINK_NETWORK' && /\.(?:mp3|m4a|aac|wav|ogg|opus|flac|webm)$/i.test(new URL(sourceUrl).pathname)) {
+            return { url: sourceUrl, name: musicLinkName(sourceUrl), sourceUrl, streaming: true };
+        }
+        throw error;
+    }
     let name = musicLinkName(finalUrl);
     if (/^(?:text\/html|application\/xhtml\+xml)\b/i.test(response.headers.get('content-type') || '')) {
-        const published = publicMusicSource(await response.text(), finalUrl);
+        let html = await waitMusicRequest(response.text(), signal);
+        let published = publicMusicSource(html, finalUrl);
+        // A share response may publish only its canonical song page. The
+        // proxy response URL is local, so use the public canonical identity.
+        const canonical = sunoSongPage(html, finalUrl);
+        if (!published && canonical && canonical !== finalUrl) {
+            ({ response, finalUrl } = await get(canonical));
+            html = await waitMusicRequest(response.text(), signal);
+            published = publicMusicSource(html, finalUrl);
+        }
         if (!published) throw linkError('歌曲网页没有提供可导入的公开音频地址。原有歌曲未替换。', 'RMT_MV_LINK_PAGE');
-        ({ response, finalUrl } = await get(published.url));
+        try { ({ response, finalUrl } = await get(published.url)); }
+        catch (error) {
+            if (allowStreaming && error?.code === 'RMT_MV_LINK_NETWORK') return { url: published.url, name: published.title || musicLinkName(published.url), sourceUrl, streaming: true };
+            throw error;
+        }
         name = published.title || musicLinkName(finalUrl);
     }
     if (/^(?:text\/|application\/(?:json|xml|xhtml))/i.test(response.headers.get('content-type') || '')) {
         throw linkError('链接返回的不是音频文件。原有歌曲未替换。', 'RMT_MV_LINK_TYPE');
     }
-    const blob = await response.blob();
+    const blob = await waitMusicRequest(response.blob(), signal);
     signal?.throwIfAborted?.();
     if (!blob.size) throw linkError('链接返回了空文件。原有歌曲未替换。', 'RMT_MV_LINK_EMPTY');
     return { blob, name, sourceUrl };
@@ -1182,6 +1279,8 @@ async function readMusicLink(value, { signal, fetcher = globalThis.fetch } = {})
 __m_extras_mvMusicLink_js.readMusicLink = readMusicLink;
 __m_extras_mvMusicLink_js.musicUrl = musicUrl;
 __m_extras_mvMusicLink_js.publicMusicSource = publicMusicSource;
+__m_extras_mvMusicLink_js.sunoSongPage = sunoSongPage;
+__m_extras_mvMusicLink_js.waitMusicRequest = waitMusicRequest;
 __m_extras_mvMusicLink_js.musicLinkName = musicLinkName;
 }
 
@@ -1420,20 +1519,23 @@ function mountContentSelection(container, mode, session = null) {
         .rmt-content-selection{margin:0 0 16px;padding:14px;border:1px solid var(--rmt-theme-border,#ddd);border-radius:12px;background:var(--rmt-theme-surface-solid,#fff);color:var(--rmt-theme-text,#333);text-align:left;min-width:0}
         .rmt-cs-head,.rmt-cs-actions,.rmt-cs-range{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
         .rmt-cs-head{justify-content:space-between}.rmt-cs-head small,.rmt-cs-row small{display:block;color:var(--rmt-theme-muted,#666);margin-top:4px}
-        .rmt-content-selection p{font-size:13px;line-height:1.6;margin:8px 0}.rmt-content-selection summary{cursor:pointer;min-height:44px;display:flex;align-items:center;font-size:14px}
+        .rmt-content-selection p{font-size:13px;line-height:1.6;margin:8px 0}
+        .rmt-content-selection summary.rmt-cs-toggle{cursor:pointer;min-height:44px;display:inline-flex;align-items:center;justify-content:center;gap:10px;max-width:100%;box-sizing:border-box;list-style:none;font-size:15px!important;font-weight:600!important;line-height:1.5;border-color:var(--rmt-theme-border,#cbdce6)!important;background:var(--rmt-theme-surface-solid,#fff)!important;touch-action:manipulation}
+        .rmt-cs-toggle::-webkit-details-marker{display:none}.rmt-cs-toggle::after{content:'›';display:inline-block;flex:none;transform:rotate(0deg)}.rmt-content-selection details[open]>.rmt-cs-toggle::after{transform:rotate(90deg)}
+        .rmt-content-selection details{margin-top:10px}.rmt-cs-head>button{flex:0 0 auto;width:auto}
         .rmt-content-selection input[type=number]{width:80px;min-height:44px;font-size:16px;box-sizing:border-box;color:inherit;background:var(--rmt-theme-bg,#fff);border:1px solid var(--rmt-theme-border,#ddd);border-radius:8px;padding:6px}
         .rmt-content-selection .rmt-btn{min-height:44px;white-space:normal}.rmt-cs-row{display:flex;gap:10px;align-items:center;min-height:54px;padding:6px 0;border-bottom:1px solid var(--rmt-theme-border,#ddd);cursor:pointer}
         .rmt-cs-row input{width:20px;height:20px;flex:none}.rmt-cs-row span{min-width:0}.rmt-cs-row b{font-size:13px;overflow-wrap:anywhere}.rmt-cs-row small{font-size:12px}
         .rmt-cs-actions{margin-top:10px}.rmt-content-selection [data-cs-notice]{color:var(--rmt-theme-accent-ink,#845160)}
-        @media(max-width:480px){.rmt-cs-head>button{width:100%}.rmt-content-selection{padding:12px}.rmt-cs-actions .rmt-btn{flex:1}}
+        @media(max-width:480px){.rmt-content-selection{padding:12px}.rmt-cs-actions .rmt-btn{flex:1}}
     </style>
     <div class="rmt-cs-head"><div><b>已收录 ${works} ${mode === constants.MODE.ALBUM ? '张' : '篇'}</b><small>已确认选材 ${status.scannedMemoryIds.length} / ${rows.length} 条</small></div><button type="button" class="rmt-btn" data-rmt-generate-mode="${esc(mode)}"${session ? '' : ' data-rmt-reader-generation="true"'}>${session ? '继续补充' : '开始生成'}</button></div>
     <p data-cs-summary>${esc(selectionLabel())}</p>
     ${status.legacyUnknown ? '<p>旧作品已保留；旧版未准确记录选材进度，其余条目仍可选择。</p>' : ''}
     ${last ? `<p>上次选材 ${last.memoryIds.length} 条，新增 ${last.added} ${mode === constants.MODE.ALBUM ? '张' : '篇'}${last.added === 0 ? '；没有新增作品，可继续下一批' : ''}。</p>` : ''}
-    <details data-cs-panel><summary>选择范围</summary><p>按当前档案条目顺序选择，也可以逐条勾选。选材数量不等于作品数量。</p>
+    <details data-cs-panel><summary class="rmt-btn rmt-cs-toggle">选择范围</summary><p>按档案顺序选范围，或逐条勾选。选材条数不等于作品数。</p>
       <div class="rmt-cs-range"><label>从 <input type="number" data-cs-start min="1" max="${rows.length}" value="${selectedIndexes[0] || 1}" aria-label="起始条目"></label><label>到 <input type="number" data-cs-end min="1" max="${rows.length}" value="${selectedIndexes.at(-1) || Math.min(rows.length, 48)}" aria-label="结束条目"></label><button type="button" class="rmt-btn" data-cs-action="range">勾选此范围</button></div>
-      <details><summary>查看并勾选条目</summary><div data-cs-rows></div><div class="rmt-cs-actions"><button type="button" class="rmt-btn" data-cs-action="prev">上一页</button><span data-cs-page></span><button type="button" class="rmt-btn" data-cs-action="next">下一页</button></div><div class="rmt-cs-actions"><button type="button" class="rmt-btn" data-cs-action="all">全选</button><button type="button" class="rmt-btn" data-cs-action="none">清空选择</button></div></details>
+      <details><summary class="rmt-btn rmt-cs-toggle">查看并勾选条目</summary><div data-cs-rows></div><div class="rmt-cs-actions"><button type="button" class="rmt-btn" data-cs-action="prev">上一页</button><span data-cs-page></span><button type="button" class="rmt-btn" data-cs-action="next">下一页</button></div><div class="rmt-cs-actions"><button type="button" class="rmt-btn" data-cs-action="all">全选</button><button type="button" class="rmt-btn" data-cs-action="none">清空选择</button></div></details>
       <p data-cs-count></p><div class="rmt-cs-actions"><button type="button" class="rmt-btn" data-cs-action="apply">应用选择</button><button type="button" class="rmt-btn" data-cs-action="auto">恢复自动选材</button></div>
     </details><p data-cs-notice role="status" aria-live="polite"></p>`;
     paintRows();
@@ -17178,7 +17280,7 @@ function httpFailure(response) {
 // line; retain any actual JSON (including partial data) on the ordinary parser path.
 // A canonical host error envelope is authoritative even if its body contains JSON.
 function transportErrorTextInfo(value, hostEnvelope = false) {
-    const none = { status: 0, hostError: false };
+    const none = { status: 0, hostError: false, failureCode: '' };
     if (typeof value !== 'string') return none;
     let body = value.replace(/^\uFEFF/, '').trim();
     const label = /^\[API (?:Error|错误|錯誤)\][ \t]*(?:\r?\n|$)/i.exec(body);
@@ -17186,7 +17288,26 @@ function transportErrorTextInfo(value, hostEnvelope = false) {
     if (wrapper) body = body.slice(wrapper[0].length).trimStart();
     if (!hostEnvelope && /[{\[]/.test(body)) return none;
     const match = /^(?:(?:failed to generate(?: chat completion)?|internal error|error)\s*:\s*)*(?:custom openai endpoint failed with status\s+|(?:http(?:\/\d(?:\.\d)?)?(?: error)?|status(?: code)?|error code)\s*[:=]?\s*)([45]\d{2})\b/i.exec(body);
-    return { status: Number(match?.[1]) || 0, hostError: !!label || hostEnvelope };
+    let failureCode = '';
+    if (label || hostEnvelope) {
+        // Keep only a code-owned category from an already identified error.
+        // The raw text may include an endpoint, credentials or the input; it
+        // never becomes a cause, saved field, diagnostic or user-facing text.
+        const detail = body.slice(0, 1600).replace(/^(?:(?:failed to generate(?: chat completion)?|internal error|typeerror|error)\s*:\s*)*/i, '');
+        if (/^(?:gateway timeout|request timeout|request timed out|operation timed out|timed out|ETIMEDOUT)\b/i.test(detail)) failureCode = 'RMT_CONNECTION_SERVER';
+        else if (/^(?:failed to fetch|fetch failed|load failed|networkerror|network request failed|error sending request for url|ENOTFOUND)\b/i.test(detail)) failureCode = 'RMT_CONNECTION_NETWORK';
+    }
+    return { status: Number(match?.[1]) || 0, hostError: !!label || hostEnvelope, failureCode };
+}
+
+function categorizedTransportFailure(code) {
+    const message = code === 'RMT_CONNECTION_NETWORK'
+        ? '无法连接模型服务。请检查地址、网络、代理与服务状态，旧内容仍会保留。'
+        : '模型服务或代理响应超时。可以稍后重试，旧内容仍会保留。';
+    const error = apiError(message, code);
+    error.transportFailureKind = code === 'RMT_CONNECTION_NETWORK' ? 'network' : 'timeout';
+    error.retryable = true;
+    return error;
 }
 
 function isHostErrorCompletion(payload) {
@@ -17199,17 +17320,20 @@ function isHostErrorCompletion(payload) {
 function providerEnvelopeFailure(payload, manual = true) {
     // Read only bounded error metadata. Never propagate a provider message/body as a cause.
     const seen = new Set();
-    let status = 0, typeStatus = 0, textStatus = 0, quota = false;
+    let status = 0, typeStatus = 0, textStatus = 0, textFailureCode = '', quota = false;
+    const readErrorText = value => {
+        const info = transportErrorTextInfo(value, true);
+        if (!textStatus) textStatus = info.status;
+        if (!textFailureCode) textFailureCode = info.failureCode;
+    };
     const visit = (node, depth) => {
-        if (typeof node === 'string') { if (!textStatus) textStatus = transportErrorTextInfo(node).status; return; }
+        if (typeof node === 'string') { readErrorText(node); return; }
         if (!node || typeof node !== 'object' || seen.has(node) || depth > 4 || seen.size >= 24) return;
         seen.add(node);
-        if (!textStatus && isHostErrorCompletion(node)) {
-            textStatus = transportErrorTextInfo(finalResponseSelection(node).text, true).status;
-        }
+        if (isHostErrorCompletion(node)) readErrorText(finalResponseSelection(node).text);
         for (const key of ['message', 'detail']) {
             const descriptor = Object.getOwnPropertyDescriptor(node, key);
-            if (!textStatus && descriptor && 'value' in descriptor) textStatus = transportErrorTextInfo(descriptor.value).status;
+            if (descriptor && 'value' in descriptor) readErrorText(descriptor.value);
         }
         for (const key of ['status', 'statusCode', 'code', 'type']) {
             const descriptor = Object.getOwnPropertyDescriptor(node, key);
@@ -17239,6 +17363,7 @@ function providerEnvelopeFailure(payload, manual = true) {
         return error;
     }
     if (status || typeStatus || textStatus) return apiError('模型服务返回错误状态；详情已隐藏。', 'RMT_PROVIDER_STATUS', status || typeStatus || textStatus);
+    if (textFailureCode) return categorizedTransportFailure(textFailureCode);
     const error = apiError('专用连接返回了错误状态，请检查服务配置后重试。', manual ? 'RMT_MANUAL_PROVIDER_ERROR' : 'RMT_CONNECTION_FAILED');
     error.retryable = false;
     return error;
@@ -17480,8 +17605,9 @@ function assertIndependentResponsePayload(payload) {
     }
     const transport = transportErrorTextInfo(content);
     if (transport.status || transport.hostError) {
-        const error = apiError('模型服务返回错误状态；详情已隐藏。', transport.status ? 'RMT_PROVIDER_STATUS' : 'RMT_CONNECTION_FAILED', transport.status);
-        if (!transport.status) error.retryable = false;
+        const error = !transport.status && transport.failureCode ? categorizedTransportFailure(transport.failureCode)
+            : apiError('模型服务返回错误状态；详情已隐藏。', transport.status ? 'RMT_PROVIDER_STATUS' : 'RMT_CONNECTION_FAILED', transport.status);
+        if (!transport.status && !transport.failureCode) error.retryable = false;
         transportFailures.set(error, { shape: 'error', finalChars: 0, reasoningChars: 0, finishReason: 'none' });
         throw error;
     }
@@ -40791,7 +40917,9 @@ function normalizeConnectionManagerError(error) {
     const status = Number.isInteger(candidateStatus) && candidateStatus >= 400 && candidateStatus <= 599 ? candidateStatus : 0;
     // Numeric transport status is authoritative; generic words from wrappers may describe
     // an authentication service being rate-limited, not an invalid user credential.
-    const hints = status ? '' : original;
+    const categorizedHint = error?.transportFailureKind === 'network' ? 'network request failed'
+        : error?.transportFailureKind === 'timeout' ? 'request timeout' : '';
+    const hints = status ? '' : `${original} ${categorizedHint}`;
     const technical = status ? `（HTTP ${status}）` : safeCode ? `（${safeCode}）` : '';
     const sourceName = error?.code === 'RMT_MANUAL_HTTP' ? '手动 API' : '专用连接';
     let code = 'RMT_CONNECTION_FAILED';
@@ -41865,6 +41993,14 @@ async function generateModeOperation(mode, options = {}) {
             allowPersonaExpansion = options.automatic !== true && savedOperation.allowPersonaExpansion === true;
             options.visualOnly = savedOperation.visualOnly === true;
             options.fillMissing = savedOperation.fillMissing === true;
+            if (mode === core_constants.MODE.ALBUM) {
+                // Old dialogue-only journals predate the explicit intent flag. They
+                // contain relation/comment slots but no CG-index request at all.
+                const slots = (recoveryExisting.segments || []).map(segment => String(segment.slot || ''));
+                options.secondStep = Object.hasOwn(savedOperation, 'secondStep') ? savedOperation.secondStep === true
+                    : !slots.some(slot => /:index$/u.test(slot))
+                        && (slots.some(slot => /:(?:relationship-scan|comments:\d+)$/u.test(slot)) || options.secondStep === true);
+            }
             if (typeof savedOperation.focusObjectId === 'string') options.focusObjectId = savedOperation.focusObjectId;
         }
     }
@@ -41994,7 +42130,7 @@ async function generateModeOperation(mode, options = {}) {
         recoveryHandle = await beginModeRecovery(mode, context, memoryBank, origin, { ...options, archiveTarget, stillCurrent: archiveTargetStillCurrent, existing: recoveryExisting, replaceExisting,
             partialReaderStillCurrent: scopedReaderMode ? () => !background && timeReaderVisible() : null,
             contentInputs: { previousSession, roomSession, focusObject, ...(linkedRoomSession ? { linkedRoomSession } : {}) },
-            operation: recoveryExisting?.operation || { kind: 'mode', mode, ...(contentSelectionPlan ? { contentSelectionPlan } : {}), ...(themeSongPlan ? { themeSongPlan } : {}), ...(bedtimePlan ? { bedtimePlan } : {}), inboxDate: inboxDate?.toISOString() || '', calendarDate: calendarCurrentDate,
+            operation: recoveryExisting?.operation || { kind: 'mode', mode, ...(mode === core_constants.MODE.ALBUM ? { secondStep: options.secondStep === true } : {}), ...(contentSelectionPlan ? { contentSelectionPlan } : {}), ...(themeSongPlan ? { themeSongPlan } : {}), ...(bedtimePlan ? { bedtimePlan } : {}), inboxDate: inboxDate?.toISOString() || '', calendarDate: calendarCurrentDate,
                 ...(mode === core_constants.MODE.INBOX ? { inboxPlanVersion: 2 } : {}),
                 ...(mode === core_constants.MODE.CALENDAR ? { calendarTimeBasis: 'story' } : {}),
                 allowPersonaExpansion, visualOnly: options.visualOnly === true, fillMissing: options.fillMissing === true, focusObjectId: core_text.normalizeText(options.focusObjectId, 120),
@@ -42185,7 +42321,7 @@ async function generateModeOperation(mode, options = {}) {
             }
             session[core_cache.PARTICIPANT_REPLACEMENT_KEY] = replacementTicket;
         }
-        if (!core_incremental.incrementalPartRecord(session, incrementalPart)) {
+        if (!(mode === core_constants.MODE.ALBUM && options.secondStep) && !core_incremental.incrementalPartRecord(session, incrementalPart)) {
             const sourceMemoryIds = core_incremental.incrementalArchiveMemoryIds(previousSession, memoryBank, incrementalPart);
             const added = previousSession ? 0 : 1;
             core_incremental.stampIncrementalCoverage(session, previousSession, memoryBank, incrementalPart, sourceMemoryIds, added);
@@ -48917,13 +49053,17 @@ function compactAlbumExisting(session) {
 
 // A reading projection is separate from the complete-result validator and from
 // the canonical album. Only closed JSON records can supply new content here.
-function projectAlbumProgress({ segments = [], memoryBank, frozenInputs = {}, operation = {} }) {
+function projectAlbumProgress({ segments = [], memoryBank, previousSession = null, frozenInputs = {}, operation = {} }) {
     const indexBank = content_selection.selectionEvidenceBank(memoryBank, operation.contentSelectionPlan);
     const participantSnapshot = core_participants.normalizeParticipantSnapshot(frozenInputs['participants:album'] || null);
     const index = segments.find(segment => /:index$/u.test(segment.slot));
-    if (!index) return null;
-    const rows = index.items('/entries');
-    const entries = [];
+    const completingComments = !index && previousSession?.entries?.length
+        && (operation.secondStep === true || segments.some(segment => /:(?:relationship-scan|comments:\d+)$/u.test(segment.slot)));
+    if (!index && !completingComments) return null;
+    if (completingComments && !segments.some(segment => /:comments:\d+$/u.test(segment.slot))) return null;
+    const rows = index ? index.items('/entries') : [];
+    const partialBase = completingComments ? structuredClone(previousSession) : null;
+    const entries = partialBase ? partialBase.entries : [];
     const unlockedSeed = rows.find(row => {
         try { return row.unlocked && normalizeAlbumIndex({ entries: [row] }, indexBank).entries.length; } catch { return false; }
     });
@@ -48943,6 +49083,7 @@ function projectAlbumProgress({ segments = [], memoryBank, frozenInputs = {}, op
     }
     for (const entry of entries) {
         if (!entry.unlocked) continue;
+        if (completingComments && !albumCommentsIncomplete(entry)) continue;
         entry.progressPending = ['共同回忆'];
         entry.relationshipSnapshot = relationshipSnapshot;
         if (participantSnapshot) entry.speakerSnapshot = albumSpeakerIdentities(participantSnapshot);
@@ -48964,6 +49105,7 @@ function projectAlbumProgress({ segments = [], memoryBank, frozenInputs = {}, op
             }
         }
     }
+    if (completingComments) return { ...partialBase, ...(participantSnapshot ? { participantSnapshot } : {}), entries };
     return { ...(participantSnapshot ? { participantSnapshot } : {}), kind: core_constants.MODE.ALBUM, title: core_text.normalizeText(index.value?.title, 120) || '回忆相簿', entries,
         category: '全部', page: 1, pageSize: 6, selectedId: entries[0].id, sharedMemory: false, dialogueIndex: 0, hintVisible: false };
 }
@@ -49396,9 +49538,13 @@ async function generateAlbumWithRepair(context, memoryBank, origin, taskKey, opt
     return content_selection.stampContentSelection(merged, previous, memoryBank, selectionPlan, added);
 }
 
+function albumCommentsIncomplete(item) {
+    return item?.unlocked && (item.comments?.length || 0) < (item.relationshipSnapshot ? 6 : 4);
+}
+
 async function fillAlbumComments(context, memoryBank, origin, taskKey, previous, participantSnapshot) {
     core_requestCoordinator.noteSecondStepOffer(origin, null);
-    const unlocked = previous.entries.filter(item => item.unlocked && (item.comments?.length || 0) < 4);
+    const unlocked = previous.entries.filter(albumCommentsIncomplete);
     if (!unlocked.length) return previous;
     const relationshipSnapshot = await generation_client.requestValidatedSegment(
         albumRelationshipScanPrompt(context, memoryBank, participantSnapshot),
@@ -49416,23 +49562,18 @@ async function fillAlbumComments(context, memoryBank, origin, taskKey, previous,
         ));
     const allComments = new Map();
     for (const map of commentMaps) for (const [id, comments] of map.entries()) allComments.set(id, comments);
-    const fresh = normalizeAlbum({
-        title: previous.title,
-        ...(participantSnapshot ? { participantSnapshot } : {}),
-        entries: previous.entries.map(item => {
-            const packed = allComments.get(item.id);
-            const commentFields = participantSnapshot
-                ? (packed && !Array.isArray(packed) ? packed : { comments: item.comments || [], commentSpeakers: item.commentSpeakers || [] })
-                : { comments: Array.isArray(packed) ? packed : (item.comments || []) };
-            return {
-                ...item,
-                ...commentFields,
-                relationshipSnapshot: item.unlocked ? structuredClone(relationshipSnapshot) : item.relationshipSnapshot,
-            };
-        }),
-    }, memoryBank);
-    // Filling dialogue does not scan a new material batch. Preserve its cursor.
-    if (previous.generationMeta) fresh.generationMeta = structuredClone(previous.generationMeta);
+    // Each replacement already passed the six-line batch validator. Do not
+    // re-normalize the whole old album or replace unrelated relationship bases,
+    // images, manual edits, reading position or material-selection progress.
+    const fresh = structuredClone(previous);
+    if (participantSnapshot) fresh.participantSnapshot = structuredClone(participantSnapshot);
+    fresh.entries = fresh.entries.map(item => {
+        if (!allComments.has(item.id)) return item;
+        const packed = allComments.get(item.id);
+        return { ...item,
+            ...(participantSnapshot ? { ...packed, speakerSnapshot: albumSpeakerIdentities(participantSnapshot) } : { comments: packed }),
+            relationshipSnapshot: structuredClone(relationshipSnapshot) };
+    });
     return fresh;
 }
 
@@ -82640,9 +82781,44 @@ const runtimeState = __m_core_state_js.state;
 
 let painting = false;
 let pumping = false;
+let paintSnapshot = null;
 const queue = [];
 const autoRetryUsed = new Map();
 let floorFailure = null;
+
+// A single chrome refresh paints the badge, live strip and optional task panel.
+// Reading a draft validates and copies its frozen sources and paid replies, so
+// share those reads only within this synchronous paint. A later paint must see
+// newly saved segments and cancellation immediately, even in the same tick.
+function withPaintSnapshot(paint) {
+    if (paintSnapshot) return paint();
+    paintSnapshot = new Map();
+    try { return paint(); }
+    finally { paintSnapshot = null; }
+}
+
+function readForPaint(key, read) {
+    if (!paintSnapshot) return read();
+    if (!paintSnapshot.has(key)) {
+        try { paintSnapshot.set(key, { value: read() }); }
+        catch (error) { paintSnapshot.set(key, { error }); }
+    }
+    const result = paintSnapshot.get(key);
+    if (Object.hasOwn(result, 'error')) throw result.error;
+    return result.value;
+}
+
+function taskRowsForPaint() {
+    return readForPaint('tasks', () => core_requestCoordinator.listChatTaskSnapshot());
+}
+
+function draftRowsForPaint() {
+    return readForPaint('drafts', () => core_cache.listGenerationDrafts());
+}
+
+function pendingRowsForPaint() {
+    return readForPaint('pending', () => statusView.currentPendingRows());
+}
 
 function noteAutoMemoryFloorFailure(info = {}) {
     const next = {
@@ -82996,29 +83172,24 @@ function hideTaskCenter() {
     if (panel) panel.hidden = true;
 }
 
-let unfinishedCache = { at: 0, count: 0 };
-
 function unfinishedReminderCount() {
-    const now = Date.now();
-    if (now - unfinishedCache.at < 1500) return unfinishedCache.count;
     let count = 0;
     try {
-        count += core_cache.listGenerationDrafts().filter(row => row.completed || row.truncated || row.failed || row.failureCode || row.oversized).length;
+        count += draftRowsForPaint().filter(row => row.completed || row.truncated || row.failed || row.failureCode || row.oversized).length;
     } catch { /* A missing archive has nothing unfinished to badge. */ }
     try {
         if (archive_repository.getCurrentArchiveImportRecoverySummary()) count += 1;
         if (archive_repository.getCurrentArchiveProfileRecoverySummary()) count += 1;
     } catch { /* Archive recovery is optional until a chat is open. */ }
     try {
-        const ids = new Set(core_cache.listGenerationDrafts().map(row => row.draftId));
-        count += statusView.currentPendingRows().filter(row => !ids.has(row.origin?.generationRecoveryDraftId || row.id)).length;
+        const ids = new Set(draftRowsForPaint().map(row => row.draftId));
+        count += pendingRowsForPaint().filter(row => !ids.has(row.origin?.generationRecoveryDraftId || row.id)).length;
     } catch { /* Corrupt raw data is exportable from the task card. */ }
-    unfinishedCache = { at: now, count };
     return count;
 }
 
 function syncTaskCenterBadge() {
-    const running = core_requestCoordinator.listChatTaskSnapshot().filter(row => row.running).length;
+    const running = taskRowsForPaint().filter(row => row.running).length;
     const waiting = queuedForScope().length;
     const unfinished = unfinishedReminderCount();
     const total = running + waiting + unfinished;
@@ -83090,7 +83261,7 @@ function dismissButton({ taskId = '', queueId = '', floorFailure = false } = {})
 
 function draftCards() {
     let drafts = [];
-    try { drafts = core_cache.listGenerationDrafts(); }
+    try { drafts = draftRowsForPaint(); }
     catch { drafts = []; }
     return drafts.filter(row => row.completed || row.truncated || row.failed || row.failureCode || row.oversized).map(row => {
         const oversized = row.oversized === true;
@@ -83188,7 +83359,7 @@ function openAction(record) {
 
 function mergedPendingCards() {
     let rows;
-    try { rows = statusView.currentPendingRows(); }
+    try { rows = pendingRowsForPaint(); }
     catch { return [{ state: 'failed', label: '暂存区', detail: '读取失败，旧数据保留。请导出未归属的旧暂存记录。', actions: '<button type="button" class="rmt-btn" data-rmt-action="merged-export-legacy">导出旧暂存记录</button>', at: 0 }]; }
     const cards = rows.map(row => {
         const state = row.kind === 'unsaved' ? 'unsaved' : 'retry';
@@ -83198,7 +83369,7 @@ function mergedPendingCards() {
             actions: `<button type="button" class="rmt-btn" data-rmt-action="${state === 'unsaved' ? 'merged-resave' : 'merged-repair'}" ${attrs} ${row.origin ? '' : 'disabled'}>${state === 'unsaved' ? '重新保存' : '只补这一页'}</button><button type="button" class="rmt-btn" data-rmt-action="merged-export" ${attrs}>导出成果</button><button type="button" class="rmt-btn" data-rmt-action="merged-new" ${attrs}>开始新任务</button><button type="button" class="rmt-btn" data-rmt-action="merged-discard" ${attrs}>放弃这份成果</button>` };
     });
     let legacy = [];
-    try { legacy = statusView.currentUnattributedPendingRows(); } catch { /* The guarded export action remains available through read failure. */ }
+    try { legacy = readForPaint('unattributed', () => statusView.currentUnattributedPendingRows()); } catch { /* The guarded export action remains available through read failure. */ }
     if (legacy.length) cards.push({ state: 'failed', label: '未归属的旧暂存记录', detail: `有 ${legacy.length} 条旧记录缺少所属人物，已保留且不会显示为当前人物内容。`, actions: '<button type="button" class="rmt-btn" data-rmt-action="merged-export-legacy">导出旧暂存记录</button><button type="button" class="rmt-btn" data-rmt-action="merged-discard-legacy">导出并丢弃</button>', at: 0 });
     return cards;
 }
@@ -83206,7 +83377,7 @@ function mergedPendingCards() {
 function collectTaskCards() {
     const cards = mergedPendingCards();
     cards.push(...draftCards().filter(row => !cards.some(card => card.draftId && card.draftId === row.draftId)));
-    const rows = core_requestCoordinator.listChatTaskSnapshot();
+    const rows = taskRowsForPaint();
     for (const row of rows.filter(item => item.running)) {
         const existing = cards.find(card => sameJob(card, row));
         const next = {
@@ -83335,7 +83506,7 @@ function paintLiveStrip() {
     if (!host) return;
     const esc = core_text.esc;
     let rows = [];
-    try { rows = core_requestCoordinator.listChatTaskSnapshot(); } catch { rows = []; }
+    try { rows = taskRowsForPaint(); } catch { rows = []; }
     const running = rows.filter(row => row.running);
     const runningLabels = new Set(running.map(row => row.label));
     const failed = rows.filter(row => !row.running && (row.phase === 'failed' || row.outcome === 'failed') && !runningLabels.has(row.label));
@@ -83462,13 +83633,15 @@ function refreshTaskCenterView() {
     if (painting) return;
     painting = true;
     try {
-        syncPickScope();
-        dropForeignQueue();
-        syncTaskCenterBadge();
-        hideMainRecoveryCards();
-        paintLiveStrip();
-        const panel = taskPanel();
-        if (panel && !panel.hidden) paintTaskCenter(panel);
+        withPaintSnapshot(() => {
+            syncPickScope();
+            dropForeignQueue();
+            syncTaskCenterBadge();
+            hideMainRecoveryCards();
+            paintLiveStrip();
+            const panel = taskPanel();
+            if (panel && !panel.hidden) paintTaskCenter(panel);
+        });
     } finally {
         painting = false;
     }
@@ -83487,11 +83660,10 @@ function bindTaskCenterRefresh() {
 }
 
 function syncLiveTaskStrip() {
-    paintLiveStrip();
+    withPaintSnapshot(paintLiveStrip);
 }
 
-function syncTaskCenterChrome({ refreshRecovery = false } = {}) {
-    if (refreshRecovery) unfinishedCache.at = 0;
+function syncTaskCenterChrome() {
     bindTaskCenterRefresh();
     refreshTaskCenterView();
 }
@@ -89325,7 +89497,7 @@ function mediaKey(kind, scope, songId, shotId = '') {
 }
 
 async function putMedia(key, blob, name = '', details = {}) {
-    try { await run('readwrite', store => store.put({ key, blob, name, type: blob?.type || '', at: Date.now(), ...(details.sourceUrl ? { sourceUrl: details.sourceUrl } : {}) })); return true; }
+    try { await run('readwrite', store => store.put({ key, blob, name, type: blob?.type || '', at: Date.now(), ...(details.sourceUrl ? { sourceUrl: details.sourceUrl } : {}), ...(!blob && details.mediaUrl ? { mediaUrl: details.mediaUrl } : {}) })); return true; }
     catch { return false; }
 }
 
@@ -89369,7 +89541,7 @@ const image_tools = __m_extras_mvImageTools_js;
 const editor_ui = __m_ui_mvEditorUi_js;
 const runtimeState = __m_core_state_js.state;
 // 印象曲 MV 页面：三步开始、镜头清单、对时间、手书剪辑台、视频单镜、拼成 MV。
-// 播放和导出都使用本机音轨；歌曲保存在本机媒体库，不上传、不写入聊天。
+// 播放由同一音轨驱动画面；可用的音频文件缓存在本机，不写入聊天。
 
 
 
@@ -89552,7 +89724,9 @@ function restoreAudio() {
     const token = {};
     audioLoads.set(key, token);
     void mv_media.getMedia(key).then(row => {
-        if (row?.blob && audioLoads.get(key) === token) acceptAudio(row.blob, row.name || '已保存的歌曲', false, target, token, { sourceUrl: row.sourceUrl || '' });
+        if ((row?.blob || row?.mediaUrl) && audioLoads.get(key) === token) {
+            return acceptAudio(row.blob || row.mediaUrl, row.name || '已保存的歌曲', false, target, token, { sourceUrl: row.sourceUrl || '', mediaUrl: row.mediaUrl || '' });
+        }
     }).catch(() => audioTried.delete(key));
 }
 
@@ -89561,7 +89735,8 @@ function acceptAudio(blob, name, persist, target = mv.captureMvTarget(ctx(), vie
     const opened = viewTarget();
     if (audioLoads.get(key) !== token) audioLoads.get(key)?.cancel?.();
     audioLoads.set(key, token);
-    const url = URL.createObjectURL(blob);
+    const streaming = typeof blob === 'string';
+    const url = streaming ? music_link.musicUrl(blob) : URL.createObjectURL(blob);
     const probe = new Audio(); probe.preload = 'metadata';
     return new Promise(resolve => {
         let settled = false;
@@ -89595,9 +89770,9 @@ function acceptAudio(blob, name, persist, target = mv.captureMvTarget(ctx(), vie
             catch (error) { finish(false, error); return; }
             const old = audioBySong.get(key);
             if (isView(opened) && audioKey() === key) { stopPlayback(); player.audio = null; }
-            audioBySong.set(key, { url, name: core_text.normalizeText(name, 80), duration, target, sourceUrl: details.sourceUrl || '' });
+            audioBySong.set(key, { url, name: core_text.normalizeText(name, 80), duration, target, sourceUrl: details.sourceUrl || '', streaming });
             if (old) { try { URL.revokeObjectURL(old.url); } catch {} }
-            if (persist) void mv_media.putMedia(key, blob, name, details).then(ok => { if (!ok && isView(opened)) globalThis.toastr?.info?.('这台设备没能记住这首歌，下次打开需要重新选择。', '心迹回廊 · MV'); });
+            if (persist) void mv_media.putMedia(key, streaming ? null : blob, name, { ...details, ...(streaming ? { mediaUrl: url } : {}) }).then(ok => { if (!ok && isView(opened)) globalThis.toastr?.info?.('这台设备没能记住这首歌，下次打开需要重新选择。', '心迹回廊 · MV'); });
             finish(true);
             if (isView(opened) && audioKey() === key) renderMv();
         };
@@ -89635,8 +89810,8 @@ async function importMusicLink(value) {
         const media = await music_link.readMusicLink(sourceUrl, { signal: controller.signal });
         if (musicLinkImport !== pending || !isView(opened) || controller.signal.aborted) return;
         view.musicLinkStatus = '正在检查音频…'; renderMv();
-        const ok = await acceptAudio(media.blob, media.name, true, target, token, { sourceUrl: media.sourceUrl });
-        if (musicLinkImport === pending && isView(opened)) view.musicLinkStatus = ok ? '已导入，与画面共用播放进度。' : '音频未能导入，原有歌曲未替换。';
+        const ok = await acceptAudio(media.blob || media.url, media.name, true, target, token, { sourceUrl: media.sourceUrl });
+        if (musicLinkImport === pending && isView(opened)) view.musicLinkStatus = ok ? (media.streaming ? '已接入在线音轨，与画面共用播放进度。' : '已导入，与画面共用播放进度。') : '音频未能导入，原有歌曲未替换。';
     } catch (error) {
         if (musicLinkImport === pending && isView(opened)) view.musicLinkStatus = timedOut ? '音乐读取超时，原有歌曲未替换。' : controller.signal.aborted ? '' : /^RMT_MV_LINK_/.test(error?.code || '') ? String(error.message) : '音乐读取失败，原有歌曲未替换。';
     } finally {
@@ -90168,7 +90343,7 @@ function canvasSize(record) {
 function audioCard(song) {
     const audio = audioBySong.get(audioKey());
     const busy = !!musicLinkImport, value = view.musicLinkInput ?? audio?.sourceUrl ?? '';
-    return `<div class="rmt-mv-file"><span aria-hidden="true">♫</span><div><b>${esc(audio ? audio.name : '还没有放入歌曲')}</b><small>${audio ? `${mv.formatTime(audio.duration)} · 只在本机使用，不上传` : `为「${esc(song.title)}」选择文件或导入音乐链接`}</small></div>
+    return `<div class="rmt-mv-file"><span aria-hidden="true">♫</span><div><b>${esc(audio ? audio.name : '还没有放入歌曲')}</b><small>${audio ? `${mv.formatTime(audio.duration)} · ${audio.streaming ? '在线音轨' : '只在本机使用，不上传'}` : `为「${esc(song.title)}」选择文件或导入音乐链接`}</small></div>
       <label>${audio ? '换一首' : '选择文件'}<input type="file" accept="audio/*,.mp3,.m4a,.wav,.ogg" data-rmt-mv-audio></label></div>
       <div class="rmt-mv-music-link" data-rmt-mv-link-box><label for="rmt-mv-music-link">音乐链接（试验）</label>
       <input id="rmt-mv-music-link" type="url" inputmode="url" autocomplete="off" spellcheck="false" data-rmt-mv-music-link value="${esc(value)}" placeholder="粘贴 Suno 歌曲链接或音频直链"${busy ? ' disabled' : ''}>
@@ -90735,13 +90910,14 @@ async function exportVideo() {
     if (!support.ok || !currentRecord() || !song) return;
     const record = mv.exportRecord(currentRecord(), song);
     stopPlayback();
-    const state = { cancelled: false, tracks: [], raf: 0, recorder: null, audio: null, ac: null, canvas: null };
+    const state = { cancelled: false, tracks: [], raf: 0, recorder: null, audio: null, ac: null, canvas: null, musicController: null, musicTimer: 0, musicUrl: '' };
     player.exporting = state;
     const current = () => !state.cancelled && player.exporting === state && isView(opened) && view.sub === sub;
     const chunks = [];
     const finish = () => {
         if (state.finished) return;
         state.finished = true;
+        state.musicController?.abort(); clearTimeout(state.musicTimer);
         const mayRender = current();
         if (player.exporting === state) player.exporting = null;
         try { state.audio?.pause(); } catch {}
@@ -90749,6 +90925,7 @@ async function exportVideo() {
         for (const track of state.tracks) { try { track.stop(); } catch {} }
         try { Promise.resolve(state.ac?.close()).catch(() => {}); } catch {}
         state.canvas?.remove();
+        if (state.musicUrl) URL.revokeObjectURL(state.musicUrl);
         if (!state.cancelled && chunks.length) {
             download(new Blob(chunks, { type: support.mime.split(';')[0] }), `${safeName(song.title)}-MV.${support.ext}`);
             toastOk('视频已导出。');
@@ -90757,6 +90934,22 @@ async function exportVideo() {
     };
     state.finish = finish;
     try {
+        let exportAudioUrl = entry?.url;
+        if (entry?.streaming) {
+            // A no-CORS media element can play but Web Audio would record
+            // silence. Obtain readable bytes before starting the recorder.
+            renderMv();
+            state.musicController = new AbortController();
+            state.musicTimer = setTimeout(() => state.musicController.abort(), 60000);
+            let media;
+            try { media = await music_link.readMusicLink(entry.url, { signal: state.musicController.signal, allowStreaming: false }); }
+            catch (error) {
+                if (!current()) { finish(); return; }
+                throw core_text.safeUserError('在线音轨可继续预览，本次未能读取用于导出的音频。请稍后重试，已有编辑已保留。', 'RMT_MV_EXPORT_AUDIO');
+            } finally { clearTimeout(state.musicTimer); }
+            if (!current()) { finish(); return; }
+            exportAudioUrl = state.musicUrl = URL.createObjectURL(media.blob);
+        }
         await preloadImages(record, song);
         if (!current()) { state.cancelled = true; finish(); return; }
         const [w, h] = canvasSize(record);
@@ -90766,7 +90959,7 @@ async function exportVideo() {
         document.body.appendChild(canvas);
         const AC = globalThis.AudioContext || globalThis.webkitAudioContext;
         // 没有放入歌曲时导出无声视频：用本地时钟代替音频的播放进度。
-        const audio = state.audio = entry ? new Audio(entry.url) : silentClock();
+        const audio = state.audio = entry ? new Audio(exportAudioUrl) : silentClock();
         const video = canvas.captureStream(30);
         state.tracks.push(...video.getTracks());
         let stream = new MediaStream(video.getVideoTracks());
@@ -90805,7 +90998,7 @@ async function exportVideo() {
         await audio.play();
         if (!current()) { audio.pause(); stopExport(); return; }
         state.raf = requestAnimationFrame(loop);
-    } catch (error) { stopExport(); toastError(core_text.safeUserError('这台设备这次没能录制，可以改用录屏模式。', 'RMT_MV_EXPORT')); }
+    } catch (error) { stopExport(); toastError(error?.code === 'RMT_MV_EXPORT_AUDIO' ? error : core_text.safeUserError('这台设备这次没能录制，可以改用录屏模式。', 'RMT_MV_EXPORT')); }
 }
 
 function stopExport() {

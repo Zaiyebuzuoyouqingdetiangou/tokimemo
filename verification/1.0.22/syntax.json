@@ -1,0 +1,2072 @@
+[
+  {
+    "file": "dev/archive/refactor/count-upward-imports.mjs",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "dev/archive/refactor/dispatch-split-identity-r84.78.mjs",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "dev/archive/refactor/settings-listeners-identity-r84.96.mjs",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "dist/heartbeatMemories.bundle.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "index.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/archive/archiveCore.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/archive/archiveFile.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/archive/archiveVerdict.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/archive/backupStore.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/archive/capacity.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/archive/coverageRanges.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/archive/draftInputs.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/archive/externalMemory.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/archive/floorWindowCheck.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/archive/groups.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/archive/importBatches.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/archive/importIdentity.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/archive/importOperation.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/archive/importPrompts.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/archive/importRecovery.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/archive/inheritance.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/archive/library.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/archive/libraryCharacter.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/archive/librarySnapshots.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/archive/memoryFileImport.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/archive/memoryProviders.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/archive/partialImport.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/archive/qianqianjie.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/archive/recoveryDrafts.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/archive/relay.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/archive/relayPreparation.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/archive/relayStore.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/archive/repository.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/archive/requestBudget.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/archive/snapshots.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/archive/sourceLedger.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/archive/sourceReadGuard.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/archive/storyScenes.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/archive/summaryPreference.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/archive/worldInfoSources.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/autoMemory/achievementLibrary.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/autoMemory/achievementLookback.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/autoMemory/combinedResult.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/autoMemory/draw.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/autoMemory/floorPace.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/autoMemory/gapFill.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/autoMemory/incrementalGate.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/autoMemory/incrementalView.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/autoMemory/instanceLease.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/autoMemory/migrateLegacy.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/autoMemory/moduleHost.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/autoMemory/modulePlans.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/autoMemory/moduleRegistry.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/autoMemory/moduleRunner.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/autoMemory/planStore.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/autoMemory/redo.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/autoMemory/scheduler.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/autoMemory/shellState.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/autoMemory/streamGate.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/autoMemory/wizardPlan.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/core/advancedGeneration.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/core/archiveBridge.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/core/archiveCover.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/core/archiveLineage.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/core/archiveRelayPolicy.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/core/autoUpdatePolicy.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/core/autoUpdates.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/core/backupDiagnostics.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/core/bedtimeContract.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/core/butterflyContract.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/core/butterflyLegacyRecovery.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/core/cache.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/core/cacheArchiveMemory.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/core/cacheCommit.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/core/cacheGenerationDrafts.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/core/cacheRecords.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/core/cacheSessions.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/core/cacheVersions.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/core/castLooks.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/core/cgImagePatch.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/core/cgPromptFormat.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/core/cgTargets.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/core/cgVisualRules.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/core/characterDescriptor.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/core/chatReadRange.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/core/connectionPool.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/core/constants.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/core/contentSelection.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/core/context.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/core/contextTags.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/core/controlledSources.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/core/creativeSupplement.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/core/deferredCommitStore.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/core/diagnosticReport.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/core/dialogue.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/core/digest.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/core/evidence.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/core/generationBridge.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/core/generationOptions.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/core/generationParticipants.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/core/generationStatus.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/core/handJournal.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/core/heartLanguage.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/core/hostCompatibility.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/core/incremental.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/core/independentApi.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/core/independentApiConfig.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/core/independentApiRequest.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/core/inputLedger.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/core/journalPiggyback.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/core/lenticularCards.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/core/letterIllustration.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/core/letterIllustrationV2.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/core/letterSketch.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/core/localRecoveryStore.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/core/mailGallery.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/core/manualCredentialStore.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/core/mirrorCall.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/core/mirrorTts.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/core/modesBridge.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/core/narrativeAuthority.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/core/outputBudget.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/core/participants.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/core/pastLivesContract.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/core/photoshootContract.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/core/presentExpression.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/core/recoveryPayload.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/core/recoveryRegistry.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/core/recoverySourcePolicy.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/core/relationshipSafety.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/core/requestCoordinator.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/core/requestTaskCenter.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/core/requestTasks.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/core/routeParticipants.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/core/selfUpdater.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/core/settings.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/core/state.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/core/storyChronology.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/core/taskTrace.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/core/text.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/core/theme.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/core/themeSongContract.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/core/themeSongCover.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/core/timeStoriesContract.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/core/uiBridge.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/core/worldPresentation.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/extras/collection.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/extras/intel.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/extras/mv.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/extras/mvCast.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/extras/mvDirection.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/extras/mvImageTools.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/extras/mvMedia.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/extras/mvMusicLink.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/extras/mvStage.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/extras/mvStillPrompt.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/extras/store.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/extras/waiting.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/generation/achievementCapture.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/generation/baibaiImage.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/generation/cgAppearance.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/generation/cgImageActions.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/generation/cgImageCore.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/generation/cgPromptPolicy.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/generation/chatu8Image.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/generation/client.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/generation/contentRegeneration.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/generation/generationContext.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/generation/generationModes.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/generation/generationRequest.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/generation/generationSavedActions.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/generation/imageGeneration.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/generation/jsonParser.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/generation/jsonShapeExamples.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/generation/mergedGeneration.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/generation/modesBridge.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/generation/normalizers.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/generation/partialProgress.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/generation/pastLivesCardActions.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/generation/prompts.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/generation/recovery.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/generation/recoveryAdapters.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/generation/recoveryFeedback.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/generation/recoveryMerge.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/generation/recoveryPayload.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/generation/recoverySegments.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/generation/requestTemperature.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/heartbeatMemories.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/modes/achievements.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/modes/advEvent.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/modes/advEventData.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/modes/advEventGeneration.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/modes/advEventView.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/modes/album.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/modes/albumView.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/modes/archiveAvatars.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/modes/archivePortal.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/modes/bedtime.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/modes/butterfly.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/modes/butterflyView.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/modes/cabinet.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/modes/calendar.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/modes/calendarBasics.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/modes/calendarData.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/modes/calendarView.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/modes/cgImageViewer.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/modes/cgPromptEditor.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/modes/characterProfile.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/modes/contentManager.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/modes/ending.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/modes/endingData.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/modes/endingGeneration.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/modes/endingView.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/modes/floatingArchive.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/modes/floatingAvatarButton.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/modes/heart.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/modes/heartData.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/modes/heartGeneration.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/modes/heartPrompts.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/modes/heartRuntime.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/modes/heartView.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/modes/homeView.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/modes/immersionStyles.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/modes/inbox.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/modes/inboxStyles.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/modes/inboxView.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/modes/items.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/modes/navigationBookmark.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/modes/overlay.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/modes/pastLives.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/modes/pastLivesView.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/modes/phone.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/modes/phoneBasics.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/modes/phoneData.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/modes/phoneEvidence.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/modes/phoneGeneration.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/modes/phoneIncrement.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/modes/phonePrompts.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/modes/phoneView.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/modes/postcardDesign.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/modes/readingStyles.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/modes/recoveryView.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/modes/relations.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/modes/relationsView.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/modes/room.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/modes/roomData.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/modes/roomFigureLocal.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/modes/roomLayout.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/modes/roomLife.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/modes/roomParticipantData.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/modes/roomPets.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/modes/roomProfile.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/modes/roomRender.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/modes/settingsPanel.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/modes/styles.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/modes/themeSong.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/modes/themeSurfaces.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/modes/timeStories.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/modes/timeStoriesView.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/modes/travel.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/modes/travelGeneration.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/modes/travelScenes.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/modes/travelView.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/advEventView.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/advancedGenerationUi.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/albumCategory.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/albumView.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/archiveAvatars.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/archiveInheritance.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/archivePortal.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/archiveRelayView.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/autoMemoryCountdown.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/autoMemoryShell.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/autoMemoryWizard.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/autoMemoryWizardStyles.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/bedtimeView.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/butterflyView.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/calendarPrint.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/calendarView.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/cgFormatControl.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/cgImageViewer.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/cgPromptEditor.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/chatFloorNav.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/contentManager.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/contentSelection.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/css/butterflyAlbumAdvCss.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/css/calendarCss.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/css/heartProfileTravelCss.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/css/overlayShellCss.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/css/phoneMobileCss.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/css/roomCss.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/css/roomMotifsItemsCss.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/endingView.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/expandedCgView.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/extrasStyles.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/extrasView.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/floatingArchive.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/floatingAvatarButton.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/generationCompletion.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/generationStatus.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/handJournalView.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/heartEnvelope.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/heartReaderState.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/heartView.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/homeView.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/imageMenu.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/immersionStyles.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/inboxStyles.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/inboxView.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/journalClip.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/journalImage.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/languageView.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/memoryReveal.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/mirrorCallView.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/mirrorTtsReader.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/mvCastControls.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/mvEditorUi.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/mvImageEditor.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/mvStageCanvas.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/mvView.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/navigationBookmark.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/overlay.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/overlayClickActions.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/overlayClickTargets.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/overlayCore.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/overlayManage.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/overlayPartial.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/overlayShell.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/participantPicker.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/pastLivesCard.css.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/pastLivesCard.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/pastLivesReading.css.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/pastLivesView.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/phoneView.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/photoshootView.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/postcardDesignView.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/readingStyles.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/recoveryAction.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/recoveryView.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/roomInterior.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/roomObjectDrawing.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/roomPixelFigure.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/routeParticipants.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/scenePicker.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/settingsPanel.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/settingsPanelHome.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/settingsPanelMarkup.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/settingsPanelParts.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/styles.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/taskCenter.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/themeSongStyles.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/themeSongView.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/themeSurfaces.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/timeStoriesView.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/toolbarIcons.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/travelView.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/workspace.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/workspaceState.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "src/ui/workspaceStyles.js",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "tools/verification/album-completion-regression.mjs",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "tools/verification/bedtime-regression.mjs",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "tools/verification/connection-error-category-regression.mjs",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "tools/verification/content-selection-regression.mjs",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "tools/verification/fixture.mjs",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "tools/verification/generation-regression.mjs",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "tools/verification/intro-prompt-hashes.mjs",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "tools/verification/material-prompt-hashes.mjs",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "tools/verification/motif-editor-fixture.mjs",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "tools/verification/motif-prompt-hashes.mjs",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "tools/verification/music-link-loading-regression.mjs",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "tools/verification/mv-auto-material-regression.mjs",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "tools/verification/mv-cast-direction-regression.mjs",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "tools/verification/mv-composite-regression.mjs",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "tools/verification/mv-composite-visual.mjs",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "tools/verification/mv-continuation-regression.mjs",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "tools/verification/mv-cutout-frame-regression.mjs",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "tools/verification/mv-editor-framing-regression.mjs",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "tools/verification/mv-editor-native-regression.mjs",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "tools/verification/mv-editor-open-probe.mjs",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "tools/verification/mv-editor-workspace-regression.mjs",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "tools/verification/mv-framing-paths-regression.mjs",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "tools/verification/mv-host-response-regression.mjs",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "tools/verification/mv-index-regression.mjs",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "tools/verification/mv-intro-regression.mjs",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "tools/verification/mv-journal-upgrade-regression.mjs",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "tools/verification/mv-material-regression.mjs",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "tools/verification/mv-media-sync-regression.mjs",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "tools/verification/mv-motif-regression.mjs",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "tools/verification/mv-music-link-regression.mjs",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "tools/verification/mv-navigation-regression.mjs",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "tools/verification/mv-overlays-regression.mjs",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "tools/verification/mv-ratio-regression.mjs",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "tools/verification/mv-request-lifecycle-regression.mjs",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "tools/verification/mv-restore-prompt-hashes.mjs",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "tools/verification/mv-save-confirmation-regression.mjs",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "tools/verification/mv-single-still-regression.mjs",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "tools/verification/mv-stage-canvas-fixture.mjs",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "tools/verification/mv-stage-canvas-regression.mjs",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "tools/verification/mv-stage-fixture.mjs",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "tools/verification/mv-stage-regression.mjs",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "tools/verification/mv-sync-dark-regression.mjs",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "tools/verification/mv-tap-clock-regression.mjs",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "tools/verification/mv-transport-regression.mjs",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "tools/verification/mv-ui-fixture.mjs",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "tools/verification/mv-update-regression.mjs",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "tools/verification/previous-regression.mjs",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "tools/verification/prompt-hashes.mjs",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "tools/verification/runtime-bindings.mjs",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "tools/verification/task-ui-refresh-probe.mjs",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "tools/verification/task-ui-refresh-regression.mjs",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "tools/verification/terminal-expression-regression.mjs",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "tools/verification/terminal-prompt-hashes.mjs",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "tools/verification/theme-song-writing-regression.mjs",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "file": "tools/verification/verify-editor-static.mjs",
+    "exit_code": 0,
+    "output": ""
+  }
+]

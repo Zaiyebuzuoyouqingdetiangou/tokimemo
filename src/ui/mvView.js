@@ -1,5 +1,5 @@
 // 印象曲 MV 页面：三步开始、镜头清单、对时间、手书剪辑台、视频单镜、拼成 MV。
-// 播放和导出都使用本机音轨；歌曲保存在本机媒体库，不上传、不写入聊天。
+// 播放由同一音轨驱动画面；可用的音频文件缓存在本机，不写入聊天。
 import * as core_constants from '../core/constants.js';
 import * as core_context from '../core/context.js';
 import * as core_text from '../core/text.js';
@@ -200,7 +200,9 @@ function restoreAudio() {
     const token = {};
     audioLoads.set(key, token);
     void mv_media.getMedia(key).then(row => {
-        if (row?.blob && audioLoads.get(key) === token) acceptAudio(row.blob, row.name || '已保存的歌曲', false, target, token, { sourceUrl: row.sourceUrl || '' });
+        if ((row?.blob || row?.mediaUrl) && audioLoads.get(key) === token) {
+            return acceptAudio(row.blob || row.mediaUrl, row.name || '已保存的歌曲', false, target, token, { sourceUrl: row.sourceUrl || '', mediaUrl: row.mediaUrl || '' });
+        }
     }).catch(() => audioTried.delete(key));
 }
 
@@ -209,7 +211,8 @@ function acceptAudio(blob, name, persist, target = mv.captureMvTarget(ctx(), vie
     const opened = viewTarget();
     if (audioLoads.get(key) !== token) audioLoads.get(key)?.cancel?.();
     audioLoads.set(key, token);
-    const url = URL.createObjectURL(blob);
+    const streaming = typeof blob === 'string';
+    const url = streaming ? music_link.musicUrl(blob) : URL.createObjectURL(blob);
     const probe = new Audio(); probe.preload = 'metadata';
     return new Promise(resolve => {
         let settled = false;
@@ -243,9 +246,9 @@ function acceptAudio(blob, name, persist, target = mv.captureMvTarget(ctx(), vie
             catch (error) { finish(false, error); return; }
             const old = audioBySong.get(key);
             if (isView(opened) && audioKey() === key) { stopPlayback(); player.audio = null; }
-            audioBySong.set(key, { url, name: core_text.normalizeText(name, 80), duration, target, sourceUrl: details.sourceUrl || '' });
+            audioBySong.set(key, { url, name: core_text.normalizeText(name, 80), duration, target, sourceUrl: details.sourceUrl || '', streaming });
             if (old) { try { URL.revokeObjectURL(old.url); } catch {} }
-            if (persist) void mv_media.putMedia(key, blob, name, details).then(ok => { if (!ok && isView(opened)) globalThis.toastr?.info?.('这台设备没能记住这首歌，下次打开需要重新选择。', '心迹回廊 · MV'); });
+            if (persist) void mv_media.putMedia(key, streaming ? null : blob, name, { ...details, ...(streaming ? { mediaUrl: url } : {}) }).then(ok => { if (!ok && isView(opened)) globalThis.toastr?.info?.('这台设备没能记住这首歌，下次打开需要重新选择。', '心迹回廊 · MV'); });
             finish(true);
             if (isView(opened) && audioKey() === key) renderMv();
         };
@@ -283,8 +286,8 @@ async function importMusicLink(value) {
         const media = await music_link.readMusicLink(sourceUrl, { signal: controller.signal });
         if (musicLinkImport !== pending || !isView(opened) || controller.signal.aborted) return;
         view.musicLinkStatus = '正在检查音频…'; renderMv();
-        const ok = await acceptAudio(media.blob, media.name, true, target, token, { sourceUrl: media.sourceUrl });
-        if (musicLinkImport === pending && isView(opened)) view.musicLinkStatus = ok ? '已导入，与画面共用播放进度。' : '音频未能导入，原有歌曲未替换。';
+        const ok = await acceptAudio(media.blob || media.url, media.name, true, target, token, { sourceUrl: media.sourceUrl });
+        if (musicLinkImport === pending && isView(opened)) view.musicLinkStatus = ok ? (media.streaming ? '已接入在线音轨，与画面共用播放进度。' : '已导入，与画面共用播放进度。') : '音频未能导入，原有歌曲未替换。';
     } catch (error) {
         if (musicLinkImport === pending && isView(opened)) view.musicLinkStatus = timedOut ? '音乐读取超时，原有歌曲未替换。' : controller.signal.aborted ? '' : /^RMT_MV_LINK_/.test(error?.code || '') ? String(error.message) : '音乐读取失败，原有歌曲未替换。';
     } finally {
@@ -816,7 +819,7 @@ function canvasSize(record) {
 function audioCard(song) {
     const audio = audioBySong.get(audioKey());
     const busy = !!musicLinkImport, value = view.musicLinkInput ?? audio?.sourceUrl ?? '';
-    return `<div class="rmt-mv-file"><span aria-hidden="true">♫</span><div><b>${esc(audio ? audio.name : '还没有放入歌曲')}</b><small>${audio ? `${mv.formatTime(audio.duration)} · 只在本机使用，不上传` : `为「${esc(song.title)}」选择文件或导入音乐链接`}</small></div>
+    return `<div class="rmt-mv-file"><span aria-hidden="true">♫</span><div><b>${esc(audio ? audio.name : '还没有放入歌曲')}</b><small>${audio ? `${mv.formatTime(audio.duration)} · ${audio.streaming ? '在线音轨' : '只在本机使用，不上传'}` : `为「${esc(song.title)}」选择文件或导入音乐链接`}</small></div>
       <label>${audio ? '换一首' : '选择文件'}<input type="file" accept="audio/*,.mp3,.m4a,.wav,.ogg" data-rmt-mv-audio></label></div>
       <div class="rmt-mv-music-link" data-rmt-mv-link-box><label for="rmt-mv-music-link">音乐链接（试验）</label>
       <input id="rmt-mv-music-link" type="url" inputmode="url" autocomplete="off" spellcheck="false" data-rmt-mv-music-link value="${esc(value)}" placeholder="粘贴 Suno 歌曲链接或音频直链"${busy ? ' disabled' : ''}>
@@ -1383,13 +1386,14 @@ async function exportVideo() {
     if (!support.ok || !currentRecord() || !song) return;
     const record = mv.exportRecord(currentRecord(), song);
     stopPlayback();
-    const state = { cancelled: false, tracks: [], raf: 0, recorder: null, audio: null, ac: null, canvas: null };
+    const state = { cancelled: false, tracks: [], raf: 0, recorder: null, audio: null, ac: null, canvas: null, musicController: null, musicTimer: 0, musicUrl: '' };
     player.exporting = state;
     const current = () => !state.cancelled && player.exporting === state && isView(opened) && view.sub === sub;
     const chunks = [];
     const finish = () => {
         if (state.finished) return;
         state.finished = true;
+        state.musicController?.abort(); clearTimeout(state.musicTimer);
         const mayRender = current();
         if (player.exporting === state) player.exporting = null;
         try { state.audio?.pause(); } catch {}
@@ -1397,6 +1401,7 @@ async function exportVideo() {
         for (const track of state.tracks) { try { track.stop(); } catch {} }
         try { Promise.resolve(state.ac?.close()).catch(() => {}); } catch {}
         state.canvas?.remove();
+        if (state.musicUrl) URL.revokeObjectURL(state.musicUrl);
         if (!state.cancelled && chunks.length) {
             download(new Blob(chunks, { type: support.mime.split(';')[0] }), `${safeName(song.title)}-MV.${support.ext}`);
             toastOk('视频已导出。');
@@ -1405,6 +1410,22 @@ async function exportVideo() {
     };
     state.finish = finish;
     try {
+        let exportAudioUrl = entry?.url;
+        if (entry?.streaming) {
+            // A no-CORS media element can play but Web Audio would record
+            // silence. Obtain readable bytes before starting the recorder.
+            renderMv();
+            state.musicController = new AbortController();
+            state.musicTimer = setTimeout(() => state.musicController.abort(), 60000);
+            let media;
+            try { media = await music_link.readMusicLink(entry.url, { signal: state.musicController.signal, allowStreaming: false }); }
+            catch (error) {
+                if (!current()) { finish(); return; }
+                throw core_text.safeUserError('在线音轨可继续预览，本次未能读取用于导出的音频。请稍后重试，已有编辑已保留。', 'RMT_MV_EXPORT_AUDIO');
+            } finally { clearTimeout(state.musicTimer); }
+            if (!current()) { finish(); return; }
+            exportAudioUrl = state.musicUrl = URL.createObjectURL(media.blob);
+        }
         await preloadImages(record, song);
         if (!current()) { state.cancelled = true; finish(); return; }
         const [w, h] = canvasSize(record);
@@ -1414,7 +1435,7 @@ async function exportVideo() {
         document.body.appendChild(canvas);
         const AC = globalThis.AudioContext || globalThis.webkitAudioContext;
         // 没有放入歌曲时导出无声视频：用本地时钟代替音频的播放进度。
-        const audio = state.audio = entry ? new Audio(entry.url) : silentClock();
+        const audio = state.audio = entry ? new Audio(exportAudioUrl) : silentClock();
         const video = canvas.captureStream(30);
         state.tracks.push(...video.getTracks());
         let stream = new MediaStream(video.getVideoTracks());
@@ -1453,7 +1474,7 @@ async function exportVideo() {
         await audio.play();
         if (!current()) { audio.pause(); stopExport(); return; }
         state.raf = requestAnimationFrame(loop);
-    } catch (error) { stopExport(); toastError(core_text.safeUserError('这台设备这次没能录制，可以改用录屏模式。', 'RMT_MV_EXPORT')); }
+    } catch (error) { stopExport(); toastError(error?.code === 'RMT_MV_EXPORT_AUDIO' ? error : core_text.safeUserError('这台设备这次没能录制，可以改用录屏模式。', 'RMT_MV_EXPORT')); }
 }
 
 function stopExport() {

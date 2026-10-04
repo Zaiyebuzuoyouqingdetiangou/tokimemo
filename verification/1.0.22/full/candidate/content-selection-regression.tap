@@ -1,0 +1,240 @@
+(node:60) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+TAP version 13
+# Subtest: album: first 500-memory request sends 48 and records 48, not all 500
+ok 1 - album: first 500-memory request sends 48 and records 48, not all 500
+  ---
+  duration_ms: 189.266952
+  type: 'test'
+  ...
+# Subtest: album: manual 300-memory range reaches prompt and validates last item
+ok 2 - album: manual 300-memory range reaches prompt and validates last item
+  ---
+  duration_ms: 318.920941
+  type: 'test'
+  ...
+# Subtest: album: old blanket coverage does not hide unused memories; old work is immutable
+ok 3 - album: old blanket coverage does not hide unused memories; old work is immutable
+  ---
+  duration_ms: 201.798304
+  type: 'test'
+  ...
+# Subtest: album: valid empty first result advances material only, without follow-up calls
+ok 4 - album: valid empty first result advances material only, without follow-up calls
+  ---
+  duration_ms: 141.34633
+  type: 'test'
+  ...
+# Subtest: album: malformed/failed result never changes old coverage or work
+ok 5 - album: malformed/failed result never changes old coverage or work
+  ---
+  duration_ms: 159.829173
+  type: 'test'
+  ...
+# Subtest: album: selected evidence cannot accept a different archive row
+ok 6 - album: selected evidence cannot accept a different archive row
+  ---
+  duration_ms: 140.571512
+  type: 'test'
+  ...
+# Subtest: album: duplicate paid output is discarded while historical image/text stays exact
+ok 7 - album: duplicate paid output is discarded while historical image/text stays exact
+  ---
+  duration_ms: 146.88343
+  type: 'test'
+  ...
+# Subtest: album: recovery schema and partial reader use frozen selected bank
+ok 8 - album: recovery schema and partial reader use frozen selected bank
+  ---
+  duration_ms: 182.502218
+  type: 'test'
+  ...
+# Subtest: adv: first 500-memory request sends 48 and records 48, not all 500
+ok 9 - adv: first 500-memory request sends 48 and records 48, not all 500
+  ---
+  duration_ms: 237.50311
+  type: 'test'
+  ...
+# Subtest: adv: manual 300-memory range reaches prompt and validates last item
+ok 10 - adv: manual 300-memory range reaches prompt and validates last item
+  ---
+  duration_ms: 247.137892
+  type: 'test'
+  ...
+# Subtest: adv: old blanket coverage does not hide unused memories; old work is immutable
+ok 11 - adv: old blanket coverage does not hide unused memories; old work is immutable
+  ---
+  duration_ms: 231.621238
+  type: 'test'
+  ...
+# Subtest: adv: valid empty first result advances material only, without follow-up calls
+ok 12 - adv: valid empty first result advances material only, without follow-up calls
+  ---
+  duration_ms: 235.22351
+  type: 'test'
+  ...
+# Subtest: adv: malformed/failed result never changes old coverage or work
+ok 13 - adv: malformed/failed result never changes old coverage or work
+  ---
+  duration_ms: 252.925253
+  type: 'test'
+  ...
+# Subtest: adv: selected evidence cannot accept a different archive row
+ok 14 - adv: selected evidence cannot accept a different archive row
+  ---
+  duration_ms: 255.871987
+  type: 'test'
+  ...
+# Subtest: adv: duplicate paid output is discarded while historical image/text stays exact
+ok 15 - adv: duplicate paid output is discarded while historical image/text stays exact
+  ---
+  duration_ms: 270.998681
+  type: 'test'
+  ...
+# Subtest: adv: recovery schema and partial reader use frozen selected bank
+ok 16 - adv: recovery schema and partial reader use frozen selected bank
+  ---
+  duration_ms: 228.86688
+  type: 'test'
+  ...
+# Subtest: cold-tier selection participates without changing the original bank
+ok 17 - cold-tier selection participates without changing the original bank
+  ---
+  duration_ms: 247.765047
+  type: 'test'
+  ...
+# Subtest: expired manual selection stops before a provider request
+ok 18 - expired manual selection stops before a provider request
+  ---
+  duration_ms: 247.584638
+  type: 'test'
+  ...
+# Subtest: manual selection is isolated by mode, chat, avatar, archive target and revision
+ok 19 - manual selection is isolated by mode, chat, avatar, archive target and revision
+  ---
+  duration_ms: 240.51449
+  type: 'test'
+  ...
+# Subtest: completion clears only its exact applied request; failed or newer choices survive
+ok 20 - completion clears only its exact applied request; failed or newer choices survive
+  ---
+  duration_ms: 195.005877
+  type: 'test'
+  ...
+# Subtest: frozen plan survives serialization and does not adopt a later form selection
+ok 21 - frozen plan survives serialization and does not adopt a later form selection
+  ---
+  duration_ms: 366.861005
+  type: 'test'
+  ...
+# Subtest: empty and nonexistent selections are rejected without replacing an applied request
+ok 22 - empty and nonexistent selections are rejected without replacing an applied request
+  ---
+  duration_ms: 191.536184
+  type: 'test'
+  ...
+# Subtest: legacy paid journal keeps its original prompt sampling, but stamps only 48 actual inputs
+ok 23 - legacy paid journal keeps its original prompt sampling, but stamps only 48 actual inputs
+  ---
+  duration_ms: 193.181882
+  type: 'test'
+  ...
+# Subtest: creative prompt templates are byte-for-byte unchanged from the delivered 1.0.20 source
+ok 24 - creative prompt templates are byte-for-byte unchanged from the delivered 1.0.20 source
+  ---
+  duration_ms: 1.739028
+  type: 'test'
+  ...
+# Subtest: UI: opening first-generation selection is local, collapsed and uses existing generate action
+ok 25 - UI: opening first-generation selection is local, collapsed and uses existing generate action
+  ---
+  duration_ms: 191.755113
+  type: 'test'
+  ...
+# Subtest: UI: apply a range before generation, paginate and keep exact mode-specific request
+ok 26 - UI: apply a range before generation, paginate and keep exact mode-specific request
+  ---
+  duration_ms: 190.619806
+  type: 'test'
+  ...
+# Subtest: UI: invalid and empty ranges cannot replace chosen material; automatic restore works
+ok 27 - UI: invalid and empty ranges cannot replace chosen material; automatic restore works
+  ---
+  duration_ms: 201.43173
+  type: 'test'
+  ...
+# Subtest: UI: individual checkboxes change the applied set
+ok 28 - UI: individual checkboxes change the applied set
+  ---
+  duration_ms: 266.760501
+  type: 'test'
+  ...
+# Subtest: UI: stale archive blocks both selection and paid generation
+ok 29 - UI: stale archive blocks both selection and paid generation
+  ---
+  duration_ms: 197.546862
+  type: 'test'
+  ...
+# Subtest: UI: completed selection resets to automatic only for its matching request
+ok 30 - UI: completed selection resets to automatic only for its matching request
+  ---
+  duration_ms: 204.863016
+  type: 'test'
+  ...
+# Subtest: UI: unsupported modes and read-only or backup pages do not expose selection controls
+ok 31 - UI: unsupported modes and read-only or backup pages do not expose selection controls
+  ---
+  duration_ms: 202.103994
+  type: 'test'
+  ...
+# Subtest: album: public generateMode freezes applied selection into recovery and commits matching coverage
+ok 32 - album: public generateMode freezes applied selection into recovery and commits matching coverage
+  ---
+  duration_ms: 365.873026
+  type: 'test'
+  ...
+# Subtest: adv: public generateMode freezes applied selection into recovery and commits matching coverage
+ok 33 - adv: public generateMode freezes applied selection into recovery and commits matching coverage
+  ---
+  duration_ms: 401.254404
+  type: 'test'
+  ...
+# Subtest: album: second-step dialogue keeps selected coverage instead of marking a new batch
+ok 34 - album: second-step dialogue keeps selected coverage instead of marking a new batch
+  ---
+  duration_ms: 459.399197
+  type: 'test'
+  ...
+# Subtest: paid album index survives a fresh runtime and resumes original range with zero new provider calls
+ok 35 - paid album index survives a fresh runtime and resumes original range with zero new provider calls
+  ---
+  duration_ms: 1248.877908
+  type: 'test'
+  ...
+# Subtest: album: existing reader mounts selection alongside original reading controls
+ok 36 - album: existing reader mounts selection alongside original reading controls
+  ---
+  duration_ms: 237.340528
+  type: 'test'
+  ...
+# Subtest: adv: existing reader mounts selection alongside original reading controls
+ok 37 - adv: existing reader mounts selection alongside original reading controls
+  ---
+  duration_ms: 238.348185
+  type: 'test'
+  ...
+# Subtest: UI: imported metadata and archive titles cannot insert HTML through the selection panel
+ok 38 - UI: imported metadata and archive titles cannot insert HTML through the selection panel
+  ---
+  duration_ms: 231.968219
+  type: 'test'
+  ...
+1..38
+# tests 38
+# suites 0
+# pass 38
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 9831.494283

@@ -1,0 +1,60 @@
+(node:208) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+TAP version 13
+# Subtest: one-click cutout opens directly on a transparent PNG draft and preserves original on save
+ok 1 - one-click cutout opens directly on a transparent PNG draft and preserves original on save
+  ---
+  duration_ms: 370.588306
+  type: 'test'
+  ...
+# Subtest: one-click cutout undo and cancel keep the paid source and do not save a mask
+ok 2 - one-click cutout undo and cancel keep the paid source and do not save a mask
+  ---
+  duration_ms: 257.374795
+  type: 'test'
+  ...
+# Subtest: explicit cutout removes panel outside white only and never describes it as recovered character
+ok 3 - explicit cutout removes panel outside white only and never describes it as recovered character
+  ---
+  duration_ms: 222.547855
+  type: 'test'
+  ...
+# Subtest: complex and empty backgrounds produce no destructive saved image
+ok 4 - complex and empty backgrounds produce no destructive saved image
+  ---
+  duration_ms: 386.985888
+  type: 'test'
+  ...
+# Subtest: preview trims a rectangular panel border but never zooms into a full-body transparent figure
+ok 5 - preview trims a rectangular panel border but never zooms into a full-body transparent figure
+  ---
+  duration_ms: 499.692542
+  type: 'test'
+  ...
+# Subtest: character, group background, motif, and inspector use the selected frame shape and provide cutout action
+ok 6 - character, group background, motif, and inspector use the selected frame shape and provide cutout action
+  ---
+  duration_ms: 180.137974
+  type: 'test'
+  ...
+# Subtest: real board thumbnail excludes picture padding without changing persisted image, shots or timing
+ok 7 - real board thumbnail excludes picture padding without changing persisted image, shots or timing
+  ---
+  duration_ms: 379.665799
+  type: 'test'
+  ...
+# Subtest: one-click never guesses a cell from a multi-panel sprite sheet
+ok 8 - one-click never guesses a cell from a multi-panel sprite sheet
+  ---
+  duration_ms: 288.361567
+  type: 'test'
+  ...
+1..8
+# tests 8
+# suites 0
+# pass 8
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 2919.746135

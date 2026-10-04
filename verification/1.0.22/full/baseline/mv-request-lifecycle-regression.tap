@@ -1,0 +1,102 @@
+(node:676) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+TAP version 13
+# Subtest: one setup click makes one storyboard request; drawing screen does not launch another batch
+ok 1 - one setup click makes one storyboard request; drawing screen does not launch another batch
+  ---
+  duration_ms: 193.07352
+  type: 'test'
+  ...
+# Subtest: an explicit continuation click requests one batch even when the reply leaves more sections
+ok 2 - an explicit continuation click requests one batch even when the reply leaves more sections
+  ---
+  duration_ms: 155.639772
+  type: 'test'
+  ...
+# Subtest: late setup completion cannot launch story requests for a newly opened song
+ok 3 - late setup completion cannot launch story requests for a newly opened song
+  ---
+  duration_ms: 141.380593
+  type: 'test'
+  ...
+# Subtest: regeneration arriving after a v2 image was drawn holds the response and preserves that image
+ok 4 - regeneration arriving after a v2 image was drawn holds the response and preserves that image
+  ---
+  duration_ms: 152.019734
+  type: 'test'
+  ...
+# Subtest: story single-flight remains locked until an asynchronous metadata save settles
+ok 5 - story single-flight remains locked until an asynchronous metadata save settles
+  ---
+  duration_ms: 169.099119
+  type: 'test'
+  ...
+# Subtest: queued group drawing never jumps to a newly opened song after its first image finishes
+ok 6 - queued group drawing never jumps to a newly opened song after its first image finishes
+  ---
+  duration_ms: 146.439916
+  type: 'test'
+  ...
+# Subtest: late paid asset is held if its group key was reused by an explicit replacement storyboard
+ok 7 - late paid asset is held if its group key was reused by an explicit replacement storyboard
+  ---
+  duration_ms: 171.71179
+  type: 'test'
+  ...
+# Subtest: a continuation can consist entirely of reused paid images without cloning or redrawing them
+ok 8 - a continuation can consist entirely of reused paid images without cloning or redrawing them
+  ---
+  duration_ms: 205.289979
+  type: 'test'
+  ...
+# Subtest: mixed new and reused groups preserve the correct image keys even when new raw IDs overlap old IDs
+ok 9 - mixed new and reused groups preserve the correct image keys even when new raw IDs overlap old IDs
+  ---
+  duration_ms: 162.408789
+  type: 'test'
+  ...
+# Subtest: single-image redraw sends a fresh seed and a group redraw shares its new seed across differences
+ok 10 - single-image redraw sends a fresh seed and a group redraw shares its new seed across differences
+  ---
+  duration_ms: 180.150716
+  type: 'test'
+  ...
+# Subtest: the existing ten-line request batch size remains, with no total section limit
+ok 11 - the existing ten-line request batch size remains, with no total section limit
+  ---
+  duration_ms: 217.414598
+  type: 'test'
+  ...
+# Subtest: saved r215 custom export selection remains effective when the restored clip controls first open
+ok 12 - saved r215 custom export selection remains effective when the restored clip controls first open
+  ---
+  duration_ms: 155.670082
+  type: 'test'
+  ...
+# Subtest: queued drawing stops when an explicit replacement story arrives, even on the same page
+ok 13 - queued drawing stops when an explicit replacement story arrives, even on the same page
+  ---
+  duration_ms: 225.978593
+  type: 'test'
+  ...
+# Subtest: a manual image filled while another asset is drawing is skipped by the remaining-image queue
+ok 14 - a manual image filled while another asset is drawing is skipped by the remaining-image queue
+  ---
+  duration_ms: 174.509154
+  type: 'test'
+  ...
+# Subtest: append retains images paid before it finishes and late image saves to the unchanged original group
+ok 15 - append retains images paid before it finishes and late image saves to the unchanged original group
+  ---
+  duration_ms: 181.65233
+  type: 'test'
+  ...
+1..15
+# tests 15
+# suites 0
+# pass 15
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 2685.829351

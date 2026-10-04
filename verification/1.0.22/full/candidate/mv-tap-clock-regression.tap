@@ -1,0 +1,102 @@
+(node:812) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+TAP version 13
+# Subtest: whole-song lyric taps keep repeated-shot starts ordered and every distinct lyric exactly on its tap
+ok 1 - whole-song lyric taps keep repeated-shot starts ordered and every distinct lyric exactly on its tap
+  ---
+  duration_ms: 123.727085
+  type: 'test'
+  ...
+# Subtest: a late lyric tap redistributes unmarked shots between anchors rather than leaving old starts behind
+ok 2 - a late lyric tap redistributes unmarked shots between anchors rather than leaving old starts behind
+  ---
+  duration_ms: 121.944088
+  type: 'test'
+  ...
+# Subtest: section taps remain exact fractional anchors even when automatic beat snapping is enabled
+ok 3 - section taps remain exact fractional anchors even when automatic beat snapping is enabled
+  ---
+  duration_ms: 127.855864
+  type: 'test'
+  ...
+# Subtest: unmarked earlier sections fit before a later manual anchor without pushing that anchor away
+ok 4 - unmarked earlier sections fit before a later manual anchor without pushing that anchor away
+  ---
+  duration_ms: 125.538003
+  type: 'test'
+  ...
+# Subtest: section ranges and clipped export follow first-line anchors from whole-song lyric sync
+ok 5 - section ranges and clipped export follow first-line anchors from whole-song lyric sync
+  ---
+  duration_ms: 145.531379
+  type: 'test'
+  ...
+# Subtest: space and punctuation differences in copied lyrics still map to the same manual line
+ok 6 - space and punctuation differences in copied lyrics still map to the same manual line
+  ---
+  duration_ms: 139.693593
+  type: 'test'
+  ...
+# Subtest: repeated lyric text in separate occurrences receives distinct saved line times
+ok 7 - repeated lyric text in separate occurrences receives distinct saved line times
+  ---
+  duration_ms: 150.576232
+  type: 'test'
+  ...
+# Subtest: null and empty lyric taps remain unmarked and corrupt reversed taps never make negative durations
+ok 8 - null and empty lyric taps remain unmarked and corrupt reversed taps never make negative durations
+  ---
+  duration_ms: 175.824426
+  type: 'test'
+  ...
+# Subtest: tiny manually timed line intervals retain both exact anchors and positive intermediate cuts
+ok 9 - tiny manually timed line intervals retain both exact anchors and positive intermediate cuts
+  ---
+  duration_ms: 143.804247
+  type: 'test'
+  ...
+# Subtest: subtitles and timetable use the repaired positive timeline and preserve saved content
+ok 10 - subtitles and timetable use the repaired positive timeline and preserve saved content
+  ---
+  duration_ms: 145.091592
+  type: 'test'
+  ...
+# Subtest: an untimed opening with no intro drawings preserves later estimated cut positions
+ok 11 - an untimed opening with no intro drawings preserves later estimated cut positions
+  ---
+  duration_ms: 164.009898
+  type: 'test'
+  ...
+# Subtest: a corrupt zero tap after earlier drawings is ignored without rewriting data or collapsing those drawings
+ok 12 - a corrupt zero tap after earlier drawings is ignored without rewriting data or collapsing those drawings
+  ---
+  duration_ms: 170.669194
+  type: 'test'
+  ...
+# Subtest: public whole-song lyric sync, undo and reopening preserve exact timing and show no early lyric or skipped drawing
+ok 13 - public whole-song lyric sync, undo and reopening preserve exact timing and show no early lyric or skipped drawing
+  ---
+  duration_ms: 510.360467
+  type: 'test'
+  ...
+# Subtest: video export starts at the marked chorus and uses the same absolute cut points and images as preview
+ok 14 - video export starts at the marked chorus and uses the same absolute cut points and images as preview
+  ---
+  duration_ms: 213.947482
+  type: 'test'
+  ...
+# Subtest: legacy overall timing offsets retain their automatic cut positions when there are no manual marks
+ok 15 - legacy overall timing offsets retain their automatic cut positions when there are no manual marks
+  ---
+  duration_ms: 166.600537
+  type: 'test'
+  ...
+1..15
+# tests 15
+# suites 0
+# pass 15
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 2958.512886

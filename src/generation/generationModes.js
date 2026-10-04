@@ -333,6 +333,14 @@ async function generateModeOperation(mode, options = {}) {
             allowPersonaExpansion = options.automatic !== true && savedOperation.allowPersonaExpansion === true;
             options.visualOnly = savedOperation.visualOnly === true;
             options.fillMissing = savedOperation.fillMissing === true;
+            if (mode === core_constants.MODE.ALBUM) {
+                // Old dialogue-only journals predate the explicit intent flag. They
+                // contain relation/comment slots but no CG-index request at all.
+                const slots = (recoveryExisting.segments || []).map(segment => String(segment.slot || ''));
+                options.secondStep = Object.hasOwn(savedOperation, 'secondStep') ? savedOperation.secondStep === true
+                    : !slots.some(slot => /:index$/u.test(slot))
+                        && (slots.some(slot => /:(?:relationship-scan|comments:\d+)$/u.test(slot)) || options.secondStep === true);
+            }
             if (typeof savedOperation.focusObjectId === 'string') options.focusObjectId = savedOperation.focusObjectId;
         }
     }
@@ -462,7 +470,7 @@ async function generateModeOperation(mode, options = {}) {
         recoveryHandle = await beginModeRecovery(mode, context, memoryBank, origin, { ...options, archiveTarget, stillCurrent: archiveTargetStillCurrent, existing: recoveryExisting, replaceExisting,
             partialReaderStillCurrent: scopedReaderMode ? () => !background && timeReaderVisible() : null,
             contentInputs: { previousSession, roomSession, focusObject, ...(linkedRoomSession ? { linkedRoomSession } : {}) },
-            operation: recoveryExisting?.operation || { kind: 'mode', mode, ...(contentSelectionPlan ? { contentSelectionPlan } : {}), ...(themeSongPlan ? { themeSongPlan } : {}), ...(bedtimePlan ? { bedtimePlan } : {}), inboxDate: inboxDate?.toISOString() || '', calendarDate: calendarCurrentDate,
+            operation: recoveryExisting?.operation || { kind: 'mode', mode, ...(mode === core_constants.MODE.ALBUM ? { secondStep: options.secondStep === true } : {}), ...(contentSelectionPlan ? { contentSelectionPlan } : {}), ...(themeSongPlan ? { themeSongPlan } : {}), ...(bedtimePlan ? { bedtimePlan } : {}), inboxDate: inboxDate?.toISOString() || '', calendarDate: calendarCurrentDate,
                 ...(mode === core_constants.MODE.INBOX ? { inboxPlanVersion: 2 } : {}),
                 ...(mode === core_constants.MODE.CALENDAR ? { calendarTimeBasis: 'story' } : {}),
                 allowPersonaExpansion, visualOnly: options.visualOnly === true, fillMissing: options.fillMissing === true, focusObjectId: core_text.normalizeText(options.focusObjectId, 120),
@@ -653,7 +661,7 @@ async function generateModeOperation(mode, options = {}) {
             }
             session[core_cache.PARTICIPANT_REPLACEMENT_KEY] = replacementTicket;
         }
-        if (!core_incremental.incrementalPartRecord(session, incrementalPart)) {
+        if (!(mode === core_constants.MODE.ALBUM && options.secondStep) && !core_incremental.incrementalPartRecord(session, incrementalPart)) {
             const sourceMemoryIds = core_incremental.incrementalArchiveMemoryIds(previousSession, memoryBank, incrementalPart);
             const added = previousSession ? 0 : 1;
             core_incremental.stampIncrementalCoverage(session, previousSession, memoryBank, incrementalPart, sourceMemoryIds, added);

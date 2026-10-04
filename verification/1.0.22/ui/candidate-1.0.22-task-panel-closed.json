@@ -1,0 +1,31 @@
+{
+  "syntheticJournalChars": 343453,
+  "taskPanelOpen": false,
+  "measurements": [
+    {
+      "ms": 29.8,
+      "draftReads": 1,
+      "draftReadChars": 343682
+    },
+    {
+      "ms": 14.6,
+      "draftReads": 1,
+      "draftReadChars": 343682
+    },
+    {
+      "ms": 13.6,
+      "draftReads": 1,
+      "draftReadChars": 343682
+    },
+    {
+      "ms": 13.4,
+      "draftReads": 1,
+      "draftReadChars": 343682
+    },
+    {
+      "ms": 12.3,
+      "draftReads": 1,
+      "draftReadChars": 343682
+    }
+  ]
+}

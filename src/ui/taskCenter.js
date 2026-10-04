@@ -22,9 +22,44 @@ import * as auto_memory_scheduler from '../autoMemory/scheduler.js';
 
 let painting = false;
 let pumping = false;
+let paintSnapshot = null;
 const queue = [];
 const autoRetryUsed = new Map();
 let floorFailure = null;
+
+// A single chrome refresh paints the badge, live strip and optional task panel.
+// Reading a draft validates and copies its frozen sources and paid replies, so
+// share those reads only within this synchronous paint. A later paint must see
+// newly saved segments and cancellation immediately, even in the same tick.
+function withPaintSnapshot(paint) {
+    if (paintSnapshot) return paint();
+    paintSnapshot = new Map();
+    try { return paint(); }
+    finally { paintSnapshot = null; }
+}
+
+function readForPaint(key, read) {
+    if (!paintSnapshot) return read();
+    if (!paintSnapshot.has(key)) {
+        try { paintSnapshot.set(key, { value: read() }); }
+        catch (error) { paintSnapshot.set(key, { error }); }
+    }
+    const result = paintSnapshot.get(key);
+    if (Object.hasOwn(result, 'error')) throw result.error;
+    return result.value;
+}
+
+function taskRowsForPaint() {
+    return readForPaint('tasks', () => core_requestCoordinator.listChatTaskSnapshot());
+}
+
+function draftRowsForPaint() {
+    return readForPaint('drafts', () => core_cache.listGenerationDrafts());
+}
+
+function pendingRowsForPaint() {
+    return readForPaint('pending', () => statusView.currentPendingRows());
+}
 
 export function noteAutoMemoryFloorFailure(info = {}) {
     const next = {
@@ -378,29 +413,24 @@ export function hideTaskCenter() {
     if (panel) panel.hidden = true;
 }
 
-let unfinishedCache = { at: 0, count: 0 };
-
 function unfinishedReminderCount() {
-    const now = Date.now();
-    if (now - unfinishedCache.at < 1500) return unfinishedCache.count;
     let count = 0;
     try {
-        count += core_cache.listGenerationDrafts().filter(row => row.completed || row.truncated || row.failed || row.failureCode || row.oversized).length;
+        count += draftRowsForPaint().filter(row => row.completed || row.truncated || row.failed || row.failureCode || row.oversized).length;
     } catch { /* A missing archive has nothing unfinished to badge. */ }
     try {
         if (archive_repository.getCurrentArchiveImportRecoverySummary()) count += 1;
         if (archive_repository.getCurrentArchiveProfileRecoverySummary()) count += 1;
     } catch { /* Archive recovery is optional until a chat is open. */ }
     try {
-        const ids = new Set(core_cache.listGenerationDrafts().map(row => row.draftId));
-        count += statusView.currentPendingRows().filter(row => !ids.has(row.origin?.generationRecoveryDraftId || row.id)).length;
+        const ids = new Set(draftRowsForPaint().map(row => row.draftId));
+        count += pendingRowsForPaint().filter(row => !ids.has(row.origin?.generationRecoveryDraftId || row.id)).length;
     } catch { /* Corrupt raw data is exportable from the task card. */ }
-    unfinishedCache = { at: now, count };
     return count;
 }
 
 function syncTaskCenterBadge() {
-    const running = core_requestCoordinator.listChatTaskSnapshot().filter(row => row.running).length;
+    const running = taskRowsForPaint().filter(row => row.running).length;
     const waiting = queuedForScope().length;
     const unfinished = unfinishedReminderCount();
     const total = running + waiting + unfinished;
@@ -472,7 +502,7 @@ function dismissButton({ taskId = '', queueId = '', floorFailure = false } = {})
 
 function draftCards() {
     let drafts = [];
-    try { drafts = core_cache.listGenerationDrafts(); }
+    try { drafts = draftRowsForPaint(); }
     catch { drafts = []; }
     return drafts.filter(row => row.completed || row.truncated || row.failed || row.failureCode || row.oversized).map(row => {
         const oversized = row.oversized === true;
@@ -570,7 +600,7 @@ function openAction(record) {
 
 function mergedPendingCards() {
     let rows;
-    try { rows = statusView.currentPendingRows(); }
+    try { rows = pendingRowsForPaint(); }
     catch { return [{ state: 'failed', label: '暂存区', detail: '读取失败，旧数据保留。请导出未归属的旧暂存记录。', actions: '<button type="button" class="rmt-btn" data-rmt-action="merged-export-legacy">导出旧暂存记录</button>', at: 0 }]; }
     const cards = rows.map(row => {
         const state = row.kind === 'unsaved' ? 'unsaved' : 'retry';
@@ -580,7 +610,7 @@ function mergedPendingCards() {
             actions: `<button type="button" class="rmt-btn" data-rmt-action="${state === 'unsaved' ? 'merged-resave' : 'merged-repair'}" ${attrs} ${row.origin ? '' : 'disabled'}>${state === 'unsaved' ? '重新保存' : '只补这一页'}</button><button type="button" class="rmt-btn" data-rmt-action="merged-export" ${attrs}>导出成果</button><button type="button" class="rmt-btn" data-rmt-action="merged-new" ${attrs}>开始新任务</button><button type="button" class="rmt-btn" data-rmt-action="merged-discard" ${attrs}>放弃这份成果</button>` };
     });
     let legacy = [];
-    try { legacy = statusView.currentUnattributedPendingRows(); } catch { /* The guarded export action remains available through read failure. */ }
+    try { legacy = readForPaint('unattributed', () => statusView.currentUnattributedPendingRows()); } catch { /* The guarded export action remains available through read failure. */ }
     if (legacy.length) cards.push({ state: 'failed', label: '未归属的旧暂存记录', detail: `有 ${legacy.length} 条旧记录缺少所属人物，已保留且不会显示为当前人物内容。`, actions: '<button type="button" class="rmt-btn" data-rmt-action="merged-export-legacy">导出旧暂存记录</button><button type="button" class="rmt-btn" data-rmt-action="merged-discard-legacy">导出并丢弃</button>', at: 0 });
     return cards;
 }
@@ -588,7 +618,7 @@ function mergedPendingCards() {
 function collectTaskCards() {
     const cards = mergedPendingCards();
     cards.push(...draftCards().filter(row => !cards.some(card => card.draftId && card.draftId === row.draftId)));
-    const rows = core_requestCoordinator.listChatTaskSnapshot();
+    const rows = taskRowsForPaint();
     for (const row of rows.filter(item => item.running)) {
         const existing = cards.find(card => sameJob(card, row));
         const next = {
@@ -717,7 +747,7 @@ function paintLiveStrip() {
     if (!host) return;
     const esc = core_text.esc;
     let rows = [];
-    try { rows = core_requestCoordinator.listChatTaskSnapshot(); } catch { rows = []; }
+    try { rows = taskRowsForPaint(); } catch { rows = []; }
     const running = rows.filter(row => row.running);
     const runningLabels = new Set(running.map(row => row.label));
     const failed = rows.filter(row => !row.running && (row.phase === 'failed' || row.outcome === 'failed') && !runningLabels.has(row.label));
@@ -844,13 +874,15 @@ function refreshTaskCenterView() {
     if (painting) return;
     painting = true;
     try {
-        syncPickScope();
-        dropForeignQueue();
-        syncTaskCenterBadge();
-        hideMainRecoveryCards();
-        paintLiveStrip();
-        const panel = taskPanel();
-        if (panel && !panel.hidden) paintTaskCenter(panel);
+        withPaintSnapshot(() => {
+            syncPickScope();
+            dropForeignQueue();
+            syncTaskCenterBadge();
+            hideMainRecoveryCards();
+            paintLiveStrip();
+            const panel = taskPanel();
+            if (panel && !panel.hidden) paintTaskCenter(panel);
+        });
     } finally {
         painting = false;
     }
@@ -869,11 +901,10 @@ function bindTaskCenterRefresh() {
 }
 
 export function syncLiveTaskStrip() {
-    paintLiveStrip();
+    withPaintSnapshot(paintLiveStrip);
 }
 
-export function syncTaskCenterChrome({ refreshRecovery = false } = {}) {
-    if (refreshRecovery) unfinishedCache.at = 0;
+export function syncTaskCenterChrome() {
     bindTaskCenterRefresh();
     refreshTaskCenterView();
 }
