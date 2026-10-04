@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
-// Source modules: 320
-// Source SHA-256: 51d59f52fd7eefcae68c05f8701bb97ab1ab4ce4eb32232fc7277c987fefb1e7
+// Source modules: 321
+// Source SHA-256: da3af6b04f16614a67d41927708f06433c51b2b7fc39181f32dcf1709191302e
 // Build: python3 tools/verification/build.py <source-root>
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -282,6 +282,7 @@ const __m_ui_memoryReveal_js = Object.create(null);
 const __m_ui_mirrorCallView_js = Object.create(null);
 const __m_ui_mirrorTtsReader_js = Object.create(null);
 const __m_ui_mvCastControls_js = Object.create(null);
+const __m_ui_mvEditorUi_js = Object.create(null);
 const __m_ui_mvImageEditor_js = Object.create(null);
 const __m_ui_mvStageCanvas_js = Object.create(null);
 const __m_ui_mvView_js = Object.create(null);
@@ -1133,6 +1134,113 @@ function shotCastControls(record, shot) {
 __m_ui_mvCastControls_js.directionControls = directionControls;
 __m_ui_mvCastControls_js.castControls = castControls;
 __m_ui_mvCastControls_js.shotCastControls = shotCastControls;
+}
+
+function __init_ui_mvEditorUi_js() {
+// MODULE: ui/mvEditorUi.js
+
+// Editor-only presentation. All actions continue through mvView and the existing
+// song-scoped storage, image editor, audio player and export implementations.
+function editorMarkup(o) {
+    const { esc, btn, song, tab, panels, width, height, strip, stripNav, selectedLabel, time, total, playing, audio, exporting, drawer, drawerHtml } = o;
+    const tabs = [['shots', '分镜'], ['timing', '定段 · 定句'], ['look', '画面']].map(([id, label]) =>
+        btn('editor-tab', label, { id, cls: 'rmt-mve-tab' + (tab === id ? ' on' : ''), extra: ` aria-pressed="${tab === id}"` })).join('');
+    return `<header class="rmt-mve-head"><div><small>手书剪辑台</small><h2>${esc(song.title)}</h2></div><div class="rmt-mve-head-actions">${btn('editor-drawer', '导出', { id: 'export', cls: 'rmt-x-primary' })}${btn('editor-drawer', '更多', { id: 'more' })}</div></header>
+      <div class="rmt-mve-layout-scope"><div class="rmt-mve-workspace" data-editor-tab="${tab}"><section class="rmt-mve-preview" aria-label="手书预览">
+        <div class="rmt-mv-canvas-wrap${width < height ? ' portrait' : ''}"><canvas data-rmt-mv-canvas width="${width}" height="${height}"></canvas></div>
+        <div class="rmt-mve-transport"><button type="button" class="rmt-mv-play" data-rmt-mv="play" aria-label="${playing ? '暂停' : '播放'}"${exporting ? ' disabled' : ''}>${playing ? '❚❚' : '▶'}</button><span class="rmt-mve-clock" data-rmt-mv-time>${esc(time)}</span><input type="range" min="0" max="${total}" step="0.1" value="${o.seconds}" data-rmt-mv-seek aria-label="播放位置"${exporting ? ' disabled' : ''}><small>${esc(o.totalLabel)}</small>${btn('editor-drawer', '歌曲', { id: 'audio' })}</div>
+        <div class="rmt-mve-meta"><span>${esc(selectedLabel)}</span><span>${audio ? '本机歌曲已接入' : '未放入歌曲 · 可静音预览'}</span></div>
+        <div class="rmt-mve-filmstrip"><div class="rmt-mv-strip">${strip}</div>${stripNav}</div>
+      </section><section class="rmt-mve-tools"><nav class="rmt-mve-tabs" aria-label="剪辑工作区">${tabs}</nav><div class="rmt-mve-panel">${panels[tab] || panels.shots}</div></section></div></div>
+      ${drawer ? `<div class="rmt-mve-sheet-shade"><section class="rmt-mve-sheet" role="dialog" aria-modal="true" aria-label="${esc({ export: '导出手书', more: '素材与项目', audio: '歌曲' }[drawer] || '选项')}"><header><b>${esc({ export: '导出手书', more: '素材与项目', audio: '歌曲' }[drawer] || '选项')}</b>${btn('editor-drawer', '关闭', { extra: ' aria-label="关闭选项面板"' })}</header><div>${drawerHtml}</div></section></div>` : ''}`;
+}
+
+function editorCss(root) {
+    const r = root;
+    return `
+${r} .rmt-x-page.rmt-mv-editor{max-width:1160px;width:100%;gap:18px;padding:8px 4px 24px}
+${r} .rmt-mve-layout-scope{min-width:0;width:100%;container-type:inline-size}
+${r} .rmt-mve-back{align-self:flex-start;width:auto;min-height:40px;padding:4px 0;border:0;background:none;color:var(--rmt-theme-muted,#63788f);font-size:12px;cursor:pointer}
+${r} .rmt-mve-head{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:2px 0 14px;border-bottom:1px solid var(--rmt-theme-border,#cddfed)}
+${r} .rmt-mve-head>div:first-child{min-width:0;flex:1}
+${r} .rmt-mve-head small{display:block;font-size:12px;color:var(--rmt-theme-muted,#63788f);margin-bottom:5px}
+${r} .rmt-mve-head h2{font-size:20px;line-height:1.4;margin:0;overflow-wrap:anywhere;color:var(--rmt-theme-text,#294762)}
+${r} .rmt-mve-head-actions{display:flex;gap:8px;flex:none}
+${r} .rmt-mve-head-actions button{width:auto;min-height:42px;font-size:13px;border-radius:10px;padding:0 15px}
+${r} .rmt-mve-workspace{display:grid;grid-template-columns:minmax(0,1fr);align-items:start;gap:18px;min-width:0}
+${r} .rmt-mve-preview,${r} .rmt-mve-tools{min-width:0}
+${r} .rmt-mve-preview .rmt-mv-canvas-wrap{width:100%;border-radius:13px;margin:0;overflow:hidden;background:var(--rmt-theme-soft,#e7f1fa)}
+${r} .rmt-mve-preview .rmt-mv-canvas-wrap.portrait{width:min(100%,300px);margin:0 auto}
+${r} .rmt-mve-preview canvas{display:block;width:100%;height:auto}
+${r} .rmt-mve-transport{display:flex;align-items:center;gap:10px;padding:10px 0 3px;min-width:0}
+${r} .rmt-mve-transport .rmt-mv-play{width:42px;min-width:42px;height:42px;min-height:42px;border-radius:50%;font-size:15px;background:var(--rmt-theme-soft,#e3eef9);color:var(--rmt-theme-text,#294762);border:1px solid var(--rmt-theme-border,#cddfed)}
+${r} .rmt-mve-clock{font-size:12px;white-space:nowrap;font-variant-numeric:tabular-nums}
+${r} .rmt-mve-transport input[type=range]{flex:1;width:0;min-width:28px;height:44px;padding:0;accent-color:var(--rmt-theme-accent,#bc779d);cursor:pointer}
+${r} .rmt-mve-transport>small{font-size:11px;color:var(--rmt-theme-muted,#63788f)}
+${r} .rmt-mve-transport>button:last-child{font-size:12px;min-height:40px;padding:0 10px;border-radius:9px}
+${r} .rmt-mve-meta{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:11px;color:var(--rmt-theme-muted,#63788f);padding:4px 1px 14px;flex-wrap:wrap}
+${r} .rmt-mve-tools{background:var(--rmt-theme-surface-solid,#fff);border:1px solid var(--rmt-theme-border,#cddfed);border-radius:14px;overflow:hidden}
+${r} .rmt-mve-tabs{display:grid;grid-template-columns:1fr 1.3fr 1fr;gap:4px;padding:6px;background:var(--rmt-theme-soft,#e7f1fa)}
+${r} .rmt-mve-tab{border:0;background:transparent;color:var(--rmt-theme-muted,#63788f);border-radius:9px;min-height:43px;font-size:13px;padding:0 8px;cursor:pointer}
+${r} .rmt-mve-tab.on{background:var(--rmt-theme-surface-solid,#fff);color:var(--rmt-theme-text,#294762);font-weight:600}
+${r} .rmt-mve-panel{padding:18px;display:flex;flex-direction:column;gap:13px;min-width:0}
+${r} .rmt-mve-panel .rmt-x-card{padding:0;border:0;background:transparent}
+${r} .rmt-mve-panel .rmt-x-row-head{align-items:center;gap:9px;flex-wrap:wrap}
+${r} .rmt-mve-panel .rmt-mv-grid2{grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
+${r} .rmt-mve-panel button{font-size:13px}
+${r} .rmt-mve-panel .rmt-x-segs{display:flex;gap:7px;flex-wrap:wrap}
+${r} .rmt-mve-panel .rmt-x-seg{min-height:42px;height:auto;flex:1 0 75px;padding:7px 10px;font-size:12px}
+${r} .rmt-mve-panel details{border-top:1px solid var(--rmt-theme-border,#cddfed);padding:10px 0 0;min-width:0}
+${r} .rmt-mve-panel summary{cursor:pointer;min-height:36px;font-size:13px}
+${r} .rmt-mve-panel details>div{display:flex;flex-direction:column;gap:12px;padding-top:12px}
+${r} .rmt-mve-panel input:not([type=checkbox]):not([type=range]),${r} .rmt-mve-panel select{font-size:16px}
+${r} .rmt-mve-filmstrip .rmt-mv-strip{gap:7px;padding:4px 2px 10px}
+${r} .rmt-mve-filmstrip .rmt-mv-strip>button{width:84px!important;min-width:84px;height:102px;flex:0 0 84px;border-radius:9px;overflow:hidden;background:var(--rmt-theme-surface-solid,#fff)}
+${r} .rmt-mve-filmstrip .rmt-mv-strip>button img{display:block;height:72px;width:100%;object-fit:cover}
+${r} .rmt-mve-filmstrip .rmt-mv-strip>button>span{position:static;display:block;background:transparent;padding:5px 2px;border-radius:0;color:var(--rmt-theme-text,#294762);font-size:11px;line-height:1.3}
+${r} .rmt-mve-strip-nav{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:11px;color:var(--rmt-theme-muted,#63788f)}
+${r} .rmt-mve-strip-nav button{font-size:11px;padding:0 10px;min-height:36px}
+${r} .rmt-mve-sync-list{display:flex;flex-direction:column;gap:0;border-top:1px solid var(--rmt-theme-border,#cddfed)}
+${r} .rmt-mve-sync-group{border-bottom:1px solid var(--rmt-theme-border,#cddfed)}
+${r} .rmt-mve-section{display:flex;align-items:center;gap:4px}
+${r} .rmt-mve-section-pick{display:flex;align-items:center;gap:10px;min-height:48px;flex:1;min-width:0;border:0;border-radius:8px;background:transparent;color:var(--rmt-theme-text,#294762);padding:8px;text-align:left;cursor:pointer}
+${r} .rmt-mve-section-pick b{font-size:13px;flex:1;overflow-wrap:anywhere}
+${r} .rmt-mve-section-pick small{font-size:10px;flex:none;color:var(--rmt-theme-muted,#63788f)}
+${r} .rmt-mve-section-pick time{font-size:11px;font-variant-numeric:tabular-nums;white-space:nowrap}
+${r} .rmt-mve-fold{border:0;background:transparent;min-width:40px;min-height:44px;color:var(--rmt-theme-text,#294762);cursor:pointer}
+${r} .rmt-mve-lines{margin:0 0 10px 10px;padding-left:10px;border-left:1px solid var(--rmt-theme-border,#cddfed);display:flex;flex-direction:column;gap:5px}
+${r} .rmt-mve-line{border:1px solid transparent;border-radius:9px;background:transparent;color:var(--rmt-theme-text,#294762);display:flex;align-items:center;justify-content:space-between;gap:12px;text-align:left;min-height:56px;padding:10px;cursor:pointer}
+${r} .rmt-mve-line>span{font-size:13px;line-height:1.65;flex:1;min-width:0;overflow-wrap:anywhere}
+${r} .rmt-mve-line>small{display:flex;flex-direction:column;gap:4px;text-align:right;flex:none;font-size:11px;color:var(--rmt-theme-muted,#63788f)}
+${r} .rmt-mve-line em{font-style:normal;font-size:10px}
+${r} .rmt-mve-line.on,${r} .rmt-mve-section-pick.on{border-color:var(--rmt-theme-border,#cddfed);background:var(--rmt-theme-soft,#e7f1fa);color:var(--rmt-theme-text,#294762)}
+${r} .rmt-mve-timing-actions{display:flex;gap:8px}
+${r} .rmt-mve-timing-actions>button:first-child{flex:1}
+${r} .rmt-mv-editor .rmt-mv-tap{width:auto;height:auto;min-height:48px;max-width:none;border-radius:10px;padding:10px 14px;font-size:14px;flex:1}
+${r} .rmt-mv-editor .rmt-mv-tap b{font-size:14px;line-height:1.4}
+${r} .rmt-mve-nudge{display:flex;align-items:center;justify-content:center;gap:6px;flex-wrap:wrap}
+${r} .rmt-mve-nudge button{min-height:38px;font-size:11px;padding:0 8px}
+${r} .rmt-mve-nudge input{width:85px;min-height:38px;border:1px solid var(--rmt-theme-border,#cddfed);border-radius:8px;background:var(--rmt-theme-surface-solid,#fff);color:var(--rmt-theme-text,#294762);text-align:center}
+${r} .rmt-mve-sheet-shade{position:fixed;inset:0;z-index:2147482990;background:rgba(20,35,50,.42);display:flex;align-items:center;justify-content:center;padding:14px;padding:calc(env(safe-area-inset-top,0px) + 14px) 14px calc(env(safe-area-inset-bottom,0px) + 14px);box-sizing:border-box}
+${r} .rmt-mve-sheet{width:min(100%,560px);max-height:85vh;overflow:auto;border-radius:18px;border:1px solid var(--rmt-theme-border,#cddfed);background:var(--rmt-theme-surface-solid,#fff);color:var(--rmt-theme-text,#294762);box-shadow:0 15px 65px rgba(0,0,0,.2);overscroll-behavior:contain}
+${r} .rmt-mve-sheet>header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 18px;border-bottom:1px solid var(--rmt-theme-border,#cddfed)}
+${r} .rmt-mve-sheet>div{padding:18px;display:flex;flex-direction:column;gap:14px}
+${r} .rmt-mve-sheet button{font-size:14px}
+${r} .rmt-mve-sheet .rmt-mv-file{flex-wrap:wrap;gap:10px}
+${r} .rmt-mve-sheet .rmt-mv-file>div{min-width:120px;overflow-wrap:anywhere}
+${r} .rmt-mv-editor button:focus-visible,${r} .rmt-mv-editor input:focus-visible{outline:2px solid var(--rmt-theme-accent-ink,#4f769d);outline-offset:2px}
+${r} .rmt-mve-group-fold{border:1px solid var(--rmt-theme-border,#cddfed);border-radius:14px;background:var(--rmt-theme-surface-solid,#fff);padding:12px}
+${r} .rmt-mve-group-fold summary{min-height:44px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:14px;list-style:none}
+${r} .rmt-mve-group-fold .rmt-mv-gcard{border:0;padding:12px 0 0}
+@media(min-width:960px){${r} .rmt-mve-workspace{grid-template-columns:minmax(0,1fr) 340px}}
+@supports(container-type:inline-size){${r} .rmt-mve-workspace{grid-template-columns:minmax(0,1fr)}@container (min-width:780px){${r} .rmt-mve-workspace{grid-template-columns:minmax(0,1fr) 340px}}}
+@media(max-width:600px){${r} .rmt-mve-head h2{font-size:17px}${r} .rmt-mve-head-actions button{padding:0 10px;font-size:12px}${r} .rmt-mve-panel{padding:14px}${r} .rmt-mve-transport{gap:7px}${r} .rmt-mve-transport>small{display:none}${r} .rmt-mve-workspace:not([data-editor-tab=shots]) .rmt-mve-filmstrip{display:none}${r} .rmt-mve-sheet{max-height:88vh}${r} .rmt-mve-head{padding-bottom:10px}}
+@container (max-width:700px){${r} .rmt-mve-workspace:not([data-editor-tab=shots]) .rmt-mve-filmstrip{display:none}}
+`;
+}
+
+__m_ui_mvEditorUi_js.editorMarkup = editorMarkup;
+__m_ui_mvEditorUi_js.editorCss = editorCss;
 }
 
 function __init_ui_mvImageEditor_js() {
@@ -88772,6 +88880,7 @@ const cast_controls = __m_ui_mvCastControls_js;
 const participant_picker = __m_ui_participantPicker_js;
 const image_editor = __m_ui_mvImageEditor_js;
 const image_tools = __m_extras_mvImageTools_js;
+const editor_ui = __m_ui_mvEditorUi_js;
 const runtimeState = __m_core_state_js.state;
 // 印象曲 MV 页面：三步开始、镜头清单、对时间、手书剪辑台、视频单镜、拼成 MV。
 // 播放和导出都在本机进行；歌曲文件只在这次打开期间留在内存里，不上传、不写入聊天。
@@ -88795,6 +88904,31 @@ let mediaSequence = 0;
 // Navigation is local to this opened song, never part of the saved MV/archive.
 const navigation = [];
 let renderedPage = '';
+let imageRefreshTimer = 0;
+let imageLayoutPending = false;
+
+function queueImageRefresh(layout = false) {
+    imageLayoutPending = imageLayoutPending || layout;
+    if (imageRefreshTimer) return;
+    const opened = viewTarget();
+    imageRefreshTimer = setTimeout(() => {
+        imageRefreshTimer = 0; const repaint = imageLayoutPending; imageLayoutPending = false;
+        if (!isView(opened) || view.sub === 'asset-editor') return;
+        if (repaint && view.sub === 'board') renderMv(); else drawNow();
+    }, 24);
+}
+
+function cacheValue(map, key, value, limit) {
+    map.delete(key); map.set(key, value);
+    while (map.size > limit) map.delete(map.keys().next().value);
+    return value;
+}
+
+function assetPreviewHtml(image) {
+    if (!mv.hasAssetImage(image)) return '';
+    const url = assetImageUrl(image);
+    return `<img${url ? ` src="${esc(url)}"` : ''}${image.local ? ` data-rmt-mv-local="${esc(image.local)}"` : ''} alt="" loading="lazy" decoding="async">`;
+}
 
 function capturePagePosition(assetKey = '') {
     const el = body();
@@ -88806,14 +88940,14 @@ function capturePagePosition(assetKey = '') {
     return { top: el.scrollTop, left: el.scrollLeft || 0,
         anchor: anchor?.dataset.rmtMvAnchor, offset: anchor?.getBoundingClientRect?.().top - top,
         // Inspection expansion is controlled by view.inspect; never undo its click.
-        details: [...(el.querySelectorAll?.('details:not(.rmt-mv-inspect)') || [])].map(node => node.open),
+        details: [...(el.querySelectorAll?.('details:not(.rmt-mv-inspect):not(.rmt-mve-group-fold)') || [])].map(node => node.open),
         strips: [...(el.querySelectorAll?.('.rmt-mv-assets, .rmt-mv-strip') || [])].map(node => node.scrollLeft) };
 }
 
 function restorePagePosition(position) {
     const el = body();
     if (!el || !position) return;
-    const details = [...(el.querySelectorAll?.('details:not(.rmt-mv-inspect)') || [])];
+    const details = [...(el.querySelectorAll?.('details:not(.rmt-mv-inspect):not(.rmt-mve-group-fold)') || [])];
     if (details.length === position.details.length) details.forEach((node, i) => { node.open = position.details[i]; });
     [...(el.querySelectorAll?.('.rmt-mv-assets, .rmt-mv-strip') || [])].forEach((node, i) => { node.scrollLeft = position.strips[i] || 0; });
     el.scrollTop = position.top; el.scrollLeft = position.left;
@@ -88843,9 +88977,14 @@ function assetImageUrl(image) {
     if (!key) return '';
     if (localUrls.has(key)) return localUrls.get(key);
     if (!loadingLocal.has(key)) {
+        const epoch = view.epoch;
         const pending = mv_media.getMedia(key).then(row => {
-            if (row?.blob) { localUrls.set(key, URL.createObjectURL(row.blob)); if (runtimeState.activeMode === MV_MODE) renderMv(); }
-        }).catch(() => {}).finally(() => loadingLocal.delete(key));
+            if (row?.blob && epoch === view.epoch) {
+                const url = URL.createObjectURL(row.blob); localUrls.set(key, url);
+                for (const node of body()?.querySelectorAll?.('[data-rmt-mv-local]') || []) if (node.dataset.rmtMvLocal === key) node.src = url;
+                queueImageRefresh(view.sub === 'board');
+            }
+        }).catch(() => {}).finally(() => { if (loadingLocal.get(key) === pending) loadingLocal.delete(key); });
         loadingLocal.set(key, pending);
     }
     return '';
@@ -89133,6 +89272,7 @@ ${r} .rmt-mv-look textarea{width:100%;box-sizing:border-box;border:1px solid var
 .rmt-mv-rec canvas{max-width:100vw;max-height:100vh;width:auto;height:auto}
 .rmt-mv-rec b{position:absolute;color:#fff;font-size:72px;font-family:sans-serif}
 .rmt-mv-rec button{position:absolute;top:calc(env(safe-area-inset-top,0px) + 12px);right:12px;min-height:44px;padding:0 16px;border-radius:12px;border:0;background:rgba(255,255,255,.9);color:#000;font-size:15px}
+${editor_ui.editorCss(r)}
 `;
     document.head.appendChild(style);
 }
@@ -89150,7 +89290,9 @@ function openMv(options = {}) {
     view.songId = songId; view.scope = mv.mvScope(context);
     const record = mv.readMv(context, view.songId);
     view.castDraft = mv_cast.initialMvCast(context, record);
-    view.sub = record?.shots?.length ? 'board' : 'setup';
+    const ready = record?.shots?.length && mv.normalizeSettings(record.settings).output === 'tegaki' && record.shots.some(s => mv.hasAssetImage(mv.shotImage(record, s)));
+    view.sub = record?.shots?.length ? options.page === 'board' || !ready ? 'board' : 'tegaki' : 'setup';
+    view.editorTab = 'shots'; view.editorDrawer = ''; view.editorTiming = { kind: 'line', key: '' }; view.editorSection = null; view.editorUndo = []; view.editorAutoNext = true; view.stripStart = 0; view.inspect = ''; view.groupOpen = '';
     view.step = 1; view.draft = mv.normalizeSettings(record?.settings); view.mode = view.draft.output; view.shotId = ''; view.copied = ''; view.tapIndex = -1; view.tapUndo = [];
     overlay.openOverlay();
     renderMv();
@@ -89239,8 +89381,9 @@ function page(title, back, html) {
     if (navigation.at(-1)?.sub === 'shot') back = '镜头详情';
     if (view.sub === 'setup' && view.step > 1) back = '上一步';
     overlay.topTitle(title); overlay.setBackVisible(true, back);
-    const returnButton = view.sub !== 'board' ? btn('back', `← 返回${esc(back)}`) : '';
-    body().innerHTML = `<main class="rmt-x-page">${returnButton}${recoveryPanel()}${html}<details class="rmt-x-card"><summary>MV 备份</summary>${btn('export-recovery', '导出 MV 数据与暂存结果')}</details></main>`;
+    const editor = view.sub === 'tegaki' || view.sub === 'sync';
+    const returnButton = view.sub !== 'board' ? btn('back', `← 返回${esc(back)}`, editor ? { cls: 'rmt-mve-back' } : {}) : '';
+    body().innerHTML = `<main class="rmt-x-page${editor ? ' rmt-mv-editor' : ''}">${returnButton}${recoveryPanel()}${html}${editor ? '' : `<details class="rmt-x-card"><summary>MV 备份</summary>${btn('export-recovery', '导出 MV 数据与暂存结果')}</details>`}</main>`;
     renderedPage = view.sub;
 }
 
@@ -89477,16 +89620,12 @@ function tegakiControls(record, song) {
     const range = mv.playRange(record, song);
     const seg2 = (action, map, value) => Object.entries(map).map(([id, label]) => btn(action, label, { id, cls: 'rmt-x-seg' + (value === id ? ' active' : ''), extra: ` aria-pressed="${value === id}"` })).join('');
     const presets = Object.entries(mv.TEGAKI_PRESETS).map(([id, p]) => `<button type="button" class="rmt-mv-choice${o.preset === id ? ' on' : ''}" aria-pressed="${o.preset === id}" data-rmt-mv="tegaki-preset" data-rmt-mv-id="${id}"><span><b>${esc(p.name)}</b><small>${esc(p.desc)}</small></span></button>`).join('');
-    return `<b style="font-size:14px">节奏模板</b><div class="rmt-mv-presets">${presets}</div>
-      <p class="rmt-x-note">参考常见手书套路，一次排好全部镜头的切换方式、停留和歌词样式；之后仍可逐镜修改。</p>
-      <b style="font-size:14px">截取哪一段</b>${rangePicker('record', o, mv.parseSections(song.lyrics))}
-      <p class="rmt-x-note">现在：${mv.formatTime(range.start)}–${mv.formatTime(range.end)}（约 ${Math.max(0, Math.round(range.end - range.start))} 秒）。</p>
-      ${mv.isV2(record) ? `<label class="rmt-mv-look"><span>片头时长（秒）</span><input type="number" min="0" step="0.5" inputmode="decimal" data-rmt-mv-intro-seconds value="${o.introSeconds}"></label><p class="rmt-x-note">0 为关闭；最多占首镜头的一半，开唱时自动结束。</p>` : ''}
-      ${mv.isV2(record) ? `<label class="rmt-mv-look"><span>片尾时长（秒）</span><input type="number" min="0" step="0.5" inputmode="decimal" data-rmt-mv-outro-seconds value="${o.outroSeconds}"></label><p class="rmt-x-note">0 为关闭；只在所选片段末尾显示，最多占最后一个镜头的一半。</p>` : ''}
-      <b style="font-size:14px">切换节奏</b><div class="rmt-mv-grid2">${seg2('tegaki-rhythm', mv.TEGAKI_RHYTHMS, o.rhythm)}</div>
-      <b style="font-size:14px">歌词</b><div class="rmt-x-segs">${seg2('tegaki-lyric', Object.fromEntries(Object.entries(mv.TEGAKI_LYRICS).filter(([key]) => key !== 'stage' || record.stage)), o.lyric)}</div>
+    return `${mv.isV2(record) ? `<b>片头与片尾</b><label class="rmt-mv-look"><span>片头时长（秒）</span><input type="number" min="0" step="0.5" inputmode="decimal" data-rmt-mv-intro-seconds value="${o.introSeconds}"></label><label class="rmt-mv-look"><span>片尾时长（秒）</span><input type="number" min="0" step="0.5" inputmode="decimal" data-rmt-mv-outro-seconds value="${o.outroSeconds}"></label><p class="rmt-x-note">0 为关闭。片头最多占首镜头一半，开唱时结束；片尾最多占所选片段末镜头一半。</p>` : ''}
+      <details open><summary>字幕与装饰</summary><div><b>歌词样式</b><div class="rmt-x-segs">${seg2('tegaki-lyric', Object.fromEntries(Object.entries(mv.TEGAKI_LYRICS).filter(([key]) => key !== 'stage' || record.stage)), o.lyric)}</div>
       ${mv.isV2(record) ? `<label class="rmt-mv-check"><input type="checkbox" data-rmt-mv-overlay="keyword" ${o.showKeyword ? 'checked' : ''}>副歌关键词（随歌词隐藏）</label><label class="rmt-mv-check"><input type="checkbox" data-rmt-mv-overlay="motif" ${o.showMotif ? 'checked' : ''}>漂浮装饰</label>` : ''}
-      ${o.lyric === 'none' ? '' : `<b style="font-size:14px">字体</b><div class="rmt-x-segs">${seg2('tegaki-font', Object.fromEntries(Object.entries(mv.TEGAKI_FONTS).map(([k, v]) => [k, v.name])), o.font)}</div><p class="rmt-x-note">字体用设备自带的，不同手机效果会略有差异。</p>`}`;
+      ${o.lyric === 'none' ? '' : `<b>字体</b><div class="rmt-x-segs">${seg2('tegaki-font', Object.fromEntries(Object.entries(mv.TEGAKI_FONTS).map(([k, v]) => [k, v.name])), o.font)}</div><p class="rmt-x-note">字体用设备自带的，不同手机效果会略有差异。</p>`}${motifNotice(record)}</div></details>
+      <details><summary>节奏模板与切换</summary><div><div class="rmt-mv-presets">${presets}</div><p class="rmt-x-note">模板会统一修改镜头切换、停留和歌词样式；之后仍可逐镜调整。</p><b>切换节奏</b><div class="rmt-mv-grid2">${seg2('tegaki-rhythm', mv.TEGAKI_RHYTHMS, o.rhythm)}</div></div></details>
+      <details><summary>截取范围 · ${mv.formatTime(range.start)}–${mv.formatTime(range.end)}</summary><div>${rangePicker('record', o, mv.parseSections(song.lyrics))}<p class="rmt-x-note">约 ${Math.max(0, Math.round(range.end - range.start))} 秒。只改变预览范围，不删除其他分镜。</p></div></details>`;
 }
 
 function stageShotControls(record, shot) {
@@ -89504,51 +89643,138 @@ function stageShotControls(record, shot) {
       <label class="rmt-mv-check"><input type="checkbox" data-rmt-mv-stage-cue="shadow" data-shot="${esc(shot.id)}"${cue.shadow ? ' checked' : ''}>人物剪影</label></details>`;
 }
 
-function renderTegaki(song, record) {
-    const [w, h] = canvasSize(record);
-    const { rows, sections } = mv.shotTimeline(record, song);
-    if (!view.selected || !record.shots.some(s => s.id === view.selected)) view.selected = record.shots[0]?.id || '';
-    const selIndex = rows.findIndex(r => r.shot.id === view.selected);
-    const sel = rows[selIndex] || rows[0];
-    const tapped = Object.values(record.timing?.taps || {}).filter(v => v !== null && v !== undefined).length;
-    const support = exportSupport();
-    const exporting = player.exporting;
-    const strip = rows.map((row, i) => {
-        const width = Math.max(48, Math.min(160, Math.round((row.end - row.start) * 9)));
-        return `<button type="button" class="${row.shot.id === view.selected ? 'on' : ''}" style="width:${width}px" aria-label="第 ${i + 1} 镜" data-rmt-mv="select-shot" data-rmt-mv-id="${esc(row.shot.id)}">${imgUrl(row.shot) ? `<img src="${esc(imgUrl(row.shot))}" alt="">` : ''}<span>${i + 1} · ${(row.end - row.start).toFixed(1)}s</span></button>`;
+function markedTime(value) { return value !== null && value !== undefined && value !== '' && Number.isFinite(Number(value)) && Number(value) >= 0; }
+
+function editorTimingTarget(record, song) {
+    const timeline = mv.shotTimeline(record, song), sections = timeline.sections, times = timeline.times;
+    const selected = view.editorTiming || { kind: 'line', key: '' };
+    if (selected.kind === 'section') {
+        const index = syncTapIndex(sections, record.timing?.taps || {});
+        return { kind: 'section', index, time: times[index]?.start || 0, label: index < 0 ? '全部段落已对齐' : sections[index].name };
+    }
+    const lines = mv.syncLines(record, song);
+    const line = lines.find(l => l.key === selected.key) || (selected.complete ? null : lines.find(l => !markedTime(record.timing?.lineTaps?.[l.key])));
+    if (!line) return { kind: 'line', key: '', index: -1, time: 0, label: '全部句子已对齐' };
+    const [index, li] = line.key.split(':').map(Number);
+    const estimate = times[index] ? times[index].start + (times[index].end - times[index].start) * li / Math.max(1, sections[index].lines.length) : 0;
+    return { kind: 'line', key: line.key, index, time: markedTime(record.timing?.lineTaps?.[line.key]) ? Number(record.timing.lineTaps[line.key]) : estimate, label: line.text, section: line.section };
+}
+
+function saveEditorTime(value, advance = false) {
+    const record = currentRecord(), song = currentSong(), target = editorTimingTarget(record, song);
+    if (!Number.isFinite(value) || value < 0 || target.index < 0) return;
+    if (target.kind === 'section') {
+        setTap(target.index, Math.round((value - (Number(record.timing?.shift) || 0)) * 10) / 10);
+        view.tapIndex = target.index;
+        if (advance && view.editorAutoNext !== false) view.editorTiming = { kind: 'line', key: mv.syncLines(record, song).find(l => l.key.startsWith(target.index + ':'))?.key || '' };
+    } else {
+        const timing = structuredClone(record.timing || {}), lineTaps = { ...(timing.lineTaps || {}), [target.key]: Math.round(value * 10) / 10 };
+        mv.patchRecord(view.songId, { timing: { ...timing, lineTaps } });
+        view.editorUndo.push({ timing, selected: { ...view.editorTiming }, tapIndex: view.tapIndex });
+        if (advance && view.editorAutoNext !== false) {
+            const lines = mv.syncLines(record, song), next = lines[lines.findIndex(l => l.key === target.key) + 1];
+            view.editorTiming = { kind: 'line', key: next?.key || '', complete: !next };
+            if (next) view.editorSection = Number(next.key.split(':')[0]);
+        }
+    }
+    renderMv();
+}
+
+function editorTimingPanel(song, record) {
+    const { sections, times } = mv.shotTimeline(record, song), lines = mv.syncLines(record, song);
+    const taps = record.timing?.taps || {}, lineTaps = record.timing?.lineTaps || {};
+    const target = editorTimingTarget(record, song);
+    const open = Number.isInteger(view.editorSection) ? view.editorSection : Math.max(0, target.index);
+    const groups = sections.map((s, i) => {
+        const own = lines.filter(l => Number(l.key.split(':')[0]) === i);
+        const picked = target.kind === 'section' && target.index === i;
+        return `<div class="rmt-mve-sync-group"><div class="rmt-mve-section"><button type="button" class="rmt-mve-section-pick${picked ? ' on' : ''}" data-rmt-mv="select-section" data-rmt-mv-id="${i}" aria-pressed="${picked}"><small>段</small><b>${esc(s.name)}</b><time>${mv.formatTime(times[i].start, true)}</time><small>${markedTime(taps[i]) ? '已定' : '估计'}</small></button>${btn('editor-section', open === i ? '⌄' : '›', { id: String(i), cls: 'rmt-mve-fold', extra: ` aria-label="${open === i ? '收起' : '展开'}歌词" aria-expanded="${open === i}"` })}</div>
+          ${open === i ? `<div class="rmt-mve-lines">${own.map(l => {
+            const li = Number(l.key.split(':')[1]), done = markedTime(lineTaps[l.key]);
+            const time = done ? Number(lineTaps[l.key]) : times[i].start + (times[i].end - times[i].start) * li / Math.max(1, s.lines.length);
+            const active = target.kind === 'line' && target.key === l.key;
+            return `<button type="button" class="rmt-mve-line${active ? ' on' : ''}" data-rmt-mv="editor-line" data-rmt-mv-id="${l.key}" aria-pressed="${active}"><span>${esc(l.text)}</span><small><time>${mv.formatTime(time, true)}</time><em>${done ? '已定' : '估计'}</em></small></button>`;
+        }).join('') || '<p class="rmt-x-note">当前截取范围内没有这一段的歌词。</p>'}</div>` : ''}</div>`;
     }).join('');
+    const sectionMode = target.kind === 'section';
+    const legacy = view.sub === 'sync' && sectionMode;
+    return `<div class="rmt-x-row-head"><b>定段与定句</b><span>${Object.values(taps).filter(markedTime).length} 段 · ${lines.filter(l => markedTime(lineTaps[l.key])).length} / ${lines.length} 句</span></div>
+      <p class="rmt-x-note">点段名定段，点歌词定句，共用上方播放器。</p><div class="rmt-mve-sync-list">${groups}</div>
+      <small class="rmt-x-note">${target.index < 0 ? esc(target.label) : `${sectionMode ? '正在定段' : '正在定句'} · ${esc(sectionMode ? target.label : target.section)}`}</small>
+      <div class="rmt-mve-timing-actions">${legacy ? `<button type="button" class="rmt-mv-tap${target.index < 0 ? ' done' : ''}" data-rmt-mv="tap" ${!audioBySong.has(audioKey()) || target.index < 0 ? 'disabled' : ''}><b>${target.index < 0 ? '✓ 时间对好了' : esc(target.label) + '开始了'}</b></button>` : btn('editor-mark', sectionMode ? '这一段开始了' : '这一句开始了', { cls: 'rmt-x-primary', disabled: target.index < 0 || player.exporting })}${btn('editor-undo', '撤销', { disabled: !view.editorUndo.length || player.exporting })}</div>
+      ${target.index < 0 ? '' : `<div class="rmt-mve-nudge">${btn('editor-nudge', '−0.1 秒', { id: '-0.1' })}<input type="number" step="0.1" min="0" inputmode="decimal" value="${Math.round(target.time * 10) / 10}" data-rmt-mv-editor-time aria-label="选中标记的开始秒数">${btn('editor-nudge', '+0.1 秒', { id: '0.1' })}</div>`}
+      <label class="rmt-mv-check"><input type="checkbox" data-rmt-mv-editor-next ${view.editorAutoNext !== false ? 'checked' : ''}>定好后自动选下一句</label>
+      <details><summary>重置与细调</summary><div>${btn('tap-line-reset', '清空逐句打点')}${btn('tap-reset', '清空全部打点')}</div></details>`;
+}
+
+function editorSheet(song, record) {
+    if (view.editorDrawer === 'audio') return audioCard(song);
+    if (view.editorDrawer === 'more') return `${btn('go-board', '素材库 · 图片编辑 · 抠图')}${btn('go-board', '补充分镜与图片')}${btn('download-table', '下载镜头时间表')}${btn('download-srt', '下载歌词字幕')}${btn('export-recovery', '导出 MV 数据与暂存结果')}${recoveryPanel()}`;
+    if (view.editorDrawer !== 'export') return '';
+    const support = exportSupport(), exporting = player.exporting;
+    return exporting ? `<div class="rmt-x-row-head"><b>正在导出</b><span data-rmt-mv-export-time>0:00</span></div><div class="rmt-x-bar"><i data-rmt-mv-export-bar style="width:0%"></i></div><p class="rmt-x-note">请留在本页，不要锁屏。</p>${btn('export-stop', '停止导出')}`
+      : `${exportControls(record, song)}${support.ok ? btn('export', audioBySong.has(audioKey()) ? `导出视频（.${support.ext}）` : `导出无声视频（.${support.ext}）`, { cls: 'rmt-x-primary' }) : '<p class="rmt-mv-warn">此环境不支持直接导出视频，可使用下面的录屏模式。</p>'}
+        ${btn('record-mode', '录屏模式（全屏播放）', { disabled: !audioBySong.has(audioKey()) })}<p class="rmt-x-note">导出会播放一遍所选片段，请不要切页或锁屏。</p>`;
+}
+
+function renderTegaki(song, record) {
+    const [w, h] = canvasSize(record), { rows, total } = mv.shotTimeline(record, song);
+    if (!view.selected || !record.shots.some(s => s.id === view.selected)) view.selected = record.shots[0]?.id || '';
+    const selIndex = Math.max(0, rows.findIndex(r => r.shot.id === view.selected)), sel = rows[selIndex];
+    const tab = view.sub === 'sync' ? 'timing' : view.editorTab || 'shots';
+    // A window in the thumbnail list, not a limit on saved/generated frames.
+    const start = Math.max(0, Math.min(view.stripStart || 0, Math.max(0, rows.length - 1)));
+    const strip = rows.slice(start, start + 12).map((row, i) => `<button type="button" class="${row.shot.id === view.selected ? 'on' : ''}" aria-label="第 ${start + i + 1} 镜" data-rmt-mv="select-shot" data-rmt-mv-id="${esc(row.shot.id)}">${assetPreviewHtml(mv.shotImage(record, row.shot))}<span>${start + i + 1} · ${(row.end - row.start).toFixed(1)}秒</span></button>`).join('');
+    const stripNav = `<div class="rmt-mve-strip-nav">${btn('editor-strip', '上一组', { id: String(Math.max(0, start - 12)), disabled: start === 0 })}<span>${start + 1}–${Math.min(rows.length, start + 12)} / ${rows.length} 镜</span>${btn('editor-strip', '下一组', { id: String(start + 12), disabled: start + 12 >= rows.length })}</div>`;
     const seg = (action, map, value) => Object.entries(map).map(([id, label]) => btn(action, label, { id, cls: 'rmt-x-seg' + (value === id ? ' active' : ''), extra: ` aria-pressed="${value === id}"` })).join('');
-    page('手书剪辑台', '镜头清单', `${head(`手书 · ${song.title}`, '手书剪辑台', '放入歌曲就能预览。每一张怎么动，点下面的缩略图来改。')}
-      <div class="rmt-mv-canvas-wrap" style="width:${w > h ? '100%' : 'min(100%, 300px)'}"><canvas data-rmt-mv-canvas width="${w}" height="${h}"></canvas></div>
-      ${mv.isV2(record) && mv.tegakiOptions(record).showMotif ? motifNotice(record) : ''}
-      <div class="rmt-mv-bar"><button type="button" class="rmt-mv-play" data-rmt-mv="play" aria-label="${player.playing ? '暂停' : '播放'}" ${exporting ? 'disabled' : ''}>${player.playing ? '❚❚' : '▶'}</button>
-        <div class="rmt-mv-track" data-rmt-mv="seek" role="slider" aria-label="拖到这里播放" style="cursor:pointer"><div><i data-rmt-mv-progress></i></div><div style="display:flex;justify-content:space-between;background:none;height:auto"><span data-rmt-mv-time>0:00</span><span>${mv.formatTime(mv.shotTimeline(record, song).total)}</span></div></div></div>
-      <div class="rmt-mv-strip">${strip}</div>
-      ${sel ? `<section class="rmt-x-card"><div class="rmt-x-row-head"><b>第 ${selIndex + 1} 镜怎么动</b><span>${mv.formatTime(sel.start, true)}–${mv.formatTime(sel.end, true)}${imgUrl(sel.shot) ? '' : ' · 还没画，先用上一张'}</span></div>
-        <div class="rmt-mv-grid2">${seg('set-motion', mv.MV_MOTIONS, sel.shot.motion)}</div>
-        <b style="font-size:14px">切到下一镜时</b><div class="rmt-x-segs">${seg('set-cut', mv.MV_CUTS, sel.shot.cut || 'fade')}</div>
-        ${stageShotControls(record, sel.shot)}
-        ${mv_stage.background(record, sel.shot) && !mv.hasAssetImage(sel.shot.image) ? btn('edit-asset', '编辑人物素材', { id: `${sel.shot.group}:${sel.shot.diff}` }) : ''}
-        <div class="rmt-mv-actions">${btn('draw', mv.isFrameDrawing(mv.mvScope(ctx()), view.songId, sel.shot.id) ? '正在画…' : imgUrl(sel.shot) ? '重画这张' : '画这一张', { id: sel.shot.id, disabled: mv.isFrameDrawing(mv.mvScope(ctx()), view.songId, sel.shot.id) })}${uploadLabel(sel.shot.id)}</div></section>` : ''}
-      ${audioBySong.has(audioKey()) ? (() => {
-        const lines = mv.syncLines(record, song);
-        if (!lines.length) return '';
-        const taps = record.timing?.lineTaps || {};
-        const done = lines.filter(l => Number.isFinite(Number(taps[l.key]))).length;
-        const next = lines.find(l => !Number.isFinite(Number(taps[l.key])));
-        return `<section class="rmt-x-card rmt-mv-linesync"><div class="rmt-x-row-head"><b>逐句对时间（最准）</b><span>${done} / ${lines.length} 句</span></div>
-          <p class="rmt-x-note">点播放，每唱到新的一句就点一下大按钮。字幕和画面会按你点的时间切换；没点到的句子仍用估计时间。</p>
-          ${next ? `<div class="rmt-mv-lyric"><small>下一句 · ${esc(next.section)}</small><p>${esc(next.text)}</p></div>${btn('tap-line', '这一句开始了', { cls: 'rmt-x-primary', id: next.key })}` : '<p class="rmt-x-note">全部对好了。</p>'}
-          <div class="rmt-mv-actions">${btn('tap-line-undo', '撤销上一句')}${btn('tap-line-reset', '全部重来')}</div></section>`;
-      })() : ''}
-      <section class="rmt-x-card"><b>歌曲与字幕</b>${audioCard(song)}
-        ${tegakiControls(record, song)}
-        ${btn('go-sync', `对时间 · 已点 ${tapped} / ${sections.length} 段${tapped < sections.length ? '，其余用估计时间' : ''}`, { cls: 'rmt-x-primary rmt-x-dark' })}</section>
-      <section class="rmt-x-card"><b>导出</b>${exporting ? '' : exportControls(record, song)}
-        ${exporting ? `<div class="rmt-x-row-head"><span>正在录制…</span><span data-rmt-mv-export-time>0:00</span></div><div class="rmt-x-bar"><i data-rmt-mv-export-bar style="width:0%"></i></div><p class="rmt-x-note">请不要切到其他页面或锁屏。</p>${btn('export-stop', '停止导出')}`
-          : `${support.ok ? btn('export', audioBySong.has(audioKey()) ? `导出成视频（.${support.ext}）` : `导出无声视频（.${support.ext}）`, { cls: 'rmt-x-primary' }) : '<div class="rmt-mv-warn">这台设备不能直接导出视频。可以用下面的录屏模式，配合手机自带的录屏功能录下来。</div>'}
-             ${btn('record-mode', '录屏模式（全屏播放）', { disabled: !audioBySong.has(audioKey()) })}
-             <p class="rmt-x-note">${audioBySong.has(audioKey()) ? '导出会播放一遍所选片段，片段多长就要等多久。期间请停留在这个页面。' : '没放入歌曲也能导出所选片段的无声视频，之后在剪辑 App 里配上歌；录屏模式需要先放入歌曲。'}${support.ok && support.ext === 'webm' ? ' 这台设备导出的是 .webm，剪映等 App 一般可以直接导入。' : ''}</p>`}</section>`);
+    const assetKey = sel?.shot.group && sel?.shot.diff ? `${sel.shot.group}:${sel.shot.diff}` : '';
+    const asset = assetKey ? mv.assetOf(record, assetKey) : null;
+    const panels = {};
+    // Only the active tab is constructed: folded/hidden tools do no image work.
+    if (tab === 'shots') panels.shots = sel ? `<div class="rmt-x-row-head"><b>第 ${selIndex + 1} 镜</b><span>${mv.formatTime(sel.start, true)}–${mv.formatTime(sel.end, true)}</span></div><p class="rmt-x-note">${esc(sel.shot.lyric || sel.shot.plain || '')}</p>
+      <b>镜头运动</b><div class="rmt-mv-grid2">${seg('set-motion', mv.MV_MOTIONS, sel.shot.motion)}</div><b>切到下一镜</b><div class="rmt-x-segs">${seg('set-cut', mv.MV_CUTS, sel.shot.cut || 'fade')}</div>
+      ${asset && !mv.hasAssetImage(sel.shot.image) ? `<div class="rmt-mv-actions">${btn('edit-asset', '图片编辑 · 选单格 · 修边', { id: assetKey })}${btn('cutout-asset', '一键抠图', { id: assetKey })}</div>` : ''}
+      ${stageShotControls(record, sel.shot)}<details><summary>图片与生成</summary><div>${btn('draw', mv.isFrameDrawing(mv.mvScope(ctx()), view.songId, sel.shot.id) ? '正在画…' : hasImg(sel.shot) ? '重画这一镜' : '画这一镜', { id: sel.shot.id, disabled: mv.isFrameDrawing(mv.mvScope(ctx()), view.songId, sel.shot.id) })}${uploadLabel(sel.shot.id)}${sel.shot.image && asset ? btn('use-group-image', '恢复使用构图素材', { id: sel.shot.id }) : ''}${btn('go-board', '素材库与背景编辑')}</div></details>` : '';
+    if (tab === 'timing') panels.timing = editorTimingPanel(song, record);
+    if (tab === 'look') panels.look = `<div class="rmt-x-row-head"><b>整支手书的样子</b><span>全片设置</span></div><div class="rmt-x-segs">${seg('editor-ratio', { '16:9': '横屏 16:9', '9:16': '竖屏 9:16' }, mv.normalizeSettings(record.settings).ratio)}</div>${tegakiControls(record, song)}`;
+    const html = editor_ui.editorMarkup({ esc, btn, song, tab, panels, width: w, height: h, strip, stripNav,
+        selectedLabel: `第 ${selIndex + 1} 镜 · ${rows.length} 镜`, time: mv.formatTime(currentTime(), true), seconds: currentTime(), total, totalLabel: mv.formatTime(total),
+        playing: player.playing, audio: audioBySong.has(audioKey()), exporting: player.exporting, drawer: view.editorDrawer, drawerHtml: editorSheet(song, record) });
+    page('手书剪辑台', '素材库', html);
+    bindEditorControls();
+}
+
+function seekEditor(time) {
+    const total = mv.shotTimeline(view.cache.record, view.cache.song).total;
+    time = Math.max(0, Math.min(total, Number(time) || 0));
+    const audio = audioElement();
+    if (audio) audio.currentTime = time; else { player.clockOffset = time; player.clockStart = performance.now(); }
+    drawNow();
+}
+
+function bindEditorControls() {
+    const root = body()?.querySelector?.('.rmt-mv-editor');
+    if (!root?.addEventListener) return;
+    root.addEventListener('input', event => { if (event.target.matches?.('[data-rmt-mv-seek]') && !player.exporting) seekEditor(event.target.value); });
+    root.addEventListener('keydown', event => {
+        const sheet = root.querySelector('.rmt-mve-sheet');
+        if (event.key === 'Escape' && view.editorDrawer) {
+            event.preventDefault(); event.stopPropagation(); const previous = view.editorDrawer; view.editorDrawer = ''; renderMv();
+            body()?.querySelector?.(`[data-rmt-mv="editor-drawer"][data-rmt-mv-id="${previous}"]`)?.focus?.(); return;
+        }
+        if (sheet && event.key === 'Tab') {
+            const nodes = [...sheet.querySelectorAll('button:not([disabled]),input:not([disabled]),select:not([disabled]),a[href]')];
+            const first = nodes[0], last = nodes.at(-1);
+            if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+            else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+        }
+        const tab = event.target.closest?.('[data-rmt-mv="editor-tab"]');
+        if (tab && ['ArrowLeft', 'ArrowRight'].includes(event.key)) {
+            event.preventDefault(); const ids = ['shots', 'timing', 'look'], next = ids[(ids.indexOf(tab.dataset.rmtMvId) + (event.key === 'ArrowRight' ? 1 : 2)) % 3];
+            view.editorTab = next; if (view.sub === 'sync') view.sub = 'tegaki'; renderMv();
+            body()?.querySelector?.(`[data-rmt-mv="editor-tab"][data-rmt-mv-id="${next}"]`)?.focus();
+        }
+    });
 }
 
 // ---------- 对时间 ----------
@@ -89559,24 +89785,7 @@ function syncTapIndex(sections, taps) {
 }
 
 function renderSync(song, record) {
-    const sections = mv.parseSections(song.lyrics);
-    const { sections: times } = mv.sectionTimes(record, sections, mv.songBpm(song));
-    const taps = record.timing?.taps || {};
-    const next = syncTapIndex(sections, taps);
-    const bpm = mv.songBpm(song);
-    const hasAudio = audioBySong.has(audioKey());
-    page('对时间', '剪辑台', `${head(`${song.title}${bpm ? ` · ${bpm} BPM` : ''}`, '对时间', `放歌，每到新的一段开头，就点一下大按钮。一共 ${sections.length} 下，段落里的镜头会自动排好。`)}
-      ${audioCard(song)}
-      <section class="rmt-x-card" style="align-items:center">
-        <div><span class="rmt-mv-clock" data-rmt-mv-time>0:00</span> <small class="rmt-x-note">/ ${mv.formatTime(audioBySong.get(audioKey())?.duration || 0)}</small></div>
-        <button type="button" class="rmt-mv-tap${next < 0 ? ' done' : ''}" data-rmt-mv="tap" ${!hasAudio || next < 0 ? 'disabled' : ''}><small>${!hasAudio ? '先放入歌曲' : next < 0 ? '全部点完了' : '听到这一段开始时点'}</small><b>${next < 0 ? '✓ 时间对好了' : esc(sections[next].name) + '开始了'}</b></button>
-        <div class="rmt-mv-actions" style="width:100%">${btn('play', player.playing ? '暂停' : '播放', { disabled: !hasAudio })}${btn('tap-undo', '撤销上一下')}</div>
-      </section>
-      ${sections.map((section, i) => `<div class="rmt-mv-sec${times[i].tapped ? ' tapped' : ''}${i === next ? ' cur' : ''}"><button type="button" class="rmt-mv-section-pick" data-rmt-mv="select-section" data-rmt-mv-id="${i}" aria-pressed="${i === next}" aria-label="选择${esc(section.name)}对时间"><i>${times[i].tapped ? '✓' : i + 1}</i><span class="rmt-mv-section-copy"><b>${esc(section.name)}</b><small>${esc(section.lines[0] || '（器乐）')}</small></span>
-        <em>${mv.formatTime(times[i].start, true)}<br><small class="rmt-x-note">${times[i].tapped ? '你点的' : '估计'}</small></em></button>
-        ${times[i].tapped && i > 0 ? `<span>${btn('nudge', '-0.5', { id: `${i}:-0.5`, cls: '' })}${btn('nudge', '+0.5', { id: `${i}:0.5`, cls: '' })}</span>` : ''}</div>`).join('')}
-      <p class="rmt-x-note">点选段落后，听到开头时再点上方大按钮；已对好的段落也能重新选。其余段落仍用估计时间。</p>
-      <div class="rmt-mv-actions">${btn('tap-reset', '从头再点')}${btn('go-tegaki', '完成，去预览', { cls: 'rmt-x-primary' })}</div>`);
+    renderTegaki(song, record);
 }
 
 // ---------- 画布与播放 ----------
@@ -89584,7 +89793,15 @@ function renderSync(song, record) {
 function imageFor(url) {
     if (!url) return null;
     let img = images.get(url);
-    if (!img) { img = new Image(); img.decoding = 'async'; img.onload = () => drawNow(); img.src = url; images.set(url, img); }
+    if (!img) {
+        const opened = viewTarget();
+        img = new Image(); img.decoding = 'async';
+        img.onload = () => { if (isView(opened)) queueImageRefresh(); };
+        img.src = url; images.set(url, img);
+    }
+    if (img.complete && img.naturalWidth && !player.exporting) {
+        cacheValue(images, url, img, 16);
+    }
     return img.complete && img.naturalWidth ? img : null;
 }
 
@@ -89770,12 +89987,14 @@ function drawNow() {
     const total = canvas ? renderFrame(canvas, record, song, t) : mv.shotTimeline(record, song).total;
     const bar = document.querySelector('[data-rmt-mv-progress]');
     if (bar) bar.style.width = `${Math.min(100, t / Math.max(1, total) * 100)}%`;
+    const slider = document.querySelector('[data-rmt-mv-seek]');
+    if (slider && document.activeElement !== slider) slider.value = String(t);
     const rec = document.querySelector('.rmt-mv-rec canvas');
     if (rec) renderFrame(rec, player.recording?.record || record, player.recording?.song || song, t);
 }
 
 function currentRange() {
-    if (view.sub === 'sync') return { start: 0, end: Infinity };
+    if (view.sub === 'sync' || (view.sub === 'tegaki' && view.editorTab === 'timing')) return { start: 0, end: Infinity };
     const record = view.cache?.record, song = view.cache?.song;
     try { return record && song ? mv.playRange(record, song) : { start: 0, end: Infinity }; } catch { return { start: 0, end: Infinity }; }
 }
@@ -89836,6 +90055,13 @@ function stopPlayback() {
 function disposeMv() {
     assetEditor?.dispose(); assetEditor = null; editSequence++;
     stageShadows.clear(); characterSprites.clear(); thumbnailPreviews.clear();
+    motifSprites.clear(); palettes.clear();
+    if (imageRefreshTimer) clearTimeout(imageRefreshTimer);
+    imageRefreshTimer = 0; imageLayoutPending = false;
+    for (const image of images.values()) { image.onload = null; image.onerror = null; }
+    images.clear(); loadingLocal.clear();
+    for (const url of localUrls.values()) { try { URL.revokeObjectURL(url); } catch {} }
+    localUrls.clear();
     navigation.length = 0; renderedPage = '';
     view.epoch += 1;
     view.stopAll = true; view.drawingAll = false; view.drawQueue = null;
@@ -90091,6 +90317,7 @@ async function drawAll() {
 }
 
 function setTap(index, value) {
+    const previousTiming = structuredClone(currentRecord()?.timing || {});
     const taps = currentRecord()?.timing?.taps || {};
     const before = Object.keys(taps).map(Number).filter(i => i < index && Number.isFinite(taps[i])).sort((a, b) => b - a)[0];
     const after = Object.keys(taps).map(Number).filter(i => i > index && Number.isFinite(taps[i])).sort((a, b) => a - b)[0];
@@ -90099,6 +90326,7 @@ function setTap(index, value) {
     value = Math.max(low, Math.min(value, high));
     mv.patchRecord(view.songId, { timing: { ...(currentRecord()?.timing || {}), taps: { ...taps, [index]: value } } });
     view.tapUndo.push({ taps: { ...taps }, index });
+    view.editorUndo.push({ timing: previousTiming, selected: { ...view.editorTiming }, tapIndex: index });
 }
 
 function handleMvClick(event) {
@@ -90114,6 +90342,26 @@ function handleMvClick(event) {
     const opened = viewTarget();
     try {
         if (action === 'back') navigateMvBack();
+        else if (action === 'editor-tab') {
+            if (['shots', 'timing', 'look'].includes(id)) { view.editorTab = id; if (view.sub === 'sync') view.sub = 'tegaki'; view.editorDrawer = ''; renderMv(); }
+        }
+        else if (action === 'editor-drawer') {
+            const previous = view.editorDrawer;
+            view.editorDrawer = ['export', 'more', 'audio'].includes(id) ? id : ''; renderMv();
+            body()?.querySelector?.(view.editorDrawer ? '.rmt-mve-sheet button' : `[data-rmt-mv="editor-drawer"][data-rmt-mv-id="${previous}"]`)?.focus?.();
+        }
+        else if (action === 'editor-strip') { const start = Number(id); if (Number.isInteger(start) && start >= 0 && start < record.shots.length) { view.stripStart = start; renderMv(); } }
+        else if (action === 'editor-section') { const index = Number(id); if (Number.isInteger(index) && index >= 0 && index < mv.parseSections(currentSong().lyrics).length) { view.editorSection = view.editorSection === index ? -1 : index; renderMv(); } }
+        else if (action === 'editor-line') { if (mv.syncLines(record, currentSong()).some(l => l.key === id)) { view.editorTiming = { kind: 'line', key: id }; view.editorSection = Number(id.split(':')[0]); renderMv(); } }
+        else if (action === 'editor-mark') saveEditorTime(currentTime(), true);
+        else if (action === 'editor-nudge') { const delta = Number(id); if (Number.isFinite(delta)) saveEditorTime(Math.max(0, editorTimingTarget(record, currentSong()).time + delta)); }
+        else if (action === 'editor-undo') {
+            const previous = view.editorUndo.at(-1);
+            if (previous) { mv.patchRecord(view.songId, { timing: previous.timing }); view.editorUndo.pop(); view.editorTiming = previous.selected; view.tapIndex = previous.tapIndex; view.editorSection = editorTimingTarget(currentRecord(), currentSong()).index; renderMv(); }
+        }
+        else if (action === 'editor-ratio') { if (['16:9', '9:16'].includes(id)) { mv.patchRecord(view.songId, { settings: { ...record.settings, ratio: id } }); renderMv(); } }
+        else if (action === 'go-board') { view.editorDrawer = ''; go('board'); }
+        else if (action === 'group-open') { if (record.groups?.some(g => g.id === id)) { view.groupOpen = view.groupOpen === id ? '' : id; view.inspect = ''; renderMv(); } }
         else if (action === 'retry-save') { void mv.retryMvSave(opened.scope, id).then(result => { reportResult(result, '结果已保存。'); if (isView(opened)) renderMv(); }).catch(toastError); }
         else if (action === 'export-recovery') download(new Blob([mv.exportMvRecovery(opened.scope)], { type: 'application/json' }), 'Hearttrace-MV-backup.json');
         else if (action === 'set-output') { d.output = id === 'video' ? 'video' : 'tegaki'; view.draft = mv.normalizeSettings(d); renderMv(); }
@@ -90178,7 +90426,7 @@ function handleMvClick(event) {
         else if (action === 'edit-asset') void openAssetEditor(id).catch(toastError);
         else if (action === 'cutout-asset') void openAssetEditor(id, true).catch(toastError);
         else if (action === 'group-layer') { const [gid, layer] = id.split(':'); mv.setGroupLayer(view.songId, gid, layer); renderMv(); }
-        else if (action === 'inspect') { view.inspect = view.inspect === id ? '' : id; setTimeout(() => renderMv(), 0); }
+        else if (action === 'inspect') { view.groupOpen = id; view.inspect = view.inspect === id ? '' : id; setTimeout(() => { if (isView(opened)) renderMv(); }, 0); }
         else if (action === 'draw-group' || action === 'redraw-group') {
             const redraw = action === 'redraw-group';
             const keys = mv.assetKeys(record, currentSong()).filter(k => k.startsWith(id + ':') && (redraw || !mv.hasAssetImage(mv.assetOf(record, k)?.image)));
@@ -90201,7 +90449,7 @@ function handleMvClick(event) {
         else if (action === 'draw-stop') { view.stopAll = true; globalThis.toastr?.info?.('画完正在画的这一张后停止。', '心迹回廊 · MV'); }
         else if (action === 'go-tegaki') go('tegaki');
         else if (action === 'go-finish') go('finish');
-        else if (action === 'go-sync') go('sync');
+        else if (action === 'go-sync') { view.editorTiming = { kind: 'section' }; go('sync'); }
         else if (action === 'open-shot') { view.copied = ''; go('shot', { shotId: id }); }
         else if (action === 'copy') {
             const shot = record.shots.find(s => s.id === view.shotId);
@@ -90217,7 +90465,7 @@ function handleMvClick(event) {
         }
         else if (action === 'download-table') download(new Blob([mv.timetableText(record, currentSong())], { type: 'text/plain;charset=utf-8' }), `${safeName(currentSong().title)}-镜头时间表.txt`);
         else if (action === 'download-srt') download(new Blob([mv.srtText(record, currentSong())], { type: 'application/x-subrip;charset=utf-8' }), `${safeName(currentSong().title)}.srt`);
-        else if (action === 'select-shot') { view.selected = id; renderMv(); }
+        else if (action === 'select-shot') { const row = mv.shotTimeline(record, currentSong()).rows.find(r => r.shot.id === id); if (row) { view.selected = id; renderMv(); seekEditor(row.start); } }
         else if (action === 'use-group-image') {
             if (mv.isV2(record) && record.shots.some(s => s.id === id)) {
                 imageImports.delete(mv_media.mediaKey('img', opened.scope, opened.songId, id));
@@ -90253,7 +90501,7 @@ function handleMvClick(event) {
         else if (action === 'select-section') {
             const index = Number(id);
             const sections = mv.parseSections(currentSong().lyrics);
-            if (Number.isInteger(index) && index >= 0 && index < sections.length) { view.tapIndex = index; renderMv(); }
+            if (Number.isInteger(index) && index >= 0 && index < sections.length) { view.tapIndex = index; view.editorTiming = { kind: 'section' }; view.editorSection = index; renderMv(); }
         }
         else if (action === 'tap') {
             const sections = mv.parseSections(currentSong().lyrics);
@@ -90271,6 +90519,8 @@ function handleMvClick(event) {
                 if (order.length) delete lineTaps[order.at(-1)];
             } else { for (const k of Object.keys(lineTaps)) delete lineTaps[k]; }
             mv.patchRecord(view.songId, { timing: { ...(record.timing || {}), lineTaps } });
+            view.editorUndo.push({ timing: structuredClone(record.timing || {}), selected: { ...view.editorTiming }, tapIndex: view.tapIndex });
+            if (action === 'tap-line-reset') view.editorTiming = { kind: 'line', key: '' };
             renderMv();
         }
         else if (action === 'tap-vocal') {
@@ -90288,7 +90538,11 @@ function handleMvClick(event) {
                 view.tapIndex = previous ? previous.index : keys[0]; renderMv();
             }
         }
-        else if (action === 'tap-reset') { mv.patchRecord(view.songId, { timing: { taps: {}, shift: 0 } }); view.tapIndex = -1; view.tapUndo = []; renderMv(); }
+        else if (action === 'tap-reset') {
+            mv.patchRecord(view.songId, { timing: { taps: {}, shift: 0 } });
+            view.editorUndo.push({ timing: structuredClone(record.timing || {}), selected: { ...view.editorTiming }, tapIndex: view.tapIndex });
+            view.tapIndex = -1; view.tapUndo = []; view.editorTiming = { kind: view.sub === 'sync' ? 'section' : 'line', key: '' }; renderMv();
+        }
         else if (action === 'nudge') {
             const [index, delta] = id.split(':').map(Number);
             const value = Number(record.timing?.taps?.[index]);
@@ -90300,6 +90554,9 @@ function handleMvClick(event) {
 
 function handleMvChange(event) {
     const input = event.target;
+    if (input?.matches?.('[data-rmt-mv-seek]')) { if (!player.exporting && view.cache?.record) seekEditor(input.value); return true; }
+    if (input?.matches?.('[data-rmt-mv-editor-time]')) { try { if (String(input.value).trim() && !player.exporting) saveEditorTime(Number(input.value)); } catch (error) { toastError(error); } return true; }
+    if (input?.matches?.('[data-rmt-mv-editor-next]')) { view.editorAutoNext = !!input.checked; return true; }
     if (input?.matches?.('[data-rmt-mv-stage-cue]')) {
         const field = input.dataset.rmtMvStageCue;
         try { const updated = mv.patchStageCue(view.songId, input.dataset.shot, { [field]: field === 'shadow' ? Boolean(input.checked) : input.value });
@@ -90461,22 +90718,21 @@ function handleMvChange(event) {
 
 function assetTile(record, key, label) {
     const found = mv.assetOf(record, key);
-    const sprite = key === 'motif' ? motifSprite(found?.image) : found?.kind === 'char' ? characterSprite(found.image, found.group) : null;
-    const url = thumbnailPreview(sprite?.preview || assetImageUrl(found?.image));
+    // Opening a material list must not cut out every full-resolution picture.
+    // The small padding-only preview is made only for the expanded group.
+    const url = thumbnailPreview(assetImageUrl(found?.image));
     const exists = mv.hasAssetImage(found?.image);
     const drawing = mv.isAssetDrawing(mv.mvScope(ctx()), view.songId, key);
     const wide = mv.normalizeSettings(record.settings).ratio === '16:9';
-    const cut = !!sprite?.image;
-    const needsEdit = ['needs-edit', 'needs-selection', 'empty', 'unreadable'].includes(sprite?.status);
     const splitSelect = `<div class="rmt-mv-asset-actions">${btn('edit-asset', '编辑素材', { id: key, cls: 'rmt-mv-edit-open' })}${exists && found?.kind !== 'bg' ? btn('cutout-asset', '一键抠图', { id: key, disabled: drawing || view.drawingAll }) : ''}</div>`;
-    return `<button type="button" class="rmt-mv-asset${wide ? ' wide' : ''}${exists ? ' done' : ''}${cut ? ' cut' : ''}" data-rmt-mv-anchor="${esc(key)}" data-rmt-mv="draw-asset" data-rmt-mv-id="${esc(key)}" ${drawing || view.drawingAll ? 'disabled' : ''} aria-label="${esc(label)}：${exists ? '重画' : '画'}这一张">${url ? `<img src="${esc(url)}" alt="">` : ''}<i>${drawing ? '画…' : needsEdit ? (sprite.status === 'needs-selection' ? '选单格' : '检查背景') : exists ? '已画' : '未画'}</i></button><small>${esc(label)}</small>${splitSelect}`;
+    return `<button type="button" class="rmt-mv-asset${wide ? ' wide' : ''}${exists ? ' done' : ''}" data-rmt-mv-anchor="${esc(key)}" data-rmt-mv="draw-asset" data-rmt-mv-id="${esc(key)}" ${drawing || view.drawingAll ? 'disabled' : ''} aria-label="${esc(label)}：${exists ? '重画' : '画'}这一张">${url ? `<img src="${esc(url)}" alt="" loading="lazy" decoding="async">` : ''}<i>${drawing ? '画…' : exists ? '已画' : '未画'}</i></button><small>${esc(label)}</small>${splitSelect}`;
 }
 
 // 素材检查：原图 → 拼图拆分 → 抠图结果 → 播放时的用法，逐张对照。
 function inspectHtml(record, g, diffs) {
-    const rows = diffs.filter(d => mv.hasAssetImage(d.image)).map(d => {
+    const rows = (view.inspect === g.id ? diffs : []).filter(d => mv.hasAssetImage(d.image)).map(d => {
         const sprite = characterSprite(d.image, g);
-        const url = thumbnailPreview(sprite?.preview || assetImageUrl(d.image)), original = assetImageUrl(d.image.original || d.image);
+        const url = inspectionPreview(sprite, assetImageUrl(d.image)), original = assetImageUrl(d.image.original || d.image);
         const layered = !!sprite?.image;
         return `<div class="rmt-mv-inspect-row${mv.normalizeSettings(record.settings).ratio === '16:9' ? ' wide' : ''}"><figure>${original ? `<img src="${esc(original)}" alt="原图">` : ''}<figcaption>原图</figcaption></figure>
           <figure class="cut">${url ? `<img src="${esc(url)}" alt="当前素材">` : ''}<figcaption>当前素材</figcaption></figure>
@@ -90526,12 +90782,15 @@ function renderGroupsBoard(song, record) {
         shown += 1;
         const secNames = [...new Set(frames.map(s => sections[s.sectionIndex]?.name).filter(Boolean))].join('、');
         const usedDiffs = g.diffs.filter(d => frames.some(s => s.diff === d.id));
+        const open = view.groupOpen === g.id || view.inspect === g.id;
+        const summary = `<summary data-rmt-mv="group-open" data-rmt-mv-id="${esc(g.id)}" aria-expanded="${open}"><b>构图 ${shown} · ${esc(g.composition || '')}</b><small>${esc(secNames)} · ${frames.length} 句 ${open ? '⌄' : '›'}</small></summary>`;
+        if (!open) return `<details class="rmt-mve-group-fold">${summary}</details>`;
         const lyrics = frames.filter(s => s.lyric).slice(0, 8).map(s => `${g.diffs.find(d => d.id === s.diff)?.label || ''}｜${s.lyric}`).join('\n');
         const bgIds = g.layer === 'full' || g.stageBackground ? [] : (g.bgs || []).length ? g.bgs.filter(b => frames.some(s => (s.bg || 'B1') === b.id)).map(b => b.id) : ['bg'];
         const bgKeys = g.layer === 'full' || g.stageBackground ? [] : bgIds.length ? bgIds : ['bg'];
         const bgTiles = bgKeys.map(id => `<div>${assetTile(record, `${g.id}:${id}`, (g.bgs || []).find(b => b.id === id)?.label ? '背景·' + g.bgs.find(b => b.id === id).label : '背景')}</div>`).join('');
         const missing = [...bgKeys.map(id => `${g.id}:${id}`), ...usedDiffs.map(d => `${g.id}:${d.id}`)].filter(k => !mv.hasAssetImage(mv.assetOf(record, k)?.image)).length;
-        return `<article class="rmt-mv-gcard"><div class="rmt-x-row-head"><b class="rmt-mv-gname">构图 ${shown} · ${esc(g.composition || '')}</b><span>${esc(secNames)} · ${frames.length} 句</span></div>
+        return `<details class="rmt-mve-group-fold" open>${summary}<article class="rmt-mv-gcard">
           ${cast_controls.shotCastControls(record, g)}
           ${g.stageBackground ? `<small>背景：${mv_stage.usedBackgrounds(record, frames).map(b => esc(b.label)).join('、')} · 共用</small>` : ''}
           <div class="rmt-mv-assets">${bgTiles}${bgTiles ? '<span class="rmt-mv-plus">+</span>' : ''}${usedDiffs.map(d => `<div>${assetTile(record, `${g.id}:${d.id}`, d.label)}</div>`).join('')}</div>
@@ -90539,7 +90798,7 @@ function renderGroupsBoard(song, record) {
           ${lyrics ? `<div class="rmt-mv-lyric"><p>${esc(lyrics)}</p></div>` : ''}
           <div class="rmt-mv-actions">${missing ? btn('draw-group', `画这一组剩下的 ${missing} 张`, { id: g.id, disabled: view.drawingAll, cls: 'rmt-x-primary' }) : btn('redraw-group', '整组换一版', { id: g.id, disabled: view.drawingAll })}</div>
           <p class="rmt-x-note">点任意一张缩略图可以单独重画。</p>
-          ${g.link ? `<div class="rmt-mv-link">↓ 承接：${esc(g.link)}</div>` : ''}</article>`;
+          ${g.link ? `<div class="rmt-mv-link">↓ 承接：${esc(g.link)}</div>` : ''}</article></details>`;
     }).join('');
     const motif = record.motif ? `<section class="rmt-x-card"><div class="rmt-x-row-head"><b>意象：${esc(record.motif.name || '装饰')}</b><span>副歌时漂浮</span></div><div class="rmt-mv-assets"><div>${assetTile(record, 'motif', '意象')}</div></div>${motifNotice(record)}</section>` : '';
     const wd = record.wardrobe || {};
@@ -90580,7 +90839,7 @@ function thumbnailPreview(url) {
             const before = pending.onload;
             pending.onload = event => {
                 thumbnailPreviews.delete(url); before?.(event);
-                if (isView() && view.sub === 'board') renderMv();
+                if (isView() && view.sub === 'board') queueImageRefresh(true);
             };
         }
         return url;
@@ -90593,7 +90852,7 @@ function thumbnailPreview(url) {
         if (rect) {
             const cropped = document.createElement('canvas'); cropped.width = rect.w; cropped.height = rect.h;
             cropped.getContext('2d').drawImage(c, rect.x, rect.y, rect.w, rect.h, 0, 0, rect.w, rect.h);
-            thumbnailPreviews.set(url, cropped.toDataURL('image/png'));
+            cacheValue(thumbnailPreviews, url, cropped.toDataURL('image/png'), 32);
         }
     } catch { /* Pixel access unavailable: retain the original preview and editor. */ }
     return thumbnailPreviews.get(url);
@@ -90609,7 +90868,7 @@ function motifSprite(image) {
         if (!cached && images.has(url)) {
             motifSprites.set(url, { status: 'loading' });
             const pending = images.get(url), before = pending.onload;
-            const refresh = () => { if (runtimeState.activeMode === MV_MODE && assetImageUrl(view.cache?.record?.motif?.image) === url) renderMv(); };
+            const refresh = () => { if (runtimeState.activeMode === MV_MODE && assetImageUrl(view.cache?.record?.motif?.image) === url) queueImageRefresh(); };
             pending.onload = event => { motifSprites.delete(url); before?.(event); refresh(); };
             pending.onerror = () => { motifSprites.set(url, { status: 'unreadable' }); refresh(); };
         }
@@ -90627,21 +90886,15 @@ function motifSprite(image) {
         if (prepared.status === 'transparent') result = { status: 'transparent', image: src, preview: url };
         else if (prepared.data) {
             pixels.data.set(prepared.data); g.putImageData(pixels, 0, 0);
-            result = { status: 'prepared', image: c, preview: c.toDataURL('image/png') };
+            result = { status: 'prepared', image: c };
         }
     } catch { result = { status: 'unreadable' }; }
     motifSprites.set(url, result);
     return result;
 }
 
-function motifForRange(record) {
-    const song = currentSong();
-    if (!song || !mv.tegakiOptions(record).showMotif || !mv.shotsInRange(record, song).some(row => isChorusSection(song, row.sectionIndex))) return null;
-    return motifSprite(record?.motif?.image);
-}
-
 function motifNotice(record) {
-    const sprite = motifForRange(record);
+    const sprite = motifSprites.get(assetImageUrl(record?.motif?.image));
     if (!sprite || ['loading', 'transparent', 'prepared'].includes(sprite.status)) return '';
     return `<div class="rmt-x-note">意象背景尚未分离，暂不叠加。${btn('edit-asset', '处理意象背景', { id: 'motif' })}</div>`;
 }
@@ -90663,8 +90916,8 @@ function drawCropCover(g, img, rect, w, h, scale = 1) {
     g.drawImage(img, sx, sy, sw, sh, (w - dw) / 2, (h - dh) / 2, dw, dh);
 }
 
-// One derived copy serves thumbnails, playback and export; originals and
-// manually saved masks are never overwritten by automatic processing.
+// A bounded, display-only derived copy serves playback and export; originals
+// and manually saved masks are never overwritten by automatic processing.
 function characterSprite(image, group) {
     if (!image || image.editMode === 'full' || (group?.layer === 'full' && image.editMode !== 'cutout')) return null;
     const url = assetImageUrl(image);
@@ -90672,22 +90925,16 @@ function characterSprite(image, group) {
     const multiple = group?.who === 'both' || (group?.cast?.length || 0) > 1;
     const key = JSON.stringify([url, image.editMode || '', image.split || 'none', multiple]);
     const cached = characterSprites.get(key);
-    if (cached && cached.status !== 'loading') return cached;
+    if (cached) return cacheValue(characterSprites, key, cached, 8);
     const src = imageFor(url);
-    if (!src) {
-        if (!cached && images.has(url)) {
-            characterSprites.set(key, { status: 'loading' });
-            const pending = images.get(url), before = pending.onload, failed = pending.onerror;
-            const refresh = () => { if (isView() && view.sub === 'board') renderMv(); };
-            pending.onload = event => { characterSprites.delete(key); before?.(event); refresh(); };
-            pending.onerror = event => { characterSprites.set(key, { status: 'unreadable' }); failed?.(event); refresh(); };
-        }
-        return null;
-    }
+    if (!src) return null;
     let result;
     try {
         const crop = cropFor(url, src, image.split);
-        const c = document.createElement('canvas'); c.width = Math.round(crop.rect[2]); c.height = Math.round(crop.rect[3]);
+        // Playback/export output is 960px. Process only a display-sized derived
+        // raster; the editor and saved originals remain at full resolution.
+        const scale = Math.min(1, 960 / Math.max(crop.rect[2], crop.rect[3]));
+        const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(crop.rect[2] * scale)); c.height = Math.max(1, Math.round(crop.rect[3] * scale));
         const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(src, ...crop.rect, 0, 0, c.width, c.height);
         const pixels = g.getImageData(0, 0, c.width, c.height);
         const prepared = image_tools.prepareCharacterPixels(pixels.data, c.width, c.height, { multiple, manual: image.editMode === 'cutout' });
@@ -90695,12 +90942,23 @@ function characterSprite(image, group) {
         if (prepared.data) {
             const unchanged = prepared.status === 'transparent' && crop.split === 'none';
             if (!unchanged) { pixels.data.set(prepared.data); g.putImageData(pixels, 0, 0); }
-            result = { ...result, image: unchanged ? src : c, preview: unchanged ? url : c.toDataURL('image/png'),
+            result = { ...result, image: unchanged ? src : c, source: url,
                 bounds: image_tools.alphaBounds(prepared.data, c.width, c.height) };
         }
     } catch { result = { status: 'unreadable', key }; }
-    characterSprites.set(key, result);
-    return result;
+    return cacheValue(characterSprites, key, result, 8);
+}
+
+function inspectionPreview(sprite, fallback) {
+    if (!sprite?.image || sprite.image.naturalWidth) return fallback;
+    if (sprite.preview) return sprite.preview;
+    try {
+        const src = sprite.image, scale = Math.min(1, 320 / Math.max(src.width, src.height));
+        const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(src.width * scale)); c.height = Math.max(1, Math.round(src.height * scale));
+        c.getContext('2d').drawImage(src, 0, 0, c.width, c.height);
+        sprite.preview = c.toDataURL('image/png');
+        return sprite.preview;
+    } catch { return fallback; }
 }
 
 function coverPalette(song) {
@@ -91147,6 +91405,7 @@ __init_extras_mvImageTools_js();
 __init_extras_mvStage_js();
 __init_extras_mvStillPrompt_js();
 __init_ui_mvCastControls_js();
+__init_ui_mvEditorUi_js();
 __init_ui_mvImageEditor_js();
 __init_ui_mvStageCanvas_js();
 __init_core_themeSongCover_js();
