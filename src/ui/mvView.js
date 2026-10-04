@@ -103,7 +103,7 @@ function closeAssetEditor() {
     if (view.sub === 'asset-editor') restoreParentPage();
 }
 
-async function openAssetEditor(key) {
+async function openAssetEditor(key, autoCutout = false) {
     const opened = viewTarget(), target = mv.captureAssetEdit(view.songId, key);
     const record = target.base.songs[target.songId], found = mv.assetOf(record, key);
     stopPlayback(); assetEditor?.dispose(); assetEditor = null;
@@ -116,7 +116,7 @@ async function openAssetEditor(key) {
     if (!isView(opened) || view.sub !== 'asset-editor' || token !== editSequence) return;
     const host = body().querySelector('[data-rmt-mv-editor-host]'); if (!host) return;
     assetEditor = image_editor.mountAssetEditor(host, {
-        motif: key === 'motif', autoCharacter: found.kind === 'char' && found.group.layer !== 'full' && image?.editMode !== 'full',
+        motif: key === 'motif', autoCutout, autoCharacter: !autoCutout && found.kind === 'char' && found.group.layer !== 'full' && image?.editMode !== 'full',
         multipleCharacters: found.group?.who === 'both' || (found.group?.cast?.length || 0) > 1,
         sourceUrl, imageUrl, image, prompt: mv.assetPrompt(record, key, ctx()), defaultPrompt: mv.defaultAssetPrompt(record, key, ctx()),
         onClose: () => { if (isView(opened) && token === editSequence) closeAssetEditor(); },
@@ -248,7 +248,7 @@ ${r} .rmt-mv-assets{display:flex;gap:8px;align-items:flex-end;overflow-x:auto;pa
 ${r} .rmt-mv-assets>div{display:flex;flex-direction:column;align-items:center;gap:4px;flex-shrink:0}
 ${r} .rmt-mv-assets small{font-size:11px;color:var(--rmt-theme-muted,#586b7c)}
 ${r} .rmt-mv-plus{font-size:18px;color:#b7c3cf;padding-bottom:28px}
-${r} .rmt-mv-asset{position:relative;width:62px;height:96px;border-radius:10px;overflow:hidden;padding:0;cursor:pointer;border:1px solid var(--rmt-theme-border,#cfdae5);background:repeating-linear-gradient(135deg,#e6e9f0 0 6px,#f2f4f8 6px 12px)}
+${r} .rmt-mv-asset{position:relative;box-sizing:border-box;flex-shrink:0;width:62px;height:auto;min-width:0;min-height:0;max-height:none;aspect-ratio:9/16;border-radius:10px;overflow:hidden;padding:0;cursor:pointer;border:1px solid var(--rmt-theme-border,#cfdae5);background:repeating-linear-gradient(135deg,#e6e9f0 0 6px,#f2f4f8 6px 12px)}
 ${r} .rmt-mv-asset.wide{box-sizing:border-box;flex-shrink:0;width:160px;height:auto;min-width:0;min-height:0;max-height:none;aspect-ratio:16/9;padding:0}
 ${r} .rmt-mv-background-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:12px;margin-top:10px}
 ${r} .rmt-mv-background-tile{display:grid;grid-template-columns:auto minmax(0,1fr);gap:6px 10px;align-items:start;min-width:0}
@@ -258,7 +258,9 @@ ${r} .rmt-mv-background-tile .rmt-mv-actions{margin:0;gap:6px}
 ${r} .rmt-mv-background-tile .rmt-mv-actions button{padding:6px 9px;min-height:36px;font-size:12px}
 ${r} .rmt-mv-background-tile>details{grid-column:1/-1;min-width:0;font-size:12px}
 ${r} .rmt-mv-background-tile>details[open]{padding-top:6px}
-${r} .rmt-mv-asset.cut.done{background:repeating-conic-gradient(#eef0f4 0 25%,#ffffff 0 50%) 0 0/12px 12px}
+${r} .rmt-mv-asset.cut.done{background:repeating-conic-gradient(#dce0e6 0 25%,#ffffff 0 50%) 0 0/12px 12px!important}
+${r} .rmt-mv-asset-actions{display:flex;flex-wrap:wrap;gap:4px;justify-content:center;max-width:160px}
+${r} .rmt-mv-asset-actions .rmt-btn{padding:6px 8px;font-size:12px;min-height:40px}
 ${r} .rmt-mv-asset img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
 ${r} .rmt-mv-asset.wide img{display:block;min-width:0;min-height:0;max-width:none;max-height:none;margin:0;padding:0;object-fit:cover;object-position:center}
 ${r} .rmt-mv-asset i{position:absolute;left:4px;top:4px;font-style:normal;font-size:10px;border-radius:4px;padding:1px 5px;background:#ecebf1;color:#5d5566}
@@ -274,7 +276,10 @@ ${r} .rmt-mv-split{margin-top:4px;min-height:32px;max-width:92px;font-size:11px;
 ${r} .rmt-mv-inspect summary{cursor:pointer;font-size:13px;font-weight:600;padding:6px 0}
 ${r} .rmt-mv-inspect-row{display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-top:1px dashed var(--rmt-theme-border,#cfdae5)}
 ${r} .rmt-mv-inspect-row figure{margin:0;display:flex;flex-direction:column;align-items:center;gap:2px}
-${r} .rmt-mv-inspect-row img{width:72px;height:108px;object-fit:contain;border-radius:8px;background:#e9edf2}
+${r} .rmt-mv-inspect-row img{width:72px;height:auto;aspect-ratio:9/16;object-fit:contain;border-radius:8px;background:#e9edf2}
+${r} .rmt-mv-inspect-row.wide{flex-wrap:wrap}
+${r} .rmt-mv-inspect-row.wide img{width:110px;height:auto;aspect-ratio:16/9}
+${r} .rmt-mv-inspect-row.wide figure.cut img{object-fit:cover}
 ${r} .rmt-mv-inspect-row figure.cut img{background:repeating-conic-gradient(#e6e9f0 0 25%,#fff 0 50%) 0 0/10px 10px}
 ${r} .rmt-mv-inspect-row figcaption{font-size:10px;color:var(--rmt-theme-muted,#586b7c)}
 ${r} .rmt-mv-inspect-row>div{display:flex;flex-direction:column;gap:3px;font-size:12px;min-width:0}
@@ -292,8 +297,8 @@ ${r} .rmt-mv-lyric p{margin:0;font-size:14px;line-height:1.8;white-space:pre-lin
 ${r} .rmt-mv-shot{display:flex;flex-direction:column;gap:12px;border-radius:16px;padding:14px;background:var(--rmt-theme-surface-solid,#fff);border:1px solid var(--rmt-theme-border,#cfdae5)}
 ${r} .rmt-mv-shot.done{border-color:#b9dcd6}
 ${r} .rmt-mv-shot-row{display:flex;gap:12px}
-${r} .rmt-mv-thumb{width:64px;height:114px;flex-shrink:0;border-radius:10px;overflow:hidden;background:repeating-linear-gradient(135deg,#e6e9f0 0 6px,#f2f4f8 6px 12px);display:flex;align-items:flex-end;justify-content:flex-start;position:relative}
-${r} .rmt-mv-thumb.wide{width:114px;height:64px}
+${r} .rmt-mv-thumb{width:64px;height:auto;aspect-ratio:9/16;flex-shrink:0;align-self:flex-start;border-radius:10px;overflow:hidden;background:repeating-linear-gradient(135deg,#e6e9f0 0 6px,#f2f4f8 6px 12px);display:flex;align-items:flex-end;justify-content:flex-start;position:relative}
+${r} .rmt-mv-thumb.wide{width:114px;aspect-ratio:16/9}
 ${r} .rmt-mv-thumb img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 ${r} .rmt-mv-thumb i{position:relative;font-style:normal;font-size:10px;color:#f3eee6;background:rgba(29,27,38,.7);border-radius:4px;padding:2px 5px;margin:4px}
 ${r} .rmt-mv-shot-copy{display:flex;flex-direction:column;gap:6px;flex:1;min-width:0}
@@ -575,7 +580,7 @@ function choice(action, value, on, title, desc, note = '') {
 
 function thumb(shot, record, label) {
     const wide = mv.normalizeSettings(record.settings).ratio === '16:9';
-    return `<span class="rmt-mv-thumb${wide ? ' wide' : ''}">${imgUrl(shot) ? `<img src="${esc(imgUrl(shot))}" alt="" loading="lazy">` : ''}<i>${esc(label)}</i></span>`;
+    return `<span class="rmt-mv-thumb${wide ? ' wide' : ''}">${imgUrl(shot) ? `<img src="${esc(thumbnailPreview(imgUrl(shot)))}" alt="" loading="lazy">` : ''}<i>${esc(label)}</i></span>`;
 }
 
 function renderBoard(song, record) {
@@ -1071,7 +1076,7 @@ export function stopPlayback() {
 
 export function disposeMv() {
     assetEditor?.dispose(); assetEditor = null; editSequence++;
-    stageShadows.clear(); characterSprites.clear();
+    stageShadows.clear(); characterSprites.clear(); thumbnailPreviews.clear();
     navigation.length = 0; renderedPage = '';
     view.epoch += 1;
     view.stopAll = true; view.drawingAll = false; view.drawQueue = null;
@@ -1412,6 +1417,7 @@ export function handleMvClick(event) {
         else if (action === 'draw-all') void drawAll();
         else if (action === 'draw-asset') void runAsset(id);
         else if (action === 'edit-asset') void openAssetEditor(id).catch(toastError);
+        else if (action === 'cutout-asset') void openAssetEditor(id, true).catch(toastError);
         else if (action === 'group-layer') { const [gid, layer] = id.split(':'); mv.setGroupLayer(view.songId, gid, layer); renderMv(); }
         else if (action === 'inspect') { view.inspect = view.inspect === id ? '' : id; setTimeout(() => renderMv(), 0); }
         else if (action === 'draw-group' || action === 'redraw-group') {
@@ -1696,24 +1702,24 @@ export function handleMvChange(event) {
 
 function assetTile(record, key, label) {
     const found = mv.assetOf(record, key);
-    const sprite = key === 'motif' ? motifForRange(record) : found?.kind === 'char' ? characterSprite(found.image, found.group) : null;
-    const url = sprite?.preview || assetImageUrl(found?.image);
+    const sprite = key === 'motif' ? motifSprite(found?.image) : found?.kind === 'char' ? characterSprite(found.image, found.group) : null;
+    const url = thumbnailPreview(sprite?.preview || assetImageUrl(found?.image));
     const exists = mv.hasAssetImage(found?.image);
     const drawing = mv.isAssetDrawing(mv.mvScope(ctx()), view.songId, key);
-    const wide = found?.kind !== 'motif' && mv.normalizeSettings(record.settings).ratio === '16:9';
-    const cut = found?.kind !== 'bg';
+    const wide = mv.normalizeSettings(record.settings).ratio === '16:9';
+    const cut = !!sprite?.image;
     const needsEdit = ['needs-edit', 'needs-selection', 'empty', 'unreadable'].includes(sprite?.status);
-    const splitSelect = btn('edit-asset', '编辑素材', { id: key, cls: 'rmt-mv-edit-open' });
-    return `<button type="button" class="rmt-mv-asset${wide ? ' wide' : ''}${exists ? ' done' : ''}${cut && found?.group?.layer !== 'full' ? ' cut' : ''}" data-rmt-mv-anchor="${esc(key)}" data-rmt-mv="draw-asset" data-rmt-mv-id="${esc(key)}" ${drawing || view.drawingAll ? 'disabled' : ''} aria-label="${esc(label)}：${exists ? '重画' : '画'}这一张">${url ? `<img src="${esc(url)}" alt="">` : ''}<i>${drawing ? '画…' : needsEdit ? (sprite.status === 'needs-selection' ? '选单格' : '检查背景') : exists ? '已画' : '未画'}</i></button><small>${esc(label)}</small>${splitSelect}`;
+    const splitSelect = `<div class="rmt-mv-asset-actions">${btn('edit-asset', '编辑素材', { id: key, cls: 'rmt-mv-edit-open' })}${exists && found?.kind !== 'bg' ? btn('cutout-asset', '一键抠图', { id: key, disabled: drawing || view.drawingAll }) : ''}</div>`;
+    return `<button type="button" class="rmt-mv-asset${wide ? ' wide' : ''}${exists ? ' done' : ''}${cut ? ' cut' : ''}" data-rmt-mv-anchor="${esc(key)}" data-rmt-mv="draw-asset" data-rmt-mv-id="${esc(key)}" ${drawing || view.drawingAll ? 'disabled' : ''} aria-label="${esc(label)}：${exists ? '重画' : '画'}这一张">${url ? `<img src="${esc(url)}" alt="">` : ''}<i>${drawing ? '画…' : needsEdit ? (sprite.status === 'needs-selection' ? '选单格' : '检查背景') : exists ? '已画' : '未画'}</i></button><small>${esc(label)}</small>${splitSelect}`;
 }
 
 // 素材检查：原图 → 拼图拆分 → 抠图结果 → 播放时的用法，逐张对照。
 function inspectHtml(record, g, diffs) {
     const rows = diffs.filter(d => mv.hasAssetImage(d.image)).map(d => {
         const sprite = characterSprite(d.image, g);
-        const url = sprite?.preview || assetImageUrl(d.image), original = assetImageUrl(d.image.original || d.image);
+        const url = thumbnailPreview(sprite?.preview || assetImageUrl(d.image)), original = assetImageUrl(d.image.original || d.image);
         const layered = !!sprite?.image;
-        return `<div class="rmt-mv-inspect-row"><figure>${original ? `<img src="${esc(original)}" alt="原图">` : ''}<figcaption>原图</figcaption></figure>
+        return `<div class="rmt-mv-inspect-row${mv.normalizeSettings(record.settings).ratio === '16:9' ? ' wide' : ''}"><figure>${original ? `<img src="${esc(original)}" alt="原图">` : ''}<figcaption>原图</figcaption></figure>
           <figure class="cut">${url ? `<img src="${esc(url)}" alt="当前素材">` : ''}<figcaption>当前素材</figcaption></figure>
           <div><b>${esc(d.label)}</b><small>${d.image.crop ? '已手动选定画面' : '可在编辑素材中选单格'}</small><small>播放时：${layered ? '透明人物叠背景' : '完整画面'}</small>
           ${btn('edit-asset', '选单格／抠图／提示词', { id: `${g.id}:${d.id}` })}</div></div>`;
@@ -1730,7 +1736,7 @@ function sharedBackgroundsHtml(record, shots) {
     const tiles = backgrounds.map(bg => {
         const key = `stage:${bg.id}`, drawn = bg.kind === 'image' && mv.hasAssetImage(bg.image);
         const drawing = mv.isAssetDrawing(mv.mvScope(ctx()), view.songId, key);
-        let preview = bg.kind === 'image' ? assetImageUrl(bg.image) : '';
+        let preview = bg.kind === 'image' ? thumbnailPreview(assetImageUrl(bg.image)) : '';
         if (bg.kind !== 'image') {
             try { const c = document.createElement('canvas'); c.width = wide ? 320 : 180; c.height = wide ? 180 : 320;
                 stage_canvas.drawBackground(c.getContext('2d'), bg, c.width, c.height, 0); preview = c.toDataURL('image/png'); } catch { /* Host without Canvas preview. */ }
@@ -1802,6 +1808,37 @@ function renderGroupsBoard(song, record) {
 const characterSprites = new Map();
 const palettes = new Map();
 const motifSprites = new Map();
+const thumbnailPreviews = new Map();
+
+function thumbnailPreview(url) {
+    if (!url) return '';
+    if (thumbnailPreviews.has(url)) return thumbnailPreviews.get(url);
+    const src = imageFor(url);
+    thumbnailPreviews.set(url, url);
+    if (!src) {
+        const pending = images.get(url);
+        if (pending) {
+            const before = pending.onload;
+            pending.onload = event => {
+                thumbnailPreviews.delete(url); before?.(event);
+                if (isView() && view.sub === 'board') renderMv();
+            };
+        }
+        return url;
+    }
+    try {
+        const scale = Math.min(1, 512 / Math.max(src.naturalWidth, src.naturalHeight));
+        const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(src.naturalWidth * scale)); c.height = Math.max(1, Math.round(src.naturalHeight * scale));
+        const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(src, 0, 0, c.width, c.height);
+        const rect = image_tools.previewContentRect(g.getImageData(0, 0, c.width, c.height).data, c.width, c.height);
+        if (rect) {
+            const cropped = document.createElement('canvas'); cropped.width = rect.w; cropped.height = rect.h;
+            cropped.getContext('2d').drawImage(c, rect.x, rect.y, rect.w, rect.h, 0, 0, rect.w, rect.h);
+            thumbnailPreviews.set(url, cropped.toDataURL('image/png'));
+        }
+    } catch { /* Pixel access unavailable: retain the original preview and editor. */ }
+    return thumbnailPreviews.get(url);
+}
 
 function motifSprite(image) {
     const url = assetImageUrl(image);
@@ -1942,21 +1979,57 @@ function silhouette(url, source) {
     return stageShadows.get(url);
 }
 
-function drawSceneV2(g, record, song, rows, index, t, w, h) {
+function detailRect(sprite, ratio) {
+    if (!sprite.detailRects) sprite.detailRects = new Map();
+    if (sprite.detailRects.has(ratio)) return sprite.detailRects.get(ratio);
+    const image = sprite.image, pw = image.naturalWidth || image.width, ph = image.naturalHeight || image.height;
+    const b = sprite.bounds, cx = b ? b.cx * pw : pw / 2, cy = b ? (b.top + b.height / 2) * ph : ph / 2;
+    let rw = b ? b.width * pw : pw, rh = b ? b.height * ph : ph;
+    if (rw / rh > ratio) rw = rh * ratio; else rh = rw / ratio;
+    // Find an opaque crop inside a local insert such as an eye-shaped mask.
+    // Only the preview/export crop changes; the paid source is retained.
+    try {
+        const c = document.createElement('canvas'); c.width = 160; c.height = Math.max(1, Math.round(160 * ph / pw));
+        const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(image, 0, 0, c.width, c.height);
+        const pixels = g.getImageData(0, 0, c.width, c.height).data;
+        const solid = (x, y) => pixels[(Math.max(0, Math.min(c.height - 1, Math.floor(y / ph * c.height))) * c.width
+            + Math.max(0, Math.min(c.width - 1, Math.floor(x / pw * c.width)))) * 4 + 3] > 235;
+        for (let attempt = 0; attempt < 16; attempt++) {
+            let ok = true;
+            for (let i = 0; i <= 20; i++) {
+                const dx = (i / 20 - .5) * rw, dy = (i / 20 - .5) * rh;
+                if (!solid(cx + dx, cy - rh / 2) || !solid(cx + dx, cy + rh / 2)
+                    || !solid(cx - rw / 2, cy + dy) || !solid(cx + rw / 2, cy + dy)) { ok = false; break; }
+            }
+            if (ok) break;
+            rw *= .95; rh *= .95;
+        }
+    } catch { /* Keep a centered crop if a canvas cannot expose pixels. */ }
+    const rect = [cx - rw / 2, cy - rh / 2, rw, rh]; sprite.detailRects.set(ratio, rect); return rect;
+}
+
+function drawSceneText(g, info, record, w, h, pass) {
+    if (!info?.stage || mv.tegakiOptions(record).lyric !== 'stage') return;
+    const { stage, group, subject, opaque } = info;
+    const font = mv.TEGAKI_FONTS[mv.tegakiOptions(record).font] || mv.TEGAKI_FONTS.sans;
+    const main = opaque ? { ...stage, text: stage.lyric || stage.text } : stage;
+    const normal = value => String(value || '').replace(/[\s\p{P}\p{S}]/gu, '');
+    const separateLyric = !opaque && stage.lyric && normal(stage.text) !== normal(stage.lyric);
+    // A crowded keyword layout must not fall back onto the full lyric's lane.
+    stage_canvas.drawText(g, main, group, w, h, font, opaque, { subject, pass, suppressBanner: !!separateLyric });
+    // Keywords may remain behind the actor, but the only copy of a complete
+    // lyric must never be hidden there. Full lyric text is drawn once in front.
+    if (separateLyric && pass === 'front')
+        stage_canvas.drawText(g, { ...stage, text: stage.lyric }, group, w, h, font, true);
+}
+
+function drawSceneV2(g, record, song, rows, index, t, w, h, showText = true) {
     const row = rows[index];
     const group = record.groups.find(x => x.id === row.shot.group);
     const stageRows = record.stage && Array.isArray(record.clipSectionIndexes) ? mv.shotTimeline(record, song).rows : rows;
     const stageIndex = stageRows === rows ? index : stageRows.findIndex(r => r.shot.id === row.shot.id);
     const stage = mv_stage.state(record, stageRows, stageIndex, t);
-    const options = mv.tegakiOptions(record);
-    const font = mv.TEGAKI_FONTS[options.font] || mv.TEGAKI_FONTS.sans;
-    const stageText = depth => {
-        if (options.lyric === 'stage' && (stage?.cue.depth || 'back') === depth)
-            stage_canvas.drawText(g, stage, group, w, h, font);
-    };
-    const opaqueText = () => {
-        if (options.lyric === 'stage') stage_canvas.drawText(g, stage, group, w, h, font, true);
-    };
+    const info = { stage, group, subject: null, opaque: false };
     g.fillStyle = coverPalette(song)[0]; g.fillRect(0, 0, w, h);
     const span = stage ? groupSpan(stageRows, stageIndex) : groupSpan(rows, index);
     const p = Math.min(1, Math.max(0, (t - span.start) / Math.max(0.1, span.end - span.start)));
@@ -1965,7 +2038,7 @@ function drawSceneV2(g, record, song, rows, index, t, w, h) {
     if (ownImage && (!stage || ownImage.editMode === 'full' || (group?.layer === 'full' && ownImage.editMode !== 'cutout'))) {
         const own = imageFor(assetImageUrl(ownImage));
         if (own) drawCover(g, own, w, h, push, 0, 0);
-        opaqueText(); return;
+        info.opaque = true; return info;
     }
     const bgRow = (group?.bgs || []).find(b => b.id === (row.shot.bg || 'B1')) || (group?.bgs || [])[0];
     if (stage) stage_canvas.drawBackground(g, stage.background, w, h, stage.backgroundTime, stage.cue.tone,
@@ -1979,42 +2052,45 @@ function drawSceneV2(g, record, song, rows, index, t, w, h) {
     const override = art?.split || 'auto';
     const url = assetImageUrl(art), raw = imageFor(url);
     const sprite = characterSprite(art, group), person = sprite?.image;
-    // Ambiguous mattes keep the complete original until the user edits them.
     if (raw && !person) {
         drawCropCover(g, raw, cropFor(url, raw, override).rect, w, h, push);
         if (!stage) { g.save(); g.globalCompositeOperation = 'soft-light'; g.globalAlpha = 0.1; g.fillStyle = coverPalette(song)[1]; g.fillRect(0, 0, w, h); g.restore(); }
-        opaqueText(); return;
+        info.opaque = true; return info;
     }
-    stageText('back');
+    if (person && stage_canvas.isDetailInsert(group, diff)) {
+        drawCropCover(g, person, detailRect(sprite, w / h), w, h, push);
+        info.opaque = true; return info;
+    }
     if (person) {
         const breathe = stage ? 1 : 1 + 0.004 * Math.sin(t * Math.PI * 2 / 3.4);
         const pw = person.naturalWidth || person.width, ph = person.naturalHeight || person.height;
-        const factor = { close: 1.35, medium: 1.05, full: 0.95, wide: 0.6 }[group.scale] || 1.05;
-        const dh = h * factor, dw = pw * (dh / ph);
-        const side = w > h ? 0.18 : 0.1;
-        const cxp = { left: 0.5 - side, right: 0.5 + side, center: 0.5 }[group.position] || 0.5;
-        const dx = w * cxp - dw / 2, dy = group.scale === 'close' ? h - dh * 0.9 : h - dh;
-        const ref = (group.diffs || []).map(dd => characterSprite(dd.image, group)?.bounds).find(Boolean);
-        const cur = sprite.bounds;
-        const map = m => [dx + m.cx * dw, dy + m.bottom * dh];
+        const placement = stage_canvas.foregroundPlacement(sprite.bounds, pw, ph, group, w, h);
+        const { x: dx, y: dy, width: dw, height: dh } = placement;
+        // Reserve the maximum push/pop extent so letters do not disappear
+        // behind a moving arm between two frames of the same shot.
+        const reserve = w * .045, slide = stage?.entrance === 'slide' ? w * .08 : 0;
+        info.subject = { ...placement.subject, x: placement.subject.x - reserve - slide, width: placement.subject.width + reserve * 2 + slide };
+        if (showText) drawSceneText(g, info, record, w, h, 'back');
         g.save();
         if (stage?.active) {
             const motion = stage_canvas.poseTransform(stage, w, h);
-            g.translate(motion.x, motion.y); g.translate(w * cxp, h); g.scale(motion.scale, motion.scale); g.translate(-w * cxp, -h);
+            g.translate(motion.x, motion.y); g.translate(w / 2, placement.foot); g.scale(motion.scale, motion.scale); g.translate(-w / 2, -placement.foot);
         }
-        g.translate(w / 2, h); g.scale(push * breathe, push * breathe); g.translate(-w / 2, -h);
-        if (ref && cur && ref !== cur) {
-            const s = Math.min(1.18, Math.max(0.85, ref.height / Math.max(0.01, cur.height)));
-            const [tx, ty] = map(ref); const [cx, cy] = map(cur);
-            g.translate(tx, ty); g.scale(s, s); g.translate(-cx, -cy);
-        }
-        if (stage?.cue.shadow) {
-            g.save(); g.globalAlpha = 0.7; g.drawImage(silhouette(sprite.key, person), dx - w * 0.055, dy, dw, dh); g.restore();
+        g.translate(w / 2, placement.foot); g.scale(push * breathe, push * breathe); g.translate(-w / 2, -placement.foot);
+        if (stage && placement.grounded) {
+            // A small ground contact anchors full-body/wide shots; no duplicate
+            // upright silhouette floating alongside the actor.
+            const sx = placement.subject.x + placement.subject.width / 2;
+            const sw = Math.min(placement.subject.width * .3, h * .18);
+            g.save(); g.globalAlpha *= stage.cue.shadow ? .24 : .14; g.fillStyle = '#161c23';
+            g.beginPath(); g.ellipse(sx, placement.foot, sw, Math.max(2, h * .009), 0, 0, Math.PI * 2); g.fill(); g.restore();
+        } else if (stage?.cue.shadow) {
+            g.save(); g.globalAlpha *= .16; g.drawImage(silhouette(sprite.key, person), dx - w * .006, dy, dw, dh); g.restore();
         }
         g.drawImage(person, dx, dy, dw, dh); g.restore();
-    }
-    stageText('front');
+    } else if (showText) drawSceneText(g, info, record, w, h, 'back');
     if (!stage) { g.save(); g.globalCompositeOperation = 'soft-light'; g.globalAlpha = 0.14; g.fillStyle = coverPalette(song)[1]; g.fillRect(0, 0, w, h); g.restore(); }
+    return info;
 }
 
 function drawMotif(g, record, song, row, t, w, h) {
@@ -2094,14 +2170,15 @@ function renderFrameV2(canvas, record, song, t) {
     let index = rows.findIndex(r => t >= r.start && t < r.end);
     if (index < 0) index = t < rows[0].start ? 0 : rows.length - 1;
     const row = rows[index];
-    drawSceneV2(g, record, song, rows, index, t, w, h);
+    const stageInfo = drawSceneV2(g, record, song, rows, index, t, w, h);
     const prev = rows[index - 1];
     const since = t - row.start;
     const fadeDuration = transitionDuration(row, 0.35), flashDuration = transitionDuration(row, 0.16);
     if (prev && since >= 0 && prev.shot.group !== row.shot.group) {
-        if (prev.shot.cut === 'fade' && since < fadeDuration) { g.save(); g.globalAlpha = 1 - since / fadeDuration; drawSceneV2(g, record, song, rows, index - 1, t, w, h); g.restore(); }
+        if (prev.shot.cut === 'fade' && since < fadeDuration) { g.save(); g.globalAlpha = 1 - since / fadeDuration; drawSceneV2(g, record, song, rows, index - 1, t, w, h, false); g.restore(); }
         else if (prev.shot.cut === 'flash' && since < flashDuration) { g.save(); g.globalAlpha = 0.85 * (1 - since / flashDuration); g.fillStyle = '#fff'; g.fillRect(0, 0, w, h); g.restore(); }
     }
+    drawSceneText(g, stageInfo, record, w, h, 'front');
     if (since >= 0 && topt.showMotif) drawMotif(g, record, song, row, t, w, h);
     const palette = coverPalette(song);
     const font = mv.TEGAKI_FONTS[topt.font] || mv.TEGAKI_FONTS.sans;

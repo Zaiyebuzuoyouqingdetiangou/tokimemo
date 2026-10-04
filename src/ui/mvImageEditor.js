@@ -3,10 +3,10 @@ import * as pixels from '../extras/mvImageTools.js';
 // Isolated editor: drafts and undo buffers live here until an explicit save.
 export function mountAssetEditor(host, options) {
     host.innerHTML = `<section class="rmt-mv-editor rmt-x-card">
-      <div class="rmt-mv-editor-tools"><button type="button" data-edit="select">1 · 选单格</button><button type="button" data-edit="paint">2 · 处理背景</button></div>
+      <div class="rmt-mv-editor-tools"><button type="button" data-edit="auto">一键抠图</button><button type="button" data-edit="select">1 · 选单格</button><button type="button" data-edit="paint">2 · 处理背景</button></div>
       <div data-select-tools><label>拼图排列 <select data-grid><option value="free">手动框选</option><option value="1:1">整张</option><option value="2:1">上下两格</option><option value="3:1">上下三格</option><option value="4:1">上下四格</option><option value="1:2">左右两格</option><option value="1:3">左右三格</option><option value="1:4">左右四格</option><option value="2:2">四宫格</option><option value="3:3">九宫格</option></select></label>
       <p class="rmt-x-note" data-selection-note>拖动框选画面，或选择排列后点选一格。</p><button type="button" data-edit="apply-crop">使用选中画面</button></div>
-      <div data-paint-tools hidden><div class="rmt-mv-editor-tools"><button type="button" data-edit="auto">${options.motif ? '尝试去背景' : '尝试去白底'}</button><button type="button" data-edit="erase" aria-pressed="true">擦除</button><button type="button" data-edit="restore" aria-pressed="false">恢复</button><button type="button" data-edit="undo">撤销</button><button type="button" data-edit="reset">还原选中画面</button></div>
+      <div data-paint-tools hidden><div class="rmt-mv-editor-tools"><button type="button" data-edit="erase" aria-pressed="true">擦除</button><button type="button" data-edit="region" aria-pressed="false">点除残底</button><button type="button" data-edit="restore" aria-pressed="false">恢复</button><button type="button" data-edit="undo">撤销</button><button type="button" data-edit="reset">还原选中画面</button></div>
       <label>笔刷 <input data-brush type="range" min="1" max="100" value="20"></label>
       <label><input data-layer type="checkbox">使用此透明图叠背景</label><p class="rmt-x-note">先看预览再保存；自动处理可能误删白纱、白衣，可用恢复笔刷修回。</p></div>
       <label>放大 <input data-zoom type="range" min="1" max="4" step="0.25" value="1"></label><div class="rmt-mv-editor-tools"><button type="button" data-edit="pan">移动画布</button></div>
@@ -70,6 +70,24 @@ export function mountAssetEditor(host, options) {
         catch { say('这张图片无法读取像素。可先下载原图，再从“导入图片”打开；提示词仍可编辑。'); }
     }
     function pushUndo() { if (working) history.push({ data: duplicate(working), layer: layer().checked }); }
+    function autoCutout() {
+        if (!working) { say('请先载入图片。'); return; }
+        if (selectionDirty) { say('请先点“使用选中画面”，再一键抠图。'); return; }
+        stage = 'paint';
+        const prepared = pixels.prepareCutoutPixels(working.data, working.width, working.height, { multiple: options.multipleCharacters, reference: original?.data || working.data });
+        if (!prepared.data) {
+            show();
+            say(prepared.status === 'needs-selection' ? '这张像是多格图，请先选单格，再一键抠图。'
+                : prepared.status === 'empty' ? '未能分离背景：没有识别到可保留的画面，图片未改动。'
+                : '未能分离背景，图片未改动；可用擦除笔刷或导入透明图。');
+            return;
+        }
+        pushUndo(); working.data.set(prepared.data); compactUndo();
+        changed = true; restoreOriginal = false; layer().checked = true; show();
+        say(prepared.borderOnly ? '已去掉外侧白边，画面内部仍保留；请检查后保存。'
+            : prepared.status === 'transparent' ? '当前已是透明底，可保存或下载 PNG。'
+            : '透明底预览已生成，请检查边缘后保存；可撤销或用恢复笔刷。');
+    }
     function compactUndo() {
         const last = history.at(-1); if (!last?.data || !working) return;
         const before = last.data.data, after = working.data;
@@ -91,7 +109,13 @@ export function mountAssetEditor(host, options) {
     canvas.addEventListener('pointerdown', event => {
         if (busy || panning || !source || pointerId !== null) return;
         event.preventDefault(); pointerId = event.pointerId; canvas.setPointerCapture?.(pointerId); anchor = point(event);
-        if (stage === 'paint' && working) { pushUndo(); paint(anchor, anchor); }
+        if (stage === 'paint' && working) {
+            pushUndo();
+            if (brush === 'region') {
+                working.data.set(pixels.eraseMatteAt(working.data, working.width, working.height, anchor.x, anchor.y));
+                changed = true; restoreOriginal = false; layer().checked = true; show();
+            } else paint(anchor, anchor);
+        }
         else if (grid !== 'free') {
             const [rows, cols] = grid.split(':').map(Number);
             crop = pixels.gridCrop(rows, cols, Math.min(rows - 1, Math.floor(anchor.y / canvas.height * rows)) * cols + Math.min(cols - 1, Math.floor(anchor.x / canvas.width * cols))); selectionDirty = true; show();
@@ -100,7 +124,7 @@ export function mountAssetEditor(host, options) {
     canvas.addEventListener('pointermove', event => {
         if (event.pointerId !== pointerId || !anchor) return;
         event.preventDefault(); const next = point(event);
-        if (stage === 'paint' && working) { paint(anchor, next); anchor = next; }
+        if (stage === 'paint' && working) { if (brush !== 'region') paint(anchor, next); anchor = next; }
         else if (grid === 'free') {
             crop = pixels.normalizeCrop({ x: Math.min(anchor.x, next.x) / canvas.width, y: Math.min(anchor.y, next.y) / canvas.height, w: Math.abs(next.x - anchor.x) / canvas.width, h: Math.abs(next.y - anchor.y) / canvas.height }) || crop; selectionDirty = true; show();
         }
@@ -138,8 +162,8 @@ export function mountAssetEditor(host, options) {
         if (action === 'select') { stage = 'select'; show(); return; }
         if (action === 'paint') { if (!working || selectionDirty) applyCrop(); else { stage = 'paint'; show(); } return; }
         if (action === 'apply-crop') { applyCrop(); return; }
-        if (action === 'erase' || action === 'restore') {
-            brush = action; for (const value of ['erase', 'restore']) find(`[data-edit="${value}"]`).setAttribute('aria-pressed', String(value === brush)); return;
+        if (action === 'erase' || action === 'restore' || action === 'region') {
+            brush = action; for (const value of ['erase', 'restore', 'region']) find(`[data-edit="${value}"]`).setAttribute('aria-pressed', String(value === brush)); return;
         }
         if (action === 'undo') { const last = history.pop(); if (last) {
             if (last.data) working = last.data;
@@ -147,12 +171,7 @@ export function mountAssetEditor(host, options) {
             layer().checked = last.layer; changed = true; restoreOriginal = false; show();
         } return; }
         if (action === 'reset' && original) { pushUndo(); working = duplicate(original); compactUndo(); layer().checked = false; changed = true; restoreOriginal = false; show(); return; }
-        if (action === 'auto' && working) {
-            const data = options.motif ? pixels.prepareMotifPixels(working.data, working.width, working.height).data : pixels.eraseEdgeWhite(working.data, working.width, working.height);
-            if (!data) { say('未能分离意象背景，可用擦除笔刷处理或导入透明图。'); return; }
-            pushUndo(); working.data.set(data); compactUndo(); changed = true; restoreOriginal = false; layer().checked = true; show();
-            say(options.motif ? '已处理意象背景，请检查边缘后保存。' : '这是去白底预览，请检查边缘和白色衣物；不满意可撤销或用恢复笔刷。'); return;
-        }
+        if (action === 'auto') { autoCutout(); return; }
         if (action === 'original') {
             // Restore the saved original reference without rewriting or deleting its pixels.
             restoreOriginal = true; changed = true; selectionDirty = false; sourceBlob = null; crop = { x: 0, y: 0, w: 1, h: 1 }; history.length = 0;
@@ -188,7 +207,7 @@ export function mountAssetEditor(host, options) {
                 const c = makeCanvas(original.width, original.height); c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
                 working = c.getContext('2d').getImageData(0, 0, c.width, c.height); layer().checked = options.image.editMode === 'cutout'; stage = 'paint';
             }
-            if (options.motif) {
+            if (options.motif && !options.autoCutout) {
                 const prepared = pixels.prepareMotifPixels(working.data, working.width, working.height);
                 if (prepared.data) {
                     working.data.set(prepared.data); layer().checked = true; stage = 'paint';
@@ -196,7 +215,7 @@ export function mountAssetEditor(host, options) {
                     changed = prepared.status === 'prepared';
                 }
             }
-            if (options.autoCharacter && !options.image?.editMode) {
+            if (options.autoCharacter && !options.autoCutout && !options.image?.editMode) {
                 const prepared = pixels.prepareCharacterPixels(working.data, working.width, working.height, { multiple: options.multipleCharacters });
                 if (prepared.data) {
                     working.data.set(prepared.data); layer().checked = true; stage = 'paint';
@@ -205,6 +224,7 @@ export function mountAssetEditor(host, options) {
                 }
             }
             show(); say('');
+            if (options.autoCutout) autoCutout();
         } catch { if (active && token === loadToken) { show(); say('无法读取图片像素，可导入本机图片继续处理；提示词仍可编辑。'); } }
     })();
     return { ready, dispose() { active = false; loadToken++; for (const url of urls) URL.revokeObjectURL(url); history.length = 0; } };

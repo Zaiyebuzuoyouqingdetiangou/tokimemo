@@ -1,0 +1,27 @@
+{
+  "baseline": {
+    "tests": 417,
+    "pass": 414,
+    "fail": 3,
+    "skipped": 0,
+    "cancelled": 0
+  },
+  "candidate": {
+    "tests": 432,
+    "pass": 429,
+    "fail": 3,
+    "skipped": 0,
+    "cancelled": 0
+  },
+  "preexisting_failures": [
+    "a verse-only export does not preload a motif that is only rendered in the chorus",
+    "frame cast is the exact intersection of shot people and appearance preference",
+    "revision drift journals paid result and survives a fresh runtime"
+  ],
+  "new_regressions": 0,
+  "new_tests": 15,
+  "intentional_requirement_test_renames": {
+    "MV shortcut is above composer, song list and cover, keeps the selected song ID and sends no requests": "MV shortcut is inside the selected song above its cover, keeps the song ID and sends no requests"
+  },
+  "failure_payloads_identical": true
+}

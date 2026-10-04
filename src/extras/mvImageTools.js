@@ -58,12 +58,83 @@ export function alphaBounds(data, width, height) {
         if (data[(y * width + x) * 4 + 3] <= 40) continue;
         x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y);
     }
-    return x1 >= x0 ? { cx: (x1 + x0) / 2 / width, bottom: y1 / height, height: Math.max(1, y1 - y0 + 1) / height } : null;
+    return x1 >= x0 ? { cx: (x1 + x0 + 1) / 2 / width, bottom: (y1 + 1) / height,
+        x: x0 / width, top: y0 / height, width: (x1 - x0 + 1) / width, height: (y1 - y0 + 1) / height } : null;
+}
+
+// A deliberate click removes one connected patch only. It never treats every
+// white pixel as background; the editor keeps undo and the unmodified source.
+export function eraseMatteAt(data, width, height, x, y) {
+    const out = new Uint8ClampedArray(data), count = width * height;
+    if (!count || data.length !== count * 4) return out;
+    const start = Math.max(0, Math.min(height - 1, Math.floor(y))) * width + Math.max(0, Math.min(width - 1, Math.floor(x)));
+    const color = Array.from(data.slice(start * 4, start * 4 + 3));
+    if (data[start * 4 + 3] <= 8) return out;
+    const seen = new Uint8Array(count), queue = new Uint32Array(count); let head = 0, tail = 1; queue[0] = start; seen[start] = 1;
+    const add = p => { if (!seen[p]) { seen[p] = 1; queue[tail++] = p; } };
+    while (head < tail) {
+        const p = queue[head++], i = p * 4;
+        if (data[i + 3] <= 8 || color.some((v, k) => Math.abs(v - data[i + k]) > 24)) continue;
+        out[i + 3] = 0; seen[p] = 2;
+        if (p % width) add(p - 1); if (p % width + 1 < width) add(p + 1);
+        if (p >= width) add(p - width); if (p + width < count) add(p + width);
+    }
+    softenMatteEdge(out, width, height, color, p => seen[p] === 2);
+    return out;
+}
+
+function softenMatteEdge(out, width, height, matte, cleared) {
+    const count = width * height;
+    for (let p = 0; p < count; p++) {
+        if (!out[p * 4 + 3]) continue;
+        const edge = p % width && cleared(p - 1) || p % width + 1 < width && cleared(p + 1)
+            || p >= width && cleared(p - width) || p + width < count && cleared(p + width);
+        if (!edge) continue;
+        const i = p * 4;
+        const a = Math.max(...matte.map((v, k) => Math.abs(out[i + k] - v) / Math.max(1, out[i + k] < v ? v : 255 - v)));
+        if (a <= 0 || a >= .98) continue;
+        out[i + 3] = Math.min(out[i + 3], Math.round(255 * a));
+        for (let k = 0; k < 3; k++) out[i + k] = Math.max(0, Math.min(255, Math.round((out[i + k] - matte[k] * (1 - a)) / a)));
+    }
+}
+
+// Conservative pockets beside a solo torso: protect the head, central white
+// garments, detailed/shaded regions and multi-person silhouettes. Ambiguous
+// whites are left for the editor's connected-region click, not guessed away.
+function clearMattePockets(data, width, height, matte, multiple = false, buffers = null) {
+    // Callers supply a derived buffer. Reuse flood-fill storage so opening a
+    // large character image does not allocate another full-resolution queue.
+    const out = data, bounds = alphaBounds(data, width, height);
+    if (!bounds || multiple) return out;
+    const count = width * height, seen = buffers?.seen || new Uint8Array(count), queue = buffers?.queue || new Uint32Array(count);
+    seen.fill(0);
+    const candidate = p => data[p * 4 + 3] >= 250 && matte.every((v, k) => Math.abs(v - data[p * 4 + k]) <= 10);
+    const cx = bounds.cx * width, fw = bounds.width * width, top = bounds.top * height, fh = bounds.height * height;
+    for (let start = 0; start < count; start++) {
+        if (seen[start] || !candidate(start)) continue;
+        let head = 0, tail = 1, x0 = width, y0 = height, x1 = -1, y1 = -1, sumX = 0, sumY = 0, open = false;
+        queue[0] = start; seen[start] = 1;
+        const add = p => { if (data[p * 4 + 3] <= 40) open = true; if (!seen[p] && candidate(p)) { seen[p] = 1; queue[tail++] = p; } };
+        while (head < tail) {
+            const p = queue[head++], x = p % width, y = Math.floor(p / width);
+            x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); sumX += x; sumY += y;
+            if (!x || x === width - 1 || !y || y === height - 1) open = true;
+            if (x) add(p - 1); if (x + 1 < width) add(p + 1); if (y) add(p - width); if (y + 1 < height) add(p + width);
+        }
+        const yy = (sumY / tail - top) / fh, offset = Math.abs(sumX / tail - cx) / fw;
+        const central = x0 < cx + fw * .09 && x1 > cx - fw * .09;
+        const irregular = tail / ((x1 - x0 + 1) * (y1 - y0 + 1)) < .88;
+        if (open || central || !irregular || yy < .34 || yy > .86 || offset < .16
+            || tail < Math.max(16, fw * fh * .003) || tail > fw * fh * .12) continue;
+        for (let i = 0; i < tail; i++) { out[queue[i] * 4 + 3] = 0; seen[queue[i]] = 2; }
+    }
+    softenMatteEdge(out, width, height, matte, p => seen[p] === 2);
+    return out;
 }
 
 // Character layers: accept real alpha, or a uniform light matte connected to
 // the perimeter. Never select a panel or infer success from removed area.
-export function prepareCharacterPixels(data, width, height, { multiple = false, manual = false } = {}) {
+export function prepareCharacterPixels(data, width, height, { multiple = false, manual = false, allowPanel = false } = {}) {
     const count = width * height;
     if (!count || data.length !== count * 4) return { status: 'empty' };
     const bounds = alphaBounds(data, width, height);
@@ -106,9 +177,9 @@ export function prepareCharacterPixels(data, width, height, { multiple = false, 
         let n = 0; for (let i = 0; i < length; i++) if (!removed[from + i * step]) n++;
         return n >= length * .9;
     };
-    if (lineSolid(y0 * width + x0, x1 - x0 + 1, 1) && lineSolid(y1 * width + x0, x1 - x0 + 1, 1)
-        && lineSolid(y0 * width + x0, y1 - y0 + 1, width) && lineSolid(y0 * width + x1, y1 - y0 + 1, width))
-        return { status: 'needs-edit' };
+    const borderOnly = lineSolid(y0 * width + x0, x1 - x0 + 1, 1) && lineSolid(y1 * width + x0, x1 - x0 + 1, 1)
+        && lineSolid(y0 * width + x0, y1 - y0 + 1, width) && lineSolid(y0 * width + x1, y1 - y0 + 1, width);
+    if (borderOnly && !allowPanel) return { status: 'needs-edit' };
     // Separated, substantial figures may be a contact sheet. Keep it intact
     // until a cell is chosen; never guess the upper/left half.
     const separated = projection => {
@@ -132,7 +203,44 @@ export function prepareCharacterPixels(data, width, height, { multiple = false, 
         out[i + 3] = Math.round(data[i + 3] * alpha);
         for (let k = 0; k < 3; k++) out[i + k] = Math.max(0, Math.min(255, Math.round((data[i + k] - matte[k] * (1 - alpha)) / alpha)));
     }
-    return { status: 'prepared', data: out };
+    return { status: 'prepared', data: borderOnly ? out : clearMattePockets(out, width, height, matte, multiple, { seen, queue }), ...(borderOnly ? { borderOnly: true } : {}) };
+}
+
+// Explicit, reversible editor action. A panel's outer matte can be cleared,
+// but this must never grant automatic character-layer permission in playback.
+export function prepareCutoutPixels(data, width, height, { multiple = false, reference = data } = {}) {
+    const result = prepareCharacterPixels(data, width, height, { multiple, allowPanel: true });
+    if (!result.data || result.borderOnly || result.status !== 'transparent' || multiple) return result;
+    // Repeated explicit cleanup may use the retained source to identify the old
+    // matte. Existing transparency and manual erasures are never filled back in.
+    const count = width * height, corners = [0, width - 1, count - width, count - 1];
+    if (reference.length !== data.length) return result;
+    const matte = [0, 1, 2].map(k => corners.reduce((sum, p) => sum + reference[p * 4 + k], 0) / 4);
+    const neutral = Math.min(...matte) >= 180 && Math.max(...matte) - Math.min(...matte) <= 20;
+    if (!neutral || !corners.every(p => matte.every((v, k) => Math.abs(v - reference[p * 4 + k]) <= 16))) return result;
+    const out = clearMattePockets(new Uint8ClampedArray(result.data), width, height, matte);
+    const changed = out.some((value, i) => value !== data[i]);
+    return { ...result, status: changed ? 'prepared' : result.status, data: out };
+}
+
+// Only remove padding around a rectangular picture for the thumbnail. A real
+// character silhouette keeps its canvas and full-body framing. No source edits.
+export function previewContentRect(data, width, height) {
+    const prepared = prepareCutoutPixels(data, width, height, { multiple: true });
+    if (!prepared.data) return null;
+    const mask = prepared.data;
+    let x0 = width, y0 = height, x1 = -1, y1 = -1;
+    const solid = (x, y) => mask[(y * width + x) * 4 + 3] > 40;
+    for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) if (solid(x, y)) {
+        x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y);
+    }
+    if (x1 < x0 || (x0 === 0 && y0 === 0 && x1 === width - 1 && y1 === height - 1)) return null;
+    let top = 0, bottom = 0, left = 0, right = 0;
+    for (let x = x0; x <= x1; x++) { top += solid(x, y0); bottom += solid(x, y1); }
+    for (let y = y0; y <= y1; y++) { left += solid(x0, y); right += solid(x1, y); }
+    const w = x1 - x0 + 1, h = y1 - y0 + 1;
+    if (top < w * .9 || bottom < w * .9 || left < h * .9 || right < h * .9) return null;
+    return { x: x0, y: y0, w, h };
 }
 
 // Decorative sprites only. Keep genuine alpha and enclosed white details;

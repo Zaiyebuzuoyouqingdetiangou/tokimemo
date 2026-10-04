@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 320
-// Source SHA-256: 1008f6567e75f9538559ac9f9b728c9d205ed5f33e435f5310c397f9827dd0a6
+// Source SHA-256: 51d59f52fd7eefcae68c05f8701bb97ab1ab4ce4eb32232fc7277c987fefb1e7
 // Build: python3 tools/verification/build.py <source-root>
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -664,12 +664,83 @@ function alphaBounds(data, width, height) {
         if (data[(y * width + x) * 4 + 3] <= 40) continue;
         x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y);
     }
-    return x1 >= x0 ? { cx: (x1 + x0) / 2 / width, bottom: y1 / height, height: Math.max(1, y1 - y0 + 1) / height } : null;
+    return x1 >= x0 ? { cx: (x1 + x0 + 1) / 2 / width, bottom: (y1 + 1) / height,
+        x: x0 / width, top: y0 / height, width: (x1 - x0 + 1) / width, height: (y1 - y0 + 1) / height } : null;
+}
+
+// A deliberate click removes one connected patch only. It never treats every
+// white pixel as background; the editor keeps undo and the unmodified source.
+function eraseMatteAt(data, width, height, x, y) {
+    const out = new Uint8ClampedArray(data), count = width * height;
+    if (!count || data.length !== count * 4) return out;
+    const start = Math.max(0, Math.min(height - 1, Math.floor(y))) * width + Math.max(0, Math.min(width - 1, Math.floor(x)));
+    const color = Array.from(data.slice(start * 4, start * 4 + 3));
+    if (data[start * 4 + 3] <= 8) return out;
+    const seen = new Uint8Array(count), queue = new Uint32Array(count); let head = 0, tail = 1; queue[0] = start; seen[start] = 1;
+    const add = p => { if (!seen[p]) { seen[p] = 1; queue[tail++] = p; } };
+    while (head < tail) {
+        const p = queue[head++], i = p * 4;
+        if (data[i + 3] <= 8 || color.some((v, k) => Math.abs(v - data[i + k]) > 24)) continue;
+        out[i + 3] = 0; seen[p] = 2;
+        if (p % width) add(p - 1); if (p % width + 1 < width) add(p + 1);
+        if (p >= width) add(p - width); if (p + width < count) add(p + width);
+    }
+    softenMatteEdge(out, width, height, color, p => seen[p] === 2);
+    return out;
+}
+
+function softenMatteEdge(out, width, height, matte, cleared) {
+    const count = width * height;
+    for (let p = 0; p < count; p++) {
+        if (!out[p * 4 + 3]) continue;
+        const edge = p % width && cleared(p - 1) || p % width + 1 < width && cleared(p + 1)
+            || p >= width && cleared(p - width) || p + width < count && cleared(p + width);
+        if (!edge) continue;
+        const i = p * 4;
+        const a = Math.max(...matte.map((v, k) => Math.abs(out[i + k] - v) / Math.max(1, out[i + k] < v ? v : 255 - v)));
+        if (a <= 0 || a >= .98) continue;
+        out[i + 3] = Math.min(out[i + 3], Math.round(255 * a));
+        for (let k = 0; k < 3; k++) out[i + k] = Math.max(0, Math.min(255, Math.round((out[i + k] - matte[k] * (1 - a)) / a)));
+    }
+}
+
+// Conservative pockets beside a solo torso: protect the head, central white
+// garments, detailed/shaded regions and multi-person silhouettes. Ambiguous
+// whites are left for the editor's connected-region click, not guessed away.
+function clearMattePockets(data, width, height, matte, multiple = false, buffers = null) {
+    // Callers supply a derived buffer. Reuse flood-fill storage so opening a
+    // large character image does not allocate another full-resolution queue.
+    const out = data, bounds = alphaBounds(data, width, height);
+    if (!bounds || multiple) return out;
+    const count = width * height, seen = buffers?.seen || new Uint8Array(count), queue = buffers?.queue || new Uint32Array(count);
+    seen.fill(0);
+    const candidate = p => data[p * 4 + 3] >= 250 && matte.every((v, k) => Math.abs(v - data[p * 4 + k]) <= 10);
+    const cx = bounds.cx * width, fw = bounds.width * width, top = bounds.top * height, fh = bounds.height * height;
+    for (let start = 0; start < count; start++) {
+        if (seen[start] || !candidate(start)) continue;
+        let head = 0, tail = 1, x0 = width, y0 = height, x1 = -1, y1 = -1, sumX = 0, sumY = 0, open = false;
+        queue[0] = start; seen[start] = 1;
+        const add = p => { if (data[p * 4 + 3] <= 40) open = true; if (!seen[p] && candidate(p)) { seen[p] = 1; queue[tail++] = p; } };
+        while (head < tail) {
+            const p = queue[head++], x = p % width, y = Math.floor(p / width);
+            x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); sumX += x; sumY += y;
+            if (!x || x === width - 1 || !y || y === height - 1) open = true;
+            if (x) add(p - 1); if (x + 1 < width) add(p + 1); if (y) add(p - width); if (y + 1 < height) add(p + width);
+        }
+        const yy = (sumY / tail - top) / fh, offset = Math.abs(sumX / tail - cx) / fw;
+        const central = x0 < cx + fw * .09 && x1 > cx - fw * .09;
+        const irregular = tail / ((x1 - x0 + 1) * (y1 - y0 + 1)) < .88;
+        if (open || central || !irregular || yy < .34 || yy > .86 || offset < .16
+            || tail < Math.max(16, fw * fh * .003) || tail > fw * fh * .12) continue;
+        for (let i = 0; i < tail; i++) { out[queue[i] * 4 + 3] = 0; seen[queue[i]] = 2; }
+    }
+    softenMatteEdge(out, width, height, matte, p => seen[p] === 2);
+    return out;
 }
 
 // Character layers: accept real alpha, or a uniform light matte connected to
 // the perimeter. Never select a panel or infer success from removed area.
-function prepareCharacterPixels(data, width, height, { multiple = false, manual = false } = {}) {
+function prepareCharacterPixels(data, width, height, { multiple = false, manual = false, allowPanel = false } = {}) {
     const count = width * height;
     if (!count || data.length !== count * 4) return { status: 'empty' };
     const bounds = alphaBounds(data, width, height);
@@ -712,9 +783,9 @@ function prepareCharacterPixels(data, width, height, { multiple = false, manual 
         let n = 0; for (let i = 0; i < length; i++) if (!removed[from + i * step]) n++;
         return n >= length * .9;
     };
-    if (lineSolid(y0 * width + x0, x1 - x0 + 1, 1) && lineSolid(y1 * width + x0, x1 - x0 + 1, 1)
-        && lineSolid(y0 * width + x0, y1 - y0 + 1, width) && lineSolid(y0 * width + x1, y1 - y0 + 1, width))
-        return { status: 'needs-edit' };
+    const borderOnly = lineSolid(y0 * width + x0, x1 - x0 + 1, 1) && lineSolid(y1 * width + x0, x1 - x0 + 1, 1)
+        && lineSolid(y0 * width + x0, y1 - y0 + 1, width) && lineSolid(y0 * width + x1, y1 - y0 + 1, width);
+    if (borderOnly && !allowPanel) return { status: 'needs-edit' };
     // Separated, substantial figures may be a contact sheet. Keep it intact
     // until a cell is chosen; never guess the upper/left half.
     const separated = projection => {
@@ -738,7 +809,44 @@ function prepareCharacterPixels(data, width, height, { multiple = false, manual 
         out[i + 3] = Math.round(data[i + 3] * alpha);
         for (let k = 0; k < 3; k++) out[i + k] = Math.max(0, Math.min(255, Math.round((data[i + k] - matte[k] * (1 - alpha)) / alpha)));
     }
-    return { status: 'prepared', data: out };
+    return { status: 'prepared', data: borderOnly ? out : clearMattePockets(out, width, height, matte, multiple, { seen, queue }), ...(borderOnly ? { borderOnly: true } : {}) };
+}
+
+// Explicit, reversible editor action. A panel's outer matte can be cleared,
+// but this must never grant automatic character-layer permission in playback.
+function prepareCutoutPixels(data, width, height, { multiple = false, reference = data } = {}) {
+    const result = prepareCharacterPixels(data, width, height, { multiple, allowPanel: true });
+    if (!result.data || result.borderOnly || result.status !== 'transparent' || multiple) return result;
+    // Repeated explicit cleanup may use the retained source to identify the old
+    // matte. Existing transparency and manual erasures are never filled back in.
+    const count = width * height, corners = [0, width - 1, count - width, count - 1];
+    if (reference.length !== data.length) return result;
+    const matte = [0, 1, 2].map(k => corners.reduce((sum, p) => sum + reference[p * 4 + k], 0) / 4);
+    const neutral = Math.min(...matte) >= 180 && Math.max(...matte) - Math.min(...matte) <= 20;
+    if (!neutral || !corners.every(p => matte.every((v, k) => Math.abs(v - reference[p * 4 + k]) <= 16))) return result;
+    const out = clearMattePockets(new Uint8ClampedArray(result.data), width, height, matte);
+    const changed = out.some((value, i) => value !== data[i]);
+    return { ...result, status: changed ? 'prepared' : result.status, data: out };
+}
+
+// Only remove padding around a rectangular picture for the thumbnail. A real
+// character silhouette keeps its canvas and full-body framing. No source edits.
+function previewContentRect(data, width, height) {
+    const prepared = prepareCutoutPixels(data, width, height, { multiple: true });
+    if (!prepared.data) return null;
+    const mask = prepared.data;
+    let x0 = width, y0 = height, x1 = -1, y1 = -1;
+    const solid = (x, y) => mask[(y * width + x) * 4 + 3] > 40;
+    for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) if (solid(x, y)) {
+        x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y);
+    }
+    if (x1 < x0 || (x0 === 0 && y0 === 0 && x1 === width - 1 && y1 === height - 1)) return null;
+    let top = 0, bottom = 0, left = 0, right = 0;
+    for (let x = x0; x <= x1; x++) { top += solid(x, y0); bottom += solid(x, y1); }
+    for (let y = y0; y <= y1; y++) { left += solid(x0, y); right += solid(x1, y); }
+    const w = x1 - x0 + 1, h = y1 - y0 + 1;
+    if (top < w * .9 || bottom < w * .9 || left < h * .9 || right < h * .9) return null;
+    return { x: x0, y: y0, w, h };
 }
 
 // Decorative sprites only. Keep genuine alpha and enclosed white details;
@@ -798,7 +906,10 @@ __m_extras_mvImageTools_js.pixelRect = pixelRect;
 __m_extras_mvImageTools_js.eraseEdgeWhite = eraseEdgeWhite;
 __m_extras_mvImageTools_js.paintAlpha = paintAlpha;
 __m_extras_mvImageTools_js.alphaBounds = alphaBounds;
+__m_extras_mvImageTools_js.eraseMatteAt = eraseMatteAt;
 __m_extras_mvImageTools_js.prepareCharacterPixels = prepareCharacterPixels;
+__m_extras_mvImageTools_js.prepareCutoutPixels = prepareCutoutPixels;
+__m_extras_mvImageTools_js.previewContentRect = previewContentRect;
 __m_extras_mvImageTools_js.prepareMotifPixels = prepareMotifPixels;
 }
 
@@ -886,7 +997,7 @@ function state(record, rows, index, time) {
         poseTime: Math.max(0, time - rows[poseStart].start),
         entrance: rows[poseStart].shot.stage?.entrance || 'cut',
         textTime: Math.max(0, time - rows[textStart].start),
-        text: value.text || row.shot.lyric || '' };
+        text: value.text || row.shot.lyric || '', lyric: row.shot.lyric || '' };
 }
 
 function prompt() {
@@ -1031,10 +1142,10 @@ const pixels = __m_extras_mvImageTools_js;
 // Isolated editor: drafts and undo buffers live here until an explicit save.
 function mountAssetEditor(host, options) {
     host.innerHTML = `<section class="rmt-mv-editor rmt-x-card">
-      <div class="rmt-mv-editor-tools"><button type="button" data-edit="select">1 · 选单格</button><button type="button" data-edit="paint">2 · 处理背景</button></div>
+      <div class="rmt-mv-editor-tools"><button type="button" data-edit="auto">一键抠图</button><button type="button" data-edit="select">1 · 选单格</button><button type="button" data-edit="paint">2 · 处理背景</button></div>
       <div data-select-tools><label>拼图排列 <select data-grid><option value="free">手动框选</option><option value="1:1">整张</option><option value="2:1">上下两格</option><option value="3:1">上下三格</option><option value="4:1">上下四格</option><option value="1:2">左右两格</option><option value="1:3">左右三格</option><option value="1:4">左右四格</option><option value="2:2">四宫格</option><option value="3:3">九宫格</option></select></label>
       <p class="rmt-x-note" data-selection-note>拖动框选画面，或选择排列后点选一格。</p><button type="button" data-edit="apply-crop">使用选中画面</button></div>
-      <div data-paint-tools hidden><div class="rmt-mv-editor-tools"><button type="button" data-edit="auto">${options.motif ? '尝试去背景' : '尝试去白底'}</button><button type="button" data-edit="erase" aria-pressed="true">擦除</button><button type="button" data-edit="restore" aria-pressed="false">恢复</button><button type="button" data-edit="undo">撤销</button><button type="button" data-edit="reset">还原选中画面</button></div>
+      <div data-paint-tools hidden><div class="rmt-mv-editor-tools"><button type="button" data-edit="erase" aria-pressed="true">擦除</button><button type="button" data-edit="region" aria-pressed="false">点除残底</button><button type="button" data-edit="restore" aria-pressed="false">恢复</button><button type="button" data-edit="undo">撤销</button><button type="button" data-edit="reset">还原选中画面</button></div>
       <label>笔刷 <input data-brush type="range" min="1" max="100" value="20"></label>
       <label><input data-layer type="checkbox">使用此透明图叠背景</label><p class="rmt-x-note">先看预览再保存；自动处理可能误删白纱、白衣，可用恢复笔刷修回。</p></div>
       <label>放大 <input data-zoom type="range" min="1" max="4" step="0.25" value="1"></label><div class="rmt-mv-editor-tools"><button type="button" data-edit="pan">移动画布</button></div>
@@ -1098,6 +1209,24 @@ function mountAssetEditor(host, options) {
         catch { say('这张图片无法读取像素。可先下载原图，再从“导入图片”打开；提示词仍可编辑。'); }
     }
     function pushUndo() { if (working) history.push({ data: duplicate(working), layer: layer().checked }); }
+    function autoCutout() {
+        if (!working) { say('请先载入图片。'); return; }
+        if (selectionDirty) { say('请先点“使用选中画面”，再一键抠图。'); return; }
+        stage = 'paint';
+        const prepared = pixels.prepareCutoutPixels(working.data, working.width, working.height, { multiple: options.multipleCharacters, reference: original?.data || working.data });
+        if (!prepared.data) {
+            show();
+            say(prepared.status === 'needs-selection' ? '这张像是多格图，请先选单格，再一键抠图。'
+                : prepared.status === 'empty' ? '未能分离背景：没有识别到可保留的画面，图片未改动。'
+                : '未能分离背景，图片未改动；可用擦除笔刷或导入透明图。');
+            return;
+        }
+        pushUndo(); working.data.set(prepared.data); compactUndo();
+        changed = true; restoreOriginal = false; layer().checked = true; show();
+        say(prepared.borderOnly ? '已去掉外侧白边，画面内部仍保留；请检查后保存。'
+            : prepared.status === 'transparent' ? '当前已是透明底，可保存或下载 PNG。'
+            : '透明底预览已生成，请检查边缘后保存；可撤销或用恢复笔刷。');
+    }
     function compactUndo() {
         const last = history.at(-1); if (!last?.data || !working) return;
         const before = last.data.data, after = working.data;
@@ -1119,7 +1248,13 @@ function mountAssetEditor(host, options) {
     canvas.addEventListener('pointerdown', event => {
         if (busy || panning || !source || pointerId !== null) return;
         event.preventDefault(); pointerId = event.pointerId; canvas.setPointerCapture?.(pointerId); anchor = point(event);
-        if (stage === 'paint' && working) { pushUndo(); paint(anchor, anchor); }
+        if (stage === 'paint' && working) {
+            pushUndo();
+            if (brush === 'region') {
+                working.data.set(pixels.eraseMatteAt(working.data, working.width, working.height, anchor.x, anchor.y));
+                changed = true; restoreOriginal = false; layer().checked = true; show();
+            } else paint(anchor, anchor);
+        }
         else if (grid !== 'free') {
             const [rows, cols] = grid.split(':').map(Number);
             crop = pixels.gridCrop(rows, cols, Math.min(rows - 1, Math.floor(anchor.y / canvas.height * rows)) * cols + Math.min(cols - 1, Math.floor(anchor.x / canvas.width * cols))); selectionDirty = true; show();
@@ -1128,7 +1263,7 @@ function mountAssetEditor(host, options) {
     canvas.addEventListener('pointermove', event => {
         if (event.pointerId !== pointerId || !anchor) return;
         event.preventDefault(); const next = point(event);
-        if (stage === 'paint' && working) { paint(anchor, next); anchor = next; }
+        if (stage === 'paint' && working) { if (brush !== 'region') paint(anchor, next); anchor = next; }
         else if (grid === 'free') {
             crop = pixels.normalizeCrop({ x: Math.min(anchor.x, next.x) / canvas.width, y: Math.min(anchor.y, next.y) / canvas.height, w: Math.abs(next.x - anchor.x) / canvas.width, h: Math.abs(next.y - anchor.y) / canvas.height }) || crop; selectionDirty = true; show();
         }
@@ -1166,8 +1301,8 @@ function mountAssetEditor(host, options) {
         if (action === 'select') { stage = 'select'; show(); return; }
         if (action === 'paint') { if (!working || selectionDirty) applyCrop(); else { stage = 'paint'; show(); } return; }
         if (action === 'apply-crop') { applyCrop(); return; }
-        if (action === 'erase' || action === 'restore') {
-            brush = action; for (const value of ['erase', 'restore']) find(`[data-edit="${value}"]`).setAttribute('aria-pressed', String(value === brush)); return;
+        if (action === 'erase' || action === 'restore' || action === 'region') {
+            brush = action; for (const value of ['erase', 'restore', 'region']) find(`[data-edit="${value}"]`).setAttribute('aria-pressed', String(value === brush)); return;
         }
         if (action === 'undo') { const last = history.pop(); if (last) {
             if (last.data) working = last.data;
@@ -1175,12 +1310,7 @@ function mountAssetEditor(host, options) {
             layer().checked = last.layer; changed = true; restoreOriginal = false; show();
         } return; }
         if (action === 'reset' && original) { pushUndo(); working = duplicate(original); compactUndo(); layer().checked = false; changed = true; restoreOriginal = false; show(); return; }
-        if (action === 'auto' && working) {
-            const data = options.motif ? pixels.prepareMotifPixels(working.data, working.width, working.height).data : pixels.eraseEdgeWhite(working.data, working.width, working.height);
-            if (!data) { say('未能分离意象背景，可用擦除笔刷处理或导入透明图。'); return; }
-            pushUndo(); working.data.set(data); compactUndo(); changed = true; restoreOriginal = false; layer().checked = true; show();
-            say(options.motif ? '已处理意象背景，请检查边缘后保存。' : '这是去白底预览，请检查边缘和白色衣物；不满意可撤销或用恢复笔刷。'); return;
-        }
+        if (action === 'auto') { autoCutout(); return; }
         if (action === 'original') {
             // Restore the saved original reference without rewriting or deleting its pixels.
             restoreOriginal = true; changed = true; selectionDirty = false; sourceBlob = null; crop = { x: 0, y: 0, w: 1, h: 1 }; history.length = 0;
@@ -1216,7 +1346,7 @@ function mountAssetEditor(host, options) {
                 const c = makeCanvas(original.width, original.height); c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
                 working = c.getContext('2d').getImageData(0, 0, c.width, c.height); layer().checked = options.image.editMode === 'cutout'; stage = 'paint';
             }
-            if (options.motif) {
+            if (options.motif && !options.autoCutout) {
                 const prepared = pixels.prepareMotifPixels(working.data, working.width, working.height);
                 if (prepared.data) {
                     working.data.set(prepared.data); layer().checked = true; stage = 'paint';
@@ -1224,7 +1354,7 @@ function mountAssetEditor(host, options) {
                     changed = prepared.status === 'prepared';
                 }
             }
-            if (options.autoCharacter && !options.image?.editMode) {
+            if (options.autoCharacter && !options.autoCutout && !options.image?.editMode) {
                 const prepared = pixels.prepareCharacterPixels(working.data, working.width, working.height, { multiple: options.multipleCharacters });
                 if (prepared.data) {
                     working.data.set(prepared.data); layer().checked = true; stage = 'paint';
@@ -1233,6 +1363,7 @@ function mountAssetEditor(host, options) {
                 }
             }
             show(); say('');
+            if (options.autoCutout) autoCutout();
         } catch { if (active && token === loadToken) { show(); say('无法读取图片像素，可导入本机图片继续处理；提示词仍可编辑。'); } }
     })();
     return { ready, dispose() { active = false; loadToken++; for (const url of urls) URL.revokeObjectURL(url); history.length = 0; } };
@@ -1292,41 +1423,123 @@ function drawBackground(g, background, w, h, time, tone = 'base', picture = null
     g.restore();
 }
 
-function linesFor(g, value, width) {
+function words(value) {
+    try { return Array.from(new Intl.Segmenter('zh', { granularity: 'word' }).segment(value), x => x.segment); }
+    catch { return value.match(/[a-zA-Z0-9]+|\s+|[^\s]/gu) || []; }
+}
+
+function linesFor(g, value, width, splitLongWords = false) {
     const lines = []; let line = '';
-    for (const c of Array.from(value)) {
-        if (c === '\n' || (line && g.measureText(line + c).width > width)) { lines.push(line); line = c === '\n' ? '' : c; }
-        else line += c;
+    const put = token => {
+        if (splitLongWords && g.measureText(token).width > width && Array.from(token).length > 1) { for (const ch of token) put(ch); return; }
+        if (line && g.measureText(line + token).width > width && !/^[，。！？、；：,.!?;:]+$/u.test(token)) {
+            lines.push(line.trim()); line = token.trimStart();
+        } else line += token;
+    };
+    for (const [i, paragraph] of String(value).split('\n').entries()) {
+        if (i && line) { lines.push(line.trim()); line = ''; }
+        for (const token of words(paragraph)) put(token);
     }
-    if (line) lines.push(line);
+    if (line.trim()) lines.push(line.trim());
     return lines;
 }
 
-function drawText(g, state, group, w, h, font, forceFront = false) {
-    if (!state?.active || !state.text || state.cue.layout === 'none') return;
-    const layout = forceFront ? 'banner' : state.cue.layout || 'sides';
-    const color = state.background.colors?.[1] || '#fffdf8';
-    const front = forceFront || state.cue.depth === 'front';
-    const width = w * (layout === 'banner' ? 0.82 : layout === 'stack' ? 0.38 : 0.28);
-    const maxHeight = h * (layout === 'banner' ? 0.16 : 0.65);
-    let size = Math.min(w, h) * (layout === 'banner' ? 0.065 : 0.14);
-    g.save(); g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineJoin = 'round';
-    g.font = `${font.weight} ${size}px ${font.stack}`;
-    let lines = linesFor(g, state.text, width);
-    // Fit the actual text inside its reserved area; no clipping or lost words.
-    while (lines.length * size * 1.2 > maxHeight && size > 2) {
-        size *= 0.88; g.font = `${font.weight} ${size}px ${font.stack}`; lines = linesFor(g, state.text, width);
+function divideText(value) {
+    const tokens = words(value), mid = value.length / 2;
+    if (tokens.length < 2 || value.length < 5) return [value];
+    let length = 0, best = 1, score = Infinity;
+    for (let i = 1; i < tokens.length; i++) {
+        length += tokens[i - 1].length;
+        if (/^[，。！？、；：,.!?;:]/u.test(tokens[i])) continue;
+        const distance = Math.abs(length - mid) - (/\s|[，。！？、；：,.!?;:]$/u.test(tokens[i - 1]) ? 1.5 : 0);
+        if (distance < score) { score = distance; best = i; }
     }
-    const points = layout === 'sides' ? [w * 0.18, w * 0.82]
-        : [layout === 'stack' ? w * (group?.position === 'right' ? 0.24 : 0.76) : w / 2];
-    const y = layout === 'banner' ? h * 0.83 : h * 0.44;
-    g.fillStyle = color; g.strokeStyle = '#141722'; g.lineWidth = Math.max(1, size * (front ? 0.09 : 0.035));
-    const count = layout === 'stack' ? Math.min(lines.length, 1 + Math.floor(state.textTime / 0.24)) : lines.length;
-    for (const x of points) for (let i = 0; i < count; i++) {
-        const yy = y + (i - (lines.length - 1) / 2) * size * 1.2;
-        g.strokeText(lines[i], x, yy); g.fillText(lines[i], x, yy);
+    return [tokens.slice(0, best).join('').trim(), tokens.slice(best).join('').trim()].filter(Boolean);
+}
+
+function textRegions(state, group, w, h, subject = null, forceFront = false) {
+    let layout = forceFront ? 'banner' : state.cue.layout || 'sides';
+    const margin = w * .05, gap = w * .025;
+    const left = subject ? Math.max(0, subject.x - gap - margin) : w * .28;
+    const rightX = subject ? Math.min(w - margin, subject.x + subject.width + gap) : w * .67;
+    const right = subject ? Math.max(0, w - margin - rightX) : w * .28;
+    const regions = [];
+    if (layout !== 'banner') {
+        if (layout === 'sides' && left >= w * .16 && right >= w * .16) {
+            const parts = divideText(state.text);
+            if (parts.length === 2) regions.push({ text: parts[0], x: margin + left / 2, width: left }, { text: parts[1], x: rightX + right / 2, width: right });
+            else { const useLeft = left >= right; regions.push({ text: state.text, x: useLeft ? margin + left / 2 : rightX + right / 2, width: useLeft ? left : right }); }
+        } else {
+            const useLeft = subject ? left >= right : group?.position === 'right';
+            const width = useLeft ? left : right;
+            if (width >= w * .18) regions.push({ text: state.text, x: useLeft ? margin + left / 2 : rightX + right / 2, width });
+            else layout = 'banner';
+        }
+    }
+    if (layout === 'banner') return { layout, front: true, regions: [{ text: state.text, x: w / 2, width: w * .88 }] };
+    return { layout, front: state.cue.depth === 'front', regions };
+}
+
+function drawText(g, state, group, w, h, font, forceFront = false, options = {}) {
+    if (!state?.active || !state.text || state.cue.layout === 'none') return;
+    g.save();
+    let plan = textRegions(state, group, w, h, options.subject, forceFront);
+    let size = Math.min(w, h) * (plan.layout === 'banner' ? .055 : .105), fitted;
+    const fit = () => {
+        g.font = `${font.weight} ${size}px ${font.stack}`;
+        return plan.regions.map(r => ({ ...r, lines: linesFor(g, r.text, r.width) }));
+    };
+    const oversized = height => fitted.some(r => r.lines.length * size * 1.25 > height || r.lines.some(line => g.measureText(line).width > r.width));
+    fitted = fit();
+    while (oversized(h * (plan.layout === 'banner' ? .24 : .55)) && size > Math.min(w, h) * .045) {
+        size *= .92; fitted = fit();
+    }
+    if (plan.layout !== 'banner' && oversized(h * .55)) {
+        plan = textRegions(state, group, w, h, options.subject, true); size = Math.min(w, h) * .055; fitted = fit();
+    }
+    // Very long lyrics wrap without dropping words. Only the display size changes.
+    while (oversized(h * .28) && plan.layout === 'banner' && size > 2) { size *= .92; fitted = fit(); }
+    if (size <= 2) fitted = plan.regions.map(r => ({ ...r, lines: linesFor(g, r.text, r.width, true) }));
+    if ((options.suppressBanner && plan.layout === 'banner') || (options.pass && options.pass !== (plan.front ? 'front' : 'back'))) { g.restore(); return; }
+    g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineJoin = 'round';
+    g.font = `${font.weight} ${size}px ${font.stack}`;
+    const candidate = /^#[0-9a-f]{6}$/iu.test(state.background.colors?.[1] || '') ? state.background.colors[1] : '#fffdf8';
+    const rgb = [1, 3, 5].map(i => parseInt(candidate.slice(i, i + 2), 16));
+    const dark = rgb[0] * .2126 + rgb[1] * .7152 + rgb[2] * .0722 < 135;
+    g.fillStyle = plan.layout === 'banner' ? '#fffdf8' : candidate;
+    g.strokeStyle = plan.layout === 'banner' || !dark ? 'rgba(15,18,25,.92)' : 'rgba(255,253,248,.95)';
+    g.lineWidth = Math.max(2, size * .11); g.shadowColor = 'rgba(0,0,0,.35)'; g.shadowBlur = size * .09;
+    for (const r of fitted) {
+        const lineHeight = size * 1.25;
+        const y = plan.layout === 'banner' ? h * .91 - (r.lines.length - 1) * lineHeight / 2 : h * .38;
+        for (let i = 0; i < r.lines.length; i++) {
+            const yy = y + (i - (r.lines.length - 1) / 2) * lineHeight;
+            g.strokeText(r.lines[i], r.x, yy); g.fillText(r.lines[i], r.x, yy);
+        }
     }
     g.restore();
+}
+
+// Layout uses the visible subject rather than the transparent canvas margins.
+function foregroundPlacement(bounds, pw, ph, group, w, h) {
+    const b = bounds || { cx: .5, bottom: 1, top: 0, x: 0, width: 1, height: 1 };
+    const factor = { close: 1.22, medium: 1.02, full: .84, wide: .56 }[group?.scale] || 1.02;
+    const body = group?.scale === 'full' || group?.scale === 'wide';
+    const foot = body ? (group.scale === 'wide' ? .91 : .95) : 1.035;
+    const scale = Math.min(h * factor / Math.max(1, ph * b.height), w * (body ? .88 : 1.04) / Math.max(1, pw * (b.width || 1)));
+    const visibleW = pw * (b.width || 1) * scale;
+    const nominal = w * ({ left: .32, right: .68, center: .5 }[group?.position] || .5);
+    const cx = visibleW >= w * .95 ? w / 2 : Math.max(visibleW / 2 + w * .025, Math.min(w - visibleW / 2 - w * .025, nominal));
+    const x = cx - pw * b.cx * scale, y = h * foot - ph * b.bottom * scale;
+    return { x, y, width: pw * scale, height: ph * scale, foot: h * foot, grounded: body,
+        subject: { x: x + pw * (b.x || 0) * scale, y: y + ph * (b.top || 0) * scale, width: visibleW, height: ph * b.height * scale } };
+}
+
+function isDetailInsert(group, diff) {
+    const description = `${group?.composition || ''} ${diff?.imagePrompt || ''} ${diff?.label || ''}`;
+    const detail = /(?:眼睛|双眼|眼部|手部|手指|嘴唇|唇部|泪痣|物件|局部).{0,12}特写|特写.{0,12}(?:眼睛|双眼|眼部|手部|手指|嘴唇|唇部|泪痣|物件)|\bextreme\s+close[ -]?up\b|\b(?:eyes?|hands?|lips?|object)\s+close[ -]?up\b|\bclose[ -]?up\s+(?:of|on)\s+(?:the\s+)?(?:eyes?|hands?|lips?|object)\b/iu.test(description);
+    const local = group?.scale === 'close' && group?.cast?.length && group.cast.every(p => ['hands', 'face'].includes(p.visible));
+    return !!(detail || local);
 }
 
 function poseTransform(state, w, h) {
@@ -1337,7 +1550,10 @@ function poseTransform(state, w, h) {
 }
 
 __m_ui_mvStageCanvas_js.drawBackground = drawBackground;
+__m_ui_mvStageCanvas_js.textRegions = textRegions;
 __m_ui_mvStageCanvas_js.drawText = drawText;
+__m_ui_mvStageCanvas_js.foregroundPlacement = foregroundPlacement;
+__m_ui_mvStageCanvas_js.isDetailInsert = isDetailInsert;
 __m_ui_mvStageCanvas_js.poseTransform = poseTransform;
 }
 
@@ -20649,7 +20865,7 @@ function __init_core_selfUpdater_js() {
 // MODULE: core/selfUpdater.js
 
 const UPDATE_STATE = Symbol.for('heartbeatMemories.selfUpdate');
-const INSTALLED_BUILD = '1.0.14-r84.231-mv-image-frame';
+const INSTALLED_BUILD = '1.0.15-r84.232-mv-cutout-preview';
 const PROJECT_REMOTE = 'https://github.com/zaiyebuzuoyouqingdetiangou/tokimemo';
 function updateError(message) { const error = new Error(message); error.userMessage = message; return error; }
 
@@ -83058,7 +83274,16 @@ ${root} .rmt-song-cover .rmt-thumb{aspect-ratio:auto;min-height:0;overflow:hidde
 ${root} .rmt-song-cover .rmt-thumb img{width:100%;height:auto;display:block;object-fit:contain}
 ${root} .rmt-song-cover-empty{display:grid;place-content:center;gap:8px;text-align:center;min-height:150px;border-radius:16px;background:var(--rmt-theme-soft);color:var(--rmt-theme-accent-ink);border:1px solid var(--rmt-theme-border)}
 ${root} .rmt-song-cover-empty>span{font-size:40px}
-${root} .rmt-song-layout.has-songs{grid-template-columns:minmax(150px,0.8fr) minmax(0,2.4fr)}
+${root} .rmt-song-layout.has-songs{grid-template-columns:minmax(0,1fr)}
+${root} .rmt-song-library{min-width:0;border:1px solid var(--rmt-theme-border);border-radius:16px;background:var(--rmt-theme-surface-solid);padding:0 14px}
+${root} .rmt-song-library>summary{min-height:52px;cursor:pointer;display:flex;align-items:center;gap:10px;padding:10px 0;font-weight:600;list-style:none}
+${root} .rmt-song-library>summary::-webkit-details-marker{display:none}
+${root} .rmt-song-library>summary:before{content:'›';flex:none}
+${root} .rmt-song-library[open]>summary:before{content:'⌄'}
+${root} .rmt-song-library>summary>span{flex:none}
+${root} .rmt-song-library>summary>small{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-left:auto;color:var(--rmt-theme-muted);font-weight:400}
+${root} .rmt-song-library:not([open])>.rmt-song-list{display:none}
+${root} .rmt-song-library[open]>.rmt-song-list{display:flex;max-height:55vh;overflow:auto;padding:0 0 14px;overscroll-behavior:contain}
 ${root} .rmt-song-list{display:flex;flex-direction:column;gap:8px;min-width:0}
 ${root} .rmt-song-list>button{display:flex;align-items:center;text-align:left;gap:10px;min-height:62px;white-space:normal;overflow-wrap:anywhere;min-width:0;width:100%;border:1px solid var(--rmt-theme-border);background:var(--rmt-theme-surface-solid);border-radius:14px;color:var(--rmt-theme-text);padding:12px;cursor:pointer;font:inherit}
 ${root} .rmt-song-list>button.active{border-color:var(--rmt-theme-accent-ink);background:var(--rmt-theme-soft)}
@@ -83242,14 +83467,14 @@ function renderThemeSongs() {
     const cover = selected ? `<div class="rmt-song-cover">${expanded_cg_view.expandedCgHtml(session,
         { kind: 'song-cover', containerId: selected.id }, readonly(),
         { placeholder: '<div class="rmt-song-cover-empty"><span aria-hidden="true">♫</span><b>专辑封面</b></div>' })}</div>` : '';
-    const details = `<div class="rmt-song-detail">${cover}${displayMode === 'format' ? formatDetails : readDetails}</div>`;
     const switcher = `<div class="rmt-song-display-switch" role="group" aria-label="歌曲操作"><button type="button" class="rmt-btn" data-rmt-song="view-read" aria-pressed="${displayMode === 'read'}">阅读模式</button><button type="button" class="rmt-btn" data-rmt-song="view-format" aria-pressed="${displayMode === 'format'}">创作格式</button>${mvButton}</div>`;
-    const list = session.songs.length ? `<nav class="rmt-song-list" aria-label="已保存的印象曲">${[...session.songs].reverse().map(song => `<button type="button" class="${song.id === selected?.id ? 'active' : ''}" data-rmt-song="select" data-rmt-song-id="${esc(song.id)}" aria-current="${song.id === selected?.id ? 'page' : 'false'}"><span aria-hidden="true">♪</span><span><b>${esc(song.title)}</b><small>${esc(song.singer)}</small></span></button>`).join('')}</nav>` : '';
+    const details = `<div class="rmt-song-detail"${selected ? ` data-rmt-current-song="${esc(selected.id)}"` : ''}>${selected ? switcher : ''}${cover}${displayMode === 'format' ? formatDetails : readDetails}</div>`;
+    const list = session.songs.length ? `<details class="rmt-song-library"><summary><span>歌曲列表 · ${session.songs.length} 首</span><small>${esc(selected?.title || '')}</small></summary><nav class="rmt-song-list" aria-label="已保存的印象曲">${[...session.songs].reverse().map(song => `<button type="button" class="${song.id === selected?.id ? 'active' : ''}" data-rmt-song="select" data-rmt-song-id="${esc(song.id)}" aria-current="${song.id === selected?.id ? 'page' : 'false'}"><span aria-hidden="true">♪</span><span><b>${esc(song.title)}</b><small>${esc(song.singer)}</small></span></button>`).join('')}</nav></details>` : '';
     const allCache = runtimeState.activeArchiveSnapshot?.cache || cache.getCache(contextApi.getContext());
     const recovery = recoveryView.recoveryBannerHtml(allCache, memory, { readOnly: readonly() });
     const partial = selected?.generationIncomplete ? '<p class="rmt-recovery-status" role="status">这首歌尚未写完；已收到的歌名、曲风和歌词分别保留，空白部分仍待生成。</p>' : '';
     const completedCount = session.songs.filter(song => !song.generationIncomplete).length;
-    overlay.bodyEl().innerHTML = `<main class="rmt-theme-song"><header class="rmt-song-heading"><div class="rmt-song-emblem" aria-hidden="true">♫</div><div><h2>角色印象曲</h2><p>${session.songs.length ? `已收录 ${completedCount} 首${completedCount < session.songs.length ? ' · 另有未完成草稿' : ''}` : '歌名 · 曲风 · 完整歌词'}</p></div></header><p class="rmt-song-note">生成歌曲文本与编曲说明，不生成音频。</p>${partial}${switcher}${recovery}${form}<div class="rmt-song-layout ${list ? 'has-songs' : ''}">${list}${details}</div></main>`;
+    overlay.bodyEl().innerHTML = `<main class="rmt-theme-song"><header class="rmt-song-heading"><div class="rmt-song-emblem" aria-hidden="true">♫</div><div><h2>角色印象曲</h2><p>${session.songs.length ? `已收录 ${completedCount} 首${completedCount < session.songs.length ? ' · 另有未完成草稿' : ''}` : '歌名 · 曲风 · 完整歌词'}</p></div></header><p class="rmt-song-note">生成歌曲文本与编曲说明，不生成音频。</p>${partial}${recovery}${form}<div class="rmt-song-layout ${list ? 'has-songs' : ''}">${list}${details}</div></main>`;
     const body = overlay.bodyEl(), draft = composerOptions.readSongOptions(contextApi.getContext(), memory);
     const fields = { subject: draft.subject === 'event' ? `event:${draft.eventId}` : 'character', language: draft.language || 'zh',
         'custom-language': draft.customLanguage || '', voice: draft.voice || 'char', direction: draft.direction || '' };
@@ -88637,7 +88862,7 @@ function closeAssetEditor() {
     if (view.sub === 'asset-editor') restoreParentPage();
 }
 
-async function openAssetEditor(key) {
+async function openAssetEditor(key, autoCutout = false) {
     const opened = viewTarget(), target = mv.captureAssetEdit(view.songId, key);
     const record = target.base.songs[target.songId], found = mv.assetOf(record, key);
     stopPlayback(); assetEditor?.dispose(); assetEditor = null;
@@ -88650,7 +88875,7 @@ async function openAssetEditor(key) {
     if (!isView(opened) || view.sub !== 'asset-editor' || token !== editSequence) return;
     const host = body().querySelector('[data-rmt-mv-editor-host]'); if (!host) return;
     assetEditor = image_editor.mountAssetEditor(host, {
-        motif: key === 'motif', autoCharacter: found.kind === 'char' && found.group.layer !== 'full' && image?.editMode !== 'full',
+        motif: key === 'motif', autoCutout, autoCharacter: !autoCutout && found.kind === 'char' && found.group.layer !== 'full' && image?.editMode !== 'full',
         multipleCharacters: found.group?.who === 'both' || (found.group?.cast?.length || 0) > 1,
         sourceUrl, imageUrl, image, prompt: mv.assetPrompt(record, key, ctx()), defaultPrompt: mv.defaultAssetPrompt(record, key, ctx()),
         onClose: () => { if (isView(opened) && token === editSequence) closeAssetEditor(); },
@@ -88782,7 +89007,7 @@ ${r} .rmt-mv-assets{display:flex;gap:8px;align-items:flex-end;overflow-x:auto;pa
 ${r} .rmt-mv-assets>div{display:flex;flex-direction:column;align-items:center;gap:4px;flex-shrink:0}
 ${r} .rmt-mv-assets small{font-size:11px;color:var(--rmt-theme-muted,#586b7c)}
 ${r} .rmt-mv-plus{font-size:18px;color:#b7c3cf;padding-bottom:28px}
-${r} .rmt-mv-asset{position:relative;width:62px;height:96px;border-radius:10px;overflow:hidden;padding:0;cursor:pointer;border:1px solid var(--rmt-theme-border,#cfdae5);background:repeating-linear-gradient(135deg,#e6e9f0 0 6px,#f2f4f8 6px 12px)}
+${r} .rmt-mv-asset{position:relative;box-sizing:border-box;flex-shrink:0;width:62px;height:auto;min-width:0;min-height:0;max-height:none;aspect-ratio:9/16;border-radius:10px;overflow:hidden;padding:0;cursor:pointer;border:1px solid var(--rmt-theme-border,#cfdae5);background:repeating-linear-gradient(135deg,#e6e9f0 0 6px,#f2f4f8 6px 12px)}
 ${r} .rmt-mv-asset.wide{box-sizing:border-box;flex-shrink:0;width:160px;height:auto;min-width:0;min-height:0;max-height:none;aspect-ratio:16/9;padding:0}
 ${r} .rmt-mv-background-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:12px;margin-top:10px}
 ${r} .rmt-mv-background-tile{display:grid;grid-template-columns:auto minmax(0,1fr);gap:6px 10px;align-items:start;min-width:0}
@@ -88792,7 +89017,9 @@ ${r} .rmt-mv-background-tile .rmt-mv-actions{margin:0;gap:6px}
 ${r} .rmt-mv-background-tile .rmt-mv-actions button{padding:6px 9px;min-height:36px;font-size:12px}
 ${r} .rmt-mv-background-tile>details{grid-column:1/-1;min-width:0;font-size:12px}
 ${r} .rmt-mv-background-tile>details[open]{padding-top:6px}
-${r} .rmt-mv-asset.cut.done{background:repeating-conic-gradient(#eef0f4 0 25%,#ffffff 0 50%) 0 0/12px 12px}
+${r} .rmt-mv-asset.cut.done{background:repeating-conic-gradient(#dce0e6 0 25%,#ffffff 0 50%) 0 0/12px 12px!important}
+${r} .rmt-mv-asset-actions{display:flex;flex-wrap:wrap;gap:4px;justify-content:center;max-width:160px}
+${r} .rmt-mv-asset-actions .rmt-btn{padding:6px 8px;font-size:12px;min-height:40px}
 ${r} .rmt-mv-asset img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
 ${r} .rmt-mv-asset.wide img{display:block;min-width:0;min-height:0;max-width:none;max-height:none;margin:0;padding:0;object-fit:cover;object-position:center}
 ${r} .rmt-mv-asset i{position:absolute;left:4px;top:4px;font-style:normal;font-size:10px;border-radius:4px;padding:1px 5px;background:#ecebf1;color:#5d5566}
@@ -88808,7 +89035,10 @@ ${r} .rmt-mv-split{margin-top:4px;min-height:32px;max-width:92px;font-size:11px;
 ${r} .rmt-mv-inspect summary{cursor:pointer;font-size:13px;font-weight:600;padding:6px 0}
 ${r} .rmt-mv-inspect-row{display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-top:1px dashed var(--rmt-theme-border,#cfdae5)}
 ${r} .rmt-mv-inspect-row figure{margin:0;display:flex;flex-direction:column;align-items:center;gap:2px}
-${r} .rmt-mv-inspect-row img{width:72px;height:108px;object-fit:contain;border-radius:8px;background:#e9edf2}
+${r} .rmt-mv-inspect-row img{width:72px;height:auto;aspect-ratio:9/16;object-fit:contain;border-radius:8px;background:#e9edf2}
+${r} .rmt-mv-inspect-row.wide{flex-wrap:wrap}
+${r} .rmt-mv-inspect-row.wide img{width:110px;height:auto;aspect-ratio:16/9}
+${r} .rmt-mv-inspect-row.wide figure.cut img{object-fit:cover}
 ${r} .rmt-mv-inspect-row figure.cut img{background:repeating-conic-gradient(#e6e9f0 0 25%,#fff 0 50%) 0 0/10px 10px}
 ${r} .rmt-mv-inspect-row figcaption{font-size:10px;color:var(--rmt-theme-muted,#586b7c)}
 ${r} .rmt-mv-inspect-row>div{display:flex;flex-direction:column;gap:3px;font-size:12px;min-width:0}
@@ -88826,8 +89056,8 @@ ${r} .rmt-mv-lyric p{margin:0;font-size:14px;line-height:1.8;white-space:pre-lin
 ${r} .rmt-mv-shot{display:flex;flex-direction:column;gap:12px;border-radius:16px;padding:14px;background:var(--rmt-theme-surface-solid,#fff);border:1px solid var(--rmt-theme-border,#cfdae5)}
 ${r} .rmt-mv-shot.done{border-color:#b9dcd6}
 ${r} .rmt-mv-shot-row{display:flex;gap:12px}
-${r} .rmt-mv-thumb{width:64px;height:114px;flex-shrink:0;border-radius:10px;overflow:hidden;background:repeating-linear-gradient(135deg,#e6e9f0 0 6px,#f2f4f8 6px 12px);display:flex;align-items:flex-end;justify-content:flex-start;position:relative}
-${r} .rmt-mv-thumb.wide{width:114px;height:64px}
+${r} .rmt-mv-thumb{width:64px;height:auto;aspect-ratio:9/16;flex-shrink:0;align-self:flex-start;border-radius:10px;overflow:hidden;background:repeating-linear-gradient(135deg,#e6e9f0 0 6px,#f2f4f8 6px 12px);display:flex;align-items:flex-end;justify-content:flex-start;position:relative}
+${r} .rmt-mv-thumb.wide{width:114px;aspect-ratio:16/9}
 ${r} .rmt-mv-thumb img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 ${r} .rmt-mv-thumb i{position:relative;font-style:normal;font-size:10px;color:#f3eee6;background:rgba(29,27,38,.7);border-radius:4px;padding:2px 5px;margin:4px}
 ${r} .rmt-mv-shot-copy{display:flex;flex-direction:column;gap:6px;flex:1;min-width:0}
@@ -89109,7 +89339,7 @@ function choice(action, value, on, title, desc, note = '') {
 
 function thumb(shot, record, label) {
     const wide = mv.normalizeSettings(record.settings).ratio === '16:9';
-    return `<span class="rmt-mv-thumb${wide ? ' wide' : ''}">${imgUrl(shot) ? `<img src="${esc(imgUrl(shot))}" alt="" loading="lazy">` : ''}<i>${esc(label)}</i></span>`;
+    return `<span class="rmt-mv-thumb${wide ? ' wide' : ''}">${imgUrl(shot) ? `<img src="${esc(thumbnailPreview(imgUrl(shot)))}" alt="" loading="lazy">` : ''}<i>${esc(label)}</i></span>`;
 }
 
 function renderBoard(song, record) {
@@ -89605,7 +89835,7 @@ function stopPlayback() {
 
 function disposeMv() {
     assetEditor?.dispose(); assetEditor = null; editSequence++;
-    stageShadows.clear(); characterSprites.clear();
+    stageShadows.clear(); characterSprites.clear(); thumbnailPreviews.clear();
     navigation.length = 0; renderedPage = '';
     view.epoch += 1;
     view.stopAll = true; view.drawingAll = false; view.drawQueue = null;
@@ -89946,6 +90176,7 @@ function handleMvClick(event) {
         else if (action === 'draw-all') void drawAll();
         else if (action === 'draw-asset') void runAsset(id);
         else if (action === 'edit-asset') void openAssetEditor(id).catch(toastError);
+        else if (action === 'cutout-asset') void openAssetEditor(id, true).catch(toastError);
         else if (action === 'group-layer') { const [gid, layer] = id.split(':'); mv.setGroupLayer(view.songId, gid, layer); renderMv(); }
         else if (action === 'inspect') { view.inspect = view.inspect === id ? '' : id; setTimeout(() => renderMv(), 0); }
         else if (action === 'draw-group' || action === 'redraw-group') {
@@ -90230,24 +90461,24 @@ function handleMvChange(event) {
 
 function assetTile(record, key, label) {
     const found = mv.assetOf(record, key);
-    const sprite = key === 'motif' ? motifForRange(record) : found?.kind === 'char' ? characterSprite(found.image, found.group) : null;
-    const url = sprite?.preview || assetImageUrl(found?.image);
+    const sprite = key === 'motif' ? motifSprite(found?.image) : found?.kind === 'char' ? characterSprite(found.image, found.group) : null;
+    const url = thumbnailPreview(sprite?.preview || assetImageUrl(found?.image));
     const exists = mv.hasAssetImage(found?.image);
     const drawing = mv.isAssetDrawing(mv.mvScope(ctx()), view.songId, key);
-    const wide = found?.kind !== 'motif' && mv.normalizeSettings(record.settings).ratio === '16:9';
-    const cut = found?.kind !== 'bg';
+    const wide = mv.normalizeSettings(record.settings).ratio === '16:9';
+    const cut = !!sprite?.image;
     const needsEdit = ['needs-edit', 'needs-selection', 'empty', 'unreadable'].includes(sprite?.status);
-    const splitSelect = btn('edit-asset', '编辑素材', { id: key, cls: 'rmt-mv-edit-open' });
-    return `<button type="button" class="rmt-mv-asset${wide ? ' wide' : ''}${exists ? ' done' : ''}${cut && found?.group?.layer !== 'full' ? ' cut' : ''}" data-rmt-mv-anchor="${esc(key)}" data-rmt-mv="draw-asset" data-rmt-mv-id="${esc(key)}" ${drawing || view.drawingAll ? 'disabled' : ''} aria-label="${esc(label)}：${exists ? '重画' : '画'}这一张">${url ? `<img src="${esc(url)}" alt="">` : ''}<i>${drawing ? '画…' : needsEdit ? (sprite.status === 'needs-selection' ? '选单格' : '检查背景') : exists ? '已画' : '未画'}</i></button><small>${esc(label)}</small>${splitSelect}`;
+    const splitSelect = `<div class="rmt-mv-asset-actions">${btn('edit-asset', '编辑素材', { id: key, cls: 'rmt-mv-edit-open' })}${exists && found?.kind !== 'bg' ? btn('cutout-asset', '一键抠图', { id: key, disabled: drawing || view.drawingAll }) : ''}</div>`;
+    return `<button type="button" class="rmt-mv-asset${wide ? ' wide' : ''}${exists ? ' done' : ''}${cut ? ' cut' : ''}" data-rmt-mv-anchor="${esc(key)}" data-rmt-mv="draw-asset" data-rmt-mv-id="${esc(key)}" ${drawing || view.drawingAll ? 'disabled' : ''} aria-label="${esc(label)}：${exists ? '重画' : '画'}这一张">${url ? `<img src="${esc(url)}" alt="">` : ''}<i>${drawing ? '画…' : needsEdit ? (sprite.status === 'needs-selection' ? '选单格' : '检查背景') : exists ? '已画' : '未画'}</i></button><small>${esc(label)}</small>${splitSelect}`;
 }
 
 // 素材检查：原图 → 拼图拆分 → 抠图结果 → 播放时的用法，逐张对照。
 function inspectHtml(record, g, diffs) {
     const rows = diffs.filter(d => mv.hasAssetImage(d.image)).map(d => {
         const sprite = characterSprite(d.image, g);
-        const url = sprite?.preview || assetImageUrl(d.image), original = assetImageUrl(d.image.original || d.image);
+        const url = thumbnailPreview(sprite?.preview || assetImageUrl(d.image)), original = assetImageUrl(d.image.original || d.image);
         const layered = !!sprite?.image;
-        return `<div class="rmt-mv-inspect-row"><figure>${original ? `<img src="${esc(original)}" alt="原图">` : ''}<figcaption>原图</figcaption></figure>
+        return `<div class="rmt-mv-inspect-row${mv.normalizeSettings(record.settings).ratio === '16:9' ? ' wide' : ''}"><figure>${original ? `<img src="${esc(original)}" alt="原图">` : ''}<figcaption>原图</figcaption></figure>
           <figure class="cut">${url ? `<img src="${esc(url)}" alt="当前素材">` : ''}<figcaption>当前素材</figcaption></figure>
           <div><b>${esc(d.label)}</b><small>${d.image.crop ? '已手动选定画面' : '可在编辑素材中选单格'}</small><small>播放时：${layered ? '透明人物叠背景' : '完整画面'}</small>
           ${btn('edit-asset', '选单格／抠图／提示词', { id: `${g.id}:${d.id}` })}</div></div>`;
@@ -90264,7 +90495,7 @@ function sharedBackgroundsHtml(record, shots) {
     const tiles = backgrounds.map(bg => {
         const key = `stage:${bg.id}`, drawn = bg.kind === 'image' && mv.hasAssetImage(bg.image);
         const drawing = mv.isAssetDrawing(mv.mvScope(ctx()), view.songId, key);
-        let preview = bg.kind === 'image' ? assetImageUrl(bg.image) : '';
+        let preview = bg.kind === 'image' ? thumbnailPreview(assetImageUrl(bg.image)) : '';
         if (bg.kind !== 'image') {
             try { const c = document.createElement('canvas'); c.width = wide ? 320 : 180; c.height = wide ? 180 : 320;
                 stage_canvas.drawBackground(c.getContext('2d'), bg, c.width, c.height, 0); preview = c.toDataURL('image/png'); } catch { /* Host without Canvas preview. */ }
@@ -90336,6 +90567,37 @@ function renderGroupsBoard(song, record) {
 const characterSprites = new Map();
 const palettes = new Map();
 const motifSprites = new Map();
+const thumbnailPreviews = new Map();
+
+function thumbnailPreview(url) {
+    if (!url) return '';
+    if (thumbnailPreviews.has(url)) return thumbnailPreviews.get(url);
+    const src = imageFor(url);
+    thumbnailPreviews.set(url, url);
+    if (!src) {
+        const pending = images.get(url);
+        if (pending) {
+            const before = pending.onload;
+            pending.onload = event => {
+                thumbnailPreviews.delete(url); before?.(event);
+                if (isView() && view.sub === 'board') renderMv();
+            };
+        }
+        return url;
+    }
+    try {
+        const scale = Math.min(1, 512 / Math.max(src.naturalWidth, src.naturalHeight));
+        const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(src.naturalWidth * scale)); c.height = Math.max(1, Math.round(src.naturalHeight * scale));
+        const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(src, 0, 0, c.width, c.height);
+        const rect = image_tools.previewContentRect(g.getImageData(0, 0, c.width, c.height).data, c.width, c.height);
+        if (rect) {
+            const cropped = document.createElement('canvas'); cropped.width = rect.w; cropped.height = rect.h;
+            cropped.getContext('2d').drawImage(c, rect.x, rect.y, rect.w, rect.h, 0, 0, rect.w, rect.h);
+            thumbnailPreviews.set(url, cropped.toDataURL('image/png'));
+        }
+    } catch { /* Pixel access unavailable: retain the original preview and editor. */ }
+    return thumbnailPreviews.get(url);
+}
 
 function motifSprite(image) {
     const url = assetImageUrl(image);
@@ -90476,21 +90738,57 @@ function silhouette(url, source) {
     return stageShadows.get(url);
 }
 
-function drawSceneV2(g, record, song, rows, index, t, w, h) {
+function detailRect(sprite, ratio) {
+    if (!sprite.detailRects) sprite.detailRects = new Map();
+    if (sprite.detailRects.has(ratio)) return sprite.detailRects.get(ratio);
+    const image = sprite.image, pw = image.naturalWidth || image.width, ph = image.naturalHeight || image.height;
+    const b = sprite.bounds, cx = b ? b.cx * pw : pw / 2, cy = b ? (b.top + b.height / 2) * ph : ph / 2;
+    let rw = b ? b.width * pw : pw, rh = b ? b.height * ph : ph;
+    if (rw / rh > ratio) rw = rh * ratio; else rh = rw / ratio;
+    // Find an opaque crop inside a local insert such as an eye-shaped mask.
+    // Only the preview/export crop changes; the paid source is retained.
+    try {
+        const c = document.createElement('canvas'); c.width = 160; c.height = Math.max(1, Math.round(160 * ph / pw));
+        const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(image, 0, 0, c.width, c.height);
+        const pixels = g.getImageData(0, 0, c.width, c.height).data;
+        const solid = (x, y) => pixels[(Math.max(0, Math.min(c.height - 1, Math.floor(y / ph * c.height))) * c.width
+            + Math.max(0, Math.min(c.width - 1, Math.floor(x / pw * c.width)))) * 4 + 3] > 235;
+        for (let attempt = 0; attempt < 16; attempt++) {
+            let ok = true;
+            for (let i = 0; i <= 20; i++) {
+                const dx = (i / 20 - .5) * rw, dy = (i / 20 - .5) * rh;
+                if (!solid(cx + dx, cy - rh / 2) || !solid(cx + dx, cy + rh / 2)
+                    || !solid(cx - rw / 2, cy + dy) || !solid(cx + rw / 2, cy + dy)) { ok = false; break; }
+            }
+            if (ok) break;
+            rw *= .95; rh *= .95;
+        }
+    } catch { /* Keep a centered crop if a canvas cannot expose pixels. */ }
+    const rect = [cx - rw / 2, cy - rh / 2, rw, rh]; sprite.detailRects.set(ratio, rect); return rect;
+}
+
+function drawSceneText(g, info, record, w, h, pass) {
+    if (!info?.stage || mv.tegakiOptions(record).lyric !== 'stage') return;
+    const { stage, group, subject, opaque } = info;
+    const font = mv.TEGAKI_FONTS[mv.tegakiOptions(record).font] || mv.TEGAKI_FONTS.sans;
+    const main = opaque ? { ...stage, text: stage.lyric || stage.text } : stage;
+    const normal = value => String(value || '').replace(/[\s\p{P}\p{S}]/gu, '');
+    const separateLyric = !opaque && stage.lyric && normal(stage.text) !== normal(stage.lyric);
+    // A crowded keyword layout must not fall back onto the full lyric's lane.
+    stage_canvas.drawText(g, main, group, w, h, font, opaque, { subject, pass, suppressBanner: !!separateLyric });
+    // Keywords may remain behind the actor, but the only copy of a complete
+    // lyric must never be hidden there. Full lyric text is drawn once in front.
+    if (separateLyric && pass === 'front')
+        stage_canvas.drawText(g, { ...stage, text: stage.lyric }, group, w, h, font, true);
+}
+
+function drawSceneV2(g, record, song, rows, index, t, w, h, showText = true) {
     const row = rows[index];
     const group = record.groups.find(x => x.id === row.shot.group);
     const stageRows = record.stage && Array.isArray(record.clipSectionIndexes) ? mv.shotTimeline(record, song).rows : rows;
     const stageIndex = stageRows === rows ? index : stageRows.findIndex(r => r.shot.id === row.shot.id);
     const stage = mv_stage.state(record, stageRows, stageIndex, t);
-    const options = mv.tegakiOptions(record);
-    const font = mv.TEGAKI_FONTS[options.font] || mv.TEGAKI_FONTS.sans;
-    const stageText = depth => {
-        if (options.lyric === 'stage' && (stage?.cue.depth || 'back') === depth)
-            stage_canvas.drawText(g, stage, group, w, h, font);
-    };
-    const opaqueText = () => {
-        if (options.lyric === 'stage') stage_canvas.drawText(g, stage, group, w, h, font, true);
-    };
+    const info = { stage, group, subject: null, opaque: false };
     g.fillStyle = coverPalette(song)[0]; g.fillRect(0, 0, w, h);
     const span = stage ? groupSpan(stageRows, stageIndex) : groupSpan(rows, index);
     const p = Math.min(1, Math.max(0, (t - span.start) / Math.max(0.1, span.end - span.start)));
@@ -90499,7 +90797,7 @@ function drawSceneV2(g, record, song, rows, index, t, w, h) {
     if (ownImage && (!stage || ownImage.editMode === 'full' || (group?.layer === 'full' && ownImage.editMode !== 'cutout'))) {
         const own = imageFor(assetImageUrl(ownImage));
         if (own) drawCover(g, own, w, h, push, 0, 0);
-        opaqueText(); return;
+        info.opaque = true; return info;
     }
     const bgRow = (group?.bgs || []).find(b => b.id === (row.shot.bg || 'B1')) || (group?.bgs || [])[0];
     if (stage) stage_canvas.drawBackground(g, stage.background, w, h, stage.backgroundTime, stage.cue.tone,
@@ -90513,42 +90811,45 @@ function drawSceneV2(g, record, song, rows, index, t, w, h) {
     const override = art?.split || 'auto';
     const url = assetImageUrl(art), raw = imageFor(url);
     const sprite = characterSprite(art, group), person = sprite?.image;
-    // Ambiguous mattes keep the complete original until the user edits them.
     if (raw && !person) {
         drawCropCover(g, raw, cropFor(url, raw, override).rect, w, h, push);
         if (!stage) { g.save(); g.globalCompositeOperation = 'soft-light'; g.globalAlpha = 0.1; g.fillStyle = coverPalette(song)[1]; g.fillRect(0, 0, w, h); g.restore(); }
-        opaqueText(); return;
+        info.opaque = true; return info;
     }
-    stageText('back');
+    if (person && stage_canvas.isDetailInsert(group, diff)) {
+        drawCropCover(g, person, detailRect(sprite, w / h), w, h, push);
+        info.opaque = true; return info;
+    }
     if (person) {
         const breathe = stage ? 1 : 1 + 0.004 * Math.sin(t * Math.PI * 2 / 3.4);
         const pw = person.naturalWidth || person.width, ph = person.naturalHeight || person.height;
-        const factor = { close: 1.35, medium: 1.05, full: 0.95, wide: 0.6 }[group.scale] || 1.05;
-        const dh = h * factor, dw = pw * (dh / ph);
-        const side = w > h ? 0.18 : 0.1;
-        const cxp = { left: 0.5 - side, right: 0.5 + side, center: 0.5 }[group.position] || 0.5;
-        const dx = w * cxp - dw / 2, dy = group.scale === 'close' ? h - dh * 0.9 : h - dh;
-        const ref = (group.diffs || []).map(dd => characterSprite(dd.image, group)?.bounds).find(Boolean);
-        const cur = sprite.bounds;
-        const map = m => [dx + m.cx * dw, dy + m.bottom * dh];
+        const placement = stage_canvas.foregroundPlacement(sprite.bounds, pw, ph, group, w, h);
+        const { x: dx, y: dy, width: dw, height: dh } = placement;
+        // Reserve the maximum push/pop extent so letters do not disappear
+        // behind a moving arm between two frames of the same shot.
+        const reserve = w * .045, slide = stage?.entrance === 'slide' ? w * .08 : 0;
+        info.subject = { ...placement.subject, x: placement.subject.x - reserve - slide, width: placement.subject.width + reserve * 2 + slide };
+        if (showText) drawSceneText(g, info, record, w, h, 'back');
         g.save();
         if (stage?.active) {
             const motion = stage_canvas.poseTransform(stage, w, h);
-            g.translate(motion.x, motion.y); g.translate(w * cxp, h); g.scale(motion.scale, motion.scale); g.translate(-w * cxp, -h);
+            g.translate(motion.x, motion.y); g.translate(w / 2, placement.foot); g.scale(motion.scale, motion.scale); g.translate(-w / 2, -placement.foot);
         }
-        g.translate(w / 2, h); g.scale(push * breathe, push * breathe); g.translate(-w / 2, -h);
-        if (ref && cur && ref !== cur) {
-            const s = Math.min(1.18, Math.max(0.85, ref.height / Math.max(0.01, cur.height)));
-            const [tx, ty] = map(ref); const [cx, cy] = map(cur);
-            g.translate(tx, ty); g.scale(s, s); g.translate(-cx, -cy);
-        }
-        if (stage?.cue.shadow) {
-            g.save(); g.globalAlpha = 0.7; g.drawImage(silhouette(sprite.key, person), dx - w * 0.055, dy, dw, dh); g.restore();
+        g.translate(w / 2, placement.foot); g.scale(push * breathe, push * breathe); g.translate(-w / 2, -placement.foot);
+        if (stage && placement.grounded) {
+            // A small ground contact anchors full-body/wide shots; no duplicate
+            // upright silhouette floating alongside the actor.
+            const sx = placement.subject.x + placement.subject.width / 2;
+            const sw = Math.min(placement.subject.width * .3, h * .18);
+            g.save(); g.globalAlpha *= stage.cue.shadow ? .24 : .14; g.fillStyle = '#161c23';
+            g.beginPath(); g.ellipse(sx, placement.foot, sw, Math.max(2, h * .009), 0, 0, Math.PI * 2); g.fill(); g.restore();
+        } else if (stage?.cue.shadow) {
+            g.save(); g.globalAlpha *= .16; g.drawImage(silhouette(sprite.key, person), dx - w * .006, dy, dw, dh); g.restore();
         }
         g.drawImage(person, dx, dy, dw, dh); g.restore();
-    }
-    stageText('front');
+    } else if (showText) drawSceneText(g, info, record, w, h, 'back');
     if (!stage) { g.save(); g.globalCompositeOperation = 'soft-light'; g.globalAlpha = 0.14; g.fillStyle = coverPalette(song)[1]; g.fillRect(0, 0, w, h); g.restore(); }
+    return info;
 }
 
 function drawMotif(g, record, song, row, t, w, h) {
@@ -90628,14 +90929,15 @@ function renderFrameV2(canvas, record, song, t) {
     let index = rows.findIndex(r => t >= r.start && t < r.end);
     if (index < 0) index = t < rows[0].start ? 0 : rows.length - 1;
     const row = rows[index];
-    drawSceneV2(g, record, song, rows, index, t, w, h);
+    const stageInfo = drawSceneV2(g, record, song, rows, index, t, w, h);
     const prev = rows[index - 1];
     const since = t - row.start;
     const fadeDuration = transitionDuration(row, 0.35), flashDuration = transitionDuration(row, 0.16);
     if (prev && since >= 0 && prev.shot.group !== row.shot.group) {
-        if (prev.shot.cut === 'fade' && since < fadeDuration) { g.save(); g.globalAlpha = 1 - since / fadeDuration; drawSceneV2(g, record, song, rows, index - 1, t, w, h); g.restore(); }
+        if (prev.shot.cut === 'fade' && since < fadeDuration) { g.save(); g.globalAlpha = 1 - since / fadeDuration; drawSceneV2(g, record, song, rows, index - 1, t, w, h, false); g.restore(); }
         else if (prev.shot.cut === 'flash' && since < flashDuration) { g.save(); g.globalAlpha = 0.85 * (1 - since / flashDuration); g.fillStyle = '#fff'; g.fillRect(0, 0, w, h); g.restore(); }
     }
+    drawSceneText(g, stageInfo, record, w, h, 'front');
     if (since >= 0 && topt.showMotif) drawMotif(g, record, song, row, t, w, h);
     const palette = coverPalette(song);
     const font = mv.TEGAKI_FONTS[topt.font] || mv.TEGAKI_FONTS.sans;

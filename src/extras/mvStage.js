@@ -79,7 +79,7 @@ export function state(record, rows, index, time) {
         poseTime: Math.max(0, time - rows[poseStart].start),
         entrance: rows[poseStart].shot.stage?.entrance || 'cut',
         textTime: Math.max(0, time - rows[textStart].start),
-        text: value.text || row.shot.lyric || '' };
+        text: value.text || row.shot.lyric || '', lyric: row.shot.lyric || '' };
 }
 
 export function prompt() {

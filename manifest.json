@@ -1,15 +1,15 @@
 {
     "display_name": "心迹回廊",
     "loading_order": 110,
-    "js": "index.js?heartbeat=1.0.14-r84.231-mv-image-frame",
+    "js": "index.js?heartbeat=1.0.16-r84.233-mv-composite",
     "author": "Toto",
-    "version": "1.0.14",
+    "version": "1.0.16",
     "auto_update": true,
     "minimum_client_version": "1.13.0",
     "hooks": {
         "disable": "onDisable",
         "clean": "onClean"
     },
-    "description": "心迹回廊：保留老 UI，修正手书横图缩略图框的 16:9 比例与图片填充。",
+    "description": "心迹回廊：保留老 UI，收纳歌曲列表，改善抠图、手书人物落位和舞台字幕。",
     "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }
