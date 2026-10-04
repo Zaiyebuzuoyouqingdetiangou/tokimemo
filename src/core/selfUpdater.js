@@ -1,5 +1,5 @@
 const UPDATE_STATE = Symbol.for('heartbeatMemories.selfUpdate');
-export const INSTALLED_BUILD = '1.0.13-r84.230-mv-materials';
+export const INSTALLED_BUILD = '1.0.14-r84.231-mv-image-frame';
 const PROJECT_REMOTE = 'https://github.com/zaiyebuzuoyouqingdetiangou/tokimemo';
 function updateError(message) { const error = new Error(message); error.userMessage = message; return error; }
 

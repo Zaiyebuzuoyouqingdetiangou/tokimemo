@@ -249,17 +249,18 @@ ${r} .rmt-mv-assets>div{display:flex;flex-direction:column;align-items:center;ga
 ${r} .rmt-mv-assets small{font-size:11px;color:var(--rmt-theme-muted,#586b7c)}
 ${r} .rmt-mv-plus{font-size:18px;color:#b7c3cf;padding-bottom:28px}
 ${r} .rmt-mv-asset{position:relative;width:62px;height:96px;border-radius:10px;overflow:hidden;padding:0;cursor:pointer;border:1px solid var(--rmt-theme-border,#cfdae5);background:repeating-linear-gradient(135deg,#e6e9f0 0 6px,#f2f4f8 6px 12px)}
-${r} .rmt-mv-asset.wide{width:160px;height:90px}
+${r} .rmt-mv-asset.wide{box-sizing:border-box;flex-shrink:0;width:160px;height:auto;min-width:0;min-height:0;max-height:none;aspect-ratio:16/9;padding:0}
 ${r} .rmt-mv-background-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:12px;margin-top:10px}
 ${r} .rmt-mv-background-tile{display:grid;grid-template-columns:auto minmax(0,1fr);gap:6px 10px;align-items:start;min-width:0}
 ${r} .rmt-mv-background-tile .rmt-mv-assets{overflow:visible}
-${r} .rmt-mv-background-tile .rmt-mv-asset.wide{width:110px;height:62px}
+${r} .rmt-mv-background-tile .rmt-mv-asset.wide{width:110px}
 ${r} .rmt-mv-background-tile .rmt-mv-actions{margin:0;gap:6px}
 ${r} .rmt-mv-background-tile .rmt-mv-actions button{padding:6px 9px;min-height:36px;font-size:12px}
 ${r} .rmt-mv-background-tile>details{grid-column:1/-1;min-width:0;font-size:12px}
 ${r} .rmt-mv-background-tile>details[open]{padding-top:6px}
 ${r} .rmt-mv-asset.cut.done{background:repeating-conic-gradient(#eef0f4 0 25%,#ffffff 0 50%) 0 0/12px 12px}
 ${r} .rmt-mv-asset img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
+${r} .rmt-mv-asset.wide img{display:block;min-width:0;min-height:0;max-width:none;max-height:none;margin:0;padding:0;object-fit:cover;object-position:center}
 ${r} .rmt-mv-asset i{position:absolute;left:4px;top:4px;font-style:normal;font-size:10px;border-radius:4px;padding:1px 5px;background:#ecebf1;color:#5d5566}
 ${r} .rmt-mv-asset.done i{background:#e2f0ee;color:#2f6b66}
 ${r} .rmt-mv-palette{display:flex;gap:12px;align-items:center;background:var(--rmt-theme-surface-solid,#fff);border:1px solid var(--rmt-theme-border,#cfdae5);border-radius:16px;padding:12px 14px}
