@@ -22,7 +22,9 @@ export function prepare(raw, existing = null) {
         ids.set(sourceId || id, id);
         const colors = list(source.colors).filter(c => typeof c === 'string' && /^#[0-9a-f]{6}$/iu.test(c));
         backgrounds.push({ id, label: text(source.label) || '共享背景',
-            kind: choice(source.kind, Object.keys(BACKGROUNDS), source.prompt ? 'image' : 'solid'),
+            // Model-created backgrounds are real image assets. Saved/manual
+            // patterns are read as-is and remain available in the style picker.
+            kind: 'image',
             colors: [colors[0] || '#203047', colors[1] || '#e4d6bb', colors[2] || '#bd6683'],
             motion: choice(source.motion, ['still', 'rotate', 'drift'], 'still'),
             prompt: text(source.prompt), image: null });
@@ -83,8 +85,8 @@ export function state(record, rows, index, time) {
 export function prompt() {
     return `【共享舞台编排】
 本类型先设计可反复使用的舞台和角色标志姿势，再安排哪些层变化、哪些层保持。背景、人物、文字分别编排；换歌词、换姿势不等于换背景，一个姿势可以跨多句保持。
-- stage.backgrounds 是跨构图、跨段落共用的背景，每个只定义一次。kind 可选 solid、rays、stripes、window、paper（本地绘制）或 image（另画一张背景）；colors 为三个 #RRGGBB 颜色，motion 为 still、rotate 或 drift。配色图案服务歌曲与角色世界观。背景运动持续，不随每次人物切换重启。
-- groups.stageBackground 引用共享背景 id；这些组的人物会单独绘制并经用户确认抠图后叠上背景。diff.imagePrompt 只写该人物层的机位、唯一静态姿势与表情，场景放在共享背景里。全景剧情插入可用 layer:"full" 与自己的 bgs；局部插镜按表达需要安排，不套固定顺序。
+- stage.backgrounds 是跨构图、跨段落共用的背景，每个只定义一次，kind 写 image。prompt 用英文写清空间、场景、色彩与光线，按歌曲和角色世界观设计可复用的绘制背景；不把场景简化成程序绘制的放射线或色块。colors 为三个 #RRGGBB 参考色，motion 默认 still，确实需要时可选 drift。背景持续，不随每次人物切换重启。
+- groups.stageBackground 引用共享背景 id；这些组的人物单独绘制，透明图直接叠背景，纯色底自动分离。diff.imagePrompt 只写该人物层的机位、唯一静态姿势与表情，场景放在共享背景里。全景剧情插入可用 layer:"full" 与自己的 bgs；局部插镜按表达需要安排，不套固定顺序。
 - frames.stage 可写 background（沿用时可省）、text（摘取对应歌词的关键词或原句）、layout（sides 两侧、stack 叠字、banner 横排、none）、depth（back 人物后方、front 前方）、entrance（cut、pop、slide）、tone（base、accent、dark）、shadow（是否有偏移剪影）。文字给脸和关键手势留白，不在生图里绘制文字。
 - 同一 group/diff 在连续多个 frame 出现时，人物保持，只换文字；再次使用背景或人物直接引用原 id，不重复生成。同一段落内也可以保持一套背景，重复副歌沿用主姿势并按歌词情绪变奏。先让一个有性格的姿势成立，再在需要时换表情，不每拍都生新图。\n`;
 }

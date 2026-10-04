@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 320
-// Source SHA-256: 2276750446ef01fc74c362682ae6d3c179b14b39c2ad303ae23197ae98d203ef
+// Source SHA-256: 89f40c8cad31a54f52a9771015ac83f700bf665caa705bbbcb6be6d4131a4c95
 // Build: python3 tools/verification/build.py <source-root>
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -667,6 +667,80 @@ function alphaBounds(data, width, height) {
     return x1 >= x0 ? { cx: (x1 + x0) / 2 / width, bottom: y1 / height, height: Math.max(1, y1 - y0 + 1) / height } : null;
 }
 
+// Character layers: accept real alpha, or a uniform light matte connected to
+// the perimeter. Never select a panel or infer success from removed area.
+function prepareCharacterPixels(data, width, height, { multiple = false, manual = false } = {}) {
+    const count = width * height;
+    if (!count || data.length !== count * 4) return { status: 'empty' };
+    const bounds = alphaBounds(data, width, height);
+    if (!bounds) return { status: 'empty' };
+    const edges = [[], [], [], []];
+    for (let x = 0; x < width; x++) { edges[0].push(x); edges[1].push(count - width + x); }
+    for (let y = 0; y < height; y++) { edges[2].push(y * width); edges[3].push(y * width + width - 1); }
+    const edge = edges.flat(), corners = [0, width - 1, count - width, count - 1];
+    // Existing alpha is kept exactly; a manually edited mask is never re-keyed.
+    if (edge.some(p => data[p * 4 + 3] < 250) || (manual && data.some((v, i) => i % 4 === 3 && v < 255)))
+        return { status: 'transparent', data };
+    if (manual) return { status: 'needs-edit' };
+    const matte = [0, 1, 2].map(k => corners.reduce((sum, p) => sum + data[p * 4 + k], 0) / 4);
+    const neutral = Math.min(...matte) >= 180 && Math.max(...matte) - Math.min(...matte) <= 20;
+    const blue = matte[2] > 160 && matte[2] - matte[0] > 120 && matte[2] - matte[1] > 100;
+    const close = p => matte.every((v, k) => Math.abs(v - data[p * 4 + k]) <= 24);
+    if ((!neutral && !blue) || !corners.every(close) || edges.filter(row => row.filter(close).length >= row.length * .9).length < 3)
+        return { status: 'needs-edit' };
+    const out = new Uint8ClampedArray(data), seen = new Uint8Array(count), removed = new Uint8Array(count), queue = new Uint32Array(count);
+    let head = 0, tail = 0;
+    const add = p => { if (!seen[p]) { seen[p] = 1; queue[tail++] = p; } };
+    const neighbours = (p, visit) => {
+        if (p % width) visit(p - 1); if (p % width + 1 < width) visit(p + 1);
+        if (p >= width) visit(p - width); if (p + width < count) visit(p + width);
+    };
+    edge.forEach(add);
+    while (head < tail) {
+        const p = queue[head++]; if (!close(p)) continue;
+        removed[p] = 1; out[p * 4 + 3] = 0; neighbours(p, add);
+    }
+    const rows = new Uint32Array(height), columns = new Uint32Array(width);
+    let x0 = width, y0 = height, x1 = -1, y1 = -1, foreground = 0;
+    for (let p = 0; p < count; p++) if (!removed[p]) {
+        const x = p % width, y = Math.floor(p / width); rows[y]++; columns[x]++; foreground++;
+        x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y);
+    }
+    if (!foreground) return { status: 'empty' };
+    // A white border around an opaque illustration is not a character cutout.
+    const lineSolid = (from, length, step) => {
+        let n = 0; for (let i = 0; i < length; i++) if (!removed[from + i * step]) n++;
+        return n >= length * .9;
+    };
+    if (lineSolid(y0 * width + x0, x1 - x0 + 1, 1) && lineSolid(y1 * width + x0, x1 - x0 + 1, 1)
+        && lineSolid(y0 * width + x0, y1 - y0 + 1, width) && lineSolid(y0 * width + x1, y1 - y0 + 1, width))
+        return { status: 'needs-edit' };
+    // Separated, substantial figures may be a contact sheet. Keep it intact
+    // until a cell is chosen; never guess the upper/left half.
+    const separated = projection => {
+        let before = 0, gap = 0;
+        for (const n of projection) {
+            if (!n) gap++; else gap = 0;
+            before += n;
+            if (gap >= Math.max(2, Math.ceil(projection.length * .015)) && before > foreground * .25 && foreground - before > foreground * .25) return true;
+        }
+        return false;
+    };
+    if (separated(rows) || (!multiple && separated(columns))) return { status: 'needs-selection' };
+    // Unmix the outer fringe only; enclosed whites (eyes, clothing) stay intact.
+    for (let p = 0; p < count; p++) {
+        if (removed[p]) continue;
+        let fringe = false; neighbours(p, n => { if (removed[n]) fringe = true; });
+        if (!fringe) continue;
+        const i = p * 4;
+        const alpha = Math.max(...matte.map((v, k) => Math.abs(data[i + k] - v) / Math.max(1, data[i + k] < v ? v : 255 - v)));
+        if (alpha <= 0 || alpha >= .98) continue;
+        out[i + 3] = Math.round(data[i + 3] * alpha);
+        for (let k = 0; k < 3; k++) out[i + k] = Math.max(0, Math.min(255, Math.round((data[i + k] - matte[k] * (1 - alpha)) / alpha)));
+    }
+    return { status: 'prepared', data: out };
+}
+
 // Decorative sprites only. Keep genuine alpha and enclosed white details;
 // flattening a background does not establish that the foreground was recovered.
 function prepareMotifPixels(data, width, height) {
@@ -724,6 +798,7 @@ __m_extras_mvImageTools_js.pixelRect = pixelRect;
 __m_extras_mvImageTools_js.eraseEdgeWhite = eraseEdgeWhite;
 __m_extras_mvImageTools_js.paintAlpha = paintAlpha;
 __m_extras_mvImageTools_js.alphaBounds = alphaBounds;
+__m_extras_mvImageTools_js.prepareCharacterPixels = prepareCharacterPixels;
 __m_extras_mvImageTools_js.prepareMotifPixels = prepareMotifPixels;
 }
 
@@ -754,7 +829,9 @@ function prepare(raw, existing = null) {
         ids.set(sourceId || id, id);
         const colors = list(source.colors).filter(c => typeof c === 'string' && /^#[0-9a-f]{6}$/iu.test(c));
         backgrounds.push({ id, label: text(source.label) || '共享背景',
-            kind: choice(source.kind, Object.keys(BACKGROUNDS), source.prompt ? 'image' : 'solid'),
+            // Model-created backgrounds are real image assets. Saved/manual
+            // patterns are read as-is and remain available in the style picker.
+            kind: 'image',
             colors: [colors[0] || '#203047', colors[1] || '#e4d6bb', colors[2] || '#bd6683'],
             motion: choice(source.motion, ['still', 'rotate', 'drift'], 'still'),
             prompt: text(source.prompt), image: null });
@@ -815,8 +892,8 @@ function state(record, rows, index, time) {
 function prompt() {
     return `【共享舞台编排】
 本类型先设计可反复使用的舞台和角色标志姿势，再安排哪些层变化、哪些层保持。背景、人物、文字分别编排；换歌词、换姿势不等于换背景，一个姿势可以跨多句保持。
-- stage.backgrounds 是跨构图、跨段落共用的背景，每个只定义一次。kind 可选 solid、rays、stripes、window、paper（本地绘制）或 image（另画一张背景）；colors 为三个 #RRGGBB 颜色，motion 为 still、rotate 或 drift。配色图案服务歌曲与角色世界观。背景运动持续，不随每次人物切换重启。
-- groups.stageBackground 引用共享背景 id；这些组的人物会单独绘制并经用户确认抠图后叠上背景。diff.imagePrompt 只写该人物层的机位、唯一静态姿势与表情，场景放在共享背景里。全景剧情插入可用 layer:"full" 与自己的 bgs；局部插镜按表达需要安排，不套固定顺序。
+- stage.backgrounds 是跨构图、跨段落共用的背景，每个只定义一次，kind 写 image。prompt 用英文写清空间、场景、色彩与光线，按歌曲和角色世界观设计可复用的绘制背景；不把场景简化成程序绘制的放射线或色块。colors 为三个 #RRGGBB 参考色，motion 默认 still，确实需要时可选 drift。背景持续，不随每次人物切换重启。
+- groups.stageBackground 引用共享背景 id；这些组的人物单独绘制，透明图直接叠背景，纯色底自动分离。diff.imagePrompt 只写该人物层的机位、唯一静态姿势与表情，场景放在共享背景里。全景剧情插入可用 layer:"full" 与自己的 bgs；局部插镜按表达需要安排，不套固定顺序。
 - frames.stage 可写 background（沿用时可省）、text（摘取对应歌词的关键词或原句）、layout（sides 两侧、stack 叠字、banner 横排、none）、depth（back 人物后方、front 前方）、entrance（cut、pop、slide）、tone（base、accent、dark）、shadow（是否有偏移剪影）。文字给脸和关键手势留白，不在生图里绘制文字。
 - 同一 group/diff 在连续多个 frame 出现时，人物保持，只换文字；再次使用背景或人物直接引用原 id，不重复生成。同一段落内也可以保持一套背景，重复副歌沿用主姿势并按歌词情绪变奏。先让一个有性格的姿势成立，再在需要时换表情，不每拍都生新图。\n`;
 }
@@ -1145,6 +1222,14 @@ function mountAssetEditor(host, options) {
                     working.data.set(prepared.data); layer().checked = true; stage = 'paint';
                     // Saving confirms the derived PNG; the original reference is retained.
                     changed = prepared.status === 'prepared';
+                }
+            }
+            if (options.autoCharacter && !options.image?.editMode) {
+                const prepared = pixels.prepareCharacterPixels(working.data, working.width, working.height, { multiple: options.multipleCharacters });
+                if (prepared.data) {
+                    working.data.set(prepared.data); layer().checked = true; stage = 'paint';
+                    // The current PNG can be downloaded immediately. A prompt-only
+                    // save does not commit a replacement image or touch its source.
                 }
             }
             show(); say('');
@@ -20564,7 +20649,7 @@ function __init_core_selfUpdater_js() {
 // MODULE: core/selfUpdater.js
 
 const UPDATE_STATE = Symbol.for('heartbeatMemories.selfUpdate');
-const INSTALLED_BUILD = '1.0.12-r84.229-mv-ratio';
+const INSTALLED_BUILD = '1.0.13-r84.230-mv-materials';
 const PROJECT_REMOTE = 'https://github.com/zaiyebuzuoyouqingdetiangou/tokimemo';
 function updateError(message) { const error = new Error(message); error.userMessage = message; return error; }
 
@@ -87351,7 +87436,7 @@ function storyboardPrompt(context, memory, song, settings, sectionIndexes = null
     const expressionCast = visible => cast ? { cast: firstPerson ? [{ participantId: firstPerson.id, position: 'center', action: '', visible }] : [] } : { who: 'char' };
     const expressionExample = settings.output === 'tegaki' && settings.storyType === 'expression' ? JSON.stringify({
         wardrobe: JSON.parse(exampleWardrobe), keyword: '关键词',
-        stage: { backgrounds: [{ id: 'S1', label: '主舞台', kind: 'window', colors: ['#263d48', '#ecdfbd', '#b05b49'], motion: 'drift' }] },
+        stage: { backgrounds: [{ id: 'S1', label: '主舞台', kind: 'image', prompt: 'quiet room, soft light through a window, painterly scenery, open space in the center', colors: ['#263d48', '#ecdfbd', '#b05b49'], motion: 'still' }] },
         groups: [
             { id: 'G1', composition: '正面半身主姿势', stageBackground: 'S1', position: 'center', scale: 'medium',
                 characterPrompt: 'front view, centered waist-up framing', ...expressionCast('full'),
@@ -87839,11 +87924,11 @@ function completedMvRanges(record, song) {
     const done = sections.map((_, i) => {
         const shots = list(record?.shots).filter(s => s.sectionIndex === i);
         return shots.length > 0 && shots.every(s => {
-            if (hasAssetImage(s.image)) return true;
+            if (hasAssetImage(s.image) && (!isV2(record) || !mv_stage.background(record, s) || s.image.editMode === 'full')) return true;
             if (!isV2(record)) return !!(s.image?.url || s.image?.local);
             const g = record.groups.find(g => g.id === s.group);
-            const stage = mv_stage.background(record, s), image = assetOf(record, `${s.group}:${s.diff}`)?.image;
-            if (stage) return hasAssetImage(image) && (image.editMode !== 'cutout' || stage.kind !== 'image' || hasAssetImage(stage.image));
+            const stage = mv_stage.background(record, s), image = shotImage(record, s);
+            if (stage) return hasAssetImage(image) && ((g?.layer === 'full' && image.editMode !== 'cutout') || image.editMode === 'full' || stage.kind !== 'image' || hasAssetImage(stage.image));
             return hasAssetImage(assetOf(record, `${s.group}:${s.diff}`)?.image)
                 && (g?.layer === 'full' || hasAssetImage(assetOf(record, `${s.group}:${s.bg || 'bg'}`)?.image));
         });
@@ -88121,7 +88206,7 @@ function defaultAssetPrompt(record, key, context, appearance = true) {
     const era = record?.wardrobe?.era ? `setting: ${record.wardrobe.era}` : '';
     // 只写正向词：tag 模型会把“no multiple views”“no people”里的词当成要画的内容。
     if (found.kind === 'motif') return [style, ...motifRecipe(found.target)].filter(Boolean).join(', ');
-    if (found.kind === 'bg') return [style, ratio, era, found.bgRow?.prompt || found.group?.backgroundPrompt, 'scenery, landscape, no humans'].filter(Boolean).join(', ');
+    if (found.kind === 'bg') return [style, ratio, era, found.bgRow?.prompt || found.group?.backgroundPrompt || found.bgRow?.label, 'scenery, landscape, no humans'].filter(Boolean).join(', ');
     if (record?.cast && Array.isArray(found.group.cast)) {
         const actors = mv_cast.shotPeople(record, found.group);
         const localCrop = actors.some(person => person.visible === 'hands' || person.visible === 'face');
@@ -88131,7 +88216,7 @@ function defaultAssetPrompt(record, key, context, appearance = true) {
         return mv_still.joinStillPrompt([style, ratio, 'single illustration, one captured instant', mv_still.stillScene(found.group, found.diff, actors.length === 1), size, place,
         mv_cast.castVisual(record, mv_still.stillCast(found.group, found.diff), { appearance }),
         found.group.layer === 'full' ? [era, (list(found.group.bgs).find(b => b.id === found.diff.bg) || list(found.group.bgs)[0])?.prompt || found.group.backgroundPrompt].filter(Boolean).join(', ')
-            : 'white background, simple background']);
+            : 'isolated subject, flat uniform white background, clear silhouette, margin around the subject']);
     }
     const who = found.group.who;
     const hasChar = who === 'char' || who === 'both';
@@ -88146,7 +88231,7 @@ function defaultAssetPrompt(record, key, context, appearance = true) {
         hasChar && hasUser ? 'duo, two people' : hasChar || hasUser ? 'solo, single figure' : 'scenery, no humans',
         found.group.layer === 'full'
             ? [era, (list(found.group.bgs).find(b => b.id === found.diff.bg) || list(found.group.bgs)[0])?.prompt || found.group.backgroundPrompt, 'detailed background, full scene'].filter(Boolean).join(', ')
-            : 'white background, simple background']);
+            : 'isolated subject, flat uniform white background, clear silhouette, margin around the subject']);
 }
 
 // 双人画面按角色分别给外貌（与 CG 相同的 characters 结构），避免两个人长成同一张脸。
@@ -88565,7 +88650,8 @@ async function openAssetEditor(key) {
     if (!isView(opened) || view.sub !== 'asset-editor' || token !== editSequence) return;
     const host = body().querySelector('[data-rmt-mv-editor-host]'); if (!host) return;
     assetEditor = image_editor.mountAssetEditor(host, {
-        motif: key === 'motif',
+        motif: key === 'motif', autoCharacter: found.kind === 'char' && found.group.layer !== 'full' && image?.editMode !== 'full',
+        multipleCharacters: found.group?.who === 'both' || (found.group?.cast?.length || 0) > 1,
         sourceUrl, imageUrl, image, prompt: mv.assetPrompt(record, key, ctx()), defaultPrompt: mv.defaultAssetPrompt(record, key, ctx()),
         onClose: () => { if (isView(opened) && token === editSequence) closeAssetEditor(); },
         onSave: async draft => {
@@ -88697,7 +88783,15 @@ ${r} .rmt-mv-assets>div{display:flex;flex-direction:column;align-items:center;ga
 ${r} .rmt-mv-assets small{font-size:11px;color:var(--rmt-theme-muted,#586b7c)}
 ${r} .rmt-mv-plus{font-size:18px;color:#b7c3cf;padding-bottom:28px}
 ${r} .rmt-mv-asset{position:relative;width:62px;height:96px;border-radius:10px;overflow:hidden;padding:0;cursor:pointer;border:1px solid var(--rmt-theme-border,#cfdae5);background:repeating-linear-gradient(135deg,#e6e9f0 0 6px,#f2f4f8 6px 12px)}
-${r} .rmt-mv-asset.wide{width:110px;height:62px}
+${r} .rmt-mv-asset.wide{width:160px;height:90px}
+${r} .rmt-mv-background-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:12px;margin-top:10px}
+${r} .rmt-mv-background-tile{display:grid;grid-template-columns:auto minmax(0,1fr);gap:6px 10px;align-items:start;min-width:0}
+${r} .rmt-mv-background-tile .rmt-mv-assets{overflow:visible}
+${r} .rmt-mv-background-tile .rmt-mv-asset.wide{width:110px;height:62px}
+${r} .rmt-mv-background-tile .rmt-mv-actions{margin:0;gap:6px}
+${r} .rmt-mv-background-tile .rmt-mv-actions button{padding:6px 9px;min-height:36px;font-size:12px}
+${r} .rmt-mv-background-tile>details{grid-column:1/-1;min-width:0;font-size:12px}
+${r} .rmt-mv-background-tile>details[open]{padding-top:6px}
 ${r} .rmt-mv-asset.cut.done{background:repeating-conic-gradient(#eef0f4 0 25%,#ffffff 0 50%) 0 0/12px 12px}
 ${r} .rmt-mv-asset img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
 ${r} .rmt-mv-asset i{position:absolute;left:4px;top:4px;font-style:normal;font-size:10px;border-radius:4px;padding:1px 5px;background:#ecebf1;color:#5d5566}
@@ -89270,9 +89364,9 @@ async function preloadImages(record, song) {
     const load = async () => {
         const assets = shots.flatMap(shot => {
             const image = mv.shotImage(record, shot);
-            if (!mv.isV2(record) || (mv.hasAssetImage(shot.image) && (!mv_stage.background(record, shot) || shot.image.editMode !== 'cutout'))) return [image];
-            if (mv_stage.background(record, shot) && mv.hasAssetImage(image) && image.editMode !== 'cutout') return [image];
+            if (!mv.isV2(record)) return [image];
             const group = record.groups.find(g => g.id === shot.group);
+            if (image?.editMode === 'full' || (group?.layer === 'full' && image?.editMode !== 'cutout') || (mv.hasAssetImage(shot.image) && !mv_stage.background(record, shot))) return [image];
             const stageBg = mv_stage.background(record, shot);
             if (stageBg && stageBg.kind !== 'image') return [image];
             const bg = stageBg || group?.bgs?.find(b => b.id === (shot.bg || 'B1')) || group?.bgs?.[0];
@@ -89510,7 +89604,7 @@ function stopPlayback() {
 
 function disposeMv() {
     assetEditor?.dispose(); assetEditor = null; editSequence++;
-    stageShadows.clear();
+    stageShadows.clear(); characterSprites.clear();
     navigation.length = 0; renderedPage = '';
     view.epoch += 1;
     view.stopAll = true; view.drawingAll = false; view.drawQueue = null;
@@ -90135,29 +90229,30 @@ function handleMvChange(event) {
 
 function assetTile(record, key, label) {
     const found = mv.assetOf(record, key);
-    const sprite = key === 'motif' ? motifForRange(record) : null;
+    const sprite = key === 'motif' ? motifForRange(record) : found?.kind === 'char' ? characterSprite(found.image, found.group) : null;
     const url = sprite?.preview || assetImageUrl(found?.image);
     const exists = mv.hasAssetImage(found?.image);
     const drawing = mv.isAssetDrawing(mv.mvScope(ctx()), view.songId, key);
     const wide = found?.kind !== 'motif' && mv.normalizeSettings(record.settings).ratio === '16:9';
     const cut = found?.kind !== 'bg';
-    const awaitingCutout = exists && found?.group?.stageBackground && found.group.layer !== 'full' && found.image.editMode !== 'cutout';
+    const needsEdit = ['needs-edit', 'needs-selection', 'empty', 'unreadable'].includes(sprite?.status);
     const splitSelect = btn('edit-asset', '编辑素材', { id: key, cls: 'rmt-mv-edit-open' });
-    return `<button type="button" class="rmt-mv-asset${wide ? ' wide' : ''}${exists ? ' done' : ''}${cut && found?.group?.layer !== 'full' ? ' cut' : ''}" data-rmt-mv-anchor="${esc(key)}" data-rmt-mv="draw-asset" data-rmt-mv-id="${esc(key)}" ${drawing || view.drawingAll ? 'disabled' : ''} aria-label="${esc(label)}：${exists ? '重画' : '画'}这一张">${url ? `<img src="${esc(url)}" alt="">` : ''}<i>${drawing ? '画…' : awaitingCutout ? '待抠图' : exists ? '已画' : '未画'}</i></button><small>${esc(label)}</small>${splitSelect}`;
+    return `<button type="button" class="rmt-mv-asset${wide ? ' wide' : ''}${exists ? ' done' : ''}${cut && found?.group?.layer !== 'full' ? ' cut' : ''}" data-rmt-mv-anchor="${esc(key)}" data-rmt-mv="draw-asset" data-rmt-mv-id="${esc(key)}" ${drawing || view.drawingAll ? 'disabled' : ''} aria-label="${esc(label)}：${exists ? '重画' : '画'}这一张">${url ? `<img src="${esc(url)}" alt="">` : ''}<i>${drawing ? '画…' : needsEdit ? (sprite.status === 'needs-selection' ? '选单格' : '检查背景') : exists ? '已画' : '未画'}</i></button><small>${esc(label)}</small>${splitSelect}`;
 }
 
 // 素材检查：原图 → 拼图拆分 → 抠图结果 → 播放时的用法，逐张对照。
 function inspectHtml(record, g, diffs) {
     const rows = diffs.filter(d => mv.hasAssetImage(d.image)).map(d => {
-        const url = assetImageUrl(d.image), original = assetImageUrl(d.image.original || d.image);
-        const layered = d.image.editMode === 'cutout';
+        const sprite = characterSprite(d.image, g);
+        const url = sprite?.preview || assetImageUrl(d.image), original = assetImageUrl(d.image.original || d.image);
+        const layered = !!sprite?.image;
         return `<div class="rmt-mv-inspect-row"><figure>${original ? `<img src="${esc(original)}" alt="原图">` : ''}<figcaption>原图</figcaption></figure>
           <figure class="cut">${url ? `<img src="${esc(url)}" alt="当前素材">` : ''}<figcaption>当前素材</figcaption></figure>
-          <div><b>${esc(d.label)}</b><small>${d.image.crop ? '已手动选定画面' : '可在编辑素材中选单格'}</small><small>播放时：${layered ? '使用已确认的透明图叠背景' : '完整画面'}</small>
+          <div><b>${esc(d.label)}</b><small>${d.image.crop ? '已手动选定画面' : '可在编辑素材中选单格'}</small><small>播放时：${layered ? '透明人物叠背景' : '完整画面'}</small>
           ${btn('edit-asset', '选单格／抠图／提示词', { id: `${g.id}:${d.id}` })}</div></div>`;
     }).join('');
     const layerTools = `<div class="rmt-mv-actions">${btn('group-layer', g.layer === 'full' ? '绘图方式：完整画面 · 改为分层素材' : '绘图方式：分层素材 · 改为完整画面', { id: `${g.id}:${g.layer === 'full' ? 'cutout' : 'full'}` })}</div>
-      <p class="rmt-x-note">自动去白底仅供预览；编辑素材中确认保存的透明图才会叠背景。</p>`;
+      <p class="rmt-x-note">透明素材直接使用，纯色底自动处理；拼图或复杂背景可在编辑素材中调整。</p>`;
     return `<details class="rmt-mv-inspect"${view.inspect === g.id ? ' open' : ''}><summary data-rmt-mv="inspect" data-rmt-mv-id="${esc(g.id)}">素材检查（画面有问题时再打开）</summary>${rows}${layerTools}</details>`;
 }
 
@@ -90166,19 +90261,20 @@ function sharedBackgroundsHtml(record, shots) {
     if (!backgrounds.length) return '';
     const wide = mv.normalizeSettings(record.settings).ratio === '16:9';
     const tiles = backgrounds.map(bg => {
-        const key = `stage:${bg.id}`;
+        const key = `stage:${bg.id}`, drawn = bg.kind === 'image' && mv.hasAssetImage(bg.image);
+        const drawing = mv.isAssetDrawing(mv.mvScope(ctx()), view.songId, key);
         let preview = bg.kind === 'image' ? assetImageUrl(bg.image) : '';
-        if (!preview) {
+        if (bg.kind !== 'image') {
             try { const c = document.createElement('canvas'); c.width = wide ? 320 : 180; c.height = wide ? 180 : 320;
                 stage_canvas.drawBackground(c.getContext('2d'), bg, c.width, c.height, 0); preview = c.toDataURL('image/png'); } catch { /* Host without Canvas preview. */ }
         }
         const select = (field, label, values, value) => `<label class="rmt-mv-look"><span>${label}</span><select data-rmt-mv-stage-bg="${field}" data-background="${esc(bg.id)}">${Object.entries(values).map(([id, name]) => `<option value="${esc(id)}"${id === value ? ' selected' : ''}>${esc(name)}</option>`).join('')}</select></label>`;
-        return `<div><div class="rmt-mv-assets"><div>${bg.kind === 'image' ? assetTile(record, key, bg.label)
-            : `<button type="button" class="rmt-mv-asset${wide ? ' wide' : ''} done" data-rmt-mv-anchor="${esc(key)}" data-rmt-mv="edit-asset" data-rmt-mv-id="${esc(key)}">${preview ? `<img src="${esc(preview)}" alt="">` : ''}<i>本地绘制</i></button><small>${esc(bg.label)}</small>${btn('edit-asset', '替换背景', { id: key })}`}</div></div>
-          <details${view.stageBackgroundOpen === bg.id ? ' open' : ''}><summary>背景样式</summary>${select('kind', '图案', mv_stage.BACKGROUNDS, bg.kind)}${select('motion', '背景运动', { still: '不动', rotate: '缓慢旋转', drift: '轻微移动' }, bg.motion)}
+        return `<div class="rmt-mv-background-tile"><div class="rmt-mv-assets"><div><button type="button" class="rmt-mv-asset${wide ? ' wide' : ''}${drawn ? ' done' : ''}" data-rmt-mv-anchor="${esc(key)}" data-rmt-mv="draw-asset" data-rmt-mv-id="${esc(key)}" aria-label="${esc(bg.label)}：${drawn ? '重画背景' : '生成背景'}" ${drawing || view.drawingAll ? 'disabled' : ''}>${preview ? `<img src="${esc(preview)}" alt="">` : ''}<i>${drawing ? '画…' : bg.kind !== 'image' ? '本地图案' : drawn ? '已画' : '未画'}</i></button></div></div>
+          <div><b>${esc(bg.label)}</b><div class="rmt-mv-actions">${btn('draw-asset', drawn ? '重画背景' : '生成背景', { id: key, disabled: drawing || view.drawingAll })}${btn('edit-asset', '编辑素材', { id: key })}</div></div>
+          <details${view.stageBackgroundOpen === bg.id ? ' open' : ''}><summary>背景样式</summary>${select('kind', '背景类型', mv_stage.BACKGROUNDS, bg.kind)}${select('motion', '背景运动', { still: '不动', rotate: '缓慢旋转', drift: '轻微移动' }, bg.motion)}
           <div class="rmt-mv-actions">${bg.colors.map((c, i) => `<label>配色 ${i + 1}<input type="color" value="${esc(c)}" data-rmt-mv-stage-bg="color${i}" data-background="${esc(bg.id)}"></label>`).join('')}</div></details></div>`;
     }).join('');
-    return `<section class="rmt-x-card"><b>共享背景</b>${tiles}</section>`;
+    return `<section class="rmt-x-card rmt-mv-backgrounds"><b>共享背景</b><div class="rmt-mv-background-grid">${tiles}</div></section>`;
 }
 
 function renderGroupsBoard(song, record) {
@@ -90236,8 +90332,7 @@ function renderGroupsBoard(song, record) {
 
 // ---------- 手书 v2：抠图、取色、渲染 ----------
 
-const cutMeta = new Map();
-const cutAlpha = new Map();
+const characterSprites = new Map();
 const palettes = new Map();
 const motifSprites = new Map();
 
@@ -90288,38 +90383,14 @@ function motifNotice(record) {
     return `<div class="rmt-x-note">意象背景尚未分离，暂不叠加。${btn('edit-asset', '处理意象背景', { id: 'motif' })}</div>`;
 }
 
-// 拼图识别：模型偶尔把同一人物画成左右或上下两格。缩小成灰度图比较两半，几乎一样就只取一格。
-// 封面就是给这首印象曲画的专辑封面（存在 song.visual.cgImage）。
+// The album cover belongs to the song. Character cells are chosen in the editor.
 function coverUrl(song) { return song?.visual?.cgImage?.url || song?.cgImage?.url || ''; }
 
-const panelCache = new Map();
-function detectPanels(img) {
-    try {
-        const n = 48, c = document.createElement('canvas'); c.width = n; c.height = n;
-        const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(img, 0, 0, n, n);
-        const d = g.getImageData(0, 0, n, n).data;
-        const v = (x, y) => { const i = (y * n + x) * 4; return 0.3 * d[i] + 0.59 * d[i + 1] + 0.11 * d[i + 2]; };
-        let lr = 0, tb = 0, spread = 0, mean = 0;
-        for (let y = 0; y < n; y += 1) for (let x = 0; x < n; x += 1) mean += v(x, y);
-        mean /= n * n;
-        for (let y = 0; y < n; y += 1) for (let x = 0; x < n / 2; x += 1) { lr += Math.abs(v(x, y) - v(x + n / 2, y)); spread += Math.abs(v(x, y) - mean); }
-        for (let y = 0; y < n / 2; y += 1) for (let x = 0; x < n; x += 1) tb += Math.abs(v(x, y) - v(x, y + n / 2));
-        const half = n * n / 2;
-        lr /= half; tb /= half; spread = Math.max(1, spread / half);
-        // 两半差异远小于画面本身的起伏，才判为重复拼图；普通双人同框两边人物不同，不会被误拆。
-        if (lr < 16 && lr < spread * 0.35 && lr <= tb) return { split: 'left', score: lr };
-        if (tb < 16 && tb < spread * 0.35) return { split: 'top', score: tb };
-        return { split: 'none', score: Math.min(lr, tb) };
-    } catch { return { split: 'none', score: -1 }; }
-}
-
 function cropFor(url, img, override) {
-    let auto = panelCache.get(url);
-    if (!auto) { auto = detectPanels(img); panelCache.set(url, auto); }
-    const split = override && override !== 'auto' ? override : auto.split;
+    const split = ['left', 'right', 'top', 'bottom'].includes(override) ? override : 'none';
     const w = img.naturalWidth, h = img.naturalHeight;
     const rect = { left: [0, 0, w / 2, h], right: [w / 2, 0, w / 2, h], top: [0, 0, w, h / 2], bottom: [0, h / 2, w, h / 2] }[split] || [0, 0, w, h];
-    return { split, auto: auto.split, rect };
+    return { split, rect };
 }
 
 function drawCropCover(g, img, rect, w, h, scale = 1) {
@@ -90329,26 +90400,44 @@ function drawCropCover(g, img, rect, w, h, scale = 1) {
     g.drawImage(img, sx, sy, sw, sh, (w - dw) / 2, (h - dh) / 2, dw, dh);
 }
 
-// Only a user-confirmed edited/imported transparent image is used as a layer.
-// Metadata describes alignment, never whether a cutout is "successful".
-function layerImage(image, requireAlpha = false) {
-    if (image?.editMode !== 'cutout') return null;
-    const url = assetImageUrl(image), src = imageFor(url);
-    if (!src) return null;
-    if (!cutMeta.has(url)) {
-        try {
-            const c = document.createElement('canvas'); c.width = src.naturalWidth; c.height = src.naturalHeight;
-            const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(src, 0, 0);
-            const pixels = g.getImageData(0, 0, c.width, c.height).data;
-            cutMeta.set(url, image_tools.alphaBounds(pixels, c.width, c.height));
-            // Actual alpha is a file property, never a claim that a cutout is clean.
-            let hasAlpha = false;
-            for (let i = 3; i < pixels.length; i += 4) if (pixels[i] < 255) { hasAlpha = true; break; }
-            cutAlpha.set(url, hasAlpha);
-        } catch { cutMeta.set(url, null); cutAlpha.set(url, false); }
+// One derived copy serves thumbnails, playback and export; originals and
+// manually saved masks are never overwritten by automatic processing.
+function characterSprite(image, group) {
+    if (!image || image.editMode === 'full' || (group?.layer === 'full' && image.editMode !== 'cutout')) return null;
+    const url = assetImageUrl(image);
+    if (!url) return null;
+    const multiple = group?.who === 'both' || (group?.cast?.length || 0) > 1;
+    const key = JSON.stringify([url, image.editMode || '', image.split || 'none', multiple]);
+    const cached = characterSprites.get(key);
+    if (cached && cached.status !== 'loading') return cached;
+    const src = imageFor(url);
+    if (!src) {
+        if (!cached && images.has(url)) {
+            characterSprites.set(key, { status: 'loading' });
+            const pending = images.get(url), before = pending.onload, failed = pending.onerror;
+            const refresh = () => { if (isView() && view.sub === 'board') renderMv(); };
+            pending.onload = event => { characterSprites.delete(key); before?.(event); refresh(); };
+            pending.onerror = event => { characterSprites.set(key, { status: 'unreadable' }); failed?.(event); refresh(); };
+        }
+        return null;
     }
-    if (requireAlpha && !cutAlpha.get(url)) return null;
-    return src;
+    let result;
+    try {
+        const crop = cropFor(url, src, image.split);
+        const c = document.createElement('canvas'); c.width = Math.round(crop.rect[2]); c.height = Math.round(crop.rect[3]);
+        const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(src, ...crop.rect, 0, 0, c.width, c.height);
+        const pixels = g.getImageData(0, 0, c.width, c.height);
+        const prepared = image_tools.prepareCharacterPixels(pixels.data, c.width, c.height, { multiple, manual: image.editMode === 'cutout' });
+        result = { status: prepared.status, key };
+        if (prepared.data) {
+            const unchanged = prepared.status === 'transparent' && crop.split === 'none';
+            if (!unchanged) { pixels.data.set(prepared.data); g.putImageData(pixels, 0, 0); }
+            result = { ...result, image: unchanged ? src : c, preview: unchanged ? url : c.toDataURL('image/png'),
+                bounds: image_tools.alphaBounds(prepared.data, c.width, c.height) };
+        }
+    } catch { result = { status: 'unreadable', key }; }
+    characterSprites.set(key, result);
+    return result;
 }
 
 function coverPalette(song) {
@@ -90379,7 +90468,7 @@ function isChorusSection(song, index) { return /^(final )?chorus|^hook/i.test(mv
 const stageShadows = new Map();
 function silhouette(url, source) {
     if (!stageShadows.has(url)) {
-        const c = document.createElement('canvas'); c.width = source.naturalWidth; c.height = source.naturalHeight;
+        const c = document.createElement('canvas'); c.width = source.naturalWidth || source.width; c.height = source.naturalHeight || source.height;
         const g = c.getContext('2d'); g.drawImage(source, 0, 0); g.globalCompositeOperation = 'source-in';
         g.fillStyle = '#10131c'; g.fillRect(0, 0, c.width, c.height); stageShadows.set(url, c);
     }
@@ -90406,7 +90495,7 @@ function drawSceneV2(g, record, song, rows, index, t, w, h) {
     const p = Math.min(1, Math.max(0, (t - span.start) / Math.max(0.1, span.end - span.start)));
     const push = group?.motion === 'push' ? 1 + 0.03 * p : 1;
     const ownImage = mv.hasAssetImage(row.shot.image) ? row.shot.image : null;
-    if (ownImage && (!stage || ownImage.editMode !== 'cutout')) {
+    if (ownImage && (!stage || ownImage.editMode === 'full' || (group?.layer === 'full' && ownImage.editMode !== 'cutout'))) {
         const own = imageFor(assetImageUrl(ownImage));
         if (own) drawCover(g, own, w, h, push, 0, 0);
         opaqueText(); return;
@@ -90422,9 +90511,9 @@ function drawSceneV2(g, record, song, rows, index, t, w, h) {
     const art = ownImage || diff?.image;
     const override = art?.split || 'auto';
     const url = assetImageUrl(art), raw = imageFor(url);
-    const person = layerImage(art, !!stage);
-    // Unconfirmed images remain intact; a white matte is never treated as transparency.
-    if (raw && (art?.editMode !== 'cutout' || (stage && !person))) {
+    const sprite = characterSprite(art, group), person = sprite?.image;
+    // Ambiguous mattes keep the complete original until the user edits them.
+    if (raw && !person) {
         drawCropCover(g, raw, cropFor(url, raw, override).rect, w, h, push);
         if (!stage) { g.save(); g.globalCompositeOperation = 'soft-light'; g.globalAlpha = 0.1; g.fillStyle = coverPalette(song)[1]; g.fillRect(0, 0, w, h); g.restore(); }
         opaqueText(); return;
@@ -90432,14 +90521,14 @@ function drawSceneV2(g, record, song, rows, index, t, w, h) {
     stageText('back');
     if (person) {
         const breathe = stage ? 1 : 1 + 0.004 * Math.sin(t * Math.PI * 2 / 3.4);
-        const pw = person.naturalWidth, ph = person.naturalHeight;
+        const pw = person.naturalWidth || person.width, ph = person.naturalHeight || person.height;
         const factor = { close: 1.35, medium: 1.05, full: 0.95, wide: 0.6 }[group.scale] || 1.05;
         const dh = h * factor, dw = pw * (dh / ph);
         const side = w > h ? 0.18 : 0.1;
         const cxp = { left: 0.5 - side, right: 0.5 + side, center: 0.5 }[group.position] || 0.5;
         const dx = w * cxp - dw / 2, dy = group.scale === 'close' ? h - dh * 0.9 : h - dh;
-        const ref = (group.diffs || []).map(dd => cutMeta.get(assetImageUrl(dd.image))).find(Boolean);
-        const cur = cutMeta.get(url);
+        const ref = (group.diffs || []).map(dd => characterSprite(dd.image, group)?.bounds).find(Boolean);
+        const cur = sprite.bounds;
         const map = m => [dx + m.cx * dw, dy + m.bottom * dh];
         g.save();
         if (stage?.active) {
@@ -90453,7 +90542,7 @@ function drawSceneV2(g, record, song, rows, index, t, w, h) {
             g.translate(tx, ty); g.scale(s, s); g.translate(-cx, -cy);
         }
         if (stage?.cue.shadow) {
-            g.save(); g.globalAlpha = 0.7; g.drawImage(silhouette(url, person), dx - w * 0.055, dy, dw, dh); g.restore();
+            g.save(); g.globalAlpha = 0.7; g.drawImage(silhouette(sprite.key, person), dx - w * 0.055, dy, dw, dh); g.restore();
         }
         g.drawImage(person, dx, dy, dw, dh); g.restore();
     }

@@ -196,6 +196,14 @@ export function mountAssetEditor(host, options) {
                     changed = prepared.status === 'prepared';
                 }
             }
+            if (options.autoCharacter && !options.image?.editMode) {
+                const prepared = pixels.prepareCharacterPixels(working.data, working.width, working.height, { multiple: options.multipleCharacters });
+                if (prepared.data) {
+                    working.data.set(prepared.data); layer().checked = true; stage = 'paint';
+                    // The current PNG can be downloaded immediately. A prompt-only
+                    // save does not commit a replacement image or touch its source.
+                }
+            }
             show(); say('');
         } catch { if (active && token === loadToken) { show(); say('无法读取图片像素，可导入本机图片继续处理；提示词仍可编辑。'); } }
     })();

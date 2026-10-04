@@ -1,5 +1,5 @@
-const VERSION = '1.0.12';
-const BUILD = '1.0.12-r84.229-mv-ratio';
+const VERSION = '1.0.13';
+const BUILD = '1.0.13-r84.230-mv-materials';
 
 const SETTINGS_ID = 'heartbeat_memories_settings';
 const MENU_ID = 'heartbeat_memories_menu_item';

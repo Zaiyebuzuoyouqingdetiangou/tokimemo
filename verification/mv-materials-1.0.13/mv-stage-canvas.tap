@@ -1,0 +1,66 @@
+(node:5) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+TAP version 13
+# Subtest: native Canvas 16:9: one background continues through held poses and changed text
+ok 1 - native Canvas 16:9: one background continues through held poses and changed text
+  ---
+  duration_ms: 499.710471
+  type: 'test'
+  ...
+# Subtest: native Canvas 9:16: one background continues through held poses and changed text
+ok 2 - native Canvas 9:16: one background continues through held poses and changed text
+  ---
+  duration_ms: 464.817492
+  type: 'test'
+  ...
+# Subtest: background is behind confirmed transparent art, text order is deliberate, and opaque art stays intact
+ok 3 - background is behind confirmed transparent art, text order is deliberate, and opaque art stays intact
+  ---
+  duration_ms: 543.48877
+  type: 'test'
+  ...
+# Subtest: an opaque PNG marked as cutout keeps a full-frame fallback instead of hiding the stage text
+ok 4 - an opaque PNG marked as cutout keeps a full-frame fallback instead of hiding the stage text
+  ---
+  duration_ms: 316.743841
+  type: 'test'
+  ...
+# Subtest: shared backgrounds appear once in the board and pose editing is reachable from the player
+ok 5 - shared backgrounds appear once in the board and pose editing is reachable from the player
+  ---
+  duration_ms: 278.485476
+  type: 'test'
+  ...
+# Subtest: native Canvas export matches preview at the same song time even for a clipped second section
+ok 6 - native Canvas export matches preview at the same song time even for a clipped second section
+  ---
+  duration_ms: 487.33344
+  type: 'test'
+  ...
+# Subtest: automatic character layer (native alpha) is visible over the actual shared image
+ok 7 - automatic character layer (native alpha) is visible over the actual shared image
+  ---
+  duration_ms: 362.114384
+  type: 'test'
+  ...
+# Subtest: automatic character layer (\#ffffff) is visible over the actual shared image
+ok 8 - automatic character layer (\#ffffff) is visible over the actual shared image
+  ---
+  duration_ms: 437.39711
+  type: 'test'
+  ...
+# Subtest: automatic character layer (\#dddddd) is visible over the actual shared image
+ok 9 - automatic character layer (\#dddddd) is visible over the actual shared image
+  ---
+  duration_ms: 313.832984
+  type: 'test'
+  ...
+1..9
+# tests 9
+# suites 0
+# pass 9
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 3710.383539

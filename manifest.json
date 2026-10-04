@@ -1,15 +1,15 @@
 {
     "display_name": "心迹回廊",
     "loading_order": 110,
-    "js": "index.js?heartbeat=1.0.12-r84.229-mv-ratio",
+    "js": "index.js?heartbeat=1.0.13-r84.230-mv-materials",
     "author": "Toto",
-    "version": "1.0.12",
+    "version": "1.0.13",
     "auto_update": true,
     "minimum_client_version": "1.13.0",
     "hooks": {
         "disable": "onDisable",
         "clean": "onClean"
     },
-    "description": "心迹回廊：保留老 UI，修复手书横竖画幅未传入人物生图请求和缩略图裁切的问题。",
+    "description": "心迹回廊：保留老 UI，恢复手书人物自动透明处理，共享背景默认生图，压缩横图素材卡片空白。",
     "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }

@@ -574,7 +574,7 @@ function storyboardPrompt(context, memory, song, settings, sectionIndexes = null
     const expressionCast = visible => cast ? { cast: firstPerson ? [{ participantId: firstPerson.id, position: 'center', action: '', visible }] : [] } : { who: 'char' };
     const expressionExample = settings.output === 'tegaki' && settings.storyType === 'expression' ? JSON.stringify({
         wardrobe: JSON.parse(exampleWardrobe), keyword: '关键词',
-        stage: { backgrounds: [{ id: 'S1', label: '主舞台', kind: 'window', colors: ['#263d48', '#ecdfbd', '#b05b49'], motion: 'drift' }] },
+        stage: { backgrounds: [{ id: 'S1', label: '主舞台', kind: 'image', prompt: 'quiet room, soft light through a window, painterly scenery, open space in the center', colors: ['#263d48', '#ecdfbd', '#b05b49'], motion: 'still' }] },
         groups: [
             { id: 'G1', composition: '正面半身主姿势', stageBackground: 'S1', position: 'center', scale: 'medium',
                 characterPrompt: 'front view, centered waist-up framing', ...expressionCast('full'),
@@ -1062,11 +1062,11 @@ export function completedMvRanges(record, song) {
     const done = sections.map((_, i) => {
         const shots = list(record?.shots).filter(s => s.sectionIndex === i);
         return shots.length > 0 && shots.every(s => {
-            if (hasAssetImage(s.image)) return true;
+            if (hasAssetImage(s.image) && (!isV2(record) || !mv_stage.background(record, s) || s.image.editMode === 'full')) return true;
             if (!isV2(record)) return !!(s.image?.url || s.image?.local);
             const g = record.groups.find(g => g.id === s.group);
-            const stage = mv_stage.background(record, s), image = assetOf(record, `${s.group}:${s.diff}`)?.image;
-            if (stage) return hasAssetImage(image) && (image.editMode !== 'cutout' || stage.kind !== 'image' || hasAssetImage(stage.image));
+            const stage = mv_stage.background(record, s), image = shotImage(record, s);
+            if (stage) return hasAssetImage(image) && ((g?.layer === 'full' && image.editMode !== 'cutout') || image.editMode === 'full' || stage.kind !== 'image' || hasAssetImage(stage.image));
             return hasAssetImage(assetOf(record, `${s.group}:${s.diff}`)?.image)
                 && (g?.layer === 'full' || hasAssetImage(assetOf(record, `${s.group}:${s.bg || 'bg'}`)?.image));
         });
@@ -1344,7 +1344,7 @@ export function defaultAssetPrompt(record, key, context, appearance = true) {
     const era = record?.wardrobe?.era ? `setting: ${record.wardrobe.era}` : '';
     // 只写正向词：tag 模型会把“no multiple views”“no people”里的词当成要画的内容。
     if (found.kind === 'motif') return [style, ...motifRecipe(found.target)].filter(Boolean).join(', ');
-    if (found.kind === 'bg') return [style, ratio, era, found.bgRow?.prompt || found.group?.backgroundPrompt, 'scenery, landscape, no humans'].filter(Boolean).join(', ');
+    if (found.kind === 'bg') return [style, ratio, era, found.bgRow?.prompt || found.group?.backgroundPrompt || found.bgRow?.label, 'scenery, landscape, no humans'].filter(Boolean).join(', ');
     if (record?.cast && Array.isArray(found.group.cast)) {
         const actors = mv_cast.shotPeople(record, found.group);
         const localCrop = actors.some(person => person.visible === 'hands' || person.visible === 'face');
@@ -1354,7 +1354,7 @@ export function defaultAssetPrompt(record, key, context, appearance = true) {
         return mv_still.joinStillPrompt([style, ratio, 'single illustration, one captured instant', mv_still.stillScene(found.group, found.diff, actors.length === 1), size, place,
         mv_cast.castVisual(record, mv_still.stillCast(found.group, found.diff), { appearance }),
         found.group.layer === 'full' ? [era, (list(found.group.bgs).find(b => b.id === found.diff.bg) || list(found.group.bgs)[0])?.prompt || found.group.backgroundPrompt].filter(Boolean).join(', ')
-            : 'white background, simple background']);
+            : 'isolated subject, flat uniform white background, clear silhouette, margin around the subject']);
     }
     const who = found.group.who;
     const hasChar = who === 'char' || who === 'both';
@@ -1369,7 +1369,7 @@ export function defaultAssetPrompt(record, key, context, appearance = true) {
         hasChar && hasUser ? 'duo, two people' : hasChar || hasUser ? 'solo, single figure' : 'scenery, no humans',
         found.group.layer === 'full'
             ? [era, (list(found.group.bgs).find(b => b.id === found.diff.bg) || list(found.group.bgs)[0])?.prompt || found.group.backgroundPrompt, 'detailed background, full scene'].filter(Boolean).join(', ')
-            : 'white background, simple background']);
+            : 'isolated subject, flat uniform white background, clear silhouette, margin around the subject']);
 }
 
 // 双人画面按角色分别给外貌（与 CG 相同的 characters 结构），避免两个人长成同一张脸。
