@@ -1,0 +1,115 @@
+{
+  "version": "1.0.22",
+  "build": "1.0.22-r84.239-link-recovery",
+  "new_tests": 40,
+  "new_tests_pass": 40,
+  "all_tests_pass": false,
+  "full": {
+    "candidate_files": 39,
+    "executions": 76,
+    "new_failure_names": [],
+    "missing_historical_fixtures": [
+      "r84.209 for one mv-index upgrade test",
+      "r84.215 for three mv-journal-upgrade tests"
+    ],
+    "environment": "Node with simulated host/provider/storage and native Canvas where tests request it; no live Suno/TT/iPhone",
+    "bundle_sha256": "aea6b7e75c621a963189082d0611463843d32d5d5a30ba92731bf6bf1afbc35d",
+    "baseline": {
+      "reported_totals": {
+        "tests": 566,
+        "pass": 560,
+        "fail": 6,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      },
+      "files_without_totals": [],
+      "timed_out_files": [],
+      "nonzero_executions": [
+        {
+          "file": "mv-index-regression.mjs",
+          "variant": "default",
+          "exit_code": 1,
+          "failures": [
+            "fresh runtime can repair an actual r84.209 blocked paid result with save-only retry"
+          ]
+        },
+        {
+          "file": "mv-journal-upgrade-regression.mjs",
+          "variant": "default",
+          "exit_code": 1,
+          "failures": [
+            "actual r215 paid image journal saves after upgrade without regenerating",
+            "actual r215 story journal saves after upgrade when its original record is unchanged",
+            "actual r215 snapshot story journal cannot erase a newer image after upgrade"
+          ]
+        },
+        {
+          "file": "mv-update-regression.mjs",
+          "variant": "default",
+          "exit_code": 1,
+          "failures": [
+            "revision drift journals paid result and survives a fresh runtime",
+            "frame cast is the exact intersection of shot people and appearance preference"
+          ]
+        }
+      ]
+    },
+    "candidate": {
+      "reported_totals": {
+        "tests": 606,
+        "pass": 600,
+        "fail": 6,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      },
+      "files_without_totals": [],
+      "timed_out_files": [],
+      "nonzero_executions": [
+        {
+          "file": "mv-index-regression.mjs",
+          "variant": "default",
+          "exit_code": 1,
+          "failures": [
+            "fresh runtime can repair an actual r84.209 blocked paid result with save-only retry"
+          ]
+        },
+        {
+          "file": "mv-journal-upgrade-regression.mjs",
+          "variant": "default",
+          "exit_code": 1,
+          "failures": [
+            "actual r215 paid image journal saves after upgrade without regenerating",
+            "actual r215 story journal saves after upgrade when its original record is unchanged",
+            "actual r215 snapshot story journal cannot erase a newer image after upgrade"
+          ]
+        },
+        {
+          "file": "mv-update-regression.mjs",
+          "variant": "default",
+          "exit_code": 1,
+          "failures": [
+            "revision drift journals paid result and survives a fresh runtime",
+            "frame cast is the exact intersection of shot people and appearance preference"
+          ]
+        }
+      ]
+    }
+  },
+  "static": {
+    "syntax_files": 414,
+    "syntax_pass": 414,
+    "imports_resolved": 2623,
+    "deterministic_build": true,
+    "modules": 324,
+    "baseline_module_bodies_verified": 324,
+    "source_sha256": "0f9af9613c9424bccaf8d675b17146b5012da522f947fb78d22e2e748bd31bfe",
+    "bundle_sha256": "aea6b7e75c621a963189082d0611463843d32d5d5a30ba92731bf6bf1afbc35d"
+  },
+  "prompt_functions_unchanged": 175,
+  "production_source_files_changed": 9,
+  "github_written": false,
+  "live_suno_tt_verified": false,
+  "real_user_archive_verified": false
+}

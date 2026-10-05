@@ -1,30 +1,20 @@
 import * as pixels from '../extras/mvImageTools.js';
+import * as image_ui from './mvImageEditorUi.js';
 
 // Isolated editor: drafts and undo buffers live here until an explicit save.
 export function mountAssetEditor(host, options) {
-    host.innerHTML = `<section class="rmt-mv-editor rmt-x-card">
-      <div class="rmt-mv-editor-tools"><button type="button" data-edit="auto">一键抠图</button><button type="button" data-edit="select">1 · 选单格</button><button type="button" data-edit="paint">2 · 处理背景</button></div>
-      <div data-select-tools><label>拼图排列 <select data-grid><option value="free">手动框选</option><option value="1:1">整张</option><option value="2:1">上下两格</option><option value="3:1">上下三格</option><option value="4:1">上下四格</option><option value="1:2">左右两格</option><option value="1:3">左右三格</option><option value="1:4">左右四格</option><option value="2:2">四宫格</option><option value="3:3">九宫格</option></select></label>
-      <p class="rmt-x-note" data-selection-note>拖动框选画面，或选择排列后点选一格。</p><button type="button" data-edit="apply-crop">使用选中画面</button></div>
-      <div data-paint-tools hidden><div class="rmt-mv-editor-tools"><button type="button" data-edit="erase" aria-pressed="true">擦除</button><button type="button" data-edit="region" aria-pressed="false">点除残底</button><button type="button" data-edit="restore" aria-pressed="false">恢复</button><button type="button" data-edit="undo">撤销</button><button type="button" data-edit="reset">还原选中画面</button></div>
-      <label>笔刷 <input data-brush type="range" min="1" max="100" value="20"></label>
-      <label><input data-layer type="checkbox">使用此透明图叠背景</label><p class="rmt-x-note">先看预览再保存；自动处理可能误删白纱、白衣，可用恢复笔刷修回。</p></div>
-      <label>放大 <input data-zoom type="range" min="1" max="4" step="0.25" value="1"></label><div class="rmt-mv-editor-tools"><button type="button" data-edit="pan">移动画布</button></div>
-      <div class="rmt-mv-editor-viewport"><canvas data-editor-canvas aria-label="素材裁切与抠图画布"></canvas></div>
-      <p role="status" data-editor-status></p>
-      <div class="rmt-mv-editor-tools"><label class="rmt-mv-editor-upload">导入图片<input type="file" accept="image/*" data-import="full"></label><label class="rmt-mv-editor-upload">导入透明图<input type="file" accept="image/png,image/webp" data-import="cutout"></label><button type="button" data-edit="download">下载当前 PNG</button><button type="button" data-edit="original">恢复原图</button></div>
-      <label>本张生图提示词<textarea data-editor-prompt rows="7"></textarea></label><div class="rmt-mv-editor-tools"><button type="button" data-edit="default-prompt">恢复默认提示词</button></div>
-      <div class="rmt-mv-editor-tools"><button type="button" data-edit="save">保存修改</button><button type="button" data-edit="close">取消</button></div>
-      <p class="rmt-x-note">保存不会重新生图；返回构图卡片后点重画才会使用新提示词。</p>
-    </section>`;
+    host.innerHTML = image_ui.imageEditorMarkup({ hasNext: !!options.onNext, showPrompt: options.showPrompt !== false });
     const root = host.firstElementChild;
     const find = s => root.querySelector(s);
     const canvas = find('[data-editor-canvas]'), g = canvas.getContext('2d', { willReadFrequently: true });
     const prompt = find('[data-editor-prompt]'), status = find('[data-editor-status]');
+    find('[data-image-title]').textContent = options.title || '图片编辑';
+    find('[data-image-scope]').textContent = options.scopeLabel || '选格、裁切与修边';
     prompt.value = options.prompt || '';
     let active = true, busy = false, loadToken = 0, source = null, sourceBlob = null, importing = false;
     let crop = pixels.normalizeCrop(options.image?.crop) || { x: 0, y: 0, w: 1, h: 1 };
     let stage = 'select', brush = 'erase', grid = 'free', anchor = null, pointerId = null, panning = false;
+    let tool = 'grid', comparing = false;
     let original = null, working = null, changed = false, restoreOriginal = false, selectionDirty = false;
     const history = [], urls = new Set();
     const originalRef = options.image?.original || options.image || null;
@@ -37,9 +27,15 @@ export function mountAssetEditor(host, options) {
     });
     function dimensions(w, h) { canvas.width = w; canvas.height = h; }
     function show() {
-        if (!active || !source) return;
+        if (!active) return;
+        if (stage === 'paint') tool = 'brush';
         find('[data-select-tools]').hidden = stage !== 'select'; find('[data-paint-tools]').hidden = stage !== 'paint';
-        if (stage === 'select') {
+        find('[data-grid-picker]').hidden = tool === 'crop';
+        for (const [action, value] of [['select', 'grid'], ['crop', 'crop'], ['paint', 'brush']]) find(`[data-edit="${action}"]`).setAttribute('aria-pressed', String(tool === value));
+        find('[data-edit="compare"]').setAttribute('aria-pressed', String(comparing));
+        if (!source) return;
+        if (comparing) { dimensions(source.naturalWidth, source.naturalHeight); g.drawImage(source, 0, 0); }
+        else if (stage === 'select') {
             dimensions(source.naturalWidth, source.naturalHeight); g.drawImage(source, 0, 0);
             if (grid !== 'free') {
                 const [rows, cols] = grid.split(':').map(Number);
@@ -52,11 +48,14 @@ export function mountAssetEditor(host, options) {
             g.strokeStyle = '#ffb800'; g.lineWidth = Math.max(2, canvas.width / 180); g.strokeRect(x, y, w, h);
             find('[data-selection-note]').textContent = `选中 ${w} × ${h} 像素；可重新框选。`;
         } else if (working) { dimensions(working.width, working.height); g.putImageData(working, 0, 0); }
-        const availableWidth = find('.rmt-mv-editor-viewport').clientWidth || 360;
-        const fitted = Math.min(availableWidth, (globalThis.innerHeight || 800) * 0.55 * canvas.width / canvas.height);
+        const viewport = find('.rmt-mv-editor-viewport');
+        const availableWidth = viewport.clientWidth || 360;
+        const availableHeight = viewport.clientHeight || (globalThis.innerHeight || 800) * 0.55;
+        const fitted = Math.min(availableWidth, availableHeight * canvas.width / canvas.height);
         canvas.style.width = `${fitted * Number(find('[data-zoom]').value)}px`;
         canvas.style.maxWidth = 'none';
-        canvas.style.touchAction = panning ? 'pan-x pan-y' : 'none';
+        canvas.style.touchAction = panning || comparing ? 'pan-x pan-y' : 'none';
+        find('[data-image-size]').textContent = `${canvas.width} × ${canvas.height}`;
     }
     function selectPixels() {
         const [x, y, w, h] = pixels.pixelRect(crop, source.naturalWidth, source.naturalHeight);
@@ -107,7 +106,7 @@ export function mountAssetEditor(host, options) {
         changed = true; restoreOriginal = false; layer().checked = true; g.putImageData(working, 0, 0);
     }
     canvas.addEventListener('pointerdown', event => {
-        if (busy || panning || !source || pointerId !== null) return;
+        if (busy || panning || comparing || !source || pointerId !== null) return;
         event.preventDefault(); pointerId = event.pointerId; canvas.setPointerCapture?.(pointerId); anchor = point(event);
         if (stage === 'paint' && working) {
             pushUndo();
@@ -131,7 +130,7 @@ export function mountAssetEditor(host, options) {
     });
     const endStroke = event => { if (event.pointerId === pointerId) { if (stage === 'paint') compactUndo(); anchor = null; pointerId = null; } };
     canvas.addEventListener('pointerup', endStroke); canvas.addEventListener('pointercancel', endStroke); canvas.addEventListener('lostpointercapture', endStroke);
-    find('[data-grid]').addEventListener('change', event => { grid = event.target.value; if (grid !== 'free') { const [rows, cols] = grid.split(':').map(Number); crop = pixels.gridCrop(rows, cols, 0); selectionDirty = true; } show(); });
+    find('[data-grid]').addEventListener('change', event => { grid = event.target.value; stage = 'select'; tool = 'grid'; comparing = false; if (grid !== 'free') { const [rows, cols] = grid.split(':').map(Number); crop = pixels.gridCrop(rows, cols, 0); selectionDirty = true; } show(); });
     find('[data-zoom]').addEventListener('input', show);
     layer().addEventListener('change', () => { changed = true; restoreOriginal = false; });
     async function blobOfWorking() {
@@ -152,16 +151,25 @@ export function mountAssetEditor(host, options) {
         finally { if (active && token === loadToken) importing = false; }
     }
     root.querySelectorAll('[data-import]').forEach(input => input.addEventListener('change', () => void importFile(input)));
+    root.querySelectorAll('[data-matte]').forEach(button => button.addEventListener('click', () => {
+        find('.rmt-mv-editor-viewport').dataset.editorMatte = button.dataset.matte;
+        root.querySelectorAll('[data-matte]').forEach(item => item.setAttribute('aria-pressed', String(item === button)));
+    }));
     root.addEventListener('click', async event => {
         const button = event.target.closest('[data-edit]'); if (!button || busy) return;
         event.preventDefault(); const action = button.dataset.edit;
         if (action === 'close') { options.onClose(); return; }
         if (action === 'default-prompt') { prompt.value = options.defaultPrompt || ''; return; }
         if (importing) { say('图片正在读取，请稍候再保存或编辑。'); return; }
-        if (action === 'pan') { panning = !panning; button.textContent = panning ? '继续编辑' : '移动画布'; show(); return; }
-        if (action === 'select') { stage = 'select'; show(); return; }
+        if (action === 'compare') { comparing = !comparing; show(); return; }
+        if (action === 'fit') { find('[data-zoom]').value = '1'; const viewport = find('.rmt-mv-editor-viewport'); viewport.scrollTop = 0; viewport.scrollLeft = 0; show(); return; }
+        const wasComparing = comparing; comparing = false;
+        if (wasComparing) show();
+        if (action === 'pan') { panning = !panning; button.setAttribute('aria-pressed', String(panning)); button.textContent = panning ? '继续编辑' : '移动画布'; show(); return; }
+        if (action === 'select' || action === 'crop') { stage = 'select'; tool = action === 'crop' ? 'crop' : 'grid'; if (tool === 'crop') { grid = 'free'; find('[data-grid]').value = grid; } show(); return; }
         if (action === 'paint') { if (!working || selectionDirty) applyCrop(); else { stage = 'paint'; show(); } return; }
         if (action === 'apply-crop') { applyCrop(); return; }
+        if (action === 'full-crop') { crop = { x: 0, y: 0, w: 1, h: 1 }; grid = 'free'; find('[data-grid]').value = grid; applyCrop(); return; }
         if (action === 'erase' || action === 'restore' || action === 'region') {
             brush = action; for (const value of ['erase', 'restore', 'region']) find(`[data-edit="${value}"]`).setAttribute('aria-pressed', String(value === brush)); return;
         }
@@ -180,8 +188,9 @@ export function mountAssetEditor(host, options) {
             catch { say('原图暂时无法读取；保存仍可恢复原图引用。'); }
             return;
         }
-        if (action !== 'save' && action !== 'download') return;
-        if (action === 'save' && selectionDirty) { say('请先点“使用选中画面”，确认单格预览。'); return; }
+        const saving = action === 'save' || action === 'save-next';
+        if (!saving && action !== 'download') return;
+        if (saving && selectionDirty) { say('请先点“使用选中画面”，确认单格预览。'); return; }
         busy = true; root.querySelectorAll('button,input,select,textarea').forEach(el => { el.disabled = true; });
         try {
             const blob = (action === 'download' || (changed && !restoreOriginal)) ? await blobOfWorking() : null;
@@ -191,11 +200,17 @@ export function mountAssetEditor(host, options) {
             } else {
                 const result = await options.onSave({ prompt: !prompt.value.trim() || prompt.value === options.defaultPrompt ? null : prompt.value,
                     ...(changed ? { image: { blob, sourceBlob, originalRef, crop, mode: layer().checked ? 'cutout' : 'full', restoreOriginal } } : {}) });
-                if (active && result !== false) options.onClose();
+                if (active && result !== false) {
+                    if (action === 'save-next' && options.onNext) await options.onNext();
+                    else options.onClose();
+                }
             }
         } catch { say('保存未完成，编辑内容仍在这里；可重试或先下载 PNG。'); }
         finally { busy = false; if (active) root.querySelectorAll('button,input,select,textarea').forEach(el => { el.disabled = false; }); }
     });
+    const resize = typeof globalThis.ResizeObserver === 'function' ? new globalThis.ResizeObserver(show) : null;
+    resize?.observe(find('.rmt-mv-editor-viewport'));
+    show();
     const ready = (async () => {
         if (!options.sourceUrl) { say('可以先编辑提示词，或导入自己的图片。'); return; }
         const token = ++loadToken;
@@ -227,5 +242,5 @@ export function mountAssetEditor(host, options) {
             if (options.autoCutout) autoCutout();
         } catch { if (active && token === loadToken) { show(); say('无法读取图片像素，可导入本机图片继续处理；提示词仍可编辑。'); } }
     })();
-    return { ready, dispose() { active = false; loadToken++; for (const url of urls) URL.revokeObjectURL(url); history.length = 0; } };
+    return { ready, dispose() { active = false; loadToken++; resize?.disconnect(); for (const url of urls) URL.revokeObjectURL(url); history.length = 0; } };
 }

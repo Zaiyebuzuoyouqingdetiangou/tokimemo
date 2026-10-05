@@ -1,0 +1,138 @@
+(node:324) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+TAP version 13
+# Subtest: detail framing reaches full group layer
+ok 1 - detail framing reaches full group layer
+  ---
+  duration_ms: 269.165121
+  type: 'test'
+  ...
+# Subtest: detail framing reaches asset explicitly kept as a full image
+ok 2 - detail framing reaches asset explicitly kept as a full image
+  ---
+  duration_ms: 239.847416
+  type: 'test'
+  ...
+# Subtest: detail framing reaches opaque cutout needing editor fallback
+ok 3 - detail framing reaches opaque cutout needing editor fallback
+  ---
+  duration_ms: 280.04803
+  type: 'test'
+  ...
+# Subtest: detail framing reaches per-shot full-image override
+ok 4 - detail framing reaches per-shot full-image override
+  ---
+  duration_ms: 252.472782
+  type: 'test'
+  ...
+# Subtest: detail framing reaches non-expression legacy group without a stage
+ok 5 - detail framing reaches non-expression legacy group without a stage
+  ---
+  duration_ms: 256.526859
+  type: 'test'
+  ...
+# Subtest: detail framing reaches legacy per-shot image without a stage
+ok 6 - detail framing reaches legacy per-shot image without a stage
+  ---
+  duration_ms: 268.656117
+  type: 'test'
+  ...
+# Subtest: detail metadata recognizes 脸部极度特写 in 16:9
+ok 7 - detail metadata recognizes 脸部极度特写 in 16:9
+  ---
+  duration_ms: 310.350064
+  type: 'test'
+  ...
+# Subtest: detail metadata recognizes legacy characterPrompt in 16:9
+ok 8 - detail metadata recognizes legacy characterPrompt in 16:9
+  ---
+  duration_ms: 278.301065
+  type: 'test'
+  ...
+# Subtest: detail metadata recognizes 脸部极度特写 in 9:16
+ok 9 - detail metadata recognizes 脸部极度特写 in 9:16
+  ---
+  duration_ms: 244.179515
+  type: 'test'
+  ...
+# Subtest: detail metadata recognizes legacy characterPrompt in 9:16
+ok 10 - detail metadata recognizes legacy characterPrompt in 9:16
+  ---
+  duration_ms: 273.772606
+  type: 'test'
+  ...
+# Subtest: local framing recognizes hands-only cast with a medium scale
+ok 11 - local framing recognizes hands-only cast with a medium scale
+  ---
+  duration_ms: 259.419549
+  type: 'test'
+  ...
+# Subtest: local framing recognizes detail cue stored only in diff.change
+ok 12 - local framing recognizes detail cue stored only in diff.change
+  ---
+  duration_ms: 267.335096
+  type: 'test'
+  ...
+# Subtest: local framing recognizes face close-up stored only in the shot imagePrompt
+ok 13 - local framing recognizes face close-up stored only in the shot imagePrompt
+  ---
+  duration_ms: 264.70677
+  type: 'test'
+  ...
+# Subtest: a legacy V1 shot preserves its complete local image
+ok 14 - a legacy V1 shot preserves its complete local image
+  ---
+  duration_ms: 253.06331
+  type: 'test'
+  ...
+# Subtest: a non-stage single-shot image retains its original background and does not acquire automatic cutout
+ok 15 - a non-stage single-shot image retains its original background and does not acquire automatic cutout
+  ---
+  duration_ms: 334.562261
+  type: 'test'
+  ...
+# Subtest: export waits for the local background exposed by a full detail insert and matches preview pixels
+ok 16 - export waits for the local background exposed by a full detail insert and matches preview pixels
+  ---
+  duration_ms: 289.035317
+  type: 'test'
+  ...
+# Subtest: a manually selected right cell retains both ends in full mode
+ok 17 - a manually selected right cell retains both ends in full mode
+  ---
+  duration_ms: 254.173114
+  type: 'test'
+  ...
+# Subtest: a manually selected right cell retains both ends in cutout mode
+ok 18 - a manually selected right cell retains both ends in cutout mode
+  ---
+  duration_ms: 279.517277
+  type: 'test'
+  ...
+# Subtest: an opaque full scene at its original aspect ratio retains its original composition
+ok 19 - an opaque full scene at its original aspect ratio retains its original composition
+  ---
+  duration_ms: 323.943962
+  type: 'test'
+  ...
+# Subtest: full stage actor mentioning hands remains a standing actor
+ok 20 - full stage actor mentioning hands remains a standing actor
+  ---
+  duration_ms: 279.014313
+  type: 'test'
+  ...
+# Subtest: medium stage actor mentioning hands remains a standing actor
+ok 21 - medium stage actor mentioning hands remains a standing actor
+  ---
+  duration_ms: 267.138812
+  type: 'test'
+  ...
+1..21
+# tests 21
+# suites 0
+# pass 21
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 6088.196005

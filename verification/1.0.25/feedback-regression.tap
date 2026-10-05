@@ -1,0 +1,2007 @@
+TAP version 13
+# (node:12) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: Suno short link uses published canonical identity and the existing host route
+ok 1 - Suno short link uses published canonical identity and the existing host route
+  ---
+  duration_ms: 144.882674
+  type: 'test'
+  ...
+# Subtest: known audio plays directly when fetch cannot read cross-origin bytes
+ok 2 - known audio plays directly when fetch cannot read cross-origin bytes
+  ---
+  duration_ms: 143.178317
+  type: 'test'
+  ...
+# Subtest: published audio from a share page can use the same streaming path
+ok 3 - published audio from a share page can use the same streaming path
+  ---
+  duration_ms: 138.563663
+  type: 'test'
+  ...
+# Subtest: HTML song pages are never sent to the audio element as fake media
+ok 4 - HTML song pages are never sent to the audio element as fake media
+  ---
+  duration_ms: 131.47664
+  type: 'test'
+  ...
+# Subtest: HTTP access denial stops without trying another transport
+ok 5 - HTTP access denial stops without trying another transport
+  ---
+  duration_ms: 203.016556
+  type: 'test'
+  ...
+# Subtest: local host route is used only for published Suno hosts, never arbitrary or private destinations
+ok 6 - local host route is used only for published Suno hosts, never arbitrary or private destinations
+  ---
+  duration_ms: 155.936827
+  type: 'test'
+  ...
+# Subtest: unavailable host route leaves a clear error instead of importing its response
+ok 7 - unavailable host route leaves a clear error instead of importing its response
+  ---
+  duration_ms: 167.660382
+  type: 'test'
+  ...
+# Subtest: automatic host adaptation does not assume Tauri supplies the web server proxy
+ok 8 - automatic host adaptation does not assume Tauri supplies the web server proxy
+  ---
+  duration_ms: 151.10887
+  type: 'test'
+  ...
+# Subtest: the media store keeps online URLs scoped by song and removes them when replaced with a file
+ok 9 - the media store keeps online URLs scoped by song and removes them when replaced with a file
+  ---
+  duration_ms: 171.370976
+  type: 'test'
+  ...
+# Subtest: JSON-LD AudioObject is parsed as data; arbitrary scripts and placeholders are ignored
+ok 10 - JSON-LD AudioObject is parsed as data; arbitrary scripts and placeholders are ignored
+  ---
+  duration_ms: 154.516937
+  type: 'test'
+  ...
+# Subtest: canonical parsing cannot leave Suno or follow an unrelated document
+ok 11 - canonical parsing cannot leave Suno or follow an unrelated document
+  ---
+  duration_ms: 220.124471
+  type: 'test'
+  ...
+# Subtest: cancel settles even when a WebView fetch ignores AbortSignal
+ok 12 - cancel settles even when a WebView fetch ignores AbortSignal
+  ---
+  duration_ms: 166.670042
+  type: 'test'
+  ...
+# Subtest: cancel also settles a stalled response body and never enables streaming after cancellation
+ok 13 - cancel also settles a stalled response body and never enables streaming after cancellation
+  ---
+  duration_ms: 182.143565
+  type: 'test'
+  ...
+# Subtest: streaming music uses existing play/pause/seek and line marking, with no separate player
+ok 14 - streaming music uses existing play/pause/seek and line marking, with no separate player
+  ---
+  duration_ms: 242.656584
+  type: 'test'
+  ...
+# Subtest: saved remote track restores locally scoped source and existing timing
+ok 15 - saved remote track restores locally scoped source and existing timing
+  ---
+  duration_ms: 348.956083
+  type: 'test'
+  ...
+# Subtest: export obtains readable audio before recording the online track
+ok 16 - export obtains readable audio before recording the online track
+  ---
+  duration_ms: 186.013755
+  type: 'test'
+  ...
+# Subtest: unreadable export audio never produces a silently muted video and preserves the preview track
+ok 17 - unreadable export audio never produces a silently muted video and preserves the preview track
+  ---
+  duration_ms: 205.146034
+  type: 'test'
+  ...
+# Subtest: cancelling export stops a non-cooperative audio fetch before any recording starts
+ok 18 - cancelling export stops a non-cooperative audio fetch before any recording starts
+  ---
+  duration_ms: 199.385459
+  type: 'test'
+  ...
+# Subtest: mp4: identify a real AAC track without reading movie payload
+ok 19 - mp4: identify a real AAC track without reading movie payload
+  ---
+  duration_ms: 16.478383
+  type: 'test'
+  ...
+# Subtest: mov: identify a real AAC track without reading movie payload
+ok 20 - mov: identify a real AAC track without reading movie payload
+  ---
+  duration_ms: 33.191784
+  type: 'test'
+  ...
+# Subtest: fragmented: identify a real AAC track without reading movie payload
+ok 21 - fragmented: identify a real AAC track without reading movie payload
+  ---
+  duration_ms: 1.946617
+  type: 'test'
+  ...
+# Subtest: a playable video without an audio track is rejected
+ok 22 - a playable video without an audio track is rejected
+  ---
+  duration_ms: 3.276811
+  type: 'test'
+  ...
+# Subtest: an audio track declared in fragmented metadata but containing no samples is rejected
+ok 23 - an audio track declared in fragmented metadata but containing no samples is rejected
+  ---
+  duration_ms: 1.261371
+  type: 'test'
+  ...
+# Subtest: truncated container and arbitrary renamed files are rejected
+ok 24 - truncated container and arbitrary renamed files are rejected
+  ---
+  duration_ms: 0.974666
+  type: 'test'
+  ...
+# Subtest: file selection recognizes video MIME and MP4/MOV names without misclassifying ordinary audio
+ok 25 - file selection recognizes video MIME and MP4/MOV names without misclassifying ordinary audio
+  ---
+  duration_ms: 0.444379
+  type: 'test'
+  ...
+# Subtest: cancellation stops metadata inspection without reading more data
+ok 26 - cancellation stops metadata inspection without reading more data
+  ---
+  duration_ms: 0.401856
+  type: 'test'
+  ...
+# (node:14) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: interior arm matte is cleared while the central white garment, eyes and original stay intact
+ok 27 - interior arm matte is cleared while the central white garment, eyes and original stay intact
+  ---
+  duration_ms: 387.209672
+  type: 'test'
+  ...
+# Subtest: explicit cleanup continues an old transparent edit, is repeatable, and never rekeys playback alpha
+ok 28 - explicit cleanup continues an old transparent edit, is repeatable, and never rekeys playback alpha
+  ---
+  duration_ms: 343.281332
+  type: 'test'
+  ...
+# Subtest: point removal affects only the chosen connected region and can be undone before PNG save
+ok 29 - point removal affects only the chosen connected region and can be undone before PNG save
+  ---
+  duration_ms: 334.921932
+  type: 'test'
+  ...
+# Subtest: full: transparent padding does not change visible scale or floor
+ok 30 - full: transparent padding does not change visible scale or floor
+  ---
+  duration_ms: 144.173214
+  type: 'test'
+  ...
+# Subtest: wide: transparent padding does not change visible scale or floor
+ok 31 - wide: transparent padding does not change visible scale or floor
+  ---
+  duration_ms: 186.642747
+  type: 'test'
+  ...
+# Subtest: medium: transparent padding does not change visible scale or floor
+ok 32 - medium: transparent padding does not change visible scale or floor
+  ---
+  duration_ms: 195.826241
+  type: 'test'
+  ...
+# Subtest: only deliberate local closeups become full-frame inserts
+ok 33 - only deliberate local closeups become full-frame inserts
+  ---
+  duration_ms: 187.339162
+  type: 'test'
+  ...
+# Subtest: an oval eye insert preserves both eyes and keeps its caption readable
+ok 34 - an oval eye insert preserves both eyes and keeps its caption readable
+  ---
+  duration_ms: 295.700304
+  type: 'test'
+  ...
+# Subtest: side captions split once at word boundaries and stay outside the actor in dark scenes
+ok 35 - side captions split once at word boundaries and stay outside the actor in dark scenes
+  ---
+  duration_ms: 141.442873
+  type: 'test'
+  ...
+# Subtest: side captions shrink to keep ordinary English words whole
+ok 36 - side captions shrink to keep ordinary English words whole
+  ---
+  duration_ms: 153.85262
+  type: 'test'
+  ...
+# Subtest: crowded 960x540 captions use one complete front lane without clipping
+ok 37 - crowded 960x540 captions use one complete front lane without clipping
+  ---
+  duration_ms: 154.139336
+  type: 'test'
+  ...
+# Subtest: crowded 540x960 captions use one complete front lane without clipping
+ok 38 - crowded 540x960 captions use one complete front lane without clipping
+  ---
+  duration_ms: 159.404695
+  type: 'test'
+  ...
+# Subtest: a crowded keyword never lands on the complete lyric and a fade renders only current captions
+ok 39 - a crowded keyword never lands on the complete lyric and a fade renders only current captions
+  ---
+  duration_ms: 332.554631
+  type: 'test'
+  ...
+# Subtest: punctuation differences do not add a second copy of a complete stage lyric
+ok 40 - punctuation differences do not add a second copy of a complete stage lyric
+  ---
+  duration_ms: 213.90082
+  type: 'test'
+  ...
+# Subtest: seven songs start folded, every song remains reachable, and actions follow the selected song
+ok 41 - seven songs start folded, every song remains reachable, and actions follow the selected song
+  ---
+  duration_ms: 158.016046
+  type: 'test'
+  ...
+# (node:20) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: save-and-next only advances after the actual save succeeds
+ok 42 - save-and-next only advances after the actual save succeeds
+  ---
+  duration_ms: 176.455858
+  type: 'test'
+  ...
+# Subtest: pending or failed image save keeps the editor and never opens the next shot
+ok 43 - pending or failed image save keeps the editor and never opens the next shot
+  ---
+  duration_ms: 411.570461
+  type: 'test'
+  ...
+# Subtest: original comparison cannot paint over pixels and returning to a brush restores crop geometry
+ok 44 - original comparison cannot paint over pixels and returning to a brush restores crop geometry
+  ---
+  duration_ms: 208.88764
+  type: 'test'
+  ...
+# Subtest: canvas fit respects its own remaining space and still supports zoom and grid selection
+ok 45 - canvas fit respects its own remaining space and still supports zoom and grid selection
+  ---
+  duration_ms: 176.254144
+  type: 'test'
+  ...
+# Subtest: automatically prepared character can be downloaded directly while a prompt-only save keeps the source
+ok 46 - automatically prepared character can be downloaded directly while a prompt-only save keeps the source
+  ---
+  duration_ms: 252.096632
+  type: 'test'
+  ...
+# Subtest: editor selects the third of four panels before processing; saved PNG contains only blue pixels
+ok 47 - editor selects the third of four panels before processing; saved PNG contains only blue pixels
+  ---
+  duration_ms: 223.327708
+  type: 'test'
+  ...
+# Subtest: native editor erase, restore, undo and saved transparent PNG preserve original reference
+ok 48 - native editor erase, restore, undo and saved transparent PNG preserve original reference
+  ---
+  duration_ms: 249.848887
+  type: 'test'
+  ...
+# Subtest: free selection uses pointer coordinates after zoom and preserves a prompt-only draft on cancel
+ok 49 - free selection uses pointer coordinates after zoom and preserves a prompt-only draft on cancel
+  ---
+  duration_ms: 146.944815
+  type: 'test'
+  ...
+# Subtest: prompt-only save needs no image; reset returns the default without requesting a new image
+ok 50 - prompt-only save needs no image; reset returns the default without requesting a new image
+  ---
+  duration_ms: 184.27754
+  type: 'test'
+  ...
+# Subtest: transparent PNG import keeps its alpha and provides its own original for persistent storage
+ok 51 - transparent PNG import keeps its alpha and provides its own original for persistent storage
+  ---
+  duration_ms: 162.23888
+  type: 'test'
+  ...
+# Subtest: reopened cropped edit keeps saved pixels and can restore the full original
+ok 52 - reopened cropped edit keeps saved pixels and can restore the full original
+  ---
+  duration_ms: 162.789527
+  type: 'test'
+  ...
+# Subtest: mobile overview fits a long four-panel image and pan mode does not draw over it
+ok 53 - mobile overview fits a long four-panel image and pan mode does not draw over it
+  ---
+  duration_ms: 178.413341
+  type: 'test'
+  ...
+# Subtest: unsuitable opaque image is not marked as a transparent layer by one-click processing
+ok 54 - unsuitable opaque image is not marked as a transparent layer by one-click processing
+  ---
+  duration_ms: 228.505543
+  type: 'test'
+  ...
+# Subtest: playback never uses white-removal percentage to layer unconfirmed pictures
+ok 55 - playback never uses white-removal percentage to layer unconfirmed pictures
+  ---
+  duration_ms: 396.690819
+  type: 'test'
+  ...
+# (node:21) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: completed old story opens directly into the responsive editor with no saved-data writes or generation
+ok 56 - completed old story opens directly into the responsive editor with no saved-data writes or generation
+  ---
+  duration_ms: 158.617477
+  type: 'test'
+  ...
+# Subtest: material groups stay folded and perform no character processing until explicitly inspected
+ok 57 - material groups stay folded and perform no character processing until explicitly inspected
+  ---
+  duration_ms: 135.201366
+  type: 'test'
+  ...
+# Subtest: filmstrip windows are navigation only and preserve all 40 saved/generated shots
+ok 58 - filmstrip windows are navigation only and preserve all 40 saved/generated shots
+  ---
+  duration_ms: 150.119915
+  type: 'test'
+  ...
+# Subtest: image editing and one-click cutout open the existing full-featured editor with original references
+ok 59 - image editing and one-click cutout open the existing full-featured editor with original references
+  ---
+  duration_ms: 260.675082
+  type: 'test'
+  ...
+# Subtest: a per-shot imported picture is not mislabeled as editing a different shared material
+ok 60 - a per-shot imported picture is not mislabeled as editing a different shared material
+  ---
+  duration_ms: 155.30913
+  type: 'test'
+  ...
+# Subtest: look tab retains title/outro timing, fonts, templates, range, stage lyrics and both overlay switches
+ok 61 - look tab retains title/outro timing, fonts, templates, range, stage lyrics and both overlay switches
+  ---
+  duration_ms: 160.226585
+  type: 'test'
+  ...
+# Subtest: timing shares one player, and selecting a section or line neither seeks nor writes
+ok 62 - timing shares one player, and selecting a section or line neither seeks nor writes
+  ---
+  duration_ms: 172.716452
+  type: 'test'
+  ...
+# Subtest: zero-second section and line marks work, automatic advance and exact undo share one history
+ok 63 - zero-second section and line marks work, automatic advance and exact undo share one history
+  ---
+  duration_ms: 206.15388
+  type: 'test'
+  ...
+# Subtest: line correction, tenths nudging and reset undo restore previous saved timing rather than deleting it
+ok 64 - line correction, tenths nudging and reset undo restore previous saved timing rather than deleting it
+  ---
+  duration_ms: 196.349992
+  type: 'test'
+  ...
+# Subtest: manual section correction respects the old global shift and stays selected with auto-next off
+ok 65 - manual section correction respects the old global shift and stays selected with auto-next off
+  ---
+  duration_ms: 209.45467
+  type: 'test'
+  ...
+# Subtest: the old timing route also permits selecting and marking a line without resetting to section mode
+ok 66 - the old timing route also permits selecting and marking a line without resetting to section mode
+  ---
+  duration_ms: 192.395682
+  type: 'test'
+  ...
+# Subtest: finished timing can reopen for correction, and null marks are never counted as zero
+ok 67 - finished timing can reopen for correction, and null marks are never counted as zero
+  ---
+  duration_ms: 173.335148
+  type: 'test'
+  ...
+# Subtest: more panel preserves material library, subtitle/time-table download and recovery backup
+ok 68 - more panel preserves material library, subtitle/time-table download and recovery backup
+  ---
+  duration_ms: 188.193003
+  type: 'test'
+  ...
+# Subtest: WebView capability fallback retains recording and local audio import without new platform APIs
+ok 69 - WebView capability fallback retains recording and local audio import without new platform APIs
+  ---
+  duration_ms: 193.328646
+  type: 'test'
+  ...
+# (node:347) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: queued image completion is cancelled on close and cannot redraw an old song
+ok 70 - queued image completion is cancelled on close and cannot redraw an old song
+  ---
+  duration_ms: 192.411745
+  type: 'test'
+  ...
+# Subtest: light/dark colors, container/mobile fallbacks and native range keyboard input remain in editor CSS
+ok 71 - light/dark colors, container/mobile fallbacks and native range keyboard input remain in editor CSS
+  ---
+  duration_ms: 174.95339
+  type: 'test'
+  ...
+# Subtest: desktop keyboard switches tabs and closes a dialog without invoking the outer back action
+ok 72 - desktop keyboard switches tabs and closes a dialog without invoking the outer back action
+  ---
+  duration_ms: 186.30739
+  type: 'test'
+  ...
+# Subtest: native large-image cold open prepares only the visible frame and never encodes whole-image PNG previews
+ok 73 - native large-image cold open prepares only the visible frame and never encodes whole-image PNG previews
+  ---
+  duration_ms: 2506.011794
+  type: 'test'
+  ...
+# (node:28) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: clearing one/all pending rows persists across fresh runtimes without modifying any song record
+ok 74 - clearing one/all pending rows persists across fresh runtimes without modifying any song record
+  ---
+  duration_ms: 344.313425
+  type: 'test'
+  ...
+# Subtest: failed persistent removal keeps recoverable rows, and quota failure can remove the final journal
+ok 75 - failed persistent removal keeps recoverable rows, and quota failure can remove the final journal
+  ---
+  duration_ms: 166.137112
+  type: 'test'
+  ...
+# Subtest: production overlay routes more/close/material navigation and confirmed clear without another generation
+ok 76 - production overlay routes more/close/material navigation and confirmed clear without another generation
+  ---
+  duration_ms: 216.575304
+  type: 'test'
+  ...
+# Subtest: editor panel escapes the scrolling body but stays inside the native host dialog, and dismissal releases background controls
+ok 77 - editor panel escapes the scrolling body but stays inside the native host dialog, and dismissal releases background controls
+  ---
+  duration_ms: 178.91505
+  type: 'test'
+  ...
+# Subtest: Chatu8 16:9 submits exact frame dimensions for shared images and per-shot redraws without changing provider settings
+ok 78 - Chatu8 16:9 submits exact frame dimensions for shared images and per-shot redraws without changing provider settings
+  ---
+  duration_ms: 174.549661
+  type: 'test'
+  ...
+# Subtest: Chatu8 9:16 submits exact frame dimensions for shared images and per-shot redraws without changing provider settings
+ok 79 - Chatu8 9:16 submits exact frame dimensions for shared images and per-shot redraws without changing provider settings
+  ---
+  duration_ms: 167.818466
+  type: 'test'
+  ...
+# Subtest: native Canvas 16:9: source-cut arms stay at frame edges and cropped body has no floating bottom
+ok 80 - native Canvas 16:9: source-cut arms stay at frame edges and cropped body has no floating bottom
+  ---
+  duration_ms: 330.221047
+  type: 'test'
+  ...
+# Subtest: native Canvas 9:16: source-cut arms stay at frame edges and cropped body has no floating bottom
+ok 81 - native Canvas 9:16: source-cut arms stay at frame edges and cropped body has no floating bottom
+  ---
+  duration_ms: 271.550708
+  type: 'test'
+  ...
+# Subtest: native export uses the same edge-attached framing as preview and leaves source pixels unchanged
+ok 82 - native export uses the same edge-attached framing as preview and leaves source pixels unchanged
+  ---
+  duration_ms: 280.371702
+  type: 'test'
+  ...
+# (node:38) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: detail framing reaches full group layer
+ok 83 - detail framing reaches full group layer
+  ---
+  duration_ms: 382.08418
+  type: 'test'
+  ...
+# Subtest: detail framing reaches asset explicitly kept as a full image
+ok 84 - detail framing reaches asset explicitly kept as a full image
+  ---
+  duration_ms: 316.657075
+  type: 'test'
+  ...
+# Subtest: detail framing reaches opaque cutout needing editor fallback
+ok 85 - detail framing reaches opaque cutout needing editor fallback
+  ---
+  duration_ms: 385.200675
+  type: 'test'
+  ...
+# Subtest: detail framing reaches per-shot full-image override
+ok 86 - detail framing reaches per-shot full-image override
+  ---
+  duration_ms: 280.306024
+  type: 'test'
+  ...
+# Subtest: detail framing reaches non-expression legacy group without a stage
+ok 87 - detail framing reaches non-expression legacy group without a stage
+  ---
+  duration_ms: 359.331725
+  type: 'test'
+  ...
+# Subtest: detail framing reaches legacy per-shot image without a stage
+ok 88 - detail framing reaches legacy per-shot image without a stage
+  ---
+  duration_ms: 216.384804
+  type: 'test'
+  ...
+# Subtest: detail metadata recognizes 脸部极度特写 in 16:9
+ok 89 - detail metadata recognizes 脸部极度特写 in 16:9
+  ---
+  duration_ms: 252.574991
+  type: 'test'
+  ...
+# Subtest: detail metadata recognizes legacy characterPrompt in 16:9
+ok 90 - detail metadata recognizes legacy characterPrompt in 16:9
+  ---
+  duration_ms: 279.800925
+  type: 'test'
+  ...
+# Subtest: detail metadata recognizes 脸部极度特写 in 9:16
+ok 91 - detail metadata recognizes 脸部极度特写 in 9:16
+  ---
+  duration_ms: 249.968911
+  type: 'test'
+  ...
+# Subtest: detail metadata recognizes legacy characterPrompt in 9:16
+ok 92 - detail metadata recognizes legacy characterPrompt in 9:16
+  ---
+  duration_ms: 260.08742
+  type: 'test'
+  ...
+# Subtest: local framing recognizes hands-only cast with a medium scale
+ok 93 - local framing recognizes hands-only cast with a medium scale
+  ---
+  duration_ms: 251.847978
+  type: 'test'
+  ...
+# Subtest: local framing recognizes detail cue stored only in diff.change
+ok 94 - local framing recognizes detail cue stored only in diff.change
+  ---
+  duration_ms: 232.236077
+  type: 'test'
+  ...
+# Subtest: local framing recognizes face close-up stored only in the shot imagePrompt
+ok 95 - local framing recognizes face close-up stored only in the shot imagePrompt
+  ---
+  duration_ms: 311.881656
+  type: 'test'
+  ...
+# Subtest: a legacy V1 shot preserves its complete local image
+ok 96 - a legacy V1 shot preserves its complete local image
+  ---
+  duration_ms: 253.005555
+  type: 'test'
+  ...
+# Subtest: a non-stage single-shot image retains its original background and does not acquire automatic cutout
+ok 97 - a non-stage single-shot image retains its original background and does not acquire automatic cutout
+  ---
+  duration_ms: 278.217432
+  type: 'test'
+  ...
+# Subtest: export waits for the local background exposed by a full detail insert and matches preview pixels
+ok 98 - export waits for the local background exposed by a full detail insert and matches preview pixels
+  ---
+  duration_ms: 394.875221
+  type: 'test'
+  ...
+# Subtest: a manually selected right cell retains both ends in full mode
+ok 99 - a manually selected right cell retains both ends in full mode
+  ---
+  duration_ms: 311.173877
+  type: 'test'
+  ...
+# Subtest: a manually selected right cell retains both ends in cutout mode
+ok 100 - a manually selected right cell retains both ends in cutout mode
+  ---
+  duration_ms: 288.427906
+  type: 'test'
+  ...
+# Subtest: an opaque full scene at its original aspect ratio retains its original composition
+ok 101 - an opaque full scene at its original aspect ratio retains its original composition
+  ---
+  duration_ms: 283.747965
+  type: 'test'
+  ...
+# Subtest: full stage actor mentioning hands remains a standing actor
+ok 102 - full stage actor mentioning hands remains a standing actor
+  ---
+  duration_ms: 315.859106
+  type: 'test'
+  ...
+# Subtest: medium stage actor mentioning hands remains a standing actor
+ok 103 - medium stage actor mentioning hands remains a standing actor
+  ---
+  duration_ms: 359.367292
+  type: 'test'
+  ...
+# Subtest: actual r215 paid image journal saves after upgrade without regenerating
+not ok 104 - actual r215 paid image journal saves after upgrade without regenerating
+  ---
+  duration_ms: 2.039375
+  type: 'test'
+  location: '/workspace/scratch/c9f4993ef355/hearttrace-1.0.25-47l_6xrk/candidate/tokimemo-main/tools/verification/mv-journal-upgrade-regression.mjs:24:1'
+  failureType: 'testCodeFailure'
+  error: 'PREVIOUS_BUILD_ROOT must identify the delivered r84.215'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  operator: '=='
+  stack: |-
+    legacyFactory (file:///workspace/scratch/c9f4993ef355/hearttrace-1.0.25-47l_6xrk/candidate/tokimemo-main/tools/verification/mv-journal-upgrade-regression.mjs:8:12)
+    TestContext.<anonymous> (file:///workspace/scratch/c9f4993ef355/hearttrace-1.0.25-47l_6xrk/candidate/tokimemo-main/tools/verification/mv-journal-upgrade-regression.mjs:25:35)
+    Test.runInAsyncScope (node:async_hooks:227:14)
+    Test.run (node:internal/test_runner/test:1382:25)
+    Test.start (node:internal/test_runner/test:1242:17)
+    startSubtestAfterBootstrap (node:internal/test_runner/harness:387:17)
+  ...
+# Subtest: actual r215 story journal saves after upgrade when its original record is unchanged
+not ok 105 - actual r215 story journal saves after upgrade when its original record is unchanged
+  ---
+  duration_ms: 0.580481
+  type: 'test'
+  location: '/workspace/scratch/c9f4993ef355/hearttrace-1.0.25-47l_6xrk/candidate/tokimemo-main/tools/verification/mv-journal-upgrade-regression.mjs:31:1'
+  failureType: 'testCodeFailure'
+  error: 'PREVIOUS_BUILD_ROOT must identify the delivered r84.215'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  operator: '=='
+  stack: |-
+    legacyFactory (file:///workspace/scratch/c9f4993ef355/hearttrace-1.0.25-47l_6xrk/candidate/tokimemo-main/tools/verification/mv-journal-upgrade-regression.mjs:8:12)
+    TestContext.<anonymous> (file:///workspace/scratch/c9f4993ef355/hearttrace-1.0.25-47l_6xrk/candidate/tokimemo-main/tools/verification/mv-journal-upgrade-regression.mjs:32:35)
+    Test.runInAsyncScope (node:async_hooks:227:14)
+    Test.run (node:internal/test_runner/test:1382:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+    Test.postRun (node:internal/test_runner/test:1522:19)
+    Test.run (node:internal/test_runner/test:1447:12)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3)
+  ...
+# Subtest: actual r215 snapshot story journal cannot erase a newer image after upgrade
+not ok 106 - actual r215 snapshot story journal cannot erase a newer image after upgrade
+  ---
+  duration_ms: 0.542154
+  type: 'test'
+  location: '/workspace/scratch/c9f4993ef355/hearttrace-1.0.25-47l_6xrk/candidate/tokimemo-main/tools/verification/mv-journal-upgrade-regression.mjs:38:1'
+  failureType: 'testCodeFailure'
+  error: 'PREVIOUS_BUILD_ROOT must identify the delivered r84.215'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  operator: '=='
+  stack: |-
+    legacyFactory (file:///workspace/scratch/c9f4993ef355/hearttrace-1.0.25-47l_6xrk/candidate/tokimemo-main/tools/verification/mv-journal-upgrade-regression.mjs:8:12)
+    TestContext.<anonymous> (file:///workspace/scratch/c9f4993ef355/hearttrace-1.0.25-47l_6xrk/candidate/tokimemo-main/tools/verification/mv-journal-upgrade-regression.mjs:39:35)
+    Test.runInAsyncScope (node:async_hooks:227:14)
+    Test.run (node:internal/test_runner/test:1382:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+    Test.postRun (node:internal/test_runner/test:1522:19)
+    Test.run (node:internal/test_runner/test:1447:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+# (node:315) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: each production tool panel scrolls independently with timing and navigation outside that scroll
+ok 107 - each production tool panel scrolls independently with timing and navigation outside that scroll
+  ---
+  duration_ms: 473.824411
+  type: 'test'
+  ...
+# Subtest: image save controls are outside the scroll area and the canvas is in its own viewport
+ok 108 - image save controls are outside the scroll area and the canvas is in its own viewport
+  ---
+  duration_ms: 281.833355
+  type: 'test'
+  ...
+# Subtest: editor CSS is scoped, balanced and retains paging without requiring container-query support
+ok 109 - editor CSS is scoped, balanced and retains paging without requiring container-query support
+  ---
+  duration_ms: 163.138399
+  type: 'test'
+  ...
+# (node:331) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: production editor has bounded workbench, independent tools scroll and a single top music entry
+ok 110 - production editor has bounded workbench, independent tools scroll and a single top music entry
+  ---
+  duration_ms: 134.438283
+  type: 'test'
+  ...
+# Subtest: preview-only mode and shot stepping preserve all images and timing and keep one clock
+ok 111 - preview-only mode and shot stepping preserve all images and timing and keep one clock
+  ---
+  duration_ms: 161.111127
+  type: 'test'
+  ...
+# Subtest: shared material editor supplies save-and-next and returns directly to the workbench
+ok 112 - shared material editor supplies save-and-next and returns directly to the workbench
+  ---
+  duration_ms: 156.425698
+  type: 'test'
+  ...
+# Subtest: a single-shot replacement opens its own image editor and saves without changing the shared image or prompts
+ok 113 - a single-shot replacement opens its own image editor and saves without changing the shared image or prompts
+  ---
+  duration_ms: 165.618718
+  type: 'test'
+  ...
+# Subtest: production image editor markup contains the canvas before local tool panes and permanent save actions
+ok 114 - production image editor markup contains the canvas before local tool panes and permanent save actions
+  ---
+  duration_ms: 188.662354
+  type: 'test'
+  ...
+# Subtest: a workspace route replacement releases editor-specific body scrolling and its observer
+ok 115 - a workspace route replacement releases editor-specific body scrolling and its observer
+  ---
+  duration_ms: 149.15971
+  type: 'test'
+  ...
+# Subtest: panel position survives its own setting redraw but does not leak into another tab
+ok 116 - panel position survives its own setting redraw but does not leak into another tab
+  ---
+  duration_ms: 167.308159
+  type: 'test'
+  ...
+# (node:339) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: four vertical panels: each selection is exactly one quarter, not another half
+ok 117 - four vertical panels: each selection is exactly one quarter, not another half
+  ---
+  duration_ms: 141.263777
+  type: 'test'
+  ...
+# Subtest: free crop handles reversed/invalid coordinates without sampling outside the image
+ok 118 - free crop handles reversed/invalid coordinates without sampling outside the image
+  ---
+  duration_ms: 147.162577
+  type: 'test'
+  ...
+# Subtest: automatic preview preserves enclosed white clothing even when its area is large
+ok 119 - automatic preview preserves enclosed white clothing even when its area is large
+  ---
+  duration_ms: 156.17831
+  type: 'test'
+  ...
+# Subtest: manual erase/restore fills fast strokes and restores original alpha and color
+ok 120 - manual erase/restore fills fast strokes and restores original alpha and color
+  ---
+  duration_ms: 176.05901
+  type: 'test'
+  ...
+# Subtest: saving prompt makes zero generation calls; redraw sends exactly that prompt without appended cast
+ok 121 - saving prompt makes zero generation calls; redraw sends exactly that prompt without appended cast
+  ---
+  duration_ms: 179.250534
+  type: 'test'
+  ...
+# Subtest: reset prompt recovers the unchanged default and never erases a saved picture
+ok 122 - reset prompt recovers the unchanged default and never erases a saved picture
+  ---
+  duration_ms: 151.752385
+  type: 'test'
+  ...
+# Subtest: manual transparent local image and original reference survive a fresh runtime
+ok 123 - manual transparent local image and original reference survive a fresh runtime
+  ---
+  duration_ms: 290.134118
+  type: 'test'
+  ...
+# Subtest: late generated picture cannot replace a manual cutout saved while drawing
+ok 124 - late generated picture cannot replace a manual cutout saved while drawing
+  ---
+  duration_ms: 143.273809
+  type: 'test'
+  ...
+# Subtest: an editor opened on an older picture cannot overwrite a newer picture or new storyboard
+ok 125 - an editor opened on an older picture cannot overwrite a newer picture or new storyboard
+  ---
+  duration_ms: 284.682942
+  type: 'test'
+  ...
+# Subtest: manual save in a different chat is held for the original scope
+ok 126 - manual save in a different chat is held for the original scope
+  ---
+  duration_ms: 144.162778
+  type: 'test'
+  ...
+# Subtest: manual save awaits failing metadata and keeps a recoverable result
+ok 127 - manual save awaits failing metadata and keeps a recoverable result
+  ---
+  duration_ms: 155.654653
+  type: 'test'
+  ...
+# Subtest: locally edited images are counted as drawn and never queued again by draw remaining
+ok 128 - locally edited images are counted as drawn and never queued again by draw remaining
+  ---
+  duration_ms: 175.99875
+  type: 'test'
+  ...
+# Subtest: editor integration commits unique media after durable blob writes and preserves an open draft across renders
+ok 129 - editor integration commits unique media after durable blob writes and preserves an open draft across renders
+  ---
+  duration_ms: 238.253223
+  type: 'test'
+  ...
+# Subtest: failed blob transaction leaves the previous picture and prompt intact
+ok 130 - failed blob transaction leaves the previous picture and prompt intact
+  ---
+  duration_ms: 208.407472
+  type: 'test'
+  ...
+# Subtest: v2 export waits for an edited local PNG before it starts recording
+ok 131 - v2 export waits for an edited local PNG before it starts recording
+  ---
+  duration_ms: 203.86919
+  type: 'test'
+  ...
+# (node:363) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: three pending results have one compact editor entry and every save-only action remains in its drawer
+ok 132 - three pending results have one compact editor entry and every save-only action remains in its drawer
+  ---
+  duration_ms: 160.382977
+  type: 'test'
+  ...
+# Subtest: a short filmstrip has no disabled page row while long projects keep every page reachable
+ok 133 - a short filmstrip has no disabled page row while long projects keep every page reachable
+  ---
+  duration_ms: 156.033005
+  type: 'test'
+  ...
+# Subtest: small host viewports have a scroll escape and a non-collapsing canvas instead of a forty-pixel minimum
+ok 134 - small host viewports have a scroll escape and a non-collapsing canvas instead of a forty-pixel minimum
+  ---
+  duration_ms: 137.829754
+  type: 'test'
+  ...
+# (node:371) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: opening the music drawer keeps file import and performs no network request
+ok 135 - opening the music drawer keeps file import and performs no network request
+  ---
+  duration_ms: 161.804702
+  type: 'test'
+  ...
+# Subtest: HTTPS input accepts Suno song and short links without inventing media endpoints
+ok 136 - HTTPS input accepts Suno song and short links without inventing media endpoints
+  ---
+  duration_ms: 130.483071
+  type: 'test'
+  ...
+# Subtest: unsafe schemes, credential URLs and remote HTTP are rejected before a request
+ok 137 - unsafe schemes, credential URLs and remote HTTP are rejected before a request
+  ---
+  duration_ms: 154.250241
+  type: 'test'
+  ...
+# Subtest: public metadata resolves escaped relative audio without executing page scripts
+ok 138 - public metadata resolves escaped relative audio without executing page scripts
+  ---
+  duration_ms: 115.716202
+  type: 'test'
+  ...
+# Subtest: explicit audio and source tags work while video-only sources are ignored
+ok 139 - explicit audio and source tags work while video-only sources are ignored
+  ---
+  duration_ms: 121.76827
+  type: 'test'
+  ...
+# Subtest: comments, scripts, malformed scripts and unsupported URL schemes never become media requests
+ok 140 - comments, scripts, malformed scripts and unsupported URL schemes never become media requests
+  ---
+  duration_ms: 139.098155
+  type: 'test'
+  ...
+# Subtest: direct audio import uses anonymous CORS fetch and commits only after decoding
+ok 141 - direct audio import uses anonymous CORS fetch and commits only after decoding
+  ---
+  duration_ms: 182.578315
+  type: 'test'
+  ...
+# Subtest: the existing play, pause, seek and lyric marking all use the imported audio clock
+ok 142 - the existing play, pause, seek and lyric marking all use the imported audio clock
+  ---
+  duration_ms: 183.536641
+  type: 'test'
+  ...
+# Subtest: export consumes the same local blob as preview through the existing sound path
+ok 143 - export consumes the same local blob as preview through the existing sound path
+  ---
+  duration_ms: 182.415548
+  type: 'test'
+  ...
+# Subtest: a Suno-shaped public metadata response imports through the same path without an iframe
+ok 144 - a Suno-shaped public metadata response imports through the same path without an iframe
+  ---
+  duration_ms: 200.049445
+  type: 'test'
+  ...
+# Subtest: a real-shaped Suno 403 leaves the old audio, timings, artwork and saved data intact
+ok 145 - a real-shaped Suno 403 leaves the old audio, timings, artwork and saved data intact
+  ---
+  duration_ms: 189.653374
+  type: 'test'
+  ...
+# Subtest: a share page without published audio fails explicitly and never becomes a phantom audio track
+ok 146 - a share page without published audio fails explicitly and never becomes a phantom audio track
+  ---
+  duration_ms: 193.845953
+  type: 'test'
+  ...
+# Subtest: CORS/network failure does not fall back to proxies or hidden playback
+ok 147 - CORS/network failure does not fall back to proxies or hidden playback
+  ---
+  duration_ms: 169.335516
+  type: 'test'
+  ...
+# Subtest: empty, JSON and nested HTML responses never replace music
+ok 148 - empty, JSON and nested HTML responses never replace music
+  ---
+  duration_ms: 611.463592
+  type: 'test'
+  ...
+# Subtest: decode failure preserves the prior cached track and can be retried
+ok 149 - decode failure preserves the prior cached track and can be retried
+  ---
+  duration_ms: 213.434459
+  type: 'test'
+  ...
+# Subtest: cancel aborts a download and a late response cannot replace the current track
+ok 150 - cancel aborts a download and a late response cannot replace the current track
+  ---
+  duration_ms: 159.322905
+  type: 'test'
+  ...
+# Subtest: cancel during decoding also discards a stale loadedmetadata event
+ok 151 - cancel during decoding also discards a stale loadedmetadata event
+  ---
+  duration_ms: 140.396471
+  type: 'test'
+  ...
+# Subtest: switching songs aborts loading and never imports into either song afterward
+ok 152 - switching songs aborts loading and never imports into either song afterward
+  ---
+  duration_ms: 165.840047
+  type: 'test'
+  ...
+# Subtest: chat changes during decoding cannot commit into old or new chat
+ok 153 - chat changes during decoding cannot commit into old or new chat
+  ---
+  duration_ms: 148.966443
+  type: 'test'
+  ...
+# Subtest: choosing a local file wins over an unfinished link import
+ok 154 - choosing a local file wins over an unfinished link import
+  ---
+  duration_ms: 164.036881
+  type: 'test'
+  ...
+# Subtest: fresh runtime restores cached link audio for the same song without network access
+ok 155 - fresh runtime restores cached link audio for the same song without network access
+  ---
+  duration_ms: 322.093519
+  type: 'test'
+  ...
+# Subtest: music media metadata remains local and does not add URLs or blobs to the MV record
+ok 156 - music media metadata remains local and does not add URLs or blobs to the MV record
+  ---
+  duration_ms: 137.73957
+  type: 'test'
+  ...
+# Subtest: non-seekable live audio is rejected without changing the current timeline
+ok 157 - non-seekable live audio is rejected without changing the current timeline
+  ---
+  duration_ms: 197.192401
+  type: 'test'
+  ...
+# Subtest: changing the song text during metadata decoding invalidates the import
+ok 158 - changing the song text during metadata decoding invalidates the import
+  ---
+  duration_ms: 166.905056
+  type: 'test'
+  ...
+# Subtest: download timeout clears the busy state and keeps the old track available
+ok 159 - download timeout clears the busy state and keeps the old track available
+  ---
+  duration_ms: 196.122675
+  type: 'test'
+  ...
+# Subtest: stream read failures never expose a source URL or provider error details in the UI
+ok 160 - stream read failures never expose a source URL or provider error details in the UI
+  ---
+  duration_ms: 153.590537
+  type: 'test'
+  ...
+# Subtest: typed link survives redraws and Enter imports through the same action
+ok 161 - typed link survives redraws and Enter imports through the same action
+  ---
+  duration_ms: 175.510997
+  type: 'test'
+  ...
+# Subtest: the real media module stores the link alongside the blob and keeps older rows compatible
+ok 162 - the real media module stores the link alongside the blob and keeps older rows compatible
+  ---
+  duration_ms: 156.633045
+  type: 'test'
+  ...
+# Subtest: legacy video MV also exposes the current-song music entry without switching its output setting
+ok 163 - legacy video MV also exposes the current-song music entry without switching its output setting
+  ---
+  duration_ms: 158.093861
+  type: 'test'
+  ...
+# (node:379) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: 16:9: BaiBai receives the selected orientation for shared poses, scene assets and redraws
+ok 164 - 16:9: BaiBai receives the selected orientation for shared poses, scene assets and redraws
+  ---
+  duration_ms: 164.030248
+  type: 'test'
+  ...
+# Subtest: 16:9: non-stage cutout assets and complete manual prompts retain the selected orientation
+ok 165 - 16:9: non-stage cutout assets and complete manual prompts retain the selected orientation
+  ---
+  duration_ms: 143.120892
+  type: 'test'
+  ...
+# Subtest: 9:16: BaiBai receives the selected orientation for shared poses, scene assets and redraws
+ok 166 - 9:16: BaiBai receives the selected orientation for shared poses, scene assets and redraws
+  ---
+  duration_ms: 151.648381
+  type: 'test'
+  ...
+# Subtest: 9:16: non-stage cutout assets and complete manual prompts retain the selected orientation
+ok 167 - 9:16: non-stage cutout assets and complete manual prompts retain the selected orientation
+  ---
+  duration_ms: 146.159599
+  type: 'test'
+  ...
+# Subtest: Chatu8 novelai: MV uses its exact ratio only for this request
+ok 168 - Chatu8 novelai: MV uses its exact ratio only for this request
+  ---
+  duration_ms: 156.004413
+  type: 'test'
+  ...
+# Subtest: Chatu8 sd: MV uses its exact ratio only for this request
+ok 169 - Chatu8 sd: MV uses its exact ratio only for this request
+  ---
+  duration_ms: 158.655926
+  type: 'test'
+  ...
+# Subtest: Chatu8 comfyui: MV uses its exact ratio only for this request
+ok 170 - Chatu8 comfyui: MV uses its exact ratio only for this request
+  ---
+  duration_ms: 158.268852
+  type: 'test'
+  ...
+# Subtest: ordinary Chatu8 CG requests retain provider sizes and MV square settings get an oriented request
+ok 171 - ordinary Chatu8 CG requests retain provider sizes and MV square settings get an oriented request
+  ---
+  duration_ms: 163.649927
+  type: 'test'
+  ...
+# Subtest: automatic provider fallback carries the MV orientation to Chatu8
+ok 172 - automatic provider fallback carries the MV orientation to Chatu8
+  ---
+  duration_ms: 176.044829
+  type: 'test'
+  ...
+# Subtest: Chatu8 missing size fields still permit MV generation without changing settings
+ok 173 - Chatu8 missing size fields still permit MV generation without changing settings
+  ---
+  duration_ms: 802.250283
+  type: 'test'
+  ...
+# Subtest: legacy standalone frames honor the orientation and motif generation keeps its existing contract
+ok 174 - legacy standalone frames honor the orientation and motif generation keeps its existing contract
+  ---
+  duration_ms: 339.050711
+  type: 'test'
+  ...
+# Subtest: horizontal board thumbnails include a wide shape while vertical boards keep portrait tiles
+ok 175 - horizontal board thumbnails include a wide shape while vertical boards keep portrait tiles
+  ---
+  duration_ms: 180.838458
+  type: 'test'
+  ...
+# Subtest: choosing horizontal in setup persists through storyboard generation and drawing the remaining images
+ok 176 - choosing horizontal in setup persists through storyboard generation and drawing the remaining images
+  ---
+  duration_ms: 184.02481
+  type: 'test'
+  ...
+# (node:387) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: one setup click makes one storyboard request; drawing screen does not launch another batch
+ok 177 - one setup click makes one storyboard request; drawing screen does not launch another batch
+  ---
+  duration_ms: 214.215026
+  type: 'test'
+  ...
+# Subtest: an explicit continuation click requests one batch even when the reply leaves more sections
+ok 178 - an explicit continuation click requests one batch even when the reply leaves more sections
+  ---
+  duration_ms: 171.045192
+  type: 'test'
+  ...
+# Subtest: late setup completion cannot launch story requests for a newly opened song
+ok 179 - late setup completion cannot launch story requests for a newly opened song
+  ---
+  duration_ms: 168.60247
+  type: 'test'
+  ...
+# Subtest: regeneration arriving after a v2 image was drawn holds the response and preserves that image
+ok 180 - regeneration arriving after a v2 image was drawn holds the response and preserves that image
+  ---
+  duration_ms: 190.33825
+  type: 'test'
+  ...
+# Subtest: story single-flight remains locked until an asynchronous metadata save settles
+ok 181 - story single-flight remains locked until an asynchronous metadata save settles
+  ---
+  duration_ms: 175.187251
+  type: 'test'
+  ...
+# Subtest: queued group drawing never jumps to a newly opened song after its first image finishes
+ok 182 - queued group drawing never jumps to a newly opened song after its first image finishes
+  ---
+  duration_ms: 150.720214
+  type: 'test'
+  ...
+# Subtest: late paid asset is held if its group key was reused by an explicit replacement storyboard
+ok 183 - late paid asset is held if its group key was reused by an explicit replacement storyboard
+  ---
+  duration_ms: 247.198927
+  type: 'test'
+  ...
+# Subtest: a continuation can consist entirely of reused paid images without cloning or redrawing them
+ok 184 - a continuation can consist entirely of reused paid images without cloning or redrawing them
+  ---
+  duration_ms: 170.975119
+  type: 'test'
+  ...
+# Subtest: mixed new and reused groups preserve the correct image keys even when new raw IDs overlap old IDs
+ok 185 - mixed new and reused groups preserve the correct image keys even when new raw IDs overlap old IDs
+  ---
+  duration_ms: 181.328977
+  type: 'test'
+  ...
+# Subtest: single-image redraw sends a fresh seed and a group redraw shares its new seed across differences
+ok 186 - single-image redraw sends a fresh seed and a group redraw shares its new seed across differences
+  ---
+  duration_ms: 255.46322
+  type: 'test'
+  ...
+# Subtest: the existing ten-line request batch size remains, with no total section limit
+ok 187 - the existing ten-line request batch size remains, with no total section limit
+  ---
+  duration_ms: 183.382533
+  type: 'test'
+  ...
+# Subtest: saved r215 custom export selection remains effective when the restored clip controls first open
+ok 188 - saved r215 custom export selection remains effective when the restored clip controls first open
+  ---
+  duration_ms: 150.223397
+  type: 'test'
+  ...
+# Subtest: queued drawing stops when an explicit replacement story arrives, even on the same page
+ok 189 - queued drawing stops when an explicit replacement story arrives, even on the same page
+  ---
+  duration_ms: 201.729967
+  type: 'test'
+  ...
+# Subtest: a manual image filled while another asset is drawing is skipped by the remaining-image queue
+ok 190 - a manual image filled while another asset is drawing is skipped by the remaining-image queue
+  ---
+  duration_ms: 209.364101
+  type: 'test'
+  ...
+# Subtest: append retains images paid before it finishes and late image saves to the unchanged original group
+ok 191 - append retains images paid before it finishes and late image saves to the unchanged original group
+  ---
+  duration_ms: 169.607089
+  type: 'test'
+  ...
+# (node:395) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: paid result waits for a returned metadata promise when local storage cannot save
+ok 192 - paid result waits for a returned metadata promise when local storage cannot save
+  ---
+  duration_ms: 141.843107
+  type: 'test'
+  ...
+# Subtest: rejected metadata with no local copy retains the paid result and retries saving without regeneration
+ok 193 - rejected metadata with no local copy retains the paid result and retries saving without regeneration
+  ---
+  duration_ms: 135.833027
+  type: 'test'
+  ...
+# [HeartbeatMemories] host metadata save adapter unavailable
+# Subtest: confirmed local copy succeeds even if metadata rejects and survives a fresh runtime
+ok 194 - confirmed local copy succeeds even if metadata rejects and survives a fresh runtime
+  ---
+  duration_ms: 315.280443
+  type: 'test'
+  ...
+# Subtest: void-returning host debounce stays compatible when local storage quota is exhausted
+ok 195 - void-returning host debounce stays compatible when local storage quota is exhausted
+  ---
+  duration_ms: 177.462907
+  type: 'test'
+  ...
+# Subtest: missing, throwing or explicitly failed metadata storage keeps recovery in memory
+ok 196 - missing, throwing or explicitly failed metadata storage keeps recovery in memory
+  ---
+  duration_ms: 717.649911
+  type: 'test'
+  ...
+# Subtest: failed paid redraw remains exportable and save-only recovery keeps its new image
+ok 197 - failed paid redraw remains exportable and save-only recovery keeps its new image
+  ---
+  duration_ms: 172.402481
+  type: 'test'
+  ...
+# Subtest: a delayed rejected save retains only its original chat recovery
+ok 198 - a delayed rejected save retains only its original chat recovery
+  ---
+  duration_ms: 174.80521
+  type: 'test'
+  ...
+# Subtest: ordinary archive revision growth still allows unchanged-song storyboard saving
+ok 199 - ordinary archive revision growth still allows unchanged-song storyboard saving
+  ---
+  duration_ms: 162.082668
+  type: 'test'
+  ...
+# Subtest: all appearance/shot combinations preserve the current branch cast and scenery intent
+ok 200 - all appearance/shot combinations preserve the current branch cast and scenery intent
+  ---
+  duration_ms: 150.250297
+  type: 'test'
+  ...
+# (node:407) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: one music entry changes from import to current filename and keeps one player
+ok 201 - one music entry changes from import to current filename and keeps one player
+  ---
+  duration_ms: 180.597001
+  type: 'test'
+  ...
+# Subtest: removing only the current music keeps saved frames and timing
+ok 202 - removing only the current music keeps saved frames and timing
+  ---
+  duration_ms: 171.593415
+  type: 'test'
+  ...
+# Subtest: failed music removal leaves the original track available
+ok 203 - failed music removal leaves the original track available
+  ---
+  duration_ms: 193.172233
+  type: 'test'
+  ...
+# Subtest: a new import wins over a pending removal of the previous song
+ok 204 - a new import wins over a pending removal of the previous song
+  ---
+  duration_ms: 194.403059
+  type: 'test'
+  ...
+# Subtest: current filename is escaped and does not create another HTML control
+ok 205 - current filename is escaped and does not create another HTML control
+  ---
+  duration_ms: 195.976753
+  type: 'test'
+  ...
+# Subtest: plain release version remains compatible with the uploaded changelog parser
+ok 206 - plain release version remains compatible with the uploaded changelog parser
+  ---
+  duration_ms: 131.843018
+  type: 'test'
+  ...
+# Subtest: all current version surfaces use plain 1.0.25 and changelog credit remains
+ok 207 - all current version surfaces use plain 1.0.25 and changelog credit remains
+  ---
+  duration_ms: 0.719968
+  type: 'test'
+  ...
+# (node:415) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: native Canvas 16:9: one background continues through held poses and changed text
+ok 208 - native Canvas 16:9: one background continues through held poses and changed text
+  ---
+  duration_ms: 374.418056
+  type: 'test'
+  ...
+# Subtest: native Canvas 9:16: one background continues through held poses and changed text
+ok 209 - native Canvas 9:16: one background continues through held poses and changed text
+  ---
+  duration_ms: 302.667308
+  type: 'test'
+  ...
+# Subtest: background is behind confirmed transparent art, text order is deliberate, and opaque art stays intact
+ok 210 - background is behind confirmed transparent art, text order is deliberate, and opaque art stays intact
+  ---
+  duration_ms: 367.981474
+  type: 'test'
+  ...
+# Subtest: an opaque PNG marked as cutout keeps a full-frame fallback instead of hiding the stage text
+ok 211 - an opaque PNG marked as cutout keeps a full-frame fallback instead of hiding the stage text
+  ---
+  duration_ms: 177.775205
+  type: 'test'
+  ...
+# Subtest: shared backgrounds appear once in the board and pose editing is reachable from the player
+ok 212 - shared backgrounds appear once in the board and pose editing is reachable from the player
+  ---
+  duration_ms: 166.227646
+  type: 'test'
+  ...
+# Subtest: native Canvas export matches preview at the same song time even for a clipped second section
+ok 213 - native Canvas export matches preview at the same song time even for a clipped second section
+  ---
+  duration_ms: 423.887956
+  type: 'test'
+  ...
+# Subtest: automatic character layer (native alpha) is visible over the actual shared image
+ok 214 - automatic character layer (native alpha) is visible over the actual shared image
+  ---
+  duration_ms: 416.470548
+  type: 'test'
+  ...
+# Subtest: automatic character layer (\#ffffff) is visible over the actual shared image
+ok 215 - automatic character layer (\#ffffff) is visible over the actual shared image
+  ---
+  duration_ms: 444.47999
+  type: 'test'
+  ...
+# Subtest: automatic character layer (\#dddddd) is visible over the actual shared image
+ok 216 - automatic character layer (\#dddddd) is visible over the actual shared image
+  ---
+  duration_ms: 509.367091
+  type: 'test'
+  ...
+# (node:435) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: paid storyboard switch + quota preserves raw and old metadata; save-only retry is idempotent
+ok 217 - paid storyboard switch + quota preserves raw and old metadata; save-only retry is idempotent
+  ---
+  duration_ms: 191.961107
+  type: 'test'
+  ...
+# Subtest: revision drift journals paid result and survives a fresh runtime
+not ok 218 - revision drift journals paid result and survives a fresh runtime
+  ---
+  duration_ms: 148.981626
+  type: 'test'
+  location: '/workspace/scratch/c9f4993ef355/hearttrace-1.0.25-47l_6xrk/candidate/tokimemo-main/tools/verification/mv-update-regression.mjs:13:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    
+    false !== true
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///workspace/scratch/c9f4993ef355/hearttrace-1.0.25-47l_6xrk/candidate/tokimemo-main/tools/verification/mv-update-regression.mjs:13:231)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+# Subtest: song deletion and text changes cannot receive a late paid result
+ok 219 - song deletion and text changes cannot receive a late paid result
+  ---
+  duration_ms: 215.460634
+  type: 'test'
+  ...
+# Subtest: absent/silent local storage and rejected metadata never claim durable success
+ok 220 - absent/silent local storage and rejected metadata never claim durable success
+  ---
+  duration_ms: 133.699698
+  type: 'test'
+  ...
+# Subtest: malformed paid storyboard remains exportable with no automatic new request
+ok 221 - malformed paid storyboard remains exportable with no automatic new request
+  ---
+  duration_ms: 119.307299
+  type: 'test'
+  ...
+# Subtest: late generated frame never overwrites a newer manual image
+ok 222 - late generated frame never overwrites a newer manual image
+  ---
+  duration_ms: 104.008416
+  type: 'test'
+  ...
+# Subtest: late rewrite detects shot edits and keeps paid rewrite
+ok 223 - late rewrite detects shot edits and keeps paid rewrite
+  ---
+  duration_ms: 144.741501
+  type: 'test'
+  ...
+# Subtest: legacy reversed taps produce strictly positive non-overlapping SRT times
+ok 224 - legacy reversed taps produce strictly positive non-overlapping SRT times
+  ---
+  duration_ms: 113.650333
+  type: 'test'
+  ...
+# Subtest: frame cast is the exact intersection of shot people and appearance preference
+not ok 225 - frame cast is the exact intersection of shot people and appearance preference
+  ---
+  duration_ms: 113.137417
+  type: 'test'
+  location: '/workspace/scratch/c9f4993ef355/hearttrace-1.0.25-47l_6xrk/candidate/tokimemo-main/tools/verification/mv-update-regression.mjs:20:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /no people/. Input:
+    
+    'vertical 9:16 composition, empty room, scenery, no humans'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual: 'vertical 9:16 composition, empty room, scenery, no humans'
+  operator: 'match'
+  stack: |-
+    TestContext.<anonymous> (file:///workspace/scratch/c9f4993ef355/hearttrace-1.0.25-47l_6xrk/candidate/tokimemo-main/tools/verification/mv-update-regression.mjs:20:585)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+# Subtest: delayed audio restore cannot change another chat/song filename or duration
+ok 226 - delayed audio restore cannot change another chat/song filename or duration
+  ---
+  duration_ms: 126.643401
+  type: 'test'
+  ...
+# Subtest: audio with same song id is isolated by chat and late restore loses to manual upload
+ok 227 - audio with same song id is isolated by chat and late restore loses to manual upload
+  ---
+  duration_ms: 186.625072
+  type: 'test'
+  ...
+# Subtest: leaving MV while playing stops audio and never renders over another route
+ok 228 - leaving MV while playing stops audio and never renders over another route
+  ---
+  duration_ms: 173.353927
+  type: 'test'
+  ...
+# Subtest: record countdown is cancelled on exit and cannot play later
+ok 229 - record countdown is cancelled on exit and cannot play later
+  ---
+  duration_ms: 132.48148
+  type: 'test'
+  ...
+# Subtest: canvas subtitles preserve the entire lyric instead of clipping to 24 characters
+ok 230 - canvas subtitles preserve the entire lyric instead of clipping to 24 characters
+  ---
+  duration_ms: 139.336053
+  type: 'test'
+  ...
+# Subtest: public tap nudge cannot cross the next marked section
+ok 231 - public tap nudge cannot cross the next marked section
+  ---
+  duration_ms: 125.497411
+  type: 'test'
+  ...
+# Subtest: updater accepts same project SSH remote and reverse-proxy prefix with JSON/CSRF intact
+ok 232 - updater accepts same project SSH remote and reverse-proxy prefix with JSON/CSRF intact
+  ---
+  duration_ms: 115.472901
+  type: 'test'
+  ...
+# Subtest: updater independently verifies the resulting commit instead of trusting update response
+ok 233 - updater independently verifies the resulting commit instead of trusting update response
+  ---
+  duration_ms: 141.401441
+  type: 'test'
+  ...
+# Subtest: up-to-date branch makes no update POST and shows actual loaded build
+ok 234 - up-to-date branch makes no update POST and shows actual loaded build
+  ---
+  duration_ms: 121.680545
+  type: 'test'
+  ...
+# Subtest: wrong remote, ZIP, denied permissions and cross-origin path never pull code
+ok 235 - wrong remote, ZIP, denied permissions and cross-origin path never pull code
+  ---
+  duration_ms: 124.205704
+  type: 'test'
+  ...
+# Subtest: concurrent update clicks share a single update and release failed button
+ok 236 - concurrent update clicks share a single update and release failed button
+  ---
+  duration_ms: 114.325369
+  type: 'test'
+  ...
+# Subtest: song plan and storage retain song 81 and cumulative text beyond 1.2M
+ok 237 - song plan and storage retain song 81 and cumulative text beyond 1.2M
+  ---
+  duration_ms: 197.178149
+  type: 'test'
+  ...
+# Subtest: leaving during active export stops recorder, audio and tracks without redrawing another page
+ok 238 - leaving during active export stops recorder, audio and tracks without redrawing another page
+  ---
+  duration_ms: 158.931208
+  type: 'test'
+  ...
+# Subtest: export waits for local image blobs and cannot start after leaving during preload
+ok 239 - export waits for local image blobs and cannot start after leaving during preload
+  ---
+  duration_ms: 135.055318
+  type: 'test'
+  ...
+# Subtest: settings updater entry renders escaped complete running version independently of update status
+not ok 240 - settings updater entry renders escaped complete running version independently of update status
+  ---
+  duration_ms: 120.894452
+  type: 'test'
+  location: '/workspace/scratch/c9f4993ef355/hearttrace-1.0.25-47l_6xrk/candidate/tokimemo-main/tools/verification/mv-update-regression.mjs:40:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /data-rmt-installed-version>当前版本：0.99.99-r84.187-&lt;runtime&gt;/. Input:
+    
+    '\n' +
+      '      <div class="inline-drawer-toggle inline-drawer-header rmt-settings-header">\n' +
+      '        <div><b>心迹回廊</b><small> API SETTINGS</small></div>\n' +
+      '        <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>\n' +
+      '      </div>\n' +
+      '      <div class="inline-drawer-content rmt-settings-content">\n' +
+      '        <details class="rmt-settings-card" data-rmt-settings-section="voice">\n' +
+      '      <summary class="rmt-settings-card-head"><span>VOICE</span><div><b>镜译 · 语音设置</b><small>连接与朗读音色</small></div></summary>\n' +
+      '      <div class="rmt-settings-section-body"><p>在镜译中配置语音服务后，可从各内容页的更多菜单朗读正文或选中文字。</p><div data-rmt-voice-settings></div></div>\n' +
+      '    </details>\n' +
+      '        <details class="rmt-settings-card rmt-api-box" data-rmt-settings-section="api">\n' +
+      '          <summary class="rmt-settings-card-head"><span>API</span><div><b>独立 API</b><small>一键配置 · 手动配置</small></div></summary>\n' +
+      '          <div class="rmt-settings-section-body">\n' +
+      '          <div class="rmt-api-source-grid" role="group" aria-label="独立 API 配置方式">\n' +
+      '            <button type="button" class="menu_button rmt-api-source-card" data-rmt-api-import-current aria-pressed="false"><span class="rmt-api-source-badge">凭证绑定</span><b>一键配置</b><small>读取酒馆当前连接</small></button>\n' +
+      '            <button type="button" class="menu_button rmt-api-source-card" data-rmt-api-select-manual aria-pressed="false"><span class="rmt-api-source-badge">OPENAI</span><b>手动配置</b><small>URL · Key · 模型</small></button>\n' +
+      '          </div>\n' +
+      '          <div data-rmt-api-host-capability role="status"></div>\n' +
+      '          <div class="rmt-api-status" data-rmt-api-status role="status">○ 一键连接未配置</div>\n' +
+      '          <div class="rmt-api-source-panel" data-rmt-api-profile-panel>\n' +
+      '            <label class="rmt-settings-field"><span>连接配置</span><select class="text_pole" data-rmt-api-profile><option value="">选择 Connection Manager 配置</option></select></label>\n' +
+      '            <details class="rmt-api-pool"><summary>多个连接轮流使用</summary><label class="rmt-settings-check"><input type="checkbox" data-rmt-api-pool-enabled><span>启用轮询连接池</span></label><div data-rmt-api-pool-choices></div><small>新任务依次使用勾选的连接及其模型；本次运行中的重试保持原连接；重新打开后续接会重新分配。可同时运行的任务数量沿用已有并发设置。</small></details>\n' +
+      '            <div class="rmt-model-row">\n' +
+      '              <label class="rmt-settings-field"><span>模型</span><select class="text_pole" data-rmt-api-model><option value="">请先选择专用连接</option></select></label>\n' +
+      '              <button type="button" class="menu_button rmt-model-refresh" data-rmt-api-model-refresh>刷新模型</button>\n' +
+      '            </div>\n' +
+      '          </div>\n' +
+      '          <div class="rmt-api-source-panel" data-rmt-api-manual-panel hidden>\n' +
+      '            <label class="rmt-settings-field"><span>API 地址</span><input class="text_pole" data-rmt-manual-api-base type="url" inputmode="url" placeholder="https://api.example.com/v1"></label>\n' +
+      '            <label class="rmt-settings-field"><span>API Key</span><div class="rmt-manual-key-row"><input class="text_pole" data-rmt-manual-api-key type="password" autocomplete="new-password" placeholder="API Key（可留空）"><button type="button" class="menu_button" data-rmt-manual-api-key-clear>清除 Key</button></div></label>\n' +
+      '            <div class="rmt-model-row">\n' +
+      '              <label class="rmt-settings-field"><span>模型 ID</span><input class="text_pole" data-rmt-manual-api-model type="text" placeholder="例如 gpt-4.1"><select class="text_pole rmt-manual-model-picker" data-rmt-manual-api-models hidden><option value="">选择已拉取模型</option></select></label>\n' +
+      '              <button type="button" class="menu_button rmt-model-refresh" data-rmt-manual-api-model-refresh>拉取模型</button>\n' +
+      '            </div>\n' +
+      '            <button type="button" class="menu_button rmt-settings-wide rmt-manual-save" data-rmt-manual-api-save>保存并使用</button>\n' +
+      '            <div data-rmt-manual-save-status role="status" aria-live="polite">填写后自动保存到本机，不随档案导出。</div>\n' +
+      '            <label class="rmt-settings-check"><input type="checkbox" data-rmt-manual-streaming ><span>使用流式输出（仅此手动 API）</span></label>\n' +
+      '            <small>需要服务端支持 SSE；关闭时使用普通完整响应，不影响主聊天。</small>\n' +
+      '          </div>\n' +
+      '          <div class="rmt-api-grid">\n' +
+      '            <label class="rmt-settings-field"><span>最大输出</span><input class="text_pole" data-rmt-api-max-tokens type="number" min="1" step="1" placeholder="默认 60000"></label>\n' +
+      '            <label class="rmt-settings-field"><span>输入预算</span><input class="text_pole" data-rmt-api-input-budget type="number" min="1" step="1" placeholder="默认 60000"></label>\n' +
+      '            <small>最大输出是模型最多写多长，默认 60000，不拦输入。输入预算默认 60000 tokens，可填写正整数；计数可用时按此预算检查，计数不可用时不按字符数拦截。实际容量由模型服务决定，与最大输出无关。</small>\n' +
+      '            <label class="rmt-settings-field"><span>温度</span><input class="text_pole" data-rmt-api-temperature type="number" min="0" max="2" step="0.1"></label>\n' +
+      '            <small data-rmt-temperature-note></small>\n' +
+      '          </div>\n' +
+      '          <label class="rmt-settings-check"><input type="checkbox" data-rmt-auto-second ><span>第一次完成后，自动进行第二次生成</span></label>\n' +
+      '          <label class="rmt-settings-check"><input type="checkbox" data-rmt-auto-retry ><span>失败后自动重试未完成部分</span></label>\n' +
+      '          <label class="rmt-settings-field"><span>自动重试次数</span><input class="text_pole" data-rmt-auto-retry-count type="number" min="1" max="5" step="1" value="1" disabled></label>\n' +
+      '          <small>默认关闭。打开后，新出现的「重试未完成部分」会自动再试，默认 1 次，可改成 1–5 次。每次都使用生成额度。超限草稿和已经写好、只差继续的草稿不会自动重试。</small>\n' +
+      '          <label class="rmt-settings-field"><span>生成禁用词</span><input class="text_pole" data-rmt-banned-generated-phrases type="text" placeholder="用逗号分隔，例如：老子"></label>\n' +
+      '          <p>打开房间只读已有内容；“今日生活”由房间里的手动更新按钮触发，不会在进入时自动请求。</p>\n' +
+      '          <label class="rmt-settings-check"><input data-rmt-tt-display type="checkbox"><span>TT 顶部安全区</span></label>\n' +
+      '          </div>\n' +
+      '        </details>\n' +
+      '        <details class="rmt-settings-card" data-rmt-settings-section="advanced-generation"><summary class="rmt-settings-card-head"><span>API</span><div><b>高级生成参数</b><small>排除参数 · 推理 · 流式</small></div></summary>\n' +
+      '<div class="rmt-settings-section-body">\n' +
+      '<label class="rmt-settings-check"><input type="checkbox" data-rmt-advanced-enabled><span>启用高级生成参数</span></label>\n' +
+      '<p>默认关闭，仅作用于心迹回廊。参数排除与附加 JSON 用于手动 API / 自定义 Profile，不改主聊天。</p>\n' +
+      '<label class="rmt-settings-field"><span>推理强度（reasoning_effort）</span><select class="text_pole" data-rmt-advanced-effort><option value="">默认：不覆盖</option><option value="none">none</option><option value="minimal">minimal</option><option value="low">low</option><option value="medium">medium</option><option value="high">high</option><option value="xhigh">xhigh</option><option value="max">max</option><option value="ultra">ultra</option></select></label>\n' +
+      '<label class="rmt-settings-field"><span>本插件流式方式</span><select class="text_pole" data-rmt-advanced-stream><option value="original">保持原设置</option><option value="on">使用流式</option><option value="off">使用完整响应</option></select></label>\n' +
+      '<p>不同模型接受的推理配置不同；不会根据模型名自动替你修改。</p>\n' +
+      '<b>排除参数（勾选＝不发送）</b>\n' +
+      '<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:12px 0"><label class="rmt-settings-check" style="min-width:0;overflow-wrap:anywhere"><input type="checkbox" data-rmt-advanced-exclude="temperature"><span>温度<small style="display:block;overflow-wrap:anywhere">temperature</small></span></label><label class="rmt-settings-check" style="min-width:0;overflow-wrap:anywhere"><input type="checkbox" data-rmt-advanced-exclude="frequency_penalty"><span>频率惩罚<small style="display:block;overflow-wrap:anywhere">frequency_penalty</small></span></label><label class="rmt-settings-check" style="min-width:0;overflow-wrap:anywhere"><input type="checkbox" data-rmt-advanced-exclude="presence_penalty"><span>存在惩罚<small style="display:block;overflow-wrap:anywhere">presence_penalty</small></span></label><label class="rmt-settings-check" style="min-width:0;overflow-wrap:anywhere"><input type="checkbox" data-rmt-advanced-exclude="top_p"><span>Top P<small style="display:block;overflow-wrap:anywhere">top_p</small></span></label><label class="rmt-settings-check" style="min-width:0;overflow-wrap:anywhere"><input type="checkbox" data-rmt-advanced-exclude="top_k"><span>Top K<small style="display:block;overflow-wrap:anywhere">top_k</small></span></label><label class="rmt-settings-check" style="min-width:0;overflow-wrap:anywhere"><input type="checkbox" data-rmt-advanced-exclude="seed"><span>种子<small style="display:block;overflow-wrap:anywhere">seed</small></span></label><label class="rmt-settings-check" style="min-width:0;overflow-wrap:anywhere"><input type="checkbox" data-rmt-advanced-exclude="min_p"><span>Min P<small style="display:block;overflow-wrap:anywhere">min_p</small></span></label><label class="rmt-settings-check" style="min-width:0;overflow-wrap:anywhere"><input type="checkbox" data-rmt-advanced-exclude="top_a"><span>Top A<small style="display:block;overflow-wrap:anywhere">top_a</small></span></label><label class="rmt-settings-check" style="min-width:0;overflow-wrap:anywhere"><input type="checkbox" data-rmt-advanced-exclude="typical_p"><span>Typical P<small style="display:block;overflow-wrap:anywhere">typical_p</small></span></label><label class="rmt-settings-check" style="min-width:0;overflow-wrap:anywhere"><input type="checkbox" data-rmt-advanced-exclude="repetition_penalty"><span>重复惩罚<small style="display:block;overflow-wrap:anywhere">repetition_penalty</small></span></label></div>\n' +
+      '<div class="rmt-theme-presets"><button type="button" data-rmt-advanced-common>选中常用四项</button><button type="button" data-rmt-advanced-none>取消所有排除</button></div>\n' +
+      `<label class="rmt-settings-field"><span>附加参数（JSON 对象，可留空）</span><textarea class="text_pole" data-rmt-advanced-json rows="6" maxlength="8192" spellcheck="false" placeholder='{"enable_thinking": false}'></textarea></label>\n` +
+      '<p>只填写接口支持的采样／推理参数；排除优先于 JSON。不接受模型、消息、最大输出、连接、Key 或工具覆盖。</p>\n' +
+      '<div class="rmt-theme-presets"><button type="button" data-rmt-advanced-save>保存高级参数</button><button type="button" data-rmt-advanced-revert>撤销编辑</button><button type="button" data-rmt-advanced-reset>关闭并重置</button></div>\n' +
+      '<div data-rmt-advanced-status role="status" aria-live="polite"></div'... 21312 more characters
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual: |-
+    
+          <div class="inline-drawer-toggle inline-drawer-header rmt-settings-header">
+            <div><b>心迹回廊</b><small> API SETTINGS</small></div>
+            <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
+          </div>
+          <div class="inline-drawer-content rmt-settings-content">
+            <details class="rmt-settings-card" data-rmt-settings-section="voice">
+          <summary class="rmt-settings-card-head"><span>VOICE</span><div><b>镜译 · 语音设置</b><small>连接与朗读音色</small></div></summary>
+          <div class="rmt-settings-section-body"><p>在镜译中配置语音服务后，可从各内容页的更多菜单朗读正文或选中文字。</p><div data-rmt-voice-settings></div></div>
+        </details>
+            <details class="rmt-settings-card rmt-api-box" data-rmt-settings-section="api">
+              <summary class="rmt-settings-card-head"><span>API</span><div><b>独立 API</b><small>一键配置 · 手动配置</small></div></summary>
+              <div class="rmt-settings-section-body">
+              <div class="rmt-api-source-grid" role="group" aria-label="独立 API 配置方式">
+                <button type="button" class="menu_button rmt-api-source-card" data-rmt-api-import-current aria-pressed="false"><span class="rmt-api-source-badge">凭证绑定</span><b>一键配置</b><small>读取酒馆当前连接</small></button>
+                <button type="button" class="menu_button rmt-api-source-card" data-rmt-api-select-manual aria-pressed="false"><span class="rmt-api-source-badge">OPENAI</span><b>手动配置</b><small>URL · Key · 模型</small></button>
+              </div>
+              <div data-rmt-api-host-capability role="status"></div>
+              <div class="rmt-api-status" data-rmt-api-status role="status">○ 一键连接未配置</div>
+              <div class="rmt-api-source-panel" data-rmt-api-profile-panel>
+                <label class="rmt-settings-field"><span>连接配置</span><select class="text_pole" data-rmt-api-profile><option value="">选择 Connection Manager 配置</option></select></label>
+                <details class="rmt-api-pool"><summary>多个连接轮流使用</summary><label class="rmt-settings-check"><input type="checkbox" data-rmt-api-pool-enabled><span>启用轮询连接池</span></label><div data-rmt-api-pool-choices></div><small>新任务依次使用勾选的连接及其模型；本次运行中的重试保持原连接；重新打开后续接会重新分配。可同时运行的任务数量沿用已有并发设置。</small></details>
+                <div class="rmt-model-row">
+                  <label class="rmt-settings-field"><span>模型</span><select class="text_pole" data-rmt-api-model><option value="">请先选择专用连接</option></select></label>
+                  <button type="button" class="menu_button rmt-model-refresh" data-rmt-api-model-refresh>刷新模型</button>
+                </div>
+              </div>
+              <div class="rmt-api-source-panel" data-rmt-api-manual-panel hidden>
+                <label class="rmt-settings-field"><span>API 地址</span><input class="text_pole" data-rmt-manual-api-base type="url" inputmode="url" placeholder="https://api.example.com/v1"></label>
+                <label class="rmt-settings-field"><span>API Key</span><div class="rmt-manual-key-row"><input class="text_pole" data-rmt-manual-api-key type="password" autocomplete="new-password" placeholder="API Key（可留空）"><button type="button" class="menu_button" data-rmt-manual-api-key-clear>清除 Key</button></div></label>
+                <div class="rmt-model-row">
+                  <label class="rmt-settings-field"><span>模型 ID</span><input class="text_pole" data-rmt-manual-api-model type="text" placeholder="例如 gpt-4.1"><select class="text_pole rmt-manual-model-picker" data-rmt-manual-api-models hidden><option value="">选择已拉取模型</option></select></label>
+                  <button type="button" class="menu_button rmt-model-refresh" data-rmt-manual-api-model-refresh>拉取模型</button>
+                </div>
+                <button type="button" class="menu_button rmt-settings-wide rmt-manual-save" data-rmt-manual-api-save>保存并使用</button>
+                <div data-rmt-manual-save-status role="status" aria-live="polite">填写后自动保存到本机，不随档案导出。</div>
+                <label class="rmt-settings-check"><input type="checkbox" data-rmt-manual-streaming ><span>使用流式输出（仅此手动 API）</span></label>
+                <small>需要服务端支持 SSE；关闭时使用普通完整响应，不影响主聊天。</small>
+              </div>
+              <div class="rmt-api-grid">
+                <label class="rmt-settings-field"><span>最大输出</span><input class="text_pole" data-rmt-api-max-tokens type="number" min="1" step="1" placeholder="默认 60000"></label>
+                <label class="rmt-settings-field"><span>输入预算</span><input class="text_pole" data-rmt-api-input-budget type="number" min="1" step="1" placeholder="默认 60000"></label>
+                <small>最大输出是模型最多写多长，默认 60000，不拦输入。输入预算默认 60000 tokens，可填写正整数；计数可用时按此预算检查，计数不可用时不按字符数拦截。实际容量由模型服务决定，与最大输出无关。</small>
+                <label class="rmt-settings-field"><span>温度</span><input class="text_pole" data-rmt-api-temperature type="number" min="0" max="2" step="0.1"></label>
+                <small data-rmt-temperature-note></small>
+              </div>
+              <label class="rmt-settings-check"><input type="checkbox" data-rmt-auto-second ><span>第一次完成后，自动进行第二次生成</span></label>
+              <label class="rmt-settings-check"><input type="checkbox" data-rmt-auto-retry ><span>失败后自动重试未完成部分</span></label>
+              <label class="rmt-settings-field"><span>自动重试次数</span><input class="text_pole" data-rmt-auto-retry-count type="number" min="1" max="5" step="1" value="1" disabled></label>
+              <small>默认关闭。打开后，新出现的「重试未完成部分」会自动再试，默认 1 次，可改成 1–5 次。每次都使用生成额度。超限草稿和已经写好、只差继续的草稿不会自动重试。</small>
+              <label class="rmt-settings-field"><span>生成禁用词</span><input class="text_pole" data-rmt-banned-generated-phrases type="text" placeholder="用逗号分隔，例如：老子"></label>
+              <p>打开房间只读已有内容；“今日生活”由房间里的手动更新按钮触发，不会在进入时自动请求。</p>
+              <label class="rmt-settings-check"><input data-rmt-tt-display type="checkbox"><span>TT 顶部安全区</span></label>
+              </div>
+            </details>
+            <details class="rmt-settings-card" data-rmt-settings-section="advanced-generation"><summary class="rmt-settings-card-head"><span>API</span><div><b>高级生成参数</b><small>排除参数 · 推理 · 流式</small></div></summary>
+    <div class="rmt-settings-section-body">
+    <label class="rmt-settings-check"><input type="checkbox" data-rmt-advanced-enabled><span>启用高级生成参数</span></label>
+    <p>默认关闭，仅作用于心迹回廊。参数排除与附加 JSON 用于手动 API / 自定义 Profile，不改主聊天。</p>
+    <label class="rmt-settings-field"><span>推理强度（reasoning_effort）</span><select class="text_pole" data-rmt-advanced-effort><option value="">默认：不覆盖</option><option value="none">none</option><option value="minimal">minimal</option><option value="low">low</option><option value="medium">medium</option><option value="high">high</option><option value="xhigh">xhigh</option><option value="max">max</option><option value="ultra">ultra</option></select></label>
+    <label class="rmt-settings-field"><span>本插件流式方式</span><select class="text_pole" data-rmt-advanced-stream><option value="original">保持原设置</option><option value="on">使用流式</option><option value="off">使用完整响应</option></select></label>
+    <p>不同模型接受的推理配置不同；不会根据模型名自动替你修改。</p>
+    <b>排除参数（勾选＝不发送）</b>
+    <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:12px 0"><label class="rmt-settings-check" style="min-width:0;overflow-wrap:anywhere"><input type="checkbox" data-rmt-advanced-exclude="temperature"><span>温度<small style="display:block;overflow-wrap:anywhere">temperature</small></span></label><label class="rmt-settings-check" style="min-width:0;overflow-wrap:anywhere"><input type="checkbox" data-rmt-advanced-exclude="frequency_penalty"><span>频率惩罚<small style="display:block;overflow-wrap:anywhere">frequency_penalty</small></span></label><label class="rmt-settings-check" style="min-width:0;overflow-wrap:anywhere"><input type="checkbox" data-rmt-advanced-exclude="presence_penalty"><span>存在惩罚<small style="display:block;overflow-wrap:anywhere">presence_penalty</small></span></label><label class="rmt-settings-check" style="min-width:0;overflow-wrap:anywhere"><input type="checkbox" data-rmt-advanced-exclude="top_p"><span>Top P<small style="display:block;overflow-wrap:anywhere">top_p</small></span></label><label class="rmt-settings-check" style="min-width:0;overflow-wrap:anywhere"><input type="checkbox" data-rmt-advanced-exclude="top_k"><span>Top K<small style="display:block;overflow-wrap:anywhere">top_k</small></span></label><label class="rmt-settings-check" style="min-width:0;overflow-wrap:anywhere"><input type="checkbox" data-rmt-advanced-exclude="seed"><span>种子<small style="display:block;overflow-wrap:anywhere">seed</small></span></label><label class="rmt-settings-check" style="min-width:0;overflow-wrap:anywhere"><input type="checkbox" data-rmt-advanced-exclude="min_p"><span>Min P<small style="display:block;overflow-wrap:anywhere">min_p</small></span></label><label class="rmt-settings-check" style="min-width:0;overflow-wrap:anywhere"><input type="checkbox" data-rmt-advanced-exclude="top_a"><span>Top A<small style="display:block;overflow-wrap:anywhere">top_a</small></span></label><label class="rmt-settings-check" style="min-width:0;overflow-wrap:anywhere"><input type="checkbox" data-rmt-advanced-exclude="typical_p"><span>Typical P<small style="display:block;overflow-wrap:anywhere">typical_p</small></span></label><label class="rmt-settings-check" style="min-width:0;overflow-wrap:anywhere"><input type="checkbox" data-rmt-advanced-exclude="repetition_penalty"><span>重复惩罚<small style="display:block;overflow-wrap:anywhere">repetition_penalty</small></span></label></div>
+    <div class="rmt-theme-presets"><button type="button" data-rmt-advanced-common>选中常用四项</button><button type="button" data-rmt-advanced-none>取消所有排除</button></div>
+    <label class="rmt-settings-field"><span>附加参数（JSON 对象，可留空）</span><textarea class="text_pole" data-rmt-advanced-json rows="6" maxlength="8192" spellcheck="false" placeholder='{"enable_thinking": false}'></textarea></label>
+    <p>只填写接口支持的采样／推理参数；排除优先于 JSON。不接受模型、消息、最大输出、连接、Key 或工具覆盖。</p>
+    <div class="rmt-theme-presets"><button type="button" data-rmt-advanced-save>保存高级参数</button><button type="button" data-rmt-advanced-revert>撤销编辑</button><button type="button" data-rmt-advanced-reset>关闭并重置</button></div>
+    <div data-rmt-advanced-status role="status" aria-live="polite"></div></div></details>
+            <details class="rmt-settings-card" data-rmt-settings-section="reading">
+          <summary class="rmt-settings-card-head"><span>READ</span><div><b>聊天读取范围</b><small>按原始楼号选择 · 不改旧档案</small></div></summary>
+          <div class="rmt-settings-section-body">
+            <label class="rmt-settings-field"><span>读取方式</span><select class="text_pole" data-rmt-read-mode><option value="recent" selected>最近若干楼</option><option value="range" >指定楼号范围</option><option value="all" >当前聊天全部楼层</option></select></label>
+            <label class="rmt-settings-field" data-rmt-read-recent-row ><span>最近多少楼</span><input class="text_pole" type="number" min="1" step="1" data-rmt-read-recent value="50"></label>
+            <div class="rmt-api-grid" data-rmt-read-range-row hidden><label class="rmt-settings-field"><span>从第几楼</span><input class="text_pole" type="number" min="1" step="1" data-rmt-read-start value="1"></label><label class="rmt-settings-field"><span>到第几楼</span><input class="text_pole" type="number" min="1" step="1" data-rmt-read-end value="100"></label></div>
+            <label class="rmt-settings-check"><input type="checkbox" data-rmt-read-hidden ><span>包含范围内被隐藏的普通聊天楼层</span></label>
+            <p>每条消息为一楼，从 1 开始，隐藏楼层仍保留原楼号。只限制聊天正文；世界书与外部记忆摘要仍按“记忆来源”单独读取。不删除已有记忆。</p>
+            <button type="button" class="menu_button rmt-settings-wide" data-rmt-read-preview>预览当前读取量（不生成）</button>
+            <div data-rmt-read-preview-status role="status" aria-live="polite">默认只读最近 50 楼；可主动选择全部。</div>
+            <div data-rmt-coverage-map class="rmt-coverage-map"></div>
+            <p data-rmt-coverage-status role="status"></p>
+          </div></details>
+            <details class="rmt-settings-card" data-rmt-settings-section="image">
+              <summary class="rmt-settings-card-head"><span>CG</span><div><b>CG 生图</b><small>相簿 · ADV · 日常一格</small></div></summary>
+              <div class="rmt-settings-section-body">
+                <label class="rmt-cg-format"><span>生图提示词格式</span><select data-rmt-cg-prompt-format aria-label="生图提示词格式" ><option value="nai45-tags" >NAI 4.5 · 英文 Tag</option><option value="nai5-natural" selected>NAI 5 · 自然语言</option></select><small>只选提示词写法；实际生图模型仍在生图插件中选择。</small></label>
+                <label class="rmt-settings-field"><span>生图渠道</span><select class="text_pole" data-rmt-image-generation-provider aria-describedby="rmt-image-provider-status"><option value="baibai-image">柏宝绘 · 公开 API v1</option><option value="chatu8-image">智绘姬</option></select></label>
+                <p id="rmt-image-provider-status" data-rmt-image-generation-status role="status" aria-live="polite"></p>
+                <label class="rmt-settings-check"><input type="checkbox" data-rmt-image-generation-fallback ><span>失败时自动改走另一个已连接的生图渠道</span></label>
+                <p>默认关闭。智绘姬沿用它自己已经配好的出图设置，这里不改那些设置。只在点击绘制并确认后出图。</p>
+              </div>
+            </details>
+            <details class="rmt-settings-card" data-rmt-settings-section="creative">
+              <summary class="rmt-settings-card-head"><span>文</span><div><b>破限词</b><small>仅用于心迹回廊独立 API；发给模型时仍标为「创作补充词」</small></div></summary>
+              <div class="rmt-settings-section-body">
+                <label class="rmt-settings-check"><input type="checkbox" data-rmt-creative-enabled><span>启用破限词</span></label>
+                <label class="rmt-settings-field"><span>文风、氛围与叙事偏好</span><textarea class="text_pole" data-rmt-creative-text maxlength="20000" rows="8" placeholder="例如：少用总结式旁白，让情绪从对白和细节中自然流露。"></textarea></label>
+                <p><output data-rmt-creative-count>0 / 20,000</output> 字符。仅随心迹回廊文本生成发送，不写入主聊天、不发送给生图接口；会占用模型输入额度。</p>
+                <div class="rmt-theme-presets"><button type="button" data-rmt-creative-save>保存破限词</button><button type="button" data-rmt-creative-cancel>撤销编辑</button></div>
+                <div role="status" data-rmt-creative-status></div>
+              </div>
+            </details>
+            <details class="rmt-settings-card" data-rmt-settings-section="filter">
+              <summary class="rmt-settings-card-head"><span>TAG</span><div><b>过滤标签</b><small>勾选即不读取</small></div></summary>
+              <div class="rmt-settings-section-body">
+                <p>勾选的标签及其中全部内容不参与后续读取；未勾选的内容和无标签正文保留。可排除正文内嵌的标签块，不改聊天和旧档案。</p>
+                <textarea class="text_pole" data-rmt-tag-draft aria-label="不读取的标签名" placeholder="thinking, 绘图提示词标签"></textarea>
+                <div class="rmt-theme-presets"><button type="button" data-rmt-tag-scan>扫描当前聊天</button><button type="button" data-rmt-tag-all>全选</button><button type="button" data-rmt-tag-invert>反选</button><button type="button" data-rmt-tag-clear>清空选择</button><button type="button" data-rmt-tag-cancel>撤销编辑</button><button type="button" data-rmt-tag-save>保存选择</button></div>
+                <div data-rmt-tag-status role="status"></div>
+                <div data-rmt-tag-results></div>
+              </div>
+            </details>
+            <details class="rmt-settings-card rmt-theme-box" data-rmt-settings-section="theme">
+              <summary class="rmt-settings-card-head"><span>UI</span><div><b>界面主题</b><small>配色与透明度</small></div></summary>
+              <div class="rmt-settings-section-body">
+              <label class="rmt-settings-field"><span>外观</span><select class="text_pole" data-rmt-theme-mode><option value="default">日间 · 珍珠白</option><option value="night">夜间 · 星黛蓝</option><option value="gs1">初叶绿</option><option value="gs2">海盐蓝</option><option value="gs3">花漾粉</option><option value="gs4">杏糖橙</option><option value="host">跟随酒馆美化</option><option value="custom">自定义配色</option></select></label>
+              <label class="rmt-settings-field"><span>悬浮头像</span><select class="text_pole" data-rmt-floating-avatar><option value="char">角色 char（默认）</option><option value="user">用户 user</option><option value="off">关闭</option></select></label>
+              <label class="rmt-settings-field"><span>卡片不透明度 <output data-rmt-theme-opacity></output></span><input data-rmt-theme-alpha type="range" min="0.72" max="1" step="0.01"></label>
+              <div class="rmt-theme-custom-panel" data-rmt-theme-custom-panel>
+                <div class="rmt-theme-presets"><button type="button" data-rmt-theme-preset="day">从日间开始</button><button type="button" data-rmt-theme-preset="night">从夜间开始</button></div>
+                <label><span>背景</span><input type="color" data-rmt-theme-color="background"></label>
+                <label><span>卡片</span><input type="color" data-rmt-theme-color="surface"></label>
+                <label><span>主文字</span><input type="color" data-rmt-theme-color="text"></label>
+                <label><span>次文字</span><input type="color" data-rmt-theme-color="muted"></label>
+                <label><span>选中与装饰色</span><input type="color" data-rmt-theme-color="accent"></label>
+                <label><span>第二装饰色</span><input type="color" data-rmt-theme-color="accentAlt"></label>
+                <label><span>边框</span><input type="color" data-rmt-theme-color="border"></label>
+              </div>
+              <button type="button" class="menu_button rmt-settings-wide" data-rmt-theme-reset>恢复默认配色</button>
+              </div>
+            </details>
+            <details class="rmt-settings-card" data-rmt-settings-section="auto">
+              <summary class="rmt-settings-card-head"><span>↻</span><div><b>自动留忆</b><small>和这个角色的回忆 · 向导与间隔</small></div></summary>
+              <div class="rmt-settings-section-body">
+              <p>只在已有档案的当前聊天里运行。打开后从当前楼数起计。</p>
+              <p data-rmt-memory-due hidden></p>
+              <label class="rmt-settings-field"><span>每隔多少楼抽一次</span><input class="text_pole" data-rmt-auto-memory-interval type="number" min="1" max="1000" step="1" value="5" aria-label="每隔多少楼抽一次"></label>
+              <small>到了这个间隔就从勾选的回忆里抽一份。1 到 1000。改完从现在重新计。</small>
+              <label class="rmt-settings-check"><input type="checkbox" data-rmt-auto-memory-latest ><span>在最新角色楼生成回忆</span></label>
+              <small>勾上后只数角色楼。间隔是 1 时，只用最新一条角色楼的正文。间隔更大时，这一窗角色楼的正文都会送去建档，不再截短。有摘要时，摘要没写到的楼附上完整正文。</small>
+              <small>打开自动留忆后，需要两次才完整的模块会自动做第二次生成。两次合在一起才是一份完整回忆。手动生成仍看连接设置里的开关。</small>
+              <label class="rmt-settings-check"><input type="checkbox" data-rmt-auto-memory-retry ><span>失败后自动重试</span></label>
+              <label class="rmt-settings-field"><span>失败后重试次数</span><input class="text_pole" data-rmt-auto-memory-retry-count type="number" min="1" max="5" step="1" value="1" aria-label="失败后重试次数"></label>
+              <small>勾上之后，信上的重试和补成就会自己跑，次数是 1 到 5。没勾就只有点了才发。已经写好的步骤会留着。</small>
+              <small>当前这一份回忆可以再写一遍。下面三个按钮不一样。</small>
+              <button type="button" class="menu_button rmt-settings-wide" data-rmt-auto-memory-redo="keep">按原来的抽签再写</button>
+              <small>还是刚才抽中的那一项，再写一遍。</small>
+              <button type="button" class="menu_button rmt-settings-wide" data-rmt-auto-memory-redo="redraw">重新抽一份</button>
+              <small>丢掉这次抽签，从已勾选的回忆里另抽一项来写。</small>
+              <button type="button" class="menu_button rmt-settings-wide" data-rmt-auto-memory-redo="pick">自己选一份</button>
+              <small>不抽签。点开后从清单里选一项来写。</small>
+              <details class="rmt-envelope-picker"><summary><span class="rmt-envelope-current" data-rmt-envelope-current><svg class="rmt-envelope" viewBox="0 0 280 190" aria-hidden="true" focusable="false"><rect x="8" y="18" width="264" height="164" rx="22" fill="#f6c6d4"/>
+            <path d="M8 146 L140 86 L272 146 L272 160 Q272 182 250 182 L30 182 Q8 182 8 160 Z" fill="#f3b4c8"/>
+            <path d="M8 146 L140 86 L140 182 L30 182 Q8 182 8 160 Z" fill="#eea9c0"/>
+            <path d="M20 36 L260 36 L140 124 Z" fill="#fff2f5"/>
+            <path d="M20 36 L140 124 L140 36 Z" fill="#fde7ee"/>
+            <path d="M140 112c-15-13-34-26-34-43 0-12 9-21 21-21 7 0 13 4 13 4s6-4 13-4c12 0 21 9 21 21 0 17-19 30-34 43z" fill="#d64578"/></svg></span><span><b>信封样式</b><small data-rmt-envelope-current-name>现在 粉色信封</small></span></summary><p>点开再选。六款一样大，用在聊天里的那封信上。</p><div class="rmt-envelope-options"><label class="rmt-envelope-option is-on"><input type="radio" name="rmt-heart-envelope" data-rmt-heart-envelope value="pink" checked><span class="rmt-envelope-art"><svg class="rmt-envelope" viewBox="0 0 280 190" aria-hidden="true" focusable="false"><rect x="8" y="18" width="264" height="164" rx="22" fill="#f6c6d4"/>
+            <path d="M8 146 L140 86 L272 146 L272 160 Q272 182 250 182 L30 182 Q8 182 8 160 Z" fill="#f3b4c8"/>
+            <path d="M8 146 L140 86 L140 182 L30 182 Q8 182 8 160 Z" fill="#eea9c0"/>
+            <path d="M20 36 L260 36 L140 124 Z" fill="#fff2f5"/>
+            <path d="M20 36 L140 124 L140 36 Z" fill="#fde7ee"/>
+            <path d="M140 112c-15-13-34-26-34-43 0-12 9-21 21-21 7 0 13 4 13 4s6-4 13-4c12 0 21 9 21 21 0 17-19 30-34 43z" fill="#d64578"/></svg></span><span>现在 粉色信封</span></label><label class="rmt-envelope-option"><input type="radio" name="rmt-heart-envelope" data-rmt-heart-envelope value="wax" ><span class="rmt-envelope-art"><svg class="rmt-envelope" viewBox="0 0 280 190" aria-hidden="true" focusable="false"><rect x="8" y="18" width="264" height="164" rx="18" fill="#f3e6d0"/>
+            <path d="M8 148 L140 84 L272 148 V162 Q272 182 250 182 H30 Q8 182 8 162 Z" fill="#e7d3b4"/>
+            <path d="M22 34 H258 L140 122 Z" fill="#fbf6ee"/>
+            <path d="M22 34 L140 122 V34 Z" fill="#f4ead8"/>
+            <circle cx="140" cy="100" r="24" fill="#8e2a2a"/>
+            <circle cx="140" cy="100" r="18" fill="#a33b3b"/>
+            <path d="M140 108c-5-4-10-8-10-13 0-4 3-6 6-6 2 0 4 1 4 1s2-1 4-1c3 0 6 2 6 6 0 5-5 9-10 13z" fill="#f6d5d8"/></svg></span><span>A 蜡封信</span></label><label class="rmt-envelope-option"><input type="radio" name="rmt-heart-envelope" data-rmt-heart-envelope value="night" ><span class="rmt-envelope-art"><svg class="rmt-envelope" viewBox="0 0 280 190" aria-hidden="true" focusable="false"><rect x="8" y="18" width="264" height="164" rx="18" fill="#15233f"/>
+            <path d="M8 148 L140 82 L272 148 V162 Q272 182 250 182 H30 Q8 182 8 162 Z" fill="#1c2e52"/>
+            <path d="M22 34 H258 L140 120 Z" fill="none" stroke="#e4c56a" stroke-width="2"/>
+            <path d="M22 34 L140 120" fill="none" stroke="#e4c56a" stroke-width="1.4"/>
+            <path d="M258 34 L140 120" fill="none" stroke="#e4c56a" stroke-width="1.4"/>
+            <circle cx="46" cy="58" r="1.4" fill="#f4e7b2"/><circle cx="78" cy="48" r="1.2" fill="#f4e7b2"/>
+            <circle cx="210" cy="52" r="1.3" fill="#f4e7b2"/><circle cx="236" cy="70" r="1.1" fill="#f4e7b2"/>
+            <circle cx="188" cy="40" r="1.2" fill="#f4e7b2"/>
+            <path d="M128 92a16 16 0 1 0 18 10 12 12 0 1 1-18-10z" fill="#f3e7c2"/></svg></span><span>B 星夜信</span></label><label class="rmt-envelope-option"><input type="radio" name="rmt-heart-envelope" data-rmt-heart-envelope value="sakura" ><span class="rmt-envelope-art"><svg class="rmt-envelope" viewBox="0 0 280 190" aria-hidden="true" focusable="false"><rect x="8" y="18" width="264" height="164" rx="22" fill="#fde8ef"/>
+            <path d="M8 148 L140 86 L272 148 V162 Q272 182 250 182 H30 Q8 182 8 162 Z" fill="#f8d5e2"/>
+            <path d="M22 34 H258 L140 120 Z" fill="#fff7f9"/>
+            <g fill="#f4a8c0" transform="translate(48 64)"><circle cx="-6" cy="0" r="4"/><circle cx="6" cy="0" r="4"/><circle cx="0" cy="-6" r="4"/><circle cx="0" cy="6" r="4"/><circle cx="0" cy="0" r="2.2" fill="#f7d7e2"/></g><g fill="#f4a8c0" transform="translate(228 58)"><circle cx="-6" cy="0" r="4"/><circle cx="6" cy="0" r="4"/><circle cx="0" cy="-6" r="4"/><circle cx="0" cy="6" r="4"/><circle cx="0" cy="0" r="2.2" fill="#f7d7e2"/></g><g fill="#f4a8c0" transform="translate(62 150)"><circle cx="-6" cy="0" r="4"/><circle cx="6" cy="0" r="4"/><circle cx="0" cy="-6" r="4"/><circle cx="0" cy="6" r="4"/><circle cx="0" cy="0" r="2.2" fill="#f7d7e2"/></g><g fill="#f4a8c0" transform="translate(214 146)"><circle cx="-6" cy="0" r="4"/><circle cx="6" cy="0" r="4"/><circle cx="0" cy="-6" r="4"/><circle cx="0" cy="6" r="4"/><circle cx="0" cy="0" r="2.2" fill="#f7d7e2"/></g>
+            <path d="M140 108c-8-7-18-14-18-23 0-6 5-11 11-11 4 0 7 2 7 2s3-2 7-2c6 0 11 5 11 11 0 9-10 16-18 23z" fill="#e56b92"/></svg></span><span>C 樱花信</span></label><label class="rmt-envelope-option"><input type="radio" name="rmt-heart-envelope" data-rmt-heart-envelope value="airmail" ><span class="rmt-envelope-art"><svg class="rmt-envelope" viewBox="0 0 280 190" aria-hidden="true" focusable="false"><line x1="-64" y1="200" x2="28" y2="-8" stroke="#d64545" stroke-width="8"/><line x1="-48" y1="200" x2="44" y2="-8" stroke="#2a4f96" stroke-width="8"/><line x1="-32" y1="200" x2="60" y2="-8" stroke="#d64545" stroke-width="8"/><line x1="-16" y1="200" x2="76" y2="-8" stroke="#2a4f96" stroke-width="8"/><line x1="0" y1="200" x2="92" y2="-8" stroke="#d64545" stroke-width="8"/><line x1="16" y1="200" x2="108" y2="-8" stroke="#2a4f96" stroke-width="8"/><line x1="32" y1="200" x2="124" y2="-8" stroke="#d64545" stroke-width="8"/><line x1="48" y1="200" x2="140" y2="-8" stroke="#2a4f96" stroke-width="8"/><line x1="64" y1="200" x2="156" y2="-8" stroke="#d64545" stroke-width="8"/><line x1="80" y1="200" x2="172" y2="-8" stroke="#2a4f96" stroke-width="8"/><line x1="96" y1="200" x2="188" y2="-8" stroke="#d64545" stroke-width="8"/><line x1="112" y1="200" x2="204" y2="-8" stroke="#2a4f96" stroke-width="8"/><line x1="128" y1="200" x2="220" y2="-8" stroke="#d64545" stroke-width="8"/><line x1="144" y1="200" x2="236" y2="-8" stroke="#2a4f96" stroke-width="8"/><line x1="160" y1="200" x2="252" y2="-8" stroke="#d64545" stroke-width="8"/><line x1="176" y1="200" x2="268" y2="-8" stroke="#2a4f96" stroke-width="8"/><line x1="192" y1="200" x2="284" y2="-8" stroke="#d64545" stroke-width="8"/><line x1="208" y1="200" x2="300" y2="-8" stroke="#2a4f96" stroke-width="8"/><line x1="224" y1="200" x2="316" y2="-8" stroke="#d64545" stroke-width="8"/><line x1="240" y1="200" x2="332" y2="-8" stroke="#2a4f96" stroke-width="8"/><line x1="256" y1="200" x2="348" y2="-8" stroke="#d64545" stroke-width="8"/><line x1="272" y1="200" x2="364" y2="-8" stroke="#2a4f96" stroke-width="8"/><line x1="288" y1="200" x2="380" y2="-8" stroke="#d64545" stroke-width="8"/><line x1="304" y1="200" x2="396" y2="-8" stroke="#2a4f96" stroke-width="8"/><line x1="320" y1="200" x2="412" y2="-8" stroke="#d64545" stroke-width="8"/><line x1="336" y1="200" x2="428" y2="-8" stroke="#2a4f96" stroke-width="8"/>
+            <rect x="22" y="30" width="236" height="132" fill="#fffdf8"/>
+            <text x="36" y="72" fill="#2a4f96" font-size="14" font-family="Georgia, 'Times New Roman', serif" letter-spacing="1.4">PAR AVION</text>
+            <path d="M36 92 H168 M36 106 H168 M36 120 H120" stroke="#c9bbaa" stroke-width="1.2"/>
+            <circle cx="176" cy="58" r="15" fill="none" stroke="#7d6a62" stroke-width="1.3"/>
+            <circle cx="176" cy="58" r="10" fill="none" stroke="#7d6a62" stroke-width="1"/>
+            <rect x="198" y="36" width="46" height="38" rx="3" fill="#f7c5d4" stroke="#e08aa6"/>
+            <path d="M221 56c-4-4-9-6-9-2 0 5 9 9 9 9s9-4 9-9c0-4-5-2-9 2z" fill="#d64578"/></svg></span><span>D 航空邮简</span></label><label class="rmt-envelope-option"><input type="radio" name="rmt-heart-envelope" data-rmt-heart-envelope value="wash" ><span class="rmt-envelope-art"><svg class="rmt-envelope" viewBox="0 0 280 190" aria-hidden="true" focusable="false"><rect x="8" y="18" width="264" height="164" rx="22" fill="#e5d2f4"/>
+            <ellipse cx="214" cy="150" rx="150" ry="110" fill="#f8c9b4"/>
+            <ellipse cx="52" cy="46" rx="78" ry="52" fill="#f6e7fb"/>
+            <path d="M8 148 L140 86 L272 148" fill="none" stroke="#fff" stroke-width="3" opacity=".85"/>
+            <path d="M140 112c-12-10-26-20-26-33 0-9 7-16 16-16 5 0 10 3 10 3s5-3 10-3c9 0 16 7 16 16 0 13-14 23-26 33z" fill="#fff"/></svg></span><span>E 水彩渐变</span></label></div></details>
+              <div data-rmt-auto-memory-pick hidden></div>
+              <p data-rmt-auto-memory-redo-status role="status"></p>
+              <button type="button" class="menu_button rmt-settings-wide" data-rmt-auto-memory-wizard>打开回忆向导</button>
+              <small>向导先接 API、读取范围和档案。生图和文字 API 分开配，配完点下一步。结束后再问要不要自动留忆。已有档案时不会重新建档。</small>
+              <p data-rmt-auto-memory-gate role="status"></p>
+              <button type="button" class="menu_button rmt-settings-wide" data-rmt-auto-memory-restore hidden>关闭自动留忆</button>
+              </div>
+            </details>
+            <details class="rmt-settings-card rmt-api-box" data-rmt-settings-section="memory">
+              <summary class="rmt-settings-card-head"><span>MEM</span><div><b>记忆来源</b><small>当前角色 · 当前聊天</small></div></summary>
+              <div class="rmt-settings-section-body">
+              <div class="rmt-api-source-grid" role="group" aria-label="记忆来源操作">
+                <button type="button" class="menu_button rmt-api-source-card" data-rmt-memory-auto-read><span class="rmt-api-source-badge">AUTO</span><b>自动读取</b><small>已注册的当前聊天来源</small></button>
+                <button type="button" class="menu_button rmt-api-source-card" data-rmt-memory-file-choose><span class="rmt-api-source-badge">FILE</span><b>导入记忆</b><small>JSON · JSONL · TXT · Markdown</small></button>
+              </div>
+              <label class="rmt-settings-check"><input type="checkbox" data-rmt-source-external checked><span>读取当前聊天的外部记忆摘要</span></label>
+              <label class="rmt-settings-check"><input type="checkbox" data-rmt-source-world-info checked><span>读取自动激活的世界书</span></label>
+              <p>聊天范围只控制聊天摘录。外部摘要、自动激活世界书分别由上方开关控制；手动选择的世界书仍按下方来源设置读取。已有档案不会被删除，派生模块仍使用已经归档的记忆。</p>
+              <button type="button" class="menu_button rmt-settings-wide" data-rmt-action="memory-worldinfo-picker" >选择记忆相关世界书</button>
+              <button type="button" class="menu_button rmt-settings-wide" data-rmt-action="participants-picker">选择加入回廊的人物</button>
+              <button type="button" class="menu_button rmt-settings-wide" data-rmt-action="participants-versions">查看重做前的旧版本</button>
+              <input type="file" accept=".json,.jsonl,.txt,.md,.markdown,application/json,text/plain,text/markdown" data-rmt-memory-file-input hidden>
+              <div class="rmt-api-status" data-rmt-memory-ingress-status role="status">展开记忆来源后查看状态；不会自动导入或生成。</div>
+              <div class="rmt-api-source-panel" data-rmt-memory-file-preview hidden>
+                <b data-rmt-memory-file-preview-title>待确认的记忆文件</b>
+                <small data-rmt-memory-file-preview-meta></small>
+                <small data-rmt-memory-file-preview-binding></small>
+                <div data-rmt-memory-file-preview-sample></div>
+                <label class="checkbox_label rmt-settings-check"><input type="checkbox" data-rmt-memory-file-history-confirm> 我确认这是已经发生的历史/摘要，不是角色设定</label>
+                <button type="button" class="menu_button rmt-settings-wide" data-rmt-memory-file-commit disabled>确认作为历史导入当前聊天</button>
+              </div>
+              <details class="rmt-api-source-panel"><summary>来源详情与世界书类型</summary>
+                <div data-rmt-memory-source-list>暂无持久化来源。</div>
+                <div data-rmt-memory-history-books></div>
+              </details>
+              <div data-rmt-scene-picker></div>
+              <button type="button" class="menu_button rmt-settings-wide" data-rmt-memory-source-clear>清除当前聊天已导入来源</button>
+              <small>只清除心迹回廊自己的来源账本；不会删除聊天、第三方记忆或正式 Mxxx。</small>
+              </div>
+            </details>
+            <div class="rmt-settings-archive-actions">
+              <button type="button" class="menu_button rmt-open-archive-room" data-rmt-settings-current-archive><i class="fa-solid fa-file-circle-plus"></i><span>生成当前窗口档案</span></button>
+              <button type="button" class="menu_button rmt-open-archive-room" data-rmt-settings-open-archive><i class="fa-solid fa-box-archive"></i><span>打开档案室</span></button>
+            </div>
+          </div>
+  operator: 'match'
+  stack: |-
+    TestContext.<anonymous> (file:///workspace/scratch/c9f4993ef355/hearttrace-1.0.25-47l_6xrk/candidate/tokimemo-main/tools/verification/mv-update-regression.mjs:40:282)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+# Subtest: normal paid frame saves once and survives metadata failure through confirmed local copy
+ok 241 - normal paid frame saves once and survives metadata failure through confirmed local copy
+  ---
+  duration_ms: 242.558477
+  type: 'test'
+  ...
+# Subtest: storyboard saves alongside newer audio duration/timing without reverting either
+ok 242 - storyboard saves alongside newer audio duration/timing without reverting either
+  ---
+  duration_ms: 138.227432
+  type: 'test'
+  ...
+# Subtest: MV backup includes old metadata-only records before the first local write
+ok 243 - MV backup includes old metadata-only records before the first local write
+  ---
+  duration_ms: 121.454694
+  type: 'test'
+  ...
+# (node:443) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: existing song file control includes MP4 and MOV without changing the storyboard
+ok 244 - existing song file control includes MP4 and MOV without changing the storyboard
+  ---
+  duration_ms: 119.858747
+  type: 'test'
+  ...
+# Subtest: mp4: metadata alone cannot replace the old song; decoded data commits original container
+ok 245 - mp4: metadata alone cannot replace the old song; decoded data commits original container
+  ---
+  duration_ms: 129.522751
+  type: 'test'
+  ...
+# Subtest: mov: metadata alone cannot replace the old song; decoded data commits original container
+ok 246 - mov: metadata alone cannot replace the old song; decoded data commits original container
+  ---
+  duration_ms: 124.28914
+  type: 'test'
+  ...
+# Subtest: fragmented: metadata alone cannot replace the old song; decoded data commits original container
+ok 247 - fragmented: metadata alone cannot replace the old song; decoded data commits original container
+  ---
+  duration_ms: 158.827154
+  type: 'test'
+  ...
+# Subtest: silent: rejected before media load and keeps old audio, duration, timing and saved file
+ok 248 - silent: rejected before media load and keeps old audio, duration, timing and saved file
+  ---
+  duration_ms: 174.956003
+  type: 'test'
+  ...
+# Subtest: emptyTrack: rejected before media load and keeps old audio, duration, timing and saved file
+ok 249 - emptyTrack: rejected before media load and keeps old audio, duration, timing and saved file
+  ---
+  duration_ms: 162.293051
+  type: 'test'
+  ...
+# Subtest: damaged: rejected before media load and keeps old audio, duration, timing and saved file
+ok 250 - damaged: rejected before media load and keeps old audio, duration, timing and saved file
+  ---
+  duration_ms: 134.253388
+  type: 'test'
+  ...
+# Subtest: host decode error after valid audio-track inspection preserves old song
+ok 251 - host decode error after valid audio-track inspection preserves old song
+  ---
+  duration_ms: 144.352849
+  type: 'test'
+  ...
+# Subtest: video audio shares preview play, pause, seek, timing marks and export source
+ok 252 - video audio shares preview play, pause, seek, timing marks and export source
+  ---
+  duration_ms: 163.150677
+  type: 'test'
+  ...
+# Subtest: a newer file selection wins over a delayed video decoder result
+ok 253 - a newer file selection wins over a delayed video decoder result
+  ---
+  duration_ms: 120.929115
+  type: 'test'
+  ...
+# Subtest: switching songs during track inspection or decoding never commits into either song
+ok 254 - switching songs during track inspection or decoding never commits into either song
+  ---
+  duration_ms: 280.736802
+  type: 'test'
+  ...
+# Subtest: fresh runtime restores original video container and validates it before use
+ok 255 - fresh runtime restores original video container and validates it before use
+  ---
+  duration_ms: 251.180467
+  type: 'test'
+  ...
+# Subtest: failed cached-video restore stops after one attempt instead of retrying on its own redraw
+ok 256 - failed cached-video restore stops after one attempt instead of retrying on its own redraw
+  ---
+  duration_ms: 275.741037
+  type: 'test'
+  ...
+# Subtest: HTML has one music entry, one player, all image controls and the same export/recovery entries
+ok 257 - HTML has one music entry, one player, all image controls and the same export/recovery entries
+  ---
+  duration_ms: 3.918753
+  type: 'test'
+  ...
+# Subtest: local recording uses the one shared sound element and current filename
+ok 258 - local recording uses the one shared sound element and current filename
+  ---
+  duration_ms: 3.573831
+  type: 'test'
+  ...
+# Subtest: failed new recording retains the loaded music and timing
+ok 259 - failed new recording retains the loaded music and timing
+  ---
+  duration_ms: 1.958875
+  type: 'test'
+  ...
+# Subtest: remove switches the same entry back to import without clearing pictures or marks
+ok 260 - remove switches the same entry back to import without clearing pictures or marks
+  ---
+  duration_ms: 1.242674
+  type: 'test'
+  ...
+1..260
+# tests 260
+# suites 0
+# pass 254
+# fail 6
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 10662.782594

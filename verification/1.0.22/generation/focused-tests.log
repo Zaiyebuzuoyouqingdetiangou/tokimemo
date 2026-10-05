@@ -1,0 +1,41 @@
+(node:13) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ album second-step intent is saved before requests and old pictures/fields are preserved on completion (502.072849ms)
+✔ failed dialogue batch keeps successful partials readable and fresh runtime resumes only missing dialogue (524.93208ms)
+✔ legacy second-step journal without intent flag resumes from its original relation/comment slots (508.219872ms)
+✔ filling a new photograph retains already complete legacy four-line dialogue and its relationship basis (236.297111ms)
+✔ an incomplete six-line-contract entry is completed, and a four-line new reply still fails validation (226.472929ms)
+✔ concurrent error waits for in-flight successful dialogue and does not dispatch later batches (287.899925ms)
+✔ cancelling the two in-flight dialogue requests releases task state and preserves the old album (255.497045ms)
+(node:14) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ known host failure retains RMT_CONNECTION_NETWORK without exposing error text (207.840513ms)
+✔ known host failure retains RMT_CONNECTION_NETWORK without exposing error text (263.308011ms)
+✔ known host failure retains RMT_CONNECTION_NETWORK without exposing error text (183.29004ms)
+✔ known host failure retains RMT_CONNECTION_NETWORK without exposing error text (193.8219ms)
+✔ known host failure retains RMT_CONNECTION_SERVER without exposing error text (209.468047ms)
+✔ known host failure retains RMT_CONNECTION_SERVER without exposing error text (196.565521ms)
+✔ numeric status remains authoritative over text hints and unknown wrappers stay unknown (200.347832ms)
+✔ ordinary final text and JSON quoting error labels do not acquire a new error gate (202.779987ms)
+✔ classified TT network failure still issues one request and exports only safe classification (237.551273ms)
+(node:15) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ TT Chinese 71-character synthetic completion is a transport failure, not missing JSON (250.454928ms)
+✔ localized error labels work after host metadata is stripped, including profile streams (191.70555ms)
+✔ canonical TT error envelopes support other locales and never accept JSON from an error body (187.549639ms)
+✔ recognized host envelope preserves status before a nested upstream JSON error (139.080465ms)
+✔ known API error without a status remains an unknown connection failure, not an invented 524 (175.574927ms)
+✔ validated requests never automatically reroll recognized TT error placeholders (467.86579ms)
+✔ normal JSON and existing safe wrappers keep every field, quote, brace, tag and lyric unchanged (172.984195ms)
+✔ partial JSON is not stripped; unfinished data, HTML and reasoning remain on their existing paths (159.354187ms)
+✔ incidental labels and noncanonical IDs do not become new generation gates (157.204563ms)
+✔ failed regeneration leaves existing pictures, timings and shots intact; next manual attempt succeeds (182.662484ms)
+✔ nested and streaming TT envelopes are recognized without treating quoted envelopes as errors (185.446129ms)
+ℹ tests 27
+ℹ suites 0
+ℹ pass 27
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2795.347439

@@ -152,7 +152,9 @@ export function normalizeConnectionManagerError(error) {
     const status = Number.isInteger(candidateStatus) && candidateStatus >= 400 && candidateStatus <= 599 ? candidateStatus : 0;
     // Numeric transport status is authoritative; generic words from wrappers may describe
     // an authentication service being rate-limited, not an invalid user credential.
-    const hints = status ? '' : original;
+    const categorizedHint = error?.transportFailureKind === 'network' ? 'network request failed'
+        : error?.transportFailureKind === 'timeout' ? 'request timeout' : '';
+    const hints = status ? '' : `${original} ${categorizedHint}`;
     const technical = status ? `（HTTP ${status}）` : safeCode ? `（${safeCode}）` : '';
     const sourceName = error?.code === 'RMT_MANUAL_HTTP' ? '手动 API' : '专用连接';
     let code = 'RMT_CONNECTION_FAILED';

@@ -1,0 +1,2224 @@
+[
+  {
+    "build": "baseline",
+    "file": "bedtime-regression.mjs",
+    "variant": "default",
+    "argv": [
+      "node",
+      "--experimental-vm-modules",
+      "--test",
+      "--test-isolation=none",
+      "--test-reporter=tap",
+      "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main/tools/verification/bedtime-regression.mjs"
+    ],
+    "test_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "baseline_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "previous_build_root": null,
+    "exit_code": 0,
+    "timeout": false,
+    "seconds": 1.369,
+    "totals": {
+      "tests": 19,
+      "pass": 19,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "failures": [],
+    "log": "baseline/bedtime-regression.tap"
+  },
+  {
+    "build": "candidate",
+    "file": "bedtime-regression.mjs",
+    "variant": "default",
+    "argv": [
+      "node",
+      "--experimental-vm-modules",
+      "--test",
+      "--test-isolation=none",
+      "--test-reporter=tap",
+      "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main/tools/verification/bedtime-regression.mjs"
+    ],
+    "test_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main",
+    "baseline_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "previous_build_root": null,
+    "exit_code": 0,
+    "timeout": false,
+    "seconds": 1.97,
+    "totals": {
+      "tests": 19,
+      "pass": 19,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "failures": [],
+    "log": "candidate/bedtime-regression.tap"
+  },
+  {
+    "build": "candidate",
+    "file": "album-completion-regression.mjs",
+    "variant": "default",
+    "argv": [
+      "node",
+      "--experimental-vm-modules",
+      "--test",
+      "--test-isolation=none",
+      "--test-reporter=tap",
+      "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main/tools/verification/album-completion-regression.mjs"
+    ],
+    "test_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main",
+    "baseline_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "previous_build_root": null,
+    "exit_code": 0,
+    "timeout": false,
+    "seconds": 3.047,
+    "totals": {
+      "tests": 7,
+      "pass": 7,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "failures": [],
+    "log": "candidate/album-completion-regression.tap"
+  },
+  {
+    "build": "candidate",
+    "file": "connection-error-category-regression.mjs",
+    "variant": "default",
+    "argv": [
+      "node",
+      "--experimental-vm-modules",
+      "--test",
+      "--test-isolation=none",
+      "--test-reporter=tap",
+      "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main/tools/verification/connection-error-category-regression.mjs"
+    ],
+    "test_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main",
+    "baseline_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "previous_build_root": null,
+    "exit_code": 0,
+    "timeout": false,
+    "seconds": 1.977,
+    "totals": {
+      "tests": 9,
+      "pass": 9,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "failures": [],
+    "log": "candidate/connection-error-category-regression.tap"
+  },
+  {
+    "build": "baseline",
+    "file": "generation-regression.mjs",
+    "variant": "default",
+    "argv": [
+      "node",
+      "--experimental-vm-modules",
+      "--test",
+      "--test-isolation=none",
+      "--test-reporter=tap",
+      "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main/tools/verification/generation-regression.mjs"
+    ],
+    "test_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "baseline_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "previous_build_root": null,
+    "exit_code": 0,
+    "timeout": false,
+    "seconds": 4.643,
+    "totals": {
+      "tests": 15,
+      "pass": 15,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "failures": [],
+    "log": "baseline/generation-regression.tap"
+  },
+  {
+    "build": "candidate",
+    "file": "generation-regression.mjs",
+    "variant": "default",
+    "argv": [
+      "node",
+      "--experimental-vm-modules",
+      "--test",
+      "--test-isolation=none",
+      "--test-reporter=tap",
+      "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main/tools/verification/generation-regression.mjs"
+    ],
+    "test_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main",
+    "baseline_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "previous_build_root": null,
+    "exit_code": 0,
+    "timeout": false,
+    "seconds": 3.101,
+    "totals": {
+      "tests": 15,
+      "pass": 15,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "failures": [],
+    "log": "candidate/generation-regression.tap"
+  },
+  {
+    "build": "baseline",
+    "file": "content-selection-regression.mjs",
+    "variant": "default",
+    "argv": [
+      "node",
+      "--experimental-vm-modules",
+      "--test",
+      "--test-isolation=none",
+      "--test-reporter=tap",
+      "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main/tools/verification/content-selection-regression.mjs"
+    ],
+    "test_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "baseline_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "previous_build_root": null,
+    "exit_code": 0,
+    "timeout": false,
+    "seconds": 10.428,
+    "totals": {
+      "tests": 38,
+      "pass": 38,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "failures": [],
+    "log": "baseline/content-selection-regression.tap"
+  },
+  {
+    "build": "candidate",
+    "file": "content-selection-regression.mjs",
+    "variant": "default",
+    "argv": [
+      "node",
+      "--experimental-vm-modules",
+      "--test",
+      "--test-isolation=none",
+      "--test-reporter=tap",
+      "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main/tools/verification/content-selection-regression.mjs"
+    ],
+    "test_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main",
+    "baseline_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "previous_build_root": null,
+    "exit_code": 0,
+    "timeout": false,
+    "seconds": 9.963,
+    "totals": {
+      "tests": 38,
+      "pass": 38,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "failures": [],
+    "log": "candidate/content-selection-regression.tap"
+  },
+  {
+    "build": "baseline",
+    "file": "mv-auto-material-regression.mjs",
+    "variant": "default",
+    "argv": [
+      "node",
+      "--experimental-vm-modules",
+      "--test",
+      "--test-isolation=none",
+      "--test-reporter=tap",
+      "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main/tools/verification/mv-auto-material-regression.mjs"
+    ],
+    "test_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "baseline_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "previous_build_root": null,
+    "exit_code": 0,
+    "timeout": false,
+    "seconds": 1.458,
+    "totals": {
+      "tests": 8,
+      "pass": 8,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "failures": [],
+    "log": "baseline/mv-auto-material-regression.tap"
+  },
+  {
+    "build": "candidate",
+    "file": "music-link-loading-regression.mjs",
+    "variant": "default",
+    "argv": [
+      "node",
+      "--experimental-vm-modules",
+      "--test",
+      "--test-isolation=none",
+      "--test-reporter=tap",
+      "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main/tools/verification/music-link-loading-regression.mjs"
+    ],
+    "test_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main",
+    "baseline_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "previous_build_root": null,
+    "exit_code": 0,
+    "timeout": false,
+    "seconds": 3.359,
+    "totals": {
+      "tests": 18,
+      "pass": 18,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "failures": [],
+    "log": "candidate/music-link-loading-regression.tap"
+  },
+  {
+    "build": "candidate",
+    "file": "mv-auto-material-regression.mjs",
+    "variant": "default",
+    "argv": [
+      "node",
+      "--experimental-vm-modules",
+      "--test",
+      "--test-isolation=none",
+      "--test-reporter=tap",
+      "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main/tools/verification/mv-auto-material-regression.mjs"
+    ],
+    "test_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main",
+    "baseline_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "previous_build_root": null,
+    "exit_code": 0,
+    "timeout": false,
+    "seconds": 1.866,
+    "totals": {
+      "tests": 8,
+      "pass": 8,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "failures": [],
+    "log": "candidate/mv-auto-material-regression.tap"
+  },
+  {
+    "build": "baseline",
+    "file": "mv-composite-regression.mjs",
+    "variant": "default",
+    "argv": [
+      "node",
+      "--experimental-vm-modules",
+      "--test",
+      "--test-isolation=none",
+      "--test-reporter=tap",
+      "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main/tools/verification/mv-composite-regression.mjs"
+    ],
+    "test_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "baseline_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "previous_build_root": null,
+    "exit_code": 0,
+    "timeout": false,
+    "seconds": 3.449,
+    "totals": {
+      "tests": 15,
+      "pass": 15,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "failures": [],
+    "log": "baseline/mv-composite-regression.tap"
+  },
+  {
+    "build": "baseline",
+    "file": "mv-cast-direction-regression.mjs",
+    "variant": "default",
+    "argv": [
+      "node",
+      "--experimental-vm-modules",
+      "--test",
+      "--test-isolation=none",
+      "--test-reporter=tap",
+      "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main/tools/verification/mv-cast-direction-regression.mjs"
+    ],
+    "test_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "baseline_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "previous_build_root": null,
+    "exit_code": 0,
+    "timeout": false,
+    "seconds": 7.313,
+    "totals": {
+      "tests": 32,
+      "pass": 32,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "failures": [],
+    "log": "baseline/mv-cast-direction-regression.tap"
+  },
+  {
+    "build": "candidate",
+    "file": "mv-composite-regression.mjs",
+    "variant": "default",
+    "argv": [
+      "node",
+      "--experimental-vm-modules",
+      "--test",
+      "--test-isolation=none",
+      "--test-reporter=tap",
+      "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main/tools/verification/mv-composite-regression.mjs"
+    ],
+    "test_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main",
+    "baseline_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "previous_build_root": null,
+    "exit_code": 0,
+    "timeout": false,
+    "seconds": 4.334,
+    "totals": {
+      "tests": 15,
+      "pass": 15,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "failures": [],
+    "log": "candidate/mv-composite-regression.tap"
+  },
+  {
+    "build": "candidate",
+    "file": "mv-cast-direction-regression.mjs",
+    "variant": "default",
+    "argv": [
+      "node",
+      "--experimental-vm-modules",
+      "--test",
+      "--test-isolation=none",
+      "--test-reporter=tap",
+      "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main/tools/verification/mv-cast-direction-regression.mjs"
+    ],
+    "test_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main",
+    "baseline_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "previous_build_root": null,
+    "exit_code": 0,
+    "timeout": false,
+    "seconds": 8.26,
+    "totals": {
+      "tests": 32,
+      "pass": 32,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "failures": [],
+    "log": "candidate/mv-cast-direction-regression.tap"
+  },
+  {
+    "build": "baseline",
+    "file": "mv-continuation-regression.mjs",
+    "variant": "default",
+    "argv": [
+      "node",
+      "--experimental-vm-modules",
+      "--test",
+      "--test-isolation=none",
+      "--test-reporter=tap",
+      "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main/tools/verification/mv-continuation-regression.mjs"
+    ],
+    "test_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "baseline_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "previous_build_root": null,
+    "exit_code": 0,
+    "timeout": false,
+    "seconds": 7.808,
+    "totals": {
+      "tests": 28,
+      "pass": 28,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "failures": [],
+    "log": "baseline/mv-continuation-regression.tap"
+  },
+  {
+    "build": "baseline",
+    "file": "mv-cutout-frame-regression.mjs",
+    "variant": "default",
+    "argv": [
+      "node",
+      "--experimental-vm-modules",
+      "--test",
+      "--test-isolation=none",
+      "--test-reporter=tap",
+      "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main/tools/verification/mv-cutout-frame-regression.mjs"
+    ],
+    "test_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "baseline_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "previous_build_root": null,
+    "exit_code": 0,
+    "timeout": false,
+    "seconds": 6.48,
+    "totals": {
+      "tests": 8,
+      "pass": 8,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "failures": [],
+    "log": "baseline/mv-cutout-frame-regression.tap"
+  },
+  {
+    "build": "candidate",
+    "file": "mv-continuation-regression.mjs",
+    "variant": "default",
+    "argv": [
+      "node",
+      "--experimental-vm-modules",
+      "--test",
+      "--test-isolation=none",
+      "--test-reporter=tap",
+      "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main/tools/verification/mv-continuation-regression.mjs"
+    ],
+    "test_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main",
+    "baseline_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "previous_build_root": null,
+    "exit_code": 0,
+    "timeout": false,
+    "seconds": 6.883,
+    "totals": {
+      "tests": 28,
+      "pass": 28,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "failures": [],
+    "log": "candidate/mv-continuation-regression.tap"
+  },
+  {
+    "build": "baseline",
+    "file": "mv-editor-framing-regression.mjs",
+    "variant": "default",
+    "argv": [
+      "node",
+      "--experimental-vm-modules",
+      "--test",
+      "--test-isolation=none",
+      "--test-reporter=tap",
+      "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main/tools/verification/mv-editor-framing-regression.mjs"
+    ],
+    "test_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "baseline_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "previous_build_root": null,
+    "exit_code": 0,
+    "timeout": false,
+    "seconds": 1.641,
+    "totals": {
+      "tests": 5,
+      "pass": 5,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "failures": [],
+    "log": "baseline/mv-editor-framing-regression.tap"
+  },
+  {
+    "build": "candidate",
+    "file": "mv-editor-framing-regression.mjs",
+    "variant": "default",
+    "argv": [
+      "node",
+      "--experimental-vm-modules",
+      "--test",
+      "--test-isolation=none",
+      "--test-reporter=tap",
+      "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main/tools/verification/mv-editor-framing-regression.mjs"
+    ],
+    "test_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main",
+    "baseline_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "previous_build_root": null,
+    "exit_code": 0,
+    "timeout": false,
+    "seconds": 2.266,
+    "totals": {
+      "tests": 5,
+      "pass": 5,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "failures": [],
+    "log": "candidate/mv-editor-framing-regression.tap"
+  },
+  {
+    "build": "candidate",
+    "file": "mv-cutout-frame-regression.mjs",
+    "variant": "default",
+    "argv": [
+      "node",
+      "--experimental-vm-modules",
+      "--test",
+      "--test-isolation=none",
+      "--test-reporter=tap",
+      "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main/tools/verification/mv-cutout-frame-regression.mjs"
+    ],
+    "test_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main",
+    "baseline_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "previous_build_root": null,
+    "exit_code": 0,
+    "timeout": false,
+    "seconds": 3.014,
+    "totals": {
+      "tests": 8,
+      "pass": 8,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "failures": [],
+    "log": "candidate/mv-cutout-frame-regression.tap"
+  },
+  {
+    "build": "baseline",
+    "file": "mv-editor-native-regression.mjs",
+    "variant": "default",
+    "argv": [
+      "node",
+      "--experimental-vm-modules",
+      "--test",
+      "--test-isolation=none",
+      "--test-reporter=tap",
+      "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main/tools/verification/mv-editor-native-regression.mjs"
+    ],
+    "test_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "baseline_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "previous_build_root": null,
+    "exit_code": 0,
+    "timeout": false,
+    "seconds": 2.683,
+    "totals": {
+      "tests": 10,
+      "pass": 10,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "failures": [],
+    "log": "baseline/mv-editor-native-regression.tap"
+  },
+  {
+    "build": "candidate",
+    "file": "mv-editor-native-regression.mjs",
+    "variant": "default",
+    "argv": [
+      "node",
+      "--experimental-vm-modules",
+      "--test",
+      "--test-isolation=none",
+      "--test-reporter=tap",
+      "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main/tools/verification/mv-editor-native-regression.mjs"
+    ],
+    "test_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main",
+    "baseline_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "previous_build_root": null,
+    "exit_code": 0,
+    "timeout": false,
+    "seconds": 2.506,
+    "totals": {
+      "tests": 10,
+      "pass": 10,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "failures": [],
+    "log": "candidate/mv-editor-native-regression.tap"
+  },
+  {
+    "build": "baseline",
+    "file": "mv-editor-workspace-regression.mjs",
+    "variant": "default",
+    "argv": [
+      "node",
+      "--experimental-vm-modules",
+      "--test",
+      "--test-isolation=none",
+      "--test-reporter=tap",
+      "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main/tools/verification/mv-editor-workspace-regression.mjs"
+    ],
+    "test_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "baseline_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "previous_build_root": null,
+    "exit_code": 0,
+    "timeout": false,
+    "seconds": 5.19,
+    "totals": {
+      "tests": 18,
+      "pass": 18,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "failures": [],
+    "log": "baseline/mv-editor-workspace-regression.tap"
+  },
+  {
+    "build": "candidate",
+    "file": "mv-editor-workspace-regression.mjs",
+    "variant": "default",
+    "argv": [
+      "node",
+      "--experimental-vm-modules",
+      "--test",
+      "--test-isolation=none",
+      "--test-reporter=tap",
+      "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main/tools/verification/mv-editor-workspace-regression.mjs"
+    ],
+    "test_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main",
+    "baseline_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "previous_build_root": null,
+    "exit_code": 0,
+    "timeout": false,
+    "seconds": 5.313,
+    "totals": {
+      "tests": 18,
+      "pass": 18,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "failures": [],
+    "log": "candidate/mv-editor-workspace-regression.tap"
+  },
+  {
+    "build": "baseline",
+    "file": "mv-framing-paths-regression.mjs",
+    "variant": "default",
+    "argv": [
+      "node",
+      "--experimental-vm-modules",
+      "--test",
+      "--test-isolation=none",
+      "--test-reporter=tap",
+      "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main/tools/verification/mv-framing-paths-regression.mjs"
+    ],
+    "test_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "baseline_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "previous_build_root": null,
+    "exit_code": 0,
+    "timeout": false,
+    "seconds": 6.21,
+    "totals": {
+      "tests": 21,
+      "pass": 21,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "failures": [],
+    "log": "baseline/mv-framing-paths-regression.tap"
+  },
+  {
+    "build": "baseline",
+    "file": "mv-host-response-regression.mjs",
+    "variant": "default",
+    "argv": [
+      "node",
+      "--experimental-vm-modules",
+      "--test",
+      "--test-isolation=none",
+      "--test-reporter=tap",
+      "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main/tools/verification/mv-host-response-regression.mjs"
+    ],
+    "test_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "baseline_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "previous_build_root": null,
+    "exit_code": 0,
+    "timeout": false,
+    "seconds": 2.137,
+    "totals": {
+      "tests": 11,
+      "pass": 11,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "failures": [],
+    "log": "baseline/mv-host-response-regression.tap"
+  },
+  {
+    "build": "candidate",
+    "file": "mv-host-response-regression.mjs",
+    "variant": "default",
+    "argv": [
+      "node",
+      "--experimental-vm-modules",
+      "--test",
+      "--test-isolation=none",
+      "--test-reporter=tap",
+      "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main/tools/verification/mv-host-response-regression.mjs"
+    ],
+    "test_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main",
+    "baseline_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "previous_build_root": null,
+    "exit_code": 0,
+    "timeout": false,
+    "seconds": 2.226,
+    "totals": {
+      "tests": 11,
+      "pass": 11,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "failures": [],
+    "log": "candidate/mv-host-response-regression.tap"
+  },
+  {
+    "build": "baseline",
+    "file": "mv-index-regression.mjs",
+    "variant": "default",
+    "argv": [
+      "node",
+      "--experimental-vm-modules",
+      "--test",
+      "--test-isolation=none",
+      "--test-reporter=tap",
+      "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main/tools/verification/mv-index-regression.mjs"
+    ],
+    "test_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "baseline_root": null,
+    "previous_build_root": null,
+    "exit_code": 1,
+    "timeout": false,
+    "seconds": 2.048,
+    "totals": {
+      "tests": 12,
+      "pass": 11,
+      "fail": 1,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "failures": [
+      "fresh runtime can repair an actual r84.209 blocked paid result with save-only retry"
+    ],
+    "log": "baseline/mv-index-regression.tap"
+  },
+  {
+    "build": "candidate",
+    "file": "mv-framing-paths-regression.mjs",
+    "variant": "default",
+    "argv": [
+      "node",
+      "--experimental-vm-modules",
+      "--test",
+      "--test-isolation=none",
+      "--test-reporter=tap",
+      "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main/tools/verification/mv-framing-paths-regression.mjs"
+    ],
+    "test_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main",
+    "baseline_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "previous_build_root": null,
+    "exit_code": 0,
+    "timeout": false,
+    "seconds": 6.084,
+    "totals": {
+      "tests": 21,
+      "pass": 21,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "failures": [],
+    "log": "candidate/mv-framing-paths-regression.tap"
+  },
+  {
+    "build": "candidate",
+    "file": "mv-index-regression.mjs",
+    "variant": "default",
+    "argv": [
+      "node",
+      "--experimental-vm-modules",
+      "--test",
+      "--test-isolation=none",
+      "--test-reporter=tap",
+      "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main/tools/verification/mv-index-regression.mjs"
+    ],
+    "test_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main",
+    "baseline_root": null,
+    "previous_build_root": null,
+    "exit_code": 1,
+    "timeout": false,
+    "seconds": 1.832,
+    "totals": {
+      "tests": 12,
+      "pass": 11,
+      "fail": 1,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "failures": [
+      "fresh runtime can repair an actual r84.209 blocked paid result with save-only retry"
+    ],
+    "log": "candidate/mv-index-regression.tap"
+  },
+  {
+    "build": "baseline",
+    "file": "mv-journal-upgrade-regression.mjs",
+    "variant": "default",
+    "argv": [
+      "node",
+      "--experimental-vm-modules",
+      "--test",
+      "--test-isolation=none",
+      "--test-reporter=tap",
+      "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main/tools/verification/mv-journal-upgrade-regression.mjs"
+    ],
+    "test_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "baseline_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "previous_build_root": null,
+    "exit_code": 1,
+    "timeout": false,
+    "seconds": 0.13,
+    "totals": {
+      "tests": 3,
+      "pass": 0,
+      "fail": 3,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "failures": [
+      "actual r215 paid image journal saves after upgrade without regenerating",
+      "actual r215 story journal saves after upgrade when its original record is unchanged",
+      "actual r215 snapshot story journal cannot erase a newer image after upgrade"
+    ],
+    "log": "baseline/mv-journal-upgrade-regression.tap"
+  },
+  {
+    "build": "candidate",
+    "file": "mv-journal-upgrade-regression.mjs",
+    "variant": "default",
+    "argv": [
+      "node",
+      "--experimental-vm-modules",
+      "--test",
+      "--test-isolation=none",
+      "--test-reporter=tap",
+      "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main/tools/verification/mv-journal-upgrade-regression.mjs"
+    ],
+    "test_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main",
+    "baseline_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "previous_build_root": null,
+    "exit_code": 1,
+    "timeout": false,
+    "seconds": 0.138,
+    "totals": {
+      "tests": 3,
+      "pass": 0,
+      "fail": 3,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "failures": [
+      "actual r215 paid image journal saves after upgrade without regenerating",
+      "actual r215 story journal saves after upgrade when its original record is unchanged",
+      "actual r215 snapshot story journal cannot erase a newer image after upgrade"
+    ],
+    "log": "candidate/mv-journal-upgrade-regression.tap"
+  },
+  {
+    "build": "baseline",
+    "file": "mv-intro-regression.mjs",
+    "variant": "default",
+    "argv": [
+      "node",
+      "--experimental-vm-modules",
+      "--test",
+      "--test-isolation=none",
+      "--test-reporter=tap",
+      "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main/tools/verification/mv-intro-regression.mjs"
+    ],
+    "test_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "baseline_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "previous_build_root": null,
+    "exit_code": 0,
+    "timeout": false,
+    "seconds": 2.03,
+    "totals": {
+      "tests": 8,
+      "pass": 8,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "failures": [],
+    "log": "baseline/mv-intro-regression.tap"
+  },
+  {
+    "build": "candidate",
+    "file": "mv-intro-regression.mjs",
+    "variant": "default",
+    "argv": [
+      "node",
+      "--experimental-vm-modules",
+      "--test",
+      "--test-isolation=none",
+      "--test-reporter=tap",
+      "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main/tools/verification/mv-intro-regression.mjs"
+    ],
+    "test_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main",
+    "baseline_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "previous_build_root": null,
+    "exit_code": 0,
+    "timeout": false,
+    "seconds": 1.987,
+    "totals": {
+      "tests": 8,
+      "pass": 8,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "failures": [],
+    "log": "candidate/mv-intro-regression.tap"
+  },
+  {
+    "build": "baseline",
+    "file": "mv-material-regression.mjs",
+    "variant": "default",
+    "argv": [
+      "node",
+      "--experimental-vm-modules",
+      "--test",
+      "--test-isolation=none",
+      "--test-reporter=tap",
+      "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main/tools/verification/mv-material-regression.mjs"
+    ],
+    "test_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "baseline_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "previous_build_root": null,
+    "exit_code": 0,
+    "timeout": false,
+    "seconds": 2.72,
+    "totals": {
+      "tests": 15,
+      "pass": 15,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "failures": [],
+    "log": "baseline/mv-material-regression.tap"
+  },
+  {
+    "build": "candidate",
+    "file": "mv-material-regression.mjs",
+    "variant": "default",
+    "argv": [
+      "node",
+      "--experimental-vm-modules",
+      "--test",
+      "--test-isolation=none",
+      "--test-reporter=tap",
+      "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main/tools/verification/mv-material-regression.mjs"
+    ],
+    "test_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main",
+    "baseline_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "previous_build_root": null,
+    "exit_code": 0,
+    "timeout": false,
+    "seconds": 3.003,
+    "totals": {
+      "tests": 15,
+      "pass": 15,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "failures": [],
+    "log": "candidate/mv-material-regression.tap"
+  },
+  {
+    "build": "baseline",
+    "file": "mv-media-sync-regression.mjs",
+    "variant": "default",
+    "argv": [
+      "node",
+      "--experimental-vm-modules",
+      "--test",
+      "--test-isolation=none",
+      "--test-reporter=tap",
+      "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main/tools/verification/mv-media-sync-regression.mjs"
+    ],
+    "test_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "baseline_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "previous_build_root": null,
+    "exit_code": 0,
+    "timeout": false,
+    "seconds": 4.282,
+    "totals": {
+      "tests": 17,
+      "pass": 17,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "failures": [],
+    "log": "baseline/mv-media-sync-regression.tap"
+  },
+  {
+    "build": "baseline",
+    "file": "mv-motif-regression.mjs",
+    "variant": "default",
+    "argv": [
+      "node",
+      "--experimental-vm-modules",
+      "--test",
+      "--test-isolation=none",
+      "--test-reporter=tap",
+      "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main/tools/verification/mv-motif-regression.mjs"
+    ],
+    "test_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "baseline_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "previous_build_root": null,
+    "exit_code": 0,
+    "timeout": false,
+    "seconds": 4.012,
+    "totals": {
+      "tests": 14,
+      "pass": 14,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "failures": [],
+    "log": "baseline/mv-motif-regression.tap"
+  },
+  {
+    "build": "candidate",
+    "file": "mv-motif-regression.mjs",
+    "variant": "default",
+    "argv": [
+      "node",
+      "--experimental-vm-modules",
+      "--test",
+      "--test-isolation=none",
+      "--test-reporter=tap",
+      "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main/tools/verification/mv-motif-regression.mjs"
+    ],
+    "test_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main",
+    "baseline_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "previous_build_root": null,
+    "exit_code": 0,
+    "timeout": false,
+    "seconds": 3.056,
+    "totals": {
+      "tests": 14,
+      "pass": 14,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "failures": [],
+    "log": "candidate/mv-motif-regression.tap"
+  },
+  {
+    "build": "candidate",
+    "file": "mv-media-sync-regression.mjs",
+    "variant": "default",
+    "argv": [
+      "node",
+      "--experimental-vm-modules",
+      "--test",
+      "--test-isolation=none",
+      "--test-reporter=tap",
+      "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main/tools/verification/mv-media-sync-regression.mjs"
+    ],
+    "test_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main",
+    "baseline_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "previous_build_root": null,
+    "exit_code": 0,
+    "timeout": false,
+    "seconds": 5.409,
+    "totals": {
+      "tests": 17,
+      "pass": 17,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "failures": [],
+    "log": "candidate/mv-media-sync-regression.tap"
+  },
+  {
+    "build": "baseline",
+    "file": "mv-navigation-regression.mjs",
+    "variant": "default",
+    "argv": [
+      "node",
+      "--experimental-vm-modules",
+      "--test",
+      "--test-isolation=none",
+      "--test-reporter=tap",
+      "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main/tools/verification/mv-navigation-regression.mjs"
+    ],
+    "test_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "baseline_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "previous_build_root": null,
+    "exit_code": 0,
+    "timeout": false,
+    "seconds": 2.681,
+    "totals": {
+      "tests": 16,
+      "pass": 16,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "failures": [],
+    "log": "baseline/mv-navigation-regression.tap"
+  },
+  {
+    "build": "baseline",
+    "file": "mv-music-link-regression.mjs",
+    "variant": "default",
+    "argv": [
+      "node",
+      "--experimental-vm-modules",
+      "--test",
+      "--test-isolation=none",
+      "--test-reporter=tap",
+      "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main/tools/verification/mv-music-link-regression.mjs"
+    ],
+    "test_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "baseline_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "previous_build_root": null,
+    "exit_code": 0,
+    "timeout": false,
+    "seconds": 6.163,
+    "totals": {
+      "tests": 29,
+      "pass": 29,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "failures": [],
+    "log": "baseline/mv-music-link-regression.tap"
+  },
+  {
+    "build": "candidate",
+    "file": "mv-navigation-regression.mjs",
+    "variant": "default",
+    "argv": [
+      "node",
+      "--experimental-vm-modules",
+      "--test",
+      "--test-isolation=none",
+      "--test-reporter=tap",
+      "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main/tools/verification/mv-navigation-regression.mjs"
+    ],
+    "test_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main",
+    "baseline_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "previous_build_root": null,
+    "exit_code": 0,
+    "timeout": false,
+    "seconds": 2.802,
+    "totals": {
+      "tests": 16,
+      "pass": 16,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "failures": [],
+    "log": "candidate/mv-navigation-regression.tap"
+  },
+  {
+    "build": "candidate",
+    "file": "mv-music-link-regression.mjs",
+    "variant": "default",
+    "argv": [
+      "node",
+      "--experimental-vm-modules",
+      "--test",
+      "--test-isolation=none",
+      "--test-reporter=tap",
+      "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main/tools/verification/mv-music-link-regression.mjs"
+    ],
+    "test_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main",
+    "baseline_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "previous_build_root": null,
+    "exit_code": 0,
+    "timeout": false,
+    "seconds": 6.089,
+    "totals": {
+      "tests": 29,
+      "pass": 29,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "failures": [],
+    "log": "candidate/mv-music-link-regression.tap"
+  },
+  {
+    "build": "candidate",
+    "file": "mv-overlays-regression.mjs",
+    "variant": "default",
+    "argv": [
+      "node",
+      "--experimental-vm-modules",
+      "--test",
+      "--test-isolation=none",
+      "--test-reporter=tap",
+      "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main/tools/verification/mv-overlays-regression.mjs"
+    ],
+    "test_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main",
+    "baseline_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "previous_build_root": null,
+    "exit_code": 0,
+    "timeout": false,
+    "seconds": 2.881,
+    "totals": {
+      "tests": 12,
+      "pass": 12,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "failures": [],
+    "log": "candidate/mv-overlays-regression.tap"
+  },
+  {
+    "build": "baseline",
+    "file": "mv-overlays-regression.mjs",
+    "variant": "default",
+    "argv": [
+      "node",
+      "--experimental-vm-modules",
+      "--test",
+      "--test-isolation=none",
+      "--test-reporter=tap",
+      "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main/tools/verification/mv-overlays-regression.mjs"
+    ],
+    "test_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "baseline_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "previous_build_root": null,
+    "exit_code": 0,
+    "timeout": false,
+    "seconds": 3.979,
+    "totals": {
+      "tests": 12,
+      "pass": 12,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "failures": [],
+    "log": "baseline/mv-overlays-regression.tap"
+  },
+  {
+    "build": "baseline",
+    "file": "mv-ratio-regression.mjs",
+    "variant": "default",
+    "argv": [
+      "node",
+      "--experimental-vm-modules",
+      "--test",
+      "--test-isolation=none",
+      "--test-reporter=tap",
+      "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main/tools/verification/mv-ratio-regression.mjs"
+    ],
+    "test_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "baseline_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "previous_build_root": null,
+    "exit_code": 0,
+    "timeout": false,
+    "seconds": 4.223,
+    "totals": {
+      "tests": 13,
+      "pass": 13,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "failures": [],
+    "log": "baseline/mv-ratio-regression.tap"
+  },
+  {
+    "build": "candidate",
+    "file": "mv-ratio-regression.mjs",
+    "variant": "default",
+    "argv": [
+      "node",
+      "--experimental-vm-modules",
+      "--test",
+      "--test-isolation=none",
+      "--test-reporter=tap",
+      "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main/tools/verification/mv-ratio-regression.mjs"
+    ],
+    "test_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main",
+    "baseline_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "previous_build_root": null,
+    "exit_code": 0,
+    "timeout": false,
+    "seconds": 3.214,
+    "totals": {
+      "tests": 13,
+      "pass": 13,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "failures": [],
+    "log": "candidate/mv-ratio-regression.tap"
+  },
+  {
+    "build": "baseline",
+    "file": "mv-request-lifecycle-regression.mjs",
+    "variant": "default",
+    "argv": [
+      "node",
+      "--experimental-vm-modules",
+      "--test",
+      "--test-isolation=none",
+      "--test-reporter=tap",
+      "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main/tools/verification/mv-request-lifecycle-regression.mjs"
+    ],
+    "test_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "baseline_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "previous_build_root": null,
+    "exit_code": 0,
+    "timeout": false,
+    "seconds": 2.78,
+    "totals": {
+      "tests": 15,
+      "pass": 15,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "failures": [],
+    "log": "baseline/mv-request-lifecycle-regression.tap"
+  },
+  {
+    "build": "candidate",
+    "file": "mv-request-lifecycle-regression.mjs",
+    "variant": "default",
+    "argv": [
+      "node",
+      "--experimental-vm-modules",
+      "--test",
+      "--test-isolation=none",
+      "--test-reporter=tap",
+      "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main/tools/verification/mv-request-lifecycle-regression.mjs"
+    ],
+    "test_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main",
+    "baseline_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "previous_build_root": null,
+    "exit_code": 0,
+    "timeout": false,
+    "seconds": 2.725,
+    "totals": {
+      "tests": 15,
+      "pass": 15,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "failures": [],
+    "log": "candidate/mv-request-lifecycle-regression.tap"
+  },
+  {
+    "build": "baseline",
+    "file": "mv-save-confirmation-regression.mjs",
+    "variant": "default",
+    "argv": [
+      "node",
+      "--experimental-vm-modules",
+      "--test",
+      "--test-isolation=none",
+      "--test-reporter=tap",
+      "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main/tools/verification/mv-save-confirmation-regression.mjs"
+    ],
+    "test_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "baseline_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "previous_build_root": null,
+    "exit_code": 0,
+    "timeout": false,
+    "seconds": 2.28,
+    "totals": {
+      "tests": 9,
+      "pass": 9,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "failures": [],
+    "log": "baseline/mv-save-confirmation-regression.tap"
+  },
+  {
+    "build": "candidate",
+    "file": "mv-save-confirmation-regression.mjs",
+    "variant": "default",
+    "argv": [
+      "node",
+      "--experimental-vm-modules",
+      "--test",
+      "--test-isolation=none",
+      "--test-reporter=tap",
+      "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main/tools/verification/mv-save-confirmation-regression.mjs"
+    ],
+    "test_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main",
+    "baseline_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "previous_build_root": null,
+    "exit_code": 0,
+    "timeout": false,
+    "seconds": 2.31,
+    "totals": {
+      "tests": 9,
+      "pass": 9,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "failures": [],
+    "log": "candidate/mv-save-confirmation-regression.tap"
+  },
+  {
+    "build": "baseline",
+    "file": "mv-single-still-regression.mjs",
+    "variant": "default",
+    "argv": [
+      "node",
+      "--experimental-vm-modules",
+      "--test",
+      "--test-isolation=none",
+      "--test-reporter=tap",
+      "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main/tools/verification/mv-single-still-regression.mjs"
+    ],
+    "test_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "baseline_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "previous_build_root": null,
+    "exit_code": 0,
+    "timeout": false,
+    "seconds": 2.447,
+    "totals": {
+      "tests": 13,
+      "pass": 13,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "failures": [],
+    "log": "baseline/mv-single-still-regression.tap"
+  },
+  {
+    "build": "candidate",
+    "file": "mv-single-still-regression.mjs",
+    "variant": "default",
+    "argv": [
+      "node",
+      "--experimental-vm-modules",
+      "--test",
+      "--test-isolation=none",
+      "--test-reporter=tap",
+      "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main/tools/verification/mv-single-still-regression.mjs"
+    ],
+    "test_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main",
+    "baseline_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "previous_build_root": null,
+    "exit_code": 0,
+    "timeout": false,
+    "seconds": 3.436,
+    "totals": {
+      "tests": 13,
+      "pass": 13,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "failures": [],
+    "log": "candidate/mv-single-still-regression.tap"
+  },
+  {
+    "build": "candidate",
+    "file": "mv-stage-canvas-regression.mjs",
+    "variant": "default",
+    "argv": [
+      "node",
+      "--experimental-vm-modules",
+      "--test",
+      "--test-isolation=none",
+      "--test-reporter=tap",
+      "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main/tools/verification/mv-stage-canvas-regression.mjs"
+    ],
+    "test_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main",
+    "baseline_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "previous_build_root": null,
+    "exit_code": 0,
+    "timeout": false,
+    "seconds": 3.531,
+    "totals": {
+      "tests": 9,
+      "pass": 9,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "failures": [],
+    "log": "candidate/mv-stage-canvas-regression.tap"
+  },
+  {
+    "build": "baseline",
+    "file": "mv-stage-regression.mjs",
+    "variant": "default",
+    "argv": [
+      "node",
+      "--experimental-vm-modules",
+      "--test",
+      "--test-isolation=none",
+      "--test-reporter=tap",
+      "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main/tools/verification/mv-stage-regression.mjs"
+    ],
+    "test_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "baseline_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "previous_build_root": null,
+    "exit_code": 0,
+    "timeout": false,
+    "seconds": 2.533,
+    "totals": {
+      "tests": 11,
+      "pass": 11,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "failures": [],
+    "log": "baseline/mv-stage-regression.tap"
+  },
+  {
+    "build": "baseline",
+    "file": "mv-stage-canvas-regression.mjs",
+    "variant": "default",
+    "argv": [
+      "node",
+      "--experimental-vm-modules",
+      "--test",
+      "--test-isolation=none",
+      "--test-reporter=tap",
+      "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main/tools/verification/mv-stage-canvas-regression.mjs"
+    ],
+    "test_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "baseline_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "previous_build_root": null,
+    "exit_code": 0,
+    "timeout": false,
+    "seconds": 5.561,
+    "totals": {
+      "tests": 9,
+      "pass": 9,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "failures": [],
+    "log": "baseline/mv-stage-canvas-regression.tap"
+  },
+  {
+    "build": "candidate",
+    "file": "mv-stage-regression.mjs",
+    "variant": "default",
+    "argv": [
+      "node",
+      "--experimental-vm-modules",
+      "--test",
+      "--test-isolation=none",
+      "--test-reporter=tap",
+      "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main/tools/verification/mv-stage-regression.mjs"
+    ],
+    "test_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main",
+    "baseline_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "previous_build_root": null,
+    "exit_code": 0,
+    "timeout": false,
+    "seconds": 1.728,
+    "totals": {
+      "tests": 11,
+      "pass": 11,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "failures": [],
+    "log": "candidate/mv-stage-regression.tap"
+  },
+  {
+    "build": "candidate",
+    "file": "mv-sync-dark-regression.mjs",
+    "variant": "default",
+    "argv": [
+      "node",
+      "--experimental-vm-modules",
+      "--test",
+      "--test-isolation=none",
+      "--test-reporter=tap",
+      "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main/tools/verification/mv-sync-dark-regression.mjs"
+    ],
+    "test_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main",
+    "baseline_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "previous_build_root": null,
+    "exit_code": 0,
+    "timeout": false,
+    "seconds": 2.091,
+    "totals": {
+      "tests": 11,
+      "pass": 11,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "failures": [],
+    "log": "candidate/mv-sync-dark-regression.tap"
+  },
+  {
+    "build": "baseline",
+    "file": "mv-sync-dark-regression.mjs",
+    "variant": "default",
+    "argv": [
+      "node",
+      "--experimental-vm-modules",
+      "--test",
+      "--test-isolation=none",
+      "--test-reporter=tap",
+      "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main/tools/verification/mv-sync-dark-regression.mjs"
+    ],
+    "test_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "baseline_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "previous_build_root": null,
+    "exit_code": 0,
+    "timeout": false,
+    "seconds": 2.254,
+    "totals": {
+      "tests": 11,
+      "pass": 11,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "failures": [],
+    "log": "baseline/mv-sync-dark-regression.tap"
+  },
+  {
+    "build": "baseline",
+    "file": "mv-tap-clock-regression.mjs",
+    "variant": "default",
+    "argv": [
+      "node",
+      "--experimental-vm-modules",
+      "--test",
+      "--test-isolation=none",
+      "--test-reporter=tap",
+      "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main/tools/verification/mv-tap-clock-regression.mjs"
+    ],
+    "test_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "baseline_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "previous_build_root": null,
+    "exit_code": 0,
+    "timeout": false,
+    "seconds": 3.135,
+    "totals": {
+      "tests": 15,
+      "pass": 15,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "failures": [],
+    "log": "baseline/mv-tap-clock-regression.tap"
+  },
+  {
+    "build": "baseline",
+    "file": "mv-transport-regression.mjs",
+    "variant": "default",
+    "argv": [
+      "node",
+      "--experimental-vm-modules",
+      "--test",
+      "--test-isolation=none",
+      "--test-reporter=tap",
+      "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main/tools/verification/mv-transport-regression.mjs"
+    ],
+    "test_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "baseline_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "previous_build_root": null,
+    "exit_code": 0,
+    "timeout": false,
+    "seconds": 2.154,
+    "totals": {
+      "tests": 13,
+      "pass": 13,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "failures": [],
+    "log": "baseline/mv-transport-regression.tap"
+  },
+  {
+    "build": "candidate",
+    "file": "mv-tap-clock-regression.mjs",
+    "variant": "default",
+    "argv": [
+      "node",
+      "--experimental-vm-modules",
+      "--test",
+      "--test-isolation=none",
+      "--test-reporter=tap",
+      "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main/tools/verification/mv-tap-clock-regression.mjs"
+    ],
+    "test_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main",
+    "baseline_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "previous_build_root": null,
+    "exit_code": 0,
+    "timeout": false,
+    "seconds": 3.058,
+    "totals": {
+      "tests": 15,
+      "pass": 15,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "failures": [],
+    "log": "candidate/mv-tap-clock-regression.tap"
+  },
+  {
+    "build": "candidate",
+    "file": "mv-transport-regression.mjs",
+    "variant": "default",
+    "argv": [
+      "node",
+      "--experimental-vm-modules",
+      "--test",
+      "--test-isolation=none",
+      "--test-reporter=tap",
+      "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main/tools/verification/mv-transport-regression.mjs"
+    ],
+    "test_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main",
+    "baseline_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "previous_build_root": null,
+    "exit_code": 0,
+    "timeout": false,
+    "seconds": 2.143,
+    "totals": {
+      "tests": 13,
+      "pass": 13,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "failures": [],
+    "log": "candidate/mv-transport-regression.tap"
+  },
+  {
+    "build": "baseline",
+    "file": "previous-regression.mjs",
+    "variant": "default",
+    "argv": [
+      "node",
+      "--experimental-vm-modules",
+      "--test",
+      "--test-isolation=none",
+      "--test-reporter=tap",
+      "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main/tools/verification/previous-regression.mjs"
+    ],
+    "test_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "baseline_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "previous_build_root": null,
+    "exit_code": 0,
+    "timeout": false,
+    "seconds": 0.511,
+    "totals": {
+      "tests": 23,
+      "pass": 23,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "failures": [],
+    "log": "baseline/previous-regression.tap"
+  },
+  {
+    "build": "candidate",
+    "file": "previous-regression.mjs",
+    "variant": "default",
+    "argv": [
+      "node",
+      "--experimental-vm-modules",
+      "--test",
+      "--test-isolation=none",
+      "--test-reporter=tap",
+      "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main/tools/verification/previous-regression.mjs"
+    ],
+    "test_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main",
+    "baseline_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "previous_build_root": null,
+    "exit_code": 0,
+    "timeout": false,
+    "seconds": 0.552,
+    "totals": {
+      "tests": 23,
+      "pass": 23,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "failures": [],
+    "log": "candidate/previous-regression.tap"
+  },
+  {
+    "build": "candidate",
+    "file": "task-ui-refresh-regression.mjs",
+    "variant": "default",
+    "argv": [
+      "node",
+      "--experimental-vm-modules",
+      "--test",
+      "--test-isolation=none",
+      "--test-reporter=tap",
+      "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main/tools/verification/task-ui-refresh-regression.mjs"
+    ],
+    "test_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main",
+    "baseline_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "previous_build_root": null,
+    "exit_code": 0,
+    "timeout": false,
+    "seconds": 0.951,
+    "totals": {
+      "tests": 6,
+      "pass": 6,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "failures": [],
+    "log": "candidate/task-ui-refresh-regression.tap"
+  },
+  {
+    "build": "baseline",
+    "file": "mv-update-regression.mjs",
+    "variant": "default",
+    "argv": [
+      "node",
+      "--experimental-vm-modules",
+      "--test",
+      "--test-isolation=none",
+      "--test-reporter=tap",
+      "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main/tools/verification/mv-update-regression.mjs"
+    ],
+    "test_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "baseline_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "previous_build_root": null,
+    "exit_code": 1,
+    "timeout": false,
+    "seconds": 5.619,
+    "totals": {
+      "tests": 27,
+      "pass": 25,
+      "fail": 2,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "failures": [
+      "revision drift journals paid result and survives a fresh runtime",
+      "frame cast is the exact intersection of shot people and appearance preference"
+    ],
+    "log": "baseline/mv-update-regression.tap"
+  },
+  {
+    "build": "candidate",
+    "file": "mv-update-regression.mjs",
+    "variant": "default",
+    "argv": [
+      "node",
+      "--experimental-vm-modules",
+      "--test",
+      "--test-isolation=none",
+      "--test-reporter=tap",
+      "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main/tools/verification/mv-update-regression.mjs"
+    ],
+    "test_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main",
+    "baseline_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "previous_build_root": null,
+    "exit_code": 1,
+    "timeout": false,
+    "seconds": 5.632,
+    "totals": {
+      "tests": 27,
+      "pass": 25,
+      "fail": 2,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "failures": [
+      "revision drift journals paid result and survives a fresh runtime",
+      "frame cast is the exact intersection of shot people and appearance preference"
+    ],
+    "log": "candidate/mv-update-regression.tap"
+  },
+  {
+    "build": "baseline",
+    "file": "terminal-expression-regression.mjs",
+    "variant": "default",
+    "argv": [
+      "node",
+      "--experimental-vm-modules",
+      "--test",
+      "--test-isolation=none",
+      "--test-reporter=tap",
+      "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main/tools/verification/terminal-expression-regression.mjs"
+    ],
+    "test_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "baseline_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "previous_build_root": null,
+    "exit_code": 0,
+    "timeout": false,
+    "seconds": 4.086,
+    "totals": {
+      "tests": 24,
+      "pass": 24,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "failures": [],
+    "log": "baseline/terminal-expression-regression.tap"
+  },
+  {
+    "build": "baseline",
+    "file": "theme-song-writing-regression.mjs",
+    "variant": "default",
+    "argv": [
+      "node",
+      "--experimental-vm-modules",
+      "--test",
+      "--test-isolation=none",
+      "--test-reporter=tap",
+      "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main/tools/verification/theme-song-writing-regression.mjs"
+    ],
+    "test_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "baseline_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "previous_build_root": null,
+    "exit_code": 0,
+    "timeout": false,
+    "seconds": 1.42,
+    "totals": {
+      "tests": 6,
+      "pass": 6,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "failures": [],
+    "log": "baseline/theme-song-writing-regression.tap"
+  },
+  {
+    "build": "baseline",
+    "file": "previous-regression.mjs",
+    "variant": "bundle",
+    "argv": [
+      "node",
+      "--experimental-vm-modules",
+      "--test",
+      "--test-isolation=none",
+      "--test-reporter=tap",
+      "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main/tools/verification/previous-regression.mjs"
+    ],
+    "test_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "baseline_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "previous_build_root": null,
+    "exit_code": 0,
+    "timeout": false,
+    "seconds": 0.661,
+    "totals": {
+      "tests": 23,
+      "pass": 23,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "failures": [],
+    "log": "baseline/previous-regression-bundle.tap"
+  },
+  {
+    "build": "candidate",
+    "file": "theme-song-writing-regression.mjs",
+    "variant": "default",
+    "argv": [
+      "node",
+      "--experimental-vm-modules",
+      "--test",
+      "--test-isolation=none",
+      "--test-reporter=tap",
+      "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main/tools/verification/theme-song-writing-regression.mjs"
+    ],
+    "test_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main",
+    "baseline_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "previous_build_root": null,
+    "exit_code": 0,
+    "timeout": false,
+    "seconds": 1.024,
+    "totals": {
+      "tests": 6,
+      "pass": 6,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "failures": [],
+    "log": "candidate/theme-song-writing-regression.tap"
+  },
+  {
+    "build": "candidate",
+    "file": "previous-regression.mjs",
+    "variant": "bundle",
+    "argv": [
+      "node",
+      "--experimental-vm-modules",
+      "--test",
+      "--test-isolation=none",
+      "--test-reporter=tap",
+      "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main/tools/verification/previous-regression.mjs"
+    ],
+    "test_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main",
+    "baseline_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "previous_build_root": null,
+    "exit_code": 0,
+    "timeout": false,
+    "seconds": 0.642,
+    "totals": {
+      "tests": 23,
+      "pass": 23,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "failures": [],
+    "log": "candidate/previous-regression-bundle.tap"
+  },
+  {
+    "build": "candidate",
+    "file": "terminal-expression-regression.mjs",
+    "variant": "default",
+    "argv": [
+      "node",
+      "--experimental-vm-modules",
+      "--test",
+      "--test-isolation=none",
+      "--test-reporter=tap",
+      "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main/tools/verification/terminal-expression-regression.mjs"
+    ],
+    "test_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.22/tokimemo-main",
+    "baseline_root": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+    "previous_build_root": null,
+    "exit_code": 0,
+    "timeout": false,
+    "seconds": 4.808,
+    "totals": {
+      "tests": 24,
+      "pass": 24,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "failures": [],
+    "log": "candidate/terminal-expression-regression.tap"
+  }
+]

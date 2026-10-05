@@ -1,0 +1,28 @@
+{
+  "build": "1.0.14-r84.231-mv-image-frame",
+  "production_changes": "Three scoped horizontal thumbnail CSS rules plus version metadata; all other source is byte-identical to 1.0.13.",
+  "no_deleted_files": true,
+  "changed_files": [
+    "README.md",
+    "RELEASE-1.0.14.md",
+    "dist/heartbeatMemories.bundle.js",
+    "index.js",
+    "manifest.json",
+    "src/core/selfUpdater.js",
+    "src/ui/mvView.js",
+    "tools/verification/mv-material-browser.cjs",
+    "tools/verification/mv-ratio-browser.cjs"
+  ],
+  "build_modules_verified": 320,
+  "runtime_initialization": "pass",
+  "regression_tests": {
+    "passed": 21,
+    "failed": 0,
+    "suites": [
+      "mv-ratio-regression.mjs",
+      "mv-auto-material-regression.mjs"
+    ]
+  },
+  "browser_validation": "Not run: Chromium executable unavailable; download endpoint unavailable. Browser assertions updated for intended horizontal cover fit and exact frame ratio.",
+  "manual_device_validation": "Not performed."
+}

@@ -1,0 +1,84 @@
+(node:620) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+TAP version 13
+# Subtest: outro appears only inside the selected ending interval, never over later or earlier shots
+ok 1 - outro appears only inside the selected ending interval, never over later or earlier shots
+  ---
+  duration_ms: 283.797875
+  type: 'test'
+  ...
+# Subtest: outro control persists, accepts fractional seconds and zero, preserving drawings and timing
+ok 2 - outro control persists, accepts fractional seconds and zero, preserving drawings and timing
+  ---
+  duration_ms: 293.108412
+  type: 'test'
+  ...
+# Subtest: a short final shot keeps its first half free of the outro
+ok 3 - a short final shot keeps its first half free of the outro
+  ---
+  duration_ms: 258.229575
+  type: 'test'
+  ...
+# Subtest: v1 fade leaves most of a 0.2 second shot clear without removing the transition
+ok 4 - v1 fade leaves most of a 0.2 second shot clear without removing the transition
+  ---
+  duration_ms: 266.202367
+  type: 'test'
+  ...
+# Subtest: v1 flash leaves most of a 0.2 second shot clear without removing the transition
+ok 5 - v1 flash leaves most of a 0.2 second shot clear without removing the transition
+  ---
+  duration_ms: 259.778658
+  type: 'test'
+  ...
+# Subtest: v2 fade leaves most of a 0.2 second shot clear without removing the transition
+ok 6 - v2 fade leaves most of a 0.2 second shot clear without removing the transition
+  ---
+  duration_ms: 268.968439
+  type: 'test'
+  ...
+# Subtest: v2 flash leaves most of a 0.2 second shot clear without removing the transition
+ok 7 - v2 flash leaves most of a 0.2 second shot clear without removing the transition
+  ---
+  duration_ms: 358.279479
+  type: 'test'
+  ...
+# Subtest: normal-length shots retain their existing fade
+ok 8 - normal-length shots retain their existing fade
+  ---
+  duration_ms: 349.095973
+  type: 'test'
+  ...
+# Subtest: hiding lyrics also hides the chorus keyword and restoring lyrics keeps the choice
+ok 9 - hiding lyrics also hides the chorus keyword and restoring lyrics keeps the choice
+  ---
+  duration_ms: 279.507373
+  type: 'test'
+  ...
+# Subtest: motif and keyword controls are independent and preserve generated assets
+ok 10 - motif and keyword controls are independent and preserve generated assets
+  ---
+  duration_ms: 268.792628
+  type: 'test'
+  ...
+# Subtest: fragment export preserves overlay choices without changing the original timeline
+ok 11 - fragment export preserves overlay choices without changing the original timeline
+  ---
+  duration_ms: 254.706154
+  type: 'test'
+  ...
+# Subtest: video export uses the saved overlay snapshot and the same clear ending as preview
+ok 12 - video export uses the saved overlay snapshot and the same clear ending as preview
+  ---
+  duration_ms: 329.60611
+  type: 'test'
+  ...
+1..12
+# tests 12
+# suites 0
+# pass 12
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 3837.788268

@@ -79,13 +79,17 @@ export function compactAlbumExisting(session) {
 
 // A reading projection is separate from the complete-result validator and from
 // the canonical album. Only closed JSON records can supply new content here.
-export function projectAlbumProgress({ segments = [], memoryBank, frozenInputs = {}, operation = {} }) {
+export function projectAlbumProgress({ segments = [], memoryBank, previousSession = null, frozenInputs = {}, operation = {} }) {
     const indexBank = content_selection.selectionEvidenceBank(memoryBank, operation.contentSelectionPlan);
     const participantSnapshot = core_participants.normalizeParticipantSnapshot(frozenInputs['participants:album'] || null);
     const index = segments.find(segment => /:index$/u.test(segment.slot));
-    if (!index) return null;
-    const rows = index.items('/entries');
-    const entries = [];
+    const completingComments = !index && previousSession?.entries?.length
+        && (operation.secondStep === true || segments.some(segment => /:(?:relationship-scan|comments:\d+)$/u.test(segment.slot)));
+    if (!index && !completingComments) return null;
+    if (completingComments && !segments.some(segment => /:comments:\d+$/u.test(segment.slot))) return null;
+    const rows = index ? index.items('/entries') : [];
+    const partialBase = completingComments ? structuredClone(previousSession) : null;
+    const entries = partialBase ? partialBase.entries : [];
     const unlockedSeed = rows.find(row => {
         try { return row.unlocked && normalizeAlbumIndex({ entries: [row] }, indexBank).entries.length; } catch { return false; }
     });
@@ -105,6 +109,7 @@ export function projectAlbumProgress({ segments = [], memoryBank, frozenInputs =
     }
     for (const entry of entries) {
         if (!entry.unlocked) continue;
+        if (completingComments && !albumCommentsIncomplete(entry)) continue;
         entry.progressPending = ['共同回忆'];
         entry.relationshipSnapshot = relationshipSnapshot;
         if (participantSnapshot) entry.speakerSnapshot = albumSpeakerIdentities(participantSnapshot);
@@ -126,6 +131,7 @@ export function projectAlbumProgress({ segments = [], memoryBank, frozenInputs =
             }
         }
     }
+    if (completingComments) return { ...partialBase, ...(participantSnapshot ? { participantSnapshot } : {}), entries };
     return { ...(participantSnapshot ? { participantSnapshot } : {}), kind: core_constants.MODE.ALBUM, title: core_text.normalizeText(index.value?.title, 120) || '回忆相簿', entries,
         category: '全部', page: 1, pageSize: 6, selectedId: entries[0].id, sharedMemory: false, dialogueIndex: 0, hintVisible: false };
 }
@@ -558,9 +564,13 @@ export async function generateAlbumWithRepair(context, memoryBank, origin, taskK
     return content_selection.stampContentSelection(merged, previous, memoryBank, selectionPlan, added);
 }
 
+function albumCommentsIncomplete(item) {
+    return item?.unlocked && (item.comments?.length || 0) < (item.relationshipSnapshot ? 6 : 4);
+}
+
 async function fillAlbumComments(context, memoryBank, origin, taskKey, previous, participantSnapshot) {
     core_requestCoordinator.noteSecondStepOffer(origin, null);
-    const unlocked = previous.entries.filter(item => item.unlocked && (item.comments?.length || 0) < 4);
+    const unlocked = previous.entries.filter(albumCommentsIncomplete);
     if (!unlocked.length) return previous;
     const relationshipSnapshot = await generation_client.requestValidatedSegment(
         albumRelationshipScanPrompt(context, memoryBank, participantSnapshot),
@@ -578,23 +588,18 @@ async function fillAlbumComments(context, memoryBank, origin, taskKey, previous,
         ));
     const allComments = new Map();
     for (const map of commentMaps) for (const [id, comments] of map.entries()) allComments.set(id, comments);
-    const fresh = normalizeAlbum({
-        title: previous.title,
-        ...(participantSnapshot ? { participantSnapshot } : {}),
-        entries: previous.entries.map(item => {
-            const packed = allComments.get(item.id);
-            const commentFields = participantSnapshot
-                ? (packed && !Array.isArray(packed) ? packed : { comments: item.comments || [], commentSpeakers: item.commentSpeakers || [] })
-                : { comments: Array.isArray(packed) ? packed : (item.comments || []) };
-            return {
-                ...item,
-                ...commentFields,
-                relationshipSnapshot: item.unlocked ? structuredClone(relationshipSnapshot) : item.relationshipSnapshot,
-            };
-        }),
-    }, memoryBank);
-    // Filling dialogue does not scan a new material batch. Preserve its cursor.
-    if (previous.generationMeta) fresh.generationMeta = structuredClone(previous.generationMeta);
+    // Each replacement already passed the six-line batch validator. Do not
+    // re-normalize the whole old album or replace unrelated relationship bases,
+    // images, manual edits, reading position or material-selection progress.
+    const fresh = structuredClone(previous);
+    if (participantSnapshot) fresh.participantSnapshot = structuredClone(participantSnapshot);
+    fresh.entries = fresh.entries.map(item => {
+        if (!allComments.has(item.id)) return item;
+        const packed = allComments.get(item.id);
+        return { ...item,
+            ...(participantSnapshot ? { ...packed, speakerSnapshot: albumSpeakerIdentities(participantSnapshot) } : { comments: packed }),
+            relationshipSnapshot: structuredClone(relationshipSnapshot) };
+    });
     return fresh;
 }
 

@@ -62,6 +62,21 @@ export function alphaBounds(data, width, height) {
         x: x0 / width, top: y0 / height, width: (x1 - x0 + 1) / width, height: (y1 - y0 + 1) / height } : null;
 }
 
+// A substantial opaque run at the original edge is an existing crop, not a
+// floating sticker margin. Ignore isolated antialias/noise pixels.
+export function alphaEdgeContacts(data, width, height) {
+    const run = (length, at) => {
+        let current = 0, longest = 0;
+        for (let i = 0; i < length; i++) {
+            current = data[at(i) * 4 + 3] > 40 ? current + 1 : 0;
+            longest = Math.max(longest, current);
+        }
+        return longest >= Math.max(3, Math.ceil(length * .02));
+    };
+    return { left: run(height, y => y * width), right: run(height, y => y * width + width - 1),
+        top: run(width, x => x), bottom: run(width, x => (height - 1) * width + x) };
+}
+
 // A deliberate click removes one connected patch only. It never treats every
 // white pixel as background; the editor keeps undo and the unmodified source.
 export function eraseMatteAt(data, width, height, x, y) {

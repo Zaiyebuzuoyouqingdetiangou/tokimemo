@@ -33,7 +33,7 @@ export function mediaKey(kind, scope, songId, shotId = '') {
 }
 
 export async function putMedia(key, blob, name = '', details = {}) {
-    try { await run('readwrite', store => store.put({ key, blob, name, type: blob?.type || '', at: Date.now(), ...(details.sourceUrl ? { sourceUrl: details.sourceUrl } : {}) })); return true; }
+    try { await run('readwrite', store => store.put({ key, blob, name, type: blob?.type || '', at: Date.now(), ...(details.sourceUrl ? { sourceUrl: details.sourceUrl } : {}), ...(!blob && details.mediaUrl ? { mediaUrl: details.mediaUrl } : {}) })); return true; }
     catch { return false; }
 }
 

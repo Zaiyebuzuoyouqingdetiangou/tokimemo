@@ -1,0 +1,67 @@
+(node:700) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+TAP version 13
+# Subtest: paid result waits for a returned metadata promise when local storage cannot save
+ok 1 - paid result waits for a returned metadata promise when local storage cannot save
+  ---
+  duration_ms: 159.025216
+  type: 'test'
+  ...
+# Subtest: rejected metadata with no local copy retains the paid result and retries saving without regeneration
+ok 2 - rejected metadata with no local copy retains the paid result and retries saving without regeneration
+  ---
+  duration_ms: 144.860819
+  type: 'test'
+  ...
+[HeartbeatMemories] host metadata save adapter unavailable
+# Subtest: confirmed local copy succeeds even if metadata rejects and survives a fresh runtime
+ok 3 - confirmed local copy succeeds even if metadata rejects and survives a fresh runtime
+  ---
+  duration_ms: 274.759795
+  type: 'test'
+  ...
+# Subtest: void-returning host debounce stays compatible when local storage quota is exhausted
+ok 4 - void-returning host debounce stays compatible when local storage quota is exhausted
+  ---
+  duration_ms: 175.494336
+  type: 'test'
+  ...
+# Subtest: missing, throwing or explicitly failed metadata storage keeps recovery in memory
+ok 5 - missing, throwing or explicitly failed metadata storage keeps recovery in memory
+  ---
+  duration_ms: 627.149568
+  type: 'test'
+  ...
+# Subtest: failed paid redraw remains exportable and save-only recovery keeps its new image
+ok 6 - failed paid redraw remains exportable and save-only recovery keeps its new image
+  ---
+  duration_ms: 159.69538
+  type: 'test'
+  ...
+# Subtest: a delayed rejected save retains only its original chat recovery
+ok 7 - a delayed rejected save retains only its original chat recovery
+  ---
+  duration_ms: 161.032912
+  type: 'test'
+  ...
+# Subtest: ordinary archive revision growth still allows unchanged-song storyboard saving
+ok 8 - ordinary archive revision growth still allows unchanged-song storyboard saving
+  ---
+  duration_ms: 240.401277
+  type: 'test'
+  ...
+# Subtest: all appearance/shot combinations preserve the current branch cast and scenery intent
+ok 9 - all appearance/shot combinations preserve the current branch cast and scenery intent
+  ---
+  duration_ms: 215.37076
+  type: 'test'
+  ...
+1..9
+# tests 9
+# suites 0
+# pass 9
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 2210.492627

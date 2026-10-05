@@ -1,0 +1,90 @@
+(node:652) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+TAP version 13
+# Subtest: 16:9: BaiBai receives the selected orientation for shared poses, scene assets and redraws
+ok 1 - 16:9: BaiBai receives the selected orientation for shared poses, scene assets and redraws
+  ---
+  duration_ms: 215.408376
+  type: 'test'
+  ...
+# Subtest: 16:9: non-stage cutout assets and complete manual prompts retain the selected orientation
+ok 2 - 16:9: non-stage cutout assets and complete manual prompts retain the selected orientation
+  ---
+  duration_ms: 198.654105
+  type: 'test'
+  ...
+# Subtest: 9:16: BaiBai receives the selected orientation for shared poses, scene assets and redraws
+ok 3 - 9:16: BaiBai receives the selected orientation for shared poses, scene assets and redraws
+  ---
+  duration_ms: 208.737457
+  type: 'test'
+  ...
+# Subtest: 9:16: non-stage cutout assets and complete manual prompts retain the selected orientation
+ok 4 - 9:16: non-stage cutout assets and complete manual prompts retain the selected orientation
+  ---
+  duration_ms: 202.989478
+  type: 'test'
+  ...
+# Subtest: Chatu8 novelai: MV swaps a portrait size only for this horizontal request
+ok 5 - Chatu8 novelai: MV swaps a portrait size only for this horizontal request
+  ---
+  duration_ms: 220.755416
+  type: 'test'
+  ...
+# Subtest: Chatu8 sd: MV swaps a portrait size only for this horizontal request
+ok 6 - Chatu8 sd: MV swaps a portrait size only for this horizontal request
+  ---
+  duration_ms: 213.64606
+  type: 'test'
+  ...
+# Subtest: Chatu8 comfyui: MV swaps a portrait size only for this horizontal request
+ok 7 - Chatu8 comfyui: MV swaps a portrait size only for this horizontal request
+  ---
+  duration_ms: 216.719082
+  type: 'test'
+  ...
+# Subtest: ordinary Chatu8 CG requests retain provider sizes and MV square settings get an oriented request
+ok 8 - ordinary Chatu8 CG requests retain provider sizes and MV square settings get an oriented request
+  ---
+  duration_ms: 256.608927
+  type: 'test'
+  ...
+# Subtest: automatic provider fallback carries the MV orientation to Chatu8
+ok 9 - automatic provider fallback carries the MV orientation to Chatu8
+  ---
+  duration_ms: 341.870005
+  type: 'test'
+  ...
+# Subtest: Chatu8 missing size fields still permit MV generation without changing settings
+ok 10 - Chatu8 missing size fields still permit MV generation without changing settings
+  ---
+  duration_ms: 1243.218663
+  type: 'test'
+  ...
+# Subtest: legacy standalone frames honor the orientation and motif generation keeps its existing contract
+ok 11 - legacy standalone frames honor the orientation and motif generation keeps its existing contract
+  ---
+  duration_ms: 340.751639
+  type: 'test'
+  ...
+# Subtest: horizontal board thumbnails include a wide shape while vertical boards keep portrait tiles
+ok 12 - horizontal board thumbnails include a wide shape while vertical boards keep portrait tiles
+  ---
+  duration_ms: 179.276962
+  type: 'test'
+  ...
+# Subtest: choosing horizontal in setup persists through storyboard generation and drawing the remaining images
+ok 13 - choosing horizontal in setup persists through storyboard generation and drawing the remaining images
+  ---
+  duration_ms: 211.379857
+  type: 'test'
+  ...
+1..13
+# tests 13
+# suites 0
+# pass 13
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 4109.094637

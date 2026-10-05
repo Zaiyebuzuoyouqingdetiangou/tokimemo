@@ -1,0 +1,66 @@
+(node:44) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+TAP version 13
+# Subtest: known host failure retains RMT_CONNECTION_NETWORK without exposing error text
+ok 1 - known host failure retains RMT_CONNECTION_NETWORK without exposing error text
+  ---
+  duration_ms: 135.633582
+  type: 'test'
+  ...
+# Subtest: known host failure retains RMT_CONNECTION_NETWORK without exposing error text
+ok 2 - known host failure retains RMT_CONNECTION_NETWORK without exposing error text
+  ---
+  duration_ms: 133.845915
+  type: 'test'
+  ...
+# Subtest: known host failure retains RMT_CONNECTION_NETWORK without exposing error text
+ok 3 - known host failure retains RMT_CONNECTION_NETWORK without exposing error text
+  ---
+  duration_ms: 133.879767
+  type: 'test'
+  ...
+# Subtest: known host failure retains RMT_CONNECTION_NETWORK without exposing error text
+ok 4 - known host failure retains RMT_CONNECTION_NETWORK without exposing error text
+  ---
+  duration_ms: 223.06642
+  type: 'test'
+  ...
+# Subtest: known host failure retains RMT_CONNECTION_SERVER without exposing error text
+ok 5 - known host failure retains RMT_CONNECTION_SERVER without exposing error text
+  ---
+  duration_ms: 194.490657
+  type: 'test'
+  ...
+# Subtest: known host failure retains RMT_CONNECTION_SERVER without exposing error text
+ok 6 - known host failure retains RMT_CONNECTION_SERVER without exposing error text
+  ---
+  duration_ms: 199.139101
+  type: 'test'
+  ...
+# Subtest: numeric status remains authoritative over text hints and unknown wrappers stay unknown
+ok 7 - numeric status remains authoritative over text hints and unknown wrappers stay unknown
+  ---
+  duration_ms: 222.242295
+  type: 'test'
+  ...
+# Subtest: ordinary final text and JSON quoting error labels do not acquire a new error gate
+ok 8 - ordinary final text and JSON quoting error labels do not acquire a new error gate
+  ---
+  duration_ms: 223.725648
+  type: 'test'
+  ...
+# Subtest: classified TT network failure still issues one request and exports only safe classification
+ok 9 - classified TT network failure still issues one request and exports only safe classification
+  ---
+  duration_ms: 327.260886
+  type: 'test'
+  ...
+1..9
+# tests 9
+# suites 0
+# pass 9
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1856.8003

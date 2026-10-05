@@ -1,0 +1,216 @@
+TAP version 13
+# (node:13) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: one-click cutout opens directly on a transparent PNG draft and preserves original on save
+not ok 1 - one-click cutout opens directly on a transparent PNG draft and preserves original on save
+  ---
+  duration_ms: 226.726246
+  type: 'test'
+  location: '/workspace/scratch/59771f6e8e39/hearttrace-mv-cutout-1.0.15/tokimemo-main/tools/verification/mv-cutout-frame-regression.mjs:21:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    
+    255 !== 0
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 0
+  actual: 255
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///workspace/scratch/59771f6e8e39/hearttrace-mv-cutout-1.0.15/tokimemo-main/tools/verification/mv-cutout-frame-regression.mjs:25:16)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3)
+  ...
+# Subtest: one-click cutout undo and cancel keep the paid source and do not save a mask
+not ok 2 - one-click cutout undo and cancel keep the paid source and do not save a mask
+  ---
+  duration_ms: 248.575815
+  type: 'test'
+  location: '/workspace/scratch/59771f6e8e39/hearttrace-mv-cutout-1.0.15/tokimemo-main/tools/verification/mv-cutout-frame-regression.mjs:37:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    
+    255 !== 0
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 0
+  actual: 255
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///workspace/scratch/59771f6e8e39/hearttrace-mv-cutout-1.0.15/tokimemo-main/tools/verification/mv-cutout-frame-regression.mjs:40:16)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+# Subtest: explicit cutout removes panel outside white only and never describes it as recovered character
+not ok 3 - explicit cutout removes panel outside white only and never describes it as recovered character
+  ---
+  duration_ms: 314.453324
+  type: 'test'
+  location: '/workspace/scratch/59771f6e8e39/hearttrace-mv-cutout-1.0.15/tokimemo-main/tools/verification/mv-cutout-frame-regression.mjs:48:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    
+    255 !== 0
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 0
+  actual: 255
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///workspace/scratch/59771f6e8e39/hearttrace-mv-cutout-1.0.15/tokimemo-main/tools/verification/mv-cutout-frame-regression.mjs:52:16)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+# Subtest: complex and empty backgrounds produce no destructive saved image
+ok 4 - complex and empty backgrounds produce no destructive saved image
+  ---
+  duration_ms: 764.182092
+  type: 'test'
+  ...
+# Subtest: preview trims a rectangular panel border but never zooms into a full-body transparent figure
+not ok 5 - preview trims a rectangular panel border but never zooms into a full-body transparent figure
+  ---
+  duration_ms: 345.76488
+  type: 'test'
+  location: '/workspace/scratch/59771f6e8e39/hearttrace-mv-cutout-1.0.15/tokimemo-main/tools/verification/mv-cutout-frame-regression.mjs:70:1'
+  failureType: 'testCodeFailure'
+  error: 'p.previewContentRect is not a function'
+  code: 'ERR_TEST_FAILURE'
+  name: 'TypeError'
+  stack: |-
+    TestContext.<anonymous> (file:///workspace/scratch/59771f6e8e39/hearttrace-mv-cutout-1.0.15/tokimemo-main/tools/verification/mv-cutout-frame-regression.mjs:75:54)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+# Subtest: character, group background, motif, and inspector use the selected frame shape and provide cutout action
+not ok 6 - character, group background, motif, and inspector use the selected frame shape and provide cutout action
+  ---
+  duration_ms: 236.949169
+  type: 'test'
+  location: '/workspace/scratch/59771f6e8e39/hearttrace-mv-cutout-1.0.15/tokimemo-main/tools/verification/mv-cutout-frame-regression.mjs:82:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /data-rmt-mv="cutout-asset"[^>]*data-rmt-mv-id="G1:D1"/. Input:
+    
+    '<main class="rmt-x-page"><header class="rmt-x-head"><small>舞台 · 手书</small><h2>构图卡片</h2><p>按歌曲安排关键画面，需要时复用素材或追加差分。</p></header>\n' +
+      '      <section class="rmt-mv-palette"><span class="rmt-mv-cover"></span><div><b>从封面取色</b><span><i style="background:#2f3a45"></i><i style="background:#7d8fa3"></i><i style="background:#f1e6d6"></i></span></div><small>片头片尾<br>用封面</small></section>\n' +
+      '      <section class="rmt-x-card"><b>做哪一段</b><div class="rmt-mv-grid2"><button type="button" class="rmt-x-seg" data-rmt-mv="range-pick" data-rmt-mv-id="chorus" aria-pressed="false" data-rmt-mv-scope="record">第一段副歌</button><button type="button" class="rmt-x-seg" data-rmt-mv="range-pick" data-rmt-mv-id="verseChorus" aria-pressed="false" data-rmt-mv-scope="record">一段主歌 + 副歌</button><button type="button" class="rmt-x-seg active" data-rmt-mv="range-pick" data-rmt-mv-id="full" aria-pressed="true" data-rmt-mv-scope="record">整首</button><button type="button" class="rmt-x-seg" data-rmt-mv="range-pick" data-rmt-mv-id="custom" aria-pressed="false" data-rmt-mv-scope="record">自己选</button></div><p class="rmt-x-note">这次做：主歌 1 → 副歌 · 2 段 · 约 3 句歌词。手书通常只做一段，镜头少、节奏紧。</p><p class="rmt-x-note">所选范围已有分镜；想继续后面的段落，可以把范围改为整首。</p></section>\n' +
+      '      <section class="rmt-x-card"><label class="rmt-mv-look"><b>分镜类型</b><select data-rmt-mv-story-type data-rmt-mv-scope="record">\n' +
+      '      <option value="auto">自动混合 · 推荐</option><option value="narrative">剧情叙事</option><option value="lyrical">抒情意象</option><option value="interaction">关系互动</option><option value="impact">高燃快切</option><option value="loop">节奏循环</option><option value="expression" selected>表情卡拍</option><option value="reveal">悬念反转</option></select></label>\n' +
+      '      <p class="rmt-x-note">共享舞台、角色表演与文字卡拍</p><p class="rmt-x-note">参考推荐：自动混合 · 现有歌曲信息不足，先按段落灵活编排</p>\n' +
+      '      <button type="button" class="rmt-x-secondary" data-rmt-mv="use-recommended-type" data-rmt-mv-scope="record">采用推荐</button>\n' +
+      '      <small class="rmt-x-note">用于之后生成，已有镜头和图片不变。</small></section>\n' +
+      '      <button type="button" class="rmt-x-secondary" data-rmt-mv="edit-cast">设置本曲人物／世界书</button>\n' +
+      '      <section class="rmt-x-card"><div class="rmt-x-row-head"><b>已画 3 / 3 张</b><span>整首</span></div>\n' +
+      '        <div class="rmt-x-bar"><i style="width:100%"></i></div>\n' +
+      '        \n' +
+      '        <button type="button" class="rmt-x-primary" data-rmt-mv="go-tegaki">去剪辑台预览</button></section>\n' +
+      '      <details class="rmt-x-card" open><summary><b>时代与衣着</b>（每一张都用同一套）</summary>\n' +
+      '      <label class="rmt-mv-look"><span>时代 / 场景</span><input type="text" maxlength="200" data-rmt-mv-wardrobe="era" value=""></label>\n' +
+      '      <label class="rmt-mv-look"><span>他的衣着</span><input type="text" maxlength="300" data-rmt-mv-wardrobe="char" value=""></label>\n' +
+      '      <label class="rmt-mv-look"><span>你的衣着</span><input type="text" maxlength="300" data-rmt-mv-wardrobe="user" value=""></label>\n' +
+      '      <p class="rmt-x-note">改完之后重画的图才会生效。</p></details><section class="rmt-x-card rmt-mv-backgrounds"><b>共享背景</b><div class="rmt-mv-background-grid"><div class="rmt-mv-background-tile"><div class="rmt-mv-assets"><div><button type="button" class="rmt-mv-asset wide" data-rmt-mv-anchor="stage:S1" data-rmt-mv="draw-asset" data-rmt-mv-id="stage:S1" aria-label="主舞台：生成背景" ><i>本地图案</i></button></div></div>\n' +
+      '          <div><b>主舞台</b><div class="rmt-mv-actions"><button type="button" class="rmt-x-secondary" data-rmt-mv="draw-asset" data-rmt-mv-id="stage:S1">生成背景</button><button type="button" class="rmt-x-secondary" data-rmt-mv="edit-asset" data-rmt-mv-id="stage:S1">编辑素材</button></div></div>\n' +
+      '          <details><summary>背景样式</summary><label class="rmt-mv-look"><span>背景类型</span><select data-rmt-mv-stage-bg="kind" data-background="S1"><option value="solid">纯色</option><option value="rays" selected>放射线</option><option value="stripes">斜纹</option><option value="window">窗格</option><option value="paper">纸纹</option><option value="image">绘制背景</option></select></label><label class="rmt-mv-look"><span>背景运动</span><select data-rmt-mv-stage-bg="motion" data-background="S1"><option value="still">不动</option><option value="rotate" selected>缓慢旋转</option><option value="drift">轻微移动</option></select></label>\n' +
+      '          <div class="rmt-mv-actions"><label>配色 1<input type="color" value="#162538" data-rmt-mv-stage-bg="color0" data-background="S1"></label><label>配色 2<input type="color" value="#e8cf91" data-rmt-mv-stage-bg="color1" data-background="S1"></label><label>配色 3<input type="color" value="#cc5679" data-rmt-mv-stage-bg="color2" data-background="S1"></label></div></details></div></div></section><article class="rmt-mv-gcard"><div class="rmt-x-row-head"><b class="rmt-mv-gname">构图 1 · 正面半身</b><span>主歌 1、副歌 · 3 句</span></div>\n' +
+      '          \n' +
+      '          <small>背景：主舞台 · 共用</small>\n' +
+      '          <div class="rmt-mv-assets"><div><button type="button" class="rmt-mv-asset wide done cut" data-rmt-mv-anchor="G1:D1" data-rmt-mv="draw-asset" data-rmt-mv-id="G1:D1"  aria-label="摊手笑：重画这一张"><img src="/pose.png" alt=""><i>已画</i></button><small>摊手笑</small><button type="button" class="rmt-mv-edit-open" data-rmt-mv="edit-asset" data-rmt-mv-id="G1:D1">编辑素材</button></div></div>\n' +
+      '          <details class="rmt-mv-inspect"><summary data-rmt-mv="inspect" data-rmt-mv-id="G1">素材检查（画面有问题时再打开）</summary><div class="rmt-mv-inspect-row"><figure><img src="/pose.png" alt="原图"><figcaption>原图</figcaption></figure>\n' +
+      '          <figure class="cut"><img src="/pose.png" alt="当前素材"><figcaption>当前素材</figcaption></figure>\n' +
+      '          <div><b>摊手笑</b><small>可在编辑素材中选单格</small><small>播放时：完整画面</small>\n' +
+      '          <button type="button" class="rmt-x-secondary" data-rmt-mv="edit-asset" data-rmt-mv-id="G1:D1">选单格／抠图／提示词</button></div></div><div class="rmt-mv-actions"><button type="button" class="rmt-x-secondary" data-rmt-mv="group-layer" data-rmt-mv-id="G1:full">绘图方式：分层素材 · 改为完整画面</button></div>\n' +
+      '      <p class="rmt-x-note">透明素材直接使用，纯色底自动处理；拼图或复杂背景可在编辑素材中调整。</p></details>\n' +
+      '          <div class="rmt-mv-lyric"><p>摊手笑｜抬眼\n' +
+      '摊手笑｜看向我\n' +
+      '摊手笑｜再抬眼</p></div>\n' +
+      '          <div class="rmt-mv-actions"><button type="button" class="rmt-x-secondary" data-rmt-mv="redraw-group" data-rmt-mv-id="G1">整组换一版</button></div>\n' +
+      '          <p class="rmt-x-note">点任意一张缩略图可以单独重画。</p>\n' +
+      '          </article><article class="rmt-mv-gcard"><div class="rmt-x-row-head"><b class="rmt-mv-gname">构图 2 · 侧身抱臂</b><span>副歌 · 1 句</span></div>\n' +
+      '          \n' +
+      '          <small>背景：主舞台 · 共用</small>\n' +
+      '          <div class="rmt-mv-assets"><div><button type="button" class="rmt-mv-asset wide done cut" data-rmt-mv-anchor="G2:D1" data-rmt-mv="draw-asset" data-rmt-mv-id="G2:D1"  aria-label="抱臂：重画这一张"><img src="/pose.png" alt=""><i>已画</i></button><small>抱臂</small><button type="button" class="rmt-mv-edit-open" data-rmt-mv="edit-asset" data-rmt-mv-id="G2:D1">编辑素材</button></div></div>\n' +
+      '          <details class="rmt-mv-inspect"><summary data-rmt-mv="inspect" data-rmt-mv-id="G2">素材检查（画面有问题时再打开）</summary><div class="rmt-mv-inspect-row"><figure><img src="/pose.png" alt="原图"><figcaption>原图</figcaption></figure>\n' +
+      '          <figure class="cut"><img src="/pose.png" alt="当前素材"><figcaption>当前素材</figcaption></figure>\n' +
+      '          <div><b>抱臂</b><small>可在编辑素材中选单格</small><small>播放时：完整画面</small>\n' +
+      '          <button type="button" class="rmt-x-secondary" data-rmt-mv="edit-asset" data-rmt-mv-id="G2:D1">选单格／抠图／提示词</button></div></div><div class="rmt-mv-actions"><button type="button" class="rmt-x-secondary" data-rmt-mv="group-layer" data-rmt-mv-id="G2:full">绘图方式：分层素材 · 改为完整画面</button></div>\n' +
+      '      <p class="rmt-x-note">透明素材直接使用，纯色底自动处理；拼图或复杂背景可在编辑素材中调整。</p></details>\n' +
+      '          <div class="rmt-mv-lyric"><p>抱臂｜再抬眼</p></div>\n' +
+      '          <div class="rmt-mv-actions"><button type="button" class="rmt-x-secondary" data-rmt-mv="redraw-group" data-rmt-mv-id="G2">整组换一版</button></div>\n' +
+      '          <p class="rmt-x-note">点任意一张缩略图可以单独重画。</p>\n' +
+      '          </article><section class="rmt-x-card"><div class="rmt-x-row-head"><b>意象：雪花</b><span>副歌时漂浮</span></div><div class="rmt-mv-assets"><div><button type="button" class="rmt-mv-asset done cut" data-rmt-mv-anchor="motif" data-rmt-mv="draw-asset" data-rmt-mv-id="motif"  aria-label="意象：重画这一张"><img src="/motif.png" alt=""><i>已画</i></button><small>意象</small><button type="button" class="rmt-mv-edit-open" data-rmt-mv="edit-asset" data-rmt-mv-id="motif">编辑素材</button></div></div></section>\n' +
+      '      <div class="rmt-mv-actions"><button type="button" class="rmt-x-secondary" data-rmt-mv="rewrite-board">重新写分镜</button></div><details class="rmt-x-card"><summary>MV 备份</summary><button type="button" class="rmt-x-secondary" data-rmt-mv="export-recovery">导出 MV 数据与暂存结果</button></details></main>'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual: |-
+    <main class="rmt-x-page"><header class="rmt-x-head"><small>舞台 · 手书</small><h2>构图卡片</h2><p>按歌曲安排关键画面，需要时复用素材或追加差分。</p></header>
+          <section class="rmt-mv-palette"><span class="rmt-mv-cover"></span><div><b>从封面取色</b><span><i style="background:#2f3a45"></i><i style="background:#7d8fa3"></i><i style="background:#f1e6d6"></i></span></div><small>片头片尾<br>用封面</small></section>
+          <section class="rmt-x-card"><b>做哪一段</b><div class="rmt-mv-grid2"><button type="button" class="rmt-x-seg" data-rmt-mv="range-pick" data-rmt-mv-id="chorus" aria-pressed="false" data-rmt-mv-scope="record">第一段副歌</button><button type="button" class="rmt-x-seg" data-rmt-mv="range-pick" data-rmt-mv-id="verseChorus" aria-pressed="false" data-rmt-mv-scope="record">一段主歌 + 副歌</button><button type="button" class="rmt-x-seg active" data-rmt-mv="range-pick" data-rmt-mv-id="full" aria-pressed="true" data-rmt-mv-scope="record">整首</button><button type="button" class="rmt-x-seg" data-rmt-mv="range-pick" data-rmt-mv-id="custom" aria-pressed="false" data-rmt-mv-scope="record">自己选</button></div><p class="rmt-x-note">这次做：主歌 1 → 副歌 · 2 段 · 约 3 句歌词。手书通常只做一段，镜头少、节奏紧。</p><p class="rmt-x-note">所选范围已有分镜；想继续后面的段落，可以把范围改为整首。</p></section>
+          <section class="rmt-x-card"><label class="rmt-mv-look"><b>分镜类型</b><select data-rmt-mv-story-type data-rmt-mv-scope="record">
+          <option value="auto">自动混合 · 推荐</option><option value="narrative">剧情叙事</option><option value="lyrical">抒情意象</option><option value="interaction">关系互动</option><option value="impact">高燃快切</option><option value="loop">节奏循环</option><option value="expression" selected>表情卡拍</option><option value="reveal">悬念反转</option></select></label>
+          <p class="rmt-x-note">共享舞台、角色表演与文字卡拍</p><p class="rmt-x-note">参考推荐：自动混合 · 现有歌曲信息不足，先按段落灵活编排</p>
+          <button type="button" class="rmt-x-secondary" data-rmt-mv="use-recommended-type" data-rmt-mv-scope="record">采用推荐</button>
+          <small class="rmt-x-note">用于之后生成，已有镜头和图片不变。</small></section>
+          <button type="button" class="rmt-x-secondary" data-rmt-mv="edit-cast">设置本曲人物／世界书</button>
+          <section class="rmt-x-card"><div class="rmt-x-row-head"><b>已画 3 / 3 张</b><span>整首</span></div>
+            <div class="rmt-x-bar"><i style="width:100%"></i></div>
+            
+            <button type="button" class="rmt-x-primary" data-rmt-mv="go-tegaki">去剪辑台预览</button></section>
+          <details class="rmt-x-card" open><summary><b>时代与衣着</b>（每一张都用同一套）</summary>
+          <label class="rmt-mv-look"><span>时代 / 场景</span><input type="text" maxlength="200" data-rmt-mv-wardrobe="era" value=""></label>
+          <label class="rmt-mv-look"><span>他的衣着</span><input type="text" maxlength="300" data-rmt-mv-wardrobe="char" value=""></label>
+          <label class="rmt-mv-look"><span>你的衣着</span><input type="text" maxlength="300" data-rmt-mv-wardrobe="user" value=""></label>
+          <p class="rmt-x-note">改完之后重画的图才会生效。</p></details><section class="rmt-x-card rmt-mv-backgrounds"><b>共享背景</b><div class="rmt-mv-background-grid"><div class="rmt-mv-background-tile"><div class="rmt-mv-assets"><div><button type="button" class="rmt-mv-asset wide" data-rmt-mv-anchor="stage:S1" data-rmt-mv="draw-asset" data-rmt-mv-id="stage:S1" aria-label="主舞台：生成背景" ><i>本地图案</i></button></div></div>
+              <div><b>主舞台</b><div class="rmt-mv-actions"><button type="button" class="rmt-x-secondary" data-rmt-mv="draw-asset" data-rmt-mv-id="stage:S1">生成背景</button><button type="button" class="rmt-x-secondary" data-rmt-mv="edit-asset" data-rmt-mv-id="stage:S1">编辑素材</button></div></div>
+              <details><summary>背景样式</summary><label class="rmt-mv-look"><span>背景类型</span><select data-rmt-mv-stage-bg="kind" data-background="S1"><option value="solid">纯色</option><option value="rays" selected>放射线</option><option value="stripes">斜纹</option><option value="window">窗格</option><option value="paper">纸纹</option><option value="image">绘制背景</option></select></label><label class="rmt-mv-look"><span>背景运动</span><select data-rmt-mv-stage-bg="motion" data-background="S1"><option value="still">不动</option><option value="rotate" selected>缓慢旋转</option><option value="drift">轻微移动</option></select></label>
+              <div class="rmt-mv-actions"><label>配色 1<input type="color" value="#162538" data-rmt-mv-stage-bg="color0" data-background="S1"></label><label>配色 2<input type="color" value="#e8cf91" data-rmt-mv-stage-bg="color1" data-background="S1"></label><label>配色 3<input type="color" value="#cc5679" data-rmt-mv-stage-bg="color2" data-background="S1"></label></div></details></div></div></section><article class="rmt-mv-gcard"><div class="rmt-x-row-head"><b class="rmt-mv-gname">构图 1 · 正面半身</b><span>主歌 1、副歌 · 3 句</span></div>
+              
+              <small>背景：主舞台 · 共用</small>
+              <div class="rmt-mv-assets"><div><button type="button" class="rmt-mv-asset wide done cut" data-rmt-mv-anchor="G1:D1" data-rmt-mv="draw-asset" data-rmt-mv-id="G1:D1"  aria-label="摊手笑：重画这一张"><img src="/pose.png" alt=""><i>已画</i></button><small>摊手笑</small><button type="button" class="rmt-mv-edit-open" data-rmt-mv="edit-asset" data-rmt-mv-id="G1:D1">编辑素材</button></div></div>
+              <details class="rmt-mv-inspect"><summary data-rmt-mv="inspect" data-rmt-mv-id="G1">素材检查（画面有问题时再打开）</summary><div class="rmt-mv-inspect-row"><figure><img src="/pose.png" alt="原图"><figcaption>原图</figcaption></figure>
+              <figure class="cut"><img src="/pose.png" alt="当前素材"><figcaption>当前素材</figcaption></figure>
+              <div><b>摊手笑</b><small>可在编辑素材中选单格</small><small>播放时：完整画面</small>
+              <button type="button" class="rmt-x-secondary" data-rmt-mv="edit-asset" data-rmt-mv-id="G1:D1">选单格／抠图／提示词</button></div></div><div class="rmt-mv-actions"><button type="button" class="rmt-x-secondary" data-rmt-mv="group-layer" data-rmt-mv-id="G1:full">绘图方式：分层素材 · 改为完整画面</button></div>
+          <p class="rmt-x-note">透明素材直接使用，纯色底自动处理；拼图或复杂背景可在编辑素材中调整。</p></details>
+              <div class="rmt-mv-lyric"><p>摊手笑｜抬眼
+    摊手笑｜看向我
+    摊手笑｜再抬眼</p></div>
+              <div class="rmt-mv-actions"><button type="button" class="rmt-x-secondary" data-rmt-mv="redraw-group" data-rmt-mv-id="G1">整组换一版</button></div>
+              <p class="rmt-x-note">点任意一张缩略图可以单独重画。</p>
+              </article><article class="rmt-mv-gcard"><div class="rmt-x-row-head"><b class="rmt-mv-gname">构图 2 · 侧身抱臂</b><span>副歌 · 1 句</span></div>
+              
+              <small>背景：主舞台 · 共用</small>
+              <div class="rmt-mv-assets"><div><button type="button" class="rmt-mv-asset wide done cut" data-rmt-mv-anchor="G2:D1" data-rmt-mv="draw-asset" data-rmt-mv-id="G2:D1"  aria-label="抱臂：重画这一张"><img src="/pose.png" alt=""><i>已画</i></button><small>抱臂</small><button type="button" class="rmt-mv-edit-open" data-rmt-mv="edit-asset" data-rmt-mv-id="G2:D1">编辑素材</button></div></div>
+              <details class="rmt-mv-inspect"><summary data-rmt-mv="inspect" data-rmt-mv-id="G2">素材检查（画面有问题时再打开）</summary><div class="rmt-mv-inspect-row"><figure><img src="/pose.png" alt="原图"><figcaption>原图</figcaption></figure>
+              <figure class="cut"><img src="/pose.png" alt="当前素材"><figcaption>当前素材</figcaption></figure>
+              <div><b>抱臂</b><small>可在编辑素材中选单格</small><small>播放时：完整画面</small>
+              <button type="button" class="rmt-x-secondary" data-rmt-mv="edit-asset" data-rmt-mv-id="G2:D1">选单格／抠图／提示词</button></div></div><div class="rmt-mv-actions"><button type="button" class="rmt-x-secondary" data-rmt-mv="group-layer" data-rmt-mv-id="G2:full">绘图方式：分层素材 · 改为完整画面</button></div>
+          <p class="rmt-x-note">透明素材直接使用，纯色底自动处理；拼图或复杂背景可在编辑素材中调整。</p></details>
+              <div class="rmt-mv-lyric"><p>抱臂｜再抬眼</p></div>
+              <div class="rmt-mv-actions"><button type="button" class="rmt-x-secondary" data-rmt-mv="redraw-group" data-rmt-mv-id="G2">整组换一版</button></div>
+              <p class="rmt-x-note">点任意一张缩略图可以单独重画。</p>
+              </article><section class="rmt-x-card"><div class="rmt-x-row-head"><b>意象：雪花</b><span>副歌时漂浮</span></div><div class="rmt-mv-assets"><div><button type="button" class="rmt-mv-asset done cut" data-rmt-mv-anchor="motif" data-rmt-mv="draw-asset" data-rmt-mv-id="motif"  aria-label="意象：重画这一张"><img src="/motif.png" alt=""><i>已画</i></button><small>意象</small><button type="button" class="rmt-mv-edit-open" data-rmt-mv="edit-asset" data-rmt-mv-id="motif">编辑素材</button></div></div></section>
+          <div class="rmt-mv-actions"><button type="button" class="rmt-x-secondary" data-rmt-mv="rewrite-board">重新写分镜</button></div><details class="rmt-x-card"><summary>MV 备份</summary><button type="button" class="rmt-x-secondary" data-rmt-mv="export-recovery">导出 MV 数据与暂存结果</button></details></main>
+  operator: 'match'
+  stack: |-
+    TestContext.<anonymous> (file:///workspace/scratch/59771f6e8e39/hearttrace-mv-cutout-1.0.15/tokimemo-main/tools/verification/mv-cutout-frame-regression.mjs:90:20)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+1..6
+# tests 6
+# suites 0
+# pass 1
+# fail 5
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 3054.085201

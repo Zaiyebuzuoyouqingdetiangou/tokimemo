@@ -265,7 +265,7 @@ export function httpFailure(response) {
 // line; retain any actual JSON (including partial data) on the ordinary parser path.
 // A canonical host error envelope is authoritative even if its body contains JSON.
 function transportErrorTextInfo(value, hostEnvelope = false) {
-    const none = { status: 0, hostError: false };
+    const none = { status: 0, hostError: false, failureCode: '' };
     if (typeof value !== 'string') return none;
     let body = value.replace(/^\uFEFF/, '').trim();
     const label = /^\[API (?:Error|错误|錯誤)\][ \t]*(?:\r?\n|$)/i.exec(body);
@@ -273,7 +273,26 @@ function transportErrorTextInfo(value, hostEnvelope = false) {
     if (wrapper) body = body.slice(wrapper[0].length).trimStart();
     if (!hostEnvelope && /[{\[]/.test(body)) return none;
     const match = /^(?:(?:failed to generate(?: chat completion)?|internal error|error)\s*:\s*)*(?:custom openai endpoint failed with status\s+|(?:http(?:\/\d(?:\.\d)?)?(?: error)?|status(?: code)?|error code)\s*[:=]?\s*)([45]\d{2})\b/i.exec(body);
-    return { status: Number(match?.[1]) || 0, hostError: !!label || hostEnvelope };
+    let failureCode = '';
+    if (label || hostEnvelope) {
+        // Keep only a code-owned category from an already identified error.
+        // The raw text may include an endpoint, credentials or the input; it
+        // never becomes a cause, saved field, diagnostic or user-facing text.
+        const detail = body.slice(0, 1600).replace(/^(?:(?:failed to generate(?: chat completion)?|internal error|typeerror|error)\s*:\s*)*/i, '');
+        if (/^(?:gateway timeout|request timeout|request timed out|operation timed out|timed out|ETIMEDOUT)\b/i.test(detail)) failureCode = 'RMT_CONNECTION_SERVER';
+        else if (/^(?:failed to fetch|fetch failed|load failed|networkerror|network request failed|error sending request for url|ENOTFOUND)\b/i.test(detail)) failureCode = 'RMT_CONNECTION_NETWORK';
+    }
+    return { status: Number(match?.[1]) || 0, hostError: !!label || hostEnvelope, failureCode };
+}
+
+function categorizedTransportFailure(code) {
+    const message = code === 'RMT_CONNECTION_NETWORK'
+        ? '无法连接模型服务。请检查地址、网络、代理与服务状态，旧内容仍会保留。'
+        : '模型服务或代理响应超时。可以稍后重试，旧内容仍会保留。';
+    const error = apiError(message, code);
+    error.transportFailureKind = code === 'RMT_CONNECTION_NETWORK' ? 'network' : 'timeout';
+    error.retryable = true;
+    return error;
 }
 
 function isHostErrorCompletion(payload) {
@@ -286,17 +305,20 @@ function isHostErrorCompletion(payload) {
 export function providerEnvelopeFailure(payload, manual = true) {
     // Read only bounded error metadata. Never propagate a provider message/body as a cause.
     const seen = new Set();
-    let status = 0, typeStatus = 0, textStatus = 0, quota = false;
+    let status = 0, typeStatus = 0, textStatus = 0, textFailureCode = '', quota = false;
+    const readErrorText = value => {
+        const info = transportErrorTextInfo(value, true);
+        if (!textStatus) textStatus = info.status;
+        if (!textFailureCode) textFailureCode = info.failureCode;
+    };
     const visit = (node, depth) => {
-        if (typeof node === 'string') { if (!textStatus) textStatus = transportErrorTextInfo(node).status; return; }
+        if (typeof node === 'string') { readErrorText(node); return; }
         if (!node || typeof node !== 'object' || seen.has(node) || depth > 4 || seen.size >= 24) return;
         seen.add(node);
-        if (!textStatus && isHostErrorCompletion(node)) {
-            textStatus = transportErrorTextInfo(finalResponseSelection(node).text, true).status;
-        }
+        if (isHostErrorCompletion(node)) readErrorText(finalResponseSelection(node).text);
         for (const key of ['message', 'detail']) {
             const descriptor = Object.getOwnPropertyDescriptor(node, key);
-            if (!textStatus && descriptor && 'value' in descriptor) textStatus = transportErrorTextInfo(descriptor.value).status;
+            if (descriptor && 'value' in descriptor) readErrorText(descriptor.value);
         }
         for (const key of ['status', 'statusCode', 'code', 'type']) {
             const descriptor = Object.getOwnPropertyDescriptor(node, key);
@@ -326,6 +348,7 @@ export function providerEnvelopeFailure(payload, manual = true) {
         return error;
     }
     if (status || typeStatus || textStatus) return apiError('模型服务返回错误状态；详情已隐藏。', 'RMT_PROVIDER_STATUS', status || typeStatus || textStatus);
+    if (textFailureCode) return categorizedTransportFailure(textFailureCode);
     const error = apiError('专用连接返回了错误状态，请检查服务配置后重试。', manual ? 'RMT_MANUAL_PROVIDER_ERROR' : 'RMT_CONNECTION_FAILED');
     error.retryable = false;
     return error;
@@ -567,8 +590,9 @@ export function assertIndependentResponsePayload(payload) {
     }
     const transport = transportErrorTextInfo(content);
     if (transport.status || transport.hostError) {
-        const error = apiError('模型服务返回错误状态；详情已隐藏。', transport.status ? 'RMT_PROVIDER_STATUS' : 'RMT_CONNECTION_FAILED', transport.status);
-        if (!transport.status) error.retryable = false;
+        const error = !transport.status && transport.failureCode ? categorizedTransportFailure(transport.failureCode)
+            : apiError('模型服务返回错误状态；详情已隐藏。', transport.status ? 'RMT_PROVIDER_STATUS' : 'RMT_CONNECTION_FAILED', transport.status);
+        if (!transport.status && !transport.failureCode) error.retryable = false;
         transportFailures.set(error, { shape: 'error', finalChars: 0, reasoningChars: 0, finishReason: 'none' });
         throw error;
     }

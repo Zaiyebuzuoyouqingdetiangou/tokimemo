@@ -65,20 +65,23 @@ export function mountContentSelection(container, mode, session = null) {
         .rmt-content-selection{margin:0 0 16px;padding:14px;border:1px solid var(--rmt-theme-border,#ddd);border-radius:12px;background:var(--rmt-theme-surface-solid,#fff);color:var(--rmt-theme-text,#333);text-align:left;min-width:0}
         .rmt-cs-head,.rmt-cs-actions,.rmt-cs-range{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
         .rmt-cs-head{justify-content:space-between}.rmt-cs-head small,.rmt-cs-row small{display:block;color:var(--rmt-theme-muted,#666);margin-top:4px}
-        .rmt-content-selection p{font-size:13px;line-height:1.6;margin:8px 0}.rmt-content-selection summary{cursor:pointer;min-height:44px;display:flex;align-items:center;font-size:14px}
+        .rmt-content-selection p{font-size:13px;line-height:1.6;margin:8px 0}
+        .rmt-content-selection summary.rmt-cs-toggle{cursor:pointer;min-height:44px;display:inline-flex;align-items:center;justify-content:center;gap:10px;max-width:100%;box-sizing:border-box;list-style:none;font-size:15px!important;font-weight:600!important;line-height:1.5;border-color:var(--rmt-theme-border,#cbdce6)!important;background:var(--rmt-theme-surface-solid,#fff)!important;touch-action:manipulation}
+        .rmt-cs-toggle::-webkit-details-marker{display:none}.rmt-cs-toggle::after{content:'›';display:inline-block;flex:none;transform:rotate(0deg)}.rmt-content-selection details[open]>.rmt-cs-toggle::after{transform:rotate(90deg)}
+        .rmt-content-selection details{margin-top:10px}.rmt-cs-head>button{flex:0 0 auto;width:auto}
         .rmt-content-selection input[type=number]{width:80px;min-height:44px;font-size:16px;box-sizing:border-box;color:inherit;background:var(--rmt-theme-bg,#fff);border:1px solid var(--rmt-theme-border,#ddd);border-radius:8px;padding:6px}
         .rmt-content-selection .rmt-btn{min-height:44px;white-space:normal}.rmt-cs-row{display:flex;gap:10px;align-items:center;min-height:54px;padding:6px 0;border-bottom:1px solid var(--rmt-theme-border,#ddd);cursor:pointer}
         .rmt-cs-row input{width:20px;height:20px;flex:none}.rmt-cs-row span{min-width:0}.rmt-cs-row b{font-size:13px;overflow-wrap:anywhere}.rmt-cs-row small{font-size:12px}
         .rmt-cs-actions{margin-top:10px}.rmt-content-selection [data-cs-notice]{color:var(--rmt-theme-accent-ink,#845160)}
-        @media(max-width:480px){.rmt-cs-head>button{width:100%}.rmt-content-selection{padding:12px}.rmt-cs-actions .rmt-btn{flex:1}}
+        @media(max-width:480px){.rmt-content-selection{padding:12px}.rmt-cs-actions .rmt-btn{flex:1}}
     </style>
     <div class="rmt-cs-head"><div><b>已收录 ${works} ${mode === constants.MODE.ALBUM ? '张' : '篇'}</b><small>已确认选材 ${status.scannedMemoryIds.length} / ${rows.length} 条</small></div><button type="button" class="rmt-btn" data-rmt-generate-mode="${esc(mode)}"${session ? '' : ' data-rmt-reader-generation="true"'}>${session ? '继续补充' : '开始生成'}</button></div>
     <p data-cs-summary>${esc(selectionLabel())}</p>
     ${status.legacyUnknown ? '<p>旧作品已保留；旧版未准确记录选材进度，其余条目仍可选择。</p>' : ''}
     ${last ? `<p>上次选材 ${last.memoryIds.length} 条，新增 ${last.added} ${mode === constants.MODE.ALBUM ? '张' : '篇'}${last.added === 0 ? '；没有新增作品，可继续下一批' : ''}。</p>` : ''}
-    <details data-cs-panel><summary>选择范围</summary><p>按当前档案条目顺序选择，也可以逐条勾选。选材数量不等于作品数量。</p>
+    <details data-cs-panel><summary class="rmt-btn rmt-cs-toggle">选择范围</summary><p>按档案顺序选范围，或逐条勾选。选材条数不等于作品数。</p>
       <div class="rmt-cs-range"><label>从 <input type="number" data-cs-start min="1" max="${rows.length}" value="${selectedIndexes[0] || 1}" aria-label="起始条目"></label><label>到 <input type="number" data-cs-end min="1" max="${rows.length}" value="${selectedIndexes.at(-1) || Math.min(rows.length, 48)}" aria-label="结束条目"></label><button type="button" class="rmt-btn" data-cs-action="range">勾选此范围</button></div>
-      <details><summary>查看并勾选条目</summary><div data-cs-rows></div><div class="rmt-cs-actions"><button type="button" class="rmt-btn" data-cs-action="prev">上一页</button><span data-cs-page></span><button type="button" class="rmt-btn" data-cs-action="next">下一页</button></div><div class="rmt-cs-actions"><button type="button" class="rmt-btn" data-cs-action="all">全选</button><button type="button" class="rmt-btn" data-cs-action="none">清空选择</button></div></details>
+      <details><summary class="rmt-btn rmt-cs-toggle">查看并勾选条目</summary><div data-cs-rows></div><div class="rmt-cs-actions"><button type="button" class="rmt-btn" data-cs-action="prev">上一页</button><span data-cs-page></span><button type="button" class="rmt-btn" data-cs-action="next">下一页</button></div><div class="rmt-cs-actions"><button type="button" class="rmt-btn" data-cs-action="all">全选</button><button type="button" class="rmt-btn" data-cs-action="none">清空选择</button></div></details>
       <p data-cs-count></p><div class="rmt-cs-actions"><button type="button" class="rmt-btn" data-cs-action="apply">应用选择</button><button type="button" class="rmt-btn" data-cs-action="auto">恢复自动选材</button></div>
     </details><p data-cs-notice role="status" aria-live="polite"></p>`;
     paintRows();

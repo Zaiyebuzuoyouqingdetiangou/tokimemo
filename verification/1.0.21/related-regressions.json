@@ -1,0 +1,17 @@
+{
+  "command": [
+    "node",
+    "--experimental-vm-modules",
+    "--test",
+    "--test-concurrency=2",
+    "tools/verification/generation-regression.mjs",
+    "tools/verification/previous-regression.mjs",
+    "tools/verification/mv-framing-paths-regression.mjs",
+    "tools/verification/mv-music-link-regression.mjs",
+    "tools/verification/mv-update-regression.mjs"
+  ],
+  "TEST_ROOT": "/workspace/scratch/c9f4993ef355/candidate-1.0.21/tokimemo-main",
+  "exit_code": 1,
+  "seconds": 17.81,
+  "bundle_sha256": "516dc9ab2e6375de8727444a6fb3c2918e90c5f83c12d2178e8709c7967a450a"
+}

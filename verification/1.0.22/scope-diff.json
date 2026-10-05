@@ -1,0 +1,57 @@
+[
+  {
+    "file": "index.js",
+    "before": "796ca10d2bfe0b775cbda4c0f7266e99e494d9632a662c9101d989ffffccf0d8",
+    "after": "4f5e9a3a099a97c63b9970e85ad8cedc1145a08389b68d94dc2deba9f9624aae"
+  },
+  {
+    "file": "manifest.json",
+    "before": "070f444f1b7d8d4be3152534f9db4a3c1d153a10499f07884865abcbd4004a74",
+    "after": "09f637bb5ea478ba97f1d150468c72a07829ba6f335cdedb6fbb39e7d82e3684"
+  },
+  {
+    "file": "src/modes/album.js",
+    "before": "26300694d5cbf0f5cdd76057259aa8ddcf9407d5e724034bbe5d7a902ad47e95",
+    "after": "3683baa74f876bc77308a42b0a9808be76245cc889d0fba415323232519a7b79"
+  },
+  {
+    "file": "src/extras/mvMusicLink.js",
+    "before": "776bfc98313e99f3a0be0befdb375228c7410f6608e3502e36e116d1782c2e28",
+    "after": "a76bc9016b4b3efca307d255dd4ba5c6d24473bcf5dad44356e8fc6d3dbecc4c"
+  },
+  {
+    "file": "src/extras/mvMedia.js",
+    "before": "aa3db7dae6ead07891916d318c66b7541be10d975f13582f4cfa5e2001236072",
+    "after": "67b98644e8c2282b56281f5a87ae666991c54e2a8a14f06e82f4e2771a672d81"
+  },
+  {
+    "file": "src/ui/mvView.js",
+    "before": "231f4b3e8cec9e0fc45ca9b524403ad2e60e4dfbe7d917b9a063619a49c8febb",
+    "after": "0d20db96ccf9529e4a8028d6ff5e6d4015b9b67cede93bdb002a995147096f29"
+  },
+  {
+    "file": "src/ui/taskCenter.js",
+    "before": "c2eaf773692fae678f95dbcab48b27da15956d22f7ff70a406d18fe753ea3b25",
+    "after": "e007986c0cb62475302ecaa6e807d7cba92ebffb68b9c4730f755b41540e2750"
+  },
+  {
+    "file": "src/ui/contentSelection.js",
+    "before": "98ba6deece3a6b036fd187a21892261f6db205246d3efaccde459b153e1f5d0d",
+    "after": "f80160ea4d91d3540962f355ef677481aec9745db592d8b0297d1bb4b52751d3"
+  },
+  {
+    "file": "src/core/independentApiConfig.js",
+    "before": "fa4b48f489b56d64c37927b9726d3fc00314172906de888ad6712455ac1e5d41",
+    "after": "8b53c6813f76b6bd778840299b068de457a741f3b54c7d7b12616dab4c9b6483"
+  },
+  {
+    "file": "src/generation/generationRequest.js",
+    "before": "014ec9d681128d7c89ef4b54092dfc31967b6cdd1d4351c0a30e5d1a884ab7d5",
+    "after": "6c496a425e39f24b7b9be6b14f22acc158dcc084a9c46722c8913859bdb27b5a"
+  },
+  {
+    "file": "src/generation/generationModes.js",
+    "before": "0eb894e123d6ef5c393b8666dd1113d0973fbc7abdd5c88d4fb9fd93cfb64406",
+    "after": "a52615bee18c3ae4910305287fa96045b497bb908ae174889fe5cde936f23a2a"
+  }
+]

@@ -1,0 +1,71 @@
+✔ paid storyboard switch + quota preserves raw and old metadata; save-only retry is idempotent (144.04979ms)
+✖ revision drift journals paid result and survives a fresh runtime (105.82962ms)
+✔ song deletion and text changes cannot receive a late paid result (221.097739ms)
+✔ absent/silent local storage and rejected metadata never claim durable success (116.945578ms)
+✔ malformed paid storyboard remains exportable with no automatic new request (129.800849ms)
+✔ late generated frame never overwrites a newer manual image (101.934393ms)
+✔ late rewrite detects shot edits and keeps paid rewrite (111.399423ms)
+✔ legacy reversed taps produce strictly positive non-overlapping SRT times (106.400585ms)
+✖ frame cast is the exact intersection of shot people and appearance preference (100.210463ms)
+✔ delayed audio restore cannot change another chat/song filename or duration (120.707283ms)
+✔ audio with same song id is isolated by chat and late restore loses to manual upload (121.566764ms)
+✔ leaving MV while playing stops audio and never renders over another route (119.574538ms)
+✔ record countdown is cancelled on exit and cannot play later (120.34167ms)
+✔ canvas subtitles preserve the entire lyric instead of clipping to 24 characters (117.523007ms)
+✔ public tap nudge cannot cross the next marked section (140.114472ms)
+✔ updater accepts same project SSH remote and reverse-proxy prefix with JSON/CSRF intact (110.413419ms)
+✔ updater independently verifies the resulting commit instead of trusting update response (112.250451ms)
+✔ up-to-date branch makes no update POST and shows actual loaded build (108.556329ms)
+✔ wrong remote, ZIP, denied permissions and cross-origin path never pull code (112.72582ms)
+✔ concurrent update clicks share a single update and release failed button (116.155072ms)
+✔ song plan and storage retain song 81 and cumulative text beyond 1.2M (172.384013ms)
+✔ leaving during active export stops recorder, audio and tracks without redrawing another page (124.106048ms)
+✔ export waits for local image blobs and cannot start after leaving during preload (132.006861ms)
+✔ settings updater entry renders escaped complete running version independently of update status (125.621554ms)
+✔ normal paid frame saves once and survives metadata failure through confirmed local copy (240.895373ms)
+✔ storyboard saves alongside newer audio duration/timing without reverting either (130.767123ms)
+✔ MV backup includes old metadata-only records before the first local write (121.472543ms)
+ℹ tests 27
+ℹ suites 0
+ℹ pass 25
+ℹ fail 2
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 3495.493423
+
+✖ failing tests:
+
+test at tools/verification/mv-update-regression.mjs:13:1
+✖ revision drift journals paid result and survives a fresh runtime (105.82962ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  false !== true
+  
+      at TestContext.<anonymous> (file:///workspace/scratch/59771f6e8e39/hearttrace-ui-1.0.11/tokimemo-main/tools/verification/mv-update-regression.mjs:13:231)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tools/verification/mv-update-regression.mjs:20:1
+✖ frame cast is the exact intersection of shot people and appearance preference (100.210463ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /no people/. Input:
+  
+  'vertical 9:16 composition, empty room, scenery, no humans'
+  
+      at TestContext.<anonymous> (file:///workspace/scratch/59771f6e8e39/hearttrace-ui-1.0.11/tokimemo-main/tools/verification/mv-update-regression.mjs:20:585)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'vertical 9:16 composition, empty room, scenery, no humans',
+    expected: /no people/,
+    operator: 'match',
+    diff: 'simple'
+  }

@@ -1,0 +1,90 @@
+(node:820) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+TAP version 13
+# Subtest: first storyboard reports wrapped 524 as transport timeout; no fake storyboard or extra request
+ok 1 - first storyboard reports wrapped 524 as transport timeout; no fake storyboard or extra request
+  ---
+  duration_ms: 148.367367
+  type: 'test'
+  ...
+# Subtest: failed regeneration preserves every old shot and image; next manual click can succeed
+ok 2 - failed regeneration preserves every old shot and image; next manual click can succeed
+  ---
+  duration_ms: 168.342247
+  type: 'test'
+  ...
+# Subtest: validated generation does not treat backend error prose as a paid empty-JSON reroll
+ok 3 - validated generation does not treat backend error prose as a paid empty-JSON reroll
+  ---
+  duration_ms: 144.763342
+  type: 'test'
+  ...
+# Subtest: plain, content-array and profile-stream errors retain 524 without exporting backend text
+ok 4 - plain, content-array and profile-stream errors retain 524 without exporting backend text
+  ---
+  duration_ms: 128.844134
+  type: 'test'
+  ...
+# Subtest: structured backend error message retains HTTP status when no numeric status field exists
+ok 5 - structured backend error message retains HTTP status when no numeric status field exists
+  ---
+  duration_ms: 152.916418
+  type: 'test'
+  ...
+# Subtest: numeric envelope status takes priority over conflicting prose
+ok 6 - numeric envelope status takes priority over conflicting prose
+  ---
+  duration_ms: 130.181362
+  type: 'test'
+  ...
+# Subtest: valid JSON, fenced JSON and JSON after backend-like prose remain parseable
+ok 7 - valid JSON, fenced JSON and JSON after backend-like prose remain parseable
+  ---
+  duration_ms: 142.430354
+  type: 'test'
+  ...
+# Subtest: truncated JSON after error-like prose remains a recoverable JSON truncation
+ok 8 - truncated JSON after error-like prose remains a recoverable JSON truncation
+  ---
+  duration_ms: 151.033819
+  type: 'test'
+  ...
+# Subtest: ordinary prose and incidental error references keep the existing parser path
+ok 9 - ordinary prose and incidental error references keep the existing parser path
+  ---
+  duration_ms: 149.305319
+  type: 'test'
+  ...
+# Subtest: HTTP and error-code-only error replies preserve a safe numeric status
+ok 10 - HTTP and error-code-only error replies preserve a safe numeric status
+  ---
+  duration_ms: 152.606243
+  type: 'test'
+  ...
+# Subtest: real thrown 524 is shown as timeout with MV trace and a single request
+ok 11 - real thrown 524 is shown as timeout with MV trace and a single request
+  ---
+  duration_ms: 166.07928
+  type: 'test'
+  ...
+# Subtest: successful first storyboard keeps configured max output, temperature, streaming choice and one request
+ok 12 - successful first storyboard keeps configured max output, temperature, streaming choice and one request
+  ---
+  duration_ms: 177.683878
+  type: 'test'
+  ...
+# Subtest: HTTP diagnostics permit only integer error statuses and never exception text
+ok 13 - HTTP diagnostics permit only integer error statuses and never exception text
+  ---
+  duration_ms: 180.85694
+  type: 'test'
+  ...
+1..13
+# tests 13
+# suites 0
+# pass 13
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 2048.750997

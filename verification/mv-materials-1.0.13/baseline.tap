@@ -1,0 +1,135 @@
+TAP version 13
+# Subtest: uniform 255 character matte is removed automatically, enclosed white clothing remains
+not ok 1 - uniform 255 character matte is removed automatically, enclosed white clothing remains
+  ---
+  duration_ms: 107.606876
+  type: 'test'
+  location: '/workspace/scratch/59771f6e8e39/hearttrace-mv-materials-1.0.13/tokimemo-main/tools/verification/mv-auto-material-regression.mjs:14:38'
+  failureType: 'testCodeFailure'
+  error: 'f.get(...).prepareCharacterPixels is not a function'
+  code: 'ERR_TEST_FAILURE'
+  name: 'TypeError'
+  stack: |-
+    TestContext.<anonymous> (file:///workspace/scratch/59771f6e8e39/hearttrace-mv-materials-1.0.13/tokimemo-main/tools/verification/mv-auto-material-regression.mjs:17:49)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3)
+  ...
+# Subtest: uniform 235 character matte is removed automatically, enclosed white clothing remains
+not ok 2 - uniform 235 character matte is removed automatically, enclosed white clothing remains
+  ---
+  duration_ms: 95.432795
+  type: 'test'
+  location: '/workspace/scratch/59771f6e8e39/hearttrace-mv-materials-1.0.13/tokimemo-main/tools/verification/mv-auto-material-regression.mjs:14:38'
+  failureType: 'testCodeFailure'
+  error: 'f.get(...).prepareCharacterPixels is not a function'
+  code: 'ERR_TEST_FAILURE'
+  name: 'TypeError'
+  stack: |-
+    TestContext.<anonymous> (file:///workspace/scratch/59771f6e8e39/hearttrace-mv-materials-1.0.13/tokimemo-main/tools/verification/mv-auto-material-regression.mjs:17:49)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+# Subtest: uniform 205 character matte is removed automatically, enclosed white clothing remains
+not ok 3 - uniform 205 character matte is removed automatically, enclosed white clothing remains
+  ---
+  duration_ms: 106.618164
+  type: 'test'
+  location: '/workspace/scratch/59771f6e8e39/hearttrace-mv-materials-1.0.13/tokimemo-main/tools/verification/mv-auto-material-regression.mjs:14:38'
+  failureType: 'testCodeFailure'
+  error: 'f.get(...).prepareCharacterPixels is not a function'
+  code: 'ERR_TEST_FAILURE'
+  name: 'TypeError'
+  stack: |-
+    TestContext.<anonymous> (file:///workspace/scratch/59771f6e8e39/hearttrace-mv-materials-1.0.13/tokimemo-main/tools/verification/mv-auto-material-regression.mjs:17:49)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+# Subtest: genuine transparency needs no user-confirmed edit flag
+not ok 4 - genuine transparency needs no user-confirmed edit flag
+  ---
+  duration_ms: 104.912127
+  type: 'test'
+  location: '/workspace/scratch/59771f6e8e39/hearttrace-mv-materials-1.0.13/tokimemo-main/tools/verification/mv-auto-material-regression.mjs:23:1'
+  failureType: 'testCodeFailure'
+  error: 'f.get(...).prepareCharacterPixels is not a function'
+  code: 'ERR_TEST_FAILURE'
+  name: 'TypeError'
+  stack: |-
+    TestContext.<anonymous> (file:///workspace/scratch/59771f6e8e39/hearttrace-mv-materials-1.0.13/tokimemo-main/tools/verification/mv-auto-material-regression.mjs:25:49)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+# Subtest: blank images, scenic rectangles, and stacked cells are not called clean cutouts
+not ok 5 - blank images, scenic rectangles, and stacked cells are not called clean cutouts
+  ---
+  duration_ms: 101.600633
+  type: 'test'
+  location: '/workspace/scratch/59771f6e8e39/hearttrace-mv-materials-1.0.13/tokimemo-main/tools/verification/mv-auto-material-regression.mjs:29:1'
+  failureType: 'testCodeFailure'
+  error: 'prepare is not a function'
+  code: 'ERR_TEST_FAILURE'
+  name: 'TypeError'
+  stack: |-
+    TestContext.<anonymous> (file:///workspace/scratch/59771f6e8e39/hearttrace-mv-materials-1.0.13/tokimemo-main/tools/verification/mv-auto-material-regression.mjs:31:42)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+# Subtest: new shared backgrounds use generated images, even if the model returns a local pattern
+not ok 6 - new shared backgrounds use generated images, even if the model returns a local pattern
+  ---
+  duration_ms: 112.375667
+  type: 'test'
+  location: '/workspace/scratch/59771f6e8e39/hearttrace-mv-materials-1.0.13/tokimemo-main/tools/verification/mv-auto-material-regression.mjs:40:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    
+    'rays' !== 'image'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'image'
+  actual: 'rays'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///workspace/scratch/59771f6e8e39/hearttrace-mv-materials-1.0.13/tokimemo-main/tools/verification/mv-auto-material-regression.mjs:43:12)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+# Subtest: previous procedural art can be replaced with one image without regenerating the storyboard
+ok 7 - previous procedural art can be replaced with one image without regenerating the storyboard
+  ---
+  duration_ms: 99.376916
+  type: 'test'
+  ...
+# Subtest: unfinished image backgrounds are not counted as completed layered clips
+not ok 8 - unfinished image backgrounds are not counted as completed layered clips
+  ---
+  duration_ms: 120.006279
+  type: 'test'
+  location: '/workspace/scratch/59771f6e8e39/hearttrace-mv-materials-1.0.13/tokimemo-main/tools/verification/mv-auto-material-regression.mjs:58:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    
+    1 !== 0
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 0
+  actual: 1
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///workspace/scratch/59771f6e8e39/hearttrace-mv-materials-1.0.13/tokimemo-main/tools/verification/mv-auto-material-regression.mjs:61:12)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+1..8
+# tests 8
+# suites 0
+# pass 1
+# fail 7
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 860.48809

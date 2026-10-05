@@ -149,10 +149,19 @@ async function saveStillImage(imageData, context, signal) {
     return path;
 }
 
-function orientedSize(context, backend, orientation) {
+function orientedSize(context, backend, orientation, aspectRatio = '') {
     const bag = extensionBag(context);
     const keys = { novelai: ['novelai_width', 'novelai_height'], sd: ['sd_cwidth', 'sd_cheight'], comfyui: ['comfyui_width', 'comfyui_height'] }[backend];
     const width = Number(keys && bag?.[keys[0]]), height = Number(keys && bag?.[keys[1]]);
+    if (aspectRatio === '16:9' || aspectRatio === '9:16') {
+        // Both dimensions are multiples of 64. Exact 16:9 begins at 1024×576;
+        // larger configured budgets can use its integer multiples. Only this
+        // request changes; never rewrite the provider's global presets.
+        const area = Number.isSafeInteger(width) && width > 0 && Number.isSafeInteger(height) && height > 0 ? width * height : 1216 * 832;
+        const units = Math.max(1, Math.floor(Math.sqrt(area / (1024 * 576))));
+        const long = 1024 * units, short = 576 * units;
+        return aspectRatio === '9:16' ? { width: short, height: long } : { width: long, height: short };
+    }
     let long = 1216, short = 832;
     if (Number.isSafeInteger(width) && width > 0 && Number.isSafeInteger(height) && height > 0) {
         long = Math.max(width, height); short = Math.min(width, height);
@@ -167,7 +176,7 @@ function orientedSize(context, backend, orientation) {
     return orientation === 'portrait' ? { width: short, height: long } : { width: long, height: short };
 }
 
-export async function generateChatu8Image(prompt, { signal = null, orientation = 'landscape', respectOrientation = false, promptMetadata = null, onProgress = null, onSettled = null, targetKey = '', context = core_context.getContext() } = {}) {
+export async function generateChatu8Image(prompt, { signal = null, orientation = 'landscape', respectOrientation = false, aspectRatio = '', promptMetadata = null, onProgress = null, onSettled = null, targetKey = '', context = core_context.getContext() } = {}) {
     if (signal?.aborted) throw chatu8ImageError('CH8_ABORTED');
     const state = chatu8ImageState(context);
     if (!state.available) throw chatu8ImageError(state.code);
@@ -217,7 +226,7 @@ export async function generateChatu8Image(prompt, { signal = null, orientation =
                 source.on(RESPONSE_EVENT, onResponse);
                 signal?.addEventListener('abort', onAbort, { once: true });
                 timer = setTimeout(() => stop('CH8_TIMEOUT'), CHATU8_IMAGE_TIMEOUT_MS);
-                source.emit(REQUEST_EVENT, { id, prompt: scene, ...(respectOrientation ? orientedSize(context, state.backend, orientation) : {}) });
+                source.emit(REQUEST_EVENT, { id, prompt: scene, ...(respectOrientation ? orientedSize(context, state.backend, orientation, aspectRatio) : {}) });
             } catch { stop('CH8_BACKEND_ERROR'); }
         });
         if (signal?.aborted) throw chatu8ImageError('CH8_ABORTED');

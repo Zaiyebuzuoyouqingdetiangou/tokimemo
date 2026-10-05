@@ -1,0 +1,16 @@
+(node:12) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ one refresh shares recovery reads with task panel closed (147.576761ms)
+✔ one refresh shares recovery reads with task panel open (136.526632ms)
+✔ the next refresh immediately sees a newly saved failure and its later completion (133.003429ms)
+✔ request phase updates reuse one snapshot and keep cancellation visible (257.548136ms)
+✔ one unreadable pending store is observed once and still exposes its existing export action (145.790361ms)
+✔ standalone live strip refresh does not carry a prior refresh snapshot (139.116713ms)
+ℹ tests 6
+ℹ suites 0
+ℹ pass 6
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1110.783446

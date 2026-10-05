@@ -1,0 +1,90 @@
+(node:708) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+TAP version 13
+# Subtest: reported legacy solo prompt replaces the old expression and omits the cast transition
+ok 1 - reported legacy solo prompt replaces the old expression and omits the cast transition
+  ---
+  duration_ms: 129.405901
+  type: 'test'
+  ...
+# Subtest: a complete still supersedes all group and change poses while preserving names and looks
+ok 2 - a complete still supersedes all group and change poses while preserving names and looks
+  ---
+  duration_ms: 131.730175
+  type: 'test'
+  ...
+# Subtest: two expressions produce separate images and the repeated beat reuses the first paid asset
+ok 3 - two expressions produce separate images and the repeated beat reuses the first paid asset
+  ---
+  duration_ms: 149.947032
+  type: 'test'
+  ...
+# Subtest: MV NAI submits the scene once and preserves its separate appearance channel
+ok 4 - MV NAI submits the scene once and preserves its separate appearance channel
+  ---
+  duration_ms: 131.674927
+  type: 'test'
+  ...
+# Subtest: other modules keep the existing NAI transport contract
+ok 5 - other modules keep the existing NAI transport contract
+  ---
+  duration_ms: 145.272101
+  type: 'test'
+  ...
+# Subtest: ComfyUI and flat backends retain complete prompt channels and named looks
+ok 6 - ComfyUI and flat backends retain complete prompt channels and named looks
+  ---
+  duration_ms: 474.92633
+  type: 'test'
+  ...
+# Subtest: player redraw and asset editor use the same chosen still
+ok 7 - player redraw and asset editor use the same chosen still
+  ---
+  duration_ms: 156.318364
+  type: 'test'
+  ...
+# Subtest: manual complete prompts pass through both redraw routes without hidden character text
+ok 8 - manual complete prompts pass through both redraw routes without hidden character text
+  ---
+  duration_ms: 154.446528
+  type: 'test'
+  ...
+# Subtest: a player redraw arriving after an asset prompt edit is preserved as pending
+ok 9 - a player redraw arriving after an asset prompt edit is preserved as pending
+  ---
+  duration_ms: 160.186973
+  type: 'test'
+  ...
+# Subtest: missing optional per-still text and legacy records remain drawable
+ok 10 - missing optional per-still text and legacy records remain drawable
+  ---
+  duration_ms: 157.959946
+  type: 'test'
+  ...
+# Subtest: unbound multi-person legacy actions are retained instead of guessing whose expression changed
+ok 11 - unbound multi-person legacy actions are retained instead of guessing whose expression changed
+  ---
+  duration_ms: 166.112704
+  type: 'test'
+  ...
+# Subtest: omitted group cast can still resolve a named person from the new per-still field
+ok 12 - omitted group cast can still resolve a named person from the new per-still field
+  ---
+  duration_ms: 152.849235
+  type: 'test'
+  ...
+# Subtest: expression storyboard request includes separate stills, sustained poses and a shared stage
+ok 13 - expression storyboard request includes separate stills, sustained poses and a shared stage
+  ---
+  duration_ms: 170.918712
+  type: 'test'
+  ...
+1..13
+# tests 13
+# suites 0
+# pass 13
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 2336.008333

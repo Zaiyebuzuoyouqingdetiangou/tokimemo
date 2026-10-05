@@ -1,0 +1,69 @@
+{
+  "changed_existing_files": [
+    {
+      "file": "index.js",
+      "before": "bcf2929d419e1132aa2bbb6a9ecb2830fd773a682b1e3a994501ec2ab2282301",
+      "after": "4305c99498ea00770536c7afa4ee798ad06a0b2092b810f4c7b251938ff8ccb0"
+    },
+    {
+      "file": "manifest.json",
+      "before": "2690db68e3c70c25f61a6307820d34f1a916d61527b5a77aa7149adc9dad25ae",
+      "after": "b96971a3c73bf7ab8529915b74a2f28dde3b59afdf034a4b05db16fda7f4a7d0"
+    },
+    {
+      "file": "dist/heartbeatMemories.bundle.js",
+      "before": "4e4d87ee42c6ff28d5dbc0ae7f5ab573204272bca2c334a97b8f548a824e771c",
+      "after": "07a924ba159c87928c9a42dd9bacc65bb276756dfaf3ec51f2c5f03c91456e19"
+    },
+    {
+      "file": "src/extras/mvImageTools.js",
+      "before": "c17578e0b701342d9bd25c128bf0fd2566671da6c9a7481ed85bd04243451a0a",
+      "after": "0c4b7edcf182e3fb68d96366eedaada45fb65c0ea8e7df699fad2cb7e94758e0"
+    },
+    {
+      "file": "src/extras/mvStage.js",
+      "before": "3e8b6dd249b552157eda63ebe9f47e10026dd8fd83ad0a7ae85a38c6b4e4e115",
+      "after": "6ee8c12a89c68d7c72dd9814775f6e9734fa5be6a8d1841e108a972951975636"
+    },
+    {
+      "file": "src/ui/mvView.js",
+      "before": "cc8e32d8a8e6d627f53d2d483b4d5c766880ec5117c95188201a86b0b48b747c",
+      "after": "54ab74649c916bf230ea9a5dd0ee796625d7d3ddcee644c8dfadc2ae535be2ee"
+    },
+    {
+      "file": "src/ui/mvImageEditor.js",
+      "before": "f1b848f13f4ea4f07818a96d8922cfdf960314a06a21ff078cf53353fb03d42d",
+      "after": "4a790e328ba815690737785e1c3c6a6b37a55604cfa41c6dc49e49832836a69c"
+    },
+    {
+      "file": "src/ui/themeSongView.js",
+      "before": "a20c5fdfad8b49be1679b1189aac7d6c69ac4137472e0c6020727f531152ed1c",
+      "after": "caf08b4d19c5ef0c2cc94f68512ce4dbf95e1cbb3158dbfdcb4831b97ca96600"
+    },
+    {
+      "file": "src/ui/themeSongStyles.js",
+      "before": "9659604cfc27143a11a5ed331611962aa616f816bae4f5d8aec53de1361a9b85",
+      "after": "3824581b07de94d8ea5b2a7522b8a345a1abba1be82f0f442e5583d4fd4a5028"
+    },
+    {
+      "file": "src/ui/mvStageCanvas.js",
+      "before": "a05d67d296bf77b36a0b67c8199d21e6bbd77d5d5b14dcbe6ce8481ee923402f",
+      "after": "9f477792fe20b944f930c378513afbe33a86ff287ca3fe999298aa29585386b0"
+    },
+    {
+      "file": "tools/verification/terminal-expression-regression.mjs",
+      "before": "ea7719815d0c58a4cbc46b2d4b73fd0fe241a8b5fdc226cac664872ed309d025",
+      "after": "a069d4a7c04af88a23a665aa4bfdb6d9c82a8287ae1160ce6677f0d7c95bac99"
+    },
+    {
+      "file": "tools/verification/mv-stage-canvas-fixture.mjs",
+      "before": "fd0640f37287cc006a9143c9f571bbc8e54b6f9266e4ba66b1763d031f456dca",
+      "after": "89f09ca0ec0aea581e7310370c9f80a3e5eadf9bdc526816df7ecf7966bd58ab"
+    }
+  ],
+  "baseline_files_removed": 0,
+  "syntax_files": 400,
+  "resolved_imports": 2602,
+  "deterministic_build": true,
+  "generation_archive_storage_and_main_song_mv_files_unchanged": true
+}

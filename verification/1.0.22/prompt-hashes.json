@@ -1,0 +1,1227 @@
+[
+  {
+    "module": "__m_archive_externalMemory_js",
+    "function": "externalMemoryImportPrompt",
+    "baseline_sha256": "74057ad10d8bc961d7a21b127ab950d5c3c7fa46e677c34b309ecf8e08745234",
+    "current_sha256": "74057ad10d8bc961d7a21b127ab950d5c3c7fa46e677c34b309ecf8e08745234",
+    "unchanged": true
+  },
+  {
+    "module": "__m_archive_importPrompts_js",
+    "function": "memoryImportPrompt",
+    "baseline_sha256": "4443ef374acfdb51063678cedaf19ddfd50532c190f876194be14cf19b6413f2",
+    "current_sha256": "4443ef374acfdb51063678cedaf19ddfd50532c190f876194be14cf19b6413f2",
+    "unchanged": true
+  },
+  {
+    "module": "__m_archive_importPrompts_js",
+    "function": "archiveProfilePrompt",
+    "baseline_sha256": "ffdfe6c98ea135e54a56830632a5a7eb29fe04bbf8eb518e46d33e1752bdacb3",
+    "current_sha256": "ffdfe6c98ea135e54a56830632a5a7eb29fe04bbf8eb518e46d33e1752bdacb3",
+    "unchanged": true
+  },
+  {
+    "module": "__m_archive_repository_js",
+    "function": "memoryWorldInfoPromptBlock",
+    "baseline_sha256": "bbb0281553ee65cbb181c0803d4a33fa29d46280c627387dfed379901631b3c3",
+    "current_sha256": "bbb0281553ee65cbb181c0803d4a33fa29d46280c627387dfed379901631b3c3",
+    "unchanged": true
+  },
+  {
+    "module": "__m_archive_repository_js",
+    "function": "externalMemoryImportPrompt",
+    "baseline_sha256": "74057ad10d8bc961d7a21b127ab950d5c3c7fa46e677c34b309ecf8e08745234",
+    "current_sha256": "74057ad10d8bc961d7a21b127ab950d5c3c7fa46e677c34b309ecf8e08745234",
+    "unchanged": true
+  },
+  {
+    "module": "__m_archive_repository_js",
+    "function": "memoryImportPrompt",
+    "baseline_sha256": "4443ef374acfdb51063678cedaf19ddfd50532c190f876194be14cf19b6413f2",
+    "current_sha256": "4443ef374acfdb51063678cedaf19ddfd50532c190f876194be14cf19b6413f2",
+    "unchanged": true
+  },
+  {
+    "module": "__m_archive_repository_js",
+    "function": "archiveProfilePrompt",
+    "baseline_sha256": "ffdfe6c98ea135e54a56830632a5a7eb29fe04bbf8eb518e46d33e1752bdacb3",
+    "current_sha256": "ffdfe6c98ea135e54a56830632a5a7eb29fe04bbf8eb518e46d33e1752bdacb3",
+    "unchanged": true
+  },
+  {
+    "module": "__m_archive_storyScenes_js",
+    "function": "estimateDatePrompt",
+    "baseline_sha256": "d7a01f26c3974d8ad1ac16b4d9691dab3182330b2ad00aa57715f82b83e5752b",
+    "current_sha256": "d7a01f26c3974d8ad1ac16b4d9691dab3182330b2ad00aa57715f82b83e5752b",
+    "unchanged": true
+  },
+  {
+    "module": "__m_archive_worldInfoSources_js",
+    "function": "memoryWorldInfoPromptBlock",
+    "baseline_sha256": "bbb0281553ee65cbb181c0803d4a33fa29d46280c627387dfed379901631b3c3",
+    "current_sha256": "bbb0281553ee65cbb181c0803d4a33fa29d46280c627387dfed379901631b3c3",
+    "unchanged": true
+  },
+  {
+    "module": "__m_autoMemory_gapFill_js",
+    "function": "supplementPrompt",
+    "baseline_sha256": "7cc98d7e95d8925a16b22359d2f56665e7c1555f0d4f09ffab2ec89a6324e455",
+    "current_sha256": "7cc98d7e95d8925a16b22359d2f56665e7c1555f0d4f09ffab2ec89a6324e455",
+    "unchanged": true
+  },
+  {
+    "module": "__m_autoMemory_redo_js",
+    "function": "achievementRepairPrompt",
+    "baseline_sha256": "395983c7e459267eadaaf6a14bf97d9e78b3535dc00aececcbf2e90ddc428d70",
+    "current_sha256": "395983c7e459267eadaaf6a14bf97d9e78b3535dc00aececcbf2e90ddc428d70",
+    "unchanged": true
+  },
+  {
+    "module": "__m_core_butterflyContract_js",
+    "function": "butterflyPlanPrompt",
+    "baseline_sha256": "fe689d87b256cb1465e7e7160e7395013139f4a003693ec29073063d02b8d972",
+    "current_sha256": "fe689d87b256cb1465e7e7160e7395013139f4a003693ec29073063d02b8d972",
+    "unchanged": true
+  },
+  {
+    "module": "__m_core_butterflyLegacyRecovery_js",
+    "function": "legacyButterflyPlanPrompt",
+    "baseline_sha256": "b1d0a2400f4c1f5574e8ea2e5d784fd3341cfa6948fe61bb95e31808df45a200",
+    "current_sha256": "b1d0a2400f4c1f5574e8ea2e5d784fd3341cfa6948fe61bb95e31808df45a200",
+    "unchanged": true
+  },
+  {
+    "module": "__m_core_butterflyLegacyRecovery_js",
+    "function": "legacyButterflyPrompt",
+    "baseline_sha256": "b4d918f64a0dffda3ad3e7b92655570ecf70302bdd4fd4a6dcb7d3bd7b7495ed",
+    "current_sha256": "b4d918f64a0dffda3ad3e7b92655570ecf70302bdd4fd4a6dcb7d3bd7b7495ed",
+    "unchanged": true
+  },
+  {
+    "module": "__m_core_butterflyLegacyRecovery_js",
+    "function": "legacyButterflySlotPrompt",
+    "baseline_sha256": "c6a6d6c1304b84ed4cb07eb28d1057e9a6df841abdf0fbd614ab4bb6547179f2",
+    "current_sha256": "c6a6d6c1304b84ed4cb07eb28d1057e9a6df841abdf0fbd614ab4bb6547179f2",
+    "unchanged": true
+  },
+  {
+    "module": "__m_core_butterflyLegacyRecovery_js",
+    "function": "legacyButterflyIncrementPrompt",
+    "baseline_sha256": "a137334ed5b9e2d92427509478d1794089c7720c29b79ec366e5de9cc1345e68",
+    "current_sha256": "a137334ed5b9e2d92427509478d1794089c7720c29b79ec366e5de9cc1345e68",
+    "unchanged": true
+  },
+  {
+    "module": "__m_core_castLooks_js",
+    "function": "castLooksPromptLine",
+    "baseline_sha256": "dc8003844cfc46bfaa58e4d31b496db5d92a2be46fece84020ba4343456411ed",
+    "current_sha256": "dc8003844cfc46bfaa58e4d31b496db5d92a2be46fece84020ba4343456411ed",
+    "unchanged": true
+  },
+  {
+    "module": "__m_core_cgPromptFormat_js",
+    "function": "normalizeCgPromptFormat",
+    "baseline_sha256": "4ee12156f9fbf9656ba7407e871ef16d29e33819185cb825f7c4fc10b7e4c751",
+    "current_sha256": "4ee12156f9fbf9656ba7407e871ef16d29e33819185cb825f7c4fc10b7e4c751",
+    "unchanged": true
+  },
+  {
+    "module": "__m_core_cgPromptFormat_js",
+    "function": "cgPromptFormatLabel",
+    "baseline_sha256": "1e4d93f95d1709b52632f9f8e739ef735e6d856cf5723c797b8048355c92fd43",
+    "current_sha256": "1e4d93f95d1709b52632f9f8e739ef735e6d856cf5723c797b8048355c92fd43",
+    "unchanged": true
+  },
+  {
+    "module": "__m_core_cgPromptFormat_js",
+    "function": "isEnglishTagPrompt",
+    "baseline_sha256": "db528c3df933f642220e3e97d5e4c5ba424149d310bd211625ebf12846b5bf8a",
+    "current_sha256": "db528c3df933f642220e3e97d5e4c5ba424149d310bd211625ebf12846b5bf8a",
+    "unchanged": true
+  },
+  {
+    "module": "__m_core_cgPromptFormat_js",
+    "function": "assertEnglishTagPrompt",
+    "baseline_sha256": "645d880249674ecfc740e223be749bbece98f00d034c6bb232e7f0e24c86ee69",
+    "current_sha256": "645d880249674ecfc740e223be749bbece98f00d034c6bb232e7f0e24c86ee69",
+    "unchanged": true
+  },
+  {
+    "module": "__m_core_cgPromptFormat_js",
+    "function": "assertNaturalScenePrompt",
+    "baseline_sha256": "0c6c191d3fa1a9a6be36c79d0e742e456f8ed0846c07036022c4ebca1bc3b232",
+    "current_sha256": "0c6c191d3fa1a9a6be36c79d0e742e456f8ed0846c07036022c4ebca1bc3b232",
+    "unchanged": true
+  },
+  {
+    "module": "__m_core_cgPromptFormat_js",
+    "function": "formatDailyComicPrompt",
+    "baseline_sha256": "81537bcb2a41cbea934d05757f8baa5ade4e4811dc8830e13c6f64bdcfe0772b",
+    "current_sha256": "81537bcb2a41cbea934d05757f8baa5ade4e4811dc8830e13c6f64bdcfe0772b",
+    "unchanged": true
+  },
+  {
+    "module": "__m_core_cgPromptFormat_js",
+    "function": "formatPhotoshootPrompt",
+    "baseline_sha256": "f3edaac6994fdb1b90cd519dbd43699110457e0404c25946d79cd995205923dd",
+    "current_sha256": "f3edaac6994fdb1b90cd519dbd43699110457e0404c25946d79cd995205923dd",
+    "unchanged": true
+  },
+  {
+    "module": "__m_core_contentSelection_js",
+    "function": "selectionPromptArchive",
+    "baseline_sha256": "cd1c048050e90aa404af621a78ddf8cf246c0da83bbd78c94d84133e1432abc0",
+    "current_sha256": "cd1c048050e90aa404af621a78ddf8cf246c0da83bbd78c94d84133e1432abc0",
+    "unchanged": true
+  },
+  {
+    "module": "__m_core_contextTags_js",
+    "function": "filterJsonPromptStrings",
+    "baseline_sha256": "2a0586c8e23f8bded4875e4394b0bc40f3a2070b6a32d508703c5926d413c7f4",
+    "current_sha256": "2a0586c8e23f8bded4875e4394b0bc40f3a2070b6a32d508703c5926d413c7f4",
+    "unchanged": true
+  },
+  {
+    "module": "__m_core_generationBridge_js",
+    "function": "promptSafetyBoundary",
+    "baseline_sha256": "e3b12baba97be13334331d7bd3027513140be49145cd6953b2c1655f368a2f25",
+    "current_sha256": "e3b12baba97be13334331d7bd3027513140be49145cd6953b2c1655f368a2f25",
+    "unchanged": true
+  },
+  {
+    "module": "__m_core_generationBridge_js",
+    "function": "promptArchiveSlice",
+    "baseline_sha256": "816fa303c908c72774742f81fa623e31065594880ffd50886ba90cef6bf1ea41",
+    "current_sha256": "816fa303c908c72774742f81fa623e31065594880ffd50886ba90cef6bf1ea41",
+    "unchanged": true
+  },
+  {
+    "module": "__m_core_generationBridge_js",
+    "function": "normalizeCgPromptMetadata",
+    "baseline_sha256": "02da9aae201b0afad75f42ec51b2faf059e5b093f50a5aded707ac81b841026a",
+    "current_sha256": "02da9aae201b0afad75f42ec51b2faf059e5b093f50a5aded707ac81b841026a",
+    "unchanged": true
+  },
+  {
+    "module": "__m_core_handJournal_js",
+    "function": "journalAnnotationPrompt",
+    "baseline_sha256": "b3b4812d5cdc07c4549264dcd0211fa865a1320e2cf37f1ea5c04d386a246dab",
+    "current_sha256": "b3b4812d5cdc07c4549264dcd0211fa865a1320e2cf37f1ea5c04d386a246dab",
+    "unchanged": true
+  },
+  {
+    "module": "__m_core_incremental_js",
+    "function": "incrementalPromptMemoryBank",
+    "baseline_sha256": "7e26843472a8a70eb6c91598c5823dced629bc41966bdffcfa77d1bd9c12f81e",
+    "current_sha256": "7e26843472a8a70eb6c91598c5823dced629bc41966bdffcfa77d1bd9c12f81e",
+    "unchanged": true
+  },
+  {
+    "module": "__m_core_inputLedger_js",
+    "function": "accountFinalPrompt",
+    "baseline_sha256": "e9370de9a7c887c27e2ed91711d5d956a99f9c3d163eb0a278b35643bfaafa61",
+    "current_sha256": "e9370de9a7c887c27e2ed91711d5d956a99f9c3d163eb0a278b35643bfaafa61",
+    "unchanged": true
+  },
+  {
+    "module": "__m_core_participants_js",
+    "function": "participantIndexPromptBlock",
+    "baseline_sha256": "c410c6ec1bf8e960f82db63ad7ba283bb402a5a137357e49fee4d2dc4dc9c20f",
+    "current_sha256": "c410c6ec1bf8e960f82db63ad7ba283bb402a5a137357e49fee4d2dc4dc9c20f",
+    "unchanged": true
+  },
+  {
+    "module": "__m_core_participants_js",
+    "function": "participantPromptBlock",
+    "baseline_sha256": "7c5401f0a30dc083ba46ea90fcc620d9a18d9d2698cf2b1de0dd0a527a116674",
+    "current_sha256": "7c5401f0a30dc083ba46ea90fcc620d9a18d9d2698cf2b1de0dd0a527a116674",
+    "unchanged": true
+  },
+  {
+    "module": "__m_core_participants_js",
+    "function": "promptIdentityLines",
+    "baseline_sha256": "376a3d454cc160a0d8030f884a4b722a10badce15aadc084028096646482d327",
+    "current_sha256": "376a3d454cc160a0d8030f884a4b722a10badce15aadc084028096646482d327",
+    "unchanged": true
+  },
+  {
+    "module": "__m_core_participants_js",
+    "function": "promptRomanceRule",
+    "baseline_sha256": "ab497afa7ef3d16a2a63c064f42b1def453f09cf95612d30bc17000cb25157bc",
+    "current_sha256": "ab497afa7ef3d16a2a63c064f42b1def453f09cf95612d30bc17000cb25157bc",
+    "unchanged": true
+  },
+  {
+    "module": "__m_core_themeSongCover_js",
+    "function": "songCoverReconceptPrompt",
+    "baseline_sha256": "82c49fbda3de49a5943dafea391c19b940fc88efb035f1655f4d37cd550c96df",
+    "current_sha256": "82c49fbda3de49a5943dafea391c19b940fc88efb035f1655f4d37cd550c96df",
+    "unchanged": true
+  },
+  {
+    "module": "__m_extras_intel_js",
+    "function": "intelPrompt",
+    "baseline_sha256": "6ee903da6083b34cc737d547f20deb44386b770039030e2be1aac8a8c02737e0",
+    "current_sha256": "6ee903da6083b34cc737d547f20deb44386b770039030e2be1aac8a8c02737e0",
+    "unchanged": true
+  },
+  {
+    "module": "__m_extras_mvCast_js",
+    "function": "castPrompt",
+    "baseline_sha256": "374911c79d5f08d4ddf4c65447abc18bd95acb7dd91f422da598a9c487b8083b",
+    "current_sha256": "374911c79d5f08d4ddf4c65447abc18bd95acb7dd91f422da598a9c487b8083b",
+    "unchanged": true
+  },
+  {
+    "module": "__m_extras_mvDirection_js",
+    "function": "directionPrompt",
+    "baseline_sha256": "0d1e8bddc520ab67f5bb352a571c6e7027d8bc97c4d25a1cbf9d25523a892d07",
+    "current_sha256": "0d1e8bddc520ab67f5bb352a571c6e7027d8bc97c4d25a1cbf9d25523a892d07",
+    "unchanged": true
+  },
+  {
+    "module": "__m_extras_mvStage_js",
+    "function": "prompt",
+    "baseline_sha256": "757e86292ee76732c2e7c975a7b910d29ddf8283d9cfa0f5ee39a56d0d50a870",
+    "current_sha256": "757e86292ee76732c2e7c975a7b910d29ddf8283d9cfa0f5ee39a56d0d50a870",
+    "unchanged": true
+  },
+  {
+    "module": "__m_extras_mvStillPrompt_js",
+    "function": "joinStillPrompt",
+    "baseline_sha256": "83f025a70b8bb31f235264d08c120335b0a9547401c9783b00ebcab44f929061",
+    "current_sha256": "83f025a70b8bb31f235264d08c120335b0a9547401c9783b00ebcab44f929061",
+    "unchanged": true
+  },
+  {
+    "module": "__m_extras_mv_js",
+    "function": "framePrompt",
+    "baseline_sha256": "1336eccd77b45b9e0bf8d2a7136b76be27a7727bfdbdcb595e678aa8101257d0",
+    "current_sha256": "1336eccd77b45b9e0bf8d2a7136b76be27a7727bfdbdcb595e678aa8101257d0",
+    "unchanged": true
+  },
+  {
+    "module": "__m_extras_mv_js",
+    "function": "assetPrompt",
+    "baseline_sha256": "982368619741191aea67f6356b355b963885a711877969e37f7b1459465a6c8b",
+    "current_sha256": "982368619741191aea67f6356b355b963885a711877969e37f7b1459465a6c8b",
+    "unchanged": true
+  },
+  {
+    "module": "__m_extras_mv_js",
+    "function": "defaultAssetPrompt",
+    "baseline_sha256": "ebade23bc0908af6525e0705d7b664f895a4f6e23aa35791b6e9928bd1b35d03",
+    "current_sha256": "ebade23bc0908af6525e0705d7b664f895a4f6e23aa35791b6e9928bd1b35d03",
+    "unchanged": true
+  },
+  {
+    "module": "__m_generation_achievementCapture_js",
+    "function": "achievementPromptSuffix",
+    "baseline_sha256": "6ec3031cea92e1341bbec5f7e243b7ad1fe896916bdd761ceb78057a5916dc0e",
+    "current_sha256": "6ec3031cea92e1341bbec5f7e243b7ad1fe896916bdd761ceb78057a5916dc0e",
+    "unchanged": true
+  },
+  {
+    "module": "__m_generation_cgAppearance_js",
+    "function": "normalizeCgPromptMetadata",
+    "baseline_sha256": "19618ccbf72f95deac37bfcc6e3cf3031b944cb055735bd636703af246d1ed26",
+    "current_sha256": "19618ccbf72f95deac37bfcc6e3cf3031b944cb055735bd636703af246d1ed26",
+    "unchanged": true
+  },
+  {
+    "module": "__m_generation_cgAppearance_js",
+    "function": "normalizeCgPreparedPrompt",
+    "baseline_sha256": "ee9bda171d46f58cee3627788043a92e7cf25ccb1841294edbfff6278bd170b6",
+    "current_sha256": "ee9bda171d46f58cee3627788043a92e7cf25ccb1841294edbfff6278bd170b6",
+    "unchanged": true
+  },
+  {
+    "module": "__m_generation_cgAppearance_js",
+    "function": "cgPreparedVisualPrompt",
+    "baseline_sha256": "ba674db5b0cc50185a50c4728050d5226d589b07b4512ec1158fe7613c8e73c2",
+    "current_sha256": "ba674db5b0cc50185a50c4728050d5226d589b07b4512ec1158fe7613c8e73c2",
+    "unchanged": true
+  },
+  {
+    "module": "__m_generation_cgAppearance_js",
+    "function": "cgFlatPromptWithNaturalLooks",
+    "baseline_sha256": "77b7f09e3f2824fa3fc55c62a030259a9e3e15f437267f085162b0de91f4683a",
+    "current_sha256": "77b7f09e3f2824fa3fc55c62a030259a9e3e15f437267f085162b0de91f4683a",
+    "unchanged": true
+  },
+  {
+    "module": "__m_generation_cgAppearance_js",
+    "function": "formattedCgProviderPrompts",
+    "baseline_sha256": "002c3b30745136e4bcbde3acd29c53e8fa850334148d176ffdefa2f9c6a07f6e",
+    "current_sha256": "002c3b30745136e4bcbde3acd29c53e8fa850334148d176ffdefa2f9c6a07f6e",
+    "unchanged": true
+  },
+  {
+    "module": "__m_generation_cgImageCore_js",
+    "function": "reconceiveCgImagePrompt",
+    "baseline_sha256": "715590a29bc8ec3318381bdb1b0c7eb2f97eb1daa3768f076779a8af43909398",
+    "current_sha256": "715590a29bc8ec3318381bdb1b0c7eb2f97eb1daa3768f076779a8af43909398",
+    "unchanged": true
+  },
+  {
+    "module": "__m_generation_cgImageCore_js",
+    "function": "sanitizeImageGenerationSlashPrompt",
+    "baseline_sha256": "b0ae1f007ebb6e5bd4633b7e310f6377c72abb093ce59de0a122af57c88ff2e8",
+    "current_sha256": "b0ae1f007ebb6e5bd4633b7e310f6377c72abb093ce59de0a122af57c88ff2e8",
+    "unchanged": true
+  },
+  {
+    "module": "__m_generation_cgImageCore_js",
+    "function": "cgImagePromptForItem",
+    "baseline_sha256": "2a1839621178d0b0f47efa9f3086ef69b03a619e7be035efb6cb81343dbe637d",
+    "current_sha256": "2a1839621178d0b0f47efa9f3086ef69b03a619e7be035efb6cb81343dbe637d",
+    "unchanged": true
+  },
+  {
+    "module": "__m_generation_cgImageCore_js",
+    "function": "dailyComicImagePrompt",
+    "baseline_sha256": "46433236a09fa11803cf20b2775955bdf6733d136d8fb8e436032f8130739447",
+    "current_sha256": "46433236a09fa11803cf20b2775955bdf6733d136d8fb8e436032f8130739447",
+    "unchanged": true
+  },
+  {
+    "module": "__m_generation_cgImageCore_js",
+    "function": "buildCgReconceptPrompt",
+    "baseline_sha256": "1375b76c59d24bc690a4b52fc418b70e093cfdf532c62441d99cdd3c750000ff",
+    "current_sha256": "1375b76c59d24bc690a4b52fc418b70e093cfdf532c62441d99cdd3c750000ff",
+    "unchanged": true
+  },
+  {
+    "module": "__m_generation_cgPromptPolicy_js",
+    "function": "bindCgPromptFormat",
+    "baseline_sha256": "1a498d22cb10312cd02e9ae1edacd0fb19ef0869a6dcdf9c1ba5efd84157cb71",
+    "current_sha256": "1a498d22cb10312cd02e9ae1edacd0fb19ef0869a6dcdf9c1ba5efd84157cb71",
+    "unchanged": true
+  },
+  {
+    "module": "__m_generation_cgPromptPolicy_js",
+    "function": "cgPromptForSegment",
+    "baseline_sha256": "0e0a5f970365c0833ffd5e7090cbe9bd2feec8d621ee723053a3311c19756f43",
+    "current_sha256": "0e0a5f970365c0833ffd5e7090cbe9bd2feec8d621ee723053a3311c19756f43",
+    "unchanged": true
+  },
+  {
+    "module": "__m_generation_client_js",
+    "function": "composeOutgoingGenerationPrompt",
+    "baseline_sha256": "3653f5704aff2bc4a1dea252b73d1a59aa0d8012b4a97742e56454d543516527",
+    "current_sha256": "3653f5704aff2bc4a1dea252b73d1a59aa0d8012b4a97742e56454d543516527",
+    "unchanged": true
+  },
+  {
+    "module": "__m_generation_generationRequest_js",
+    "function": "composeOutgoingGenerationPrompt",
+    "baseline_sha256": "3653f5704aff2bc4a1dea252b73d1a59aa0d8012b4a97742e56454d543516527",
+    "current_sha256": "3653f5704aff2bc4a1dea252b73d1a59aa0d8012b4a97742e56454d543516527",
+    "unchanged": true
+  },
+  {
+    "module": "__m_generation_imageGeneration_js",
+    "function": "sanitizeImageGenerationSlashPrompt",
+    "baseline_sha256": "b0ae1f007ebb6e5bd4633b7e310f6377c72abb093ce59de0a122af57c88ff2e8",
+    "current_sha256": "b0ae1f007ebb6e5bd4633b7e310f6377c72abb093ce59de0a122af57c88ff2e8",
+    "unchanged": true
+  },
+  {
+    "module": "__m_generation_imageGeneration_js",
+    "function": "cgImagePromptForItem",
+    "baseline_sha256": "2a1839621178d0b0f47efa9f3086ef69b03a619e7be035efb6cb81343dbe637d",
+    "current_sha256": "2a1839621178d0b0f47efa9f3086ef69b03a619e7be035efb6cb81343dbe637d",
+    "unchanged": true
+  },
+  {
+    "module": "__m_generation_imageGeneration_js",
+    "function": "dailyComicImagePrompt",
+    "baseline_sha256": "46433236a09fa11803cf20b2775955bdf6733d136d8fb8e436032f8130739447",
+    "current_sha256": "46433236a09fa11803cf20b2775955bdf6733d136d8fb8e436032f8130739447",
+    "unchanged": true
+  },
+  {
+    "module": "__m_generation_imageGeneration_js",
+    "function": "buildCgReconceptPrompt",
+    "baseline_sha256": "1375b76c59d24bc690a4b52fc418b70e093cfdf532c62441d99cdd3c750000ff",
+    "current_sha256": "1375b76c59d24bc690a4b52fc418b70e093cfdf532c62441d99cdd3c750000ff",
+    "unchanged": true
+  },
+  {
+    "module": "__m_generation_imageGeneration_js",
+    "function": "reconceiveCgImagePrompt",
+    "baseline_sha256": "715590a29bc8ec3318381bdb1b0c7eb2f97eb1daa3768f076779a8af43909398",
+    "current_sha256": "715590a29bc8ec3318381bdb1b0c7eb2f97eb1daa3768f076779a8af43909398",
+    "unchanged": true
+  },
+  {
+    "module": "__m_generation_mergedGeneration_js",
+    "function": "assembleMergedPrompt",
+    "baseline_sha256": "6670b71522f6d15b11463c79e4944a2d3ac02df0a788460d88a60821bfacf5ac",
+    "current_sha256": "6670b71522f6d15b11463c79e4944a2d3ac02df0a788460d88a60821bfacf5ac",
+    "unchanged": true
+  },
+  {
+    "module": "__m_generation_modesBridge_js",
+    "function": "bedtimePrompt",
+    "baseline_sha256": "b8424f45d73d497135d920c1ccd7ad44419b3e69a55c29666b0dad319a84841d",
+    "current_sha256": "b8424f45d73d497135d920c1ccd7ad44419b3e69a55c29666b0dad319a84841d",
+    "unchanged": true
+  },
+  {
+    "module": "__m_generation_modesBridge_js",
+    "function": "themeSongPrompt",
+    "baseline_sha256": "b394a9d9166f352de61a500e36902f527febcd0c492071b3f0a7c4edc3f1dba6",
+    "current_sha256": "b394a9d9166f352de61a500e36902f527febcd0c492071b3f0a7c4edc3f1dba6",
+    "unchanged": true
+  },
+  {
+    "module": "__m_generation_modesBridge_js",
+    "function": "inboxPrompt",
+    "baseline_sha256": "be8e3950c32a7511850002e334649fc4acd9d7bb89b6ca6c26e359b1b1acab47",
+    "current_sha256": "be8e3950c32a7511850002e334649fc4acd9d7bb89b6ca6c26e359b1b1acab47",
+    "unchanged": true
+  },
+  {
+    "module": "__m_generation_modesBridge_js",
+    "function": "relationsPrompt",
+    "baseline_sha256": "4df300b866adeaf8e5d0530ae8354266a5de52052aa2541318034e5afe12acad",
+    "current_sha256": "4df300b866adeaf8e5d0530ae8354266a5de52052aa2541318034e5afe12acad",
+    "unchanged": true
+  },
+  {
+    "module": "__m_generation_modesBridge_js",
+    "function": "phoneAppPrompt",
+    "baseline_sha256": "ec7a1870c60d48e9652229d42ef3028060b229483287d085bbe381f1ce99b646",
+    "current_sha256": "ec7a1870c60d48e9652229d42ef3028060b229483287d085bbe381f1ce99b646",
+    "unchanged": true
+  },
+  {
+    "module": "__m_generation_modesBridge_js",
+    "function": "cabinetPrompt",
+    "baseline_sha256": "5901cc1a6972364bf9b6eb98de8052103b3005e299640c5f2134865c3291708c",
+    "current_sha256": "5901cc1a6972364bf9b6eb98de8052103b3005e299640c5f2134865c3291708c",
+    "unchanged": true
+  },
+  {
+    "module": "__m_generation_modesBridge_js",
+    "function": "achievementsPrompt",
+    "baseline_sha256": "bb42355c1a2f46f8e0cd1a2df56fca5954308dfcd6140b1dadf16f42e719da6a",
+    "current_sha256": "bb42355c1a2f46f8e0cd1a2df56fca5954308dfcd6140b1dadf16f42e719da6a",
+    "unchanged": true
+  },
+  {
+    "module": "__m_generation_modesBridge_js",
+    "function": "endingRouteDetailPrompt",
+    "baseline_sha256": "091677c8c64aa7902ffc7527d1f207cf6c906259d3fdd90e33d8ef57f9f8665a",
+    "current_sha256": "091677c8c64aa7902ffc7527d1f207cf6c906259d3fdd90e33d8ef57f9f8665a",
+    "unchanged": true
+  },
+  {
+    "module": "__m_generation_modesBridge_js",
+    "function": "endingOutlinePrompt",
+    "baseline_sha256": "b5231222decd0e0f7222a512da7399dd29695bdc1e95d6e141e237d0699ce013",
+    "current_sha256": "b5231222decd0e0f7222a512da7399dd29695bdc1e95d6e141e237d0699ce013",
+    "unchanged": true
+  },
+  {
+    "module": "__m_generation_modesBridge_js",
+    "function": "advPrompt",
+    "baseline_sha256": "1a6bb64a56b528090d8b7c23dc9e26ab967c3c2100fdd04ea87620384abbe61f",
+    "current_sha256": "1a6bb64a56b528090d8b7c23dc9e26ab967c3c2100fdd04ea87620384abbe61f",
+    "unchanged": true
+  },
+  {
+    "module": "__m_generation_modesBridge_js",
+    "function": "albumRelationshipScanPrompt",
+    "baseline_sha256": "db11c96efacb3dbc023b7d05081f1f0a46260630383815f43061762f5d21cb71",
+    "current_sha256": "db11c96efacb3dbc023b7d05081f1f0a46260630383815f43061762f5d21cb71",
+    "unchanged": true
+  },
+  {
+    "module": "__m_generation_modesBridge_js",
+    "function": "albumCommentsPrompt",
+    "baseline_sha256": "0b7e9b1b5d8fd5ab8b7521a312147cda06c2d3cedce6988089ecb2ecb42a346a",
+    "current_sha256": "0b7e9b1b5d8fd5ab8b7521a312147cda06c2d3cedce6988089ecb2ecb42a346a",
+    "unchanged": true
+  },
+  {
+    "module": "__m_generation_modesBridge_js",
+    "function": "albumIndexPrompt",
+    "baseline_sha256": "4510ca30dd72857dfea38b28d70ee162c1c7d39ced3baff890b66f44188af5c4",
+    "current_sha256": "4510ca30dd72857dfea38b28d70ee162c1c7d39ced3baff890b66f44188af5c4",
+    "unchanged": true
+  },
+  {
+    "module": "__m_generation_modesBridge_js",
+    "function": "heartCorePrompt",
+    "baseline_sha256": "bbd88faccb65c1c775946378c06d7a41a4f0cc3cf0181f37c0f9589976292081",
+    "current_sha256": "bbd88faccb65c1c775946378c06d7a41a4f0cc3cf0181f37c0f9589976292081",
+    "unchanged": true
+  },
+  {
+    "module": "__m_generation_modesBridge_js",
+    "function": "heartPostVoicePrompt",
+    "baseline_sha256": "306e37d8d56d7271dd615276ccaf21a2d81c49cba0949e642b4141fdccd6ecfe",
+    "current_sha256": "306e37d8d56d7271dd615276ccaf21a2d81c49cba0949e642b4141fdccd6ecfe",
+    "unchanged": true
+  },
+  {
+    "module": "__m_generation_modesBridge_js",
+    "function": "heartSeasonVoicePrompt",
+    "baseline_sha256": "45f60f4b1b32e2ac1a3d4eac25ea587ccfab2ccc98c712736715f0bc732a9edc",
+    "current_sha256": "45f60f4b1b32e2ac1a3d4eac25ea587ccfab2ccc98c712736715f0bc732a9edc",
+    "unchanged": true
+  },
+  {
+    "module": "__m_generation_modesBridge_js",
+    "function": "heartSeasonScenarioPrompt",
+    "baseline_sha256": "159308d544f33d1547b3274a1f6950ab2eff5ca0647c23da8d5f0c1c488b8b59",
+    "current_sha256": "159308d544f33d1547b3274a1f6950ab2eff5ca0647c23da8d5f0c1c488b8b59",
+    "unchanged": true
+  },
+  {
+    "module": "__m_generation_modesBridge_js",
+    "function": "heartStripsPrompt",
+    "baseline_sha256": "e73057acfe4da7e0944f0673a8111f642ebf8d86349b4aa26306262dcda4f7cb",
+    "current_sha256": "e73057acfe4da7e0944f0673a8111f642ebf8d86349b4aa26306262dcda4f7cb",
+    "unchanged": true
+  },
+  {
+    "module": "__m_generation_prompts_js",
+    "function": "promptSafetyBoundary",
+    "baseline_sha256": "3c2fa7d10d810d43737f6e3d49992a0424877cc96a39bab4c44fad2e26044844",
+    "current_sha256": "3c2fa7d10d810d43737f6e3d49992a0424877cc96a39bab4c44fad2e26044844",
+    "unchanged": true
+  },
+  {
+    "module": "__m_generation_prompts_js",
+    "function": "promptArchiveSlice",
+    "baseline_sha256": "23422ff637916c9cd65c2f9518439915267337032121058111df1bc9bb60bcc5",
+    "current_sha256": "23422ff637916c9cd65c2f9518439915267337032121058111df1bc9bb60bcc5",
+    "unchanged": true
+  },
+  {
+    "module": "__m_generation_prompts_js",
+    "function": "calendarStoryPrompt",
+    "baseline_sha256": "f7126440bdd8357f3c67b092e2d2f49a367879f64f5cb08954d43baedc57e7d2",
+    "current_sha256": "f7126440bdd8357f3c67b092e2d2f49a367879f64f5cb08954d43baedc57e7d2",
+    "unchanged": true
+  },
+  {
+    "module": "__m_generation_prompts_js",
+    "function": "calendarPrompt",
+    "baseline_sha256": "78a01ef2340b5e38fcf34c4edbd2cec714dfa8626dfab57b53ba9e1377c59a55",
+    "current_sha256": "78a01ef2340b5e38fcf34c4edbd2cec714dfa8626dfab57b53ba9e1377c59a55",
+    "unchanged": true
+  },
+  {
+    "module": "__m_generation_prompts_js",
+    "function": "roomDeepGenerationPrompt",
+    "baseline_sha256": "282eaf8e0fc8075bfed31bbb97e440fa8b2cff2f8a23d13b2fddc48ceb2951dd",
+    "current_sha256": "282eaf8e0fc8075bfed31bbb97e440fa8b2cff2f8a23d13b2fddc48ceb2951dd",
+    "unchanged": true
+  },
+  {
+    "module": "__m_generation_prompts_js",
+    "function": "multiplayerRoomPrompt",
+    "baseline_sha256": "faf2f1016131df3ca32df4cb1ffc55622843b827e8c0dab1dc558a51bdd5c814",
+    "current_sha256": "faf2f1016131df3ca32df4cb1ffc55622843b827e8c0dab1dc558a51bdd5c814",
+    "unchanged": true
+  },
+  {
+    "module": "__m_generation_recoveryFeedback_js",
+    "function": "generationRetryPrompt",
+    "baseline_sha256": "27378fc2fd722e95b130824604cdbbb4138e6cc138c999138be6fafb4837523a",
+    "current_sha256": "27378fc2fd722e95b130824604cdbbb4138e6cc138c999138be6fafb4837523a",
+    "unchanged": true
+  },
+  {
+    "module": "__m_generation_recoveryFeedback_js",
+    "function": "generationPhoneRetryPrompt",
+    "baseline_sha256": "01309d4b3c1b19e20eabc4dac4011c488828afcae2c1bf3d6b8e95437aa1f5e7",
+    "current_sha256": "01309d4b3c1b19e20eabc4dac4011c488828afcae2c1bf3d6b8e95437aa1f5e7",
+    "unchanged": true
+  },
+  {
+    "module": "__m_generation_recoverySegments_js",
+    "function": "legacyRecoveryPromptPermitted",
+    "baseline_sha256": "5aa9ccb4122ed91a6e59ce4f09802c8c63647d929bdb2cd9fdd67a22c32d8ff7",
+    "current_sha256": "5aa9ccb4122ed91a6e59ce4f09802c8c63647d929bdb2cd9fdd67a22c32d8ff7",
+    "unchanged": true
+  },
+  {
+    "module": "__m_generation_recoverySegments_js",
+    "function": "generationContinuationPrompt",
+    "baseline_sha256": "e94e613506716ab311703975914921ae58919cedae6ef9502ece67a6651e9d01",
+    "current_sha256": "e94e613506716ab311703975914921ae58919cedae6ef9502ece67a6651e9d01",
+    "unchanged": true
+  },
+  {
+    "module": "__m_generation_recovery_js",
+    "function": "generationRetryPrompt",
+    "baseline_sha256": "27378fc2fd722e95b130824604cdbbb4138e6cc138c999138be6fafb4837523a",
+    "current_sha256": "27378fc2fd722e95b130824604cdbbb4138e6cc138c999138be6fafb4837523a",
+    "unchanged": true
+  },
+  {
+    "module": "__m_generation_recovery_js",
+    "function": "generationPhoneRetryPrompt",
+    "baseline_sha256": "01309d4b3c1b19e20eabc4dac4011c488828afcae2c1bf3d6b8e95437aa1f5e7",
+    "current_sha256": "01309d4b3c1b19e20eabc4dac4011c488828afcae2c1bf3d6b8e95437aa1f5e7",
+    "unchanged": true
+  },
+  {
+    "module": "__m_generation_recovery_js",
+    "function": "generationContinuationPrompt",
+    "baseline_sha256": "e94e613506716ab311703975914921ae58919cedae6ef9502ece67a6651e9d01",
+    "current_sha256": "e94e613506716ab311703975914921ae58919cedae6ef9502ece67a6651e9d01",
+    "unchanged": true
+  },
+  {
+    "module": "__m_generation_recovery_js",
+    "function": "legacyRecoveryPromptPermitted",
+    "baseline_sha256": "5aa9ccb4122ed91a6e59ce4f09802c8c63647d929bdb2cd9fdd67a22c32d8ff7",
+    "current_sha256": "5aa9ccb4122ed91a6e59ce4f09802c8c63647d929bdb2cd9fdd67a22c32d8ff7",
+    "unchanged": true
+  },
+  {
+    "module": "__m_modes_achievements_js",
+    "function": "achievementsPrompt",
+    "baseline_sha256": "3c38e6c1e509e91f786e20a59465341d1844087685c59e1e8cf23d5eea64f556",
+    "current_sha256": "3c38e6c1e509e91f786e20a59465341d1844087685c59e1e8cf23d5eea64f556",
+    "unchanged": true
+  },
+  {
+    "module": "__m_modes_advEventData_js",
+    "function": "advPrompt",
+    "baseline_sha256": "f600df5b58e7646f1f1e3c60c39bf641a3bb2a04db9078f3f19e9798c737afa1",
+    "current_sha256": "f600df5b58e7646f1f1e3c60c39bf641a3bb2a04db9078f3f19e9798c737afa1",
+    "unchanged": true
+  },
+  {
+    "module": "__m_modes_advEventData_js",
+    "function": "advIndexRepairPrompt",
+    "baseline_sha256": "dbfa4969755b2acba0c3e135d84075f117a0c1665315e6a9b5aba367a961c858",
+    "current_sha256": "dbfa4969755b2acba0c3e135d84075f117a0c1665315e6a9b5aba367a961c858",
+    "unchanged": true
+  },
+  {
+    "module": "__m_modes_advEventData_js",
+    "function": "advBatchPrompt",
+    "baseline_sha256": "813a2eedcbe7bddf1676eddbe053600c2e256c0e4d433f5657309cf2112026eb",
+    "current_sha256": "813a2eedcbe7bddf1676eddbe053600c2e256c0e4d433f5657309cf2112026eb",
+    "unchanged": true
+  },
+  {
+    "module": "__m_modes_advEventData_js",
+    "function": "advImportantIndexPrompt",
+    "baseline_sha256": "458955c9c945354d545b300bf6f953307a52b898023bb0ca2f2a5e34f00398b3",
+    "current_sha256": "458955c9c945354d545b300bf6f953307a52b898023bb0ca2f2a5e34f00398b3",
+    "unchanged": true
+  },
+  {
+    "module": "__m_modes_advEvent_js",
+    "function": "advPrompt",
+    "baseline_sha256": "f600df5b58e7646f1f1e3c60c39bf641a3bb2a04db9078f3f19e9798c737afa1",
+    "current_sha256": "f600df5b58e7646f1f1e3c60c39bf641a3bb2a04db9078f3f19e9798c737afa1",
+    "unchanged": true
+  },
+  {
+    "module": "__m_modes_advEvent_js",
+    "function": "advIndexRepairPrompt",
+    "baseline_sha256": "dbfa4969755b2acba0c3e135d84075f117a0c1665315e6a9b5aba367a961c858",
+    "current_sha256": "dbfa4969755b2acba0c3e135d84075f117a0c1665315e6a9b5aba367a961c858",
+    "unchanged": true
+  },
+  {
+    "module": "__m_modes_advEvent_js",
+    "function": "advBatchPrompt",
+    "baseline_sha256": "813a2eedcbe7bddf1676eddbe053600c2e256c0e4d433f5657309cf2112026eb",
+    "current_sha256": "813a2eedcbe7bddf1676eddbe053600c2e256c0e4d433f5657309cf2112026eb",
+    "unchanged": true
+  },
+  {
+    "module": "__m_modes_advEvent_js",
+    "function": "advImportantIndexPrompt",
+    "baseline_sha256": "458955c9c945354d545b300bf6f953307a52b898023bb0ca2f2a5e34f00398b3",
+    "current_sha256": "458955c9c945354d545b300bf6f953307a52b898023bb0ca2f2a5e34f00398b3",
+    "unchanged": true
+  },
+  {
+    "module": "__m_modes_album_js",
+    "function": "albumRelationshipScanPrompt",
+    "baseline_sha256": "28f25fabccb1d88d2eafac3fc8ba5c8c2d01928126902fb3d85a3cdd54ca185e",
+    "current_sha256": "28f25fabccb1d88d2eafac3fc8ba5c8c2d01928126902fb3d85a3cdd54ca185e",
+    "unchanged": true
+  },
+  {
+    "module": "__m_modes_album_js",
+    "function": "albumIndexPrompt",
+    "baseline_sha256": "82fe55ee212e786eb3e327ab8f1f2b42076eb860d9eff96bbc70ba31d8d93327",
+    "current_sha256": "82fe55ee212e786eb3e327ab8f1f2b42076eb860d9eff96bbc70ba31d8d93327",
+    "unchanged": true
+  },
+  {
+    "module": "__m_modes_album_js",
+    "function": "albumCommentsPrompt",
+    "baseline_sha256": "f358ecc8ccf43a26911003bde9caea4cf01d5c9dd8af419e1458fc0188ed36fe",
+    "current_sha256": "f358ecc8ccf43a26911003bde9caea4cf01d5c9dd8af419e1458fc0188ed36fe",
+    "unchanged": true
+  },
+  {
+    "module": "__m_modes_bedtime_js",
+    "function": "bedtimePrompt",
+    "baseline_sha256": "e7268bd0d4d51ff6c340382343875056759ce1849cc921daef30bb2b226e2b35",
+    "current_sha256": "e7268bd0d4d51ff6c340382343875056759ce1849cc921daef30bb2b226e2b35",
+    "unchanged": true
+  },
+  {
+    "module": "__m_modes_butterfly_js",
+    "function": "butterflySlotPrompt",
+    "baseline_sha256": "c5f06539344842636b638262c576648da59efe92b3559bc6d27993b0e6faa9de",
+    "current_sha256": "c5f06539344842636b638262c576648da59efe92b3559bc6d27993b0e6faa9de",
+    "unchanged": true
+  },
+  {
+    "module": "__m_modes_butterfly_js",
+    "function": "butterflyIncrementPrompt",
+    "baseline_sha256": "ce7eaa39bb7b017319d7fd07f807daf17dc3095a1500abec60bb1599a70599d0",
+    "current_sha256": "ce7eaa39bb7b017319d7fd07f807daf17dc3095a1500abec60bb1599a70599d0",
+    "unchanged": true
+  },
+  {
+    "module": "__m_modes_cabinet_js",
+    "function": "cabinetPrompt",
+    "baseline_sha256": "5d35d0537fde55ffd38c9ef449bee33856868041f62d22f036d066eb9dbd20a6",
+    "current_sha256": "5d35d0537fde55ffd38c9ef449bee33856868041f62d22f036d066eb9dbd20a6",
+    "unchanged": true
+  },
+  {
+    "module": "__m_modes_characterProfile_js",
+    "function": "characterProfilePrompt",
+    "baseline_sha256": "b30ffb06519f5828f61cc7053e7e0d957826907e57d730e27571f41c795d1036",
+    "current_sha256": "b30ffb06519f5828f61cc7053e7e0d957826907e57d730e27571f41c795d1036",
+    "unchanged": true
+  },
+  {
+    "module": "__m_modes_characterProfile_js",
+    "function": "relationsPrompt",
+    "baseline_sha256": "349f6b8ddf68929e4f3765e8672f4ff183bbf1380de3910fd7dbe14f6a59ef56",
+    "current_sha256": "349f6b8ddf68929e4f3765e8672f4ff183bbf1380de3910fd7dbe14f6a59ef56",
+    "unchanged": true
+  },
+  {
+    "module": "__m_modes_endingData_js",
+    "function": "endingConfessionRefreshPrompt",
+    "baseline_sha256": "90b20321788857dfc7593851a078a013cb9002718d76a798f97fcc8ac20620de",
+    "current_sha256": "90b20321788857dfc7593851a078a013cb9002718d76a798f97fcc8ac20620de",
+    "unchanged": true
+  },
+  {
+    "module": "__m_modes_endingData_js",
+    "function": "endingOutlinePrompt",
+    "baseline_sha256": "922b012c57e7d27352962ee9cb31ec0eb3b2abc82f573ad873ba4873518d23a0",
+    "current_sha256": "922b012c57e7d27352962ee9cb31ec0eb3b2abc82f573ad873ba4873518d23a0",
+    "unchanged": true
+  },
+  {
+    "module": "__m_modes_endingData_js",
+    "function": "endingIncrementOutlinePrompt",
+    "baseline_sha256": "a6e1186d4f412240f68acb152131aea1b09379b0342f37aae09271fdac61d8c0",
+    "current_sha256": "a6e1186d4f412240f68acb152131aea1b09379b0342f37aae09271fdac61d8c0",
+    "unchanged": true
+  },
+  {
+    "module": "__m_modes_endingData_js",
+    "function": "endingRouteDetailPrompt",
+    "baseline_sha256": "84994522f1d4978d36dfd9820bfa209c74d0ddca351f2bc644c66954c3d3d961",
+    "current_sha256": "84994522f1d4978d36dfd9820bfa209c74d0ddca351f2bc644c66954c3d3d961",
+    "unchanged": true
+  },
+  {
+    "module": "__m_modes_ending_js",
+    "function": "endingConfessionRefreshPrompt",
+    "baseline_sha256": "90b20321788857dfc7593851a078a013cb9002718d76a798f97fcc8ac20620de",
+    "current_sha256": "90b20321788857dfc7593851a078a013cb9002718d76a798f97fcc8ac20620de",
+    "unchanged": true
+  },
+  {
+    "module": "__m_modes_ending_js",
+    "function": "endingOutlinePrompt",
+    "baseline_sha256": "922b012c57e7d27352962ee9cb31ec0eb3b2abc82f573ad873ba4873518d23a0",
+    "current_sha256": "922b012c57e7d27352962ee9cb31ec0eb3b2abc82f573ad873ba4873518d23a0",
+    "unchanged": true
+  },
+  {
+    "module": "__m_modes_ending_js",
+    "function": "endingIncrementOutlinePrompt",
+    "baseline_sha256": "a6e1186d4f412240f68acb152131aea1b09379b0342f37aae09271fdac61d8c0",
+    "current_sha256": "a6e1186d4f412240f68acb152131aea1b09379b0342f37aae09271fdac61d8c0",
+    "unchanged": true
+  },
+  {
+    "module": "__m_modes_ending_js",
+    "function": "endingRouteDetailPrompt",
+    "baseline_sha256": "84994522f1d4978d36dfd9820bfa209c74d0ddca351f2bc644c66954c3d3d961",
+    "current_sha256": "84994522f1d4978d36dfd9820bfa209c74d0ddca351f2bc644c66954c3d3d961",
+    "unchanged": true
+  },
+  {
+    "module": "__m_modes_heartPrompts_js",
+    "function": "heartCorePrompt",
+    "baseline_sha256": "17309688a0a32da1ac748ff525c7e2f7b0a09dc5db79ec4af8e3389424b66a18",
+    "current_sha256": "17309688a0a32da1ac748ff525c7e2f7b0a09dc5db79ec4af8e3389424b66a18",
+    "unchanged": true
+  },
+  {
+    "module": "__m_modes_heartPrompts_js",
+    "function": "heartCoreLegacyPrompt",
+    "baseline_sha256": "8e9f3dfc29e49be3d89d076b0fbae3437ca3cb93da43e76f4b52829d125ee478",
+    "current_sha256": "8e9f3dfc29e49be3d89d076b0fbae3437ca3cb93da43e76f4b52829d125ee478",
+    "unchanged": true
+  },
+  {
+    "module": "__m_modes_heartPrompts_js",
+    "function": "heartCoreIncrementPrompt",
+    "baseline_sha256": "0b4a5f1756def70afb34845cacf2f9d66efe1fcbf7600f6422e00cdb40d69eaf",
+    "current_sha256": "0b4a5f1756def70afb34845cacf2f9d66efe1fcbf7600f6422e00cdb40d69eaf",
+    "unchanged": true
+  },
+  {
+    "module": "__m_modes_heartPrompts_js",
+    "function": "heartPostVoicePrompt",
+    "baseline_sha256": "febe453bb7c0a5182fb7519cb61ac4a5c12ecd15b97056349632e4fd14891bbe",
+    "current_sha256": "febe453bb7c0a5182fb7519cb61ac4a5c12ecd15b97056349632e4fd14891bbe",
+    "unchanged": true
+  },
+  {
+    "module": "__m_modes_heartPrompts_js",
+    "function": "heartSeasonVoicePrompt",
+    "baseline_sha256": "e835f215ed55d79a722d6b0b777c4f82f60675cbddd2bfc86d0a74f9b12a93db",
+    "current_sha256": "e835f215ed55d79a722d6b0b777c4f82f60675cbddd2bfc86d0a74f9b12a93db",
+    "unchanged": true
+  },
+  {
+    "module": "__m_modes_heartPrompts_js",
+    "function": "heartSeasonScenarioPrompt",
+    "baseline_sha256": "84a6705743e087a0194fff479f7b1c261963089a094fdba457e15035f9adbc86",
+    "current_sha256": "84a6705743e087a0194fff479f7b1c261963089a094fdba457e15035f9adbc86",
+    "unchanged": true
+  },
+  {
+    "module": "__m_modes_heartPrompts_js",
+    "function": "heartFireflyPrompt",
+    "baseline_sha256": "49d1f5a44f2812fea6d9c446f1b24cafaee9d4662699293372594b79f7f29e25",
+    "current_sha256": "49d1f5a44f2812fea6d9c446f1b24cafaee9d4662699293372594b79f7f29e25",
+    "unchanged": true
+  },
+  {
+    "module": "__m_modes_heartPrompts_js",
+    "function": "heartFireflyUpgradePrompt",
+    "baseline_sha256": "c76fa4cb0279d13bbf885d961a1c227b9514bdd2e8d0a182289ccb55125910a8",
+    "current_sha256": "c76fa4cb0279d13bbf885d961a1c227b9514bdd2e8d0a182289ccb55125910a8",
+    "unchanged": true
+  },
+  {
+    "module": "__m_modes_heartPrompts_js",
+    "function": "heartStripsPrompt",
+    "baseline_sha256": "81d5e2ee8ae1c8da8422ebba8afd1660966feda80eed82f3d7eaadbd0697729b",
+    "current_sha256": "81d5e2ee8ae1c8da8422ebba8afd1660966feda80eed82f3d7eaadbd0697729b",
+    "unchanged": true
+  },
+  {
+    "module": "__m_modes_heartPrompts_js",
+    "function": "categoryLanguagePrompt",
+    "baseline_sha256": "00a591db9b5ae29a17a852fb335eb8939beb9935a2f31edd52ca802d545bb4c3",
+    "current_sha256": "00a591db9b5ae29a17a852fb335eb8939beb9935a2f31edd52ca802d545bb4c3",
+    "unchanged": true
+  },
+  {
+    "module": "__m_modes_heart_js",
+    "function": "heartCorePrompt",
+    "baseline_sha256": "17309688a0a32da1ac748ff525c7e2f7b0a09dc5db79ec4af8e3389424b66a18",
+    "current_sha256": "17309688a0a32da1ac748ff525c7e2f7b0a09dc5db79ec4af8e3389424b66a18",
+    "unchanged": true
+  },
+  {
+    "module": "__m_modes_heart_js",
+    "function": "heartCoreLegacyPrompt",
+    "baseline_sha256": "8e9f3dfc29e49be3d89d076b0fbae3437ca3cb93da43e76f4b52829d125ee478",
+    "current_sha256": "8e9f3dfc29e49be3d89d076b0fbae3437ca3cb93da43e76f4b52829d125ee478",
+    "unchanged": true
+  },
+  {
+    "module": "__m_modes_heart_js",
+    "function": "heartCoreIncrementPrompt",
+    "baseline_sha256": "0b4a5f1756def70afb34845cacf2f9d66efe1fcbf7600f6422e00cdb40d69eaf",
+    "current_sha256": "0b4a5f1756def70afb34845cacf2f9d66efe1fcbf7600f6422e00cdb40d69eaf",
+    "unchanged": true
+  },
+  {
+    "module": "__m_modes_heart_js",
+    "function": "heartPostVoicePrompt",
+    "baseline_sha256": "febe453bb7c0a5182fb7519cb61ac4a5c12ecd15b97056349632e4fd14891bbe",
+    "current_sha256": "febe453bb7c0a5182fb7519cb61ac4a5c12ecd15b97056349632e4fd14891bbe",
+    "unchanged": true
+  },
+  {
+    "module": "__m_modes_heart_js",
+    "function": "heartSeasonVoicePrompt",
+    "baseline_sha256": "e835f215ed55d79a722d6b0b777c4f82f60675cbddd2bfc86d0a74f9b12a93db",
+    "current_sha256": "e835f215ed55d79a722d6b0b777c4f82f60675cbddd2bfc86d0a74f9b12a93db",
+    "unchanged": true
+  },
+  {
+    "module": "__m_modes_heart_js",
+    "function": "heartSeasonScenarioPrompt",
+    "baseline_sha256": "84a6705743e087a0194fff479f7b1c261963089a094fdba457e15035f9adbc86",
+    "current_sha256": "84a6705743e087a0194fff479f7b1c261963089a094fdba457e15035f9adbc86",
+    "unchanged": true
+  },
+  {
+    "module": "__m_modes_heart_js",
+    "function": "heartFireflyPrompt",
+    "baseline_sha256": "49d1f5a44f2812fea6d9c446f1b24cafaee9d4662699293372594b79f7f29e25",
+    "current_sha256": "49d1f5a44f2812fea6d9c446f1b24cafaee9d4662699293372594b79f7f29e25",
+    "unchanged": true
+  },
+  {
+    "module": "__m_modes_heart_js",
+    "function": "heartFireflyUpgradePrompt",
+    "baseline_sha256": "c76fa4cb0279d13bbf885d961a1c227b9514bdd2e8d0a182289ccb55125910a8",
+    "current_sha256": "c76fa4cb0279d13bbf885d961a1c227b9514bdd2e8d0a182289ccb55125910a8",
+    "unchanged": true
+  },
+  {
+    "module": "__m_modes_heart_js",
+    "function": "heartStripsPrompt",
+    "baseline_sha256": "81d5e2ee8ae1c8da8422ebba8afd1660966feda80eed82f3d7eaadbd0697729b",
+    "current_sha256": "81d5e2ee8ae1c8da8422ebba8afd1660966feda80eed82f3d7eaadbd0697729b",
+    "unchanged": true
+  },
+  {
+    "module": "__m_modes_inbox_js",
+    "function": "inboxPrompt",
+    "baseline_sha256": "5ec960f143cb25f80e5e8c03866b10b01f21ef28e25a09c536641bd0127eb2d8",
+    "current_sha256": "5ec960f143cb25f80e5e8c03866b10b01f21ef28e25a09c536641bd0127eb2d8",
+    "unchanged": true
+  },
+  {
+    "module": "__m_modes_items_js",
+    "function": "itemsIncrementPrompt",
+    "baseline_sha256": "ffd1af42fafab336c10320da4078c8b574209826254812a39abfde12fba56251",
+    "current_sha256": "ffd1af42fafab336c10320da4078c8b574209826254812a39abfde12fba56251",
+    "unchanged": true
+  },
+  {
+    "module": "__m_modes_pastLives_js",
+    "function": "pastLivesPlanPrompt",
+    "baseline_sha256": "d8ab2d18c72f051132561cb297f9c9405905253328595d64b1a85e5a3ebf17f3",
+    "current_sha256": "d8ab2d18c72f051132561cb297f9c9405905253328595d64b1a85e5a3ebf17f3",
+    "unchanged": true
+  },
+  {
+    "module": "__m_modes_phonePrompts_js",
+    "function": "phonePlanPrompt",
+    "baseline_sha256": "37c5840fbb9435e311db90035e0431eb1319d5e6918f1239ff4dcc73b429ed6e",
+    "current_sha256": "37c5840fbb9435e311db90035e0431eb1319d5e6918f1239ff4dcc73b429ed6e",
+    "unchanged": true
+  },
+  {
+    "module": "__m_modes_phonePrompts_js",
+    "function": "phoneAppPrompt",
+    "baseline_sha256": "3244b3dfdef7648697a1bf04c25b22902013b5a153122de32bcc24bfb7a37821",
+    "current_sha256": "3244b3dfdef7648697a1bf04c25b22902013b5a153122de32bcc24bfb7a37821",
+    "unchanged": true
+  },
+  {
+    "module": "__m_modes_phonePrompts_js",
+    "function": "phoneIncrementPlanPrompt",
+    "baseline_sha256": "2010aea0448787b4553783938418cf48b2e73bc64268c5892337ec5c805add0d",
+    "current_sha256": "2010aea0448787b4553783938418cf48b2e73bc64268c5892337ec5c805add0d",
+    "unchanged": true
+  },
+  {
+    "module": "__m_modes_phone_js",
+    "function": "phonePlanPrompt",
+    "baseline_sha256": "37c5840fbb9435e311db90035e0431eb1319d5e6918f1239ff4dcc73b429ed6e",
+    "current_sha256": "37c5840fbb9435e311db90035e0431eb1319d5e6918f1239ff4dcc73b429ed6e",
+    "unchanged": true
+  },
+  {
+    "module": "__m_modes_phone_js",
+    "function": "phoneAppPrompt",
+    "baseline_sha256": "3244b3dfdef7648697a1bf04c25b22902013b5a153122de32bcc24bfb7a37821",
+    "current_sha256": "3244b3dfdef7648697a1bf04c25b22902013b5a153122de32bcc24bfb7a37821",
+    "unchanged": true
+  },
+  {
+    "module": "__m_modes_phone_js",
+    "function": "phoneIncrementPlanPrompt",
+    "baseline_sha256": "2010aea0448787b4553783938418cf48b2e73bc64268c5892337ec5c805add0d",
+    "current_sha256": "2010aea0448787b4553783938418cf48b2e73bc64268c5892337ec5c805add0d",
+    "unchanged": true
+  },
+  {
+    "module": "__m_modes_relations_js",
+    "function": "characterProfilePrompt",
+    "baseline_sha256": "b30ffb06519f5828f61cc7053e7e0d957826907e57d730e27571f41c795d1036",
+    "current_sha256": "b30ffb06519f5828f61cc7053e7e0d957826907e57d730e27571f41c795d1036",
+    "unchanged": true
+  },
+  {
+    "module": "__m_modes_relations_js",
+    "function": "relationsPrompt",
+    "baseline_sha256": "349f6b8ddf68929e4f3765e8672f4ff183bbf1380de3910fd7dbe14f6a59ef56",
+    "current_sha256": "349f6b8ddf68929e4f3765e8672f4ff183bbf1380de3910fd7dbe14f6a59ef56",
+    "unchanged": true
+  },
+  {
+    "module": "__m_modes_roomData_js",
+    "function": "roomIncrementPrompt",
+    "baseline_sha256": "de956db2598214402ca5de521622f84ad85add08844194967636bbd86c2f1399",
+    "current_sha256": "de956db2598214402ca5de521622f84ad85add08844194967636bbd86c2f1399",
+    "unchanged": true
+  },
+  {
+    "module": "__m_modes_roomLife_js",
+    "function": "roomLifePrompt",
+    "baseline_sha256": "c5124c98174d563aedcaee789f9d4550dd08a7ab2fd896aa8c25de79e5a6611a",
+    "current_sha256": "c5124c98174d563aedcaee789f9d4550dd08a7ab2fd896aa8c25de79e5a6611a",
+    "unchanged": true
+  },
+  {
+    "module": "__m_modes_room_js",
+    "function": "roomIncrementPrompt",
+    "baseline_sha256": "de956db2598214402ca5de521622f84ad85add08844194967636bbd86c2f1399",
+    "current_sha256": "de956db2598214402ca5de521622f84ad85add08844194967636bbd86c2f1399",
+    "unchanged": true
+  },
+  {
+    "module": "__m_modes_room_js",
+    "function": "roomLifePrompt",
+    "baseline_sha256": "c5124c98174d563aedcaee789f9d4550dd08a7ab2fd896aa8c25de79e5a6611a",
+    "current_sha256": "c5124c98174d563aedcaee789f9d4550dd08a7ab2fd896aa8c25de79e5a6611a",
+    "unchanged": true
+  },
+  {
+    "module": "__m_modes_themeSong_js",
+    "function": "themeSongPrompt",
+    "baseline_sha256": "d5c5b2024539e20d3414111814481bf688d108ed29aa1cb3f91a5f673c8d3751",
+    "current_sha256": "d5c5b2024539e20d3414111814481bf688d108ed29aa1cb3f91a5f673c8d3751",
+    "unchanged": true
+  },
+  {
+    "module": "__m_modes_timeStories_js",
+    "function": "timeStoryPrompt",
+    "baseline_sha256": "70ffd872d067247b8c1fef57e71fc1e320410383ad1fbf7703c27df461162c1f",
+    "current_sha256": "70ffd872d067247b8c1fef57e71fc1e320410383ad1fbf7703c27df461162c1f",
+    "unchanged": true
+  },
+  {
+    "module": "__m_modes_travelGeneration_js",
+    "function": "structuredTravelPrompt",
+    "baseline_sha256": "7365ff82698738e21ca7916174f9e97043a4ba062bb7d7f1a7e111dd1331e992",
+    "current_sha256": "7365ff82698738e21ca7916174f9e97043a4ba062bb7d7f1a7e111dd1331e992",
+    "unchanged": true
+  },
+  {
+    "module": "__m_modes_travelScenes_js",
+    "function": "travelPrompt",
+    "baseline_sha256": "49671508db1fc9b5c61967c643f85378f6dfce80dcc2928937c1a4a05acdc07a",
+    "current_sha256": "49671508db1fc9b5c61967c643f85378f6dfce80dcc2928937c1a4a05acdc07a",
+    "unchanged": true
+  },
+  {
+    "module": "__m_modes_travel_js",
+    "function": "travelPrompt",
+    "baseline_sha256": "49671508db1fc9b5c61967c643f85378f6dfce80dcc2928937c1a4a05acdc07a",
+    "current_sha256": "49671508db1fc9b5c61967c643f85378f6dfce80dcc2928937c1a4a05acdc07a",
+    "unchanged": true
+  },
+  {
+    "module": "__m_modes_travel_js",
+    "function": "structuredTravelPrompt",
+    "baseline_sha256": "7365ff82698738e21ca7916174f9e97043a4ba062bb7d7f1a7e111dd1331e992",
+    "current_sha256": "7365ff82698738e21ca7916174f9e97043a4ba062bb7d7f1a7e111dd1331e992",
+    "unchanged": true
+  },
+  {
+    "module": "__m_ui_albumView_js",
+    "function": "albumEditCgPrompt",
+    "baseline_sha256": "d1bbf5025b68cb8e5843331ae510f1effe73803bb9f5dc837de3274dc01025d8",
+    "current_sha256": "d1bbf5025b68cb8e5843331ae510f1effe73803bb9f5dc837de3274dc01025d8",
+    "unchanged": true
+  },
+  {
+    "module": "__m_ui_cgPromptEditor_js",
+    "function": "handleCgPromptEditorAction",
+    "baseline_sha256": "b2c7ec2568cee1640fb126fc40c0872c21dd02ad05d98a2c78b3f7f7b9ac4edc",
+    "current_sha256": "b2c7ec2568cee1640fb126fc40c0872c21dd02ad05d98a2c78b3f7f7b9ac4edc",
+    "unchanged": true
+  },
+  {
+    "module": "__m_ui_cgPromptEditor_js",
+    "function": "hasCgPromptEditor",
+    "baseline_sha256": "cb344417a77fe521086fbe6a9ceb25621565396f1d91cac4bbbe15121f070072",
+    "current_sha256": "cb344417a77fe521086fbe6a9ceb25621565396f1d91cac4bbbe15121f070072",
+    "unchanged": true
+  },
+  {
+    "module": "__m_ui_cgPromptEditor_js",
+    "function": "closeCgPromptEditor",
+    "baseline_sha256": "0fe365ac5c7298d48a1af0399c5cee985ca029f56ec74ef3aa00c9c99063365e",
+    "current_sha256": "0fe365ac5c7298d48a1af0399c5cee985ca029f56ec74ef3aa00c9c99063365e",
+    "unchanged": true
+  },
+  {
+    "module": "__m_ui_cgPromptEditor_js",
+    "function": "openCgPromptEditor",
+    "baseline_sha256": "d59460707eb1fbcff7ebf3892ea88fe6ecb4f9ce53473a12ab983c01b460283f",
+    "current_sha256": "d59460707eb1fbcff7ebf3892ea88fe6ecb4f9ce53473a12ab983c01b460283f",
+    "unchanged": true
+  },
+  {
+    "module": "__m_ui_heartView_js",
+    "function": "heartStripImagePrompt",
+    "baseline_sha256": "bf0e86e00c3f6c3e54d3e1e03d64c74bb87487773c196aa26e4a9af6ae3b52be",
+    "current_sha256": "bf0e86e00c3f6c3e54d3e1e03d64c74bb87487773c196aa26e4a9af6ae3b52be",
+    "unchanged": true
+  },
+  {
+    "file": "src/extras/waiting.js",
+    "function": "waitingPrompt",
+    "baseline_sha256": "0cb42a507959930e5d7b7e35bf8e35c579746c515d067a63d44e7c5ba6518ce9",
+    "current_sha256": "0cb42a507959930e5d7b7e35bf8e35c579746c515d067a63d44e7c5ba6518ce9",
+    "unchanged": true
+  },
+  {
+    "file": "src/extras/mv.js",
+    "function": "storyboardPrompt",
+    "baseline_sha256": "0b5c9bd985b1fb53bef410d32be9075bf5a8e111fb665a9c96a4e4e869fa358d",
+    "current_sha256": "0b5c9bd985b1fb53bef410d32be9075bf5a8e111fb665a9c96a4e4e869fa358d",
+    "unchanged": true
+  },
+  {
+    "file": "src/extras/mv.js",
+    "function": "tegakiGrammar",
+    "baseline_sha256": "4c0d9a7b70d0c24d5f4c571f5dea5bc4f3c4f30817646f9e0b7ea940c3e2ba4b",
+    "current_sha256": "4c0d9a7b70d0c24d5f4c571f5dea5bc4f3c4f30817646f9e0b7ea940c3e2ba4b",
+    "unchanged": true
+  },
+  {
+    "file": "src/extras/mv.js",
+    "function": "rewriteShot",
+    "baseline_sha256": "4060c03ef4d436118eb32fea5c3f7b5075b2ca1e03245b78e4433088f7a906a5",
+    "current_sha256": "4060c03ef4d436118eb32fea5c3f7b5075b2ca1e03245b78e4433088f7a906a5",
+    "unchanged": true
+  },
+  {
+    "file": "src/extras/mv.js",
+    "function": "continueStoryboard.promptBlock",
+    "baseline_sha256": "1d5e197a9c9a30641a71ac72487d6c0337cc97342bad873fcf9469d8562b16dc",
+    "current_sha256": "1d5e197a9c9a30641a71ac72487d6c0337cc97342bad873fcf9469d8562b16dc",
+    "unchanged": true
+  }
+]

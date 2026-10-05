@@ -1,0 +1,78 @@
+(node:5) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+TAP version 13
+# Subtest: one shared procedural background serves two groups and does not request an extra image
+ok 1 - one shared procedural background serves two groups and does not request an extra image
+  ---
+  duration_ms: 187.946659
+  type: 'test'
+  ...
+# Subtest: a shared image background is one editable asset and one paid request across groups
+ok 2 - a shared image background is one editable asset and one paid request across groups
+  ---
+  duration_ms: 153.334616
+  type: 'test'
+  ...
+# Subtest: stage prompts separate the character and stage while old expression records stay full-frame
+ok 3 - stage prompts separate the character and stage while old expression records stay full-frame
+  ---
+  duration_ms: 119.04731
+  type: 'test'
+  ...
+# Subtest: layer clocks retain the song anchor when only lyrics or the pose changes
+ok 4 - layer clocks retain the song anchor when only lyrics or the pose changes
+  ---
+  duration_ms: 124.725189
+  type: 'test'
+  ...
+# Subtest: procedural scenes are ready without a paid background and manual clips remain selectable
+ok 5 - procedural scenes are ready without a paid background and manual clips remain selectable
+  ---
+  duration_ms: 122.223111
+  type: 'test'
+  ...
+# Subtest: a shared background cannot be drawn twice concurrently or overwrite a newer edit
+ok 6 - a shared background cannot be drawn twice concurrently or overwrite a newer edit
+  ---
+  duration_ms: 157.286881
+  type: 'test'
+  ...
+# Subtest: shared pose redraw updates its reusable asset and remains editable
+ok 7 - shared pose redraw updates its reusable asset and remains editable
+  ---
+  duration_ms: 177.165425
+  type: 'test'
+  ...
+# Subtest: continuation preserves edited shared art and reuses IDs while appending new backgrounds
+ok 8 - continuation preserves edited shared art and reuses IDs while appending new backgrounds
+  ---
+  duration_ms: 178.936366
+  type: 'test'
+  ...
+# Subtest: late storyboard cannot replace a manually changed shared background
+ok 9 - late storyboard cannot replace a manually changed shared background
+  ---
+  duration_ms: 182.907804
+  type: 'test'
+  ...
+# Subtest: unrecognized optional stage data falls back without blocking a usable storyboard
+ok 10 - unrecognized optional stage data falls back without blocking a usable storyboard
+  ---
+  duration_ms: 147.100516
+  type: 'test'
+  ...
+# Subtest: one storyboard request saves executable stage data and its lyric mode
+ok 11 - one storyboard request saves executable stage data and its lyric mode
+  ---
+  duration_ms: 209.178974
+  type: 'test'
+  ...
+1..11
+# tests 11
+# suites 0
+# pass 11
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1779.687217

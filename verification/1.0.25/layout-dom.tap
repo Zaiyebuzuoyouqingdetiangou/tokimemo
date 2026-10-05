@@ -1,0 +1,74 @@
+TAP version 13
+# (node:12) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: each production tool panel scrolls independently with timing and navigation outside that scroll
+ok 1 - each production tool panel scrolls independently with timing and navigation outside that scroll
+  ---
+  duration_ms: 300.189142
+  type: 'test'
+  ...
+# Subtest: image save controls are outside the scroll area and the canvas is in its own viewport
+ok 2 - image save controls are outside the scroll area and the canvas is in its own viewport
+  ---
+  duration_ms: 135.361473
+  type: 'test'
+  ...
+# Subtest: editor CSS is scoped, balanced and retains paging without requiring container-query support
+ok 3 - editor CSS is scoped, balanced and retains paging without requiring container-query support
+  ---
+  duration_ms: 91.925447
+  type: 'test'
+  ...
+# (node:13) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: production editor has bounded workbench, independent tools scroll and a single top music entry
+ok 4 - production editor has bounded workbench, independent tools scroll and a single top music entry
+  ---
+  duration_ms: 153.146671
+  type: 'test'
+  ...
+# Subtest: preview-only mode and shot stepping preserve all images and timing and keep one clock
+ok 5 - preview-only mode and shot stepping preserve all images and timing and keep one clock
+  ---
+  duration_ms: 109.640089
+  type: 'test'
+  ...
+# Subtest: shared material editor supplies save-and-next and returns directly to the workbench
+ok 6 - shared material editor supplies save-and-next and returns directly to the workbench
+  ---
+  duration_ms: 114.903036
+  type: 'test'
+  ...
+# Subtest: a single-shot replacement opens its own image editor and saves without changing the shared image or prompts
+ok 7 - a single-shot replacement opens its own image editor and saves without changing the shared image or prompts
+  ---
+  duration_ms: 118.549789
+  type: 'test'
+  ...
+# Subtest: production image editor markup contains the canvas before local tool panes and permanent save actions
+ok 8 - production image editor markup contains the canvas before local tool panes and permanent save actions
+  ---
+  duration_ms: 109.36011
+  type: 'test'
+  ...
+# Subtest: a workspace route replacement releases editor-specific body scrolling and its observer
+ok 9 - a workspace route replacement releases editor-specific body scrolling and its observer
+  ---
+  duration_ms: 107.134485
+  type: 'test'
+  ...
+# Subtest: panel position survives its own setting redraw but does not leak into another tab
+ok 10 - panel position survives its own setting redraw but does not leak into another tab
+  ---
+  duration_ms: 122.34849
+  type: 'test'
+  ...
+1..10
+# tests 10
+# suites 0
+# pass 10
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 952.209143

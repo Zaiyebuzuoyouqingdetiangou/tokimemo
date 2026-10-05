@@ -131,6 +131,26 @@ function savePending(scope, rows) {
     return confirmedWrite(LOCAL_PREFIX + scope + ':pending', slimPending(rows));
 }
 
+// Clear only explicitly selected journal rows. Song records, images and timing
+// are stored separately and never take part in this operation.
+export function clearPendingMv(scope, ids) {
+    const selected = new Set(list(ids));
+    const rows = pendingMv(scope), remaining = rows.filter(row => !selected.has(row.id));
+    if (remaining.length === rows.length) return { cleared: true, count: 0 };
+    const key = LOCAL_PREFIX + scope + ':pending';
+    let durable = confirmedWrite(key, slimPending(remaining));
+    // Removing the final journal also works when the storage quota is full.
+    if (!durable && !remaining.length) {
+        try {
+            globalThis.localStorage.removeItem(key);
+            durable = globalThis.localStorage.getItem(key) === null;
+        } catch {}
+    }
+    if (!durable) return { cleared: false, count: 0 };
+    pendingByScope.set(scope, structuredClone(remaining));
+    return { cleared: true, count: rows.length - remaining.length };
+}
+
 function songSignature(song) {
     const { visual, ...text } = song || {};
     return JSON.stringify(text);
@@ -963,6 +983,7 @@ export async function drawFrame(songId, shotId) {
         const result = await cg_core.invokeImageGeneration(framePrompt(record, shot, context, !metadata), context, {
             orientation: normalizeSettings(record.settings).ratio === '9:16' ? 'portrait' : 'landscape',
             respectOrientation: true,
+            aspectRatio: normalizeSettings(record.settings).ratio,
             characterName: context?.name2 || '', targetKey: key, singlePrompt: true,
             ...(metadata ? { promptMetadata: metadata } : {}),
         });
@@ -1405,6 +1426,7 @@ export async function drawAsset(songId, key, { fresh = false } = {}) {
             // 场景和人物差分都遵守本曲画幅；意象仍是独立的抠图素材。
             orientation: found.kind === 'motif' || normalizeSettings(record.settings).ratio === '9:16' ? 'portrait' : 'landscape',
             respectOrientation: found.kind !== 'motif',
+            aspectRatio: found.kind === 'motif' ? '' : normalizeSettings(record.settings).ratio,
             characterName: context?.name2 || '', targetKey: runKey, seed, singlePrompt: true,
         };
         // A saved custom prompt is the complete previewed text; do not append hidden cast text.

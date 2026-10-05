@@ -1,0 +1,78 @@
+(node:787) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+TAP version 13
+# Subtest: each section has a selectable button, including index zero
+ok 1 - each section has a selectable button, including index zero
+  ---
+  duration_ms: 154.057869
+  type: 'test'
+  ...
+# Subtest: selecting the chorus changes the big button without writing or seeking audio
+ok 2 - selecting the chorus changes the big button without writing or seeking audio
+  ---
+  duration_ms: 140.124603
+  type: 'test'
+  ...
+# Subtest: original sequential tapping still advances through every section
+ok 3 - original sequential tapping still advances through every section
+  ---
+  duration_ms: 176.0658
+  type: 'test'
+  ...
+# Subtest: a completed section can be selected and corrected, then undo restores its old time
+ok 4 - a completed section can be selected and corrected, then undo restores its old time
+  ---
+  duration_ms: 159.482502
+  type: 'test'
+  ...
+# Subtest: undo removes the most recent selected tap, not the highest section number
+ok 5 - undo removes the most recent selected tap, not the highest section number
+  ---
+  duration_ms: 165.951338
+  type: 'test'
+  ...
+# Subtest: selection resets on reopen and does not carry into another song
+ok 6 - selection resets on reopen and does not carry into another song
+  ---
+  duration_ms: 159.383155
+  type: 'test'
+  ...
+# Subtest: reset clears manual selection and undo history; no audio still disables recording
+ok 7 - reset clears manual selection and undo history; no audio still disables recording
+  ---
+  duration_ms: 315.662615
+  type: 'test'
+  ...
+# Subtest: invalid selection leaves the current target and timing unchanged
+ok 8 - invalid selection leaves the current target and timing unchanged
+  ---
+  duration_ms: 170.312182
+  type: 'test'
+  ...
+# Subtest: saved timing can be reopened and neighbouring tap bounds remain monotonic
+ok 9 - saved timing can be reopened and neighbouring tap bounds remain monotonic
+  ---
+  duration_ms: 173.290522
+  type: 'test'
+  ...
+# Subtest: MV lyrics and other text panels use paired semantic theme colours
+ok 10 - MV lyrics and other text panels use paired semantic theme colours
+  ---
+  duration_ms: 166.703953
+  type: 'test'
+  ...
+# Subtest: theme colour pairs for MV panels exceed 4.5:1 in light, dark and custom modes
+ok 11 - theme colour pairs for MV panels exceed 4.5:1 in light, dark and custom modes
+  ---
+  duration_ms: 163.64889
+  type: 'test'
+  ...
+1..11
+# tests 11
+# suites 0
+# pass 11
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1992.512289
