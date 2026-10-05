@@ -1,5 +1,5 @@
-const VERSION = '1.0.24';
-const BUILD = '1.0.24-r84.241-branch-update';
+const VERSION = '1.0.25';
+const BUILD = '1.0.25';
 
 const SETTINGS_ID = 'heartbeat_memories_settings';
 const MENU_ID = 'heartbeat_memories_menu_item';
@@ -566,7 +566,7 @@ async function ensureRuntime(reason = 'unknown') {
     if (bootPromise) return bootPromise;
     const startedAt = globalThis.performance?.now?.() ?? Date.now();
     bootPromise = (async () => {
-        const module = await import(`./dist/heartbeatMemories.bundle.js?heartbeat=${BUILD}`);
+        const module = await import(`./dist/heartbeatMemories.bundle.js?heartbeat=${BUILD}&layout=1`);
         if (disabled) return module;
         stopBootstrapMountTimer();
         stopBootstrapAutoUpdates();

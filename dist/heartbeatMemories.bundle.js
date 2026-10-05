@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
-// Source modules: 324
-// Source SHA-256: 0f9af9613c9424bccaf8d675b17146b5012da522f947fb78d22e2e748bd31bfe
+// Source modules: 326
+// Source SHA-256: 70f6745b77c2f74540f8e071e52b4ce80063d1cfd156264e1c633ecc9a07d584
 // Build: python3 tools/verification/build.py <source-root>
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -146,6 +146,7 @@ const __m_core_worldPresentation_js = Object.create(null);
 const __m_extras_collection_js = Object.create(null);
 const __m_extras_intel_js = Object.create(null);
 const __m_extras_mv_js = Object.create(null);
+const __m_extras_mvAudioSource_js = Object.create(null);
 const __m_extras_mvCast_js = Object.create(null);
 const __m_extras_mvDirection_js = Object.create(null);
 const __m_extras_mvImageTools_js = Object.create(null);
@@ -287,6 +288,7 @@ const __m_ui_mirrorTtsReader_js = Object.create(null);
 const __m_ui_mvCastControls_js = Object.create(null);
 const __m_ui_mvEditorUi_js = Object.create(null);
 const __m_ui_mvImageEditor_js = Object.create(null);
+const __m_ui_mvImageEditorUi_js = Object.create(null);
 const __m_ui_mvStageCanvas_js = Object.create(null);
 const __m_ui_mvView_js = Object.create(null);
 const __m_ui_navigationBookmark_js = Object.create(null);
@@ -484,6 +486,93 @@ __m_core_contentSelection_js.selectionEvidenceBank = selectionEvidenceBank;
 __m_core_contentSelection_js.selectionPromptArchive = selectionPromptArchive;
 __m_core_contentSelection_js.legacyContentSelectionPlan = legacyContentSelectionPlan;
 __m_core_contentSelection_js.stampContentSelection = stampContentSelection;
+}
+
+function __init_extras_mvAudioSource_js() {
+// MODULE: extras/mvAudioSource.js
+
+// A recording stays in its original container. Read only MP4/MOV box headers
+// and track metadata; never load or transcode the whole movie on the UI thread.
+function sourceError(message, code = 'RMT_MV_VIDEO_AUDIO') {
+    return Object.assign(new Error(message), { code });
+}
+
+function isVideoAudioSource(blob, name = '') {
+    return /^video\//i.test(blob?.type || '') || /\.(?:mp4|mov|m4v)$/i.test(name || blob?.name || '');
+}
+
+async function inspectVideoAudioSource(blob, { signal } = {}) {
+    const invalid = () => sourceError('这个视频文件不完整或无法读取，原有歌曲未替换。');
+    const read = async (start, size) => {
+        signal?.throwIfAborted?.();
+        if (!Number.isSafeInteger(start) || !Number.isSafeInteger(size) || start < 0 || size < 0 || start + size > blob.size) throw invalid();
+        const buffer = await blob.slice(start, start + size).arrayBuffer();
+        signal?.throwIfAborted?.();
+        if (buffer.byteLength !== size) throw invalid();
+        return new DataView(buffer);
+    };
+    const word = (data, at) => String.fromCharCode(...[0, 1, 2, 3].map(i => data.getUint8(at + i)));
+    let headers = 0;
+    async function boxes(start, end) {
+        const result = [];
+        while (start < end) {
+            if (end - start < 8) throw invalid();
+            const header = await read(start, 8);
+            const type = word(header, 4);
+            let size = header.getUint32(0), length = 8;
+            if (size === 1) {
+                const large = await read(start + 8, 8);
+                size = large.getUint32(0) * 4294967296 + large.getUint32(4); length = 16;
+            } else if (size === 0) size = end - start;
+            if (!Number.isSafeInteger(size) || size < length || start + size > end) throw invalid();
+            result.push({ type, start: start + length, end: start + size });
+            start += size;
+            // Yield even for an unusual container with many tiny boxes.
+            if (++headers % 128 === 0) await new Promise(resolve => setTimeout(resolve, 0));
+        }
+        return result;
+    }
+    if (!blob || typeof blob.slice !== 'function' || !Number.isSafeInteger(blob.size) || blob.size < 8) throw invalid();
+    const roots = await boxes(0, blob.size), movie = roots.find(box => box.type === 'moov');
+    if (!movie) throw sourceError('暂时无法读取这个视频的音轨，请选择 MP4 或 MOV 录屏。');
+    const children = await boxes(movie.start, movie.end);
+    async function hasFragmentSamples(trackBoxes) {
+        const header = trackBoxes.find(box => box.type === 'tkhd');
+        if (!header || header.end - header.start < 16) return false;
+        const version = (await read(header.start, 1)).getUint8(0), offset = version === 1 ? 20 : 12;
+        if (header.end - header.start < offset + 4) return false;
+        const trackId = (await read(header.start + offset, 4)).getUint32(0);
+        for (const fragment of roots.filter(box => box.type === 'moof')) {
+            for (const part of (await boxes(fragment.start, fragment.end)).filter(box => box.type === 'traf')) {
+                const partBoxes = await boxes(part.start, part.end), info = partBoxes.find(box => box.type === 'tfhd');
+                if (!info || info.end - info.start < 8 || (await read(info.start + 4, 4)).getUint32(0) !== trackId) continue;
+                for (const run of partBoxes.filter(box => box.type === 'trun')) {
+                    if (run.end - run.start >= 8 && (await read(run.start + 4, 4)).getUint32(0) > 0) return true;
+                }
+            }
+        }
+        return false;
+    }
+    for (const track of children.filter(box => box.type === 'trak')) {
+        const trackBoxes = await boxes(track.start, track.end), media = trackBoxes.find(box => box.type === 'mdia');
+        if (!media) continue;
+        const mediaBoxes = await boxes(media.start, media.end), handler = mediaBoxes.find(box => box.type === 'hdlr');
+        if (!handler || handler.end - handler.start < 12 || word(await read(handler.start + 8, 4), 0) !== 'soun') continue;
+        const info = mediaBoxes.find(box => box.type === 'minf');
+        if (!info) continue;
+        const table = (await boxes(info.start, info.end)).find(box => box.type === 'stbl');
+        if (!table) continue;
+        const samples = (await boxes(table.start, table.end)).find(box => box.type === 'stsz' || box.type === 'stz2');
+        if (samples && samples.end - samples.start >= 12) {
+            const count = (await read(samples.start + 8, 4)).getUint32(0);
+            if (count > 0 || await hasFragmentSamples(trackBoxes)) return { kind: 'video', hasAudio: true };
+        }
+    }
+    throw sourceError('这个视频没有可用音轨，原有歌曲未替换。', 'RMT_MV_VIDEO_SILENT');
+}
+
+__m_extras_mvAudioSource_js.inspectVideoAudioSource = inspectVideoAudioSource;
+__m_extras_mvAudioSource_js.isVideoAudioSource = isVideoAudioSource;
 }
 
 function __init_extras_mvCast_js() {
@@ -1658,14 +1747,17 @@ function __init_ui_mvEditorUi_js() {
 // Editor-only presentation. All actions continue through mvView and the existing
 // song-scoped storage, image editor, audio player and export implementations.
 function editorMarkup(o) {
-    const { esc, btn, song, tab, panels, width, height, strip, stripNav, selectedLabel, time, total, playing, audio, exporting, drawer, drawerHtml } = o;
-    const tabs = [['shots', '分镜'], ['timing', '定段 · 定句'], ['look', '画面']].map(([id, label]) =>
+    const { esc, btn, song, tab, panels, width, height, strip, stripNav, selectedLabel, time, total, playing, audio, audioName, exporting, drawer, drawerHtml } = o;
+    const musicLabel = audio ? (audioName || song.title) : '导入音乐';
+    const tabs = [['shots', '分镜'], ['timing', '定段 · 定句'], ['look', '全片样式']].map(([id, label]) =>
         btn('editor-tab', label, { id, cls: 'rmt-mve-tab' + (tab === id ? ' on' : ''), extra: ` aria-pressed="${tab === id}"` })).join('');
-    return `<header class="rmt-mve-head"><div><small>手书剪辑台</small><h2>${esc(song.title)}</h2></div><div class="rmt-mve-head-actions">${btn('editor-drawer', '导出', { id: 'export', cls: 'rmt-x-primary' })}${btn('editor-drawer', '更多', { id: 'more' })}</div></header>
-      <div class="rmt-mve-layout-scope"><div class="rmt-mve-workspace" data-editor-tab="${tab}"><section class="rmt-mve-preview" aria-label="手书预览">
+    return `<header class="rmt-mve-head"><div><h2>${esc(song.title)}</h2></div><div class="rmt-mve-head-actions">${btn('editor-drawer', '更多', { id: 'more' })}${btn('editor-drawer', '导出', { id: 'export', cls: 'rmt-x-primary' })}</div></header>
+      <div class="rmt-mve-projectbar"><span>${esc(o.storyLabel || '手书')}</span>${btn('editor-drawer', esc(musicLabel), { id: 'audio', extra: ` title="${esc(musicLabel)}" aria-label="${audio ? '管理当前音乐：' + esc(musicLabel) : '导入音乐'}"` })}</div>
+      <div class="rmt-mve-layout-scope"><div class="rmt-mve-workspace" data-editor-tab="${tab}" data-preview-only="${!!o.previewOnly}"><section class="rmt-mve-preview" aria-label="手书预览">
+        <div class="rmt-mve-preview-head"><span data-rmt-mv-current>${esc(selectedLabel)}</span>${btn('editor-preview', o.previewOnly ? '恢复编辑' : '只看画面')}</div>
         <div class="rmt-mv-canvas-wrap${width < height ? ' portrait' : ''}"><canvas data-rmt-mv-canvas width="${width}" height="${height}"></canvas></div>
-        <div class="rmt-mve-transport"><button type="button" class="rmt-mv-play" data-rmt-mv="play" aria-label="${playing ? '暂停' : '播放'}"${exporting ? ' disabled' : ''}>${playing ? '❚❚' : '▶'}</button><span class="rmt-mve-clock" data-rmt-mv-time>${esc(time)}</span><input type="range" min="0" max="${total}" step="0.1" value="${o.seconds}" data-rmt-mv-seek aria-label="播放位置"${exporting ? ' disabled' : ''}><small>${esc(o.totalLabel)}</small>${btn('editor-drawer', '歌曲', { id: 'audio' })}</div>
-        <div class="rmt-mve-meta"><span data-rmt-mv-current>${esc(selectedLabel)}</span><span>${audio ? '本机歌曲已接入' : '未放入歌曲 · 可静音预览'}</span></div>
+        <div class="rmt-mve-transport"><button type="button" class="rmt-mv-play" data-rmt-mv="play" aria-label="${playing ? '暂停' : '播放'}"${exporting ? ' disabled' : ''}>${playing ? '❚❚' : '▶'}</button><span class="rmt-mve-clock" data-rmt-mv-time>${esc(time)}</span><input type="range" min="0" max="${total}" step="0.1" value="${o.seconds}" data-rmt-mv-seek aria-label="播放位置"${exporting ? ' disabled' : ''}><small>${esc(o.totalLabel)}</small></div>
+        <div class="rmt-mve-meta"><span>${audio ? '音乐与画面共用进度' : '静音预览'}</span>${btn('go-board', '素材库')}</div>
         <div class="rmt-mve-filmstrip" data-rmt-mv-filmstrip><div class="rmt-mv-strip">${strip}</div>${stripNav}</div>
       </section><section class="rmt-mve-tools"><nav class="rmt-mve-tabs" aria-label="剪辑工作区">${tabs}</nav><div class="rmt-mve-panel"${tab === 'shots' ? ' data-rmt-mv-shot-panel' : ''}>${panels[tab] || panels.shots}</div></section></div></div>
       ${drawer ? `<div class="rmt-mve-sheet-shade"><section class="rmt-mve-sheet" role="dialog" aria-modal="true" aria-label="${esc({ export: '导出手书', more: '素材与项目', audio: '歌曲' }[drawer] || '选项')}"><header><b>${esc({ export: '导出手书', more: '素材与项目', audio: '歌曲' }[drawer] || '选项')}</b>${btn('editor-drawer', '关闭', { extra: ' aria-label="关闭选项面板"' })}</header><div>${drawerHtml}</div></section></div>` : ''}`;
@@ -1698,7 +1790,7 @@ ${r} .rmt-mve-transport input[type=range]::-moz-range-track{height:6px;border:0;
 ${r} .rmt-mve-transport input[type=range]::-moz-range-progress{height:6px;border-radius:999px;background:var(--rmt-theme-accent,#bc779d)}
 ${r} .rmt-mve-transport input[type=range]::-moz-range-thumb{width:14px;height:14px;border:2px solid var(--rmt-theme-surface-solid,#fff);border-radius:50%;background:var(--rmt-theme-accent-ink,#4f769d);box-shadow:0 1px 4px #0002}
 ${r} .rmt-mve-transport>small{font-size:11px;color:var(--rmt-theme-muted,#63788f)}
-${r} .rmt-mve-transport>button:last-child{font-size:12px;min-height:40px;padding:0 10px;border-radius:9px}
+${r} .rmt-mve-transport>button:last-child{font-size:12px;min-height:40px;padding:0 10px;border-radius:999px;max-width:34%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:none;display:block}
 ${r} .rmt-mve-meta{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:11px;color:var(--rmt-theme-muted,#63788f);padding:4px 1px 14px;flex-wrap:wrap}
 ${r} .rmt-mve-tools{background:var(--rmt-theme-surface-solid,#fff);border:1px solid var(--rmt-theme-border,#cddfed);border-radius:14px;overflow:hidden}
 ${r} .rmt-mve-tabs{display:grid;grid-template-columns:1fr 1.3fr 1fr;gap:4px;padding:6px;background:var(--rmt-theme-soft,#e7f1fa)}
@@ -1758,6 +1850,65 @@ ${r} .rmt-mve-group-fold .rmt-mv-gcard{border:0;padding:12px 0 0}
 @supports(container-type:inline-size){${r} .rmt-mve-workspace{grid-template-columns:minmax(0,1fr)}@container (min-width:780px){${r} .rmt-mve-workspace{grid-template-columns:minmax(0,1fr) 340px}}}
 @media(max-width:600px){${r} .rmt-mve-head h2{font-size:17px}${r} .rmt-mve-head-actions button{padding:0 10px;font-size:12px}${r} .rmt-mve-panel{padding:14px}${r} .rmt-mve-transport{gap:7px}${r} .rmt-mve-transport>small{font-size:11px!important;white-space:nowrap}${r} .rmt-mve-workspace:not([data-editor-tab=shots]) .rmt-mve-filmstrip{display:none}${r} .rmt-mve-sheet{max-height:88vh}${r} .rmt-mve-head{padding-bottom:10px}}
 @container (max-width:700px){${r} .rmt-mve-workspace:not([data-editor-tab=shots]) .rmt-mve-filmstrip{display:none}}
+${workbenchCss(r)}
+`;
+}
+
+function workbenchCss(r) {
+    return `
+${r} .rmt-body.rmt-mve-body,${r}.rmt-workspace[data-rmt-theme-mode] .rmt-body.rmt-mve-body{display:flex;flex-direction:column;padding:10px!important;overflow:hidden!important;touch-action:auto!important;scrollbar-gutter:auto!important}
+${r} .rmt-x-page.rmt-mv-editor{flex:1;min-height:0;max-width:none;width:100%;gap:0;padding:0;overflow:hidden}
+${r} .rmt-mve-head{flex:none;min-height:38px;padding:0 0 5px;border:0}
+${r} .rmt-mve-head h2{font-size:16px;line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+${r} .rmt-mve-head-actions button{min-height:36px;font-size:12px;padding:5px 12px;border-radius:999px}
+${r} .rmt-mve-projectbar{flex:none;display:flex;justify-content:space-between;align-items:center;min-width:0;gap:12px;padding:2px 0 8px;font-size:11px;color:var(--rmt-theme-muted,#63788f)}
+${r} .rmt-mve-projectbar>button{font-size:12px;min-height:34px;padding:5px 12px;border-radius:999px;max-width:65%;min-width:0;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+${r} .rmt-mve-layout-scope{display:flex;flex:1;min-height:0;min-width:0}
+${r} .rmt-mve-workspace{flex:1;min-height:0;min-width:0;align-items:stretch;gap:10px;grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1.5fr) minmax(140px,1fr)}
+${r} .rmt-mve-preview{display:flex;flex-direction:column;min-height:0;min-width:0;overflow:hidden}
+${r} .rmt-mve-preview-head{display:flex;align-items:center;justify-content:space-between;gap:8px;flex:none;padding:0 0 4px;font-size:11px;color:var(--rmt-theme-muted,#63788f)}
+${r} .rmt-mve-preview-head button,${r} .rmt-mve-meta button{font-size:11px;min-height:28px;padding:3px 10px;border-radius:999px}
+${r} .rmt-mve-preview .rmt-mv-canvas-wrap,${r} .rmt-mve-preview .rmt-mv-canvas-wrap.portrait{width:100%;height:auto;min-height:40px;max-width:none;border-radius:10px;display:flex;align-items:center;justify-content:center;overflow:hidden;flex:1}
+${r} .rmt-mve-preview canvas{display:block;width:100%;height:100%;max-width:100%;max-height:100%;object-fit:contain}
+${r} .rmt-mve-transport{flex:none;padding:3px 0 0;gap:9px}
+${r} .rmt-mve-meta{flex:none;padding:0 1px 4px;gap:8px}
+${r} .rmt-mve-filmstrip{flex:none;min-height:0}
+${r} .rmt-mve-filmstrip .rmt-mv-strip{padding:1px 2px 4px;overscroll-behavior-x:contain;scrollbar-width:thin}
+${r} .rmt-mve-filmstrip .rmt-mv-strip>button{grid-template-rows:44px 20px;width:74px!important;min-width:74px;flex-basis:74px;height:68px;border-radius:9px}
+${r} .rmt-mve-filmstrip .rmt-mv-strip>button img{height:44px!important;max-height:44px;object-fit:contain}
+${r} .rmt-mve-filmstrip .rmt-mv-strip>button>span{font-size:10px}
+${r} .rmt-mve-strip-nav{font-size:10px}
+${r} .rmt-mve-strip-nav button{min-height:26px;padding:2px 8px;font-size:10px;border-radius:999px}
+${r} .rmt-mve-tools{display:flex;flex-direction:column;min-height:0;min-width:0;overflow:hidden}
+${r} .rmt-mve-tabs{flex:none;padding:5px;gap:3px;grid-template-columns:1fr 1.25fr 1fr}
+${r} .rmt-mve-tab{min-height:38px;font-size:12px;border-radius:999px}
+${r} .rmt-mve-panel{display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden;padding:0;gap:0}
+${r} .rmt-mve-panel-scroll{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin;padding:12px;display:flex;flex-direction:column;gap:12px;touch-action:pan-y pinch-zoom}
+${r} .rmt-mve-panel-scroll .rmt-x-note{font-size:12px;line-height:1.7;margin:0}
+${r} .rmt-mve-dock{flex:none;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 12px;border-top:1px solid var(--rmt-theme-border,#cddfed);background:var(--rmt-theme-surface-solid,#fff)}
+${r} .rmt-mve-dock>small{font-size:11px;color:var(--rmt-theme-muted,#63788f)}
+${r} .rmt-mve-dock button{font-size:12px;min-height:38px;border-radius:999px;padding:6px 12px}
+${r} .rmt-mve-image-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+${r} .rmt-mve-image-actions>button,${r} .rmt-mve-image-actions>label{flex:1;min-height:42px;display:flex;align-items:center;justify-content:center;border-radius:999px;margin:0;padding:8px;font-size:13px}
+${r} .rmt-mve-image-note{font-size:11px;color:var(--rmt-theme-muted,#63788f)}
+${r} .rmt-mve-timing-dock{display:flex;flex-direction:column;align-items:stretch;gap:5px;padding:8px 12px}
+${r} .rmt-mve-timing-dock .rmt-mv-check{flex-direction:row;margin:0;min-height:28px;font-size:11px}
+${r} .rmt-mve-panel .rmt-x-seg{border-radius:999px}
+${r} .rmt-mve-panel summary{border:1px solid var(--rmt-theme-border,#cddfed);border-radius:999px;padding:7px 12px;min-height:36px;box-sizing:border-box}
+${r} .rmt-mve-panel details{padding:0;border-top:0}
+${r} .rmt-mve-workspace[data-preview-only=true]{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr)}
+${r} .rmt-mve-workspace[data-preview-only=true] .rmt-mve-tools,${r} .rmt-mve-workspace[data-preview-only=true] .rmt-mve-filmstrip{display:none}
+${r} .rmt-mve-workspace[data-preview-only=true] .rmt-mv-canvas-wrap{flex:1;height:auto}
+${r} .rmt-mv-editor>.rmt-x-card,${r} .rmt-mve-image-page>.rmt-x-card{flex:none;max-height:90px;overflow:auto;padding:8px;margin-bottom:7px}
+@media(min-width:960px){${r} .rmt-mve-workspace{grid-template-columns:minmax(0,1fr) 335px;grid-template-rows:minmax(0,1fr)}${r} .rmt-mve-preview .rmt-mv-canvas-wrap{flex:1;height:auto}}
+@supports(container-type:inline-size){${r} .rmt-mve-workspace{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1.5fr) minmax(140px,1fr)}@container(min-width:740px){${r} .rmt-mve-workspace{grid-template-columns:minmax(0,1fr) 335px;grid-template-rows:minmax(0,1fr)}}}
+@media(max-height:700px){${r} .rmt-mve-filmstrip .rmt-mv-strip>button{grid-template-rows:30px 18px;height:52px}${r} .rmt-mve-filmstrip .rmt-mv-strip>button img{height:30px!important;max-height:30px}${r} .rmt-mve-head-actions button{min-height:32px}${r} .rmt-mve-projectbar{padding-bottom:4px}${r} .rmt-mve-preview-head{padding:0}${r} .rmt-mve-meta{padding-bottom:2px}}
+@media(max-height:600px) and (orientation:landscape){${r} .rmt-mve-workspace{grid-template-columns:minmax(0,1fr) minmax(250px,.8fr);grid-template-rows:minmax(0,1fr)}${r} .rmt-mve-preview .rmt-mv-canvas-wrap{flex:1;height:auto}${r} .rmt-mve-filmstrip{display:none}}
+@media(max-width:959px) and (orientation:portrait){${r} .rmt-mve-workspace[data-editor-tab=timing]{grid-template-rows:minmax(110px,.8fr) minmax(235px,1.2fr)}${r} .rmt-mve-workspace[data-editor-tab=look]{grid-template-rows:minmax(110px,.8fr) minmax(160px,1.2fr)}}
+@supports(container-type:inline-size){@container(max-width:739px){${r} .rmt-mve-workspace[data-editor-tab=timing]{grid-template-rows:minmax(110px,.8fr) minmax(235px,1.2fr)}${r} .rmt-mve-workspace[data-editor-tab=look]{grid-template-rows:minmax(110px,.8fr) minmax(160px,1.2fr)}}}
+@media(max-height:600px) and (orientation:landscape){${r} .rmt-mve-workspace[data-editor-tab]{grid-template-rows:minmax(0,1fr)}}
+${r} .rmt-mve-workspace[data-preview-only=true]{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr)}
+${r} .rmt-mve-workspace[data-preview-only=true] .rmt-mv-canvas-wrap{flex:1;height:auto}
 `;
 }
 
@@ -1768,32 +1919,23 @@ __m_ui_mvEditorUi_js.editorCss = editorCss;
 function __init_ui_mvImageEditor_js() {
 // MODULE: ui/mvImageEditor.js
 const pixels = __m_extras_mvImageTools_js;
+const image_ui = __m_ui_mvImageEditorUi_js;
+
 
 // Isolated editor: drafts and undo buffers live here until an explicit save.
 function mountAssetEditor(host, options) {
-    host.innerHTML = `<section class="rmt-mv-editor rmt-x-card">
-      <div class="rmt-mv-editor-tools"><button type="button" data-edit="auto">一键抠图</button><button type="button" data-edit="select">1 · 选单格</button><button type="button" data-edit="paint">2 · 处理背景</button></div>
-      <div data-select-tools><label>拼图排列 <select data-grid><option value="free">手动框选</option><option value="1:1">整张</option><option value="2:1">上下两格</option><option value="3:1">上下三格</option><option value="4:1">上下四格</option><option value="1:2">左右两格</option><option value="1:3">左右三格</option><option value="1:4">左右四格</option><option value="2:2">四宫格</option><option value="3:3">九宫格</option></select></label>
-      <p class="rmt-x-note" data-selection-note>拖动框选画面，或选择排列后点选一格。</p><button type="button" data-edit="apply-crop">使用选中画面</button></div>
-      <div data-paint-tools hidden><div class="rmt-mv-editor-tools"><button type="button" data-edit="erase" aria-pressed="true">擦除</button><button type="button" data-edit="region" aria-pressed="false">点除残底</button><button type="button" data-edit="restore" aria-pressed="false">恢复</button><button type="button" data-edit="undo">撤销</button><button type="button" data-edit="reset">还原选中画面</button></div>
-      <label>笔刷 <input data-brush type="range" min="1" max="100" value="20"></label>
-      <label><input data-layer type="checkbox">使用此透明图叠背景</label><p class="rmt-x-note">先看预览再保存；自动处理可能误删白纱、白衣，可用恢复笔刷修回。</p></div>
-      <label>放大 <input data-zoom type="range" min="1" max="4" step="0.25" value="1"></label><div class="rmt-mv-editor-tools"><button type="button" data-edit="pan">移动画布</button></div>
-      <div class="rmt-mv-editor-viewport"><canvas data-editor-canvas aria-label="素材裁切与抠图画布"></canvas></div>
-      <p role="status" data-editor-status></p>
-      <div class="rmt-mv-editor-tools"><label class="rmt-mv-editor-upload">导入图片<input type="file" accept="image/*" data-import="full"></label><label class="rmt-mv-editor-upload">导入透明图<input type="file" accept="image/png,image/webp" data-import="cutout"></label><button type="button" data-edit="download">下载当前 PNG</button><button type="button" data-edit="original">恢复原图</button></div>
-      <label>本张生图提示词<textarea data-editor-prompt rows="7"></textarea></label><div class="rmt-mv-editor-tools"><button type="button" data-edit="default-prompt">恢复默认提示词</button></div>
-      <div class="rmt-mv-editor-tools"><button type="button" data-edit="save">保存修改</button><button type="button" data-edit="close">取消</button></div>
-      <p class="rmt-x-note">保存不会重新生图；返回构图卡片后点重画才会使用新提示词。</p>
-    </section>`;
+    host.innerHTML = image_ui.imageEditorMarkup({ hasNext: !!options.onNext, showPrompt: options.showPrompt !== false });
     const root = host.firstElementChild;
     const find = s => root.querySelector(s);
     const canvas = find('[data-editor-canvas]'), g = canvas.getContext('2d', { willReadFrequently: true });
     const prompt = find('[data-editor-prompt]'), status = find('[data-editor-status]');
+    find('[data-image-title]').textContent = options.title || '图片编辑';
+    find('[data-image-scope]').textContent = options.scopeLabel || '选格、裁切与修边';
     prompt.value = options.prompt || '';
     let active = true, busy = false, loadToken = 0, source = null, sourceBlob = null, importing = false;
     let crop = pixels.normalizeCrop(options.image?.crop) || { x: 0, y: 0, w: 1, h: 1 };
     let stage = 'select', brush = 'erase', grid = 'free', anchor = null, pointerId = null, panning = false;
+    let tool = 'grid', comparing = false;
     let original = null, working = null, changed = false, restoreOriginal = false, selectionDirty = false;
     const history = [], urls = new Set();
     const originalRef = options.image?.original || options.image || null;
@@ -1806,9 +1948,15 @@ function mountAssetEditor(host, options) {
     });
     function dimensions(w, h) { canvas.width = w; canvas.height = h; }
     function show() {
-        if (!active || !source) return;
+        if (!active) return;
+        if (stage === 'paint') tool = 'brush';
         find('[data-select-tools]').hidden = stage !== 'select'; find('[data-paint-tools]').hidden = stage !== 'paint';
-        if (stage === 'select') {
+        find('[data-grid-picker]').hidden = tool === 'crop';
+        for (const [action, value] of [['select', 'grid'], ['crop', 'crop'], ['paint', 'brush']]) find(`[data-edit="${action}"]`).setAttribute('aria-pressed', String(tool === value));
+        find('[data-edit="compare"]').setAttribute('aria-pressed', String(comparing));
+        if (!source) return;
+        if (comparing) { dimensions(source.naturalWidth, source.naturalHeight); g.drawImage(source, 0, 0); }
+        else if (stage === 'select') {
             dimensions(source.naturalWidth, source.naturalHeight); g.drawImage(source, 0, 0);
             if (grid !== 'free') {
                 const [rows, cols] = grid.split(':').map(Number);
@@ -1821,11 +1969,14 @@ function mountAssetEditor(host, options) {
             g.strokeStyle = '#ffb800'; g.lineWidth = Math.max(2, canvas.width / 180); g.strokeRect(x, y, w, h);
             find('[data-selection-note]').textContent = `选中 ${w} × ${h} 像素；可重新框选。`;
         } else if (working) { dimensions(working.width, working.height); g.putImageData(working, 0, 0); }
-        const availableWidth = find('.rmt-mv-editor-viewport').clientWidth || 360;
-        const fitted = Math.min(availableWidth, (globalThis.innerHeight || 800) * 0.55 * canvas.width / canvas.height);
+        const viewport = find('.rmt-mv-editor-viewport');
+        const availableWidth = viewport.clientWidth || 360;
+        const availableHeight = viewport.clientHeight || (globalThis.innerHeight || 800) * 0.55;
+        const fitted = Math.min(availableWidth, availableHeight * canvas.width / canvas.height);
         canvas.style.width = `${fitted * Number(find('[data-zoom]').value)}px`;
         canvas.style.maxWidth = 'none';
-        canvas.style.touchAction = panning ? 'pan-x pan-y' : 'none';
+        canvas.style.touchAction = panning || comparing ? 'pan-x pan-y' : 'none';
+        find('[data-image-size]').textContent = `${canvas.width} × ${canvas.height}`;
     }
     function selectPixels() {
         const [x, y, w, h] = pixels.pixelRect(crop, source.naturalWidth, source.naturalHeight);
@@ -1876,7 +2027,7 @@ function mountAssetEditor(host, options) {
         changed = true; restoreOriginal = false; layer().checked = true; g.putImageData(working, 0, 0);
     }
     canvas.addEventListener('pointerdown', event => {
-        if (busy || panning || !source || pointerId !== null) return;
+        if (busy || panning || comparing || !source || pointerId !== null) return;
         event.preventDefault(); pointerId = event.pointerId; canvas.setPointerCapture?.(pointerId); anchor = point(event);
         if (stage === 'paint' && working) {
             pushUndo();
@@ -1900,7 +2051,7 @@ function mountAssetEditor(host, options) {
     });
     const endStroke = event => { if (event.pointerId === pointerId) { if (stage === 'paint') compactUndo(); anchor = null; pointerId = null; } };
     canvas.addEventListener('pointerup', endStroke); canvas.addEventListener('pointercancel', endStroke); canvas.addEventListener('lostpointercapture', endStroke);
-    find('[data-grid]').addEventListener('change', event => { grid = event.target.value; if (grid !== 'free') { const [rows, cols] = grid.split(':').map(Number); crop = pixels.gridCrop(rows, cols, 0); selectionDirty = true; } show(); });
+    find('[data-grid]').addEventListener('change', event => { grid = event.target.value; stage = 'select'; tool = 'grid'; comparing = false; if (grid !== 'free') { const [rows, cols] = grid.split(':').map(Number); crop = pixels.gridCrop(rows, cols, 0); selectionDirty = true; } show(); });
     find('[data-zoom]').addEventListener('input', show);
     layer().addEventListener('change', () => { changed = true; restoreOriginal = false; });
     async function blobOfWorking() {
@@ -1921,16 +2072,25 @@ function mountAssetEditor(host, options) {
         finally { if (active && token === loadToken) importing = false; }
     }
     root.querySelectorAll('[data-import]').forEach(input => input.addEventListener('change', () => void importFile(input)));
+    root.querySelectorAll('[data-matte]').forEach(button => button.addEventListener('click', () => {
+        find('.rmt-mv-editor-viewport').dataset.editorMatte = button.dataset.matte;
+        root.querySelectorAll('[data-matte]').forEach(item => item.setAttribute('aria-pressed', String(item === button)));
+    }));
     root.addEventListener('click', async event => {
         const button = event.target.closest('[data-edit]'); if (!button || busy) return;
         event.preventDefault(); const action = button.dataset.edit;
         if (action === 'close') { options.onClose(); return; }
         if (action === 'default-prompt') { prompt.value = options.defaultPrompt || ''; return; }
         if (importing) { say('图片正在读取，请稍候再保存或编辑。'); return; }
-        if (action === 'pan') { panning = !panning; button.textContent = panning ? '继续编辑' : '移动画布'; show(); return; }
-        if (action === 'select') { stage = 'select'; show(); return; }
+        if (action === 'compare') { comparing = !comparing; show(); return; }
+        if (action === 'fit') { find('[data-zoom]').value = '1'; const viewport = find('.rmt-mv-editor-viewport'); viewport.scrollTop = 0; viewport.scrollLeft = 0; show(); return; }
+        const wasComparing = comparing; comparing = false;
+        if (wasComparing) show();
+        if (action === 'pan') { panning = !panning; button.setAttribute('aria-pressed', String(panning)); button.textContent = panning ? '继续编辑' : '移动画布'; show(); return; }
+        if (action === 'select' || action === 'crop') { stage = 'select'; tool = action === 'crop' ? 'crop' : 'grid'; if (tool === 'crop') { grid = 'free'; find('[data-grid]').value = grid; } show(); return; }
         if (action === 'paint') { if (!working || selectionDirty) applyCrop(); else { stage = 'paint'; show(); } return; }
         if (action === 'apply-crop') { applyCrop(); return; }
+        if (action === 'full-crop') { crop = { x: 0, y: 0, w: 1, h: 1 }; grid = 'free'; find('[data-grid]').value = grid; applyCrop(); return; }
         if (action === 'erase' || action === 'restore' || action === 'region') {
             brush = action; for (const value of ['erase', 'restore', 'region']) find(`[data-edit="${value}"]`).setAttribute('aria-pressed', String(value === brush)); return;
         }
@@ -1949,8 +2109,9 @@ function mountAssetEditor(host, options) {
             catch { say('原图暂时无法读取；保存仍可恢复原图引用。'); }
             return;
         }
-        if (action !== 'save' && action !== 'download') return;
-        if (action === 'save' && selectionDirty) { say('请先点“使用选中画面”，确认单格预览。'); return; }
+        const saving = action === 'save' || action === 'save-next';
+        if (!saving && action !== 'download') return;
+        if (saving && selectionDirty) { say('请先点“使用选中画面”，确认单格预览。'); return; }
         busy = true; root.querySelectorAll('button,input,select,textarea').forEach(el => { el.disabled = true; });
         try {
             const blob = (action === 'download' || (changed && !restoreOriginal)) ? await blobOfWorking() : null;
@@ -1960,11 +2121,17 @@ function mountAssetEditor(host, options) {
             } else {
                 const result = await options.onSave({ prompt: !prompt.value.trim() || prompt.value === options.defaultPrompt ? null : prompt.value,
                     ...(changed ? { image: { blob, sourceBlob, originalRef, crop, mode: layer().checked ? 'cutout' : 'full', restoreOriginal } } : {}) });
-                if (active && result !== false) options.onClose();
+                if (active && result !== false) {
+                    if (action === 'save-next' && options.onNext) await options.onNext();
+                    else options.onClose();
+                }
             }
         } catch { say('保存未完成，编辑内容仍在这里；可重试或先下载 PNG。'); }
         finally { busy = false; if (active) root.querySelectorAll('button,input,select,textarea').forEach(el => { el.disabled = false; }); }
     });
+    const resize = typeof globalThis.ResizeObserver === 'function' ? new globalThis.ResizeObserver(show) : null;
+    resize?.observe(find('.rmt-mv-editor-viewport'));
+    show();
     const ready = (async () => {
         if (!options.sourceUrl) { say('可以先编辑提示词，或导入自己的图片。'); return; }
         const token = ++loadToken;
@@ -1996,10 +2163,96 @@ function mountAssetEditor(host, options) {
             if (options.autoCutout) autoCutout();
         } catch { if (active && token === loadToken) { show(); say('无法读取图片像素，可导入本机图片继续处理；提示词仍可编辑。'); } }
     })();
-    return { ready, dispose() { active = false; loadToken++; for (const url of urls) URL.revokeObjectURL(url); history.length = 0; } };
+    return { ready, dispose() { active = false; loadToken++; resize?.disconnect(); for (const url of urls) URL.revokeObjectURL(url); history.length = 0; } };
 }
 
 __m_ui_mvImageEditor_js.mountAssetEditor = mountAssetEditor;
+}
+
+function __init_ui_mvImageEditorUi_js() {
+// MODULE: ui/mvImageEditorUi.js
+
+// Presentation only. Pixel edits, undo, storage and prompt generation remain in
+// their existing modules; this layout keeps the canvas and save actions visible.
+function imageEditorMarkup({ hasNext = false, showPrompt = true } = {}) {
+    return `<section class="rmt-mv-editor rmt-mvi-workbench" aria-label="图片编辑">
+      <header class="rmt-mvi-header"><div><b data-image-title>图片编辑</b><small data-image-scope></small></div><button type="button" data-edit="close">取消</button></header>
+      <div class="rmt-mvi-layout">
+        <section class="rmt-mvi-visual" aria-label="编辑画布">
+          <div class="rmt-mvi-canvas-tools"><button type="button" data-edit="compare" aria-pressed="false">原图对比</button><label>缩放<input data-zoom type="range" min="1" max="4" step="0.25" value="1" aria-label="画布缩放"></label><button type="button" data-edit="fit">适应</button></div>
+          <div class="rmt-mv-editor-viewport"><canvas data-editor-canvas aria-label="素材裁切与抠图画布"></canvas></div>
+          <div class="rmt-mvi-matte" aria-label="检查透明边缘"><small data-image-size></small><div><button type="button" data-matte="grid" aria-pressed="true">透明底</button><button type="button" data-matte="dark" aria-pressed="false">深色底</button><button type="button" data-matte="light" aria-pressed="false">浅色底</button></div></div>
+        </section>
+        <section class="rmt-mvi-inspector" aria-label="图片编辑工具">
+          <nav class="rmt-mvi-tabs" aria-label="编辑方式"><button type="button" data-edit="select" aria-pressed="true">选单格</button><button type="button" data-edit="crop" aria-pressed="false">自由裁切</button><button type="button" data-edit="paint" aria-pressed="false">抠图修边</button></nav>
+          <div class="rmt-mvi-tool-scroll">
+            <div data-select-tools><label data-grid-picker>拼图排列<select data-grid><option value="free">手动框选</option><option value="1:1">整张</option><option value="2:1">上下两格</option><option value="3:1">上下三格</option><option value="4:1">上下四格</option><option value="1:2">左右两格</option><option value="1:3">左右三格</option><option value="1:4">左右四格</option><option value="2:2">四宫格</option><option value="3:3">九宫格</option></select></label><p class="rmt-x-note" data-selection-note>拖动框选画面，或选择排列后点选一格。</p><div class="rmt-mv-editor-tools"><button type="button" data-edit="apply-crop">使用选中画面</button><button type="button" data-edit="full-crop">整张入画</button></div></div>
+            <div data-paint-tools hidden><div class="rmt-mv-editor-tools"><button type="button" data-edit="auto">一键抠图</button><button type="button" data-edit="erase" aria-pressed="true">擦除</button><button type="button" data-edit="restore" aria-pressed="false">恢复</button><button type="button" data-edit="region" aria-pressed="false">点除残底</button></div><label class="rmt-mvi-brush">笔刷<input data-brush type="range" min="1" max="100" value="20" aria-label="笔刷大小"></label></div>
+            <div class="rmt-mv-editor-tools"><button type="button" data-edit="pan" aria-pressed="false">移动画布</button><button type="button" data-edit="reset">还原选中画面</button></div>
+            <label class="rmt-mvi-layer"><input data-layer type="checkbox">使用此透明图叠背景</label>
+            <details class="rmt-mvi-more"><summary>导入、原图与下载</summary><div class="rmt-mv-editor-tools"><label class="rmt-mv-editor-upload">导入图片<input type="file" accept="image/*" data-import="full"></label><label class="rmt-mv-editor-upload">导入透明图<input type="file" accept="image/png,image/webp" data-import="cutout"></label><button type="button" data-edit="download">下载当前 PNG</button><button type="button" data-edit="original">恢复原图</button></div></details>
+            <details class="rmt-mvi-more"${showPrompt ? '' : ' hidden'}><summary>本张生图提示词</summary><label>提示词<textarea data-editor-prompt rows="6"></textarea></label><div class="rmt-mv-editor-tools"><button type="button" data-edit="default-prompt">恢复默认提示词</button></div><p class="rmt-x-note">保存不重新生图；重画时才使用新提示词。</p></details>
+          </div>
+        </section>
+      </div>
+      <footer class="rmt-mvi-footer"><p role="status" aria-live="polite" data-editor-status></p><div class="rmt-mvi-save-row"><button type="button" data-edit="undo">撤销</button><div><button type="button" data-edit="save">保存修改</button><button type="button" class="rmt-mvi-primary" data-edit="save-next"${hasNext ? '' : ' hidden'}>保存并下一镜</button></div></div></footer>
+    </section>`;
+}
+
+function imageEditorCss(r) {
+    return `
+${r} .rmt-mve-image-page{display:flex;flex-direction:column;flex:1;min-height:0;max-width:none;width:100%;gap:0;padding:0}
+${r} [data-rmt-mv-editor-host]{display:flex;flex:1;min-height:0;min-width:0}
+${r} .rmt-mvi-workbench{display:flex;flex:1;flex-direction:column;min-height:0;min-width:0;width:100%;gap:10px;container-type:inline-size}
+${r} .rmt-mvi-workbench button{font:inherit;font-size:13px;line-height:1.3;min-height:40px;padding:7px 12px;border:1px solid var(--rmt-theme-border,#cddfed);border-radius:999px;background:var(--rmt-theme-surface-solid,#fff);color:var(--rmt-theme-text,#294762);cursor:pointer;touch-action:manipulation;box-sizing:border-box}
+${r} .rmt-mvi-workbench button[aria-pressed=true]{border-color:var(--rmt-theme-accent-ink,#4f769d);background:var(--rmt-theme-soft,#e7f1fa)}
+${r} .rmt-mvi-workbench button:disabled{opacity:.5;cursor:default}
+${r} .rmt-mvi-workbench button:focus-visible,${r} .rmt-mvi-workbench summary:focus-visible{outline:2px solid var(--rmt-theme-accent-ink,#4f769d);outline-offset:2px}
+${r} .rmt-mvi-header{display:flex;align-items:center;justify-content:space-between;gap:12px;flex:none;padding:0 0 8px;border-bottom:1px solid var(--rmt-theme-border,#cddfed)}
+${r} .rmt-mvi-header>div{min-width:0;display:flex;flex-direction:column;gap:3px}
+${r} .rmt-mvi-header b{font-size:15px;overflow-wrap:anywhere}
+${r} .rmt-mvi-header small{font-size:11px;color:var(--rmt-theme-muted,#63788f)}
+${r} .rmt-mvi-layout{flex:1;min-height:0;min-width:0;display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(90px,1fr) minmax(135px,.8fr);gap:10px}
+${r} .rmt-mvi-visual{display:flex;flex-direction:column;min-height:0;min-width:0;overflow:hidden;border:1px solid var(--rmt-theme-border,#cddfed);border-radius:12px;background:var(--rmt-theme-soft,#e7f1fa)}
+${r} .rmt-mvi-canvas-tools,${r} .rmt-mvi-matte{display:flex;align-items:center;justify-content:space-between;gap:7px;flex:none;padding:6px 8px}
+${r} .rmt-mvi-canvas-tools>label{flex:1;display:flex;flex-direction:row;align-items:center;gap:6px;margin:0;font-size:11px;min-width:0}
+${r} .rmt-mvi-workbench input[type=range]{min-width:0;min-height:32px;height:32px;width:100%;padding:0;margin:0;box-shadow:none;background:transparent;accent-color:var(--rmt-theme-accent-ink,#4f769d)}
+${r} .rmt-mvi-canvas-tools input[type=range]{width:0;flex:1}
+${r} .rmt-mvi-canvas-tools button,${r} .rmt-mvi-matte button{font-size:11px;min-height:32px;padding:4px 8px}
+${r} .rmt-mvi-visual .rmt-mv-editor-viewport{flex:1;min-height:0;max-height:none;width:100%;overflow:auto;overscroll-behavior:contain;position:relative}
+${r} .rmt-mvi-visual [data-editor-canvas]{margin:0 auto;max-width:none;flex:none}
+${r} .rmt-mvi-matte>div{display:flex;gap:4px}
+${r} .rmt-mvi-matte>small{font-size:10px;color:var(--rmt-theme-muted,#63788f);white-space:nowrap}
+${r} .rmt-mv-editor-viewport[data-editor-matte=dark]{background:#253445}
+${r} .rmt-mv-editor-viewport[data-editor-matte=light]{background:#f8fbfe}
+${r} .rmt-mvi-inspector{display:flex;flex-direction:column;min-height:0;min-width:0;overflow:hidden;background:var(--rmt-theme-surface-solid,#fff);border:1px solid var(--rmt-theme-border,#cddfed);border-radius:12px}
+${r} .rmt-mvi-tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;flex:none;padding:5px;background:var(--rmt-theme-soft,#e7f1fa)}
+${r} .rmt-mvi-tabs button{font-size:12px;min-height:38px;padding:6px 3px}
+${r} .rmt-mvi-tool-scroll{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;padding:10px 12px;scrollbar-width:thin;touch-action:pan-y pinch-zoom}
+${r} .rmt-mvi-tool-scroll .rmt-mv-editor-tools{gap:6px;margin:4px 0}
+${r} .rmt-mvi-tool-scroll .rmt-mv-editor-tools button{flex:1 0 auto;min-height:40px;padding:6px 10px;font-size:12px}
+${r} .rmt-mvi-tool-scroll label{font-size:12px}
+${r} .rmt-mvi-tool-scroll input:not([type=checkbox]):not([type=range]),${r} .rmt-mvi-tool-scroll select,${r} .rmt-mvi-tool-scroll textarea{font-size:16px}
+${r} .rmt-mvi-tool-scroll .rmt-mvi-brush{display:flex;flex-direction:row;align-items:center;gap:8px}
+${r} .rmt-mvi-tool-scroll .rmt-mvi-brush input{flex:1;width:0}
+${r} .rmt-mvi-tool-scroll .rmt-mvi-layer{display:flex;flex-direction:row;align-items:center;gap:8px;line-height:1.5;margin:8px 0}
+${r} .rmt-mvi-layer input{width:18px;min-width:18px;height:18px;margin:0}
+${r} .rmt-mvi-more{border-top:1px solid var(--rmt-theme-border,#cddfed);margin-top:8px}
+${r} .rmt-mvi-more summary{min-height:40px;display:flex;align-items:center;cursor:pointer;font-size:12px}
+${r} .rmt-mvi-workbench .rmt-x-note{margin:5px 0;font-size:11px;line-height:1.6}
+${r} .rmt-mvi-footer{flex:none;padding:5px 0 max(2px,env(safe-area-inset-bottom,0px));border-top:1px solid var(--rmt-theme-border,#cddfed)}
+${r} .rmt-mvi-footer p{font-size:11px;line-height:1.5;color:var(--rmt-theme-muted,#63788f);margin:0 0 5px;max-height:3em;overflow:auto}
+${r} .rmt-mvi-footer p:empty{display:none}
+${r} .rmt-mvi-save-row,${r} .rmt-mvi-save-row>div{display:flex;align-items:center;justify-content:space-between;gap:7px}
+${r} .rmt-mvi-workbench .rmt-mvi-primary{background:var(--rmt-theme-soft,#e7f1fa);border-color:var(--rmt-theme-accent-ink,#4f769d);font-weight:600}
+@media(min-width:960px){${r} .rmt-mvi-layout{grid-template-columns:minmax(0,1fr) 315px;grid-template-rows:minmax(0,1fr)}}
+@supports(container-type:inline-size){${r} .rmt-mvi-layout{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(90px,1fr) minmax(135px,.8fr)}@container(min-width:740px){${r} .rmt-mvi-layout{grid-template-columns:minmax(0,1fr) 315px;grid-template-rows:minmax(0,1fr)}}}
+@media(max-height:600px) and (orientation:landscape){${r} .rmt-mvi-layout{grid-template-columns:minmax(0,1fr) minmax(240px,.8fr);grid-template-rows:minmax(0,1fr)}${r} .rmt-mvi-header{padding-bottom:3px}${r} .rmt-mvi-workbench{gap:5px}${r} .rmt-mvi-matte{padding-block:2px}}
+`;
+}
+
+__m_ui_mvImageEditorUi_js.imageEditorMarkup = imageEditorMarkup;
+__m_ui_mvImageEditorUi_js.imageEditorCss = imageEditorCss;
 }
 
 function __init_ui_mvStageCanvas_js() {
@@ -21525,7 +21778,7 @@ function __init_core_selfUpdater_js() {
 // MODULE: core/selfUpdater.js
 
 const UPDATE_STATE = Symbol.for('heartbeatMemories.selfUpdate');
-const INSTALLED_BUILD = '1.0.15-r84.232-mv-cutout-preview';
+const INSTALLED_BUILD = '1.0.25';
 const PROJECT_REMOTE = 'https://github.com/zaiyebuzuoyouqingdetiangou/tokimemo';
 function updateError(message) { const error = new Error(message); error.userMessage = message; return error; }
 
@@ -21902,18 +22155,18 @@ async function applyHearttraceUpdateAndReload(options = {}) {
 
 __m_core_selfUpdater_js.updateSelf = updateSelf;
 __m_core_selfUpdater_js.updateFromButton = updateFromButton;
+__m_core_selfUpdater_js.loadHearttraceChangelog = loadHearttraceChangelog;
+__m_core_selfUpdater_js.checkHearttraceUpdate = checkHearttraceUpdate;
+__m_core_selfUpdater_js.applyHearttraceUpdateAndReload = applyHearttraceUpdateAndReload;
 __m_core_selfUpdater_js.ownExtensionFolder = ownExtensionFolder;
 __m_core_selfUpdater_js.installedVersion = installedVersion;
 __m_core_selfUpdater_js.isProjectRemote = isProjectRemote;
-__m_core_selfUpdater_js.INSTALLED_BUILD = INSTALLED_BUILD;
 __m_core_selfUpdater_js.hearttraceUpdateSnapshot = hearttraceUpdateSnapshot;
 __m_core_selfUpdater_js.subscribeHearttraceUpdate = subscribeHearttraceUpdate;
 __m_core_selfUpdater_js.compareHearttraceVersions = compareHearttraceVersions;
 __m_core_selfUpdater_js.isNewerHearttraceVersion = isNewerHearttraceVersion;
 __m_core_selfUpdater_js.parseHearttraceChangelog = parseHearttraceChangelog;
-__m_core_selfUpdater_js.loadHearttraceChangelog = loadHearttraceChangelog;
-__m_core_selfUpdater_js.checkHearttraceUpdate = checkHearttraceUpdate;
-__m_core_selfUpdater_js.applyHearttraceUpdateAndReload = applyHearttraceUpdateAndReload;
+__m_core_selfUpdater_js.INSTALLED_BUILD = INSTALLED_BUILD;
 }
 
 function __init_core_state_js() {
@@ -73585,91 +73838,6 @@ function showHome({ section = '' } = {}) {
     return true;
 }
 
-// Keep the runtime usable when it is loaded directly without the bootstrap globals.
-async function deliverHomeDiagnostic(action, { output, status, isCurrent }) {
-    const deliver = globalThis.__heartbeatMemoriesDeliverDiagnostic;
-    if (typeof deliver === 'function') return deliver(action, { output, status, isCurrent });
-    if (!isCurrent()) return false;
-    const report = diagnostics.diagnosticReportText();
-    const show = message => {
-        if (!isCurrent()) return;
-        output.value = report; output.hidden = false;
-        output.closest('[data-rmt-diagnostic-panel]').hidden = false;
-        status.textContent = message;
-    };
-    if (action === 'copy') {
-        try {
-            if (typeof globalThis.navigator?.clipboard?.writeText !== 'function') throw new Error();
-            await globalThis.navigator.clipboard.writeText(report);
-            if (isCurrent()) status.textContent = '已复制诊断报告。';
-            return true;
-        } catch { show('无法自动复制，请长按下方报告手动复制。'); return false; }
-    }
-    if (action === 'export') {
-        let url = '', link = null;
-        try {
-            url = URL.createObjectURL(new Blob([report], { type: 'application/json;charset=utf-8' }));
-            link = document.createElement('a'); link.href = url;
-            link.download = 'Hearttrace-diagnostic.json'; link.hidden = true;
-            document.body.appendChild(link); link.click();
-            if (isCurrent()) status.textContent = '已请求导出；若未出现下载，请使用“复制报告”或“查看报告”。';
-            return true;
-        } catch { show('无法下载，请复制下方报告。'); return false; }
-        finally {
-            link?.remove();
-            if (url) setTimeout(() => { try { URL.revokeObjectURL(url); } catch {} }, 1000);
-        }
-    }
-    show('报告不含聊天、外貌、提示词或密钥。');
-    return true;
-}
-
-function mountHomeDiagnostics(target) {
-    if (!target) return false;
-    if (target.querySelector('[data-rmt-home-diagnostic]')) return true;
-    const panel = document.createElement('details');
-    panel.setAttribute('data-rmt-home-diagnostic', ''); panel.open = false;
-    const style = document.createElement('style');
-    style.textContent = `
-[data-rmt-home-diagnostic]{box-sizing:border-box;min-width:0;max-width:100%;margin-top:14px;padding:0 14px;border:1px solid var(--rmt-theme-line,#c6d8e7);border-radius:16px;color:inherit}
-[data-rmt-home-diagnostic] [hidden]{display:none!important}
-[data-rmt-home-diagnostic]>summary{box-sizing:border-box;min-height:46px;padding:14px 0;cursor:pointer;font-size:16px;writing-mode:horizontal-tb;touch-action:manipulation}
-[data-rmt-home-diagnostic]:not([open])>.rmt-home-diagnostic-body{display:none!important}
-[data-rmt-home-diagnostic] .rmt-home-diagnostic-actions{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;min-width:0;max-width:100%}
-[data-rmt-home-diagnostic] button{box-sizing:border-box;width:100%;min-width:0;min-height:46px;height:auto;margin:0;padding:9px;white-space:normal;writing-mode:horizontal-tb;touch-action:manipulation}
-[data-rmt-home-diagnostic] [role="status"]{display:block;margin:8px 0;font-size:13px;line-height:1.5;overflow-wrap:anywhere}
-[data-rmt-home-diagnostic] textarea{box-sizing:border-box;display:block;width:100%;max-width:100%;min-width:0;height:240px;margin-bottom:14px;padding:8px;font-size:12px;line-height:1.5;resize:vertical;white-space:pre-wrap;overflow-wrap:anywhere;user-select:text;-webkit-user-select:text;touch-action:auto;color:inherit;background:inherit}
-`;
-    const heading = document.createElement('summary'); heading.textContent = '故障排查';
-    const body = document.createElement('div'); body.className = 'rmt-home-diagnostic-body';
-    const actions = document.createElement('div'); actions.className = 'rmt-home-diagnostic-actions';
-    const status = document.createElement('span'); status.setAttribute('role', 'status');
-    const report = document.createElement('div'); report.hidden = true;
-    report.setAttribute('data-rmt-diagnostic-panel', '');
-    const output = document.createElement('textarea'); output.readOnly = true;
-    output.hidden = true; output.spellcheck = false; output.setAttribute('aria-label', '脱敏诊断报告');
-    let reportEpoch = 0;
-    const lifecycleEpoch = runtimeState.runtimeLifecycleEpoch;
-    const clear = () => { reportEpoch += 1; output.value = ''; output.hidden = true; report.hidden = true; status.textContent = ''; };
-    panel.addEventListener('toggle', () => { if (!panel.open) clear(); });
-    for (const [action, label] of [['copy', '复制报告'], ['export', '导出 JSON'], ['show', '查看报告'], ['close', '关闭']]) {
-        const button = document.createElement('button'); button.type = 'button'; button.textContent = label;
-        button.setAttribute('data-rmt-diagnostic-action', action);
-        button.addEventListener('click', () => {
-            clear();
-            if (action === 'close') { panel.open = false; return; }
-            const epoch = reportEpoch;
-            void deliverHomeDiagnostic(action, { output, status,
-                isCurrent: () => panel.isConnected && panel.open && epoch === reportEpoch
-                    && lifecycleEpoch === runtimeState.runtimeLifecycleEpoch });
-        });
-        actions.appendChild(button);
-    }
-    report.appendChild(output); body.appendChild(actions); body.appendChild(status); body.appendChild(report);
-    panel.appendChild(heading); panel.appendChild(style); panel.appendChild(body); target.appendChild(panel);
-    return true;
-}
-
 const scrollIcon = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M7 4h8a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3V7a3 3 0 0 1 3-3z"/><path d="M7 4v13a3 3 0 0 0 3 3"/><path d="M10 8h5M10 12h5"/></svg>';
 let updateSheet = null;
 let updateApplying = false;
@@ -73905,6 +74073,91 @@ function mountHomeUpdateChrome(row) {
         void openHearttraceChangelog('view');
     });
     void updater.checkHearttraceUpdate({ force: true });
+}
+
+// Keep the runtime usable when it is loaded directly without the bootstrap globals.
+async function deliverHomeDiagnostic(action, { output, status, isCurrent }) {
+    const deliver = globalThis.__heartbeatMemoriesDeliverDiagnostic;
+    if (typeof deliver === 'function') return deliver(action, { output, status, isCurrent });
+    if (!isCurrent()) return false;
+    const report = diagnostics.diagnosticReportText();
+    const show = message => {
+        if (!isCurrent()) return;
+        output.value = report; output.hidden = false;
+        output.closest('[data-rmt-diagnostic-panel]').hidden = false;
+        status.textContent = message;
+    };
+    if (action === 'copy') {
+        try {
+            if (typeof globalThis.navigator?.clipboard?.writeText !== 'function') throw new Error();
+            await globalThis.navigator.clipboard.writeText(report);
+            if (isCurrent()) status.textContent = '已复制诊断报告。';
+            return true;
+        } catch { show('无法自动复制，请长按下方报告手动复制。'); return false; }
+    }
+    if (action === 'export') {
+        let url = '', link = null;
+        try {
+            url = URL.createObjectURL(new Blob([report], { type: 'application/json;charset=utf-8' }));
+            link = document.createElement('a'); link.href = url;
+            link.download = 'Hearttrace-diagnostic.json'; link.hidden = true;
+            document.body.appendChild(link); link.click();
+            if (isCurrent()) status.textContent = '已请求导出；若未出现下载，请使用“复制报告”或“查看报告”。';
+            return true;
+        } catch { show('无法下载，请复制下方报告。'); return false; }
+        finally {
+            link?.remove();
+            if (url) setTimeout(() => { try { URL.revokeObjectURL(url); } catch {} }, 1000);
+        }
+    }
+    show('报告不含聊天、外貌、提示词或密钥。');
+    return true;
+}
+
+function mountHomeDiagnostics(target) {
+    if (!target) return false;
+    if (target.querySelector('[data-rmt-home-diagnostic]')) return true;
+    const panel = document.createElement('details');
+    panel.setAttribute('data-rmt-home-diagnostic', ''); panel.open = false;
+    const style = document.createElement('style');
+    style.textContent = `
+[data-rmt-home-diagnostic]{box-sizing:border-box;min-width:0;max-width:100%;margin-top:14px;padding:0 14px;border:1px solid var(--rmt-theme-line,#c6d8e7);border-radius:16px;color:inherit}
+[data-rmt-home-diagnostic] [hidden]{display:none!important}
+[data-rmt-home-diagnostic]>summary{box-sizing:border-box;min-height:46px;padding:14px 0;cursor:pointer;font-size:16px;writing-mode:horizontal-tb;touch-action:manipulation}
+[data-rmt-home-diagnostic]:not([open])>.rmt-home-diagnostic-body{display:none!important}
+[data-rmt-home-diagnostic] .rmt-home-diagnostic-actions{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;min-width:0;max-width:100%}
+[data-rmt-home-diagnostic] button{box-sizing:border-box;width:100%;min-width:0;min-height:46px;height:auto;margin:0;padding:9px;white-space:normal;writing-mode:horizontal-tb;touch-action:manipulation}
+[data-rmt-home-diagnostic] [role="status"]{display:block;margin:8px 0;font-size:13px;line-height:1.5;overflow-wrap:anywhere}
+[data-rmt-home-diagnostic] textarea{box-sizing:border-box;display:block;width:100%;max-width:100%;min-width:0;height:240px;margin-bottom:14px;padding:8px;font-size:12px;line-height:1.5;resize:vertical;white-space:pre-wrap;overflow-wrap:anywhere;user-select:text;-webkit-user-select:text;touch-action:auto;color:inherit;background:inherit}
+`;
+    const heading = document.createElement('summary'); heading.textContent = '故障排查';
+    const body = document.createElement('div'); body.className = 'rmt-home-diagnostic-body';
+    const actions = document.createElement('div'); actions.className = 'rmt-home-diagnostic-actions';
+    const status = document.createElement('span'); status.setAttribute('role', 'status');
+    const report = document.createElement('div'); report.hidden = true;
+    report.setAttribute('data-rmt-diagnostic-panel', '');
+    const output = document.createElement('textarea'); output.readOnly = true;
+    output.hidden = true; output.spellcheck = false; output.setAttribute('aria-label', '脱敏诊断报告');
+    let reportEpoch = 0;
+    const lifecycleEpoch = runtimeState.runtimeLifecycleEpoch;
+    const clear = () => { reportEpoch += 1; output.value = ''; output.hidden = true; report.hidden = true; status.textContent = ''; };
+    panel.addEventListener('toggle', () => { if (!panel.open) clear(); });
+    for (const [action, label] of [['copy', '复制报告'], ['export', '导出 JSON'], ['show', '查看报告'], ['close', '关闭']]) {
+        const button = document.createElement('button'); button.type = 'button'; button.textContent = label;
+        button.setAttribute('data-rmt-diagnostic-action', action);
+        button.addEventListener('click', () => {
+            clear();
+            if (action === 'close') { panel.open = false; return; }
+            const epoch = reportEpoch;
+            void deliverHomeDiagnostic(action, { output, status,
+                isCurrent: () => panel.isConnected && panel.open && epoch === reportEpoch
+                    && lifecycleEpoch === runtimeState.runtimeLifecycleEpoch });
+        });
+        actions.appendChild(button);
+    }
+    report.appendChild(output); body.appendChild(actions); body.appendChild(status); body.appendChild(report);
+    panel.appendChild(heading); panel.appendChild(style); panel.appendChild(body); target.appendChild(panel);
+    return true;
 }
 
 __m_ui_homeView_js.homeHeadingHtml = homeHeadingHtml;
@@ -82650,8 +82903,6 @@ __m_ui_settingsPanel_js.mountSettings = mountSettings;
 
 function __init_ui_settingsPanelMarkup_js() {
 // MODULE: ui/settingsPanelMarkup.js
-const core_selfUpdater = __m_core_selfUpdater_js;
-const core_text = __m_core_text_js;
 const core_requestCoordinator = __m_core_requestCoordinator_js;
 const core_settings = __m_core_settings_js;
 const advanced_ui = __m_ui_advancedGenerationUi_js;
@@ -82661,8 +82912,6 @@ const runtimeState = __m_core_state_js.state;
 const SETTINGS_MOUNT_UNHANDLED = __m_ui_settingsPanelHome_js.SETTINGS_MOUNT_UNHANDLED;
 const chatReadingSettingsHtml = __m_ui_settingsPanelParts_js.chatReadingSettingsHtml;
 const voiceSettingsHtml = __m_ui_settingsPanelParts_js.voiceSettingsHtml;
-
-
 
 
 
@@ -90067,6 +90316,7 @@ const extras_styles = __m_ui_extrasStyles_js;
 const mv = __m_extras_mv_js;
 const mv_media = __m_extras_mvMedia_js;
 const music_link = __m_extras_mvMusicLink_js;
+const audio_source = __m_extras_mvAudioSource_js;
 const core_castLooks = __m_core_castLooks_js;
 const archive_repository = __m_archive_repository_js;
 const mv_cast = __m_extras_mvCast_js;
@@ -90076,6 +90326,7 @@ const stage_canvas = __m_ui_mvStageCanvas_js;
 const cast_controls = __m_ui_mvCastControls_js;
 const participant_picker = __m_ui_participantPicker_js;
 const image_editor = __m_ui_mvImageEditor_js;
+const image_editor_ui = __m_ui_mvImageEditorUi_js;
 const image_tools = __m_extras_mvImageTools_js;
 const editor_ui = __m_ui_mvEditorUi_js;
 const runtimeState = __m_core_state_js.state;
@@ -90104,6 +90355,30 @@ const navigation = [];
 let renderedPage = '';
 let imageRefreshTimer = 0;
 let imageLayoutPending = false;
+let layoutBody = null;
+let layoutBodyObserver = null;
+
+function editorBody(enabled) {
+    const el = body();
+    if (layoutBody && (layoutBody !== el || !enabled)) {
+        layoutBody.classList?.remove('rmt-mve-body');
+        layoutBodyObserver?.disconnect(); layoutBodyObserver = null; layoutBody = null;
+    }
+    el?.classList?.toggle('rmt-mve-body', enabled);
+    if (!enabled || !el || layoutBody === el) return;
+    layoutBody = el;
+    if (typeof globalThis.MutationObserver === 'function') {
+        // Only direct page replacement is observed, never animation frames,
+        // thumbnail loads or brush strokes. Other modules keep their own scroll.
+        layoutBodyObserver = new globalThis.MutationObserver(() => {
+            if (!el.querySelector('.rmt-mve-layout-scope,[data-rmt-mv-editor-host]')) {
+                el.classList.remove('rmt-mve-body');
+                layoutBodyObserver?.disconnect(); layoutBodyObserver = null; layoutBody = null;
+            }
+        });
+        layoutBodyObserver.observe(el, { childList: true });
+    }
+}
 
 function queueImageRefresh(layout = false) {
     imageLayoutPending = imageLayoutPending || layout;
@@ -90139,7 +90414,8 @@ function capturePagePosition(assetKey = '') {
         anchor: anchor?.dataset.rmtMvAnchor, offset: anchor?.getBoundingClientRect?.().top - top,
         // Inspection expansion is controlled by view.inspect; never undo its click.
         details: [...(el.querySelectorAll?.('details:not(.rmt-mv-inspect):not(.rmt-mve-group-fold)') || [])].map(node => node.open),
-        strips: [...(el.querySelectorAll?.('.rmt-mv-assets, .rmt-mv-strip') || [])].map(node => node.scrollLeft) };
+        strips: [...(el.querySelectorAll?.('.rmt-mv-assets, .rmt-mv-strip') || [])].map(node => node.scrollLeft),
+        panels: [...(el.querySelectorAll?.('[data-rmt-mv-scroll]') || [])].map(node => ({ key: node.dataset.rmtMvScroll, top: node.scrollTop })) };
 }
 
 function restorePagePosition(position) {
@@ -90148,6 +90424,10 @@ function restorePagePosition(position) {
     const details = [...(el.querySelectorAll?.('details:not(.rmt-mv-inspect):not(.rmt-mve-group-fold)') || [])];
     if (details.length === position.details.length) details.forEach((node, i) => { node.open = position.details[i]; });
     [...(el.querySelectorAll?.('.rmt-mv-assets, .rmt-mv-strip') || [])].forEach((node, i) => { node.scrollLeft = position.strips[i] || 0; });
+    for (const node of el.querySelectorAll?.('[data-rmt-mv-scroll]') || []) {
+        const saved = position.panels?.find(row => row.key === node.dataset.rmtMvScroll);
+        if (saved) node.scrollTop = saved.top;
+    }
     el.scrollTop = position.top; el.scrollLeft = position.left;
     const anchor = [...(el.querySelectorAll?.('[data-rmt-mv-anchor]') || [])].find(node => node.dataset.rmtMvAnchor === position.anchor);
     if (anchor && Number.isFinite(position.offset) && anchor.getBoundingClientRect) {
@@ -90199,26 +90479,49 @@ function closeAssetEditor() {
     if (view.sub === 'asset-editor') restoreParentPage();
 }
 
-async function openAssetEditor(key, autoCutout = false) {
-    const opened = viewTarget(), target = mv.captureAssetEdit(view.songId, key);
-    const record = target.base.songs[target.songId], found = mv.assetOf(record, key);
+async function openAssetEditor(key, autoCutout = false, frameId = '') {
+    const opened = viewTarget(), target = frameId ? mv.captureMvTarget(ctx(), view.songId) : mv.captureAssetEdit(view.songId, key);
+    const record = target.base.songs[target.songId];
+    const frame = frameId ? record.shots.find(s => s.id === frameId) : null;
+    if (frameId && !frame) return;
+    const found = frame ? { kind: 'frame', image: mv.shotImage(record, frame) } : mv.assetOf(record, key);
+    const parent = view.sub === 'asset-editor' ? navigation.at(-1)?.sub : view.sub;
+    const selected = record.shots.find(s => s.id === view.selected);
+    const inEditor = ['tegaki', 'sync'].includes(parent) && (frameId === selected?.id || (!frameId && key === `${selected?.group}:${selected?.diff}`));
+    const rows = inEditor ? mv.shotTimeline(record, currentSong()).rows : [];
+    const selectedIndex = rows.findIndex(row => row.shot.id === view.selected);
+    const nextId = rows[selectedIndex + 1]?.shot.id;
     stopPlayback(); assetEditor?.dispose(); assetEditor = null;
     const token = ++editSequence;
     if (view.sub !== 'asset-editor') navigation.push(currentPage(key));
-    view.sub = 'asset-editor'; page('编辑素材', '构图卡片', '<section data-rmt-mv-editor-host>正在打开素材…</section>');
+    view.sub = 'asset-editor'; page('图片编辑', inEditor ? '剪辑台' : '构图卡片', '<section data-rmt-mv-editor-host>正在打开素材…</section>');
     if (body()) body().scrollTop = 0;
     const image = found.image, original = image?.original || image;
     const [sourceUrl, imageUrl] = await Promise.all([resolveAssetImage(original), resolveAssetImage(image)]);
     if (!isView(opened) || view.sub !== 'asset-editor' || token !== editSequence) return;
     const host = body().querySelector('[data-rmt-mv-editor-host]'); if (!host) return;
     assetEditor = image_editor.mountAssetEditor(host, {
+        title: inEditor ? `第 ${selectedIndex + 1} 镜 · 图片编辑` : '素材编辑',
+        scopeLabel: frame ? '修改当前镜图片' : inEditor ? '修改共享素材，关联镜头同步更新' : '选格、裁切与修边',
+        showPrompt: !frame,
         motif: key === 'motif', autoCutout, autoCharacter: !autoCutout && found.kind === 'char' && found.group.layer !== 'full' && image?.editMode !== 'full',
         multipleCharacters: found.group?.who === 'both' || (found.group?.cast?.length || 0) > 1,
-        sourceUrl, imageUrl, image, prompt: mv.assetPrompt(record, key, ctx()), defaultPrompt: mv.defaultAssetPrompt(record, key, ctx()),
+        sourceUrl, imageUrl, image, prompt: frame ? '' : mv.assetPrompt(record, key, ctx()), defaultPrompt: frame ? '' : mv.defaultAssetPrompt(record, key, ctx()),
         onClose: () => { if (isView(opened) && token === editSequence) closeAssetEditor(); },
+        onNext: inEditor && nextId ? async () => {
+            if (!isView(opened) || token !== editSequence) return;
+            const nextRecord = currentRecord(), timeline = mv.shotTimeline(nextRecord, currentSong()).rows;
+            const index = timeline.findIndex(row => row.shot.id === nextId), next = timeline[index];
+            if (!next) { closeAssetEditor(); return; }
+            view.selected = nextId; view.stripStart = Math.floor(index / 12) * 12;
+            seekEditor(next.start);
+            const nextKey = `${next.shot.group}:${next.shot.diff}`;
+            if (!mv.hasAssetImage(next.shot.image) && mv.assetOf(nextRecord, nextKey)) await openAssetEditor(nextKey);
+            else await openAssetEditor(`shot:${nextId}`, false, nextId);
+        } : undefined,
         onSave: async draft => {
             if (!isView(opened) || token !== editSequence) return false;
-            const patch = { prompt: draft.prompt };
+            const patch = frame ? {} : { prompt: draft.prompt };
             if (draft.image) {
                 if (draft.image.restoreOriginal) {
                     if (!original) return false;
@@ -90235,7 +90538,9 @@ async function openAssetEditor(key, autoCutout = false) {
                     patch.image = { ...result, original: sourceRef, crop: draft.image.crop, editMode: draft.image.mode, split: 'none', at: Date.now() };
                 }
             }
-            const result = await mv.saveAssetEdit(target, patch);
+            // Shot replacements use the existing frame journal. The shared
+            // material and its editable prompt remain available in the library.
+            const result = frame ? (patch.image ? await mv.saveFrameImage(target, frameId, patch.image) : null) : await mv.saveAssetEdit(target, patch);
             reportResult(result, '素材修改已保存。');
             return !result?.pending;
         },
@@ -90260,10 +90565,13 @@ function restoreAudio() {
     const key = audioKey(target);
     if (audioTried.has(key)) return;
     audioTried.add(key);
-    const token = {};
+    const token = {}, opened = viewTarget();
     audioLoads.set(key, token);
     void mv_media.getMedia(key).then(row => {
         if ((row?.blob || row?.mediaUrl) && audioLoads.get(key) === token) {
+            if (audio_source.isVideoAudioSource(row.blob, row.name) && !isView(opened)) {
+                audioTried.delete(key); audioLoads.delete(key); return;
+            }
             return acceptAudio(row.blob || row.mediaUrl, row.name || '已保存的歌曲', false, target, token, { sourceUrl: row.sourceUrl || '', mediaUrl: row.mediaUrl || '' });
         }
     }).catch(() => audioTried.delete(key));
@@ -90272,51 +90580,77 @@ function restoreAudio() {
 function acceptAudio(blob, name, persist, target = mv.captureMvTarget(ctx(), view.songId), token = {}, details = {}) {
     const key = audioKey(target);
     const opened = viewTarget();
+    if (isView(opened) && audioKey() === key) view.audioStatus = '';
     if (audioLoads.get(key) !== token) audioLoads.get(key)?.cancel?.();
     audioLoads.set(key, token);
     const streaming = typeof blob === 'string';
+    const fromVideo = !streaming && audio_source.isVideoAudioSource(blob, name);
+    const sourceController = fromVideo ? new AbortController() : null;
+    token.videoSource = fromVideo;
     const url = streaming ? music_link.musicUrl(blob) : URL.createObjectURL(blob);
-    const probe = new Audio(); probe.preload = 'metadata';
+    const probe = new Audio(); probe.preload = fromVideo ? 'auto' : 'metadata';
     return new Promise(resolve => {
         let settled = false;
         const finish = (ok, error) => {
             if (settled) return;
             settled = true;
             clearTimeout(timer);
+            sourceController?.abort();
             token.signal?.removeEventListener('abort', cancel);
             delete token.cancel;
-            probe.onloadedmetadata = null; probe.onerror = null;
+            probe.onloadedmetadata = null; probe.onloadeddata = null; probe.oncanplay = null; probe.onerror = null;
             try { probe.removeAttribute?.('src'); probe.load?.(); } catch {}
             if (!ok) {
                 URL.revokeObjectURL(url);
-                if (audioLoads.get(key) === token) audioTried.delete(key);
+                // Failed automatic restore gets one attempt per open, otherwise
+                // its error redraw would restore the same bad recording forever.
+                if (audioLoads.get(key) === token && !(fromVideo && !persist && error)) audioTried.delete(key);
                 if (error && isView(opened) && audioLoads.get(key) === token) toastError(error);
+            }
+            if (fromVideo && isView(opened) && audioLoads.get(key) === token) {
+                view.audioStatus = '';
+                if (!ok && error) renderMv();
             }
             resolve(ok);
         };
         const cancel = () => finish(false);
         token.cancel = cancel;
-        const timer = details.sourceUrl ? setTimeout(() => finish(false, core_text.safeUserError('音频读取超时，原有歌曲未替换。', 'RMT_MV_AUDIO_TIMEOUT')), 30000) : 0;
+        const timer = details.sourceUrl || fromVideo ? setTimeout(() => finish(false, core_text.safeUserError('音频读取超时，原有歌曲未替换。', 'RMT_MV_AUDIO_TIMEOUT')), 30000) : 0;
         token.signal?.addEventListener('abort', cancel, { once: true });
-        probe.onloadedmetadata = () => {
-            if (settled || audioLoads.get(key) !== token || token.signal?.aborted || (details.sourceUrl && !isView(opened))) { finish(false); return; }
+        const ready = () => {
+            if (settled || audioLoads.get(key) !== token || token.signal?.aborted || ((details.sourceUrl || fromVideo) && !isView(opened))) { finish(false); return; }
+            // A video container must have a real audio track (checked below)
+            // and decoded media data, not merely a readable duration header.
+            if (fromVideo && probe.readyState < 2) return;
             const duration = Number.isFinite(probe.duration) ? probe.duration : 0;
-            if (details.sourceUrl && duration <= 0) { finish(false, core_text.safeUserError('这段音频无法取得完整时长，原有歌曲未替换。', 'RMT_MV_AUDIO')); return; }
+            if ((details.sourceUrl || fromVideo) && duration <= 0) { finish(false, core_text.safeUserError('这段音频无法取得完整时长，原有歌曲未替换。', 'RMT_MV_AUDIO')); return; }
             try {
                 const updated = mv.patchRecord(target.songId, { duration }, target);
-                if (details.sourceUrl && !updated) { finish(false, core_text.safeUserError('当前歌曲已变化，音频未替换。', 'RMT_MV_AUDIO')); return; }
+                if ((details.sourceUrl || fromVideo) && !updated) { finish(false, core_text.safeUserError('当前歌曲已变化，音频未替换。', 'RMT_MV_AUDIO')); return; }
             }
             catch (error) { finish(false, error); return; }
             const old = audioBySong.get(key);
             if (isView(opened) && audioKey() === key) { stopPlayback(); player.audio = null; }
-            audioBySong.set(key, { url, name: core_text.normalizeText(name, 80), duration, target, sourceUrl: details.sourceUrl || '', streaming });
+            audioBySong.set(key, { url, name: core_text.normalizeText(name, 80), duration, target, sourceUrl: details.sourceUrl || '', streaming, fromVideo });
             if (old) { try { URL.revokeObjectURL(old.url); } catch {} }
             if (persist) void mv_media.putMedia(key, streaming ? null : blob, name, { ...details, ...(streaming ? { mediaUrl: url } : {}) }).then(ok => { if (!ok && isView(opened)) globalThis.toastr?.info?.('这台设备没能记住这首歌，下次打开需要重新选择。', '心迹回廊 · MV'); });
             finish(true);
             if (isView(opened) && audioKey() === key) renderMv();
         };
+        probe.onloadedmetadata = ready;
+        if (fromVideo) { probe.onloadeddata = ready; probe.oncanplay = ready; }
         probe.onerror = () => finish(false, core_text.safeUserError('这段音频没法播放，原有歌曲未替换。', 'RMT_MV_AUDIO'));
-        if (token.signal?.aborted) cancel(); else probe.src = url;
+        if (token.signal?.aborted) cancel();
+        else if (fromVideo) {
+            audioTried.add(key);
+            if (isView(opened) && audioKey() === key) { view.audioStatus = '正在检查视频音轨…'; renderMv(); }
+            void audio_source.inspectVideoAudioSource(blob, { signal: sourceController.signal }).then(() => {
+                if (settled || audioLoads.get(key) !== token || !isView(opened)) { finish(false); return; }
+                probe.src = url;
+            }).catch(error => {
+                if (!settled) finish(false, error?.code?.startsWith('RMT_MV_VIDEO_') ? error : core_text.safeUserError('这个视频无法读取音轨，原有歌曲未替换。', 'RMT_MV_VIDEO_AUDIO'));
+            });
+        } else probe.src = url;
     });
 }
 
@@ -90360,6 +90694,34 @@ async function importMusicLink(value) {
             if (!audioBySong.has(key)) audioTried.delete(key);
             if (timedOut && isView(opened)) view.musicLinkStatus = '音乐读取超时，原有歌曲未替换。';
             if (isView(opened)) renderMv();
+        }
+    }
+}
+
+async function removeMusic() {
+    const opened = viewTarget(), key = audioKey(), entry = audioBySong.get(key);
+    if (!entry || !isView(opened) || player.exporting || audioLoads.get(key)?.removing) return;
+    cancelMusicLink(); audioLoads.get(key)?.cancel?.();
+    const token = { removing: true };
+    audioLoads.set(key, token); audioTried.add(key);
+    view.audioStatus = '正在移除音源…'; renderMv();
+    try {
+        if (!await mv_media.deleteMedia(key)) throw core_text.safeUserError('音源未能移除，原有音源保留。', 'RMT_MV_AUDIO_REMOVE');
+        // A newer import or another song must not be cleared by this completion.
+        if (audioLoads.get(key) !== token || audioBySong.get(key) !== entry) return;
+        if (isView(opened)) {
+            const time = currentTime(); stopPlayback();
+            try { player.audio?.removeAttribute?.('src'); player.audio?.load?.(); } catch {}
+            player.audio = null; player.clockOffset = time;
+            view.musicLinkInput = ''; view.musicLinkStatus = '';
+        }
+        audioBySong.delete(key); URL.revokeObjectURL(entry.url);
+    } catch (error) {
+        if (isView(opened) && audioLoads.get(key) === token) toastError(error);
+    } finally {
+        if (audioLoads.get(key) === token) {
+            audioLoads.delete(key);
+            if (isView(opened)) { view.audioStatus = ''; renderMv(); }
         }
     }
 }
@@ -90552,6 +90914,7 @@ ${r} .rmt-mv-look textarea{width:100%;box-sizing:border-box;border:1px solid var
 .rmt-mv-rec b{position:absolute;color:#fff;font-size:72px;font-family:sans-serif}
 .rmt-mv-rec button{position:absolute;top:calc(env(safe-area-inset-top,0px) + 12px);right:12px;min-height:44px;padding:0 16px;border-radius:12px;border:0;background:rgba(255,255,255,.9);color:#000;font-size:15px}
 ${editor_ui.editorCss(r)}
+${image_editor_ui.imageEditorCss(r)}
 `;
     document.head.appendChild(style);
 }
@@ -90567,12 +90930,12 @@ function openMv(options = {}) {
     const songId = core_text.normalizeText(options.songId, 120) || view.songId;
     disposeMv();
     view.songId = songId; view.scope = mv.mvScope(context);
-    view.musicLinkInput = null; view.musicLinkStatus = '';
+    view.musicLinkInput = null; view.musicLinkStatus = ''; view.audioStatus = '';
     const record = mv.readMv(context, view.songId);
     view.castDraft = mv_cast.initialMvCast(context, record);
     const ready = record?.shots?.length && mv.normalizeSettings(record.settings).output === 'tegaki' && record.shots.some(s => mv.hasAssetImage(mv.shotImage(record, s)));
     view.sub = record?.shots?.length ? options.page === 'board' || !ready ? 'board' : 'tegaki' : 'setup';
-    view.editorTab = 'shots'; view.editorDrawer = ''; view.editorTiming = { kind: 'line', key: '' }; view.editorSection = null; view.editorUndo = []; view.editorAutoNext = true; view.stripStart = 0; view.editorPlayhead = ''; view.inspect = ''; view.groupOpen = '';
+    view.editorTab = 'shots'; view.editorDrawer = ''; view.previewOnly = false; view.editorTiming = { kind: 'line', key: '' }; view.editorSection = null; view.editorUndo = []; view.editorAutoNext = true; view.stripStart = 0; view.editorPlayhead = ''; view.inspect = ''; view.groupOpen = '';
     view.step = 1; view.draft = mv.normalizeSettings(record?.settings); view.mode = view.draft.output; view.shotId = ''; view.copied = ''; view.tapIndex = -1; view.tapUndo = [];
     overlay.openOverlay();
     renderMv();
@@ -90591,6 +90954,7 @@ function navigateMvBack() {
     if (['shot', 'sync', 'tegaki', 'finish'].includes(view.sub) || (view.sub === 'setup' && record?.shots?.length)) {
         view.sub = view.sub === 'sync' ? 'tegaki' : 'board'; renderMv(); return true;
     }
+    editorBody(false);
     void overlay.openCachedOrGenerate(core_constants.MODE.THEME_SONG, { workspaceRoute: 'themeSong' });
     return true;
 }
@@ -90623,6 +90987,7 @@ function renderMv() {
     try { renderMvUnsafe(); if (isView() && view.sub === previous) restorePagePosition(position); }
     catch (error) {
         console.error('[HeartbeatMemories] MV page failed', error);
+        editorBody(false);
         try {
             overlay.topTitle('做成 MV'); overlay.setBackVisible(true, '印象曲');
             const el = body();
@@ -90640,6 +91005,7 @@ function renderMvUnsafe() {
     let song;
     try { song = currentSong(); }
     catch (error) {
+        editorBody(false);
         overlay.topTitle('做成 MV'); overlay.setBackVisible(true, '印象曲');
         body().innerHTML = `<main class="rmt-x-page">${recoveryPanel()}<header class="rmt-x-head"><h2>做成 MV</h2><p>${esc(core_text.safeErrorSummary(error))}</p></header></main>`;
         return;
@@ -90662,8 +91028,10 @@ function page(title, back, html) {
     if (view.sub === 'setup' && view.step > 1) back = '上一步';
     overlay.topTitle(title); overlay.setBackVisible(true, back);
     const editor = view.sub === 'tegaki' || view.sub === 'sync';
-    const returnButton = view.sub !== 'board' ? btn('back', `← 返回${esc(back)}`, editor ? { cls: 'rmt-mve-back' } : {}) : '';
-    body().innerHTML = `<main class="rmt-x-page${editor ? ' rmt-mv-editor' : ''}">${returnButton}${recoveryPanel()}${html}${editor ? '' : `<details class="rmt-x-card"><summary>MV 备份</summary>${btn('export-recovery', '导出 MV 数据与暂存结果')}</details>`}</main>`;
+    const imageEditor = view.sub === 'asset-editor';
+    const returnButton = view.sub !== 'board' && !editor && !imageEditor ? btn('back', `← 返回${esc(back)}`) : '';
+    editorBody(editor || imageEditor);
+    body().innerHTML = `<main class="rmt-x-page${editor ? ' rmt-mv-editor' : imageEditor ? ' rmt-mve-image-page' : ''}">${returnButton}${recoveryPanel()}${html}${editor || imageEditor ? '' : `<details class="rmt-x-card"><summary>MV 备份</summary>${btn('export-recovery', '导出 MV 数据与暂存结果')}</details>`}</main>`;
     renderedPage = view.sub;
 }
 
@@ -90882,8 +91250,9 @@ function canvasSize(record) {
 function audioCard(song) {
     const audio = audioBySong.get(audioKey());
     const busy = !!musicLinkImport, value = view.musicLinkInput ?? audio?.sourceUrl ?? '';
-    return `<div class="rmt-mv-file"><span aria-hidden="true">♫</span><div><b>${esc(audio ? audio.name : '还没有放入歌曲')}</b><small>${audio ? `${mv.formatTime(audio.duration)} · ${audio.streaming ? '在线音轨' : '只在本机使用，不上传'}` : `为「${esc(song.title)}」选择文件或导入音乐链接`}</small></div>
-      <label>${audio ? '换一首' : '选择文件'}<input type="file" accept="audio/*,.mp3,.m4a,.wav,.ogg" data-rmt-mv-audio></label></div>
+    return `<div class="rmt-mv-file"><span aria-hidden="true">♫</span><div><b>${esc(audio ? audio.name : '选择音源')}</b><small role="status">${esc(view.audioStatus || (audio ? `${mv.formatTime(audio.duration)} · ${audio.streaming ? '在线音轨' : audio.fromVideo ? '视频音轨 · 只在本机使用' : '只在本机使用，不上传'}` : `为「${song.title}」选择音频、录屏或导入音乐链接`))}</small></div>
+      <label>${audio ? '更换文件' : '选择文件'}<input type="file" accept="audio/*,video/mp4,video/quicktime,.mp3,.m4a,.wav,.ogg,.mp4,.mov,.m4v" data-rmt-mv-audio${player.exporting ? ' disabled' : ''}></label></div>
+      ${audio ? btn('audio-remove', '移除当前音乐', { disabled: !!player.exporting || !!audioLoads.get(audioKey())?.removing }) : ''}
       <div class="rmt-mv-music-link" data-rmt-mv-link-box><label for="rmt-mv-music-link">音乐链接（试验）</label>
       <input id="rmt-mv-music-link" type="url" inputmode="url" autocomplete="off" spellcheck="false" data-rmt-mv-music-link value="${esc(value)}" placeholder="粘贴 Suno 歌曲链接或音频直链"${busy ? ' disabled' : ''}>
       ${busy ? btn('audio-link-cancel', '取消') : btn('audio-link', '导入链接', { disabled: !!player.exporting })}
@@ -90983,13 +91352,14 @@ function editorTimingPanel(song, record) {
     }).join('');
     const sectionMode = target.kind === 'section';
     const legacy = view.sub === 'sync' && sectionMode;
-    return `<div class="rmt-x-row-head"><b>定段与定句</b><span>${Object.values(taps).filter(markedTime).length} 段 · ${lines.filter(l => markedTime(lineTaps[l.key])).length} / ${lines.length} 句</span></div>
+    return `<div class="rmt-mve-panel-scroll" data-rmt-mv-scroll="timing"><div class="rmt-x-row-head"><b>定段与定句</b><span>${Object.values(taps).filter(markedTime).length} 段 · ${lines.filter(l => markedTime(lineTaps[l.key])).length} / ${lines.length} 句</span></div>
       <p class="rmt-x-note">点段名定段，点歌词定句，共用上方播放器。</p><div class="rmt-mve-sync-list">${groups}</div>
+      <details><summary>重置与细调</summary><div>${btn('tap-line-reset', '清空逐句打点')}${btn('tap-reset', '清空全部打点')}</div></details></div>
+      <footer class="rmt-mve-dock rmt-mve-timing-dock">
       <small class="rmt-x-note">${target.index < 0 ? esc(target.label) : `${sectionMode ? '正在定段' : '正在定句'} · ${esc(sectionMode ? target.label : target.section)}`}</small>
       <div class="rmt-mve-timing-actions">${legacy ? `<button type="button" class="rmt-mv-tap${target.index < 0 ? ' done' : ''}" data-rmt-mv="tap" ${!audioBySong.has(audioKey()) || target.index < 0 ? 'disabled' : ''}><b>${target.index < 0 ? '✓ 时间对好了' : esc(target.label) + '开始了'}</b></button>` : btn('editor-mark', sectionMode ? '这一段开始了' : '这一句开始了', { cls: 'rmt-x-primary', disabled: target.index < 0 || player.exporting })}${btn('editor-undo', '撤销', { disabled: !view.editorUndo.length || player.exporting })}</div>
       ${target.index < 0 ? '' : `<div class="rmt-mve-nudge">${btn('editor-nudge', '−0.1 秒', { id: '-0.1' })}<input type="number" step="0.1" min="0" inputmode="decimal" value="${Math.round(target.time * 10) / 10}" data-rmt-mv-editor-time aria-label="选中标记的开始秒数">${btn('editor-nudge', '+0.1 秒', { id: '0.1' })}</div>`}
-      <label class="rmt-mv-check"><input type="checkbox" data-rmt-mv-editor-next ${view.editorAutoNext !== false ? 'checked' : ''}>定好后自动选下一句</label>
-      <details><summary>重置与细调</summary><div>${btn('tap-line-reset', '清空逐句打点')}${btn('tap-reset', '清空全部打点')}</div></details>`;
+      <label class="rmt-mv-check"><input type="checkbox" data-rmt-mv-editor-next ${view.editorAutoNext !== false ? 'checked' : ''}>定好后自动选下一句</label></footer>`;
 }
 
 function editorSheet(song, record) {
@@ -91006,10 +91376,12 @@ function editorShotPanel(song, record, sel, selIndex) {
     const seg = (action, map, value) => Object.entries(map).map(([id, label]) => btn(action, label, { id, cls: 'rmt-x-seg' + (value === id ? ' active' : ''), extra: ` aria-pressed="${value === id}"` })).join('');
     const assetKey = sel?.shot.group && sel?.shot.diff ? `${sel.shot.group}:${sel.shot.diff}` : '';
     const asset = assetKey ? mv.assetOf(record, assetKey) : null;
-    return sel ? `<div class="rmt-x-row-head"><b>第 ${selIndex + 1} 镜</b><span>${mv.formatTime(sel.start, true)}–${mv.formatTime(sel.end, true)}</span></div><p class="rmt-x-note">${esc(sel.shot.lyric || sel.shot.plain || '')}</p>
+    const shared = asset && !mv.hasAssetImage(sel?.shot.image);
+    return sel ? `<div class="rmt-mve-panel-scroll" data-rmt-mv-scroll="shots"><div class="rmt-x-row-head"><b>第 ${selIndex + 1} 镜</b><span>${mv.formatTime(sel.start, true)}–${mv.formatTime(sel.end, true)}</span></div><p class="rmt-x-note">${esc(sel.shot.lyric || sel.shot.plain || '')}</p>
+      <div class="rmt-mve-image-actions">${btn(shared ? 'edit-asset' : 'edit-frame', '编辑图片', { id: shared ? assetKey : sel.shot.id, cls: 'rmt-x-primary', extra: ' aria-label="图片编辑 · 选单格 · 修边"' })}${uploadLabel(sel.shot.id, '换图')}</div><small class="rmt-mve-image-note">${shared ? '共享构图素材' : '当前镜图片'} · ${mv.shotImage(record, sel.shot)?.editMode === 'cutout' ? '透明图' : '保留原背景'}</small>
       <b>镜头运动</b><div class="rmt-mv-grid2">${seg('set-motion', mv.MV_MOTIONS, sel.shot.motion)}</div><b>切到下一镜</b><div class="rmt-x-segs">${seg('set-cut', mv.MV_CUTS, sel.shot.cut || 'fade')}</div>
-      ${asset && !mv.hasAssetImage(sel.shot.image) ? `<div class="rmt-mv-actions">${btn('edit-asset', '图片编辑 · 选单格 · 修边', { id: assetKey })}${btn('cutout-asset', '一键抠图', { id: assetKey })}</div>` : ''}
-      ${stageShotControls(record, sel.shot)}<details><summary>图片与生成</summary><div>${btn('draw', mv.isFrameDrawing(mv.mvScope(ctx()), view.songId, sel.shot.id) ? '正在画…' : hasImg(sel.shot) ? '重画这一镜' : '画这一镜', { id: sel.shot.id, disabled: mv.isFrameDrawing(mv.mvScope(ctx()), view.songId, sel.shot.id) })}${uploadLabel(sel.shot.id)}${sel.shot.image && asset ? btn('use-group-image', '恢复使用构图素材', { id: sel.shot.id }) : ''}${btn('go-board', '素材库与背景编辑')}</div></details>` : '';
+      ${stageShotControls(record, sel.shot)}<details><summary>图片与生成</summary><div>${shared ? btn('cutout-asset', '一键抠图', { id: assetKey }) : ''}${asset ? btn('edit-prompt-asset', '构图素材与提示词', { id: assetKey }) : ''}${btn('draw', mv.isFrameDrawing(mv.mvScope(ctx()), view.songId, sel.shot.id) ? '正在画…' : hasImg(sel.shot) ? '重画这一镜' : '画这一镜', { id: sel.shot.id, disabled: mv.isFrameDrawing(mv.mvScope(ctx()), view.songId, sel.shot.id) })}${btn('go-board', '素材库与背景编辑')}${btn('go-board', '补充分镜与图片')}</div></details></div>
+      <footer class="rmt-mve-dock">${btn('editor-step', '上一镜', { id: '-1', disabled: selIndex <= 0 || !!player.exporting })}<small>${selIndex + 1} / ${mv.shotTimeline(record, song).rows.length}</small>${btn('editor-step', '下一镜', { id: '1', disabled: selIndex + 1 >= mv.shotTimeline(record, song).rows.length || !!player.exporting })}</footer>` : '';
 }
 
 function editorStrip(rows, record) {
@@ -91031,10 +91403,11 @@ function renderTegaki(song, record) {
     // Only the active tab is constructed: folded/hidden tools do no image work.
     if (tab === 'shots') panels.shots = editorShotPanel(song, record, sel, selIndex);
     if (tab === 'timing') panels.timing = editorTimingPanel(song, record);
-    if (tab === 'look') panels.look = `<div class="rmt-x-row-head"><b>整支手书的样子</b><span>全片设置</span></div><div class="rmt-x-segs">${seg('editor-ratio', { '16:9': '横屏 16:9', '9:16': '竖屏 9:16' }, mv.normalizeSettings(record.settings).ratio)}</div>${tegakiControls(record, song)}`;
+    if (tab === 'look') panels.look = `<div class="rmt-mve-panel-scroll" data-rmt-mv-scroll="look"><div class="rmt-x-row-head"><b>整支手书的样子</b><span>全片设置</span></div><div class="rmt-x-segs">${seg('editor-ratio', { '16:9': '横屏 16:9', '9:16': '竖屏 9:16' }, mv.normalizeSettings(record.settings).ratio)}</div>${tegakiControls(record, song)}</div>`;
     const html = editor_ui.editorMarkup({ esc, btn, song, tab, panels, width: w, height: h, strip, stripNav,
+        storyLabel: mv_direction.directionOf(mv.normalizeSettings(record.settings).storyType).name, previewOnly: view.previewOnly,
         selectedLabel: `第 ${selIndex + 1} 镜 · ${rows.length} 镜`, time: mv.formatTime(currentTime(), true), seconds: currentTime(), total, totalLabel: mv.formatTime(total),
-        playing: player.playing, audio: audioBySong.has(audioKey()), exporting: player.exporting, drawer: view.editorDrawer, drawerHtml: editorSheet(song, record) });
+        playing: player.playing, audio: audioBySong.has(audioKey()), audioName: audioBySong.get(audioKey())?.name, exporting: player.exporting, drawer: view.editorDrawer, drawerHtml: editorSheet(song, record) });
     page('手书剪辑台', '素材库', html);
     bindEditorControls();
 }
@@ -91407,7 +91780,9 @@ function stopPlayback() {
 }
 
 function disposeMv() {
+    editorBody(false);
     cancelMusicLink();
+    for (const [key, token] of audioLoads) if (token.videoSource) { token.cancel?.(); audioTried.delete(key); }
     assetEditor?.dispose(); assetEditor = null; editSequence++;
     stageShadows.clear(); characterSprites.clear(); thumbnailPreviews.clear();
     motifSprites.clear(); palettes.clear();
@@ -91721,8 +92096,17 @@ function handleMvClick(event) {
             void importMusicLink(input?.value ?? view.musicLinkInput ?? '').catch(toastError);
         }
         else if (action === 'audio-link-cancel') { cancelMusicLink(); renderMv(); }
+        else if (action === 'audio-remove') { void removeMusic(); }
         else if (action === 'editor-tab') {
             if (['shots', 'timing', 'look'].includes(id)) { view.editorTab = id; if (view.sub === 'sync') view.sub = 'tegaki'; view.editorDrawer = ''; renderMv(); }
+        }
+        else if (action === 'editor-preview') { view.previewOnly = !view.previewOnly; renderMv(); }
+        else if (action === 'editor-step') {
+            if (!player.exporting && ['-1', '1'].includes(id)) {
+                const rows = mv.shotTimeline(record, currentSong()).rows;
+                const index = rows.findIndex(row => row.shot.id === view.selected) + Number(id), next = rows[index];
+                if (next) { view.selected = next.shot.id; view.stripStart = Math.floor(index / 12) * 12; seekEditor(next.start); renderMv(); }
+            }
         }
         else if (action === 'editor-drawer') {
             const previous = view.editorDrawer;
@@ -91803,6 +92187,8 @@ function handleMvClick(event) {
         else if (action === 'draw-all') void drawAll();
         else if (action === 'draw-asset') void runAsset(id);
         else if (action === 'edit-asset') void openAssetEditor(id).catch(toastError);
+        else if (action === 'edit-frame') void openAssetEditor(`shot:${id}`, false, id).catch(toastError);
+        else if (action === 'edit-prompt-asset') void openAssetEditor(id).catch(toastError);
         else if (action === 'cutout-asset') void openAssetEditor(id, true).catch(toastError);
         else if (action === 'group-layer') { const [gid, layer] = id.split(':'); mv.setGroupLayer(view.songId, gid, layer); renderMv(); }
         else if (action === 'inspect') { view.groupOpen = id; view.inspect = view.inspect === id ? '' : id; setTimeout(() => { if (isView(opened)) renderMv(); }, 0); }
@@ -92041,7 +92427,7 @@ function handleMvChange(event) {
     }
     if (input?.matches?.('[data-rmt-mv-audio]')) {
         const file = input.files?.[0];
-        if (file) { cancelMusicLink(); view.musicLinkInput = ''; void acceptAudio(file, file.name, true); }
+        if (file) { input.value = ''; cancelMusicLink(); view.musicLinkInput = ''; void acceptAudio(file, file.name, true); }
         return true;
     }
     if (input?.matches?.('[data-rmt-mv-image]')) {
@@ -92774,6 +93160,7 @@ __m_archive_archiveFile_js.ARCHIVE_FILE_FORMAT = ARCHIVE_FILE_FORMAT;
 }
 
 __init_core_contentSelection_js();
+__init_extras_mvAudioSource_js();
 __init_extras_mvCast_js();
 __init_extras_mvDirection_js();
 __init_extras_mvImageTools_js();
@@ -92784,6 +93171,7 @@ __init_ui_contentSelection_js();
 __init_ui_mvCastControls_js();
 __init_ui_mvEditorUi_js();
 __init_ui_mvImageEditor_js();
+__init_ui_mvImageEditorUi_js();
 __init_ui_mvStageCanvas_js();
 __init_core_themeSongCover_js();
 __init_archive_capacity_js();

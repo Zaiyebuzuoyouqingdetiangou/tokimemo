@@ -1,0 +1,78 @@
+TAP version 13
+# (node:12) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: one music entry changes from import to current filename and keeps one player
+ok 1 - one music entry changes from import to current filename and keeps one player
+  ---
+  duration_ms: 113.747154
+  type: 'test'
+  ...
+# Subtest: removing only the current music keeps saved frames and timing
+ok 2 - removing only the current music keeps saved frames and timing
+  ---
+  duration_ms: 102.592468
+  type: 'test'
+  ...
+# Subtest: failed music removal leaves the original track available
+ok 3 - failed music removal leaves the original track available
+  ---
+  duration_ms: 109.06833
+  type: 'test'
+  ...
+# Subtest: a new import wins over a pending removal of the previous song
+ok 4 - a new import wins over a pending removal of the previous song
+  ---
+  duration_ms: 116.750473
+  type: 'test'
+  ...
+# Subtest: current filename is escaped and does not create another HTML control
+ok 5 - current filename is escaped and does not create another HTML control
+  ---
+  duration_ms: 103.712982
+  type: 'test'
+  ...
+# Subtest: plain release version remains compatible with the uploaded changelog parser
+ok 6 - plain release version remains compatible with the uploaded changelog parser
+  ---
+  duration_ms: 96.120381
+  type: 'test'
+  ...
+# Subtest: all current version surfaces use plain 1.0.25 and changelog credit remains
+ok 7 - all current version surfaces use plain 1.0.25 and changelog credit remains
+  ---
+  duration_ms: 0.705167
+  type: 'test'
+  ...
+# Subtest: HTML has one music entry, one player, all image controls and the same export/recovery entries
+ok 8 - HTML has one music entry, one player, all image controls and the same export/recovery entries
+  ---
+  duration_ms: 2.563545
+  type: 'test'
+  ...
+# Subtest: local recording uses the one shared sound element and current filename
+ok 9 - local recording uses the one shared sound element and current filename
+  ---
+  duration_ms: 2.217191
+  type: 'test'
+  ...
+# Subtest: failed new recording retains the loaded music and timing
+ok 10 - failed new recording retains the loaded music and timing
+  ---
+  duration_ms: 0.899645
+  type: 'test'
+  ...
+# Subtest: remove switches the same entry back to import without clearing pictures or marks
+ok 11 - remove switches the same entry back to import without clearing pictures or marks
+  ---
+  duration_ms: 0.94968
+  type: 'test'
+  ...
+1..11
+# tests 11
+# suites 0
+# pass 11
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 752.33048
