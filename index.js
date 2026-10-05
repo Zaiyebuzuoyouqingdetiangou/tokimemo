@@ -1,5 +1,5 @@
-const VERSION = '1.0.23';
-const BUILD = '1.0.23-r84.240-settings-update';
+const VERSION = '1.0.24';
+const BUILD = '1.0.24-r84.241-branch-update';
 
 const SETTINGS_ID = 'heartbeat_memories_settings';
 const MENU_ID = 'heartbeat_memories_menu_item';

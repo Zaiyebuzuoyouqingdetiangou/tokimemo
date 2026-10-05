@@ -21612,7 +21612,7 @@ async function updateFromButton(button, status, options = {}) {
 }
 
 const HOMEPAGE = 'https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo';
-const FALLBACK_BRANCH = '测试';
+const FALLBACK_BRANCH = 'main';
 const CHECK_THROTTLE_MS = 30_000;
 let updateView = { status: 'idle', remoteVersion: '', remoteBranch: FALLBACK_BRANCH, remoteUrl: HOMEPAGE, message: '' };
 const updateListeners = new Set();
@@ -21720,8 +21720,6 @@ async function fetchRemoteManifestVersion(identity, fetcher) {
     const urls = [...new Set([
         remoteFileUrl(identity.remoteUrl, 'manifest.json', identity.remoteBranch, false),
         remoteFileUrl(identity.remoteUrl, 'manifest.json', identity.remoteBranch, true),
-        remoteFileUrl(HOMEPAGE, 'manifest.json', FALLBACK_BRANCH, false),
-        remoteFileUrl(HOMEPAGE, 'manifest.json', FALLBACK_BRANCH, true),
     ].filter(Boolean))];
     for (const url of urls) {
         const text = await readRemoteText(url, fetcher, 'manifest');
@@ -21763,11 +21761,10 @@ function parseHearttraceChangelog(text) {
 }
 
 async function loadHearttraceChangelog({ remoteUrl = HOMEPAGE, remoteBranch = FALLBACK_BRANCH, fetcher = globalThis.fetch.bind(globalThis), moduleUrl = import.meta.url } = {}) {
+    const branch = String(remoteBranch || FALLBACK_BRANCH).trim() || FALLBACK_BRANCH;
     const urls = [...new Set([
-        remoteFileUrl(remoteUrl, 'CHANGELOG.md', remoteBranch, false),
-        remoteFileUrl(remoteUrl, 'CHANGELOG.md', remoteBranch, true),
-        remoteFileUrl(HOMEPAGE, 'CHANGELOG.md', FALLBACK_BRANCH, false),
-        remoteFileUrl(HOMEPAGE, 'CHANGELOG.md', FALLBACK_BRANCH, true),
+        remoteFileUrl(remoteUrl, 'CHANGELOG.md', branch, false),
+        remoteFileUrl(remoteUrl, 'CHANGELOG.md', branch, true),
     ].filter(Boolean))];
     try {
         const local = new URL('../CHANGELOG.md', moduleUrl);
@@ -21839,6 +21836,15 @@ function reloadTavernPage(delayMs = 800) {
     }, delayMs);
 }
 
+function localChangesMessage(branch) {
+    return `更新失败：本地扩展目录有改动，酒馆无法 git pull。当前分支是 ${branch}，只有 main 才会用 GitHub 覆盖。请先处理本地改动后再更新。`;
+}
+
+function afterPullBlocked(branch, folder) {
+    if (branch === 'main') return overwriteFromGithub(folder);
+    throw updateError(localChangesMessage(branch));
+}
+
 async function overwriteFromGithub(folder) {
     const reinstallFn = resolveHostFn('reinstallExtension');
     if (!reinstallFn) throw updateError('更新失败：本地扩展目录有改动，酒馆无法 git pull。当前环境没有 GitHub 覆盖安装。');
@@ -21863,6 +21869,7 @@ async function applyHearttraceUpdateAndReload(options = {}) {
     }
     if (options.isBusy?.()) throw updateError('请等待生成和档案保存完成后，再更新插件。');
     const folder = ownExtensionFolder(options.moduleUrl || import.meta.url, options.origin || globalThis.location?.origin);
+    const branch = updateView.remoteBranch || FALLBACK_BRANCH;
     const updateFn = resolveHostFn('updateExtension');
     if (updateFn) {
         try {
@@ -21875,10 +21882,10 @@ async function applyHearttraceUpdateAndReload(options = {}) {
             const status = typeof response?.status === 'number' ? response.status : 0;
             let detail = '';
             try { if (typeof response?.text === 'function') detail = (await response.text()).trim(); } catch {}
-            if (looksLikeGitPullBlocked(null, status, detail)) return overwriteFromGithub(folder);
+            if (looksLikeGitPullBlocked(null, status, detail)) return afterPullBlocked(branch, folder);
             throw updateError(detail || `宿主更新接口返回 HTTP ${status || '?'}`);
         } catch (error) {
-            if (looksLikeGitPullBlocked(error, error?.status, error?.detail)) return overwriteFromGithub(folder);
+            if (looksLikeGitPullBlocked(error, error?.status, error?.detail)) return afterPullBlocked(branch, folder);
             throw error?.userMessage ? error : updateError(error?.message || '更新未完成，请检查宿主与网络。');
         }
     }
@@ -21888,7 +21895,7 @@ async function applyHearttraceUpdateAndReload(options = {}) {
         reloadTavernPage();
         return { ok: true };
     } catch (error) {
-        if (looksLikeGitPullBlocked(error, error?.status, error?.detail || error?.userMessage)) return overwriteFromGithub(folder);
+        if (looksLikeGitPullBlocked(error, error?.status, error?.detail || error?.userMessage)) return afterPullBlocked(branch, folder);
         throw error;
     }
 }
