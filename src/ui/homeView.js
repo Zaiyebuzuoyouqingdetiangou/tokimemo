@@ -11,11 +11,13 @@ import { state as runtimeState } from '../core/state.js';
 import * as workspace_ui from './workspace.js';
 import * as ui_workspaceState from './workspaceState.js';
 import * as mirrorReader from './mirrorTtsReader.js';
+import * as updater from '../core/selfUpdater.js';
+import * as requestCoordinator from '../core/requestCoordinator.js';
 
 export function homeHeadingHtml(ctx = context.getContext()) {
     const name = text.normalizeText(ctx?.name2, 120);
     const bank = repository.getImportedMemory(ctx);
-    return `<header class="rmt-home-heading"><h1>设置</h1><p>${name ? text.esc(name) + ' · ' : ''}连接、主题与生成参数</p></header>`;
+    return `<header class="rmt-home-heading"><div class="rmt-home-heading-top"><h1>设置</h1><div class="rmt-update-row" data-rmt-update-row></div></div><p>${name ? text.esc(name) + ' · ' : ''}连接、主题与生成参数</p></header>`;
 }
 
 export function showHome({ section = '' } = {}) {
@@ -29,6 +31,7 @@ export function showHome({ section = '' } = {}) {
     overlay.setRegenerateVisible(false); overlay.setManageVisible(false);
     const body = overlay.bodyEl();
     body.innerHTML = `<main class="rmt-home">${homeHeadingHtml()}<div data-rmt-home-settings></div></main>`;
+    mountHomeUpdateChrome(body.querySelector('[data-rmt-update-row]'));
     settings.mountSettings({ homeTarget: body.querySelector('[data-rmt-home-settings]') });
     mountHomeDiagnostics(body.querySelector('.rmt-home'));
     workspace_ui.arrangeSettingsHome(body);
@@ -37,6 +40,243 @@ export function showHome({ section = '' } = {}) {
         if (details) { const more = details.closest('.rmt-workspace-more'); if (more) more.open = true; details.open = true; if (section !== 'voice') settings.hydrateSettingsPanel({ memory: section === 'memory' }); details.scrollIntoView?.({ block: 'start' }); }
     }
     return true;
+}
+
+const scrollIcon = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M7 4h8a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3V7a3 3 0 0 1 3-3z"/><path d="M7 4v13a3 3 0 0 0 3 3"/><path d="M10 8h5M10 12h5"/></svg>';
+let updateSheet = null;
+let updateApplying = false;
+let updateSheetKey = false;
+let stopUpdateChrome = null;
+
+function hearttraceBusy() {
+    return !!(runtimeState.busy || requestCoordinator.hasGenerationTasks?.() || runtimeState.roomLifeRefreshPromise);
+}
+
+function closeUpdateSheet() {
+    if (!updateSheet?.isConnected || updateApplying) return;
+    updateSheet.remove();
+}
+
+function changelogBlock(section) {
+    const block = document.createElement('section');
+    block.style.cssText = 'margin:0 0 14px;';
+    const heading = document.createElement('strong');
+    heading.style.cssText = 'display:block;margin:0 0 6px;';
+    heading.textContent = section.version ? (section.title ? `${section.version} · ${section.title}` : section.version) : (section.title || '更新说明');
+    block.append(heading);
+    const list = document.createElement('ul');
+    list.style.cssText = 'margin:0;padding-left:1.2em;';
+    for (const item of section.items || []) {
+        const li = document.createElement('li');
+        li.style.cssText = 'margin:4px 0;';
+        li.textContent = item;
+        list.append(li);
+    }
+    if (!section.items?.length) {
+        const empty = document.createElement('p');
+        empty.textContent = '这一版没有写出条目。';
+        block.append(empty);
+    } else block.append(list);
+    return block;
+}
+
+function fillChangelog(body, result, full) {
+    body.replaceChildren();
+    if (!result?.ok) {
+        const fail = document.createElement('p');
+        fail.textContent = result?.message || '没能读到更新日志。';
+        body.append(fail);
+        return;
+    }
+    const current = updater.installedVersion();
+    const newer = result.sections.filter(section => section.version && updater.isNewerHearttraceVersion(section.version, current));
+    const show = full ? result.sections : (newer.length ? newer : result.sections.slice(0, 1)).slice(0, 12);
+    if (full && result.sections.length > 1) {
+        const hint = document.createElement('p');
+        hint.textContent = `共 ${result.sections.length} 个版本，向下滚动查看更早更新`;
+        body.append(hint);
+    } else if (!full && !newer.length) {
+        const note = document.createElement('p');
+        note.textContent = '更新日志里还没有比当前版本更高的条目，下面是这次读到的最新说明。';
+        body.append(note);
+    }
+    for (const section of show) body.append(changelogBlock(section));
+}
+
+function ensureUpdateSheet() {
+    if (!updateSheetKey) {
+        updateSheetKey = true;
+        document.addEventListener('keydown', event => { if (event.key === 'Escape') closeUpdateSheet(); });
+    }
+    if (updateSheet?.isConnected) return updateSheet;
+    const overlay = document.createElement('dialog');
+    overlay.setAttribute('data-rmt-update-sheet', 'true');
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:2147483647;width:100vw;height:100vh;max-width:none;max-height:none;margin:0;border:0;display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box;background:rgba(0,0,0,.45);color:inherit;';
+    const card = document.createElement('section');
+    card.setAttribute('role', 'dialog');
+    card.setAttribute('aria-label', '更新日志');
+    card.style.cssText = 'width:min(440px,100%);max-height:min(78vh,720px);display:flex;flex-direction:column;box-sizing:border-box;padding:16px;border:1px solid var(--rmt-theme-border,#dce7ec);border-radius:15px;background:var(--rmt-theme-surface-solid,#fff);color:var(--rmt-theme-text,#334155);box-shadow:0 8px 30px #0004;font:14px/1.5 sans-serif;';
+    const title = document.createElement('strong');
+    title.dataset.rmtUpdateTitle = 'true';
+    title.style.cssText = 'display:block;margin-bottom:8px;font-size:16px;';
+    const sheetBody = document.createElement('div');
+    sheetBody.dataset.rmtUpdateBody = 'true';
+    sheetBody.style.cssText = 'overflow:auto;min-height:0;flex:1 1 auto;';
+    const actions = document.createElement('div');
+    actions.style.cssText = 'display:flex;gap:8px;margin-top:12px;';
+    const close = document.createElement('button');
+    close.type = 'button';
+    close.textContent = '关闭';
+    close.className = 'rmt-btn';
+    close.style.cssText = 'flex:1;min-height:44px;';
+    const apply = document.createElement('button');
+    apply.type = 'button';
+    apply.dataset.rmtUpdateApply = 'true';
+    apply.textContent = '确认更新';
+    apply.className = 'rmt-btn';
+    apply.style.cssText = 'flex:1;min-height:44px;';
+    actions.append(close, apply);
+    card.append(title, sheetBody, actions);
+    overlay.append(card);
+    overlay.addEventListener('cancel', event => { event.preventDefault(); closeUpdateSheet(); });
+    overlay.addEventListener('pointerdown', event => { if (event.target === overlay) closeUpdateSheet(); });
+    close.addEventListener('click', event => { event.preventDefault(); event.stopPropagation(); closeUpdateSheet(); });
+    apply.addEventListener('click', event => {
+        event.preventDefault();
+        event.stopPropagation();
+        void runHearttraceUpdate(apply, close, sheetBody);
+    });
+    document.body.append(overlay);
+    try { if (typeof overlay.showModal === 'function' && !overlay.open) overlay.showModal(); }
+    catch (error) {
+        const host = document.getElementById('heartbeat_memories_overlay');
+        if (host) host.append(overlay);
+        console.warn('[Hearttrace] 更新日志没能单独盖住插件面板', error);
+    }
+    updateSheet = overlay;
+    return overlay;
+}
+
+async function runHearttraceUpdate(apply, close, sheetBody) {
+    if (updateApplying) return;
+    updateApplying = true;
+    apply.disabled = true;
+    close.disabled = true;
+    apply.textContent = '更新中…';
+    const wait = document.createElement('p');
+    wait.textContent = '正在向酒馆请求更新。完成后会刷新页面。';
+    sheetBody.prepend(wait);
+    try {
+        const result = await updater.applyHearttraceUpdateAndReload({ isBusy: hearttraceBusy });
+        if (result?.skipped) {
+            globalThis.toastr?.info?.(result.message || '当前已是最新版本，无需更新', '心迹回廊');
+            updateApplying = false;
+            apply.disabled = false;
+            close.disabled = false;
+            apply.textContent = '确认更新';
+            wait.remove();
+            return;
+        }
+        apply.textContent = '正在刷新…';
+    } catch (error) {
+        updateApplying = false;
+        apply.disabled = false;
+        close.disabled = false;
+        apply.textContent = '确认更新';
+        wait.remove();
+        globalThis.toastr?.error?.(error?.userMessage || error?.message || '更新失败，请检查宿主日志。', '心迹回廊');
+    }
+}
+
+async function openHearttraceChangelog(mode) {
+    const overlay = ensureUpdateSheet();
+    const sheetBody = overlay.querySelector('[data-rmt-update-body]');
+    const title = overlay.querySelector('[data-rmt-update-title]');
+    const apply = overlay.querySelector('[data-rmt-update-apply]');
+    const updateMode = mode === 'update';
+    apply.hidden = !updateMode;
+    apply.style.setProperty('display', updateMode ? 'block' : 'none', 'important');
+    const snap = updater.hearttraceUpdateSnapshot();
+    title.textContent = updateMode ? (snap.remoteVersion ? `发现新版本 ${snap.remoteVersion}` : '发现新版本') : '更新日志';
+    sheetBody.textContent = '正在读取更新日志…';
+    const changelog = await updater.loadHearttraceChangelog({ remoteUrl: snap.remoteUrl, remoteBranch: snap.remoteBranch });
+    if (!overlay.isConnected) return;
+    fillChangelog(sheetBody, changelog, !updateMode);
+}
+
+function paintHomeUpdate(row, snap) {
+    const badge = row.querySelector('[data-rmt-update-badge]');
+    const action = row.querySelector('[data-rmt-update-action]');
+    const version = updater.installedVersion();
+    if (badge) badge.textContent = version ? `v${version}` : '版本未知';
+    if (!action) return;
+    const checking = snap.status === 'checking' || updateApplying;
+    action.disabled = checking || snap.status === 'latest';
+    if (snap.status === 'available') {
+        action.textContent = updateApplying ? '更新中…' : '有更新';
+        action.title = '发现新版本，点击查看更新日志';
+        action.dataset.rmtUpdateMode = 'update';
+    } else if (snap.status === 'latest') {
+        action.textContent = '已是最新';
+        action.title = '当前版本已是最新';
+        action.dataset.rmtUpdateMode = 'latest';
+    } else if (checking) {
+        action.textContent = '检测中…';
+        action.title = '正在检测更新';
+        action.dataset.rmtUpdateMode = 'checking';
+    } else if (snap.status === 'unknown') {
+        action.textContent = '检测失败';
+        action.title = snap.message || '网络不好，没能完成检测。点击再试一次。';
+        action.dataset.rmtUpdateMode = 'check';
+    } else {
+        action.textContent = '检测更新';
+        action.title = '检测心迹回廊是否有新版本';
+        action.dataset.rmtUpdateMode = 'check';
+    }
+}
+
+function mountHomeUpdateChrome(row) {
+    if (!row) return;
+    stopUpdateChrome?.();
+    const badge = document.createElement('span');
+    badge.className = 'rmt-update-badge';
+    badge.dataset.rmtUpdateBadge = 'true';
+    const action = document.createElement('button');
+    action.type = 'button';
+    action.className = 'rmt-update-action';
+    action.dataset.rmtUpdateAction = 'true';
+    const log = document.createElement('button');
+    log.type = 'button';
+    log.className = 'rmt-update-log';
+    log.title = '查看更新日志';
+    log.setAttribute('aria-label', '查看更新日志');
+    log.innerHTML = scrollIcon;
+    row.replaceChildren(badge, action, log);
+    const render = () => { if (row.isConnected) paintHomeUpdate(row, updater.hearttraceUpdateSnapshot()); };
+    stopUpdateChrome = updater.subscribeHearttraceUpdate(render);
+    render();
+    action.addEventListener('click', event => {
+        event.preventDefault();
+        event.stopPropagation();
+        if (action.dataset.rmtUpdateMode === 'update') {
+            void openHearttraceChangelog('update');
+            return;
+        }
+        if (action.dataset.rmtUpdateMode !== 'check') return;
+        void (async () => {
+            const snap = await updater.checkHearttraceUpdate({ force: true });
+            if (!row.isConnected) return;
+            if (snap.status === 'available') void openHearttraceChangelog('update');
+            else if (snap.status === 'latest') globalThis.toastr?.info?.('当前已是最新', '心迹回廊');
+            else if (snap.status === 'unknown') globalThis.toastr?.warning?.(snap.message || '没能完成检测，请稍后再试。', '心迹回廊');
+        })();
+    });
+    log.addEventListener('click', event => {
+        event.preventDefault();
+        event.stopPropagation();
+        void openHearttraceChangelog('view');
+    });
+    void updater.checkHearttraceUpdate({ force: true });
 }
 
 // Keep the runtime usable when it is loaded directly without the bootstrap globals.

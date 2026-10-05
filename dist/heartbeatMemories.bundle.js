@@ -21611,12 +21611,302 @@ async function updateFromButton(button, status, options = {}) {
     finally { button.disabled = false; }
 }
 
+const HOMEPAGE = 'https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo';
+const FALLBACK_BRANCH = '测试';
+const CHECK_THROTTLE_MS = 30_000;
+let updateView = { status: 'idle', remoteVersion: '', remoteBranch: FALLBACK_BRANCH, remoteUrl: HOMEPAGE, message: '' };
+const updateListeners = new Set();
+let checkingPromise = null;
+let lastCheckAt = 0;
+let checkSequence = 0;
+
+function publishUpdate(next) {
+    updateView = { ...updateView, ...next };
+    for (const listener of updateListeners) {
+        try { listener(hearttraceUpdateSnapshot()); } catch {}
+    }
+}
+
+function hearttraceUpdateSnapshot() {
+    return { ...updateView };
+}
+
+function subscribeHearttraceUpdate(listener) {
+    updateListeners.add(listener);
+    return () => updateListeners.delete(listener);
+}
+
+function versionParts(value) {
+    const match = String(value || '').match(/(\d+)\.(\d+)(?:\.(\d+))?/);
+    return match ? [Number(match[1]), Number(match[2]), Number(match[3] || 0)] : null;
+}
+
+function revisionNumber(value) {
+    const match = String(value || '').match(/r(\d+)(?:\.(\d+))?/i);
+    return match ? Number(match[1]) * 1000 + Number(match[2] || 0) : null;
+}
+
+function compareHearttraceVersions(left, right) {
+    const a = versionParts(left);
+    const b = versionParts(right);
+    if (!a || !b) return 0;
+    for (let index = 0; index < 3; index += 1) {
+        if (a[index] !== b[index]) return a[index] - b[index];
+    }
+    const leftRevision = revisionNumber(left);
+    const rightRevision = revisionNumber(right);
+    if (leftRevision == null || rightRevision == null) return 0;
+    return leftRevision - rightRevision;
+}
+
+function isNewerHearttraceVersion(latest, current) {
+    return compareHearttraceVersions(latest, current) > 0;
+}
+
+function parseGithubRepo(remoteUrl) {
+    const match = String(remoteUrl || '').trim().match(/github\.com[/:]([^/]+)\/([^/.]+?)(?:\.git)?\/?$/i);
+    return match ? { owner: match[1], repo: match[2] } : null;
+}
+
+function remoteFileUrl(remoteUrl, fileName, branch, cdn) {
+    const parsed = parseGithubRepo(remoteUrl);
+    if (!parsed) return '';
+    const safeBranch = String(branch || '').trim() || FALLBACK_BRANCH;
+    const file = String(fileName || '').replace(/^\//, '');
+    return cdn
+        ? `https://cdn.jsdelivr.net/gh/${parsed.owner}/${parsed.repo}@${encodeURIComponent(safeBranch)}/${file}`
+        : `https://raw.githubusercontent.com/${parsed.owner}/${parsed.repo}/${encodeURIComponent(safeBranch)}/${file}`;
+}
+
+async function readRemoteText(url, fetcher, label) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 12000);
+    try {
+        const response = await fetcher(`${url}${url.includes('?') ? '&' : '?'}_=${Date.now()}`, { cache: 'no-store', signal: controller.signal });
+        if (!response.ok) return '';
+        return await response.text();
+    } catch {
+        return '';
+    } finally {
+        clearTimeout(timer);
+        void label;
+    }
+}
+
+async function tryReadInstallInfo(moduleUrl, origin) {
+    const fn = typeof globalThis.getExtensionInstallationInfo === 'function'
+        ? globalThis.getExtensionInstallationInfo
+        : globalThis.TavernHelper?.getExtensionStatus;
+    if (typeof fn !== 'function') return null;
+    try {
+        const folder = ownExtensionFolder(moduleUrl, origin);
+        return await Promise.race([
+            fn(folder),
+            new Promise(resolve => { setTimeout(() => resolve(null), 5000); }),
+        ]);
+    } catch {
+        return null;
+    }
+}
+
+function remoteIdentity(info) {
+    return {
+        remoteUrl: info?.remote_url || info?.remoteUrl || HOMEPAGE,
+        remoteBranch: String(info?.current_branch_name || info?.currentBranchName || '').trim() || FALLBACK_BRANCH,
+    };
+}
+
+async function fetchRemoteManifestVersion(identity, fetcher) {
+    const urls = [...new Set([
+        remoteFileUrl(identity.remoteUrl, 'manifest.json', identity.remoteBranch, false),
+        remoteFileUrl(identity.remoteUrl, 'manifest.json', identity.remoteBranch, true),
+        remoteFileUrl(HOMEPAGE, 'manifest.json', FALLBACK_BRANCH, false),
+        remoteFileUrl(HOMEPAGE, 'manifest.json', FALLBACK_BRANCH, true),
+    ].filter(Boolean))];
+    for (const url of urls) {
+        const text = await readRemoteText(url, fetcher, 'manifest');
+        if (!text || text.trim()[0] !== '{') continue;
+        try {
+            const version = String(JSON.parse(text)?.version || '').trim();
+            if (/^\d+\.\d+/.test(version)) return version;
+        } catch {}
+    }
+    return '';
+}
+
+const changelogHeading = /^(#{1,3})\s+(\d+\.\d+(?:\.\d+)?)(?:\s*\/\s*(r[\w.-]+))?(?:\s*[·:：\-—]\s*|\s+)?(.*)$/;
+
+function parseHearttraceChangelog(text) {
+    const sections = [];
+    let current = null;
+    const push = () => {
+        if (!current) return;
+        const items = [];
+        for (const raw of current.lines) {
+            const line = raw.replace(/^\s*>\s?/, '').trim().replace(/^[-*]\s+/, '').trim();
+            if (line && line !== '---') items.push(line);
+        }
+        if (current.version || items.length) sections.push({ version: current.version, title: current.title, items });
+    };
+    for (const line of String(text || '').split(/\r?\n/)) {
+        const match = changelogHeading.exec(line.trim());
+        if (match) {
+            push();
+            const revision = match[3] ? `-${match[3]}` : '';
+            current = { version: `${match[2]}${revision}`, title: (match[4] || '').trim(), lines: [] };
+            continue;
+        }
+        if (current) current.lines.push(line);
+    }
+    push();
+    return sections;
+}
+
+async function loadHearttraceChangelog({ remoteUrl = HOMEPAGE, remoteBranch = FALLBACK_BRANCH, fetcher = globalThis.fetch.bind(globalThis), moduleUrl = import.meta.url } = {}) {
+    const urls = [...new Set([
+        remoteFileUrl(remoteUrl, 'CHANGELOG.md', remoteBranch, false),
+        remoteFileUrl(remoteUrl, 'CHANGELOG.md', remoteBranch, true),
+        remoteFileUrl(HOMEPAGE, 'CHANGELOG.md', FALLBACK_BRANCH, false),
+        remoteFileUrl(HOMEPAGE, 'CHANGELOG.md', FALLBACK_BRANCH, true),
+    ].filter(Boolean))];
+    try {
+        const local = new URL('../CHANGELOG.md', moduleUrl);
+        local.searchParams.set('rmt-check', String(Date.now()));
+        urls.push(local.href);
+    } catch {}
+    for (const url of urls) {
+        const text = await readRemoteText(url, fetcher, 'changelog');
+        const sections = parseHearttraceChangelog(text);
+        if (sections.length) return { ok: true, sections };
+    }
+    return { ok: false, sections: [], message: '没能读到更新日志。请检查网络后再打开一次。' };
+}
+
+async function checkHearttraceUpdate({ force = false, moduleUrl = import.meta.url, origin = globalThis.location?.origin, fetcher = globalThis.fetch.bind(globalThis) } = {}) {
+    if (updateView.status === 'checking' && checkingPromise) return checkingPromise;
+    if (!force && updateView.status !== 'unknown' && Date.now() - lastCheckAt < CHECK_THROTTLE_MS) return hearttraceUpdateSnapshot();
+    const sequence = ++checkSequence;
+    lastCheckAt = Date.now();
+    publishUpdate({ status: 'checking', message: '' });
+    checkingPromise = (async () => {
+        try {
+            const info = await tryReadInstallInfo(moduleUrl, origin);
+            const identity = remoteIdentity(info);
+            const remoteVersion = await fetchRemoteManifestVersion(identity, fetcher);
+            if (sequence !== checkSequence) return hearttraceUpdateSnapshot();
+            if (!remoteVersion) {
+                publishUpdate({ status: 'unknown', message: '网络不好，没能读到远程版本。', ...identity });
+                return hearttraceUpdateSnapshot();
+            }
+            publishUpdate({
+                status: isNewerHearttraceVersion(remoteVersion, installedVersion()) ? 'available' : 'latest',
+                message: '',
+                remoteVersion,
+                ...identity,
+            });
+            return hearttraceUpdateSnapshot();
+        } catch (error) {
+            if (sequence === checkSequence) publishUpdate({ status: 'unknown', message: String(error?.userMessage || error?.message || '没能完成检测，请稍后再试。') });
+            return hearttraceUpdateSnapshot();
+        } finally {
+            checkingPromise = null;
+        }
+    })();
+    return checkingPromise;
+}
+
+function resolveHostFn(name) {
+    if (typeof globalThis[name] === 'function') return globalThis[name].bind(globalThis);
+    const helper = globalThis.TavernHelper;
+    if (typeof helper?.[name] === 'function') return helper[name].bind(helper);
+    return null;
+}
+
+function looksLikeGitPullBlocked(error, status = 0, detail = '') {
+    const text = `${detail} ${error instanceof Error ? error.message : String(error || '')}`;
+    return status === 500 || error?.status === 500 || /not valid JSON|Unexpected token|Internal Server Error|HTTP 500/i.test(text);
+}
+
+function reloadTavernPage(delayMs = 800) {
+    globalThis.setTimeout(() => {
+        try {
+            if (typeof globalThis.triggerSlash === 'function') {
+                globalThis.triggerSlash('/reload-page');
+                return;
+            }
+        } catch {}
+        try { globalThis.location?.reload(); } catch {}
+    }, delayMs);
+}
+
+async function overwriteFromGithub(folder) {
+    const reinstallFn = resolveHostFn('reinstallExtension');
+    if (!reinstallFn) throw updateError('更新失败：本地扩展目录有改动，酒馆无法 git pull。当前环境没有 GitHub 覆盖安装。');
+    globalThis.toastr?.info?.('git pull 被本地改动挡住了，改为用 GitHub 版本覆盖…', '心迹回廊');
+    const response = await reinstallFn(folder);
+    if (response?.ok === true) {
+        globalThis.toastr?.success?.('已强制覆盖为 GitHub 版本，正在刷新页面…', '心迹回廊');
+        reloadTavernPage();
+        return { ok: true, overwritten: true };
+    }
+    const status = typeof response?.status === 'number' ? response.status : 0;
+    let detail = '';
+    try { if (typeof response?.text === 'function') detail = (await response.text()).trim(); } catch {}
+    throw updateError(detail || (status ? `GitHub 覆盖失败 (HTTP ${status})` : 'GitHub 覆盖失败'));
+}
+
+async function applyHearttraceUpdateAndReload(options = {}) {
+    const check = await checkHearttraceUpdate({ ...options, force: true });
+    if (check.status !== 'available') {
+        publishUpdate({ status: check.status === 'unknown' ? 'unknown' : 'latest' });
+        return { ok: true, skipped: true, message: check.status === 'unknown' ? (check.message || '没能确认远程版本，没有发送更新。') : '当前已是最新版本，无需更新' };
+    }
+    if (options.isBusy?.()) throw updateError('请等待生成和档案保存完成后，再更新插件。');
+    const folder = ownExtensionFolder(options.moduleUrl || import.meta.url, options.origin || globalThis.location?.origin);
+    const updateFn = resolveHostFn('updateExtension');
+    if (updateFn) {
+        try {
+            const response = await updateFn(folder);
+            if (response?.ok === true) {
+                globalThis.toastr?.success?.('心迹回廊已更新，正在刷新页面…', '心迹回廊');
+                reloadTavernPage();
+                return { ok: true };
+            }
+            const status = typeof response?.status === 'number' ? response.status : 0;
+            let detail = '';
+            try { if (typeof response?.text === 'function') detail = (await response.text()).trim(); } catch {}
+            if (looksLikeGitPullBlocked(null, status, detail)) return overwriteFromGithub(folder);
+            throw updateError(detail || `宿主更新接口返回 HTTP ${status || '?'}`);
+        } catch (error) {
+            if (looksLikeGitPullBlocked(error, error?.status, error?.detail)) return overwriteFromGithub(folder);
+            throw error?.userMessage ? error : updateError(error?.message || '更新未完成，请检查宿主与网络。');
+        }
+    }
+    try {
+        const result = await updateSelf(options);
+        globalThis.toastr?.success?.(`${result?.message || '心迹回廊已更新'} 正在刷新页面…`, '心迹回廊');
+        reloadTavernPage();
+        return { ok: true };
+    } catch (error) {
+        if (looksLikeGitPullBlocked(error, error?.status, error?.detail || error?.userMessage)) return overwriteFromGithub(folder);
+        throw error;
+    }
+}
+
 __m_core_selfUpdater_js.updateSelf = updateSelf;
 __m_core_selfUpdater_js.updateFromButton = updateFromButton;
 __m_core_selfUpdater_js.ownExtensionFolder = ownExtensionFolder;
 __m_core_selfUpdater_js.installedVersion = installedVersion;
 __m_core_selfUpdater_js.isProjectRemote = isProjectRemote;
 __m_core_selfUpdater_js.INSTALLED_BUILD = INSTALLED_BUILD;
+__m_core_selfUpdater_js.hearttraceUpdateSnapshot = hearttraceUpdateSnapshot;
+__m_core_selfUpdater_js.subscribeHearttraceUpdate = subscribeHearttraceUpdate;
+__m_core_selfUpdater_js.compareHearttraceVersions = compareHearttraceVersions;
+__m_core_selfUpdater_js.isNewerHearttraceVersion = isNewerHearttraceVersion;
+__m_core_selfUpdater_js.parseHearttraceChangelog = parseHearttraceChangelog;
+__m_core_selfUpdater_js.loadHearttraceChangelog = loadHearttraceChangelog;
+__m_core_selfUpdater_js.checkHearttraceUpdate = checkHearttraceUpdate;
+__m_core_selfUpdater_js.applyHearttraceUpdateAndReload = applyHearttraceUpdateAndReload;
 }
 
 function __init_core_state_js() {
@@ -73247,6 +73537,8 @@ const phone = __m_ui_phoneView_js;
 const workspace_ui = __m_ui_workspace_js;
 const ui_workspaceState = __m_ui_workspaceState_js;
 const mirrorReader = __m_ui_mirrorTtsReader_js;
+const updater = __m_core_selfUpdater_js;
+const requestCoordinator = __m_core_requestCoordinator_js;
 const runtimeState = __m_core_state_js.state;
 
 
@@ -73261,7 +73553,7 @@ const runtimeState = __m_core_state_js.state;
 function homeHeadingHtml(ctx = context.getContext()) {
     const name = text.normalizeText(ctx?.name2, 120);
     const bank = repository.getImportedMemory(ctx);
-    return `<header class="rmt-home-heading"><h1>设置</h1><p>${name ? text.esc(name) + ' · ' : ''}连接、主题与生成参数</p></header>`;
+    return `<header class="rmt-home-heading"><div class="rmt-home-heading-top"><h1>设置</h1><div class="rmt-update-row" data-rmt-update-row></div></div><p>${name ? text.esc(name) + ' · ' : ''}连接、主题与生成参数</p></header>`;
 }
 
 function showHome({ section = '' } = {}) {
@@ -73275,6 +73567,7 @@ function showHome({ section = '' } = {}) {
     overlay.setRegenerateVisible(false); overlay.setManageVisible(false);
     const body = overlay.bodyEl();
     body.innerHTML = `<main class="rmt-home">${homeHeadingHtml()}<div data-rmt-home-settings></div></main>`;
+    mountHomeUpdateChrome(body.querySelector('[data-rmt-update-row]'));
     settings.mountSettings({ homeTarget: body.querySelector('[data-rmt-home-settings]') });
     mountHomeDiagnostics(body.querySelector('.rmt-home'));
     workspace_ui.arrangeSettingsHome(body);
@@ -73368,6 +73661,243 @@ function mountHomeDiagnostics(target) {
     report.appendChild(output); body.appendChild(actions); body.appendChild(status); body.appendChild(report);
     panel.appendChild(heading); panel.appendChild(style); panel.appendChild(body); target.appendChild(panel);
     return true;
+}
+
+const scrollIcon = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M7 4h8a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3V7a3 3 0 0 1 3-3z"/><path d="M7 4v13a3 3 0 0 0 3 3"/><path d="M10 8h5M10 12h5"/></svg>';
+let updateSheet = null;
+let updateApplying = false;
+let updateSheetKey = false;
+let stopUpdateChrome = null;
+
+function hearttraceBusy() {
+    return !!(runtimeState.busy || requestCoordinator.hasGenerationTasks?.() || runtimeState.roomLifeRefreshPromise);
+}
+
+function closeUpdateSheet() {
+    if (!updateSheet?.isConnected || updateApplying) return;
+    updateSheet.remove();
+}
+
+function changelogBlock(section) {
+    const block = document.createElement('section');
+    block.style.cssText = 'margin:0 0 14px;';
+    const heading = document.createElement('strong');
+    heading.style.cssText = 'display:block;margin:0 0 6px;';
+    heading.textContent = section.version ? (section.title ? `${section.version} · ${section.title}` : section.version) : (section.title || '更新说明');
+    block.append(heading);
+    const list = document.createElement('ul');
+    list.style.cssText = 'margin:0;padding-left:1.2em;';
+    for (const item of section.items || []) {
+        const li = document.createElement('li');
+        li.style.cssText = 'margin:4px 0;';
+        li.textContent = item;
+        list.append(li);
+    }
+    if (!section.items?.length) {
+        const empty = document.createElement('p');
+        empty.textContent = '这一版没有写出条目。';
+        block.append(empty);
+    } else block.append(list);
+    return block;
+}
+
+function fillChangelog(body, result, full) {
+    body.replaceChildren();
+    if (!result?.ok) {
+        const fail = document.createElement('p');
+        fail.textContent = result?.message || '没能读到更新日志。';
+        body.append(fail);
+        return;
+    }
+    const current = updater.installedVersion();
+    const newer = result.sections.filter(section => section.version && updater.isNewerHearttraceVersion(section.version, current));
+    const show = full ? result.sections : (newer.length ? newer : result.sections.slice(0, 1)).slice(0, 12);
+    if (full && result.sections.length > 1) {
+        const hint = document.createElement('p');
+        hint.textContent = `共 ${result.sections.length} 个版本，向下滚动查看更早更新`;
+        body.append(hint);
+    } else if (!full && !newer.length) {
+        const note = document.createElement('p');
+        note.textContent = '更新日志里还没有比当前版本更高的条目，下面是这次读到的最新说明。';
+        body.append(note);
+    }
+    for (const section of show) body.append(changelogBlock(section));
+}
+
+function ensureUpdateSheet() {
+    if (!updateSheetKey) {
+        updateSheetKey = true;
+        document.addEventListener('keydown', event => { if (event.key === 'Escape') closeUpdateSheet(); });
+    }
+    if (updateSheet?.isConnected) return updateSheet;
+    const overlay = document.createElement('dialog');
+    overlay.setAttribute('data-rmt-update-sheet', 'true');
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:2147483647;width:100vw;height:100vh;max-width:none;max-height:none;margin:0;border:0;display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box;background:rgba(0,0,0,.45);color:inherit;';
+    const card = document.createElement('section');
+    card.setAttribute('role', 'dialog');
+    card.setAttribute('aria-label', '更新日志');
+    card.style.cssText = 'width:min(440px,100%);max-height:min(78vh,720px);display:flex;flex-direction:column;box-sizing:border-box;padding:16px;border:1px solid var(--rmt-theme-border,#dce7ec);border-radius:15px;background:var(--rmt-theme-surface-solid,#fff);color:var(--rmt-theme-text,#334155);box-shadow:0 8px 30px #0004;font:14px/1.5 sans-serif;';
+    const title = document.createElement('strong');
+    title.dataset.rmtUpdateTitle = 'true';
+    title.style.cssText = 'display:block;margin-bottom:8px;font-size:16px;';
+    const sheetBody = document.createElement('div');
+    sheetBody.dataset.rmtUpdateBody = 'true';
+    sheetBody.style.cssText = 'overflow:auto;min-height:0;flex:1 1 auto;';
+    const actions = document.createElement('div');
+    actions.style.cssText = 'display:flex;gap:8px;margin-top:12px;';
+    const close = document.createElement('button');
+    close.type = 'button';
+    close.textContent = '关闭';
+    close.className = 'rmt-btn';
+    close.style.cssText = 'flex:1;min-height:44px;';
+    const apply = document.createElement('button');
+    apply.type = 'button';
+    apply.dataset.rmtUpdateApply = 'true';
+    apply.textContent = '确认更新';
+    apply.className = 'rmt-btn';
+    apply.style.cssText = 'flex:1;min-height:44px;';
+    actions.append(close, apply);
+    card.append(title, sheetBody, actions);
+    overlay.append(card);
+    overlay.addEventListener('cancel', event => { event.preventDefault(); closeUpdateSheet(); });
+    overlay.addEventListener('pointerdown', event => { if (event.target === overlay) closeUpdateSheet(); });
+    close.addEventListener('click', event => { event.preventDefault(); event.stopPropagation(); closeUpdateSheet(); });
+    apply.addEventListener('click', event => {
+        event.preventDefault();
+        event.stopPropagation();
+        void runHearttraceUpdate(apply, close, sheetBody);
+    });
+    document.body.append(overlay);
+    try { if (typeof overlay.showModal === 'function' && !overlay.open) overlay.showModal(); }
+    catch (error) {
+        const host = document.getElementById('heartbeat_memories_overlay');
+        if (host) host.append(overlay);
+        console.warn('[Hearttrace] 更新日志没能单独盖住插件面板', error);
+    }
+    updateSheet = overlay;
+    return overlay;
+}
+
+async function runHearttraceUpdate(apply, close, sheetBody) {
+    if (updateApplying) return;
+    updateApplying = true;
+    apply.disabled = true;
+    close.disabled = true;
+    apply.textContent = '更新中…';
+    const wait = document.createElement('p');
+    wait.textContent = '正在向酒馆请求更新。完成后会刷新页面。';
+    sheetBody.prepend(wait);
+    try {
+        const result = await updater.applyHearttraceUpdateAndReload({ isBusy: hearttraceBusy });
+        if (result?.skipped) {
+            globalThis.toastr?.info?.(result.message || '当前已是最新版本，无需更新', '心迹回廊');
+            updateApplying = false;
+            apply.disabled = false;
+            close.disabled = false;
+            apply.textContent = '确认更新';
+            wait.remove();
+            return;
+        }
+        apply.textContent = '正在刷新…';
+    } catch (error) {
+        updateApplying = false;
+        apply.disabled = false;
+        close.disabled = false;
+        apply.textContent = '确认更新';
+        wait.remove();
+        globalThis.toastr?.error?.(error?.userMessage || error?.message || '更新失败，请检查宿主日志。', '心迹回廊');
+    }
+}
+
+async function openHearttraceChangelog(mode) {
+    const overlay = ensureUpdateSheet();
+    const sheetBody = overlay.querySelector('[data-rmt-update-body]');
+    const title = overlay.querySelector('[data-rmt-update-title]');
+    const apply = overlay.querySelector('[data-rmt-update-apply]');
+    const updateMode = mode === 'update';
+    apply.hidden = !updateMode;
+    apply.style.setProperty('display', updateMode ? 'block' : 'none', 'important');
+    const snap = updater.hearttraceUpdateSnapshot();
+    title.textContent = updateMode ? (snap.remoteVersion ? `发现新版本 ${snap.remoteVersion}` : '发现新版本') : '更新日志';
+    sheetBody.textContent = '正在读取更新日志…';
+    const changelog = await updater.loadHearttraceChangelog({ remoteUrl: snap.remoteUrl, remoteBranch: snap.remoteBranch });
+    if (!overlay.isConnected) return;
+    fillChangelog(sheetBody, changelog, !updateMode);
+}
+
+function paintHomeUpdate(row, snap) {
+    const badge = row.querySelector('[data-rmt-update-badge]');
+    const action = row.querySelector('[data-rmt-update-action]');
+    const version = updater.installedVersion();
+    if (badge) badge.textContent = version ? `v${version}` : '版本未知';
+    if (!action) return;
+    const checking = snap.status === 'checking' || updateApplying;
+    action.disabled = checking || snap.status === 'latest';
+    if (snap.status === 'available') {
+        action.textContent = updateApplying ? '更新中…' : '有更新';
+        action.title = '发现新版本，点击查看更新日志';
+        action.dataset.rmtUpdateMode = 'update';
+    } else if (snap.status === 'latest') {
+        action.textContent = '已是最新';
+        action.title = '当前版本已是最新';
+        action.dataset.rmtUpdateMode = 'latest';
+    } else if (checking) {
+        action.textContent = '检测中…';
+        action.title = '正在检测更新';
+        action.dataset.rmtUpdateMode = 'checking';
+    } else if (snap.status === 'unknown') {
+        action.textContent = '检测失败';
+        action.title = snap.message || '网络不好，没能完成检测。点击再试一次。';
+        action.dataset.rmtUpdateMode = 'check';
+    } else {
+        action.textContent = '检测更新';
+        action.title = '检测心迹回廊是否有新版本';
+        action.dataset.rmtUpdateMode = 'check';
+    }
+}
+
+function mountHomeUpdateChrome(row) {
+    if (!row) return;
+    stopUpdateChrome?.();
+    const badge = document.createElement('span');
+    badge.className = 'rmt-update-badge';
+    badge.dataset.rmtUpdateBadge = 'true';
+    const action = document.createElement('button');
+    action.type = 'button';
+    action.className = 'rmt-update-action';
+    action.dataset.rmtUpdateAction = 'true';
+    const log = document.createElement('button');
+    log.type = 'button';
+    log.className = 'rmt-update-log';
+    log.title = '查看更新日志';
+    log.setAttribute('aria-label', '查看更新日志');
+    log.innerHTML = scrollIcon;
+    row.replaceChildren(badge, action, log);
+    const render = () => { if (row.isConnected) paintHomeUpdate(row, updater.hearttraceUpdateSnapshot()); };
+    stopUpdateChrome = updater.subscribeHearttraceUpdate(render);
+    render();
+    action.addEventListener('click', event => {
+        event.preventDefault();
+        event.stopPropagation();
+        if (action.dataset.rmtUpdateMode === 'update') {
+            void openHearttraceChangelog('update');
+            return;
+        }
+        if (action.dataset.rmtUpdateMode !== 'check') return;
+        void (async () => {
+            const snap = await updater.checkHearttraceUpdate({ force: true });
+            if (!row.isConnected) return;
+            if (snap.status === 'available') void openHearttraceChangelog('update');
+            else if (snap.status === 'latest') globalThis.toastr?.info?.('当前已是最新', '心迹回廊');
+            else if (snap.status === 'unknown') globalThis.toastr?.warning?.(snap.message || '没能完成检测，请稍后再试。', '心迹回廊');
+        })();
+    });
+    log.addEventListener('click', event => {
+        event.preventDefault();
+        event.stopPropagation();
+        void openHearttraceChangelog('view');
+    });
+    void updater.checkHearttraceUpdate({ force: true });
 }
 
 __m_ui_homeView_js.homeHeadingHtml = homeHeadingHtml;
@@ -82268,11 +82798,6 @@ function renderSettingsPanelMarkup(panel) {
           <button type="button" class="menu_button rmt-settings-wide" data-rmt-auto-memory-restore hidden>关闭自动留忆</button>
           </div>
         </details>
-        <div class="rmt-settings-card">
-          <small data-rmt-installed-version>当前版本：${core_text.esc(core_selfUpdater.installedVersion())}</small>
-          <button type="button" class="menu_button rmt-settings-wide" data-rmt-self-update>检查并更新插件</button>
-          <small data-rmt-self-update-status role="status">检查当前安装分支 · 更新后刷新页面</small>
-        </div>
         <details class="rmt-settings-card rmt-api-box" data-rmt-settings-section="memory">
           <summary class="rmt-settings-card-head"><span>MEM</span><div><b>记忆来源</b><small>当前角色 · 当前聊天</small></div></summary>
           <div class="rmt-settings-section-body">
@@ -86080,7 +86605,14 @@ ${r} .rmt-calendar-quick-copy>span{display:none}
 ${r} .rmt-calendar-quick-copy>small{font-size:13px!important;line-height:1.6!important}
 ${r} .rmt-workspace-browse{display:block;margin:20px auto 8px;min-height:46px;font-size:16px}
 ${r} .rmt-home-heading{padding:0 0 16px!important}
+${r} .rmt-home-heading-top{display:flex!important;align-items:center!important;flex-wrap:wrap!important;gap:8px 10px!important;min-width:0}
 ${r} .rmt-home-heading h1{font-size:24px!important;margin:0 0 6px!important}
+${r} .rmt-home-heading-top h1{margin:0!important}
+${r} .rmt-update-row{display:flex!important;align-items:center!important;flex-wrap:wrap!important;gap:6px!important}
+${r} .rmt-update-badge{font-size:12px!important;color:var(--rmt-theme-muted)!important;white-space:nowrap}
+${r} .rmt-update-action,${r} .rmt-update-log{border:1px solid var(--rmt-theme-border)!important;background:var(--rmt-theme-surface-solid)!important;color:inherit!important;border-radius:999px!important;min-height:28px!important;padding:2px 10px!important;font:inherit!important;font-size:12px!important;line-height:1.2!important;cursor:pointer}
+${r} .rmt-update-action:disabled{opacity:.72!important}
+${r} .rmt-update-log{width:32px!important;height:32px!important;padding:0!important;display:inline-flex!important;align-items:center!important;justify-content:center!important}
 ${r} .rmt-home-heading p{font-size:14px!important;margin:0!important;color:var(--rmt-theme-muted)!important}
 ${r} .rmt-settings-content{gap:14px!important}
 ${r} .rmt-settings-card-head{min-height:68px!important;padding:14px 16px!important}
