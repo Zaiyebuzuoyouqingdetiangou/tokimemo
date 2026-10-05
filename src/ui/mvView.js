@@ -23,6 +23,7 @@ import * as image_editor from './mvImageEditor.js';
 import * as image_editor_ui from './mvImageEditorUi.js';
 import * as image_tools from '../extras/mvImageTools.js';
 import * as editor_ui from './mvEditorUi.js';
+import * as editor_dialog from './mvEditorDialog.js';
 
 const esc = core_text.esc;
 export const MV_MODE = 'songMv';
@@ -45,8 +46,17 @@ let imageRefreshTimer = 0;
 let imageLayoutPending = false;
 let layoutBody = null;
 let layoutBodyObserver = null;
+let editorDialog = null;
+
+function closeEditorDrawer() {
+    const previous = view.editorDrawer;
+    editorDialog?.dispose(); editorDialog = null;
+    view.editorDrawer = ''; view.clearPendingIds = null; renderMv();
+    body()?.querySelector?.(`[data-rmt-mv="editor-drawer"][data-rmt-mv-id="${previous}"]`)?.focus?.({ preventScroll: true });
+}
 
 function editorBody(enabled) {
+    if (!enabled) { editorDialog?.dispose(); editorDialog = null; }
     const el = body();
     if (layoutBody && (layoutBody !== el || !enabled)) {
         layoutBody.classList?.remove('rmt-mve-body');
@@ -60,6 +70,7 @@ function editorBody(enabled) {
         // thumbnail loads or brush strokes. Other modules keep their own scroll.
         layoutBodyObserver = new globalThis.MutationObserver(() => {
             if (!el.querySelector('.rmt-mve-layout-scope,[data-rmt-mv-editor-host]')) {
+                editorDialog?.dispose(); editorDialog = null;
                 el.classList.remove('rmt-mve-body');
                 layoutBodyObserver?.disconnect(); layoutBodyObserver = null; layoutBody = null;
             }
@@ -619,6 +630,7 @@ export function openMv(options = {}) {
     disposeMv();
     view.songId = songId; view.scope = mv.mvScope(context);
     view.musicLinkInput = null; view.musicLinkStatus = ''; view.audioStatus = '';
+    view.clearPendingIds = null;
     const record = mv.readMv(context, view.songId);
     view.castDraft = mv_cast.initialMvCast(context, record);
     const ready = record?.shots?.length && mv.normalizeSettings(record.settings).output === 'tegaki' && record.shots.some(s => mv.hasAssetImage(mv.shotImage(record, s)));
@@ -633,6 +645,7 @@ export function openMv(options = {}) {
 
 export function navigateMvBack() {
     if (runtimeState.activeMode !== MV_MODE) return false;
+    if (view.editorDrawer) { closeEditorDrawer(); return true; }
     stopExport();
     stopPlayback();
     if (view.sub === 'asset-editor') { closeAssetEditor(); return true; }
@@ -712,6 +725,7 @@ function renderMvUnsafe() {
 }
 
 function page(title, back, html) {
+    editorDialog?.dispose(); editorDialog = null;
     if (navigation.at(-1)?.sub === 'shot') back = '镜头详情';
     if (view.sub === 'setup' && view.step > 1) back = '上一步';
     overlay.topTitle(title); overlay.setBackVisible(true, back);
@@ -726,8 +740,8 @@ function page(title, back, html) {
 function recoveryPanel(compact = false) {
     const rows = mv.pendingMv(view.scope);
     if (!rows.length) return '';
-    const content = `${rows.map(row => `<div><p class="rmt-x-note">${esc(row.song?.title || 'MV')} · ${esc(row.reason || '等待保存')}</p>${btn('retry-save', '仅重试保存', { id: row.id })}</div>`).join('')}${btn('export-recovery', '导出暂存结果')}`;
-    return compact ? `<details class="rmt-mve-recovery"><summary>${rows.length} 份结果待保存</summary>${content}</details>` : `<section class="rmt-x-card"><b>有 ${rows.length} 份 MV 结果待保存</b>${content}</section>`;
+    const content = `${rows.map(row => `<div><p class="rmt-x-note">${esc(row.song?.title || 'MV')} · ${esc(row.reason || '等待保存')}</p><div class="rmt-mve-recovery-actions">${btn('retry-save', '仅重试保存', { id: row.id })}${btn('clear-pending', '清除', { id: row.id })}</div></div>`).join('')}<div class="rmt-mve-recovery-actions">${btn('export-recovery', '导出暂存结果')}${btn('clear-pending', '全部清除', { id: 'all' })}</div>${view.clearPendingIds?.length ? `<div class="rmt-mve-clear-confirm" role="alert"><p>清除这 ${view.clearPendingIds.length} 份暂存结果？已保存的分镜和图片会保留。</p><div class="rmt-mve-recovery-actions">${btn('confirm-clear-pending', '确认清除')}${btn('cancel-clear-pending', '取消')}</div></div>` : ''}`;
+    return compact || view.sub === 'board' ? `<details class="rmt-mve-recovery"${view.clearPendingIds?.length ? ' open' : ''}><summary>${rows.length} 份结果待保存</summary>${content}</details>` : `<section class="rmt-x-card"><b>有 ${rows.length} 份 MV 结果待保存</b>${content}</section>`;
 }
 function reportResult(result, success) {
     if (result?.pending) globalThis.toastr?.info?.(result.message, '心迹回廊 · MV');
@@ -1098,6 +1112,7 @@ function renderTegaki(song, record) {
         selectedLabel: `第 ${selIndex + 1} 镜 · ${rows.length} 镜`, time: mv.formatTime(currentTime(), true), seconds: currentTime(), total, totalLabel: mv.formatTime(total),
         playing: player.playing, audio: audioBySong.has(audioKey()), audioName: audioBySong.get(audioKey())?.name, exporting: player.exporting, drawer: view.editorDrawer, drawerHtml: editorSheet(song, record) });
     page('手书剪辑台', '素材库', html);
+    editorDialog = editor_dialog.mountEditorDialog(body(), closeEditorDrawer);
     bindEditorControls();
 }
 
@@ -1110,36 +1125,37 @@ function seekEditor(time) {
 }
 
 function bindEditorControls() {
-    const root = body()?.querySelector?.('.rmt-mv-editor');
-    if (!root?.addEventListener) return;
-    root.addEventListener('input', event => {
-        if (event.target.matches?.('[data-rmt-mv-seek]') && !player.exporting) seekEditor(event.target.value);
-        if (event.target.matches?.('[data-rmt-mv-music-link]')) view.musicLinkInput = event.target.value;
-    });
-    root.addEventListener('keydown', event => {
-        if (event.key === 'Enter' && event.target.matches?.('[data-rmt-mv-music-link]')) {
-            event.preventDefault();
-            if (!musicLinkImport && !player.exporting) void importMusicLink(event.target.value).catch(toastError);
-            return;
-        }
-        const sheet = root.querySelector('.rmt-mve-sheet');
-        if (event.key === 'Escape' && view.editorDrawer) {
-            event.preventDefault(); event.stopPropagation(); const previous = view.editorDrawer; view.editorDrawer = ''; renderMv();
-            body()?.querySelector?.(`[data-rmt-mv="editor-drawer"][data-rmt-mv-id="${previous}"]`)?.focus?.(); return;
-        }
-        if (sheet && event.key === 'Tab') {
-            const nodes = [...sheet.querySelectorAll('button:not([disabled]),input:not([disabled]),select:not([disabled]),a[href]')];
-            const first = nodes[0], last = nodes.at(-1);
-            if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
-            else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
-        }
-        const tab = event.target.closest?.('[data-rmt-mv="editor-tab"]');
-        if (tab && ['ArrowLeft', 'ArrowRight'].includes(event.key)) {
-            event.preventDefault(); const ids = ['shots', 'timing', 'look'], next = ids[(ids.indexOf(tab.dataset.rmtMvId) + (event.key === 'ArrowRight' ? 1 : 2)) % 3];
-            view.editorTab = next; if (view.sub === 'sync') view.sub = 'tegaki'; renderMv();
-            body()?.querySelector?.(`[data-rmt-mv="editor-tab"][data-rmt-mv-id="${next}"]`)?.focus();
-        }
-    });
+    const roots = [body()?.querySelector?.('.rmt-mv-editor'), editorDialog?.element].filter(Boolean);
+    for (const root of roots) {
+        if (!root.addEventListener) continue;
+        root.addEventListener('input', event => {
+            if (event.target.matches?.('[data-rmt-mv-seek]') && !player.exporting) seekEditor(event.target.value);
+            if (event.target.matches?.('[data-rmt-mv-music-link]')) view.musicLinkInput = event.target.value;
+        });
+        root.addEventListener('keydown', event => {
+            if (event.key === 'Enter' && event.target.matches?.('[data-rmt-mv-music-link]')) {
+                event.preventDefault();
+                if (!musicLinkImport && !player.exporting) void importMusicLink(event.target.value).catch(toastError);
+                return;
+            }
+            const sheet = root.querySelector('.rmt-mve-sheet');
+            if (event.key === 'Escape' && view.editorDrawer) {
+                event.preventDefault(); event.stopPropagation(); closeEditorDrawer(); return;
+            }
+            if (sheet && event.key === 'Tab') {
+                const nodes = [...sheet.querySelectorAll('button:not([disabled]),input:not([disabled]),select:not([disabled]),a[href]')];
+                const first = nodes[0], last = nodes.at(-1);
+                if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+                else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+            }
+            const tab = event.target.closest?.('[data-rmt-mv="editor-tab"]');
+            if (tab && ['ArrowLeft', 'ArrowRight'].includes(event.key)) {
+                event.preventDefault(); const ids = ['shots', 'timing', 'look'], next = ids[(ids.indexOf(tab.dataset.rmtMvId) + (event.key === 'ArrowRight' ? 1 : 2)) % 3];
+                view.editorTab = next; if (view.sub === 'sync') view.sub = 'tegaki'; renderMv();
+                body()?.querySelector?.(`[data-rmt-mv="editor-tab"][data-rmt-mv-id="${next}"]`)?.focus();
+            }
+        });
+    }
 }
 
 // ---------- 对时间 ----------
@@ -1775,13 +1791,15 @@ export function handleMvClick(event) {
     const id = el.dataset.rmtMvId || '';
     if (action === 'open') { openMv({ songId: id }); return true; }
     if (runtimeState.activeMode !== MV_MODE) return true;
+    // Closing must remain available even if this song/archive became unreadable.
+    if (action === 'editor-drawer' && !['export', 'more', 'audio'].includes(id)) { closeEditorDrawer(); return true; }
     const d = view.draft ||= mv.normalizeSettings(currentRecord()?.settings);
     const record = currentRecord();
     const opened = viewTarget();
     try {
         if (action === 'back') navigateMvBack();
         else if (action === 'audio-link') {
-            const input = body()?.querySelector?.('[data-rmt-mv-music-link]');
+            const input = (editorDialog?.element || body())?.querySelector?.('[data-rmt-mv-music-link]');
             void importMusicLink(input?.value ?? view.musicLinkInput ?? '').catch(toastError);
         }
         else if (action === 'audio-link-cancel') { cancelMusicLink(); renderMv(); }
@@ -1798,9 +1816,8 @@ export function handleMvClick(event) {
             }
         }
         else if (action === 'editor-drawer') {
-            const previous = view.editorDrawer;
-            view.editorDrawer = ['export', 'more', 'audio'].includes(id) ? id : ''; renderMv();
-            body()?.querySelector?.(view.editorDrawer ? '.rmt-mve-sheet button' : `[data-rmt-mv="editor-drawer"][data-rmt-mv-id="${previous}"]`)?.focus?.();
+            view.editorDrawer = id; view.clearPendingIds = null; renderMv();
+            (editorDialog?.element || body())?.querySelector?.('.rmt-mve-sheet button')?.focus?.({ preventScroll: true });
         }
         else if (action === 'editor-strip') { const start = Number(id); if (Number.isInteger(start) && start >= 0 && start < record.shots.length) { view.stripStart = start; renderMv(); } }
         else if (action === 'editor-section') { const index = Number(id); if (Number.isInteger(index) && index >= 0 && index < mv.parseSections(currentSong().lyrics).length) { view.editorSection = view.editorSection === index ? -1 : index; renderMv(); } }
@@ -1815,6 +1832,14 @@ export function handleMvClick(event) {
         else if (action === 'go-board') { view.editorDrawer = ''; go('board'); }
         else if (action === 'group-open') { if (record.groups?.some(g => g.id === id)) { view.groupOpen = view.groupOpen === id ? '' : id; view.inspect = ''; renderMv(); } }
         else if (action === 'retry-save') { void mv.retryMvSave(opened.scope, id).then(result => { reportResult(result, '结果已保存。'); if (isView(opened)) renderMv(); }).catch(toastError); }
+        else if (action === 'clear-pending') { view.clearPendingIds = mv.pendingMv(opened.scope).filter(row => id === 'all' || row.id === id).map(row => row.id); renderMv(); }
+        else if (action === 'cancel-clear-pending') { view.clearPendingIds = null; renderMv(); }
+        else if (action === 'confirm-clear-pending') {
+            const result = mv.clearPendingMv(opened.scope, view.clearPendingIds || []);
+            if (result.cleared) view.clearPendingIds = null;
+            else globalThis.toastr?.error?.('清除未能保存，暂存结果仍保留，请重试。', '心迹回廊');
+            renderMv();
+        }
         else if (action === 'export-recovery') download(new Blob([mv.exportMvRecovery(opened.scope)], { type: 'application/json' }), 'Hearttrace-MV-backup.json');
         else if (action === 'set-output') { d.output = id === 'video' ? 'video' : 'tegaki'; view.draft = mv.normalizeSettings(d); renderMv(); }
         else if (action === 'set-style') { d.style = id; renderMv(); }
@@ -2410,7 +2435,7 @@ function characterSprite(image, group) {
             const unchanged = prepared.status === 'transparent' && crop.split === 'none';
             if (!unchanged) { pixels.data.set(prepared.data); g.putImageData(pixels, 0, 0); }
             result = { ...result, image: unchanged ? src : c, source: url,
-                bounds: image_tools.alphaBounds(prepared.data, c.width, c.height) };
+                bounds: { ...image_tools.alphaBounds(prepared.data, c.width, c.height), edges: image_tools.alphaEdgeContacts(prepared.data, c.width, c.height) } };
         }
     } catch { result = { status: 'unreadable', key }; }
     return cacheValue(characterSprites, key, result, 8);
@@ -2528,9 +2553,9 @@ function drawSceneV2(g, record, song, rows, index, t, w, h, showText = true) {
         info.opaque = true; return info;
     }
     if (person) {
-        const breathe = stage ? 1 : 1 + 0.004 * Math.sin(t * Math.PI * 2 / 3.4);
         const pw = person.naturalWidth || person.width, ph = person.naturalHeight || person.height;
         const placement = stage_canvas.foregroundPlacement(sprite.bounds, pw, ph, group, w, h);
+        const breathe = stage || placement.attached ? 1 : 1 + 0.004 * Math.sin(t * Math.PI * 2 / 3.4);
         const { x: dx, y: dy, width: dw, height: dh } = placement;
         // Reserve the maximum push/pop extent so letters do not disappear
         // behind a moving arm between two frames of the same shot.
@@ -2540,9 +2565,9 @@ function drawSceneV2(g, record, song, rows, index, t, w, h, showText = true) {
         g.save();
         if (stage?.active) {
             const motion = stage_canvas.poseTransform(stage, w, h);
-            g.translate(motion.x, motion.y); g.translate(w / 2, placement.foot); g.scale(motion.scale, motion.scale); g.translate(-w / 2, -placement.foot);
+            g.translate(placement.attachedX ? 0 : motion.x, motion.y); g.translate(placement.anchorX, placement.foot); g.scale(motion.scale, motion.scale); g.translate(-placement.anchorX, -placement.foot);
         }
-        g.translate(w / 2, placement.foot); g.scale(push * breathe, push * breathe); g.translate(-w / 2, -placement.foot);
+        g.translate(placement.anchorX, placement.foot); g.scale(push * breathe, push * breathe); g.translate(-placement.anchorX, -placement.foot);
         if (stage && placement.grounded) {
             // A small ground contact anchors full-body/wide shots; no duplicate
             // upright silhouette floating alongside the actor.

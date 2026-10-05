@@ -87,12 +87,12 @@ function invokeSelectedImageProvider(selectedProvider, prompt, context, options)
     throw core_text.safeUserError('请在设置里选择柏宝绘或智绘姬。旧渠道图片仍可查看。', 'RMT_IMAGE_PROVIDER_RETIRED');
 }
 
-export async function invokeImageGeneration(prompt, context = core_context.getContext(), { signal = null, provider = null, orientation = 'landscape', respectOrientation = false, characterName = '', promptMetadata = null, onProgress = null, onSettled = null, targetKey = '', seed = 0, singlePrompt = false } = {}) {
+export async function invokeImageGeneration(prompt, context = core_context.getContext(), { signal = null, provider = null, orientation = 'landscape', respectOrientation = false, aspectRatio = '', characterName = '', promptMetadata = null, onProgress = null, onSettled = null, targetKey = '', seed = 0, singlePrompt = false } = {}) {
     const settings = core_settings.getPluginSettings(context);
     const selectedProvider = provider === chatu8_image.CHATU8_IMAGE_PROVIDER || provider === baibai_image.BAIBAI_IMAGE_PROVIDER
         ? provider : settings.imageGenerationProvider;
     // seed 只交给柏宝绘（公开 API 支持单次 seed）；智绘姬没有公开的单次 seed 接口，不传。
-    const options = { signal, orientation, respectOrientation, characterName, promptMetadata, onProgress, onSettled, targetKey, singlePrompt, seed: Number.isInteger(seed) && seed > 0 ? seed : 0 };
+    const options = { signal, orientation, respectOrientation, aspectRatio, characterName, promptMetadata, onProgress, onSettled, targetKey, singlePrompt, seed: Number.isInteger(seed) && seed > 0 ? seed : 0 };
     try {
         return await invokeSelectedImageProvider(selectedProvider, prompt, context, options);
     } catch (error) {

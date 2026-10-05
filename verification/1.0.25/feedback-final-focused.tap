@@ -1,0 +1,66 @@
+TAP version 13
+# (node:12) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: clearing one/all pending rows persists across fresh runtimes without modifying any song record
+ok 1 - clearing one/all pending rows persists across fresh runtimes without modifying any song record
+  ---
+  duration_ms: 203.875747
+  type: 'test'
+  ...
+# Subtest: failed persistent removal keeps recoverable rows, and quota failure can remove the final journal
+ok 2 - failed persistent removal keeps recoverable rows, and quota failure can remove the final journal
+  ---
+  duration_ms: 100.019998
+  type: 'test'
+  ...
+# Subtest: production overlay routes more/close/material navigation and confirmed clear without another generation
+ok 3 - production overlay routes more/close/material navigation and confirmed clear without another generation
+  ---
+  duration_ms: 135.917383
+  type: 'test'
+  ...
+# Subtest: editor panel escapes the scrolling body but stays inside the native host dialog, and dismissal releases background controls
+ok 4 - editor panel escapes the scrolling body but stays inside the native host dialog, and dismissal releases background controls
+  ---
+  duration_ms: 165.42178
+  type: 'test'
+  ...
+# Subtest: Chatu8 16:9 submits exact frame dimensions for shared images and per-shot redraws without changing provider settings
+ok 5 - Chatu8 16:9 submits exact frame dimensions for shared images and per-shot redraws without changing provider settings
+  ---
+  duration_ms: 118.525309
+  type: 'test'
+  ...
+# Subtest: Chatu8 9:16 submits exact frame dimensions for shared images and per-shot redraws without changing provider settings
+ok 6 - Chatu8 9:16 submits exact frame dimensions for shared images and per-shot redraws without changing provider settings
+  ---
+  duration_ms: 115.964682
+  type: 'test'
+  ...
+# Subtest: native Canvas 16:9: source-cut arms stay at frame edges and cropped body has no floating bottom
+ok 7 - native Canvas 16:9: source-cut arms stay at frame edges and cropped body has no floating bottom
+  ---
+  duration_ms: 221.652603
+  type: 'test'
+  ...
+# Subtest: native Canvas 9:16: source-cut arms stay at frame edges and cropped body has no floating bottom
+ok 8 - native Canvas 9:16: source-cut arms stay at frame edges and cropped body has no floating bottom
+  ---
+  duration_ms: 179.433996
+  type: 'test'
+  ...
+# Subtest: native export uses the same edge-attached framing as preview and leaves source pixels unchanged
+ok 9 - native export uses the same edge-attached framing as preview and leaves source pixels unchanged
+  ---
+  duration_ms: 227.512876
+  type: 'test'
+  ...
+1..9
+# tests 9
+# suites 0
+# pass 9
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1880.33528

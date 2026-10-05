@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
-// Source modules: 326
-// Source SHA-256: 902c503bd7105932ad04e48727d37e1b51b7d3fe9a995f86da1b41030acc002d
+// Source modules: 327
+// Source SHA-256: b43da0f4bd083620ef866ed853aba0c21b3b5a0e2a8cb11210786bcd74e6f6c5
 // Build: python3 tools/verification/build.py <source-root>
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -286,6 +286,7 @@ const __m_ui_memoryReveal_js = Object.create(null);
 const __m_ui_mirrorCallView_js = Object.create(null);
 const __m_ui_mirrorTtsReader_js = Object.create(null);
 const __m_ui_mvCastControls_js = Object.create(null);
+const __m_ui_mvEditorDialog_js = Object.create(null);
 const __m_ui_mvEditorUi_js = Object.create(null);
 const __m_ui_mvImageEditor_js = Object.create(null);
 const __m_ui_mvImageEditorUi_js = Object.create(null);
@@ -919,6 +920,21 @@ function alphaBounds(data, width, height) {
         x: x0 / width, top: y0 / height, width: (x1 - x0 + 1) / width, height: (y1 - y0 + 1) / height } : null;
 }
 
+// A substantial opaque run at the original edge is an existing crop, not a
+// floating sticker margin. Ignore isolated antialias/noise pixels.
+function alphaEdgeContacts(data, width, height) {
+    const run = (length, at) => {
+        let current = 0, longest = 0;
+        for (let i = 0; i < length; i++) {
+            current = data[at(i) * 4 + 3] > 40 ? current + 1 : 0;
+            longest = Math.max(longest, current);
+        }
+        return longest >= Math.max(3, Math.ceil(length * .02));
+    };
+    return { left: run(height, y => y * width), right: run(height, y => y * width + width - 1),
+        top: run(width, x => x), bottom: run(width, x => (height - 1) * width + x) };
+}
+
 // A deliberate click removes one connected patch only. It never treats every
 // white pixel as background; the editor keeps undo and the unmodified source.
 function eraseMatteAt(data, width, height, x, y) {
@@ -1157,6 +1173,7 @@ __m_extras_mvImageTools_js.pixelRect = pixelRect;
 __m_extras_mvImageTools_js.eraseEdgeWhite = eraseEdgeWhite;
 __m_extras_mvImageTools_js.paintAlpha = paintAlpha;
 __m_extras_mvImageTools_js.alphaBounds = alphaBounds;
+__m_extras_mvImageTools_js.alphaEdgeContacts = alphaEdgeContacts;
 __m_extras_mvImageTools_js.eraseMatteAt = eraseMatteAt;
 __m_extras_mvImageTools_js.prepareCharacterPixels = prepareCharacterPixels;
 __m_extras_mvImageTools_js.prepareCutoutPixels = prepareCutoutPixels;
@@ -1741,6 +1758,42 @@ __m_ui_mvCastControls_js.castControls = castControls;
 __m_ui_mvCastControls_js.shotCastControls = shotCastControls;
 }
 
+function __init_ui_mvEditorDialog_js() {
+// MODULE: ui/mvEditorDialog.js
+
+// Keep editor dialogs inside the host's native dialog, but outside its scrolling
+// body. A fixed descendant of that body can be clipped behind the workspace tabs.
+function mountEditorDialog(body, onDismiss) {
+    const shade = body?.querySelector?.('.rmt-mve-sheet-shade');
+    const shell = body?.closest?.('.rmt-shell');
+    if (!shade || !shell?.appendChild) return null;
+    shell.appendChild(shade);
+    const siblings = [...shell.children].filter(node => node !== shade);
+    const previous = siblings.map(node => [node, node.inert]);
+    for (const [node] of previous) node.inert = true;
+    const dismiss = event => {
+        if (event.type === 'click' && event.target !== shade) return;
+        if (event.type === 'keydown' && event.key !== 'Escape') return;
+        event.preventDefault(); event.stopPropagation(); onDismiss();
+    };
+    shade.addEventListener('click', dismiss);
+    shade.addEventListener('keydown', dismiss);
+    // Native <dialog> cancellation (Escape/back on supporting WebViews) should
+    // dismiss the inner panel before closing the entire editor.
+    const host = shell.closest?.('dialog');
+    const cancel = event => { event.preventDefault(); event.stopImmediatePropagation(); onDismiss(); };
+    host?.addEventListener('cancel', cancel, true);
+    return { element: shade, dispose() {
+        shade.removeEventListener('click', dismiss); shade.removeEventListener('keydown', dismiss);
+        host?.removeEventListener('cancel', cancel, true);
+        for (const [node, value] of previous) node.inert = value;
+        shade.remove();
+    } };
+}
+
+__m_ui_mvEditorDialog_js.mountEditorDialog = mountEditorDialog;
+}
+
 function __init_ui_mvEditorUi_js() {
 // MODULE: ui/mvEditorUi.js
 
@@ -1836,11 +1889,20 @@ ${r} .rmt-mv-editor .rmt-mv-tap b{font-size:14px;line-height:1.4}
 ${r} .rmt-mve-nudge{display:flex;align-items:center;justify-content:center;gap:6px;flex-wrap:wrap}
 ${r} .rmt-mve-nudge button{min-height:38px;font-size:11px;padding:0 8px}
 ${r} .rmt-mve-nudge input{width:85px;min-height:38px;border:1px solid var(--rmt-theme-border,#cddfed);border-radius:8px;background:var(--rmt-theme-surface-solid,#fff);color:var(--rmt-theme-text,#294762);text-align:center}
-${r} .rmt-mve-sheet-shade{position:fixed;inset:0;z-index:2147482990;background:rgba(20,35,50,.42);display:flex;align-items:center;justify-content:center;padding:14px;padding:calc(env(safe-area-inset-top,0px) + 14px) 14px calc(env(safe-area-inset-bottom,0px) + 14px);box-sizing:border-box}
-${r} .rmt-mve-sheet{width:min(100%,560px);max-height:85vh;overflow:auto;border-radius:18px;border:1px solid var(--rmt-theme-border,#cddfed);background:var(--rmt-theme-surface-solid,#fff);color:var(--rmt-theme-text,#294762);box-shadow:0 15px 65px rgba(0,0,0,.2);overscroll-behavior:contain}
-${r} .rmt-mve-sheet>header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 18px;border-bottom:1px solid var(--rmt-theme-border,#cddfed)}
-${r} .rmt-mve-sheet>div{padding:18px;display:flex;flex-direction:column;gap:14px}
-${r} .rmt-mve-sheet button{font-size:14px}
+${r} .rmt-shell>.rmt-mve-sheet-shade{position:absolute;inset:0;z-index:200;background:rgba(20,35,50,.42);display:flex;align-items:center;justify-content:center;padding:12px;box-sizing:border-box;isolation:isolate;overflow:hidden;touch-action:pan-y pinch-zoom}
+${r} .rmt-shell>.rmt-mve-sheet-shade .rmt-mve-sheet{box-sizing:border-box;display:flex;flex-direction:column;min-width:0;min-height:0;width:min(100%,560px);max-height:100%;overflow:hidden;border-radius:18px;border:1px solid var(--rmt-theme-border,#cddfed);background:var(--rmt-theme-surface-solid,#fff);color:var(--rmt-theme-text,#294762);box-shadow:0 15px 65px rgba(0,0,0,.2)}
+${r} .rmt-mve-sheet>header{display:flex;flex:0 0 auto;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px;border-bottom:1px solid var(--rmt-theme-border,#cddfed);background:var(--rmt-theme-surface-solid,#fff)}
+${r} .rmt-mve-sheet>div{padding:16px;display:flex;flex-direction:column;gap:14px;min-height:0;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+${r} .rmt-mve-sheet>div>*{flex-shrink:0;min-width:0}
+${r} .rmt-shell .rmt-mve-sheet button{font-size:14px!important;min-height:44px;touch-action:manipulation}
+${r} .rmt-shell .rmt-mve-sheet :is(p,b,summary){font-size:14px!important;line-height:1.65!important;overflow-wrap:anywhere}
+${r} .rmt-mve-sheet input:not([type=checkbox]):not([type=range]),${r} .rmt-mve-sheet select{min-width:0;max-width:100%;font-size:16px!important}
+${r} .rmt-mve-recovery{border:1px solid var(--rmt-theme-border,#cddfed);border-radius:14px;padding:12px;background:var(--rmt-theme-surface-solid,#fff)}
+${r} .rmt-mve-recovery>summary{cursor:pointer;min-height:44px;display:flex;align-items:center}
+${r} .rmt-mve-recovery>div{margin-top:12px}
+${r} .rmt-mve-recovery-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+${r} .rmt-mve-recovery-actions button{flex:1 1 100px;min-height:44px;border-radius:999px}
+${r} .rmt-mve-clear-confirm{padding:10px;border:1px solid var(--rmt-theme-border,#cddfed);border-radius:12px;background:var(--rmt-theme-soft,#f7f4fb)}
 ${r} .rmt-mve-sheet .rmt-mv-file{flex-wrap:wrap;gap:10px}
 ${r} .rmt-mve-sheet .rmt-mv-file>div{min-width:120px;overflow-wrap:anywhere}
 ${r} .rmt-mv-editor button:focus-visible,${r} .rmt-mv-editor input:focus-visible{outline:2px solid var(--rmt-theme-accent-ink,#4f769d);outline-offset:2px}
@@ -2420,12 +2482,20 @@ function foregroundPlacement(bounds, pw, ph, group, w, h) {
     const factor = { close: 1.22, medium: 1.02, full: .84, wide: .56 }[group?.scale] || 1.02;
     const body = group?.scale === 'full' || group?.scale === 'wide';
     const foot = body ? (group.scale === 'wide' ? .91 : .95) : 1.035;
-    const scale = Math.min(h * factor / Math.max(1, ph * b.height), w * (body ? .88 : 1.04) / Math.max(1, pw * (b.width || 1)));
+    const edges = b.edges || {};
+    const attached = !!(edges.left || edges.right || edges.top || edges.bottom);
+    let scale = Math.min(h * factor / Math.max(1, ph * b.height), w * (body ? .88 : 1.04) / Math.max(1, pw * (b.width || 1)));
+    if (edges.left && edges.right) scale = Math.max(scale, w / (pw * b.width));
+    if (edges.top && edges.bottom) scale = Math.max(scale, h / (ph * b.height));
     const visibleW = pw * (b.width || 1) * scale;
     const nominal = w * ({ left: .32, right: .68, center: .5 }[group?.position] || .5);
     const cx = visibleW >= w * .95 ? w / 2 : Math.max(visibleW / 2 + w * .025, Math.min(w - visibleW / 2 - w * .025, nominal));
-    const x = cx - pw * b.cx * scale, y = h * foot - ph * b.bottom * scale;
-    return { x, y, width: pw * scale, height: ph * scale, foot: h * foot, grounded: body,
+    let x = cx - pw * b.cx * scale, y = h * foot - ph * b.bottom * scale;
+    if (edges.left || edges.right) x = edges.left && edges.right ? (w - visibleW) / 2 - pw * b.x * scale : edges.left ? -pw * b.x * scale : w - pw * (b.x + b.width) * scale;
+    if (edges.top || edges.bottom) y = edges.top ? -ph * (b.top || 0) * scale : h - ph * b.bottom * scale;
+    const anchorX = edges.left && !edges.right ? 0 : edges.right && !edges.left ? w : w / 2;
+    const anchorY = edges.top ? 0 : edges.bottom ? h : h * foot;
+    return { x, y, width: pw * scale, height: ph * scale, foot: anchorY, anchorX, attached, attachedX: !!(edges.left || edges.right), grounded: body && !attached,
         subject: { x: x + pw * (b.x || 0) * scale, y: y + ph * (b.top || 0) * scale, width: visibleW, height: ph * b.height * scale } };
 }
 
@@ -38638,12 +38708,12 @@ function invokeSelectedImageProvider(selectedProvider, prompt, context, options)
     throw core_text.safeUserError('请在设置里选择柏宝绘或智绘姬。旧渠道图片仍可查看。', 'RMT_IMAGE_PROVIDER_RETIRED');
 }
 
-async function invokeImageGeneration(prompt, context = core_context.getContext(), { signal = null, provider = null, orientation = 'landscape', respectOrientation = false, characterName = '', promptMetadata = null, onProgress = null, onSettled = null, targetKey = '', seed = 0, singlePrompt = false } = {}) {
+async function invokeImageGeneration(prompt, context = core_context.getContext(), { signal = null, provider = null, orientation = 'landscape', respectOrientation = false, aspectRatio = '', characterName = '', promptMetadata = null, onProgress = null, onSettled = null, targetKey = '', seed = 0, singlePrompt = false } = {}) {
     const settings = core_settings.getPluginSettings(context);
     const selectedProvider = provider === chatu8_image.CHATU8_IMAGE_PROVIDER || provider === baibai_image.BAIBAI_IMAGE_PROVIDER
         ? provider : settings.imageGenerationProvider;
     // seed 只交给柏宝绘（公开 API 支持单次 seed）；智绘姬没有公开的单次 seed 接口，不传。
-    const options = { signal, orientation, respectOrientation, characterName, promptMetadata, onProgress, onSettled, targetKey, singlePrompt, seed: Number.isInteger(seed) && seed > 0 ? seed : 0 };
+    const options = { signal, orientation, respectOrientation, aspectRatio, characterName, promptMetadata, onProgress, onSettled, targetKey, singlePrompt, seed: Number.isInteger(seed) && seed > 0 ? seed : 0 };
     try {
         return await invokeSelectedImageProvider(selectedProvider, prompt, context, options);
     } catch (error) {
@@ -39924,10 +39994,19 @@ async function saveStillImage(imageData, context, signal) {
     return path;
 }
 
-function orientedSize(context, backend, orientation) {
+function orientedSize(context, backend, orientation, aspectRatio = '') {
     const bag = extensionBag(context);
     const keys = { novelai: ['novelai_width', 'novelai_height'], sd: ['sd_cwidth', 'sd_cheight'], comfyui: ['comfyui_width', 'comfyui_height'] }[backend];
     const width = Number(keys && bag?.[keys[0]]), height = Number(keys && bag?.[keys[1]]);
+    if (aspectRatio === '16:9' || aspectRatio === '9:16') {
+        // Both dimensions are multiples of 64. Exact 16:9 begins at 1024×576;
+        // larger configured budgets can use its integer multiples. Only this
+        // request changes; never rewrite the provider's global presets.
+        const area = Number.isSafeInteger(width) && width > 0 && Number.isSafeInteger(height) && height > 0 ? width * height : 1216 * 832;
+        const units = Math.max(1, Math.floor(Math.sqrt(area / (1024 * 576))));
+        const long = 1024 * units, short = 576 * units;
+        return aspectRatio === '9:16' ? { width: short, height: long } : { width: long, height: short };
+    }
     let long = 1216, short = 832;
     if (Number.isSafeInteger(width) && width > 0 && Number.isSafeInteger(height) && height > 0) {
         long = Math.max(width, height); short = Math.min(width, height);
@@ -39942,7 +40021,7 @@ function orientedSize(context, backend, orientation) {
     return orientation === 'portrait' ? { width: short, height: long } : { width: long, height: short };
 }
 
-async function generateChatu8Image(prompt, { signal = null, orientation = 'landscape', respectOrientation = false, promptMetadata = null, onProgress = null, onSettled = null, targetKey = '', context = core_context.getContext() } = {}) {
+async function generateChatu8Image(prompt, { signal = null, orientation = 'landscape', respectOrientation = false, aspectRatio = '', promptMetadata = null, onProgress = null, onSettled = null, targetKey = '', context = core_context.getContext() } = {}) {
     if (signal?.aborted) throw chatu8ImageError('CH8_ABORTED');
     const state = chatu8ImageState(context);
     if (!state.available) throw chatu8ImageError(state.code);
@@ -39992,7 +40071,7 @@ async function generateChatu8Image(prompt, { signal = null, orientation = 'lands
                 source.on(RESPONSE_EVENT, onResponse);
                 signal?.addEventListener('abort', onAbort, { once: true });
                 timer = setTimeout(() => stop('CH8_TIMEOUT'), CHATU8_IMAGE_TIMEOUT_MS);
-                source.emit(REQUEST_EVENT, { id, prompt: scene, ...(respectOrientation ? orientedSize(context, state.backend, orientation) : {}) });
+                source.emit(REQUEST_EVENT, { id, prompt: scene, ...(respectOrientation ? orientedSize(context, state.backend, orientation, aspectRatio) : {}) });
             } catch { stop('CH8_BACKEND_ERROR'); }
         });
         if (signal?.aborted) throw chatu8ImageError('CH8_ABORTED');
@@ -88782,6 +88861,26 @@ function savePending(scope, rows) {
     return confirmedWrite(LOCAL_PREFIX + scope + ':pending', slimPending(rows));
 }
 
+// Clear only explicitly selected journal rows. Song records, images and timing
+// are stored separately and never take part in this operation.
+function clearPendingMv(scope, ids) {
+    const selected = new Set(list(ids));
+    const rows = pendingMv(scope), remaining = rows.filter(row => !selected.has(row.id));
+    if (remaining.length === rows.length) return { cleared: true, count: 0 };
+    const key = LOCAL_PREFIX + scope + ':pending';
+    let durable = confirmedWrite(key, slimPending(remaining));
+    // Removing the final journal also works when the storage quota is full.
+    if (!durable && !remaining.length) {
+        try {
+            globalThis.localStorage.removeItem(key);
+            durable = globalThis.localStorage.getItem(key) === null;
+        } catch {}
+    }
+    if (!durable) return { cleared: false, count: 0 };
+    pendingByScope.set(scope, structuredClone(remaining));
+    return { cleared: true, count: rows.length - remaining.length };
+}
+
 function songSignature(song) {
     const { visual, ...text } = song || {};
     return JSON.stringify(text);
@@ -89614,6 +89713,7 @@ async function drawFrame(songId, shotId) {
         const result = await cg_core.invokeImageGeneration(framePrompt(record, shot, context, !metadata), context, {
             orientation: normalizeSettings(record.settings).ratio === '9:16' ? 'portrait' : 'landscape',
             respectOrientation: true,
+            aspectRatio: normalizeSettings(record.settings).ratio,
             characterName: context?.name2 || '', targetKey: key, singlePrompt: true,
             ...(metadata ? { promptMetadata: metadata } : {}),
         });
@@ -90056,6 +90156,7 @@ async function drawAsset(songId, key, { fresh = false } = {}) {
             // 场景和人物差分都遵守本曲画幅；意象仍是独立的抠图素材。
             orientation: found.kind === 'motif' || normalizeSettings(record.settings).ratio === '9:16' ? 'portrait' : 'landscape',
             respectOrientation: found.kind !== 'motif',
+            aspectRatio: found.kind === 'motif' ? '' : normalizeSettings(record.settings).ratio,
             characterName: context?.name2 || '', targetKey: runKey, seed, singlePrompt: true,
         };
         // A saved custom prompt is the complete previewed text; do not append hidden cast text.
@@ -90189,6 +90290,7 @@ __m_extras_mv_js.motionOf = motionOf;
 __m_extras_mv_js.readMvStore = readMvStore;
 __m_extras_mv_js.readMv = readMv;
 __m_extras_mv_js.pendingMv = pendingMv;
+__m_extras_mv_js.clearPendingMv = clearPendingMv;
 __m_extras_mv_js.captureMvTarget = captureMvTarget;
 __m_extras_mv_js.exportMvRecovery = exportMvRecovery;
 __m_extras_mv_js.writeMv = writeMv;
@@ -90340,6 +90442,7 @@ const image_editor = __m_ui_mvImageEditor_js;
 const image_editor_ui = __m_ui_mvImageEditorUi_js;
 const image_tools = __m_extras_mvImageTools_js;
 const editor_ui = __m_ui_mvEditorUi_js;
+const editor_dialog = __m_ui_mvEditorDialog_js;
 const runtimeState = __m_core_state_js.state;
 // 印象曲 MV 页面：三步开始、镜头清单、对时间、手书剪辑台、视频单镜、拼成 MV。
 // 播放由同一音轨驱动画面；可用的音频文件缓存在本机，不写入聊天。
@@ -90368,8 +90471,17 @@ let imageRefreshTimer = 0;
 let imageLayoutPending = false;
 let layoutBody = null;
 let layoutBodyObserver = null;
+let editorDialog = null;
+
+function closeEditorDrawer() {
+    const previous = view.editorDrawer;
+    editorDialog?.dispose(); editorDialog = null;
+    view.editorDrawer = ''; view.clearPendingIds = null; renderMv();
+    body()?.querySelector?.(`[data-rmt-mv="editor-drawer"][data-rmt-mv-id="${previous}"]`)?.focus?.({ preventScroll: true });
+}
 
 function editorBody(enabled) {
+    if (!enabled) { editorDialog?.dispose(); editorDialog = null; }
     const el = body();
     if (layoutBody && (layoutBody !== el || !enabled)) {
         layoutBody.classList?.remove('rmt-mve-body');
@@ -90383,6 +90495,7 @@ function editorBody(enabled) {
         // thumbnail loads or brush strokes. Other modules keep their own scroll.
         layoutBodyObserver = new globalThis.MutationObserver(() => {
             if (!el.querySelector('.rmt-mve-layout-scope,[data-rmt-mv-editor-host]')) {
+                editorDialog?.dispose(); editorDialog = null;
                 el.classList.remove('rmt-mve-body');
                 layoutBodyObserver?.disconnect(); layoutBodyObserver = null; layoutBody = null;
             }
@@ -90942,6 +91055,7 @@ function openMv(options = {}) {
     disposeMv();
     view.songId = songId; view.scope = mv.mvScope(context);
     view.musicLinkInput = null; view.musicLinkStatus = ''; view.audioStatus = '';
+    view.clearPendingIds = null;
     const record = mv.readMv(context, view.songId);
     view.castDraft = mv_cast.initialMvCast(context, record);
     const ready = record?.shots?.length && mv.normalizeSettings(record.settings).output === 'tegaki' && record.shots.some(s => mv.hasAssetImage(mv.shotImage(record, s)));
@@ -90956,6 +91070,7 @@ function openMv(options = {}) {
 
 function navigateMvBack() {
     if (runtimeState.activeMode !== MV_MODE) return false;
+    if (view.editorDrawer) { closeEditorDrawer(); return true; }
     stopExport();
     stopPlayback();
     if (view.sub === 'asset-editor') { closeAssetEditor(); return true; }
@@ -91035,6 +91150,7 @@ function renderMvUnsafe() {
 }
 
 function page(title, back, html) {
+    editorDialog?.dispose(); editorDialog = null;
     if (navigation.at(-1)?.sub === 'shot') back = '镜头详情';
     if (view.sub === 'setup' && view.step > 1) back = '上一步';
     overlay.topTitle(title); overlay.setBackVisible(true, back);
@@ -91049,8 +91165,8 @@ function page(title, back, html) {
 function recoveryPanel(compact = false) {
     const rows = mv.pendingMv(view.scope);
     if (!rows.length) return '';
-    const content = `${rows.map(row => `<div><p class="rmt-x-note">${esc(row.song?.title || 'MV')} · ${esc(row.reason || '等待保存')}</p>${btn('retry-save', '仅重试保存', { id: row.id })}</div>`).join('')}${btn('export-recovery', '导出暂存结果')}`;
-    return compact ? `<details class="rmt-mve-recovery"><summary>${rows.length} 份结果待保存</summary>${content}</details>` : `<section class="rmt-x-card"><b>有 ${rows.length} 份 MV 结果待保存</b>${content}</section>`;
+    const content = `${rows.map(row => `<div><p class="rmt-x-note">${esc(row.song?.title || 'MV')} · ${esc(row.reason || '等待保存')}</p><div class="rmt-mve-recovery-actions">${btn('retry-save', '仅重试保存', { id: row.id })}${btn('clear-pending', '清除', { id: row.id })}</div></div>`).join('')}<div class="rmt-mve-recovery-actions">${btn('export-recovery', '导出暂存结果')}${btn('clear-pending', '全部清除', { id: 'all' })}</div>${view.clearPendingIds?.length ? `<div class="rmt-mve-clear-confirm" role="alert"><p>清除这 ${view.clearPendingIds.length} 份暂存结果？已保存的分镜和图片会保留。</p><div class="rmt-mve-recovery-actions">${btn('confirm-clear-pending', '确认清除')}${btn('cancel-clear-pending', '取消')}</div></div>` : ''}`;
+    return compact || view.sub === 'board' ? `<details class="rmt-mve-recovery"${view.clearPendingIds?.length ? ' open' : ''}><summary>${rows.length} 份结果待保存</summary>${content}</details>` : `<section class="rmt-x-card"><b>有 ${rows.length} 份 MV 结果待保存</b>${content}</section>`;
 }
 function reportResult(result, success) {
     if (result?.pending) globalThis.toastr?.info?.(result.message, '心迹回廊 · MV');
@@ -91421,6 +91537,7 @@ function renderTegaki(song, record) {
         selectedLabel: `第 ${selIndex + 1} 镜 · ${rows.length} 镜`, time: mv.formatTime(currentTime(), true), seconds: currentTime(), total, totalLabel: mv.formatTime(total),
         playing: player.playing, audio: audioBySong.has(audioKey()), audioName: audioBySong.get(audioKey())?.name, exporting: player.exporting, drawer: view.editorDrawer, drawerHtml: editorSheet(song, record) });
     page('手书剪辑台', '素材库', html);
+    editorDialog = editor_dialog.mountEditorDialog(body(), closeEditorDrawer);
     bindEditorControls();
 }
 
@@ -91433,36 +91550,37 @@ function seekEditor(time) {
 }
 
 function bindEditorControls() {
-    const root = body()?.querySelector?.('.rmt-mv-editor');
-    if (!root?.addEventListener) return;
-    root.addEventListener('input', event => {
-        if (event.target.matches?.('[data-rmt-mv-seek]') && !player.exporting) seekEditor(event.target.value);
-        if (event.target.matches?.('[data-rmt-mv-music-link]')) view.musicLinkInput = event.target.value;
-    });
-    root.addEventListener('keydown', event => {
-        if (event.key === 'Enter' && event.target.matches?.('[data-rmt-mv-music-link]')) {
-            event.preventDefault();
-            if (!musicLinkImport && !player.exporting) void importMusicLink(event.target.value).catch(toastError);
-            return;
-        }
-        const sheet = root.querySelector('.rmt-mve-sheet');
-        if (event.key === 'Escape' && view.editorDrawer) {
-            event.preventDefault(); event.stopPropagation(); const previous = view.editorDrawer; view.editorDrawer = ''; renderMv();
-            body()?.querySelector?.(`[data-rmt-mv="editor-drawer"][data-rmt-mv-id="${previous}"]`)?.focus?.(); return;
-        }
-        if (sheet && event.key === 'Tab') {
-            const nodes = [...sheet.querySelectorAll('button:not([disabled]),input:not([disabled]),select:not([disabled]),a[href]')];
-            const first = nodes[0], last = nodes.at(-1);
-            if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
-            else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
-        }
-        const tab = event.target.closest?.('[data-rmt-mv="editor-tab"]');
-        if (tab && ['ArrowLeft', 'ArrowRight'].includes(event.key)) {
-            event.preventDefault(); const ids = ['shots', 'timing', 'look'], next = ids[(ids.indexOf(tab.dataset.rmtMvId) + (event.key === 'ArrowRight' ? 1 : 2)) % 3];
-            view.editorTab = next; if (view.sub === 'sync') view.sub = 'tegaki'; renderMv();
-            body()?.querySelector?.(`[data-rmt-mv="editor-tab"][data-rmt-mv-id="${next}"]`)?.focus();
-        }
-    });
+    const roots = [body()?.querySelector?.('.rmt-mv-editor'), editorDialog?.element].filter(Boolean);
+    for (const root of roots) {
+        if (!root.addEventListener) continue;
+        root.addEventListener('input', event => {
+            if (event.target.matches?.('[data-rmt-mv-seek]') && !player.exporting) seekEditor(event.target.value);
+            if (event.target.matches?.('[data-rmt-mv-music-link]')) view.musicLinkInput = event.target.value;
+        });
+        root.addEventListener('keydown', event => {
+            if (event.key === 'Enter' && event.target.matches?.('[data-rmt-mv-music-link]')) {
+                event.preventDefault();
+                if (!musicLinkImport && !player.exporting) void importMusicLink(event.target.value).catch(toastError);
+                return;
+            }
+            const sheet = root.querySelector('.rmt-mve-sheet');
+            if (event.key === 'Escape' && view.editorDrawer) {
+                event.preventDefault(); event.stopPropagation(); closeEditorDrawer(); return;
+            }
+            if (sheet && event.key === 'Tab') {
+                const nodes = [...sheet.querySelectorAll('button:not([disabled]),input:not([disabled]),select:not([disabled]),a[href]')];
+                const first = nodes[0], last = nodes.at(-1);
+                if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+                else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+            }
+            const tab = event.target.closest?.('[data-rmt-mv="editor-tab"]');
+            if (tab && ['ArrowLeft', 'ArrowRight'].includes(event.key)) {
+                event.preventDefault(); const ids = ['shots', 'timing', 'look'], next = ids[(ids.indexOf(tab.dataset.rmtMvId) + (event.key === 'ArrowRight' ? 1 : 2)) % 3];
+                view.editorTab = next; if (view.sub === 'sync') view.sub = 'tegaki'; renderMv();
+                body()?.querySelector?.(`[data-rmt-mv="editor-tab"][data-rmt-mv-id="${next}"]`)?.focus();
+            }
+        });
+    }
 }
 
 // ---------- 对时间 ----------
@@ -92098,13 +92216,15 @@ function handleMvClick(event) {
     const id = el.dataset.rmtMvId || '';
     if (action === 'open') { openMv({ songId: id }); return true; }
     if (runtimeState.activeMode !== MV_MODE) return true;
+    // Closing must remain available even if this song/archive became unreadable.
+    if (action === 'editor-drawer' && !['export', 'more', 'audio'].includes(id)) { closeEditorDrawer(); return true; }
     const d = view.draft ||= mv.normalizeSettings(currentRecord()?.settings);
     const record = currentRecord();
     const opened = viewTarget();
     try {
         if (action === 'back') navigateMvBack();
         else if (action === 'audio-link') {
-            const input = body()?.querySelector?.('[data-rmt-mv-music-link]');
+            const input = (editorDialog?.element || body())?.querySelector?.('[data-rmt-mv-music-link]');
             void importMusicLink(input?.value ?? view.musicLinkInput ?? '').catch(toastError);
         }
         else if (action === 'audio-link-cancel') { cancelMusicLink(); renderMv(); }
@@ -92121,9 +92241,8 @@ function handleMvClick(event) {
             }
         }
         else if (action === 'editor-drawer') {
-            const previous = view.editorDrawer;
-            view.editorDrawer = ['export', 'more', 'audio'].includes(id) ? id : ''; renderMv();
-            body()?.querySelector?.(view.editorDrawer ? '.rmt-mve-sheet button' : `[data-rmt-mv="editor-drawer"][data-rmt-mv-id="${previous}"]`)?.focus?.();
+            view.editorDrawer = id; view.clearPendingIds = null; renderMv();
+            (editorDialog?.element || body())?.querySelector?.('.rmt-mve-sheet button')?.focus?.({ preventScroll: true });
         }
         else if (action === 'editor-strip') { const start = Number(id); if (Number.isInteger(start) && start >= 0 && start < record.shots.length) { view.stripStart = start; renderMv(); } }
         else if (action === 'editor-section') { const index = Number(id); if (Number.isInteger(index) && index >= 0 && index < mv.parseSections(currentSong().lyrics).length) { view.editorSection = view.editorSection === index ? -1 : index; renderMv(); } }
@@ -92138,6 +92257,14 @@ function handleMvClick(event) {
         else if (action === 'go-board') { view.editorDrawer = ''; go('board'); }
         else if (action === 'group-open') { if (record.groups?.some(g => g.id === id)) { view.groupOpen = view.groupOpen === id ? '' : id; view.inspect = ''; renderMv(); } }
         else if (action === 'retry-save') { void mv.retryMvSave(opened.scope, id).then(result => { reportResult(result, '结果已保存。'); if (isView(opened)) renderMv(); }).catch(toastError); }
+        else if (action === 'clear-pending') { view.clearPendingIds = mv.pendingMv(opened.scope).filter(row => id === 'all' || row.id === id).map(row => row.id); renderMv(); }
+        else if (action === 'cancel-clear-pending') { view.clearPendingIds = null; renderMv(); }
+        else if (action === 'confirm-clear-pending') {
+            const result = mv.clearPendingMv(opened.scope, view.clearPendingIds || []);
+            if (result.cleared) view.clearPendingIds = null;
+            else globalThis.toastr?.error?.('清除未能保存，暂存结果仍保留，请重试。', '心迹回廊');
+            renderMv();
+        }
         else if (action === 'export-recovery') download(new Blob([mv.exportMvRecovery(opened.scope)], { type: 'application/json' }), 'Hearttrace-MV-backup.json');
         else if (action === 'set-output') { d.output = id === 'video' ? 'video' : 'tegaki'; view.draft = mv.normalizeSettings(d); renderMv(); }
         else if (action === 'set-style') { d.style = id; renderMv(); }
@@ -92733,7 +92860,7 @@ function characterSprite(image, group) {
             const unchanged = prepared.status === 'transparent' && crop.split === 'none';
             if (!unchanged) { pixels.data.set(prepared.data); g.putImageData(pixels, 0, 0); }
             result = { ...result, image: unchanged ? src : c, source: url,
-                bounds: image_tools.alphaBounds(prepared.data, c.width, c.height) };
+                bounds: { ...image_tools.alphaBounds(prepared.data, c.width, c.height), edges: image_tools.alphaEdgeContacts(prepared.data, c.width, c.height) } };
         }
     } catch { result = { status: 'unreadable', key }; }
     return cacheValue(characterSprites, key, result, 8);
@@ -92851,9 +92978,9 @@ function drawSceneV2(g, record, song, rows, index, t, w, h, showText = true) {
         info.opaque = true; return info;
     }
     if (person) {
-        const breathe = stage ? 1 : 1 + 0.004 * Math.sin(t * Math.PI * 2 / 3.4);
         const pw = person.naturalWidth || person.width, ph = person.naturalHeight || person.height;
         const placement = stage_canvas.foregroundPlacement(sprite.bounds, pw, ph, group, w, h);
+        const breathe = stage || placement.attached ? 1 : 1 + 0.004 * Math.sin(t * Math.PI * 2 / 3.4);
         const { x: dx, y: dy, width: dw, height: dh } = placement;
         // Reserve the maximum push/pop extent so letters do not disappear
         // behind a moving arm between two frames of the same shot.
@@ -92863,9 +92990,9 @@ function drawSceneV2(g, record, song, rows, index, t, w, h, showText = true) {
         g.save();
         if (stage?.active) {
             const motion = stage_canvas.poseTransform(stage, w, h);
-            g.translate(motion.x, motion.y); g.translate(w / 2, placement.foot); g.scale(motion.scale, motion.scale); g.translate(-w / 2, -placement.foot);
+            g.translate(placement.attachedX ? 0 : motion.x, motion.y); g.translate(placement.anchorX, placement.foot); g.scale(motion.scale, motion.scale); g.translate(-placement.anchorX, -placement.foot);
         }
-        g.translate(w / 2, placement.foot); g.scale(push * breathe, push * breathe); g.translate(-w / 2, -placement.foot);
+        g.translate(placement.anchorX, placement.foot); g.scale(push * breathe, push * breathe); g.translate(-placement.anchorX, -placement.foot);
         if (stage && placement.grounded) {
             // A small ground contact anchors full-body/wide shots; no duplicate
             // upright silhouette floating alongside the actor.
@@ -93181,6 +93308,7 @@ __init_extras_mvStage_js();
 __init_extras_mvStillPrompt_js();
 __init_ui_contentSelection_js();
 __init_ui_mvCastControls_js();
+__init_ui_mvEditorDialog_js();
 __init_ui_mvEditorUi_js();
 __init_ui_mvImageEditor_js();
 __init_ui_mvImageEditorUi_js();

@@ -1,0 +1,365 @@
+TAP version 13
+# (node:12) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: clearing one/all pending rows persists across fresh runtimes without modifying any song record
+ok 1 - clearing one/all pending rows persists across fresh runtimes without modifying any song record
+  ---
+  duration_ms: 203.60233
+  type: 'test'
+  ...
+# Subtest: failed persistent removal keeps recoverable rows, and quota failure can remove the final journal
+ok 2 - failed persistent removal keeps recoverable rows, and quota failure can remove the final journal
+  ---
+  duration_ms: 95.170839
+  type: 'test'
+  ...
+# Subtest: production overlay routes more/close/material navigation and confirmed clear without another generation
+ok 3 - production overlay routes more/close/material navigation and confirmed clear without another generation
+  ---
+  duration_ms: 121.960891
+  type: 'test'
+  ...
+# Subtest: editor panel escapes the scrolling body but stays inside the native host dialog, and dismissal releases background controls
+ok 4 - editor panel escapes the scrolling body but stays inside the native host dialog, and dismissal releases background controls
+  ---
+  duration_ms: 118.12851
+  type: 'test'
+  ...
+# Subtest: Chatu8 16:9 submits exact frame dimensions for shared images and per-shot redraws without changing provider settings
+ok 5 - Chatu8 16:9 submits exact frame dimensions for shared images and per-shot redraws without changing provider settings
+  ---
+  duration_ms: 135.363303
+  type: 'test'
+  ...
+# Subtest: Chatu8 9:16 submits exact frame dimensions for shared images and per-shot redraws without changing provider settings
+ok 6 - Chatu8 9:16 submits exact frame dimensions for shared images and per-shot redraws without changing provider settings
+  ---
+  duration_ms: 124.4144
+  type: 'test'
+  ...
+# Subtest: native Canvas 16:9: source-cut arms stay at frame edges and cropped body has no floating bottom
+ok 7 - native Canvas 16:9: source-cut arms stay at frame edges and cropped body has no floating bottom
+  ---
+  duration_ms: 254.458987
+  type: 'test'
+  ...
+# Subtest: native Canvas 9:16: source-cut arms stay at frame edges and cropped body has no floating bottom
+ok 8 - native Canvas 9:16: source-cut arms stay at frame edges and cropped body has no floating bottom
+  ---
+  duration_ms: 216.517809
+  type: 'test'
+  ...
+# (node:13) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: detail framing reaches full group layer
+ok 9 - detail framing reaches full group layer
+  ---
+  duration_ms: 253.184051
+  type: 'test'
+  ...
+# Subtest: detail framing reaches asset explicitly kept as a full image
+ok 10 - detail framing reaches asset explicitly kept as a full image
+  ---
+  duration_ms: 258.583246
+  type: 'test'
+  ...
+# Subtest: detail framing reaches opaque cutout needing editor fallback
+ok 11 - detail framing reaches opaque cutout needing editor fallback
+  ---
+  duration_ms: 254.254664
+  type: 'test'
+  ...
+# Subtest: detail framing reaches per-shot full-image override
+ok 12 - detail framing reaches per-shot full-image override
+  ---
+  duration_ms: 213.300301
+  type: 'test'
+  ...
+# Subtest: detail framing reaches non-expression legacy group without a stage
+ok 13 - detail framing reaches non-expression legacy group without a stage
+  ---
+  duration_ms: 214.381885
+  type: 'test'
+  ...
+# Subtest: detail framing reaches legacy per-shot image without a stage
+ok 14 - detail framing reaches legacy per-shot image without a stage
+  ---
+  duration_ms: 183.157822
+  type: 'test'
+  ...
+# Subtest: detail metadata recognizes 脸部极度特写 in 16:9
+ok 15 - detail metadata recognizes 脸部极度特写 in 16:9
+  ---
+  duration_ms: 199.94877
+  type: 'test'
+  ...
+# Subtest: detail metadata recognizes legacy characterPrompt in 16:9
+ok 16 - detail metadata recognizes legacy characterPrompt in 16:9
+  ---
+  duration_ms: 178.014963
+  type: 'test'
+  ...
+# Subtest: detail metadata recognizes 脸部极度特写 in 9:16
+ok 17 - detail metadata recognizes 脸部极度特写 in 9:16
+  ---
+  duration_ms: 171.544544
+  type: 'test'
+  ...
+# Subtest: detail metadata recognizes legacy characterPrompt in 9:16
+ok 18 - detail metadata recognizes legacy characterPrompt in 9:16
+  ---
+  duration_ms: 170.381409
+  type: 'test'
+  ...
+# Subtest: local framing recognizes hands-only cast with a medium scale
+ok 19 - local framing recognizes hands-only cast with a medium scale
+  ---
+  duration_ms: 186.306332
+  type: 'test'
+  ...
+# Subtest: local framing recognizes detail cue stored only in diff.change
+ok 20 - local framing recognizes detail cue stored only in diff.change
+  ---
+  duration_ms: 187.368338
+  type: 'test'
+  ...
+# Subtest: local framing recognizes face close-up stored only in the shot imagePrompt
+ok 21 - local framing recognizes face close-up stored only in the shot imagePrompt
+  ---
+  duration_ms: 172.511339
+  type: 'test'
+  ...
+# Subtest: a legacy V1 shot preserves its complete local image
+ok 22 - a legacy V1 shot preserves its complete local image
+  ---
+  duration_ms: 167.191757
+  type: 'test'
+  ...
+# Subtest: a non-stage single-shot image retains its original background and does not acquire automatic cutout
+ok 23 - a non-stage single-shot image retains its original background and does not acquire automatic cutout
+  ---
+  duration_ms: 180.86426
+  type: 'test'
+  ...
+# Subtest: export waits for the local background exposed by a full detail insert and matches preview pixels
+ok 24 - export waits for the local background exposed by a full detail insert and matches preview pixels
+  ---
+  duration_ms: 194.685822
+  type: 'test'
+  ...
+# Subtest: a manually selected right cell retains both ends in full mode
+ok 25 - a manually selected right cell retains both ends in full mode
+  ---
+  duration_ms: 224.626728
+  type: 'test'
+  ...
+# Subtest: a manually selected right cell retains both ends in cutout mode
+ok 26 - a manually selected right cell retains both ends in cutout mode
+  ---
+  duration_ms: 189.465649
+  type: 'test'
+  ...
+# Subtest: an opaque full scene at its original aspect ratio retains its original composition
+ok 27 - an opaque full scene at its original aspect ratio retains its original composition
+  ---
+  duration_ms: 173.093797
+  type: 'test'
+  ...
+# Subtest: full stage actor mentioning hands remains a standing actor
+ok 28 - full stage actor mentioning hands remains a standing actor
+  ---
+  duration_ms: 189.54668
+  type: 'test'
+  ...
+# Subtest: medium stage actor mentioning hands remains a standing actor
+ok 29 - medium stage actor mentioning hands remains a standing actor
+  ---
+  duration_ms: 183.915764
+  type: 'test'
+  ...
+# (node:14) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: each production tool panel scrolls independently with timing and navigation outside that scroll
+ok 30 - each production tool panel scrolls independently with timing and navigation outside that scroll
+  ---
+  duration_ms: 273.498588
+  type: 'test'
+  ...
+# Subtest: image save controls are outside the scroll area and the canvas is in its own viewport
+ok 31 - image save controls are outside the scroll area and the canvas is in its own viewport
+  ---
+  duration_ms: 164.27412
+  type: 'test'
+  ...
+# Subtest: editor CSS is scoped, balanced and retains paging without requiring container-query support
+ok 32 - editor CSS is scoped, balanced and retains paging without requiring container-query support
+  ---
+  duration_ms: 120.086595
+  type: 'test'
+  ...
+# (node:25) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: production editor has bounded workbench, independent tools scroll and a single top music entry
+ok 33 - production editor has bounded workbench, independent tools scroll and a single top music entry
+  ---
+  duration_ms: 130.461267
+  type: 'test'
+  ...
+# Subtest: preview-only mode and shot stepping preserve all images and timing and keep one clock
+ok 34 - preview-only mode and shot stepping preserve all images and timing and keep one clock
+  ---
+  duration_ms: 146.431481
+  type: 'test'
+  ...
+# Subtest: shared material editor supplies save-and-next and returns directly to the workbench
+ok 35 - shared material editor supplies save-and-next and returns directly to the workbench
+  ---
+  duration_ms: 119.566288
+  type: 'test'
+  ...
+# Subtest: a single-shot replacement opens its own image editor and saves without changing the shared image or prompts
+ok 36 - a single-shot replacement opens its own image editor and saves without changing the shared image or prompts
+  ---
+  duration_ms: 135.77661
+  type: 'test'
+  ...
+# Subtest: production image editor markup contains the canvas before local tool panes and permanent save actions
+ok 37 - production image editor markup contains the canvas before local tool panes and permanent save actions
+  ---
+  duration_ms: 188.193492
+  type: 'test'
+  ...
+# Subtest: a workspace route replacement releases editor-specific body scrolling and its observer
+ok 38 - a workspace route replacement releases editor-specific body scrolling and its observer
+  ---
+  duration_ms: 144.023524
+  type: 'test'
+  ...
+# Subtest: panel position survives its own setting redraw but does not leak into another tab
+ok 39 - panel position survives its own setting redraw but does not leak into another tab
+  ---
+  duration_ms: 135.122911
+  type: 'test'
+  ...
+# (node:31) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: paid result waits for a returned metadata promise when local storage cannot save
+ok 40 - paid result waits for a returned metadata promise when local storage cannot save
+  ---
+  duration_ms: 156.1441
+  type: 'test'
+  ...
+# Subtest: rejected metadata with no local copy retains the paid result and retries saving without regeneration
+ok 41 - rejected metadata with no local copy retains the paid result and retries saving without regeneration
+  ---
+  duration_ms: 115.243516
+  type: 'test'
+  ...
+# [HeartbeatMemories] host metadata save adapter unavailable
+# Subtest: confirmed local copy succeeds even if metadata rejects and survives a fresh runtime
+ok 42 - confirmed local copy succeeds even if metadata rejects and survives a fresh runtime
+  ---
+  duration_ms: 231.224606
+  type: 'test'
+  ...
+# Subtest: void-returning host debounce stays compatible when local storage quota is exhausted
+ok 43 - void-returning host debounce stays compatible when local storage quota is exhausted
+  ---
+  duration_ms: 164.536358
+  type: 'test'
+  ...
+# Subtest: missing, throwing or explicitly failed metadata storage keeps recovery in memory
+ok 44 - missing, throwing or explicitly failed metadata storage keeps recovery in memory
+  ---
+  duration_ms: 607.259197
+  type: 'test'
+  ...
+# Subtest: failed paid redraw remains exportable and save-only recovery keeps its new image
+ok 45 - failed paid redraw remains exportable and save-only recovery keeps its new image
+  ---
+  duration_ms: 146.695092
+  type: 'test'
+  ...
+# Subtest: a delayed rejected save retains only its original chat recovery
+ok 46 - a delayed rejected save retains only its original chat recovery
+  ---
+  duration_ms: 125.502404
+  type: 'test'
+  ...
+# Subtest: ordinary archive revision growth still allows unchanged-song storyboard saving
+ok 47 - ordinary archive revision growth still allows unchanged-song storyboard saving
+  ---
+  duration_ms: 115.393428
+  type: 'test'
+  ...
+# Subtest: all appearance/shot combinations preserve the current branch cast and scenery intent
+ok 48 - all appearance/shot combinations preserve the current branch cast and scenery intent
+  ---
+  duration_ms: 106.301521
+  type: 'test'
+  ...
+# (node:32) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: native Canvas 16:9: one background continues through held poses and changed text
+ok 49 - native Canvas 16:9: one background continues through held poses and changed text
+  ---
+  duration_ms: 252.761234
+  type: 'test'
+  ...
+# Subtest: native Canvas 9:16: one background continues through held poses and changed text
+ok 50 - native Canvas 9:16: one background continues through held poses and changed text
+  ---
+  duration_ms: 310.401654
+  type: 'test'
+  ...
+# Subtest: background is behind confirmed transparent art, text order is deliberate, and opaque art stays intact
+ok 51 - background is behind confirmed transparent art, text order is deliberate, and opaque art stays intact
+  ---
+  duration_ms: 369.925755
+  type: 'test'
+  ...
+# Subtest: an opaque PNG marked as cutout keeps a full-frame fallback instead of hiding the stage text
+ok 52 - an opaque PNG marked as cutout keeps a full-frame fallback instead of hiding the stage text
+  ---
+  duration_ms: 204.445976
+  type: 'test'
+  ...
+# Subtest: shared backgrounds appear once in the board and pose editing is reachable from the player
+ok 53 - shared backgrounds appear once in the board and pose editing is reachable from the player
+  ---
+  duration_ms: 155.299381
+  type: 'test'
+  ...
+# Subtest: native Canvas export matches preview at the same song time even for a clipped second section
+ok 54 - native Canvas export matches preview at the same song time even for a clipped second section
+  ---
+  duration_ms: 350.745667
+  type: 'test'
+  ...
+# Subtest: automatic character layer (native alpha) is visible over the actual shared image
+ok 55 - automatic character layer (native alpha) is visible over the actual shared image
+  ---
+  duration_ms: 340.410485
+  type: 'test'
+  ...
+# Subtest: automatic character layer (\#ffffff) is visible over the actual shared image
+ok 56 - automatic character layer (\#ffffff) is visible over the actual shared image
+  ---
+  duration_ms: 390.345651
+  type: 'test'
+  ...
+# Subtest: automatic character layer (\#dddddd) is visible over the actual shared image
+ok 57 - automatic character layer (\#dddddd) is visible over the actual shared image
+  ---
+  duration_ms: 445.195968
+  type: 'test'
+  ...
+1..57
+# tests 57
+# suites 0
+# pass 57
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 4555.67914

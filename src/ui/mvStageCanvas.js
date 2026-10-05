@@ -149,12 +149,20 @@ export function foregroundPlacement(bounds, pw, ph, group, w, h) {
     const factor = { close: 1.22, medium: 1.02, full: .84, wide: .56 }[group?.scale] || 1.02;
     const body = group?.scale === 'full' || group?.scale === 'wide';
     const foot = body ? (group.scale === 'wide' ? .91 : .95) : 1.035;
-    const scale = Math.min(h * factor / Math.max(1, ph * b.height), w * (body ? .88 : 1.04) / Math.max(1, pw * (b.width || 1)));
+    const edges = b.edges || {};
+    const attached = !!(edges.left || edges.right || edges.top || edges.bottom);
+    let scale = Math.min(h * factor / Math.max(1, ph * b.height), w * (body ? .88 : 1.04) / Math.max(1, pw * (b.width || 1)));
+    if (edges.left && edges.right) scale = Math.max(scale, w / (pw * b.width));
+    if (edges.top && edges.bottom) scale = Math.max(scale, h / (ph * b.height));
     const visibleW = pw * (b.width || 1) * scale;
     const nominal = w * ({ left: .32, right: .68, center: .5 }[group?.position] || .5);
     const cx = visibleW >= w * .95 ? w / 2 : Math.max(visibleW / 2 + w * .025, Math.min(w - visibleW / 2 - w * .025, nominal));
-    const x = cx - pw * b.cx * scale, y = h * foot - ph * b.bottom * scale;
-    return { x, y, width: pw * scale, height: ph * scale, foot: h * foot, grounded: body,
+    let x = cx - pw * b.cx * scale, y = h * foot - ph * b.bottom * scale;
+    if (edges.left || edges.right) x = edges.left && edges.right ? (w - visibleW) / 2 - pw * b.x * scale : edges.left ? -pw * b.x * scale : w - pw * (b.x + b.width) * scale;
+    if (edges.top || edges.bottom) y = edges.top ? -ph * (b.top || 0) * scale : h - ph * b.bottom * scale;
+    const anchorX = edges.left && !edges.right ? 0 : edges.right && !edges.left ? w : w / 2;
+    const anchorY = edges.top ? 0 : edges.bottom ? h : h * foot;
+    return { x, y, width: pw * scale, height: ph * scale, foot: anchorY, anchorX, attached, attachedX: !!(edges.left || edges.right), grounded: body && !attached,
         subject: { x: x + pw * (b.x || 0) * scale, y: y + ph * (b.top || 0) * scale, width: visibleW, height: ph * b.height * scale } };
 }
 

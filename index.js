@@ -566,7 +566,7 @@ async function ensureRuntime(reason = 'unknown') {
     if (bootPromise) return bootPromise;
     const startedAt = globalThis.performance?.now?.() ?? Date.now();
     bootPromise = (async () => {
-        const module = await import(`./dist/heartbeatMemories.bundle.js?heartbeat=${BUILD}&layout=2`);
+        const module = await import(`./dist/heartbeatMemories.bundle.js?heartbeat=${BUILD}&layout=3`);
         if (disabled) return module;
         stopBootstrapMountTimer();
         stopBootstrapAutoUpdates();
