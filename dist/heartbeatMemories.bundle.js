@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 326
-// Source SHA-256: 70f6745b77c2f74540f8e071e52b4ce80063d1cfd156264e1c633ecc9a07d584
+// Source SHA-256: 902c503bd7105932ad04e48727d37e1b51b7d3fe9a995f86da1b41030acc002d
 // Build: python3 tools/verification/build.py <source-root>
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -1749,15 +1749,16 @@ function __init_ui_mvEditorUi_js() {
 function editorMarkup(o) {
     const { esc, btn, song, tab, panels, width, height, strip, stripNav, selectedLabel, time, total, playing, audio, audioName, exporting, drawer, drawerHtml } = o;
     const musicLabel = audio ? (audioName || song.title) : '导入音乐';
+    const pending = Math.max(0, Number(o.pendingCount) || 0);
+    const moreLabel = pending ? `更多 <span class="rmt-mve-pending-count">${pending}</span>` : '更多';
     const tabs = [['shots', '分镜'], ['timing', '定段 · 定句'], ['look', '全片样式']].map(([id, label]) =>
         btn('editor-tab', label, { id, cls: 'rmt-mve-tab' + (tab === id ? ' on' : ''), extra: ` aria-pressed="${tab === id}"` })).join('');
-    return `<header class="rmt-mve-head"><div><h2>${esc(song.title)}</h2></div><div class="rmt-mve-head-actions">${btn('editor-drawer', '更多', { id: 'more' })}${btn('editor-drawer', '导出', { id: 'export', cls: 'rmt-x-primary' })}</div></header>
-      <div class="rmt-mve-projectbar"><span>${esc(o.storyLabel || '手书')}</span>${btn('editor-drawer', esc(musicLabel), { id: 'audio', extra: ` title="${esc(musicLabel)}" aria-label="${audio ? '管理当前音乐：' + esc(musicLabel) : '导入音乐'}"` })}</div>
-      <div class="rmt-mve-layout-scope"><div class="rmt-mve-workspace" data-editor-tab="${tab}" data-preview-only="${!!o.previewOnly}"><section class="rmt-mve-preview" aria-label="手书预览">
-        <div class="rmt-mve-preview-head"><span data-rmt-mv-current>${esc(selectedLabel)}</span>${btn('editor-preview', o.previewOnly ? '恢复编辑' : '只看画面')}</div>
+    return `<header class="rmt-mve-head"><div><h2>${esc(song.title)}</h2></div><div class="rmt-mve-head-actions">${btn('editor-drawer', moreLabel, { id: 'more', extra: pending ? ` data-rmt-mv-pending="${pending}" aria-label="更多，${pending} 份结果待保存"` : '' })}${btn('editor-drawer', '导出', { id: 'export', cls: 'rmt-x-primary' })}</div></header>
+      <div class="rmt-mve-projectbar"><span class="rmt-mve-meta">${esc(o.storyLabel || '手书')} · ${audio ? '音乐与画面共用进度' : '静音预览'}</span>${btn('editor-drawer', esc(musicLabel), { id: 'audio', extra: ` title="${esc(musicLabel)}" aria-label="${audio ? '管理当前音乐：' + esc(musicLabel) : '导入音乐'}"` })}</div>
+      <div class="rmt-mve-layout-scope"><div class="rmt-mve-workspace" data-editor-tab="${tab}" data-editor-paged="${!!stripNav}" data-preview-only="${!!o.previewOnly}"><section class="rmt-mve-preview" aria-label="手书预览">
+        <div class="rmt-mve-preview-head"><span data-rmt-mv-current>${esc(selectedLabel)}</span><div class="rmt-mve-preview-actions">${btn('go-board', '素材库')}${btn('editor-preview', o.previewOnly ? '恢复编辑' : '只看画面')}</div></div>
         <div class="rmt-mv-canvas-wrap${width < height ? ' portrait' : ''}"><canvas data-rmt-mv-canvas width="${width}" height="${height}"></canvas></div>
         <div class="rmt-mve-transport"><button type="button" class="rmt-mv-play" data-rmt-mv="play" aria-label="${playing ? '暂停' : '播放'}"${exporting ? ' disabled' : ''}>${playing ? '❚❚' : '▶'}</button><span class="rmt-mve-clock" data-rmt-mv-time>${esc(time)}</span><input type="range" min="0" max="${total}" step="0.1" value="${o.seconds}" data-rmt-mv-seek aria-label="播放位置"${exporting ? ' disabled' : ''}><small>${esc(o.totalLabel)}</small></div>
-        <div class="rmt-mve-meta"><span>${audio ? '音乐与画面共用进度' : '静音预览'}</span>${btn('go-board', '素材库')}</div>
         <div class="rmt-mve-filmstrip" data-rmt-mv-filmstrip><div class="rmt-mv-strip">${strip}</div>${stripNav}</div>
       </section><section class="rmt-mve-tools"><nav class="rmt-mve-tabs" aria-label="剪辑工作区">${tabs}</nav><div class="rmt-mve-panel"${tab === 'shots' ? ' data-rmt-mv-shot-panel' : ''}>${panels[tab] || panels.shots}</div></section></div></div>
       ${drawer ? `<div class="rmt-mve-sheet-shade"><section class="rmt-mve-sheet" role="dialog" aria-modal="true" aria-label="${esc({ export: '导出手书', more: '素材与项目', audio: '歌曲' }[drawer] || '选项')}"><header><b>${esc({ export: '导出手书', more: '素材与项目', audio: '歌曲' }[drawer] || '选项')}</b>${btn('editor-drawer', '关闭', { extra: ' aria-label="关闭选项面板"' })}</header><div>${drawerHtml}</div></section></div>` : ''}`;
@@ -1854,40 +1855,51 @@ ${workbenchCss(r)}
 `;
 }
 
-function workbenchCss(r) {
+function workbenchCss(root) {
+    // The structural theme also sets button and heading metrics. Scope the real
+    // workbench above that selector so its height budget matches what is drawn.
+    const r = `${root} .rmt-body.rmt-mve-body`;
     return `
-${r} .rmt-body.rmt-mve-body,${r}.rmt-workspace[data-rmt-theme-mode] .rmt-body.rmt-mve-body{display:flex;flex-direction:column;padding:10px!important;overflow:hidden!important;touch-action:auto!important;scrollbar-gutter:auto!important}
-${r} .rmt-x-page.rmt-mv-editor{flex:1;min-height:0;max-width:none;width:100%;gap:0;padding:0;overflow:hidden}
+${root} .rmt-body.rmt-mve-body,${root}.rmt-workspace[data-rmt-theme-mode] .rmt-body.rmt-mve-body{display:flex;flex-direction:column;padding:10px!important;overflow:auto!important;touch-action:pan-y pinch-zoom!important;scrollbar-gutter:auto!important}
+${r} .rmt-x-page.rmt-mv-editor{flex:1 0 740px;min-height:740px;max-width:none;width:100%;gap:0;padding:0;overflow:visible}
 ${r} .rmt-mve-head{flex:none;min-height:38px;padding:0 0 5px;border:0}
-${r} .rmt-mve-head h2{font-size:16px;line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-${r} .rmt-mve-head-actions button{min-height:36px;font-size:12px;padding:5px 12px;border-radius:999px}
+${r} .rmt-mve-head h2{font-size:16px!important;line-height:1.4!important;margin:0!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+${r} .rmt-mve-head-actions button{min-height:36px;font-size:12px!important;padding:5px 12px;border-radius:999px}
+${r} .rmt-mve-pending-count{display:inline-block;margin-left:3px;min-width:18px;border-radius:999px;background:var(--rmt-theme-soft,#e7f1fa);font-size:11px!important;text-align:center}
 ${r} .rmt-mve-projectbar{flex:none;display:flex;justify-content:space-between;align-items:center;min-width:0;gap:12px;padding:2px 0 8px;font-size:11px;color:var(--rmt-theme-muted,#63788f)}
-${r} .rmt-mve-projectbar>button{font-size:12px;min-height:34px;padding:5px 12px;border-radius:999px;max-width:65%;min-width:0;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+${r} .rmt-mve-projectbar>button{font-size:12px!important;min-height:34px;padding:5px 12px;border-radius:999px;max-width:60%;min-width:0;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+${r} .rmt-mve-projectbar .rmt-mve-meta{flex:1;display:block;min-width:0;padding:0;font-size:11px!important;line-height:1.5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 ${r} .rmt-mve-layout-scope{display:flex;flex:1;min-height:0;min-width:0}
-${r} .rmt-mve-workspace{flex:1;min-height:0;min-width:0;align-items:stretch;gap:10px;grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1.5fr) minmax(140px,1fr)}
+${r} .rmt-mve-workspace{--rmt-mve-preview-min:320px;--rmt-mve-tools-min:300px;flex:1;min-height:630px;min-width:0;align-items:stretch;gap:10px;grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(var(--rmt-mve-preview-min),1.1fr) minmax(var(--rmt-mve-tools-min),1fr)}
+${r} .rmt-mve-workspace[data-editor-tab=shots][data-editor-paged=true]{--rmt-mve-preview-min:360px;min-height:670px}
+${r} .rmt-mve-workspace[data-editor-tab=timing]{--rmt-mve-preview-min:230px;--rmt-mve-tools-min:390px}
+${r} .rmt-mve-workspace[data-editor-tab=look]{--rmt-mve-preview-min:230px;--rmt-mve-tools-min:320px}
 ${r} .rmt-mve-preview{display:flex;flex-direction:column;min-height:0;min-width:0;overflow:hidden}
 ${r} .rmt-mve-preview-head{display:flex;align-items:center;justify-content:space-between;gap:8px;flex:none;padding:0 0 4px;font-size:11px;color:var(--rmt-theme-muted,#63788f)}
-${r} .rmt-mve-preview-head button,${r} .rmt-mve-meta button{font-size:11px;min-height:28px;padding:3px 10px;border-radius:999px}
-${r} .rmt-mve-preview .rmt-mv-canvas-wrap,${r} .rmt-mve-preview .rmt-mv-canvas-wrap.portrait{width:100%;height:auto;min-height:40px;max-width:none;border-radius:10px;display:flex;align-items:center;justify-content:center;overflow:hidden;flex:1}
-${r} .rmt-mve-preview canvas{display:block;width:100%;height:100%;max-width:100%;max-height:100%;object-fit:contain}
+${r} .rmt-mve-preview-head>span{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+${r} .rmt-mve-preview-actions{display:flex;flex:none;gap:6px}
+${r} .rmt-mve-preview-head button{font-size:12px!important;min-height:34px;padding:4px 10px;border-radius:999px;white-space:nowrap}
+${r} .rmt-mve-preview .rmt-mv-canvas-wrap,${r} .rmt-mve-preview .rmt-mv-canvas-wrap.portrait{position:relative;width:100%;height:auto;min-height:160px;max-width:none;border-radius:10px;display:flex;align-items:center;justify-content:center;overflow:hidden;flex:1 0 160px}
+${r} .rmt-mve-preview canvas{position:absolute;inset:0;display:block;width:100%;height:100%;max-width:100%;max-height:100%;object-fit:contain}
 ${r} .rmt-mve-transport{flex:none;padding:3px 0 0;gap:9px}
-${r} .rmt-mve-meta{flex:none;padding:0 1px 4px;gap:8px}
+${r} .rmt-mve-transport>small{font-size:11px!important;white-space:nowrap}
 ${r} .rmt-mve-filmstrip{flex:none;min-height:0}
 ${r} .rmt-mve-filmstrip .rmt-mv-strip{padding:1px 2px 4px;overscroll-behavior-x:contain;scrollbar-width:thin}
 ${r} .rmt-mve-filmstrip .rmt-mv-strip>button{grid-template-rows:44px 20px;width:74px!important;min-width:74px;flex-basis:74px;height:68px;border-radius:9px}
 ${r} .rmt-mve-filmstrip .rmt-mv-strip>button img{height:44px!important;max-height:44px;object-fit:contain}
 ${r} .rmt-mve-filmstrip .rmt-mv-strip>button>span{font-size:10px}
 ${r} .rmt-mve-strip-nav{font-size:10px}
-${r} .rmt-mve-strip-nav button{min-height:26px;padding:2px 8px;font-size:10px;border-radius:999px}
+${r} .rmt-mve-strip-nav button{min-height:30px;padding:2px 8px;font-size:11px!important;border-radius:999px}
 ${r} .rmt-mve-tools{display:flex;flex-direction:column;min-height:0;min-width:0;overflow:hidden}
 ${r} .rmt-mve-tabs{flex:none;padding:5px;gap:3px;grid-template-columns:1fr 1.25fr 1fr}
-${r} .rmt-mve-tab{min-height:38px;font-size:12px;border-radius:999px}
+${r} .rmt-mve-tab{min-height:38px;font-size:12px!important;border-radius:999px}
 ${r} .rmt-mve-panel{display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden;padding:0;gap:0}
-${r} .rmt-mve-panel-scroll{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin;padding:12px;display:flex;flex-direction:column;gap:12px;touch-action:pan-y pinch-zoom}
-${r} .rmt-mve-panel-scroll .rmt-x-note{font-size:12px;line-height:1.7;margin:0}
+${r} .rmt-mve-panel-scroll{flex:1;min-height:0;overflow:auto;overscroll-behavior:auto;scrollbar-width:thin;padding:12px;display:flex;flex-direction:column;gap:12px;touch-action:pan-y pinch-zoom}
+${r} .rmt-mve-panel-scroll>*{flex-shrink:0}
+${r} .rmt-mve-panel-scroll .rmt-x-note{font-size:13px!important;line-height:1.7!important;margin:0}
 ${r} .rmt-mve-dock{flex:none;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 12px;border-top:1px solid var(--rmt-theme-border,#cddfed);background:var(--rmt-theme-surface-solid,#fff)}
 ${r} .rmt-mve-dock>small{font-size:11px;color:var(--rmt-theme-muted,#63788f)}
-${r} .rmt-mve-dock button{font-size:12px;min-height:38px;border-radius:999px;padding:6px 12px}
+${r} .rmt-mve-dock button{font-size:12px!important;min-height:38px;border-radius:999px;padding:6px 12px}
 ${r} .rmt-mve-image-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 ${r} .rmt-mve-image-actions>button,${r} .rmt-mve-image-actions>label{flex:1;min-height:42px;display:flex;align-items:center;justify-content:center;border-radius:999px;margin:0;padding:8px;font-size:13px}
 ${r} .rmt-mve-image-note{font-size:11px;color:var(--rmt-theme-muted,#63788f)}
@@ -1899,15 +1911,13 @@ ${r} .rmt-mve-panel details{padding:0;border-top:0}
 ${r} .rmt-mve-workspace[data-preview-only=true]{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr)}
 ${r} .rmt-mve-workspace[data-preview-only=true] .rmt-mve-tools,${r} .rmt-mve-workspace[data-preview-only=true] .rmt-mve-filmstrip{display:none}
 ${r} .rmt-mve-workspace[data-preview-only=true] .rmt-mv-canvas-wrap{flex:1;height:auto}
-${r} .rmt-mv-editor>.rmt-x-card,${r} .rmt-mve-image-page>.rmt-x-card{flex:none;max-height:90px;overflow:auto;padding:8px;margin-bottom:7px}
-@media(min-width:960px){${r} .rmt-mve-workspace{grid-template-columns:minmax(0,1fr) 335px;grid-template-rows:minmax(0,1fr)}${r} .rmt-mve-preview .rmt-mv-canvas-wrap{flex:1;height:auto}}
-@supports(container-type:inline-size){${r} .rmt-mve-workspace{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1.5fr) minmax(140px,1fr)}@container(min-width:740px){${r} .rmt-mve-workspace{grid-template-columns:minmax(0,1fr) 335px;grid-template-rows:minmax(0,1fr)}}}
+${r} .rmt-mve-recovery{flex:none;max-height:200px;overflow:auto;padding:8px;margin:0 0 7px;border:1px solid var(--rmt-theme-border,#cddfed);border-radius:12px;background:var(--rmt-theme-surface-solid,#fff)}
+${r} .rmt-mve-recovery>summary{font-size:12px!important;min-height:30px;cursor:pointer}
+@media(min-width:960px){${r} .rmt-x-page.rmt-mv-editor{flex-basis:450px;min-height:450px}${r} .rmt-mve-workspace[data-editor-tab][data-editor-paged]{min-height:340px;grid-template-columns:minmax(0,1fr) 335px;grid-template-rows:minmax(340px,1fr)}}
+@supports(container-type:inline-size){${r} .rmt-mve-workspace[data-editor-tab]{min-height:630px;grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(var(--rmt-mve-preview-min),1.1fr) minmax(var(--rmt-mve-tools-min),1fr)}${r} .rmt-mve-workspace[data-editor-tab=shots][data-editor-paged=true]{min-height:670px}@container(min-width:740px){${r} .rmt-mve-workspace[data-editor-tab][data-editor-paged]{min-height:340px;grid-template-columns:minmax(0,1fr) 335px;grid-template-rows:minmax(340px,1fr)}}}
 @media(max-height:700px){${r} .rmt-mve-filmstrip .rmt-mv-strip>button{grid-template-rows:30px 18px;height:52px}${r} .rmt-mve-filmstrip .rmt-mv-strip>button img{height:30px!important;max-height:30px}${r} .rmt-mve-head-actions button{min-height:32px}${r} .rmt-mve-projectbar{padding-bottom:4px}${r} .rmt-mve-preview-head{padding:0}${r} .rmt-mve-meta{padding-bottom:2px}}
-@media(max-height:600px) and (orientation:landscape){${r} .rmt-mve-workspace{grid-template-columns:minmax(0,1fr) minmax(250px,.8fr);grid-template-rows:minmax(0,1fr)}${r} .rmt-mve-preview .rmt-mv-canvas-wrap{flex:1;height:auto}${r} .rmt-mve-filmstrip{display:none}}
-@media(max-width:959px) and (orientation:portrait){${r} .rmt-mve-workspace[data-editor-tab=timing]{grid-template-rows:minmax(110px,.8fr) minmax(235px,1.2fr)}${r} .rmt-mve-workspace[data-editor-tab=look]{grid-template-rows:minmax(110px,.8fr) minmax(160px,1.2fr)}}
-@supports(container-type:inline-size){@container(max-width:739px){${r} .rmt-mve-workspace[data-editor-tab=timing]{grid-template-rows:minmax(110px,.8fr) minmax(235px,1.2fr)}${r} .rmt-mve-workspace[data-editor-tab=look]{grid-template-rows:minmax(110px,.8fr) minmax(160px,1.2fr)}}}
-@media(max-height:600px) and (orientation:landscape){${r} .rmt-mve-workspace[data-editor-tab]{grid-template-rows:minmax(0,1fr)}}
-${r} .rmt-mve-workspace[data-preview-only=true]{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr)}
+@media(max-height:600px) and (orientation:landscape){${r} .rmt-x-page.rmt-mv-editor{flex-basis:450px;min-height:450px}${r} .rmt-mve-workspace[data-editor-tab][data-editor-paged]{min-height:340px;grid-template-columns:minmax(0,1fr) minmax(250px,.8fr);grid-template-rows:minmax(340px,1fr)}}
+${r} .rmt-mve-workspace[data-editor-tab][data-editor-paged][data-preview-only=true]{min-height:340px;grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(340px,1fr)}
 ${r} .rmt-mve-workspace[data-preview-only=true] .rmt-mv-canvas-wrap{flex:1;height:auto}
 `;
 }
@@ -2199,12 +2209,13 @@ function imageEditorMarkup({ hasNext = false, showPrompt = true } = {}) {
     </section>`;
 }
 
-function imageEditorCss(r) {
+function imageEditorCss(root) {
+    const r = `${root} .rmt-body.rmt-mve-body`;
     return `
-${r} .rmt-mve-image-page{display:flex;flex-direction:column;flex:1;min-height:0;max-width:none;width:100%;gap:0;padding:0}
+${r} .rmt-mve-image-page{display:flex;flex-direction:column;flex:1 0 680px;min-height:680px;max-width:none;width:100%;gap:0;padding:0}
 ${r} [data-rmt-mv-editor-host]{display:flex;flex:1;min-height:0;min-width:0}
 ${r} .rmt-mvi-workbench{display:flex;flex:1;flex-direction:column;min-height:0;min-width:0;width:100%;gap:10px;container-type:inline-size}
-${r} .rmt-mvi-workbench button{font:inherit;font-size:13px;line-height:1.3;min-height:40px;padding:7px 12px;border:1px solid var(--rmt-theme-border,#cddfed);border-radius:999px;background:var(--rmt-theme-surface-solid,#fff);color:var(--rmt-theme-text,#294762);cursor:pointer;touch-action:manipulation;box-sizing:border-box}
+${r} .rmt-mvi-workbench button{font:inherit;font-size:13px!important;line-height:1.3!important;min-height:40px;padding:7px 12px;border:1px solid var(--rmt-theme-border,#cddfed);border-radius:999px;background:var(--rmt-theme-surface-solid,#fff);color:var(--rmt-theme-text,#294762);cursor:pointer;touch-action:manipulation;box-sizing:border-box}
 ${r} .rmt-mvi-workbench button[aria-pressed=true]{border-color:var(--rmt-theme-accent-ink,#4f769d);background:var(--rmt-theme-soft,#e7f1fa)}
 ${r} .rmt-mvi-workbench button:disabled{opacity:.5;cursor:default}
 ${r} .rmt-mvi-workbench button:focus-visible,${r} .rmt-mvi-workbench summary:focus-visible{outline:2px solid var(--rmt-theme-accent-ink,#4f769d);outline-offset:2px}
@@ -2212,14 +2223,14 @@ ${r} .rmt-mvi-header{display:flex;align-items:center;justify-content:space-betwe
 ${r} .rmt-mvi-header>div{min-width:0;display:flex;flex-direction:column;gap:3px}
 ${r} .rmt-mvi-header b{font-size:15px;overflow-wrap:anywhere}
 ${r} .rmt-mvi-header small{font-size:11px;color:var(--rmt-theme-muted,#63788f)}
-${r} .rmt-mvi-layout{flex:1;min-height:0;min-width:0;display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(90px,1fr) minmax(135px,.8fr);gap:10px}
+${r} .rmt-mvi-layout{flex:1;min-height:510px;min-width:0;display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(280px,1fr) minmax(220px,.8fr);gap:10px}
 ${r} .rmt-mvi-visual{display:flex;flex-direction:column;min-height:0;min-width:0;overflow:hidden;border:1px solid var(--rmt-theme-border,#cddfed);border-radius:12px;background:var(--rmt-theme-soft,#e7f1fa)}
 ${r} .rmt-mvi-canvas-tools,${r} .rmt-mvi-matte{display:flex;align-items:center;justify-content:space-between;gap:7px;flex:none;padding:6px 8px}
 ${r} .rmt-mvi-canvas-tools>label{flex:1;display:flex;flex-direction:row;align-items:center;gap:6px;margin:0;font-size:11px;min-width:0}
 ${r} .rmt-mvi-workbench input[type=range]{min-width:0;min-height:32px;height:32px;width:100%;padding:0;margin:0;box-shadow:none;background:transparent;accent-color:var(--rmt-theme-accent-ink,#4f769d)}
 ${r} .rmt-mvi-canvas-tools input[type=range]{width:0;flex:1}
-${r} .rmt-mvi-canvas-tools button,${r} .rmt-mvi-matte button{font-size:11px;min-height:32px;padding:4px 8px}
-${r} .rmt-mvi-visual .rmt-mv-editor-viewport{flex:1;min-height:0;max-height:none;width:100%;overflow:auto;overscroll-behavior:contain;position:relative}
+${r} .rmt-mvi-canvas-tools button,${r} .rmt-mvi-matte button{font-size:11px!important;min-height:32px;padding:4px 8px}
+${r} .rmt-mvi-visual .rmt-mv-editor-viewport{flex:1 0 180px;min-height:180px;max-height:none;width:100%;overflow:auto;overscroll-behavior:contain;position:relative}
 ${r} .rmt-mvi-visual [data-editor-canvas]{margin:0 auto;max-width:none;flex:none}
 ${r} .rmt-mvi-matte>div{display:flex;gap:4px}
 ${r} .rmt-mvi-matte>small{font-size:10px;color:var(--rmt-theme-muted,#63788f);white-space:nowrap}
@@ -2228,7 +2239,7 @@ ${r} .rmt-mv-editor-viewport[data-editor-matte=light]{background:#f8fbfe}
 ${r} .rmt-mvi-inspector{display:flex;flex-direction:column;min-height:0;min-width:0;overflow:hidden;background:var(--rmt-theme-surface-solid,#fff);border:1px solid var(--rmt-theme-border,#cddfed);border-radius:12px}
 ${r} .rmt-mvi-tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;flex:none;padding:5px;background:var(--rmt-theme-soft,#e7f1fa)}
 ${r} .rmt-mvi-tabs button{font-size:12px;min-height:38px;padding:6px 3px}
-${r} .rmt-mvi-tool-scroll{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;padding:10px 12px;scrollbar-width:thin;touch-action:pan-y pinch-zoom}
+${r} .rmt-mvi-tool-scroll{flex:1;min-height:0;overflow:auto;overscroll-behavior:auto;padding:10px 12px;scrollbar-width:thin;touch-action:pan-y pinch-zoom}
 ${r} .rmt-mvi-tool-scroll .rmt-mv-editor-tools{gap:6px;margin:4px 0}
 ${r} .rmt-mvi-tool-scroll .rmt-mv-editor-tools button{flex:1 0 auto;min-height:40px;padding:6px 10px;font-size:12px}
 ${r} .rmt-mvi-tool-scroll label{font-size:12px}
@@ -2245,9 +2256,9 @@ ${r} .rmt-mvi-footer p{font-size:11px;line-height:1.5;color:var(--rmt-theme-mute
 ${r} .rmt-mvi-footer p:empty{display:none}
 ${r} .rmt-mvi-save-row,${r} .rmt-mvi-save-row>div{display:flex;align-items:center;justify-content:space-between;gap:7px}
 ${r} .rmt-mvi-workbench .rmt-mvi-primary{background:var(--rmt-theme-soft,#e7f1fa);border-color:var(--rmt-theme-accent-ink,#4f769d);font-weight:600}
-@media(min-width:960px){${r} .rmt-mvi-layout{grid-template-columns:minmax(0,1fr) 315px;grid-template-rows:minmax(0,1fr)}}
-@supports(container-type:inline-size){${r} .rmt-mvi-layout{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(90px,1fr) minmax(135px,.8fr)}@container(min-width:740px){${r} .rmt-mvi-layout{grid-template-columns:minmax(0,1fr) 315px;grid-template-rows:minmax(0,1fr)}}}
-@media(max-height:600px) and (orientation:landscape){${r} .rmt-mvi-layout{grid-template-columns:minmax(0,1fr) minmax(240px,.8fr);grid-template-rows:minmax(0,1fr)}${r} .rmt-mvi-header{padding-bottom:3px}${r} .rmt-mvi-workbench{gap:5px}${r} .rmt-mvi-matte{padding-block:2px}}
+@media(min-width:960px){${r} .rmt-mve-image-page{flex-basis:450px;min-height:450px}${r} .rmt-mvi-layout{min-height:300px;grid-template-columns:minmax(0,1fr) 315px;grid-template-rows:minmax(300px,1fr)}}
+@supports(container-type:inline-size){${r} .rmt-mvi-layout{min-height:510px;grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(280px,1fr) minmax(220px,.8fr)}@container(min-width:740px){${r} .rmt-mvi-layout{min-height:300px;grid-template-columns:minmax(0,1fr) 315px;grid-template-rows:minmax(300px,1fr)}}}
+@media(max-height:600px) and (orientation:landscape){${r} .rmt-mve-image-page{flex-basis:450px;min-height:450px}${r} .rmt-mvi-layout{min-height:300px;grid-template-columns:minmax(0,1fr) minmax(240px,.8fr);grid-template-rows:minmax(300px,1fr)}${r} .rmt-mvi-header{padding-bottom:3px}${r} .rmt-mvi-workbench{gap:5px}${r} .rmt-mvi-matte{padding-block:2px}}
 `;
 }
 
@@ -91031,14 +91042,15 @@ function page(title, back, html) {
     const imageEditor = view.sub === 'asset-editor';
     const returnButton = view.sub !== 'board' && !editor && !imageEditor ? btn('back', `← 返回${esc(back)}`) : '';
     editorBody(editor || imageEditor);
-    body().innerHTML = `<main class="rmt-x-page${editor ? ' rmt-mv-editor' : imageEditor ? ' rmt-mve-image-page' : ''}">${returnButton}${recoveryPanel()}${html}${editor || imageEditor ? '' : `<details class="rmt-x-card"><summary>MV 备份</summary>${btn('export-recovery', '导出 MV 数据与暂存结果')}</details>`}</main>`;
+    body().innerHTML = `<main class="rmt-x-page${editor ? ' rmt-mv-editor' : imageEditor ? ' rmt-mve-image-page' : ''}">${returnButton}${editor ? '' : recoveryPanel(imageEditor)}${html}${editor || imageEditor ? '' : `<details class="rmt-x-card"><summary>MV 备份</summary>${btn('export-recovery', '导出 MV 数据与暂存结果')}</details>`}</main>`;
     renderedPage = view.sub;
 }
 
-function recoveryPanel() {
+function recoveryPanel(compact = false) {
     const rows = mv.pendingMv(view.scope);
     if (!rows.length) return '';
-    return `<section class="rmt-x-card"><b>有 ${rows.length} 份 MV 结果待保存</b>${rows.map(row => `<div><p class="rmt-x-note">${esc(row.song?.title || 'MV')} · ${esc(row.reason || '等待保存')}</p>${btn('retry-save', '仅重试保存', { id: row.id })}</div>`).join('')}${btn('export-recovery', '导出暂存结果')}</section>`;
+    const content = `${rows.map(row => `<div><p class="rmt-x-note">${esc(row.song?.title || 'MV')} · ${esc(row.reason || '等待保存')}</p>${btn('retry-save', '仅重试保存', { id: row.id })}</div>`).join('')}${btn('export-recovery', '导出暂存结果')}`;
+    return compact ? `<details class="rmt-mve-recovery"><summary>${rows.length} 份结果待保存</summary>${content}</details>` : `<section class="rmt-x-card"><b>有 ${rows.length} 份 MV 结果待保存</b>${content}</section>`;
 }
 function reportResult(result, success) {
     if (result?.pending) globalThis.toastr?.info?.(result.message, '心迹回廊 · MV');
@@ -91364,7 +91376,7 @@ function editorTimingPanel(song, record) {
 
 function editorSheet(song, record) {
     if (view.editorDrawer === 'audio') return audioCard(song);
-    if (view.editorDrawer === 'more') return `${btn('go-board', '素材库 · 图片编辑 · 抠图')}${btn('go-board', '补充分镜与图片')}${btn('download-table', '下载镜头时间表')}${btn('download-srt', '下载歌词字幕')}${btn('export-recovery', '导出 MV 数据与暂存结果')}${recoveryPanel()}`;
+    if (view.editorDrawer === 'more') return `${recoveryPanel()}${btn('go-board', '素材库 · 图片编辑 · 抠图')}${btn('go-board', '补充分镜与图片')}${btn('download-table', '下载镜头时间表')}${btn('download-srt', '下载歌词字幕')}${btn('export-recovery', '导出 MV 数据与暂存结果')}`;
     if (view.editorDrawer !== 'export') return '';
     const support = exportSupport(), exporting = player.exporting;
     return exporting ? `<div class="rmt-x-row-head"><b>正在导出</b><span data-rmt-mv-export-time>0:00</span></div><div class="rmt-x-bar"><i data-rmt-mv-export-bar style="width:0%"></i></div><p class="rmt-x-note">请留在本页，不要锁屏。</p>${btn('export-stop', '停止导出')}`
@@ -91388,7 +91400,7 @@ function editorStrip(rows, record) {
     // A window in the thumbnail list, not a limit on saved/generated frames.
     const start = Math.max(0, Math.min(view.stripStart || 0, Math.max(0, rows.length - 1)));
     const strip = rows.slice(start, start + 12).map((row, i) => `<button type="button" class="${row.shot.id === view.selected ? 'on' : ''}" aria-label="第 ${start + i + 1} 镜" data-rmt-mv="select-shot" data-rmt-mv-id="${esc(row.shot.id)}">${assetPreviewHtml(mv.shotImage(record, row.shot))}<span>${start + i + 1} · ${(row.end - row.start).toFixed(1)}秒</span></button>`).join('');
-    const stripNav = `<div class="rmt-mve-strip-nav">${btn('editor-strip', '上一组', { id: String(Math.max(0, start - 12)), disabled: start === 0 })}<span>${start + 1}–${Math.min(rows.length, start + 12)} / ${rows.length} 镜</span>${btn('editor-strip', '下一组', { id: String(start + 12), disabled: start + 12 >= rows.length })}</div>`;
+    const stripNav = rows.length <= 12 ? '' : `<div class="rmt-mve-strip-nav">${btn('editor-strip', '上一组', { id: String(Math.max(0, start - 12)), disabled: start === 0 })}<span>${start + 1}–${Math.min(rows.length, start + 12)} / ${rows.length} 镜</span>${btn('editor-strip', '下一组', { id: String(start + 12), disabled: start + 12 >= rows.length })}</div>`;
     return { strip, stripNav };
 }
 
@@ -91405,7 +91417,7 @@ function renderTegaki(song, record) {
     if (tab === 'timing') panels.timing = editorTimingPanel(song, record);
     if (tab === 'look') panels.look = `<div class="rmt-mve-panel-scroll" data-rmt-mv-scroll="look"><div class="rmt-x-row-head"><b>整支手书的样子</b><span>全片设置</span></div><div class="rmt-x-segs">${seg('editor-ratio', { '16:9': '横屏 16:9', '9:16': '竖屏 9:16' }, mv.normalizeSettings(record.settings).ratio)}</div>${tegakiControls(record, song)}</div>`;
     const html = editor_ui.editorMarkup({ esc, btn, song, tab, panels, width: w, height: h, strip, stripNav,
-        storyLabel: mv_direction.directionOf(mv.normalizeSettings(record.settings).storyType).name, previewOnly: view.previewOnly,
+        storyLabel: mv_direction.directionOf(mv.normalizeSettings(record.settings).storyType).name, previewOnly: view.previewOnly, pendingCount: mv.pendingMv(view.scope).length,
         selectedLabel: `第 ${selIndex + 1} 镜 · ${rows.length} 镜`, time: mv.formatTime(currentTime(), true), seconds: currentTime(), total, totalLabel: mv.formatTime(total),
         playing: player.playing, audio: audioBySong.has(audioKey()), audioName: audioBySong.get(audioKey())?.name, exporting: player.exporting, drawer: view.editorDrawer, drawerHtml: editorSheet(song, record) });
     page('手书剪辑台', '素材库', html);
