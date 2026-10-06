@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 327
-// Source SHA-256: b43da0f4bd083620ef866ed853aba0c21b3b5a0e2a8cb11210786bcd74e6f6c5
+// Source SHA-256: 09bd010c450f273000a402cb5316b254293fa39ed81ae6b4b3a6ccef3cea1e41
 // Build: python3 tools/verification/build.py <source-root>
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -2013,6 +2013,25 @@ function mountAssetEditor(host, options) {
     const originalRef = options.image?.original || options.image || null;
     const say = text => { if (active) status.textContent = text; };
     const layer = () => find('[data-layer]');
+    const viewport = find('.rmt-mv-editor-viewport');
+    const cursor = find('[data-brush-cursor]');
+    const zoom = () => Number(find('[data-zoom]').value) || 1;
+    let toolsOpen = (root.clientWidth || host.clientWidth || 0) >= 740;
+    let fittedWidth = 0, fittedAspect = 0, viewSize = null;
+    function resetView() {
+        find('[data-zoom]').value = '1'; viewport.scrollTop = 0; viewport.scrollLeft = 0;
+        fittedWidth = 0; viewSize = null;
+    }
+    function brushPreview(event = null) {
+        const size = Number(find('[data-brush]').value) || 20;
+        find('[data-brush-size]').textContent = `${size} 像素`;
+        cursor.hidden = busy || stage !== 'paint' || panning || comparing || brush === 'region' || !source;
+        if (cursor.hidden) return;
+        const r = viewport.getBoundingClientRect();
+        cursor.style.width = `${size}px`; cursor.style.height = `${size}px`;
+        cursor.style.left = `${(viewport.scrollLeft || 0) + (event ? event.clientX - r.left : (viewport.clientWidth || 360) / 2)}px`;
+        cursor.style.top = `${(viewport.scrollTop || 0) + (event ? event.clientY - r.top : (viewport.clientHeight || 180) / 2)}px`;
+    }
     const makeCanvas = (w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; };
     const duplicate = data => new ImageData(new Uint8ClampedArray(data.data), data.width, data.height);
     const load = url => new Promise((resolve, reject) => {
@@ -2021,11 +2040,19 @@ function mountAssetEditor(host, options) {
     function dimensions(w, h) { canvas.width = w; canvas.height = h; }
     function show() {
         if (!active) return;
+        root.dataset.toolsOpen = String(toolsOpen);
+        find('.rmt-mvi-tool-scroll').hidden = !toolsOpen;
+        find('[data-edit="tools"]').setAttribute('aria-expanded', String(toolsOpen));
+        find('[data-edit="tools"]').textContent = toolsOpen ? '收起工具' : '展开工具';
         if (stage === 'paint') tool = 'brush';
         find('[data-select-tools]').hidden = stage !== 'select'; find('[data-paint-tools]').hidden = stage !== 'paint';
         find('[data-grid-picker]').hidden = tool === 'crop';
         for (const [action, value] of [['select', 'grid'], ['crop', 'crop'], ['paint', 'brush']]) find(`[data-edit="${action}"]`).setAttribute('aria-pressed', String(tool === value));
         find('[data-edit="compare"]').setAttribute('aria-pressed', String(comparing));
+        find('[data-edit="pan"]').setAttribute('aria-pressed', String(panning));
+        for (const value of ['erase', 'restore', 'region']) find(`[data-edit="${value}"]`).setAttribute('aria-pressed', String(!panning && brush === value));
+        find('[data-zoom-value]').textContent = `${Math.round(zoom() * 100)}%`;
+        cursor.hidden = true;
         if (!source) return;
         if (comparing) { dimensions(source.naturalWidth, source.naturalHeight); g.drawImage(source, 0, 0); }
         else if (stage === 'select') {
@@ -2041,12 +2068,26 @@ function mountAssetEditor(host, options) {
             g.strokeStyle = '#ffb800'; g.lineWidth = Math.max(2, canvas.width / 180); g.strokeRect(x, y, w, h);
             find('[data-selection-note]').textContent = `选中 ${w} × ${h} 像素；可重新框选。`;
         } else if (working) { dimensions(working.width, working.height); g.putImageData(working, 0, 0); }
-        const viewport = find('.rmt-mv-editor-viewport');
         const availableWidth = viewport.clientWidth || 360;
         const availableHeight = viewport.clientHeight || (globalThis.innerHeight || 800) * 0.55;
-        const fitted = Math.min(availableWidth, availableHeight * canvas.width / canvas.height);
-        canvas.style.width = `${fitted * Number(find('[data-zoom]').value)}px`;
+        const aspect = canvas.width / canvas.height;
+        // At fit size the image follows the viewport. Once zoomed, opening or
+        // folding tools must reveal/hide pixels, not rescale the image again.
+        const sameImageShape = fittedAspect === aspect;
+        if (zoom() === 1 || !fittedWidth || !sameImageShape) fittedWidth = Math.min(availableWidth, availableHeight * aspect);
+        fittedAspect = aspect;
+        const displayWidth = fittedWidth * zoom(), displayHeight = displayWidth / aspect;
+        canvas.style.width = `${displayWidth}px`;
         canvas.style.maxWidth = 'none';
+        if (zoom() > 1 && sameImageShape && viewSize && (viewSize.width !== availableWidth || viewSize.height !== availableHeight)) {
+            // Keep the inspected detail near the centre when the tool dock or
+            // host viewport changes, including phone rotation.
+            const x = viewSize.imageWidth <= viewSize.width ? 0.5 : ((viewport.scrollLeft || 0) + viewSize.width / 2) / viewSize.imageWidth;
+            const y = viewSize.imageHeight <= viewSize.height ? 0.5 : ((viewport.scrollTop || 0) + viewSize.height / 2) / viewSize.imageHeight;
+            viewport.scrollLeft = Math.max(0, x * displayWidth - availableWidth / 2);
+            viewport.scrollTop = Math.max(0, y * displayHeight - availableHeight / 2);
+        }
+        viewSize = { width: availableWidth, height: availableHeight, imageWidth: displayWidth, imageHeight: displayHeight };
         canvas.style.touchAction = panning || comparing ? 'pan-x pan-y' : 'none';
         find('[data-image-size]').textContent = `${canvas.width} × ${canvas.height}`;
     }
@@ -2058,14 +2099,14 @@ function mountAssetEditor(host, options) {
     }
     function applyCrop() {
         if (!source) return;
-        try { original = selectPixels(); working = duplicate(original); history.length = 0; changed = true; selectionDirty = false; restoreOriginal = false; stage = 'paint'; layer().checked = false; show(); say('已选定单格。可以直接保存，或继续处理背景。'); }
+        try { original = selectPixels(); working = duplicate(original); history.length = 0; changed = true; selectionDirty = false; restoreOriginal = false; stage = 'paint'; panning = false; resetView(); layer().checked = false; show(); say('已选定画面。可保存，或继续抠图修边。'); }
         catch { say('这张图片无法读取像素。可先下载原图，再从“导入图片”打开；提示词仍可编辑。'); }
     }
     function pushUndo() { if (working) history.push({ data: duplicate(working), layer: layer().checked }); }
     function autoCutout() {
         if (!working) { say('请先载入图片。'); return; }
         if (selectionDirty) { say('请先点“使用选中画面”，再一键抠图。'); return; }
-        stage = 'paint';
+        stage = 'paint'; panning = false;
         const prepared = pixels.prepareCutoutPixels(working.data, working.width, working.height, { multiple: options.multipleCharacters, reference: original?.data || working.data });
         if (!prepared.data) {
             show();
@@ -2101,6 +2142,7 @@ function mountAssetEditor(host, options) {
     canvas.addEventListener('pointerdown', event => {
         if (busy || panning || comparing || !source || pointerId !== null) return;
         event.preventDefault(); pointerId = event.pointerId; canvas.setPointerCapture?.(pointerId); anchor = point(event);
+        brushPreview(event);
         if (stage === 'paint' && working) {
             pushUndo();
             if (brush === 'region') {
@@ -2114,6 +2156,7 @@ function mountAssetEditor(host, options) {
         }
     });
     canvas.addEventListener('pointermove', event => {
+        brushPreview(event);
         if (event.pointerId !== pointerId || !anchor) return;
         event.preventDefault(); const next = point(event);
         if (stage === 'paint' && working) { if (brush !== 'region') paint(anchor, next); anchor = next; }
@@ -2123,8 +2166,20 @@ function mountAssetEditor(host, options) {
     });
     const endStroke = event => { if (event.pointerId === pointerId) { if (stage === 'paint') compactUndo(); anchor = null; pointerId = null; } };
     canvas.addEventListener('pointerup', endStroke); canvas.addEventListener('pointercancel', endStroke); canvas.addEventListener('lostpointercapture', endStroke);
-    find('[data-grid]').addEventListener('change', event => { grid = event.target.value; stage = 'select'; tool = 'grid'; comparing = false; if (grid !== 'free') { const [rows, cols] = grid.split(':').map(Number); crop = pixels.gridCrop(rows, cols, 0); selectionDirty = true; } show(); });
-    find('[data-zoom]').addEventListener('input', show);
+    canvas.addEventListener('pointerleave', () => { cursor.hidden = true; });
+    viewport.addEventListener('scroll', () => { cursor.hidden = true; }, { passive: true });
+    find('[data-grid]').addEventListener('change', event => { grid = event.target.value; stage = 'select'; tool = 'grid'; panning = false; comparing = false; if (grid !== 'free') { const [rows, cols] = grid.split(':').map(Number); crop = pixels.gridCrop(rows, cols, 0); selectionDirty = true; } show(); });
+    find('[data-zoom]').addEventListener('input', () => {
+        const before = canvas.getBoundingClientRect(), area = viewport.getBoundingClientRect();
+        const width = viewport.clientWidth || 360, height = viewport.clientHeight || 180;
+        const x = Math.max(0, Math.min(1, (area.left + width / 2 - before.left) / Math.max(1, before.width)));
+        const y = Math.max(0, Math.min(1, (area.top + height / 2 - before.top) / Math.max(1, before.height)));
+        show();
+        const after = canvas.getBoundingClientRect();
+        viewport.scrollLeft = Math.max(0, x * after.width - width / 2);
+        viewport.scrollTop = Math.max(0, y * after.height - height / 2);
+    });
+    find('[data-brush]').addEventListener('input', () => brushPreview());
     layer().addEventListener('change', () => { changed = true; restoreOriginal = false; });
     async function blobOfWorking() {
         if (!working) throw new Error('no pixels');
@@ -2149,22 +2204,24 @@ function mountAssetEditor(host, options) {
         root.querySelectorAll('[data-matte]').forEach(item => item.setAttribute('aria-pressed', String(item === button)));
     }));
     root.addEventListener('click', async event => {
-        const button = event.target.closest('[data-edit]'); if (!button || busy) return;
+        const button = event.target.closest('[data-edit]'); if (!button) return;
         event.preventDefault(); const action = button.dataset.edit;
         if (action === 'close') { options.onClose(); return; }
+        if (busy) return;
+        if (action === 'tools') { toolsOpen = !toolsOpen; show(); return; }
         if (action === 'default-prompt') { prompt.value = options.defaultPrompt || ''; return; }
         if (importing) { say('图片正在读取，请稍候再保存或编辑。'); return; }
         if (action === 'compare') { comparing = !comparing; show(); return; }
-        if (action === 'fit') { find('[data-zoom]').value = '1'; const viewport = find('.rmt-mv-editor-viewport'); viewport.scrollTop = 0; viewport.scrollLeft = 0; show(); return; }
+        if (action === 'fit') { resetView(); show(); return; }
         const wasComparing = comparing; comparing = false;
         if (wasComparing) show();
-        if (action === 'pan') { panning = !panning; button.setAttribute('aria-pressed', String(panning)); button.textContent = panning ? '继续编辑' : '移动画布'; show(); return; }
-        if (action === 'select' || action === 'crop') { stage = 'select'; tool = action === 'crop' ? 'crop' : 'grid'; if (tool === 'crop') { grid = 'free'; find('[data-grid]').value = grid; } show(); return; }
-        if (action === 'paint') { if (!working || selectionDirty) applyCrop(); else { stage = 'paint'; show(); } return; }
+        if (action === 'pan') { panning = !panning; show(); return; }
+        if (action === 'select' || action === 'crop') { toolsOpen = true; stage = 'select'; panning = false; tool = action === 'crop' ? 'crop' : 'grid'; if (tool === 'crop') { grid = 'free'; find('[data-grid]').value = grid; } show(); return; }
+        if (action === 'paint') { toolsOpen = true; panning = false; if (!working || selectionDirty) applyCrop(); else { stage = 'paint'; show(); } return; }
         if (action === 'apply-crop') { applyCrop(); return; }
         if (action === 'full-crop') { crop = { x: 0, y: 0, w: 1, h: 1 }; grid = 'free'; find('[data-grid]').value = grid; applyCrop(); return; }
         if (action === 'erase' || action === 'restore' || action === 'region') {
-            brush = action; for (const value of ['erase', 'restore', 'region']) find(`[data-edit="${value}"]`).setAttribute('aria-pressed', String(value === brush)); return;
+            brush = action; panning = false; show(); brushPreview(); return;
         }
         if (action === 'undo') { const last = history.pop(); if (last) {
             if (last.data) working = last.data;
@@ -2176,6 +2233,7 @@ function mountAssetEditor(host, options) {
         if (action === 'original') {
             // Restore the saved original reference without rewriting or deleting its pixels.
             restoreOriginal = true; changed = true; selectionDirty = false; sourceBlob = null; crop = { x: 0, y: 0, w: 1, h: 1 }; history.length = 0;
+            resetView(); panning = false;
             const token = ++loadToken;
             try { if (options.sourceUrl) { const img = await load(options.sourceUrl); if (!active || token !== loadToken) return; source = img; original = selectPixels(); working = duplicate(original); layer().checked = false; stage = 'paint'; show(); say('原图已恢复，保存后生效。'); } }
             catch { say('原图暂时无法读取；保存仍可恢复原图引用。'); }
@@ -2184,7 +2242,9 @@ function mountAssetEditor(host, options) {
         const saving = action === 'save' || action === 'save-next';
         if (!saving && action !== 'download') return;
         if (saving && selectionDirty) { say('请先点“使用选中画面”，确认单格预览。'); return; }
-        busy = true; root.querySelectorAll('button,input,select,textarea').forEach(el => { el.disabled = true; });
+        busy = true; cursor.hidden = true;
+        root.querySelectorAll('button,input,select,textarea').forEach(el => { el.disabled = el.dataset.edit !== 'close'; });
+        say(saving ? '正在保存修改…' : '正在准备 PNG…');
         try {
             const blob = (action === 'download' || (changed && !restoreOriginal)) ? await blobOfWorking() : null;
             if (!active) return;
@@ -2247,80 +2307,95 @@ function __init_ui_mvImageEditorUi_js() {
 // Presentation only. Pixel edits, undo, storage and prompt generation remain in
 // their existing modules; this layout keeps the canvas and save actions visible.
 function imageEditorMarkup({ hasNext = false, showPrompt = true } = {}) {
-    return `<section class="rmt-mv-editor rmt-mvi-workbench" aria-label="图片编辑">
-      <header class="rmt-mvi-header"><div><b data-image-title>图片编辑</b><small data-image-scope></small></div><button type="button" data-edit="close">取消</button></header>
+    return `<section class="rmt-mv-editor rmt-mvi-workbench" data-tools-open="false" aria-label="图片编辑">
+      <header class="rmt-mvi-header"><button type="button" data-edit="close" aria-label="返回，放弃未保存修改">返回</button><div><b data-image-title>图片编辑</b><small data-image-scope></small></div><button type="button" data-edit="tools" aria-expanded="false">展开工具</button></header>
       <div class="rmt-mvi-layout">
         <section class="rmt-mvi-visual" aria-label="编辑画布">
-          <div class="rmt-mvi-canvas-tools"><button type="button" data-edit="compare" aria-pressed="false">原图对比</button><label>缩放<input data-zoom type="range" min="1" max="4" step="0.25" value="1" aria-label="画布缩放"></label><button type="button" data-edit="fit">适应</button></div>
-          <div class="rmt-mv-editor-viewport"><canvas data-editor-canvas aria-label="素材裁切与抠图画布"></canvas></div>
-          <div class="rmt-mvi-matte" aria-label="检查透明边缘"><small data-image-size></small><div><button type="button" data-matte="grid" aria-pressed="true">透明底</button><button type="button" data-matte="dark" aria-pressed="false">深色底</button><button type="button" data-matte="light" aria-pressed="false">浅色底</button></div></div>
+          <div class="rmt-mvi-canvas-tools"><button type="button" data-edit="pan" aria-pressed="false">移动</button><label><span data-zoom-value>100%</span><input data-zoom type="range" min="1" max="4" step="0.25" value="1" aria-label="画布缩放"></label><button type="button" data-edit="fit">看全图</button><button type="button" data-edit="compare" aria-pressed="false">对比</button></div>
+          <div class="rmt-mv-editor-viewport"><canvas data-editor-canvas aria-label="素材裁切与抠图画布"></canvas><span class="rmt-mvi-brush-cursor" data-brush-cursor hidden aria-hidden="true"></span></div>
         </section>
         <section class="rmt-mvi-inspector" aria-label="图片编辑工具">
           <nav class="rmt-mvi-tabs" aria-label="编辑方式"><button type="button" data-edit="select" aria-pressed="true">选单格</button><button type="button" data-edit="crop" aria-pressed="false">自由裁切</button><button type="button" data-edit="paint" aria-pressed="false">抠图修边</button></nav>
-          <div class="rmt-mvi-tool-scroll">
+          <div class="rmt-mvi-tool-scroll" hidden>
             <div data-select-tools><label data-grid-picker>拼图排列<select data-grid><option value="free">手动框选</option><option value="1:1">整张</option><option value="2:1">上下两格</option><option value="3:1">上下三格</option><option value="4:1">上下四格</option><option value="1:2">左右两格</option><option value="1:3">左右三格</option><option value="1:4">左右四格</option><option value="2:2">四宫格</option><option value="3:3">九宫格</option></select></label><p class="rmt-x-note" data-selection-note>拖动框选画面，或选择排列后点选一格。</p><div class="rmt-mv-editor-tools"><button type="button" data-edit="apply-crop">使用选中画面</button><button type="button" data-edit="full-crop">整张入画</button></div></div>
-            <div data-paint-tools hidden><div class="rmt-mv-editor-tools"><button type="button" data-edit="auto">一键抠图</button><button type="button" data-edit="erase" aria-pressed="true">擦除</button><button type="button" data-edit="restore" aria-pressed="false">恢复</button><button type="button" data-edit="region" aria-pressed="false">点除残底</button></div><label class="rmt-mvi-brush">笔刷<input data-brush type="range" min="1" max="100" value="20" aria-label="笔刷大小"></label></div>
-            <div class="rmt-mv-editor-tools"><button type="button" data-edit="pan" aria-pressed="false">移动画布</button><button type="button" data-edit="reset">还原选中画面</button></div>
+            <div data-paint-tools hidden><div class="rmt-mv-editor-tools"><button type="button" data-edit="auto">一键抠图</button><button type="button" data-edit="erase" aria-pressed="true">擦除</button><button type="button" data-edit="restore" aria-pressed="false">恢复</button><button type="button" data-edit="region" aria-pressed="false">点除残底</button></div><label class="rmt-mvi-brush">笔刷<input data-brush type="range" min="1" max="100" value="20" aria-label="笔刷大小"><span data-brush-size>20 像素</span></label></div>
+            <div class="rmt-mv-editor-tools"><button type="button" data-edit="reset">还原选中画面</button></div>
             <label class="rmt-mvi-layer"><input data-layer type="checkbox">使用此透明图叠背景</label>
+            <div class="rmt-mvi-matte" aria-label="检查透明边缘"><small data-image-size></small><div><button type="button" data-matte="grid" aria-pressed="true">透明底</button><button type="button" data-matte="dark" aria-pressed="false">深色底</button><button type="button" data-matte="light" aria-pressed="false">浅色底</button></div></div>
             <details class="rmt-mvi-more"><summary>导入、原图与下载</summary><div class="rmt-mv-editor-tools"><label class="rmt-mv-editor-upload">导入图片<input type="file" accept="image/*" data-import="full"></label><label class="rmt-mv-editor-upload">导入透明图<input type="file" accept="image/png,image/webp" data-import="cutout"></label><button type="button" data-edit="download">下载当前 PNG</button><button type="button" data-edit="original">恢复原图</button></div></details>
             <details class="rmt-mvi-more"${showPrompt ? '' : ' hidden'}><summary>本张生图提示词</summary><label>提示词<textarea data-editor-prompt rows="6"></textarea></label><div class="rmt-mv-editor-tools"><button type="button" data-edit="default-prompt">恢复默认提示词</button></div><p class="rmt-x-note">保存不重新生图；重画时才使用新提示词。</p></details>
           </div>
         </section>
       </div>
-      <footer class="rmt-mvi-footer"><p role="status" aria-live="polite" data-editor-status></p><div class="rmt-mvi-save-row"><button type="button" data-edit="undo">撤销</button><div><button type="button" data-edit="save">保存修改</button><button type="button" class="rmt-mvi-primary" data-edit="save-next"${hasNext ? '' : ' hidden'}>保存并下一镜</button></div></div></footer>
+      <footer class="rmt-mvi-footer"><p role="status" aria-live="polite" data-editor-status></p><div class="rmt-mvi-save-row"><button type="button" data-edit="undo" aria-label="撤销上一步">撤销</button><button type="button" class="rmt-mvi-primary" data-edit="save">保存修改</button><button type="button" data-edit="save-next"${hasNext ? '' : ' hidden'}>保存并下一镜</button></div></footer>
     </section>`;
 }
 
 function imageEditorCss(root) {
     const r = `${root} .rmt-body.rmt-mve-body`;
     return `
-${r} .rmt-mve-image-page{display:flex;flex-direction:column;flex:1 0 680px;min-height:680px;max-width:none;width:100%;gap:0;padding:0}
+${root} .rmt-shell.rmt-mvi-focus>.rmt-topbar,${root} .rmt-shell.rmt-mvi-focus>.rmt-workspace-tabs,${root} .rmt-shell.rmt-mvi-focus>.rmt-workspace-location{display:none!important}
+${root} .rmt-shell.rmt-mvi-focus>.rmt-body.rmt-mve-body{display:flex!important;flex:1 1 0!important;min-height:0;padding:8px!important;overflow:hidden!important}
+${r} .rmt-mve-image-page{display:flex;flex-direction:column;flex:1 1 0;min-height:0;max-width:none;width:100%;gap:0;padding:0}
 ${r} [data-rmt-mv-editor-host]{display:flex;flex:1;min-height:0;min-width:0}
-${r} .rmt-mvi-workbench{display:flex;flex:1;flex-direction:column;min-height:0;min-width:0;width:100%;gap:10px;container-type:inline-size}
-${r} .rmt-mvi-workbench button{font:inherit;font-size:13px!important;line-height:1.3!important;min-height:40px;padding:7px 12px;border:1px solid var(--rmt-theme-border,#cddfed);border-radius:999px;background:var(--rmt-theme-surface-solid,#fff);color:var(--rmt-theme-text,#294762);cursor:pointer;touch-action:manipulation;box-sizing:border-box}
+${r} .rmt-mvi-loading{display:flex;flex-direction:column;gap:12px;align-items:flex-start}
+${r} .rmt-mvi-workbench{display:flex;flex:1;flex-direction:column;min-height:0;min-width:0;width:100%;gap:6px;overflow:hidden;container-type:inline-size}
+${r} .rmt-mvi-workbench,${r} .rmt-mvi-workbench *{box-sizing:border-box}
+${r} .rmt-mvi-workbench [hidden]{display:none!important}
+${r} .rmt-mvi-workbench button{font:inherit;font-size:13px!important;line-height:1.3!important;min-height:44px;padding:7px 12px;border:1px solid var(--rmt-theme-border,#cddfed);border-radius:999px;background:var(--rmt-theme-surface-solid,#fff);color:var(--rmt-theme-text,#294762);cursor:pointer;touch-action:manipulation;box-sizing:border-box}
 ${r} .rmt-mvi-workbench button[aria-pressed=true]{border-color:var(--rmt-theme-accent-ink,#4f769d);background:var(--rmt-theme-soft,#e7f1fa)}
 ${r} .rmt-mvi-workbench button:disabled{opacity:.5;cursor:default}
 ${r} .rmt-mvi-workbench button:focus-visible,${r} .rmt-mvi-workbench summary:focus-visible{outline:2px solid var(--rmt-theme-accent-ink,#4f769d);outline-offset:2px}
-${r} .rmt-mvi-header{display:flex;align-items:center;justify-content:space-between;gap:12px;flex:none;padding:0 0 8px;border-bottom:1px solid var(--rmt-theme-border,#cddfed)}
-${r} .rmt-mvi-header>div{min-width:0;display:flex;flex-direction:column;gap:3px}
-${r} .rmt-mvi-header b{font-size:15px;overflow-wrap:anywhere}
-${r} .rmt-mvi-header small{font-size:11px;color:var(--rmt-theme-muted,#63788f)}
-${r} .rmt-mvi-layout{flex:1;min-height:510px;min-width:0;display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(280px,1fr) minmax(220px,.8fr);gap:10px}
+${r} .rmt-mvi-header{display:flex;align-items:center;justify-content:flex-start;gap:12px;flex:none;padding:0 0 6px;border-bottom:1px solid var(--rmt-theme-border,#cddfed)}
+${r} .rmt-mvi-header>div{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+${r} .rmt-mvi-header button{flex:none;white-space:nowrap}
+${r} .rmt-mvi-header b{font-size:15px!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+${r} .rmt-mvi-header small{font-size:11px!important;color:var(--rmt-theme-muted,#63788f);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+${r} .rmt-mvi-layout{flex:1;min-height:0;min-width:0;display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr) auto;gap:6px}
+${r} .rmt-mvi-workbench[data-tools-open=true] .rmt-mvi-layout{grid-template-rows:minmax(0,1fr) minmax(0,.5fr)}
 ${r} .rmt-mvi-visual{display:flex;flex-direction:column;min-height:0;min-width:0;overflow:hidden;border:1px solid var(--rmt-theme-border,#cddfed);border-radius:12px;background:var(--rmt-theme-soft,#e7f1fa)}
 ${r} .rmt-mvi-canvas-tools,${r} .rmt-mvi-matte{display:flex;align-items:center;justify-content:space-between;gap:7px;flex:none;padding:6px 8px}
-${r} .rmt-mvi-canvas-tools>label{flex:1;display:flex;flex-direction:row;align-items:center;gap:6px;margin:0;font-size:11px;min-width:0}
-${r} .rmt-mvi-workbench input[type=range]{min-width:0;min-height:32px;height:32px;width:100%;padding:0;margin:0;box-shadow:none;background:transparent;accent-color:var(--rmt-theme-accent-ink,#4f769d)}
+${r} .rmt-mvi-canvas-tools>label{flex:1;display:flex;flex-direction:row;align-items:center;gap:6px;margin:0;font-size:11px!important;min-width:0;white-space:nowrap}
+${r} .rmt-mvi-workbench input[type=range]{appearance:none!important;-webkit-appearance:none!important;display:block;min-width:0;min-height:44px!important;height:44px!important;max-height:44px!important;width:100%;padding:0!important;margin:0!important;border:0!important;border-radius:0!important;box-shadow:none!important;background:transparent!important;filter:none!important;touch-action:pan-y;cursor:pointer}
+${r} .rmt-mvi-workbench input[type=range]::-webkit-slider-runnable-track{height:6px!important;border:0!important;border-radius:999px!important;background:var(--rmt-theme-border,#cddfed)!important;box-shadow:none!important}
+${r} .rmt-mvi-workbench input[type=range]::-webkit-slider-thumb{-webkit-appearance:none!important;appearance:none!important;width:22px!important;height:22px!important;margin-top:-8px!important;border:2px solid var(--rmt-theme-surface-solid,#fff)!important;border-radius:50%!important;background:var(--rmt-theme-accent-ink,#4f769d)!important;box-shadow:0 1px 4px #0003!important}
+${r} .rmt-mvi-workbench input[type=range]::-moz-range-track{height:6px;border:0;border-radius:999px;background:var(--rmt-theme-border,#cddfed)}
+${r} .rmt-mvi-workbench input[type=range]::-moz-range-thumb{width:18px;height:18px;border:2px solid var(--rmt-theme-surface-solid,#fff);border-radius:50%;background:var(--rmt-theme-accent-ink,#4f769d)}
 ${r} .rmt-mvi-canvas-tools input[type=range]{width:0;flex:1}
-${r} .rmt-mvi-canvas-tools button,${r} .rmt-mvi-matte button{font-size:11px!important;min-height:32px;padding:4px 8px}
-${r} .rmt-mvi-visual .rmt-mv-editor-viewport{flex:1 0 180px;min-height:180px;max-height:none;width:100%;overflow:auto;overscroll-behavior:contain;position:relative}
+${r} .rmt-mvi-canvas-tools button,${r} .rmt-mvi-matte button{font-size:11px!important;min-height:44px;padding:4px 8px;white-space:nowrap}
+${r} .rmt-mvi-visual .rmt-mv-editor-viewport{flex:1 1 0;min-height:0;max-height:none;width:100%;overflow:auto;overscroll-behavior:contain;position:relative;isolation:isolate}
 ${r} .rmt-mvi-visual [data-editor-canvas]{margin:0 auto;max-width:none;flex:none}
+${r} .rmt-mvi-brush-cursor{position:absolute;z-index:2;display:block;pointer-events:none;transform:translate(-50%,-50%);border:1px solid #fff;border-radius:50%;box-shadow:0 0 0 1px #253445,inset 0 0 0 1px #253445;box-sizing:border-box}
 ${r} .rmt-mvi-matte>div{display:flex;gap:4px}
 ${r} .rmt-mvi-matte>small{font-size:10px;color:var(--rmt-theme-muted,#63788f);white-space:nowrap}
 ${r} .rmt-mv-editor-viewport[data-editor-matte=dark]{background:#253445}
 ${r} .rmt-mv-editor-viewport[data-editor-matte=light]{background:#f8fbfe}
 ${r} .rmt-mvi-inspector{display:flex;flex-direction:column;min-height:0;min-width:0;overflow:hidden;background:var(--rmt-theme-surface-solid,#fff);border:1px solid var(--rmt-theme-border,#cddfed);border-radius:12px}
 ${r} .rmt-mvi-tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;flex:none;padding:5px;background:var(--rmt-theme-soft,#e7f1fa)}
-${r} .rmt-mvi-tabs button{font-size:12px;min-height:38px;padding:6px 3px}
+${r} .rmt-mvi-tabs button{font-size:12px;min-height:44px;padding:6px 3px}
 ${r} .rmt-mvi-tool-scroll{flex:1;min-height:0;overflow:auto;overscroll-behavior:auto;padding:10px 12px;scrollbar-width:thin;touch-action:pan-y pinch-zoom}
 ${r} .rmt-mvi-tool-scroll .rmt-mv-editor-tools{gap:6px;margin:4px 0}
-${r} .rmt-mvi-tool-scroll .rmt-mv-editor-tools button{flex:1 0 auto;min-height:40px;padding:6px 10px;font-size:12px}
-${r} .rmt-mvi-tool-scroll label{font-size:12px}
+${r} .rmt-mvi-tool-scroll .rmt-mv-editor-tools button{flex:1 0 auto;min-height:44px;padding:6px 10px;font-size:12px}
+${r} .rmt-mvi-tool-scroll label{font-size:12px!important}
 ${r} .rmt-mvi-tool-scroll input:not([type=checkbox]):not([type=range]),${r} .rmt-mvi-tool-scroll select,${r} .rmt-mvi-tool-scroll textarea{font-size:16px}
 ${r} .rmt-mvi-tool-scroll .rmt-mvi-brush{display:flex;flex-direction:row;align-items:center;gap:8px}
 ${r} .rmt-mvi-tool-scroll .rmt-mvi-brush input{flex:1;width:0}
+${r} .rmt-mvi-brush>span{flex:none;min-width:55px;font-size:11px!important;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
 ${r} .rmt-mvi-tool-scroll .rmt-mvi-layer{display:flex;flex-direction:row;align-items:center;gap:8px;line-height:1.5;margin:8px 0}
 ${r} .rmt-mvi-layer input{width:18px;min-width:18px;height:18px;margin:0}
-${r} .rmt-mvi-more{border-top:1px solid var(--rmt-theme-border,#cddfed);margin-top:8px}
-${r} .rmt-mvi-more summary{min-height:40px;display:flex;align-items:center;cursor:pointer;font-size:12px}
+${r} .rmt-mvi-more{margin-top:8px}
+${r} .rmt-mvi-more summary{min-height:44px;display:flex;align-items:center;cursor:pointer;font-size:12px!important;padding:7px 12px;box-sizing:border-box;border:1px solid var(--rmt-theme-border,#cddfed);border-radius:999px;background:var(--rmt-theme-surface-solid,#fff)}
 ${r} .rmt-mvi-workbench .rmt-x-note{margin:5px 0;font-size:11px;line-height:1.6}
-${r} .rmt-mvi-footer{flex:none;padding:5px 0 max(2px,env(safe-area-inset-bottom,0px));border-top:1px solid var(--rmt-theme-border,#cddfed)}
-${r} .rmt-mvi-footer p{font-size:11px;line-height:1.5;color:var(--rmt-theme-muted,#63788f);margin:0 0 5px;max-height:3em;overflow:auto}
+${r} .rmt-mvi-footer{flex:none;position:relative;z-index:3;padding:6px 0 max(2px,env(safe-area-inset-bottom,0px));border-top:1px solid var(--rmt-theme-border,#cddfed);background:var(--rmt-theme-bg,#f5f9fd)}
+${r} .rmt-mvi-footer p{font-size:11px!important;line-height:1.5!important;color:var(--rmt-theme-muted,#63788f);margin:0 0 5px;max-height:3em;overflow:auto}
 ${r} .rmt-mvi-footer p:empty{display:none}
-${r} .rmt-mvi-save-row,${r} .rmt-mvi-save-row>div{display:flex;align-items:center;justify-content:space-between;gap:7px}
-${r} .rmt-mvi-workbench .rmt-mvi-primary{background:var(--rmt-theme-soft,#e7f1fa);border-color:var(--rmt-theme-accent-ink,#4f769d);font-weight:600}
-@media(min-width:960px){${r} .rmt-mve-image-page{flex-basis:450px;min-height:450px}${r} .rmt-mvi-layout{min-height:300px;grid-template-columns:minmax(0,1fr) 315px;grid-template-rows:minmax(300px,1fr)}}
-@supports(container-type:inline-size){${r} .rmt-mvi-layout{min-height:510px;grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(280px,1fr) minmax(220px,.8fr)}@container(min-width:740px){${r} .rmt-mvi-layout{min-height:300px;grid-template-columns:minmax(0,1fr) 315px;grid-template-rows:minmax(300px,1fr)}}}
-@media(max-height:600px) and (orientation:landscape){${r} .rmt-mve-image-page{flex-basis:450px;min-height:450px}${r} .rmt-mvi-layout{min-height:300px;grid-template-columns:minmax(0,1fr) minmax(240px,.8fr);grid-template-rows:minmax(300px,1fr)}${r} .rmt-mvi-header{padding-bottom:3px}${r} .rmt-mvi-workbench{gap:5px}${r} .rmt-mvi-matte{padding-block:2px}}
+${r} .rmt-mvi-save-row{display:flex;align-items:center;gap:7px}
+${r} .rmt-mvi-save-row button{min-height:48px;padding:8px 10px;white-space:nowrap;font-weight:600!important}
+${r} .rmt-mvi-save-row [data-edit=undo]{min-width:64px}
+${r} .rmt-mvi-workbench .rmt-mvi-primary{flex:1;background:var(--rmt-theme-accent-ink,#4f769d)!important;color:var(--rmt-theme-surface-solid,#fff)!important;border-color:var(--rmt-theme-accent-ink,#4f769d)!important;font-weight:700!important}
+@media(min-width:960px){${r} .rmt-mvi-workbench[data-tools-open=true] .rmt-mvi-layout{grid-template-columns:minmax(0,1fr) 300px;grid-template-rows:minmax(0,1fr)}}
+@supports(container-type:inline-size){${r} .rmt-mvi-workbench[data-tools-open=true] .rmt-mvi-layout{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr) minmax(0,.5fr)}@container(min-width:740px){${r} .rmt-mvi-workbench[data-tools-open=true] .rmt-mvi-layout{grid-template-columns:minmax(0,1fr) 300px;grid-template-rows:minmax(0,1fr)}}}
+@media(max-height:600px) and (orientation:landscape) and (min-width:600px){${r} .rmt-mvi-workbench[data-tools-open=true] .rmt-mvi-layout{grid-template-columns:minmax(0,1fr) minmax(240px,.65fr);grid-template-rows:minmax(0,1fr)}${r} .rmt-mvi-header{padding-bottom:3px}${r} .rmt-mvi-workbench{gap:4px}}
 `;
 }
 
@@ -11174,6 +11249,12 @@ function applyAdvancedExclusions(body, parsed) {
     if (!branded.has(parsed)) throw bad();
     const result = { ...body }; for (const key of parsed.excluded) delete result[key]; return result;
 }
+// A feature may prefer streaming without changing prompts, output budgets or
+// saved connection settings. An explicit complete-response choice always wins.
+function requestStreaming(parsed, settings, options = {}) {
+    if (parsed.streamMode !== 'original') return parsed.streamMode === 'on';
+    return options.preferStream === true || (settings.apiConnectionMode === 'manual' && settings.manualApiStreaming === true);
+}
 function advancedFingerprint(settings) {
     if (settings?.advancedGenerationEnabled !== true) return '';
     const raw = advancedSettings(settings);
@@ -11184,6 +11265,7 @@ __m_core_advancedGeneration_js.advancedSettings = advancedSettings;
 __m_core_advancedGeneration_js.parseAdvancedGeneration = parseAdvancedGeneration;
 __m_core_advancedGeneration_js.advancedCarrier = advancedCarrier;
 __m_core_advancedGeneration_js.applyAdvancedExclusions = applyAdvancedExclusions;
+__m_core_advancedGeneration_js.requestStreaming = requestStreaming;
 __m_core_advancedGeneration_js.advancedFingerprint = advancedFingerprint;
 __m_core_advancedGeneration_js.EXCLUDABLE_PARAMETERS = EXCLUDABLE_PARAMETERS;
 __m_core_advancedGeneration_js.REASONING_EFFORTS = REASONING_EFFORTS;
@@ -18016,7 +18098,7 @@ function emptyFinalFailure(summary) {
 
 // Public ConnectionManager streaming contract: cumulative text + separate reasoning.
 // Its API does not expose the provider finish reason; do not manufacture a stop code.
-async function readProfileCompletion(result, { signal = null } = {}) {
+async function readProfileCompletion(result, { signal = null, onProgress = null } = {}) {
     if (typeof result !== 'function') return result;
     const iterator = result();
     if (!iterator || typeof iterator.next !== 'function') throw apiError('连接未提供可读取的流式结果。', 'RMT_RESPONSE_FORMAT');
@@ -18038,6 +18120,7 @@ async function readProfileCompletion(result, { signal = null } = {}) {
                 || (Number.isFinite(core_constants.MAX_MANUAL_API_RESPONSE_BYTES) && new TextEncoder().encode(next).byteLength > core_constants.MAX_MANUAL_API_RESPONSE_BYTES)
                 || reasoningChars > core_constants.MAX_MANUAL_API_RESPONSE_BYTES) throw apiError('流式响应超过安全范围。', 'RMT_MANUAL_RESPONSE_TOO_LARGE');
             content = next;
+            onProgress?.();
         }
     } catch (error) {
         if (signal?.aborted || error?.name === 'AbortError') throw streamAbortReason(signal);
@@ -18306,6 +18389,7 @@ async function readManualApiStream(response, options = {}) {
             bytes += value?.byteLength || 0;
             if (bytes > maxBytes) throw apiError('模型服务返回内容过大，已停止读取。', 'RMT_MANUAL_RESPONSE_TOO_LARGE');
             consume(decoder.decode(value, { stream: true }));
+            if (value?.byteLength) options.onProgress?.();
         }
     } catch (error) {
         if (signal?.aborted || error?.name === 'AbortError') throw streamAbortReason(signal);
@@ -18520,7 +18604,7 @@ async function requestManualApiCompletion(settings, context, messages, maxTokens
         messages,
         max_tokens: output_budget.normalizeOutputTokens(maxTokens),
         temperature: Number.isFinite(Number(options.temperature)) ? Number(options.temperature) : settings?.temperature,
-        stream: settings?.manualApiStreaming === true,
+        stream: advanced_generation.requestStreaming(advanced, { ...settings, apiConnectionMode: 'manual' }, options),
         chat_completion_source: 'custom',
         custom_url: customUrl,
         custom_include_headers: manualApiHeadersJson(settings?.manualApiKey),
@@ -36471,6 +36555,18 @@ function recordRetry(entry, error) {
     return markStage(entry, 'retry');
 }
 
+// Counts/timing only: never retain streamed text, prompts, reasoning or URLs.
+function recordRequestTransport(entry, streamRequested) {
+    if (!entry || entry.outcome !== 'running') return;
+    entry.transport = { streamRequested: streamRequested === true, receivedChunks: 0, firstChunkMs: null, startedAt: Date.now() };
+}
+
+function recordStreamProgress(entry) {
+    if (!entry?.transport || entry.outcome !== 'running') return;
+    entry.transport.receivedChunks = count(entry.transport.receivedChunks + 1);
+    if (entry.transport.firstChunkMs === null) entry.transport.firstChunkMs = duration(Date.now() - entry.transport.startedAt);
+}
+
 function recordInput(entry, chars, tokens = null) {
     if (!entry) return;
     entry.input = { chars: count(chars), tokens: Number.isFinite(tokens) ? count(tokens) : null };
@@ -36521,6 +36617,7 @@ function finishSegmentTrace(parent, child, outcome, error = null) {
     merged.add(child);
     parent.input = child.input;
     parent.response = child.response;
+    if (child.transport) parent.transport = { ...child.transport };
     parent.attempt = child.attempt;
     parent.retryCode = child.retryCode;
     if (child.recovery) parent.recovery = { ...child.recovery };
@@ -36607,6 +36704,8 @@ function snapshotEntries(entries, includeRequests = false) {
         field: STAGES.includes(entry.field) ? entry.field : '',
         activeStage: STAGES.includes(entry.activeStage) ? entry.activeStage : '',
         providerRequests: count(entry.providerRequests),
+        ...(entry.transport ? { transport: { streamRequested: entry.transport.streamRequested === true,
+            receivedChunks: count(entry.transport.receivedChunks), firstChunkMs: entry.transport.firstChunkMs === null ? null : duration(entry.transport.firstChunkMs) } } : {}),
         durations: snapshotDurations(entry),
         ...(entry.archiveBudget ? { archiveBudget: {
             ...Object.fromEntries(['utf16Chars', 'unicodeCharacters', 'utf8Bytes', 'inputTokens', 'outputTokens', 'combinedTokens', 'contextTokens', 'maximumOutputTokens']
@@ -36639,6 +36738,8 @@ function clearTaskTrace() { trace.length = 0; }
 __m_core_taskTrace_js.beginRequestAttempt = beginRequestAttempt;
 __m_core_taskTrace_js.recordProviderRequest = recordProviderRequest;
 __m_core_taskTrace_js.recordRetry = recordRetry;
+__m_core_taskTrace_js.recordRequestTransport = recordRequestTransport;
+__m_core_taskTrace_js.recordStreamProgress = recordStreamProgress;
 __m_core_taskTrace_js.recordInput = recordInput;
 __m_core_taskTrace_js.recordResponse = recordResponse;
 __m_core_taskTrace_js.startTaskTrace = startTaskTrace;
@@ -41688,6 +41789,7 @@ async function generateConfiguredJsonOperation(prompt, options = {}) {
     const savedContent = options.recoveryContentSettings || generation_recovery.generationContentSnapshotForOrigin(options.origin)?.contentSettings;
     let contentSettings = { ...settings, ...(savedContent || {}) };
     const advanced = advanced_generation.parseAdvancedGeneration(settings);
+    const streamRequested = advanced_generation.requestStreaming(advanced, settings, options);
     const configurationFingerprint = core_independentApi.apiConfigurationFingerprint(configuredSettings);
     const contextEnvelope = typeof options.contextEnvelope === 'string'
         ? options.contextEnvelope
@@ -41810,20 +41912,24 @@ async function generateConfiguredJsonOperation(prompt, options = {}) {
             async () => {
                 assertRequestCurrent();
                 core_taskTrace.recordProviderRequest(taskTrace);
+                core_taskTrace.recordRequestTransport(taskTrace, streamRequested);
+                const onProgress = () => core_taskTrace.recordStreamProgress(taskTrace);
                 const returned = connectionMode === 'manual'
                 ? core_independentApi.requestManualApiCompletion(settings, context, messages, responseLength, {
                     signal: lifecycleController.signal,
                     model: modelOverride,
                     temperature: overridePayload.temperature,
+                    preferStream: options.preferStream === true,
+                    onProgress,
                 })
                 : service.sendRequest(
                     settings.connectionProfileId,
                     messages,
                     responseLength,
-                    { stream: advanced.streamMode === 'on', extractData: false, includePreset: false, includeInstruct: false, signal: lifecycleController.signal },
+                    { stream: streamRequested, extractData: false, includePreset: false, includeInstruct: false, signal: lifecycleController.signal },
                     overridePayload,
                 );
-                return core_independentApi.readProfileCompletion(await returned, { signal: lifecycleController.signal });
+                return core_independentApi.readProfileCompletion(await returned, { signal: lifecycleController.signal, onProgress });
             },
             lifecycleController,
             options.timeoutMs,
@@ -89528,7 +89634,7 @@ async function continueStoryboard(songId) {
             lastScene: list(previous.shots).filter(s => s.sectionIndex < missing[0]).at(-1)?.plain || '' };
         const prompt = storyboardPrompt(context, memory, song, settings, missing, previous.cast || null)
             + `\n【接着已有分镜补写】\n只补上面列出的段落，sectionIndex 沿用歌曲原编号。已有分镜和图片会保留；新构图在保存时自动分配编号。重复的画面可在 frames 引用 reusableGroups 的原 group/diff，不必重写该 group；新画面使用新构图。沿用已有时代、衣着和意象，并衔接已有画面：\n${JSON.stringify(continuity)}`;
-        const data = await generation_client.requestJson(prompt, '正在补写剩余分镜…', { mode: 'songMv', taskKey: `extras:mv:${key}`, context, origin });
+        const data = await generation_client.requestJson(prompt, '正在补写剩余分镜…', { mode: 'songMv', preferStream: true, taskKey: `extras:mv:${key}`, context, origin });
         return await holdResult({ ...target, appendSections: missing }, 'append', '', data, raw => continuationPatch(raw, previous, memory, song, settings, missing));
     } finally { running.delete(key); }
 }
@@ -89545,7 +89651,7 @@ async function generateStoryboard(songId, settingsInput, castInput = undefined) 
     running.add(key);
     try {
         const data = await generation_client.requestJson(storyboardPrompt(context, memory, song, settings, settings.output === 'tegaki' ? firstChunk(parseSections(song.lyrics), selectedSectionIndexes(parseSections(song.lyrics), settings.range, settings.rangeFrom, settings.rangeTo)) : null, cast), '正在写 MV 分镜…', {
-            mode: 'songMv', taskKey: `extras:mv:${key}`, context, origin,
+            mode: 'songMv', preferStream: true, taskKey: `extras:mv:${key}`, context, origin,
         });
         return await holdResult(target, 'story', '', data, raw => {
             const built = buildShots(raw, memory, parseSections(song.lyrics).length, settings, cast);
@@ -89625,7 +89731,7 @@ ${record.cast ? `本镜人物及动作：${mv_cast.castVisual(record, shot)}\n${
 第一个字符必须是 {，最后一个字符必须是 }。
 不要前言，不要解释，不要代码围栏，不要在 JSON 外面写任何字。
 {"plain":"……","shot":"……","move":"……","motion":"push","imagePrompt":"……","videoZh":"……","videoEn":"……"}`;
-        const data = await generation_client.requestJson(prompt, '正在改写这一镜…', { mode: 'songMv', taskKey: `extras:mv:${key}`, context, origin });
+        const data = await generation_client.requestJson(prompt, '正在改写这一镜…', { mode: 'songMv', preferStream: true, taskKey: `extras:mv:${key}`, context, origin });
         return await holdResult(target, 'rewrite', shotId, data, raw => {
             const patch = {};
             for (const field of ['plain', 'shot', 'move', 'imagePrompt', 'videoZh', 'videoEn']) {
@@ -90484,10 +90590,12 @@ function editorBody(enabled) {
     if (!enabled) { editorDialog?.dispose(); editorDialog = null; }
     const el = body();
     if (layoutBody && (layoutBody !== el || !enabled)) {
+        layoutBody.closest?.('.rmt-shell')?.classList?.remove('rmt-mvi-focus');
         layoutBody.classList?.remove('rmt-mve-body');
         layoutBodyObserver?.disconnect(); layoutBodyObserver = null; layoutBody = null;
     }
     el?.classList?.toggle('rmt-mve-body', enabled);
+    el?.closest?.('.rmt-shell')?.classList?.toggle('rmt-mvi-focus', enabled && view.sub === 'asset-editor');
     if (!enabled || !el || layoutBody === el) return;
     layoutBody = el;
     if (typeof globalThis.MutationObserver === 'function') {
@@ -90497,6 +90605,7 @@ function editorBody(enabled) {
             if (!el.querySelector('.rmt-mve-layout-scope,[data-rmt-mv-editor-host]')) {
                 editorDialog?.dispose(); editorDialog = null;
                 el.classList.remove('rmt-mve-body');
+                el.closest?.('.rmt-shell')?.classList?.remove('rmt-mvi-focus');
                 layoutBodyObserver?.disconnect(); layoutBodyObserver = null; layoutBody = null;
             }
         });
@@ -90618,7 +90727,7 @@ async function openAssetEditor(key, autoCutout = false, frameId = '') {
     stopPlayback(); assetEditor?.dispose(); assetEditor = null;
     const token = ++editSequence;
     if (view.sub !== 'asset-editor') navigation.push(currentPage(key));
-    view.sub = 'asset-editor'; page('图片编辑', inEditor ? '剪辑台' : '构图卡片', '<section data-rmt-mv-editor-host>正在打开素材…</section>');
+    view.sub = 'asset-editor'; page('图片编辑', inEditor ? '剪辑台' : '构图卡片', `<section data-rmt-mv-editor-host><div class="rmt-mvi-loading">${btn('back', '返回')}<p role="status">正在打开素材…</p></div></section>`);
     if (body()) body().scrollTop = 0;
     const image = found.image, original = image?.original || image;
     const [sourceUrl, imageUrl] = await Promise.all([resolveAssetImage(original), resolveAssetImage(image)]);
@@ -91158,7 +91267,7 @@ function page(title, back, html) {
     const imageEditor = view.sub === 'asset-editor';
     const returnButton = view.sub !== 'board' && !editor && !imageEditor ? btn('back', `← 返回${esc(back)}`) : '';
     editorBody(editor || imageEditor);
-    body().innerHTML = `<main class="rmt-x-page${editor ? ' rmt-mv-editor' : imageEditor ? ' rmt-mve-image-page' : ''}">${returnButton}${editor ? '' : recoveryPanel(imageEditor)}${html}${editor || imageEditor ? '' : `<details class="rmt-x-card"><summary>MV 备份</summary>${btn('export-recovery', '导出 MV 数据与暂存结果')}</details>`}</main>`;
+    body().innerHTML = `<main class="rmt-x-page${editor ? ' rmt-mv-editor' : imageEditor ? ' rmt-mve-image-page' : ''}">${returnButton}${editor || imageEditor ? '' : recoveryPanel()}${html}${editor || imageEditor ? '' : `<details class="rmt-x-card"><summary>MV 备份</summary>${btn('export-recovery', '导出 MV 数据与暂存结果')}</details>`}</main>`;
     renderedPage = view.sub;
 }
 

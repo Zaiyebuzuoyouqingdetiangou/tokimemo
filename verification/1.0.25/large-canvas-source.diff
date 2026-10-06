@@ -1,0 +1,183 @@
+diff -ru /workspace/scratch/c9f4993ef355/hearttrace-1.0.25-47l_6xrk/before-large-image-canvas/src/ui/mvImageEditor.js src/ui/mvImageEditor.js
+--- /workspace/scratch/c9f4993ef355/hearttrace-1.0.25-47l_6xrk/before-large-image-canvas/src/ui/mvImageEditor.js	2026-10-05 06:53:20.127383220 -0700
++++ src/ui/mvImageEditor.js	2026-10-05 13:36:22.696550565 -0700
+@@ -23,8 +23,11 @@
+     const viewport = find('.rmt-mv-editor-viewport');
+     const cursor = find('[data-brush-cursor]');
+     const zoom = () => Number(find('[data-zoom]').value) || 1;
++    let toolsOpen = (root.clientWidth || host.clientWidth || 0) >= 740;
++    let fittedWidth = 0, fittedAspect = 0, viewSize = null;
+     function resetView() {
+         find('[data-zoom]').value = '1'; viewport.scrollTop = 0; viewport.scrollLeft = 0;
++        fittedWidth = 0; viewSize = null;
+     }
+     function brushPreview(event = null) {
+         const size = Number(find('[data-brush]').value) || 20;
+@@ -44,6 +47,10 @@
+     function dimensions(w, h) { canvas.width = w; canvas.height = h; }
+     function show() {
+         if (!active) return;
++        root.dataset.toolsOpen = String(toolsOpen);
++        find('.rmt-mvi-tool-scroll').hidden = !toolsOpen;
++        find('[data-edit="tools"]').setAttribute('aria-expanded', String(toolsOpen));
++        find('[data-edit="tools"]').textContent = toolsOpen ? '收起工具' : '展开工具';
+         if (stage === 'paint') tool = 'brush';
+         find('[data-select-tools]').hidden = stage !== 'select'; find('[data-paint-tools]').hidden = stage !== 'paint';
+         find('[data-grid-picker]').hidden = tool === 'crop';
+@@ -70,9 +77,24 @@
+         } else if (working) { dimensions(working.width, working.height); g.putImageData(working, 0, 0); }
+         const availableWidth = viewport.clientWidth || 360;
+         const availableHeight = viewport.clientHeight || (globalThis.innerHeight || 800) * 0.55;
+-        const fitted = Math.min(availableWidth, availableHeight * canvas.width / canvas.height);
+-        canvas.style.width = `${fitted * zoom()}px`;
++        const aspect = canvas.width / canvas.height;
++        // At fit size the image follows the viewport. Once zoomed, opening or
++        // folding tools must reveal/hide pixels, not rescale the image again.
++        const sameImageShape = fittedAspect === aspect;
++        if (zoom() === 1 || !fittedWidth || !sameImageShape) fittedWidth = Math.min(availableWidth, availableHeight * aspect);
++        fittedAspect = aspect;
++        const displayWidth = fittedWidth * zoom(), displayHeight = displayWidth / aspect;
++        canvas.style.width = `${displayWidth}px`;
+         canvas.style.maxWidth = 'none';
++        if (zoom() > 1 && sameImageShape && viewSize && (viewSize.width !== availableWidth || viewSize.height !== availableHeight)) {
++            // Keep the inspected detail near the centre when the tool dock or
++            // host viewport changes, including phone rotation.
++            const x = viewSize.imageWidth <= viewSize.width ? 0.5 : ((viewport.scrollLeft || 0) + viewSize.width / 2) / viewSize.imageWidth;
++            const y = viewSize.imageHeight <= viewSize.height ? 0.5 : ((viewport.scrollTop || 0) + viewSize.height / 2) / viewSize.imageHeight;
++            viewport.scrollLeft = Math.max(0, x * displayWidth - availableWidth / 2);
++            viewport.scrollTop = Math.max(0, y * displayHeight - availableHeight / 2);
++        }
++        viewSize = { width: availableWidth, height: availableHeight, imageWidth: displayWidth, imageHeight: displayHeight };
+         canvas.style.touchAction = panning || comparing ? 'pan-x pan-y' : 'none';
+         find('[data-image-size]').textContent = `${canvas.width} × ${canvas.height}`;
+     }
+@@ -193,6 +215,7 @@
+         event.preventDefault(); const action = button.dataset.edit;
+         if (action === 'close') { options.onClose(); return; }
+         if (busy) return;
++        if (action === 'tools') { toolsOpen = !toolsOpen; show(); return; }
+         if (action === 'default-prompt') { prompt.value = options.defaultPrompt || ''; return; }
+         if (importing) { say('图片正在读取，请稍候再保存或编辑。'); return; }
+         if (action === 'compare') { comparing = !comparing; show(); return; }
+@@ -200,8 +223,8 @@
+         const wasComparing = comparing; comparing = false;
+         if (wasComparing) show();
+         if (action === 'pan') { panning = !panning; show(); return; }
+-        if (action === 'select' || action === 'crop') { stage = 'select'; panning = false; tool = action === 'crop' ? 'crop' : 'grid'; if (tool === 'crop') { grid = 'free'; find('[data-grid]').value = grid; } show(); return; }
+-        if (action === 'paint') { panning = false; if (!working || selectionDirty) applyCrop(); else { stage = 'paint'; show(); } return; }
++        if (action === 'select' || action === 'crop') { toolsOpen = true; stage = 'select'; panning = false; tool = action === 'crop' ? 'crop' : 'grid'; if (tool === 'crop') { grid = 'free'; find('[data-grid]').value = grid; } show(); return; }
++        if (action === 'paint') { toolsOpen = true; panning = false; if (!working || selectionDirty) applyCrop(); else { stage = 'paint'; show(); } return; }
+         if (action === 'apply-crop') { applyCrop(); return; }
+         if (action === 'full-crop') { crop = { x: 0, y: 0, w: 1, h: 1 }; grid = 'free'; find('[data-grid]').value = grid; applyCrop(); return; }
+         if (action === 'erase' || action === 'restore' || action === 'region') {
+diff -ru /workspace/scratch/c9f4993ef355/hearttrace-1.0.25-47l_6xrk/before-large-image-canvas/src/ui/mvImageEditorUi.js src/ui/mvImageEditorUi.js
+--- /workspace/scratch/c9f4993ef355/hearttrace-1.0.25-47l_6xrk/before-large-image-canvas/src/ui/mvImageEditorUi.js	2026-10-05 07:08:15.232547628 -0700
++++ src/ui/mvImageEditorUi.js	2026-10-05 13:41:51.178233473 -0700
+@@ -1,27 +1,27 @@
+ // Presentation only. Pixel edits, undo, storage and prompt generation remain in
+ // their existing modules; this layout keeps the canvas and save actions visible.
+ export function imageEditorMarkup({ hasNext = false, showPrompt = true } = {}) {
+-    return `<section class="rmt-mv-editor rmt-mvi-workbench" aria-label="图片编辑">
+-      <header class="rmt-mvi-header"><button type="button" data-edit="close" aria-label="返回，放弃未保存修改">返回</button><div><b data-image-title>图片编辑</b><small data-image-scope></small></div></header>
++    return `<section class="rmt-mv-editor rmt-mvi-workbench" data-tools-open="false" aria-label="图片编辑">
++      <header class="rmt-mvi-header"><button type="button" data-edit="close" aria-label="返回，放弃未保存修改">返回</button><div><b data-image-title>图片编辑</b><small data-image-scope></small></div><button type="button" data-edit="tools" aria-expanded="false">展开工具</button></header>
+       <div class="rmt-mvi-layout">
+         <section class="rmt-mvi-visual" aria-label="编辑画布">
+           <div class="rmt-mvi-canvas-tools"><button type="button" data-edit="pan" aria-pressed="false">移动</button><label><span data-zoom-value>100%</span><input data-zoom type="range" min="1" max="4" step="0.25" value="1" aria-label="画布缩放"></label><button type="button" data-edit="fit">看全图</button><button type="button" data-edit="compare" aria-pressed="false">对比</button></div>
+           <div class="rmt-mv-editor-viewport"><canvas data-editor-canvas aria-label="素材裁切与抠图画布"></canvas><span class="rmt-mvi-brush-cursor" data-brush-cursor hidden aria-hidden="true"></span></div>
+-          <div class="rmt-mvi-matte" aria-label="检查透明边缘"><small data-image-size></small><div><button type="button" data-matte="grid" aria-pressed="true">透明底</button><button type="button" data-matte="dark" aria-pressed="false">深色底</button><button type="button" data-matte="light" aria-pressed="false">浅色底</button></div></div>
+         </section>
+         <section class="rmt-mvi-inspector" aria-label="图片编辑工具">
+           <nav class="rmt-mvi-tabs" aria-label="编辑方式"><button type="button" data-edit="select" aria-pressed="true">选单格</button><button type="button" data-edit="crop" aria-pressed="false">自由裁切</button><button type="button" data-edit="paint" aria-pressed="false">抠图修边</button></nav>
+-          <div class="rmt-mvi-tool-scroll">
++          <div class="rmt-mvi-tool-scroll" hidden>
+             <div data-select-tools><label data-grid-picker>拼图排列<select data-grid><option value="free">手动框选</option><option value="1:1">整张</option><option value="2:1">上下两格</option><option value="3:1">上下三格</option><option value="4:1">上下四格</option><option value="1:2">左右两格</option><option value="1:3">左右三格</option><option value="1:4">左右四格</option><option value="2:2">四宫格</option><option value="3:3">九宫格</option></select></label><p class="rmt-x-note" data-selection-note>拖动框选画面，或选择排列后点选一格。</p><div class="rmt-mv-editor-tools"><button type="button" data-edit="apply-crop">使用选中画面</button><button type="button" data-edit="full-crop">整张入画</button></div></div>
+             <div data-paint-tools hidden><div class="rmt-mv-editor-tools"><button type="button" data-edit="auto">一键抠图</button><button type="button" data-edit="erase" aria-pressed="true">擦除</button><button type="button" data-edit="restore" aria-pressed="false">恢复</button><button type="button" data-edit="region" aria-pressed="false">点除残底</button></div><label class="rmt-mvi-brush">笔刷<input data-brush type="range" min="1" max="100" value="20" aria-label="笔刷大小"><span data-brush-size>20 像素</span></label></div>
+             <div class="rmt-mv-editor-tools"><button type="button" data-edit="reset">还原选中画面</button></div>
+             <label class="rmt-mvi-layer"><input data-layer type="checkbox">使用此透明图叠背景</label>
++            <div class="rmt-mvi-matte" aria-label="检查透明边缘"><small data-image-size></small><div><button type="button" data-matte="grid" aria-pressed="true">透明底</button><button type="button" data-matte="dark" aria-pressed="false">深色底</button><button type="button" data-matte="light" aria-pressed="false">浅色底</button></div></div>
+             <details class="rmt-mvi-more"><summary>导入、原图与下载</summary><div class="rmt-mv-editor-tools"><label class="rmt-mv-editor-upload">导入图片<input type="file" accept="image/*" data-import="full"></label><label class="rmt-mv-editor-upload">导入透明图<input type="file" accept="image/png,image/webp" data-import="cutout"></label><button type="button" data-edit="download">下载当前 PNG</button><button type="button" data-edit="original">恢复原图</button></div></details>
+             <details class="rmt-mvi-more"${showPrompt ? '' : ' hidden'}><summary>本张生图提示词</summary><label>提示词<textarea data-editor-prompt rows="6"></textarea></label><div class="rmt-mv-editor-tools"><button type="button" data-edit="default-prompt">恢复默认提示词</button></div><p class="rmt-x-note">保存不重新生图；重画时才使用新提示词。</p></details>
+           </div>
+         </section>
+       </div>
+-      <footer class="rmt-mvi-footer"><p role="status" aria-live="polite" data-editor-status></p><div class="rmt-mvi-save-row"><button type="button" data-edit="undo">撤销</button><div><button type="button" data-edit="save">保存修改</button><button type="button" class="rmt-mvi-primary" data-edit="save-next"${hasNext ? '' : ' hidden'}>保存并下一镜</button></div></div></footer>
++      <footer class="rmt-mvi-footer"><p role="status" aria-live="polite" data-editor-status></p><div class="rmt-mvi-save-row"><button type="button" data-edit="undo" aria-label="撤销上一步">撤销</button><button type="button" class="rmt-mvi-primary" data-edit="save">保存修改</button><button type="button" data-edit="save-next"${hasNext ? '' : ' hidden'}>保存并下一镜</button></div></footer>
+     </section>`;
+ }
+ 
+@@ -29,21 +29,24 @@
+     const r = `${root} .rmt-body.rmt-mve-body`;
+     return `
+ ${root} .rmt-shell.rmt-mvi-focus>.rmt-topbar,${root} .rmt-shell.rmt-mvi-focus>.rmt-workspace-tabs,${root} .rmt-shell.rmt-mvi-focus>.rmt-workspace-location{display:none!important}
+-${root} .rmt-shell.rmt-mvi-focus>.rmt-body.rmt-mve-body{display:flex!important;flex:1 1 0;min-height:0;padding:10px!important;overflow:hidden!important}
++${root} .rmt-shell.rmt-mvi-focus>.rmt-body.rmt-mve-body{display:flex!important;flex:1 1 0!important;min-height:0;padding:8px!important;overflow:hidden!important}
+ ${r} .rmt-mve-image-page{display:flex;flex-direction:column;flex:1 1 0;min-height:0;max-width:none;width:100%;gap:0;padding:0}
+ ${r} [data-rmt-mv-editor-host]{display:flex;flex:1;min-height:0;min-width:0}
+ ${r} .rmt-mvi-loading{display:flex;flex-direction:column;gap:12px;align-items:flex-start}
+-${r} .rmt-mvi-workbench{display:flex;flex:1;flex-direction:column;min-height:0;min-width:0;width:100%;gap:8px;container-type:inline-size}
++${r} .rmt-mvi-workbench{display:flex;flex:1;flex-direction:column;min-height:0;min-width:0;width:100%;gap:6px;overflow:hidden;container-type:inline-size}
++${r} .rmt-mvi-workbench,${r} .rmt-mvi-workbench *{box-sizing:border-box}
+ ${r} .rmt-mvi-workbench [hidden]{display:none!important}
+ ${r} .rmt-mvi-workbench button{font:inherit;font-size:13px!important;line-height:1.3!important;min-height:44px;padding:7px 12px;border:1px solid var(--rmt-theme-border,#cddfed);border-radius:999px;background:var(--rmt-theme-surface-solid,#fff);color:var(--rmt-theme-text,#294762);cursor:pointer;touch-action:manipulation;box-sizing:border-box}
+ ${r} .rmt-mvi-workbench button[aria-pressed=true]{border-color:var(--rmt-theme-accent-ink,#4f769d);background:var(--rmt-theme-soft,#e7f1fa)}
+ ${r} .rmt-mvi-workbench button:disabled{opacity:.5;cursor:default}
+ ${r} .rmt-mvi-workbench button:focus-visible,${r} .rmt-mvi-workbench summary:focus-visible{outline:2px solid var(--rmt-theme-accent-ink,#4f769d);outline-offset:2px}
+ ${r} .rmt-mvi-header{display:flex;align-items:center;justify-content:flex-start;gap:12px;flex:none;padding:0 0 6px;border-bottom:1px solid var(--rmt-theme-border,#cddfed)}
+-${r} .rmt-mvi-header>div{min-width:0;display:flex;flex-direction:column;gap:3px}
+-${r} .rmt-mvi-header b{font-size:15px!important;overflow-wrap:anywhere}
+-${r} .rmt-mvi-header small{font-size:11px!important;color:var(--rmt-theme-muted,#63788f)}
+-${r} .rmt-mvi-layout{flex:1;min-height:0;min-width:0;display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(180px,1fr) minmax(170px,.65fr);gap:8px}
++${r} .rmt-mvi-header>div{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
++${r} .rmt-mvi-header button{flex:none;white-space:nowrap}
++${r} .rmt-mvi-header b{font-size:15px!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
++${r} .rmt-mvi-header small{font-size:11px!important;color:var(--rmt-theme-muted,#63788f);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
++${r} .rmt-mvi-layout{flex:1;min-height:0;min-width:0;display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr) auto;gap:6px}
++${r} .rmt-mvi-workbench[data-tools-open=true] .rmt-mvi-layout{grid-template-rows:minmax(0,1fr) minmax(0,.5fr)}
+ ${r} .rmt-mvi-visual{display:flex;flex-direction:column;min-height:0;min-width:0;overflow:hidden;border:1px solid var(--rmt-theme-border,#cddfed);border-radius:12px;background:var(--rmt-theme-soft,#e7f1fa)}
+ ${r} .rmt-mvi-canvas-tools,${r} .rmt-mvi-matte{display:flex;align-items:center;justify-content:space-between;gap:7px;flex:none;padding:6px 8px}
+ ${r} .rmt-mvi-canvas-tools>label{flex:1;display:flex;flex-direction:row;align-items:center;gap:6px;margin:0;font-size:11px!important;min-width:0;white-space:nowrap}
+@@ -54,7 +57,7 @@
+ ${r} .rmt-mvi-workbench input[type=range]::-moz-range-thumb{width:18px;height:18px;border:2px solid var(--rmt-theme-surface-solid,#fff);border-radius:50%;background:var(--rmt-theme-accent-ink,#4f769d)}
+ ${r} .rmt-mvi-canvas-tools input[type=range]{width:0;flex:1}
+ ${r} .rmt-mvi-canvas-tools button,${r} .rmt-mvi-matte button{font-size:11px!important;min-height:44px;padding:4px 8px;white-space:nowrap}
+-${r} .rmt-mvi-visual .rmt-mv-editor-viewport{flex:1 1 0;min-height:64px;max-height:none;width:100%;overflow:auto;overscroll-behavior:contain;position:relative;isolation:isolate}
++${r} .rmt-mvi-visual .rmt-mv-editor-viewport{flex:1 1 0;min-height:0;max-height:none;width:100%;overflow:auto;overscroll-behavior:contain;position:relative;isolation:isolate}
+ ${r} .rmt-mvi-visual [data-editor-canvas]{margin:0 auto;max-width:none;flex:none}
+ ${r} .rmt-mvi-brush-cursor{position:absolute;z-index:2;display:block;pointer-events:none;transform:translate(-50%,-50%);border:1px solid #fff;border-radius:50%;box-shadow:0 0 0 1px #253445,inset 0 0 0 1px #253445;box-sizing:border-box}
+ ${r} .rmt-mvi-matte>div{display:flex;gap:4px}
+@@ -77,14 +80,15 @@
+ ${r} .rmt-mvi-more{margin-top:8px}
+ ${r} .rmt-mvi-more summary{min-height:44px;display:flex;align-items:center;cursor:pointer;font-size:12px!important;padding:7px 12px;box-sizing:border-box;border:1px solid var(--rmt-theme-border,#cddfed);border-radius:999px;background:var(--rmt-theme-surface-solid,#fff)}
+ ${r} .rmt-mvi-workbench .rmt-x-note{margin:5px 0;font-size:11px;line-height:1.6}
+-${r} .rmt-mvi-footer{flex:none;padding:5px 0 max(2px,env(safe-area-inset-bottom,0px));border-top:1px solid var(--rmt-theme-border,#cddfed)}
++${r} .rmt-mvi-footer{flex:none;position:relative;z-index:3;padding:6px 0 max(2px,env(safe-area-inset-bottom,0px));border-top:1px solid var(--rmt-theme-border,#cddfed);background:var(--rmt-theme-bg,#f5f9fd)}
+ ${r} .rmt-mvi-footer p{font-size:11px!important;line-height:1.5!important;color:var(--rmt-theme-muted,#63788f);margin:0 0 5px;max-height:3em;overflow:auto}
+ ${r} .rmt-mvi-footer p:empty{display:none}
+-${r} .rmt-mvi-save-row,${r} .rmt-mvi-save-row>div{display:flex;align-items:center;justify-content:space-between;gap:7px}
+-${r} .rmt-mvi-workbench .rmt-mvi-primary{background:var(--rmt-theme-soft,#e7f1fa);border-color:var(--rmt-theme-accent-ink,#4f769d);font-weight:600}
+-@media(min-width:960px){${r} .rmt-mvi-layout{grid-template-columns:minmax(0,1fr) 315px;grid-template-rows:minmax(0,1fr)}}
+-@supports(container-type:inline-size){${r} .rmt-mvi-layout{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(180px,1fr) minmax(170px,.65fr)}@container(min-width:740px){${r} .rmt-mvi-layout{grid-template-columns:minmax(0,1fr) 315px;grid-template-rows:minmax(0,1fr)}}}
+-@media(max-height:600px) and (orientation:landscape) and (min-width:600px){${r} .rmt-mvi-layout{grid-template-columns:minmax(0,1fr) minmax(240px,.8fr);grid-template-rows:minmax(0,1fr)}${r} .rmt-mvi-header{padding-bottom:3px}${r} .rmt-mvi-workbench{gap:5px}${r} .rmt-mvi-matte{padding-block:2px}}
+-@media(max-height:500px) and (max-width:599px){${root} .rmt-shell.rmt-mvi-focus>.rmt-body.rmt-mve-body{overflow:auto!important}${r} .rmt-mve-image-page{flex:1 0 460px;min-height:460px}}
++${r} .rmt-mvi-save-row{display:flex;align-items:center;gap:7px}
++${r} .rmt-mvi-save-row button{min-height:48px;padding:8px 10px;white-space:nowrap;font-weight:600!important}
++${r} .rmt-mvi-save-row [data-edit=undo]{min-width:64px}
++${r} .rmt-mvi-workbench .rmt-mvi-primary{flex:1;background:var(--rmt-theme-accent-ink,#4f769d)!important;color:var(--rmt-theme-surface-solid,#fff)!important;border-color:var(--rmt-theme-accent-ink,#4f769d)!important;font-weight:700!important}
++@media(min-width:960px){${r} .rmt-mvi-workbench[data-tools-open=true] .rmt-mvi-layout{grid-template-columns:minmax(0,1fr) 300px;grid-template-rows:minmax(0,1fr)}}
++@supports(container-type:inline-size){${r} .rmt-mvi-workbench[data-tools-open=true] .rmt-mvi-layout{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr) minmax(0,.5fr)}@container(min-width:740px){${r} .rmt-mvi-workbench[data-tools-open=true] .rmt-mvi-layout{grid-template-columns:minmax(0,1fr) 300px;grid-template-rows:minmax(0,1fr)}}}
++@media(max-height:600px) and (orientation:landscape) and (min-width:600px){${r} .rmt-mvi-workbench[data-tools-open=true] .rmt-mvi-layout{grid-template-columns:minmax(0,1fr) minmax(240px,.65fr);grid-template-rows:minmax(0,1fr)}${r} .rmt-mvi-header{padding-bottom:3px}${r} .rmt-mvi-workbench{gap:4px}}
+ `;
+ }
+diff -ru /workspace/scratch/c9f4993ef355/hearttrace-1.0.25-47l_6xrk/before-large-image-canvas/src/ui/mvView.js src/ui/mvView.js
+--- /workspace/scratch/c9f4993ef355/hearttrace-1.0.25-47l_6xrk/before-large-image-canvas/src/ui/mvView.js	2026-10-05 06:58:42.965018349 -0700
++++ src/ui/mvView.js	2026-10-05 13:36:23.460545278 -0700
+@@ -736,7 +736,7 @@
+     const imageEditor = view.sub === 'asset-editor';
+     const returnButton = view.sub !== 'board' && !editor && !imageEditor ? btn('back', `← 返回${esc(back)}`) : '';
+     editorBody(editor || imageEditor);
+-    body().innerHTML = `<main class="rmt-x-page${editor ? ' rmt-mv-editor' : imageEditor ? ' rmt-mve-image-page' : ''}">${returnButton}${editor ? '' : recoveryPanel(imageEditor)}${html}${editor || imageEditor ? '' : `<details class="rmt-x-card"><summary>MV 备份</summary>${btn('export-recovery', '导出 MV 数据与暂存结果')}</details>`}</main>`;
++    body().innerHTML = `<main class="rmt-x-page${editor ? ' rmt-mv-editor' : imageEditor ? ' rmt-mve-image-page' : ''}">${returnButton}${editor || imageEditor ? '' : recoveryPanel()}${html}${editor || imageEditor ? '' : `<details class="rmt-x-card"><summary>MV 备份</summary>${btn('export-recovery', '导出 MV 数据与暂存结果')}</details>`}</main>`;
+     renderedPage = view.sub;
+ }
+ 

@@ -174,6 +174,7 @@ async function readManualApiStream(response, options = {}) {
             bytes += value?.byteLength || 0;
             if (bytes > maxBytes) throw apiError('模型服务返回内容过大，已停止读取。', 'RMT_MANUAL_RESPONSE_TOO_LARGE');
             consume(decoder.decode(value, { stream: true }));
+            if (value?.byteLength) options.onProgress?.();
         }
     } catch (error) {
         if (signal?.aborted || error?.name === 'AbortError') throw streamAbortReason(signal);
@@ -388,7 +389,7 @@ export async function requestManualApiCompletion(settings, context, messages, ma
         messages,
         max_tokens: output_budget.normalizeOutputTokens(maxTokens),
         temperature: Number.isFinite(Number(options.temperature)) ? Number(options.temperature) : settings?.temperature,
-        stream: settings?.manualApiStreaming === true,
+        stream: advanced_generation.requestStreaming(advanced, { ...settings, apiConnectionMode: 'manual' }, options),
         chat_completion_source: 'custom',
         custom_url: customUrl,
         custom_include_headers: manualApiHeadersJson(settings?.manualApiKey),

@@ -1,0 +1,207 @@
+TAP version 13
+# (node:12) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: narrow image editor starts with a large canvas and tools can fold without discarding edits or undo
+not ok 1 - narrow image editor starts with a large canvas and tools can fold without discarding edits or undo
+  ---
+  duration_ms: 159.572799
+  type: 'test'
+  location: '/workspace/scratch/c9f4993ef355/hearttrace-1.0.25-47l_6xrk/candidate/tokimemo-main/tools/verification/mv-editor-native-regression.mjs:67:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    the inspector must not take canvas space on entry
+    + actual - expected
+    
+    + undefined
+    - true
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///workspace/scratch/c9f4993ef355/hearttrace-1.0.25-47l_6xrk/candidate/tokimemo-main/tools/verification/mv-editor-native-regression.mjs:71:16)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3)
+  ...
+# Subtest: making room for a zoomed image reveals more pixels instead of enlarging the image again
+not ok 2 - making room for a zoomed image reveals more pixels instead of enlarging the image again
+  ---
+  duration_ms: 202.444935
+  type: 'test'
+  location: '/workspace/scratch/c9f4993ef355/hearttrace-1.0.25-47l_6xrk/candidate/tokimemo-main/tools/verification/mv-editor-native-regression.mjs:88:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    collapsing tools must not multiply the display size again
+    
+    '500px' !== '200px'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: '200px'
+  actual: '500px'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///workspace/scratch/c9f4993ef355/hearttrace-1.0.25-47l_6xrk/candidate/tokimemo-main/tools/verification/mv-editor-native-regression.mjs:97:16)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+# Subtest: save-and-next only advances after the actual save succeeds
+ok 3 - save-and-next only advances after the actual save succeeds
+  ---
+  duration_ms: 182.422407
+  type: 'test'
+  ...
+# Subtest: pending or failed image save keeps the editor and never opens the next shot
+ok 4 - pending or failed image save keeps the editor and never opens the next shot
+  ---
+  duration_ms: 349.484767
+  type: 'test'
+  ...
+# Subtest: return remains usable while an asynchronous save is pending
+ok 5 - return remains usable while an asynchronous save is pending
+  ---
+  duration_ms: 141.668761
+  type: 'test'
+  ...
+# Subtest: original comparison cannot paint over pixels and returning to a brush restores crop geometry
+ok 6 - original comparison cannot paint over pixels and returning to a brush restores crop geometry
+  ---
+  duration_ms: 186.210248
+  type: 'test'
+  ...
+# Subtest: selecting a brush exits move mode and really paints instead of silently panning
+ok 7 - selecting a brush exits move mode and really paints instead of silently panning
+  ---
+  duration_ms: 189.218893
+  type: 'test'
+  ...
+# Subtest: brush size has a non-destructive visible preview and a numeric label
+ok 8 - brush size has a non-destructive visible preview and a numeric label
+  ---
+  duration_ms: 181.078653
+  type: 'test'
+  ...
+# Subtest: applying a new crop resets zoom and scroll so the selected image is not lost outside the viewport
+ok 9 - applying a new crop resets zoom and scroll so the selected image is not lost outside the viewport
+  ---
+  duration_ms: 175.843324
+  type: 'test'
+  ...
+# Subtest: canvas fit respects its own remaining space and still supports zoom and grid selection
+ok 10 - canvas fit respects its own remaining space and still supports zoom and grid selection
+  ---
+  duration_ms: 199.857731
+  type: 'test'
+  ...
+# Subtest: automatically prepared character can be downloaded directly while a prompt-only save keeps the source
+ok 11 - automatically prepared character can be downloaded directly while a prompt-only save keeps the source
+  ---
+  duration_ms: 235.665909
+  type: 'test'
+  ...
+# Subtest: editor selects the third of four panels before processing; saved PNG contains only blue pixels
+ok 12 - editor selects the third of four panels before processing; saved PNG contains only blue pixels
+  ---
+  duration_ms: 227.662027
+  type: 'test'
+  ...
+# Subtest: native editor erase, restore, undo and saved transparent PNG preserve original reference
+ok 13 - native editor erase, restore, undo and saved transparent PNG preserve original reference
+  ---
+  duration_ms: 248.676651
+  type: 'test'
+  ...
+# Subtest: free selection uses pointer coordinates after zoom and preserves a prompt-only draft on cancel
+ok 14 - free selection uses pointer coordinates after zoom and preserves a prompt-only draft on cancel
+  ---
+  duration_ms: 175.158489
+  type: 'test'
+  ...
+# Subtest: prompt-only save needs no image; reset returns the default without requesting a new image
+ok 15 - prompt-only save needs no image; reset returns the default without requesting a new image
+  ---
+  duration_ms: 152.576277
+  type: 'test'
+  ...
+# Subtest: transparent PNG import keeps its alpha and provides its own original for persistent storage
+ok 16 - transparent PNG import keeps its alpha and provides its own original for persistent storage
+  ---
+  duration_ms: 159.887997
+  type: 'test'
+  ...
+# Subtest: reopened cropped edit keeps saved pixels and can restore the full original
+ok 17 - reopened cropped edit keeps saved pixels and can restore the full original
+  ---
+  duration_ms: 155.142886
+  type: 'test'
+  ...
+# Subtest: mobile overview fits a long four-panel image and pan mode does not draw over it
+ok 18 - mobile overview fits a long four-panel image and pan mode does not draw over it
+  ---
+  duration_ms: 174.542203
+  type: 'test'
+  ...
+# Subtest: unsuitable opaque image is not marked as a transparent layer by one-click processing
+ok 19 - unsuitable opaque image is not marked as a transparent layer by one-click processing
+  ---
+  duration_ms: 199.196609
+  type: 'test'
+  ...
+# Subtest: playback never uses white-removal percentage to layer unconfirmed pictures
+ok 20 - playback never uses white-removal percentage to layer unconfirmed pictures
+  ---
+  duration_ms: 395.876465
+  type: 'test'
+  ...
+# (node:13) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: each production tool panel scrolls independently with timing and navigation outside that scroll
+ok 21 - each production tool panel scrolls independently with timing and navigation outside that scroll
+  ---
+  duration_ms: 374.640642
+  type: 'test'
+  ...
+# Subtest: image save controls are outside the scroll area and the canvas is in its own viewport
+ok 22 - image save controls are outside the scroll area and the canvas is in its own viewport
+  ---
+  duration_ms: 217.904951
+  type: 'test'
+  ...
+# Subtest: large image canvas has a foldable tool panel and prominent persistent undo/save actions
+not ok 23 - large image canvas has a foldable tool panel and prominent persistent undo/save actions
+  ---
+  duration_ms: 198.63431
+  type: 'test'
+  location: '/workspace/scratch/c9f4993ef355/hearttrace-1.0.25-47l_6xrk/candidate/tokimemo-main/tools/verification/mv-layout-dom-regression.mjs:53:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    
+    0 !== 1
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 1
+  actual: 0
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///workspace/scratch/c9f4993ef355/hearttrace-1.0.25-47l_6xrk/candidate/tokimemo-main/tools/verification/mv-layout-dom-regression.mjs:56:12)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+# Subtest: editor CSS is scoped, balanced and retains paging without requiring container-query support
+ok 24 - editor CSS is scoped, balanced and retains paging without requiring container-query support
+  ---
+  duration_ms: 161.479509
+  type: 'test'
+  ...
+1..24
+# tests 24
+# suites 0
+# pass 21
+# fail 3
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 4447.089325

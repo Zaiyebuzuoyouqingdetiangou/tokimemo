@@ -59,10 +59,12 @@ function editorBody(enabled) {
     if (!enabled) { editorDialog?.dispose(); editorDialog = null; }
     const el = body();
     if (layoutBody && (layoutBody !== el || !enabled)) {
+        layoutBody.closest?.('.rmt-shell')?.classList?.remove('rmt-mvi-focus');
         layoutBody.classList?.remove('rmt-mve-body');
         layoutBodyObserver?.disconnect(); layoutBodyObserver = null; layoutBody = null;
     }
     el?.classList?.toggle('rmt-mve-body', enabled);
+    el?.closest?.('.rmt-shell')?.classList?.toggle('rmt-mvi-focus', enabled && view.sub === 'asset-editor');
     if (!enabled || !el || layoutBody === el) return;
     layoutBody = el;
     if (typeof globalThis.MutationObserver === 'function') {
@@ -72,6 +74,7 @@ function editorBody(enabled) {
             if (!el.querySelector('.rmt-mve-layout-scope,[data-rmt-mv-editor-host]')) {
                 editorDialog?.dispose(); editorDialog = null;
                 el.classList.remove('rmt-mve-body');
+                el.closest?.('.rmt-shell')?.classList?.remove('rmt-mvi-focus');
                 layoutBodyObserver?.disconnect(); layoutBodyObserver = null; layoutBody = null;
             }
         });
@@ -193,7 +196,7 @@ async function openAssetEditor(key, autoCutout = false, frameId = '') {
     stopPlayback(); assetEditor?.dispose(); assetEditor = null;
     const token = ++editSequence;
     if (view.sub !== 'asset-editor') navigation.push(currentPage(key));
-    view.sub = 'asset-editor'; page('图片编辑', inEditor ? '剪辑台' : '构图卡片', '<section data-rmt-mv-editor-host>正在打开素材…</section>');
+    view.sub = 'asset-editor'; page('图片编辑', inEditor ? '剪辑台' : '构图卡片', `<section data-rmt-mv-editor-host><div class="rmt-mvi-loading">${btn('back', '返回')}<p role="status">正在打开素材…</p></div></section>`);
     if (body()) body().scrollTop = 0;
     const image = found.image, original = image?.original || image;
     const [sourceUrl, imageUrl] = await Promise.all([resolveAssetImage(original), resolveAssetImage(image)]);
@@ -733,7 +736,7 @@ function page(title, back, html) {
     const imageEditor = view.sub === 'asset-editor';
     const returnButton = view.sub !== 'board' && !editor && !imageEditor ? btn('back', `← 返回${esc(back)}`) : '';
     editorBody(editor || imageEditor);
-    body().innerHTML = `<main class="rmt-x-page${editor ? ' rmt-mv-editor' : imageEditor ? ' rmt-mve-image-page' : ''}">${returnButton}${editor ? '' : recoveryPanel(imageEditor)}${html}${editor || imageEditor ? '' : `<details class="rmt-x-card"><summary>MV 备份</summary>${btn('export-recovery', '导出 MV 数据与暂存结果')}</details>`}</main>`;
+    body().innerHTML = `<main class="rmt-x-page${editor ? ' rmt-mv-editor' : imageEditor ? ' rmt-mve-image-page' : ''}">${returnButton}${editor || imageEditor ? '' : recoveryPanel()}${html}${editor || imageEditor ? '' : `<details class="rmt-x-card"><summary>MV 备份</summary>${btn('export-recovery', '导出 MV 数据与暂存结果')}</details>`}</main>`;
     renderedPage = view.sub;
 }
 

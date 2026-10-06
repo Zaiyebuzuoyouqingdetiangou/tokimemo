@@ -283,6 +283,7 @@ async function generateConfiguredJsonOperation(prompt, options = {}) {
     const savedContent = options.recoveryContentSettings || generation_recovery.generationContentSnapshotForOrigin(options.origin)?.contentSettings;
     let contentSettings = { ...settings, ...(savedContent || {}) };
     const advanced = advanced_generation.parseAdvancedGeneration(settings);
+    const streamRequested = advanced_generation.requestStreaming(advanced, settings, options);
     const configurationFingerprint = core_independentApi.apiConfigurationFingerprint(configuredSettings);
     const contextEnvelope = typeof options.contextEnvelope === 'string'
         ? options.contextEnvelope
@@ -405,20 +406,24 @@ async function generateConfiguredJsonOperation(prompt, options = {}) {
             async () => {
                 assertRequestCurrent();
                 core_taskTrace.recordProviderRequest(taskTrace);
+                core_taskTrace.recordRequestTransport(taskTrace, streamRequested);
+                const onProgress = () => core_taskTrace.recordStreamProgress(taskTrace);
                 const returned = connectionMode === 'manual'
                 ? core_independentApi.requestManualApiCompletion(settings, context, messages, responseLength, {
                     signal: lifecycleController.signal,
                     model: modelOverride,
                     temperature: overridePayload.temperature,
+                    preferStream: options.preferStream === true,
+                    onProgress,
                 })
                 : service.sendRequest(
                     settings.connectionProfileId,
                     messages,
                     responseLength,
-                    { stream: advanced.streamMode === 'on', extractData: false, includePreset: false, includeInstruct: false, signal: lifecycleController.signal },
+                    { stream: streamRequested, extractData: false, includePreset: false, includeInstruct: false, signal: lifecycleController.signal },
                     overridePayload,
                 );
-                return core_independentApi.readProfileCompletion(await returned, { signal: lifecycleController.signal });
+                return core_independentApi.readProfileCompletion(await returned, { signal: lifecycleController.signal, onProgress });
             },
             lifecycleController,
             options.timeoutMs,

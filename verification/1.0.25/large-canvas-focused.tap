@@ -1,0 +1,196 @@
+TAP version 13
+# (node:12) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: narrow image editor starts with a large canvas and tools can fold without discarding edits or undo
+ok 1 - narrow image editor starts with a large canvas and tools can fold without discarding edits or undo
+  ---
+  duration_ms: 141.374092
+  type: 'test'
+  ...
+# Subtest: making room for a zoomed image reveals more pixels instead of enlarging the image again
+ok 2 - making room for a zoomed image reveals more pixels instead of enlarging the image again
+  ---
+  duration_ms: 110.952455
+  type: 'test'
+  ...
+# Subtest: wide image editor starts with tools available and folding them preserves prompt-only save
+ok 3 - wide image editor starts with tools available and folding them preserves prompt-only save
+  ---
+  duration_ms: 114.116148
+  type: 'test'
+  ...
+# Subtest: save-and-next only advances after the actual save succeeds
+ok 4 - save-and-next only advances after the actual save succeeds
+  ---
+  duration_ms: 107.946065
+  type: 'test'
+  ...
+# Subtest: pending or failed image save keeps the editor and never opens the next shot
+ok 5 - pending or failed image save keeps the editor and never opens the next shot
+  ---
+  duration_ms: 217.28609
+  type: 'test'
+  ...
+# Subtest: return remains usable while an asynchronous save is pending
+ok 6 - return remains usable while an asynchronous save is pending
+  ---
+  duration_ms: 108.221946
+  type: 'test'
+  ...
+# Subtest: original comparison cannot paint over pixels and returning to a brush restores crop geometry
+ok 7 - original comparison cannot paint over pixels and returning to a brush restores crop geometry
+  ---
+  duration_ms: 112.851723
+  type: 'test'
+  ...
+# Subtest: selecting a brush exits move mode and really paints instead of silently panning
+ok 8 - selecting a brush exits move mode and really paints instead of silently panning
+  ---
+  duration_ms: 119.793501
+  type: 'test'
+  ...
+# Subtest: brush size has a non-destructive visible preview and a numeric label
+ok 9 - brush size has a non-destructive visible preview and a numeric label
+  ---
+  duration_ms: 112.657366
+  type: 'test'
+  ...
+# Subtest: applying a new crop resets zoom and scroll so the selected image is not lost outside the viewport
+ok 10 - applying a new crop resets zoom and scroll so the selected image is not lost outside the viewport
+  ---
+  duration_ms: 111.643512
+  type: 'test'
+  ...
+# Subtest: canvas fit respects its own remaining space and still supports zoom and grid selection
+ok 11 - canvas fit respects its own remaining space and still supports zoom and grid selection
+  ---
+  duration_ms: 114.222988
+  type: 'test'
+  ...
+# Subtest: automatically prepared character can be downloaded directly while a prompt-only save keeps the source
+ok 12 - automatically prepared character can be downloaded directly while a prompt-only save keeps the source
+  ---
+  duration_ms: 131.560496
+  type: 'test'
+  ...
+# Subtest: editor selects the third of four panels before processing; saved PNG contains only blue pixels
+ok 13 - editor selects the third of four panels before processing; saved PNG contains only blue pixels
+  ---
+  duration_ms: 121.092528
+  type: 'test'
+  ...
+# Subtest: native editor erase, restore, undo and saved transparent PNG preserve original reference
+ok 14 - native editor erase, restore, undo and saved transparent PNG preserve original reference
+  ---
+  duration_ms: 167.075068
+  type: 'test'
+  ...
+# Subtest: free selection uses pointer coordinates after zoom and preserves a prompt-only draft on cancel
+ok 15 - free selection uses pointer coordinates after zoom and preserves a prompt-only draft on cancel
+  ---
+  duration_ms: 147.032483
+  type: 'test'
+  ...
+# Subtest: prompt-only save needs no image; reset returns the default without requesting a new image
+ok 16 - prompt-only save needs no image; reset returns the default without requesting a new image
+  ---
+  duration_ms: 124.902861
+  type: 'test'
+  ...
+# Subtest: transparent PNG import keeps its alpha and provides its own original for persistent storage
+ok 17 - transparent PNG import keeps its alpha and provides its own original for persistent storage
+  ---
+  duration_ms: 145.350712
+  type: 'test'
+  ...
+# Subtest: reopened cropped edit keeps saved pixels and can restore the full original
+ok 18 - reopened cropped edit keeps saved pixels and can restore the full original
+  ---
+  duration_ms: 127.756593
+  type: 'test'
+  ...
+# Subtest: mobile overview fits a long four-panel image and pan mode does not draw over it
+ok 19 - mobile overview fits a long four-panel image and pan mode does not draw over it
+  ---
+  duration_ms: 140.075807
+  type: 'test'
+  ...
+# Subtest: unsuitable opaque image is not marked as a transparent layer by one-click processing
+ok 20 - unsuitable opaque image is not marked as a transparent layer by one-click processing
+  ---
+  duration_ms: 180.819807
+  type: 'test'
+  ...
+# Subtest: playback never uses white-removal percentage to layer unconfirmed pictures
+ok 21 - playback never uses white-removal percentage to layer unconfirmed pictures
+  ---
+  duration_ms: 338.192663
+  type: 'test'
+  ...
+# (node:13) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: each production tool panel scrolls independently with timing and navigation outside that scroll
+ok 22 - each production tool panel scrolls independently with timing and navigation outside that scroll
+  ---
+  duration_ms: 233.703364
+  type: 'test'
+  ...
+# Subtest: image save controls are outside the scroll area and the canvas is in its own viewport
+ok 23 - image save controls are outside the scroll area and the canvas is in its own viewport
+  ---
+  duration_ms: 140.72232
+  type: 'test'
+  ...
+# Subtest: large image canvas has a foldable tool panel and prominent persistent undo/save actions
+ok 24 - large image canvas has a foldable tool panel and prominent persistent undo/save actions
+  ---
+  duration_ms: 137.872832
+  type: 'test'
+  ...
+# Subtest: editor CSS is scoped, balanced and retains paging without requiring container-query support
+ok 25 - editor CSS is scoped, balanced and retains paging without requiring container-query support
+  ---
+  duration_ms: 101.732662
+  type: 'test'
+  ...
+# (node:14) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: three pending results have one compact editor entry and every save-only action remains in its drawer
+ok 26 - three pending results have one compact editor entry and every save-only action remains in its drawer
+  ---
+  duration_ms: 117.962504
+  type: 'test'
+  ...
+# Subtest: a short filmstrip has no disabled page row while long projects keep every page reachable
+ok 27 - a short filmstrip has no disabled page row while long projects keep every page reachable
+  ---
+  duration_ms: 119.532373
+  type: 'test'
+  ...
+# Subtest: small host viewports have a scroll escape and a non-collapsing canvas instead of a forty-pixel minimum
+ok 28 - small host viewports have a scroll escape and a non-collapsing canvas instead of a forty-pixel minimum
+  ---
+  duration_ms: 113.881435
+  type: 'test'
+  ...
+# Subtest: image focus opens with an immediate return action and releases the shell on back or disposal
+ok 29 - image focus opens with an immediate return action and releases the shell on back or disposal
+  ---
+  duration_ms: 114.491806
+  type: 'test'
+  ...
+# Subtest: pending results do not take image canvas space and remain reachable after returning
+ok 30 - pending results do not take image canvas space and remain reachable after returning
+  ---
+  duration_ms: 116.950373
+  type: 'test'
+  ...
+1..30
+# tests 30
+# suites 0
+# pass 30
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 3336.201638

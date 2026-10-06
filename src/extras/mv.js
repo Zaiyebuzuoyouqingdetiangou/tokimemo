@@ -798,7 +798,7 @@ export async function continueStoryboard(songId) {
             lastScene: list(previous.shots).filter(s => s.sectionIndex < missing[0]).at(-1)?.plain || '' };
         const prompt = storyboardPrompt(context, memory, song, settings, missing, previous.cast || null)
             + `\n【接着已有分镜补写】\n只补上面列出的段落，sectionIndex 沿用歌曲原编号。已有分镜和图片会保留；新构图在保存时自动分配编号。重复的画面可在 frames 引用 reusableGroups 的原 group/diff，不必重写该 group；新画面使用新构图。沿用已有时代、衣着和意象，并衔接已有画面：\n${JSON.stringify(continuity)}`;
-        const data = await generation_client.requestJson(prompt, '正在补写剩余分镜…', { mode: 'songMv', taskKey: `extras:mv:${key}`, context, origin });
+        const data = await generation_client.requestJson(prompt, '正在补写剩余分镜…', { mode: 'songMv', preferStream: true, taskKey: `extras:mv:${key}`, context, origin });
         return await holdResult({ ...target, appendSections: missing }, 'append', '', data, raw => continuationPatch(raw, previous, memory, song, settings, missing));
     } finally { running.delete(key); }
 }
@@ -815,7 +815,7 @@ export async function generateStoryboard(songId, settingsInput, castInput = unde
     running.add(key);
     try {
         const data = await generation_client.requestJson(storyboardPrompt(context, memory, song, settings, settings.output === 'tegaki' ? firstChunk(parseSections(song.lyrics), selectedSectionIndexes(parseSections(song.lyrics), settings.range, settings.rangeFrom, settings.rangeTo)) : null, cast), '正在写 MV 分镜…', {
-            mode: 'songMv', taskKey: `extras:mv:${key}`, context, origin,
+            mode: 'songMv', preferStream: true, taskKey: `extras:mv:${key}`, context, origin,
         });
         return await holdResult(target, 'story', '', data, raw => {
             const built = buildShots(raw, memory, parseSections(song.lyrics).length, settings, cast);
@@ -895,7 +895,7 @@ ${record.cast ? `本镜人物及动作：${mv_cast.castVisual(record, shot)}\n${
 第一个字符必须是 {，最后一个字符必须是 }。
 不要前言，不要解释，不要代码围栏，不要在 JSON 外面写任何字。
 {"plain":"……","shot":"……","move":"……","motion":"push","imagePrompt":"……","videoZh":"……","videoEn":"……"}`;
-        const data = await generation_client.requestJson(prompt, '正在改写这一镜…', { mode: 'songMv', taskKey: `extras:mv:${key}`, context, origin });
+        const data = await generation_client.requestJson(prompt, '正在改写这一镜…', { mode: 'songMv', preferStream: true, taskKey: `extras:mv:${key}`, context, origin });
         return await holdResult(target, 'rewrite', shotId, data, raw => {
             const patch = {};
             for (const field of ['plain', 'shot', 'move', 'imagePrompt', 'videoZh', 'videoEn']) {

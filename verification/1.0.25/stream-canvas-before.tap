@@ -1,0 +1,246 @@
+TAP version 13
+# (node:12) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: save-and-next only advances after the actual save succeeds
+ok 1 - save-and-next only advances after the actual save succeeds
+  ---
+  duration_ms: 113.551323
+  type: 'test'
+  ...
+# Subtest: pending or failed image save keeps the editor and never opens the next shot
+ok 2 - pending or failed image save keeps the editor and never opens the next shot
+  ---
+  duration_ms: 214.74768
+  type: 'test'
+  ...
+# Subtest: original comparison cannot paint over pixels and returning to a brush restores crop geometry
+ok 3 - original comparison cannot paint over pixels and returning to a brush restores crop geometry
+  ---
+  duration_ms: 112.025459
+  type: 'test'
+  ...
+# Subtest: selecting a brush exits move mode and really paints instead of silently panning
+not ok 4 - selecting a brush exits move mode and really paints instead of silently panning
+  ---
+  duration_ms: 106.69253
+  type: 'test'
+  location: '/workspace/scratch/c9f4993ef355/hearttrace-1.0.25-47l_6xrk/candidate/tokimemo-main/tools/verification/mv-editor-native-regression.mjs:102:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+    
+    + 'pan-x pan-y'
+    - 'none'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'none'
+  actual: 'pan-x pan-y'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///workspace/scratch/c9f4993ef355/hearttrace-1.0.25-47l_6xrk/candidate/tokimemo-main/tools/verification/mv-editor-native-regression.mjs:107:16)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+# Subtest: brush size has a non-destructive visible preview and a numeric label
+not ok 5 - brush size has a non-destructive visible preview and a numeric label
+  ---
+  duration_ms: 110.696608
+  type: 'test'
+  location: '/workspace/scratch/c9f4993ef355/hearttrace-1.0.25-47l_6xrk/candidate/tokimemo-main/tools/verification/mv-editor-native-regression.mjs:118:1'
+  failureType: 'testCodeFailure'
+  error: "Cannot read properties of null (reading 'hidden')"
+  code: 'ERR_TEST_FAILURE'
+  name: 'TypeError'
+  stack: |-
+    TestContext.<anonymous> (file:///workspace/scratch/c9f4993ef355/hearttrace-1.0.25-47l_6xrk/candidate/tokimemo-main/tools/verification/mv-editor-native-regression.mjs:124:51)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+# Subtest: applying a new crop resets zoom and scroll so the selected image is not lost outside the viewport
+not ok 6 - applying a new crop resets zoom and scroll so the selected image is not lost outside the viewport
+  ---
+  duration_ms: 112.411452
+  type: 'test'
+  location: '/workspace/scratch/c9f4993ef355/hearttrace-1.0.25-47l_6xrk/candidate/tokimemo-main/tools/verification/mv-editor-native-regression.mjs:132:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    
+    '4' !== '1'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: '1'
+  actual: '4'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///workspace/scratch/c9f4993ef355/hearttrace-1.0.25-47l_6xrk/candidate/tokimemo-main/tools/verification/mv-editor-native-regression.mjs:140:16)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+# Subtest: canvas fit respects its own remaining space and still supports zoom and grid selection
+ok 7 - canvas fit respects its own remaining space and still supports zoom and grid selection
+  ---
+  duration_ms: 113.619925
+  type: 'test'
+  ...
+# Subtest: automatically prepared character can be downloaded directly while a prompt-only save keeps the source
+ok 8 - automatically prepared character can be downloaded directly while a prompt-only save keeps the source
+  ---
+  duration_ms: 132.754568
+  type: 'test'
+  ...
+# Subtest: editor selects the third of four panels before processing; saved PNG contains only blue pixels
+ok 9 - editor selects the third of four panels before processing; saved PNG contains only blue pixels
+  ---
+  duration_ms: 114.847005
+  type: 'test'
+  ...
+# Subtest: native editor erase, restore, undo and saved transparent PNG preserve original reference
+ok 10 - native editor erase, restore, undo and saved transparent PNG preserve original reference
+  ---
+  duration_ms: 135.447532
+  type: 'test'
+  ...
+# Subtest: free selection uses pointer coordinates after zoom and preserves a prompt-only draft on cancel
+ok 11 - free selection uses pointer coordinates after zoom and preserves a prompt-only draft on cancel
+  ---
+  duration_ms: 114.365982
+  type: 'test'
+  ...
+# Subtest: prompt-only save needs no image; reset returns the default without requesting a new image
+ok 12 - prompt-only save needs no image; reset returns the default without requesting a new image
+  ---
+  duration_ms: 109.886547
+  type: 'test'
+  ...
+# Subtest: transparent PNG import keeps its alpha and provides its own original for persistent storage
+ok 13 - transparent PNG import keeps its alpha and provides its own original for persistent storage
+  ---
+  duration_ms: 119.043515
+  type: 'test'
+  ...
+# Subtest: reopened cropped edit keeps saved pixels and can restore the full original
+ok 14 - reopened cropped edit keeps saved pixels and can restore the full original
+  ---
+  duration_ms: 124.444331
+  type: 'test'
+  ...
+# Subtest: mobile overview fits a long four-panel image and pan mode does not draw over it
+ok 15 - mobile overview fits a long four-panel image and pan mode does not draw over it
+  ---
+  duration_ms: 166.919514
+  type: 'test'
+  ...
+# Subtest: unsuitable opaque image is not marked as a transparent layer by one-click processing
+ok 16 - unsuitable opaque image is not marked as a transparent layer by one-click processing
+  ---
+  duration_ms: 190.061311
+  type: 'test'
+  ...
+# Subtest: playback never uses white-removal percentage to layer unconfirmed pictures
+ok 17 - playback never uses white-removal percentage to layer unconfirmed pictures
+  ---
+  duration_ms: 295.121569
+  type: 'test'
+  ...
+# (node:13) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: MV storyboard and continuation prefer the existing streaming transport with one paid request per click
+not ok 18 - MV storyboard and continuation prefer the existing streaming transport with one paid request per click
+  ---
+  duration_ms: 127.833316
+  type: 'test'
+  location: '/workspace/scratch/c9f4993ef355/hearttrace-1.0.25-47l_6xrk/candidate/tokimemo-main/tools/verification/mv-stream-transport-regression.mjs:22:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    
+    false !== true
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///workspace/scratch/c9f4993ef355/hearttrace-1.0.25-47l_6xrk/candidate/tokimemo-main/tools/verification/mv-stream-transport-regression.mjs:25:44)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3)
+  ...
+# Subtest: an explicit complete-response preference stays effective; other modes are unchanged
+ok 19 - an explicit complete-response preference stays effective; other modes are unchanged
+  ---
+  duration_ms: 116.582629
+  type: 'test'
+  ...
+# Subtest: a non-streaming JSON reply to the same streaming request is accepted without another request
+not ok 20 - a non-streaming JSON reply to the same streaming request is accepted without another request
+  ---
+  duration_ms: 116.669028
+  type: 'test'
+  location: '/workspace/scratch/c9f4993ef355/hearttrace-1.0.25-47l_6xrk/candidate/tokimemo-main/tools/verification/mv-stream-transport-regression.mjs:47:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    
+    false !== true
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///workspace/scratch/c9f4993ef355/hearttrace-1.0.25-47l_6xrk/candidate/tokimemo-main/tools/verification/mv-stream-transport-regression.mjs:51:44)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+# Subtest: 524 and 503 still surface honestly, with no automatic reroll or clearing old images and timings
+not ok 21 - 524 and 503 still surface honestly, with no automatic reroll or clearing old images and timings
+  ---
+  duration_ms: 115.487485
+  type: 'test'
+  location: '/workspace/scratch/c9f4993ef355/hearttrace-1.0.25-47l_6xrk/candidate/tokimemo-main/tools/verification/mv-stream-transport-regression.mjs:55:1'
+  failureType: 'testCodeFailure'
+  error: "Cannot read properties of undefined (reading 'streamRequested')"
+  code: 'ERR_TEST_FAILURE'
+  name: 'TypeError'
+  stack: |-
+    TestContext.<anonymous> (file:///workspace/scratch/c9f4993ef355/hearttrace-1.0.25-47l_6xrk/candidate/tokimemo-main/tools/verification/mv-stream-transport-regression.mjs:67:38)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+# Subtest: manual API uses the same stream preference and preserves an explicit off switch
+not ok 22 - manual API uses the same stream preference and preserves an explicit off switch
+  ---
+  duration_ms: 141.66198
+  type: 'test'
+  location: '/workspace/scratch/c9f4993ef355/hearttrace-1.0.25-47l_6xrk/candidate/tokimemo-main/tools/verification/mv-stream-transport-regression.mjs:72:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    
+    false !== true
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///workspace/scratch/c9f4993ef355/hearttrace-1.0.25-47l_6xrk/candidate/tokimemo-main/tools/verification/mv-stream-transport-regression.mjs:83:16)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+1..22
+# tests 22
+# suites 0
+# pass 15
+# fail 7
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 2734.722735

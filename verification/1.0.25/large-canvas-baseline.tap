@@ -1,0 +1,412 @@
+TAP version 13
+# (node:13) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: narrow image editor starts with a large canvas and tools can fold without discarding edits or undo
+not ok 1 - narrow image editor starts with a large canvas and tools can fold without discarding edits or undo
+  ---
+  duration_ms: 115.848239
+  type: 'test'
+  location: '/workspace/scratch/c9f4993ef355/hearttrace-1.0.25-47l_6xrk/candidate/tokimemo-main/tools/verification/mv-editor-native-regression.mjs:68:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    the inspector must not take canvas space on entry
+    + actual - expected
+    
+    + undefined
+    - true
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///workspace/scratch/c9f4993ef355/hearttrace-1.0.25-47l_6xrk/candidate/tokimemo-main/tools/verification/mv-editor-native-regression.mjs:72:16)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3)
+  ...
+# Subtest: making room for a zoomed image reveals more pixels instead of enlarging the image again
+not ok 2 - making room for a zoomed image reveals more pixels instead of enlarging the image again
+  ---
+  duration_ms: 110.555695
+  type: 'test'
+  location: '/workspace/scratch/c9f4993ef355/hearttrace-1.0.25-47l_6xrk/candidate/tokimemo-main/tools/verification/mv-editor-native-regression.mjs:88:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    collapsing tools must not multiply the display size again
+    
+    '500px' !== '200px'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: '200px'
+  actual: '500px'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///workspace/scratch/c9f4993ef355/hearttrace-1.0.25-47l_6xrk/candidate/tokimemo-main/tools/verification/mv-editor-native-regression.mjs:98:16)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+# Subtest: wide image editor starts with tools available and folding them preserves prompt-only save
+not ok 3 - wide image editor starts with tools available and folding them preserves prompt-only save
+  ---
+  duration_ms: 127.630729
+  type: 'test'
+  location: '/workspace/scratch/c9f4993ef355/hearttrace-1.0.25-47l_6xrk/candidate/tokimemo-main/tools/verification/mv-editor-native-regression.mjs:106:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+    
+    + undefined
+    - false
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: false
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///workspace/scratch/c9f4993ef355/hearttrace-1.0.25-47l_6xrk/candidate/tokimemo-main/tools/verification/mv-editor-native-regression.mjs:109:16)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+# Subtest: save-and-next only advances after the actual save succeeds
+ok 4 - save-and-next only advances after the actual save succeeds
+  ---
+  duration_ms: 132.532241
+  type: 'test'
+  ...
+# Subtest: pending or failed image save keeps the editor and never opens the next shot
+ok 5 - pending or failed image save keeps the editor and never opens the next shot
+  ---
+  duration_ms: 226.086031
+  type: 'test'
+  ...
+# Subtest: return remains usable while an asynchronous save is pending
+ok 6 - return remains usable while an asynchronous save is pending
+  ---
+  duration_ms: 119.260971
+  type: 'test'
+  ...
+# Subtest: original comparison cannot paint over pixels and returning to a brush restores crop geometry
+ok 7 - original comparison cannot paint over pixels and returning to a brush restores crop geometry
+  ---
+  duration_ms: 120.640127
+  type: 'test'
+  ...
+# Subtest: selecting a brush exits move mode and really paints instead of silently panning
+ok 8 - selecting a brush exits move mode and really paints instead of silently panning
+  ---
+  duration_ms: 125.125772
+  type: 'test'
+  ...
+# Subtest: brush size has a non-destructive visible preview and a numeric label
+ok 9 - brush size has a non-destructive visible preview and a numeric label
+  ---
+  duration_ms: 113.82098
+  type: 'test'
+  ...
+# Subtest: applying a new crop resets zoom and scroll so the selected image is not lost outside the viewport
+ok 10 - applying a new crop resets zoom and scroll so the selected image is not lost outside the viewport
+  ---
+  duration_ms: 111.868633
+  type: 'test'
+  ...
+# Subtest: canvas fit respects its own remaining space and still supports zoom and grid selection
+ok 11 - canvas fit respects its own remaining space and still supports zoom and grid selection
+  ---
+  duration_ms: 118.602148
+  type: 'test'
+  ...
+# Subtest: automatically prepared character can be downloaded directly while a prompt-only save keeps the source
+ok 12 - automatically prepared character can be downloaded directly while a prompt-only save keeps the source
+  ---
+  duration_ms: 132.481496
+  type: 'test'
+  ...
+# Subtest: editor selects the third of four panels before processing; saved PNG contains only blue pixels
+ok 13 - editor selects the third of four panels before processing; saved PNG contains only blue pixels
+  ---
+  duration_ms: 117.623612
+  type: 'test'
+  ...
+# Subtest: native editor erase, restore, undo and saved transparent PNG preserve original reference
+ok 14 - native editor erase, restore, undo and saved transparent PNG preserve original reference
+  ---
+  duration_ms: 139.917222
+  type: 'test'
+  ...
+# Subtest: free selection uses pointer coordinates after zoom and preserves a prompt-only draft on cancel
+ok 15 - free selection uses pointer coordinates after zoom and preserves a prompt-only draft on cancel
+  ---
+  duration_ms: 121.516517
+  type: 'test'
+  ...
+# Subtest: prompt-only save needs no image; reset returns the default without requesting a new image
+ok 16 - prompt-only save needs no image; reset returns the default without requesting a new image
+  ---
+  duration_ms: 111.9001
+  type: 'test'
+  ...
+# Subtest: transparent PNG import keeps its alpha and provides its own original for persistent storage
+ok 17 - transparent PNG import keeps its alpha and provides its own original for persistent storage
+  ---
+  duration_ms: 115.521984
+  type: 'test'
+  ...
+# Subtest: reopened cropped edit keeps saved pixels and can restore the full original
+ok 18 - reopened cropped edit keeps saved pixels and can restore the full original
+  ---
+  duration_ms: 162.255108
+  type: 'test'
+  ...
+# Subtest: mobile overview fits a long four-panel image and pan mode does not draw over it
+ok 19 - mobile overview fits a long four-panel image and pan mode does not draw over it
+  ---
+  duration_ms: 132.514937
+  type: 'test'
+  ...
+# Subtest: unsuitable opaque image is not marked as a transparent layer by one-click processing
+ok 20 - unsuitable opaque image is not marked as a transparent layer by one-click processing
+  ---
+  duration_ms: 157.897548
+  type: 'test'
+  ...
+# Subtest: playback never uses white-removal percentage to layer unconfirmed pictures
+ok 21 - playback never uses white-removal percentage to layer unconfirmed pictures
+  ---
+  duration_ms: 318.234366
+  type: 'test'
+  ...
+# (node:14) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: each production tool panel scrolls independently with timing and navigation outside that scroll
+ok 22 - each production tool panel scrolls independently with timing and navigation outside that scroll
+  ---
+  duration_ms: 276.223118
+  type: 'test'
+  ...
+# Subtest: image save controls are outside the scroll area and the canvas is in its own viewport
+ok 23 - image save controls are outside the scroll area and the canvas is in its own viewport
+  ---
+  duration_ms: 168.459163
+  type: 'test'
+  ...
+# Subtest: large image canvas has a foldable tool panel and prominent persistent undo/save actions
+not ok 24 - large image canvas has a foldable tool panel and prominent persistent undo/save actions
+  ---
+  duration_ms: 183.07595
+  type: 'test'
+  location: '/workspace/scratch/c9f4993ef355/hearttrace-1.0.25-47l_6xrk/candidate/tokimemo-main/tools/verification/mv-layout-dom-regression.mjs:53:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    
+    0 !== 1
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 1
+  actual: 0
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///workspace/scratch/c9f4993ef355/hearttrace-1.0.25-47l_6xrk/candidate/tokimemo-main/tools/verification/mv-layout-dom-regression.mjs:56:12)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+# Subtest: editor CSS is scoped, balanced and retains paging without requiring container-query support
+ok 25 - editor CSS is scoped, balanced and retains paging without requiring container-query support
+  ---
+  duration_ms: 116.939426
+  type: 'test'
+  ...
+# (node:15) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: three pending results have one compact editor entry and every save-only action remains in its drawer
+ok 26 - three pending results have one compact editor entry and every save-only action remains in its drawer
+  ---
+  duration_ms: 142.65253
+  type: 'test'
+  ...
+# Subtest: a short filmstrip has no disabled page row while long projects keep every page reachable
+ok 27 - a short filmstrip has no disabled page row while long projects keep every page reachable
+  ---
+  duration_ms: 125.637623
+  type: 'test'
+  ...
+# Subtest: small host viewports have a scroll escape and a non-collapsing canvas instead of a forty-pixel minimum
+not ok 28 - small host viewports have a scroll escape and a non-collapsing canvas instead of a forty-pixel minimum
+  ---
+  duration_ms: 97.486399
+  type: 'test'
+  location: '/workspace/scratch/c9f4993ef355/hearttrace-1.0.25-47l_6xrk/candidate/tokimemo-main/tools/verification/mv-mobile-height-regression.mjs:47:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /\.rmt-mvi-layout\{[^}]*grid-template-rows:minmax\(0,1fr\) auto/. Input:
+    
+    '\n' +
+      '#test .rmt-shell.rmt-mvi-focus>.rmt-topbar,#test .rmt-shell.rmt-mvi-focus>.rmt-workspace-tabs,#test .rmt-shell.rmt-mvi-focus>.rmt-workspace-location{display:none!important}\n' +
+      '#test .rmt-shell.rmt-mvi-focus>.rmt-body.rmt-mve-body{display:flex!important;flex:1 1 0;min-height:0;padding:10px!important;overflow:hidden!important}\n' +
+      '#test .rmt-body.rmt-mve-body .rmt-mve-image-page{display:flex;flex-direction:column;flex:1 1 0;min-height:0;max-width:none;width:100%;gap:0;padding:0}\n' +
+      '#test .rmt-body.rmt-mve-body [data-rmt-mv-editor-host]{display:flex;flex:1;min-height:0;min-width:0}\n' +
+      '#test .rmt-body.rmt-mve-body .rmt-mvi-loading{display:flex;flex-direction:column;gap:12px;align-items:flex-start}\n' +
+      '#test .rmt-body.rmt-mve-body .rmt-mvi-workbench{display:flex;flex:1;flex-direction:column;min-height:0;min-width:0;width:100%;gap:8px;container-type:inline-size}\n' +
+      '#test .rmt-body.rmt-mve-body .rmt-mvi-workbench [hidden]{display:none!important}\n' +
+      '#test .rmt-body.rmt-mve-body .rmt-mvi-workbench button{font:inherit;font-size:13px!important;line-height:1.3!important;min-height:44px;padding:7px 12px;border:1px solid var(--rmt-theme-border,#cddfed);border-radius:999px;background:var(--rmt-theme-surface-solid,#fff);color:var(--rmt-theme-text,#294762);cursor:pointer;touch-action:manipulation;box-sizing:border-box}\n' +
+      '#test .rmt-body.rmt-mve-body .rmt-mvi-workbench button[aria-pressed=true]{border-color:var(--rmt-theme-accent-ink,#4f769d);background:var(--rmt-theme-soft,#e7f1fa)}\n' +
+      '#test .rmt-body.rmt-mve-body .rmt-mvi-workbench button:disabled{opacity:.5;cursor:default}\n' +
+      '#test .rmt-body.rmt-mve-body .rmt-mvi-workbench button:focus-visible,#test .rmt-body.rmt-mve-body .rmt-mvi-workbench summary:focus-visible{outline:2px solid var(--rmt-theme-accent-ink,#4f769d);outline-offset:2px}\n' +
+      '#test .rmt-body.rmt-mve-body .rmt-mvi-header{display:flex;align-items:center;justify-content:flex-start;gap:12px;flex:none;padding:0 0 6px;border-bottom:1px solid var(--rmt-theme-border,#cddfed)}\n' +
+      '#test .rmt-body.rmt-mve-body .rmt-mvi-header>div{min-width:0;display:flex;flex-direction:column;gap:3px}\n' +
+      '#test .rmt-body.rmt-mve-body .rmt-mvi-header b{font-size:15px!important;overflow-wrap:anywhere}\n' +
+      '#test .rmt-body.rmt-mve-body .rmt-mvi-header small{font-size:11px!important;color:var(--rmt-theme-muted,#63788f)}\n' +
+      '#test .rmt-body.rmt-mve-body .rmt-mvi-layout{flex:1;min-height:0;min-width:0;display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(180px,1fr) minmax(170px,.65fr);gap:8px}\n' +
+      '#test .rmt-body.rmt-mve-body .rmt-mvi-visual{display:flex;flex-direction:column;min-height:0;min-width:0;overflow:hidden;border:1px solid var(--rmt-theme-border,#cddfed);border-radius:12px;background:var(--rmt-theme-soft,#e7f1fa)}\n' +
+      '#test .rmt-body.rmt-mve-body .rmt-mvi-canvas-tools,#test .rmt-body.rmt-mve-body .rmt-mvi-matte{display:flex;align-items:center;justify-content:space-between;gap:7px;flex:none;padding:6px 8px}\n' +
+      '#test .rmt-body.rmt-mve-body .rmt-mvi-canvas-tools>label{flex:1;display:flex;flex-direction:row;align-items:center;gap:6px;margin:0;font-size:11px!important;min-width:0;white-space:nowrap}\n' +
+      '#test .rmt-body.rmt-mve-body .rmt-mvi-workbench input[type=range]{appearance:none!important;-webkit-appearance:none!important;display:block;min-width:0;min-height:44px!important;height:44px!important;max-height:44px!important;width:100%;padding:0!important;margin:0!important;border:0!important;border-radius:0!important;box-shadow:none!important;background:transparent!important;filter:none!important;touch-action:pan-y;cursor:pointer}\n' +
+      '#test .rmt-body.rmt-mve-body .rmt-mvi-workbench input[type=range]::-webkit-slider-runnable-track{height:6px!important;border:0!important;border-radius:999px!important;background:var(--rmt-theme-border,#cddfed)!important;box-shadow:none!important}\n' +
+      '#test .rmt-body.rmt-mve-body .rmt-mvi-workbench input[type=range]::-webkit-slider-thumb{-webkit-appearance:none!important;appearance:none!important;width:22px!important;height:22px!important;margin-top:-8px!important;border:2px solid var(--rmt-theme-surface-solid,#fff)!important;border-radius:50%!important;background:var(--rmt-theme-accent-ink,#4f769d)!important;box-shadow:0 1px 4px #0003!important}\n' +
+      '#test .rmt-body.rmt-mve-body .rmt-mvi-workbench input[type=range]::-moz-range-track{height:6px;border:0;border-radius:999px;background:var(--rmt-theme-border,#cddfed)}\n' +
+      '#test .rmt-body.rmt-mve-body .rmt-mvi-workbench input[type=range]::-moz-range-thumb{width:18px;height:18px;border:2px solid var(--rmt-theme-surface-solid,#fff);border-radius:50%;background:var(--rmt-theme-accent-ink,#4f769d)}\n' +
+      '#test .rmt-body.rmt-mve-body .rmt-mvi-canvas-tools input[type=range]{width:0;flex:1}\n' +
+      '#test .rmt-body.rmt-mve-body .rmt-mvi-canvas-tools button,#test .rmt-body.rmt-mve-body .rmt-mvi-matte button{font-size:11px!important;min-height:44px;padding:4px 8px;white-space:nowrap}\n' +
+      '#test .rmt-body.rmt-mve-body .rmt-mvi-visual .rmt-mv-editor-viewport{flex:1 1 0;min-height:64px;max-height:none;width:100%;overflow:auto;overscroll-behavior:contain;position:relative;isolation:isolate}\n' +
+      '#test .rmt-body.rmt-mve-body .rmt-mvi-visual [data-editor-canvas]{margin:0 auto;max-width:none;flex:none}\n' +
+      '#test .rmt-body.rmt-mve-body .rmt-mvi-brush-cursor{position:absolute;z-index:2;display:block;pointer-events:none;transform:translate(-50%,-50%);border:1px solid #fff;border-radius:50%;box-shadow:0 0 0 1px #253445,inset 0 0 0 1px #253445;box-sizing:border-box}\n' +
+      '#test .rmt-body.rmt-mve-body .rmt-mvi-matte>div{display:flex;gap:4px}\n' +
+      '#test .rmt-body.rmt-mve-body .rmt-mvi-matte>small{font-size:10px;color:var(--rmt-theme-muted,#63788f);white-space:nowrap}\n' +
+      '#test .rmt-body.rmt-mve-body .rmt-mv-editor-viewport[data-editor-matte=dark]{background:#253445}\n' +
+      '#test .rmt-body.rmt-mve-body .rmt-mv-editor-viewport[data-editor-matte=light]{background:#f8fbfe}\n' +
+      '#test .rmt-body.rmt-mve-body .rmt-mvi-inspector{display:flex;flex-direction:column;min-height:0;min-width:0;overflow:hidden;background:var(--rmt-theme-surface-solid,#fff);border:1px solid var(--rmt-theme-border,#cddfed);border-radius:12px}\n' +
+      '#test .rmt-body.rmt-mve-body .rmt-mvi-tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;flex:none;padding:5px;background:var(--rmt-theme-soft,#e7f1fa)}\n' +
+      '#test .rmt-body.rmt-mve-body .rmt-mvi-tabs button{font-size:12px;min-height:44px;padding:6px 3px}\n' +
+      '#test .rmt-body.rmt-mve-body .rmt-mvi-tool-scroll{flex:1;min-height:0;overflow:auto;overscroll-behavior:auto;padding:10px 12px;scrollbar-width:thin;touch-action:pan-y pinch-zoom}\n' +
+      '#test .rmt-body.rmt-mve-body .rmt-mvi-tool-scroll .rmt-mv-editor-tools{gap:6px;margin:4px 0}\n' +
+      '#test .rmt-body.rmt-mve-body .rmt-mvi-tool-scroll .rmt-mv-editor-tools button{flex:1 0 auto;min-height:44px;padding:6px 10px;font-size:12px}\n' +
+      '#test .rmt-body.rmt-mve-body .rmt-mvi-tool-scroll label{font-size:12px!important}\n' +
+      '#test .rmt-body.rmt-mve-body .rmt-mvi-tool-scroll input:not([type=checkbox]):not([type=range]),#test .rmt-body.rmt-mve-body .rmt-mvi-tool-scroll select,#test .rmt-body.rmt-mve-body .rmt-mvi-tool-scroll textarea{font-size:16px}\n' +
+      '#test .rmt-body.rmt-mve-body .rmt-mvi-tool-scroll .rmt-mvi-brush{display:flex;flex-direction:row;align-items:center;gap:8px}\n' +
+      '#test .rmt-body.rmt-mve-body .rmt-mvi-tool-scroll .rmt-mvi-brush input{flex:1;width:0}\n' +
+      '#test .rmt-body.rmt-mve-body .rmt-mvi-brush>span{flex:none;min-width:55px;font-size:11px!important;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}\n' +
+      '#test .rmt-body.rmt-mve-body .rmt-mvi-tool-scroll .rmt-mvi-layer{display:flex;flex-direction:row;align-items:center;gap:8px;line-height:1.5;margin:8px 0}\n' +
+      '#test .rmt-body.rmt-mve-body .rmt-mvi-layer input{width:18px;min-width:18px;height:18px;margin:0}\n' +
+      '#test .rmt-body.rmt-mve-body .rmt-mvi-more{margin-top:8px}\n' +
+      '#test .rmt-body.rmt-mve-body .rmt-mvi-more summary{min-height:44px;display:flex;align-items:center;cursor:pointer;font-size:12px!important;padding:7px 12px;box-sizing:border-box;border:1px solid var(--rmt-theme-border,#cddfed);border-radius:999px;background:var(--rmt-theme-surface-solid,#fff)}\n' +
+      '#test .rmt-body.rmt-mve-body .rmt-mvi-workbench .rmt-x-note{margin:5px 0;font-size:11px;line-height:1.6}\n' +
+      '#test .rmt-body.rmt-mve-body .rmt-mvi-footer{flex:none;padding:5px 0 max(2px,env(safe-area-inset-bottom,0px));border-top:1px solid var(--rmt-theme-border,#cddfed)}\n' +
+      '#test .rmt-body.rmt-mve-body .rmt-mvi-footer p{font-size:11px!important;line-height:1.5!important;color:var(--rmt-theme-muted,#63788f);margin:0 0 5px;max-height:3em;overflow:auto}\n' +
+      '#test .rmt-body.rmt-mve-body .rmt-mvi-footer p:empty{display:none}\n' +
+      '#test .rmt-body.rmt-mve-body .rmt-mvi-save-row,#test .rmt-body.rmt-mve-body .rmt-mvi-save-row>div{display:flex;align-items:center;justify-content:space-between;gap:7px}\n' +
+      '#test .rmt-body.rmt-mve-body .rmt-mvi-workbench .rmt-mvi-primary{background:var(--rmt-theme-soft,#e7f1fa);border-color:var(--rmt-theme-accent-ink,#4f769d);font-weight:600}\n' +
+      '@media(min-width:960px){#test .rmt-body.rmt-mve-body .rmt-mvi-layout{grid-template-columns:minmax(0,1fr) 315px;grid-template-rows:minmax(0,1fr)}}\n' +
+      '@supports(container-type:inline-size){#test .rmt-body.rmt-mve-body .rmt-mvi-layout{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(180px,1fr) minmax(170px,.65fr)}@container(min-width:740px){#test .rmt-body.rmt-mve-body .rmt-mvi-layout{grid-template-columns:minmax(0,1fr) 315px;grid-template-rows:minmax(0,1fr)}}}\n' +
+      '@media(max-height:600px) and (orientation:landscape) and (min-width:600px){#test .rmt-body.rmt-mve-body .rmt-mvi-layout{grid-template-columns:minmax(0,1fr) minmax(240px,.8fr);grid-template-rows:minmax(0,1fr)}#test .rmt-body.rmt-mve-body .rmt-mvi-header{padding-bottom:3px}#test .rmt-body.rmt-mve-body .rmt-mvi-workbench{gap:5px}#test .rmt-body.rmt-mve-body .rmt-mvi-matte{padding-block:2px}}\n' +
+      '@media(max-height:500px) and (max-width:599px){#test .rmt-shell.rmt-mvi-focus>.rmt-body.rmt-mve-body{overflow:auto!important}#test .rmt-body.rmt-mve-body .rmt-mve-image-page{flex:1 0 460px;min-height:460px}}\n'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual: |-
+    
+    #test .rmt-shell.rmt-mvi-focus>.rmt-topbar,#test .rmt-shell.rmt-mvi-focus>.rmt-workspace-tabs,#test .rmt-shell.rmt-mvi-focus>.rmt-workspace-location{display:none!important}
+    #test .rmt-shell.rmt-mvi-focus>.rmt-body.rmt-mve-body{display:flex!important;flex:1 1 0;min-height:0;padding:10px!important;overflow:hidden!important}
+    #test .rmt-body.rmt-mve-body .rmt-mve-image-page{display:flex;flex-direction:column;flex:1 1 0;min-height:0;max-width:none;width:100%;gap:0;padding:0}
+    #test .rmt-body.rmt-mve-body [data-rmt-mv-editor-host]{display:flex;flex:1;min-height:0;min-width:0}
+    #test .rmt-body.rmt-mve-body .rmt-mvi-loading{display:flex;flex-direction:column;gap:12px;align-items:flex-start}
+    #test .rmt-body.rmt-mve-body .rmt-mvi-workbench{display:flex;flex:1;flex-direction:column;min-height:0;min-width:0;width:100%;gap:8px;container-type:inline-size}
+    #test .rmt-body.rmt-mve-body .rmt-mvi-workbench [hidden]{display:none!important}
+    #test .rmt-body.rmt-mve-body .rmt-mvi-workbench button{font:inherit;font-size:13px!important;line-height:1.3!important;min-height:44px;padding:7px 12px;border:1px solid var(--rmt-theme-border,#cddfed);border-radius:999px;background:var(--rmt-theme-surface-solid,#fff);color:var(--rmt-theme-text,#294762);cursor:pointer;touch-action:manipulation;box-sizing:border-box}
+    #test .rmt-body.rmt-mve-body .rmt-mvi-workbench button[aria-pressed=true]{border-color:var(--rmt-theme-accent-ink,#4f769d);background:var(--rmt-theme-soft,#e7f1fa)}
+    #test .rmt-body.rmt-mve-body .rmt-mvi-workbench button:disabled{opacity:.5;cursor:default}
+    #test .rmt-body.rmt-mve-body .rmt-mvi-workbench button:focus-visible,#test .rmt-body.rmt-mve-body .rmt-mvi-workbench summary:focus-visible{outline:2px solid var(--rmt-theme-accent-ink,#4f769d);outline-offset:2px}
+    #test .rmt-body.rmt-mve-body .rmt-mvi-header{display:flex;align-items:center;justify-content:flex-start;gap:12px;flex:none;padding:0 0 6px;border-bottom:1px solid var(--rmt-theme-border,#cddfed)}
+    #test .rmt-body.rmt-mve-body .rmt-mvi-header>div{min-width:0;display:flex;flex-direction:column;gap:3px}
+    #test .rmt-body.rmt-mve-body .rmt-mvi-header b{font-size:15px!important;overflow-wrap:anywhere}
+    #test .rmt-body.rmt-mve-body .rmt-mvi-header small{font-size:11px!important;color:var(--rmt-theme-muted,#63788f)}
+    #test .rmt-body.rmt-mve-body .rmt-mvi-layout{flex:1;min-height:0;min-width:0;display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(180px,1fr) minmax(170px,.65fr);gap:8px}
+    #test .rmt-body.rmt-mve-body .rmt-mvi-visual{display:flex;flex-direction:column;min-height:0;min-width:0;overflow:hidden;border:1px solid var(--rmt-theme-border,#cddfed);border-radius:12px;background:var(--rmt-theme-soft,#e7f1fa)}
+    #test .rmt-body.rmt-mve-body .rmt-mvi-canvas-tools,#test .rmt-body.rmt-mve-body .rmt-mvi-matte{display:flex;align-items:center;justify-content:space-between;gap:7px;flex:none;padding:6px 8px}
+    #test .rmt-body.rmt-mve-body .rmt-mvi-canvas-tools>label{flex:1;display:flex;flex-direction:row;align-items:center;gap:6px;margin:0;font-size:11px!important;min-width:0;white-space:nowrap}
+    #test .rmt-body.rmt-mve-body .rmt-mvi-workbench input[type=range]{appearance:none!important;-webkit-appearance:none!important;display:block;min-width:0;min-height:44px!important;height:44px!important;max-height:44px!important;width:100%;padding:0!important;margin:0!important;border:0!important;border-radius:0!important;box-shadow:none!important;background:transparent!important;filter:none!important;touch-action:pan-y;cursor:pointer}
+    #test .rmt-body.rmt-mve-body .rmt-mvi-workbench input[type=range]::-webkit-slider-runnable-track{height:6px!important;border:0!important;border-radius:999px!important;background:var(--rmt-theme-border,#cddfed)!important;box-shadow:none!important}
+    #test .rmt-body.rmt-mve-body .rmt-mvi-workbench input[type=range]::-webkit-slider-thumb{-webkit-appearance:none!important;appearance:none!important;width:22px!important;height:22px!important;margin-top:-8px!important;border:2px solid var(--rmt-theme-surface-solid,#fff)!important;border-radius:50%!important;background:var(--rmt-theme-accent-ink,#4f769d)!important;box-shadow:0 1px 4px #0003!important}
+    #test .rmt-body.rmt-mve-body .rmt-mvi-workbench input[type=range]::-moz-range-track{height:6px;border:0;border-radius:999px;background:var(--rmt-theme-border,#cddfed)}
+    #test .rmt-body.rmt-mve-body .rmt-mvi-workbench input[type=range]::-moz-range-thumb{width:18px;height:18px;border:2px solid var(--rmt-theme-surface-solid,#fff);border-radius:50%;background:var(--rmt-theme-accent-ink,#4f769d)}
+    #test .rmt-body.rmt-mve-body .rmt-mvi-canvas-tools input[type=range]{width:0;flex:1}
+    #test .rmt-body.rmt-mve-body .rmt-mvi-canvas-tools button,#test .rmt-body.rmt-mve-body .rmt-mvi-matte button{font-size:11px!important;min-height:44px;padding:4px 8px;white-space:nowrap}
+    #test .rmt-body.rmt-mve-body .rmt-mvi-visual .rmt-mv-editor-viewport{flex:1 1 0;min-height:64px;max-height:none;width:100%;overflow:auto;overscroll-behavior:contain;position:relative;isolation:isolate}
+    #test .rmt-body.rmt-mve-body .rmt-mvi-visual [data-editor-canvas]{margin:0 auto;max-width:none;flex:none}
+    #test .rmt-body.rmt-mve-body .rmt-mvi-brush-cursor{position:absolute;z-index:2;display:block;pointer-events:none;transform:translate(-50%,-50%);border:1px solid #fff;border-radius:50%;box-shadow:0 0 0 1px #253445,inset 0 0 0 1px #253445;box-sizing:border-box}
+    #test .rmt-body.rmt-mve-body .rmt-mvi-matte>div{display:flex;gap:4px}
+    #test .rmt-body.rmt-mve-body .rmt-mvi-matte>small{font-size:10px;color:var(--rmt-theme-muted,#63788f);white-space:nowrap}
+    #test .rmt-body.rmt-mve-body .rmt-mv-editor-viewport[data-editor-matte=dark]{background:#253445}
+    #test .rmt-body.rmt-mve-body .rmt-mv-editor-viewport[data-editor-matte=light]{background:#f8fbfe}
+    #test .rmt-body.rmt-mve-body .rmt-mvi-inspector{display:flex;flex-direction:column;min-height:0;min-width:0;overflow:hidden;background:var(--rmt-theme-surface-solid,#fff);border:1px solid var(--rmt-theme-border,#cddfed);border-radius:12px}
+    #test .rmt-body.rmt-mve-body .rmt-mvi-tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;flex:none;padding:5px;background:var(--rmt-theme-soft,#e7f1fa)}
+    #test .rmt-body.rmt-mve-body .rmt-mvi-tabs button{font-size:12px;min-height:44px;padding:6px 3px}
+    #test .rmt-body.rmt-mve-body .rmt-mvi-tool-scroll{flex:1;min-height:0;overflow:auto;overscroll-behavior:auto;padding:10px 12px;scrollbar-width:thin;touch-action:pan-y pinch-zoom}
+    #test .rmt-body.rmt-mve-body .rmt-mvi-tool-scroll .rmt-mv-editor-tools{gap:6px;margin:4px 0}
+    #test .rmt-body.rmt-mve-body .rmt-mvi-tool-scroll .rmt-mv-editor-tools button{flex:1 0 auto;min-height:44px;padding:6px 10px;font-size:12px}
+    #test .rmt-body.rmt-mve-body .rmt-mvi-tool-scroll label{font-size:12px!important}
+    #test .rmt-body.rmt-mve-body .rmt-mvi-tool-scroll input:not([type=checkbox]):not([type=range]),#test .rmt-body.rmt-mve-body .rmt-mvi-tool-scroll select,#test .rmt-body.rmt-mve-body .rmt-mvi-tool-scroll textarea{font-size:16px}
+    #test .rmt-body.rmt-mve-body .rmt-mvi-tool-scroll .rmt-mvi-brush{display:flex;flex-direction:row;align-items:center;gap:8px}
+    #test .rmt-body.rmt-mve-body .rmt-mvi-tool-scroll .rmt-mvi-brush input{flex:1;width:0}
+    #test .rmt-body.rmt-mve-body .rmt-mvi-brush>span{flex:none;min-width:55px;font-size:11px!important;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+    #test .rmt-body.rmt-mve-body .rmt-mvi-tool-scroll .rmt-mvi-layer{display:flex;flex-direction:row;align-items:center;gap:8px;line-height:1.5;margin:8px 0}
+    #test .rmt-body.rmt-mve-body .rmt-mvi-layer input{width:18px;min-width:18px;height:18px;margin:0}
+    #test .rmt-body.rmt-mve-body .rmt-mvi-more{margin-top:8px}
+    #test .rmt-body.rmt-mve-body .rmt-mvi-more summary{min-height:44px;display:flex;align-items:center;cursor:pointer;font-size:12px!important;padding:7px 12px;box-sizing:border-box;border:1px solid var(--rmt-theme-border,#cddfed);border-radius:999px;background:var(--rmt-theme-surface-solid,#fff)}
+    #test .rmt-body.rmt-mve-body .rmt-mvi-workbench .rmt-x-note{margin:5px 0;font-size:11px;line-height:1.6}
+    #test .rmt-body.rmt-mve-body .rmt-mvi-footer{flex:none;padding:5px 0 max(2px,env(safe-area-inset-bottom,0px));border-top:1px solid var(--rmt-theme-border,#cddfed)}
+    #test .rmt-body.rmt-mve-body .rmt-mvi-footer p{font-size:11px!important;line-height:1.5!important;color:var(--rmt-theme-muted,#63788f);margin:0 0 5px;max-height:3em;overflow:auto}
+    #test .rmt-body.rmt-mve-body .rmt-mvi-footer p:empty{display:none}
+    #test .rmt-body.rmt-mve-body .rmt-mvi-save-row,#test .rmt-body.rmt-mve-body .rmt-mvi-save-row>div{display:flex;align-items:center;justify-content:space-between;gap:7px}
+    #test .rmt-body.rmt-mve-body .rmt-mvi-workbench .rmt-mvi-primary{background:var(--rmt-theme-soft,#e7f1fa);border-color:var(--rmt-theme-accent-ink,#4f769d);font-weight:600}
+    @media(min-width:960px){#test .rmt-body.rmt-mve-body .rmt-mvi-layout{grid-template-columns:minmax(0,1fr) 315px;grid-template-rows:minmax(0,1fr)}}
+    @supports(container-type:inline-size){#test .rmt-body.rmt-mve-body .rmt-mvi-layout{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(180px,1fr) minmax(170px,.65fr)}@container(min-width:740px){#test .rmt-body.rmt-mve-body .rmt-mvi-layout{grid-template-columns:minmax(0,1fr) 315px;grid-template-rows:minmax(0,1fr)}}}
+    @media(max-height:600px) and (orientation:landscape) and (min-width:600px){#test .rmt-body.rmt-mve-body .rmt-mvi-layout{grid-template-columns:minmax(0,1fr) minmax(240px,.8fr);grid-template-rows:minmax(0,1fr)}#test .rmt-body.rmt-mve-body .rmt-mvi-header{padding-bottom:3px}#test .rmt-body.rmt-mve-body .rmt-mvi-workbench{gap:5px}#test .rmt-body.rmt-mve-body .rmt-mvi-matte{padding-block:2px}}
+    @media(max-height:500px) and (max-width:599px){#test .rmt-shell.rmt-mvi-focus>.rmt-body.rmt-mve-body{overflow:auto!important}#test .rmt-body.rmt-mve-body .rmt-mve-image-page{flex:1 0 460px;min-height:460px}}
+    
+  operator: 'match'
+  stack: |-
+    TestContext.<anonymous> (file:///workspace/scratch/c9f4993ef355/hearttrace-1.0.25-47l_6xrk/candidate/tokimemo-main/tools/verification/mv-mobile-height-regression.mjs:61:12)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+# Subtest: image focus opens with an immediate return action and releases the shell on back or disposal
+ok 29 - image focus opens with an immediate return action and releases the shell on back or disposal
+  ---
+  duration_ms: 127.311671
+  type: 'test'
+  ...
+# Subtest: pending results do not take image canvas space and remain reachable after returning
+not ok 30 - pending results do not take image canvas space and remain reachable after returning
+  ---
+  duration_ms: 139.446679
+  type: 'test'
+  location: '/workspace/scratch/c9f4993ef355/hearttrace-1.0.25-47l_6xrk/candidate/tokimemo-main/tools/verification/mv-mobile-height-regression.mjs:83:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input was expected to not match the regular expression /rmt-mve-recovery|kept-pending/. Input:
+    
+    '<main class="rmt-x-page rmt-mve-image-page"><details class="rmt-mve-recovery"><summary>1 份结果待保存</summary><div><p class="rmt-x-note">待保存作品 · 等待保存</p><div class="rmt-mve-recovery-actions"><button type="button" class="rmt-x-secondary" data-rmt-mv="retry-save" data-rmt-mv-id="kept-pending">仅重试保存</button><button type="button" class="rmt-x-secondary" data-rmt-mv="clear-pending" data-rmt-mv-id="kept-pending">清除</button></div></div><div class="rmt-mve-recovery-actions"><button type="button" class="rmt-x-secondary" data-rmt-mv="export-recovery">导出暂存结果</button><button type="button" class="rmt-x-secondary" data-rmt-mv="clear-pending" data-rmt-mv-id="all">全部清除</button></div></details><section data-rmt-mv-editor-host><div class="rmt-mvi-loading"><button type="button" class="rmt-x-secondary" data-rmt-mv="back">返回</button><p role="status">正在打开素材…</p></div></section></main>'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual: '<main class="rmt-x-page rmt-mve-image-page"><details class="rmt-mve-recovery"><summary>1 份结果待保存</summary><div><p class="rmt-x-note">待保存作品 · 等待保存</p><div class="rmt-mve-recovery-actions"><button type="button" class="rmt-x-secondary" data-rmt-mv="retry-save" data-rmt-mv-id="kept-pending">仅重试保存</button><button type="button" class="rmt-x-secondary" data-rmt-mv="clear-pending" data-rmt-mv-id="kept-pending">清除</button></div></div><div class="rmt-mve-recovery-actions"><button type="button" class="rmt-x-secondary" data-rmt-mv="export-recovery">导出暂存结果</button><button type="button" class="rmt-x-secondary" data-rmt-mv="clear-pending" data-rmt-mv-id="all">全部清除</button></div></details><section data-rmt-mv-editor-host><div class="rmt-mvi-loading"><button type="button" class="rmt-x-secondary" data-rmt-mv="back">返回</button><p role="status">正在打开素材…</p></div></section></main>'
+  operator: 'doesNotMatch'
+  stack: |-
+    TestContext.<anonymous> (file:///workspace/scratch/c9f4993ef355/hearttrace-1.0.25-47l_6xrk/candidate/tokimemo-main/tools/verification/mv-mobile-height-regression.mjs:89:16)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+1..30
+# tests 30
+# suites 0
+# pass 24
+# fail 6
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 3321.796277

@@ -96,6 +96,18 @@ export function recordRetry(entry, error) {
     return markStage(entry, 'retry');
 }
 
+// Counts/timing only: never retain streamed text, prompts, reasoning or URLs.
+export function recordRequestTransport(entry, streamRequested) {
+    if (!entry || entry.outcome !== 'running') return;
+    entry.transport = { streamRequested: streamRequested === true, receivedChunks: 0, firstChunkMs: null, startedAt: Date.now() };
+}
+
+export function recordStreamProgress(entry) {
+    if (!entry?.transport || entry.outcome !== 'running') return;
+    entry.transport.receivedChunks = count(entry.transport.receivedChunks + 1);
+    if (entry.transport.firstChunkMs === null) entry.transport.firstChunkMs = duration(Date.now() - entry.transport.startedAt);
+}
+
 export function recordInput(entry, chars, tokens = null) {
     if (!entry) return;
     entry.input = { chars: count(chars), tokens: Number.isFinite(tokens) ? count(tokens) : null };
@@ -146,6 +158,7 @@ export function finishSegmentTrace(parent, child, outcome, error = null) {
     merged.add(child);
     parent.input = child.input;
     parent.response = child.response;
+    if (child.transport) parent.transport = { ...child.transport };
     parent.attempt = child.attempt;
     parent.retryCode = child.retryCode;
     if (child.recovery) parent.recovery = { ...child.recovery };
@@ -232,6 +245,8 @@ function snapshotEntries(entries, includeRequests = false) {
         field: STAGES.includes(entry.field) ? entry.field : '',
         activeStage: STAGES.includes(entry.activeStage) ? entry.activeStage : '',
         providerRequests: count(entry.providerRequests),
+        ...(entry.transport ? { transport: { streamRequested: entry.transport.streamRequested === true,
+            receivedChunks: count(entry.transport.receivedChunks), firstChunkMs: entry.transport.firstChunkMs === null ? null : duration(entry.transport.firstChunkMs) } } : {}),
         durations: snapshotDurations(entry),
         ...(entry.archiveBudget ? { archiveBudget: {
             ...Object.fromEntries(['utf16Chars', 'unicodeCharacters', 'utf8Bytes', 'inputTokens', 'outputTokens', 'combinedTokens', 'contextTokens', 'maximumOutputTokens']
