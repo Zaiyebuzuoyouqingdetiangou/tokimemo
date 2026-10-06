@@ -61,6 +61,12 @@ export function applyAdvancedExclusions(body, parsed) {
     if (!branded.has(parsed)) throw bad();
     const result = { ...body }; for (const key of parsed.excluded) delete result[key]; return result;
 }
+// A feature may prefer streaming without changing prompts, output budgets or
+// saved connection settings. An explicit complete-response choice always wins.
+export function requestStreaming(parsed, settings, options = {}) {
+    if (parsed.streamMode !== 'original') return parsed.streamMode === 'on';
+    return options.preferStream === true || (settings.apiConnectionMode === 'manual' && settings.manualApiStreaming === true);
+}
 export function advancedFingerprint(settings) {
     if (settings?.advancedGenerationEnabled !== true) return '';
     const raw = advancedSettings(settings);

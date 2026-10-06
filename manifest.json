@@ -1,15 +1,15 @@
 {
     "display_name": "心迹回廊",
     "loading_order": 110,
-    "js": "index.js?heartbeat=1.0.25&layout=3",
+    "js": "index.js?heartbeat=1.0.28&layout=8",
     "author": "Toto",
-    "version": "1.0.25",
+    "version": "1.0.28",
     "auto_update": true,
     "minimum_client_version": "1.13.0",
     "hooks": {
         "disable": "onDisable",
         "clean": "onClean"
     },
-    "description": "心迹回廊：新增更新日志板块，统一音乐入口，支持本地录屏音源试用，保留现有编辑功能。",
+    "description": "心迹回廊：手书剪辑台布局更新，保留编辑与生成功能，更新说明与 README 同源。",
     "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }

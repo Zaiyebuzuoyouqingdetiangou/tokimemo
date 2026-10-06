@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
-// Source modules: 327
-// Source SHA-256: b43da0f4bd083620ef866ed853aba0c21b3b5a0e2a8cb11210786bcd74e6f6c5
+// Source modules: 329
+// Source SHA-256: baba6694f23908fe16578fb77f3c27e97b5918b00bc0f1e32e819f5769d32d68
 // Build: python3 tools/verification/build.py <source-root>
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -127,6 +127,7 @@ const __m_core_recoveryPayload_js = Object.create(null);
 const __m_core_recoveryRegistry_js = Object.create(null);
 const __m_core_recoverySourcePolicy_js = Object.create(null);
 const __m_core_relationshipSafety_js = Object.create(null);
+const __m_core_releaseNotes_js = Object.create(null);
 const __m_core_requestCoordinator_js = Object.create(null);
 const __m_core_requestTaskCenter_js = Object.create(null);
 const __m_core_requestTasks_js = Object.create(null);
@@ -287,6 +288,7 @@ const __m_ui_mirrorCallView_js = Object.create(null);
 const __m_ui_mirrorTtsReader_js = Object.create(null);
 const __m_ui_mvCastControls_js = Object.create(null);
 const __m_ui_mvEditorDialog_js = Object.create(null);
+const __m_ui_mvEditorLayout_js = Object.create(null);
 const __m_ui_mvEditorUi_js = Object.create(null);
 const __m_ui_mvImageEditor_js = Object.create(null);
 const __m_ui_mvImageEditorUi_js = Object.create(null);
@@ -487,6 +489,15 @@ __m_core_contentSelection_js.selectionEvidenceBank = selectionEvidenceBank;
 __m_core_contentSelection_js.selectionPromptArchive = selectionPromptArchive;
 __m_core_contentSelection_js.legacyContentSelectionPlan = legacyContentSelectionPlan;
 __m_core_contentSelection_js.stampContentSelection = stampContentSelection;
+}
+
+function __init_core_releaseNotes_js() {
+// MODULE: core/releaseNotes.js
+
+// GENERATED FROM README.md by tools/verification/build.py. Do not edit by hand.
+const RELEASE_README = "# 心迹回廊 1.0.28\n\n## 更新日志模块\n\n新增了更新日志板块，感谢@nancyindaeyo的更新。\n\n## 本次变动\n\n- 手书剪辑台采用已确认的新布局：大画面、四镜缩略图与全部分镜入口、简洁工具页签；剪辑时收起外层导航，返回即恢复。\n- 镜头与全片设置按需展开；保留图片编辑、音乐与录屏音源、定段定句、舞台编排、导出和待保存结果处理。\n- 图片编辑的缩放工具移到画布下方，撤销、保存和保存下一镜常驻；更新不改已有图片、提示词与存档。\n- 更新说明与 README 同源，仅显示致谢和本次变动；不增加生成条件、数量上限或请求限制。\n- 完整安装包不含工作流。\n";
+
+__m_core_releaseNotes_js.RELEASE_README = RELEASE_README;
 }
 
 function __init_extras_mvAudioSource_js() {
@@ -1794,28 +1805,150 @@ function mountEditorDialog(body, onDismiss) {
 __m_ui_mvEditorDialog_js.mountEditorDialog = mountEditorDialog;
 }
 
-function __init_ui_mvEditorUi_js() {
-// MODULE: ui/mvEditorUi.js
+function __init_ui_mvEditorLayout_js() {
+// MODULE: ui/mvEditorLayout.js
 
-// Editor-only presentation. All actions continue through mvView and the existing
-// song-scoped storage, image editor, audio player and export implementations.
+// Approved workbench layout. This module owns presentation only; no requests,
+// model limits, image processing, audio transport or persistence live here.
+const EDITOR_PAGE_SIZE = 4;
+
+function editorFilmstripMarkup({ btn, selectedLabel, strip, stripNav }) {
+    return `<div class="rmt-mve-strip-head"><small data-rmt-mv-selection>${selectedLabel}</small><div class="rmt-mve-strip-actions">${stripNav}${btn('editor-drawer', '全部分镜', { id: 'shots' })}</div></div><div class="rmt-mv-strip">${strip}</div>`;
+}
+
 function editorMarkup(o) {
-    const { esc, btn, song, tab, panels, width, height, strip, stripNav, selectedLabel, time, total, playing, audio, audioName, exporting, drawer, drawerHtml } = o;
+    const { esc, btn, song, tab, panels, width, height, time, total, playing, audio, audioName, exporting, drawer, drawerHtml } = o;
     const musicLabel = audio ? (audioName || song.title) : '导入音乐';
     const pending = Math.max(0, Number(o.pendingCount) || 0);
-    const moreLabel = pending ? `更多 <span class="rmt-mve-pending-count">${pending}</span>` : '更多';
+    const moreLabel = `⋯${pending ? ` <span class="rmt-mve-pending-count">${pending}</span>` : ''}`;
     const tabs = [['shots', '分镜'], ['timing', '定段 · 定句'], ['look', '全片样式']].map(([id, label]) =>
-        btn('editor-tab', label, { id, cls: 'rmt-mve-tab' + (tab === id ? ' on' : ''), extra: ` aria-pressed="${tab === id}"` })).join('');
-    return `<header class="rmt-mve-head"><div><h2>${esc(song.title)}</h2></div><div class="rmt-mve-head-actions">${btn('editor-drawer', moreLabel, { id: 'more', extra: pending ? ` data-rmt-mv-pending="${pending}" aria-label="更多，${pending} 份结果待保存"` : '' })}${btn('editor-drawer', '导出', { id: 'export', cls: 'rmt-x-primary' })}</div></header>
-      <div class="rmt-mve-projectbar"><span class="rmt-mve-meta">${esc(o.storyLabel || '手书')} · ${audio ? '音乐与画面共用进度' : '静音预览'}</span>${btn('editor-drawer', esc(musicLabel), { id: 'audio', extra: ` title="${esc(musicLabel)}" aria-label="${audio ? '管理当前音乐：' + esc(musicLabel) : '导入音乐'}"` })}</div>
-      <div class="rmt-mve-layout-scope"><div class="rmt-mve-workspace" data-editor-tab="${tab}" data-editor-paged="${!!stripNav}" data-preview-only="${!!o.previewOnly}"><section class="rmt-mve-preview" aria-label="手书预览">
-        <div class="rmt-mve-preview-head"><span data-rmt-mv-current>${esc(selectedLabel)}</span><div class="rmt-mve-preview-actions">${btn('go-board', '素材库')}${btn('editor-preview', o.previewOnly ? '恢复编辑' : '只看画面')}</div></div>
-        <div class="rmt-mv-canvas-wrap${width < height ? ' portrait' : ''}"><canvas data-rmt-mv-canvas width="${width}" height="${height}"></canvas></div>
+        btn('editor-tab', label, { id, cls: 'rmt-mve-tab' + (tab === id ? ' on' : ''), extra: ` role="tab" aria-selected="${tab === id}" aria-pressed="${tab === id}" aria-controls="rmt-mve-active-panel"` })).join('');
+    const drawerTitle = { export: '导出手书', more: '素材与项目', audio: '歌曲', shots: '全部分镜' }[drawer] || '选项';
+    return `<header class="rmt-mve-head">${btn('back', '‹', { cls: 'rmt-mve-back', extra: ' aria-label="返回素材库"' })}<div class="rmt-mve-title"><h2>${esc(song.title)}</h2><small>手书剪辑台</small></div><div class="rmt-mve-head-actions">${btn('editor-drawer', moreLabel, { id: 'more', cls: 'rmt-mve-more', extra: ` aria-label="${pending ? `更多，${pending} 份结果待保存` : '更多操作'}"${pending ? ` data-rmt-mv-pending="${pending}"` : ''}` })}${btn('editor-drawer', '导出', { id: 'export', cls: 'rmt-x-primary' })}</div></header>
+      <div class="rmt-mve-layout-scope"><div class="rmt-mve-workspace" data-editor-tab="${tab}" data-editor-paged="${!!o.stripNav}" data-preview-only="${!!o.previewOnly}"><section class="rmt-mve-preview" aria-label="手书预览">
+        <div class="rmt-mve-preview-head"><span data-rmt-mv-current>${esc(o.selectedLabel)}</span>${btn('editor-preview', o.previewOnly ? '恢复编辑' : '只看画面', { extra: ` aria-pressed="${!!o.previewOnly}"` })}</div>
+        <div class="rmt-mv-canvas-wrap${width < height ? ' portrait' : ''}"><canvas data-rmt-mv-canvas width="${width}" height="${height}" aria-label="当前分镜画面"></canvas></div>
         <div class="rmt-mve-transport"><button type="button" class="rmt-mv-play" data-rmt-mv="play" aria-label="${playing ? '暂停' : '播放'}"${exporting ? ' disabled' : ''}>${playing ? '❚❚' : '▶'}</button><span class="rmt-mve-clock" data-rmt-mv-time>${esc(time)}</span><input type="range" min="0" max="${total}" step="0.1" value="${o.seconds}" data-rmt-mv-seek aria-label="播放位置"${exporting ? ' disabled' : ''}><small>${esc(o.totalLabel)}</small></div>
-        <div class="rmt-mve-filmstrip" data-rmt-mv-filmstrip><div class="rmt-mv-strip">${strip}</div>${stripNav}</div>
-      </section><section class="rmt-mve-tools"><nav class="rmt-mve-tabs" aria-label="剪辑工作区">${tabs}</nav><div class="rmt-mve-panel"${tab === 'shots' ? ' data-rmt-mv-shot-panel' : ''}>${panels[tab] || panels.shots}</div></section></div></div>
-      ${drawer ? `<div class="rmt-mve-sheet-shade"><section class="rmt-mve-sheet" role="dialog" aria-modal="true" aria-label="${esc({ export: '导出手书', more: '素材与项目', audio: '歌曲' }[drawer] || '选项')}"><header><b>${esc({ export: '导出手书', more: '素材与项目', audio: '歌曲' }[drawer] || '选项')}</b>${btn('editor-drawer', '关闭', { extra: ' aria-label="关闭选项面板"' })}</header><div>${drawerHtml}</div></section></div>` : ''}`;
+        <div class="rmt-mve-projectbar">${btn('editor-drawer', `<span aria-hidden="true">♪</span> <span>${esc(musicLabel)}</span> <span aria-hidden="true">›</span>`, { id: 'audio', extra: ` title="${esc(musicLabel)}" aria-label="${audio ? '管理当前音乐：' + esc(musicLabel) : '导入音乐'}"` })}<small class="rmt-mve-meta">${audio ? '音画同步' : '静音预览'}</small></div>
+        <div class="rmt-mve-filmstrip" data-rmt-mv-filmstrip>${editorFilmstripMarkup({ ...o, selectedLabel: esc(o.selectedLabel) })}</div>
+      </section><section class="rmt-mve-tools" aria-label="剪辑工具"><nav class="rmt-mve-tabs" role="tablist" aria-label="剪辑工作区">${tabs}</nav><div id="rmt-mve-active-panel" role="tabpanel" aria-label="${esc({shots:'分镜',timing:'定段与定句',look:'全片样式'}[tab] || '分镜')}" class="rmt-mve-panel"${tab === 'shots' ? ' data-rmt-mv-shot-panel' : ''}>${panels[tab] || panels.shots}</div></section></div></div>
+      ${drawer ? `<div class="rmt-mve-sheet-shade"><section class="rmt-mve-sheet" data-editor-drawer="${drawer}" role="dialog" aria-modal="true" aria-label="${esc(drawerTitle)}"><header><b>${esc(drawerTitle)}</b>${btn('editor-drawer', '关闭', { extra: ' aria-label="关闭选项面板"' })}</header><div>${drawerHtml}</div></section></div>` : ''}`;
 }
+
+function editorLayoutCss(root) {
+    // Structural themes have important global metrics. Only the editor gets
+    // these scoped overrides; other pages retain their original typography.
+    const r = `${root} .rmt-body.rmt-mve-body .rmt-x-page.rmt-mv-editor`;
+    const focus = `${root} .rmt-shell.rmt-mve-focus`;
+    const themed = `${root}.rmt-workspace[data-rmt-theme-mode] .rmt-shell.rmt-mve-focus`;
+    return `
+${focus}>.rmt-topbar,${focus}>.rmt-workspace-tabs,${focus}>.rmt-workspace-location,${themed}>.rmt-topbar,${themed}>.rmt-workspace-tabs,${themed}>.rmt-workspace-location{display:none!important}
+${focus}>.rmt-body.rmt-mve-body,${themed}>.rmt-body.rmt-mve-body{display:flex!important;flex-direction:column;flex:1 1 0!important;min-height:0;padding:0!important;overflow:auto!important;scrollbar-gutter:auto!important;touch-action:pan-y pinch-zoom!important}
+${r}{box-sizing:border-box;flex:none;min-height:0;max-width:none;width:100%;gap:0;margin:0;padding:0 0 max(12px,env(safe-area-inset-bottom,0px));overflow:visible;background:var(--rmt-theme-bg,#f8fbfd)}
+${r} *{box-sizing:border-box}
+${r} [hidden]{display:none!important}
+${r} button{min-height:44px;min-width:0;height:auto;padding:8px 12px;border:1px solid transparent;border-radius:10px;font-size:14px!important;line-height:1.4!important;background:transparent!important;color:var(--rmt-theme-text,#294762)!important;box-shadow:none!important;touch-action:manipulation}
+${r} button:disabled{opacity:.5!important}
+${r} .rmt-x-secondary{background:var(--rmt-theme-surface-solid,#fff)!important;border-color:var(--rmt-theme-border,#dce5ed)!important}
+${r} .rmt-x-primary{--rmt-content-ink:var(--rmt-theme-surface-solid,#fff);background:var(--rmt-theme-accent-ink,#3575a8)!important;border-color:var(--rmt-theme-accent-ink,#3575a8)!important;color:var(--rmt-theme-surface-solid,#fff)!important;font-weight:600!important}
+${r} .rmt-mve-head{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--rmt-theme-border,#dce5ed);background:var(--rmt-theme-surface-solid,#fff)}
+${r} .rmt-mve-head>.rmt-mve-back{flex:0 0 40px;width:40px;min-height:44px;align-self:center;padding:0;font-size:28px!important;border:0!important}
+${r} .rmt-mve-title{flex:1;min-width:0}
+${r} .rmt-mve-head h2{font-size:17px!important;line-height:1.4!important;margin:0!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+${r} .rmt-mve-title small{display:block;margin:3px 0 0;--rmt-content-ink:var(--rmt-theme-muted,#63788f);font-size:11px!important}
+${r} .rmt-mve-head-actions{display:flex;align-items:center;gap:6px;flex:none}
+${r} .rmt-mve-head-actions button{min-width:44px;min-height:44px;padding:8px 12px;border-radius:10px}
+${r} .rmt-mve-head-actions .rmt-mve-more{font-size:25px!important;line-height:1!important;padding:4px 8px}
+${r} .rmt-mve-pending-count{display:inline-grid;place-items:center;min-width:17px;min-height:17px;padding:1px 3px;border-radius:6px;background:var(--rmt-theme-soft,#e7f1fa);font-size:10px!important;vertical-align:middle}
+${r} .rmt-mve-layout-scope{display:block;min-width:0;width:100%;container-type:inline-size}
+${r} .rmt-mve-workspace{display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:auto auto;align-items:start;gap:0;min-width:0;min-height:0}
+${r} .rmt-mve-preview{display:flex;flex-direction:column;min-width:0;min-height:0;padding:14px 16px 0;align-self:start;overflow:visible}
+${r} .rmt-mve-preview-head{display:flex;justify-content:space-between;align-items:center;gap:10px;min-height:38px;margin-bottom:7px;padding:0}
+${r} .rmt-mve-preview-head>span{--rmt-content-ink:var(--rmt-theme-muted,#63788f);font-size:12px!important;min-width:0;overflow-wrap:anywhere}
+${r} .rmt-mve-preview-head button{flex:none;min-height:38px;padding:5px 9px;font-size:12px!important;border:0!important;background:transparent!important}
+${r} .rmt-mve-preview .rmt-mv-canvas-wrap{position:relative;width:100%;height:auto;min-height:0;max-width:none;aspect-ratio:16/9;border-radius:10px;margin:0;display:flex;align-items:center;justify-content:center;overflow:hidden;flex:0 0 auto}
+${r} .rmt-mve-preview .rmt-mv-canvas-wrap.portrait{width:min(100%,266px);aspect-ratio:9/16;margin:0 auto}
+${r} .rmt-mve-preview canvas{position:absolute;inset:0;display:block;width:100%;height:100%;max-width:100%;max-height:100%;object-fit:contain}
+${r} .rmt-mve-transport{display:flex;align-items:center;gap:10px;padding:8px 0 0;min-width:0;flex:none}
+${r} .rmt-mve-transport .rmt-mv-play{flex:0 0 44px;min-width:44px;width:44px;height:44px;border-radius:10px;font-size:16px!important;background:var(--rmt-theme-soft,#e7f1fa)!important;border:0!important}
+${r} .rmt-mve-clock{font-size:12px!important;min-width:43px;white-space:nowrap;font-variant-numeric:tabular-nums}
+${r} .rmt-mve-transport>small{--rmt-content-ink:var(--rmt-theme-muted,#63788f);font-size:11px!important;white-space:nowrap;font-variant-numeric:tabular-nums}
+${r} .rmt-mve-transport input[type=range]::-webkit-slider-runnable-track{background:linear-gradient(to right,var(--rmt-theme-accent-ink,#3575a8) 0%,var(--rmt-theme-accent-ink,#3575a8) var(--rmt-mv-seek,0%),var(--rmt-theme-border,#cddfed) var(--rmt-mv-seek,0%),var(--rmt-theme-border,#cddfed) 100%)}
+${r} .rmt-mve-projectbar{display:flex;justify-content:space-between;align-items:center;gap:10px;min-width:0;padding:0 0 7px;border-bottom:1px solid var(--rmt-theme-border,#dce5ed)}
+${r} .rmt-mve-projectbar>button{display:flex;align-items:center;gap:7px;max-width:76%;min-width:0;padding:5px 0;min-height:38px;font-size:12px!important;text-align:left;border:0!important;background:transparent!important}
+${r} .rmt-mve-projectbar>button>span:nth-child(2){overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+${r} .rmt-mve-meta{--rmt-content-ink:var(--rmt-theme-muted,#63788f);display:block;padding:0;font-size:11px!important;white-space:nowrap}
+${r} .rmt-mve-filmstrip{min-width:0;padding-bottom:14px;display:block}
+${r} .rmt-mve-strip-head{display:flex;align-items:center;justify-content:space-between;gap:6px;padding:5px 0 3px}
+${r} .rmt-mve-strip-head>small{--rmt-content-ink:var(--rmt-theme-muted,#63788f);font-size:11px!important;min-width:0}
+${r} .rmt-mve-strip-actions,${r} .rmt-mve-strip-nav{display:flex;align-items:center;gap:2px;flex:none}
+${r} .rmt-mve-strip-actions>button{font-size:12px!important;padding:5px 4px;min-height:44px;border:0!important;background:transparent!important}
+${r} .rmt-mve-strip-nav button{font-size:22px!important;width:40px;min-height:44px;padding:0;border:0!important;background:transparent!important}
+${r} .rmt-mve-filmstrip .rmt-mv-strip{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;padding:2px;overflow:visible}
+${r} .rmt-mve-filmstrip .rmt-mv-strip>button{display:flex;flex-direction:column;gap:0;width:100%!important;min-width:0;height:auto;min-height:64px;padding:3px!important;border:2px solid transparent!important;border-radius:9px;overflow:hidden;background:var(--rmt-theme-surface-solid,#fff)!important}
+${r} .rmt-mve-filmstrip .rmt-mv-strip>button img{position:static!important;inset:auto!important;display:block;width:100%!important;height:auto!important;aspect-ratio:16/10;min-height:0;max-height:none;object-fit:contain;border-radius:4px}
+${r} .rmt-mve-filmstrip .rmt-mv-strip>button>span{position:static;display:block;width:100%;padding:5px 0 1px;min-height:23px;border-radius:0;background:transparent!important;color:var(--rmt-theme-text)!important;font-size:11px!important;line-height:1.3!important;white-space:nowrap;text-align:center;font-variant-numeric:tabular-nums}
+${r} .rmt-mve-filmstrip .rmt-mv-strip>button.on,${r} .rmt-mve-filmstrip .rmt-mv-strip>button[aria-current=true]{border-color:var(--rmt-theme-accent-ink,#3575a8)!important;box-shadow:none!important}
+${r} .rmt-mve-tools{min-width:0;background:var(--rmt-theme-surface-solid,#fff);border:0;border-top:1px solid var(--rmt-theme-border,#dce5ed);border-radius:0;overflow:visible}
+${r} .rmt-mve-tabs{display:flex;gap:18px;padding:0 20px;border-bottom:1px solid var(--rmt-theme-border,#dce5ed);background:transparent}
+${r} .rmt-mve-tab{position:relative;flex:1;min-width:0;min-height:48px;padding:12px 0;border:0!important;border-radius:0;font-size:13px!important;white-space:nowrap;background:transparent!important;color:var(--rmt-theme-muted,#63788f)!important}
+${r} .rmt-mve-tab.on{color:var(--rmt-theme-accent-ink,#3575a8)!important;background:transparent!important;box-shadow:none!important;font-weight:600!important}
+${r} .rmt-mve-tab.on:after{content:"";position:absolute;bottom:0;left:12%;right:12%;height:3px;border-radius:3px;background:var(--rmt-theme-accent-ink,#3575a8)}
+${r} .rmt-mve-panel{display:flex;flex-direction:column;min-width:0;padding:0;gap:0;overflow:visible}
+${r} .rmt-mve-panel-scroll{display:flex;flex-direction:column;min-width:0;padding:20px;gap:14px;overflow:visible}
+${r} .rmt-mve-panel-scroll>*{min-width:0;flex-shrink:0}
+${r} .rmt-mve-panel .rmt-x-row-head{align-items:center;flex-wrap:wrap;gap:8px}
+${r} .rmt-mve-panel .rmt-x-row-head>b{font-size:15px!important}
+${r} .rmt-mve-panel .rmt-x-row-head>span{--rmt-content-ink:var(--rmt-theme-muted,#63788f);font-size:12px!important;font-variant-numeric:tabular-nums}
+${r} .rmt-mve-panel .rmt-x-note{font-size:14px!important;line-height:1.75!important;margin:0}
+${r} .rmt-mve-panel .rmt-mve-lyric{font-size:15px!important;line-height:1.75!important;margin:0 0 2px}
+${r} .rmt-mve-image-actions{display:grid;grid-template-columns:minmax(0,1fr) 82px;gap:10px}
+${r} .rmt-mve-image-actions>button,${r} .rmt-mve-image-actions>label{display:flex;align-items:center;justify-content:center;min-width:0;min-height:46px;padding:9px 12px;margin:0;border-radius:10px;font-size:14px!important}
+${r} .rmt-mve-image-note{--rmt-content-ink:var(--rmt-theme-muted,#63788f);font-size:11px!important;line-height:1.5!important}
+${r} .rmt-mve-panel details{padding:0;border:0;border-top:1px solid var(--rmt-theme-border,#dce5ed)}
+${r} .rmt-mve-panel summary{min-height:46px;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 0;font-size:14px!important;line-height:1.5!important;list-style:none;cursor:pointer}
+${r} .rmt-mve-panel summary::-webkit-details-marker{display:none}
+${r} .rmt-mve-panel summary:after{content:"›";font-size:20px;line-height:1;flex:none}
+${r} .rmt-mve-panel details[open]>summary:after{content:"⌄"}
+${r} .rmt-mve-panel details>div{display:flex;flex-direction:column;gap:12px;padding:0 0 12px}
+${r} .rmt-mve-panel b{font-size:14px!important}
+${r} .rmt-x-seg{border-radius:9px}
+${r} button[aria-pressed=true]:not(.rmt-mve-tab){background:var(--rmt-theme-soft)!important;border-color:var(--rmt-theme-accent-ink)!important;box-shadow:none!important}
+${r} .rmt-mve-panel input:not([type=checkbox]):not([type=range]):not([type=file]),${r} .rmt-mve-panel select,${r} .rmt-mve-panel textarea{min-width:0;max-width:100%;font-size:16px!important;min-height:44px;border-radius:9px}
+${r} .rmt-mve-dock{display:flex;align-items:center;justify-content:space-between;flex:none;gap:8px;padding:10px 20px;border-top:1px solid var(--rmt-theme-border);background:var(--rmt-theme-surface-solid)}
+${r} .rmt-mve-dock>small{--rmt-content-ink:var(--rmt-theme-muted,#63788f);font-size:11px!important}
+${r} .rmt-mve-dock button{min-height:44px;font-size:12px!important}
+${r} .rmt-mve-timing-dock{position:sticky;bottom:0;z-index:2;display:flex;flex-direction:column;align-items:stretch;gap:8px;padding:12px 16px}
+${r} .rmt-mve-timing-dock .rmt-mv-check{display:flex;flex-direction:row;align-items:center;min-height:36px;margin:0;font-size:12px!important}
+${r} .rmt-mve-workspace[data-preview-only=true]{grid-template-columns:minmax(0,1fr)!important}
+${r} .rmt-mve-workspace[data-preview-only=true] .rmt-mve-tools,${r} .rmt-mve-workspace[data-preview-only=true] .rmt-mve-filmstrip{display:none}
+${r} .rmt-mve-workspace[data-preview-only=true] .rmt-mve-preview{padding-bottom:16px}
+@media(min-width:960px){${r} .rmt-mve-workspace{grid-template-columns:minmax(0,1fr) 335px}${r} .rmt-mve-tools{border-top:0;border-left:1px solid var(--rmt-theme-border)}${r} .rmt-mve-preview{padding:20px 24px}}
+@supports(container-type:inline-size){${r} .rmt-mve-workspace{grid-template-columns:minmax(0,1fr)}${r} .rmt-mve-tools{border-left:0;border-top:1px solid var(--rmt-theme-border)}@container(min-width:780px){${r} .rmt-mve-workspace{grid-template-columns:minmax(0,1fr) 335px}${r} .rmt-mve-tools{border-top:0;border-left:1px solid var(--rmt-theme-border)}${r} .rmt-mve-preview{padding:20px 24px}}}
+@media(max-width:360px){${r} .rmt-mve-head{padding:8px;gap:5px}${r} .rmt-mve-head-actions button{padding-inline:9px}${r} .rmt-mve-head h2{font-size:16px!important}${r} .rmt-mve-preview{padding:12px 12px 0}${r} .rmt-mve-panel-scroll{padding:16px}${r} .rmt-mve-tabs{padding:0 14px;gap:12px}${r} .rmt-mve-transport{gap:7px}${r} .rmt-mve-filmstrip .rmt-mv-strip{gap:5px}${r} .rmt-mve-strip-nav button{width:36px}}
+${root} .rmt-shell .rmt-mve-sheet .rmt-mve-shot-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+${root} .rmt-mve-shot-grid>button{display:flex;flex-direction:column;gap:5px;min-width:0;width:100%;padding:4px;border:1px solid var(--rmt-theme-border);border-radius:9px;overflow:hidden}
+${root} .rmt-mve-shot-grid img{display:block;width:100%;aspect-ratio:16/10;object-fit:contain;border-radius:5px}
+${root} .rmt-mve-shot-grid span{font-size:11px!important;font-variant-numeric:tabular-nums;white-space:nowrap}
+${root} .rmt-mve-sheet .rmt-mve-host-actions{display:flex;flex-wrap:wrap;gap:8px;padding-top:12px;border-top:1px solid var(--rmt-theme-border)}
+${root} .rmt-mve-host-actions button{flex:1}
+`;
+}
+
+__m_ui_mvEditorLayout_js.editorFilmstripMarkup = editorFilmstripMarkup;
+__m_ui_mvEditorLayout_js.editorMarkup = editorMarkup;
+__m_ui_mvEditorLayout_js.editorLayoutCss = editorLayoutCss;
+__m_ui_mvEditorLayout_js.EDITOR_PAGE_SIZE = EDITOR_PAGE_SIZE;
+}
+
+function __init_ui_mvEditorUi_js() {
+// MODULE: ui/mvEditorUi.js
+const layout = __m_ui_mvEditorLayout_js;
+// Shared editor controls and dialogs retain their existing styles.
+
+const EDITOR_PAGE_SIZE = layout.EDITOR_PAGE_SIZE;
+function editorMarkup(o) { return layout.editorMarkup(o); }
+function editorFilmstripMarkup(o) { return layout.editorFilmstripMarkup(o); }
 
 function editorCss(root) {
     const r = root;
@@ -1917,75 +2050,12 @@ ${workbenchCss(r)}
 `;
 }
 
-function workbenchCss(root) {
-    // The structural theme also sets button and heading metrics. Scope the real
-    // workbench above that selector so its height budget matches what is drawn.
-    const r = `${root} .rmt-body.rmt-mve-body`;
-    return `
-${root} .rmt-body.rmt-mve-body,${root}.rmt-workspace[data-rmt-theme-mode] .rmt-body.rmt-mve-body{display:flex;flex-direction:column;padding:10px!important;overflow:auto!important;touch-action:pan-y pinch-zoom!important;scrollbar-gutter:auto!important}
-${r} .rmt-x-page.rmt-mv-editor{flex:1 0 740px;min-height:740px;max-width:none;width:100%;gap:0;padding:0;overflow:visible}
-${r} .rmt-mve-head{flex:none;min-height:38px;padding:0 0 5px;border:0}
-${r} .rmt-mve-head h2{font-size:16px!important;line-height:1.4!important;margin:0!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-${r} .rmt-mve-head-actions button{min-height:36px;font-size:12px!important;padding:5px 12px;border-radius:999px}
-${r} .rmt-mve-pending-count{display:inline-block;margin-left:3px;min-width:18px;border-radius:999px;background:var(--rmt-theme-soft,#e7f1fa);font-size:11px!important;text-align:center}
-${r} .rmt-mve-projectbar{flex:none;display:flex;justify-content:space-between;align-items:center;min-width:0;gap:12px;padding:2px 0 8px;font-size:11px;color:var(--rmt-theme-muted,#63788f)}
-${r} .rmt-mve-projectbar>button{font-size:12px!important;min-height:34px;padding:5px 12px;border-radius:999px;max-width:60%;min-width:0;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-${r} .rmt-mve-projectbar .rmt-mve-meta{flex:1;display:block;min-width:0;padding:0;font-size:11px!important;line-height:1.5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-${r} .rmt-mve-layout-scope{display:flex;flex:1;min-height:0;min-width:0}
-${r} .rmt-mve-workspace{--rmt-mve-preview-min:320px;--rmt-mve-tools-min:300px;flex:1;min-height:630px;min-width:0;align-items:stretch;gap:10px;grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(var(--rmt-mve-preview-min),1.1fr) minmax(var(--rmt-mve-tools-min),1fr)}
-${r} .rmt-mve-workspace[data-editor-tab=shots][data-editor-paged=true]{--rmt-mve-preview-min:360px;min-height:670px}
-${r} .rmt-mve-workspace[data-editor-tab=timing]{--rmt-mve-preview-min:230px;--rmt-mve-tools-min:390px}
-${r} .rmt-mve-workspace[data-editor-tab=look]{--rmt-mve-preview-min:230px;--rmt-mve-tools-min:320px}
-${r} .rmt-mve-preview{display:flex;flex-direction:column;min-height:0;min-width:0;overflow:hidden}
-${r} .rmt-mve-preview-head{display:flex;align-items:center;justify-content:space-between;gap:8px;flex:none;padding:0 0 4px;font-size:11px;color:var(--rmt-theme-muted,#63788f)}
-${r} .rmt-mve-preview-head>span{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-${r} .rmt-mve-preview-actions{display:flex;flex:none;gap:6px}
-${r} .rmt-mve-preview-head button{font-size:12px!important;min-height:34px;padding:4px 10px;border-radius:999px;white-space:nowrap}
-${r} .rmt-mve-preview .rmt-mv-canvas-wrap,${r} .rmt-mve-preview .rmt-mv-canvas-wrap.portrait{position:relative;width:100%;height:auto;min-height:160px;max-width:none;border-radius:10px;display:flex;align-items:center;justify-content:center;overflow:hidden;flex:1 0 160px}
-${r} .rmt-mve-preview canvas{position:absolute;inset:0;display:block;width:100%;height:100%;max-width:100%;max-height:100%;object-fit:contain}
-${r} .rmt-mve-transport{flex:none;padding:3px 0 0;gap:9px}
-${r} .rmt-mve-transport>small{font-size:11px!important;white-space:nowrap}
-${r} .rmt-mve-filmstrip{flex:none;min-height:0}
-${r} .rmt-mve-filmstrip .rmt-mv-strip{padding:1px 2px 4px;overscroll-behavior-x:contain;scrollbar-width:thin}
-${r} .rmt-mve-filmstrip .rmt-mv-strip>button{grid-template-rows:44px 20px;width:74px!important;min-width:74px;flex-basis:74px;height:68px;border-radius:9px}
-${r} .rmt-mve-filmstrip .rmt-mv-strip>button img{height:44px!important;max-height:44px;object-fit:contain}
-${r} .rmt-mve-filmstrip .rmt-mv-strip>button>span{font-size:10px}
-${r} .rmt-mve-strip-nav{font-size:10px}
-${r} .rmt-mve-strip-nav button{min-height:30px;padding:2px 8px;font-size:11px!important;border-radius:999px}
-${r} .rmt-mve-tools{display:flex;flex-direction:column;min-height:0;min-width:0;overflow:hidden}
-${r} .rmt-mve-tabs{flex:none;padding:5px;gap:3px;grid-template-columns:1fr 1.25fr 1fr}
-${r} .rmt-mve-tab{min-height:38px;font-size:12px!important;border-radius:999px}
-${r} .rmt-mve-panel{display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden;padding:0;gap:0}
-${r} .rmt-mve-panel-scroll{flex:1;min-height:0;overflow:auto;overscroll-behavior:auto;scrollbar-width:thin;padding:12px;display:flex;flex-direction:column;gap:12px;touch-action:pan-y pinch-zoom}
-${r} .rmt-mve-panel-scroll>*{flex-shrink:0}
-${r} .rmt-mve-panel-scroll .rmt-x-note{font-size:13px!important;line-height:1.7!important;margin:0}
-${r} .rmt-mve-dock{flex:none;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 12px;border-top:1px solid var(--rmt-theme-border,#cddfed);background:var(--rmt-theme-surface-solid,#fff)}
-${r} .rmt-mve-dock>small{font-size:11px;color:var(--rmt-theme-muted,#63788f)}
-${r} .rmt-mve-dock button{font-size:12px!important;min-height:38px;border-radius:999px;padding:6px 12px}
-${r} .rmt-mve-image-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-${r} .rmt-mve-image-actions>button,${r} .rmt-mve-image-actions>label{flex:1;min-height:42px;display:flex;align-items:center;justify-content:center;border-radius:999px;margin:0;padding:8px;font-size:13px}
-${r} .rmt-mve-image-note{font-size:11px;color:var(--rmt-theme-muted,#63788f)}
-${r} .rmt-mve-timing-dock{display:flex;flex-direction:column;align-items:stretch;gap:5px;padding:8px 12px}
-${r} .rmt-mve-timing-dock .rmt-mv-check{flex-direction:row;margin:0;min-height:28px;font-size:11px}
-${r} .rmt-mve-panel .rmt-x-seg{border-radius:999px}
-${r} .rmt-mve-panel summary{border:1px solid var(--rmt-theme-border,#cddfed);border-radius:999px;padding:7px 12px;min-height:36px;box-sizing:border-box}
-${r} .rmt-mve-panel details{padding:0;border-top:0}
-${r} .rmt-mve-workspace[data-preview-only=true]{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr)}
-${r} .rmt-mve-workspace[data-preview-only=true] .rmt-mve-tools,${r} .rmt-mve-workspace[data-preview-only=true] .rmt-mve-filmstrip{display:none}
-${r} .rmt-mve-workspace[data-preview-only=true] .rmt-mv-canvas-wrap{flex:1;height:auto}
-${r} .rmt-mve-recovery{flex:none;max-height:200px;overflow:auto;padding:8px;margin:0 0 7px;border:1px solid var(--rmt-theme-border,#cddfed);border-radius:12px;background:var(--rmt-theme-surface-solid,#fff)}
-${r} .rmt-mve-recovery>summary{font-size:12px!important;min-height:30px;cursor:pointer}
-@media(min-width:960px){${r} .rmt-x-page.rmt-mv-editor{flex-basis:450px;min-height:450px}${r} .rmt-mve-workspace[data-editor-tab][data-editor-paged]{min-height:340px;grid-template-columns:minmax(0,1fr) 335px;grid-template-rows:minmax(340px,1fr)}}
-@supports(container-type:inline-size){${r} .rmt-mve-workspace[data-editor-tab]{min-height:630px;grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(var(--rmt-mve-preview-min),1.1fr) minmax(var(--rmt-mve-tools-min),1fr)}${r} .rmt-mve-workspace[data-editor-tab=shots][data-editor-paged=true]{min-height:670px}@container(min-width:740px){${r} .rmt-mve-workspace[data-editor-tab][data-editor-paged]{min-height:340px;grid-template-columns:minmax(0,1fr) 335px;grid-template-rows:minmax(340px,1fr)}}}
-@media(max-height:700px){${r} .rmt-mve-filmstrip .rmt-mv-strip>button{grid-template-rows:30px 18px;height:52px}${r} .rmt-mve-filmstrip .rmt-mv-strip>button img{height:30px!important;max-height:30px}${r} .rmt-mve-head-actions button{min-height:32px}${r} .rmt-mve-projectbar{padding-bottom:4px}${r} .rmt-mve-preview-head{padding:0}${r} .rmt-mve-meta{padding-bottom:2px}}
-@media(max-height:600px) and (orientation:landscape){${r} .rmt-x-page.rmt-mv-editor{flex-basis:450px;min-height:450px}${r} .rmt-mve-workspace[data-editor-tab][data-editor-paged]{min-height:340px;grid-template-columns:minmax(0,1fr) minmax(250px,.8fr);grid-template-rows:minmax(340px,1fr)}}
-${r} .rmt-mve-workspace[data-editor-tab][data-editor-paged][data-preview-only=true]{min-height:340px;grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(340px,1fr)}
-${r} .rmt-mve-workspace[data-preview-only=true] .rmt-mv-canvas-wrap{flex:1;height:auto}
-`;
-}
+function workbenchCss(root) { return layout.editorLayoutCss(root); }
 
 __m_ui_mvEditorUi_js.editorMarkup = editorMarkup;
+__m_ui_mvEditorUi_js.editorFilmstripMarkup = editorFilmstripMarkup;
 __m_ui_mvEditorUi_js.editorCss = editorCss;
+__m_ui_mvEditorUi_js.EDITOR_PAGE_SIZE = EDITOR_PAGE_SIZE;
 }
 
 function __init_ui_mvImageEditor_js() {
@@ -2013,6 +2083,25 @@ function mountAssetEditor(host, options) {
     const originalRef = options.image?.original || options.image || null;
     const say = text => { if (active) status.textContent = text; };
     const layer = () => find('[data-layer]');
+    const viewport = find('.rmt-mv-editor-viewport');
+    const cursor = find('[data-brush-cursor]');
+    const zoom = () => Number(find('[data-zoom]').value) || 1;
+    let toolsOpen = (root.clientWidth || host.clientWidth || 0) >= 740;
+    let fittedWidth = 0, fittedAspect = 0, viewSize = null;
+    function resetView() {
+        find('[data-zoom]').value = '1'; viewport.scrollTop = 0; viewport.scrollLeft = 0;
+        fittedWidth = 0; viewSize = null;
+    }
+    function brushPreview(event = null) {
+        const size = Number(find('[data-brush]').value) || 20;
+        find('[data-brush-size]').textContent = `${size} 像素`;
+        cursor.hidden = busy || stage !== 'paint' || panning || comparing || brush === 'region' || !source;
+        if (cursor.hidden) return;
+        const r = viewport.getBoundingClientRect();
+        cursor.style.width = `${size}px`; cursor.style.height = `${size}px`;
+        cursor.style.left = `${(viewport.scrollLeft || 0) + (event ? event.clientX - r.left : (viewport.clientWidth || 360) / 2)}px`;
+        cursor.style.top = `${(viewport.scrollTop || 0) + (event ? event.clientY - r.top : (viewport.clientHeight || 180) / 2)}px`;
+    }
     const makeCanvas = (w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; };
     const duplicate = data => new ImageData(new Uint8ClampedArray(data.data), data.width, data.height);
     const load = url => new Promise((resolve, reject) => {
@@ -2021,11 +2110,19 @@ function mountAssetEditor(host, options) {
     function dimensions(w, h) { canvas.width = w; canvas.height = h; }
     function show() {
         if (!active) return;
+        root.dataset.toolsOpen = String(toolsOpen);
+        find('.rmt-mvi-tool-scroll').hidden = !toolsOpen;
+        find('[data-edit="tools"]').setAttribute('aria-expanded', String(toolsOpen));
+        find('[data-edit="tools"]').textContent = toolsOpen ? '收起工具' : '展开工具';
         if (stage === 'paint') tool = 'brush';
         find('[data-select-tools]').hidden = stage !== 'select'; find('[data-paint-tools]').hidden = stage !== 'paint';
         find('[data-grid-picker]').hidden = tool === 'crop';
         for (const [action, value] of [['select', 'grid'], ['crop', 'crop'], ['paint', 'brush']]) find(`[data-edit="${action}"]`).setAttribute('aria-pressed', String(tool === value));
         find('[data-edit="compare"]').setAttribute('aria-pressed', String(comparing));
+        find('[data-edit="pan"]').setAttribute('aria-pressed', String(panning));
+        for (const value of ['erase', 'restore', 'region']) find(`[data-edit="${value}"]`).setAttribute('aria-pressed', String(!panning && brush === value));
+        find('[data-zoom-value]').textContent = `${Math.round(zoom() * 100)}%`;
+        cursor.hidden = true;
         if (!source) return;
         if (comparing) { dimensions(source.naturalWidth, source.naturalHeight); g.drawImage(source, 0, 0); }
         else if (stage === 'select') {
@@ -2041,12 +2138,26 @@ function mountAssetEditor(host, options) {
             g.strokeStyle = '#ffb800'; g.lineWidth = Math.max(2, canvas.width / 180); g.strokeRect(x, y, w, h);
             find('[data-selection-note]').textContent = `选中 ${w} × ${h} 像素；可重新框选。`;
         } else if (working) { dimensions(working.width, working.height); g.putImageData(working, 0, 0); }
-        const viewport = find('.rmt-mv-editor-viewport');
         const availableWidth = viewport.clientWidth || 360;
         const availableHeight = viewport.clientHeight || (globalThis.innerHeight || 800) * 0.55;
-        const fitted = Math.min(availableWidth, availableHeight * canvas.width / canvas.height);
-        canvas.style.width = `${fitted * Number(find('[data-zoom]').value)}px`;
+        const aspect = canvas.width / canvas.height;
+        // At fit size the image follows the viewport. Once zoomed, opening or
+        // folding tools must reveal/hide pixels, not rescale the image again.
+        const sameImageShape = fittedAspect === aspect;
+        if (zoom() === 1 || !fittedWidth || !sameImageShape) fittedWidth = Math.min(availableWidth, availableHeight * aspect);
+        fittedAspect = aspect;
+        const displayWidth = fittedWidth * zoom(), displayHeight = displayWidth / aspect;
+        canvas.style.width = `${displayWidth}px`;
         canvas.style.maxWidth = 'none';
+        if (zoom() > 1 && sameImageShape && viewSize && (viewSize.width !== availableWidth || viewSize.height !== availableHeight)) {
+            // Keep the inspected detail near the centre when the tool dock or
+            // host viewport changes, including phone rotation.
+            const x = viewSize.imageWidth <= viewSize.width ? 0.5 : ((viewport.scrollLeft || 0) + viewSize.width / 2) / viewSize.imageWidth;
+            const y = viewSize.imageHeight <= viewSize.height ? 0.5 : ((viewport.scrollTop || 0) + viewSize.height / 2) / viewSize.imageHeight;
+            viewport.scrollLeft = Math.max(0, x * displayWidth - availableWidth / 2);
+            viewport.scrollTop = Math.max(0, y * displayHeight - availableHeight / 2);
+        }
+        viewSize = { width: availableWidth, height: availableHeight, imageWidth: displayWidth, imageHeight: displayHeight };
         canvas.style.touchAction = panning || comparing ? 'pan-x pan-y' : 'none';
         find('[data-image-size]').textContent = `${canvas.width} × ${canvas.height}`;
     }
@@ -2058,14 +2169,14 @@ function mountAssetEditor(host, options) {
     }
     function applyCrop() {
         if (!source) return;
-        try { original = selectPixels(); working = duplicate(original); history.length = 0; changed = true; selectionDirty = false; restoreOriginal = false; stage = 'paint'; layer().checked = false; show(); say('已选定单格。可以直接保存，或继续处理背景。'); }
+        try { original = selectPixels(); working = duplicate(original); history.length = 0; changed = true; selectionDirty = false; restoreOriginal = false; stage = 'paint'; panning = false; resetView(); layer().checked = false; show(); say('已选定画面。可保存，或继续抠图修边。'); }
         catch { say('这张图片无法读取像素。可先下载原图，再从“导入图片”打开；提示词仍可编辑。'); }
     }
     function pushUndo() { if (working) history.push({ data: duplicate(working), layer: layer().checked }); }
     function autoCutout() {
         if (!working) { say('请先载入图片。'); return; }
         if (selectionDirty) { say('请先点“使用选中画面”，再一键抠图。'); return; }
-        stage = 'paint';
+        stage = 'paint'; panning = false;
         const prepared = pixels.prepareCutoutPixels(working.data, working.width, working.height, { multiple: options.multipleCharacters, reference: original?.data || working.data });
         if (!prepared.data) {
             show();
@@ -2101,6 +2212,7 @@ function mountAssetEditor(host, options) {
     canvas.addEventListener('pointerdown', event => {
         if (busy || panning || comparing || !source || pointerId !== null) return;
         event.preventDefault(); pointerId = event.pointerId; canvas.setPointerCapture?.(pointerId); anchor = point(event);
+        brushPreview(event);
         if (stage === 'paint' && working) {
             pushUndo();
             if (brush === 'region') {
@@ -2114,6 +2226,7 @@ function mountAssetEditor(host, options) {
         }
     });
     canvas.addEventListener('pointermove', event => {
+        brushPreview(event);
         if (event.pointerId !== pointerId || !anchor) return;
         event.preventDefault(); const next = point(event);
         if (stage === 'paint' && working) { if (brush !== 'region') paint(anchor, next); anchor = next; }
@@ -2123,8 +2236,20 @@ function mountAssetEditor(host, options) {
     });
     const endStroke = event => { if (event.pointerId === pointerId) { if (stage === 'paint') compactUndo(); anchor = null; pointerId = null; } };
     canvas.addEventListener('pointerup', endStroke); canvas.addEventListener('pointercancel', endStroke); canvas.addEventListener('lostpointercapture', endStroke);
-    find('[data-grid]').addEventListener('change', event => { grid = event.target.value; stage = 'select'; tool = 'grid'; comparing = false; if (grid !== 'free') { const [rows, cols] = grid.split(':').map(Number); crop = pixels.gridCrop(rows, cols, 0); selectionDirty = true; } show(); });
-    find('[data-zoom]').addEventListener('input', show);
+    canvas.addEventListener('pointerleave', () => { cursor.hidden = true; });
+    viewport.addEventListener('scroll', () => { cursor.hidden = true; }, { passive: true });
+    find('[data-grid]').addEventListener('change', event => { grid = event.target.value; stage = 'select'; tool = 'grid'; panning = false; comparing = false; if (grid !== 'free') { const [rows, cols] = grid.split(':').map(Number); crop = pixels.gridCrop(rows, cols, 0); selectionDirty = true; } show(); });
+    find('[data-zoom]').addEventListener('input', () => {
+        const before = canvas.getBoundingClientRect(), area = viewport.getBoundingClientRect();
+        const width = viewport.clientWidth || 360, height = viewport.clientHeight || 180;
+        const x = Math.max(0, Math.min(1, (area.left + width / 2 - before.left) / Math.max(1, before.width)));
+        const y = Math.max(0, Math.min(1, (area.top + height / 2 - before.top) / Math.max(1, before.height)));
+        show();
+        const after = canvas.getBoundingClientRect();
+        viewport.scrollLeft = Math.max(0, x * after.width - width / 2);
+        viewport.scrollTop = Math.max(0, y * after.height - height / 2);
+    });
+    find('[data-brush]').addEventListener('input', () => brushPreview());
     layer().addEventListener('change', () => { changed = true; restoreOriginal = false; });
     async function blobOfWorking() {
         if (!working) throw new Error('no pixels');
@@ -2149,22 +2274,24 @@ function mountAssetEditor(host, options) {
         root.querySelectorAll('[data-matte]').forEach(item => item.setAttribute('aria-pressed', String(item === button)));
     }));
     root.addEventListener('click', async event => {
-        const button = event.target.closest('[data-edit]'); if (!button || busy) return;
+        const button = event.target.closest('[data-edit]'); if (!button) return;
         event.preventDefault(); const action = button.dataset.edit;
         if (action === 'close') { options.onClose(); return; }
+        if (busy) return;
+        if (action === 'tools') { toolsOpen = !toolsOpen; show(); return; }
         if (action === 'default-prompt') { prompt.value = options.defaultPrompt || ''; return; }
         if (importing) { say('图片正在读取，请稍候再保存或编辑。'); return; }
         if (action === 'compare') { comparing = !comparing; show(); return; }
-        if (action === 'fit') { find('[data-zoom]').value = '1'; const viewport = find('.rmt-mv-editor-viewport'); viewport.scrollTop = 0; viewport.scrollLeft = 0; show(); return; }
+        if (action === 'fit') { resetView(); show(); return; }
         const wasComparing = comparing; comparing = false;
         if (wasComparing) show();
-        if (action === 'pan') { panning = !panning; button.setAttribute('aria-pressed', String(panning)); button.textContent = panning ? '继续编辑' : '移动画布'; show(); return; }
-        if (action === 'select' || action === 'crop') { stage = 'select'; tool = action === 'crop' ? 'crop' : 'grid'; if (tool === 'crop') { grid = 'free'; find('[data-grid]').value = grid; } show(); return; }
-        if (action === 'paint') { if (!working || selectionDirty) applyCrop(); else { stage = 'paint'; show(); } return; }
+        if (action === 'pan') { panning = !panning; show(); return; }
+        if (action === 'select' || action === 'crop') { toolsOpen = true; stage = 'select'; panning = false; tool = action === 'crop' ? 'crop' : 'grid'; if (tool === 'crop') { grid = 'free'; find('[data-grid]').value = grid; } show(); return; }
+        if (action === 'paint') { toolsOpen = true; panning = false; if (!working || selectionDirty) applyCrop(); else { stage = 'paint'; show(); } return; }
         if (action === 'apply-crop') { applyCrop(); return; }
         if (action === 'full-crop') { crop = { x: 0, y: 0, w: 1, h: 1 }; grid = 'free'; find('[data-grid]').value = grid; applyCrop(); return; }
         if (action === 'erase' || action === 'restore' || action === 'region') {
-            brush = action; for (const value of ['erase', 'restore', 'region']) find(`[data-edit="${value}"]`).setAttribute('aria-pressed', String(value === brush)); return;
+            brush = action; panning = false; show(); brushPreview(); return;
         }
         if (action === 'undo') { const last = history.pop(); if (last) {
             if (last.data) working = last.data;
@@ -2176,6 +2303,7 @@ function mountAssetEditor(host, options) {
         if (action === 'original') {
             // Restore the saved original reference without rewriting or deleting its pixels.
             restoreOriginal = true; changed = true; selectionDirty = false; sourceBlob = null; crop = { x: 0, y: 0, w: 1, h: 1 }; history.length = 0;
+            resetView(); panning = false;
             const token = ++loadToken;
             try { if (options.sourceUrl) { const img = await load(options.sourceUrl); if (!active || token !== loadToken) return; source = img; original = selectPixels(); working = duplicate(original); layer().checked = false; stage = 'paint'; show(); say('原图已恢复，保存后生效。'); } }
             catch { say('原图暂时无法读取；保存仍可恢复原图引用。'); }
@@ -2184,7 +2312,9 @@ function mountAssetEditor(host, options) {
         const saving = action === 'save' || action === 'save-next';
         if (!saving && action !== 'download') return;
         if (saving && selectionDirty) { say('请先点“使用选中画面”，确认单格预览。'); return; }
-        busy = true; root.querySelectorAll('button,input,select,textarea').forEach(el => { el.disabled = true; });
+        busy = true; cursor.hidden = true;
+        root.querySelectorAll('button,input,select,textarea').forEach(el => { el.disabled = el.dataset.edit !== 'close'; });
+        say(saving ? '正在保存修改…' : '正在准备 PNG…');
         try {
             const blob = (action === 'download' || (changed && !restoreOriginal)) ? await blobOfWorking() : null;
             if (!active) return;
@@ -2247,80 +2377,96 @@ function __init_ui_mvImageEditorUi_js() {
 // Presentation only. Pixel edits, undo, storage and prompt generation remain in
 // their existing modules; this layout keeps the canvas and save actions visible.
 function imageEditorMarkup({ hasNext = false, showPrompt = true } = {}) {
-    return `<section class="rmt-mv-editor rmt-mvi-workbench" aria-label="图片编辑">
-      <header class="rmt-mvi-header"><div><b data-image-title>图片编辑</b><small data-image-scope></small></div><button type="button" data-edit="close">取消</button></header>
+    return `<section class="rmt-mv-editor rmt-mvi-workbench" data-tools-open="false" aria-label="图片编辑">
+      <header class="rmt-mvi-header"><button type="button" data-edit="close" aria-label="返回，放弃未保存修改">返回</button><div><b data-image-title>图片编辑</b><small data-image-scope></small></div><button type="button" data-edit="tools" aria-expanded="false">展开工具</button></header>
       <div class="rmt-mvi-layout">
         <section class="rmt-mvi-visual" aria-label="编辑画布">
-          <div class="rmt-mvi-canvas-tools"><button type="button" data-edit="compare" aria-pressed="false">原图对比</button><label>缩放<input data-zoom type="range" min="1" max="4" step="0.25" value="1" aria-label="画布缩放"></label><button type="button" data-edit="fit">适应</button></div>
-          <div class="rmt-mv-editor-viewport"><canvas data-editor-canvas aria-label="素材裁切与抠图画布"></canvas></div>
-          <div class="rmt-mvi-matte" aria-label="检查透明边缘"><small data-image-size></small><div><button type="button" data-matte="grid" aria-pressed="true">透明底</button><button type="button" data-matte="dark" aria-pressed="false">深色底</button><button type="button" data-matte="light" aria-pressed="false">浅色底</button></div></div>
+          <div class="rmt-mv-editor-viewport"><canvas data-editor-canvas aria-label="素材裁切与抠图画布"></canvas><span class="rmt-mvi-brush-cursor" data-brush-cursor hidden aria-hidden="true"></span></div>
+          <div class="rmt-mvi-canvas-tools"><button type="button" data-edit="pan" aria-pressed="false">移动</button><label><span data-zoom-value>100%</span><input data-zoom type="range" min="1" max="4" step="0.25" value="1" aria-label="画布缩放"></label><button type="button" data-edit="fit">看全图</button><button type="button" data-edit="compare" aria-pressed="false">对比</button></div>
         </section>
         <section class="rmt-mvi-inspector" aria-label="图片编辑工具">
           <nav class="rmt-mvi-tabs" aria-label="编辑方式"><button type="button" data-edit="select" aria-pressed="true">选单格</button><button type="button" data-edit="crop" aria-pressed="false">自由裁切</button><button type="button" data-edit="paint" aria-pressed="false">抠图修边</button></nav>
-          <div class="rmt-mvi-tool-scroll">
+          <div class="rmt-mvi-tool-scroll" hidden>
             <div data-select-tools><label data-grid-picker>拼图排列<select data-grid><option value="free">手动框选</option><option value="1:1">整张</option><option value="2:1">上下两格</option><option value="3:1">上下三格</option><option value="4:1">上下四格</option><option value="1:2">左右两格</option><option value="1:3">左右三格</option><option value="1:4">左右四格</option><option value="2:2">四宫格</option><option value="3:3">九宫格</option></select></label><p class="rmt-x-note" data-selection-note>拖动框选画面，或选择排列后点选一格。</p><div class="rmt-mv-editor-tools"><button type="button" data-edit="apply-crop">使用选中画面</button><button type="button" data-edit="full-crop">整张入画</button></div></div>
-            <div data-paint-tools hidden><div class="rmt-mv-editor-tools"><button type="button" data-edit="auto">一键抠图</button><button type="button" data-edit="erase" aria-pressed="true">擦除</button><button type="button" data-edit="restore" aria-pressed="false">恢复</button><button type="button" data-edit="region" aria-pressed="false">点除残底</button></div><label class="rmt-mvi-brush">笔刷<input data-brush type="range" min="1" max="100" value="20" aria-label="笔刷大小"></label></div>
-            <div class="rmt-mv-editor-tools"><button type="button" data-edit="pan" aria-pressed="false">移动画布</button><button type="button" data-edit="reset">还原选中画面</button></div>
+            <div data-paint-tools hidden><div class="rmt-mv-editor-tools"><button type="button" data-edit="auto">一键抠图</button><button type="button" data-edit="erase" aria-pressed="true">擦除</button><button type="button" data-edit="restore" aria-pressed="false">恢复</button><button type="button" data-edit="region" aria-pressed="false">点除残底</button></div><label class="rmt-mvi-brush">笔刷<input data-brush type="range" min="1" max="100" value="20" aria-label="笔刷大小"><span data-brush-size>20 像素</span></label></div>
+            <div class="rmt-mv-editor-tools"><button type="button" data-edit="reset">还原选中画面</button></div>
             <label class="rmt-mvi-layer"><input data-layer type="checkbox">使用此透明图叠背景</label>
+            <div class="rmt-mvi-matte" aria-label="检查透明边缘"><small data-image-size></small><div><button type="button" data-matte="grid" aria-pressed="true">透明底</button><button type="button" data-matte="dark" aria-pressed="false">深色底</button><button type="button" data-matte="light" aria-pressed="false">浅色底</button></div></div>
             <details class="rmt-mvi-more"><summary>导入、原图与下载</summary><div class="rmt-mv-editor-tools"><label class="rmt-mv-editor-upload">导入图片<input type="file" accept="image/*" data-import="full"></label><label class="rmt-mv-editor-upload">导入透明图<input type="file" accept="image/png,image/webp" data-import="cutout"></label><button type="button" data-edit="download">下载当前 PNG</button><button type="button" data-edit="original">恢复原图</button></div></details>
             <details class="rmt-mvi-more"${showPrompt ? '' : ' hidden'}><summary>本张生图提示词</summary><label>提示词<textarea data-editor-prompt rows="6"></textarea></label><div class="rmt-mv-editor-tools"><button type="button" data-edit="default-prompt">恢复默认提示词</button></div><p class="rmt-x-note">保存不重新生图；重画时才使用新提示词。</p></details>
           </div>
         </section>
       </div>
-      <footer class="rmt-mvi-footer"><p role="status" aria-live="polite" data-editor-status></p><div class="rmt-mvi-save-row"><button type="button" data-edit="undo">撤销</button><div><button type="button" data-edit="save">保存修改</button><button type="button" class="rmt-mvi-primary" data-edit="save-next"${hasNext ? '' : ' hidden'}>保存并下一镜</button></div></div></footer>
+      <footer class="rmt-mvi-footer"><p role="status" aria-live="polite" data-editor-status></p><div class="rmt-mvi-save-row"><button type="button" data-edit="undo" aria-label="撤销上一步">撤销</button><button type="button" class="rmt-mvi-primary" data-edit="save">保存修改</button><button type="button" data-edit="save-next"${hasNext ? '' : ' hidden'}>保存并下一镜</button></div></footer>
     </section>`;
 }
 
 function imageEditorCss(root) {
     const r = `${root} .rmt-body.rmt-mve-body`;
     return `
-${r} .rmt-mve-image-page{display:flex;flex-direction:column;flex:1 0 680px;min-height:680px;max-width:none;width:100%;gap:0;padding:0}
+${root} .rmt-shell.rmt-mvi-focus>.rmt-topbar,${root} .rmt-shell.rmt-mvi-focus>.rmt-workspace-tabs,${root} .rmt-shell.rmt-mvi-focus>.rmt-workspace-location{display:none!important}
+${root}.rmt-workspace[data-rmt-theme-mode] .rmt-shell.rmt-mvi-focus>.rmt-topbar,${root}.rmt-workspace[data-rmt-theme-mode] .rmt-shell.rmt-mvi-focus>.rmt-workspace-tabs,${root}.rmt-workspace[data-rmt-theme-mode] .rmt-shell.rmt-mvi-focus>.rmt-workspace-location{display:none!important}
+${root} .rmt-shell.rmt-mvi-focus>.rmt-body.rmt-mve-body{display:flex!important;flex:1 1 0!important;min-height:0;padding:8px!important;overflow:hidden!important}
+${r} .rmt-mve-image-page{display:flex;flex-direction:column;flex:1 1 0;min-height:0;max-width:none;width:100%;gap:0;padding:0}
 ${r} [data-rmt-mv-editor-host]{display:flex;flex:1;min-height:0;min-width:0}
-${r} .rmt-mvi-workbench{display:flex;flex:1;flex-direction:column;min-height:0;min-width:0;width:100%;gap:10px;container-type:inline-size}
-${r} .rmt-mvi-workbench button{font:inherit;font-size:13px!important;line-height:1.3!important;min-height:40px;padding:7px 12px;border:1px solid var(--rmt-theme-border,#cddfed);border-radius:999px;background:var(--rmt-theme-surface-solid,#fff);color:var(--rmt-theme-text,#294762);cursor:pointer;touch-action:manipulation;box-sizing:border-box}
+${r} .rmt-mvi-loading{display:flex;flex-direction:column;gap:12px;align-items:flex-start}
+${r} .rmt-mvi-workbench{display:flex;flex:1;flex-direction:column;min-height:0;min-width:0;width:100%;gap:6px;overflow:hidden;container-type:inline-size}
+${r} .rmt-mvi-workbench,${r} .rmt-mvi-workbench *{box-sizing:border-box}
+${r} .rmt-mvi-workbench [hidden]{display:none!important}
+${r} .rmt-mvi-workbench button{font:inherit;font-size:13px!important;line-height:1.3!important;min-height:44px;padding:7px 12px;border:1px solid var(--rmt-theme-border,#cddfed);border-radius:10px;background:var(--rmt-theme-surface-solid,#fff);color:var(--rmt-theme-text,#294762);cursor:pointer;touch-action:manipulation;box-sizing:border-box}
 ${r} .rmt-mvi-workbench button[aria-pressed=true]{border-color:var(--rmt-theme-accent-ink,#4f769d);background:var(--rmt-theme-soft,#e7f1fa)}
 ${r} .rmt-mvi-workbench button:disabled{opacity:.5;cursor:default}
 ${r} .rmt-mvi-workbench button:focus-visible,${r} .rmt-mvi-workbench summary:focus-visible{outline:2px solid var(--rmt-theme-accent-ink,#4f769d);outline-offset:2px}
-${r} .rmt-mvi-header{display:flex;align-items:center;justify-content:space-between;gap:12px;flex:none;padding:0 0 8px;border-bottom:1px solid var(--rmt-theme-border,#cddfed)}
-${r} .rmt-mvi-header>div{min-width:0;display:flex;flex-direction:column;gap:3px}
-${r} .rmt-mvi-header b{font-size:15px;overflow-wrap:anywhere}
-${r} .rmt-mvi-header small{font-size:11px;color:var(--rmt-theme-muted,#63788f)}
-${r} .rmt-mvi-layout{flex:1;min-height:510px;min-width:0;display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(280px,1fr) minmax(220px,.8fr);gap:10px}
+${r} .rmt-mvi-header{display:flex;align-items:center;justify-content:flex-start;gap:12px;flex:none;padding:0 0 6px;border-bottom:1px solid var(--rmt-theme-border,#cddfed)}
+${r} .rmt-mvi-header>div{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+${r} .rmt-mvi-header button{flex:none;white-space:nowrap}
+${r} .rmt-mvi-header b{font-size:15px!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+${r} .rmt-mvi-header small{font-size:11px!important;color:var(--rmt-theme-muted,#63788f);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+${r} .rmt-mvi-layout{flex:1;min-height:0;min-width:0;display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr) auto;gap:6px}
+${r} .rmt-mvi-workbench[data-tools-open=true] .rmt-mvi-layout{grid-template-rows:minmax(0,1fr) minmax(0,.5fr)}
 ${r} .rmt-mvi-visual{display:flex;flex-direction:column;min-height:0;min-width:0;overflow:hidden;border:1px solid var(--rmt-theme-border,#cddfed);border-radius:12px;background:var(--rmt-theme-soft,#e7f1fa)}
 ${r} .rmt-mvi-canvas-tools,${r} .rmt-mvi-matte{display:flex;align-items:center;justify-content:space-between;gap:7px;flex:none;padding:6px 8px}
-${r} .rmt-mvi-canvas-tools>label{flex:1;display:flex;flex-direction:row;align-items:center;gap:6px;margin:0;font-size:11px;min-width:0}
-${r} .rmt-mvi-workbench input[type=range]{min-width:0;min-height:32px;height:32px;width:100%;padding:0;margin:0;box-shadow:none;background:transparent;accent-color:var(--rmt-theme-accent-ink,#4f769d)}
+${r} .rmt-mvi-canvas-tools>label{flex:1;display:flex;flex-direction:row;align-items:center;gap:6px;margin:0;font-size:11px!important;min-width:0;white-space:nowrap}
+${r} .rmt-mvi-workbench input[type=range]{appearance:none!important;-webkit-appearance:none!important;display:block;min-width:0;min-height:44px!important;height:44px!important;max-height:44px!important;width:100%;padding:0!important;margin:0!important;border:0!important;border-radius:0!important;box-shadow:none!important;background:transparent!important;filter:none!important;touch-action:pan-y;cursor:pointer}
+${r} .rmt-mvi-workbench input[type=range]::-webkit-slider-runnable-track{height:6px!important;border:0!important;border-radius:999px!important;background:var(--rmt-theme-border,#cddfed)!important;box-shadow:none!important}
+${r} .rmt-mvi-workbench input[type=range]::-webkit-slider-thumb{-webkit-appearance:none!important;appearance:none!important;width:22px!important;height:22px!important;margin-top:-8px!important;border:2px solid var(--rmt-theme-surface-solid,#fff)!important;border-radius:50%!important;background:var(--rmt-theme-accent-ink,#4f769d)!important;box-shadow:0 1px 4px #0003!important}
+${r} .rmt-mvi-workbench input[type=range]::-moz-range-track{height:6px;border:0;border-radius:999px;background:var(--rmt-theme-border,#cddfed)}
+${r} .rmt-mvi-workbench input[type=range]::-moz-range-thumb{width:18px;height:18px;border:2px solid var(--rmt-theme-surface-solid,#fff);border-radius:50%;background:var(--rmt-theme-accent-ink,#4f769d)}
 ${r} .rmt-mvi-canvas-tools input[type=range]{width:0;flex:1}
-${r} .rmt-mvi-canvas-tools button,${r} .rmt-mvi-matte button{font-size:11px!important;min-height:32px;padding:4px 8px}
-${r} .rmt-mvi-visual .rmt-mv-editor-viewport{flex:1 0 180px;min-height:180px;max-height:none;width:100%;overflow:auto;overscroll-behavior:contain;position:relative}
+${r} .rmt-mvi-canvas-tools button,${r} .rmt-mvi-matte button{font-size:11px!important;min-height:44px;padding:4px 8px;white-space:nowrap}
+${r} .rmt-mvi-visual .rmt-mv-editor-viewport{flex:1 1 0;min-height:0;max-height:none;width:100%;overflow:auto;overscroll-behavior:contain;position:relative;isolation:isolate}
 ${r} .rmt-mvi-visual [data-editor-canvas]{margin:0 auto;max-width:none;flex:none}
+${r} .rmt-mvi-brush-cursor{position:absolute;z-index:2;display:block;pointer-events:none;transform:translate(-50%,-50%);border:1px solid #fff;border-radius:50%;box-shadow:0 0 0 1px #253445,inset 0 0 0 1px #253445;box-sizing:border-box}
 ${r} .rmt-mvi-matte>div{display:flex;gap:4px}
 ${r} .rmt-mvi-matte>small{font-size:10px;color:var(--rmt-theme-muted,#63788f);white-space:nowrap}
 ${r} .rmt-mv-editor-viewport[data-editor-matte=dark]{background:#253445}
 ${r} .rmt-mv-editor-viewport[data-editor-matte=light]{background:#f8fbfe}
 ${r} .rmt-mvi-inspector{display:flex;flex-direction:column;min-height:0;min-width:0;overflow:hidden;background:var(--rmt-theme-surface-solid,#fff);border:1px solid var(--rmt-theme-border,#cddfed);border-radius:12px}
 ${r} .rmt-mvi-tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;flex:none;padding:5px;background:var(--rmt-theme-soft,#e7f1fa)}
-${r} .rmt-mvi-tabs button{font-size:12px;min-height:38px;padding:6px 3px}
+${r} .rmt-mvi-tabs button{font-size:12px;min-height:44px;padding:6px 3px}
 ${r} .rmt-mvi-tool-scroll{flex:1;min-height:0;overflow:auto;overscroll-behavior:auto;padding:10px 12px;scrollbar-width:thin;touch-action:pan-y pinch-zoom}
 ${r} .rmt-mvi-tool-scroll .rmt-mv-editor-tools{gap:6px;margin:4px 0}
-${r} .rmt-mvi-tool-scroll .rmt-mv-editor-tools button{flex:1 0 auto;min-height:40px;padding:6px 10px;font-size:12px}
-${r} .rmt-mvi-tool-scroll label{font-size:12px}
+${r} .rmt-mvi-tool-scroll .rmt-mv-editor-tools button{flex:1 0 auto;min-height:44px;padding:6px 10px;font-size:12px}
+${r} .rmt-mvi-tool-scroll label{font-size:12px!important}
 ${r} .rmt-mvi-tool-scroll input:not([type=checkbox]):not([type=range]),${r} .rmt-mvi-tool-scroll select,${r} .rmt-mvi-tool-scroll textarea{font-size:16px}
 ${r} .rmt-mvi-tool-scroll .rmt-mvi-brush{display:flex;flex-direction:row;align-items:center;gap:8px}
 ${r} .rmt-mvi-tool-scroll .rmt-mvi-brush input{flex:1;width:0}
+${r} .rmt-mvi-brush>span{flex:none;min-width:55px;font-size:11px!important;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
 ${r} .rmt-mvi-tool-scroll .rmt-mvi-layer{display:flex;flex-direction:row;align-items:center;gap:8px;line-height:1.5;margin:8px 0}
 ${r} .rmt-mvi-layer input{width:18px;min-width:18px;height:18px;margin:0}
-${r} .rmt-mvi-more{border-top:1px solid var(--rmt-theme-border,#cddfed);margin-top:8px}
-${r} .rmt-mvi-more summary{min-height:40px;display:flex;align-items:center;cursor:pointer;font-size:12px}
+${r} .rmt-mvi-more{margin-top:8px}
+${r} .rmt-mvi-more summary{min-height:44px;display:flex;align-items:center;cursor:pointer;font-size:12px!important;padding:7px 12px;box-sizing:border-box;border:1px solid var(--rmt-theme-border,#cddfed);border-radius:999px;background:var(--rmt-theme-surface-solid,#fff)}
 ${r} .rmt-mvi-workbench .rmt-x-note{margin:5px 0;font-size:11px;line-height:1.6}
-${r} .rmt-mvi-footer{flex:none;padding:5px 0 max(2px,env(safe-area-inset-bottom,0px));border-top:1px solid var(--rmt-theme-border,#cddfed)}
-${r} .rmt-mvi-footer p{font-size:11px;line-height:1.5;color:var(--rmt-theme-muted,#63788f);margin:0 0 5px;max-height:3em;overflow:auto}
+${r} .rmt-mvi-footer{flex:none;position:relative;z-index:3;padding:6px 0 max(2px,env(safe-area-inset-bottom,0px));border-top:1px solid var(--rmt-theme-border,#cddfed);background:var(--rmt-theme-bg,#f5f9fd)}
+${r} .rmt-mvi-footer p{font-size:11px!important;line-height:1.5!important;color:var(--rmt-theme-muted,#63788f);margin:0 0 5px;max-height:3em;overflow:auto}
 ${r} .rmt-mvi-footer p:empty{display:none}
-${r} .rmt-mvi-save-row,${r} .rmt-mvi-save-row>div{display:flex;align-items:center;justify-content:space-between;gap:7px}
-${r} .rmt-mvi-workbench .rmt-mvi-primary{background:var(--rmt-theme-soft,#e7f1fa);border-color:var(--rmt-theme-accent-ink,#4f769d);font-weight:600}
-@media(min-width:960px){${r} .rmt-mve-image-page{flex-basis:450px;min-height:450px}${r} .rmt-mvi-layout{min-height:300px;grid-template-columns:minmax(0,1fr) 315px;grid-template-rows:minmax(300px,1fr)}}
-@supports(container-type:inline-size){${r} .rmt-mvi-layout{min-height:510px;grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(280px,1fr) minmax(220px,.8fr)}@container(min-width:740px){${r} .rmt-mvi-layout{min-height:300px;grid-template-columns:minmax(0,1fr) 315px;grid-template-rows:minmax(300px,1fr)}}}
-@media(max-height:600px) and (orientation:landscape){${r} .rmt-mve-image-page{flex-basis:450px;min-height:450px}${r} .rmt-mvi-layout{min-height:300px;grid-template-columns:minmax(0,1fr) minmax(240px,.8fr);grid-template-rows:minmax(300px,1fr)}${r} .rmt-mvi-header{padding-bottom:3px}${r} .rmt-mvi-workbench{gap:5px}${r} .rmt-mvi-matte{padding-block:2px}}
+${r} .rmt-mvi-save-row{display:flex;align-items:center;gap:7px}
+${r} .rmt-mvi-save-row button{min-height:48px;padding:8px 10px;white-space:nowrap;font-weight:600!important}
+${r} .rmt-mvi-save-row [data-edit=undo]{min-width:64px}
+${r} .rmt-mvi-workbench .rmt-mvi-primary{flex:1;background:var(--rmt-theme-accent-ink,#4f769d)!important;color:var(--rmt-theme-surface-solid,#fff)!important;border-color:var(--rmt-theme-accent-ink,#4f769d)!important;font-weight:700!important}
+@media(min-width:960px){${r} .rmt-mvi-workbench[data-tools-open=true] .rmt-mvi-layout{grid-template-columns:minmax(0,1fr) 300px;grid-template-rows:minmax(0,1fr)}}
+@supports(container-type:inline-size){${r} .rmt-mvi-workbench[data-tools-open=true] .rmt-mvi-layout{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr) minmax(0,.5fr)}@container(min-width:740px){${r} .rmt-mvi-workbench[data-tools-open=true] .rmt-mvi-layout{grid-template-columns:minmax(0,1fr) 300px;grid-template-rows:minmax(0,1fr)}}}
+@media(max-height:600px) and (orientation:landscape) and (min-width:600px){${r} .rmt-mvi-workbench[data-tools-open=true] .rmt-mvi-layout{grid-template-columns:minmax(0,1fr) minmax(240px,.65fr);grid-template-rows:minmax(0,1fr)}${r} .rmt-mvi-header{padding-bottom:3px}${r} .rmt-mvi-workbench{gap:4px}}
 `;
 }
 
@@ -11174,6 +11320,12 @@ function applyAdvancedExclusions(body, parsed) {
     if (!branded.has(parsed)) throw bad();
     const result = { ...body }; for (const key of parsed.excluded) delete result[key]; return result;
 }
+// A feature may prefer streaming without changing prompts, output budgets or
+// saved connection settings. An explicit complete-response choice always wins.
+function requestStreaming(parsed, settings, options = {}) {
+    if (parsed.streamMode !== 'original') return parsed.streamMode === 'on';
+    return options.preferStream === true || (settings.apiConnectionMode === 'manual' && settings.manualApiStreaming === true);
+}
 function advancedFingerprint(settings) {
     if (settings?.advancedGenerationEnabled !== true) return '';
     const raw = advancedSettings(settings);
@@ -11184,6 +11336,7 @@ __m_core_advancedGeneration_js.advancedSettings = advancedSettings;
 __m_core_advancedGeneration_js.parseAdvancedGeneration = parseAdvancedGeneration;
 __m_core_advancedGeneration_js.advancedCarrier = advancedCarrier;
 __m_core_advancedGeneration_js.applyAdvancedExclusions = applyAdvancedExclusions;
+__m_core_advancedGeneration_js.requestStreaming = requestStreaming;
 __m_core_advancedGeneration_js.advancedFingerprint = advancedFingerprint;
 __m_core_advancedGeneration_js.EXCLUDABLE_PARAMETERS = EXCLUDABLE_PARAMETERS;
 __m_core_advancedGeneration_js.REASONING_EFFORTS = REASONING_EFFORTS;
@@ -18016,7 +18169,7 @@ function emptyFinalFailure(summary) {
 
 // Public ConnectionManager streaming contract: cumulative text + separate reasoning.
 // Its API does not expose the provider finish reason; do not manufacture a stop code.
-async function readProfileCompletion(result, { signal = null } = {}) {
+async function readProfileCompletion(result, { signal = null, onProgress = null } = {}) {
     if (typeof result !== 'function') return result;
     const iterator = result();
     if (!iterator || typeof iterator.next !== 'function') throw apiError('连接未提供可读取的流式结果。', 'RMT_RESPONSE_FORMAT');
@@ -18038,6 +18191,7 @@ async function readProfileCompletion(result, { signal = null } = {}) {
                 || (Number.isFinite(core_constants.MAX_MANUAL_API_RESPONSE_BYTES) && new TextEncoder().encode(next).byteLength > core_constants.MAX_MANUAL_API_RESPONSE_BYTES)
                 || reasoningChars > core_constants.MAX_MANUAL_API_RESPONSE_BYTES) throw apiError('流式响应超过安全范围。', 'RMT_MANUAL_RESPONSE_TOO_LARGE');
             content = next;
+            onProgress?.();
         }
     } catch (error) {
         if (signal?.aborted || error?.name === 'AbortError') throw streamAbortReason(signal);
@@ -18306,6 +18460,7 @@ async function readManualApiStream(response, options = {}) {
             bytes += value?.byteLength || 0;
             if (bytes > maxBytes) throw apiError('模型服务返回内容过大，已停止读取。', 'RMT_MANUAL_RESPONSE_TOO_LARGE');
             consume(decoder.decode(value, { stream: true }));
+            if (value?.byteLength) options.onProgress?.();
         }
     } catch (error) {
         if (signal?.aborted || error?.name === 'AbortError') throw streamAbortReason(signal);
@@ -18520,7 +18675,7 @@ async function requestManualApiCompletion(settings, context, messages, maxTokens
         messages,
         max_tokens: output_budget.normalizeOutputTokens(maxTokens),
         temperature: Number.isFinite(Number(options.temperature)) ? Number(options.temperature) : settings?.temperature,
-        stream: settings?.manualApiStreaming === true,
+        stream: advanced_generation.requestStreaming(advanced, { ...settings, apiConnectionMode: 'manual' }, options),
         chat_completion_source: 'custom',
         custom_url: customUrl,
         custom_include_headers: manualApiHeadersJson(settings?.manualApiKey),
@@ -21857,9 +22012,10 @@ __m_core_routeParticipants_js.captureRoutePeople = captureRoutePeople;
 
 function __init_core_selfUpdater_js() {
 // MODULE: core/selfUpdater.js
+const RELEASE_README = __m_core_releaseNotes_js.RELEASE_README;
 
 const UPDATE_STATE = Symbol.for('heartbeatMemories.selfUpdate');
-const INSTALLED_BUILD = '1.0.25';
+const INSTALLED_BUILD = '1.0.28';
 const PROJECT_REMOTE = 'https://github.com/zaiyebuzuoyouqingdetiangou/tokimemo';
 function updateError(message) { const error = new Error(message); error.userMessage = message; return error; }
 
@@ -22094,23 +22250,52 @@ function parseHearttraceChangelog(text) {
     return sections;
 }
 
-async function loadHearttraceChangelog({ remoteUrl = HOMEPAGE, remoteBranch = FALLBACK_BRANCH, fetcher = globalThis.fetch.bind(globalThis), moduleUrl = import.meta.url } = {}) {
+function parseHearttraceReadme(text) {
+    const input = String(text || '').replace(/^\uFEFF/, '');
+    const heading = /^#\s+(.+?)\s+(\d+\.\d+\.\d+(?:-[\w.-]+)?)\s*$/m.exec(input);
+    if (!heading) return [];
+    const groups = [];
+    let group = null, paragraph = '';
+    const flush = () => { if (paragraph && group) group.items.push(paragraph); paragraph = ''; };
+    for (const raw of input.split(/\r?\n/)) {
+        const line = raw.trim();
+        if (/^#{1,6}\s/.test(line)) {
+            flush();
+            const match = /^##\s+(更新日志模块|本次变动|本次更新)\s*$/.exec(line);
+            group = match ? { title: match[1], items: [] } : null;
+            if (group) groups.push(group);
+            continue;
+        }
+        if (!group) continue;
+        if (!line || line === '---') { flush(); continue; }
+        const item = /^[-*]\s+(.*)$/.exec(line);
+        if (item) { flush(); paragraph = item[1]; }
+        else paragraph = paragraph ? `${paragraph} ${line}` : line;
+    }
+    flush();
+    const items = groups.flatMap(row => row.items);
+    return items.length ? [{ version: heading[2], title: heading[1], groups, items }] : [];
+}
+
+async function loadHearttraceChangelog({ source = 'installed', remoteUrl = HOMEPAGE, remoteBranch = FALLBACK_BRANCH, fetcher = globalThis.fetch } = {}) {
+    // The installed README is embedded by build.py. Opening its notes needs
+    // neither a network connection nor an unrelated remote history file.
+    if (source !== 'remote') {
+        const sections = parseHearttraceReadme(RELEASE_README);
+        return { ok: sections.length > 0, source: 'readme', sections,
+            ...(sections.length ? {} : { message: '当前安装包没有可读取的更新说明。' }) };
+    }
     const branch = String(remoteBranch || FALLBACK_BRANCH).trim() || FALLBACK_BRANCH;
     const urls = [...new Set([
-        remoteFileUrl(remoteUrl, 'CHANGELOG.md', branch, false),
-        remoteFileUrl(remoteUrl, 'CHANGELOG.md', branch, true),
+        remoteFileUrl(remoteUrl, 'README.md', branch, false),
+        remoteFileUrl(remoteUrl, 'README.md', branch, true),
     ].filter(Boolean))];
-    try {
-        const local = new URL('../CHANGELOG.md', moduleUrl);
-        local.searchParams.set('rmt-check', String(Date.now()));
-        urls.push(local.href);
-    } catch {}
     for (const url of urls) {
         const text = await readRemoteText(url, fetcher, 'changelog');
-        const sections = parseHearttraceChangelog(text);
-        if (sections.length) return { ok: true, sections };
+        const sections = parseHearttraceReadme(text);
+        if (sections.length) return { ok: true, source: 'readme', sections };
     }
-    return { ok: false, sections: [], message: '没能读到更新日志。请检查网络后再打开一次。' };
+    return { ok: false, source: 'readme', sections: [], message: '没能读到当前分支的 README 更新说明。请检查网络后再打开一次。' };
 }
 
 async function checkHearttraceUpdate({ force = false, moduleUrl = import.meta.url, origin = globalThis.location?.origin, fetcher = globalThis.fetch.bind(globalThis) } = {}) {
@@ -22247,6 +22432,7 @@ __m_core_selfUpdater_js.subscribeHearttraceUpdate = subscribeHearttraceUpdate;
 __m_core_selfUpdater_js.compareHearttraceVersions = compareHearttraceVersions;
 __m_core_selfUpdater_js.isNewerHearttraceVersion = isNewerHearttraceVersion;
 __m_core_selfUpdater_js.parseHearttraceChangelog = parseHearttraceChangelog;
+__m_core_selfUpdater_js.parseHearttraceReadme = parseHearttraceReadme;
 __m_core_selfUpdater_js.INSTALLED_BUILD = INSTALLED_BUILD;
 }
 
@@ -36471,6 +36657,18 @@ function recordRetry(entry, error) {
     return markStage(entry, 'retry');
 }
 
+// Counts/timing only: never retain streamed text, prompts, reasoning or URLs.
+function recordRequestTransport(entry, streamRequested) {
+    if (!entry || entry.outcome !== 'running') return;
+    entry.transport = { streamRequested: streamRequested === true, receivedChunks: 0, firstChunkMs: null, startedAt: Date.now() };
+}
+
+function recordStreamProgress(entry) {
+    if (!entry?.transport || entry.outcome !== 'running') return;
+    entry.transport.receivedChunks = count(entry.transport.receivedChunks + 1);
+    if (entry.transport.firstChunkMs === null) entry.transport.firstChunkMs = duration(Date.now() - entry.transport.startedAt);
+}
+
 function recordInput(entry, chars, tokens = null) {
     if (!entry) return;
     entry.input = { chars: count(chars), tokens: Number.isFinite(tokens) ? count(tokens) : null };
@@ -36521,6 +36719,7 @@ function finishSegmentTrace(parent, child, outcome, error = null) {
     merged.add(child);
     parent.input = child.input;
     parent.response = child.response;
+    if (child.transport) parent.transport = { ...child.transport };
     parent.attempt = child.attempt;
     parent.retryCode = child.retryCode;
     if (child.recovery) parent.recovery = { ...child.recovery };
@@ -36607,6 +36806,8 @@ function snapshotEntries(entries, includeRequests = false) {
         field: STAGES.includes(entry.field) ? entry.field : '',
         activeStage: STAGES.includes(entry.activeStage) ? entry.activeStage : '',
         providerRequests: count(entry.providerRequests),
+        ...(entry.transport ? { transport: { streamRequested: entry.transport.streamRequested === true,
+            receivedChunks: count(entry.transport.receivedChunks), firstChunkMs: entry.transport.firstChunkMs === null ? null : duration(entry.transport.firstChunkMs) } } : {}),
         durations: snapshotDurations(entry),
         ...(entry.archiveBudget ? { archiveBudget: {
             ...Object.fromEntries(['utf16Chars', 'unicodeCharacters', 'utf8Bytes', 'inputTokens', 'outputTokens', 'combinedTokens', 'contextTokens', 'maximumOutputTokens']
@@ -36639,6 +36840,8 @@ function clearTaskTrace() { trace.length = 0; }
 __m_core_taskTrace_js.beginRequestAttempt = beginRequestAttempt;
 __m_core_taskTrace_js.recordProviderRequest = recordProviderRequest;
 __m_core_taskTrace_js.recordRetry = recordRetry;
+__m_core_taskTrace_js.recordRequestTransport = recordRequestTransport;
+__m_core_taskTrace_js.recordStreamProgress = recordStreamProgress;
 __m_core_taskTrace_js.recordInput = recordInput;
 __m_core_taskTrace_js.recordResponse = recordResponse;
 __m_core_taskTrace_js.startTaskTrace = startTaskTrace;
@@ -41688,6 +41891,7 @@ async function generateConfiguredJsonOperation(prompt, options = {}) {
     const savedContent = options.recoveryContentSettings || generation_recovery.generationContentSnapshotForOrigin(options.origin)?.contentSettings;
     let contentSettings = { ...settings, ...(savedContent || {}) };
     const advanced = advanced_generation.parseAdvancedGeneration(settings);
+    const streamRequested = advanced_generation.requestStreaming(advanced, settings, options);
     const configurationFingerprint = core_independentApi.apiConfigurationFingerprint(configuredSettings);
     const contextEnvelope = typeof options.contextEnvelope === 'string'
         ? options.contextEnvelope
@@ -41810,20 +42014,24 @@ async function generateConfiguredJsonOperation(prompt, options = {}) {
             async () => {
                 assertRequestCurrent();
                 core_taskTrace.recordProviderRequest(taskTrace);
+                core_taskTrace.recordRequestTransport(taskTrace, streamRequested);
+                const onProgress = () => core_taskTrace.recordStreamProgress(taskTrace);
                 const returned = connectionMode === 'manual'
                 ? core_independentApi.requestManualApiCompletion(settings, context, messages, responseLength, {
                     signal: lifecycleController.signal,
                     model: modelOverride,
                     temperature: overridePayload.temperature,
+                    preferStream: options.preferStream === true,
+                    onProgress,
                 })
                 : service.sendRequest(
                     settings.connectionProfileId,
                     messages,
                     responseLength,
-                    { stream: advanced.streamMode === 'on', extractData: false, includePreset: false, includeInstruct: false, signal: lifecycleController.signal },
+                    { stream: streamRequested, extractData: false, includePreset: false, includeInstruct: false, signal: lifecycleController.signal },
                     overridePayload,
                 );
-                return core_independentApi.readProfileCompletion(await returned, { signal: lifecycleController.signal });
+                return core_independentApi.readProfileCompletion(await returned, { signal: lifecycleController.signal, onProgress });
             },
             lifecycleController,
             options.timeoutMs,
@@ -73950,6 +74158,24 @@ function changelogBlock(section) {
     heading.style.cssText = 'display:block;margin:0 0 6px;';
     heading.textContent = section.version ? (section.title ? `${section.version} · ${section.title}` : section.version) : (section.title || '更新说明');
     block.append(heading);
+    if (section.groups?.length) {
+        for (const group of section.groups) {
+            const label = document.createElement('h3');
+            label.style.cssText = 'margin:16px 0 8px;font-size:14px;';
+            label.textContent = group.title;
+            block.append(label);
+            const list = document.createElement('ul');
+            list.style.cssText = 'margin:0;padding-left:1.2em;';
+            for (const item of group.items) {
+                const li = document.createElement('li');
+                li.style.cssText = 'margin:6px 0;';
+                li.textContent = item;
+                list.append(li);
+            }
+            block.append(list);
+        }
+        return block;
+    }
     const list = document.createElement('ul');
     list.style.cssText = 'margin:0;padding-left:1.2em;';
     for (const item of section.items || []) {
@@ -73977,11 +74203,11 @@ function fillChangelog(body, result, full) {
     const current = updater.installedVersion();
     const newer = result.sections.filter(section => section.version && updater.isNewerHearttraceVersion(section.version, current));
     const show = full ? result.sections : (newer.length ? newer : result.sections.slice(0, 1)).slice(0, 12);
-    if (full && result.sections.length > 1) {
+    if (full && result.source !== 'readme' && result.sections.length > 1) {
         const hint = document.createElement('p');
         hint.textContent = `共 ${result.sections.length} 个版本，向下滚动查看更早更新`;
         body.append(hint);
-    } else if (!full && !newer.length) {
+    } else if (!full && result.source !== 'readme' && !newer.length) {
         const note = document.createElement('p');
         note.textContent = '更新日志里还没有比当前版本更高的条目，下面是这次读到的最新说明。';
         body.append(note);
@@ -74085,7 +74311,7 @@ async function openHearttraceChangelog(mode) {
     const snap = updater.hearttraceUpdateSnapshot();
     title.textContent = updateMode ? (snap.remoteVersion ? `发现新版本 ${snap.remoteVersion}` : '发现新版本') : '更新日志';
     sheetBody.textContent = '正在读取更新日志…';
-    const changelog = await updater.loadHearttraceChangelog({ remoteUrl: snap.remoteUrl, remoteBranch: snap.remoteBranch });
+    const changelog = await updater.loadHearttraceChangelog({ source: updateMode ? 'remote' : 'installed', remoteUrl: snap.remoteUrl, remoteBranch: snap.remoteBranch });
     if (!overlay.isConnected) return;
     fillChangelog(sheetBody, changelog, !updateMode);
 }
@@ -89528,7 +89754,7 @@ async function continueStoryboard(songId) {
             lastScene: list(previous.shots).filter(s => s.sectionIndex < missing[0]).at(-1)?.plain || '' };
         const prompt = storyboardPrompt(context, memory, song, settings, missing, previous.cast || null)
             + `\n【接着已有分镜补写】\n只补上面列出的段落，sectionIndex 沿用歌曲原编号。已有分镜和图片会保留；新构图在保存时自动分配编号。重复的画面可在 frames 引用 reusableGroups 的原 group/diff，不必重写该 group；新画面使用新构图。沿用已有时代、衣着和意象，并衔接已有画面：\n${JSON.stringify(continuity)}`;
-        const data = await generation_client.requestJson(prompt, '正在补写剩余分镜…', { mode: 'songMv', taskKey: `extras:mv:${key}`, context, origin });
+        const data = await generation_client.requestJson(prompt, '正在补写剩余分镜…', { mode: 'songMv', preferStream: true, taskKey: `extras:mv:${key}`, context, origin });
         return await holdResult({ ...target, appendSections: missing }, 'append', '', data, raw => continuationPatch(raw, previous, memory, song, settings, missing));
     } finally { running.delete(key); }
 }
@@ -89545,7 +89771,7 @@ async function generateStoryboard(songId, settingsInput, castInput = undefined) 
     running.add(key);
     try {
         const data = await generation_client.requestJson(storyboardPrompt(context, memory, song, settings, settings.output === 'tegaki' ? firstChunk(parseSections(song.lyrics), selectedSectionIndexes(parseSections(song.lyrics), settings.range, settings.rangeFrom, settings.rangeTo)) : null, cast), '正在写 MV 分镜…', {
-            mode: 'songMv', taskKey: `extras:mv:${key}`, context, origin,
+            mode: 'songMv', preferStream: true, taskKey: `extras:mv:${key}`, context, origin,
         });
         return await holdResult(target, 'story', '', data, raw => {
             const built = buildShots(raw, memory, parseSections(song.lyrics).length, settings, cast);
@@ -89625,7 +89851,7 @@ ${record.cast ? `本镜人物及动作：${mv_cast.castVisual(record, shot)}\n${
 第一个字符必须是 {，最后一个字符必须是 }。
 不要前言，不要解释，不要代码围栏，不要在 JSON 外面写任何字。
 {"plain":"……","shot":"……","move":"……","motion":"push","imagePrompt":"……","videoZh":"……","videoEn":"……"}`;
-        const data = await generation_client.requestJson(prompt, '正在改写这一镜…', { mode: 'songMv', taskKey: `extras:mv:${key}`, context, origin });
+        const data = await generation_client.requestJson(prompt, '正在改写这一镜…', { mode: 'songMv', preferStream: true, taskKey: `extras:mv:${key}`, context, origin });
         return await holdResult(target, 'rewrite', shotId, data, raw => {
             const patch = {};
             for (const field of ['plain', 'shot', 'move', 'imagePrompt', 'videoZh', 'videoEn']) {
@@ -90455,6 +90681,7 @@ const MV_MODE = 'songMv';
 const view = { songId: '', scope: '', epoch: 0, sub: 'board', step: 1, draft: null, mode: 'tegaki', shotId: '', copied: '', selected: '', drawingAll: false, stopAll: false, tapIndex: 0 };
 const audioBySong = new Map();
 const images = new Map();
+const fittedBackdropCache = new WeakMap();
 const localUrls = new Map();
 const loadingLocal = new Map();
 const imageImports = new Map();
@@ -90484,10 +90711,14 @@ function editorBody(enabled) {
     if (!enabled) { editorDialog?.dispose(); editorDialog = null; }
     const el = body();
     if (layoutBody && (layoutBody !== el || !enabled)) {
+        layoutBody.closest?.('.rmt-shell')?.classList?.remove('rmt-mvi-focus');
+        layoutBody.closest?.('.rmt-shell')?.classList?.remove('rmt-mve-focus');
         layoutBody.classList?.remove('rmt-mve-body');
         layoutBodyObserver?.disconnect(); layoutBodyObserver = null; layoutBody = null;
     }
     el?.classList?.toggle('rmt-mve-body', enabled);
+    el?.closest?.('.rmt-shell')?.classList?.toggle('rmt-mvi-focus', enabled && view.sub === 'asset-editor');
+    el?.closest?.('.rmt-shell')?.classList?.toggle('rmt-mve-focus', enabled && ['tegaki', 'sync'].includes(view.sub));
     if (!enabled || !el || layoutBody === el) return;
     layoutBody = el;
     if (typeof globalThis.MutationObserver === 'function') {
@@ -90497,6 +90728,8 @@ function editorBody(enabled) {
             if (!el.querySelector('.rmt-mve-layout-scope,[data-rmt-mv-editor-host]')) {
                 editorDialog?.dispose(); editorDialog = null;
                 el.classList.remove('rmt-mve-body');
+                el.closest?.('.rmt-shell')?.classList?.remove('rmt-mvi-focus');
+                el.closest?.('.rmt-shell')?.classList?.remove('rmt-mve-focus');
                 layoutBodyObserver?.disconnect(); layoutBodyObserver = null; layoutBody = null;
             }
         });
@@ -90618,7 +90851,7 @@ async function openAssetEditor(key, autoCutout = false, frameId = '') {
     stopPlayback(); assetEditor?.dispose(); assetEditor = null;
     const token = ++editSequence;
     if (view.sub !== 'asset-editor') navigation.push(currentPage(key));
-    view.sub = 'asset-editor'; page('图片编辑', inEditor ? '剪辑台' : '构图卡片', '<section data-rmt-mv-editor-host>正在打开素材…</section>');
+    view.sub = 'asset-editor'; page('图片编辑', inEditor ? '剪辑台' : '构图卡片', `<section data-rmt-mv-editor-host><div class="rmt-mvi-loading">${btn('back', '返回')}<p role="status">正在打开素材…</p></div></section>`);
     if (body()) body().scrollTop = 0;
     const image = found.image, original = image?.original || image;
     const [sourceUrl, imageUrl] = await Promise.all([resolveAssetImage(original), resolveAssetImage(image)]);
@@ -90637,7 +90870,7 @@ async function openAssetEditor(key, autoCutout = false, frameId = '') {
             const nextRecord = currentRecord(), timeline = mv.shotTimeline(nextRecord, currentSong()).rows;
             const index = timeline.findIndex(row => row.shot.id === nextId), next = timeline[index];
             if (!next) { closeAssetEditor(); return; }
-            view.selected = nextId; view.stripStart = Math.floor(index / 12) * 12;
+            view.selected = nextId; view.stripStart = Math.floor(index / editor_ui.EDITOR_PAGE_SIZE) * editor_ui.EDITOR_PAGE_SIZE;
             seekEditor(next.start);
             const nextKey = `${next.shot.group}:${next.shot.diff}`;
             if (!mv.hasAssetImage(next.shot.image) && mv.assetOf(nextRecord, nextKey)) await openAssetEditor(nextKey);
@@ -91158,7 +91391,7 @@ function page(title, back, html) {
     const imageEditor = view.sub === 'asset-editor';
     const returnButton = view.sub !== 'board' && !editor && !imageEditor ? btn('back', `← 返回${esc(back)}`) : '';
     editorBody(editor || imageEditor);
-    body().innerHTML = `<main class="rmt-x-page${editor ? ' rmt-mv-editor' : imageEditor ? ' rmt-mve-image-page' : ''}">${returnButton}${editor ? '' : recoveryPanel(imageEditor)}${html}${editor || imageEditor ? '' : `<details class="rmt-x-card"><summary>MV 备份</summary>${btn('export-recovery', '导出 MV 数据与暂存结果')}</details>`}</main>`;
+    body().innerHTML = `<main class="rmt-x-page${editor ? ' rmt-mv-editor' : imageEditor ? ' rmt-mve-image-page' : ''}">${returnButton}${editor || imageEditor ? '' : recoveryPanel()}${html}${editor || imageEditor ? '' : `<details class="rmt-x-card"><summary>MV 备份</summary>${btn('export-recovery', '导出 MV 数据与暂存结果')}</details>`}</main>`;
     renderedPage = view.sub;
 }
 
@@ -91402,7 +91635,7 @@ function tegakiControls(record, song) {
     const range = mv.playRange(record, song);
     const seg2 = (action, map, value) => Object.entries(map).map(([id, label]) => btn(action, label, { id, cls: 'rmt-x-seg' + (value === id ? ' active' : ''), extra: ` aria-pressed="${value === id}"` })).join('');
     const presets = Object.entries(mv.TEGAKI_PRESETS).map(([id, p]) => `<button type="button" class="rmt-mv-choice${o.preset === id ? ' on' : ''}" aria-pressed="${o.preset === id}" data-rmt-mv="tegaki-preset" data-rmt-mv-id="${id}"><span><b>${esc(p.name)}</b><small>${esc(p.desc)}</small></span></button>`).join('');
-    return `${mv.isV2(record) ? `<b>片头与片尾</b><label class="rmt-mv-look"><span>片头时长（秒）</span><input type="number" min="0" step="0.5" inputmode="decimal" data-rmt-mv-intro-seconds value="${o.introSeconds}"></label><label class="rmt-mv-look"><span>片尾时长（秒）</span><input type="number" min="0" step="0.5" inputmode="decimal" data-rmt-mv-outro-seconds value="${o.outroSeconds}"></label><p class="rmt-x-note">0 为关闭。片头最多占首镜头一半，开唱时结束；片尾最多占所选片段末镜头一半。</p>` : ''}
+    return `${mv.isV2(record) ? `<details><summary>片头与片尾</summary><div><label class="rmt-mv-look"><span>片头时长（秒）</span><input type="number" min="0" step="0.5" inputmode="decimal" data-rmt-mv-intro-seconds value="${o.introSeconds}"></label><label class="rmt-mv-look"><span>片尾时长（秒）</span><input type="number" min="0" step="0.5" inputmode="decimal" data-rmt-mv-outro-seconds value="${o.outroSeconds}"></label><p class="rmt-x-note">0 为关闭。片头最多占首镜头一半，开唱时结束；片尾最多占所选片段末镜头一半。</p></div></details>` : ''}
       <details open><summary>字幕与装饰</summary><div><b>歌词样式</b><div class="rmt-x-segs">${seg2('tegaki-lyric', Object.fromEntries(Object.entries(mv.TEGAKI_LYRICS).filter(([key]) => key !== 'stage' || record.stage)), o.lyric)}</div>
       ${mv.isV2(record) ? `<label class="rmt-mv-check"><input type="checkbox" data-rmt-mv-overlay="keyword" ${o.showKeyword ? 'checked' : ''}>副歌关键词（随歌词隐藏）</label><label class="rmt-mv-check"><input type="checkbox" data-rmt-mv-overlay="motif" ${o.showMotif ? 'checked' : ''}>漂浮装饰</label>` : ''}
       ${o.lyric === 'none' ? '' : `<b>字体</b><div class="rmt-x-segs">${seg2('tegaki-font', Object.fromEntries(Object.entries(mv.TEGAKI_FONTS).map(([k, v]) => [k, v.name])), o.font)}</div><p class="rmt-x-note">字体用设备自带的，不同手机效果会略有差异。</p>`}${motifNotice(record)}</div></details>
@@ -91492,7 +91725,8 @@ function editorTimingPanel(song, record) {
 
 function editorSheet(song, record) {
     if (view.editorDrawer === 'audio') return audioCard(song);
-    if (view.editorDrawer === 'more') return `${recoveryPanel()}${btn('go-board', '素材库 · 图片编辑 · 抠图')}${btn('go-board', '补充分镜与图片')}${btn('download-table', '下载镜头时间表')}${btn('download-srt', '下载歌词字幕')}${btn('export-recovery', '导出 MV 数据与暂存结果')}`;
+    if (view.editorDrawer === 'shots') return `<div class="rmt-mve-shot-grid">${editorStrip(mv.shotTimeline(record, song).rows, record, true).strip}</div>`;
+    if (view.editorDrawer === 'more') return `${recoveryPanel()}${btn('go-board', '素材库 · 图片编辑 · 抠图')}${btn('go-board', '补充分镜与图片')}${btn('download-table', '下载镜头时间表')}${btn('download-srt', '下载歌词字幕')}${btn('export-recovery', '导出 MV 数据与暂存结果')}<div class="rmt-mve-host-actions">${btn('go-board', '主导航与任务')}<button type="button" class="rmt-x-secondary" data-rmt-action="close">关闭窗口</button></div>`;
     if (view.editorDrawer !== 'export') return '';
     const support = exportSupport(), exporting = player.exporting;
     return exporting ? `<div class="rmt-x-row-head"><b>正在导出</b><span data-rmt-mv-export-time>0:00</span></div><div class="rmt-x-bar"><i data-rmt-mv-export-bar style="width:0%"></i></div><p class="rmt-x-note">请留在本页，不要锁屏。</p>${btn('export-stop', '停止导出')}`
@@ -91505,18 +91739,19 @@ function editorShotPanel(song, record, sel, selIndex) {
     const assetKey = sel?.shot.group && sel?.shot.diff ? `${sel.shot.group}:${sel.shot.diff}` : '';
     const asset = assetKey ? mv.assetOf(record, assetKey) : null;
     const shared = asset && !mv.hasAssetImage(sel?.shot.image);
-    return sel ? `<div class="rmt-mve-panel-scroll" data-rmt-mv-scroll="shots"><div class="rmt-x-row-head"><b>第 ${selIndex + 1} 镜</b><span>${mv.formatTime(sel.start, true)}–${mv.formatTime(sel.end, true)}</span></div><p class="rmt-x-note">${esc(sel.shot.lyric || sel.shot.plain || '')}</p>
+    return sel ? `<div class="rmt-mve-panel-scroll" data-rmt-mv-scroll="shots"><div class="rmt-x-row-head"><b>第 ${selIndex + 1} 镜</b><span>${mv.formatTime(sel.start, true)}–${mv.formatTime(sel.end, true)}</span></div><p class="rmt-x-note rmt-mve-lyric">${esc(sel.shot.lyric || sel.shot.plain || '')}</p>
       <div class="rmt-mve-image-actions">${btn(shared ? 'edit-asset' : 'edit-frame', '编辑图片', { id: shared ? assetKey : sel.shot.id, cls: 'rmt-x-primary', extra: ' aria-label="图片编辑 · 选单格 · 修边"' })}${uploadLabel(sel.shot.id, '换图')}</div><small class="rmt-mve-image-note">${shared ? '共享构图素材' : '当前镜图片'} · ${mv.shotImage(record, sel.shot)?.editMode === 'cutout' ? '透明图' : '保留原背景'}</small>
-      <b>镜头运动</b><div class="rmt-mv-grid2">${seg('set-motion', mv.MV_MOTIONS, sel.shot.motion)}</div><b>切到下一镜</b><div class="rmt-x-segs">${seg('set-cut', mv.MV_CUTS, sel.shot.cut || 'fade')}</div>
+      <details><summary>镜头运动与切换</summary><div><b>镜头运动</b><div class="rmt-mv-grid2">${seg('set-motion', mv.MV_MOTIONS, sel.shot.motion)}</div><b>切到下一镜</b><div class="rmt-x-segs">${seg('set-cut', mv.MV_CUTS, sel.shot.cut || 'fade')}</div></div></details>
       ${stageShotControls(record, sel.shot)}<details><summary>图片与生成</summary><div>${shared ? btn('cutout-asset', '一键抠图', { id: assetKey }) : ''}${asset ? btn('edit-prompt-asset', '构图素材与提示词', { id: assetKey }) : ''}${btn('draw', mv.isFrameDrawing(mv.mvScope(ctx()), view.songId, sel.shot.id) ? '正在画…' : hasImg(sel.shot) ? '重画这一镜' : '画这一镜', { id: sel.shot.id, disabled: mv.isFrameDrawing(mv.mvScope(ctx()), view.songId, sel.shot.id) })}${btn('go-board', '素材库与背景编辑')}${btn('go-board', '补充分镜与图片')}</div></details></div>
       <footer class="rmt-mve-dock">${btn('editor-step', '上一镜', { id: '-1', disabled: selIndex <= 0 || !!player.exporting })}<small>${selIndex + 1} / ${mv.shotTimeline(record, song).rows.length}</small>${btn('editor-step', '下一镜', { id: '1', disabled: selIndex + 1 >= mv.shotTimeline(record, song).rows.length || !!player.exporting })}</footer>` : '';
 }
 
-function editorStrip(rows, record) {
+function editorStrip(rows, record, all = false) {
     // A window in the thumbnail list, not a limit on saved/generated frames.
-    const start = Math.max(0, Math.min(view.stripStart || 0, Math.max(0, rows.length - 1)));
-    const strip = rows.slice(start, start + 12).map((row, i) => `<button type="button" class="${row.shot.id === view.selected ? 'on' : ''}" aria-label="第 ${start + i + 1} 镜" data-rmt-mv="select-shot" data-rmt-mv-id="${esc(row.shot.id)}">${assetPreviewHtml(mv.shotImage(record, row.shot))}<span>${start + i + 1} · ${(row.end - row.start).toFixed(1)}秒</span></button>`).join('');
-    const stripNav = rows.length <= 12 ? '' : `<div class="rmt-mve-strip-nav">${btn('editor-strip', '上一组', { id: String(Math.max(0, start - 12)), disabled: start === 0 })}<span>${start + 1}–${Math.min(rows.length, start + 12)} / ${rows.length} 镜</span>${btn('editor-strip', '下一组', { id: String(start + 12), disabled: start + 12 >= rows.length })}</div>`;
+    const size = editor_ui.EDITOR_PAGE_SIZE;
+    const start = all ? 0 : Math.max(0, Math.min(view.stripStart || 0, Math.max(0, rows.length - 1)));
+    const strip = rows.slice(start, all ? rows.length : start + size).map((row, i) => `<button type="button" class="${row.shot.id === view.selected ? 'on' : ''}" aria-label="第 ${start + i + 1} 镜" data-rmt-mv="select-shot" data-rmt-mv-id="${esc(row.shot.id)}">${assetPreviewHtml(mv.shotImage(record, row.shot))}<span>${start + i + 1} · ${(row.end - row.start).toFixed(1)}秒</span></button>`).join('');
+    const stripNav = all || rows.length <= size ? '' : `<div class="rmt-mve-strip-nav">${btn('editor-strip', '‹', { id: String(Math.max(0, start - size)), disabled: start === 0, extra: ' aria-label="上一组分镜"' })}${btn('editor-strip', '›', { id: String(start + size), disabled: start + size >= rows.length, extra: ' aria-label="下一组分镜"' })}</div>`;
     return { strip, stripNav };
 }
 
@@ -91690,7 +91925,8 @@ function drawShot(g, row, rows, index, t, w, h) {
         const motion = mv.motionOf((lead >= 0 ? rows[lead] : row).shot.motion);
         if (stage_canvas.isDetailInsert(null, null, sourceShot)) {
             drawFittedInsert(g, img, cropFor(img.src, img, mv.shotImage(view.cache?.record, sourceShot)?.split).rect,
-                w, h, motion === 'push' ? (1 + 0.05 * p) / 1.05 : 1);
+                w, h, motion === 'push' ? (1 + 0.05 * p) / 1.05 : 1,
+                mv.shotImage(view.cache?.record, sourceShot)?.editMode !== 'cutout');
         } else drawCover(g, img, w, h, motion === 'push' ? 1 + 0.05 * p : 1, 0, 0);
     } else {
         g.fillStyle = '#8b95a3'; g.font = `${Math.round(w * 0.04)}px sans-serif`; g.textAlign = 'center';
@@ -91811,11 +92047,13 @@ function syncEditorPlayback(record, song, t) {
     }
     if (follow && changed) {
         const start = view.stripStart || 0;
-        if (number - 1 < start || number - 1 >= start + 12) {
-            view.stripStart = Math.floor((number - 1) / 12) * 12;
+        if (number - 1 < start || number - 1 >= start + editor_ui.EDITOR_PAGE_SIZE) {
+            view.stripStart = Math.floor((number - 1) / editor_ui.EDITOR_PAGE_SIZE) * editor_ui.EDITOR_PAGE_SIZE;
             const film = body()?.querySelector?.('[data-rmt-mv-filmstrip]');
-            if (film) { const { strip, stripNav } = editorStrip(rows, record); film.innerHTML = `<div class="rmt-mv-strip">${strip}</div>${stripNav}`; }
+            if (film) { const { strip, stripNav } = editorStrip(rows, record); film.innerHTML = editor_ui.editorFilmstripMarkup({ btn, selectedLabel: `第 ${number} 镜 · ${rows.length} 镜`, strip, stripNav }); }
         }
+        const selection = body()?.querySelector?.('[data-rmt-mv-selection]');
+        if (selection) selection.textContent = `第 ${number} 镜 · ${rows.length} 镜`;
     }
     for (const button of document.querySelectorAll('.rmt-mve-filmstrip [data-rmt-mv="select-shot"]')) {
         const current = button.dataset.rmtMvId === row.shot.id;
@@ -92217,7 +92455,7 @@ function handleMvClick(event) {
     if (action === 'open') { openMv({ songId: id }); return true; }
     if (runtimeState.activeMode !== MV_MODE) return true;
     // Closing must remain available even if this song/archive became unreadable.
-    if (action === 'editor-drawer' && !['export', 'more', 'audio'].includes(id)) { closeEditorDrawer(); return true; }
+    if (action === 'editor-drawer' && !['export', 'more', 'audio', 'shots'].includes(id)) { closeEditorDrawer(); return true; }
     const d = view.draft ||= mv.normalizeSettings(currentRecord()?.settings);
     const record = currentRecord();
     const opened = viewTarget();
@@ -92237,7 +92475,7 @@ function handleMvClick(event) {
             if (!player.exporting && ['-1', '1'].includes(id)) {
                 const rows = mv.shotTimeline(record, currentSong()).rows;
                 const index = rows.findIndex(row => row.shot.id === view.selected) + Number(id), next = rows[index];
-                if (next) { view.selected = next.shot.id; view.stripStart = Math.floor(index / 12) * 12; seekEditor(next.start); renderMv(); }
+                if (next) { view.selected = next.shot.id; view.stripStart = Math.floor(index / editor_ui.EDITOR_PAGE_SIZE) * editor_ui.EDITOR_PAGE_SIZE; seekEditor(next.start); renderMv(); }
             }
         }
         else if (action === 'editor-drawer') {
@@ -92370,7 +92608,15 @@ function handleMvClick(event) {
         }
         else if (action === 'download-table') download(new Blob([mv.timetableText(record, currentSong())], { type: 'text/plain;charset=utf-8' }), `${safeName(currentSong().title)}-镜头时间表.txt`);
         else if (action === 'download-srt') download(new Blob([mv.srtText(record, currentSong())], { type: 'application/x-subrip;charset=utf-8' }), `${safeName(currentSong().title)}.srt`);
-        else if (action === 'select-shot') { const row = mv.shotTimeline(record, currentSong()).rows.find(r => r.shot.id === id); if (row) { view.selected = id; seekEditor(row.start); renderMv(); } }
+        else if (action === 'select-shot') {
+            const rows = mv.shotTimeline(record, currentSong()).rows, index = rows.findIndex(r => r.shot.id === id), row = rows[index];
+            if (row) {
+                view.selected = id;
+                view.stripStart = Math.floor(index / editor_ui.EDITOR_PAGE_SIZE) * editor_ui.EDITOR_PAGE_SIZE;
+                if (view.editorDrawer === 'shots') view.editorDrawer = '';
+                seekEditor(row.start); renderMv();
+            }
+        }
         else if (action === 'use-group-image') {
             if (mv.isV2(record) && record.shots.some(s => s.id === id)) {
                 imageImports.delete(mv_media.mediaKey('img', opened.scope, opened.songId, id));
@@ -92825,10 +93071,39 @@ function drawCropCover(g, img, rect, w, h, scale = 1) {
 // All foreground paths use this for an already composed local insert, including
 // complete pictures and unreadable/opaque cutout fallbacks. Preserve the whole
 // selected cell. Backgrounds and standing stage actors keep their own placement.
-function drawFittedInsert(g, img, rect, w, h, zoom = 1) {
+function fittedBackdrop(img, rect) {
+    let cells = fittedBackdropCache.get(img);
+    if (!cells) { cells = new Map(); fittedBackdropCache.set(img, cells); }
+    const key = rect.join(':');
+    if (cells.has(key)) return cells.get(key);
+    let backdrop = null;
+    try {
+        // A tiny, display-only copy softens the picture's colours without a
+        // Canvas filter (which is not available in every supported WebView).
+        // Cache by image and selected cell; never rasterize on every frame.
+        const small = document.createElement('canvas'); small.width = 12; small.height = 12;
+        const context = small.getContext('2d', { willReadFrequently: true });
+        context.drawImage(img, ...rect, 0, 0, 12, 12);
+        const pixels = context.getImageData(0, 0, 12, 12).data;
+        let opaque = true;
+        for (let i = 3; i < pixels.length; i += 4) if (pixels[i] < 255) { opaque = false; break; }
+        if (opaque) backdrop = small;
+    } catch { /* Unreadable or transparent images keep their existing background. */ }
+    cells.set(key, backdrop);
+    return backdrop;
+}
+
+function drawFittedInsert(g, img, rect, w, h, zoom = 1, useBackdrop = false) {
     const [sx, sy, sw, sh] = rect;
     const scale = Math.min(w / sw, h / sh) * Math.min(1, Math.max(0.01, zoom));
     const width = sw * scale, height = sh * scale, x = (w - width) / 2, y = (h - height) / 2;
+    if (useBackdrop && (width < w - 0.5 || height < h - 0.5)) {
+        const backdrop = fittedBackdrop(img, rect);
+        if (backdrop) {
+            g.save(); g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high';
+            g.drawImage(backdrop, 0, 0, w, h); g.restore();
+        }
+    }
     g.drawImage(img, sx, sy, sw, sh, x, y, width, height);
     return { x, y, width, height };
 }
@@ -92969,7 +93244,8 @@ function drawSceneV2(g, record, song, rows, index, t, w, h, showText = true) {
         // Local inserts use foreground captions, so no text is lost beneath
         // an opaque saved picture or an unprocessed matte.
         info.opaque = true;
-        info.subject = drawFittedInsert(g, source, rect, w, h, zoom);
+        const useBackdrop = !person && art?.editMode !== 'cutout' && !stage && !mv.hasAssetImage(bgRow?.image || group?.bg);
+        info.subject = drawFittedInsert(g, source, rect, w, h, zoom, useBackdrop);
         return info;
     }
     if (raw && !person) {
@@ -93299,6 +93575,7 @@ __m_archive_archiveFile_js.ARCHIVE_FILE_FORMAT = ARCHIVE_FILE_FORMAT;
 }
 
 __init_core_contentSelection_js();
+__init_core_releaseNotes_js();
 __init_extras_mvAudioSource_js();
 __init_extras_mvCast_js();
 __init_extras_mvDirection_js();
@@ -93309,6 +93586,7 @@ __init_extras_mvStillPrompt_js();
 __init_ui_contentSelection_js();
 __init_ui_mvCastControls_js();
 __init_ui_mvEditorDialog_js();
+__init_ui_mvEditorLayout_js();
 __init_ui_mvEditorUi_js();
 __init_ui_mvImageEditor_js();
 __init_ui_mvImageEditorUi_js();

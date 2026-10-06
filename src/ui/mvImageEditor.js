@@ -20,6 +20,25 @@ export function mountAssetEditor(host, options) {
     const originalRef = options.image?.original || options.image || null;
     const say = text => { if (active) status.textContent = text; };
     const layer = () => find('[data-layer]');
+    const viewport = find('.rmt-mv-editor-viewport');
+    const cursor = find('[data-brush-cursor]');
+    const zoom = () => Number(find('[data-zoom]').value) || 1;
+    let toolsOpen = (root.clientWidth || host.clientWidth || 0) >= 740;
+    let fittedWidth = 0, fittedAspect = 0, viewSize = null;
+    function resetView() {
+        find('[data-zoom]').value = '1'; viewport.scrollTop = 0; viewport.scrollLeft = 0;
+        fittedWidth = 0; viewSize = null;
+    }
+    function brushPreview(event = null) {
+        const size = Number(find('[data-brush]').value) || 20;
+        find('[data-brush-size]').textContent = `${size} 像素`;
+        cursor.hidden = busy || stage !== 'paint' || panning || comparing || brush === 'region' || !source;
+        if (cursor.hidden) return;
+        const r = viewport.getBoundingClientRect();
+        cursor.style.width = `${size}px`; cursor.style.height = `${size}px`;
+        cursor.style.left = `${(viewport.scrollLeft || 0) + (event ? event.clientX - r.left : (viewport.clientWidth || 360) / 2)}px`;
+        cursor.style.top = `${(viewport.scrollTop || 0) + (event ? event.clientY - r.top : (viewport.clientHeight || 180) / 2)}px`;
+    }
     const makeCanvas = (w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; };
     const duplicate = data => new ImageData(new Uint8ClampedArray(data.data), data.width, data.height);
     const load = url => new Promise((resolve, reject) => {
@@ -28,11 +47,19 @@ export function mountAssetEditor(host, options) {
     function dimensions(w, h) { canvas.width = w; canvas.height = h; }
     function show() {
         if (!active) return;
+        root.dataset.toolsOpen = String(toolsOpen);
+        find('.rmt-mvi-tool-scroll').hidden = !toolsOpen;
+        find('[data-edit="tools"]').setAttribute('aria-expanded', String(toolsOpen));
+        find('[data-edit="tools"]').textContent = toolsOpen ? '收起工具' : '展开工具';
         if (stage === 'paint') tool = 'brush';
         find('[data-select-tools]').hidden = stage !== 'select'; find('[data-paint-tools]').hidden = stage !== 'paint';
         find('[data-grid-picker]').hidden = tool === 'crop';
         for (const [action, value] of [['select', 'grid'], ['crop', 'crop'], ['paint', 'brush']]) find(`[data-edit="${action}"]`).setAttribute('aria-pressed', String(tool === value));
         find('[data-edit="compare"]').setAttribute('aria-pressed', String(comparing));
+        find('[data-edit="pan"]').setAttribute('aria-pressed', String(panning));
+        for (const value of ['erase', 'restore', 'region']) find(`[data-edit="${value}"]`).setAttribute('aria-pressed', String(!panning && brush === value));
+        find('[data-zoom-value]').textContent = `${Math.round(zoom() * 100)}%`;
+        cursor.hidden = true;
         if (!source) return;
         if (comparing) { dimensions(source.naturalWidth, source.naturalHeight); g.drawImage(source, 0, 0); }
         else if (stage === 'select') {
@@ -48,12 +75,26 @@ export function mountAssetEditor(host, options) {
             g.strokeStyle = '#ffb800'; g.lineWidth = Math.max(2, canvas.width / 180); g.strokeRect(x, y, w, h);
             find('[data-selection-note]').textContent = `选中 ${w} × ${h} 像素；可重新框选。`;
         } else if (working) { dimensions(working.width, working.height); g.putImageData(working, 0, 0); }
-        const viewport = find('.rmt-mv-editor-viewport');
         const availableWidth = viewport.clientWidth || 360;
         const availableHeight = viewport.clientHeight || (globalThis.innerHeight || 800) * 0.55;
-        const fitted = Math.min(availableWidth, availableHeight * canvas.width / canvas.height);
-        canvas.style.width = `${fitted * Number(find('[data-zoom]').value)}px`;
+        const aspect = canvas.width / canvas.height;
+        // At fit size the image follows the viewport. Once zoomed, opening or
+        // folding tools must reveal/hide pixels, not rescale the image again.
+        const sameImageShape = fittedAspect === aspect;
+        if (zoom() === 1 || !fittedWidth || !sameImageShape) fittedWidth = Math.min(availableWidth, availableHeight * aspect);
+        fittedAspect = aspect;
+        const displayWidth = fittedWidth * zoom(), displayHeight = displayWidth / aspect;
+        canvas.style.width = `${displayWidth}px`;
         canvas.style.maxWidth = 'none';
+        if (zoom() > 1 && sameImageShape && viewSize && (viewSize.width !== availableWidth || viewSize.height !== availableHeight)) {
+            // Keep the inspected detail near the centre when the tool dock or
+            // host viewport changes, including phone rotation.
+            const x = viewSize.imageWidth <= viewSize.width ? 0.5 : ((viewport.scrollLeft || 0) + viewSize.width / 2) / viewSize.imageWidth;
+            const y = viewSize.imageHeight <= viewSize.height ? 0.5 : ((viewport.scrollTop || 0) + viewSize.height / 2) / viewSize.imageHeight;
+            viewport.scrollLeft = Math.max(0, x * displayWidth - availableWidth / 2);
+            viewport.scrollTop = Math.max(0, y * displayHeight - availableHeight / 2);
+        }
+        viewSize = { width: availableWidth, height: availableHeight, imageWidth: displayWidth, imageHeight: displayHeight };
         canvas.style.touchAction = panning || comparing ? 'pan-x pan-y' : 'none';
         find('[data-image-size]').textContent = `${canvas.width} × ${canvas.height}`;
     }
@@ -65,14 +106,14 @@ export function mountAssetEditor(host, options) {
     }
     function applyCrop() {
         if (!source) return;
-        try { original = selectPixels(); working = duplicate(original); history.length = 0; changed = true; selectionDirty = false; restoreOriginal = false; stage = 'paint'; layer().checked = false; show(); say('已选定单格。可以直接保存，或继续处理背景。'); }
+        try { original = selectPixels(); working = duplicate(original); history.length = 0; changed = true; selectionDirty = false; restoreOriginal = false; stage = 'paint'; panning = false; resetView(); layer().checked = false; show(); say('已选定画面。可保存，或继续抠图修边。'); }
         catch { say('这张图片无法读取像素。可先下载原图，再从“导入图片”打开；提示词仍可编辑。'); }
     }
     function pushUndo() { if (working) history.push({ data: duplicate(working), layer: layer().checked }); }
     function autoCutout() {
         if (!working) { say('请先载入图片。'); return; }
         if (selectionDirty) { say('请先点“使用选中画面”，再一键抠图。'); return; }
-        stage = 'paint';
+        stage = 'paint'; panning = false;
         const prepared = pixels.prepareCutoutPixels(working.data, working.width, working.height, { multiple: options.multipleCharacters, reference: original?.data || working.data });
         if (!prepared.data) {
             show();
@@ -108,6 +149,7 @@ export function mountAssetEditor(host, options) {
     canvas.addEventListener('pointerdown', event => {
         if (busy || panning || comparing || !source || pointerId !== null) return;
         event.preventDefault(); pointerId = event.pointerId; canvas.setPointerCapture?.(pointerId); anchor = point(event);
+        brushPreview(event);
         if (stage === 'paint' && working) {
             pushUndo();
             if (brush === 'region') {
@@ -121,6 +163,7 @@ export function mountAssetEditor(host, options) {
         }
     });
     canvas.addEventListener('pointermove', event => {
+        brushPreview(event);
         if (event.pointerId !== pointerId || !anchor) return;
         event.preventDefault(); const next = point(event);
         if (stage === 'paint' && working) { if (brush !== 'region') paint(anchor, next); anchor = next; }
@@ -130,8 +173,20 @@ export function mountAssetEditor(host, options) {
     });
     const endStroke = event => { if (event.pointerId === pointerId) { if (stage === 'paint') compactUndo(); anchor = null; pointerId = null; } };
     canvas.addEventListener('pointerup', endStroke); canvas.addEventListener('pointercancel', endStroke); canvas.addEventListener('lostpointercapture', endStroke);
-    find('[data-grid]').addEventListener('change', event => { grid = event.target.value; stage = 'select'; tool = 'grid'; comparing = false; if (grid !== 'free') { const [rows, cols] = grid.split(':').map(Number); crop = pixels.gridCrop(rows, cols, 0); selectionDirty = true; } show(); });
-    find('[data-zoom]').addEventListener('input', show);
+    canvas.addEventListener('pointerleave', () => { cursor.hidden = true; });
+    viewport.addEventListener('scroll', () => { cursor.hidden = true; }, { passive: true });
+    find('[data-grid]').addEventListener('change', event => { grid = event.target.value; stage = 'select'; tool = 'grid'; panning = false; comparing = false; if (grid !== 'free') { const [rows, cols] = grid.split(':').map(Number); crop = pixels.gridCrop(rows, cols, 0); selectionDirty = true; } show(); });
+    find('[data-zoom]').addEventListener('input', () => {
+        const before = canvas.getBoundingClientRect(), area = viewport.getBoundingClientRect();
+        const width = viewport.clientWidth || 360, height = viewport.clientHeight || 180;
+        const x = Math.max(0, Math.min(1, (area.left + width / 2 - before.left) / Math.max(1, before.width)));
+        const y = Math.max(0, Math.min(1, (area.top + height / 2 - before.top) / Math.max(1, before.height)));
+        show();
+        const after = canvas.getBoundingClientRect();
+        viewport.scrollLeft = Math.max(0, x * after.width - width / 2);
+        viewport.scrollTop = Math.max(0, y * after.height - height / 2);
+    });
+    find('[data-brush]').addEventListener('input', () => brushPreview());
     layer().addEventListener('change', () => { changed = true; restoreOriginal = false; });
     async function blobOfWorking() {
         if (!working) throw new Error('no pixels');
@@ -156,22 +211,24 @@ export function mountAssetEditor(host, options) {
         root.querySelectorAll('[data-matte]').forEach(item => item.setAttribute('aria-pressed', String(item === button)));
     }));
     root.addEventListener('click', async event => {
-        const button = event.target.closest('[data-edit]'); if (!button || busy) return;
+        const button = event.target.closest('[data-edit]'); if (!button) return;
         event.preventDefault(); const action = button.dataset.edit;
         if (action === 'close') { options.onClose(); return; }
+        if (busy) return;
+        if (action === 'tools') { toolsOpen = !toolsOpen; show(); return; }
         if (action === 'default-prompt') { prompt.value = options.defaultPrompt || ''; return; }
         if (importing) { say('图片正在读取，请稍候再保存或编辑。'); return; }
         if (action === 'compare') { comparing = !comparing; show(); return; }
-        if (action === 'fit') { find('[data-zoom]').value = '1'; const viewport = find('.rmt-mv-editor-viewport'); viewport.scrollTop = 0; viewport.scrollLeft = 0; show(); return; }
+        if (action === 'fit') { resetView(); show(); return; }
         const wasComparing = comparing; comparing = false;
         if (wasComparing) show();
-        if (action === 'pan') { panning = !panning; button.setAttribute('aria-pressed', String(panning)); button.textContent = panning ? '继续编辑' : '移动画布'; show(); return; }
-        if (action === 'select' || action === 'crop') { stage = 'select'; tool = action === 'crop' ? 'crop' : 'grid'; if (tool === 'crop') { grid = 'free'; find('[data-grid]').value = grid; } show(); return; }
-        if (action === 'paint') { if (!working || selectionDirty) applyCrop(); else { stage = 'paint'; show(); } return; }
+        if (action === 'pan') { panning = !panning; show(); return; }
+        if (action === 'select' || action === 'crop') { toolsOpen = true; stage = 'select'; panning = false; tool = action === 'crop' ? 'crop' : 'grid'; if (tool === 'crop') { grid = 'free'; find('[data-grid]').value = grid; } show(); return; }
+        if (action === 'paint') { toolsOpen = true; panning = false; if (!working || selectionDirty) applyCrop(); else { stage = 'paint'; show(); } return; }
         if (action === 'apply-crop') { applyCrop(); return; }
         if (action === 'full-crop') { crop = { x: 0, y: 0, w: 1, h: 1 }; grid = 'free'; find('[data-grid]').value = grid; applyCrop(); return; }
         if (action === 'erase' || action === 'restore' || action === 'region') {
-            brush = action; for (const value of ['erase', 'restore', 'region']) find(`[data-edit="${value}"]`).setAttribute('aria-pressed', String(value === brush)); return;
+            brush = action; panning = false; show(); brushPreview(); return;
         }
         if (action === 'undo') { const last = history.pop(); if (last) {
             if (last.data) working = last.data;
@@ -183,6 +240,7 @@ export function mountAssetEditor(host, options) {
         if (action === 'original') {
             // Restore the saved original reference without rewriting or deleting its pixels.
             restoreOriginal = true; changed = true; selectionDirty = false; sourceBlob = null; crop = { x: 0, y: 0, w: 1, h: 1 }; history.length = 0;
+            resetView(); panning = false;
             const token = ++loadToken;
             try { if (options.sourceUrl) { const img = await load(options.sourceUrl); if (!active || token !== loadToken) return; source = img; original = selectPixels(); working = duplicate(original); layer().checked = false; stage = 'paint'; show(); say('原图已恢复，保存后生效。'); } }
             catch { say('原图暂时无法读取；保存仍可恢复原图引用。'); }
@@ -191,7 +249,9 @@ export function mountAssetEditor(host, options) {
         const saving = action === 'save' || action === 'save-next';
         if (!saving && action !== 'download') return;
         if (saving && selectionDirty) { say('请先点“使用选中画面”，确认单格预览。'); return; }
-        busy = true; root.querySelectorAll('button,input,select,textarea').forEach(el => { el.disabled = true; });
+        busy = true; cursor.hidden = true;
+        root.querySelectorAll('button,input,select,textarea').forEach(el => { el.disabled = el.dataset.edit !== 'close'; });
+        say(saving ? '正在保存修改…' : '正在准备 PNG…');
         try {
             const blob = (action === 'download' || (changed && !restoreOriginal)) ? await blobOfWorking() : null;
             if (!active) return;

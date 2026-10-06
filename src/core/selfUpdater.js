@@ -1,5 +1,7 @@
+import { RELEASE_README } from './releaseNotes.js';
+
 const UPDATE_STATE = Symbol.for('heartbeatMemories.selfUpdate');
-export const INSTALLED_BUILD = '1.0.25';
+export const INSTALLED_BUILD = '1.0.28';
 const PROJECT_REMOTE = 'https://github.com/zaiyebuzuoyouqingdetiangou/tokimemo';
 function updateError(message) { const error = new Error(message); error.userMessage = message; return error; }
 
@@ -234,23 +236,52 @@ export function parseHearttraceChangelog(text) {
     return sections;
 }
 
-export async function loadHearttraceChangelog({ remoteUrl = HOMEPAGE, remoteBranch = FALLBACK_BRANCH, fetcher = globalThis.fetch.bind(globalThis), moduleUrl = import.meta.url } = {}) {
+export function parseHearttraceReadme(text) {
+    const input = String(text || '').replace(/^\uFEFF/, '');
+    const heading = /^#\s+(.+?)\s+(\d+\.\d+\.\d+(?:-[\w.-]+)?)\s*$/m.exec(input);
+    if (!heading) return [];
+    const groups = [];
+    let group = null, paragraph = '';
+    const flush = () => { if (paragraph && group) group.items.push(paragraph); paragraph = ''; };
+    for (const raw of input.split(/\r?\n/)) {
+        const line = raw.trim();
+        if (/^#{1,6}\s/.test(line)) {
+            flush();
+            const match = /^##\s+(更新日志模块|本次变动|本次更新)\s*$/.exec(line);
+            group = match ? { title: match[1], items: [] } : null;
+            if (group) groups.push(group);
+            continue;
+        }
+        if (!group) continue;
+        if (!line || line === '---') { flush(); continue; }
+        const item = /^[-*]\s+(.*)$/.exec(line);
+        if (item) { flush(); paragraph = item[1]; }
+        else paragraph = paragraph ? `${paragraph} ${line}` : line;
+    }
+    flush();
+    const items = groups.flatMap(row => row.items);
+    return items.length ? [{ version: heading[2], title: heading[1], groups, items }] : [];
+}
+
+export async function loadHearttraceChangelog({ source = 'installed', remoteUrl = HOMEPAGE, remoteBranch = FALLBACK_BRANCH, fetcher = globalThis.fetch } = {}) {
+    // The installed README is embedded by build.py. Opening its notes needs
+    // neither a network connection nor an unrelated remote history file.
+    if (source !== 'remote') {
+        const sections = parseHearttraceReadme(RELEASE_README);
+        return { ok: sections.length > 0, source: 'readme', sections,
+            ...(sections.length ? {} : { message: '当前安装包没有可读取的更新说明。' }) };
+    }
     const branch = String(remoteBranch || FALLBACK_BRANCH).trim() || FALLBACK_BRANCH;
     const urls = [...new Set([
-        remoteFileUrl(remoteUrl, 'CHANGELOG.md', branch, false),
-        remoteFileUrl(remoteUrl, 'CHANGELOG.md', branch, true),
+        remoteFileUrl(remoteUrl, 'README.md', branch, false),
+        remoteFileUrl(remoteUrl, 'README.md', branch, true),
     ].filter(Boolean))];
-    try {
-        const local = new URL('../CHANGELOG.md', moduleUrl);
-        local.searchParams.set('rmt-check', String(Date.now()));
-        urls.push(local.href);
-    } catch {}
     for (const url of urls) {
         const text = await readRemoteText(url, fetcher, 'changelog');
-        const sections = parseHearttraceChangelog(text);
-        if (sections.length) return { ok: true, sections };
+        const sections = parseHearttraceReadme(text);
+        if (sections.length) return { ok: true, source: 'readme', sections };
     }
-    return { ok: false, sections: [], message: '没能读到更新日志。请检查网络后再打开一次。' };
+    return { ok: false, source: 'readme', sections: [], message: '没能读到当前分支的 README 更新说明。请检查网络后再打开一次。' };
 }
 
 export async function checkHearttraceUpdate({ force = false, moduleUrl = import.meta.url, origin = globalThis.location?.origin, fetcher = globalThis.fetch.bind(globalThis) } = {}) {

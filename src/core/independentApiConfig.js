@@ -667,7 +667,7 @@ export function emptyFinalFailure(summary) {
 
 // Public ConnectionManager streaming contract: cumulative text + separate reasoning.
 // Its API does not expose the provider finish reason; do not manufacture a stop code.
-export async function readProfileCompletion(result, { signal = null } = {}) {
+export async function readProfileCompletion(result, { signal = null, onProgress = null } = {}) {
     if (typeof result !== 'function') return result;
     const iterator = result();
     if (!iterator || typeof iterator.next !== 'function') throw apiError('连接未提供可读取的流式结果。', 'RMT_RESPONSE_FORMAT');
@@ -689,6 +689,7 @@ export async function readProfileCompletion(result, { signal = null } = {}) {
                 || (Number.isFinite(core_constants.MAX_MANUAL_API_RESPONSE_BYTES) && new TextEncoder().encode(next).byteLength > core_constants.MAX_MANUAL_API_RESPONSE_BYTES)
                 || reasoningChars > core_constants.MAX_MANUAL_API_RESPONSE_BYTES) throw apiError('流式响应超过安全范围。', 'RMT_MANUAL_RESPONSE_TOO_LARGE');
             content = next;
+            onProgress?.();
         }
     } catch (error) {
         if (signal?.aborted || error?.name === 'AbortError') throw streamAbortReason(signal);
