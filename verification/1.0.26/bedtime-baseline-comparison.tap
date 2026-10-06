@@ -1,0 +1,124 @@
+TAP version 13
+# Subtest: new custom questionnaire is conveyed intact as the creative request, not discarded as untrusted commands
+ok 1 - new custom questionnaire is conveyed intact as the creative request, not discarded as untrusted commands
+  ---
+  duration_ms: 2.398605
+  type: 'test'
+  ...
+# Subtest: archived plot context accompanies the request without mutating the archive
+ok 2 - archived plot context accompanies the request without mutating the archive
+  ---
+  duration_ms: 0.314016
+  type: 'test'
+  ...
+# Subtest: new story does not receive an unrelated prior story as its continuation
+ok 3 - new story does not receive an unrelated prior story as its continuation
+  ---
+  duration_ms: 1.61255
+  type: 'test'
+  ...
+# Subtest: empty request remains optional and keeps a normal story default
+ok 4 - empty request remains optional and keeps a normal story default
+  ---
+  duration_ms: 0.380133
+  type: 'test'
+  ...
+# Subtest: continue without a request includes all existing chapters and advances only one chapter
+ok 5 - continue without a request includes all existing chapters and advances only one chapter
+  ---
+  duration_ms: 2.077759
+  type: 'test'
+  ...
+# Subtest: custom continuation carries both the current direction and the exact original story
+ok 6 - custom continuation carries both the current direction and the exact original story
+  ---
+  duration_ms: 0.481815
+  type: 'test'
+  ...
+# Subtest: questionnaire, list and letter bodies are accepted without a narrative-only validator
+ok 7 - questionnaire, list and letter bodies are accepted without a narrative-only validator
+  ---
+  duration_ms: 0.838503
+  type: 'test'
+  ...
+# Subtest: continuation appends and preserves old chapter bytes, title, premise and other stories
+ok 8 - continuation appends and preserves old chapter bytes, title, premise and other stories
+  ---
+  duration_ms: 0.655101
+  type: 'test'
+  ...
+# Subtest: long requirements retain their last instruction, with no new length gate or truncation
+ok 9 - long requirements retain their last instruction, with no new length gate or truncation
+  ---
+  duration_ms: 6.240665
+  type: 'test'
+  ...
+# Subtest: new plans keep a recoverable prompt revision, preserving the direction across JSON round trips
+ok 10 - new plans keep a recoverable prompt revision, preserving the direction across JSON round trips
+  ---
+  duration_ms: 0.395175
+  type: 'test'
+  ...
+# Subtest: legacy new and continuation plans reproduce the exact previous prompt bytes
+ok 11 - legacy new and continuation plans reproduce the exact previous prompt bytes
+  ---
+  duration_ms: 2.025873
+  type: 'test'
+  ...
+# Subtest: requirements remain JSON-encoded; reference commands do not become creative instructions
+ok 12 - requirements remain JSON-encoded; reference commands do not become creative instructions
+  ---
+  duration_ms: 0.335918
+  type: 'test'
+  ...
+# Subtest: the composed outgoing request keeps the custom requirement, archive and controlled character context
+ok 13 - the composed outgoing request keeps the custom requirement, archive and controlled character context
+  ---
+  duration_ms: 2.74615
+  type: 'test'
+  ...
+# Subtest: UI explains one optional input for both new work and continuation; both actions remain available
+ok 14 - UI explains one optional input for both new work and continuation; both actions remain available
+  ---
+  duration_ms: 3.057112
+  type: 'test'
+  ...
+# Subtest: read-only UI retains the reader and hides generation actions
+ok 15 - read-only UI retains the reader and hides generation actions
+  ---
+  duration_ms: 0.566089
+  type: 'test'
+  ...
+# Subtest: plain-text rendering escapes executable markup in questionnaire answers
+ok 16 - plain-text rendering escapes executable markup in questionnaire answers
+  ---
+  duration_ms: 0.59395
+  type: 'test'
+  ...
+# Subtest: generation still uses one validated segment, the original settings and the supplied context envelope
+ok 17 - generation still uses one validated segment, the original settings and the supplied context envelope
+  ---
+  duration_ms: 0.78251
+  type: 'test'
+  ...
+# Subtest: invalid target still fails before generation; existing story stays unchanged
+ok 18 - invalid target still fails before generation; existing story stays unchanged
+  ---
+  duration_ms: 2.616298
+  type: 'test'
+  ...
+# Subtest: explicit new/next-chapter actions send the current input without selecting an unrelated pending task
+ok 19 - explicit new/next-chapter actions send the current input without selecting an unrelated pending task
+  ---
+  duration_ms: 2.257135
+  type: 'test'
+  ...
+1..19
+# tests 19
+# suites 0
+# pass 19
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 750.968726

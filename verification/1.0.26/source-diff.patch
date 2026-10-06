@@ -1,0 +1,272 @@
+--- 1.0.25/CHANGELOG.md
++++ 1.0.26/CHANGELOG.md
+@@ -1,3 +1,10 @@
++# 1.0.26 · 预览画幅与特写补边
++
++- 剪辑台预览按影片比例占用空间，横屏画面使用可用宽度，工具区按预览实际高度排列。
++- 完整特写保留原构图；比例不匹配且没有已选背景时，用当前图片的柔化色彩补齐空边，预览与导出一致。透明素材、已有舞台背景、手动选格和原图保留。
++- README 仅保留更新日志模块的致谢与本次变动；安装包排除工作流。
++- 代码与原生 Canvas 检查不代替 iPhone／TT 真机验收。
++
+ # 1.0.25 · 分镜接收、图片编辑与录屏音源
+ 
+ - 新增了更新日志板块，感谢@nancyindaeyo的更新。保留上传包中的当前分支检测、更新和日志入口。
+--- 1.0.25/README.md
++++ 1.0.26/README.md
+@@ -1,24 +1,11 @@
+-# 心迹回廊 1.0.25
++# 心迹回廊 1.0.26
+ 
+-SillyTavern 角色聊天扩展：整理回忆档案，创作相簿、剧情、印象曲和手书。
++## 更新日志模块
+ 
+-## 本次更新
++新增了更新日志板块，感谢@nancyindaeyo的更新。
+ 
+-- 新增了更新日志板块，感谢@nancyindaeyo的更新。设置标题旁可查看说明、检查当前分支更新。
+-- 分镜生成、补写和单镜改写优先使用流式接收，减少等待完整回复的情况；不减提示词、不降最大输出、不偷偷重试。明确设置了完整响应的连接仍沿用该设置。
+-- 图片编辑改为大画布：手机默认收起工具，点选格／裁切／修边再展开，随时可收起；PC 宽窗口使用双栏。底部“撤销、保存修改、保存并下一镜”常驻，保存按钮突出显示。收起工具不会把已放大的图片再放大，也不会丢失修改。
+-- 修复“移动画布后选擦除却没反应”；笔刷带大小数字和圆形预览，缩放显示百分比，点“看全图”复位。滑条改为细轨道，裁切后自动显示完整选区，保存等待时仍能返回。
+-- MV 待保存结果支持单条／全部清除；“更多／歌曲／导出”面板固定关闭区、独立滚动，不删除已保存作品。
+-- 智绘姬分镜请求使用剪辑台的精确画幅；修正贴边抠图的手臂与身体断口悬空。原图、特写完整入画、手动选格保留。
+-- 手书只用一个音乐入口、一个播放进度；加入 MP4／MOV／M4V 录屏音源试用，导入失败保留原音乐。
+-- 保留图片编辑、裁切修边、片头片尾、定段定句、字幕、导出及暂存恢复。只对表情卡拍默认抠图，其他类型保留完整分镜背景。
++## 本次变动
+ 
+-503／524 来自模型服务或代理，流式接收不能保证消除它们。若渠道不支持流式，可在设置的高级生成参数中选择“使用完整响应”。尚未完成 PC、iPhone、TT 真机验收及真实 API 复测；录屏音源的播放、同步、有声导出和 Suno 链接仍需实际验证。
+-
+-## 安装与更新
+-
+-扩展地址：`https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo`
+-
+-支持 SillyTavern 1.13.0 及以上。更新前先保存编辑，完整覆盖插件代码后刷新酒馆，版本为 **1.0.25**。同号旧包也需要刷新；不会清除聊天、档案、分镜或图片。
+-
+-详细说明见 [更新日志](./CHANGELOG.md)，使用范围见 [许可证](./LICENSE)。完整 ZIP 不含 GitHub 工作流。
++- 修正手书剪辑台的预览比例，横向影片按可用宽度显示，减少画面外侧多余的空区。
++- 牵手、脸部等特写保留完整构图；完整图片与影片比例不同时，在没有已选背景的情况下，用当前图片的柔化色彩补齐空边。已有舞台背景、透明素材和手动选格继续保留。
++- 预览与导出使用同一取景处理，已有图片和分镜无需重新生成。
+--- 1.0.25/manifest.json
++++ 1.0.26/manifest.json
+@@ -1,15 +1,15 @@
+ {
+     "display_name": "心迹回廊",
+     "loading_order": 110,
+-    "js": "index.js?heartbeat=1.0.25&layout=5",
++    "js": "index.js?heartbeat=1.0.26&layout=6",
+     "author": "Toto",
+-    "version": "1.0.25",
++    "version": "1.0.26",
+     "auto_update": true,
+     "minimum_client_version": "1.13.0",
+     "hooks": {
+         "disable": "onDisable",
+         "clean": "onClean"
+     },
+-    "description": "心迹回廊：新增更新日志板块，统一音乐入口，支持本地录屏音源试用，保留现有编辑功能。",
++    "description": "心迹回廊：修正手书预览比例与特写补边，保留已有图片、分镜及更新日志板块。",
+     "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
+ }
+--- 1.0.25/index.js
++++ 1.0.26/index.js
+@@ -1,5 +1,5 @@
+-const VERSION = '1.0.25';
+-const BUILD = '1.0.25';
++const VERSION = '1.0.26';
++const BUILD = '1.0.26';
+ 
+ const SETTINGS_ID = 'heartbeat_memories_settings';
+ const MENU_ID = 'heartbeat_memories_menu_item';
+@@ -566,7 +566,7 @@
+     if (bootPromise) return bootPromise;
+     const startedAt = globalThis.performance?.now?.() ?? Date.now();
+     bootPromise = (async () => {
+-        const module = await import(`./dist/heartbeatMemories.bundle.js?heartbeat=${BUILD}&layout=5`);
++        const module = await import(`./dist/heartbeatMemories.bundle.js?heartbeat=${BUILD}&layout=6`);
+         if (disabled) return module;
+         stopBootstrapMountTimer();
+         stopBootstrapAutoUpdates();
+--- 1.0.25/src/ui/mvView.js
++++ 1.0.26/src/ui/mvView.js
+@@ -30,6 +30,7 @@
+ const view = { songId: '', scope: '', epoch: 0, sub: 'board', step: 1, draft: null, mode: 'tegaki', shotId: '', copied: '', selected: '', drawingAll: false, stopAll: false, tapIndex: 0 };
+ const audioBySong = new Map();
+ const images = new Map();
++const fittedBackdropCache = new WeakMap();
+ const localUrls = new Map();
+ const loadingLocal = new Map();
+ const imageImports = new Map();
+@@ -1268,7 +1269,8 @@
+         const motion = mv.motionOf((lead >= 0 ? rows[lead] : row).shot.motion);
+         if (stage_canvas.isDetailInsert(null, null, sourceShot)) {
+             drawFittedInsert(g, img, cropFor(img.src, img, mv.shotImage(view.cache?.record, sourceShot)?.split).rect,
+-                w, h, motion === 'push' ? (1 + 0.05 * p) / 1.05 : 1);
++                w, h, motion === 'push' ? (1 + 0.05 * p) / 1.05 : 1,
++                mv.shotImage(view.cache?.record, sourceShot)?.editMode !== 'cutout');
+         } else drawCover(g, img, w, h, motion === 'push' ? 1 + 0.05 * p : 1, 0, 0);
+     } else {
+         g.fillStyle = '#8b95a3'; g.font = `${Math.round(w * 0.04)}px sans-serif`; g.textAlign = 'center';
+@@ -2403,10 +2405,39 @@
+ // All foreground paths use this for an already composed local insert, including
+ // complete pictures and unreadable/opaque cutout fallbacks. Preserve the whole
+ // selected cell. Backgrounds and standing stage actors keep their own placement.
+-function drawFittedInsert(g, img, rect, w, h, zoom = 1) {
++function fittedBackdrop(img, rect) {
++    let cells = fittedBackdropCache.get(img);
++    if (!cells) { cells = new Map(); fittedBackdropCache.set(img, cells); }
++    const key = rect.join(':');
++    if (cells.has(key)) return cells.get(key);
++    let backdrop = null;
++    try {
++        // A tiny, display-only copy softens the picture's colours without a
++        // Canvas filter (which is not available in every supported WebView).
++        // Cache by image and selected cell; never rasterize on every frame.
++        const small = document.createElement('canvas'); small.width = 12; small.height = 12;
++        const context = small.getContext('2d', { willReadFrequently: true });
++        context.drawImage(img, ...rect, 0, 0, 12, 12);
++        const pixels = context.getImageData(0, 0, 12, 12).data;
++        let opaque = true;
++        for (let i = 3; i < pixels.length; i += 4) if (pixels[i] < 255) { opaque = false; break; }
++        if (opaque) backdrop = small;
++    } catch { /* Unreadable or transparent images keep their existing background. */ }
++    cells.set(key, backdrop);
++    return backdrop;
++}
++
++function drawFittedInsert(g, img, rect, w, h, zoom = 1, useBackdrop = false) {
+     const [sx, sy, sw, sh] = rect;
+     const scale = Math.min(w / sw, h / sh) * Math.min(1, Math.max(0.01, zoom));
+     const width = sw * scale, height = sh * scale, x = (w - width) / 2, y = (h - height) / 2;
++    if (useBackdrop && (width < w - 0.5 || height < h - 0.5)) {
++        const backdrop = fittedBackdrop(img, rect);
++        if (backdrop) {
++            g.save(); g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high';
++            g.drawImage(backdrop, 0, 0, w, h); g.restore();
++        }
++    }
+     g.drawImage(img, sx, sy, sw, sh, x, y, width, height);
+     return { x, y, width, height };
+ }
+@@ -2547,7 +2578,8 @@
+         // Local inserts use foreground captions, so no text is lost beneath
+         // an opaque saved picture or an unprocessed matte.
+         info.opaque = true;
+-        info.subject = drawFittedInsert(g, source, rect, w, h, zoom);
++        const useBackdrop = !person && art?.editMode !== 'cutout' && !stage && !mv.hasAssetImage(bgRow?.image || group?.bg);
++        info.subject = drawFittedInsert(g, source, rect, w, h, zoom, useBackdrop);
+         return info;
+     }
+     if (raw && !person) {
+--- 1.0.25/src/ui/mvEditorUi.js
++++ 1.0.26/src/ui/mvEditorUi.js
+@@ -133,16 +133,17 @@
+ ${r} .rmt-mve-projectbar>button{font-size:12px!important;min-height:34px;padding:5px 12px;border-radius:999px;max-width:60%;min-width:0;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+ ${r} .rmt-mve-projectbar .rmt-mve-meta{flex:1;display:block;min-width:0;padding:0;font-size:11px!important;line-height:1.5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+ ${r} .rmt-mve-layout-scope{display:flex;flex:1;min-height:0;min-width:0}
+-${r} .rmt-mve-workspace{--rmt-mve-preview-min:320px;--rmt-mve-tools-min:300px;flex:1;min-height:630px;min-width:0;align-items:stretch;gap:10px;grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(var(--rmt-mve-preview-min),1.1fr) minmax(var(--rmt-mve-tools-min),1fr)}
+-${r} .rmt-mve-workspace[data-editor-tab=shots][data-editor-paged=true]{--rmt-mve-preview-min:360px;min-height:670px}
+-${r} .rmt-mve-workspace[data-editor-tab=timing]{--rmt-mve-preview-min:230px;--rmt-mve-tools-min:390px}
+-${r} .rmt-mve-workspace[data-editor-tab=look]{--rmt-mve-preview-min:230px;--rmt-mve-tools-min:320px}
+-${r} .rmt-mve-preview{display:flex;flex-direction:column;min-height:0;min-width:0;overflow:hidden}
++${r} .rmt-mve-workspace{--rmt-mve-tools-min:300px;flex:1;min-height:630px;min-width:0;align-items:stretch;gap:10px;grid-template-columns:minmax(0,1fr);grid-template-rows:max-content minmax(var(--rmt-mve-tools-min),1fr)}
++${r} .rmt-mve-workspace[data-editor-tab=shots][data-editor-paged=true]{min-height:670px}
++${r} .rmt-mve-workspace[data-editor-tab=timing]{--rmt-mve-tools-min:390px}
++${r} .rmt-mve-workspace[data-editor-tab=look]{--rmt-mve-tools-min:320px}
++${r} .rmt-mve-preview{display:flex;flex-direction:column;min-height:0;min-width:0;align-self:start;overflow:visible}
+ ${r} .rmt-mve-preview-head{display:flex;align-items:center;justify-content:space-between;gap:8px;flex:none;padding:0 0 4px;font-size:11px;color:var(--rmt-theme-muted,#63788f)}
+ ${r} .rmt-mve-preview-head>span{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+ ${r} .rmt-mve-preview-actions{display:flex;flex:none;gap:6px}
+ ${r} .rmt-mve-preview-head button{font-size:12px!important;min-height:34px;padding:4px 10px;border-radius:999px;white-space:nowrap}
+-${r} .rmt-mve-preview .rmt-mv-canvas-wrap,${r} .rmt-mve-preview .rmt-mv-canvas-wrap.portrait{position:relative;width:100%;height:auto;min-height:160px;max-width:none;border-radius:10px;display:flex;align-items:center;justify-content:center;overflow:hidden;flex:1 0 160px}
++${r} .rmt-mve-preview .rmt-mv-canvas-wrap{position:relative;width:100%;height:auto;min-height:0;max-width:none;aspect-ratio:16/9;border-radius:10px;display:flex;align-items:center;justify-content:center;overflow:hidden;flex:0 0 auto}
++${r} .rmt-mve-preview .rmt-mv-canvas-wrap.portrait{width:min(100%,300px);aspect-ratio:9/16;margin:0 auto}
+ ${r} .rmt-mve-preview canvas{position:absolute;inset:0;display:block;width:100%;height:100%;max-width:100%;max-height:100%;object-fit:contain}
+ ${r} .rmt-mve-transport{flex:none;padding:3px 0 0;gap:9px}
+ ${r} .rmt-mve-transport>small{font-size:11px!important;white-space:nowrap}
+@@ -173,14 +174,12 @@
+ ${r} .rmt-mve-panel details{padding:0;border-top:0}
+ ${r} .rmt-mve-workspace[data-preview-only=true]{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr)}
+ ${r} .rmt-mve-workspace[data-preview-only=true] .rmt-mve-tools,${r} .rmt-mve-workspace[data-preview-only=true] .rmt-mve-filmstrip{display:none}
+-${r} .rmt-mve-workspace[data-preview-only=true] .rmt-mv-canvas-wrap{flex:1;height:auto}
+ ${r} .rmt-mve-recovery{flex:none;max-height:200px;overflow:auto;padding:8px;margin:0 0 7px;border:1px solid var(--rmt-theme-border,#cddfed);border-radius:12px;background:var(--rmt-theme-surface-solid,#fff)}
+ ${r} .rmt-mve-recovery>summary{font-size:12px!important;min-height:30px;cursor:pointer}
+ @media(min-width:960px){${r} .rmt-x-page.rmt-mv-editor{flex-basis:450px;min-height:450px}${r} .rmt-mve-workspace[data-editor-tab][data-editor-paged]{min-height:340px;grid-template-columns:minmax(0,1fr) 335px;grid-template-rows:minmax(340px,1fr)}}
+-@supports(container-type:inline-size){${r} .rmt-mve-workspace[data-editor-tab]{min-height:630px;grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(var(--rmt-mve-preview-min),1.1fr) minmax(var(--rmt-mve-tools-min),1fr)}${r} .rmt-mve-workspace[data-editor-tab=shots][data-editor-paged=true]{min-height:670px}@container(min-width:740px){${r} .rmt-mve-workspace[data-editor-tab][data-editor-paged]{min-height:340px;grid-template-columns:minmax(0,1fr) 335px;grid-template-rows:minmax(340px,1fr)}}}
++@supports(container-type:inline-size){${r} .rmt-mve-workspace[data-editor-tab]{min-height:630px;grid-template-columns:minmax(0,1fr);grid-template-rows:max-content minmax(var(--rmt-mve-tools-min),1fr)}${r} .rmt-mve-workspace[data-editor-tab=shots][data-editor-paged=true]{min-height:670px}@container(min-width:740px){${r} .rmt-mve-workspace[data-editor-tab][data-editor-paged]{min-height:340px;grid-template-columns:minmax(0,1fr) 335px;grid-template-rows:minmax(340px,1fr)}}}
+ @media(max-height:700px){${r} .rmt-mve-filmstrip .rmt-mv-strip>button{grid-template-rows:30px 18px;height:52px}${r} .rmt-mve-filmstrip .rmt-mv-strip>button img{height:30px!important;max-height:30px}${r} .rmt-mve-head-actions button{min-height:32px}${r} .rmt-mve-projectbar{padding-bottom:4px}${r} .rmt-mve-preview-head{padding:0}${r} .rmt-mve-meta{padding-bottom:2px}}
+ @media(max-height:600px) and (orientation:landscape){${r} .rmt-x-page.rmt-mv-editor{flex-basis:450px;min-height:450px}${r} .rmt-mve-workspace[data-editor-tab][data-editor-paged]{min-height:340px;grid-template-columns:minmax(0,1fr) minmax(250px,.8fr);grid-template-rows:minmax(340px,1fr)}}
+ ${r} .rmt-mve-workspace[data-editor-tab][data-editor-paged][data-preview-only=true]{min-height:340px;grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(340px,1fr)}
+-${r} .rmt-mve-workspace[data-preview-only=true] .rmt-mv-canvas-wrap{flex:1;height:auto}
+ `;
+ }
+--- 1.0.25/src/core/selfUpdater.js
++++ 1.0.26/src/core/selfUpdater.js
+@@ -1,5 +1,5 @@
+ const UPDATE_STATE = Symbol.for('heartbeatMemories.selfUpdate');
+-export const INSTALLED_BUILD = '1.0.25';
++export const INSTALLED_BUILD = '1.0.26';
+ const PROJECT_REMOTE = 'https://github.com/zaiyebuzuoyouqingdetiangou/tokimemo';
+ function updateError(message) { const error = new Error(message); error.userMessage = message; return error; }
+ 
+--- 1.0.25/tools/verification/mv-single-music-regression.mjs
++++ 1.0.26/tools/verification/mv-single-music-regression.mjs
+@@ -84,18 +84,18 @@
+     const f = await fixture(), updater = f.get('core/selfUpdater');
+     const root = path.resolve(process.env.TEST_ROOT || '.');
+     const sections = updater.parseHearttraceChangelog(fs.readFileSync(path.join(root, 'CHANGELOG.md'), 'utf8'));
+-    assert.equal(sections[0].version, '1.0.25');
+-    assert.ok(updater.compareHearttraceVersions('1.0.25', '1.0.24-r84.241-branch-update') > 0);
+-    assert.ok(sections[0].items.some(item => item.includes('@nancyindaeyo')));
++    assert.equal(sections[0].version, '1.0.26');
++    assert.ok(updater.compareHearttraceVersions('1.0.26', '1.0.25') > 0);
++    assert.ok(sections.some(section => section.items.some(item => item.includes('@nancyindaeyo'))));
+ });
+ 
+-test('all current version surfaces use plain 1.0.25 and changelog credit remains', () => {
++test('all current version surfaces use plain 1.0.26 and changelog credit remains', () => {
+     const root = path.resolve(process.env.TEST_ROOT || '.');
+     const manifest = JSON.parse(fs.readFileSync(path.join(root, 'manifest.json'), 'utf8'));
+-    assert.equal(manifest.version, '1.0.25'); assert.equal(manifest.js, 'index.js?heartbeat=1.0.25&layout=5');
+-    assert.match(fs.readFileSync(path.join(root, 'index.js'), 'utf8'), /heartbeat=\$\{BUILD\}&layout=5/);
+-    assert.match(fs.readFileSync(path.join(root, 'index.js'), 'utf8'), /const BUILD = '1\.0\.25';/);
+-    assert.match(fs.readFileSync(path.join(root, 'src/core/selfUpdater.js'), 'utf8'), /INSTALLED_BUILD = '1\.0\.25'/);
++    assert.equal(manifest.version, '1.0.26'); assert.equal(manifest.js, 'index.js?heartbeat=1.0.26&layout=6');
++    assert.match(fs.readFileSync(path.join(root, 'index.js'), 'utf8'), /heartbeat=\$\{BUILD\}&layout=6/);
++    assert.match(fs.readFileSync(path.join(root, 'index.js'), 'utf8'), /const BUILD = '1\.0\.26';/);
++    assert.match(fs.readFileSync(path.join(root, 'src/core/selfUpdater.js'), 'utf8'), /INSTALLED_BUILD = '1\.0\.26'/);
+     const readme = fs.readFileSync(path.join(root, 'README.md'), 'utf8');
+     assert.match(readme, /新增了更新日志板块，感谢@nancyindaeyo的更新。/);
+     assert.doesNotMatch(readme, /r84|1\.0\.2[0-4]/);
+--- 1.0.25/tools/verification/mv-mobile-height-regression.mjs
++++ 1.0.26/tools/verification/mv-mobile-height-regression.mjs
+@@ -49,7 +49,10 @@
+     const css = f.get('ui/mvEditorUi').editorCss('#test');
+     assert.match(css, /\.rmt-body\.rmt-mve-body[^}]*overflow:auto!important/);
+     assert.match(css, /\.rmt-x-page\.rmt-mv-editor\{[^}]*min-height:740px/);
+-    assert.match(css, /\.rmt-mv-canvas-wrap\.portrait\{[^}]*min-height:160px/);
++    // Width plus film ratio replaces the old 160px floor: that floor could
++    // still leave a wide phone preview with a much smaller canvas inside it.
++    assert.match(css, /\.rmt-mve-preview \.rmt-mv-canvas-wrap\{[^}]*aspect-ratio:16\/9[^}]*flex:0 0 auto/);
++    assert.match(css, /\.rmt-mve-preview \.rmt-mv-canvas-wrap\.portrait\{[^}]*aspect-ratio:9\/16/);
+     assert.doesNotMatch(css, /\.rmt-mv-canvas-wrap\.portrait\{[^}]*min-height:40px/);
+     assert.match(css, /\.rmt-body\.rmt-mve-body \.rmt-mve-head h2\{[^}]*font-size:16px!important/);
+     assert.match(css, /\.rmt-body\.rmt-mve-body \.rmt-mve-preview-head button[^}]*font-size:12px!important/);
+--- 1.0.25/tools/verification/package.py
++++ 1.0.26/tools/verification/package.py
+@@ -4,7 +4,7 @@
+ with zipfile.ZipFile(out,'w',zipfile.ZIP_DEFLATED,compresslevel=9) as z:
+  for p in sorted(root.rglob('*')):
+   if not p.is_file():continue
+-  if any(part in {'node_modules','__pycache__'} for part in p.relative_to(root).parts) or p.suffix=='.pyc':continue
++  if any(part in {'node_modules','__pycache__','.git','.github'} for part in p.relative_to(root).parts) or p.suffix=='.pyc':continue
+   assert not p.is_symlink()
+   assert not any(part in {'.git','.github'} for part in p.relative_to(root).parts)
+   i=zipfile.ZipInfo('tokimemo-main/'+str(p.relative_to(root)),date_time=(2026,10,1,0,0,0));i.compress_type=zipfile.ZIP_DEFLATED;i.external_attr=0o100644<<16;z.writestr(i,p.read_bytes())
+@@ -13,6 +13,7 @@
+  assert all(n.startswith('tokimemo-main/') and '..' not in Path(n).parts for n in z.namelist())
+  for name in z.namelist():assert z.read(name)==(root/Path(name).relative_to('tokimemo-main')).read_bytes()
+  manifest=json.loads(z.read('tokimemo-main/manifest.json'));index=z.read('tokimemo-main/index.js').decode();build=re.search(r"^const BUILD = '([^']+)';$",index,re.M)[1];version=re.search(r"^const VERSION = '([^']+)';$",index,re.M)[1]
+- assert manifest['js']=='index.js?heartbeat='+build+'&layout=5';assert manifest['version']==version;assert build==version
++ assert manifest['js']=='index.js?heartbeat='+build+'&layout=6';assert manifest['version']==version;assert build==version
++ assert './dist/heartbeatMemories.bundle.js?heartbeat=${BUILD}&layout=6' in index
+  result={'files':len(z.namelist()),'root':'tokimemo-main/','crc':'pass','exact_source_bytes':True,'version':version,'build':build,'github_workflows':False,'sha256':hashlib.sha256(out.read_bytes()).hexdigest(),'bytes':out.stat().st_size}
+ print(json.dumps(result))

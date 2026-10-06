@@ -30,6 +30,7 @@ export const MV_MODE = 'songMv';
 const view = { songId: '', scope: '', epoch: 0, sub: 'board', step: 1, draft: null, mode: 'tegaki', shotId: '', copied: '', selected: '', drawingAll: false, stopAll: false, tapIndex: 0 };
 const audioBySong = new Map();
 const images = new Map();
+const fittedBackdropCache = new WeakMap();
 const localUrls = new Map();
 const loadingLocal = new Map();
 const imageImports = new Map();
@@ -1268,7 +1269,8 @@ function drawShot(g, row, rows, index, t, w, h) {
         const motion = mv.motionOf((lead >= 0 ? rows[lead] : row).shot.motion);
         if (stage_canvas.isDetailInsert(null, null, sourceShot)) {
             drawFittedInsert(g, img, cropFor(img.src, img, mv.shotImage(view.cache?.record, sourceShot)?.split).rect,
-                w, h, motion === 'push' ? (1 + 0.05 * p) / 1.05 : 1);
+                w, h, motion === 'push' ? (1 + 0.05 * p) / 1.05 : 1,
+                mv.shotImage(view.cache?.record, sourceShot)?.editMode !== 'cutout');
         } else drawCover(g, img, w, h, motion === 'push' ? 1 + 0.05 * p : 1, 0, 0);
     } else {
         g.fillStyle = '#8b95a3'; g.font = `${Math.round(w * 0.04)}px sans-serif`; g.textAlign = 'center';
@@ -2403,10 +2405,39 @@ function drawCropCover(g, img, rect, w, h, scale = 1) {
 // All foreground paths use this for an already composed local insert, including
 // complete pictures and unreadable/opaque cutout fallbacks. Preserve the whole
 // selected cell. Backgrounds and standing stage actors keep their own placement.
-function drawFittedInsert(g, img, rect, w, h, zoom = 1) {
+function fittedBackdrop(img, rect) {
+    let cells = fittedBackdropCache.get(img);
+    if (!cells) { cells = new Map(); fittedBackdropCache.set(img, cells); }
+    const key = rect.join(':');
+    if (cells.has(key)) return cells.get(key);
+    let backdrop = null;
+    try {
+        // A tiny, display-only copy softens the picture's colours without a
+        // Canvas filter (which is not available in every supported WebView).
+        // Cache by image and selected cell; never rasterize on every frame.
+        const small = document.createElement('canvas'); small.width = 12; small.height = 12;
+        const context = small.getContext('2d', { willReadFrequently: true });
+        context.drawImage(img, ...rect, 0, 0, 12, 12);
+        const pixels = context.getImageData(0, 0, 12, 12).data;
+        let opaque = true;
+        for (let i = 3; i < pixels.length; i += 4) if (pixels[i] < 255) { opaque = false; break; }
+        if (opaque) backdrop = small;
+    } catch { /* Unreadable or transparent images keep their existing background. */ }
+    cells.set(key, backdrop);
+    return backdrop;
+}
+
+function drawFittedInsert(g, img, rect, w, h, zoom = 1, useBackdrop = false) {
     const [sx, sy, sw, sh] = rect;
     const scale = Math.min(w / sw, h / sh) * Math.min(1, Math.max(0.01, zoom));
     const width = sw * scale, height = sh * scale, x = (w - width) / 2, y = (h - height) / 2;
+    if (useBackdrop && (width < w - 0.5 || height < h - 0.5)) {
+        const backdrop = fittedBackdrop(img, rect);
+        if (backdrop) {
+            g.save(); g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high';
+            g.drawImage(backdrop, 0, 0, w, h); g.restore();
+        }
+    }
     g.drawImage(img, sx, sy, sw, sh, x, y, width, height);
     return { x, y, width, height };
 }
@@ -2547,7 +2578,8 @@ function drawSceneV2(g, record, song, rows, index, t, w, h, showText = true) {
         // Local inserts use foreground captions, so no text is lost beneath
         // an opaque saved picture or an unprocessed matte.
         info.opaque = true;
-        info.subject = drawFittedInsert(g, source, rect, w, h, zoom);
+        const useBackdrop = !person && art?.editMode !== 'cutout' && !stage && !mv.hasAssetImage(bgRow?.image || group?.bg);
+        info.subject = drawFittedInsert(g, source, rect, w, h, zoom, useBackdrop);
         return info;
     }
     if (raw && !person) {

@@ -1,0 +1,66 @@
+[
+  {
+    "removed_duplicate": "dev/archive/#U5efa#U6863#U534a#U5b58#U6279#U6b21#U5361#U4f4f#U81ea#U52a8#U7559#U5fc6-#U8bca#U65ad#U8bf4#U660e.md",
+    "kept": "dev/archive/建档半存批次卡住自动留忆-诊断说明.md"
+  },
+  {
+    "removed_duplicate": "dev/archive/CURRENT-#U5386#U53f2.md",
+    "kept": "dev/archive/CURRENT-历史.md"
+  },
+  {
+    "removed_duplicate": "dev/active/#U81ea#U52a8#U7559#U5fc6#U903b#U8f91#U4e0e#U9a8c#U6536.md",
+    "kept": "dev/active/自动留忆逻辑与验收.md"
+  },
+  {
+    "removed_duplicate": "dev/active/#U8de8#U804a#U5929#U8fde#U7eed#U6863#U6848-#U8bbe#U8ba1#U65b9#U6848.md",
+    "kept": "dev/active/跨聊天连续档案-设计方案.md"
+  },
+  {
+    "removed_duplicate": "dev/active/#U81ea#U52a8#U7559#U5fc6#U6a21#U5757#U751f#U6210#U5408#U540c.md",
+    "kept": "dev/active/自动留忆模块生成合同.md"
+  },
+  {
+    "removed_duplicate": "dev/active/#U751f#U6210#U9650#U5236#U4e0e#U95ee#U9898#U6e05#U5355-r84.170.md",
+    "kept": "dev/active/生成限制与问题清单-r84.170.md"
+  },
+  {
+    "removed_duplicate": "dev/active/#U81ea#U52a8#U7559#U5fc6#U903b#U8f91#U4e0e#U9a8c#U6536",
+    "kept": "dev/active/自动留忆逻辑与验收"
+  },
+  {
+    "removed_duplicate": "dev/active/#U91cd#U6784#U6e05#U5355.md",
+    "kept": "dev/active/重构清单.md"
+  },
+  {
+    "removed_duplicate": "dev/active/#U81ea#U52a8#U7559#U5fc6#U4e0e#U6210#U5c31#U5b58#U6863#U65b9#U6848.md",
+    "kept": "dev/active/自动留忆与成就存档方案.md"
+  },
+  {
+    "removed_duplicate": "dev/active/#U81ea#U52a8#U7559#U5fc6#U5b9e#U65bd#U6e05#U5355.md",
+    "kept": "dev/active/自动留忆实施清单.md"
+  },
+  {
+    "removed_duplicate": "dev/archive/docs/#U95ee#U9898#U5206#U6790-#U4e3a#U4ec0#U4e48#U4f1a#U53cd#U590d#U51fa#U73b0#U91cd#U8bd5#U672a#U5b8c#U6210#U90e8#U5206.md",
+    "kept": "dev/archive/docs/问题分析-为什么会反复出现重试未完成部分.md"
+  },
+  {
+    "removed_duplicate": "dev/archive/docs/#U95ee#U9898#U5206#U6790-#U623f#U95f4#U9884#U7b97#U4e0e#U957f#U8bb0#U5fc6#U4e0a#U9650.md",
+    "kept": "dev/archive/docs/问题分析-房间预算与长记忆上限.md"
+  },
+  {
+    "removed_duplicate": "dev/archive/docs/#U65bd#U5de5#U65b9#U6848-#U65e7#U7248.md",
+    "kept": "dev/archive/docs/施工方案-旧版.md"
+  },
+  {
+    "removed_duplicate": "dev/archive/docs/#U65bd#U5de5#U65b9#U6848.md",
+    "kept": "dev/archive/docs/施工方案.md"
+  },
+  {
+    "removed_duplicate": "dev/archive/docs/#U6574#U4f53#U903b#U8f91.md",
+    "kept": "dev/archive/docs/整体逻辑.md"
+  },
+  {
+    "removed_duplicate": "dev/archive/rounds/P0-#U4fee#U590d#U8bf4#U660e.md",
+    "kept": "dev/archive/rounds/P0-修复说明.md"
+  }
+]

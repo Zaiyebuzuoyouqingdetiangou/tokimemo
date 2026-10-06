@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 327
-// Source SHA-256: 09bd010c450f273000a402cb5316b254293fa39ed81ae6b4b3a6ccef3cea1e41
+// Source SHA-256: 9b249a094113466e4501a4234cd6704b56d988e5766eff922c9cd5a2b23268bc
 // Build: python3 tools/verification/build.py <source-root>
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -1932,16 +1932,17 @@ ${r} .rmt-mve-projectbar{flex:none;display:flex;justify-content:space-between;al
 ${r} .rmt-mve-projectbar>button{font-size:12px!important;min-height:34px;padding:5px 12px;border-radius:999px;max-width:60%;min-width:0;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 ${r} .rmt-mve-projectbar .rmt-mve-meta{flex:1;display:block;min-width:0;padding:0;font-size:11px!important;line-height:1.5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 ${r} .rmt-mve-layout-scope{display:flex;flex:1;min-height:0;min-width:0}
-${r} .rmt-mve-workspace{--rmt-mve-preview-min:320px;--rmt-mve-tools-min:300px;flex:1;min-height:630px;min-width:0;align-items:stretch;gap:10px;grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(var(--rmt-mve-preview-min),1.1fr) minmax(var(--rmt-mve-tools-min),1fr)}
-${r} .rmt-mve-workspace[data-editor-tab=shots][data-editor-paged=true]{--rmt-mve-preview-min:360px;min-height:670px}
-${r} .rmt-mve-workspace[data-editor-tab=timing]{--rmt-mve-preview-min:230px;--rmt-mve-tools-min:390px}
-${r} .rmt-mve-workspace[data-editor-tab=look]{--rmt-mve-preview-min:230px;--rmt-mve-tools-min:320px}
-${r} .rmt-mve-preview{display:flex;flex-direction:column;min-height:0;min-width:0;overflow:hidden}
+${r} .rmt-mve-workspace{--rmt-mve-tools-min:300px;flex:1;min-height:630px;min-width:0;align-items:stretch;gap:10px;grid-template-columns:minmax(0,1fr);grid-template-rows:max-content minmax(var(--rmt-mve-tools-min),1fr)}
+${r} .rmt-mve-workspace[data-editor-tab=shots][data-editor-paged=true]{min-height:670px}
+${r} .rmt-mve-workspace[data-editor-tab=timing]{--rmt-mve-tools-min:390px}
+${r} .rmt-mve-workspace[data-editor-tab=look]{--rmt-mve-tools-min:320px}
+${r} .rmt-mve-preview{display:flex;flex-direction:column;min-height:0;min-width:0;align-self:start;overflow:visible}
 ${r} .rmt-mve-preview-head{display:flex;align-items:center;justify-content:space-between;gap:8px;flex:none;padding:0 0 4px;font-size:11px;color:var(--rmt-theme-muted,#63788f)}
 ${r} .rmt-mve-preview-head>span{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 ${r} .rmt-mve-preview-actions{display:flex;flex:none;gap:6px}
 ${r} .rmt-mve-preview-head button{font-size:12px!important;min-height:34px;padding:4px 10px;border-radius:999px;white-space:nowrap}
-${r} .rmt-mve-preview .rmt-mv-canvas-wrap,${r} .rmt-mve-preview .rmt-mv-canvas-wrap.portrait{position:relative;width:100%;height:auto;min-height:160px;max-width:none;border-radius:10px;display:flex;align-items:center;justify-content:center;overflow:hidden;flex:1 0 160px}
+${r} .rmt-mve-preview .rmt-mv-canvas-wrap{position:relative;width:100%;height:auto;min-height:0;max-width:none;aspect-ratio:16/9;border-radius:10px;display:flex;align-items:center;justify-content:center;overflow:hidden;flex:0 0 auto}
+${r} .rmt-mve-preview .rmt-mv-canvas-wrap.portrait{width:min(100%,300px);aspect-ratio:9/16;margin:0 auto}
 ${r} .rmt-mve-preview canvas{position:absolute;inset:0;display:block;width:100%;height:100%;max-width:100%;max-height:100%;object-fit:contain}
 ${r} .rmt-mve-transport{flex:none;padding:3px 0 0;gap:9px}
 ${r} .rmt-mve-transport>small{font-size:11px!important;white-space:nowrap}
@@ -1972,15 +1973,13 @@ ${r} .rmt-mve-panel summary{border:1px solid var(--rmt-theme-border,#cddfed);bor
 ${r} .rmt-mve-panel details{padding:0;border-top:0}
 ${r} .rmt-mve-workspace[data-preview-only=true]{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr)}
 ${r} .rmt-mve-workspace[data-preview-only=true] .rmt-mve-tools,${r} .rmt-mve-workspace[data-preview-only=true] .rmt-mve-filmstrip{display:none}
-${r} .rmt-mve-workspace[data-preview-only=true] .rmt-mv-canvas-wrap{flex:1;height:auto}
 ${r} .rmt-mve-recovery{flex:none;max-height:200px;overflow:auto;padding:8px;margin:0 0 7px;border:1px solid var(--rmt-theme-border,#cddfed);border-radius:12px;background:var(--rmt-theme-surface-solid,#fff)}
 ${r} .rmt-mve-recovery>summary{font-size:12px!important;min-height:30px;cursor:pointer}
 @media(min-width:960px){${r} .rmt-x-page.rmt-mv-editor{flex-basis:450px;min-height:450px}${r} .rmt-mve-workspace[data-editor-tab][data-editor-paged]{min-height:340px;grid-template-columns:minmax(0,1fr) 335px;grid-template-rows:minmax(340px,1fr)}}
-@supports(container-type:inline-size){${r} .rmt-mve-workspace[data-editor-tab]{min-height:630px;grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(var(--rmt-mve-preview-min),1.1fr) minmax(var(--rmt-mve-tools-min),1fr)}${r} .rmt-mve-workspace[data-editor-tab=shots][data-editor-paged=true]{min-height:670px}@container(min-width:740px){${r} .rmt-mve-workspace[data-editor-tab][data-editor-paged]{min-height:340px;grid-template-columns:minmax(0,1fr) 335px;grid-template-rows:minmax(340px,1fr)}}}
+@supports(container-type:inline-size){${r} .rmt-mve-workspace[data-editor-tab]{min-height:630px;grid-template-columns:minmax(0,1fr);grid-template-rows:max-content minmax(var(--rmt-mve-tools-min),1fr)}${r} .rmt-mve-workspace[data-editor-tab=shots][data-editor-paged=true]{min-height:670px}@container(min-width:740px){${r} .rmt-mve-workspace[data-editor-tab][data-editor-paged]{min-height:340px;grid-template-columns:minmax(0,1fr) 335px;grid-template-rows:minmax(340px,1fr)}}}
 @media(max-height:700px){${r} .rmt-mve-filmstrip .rmt-mv-strip>button{grid-template-rows:30px 18px;height:52px}${r} .rmt-mve-filmstrip .rmt-mv-strip>button img{height:30px!important;max-height:30px}${r} .rmt-mve-head-actions button{min-height:32px}${r} .rmt-mve-projectbar{padding-bottom:4px}${r} .rmt-mve-preview-head{padding:0}${r} .rmt-mve-meta{padding-bottom:2px}}
 @media(max-height:600px) and (orientation:landscape){${r} .rmt-x-page.rmt-mv-editor{flex-basis:450px;min-height:450px}${r} .rmt-mve-workspace[data-editor-tab][data-editor-paged]{min-height:340px;grid-template-columns:minmax(0,1fr) minmax(250px,.8fr);grid-template-rows:minmax(340px,1fr)}}
 ${r} .rmt-mve-workspace[data-editor-tab][data-editor-paged][data-preview-only=true]{min-height:340px;grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(340px,1fr)}
-${r} .rmt-mve-workspace[data-preview-only=true] .rmt-mv-canvas-wrap{flex:1;height:auto}
 `;
 }
 
@@ -21943,7 +21942,7 @@ function __init_core_selfUpdater_js() {
 // MODULE: core/selfUpdater.js
 
 const UPDATE_STATE = Symbol.for('heartbeatMemories.selfUpdate');
-const INSTALLED_BUILD = '1.0.25';
+const INSTALLED_BUILD = '1.0.26';
 const PROJECT_REMOTE = 'https://github.com/zaiyebuzuoyouqingdetiangou/tokimemo';
 function updateError(message) { const error = new Error(message); error.userMessage = message; return error; }
 
@@ -90561,6 +90560,7 @@ const MV_MODE = 'songMv';
 const view = { songId: '', scope: '', epoch: 0, sub: 'board', step: 1, draft: null, mode: 'tegaki', shotId: '', copied: '', selected: '', drawingAll: false, stopAll: false, tapIndex: 0 };
 const audioBySong = new Map();
 const images = new Map();
+const fittedBackdropCache = new WeakMap();
 const localUrls = new Map();
 const loadingLocal = new Map();
 const imageImports = new Map();
@@ -91799,7 +91799,8 @@ function drawShot(g, row, rows, index, t, w, h) {
         const motion = mv.motionOf((lead >= 0 ? rows[lead] : row).shot.motion);
         if (stage_canvas.isDetailInsert(null, null, sourceShot)) {
             drawFittedInsert(g, img, cropFor(img.src, img, mv.shotImage(view.cache?.record, sourceShot)?.split).rect,
-                w, h, motion === 'push' ? (1 + 0.05 * p) / 1.05 : 1);
+                w, h, motion === 'push' ? (1 + 0.05 * p) / 1.05 : 1,
+                mv.shotImage(view.cache?.record, sourceShot)?.editMode !== 'cutout');
         } else drawCover(g, img, w, h, motion === 'push' ? 1 + 0.05 * p : 1, 0, 0);
     } else {
         g.fillStyle = '#8b95a3'; g.font = `${Math.round(w * 0.04)}px sans-serif`; g.textAlign = 'center';
@@ -92934,10 +92935,39 @@ function drawCropCover(g, img, rect, w, h, scale = 1) {
 // All foreground paths use this for an already composed local insert, including
 // complete pictures and unreadable/opaque cutout fallbacks. Preserve the whole
 // selected cell. Backgrounds and standing stage actors keep their own placement.
-function drawFittedInsert(g, img, rect, w, h, zoom = 1) {
+function fittedBackdrop(img, rect) {
+    let cells = fittedBackdropCache.get(img);
+    if (!cells) { cells = new Map(); fittedBackdropCache.set(img, cells); }
+    const key = rect.join(':');
+    if (cells.has(key)) return cells.get(key);
+    let backdrop = null;
+    try {
+        // A tiny, display-only copy softens the picture's colours without a
+        // Canvas filter (which is not available in every supported WebView).
+        // Cache by image and selected cell; never rasterize on every frame.
+        const small = document.createElement('canvas'); small.width = 12; small.height = 12;
+        const context = small.getContext('2d', { willReadFrequently: true });
+        context.drawImage(img, ...rect, 0, 0, 12, 12);
+        const pixels = context.getImageData(0, 0, 12, 12).data;
+        let opaque = true;
+        for (let i = 3; i < pixels.length; i += 4) if (pixels[i] < 255) { opaque = false; break; }
+        if (opaque) backdrop = small;
+    } catch { /* Unreadable or transparent images keep their existing background. */ }
+    cells.set(key, backdrop);
+    return backdrop;
+}
+
+function drawFittedInsert(g, img, rect, w, h, zoom = 1, useBackdrop = false) {
     const [sx, sy, sw, sh] = rect;
     const scale = Math.min(w / sw, h / sh) * Math.min(1, Math.max(0.01, zoom));
     const width = sw * scale, height = sh * scale, x = (w - width) / 2, y = (h - height) / 2;
+    if (useBackdrop && (width < w - 0.5 || height < h - 0.5)) {
+        const backdrop = fittedBackdrop(img, rect);
+        if (backdrop) {
+            g.save(); g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high';
+            g.drawImage(backdrop, 0, 0, w, h); g.restore();
+        }
+    }
     g.drawImage(img, sx, sy, sw, sh, x, y, width, height);
     return { x, y, width, height };
 }
@@ -93078,7 +93108,8 @@ function drawSceneV2(g, record, song, rows, index, t, w, h, showText = true) {
         // Local inserts use foreground captions, so no text is lost beneath
         // an opaque saved picture or an unprocessed matte.
         info.opaque = true;
-        info.subject = drawFittedInsert(g, source, rect, w, h, zoom);
+        const useBackdrop = !person && art?.editMode !== 'cutout' && !stage && !mv.hasAssetImage(bgRow?.image || group?.bg);
+        info.subject = drawFittedInsert(g, source, rect, w, h, zoom, useBackdrop);
         return info;
     }
     if (raw && !person) {

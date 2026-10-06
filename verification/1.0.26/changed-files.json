@@ -1,0 +1,13 @@
+[
+  "CHANGELOG.md",
+  "README.md",
+  "manifest.json",
+  "index.js",
+  "dist/heartbeatMemories.bundle.js",
+  "src/ui/mvView.js",
+  "src/ui/mvEditorUi.js",
+  "src/core/selfUpdater.js",
+  "tools/verification/mv-single-music-regression.mjs",
+  "tools/verification/mv-mobile-height-regression.mjs",
+  "tools/verification/package.py"
+]

@@ -1,0 +1,42 @@
+{
+  "baseline": {
+    "tests": 651,
+    "pass": 629,
+    "fail": 22,
+    "skipped": 0,
+    "cancelled": 0
+  },
+  "candidate": {
+    "tests": 659,
+    "pass": 637,
+    "fail": 22,
+    "skipped": 0,
+    "cancelled": 0
+  },
+  "introduced_failure_names": [],
+  "removed_failure_names": [],
+  "same_failure_names": [
+    "actual r215 paid image journal saves after upgrade without regenerating",
+    "actual r215 snapshot story journal cannot erase a newer image after upgrade",
+    "actual r215 story journal saves after upgrade when its original record is unchanged",
+    "big lyrics do not discard text after the third line",
+    "creative prompt templates are byte-for-byte unchanged from the delivered 1.0.20 source",
+    "editor exposes optional size, tracking and leading without adding a font dependency",
+    "frame cast is the exact intersection of shot people and appearance preference",
+    "fresh runtime can repair an actual r84.209 blocked paid result with save-only retry",
+    "long subtitles stay complete and inside the 9:16 canvas",
+    "page-local return works through the overlay click dispatcher without exiting to interactions",
+    "picture anchor, expanded inspection and horizontal thumbnails survive changed layout",
+    "preview and timing return one level at a time, restoring each parent position",
+    "repeated layout reuses measurements and does not change text or font size",
+    "reset restores original typography only and fragment export keeps the chosen settings",
+    "revision drift journals paid result and survives a fresh runtime",
+    "saved typography defaults preserve old records and malformed data does not stop rendering",
+    "settings updater entry renders escaped complete running version independently of update status",
+    "successful first storyboard keeps configured max output, temperature, streaming choice and one request",
+    "tools/verification/bedtime-regression.mjs",
+    "tracking does not split emoji families or combining accents and zero tracking uses whole text",
+    "typography changes persist for the current song without touching images, shots or timing",
+    "typography stays in its own song and invalid input does not overwrite saved values"
+  ]
+}
