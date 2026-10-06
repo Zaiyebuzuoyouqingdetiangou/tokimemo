@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 329
-// Source SHA-256: 44c81930d7d1f6041a4bbd0c1ed2f13f320bf871479be2ff41f58e6b3683dd2c
+// Source SHA-256: 337ba1eed4e570897c821ccf717e11697a98429914fea838f830895ba6e56ad2
 // Build: python3 tools/verification/build.py <source-root>
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -495,7 +495,7 @@ function __init_core_releaseNotes_js() {
 // MODULE: core/releaseNotes.js
 
 // GENERATED FROM README.md by tools/verification/build.py. Do not edit by hand.
-const RELEASE_README = "# 心迹回廊 1.0.28\n\n## 更新日志模块\n\n新增了更新日志板块，感谢@nancyindaeyo的更新。\n\n## 本次变动\n\n- 手书剪辑台采用已确认的新布局：大画面、四镜缩略图与全部分镜入口、简洁工具页签；剪辑时收起外层导航，返回即恢复。\n- 镜头与全片设置按需展开；保留图片编辑、音乐与录屏音源、定段定句、舞台编排、导出和待保存结果处理。\n- 图片编辑的缩放工具移到画布下方，撤销、保存和保存下一镜常驻；更新不改已有图片、提示词与存档。\n";
+const RELEASE_README = "# 心迹回廊 1.0.29\n\n## 更新日志模块\n\n新增了更新日志板块，感谢@nancyindaeyo的更新。\n\n## 本次变动\n\n- 图片编辑保留“选单格、自由裁切、抠图修边”原位置，把“导入图片”和“编辑提示词”移出工具滚动区，放到下方独立显示。\n- 共用面板按需展开、相互切换，关闭时保留当前图片、缩放、撤销记录和提示词草稿；撤销与保存仍常驻。\n";
 
 __m_core_releaseNotes_js.RELEASE_README = RELEASE_README;
 }
@@ -2071,6 +2071,7 @@ function mountAssetEditor(host, options) {
     const find = s => root.querySelector(s);
     const canvas = find('[data-editor-canvas]'), g = canvas.getContext('2d', { willReadFrequently: true });
     const prompt = find('[data-editor-prompt]'), status = find('[data-editor-status]');
+    const commonPanels = [...root.querySelectorAll('[data-common-panel]')];
     find('[data-image-title]').textContent = options.title || '图片编辑';
     find('[data-image-scope]').textContent = options.scopeLabel || '选格、裁切与修边';
     prompt.value = options.prompt || '';
@@ -2277,6 +2278,16 @@ function mountAssetEditor(host, options) {
         const button = event.target.closest('[data-edit]'); if (!button) return;
         event.preventDefault(); const action = button.dataset.edit;
         if (action === 'close') { options.onClose(); return; }
+        // Shared panels only change visibility. Keep image, prompt, mode and
+        // undo state in place, and do not resize the canvas when opening them.
+        if (action === 'common-import' || action === 'common-prompt' || action === 'common-close') {
+            const current = commonPanels.find(panel => panel.open);
+            const target = commonPanels.find(panel => `common-${panel.dataset.commonPanel}` === action);
+            const opening = !!target && !target.open;
+            for (const panel of commonPanels) panel.open = panel === target && opening;
+            if (action === 'common-close' && current) find(`[data-edit="common-${current.dataset.commonPanel}"]`)?.focus?.();
+            return;
+        }
         if (busy) return;
         if (action === 'tools') { toolsOpen = !toolsOpen; show(); return; }
         if (action === 'default-prompt') { prompt.value = options.defaultPrompt || ''; return; }
@@ -2313,7 +2324,7 @@ function mountAssetEditor(host, options) {
         if (!saving && action !== 'download') return;
         if (saving && selectionDirty) { say('请先点“使用选中画面”，确认单格预览。'); return; }
         busy = true; cursor.hidden = true;
-        root.querySelectorAll('button,input,select,textarea').forEach(el => { el.disabled = el.dataset.edit !== 'close'; });
+        root.querySelectorAll('button,input,select,textarea').forEach(el => { el.disabled = !['close', 'common-close'].includes(el.dataset.edit); });
         say(saving ? '正在保存修改…' : '正在准备 PNG…');
         try {
             const blob = (action === 'download' || (changed && !restoreOriginal)) ? await blobOfWorking() : null;
@@ -2392,10 +2403,12 @@ function imageEditorMarkup({ hasNext = false, showPrompt = true } = {}) {
             <div class="rmt-mv-editor-tools"><button type="button" data-edit="reset">还原选中画面</button></div>
             <label class="rmt-mvi-layer"><input data-layer type="checkbox">使用此透明图叠背景</label>
             <div class="rmt-mvi-matte" aria-label="检查透明边缘"><small data-image-size></small><div><button type="button" data-matte="grid" aria-pressed="true">透明底</button><button type="button" data-matte="dark" aria-pressed="false">深色底</button><button type="button" data-matte="light" aria-pressed="false">浅色底</button></div></div>
-            <details class="rmt-mvi-more"><summary>导入、原图与下载</summary><div class="rmt-mv-editor-tools"><label class="rmt-mv-editor-upload">导入图片<input type="file" accept="image/*" data-import="full"></label><label class="rmt-mv-editor-upload">导入透明图<input type="file" accept="image/png,image/webp" data-import="cutout"></label><button type="button" data-edit="download">下载当前 PNG</button><button type="button" data-edit="original">恢复原图</button></div></details>
-            <details class="rmt-mvi-more"${showPrompt ? '' : ' hidden'}><summary>本张生图提示词</summary><label>提示词<textarea data-editor-prompt rows="6"></textarea></label><div class="rmt-mv-editor-tools"><button type="button" data-edit="default-prompt">恢复默认提示词</button></div><p class="rmt-x-note">保存不重新生图；重画时才使用新提示词。</p></details>
           </div>
         </section>
+      </div>
+      <div class="rmt-mvi-common" aria-label="共用操作">
+        <details data-common-panel="import"><summary data-edit="common-import">导入图片</summary><section class="rmt-mvi-common-pane" aria-label="导入、原图与下载"><header><b>导入图片</b><button type="button" data-edit="common-close">收起</button></header><div class="rmt-mvi-common-scroll"><div class="rmt-mv-editor-tools"><label class="rmt-mv-editor-upload">导入图片<input type="file" accept="image/*" data-import="full"></label><label class="rmt-mv-editor-upload">导入透明图<input type="file" accept="image/png,image/webp" data-import="cutout"></label><button type="button" data-edit="download">下载当前 PNG</button><button type="button" data-edit="original">恢复原图</button></div></div></section></details>
+        <details data-common-panel="prompt"${showPrompt ? '' : ' hidden'}><summary data-edit="common-prompt">编辑提示词</summary><section class="rmt-mvi-common-pane" aria-label="编辑提示词"><header><b>编辑提示词</b><button type="button" data-edit="common-close">收起</button></header><div class="rmt-mvi-common-scroll"><label>提示词<textarea data-editor-prompt rows="6"></textarea></label><div class="rmt-mv-editor-tools"><button type="button" data-edit="default-prompt">恢复默认提示词</button></div><p class="rmt-x-note">保存不重新生图；重画时才使用新提示词。</p></div></section></details>
       </div>
       <footer class="rmt-mvi-footer"><p role="status" aria-live="polite" data-editor-status></p><div class="rmt-mvi-save-row"><button type="button" data-edit="undo" aria-label="撤销上一步">撤销</button><button type="button" class="rmt-mvi-primary" data-edit="save">保存修改</button><button type="button" data-edit="save-next"${hasNext ? '' : ' hidden'}>保存并下一镜</button></div></footer>
     </section>`;
@@ -2454,8 +2467,20 @@ ${r} .rmt-mvi-tool-scroll .rmt-mvi-brush input{flex:1;width:0}
 ${r} .rmt-mvi-brush>span{flex:none;min-width:55px;font-size:11px!important;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
 ${r} .rmt-mvi-tool-scroll .rmt-mvi-layer{display:flex;flex-direction:row;align-items:center;gap:8px;line-height:1.5;margin:8px 0}
 ${r} .rmt-mvi-layer input{width:18px;min-width:18px;height:18px;margin:0}
-${r} .rmt-mvi-more{margin-top:8px}
-${r} .rmt-mvi-more summary{min-height:44px;display:flex;align-items:center;cursor:pointer;font-size:12px!important;padding:7px 12px;box-sizing:border-box;border:1px solid var(--rmt-theme-border,#cddfed);border-radius:999px;background:var(--rmt-theme-surface-solid,#fff)}
+${r} .rmt-mvi-common{position:relative;z-index:4;flex:none;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;min-width:0}
+${r} .rmt-mvi-common>details{min-width:0;margin:0;padding:0;border:0}
+${r} .rmt-mvi-common>details>summary{min-height:44px;display:flex;align-items:center;justify-content:center;cursor:pointer;list-style:none;font-size:13px!important;padding:7px 10px;border:1px solid var(--rmt-theme-border,#cddfed);border-radius:10px;background:var(--rmt-theme-surface-solid,#fff)}
+${r} .rmt-mvi-common summary::-webkit-details-marker{display:none}
+${r} .rmt-mvi-common>details[open]>summary{border-color:var(--rmt-theme-accent-ink,#4f769d);background:var(--rmt-theme-soft,#e7f1fa)}
+${r} .rmt-mvi-common>details:not([open])>.rmt-mvi-common-pane{display:none!important}
+${r} .rmt-mvi-common-pane{position:absolute;bottom:calc(100% + 6px);left:0;right:0;z-index:1;display:flex;flex-direction:column;min-height:0;max-height:min(50vh,340px);max-height:min(50dvh,340px);overflow:hidden;border:1px solid var(--rmt-theme-border,#cddfed);border-radius:12px;background:var(--rmt-theme-surface-solid,#fff);box-shadow:0 -6px 24px #0002}
+${r} .rmt-mvi-common-pane>header{display:flex;align-items:center;justify-content:space-between;gap:10px;flex:none;padding:6px 12px;border-bottom:1px solid var(--rmt-theme-border,#cddfed)}
+${r} .rmt-mvi-common-pane>header>b{font-size:14px!important}
+${r} .rmt-mvi-common-scroll{min-height:0;overflow:auto;overscroll-behavior:contain;padding:12px;display:flex;flex-direction:column;gap:10px;touch-action:pan-y pinch-zoom}
+${r} .rmt-mvi-common-scroll label{font-size:13px!important}
+${r} .rmt-mvi-common-scroll textarea{width:100%;min-height:120px;max-width:100%;font-size:16px!important}
+${r} .rmt-mvi-common-scroll .rmt-mv-editor-tools{display:flex;flex-wrap:wrap;gap:8px;margin:0}
+${r} .rmt-mvi-common-scroll .rmt-mv-editor-tools>button,${r} .rmt-mvi-common-scroll .rmt-mv-editor-upload{display:flex;align-items:center;justify-content:center;flex:1 1 130px;min-height:44px;padding:7px 10px}
 ${r} .rmt-mvi-workbench .rmt-x-note{margin:5px 0;font-size:11px;line-height:1.6}
 ${r} .rmt-mvi-footer{flex:none;position:relative;z-index:3;padding:6px 0 max(2px,env(safe-area-inset-bottom,0px));border-top:1px solid var(--rmt-theme-border,#cddfed);background:var(--rmt-theme-bg,#f5f9fd)}
 ${r} .rmt-mvi-footer p{font-size:11px!important;line-height:1.5!important;color:var(--rmt-theme-muted,#63788f);margin:0 0 5px;max-height:3em;overflow:auto}
@@ -22015,7 +22040,7 @@ function __init_core_selfUpdater_js() {
 const RELEASE_README = __m_core_releaseNotes_js.RELEASE_README;
 
 const UPDATE_STATE = Symbol.for('heartbeatMemories.selfUpdate');
-const INSTALLED_BUILD = '1.0.28';
+const INSTALLED_BUILD = '1.0.29';
 const PROJECT_REMOTE = 'https://github.com/zaiyebuzuoyouqingdetiangou/tokimemo';
 function updateError(message) { const error = new Error(message); error.userMessage = message; return error; }
 
