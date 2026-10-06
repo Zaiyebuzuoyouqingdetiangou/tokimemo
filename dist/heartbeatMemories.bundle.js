@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 329
-// Source SHA-256: baba6694f23908fe16578fb77f3c27e97b5918b00bc0f1e32e819f5769d32d68
+// Source SHA-256: 44c81930d7d1f6041a4bbd0c1ed2f13f320bf871479be2ff41f58e6b3683dd2c
 // Build: python3 tools/verification/build.py <source-root>
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -495,7 +495,7 @@ function __init_core_releaseNotes_js() {
 // MODULE: core/releaseNotes.js
 
 // GENERATED FROM README.md by tools/verification/build.py. Do not edit by hand.
-const RELEASE_README = "# 心迹回廊 1.0.28\n\n## 更新日志模块\n\n新增了更新日志板块，感谢@nancyindaeyo的更新。\n\n## 本次变动\n\n- 手书剪辑台采用已确认的新布局：大画面、四镜缩略图与全部分镜入口、简洁工具页签；剪辑时收起外层导航，返回即恢复。\n- 镜头与全片设置按需展开；保留图片编辑、音乐与录屏音源、定段定句、舞台编排、导出和待保存结果处理。\n- 图片编辑的缩放工具移到画布下方，撤销、保存和保存下一镜常驻；更新不改已有图片、提示词与存档。\n- 更新说明与 README 同源，仅显示致谢和本次变动；不增加生成条件、数量上限或请求限制。\n- 完整安装包不含工作流。\n";
+const RELEASE_README = "# 心迹回廊 1.0.28\n\n## 更新日志模块\n\n新增了更新日志板块，感谢@nancyindaeyo的更新。\n\n## 本次变动\n\n- 手书剪辑台采用已确认的新布局：大画面、四镜缩略图与全部分镜入口、简洁工具页签；剪辑时收起外层导航，返回即恢复。\n- 镜头与全片设置按需展开；保留图片编辑、音乐与录屏音源、定段定句、舞台编排、导出和待保存结果处理。\n- 图片编辑的缩放工具移到画布下方，撤销、保存和保存下一镜常驻；更新不改已有图片、提示词与存档。\n";
 
 __m_core_releaseNotes_js.RELEASE_README = RELEASE_README;
 }
