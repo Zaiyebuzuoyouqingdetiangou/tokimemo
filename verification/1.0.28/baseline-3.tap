@@ -1,0 +1,1719 @@
+TAP version 13
+# (node:24) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: native Canvas 16:9: one background continues through held poses and changed text
+ok 1 - native Canvas 16:9: one background continues through held poses and changed text
+  ---
+  duration_ms: 287.071045
+  type: 'test'
+  ...
+# Subtest: native Canvas 9:16: one background continues through held poses and changed text
+ok 2 - native Canvas 9:16: one background continues through held poses and changed text
+  ---
+  duration_ms: 333.555618
+  type: 'test'
+  ...
+# Subtest: background is behind confirmed transparent art, text order is deliberate, and opaque art stays intact
+ok 3 - background is behind confirmed transparent art, text order is deliberate, and opaque art stays intact
+  ---
+  duration_ms: 467.515838
+  type: 'test'
+  ...
+# Subtest: an opaque PNG marked as cutout keeps a full-frame fallback instead of hiding the stage text
+ok 4 - an opaque PNG marked as cutout keeps a full-frame fallback instead of hiding the stage text
+  ---
+  duration_ms: 206.220256
+  type: 'test'
+  ...
+# Subtest: shared backgrounds appear once in the board and pose editing is reachable from the player
+ok 5 - shared backgrounds appear once in the board and pose editing is reachable from the player
+  ---
+  duration_ms: 195.395607
+  type: 'test'
+  ...
+# Subtest: native Canvas export matches preview at the same song time even for a clipped second section
+ok 6 - native Canvas export matches preview at the same song time even for a clipped second section
+  ---
+  duration_ms: 498.325094
+  type: 'test'
+  ...
+# Subtest: automatic character layer (native alpha) is visible over the actual shared image
+ok 7 - automatic character layer (native alpha) is visible over the actual shared image
+  ---
+  duration_ms: 631.991194
+  type: 'test'
+  ...
+# Subtest: automatic character layer (\#ffffff) is visible over the actual shared image
+ok 8 - automatic character layer (\#ffffff) is visible over the actual shared image
+  ---
+  duration_ms: 686.082996
+  type: 'test'
+  ...
+# Subtest: automatic character layer (\#dddddd) is visible over the actual shared image
+ok 9 - automatic character layer (\#dddddd) is visible over the actual shared image
+  ---
+  duration_ms: 539.208562
+  type: 'test'
+  ...
+# (node:25) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: one shared procedural background serves two groups and does not request an extra image
+ok 10 - one shared procedural background serves two groups and does not request an extra image
+  ---
+  duration_ms: 123.246962
+  type: 'test'
+  ...
+# Subtest: a shared image background is one editable asset and one paid request across groups
+ok 11 - a shared image background is one editable asset and one paid request across groups
+  ---
+  duration_ms: 160.572274
+  type: 'test'
+  ...
+# Subtest: stage prompts separate the character and stage while old expression records stay full-frame
+ok 12 - stage prompts separate the character and stage while old expression records stay full-frame
+  ---
+  duration_ms: 156.357571
+  type: 'test'
+  ...
+# Subtest: layer clocks retain the song anchor when only lyrics or the pose changes
+ok 13 - layer clocks retain the song anchor when only lyrics or the pose changes
+  ---
+  duration_ms: 146.943735
+  type: 'test'
+  ...
+# Subtest: procedural scenes are ready without a paid background and manual clips remain selectable
+ok 14 - procedural scenes are ready without a paid background and manual clips remain selectable
+  ---
+  duration_ms: 208.731939
+  type: 'test'
+  ...
+# Subtest: a shared background cannot be drawn twice concurrently or overwrite a newer edit
+ok 15 - a shared background cannot be drawn twice concurrently or overwrite a newer edit
+  ---
+  duration_ms: 171.036026
+  type: 'test'
+  ...
+# Subtest: shared pose redraw updates its reusable asset and remains editable
+ok 16 - shared pose redraw updates its reusable asset and remains editable
+  ---
+  duration_ms: 182.760524
+  type: 'test'
+  ...
+# Subtest: continuation preserves edited shared art and reuses IDs while appending new backgrounds
+ok 17 - continuation preserves edited shared art and reuses IDs while appending new backgrounds
+  ---
+  duration_ms: 151.717176
+  type: 'test'
+  ...
+# Subtest: late storyboard cannot replace a manually changed shared background
+ok 18 - late storyboard cannot replace a manually changed shared background
+  ---
+  duration_ms: 127.004174
+  type: 'test'
+  ...
+# Subtest: unrecognized optional stage data falls back without blocking a usable storyboard
+ok 19 - unrecognized optional stage data falls back without blocking a usable storyboard
+  ---
+  duration_ms: 146.082749
+  type: 'test'
+  ...
+# Subtest: one storyboard request saves executable stage data and its lyric mode
+ok 20 - one storyboard request saves executable stage data and its lyric mode
+  ---
+  duration_ms: 130.905233
+  type: 'test'
+  ...
+# (node:31) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: MV storyboard and continuation prefer the existing streaming transport with one paid request per click
+ok 21 - MV storyboard and continuation prefer the existing streaming transport with one paid request per click
+  ---
+  duration_ms: 229.647525
+  type: 'test'
+  ...
+# Subtest: an explicit complete-response preference stays effective; other modes are unchanged
+ok 22 - an explicit complete-response preference stays effective; other modes are unchanged
+  ---
+  duration_ms: 165.982517
+  type: 'test'
+  ...
+# Subtest: a non-streaming JSON reply to the same streaming request is accepted without another request
+ok 23 - a non-streaming JSON reply to the same streaming request is accepted without another request
+  ---
+  duration_ms: 183.360904
+  type: 'test'
+  ...
+# Subtest: 524 and 503 still surface honestly, with no automatic reroll or clearing old images and timings
+ok 24 - 524 and 503 still surface honestly, with no automatic reroll or clearing old images and timings
+  ---
+  duration_ms: 387.390933
+  type: 'test'
+  ...
+# Subtest: manual API uses the same stream preference and preserves an explicit off switch
+ok 25 - manual API uses the same stream preference and preserves an explicit off switch
+  ---
+  duration_ms: 296.348659
+  type: 'test'
+  ...
+# Subtest: a broken stream never saves an incomplete storyboard or sends an automatic second request
+ok 26 - a broken stream never saves an incomplete storyboard or sends an automatic second request
+  ---
+  duration_ms: 136.353879
+  type: 'test'
+  ...
+# (node:37) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: each section has a selectable button, including index zero
+ok 27 - each section has a selectable button, including index zero
+  ---
+  duration_ms: 300.982254
+  type: 'test'
+  ...
+# Subtest: selecting the chorus changes the big button without writing or seeking audio
+ok 28 - selecting the chorus changes the big button without writing or seeking audio
+  ---
+  duration_ms: 357.771214
+  type: 'test'
+  ...
+# Subtest: original sequential tapping still advances through every section
+ok 29 - original sequential tapping still advances through every section
+  ---
+  duration_ms: 383.365898
+  type: 'test'
+  ...
+# Subtest: a completed section can be selected and corrected, then undo restores its old time
+ok 30 - a completed section can be selected and corrected, then undo restores its old time
+  ---
+  duration_ms: 348.50136
+  type: 'test'
+  ...
+# Subtest: undo removes the most recent selected tap, not the highest section number
+ok 31 - undo removes the most recent selected tap, not the highest section number
+  ---
+  duration_ms: 370.275985
+  type: 'test'
+  ...
+# Subtest: selection resets on reopen and does not carry into another song
+ok 32 - selection resets on reopen and does not carry into another song
+  ---
+  duration_ms: 359.894537
+  type: 'test'
+  ...
+# Subtest: reset clears manual selection and undo history; no audio still disables recording
+ok 33 - reset clears manual selection and undo history; no audio still disables recording
+  ---
+  duration_ms: 465.742995
+  type: 'test'
+  ...
+# Subtest: invalid selection leaves the current target and timing unchanged
+ok 34 - invalid selection leaves the current target and timing unchanged
+  ---
+  duration_ms: 321.748446
+  type: 'test'
+  ...
+# Subtest: saved timing can be reopened and neighbouring tap bounds remain monotonic
+ok 35 - saved timing can be reopened and neighbouring tap bounds remain monotonic
+  ---
+  duration_ms: 300.54966
+  type: 'test'
+  ...
+# Subtest: MV lyrics and other text panels use paired semantic theme colours
+ok 36 - MV lyrics and other text panels use paired semantic theme colours
+  ---
+  duration_ms: 151.452818
+  type: 'test'
+  ...
+# Subtest: theme colour pairs for MV panels exceed 4.5:1 in light, dark and custom modes
+ok 37 - theme colour pairs for MV panels exceed 4.5:1 in light, dark and custom modes
+  ---
+  duration_ms: 191.69351
+  type: 'test'
+  ...
+# (node:68) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: whole-song lyric taps keep repeated-shot starts ordered and every distinct lyric exactly on its tap
+ok 38 - whole-song lyric taps keep repeated-shot starts ordered and every distinct lyric exactly on its tap
+  ---
+  duration_ms: 224.524488
+  type: 'test'
+  ...
+# Subtest: a late lyric tap redistributes unmarked shots between anchors rather than leaving old starts behind
+ok 39 - a late lyric tap redistributes unmarked shots between anchors rather than leaving old starts behind
+  ---
+  duration_ms: 125.375726
+  type: 'test'
+  ...
+# Subtest: section taps remain exact fractional anchors even when automatic beat snapping is enabled
+ok 40 - section taps remain exact fractional anchors even when automatic beat snapping is enabled
+  ---
+  duration_ms: 110.160179
+  type: 'test'
+  ...
+# Subtest: unmarked earlier sections fit before a later manual anchor without pushing that anchor away
+ok 41 - unmarked earlier sections fit before a later manual anchor without pushing that anchor away
+  ---
+  duration_ms: 137.175065
+  type: 'test'
+  ...
+# Subtest: section ranges and clipped export follow first-line anchors from whole-song lyric sync
+ok 42 - section ranges and clipped export follow first-line anchors from whole-song lyric sync
+  ---
+  duration_ms: 204.29929
+  type: 'test'
+  ...
+# Subtest: space and punctuation differences in copied lyrics still map to the same manual line
+ok 43 - space and punctuation differences in copied lyrics still map to the same manual line
+  ---
+  duration_ms: 117.992112
+  type: 'test'
+  ...
+# Subtest: repeated lyric text in separate occurrences receives distinct saved line times
+ok 44 - repeated lyric text in separate occurrences receives distinct saved line times
+  ---
+  duration_ms: 151.241075
+  type: 'test'
+  ...
+# Subtest: null and empty lyric taps remain unmarked and corrupt reversed taps never make negative durations
+ok 45 - null and empty lyric taps remain unmarked and corrupt reversed taps never make negative durations
+  ---
+  duration_ms: 131.234741
+  type: 'test'
+  ...
+# Subtest: tiny manually timed line intervals retain both exact anchors and positive intermediate cuts
+ok 46 - tiny manually timed line intervals retain both exact anchors and positive intermediate cuts
+  ---
+  duration_ms: 170.565388
+  type: 'test'
+  ...
+# Subtest: subtitles and timetable use the repaired positive timeline and preserve saved content
+ok 47 - subtitles and timetable use the repaired positive timeline and preserve saved content
+  ---
+  duration_ms: 152.968836
+  type: 'test'
+  ...
+# Subtest: an untimed opening with no intro drawings preserves later estimated cut positions
+ok 48 - an untimed opening with no intro drawings preserves later estimated cut positions
+  ---
+  duration_ms: 154.486395
+  type: 'test'
+  ...
+# Subtest: a corrupt zero tap after earlier drawings is ignored without rewriting data or collapsing those drawings
+ok 49 - a corrupt zero tap after earlier drawings is ignored without rewriting data or collapsing those drawings
+  ---
+  duration_ms: 125.379663
+  type: 'test'
+  ...
+# Subtest: public whole-song lyric sync, undo and reopening preserve exact timing and show no early lyric or skipped drawing
+ok 50 - public whole-song lyric sync, undo and reopening preserve exact timing and show no early lyric or skipped drawing
+  ---
+  duration_ms: 620.92266
+  type: 'test'
+  ...
+# Subtest: video export starts at the marked chorus and uses the same absolute cut points and images as preview
+ok 51 - video export starts at the marked chorus and uses the same absolute cut points and images as preview
+  ---
+  duration_ms: 252.750732
+  type: 'test'
+  ...
+# Subtest: legacy overall timing offsets retain their automatic cut positions when there are no manual marks
+ok 52 - legacy overall timing offsets retain their automatic cut positions when there are no manual marks
+  ---
+  duration_ms: 217.083064
+  type: 'test'
+  ...
+# (node:84) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: first storyboard reports wrapped 524 as transport timeout; no fake storyboard or extra request
+ok 53 - first storyboard reports wrapped 524 as transport timeout; no fake storyboard or extra request
+  ---
+  duration_ms: 174.82765
+  type: 'test'
+  ...
+# Subtest: failed regeneration preserves every old shot and image; next manual click can succeed
+ok 54 - failed regeneration preserves every old shot and image; next manual click can succeed
+  ---
+  duration_ms: 259.164984
+  type: 'test'
+  ...
+# Subtest: validated generation does not treat backend error prose as a paid empty-JSON reroll
+ok 55 - validated generation does not treat backend error prose as a paid empty-JSON reroll
+  ---
+  duration_ms: 308.323807
+  type: 'test'
+  ...
+# Subtest: plain, content-array and profile-stream errors retain 524 without exporting backend text
+ok 56 - plain, content-array and profile-stream errors retain 524 without exporting backend text
+  ---
+  duration_ms: 205.017293
+  type: 'test'
+  ...
+# Subtest: structured backend error message retains HTTP status when no numeric status field exists
+ok 57 - structured backend error message retains HTTP status when no numeric status field exists
+  ---
+  duration_ms: 181.624079
+  type: 'test'
+  ...
+# Subtest: numeric envelope status takes priority over conflicting prose
+ok 58 - numeric envelope status takes priority over conflicting prose
+  ---
+  duration_ms: 219.091925
+  type: 'test'
+  ...
+# Subtest: valid JSON, fenced JSON and JSON after backend-like prose remain parseable
+ok 59 - valid JSON, fenced JSON and JSON after backend-like prose remain parseable
+  ---
+  duration_ms: 250.192424
+  type: 'test'
+  ...
+# Subtest: truncated JSON after error-like prose remains a recoverable JSON truncation
+ok 60 - truncated JSON after error-like prose remains a recoverable JSON truncation
+  ---
+  duration_ms: 306.313864
+  type: 'test'
+  ...
+# Subtest: ordinary prose and incidental error references keep the existing parser path
+ok 61 - ordinary prose and incidental error references keep the existing parser path
+  ---
+  duration_ms: 344.667193
+  type: 'test'
+  ...
+# Subtest: HTTP and error-code-only error replies preserve a safe numeric status
+ok 62 - HTTP and error-code-only error replies preserve a safe numeric status
+  ---
+  duration_ms: 294.944302
+  type: 'test'
+  ...
+# Subtest: real thrown 524 is shown as timeout with MV trace and a single request
+ok 63 - real thrown 524 is shown as timeout with MV trace and a single request
+  ---
+  duration_ms: 369.059387
+  type: 'test'
+  ...
+# Subtest: successful first storyboard keeps configured max output, temperature, streaming choice and one request
+not ok 64 - successful first storyboard keeps configured max output, temperature, streaming choice and one request
+  ---
+  duration_ms: 403.861663
+  type: 'test'
+  location: '/workspace/scratch/8e568532ca62/candidate-1.0.27/tokimemo-main/tools/verification/mv-transport-regression.mjs:50:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    
+    true !== false
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: false
+  actual: true
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///workspace/scratch/8e568532ca62/candidate-1.0.27/tokimemo-main/tools/verification/mv-transport-regression.mjs:51:235)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+# Subtest: HTTP diagnostics permit only integer error statuses and never exception text
+ok 65 - HTTP diagnostics permit only integer error statuses and never exception text
+  ---
+  duration_ms: 298.698256
+  type: 'test'
+  ...
+# (node:92) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: saved typography defaults preserve old records and malformed data does not stop rendering
+not ok 66 - saved typography defaults preserve old records and malformed data does not stop rendering
+  ---
+  duration_ms: 313.096517
+  type: 'test'
+  location: '/workspace/scratch/8e568532ca62/candidate-1.0.27/tokimemo-main/tools/verification/mv-typography-regression.mjs:13:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    
+    undefined !== 1
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 1
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///workspace/scratch/8e568532ca62/candidate-1.0.27/tokimemo-main/tools/verification/mv-typography-regression.mjs:16:110)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3)
+  ...
+# Subtest: editor exposes optional size, tracking and leading without adding a font dependency
+not ok 67 - editor exposes optional size, tracking and leading without adding a font dependency
+  ---
+  duration_ms: 248.240087
+  type: 'test'
+  location: '/workspace/scratch/8e568532ca62/candidate-1.0.27/tokimemo-main/tools/verification/mv-typography-regression.mjs:24:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /data-rmt-mv-text-style="textScale"/. Input:
+    
+    '<main class="rmt-x-page rmt-mv-editor"><header class="rmt-mve-head"><div><h2>舞台</h2></div><div class="rmt-mve-head-actions"><button type="button" class="rmt-x-secondary" data-rmt-mv="editor-drawer" data-rmt-mv-id="more">更多</button><button type="button" class="rmt-x-primary" data-rmt-mv="editor-drawer" data-rmt-mv-id="export">导出</button></div></header>\n' +
+      '      <div class="rmt-mve-projectbar"><span class="rmt-mve-meta">表情卡拍 · 静音预览</span><button type="button" class="rmt-x-secondary" data-rmt-mv="editor-drawer" data-rmt-mv-id="audio" title="导入音乐" aria-label="导入音乐">导入音乐</button></div>\n' +
+      '      <div class="rmt-mve-layout-scope"><div class="rmt-mve-workspace" data-editor-tab="look" data-editor-paged="false" data-preview-only="false"><section class="rmt-mve-preview" aria-label="手书预览">\n' +
+      '        <div class="rmt-mve-preview-head"><span data-rmt-mv-current>第 1 镜 · 4 镜</span><div class="rmt-mve-preview-actions"><button type="button" class="rmt-x-secondary" data-rmt-mv="go-board">素材库</button><button type="button" class="rmt-x-secondary" data-rmt-mv="editor-preview">只看画面</button></div></div>\n' +
+      '        <div class="rmt-mv-canvas-wrap"><canvas data-rmt-mv-canvas width="960" height="540"></canvas></div>\n' +
+      '        <div class="rmt-mve-transport"><button type="button" class="rmt-mv-play" data-rmt-mv="play" aria-label="播放">▶</button><span class="rmt-mve-clock" data-rmt-mv-time>0:00.0</span><input type="range" min="0" max="16" step="0.1" value="0" data-rmt-mv-seek aria-label="播放位置"><small>0:16</small></div>\n' +
+      '        <div class="rmt-mve-filmstrip" data-rmt-mv-filmstrip><div class="rmt-mv-strip"><button type="button" class="on" aria-label="第 1 镜" data-rmt-mv="select-shot" data-rmt-mv-id="F1_muwbujj3"><img src="data:image/png;base64,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" alt="" loading="lazy" decoding="async"><span>1 · 4.0秒</span></button><button type="button" class="" aria-label="第 2 镜" data-rmt-mv="select-shot" data-rmt-mv-id="F2_muwbujj3"><img src="data:image/png;base64,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'... 16996 more characters
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual: |-
+    <main class="rmt-x-page rmt-mv-editor"><header class="rmt-mve-head"><div><h2>舞台</h2></div><div class="rmt-mve-head-actions"><button type="button" class="rmt-x-secondary" data-rmt-mv="editor-drawer" data-rmt-mv-id="more">更多</button><button type="button" class="rmt-x-primary" data-rmt-mv="editor-drawer" data-rmt-mv-id="export">导出</button></div></header>
+          <div class="rmt-mve-projectbar"><span class="rmt-mve-meta">表情卡拍 · 静音预览</span><button type="button" class="rmt-x-secondary" data-rmt-mv="editor-drawer" data-rmt-mv-id="audio" title="导入音乐" aria-label="导入音乐">导入音乐</button></div>
+          <div class="rmt-mve-layout-scope"><div class="rmt-mve-workspace" data-editor-tab="look" data-editor-paged="false" data-preview-only="false"><section class="rmt-mve-preview" aria-label="手书预览">
+            <div class="rmt-mve-preview-head"><span data-rmt-mv-current>第 1 镜 · 4 镜</span><div class="rmt-mve-preview-actions"><button type="button" class="rmt-x-secondary" data-rmt-mv="go-board">素材库</button><button type="button" class="rmt-x-secondary" data-rmt-mv="editor-preview">只看画面</button></div></div>
+            <div class="rmt-mv-canvas-wrap"><canvas data-rmt-mv-canvas width="960" height="540"></canvas></div>
+            <div class="rmt-mve-transport"><button type="button" class="rmt-mv-play" data-rmt-mv="play" aria-label="播放">▶</button><span class="rmt-mve-clock" data-rmt-mv-time>0:00.0</span><input type="range" min="0" max="16" step="0.1" value="0" data-rmt-mv-seek aria-label="播放位置"><small>0:16</small></div>
+            <div class="rmt-mve-filmstrip" data-rmt-mv-filmstrip><div class="rmt-mv-strip"><button type="button" class="on" aria-label="第 1 镜" data-rmt-mv="select-shot" data-rmt-mv-id="F1_muwbujj3"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAKAAAADwCAYAAACHQW/aAAAABHNCSVQICAgIfAhkiAAAAAFzUkdCAK7OHOkAAA+HSURBVHic7d1/cBzleQfw77N3khXZku5OEJsST0mGxImUCaFTfiR02nrCBEiY2ED2TsLguiJR05kw+dUOpFB6kBBgBkKCyUziScBj4tyPjYMNhJCWlkmnbkKdBifEahj+iDuOWxvQ3UmyjCXd7tM/JDNTQ8zp7t179t17Pv/69O5Xe1/vPjqtdgGllFJKKaWUUkoppZRSSimllFJKKaWUUkoppZRSSimllFLKFiQdIOp4fLy3Nj19IZjfDua3MbAWzGsBrAXR2sUX8SEAh0B0iIBDYD6EROJgqr//P2jbtuPS30OUaQFPwcw0NTJyfhAEHwbRh8F8CYDuJpebB9FeAD8mx/nHVKGwn4jYcGSraQGXVFz3T5joEwR8FMxnhLIRolcY+CExfzvjef8WyjYs0/EFnHHdoQXgHgBXtnnTT8BxvpgplX7d5u1GSscWcMp1z/WB20C0CcyOSAiiAMw7KZG4LV0sHhTJIKzjCjh73XVnzc3P3w7mvwSQlM6zZJ6JvtnN/OU+z3tZOkw7dVQBayMjfxz4/pMAzpTO8nu87CQSH0kViz+XDtIuMqceAZVc7grf938S4fIBwJm+7/+kkstdIR2kXTqigNVsdgxB8DgBvdJZ3gwBvQiCx6vZ7Jh0lnaIfQEns9k8M38HQEI6yzIkmPk71Vzus9JBwhbrGbDiujcDuEs6R4u+mPG8u6VDhCW2BZzKZi/zgSfFPmIxhSgA0ZWZUulH0lHCEMsCTudy76oz7wNzv3QWQ6aSwEX9nveCdBDT7D46vAHetKl/gfnxGJUPAAYWgD0V1x2QDmJarArI4+Nd1YWFMjG/SzqLaQSsA1DgfD5W71msvplqrXYDmC+TzhGiK6oTE+PSIUyKzQzImzb1V+bnXyTgrdJZwsRER4l5XcbzpqSzmBCbI2B1YeHv4l4+ACDm1Uz0OekcpsTiCDhz/fVvnZ+b+29i7pHO0iZT3cnkulWFwlHpIK2KxRFwYW7ujg4qHwAMzPv+7dIhTLD+CFjJ5d6LINhv2a/aTPAd4J0pz/utdJBW2H8EZP50B5YPABI+8BnpEK2KQwEvl44gyPrv3eoCTo+OvhvAH0rnkELAuqV9YC2rC1iv1zdKZ5Bm+z6wuoAMWL3zTbB9H1j7U/DsddedNTc3d9jm78EQXpFIvG1lsfg/0kGaYe0RcH5+/iItHwCATvj++6RDNMvaAjKwRjpDVDgW74uo/F3ssjGwxsTh7z37Jk777/91wVDktxEQndPSAoKsPQICsHanh8DafWFtAYnZ2p1uGll8Cra2gDoD/j/W7gtrC2jz/3rjLD4bWFtAFQ/WFpCBI9IZosLmfWHtxzC0uNPXtbqOiY9ZpLdBFhfQ2iMgLN7pIbB2X1hbQJtPO6bZvC+sLaDNpx3THMex9va+WsAY0COggEQy+TPpDFGRdJz90hmaZfXlTJOu+xsy8JOwzRh4YdDzrL0s39ojIAAQ0W7pDNJs3wdWFzBh+c43wfZ9YPUpmJmpks0eJuAs6SwSGDiSKZf/wObnz1l9BCQiJqLHpHNIIaI9NpcPthcQAMD8DQC+dAwBPogelA7RKusLmPG855nou9I52o7o23F40KH1BcTiQzVuZ6IT0jnahYlOdK1YcZt0DhNiUcCU5/0WzN+SztEuBHy975FHXpLOYUIsCggAK5LJuwDE4ra1p0U0ne7q+op0DFNiU8BVhcJRJvqadI7QMd9FO3dOS8cwJTYFBIBMKnUniPZK5wjRT9Pp9H3SIUyy+oPoNzLjumcuEP0nmNdKZzHsd8lk8vz+QuEV6SAmxeoICAB9nvcyMX+MgVelsxhDNI1k8qNxKx/iWEAASHve/oTj/AWIAuksLSMKHOaPZwqFX0lHCUMsCwgAqVLJA/Mt0jlaxnxLyvP+STpGWGI3A56qmsvdyEFwv4U3MveJ6G/T5fL90kHCFPsCAkAtm700AHZZ8wRNommH+aqU5/2LdJSwdUQBsXRD84V6/VECIn31MAMvdAEb4vhs4DcS2xnwVP2Fwm8y3d0XMdHT0llO44lMd/eFnVI+dFIBAYB27pzODA1dxo7zSSaKzHPWGHiJicbTw8Mb4vRbjkZ0zCn4VDw21lc9duxWMH8GwAqRDMBxAPdm+vrupYcempHIIK1jC3hS7dpr3xHU63eA+do27g8GUOjp7r6pd+fO37Vpm5HU8QU8aSqXu9gPgs8y0ZXEvDKMbTDRLDE/kXCcrw2USvp3zVrA1+Mbb1xRPXLkUiLaGDB/rNWHYDPwkkP0GDPvTq9Z8zRt3TpnLq39tIBvYnJk5IOO71/KwBoiOiNgHiSiQWY+A0SDAADmSSJ6hZknHaJJZn6FgCNBIvH0YLH479Lfg1JKqSiy/hRccV2r/y62VRnPs/o97KgPolX0aAGVKC2gEqUFVKK0gEqUFlCJ0gIqUVpAJUoLqERpAZUoLaASZXUBqyMj50tnkFZ13fdLZ2iFtQWsbtmS4iD4gXQOaUz0KI+N9UnnaJa1BeTZ2YLNj6o3hvmc6szMI9IxmmVlASdd9/MALpfOESEbqtns56RDNMO6a8kmXfcDBOhl7m8gkUhcPFAsPiudYzmsOgJWt2xJAfCkc0RV3fd3Le0ja1hVQJ6dLRBwtnSOqCLgbJ6dLUjnWA5rClhx3Zt17mvI5ZVs9ibpEI2yYgasZLOXAPhXMFvzH0ZYHUR/nimXI3/D9si/odObNw/y4r39Ip81QpIM7JrevHlQOsibifSbysxUP3HCI+bV0llsQ8yr6ydOeMwc6bNcpAtYy+VuAfN66RzWYl5fy+UifZ/syP7v0LnPkMUnBfxpVOfBSBbw2Ojo6jnf/6Wees1goqNdPT3D/Tt2TEpnOVXkji6czzvzvr9Ly2fOa/NgPh+59ztygSoTE3kwXyKdI3aY11cOHPgH6RinitQpuJrNrmfmf45arhhhIvpQulx+RjrISZF5o4+Njq6er9cPAIj8Z1eWm+xOJodXFQqRuEl7JE7BJ+c+LV9bDM77/q6ozIORCFE9cOBOnfvaiPmS6sTEl6VjIAqn4EnXvZyAH0nn6EDMwEcGPe8pyRCiBTzuumefAH4NwKpr2GKk1gO8t9fzDksFEDsFcz6ffJXoUS2fqNSrRI9yPp+UCiBWwNqBA/cQ8wVS21eLiPmC2sTE3WLbl9iozn3Rw8AVEvNg2wtYHRk5h33/OT31Ro7IPNjWUzCPj3dxEOzW8kXS4jw4Pt7Vzo22tYDVWu0+MJ/Xzm2qxhHzBZVa7d62brNdG6rmchuWjn4q4shxNqZLpT1t2VY7NlIdGTkn8P1fEWDtPUw6CQMzTiLxvnSxeDDsbYV+Cj4594VSPqJfGl/TNiHsAwL6OAh2t2MeDL2A1VrtgTDmPgZmyHE2ml7XNuQ4Gxkw/7R15vOq1erXja97ilALOJnNZsH8qTDWdhzn+nacIqIuXSwedBzn+pCW/+vJbDYb0tpAmAWcct1zwfxwGGsz0QPtGpJtkC6V9oBoayiLMz885brnhrJ2WAXkLVt6fGAPAb3G1ybal0ml/sb0urZLp1JfCGke7PWBPbxlS4/ptRFWAWuzsw8CGApj6bcwX0Xbti2EsLbVaNu2haWZuBbC8kO148dDOcIaL+BkNptl4AbT62LxB49RyUuHoi5dLB5kYDSMtZn5E2HMg0YLGObcR0T3SV88aYNBz3uKgK+GsngI86CxAvL4eG+Yc19qaOhm0+vGVWp4+CYm2md63dfmwfFxY++xsQJWa7WHQ5378vl6CGvHEuXz9bcwXxXWPLj0XhthpIA1170BzGF8XsQ69zWn1/MOhzUPgjlbzWbHTCzVcgFnXHfIJ3rQRJjXIbpb577mLe27UK52DoBvzLhuy2e8lgrI4+O9C8AeYjb/GRHR3vTQ0K3G1+0w6eHhW0Bk/M5YxNyzYGAebKmAS7NAGJ+ST3YnEtdQPh+EsHZHoXw+6E4krgEQxp2xzm11Hmy6gJVs9lNhzX1E5Ebl1hFxsKpQOEpE7uJHqYYxZyu53F81++VNFbCay50H4IFmN3o6DHwpSjfPiYt0ufwME4VzNwTmrUudWLZlF5DHxvqYeTeYzV8rRvRMZnj4duPrKgBAZmgoH8Y8COYuZt7dzEMTl13A6szMI2E8JJCJjiZ7elyd+8Jzch5kIvPjTZMPTVxWAau53I0ANix3I2+KKCDgmijeQjZuVhUKRwm4Zune0aZtqLjup5fzBQ0XcMZ1hzgIQpn7wHxbVG+iHUeZcnkvAWHdLXXrcj4fbLiA80A4AyzRM+ly+SuhrK1+r1SpdCeIQvlhb57ojkZf21ABZ1x3iADjf3/x2txHZP7jAXVaRMTJnh43jHmQmK+eHB0dbuS1DRVwHvhSCH/CWde5T1b/jh2TIc2DRPX63zfywoYKSMCftRzpdYvSrTr3ycuUy3vBbPxpStxgZ6Ruz/ZUply+R2jb6hQZz7sbgMhFH20vIAOHaeXKcC4TUk2jlStHGWj7ZW+NFtBYsKTjXJXevj2MCyVVC9Lbt9eSixctGEHA/zbyusZmQKLvt5xocZ3PD5RKxi8VV2YMFIvPMvAFQ8vtauRFDRXQSSaLLccBnkqXy/cbWEeFaNDzvmpiHuREYkcjr2uogAPf+96LLf3RM9FBnfvsQStXjoKo6dueMPDzwWLxUCOvbfiHkATRJ5lotokwx8hxrta5zx7p7dtr5DhXM3Bs2V9MNJ1wnIavD2y4gAOl0r6k43xoOaEYOIJk8uJ0sfhco1+joiFdLD5HwAcZeKnRr2HgmEO0PlUq/aLRr1nWxzADxeKz5DgfAPBYA2FeQCJx4WChcGA521DRkfG8551E4iIGXmzg5Y8hmbx4OeVDK79eq46MnB8EwWYC/gjA+8HcD+BlEO0GsDtTLj/Z7NrLUXHdjv49csbz2nKX20oudyUxb2DmDQDOBNE0mH/BRPuJ+aGM5z3fzLriz4prlRawPQUMSySelqk6lxZQidICKlFaQCVKC6hEaQGVKC2gEqUFVKK0gEqUFlCJ0gIqUVpAJUoLqERpAZUoLaASpQVUorSASpQWUInSAipRWkAlSguoRGkBlSgtoBKlBVSitIBKlBZQidICKlFaQCVKC6hEaQGVKC2gEqUFVKK0gEqUFlCJ0gIqUVpAJUoLqERpAZUoLaASpQVUorSASpQWUInSAipRWkAlSguoRGkBlSgtoBKlBVSitIBKlBZQidICKlFaQCVKC6hEaQGVKC2gEqUFVKK0gEqUFlCJ0gIqUVpAJUoLqERpAZUoLaASpQVUorSASpQWUInSAipRWkAlSguolFJKifg/YmH7G1nES3IAAAAASUVORK5CYII=" alt="" loading="lazy" decoding="async"><span>1 · 4.0秒</span></button><button type="button" class="" aria-label="第 2 镜" data-rmt-mv="select-shot" data-rmt-mv-id="F2_muwbujj3"><img src="data:image/png;base64,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" alt="" loading="lazy" decoding="async"><span>2 · 4.0秒</span></button><button type="button" class="" aria-label="第 3 镜" data-rmt-mv="select-shot" data-rmt-mv-id="F3_muwbujj3"><img src="data:image/png;base64,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" alt="" loading="lazy" decoding="async"><span>3 · 4.0秒</span></button><button type="button" class="" aria-label="第 4 镜" data-rmt-mv="select-shot" data-rmt-mv-id="F4_muwbujj3"><img src="data:image/png;base64,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" alt="" loading="lazy" decoding="async"><span>4 · 4.0秒</span></button></div></div>
+          </section><section class="rmt-mve-tools"><nav class="rmt-mve-tabs" aria-label="剪辑工作区"><button type="button" class="rmt-mve-tab" data-rmt-mv="editor-tab" data-rmt-mv-id="shots" aria-pressed="false">分镜</button><button type="button" class="rmt-mve-tab" data-rmt-mv="editor-tab" data-rmt-mv-id="timing" aria-pressed="false">定段 · 定句</button><button type="button" class="rmt-mve-tab on" data-rmt-mv="editor-tab" data-rmt-mv-id="look" aria-pressed="true">全片样式</button></nav><div class="rmt-mve-panel"><div class="rmt-mve-panel-scroll" data-rmt-mv-scroll="look"><div class="rmt-x-row-head"><b>整支手书的样子</b><span>全片设置</span></div><div class="rmt-x-segs"><button type="button" class="rmt-x-seg active" data-rmt-mv="editor-ratio" data-rmt-mv-id="16:9" aria-pressed="true">横屏 16:9</button><button type="button" class="rmt-x-seg" data-rmt-mv="editor-ratio" data-rmt-mv-id="9:16" aria-pressed="false">竖屏 9:16</button></div><b>片头与片尾</b><label class="rmt-mv-look"><span>片头时长（秒）</span><input type="number" min="0" step="0.5" inputmode="decimal" data-rmt-mv-intro-seconds value="0"></label><label class="rmt-mv-look"><span>片尾时长（秒）</span><input type="number" min="0" step="0.5" inputmode="decimal" data-rmt-mv-outro-seconds value="0"></label><p class="rmt-x-note">0 为关闭。片头最多占首镜头一半，开唱时结束；片尾最多占所选片段末镜头一半。</p>
+          <details open><summary>字幕与装饰</summary><div><b>歌词样式</b><div class="rmt-x-segs"><button type="button" class="rmt-x-seg active" data-rmt-mv="tegaki-lyric" data-rmt-mv-id="stage" aria-pressed="true">舞台编排</button><button type="button" class="rmt-x-seg" data-rmt-mv="tegaki-lyric" data-rmt-mv-id="vertical" aria-pressed="false">竖排</button><button type="button" class="rmt-x-seg" data-rmt-mv="tegaki-lyric" data-rmt-mv-id="subtitle" aria-pressed="false">字幕</button><button type="button" class="rmt-x-seg" data-rmt-mv="tegaki-lyric" data-rmt-mv-id="big" aria-pressed="false">大字</button><button type="button" class="rmt-x-seg" data-rmt-mv="tegaki-lyric" data-rmt-mv-id="none" aria-pressed="false">不显示</button></div>
+          <label class="rmt-mv-check"><input type="checkbox" data-rmt-mv-overlay="keyword" >副歌关键词（随歌词隐藏）</label><label class="rmt-mv-check"><input type="checkbox" data-rmt-mv-overlay="motif" >漂浮装饰</label>
+          <b>字体</b><div class="rmt-x-segs"><button type="button" class="rmt-x-seg active" data-rmt-mv="tegaki-font" data-rmt-mv-id="sans" aria-pressed="true">清爽</button><button type="button" class="rmt-x-seg" data-rmt-mv="tegaki-font" data-rmt-mv-id="song" aria-pressed="false">书卷</button><button type="button" class="rmt-x-seg" data-rmt-mv="tegaki-font" data-rmt-mv-id="round" aria-pressed="false">圆润</button></div><p class="rmt-x-note">字体用设备自带的，不同手机效果会略有差异。</p></div></details>
+          <details><summary>节奏模板与切换</summary><div><div class="rmt-mv-presets"><button type="button" class="rmt-mv-choice" aria-pressed="false" data-rmt-mv="tegaki-preset" data-rmt-mv-id="quick"><span><b>一人一句快切</b><small>每句歌词一张，干脆直切，节奏紧</small></span></button><button type="button" class="rmt-mv-choice" aria-pressed="false" data-rmt-mv="tegaki-preset" data-rmt-mv-id="flash"><span><b>白闪卡点</b><small>换构图时白闪，副歌每小节轻闪一下</small></span></button><button type="button" class="rmt-mv-choice" aria-pressed="false" data-rmt-mv="tegaki-preset" data-rmt-mv-id="slow"><span><b>抒情慢镜</b><small>构图之间淡入，画面缓慢推近，停留更久</small></span></button></div><p class="rmt-x-note">模板会统一修改镜头切换、停留和歌词样式；之后仍可逐镜调整。</p><b>切换节奏</b><div class="rmt-mv-grid2"><button type="button" class="rmt-x-seg active" data-rmt-mv="tegaki-rhythm" data-rmt-mv-id="line" aria-pressed="true">每句一换</button><button type="button" class="rmt-x-seg" data-rmt-mv="tegaki-rhythm" data-rmt-mv-id="beat" aria-pressed="false">跟着拍子切</button></div></div></details>
+          <details><summary>截取范围 · 0:00–0:16</summary><div><div class="rmt-mv-grid2"><button type="button" class="rmt-x-seg" data-rmt-mv="range-pick" data-rmt-mv-id="chorus" aria-pressed="false" data-rmt-mv-scope="record">第一段副歌</button><button type="button" class="rmt-x-seg" data-rmt-mv="range-pick" data-rmt-mv-id="verseChorus" aria-pressed="false" data-rmt-mv-scope="record">一段主歌 + 副歌</button><button type="button" class="rmt-x-seg active" data-rmt-mv="range-pick" data-rmt-mv-id="full" aria-pressed="true" data-rmt-mv-scope="record">整首</button><button type="button" class="rmt-x-seg" data-rmt-mv="range-pick" data-rmt-mv-id="custom" aria-pressed="false" data-rmt-mv-scope="record">自己选</button></div><p class="rmt-x-note">这次做：主歌 1 → 副歌 · 2 段 · 约 3 句歌词。手书通常只做一段，镜头少、节奏紧。</p><p class="rmt-x-note">约 16 秒。只改变预览范围，不删除其他分镜。</p></div></details></div></div></section></div></div>
+          </main>
+  operator: 'match'
+  stack: |-
+    TestContext.<anonymous> (file:///workspace/scratch/8e568532ca62/candidate-1.0.27/tokimemo-main/tools/verification/mv-typography-regression.mjs:27:57)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+# Subtest: typography changes persist for the current song without touching images, shots or timing
+not ok 68 - typography changes persist for the current song without touching images, shots or timing
+  ---
+  duration_ms: 376.44891
+  type: 'test'
+  location: '/workspace/scratch/8e568532ca62/candidate-1.0.27/tokimemo-main/tools/verification/mv-typography-regression.mjs:32:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    
+    false !== true
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///workspace/scratch/8e568532ca62/candidate-1.0.27/tokimemo-main/tools/verification/mv-typography-regression.mjs:38:69)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+# Subtest: reset restores original typography only and fragment export keeps the chosen settings
+not ok 69 - reset restores original typography only and fragment export keeps the chosen settings
+  ---
+  duration_ms: 242.826503
+  type: 'test'
+  location: '/workspace/scratch/8e568532ca62/candidate-1.0.27/tokimemo-main/tools/verification/mv-typography-regression.mjs:49:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+    
+    + undefined
+    - 1.15
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 1.15
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///workspace/scratch/8e568532ca62/candidate-1.0.27/tokimemo-main/tools/verification/mv-typography-regression.mjs:54:69)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+# Subtest: long subtitles stay complete and inside the 9:16 canvas
+not ok 70 - long subtitles stay complete and inside the 9:16 canvas
+  ---
+  duration_ms: 254.021565
+  type: 'test'
+  location: '/workspace/scratch/8e568532ca62/candidate-1.0.27/tokimemo-main/tools/verification/mv-typography-regression.mjs:63:5'
+  failureType: 'testCodeFailure'
+  error: 'the complete width of every drawn glyph/line must fit'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: '=='
+  stack: |-
+    TestContext.<anonymous> (file:///workspace/scratch/8e568532ca62/candidate-1.0.27/tokimemo-main/tools/verification/mv-typography-regression.mjs:71:20)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+# Subtest: long subtitles stay complete and inside the 16:9 canvas
+ok 71 - long subtitles stay complete and inside the 16:9 canvas
+  ---
+  duration_ms: 237.521088
+  type: 'test'
+  ...
+# Subtest: tracking does not split emoji families or combining accents and zero tracking uses whole text
+not ok 72 - tracking does not split emoji families or combining accents and zero tracking uses whole text
+  ---
+  duration_ms: 228.728676
+  type: 'test'
+  location: '/workspace/scratch/8e568532ca62/candidate-1.0.27/tokimemo-main/tools/verification/mv-typography-regression.mjs:79:1'
+  failureType: 'testCodeFailure'
+  error: 'shared typography module is bundled'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  operator: '=='
+  stack: |-
+    TestContext.<anonymous> (file:///workspace/scratch/8e568532ca62/candidate-1.0.27/tokimemo-main/tools/verification/mv-typography-regression.mjs:82:16)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+# Subtest: big lyrics do not discard text after the third line
+not ok 73 - big lyrics do not discard text after the third line
+  ---
+  duration_ms: 220.543664
+  type: 'test'
+  location: '/workspace/scratch/8e568532ca62/candidate-1.0.27/tokimemo-main/tools/verification/mv-typography-regression.mjs:93:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+    
+    + '写到这里也不能丢掉后面的歌词写到这里也不能丢掉后面的歌词写到这里也'
+    - '写到这里也不能丢掉后面的歌词写到这里也不能丢掉后面的歌词写到这里也不能丢掉后面的歌词写到这里也不能丢掉后面的歌词写到这里也不能丢掉后面的歌词写到这里也不能丢掉后面的歌词写到这里也不能丢掉后面的歌词写到这里也不能丢掉后面的歌词写到这里也不能丢掉后面的歌词写到这里也不能丢掉后面的歌词写到这里也不能丢掉后面的歌词写到这里也不能丢掉后面的歌词'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: '写到这里也不能丢掉后面的歌词写到这里也不能丢掉后面的歌词写到这里也不能丢掉后面的歌词写到这里也不能丢掉后面的歌词写到这里也不能丢掉后面的歌词写到这里也不能丢掉后面的歌词写到这里也不能丢掉后面的歌词写到这里也不能丢掉后面的歌词写到这里也不能丢掉后面的歌词写到这里也不能丢掉后面的歌词写到这里也不能丢掉后面的歌词写到这里也不能丢掉后面的歌词'
+  actual: '写到这里也不能丢掉后面的歌词写到这里也不能丢掉后面的歌词写到这里也'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///workspace/scratch/8e568532ca62/candidate-1.0.27/tokimemo-main/tools/verification/mv-typography-regression.mjs:96:18)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+# Subtest: repeated layout reuses measurements and does not change text or font size
+not ok 74 - repeated layout reuses measurements and does not change text or font size
+  ---
+  duration_ms: 167.196752
+  type: 'test'
+  location: '/workspace/scratch/8e568532ca62/candidate-1.0.27/tokimemo-main/tools/verification/mv-typography-regression.mjs:100:1'
+  failureType: 'testCodeFailure'
+  error: "Cannot read properties of undefined (reading 'fit')"
+  code: 'ERR_TEST_FAILURE'
+  name: 'TypeError'
+  stack: |-
+    TestContext.<anonymous> (file:///workspace/scratch/8e568532ca62/candidate-1.0.27/tokimemo-main/tools/verification/mv-typography-regression.mjs:106:29)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+# Subtest: video export and preview render the same adjusted typography at the same music time
+ok 75 - video export and preview render the same adjusted typography at the same music time
+  ---
+  duration_ms: 196.638241
+  type: 'test'
+  ...
+# Subtest: typography stays in its own song and invalid input does not overwrite saved values
+not ok 76 - typography stays in its own song and invalid input does not overwrite saved values
+  ---
+  duration_ms: 169.216746
+  type: 'test'
+  location: '/workspace/scratch/8e568532ca62/candidate-1.0.27/tokimemo-main/tools/verification/mv-typography-regression.mjs:138:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+    
+    + undefined
+    - 1.15
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 1.15
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///workspace/scratch/8e568532ca62/candidate-1.0.27/tokimemo-main/tools/verification/mv-typography-regression.mjs:143:16)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+# Subtest: manual vertical typography keeps long text on-screen without dropping characters
+ok 77 - manual vertical typography keeps long text on-screen without dropping characters
+  ---
+  duration_ms: 191.832553
+  type: 'test'
+  ...
+# (node:112) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: paid storyboard switch + quota preserves raw and old metadata; save-only retry is idempotent
+ok 78 - paid storyboard switch + quota preserves raw and old metadata; save-only retry is idempotent
+  ---
+  duration_ms: 223.220747
+  type: 'test'
+  ...
+# Subtest: revision drift journals paid result and survives a fresh runtime
+not ok 79 - revision drift journals paid result and survives a fresh runtime
+  ---
+  duration_ms: 173.527435
+  type: 'test'
+  location: '/workspace/scratch/8e568532ca62/candidate-1.0.27/tokimemo-main/tools/verification/mv-update-regression.mjs:13:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    
+    false !== true
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///workspace/scratch/8e568532ca62/candidate-1.0.27/tokimemo-main/tools/verification/mv-update-regression.mjs:13:231)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+# Subtest: song deletion and text changes cannot receive a late paid result
+ok 80 - song deletion and text changes cannot receive a late paid result
+  ---
+  duration_ms: 470.98948
+  type: 'test'
+  ...
+# Subtest: absent/silent local storage and rejected metadata never claim durable success
+ok 81 - absent/silent local storage and rejected metadata never claim durable success
+  ---
+  duration_ms: 286.738109
+  type: 'test'
+  ...
+# Subtest: malformed paid storyboard remains exportable with no automatic new request
+ok 82 - malformed paid storyboard remains exportable with no automatic new request
+  ---
+  duration_ms: 265.826013
+  type: 'test'
+  ...
+# Subtest: late generated frame never overwrites a newer manual image
+ok 83 - late generated frame never overwrites a newer manual image
+  ---
+  duration_ms: 390.312039
+  type: 'test'
+  ...
+# Subtest: late rewrite detects shot edits and keeps paid rewrite
+ok 84 - late rewrite detects shot edits and keeps paid rewrite
+  ---
+  duration_ms: 322.067595
+  type: 'test'
+  ...
+# Subtest: legacy reversed taps produce strictly positive non-overlapping SRT times
+ok 85 - legacy reversed taps produce strictly positive non-overlapping SRT times
+  ---
+  duration_ms: 336.537097
+  type: 'test'
+  ...
+# Subtest: frame cast is the exact intersection of shot people and appearance preference
+not ok 86 - frame cast is the exact intersection of shot people and appearance preference
+  ---
+  duration_ms: 263.314965
+  type: 'test'
+  location: '/workspace/scratch/8e568532ca62/candidate-1.0.27/tokimemo-main/tools/verification/mv-update-regression.mjs:20:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /no people/. Input:
+    
+    'vertical 9:16 composition, empty room, scenery, no humans'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual: 'vertical 9:16 composition, empty room, scenery, no humans'
+  operator: 'match'
+  stack: |-
+    TestContext.<anonymous> (file:///workspace/scratch/8e568532ca62/candidate-1.0.27/tokimemo-main/tools/verification/mv-update-regression.mjs:20:585)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+# Subtest: delayed audio restore cannot change another chat/song filename or duration
+ok 87 - delayed audio restore cannot change another chat/song filename or duration
+  ---
+  duration_ms: 375.326097
+  type: 'test'
+  ...
+# Subtest: audio with same song id is isolated by chat and late restore loses to manual upload
+ok 88 - audio with same song id is isolated by chat and late restore loses to manual upload
+  ---
+  duration_ms: 311.23932
+  type: 'test'
+  ...
+# Subtest: leaving MV while playing stops audio and never renders over another route
+ok 89 - leaving MV while playing stops audio and never renders over another route
+  ---
+  duration_ms: 405.586067
+  type: 'test'
+  ...
+# Subtest: record countdown is cancelled on exit and cannot play later
+ok 90 - record countdown is cancelled on exit and cannot play later
+  ---
+  duration_ms: 376.779709
+  type: 'test'
+  ...
+# Subtest: canvas subtitles preserve the entire lyric instead of clipping to 24 characters
+ok 91 - canvas subtitles preserve the entire lyric instead of clipping to 24 characters
+  ---
+  duration_ms: 332.078994
+  type: 'test'
+  ...
+# Subtest: public tap nudge cannot cross the next marked section
+ok 92 - public tap nudge cannot cross the next marked section
+  ---
+  duration_ms: 358.784557
+  type: 'test'
+  ...
+# Subtest: updater accepts same project SSH remote and reverse-proxy prefix with JSON/CSRF intact
+ok 93 - updater accepts same project SSH remote and reverse-proxy prefix with JSON/CSRF intact
+  ---
+  duration_ms: 286.431675
+  type: 'test'
+  ...
+# Subtest: updater independently verifies the resulting commit instead of trusting update response
+ok 94 - updater independently verifies the resulting commit instead of trusting update response
+  ---
+  duration_ms: 260.517935
+  type: 'test'
+  ...
+# Subtest: up-to-date branch makes no update POST and shows actual loaded build
+ok 95 - up-to-date branch makes no update POST and shows actual loaded build
+  ---
+  duration_ms: 281.210036
+  type: 'test'
+  ...
+# Subtest: wrong remote, ZIP, denied permissions and cross-origin path never pull code
+ok 96 - wrong remote, ZIP, denied permissions and cross-origin path never pull code
+  ---
+  duration_ms: 287.720835
+  type: 'test'
+  ...
+# Subtest: concurrent update clicks share a single update and release failed button
+ok 97 - concurrent update clicks share a single update and release failed button
+  ---
+  duration_ms: 324.423653
+  type: 'test'
+  ...
+# Subtest: song plan and storage retain song 81 and cumulative text beyond 1.2M
+ok 98 - song plan and storage retain song 81 and cumulative text beyond 1.2M
+  ---
+  duration_ms: 369.867095
+  type: 'test'
+  ...
+# Subtest: leaving during active export stops recorder, audio and tracks without redrawing another page
+ok 99 - leaving during active export stops recorder, audio and tracks without redrawing another page
+  ---
+  duration_ms: 278.322915
+  type: 'test'
+  ...
+# Subtest: export waits for local image blobs and cannot start after leaving during preload
+ok 100 - export waits for local image blobs and cannot start after leaving during preload
+  ---
+  duration_ms: 142.37779
+  type: 'test'
+  ...
+# Subtest: settings updater entry renders escaped complete running version independently of update status
+not ok 101 - settings updater entry renders escaped complete running version independently of update status
+  ---
+  duration_ms: 150.591369
+  type: 'test'
+  location: '/workspace/scratch/8e568532ca62/candidate-1.0.27/tokimemo-main/tools/verification/mv-update-regression.mjs:40:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /data-rmt-installed-version>当前版本：0.99.99-r84.187-&lt;runtime&gt;/. Input:
+    
+    '\n' +
+      '      <div class="inline-drawer-toggle inline-drawer-header rmt-settings-header">\n' +
+      '        <div><b>心迹回廊</b><small> API SETTINGS</small></div>\n' +
+      '        <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>\n' +
+      '      </div>\n' +
+      '      <div class="inline-drawer-content rmt-settings-content">\n' +
+      '        <details class="rmt-settings-card" data-rmt-settings-section="voice">\n' +
+      '      <summary class="rmt-settings-card-head"><span>VOICE</span><div><b>镜译 · 语音设置</b><small>连接与朗读音色</small></div></summary>\n' +
+      '      <div class="rmt-settings-section-body"><p>在镜译中配置语音服务后，可从各内容页的更多菜单朗读正文或选中文字。</p><div data-rmt-voice-settings></div></div>\n' +
+      '    </details>\n' +
+      '        <details class="rmt-settings-card rmt-api-box" data-rmt-settings-section="api">\n' +
+      '          <summary class="rmt-settings-card-head"><span>API</span><div><b>独立 API</b><small>一键配置 · 手动配置</small></div></summary>\n' +
+      '          <div class="rmt-settings-section-body">\n' +
+      '          <div class="rmt-api-source-grid" role="group" aria-label="独立 API 配置方式">\n' +
+      '            <button type="button" class="menu_button rmt-api-source-card" data-rmt-api-import-current aria-pressed="false"><span class="rmt-api-source-badge">凭证绑定</span><b>一键配置</b><small>读取酒馆当前连接</small></button>\n' +
+      '            <button type="button" class="menu_button rmt-api-source-card" data-rmt-api-select-manual aria-pressed="false"><span class="rmt-api-source-badge">OPENAI</span><b>手动配置</b><small>URL · Key · 模型</small></button>\n' +
+      '          </div>\n' +
+      '          <div data-rmt-api-host-capability role="status"></div>\n' +
+      '          <div class="rmt-api-status" data-rmt-api-status role="status">○ 一键连接未配置</div>\n' +
+      '          <div class="rmt-api-source-panel" data-rmt-api-profile-panel>\n' +
+      '            <label class="rmt-settings-field"><span>连接配置</span><select class="text_pole" data-rmt-api-profile><option value="">选择 Connection Manager 配置</option></select></label>\n' +
+      '            <details class="rmt-api-pool"><summary>多个连接轮流使用</summary><label class="rmt-settings-check"><input type="checkbox" data-rmt-api-pool-enabled><span>启用轮询连接池</span></label><div data-rmt-api-pool-choices></div><small>新任务依次使用勾选的连接及其模型；本次运行中的重试保持原连接；重新打开后续接会重新分配。可同时运行的任务数量沿用已有并发设置。</small></details>\n' +
+      '            <div class="rmt-model-row">\n' +
+      '              <label class="rmt-settings-field"><span>模型</span><select class="text_pole" data-rmt-api-model><option value="">请先选择专用连接</option></select></label>\n' +
+      '              <button type="button" class="menu_button rmt-model-refresh" data-rmt-api-model-refresh>刷新模型</button>\n' +
+      '            </div>\n' +
+      '          </div>\n' +
+      '          <div class="rmt-api-source-panel" data-rmt-api-manual-panel hidden>\n' +
+      '            <label class="rmt-settings-field"><span>API 地址</span><input class="text_pole" data-rmt-manual-api-base type="url" inputmode="url" placeholder="https://api.example.com/v1"></label>\n' +
+      '            <label class="rmt-settings-field"><span>API Key</span><div class="rmt-manual-key-row"><input class="text_pole" data-rmt-manual-api-key type="password" autocomplete="new-password" placeholder="API Key（可留空）"><button type="button" class="menu_button" data-rmt-manual-api-key-clear>清除 Key</button></div></label>\n' +
+      '            <div class="rmt-model-row">\n' +
+      '              <label class="rmt-settings-field"><span>模型 ID</span><input class="text_pole" data-rmt-manual-api-model type="text" placeholder="例如 gpt-4.1"><select class="text_pole rmt-manual-model-picker" data-rmt-manual-api-models hidden><option value="">选择已拉取模型</option></select></label>\n' +
+      '              <button type="button" class="menu_button rmt-model-refresh" data-rmt-manual-api-model-refresh>拉取模型</button>\n' +
+      '            </div>\n' +
+      '            <button type="button" class="menu_button rmt-settings-wide rmt-manual-save" data-rmt-manual-api-save>保存并使用</button>\n' +
+      '            <div data-rmt-manual-save-status role="status" aria-live="polite">填写后自动保存到本机，不随档案导出。</div>\n' +
+      '            <label class="rmt-settings-check"><input type="checkbox" data-rmt-manual-streaming ><span>使用流式输出（仅此手动 API）</span></label>\n' +
+      '            <small>需要服务端支持 SSE；关闭时使用普通完整响应，不影响主聊天。</small>\n' +
+      '          </div>\n' +
+      '          <div class="rmt-api-grid">\n' +
+      '            <label class="rmt-settings-field"><span>最大输出</span><input class="text_pole" data-rmt-api-max-tokens type="number" min="1" step="1" placeholder="默认 60000"></label>\n' +
+      '            <label class="rmt-settings-field"><span>输入预算</span><input class="text_pole" data-rmt-api-input-budget type="number" min="1" step="1" placeholder="默认 60000"></label>\n' +
+      '            <small>最大输出是模型最多写多长，默认 60000，不拦输入。输入预算默认 60000 tokens，可填写正整数；计数可用时按此预算检查，计数不可用时不按字符数拦截。实际容量由模型服务决定，与最大输出无关。</small>\n' +
+      '            <label class="rmt-settings-field"><span>温度</span><input class="text_pole" data-rmt-api-temperature type="number" min="0" max="2" step="0.1"></label>\n' +
+      '            <small data-rmt-temperature-note></small>\n' +
+      '          </div>\n' +
+      '          <label class="rmt-settings-check"><input type="checkbox" data-rmt-auto-second ><span>第一次完成后，自动进行第二次生成</span></label>\n' +
+      '          <label class="rmt-settings-check"><input type="checkbox" data-rmt-auto-retry ><span>失败后自动重试未完成部分</span></label>\n' +
+      '          <label class="rmt-settings-field"><span>自动重试次数</span><input class="text_pole" data-rmt-auto-retry-count type="number" min="1" max="5" step="1" value="1" disabled></label>\n' +
+      '          <small>默认关闭。打开后，新出现的「重试未完成部分」会自动再试，默认 1 次，可改成 1–5 次。每次都使用生成额度。超限草稿和已经写好、只差继续的草稿不会自动重试。</small>\n' +
+      '          <label class="rmt-settings-field"><span>生成禁用词</span><input class="text_pole" data-rmt-banned-generated-phrases type="text" placeholder="用逗号分隔，例如：老子"></label>\n' +
+      '          <p>打开房间只读已有内容；“今日生活”由房间里的手动更新按钮触发，不会在进入时自动请求。</p>\n' +
+      '          <label class="rmt-settings-check"><input data-rmt-tt-display type="checkbox"><span>TT 顶部安全区</span></label>\n' +
+      '          </div>\n' +
+      '        </details>\n' +
+      '        <details class="rmt-settings-card" data-rmt-settings-section="advanced-generation"><summary class="rmt-settings-card-head"><span>API</span><div><b>高级生成参数</b><small>排除参数 · 推理 · 流式</small></div></summary>\n' +
+      '<div class="rmt-settings-section-body">\n' +
+      '<label class="rmt-settings-check"><input type="checkbox" data-rmt-advanced-enabled><span>启用高级生成参数</span></label>\n' +
+      '<p>默认关闭，仅作用于心迹回廊。参数排除与附加 JSON 用于手动 API / 自定义 Profile，不改主聊天。</p>\n' +
+      '<label class="rmt-settings-field"><span>推理强度（reasoning_effort）</span><select class="text_pole" data-rmt-advanced-effort><option value="">默认：不覆盖</option><option value="none">none</option><option value="minimal">minimal</option><option value="low">low</option><option value="medium">medium</option><option value="high">high</option><option value="xhigh">xhigh</option><option value="max">max</option><option value="ultra">ultra</option></select></label>\n' +
+      '<label class="rmt-settings-field"><span>本插件流式方式</span><select class="text_pole" data-rmt-advanced-stream><option value="original">保持原设置</option><option value="on">使用流式</option><option value="off">使用完整响应</option></select></label>\n' +
+      '<p>不同模型接受的推理配置不同；不会根据模型名自动替你修改。</p>\n' +
+      '<b>排除参数（勾选＝不发送）</b>\n' +
+      '<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:12px 0"><label class="rmt-settings-check" style="min-width:0;overflow-wrap:anywhere"><input type="checkbox" data-rmt-advanced-exclude="temperature"><span>温度<small style="display:block;overflow-wrap:anywhere">temperature</small></span></label><label class="rmt-settings-check" style="min-width:0;overflow-wrap:anywhere"><input type="checkbox" data-rmt-advanced-exclude="frequency_penalty"><span>频率惩罚<small style="display:block;overflow-wrap:anywhere">frequency_penalty</small></span></label><label class="rmt-settings-check" style="min-width:0;overflow-wrap:anywhere"><input type="checkbox" data-rmt-advanced-exclude="presence_penalty"><span>存在惩罚<small style="display:block;overflow-wrap:anywhere">presence_penalty</small></span></label><label class="rmt-settings-check" style="min-width:0;overflow-wrap:anywhere"><input type="checkbox" data-rmt-advanced-exclude="top_p"><span>Top P<small style="display:block;overflow-wrap:anywhere">top_p</small></span></label><label class="rmt-settings-check" style="min-width:0;overflow-wrap:anywhere"><input type="checkbox" data-rmt-advanced-exclude="top_k"><span>Top K<small style="display:block;overflow-wrap:anywhere">top_k</small></span></label><label class="rmt-settings-check" style="min-width:0;overflow-wrap:anywhere"><input type="checkbox" data-rmt-advanced-exclude="seed"><span>种子<small style="display:block;overflow-wrap:anywhere">seed</small></span></label><label class="rmt-settings-check" style="min-width:0;overflow-wrap:anywhere"><input type="checkbox" data-rmt-advanced-exclude="min_p"><span>Min P<small style="display:block;overflow-wrap:anywhere">min_p</small></span></label><label class="rmt-settings-check" style="min-width:0;overflow-wrap:anywhere"><input type="checkbox" data-rmt-advanced-exclude="top_a"><span>Top A<small style="display:block;overflow-wrap:anywhere">top_a</small></span></label><label class="rmt-settings-check" style="min-width:0;overflow-wrap:anywhere"><input type="checkbox" data-rmt-advanced-exclude="typical_p"><span>Typical P<small style="display:block;overflow-wrap:anywhere">typical_p</small></span></label><label class="rmt-settings-check" style="min-width:0;overflow-wrap:anywhere"><input type="checkbox" data-rmt-advanced-exclude="repetition_penalty"><span>重复惩罚<small style="display:block;overflow-wrap:anywhere">repetition_penalty</small></span></label></div>\n' +
+      '<div class="rmt-theme-presets"><button type="button" data-rmt-advanced-common>选中常用四项</button><button type="button" data-rmt-advanced-none>取消所有排除</button></div>\n' +
+      `<label class="rmt-settings-field"><span>附加参数（JSON 对象，可留空）</span><textarea class="text_pole" data-rmt-advanced-json rows="6" maxlength="8192" spellcheck="false" placeholder='{"enable_thinking": false}'></textarea></label>\n` +
+      '<p>只填写接口支持的采样／推理参数；排除优先于 JSON。不接受模型、消息、最大输出、连接、Key 或工具覆盖。</p>\n' +
+      '<div class="rmt-theme-presets"><button type="button" data-rmt-advanced-save>保存高级参数</button><button type="button" data-rmt-advanced-revert>撤销编辑</button><button type="button" data-rmt-advanced-reset>关闭并重置</button></div>\n' +
+      '<div data-rmt-advanced-status role="status" aria-live="polite"></div'... 21312 more characters
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual: |-
+    
+          <div class="inline-drawer-toggle inline-drawer-header rmt-settings-header">
+            <div><b>心迹回廊</b><small> API SETTINGS</small></div>
+            <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
+          </div>
+          <div class="inline-drawer-content rmt-settings-content">
+            <details class="rmt-settings-card" data-rmt-settings-section="voice">
+          <summary class="rmt-settings-card-head"><span>VOICE</span><div><b>镜译 · 语音设置</b><small>连接与朗读音色</small></div></summary>
+          <div class="rmt-settings-section-body"><p>在镜译中配置语音服务后，可从各内容页的更多菜单朗读正文或选中文字。</p><div data-rmt-voice-settings></div></div>
+        </details>
+            <details class="rmt-settings-card rmt-api-box" data-rmt-settings-section="api">
+              <summary class="rmt-settings-card-head"><span>API</span><div><b>独立 API</b><small>一键配置 · 手动配置</small></div></summary>
+              <div class="rmt-settings-section-body">
+              <div class="rmt-api-source-grid" role="group" aria-label="独立 API 配置方式">
+                <button type="button" class="menu_button rmt-api-source-card" data-rmt-api-import-current aria-pressed="false"><span class="rmt-api-source-badge">凭证绑定</span><b>一键配置</b><small>读取酒馆当前连接</small></button>
+                <button type="button" class="menu_button rmt-api-source-card" data-rmt-api-select-manual aria-pressed="false"><span class="rmt-api-source-badge">OPENAI</span><b>手动配置</b><small>URL · Key · 模型</small></button>
+              </div>
+              <div data-rmt-api-host-capability role="status"></div>
+              <div class="rmt-api-status" data-rmt-api-status role="status">○ 一键连接未配置</div>
+              <div class="rmt-api-source-panel" data-rmt-api-profile-panel>
+                <label class="rmt-settings-field"><span>连接配置</span><select class="text_pole" data-rmt-api-profile><option value="">选择 Connection Manager 配置</option></select></label>
+                <details class="rmt-api-pool"><summary>多个连接轮流使用</summary><label class="rmt-settings-check"><input type="checkbox" data-rmt-api-pool-enabled><span>启用轮询连接池</span></label><div data-rmt-api-pool-choices></div><small>新任务依次使用勾选的连接及其模型；本次运行中的重试保持原连接；重新打开后续接会重新分配。可同时运行的任务数量沿用已有并发设置。</small></details>
+                <div class="rmt-model-row">
+                  <label class="rmt-settings-field"><span>模型</span><select class="text_pole" data-rmt-api-model><option value="">请先选择专用连接</option></select></label>
+                  <button type="button" class="menu_button rmt-model-refresh" data-rmt-api-model-refresh>刷新模型</button>
+                </div>
+              </div>
+              <div class="rmt-api-source-panel" data-rmt-api-manual-panel hidden>
+                <label class="rmt-settings-field"><span>API 地址</span><input class="text_pole" data-rmt-manual-api-base type="url" inputmode="url" placeholder="https://api.example.com/v1"></label>
+                <label class="rmt-settings-field"><span>API Key</span><div class="rmt-manual-key-row"><input class="text_pole" data-rmt-manual-api-key type="password" autocomplete="new-password" placeholder="API Key（可留空）"><button type="button" class="menu_button" data-rmt-manual-api-key-clear>清除 Key</button></div></label>
+                <div class="rmt-model-row">
+                  <label class="rmt-settings-field"><span>模型 ID</span><input class="text_pole" data-rmt-manual-api-model type="text" placeholder="例如 gpt-4.1"><select class="text_pole rmt-manual-model-picker" data-rmt-manual-api-models hidden><option value="">选择已拉取模型</option></select></label>
+                  <button type="button" class="menu_button rmt-model-refresh" data-rmt-manual-api-model-refresh>拉取模型</button>
+                </div>
+                <button type="button" class="menu_button rmt-settings-wide rmt-manual-save" data-rmt-manual-api-save>保存并使用</button>
+                <div data-rmt-manual-save-status role="status" aria-live="polite">填写后自动保存到本机，不随档案导出。</div>
+                <label class="rmt-settings-check"><input type="checkbox" data-rmt-manual-streaming ><span>使用流式输出（仅此手动 API）</span></label>
+                <small>需要服务端支持 SSE；关闭时使用普通完整响应，不影响主聊天。</small>
+              </div>
+              <div class="rmt-api-grid">
+                <label class="rmt-settings-field"><span>最大输出</span><input class="text_pole" data-rmt-api-max-tokens type="number" min="1" step="1" placeholder="默认 60000"></label>
+                <label class="rmt-settings-field"><span>输入预算</span><input class="text_pole" data-rmt-api-input-budget type="number" min="1" step="1" placeholder="默认 60000"></label>
+                <small>最大输出是模型最多写多长，默认 60000，不拦输入。输入预算默认 60000 tokens，可填写正整数；计数可用时按此预算检查，计数不可用时不按字符数拦截。实际容量由模型服务决定，与最大输出无关。</small>
+                <label class="rmt-settings-field"><span>温度</span><input class="text_pole" data-rmt-api-temperature type="number" min="0" max="2" step="0.1"></label>
+                <small data-rmt-temperature-note></small>
+              </div>
+              <label class="rmt-settings-check"><input type="checkbox" data-rmt-auto-second ><span>第一次完成后，自动进行第二次生成</span></label>
+              <label class="rmt-settings-check"><input type="checkbox" data-rmt-auto-retry ><span>失败后自动重试未完成部分</span></label>
+              <label class="rmt-settings-field"><span>自动重试次数</span><input class="text_pole" data-rmt-auto-retry-count type="number" min="1" max="5" step="1" value="1" disabled></label>
+              <small>默认关闭。打开后，新出现的「重试未完成部分」会自动再试，默认 1 次，可改成 1–5 次。每次都使用生成额度。超限草稿和已经写好、只差继续的草稿不会自动重试。</small>
+              <label class="rmt-settings-field"><span>生成禁用词</span><input class="text_pole" data-rmt-banned-generated-phrases type="text" placeholder="用逗号分隔，例如：老子"></label>
+              <p>打开房间只读已有内容；“今日生活”由房间里的手动更新按钮触发，不会在进入时自动请求。</p>
+              <label class="rmt-settings-check"><input data-rmt-tt-display type="checkbox"><span>TT 顶部安全区</span></label>
+              </div>
+            </details>
+            <details class="rmt-settings-card" data-rmt-settings-section="advanced-generation"><summary class="rmt-settings-card-head"><span>API</span><div><b>高级生成参数</b><small>排除参数 · 推理 · 流式</small></div></summary>
+    <div class="rmt-settings-section-body">
+    <label class="rmt-settings-check"><input type="checkbox" data-rmt-advanced-enabled><span>启用高级生成参数</span></label>
+    <p>默认关闭，仅作用于心迹回廊。参数排除与附加 JSON 用于手动 API / 自定义 Profile，不改主聊天。</p>
+    <label class="rmt-settings-field"><span>推理强度（reasoning_effort）</span><select class="text_pole" data-rmt-advanced-effort><option value="">默认：不覆盖</option><option value="none">none</option><option value="minimal">minimal</option><option value="low">low</option><option value="medium">medium</option><option value="high">high</option><option value="xhigh">xhigh</option><option value="max">max</option><option value="ultra">ultra</option></select></label>
+    <label class="rmt-settings-field"><span>本插件流式方式</span><select class="text_pole" data-rmt-advanced-stream><option value="original">保持原设置</option><option value="on">使用流式</option><option value="off">使用完整响应</option></select></label>
+    <p>不同模型接受的推理配置不同；不会根据模型名自动替你修改。</p>
+    <b>排除参数（勾选＝不发送）</b>
+    <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:12px 0"><label class="rmt-settings-check" style="min-width:0;overflow-wrap:anywhere"><input type="checkbox" data-rmt-advanced-exclude="temperature"><span>温度<small style="display:block;overflow-wrap:anywhere">temperature</small></span></label><label class="rmt-settings-check" style="min-width:0;overflow-wrap:anywhere"><input type="checkbox" data-rmt-advanced-exclude="frequency_penalty"><span>频率惩罚<small style="display:block;overflow-wrap:anywhere">frequency_penalty</small></span></label><label class="rmt-settings-check" style="min-width:0;overflow-wrap:anywhere"><input type="checkbox" data-rmt-advanced-exclude="presence_penalty"><span>存在惩罚<small style="display:block;overflow-wrap:anywhere">presence_penalty</small></span></label><label class="rmt-settings-check" style="min-width:0;overflow-wrap:anywhere"><input type="checkbox" data-rmt-advanced-exclude="top_p"><span>Top P<small style="display:block;overflow-wrap:anywhere">top_p</small></span></label><label class="rmt-settings-check" style="min-width:0;overflow-wrap:anywhere"><input type="checkbox" data-rmt-advanced-exclude="top_k"><span>Top K<small style="display:block;overflow-wrap:anywhere">top_k</small></span></label><label class="rmt-settings-check" style="min-width:0;overflow-wrap:anywhere"><input type="checkbox" data-rmt-advanced-exclude="seed"><span>种子<small style="display:block;overflow-wrap:anywhere">seed</small></span></label><label class="rmt-settings-check" style="min-width:0;overflow-wrap:anywhere"><input type="checkbox" data-rmt-advanced-exclude="min_p"><span>Min P<small style="display:block;overflow-wrap:anywhere">min_p</small></span></label><label class="rmt-settings-check" style="min-width:0;overflow-wrap:anywhere"><input type="checkbox" data-rmt-advanced-exclude="top_a"><span>Top A<small style="display:block;overflow-wrap:anywhere">top_a</small></span></label><label class="rmt-settings-check" style="min-width:0;overflow-wrap:anywhere"><input type="checkbox" data-rmt-advanced-exclude="typical_p"><span>Typical P<small style="display:block;overflow-wrap:anywhere">typical_p</small></span></label><label class="rmt-settings-check" style="min-width:0;overflow-wrap:anywhere"><input type="checkbox" data-rmt-advanced-exclude="repetition_penalty"><span>重复惩罚<small style="display:block;overflow-wrap:anywhere">repetition_penalty</small></span></label></div>
+    <div class="rmt-theme-presets"><button type="button" data-rmt-advanced-common>选中常用四项</button><button type="button" data-rmt-advanced-none>取消所有排除</button></div>
+    <label class="rmt-settings-field"><span>附加参数（JSON 对象，可留空）</span><textarea class="text_pole" data-rmt-advanced-json rows="6" maxlength="8192" spellcheck="false" placeholder='{"enable_thinking": false}'></textarea></label>
+    <p>只填写接口支持的采样／推理参数；排除优先于 JSON。不接受模型、消息、最大输出、连接、Key 或工具覆盖。</p>
+    <div class="rmt-theme-presets"><button type="button" data-rmt-advanced-save>保存高级参数</button><button type="button" data-rmt-advanced-revert>撤销编辑</button><button type="button" data-rmt-advanced-reset>关闭并重置</button></div>
+    <div data-rmt-advanced-status role="status" aria-live="polite"></div></div></details>
+            <details class="rmt-settings-card" data-rmt-settings-section="reading">
+          <summary class="rmt-settings-card-head"><span>READ</span><div><b>聊天读取范围</b><small>按原始楼号选择 · 不改旧档案</small></div></summary>
+          <div class="rmt-settings-section-body">
+            <label class="rmt-settings-field"><span>读取方式</span><select class="text_pole" data-rmt-read-mode><option value="recent" selected>最近若干楼</option><option value="range" >指定楼号范围</option><option value="all" >当前聊天全部楼层</option></select></label>
+            <label class="rmt-settings-field" data-rmt-read-recent-row ><span>最近多少楼</span><input class="text_pole" type="number" min="1" step="1" data-rmt-read-recent value="50"></label>
+            <div class="rmt-api-grid" data-rmt-read-range-row hidden><label class="rmt-settings-field"><span>从第几楼</span><input class="text_pole" type="number" min="1" step="1" data-rmt-read-start value="1"></label><label class="rmt-settings-field"><span>到第几楼</span><input class="text_pole" type="number" min="1" step="1" data-rmt-read-end value="100"></label></div>
+            <label class="rmt-settings-check"><input type="checkbox" data-rmt-read-hidden ><span>包含范围内被隐藏的普通聊天楼层</span></label>
+            <p>每条消息为一楼，从 1 开始，隐藏楼层仍保留原楼号。只限制聊天正文；世界书与外部记忆摘要仍按“记忆来源”单独读取。不删除已有记忆。</p>
+            <button type="button" class="menu_button rmt-settings-wide" data-rmt-read-preview>预览当前读取量（不生成）</button>
+            <div data-rmt-read-preview-status role="status" aria-live="polite">默认只读最近 50 楼；可主动选择全部。</div>
+            <div data-rmt-coverage-map class="rmt-coverage-map"></div>
+            <p data-rmt-coverage-status role="status"></p>
+          </div></details>
+            <details class="rmt-settings-card" data-rmt-settings-section="image">
+              <summary class="rmt-settings-card-head"><span>CG</span><div><b>CG 生图</b><small>相簿 · ADV · 日常一格</small></div></summary>
+              <div class="rmt-settings-section-body">
+                <label class="rmt-cg-format"><span>生图提示词格式</span><select data-rmt-cg-prompt-format aria-label="生图提示词格式" ><option value="nai45-tags" >NAI 4.5 · 英文 Tag</option><option value="nai5-natural" selected>NAI 5 · 自然语言</option></select><small>只选提示词写法；实际生图模型仍在生图插件中选择。</small></label>
+                <label class="rmt-settings-field"><span>生图渠道</span><select class="text_pole" data-rmt-image-generation-provider aria-describedby="rmt-image-provider-status"><option value="baibai-image">柏宝绘 · 公开 API v1</option><option value="chatu8-image">智绘姬</option></select></label>
+                <p id="rmt-image-provider-status" data-rmt-image-generation-status role="status" aria-live="polite"></p>
+                <label class="rmt-settings-check"><input type="checkbox" data-rmt-image-generation-fallback ><span>失败时自动改走另一个已连接的生图渠道</span></label>
+                <p>默认关闭。智绘姬沿用它自己已经配好的出图设置，这里不改那些设置。只在点击绘制并确认后出图。</p>
+              </div>
+            </details>
+            <details class="rmt-settings-card" data-rmt-settings-section="creative">
+              <summary class="rmt-settings-card-head"><span>文</span><div><b>破限词</b><small>仅用于心迹回廊独立 API；发给模型时仍标为「创作补充词」</small></div></summary>
+              <div class="rmt-settings-section-body">
+                <label class="rmt-settings-check"><input type="checkbox" data-rmt-creative-enabled><span>启用破限词</span></label>
+                <label class="rmt-settings-field"><span>文风、氛围与叙事偏好</span><textarea class="text_pole" data-rmt-creative-text maxlength="20000" rows="8" placeholder="例如：少用总结式旁白，让情绪从对白和细节中自然流露。"></textarea></label>
+                <p><output data-rmt-creative-count>0 / 20,000</output> 字符。仅随心迹回廊文本生成发送，不写入主聊天、不发送给生图接口；会占用模型输入额度。</p>
+                <div class="rmt-theme-presets"><button type="button" data-rmt-creative-save>保存破限词</button><button type="button" data-rmt-creative-cancel>撤销编辑</button></div>
+                <div role="status" data-rmt-creative-status></div>
+              </div>
+            </details>
+            <details class="rmt-settings-card" data-rmt-settings-section="filter">
+              <summary class="rmt-settings-card-head"><span>TAG</span><div><b>过滤标签</b><small>勾选即不读取</small></div></summary>
+              <div class="rmt-settings-section-body">
+                <p>勾选的标签及其中全部内容不参与后续读取；未勾选的内容和无标签正文保留。可排除正文内嵌的标签块，不改聊天和旧档案。</p>
+                <textarea class="text_pole" data-rmt-tag-draft aria-label="不读取的标签名" placeholder="thinking, 绘图提示词标签"></textarea>
+                <div class="rmt-theme-presets"><button type="button" data-rmt-tag-scan>扫描当前聊天</button><button type="button" data-rmt-tag-all>全选</button><button type="button" data-rmt-tag-invert>反选</button><button type="button" data-rmt-tag-clear>清空选择</button><button type="button" data-rmt-tag-cancel>撤销编辑</button><button type="button" data-rmt-tag-save>保存选择</button></div>
+                <div data-rmt-tag-status role="status"></div>
+                <div data-rmt-tag-results></div>
+              </div>
+            </details>
+            <details class="rmt-settings-card rmt-theme-box" data-rmt-settings-section="theme">
+              <summary class="rmt-settings-card-head"><span>UI</span><div><b>界面主题</b><small>配色与透明度</small></div></summary>
+              <div class="rmt-settings-section-body">
+              <label class="rmt-settings-field"><span>外观</span><select class="text_pole" data-rmt-theme-mode><option value="default">日间 · 珍珠白</option><option value="night">夜间 · 星黛蓝</option><option value="gs1">初叶绿</option><option value="gs2">海盐蓝</option><option value="gs3">花漾粉</option><option value="gs4">杏糖橙</option><option value="host">跟随酒馆美化</option><option value="custom">自定义配色</option></select></label>
+              <label class="rmt-settings-field"><span>悬浮头像</span><select class="text_pole" data-rmt-floating-avatar><option value="char">角色 char（默认）</option><option value="user">用户 user</option><option value="off">关闭</option></select></label>
+              <label class="rmt-settings-field"><span>卡片不透明度 <output data-rmt-theme-opacity></output></span><input data-rmt-theme-alpha type="range" min="0.72" max="1" step="0.01"></label>
+              <div class="rmt-theme-custom-panel" data-rmt-theme-custom-panel>
+                <div class="rmt-theme-presets"><button type="button" data-rmt-theme-preset="day">从日间开始</button><button type="button" data-rmt-theme-preset="night">从夜间开始</button></div>
+                <label><span>背景</span><input type="color" data-rmt-theme-color="background"></label>
+                <label><span>卡片</span><input type="color" data-rmt-theme-color="surface"></label>
+                <label><span>主文字</span><input type="color" data-rmt-theme-color="text"></label>
+                <label><span>次文字</span><input type="color" data-rmt-theme-color="muted"></label>
+                <label><span>选中与装饰色</span><input type="color" data-rmt-theme-color="accent"></label>
+                <label><span>第二装饰色</span><input type="color" data-rmt-theme-color="accentAlt"></label>
+                <label><span>边框</span><input type="color" data-rmt-theme-color="border"></label>
+              </div>
+              <button type="button" class="menu_button rmt-settings-wide" data-rmt-theme-reset>恢复默认配色</button>
+              </div>
+            </details>
+            <details class="rmt-settings-card" data-rmt-settings-section="auto">
+              <summary class="rmt-settings-card-head"><span>↻</span><div><b>自动留忆</b><small>和这个角色的回忆 · 向导与间隔</small></div></summary>
+              <div class="rmt-settings-section-body">
+              <p>只在已有档案的当前聊天里运行。打开后从当前楼数起计。</p>
+              <p data-rmt-memory-due hidden></p>
+              <label class="rmt-settings-field"><span>每隔多少楼抽一次</span><input class="text_pole" data-rmt-auto-memory-interval type="number" min="1" max="1000" step="1" value="5" aria-label="每隔多少楼抽一次"></label>
+              <small>到了这个间隔就从勾选的回忆里抽一份。1 到 1000。改完从现在重新计。</small>
+              <label class="rmt-settings-check"><input type="checkbox" data-rmt-auto-memory-latest ><span>在最新角色楼生成回忆</span></label>
+              <small>勾上后只数角色楼。间隔是 1 时，只用最新一条角色楼的正文。间隔更大时，这一窗角色楼的正文都会送去建档，不再截短。有摘要时，摘要没写到的楼附上完整正文。</small>
+              <small>打开自动留忆后，需要两次才完整的模块会自动做第二次生成。两次合在一起才是一份完整回忆。手动生成仍看连接设置里的开关。</small>
+              <label class="rmt-settings-check"><input type="checkbox" data-rmt-auto-memory-retry ><span>失败后自动重试</span></label>
+              <label class="rmt-settings-field"><span>失败后重试次数</span><input class="text_pole" data-rmt-auto-memory-retry-count type="number" min="1" max="5" step="1" value="1" aria-label="失败后重试次数"></label>
+              <small>勾上之后，信上的重试和补成就会自己跑，次数是 1 到 5。没勾就只有点了才发。已经写好的步骤会留着。</small>
+              <small>当前这一份回忆可以再写一遍。下面三个按钮不一样。</small>
+              <button type="button" class="menu_button rmt-settings-wide" data-rmt-auto-memory-redo="keep">按原来的抽签再写</button>
+              <small>还是刚才抽中的那一项，再写一遍。</small>
+              <button type="button" class="menu_button rmt-settings-wide" data-rmt-auto-memory-redo="redraw">重新抽一份</button>
+              <small>丢掉这次抽签，从已勾选的回忆里另抽一项来写。</small>
+              <button type="button" class="menu_button rmt-settings-wide" data-rmt-auto-memory-redo="pick">自己选一份</button>
+              <small>不抽签。点开后从清单里选一项来写。</small>
+              <details class="rmt-envelope-picker"><summary><span class="rmt-envelope-current" data-rmt-envelope-current><svg class="rmt-envelope" viewBox="0 0 280 190" aria-hidden="true" focusable="false"><rect x="8" y="18" width="264" height="164" rx="22" fill="#f6c6d4"/>
+            <path d="M8 146 L140 86 L272 146 L272 160 Q272 182 250 182 L30 182 Q8 182 8 160 Z" fill="#f3b4c8"/>
+            <path d="M8 146 L140 86 L140 182 L30 182 Q8 182 8 160 Z" fill="#eea9c0"/>
+            <path d="M20 36 L260 36 L140 124 Z" fill="#fff2f5"/>
+            <path d="M20 36 L140 124 L140 36 Z" fill="#fde7ee"/>
+            <path d="M140 112c-15-13-34-26-34-43 0-12 9-21 21-21 7 0 13 4 13 4s6-4 13-4c12 0 21 9 21 21 0 17-19 30-34 43z" fill="#d64578"/></svg></span><span><b>信封样式</b><small data-rmt-envelope-current-name>现在 粉色信封</small></span></summary><p>点开再选。六款一样大，用在聊天里的那封信上。</p><div class="rmt-envelope-options"><label class="rmt-envelope-option is-on"><input type="radio" name="rmt-heart-envelope" data-rmt-heart-envelope value="pink" checked><span class="rmt-envelope-art"><svg class="rmt-envelope" viewBox="0 0 280 190" aria-hidden="true" focusable="false"><rect x="8" y="18" width="264" height="164" rx="22" fill="#f6c6d4"/>
+            <path d="M8 146 L140 86 L272 146 L272 160 Q272 182 250 182 L30 182 Q8 182 8 160 Z" fill="#f3b4c8"/>
+            <path d="M8 146 L140 86 L140 182 L30 182 Q8 182 8 160 Z" fill="#eea9c0"/>
+            <path d="M20 36 L260 36 L140 124 Z" fill="#fff2f5"/>
+            <path d="M20 36 L140 124 L140 36 Z" fill="#fde7ee"/>
+            <path d="M140 112c-15-13-34-26-34-43 0-12 9-21 21-21 7 0 13 4 13 4s6-4 13-4c12 0 21 9 21 21 0 17-19 30-34 43z" fill="#d64578"/></svg></span><span>现在 粉色信封</span></label><label class="rmt-envelope-option"><input type="radio" name="rmt-heart-envelope" data-rmt-heart-envelope value="wax" ><span class="rmt-envelope-art"><svg class="rmt-envelope" viewBox="0 0 280 190" aria-hidden="true" focusable="false"><rect x="8" y="18" width="264" height="164" rx="18" fill="#f3e6d0"/>
+            <path d="M8 148 L140 84 L272 148 V162 Q272 182 250 182 H30 Q8 182 8 162 Z" fill="#e7d3b4"/>
+            <path d="M22 34 H258 L140 122 Z" fill="#fbf6ee"/>
+            <path d="M22 34 L140 122 V34 Z" fill="#f4ead8"/>
+            <circle cx="140" cy="100" r="24" fill="#8e2a2a"/>
+            <circle cx="140" cy="100" r="18" fill="#a33b3b"/>
+            <path d="M140 108c-5-4-10-8-10-13 0-4 3-6 6-6 2 0 4 1 4 1s2-1 4-1c3 0 6 2 6 6 0 5-5 9-10 13z" fill="#f6d5d8"/></svg></span><span>A 蜡封信</span></label><label class="rmt-envelope-option"><input type="radio" name="rmt-heart-envelope" data-rmt-heart-envelope value="night" ><span class="rmt-envelope-art"><svg class="rmt-envelope" viewBox="0 0 280 190" aria-hidden="true" focusable="false"><rect x="8" y="18" width="264" height="164" rx="18" fill="#15233f"/>
+            <path d="M8 148 L140 82 L272 148 V162 Q272 182 250 182 H30 Q8 182 8 162 Z" fill="#1c2e52"/>
+            <path d="M22 34 H258 L140 120 Z" fill="none" stroke="#e4c56a" stroke-width="2"/>
+            <path d="M22 34 L140 120" fill="none" stroke="#e4c56a" stroke-width="1.4"/>
+            <path d="M258 34 L140 120" fill="none" stroke="#e4c56a" stroke-width="1.4"/>
+            <circle cx="46" cy="58" r="1.4" fill="#f4e7b2"/><circle cx="78" cy="48" r="1.2" fill="#f4e7b2"/>
+            <circle cx="210" cy="52" r="1.3" fill="#f4e7b2"/><circle cx="236" cy="70" r="1.1" fill="#f4e7b2"/>
+            <circle cx="188" cy="40" r="1.2" fill="#f4e7b2"/>
+            <path d="M128 92a16 16 0 1 0 18 10 12 12 0 1 1-18-10z" fill="#f3e7c2"/></svg></span><span>B 星夜信</span></label><label class="rmt-envelope-option"><input type="radio" name="rmt-heart-envelope" data-rmt-heart-envelope value="sakura" ><span class="rmt-envelope-art"><svg class="rmt-envelope" viewBox="0 0 280 190" aria-hidden="true" focusable="false"><rect x="8" y="18" width="264" height="164" rx="22" fill="#fde8ef"/>
+            <path d="M8 148 L140 86 L272 148 V162 Q272 182 250 182 H30 Q8 182 8 162 Z" fill="#f8d5e2"/>
+            <path d="M22 34 H258 L140 120 Z" fill="#fff7f9"/>
+            <g fill="#f4a8c0" transform="translate(48 64)"><circle cx="-6" cy="0" r="4"/><circle cx="6" cy="0" r="4"/><circle cx="0" cy="-6" r="4"/><circle cx="0" cy="6" r="4"/><circle cx="0" cy="0" r="2.2" fill="#f7d7e2"/></g><g fill="#f4a8c0" transform="translate(228 58)"><circle cx="-6" cy="0" r="4"/><circle cx="6" cy="0" r="4"/><circle cx="0" cy="-6" r="4"/><circle cx="0" cy="6" r="4"/><circle cx="0" cy="0" r="2.2" fill="#f7d7e2"/></g><g fill="#f4a8c0" transform="translate(62 150)"><circle cx="-6" cy="0" r="4"/><circle cx="6" cy="0" r="4"/><circle cx="0" cy="-6" r="4"/><circle cx="0" cy="6" r="4"/><circle cx="0" cy="0" r="2.2" fill="#f7d7e2"/></g><g fill="#f4a8c0" transform="translate(214 146)"><circle cx="-6" cy="0" r="4"/><circle cx="6" cy="0" r="4"/><circle cx="0" cy="-6" r="4"/><circle cx="0" cy="6" r="4"/><circle cx="0" cy="0" r="2.2" fill="#f7d7e2"/></g>
+            <path d="M140 108c-8-7-18-14-18-23 0-6 5-11 11-11 4 0 7 2 7 2s3-2 7-2c6 0 11 5 11 11 0 9-10 16-18 23z" fill="#e56b92"/></svg></span><span>C 樱花信</span></label><label class="rmt-envelope-option"><input type="radio" name="rmt-heart-envelope" data-rmt-heart-envelope value="airmail" ><span class="rmt-envelope-art"><svg class="rmt-envelope" viewBox="0 0 280 190" aria-hidden="true" focusable="false"><line x1="-64" y1="200" x2="28" y2="-8" stroke="#d64545" stroke-width="8"/><line x1="-48" y1="200" x2="44" y2="-8" stroke="#2a4f96" stroke-width="8"/><line x1="-32" y1="200" x2="60" y2="-8" stroke="#d64545" stroke-width="8"/><line x1="-16" y1="200" x2="76" y2="-8" stroke="#2a4f96" stroke-width="8"/><line x1="0" y1="200" x2="92" y2="-8" stroke="#d64545" stroke-width="8"/><line x1="16" y1="200" x2="108" y2="-8" stroke="#2a4f96" stroke-width="8"/><line x1="32" y1="200" x2="124" y2="-8" stroke="#d64545" stroke-width="8"/><line x1="48" y1="200" x2="140" y2="-8" stroke="#2a4f96" stroke-width="8"/><line x1="64" y1="200" x2="156" y2="-8" stroke="#d64545" stroke-width="8"/><line x1="80" y1="200" x2="172" y2="-8" stroke="#2a4f96" stroke-width="8"/><line x1="96" y1="200" x2="188" y2="-8" stroke="#d64545" stroke-width="8"/><line x1="112" y1="200" x2="204" y2="-8" stroke="#2a4f96" stroke-width="8"/><line x1="128" y1="200" x2="220" y2="-8" stroke="#d64545" stroke-width="8"/><line x1="144" y1="200" x2="236" y2="-8" stroke="#2a4f96" stroke-width="8"/><line x1="160" y1="200" x2="252" y2="-8" stroke="#d64545" stroke-width="8"/><line x1="176" y1="200" x2="268" y2="-8" stroke="#2a4f96" stroke-width="8"/><line x1="192" y1="200" x2="284" y2="-8" stroke="#d64545" stroke-width="8"/><line x1="208" y1="200" x2="300" y2="-8" stroke="#2a4f96" stroke-width="8"/><line x1="224" y1="200" x2="316" y2="-8" stroke="#d64545" stroke-width="8"/><line x1="240" y1="200" x2="332" y2="-8" stroke="#2a4f96" stroke-width="8"/><line x1="256" y1="200" x2="348" y2="-8" stroke="#d64545" stroke-width="8"/><line x1="272" y1="200" x2="364" y2="-8" stroke="#2a4f96" stroke-width="8"/><line x1="288" y1="200" x2="380" y2="-8" stroke="#d64545" stroke-width="8"/><line x1="304" y1="200" x2="396" y2="-8" stroke="#2a4f96" stroke-width="8"/><line x1="320" y1="200" x2="412" y2="-8" stroke="#d64545" stroke-width="8"/><line x1="336" y1="200" x2="428" y2="-8" stroke="#2a4f96" stroke-width="8"/>
+            <rect x="22" y="30" width="236" height="132" fill="#fffdf8"/>
+            <text x="36" y="72" fill="#2a4f96" font-size="14" font-family="Georgia, 'Times New Roman', serif" letter-spacing="1.4">PAR AVION</text>
+            <path d="M36 92 H168 M36 106 H168 M36 120 H120" stroke="#c9bbaa" stroke-width="1.2"/>
+            <circle cx="176" cy="58" r="15" fill="none" stroke="#7d6a62" stroke-width="1.3"/>
+            <circle cx="176" cy="58" r="10" fill="none" stroke="#7d6a62" stroke-width="1"/>
+            <rect x="198" y="36" width="46" height="38" rx="3" fill="#f7c5d4" stroke="#e08aa6"/>
+            <path d="M221 56c-4-4-9-6-9-2 0 5 9 9 9 9s9-4 9-9c0-4-5-2-9 2z" fill="#d64578"/></svg></span><span>D 航空邮简</span></label><label class="rmt-envelope-option"><input type="radio" name="rmt-heart-envelope" data-rmt-heart-envelope value="wash" ><span class="rmt-envelope-art"><svg class="rmt-envelope" viewBox="0 0 280 190" aria-hidden="true" focusable="false"><rect x="8" y="18" width="264" height="164" rx="22" fill="#e5d2f4"/>
+            <ellipse cx="214" cy="150" rx="150" ry="110" fill="#f8c9b4"/>
+            <ellipse cx="52" cy="46" rx="78" ry="52" fill="#f6e7fb"/>
+            <path d="M8 148 L140 86 L272 148" fill="none" stroke="#fff" stroke-width="3" opacity=".85"/>
+            <path d="M140 112c-12-10-26-20-26-33 0-9 7-16 16-16 5 0 10 3 10 3s5-3 10-3c9 0 16 7 16 16 0 13-14 23-26 33z" fill="#fff"/></svg></span><span>E 水彩渐变</span></label></div></details>
+              <div data-rmt-auto-memory-pick hidden></div>
+              <p data-rmt-auto-memory-redo-status role="status"></p>
+              <button type="button" class="menu_button rmt-settings-wide" data-rmt-auto-memory-wizard>打开回忆向导</button>
+              <small>向导先接 API、读取范围和档案。生图和文字 API 分开配，配完点下一步。结束后再问要不要自动留忆。已有档案时不会重新建档。</small>
+              <p data-rmt-auto-memory-gate role="status"></p>
+              <button type="button" class="menu_button rmt-settings-wide" data-rmt-auto-memory-restore hidden>关闭自动留忆</button>
+              </div>
+            </details>
+            <details class="rmt-settings-card rmt-api-box" data-rmt-settings-section="memory">
+              <summary class="rmt-settings-card-head"><span>MEM</span><div><b>记忆来源</b><small>当前角色 · 当前聊天</small></div></summary>
+              <div class="rmt-settings-section-body">
+              <div class="rmt-api-source-grid" role="group" aria-label="记忆来源操作">
+                <button type="button" class="menu_button rmt-api-source-card" data-rmt-memory-auto-read><span class="rmt-api-source-badge">AUTO</span><b>自动读取</b><small>已注册的当前聊天来源</small></button>
+                <button type="button" class="menu_button rmt-api-source-card" data-rmt-memory-file-choose><span class="rmt-api-source-badge">FILE</span><b>导入记忆</b><small>JSON · JSONL · TXT · Markdown</small></button>
+              </div>
+              <label class="rmt-settings-check"><input type="checkbox" data-rmt-source-external checked><span>读取当前聊天的外部记忆摘要</span></label>
+              <label class="rmt-settings-check"><input type="checkbox" data-rmt-source-world-info checked><span>读取自动激活的世界书</span></label>
+              <p>聊天范围只控制聊天摘录。外部摘要、自动激活世界书分别由上方开关控制；手动选择的世界书仍按下方来源设置读取。已有档案不会被删除，派生模块仍使用已经归档的记忆。</p>
+              <button type="button" class="menu_button rmt-settings-wide" data-rmt-action="memory-worldinfo-picker" >选择记忆相关世界书</button>
+              <button type="button" class="menu_button rmt-settings-wide" data-rmt-action="participants-picker">选择加入回廊的人物</button>
+              <button type="button" class="menu_button rmt-settings-wide" data-rmt-action="participants-versions">查看重做前的旧版本</button>
+              <input type="file" accept=".json,.jsonl,.txt,.md,.markdown,application/json,text/plain,text/markdown" data-rmt-memory-file-input hidden>
+              <div class="rmt-api-status" data-rmt-memory-ingress-status role="status">展开记忆来源后查看状态；不会自动导入或生成。</div>
+              <div class="rmt-api-source-panel" data-rmt-memory-file-preview hidden>
+                <b data-rmt-memory-file-preview-title>待确认的记忆文件</b>
+                <small data-rmt-memory-file-preview-meta></small>
+                <small data-rmt-memory-file-preview-binding></small>
+                <div data-rmt-memory-file-preview-sample></div>
+                <label class="checkbox_label rmt-settings-check"><input type="checkbox" data-rmt-memory-file-history-confirm> 我确认这是已经发生的历史/摘要，不是角色设定</label>
+                <button type="button" class="menu_button rmt-settings-wide" data-rmt-memory-file-commit disabled>确认作为历史导入当前聊天</button>
+              </div>
+              <details class="rmt-api-source-panel"><summary>来源详情与世界书类型</summary>
+                <div data-rmt-memory-source-list>暂无持久化来源。</div>
+                <div data-rmt-memory-history-books></div>
+              </details>
+              <div data-rmt-scene-picker></div>
+              <button type="button" class="menu_button rmt-settings-wide" data-rmt-memory-source-clear>清除当前聊天已导入来源</button>
+              <small>只清除心迹回廊自己的来源账本；不会删除聊天、第三方记忆或正式 Mxxx。</small>
+              </div>
+            </details>
+            <div class="rmt-settings-archive-actions">
+              <button type="button" class="menu_button rmt-open-archive-room" data-rmt-settings-current-archive><i class="fa-solid fa-file-circle-plus"></i><span>生成当前窗口档案</span></button>
+              <button type="button" class="menu_button rmt-open-archive-room" data-rmt-settings-open-archive><i class="fa-solid fa-box-archive"></i><span>打开档案室</span></button>
+            </div>
+          </div>
+  operator: 'match'
+  stack: |-
+    TestContext.<anonymous> (file:///workspace/scratch/8e568532ca62/candidate-1.0.27/tokimemo-main/tools/verification/mv-update-regression.mjs:40:282)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+# Subtest: normal paid frame saves once and survives metadata failure through confirmed local copy
+ok 102 - normal paid frame saves once and survives metadata failure through confirmed local copy
+  ---
+  duration_ms: 272.561045
+  type: 'test'
+  ...
+# Subtest: storyboard saves alongside newer audio duration/timing without reverting either
+ok 103 - storyboard saves alongside newer audio duration/timing without reverting either
+  ---
+  duration_ms: 148.018566
+  type: 'test'
+  ...
+# Subtest: MV backup includes old metadata-only records before the first local write
+ok 104 - MV backup includes old metadata-only records before the first local write
+  ---
+  duration_ms: 151.557334
+  type: 'test'
+  ...
+# (node:124) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: existing song file control includes MP4 and MOV without changing the storyboard
+ok 105 - existing song file control includes MP4 and MOV without changing the storyboard
+  ---
+  duration_ms: 287.977717
+  type: 'test'
+  ...
+# Subtest: mp4: metadata alone cannot replace the old song; decoded data commits original container
+ok 106 - mp4: metadata alone cannot replace the old song; decoded data commits original container
+  ---
+  duration_ms: 349.465074
+  type: 'test'
+  ...
+# Subtest: mov: metadata alone cannot replace the old song; decoded data commits original container
+ok 107 - mov: metadata alone cannot replace the old song; decoded data commits original container
+  ---
+  duration_ms: 313.943488
+  type: 'test'
+  ...
+# Subtest: fragmented: metadata alone cannot replace the old song; decoded data commits original container
+ok 108 - fragmented: metadata alone cannot replace the old song; decoded data commits original container
+  ---
+  duration_ms: 204.417241
+  type: 'test'
+  ...
+# Subtest: silent: rejected before media load and keeps old audio, duration, timing and saved file
+ok 109 - silent: rejected before media load and keeps old audio, duration, timing and saved file
+  ---
+  duration_ms: 239.725451
+  type: 'test'
+  ...
+# Subtest: emptyTrack: rejected before media load and keeps old audio, duration, timing and saved file
+ok 110 - emptyTrack: rejected before media load and keeps old audio, duration, timing and saved file
+  ---
+  duration_ms: 205.842304
+  type: 'test'
+  ...
+# Subtest: damaged: rejected before media load and keeps old audio, duration, timing and saved file
+ok 111 - damaged: rejected before media load and keeps old audio, duration, timing and saved file
+  ---
+  duration_ms: 158.840571
+  type: 'test'
+  ...
+# Subtest: host decode error after valid audio-track inspection preserves old song
+ok 112 - host decode error after valid audio-track inspection preserves old song
+  ---
+  duration_ms: 163.925184
+  type: 'test'
+  ...
+# Subtest: video audio shares preview play, pause, seek, timing marks and export source
+ok 113 - video audio shares preview play, pause, seek, timing marks and export source
+  ---
+  duration_ms: 170.277158
+  type: 'test'
+  ...
+# Subtest: a newer file selection wins over a delayed video decoder result
+ok 114 - a newer file selection wins over a delayed video decoder result
+  ---
+  duration_ms: 191.000786
+  type: 'test'
+  ...
+# Subtest: switching songs during track inspection or decoding never commits into either song
+ok 115 - switching songs during track inspection or decoding never commits into either song
+  ---
+  duration_ms: 316.57912
+  type: 'test'
+  ...
+# Subtest: fresh runtime restores original video container and validates it before use
+ok 116 - fresh runtime restores original video container and validates it before use
+  ---
+  duration_ms: 323.754195
+  type: 'test'
+  ...
+# Subtest: failed cached-video restore stops after one attempt instead of retrying on its own redraw
+ok 117 - failed cached-video restore stops after one attempt instead of retrying on its own redraw
+  ---
+  duration_ms: 338.731425
+  type: 'test'
+  ...
+# Subtest: HTML has one music entry, one player, all image controls and the same export/recovery entries
+ok 118 - HTML has one music entry, one player, all image controls and the same export/recovery entries
+  ---
+  duration_ms: 3.388263
+  type: 'test'
+  ...
+# Subtest: local recording uses the one shared sound element and current filename
+ok 119 - local recording uses the one shared sound element and current filename
+  ---
+  duration_ms: 3.427541
+  type: 'test'
+  ...
+# Subtest: failed new recording retains the loaded music and timing
+ok 120 - failed new recording retains the loaded music and timing
+  ---
+  duration_ms: 1.485682
+  type: 'test'
+  ...
+# Subtest: remove switches the same entry back to import without clearing pictures or marks
+ok 121 - remove switches the same entry back to import without clearing pictures or marks
+  ---
+  duration_ms: 1.255401
+  type: 'test'
+  ...
+# Subtest: completed body + open draw ticket: settle without new body requests; repeated wake is idle
+ok 122 - completed body + open draw ticket: settle without new body requests; repeated wake is idle
+  ---
+  duration_ms: 3.95364
+  type: 'test'
+  ...
+# Subtest: settlement failure can be retried without rerunning completed body
+ok 123 - settlement failure can be retried without rerunning completed body
+  ---
+  duration_ms: 1.270974
+  type: 'test'
+  ...
+# Subtest: failed pending step on same floor remains resumable; saved steps never execute
+ok 124 - failed pending step on same floor remains resumable; saved steps never execute
+  ---
+  duration_ms: 1.130776
+  type: 'test'
+  ...
+# Subtest: every 1 floor, 4 floors with repeated wakeups -> exactly 4 bodies and no adjacent repeat in multi-candidate pool
+ok 125 - every 1 floor, 4 floors with repeated wakeups -> exactly 4 bodies and no adjacent repeat in multi-candidate pool
+  ---
+  duration_ms: 3.63676
+  type: 'test'
+  ...
+# Subtest: only one eligible module continues generating each floor (no added block)
+ok 126 - only one eligible module continues generating each floor (no added block)
+  ---
+  duration_ms: 3.441551
+  type: 'test'
+  ...
+# Subtest: completed ticket on next due floor does not consume or block the new draw
+ok 127 - completed ticket on next due floor does not consume or block the new draw
+  ---
+  duration_ms: 0.62777
+  type: 'test'
+  ...
+# Subtest: batch progress preserves page-only flag and displays a working save-only entry
+ok 128 - batch progress preserves page-only flag and displays a working save-only entry
+  ---
+  duration_ms: 45.80928
+  type: 'test'
+  ...
+# Subtest: successful paid segment survives storage failure; explicit save makes it durable with zero additional model calls
+ok 129 - successful paid segment survives storage failure; explicit save makes it durable with zero additional model calls
+  ---
+  duration_ms: 7.412046
+  type: 'test'
+  ...
+# Subtest: new batch reusing storage slot never counts previous batch successes as current saved successes
+ok 130 - new batch reusing storage slot never counts previous batch successes as current saved successes
+  ---
+  duration_ms: 3.865479
+  type: 'test'
+  ...
+# Subtest: manual save waits for a failed in-flight write, then performs its own save retry
+ok 131 - manual save waits for a failed in-flight write, then performs its own save retry
+  ---
+  duration_ms: 1.805447
+  type: 'test'
+  ...
+# Subtest: storage CAS conflicts still preserve page data and do not overwrite external data
+ok 132 - storage CAS conflicts still preserve page data and do not overwrite external data
+  ---
+  duration_ms: 2.337385
+  type: 'test'
+  ...
+# Subtest: finished result or parked old draft with failed storage still exposes save-only action
+ok 133 - finished result or parked old draft with failed storage still exposes save-only action
+  ---
+  duration_ms: 4.978939
+  type: 'test'
+  ...
+# Subtest: legacy songs remain readable, with optional cover absent and no data mutation on opening
+ok 134 - legacy songs remain readable, with optional cover absent and no data mutation on opening
+  ---
+  duration_ms: 2.915671
+  type: 'test'
+  ...
+# Subtest: cover apply/reopen/redraw/history touches only the selected cover, preserving lyrics and neighboring songs
+ok 135 - cover apply/reopen/redraw/history touches only the selected cover, preserving lyrics and neighboring songs
+  ---
+  duration_ms: 3.187274
+  type: 'test'
+  ...
+# Subtest: late cover cannot overwrite changed lyrics, another song, or another mode
+ok 136 - late cover cannot overwrite changed lyrics, another song, or another mode
+  ---
+  duration_ms: 0.293364
+  type: 'test'
+  ...
+# Subtest: newer redraw is preserved when an older image completion arrives late
+ok 137 - newer redraw is preserved when an older image completion arrives late
+  ---
+  duration_ms: 0.514753
+  type: 'test'
+  ...
+# Subtest: cover sidecar rejects remote / embedded / script / traversal paths using existing saved-image contract
+ok 138 - cover sidecar rejects remote / embedded / script / traversal paths using existing saved-image contract
+  ---
+  duration_ms: 0.539219
+  type: 'test'
+  ...
+# Subtest: concurrent new song commit keeps latest stored cover and still rejects text conflicts
+ok 139 - concurrent new song commit keeps latest stored cover and still rejects text conflicts
+  ---
+  duration_ms: 1.029746
+  type: 'test'
+  ...
+# Subtest: initial and reconceived album art prompts are cinematic fashion covers, not old generic 16:9 scene instructions
+ok 140 - initial and reconceived album art prompts are cinematic fashion covers, not old generic 16:9 scene instructions
+  ---
+  duration_ms: 0.892543
+  type: 'test'
+  ...
+# Subtest: read-only cover view displays saved art without edit buttons
+ok 141 - read-only cover view displays saved art without edit buttons
+  ---
+  duration_ms: 0.704825
+  type: 'test'
+  ...
+# Subtest: album concept preserves participant identities and existing appearance contract in both text formats
+ok 142 - album concept preserves participant identities and existing appearance contract in both text formats
+  ---
+  duration_ms: 0.429647
+  type: 'test'
+  ...
+# Subtest: manual album prompt remains editable and sendable with empty appearance; no new formatting gate
+ok 143 - manual album prompt remains editable and sendable with empty appearance; no new formatting gate
+  ---
+  duration_ms: 0.981544
+  type: 'test'
+  ...
+# Subtest: cover capture uses existing chat/revision identity and becomes stale on changed song content
+ok 144 - cover capture uses existing chat/revision identity and becomes stale on changed song content
+  ---
+  duration_ms: 6.299688
+  type: 'test'
+  ...
+# (node:279) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: installed notes come from the exact bundled README, without network or old remote history
+ok 145 - installed notes come from the exact bundled README, without network or old remote history
+  ---
+  duration_ms: 124.533026
+  type: 'test'
+  ...
+# Subtest: README parser retains credit and current changes, never adds older sections
+ok 146 - README parser retains credit and current changes, never adds older sections
+  ---
+  duration_ms: 120.293146
+  type: 'test'
+  ...
+# Subtest: remote update preview reads the selected branch README, never CHANGELOG or main
+ok 147 - remote update preview reads the selected branch README, never CHANGELOG or main
+  ---
+  duration_ms: 207.946132
+  type: 'test'
+  ...
+# Subtest: failed remote README does not silently substitute installed notes or old history
+ok 148 - failed remote README does not silently substitute installed notes or old history
+  ---
+  duration_ms: 280.618423
+  type: 'test'
+  ...
+# Subtest: README parser handles CRLF, wrapped paragraphs and hostile strings as plain data
+ok 149 - README parser handles CRLF, wrapped paragraphs and hostile strings as plain data
+  ---
+  duration_ms: 274.755448
+  type: 'test'
+  ...
+# Subtest: current UI consumes README groups and chooses installed vs remote notes explicitly
+ok 150 - current UI consumes README groups and chooses installed vs remote notes explicitly
+  ---
+  duration_ms: 16.769827
+  type: 'test'
+  ...
+# Subtest: self-contained preview loads reference pixels and one shared player
+ok 151 - self-contained preview loads reference pixels and one shared player
+  ---
+  duration_ms: 43.17191
+  type: 'test'
+  ...
+# Subtest: selecting and seeking follow one current shot and retain 17 visible choices
+ok 152 - selecting and seeking follow one current shot and retain 17 visible choices
+  ---
+  duration_ms: 90.511528
+  type: 'test'
+  ...
+# Subtest: play pause and focus view are reversible without resetting the timeline
+ok 153 - play pause and focus view are reversible without resetting the timeline
+  ---
+  duration_ms: 45.935492
+  type: 'test'
+  ...
+# Subtest: tabs have keyboard navigation and portrait ratio keeps original width-height relationship
+ok 154 - tabs have keyboard navigation and portrait ratio keeps original width-height relationship
+  ---
+  duration_ms: 41.830232
+  type: 'test'
+  ...
+# Subtest: image editor keeps save controls, foldable tools, zoom reset and next-shot navigation
+ok 155 - image editor keeps save controls, foldable tools, zoom reset and next-shot navigation
+  ---
+  duration_ms: 161.793884
+  type: 'test'
+  ...
+# Subtest: README view and release dialog share the exact current README and do not show history
+ok 156 - README view and release dialog share the exact current README and do not show history
+  ---
+  duration_ms: 384.618329
+  type: 'test'
+  ...
+# Subtest: timing edits are local and undo restores the previous marks
+ok 157 - timing edits are local and undo restores the previous marks
+  ---
+  duration_ms: 109.354087
+  type: 'test'
+  ...
+# Subtest: release text containing markup remains inert in the prototype
+ok 158 - release text containing markup remains inert in the prototype
+  ---
+  duration_ms: 231.571309
+  type: 'test'
+  ...
+# (node:376) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: one refresh shares recovery reads with task panel closed
+ok 159 - one refresh shares recovery reads with task panel closed
+  ---
+  duration_ms: 251.692063
+  type: 'test'
+  ...
+# Subtest: one refresh shares recovery reads with task panel open
+ok 160 - one refresh shares recovery reads with task panel open
+  ---
+  duration_ms: 197.831469
+  type: 'test'
+  ...
+# Subtest: the next refresh immediately sees a newly saved failure and its later completion
+ok 161 - the next refresh immediately sees a newly saved failure and its later completion
+  ---
+  duration_ms: 279.316859
+  type: 'test'
+  ...
+# Subtest: request phase updates reuse one snapshot and keep cancellation visible
+ok 162 - request phase updates reuse one snapshot and keep cancellation visible
+  ---
+  duration_ms: 204.676736
+  type: 'test'
+  ...
+# Subtest: one unreadable pending store is observed once and still exposes its existing export action
+ok 163 - one unreadable pending store is observed once and still exposes its existing export action
+  ---
+  duration_ms: 186.036507
+  type: 'test'
+  ...
+# Subtest: standalone live strip refresh does not carry a prior refresh snapshot
+ok 164 - standalone live strip refresh does not carry a prior refresh snapshot
+  ---
+  duration_ms: 160.824167
+  type: 'test'
+  ...
+# (node:388) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: ordinary ledger is retained even when provider labels it memory and uses no timing keywords
+ok 165 - ordinary ledger is retained even when provider labels it memory and uses no timing keywords
+  ---
+  duration_ms: 359.854863
+  type: 'test'
+  ...
+# Subtest: all ordinary app kinds accept persona content without memory quotes or new mandatory fields
+ok 166 - all ordinary app kinds accept persona content without memory quotes or new mandatory fields
+  ---
+  duration_ms: 264.604812
+  type: 'test'
+  ...
+# Subtest: the final phone normalizer does not turn a validated ledger back into source excerpts
+ok 167 - the final phone normalizer does not turn a validated ledger back into source excerpts
+  ---
+  duration_ms: 255.810257
+  type: 'test'
+  ...
+# Subtest: actual joint history still needs evidence and is never downgraded into ordinary life
+ok 168 - actual joint history still needs evidence and is never downgraded into ordinary life
+  ---
+  duration_ms: 119.401349
+  type: 'test'
+  ...
+# Subtest: known contact can use name and a present note without a telephone or address
+ok 169 - known contact can use name and a present note without a telephone or address
+  ---
+  duration_ms: 198.484168
+  type: 'test'
+  ...
+# Subtest: unknown contacts and invented private fields remain rejected
+ok 170 - unknown contacts and invented private fields remain rejected
+  ---
+  duration_ms: 126.301457
+  type: 'test'
+  ...
+# Subtest: terminal prompt supplies contact identity and app-shaped records without UI disclaimers
+ok 171 - terminal prompt supplies contact identity and app-shaped records without UI disclaimers
+  ---
+  duration_ms: 131.766738
+  type: 'test'
+  ...
+# Subtest: old recap repair is offered without mutating or dropping saved rows
+ok 172 - old recap repair is offered without mutating or dropping saved rows
+  ---
+  duration_ms: 158.8734
+  type: 'test'
+  ...
+# Subtest: explicit repair requests only recap or missing slots and persists the successful replacement
+ok 173 - explicit repair requests only recap or missing slots and persists the successful replacement
+  ---
+  duration_ms: 127.603612
+  type: 'test'
+  ...
+# Subtest: repair errors and failed saves never mutate the previous session
+ok 174 - repair errors and failed saves never mutate the previous session
+  ---
+  duration_ms: 120.598363
+  type: 'test'
+  ...
+# Subtest: historical chat and contact records are not rewritten by the ordinary app repair
+ok 175 - historical chat and contact records are not rewritten by the ordinary app repair
+  ---
+  duration_ms: 129.962322
+  type: 'test'
+  ...
+# Subtest: app lists expose ledger fields and named contact cards, escaping model text
+ok 176 - app lists expose ledger fields and named contact cards, escaping model text
+  ---
+  duration_ms: 149.124285
+  type: 'test'
+  ...
+# Subtest: legacy recap labels are absent in list and detail while source data remains unchanged
+ok 177 - legacy recap labels are absent in list and detail while source data remains unchanged
+  ---
+  duration_ms: 134.243668
+  type: 'test'
+  ...
+# Subtest: empty app has a working generation action and read-only app has no paid action
+ok 178 - empty app has a working generation action and read-only app has no paid action
+  ---
+  duration_ms: 120.371416
+  type: 'test'
+  ...
+# Subtest: new expression direction is available manually, recommended by fit, and does not force unrelated songs
+ok 179 - new expression direction is available manually, recommended by fit, and does not force unrelated songs
+  ---
+  duration_ms: 126.269379
+  type: 'test'
+  ...
+# Subtest: expression storyboard uses the existing one-request schema, saves type, and reuses assets
+ok 180 - expression storyboard uses the existing one-request schema, saves type, and reuses assets
+  ---
+  duration_ms: 141.805777
+  type: 'test'
+  ...
+# Subtest: expression selector remains reachable for existing storyboards without requesting generation
+ok 181 - expression selector remains reachable for existing storyboards without requesting generation
+  ---
+  duration_ms: 153.369047
+  type: 'test'
+  ...
+# Subtest: MV shortcut is inside the selected song above its cover, keeps the song ID and sends no requests
+ok 182 - MV shortcut is inside the selected song above its cover, keeps the song ID and sends no requests
+  ---
+  duration_ms: 194.940379
+  type: 'test'
+  ...
+# Subtest: MV shortcut stays hidden for incomplete, absent or read-only songs
+ok 183 - MV shortcut stays hidden for incomplete, absent or read-only songs
+  ---
+  duration_ms: 120.285737
+  type: 'test'
+  ...
+# Subtest: a completely empty legacy app can be filled instead of exposing a no-op button
+ok 184 - a completely empty legacy app can be filled instead of exposing a no-op button
+  ---
+  duration_ms: 175.071607
+  type: 'test'
+  ...
+# Subtest: unusable replacement is not presented as a completed recap repair
+ok 185 - unusable replacement is not presented as a completed recap repair
+  ---
+  duration_ms: 124.432424
+  type: 'test'
+  ...
+# Subtest: saved terminal directory continuation preserves completed apps and requests the pending app only
+ok 186 - saved terminal directory continuation preserves completed apps and requests the pending app only
+  ---
+  duration_ms: 140.699939
+  type: 'test'
+  ...
+# Subtest: one bad contact never hides a valid sibling, and malformed optional fields do not throw a TypeError
+ok 187 - one bad contact never hides a valid sibling, and malformed optional fields do not throw a TypeError
+  ---
+  duration_ms: 146.852147
+  type: 'test'
+  ...
+# Subtest: new top MV button opens the selected song through the existing event handler without generating
+ok 188 - new top MV button opens the selected song through the existing event handler without generating
+  ---
+  duration_ms: 126.424657
+  type: 'test'
+  ...
+# (node:396) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: song prompt guides singability, a recurring hook and audible arrangement without a fixed style
+ok 189 - song prompt guides singability, a recurring hook and audible arrangement without a fixed style
+  ---
+  duration_ms: 105.062046
+  type: 'test'
+  ...
+# Subtest: musical direction has explicit creative priority but remains JSON data with output boundaries
+ok 190 - musical direction has explicit creative priority but remains JSON data with output boundaries
+  ---
+  duration_ms: 124.587006
+  type: 'test'
+  ...
+# Subtest: all existing language and voice choices retain their plan, singer and prompt fields
+ok 191 - all existing language and voice choices retain their plan, singer and prompt fields
+  ---
+  duration_ms: 127.757144
+  type: 'test'
+  ...
+# Subtest: new songwriting guidance keeps minimal valid lyrics, missing BPM and previous output schema valid
+ok 192 - new songwriting guidance keeps minimal valid lyrics, missing BPM and previous output schema valid
+  ---
+  duration_ms: 111.484104
+  type: 'test'
+  ...
+# Subtest: new song generation uses one existing provider request and preserves prior song content
+ok 193 - new song generation uses one existing provider request and preserves prior song content
+  ---
+  duration_ms: 265.152415
+  type: 'test'
+  ...
+# Subtest: event songs preserve the selected factual source and remain fiction
+ok 194 - event songs preserve the selected factual source and remain fiction
+  ---
+  duration_ms: 284.345682
+  type: 'test'
+  ...
+1..194
+# tests 194
+# suites 0
+# pass 181
+# fail 13
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 13102.408585

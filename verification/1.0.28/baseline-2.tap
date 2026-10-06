@@ -1,0 +1,1439 @@
+TAP version 13
+# (node:24) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: batch zero-based response accepts correct lyrics without replacing old images
+ok 1 - batch zero-based response accepts correct lyrics without replacing old images
+  ---
+  duration_ms: 134.700488
+  type: 'test'
+  ...
+# Subtest: batch one-based response accepts correct lyrics without replacing old images
+ok 2 - batch one-based response accepts correct lyrics without replacing old images
+  ---
+  duration_ms: 108.385004
+  type: 'test'
+  ...
+# Subtest: song one-based response accepts correct lyrics without replacing old images
+ok 3 - song one-based response accepts correct lyrics without replacing old images
+  ---
+  duration_ms: 104.771934
+  type: 'test'
+  ...
+# Subtest: song zero-based response accepts correct lyrics without replacing old images
+ok 4 - song zero-based response accepts correct lyrics without replacing old images
+  ---
+  duration_ms: 138.930138
+  type: 'test'
+  ...
+# Subtest: missing indexes and normalized whitespace/punctuation are recovered from the actual lyric
+ok 5 - missing indexes and normalized whitespace/punctuation are recovered from the actual lyric
+  ---
+  duration_ms: 168.567284
+  type: 'test'
+  ...
+# Subtest: already completed lyrics are never re-labelled as new sections just because their batch indexes fit
+ok 6 - already completed lyrics are never re-labelled as new sections just because their batch indexes fit
+  ---
+  duration_ms: 141.66525
+  type: 'test'
+  ...
+# Subtest: valid absolute-index partial responses with paraphrased lyrics remain accepted
+ok 7 - valid absolute-index partial responses with paraphrased lyrics remain accepted
+  ---
+  duration_ms: 121.952894
+  type: 'test'
+  ...
+# Subtest: flat legacy shots with relative indexes also recover by lyric without upgrading old data
+ok 8 - flat legacy shots with relative indexes also recover by lyric without upgrading old data
+  ---
+  duration_ms: 121.974947
+  type: 'test'
+  ...
+# Subtest: fresh runtime can repair an actual r84.209 blocked paid result with save-only retry
+not ok 9 - fresh runtime can repair an actual r84.209 blocked paid result with save-only retry
+  ---
+  duration_ms: 1.002155
+  type: 'test'
+  location: '/workspace/scratch/8e568532ca62/candidate-1.0.27/tokimemo-main/tools/verification/mv-index-regression.mjs:28:1'
+  failureType: 'testCodeFailure'
+  error: 'BASELINE_ROOT must identify delivered r84.209'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  operator: '=='
+  stack: |-
+    TestContext.<anonymous> (file:///workspace/scratch/8e568532ca62/candidate-1.0.27/tokimemo-main/tools/verification/mv-index-regression.mjs:29:85)
+    Test.runInAsyncScope (node:async_hooks:227:14)
+    Test.run (node:internal/test_runner/test:1382:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+    Test.postRun (node:internal/test_runner/test:1522:19)
+    Test.run (node:internal/test_runner/test:1447:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+# Subtest: instrumental batch without lyrics accepts an unambiguous batch-local numbering scheme
+ok 10 - instrumental batch without lyrics accepts an unambiguous batch-local numbering scheme
+  ---
+  duration_ms: 108.518362
+  type: 'test'
+  ...
+# Subtest: a short instrumental reply with ambiguous one-based numbering is retained instead of placed on an arbitrary section
+ok 11 - a short instrumental reply with ambiguous one-based numbering is retained instead of placed on an arbitrary section
+  ---
+  duration_ms: 109.336425
+  type: 'test'
+  ...
+# Subtest: new pending results retain their requested section range when the display range changes before save
+ok 12 - new pending results retain their requested section range when the display range changes before save
+  ---
+  duration_ms: 264.39738
+  type: 'test'
+  ...
+# (node:25) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: a thirty-second prelude shows the first drawing after the two-second title
+ok 13 - a thirty-second prelude shows the first drawing after the two-second title
+  ---
+  duration_ms: 152.460972
+  type: 'test'
+  ...
+# Subtest: intro duration is editable, zero disables it, and reopening preserves song, timing and drawings
+ok 14 - intro duration is editable, zero disables it, and reopening preserves song, timing and drawings
+  ---
+  duration_ms: 129.917969
+  type: 'test'
+  ...
+# Subtest: a chosen five-second title fades out at five seconds rather than waiting for lyrics
+ok 15 - a chosen five-second title fades out at five seconds rather than waiting for lyrics
+  ---
+  duration_ms: 193.018325
+  type: 'test'
+  ...
+# Subtest: a short first shot keeps its second half visible even with a longer title setting
+ok 16 - a short first shot keeps its second half visible even with a longer title setting
+  ---
+  duration_ms: 149.75341
+  type: 'test'
+  ...
+# Subtest: fractional intro durations work and malformed values do not break playback
+ok 17 - fractional intro durations work and malformed values do not break playback
+  ---
+  duration_ms: 132.61051
+  type: 'test'
+  ...
+# Subtest: a sung opening has no cover and lyric taps are not delayed by title duration
+ok 18 - a sung opening has no cover and lyric taps are not delayed by title duration
+  ---
+  duration_ms: 273.588432
+  type: 'test'
+  ...
+# Subtest: fragment preview times the title from its own start without changing export timing
+ok 19 - fragment preview times the title from its own start without changing export timing
+  ---
+  duration_ms: 153.938962
+  type: 'test'
+  ...
+# Subtest: recorded video renders the same shortened title as preview without shifting the clock
+ok 20 - recorded video renders the same shortened title as preview without shifting the clock
+  ---
+  duration_ms: 154.817675
+  type: 'test'
+  ...
+# Subtest: actual r215 paid image journal saves after upgrade without regenerating
+not ok 21 - actual r215 paid image journal saves after upgrade without regenerating
+  ---
+  duration_ms: 1.182442
+  type: 'test'
+  location: '/workspace/scratch/8e568532ca62/candidate-1.0.27/tokimemo-main/tools/verification/mv-journal-upgrade-regression.mjs:24:1'
+  failureType: 'testCodeFailure'
+  error: 'PREVIOUS_BUILD_ROOT must identify the delivered r84.215'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  operator: '=='
+  stack: |-
+    legacyFactory (file:///workspace/scratch/8e568532ca62/candidate-1.0.27/tokimemo-main/tools/verification/mv-journal-upgrade-regression.mjs:8:12)
+    TestContext.<anonymous> (file:///workspace/scratch/8e568532ca62/candidate-1.0.27/tokimemo-main/tools/verification/mv-journal-upgrade-regression.mjs:25:35)
+    Test.runInAsyncScope (node:async_hooks:227:14)
+    Test.run (node:internal/test_runner/test:1382:25)
+    Test.start (node:internal/test_runner/test:1242:17)
+    startSubtestAfterBootstrap (node:internal/test_runner/harness:387:17)
+  ...
+# Subtest: actual r215 story journal saves after upgrade when its original record is unchanged
+not ok 22 - actual r215 story journal saves after upgrade when its original record is unchanged
+  ---
+  duration_ms: 0.247096
+  type: 'test'
+  location: '/workspace/scratch/8e568532ca62/candidate-1.0.27/tokimemo-main/tools/verification/mv-journal-upgrade-regression.mjs:31:1'
+  failureType: 'testCodeFailure'
+  error: 'PREVIOUS_BUILD_ROOT must identify the delivered r84.215'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  operator: '=='
+  stack: |-
+    legacyFactory (file:///workspace/scratch/8e568532ca62/candidate-1.0.27/tokimemo-main/tools/verification/mv-journal-upgrade-regression.mjs:8:12)
+    TestContext.<anonymous> (file:///workspace/scratch/8e568532ca62/candidate-1.0.27/tokimemo-main/tools/verification/mv-journal-upgrade-regression.mjs:32:35)
+    Test.runInAsyncScope (node:async_hooks:227:14)
+    Test.run (node:internal/test_runner/test:1382:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+    Test.postRun (node:internal/test_runner/test:1522:19)
+    Test.run (node:internal/test_runner/test:1447:12)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3)
+  ...
+# Subtest: actual r215 snapshot story journal cannot erase a newer image after upgrade
+not ok 23 - actual r215 snapshot story journal cannot erase a newer image after upgrade
+  ---
+  duration_ms: 0.26275
+  type: 'test'
+  location: '/workspace/scratch/8e568532ca62/candidate-1.0.27/tokimemo-main/tools/verification/mv-journal-upgrade-regression.mjs:38:1'
+  failureType: 'testCodeFailure'
+  error: 'PREVIOUS_BUILD_ROOT must identify the delivered r84.215'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  operator: '=='
+  stack: |-
+    legacyFactory (file:///workspace/scratch/8e568532ca62/candidate-1.0.27/tokimemo-main/tools/verification/mv-journal-upgrade-regression.mjs:8:12)
+    TestContext.<anonymous> (file:///workspace/scratch/8e568532ca62/candidate-1.0.27/tokimemo-main/tools/verification/mv-journal-upgrade-regression.mjs:39:35)
+    Test.runInAsyncScope (node:async_hooks:227:14)
+    Test.run (node:internal/test_runner/test:1382:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+    Test.postRun (node:internal/test_runner/test:1522:19)
+    Test.run (node:internal/test_runner/test:1447:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+# (node:27) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: each production tool panel scrolls independently with timing and navigation outside that scroll
+ok 24 - each production tool panel scrolls independently with timing and navigation outside that scroll
+  ---
+  duration_ms: 309.490976
+  type: 'test'
+  ...
+# Subtest: image save controls are outside the scroll area and the canvas is in its own viewport
+ok 25 - image save controls are outside the scroll area and the canvas is in its own viewport
+  ---
+  duration_ms: 209.536036
+  type: 'test'
+  ...
+# Subtest: large image canvas has a foldable tool panel and prominent persistent undo/save actions
+ok 26 - large image canvas has a foldable tool panel and prominent persistent undo/save actions
+  ---
+  duration_ms: 188.747955
+  type: 'test'
+  ...
+# Subtest: editor CSS is scoped, balanced and retains paging without requiring container-query support
+ok 27 - editor CSS is scoped, balanced and retains paging without requiring container-query support
+  ---
+  duration_ms: 156.158221
+  type: 'test'
+  ...
+# (node:64) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: production editor has bounded workbench, independent tools scroll and a single top music entry
+ok 28 - production editor has bounded workbench, independent tools scroll and a single top music entry
+  ---
+  duration_ms: 168.558391
+  type: 'test'
+  ...
+# Subtest: preview-only mode and shot stepping preserve all images and timing and keep one clock
+ok 29 - preview-only mode and shot stepping preserve all images and timing and keep one clock
+  ---
+  duration_ms: 126.267579
+  type: 'test'
+  ...
+# Subtest: shared material editor supplies save-and-next and returns directly to the workbench
+ok 30 - shared material editor supplies save-and-next and returns directly to the workbench
+  ---
+  duration_ms: 114.662078
+  type: 'test'
+  ...
+# Subtest: a single-shot replacement opens its own image editor and saves without changing the shared image or prompts
+ok 31 - a single-shot replacement opens its own image editor and saves without changing the shared image or prompts
+  ---
+  duration_ms: 160.471185
+  type: 'test'
+  ...
+# Subtest: production image editor markup contains the canvas before local tool panes and permanent save actions
+ok 32 - production image editor markup contains the canvas before local tool panes and permanent save actions
+  ---
+  duration_ms: 153.145836
+  type: 'test'
+  ...
+# Subtest: a workspace route replacement releases editor-specific body scrolling and its observer
+ok 33 - a workspace route replacement releases editor-specific body scrolling and its observer
+  ---
+  duration_ms: 141.283365
+  type: 'test'
+  ...
+# Subtest: panel position survives its own setting redraw but does not leak into another tab
+ok 34 - panel position survives its own setting redraw but does not leak into another tab
+  ---
+  duration_ms: 115.162781
+  type: 'test'
+  ...
+# (node:81) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: four vertical panels: each selection is exactly one quarter, not another half
+ok 35 - four vertical panels: each selection is exactly one quarter, not another half
+  ---
+  duration_ms: 164.764477
+  type: 'test'
+  ...
+# Subtest: free crop handles reversed/invalid coordinates without sampling outside the image
+ok 36 - free crop handles reversed/invalid coordinates without sampling outside the image
+  ---
+  duration_ms: 165.157646
+  type: 'test'
+  ...
+# Subtest: automatic preview preserves enclosed white clothing even when its area is large
+ok 37 - automatic preview preserves enclosed white clothing even when its area is large
+  ---
+  duration_ms: 196.474216
+  type: 'test'
+  ...
+# Subtest: manual erase/restore fills fast strokes and restores original alpha and color
+ok 38 - manual erase/restore fills fast strokes and restores original alpha and color
+  ---
+  duration_ms: 161.856653
+  type: 'test'
+  ...
+# Subtest: saving prompt makes zero generation calls; redraw sends exactly that prompt without appended cast
+ok 39 - saving prompt makes zero generation calls; redraw sends exactly that prompt without appended cast
+  ---
+  duration_ms: 200.413261
+  type: 'test'
+  ...
+# Subtest: reset prompt recovers the unchanged default and never erases a saved picture
+ok 40 - reset prompt recovers the unchanged default and never erases a saved picture
+  ---
+  duration_ms: 167.796679
+  type: 'test'
+  ...
+# Subtest: manual transparent local image and original reference survive a fresh runtime
+ok 41 - manual transparent local image and original reference survive a fresh runtime
+  ---
+  duration_ms: 333.282823
+  type: 'test'
+  ...
+# Subtest: late generated picture cannot replace a manual cutout saved while drawing
+ok 42 - late generated picture cannot replace a manual cutout saved while drawing
+  ---
+  duration_ms: 202.632379
+  type: 'test'
+  ...
+# Subtest: an editor opened on an older picture cannot overwrite a newer picture or new storyboard
+ok 43 - an editor opened on an older picture cannot overwrite a newer picture or new storyboard
+  ---
+  duration_ms: 320.634309
+  type: 'test'
+  ...
+# Subtest: manual save in a different chat is held for the original scope
+ok 44 - manual save in a different chat is held for the original scope
+  ---
+  duration_ms: 189.112139
+  type: 'test'
+  ...
+# Subtest: manual save awaits failing metadata and keeps a recoverable result
+ok 45 - manual save awaits failing metadata and keeps a recoverable result
+  ---
+  duration_ms: 156.01078
+  type: 'test'
+  ...
+# Subtest: locally edited images are counted as drawn and never queued again by draw remaining
+ok 46 - locally edited images are counted as drawn and never queued again by draw remaining
+  ---
+  duration_ms: 218.693981
+  type: 'test'
+  ...
+# Subtest: editor integration commits unique media after durable blob writes and preserves an open draft across renders
+ok 47 - editor integration commits unique media after durable blob writes and preserves an open draft across renders
+  ---
+  duration_ms: 257.462555
+  type: 'test'
+  ...
+# Subtest: failed blob transaction leaves the previous picture and prompt intact
+ok 48 - failed blob transaction leaves the previous picture and prompt intact
+  ---
+  duration_ms: 221.533975
+  type: 'test'
+  ...
+# Subtest: v2 export waits for an edited local PNG before it starts recording
+ok 49 - v2 export waits for an edited local PNG before it starts recording
+  ---
+  duration_ms: 170.329764
+  type: 'test'
+  ...
+# (node:89) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: saved per-shot local images appear after reopening v2 and do not replace shared sibling images
+ok 50 - saved per-shot local images appear after reopening v2 and do not replace shared sibling images
+  ---
+  duration_ms: 315.534585
+  type: 'test'
+  ...
+# Subtest: importing a full scene takes effect in v2 preview without automatic splitting or cutout
+ok 51 - importing a full scene takes effect in v2 preview without automatic splitting or cutout
+  ---
+  duration_ms: 380.130783
+  type: 'test'
+  ...
+# Subtest: single-shot redraw is visible in v2 while sibling shots retain their shared art
+ok 52 - single-shot redraw is visible in v2 while sibling shots retain their shared art
+  ---
+  duration_ms: 530.55037
+  type: 'test'
+  ...
+# Subtest: manual image failure preserves the old reference and blob
+ok 53 - manual image failure preserves the old reference and blob
+  ---
+  duration_ms: 346.833879
+  type: 'test'
+  ...
+# Subtest: two rapid imports keep the last chosen image when storage finishes out of order
+ok 54 - two rapid imports keep the last chosen image when storage finishes out of order
+  ---
+  duration_ms: 460.826323
+  type: 'test'
+  ...
+# Subtest: late import cannot overwrite a replacement storyboard and remains recoverable
+ok 55 - late import cannot overwrite a replacement storyboard and remains recoverable
+  ---
+  duration_ms: 305.321077
+  type: 'test'
+  ...
+# Subtest: late imported image stays bound to the original song after navigation
+ok 56 - late imported image stays bound to the original song after navigation
+  ---
+  duration_ms: 195.307722
+  type: 'test'
+  ...
+# Subtest: a new storyboard revision holds a late import even when its shot fields are identical
+ok 57 - a new storyboard revision holds a late import even when its shot fields are identical
+  ---
+  duration_ms: 319.964077
+  type: 'test'
+  ...
+# Subtest: changing chats during image storage cannot write the imported image into the new chat
+ok 58 - changing chats during image storage cannot write the imported image into the new chat
+  ---
+  duration_ms: 191.827879
+  type: 'test'
+  ...
+# Subtest: a missing imported blob stops export with a message instead of exporting its replaced picture
+ok 59 - a missing imported blob stops export with a message instead of exporting its replaced picture
+  ---
+  duration_ms: 338.036209
+  type: 'test'
+  ...
+# Subtest: returning to shared art removes only the chosen shot override
+ok 60 - returning to shared art removes only the chosen shot override
+  ---
+  duration_ms: 412.306485
+  type: 'test'
+  ...
+# Subtest: completed clip export loads visible imported scenes instead of unavailable replaced assets
+ok 61 - completed clip export loads visible imported scenes instead of unavailable replaced assets
+  ---
+  duration_ms: 452.330655
+  type: 'test'
+  ...
+# Subtest: undoing a correction after all sections are timed leaves that section ready to tap again
+ok 62 - undoing a correction after all sections are timed leaves that section ready to tap again
+  ---
+  duration_ms: 347.589674
+  type: 'test'
+  ...
+# Subtest: undoing an out-of-order section returns to that section, not the first missing one
+ok 63 - undoing an out-of-order section returns to that section, not the first missing one
+  ---
+  duration_ms: 476.953851
+  type: 'test'
+  ...
+# Subtest: undoing a nudge restores its target and a new tap creates a correct undo record
+ok 64 - undoing a nudge restores its target and a new tap creates a correct undo record
+  ---
+  duration_ms: 592.442981
+  type: 'test'
+  ...
+# Subtest: sequential final-tap undo and reopened fallback undo can both be tapped again
+ok 65 - sequential final-tap undo and reopened fallback undo can both be tapped again
+  ---
+  duration_ms: 525.09132
+  type: 'test'
+  ...
+# Subtest: undo keeps the no-audio button disabled and reset removes stale undo targets
+ok 66 - undo keeps the no-audio button disabled and reset removes stale undo targets
+  ---
+  duration_ms: 347.054256
+  type: 'test'
+  ...
+# (node:105) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: three pending results have one compact editor entry and every save-only action remains in its drawer
+ok 67 - three pending results have one compact editor entry and every save-only action remains in its drawer
+  ---
+  duration_ms: 387.097941
+  type: 'test'
+  ...
+# Subtest: a short filmstrip has no disabled page row while long projects keep every page reachable
+ok 68 - a short filmstrip has no disabled page row while long projects keep every page reachable
+  ---
+  duration_ms: 268.214146
+  type: 'test'
+  ...
+# Subtest: small host viewports have a scroll escape and a non-collapsing canvas instead of a forty-pixel minimum
+ok 69 - small host viewports have a scroll escape and a non-collapsing canvas instead of a forty-pixel minimum
+  ---
+  duration_ms: 241.012978
+  type: 'test'
+  ...
+# Subtest: image focus opens with an immediate return action and releases the shell on back or disposal
+ok 70 - image focus opens with an immediate return action and releases the shell on back or disposal
+  ---
+  duration_ms: 219.216891
+  type: 'test'
+  ...
+# Subtest: pending results do not take image canvas space and remain reachable after returning
+ok 71 - pending results do not take image canvas space and remain reachable after returning
+  ---
+  duration_ms: 259.701549
+  type: 'test'
+  ...
+# (node:111) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: legacy white-background motifs are real transparent sprites in preview without touching saved art
+ok 72 - legacy white-background motifs are real transparent sprites in preview without touching saved art
+  ---
+  duration_ms: 216.527796
+  type: 'test'
+  ...
+# Subtest: opaque white or patterned motifs are not pasted as rectangular decorations
+ok 73 - opaque white or patterned motifs are not pasted as rectangular decorations
+  ---
+  duration_ms: 402.798502
+  type: 'test'
+  ...
+# Subtest: true transparent white motifs retain their original colour and semi-transparent pixels
+ok 74 - true transparent white motifs retain their original colour and semi-transparent pixels
+  ---
+  duration_ms: 168.41804
+  type: 'test'
+  ...
+# Subtest: white snow on the contrasting default background keeps its white foreground
+ok 75 - white snow on the contrasting default background keeps its white foreground
+  ---
+  duration_ms: 209.90597
+  type: 'test'
+  ...
+# Subtest: enclosed white motif details stay opaque while the outside becomes transparent
+ok 76 - enclosed white motif details stay opaque while the outside becomes transparent
+  ---
+  duration_ms: 224.157334
+  type: 'test'
+  ...
+# Subtest: motif background processing is not applied to a full-scene white character picture
+ok 77 - motif background processing is not applied to a full-scene white character picture
+  ---
+  duration_ms: 242.481424
+  type: 'test'
+  ...
+# Subtest: redrawing or importing a new motif invalidates the old prepared sprite
+ok 78 - redrawing or importing a new motif invalidates the old prepared sprite
+  ---
+  duration_ms: 332.772331
+  type: 'test'
+  ...
+# Subtest: canvas read failure skips only the motif and does not fall back to its opaque original
+ok 79 - canvas read failure skips only the motif and does not fall back to its opaque original
+  ---
+  duration_ms: 505.080087
+  type: 'test'
+  ...
+# Subtest: preview and video export use the same transparent motif pixels
+ok 80 - preview and video export use the same transparent motif pixels
+  ---
+  duration_ms: 329.744378
+  type: 'test'
+  ...
+# Subtest: only the default motif recipe changes; white motifs use contrast and custom prompts remain verbatim
+ok 81 - only the default motif recipe changes; white motifs use contrast and custom prompts remain verbatim
+  ---
+  duration_ms: 361.999027
+  type: 'test'
+  ...
+# Subtest: motif editor opens with the prepared pixels and saves a real PNG while preserving its original
+ok 82 - motif editor opens with the prepared pixels and saves a real PNG while preserving its original
+  ---
+  duration_ms: 398.46559
+  type: 'test'
+  ...
+# Subtest: motif editor can undo background processing and manually restore white details
+ok 83 - motif editor can undo background processing and manually restore white details
+  ---
+  duration_ms: 429.439605
+  type: 'test'
+  ...
+# Subtest: motif editor does not erase an unrecognizable background or call an empty image a cutout
+ok 84 - motif editor does not erase an unrecognizable background or call an empty image a cutout
+  ---
+  duration_ms: 456.01241
+  type: 'test'
+  ...
+# Subtest: outer anti-aliased colour is unmixed from white without changing the input or enclosed white
+ok 85 - outer anti-aliased colour is unmixed from white without changing the input or enclosed white
+  ---
+  duration_ms: 345.901362
+  type: 'test'
+  ...
+# (node:137) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: opening the music drawer keeps file import and performs no network request
+ok 86 - opening the music drawer keeps file import and performs no network request
+  ---
+  duration_ms: 306.133658
+  type: 'test'
+  ...
+# Subtest: HTTPS input accepts Suno song and short links without inventing media endpoints
+ok 87 - HTTPS input accepts Suno song and short links without inventing media endpoints
+  ---
+  duration_ms: 92.24684
+  type: 'test'
+  ...
+# Subtest: unsafe schemes, credential URLs and remote HTTP are rejected before a request
+ok 88 - unsafe schemes, credential URLs and remote HTTP are rejected before a request
+  ---
+  duration_ms: 253.055638
+  type: 'test'
+  ...
+# Subtest: public metadata resolves escaped relative audio without executing page scripts
+ok 89 - public metadata resolves escaped relative audio without executing page scripts
+  ---
+  duration_ms: 369.067549
+  type: 'test'
+  ...
+# Subtest: explicit audio and source tags work while video-only sources are ignored
+ok 90 - explicit audio and source tags work while video-only sources are ignored
+  ---
+  duration_ms: 120.280134
+  type: 'test'
+  ...
+# Subtest: comments, scripts, malformed scripts and unsupported URL schemes never become media requests
+ok 91 - comments, scripts, malformed scripts and unsupported URL schemes never become media requests
+  ---
+  duration_ms: 118.356842
+  type: 'test'
+  ...
+# Subtest: direct audio import uses anonymous CORS fetch and commits only after decoding
+ok 92 - direct audio import uses anonymous CORS fetch and commits only after decoding
+  ---
+  duration_ms: 284.421189
+  type: 'test'
+  ...
+# Subtest: the existing play, pause, seek and lyric marking all use the imported audio clock
+ok 93 - the existing play, pause, seek and lyric marking all use the imported audio clock
+  ---
+  duration_ms: 288.344954
+  type: 'test'
+  ...
+# Subtest: export consumes the same local blob as preview through the existing sound path
+ok 94 - export consumes the same local blob as preview through the existing sound path
+  ---
+  duration_ms: 269.413184
+  type: 'test'
+  ...
+# Subtest: a Suno-shaped public metadata response imports through the same path without an iframe
+ok 95 - a Suno-shaped public metadata response imports through the same path without an iframe
+  ---
+  duration_ms: 298.540633
+  type: 'test'
+  ...
+# Subtest: a real-shaped Suno 403 leaves the old audio, timings, artwork and saved data intact
+ok 96 - a real-shaped Suno 403 leaves the old audio, timings, artwork and saved data intact
+  ---
+  duration_ms: 274.137562
+  type: 'test'
+  ...
+# Subtest: a share page without published audio fails explicitly and never becomes a phantom audio track
+ok 97 - a share page without published audio fails explicitly and never becomes a phantom audio track
+  ---
+  duration_ms: 275.491559
+  type: 'test'
+  ...
+# Subtest: CORS/network failure does not fall back to proxies or hidden playback
+ok 98 - CORS/network failure does not fall back to proxies or hidden playback
+  ---
+  duration_ms: 441.427732
+  type: 'test'
+  ...
+# Subtest: empty, JSON and nested HTML responses never replace music
+ok 99 - empty, JSON and nested HTML responses never replace music
+  ---
+  duration_ms: 1205.491018
+  type: 'test'
+  ...
+# Subtest: decode failure preserves the prior cached track and can be retried
+ok 100 - decode failure preserves the prior cached track and can be retried
+  ---
+  duration_ms: 279.873009
+  type: 'test'
+  ...
+# Subtest: cancel aborts a download and a late response cannot replace the current track
+ok 101 - cancel aborts a download and a late response cannot replace the current track
+  ---
+  duration_ms: 147.782375
+  type: 'test'
+  ...
+# Subtest: cancel during decoding also discards a stale loadedmetadata event
+ok 102 - cancel during decoding also discards a stale loadedmetadata event
+  ---
+  duration_ms: 181.328179
+  type: 'test'
+  ...
+# Subtest: switching songs aborts loading and never imports into either song afterward
+ok 103 - switching songs aborts loading and never imports into either song afterward
+  ---
+  duration_ms: 248.406707
+  type: 'test'
+  ...
+# Subtest: chat changes during decoding cannot commit into old or new chat
+ok 104 - chat changes during decoding cannot commit into old or new chat
+  ---
+  duration_ms: 179.52761
+  type: 'test'
+  ...
+# Subtest: choosing a local file wins over an unfinished link import
+ok 105 - choosing a local file wins over an unfinished link import
+  ---
+  duration_ms: 167.499761
+  type: 'test'
+  ...
+# Subtest: fresh runtime restores cached link audio for the same song without network access
+ok 106 - fresh runtime restores cached link audio for the same song without network access
+  ---
+  duration_ms: 317.018717
+  type: 'test'
+  ...
+# Subtest: music media metadata remains local and does not add URLs or blobs to the MV record
+ok 107 - music media metadata remains local and does not add URLs or blobs to the MV record
+  ---
+  duration_ms: 176.170704
+  type: 'test'
+  ...
+# Subtest: non-seekable live audio is rejected without changing the current timeline
+ok 108 - non-seekable live audio is rejected without changing the current timeline
+  ---
+  duration_ms: 204.000804
+  type: 'test'
+  ...
+# Subtest: changing the song text during metadata decoding invalidates the import
+ok 109 - changing the song text during metadata decoding invalidates the import
+  ---
+  duration_ms: 155.910193
+  type: 'test'
+  ...
+# Subtest: download timeout clears the busy state and keeps the old track available
+ok 110 - download timeout clears the busy state and keeps the old track available
+  ---
+  duration_ms: 186.124317
+  type: 'test'
+  ...
+# Subtest: stream read failures never expose a source URL or provider error details in the UI
+ok 111 - stream read failures never expose a source URL or provider error details in the UI
+  ---
+  duration_ms: 171.607259
+  type: 'test'
+  ...
+# Subtest: typed link survives redraws and Enter imports through the same action
+ok 112 - typed link survives redraws and Enter imports through the same action
+  ---
+  duration_ms: 175.772474
+  type: 'test'
+  ...
+# Subtest: the real media module stores the link alongside the blob and keeps older rows compatible
+ok 113 - the real media module stores the link alongside the blob and keeps older rows compatible
+  ---
+  duration_ms: 167.157774
+  type: 'test'
+  ...
+# Subtest: legacy video MV also exposes the current-song music entry without switching its output setting
+ok 114 - legacy video MV also exposes the current-song music entry without switching its output setting
+  ---
+  duration_ms: 176.379183
+  type: 'test'
+  ...
+# (node:145) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: saving an MV prompt returns to its picture without changing images or generating
+ok 115 - saving an MV prompt returns to its picture without changing images or generating
+  ---
+  duration_ms: 130.483807
+  type: 'test'
+  ...
+# Subtest: toolbar returns from material editor to the same picture and leaves unsaved prompt unchanged
+ok 116 - toolbar returns from material editor to the same picture and leaves unsaved prompt unchanged
+  ---
+  duration_ms: 128.912138
+  type: 'test'
+  ...
+# Subtest: same-page image completion rerenders keep the current scroll position
+ok 117 - same-page image completion rerenders keep the current scroll position
+  ---
+  duration_ms: 150.147254
+  type: 'test'
+  ...
+# Subtest: preview and timing return one level at a time, restoring each parent position
+not ok 118 - preview and timing return one level at a time, restoring each parent position
+  ---
+  duration_ms: 134.442199
+  type: 'test'
+  location: '/workspace/scratch/8e568532ca62/candidate-1.0.27/tokimemo-main/tools/verification/mv-navigation-regression.mjs:67:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /手书剪辑台/. Input:
+    
+    '<main class="rmt-x-page rmt-mv-editor"><header class="rmt-mve-head"><div><h2>Navigation</h2></div><div class="rmt-mve-head-actions"><button type="button" class="rmt-x-secondary" data-rmt-mv="editor-drawer" data-rmt-mv-id="more">更多</button><button type="button" class="rmt-x-primary" data-rmt-mv="editor-drawer" data-rmt-mv-id="export">导出</button></div></header>\n' +
+      '      <div class="rmt-mve-projectbar"><span class="rmt-mve-meta">自动混合 · 静音预览</span><button type="button" class="rmt-x-secondary" data-rmt-mv="editor-drawer" data-rmt-mv-id="audio" title="导入音乐" aria-label="导入音乐">导入音乐</button></div>\n' +
+      '      <div class="rmt-mve-layout-scope"><div class="rmt-mve-workspace" data-editor-tab="shots" data-editor-paged="false" data-preview-only="false"><section class="rmt-mve-preview" aria-label="手书预览">\n' +
+      '        <div class="rmt-mve-preview-head"><span data-rmt-mv-current>第 1 镜 · 1 镜</span><div class="rmt-mve-preview-actions"><button type="button" class="rmt-x-secondary" data-rmt-mv="go-board">素材库</button><button type="button" class="rmt-x-secondary" data-rmt-mv="editor-preview">只看画面</button></div></div>\n' +
+      '        <div class="rmt-mv-canvas-wrap portrait"><canvas data-rmt-mv-canvas width="540" height="960"></canvas></div>\n' +
+      '        <div class="rmt-mve-transport"><button type="button" class="rmt-mv-play" data-rmt-mv="play" aria-label="播放">▶</button><span class="rmt-mve-clock" data-rmt-mv-time>0:00.0</span><input type="range" min="0" max="10.666666666666666" step="0.1" value="0" data-rmt-mv-seek aria-label="播放位置"><small>0:10</small></div>\n' +
+      '        <div class="rmt-mve-filmstrip" data-rmt-mv-filmstrip><div class="rmt-mv-strip"><button type="button" class="on" aria-label="第 1 镜" data-rmt-mv="select-shot" data-rmt-mv-id="S1"><img src="/user/images/original.png" alt="" loading="lazy" decoding="async"><span>1 · 10.7秒</span></button></div></div>\n' +
+      '      </section><section class="rmt-mve-tools"><nav class="rmt-mve-tabs" aria-label="剪辑工作区"><button type="button" class="rmt-mve-tab on" data-rmt-mv="editor-tab" data-rmt-mv-id="shots" aria-pressed="true">分镜</button><button type="button" class="rmt-mve-tab" data-rmt-mv="editor-tab" data-rmt-mv-id="timing" aria-pressed="false">定段 · 定句</button><button type="button" class="rmt-mve-tab" data-rmt-mv="editor-tab" data-rmt-mv-id="look" aria-pressed="false">全片样式</button></nav><div class="rmt-mve-panel" data-rmt-mv-shot-panel><div class="rmt-mve-panel-scroll" data-rmt-mv-scroll="shots"><div class="rmt-x-row-head"><b>第 1 镜</b><span>0:00.0–0:10.7</span></div><p class="rmt-x-note">one</p>\n' +
+      '      <div class="rmt-mve-image-actions"><button type="button" class="rmt-x-primary" data-rmt-mv="edit-asset" data-rmt-mv-id="G1:D1" aria-label="图片编辑 · 选单格 · 修边">编辑图片</button><label class="rmt-x-secondary rmt-mv-upload">换图<input type="file" accept="image/*" data-rmt-mv-image data-rmt-mv-id="S1"></label></div><small class="rmt-mve-image-note">共享构图素材 · 保留原背景</small>\n' +
+      '      <b>镜头运动</b><div class="rmt-mv-grid2"><button type="button" class="rmt-x-seg" data-rmt-mv="set-motion" data-rmt-mv-id="still" aria-pressed="false">不动</button><button type="button" class="rmt-x-seg" data-rmt-mv="set-motion" data-rmt-mv-id="push" aria-pressed="false">缓慢推近</button></div><b>切到下一镜</b><div class="rmt-x-segs"><button type="button" class="rmt-x-seg" data-rmt-mv="set-cut" data-rmt-mv-id="cut" aria-pressed="false">直接切</button><button type="button" class="rmt-x-seg active" data-rmt-mv="set-cut" data-rmt-mv-id="fade" aria-pressed="true">淡入淡出</button><button type="button" class="rmt-x-seg" data-rmt-mv="set-cut" data-rmt-mv-id="flash" aria-pressed="false">闪白</button></div>\n' +
+      '      <details><summary>图片与生成</summary><div><button type="button" class="rmt-x-secondary" data-rmt-mv="cutout-asset" data-rmt-mv-id="G1:D1">一键抠图</button><button type="button" class="rmt-x-secondary" data-rmt-mv="edit-prompt-asset" data-rmt-mv-id="G1:D1">构图素材与提示词</button><button type="button" class="rmt-x-secondary" data-rmt-mv="draw" data-rmt-mv-id="S1">重画这一镜</button><button type="button" class="rmt-x-secondary" data-rmt-mv="go-board">素材库与背景编辑</button><button type="button" class="rmt-x-secondary" data-rmt-mv="go-board">补充分镜与图片</button></div></details></div>\n' +
+      '      <footer class="rmt-mve-dock"><button type="button" class="rmt-x-secondary" data-rmt-mv="editor-step" data-rmt-mv-id="-1" disabled>上一镜</button><small>1 / 1</small><button type="button" class="rmt-x-secondary" data-rmt-mv="editor-step" data-rmt-mv-id="1" disabled>下一镜</button></footer></div></section></div></div>\n' +
+      '      </main>'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual: |-
+    <main class="rmt-x-page rmt-mv-editor"><header class="rmt-mve-head"><div><h2>Navigation</h2></div><div class="rmt-mve-head-actions"><button type="button" class="rmt-x-secondary" data-rmt-mv="editor-drawer" data-rmt-mv-id="more">更多</button><button type="button" class="rmt-x-primary" data-rmt-mv="editor-drawer" data-rmt-mv-id="export">导出</button></div></header>
+          <div class="rmt-mve-projectbar"><span class="rmt-mve-meta">自动混合 · 静音预览</span><button type="button" class="rmt-x-secondary" data-rmt-mv="editor-drawer" data-rmt-mv-id="audio" title="导入音乐" aria-label="导入音乐">导入音乐</button></div>
+          <div class="rmt-mve-layout-scope"><div class="rmt-mve-workspace" data-editor-tab="shots" data-editor-paged="false" data-preview-only="false"><section class="rmt-mve-preview" aria-label="手书预览">
+            <div class="rmt-mve-preview-head"><span data-rmt-mv-current>第 1 镜 · 1 镜</span><div class="rmt-mve-preview-actions"><button type="button" class="rmt-x-secondary" data-rmt-mv="go-board">素材库</button><button type="button" class="rmt-x-secondary" data-rmt-mv="editor-preview">只看画面</button></div></div>
+            <div class="rmt-mv-canvas-wrap portrait"><canvas data-rmt-mv-canvas width="540" height="960"></canvas></div>
+            <div class="rmt-mve-transport"><button type="button" class="rmt-mv-play" data-rmt-mv="play" aria-label="播放">▶</button><span class="rmt-mve-clock" data-rmt-mv-time>0:00.0</span><input type="range" min="0" max="10.666666666666666" step="0.1" value="0" data-rmt-mv-seek aria-label="播放位置"><small>0:10</small></div>
+            <div class="rmt-mve-filmstrip" data-rmt-mv-filmstrip><div class="rmt-mv-strip"><button type="button" class="on" aria-label="第 1 镜" data-rmt-mv="select-shot" data-rmt-mv-id="S1"><img src="/user/images/original.png" alt="" loading="lazy" decoding="async"><span>1 · 10.7秒</span></button></div></div>
+          </section><section class="rmt-mve-tools"><nav class="rmt-mve-tabs" aria-label="剪辑工作区"><button type="button" class="rmt-mve-tab on" data-rmt-mv="editor-tab" data-rmt-mv-id="shots" aria-pressed="true">分镜</button><button type="button" class="rmt-mve-tab" data-rmt-mv="editor-tab" data-rmt-mv-id="timing" aria-pressed="false">定段 · 定句</button><button type="button" class="rmt-mve-tab" data-rmt-mv="editor-tab" data-rmt-mv-id="look" aria-pressed="false">全片样式</button></nav><div class="rmt-mve-panel" data-rmt-mv-shot-panel><div class="rmt-mve-panel-scroll" data-rmt-mv-scroll="shots"><div class="rmt-x-row-head"><b>第 1 镜</b><span>0:00.0–0:10.7</span></div><p class="rmt-x-note">one</p>
+          <div class="rmt-mve-image-actions"><button type="button" class="rmt-x-primary" data-rmt-mv="edit-asset" data-rmt-mv-id="G1:D1" aria-label="图片编辑 · 选单格 · 修边">编辑图片</button><label class="rmt-x-secondary rmt-mv-upload">换图<input type="file" accept="image/*" data-rmt-mv-image data-rmt-mv-id="S1"></label></div><small class="rmt-mve-image-note">共享构图素材 · 保留原背景</small>
+          <b>镜头运动</b><div class="rmt-mv-grid2"><button type="button" class="rmt-x-seg" data-rmt-mv="set-motion" data-rmt-mv-id="still" aria-pressed="false">不动</button><button type="button" class="rmt-x-seg" data-rmt-mv="set-motion" data-rmt-mv-id="push" aria-pressed="false">缓慢推近</button></div><b>切到下一镜</b><div class="rmt-x-segs"><button type="button" class="rmt-x-seg" data-rmt-mv="set-cut" data-rmt-mv-id="cut" aria-pressed="false">直接切</button><button type="button" class="rmt-x-seg active" data-rmt-mv="set-cut" data-rmt-mv-id="fade" aria-pressed="true">淡入淡出</button><button type="button" class="rmt-x-seg" data-rmt-mv="set-cut" data-rmt-mv-id="flash" aria-pressed="false">闪白</button></div>
+          <details><summary>图片与生成</summary><div><button type="button" class="rmt-x-secondary" data-rmt-mv="cutout-asset" data-rmt-mv-id="G1:D1">一键抠图</button><button type="button" class="rmt-x-secondary" data-rmt-mv="edit-prompt-asset" data-rmt-mv-id="G1:D1">构图素材与提示词</button><button type="button" class="rmt-x-secondary" data-rmt-mv="draw" data-rmt-mv-id="S1">重画这一镜</button><button type="button" class="rmt-x-secondary" data-rmt-mv="go-board">素材库与背景编辑</button><button type="button" class="rmt-x-secondary" data-rmt-mv="go-board">补充分镜与图片</button></div></details></div>
+          <footer class="rmt-mve-dock"><button type="button" class="rmt-x-secondary" data-rmt-mv="editor-step" data-rmt-mv-id="-1" disabled>上一镜</button><small>1 / 1</small><button type="button" class="rmt-x-secondary" data-rmt-mv="editor-step" data-rmt-mv-id="1" disabled>下一镜</button></footer></div></section></div></div>
+          </main>
+  operator: 'match'
+  stack: |-
+    TestContext.<anonymous> (file:///workspace/scratch/8e568532ca62/candidate-1.0.27/tokimemo-main/tools/verification/mv-navigation-regression.mjs:71:12)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+# Subtest: page-local return works through the overlay click dispatcher without exiting to interactions
+not ok 119 - page-local return works through the overlay click dispatcher without exiting to interactions
+  ---
+  duration_ms: 168.300782
+  type: 'test'
+  location: '/workspace/scratch/8e568532ca62/candidate-1.0.27/tokimemo-main/tools/verification/mv-navigation-regression.mjs:76:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /data-rmt-mv="back"/. Input:
+    
+    '<main class="rmt-x-page rmt-mv-editor"><header class="rmt-mve-head"><div><h2>Navigation</h2></div><div class="rmt-mve-head-actions"><button type="button" class="rmt-x-secondary" data-rmt-mv="editor-drawer" data-rmt-mv-id="more">更多</button><button type="button" class="rmt-x-primary" data-rmt-mv="editor-drawer" data-rmt-mv-id="export">导出</button></div></header>\n' +
+      '      <div class="rmt-mve-projectbar"><span class="rmt-mve-meta">自动混合 · 静音预览</span><button type="button" class="rmt-x-secondary" data-rmt-mv="editor-drawer" data-rmt-mv-id="audio" title="导入音乐" aria-label="导入音乐">导入音乐</button></div>\n' +
+      '      <div class="rmt-mve-layout-scope"><div class="rmt-mve-workspace" data-editor-tab="shots" data-editor-paged="false" data-preview-only="false"><section class="rmt-mve-preview" aria-label="手书预览">\n' +
+      '        <div class="rmt-mve-preview-head"><span data-rmt-mv-current>第 1 镜 · 1 镜</span><div class="rmt-mve-preview-actions"><button type="button" class="rmt-x-secondary" data-rmt-mv="go-board">素材库</button><button type="button" class="rmt-x-secondary" data-rmt-mv="editor-preview">只看画面</button></div></div>\n' +
+      '        <div class="rmt-mv-canvas-wrap portrait"><canvas data-rmt-mv-canvas width="540" height="960"></canvas></div>\n' +
+      '        <div class="rmt-mve-transport"><button type="button" class="rmt-mv-play" data-rmt-mv="play" aria-label="播放">▶</button><span class="rmt-mve-clock" data-rmt-mv-time>0:00.0</span><input type="range" min="0" max="10.666666666666666" step="0.1" value="0" data-rmt-mv-seek aria-label="播放位置"><small>0:10</small></div>\n' +
+      '        <div class="rmt-mve-filmstrip" data-rmt-mv-filmstrip><div class="rmt-mv-strip"><button type="button" class="on" aria-label="第 1 镜" data-rmt-mv="select-shot" data-rmt-mv-id="S1"><img src="/user/images/original.png" alt="" loading="lazy" decoding="async"><span>1 · 10.7秒</span></button></div></div>\n' +
+      '      </section><section class="rmt-mve-tools"><nav class="rmt-mve-tabs" aria-label="剪辑工作区"><button type="button" class="rmt-mve-tab on" data-rmt-mv="editor-tab" data-rmt-mv-id="shots" aria-pressed="true">分镜</button><button type="button" class="rmt-mve-tab" data-rmt-mv="editor-tab" data-rmt-mv-id="timing" aria-pressed="false">定段 · 定句</button><button type="button" class="rmt-mve-tab" data-rmt-mv="editor-tab" data-rmt-mv-id="look" aria-pressed="false">全片样式</button></nav><div class="rmt-mve-panel" data-rmt-mv-shot-panel><div class="rmt-mve-panel-scroll" data-rmt-mv-scroll="shots"><div class="rmt-x-row-head"><b>第 1 镜</b><span>0:00.0–0:10.7</span></div><p class="rmt-x-note">one</p>\n' +
+      '      <div class="rmt-mve-image-actions"><button type="button" class="rmt-x-primary" data-rmt-mv="edit-asset" data-rmt-mv-id="G1:D1" aria-label="图片编辑 · 选单格 · 修边">编辑图片</button><label class="rmt-x-secondary rmt-mv-upload">换图<input type="file" accept="image/*" data-rmt-mv-image data-rmt-mv-id="S1"></label></div><small class="rmt-mve-image-note">共享构图素材 · 保留原背景</small>\n' +
+      '      <b>镜头运动</b><div class="rmt-mv-grid2"><button type="button" class="rmt-x-seg" data-rmt-mv="set-motion" data-rmt-mv-id="still" aria-pressed="false">不动</button><button type="button" class="rmt-x-seg" data-rmt-mv="set-motion" data-rmt-mv-id="push" aria-pressed="false">缓慢推近</button></div><b>切到下一镜</b><div class="rmt-x-segs"><button type="button" class="rmt-x-seg" data-rmt-mv="set-cut" data-rmt-mv-id="cut" aria-pressed="false">直接切</button><button type="button" class="rmt-x-seg active" data-rmt-mv="set-cut" data-rmt-mv-id="fade" aria-pressed="true">淡入淡出</button><button type="button" class="rmt-x-seg" data-rmt-mv="set-cut" data-rmt-mv-id="flash" aria-pressed="false">闪白</button></div>\n' +
+      '      <details><summary>图片与生成</summary><div><button type="button" class="rmt-x-secondary" data-rmt-mv="cutout-asset" data-rmt-mv-id="G1:D1">一键抠图</button><button type="button" class="rmt-x-secondary" data-rmt-mv="edit-prompt-asset" data-rmt-mv-id="G1:D1">构图素材与提示词</button><button type="button" class="rmt-x-secondary" data-rmt-mv="draw" data-rmt-mv-id="S1">重画这一镜</button><button type="button" class="rmt-x-secondary" data-rmt-mv="go-board">素材库与背景编辑</button><button type="button" class="rmt-x-secondary" data-rmt-mv="go-board">补充分镜与图片</button></div></details></div>\n' +
+      '      <footer class="rmt-mve-dock"><button type="button" class="rmt-x-secondary" data-rmt-mv="editor-step" data-rmt-mv-id="-1" disabled>上一镜</button><small>1 / 1</small><button type="button" class="rmt-x-secondary" data-rmt-mv="editor-step" data-rmt-mv-id="1" disabled>下一镜</button></footer></div></section></div></div>\n' +
+      '      </main>'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual: |-
+    <main class="rmt-x-page rmt-mv-editor"><header class="rmt-mve-head"><div><h2>Navigation</h2></div><div class="rmt-mve-head-actions"><button type="button" class="rmt-x-secondary" data-rmt-mv="editor-drawer" data-rmt-mv-id="more">更多</button><button type="button" class="rmt-x-primary" data-rmt-mv="editor-drawer" data-rmt-mv-id="export">导出</button></div></header>
+          <div class="rmt-mve-projectbar"><span class="rmt-mve-meta">自动混合 · 静音预览</span><button type="button" class="rmt-x-secondary" data-rmt-mv="editor-drawer" data-rmt-mv-id="audio" title="导入音乐" aria-label="导入音乐">导入音乐</button></div>
+          <div class="rmt-mve-layout-scope"><div class="rmt-mve-workspace" data-editor-tab="shots" data-editor-paged="false" data-preview-only="false"><section class="rmt-mve-preview" aria-label="手书预览">
+            <div class="rmt-mve-preview-head"><span data-rmt-mv-current>第 1 镜 · 1 镜</span><div class="rmt-mve-preview-actions"><button type="button" class="rmt-x-secondary" data-rmt-mv="go-board">素材库</button><button type="button" class="rmt-x-secondary" data-rmt-mv="editor-preview">只看画面</button></div></div>
+            <div class="rmt-mv-canvas-wrap portrait"><canvas data-rmt-mv-canvas width="540" height="960"></canvas></div>
+            <div class="rmt-mve-transport"><button type="button" class="rmt-mv-play" data-rmt-mv="play" aria-label="播放">▶</button><span class="rmt-mve-clock" data-rmt-mv-time>0:00.0</span><input type="range" min="0" max="10.666666666666666" step="0.1" value="0" data-rmt-mv-seek aria-label="播放位置"><small>0:10</small></div>
+            <div class="rmt-mve-filmstrip" data-rmt-mv-filmstrip><div class="rmt-mv-strip"><button type="button" class="on" aria-label="第 1 镜" data-rmt-mv="select-shot" data-rmt-mv-id="S1"><img src="/user/images/original.png" alt="" loading="lazy" decoding="async"><span>1 · 10.7秒</span></button></div></div>
+          </section><section class="rmt-mve-tools"><nav class="rmt-mve-tabs" aria-label="剪辑工作区"><button type="button" class="rmt-mve-tab on" data-rmt-mv="editor-tab" data-rmt-mv-id="shots" aria-pressed="true">分镜</button><button type="button" class="rmt-mve-tab" data-rmt-mv="editor-tab" data-rmt-mv-id="timing" aria-pressed="false">定段 · 定句</button><button type="button" class="rmt-mve-tab" data-rmt-mv="editor-tab" data-rmt-mv-id="look" aria-pressed="false">全片样式</button></nav><div class="rmt-mve-panel" data-rmt-mv-shot-panel><div class="rmt-mve-panel-scroll" data-rmt-mv-scroll="shots"><div class="rmt-x-row-head"><b>第 1 镜</b><span>0:00.0–0:10.7</span></div><p class="rmt-x-note">one</p>
+          <div class="rmt-mve-image-actions"><button type="button" class="rmt-x-primary" data-rmt-mv="edit-asset" data-rmt-mv-id="G1:D1" aria-label="图片编辑 · 选单格 · 修边">编辑图片</button><label class="rmt-x-secondary rmt-mv-upload">换图<input type="file" accept="image/*" data-rmt-mv-image data-rmt-mv-id="S1"></label></div><small class="rmt-mve-image-note">共享构图素材 · 保留原背景</small>
+          <b>镜头运动</b><div class="rmt-mv-grid2"><button type="button" class="rmt-x-seg" data-rmt-mv="set-motion" data-rmt-mv-id="still" aria-pressed="false">不动</button><button type="button" class="rmt-x-seg" data-rmt-mv="set-motion" data-rmt-mv-id="push" aria-pressed="false">缓慢推近</button></div><b>切到下一镜</b><div class="rmt-x-segs"><button type="button" class="rmt-x-seg" data-rmt-mv="set-cut" data-rmt-mv-id="cut" aria-pressed="false">直接切</button><button type="button" class="rmt-x-seg active" data-rmt-mv="set-cut" data-rmt-mv-id="fade" aria-pressed="true">淡入淡出</button><button type="button" class="rmt-x-seg" data-rmt-mv="set-cut" data-rmt-mv-id="flash" aria-pressed="false">闪白</button></div>
+          <details><summary>图片与生成</summary><div><button type="button" class="rmt-x-secondary" data-rmt-mv="cutout-asset" data-rmt-mv-id="G1:D1">一键抠图</button><button type="button" class="rmt-x-secondary" data-rmt-mv="edit-prompt-asset" data-rmt-mv-id="G1:D1">构图素材与提示词</button><button type="button" class="rmt-x-secondary" data-rmt-mv="draw" data-rmt-mv-id="S1">重画这一镜</button><button type="button" class="rmt-x-secondary" data-rmt-mv="go-board">素材库与背景编辑</button><button type="button" class="rmt-x-secondary" data-rmt-mv="go-board">补充分镜与图片</button></div></details></div>
+          <footer class="rmt-mve-dock"><button type="button" class="rmt-x-secondary" data-rmt-mv="editor-step" data-rmt-mv-id="-1" disabled>上一镜</button><small>1 / 1</small><button type="button" class="rmt-x-secondary" data-rmt-mv="editor-step" data-rmt-mv-id="1" disabled>下一镜</button></footer></div></section></div></div>
+          </main>
+  operator: 'match'
+  stack: |-
+    TestContext.<anonymous> (file:///workspace/scratch/8e568532ca62/candidate-1.0.27/tokimemo-main/tools/verification/mv-navigation-regression.mjs:78:34)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+# Subtest: old editor callbacks cannot restore the previous song page after leaving and reopening
+ok 120 - old editor callbacks cannot restore the previous song page after leaving and reopening
+  ---
+  duration_ms: 129.318289
+  type: 'test'
+  ...
+# Subtest: picture anchor, expanded inspection and horizontal thumbnails survive changed layout
+not ok 121 - picture anchor, expanded inspection and horizontal thumbnails survive changed layout
+  ---
+  duration_ms: 135.341889
+  type: 'test'
+  location: '/workspace/scratch/8e568532ca62/candidate-1.0.27/tokimemo-main/tools/verification/mv-navigation-regression.mjs:93:1'
+  failureType: 'testCodeFailure'
+  error: "Cannot read properties of undefined (reading 'onClose')"
+  code: 'ERR_TEST_FAILURE'
+  name: 'TypeError'
+  stack: |-
+    TestContext.<anonymous> (file:///workspace/scratch/8e568532ca62/candidate-1.0.27/tokimemo-main/tools/verification/mv-navigation-regression.mjs:102:15)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+# Subtest: completed timing navigation does not make a preview/timing back loop
+ok 122 - completed timing navigation does not make a preview/timing back loop
+  ---
+  duration_ms: 167.529837
+  type: 'test'
+  ...
+# Subtest: preserving page state never reverses an explicit inspection expand/collapse click
+ok 123 - preserving page state never reverses an explicit inspection expand/collapse click
+  ---
+  duration_ms: 166.969305
+  type: 'test'
+  ...
+# Subtest: closed editor callbacks cannot dismiss a newer editor in the same song
+ok 124 - closed editor callbacks cannot dismiss a newer editor in the same song
+  ---
+  duration_ms: 130.18322
+  type: 'test'
+  ...
+# Subtest: rapid repeated edit clicks still return once to the original picture
+ok 125 - rapid repeated edit clicks still return once to the original picture
+  ---
+  duration_ms: 173.122136
+  type: 'test'
+  ...
+# Subtest: the first successful storyboard becomes the root instead of returning to the generate wizard
+ok 126 - the first successful storyboard becomes the root instead of returning to the generate wizard
+  ---
+  duration_ms: 202.888906
+  type: 'test'
+  ...
+# Subtest: pending save keeps the editor open and still allows returning without losing the original picture
+ok 127 - pending save keeps the editor open and still allows returning without losing the original picture
+  ---
+  duration_ms: 245.214101
+  type: 'test'
+  ...
+# Subtest: album thumbnails have no rabbit menu but retain memory and detail image actions
+ok 128 - album thumbnails have no rabbit menu but retain memory and detail image actions
+  ---
+  duration_ms: 157.718394
+  type: 'test'
+  ...
+# Subtest: album detail has a local return and toolbar returns to the scrolled album
+ok 129 - album detail has a local return and toolbar returns to the scrolled album
+  ---
+  duration_ms: 271.448977
+  type: 'test'
+  ...
+# Subtest: read-only album hides write actions and a different album cannot inherit the return position
+ok 130 - read-only album hides write actions and a different album cannot inherit the return position
+  ---
+  duration_ms: 235.043706
+  type: 'test'
+  ...
+# (node:153) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: outro appears only inside the selected ending interval, never over later or earlier shots
+ok 131 - outro appears only inside the selected ending interval, never over later or earlier shots
+  ---
+  duration_ms: 466.007826
+  type: 'test'
+  ...
+# Subtest: outro control persists, accepts fractional seconds and zero, preserving drawings and timing
+ok 132 - outro control persists, accepts fractional seconds and zero, preserving drawings and timing
+  ---
+  duration_ms: 393.185458
+  type: 'test'
+  ...
+# Subtest: a short final shot keeps its first half free of the outro
+ok 133 - a short final shot keeps its first half free of the outro
+  ---
+  duration_ms: 403.797136
+  type: 'test'
+  ...
+# Subtest: v1 fade leaves most of a 0.2 second shot clear without removing the transition
+ok 134 - v1 fade leaves most of a 0.2 second shot clear without removing the transition
+  ---
+  duration_ms: 406.622248
+  type: 'test'
+  ...
+# Subtest: v1 flash leaves most of a 0.2 second shot clear without removing the transition
+ok 135 - v1 flash leaves most of a 0.2 second shot clear without removing the transition
+  ---
+  duration_ms: 366.870653
+  type: 'test'
+  ...
+# Subtest: v2 fade leaves most of a 0.2 second shot clear without removing the transition
+ok 136 - v2 fade leaves most of a 0.2 second shot clear without removing the transition
+  ---
+  duration_ms: 444.834773
+  type: 'test'
+  ...
+# Subtest: v2 flash leaves most of a 0.2 second shot clear without removing the transition
+ok 137 - v2 flash leaves most of a 0.2 second shot clear without removing the transition
+  ---
+  duration_ms: 439.000295
+  type: 'test'
+  ...
+# Subtest: normal-length shots retain their existing fade
+ok 138 - normal-length shots retain their existing fade
+  ---
+  duration_ms: 369.645246
+  type: 'test'
+  ...
+# Subtest: hiding lyrics also hides the chorus keyword and restoring lyrics keeps the choice
+ok 139 - hiding lyrics also hides the chorus keyword and restoring lyrics keeps the choice
+  ---
+  duration_ms: 309.963764
+  type: 'test'
+  ...
+# Subtest: motif and keyword controls are independent and preserve generated assets
+ok 140 - motif and keyword controls are independent and preserve generated assets
+  ---
+  duration_ms: 307.427535
+  type: 'test'
+  ...
+# Subtest: fragment export preserves overlay choices without changing the original timeline
+ok 141 - fragment export preserves overlay choices without changing the original timeline
+  ---
+  duration_ms: 357.539698
+  type: 'test'
+  ...
+# Subtest: video export uses the saved overlay snapshot and the same clear ending as preview
+ok 142 - video export uses the saved overlay snapshot and the same clear ending as preview
+  ---
+  duration_ms: 431.179513
+  type: 'test'
+  ...
+# (node:169) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: 16:9: old full detail images keep both ends and fill empty frame area locally
+ok 143 - 16:9: old full detail images keep both ends and fill empty frame area locally
+  ---
+  duration_ms: 258.859636
+  type: 'test'
+  ...
+# Subtest: 9:16: old full detail images keep both ends and fill empty frame area locally
+ok 144 - 9:16: old full detail images keep both ends and fill empty frame area locally
+  ---
+  duration_ms: 237.59016
+  type: 'test'
+  ...
+# Subtest: manual right-cell selection supplies both the foreground and its soft background
+ok 145 - manual right-cell selection supplies both the foreground and its soft background
+  ---
+  duration_ms: 301.653377
+  type: 'test'
+  ...
+# Subtest: V1 replacement images use the same soft background without editing the original record
+ok 146 - V1 replacement images use the same soft background without editing the original record
+  ---
+  duration_ms: 311.454773
+  type: 'test'
+  ...
+# Subtest: a chosen stage background remains visible around full detail images
+ok 147 - a chosen stage background remains visible around full detail images
+  ---
+  duration_ms: 453.255955
+  type: 'test'
+  ...
+# Subtest: transparent pictures retain their transparent margins instead of acquiring a duplicate backdrop
+ok 148 - transparent pictures retain their transparent margins instead of acquiring a duplicate backdrop
+  ---
+  duration_ms: 557.575048
+  type: 'test'
+  ...
+# Subtest: soft padding uses the same pixels in preview and export
+ok 149 - soft padding uses the same pixels in preview and export
+  ---
+  duration_ms: 748.325333
+  type: 'test'
+  ...
+# Subtest: the editor gives the preview its film ratio and does not stretch it to the remaining row height
+ok 150 - the editor gives the preview its film ratio and does not stretch it to the remaining row height
+  ---
+  duration_ms: 267.553117
+  type: 'test'
+  ...
+# (node:193) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: 16:9: BaiBai receives the selected orientation for shared poses, scene assets and redraws
+ok 151 - 16:9: BaiBai receives the selected orientation for shared poses, scene assets and redraws
+  ---
+  duration_ms: 140.919048
+  type: 'test'
+  ...
+# Subtest: 16:9: non-stage cutout assets and complete manual prompts retain the selected orientation
+ok 152 - 16:9: non-stage cutout assets and complete manual prompts retain the selected orientation
+  ---
+  duration_ms: 125.351578
+  type: 'test'
+  ...
+# Subtest: 9:16: BaiBai receives the selected orientation for shared poses, scene assets and redraws
+ok 153 - 9:16: BaiBai receives the selected orientation for shared poses, scene assets and redraws
+  ---
+  duration_ms: 115.570045
+  type: 'test'
+  ...
+# Subtest: 9:16: non-stage cutout assets and complete manual prompts retain the selected orientation
+ok 154 - 9:16: non-stage cutout assets and complete manual prompts retain the selected orientation
+  ---
+  duration_ms: 167.415131
+  type: 'test'
+  ...
+# Subtest: Chatu8 novelai: MV uses its exact ratio only for this request
+ok 155 - Chatu8 novelai: MV uses its exact ratio only for this request
+  ---
+  duration_ms: 220.914494
+  type: 'test'
+  ...
+# Subtest: Chatu8 sd: MV uses its exact ratio only for this request
+ok 156 - Chatu8 sd: MV uses its exact ratio only for this request
+  ---
+  duration_ms: 194.849104
+  type: 'test'
+  ...
+# Subtest: Chatu8 comfyui: MV uses its exact ratio only for this request
+ok 157 - Chatu8 comfyui: MV uses its exact ratio only for this request
+  ---
+  duration_ms: 136.166018
+  type: 'test'
+  ...
+# Subtest: ordinary Chatu8 CG requests retain provider sizes and MV square settings get an oriented request
+ok 158 - ordinary Chatu8 CG requests retain provider sizes and MV square settings get an oriented request
+  ---
+  duration_ms: 122.224594
+  type: 'test'
+  ...
+# Subtest: automatic provider fallback carries the MV orientation to Chatu8
+ok 159 - automatic provider fallback carries the MV orientation to Chatu8
+  ---
+  duration_ms: 148.261356
+  type: 'test'
+  ...
+# Subtest: Chatu8 missing size fields still permit MV generation without changing settings
+ok 160 - Chatu8 missing size fields still permit MV generation without changing settings
+  ---
+  duration_ms: 704.940982
+  type: 'test'
+  ...
+# Subtest: legacy standalone frames honor the orientation and motif generation keeps its existing contract
+ok 161 - legacy standalone frames honor the orientation and motif generation keeps its existing contract
+  ---
+  duration_ms: 265.937859
+  type: 'test'
+  ...
+# Subtest: horizontal board thumbnails include a wide shape while vertical boards keep portrait tiles
+ok 162 - horizontal board thumbnails include a wide shape while vertical boards keep portrait tiles
+  ---
+  duration_ms: 188.657357
+  type: 'test'
+  ...
+# Subtest: choosing horizontal in setup persists through storyboard generation and drawing the remaining images
+ok 163 - choosing horizontal in setup persists through storyboard generation and drawing the remaining images
+  ---
+  duration_ms: 285.945995
+  type: 'test'
+  ...
+# (node:201) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: one setup click makes one storyboard request; drawing screen does not launch another batch
+ok 164 - one setup click makes one storyboard request; drawing screen does not launch another batch
+  ---
+  duration_ms: 331.471243
+  type: 'test'
+  ...
+# Subtest: an explicit continuation click requests one batch even when the reply leaves more sections
+ok 165 - an explicit continuation click requests one batch even when the reply leaves more sections
+  ---
+  duration_ms: 353.019662
+  type: 'test'
+  ...
+# Subtest: late setup completion cannot launch story requests for a newly opened song
+ok 166 - late setup completion cannot launch story requests for a newly opened song
+  ---
+  duration_ms: 154.239743
+  type: 'test'
+  ...
+# Subtest: regeneration arriving after a v2 image was drawn holds the response and preserves that image
+ok 167 - regeneration arriving after a v2 image was drawn holds the response and preserves that image
+  ---
+  duration_ms: 159.198602
+  type: 'test'
+  ...
+# Subtest: story single-flight remains locked until an asynchronous metadata save settles
+ok 168 - story single-flight remains locked until an asynchronous metadata save settles
+  ---
+  duration_ms: 137.602828
+  type: 'test'
+  ...
+# Subtest: queued group drawing never jumps to a newly opened song after its first image finishes
+ok 169 - queued group drawing never jumps to a newly opened song after its first image finishes
+  ---
+  duration_ms: 163.266983
+  type: 'test'
+  ...
+# Subtest: late paid asset is held if its group key was reused by an explicit replacement storyboard
+ok 170 - late paid asset is held if its group key was reused by an explicit replacement storyboard
+  ---
+  duration_ms: 140.014552
+  type: 'test'
+  ...
+# Subtest: a continuation can consist entirely of reused paid images without cloning or redrawing them
+ok 171 - a continuation can consist entirely of reused paid images without cloning or redrawing them
+  ---
+  duration_ms: 148.559607
+  type: 'test'
+  ...
+# Subtest: mixed new and reused groups preserve the correct image keys even when new raw IDs overlap old IDs
+ok 172 - mixed new and reused groups preserve the correct image keys even when new raw IDs overlap old IDs
+  ---
+  duration_ms: 132.405964
+  type: 'test'
+  ...
+# Subtest: single-image redraw sends a fresh seed and a group redraw shares its new seed across differences
+ok 173 - single-image redraw sends a fresh seed and a group redraw shares its new seed across differences
+  ---
+  duration_ms: 164.024336
+  type: 'test'
+  ...
+# Subtest: the existing ten-line request batch size remains, with no total section limit
+ok 174 - the existing ten-line request batch size remains, with no total section limit
+  ---
+  duration_ms: 214.329814
+  type: 'test'
+  ...
+# Subtest: saved r215 custom export selection remains effective when the restored clip controls first open
+ok 175 - saved r215 custom export selection remains effective when the restored clip controls first open
+  ---
+  duration_ms: 198.866033
+  type: 'test'
+  ...
+# Subtest: queued drawing stops when an explicit replacement story arrives, even on the same page
+ok 176 - queued drawing stops when an explicit replacement story arrives, even on the same page
+  ---
+  duration_ms: 155.775793
+  type: 'test'
+  ...
+# Subtest: a manual image filled while another asset is drawing is skipped by the remaining-image queue
+ok 177 - a manual image filled while another asset is drawing is skipped by the remaining-image queue
+  ---
+  duration_ms: 135.546826
+  type: 'test'
+  ...
+# Subtest: append retains images paid before it finishes and late image saves to the unchanged original group
+ok 178 - append retains images paid before it finishes and late image saves to the unchanged original group
+  ---
+  duration_ms: 129.683697
+  type: 'test'
+  ...
+# (node:209) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: paid result waits for a returned metadata promise when local storage cannot save
+ok 179 - paid result waits for a returned metadata promise when local storage cannot save
+  ---
+  duration_ms: 148.087649
+  type: 'test'
+  ...
+# Subtest: rejected metadata with no local copy retains the paid result and retries saving without regeneration
+ok 180 - rejected metadata with no local copy retains the paid result and retries saving without regeneration
+  ---
+  duration_ms: 152.945629
+  type: 'test'
+  ...
+# [HeartbeatMemories] host metadata save adapter unavailable
+# Subtest: confirmed local copy succeeds even if metadata rejects and survives a fresh runtime
+ok 181 - confirmed local copy succeeds even if metadata rejects and survives a fresh runtime
+  ---
+  duration_ms: 280.462587
+  type: 'test'
+  ...
+# Subtest: void-returning host debounce stays compatible when local storage quota is exhausted
+ok 182 - void-returning host debounce stays compatible when local storage quota is exhausted
+  ---
+  duration_ms: 188.938308
+  type: 'test'
+  ...
+# Subtest: missing, throwing or explicitly failed metadata storage keeps recovery in memory
+ok 183 - missing, throwing or explicitly failed metadata storage keeps recovery in memory
+  ---
+  duration_ms: 717.218375
+  type: 'test'
+  ...
+# Subtest: failed paid redraw remains exportable and save-only recovery keeps its new image
+ok 184 - failed paid redraw remains exportable and save-only recovery keeps its new image
+  ---
+  duration_ms: 152.533308
+  type: 'test'
+  ...
+# Subtest: a delayed rejected save retains only its original chat recovery
+ok 185 - a delayed rejected save retains only its original chat recovery
+  ---
+  duration_ms: 229.890258
+  type: 'test'
+  ...
+# Subtest: ordinary archive revision growth still allows unchanged-song storyboard saving
+ok 186 - ordinary archive revision growth still allows unchanged-song storyboard saving
+  ---
+  duration_ms: 231.401458
+  type: 'test'
+  ...
+# Subtest: all appearance/shot combinations preserve the current branch cast and scenery intent
+ok 187 - all appearance/shot combinations preserve the current branch cast and scenery intent
+  ---
+  duration_ms: 174.854733
+  type: 'test'
+  ...
+# (node:217) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: one music entry changes from import to current filename and keeps one player
+ok 188 - one music entry changes from import to current filename and keeps one player
+  ---
+  duration_ms: 277.037561
+  type: 'test'
+  ...
+# Subtest: removing only the current music keeps saved frames and timing
+ok 189 - removing only the current music keeps saved frames and timing
+  ---
+  duration_ms: 138.398567
+  type: 'test'
+  ...
+# Subtest: failed music removal leaves the original track available
+ok 190 - failed music removal leaves the original track available
+  ---
+  duration_ms: 128.676297
+  type: 'test'
+  ...
+# Subtest: a new import wins over a pending removal of the previous song
+ok 191 - a new import wins over a pending removal of the previous song
+  ---
+  duration_ms: 166.971909
+  type: 'test'
+  ...
+# Subtest: current filename is escaped and does not create another HTML control
+ok 192 - current filename is escaped and does not create another HTML control
+  ---
+  duration_ms: 140.383604
+  type: 'test'
+  ...
+# Subtest: plain release version remains compatible with the uploaded changelog parser
+ok 193 - plain release version remains compatible with the uploaded changelog parser
+  ---
+  duration_ms: 118.217514
+  type: 'test'
+  ...
+# Subtest: all current version surfaces use plain 1.0.27 and changelog credit remains
+ok 194 - all current version surfaces use plain 1.0.27 and changelog credit remains
+  ---
+  duration_ms: 0.968115
+  type: 'test'
+  ...
+# (node:225) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: reported legacy solo prompt replaces the old expression and omits the cast transition
+ok 195 - reported legacy solo prompt replaces the old expression and omits the cast transition
+  ---
+  duration_ms: 148.118795
+  type: 'test'
+  ...
+# Subtest: a complete still supersedes all group and change poses while preserving names and looks
+ok 196 - a complete still supersedes all group and change poses while preserving names and looks
+  ---
+  duration_ms: 159.728062
+  type: 'test'
+  ...
+# Subtest: two expressions produce separate images and the repeated beat reuses the first paid asset
+ok 197 - two expressions produce separate images and the repeated beat reuses the first paid asset
+  ---
+  duration_ms: 136.310953
+  type: 'test'
+  ...
+# Subtest: MV NAI submits the scene once and preserves its separate appearance channel
+ok 198 - MV NAI submits the scene once and preserves its separate appearance channel
+  ---
+  duration_ms: 202.920432
+  type: 'test'
+  ...
+# Subtest: other modules keep the existing NAI transport contract
+ok 199 - other modules keep the existing NAI transport contract
+  ---
+  duration_ms: 176.848633
+  type: 'test'
+  ...
+# Subtest: ComfyUI and flat backends retain complete prompt channels and named looks
+ok 200 - ComfyUI and flat backends retain complete prompt channels and named looks
+  ---
+  duration_ms: 421.553124
+  type: 'test'
+  ...
+# Subtest: player redraw and asset editor use the same chosen still
+ok 201 - player redraw and asset editor use the same chosen still
+  ---
+  duration_ms: 134.89477
+  type: 'test'
+  ...
+# Subtest: manual complete prompts pass through both redraw routes without hidden character text
+ok 202 - manual complete prompts pass through both redraw routes without hidden character text
+  ---
+  duration_ms: 133.790538
+  type: 'test'
+  ...
+# Subtest: a player redraw arriving after an asset prompt edit is preserved as pending
+ok 203 - a player redraw arriving after an asset prompt edit is preserved as pending
+  ---
+  duration_ms: 112.685187
+  type: 'test'
+  ...
+# Subtest: missing optional per-still text and legacy records remain drawable
+ok 204 - missing optional per-still text and legacy records remain drawable
+  ---
+  duration_ms: 123.14867
+  type: 'test'
+  ...
+# Subtest: unbound multi-person legacy actions are retained instead of guessing whose expression changed
+ok 205 - unbound multi-person legacy actions are retained instead of guessing whose expression changed
+  ---
+  duration_ms: 118.735109
+  type: 'test'
+  ...
+# Subtest: omitted group cast can still resolve a named person from the new per-still field
+ok 206 - omitted group cast can still resolve a named person from the new per-still field
+  ---
+  duration_ms: 106.068617
+  type: 'test'
+  ...
+# Subtest: expression storyboard request includes separate stills, sustained poses and a shared stage
+ok 207 - expression storyboard request includes separate stills, sustained poses and a shared stage
+  ---
+  duration_ms: 110.350322
+  type: 'test'
+  ...
+1..207
+# tests 207
+# suites 0
+# pass 200
+# fail 7
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 14741.289056

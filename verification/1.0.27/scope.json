@@ -1,0 +1,12 @@
+{
+  "changed_src": [
+    "src/core/releaseNotes.js",
+    "src/core/selfUpdater.js",
+    "src/ui/homeView.js"
+  ],
+  "generation_changed": false,
+  "production_editor_changed": false,
+  "storage_changed": false,
+  "github_write": false,
+  "browser_tested": false
+}

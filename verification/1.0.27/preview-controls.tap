@@ -1,0 +1,58 @@
+TAP version 13
+# Subtest: self-contained preview loads reference pixels and one shared player
+ok 1 - self-contained preview loads reference pixels and one shared player
+  ---
+  duration_ms: 40.599448
+  type: 'test'
+  ...
+# Subtest: selecting and seeking follow one current shot and retain 17 visible choices
+ok 2 - selecting and seeking follow one current shot and retain 17 visible choices
+  ---
+  duration_ms: 37.728422
+  type: 'test'
+  ...
+# Subtest: play pause and focus view are reversible without resetting the timeline
+ok 3 - play pause and focus view are reversible without resetting the timeline
+  ---
+  duration_ms: 33.58721
+  type: 'test'
+  ...
+# Subtest: tabs have keyboard navigation and portrait ratio keeps original width-height relationship
+ok 4 - tabs have keyboard navigation and portrait ratio keeps original width-height relationship
+  ---
+  duration_ms: 32.509246
+  type: 'test'
+  ...
+# Subtest: image editor keeps save controls, foldable tools, zoom reset and next-shot navigation
+ok 5 - image editor keeps save controls, foldable tools, zoom reset and next-shot navigation
+  ---
+  duration_ms: 89.072571
+  type: 'test'
+  ...
+# Subtest: README view and release dialog share the exact current README and do not show history
+ok 6 - README view and release dialog share the exact current README and do not show history
+  ---
+  duration_ms: 124.680099
+  type: 'test'
+  ...
+# Subtest: timing edits are local and undo restores the previous marks
+ok 7 - timing edits are local and undo restores the previous marks
+  ---
+  duration_ms: 32.504799
+  type: 'test'
+  ...
+# Subtest: release text containing markup remains inert in the prototype
+ok 8 - release text containing markup remains inert in the prototype
+  ---
+  duration_ms: 82.933981
+  type: 'test'
+  ...
+1..8
+# tests 8
+# suites 0
+# pass 8
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 854.784297

@@ -1,0 +1,1709 @@
+TAP version 13
+# (node:24) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: album second-step intent is saved before requests and old pictures/fields are preserved on completion
+ok 1 - album second-step intent is saved before requests and old pictures/fields are preserved on completion
+  ---
+  duration_ms: 280.90056
+  type: 'test'
+  ...
+# Subtest: failed dialogue batch keeps successful partials readable and fresh runtime resumes only missing dialogue
+ok 2 - failed dialogue batch keeps successful partials readable and fresh runtime resumes only missing dialogue
+  ---
+  duration_ms: 364.765632
+  type: 'test'
+  ...
+# Subtest: legacy second-step journal without intent flag resumes from its original relation/comment slots
+ok 3 - legacy second-step journal without intent flag resumes from its original relation/comment slots
+  ---
+  duration_ms: 384.29591
+  type: 'test'
+  ...
+# Subtest: filling a new photograph retains already complete legacy four-line dialogue and its relationship basis
+ok 4 - filling a new photograph retains already complete legacy four-line dialogue and its relationship basis
+  ---
+  duration_ms: 168.556929
+  type: 'test'
+  ...
+# Subtest: an incomplete six-line-contract entry is completed, and a four-line new reply still fails validation
+ok 5 - an incomplete six-line-contract entry is completed, and a four-line new reply still fails validation
+  ---
+  duration_ms: 232.996729
+  type: 'test'
+  ...
+# Subtest: concurrent error waits for in-flight successful dialogue and does not dispatch later batches
+ok 6 - concurrent error waits for in-flight successful dialogue and does not dispatch later batches
+  ---
+  duration_ms: 334.418537
+  type: 'test'
+  ...
+# Subtest: cancelling the two in-flight dialogue requests releases task state and preserves the old album
+ok 7 - cancelling the two in-flight dialogue requests releases task state and preserves the old album
+  ---
+  duration_ms: 234.278919
+  type: 'test'
+  ...
+# node:internal/fs/promises:697
+#   return new FileHandle(await PromisePrototypeThen(
+#                         ^
+# Error: ENOENT: no such file or directory, open '/workspace/scratch/8e568532ca62/candidate-1.0.27/tokimemo-main/audit-input/tokimemo-main/dist/heartbeatMemories.bundle.js'
+#     at async open (node:internal/fs/promises:697:25)
+#     at async Object.readFile (node:internal/fs/promises:1348:14)
+#     at async modules (file:///workspace/scratch/8e568532ca62/candidate-1.0.27/tokimemo-main/tools/verification/bedtime-regression.mjs:7:16)
+#     at async file:///workspace/scratch/8e568532ca62/candidate-1.0.27/tokimemo-main/tools/verification/bedtime-regression.mjs:12:18 {
+#   errno: -2,
+#   code: 'ENOENT',
+#   syscall: 'open',
+#   path: '/workspace/scratch/8e568532ca62/candidate-1.0.27/tokimemo-main/audit-input/tokimemo-main/dist/heartbeatMemories.bundle.js'
+# }
+# Node.js v24.19.0
+# Subtest: tools/verification/bedtime-regression.mjs
+not ok 2 - tools/verification/bedtime-regression.mjs
+  ---
+  duration_ms: 429.9359
+  type: 'test'
+  location: '/workspace/scratch/8e568532ca62/candidate-1.0.27/tokimemo-main/tools/verification/bedtime-regression.mjs:1:1'
+  failureType: 'testCodeFailure'
+  exitCode: 1
+  signal: ~
+  error: 'test failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+# (node:32) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: known host failure retains RMT_CONNECTION_NETWORK without exposing error text
+ok 9 - known host failure retains RMT_CONNECTION_NETWORK without exposing error text
+  ---
+  duration_ms: 108.750816
+  type: 'test'
+  ...
+# Subtest: known host failure retains RMT_CONNECTION_NETWORK without exposing error text
+ok 10 - known host failure retains RMT_CONNECTION_NETWORK without exposing error text
+  ---
+  duration_ms: 103.084433
+  type: 'test'
+  ...
+# Subtest: known host failure retains RMT_CONNECTION_NETWORK without exposing error text
+ok 11 - known host failure retains RMT_CONNECTION_NETWORK without exposing error text
+  ---
+  duration_ms: 104.009579
+  type: 'test'
+  ...
+# Subtest: known host failure retains RMT_CONNECTION_NETWORK without exposing error text
+ok 12 - known host failure retains RMT_CONNECTION_NETWORK without exposing error text
+  ---
+  duration_ms: 95.132492
+  type: 'test'
+  ...
+# Subtest: known host failure retains RMT_CONNECTION_SERVER without exposing error text
+ok 13 - known host failure retains RMT_CONNECTION_SERVER without exposing error text
+  ---
+  duration_ms: 109.159483
+  type: 'test'
+  ...
+# Subtest: known host failure retains RMT_CONNECTION_SERVER without exposing error text
+ok 14 - known host failure retains RMT_CONNECTION_SERVER without exposing error text
+  ---
+  duration_ms: 95.137379
+  type: 'test'
+  ...
+# Subtest: numeric status remains authoritative over text hints and unknown wrappers stay unknown
+ok 15 - numeric status remains authoritative over text hints and unknown wrappers stay unknown
+  ---
+  duration_ms: 102.55257
+  type: 'test'
+  ...
+# Subtest: ordinary final text and JSON quoting error labels do not acquire a new error gate
+ok 16 - ordinary final text and JSON quoting error labels do not acquire a new error gate
+  ---
+  duration_ms: 111.316729
+  type: 'test'
+  ...
+# Subtest: classified TT network failure still issues one request and exports only safe classification
+ok 17 - classified TT network failure still issues one request and exports only safe classification
+  ---
+  duration_ms: 119.184791
+  type: 'test'
+  ...
+# (node:37) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: album: first 500-memory request sends 48 and records 48, not all 500
+ok 18 - album: first 500-memory request sends 48 and records 48, not all 500
+  ---
+  duration_ms: 137.490468
+  type: 'test'
+  ...
+# Subtest: album: manual 300-memory range reaches prompt and validates last item
+ok 19 - album: manual 300-memory range reaches prompt and validates last item
+  ---
+  duration_ms: 117.632661
+  type: 'test'
+  ...
+# Subtest: album: old blanket coverage does not hide unused memories; old work is immutable
+ok 20 - album: old blanket coverage does not hide unused memories; old work is immutable
+  ---
+  duration_ms: 127.335717
+  type: 'test'
+  ...
+# Subtest: album: valid empty first result advances material only, without follow-up calls
+ok 21 - album: valid empty first result advances material only, without follow-up calls
+  ---
+  duration_ms: 119.05561
+  type: 'test'
+  ...
+# Subtest: album: malformed/failed result never changes old coverage or work
+ok 22 - album: malformed/failed result never changes old coverage or work
+  ---
+  duration_ms: 101.510245
+  type: 'test'
+  ...
+# Subtest: album: selected evidence cannot accept a different archive row
+ok 23 - album: selected evidence cannot accept a different archive row
+  ---
+  duration_ms: 101.087418
+  type: 'test'
+  ...
+# Subtest: album: duplicate paid output is discarded while historical image/text stays exact
+ok 24 - album: duplicate paid output is discarded while historical image/text stays exact
+  ---
+  duration_ms: 103.506193
+  type: 'test'
+  ...
+# Subtest: album: recovery schema and partial reader use frozen selected bank
+ok 25 - album: recovery schema and partial reader use frozen selected bank
+  ---
+  duration_ms: 112.891593
+  type: 'test'
+  ...
+# Subtest: adv: first 500-memory request sends 48 and records 48, not all 500
+ok 26 - adv: first 500-memory request sends 48 and records 48, not all 500
+  ---
+  duration_ms: 135.989709
+  type: 'test'
+  ...
+# Subtest: adv: manual 300-memory range reaches prompt and validates last item
+ok 27 - adv: manual 300-memory range reaches prompt and validates last item
+  ---
+  duration_ms: 117.022076
+  type: 'test'
+  ...
+# Subtest: adv: old blanket coverage does not hide unused memories; old work is immutable
+ok 28 - adv: old blanket coverage does not hide unused memories; old work is immutable
+  ---
+  duration_ms: 113.316343
+  type: 'test'
+  ...
+# Subtest: adv: valid empty first result advances material only, without follow-up calls
+ok 29 - adv: valid empty first result advances material only, without follow-up calls
+  ---
+  duration_ms: 115.353493
+  type: 'test'
+  ...
+# Subtest: adv: malformed/failed result never changes old coverage or work
+ok 30 - adv: malformed/failed result never changes old coverage or work
+  ---
+  duration_ms: 111.447403
+  type: 'test'
+  ...
+# Subtest: adv: selected evidence cannot accept a different archive row
+ok 31 - adv: selected evidence cannot accept a different archive row
+  ---
+  duration_ms: 113.940168
+  type: 'test'
+  ...
+# Subtest: adv: duplicate paid output is discarded while historical image/text stays exact
+ok 32 - adv: duplicate paid output is discarded while historical image/text stays exact
+  ---
+  duration_ms: 116.078362
+  type: 'test'
+  ...
+# Subtest: adv: recovery schema and partial reader use frozen selected bank
+ok 33 - adv: recovery schema and partial reader use frozen selected bank
+  ---
+  duration_ms: 114.873591
+  type: 'test'
+  ...
+# Subtest: cold-tier selection participates without changing the original bank
+ok 34 - cold-tier selection participates without changing the original bank
+  ---
+  duration_ms: 122.986095
+  type: 'test'
+  ...
+# Subtest: expired manual selection stops before a provider request
+ok 35 - expired manual selection stops before a provider request
+  ---
+  duration_ms: 137.919519
+  type: 'test'
+  ...
+# Subtest: manual selection is isolated by mode, chat, avatar, archive target and revision
+ok 36 - manual selection is isolated by mode, chat, avatar, archive target and revision
+  ---
+  duration_ms: 150.789464
+  type: 'test'
+  ...
+# Subtest: completion clears only its exact applied request; failed or newer choices survive
+ok 37 - completion clears only its exact applied request; failed or newer choices survive
+  ---
+  duration_ms: 208.011126
+  type: 'test'
+  ...
+# Subtest: frozen plan survives serialization and does not adopt a later form selection
+ok 38 - frozen plan survives serialization and does not adopt a later form selection
+  ---
+  duration_ms: 300.479599
+  type: 'test'
+  ...
+# Subtest: empty and nonexistent selections are rejected without replacing an applied request
+ok 39 - empty and nonexistent selections are rejected without replacing an applied request
+  ---
+  duration_ms: 203.475183
+  type: 'test'
+  ...
+# Subtest: legacy paid journal keeps its original prompt sampling, but stamps only 48 actual inputs
+ok 40 - legacy paid journal keeps its original prompt sampling, but stamps only 48 actual inputs
+  ---
+  duration_ms: 383.598071
+  type: 'test'
+  ...
+# Subtest: creative prompt templates are byte-for-byte unchanged from the delivered 1.0.20 source
+not ok 41 - creative prompt templates are byte-for-byte unchanged from the delivered 1.0.20 source
+  ---
+  duration_ms: 0.412822
+  type: 'test'
+  location: '/workspace/scratch/8e568532ca62/candidate-1.0.27/tokimemo-main/tools/verification/content-selection-regression.mjs:150:1'
+  failureType: 'testCodeFailure'
+  error: 'Set BASELINE_ROOT to the exact 1.0.20 source for this contract check'
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    TestContext.<anonymous> (file:///workspace/scratch/8e568532ca62/candidate-1.0.27/tokimemo-main/tools/verification/content-selection-regression.mjs:152:25)
+    Test.runInAsyncScope (node:async_hooks:227:14)
+    Test.run (node:internal/test_runner/test:1382:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+    Test.postRun (node:internal/test_runner/test:1522:19)
+    Test.run (node:internal/test_runner/test:1447:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+# Subtest: UI: opening first-generation selection is local, collapsed and uses existing generate action
+ok 42 - UI: opening first-generation selection is local, collapsed and uses existing generate action
+  ---
+  duration_ms: 456.271642
+  type: 'test'
+  ...
+# Subtest: UI: apply a range before generation, paginate and keep exact mode-specific request
+ok 43 - UI: apply a range before generation, paginate and keep exact mode-specific request
+  ---
+  duration_ms: 378.789174
+  type: 'test'
+  ...
+# Subtest: UI: invalid and empty ranges cannot replace chosen material; automatic restore works
+ok 44 - UI: invalid and empty ranges cannot replace chosen material; automatic restore works
+  ---
+  duration_ms: 332.856982
+  type: 'test'
+  ...
+# Subtest: UI: individual checkboxes change the applied set
+ok 45 - UI: individual checkboxes change the applied set
+  ---
+  duration_ms: 359.682504
+  type: 'test'
+  ...
+# Subtest: UI: stale archive blocks both selection and paid generation
+ok 46 - UI: stale archive blocks both selection and paid generation
+  ---
+  duration_ms: 256.169322
+  type: 'test'
+  ...
+# Subtest: UI: completed selection resets to automatic only for its matching request
+ok 47 - UI: completed selection resets to automatic only for its matching request
+  ---
+  duration_ms: 248.235683
+  type: 'test'
+  ...
+# Subtest: UI: unsupported modes and read-only or backup pages do not expose selection controls
+ok 48 - UI: unsupported modes and read-only or backup pages do not expose selection controls
+  ---
+  duration_ms: 446.864038
+  type: 'test'
+  ...
+# Subtest: album: public generateMode freezes applied selection into recovery and commits matching coverage
+ok 49 - album: public generateMode freezes applied selection into recovery and commits matching coverage
+  ---
+  duration_ms: 616.999973
+  type: 'test'
+  ...
+# Subtest: adv: public generateMode freezes applied selection into recovery and commits matching coverage
+ok 50 - adv: public generateMode freezes applied selection into recovery and commits matching coverage
+  ---
+  duration_ms: 832.307244
+  type: 'test'
+  ...
+# Subtest: album: second-step dialogue keeps selected coverage instead of marking a new batch
+ok 51 - album: second-step dialogue keeps selected coverage instead of marking a new batch
+  ---
+  duration_ms: 869.535924
+  type: 'test'
+  ...
+# Subtest: paid album index survives a fresh runtime and resumes original range with zero new provider calls
+ok 52 - paid album index survives a fresh runtime and resumes original range with zero new provider calls
+  ---
+  duration_ms: 2275.308051
+  type: 'test'
+  ...
+# Subtest: album: existing reader mounts selection alongside original reading controls
+ok 53 - album: existing reader mounts selection alongside original reading controls
+  ---
+  duration_ms: 193.375055
+  type: 'test'
+  ...
+# Subtest: adv: existing reader mounts selection alongside original reading controls
+ok 54 - adv: existing reader mounts selection alongside original reading controls
+  ---
+  duration_ms: 189.763741
+  type: 'test'
+  ...
+# Subtest: UI: imported metadata and archive titles cannot insert HTML through the selection panel
+ok 55 - UI: imported metadata and archive titles cannot insert HTML through the selection panel
+  ---
+  duration_ms: 196.088812
+  type: 'test'
+  ...
+# [HeartbeatMemories] input token count unavailable; proceeding without an estimated hard cutoff { name: 'Error' }
+# (node:64) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: all production module exports initialize
+ok 56 - all production module exports initialize
+  ---
+  duration_ms: 100.043591
+  type: 'test'
+  ...
+# Subtest: input user budget preserves positive integers; actual tokens decide instead of chars
+ok 57 - input user budget preserves positive integers; actual tokens decide instead of chars
+  ---
+  duration_ms: 102.474554
+  type: 'test'
+  ...
+# Subtest: JSON and profile streaming preserve responses beyond 600k chars and 4MB
+ok 58 - JSON and profile streaming preserve responses beyond 600k chars and 4MB
+  ---
+  duration_ms: 117.988758
+  type: 'test'
+  ...
+# Subtest: cumulative drama and extras retain every existing record past former caps
+ok 59 - cumulative drama and extras retain every existing record past former caps
+  ---
+  duration_ms: 109.257828
+  type: 'test'
+  ...
+# Subtest: CG incremental generation retains paid item 241 and matching coverage
+ok 60 - CG incremental generation retains paid item 241 and matching coverage
+  ---
+  duration_ms: 117.402785
+  type: 'test'
+  ...
+# Subtest: real waiting request pipeline holds revision drift and does not commit stale output
+ok 61 - real waiting request pipeline holds revision drift and does not commit stale output
+  ---
+  duration_ms: 130.719757
+  type: 'test'
+  ...
+# Subtest: switch + quota failure retains paid output; save-only retry restores old and new without another request
+ok 62 - switch + quota failure retains paid output; save-only retry restores old and new without another request
+  ---
+  duration_ms: 133.167446
+  type: 'test'
+  ...
+# Subtest: missing or silent localStorage never reports durable save; rejection handled and export available
+ok 63 - missing or silent localStorage never reports durable save; rejection handled and export available
+  ---
+  duration_ms: 125.457979
+  type: 'test'
+  ...
+# Subtest: durable pending journal survives runtime reload and requires original revision
+ok 64 - durable pending journal survives runtime reload and requires original revision
+  ---
+  duration_ms: 221.305761
+  type: 'test'
+  ...
+# Subtest: invalid paid body remains exportable rather than triggering another request
+ok 65 - invalid paid body remains exportable rather than triggering another request
+  ---
+  duration_ms: 132.148641
+  type: 'test'
+  ...
+# Subtest: real intel request saves normally and releases running state
+ok 66 - real intel request saves normally and releases running state
+  ---
+  duration_ms: 145.960246
+  type: 'test'
+  ...
+# Subtest: manual JSON and SSE transport retain >4MB while preserving requested output budget
+ok 67 - manual JSON and SSE transport retain >4MB while preserving requested output budget
+  ---
+  duration_ms: 475.297333
+  type: 'test'
+  ...
+# Subtest: archive deletion and character switch never write held results into the new target
+ok 68 - archive deletion and character switch never write held results into the new target
+  ---
+  duration_ms: 123.459021
+  type: 'test'
+  ...
+# Subtest: confirmed local results remain recoverable despite rejected metadata persistence
+ok 69 - confirmed local results remain recoverable despite rejected metadata persistence
+  ---
+  duration_ms: 261.677028
+  type: 'test'
+  ...
+# Subtest: HTTP/LAN hosts without crypto.randomUUID can retain paid results with distinct ids
+ok 70 - HTTP/LAN hosts without crypto.randomUUID can retain paid results with distinct ids
+  ---
+  duration_ms: 267.242807
+  type: 'test'
+  ...
+# (node:72) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: Suno short link uses published canonical identity and the existing host route
+ok 71 - Suno short link uses published canonical identity and the existing host route
+  ---
+  duration_ms: 102.979562
+  type: 'test'
+  ...
+# Subtest: known audio plays directly when fetch cannot read cross-origin bytes
+ok 72 - known audio plays directly when fetch cannot read cross-origin bytes
+  ---
+  duration_ms: 101.672836
+  type: 'test'
+  ...
+# Subtest: published audio from a share page can use the same streaming path
+ok 73 - published audio from a share page can use the same streaming path
+  ---
+  duration_ms: 110.829277
+  type: 'test'
+  ...
+# Subtest: HTML song pages are never sent to the audio element as fake media
+ok 74 - HTML song pages are never sent to the audio element as fake media
+  ---
+  duration_ms: 129.272293
+  type: 'test'
+  ...
+# Subtest: HTTP access denial stops without trying another transport
+ok 75 - HTTP access denial stops without trying another transport
+  ---
+  duration_ms: 136.241703
+  type: 'test'
+  ...
+# Subtest: local host route is used only for published Suno hosts, never arbitrary or private destinations
+ok 76 - local host route is used only for published Suno hosts, never arbitrary or private destinations
+  ---
+  duration_ms: 135.697015
+  type: 'test'
+  ...
+# Subtest: unavailable host route leaves a clear error instead of importing its response
+ok 77 - unavailable host route leaves a clear error instead of importing its response
+  ---
+  duration_ms: 152.32107
+  type: 'test'
+  ...
+# Subtest: automatic host adaptation does not assume Tauri supplies the web server proxy
+ok 78 - automatic host adaptation does not assume Tauri supplies the web server proxy
+  ---
+  duration_ms: 145.921259
+  type: 'test'
+  ...
+# Subtest: the media store keeps online URLs scoped by song and removes them when replaced with a file
+ok 79 - the media store keeps online URLs scoped by song and removes them when replaced with a file
+  ---
+  duration_ms: 117.647248
+  type: 'test'
+  ...
+# Subtest: JSON-LD AudioObject is parsed as data; arbitrary scripts and placeholders are ignored
+ok 80 - JSON-LD AudioObject is parsed as data; arbitrary scripts and placeholders are ignored
+  ---
+  duration_ms: 138.00856
+  type: 'test'
+  ...
+# Subtest: canonical parsing cannot leave Suno or follow an unrelated document
+ok 81 - canonical parsing cannot leave Suno or follow an unrelated document
+  ---
+  duration_ms: 124.417868
+  type: 'test'
+  ...
+# Subtest: cancel settles even when a WebView fetch ignores AbortSignal
+ok 82 - cancel settles even when a WebView fetch ignores AbortSignal
+  ---
+  duration_ms: 135.543908
+  type: 'test'
+  ...
+# Subtest: cancel also settles a stalled response body and never enables streaming after cancellation
+ok 83 - cancel also settles a stalled response body and never enables streaming after cancellation
+  ---
+  duration_ms: 299.773128
+  type: 'test'
+  ...
+# Subtest: streaming music uses existing play/pause/seek and line marking, with no separate player
+ok 84 - streaming music uses existing play/pause/seek and line marking, with no separate player
+  ---
+  duration_ms: 323.185994
+  type: 'test'
+  ...
+# Subtest: saved remote track restores locally scoped source and existing timing
+ok 85 - saved remote track restores locally scoped source and existing timing
+  ---
+  duration_ms: 846.023063
+  type: 'test'
+  ...
+# Subtest: export obtains readable audio before recording the online track
+ok 86 - export obtains readable audio before recording the online track
+  ---
+  duration_ms: 400.052276
+  type: 'test'
+  ...
+# Subtest: unreadable export audio never produces a silently muted video and preserves the preview track
+ok 87 - unreadable export audio never produces a silently muted video and preserves the preview track
+  ---
+  duration_ms: 380.822219
+  type: 'test'
+  ...
+# Subtest: cancelling export stops a non-cooperative audio fetch before any recording starts
+ok 88 - cancelling export stops a non-cooperative audio fetch before any recording starts
+  ---
+  duration_ms: 377.098137
+  type: 'test'
+  ...
+# Subtest: mp4: identify a real AAC track without reading movie payload
+ok 89 - mp4: identify a real AAC track without reading movie payload
+  ---
+  duration_ms: 5.99057
+  type: 'test'
+  ...
+# Subtest: mov: identify a real AAC track without reading movie payload
+ok 90 - mov: identify a real AAC track without reading movie payload
+  ---
+  duration_ms: 1.419073
+  type: 'test'
+  ...
+# Subtest: fragmented: identify a real AAC track without reading movie payload
+ok 91 - fragmented: identify a real AAC track without reading movie payload
+  ---
+  duration_ms: 1.670386
+  type: 'test'
+  ...
+# Subtest: a playable video without an audio track is rejected
+ok 92 - a playable video without an audio track is rejected
+  ---
+  duration_ms: 0.99173
+  type: 'test'
+  ...
+# Subtest: an audio track declared in fragmented metadata but containing no samples is rejected
+ok 93 - an audio track declared in fragmented metadata but containing no samples is rejected
+  ---
+  duration_ms: 1.052891
+  type: 'test'
+  ...
+# Subtest: truncated container and arbitrary renamed files are rejected
+ok 94 - truncated container and arbitrary renamed files are rejected
+  ---
+  duration_ms: 0.83658
+  type: 'test'
+  ...
+# Subtest: file selection recognizes video MIME and MP4/MOV names without misclassifying ordinary audio
+ok 95 - file selection recognizes video MIME and MP4/MOV names without misclassifying ordinary audio
+  ---
+  duration_ms: 1.447305
+  type: 'test'
+  ...
+# Subtest: cancellation stops metadata inspection without reading more data
+ok 96 - cancellation stops metadata inspection without reading more data
+  ---
+  duration_ms: 0.331342
+  type: 'test'
+  ...
+# (node:240) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: uniform 255 character matte is removed automatically, enclosed white clothing remains
+ok 97 - uniform 255 character matte is removed automatically, enclosed white clothing remains
+  ---
+  duration_ms: 257.250675
+  type: 'test'
+  ...
+# Subtest: uniform 235 character matte is removed automatically, enclosed white clothing remains
+ok 98 - uniform 235 character matte is removed automatically, enclosed white clothing remains
+  ---
+  duration_ms: 241.247736
+  type: 'test'
+  ...
+# Subtest: uniform 205 character matte is removed automatically, enclosed white clothing remains
+ok 99 - uniform 205 character matte is removed automatically, enclosed white clothing remains
+  ---
+  duration_ms: 210.305503
+  type: 'test'
+  ...
+# Subtest: genuine transparency needs no user-confirmed edit flag
+ok 100 - genuine transparency needs no user-confirmed edit flag
+  ---
+  duration_ms: 189.201225
+  type: 'test'
+  ...
+# Subtest: blank images, scenic rectangles, and stacked cells are not called clean cutouts
+ok 101 - blank images, scenic rectangles, and stacked cells are not called clean cutouts
+  ---
+  duration_ms: 216.613326
+  type: 'test'
+  ...
+# Subtest: new shared backgrounds use generated images, even if the model returns a local pattern
+ok 102 - new shared backgrounds use generated images, even if the model returns a local pattern
+  ---
+  duration_ms: 114.222555
+  type: 'test'
+  ...
+# Subtest: previous procedural art can be replaced with one image without regenerating the storyboard
+ok 103 - previous procedural art can be replaced with one image without regenerating the storyboard
+  ---
+  duration_ms: 169.27485
+  type: 'test'
+  ...
+# Subtest: unfinished image backgrounds are not counted as completed layered clips
+ok 104 - unfinished image backgrounds are not counted as completed layered clips
+  ---
+  duration_ms: 174.405791
+  type: 'test'
+  ...
+# (node:291) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: song recommendations rank lyrical, impact, interaction, loop and reveal from meaningful evidence
+ok 105 - song recommendations rank lyrical, impact, interaction, loop and reveal from meaningful evidence
+  ---
+  duration_ms: 231.571824
+  type: 'test'
+  ...
+# Subtest: three selected NPCs are kept independently of user visibility; one frame uses only its two named actors
+ok 106 - three selected NPCs are kept independently of user visibility; one frame uses only its two named actors
+  ---
+  duration_ms: 199.368962
+  type: 'test'
+  ...
+# Subtest: worldbook cast source is supplied once, with stable person bindings and no card-as-person instruction
+ok 107 - worldbook cast source is supplied once, with stable person bindings and no card-as-person instruction
+  ---
+  duration_ms: 207.305365
+  type: 'test'
+  ...
+# Subtest: opening recommendation controls and editing type never calls text/image providers
+ok 108 - opening recommendation controls and editing type never calls text/image providers
+  ---
+  duration_ms: 244.937945
+  type: 'test'
+  ...
+# Subtest: storyboard JSON examples use real participant IDs in both image and video modes
+ok 109 - storyboard JSON examples use real participant IDs in both image and video modes
+  ---
+  duration_ms: 680.54383
+  type: 'test'
+  ...
+# Subtest: same-name NPCs retain separate identity, appearance and provider labels without renaming saved people
+ok 110 - same-name NPCs retain separate identity, appearance and provider labels without renaming saved people
+  ---
+  duration_ms: 127.633237
+  type: 'test'
+  ...
+# Subtest: user visibility filters only explicit user identity, never NPCs sharing the persona name
+ok 111 - user visibility filters only explicit user identity, never NPCs sharing the persona name
+  ---
+  duration_ms: 265.207559
+  type: 'test'
+  ...
+# Subtest: explicit empty cast stays an empty landscape; missing cast remains repairable, not a generation gate
+ok 112 - explicit empty cast stays an empty landscape; missing cast remains repairable, not a generation gate
+  ---
+  duration_ms: 105.808623
+  type: 'test'
+  ...
+# Subtest: model name fallback binds only a unique name and unknown IDs warn without dropping valid cast
+ok 113 - model name fallback binds only a unique name and unknown IDs warn without dropping valid cast
+  ---
+  duration_ms: 120.596582
+  type: 'test'
+  ...
+# Subtest: one person can keep multiple worldbook sources and deselection preserves paid old-shot identities
+ok 114 - one person can keep multiple worldbook sources and deselection preserves paid old-shot identities
+  ---
+  duration_ms: 123.838127
+  type: 'test'
+  ...
+# Subtest: no new actor count cap: 24 identities and appearances survive multi-character and flat provider preparation
+ok 115 - no new actor count cap: 24 identities and appearances survive multi-character and flat provider preparation
+  ---
+  duration_ms: 121.09395
+  type: 'test'
+  ...
+# Subtest: hands-only framing does not append face, hair, wardrobe or full-body framing
+ok 116 - hands-only framing does not append face, hair, wardrobe or full-body framing
+  ---
+  duration_ms: 151.560798
+  type: 'test'
+  ...
+# Subtest: missing appearance is allowed; generated appearance cannot overwrite manual facts or create strangers
+ok 117 - missing appearance is allowed; generated appearance cannot overwrite manual facts or create strangers
+  ---
+  duration_ms: 123.919467
+  type: 'test'
+  ...
+# Subtest: song-owned cast and type survive reload and stay isolated from another song and chat
+ok 118 - song-owned cast and type survive reload and stay isolated from another song and chat
+  ---
+  duration_ms: 324.377334
+  type: 'test'
+  ...
+# Subtest: continuation freezes per-song cast despite archive edits, keeps images and clothing, and adds only missing sections
+ok 119 - continuation freezes per-song cast despite archive edits, keeps images and clothing, and adds only missing sections
+  ---
+  duration_ms: 137.603709
+  type: 'test'
+  ...
+# Subtest: editing cast during a paid request holds its response for save-only retry instead of overwriting the edit
+ok 120 - editing cast during a paid request holds its response for save-only retry instead of overwriting the edit
+  ---
+  duration_ms: 324.400508
+  type: 'test'
+  ...
+# Subtest: chat switch journals new cast response and fresh-runtime save-only recovery preserves IDs
+ok 121 - chat switch journals new cast response and fresh-runtime save-only recovery preserves IDs
+  ---
+  duration_ms: 376.411699
+  type: 'test'
+  ...
+# Subtest: draw failure sends no automatic extra request and preserves an already-paid asset
+ok 122 - draw failure sends no automatic extra request and preserves an already-paid asset
+  ---
+  duration_ms: 221.354937
+  type: 'test'
+  ...
+# Subtest: draw delivers scene and matched appearance metadata without duplicating lorebook bodies in image prompt
+ok 123 - draw delivers scene and matched appearance metadata without duplicating lorebook bodies in image prompt
+  ---
+  duration_ms: 195.900512
+  type: 'test'
+  ...
+# Subtest: manual shot binding keeps assets and edits all reused frames of that composition
+ok 124 - manual shot binding keeps assets and edits all reused frames of that composition
+  ---
+  duration_ms: 209.328777
+  type: 'test'
+  ...
+# Subtest: cast editor uses song-only snapshot, and late picker confirmation after chat switch is rejected
+ok 125 - cast editor uses song-only snapshot, and late picker confirmation after chat switch is rejected
+  ---
+  duration_ms: 197.784059
+  type: 'test'
+  ...
+# Subtest: stale picker cannot overwrite newer per-song appearance edits
+ok 126 - stale picker cannot overwrite newer per-song appearance edits
+  ---
+  duration_ms: 197.692484
+  type: 'test'
+  ...
+# Subtest: persona is added only explicitly and adding it twice never duplicates or reclassifies an NPC
+ok 127 - persona is added only explicitly and adding it twice never duplicates or reclassifies an NPC
+  ---
+  duration_ms: 207.136282
+  type: 'test'
+  ...
+# Subtest: loop reuses paid asset keys and fractional short-shot weights survive timeline building
+ok 128 - loop reuses paid asset keys and fractional short-shot weights survive timeline building
+  ---
+  duration_ms: 143.219903
+  type: 'test'
+  ...
+# Subtest: manual nonrecommended type is accepted and malformed recommendation metadata never becomes a gate
+ok 129 - manual nonrecommended type is accepted and malformed recommendation metadata never becomes a gate
+  ---
+  duration_ms: 167.176693
+  type: 'test'
+  ...
+# Subtest: UI escapes names, IDs and actions, and keeps all style options selectable without percentages
+ok 130 - UI escapes names, IDs and actions, and keeps all style options selectable without percentages
+  ---
+  duration_ms: 179.16426
+  type: 'test'
+  ...
+# Subtest: real public image adapter forwards names and looks to character and flat backends without changing user settings
+ok 131 - real public image adapter forwards names and looks to character and flat backends without changing user settings
+  ---
+  duration_ms: 405.240585
+  type: 'test'
+  ...
+# Subtest: back-only persona setting still permits hand and silhouette crops
+ok 132 - back-only persona setting still permits hand and silhouette crops
+  ---
+  duration_ms: 138.040327
+  type: 'test'
+  ...
+# Subtest: empty scene cannot inherit full-body framing from a model group default
+ok 133 - empty scene cannot inherit full-body framing from a model group default
+  ---
+  duration_ms: 165.239491
+  type: 'test'
+  ...
+# Subtest: legacy grouped-frame replies inherit their cast without additional schema rejection
+ok 134 - legacy grouped-frame replies inherit their cast without additional schema rejection
+  ---
+  duration_ms: 155.313459
+  type: 'test'
+  ...
+# Subtest: a delayed continuation never overwrites per-person wardrobe edited while it was running
+ok 135 - a delayed continuation never overwrites per-person wardrobe edited while it was running
+  ---
+  duration_ms: 191.535146
+  type: 'test'
+  ...
+# Subtest: record UI type, appearance and outfit edits are song-local and keep existing assets
+ok 136 - record UI type, appearance and outfit edits are song-local and keep existing assets
+  ---
+  duration_ms: 211.105615
+  type: 'test'
+  ...
+# (node:299) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: interior arm matte is cleared while the central white garment, eyes and original stay intact
+ok 137 - interior arm matte is cleared while the central white garment, eyes and original stay intact
+  ---
+  duration_ms: 519.044035
+  type: 'test'
+  ...
+# Subtest: explicit cleanup continues an old transparent edit, is repeatable, and never rekeys playback alpha
+ok 138 - explicit cleanup continues an old transparent edit, is repeatable, and never rekeys playback alpha
+  ---
+  duration_ms: 309.670374
+  type: 'test'
+  ...
+# Subtest: point removal affects only the chosen connected region and can be undone before PNG save
+ok 139 - point removal affects only the chosen connected region and can be undone before PNG save
+  ---
+  duration_ms: 433.900783
+  type: 'test'
+  ...
+# Subtest: full: transparent padding does not change visible scale or floor
+ok 140 - full: transparent padding does not change visible scale or floor
+  ---
+  duration_ms: 149.841661
+  type: 'test'
+  ...
+# Subtest: wide: transparent padding does not change visible scale or floor
+ok 141 - wide: transparent padding does not change visible scale or floor
+  ---
+  duration_ms: 128.032524
+  type: 'test'
+  ...
+# Subtest: medium: transparent padding does not change visible scale or floor
+ok 142 - medium: transparent padding does not change visible scale or floor
+  ---
+  duration_ms: 229.235313
+  type: 'test'
+  ...
+# Subtest: only deliberate local closeups become full-frame inserts
+ok 143 - only deliberate local closeups become full-frame inserts
+  ---
+  duration_ms: 273.222656
+  type: 'test'
+  ...
+# Subtest: an oval eye insert preserves both eyes and keeps its caption readable
+ok 144 - an oval eye insert preserves both eyes and keeps its caption readable
+  ---
+  duration_ms: 251.905129
+  type: 'test'
+  ...
+# Subtest: side captions split once at word boundaries and stay outside the actor in dark scenes
+ok 145 - side captions split once at word boundaries and stay outside the actor in dark scenes
+  ---
+  duration_ms: 130.320533
+  type: 'test'
+  ...
+# Subtest: side captions shrink to keep ordinary English words whole
+ok 146 - side captions shrink to keep ordinary English words whole
+  ---
+  duration_ms: 128.719741
+  type: 'test'
+  ...
+# Subtest: crowded 960x540 captions use one complete front lane without clipping
+ok 147 - crowded 960x540 captions use one complete front lane without clipping
+  ---
+  duration_ms: 129.20446
+  type: 'test'
+  ...
+# Subtest: crowded 540x960 captions use one complete front lane without clipping
+ok 148 - crowded 540x960 captions use one complete front lane without clipping
+  ---
+  duration_ms: 133.547867
+  type: 'test'
+  ...
+# Subtest: a crowded keyword never lands on the complete lyric and a fade renders only current captions
+ok 149 - a crowded keyword never lands on the complete lyric and a fade renders only current captions
+  ---
+  duration_ms: 280.648713
+  type: 'test'
+  ...
+# Subtest: punctuation differences do not add a second copy of a complete stage lyric
+ok 150 - punctuation differences do not add a second copy of a complete stage lyric
+  ---
+  duration_ms: 236.705604
+  type: 'test'
+  ...
+# Subtest: seven songs start folded, every song remains reachable, and actions follow the selected song
+ok 151 - seven songs start folded, every song remains reachable, and actions follow the selected song
+  ---
+  duration_ms: 172.562125
+  type: 'test'
+  ...
+# (node:315) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: 1–4 completed then full range appends 5–8 and preserves paid assets, settings and timing
+ok 152 - 1–4 completed then full range appends 5–8 and preserves paid assets, settings and timing
+  ---
+  duration_ms: 376.084881
+  type: 'test'
+  ...
+# Subtest: export defaults to completed 1–4 and remains independent when making full song
+ok 153 - export defaults to completed 1–4 and remains independent when making full song
+  ---
+  duration_ms: 228.196265
+  type: 'test'
+  ...
+# Subtest: continuation only supplies missing global section indexes and existing wardrobe to the request
+ok 154 - continuation only supplies missing global section indexes and existing wardrobe to the request
+  ---
+  duration_ms: 252.509078
+  type: 'test'
+  ...
+# Subtest: no missing sections makes no paid request; duplicate clicks share the existing story lock
+ok 155 - no missing sections makes no paid request; duplicate clicks share the existing story lock
+  ---
+  duration_ms: 270.624164
+  type: 'test'
+  ...
+# Subtest: a short model reply can be continued again without losing either completed batch
+ok 156 - a short model reply can be continued again without losing either completed batch
+  ---
+  duration_ms: 397.590961
+  type: 'test'
+  ...
+# Subtest: append merges concurrent drawing, timing, wardrobe, export and range edits
+ok 157 - append merges concurrent drawing, timing, wardrobe, export and range edits
+  ---
+  duration_ms: 313.106643
+  type: 'test'
+  ...
+# Subtest: regeneration while append is running holds paid append instead of overwriting the replacement
+ok 158 - regeneration while append is running holds paid append instead of overwriting the replacement
+  ---
+  duration_ms: 313.080645
+  type: 'test'
+  ...
+# Subtest: switching chat journals append; fresh runtime can save it once without another request
+ok 159 - switching chat journals append; fresh runtime can save it once without another request
+  ---
+  duration_ms: 735.092749
+  type: 'test'
+  ...
+# Subtest: request failure and malformed/out-of-range paid results keep all existing images
+ok 160 - request failure and malformed/out-of-range paid results keep all existing images
+  ---
+  duration_ms: 862.830439
+  type: 'test'
+  ...
+# Subtest: legacy shots accept new v2 continuation while preserving existing local images
+ok 161 - legacy shots accept new v2 continuation while preserving existing local images
+  ---
+  duration_ms: 294.80088
+  type: 'test'
+  ...
+# Subtest: legacy flat model reply can append to v2 without making new shots undrawable
+ok 162 - legacy flat model reply can append to v2 without making new shots undrawable
+  ---
+  duration_ms: 303.199829
+  type: 'test'
+  ...
+# Subtest: normalization retains more than 8 groups, 5 diffs and 2 backgrounds without remapping to first
+ok 163 - normalization retains more than 8 groups, 5 diffs and 2 backgrounds without remapping to first
+  ---
+  duration_ms: 278.651928
+  type: 'test'
+  ...
+# Subtest: range generation no longer treats a stretched previous shot as part of an empty section
+ok 164 - range generation no longer treats a stretched previous shot as part of an empty section
+  ---
+  duration_ms: 445.174997
+  type: 'test'
+  ...
+# Subtest: completed clips exclude holes, undrawn diffs and missing cutout backgrounds; optional motif is not a gate
+ok 165 - completed clips exclude holes, undrawn diffs and missing cutout backgrounds; optional motif is not a gate
+  ---
+  duration_ms: 363.702467
+  type: 'test'
+  ...
+# Subtest: custom partial export uses section times, supports reverse selection, and keeps source data untouched
+ok 166 - custom partial export uses section times, supports reverse selection, and keeps source data untouched
+  ---
+  duration_ms: 407.361389
+  type: 'test'
+  ...
+# Subtest: manual full/unfinished export is still available and export choice survives save/reload
+ok 167 - manual full/unfinished export is still available and export choice survives save/reload
+  ---
+  duration_ms: 764.450108
+  type: 'test'
+  ...
+# Subtest: v2 UI displays continuation, invokes it once, and renders both saved and appended groups
+ok 168 - v2 UI displays continuation, invokes it once, and renders both saved and appended groups
+  ---
+  duration_ms: 331.460663
+  type: 'test'
+  ...
+# Subtest: export UI selects a completed clip independently of generation range and offers later clips separately
+ok 169 - export UI selects a completed clip independently of generation range and offers later clips separately
+  ---
+  duration_ms: 302.872007
+  type: 'test'
+  ...
+# Subtest: audio export seeks selected start, omits broken out-of-range image and stops at selected end
+ok 170 - audio export seeks selected start, omits broken out-of-range image and stops at selected end
+  ---
+  duration_ms: 182.924064
+  type: 'test'
+  ...
+# Subtest: silent export uses the same chosen clip length instead of the whole song
+ok 171 - silent export uses the same chosen clip length instead of the whole song
+  ---
+  duration_ms: 166.130231
+  type: 'test'
+  ...
+# Subtest: selected unavailable image reports export failure, and explicit stop releases recorder resources
+ok 172 - selected unavailable image reports export failure, and explicit stop releases recorder resources
+  ---
+  duration_ms: 206.739774
+  type: 'test'
+  ...
+# Subtest: recording fallback seeks and stops at its separately selected clip
+ok 173 - recording fallback seeks and stops at its separately selected clip
+  ---
+  duration_ms: 202.332306
+  type: 'test'
+  ...
+# Subtest: storage outage retains the paid append and save-only retry is idempotent without another generation
+ok 174 - storage outage retains the paid append and save-only retry is idempotent without another generation
+  ---
+  duration_ms: 211.49412
+  type: 'test'
+  ...
+# Subtest: paid asset finishing after append still saves to the original group
+ok 175 - paid asset finishing after append still saves to the original group
+  ---
+  duration_ms: 191.30727
+  type: 'test'
+  ...
+# Subtest: export progress starts at zero and measures only the chosen duration
+ok 176 - export progress starts at zero and measures only the chosen duration
+  ---
+  duration_ms: 242.678112
+  type: 'test'
+  ...
+# Subtest: leaving during audio metadata wait cannot restart a cancelled export
+ok 177 - leaving during audio metadata wait cannot restart a cancelled export
+  ---
+  duration_ms: 222.367858
+  type: 'test'
+  ...
+# Subtest: a verse-only export does not preload a motif that is only rendered in the chorus
+ok 178 - a verse-only export does not preload a motif that is only rendered in the chorus
+  ---
+  duration_ms: 224.26495
+  type: 'test'
+  ...
+# Subtest: clipping preserves original first-shot timing and beat/lyric boundaries instead of recalculating from zero
+ok 179 - clipping preserves original first-shot timing and beat/lyric boundaries instead of recalculating from zero
+  ---
+  duration_ms: 179.5248
+  type: 'test'
+  ...
+# (node:331) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: one-click cutout opens directly on a transparent PNG draft and preserves original on save
+ok 180 - one-click cutout opens directly on a transparent PNG draft and preserves original on save
+  ---
+  duration_ms: 416.594765
+  type: 'test'
+  ...
+# Subtest: one-click cutout undo and cancel keep the paid source and do not save a mask
+ok 181 - one-click cutout undo and cancel keep the paid source and do not save a mask
+  ---
+  duration_ms: 284.749391
+  type: 'test'
+  ...
+# Subtest: explicit cutout removes panel outside white only and never describes it as recovered character
+ok 182 - explicit cutout removes panel outside white only and never describes it as recovered character
+  ---
+  duration_ms: 296.662033
+  type: 'test'
+  ...
+# Subtest: complex and empty backgrounds produce no destructive saved image
+ok 183 - complex and empty backgrounds produce no destructive saved image
+  ---
+  duration_ms: 429.406159
+  type: 'test'
+  ...
+# Subtest: preview trims a rectangular panel border but never zooms into a full-body transparent figure
+ok 184 - preview trims a rectangular panel border but never zooms into a full-body transparent figure
+  ---
+  duration_ms: 592.365301
+  type: 'test'
+  ...
+# Subtest: character, group background, motif, and inspector use the selected frame shape and provide cutout action
+ok 185 - character, group background, motif, and inspector use the selected frame shape and provide cutout action
+  ---
+  duration_ms: 245.192179
+  type: 'test'
+  ...
+# Subtest: real board thumbnail excludes picture padding without changing persisted image, shots or timing
+ok 186 - real board thumbnail excludes picture padding without changing persisted image, shots or timing
+  ---
+  duration_ms: 736.809753
+  type: 'test'
+  ...
+# Subtest: one-click never guesses a cell from a multi-panel sprite sheet
+ok 187 - one-click never guesses a cell from a multi-panel sprite sheet
+  ---
+  duration_ms: 349.364786
+  type: 'test'
+  ...
+# (node:351) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: local detail keeps both edges and source proportions in 16:9
+ok 188 - local detail keeps both edges and source proportions in 16:9
+  ---
+  duration_ms: 224.548109
+  type: 'test'
+  ...
+# Subtest: local detail keeps both edges and source proportions in 9:16
+ok 189 - local detail keeps both edges and source proportions in 9:16
+  ---
+  duration_ms: 220.787937
+  type: 'test'
+  ...
+# Subtest: seeking follows the visible shot and its editor without replacing the player or saved data
+ok 190 - seeking follows the visible shot and its editor without replacing the player or saved data
+  ---
+  duration_ms: 151.398516
+  type: 'test'
+  ...
+# Subtest: seeking follows later thumbnail pages but keeps a focused edit field intact
+ok 191 - seeking follows later thumbnail pages but keeps a focused edit field intact
+  ---
+  duration_ms: 205.148355
+  type: 'test'
+  ...
+# Subtest: audio-free playback follows the actual clock across shots without rebuilding the player
+ok 192 - audio-free playback follows the actual clock across shots without rebuilding the player
+  ---
+  duration_ms: 160.865096
+  type: 'test'
+  ...
+# (node:367) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: narrow image editor starts with a large canvas and tools can fold without discarding edits or undo
+ok 193 - narrow image editor starts with a large canvas and tools can fold without discarding edits or undo
+  ---
+  duration_ms: 197.898779
+  type: 'test'
+  ...
+# Subtest: making room for a zoomed image reveals more pixels instead of enlarging the image again
+ok 194 - making room for a zoomed image reveals more pixels instead of enlarging the image again
+  ---
+  duration_ms: 176.948857
+  type: 'test'
+  ...
+# Subtest: wide image editor starts with tools available and folding them preserves prompt-only save
+ok 195 - wide image editor starts with tools available and folding them preserves prompt-only save
+  ---
+  duration_ms: 148.52104
+  type: 'test'
+  ...
+# Subtest: save-and-next only advances after the actual save succeeds
+ok 196 - save-and-next only advances after the actual save succeeds
+  ---
+  duration_ms: 183.303447
+  type: 'test'
+  ...
+# Subtest: pending or failed image save keeps the editor and never opens the next shot
+ok 197 - pending or failed image save keeps the editor and never opens the next shot
+  ---
+  duration_ms: 289.49829
+  type: 'test'
+  ...
+# Subtest: return remains usable while an asynchronous save is pending
+ok 198 - return remains usable while an asynchronous save is pending
+  ---
+  duration_ms: 153.581622
+  type: 'test'
+  ...
+# Subtest: original comparison cannot paint over pixels and returning to a brush restores crop geometry
+ok 199 - original comparison cannot paint over pixels and returning to a brush restores crop geometry
+  ---
+  duration_ms: 185.684946
+  type: 'test'
+  ...
+# Subtest: selecting a brush exits move mode and really paints instead of silently panning
+ok 200 - selecting a brush exits move mode and really paints instead of silently panning
+  ---
+  duration_ms: 188.847789
+  type: 'test'
+  ...
+# Subtest: brush size has a non-destructive visible preview and a numeric label
+ok 201 - brush size has a non-destructive visible preview and a numeric label
+  ---
+  duration_ms: 151.645202
+  type: 'test'
+  ...
+# Subtest: applying a new crop resets zoom and scroll so the selected image is not lost outside the viewport
+ok 202 - applying a new crop resets zoom and scroll so the selected image is not lost outside the viewport
+  ---
+  duration_ms: 136.618628
+  type: 'test'
+  ...
+# Subtest: canvas fit respects its own remaining space and still supports zoom and grid selection
+ok 203 - canvas fit respects its own remaining space and still supports zoom and grid selection
+  ---
+  duration_ms: 176.637486
+  type: 'test'
+  ...
+# Subtest: automatically prepared character can be downloaded directly while a prompt-only save keeps the source
+ok 204 - automatically prepared character can be downloaded directly while a prompt-only save keeps the source
+  ---
+  duration_ms: 164.073573
+  type: 'test'
+  ...
+# Subtest: editor selects the third of four panels before processing; saved PNG contains only blue pixels
+ok 205 - editor selects the third of four panels before processing; saved PNG contains only blue pixels
+  ---
+  duration_ms: 219.44763
+  type: 'test'
+  ...
+# Subtest: native editor erase, restore, undo and saved transparent PNG preserve original reference
+ok 206 - native editor erase, restore, undo and saved transparent PNG preserve original reference
+  ---
+  duration_ms: 168.197645
+  type: 'test'
+  ...
+# Subtest: free selection uses pointer coordinates after zoom and preserves a prompt-only draft on cancel
+ok 207 - free selection uses pointer coordinates after zoom and preserves a prompt-only draft on cancel
+  ---
+  duration_ms: 141.201061
+  type: 'test'
+  ...
+# Subtest: prompt-only save needs no image; reset returns the default without requesting a new image
+ok 208 - prompt-only save needs no image; reset returns the default without requesting a new image
+  ---
+  duration_ms: 141.282321
+  type: 'test'
+  ...
+# Subtest: transparent PNG import keeps its alpha and provides its own original for persistent storage
+ok 209 - transparent PNG import keeps its alpha and provides its own original for persistent storage
+  ---
+  duration_ms: 155.889122
+  type: 'test'
+  ...
+# Subtest: reopened cropped edit keeps saved pixels and can restore the full original
+ok 210 - reopened cropped edit keeps saved pixels and can restore the full original
+  ---
+  duration_ms: 138.850717
+  type: 'test'
+  ...
+# Subtest: mobile overview fits a long four-panel image and pan mode does not draw over it
+ok 211 - mobile overview fits a long four-panel image and pan mode does not draw over it
+  ---
+  duration_ms: 169.301101
+  type: 'test'
+  ...
+# Subtest: unsuitable opaque image is not marked as a transparent layer by one-click processing
+ok 212 - unsuitable opaque image is not marked as a transparent layer by one-click processing
+  ---
+  duration_ms: 172.311862
+  type: 'test'
+  ...
+# Subtest: playback never uses white-removal percentage to layer unconfirmed pictures
+ok 213 - playback never uses white-removal percentage to layer unconfirmed pictures
+  ---
+  duration_ms: 321.996097
+  type: 'test'
+  ...
+# (node:391) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: completed old story opens directly into the responsive editor with no saved-data writes or generation
+ok 214 - completed old story opens directly into the responsive editor with no saved-data writes or generation
+  ---
+  duration_ms: 194.176432
+  type: 'test'
+  ...
+# Subtest: material groups stay folded and perform no character processing until explicitly inspected
+ok 215 - material groups stay folded and perform no character processing until explicitly inspected
+  ---
+  duration_ms: 132.45636
+  type: 'test'
+  ...
+# Subtest: filmstrip windows are navigation only and preserve all 40 saved/generated shots
+ok 216 - filmstrip windows are navigation only and preserve all 40 saved/generated shots
+  ---
+  duration_ms: 189.5605
+  type: 'test'
+  ...
+# Subtest: image editing and one-click cutout open the existing full-featured editor with original references
+ok 217 - image editing and one-click cutout open the existing full-featured editor with original references
+  ---
+  duration_ms: 229.490576
+  type: 'test'
+  ...
+# Subtest: a per-shot imported picture is not mislabeled as editing a different shared material
+ok 218 - a per-shot imported picture is not mislabeled as editing a different shared material
+  ---
+  duration_ms: 150.403451
+  type: 'test'
+  ...
+# Subtest: look tab retains title/outro timing, fonts, templates, range, stage lyrics and both overlay switches
+ok 219 - look tab retains title/outro timing, fonts, templates, range, stage lyrics and both overlay switches
+  ---
+  duration_ms: 138.941682
+  type: 'test'
+  ...
+# Subtest: timing shares one player, and selecting a section or line neither seeks nor writes
+ok 220 - timing shares one player, and selecting a section or line neither seeks nor writes
+  ---
+  duration_ms: 168.007673
+  type: 'test'
+  ...
+# Subtest: zero-second section and line marks work, automatic advance and exact undo share one history
+ok 221 - zero-second section and line marks work, automatic advance and exact undo share one history
+  ---
+  duration_ms: 137.689066
+  type: 'test'
+  ...
+# Subtest: line correction, tenths nudging and reset undo restore previous saved timing rather than deleting it
+ok 222 - line correction, tenths nudging and reset undo restore previous saved timing rather than deleting it
+  ---
+  duration_ms: 201.877477
+  type: 'test'
+  ...
+# Subtest: manual section correction respects the old global shift and stays selected with auto-next off
+ok 223 - manual section correction respects the old global shift and stays selected with auto-next off
+  ---
+  duration_ms: 190.114371
+  type: 'test'
+  ...
+# Subtest: the old timing route also permits selecting and marking a line without resetting to section mode
+ok 224 - the old timing route also permits selecting and marking a line without resetting to section mode
+  ---
+  duration_ms: 200.219539
+  type: 'test'
+  ...
+# Subtest: finished timing can reopen for correction, and null marks are never counted as zero
+ok 225 - finished timing can reopen for correction, and null marks are never counted as zero
+  ---
+  duration_ms: 200.1528
+  type: 'test'
+  ...
+# Subtest: more panel preserves material library, subtitle/time-table download and recovery backup
+ok 226 - more panel preserves material library, subtitle/time-table download and recovery backup
+  ---
+  duration_ms: 269.881565
+  type: 'test'
+  ...
+# Subtest: WebView capability fallback retains recording and local audio import without new platform APIs
+ok 227 - WebView capability fallback retains recording and local audio import without new platform APIs
+  ---
+  duration_ms: 203.133668
+  type: 'test'
+  ...
+# (node:443) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: queued image completion is cancelled on close and cannot redraw an old song
+ok 228 - queued image completion is cancelled on close and cannot redraw an old song
+  ---
+  duration_ms: 128.020688
+  type: 'test'
+  ...
+# Subtest: light/dark colors, container/mobile fallbacks and native range keyboard input remain in editor CSS
+ok 229 - light/dark colors, container/mobile fallbacks and native range keyboard input remain in editor CSS
+  ---
+  duration_ms: 119.064147
+  type: 'test'
+  ...
+# Subtest: desktop keyboard switches tabs and closes a dialog without invoking the outer back action
+ok 230 - desktop keyboard switches tabs and closes a dialog without invoking the outer back action
+  ---
+  duration_ms: 155.108865
+  type: 'test'
+  ...
+# Subtest: native large-image cold open prepares only the visible frame and never encodes whole-image PNG previews
+ok 231 - native large-image cold open prepares only the visible frame and never encodes whole-image PNG previews
+  ---
+  duration_ms: 1882.796868
+  type: 'test'
+  ...
+# (node:399) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: clearing one/all pending rows persists across fresh runtimes without modifying any song record
+ok 232 - clearing one/all pending rows persists across fresh runtimes without modifying any song record
+  ---
+  duration_ms: 238.182168
+  type: 'test'
+  ...
+# Subtest: failed persistent removal keeps recoverable rows, and quota failure can remove the final journal
+ok 233 - failed persistent removal keeps recoverable rows, and quota failure can remove the final journal
+  ---
+  duration_ms: 134.816759
+  type: 'test'
+  ...
+# Subtest: production overlay routes more/close/material navigation and confirmed clear without another generation
+ok 234 - production overlay routes more/close/material navigation and confirmed clear without another generation
+  ---
+  duration_ms: 166.138043
+  type: 'test'
+  ...
+# Subtest: editor panel escapes the scrolling body but stays inside the native host dialog, and dismissal releases background controls
+ok 235 - editor panel escapes the scrolling body but stays inside the native host dialog, and dismissal releases background controls
+  ---
+  duration_ms: 160.381501
+  type: 'test'
+  ...
+# Subtest: Chatu8 16:9 submits exact frame dimensions for shared images and per-shot redraws without changing provider settings
+ok 236 - Chatu8 16:9 submits exact frame dimensions for shared images and per-shot redraws without changing provider settings
+  ---
+  duration_ms: 144.200437
+  type: 'test'
+  ...
+# Subtest: Chatu8 9:16 submits exact frame dimensions for shared images and per-shot redraws without changing provider settings
+ok 237 - Chatu8 9:16 submits exact frame dimensions for shared images and per-shot redraws without changing provider settings
+  ---
+  duration_ms: 206.524574
+  type: 'test'
+  ...
+# Subtest: native Canvas 16:9: source-cut arms stay at frame edges and cropped body has no floating bottom
+ok 238 - native Canvas 16:9: source-cut arms stay at frame edges and cropped body has no floating bottom
+  ---
+  duration_ms: 317.586724
+  type: 'test'
+  ...
+# Subtest: native Canvas 9:16: source-cut arms stay at frame edges and cropped body has no floating bottom
+ok 239 - native Canvas 9:16: source-cut arms stay at frame edges and cropped body has no floating bottom
+  ---
+  duration_ms: 245.481949
+  type: 'test'
+  ...
+# Subtest: native export uses the same edge-attached framing as preview and leaves source pixels unchanged
+ok 240 - native export uses the same edge-attached framing as preview and leaves source pixels unchanged
+  ---
+  duration_ms: 192.109443
+  type: 'test'
+  ...
+# (node:419) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: detail framing reaches full group layer
+ok 241 - detail framing reaches full group layer
+  ---
+  duration_ms: 234.874852
+  type: 'test'
+  ...
+# Subtest: detail framing reaches asset explicitly kept as a full image
+ok 242 - detail framing reaches asset explicitly kept as a full image
+  ---
+  duration_ms: 187.640651
+  type: 'test'
+  ...
+# Subtest: detail framing reaches opaque cutout needing editor fallback
+ok 243 - detail framing reaches opaque cutout needing editor fallback
+  ---
+  duration_ms: 221.850279
+  type: 'test'
+  ...
+# Subtest: detail framing reaches per-shot full-image override
+ok 244 - detail framing reaches per-shot full-image override
+  ---
+  duration_ms: 181.130536
+  type: 'test'
+  ...
+# Subtest: detail framing reaches non-expression legacy group without a stage
+ok 245 - detail framing reaches non-expression legacy group without a stage
+  ---
+  duration_ms: 199.16394
+  type: 'test'
+  ...
+# Subtest: detail framing reaches legacy per-shot image without a stage
+ok 246 - detail framing reaches legacy per-shot image without a stage
+  ---
+  duration_ms: 177.025172
+  type: 'test'
+  ...
+# Subtest: detail metadata recognizes 脸部极度特写 in 16:9
+ok 247 - detail metadata recognizes 脸部极度特写 in 16:9
+  ---
+  duration_ms: 184.975145
+  type: 'test'
+  ...
+# Subtest: detail metadata recognizes legacy characterPrompt in 16:9
+ok 248 - detail metadata recognizes legacy characterPrompt in 16:9
+  ---
+  duration_ms: 195.365004
+  type: 'test'
+  ...
+# Subtest: detail metadata recognizes 脸部极度特写 in 9:16
+ok 249 - detail metadata recognizes 脸部极度特写 in 9:16
+  ---
+  duration_ms: 170.360724
+  type: 'test'
+  ...
+# Subtest: detail metadata recognizes legacy characterPrompt in 9:16
+ok 250 - detail metadata recognizes legacy characterPrompt in 9:16
+  ---
+  duration_ms: 185.923191
+  type: 'test'
+  ...
+# Subtest: local framing recognizes hands-only cast with a medium scale
+ok 251 - local framing recognizes hands-only cast with a medium scale
+  ---
+  duration_ms: 185.944768
+  type: 'test'
+  ...
+# Subtest: local framing recognizes detail cue stored only in diff.change
+ok 252 - local framing recognizes detail cue stored only in diff.change
+  ---
+  duration_ms: 171.274727
+  type: 'test'
+  ...
+# Subtest: local framing recognizes face close-up stored only in the shot imagePrompt
+ok 253 - local framing recognizes face close-up stored only in the shot imagePrompt
+  ---
+  duration_ms: 173.383323
+  type: 'test'
+  ...
+# Subtest: a legacy V1 shot preserves its complete local image
+ok 254 - a legacy V1 shot preserves its complete local image
+  ---
+  duration_ms: 236.93474
+  type: 'test'
+  ...
+# Subtest: a non-stage single-shot image retains its original background and does not acquire automatic cutout
+ok 255 - a non-stage single-shot image retains its original background and does not acquire automatic cutout
+  ---
+  duration_ms: 262.618509
+  type: 'test'
+  ...
+# Subtest: export waits for the local background exposed by a full detail insert and matches preview pixels
+ok 256 - export waits for the local background exposed by a full detail insert and matches preview pixels
+  ---
+  duration_ms: 196.837046
+  type: 'test'
+  ...
+# Subtest: a manually selected right cell retains both ends in full mode
+ok 257 - a manually selected right cell retains both ends in full mode
+  ---
+  duration_ms: 187.377204
+  type: 'test'
+  ...
+# Subtest: a manually selected right cell retains both ends in cutout mode
+ok 258 - a manually selected right cell retains both ends in cutout mode
+  ---
+  duration_ms: 197.552046
+  type: 'test'
+  ...
+# Subtest: an opaque full scene at its original aspect ratio retains its original composition
+ok 259 - an opaque full scene at its original aspect ratio retains its original composition
+  ---
+  duration_ms: 194.087144
+  type: 'test'
+  ...
+# Subtest: full stage actor mentioning hands remains a standing actor
+ok 260 - full stage actor mentioning hands remains a standing actor
+  ---
+  duration_ms: 193.467692
+  type: 'test'
+  ...
+# Subtest: medium stage actor mentioning hands remains a standing actor
+ok 261 - medium stage actor mentioning hands remains a standing actor
+  ---
+  duration_ms: 206.623692
+  type: 'test'
+  ...
+# (node:435) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: TT Chinese 71-character synthetic completion is a transport failure, not missing JSON
+ok 262 - TT Chinese 71-character synthetic completion is a transport failure, not missing JSON
+  ---
+  duration_ms: 131.190671
+  type: 'test'
+  ...
+# Subtest: localized error labels work after host metadata is stripped, including profile streams
+ok 263 - localized error labels work after host metadata is stripped, including profile streams
+  ---
+  duration_ms: 96.674012
+  type: 'test'
+  ...
+# Subtest: canonical TT error envelopes support other locales and never accept JSON from an error body
+ok 264 - canonical TT error envelopes support other locales and never accept JSON from an error body
+  ---
+  duration_ms: 98.56134
+  type: 'test'
+  ...
+# Subtest: recognized host envelope preserves status before a nested upstream JSON error
+ok 265 - recognized host envelope preserves status before a nested upstream JSON error
+  ---
+  duration_ms: 96.183606
+  type: 'test'
+  ...
+# Subtest: known API error without a status remains an unknown connection failure, not an invented 524
+ok 266 - known API error without a status remains an unknown connection failure, not an invented 524
+  ---
+  duration_ms: 145.583838
+  type: 'test'
+  ...
+# Subtest: validated requests never automatically reroll recognized TT error placeholders
+ok 267 - validated requests never automatically reroll recognized TT error placeholders
+  ---
+  duration_ms: 328.456671
+  type: 'test'
+  ...
+# Subtest: normal JSON and existing safe wrappers keep every field, quote, brace, tag and lyric unchanged
+ok 268 - normal JSON and existing safe wrappers keep every field, quote, brace, tag and lyric unchanged
+  ---
+  duration_ms: 115.640152
+  type: 'test'
+  ...
+# Subtest: partial JSON is not stripped; unfinished data, HTML and reasoning remain on their existing paths
+ok 269 - partial JSON is not stripped; unfinished data, HTML and reasoning remain on their existing paths
+  ---
+  duration_ms: 102.728625
+  type: 'test'
+  ...
+# Subtest: incidental labels and noncanonical IDs do not become new generation gates
+ok 270 - incidental labels and noncanonical IDs do not become new generation gates
+  ---
+  duration_ms: 103.792233
+  type: 'test'
+  ...
+# Subtest: failed regeneration leaves existing pictures, timings and shots intact; next manual attempt succeeds
+ok 271 - failed regeneration leaves existing pictures, timings and shots intact; next manual attempt succeeds
+  ---
+  duration_ms: 126.843131
+  type: 'test'
+  ...
+# Subtest: nested and streaming TT envelopes are recognized without treating quoted envelopes as errors
+ok 272 - nested and streaming TT envelopes are recognized without treating quoted envelopes as errors
+  ---
+  duration_ms: 112.220084
+  type: 'test'
+  ...
+1..272
+# tests 272
+# suites 0
+# pass 270
+# fail 2
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 19566.918218

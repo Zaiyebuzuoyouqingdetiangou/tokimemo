@@ -1,0 +1,131 @@
+--- 1.0.26/src/core/releaseNotes.js
++++ 1.0.27/src/core/releaseNotes.js
+@@ -0,0 +1,2 @@
++// GENERATED FROM README.md by tools/verification/build.py. Do not edit by hand.
++export const RELEASE_README = "# 心迹回廊 1.0.27\n\n## 更新日志模块\n\n新增了更新日志板块，感谢@nancyindaeyo的更新。\n\n## 本次变动\n\n- 更新说明与 README 使用同一份内容，仅显示更新日志模块致谢和本次变动，不再混入旧版本历史。\n- 当前安装版本的更新说明可离线查看；检查新版本时，显示对应分支 README 的说明。\n- 提供手书剪辑界面独立交互预览：大画面、横向分镜、按需展开工具。正式剪辑界面暂未替换。\n";
+--- 1.0.26/src/core/selfUpdater.js
++++ 1.0.27/src/core/selfUpdater.js
+@@ -1,5 +1,7 @@
++import { RELEASE_README } from './releaseNotes.js';
++
+ const UPDATE_STATE = Symbol.for('heartbeatMemories.selfUpdate');
+-export const INSTALLED_BUILD = '1.0.26';
++export const INSTALLED_BUILD = '1.0.27';
+ const PROJECT_REMOTE = 'https://github.com/zaiyebuzuoyouqingdetiangou/tokimemo';
+ function updateError(message) { const error = new Error(message); error.userMessage = message; return error; }
+ 
+@@ -234,23 +236,52 @@
+     return sections;
+ }
+ 
+-export async function loadHearttraceChangelog({ remoteUrl = HOMEPAGE, remoteBranch = FALLBACK_BRANCH, fetcher = globalThis.fetch.bind(globalThis), moduleUrl = import.meta.url } = {}) {
++export function parseHearttraceReadme(text) {
++    const input = String(text || '').replace(/^\uFEFF/, '');
++    const heading = /^#\s+(.+?)\s+(\d+\.\d+\.\d+(?:-[\w.-]+)?)\s*$/m.exec(input);
++    if (!heading) return [];
++    const groups = [];
++    let group = null, paragraph = '';
++    const flush = () => { if (paragraph && group) group.items.push(paragraph); paragraph = ''; };
++    for (const raw of input.split(/\r?\n/)) {
++        const line = raw.trim();
++        if (/^#{1,6}\s/.test(line)) {
++            flush();
++            const match = /^##\s+(更新日志模块|本次变动|本次更新)\s*$/.exec(line);
++            group = match ? { title: match[1], items: [] } : null;
++            if (group) groups.push(group);
++            continue;
++        }
++        if (!group) continue;
++        if (!line || line === '---') { flush(); continue; }
++        const item = /^[-*]\s+(.*)$/.exec(line);
++        if (item) { flush(); paragraph = item[1]; }
++        else paragraph = paragraph ? `${paragraph} ${line}` : line;
++    }
++    flush();
++    const items = groups.flatMap(row => row.items);
++    return items.length ? [{ version: heading[2], title: heading[1], groups, items }] : [];
++}
++
++export async function loadHearttraceChangelog({ source = 'installed', remoteUrl = HOMEPAGE, remoteBranch = FALLBACK_BRANCH, fetcher = globalThis.fetch } = {}) {
++    // The installed README is embedded by build.py. Opening its notes needs
++    // neither a network connection nor an unrelated remote history file.
++    if (source !== 'remote') {
++        const sections = parseHearttraceReadme(RELEASE_README);
++        return { ok: sections.length > 0, source: 'readme', sections,
++            ...(sections.length ? {} : { message: '当前安装包没有可读取的更新说明。' }) };
++    }
+     const branch = String(remoteBranch || FALLBACK_BRANCH).trim() || FALLBACK_BRANCH;
+     const urls = [...new Set([
+-        remoteFileUrl(remoteUrl, 'CHANGELOG.md', branch, false),
+-        remoteFileUrl(remoteUrl, 'CHANGELOG.md', branch, true),
++        remoteFileUrl(remoteUrl, 'README.md', branch, false),
++        remoteFileUrl(remoteUrl, 'README.md', branch, true),
+     ].filter(Boolean))];
+-    try {
+-        const local = new URL('../CHANGELOG.md', moduleUrl);
+-        local.searchParams.set('rmt-check', String(Date.now()));
+-        urls.push(local.href);
+-    } catch {}
+     for (const url of urls) {
+         const text = await readRemoteText(url, fetcher, 'changelog');
+-        const sections = parseHearttraceChangelog(text);
+-        if (sections.length) return { ok: true, sections };
+-    }
+-    return { ok: false, sections: [], message: '没能读到更新日志。请检查网络后再打开一次。' };
++        const sections = parseHearttraceReadme(text);
++        if (sections.length) return { ok: true, source: 'readme', sections };
++    }
++    return { ok: false, source: 'readme', sections: [], message: '没能读到当前分支的 README 更新说明。请检查网络后再打开一次。' };
+ }
+ 
+ export async function checkHearttraceUpdate({ force = false, moduleUrl = import.meta.url, origin = globalThis.location?.origin, fetcher = globalThis.fetch.bind(globalThis) } = {}) {
+--- 1.0.26/src/ui/homeView.js
++++ 1.0.27/src/ui/homeView.js
+@@ -64,6 +64,24 @@
+     heading.style.cssText = 'display:block;margin:0 0 6px;';
+     heading.textContent = section.version ? (section.title ? `${section.version} · ${section.title}` : section.version) : (section.title || '更新说明');
+     block.append(heading);
++    if (section.groups?.length) {
++        for (const group of section.groups) {
++            const label = document.createElement('h3');
++            label.style.cssText = 'margin:16px 0 8px;font-size:14px;';
++            label.textContent = group.title;
++            block.append(label);
++            const list = document.createElement('ul');
++            list.style.cssText = 'margin:0;padding-left:1.2em;';
++            for (const item of group.items) {
++                const li = document.createElement('li');
++                li.style.cssText = 'margin:6px 0;';
++                li.textContent = item;
++                list.append(li);
++            }
++            block.append(list);
++        }
++        return block;
++    }
+     const list = document.createElement('ul');
+     list.style.cssText = 'margin:0;padding-left:1.2em;';
+     for (const item of section.items || []) {
+@@ -91,11 +109,11 @@
+     const current = updater.installedVersion();
+     const newer = result.sections.filter(section => section.version && updater.isNewerHearttraceVersion(section.version, current));
+     const show = full ? result.sections : (newer.length ? newer : result.sections.slice(0, 1)).slice(0, 12);
+-    if (full && result.sections.length > 1) {
++    if (full && result.source !== 'readme' && result.sections.length > 1) {
+         const hint = document.createElement('p');
+         hint.textContent = `共 ${result.sections.length} 个版本，向下滚动查看更早更新`;
+         body.append(hint);
+-    } else if (!full && !newer.length) {
++    } else if (!full && result.source !== 'readme' && !newer.length) {
+         const note = document.createElement('p');
+         note.textContent = '更新日志里还没有比当前版本更高的条目，下面是这次读到的最新说明。';
+         body.append(note);
+@@ -199,7 +217,7 @@
+     const snap = updater.hearttraceUpdateSnapshot();
+     title.textContent = updateMode ? (snap.remoteVersion ? `发现新版本 ${snap.remoteVersion}` : '发现新版本') : '更新日志';
+     sheetBody.textContent = '正在读取更新日志…';
+-    const changelog = await updater.loadHearttraceChangelog({ remoteUrl: snap.remoteUrl, remoteBranch: snap.remoteBranch });
++    const changelog = await updater.loadHearttraceChangelog({ source: updateMode ? 'remote' : 'installed', remoteUrl: snap.remoteUrl, remoteBranch: snap.remoteBranch });
+     if (!overlay.isConnected) return;
+     fillChangelog(sheetBody, changelog, !updateMode);
+ }

@@ -1,0 +1,376 @@
+TAP version 13
+# (node:12) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: local detail keeps both edges and source proportions in 16:9
+ok 1 - local detail keeps both edges and source proportions in 16:9
+  ---
+  duration_ms: 187.960281
+  type: 'test'
+  ...
+# Subtest: local detail keeps both edges and source proportions in 9:16
+ok 2 - local detail keeps both edges and source proportions in 9:16
+  ---
+  duration_ms: 156.470626
+  type: 'test'
+  ...
+# Subtest: seeking follows the visible shot and its editor without replacing the player or saved data
+ok 3 - seeking follows the visible shot and its editor without replacing the player or saved data
+  ---
+  duration_ms: 145.974819
+  type: 'test'
+  ...
+# Subtest: seeking follows later thumbnail pages but keeps a focused edit field intact
+ok 4 - seeking follows later thumbnail pages but keeps a focused edit field intact
+  ---
+  duration_ms: 111.706105
+  type: 'test'
+  ...
+# Subtest: audio-free playback follows the actual clock across shots without rebuilding the player
+ok 5 - audio-free playback follows the actual clock across shots without rebuilding the player
+  ---
+  duration_ms: 116.458819
+  type: 'test'
+  ...
+# (node:13) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: TT Chinese 71-character synthetic completion is a transport failure, not missing JSON
+ok 6 - TT Chinese 71-character synthetic completion is a transport failure, not missing JSON
+  ---
+  duration_ms: 112.746196
+  type: 'test'
+  ...
+# Subtest: localized error labels work after host metadata is stripped, including profile streams
+ok 7 - localized error labels work after host metadata is stripped, including profile streams
+  ---
+  duration_ms: 96.521171
+  type: 'test'
+  ...
+# Subtest: canonical TT error envelopes support other locales and never accept JSON from an error body
+ok 8 - canonical TT error envelopes support other locales and never accept JSON from an error body
+  ---
+  duration_ms: 100.610658
+  type: 'test'
+  ...
+# Subtest: recognized host envelope preserves status before a nested upstream JSON error
+ok 9 - recognized host envelope preserves status before a nested upstream JSON error
+  ---
+  duration_ms: 124.866431
+  type: 'test'
+  ...
+# Subtest: known API error without a status remains an unknown connection failure, not an invented 524
+ok 10 - known API error without a status remains an unknown connection failure, not an invented 524
+  ---
+  duration_ms: 167.816032
+  type: 'test'
+  ...
+# Subtest: validated requests never automatically reroll recognized TT error placeholders
+ok 11 - validated requests never automatically reroll recognized TT error placeholders
+  ---
+  duration_ms: 384.87143
+  type: 'test'
+  ...
+# Subtest: normal JSON and existing safe wrappers keep every field, quote, brace, tag and lyric unchanged
+ok 12 - normal JSON and existing safe wrappers keep every field, quote, brace, tag and lyric unchanged
+  ---
+  duration_ms: 108.272014
+  type: 'test'
+  ...
+# Subtest: partial JSON is not stripped; unfinished data, HTML and reasoning remain on their existing paths
+ok 13 - partial JSON is not stripped; unfinished data, HTML and reasoning remain on their existing paths
+  ---
+  duration_ms: 115.8892
+  type: 'test'
+  ...
+# Subtest: incidental labels and noncanonical IDs do not become new generation gates
+ok 14 - incidental labels and noncanonical IDs do not become new generation gates
+  ---
+  duration_ms: 112.977494
+  type: 'test'
+  ...
+# Subtest: failed regeneration leaves existing pictures, timings and shots intact; next manual attempt succeeds
+ok 15 - failed regeneration leaves existing pictures, timings and shots intact; next manual attempt succeeds
+  ---
+  duration_ms: 124.060967
+  type: 'test'
+  ...
+# Subtest: nested and streaming TT envelopes are recognized without treating quoted envelopes as errors
+ok 16 - nested and streaming TT envelopes are recognized without treating quoted envelopes as errors
+  ---
+  duration_ms: 111.828396
+  type: 'test'
+  ...
+# (node:14) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: saved per-shot local images appear after reopening v2 and do not replace shared sibling images
+ok 17 - saved per-shot local images appear after reopening v2 and do not replace shared sibling images
+  ---
+  duration_ms: 252.787129
+  type: 'test'
+  ...
+# Subtest: importing a full scene takes effect in v2 preview without automatic splitting or cutout
+ok 18 - importing a full scene takes effect in v2 preview without automatic splitting or cutout
+  ---
+  duration_ms: 216.441161
+  type: 'test'
+  ...
+# Subtest: single-shot redraw is visible in v2 while sibling shots retain their shared art
+ok 19 - single-shot redraw is visible in v2 while sibling shots retain their shared art
+  ---
+  duration_ms: 229.915748
+  type: 'test'
+  ...
+# Subtest: manual image failure preserves the old reference and blob
+ok 20 - manual image failure preserves the old reference and blob
+  ---
+  duration_ms: 163.653062
+  type: 'test'
+  ...
+# Subtest: two rapid imports keep the last chosen image when storage finishes out of order
+ok 21 - two rapid imports keep the last chosen image when storage finishes out of order
+  ---
+  duration_ms: 266.297034
+  type: 'test'
+  ...
+# Subtest: late import cannot overwrite a replacement storyboard and remains recoverable
+ok 22 - late import cannot overwrite a replacement storyboard and remains recoverable
+  ---
+  duration_ms: 152.92456
+  type: 'test'
+  ...
+# Subtest: late imported image stays bound to the original song after navigation
+ok 23 - late imported image stays bound to the original song after navigation
+  ---
+  duration_ms: 149.998503
+  type: 'test'
+  ...
+# Subtest: a new storyboard revision holds a late import even when its shot fields are identical
+ok 24 - a new storyboard revision holds a late import even when its shot fields are identical
+  ---
+  duration_ms: 145.600543
+  type: 'test'
+  ...
+# Subtest: changing chats during image storage cannot write the imported image into the new chat
+ok 25 - changing chats during image storage cannot write the imported image into the new chat
+  ---
+  duration_ms: 149.399295
+  type: 'test'
+  ...
+# Subtest: a missing imported blob stops export with a message instead of exporting its replaced picture
+ok 26 - a missing imported blob stops export with a message instead of exporting its replaced picture
+  ---
+  duration_ms: 145.340699
+  type: 'test'
+  ...
+# Subtest: returning to shared art removes only the chosen shot override
+ok 27 - returning to shared art removes only the chosen shot override
+  ---
+  duration_ms: 210.33098
+  type: 'test'
+  ...
+# Subtest: completed clip export loads visible imported scenes instead of unavailable replaced assets
+ok 28 - completed clip export loads visible imported scenes instead of unavailable replaced assets
+  ---
+  duration_ms: 205.203208
+  type: 'test'
+  ...
+# Subtest: undoing a correction after all sections are timed leaves that section ready to tap again
+ok 29 - undoing a correction after all sections are timed leaves that section ready to tap again
+  ---
+  duration_ms: 175.952362
+  type: 'test'
+  ...
+# Subtest: undoing an out-of-order section returns to that section, not the first missing one
+ok 30 - undoing an out-of-order section returns to that section, not the first missing one
+  ---
+  duration_ms: 156.241927
+  type: 'test'
+  ...
+# Subtest: undoing a nudge restores its target and a new tap creates a correct undo record
+ok 31 - undoing a nudge restores its target and a new tap creates a correct undo record
+  ---
+  duration_ms: 159.106152
+  type: 'test'
+  ...
+# Subtest: sequential final-tap undo and reopened fallback undo can both be tapped again
+ok 32 - sequential final-tap undo and reopened fallback undo can both be tapped again
+  ---
+  duration_ms: 167.033523
+  type: 'test'
+  ...
+# Subtest: undo keeps the no-audio button disabled and reset removes stale undo targets
+ok 33 - undo keeps the no-audio button disabled and reset removes stale undo targets
+  ---
+  duration_ms: 121.861897
+  type: 'test'
+  ...
+# (node:20) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: one music entry changes from import to current filename and keeps one player
+ok 34 - one music entry changes from import to current filename and keeps one player
+  ---
+  duration_ms: 115.641197
+  type: 'test'
+  ...
+# Subtest: removing only the current music keeps saved frames and timing
+ok 35 - removing only the current music keeps saved frames and timing
+  ---
+  duration_ms: 125.743225
+  type: 'test'
+  ...
+# Subtest: failed music removal leaves the original track available
+ok 36 - failed music removal leaves the original track available
+  ---
+  duration_ms: 150.576079
+  type: 'test'
+  ...
+# Subtest: a new import wins over a pending removal of the previous song
+ok 37 - a new import wins over a pending removal of the previous song
+  ---
+  duration_ms: 130.326945
+  type: 'test'
+  ...
+# Subtest: current filename is escaped and does not create another HTML control
+ok 38 - current filename is escaped and does not create another HTML control
+  ---
+  duration_ms: 140.369425
+  type: 'test'
+  ...
+# Subtest: plain release version remains compatible with the uploaded changelog parser
+ok 39 - plain release version remains compatible with the uploaded changelog parser
+  ---
+  duration_ms: 92.767372
+  type: 'test'
+  ...
+# Subtest: all current version surfaces use plain 1.0.28 and changelog credit remains
+ok 40 - all current version surfaces use plain 1.0.28 and changelog credit remains
+  ---
+  duration_ms: 0.767027
+  type: 'test'
+  ...
+# (node:26) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: MV storyboard and continuation prefer the existing streaming transport with one paid request per click
+ok 41 - MV storyboard and continuation prefer the existing streaming transport with one paid request per click
+  ---
+  duration_ms: 157.917305
+  type: 'test'
+  ...
+# Subtest: an explicit complete-response preference stays effective; other modes are unchanged
+ok 42 - an explicit complete-response preference stays effective; other modes are unchanged
+  ---
+  duration_ms: 112.981605
+  type: 'test'
+  ...
+# Subtest: a non-streaming JSON reply to the same streaming request is accepted without another request
+ok 43 - a non-streaming JSON reply to the same streaming request is accepted without another request
+  ---
+  duration_ms: 114.517391
+  type: 'test'
+  ...
+# Subtest: 524 and 503 still surface honestly, with no automatic reroll or clearing old images and timings
+ok 44 - 524 and 503 still surface honestly, with no automatic reroll or clearing old images and timings
+  ---
+  duration_ms: 242.292884
+  type: 'test'
+  ...
+# Subtest: manual API uses the same stream preference and preserves an explicit off switch
+ok 45 - manual API uses the same stream preference and preserves an explicit off switch
+  ---
+  duration_ms: 259.563764
+  type: 'test'
+  ...
+# Subtest: a broken stream never saves an incomplete storyboard or sends an automatic second request
+ok 46 - a broken stream never saves an incomplete storyboard or sends an automatic second request
+  ---
+  duration_ms: 125.786405
+  type: 'test'
+  ...
+# (node:27) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: existing song file control includes MP4 and MOV without changing the storyboard
+ok 47 - existing song file control includes MP4 and MOV without changing the storyboard
+  ---
+  duration_ms: 144.773513
+  type: 'test'
+  ...
+# Subtest: mp4: metadata alone cannot replace the old song; decoded data commits original container
+ok 48 - mp4: metadata alone cannot replace the old song; decoded data commits original container
+  ---
+  duration_ms: 148.129723
+  type: 'test'
+  ...
+# Subtest: mov: metadata alone cannot replace the old song; decoded data commits original container
+ok 49 - mov: metadata alone cannot replace the old song; decoded data commits original container
+  ---
+  duration_ms: 146.530273
+  type: 'test'
+  ...
+# Subtest: fragmented: metadata alone cannot replace the old song; decoded data commits original container
+ok 50 - fragmented: metadata alone cannot replace the old song; decoded data commits original container
+  ---
+  duration_ms: 124.543998
+  type: 'test'
+  ...
+# Subtest: silent: rejected before media load and keeps old audio, duration, timing and saved file
+ok 51 - silent: rejected before media load and keeps old audio, duration, timing and saved file
+  ---
+  duration_ms: 109.835462
+  type: 'test'
+  ...
+# Subtest: emptyTrack: rejected before media load and keeps old audio, duration, timing and saved file
+ok 52 - emptyTrack: rejected before media load and keeps old audio, duration, timing and saved file
+  ---
+  duration_ms: 107.00735
+  type: 'test'
+  ...
+# Subtest: damaged: rejected before media load and keeps old audio, duration, timing and saved file
+ok 53 - damaged: rejected before media load and keeps old audio, duration, timing and saved file
+  ---
+  duration_ms: 112.304652
+  type: 'test'
+  ...
+# Subtest: host decode error after valid audio-track inspection preserves old song
+ok 54 - host decode error after valid audio-track inspection preserves old song
+  ---
+  duration_ms: 118.419195
+  type: 'test'
+  ...
+# Subtest: video audio shares preview play, pause, seek, timing marks and export source
+ok 55 - video audio shares preview play, pause, seek, timing marks and export source
+  ---
+  duration_ms: 126.911913
+  type: 'test'
+  ...
+# Subtest: a newer file selection wins over a delayed video decoder result
+ok 56 - a newer file selection wins over a delayed video decoder result
+  ---
+  duration_ms: 129.312
+  type: 'test'
+  ...
+# Subtest: switching songs during track inspection or decoding never commits into either song
+ok 57 - switching songs during track inspection or decoding never commits into either song
+  ---
+  duration_ms: 223.110201
+  type: 'test'
+  ...
+# Subtest: fresh runtime restores original video container and validates it before use
+ok 58 - fresh runtime restores original video container and validates it before use
+  ---
+  duration_ms: 234.661092
+  type: 'test'
+  ...
+# Subtest: failed cached-video restore stops after one attempt instead of retrying on its own redraw
+ok 59 - failed cached-video restore stops after one attempt instead of retrying on its own redraw
+  ---
+  duration_ms: 240.002289
+  type: 'test'
+  ...
+1..59
+# tests 59
+# suites 0
+# pass 59
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 3474.203738

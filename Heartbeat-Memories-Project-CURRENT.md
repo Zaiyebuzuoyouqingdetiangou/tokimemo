@@ -1,3 +1,7 @@
+## 2026-10-06 · 1.0.27 / layout=7
+
+本轮以完整 1.0.26 为基线，更新弹窗改为 README 同源，并提供 `preview/hearttrace-editor-redesign.html` 独立交互设计稿。正式剪辑台尚未替换，等待用户确认；生成、存档、图片与音乐实现不变。详情见 `RELEASE-1.0.27.md`、`dev/active/1.0.27-editor-design-context.md`。浏览器／iPhone／TT 排版未实测，完整套件仍有 22 个原包失败，不宣称全绿。ZIP 不含工作流，GitHub 无写入。
+
 ## 2026-10-04 · 1.0.22 / r84.239-link-recovery
 
 本轮完成公开音乐加载适配、相簿补共同回忆恢复、任务刷新去重和选材胶囊入口；原剪辑台及生成提示词保持。实际 Suno TT 接通与真机卡死尚未验收，不能声称全部修复。详情和当前验证状态见 `RELEASE-1.0.22.md`、`dev/active/r84.239-link-recovery-context.md`。

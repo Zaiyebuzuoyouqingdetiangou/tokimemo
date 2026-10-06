@@ -1,0 +1,857 @@
+TAP version 13
+# (node:12) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: narrow image editor starts with a large canvas and tools can fold without discarding edits or undo
+ok 1 - narrow image editor starts with a large canvas and tools can fold without discarding edits or undo
+  ---
+  duration_ms: 197.000632
+  type: 'test'
+  ...
+# Subtest: making room for a zoomed image reveals more pixels instead of enlarging the image again
+ok 2 - making room for a zoomed image reveals more pixels instead of enlarging the image again
+  ---
+  duration_ms: 172.846019
+  type: 'test'
+  ...
+# Subtest: wide image editor starts with tools available and folding them preserves prompt-only save
+ok 3 - wide image editor starts with tools available and folding them preserves prompt-only save
+  ---
+  duration_ms: 163.262714
+  type: 'test'
+  ...
+# Subtest: save-and-next only advances after the actual save succeeds
+ok 4 - save-and-next only advances after the actual save succeeds
+  ---
+  duration_ms: 126.917757
+  type: 'test'
+  ...
+# Subtest: pending or failed image save keeps the editor and never opens the next shot
+ok 5 - pending or failed image save keeps the editor and never opens the next shot
+  ---
+  duration_ms: 327.089614
+  type: 'test'
+  ...
+# Subtest: return remains usable while an asynchronous save is pending
+ok 6 - return remains usable while an asynchronous save is pending
+  ---
+  duration_ms: 166.027853
+  type: 'test'
+  ...
+# Subtest: original comparison cannot paint over pixels and returning to a brush restores crop geometry
+ok 7 - original comparison cannot paint over pixels and returning to a brush restores crop geometry
+  ---
+  duration_ms: 168.950444
+  type: 'test'
+  ...
+# Subtest: selecting a brush exits move mode and really paints instead of silently panning
+ok 8 - selecting a brush exits move mode and really paints instead of silently panning
+  ---
+  duration_ms: 187.427447
+  type: 'test'
+  ...
+# Subtest: brush size has a non-destructive visible preview and a numeric label
+ok 9 - brush size has a non-destructive visible preview and a numeric label
+  ---
+  duration_ms: 179.367374
+  type: 'test'
+  ...
+# Subtest: applying a new crop resets zoom and scroll so the selected image is not lost outside the viewport
+ok 10 - applying a new crop resets zoom and scroll so the selected image is not lost outside the viewport
+  ---
+  duration_ms: 240.206883
+  type: 'test'
+  ...
+# Subtest: canvas fit respects its own remaining space and still supports zoom and grid selection
+ok 11 - canvas fit respects its own remaining space and still supports zoom and grid selection
+  ---
+  duration_ms: 176.303828
+  type: 'test'
+  ...
+# Subtest: automatically prepared character can be downloaded directly while a prompt-only save keeps the source
+ok 12 - automatically prepared character can be downloaded directly while a prompt-only save keeps the source
+  ---
+  duration_ms: 144.602755
+  type: 'test'
+  ...
+# Subtest: editor selects the third of four panels before processing; saved PNG contains only blue pixels
+ok 13 - editor selects the third of four panels before processing; saved PNG contains only blue pixels
+  ---
+  duration_ms: 128.240724
+  type: 'test'
+  ...
+# Subtest: native editor erase, restore, undo and saved transparent PNG preserve original reference
+ok 14 - native editor erase, restore, undo and saved transparent PNG preserve original reference
+  ---
+  duration_ms: 177.242606
+  type: 'test'
+  ...
+# Subtest: free selection uses pointer coordinates after zoom and preserves a prompt-only draft on cancel
+ok 15 - free selection uses pointer coordinates after zoom and preserves a prompt-only draft on cancel
+  ---
+  duration_ms: 123.67171
+  type: 'test'
+  ...
+# Subtest: prompt-only save needs no image; reset returns the default without requesting a new image
+ok 16 - prompt-only save needs no image; reset returns the default without requesting a new image
+  ---
+  duration_ms: 110.665283
+  type: 'test'
+  ...
+# Subtest: transparent PNG import keeps its alpha and provides its own original for persistent storage
+ok 17 - transparent PNG import keeps its alpha and provides its own original for persistent storage
+  ---
+  duration_ms: 113.98982
+  type: 'test'
+  ...
+# Subtest: reopened cropped edit keeps saved pixels and can restore the full original
+ok 18 - reopened cropped edit keeps saved pixels and can restore the full original
+  ---
+  duration_ms: 117.629586
+  type: 'test'
+  ...
+# Subtest: mobile overview fits a long four-panel image and pan mode does not draw over it
+ok 19 - mobile overview fits a long four-panel image and pan mode does not draw over it
+  ---
+  duration_ms: 123.578643
+  type: 'test'
+  ...
+# Subtest: unsuitable opaque image is not marked as a transparent layer by one-click processing
+ok 20 - unsuitable opaque image is not marked as a transparent layer by one-click processing
+  ---
+  duration_ms: 159.663468
+  type: 'test'
+  ...
+# Subtest: playback never uses white-removal percentage to layer unconfirmed pictures
+ok 21 - playback never uses white-removal percentage to layer unconfirmed pictures
+  ---
+  duration_ms: 299.805393
+  type: 'test'
+  ...
+# (node:13) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: completed old story opens directly into the responsive editor with no saved-data writes or generation
+ok 22 - completed old story opens directly into the responsive editor with no saved-data writes or generation
+  ---
+  duration_ms: 159.676124
+  type: 'test'
+  ...
+# Subtest: material groups stay folded and perform no character processing until explicitly inspected
+ok 23 - material groups stay folded and perform no character processing until explicitly inspected
+  ---
+  duration_ms: 124.739934
+  type: 'test'
+  ...
+# Subtest: filmstrip windows are navigation only and preserve all 40 saved/generated shots
+ok 24 - filmstrip windows are navigation only and preserve all 40 saved/generated shots
+  ---
+  duration_ms: 171.756244
+  type: 'test'
+  ...
+# Subtest: image editing and one-click cutout open the existing full-featured editor with original references
+ok 25 - image editing and one-click cutout open the existing full-featured editor with original references
+  ---
+  duration_ms: 177.46882
+  type: 'test'
+  ...
+# Subtest: a per-shot imported picture is not mislabeled as editing a different shared material
+ok 26 - a per-shot imported picture is not mislabeled as editing a different shared material
+  ---
+  duration_ms: 165.402085
+  type: 'test'
+  ...
+# Subtest: look tab retains title/outro timing, fonts, templates, range, stage lyrics and both overlay switches
+ok 27 - look tab retains title/outro timing, fonts, templates, range, stage lyrics and both overlay switches
+  ---
+  duration_ms: 160.628639
+  type: 'test'
+  ...
+# Subtest: timing shares one player, and selecting a section or line neither seeks nor writes
+ok 28 - timing shares one player, and selecting a section or line neither seeks nor writes
+  ---
+  duration_ms: 173.93337
+  type: 'test'
+  ...
+# Subtest: zero-second section and line marks work, automatic advance and exact undo share one history
+ok 29 - zero-second section and line marks work, automatic advance and exact undo share one history
+  ---
+  duration_ms: 162.280678
+  type: 'test'
+  ...
+# Subtest: line correction, tenths nudging and reset undo restore previous saved timing rather than deleting it
+ok 30 - line correction, tenths nudging and reset undo restore previous saved timing rather than deleting it
+  ---
+  duration_ms: 155.444611
+  type: 'test'
+  ...
+# Subtest: manual section correction respects the old global shift and stays selected with auto-next off
+ok 31 - manual section correction respects the old global shift and stays selected with auto-next off
+  ---
+  duration_ms: 209.894758
+  type: 'test'
+  ...
+# Subtest: the old timing route also permits selecting and marking a line without resetting to section mode
+ok 32 - the old timing route also permits selecting and marking a line without resetting to section mode
+  ---
+  duration_ms: 188.359629
+  type: 'test'
+  ...
+# Subtest: finished timing can reopen for correction, and null marks are never counted as zero
+ok 33 - finished timing can reopen for correction, and null marks are never counted as zero
+  ---
+  duration_ms: 145.974794
+  type: 'test'
+  ...
+# Subtest: more panel preserves material library, subtitle/time-table download and recovery backup
+ok 34 - more panel preserves material library, subtitle/time-table download and recovery backup
+  ---
+  duration_ms: 196.373647
+  type: 'test'
+  ...
+# Subtest: WebView capability fallback retains recording and local audio import without new platform APIs
+ok 35 - WebView capability fallback retains recording and local audio import without new platform APIs
+  ---
+  duration_ms: 175.300467
+  type: 'test'
+  ...
+# (node:169) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: queued image completion is cancelled on close and cannot redraw an old song
+ok 36 - queued image completion is cancelled on close and cannot redraw an old song
+  ---
+  duration_ms: 125.666352
+  type: 'test'
+  ...
+# Subtest: light/dark colors, container/mobile fallbacks and native range keyboard input remain in editor CSS
+ok 37 - light/dark colors, container/mobile fallbacks and native range keyboard input remain in editor CSS
+  ---
+  duration_ms: 126.742172
+  type: 'test'
+  ...
+# Subtest: desktop keyboard switches tabs and closes a dialog without invoking the outer back action
+ok 38 - desktop keyboard switches tabs and closes a dialog without invoking the outer back action
+  ---
+  duration_ms: 130.173298
+  type: 'test'
+  ...
+# Subtest: native large-image cold open prepares only the visible frame and never encodes whole-image PNG previews
+ok 39 - native large-image cold open prepares only the visible frame and never encodes whole-image PNG previews
+  ---
+  duration_ms: 1847.426528
+  type: 'test'
+  ...
+# (node:14) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: each production tool panel retains its content and separate timing/navigation dock
+ok 40 - each production tool panel retains its content and separate timing/navigation dock
+  ---
+  duration_ms: 292.145719
+  type: 'test'
+  ...
+# Subtest: image save controls are outside the scroll area and the canvas is in its own viewport
+ok 41 - image save controls are outside the scroll area and the canvas is in its own viewport
+  ---
+  duration_ms: 171.467836
+  type: 'test'
+  ...
+# Subtest: large image canvas has a foldable tool panel and prominent persistent undo/save actions
+ok 42 - large image canvas has a foldable tool panel and prominent persistent undo/save actions
+  ---
+  duration_ms: 207.757261
+  type: 'test'
+  ...
+# Subtest: editor CSS is scoped, balanced and retains paging without requiring container-query support
+ok 43 - editor CSS is scoped, balanced and retains paging without requiring container-query support
+  ---
+  duration_ms: 145.232919
+  type: 'test'
+  ...
+# (node:20) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: production editor has natural-height tools and a single music entry below the player
+ok 44 - production editor has natural-height tools and a single music entry below the player
+  ---
+  duration_ms: 158.08502
+  type: 'test'
+  ...
+# Subtest: preview-only mode and shot stepping preserve all images and timing and keep one clock
+ok 45 - preview-only mode and shot stepping preserve all images and timing and keep one clock
+  ---
+  duration_ms: 117.185276
+  type: 'test'
+  ...
+# Subtest: shared material editor supplies save-and-next and returns directly to the workbench
+ok 46 - shared material editor supplies save-and-next and returns directly to the workbench
+  ---
+  duration_ms: 171.911078
+  type: 'test'
+  ...
+# Subtest: a single-shot replacement opens its own image editor and saves without changing the shared image or prompts
+ok 47 - a single-shot replacement opens its own image editor and saves without changing the shared image or prompts
+  ---
+  duration_ms: 170.908627
+  type: 'test'
+  ...
+# Subtest: production image editor markup contains the canvas before local tool panes and permanent save actions
+ok 48 - production image editor markup contains the canvas before local tool panes and permanent save actions
+  ---
+  duration_ms: 153.143784
+  type: 'test'
+  ...
+# Subtest: a workspace route replacement releases editor-specific body scrolling and its observer
+ok 49 - a workspace route replacement releases editor-specific body scrolling and its observer
+  ---
+  duration_ms: 167.061856
+  type: 'test'
+  ...
+# Subtest: panel position survives its own setting redraw but does not leak into another tab
+ok 50 - panel position survives its own setting redraw but does not leak into another tab
+  ---
+  duration_ms: 170.141751
+  type: 'test'
+  ...
+# (node:21) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: three pending results have one compact editor entry and every save-only action remains in its drawer
+ok 51 - three pending results have one compact editor entry and every save-only action remains in its drawer
+  ---
+  duration_ms: 152.791303
+  type: 'test'
+  ...
+# Subtest: a short filmstrip has no disabled page row while long projects keep every page reachable
+ok 52 - a short filmstrip has no disabled page row while long projects keep every page reachable
+  ---
+  duration_ms: 156.6552
+  type: 'test'
+  ...
+# Subtest: small host viewports have a scroll escape and a non-collapsing canvas instead of a forty-pixel minimum
+ok 53 - small host viewports have a scroll escape and a non-collapsing canvas instead of a forty-pixel minimum
+  ---
+  duration_ms: 133.012116
+  type: 'test'
+  ...
+# Subtest: image focus opens with an immediate return action and releases the shell on back or disposal
+ok 54 - image focus opens with an immediate return action and releases the shell on back or disposal
+  ---
+  duration_ms: 160.556312
+  type: 'test'
+  ...
+# Subtest: pending results do not take image canvas space and remain reachable after returning
+ok 55 - pending results do not take image canvas space and remain reachable after returning
+  ---
+  duration_ms: 141.713542
+  type: 'test'
+  ...
+# (node:26) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: saving an MV prompt returns to its picture without changing images or generating
+ok 56 - saving an MV prompt returns to its picture without changing images or generating
+  ---
+  duration_ms: 157.344261
+  type: 'test'
+  ...
+# Subtest: toolbar returns from material editor to the same picture and leaves unsaved prompt unchanged
+ok 57 - toolbar returns from material editor to the same picture and leaves unsaved prompt unchanged
+  ---
+  duration_ms: 104.346817
+  type: 'test'
+  ...
+# Subtest: same-page image completion rerenders keep the current scroll position
+ok 58 - same-page image completion rerenders keep the current scroll position
+  ---
+  duration_ms: 112.529576
+  type: 'test'
+  ...
+# Subtest: preview and timing return one level at a time, restoring each parent position
+ok 59 - preview and timing return one level at a time, restoring each parent position
+  ---
+  duration_ms: 114.334931
+  type: 'test'
+  ...
+# Subtest: page-local return works through the overlay click dispatcher without exiting to interactions
+ok 60 - page-local return works through the overlay click dispatcher without exiting to interactions
+  ---
+  duration_ms: 155.086811
+  type: 'test'
+  ...
+# Subtest: old editor callbacks cannot restore the previous song page after leaving and reopening
+ok 61 - old editor callbacks cannot restore the previous song page after leaving and reopening
+  ---
+  duration_ms: 122.770896
+  type: 'test'
+  ...
+# Subtest: picture anchor, expanded inspection and horizontal thumbnails survive changed layout
+not ok 62 - picture anchor, expanded inspection and horizontal thumbnails survive changed layout
+  ---
+  duration_ms: 110.523062
+  type: 'test'
+  location: '/workspace/scratch/8e568532ca62/candidate-1.0.28/tokimemo-main/tools/verification/mv-navigation-regression.mjs:93:1'
+  failureType: 'testCodeFailure'
+  error: "Cannot read properties of undefined (reading 'onClose')"
+  code: 'ERR_TEST_FAILURE'
+  name: 'TypeError'
+  stack: |-
+    TestContext.<anonymous> (file:///workspace/scratch/8e568532ca62/candidate-1.0.28/tokimemo-main/tools/verification/mv-navigation-regression.mjs:102:15)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+# Subtest: completed timing navigation does not make a preview/timing back loop
+ok 63 - completed timing navigation does not make a preview/timing back loop
+  ---
+  duration_ms: 146.03912
+  type: 'test'
+  ...
+# Subtest: preserving page state never reverses an explicit inspection expand/collapse click
+ok 64 - preserving page state never reverses an explicit inspection expand/collapse click
+  ---
+  duration_ms: 179.481108
+  type: 'test'
+  ...
+# Subtest: closed editor callbacks cannot dismiss a newer editor in the same song
+ok 65 - closed editor callbacks cannot dismiss a newer editor in the same song
+  ---
+  duration_ms: 167.315391
+  type: 'test'
+  ...
+# Subtest: rapid repeated edit clicks still return once to the original picture
+ok 66 - rapid repeated edit clicks still return once to the original picture
+  ---
+  duration_ms: 161.185861
+  type: 'test'
+  ...
+# Subtest: the first successful storyboard becomes the root instead of returning to the generate wizard
+ok 67 - the first successful storyboard becomes the root instead of returning to the generate wizard
+  ---
+  duration_ms: 139.26879
+  type: 'test'
+  ...
+# Subtest: pending save keeps the editor open and still allows returning without losing the original picture
+ok 68 - pending save keeps the editor open and still allows returning without losing the original picture
+  ---
+  duration_ms: 221.673733
+  type: 'test'
+  ...
+# Subtest: album thumbnails have no rabbit menu but retain memory and detail image actions
+ok 69 - album thumbnails have no rabbit menu but retain memory and detail image actions
+  ---
+  duration_ms: 188.218113
+  type: 'test'
+  ...
+# Subtest: album detail has a local return and toolbar returns to the scrolled album
+ok 70 - album detail has a local return and toolbar returns to the scrolled album
+  ---
+  duration_ms: 206.245045
+  type: 'test'
+  ...
+# Subtest: read-only album hides write actions and a different album cannot inherit the return position
+ok 71 - read-only album hides write actions and a different album cannot inherit the return position
+  ---
+  duration_ms: 131.892325
+  type: 'test'
+  ...
+# (node:28) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: 16:9: old full detail images keep both ends and fill empty frame area locally
+ok 72 - 16:9: old full detail images keep both ends and fill empty frame area locally
+  ---
+  duration_ms: 209.544324
+  type: 'test'
+  ...
+# Subtest: 9:16: old full detail images keep both ends and fill empty frame area locally
+ok 73 - 9:16: old full detail images keep both ends and fill empty frame area locally
+  ---
+  duration_ms: 251.735372
+  type: 'test'
+  ...
+# Subtest: manual right-cell selection supplies both the foreground and its soft background
+ok 74 - manual right-cell selection supplies both the foreground and its soft background
+  ---
+  duration_ms: 315.201668
+  type: 'test'
+  ...
+# Subtest: V1 replacement images use the same soft background without editing the original record
+ok 75 - V1 replacement images use the same soft background without editing the original record
+  ---
+  duration_ms: 299.211863
+  type: 'test'
+  ...
+# Subtest: a chosen stage background remains visible around full detail images
+ok 76 - a chosen stage background remains visible around full detail images
+  ---
+  duration_ms: 250.679155
+  type: 'test'
+  ...
+# Subtest: transparent pictures retain their transparent margins instead of acquiring a duplicate backdrop
+ok 77 - transparent pictures retain their transparent margins instead of acquiring a duplicate backdrop
+  ---
+  duration_ms: 208.390354
+  type: 'test'
+  ...
+# Subtest: soft padding uses the same pixels in preview and export
+ok 78 - soft padding uses the same pixels in preview and export
+  ---
+  duration_ms: 330.73674
+  type: 'test'
+  ...
+# Subtest: the editor gives the preview its film ratio and does not stretch it to the remaining row height
+ok 79 - the editor gives the preview its film ratio and does not stretch it to the remaining row height
+  ---
+  duration_ms: 184.455507
+  type: 'test'
+  ...
+# (node:97) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: approved workbench replaces duplicate chrome, has a direct return, and releases focus on exit
+ok 80 - approved workbench replaces duplicate chrome, has a direct return, and releases focus on exit
+  ---
+  duration_ms: 156.948274
+  type: 'test'
+  ...
+# Subtest: four visible thumbnails and all-shots view retain all 121 frames without generation or saved-data writes
+ok 81 - four visible thumbnails and all-shots view retain all 121 frames without generation or saved-data writes
+  ---
+  duration_ms: 202.892164
+  type: 'test'
+  ...
+# Subtest: mobile uses natural height and one page scroll, preview ratio is preserved, and desktop still has two columns
+ok 82 - mobile uses natural height and one page scroll, preview ratio is preserved, and desktop still has two columns
+  ---
+  duration_ms: 177.649868
+  type: 'test'
+  ...
+# Subtest: all baseline editor/image actions, inputs, options and accepted files remain reachable
+ok 83 - all baseline editor/image actions, inputs, options and accepted files remain reachable
+  ---
+  duration_ms: 1178.07441
+  type: 'test'
+  ...
+# Subtest: previously enabled operations receive no new disabled gate
+ok 84 - previously enabled operations receive no new disabled gate
+  ---
+  duration_ms: 0.424299
+  type: 'test'
+  ...
+# Subtest: 25 existing shots remain navigable without content writes or generation and one player is retained
+ok 85 - 25 existing shots remain navigable without content writes or generation and one player is retained
+  ---
+  duration_ms: 1.092429
+  type: 'test'
+  ...
+# Subtest: the approved compact strip shows at most four shots and its gallery reaches all 25
+ok 86 - the approved compact strip shows at most four shots and its gallery reaches all 25
+  ---
+  duration_ms: 0.387995
+  type: 'test'
+  ...
+# Subtest: no music and no existing images do not disable the real draw action
+ok 87 - no music and no existing images do not disable the real draw action
+  ---
+  duration_ms: 1.75388
+  type: 'test'
+  ...
+# Subtest: drawer disposal restores previous inert states and removes click/Escape/native-cancel listeners
+ok 88 - drawer disposal restores previous inert states and removes click/Escape/native-cancel listeners
+  ---
+  duration_ms: 0.233186
+  type: 'test'
+  ...
+# Subtest: generation, prompts, streaming, storage and every non-UI source stay byte-identical except release metadata
+ok 89 - generation, prompts, streaming, storage and every non-UI source stay byte-identical except release metadata
+  ---
+  duration_ms: 100.329351
+  type: 'test'
+  ...
+# (node:121) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: one music entry changes from import to current filename and keeps one player
+not ok 90 - one music entry changes from import to current filename and keeps one player
+  ---
+  duration_ms: 147.150322
+  type: 'test'
+  location: '/workspace/scratch/8e568532ca62/candidate-1.0.28/tokimemo-main/tools/verification/mv-single-music-regression.mjs:24:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly deep-equal:
+    + actual - expected
+    
+    + []
+    - [
+    -   '导入音乐'
+    - ]
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    0: '导入音乐'
+  actual:
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///workspace/scratch/8e568532ca62/candidate-1.0.28/tokimemo-main/tools/verification/mv-single-music-regression.mjs:27:16)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3)
+  ...
+# Subtest: removing only the current music keeps saved frames and timing
+not ok 91 - removing only the current music keeps saved frames and timing
+  ---
+  duration_ms: 170.260575
+  type: 'test'
+  location: '/workspace/scratch/8e568532ca62/candidate-1.0.28/tokimemo-main/tools/verification/mv-single-music-regression.mjs:40:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression />导入音乐<\/button>/. Input:
+    
+    '<main class="rmt-x-page rmt-mv-editor"><header class="rmt-mve-head"><button type="button" class="rmt-mve-back" data-rmt-mv="back" aria-label="返回素材库">‹</button><div class="rmt-mve-title"><h2>同一首歌</h2><small>手书剪辑台</small></div><div class="rmt-mve-head-actions"><button type="button" class="rmt-mve-more" data-rmt-mv="editor-drawer" data-rmt-mv-id="more" aria-label="更多操作">⋯</button><button type="button" class="rmt-x-primary" data-rmt-mv="editor-drawer" data-rmt-mv-id="export">导出</button></div></header>\n' +
+      '      <div class="rmt-mve-layout-scope"><div class="rmt-mve-workspace" data-editor-tab="shots" data-editor-paged="false" data-preview-only="false"><section class="rmt-mve-preview" aria-label="手书预览">\n' +
+      '        <div class="rmt-mve-preview-head"><span data-rmt-mv-current>第 1 镜 · 2 镜</span><button type="button" class="rmt-x-secondary" data-rmt-mv="editor-preview" aria-pressed="false">只看画面</button></div>\n' +
+      '        <div class="rmt-mv-canvas-wrap portrait"><canvas data-rmt-mv-canvas width="540" height="960" aria-label="当前分镜画面"></canvas></div>\n' +
+      '        <div class="rmt-mve-transport"><button type="button" class="rmt-mv-play" data-rmt-mv="play" aria-label="播放">▶</button><span class="rmt-mve-clock" data-rmt-mv-time>0:00.0</span><input type="range" min="0" max="123" step="0.1" value="0" data-rmt-mv-seek aria-label="播放位置"><small>2:03</small></div>\n' +
+      '        <div class="rmt-mve-projectbar"><button type="button" class="rmt-x-secondary" data-rmt-mv="editor-drawer" data-rmt-mv-id="audio" title="导入音乐" aria-label="导入音乐"><span aria-hidden="true">♪</span> <span>导入音乐</span> <span aria-hidden="true">›</span></button><small class="rmt-mve-meta">静音预览</small></div>\n' +
+      '        <div class="rmt-mve-filmstrip" data-rmt-mv-filmstrip><div class="rmt-mve-strip-head"><small data-rmt-mv-selection>第 1 镜 · 2 镜</small><div class="rmt-mve-strip-actions"><button type="button" class="rmt-x-secondary" data-rmt-mv="editor-drawer" data-rmt-mv-id="shots">全部分镜</button></div></div><div class="rmt-mv-strip"><button type="button" class="on" aria-label="第 1 镜" data-rmt-mv="select-shot" data-rmt-mv-id="A"><img src="/first.png" alt="" loading="lazy" decoding="async"><span>1 · 57.5秒</span></button><button type="button" class="" aria-label="第 2 镜" data-rmt-mv="select-shot" data-rmt-mv-id="B"><span>2 · 63.0秒</span></button></div></div>\n' +
+      '      </section><section class="rmt-mve-tools" aria-label="剪辑工具"><nav class="rmt-mve-tabs" role="tablist" aria-label="剪辑工作区"><button type="button" class="rmt-mve-tab on" data-rmt-mv="editor-tab" data-rmt-mv-id="shots" role="tab" aria-selected="true" aria-pressed="true" aria-controls="rmt-mve-active-panel">分镜</button><button type="button" class="rmt-mve-tab" data-rmt-mv="editor-tab" data-rmt-mv-id="timing" role="tab" aria-selected="false" aria-pressed="false" aria-controls="rmt-mve-active-panel">定段 · 定句</button><button type="button" class="rmt-mve-tab" data-rmt-mv="editor-tab" data-rmt-mv-id="look" role="tab" aria-selected="false" aria-pressed="false" aria-controls="rmt-mve-active-panel">全片样式</button></nav><div id="rmt-mve-active-panel" role="tabpanel" aria-label="分镜" class="rmt-mve-panel" data-rmt-mv-shot-panel><div class="rmt-mve-panel-scroll" data-rmt-mv-scroll="shots"><div class="rmt-x-row-head"><b>第 1 镜</b><span>0:02.5–1:00.0</span></div><p class="rmt-x-note rmt-mve-lyric">第一句</p>\n' +
+      '      <div class="rmt-mve-image-actions"><button type="button" class="rmt-x-primary" data-rmt-mv="edit-frame" data-rmt-mv-id="A" aria-label="图片编辑 · 选单格 · 修边">编辑图片</button><label class="rmt-x-secondary rmt-mv-upload">换图<input type="file" accept="image/*" data-rmt-mv-image data-rmt-mv-id="A"></label></div><small class="rmt-mve-image-note">当前镜图片 · 保留原背景</small>\n' +
+      '      <details><summary>镜头运动与切换</summary><div><b>镜头运动</b><div class="rmt-mv-grid2"><button type="button" class="rmt-x-seg" data-rmt-mv="set-motion" data-rmt-mv-id="still" aria-pressed="false">不动</button><button type="button" class="rmt-x-seg" data-rmt-mv="set-motion" data-rmt-mv-id="push" aria-pressed="false">缓慢推近</button></div><b>切到下一镜</b><div class="rmt-x-segs"><button type="button" class="rmt-x-seg" data-rmt-mv="set-cut" data-rmt-mv-id="cut" aria-pressed="false">直接切</button><button type="button" class="rmt-x-seg active" data-rmt-mv="set-cut" data-rmt-mv-id="fade" aria-pressed="true">淡入淡出</button><button type="button" class="rmt-x-seg" data-rmt-mv="set-cut" data-rmt-mv-id="flash" aria-pressed="false">闪白</button></div></div></details>\n' +
+      '      <details><summary>图片与生成</summary><div><button type="button" class="rmt-x-secondary" data-rmt-mv="draw" data-rmt-mv-id="A">重画这一镜</button><button type="button" class="rmt-x-secondary" data-rmt-mv="go-board">素材库与背景编辑</button><button type="button" class="rmt-x-secondary" data-rmt-mv="go-board">补充分镜与图片</button></div></details></div>\n' +
+      '      <footer class="rmt-mve-dock"><button type="button" class="rmt-x-secondary" data-rmt-mv="editor-step" data-rmt-mv-id="-1" disabled>上一镜</button><small>1 / 2</small><button type="button" class="rmt-x-secondary" data-rmt-mv="editor-step" data-rmt-mv-id="1">下一镜</button></footer></div></section></div></div>\n' +
+      '      <div class="rmt-mve-sheet-shade"><section class="rmt-mve-sheet" data-editor-drawer="audio" role="dialog" aria-modal="true" aria-label="歌曲"><header><b>歌曲</b><button type="button" class="rmt-x-secondary" data-rmt-mv="editor-drawer" aria-label="关闭选项面板">关闭</button></header><div><div class="rmt-mv-file"><span aria-hidden="true">♫</span><div><b>选择音源</b><small role="status">为「同一首歌」选择音频、录屏或导入音乐链接</small></div>\n' +
+      '      <label>选择文件<input type="file" accept="audio/*,video/mp4,video/quicktime,.mp3,.m4a,.wav,.ogg,.mp4,.mov,.m4v" data-rmt-mv-audio></label></div>\n' +
+      '      \n' +
+      '      <div class="rmt-mv-music-link" data-rmt-mv-link-box><label for="rmt-mv-music-link">音乐链接（试验）</label>\n' +
+      '      <input id="rmt-mv-music-link" type="url" inputmode="url" autocomplete="off" spellcheck="false" data-rmt-mv-music-link value="" placeholder="粘贴 Suno 歌曲链接或音频直链">\n' +
+      '      <button type="button" class="rmt-x-secondary" data-rmt-mv="audio-link">导入链接</button>\n' +
+      '      <p class="rmt-x-note" role="status" aria-live="polite">Suno 分享链接试接中；成功后与画面共用播放进度。</p></div></div></section></div></main>'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual: |-
+    <main class="rmt-x-page rmt-mv-editor"><header class="rmt-mve-head"><button type="button" class="rmt-mve-back" data-rmt-mv="back" aria-label="返回素材库">‹</button><div class="rmt-mve-title"><h2>同一首歌</h2><small>手书剪辑台</small></div><div class="rmt-mve-head-actions"><button type="button" class="rmt-mve-more" data-rmt-mv="editor-drawer" data-rmt-mv-id="more" aria-label="更多操作">⋯</button><button type="button" class="rmt-x-primary" data-rmt-mv="editor-drawer" data-rmt-mv-id="export">导出</button></div></header>
+          <div class="rmt-mve-layout-scope"><div class="rmt-mve-workspace" data-editor-tab="shots" data-editor-paged="false" data-preview-only="false"><section class="rmt-mve-preview" aria-label="手书预览">
+            <div class="rmt-mve-preview-head"><span data-rmt-mv-current>第 1 镜 · 2 镜</span><button type="button" class="rmt-x-secondary" data-rmt-mv="editor-preview" aria-pressed="false">只看画面</button></div>
+            <div class="rmt-mv-canvas-wrap portrait"><canvas data-rmt-mv-canvas width="540" height="960" aria-label="当前分镜画面"></canvas></div>
+            <div class="rmt-mve-transport"><button type="button" class="rmt-mv-play" data-rmt-mv="play" aria-label="播放">▶</button><span class="rmt-mve-clock" data-rmt-mv-time>0:00.0</span><input type="range" min="0" max="123" step="0.1" value="0" data-rmt-mv-seek aria-label="播放位置"><small>2:03</small></div>
+            <div class="rmt-mve-projectbar"><button type="button" class="rmt-x-secondary" data-rmt-mv="editor-drawer" data-rmt-mv-id="audio" title="导入音乐" aria-label="导入音乐"><span aria-hidden="true">♪</span> <span>导入音乐</span> <span aria-hidden="true">›</span></button><small class="rmt-mve-meta">静音预览</small></div>
+            <div class="rmt-mve-filmstrip" data-rmt-mv-filmstrip><div class="rmt-mve-strip-head"><small data-rmt-mv-selection>第 1 镜 · 2 镜</small><div class="rmt-mve-strip-actions"><button type="button" class="rmt-x-secondary" data-rmt-mv="editor-drawer" data-rmt-mv-id="shots">全部分镜</button></div></div><div class="rmt-mv-strip"><button type="button" class="on" aria-label="第 1 镜" data-rmt-mv="select-shot" data-rmt-mv-id="A"><img src="/first.png" alt="" loading="lazy" decoding="async"><span>1 · 57.5秒</span></button><button type="button" class="" aria-label="第 2 镜" data-rmt-mv="select-shot" data-rmt-mv-id="B"><span>2 · 63.0秒</span></button></div></div>
+          </section><section class="rmt-mve-tools" aria-label="剪辑工具"><nav class="rmt-mve-tabs" role="tablist" aria-label="剪辑工作区"><button type="button" class="rmt-mve-tab on" data-rmt-mv="editor-tab" data-rmt-mv-id="shots" role="tab" aria-selected="true" aria-pressed="true" aria-controls="rmt-mve-active-panel">分镜</button><button type="button" class="rmt-mve-tab" data-rmt-mv="editor-tab" data-rmt-mv-id="timing" role="tab" aria-selected="false" aria-pressed="false" aria-controls="rmt-mve-active-panel">定段 · 定句</button><button type="button" class="rmt-mve-tab" data-rmt-mv="editor-tab" data-rmt-mv-id="look" role="tab" aria-selected="false" aria-pressed="false" aria-controls="rmt-mve-active-panel">全片样式</button></nav><div id="rmt-mve-active-panel" role="tabpanel" aria-label="分镜" class="rmt-mve-panel" data-rmt-mv-shot-panel><div class="rmt-mve-panel-scroll" data-rmt-mv-scroll="shots"><div class="rmt-x-row-head"><b>第 1 镜</b><span>0:02.5–1:00.0</span></div><p class="rmt-x-note rmt-mve-lyric">第一句</p>
+          <div class="rmt-mve-image-actions"><button type="button" class="rmt-x-primary" data-rmt-mv="edit-frame" data-rmt-mv-id="A" aria-label="图片编辑 · 选单格 · 修边">编辑图片</button><label class="rmt-x-secondary rmt-mv-upload">换图<input type="file" accept="image/*" data-rmt-mv-image data-rmt-mv-id="A"></label></div><small class="rmt-mve-image-note">当前镜图片 · 保留原背景</small>
+          <details><summary>镜头运动与切换</summary><div><b>镜头运动</b><div class="rmt-mv-grid2"><button type="button" class="rmt-x-seg" data-rmt-mv="set-motion" data-rmt-mv-id="still" aria-pressed="false">不动</button><button type="button" class="rmt-x-seg" data-rmt-mv="set-motion" data-rmt-mv-id="push" aria-pressed="false">缓慢推近</button></div><b>切到下一镜</b><div class="rmt-x-segs"><button type="button" class="rmt-x-seg" data-rmt-mv="set-cut" data-rmt-mv-id="cut" aria-pressed="false">直接切</button><button type="button" class="rmt-x-seg active" data-rmt-mv="set-cut" data-rmt-mv-id="fade" aria-pressed="true">淡入淡出</button><button type="button" class="rmt-x-seg" data-rmt-mv="set-cut" data-rmt-mv-id="flash" aria-pressed="false">闪白</button></div></div></details>
+          <details><summary>图片与生成</summary><div><button type="button" class="rmt-x-secondary" data-rmt-mv="draw" data-rmt-mv-id="A">重画这一镜</button><button type="button" class="rmt-x-secondary" data-rmt-mv="go-board">素材库与背景编辑</button><button type="button" class="rmt-x-secondary" data-rmt-mv="go-board">补充分镜与图片</button></div></details></div>
+          <footer class="rmt-mve-dock"><button type="button" class="rmt-x-secondary" data-rmt-mv="editor-step" data-rmt-mv-id="-1" disabled>上一镜</button><small>1 / 2</small><button type="button" class="rmt-x-secondary" data-rmt-mv="editor-step" data-rmt-mv-id="1">下一镜</button></footer></div></section></div></div>
+          <div class="rmt-mve-sheet-shade"><section class="rmt-mve-sheet" data-editor-drawer="audio" role="dialog" aria-modal="true" aria-label="歌曲"><header><b>歌曲</b><button type="button" class="rmt-x-secondary" data-rmt-mv="editor-drawer" aria-label="关闭选项面板">关闭</button></header><div><div class="rmt-mv-file"><span aria-hidden="true">♫</span><div><b>选择音源</b><small role="status">为「同一首歌」选择音频、录屏或导入音乐链接</small></div>
+          <label>选择文件<input type="file" accept="audio/*,video/mp4,video/quicktime,.mp3,.m4a,.wav,.ogg,.mp4,.mov,.m4v" data-rmt-mv-audio></label></div>
+          
+          <div class="rmt-mv-music-link" data-rmt-mv-link-box><label for="rmt-mv-music-link">音乐链接（试验）</label>
+          <input id="rmt-mv-music-link" type="url" inputmode="url" autocomplete="off" spellcheck="false" data-rmt-mv-music-link value="" placeholder="粘贴 Suno 歌曲链接或音频直链">
+          <button type="button" class="rmt-x-secondary" data-rmt-mv="audio-link">导入链接</button>
+          <p class="rmt-x-note" role="status" aria-live="polite">Suno 分享链接试接中；成功后与画面共用播放进度。</p></div></div></section></div></main>
+  operator: 'match'
+  stack: |-
+    TestContext.<anonymous> (file:///workspace/scratch/8e568532ca62/candidate-1.0.28/tokimemo-main/tools/verification/mv-single-music-regression.mjs:47:16)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+# Subtest: failed music removal leaves the original track available
+not ok 92 - failed music removal leaves the original track available
+  ---
+  duration_ms: 146.753533
+  type: 'test'
+  location: '/workspace/scratch/8e568532ca62/candidate-1.0.28/tokimemo-main/tools/verification/mv-single-music-regression.mjs:52:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression />manual\.wav<\/button>/. Input:
+    
+    '<main class="rmt-x-page rmt-mv-editor"><header class="rmt-mve-head"><button type="button" class="rmt-mve-back" data-rmt-mv="back" aria-label="返回素材库">‹</button><div class="rmt-mve-title"><h2>同一首歌</h2><small>手书剪辑台</small></div><div class="rmt-mve-head-actions"><button type="button" class="rmt-mve-more" data-rmt-mv="editor-drawer" data-rmt-mv-id="more" aria-label="更多操作">⋯</button><button type="button" class="rmt-x-primary" data-rmt-mv="editor-drawer" data-rmt-mv-id="export">导出</button></div></header>\n' +
+      '      <div class="rmt-mve-layout-scope"><div class="rmt-mve-workspace" data-editor-tab="shots" data-editor-paged="false" data-preview-only="false"><section class="rmt-mve-preview" aria-label="手书预览">\n' +
+      '        <div class="rmt-mve-preview-head"><span data-rmt-mv-current>第 1 镜 · 2 镜</span><button type="button" class="rmt-x-secondary" data-rmt-mv="editor-preview" aria-pressed="false">只看画面</button></div>\n' +
+      '        <div class="rmt-mv-canvas-wrap portrait"><canvas data-rmt-mv-canvas width="540" height="960" aria-label="当前分镜画面"></canvas></div>\n' +
+      '        <div class="rmt-mve-transport"><button type="button" class="rmt-mv-play" data-rmt-mv="play" aria-label="播放">▶</button><span class="rmt-mve-clock" data-rmt-mv-time>0:00.0</span><input type="range" min="0" max="123" step="0.1" value="0" data-rmt-mv-seek aria-label="播放位置"><small>2:03</small></div>\n' +
+      '        <div class="rmt-mve-projectbar"><button type="button" class="rmt-x-secondary" data-rmt-mv="editor-drawer" data-rmt-mv-id="audio" title="manual.wav" aria-label="管理当前音乐：manual.wav"><span aria-hidden="true">♪</span> <span>manual.wav</span> <span aria-hidden="true">›</span></button><small class="rmt-mve-meta">音画同步</small></div>\n' +
+      '        <div class="rmt-mve-filmstrip" data-rmt-mv-filmstrip><div class="rmt-mve-strip-head"><small data-rmt-mv-selection>第 1 镜 · 2 镜</small><div class="rmt-mve-strip-actions"><button type="button" class="rmt-x-secondary" data-rmt-mv="editor-drawer" data-rmt-mv-id="shots">全部分镜</button></div></div><div class="rmt-mv-strip"><button type="button" class="on" aria-label="第 1 镜" data-rmt-mv="select-shot" data-rmt-mv-id="A"><img src="/first.png" alt="" loading="lazy" decoding="async"><span>1 · 57.5秒</span></button><button type="button" class="" aria-label="第 2 镜" data-rmt-mv="select-shot" data-rmt-mv-id="B"><span>2 · 63.0秒</span></button></div></div>\n' +
+      '      </section><section class="rmt-mve-tools" aria-label="剪辑工具"><nav class="rmt-mve-tabs" role="tablist" aria-label="剪辑工作区"><button type="button" class="rmt-mve-tab on" data-rmt-mv="editor-tab" data-rmt-mv-id="shots" role="tab" aria-selected="true" aria-pressed="true" aria-controls="rmt-mve-active-panel">分镜</button><button type="button" class="rmt-mve-tab" data-rmt-mv="editor-tab" data-rmt-mv-id="timing" role="tab" aria-selected="false" aria-pressed="false" aria-controls="rmt-mve-active-panel">定段 · 定句</button><button type="button" class="rmt-mve-tab" data-rmt-mv="editor-tab" data-rmt-mv-id="look" role="tab" aria-selected="false" aria-pressed="false" aria-controls="rmt-mve-active-panel">全片样式</button></nav><div id="rmt-mve-active-panel" role="tabpanel" aria-label="分镜" class="rmt-mve-panel" data-rmt-mv-shot-panel><div class="rmt-mve-panel-scroll" data-rmt-mv-scroll="shots"><div class="rmt-x-row-head"><b>第 1 镜</b><span>0:02.5–1:00.0</span></div><p class="rmt-x-note rmt-mve-lyric">第一句</p>\n' +
+      '      <div class="rmt-mve-image-actions"><button type="button" class="rmt-x-primary" data-rmt-mv="edit-frame" data-rmt-mv-id="A" aria-label="图片编辑 · 选单格 · 修边">编辑图片</button><label class="rmt-x-secondary rmt-mv-upload">换图<input type="file" accept="image/*" data-rmt-mv-image data-rmt-mv-id="A"></label></div><small class="rmt-mve-image-note">当前镜图片 · 保留原背景</small>\n' +
+      '      <details><summary>镜头运动与切换</summary><div><b>镜头运动</b><div class="rmt-mv-grid2"><button type="button" class="rmt-x-seg" data-rmt-mv="set-motion" data-rmt-mv-id="still" aria-pressed="false">不动</button><button type="button" class="rmt-x-seg" data-rmt-mv="set-motion" data-rmt-mv-id="push" aria-pressed="false">缓慢推近</button></div><b>切到下一镜</b><div class="rmt-x-segs"><button type="button" class="rmt-x-seg" data-rmt-mv="set-cut" data-rmt-mv-id="cut" aria-pressed="false">直接切</button><button type="button" class="rmt-x-seg active" data-rmt-mv="set-cut" data-rmt-mv-id="fade" aria-pressed="true">淡入淡出</button><button type="button" class="rmt-x-seg" data-rmt-mv="set-cut" data-rmt-mv-id="flash" aria-pressed="false">闪白</button></div></div></details>\n' +
+      '      <details><summary>图片与生成</summary><div><button type="button" class="rmt-x-secondary" data-rmt-mv="draw" data-rmt-mv-id="A">重画这一镜</button><button type="button" class="rmt-x-secondary" data-rmt-mv="go-board">素材库与背景编辑</button><button type="button" class="rmt-x-secondary" data-rmt-mv="go-board">补充分镜与图片</button></div></details></div>\n' +
+      '      <footer class="rmt-mve-dock"><button type="button" class="rmt-x-secondary" data-rmt-mv="editor-step" data-rmt-mv-id="-1" disabled>上一镜</button><small>1 / 2</small><button type="button" class="rmt-x-secondary" data-rmt-mv="editor-step" data-rmt-mv-id="1">下一镜</button></footer></div></section></div></div>\n' +
+      '      </main>'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual: |-
+    <main class="rmt-x-page rmt-mv-editor"><header class="rmt-mve-head"><button type="button" class="rmt-mve-back" data-rmt-mv="back" aria-label="返回素材库">‹</button><div class="rmt-mve-title"><h2>同一首歌</h2><small>手书剪辑台</small></div><div class="rmt-mve-head-actions"><button type="button" class="rmt-mve-more" data-rmt-mv="editor-drawer" data-rmt-mv-id="more" aria-label="更多操作">⋯</button><button type="button" class="rmt-x-primary" data-rmt-mv="editor-drawer" data-rmt-mv-id="export">导出</button></div></header>
+          <div class="rmt-mve-layout-scope"><div class="rmt-mve-workspace" data-editor-tab="shots" data-editor-paged="false" data-preview-only="false"><section class="rmt-mve-preview" aria-label="手书预览">
+            <div class="rmt-mve-preview-head"><span data-rmt-mv-current>第 1 镜 · 2 镜</span><button type="button" class="rmt-x-secondary" data-rmt-mv="editor-preview" aria-pressed="false">只看画面</button></div>
+            <div class="rmt-mv-canvas-wrap portrait"><canvas data-rmt-mv-canvas width="540" height="960" aria-label="当前分镜画面"></canvas></div>
+            <div class="rmt-mve-transport"><button type="button" class="rmt-mv-play" data-rmt-mv="play" aria-label="播放">▶</button><span class="rmt-mve-clock" data-rmt-mv-time>0:00.0</span><input type="range" min="0" max="123" step="0.1" value="0" data-rmt-mv-seek aria-label="播放位置"><small>2:03</small></div>
+            <div class="rmt-mve-projectbar"><button type="button" class="rmt-x-secondary" data-rmt-mv="editor-drawer" data-rmt-mv-id="audio" title="manual.wav" aria-label="管理当前音乐：manual.wav"><span aria-hidden="true">♪</span> <span>manual.wav</span> <span aria-hidden="true">›</span></button><small class="rmt-mve-meta">音画同步</small></div>
+            <div class="rmt-mve-filmstrip" data-rmt-mv-filmstrip><div class="rmt-mve-strip-head"><small data-rmt-mv-selection>第 1 镜 · 2 镜</small><div class="rmt-mve-strip-actions"><button type="button" class="rmt-x-secondary" data-rmt-mv="editor-drawer" data-rmt-mv-id="shots">全部分镜</button></div></div><div class="rmt-mv-strip"><button type="button" class="on" aria-label="第 1 镜" data-rmt-mv="select-shot" data-rmt-mv-id="A"><img src="/first.png" alt="" loading="lazy" decoding="async"><span>1 · 57.5秒</span></button><button type="button" class="" aria-label="第 2 镜" data-rmt-mv="select-shot" data-rmt-mv-id="B"><span>2 · 63.0秒</span></button></div></div>
+          </section><section class="rmt-mve-tools" aria-label="剪辑工具"><nav class="rmt-mve-tabs" role="tablist" aria-label="剪辑工作区"><button type="button" class="rmt-mve-tab on" data-rmt-mv="editor-tab" data-rmt-mv-id="shots" role="tab" aria-selected="true" aria-pressed="true" aria-controls="rmt-mve-active-panel">分镜</button><button type="button" class="rmt-mve-tab" data-rmt-mv="editor-tab" data-rmt-mv-id="timing" role="tab" aria-selected="false" aria-pressed="false" aria-controls="rmt-mve-active-panel">定段 · 定句</button><button type="button" class="rmt-mve-tab" data-rmt-mv="editor-tab" data-rmt-mv-id="look" role="tab" aria-selected="false" aria-pressed="false" aria-controls="rmt-mve-active-panel">全片样式</button></nav><div id="rmt-mve-active-panel" role="tabpanel" aria-label="分镜" class="rmt-mve-panel" data-rmt-mv-shot-panel><div class="rmt-mve-panel-scroll" data-rmt-mv-scroll="shots"><div class="rmt-x-row-head"><b>第 1 镜</b><span>0:02.5–1:00.0</span></div><p class="rmt-x-note rmt-mve-lyric">第一句</p>
+          <div class="rmt-mve-image-actions"><button type="button" class="rmt-x-primary" data-rmt-mv="edit-frame" data-rmt-mv-id="A" aria-label="图片编辑 · 选单格 · 修边">编辑图片</button><label class="rmt-x-secondary rmt-mv-upload">换图<input type="file" accept="image/*" data-rmt-mv-image data-rmt-mv-id="A"></label></div><small class="rmt-mve-image-note">当前镜图片 · 保留原背景</small>
+          <details><summary>镜头运动与切换</summary><div><b>镜头运动</b><div class="rmt-mv-grid2"><button type="button" class="rmt-x-seg" data-rmt-mv="set-motion" data-rmt-mv-id="still" aria-pressed="false">不动</button><button type="button" class="rmt-x-seg" data-rmt-mv="set-motion" data-rmt-mv-id="push" aria-pressed="false">缓慢推近</button></div><b>切到下一镜</b><div class="rmt-x-segs"><button type="button" class="rmt-x-seg" data-rmt-mv="set-cut" data-rmt-mv-id="cut" aria-pressed="false">直接切</button><button type="button" class="rmt-x-seg active" data-rmt-mv="set-cut" data-rmt-mv-id="fade" aria-pressed="true">淡入淡出</button><button type="button" class="rmt-x-seg" data-rmt-mv="set-cut" data-rmt-mv-id="flash" aria-pressed="false">闪白</button></div></div></details>
+          <details><summary>图片与生成</summary><div><button type="button" class="rmt-x-secondary" data-rmt-mv="draw" data-rmt-mv-id="A">重画这一镜</button><button type="button" class="rmt-x-secondary" data-rmt-mv="go-board">素材库与背景编辑</button><button type="button" class="rmt-x-secondary" data-rmt-mv="go-board">补充分镜与图片</button></div></details></div>
+          <footer class="rmt-mve-dock"><button type="button" class="rmt-x-secondary" data-rmt-mv="editor-step" data-rmt-mv-id="-1" disabled>上一镜</button><small>1 / 2</small><button type="button" class="rmt-x-secondary" data-rmt-mv="editor-step" data-rmt-mv-id="1">下一镜</button></footer></div></section></div></div>
+          </main>
+  operator: 'match'
+  stack: |-
+    TestContext.<anonymous> (file:///workspace/scratch/8e568532ca62/candidate-1.0.28/tokimemo-main/tools/verification/mv-single-music-regression.mjs:57:16)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+# Subtest: a new import wins over a pending removal of the previous song
+not ok 93 - a new import wins over a pending removal of the previous song
+  ---
+  duration_ms: 194.366156
+  type: 'test'
+  location: '/workspace/scratch/8e568532ca62/candidate-1.0.28/tokimemo-main/tools/verification/mv-single-music-regression.mjs:62:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression />new-song\.wav<\/button>/. Input:
+    
+    '<main class="rmt-x-page rmt-mv-editor"><header class="rmt-mve-head"><button type="button" class="rmt-mve-back" data-rmt-mv="back" aria-label="返回素材库">‹</button><div class="rmt-mve-title"><h2>同一首歌</h2><small>手书剪辑台</small></div><div class="rmt-mve-head-actions"><button type="button" class="rmt-mve-more" data-rmt-mv="editor-drawer" data-rmt-mv-id="more" aria-label="更多操作">⋯</button><button type="button" class="rmt-x-primary" data-rmt-mv="editor-drawer" data-rmt-mv-id="export">导出</button></div></header>\n' +
+      '      <div class="rmt-mve-layout-scope"><div class="rmt-mve-workspace" data-editor-tab="shots" data-editor-paged="false" data-preview-only="false"><section class="rmt-mve-preview" aria-label="手书预览">\n' +
+      '        <div class="rmt-mve-preview-head"><span data-rmt-mv-current>第 1 镜 · 2 镜</span><button type="button" class="rmt-x-secondary" data-rmt-mv="editor-preview" aria-pressed="false">只看画面</button></div>\n' +
+      '        <div class="rmt-mv-canvas-wrap portrait"><canvas data-rmt-mv-canvas width="540" height="960" aria-label="当前分镜画面"></canvas></div>\n' +
+      '        <div class="rmt-mve-transport"><button type="button" class="rmt-mv-play" data-rmt-mv="play" aria-label="播放">▶</button><span class="rmt-mve-clock" data-rmt-mv-time>0:00.0</span><input type="range" min="0" max="123" step="0.1" value="0" data-rmt-mv-seek aria-label="播放位置"><small>2:03</small></div>\n' +
+      '        <div class="rmt-mve-projectbar"><button type="button" class="rmt-x-secondary" data-rmt-mv="editor-drawer" data-rmt-mv-id="audio" title="new-song.wav" aria-label="管理当前音乐：new-song.wav"><span aria-hidden="true">♪</span> <span>new-song.wav</span> <span aria-hidden="true">›</span></button><small class="rmt-mve-meta">音画同步</small></div>\n' +
+      '        <div class="rmt-mve-filmstrip" data-rmt-mv-filmstrip><div class="rmt-mve-strip-head"><small data-rmt-mv-selection>第 1 镜 · 2 镜</small><div class="rmt-mve-strip-actions"><button type="button" class="rmt-x-secondary" data-rmt-mv="editor-drawer" data-rmt-mv-id="shots">全部分镜</button></div></div><div class="rmt-mv-strip"><button type="button" class="on" aria-label="第 1 镜" data-rmt-mv="select-shot" data-rmt-mv-id="A"><img src="/first.png" alt="" loading="lazy" decoding="async"><span>1 · 57.5秒</span></button><button type="button" class="" aria-label="第 2 镜" data-rmt-mv="select-shot" data-rmt-mv-id="B"><span>2 · 63.0秒</span></button></div></div>\n' +
+      '      </section><section class="rmt-mve-tools" aria-label="剪辑工具"><nav class="rmt-mve-tabs" role="tablist" aria-label="剪辑工作区"><button type="button" class="rmt-mve-tab on" data-rmt-mv="editor-tab" data-rmt-mv-id="shots" role="tab" aria-selected="true" aria-pressed="true" aria-controls="rmt-mve-active-panel">分镜</button><button type="button" class="rmt-mve-tab" data-rmt-mv="editor-tab" data-rmt-mv-id="timing" role="tab" aria-selected="false" aria-pressed="false" aria-controls="rmt-mve-active-panel">定段 · 定句</button><button type="button" class="rmt-mve-tab" data-rmt-mv="editor-tab" data-rmt-mv-id="look" role="tab" aria-selected="false" aria-pressed="false" aria-controls="rmt-mve-active-panel">全片样式</button></nav><div id="rmt-mve-active-panel" role="tabpanel" aria-label="分镜" class="rmt-mve-panel" data-rmt-mv-shot-panel><div class="rmt-mve-panel-scroll" data-rmt-mv-scroll="shots"><div class="rmt-x-row-head"><b>第 1 镜</b><span>0:02.5–1:00.0</span></div><p class="rmt-x-note rmt-mve-lyric">第一句</p>\n' +
+      '      <div class="rmt-mve-image-actions"><button type="button" class="rmt-x-primary" data-rmt-mv="edit-frame" data-rmt-mv-id="A" aria-label="图片编辑 · 选单格 · 修边">编辑图片</button><label class="rmt-x-secondary rmt-mv-upload">换图<input type="file" accept="image/*" data-rmt-mv-image data-rmt-mv-id="A"></label></div><small class="rmt-mve-image-note">当前镜图片 · 保留原背景</small>\n' +
+      '      <details><summary>镜头运动与切换</summary><div><b>镜头运动</b><div class="rmt-mv-grid2"><button type="button" class="rmt-x-seg" data-rmt-mv="set-motion" data-rmt-mv-id="still" aria-pressed="false">不动</button><button type="button" class="rmt-x-seg" data-rmt-mv="set-motion" data-rmt-mv-id="push" aria-pressed="false">缓慢推近</button></div><b>切到下一镜</b><div class="rmt-x-segs"><button type="button" class="rmt-x-seg" data-rmt-mv="set-cut" data-rmt-mv-id="cut" aria-pressed="false">直接切</button><button type="button" class="rmt-x-seg active" data-rmt-mv="set-cut" data-rmt-mv-id="fade" aria-pressed="true">淡入淡出</button><button type="button" class="rmt-x-seg" data-rmt-mv="set-cut" data-rmt-mv-id="flash" aria-pressed="false">闪白</button></div></div></details>\n' +
+      '      <details><summary>图片与生成</summary><div><button type="button" class="rmt-x-secondary" data-rmt-mv="draw" data-rmt-mv-id="A">重画这一镜</button><button type="button" class="rmt-x-secondary" data-rmt-mv="go-board">素材库与背景编辑</button><button type="button" class="rmt-x-secondary" data-rmt-mv="go-board">补充分镜与图片</button></div></details></div>\n' +
+      '      <footer class="rmt-mve-dock"><button type="button" class="rmt-x-secondary" data-rmt-mv="editor-step" data-rmt-mv-id="-1" disabled>上一镜</button><small>1 / 2</small><button type="button" class="rmt-x-secondary" data-rmt-mv="editor-step" data-rmt-mv-id="1">下一镜</button></footer></div></section></div></div>\n' +
+      '      </main>'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual: |-
+    <main class="rmt-x-page rmt-mv-editor"><header class="rmt-mve-head"><button type="button" class="rmt-mve-back" data-rmt-mv="back" aria-label="返回素材库">‹</button><div class="rmt-mve-title"><h2>同一首歌</h2><small>手书剪辑台</small></div><div class="rmt-mve-head-actions"><button type="button" class="rmt-mve-more" data-rmt-mv="editor-drawer" data-rmt-mv-id="more" aria-label="更多操作">⋯</button><button type="button" class="rmt-x-primary" data-rmt-mv="editor-drawer" data-rmt-mv-id="export">导出</button></div></header>
+          <div class="rmt-mve-layout-scope"><div class="rmt-mve-workspace" data-editor-tab="shots" data-editor-paged="false" data-preview-only="false"><section class="rmt-mve-preview" aria-label="手书预览">
+            <div class="rmt-mve-preview-head"><span data-rmt-mv-current>第 1 镜 · 2 镜</span><button type="button" class="rmt-x-secondary" data-rmt-mv="editor-preview" aria-pressed="false">只看画面</button></div>
+            <div class="rmt-mv-canvas-wrap portrait"><canvas data-rmt-mv-canvas width="540" height="960" aria-label="当前分镜画面"></canvas></div>
+            <div class="rmt-mve-transport"><button type="button" class="rmt-mv-play" data-rmt-mv="play" aria-label="播放">▶</button><span class="rmt-mve-clock" data-rmt-mv-time>0:00.0</span><input type="range" min="0" max="123" step="0.1" value="0" data-rmt-mv-seek aria-label="播放位置"><small>2:03</small></div>
+            <div class="rmt-mve-projectbar"><button type="button" class="rmt-x-secondary" data-rmt-mv="editor-drawer" data-rmt-mv-id="audio" title="new-song.wav" aria-label="管理当前音乐：new-song.wav"><span aria-hidden="true">♪</span> <span>new-song.wav</span> <span aria-hidden="true">›</span></button><small class="rmt-mve-meta">音画同步</small></div>
+            <div class="rmt-mve-filmstrip" data-rmt-mv-filmstrip><div class="rmt-mve-strip-head"><small data-rmt-mv-selection>第 1 镜 · 2 镜</small><div class="rmt-mve-strip-actions"><button type="button" class="rmt-x-secondary" data-rmt-mv="editor-drawer" data-rmt-mv-id="shots">全部分镜</button></div></div><div class="rmt-mv-strip"><button type="button" class="on" aria-label="第 1 镜" data-rmt-mv="select-shot" data-rmt-mv-id="A"><img src="/first.png" alt="" loading="lazy" decoding="async"><span>1 · 57.5秒</span></button><button type="button" class="" aria-label="第 2 镜" data-rmt-mv="select-shot" data-rmt-mv-id="B"><span>2 · 63.0秒</span></button></div></div>
+          </section><section class="rmt-mve-tools" aria-label="剪辑工具"><nav class="rmt-mve-tabs" role="tablist" aria-label="剪辑工作区"><button type="button" class="rmt-mve-tab on" data-rmt-mv="editor-tab" data-rmt-mv-id="shots" role="tab" aria-selected="true" aria-pressed="true" aria-controls="rmt-mve-active-panel">分镜</button><button type="button" class="rmt-mve-tab" data-rmt-mv="editor-tab" data-rmt-mv-id="timing" role="tab" aria-selected="false" aria-pressed="false" aria-controls="rmt-mve-active-panel">定段 · 定句</button><button type="button" class="rmt-mve-tab" data-rmt-mv="editor-tab" data-rmt-mv-id="look" role="tab" aria-selected="false" aria-pressed="false" aria-controls="rmt-mve-active-panel">全片样式</button></nav><div id="rmt-mve-active-panel" role="tabpanel" aria-label="分镜" class="rmt-mve-panel" data-rmt-mv-shot-panel><div class="rmt-mve-panel-scroll" data-rmt-mv-scroll="shots"><div class="rmt-x-row-head"><b>第 1 镜</b><span>0:02.5–1:00.0</span></div><p class="rmt-x-note rmt-mve-lyric">第一句</p>
+          <div class="rmt-mve-image-actions"><button type="button" class="rmt-x-primary" data-rmt-mv="edit-frame" data-rmt-mv-id="A" aria-label="图片编辑 · 选单格 · 修边">编辑图片</button><label class="rmt-x-secondary rmt-mv-upload">换图<input type="file" accept="image/*" data-rmt-mv-image data-rmt-mv-id="A"></label></div><small class="rmt-mve-image-note">当前镜图片 · 保留原背景</small>
+          <details><summary>镜头运动与切换</summary><div><b>镜头运动</b><div class="rmt-mv-grid2"><button type="button" class="rmt-x-seg" data-rmt-mv="set-motion" data-rmt-mv-id="still" aria-pressed="false">不动</button><button type="button" class="rmt-x-seg" data-rmt-mv="set-motion" data-rmt-mv-id="push" aria-pressed="false">缓慢推近</button></div><b>切到下一镜</b><div class="rmt-x-segs"><button type="button" class="rmt-x-seg" data-rmt-mv="set-cut" data-rmt-mv-id="cut" aria-pressed="false">直接切</button><button type="button" class="rmt-x-seg active" data-rmt-mv="set-cut" data-rmt-mv-id="fade" aria-pressed="true">淡入淡出</button><button type="button" class="rmt-x-seg" data-rmt-mv="set-cut" data-rmt-mv-id="flash" aria-pressed="false">闪白</button></div></div></details>
+          <details><summary>图片与生成</summary><div><button type="button" class="rmt-x-secondary" data-rmt-mv="draw" data-rmt-mv-id="A">重画这一镜</button><button type="button" class="rmt-x-secondary" data-rmt-mv="go-board">素材库与背景编辑</button><button type="button" class="rmt-x-secondary" data-rmt-mv="go-board">补充分镜与图片</button></div></details></div>
+          <footer class="rmt-mve-dock"><button type="button" class="rmt-x-secondary" data-rmt-mv="editor-step" data-rmt-mv-id="-1" disabled>上一镜</button><small>1 / 2</small><button type="button" class="rmt-x-secondary" data-rmt-mv="editor-step" data-rmt-mv-id="1">下一镜</button></footer></div></section></div></div>
+          </main>
+  operator: 'match'
+  stack: |-
+    TestContext.<anonymous> (file:///workspace/scratch/8e568532ca62/candidate-1.0.28/tokimemo-main/tools/verification/mv-single-music-regression.mjs:69:16)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+# Subtest: current filename is escaped and does not create another HTML control
+ok 94 - current filename is escaped and does not create another HTML control
+  ---
+  duration_ms: 162.701622
+  type: 'test'
+  ...
+# Subtest: plain release version remains compatible with the uploaded changelog parser
+ok 95 - plain release version remains compatible with the uploaded changelog parser
+  ---
+  duration_ms: 172.168685
+  type: 'test'
+  ...
+# Subtest: all current version surfaces use plain 1.0.28 and changelog credit remains
+ok 96 - all current version surfaces use plain 1.0.28 and changelog credit remains
+  ---
+  duration_ms: 1.143215
+  type: 'test'
+  ...
+# (node:130) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: installed notes come from the exact bundled README, without network or old remote history
+ok 97 - installed notes come from the exact bundled README, without network or old remote history
+  ---
+  duration_ms: 101.322864
+  type: 'test'
+  ...
+# Subtest: README parser retains credit and current changes, never adds older sections
+ok 98 - README parser retains credit and current changes, never adds older sections
+  ---
+  duration_ms: 105.025102
+  type: 'test'
+  ...
+# Subtest: remote update preview reads the selected branch README, never CHANGELOG or main
+ok 99 - remote update preview reads the selected branch README, never CHANGELOG or main
+  ---
+  duration_ms: 124.071483
+  type: 'test'
+  ...
+# Subtest: failed remote README does not silently substitute installed notes or old history
+ok 100 - failed remote README does not silently substitute installed notes or old history
+  ---
+  duration_ms: 97.903416
+  type: 'test'
+  ...
+# Subtest: README parser handles CRLF, wrapped paragraphs and hostile strings as plain data
+ok 101 - README parser handles CRLF, wrapped paragraphs and hostile strings as plain data
+  ---
+  duration_ms: 127.976802
+  type: 'test'
+  ...
+# Subtest: current UI consumes README groups and chooses installed vs remote notes explicitly
+ok 102 - current UI consumes README groups and chooses installed vs remote notes explicitly
+  ---
+  duration_ms: 0.396368
+  type: 'test'
+  ...
+# Subtest: self-contained preview loads reference pixels and one shared player
+ok 103 - self-contained preview loads reference pixels and one shared player
+  ---
+  duration_ms: 45.853566
+  type: 'test'
+  ...
+# Subtest: selecting and seeking follow one current shot and retain 17 visible choices
+ok 104 - selecting and seeking follow one current shot and retain 17 visible choices
+  ---
+  duration_ms: 33.89449
+  type: 'test'
+  ...
+# Subtest: play pause and focus view are reversible without resetting the timeline
+ok 105 - play pause and focus view are reversible without resetting the timeline
+  ---
+  duration_ms: 34.367611
+  type: 'test'
+  ...
+# Subtest: tabs have keyboard navigation and portrait ratio keeps original width-height relationship
+ok 106 - tabs have keyboard navigation and portrait ratio keeps original width-height relationship
+  ---
+  duration_ms: 43.29283
+  type: 'test'
+  ...
+# Subtest: image editor keeps save controls, foldable tools, zoom reset and next-shot navigation
+ok 107 - image editor keeps save controls, foldable tools, zoom reset and next-shot navigation
+  ---
+  duration_ms: 82.714853
+  type: 'test'
+  ...
+# Subtest: README view and release dialog share the exact current README and do not show history
+ok 108 - README view and release dialog share the exact current README and do not show history
+  ---
+  duration_ms: 143.816089
+  type: 'test'
+  ...
+# Subtest: timing edits are local and undo restores the previous marks
+ok 109 - timing edits are local and undo restores the previous marks
+  ---
+  duration_ms: 45.14131
+  type: 'test'
+  ...
+# Subtest: release text containing markup remains inert in the prototype
+ok 110 - release text containing markup remains inert in the prototype
+  ---
+  duration_ms: 115.586087
+  type: 'test'
+  ...
+1..110
+# tests 110
+# suites 0
+# pass 105
+# fail 5
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 4774.857498

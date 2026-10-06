@@ -64,6 +64,24 @@ function changelogBlock(section) {
     heading.style.cssText = 'display:block;margin:0 0 6px;';
     heading.textContent = section.version ? (section.title ? `${section.version} · ${section.title}` : section.version) : (section.title || '更新说明');
     block.append(heading);
+    if (section.groups?.length) {
+        for (const group of section.groups) {
+            const label = document.createElement('h3');
+            label.style.cssText = 'margin:16px 0 8px;font-size:14px;';
+            label.textContent = group.title;
+            block.append(label);
+            const list = document.createElement('ul');
+            list.style.cssText = 'margin:0;padding-left:1.2em;';
+            for (const item of group.items) {
+                const li = document.createElement('li');
+                li.style.cssText = 'margin:6px 0;';
+                li.textContent = item;
+                list.append(li);
+            }
+            block.append(list);
+        }
+        return block;
+    }
     const list = document.createElement('ul');
     list.style.cssText = 'margin:0;padding-left:1.2em;';
     for (const item of section.items || []) {
@@ -91,11 +109,11 @@ function fillChangelog(body, result, full) {
     const current = updater.installedVersion();
     const newer = result.sections.filter(section => section.version && updater.isNewerHearttraceVersion(section.version, current));
     const show = full ? result.sections : (newer.length ? newer : result.sections.slice(0, 1)).slice(0, 12);
-    if (full && result.sections.length > 1) {
+    if (full && result.source !== 'readme' && result.sections.length > 1) {
         const hint = document.createElement('p');
         hint.textContent = `共 ${result.sections.length} 个版本，向下滚动查看更早更新`;
         body.append(hint);
-    } else if (!full && !newer.length) {
+    } else if (!full && result.source !== 'readme' && !newer.length) {
         const note = document.createElement('p');
         note.textContent = '更新日志里还没有比当前版本更高的条目，下面是这次读到的最新说明。';
         body.append(note);
@@ -199,7 +217,7 @@ async function openHearttraceChangelog(mode) {
     const snap = updater.hearttraceUpdateSnapshot();
     title.textContent = updateMode ? (snap.remoteVersion ? `发现新版本 ${snap.remoteVersion}` : '发现新版本') : '更新日志';
     sheetBody.textContent = '正在读取更新日志…';
-    const changelog = await updater.loadHearttraceChangelog({ remoteUrl: snap.remoteUrl, remoteBranch: snap.remoteBranch });
+    const changelog = await updater.loadHearttraceChangelog({ source: updateMode ? 'remote' : 'installed', remoteUrl: snap.remoteUrl, remoteBranch: snap.remoteBranch });
     if (!overlay.isConnected) return;
     fillChangelog(sheetBody, changelog, !updateMode);
 }

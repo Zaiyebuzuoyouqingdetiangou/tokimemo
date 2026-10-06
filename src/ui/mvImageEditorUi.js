@@ -5,8 +5,8 @@ export function imageEditorMarkup({ hasNext = false, showPrompt = true } = {}) {
       <header class="rmt-mvi-header"><button type="button" data-edit="close" aria-label="返回，放弃未保存修改">返回</button><div><b data-image-title>图片编辑</b><small data-image-scope></small></div><button type="button" data-edit="tools" aria-expanded="false">展开工具</button></header>
       <div class="rmt-mvi-layout">
         <section class="rmt-mvi-visual" aria-label="编辑画布">
-          <div class="rmt-mvi-canvas-tools"><button type="button" data-edit="pan" aria-pressed="false">移动</button><label><span data-zoom-value>100%</span><input data-zoom type="range" min="1" max="4" step="0.25" value="1" aria-label="画布缩放"></label><button type="button" data-edit="fit">看全图</button><button type="button" data-edit="compare" aria-pressed="false">对比</button></div>
           <div class="rmt-mv-editor-viewport"><canvas data-editor-canvas aria-label="素材裁切与抠图画布"></canvas><span class="rmt-mvi-brush-cursor" data-brush-cursor hidden aria-hidden="true"></span></div>
+          <div class="rmt-mvi-canvas-tools"><button type="button" data-edit="pan" aria-pressed="false">移动</button><label><span data-zoom-value>100%</span><input data-zoom type="range" min="1" max="4" step="0.25" value="1" aria-label="画布缩放"></label><button type="button" data-edit="fit">看全图</button><button type="button" data-edit="compare" aria-pressed="false">对比</button></div>
         </section>
         <section class="rmt-mvi-inspector" aria-label="图片编辑工具">
           <nav class="rmt-mvi-tabs" aria-label="编辑方式"><button type="button" data-edit="select" aria-pressed="true">选单格</button><button type="button" data-edit="crop" aria-pressed="false">自由裁切</button><button type="button" data-edit="paint" aria-pressed="false">抠图修边</button></nav>
@@ -29,6 +29,7 @@ export function imageEditorCss(root) {
     const r = `${root} .rmt-body.rmt-mve-body`;
     return `
 ${root} .rmt-shell.rmt-mvi-focus>.rmt-topbar,${root} .rmt-shell.rmt-mvi-focus>.rmt-workspace-tabs,${root} .rmt-shell.rmt-mvi-focus>.rmt-workspace-location{display:none!important}
+${root}.rmt-workspace[data-rmt-theme-mode] .rmt-shell.rmt-mvi-focus>.rmt-topbar,${root}.rmt-workspace[data-rmt-theme-mode] .rmt-shell.rmt-mvi-focus>.rmt-workspace-tabs,${root}.rmt-workspace[data-rmt-theme-mode] .rmt-shell.rmt-mvi-focus>.rmt-workspace-location{display:none!important}
 ${root} .rmt-shell.rmt-mvi-focus>.rmt-body.rmt-mve-body{display:flex!important;flex:1 1 0!important;min-height:0;padding:8px!important;overflow:hidden!important}
 ${r} .rmt-mve-image-page{display:flex;flex-direction:column;flex:1 1 0;min-height:0;max-width:none;width:100%;gap:0;padding:0}
 ${r} [data-rmt-mv-editor-host]{display:flex;flex:1;min-height:0;min-width:0}
@@ -36,7 +37,7 @@ ${r} .rmt-mvi-loading{display:flex;flex-direction:column;gap:12px;align-items:fl
 ${r} .rmt-mvi-workbench{display:flex;flex:1;flex-direction:column;min-height:0;min-width:0;width:100%;gap:6px;overflow:hidden;container-type:inline-size}
 ${r} .rmt-mvi-workbench,${r} .rmt-mvi-workbench *{box-sizing:border-box}
 ${r} .rmt-mvi-workbench [hidden]{display:none!important}
-${r} .rmt-mvi-workbench button{font:inherit;font-size:13px!important;line-height:1.3!important;min-height:44px;padding:7px 12px;border:1px solid var(--rmt-theme-border,#cddfed);border-radius:999px;background:var(--rmt-theme-surface-solid,#fff);color:var(--rmt-theme-text,#294762);cursor:pointer;touch-action:manipulation;box-sizing:border-box}
+${r} .rmt-mvi-workbench button{font:inherit;font-size:13px!important;line-height:1.3!important;min-height:44px;padding:7px 12px;border:1px solid var(--rmt-theme-border,#cddfed);border-radius:10px;background:var(--rmt-theme-surface-solid,#fff);color:var(--rmt-theme-text,#294762);cursor:pointer;touch-action:manipulation;box-sizing:border-box}
 ${r} .rmt-mvi-workbench button[aria-pressed=true]{border-color:var(--rmt-theme-accent-ink,#4f769d);background:var(--rmt-theme-soft,#e7f1fa)}
 ${r} .rmt-mvi-workbench button:disabled{opacity:.5;cursor:default}
 ${r} .rmt-mvi-workbench button:focus-visible,${r} .rmt-mvi-workbench summary:focus-visible{outline:2px solid var(--rmt-theme-accent-ink,#4f769d);outline-offset:2px}

@@ -1,0 +1,1301 @@
+TAP version 13
+# (node:24) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: batch zero-based response accepts correct lyrics without replacing old images
+ok 1 - batch zero-based response accepts correct lyrics without replacing old images
+  ---
+  duration_ms: 115.399047
+  type: 'test'
+  ...
+# Subtest: batch one-based response accepts correct lyrics without replacing old images
+ok 2 - batch one-based response accepts correct lyrics without replacing old images
+  ---
+  duration_ms: 103.141437
+  type: 'test'
+  ...
+# Subtest: song one-based response accepts correct lyrics without replacing old images
+ok 3 - song one-based response accepts correct lyrics without replacing old images
+  ---
+  duration_ms: 96.471622
+  type: 'test'
+  ...
+# Subtest: song zero-based response accepts correct lyrics without replacing old images
+ok 4 - song zero-based response accepts correct lyrics without replacing old images
+  ---
+  duration_ms: 95.490408
+  type: 'test'
+  ...
+# Subtest: missing indexes and normalized whitespace/punctuation are recovered from the actual lyric
+ok 5 - missing indexes and normalized whitespace/punctuation are recovered from the actual lyric
+  ---
+  duration_ms: 110.610735
+  type: 'test'
+  ...
+# Subtest: already completed lyrics are never re-labelled as new sections just because their batch indexes fit
+ok 6 - already completed lyrics are never re-labelled as new sections just because their batch indexes fit
+  ---
+  duration_ms: 108.186196
+  type: 'test'
+  ...
+# Subtest: valid absolute-index partial responses with paraphrased lyrics remain accepted
+ok 7 - valid absolute-index partial responses with paraphrased lyrics remain accepted
+  ---
+  duration_ms: 101.728995
+  type: 'test'
+  ...
+# Subtest: flat legacy shots with relative indexes also recover by lyric without upgrading old data
+ok 8 - flat legacy shots with relative indexes also recover by lyric without upgrading old data
+  ---
+  duration_ms: 105.575426
+  type: 'test'
+  ...
+# Subtest: fresh runtime can repair an actual r84.209 blocked paid result with save-only retry
+not ok 9 - fresh runtime can repair an actual r84.209 blocked paid result with save-only retry
+  ---
+  duration_ms: 0.919182
+  type: 'test'
+  location: '/workspace/scratch/8e568532ca62/candidate-1.0.28/tokimemo-main/tools/verification/mv-index-regression.mjs:28:1'
+  failureType: 'testCodeFailure'
+  error: 'BASELINE_ROOT must identify delivered r84.209'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  operator: '=='
+  stack: |-
+    TestContext.<anonymous> (file:///workspace/scratch/8e568532ca62/candidate-1.0.28/tokimemo-main/tools/verification/mv-index-regression.mjs:29:85)
+    Test.runInAsyncScope (node:async_hooks:227:14)
+    Test.run (node:internal/test_runner/test:1382:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+    Test.postRun (node:internal/test_runner/test:1522:19)
+    Test.run (node:internal/test_runner/test:1447:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+# Subtest: instrumental batch without lyrics accepts an unambiguous batch-local numbering scheme
+ok 10 - instrumental batch without lyrics accepts an unambiguous batch-local numbering scheme
+  ---
+  duration_ms: 101.747381
+  type: 'test'
+  ...
+# Subtest: a short instrumental reply with ambiguous one-based numbering is retained instead of placed on an arbitrary section
+ok 11 - a short instrumental reply with ambiguous one-based numbering is retained instead of placed on an arbitrary section
+  ---
+  duration_ms: 106.954539
+  type: 'test'
+  ...
+# Subtest: new pending results retain their requested section range when the display range changes before save
+ok 12 - new pending results retain their requested section range when the display range changes before save
+  ---
+  duration_ms: 105.681824
+  type: 'test'
+  ...
+# (node:25) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: a thirty-second prelude shows the first drawing after the two-second title
+ok 13 - a thirty-second prelude shows the first drawing after the two-second title
+  ---
+  duration_ms: 139.434292
+  type: 'test'
+  ...
+# Subtest: intro duration is editable, zero disables it, and reopening preserves song, timing and drawings
+ok 14 - intro duration is editable, zero disables it, and reopening preserves song, timing and drawings
+  ---
+  duration_ms: 137.970702
+  type: 'test'
+  ...
+# Subtest: a chosen five-second title fades out at five seconds rather than waiting for lyrics
+ok 15 - a chosen five-second title fades out at five seconds rather than waiting for lyrics
+  ---
+  duration_ms: 144.844811
+  type: 'test'
+  ...
+# Subtest: a short first shot keeps its second half visible even with a longer title setting
+ok 16 - a short first shot keeps its second half visible even with a longer title setting
+  ---
+  duration_ms: 139.428213
+  type: 'test'
+  ...
+# Subtest: fractional intro durations work and malformed values do not break playback
+ok 17 - fractional intro durations work and malformed values do not break playback
+  ---
+  duration_ms: 124.760793
+  type: 'test'
+  ...
+# Subtest: a sung opening has no cover and lyric taps are not delayed by title duration
+ok 18 - a sung opening has no cover and lyric taps are not delayed by title duration
+  ---
+  duration_ms: 219.027336
+  type: 'test'
+  ...
+# Subtest: fragment preview times the title from its own start without changing export timing
+ok 19 - fragment preview times the title from its own start without changing export timing
+  ---
+  duration_ms: 129.052965
+  type: 'test'
+  ...
+# Subtest: recorded video renders the same shortened title as preview without shifting the clock
+ok 20 - recorded video renders the same shortened title as preview without shifting the clock
+  ---
+  duration_ms: 129.961361
+  type: 'test'
+  ...
+# Subtest: actual r215 paid image journal saves after upgrade without regenerating
+not ok 21 - actual r215 paid image journal saves after upgrade without regenerating
+  ---
+  duration_ms: 1.596897
+  type: 'test'
+  location: '/workspace/scratch/8e568532ca62/candidate-1.0.28/tokimemo-main/tools/verification/mv-journal-upgrade-regression.mjs:24:1'
+  failureType: 'testCodeFailure'
+  error: 'PREVIOUS_BUILD_ROOT must identify the delivered r84.215'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  operator: '=='
+  stack: |-
+    legacyFactory (file:///workspace/scratch/8e568532ca62/candidate-1.0.28/tokimemo-main/tools/verification/mv-journal-upgrade-regression.mjs:8:12)
+    TestContext.<anonymous> (file:///workspace/scratch/8e568532ca62/candidate-1.0.28/tokimemo-main/tools/verification/mv-journal-upgrade-regression.mjs:25:35)
+    Test.runInAsyncScope (node:async_hooks:227:14)
+    Test.run (node:internal/test_runner/test:1382:25)
+    Test.start (node:internal/test_runner/test:1242:17)
+    startSubtestAfterBootstrap (node:internal/test_runner/harness:387:17)
+  ...
+# Subtest: actual r215 story journal saves after upgrade when its original record is unchanged
+not ok 22 - actual r215 story journal saves after upgrade when its original record is unchanged
+  ---
+  duration_ms: 0.327275
+  type: 'test'
+  location: '/workspace/scratch/8e568532ca62/candidate-1.0.28/tokimemo-main/tools/verification/mv-journal-upgrade-regression.mjs:31:1'
+  failureType: 'testCodeFailure'
+  error: 'PREVIOUS_BUILD_ROOT must identify the delivered r84.215'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  operator: '=='
+  stack: |-
+    legacyFactory (file:///workspace/scratch/8e568532ca62/candidate-1.0.28/tokimemo-main/tools/verification/mv-journal-upgrade-regression.mjs:8:12)
+    TestContext.<anonymous> (file:///workspace/scratch/8e568532ca62/candidate-1.0.28/tokimemo-main/tools/verification/mv-journal-upgrade-regression.mjs:32:35)
+    Test.runInAsyncScope (node:async_hooks:227:14)
+    Test.run (node:internal/test_runner/test:1382:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+    Test.postRun (node:internal/test_runner/test:1522:19)
+    Test.run (node:internal/test_runner/test:1447:12)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3)
+  ...
+# Subtest: actual r215 snapshot story journal cannot erase a newer image after upgrade
+not ok 23 - actual r215 snapshot story journal cannot erase a newer image after upgrade
+  ---
+  duration_ms: 0.302368
+  type: 'test'
+  location: '/workspace/scratch/8e568532ca62/candidate-1.0.28/tokimemo-main/tools/verification/mv-journal-upgrade-regression.mjs:38:1'
+  failureType: 'testCodeFailure'
+  error: 'PREVIOUS_BUILD_ROOT must identify the delivered r84.215'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  operator: '=='
+  stack: |-
+    legacyFactory (file:///workspace/scratch/8e568532ca62/candidate-1.0.28/tokimemo-main/tools/verification/mv-journal-upgrade-regression.mjs:8:12)
+    TestContext.<anonymous> (file:///workspace/scratch/8e568532ca62/candidate-1.0.28/tokimemo-main/tools/verification/mv-journal-upgrade-regression.mjs:39:35)
+    Test.runInAsyncScope (node:async_hooks:227:14)
+    Test.run (node:internal/test_runner/test:1382:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+    Test.postRun (node:internal/test_runner/test:1522:19)
+    Test.run (node:internal/test_runner/test:1447:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+# (node:27) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: each production tool panel retains its content and separate timing/navigation dock
+ok 24 - each production tool panel retains its content and separate timing/navigation dock
+  ---
+  duration_ms: 246.998561
+  type: 'test'
+  ...
+# Subtest: image save controls are outside the scroll area and the canvas is in its own viewport
+ok 25 - image save controls are outside the scroll area and the canvas is in its own viewport
+  ---
+  duration_ms: 158.906609
+  type: 'test'
+  ...
+# Subtest: large image canvas has a foldable tool panel and prominent persistent undo/save actions
+ok 26 - large image canvas has a foldable tool panel and prominent persistent undo/save actions
+  ---
+  duration_ms: 145.648704
+  type: 'test'
+  ...
+# Subtest: editor CSS is scoped, balanced and retains paging without requiring container-query support
+ok 27 - editor CSS is scoped, balanced and retains paging without requiring container-query support
+  ---
+  duration_ms: 98.891589
+  type: 'test'
+  ...
+# (node:64) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: production editor has natural-height tools and a single music entry below the player
+ok 28 - production editor has natural-height tools and a single music entry below the player
+  ---
+  duration_ms: 117.699166
+  type: 'test'
+  ...
+# Subtest: preview-only mode and shot stepping preserve all images and timing and keep one clock
+ok 29 - preview-only mode and shot stepping preserve all images and timing and keep one clock
+  ---
+  duration_ms: 115.492305
+  type: 'test'
+  ...
+# Subtest: shared material editor supplies save-and-next and returns directly to the workbench
+ok 30 - shared material editor supplies save-and-next and returns directly to the workbench
+  ---
+  duration_ms: 131.470588
+  type: 'test'
+  ...
+# Subtest: a single-shot replacement opens its own image editor and saves without changing the shared image or prompts
+ok 31 - a single-shot replacement opens its own image editor and saves without changing the shared image or prompts
+  ---
+  duration_ms: 119.996636
+  type: 'test'
+  ...
+# Subtest: production image editor markup contains the canvas before local tool panes and permanent save actions
+ok 32 - production image editor markup contains the canvas before local tool panes and permanent save actions
+  ---
+  duration_ms: 133.861737
+  type: 'test'
+  ...
+# Subtest: a workspace route replacement releases editor-specific body scrolling and its observer
+ok 33 - a workspace route replacement releases editor-specific body scrolling and its observer
+  ---
+  duration_ms: 100.303772
+  type: 'test'
+  ...
+# Subtest: panel position survives its own setting redraw but does not leak into another tab
+ok 34 - panel position survives its own setting redraw but does not leak into another tab
+  ---
+  duration_ms: 106.729586
+  type: 'test'
+  ...
+# (node:81) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: four vertical panels: each selection is exactly one quarter, not another half
+ok 35 - four vertical panels: each selection is exactly one quarter, not another half
+  ---
+  duration_ms: 91.732588
+  type: 'test'
+  ...
+# Subtest: free crop handles reversed/invalid coordinates without sampling outside the image
+ok 36 - free crop handles reversed/invalid coordinates without sampling outside the image
+  ---
+  duration_ms: 88.579735
+  type: 'test'
+  ...
+# Subtest: automatic preview preserves enclosed white clothing even when its area is large
+ok 37 - automatic preview preserves enclosed white clothing even when its area is large
+  ---
+  duration_ms: 92.257045
+  type: 'test'
+  ...
+# Subtest: manual erase/restore fills fast strokes and restores original alpha and color
+ok 38 - manual erase/restore fills fast strokes and restores original alpha and color
+  ---
+  duration_ms: 91.243062
+  type: 'test'
+  ...
+# Subtest: saving prompt makes zero generation calls; redraw sends exactly that prompt without appended cast
+ok 39 - saving prompt makes zero generation calls; redraw sends exactly that prompt without appended cast
+  ---
+  duration_ms: 108.514632
+  type: 'test'
+  ...
+# Subtest: reset prompt recovers the unchanged default and never erases a saved picture
+ok 40 - reset prompt recovers the unchanged default and never erases a saved picture
+  ---
+  duration_ms: 104.150845
+  type: 'test'
+  ...
+# Subtest: manual transparent local image and original reference survive a fresh runtime
+ok 41 - manual transparent local image and original reference survive a fresh runtime
+  ---
+  duration_ms: 228.204269
+  type: 'test'
+  ...
+# Subtest: late generated picture cannot replace a manual cutout saved while drawing
+ok 42 - late generated picture cannot replace a manual cutout saved while drawing
+  ---
+  duration_ms: 146.136566
+  type: 'test'
+  ...
+# Subtest: an editor opened on an older picture cannot overwrite a newer picture or new storyboard
+ok 43 - an editor opened on an older picture cannot overwrite a newer picture or new storyboard
+  ---
+  duration_ms: 326.541146
+  type: 'test'
+  ...
+# Subtest: manual save in a different chat is held for the original scope
+ok 44 - manual save in a different chat is held for the original scope
+  ---
+  duration_ms: 106.427838
+  type: 'test'
+  ...
+# Subtest: manual save awaits failing metadata and keeps a recoverable result
+ok 45 - manual save awaits failing metadata and keeps a recoverable result
+  ---
+  duration_ms: 166.421352
+  type: 'test'
+  ...
+# Subtest: locally edited images are counted as drawn and never queued again by draw remaining
+ok 46 - locally edited images are counted as drawn and never queued again by draw remaining
+  ---
+  duration_ms: 171.964798
+  type: 'test'
+  ...
+# Subtest: editor integration commits unique media after durable blob writes and preserves an open draft across renders
+ok 47 - editor integration commits unique media after durable blob writes and preserves an open draft across renders
+  ---
+  duration_ms: 133.942872
+  type: 'test'
+  ...
+# Subtest: failed blob transaction leaves the previous picture and prompt intact
+ok 48 - failed blob transaction leaves the previous picture and prompt intact
+  ---
+  duration_ms: 124.151529
+  type: 'test'
+  ...
+# Subtest: v2 export waits for an edited local PNG before it starts recording
+ok 49 - v2 export waits for an edited local PNG before it starts recording
+  ---
+  duration_ms: 156.501379
+  type: 'test'
+  ...
+# (node:89) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: saved per-shot local images appear after reopening v2 and do not replace shared sibling images
+ok 50 - saved per-shot local images appear after reopening v2 and do not replace shared sibling images
+  ---
+  duration_ms: 214.124339
+  type: 'test'
+  ...
+# Subtest: importing a full scene takes effect in v2 preview without automatic splitting or cutout
+ok 51 - importing a full scene takes effect in v2 preview without automatic splitting or cutout
+  ---
+  duration_ms: 195.328199
+  type: 'test'
+  ...
+# Subtest: single-shot redraw is visible in v2 while sibling shots retain their shared art
+ok 52 - single-shot redraw is visible in v2 while sibling shots retain their shared art
+  ---
+  duration_ms: 221.378396
+  type: 'test'
+  ...
+# Subtest: manual image failure preserves the old reference and blob
+ok 53 - manual image failure preserves the old reference and blob
+  ---
+  duration_ms: 216.066086
+  type: 'test'
+  ...
+# Subtest: two rapid imports keep the last chosen image when storage finishes out of order
+ok 54 - two rapid imports keep the last chosen image when storage finishes out of order
+  ---
+  duration_ms: 293.695525
+  type: 'test'
+  ...
+# Subtest: late import cannot overwrite a replacement storyboard and remains recoverable
+ok 55 - late import cannot overwrite a replacement storyboard and remains recoverable
+  ---
+  duration_ms: 186.712884
+  type: 'test'
+  ...
+# Subtest: late imported image stays bound to the original song after navigation
+ok 56 - late imported image stays bound to the original song after navigation
+  ---
+  duration_ms: 161.568379
+  type: 'test'
+  ...
+# Subtest: a new storyboard revision holds a late import even when its shot fields are identical
+ok 57 - a new storyboard revision holds a late import even when its shot fields are identical
+  ---
+  duration_ms: 215.502621
+  type: 'test'
+  ...
+# Subtest: changing chats during image storage cannot write the imported image into the new chat
+ok 58 - changing chats during image storage cannot write the imported image into the new chat
+  ---
+  duration_ms: 212.16844
+  type: 'test'
+  ...
+# Subtest: a missing imported blob stops export with a message instead of exporting its replaced picture
+ok 59 - a missing imported blob stops export with a message instead of exporting its replaced picture
+  ---
+  duration_ms: 211.192612
+  type: 'test'
+  ...
+# Subtest: returning to shared art removes only the chosen shot override
+ok 60 - returning to shared art removes only the chosen shot override
+  ---
+  duration_ms: 277.903442
+  type: 'test'
+  ...
+# Subtest: completed clip export loads visible imported scenes instead of unavailable replaced assets
+ok 61 - completed clip export loads visible imported scenes instead of unavailable replaced assets
+  ---
+  duration_ms: 262.182125
+  type: 'test'
+  ...
+# Subtest: undoing a correction after all sections are timed leaves that section ready to tap again
+ok 62 - undoing a correction after all sections are timed leaves that section ready to tap again
+  ---
+  duration_ms: 208.714475
+  type: 'test'
+  ...
+# Subtest: undoing an out-of-order section returns to that section, not the first missing one
+ok 63 - undoing an out-of-order section returns to that section, not the first missing one
+  ---
+  duration_ms: 270.320462
+  type: 'test'
+  ...
+# Subtest: undoing a nudge restores its target and a new tap creates a correct undo record
+ok 64 - undoing a nudge restores its target and a new tap creates a correct undo record
+  ---
+  duration_ms: 171.046708
+  type: 'test'
+  ...
+# Subtest: sequential final-tap undo and reopened fallback undo can both be tapped again
+ok 65 - sequential final-tap undo and reopened fallback undo can both be tapped again
+  ---
+  duration_ms: 229.553627
+  type: 'test'
+  ...
+# Subtest: undo keeps the no-audio button disabled and reset removes stale undo targets
+ok 66 - undo keeps the no-audio button disabled and reset removes stale undo targets
+  ---
+  duration_ms: 183.327931
+  type: 'test'
+  ...
+# (node:105) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: three pending results have one compact editor entry and every save-only action remains in its drawer
+ok 67 - three pending results have one compact editor entry and every save-only action remains in its drawer
+  ---
+  duration_ms: 145.610596
+  type: 'test'
+  ...
+# Subtest: a short filmstrip has no disabled page row while long projects keep every page reachable
+ok 68 - a short filmstrip has no disabled page row while long projects keep every page reachable
+  ---
+  duration_ms: 101.159771
+  type: 'test'
+  ...
+# Subtest: small host viewports have a scroll escape and a non-collapsing canvas instead of a forty-pixel minimum
+ok 69 - small host viewports have a scroll escape and a non-collapsing canvas instead of a forty-pixel minimum
+  ---
+  duration_ms: 94.23653
+  type: 'test'
+  ...
+# Subtest: image focus opens with an immediate return action and releases the shell on back or disposal
+ok 70 - image focus opens with an immediate return action and releases the shell on back or disposal
+  ---
+  duration_ms: 125.720205
+  type: 'test'
+  ...
+# Subtest: pending results do not take image canvas space and remain reachable after returning
+ok 71 - pending results do not take image canvas space and remain reachable after returning
+  ---
+  duration_ms: 160.573384
+  type: 'test'
+  ...
+# (node:117) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: legacy white-background motifs are real transparent sprites in preview without touching saved art
+ok 72 - legacy white-background motifs are real transparent sprites in preview without touching saved art
+  ---
+  duration_ms: 231.861269
+  type: 'test'
+  ...
+# Subtest: opaque white or patterned motifs are not pasted as rectangular decorations
+ok 73 - opaque white or patterned motifs are not pasted as rectangular decorations
+  ---
+  duration_ms: 364.389844
+  type: 'test'
+  ...
+# Subtest: true transparent white motifs retain their original colour and semi-transparent pixels
+ok 74 - true transparent white motifs retain their original colour and semi-transparent pixels
+  ---
+  duration_ms: 165.825178
+  type: 'test'
+  ...
+# Subtest: white snow on the contrasting default background keeps its white foreground
+ok 75 - white snow on the contrasting default background keeps its white foreground
+  ---
+  duration_ms: 126.194998
+  type: 'test'
+  ...
+# Subtest: enclosed white motif details stay opaque while the outside becomes transparent
+ok 76 - enclosed white motif details stay opaque while the outside becomes transparent
+  ---
+  duration_ms: 137.710997
+  type: 'test'
+  ...
+# Subtest: motif background processing is not applied to a full-scene white character picture
+ok 77 - motif background processing is not applied to a full-scene white character picture
+  ---
+  duration_ms: 200.549898
+  type: 'test'
+  ...
+# Subtest: redrawing or importing a new motif invalidates the old prepared sprite
+ok 78 - redrawing or importing a new motif invalidates the old prepared sprite
+  ---
+  duration_ms: 167.29049
+  type: 'test'
+  ...
+# Subtest: canvas read failure skips only the motif and does not fall back to its opaque original
+ok 79 - canvas read failure skips only the motif and does not fall back to its opaque original
+  ---
+  duration_ms: 152.608473
+  type: 'test'
+  ...
+# Subtest: preview and video export use the same transparent motif pixels
+ok 80 - preview and video export use the same transparent motif pixels
+  ---
+  duration_ms: 140.299654
+  type: 'test'
+  ...
+# Subtest: only the default motif recipe changes; white motifs use contrast and custom prompts remain verbatim
+ok 81 - only the default motif recipe changes; white motifs use contrast and custom prompts remain verbatim
+  ---
+  duration_ms: 167.913734
+  type: 'test'
+  ...
+# Subtest: motif editor opens with the prepared pixels and saves a real PNG while preserving its original
+ok 82 - motif editor opens with the prepared pixels and saves a real PNG while preserving its original
+  ---
+  duration_ms: 168.617462
+  type: 'test'
+  ...
+# Subtest: motif editor can undo background processing and manually restore white details
+ok 83 - motif editor can undo background processing and manually restore white details
+  ---
+  duration_ms: 183.602423
+  type: 'test'
+  ...
+# Subtest: motif editor does not erase an unrecognizable background or call an empty image a cutout
+ok 84 - motif editor does not erase an unrecognizable background or call an empty image a cutout
+  ---
+  duration_ms: 172.944982
+  type: 'test'
+  ...
+# Subtest: outer anti-aliased colour is unmixed from white without changing the input or enclosed white
+ok 85 - outer anti-aliased colour is unmixed from white without changing the input or enclosed white
+  ---
+  duration_ms: 162.889047
+  type: 'test'
+  ...
+# (node:133) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: opening the music drawer keeps file import and performs no network request
+ok 86 - opening the music drawer keeps file import and performs no network request
+  ---
+  duration_ms: 136.245655
+  type: 'test'
+  ...
+# Subtest: HTTPS input accepts Suno song and short links without inventing media endpoints
+ok 87 - HTTPS input accepts Suno song and short links without inventing media endpoints
+  ---
+  duration_ms: 113.35722
+  type: 'test'
+  ...
+# Subtest: unsafe schemes, credential URLs and remote HTTP are rejected before a request
+ok 88 - unsafe schemes, credential URLs and remote HTTP are rejected before a request
+  ---
+  duration_ms: 156.642447
+  type: 'test'
+  ...
+# Subtest: public metadata resolves escaped relative audio without executing page scripts
+ok 89 - public metadata resolves escaped relative audio without executing page scripts
+  ---
+  duration_ms: 138.247542
+  type: 'test'
+  ...
+# Subtest: explicit audio and source tags work while video-only sources are ignored
+ok 90 - explicit audio and source tags work while video-only sources are ignored
+  ---
+  duration_ms: 136.363821
+  type: 'test'
+  ...
+# Subtest: comments, scripts, malformed scripts and unsupported URL schemes never become media requests
+ok 91 - comments, scripts, malformed scripts and unsupported URL schemes never become media requests
+  ---
+  duration_ms: 104.016405
+  type: 'test'
+  ...
+# Subtest: direct audio import uses anonymous CORS fetch and commits only after decoding
+ok 92 - direct audio import uses anonymous CORS fetch and commits only after decoding
+  ---
+  duration_ms: 149.751384
+  type: 'test'
+  ...
+# Subtest: the existing play, pause, seek and lyric marking all use the imported audio clock
+ok 93 - the existing play, pause, seek and lyric marking all use the imported audio clock
+  ---
+  duration_ms: 168.369539
+  type: 'test'
+  ...
+# Subtest: export consumes the same local blob as preview through the existing sound path
+ok 94 - export consumes the same local blob as preview through the existing sound path
+  ---
+  duration_ms: 169.055616
+  type: 'test'
+  ...
+# Subtest: a Suno-shaped public metadata response imports through the same path without an iframe
+ok 95 - a Suno-shaped public metadata response imports through the same path without an iframe
+  ---
+  duration_ms: 124.545253
+  type: 'test'
+  ...
+# Subtest: a real-shaped Suno 403 leaves the old audio, timings, artwork and saved data intact
+ok 96 - a real-shaped Suno 403 leaves the old audio, timings, artwork and saved data intact
+  ---
+  duration_ms: 122.445139
+  type: 'test'
+  ...
+# Subtest: a share page without published audio fails explicitly and never becomes a phantom audio track
+ok 97 - a share page without published audio fails explicitly and never becomes a phantom audio track
+  ---
+  duration_ms: 125.780063
+  type: 'test'
+  ...
+# Subtest: CORS/network failure does not fall back to proxies or hidden playback
+ok 98 - CORS/network failure does not fall back to proxies or hidden playback
+  ---
+  duration_ms: 129.038904
+  type: 'test'
+  ...
+# Subtest: empty, JSON and nested HTML responses never replace music
+ok 99 - empty, JSON and nested HTML responses never replace music
+  ---
+  duration_ms: 482.874353
+  type: 'test'
+  ...
+# Subtest: decode failure preserves the prior cached track and can be retried
+ok 100 - decode failure preserves the prior cached track and can be retried
+  ---
+  duration_ms: 151.088325
+  type: 'test'
+  ...
+# Subtest: cancel aborts a download and a late response cannot replace the current track
+ok 101 - cancel aborts a download and a late response cannot replace the current track
+  ---
+  duration_ms: 176.494583
+  type: 'test'
+  ...
+# Subtest: cancel during decoding also discards a stale loadedmetadata event
+ok 102 - cancel during decoding also discards a stale loadedmetadata event
+  ---
+  duration_ms: 168.063095
+  type: 'test'
+  ...
+# Subtest: switching songs aborts loading and never imports into either song afterward
+ok 103 - switching songs aborts loading and never imports into either song afterward
+  ---
+  duration_ms: 225.917407
+  type: 'test'
+  ...
+# Subtest: chat changes during decoding cannot commit into old or new chat
+ok 104 - chat changes during decoding cannot commit into old or new chat
+  ---
+  duration_ms: 142.036719
+  type: 'test'
+  ...
+# Subtest: choosing a local file wins over an unfinished link import
+ok 105 - choosing a local file wins over an unfinished link import
+  ---
+  duration_ms: 149.835899
+  type: 'test'
+  ...
+# Subtest: fresh runtime restores cached link audio for the same song without network access
+ok 106 - fresh runtime restores cached link audio for the same song without network access
+  ---
+  duration_ms: 329.035712
+  type: 'test'
+  ...
+# Subtest: music media metadata remains local and does not add URLs or blobs to the MV record
+ok 107 - music media metadata remains local and does not add URLs or blobs to the MV record
+  ---
+  duration_ms: 175.90573
+  type: 'test'
+  ...
+# Subtest: non-seekable live audio is rejected without changing the current timeline
+ok 108 - non-seekable live audio is rejected without changing the current timeline
+  ---
+  duration_ms: 213.453625
+  type: 'test'
+  ...
+# Subtest: changing the song text during metadata decoding invalidates the import
+ok 109 - changing the song text during metadata decoding invalidates the import
+  ---
+  duration_ms: 205.985581
+  type: 'test'
+  ...
+# Subtest: download timeout clears the busy state and keeps the old track available
+ok 110 - download timeout clears the busy state and keeps the old track available
+  ---
+  duration_ms: 198.696451
+  type: 'test'
+  ...
+# Subtest: stream read failures never expose a source URL or provider error details in the UI
+ok 111 - stream read failures never expose a source URL or provider error details in the UI
+  ---
+  duration_ms: 199.379273
+  type: 'test'
+  ...
+# Subtest: typed link survives redraws and Enter imports through the same action
+ok 112 - typed link survives redraws and Enter imports through the same action
+  ---
+  duration_ms: 173.55141
+  type: 'test'
+  ...
+# Subtest: the real media module stores the link alongside the blob and keeps older rows compatible
+ok 113 - the real media module stores the link alongside the blob and keeps older rows compatible
+  ---
+  duration_ms: 188.446328
+  type: 'test'
+  ...
+# Subtest: legacy video MV also exposes the current-song music entry without switching its output setting
+ok 114 - legacy video MV also exposes the current-song music entry without switching its output setting
+  ---
+  duration_ms: 197.664291
+  type: 'test'
+  ...
+# (node:145) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: saving an MV prompt returns to its picture without changing images or generating
+ok 115 - saving an MV prompt returns to its picture without changing images or generating
+  ---
+  duration_ms: 177.977926
+  type: 'test'
+  ...
+# Subtest: toolbar returns from material editor to the same picture and leaves unsaved prompt unchanged
+ok 116 - toolbar returns from material editor to the same picture and leaves unsaved prompt unchanged
+  ---
+  duration_ms: 147.078552
+  type: 'test'
+  ...
+# Subtest: same-page image completion rerenders keep the current scroll position
+ok 117 - same-page image completion rerenders keep the current scroll position
+  ---
+  duration_ms: 128.684648
+  type: 'test'
+  ...
+# Subtest: preview and timing return one level at a time, restoring each parent position
+ok 118 - preview and timing return one level at a time, restoring each parent position
+  ---
+  duration_ms: 132.931544
+  type: 'test'
+  ...
+# Subtest: page-local return works through the overlay click dispatcher without exiting to interactions
+ok 119 - page-local return works through the overlay click dispatcher without exiting to interactions
+  ---
+  duration_ms: 189.822677
+  type: 'test'
+  ...
+# Subtest: old editor callbacks cannot restore the previous song page after leaving and reopening
+ok 120 - old editor callbacks cannot restore the previous song page after leaving and reopening
+  ---
+  duration_ms: 141.698658
+  type: 'test'
+  ...
+# Subtest: picture anchor, expanded inspection and horizontal thumbnails survive changed layout
+not ok 121 - picture anchor, expanded inspection and horizontal thumbnails survive changed layout
+  ---
+  duration_ms: 136.236336
+  type: 'test'
+  location: '/workspace/scratch/8e568532ca62/candidate-1.0.28/tokimemo-main/tools/verification/mv-navigation-regression.mjs:93:1'
+  failureType: 'testCodeFailure'
+  error: "Cannot read properties of undefined (reading 'onClose')"
+  code: 'ERR_TEST_FAILURE'
+  name: 'TypeError'
+  stack: |-
+    TestContext.<anonymous> (file:///workspace/scratch/8e568532ca62/candidate-1.0.28/tokimemo-main/tools/verification/mv-navigation-regression.mjs:102:15)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+# Subtest: completed timing navigation does not make a preview/timing back loop
+ok 122 - completed timing navigation does not make a preview/timing back loop
+  ---
+  duration_ms: 151.638065
+  type: 'test'
+  ...
+# Subtest: preserving page state never reverses an explicit inspection expand/collapse click
+ok 123 - preserving page state never reverses an explicit inspection expand/collapse click
+  ---
+  duration_ms: 150.681813
+  type: 'test'
+  ...
+# Subtest: closed editor callbacks cannot dismiss a newer editor in the same song
+ok 124 - closed editor callbacks cannot dismiss a newer editor in the same song
+  ---
+  duration_ms: 157.070802
+  type: 'test'
+  ...
+# Subtest: rapid repeated edit clicks still return once to the original picture
+ok 125 - rapid repeated edit clicks still return once to the original picture
+  ---
+  duration_ms: 170.31934
+  type: 'test'
+  ...
+# Subtest: the first successful storyboard becomes the root instead of returning to the generate wizard
+ok 126 - the first successful storyboard becomes the root instead of returning to the generate wizard
+  ---
+  duration_ms: 138.729462
+  type: 'test'
+  ...
+# Subtest: pending save keeps the editor open and still allows returning without losing the original picture
+ok 127 - pending save keeps the editor open and still allows returning without losing the original picture
+  ---
+  duration_ms: 218.894109
+  type: 'test'
+  ...
+# Subtest: album thumbnails have no rabbit menu but retain memory and detail image actions
+ok 128 - album thumbnails have no rabbit menu but retain memory and detail image actions
+  ---
+  duration_ms: 127.11357
+  type: 'test'
+  ...
+# Subtest: album detail has a local return and toolbar returns to the scrolled album
+ok 129 - album detail has a local return and toolbar returns to the scrolled album
+  ---
+  duration_ms: 147.300766
+  type: 'test'
+  ...
+# Subtest: read-only album hides write actions and a different album cannot inherit the return position
+ok 130 - read-only album hides write actions and a different album cannot inherit the return position
+  ---
+  duration_ms: 153.228548
+  type: 'test'
+  ...
+# (node:153) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: outro appears only inside the selected ending interval, never over later or earlier shots
+ok 131 - outro appears only inside the selected ending interval, never over later or earlier shots
+  ---
+  duration_ms: 193.371578
+  type: 'test'
+  ...
+# Subtest: outro control persists, accepts fractional seconds and zero, preserving drawings and timing
+ok 132 - outro control persists, accepts fractional seconds and zero, preserving drawings and timing
+  ---
+  duration_ms: 195.217054
+  type: 'test'
+  ...
+# Subtest: a short final shot keeps its first half free of the outro
+ok 133 - a short final shot keeps its first half free of the outro
+  ---
+  duration_ms: 157.884398
+  type: 'test'
+  ...
+# Subtest: v1 fade leaves most of a 0.2 second shot clear without removing the transition
+ok 134 - v1 fade leaves most of a 0.2 second shot clear without removing the transition
+  ---
+  duration_ms: 177.542246
+  type: 'test'
+  ...
+# Subtest: v1 flash leaves most of a 0.2 second shot clear without removing the transition
+ok 135 - v1 flash leaves most of a 0.2 second shot clear without removing the transition
+  ---
+  duration_ms: 162.675255
+  type: 'test'
+  ...
+# Subtest: v2 fade leaves most of a 0.2 second shot clear without removing the transition
+ok 136 - v2 fade leaves most of a 0.2 second shot clear without removing the transition
+  ---
+  duration_ms: 178.460381
+  type: 'test'
+  ...
+# Subtest: v2 flash leaves most of a 0.2 second shot clear without removing the transition
+ok 137 - v2 flash leaves most of a 0.2 second shot clear without removing the transition
+  ---
+  duration_ms: 139.66008
+  type: 'test'
+  ...
+# Subtest: normal-length shots retain their existing fade
+ok 138 - normal-length shots retain their existing fade
+  ---
+  duration_ms: 135.659104
+  type: 'test'
+  ...
+# Subtest: hiding lyrics also hides the chorus keyword and restoring lyrics keeps the choice
+ok 139 - hiding lyrics also hides the chorus keyword and restoring lyrics keeps the choice
+  ---
+  duration_ms: 201.385036
+  type: 'test'
+  ...
+# Subtest: motif and keyword controls are independent and preserve generated assets
+ok 140 - motif and keyword controls are independent and preserve generated assets
+  ---
+  duration_ms: 205.864812
+  type: 'test'
+  ...
+# Subtest: fragment export preserves overlay choices without changing the original timeline
+ok 141 - fragment export preserves overlay choices without changing the original timeline
+  ---
+  duration_ms: 178.115599
+  type: 'test'
+  ...
+# Subtest: video export uses the saved overlay snapshot and the same clear ending as preview
+ok 142 - video export uses the saved overlay snapshot and the same clear ending as preview
+  ---
+  duration_ms: 246.234575
+  type: 'test'
+  ...
+# (node:173) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: 16:9: old full detail images keep both ends and fill empty frame area locally
+ok 143 - 16:9: old full detail images keep both ends and fill empty frame area locally
+  ---
+  duration_ms: 240.220919
+  type: 'test'
+  ...
+# Subtest: 9:16: old full detail images keep both ends and fill empty frame area locally
+ok 144 - 9:16: old full detail images keep both ends and fill empty frame area locally
+  ---
+  duration_ms: 251.192942
+  type: 'test'
+  ...
+# Subtest: manual right-cell selection supplies both the foreground and its soft background
+ok 145 - manual right-cell selection supplies both the foreground and its soft background
+  ---
+  duration_ms: 315.741681
+  type: 'test'
+  ...
+# Subtest: V1 replacement images use the same soft background without editing the original record
+ok 146 - V1 replacement images use the same soft background without editing the original record
+  ---
+  duration_ms: 273.281265
+  type: 'test'
+  ...
+# Subtest: a chosen stage background remains visible around full detail images
+ok 147 - a chosen stage background remains visible around full detail images
+  ---
+  duration_ms: 246.89966
+  type: 'test'
+  ...
+# Subtest: transparent pictures retain their transparent margins instead of acquiring a duplicate backdrop
+ok 148 - transparent pictures retain their transparent margins instead of acquiring a duplicate backdrop
+  ---
+  duration_ms: 231.315371
+  type: 'test'
+  ...
+# Subtest: soft padding uses the same pixels in preview and export
+ok 149 - soft padding uses the same pixels in preview and export
+  ---
+  duration_ms: 296.250577
+  type: 'test'
+  ...
+# Subtest: the editor gives the preview its film ratio and does not stretch it to the remaining row height
+ok 150 - the editor gives the preview its film ratio and does not stretch it to the remaining row height
+  ---
+  duration_ms: 140.731501
+  type: 'test'
+  ...
+# (node:193) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: 16:9: BaiBai receives the selected orientation for shared poses, scene assets and redraws
+ok 151 - 16:9: BaiBai receives the selected orientation for shared poses, scene assets and redraws
+  ---
+  duration_ms: 170.254684
+  type: 'test'
+  ...
+# Subtest: 16:9: non-stage cutout assets and complete manual prompts retain the selected orientation
+ok 152 - 16:9: non-stage cutout assets and complete manual prompts retain the selected orientation
+  ---
+  duration_ms: 168.650531
+  type: 'test'
+  ...
+# Subtest: 9:16: BaiBai receives the selected orientation for shared poses, scene assets and redraws
+ok 153 - 9:16: BaiBai receives the selected orientation for shared poses, scene assets and redraws
+  ---
+  duration_ms: 164.035253
+  type: 'test'
+  ...
+# Subtest: 9:16: non-stage cutout assets and complete manual prompts retain the selected orientation
+ok 154 - 9:16: non-stage cutout assets and complete manual prompts retain the selected orientation
+  ---
+  duration_ms: 158.036682
+  type: 'test'
+  ...
+# Subtest: Chatu8 novelai: MV uses its exact ratio only for this request
+ok 155 - Chatu8 novelai: MV uses its exact ratio only for this request
+  ---
+  duration_ms: 185.505558
+  type: 'test'
+  ...
+# Subtest: Chatu8 sd: MV uses its exact ratio only for this request
+ok 156 - Chatu8 sd: MV uses its exact ratio only for this request
+  ---
+  duration_ms: 165.387208
+  type: 'test'
+  ...
+# Subtest: Chatu8 comfyui: MV uses its exact ratio only for this request
+ok 157 - Chatu8 comfyui: MV uses its exact ratio only for this request
+  ---
+  duration_ms: 143.288356
+  type: 'test'
+  ...
+# Subtest: ordinary Chatu8 CG requests retain provider sizes and MV square settings get an oriented request
+ok 158 - ordinary Chatu8 CG requests retain provider sizes and MV square settings get an oriented request
+  ---
+  duration_ms: 167.793094
+  type: 'test'
+  ...
+# Subtest: automatic provider fallback carries the MV orientation to Chatu8
+ok 159 - automatic provider fallback carries the MV orientation to Chatu8
+  ---
+  duration_ms: 183.681215
+  type: 'test'
+  ...
+# Subtest: Chatu8 missing size fields still permit MV generation without changing settings
+ok 160 - Chatu8 missing size fields still permit MV generation without changing settings
+  ---
+  duration_ms: 708.955944
+  type: 'test'
+  ...
+# Subtest: legacy standalone frames honor the orientation and motif generation keeps its existing contract
+ok 161 - legacy standalone frames honor the orientation and motif generation keeps its existing contract
+  ---
+  duration_ms: 288.048354
+  type: 'test'
+  ...
+# Subtest: horizontal board thumbnails include a wide shape while vertical boards keep portrait tiles
+ok 162 - horizontal board thumbnails include a wide shape while vertical boards keep portrait tiles
+  ---
+  duration_ms: 127.59721
+  type: 'test'
+  ...
+# Subtest: choosing horizontal in setup persists through storyboard generation and drawing the remaining images
+ok 163 - choosing horizontal in setup persists through storyboard generation and drawing the remaining images
+  ---
+  duration_ms: 150.540252
+  type: 'test'
+  ...
+# (node:201) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: approved workbench replaces duplicate chrome, has a direct return, and releases focus on exit
+ok 164 - approved workbench replaces duplicate chrome, has a direct return, and releases focus on exit
+  ---
+  duration_ms: 140.130595
+  type: 'test'
+  ...
+# Subtest: four visible thumbnails and all-shots view retain all 121 frames without generation or saved-data writes
+ok 165 - four visible thumbnails and all-shots view retain all 121 frames without generation or saved-data writes
+  ---
+  duration_ms: 192.776964
+  type: 'test'
+  ...
+# Subtest: mobile uses natural height and one page scroll, preview ratio is preserved, and desktop still has two columns
+ok 166 - mobile uses natural height and one page scroll, preview ratio is preserved, and desktop still has two columns
+  ---
+  duration_ms: 150.260327
+  type: 'test'
+  ...
+# Subtest: image editor next crosses shot 4 to 5 and returns to thumbnails 5 through 8 without saved-data writes
+ok 167 - image editor next crosses shot 4 to 5 and returns to thumbnails 5 through 8 without saved-data writes
+  ---
+  duration_ms: 125.413459
+  type: 'test'
+  ...
+# Subtest: all baseline editor/image actions, inputs, options and accepted files remain reachable
+ok 168 - all baseline editor/image actions, inputs, options and accepted files remain reachable
+  ---
+  duration_ms: 1130.543128
+  type: 'test'
+  ...
+# Subtest: previously enabled operations receive no new disabled gate
+ok 169 - previously enabled operations receive no new disabled gate
+  ---
+  duration_ms: 0.378611
+  type: 'test'
+  ...
+# Subtest: 25 existing shots remain navigable without content writes or generation and one player is retained
+ok 170 - 25 existing shots remain navigable without content writes or generation and one player is retained
+  ---
+  duration_ms: 0.665687
+  type: 'test'
+  ...
+# Subtest: the approved compact strip shows at most four shots and its gallery reaches all 25
+ok 171 - the approved compact strip shows at most four shots and its gallery reaches all 25
+  ---
+  duration_ms: 0.234187
+  type: 'test'
+  ...
+# Subtest: no music and no existing images do not disable the real draw action
+ok 172 - no music and no existing images do not disable the real draw action
+  ---
+  duration_ms: 0.268257
+  type: 'test'
+  ...
+# Subtest: drawer disposal restores previous inert states and removes click/Escape/native-cancel listeners
+ok 173 - drawer disposal restores previous inert states and removes click/Escape/native-cancel listeners
+  ---
+  duration_ms: 0.122802
+  type: 'test'
+  ...
+# Subtest: generation, prompts, streaming, storage and every non-UI source stay byte-identical except release metadata
+ok 174 - generation, prompts, streaming, storage and every non-UI source stay byte-identical except release metadata
+  ---
+  duration_ms: 70.084967
+  type: 'test'
+  ...
+# (node:217) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: one setup click makes one storyboard request; drawing screen does not launch another batch
+ok 175 - one setup click makes one storyboard request; drawing screen does not launch another batch
+  ---
+  duration_ms: 192.335202
+  type: 'test'
+  ...
+# Subtest: an explicit continuation click requests one batch even when the reply leaves more sections
+ok 176 - an explicit continuation click requests one batch even when the reply leaves more sections
+  ---
+  duration_ms: 141.838825
+  type: 'test'
+  ...
+# Subtest: late setup completion cannot launch story requests for a newly opened song
+ok 177 - late setup completion cannot launch story requests for a newly opened song
+  ---
+  duration_ms: 208.492512
+  type: 'test'
+  ...
+# Subtest: regeneration arriving after a v2 image was drawn holds the response and preserves that image
+ok 178 - regeneration arriving after a v2 image was drawn holds the response and preserves that image
+  ---
+  duration_ms: 128.462121
+  type: 'test'
+  ...
+# Subtest: story single-flight remains locked until an asynchronous metadata save settles
+ok 179 - story single-flight remains locked until an asynchronous metadata save settles
+  ---
+  duration_ms: 116.741052
+  type: 'test'
+  ...
+# Subtest: queued group drawing never jumps to a newly opened song after its first image finishes
+ok 180 - queued group drawing never jumps to a newly opened song after its first image finishes
+  ---
+  duration_ms: 111.055666
+  type: 'test'
+  ...
+# Subtest: late paid asset is held if its group key was reused by an explicit replacement storyboard
+ok 181 - late paid asset is held if its group key was reused by an explicit replacement storyboard
+  ---
+  duration_ms: 159.957088
+  type: 'test'
+  ...
+# Subtest: a continuation can consist entirely of reused paid images without cloning or redrawing them
+ok 182 - a continuation can consist entirely of reused paid images without cloning or redrawing them
+  ---
+  duration_ms: 124.007931
+  type: 'test'
+  ...
+# Subtest: mixed new and reused groups preserve the correct image keys even when new raw IDs overlap old IDs
+ok 183 - mixed new and reused groups preserve the correct image keys even when new raw IDs overlap old IDs
+  ---
+  duration_ms: 125.911221
+  type: 'test'
+  ...
+# Subtest: single-image redraw sends a fresh seed and a group redraw shares its new seed across differences
+ok 184 - single-image redraw sends a fresh seed and a group redraw shares its new seed across differences
+  ---
+  duration_ms: 182.898592
+  type: 'test'
+  ...
+# Subtest: the existing ten-line request batch size remains, with no total section limit
+ok 185 - the existing ten-line request batch size remains, with no total section limit
+  ---
+  duration_ms: 148.288494
+  type: 'test'
+  ...
+# Subtest: saved r215 custom export selection remains effective when the restored clip controls first open
+ok 186 - saved r215 custom export selection remains effective when the restored clip controls first open
+  ---
+  duration_ms: 103.531274
+  type: 'test'
+  ...
+# Subtest: queued drawing stops when an explicit replacement story arrives, even on the same page
+ok 187 - queued drawing stops when an explicit replacement story arrives, even on the same page
+  ---
+  duration_ms: 125.345763
+  type: 'test'
+  ...
+# Subtest: a manual image filled while another asset is drawing is skipped by the remaining-image queue
+ok 188 - a manual image filled while another asset is drawing is skipped by the remaining-image queue
+  ---
+  duration_ms: 116.207761
+  type: 'test'
+  ...
+# Subtest: append retains images paid before it finishes and late image saves to the unchanged original group
+ok 189 - append retains images paid before it finishes and late image saves to the unchanged original group
+  ---
+  duration_ms: 121.026376
+  type: 'test'
+  ...
+# (node:233) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: paid result waits for a returned metadata promise when local storage cannot save
+ok 190 - paid result waits for a returned metadata promise when local storage cannot save
+  ---
+  duration_ms: 232.83992
+  type: 'test'
+  ...
+# Subtest: rejected metadata with no local copy retains the paid result and retries saving without regeneration
+ok 191 - rejected metadata with no local copy retains the paid result and retries saving without regeneration
+  ---
+  duration_ms: 107.021257
+  type: 'test'
+  ...
+# [HeartbeatMemories] host metadata save adapter unavailable
+# Subtest: confirmed local copy succeeds even if metadata rejects and survives a fresh runtime
+ok 192 - confirmed local copy succeeds even if metadata rejects and survives a fresh runtime
+  ---
+  duration_ms: 196.761551
+  type: 'test'
+  ...
+# Subtest: void-returning host debounce stays compatible when local storage quota is exhausted
+ok 193 - void-returning host debounce stays compatible when local storage quota is exhausted
+  ---
+  duration_ms: 136.721898
+  type: 'test'
+  ...
+# Subtest: missing, throwing or explicitly failed metadata storage keeps recovery in memory
+ok 194 - missing, throwing or explicitly failed metadata storage keeps recovery in memory
+  ---
+  duration_ms: 496.063369
+  type: 'test'
+  ...
+# Subtest: failed paid redraw remains exportable and save-only recovery keeps its new image
+ok 195 - failed paid redraw remains exportable and save-only recovery keeps its new image
+  ---
+  duration_ms: 163.197925
+  type: 'test'
+  ...
+# Subtest: a delayed rejected save retains only its original chat recovery
+ok 196 - a delayed rejected save retains only its original chat recovery
+  ---
+  duration_ms: 128.369674
+  type: 'test'
+  ...
+# Subtest: ordinary archive revision growth still allows unchanged-song storyboard saving
+ok 197 - ordinary archive revision growth still allows unchanged-song storyboard saving
+  ---
+  duration_ms: 140.512851
+  type: 'test'
+  ...
+# Subtest: all appearance/shot combinations preserve the current branch cast and scenery intent
+ok 198 - all appearance/shot combinations preserve the current branch cast and scenery intent
+  ---
+  duration_ms: 106.921488
+  type: 'test'
+  ...
+1..198
+# tests 198
+# suites 0
+# pass 193
+# fail 5
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 9738.191704

@@ -1,0 +1,72 @@
+TAP version 13
+# (node:12) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: approved workbench replaces duplicate chrome, has a direct return, and releases focus on exit
+ok 1 - approved workbench replaces duplicate chrome, has a direct return, and releases focus on exit
+  ---
+  duration_ms: 139.074845
+  type: 'test'
+  ...
+# Subtest: four visible thumbnails and all-shots view retain all 121 frames without generation or saved-data writes
+ok 2 - four visible thumbnails and all-shots view retain all 121 frames without generation or saved-data writes
+  ---
+  duration_ms: 129.184447
+  type: 'test'
+  ...
+# Subtest: mobile uses natural height and one page scroll, preview ratio is preserved, and desktop still has two columns
+ok 3 - mobile uses natural height and one page scroll, preview ratio is preserved, and desktop still has two columns
+  ---
+  duration_ms: 102.876153
+  type: 'test'
+  ...
+# Subtest: all baseline editor/image actions, inputs, options and accepted files remain reachable
+ok 4 - all baseline editor/image actions, inputs, options and accepted files remain reachable
+  ---
+  duration_ms: 788.650366
+  type: 'test'
+  ...
+# Subtest: previously enabled operations receive no new disabled gate
+ok 5 - previously enabled operations receive no new disabled gate
+  ---
+  duration_ms: 0.217472
+  type: 'test'
+  ...
+# Subtest: 25 existing shots remain navigable without content writes or generation and one player is retained
+ok 6 - 25 existing shots remain navigable without content writes or generation and one player is retained
+  ---
+  duration_ms: 0.30366
+  type: 'test'
+  ...
+# Subtest: the approved compact strip shows at most four shots and its gallery reaches all 25
+ok 7 - the approved compact strip shows at most four shots and its gallery reaches all 25
+  ---
+  duration_ms: 0.170232
+  type: 'test'
+  ...
+# Subtest: no music and no existing images do not disable the real draw action
+ok 8 - no music and no existing images do not disable the real draw action
+  ---
+  duration_ms: 0.862017
+  type: 'test'
+  ...
+# Subtest: drawer disposal restores previous inert states and removes click/Escape/native-cancel listeners
+ok 9 - drawer disposal restores previous inert states and removes click/Escape/native-cancel listeners
+  ---
+  duration_ms: 0.106428
+  type: 'test'
+  ...
+# Subtest: generation, prompts, streaming, storage and every non-UI source stay byte-identical except release metadata
+ok 10 - generation, prompts, streaming, storage and every non-UI source stay byte-identical except release metadata
+  ---
+  duration_ms: 50.500141
+  type: 'test'
+  ...
+1..10
+# tests 10
+# suites 0
+# pass 10
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 952.641733
