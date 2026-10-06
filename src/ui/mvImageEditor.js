@@ -8,6 +8,7 @@ export function mountAssetEditor(host, options) {
     const find = s => root.querySelector(s);
     const canvas = find('[data-editor-canvas]'), g = canvas.getContext('2d', { willReadFrequently: true });
     const prompt = find('[data-editor-prompt]'), status = find('[data-editor-status]');
+    const commonPanels = [...root.querySelectorAll('[data-common-panel]')];
     find('[data-image-title]').textContent = options.title || '图片编辑';
     find('[data-image-scope]').textContent = options.scopeLabel || '选格、裁切与修边';
     prompt.value = options.prompt || '';
@@ -214,6 +215,16 @@ export function mountAssetEditor(host, options) {
         const button = event.target.closest('[data-edit]'); if (!button) return;
         event.preventDefault(); const action = button.dataset.edit;
         if (action === 'close') { options.onClose(); return; }
+        // Shared panels only change visibility. Keep image, prompt, mode and
+        // undo state in place, and do not resize the canvas when opening them.
+        if (action === 'common-import' || action === 'common-prompt' || action === 'common-close') {
+            const current = commonPanels.find(panel => panel.open);
+            const target = commonPanels.find(panel => `common-${panel.dataset.commonPanel}` === action);
+            const opening = !!target && !target.open;
+            for (const panel of commonPanels) panel.open = panel === target && opening;
+            if (action === 'common-close' && current) find(`[data-edit="common-${current.dataset.commonPanel}"]`)?.focus?.();
+            return;
+        }
         if (busy) return;
         if (action === 'tools') { toolsOpen = !toolsOpen; show(); return; }
         if (action === 'default-prompt') { prompt.value = options.defaultPrompt || ''; return; }
@@ -250,7 +261,7 @@ export function mountAssetEditor(host, options) {
         if (!saving && action !== 'download') return;
         if (saving && selectionDirty) { say('请先点“使用选中画面”，确认单格预览。'); return; }
         busy = true; cursor.hidden = true;
-        root.querySelectorAll('button,input,select,textarea').forEach(el => { el.disabled = el.dataset.edit !== 'close'; });
+        root.querySelectorAll('button,input,select,textarea').forEach(el => { el.disabled = !['close', 'common-close'].includes(el.dataset.edit); });
         say(saving ? '正在保存修改…' : '正在准备 PNG…');
         try {
             const blob = (action === 'download' || (changed && !restoreOriginal)) ? await blobOfWorking() : null;
