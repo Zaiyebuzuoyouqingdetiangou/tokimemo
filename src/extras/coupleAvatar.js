@@ -1,0 +1,381 @@
+// 独立的情侣头像：一次生图得到一对，原图与裁切参数按聊天保存在本机。
+// 这里不读取或修改正式档案，也不为生图增加数量、外貌或比例门槛。
+import * as core_context from '../core/context.js';
+import * as core_castLooks from '../core/castLooks.js';
+import * as core_text from '../core/text.js';
+import * as cg_core from '../generation/cgImageCore.js';
+import * as styles from './coupleAvatarStyles.js';
+
+export const COUPLE_MODE = 'coupleAvatar';
+const DATABASE = 'heartbeatMemoriesCoupleAvatars';
+const RECORDS = 'pairs';
+const SETTINGS = 'settings';
+const states = new Map();
+let databasePromise = null;
+let sequence = 0;
+const text = value => typeof value === 'string' ? value.trim() : '';
+const clone = value => value == null ? value : JSON.parse(JSON.stringify(value));
+const finite = (value, fallback) => Number.isFinite(Number(value)) ? Number(value) : fallback;
+const bound = (value, min, max, fallback) => Math.min(max, Math.max(min, finite(value, fallback)));
+const own = (value, key) => !!value && Object.prototype.hasOwnProperty.call(value, key);
+
+export function coupleScope(context = core_context.currentCharacterGuard()) {
+    return core_context.chatScopeKey(context);
+}
+
+function optionalContext() {
+    try { return core_context.currentCharacterGuard(); } catch { return null; }
+}
+
+export function defaultCoupleSettings(context = optionalContext()) {
+    let looks = null, card = {};
+    try { if (context) looks = core_castLooks.readCastLooks(context); } catch { /* Optional saved looks. */ }
+    try { card = context?.getCharacterCardFields?.() || {}; } catch { /* Manual appearance remains available. */ }
+    const visible = (role, description) => {
+        if (text(looks?.[role])) return looks?.manual === true ? text(looks[role]) : core_castLooks.lookFromDescription(looks[role]);
+        return core_castLooks.lookFromDescription(description);
+    };
+    return {
+        people: [
+            { id: 'char', name: text(context?.name2) || '角色', appearance: visible('char', text(card.description)) },
+            { id: 'user', name: text(context?.name1) || '我', appearance: visible('user', text(card.persona) || text(context?.powerUserSettings?.persona_description)) },
+        ],
+        styleId: 'chibi-dumpling', pairType: 'joined', interaction: '半颗爱心',
+        clothing: '', background: '', direction: '', customStyle: '',
+    };
+}
+
+export function normalizeCoupleSettings(value, context = optionalContext()) {
+    const input = value && typeof value === 'object' ? value : {};
+    const defaults = defaultCoupleSettings(context);
+    const styleId = text(input.styleId);
+    return {
+        people: defaults.people.map((person, index) => {
+            const source = Array.isArray(input.people) && input.people[index] && typeof input.people[index] === 'object' ? input.people[index] : {};
+            return {
+                id: text(source.id) || person.id,
+                name: own(source, 'name') ? text(source.name) : person.name,
+                appearance: own(source, 'appearance') ? text(source.appearance) : person.appearance,
+            };
+        }),
+        styleId: styleId === 'custom' || styles.COUPLE_STYLES.some(style => style.id === styleId) ? styleId : defaults.styleId,
+        pairType: input.pairType === 'echo' ? 'echo' : 'joined',
+        interaction: own(input, 'interaction') ? text(input.interaction) : defaults.interaction,
+        clothing: text(input.clothing), background: text(input.background),
+        direction: text(input.direction), customStyle: text(input.customStyle),
+    };
+}
+
+const INTERACTION_PROMPTS = Object.freeze({
+    '半颗爱心': 'a shared heart motif: each person holds one matching half of a heart toward the inner edge, together the two halves read as one complete heart',
+    '隔空对望': 'the left person looks gently toward the right, the right person returns their gaze toward the left',
+    '左右眨眼': 'complementary playful winks, the two people have their own distinct expressions',
+    '一根红线': 'a fine red thread visually connects the two portraits across the central boundary',
+    '举杯碰杯': 'each person raises their own cup toward the other, a lighthearted shared toast',
+    '隔空击掌': 'the two people reach toward the inner edges with complementary high-five gestures',
+    '一人一只小动物': 'each person holds their own small animal, with coordinated but distinct affectionate gestures',
+    '耳机分你一只': 'one earphone for each person, a shared cable or matching headphones connecting the mood',
+    '同款不同色': 'coordinated clothing or accessories in two complementary colors, individual expressions',
+    '一起看烟花': 'both people enjoy the same fireworks, matching reflected light and different delighted expressions',
+    '并肩吹泡泡': 'both people blow bubbles, light bubbles drifting between their portraits',
+    '悄悄牵住衣角': 'one person gently reaches for the other person\'s clothing edge, the other responds with a small affectionate smile',
+    '一边闹一边笑': 'one person playfully teases, the other laughs in response, distinct complementary expressions',
+    '递出一朵花': 'one person offers a flower toward the inner edge, the other reaches to receive it',
+    '日与月的呼应': 'complementary sun and moon motifs, warm and cool light linking two individual portraits',
+    '交给灵感': 'choose a fresh affectionate interaction with complementary expressions and gestures for these two people',
+});
+
+export function couplePrompt(value) {
+    const settings = normalizeCoupleSettings(value, null);
+    const chosen = styles.COUPLE_STYLES.find(style => style.id === settings.styleId);
+    const people = settings.people.map((person, index) => {
+        const side = index === 0 ? 'LEFT' : 'RIGHT';
+        return `${side} HALF person: ${person.name || (index === 0 ? 'the first person' : 'the second person')}${person.appearance ? `; appearance: ${person.appearance}` : ''}.`;
+    });
+    return [
+        'One matching avatar pair in one horizontal image, preferably 2:1, two equal square halves.',
+        chosen ? `Style: ${chosen.prompt}.` : '',
+        settings.styleId === 'custom' && settings.customStyle ? `Style: ${settings.customStyle}.` : '',
+        settings.direction ? `Direction: ${settings.direction}.` : '',
+        ...people,
+        settings.clothing ? `Clothing: ${settings.clothing}.` : '',
+        settings.background ? `Background: ${settings.background}.` : '',
+        `Interaction: ${INTERACTION_PROMPTS[settings.interaction] || settings.interaction || INTERACTION_PROMPTS['交给灵感']}.`,
+        settings.pairType === 'echo'
+            ? 'Independent portraits, coordinated colors and light, complementary poses.'
+            : 'Connected background and shared motif across the center, matching scale.',
+        'One person centered in each half; leave space around hair and head for square/circle crops. Clear small faces, distinct poses, no mirrored duplicates. Preserve identity and gender, improvise unspecified details. No text, watermark, frame or divider.',
+    ].filter(Boolean).join('\n');
+}
+
+function openDatabase() {
+    if (databasePromise) return databasePromise;
+    databasePromise = new Promise((resolve, reject) => {
+        try {
+            const request = globalThis.indexedDB?.open(DATABASE, 1);
+            if (!request) { reject(new Error('Storage unavailable')); return; }
+            request.onupgradeneeded = () => {
+                const db = request.result;
+                if (!db.objectStoreNames.contains(RECORDS)) {
+                    const records = db.createObjectStore(RECORDS, { keyPath: 'key' });
+                    records.createIndex('scope', 'scope', { unique: false });
+                }
+                if (!db.objectStoreNames.contains(SETTINGS)) db.createObjectStore(SETTINGS, { keyPath: 'scope' });
+            };
+            request.onsuccess = () => {
+                const db = request.result;
+                db.onversionchange = () => { db.close(); databasePromise = null; };
+                resolve(db);
+            };
+            request.onerror = () => reject(request.error || new Error('Storage unavailable'));
+            request.onblocked = () => reject(new Error('Storage blocked'));
+        } catch (error) { reject(error); }
+    }).catch(error => { databasePromise = null; throw error; });
+    return databasePromise;
+}
+
+async function transact(storeName, mode, callback) {
+    const db = await openDatabase();
+    return new Promise((resolve, reject) => {
+        let transaction, result;
+        try {
+            transaction = db.transaction(storeName, mode);
+            result = callback(transaction.objectStore(storeName));
+        } catch (error) { reject(error); return; }
+        transaction.oncomplete = () => resolve(typeof result === 'function' ? result() : result?.result);
+        transaction.onerror = () => reject(transaction.error || new Error('Storage write failed'));
+        transaction.onabort = () => reject(transaction.error || new Error('Storage transaction interrupted'));
+    });
+}
+
+function stateFor(scope) {
+    const key = String(scope || '');
+    if (!states.has(key)) states.set(key, {
+        scope: key, records: new Map(), settings: null, settingsAt: 0,
+        pending: new Set(), settingsPending: false, loaded: false, loading: null, tail: Promise.resolve(),
+    });
+    return states.get(key);
+}
+
+function originalOf(value) {
+    const source = typeof value === 'string' ? { url: value } : value;
+    const url = text(source?.url);
+    if (!url || /[\u0000-\u001f\u007f]/.test(url)) return null;
+    try {
+        const parsed = new URL(url, globalThis.location?.href || 'http://localhost/');
+        if (!['http:', 'https:', 'blob:'].includes(parsed.protocol) && !/^data:image\/[a-z0-9.+-]+[;,]/i.test(url)) return null;
+    } catch { return null; }
+    return { url,
+        ...(finite(source?.width, 0) > 0 ? { width: Math.floor(Number(source.width)) } : {}),
+        ...(finite(source?.height, 0) > 0 ? { height: Math.floor(Number(source.height)) } : {}),
+        ...(text(source?.name) ? { name: text(source.name) } : {}),
+    };
+}
+
+function cropsOf(value) {
+    return [0, 1].map(index => ({
+        // These bounds describe local crop geometry, never a generation prerequisite.
+        zoom: Math.max(1, finite(value?.[index]?.zoom, 1)),
+        x: bound(value?.[index]?.x, -100, 100, 0), y: bound(value?.[index]?.y, -100, 100, 0),
+    }));
+}
+
+function recordOf(value, scope) {
+    const original = originalOf(value?.original);
+    if (!value || !text(value.id) || !original) return null;
+    return {
+        id: text(value.id), scope: String(scope),
+        createdAt: Math.max(0, finite(value.createdAt, Date.now())),
+        updatedAt: Math.max(0, finite(value.updatedAt, finite(value.createdAt, Date.now()))),
+        settings: normalizeCoupleSettings(value.settings, null), original,
+        crops: cropsOf(value.crops), order: value.order?.[0] === 1 && value.order?.[1] === 0 ? [1, 0] : [0, 1],
+        favorite: value.favorite === true,
+    };
+}
+
+async function loadState(state) {
+    if (state.loaded) return state;
+    if (state.loading) return state.loading;
+    state.loading = (async () => {
+        try {
+            const records = await transact(RECORDS, 'readonly', store => {
+                const rows = [], request = store.index('scope').openCursor(state.scope);
+                request.onsuccess = () => { const cursor = request.result; if (cursor) { rows.push(cursor.value); cursor.continue(); } };
+                return () => rows;
+            });
+            const settings = await transact(SETTINGS, 'readonly', store => store.get(state.scope));
+            for (const row of records) {
+                const record = recordOf(row, state.scope), current = record && state.records.get(record.id);
+                if (record && !state.pending.has(record.id) && (!current || current.updatedAt <= record.updatedAt)) state.records.set(record.id, record);
+            }
+            if (settings && !state.settingsPending && finite(settings.updatedAt, 0) >= state.settingsAt) {
+                state.settings = normalizeCoupleSettings(settings.value, null);
+                state.settingsAt = finite(settings.updatedAt, 0);
+            }
+            state.loaded = true;
+        } catch { /* In-memory originals and unsaved edits remain accessible and retryable. */ }
+        return state;
+    })().finally(() => { state.loading = null; });
+    return state.loading;
+}
+
+function enqueue(state, action) {
+    const next = state.tail.catch(() => {}).then(action);
+    state.tail = next.catch(() => {});
+    return next;
+}
+
+async function durableOriginal(original) {
+    if (!original.url.startsWith('blob:')) return original;
+    try {
+        const response = await fetch(original.url), blob = await response.blob();
+        const url = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = () => reject(reader.error);
+            reader.readAsDataURL(blob);
+        });
+        return originalOf({ ...original, url });
+    } catch { return null; }
+}
+
+function persistRecord(state, id) {
+    return enqueue(state, async () => {
+        const record = state.records.get(id);
+        if (!record) return false;
+        try {
+            const original = await durableOriginal(record.original);
+            if (!original) return false;
+            const saved = { ...record, original };
+            await transact(RECORDS, 'readwrite', store => store.put({ ...clone(saved), key: JSON.stringify([state.scope, id]) }));
+            if (state.records.get(id)?.updatedAt === record.updatedAt) {
+                state.records.set(id, saved);
+                state.pending.delete(id);
+            }
+            return !state.pending.has(id);
+        } catch { return false; }
+    });
+}
+
+export async function readCouples(scope) {
+    const state = await loadState(stateFor(scope));
+    return {
+        records: [...state.records.values()].sort((a, b) => b.createdAt - a.createdAt || b.id.localeCompare(a.id)).map(clone),
+        settings: clone(state.settings), pendingIds: [...state.pending],
+        durable: state.loaded && state.pending.size === 0 && !state.settingsPending,
+    };
+}
+
+export async function saveCoupleSettings(scope, settings) {
+    const state = await loadState(stateFor(scope));
+    state.settings = normalizeCoupleSettings(settings, null);
+    state.settingsAt = Math.max(Date.now(), state.settingsAt + 1);
+    state.settingsPending = true;
+    const durable = await enqueue(state, async () => {
+        const updatedAt = state.settingsAt, value = clone(state.settings);
+        try {
+            await transact(SETTINGS, 'readwrite', store => store.put({ scope: state.scope, value, updatedAt }));
+            if (updatedAt === state.settingsAt) state.settingsPending = false;
+            return !state.settingsPending;
+        } catch { return false; }
+    });
+    return { settings: clone(state.settings), durable };
+}
+
+function newId() {
+    sequence += 1;
+    try { return `pair-${globalThis.crypto.randomUUID()}`; }
+    catch { return `pair-${Date.now().toString(36)}-${sequence.toString(36)}-${Math.random().toString(36).slice(2)}`; }
+}
+
+export async function addCouple(scope, { settings, original } = {}) {
+    const state = await loadState(stateFor(scope));
+    const normalized = originalOf(original);
+    if (!normalized) throw core_text.safeUserError('没有读取到可用图片，已有头像仍然保留。', 'RMT_COUPLE_IMAGE');
+    const now = Date.now();
+    const record = { id: newId(), scope: state.scope, createdAt: now, updatedAt: now,
+        settings: normalizeCoupleSettings(settings, null), original: normalized,
+        crops: cropsOf(null), order: [0, 1], favorite: false };
+    state.records.set(record.id, record); state.pending.add(record.id);
+    const durable = await persistRecord(state, record.id);
+    return { record: clone(state.records.get(record.id)), durable };
+}
+
+export async function updateCouple(scope, id, patch = {}) {
+    const state = await loadState(stateFor(scope)), previous = state.records.get(String(id));
+    if (!previous) throw core_text.safeUserError('这对头像暂时找不到，请重新打开历史记录。', 'RMT_COUPLE_MISSING');
+    const record = { ...previous, updatedAt: Math.max(Date.now(), previous.updatedAt + 1),
+        ...(own(patch, 'crops') ? { crops: cropsOf(patch.crops) } : {}),
+        ...(own(patch, 'order') ? { order: patch.order?.[0] === 1 && patch.order?.[1] === 0 ? [1, 0] : [0, 1] } : {}),
+        ...(own(patch, 'favorite') ? { favorite: patch.favorite === true } : {}),
+    };
+    state.records.set(record.id, record); state.pending.add(record.id);
+    const durable = await persistRecord(state, record.id);
+    return { record: clone(state.records.get(record.id)), durable };
+}
+
+export async function retryCoupleSave(scope, id) {
+    const state = await loadState(stateFor(scope)), record = state.records.get(String(id));
+    if (!record) throw core_text.safeUserError('这对头像暂时找不到，请重新打开历史记录。', 'RMT_COUPLE_MISSING');
+    const durable = await persistRecord(state, record.id);
+    return { record: clone(state.records.get(record.id)), durable };
+}
+
+export async function exportCouples(scope) {
+    const { records, settings } = await readCouples(scope);
+    return JSON.stringify({ format: 'hearttrace-couple-avatars', version: 1, exportedAt: Date.now(), records, settings }, null, 2);
+}
+
+export async function importCouples(scope, json) {
+    let incoming;
+    try { incoming = typeof json === 'string' ? JSON.parse(json) : json; } catch { /* Report a safe error below. */ }
+    if (incoming?.format !== 'hearttrace-couple-avatars' || incoming?.version !== 1 || !Array.isArray(incoming.records)) {
+        throw core_text.safeUserError('这份文件不是情侣头像备份，现有内容没有改变。', 'RMT_COUPLE_IMPORT');
+    }
+    const state = await loadState(stateFor(scope)), added = [];
+    let durable = true;
+    for (const value of incoming.records) {
+        let record = recordOf(value, state.scope);
+        if (!record) continue;
+        const sameId = state.records.get(record.id);
+        if (sameId?.original.url === record.original.url) continue;
+        if (sameId) record = { ...record, id: newId() };
+        state.records.set(record.id, record); state.pending.add(record.id); added.push(record.id);
+        if (!await persistRecord(state, record.id)) durable = false;
+    }
+    // Import is additive. A backup never replaces the current form or successful pair.
+    if (!state.settings && incoming.settings) {
+        const saved = await saveCoupleSettings(state.scope, incoming.settings);
+        if (!saved.durable) durable = false;
+    }
+    return { records: added.map(id => clone(state.records.get(id))), durable };
+}
+
+export async function generateCouple(value, { context = core_context.currentCharacterGuard(), signal = null, onProgress = null } = {}) {
+    if (signal?.aborted) throw core_text.safeUserError('这次绘制尚未开始。', 'RMT_COUPLE_NOT_STARTED');
+    const scope = coupleScope(context), settings = normalizeCoupleSettings(value, context);
+    const targetKey = `couple-avatar:${scope}:${newId()}`;
+    const report = progress => { if (!signal?.aborted) { try { onProgress?.(progress); } catch { /* UI progress cannot lose an image. */ } } };
+    // Moving to the background stops foreground updates, not an already paid request.
+    // Existing provider wrappers drop late results on abort, so do not pass the view's
+    // background signal after submission. A returned result always enters its origin scope.
+    let result;
+    try {
+        result = await cg_core.invokeImageGeneration(couplePrompt(settings), context, {
+            orientation: 'landscape', respectOrientation: true, aspectRatio: '2:1',
+            characterName: settings.people[0].name || context?.name2 || '',
+            targetKey, singlePrompt: true, onProgress: report,
+        });
+    } catch (error) {
+        if (error?.safeToDisplay || /^(BBI_|CH8_|RMT_)/.test(text(error?.code))) throw error;
+        throw core_text.safeUserError('这次绘制没有完成，已有头像仍然保留，可以稍后再试。', 'RMT_COUPLE_GENERATION');
+    }
+    const raw = typeof result === 'string' ? result : result?.url;
+    const url = cg_core.normalizeCgImageUrl(raw);
+    if (!url) throw core_text.safeUserError('这次没有收到可用图片，已有头像仍然保留。', 'RMT_COUPLE_IMAGE');
+    const saved = await addCouple(scope, { settings, original: { url,
+        ...(Number(result?.width) > 0 ? { width: Number(result.width) } : {}),
+        ...(Number(result?.height) > 0 ? { height: Number(result.height) } : {}),
+    } });
+    return { ...saved, scope, cancelled: signal?.aborted === true };
+}

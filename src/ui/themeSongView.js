@@ -9,6 +9,7 @@ import * as coordinator from '../core/requestCoordinator.js';
 import * as repository from '../archive/repository.js';
 import * as library from '../archive/library.js';
 import * as generation from '../generation/client.js';
+import * as mv from '../extras/mv.js';
 import * as recoveryView from './recoveryView.js';
 import * as overlay from './overlay.js';
 import * as text from '../core/text.js';
@@ -20,7 +21,67 @@ const scope = s => JSON.stringify([s?.chatId, s?.archiveRevision, s?.characterNa
 const esc = text.esc;
 // Pure UI preference. Never written into a song, archive or recovery request.
 let displayMode = 'read';
+let songReturn = null;
 export function themeSongDisplayMode() { return displayMode; }
+
+function themeSongReturnScope() {
+    const session = runtimeState.activeSession, memory = shownMemory();
+    if (runtimeState.activeMode !== MODE || session?.kind !== MODE || !memory
+        || session.chatId !== memory.chatId || session.archiveRevision !== memory.archiveRevision) return '';
+    return JSON.stringify([contextApi.chatScopeKey(contextApi.getContext()), scope(session), scope(memory),
+        runtimeState.activeArchiveSnapshot?.entryId || '', !!runtimeState.activeArchiveSnapshot]);
+}
+
+function songDetails(body) {
+    const counts = new Map();
+    return [...(body?.querySelectorAll?.('.rmt-theme-song details') || [])].map(node => {
+        const name = node.className || 'details', index = counts.get(name) || 0;
+        counts.set(name, index + 1);
+        return { key: `${name}:${index}`, node };
+    });
+}
+
+// The return path keeps presentation only. Never retain an old session or
+// restore its generated content over the session opened by the normal reader.
+export function captureThemeSongReturn() {
+    try {
+        const key = themeSongReturnScope(), body = overlay.bodyEl();
+        if (!key || !body) return null;
+        const session = runtimeState.activeSession;
+        const songId = session.songs?.find(song => song.id === session.selectedId)?.id || session.songs?.[0]?.id;
+        if (!songId) return null;
+        songReturn = { key, songId, displayMode, scrollTop: body.scrollTop || 0,
+            details: songDetails(body).map(({ key, node }) => ({ key, open: !!node.open })),
+            draft: ['subject', 'language', 'custom-language', 'voice', 'direction'].map(name =>
+                [name, body.querySelector(`[data-rmt-song-${name}]`)?.value]) };
+        return songReturn;
+    } catch { return null; }
+}
+
+// Call after awaiting openCachedOrGenerate(THEME_SONG). A changed chat,
+// archive revision or missing song simply keeps the newly opened reader as-is.
+export function restoreThemeSongReturn(saved = songReturn) {
+    try {
+        if (!saved || saved.key !== themeSongReturnScope()) return false;
+        const session = runtimeState.activeSession;
+        if (!session.songs?.some(song => song.id === saved.songId)) return false;
+        session.selectedId = saved.songId;
+        displayMode = saved.displayMode === 'format' ? 'format' : 'read';
+        renderThemeSongs();
+        const body = overlay.bodyEl();
+        if (!body) return false;
+        for (const [name, value] of saved.draft) {
+            const field = body.querySelector(`[data-rmt-song-${name}]`);
+            if (field && typeof value === 'string') field.value = value;
+        }
+        syncSongLanguageInput(body);
+        const expanded = new Map(saved.details.map(row => [row.key, row.open]));
+        for (const { key, node } of songDetails(body)) if (expanded.has(key)) node.open = expanded.get(key);
+        body.scrollTop = saved.scrollTop;
+        return true;
+    } catch { return false; }
+}
+
 export function songLyricsReadingHtml(lyrics) {
     const lines = text.normalizeText(lyrics, contract.SONG_LIMITS.lyrics).split('\n');
     const sections = [];
@@ -111,8 +172,12 @@ export function renderThemeSongs() {
       <label class="rmt-song-wide">想要的感觉（可不填）<input data-rmt-song-direction maxlength="400" placeholder="例如：克制的钢琴抒情，副歌逐渐明亮" ${disabled ? 'disabled' : ''}></label>
       <button type="button" class="rmt-btn rmt-song-write" data-rmt-song="generate" ${disabled ? 'disabled' : ''}>${busy() ? '正在写歌…' : session.songs.length ? '新写一首' : '创作印象曲'}</button></div></details>`;
     const button = (action, label) => `<button type="button" class="rmt-btn" data-rmt-song="${action}" data-rmt-song-id="${esc(selected.id)}">${label}</button>`;
+    let mvLabel = '制作手书';
+    if (selected && !runtimeState.activeArchiveSnapshot) {
+        try { if (mv.readMv(contextApi.getContext(), selected.id)?.shots?.length) mvLabel = '继续制作手书'; } catch { /* Reading progress must not hide the entry. */ }
+    }
     const mvButton = selected && !readonly() && !selected.generationIncomplete
-        ? `<button type="button" class="rmt-btn" data-rmt-mv="open" data-rmt-mv-id="${esc(selected.id)}">做成 MV</button>` : '';
+        ? `<button type="button" class="rmt-btn" data-rmt-mv="open" data-rmt-mv-id="${esc(selected.id)}">${mvLabel}</button>` : '';
     const formatDetails = selected ? `<article class="rmt-song-sheet" data-rmt-song-presentation="format"><header><small>${esc(selected.subject === 'event' ? '事件印象曲' : '角色印象曲')} · ${esc(selected.subjectTitle)}</small><h2>${esc(selected.title)}</h2><p><b>演唱者</b> ${esc(selected.singer)} <span>· ${esc(contract.songLanguageLabel(selected))}</span></p><p>${esc(selected.vocalDescription)}</p></header>
       <section class="rmt-song-style"><h3>曲风</h3><p>${esc(selected.styleDescription)}</p><div class="rmt-song-toolbar">${button('copy-title','复制歌名')}${button('copy-style','复制曲风')}</div><pre>${esc(selected.stylePrompt)}</pre></section>
       <section class="rmt-song-lyrics"><div class="rmt-song-toolbar"><h3>${selected.generationIncomplete ? '已收到的歌词 · 未完成' : '完整歌词'}</h3>${button('copy-lyrics','复制歌词')}</div><pre>${esc(selected.lyrics)}</pre></section>

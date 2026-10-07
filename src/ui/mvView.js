@@ -1,4 +1,4 @@
-// 印象曲 MV 页面：三步开始、镜头清单、对时间、手书剪辑台、视频单镜、拼成 MV。
+// 独立印象曲进入手书：分镜与画面、剪辑与导出，兼容视频逐镜制作。
 // 播放由同一音轨驱动画面；可用的音频文件缓存在本机，不写入聊天。
 import * as core_constants from '../core/constants.js';
 import * as core_context from '../core/context.js';
@@ -24,6 +24,8 @@ import * as image_editor_ui from './mvImageEditorUi.js';
 import * as image_tools from '../extras/mvImageTools.js';
 import * as editor_ui from './mvEditorUi.js';
 import * as editor_dialog from './mvEditorDialog.js';
+import * as workspace_ui from './mvWorkspaceUi.js';
+import * as theme_song_view from './themeSongView.js';
 
 const esc = core_text.esc;
 export const MV_MODE = 'songMv';
@@ -48,6 +50,8 @@ let imageLayoutPending = false;
 let layoutBody = null;
 let layoutBodyObserver = null;
 let editorDialog = null;
+// In-session view preferences only. Never written into saved MV records.
+const workspaceViews = new Map();
 
 function closeEditorDrawer() {
     const previous = view.editorDrawer;
@@ -62,11 +66,13 @@ function editorBody(enabled) {
     if (layoutBody && (layoutBody !== el || !enabled)) {
         layoutBody.closest?.('.rmt-shell')?.classList?.remove('rmt-mvi-focus');
         layoutBody.closest?.('.rmt-shell')?.classList?.remove('rmt-mve-focus');
+        layoutBody.closest?.('.rmt-shell')?.classList?.remove('rmt-mvf-focus');
         layoutBody.classList?.remove('rmt-mve-body');
         layoutBodyObserver?.disconnect(); layoutBodyObserver = null; layoutBody = null;
     }
     el?.classList?.toggle('rmt-mve-body', enabled);
     el?.closest?.('.rmt-shell')?.classList?.toggle('rmt-mvi-focus', enabled && view.sub === 'asset-editor');
+    el?.closest?.('.rmt-shell')?.classList?.toggle('rmt-mvf-focus', enabled && ['board', 'setup'].includes(view.sub));
     el?.closest?.('.rmt-shell')?.classList?.toggle('rmt-mve-focus', enabled && ['tegaki', 'sync'].includes(view.sub));
     if (!enabled || !el || layoutBody === el) return;
     layoutBody = el;
@@ -74,11 +80,12 @@ function editorBody(enabled) {
         // Only direct page replacement is observed, never animation frames,
         // thumbnail loads or brush strokes. Other modules keep their own scroll.
         layoutBodyObserver = new globalThis.MutationObserver(() => {
-            if (!el.querySelector('.rmt-mve-layout-scope,[data-rmt-mv-editor-host]')) {
+            if (!el.querySelector('.rmt-mve-layout-scope,.rmt-mvf-page,[data-rmt-mv-editor-host]')) {
                 editorDialog?.dispose(); editorDialog = null;
                 el.classList.remove('rmt-mve-body');
                 el.closest?.('.rmt-shell')?.classList?.remove('rmt-mvi-focus');
                 el.closest?.('.rmt-shell')?.classList?.remove('rmt-mve-focus');
+                el.closest?.('.rmt-shell')?.classList?.remove('rmt-mvf-focus');
                 layoutBodyObserver?.disconnect(); layoutBodyObserver = null; layoutBody = null;
             }
         });
@@ -113,15 +120,18 @@ function capturePagePosition(assetKey = '') {
     const el = body();
     if (!el) return null;
     const anchors = [...(el.querySelectorAll?.('[data-rmt-mv-anchor]') || [])];
-    const top = el.getBoundingClientRect?.().top || 0;
+    const scroller = el.querySelector?.('[data-rmt-mv-scroll="board"]') || el;
+    const top = scroller.getBoundingClientRect?.().top || 0;
     const anchor = assetKey ? anchors.find(node => node.dataset.rmtMvAnchor === assetKey)
         : anchors.find(node => node.getBoundingClientRect?.().bottom > top);
     return { top: el.scrollTop, left: el.scrollLeft || 0,
+        drawer: view.editorDrawer, drawerTop: editorDialog?.element?.querySelector?.('.rmt-mve-sheet>div')?.scrollTop || 0,
+        drawerDetails: [...(editorDialog?.element?.querySelectorAll?.('details') || [])].map(node => node.open),
         anchor: anchor?.dataset.rmtMvAnchor, offset: anchor?.getBoundingClientRect?.().top - top,
         // Inspection expansion is controlled by view.inspect; never undo its click.
         details: [...(el.querySelectorAll?.('details:not(.rmt-mv-inspect):not(.rmt-mve-group-fold)') || [])].map(node => node.open),
         strips: [...(el.querySelectorAll?.('.rmt-mv-assets, .rmt-mv-strip') || [])].map(node => node.scrollLeft),
-        panels: [...(el.querySelectorAll?.('[data-rmt-mv-scroll]') || [])].map(node => ({ key: node.dataset.rmtMvScroll, top: node.scrollTop })) };
+        panels: [...(el.querySelectorAll?.('[data-rmt-mv-scroll]') || [])].map(node => ({ key: node.dataset?.rmtMvScroll, top: node.scrollTop })) };
 }
 
 function restorePagePosition(position) {
@@ -131,20 +141,27 @@ function restorePagePosition(position) {
     if (details.length === position.details.length) details.forEach((node, i) => { node.open = position.details[i]; });
     [...(el.querySelectorAll?.('.rmt-mv-assets, .rmt-mv-strip') || [])].forEach((node, i) => { node.scrollLeft = position.strips[i] || 0; });
     for (const node of el.querySelectorAll?.('[data-rmt-mv-scroll]') || []) {
-        const saved = position.panels?.find(row => row.key === node.dataset.rmtMvScroll);
+        const saved = position.panels?.find(row => row.key === node.dataset?.rmtMvScroll);
         if (saved) node.scrollTop = saved.top;
+    }
+    if (position.drawer === view.editorDrawer && editorDialog?.element) {
+        const sheet = editorDialog.element.querySelector?.('.rmt-mve-sheet>div');
+        const folds = [...(sheet?.querySelectorAll?.('details') || [])];
+        if (folds.length === position.drawerDetails?.length) folds.forEach((node, i) => { node.open = position.drawerDetails[i]; });
+        if (sheet) sheet.scrollTop = position.drawerTop || 0;
     }
     el.scrollTop = position.top; el.scrollLeft = position.left;
     const anchor = [...(el.querySelectorAll?.('[data-rmt-mv-anchor]') || [])].find(node => node.dataset.rmtMvAnchor === position.anchor);
     if (anchor && Number.isFinite(position.offset) && anchor.getBoundingClientRect) {
-        el.scrollTop += anchor.getBoundingClientRect().top - (el.getBoundingClientRect?.().top || 0) - position.offset;
+        const scroller = el.querySelector?.('[data-rmt-mv-scroll="board"]') || el;
+        scroller.scrollTop += anchor.getBoundingClientRect().top - (scroller.getBoundingClientRect?.().top || 0) - position.offset;
     }
 }
 
-function currentPage(assetKey = '') { return { sub: view.sub, shotId: view.shotId, position: capturePagePosition(assetKey) }; }
+function currentPage(assetKey = '') { return { sub: view.sub, shotId: view.shotId, drawer: view.editorDrawer, position: capturePagePosition(assetKey) }; }
 function restoreParentPage() {
     const parent = navigation.pop() || { sub: 'board', shotId: '' };
-    Object.assign(view, { sub: parent.sub, shotId: parent.shotId });
+    Object.assign(view, { sub: parent.sub, shotId: parent.shotId, editorDrawer: parent.drawer || '' });
     renderMv(); restorePagePosition(parent.position);
 }
 
@@ -200,7 +217,7 @@ async function openAssetEditor(key, autoCutout = false, frameId = '') {
     stopPlayback(); assetEditor?.dispose(); assetEditor = null;
     const token = ++editSequence;
     if (view.sub !== 'asset-editor') navigation.push(currentPage(key));
-    view.sub = 'asset-editor'; page('图片编辑', inEditor ? '剪辑台' : '构图卡片', `<section data-rmt-mv-editor-host><div class="rmt-mvi-loading">${btn('back', '返回')}<p role="status">正在打开素材…</p></div></section>`);
+    view.editorDrawer = ''; view.sub = 'asset-editor'; page('图片编辑', inEditor ? '剪辑台' : '构图卡片', `<section data-rmt-mv-editor-host><div class="rmt-mvi-loading">${btn('back', '返回')}<p role="status">正在打开素材…</p></div></section>`);
     if (body()) body().scrollTop = 0;
     const image = found.image, original = image?.original || image;
     const [sourceUrl, imageUrl] = await Promise.all([resolveAssetImage(original), resolveAssetImage(image)]);
@@ -621,6 +638,7 @@ ${r} .rmt-mv-look textarea{width:100%;box-sizing:border-box;border:1px solid var
 .rmt-mv-rec button{position:absolute;top:calc(env(safe-area-inset-top,0px) + 12px);right:12px;min-height:44px;padding:0 16px;border-radius:12px;border:0;background:rgba(255,255,255,.9);color:#000;font-size:15px}
 ${editor_ui.editorCss(r)}
 ${image_editor_ui.imageEditorCss(r)}
+${workspace_ui.workspaceCss(r)}
 `;
     document.head.appendChild(style);
 }
@@ -630,6 +648,7 @@ ${image_editor_ui.imageEditorCss(r)}
 export function openMv(options = {}) {
     const context = ctx();
     if (!context || runtimeState.activeArchiveSnapshot) { toastError(core_text.safeUserError('MV 只在当前聊天里制作。', 'RMT_MV_SCOPE')); return false; }
+    theme_song_view.captureThemeSongReturn();
     ui_workspaceState.leaveWorkspaceReader();
     ui_workspaceState.workspace.route = MV_MODE; ui_workspaceState.workspace.tab = 'content'; ui_workspaceState.workspace.empty = null;
     runtimeState.activeMode = MV_MODE; runtimeState.activeSession = null;
@@ -644,9 +663,18 @@ export function openMv(options = {}) {
     view.sub = record?.shots?.length ? options.page === 'board' || !ready ? 'board' : 'tegaki' : 'setup';
     view.editorTab = 'shots'; view.editorDrawer = ''; view.previewOnly = false; view.editorTiming = { kind: 'line', key: '' }; view.editorSection = null; view.editorUndo = []; view.editorAutoNext = true; view.stripStart = 0; view.editorPlayhead = ''; view.inspect = ''; view.groupOpen = '';
     view.step = 1; view.draft = mv.normalizeSettings(record?.settings); view.mode = view.draft.output; view.shotId = ''; view.copied = ''; view.tapIndex = -1; view.tapUndo = [];
+    const resumed = workspaceViews.get(audioKey());
+    const resumeMatches = resumed && resumed.revision === (record?.storyRevision || record?.createdAt || '');
+    if (resumeMatches) {
+        Object.assign(view, resumed.state);
+        if (options.page === 'board') view.sub = record?.shots?.length ? 'board' : 'setup';
+        if (!record?.shots?.length) view.sub = 'setup';
+        player.clockOffset = resumed.time; player.clockStart = performance.now();
+    }
     overlay.openOverlay();
     renderMv();
     const el = body(); if (el) el.scrollTop = 0;
+    if (resumeMatches && view.sub === resumed.state.sub) restorePagePosition(resumed.position);
     return true;
 }
 
@@ -662,9 +690,30 @@ export function navigateMvBack() {
     if (['shot', 'sync', 'tegaki', 'finish'].includes(view.sub) || (view.sub === 'setup' && record?.shots?.length)) {
         view.sub = view.sub === 'sync' ? 'tegaki' : 'board'; renderMv(); return true;
     }
-    editorBody(false);
-    void overlay.openCachedOrGenerate(core_constants.MODE.THEME_SONG, { workspaceRoute: 'themeSong' });
+    returnToSong();
     return true;
+}
+
+
+function rememberWorkspace() {
+    if (!view.songId || !view.scope || !renderedPage) return;
+    const parent = view.sub === 'asset-editor' ? navigation.at(-1) : null;
+    const state = {};
+    for (const key of ['sub', 'mode', 'selected', 'editorTab', 'editorTiming', 'editorSection', 'editorAutoNext', 'stripStart', 'groupOpen', 'inspect', 'draft', 'castDraft', 'step', 'tapIndex']) state[key] = view[key];
+    if (parent) state.sub = parent.sub;
+    state.editorDrawer = ''; state.previewOnly = false;
+    workspaceViews.set(audioKey(), { revision: view.cache?.record?.storyRevision || view.cache?.record?.createdAt || '', state: structuredClone(state), time: currentTime(), position: parent?.position || capturePagePosition() });
+}
+
+function returnToSong() {
+    rememberWorkspace();
+    disposeMv();
+    void Promise.resolve(overlay.openCachedOrGenerate(core_constants.MODE.THEME_SONG, { workspaceRoute: 'themeSong' }))
+        .then(() => theme_song_view.restoreThemeSongReturn()).catch(toastError);
+}
+
+function workspaceHeader(song, record) {
+    return workspace_ui.workspaceHeader({ esc, btn, song, editing: ['tegaki', 'sync'].includes(view.sub), ready: !!record?.shots?.length, pending: mv.pendingMv(view.scope).length });
 }
 
 function go(sub, extra = {}) {
@@ -739,7 +788,16 @@ function page(title, back, html) {
     const editor = view.sub === 'tegaki' || view.sub === 'sync';
     const imageEditor = view.sub === 'asset-editor';
     const returnButton = view.sub !== 'board' && !editor && !imageEditor ? btn('back', `← 返回${esc(back)}`) : '';
-    editorBody(editor || imageEditor);
+    const workspace = ['board', 'setup'].includes(view.sub);
+    editorBody(editor || imageEditor || workspace);
+    if (workspace) {
+        const { song, record } = view.cache;
+        body().innerHTML = `<main class="rmt-x-page rmt-mvf-page">${workspaceHeader(song, record)}<div class="rmt-mvf-scroll" data-rmt-mv-scroll="board">${recoveryPanel()}${html}</div>${workspace_ui.workspaceSheet({ esc, btn, drawer: view.editorDrawer, html: editorSheet(song, record) })}</main>`;
+        renderedPage = view.sub;
+        editorDialog = editor_dialog.mountEditorDialog(body(), closeEditorDrawer);
+        bindEditorControls();
+        return;
+    }
     body().innerHTML = `<main class="rmt-x-page${editor ? ' rmt-mv-editor' : imageEditor ? ' rmt-mve-image-page' : ''}">${returnButton}${editor || imageEditor ? '' : recoveryPanel()}${html}${editor || imageEditor ? '' : `<details class="rmt-x-card"><summary>MV 备份</summary>${btn('export-recovery', '导出 MV 数据与暂存结果')}</details>`}</main>`;
     renderedPage = view.sub;
 }
@@ -795,41 +853,19 @@ function exportControls(record, song) {
 }
 
 function renderSetup(song, record) {
-    const d = view.draft || mv.normalizeSettings(null);
-    const steps = ['做成什么', '分镜与出镜', '确认'].map((label, i) => `<span class="${view.step === i + 1 ? 'on' : view.step > i + 1 ? 'done' : ''}"><b>${view.step > i + 1 ? '✓' : i + 1}</b>${label}</span>`).join('');
-    let content = '';
-    if (view.step === 1) {
-        content = `<h3 class="rmt-x-section-title">做成什么？</h3>
-          ${choice('set-output', 'tegaki', d.output === 'tegaki', '手书 · 推荐', '一张张手绘风的画，跟着歌词切换、轻轻移动，像同人手书。', '全程在插件里完成，可以直接导出视频')}
-          ${choice('set-output', 'video', d.output === 'video', '视频 · 进阶', '画面真正动起来，像电影片段。', '需要把提示词拿到视频工具里生成')}`;
-    } else if (view.step === 2) {
-        const styles = mv.MV_STYLES[d.output];
-        const sectionsForRange = mv.parseSections(song.lyrics);
-        content = `${d.output === 'tegaki' ? `<h3 class="rmt-x-section-title">做哪一段</h3>${rangePicker('draft', d, sectionsForRange)}` : ''}
-          ${cast_controls.directionControls(song, d)}
-          ${cast_controls.castControls(view.castDraft, d)}
-          <h3 class="rmt-x-section-title">画风</h3><div class="rmt-mv-grid2">${styles.map(s => choice('set-style', s.id, d.style === s.id, s.name, s.desc)).join('')}</div>
-          ${view.castDraft?.people.some(person => person.identity === 'user' && view.castDraft.selectedIds.includes(person.id)) ? `<h3 class="rmt-x-section-title">你要出镜吗？</h3>
-          ${choice('set-appear', 'face', d.appear === 'face', '露脸出镜', '按你填写的外貌来画。')}
-          ${choice('set-appear', 'back', d.appear === 'back', '只拍背影或手', '有你的存在感，但不画脸。')}
-          ${choice('set-appear', 'none', d.appear === 'none', '不出镜', '不画用户，其他已选人物不受影响。')}` : ''}
-          <h3 class="rmt-x-section-title">比例</h3><div class="rmt-mv-grid2">${choice('set-ratio', '9:16', d.ratio === '9:16', '竖屏 9:16', '手机看')}${choice('set-ratio', '16:9', d.ratio === '16:9', '横屏 16:9', '电脑看')}</div>
-          ${d.output === 'video' ? `<h3 class="rmt-x-section-title">你打算用什么做视频？</h3>
-            ${choice('set-lang', 'zh', d.lang === 'zh', '国内的视频 App', '比如可灵、即梦。提示词用中文写。')}
-            ${choice('set-lang', 'en', d.lang === 'en', '国外的视频工具', '比如 Runway。提示词用英文写。')}
-            ${choice('set-lang', 'both', d.lang === 'both', '还没想好', '中英文都给你，到时候挑一个复制。')}` : ''}`;
-    } else {
-        const style = mv.MV_STYLES[d.output].find(s => s.id === d.style);
-        const lines = [['做成', d.output === 'video' ? '视频' : '手书'], ['分镜类型', mv_direction.directionOf(d.storyType).name], ['画风', style?.name || ''],
-            ['出镜人物', mv_cast.selectedMvPeople(view.castDraft, d).map(person => person.name || '未命名').join('、') || '空镜'], ['比例', d.ratio === '9:16' ? '竖屏 9:16' : '横屏 16:9'],
-            ['写分镜', '1 次文字请求'], ['画图', '之后由你逐张手动画']];
-        content = `<section class="rmt-x-card">${lines.map(([k, v]) => `<div class="rmt-x-row-head"><span>${esc(k)}</span><b>${esc(v)}</b></div>`).join('')}</section>
-          <p class="rmt-x-note">生成分镜时不会画图。画几张、什么时候画，都由你在下一页决定。${record?.shots?.length ? '重新写分镜会替换现在的镜头，已画的图不会保留在新镜头上。' : ''}</p>`;
-    }
+    const d = view.draft || mv.normalizeSettings(null), styles = mv.MV_STYLES[d.output];
     const running = mv.isMvRunning(`story:${mv.mvScope(ctx())}:${view.songId}`);
-    const nav = `<div class="rmt-mv-actions">${view.step > 1 ? btn('setup-prev', '上一步') : ''}${view.step < 3 ? btn('setup-next', '下一步', { cls: 'rmt-x-primary rmt-x-dark' })
-        : btn('setup-generate', running ? '正在写分镜…' : record?.shots?.length ? '重新写分镜' : '生成分镜', { cls: 'rmt-x-primary', disabled: running })}</div>`;
-    page('做成 MV', view.step > 1 ? '上一步' : '印象曲', `${head(song.title + ' · 做成 MV', '把这首歌做成 MV', '先写一张分镜表，再选做成手书还是视频。之后随时可以换另一种。')}<div class="rmt-mv-steps">${steps}</div>${content}${nav}`);
+    const appearance = view.castDraft?.people.some(person => person.identity === 'user' && view.castDraft.selectedIds.includes(person.id));
+    page('分镜与画面', '印象曲', `<section class="rmt-mvf-setup"><h2>${record?.shots?.length ? '重新安排分镜' : '从这首歌开始'}</h2><p class="rmt-x-note">先选要做的片段，再生成分镜。音乐和图片都可以稍后加入。</p></section>
+      <section class="rmt-x-card"><b>制作范围</b>${rangePicker('draft', d, mv.parseSections(song.lyrics))}</section>
+      ${btn('editor-drawer', audioBySong.has(audioKey()) ? '管理音乐' : '导入音乐（可稍后）', { id: 'audio' })}
+      <details class="rmt-x-card"><summary>分镜方向与人物</summary>${cast_controls.directionControls(song, d)}${cast_controls.castControls(view.castDraft, d)}</details>
+      <details class="rmt-x-card"><summary>画风、出镜与画幅</summary><h3 class="rmt-x-section-title">画风</h3><div class="rmt-mv-grid2">${styles.map(style => choice('set-style', style.id, d.style === style.id, style.name, style.desc)).join('')}</div>
+      ${appearance ? `<h3 class="rmt-x-section-title">你的出镜方式</h3>${choice('set-appear', 'face', d.appear === 'face', '露脸出镜', '按你填写的外貌来画。')}${choice('set-appear', 'back', d.appear === 'back', '只拍背影或手', '有你的存在感，但不画脸。')}${choice('set-appear', 'none', d.appear === 'none', '不出镜', '不画用户，其他已选人物不受影响。')}` : ''}
+      <h3 class="rmt-x-section-title">画幅</h3><div class="rmt-mv-grid2">${choice('set-ratio', '9:16', d.ratio === '9:16', '竖屏 9:16', '手机看')}${choice('set-ratio', '16:9', d.ratio === '16:9', '横屏 16:9', '电脑看')}</div></details>
+      <details class="rmt-x-card"><summary>制作方式 · ${d.output === 'video' ? '外部视频工具' : '手书'}</summary>${choice('set-output', 'tegaki', d.output === 'tegaki', '手书', '画面随歌词切换，在插件里剪辑并导出。')}${choice('set-output', 'video', d.output === 'video', '外部视频工具', '保留逐镜视频提示词、完成标记与拼接指引。')}
+      ${d.output === 'video' ? `<h3 class="rmt-x-section-title">视频提示词语言</h3>${choice('set-lang', 'zh', d.lang === 'zh', '中文', '用于国内视频工具')}${choice('set-lang', 'en', d.lang === 'en', '英文', '用于国外视频工具')}${choice('set-lang', 'both', d.lang === 'both', '中英文', '按需要选择')}` : ''}</details>
+      <footer class="rmt-mvf-generate">${record?.shots?.length ? '<p class="rmt-x-note">重新生成会替换现有分镜，已画的图不会保留在新镜头上。</p>' : ''}${btn('setup-generate', running ? '正在写分镜…' : record?.shots?.length ? '重新生成分镜' : '生成分镜', { cls: 'rmt-x-primary', disabled: running })}<small class="rmt-x-note">这里只生成分镜，图片由你另行生成或导入。</small></footer>`);
 }
 
 function choice(action, value, on, title, desc, note = '') {
@@ -844,14 +880,13 @@ function thumb(shot, record, label) {
 }
 
 function renderBoard(song, record) {
-    if (mv.isV2(record)) return renderGroupsBoard(song, record);
+    if (mv.isV2(record) && view.mode !== 'video') return renderGroupsBoard(song, record);
     const context = ctx();
     const scope = mv.mvScope(context);
     const tegaki = view.mode === 'tegaki';
     const shots = record.shots;
     const drawn = shots.filter(hasImg).length;
     const videos = shots.filter(s => s.videoDone).length;
-    const done = tegaki ? drawn : videos;
     const sections = mv.parseSections(song.lyrics);
     let rangeShots = shots;
     if (tegaki) { try { rangeShots = mv.shotsInRange(record, song); } catch { rangeShots = shots; } }
@@ -876,31 +911,15 @@ function renderBoard(song, record) {
               ${!tegaki ? btn('open-shot', shot.videoDone ? '再看看' : '去生成视频', { id: shot.id, cls: 'rmt-x-primary rmt-x-dark' }) : uploadLabel(shot.id, '用自己的图')}</div></article>${groupLink}`.replace(/^/, () => groupHead);
         }).join('');
     }).join('');
-    const wd = record.wardrobe || {};
-    const wardrobeCard = `<details class="rmt-x-card"${wd.char || wd.user || wd.era ? '' : ' open'}><summary><b>时代与衣着</b>（每一张都用同一套）</summary>
-      <label class="rmt-mv-look"><span>时代 / 场景</span><input type="text" maxlength="200" data-rmt-mv-wardrobe="era" value="${esc(wd.era || '')}" placeholder="例如 ancient Chinese wuxia, bamboo forest sect"></label>
-      ${record.cast ? '' : `<label class="rmt-mv-look"><span>他的衣着</span><input type="text" maxlength="300" data-rmt-mv-wardrobe="char" value="${esc(wd.char || '')}" placeholder="例如 white layered hanfu robe, silver hairpin"></label>
-      ${mv.normalizeSettings(record.settings).appear === 'none' ? '' : `<label class="rmt-mv-look"><span>你的衣着</span><input type="text" maxlength="300" data-rmt-mv-wardrobe="user" value="${esc(wd.user || '')}" placeholder="例如 pale pink ruqun dress, jade hairpin"></label>`}`}
-      <p class="rmt-x-note">外貌设定只管长相；衣着在这里统一，写分镜时会按角色设定和世界观自动填好，可以改。用英文写效果最稳。改完之后重画的图才会生效。</p></details>`;
     const warn = mv.frameNeedsUserLooks(record, context) && shots.some(s => s.who === 'both' || s.who === 'user')
         ? `<div class="rmt-mv-warn">还没有填写你的外貌，画出来的你可能每张不一样。</div>${looksEditor()}` : '';
-    const rangeCard = tegaki ? (() => {
-        const o = mv.tegakiOptions(record);
-        return `<section class="rmt-x-card"><b>做哪一段</b>${rangePicker('record', o, sections)}${continueControl(record, song)}</section>`;
-    })() : '';
     const tools = tegaki ? `${remaining ? btn(view.drawingAll ? 'draw-stop' : 'draw-all', view.drawingAll ? '停止连续绘制' : `一次画完剩下的 ${remaining} 张（会用 ${remaining} 次生图）`) : ''}
         ${btn('go-tegaki', '去手书剪辑台', { cls: 'rmt-x-primary' })}<p class="rmt-x-note">没画的镜头在剪辑台里会先用上一张代替，随时能预览。</p>`
         : `${btn('music-preview', '配乐与预览')}${btn('go-finish', '全部做完后：拼成 MV', { cls: 'rmt-x-primary rmt-x-dark' })}`;
-    page('镜头清单', '印象曲', `${head(song.title, '镜头清单', `${shots.length} 镜 · ${mv.normalizeSettings(record.settings).ratio === '9:16' ? '竖屏' : '横屏'}。同一张分镜表，可以做成手书，也可以做成视频。`)}
-      <div class="rmt-mv-toggle">${['tegaki', 'video'].map(m => `<button type="button" class="${view.mode === m ? 'on' : ''}" aria-pressed="${view.mode === m}" data-rmt-mv="mode" data-rmt-mv-id="${m}">${m === 'tegaki' ? '手书' : '视频'}</button>`).join('')}</div>
-      ${rangeCard}
-      ${cast_controls.directionControls(song, record.settings, 'record')}
-      ${record.cast ? cast_controls.castControls(record.cast, record.settings, wd, 'record') : btn('edit-cast', '设置本曲人物／世界书')}
-      ${wardrobeCard}
-      <section class="rmt-x-card"><div class="rmt-x-row-head"><b>${tegaki ? `已画好 ${drawn} / ${shots.length} 张` : `视频已做好 ${videos} / ${shots.length} 镜`}</b><span>${tegaki ? '画好的图两边通用' : '先画第一张图再做视频'}</span></div>
-        <div class="rmt-x-bar"><i style="width:${shots.length ? Math.round(done / shots.length * 100) : 0}%"></i></div>${tools}</section>
-      ${warn}${groups}
-      <div class="rmt-mv-actions">${btn('rewrite-board', '重新写分镜')}</div>`);
+    page('分镜与画面', '印象曲', `<section class="rmt-mvf-overview"><div class="rmt-x-row-head"><b>${tegaki ? '分镜与画面' : '逐镜制作视频'}</b><span>${shots.length} 镜</span></div>
+      <div class="rmt-mv-toggle">${['tegaki', 'video'].map(m => `<button type="button" class="${view.mode === m ? 'on' : ''}" aria-pressed="${view.mode === m}" data-rmt-mv="mode" data-rmt-mv-id="${m}">${m === 'tegaki' ? '手书' : '外部视频'}</button>`).join('')}</div>
+      <div class="rmt-mvf-toolbar">${btn('editor-drawer', '制作设置', { id: 'settings' })}${btn('editor-drawer', audioBySong.has(audioKey()) ? '管理音乐' : '导入音乐', { id: 'audio' })}</div>
+      <p class="rmt-x-note">${tegaki ? `图片 ${drawn} / ${shots.length} 张` : `视频已做好 ${videos} / ${shots.length} 镜`}</p>${tools}</section>${warn}${groups}`);
 }
 
 // ---------- 视频 · 做这一镜 ----------
@@ -1042,6 +1061,12 @@ function saveEditorTime(value, advance = false) {
         }
     }
     renderMv();
+    const root = body()?.querySelector?.('[data-rmt-mv-scroll="timing"]');
+    const active = root?.querySelector?.('.rmt-mve-line.on,.rmt-mve-section-pick.on');
+    if (active && root?.getBoundingClientRect && active.getBoundingClientRect) {
+        const a = active.getBoundingClientRect(), b = root.getBoundingClientRect();
+        if (a.top < b.top || a.bottom > b.bottom) root.scrollTop += a.top - b.top - 12;
+    }
 }
 
 function editorTimingPanel(song, record) {
@@ -1062,21 +1087,47 @@ function editorTimingPanel(song, record) {
     }).join('');
     const sectionMode = target.kind === 'section';
     const legacy = view.sub === 'sync' && sectionMode;
+    const nextLine = target.kind === 'line' ? lines[lines.findIndex(l => l.key === target.key) + 1] : null;
+    const fine = target.index < 0 ? '' : `<div class="rmt-mve-nudge">${btn('editor-nudge', '−0.1 秒', { id: '-0.1' })}<input type="number" step="0.1" min="0" inputmode="decimal" value="${Math.round(target.time * 10) / 10}" data-rmt-mv-editor-time aria-label="选中标记的开始秒数">${btn('editor-nudge', '+0.1 秒', { id: '0.1' })}</div>`;
     return `<div class="rmt-mve-panel-scroll" data-rmt-mv-scroll="timing"><div class="rmt-x-row-head"><b>定段与定句</b><span>${Object.values(taps).filter(markedTime).length} 段 · ${lines.filter(l => markedTime(lineTaps[l.key])).length} / ${lines.length} 句</span></div>
       <p class="rmt-x-note">点段名定段，点歌词定句，共用上方播放器。</p><div class="rmt-mve-sync-list">${groups}</div>
-      <details><summary>重置与细调</summary><div>${btn('tap-line-reset', '清空逐句打点')}${btn('tap-reset', '清空全部打点')}</div></details></div>
+      <details><summary>对轴选项与微调</summary><div><label class="rmt-mv-check"><input type="checkbox" data-rmt-mv-editor-next ${view.editorAutoNext !== false ? 'checked' : ''}>定好后自动选下一句</label>${fine}${btn('tap-line-reset', '清空逐句打点')}${btn('tap-reset', '清空全部打点')}</div></details></div>
       <footer class="rmt-mve-dock rmt-mve-timing-dock">
-      <small class="rmt-x-note">${target.index < 0 ? esc(target.label) : `${sectionMode ? '正在定段' : '正在定句'} · ${esc(sectionMode ? target.label : target.section)}`}</small>
+      <small>${target.index < 0 ? '对轴完成' : `${sectionMode ? '正在定段' : '正在定句'} · ${esc(sectionMode ? target.label : target.section || '')}`}</small><b class="rmt-mve-current-line">${esc(target.label)}</b>${nextLine ? `<small class="rmt-mve-next-line">下一句：${esc(nextLine.text)}</small>` : ''}
       <div class="rmt-mve-timing-actions">${legacy ? `<button type="button" class="rmt-mv-tap${target.index < 0 ? ' done' : ''}" data-rmt-mv="tap" ${!audioBySong.has(audioKey()) || target.index < 0 ? 'disabled' : ''}><b>${target.index < 0 ? '✓ 时间对好了' : esc(target.label) + '开始了'}</b></button>` : btn('editor-mark', sectionMode ? '这一段开始了' : '这一句开始了', { cls: 'rmt-x-primary', disabled: target.index < 0 || player.exporting })}${btn('editor-undo', '撤销', { disabled: !view.editorUndo.length || player.exporting })}</div>
-      ${target.index < 0 ? '' : `<div class="rmt-mve-nudge">${btn('editor-nudge', '−0.1 秒', { id: '-0.1' })}<input type="number" step="0.1" min="0" inputmode="decimal" value="${Math.round(target.time * 10) / 10}" data-rmt-mv-editor-time aria-label="选中标记的开始秒数">${btn('editor-nudge', '+0.1 秒', { id: '0.1' })}</div>`}
-      <label class="rmt-mv-check"><input type="checkbox" data-rmt-mv-editor-next ${view.editorAutoNext !== false ? 'checked' : ''}>定好后自动选下一句</label></footer>`;
+      </footer>`;
+}
+
+function wardrobeSettings(record) {
+    const wd = record?.wardrobe || {};
+    return `<details class="rmt-x-card"><summary>时代与衣着</summary><label class="rmt-mv-look"><span>时代 / 场景</span><input type="text" maxlength="200" data-rmt-mv-wardrobe="era" value="${esc(wd.era || '')}"></label>
+      ${record?.cast ? '' : `<label class="rmt-mv-look"><span>他的衣着</span><input type="text" maxlength="300" data-rmt-mv-wardrobe="char" value="${esc(wd.char || '')}"></label>${mv.normalizeSettings(record?.settings).appear === 'none' ? '' : `<label class="rmt-mv-look"><span>你的衣着</span><input type="text" maxlength="300" data-rmt-mv-wardrobe="user" value="${esc(wd.user || '')}"></label>`}`}<p class="rmt-x-note">改完之后生成的图片会使用这些设置。</p></details>`;
+}
+
+function projectSettings(song, record) {
+    if (!record?.shots?.length) return '<p class="rmt-x-note">在分镜页选择制作范围、方向和人物。</p>';
+    const o = mv.tegakiOptions(record), wd = record.wardrobe || {};
+    return `<section class="rmt-x-card"><b>制作范围</b>${rangePicker('record', o, mv.parseSections(song.lyrics))}${continueControl(record, song)}</section>${cast_controls.directionControls(song, record.settings, 'record')}
+      ${record.cast ? cast_controls.castControls(record.cast, record.settings, wd, 'record') : btn('edit-cast', '设置本曲人物／世界书')}${wardrobeSettings(record)}
+      <div class="rmt-mv-actions">${['16:9', '9:16'].map(id => btn('editor-ratio', id === '16:9' ? '横屏 16:9' : '竖屏 9:16', { id, extra: ` aria-pressed="${mv.normalizeSettings(record.settings).ratio === id}"` })).join('')}</div>`;
+}
+
+function sharedMaterials(record) {
+    if (!record?.shots?.length) return '<p class="rmt-x-note">生成分镜后会在这里显示共享素材。</p>';
+    let shots; try { shots = mv.shotsInRange(record, currentSong()); } catch { shots = record.shots; }
+    const backgrounds = sharedBackgroundsHtml(record, shots);
+    const motif = record.motif ? `<section class="rmt-x-card"><b>装饰 · ${esc(record.motif.name || '意象')}</b><div class="rmt-mv-assets"><div>${assetTile(record, 'motif', '装饰')}</div></div>${motifNotice(record)}</section>` : '';
+    const groups = (record.groups || []).map(group => `<details class="rmt-x-card"><summary>${esc(group.composition || group.id)} · 共享图片</summary><div class="rmt-mv-assets">${group.diffs.map(diff => `<div>${assetTile(record, `${group.id}:${diff.id}`, diff.label)}</div>`).join('')}</div></details>`).join('');
+    return `${backgrounds}${motif}${groups || ''}${!backgrounds && !motif && !groups ? '<p class="rmt-x-note">这份作品使用逐镜图片，可在分镜页编辑。</p>' : ''}`;
 }
 
 function editorSheet(song, record) {
     if (view.editorDrawer === 'audio') return audioCard(song);
+    if (view.editorDrawer === 'settings') return projectSettings(song, record);
+    if (view.editorDrawer === 'materials') return sharedMaterials(record);
     if (view.editorDrawer === 'shots') return `<div class="rmt-mve-shot-grid">${editorStrip(mv.shotTimeline(record, song).rows, record, true).strip}</div>`;
-    if (view.editorDrawer === 'more') return `${recoveryPanel()}${btn('go-board', '素材库 · 图片编辑 · 抠图')}${btn('go-board', '补充分镜与图片')}${btn('download-table', '下载镜头时间表')}${btn('download-srt', '下载歌词字幕')}${btn('export-recovery', '导出 MV 数据与暂存结果')}<div class="rmt-mve-host-actions">${btn('go-board', '主导航与任务')}<button type="button" class="rmt-x-secondary" data-rmt-action="close">关闭窗口</button></div>`;
-    if (view.editorDrawer !== 'export') return '';
+    if (view.editorDrawer === 'more') return `${recoveryPanel()}${record?.shots?.length ? `${btn('editor-drawer', '制作设置', { id: 'settings' })}${btn('editor-drawer', '共享图片、背景与装饰', { id: 'materials' })}${btn('download-table', '下载镜头时间表')}${btn('download-srt', '下载歌词字幕')}${btn('video-workflow', '外部视频工具与逐镜制作')}${btn('rewrite-board', '重新生成分镜')}` : ''}${btn('export-recovery', '导出 MV 数据与暂存结果')}<div class="rmt-mve-host-actions"><button type="button" class="rmt-x-secondary" data-rmt-action="tasks">任务中心</button><button type="button" class="rmt-x-secondary" data-rmt-workspace-tab="content">返回内容</button><button type="button" class="rmt-x-secondary" data-rmt-workspace-tab="archive">当前档案</button><button type="button" class="rmt-x-secondary" data-rmt-workspace-tab="settings">插件设置</button><button type="button" class="rmt-x-secondary" data-rmt-action="workspace-expand">展开／收起窗口</button><button type="button" class="rmt-x-secondary" data-rmt-action="close">关闭窗口</button></div>`;
+    if (view.editorDrawer !== 'export' || !record?.shots?.length) return '';
     const support = exportSupport(), exporting = player.exporting;
     return exporting ? `<div class="rmt-x-row-head"><b>正在导出</b><span data-rmt-mv-export-time>0:00</span></div><div class="rmt-x-bar"><i data-rmt-mv-export-bar style="width:0%"></i></div><p class="rmt-x-note">请留在本页，不要锁屏。</p>${btn('export-stop', '停止导出')}`
       : `${exportControls(record, song)}${support.ok ? btn('export', audioBySong.has(audioKey()) ? `导出视频（.${support.ext}）` : `导出无声视频（.${support.ext}）`, { cls: 'rmt-x-primary' }) : '<p class="rmt-mv-warn">此环境不支持直接导出视频，可使用下面的录屏模式。</p>'}
@@ -1088,10 +1139,11 @@ function editorShotPanel(song, record, sel, selIndex) {
     const assetKey = sel?.shot.group && sel?.shot.diff ? `${sel.shot.group}:${sel.shot.diff}` : '';
     const asset = assetKey ? mv.assetOf(record, assetKey) : null;
     const shared = asset && !mv.hasAssetImage(sel?.shot.image);
+    const linked = shared ? record.shots.filter(shot => shot.group === sel.shot.group && shot.diff === sel.shot.diff && !mv.hasAssetImage(shot.image)).length : 0;
     return sel ? `<div class="rmt-mve-panel-scroll" data-rmt-mv-scroll="shots"><div class="rmt-x-row-head"><b>第 ${selIndex + 1} 镜</b><span>${mv.formatTime(sel.start, true)}–${mv.formatTime(sel.end, true)}</span></div><p class="rmt-x-note rmt-mve-lyric">${esc(sel.shot.lyric || sel.shot.plain || '')}</p>
-      <div class="rmt-mve-image-actions">${btn(shared ? 'edit-asset' : 'edit-frame', '编辑图片', { id: shared ? assetKey : sel.shot.id, cls: 'rmt-x-primary', extra: ' aria-label="图片编辑 · 选单格 · 修边"' })}${uploadLabel(sel.shot.id, '换图')}</div><small class="rmt-mve-image-note">${shared ? '共享构图素材' : '当前镜图片'} · ${mv.shotImage(record, sel.shot)?.editMode === 'cutout' ? '透明图' : '保留原背景'}</small>
+      <div class="rmt-mve-image-actions">${btn(shared ? 'edit-asset' : 'edit-frame', shared ? '编辑共享图片' : '编辑本镜图片', { id: shared ? assetKey : sel.shot.id, cls: 'rmt-x-primary', extra: ' aria-label="图片编辑 · 选单格 · 修边"' })}${uploadLabel(sel.shot.id, '换图')}</div><small class="rmt-mve-image-note">${shared ? `用于 ${linked} 镜 · 修改会同步关联镜头` : '仅当前镜图片'} · ${mv.shotImage(record, sel.shot)?.editMode === 'cutout' ? '透明图' : '保留原背景'}</small>
       <details><summary>镜头运动与切换</summary><div><b>镜头运动</b><div class="rmt-mv-grid2">${seg('set-motion', mv.MV_MOTIONS, sel.shot.motion)}</div><b>切到下一镜</b><div class="rmt-x-segs">${seg('set-cut', mv.MV_CUTS, sel.shot.cut || 'fade')}</div></div></details>
-      ${stageShotControls(record, sel.shot)}<details><summary>图片与生成</summary><div>${shared ? btn('cutout-asset', '一键抠图', { id: assetKey }) : ''}${asset ? btn('edit-prompt-asset', '构图素材与提示词', { id: assetKey }) : ''}${btn('draw', mv.isFrameDrawing(mv.mvScope(ctx()), view.songId, sel.shot.id) ? '正在画…' : hasImg(sel.shot) ? '重画这一镜' : '画这一镜', { id: sel.shot.id, disabled: mv.isFrameDrawing(mv.mvScope(ctx()), view.songId, sel.shot.id) })}${btn('go-board', '素材库与背景编辑')}${btn('go-board', '补充分镜与图片')}</div></details></div>
+      ${stageShotControls(record, sel.shot)}<details><summary>图片与生成</summary><div>${shared ? btn('cutout-asset', '一键抠图', { id: assetKey }) : ''}${asset ? btn('edit-prompt-asset', '构图素材与提示词', { id: assetKey }) : ''}${btn('draw', mv.isFrameDrawing(mv.mvScope(ctx()), view.songId, sel.shot.id) ? '正在画…' : hasImg(sel.shot) ? '重画这一镜' : '画这一镜', { id: sel.shot.id, disabled: mv.isFrameDrawing(mv.mvScope(ctx()), view.songId, sel.shot.id) })}${btn('editor-drawer', '共享背景与装饰', { id: 'materials' })}${btn('go-board', '补充分镜与图片')}</div></details></div>
       <footer class="rmt-mve-dock">${btn('editor-step', '上一镜', { id: '-1', disabled: selIndex <= 0 || !!player.exporting })}<small>${selIndex + 1} / ${mv.shotTimeline(record, song).rows.length}</small>${btn('editor-step', '下一镜', { id: '1', disabled: selIndex + 1 >= mv.shotTimeline(record, song).rows.length || !!player.exporting })}</footer>` : '';
 }
 
@@ -1116,7 +1168,7 @@ function renderTegaki(song, record) {
     if (tab === 'shots') panels.shots = editorShotPanel(song, record, sel, selIndex);
     if (tab === 'timing') panels.timing = editorTimingPanel(song, record);
     if (tab === 'look') panels.look = `<div class="rmt-mve-panel-scroll" data-rmt-mv-scroll="look"><div class="rmt-x-row-head"><b>整支手书的样子</b><span>全片设置</span></div><div class="rmt-x-segs">${seg('editor-ratio', { '16:9': '横屏 16:9', '9:16': '竖屏 9:16' }, mv.normalizeSettings(record.settings).ratio)}</div>${tegakiControls(record, song)}</div>`;
-    const html = editor_ui.editorMarkup({ esc, btn, song, tab, panels, width: w, height: h, strip, stripNav,
+    const html = editor_ui.editorMarkup({ esc, btn, song, header: workspaceHeader(song, record), tab, panels, width: w, height: h, strip, stripNav,
         storyLabel: mv_direction.directionOf(mv.normalizeSettings(record.settings).storyType).name, previewOnly: view.previewOnly, pendingCount: mv.pendingMv(view.scope).length,
         selectedLabel: `第 ${selIndex + 1} 镜 · ${rows.length} 镜`, time: mv.formatTime(currentTime(), true), seconds: currentTime(), total, totalLabel: mv.formatTime(total),
         playing: player.playing, audio: audioBySong.has(audioKey()), audioName: audioBySong.get(audioKey())?.name, exporting: player.exporting, drawer: view.editorDrawer, drawerHtml: editorSheet(song, record) });
@@ -1137,6 +1189,11 @@ function bindEditorControls() {
     const roots = [body()?.querySelector?.('.rmt-mv-editor'), editorDialog?.element].filter(Boolean);
     for (const root of roots) {
         if (!root.addEventListener) continue;
+        root.addEventListener('click', event => {
+            if (view.editorDrawer && event.target.closest?.('[data-rmt-action],[data-rmt-workspace-tab]')) {
+                editorDialog?.dispose(); editorDialog = null; view.editorDrawer = '';
+            }
+        });
         root.addEventListener('input', event => {
             if (event.target.matches?.('[data-rmt-mv-seek]') && !player.exporting) seekEditor(event.target.value);
             if (event.target.matches?.('[data-rmt-mv-music-link]')) view.musicLinkInput = event.target.value;
@@ -1383,35 +1440,11 @@ function syncEditorPlayback(record, song, t) {
     const label = document.querySelector('[data-rmt-mv-current]');
     const text = `播放 · 第 ${number} 镜 / ${rows.length} 镜`;
     if (label && label.textContent !== text) label.textContent = text;
-    const changed = view.editorPlayhead !== row.shot.id;
     view.editorPlayhead = row.shot.id;
-    // Do not replace a focused field, an image draft, or the timing workspace.
-    const editing = document.activeElement?.closest?.('.rmt-mve-tools')
-        && document.activeElement?.matches?.('input,select,textarea,[contenteditable="true"]');
-    const follow = view.sub === 'tegaki' && (view.editorTab || 'shots') === 'shots' && !view.editorDrawer && !editing;
-    if (follow && view.selected !== row.shot.id) {
-        view.selected = row.shot.id;
-        const panel = body()?.querySelector?.('[data-rmt-mv-shot-panel]');
-        if (panel) panel.innerHTML = editorShotPanel(song, record, row, number - 1);
-    }
-    if (follow && changed) {
-        const start = view.stripStart || 0;
-        if (number - 1 < start || number - 1 >= start + editor_ui.EDITOR_PAGE_SIZE) {
-            view.stripStart = Math.floor((number - 1) / editor_ui.EDITOR_PAGE_SIZE) * editor_ui.EDITOR_PAGE_SIZE;
-            const film = body()?.querySelector?.('[data-rmt-mv-filmstrip]');
-            if (film) { const { strip, stripNav } = editorStrip(rows, record); film.innerHTML = editor_ui.editorFilmstripMarkup({ btn, selectedLabel: `第 ${number} 镜 · ${rows.length} 镜`, strip, stripNav }); }
-        }
-        const selection = body()?.querySelector?.('[data-rmt-mv-selection]');
-        if (selection) selection.textContent = `第 ${number} 镜 · ${rows.length} 镜`;
-    }
     for (const button of document.querySelectorAll('.rmt-mve-filmstrip [data-rmt-mv="select-shot"]')) {
         const current = button.dataset.rmtMvId === row.shot.id;
         if (button.getAttribute?.('aria-current') !== String(current)) button.setAttribute('aria-current', String(current));
         button.classList?.toggle('on', button.dataset.rmtMvId === view.selected);
-        if (follow && changed && current) {
-            const strip = button.parentElement;
-            if (strip) strip.scrollLeft = Math.max(0, button.offsetLeft - strip.offsetLeft - (strip.clientWidth - button.offsetWidth) / 2);
-        }
     }
 }
 
@@ -1488,7 +1521,9 @@ async function togglePlay() {
 }
 
 export function stopPlayback() {
+    const pausedAt = currentTime();
     player.playing = false;
+    if (!player.audio) player.clockOffset = pausedAt;
     if (player.recording) { clearInterval(player.recording.timer); player.recording.shell.remove(); player.recording = null; }
     if (player.audio) player.audio.onended = null;
     try { player.audio?.pause(); } catch {}
@@ -1497,6 +1532,7 @@ export function stopPlayback() {
 }
 
 export function disposeMv() {
+    rememberWorkspace();
     editorBody(false);
     cancelMusicLink();
     for (const [key, token] of audioLoads) if (token.videoSource) { token.cancel?.(); audioTried.delete(key); }
@@ -1804,12 +1840,24 @@ export function handleMvClick(event) {
     if (action === 'open') { openMv({ songId: id }); return true; }
     if (runtimeState.activeMode !== MV_MODE) return true;
     // Closing must remain available even if this song/archive became unreadable.
-    if (action === 'editor-drawer' && !['export', 'more', 'audio', 'shots'].includes(id)) { closeEditorDrawer(); return true; }
+    if (action === 'editor-drawer' && !['export', 'more', 'audio', 'shots', 'settings', 'materials'].includes(id)) { closeEditorDrawer(); return true; }
     const d = view.draft ||= mv.normalizeSettings(currentRecord()?.settings);
     const record = currentRecord();
     const opened = viewTarget();
     try {
         if (action === 'back') navigateMvBack();
+        else if (action === 'back-song') returnToSong();
+        else if (action === 'workspace-tab') {
+            view.editorDrawer = '';
+            if (id === 'editor' && !record?.shots?.length) { go('setup'); globalThis.toastr?.info?.('写好分镜后，可以在这里预览和剪辑。', '心迹回廊'); }
+            else if (id === 'editor') go('tegaki');
+            else if (id === 'board') go(record?.shots?.length ? 'board' : 'setup');
+        }
+        else if (action === 'open-editor-shot') {
+            const rows = mv.shotTimeline(record, currentSong()).rows, index = rows.findIndex(row => row.shot.id === id);
+            if (index >= 0) { view.selected = id; view.stripStart = Math.floor(index / editor_ui.EDITOR_PAGE_SIZE) * editor_ui.EDITOR_PAGE_SIZE; view.editorTab = 'shots'; view.editorDrawer = ''; go('tegaki'); seekEditor(rows[index].start); }
+        }
+        else if (action === 'video-workflow') { view.editorDrawer = ''; view.mode = 'video'; go('board'); }
         else if (action === 'audio-link') {
             const input = (editorDialog?.element || body())?.querySelector?.('[data-rmt-mv-music-link]');
             void importMusicLink(input?.value ?? view.musicLinkInput ?? '').catch(toastError);
@@ -1896,7 +1944,7 @@ export function handleMvClick(event) {
             p.then(result => { reportResult(result, '分镜写好了。'); if (isView(opened)) { if (result?.pending) renderMv(); else { view.mode = settings.output; go('board'); } } })
                 .catch(error => { toastError(error); if (isView(opened)) renderMv(); });
         }
-        else if (action === 'rewrite-board') { view.step = 1; view.castDraft = mv_cast.initialMvCast(ctx(), record); view.draft = mv.normalizeSettings({ ...(record?.settings || {}), ...(record?.tegaki?.range ? { range: record.tegaki.range, rangeFrom: record.tegaki.rangeFrom, rangeTo: record.tegaki.rangeTo } : {}) }); go('setup'); }
+        else if (action === 'rewrite-board') { view.editorDrawer = ''; view.step = 1; view.castDraft = mv_cast.initialMvCast(ctx(), record); view.draft = mv.normalizeSettings({ ...(record?.settings || {}), ...(record?.tegaki?.range ? { range: record.tegaki.range, rangeFrom: record.tegaki.rangeFrom, rangeTo: record.tegaki.rangeTo } : {}) }); go('setup'); }
         else if (action === 'continue-board') {
             const p = mv.continueStoryboard(view.songId);
             renderMv();
@@ -2225,8 +2273,8 @@ function assetTile(record, key, label) {
     const exists = mv.hasAssetImage(found?.image);
     const drawing = mv.isAssetDrawing(mv.mvScope(ctx()), view.songId, key);
     const wide = mv.normalizeSettings(record.settings).ratio === '16:9';
-    const splitSelect = `<div class="rmt-mv-asset-actions">${btn('edit-asset', '编辑素材', { id: key, cls: 'rmt-mv-edit-open' })}${exists && found?.kind !== 'bg' ? btn('cutout-asset', '一键抠图', { id: key, disabled: drawing || view.drawingAll }) : ''}</div>`;
-    return `<button type="button" class="rmt-mv-asset${wide ? ' wide' : ''}${exists ? ' done' : ''}" data-rmt-mv-anchor="${esc(key)}" data-rmt-mv="draw-asset" data-rmt-mv-id="${esc(key)}" ${drawing || view.drawingAll ? 'disabled' : ''} aria-label="${esc(label)}：${exists ? '重画' : '画'}这一张">${url ? `<img src="${esc(url)}" alt="" loading="lazy" decoding="async">` : ''}<i>${drawing ? '画…' : exists ? '已画' : '未画'}</i></button><small>${esc(label)}</small>${splitSelect}`;
+    const splitSelect = `<div class="rmt-mv-asset-actions">${btn('draw-asset', drawing ? '正在画…' : exists ? '重画' : '生成图片', { id: key, disabled: drawing || view.drawingAll })}${btn('edit-asset', '编辑素材', { id: key, cls: 'rmt-mv-edit-open' })}${exists && found?.kind !== 'bg' ? btn('cutout-asset', '一键抠图', { id: key, disabled: drawing || view.drawingAll }) : ''}</div>`;
+    return `<button type="button" class="rmt-mv-asset${wide ? ' wide' : ''}${exists ? ' done' : ''}" data-rmt-mv-anchor="${esc(key)}" data-rmt-mv="edit-asset" data-rmt-mv-id="${esc(key)}" aria-label="${esc(label)}：查看与编辑图片">${url ? `<img src="${esc(url)}" alt="" loading="lazy" decoding="async">` : ''}<i>${drawing ? '画…' : exists ? '已画' : '未画'}</i></button><small>${esc(label)}</small>${splitSelect}`;
 }
 
 // 素材检查：原图 → 拼图拆分 → 抠图结果 → 播放时的用法，逐张对照。
@@ -2258,7 +2306,7 @@ function sharedBackgroundsHtml(record, shots) {
                 stage_canvas.drawBackground(c.getContext('2d'), bg, c.width, c.height, 0); preview = c.toDataURL('image/png'); } catch { /* Host without Canvas preview. */ }
         }
         const select = (field, label, values, value) => `<label class="rmt-mv-look"><span>${label}</span><select data-rmt-mv-stage-bg="${field}" data-background="${esc(bg.id)}">${Object.entries(values).map(([id, name]) => `<option value="${esc(id)}"${id === value ? ' selected' : ''}>${esc(name)}</option>`).join('')}</select></label>`;
-        return `<div class="rmt-mv-background-tile"><div class="rmt-mv-assets"><div><button type="button" class="rmt-mv-asset${wide ? ' wide' : ''}${drawn ? ' done' : ''}" data-rmt-mv-anchor="${esc(key)}" data-rmt-mv="draw-asset" data-rmt-mv-id="${esc(key)}" aria-label="${esc(bg.label)}：${drawn ? '重画背景' : '生成背景'}" ${drawing || view.drawingAll ? 'disabled' : ''}>${preview ? `<img src="${esc(preview)}" alt="">` : ''}<i>${drawing ? '画…' : bg.kind !== 'image' ? '本地图案' : drawn ? '已画' : '未画'}</i></button></div></div>
+        return `<div class="rmt-mv-background-tile"><div class="rmt-mv-assets"><div><button type="button" class="rmt-mv-asset${wide ? ' wide' : ''}${drawn ? ' done' : ''}" data-rmt-mv-anchor="${esc(key)}" data-rmt-mv="edit-asset" data-rmt-mv-id="${esc(key)}" aria-label="${esc(bg.label)}：编辑背景图片">${preview ? `<img src="${esc(preview)}" alt="">` : ''}<i>${drawing ? '画…' : bg.kind !== 'image' ? '本地图案' : drawn ? '已画' : '未画'}</i></button></div></div>
           <div><b>${esc(bg.label)}</b><div class="rmt-mv-actions">${btn('draw-asset', drawn ? '重画背景' : '生成背景', { id: key, disabled: drawing || view.drawingAll })}${btn('edit-asset', '编辑素材', { id: key })}</div></div>
           <details${view.stageBackgroundOpen === bg.id ? ' open' : ''}><summary>背景样式</summary>${select('kind', '背景类型', mv_stage.BACKGROUNDS, bg.kind)}${select('motion', '背景运动', { still: '不动', rotate: '缓慢旋转', drift: '轻微移动' }, bg.motion)}
           <div class="rmt-mv-actions">${bg.colors.map((c, i) => `<label>配色 ${i + 1}<input type="color" value="${esc(c)}" data-rmt-mv-stage-bg="color${i}" data-background="${esc(bg.id)}"></label>`).join('')}</div></details></div>`;
@@ -2272,7 +2320,6 @@ function renderGroupsBoard(song, record) {
     const drawn = keys.filter(k => mv.hasAssetImage(mv.assetOf(record, k)?.image)).length;
     const remaining = keys.length - drawn;
     const palette = coverPalette(song);
-    const o = mv.tegakiOptions(record);
     let inRangeList;
     try { inRangeList = mv.shotsInRange(record, song).map(s => s.id); } catch { inRangeList = record.shots.map(s => s.id); }
     const inRange = new Set(inRangeList);
@@ -2284,9 +2331,10 @@ function renderGroupsBoard(song, record) {
         const secNames = [...new Set(frames.map(s => sections[s.sectionIndex]?.name).filter(Boolean))].join('、');
         const usedDiffs = g.diffs.filter(d => frames.some(s => s.diff === d.id));
         const open = view.groupOpen === g.id || view.inspect === g.id;
-        const summary = `<summary data-rmt-mv="group-open" data-rmt-mv-id="${esc(g.id)}" aria-expanded="${open}"><b>构图 ${shown} · ${esc(g.composition || '')}</b><small>${esc(secNames)} · ${frames.length} 句 ${open ? '⌄' : '›'}</small></summary>`;
+        const ready = usedDiffs.filter(d => mv.hasAssetImage(d.image)).length;
+        const first = usedDiffs.find(d => mv.hasAssetImage(d.image));
+        const summary = `<summary data-rmt-mv="group-open" data-rmt-mv-id="${esc(g.id)}" aria-expanded="${open}"><span class="rmt-mvf-group-preview">${first ? assetPreviewHtml(first.image) : '待配图'}</span><span class="rmt-mvf-group-copy"><small>第 ${shown} 组 · ${frames.length} 镜 · 图片 ${ready}/${usedDiffs.length}</small><b>${esc(frames[0].lyric || g.composition || '')}</b><small>${esc(secNames)} · ${esc(g.composition || '')}</small></span><em aria-hidden="true">${open ? '⌄' : '›'}</em></summary>`;
         if (!open) return `<details class="rmt-mve-group-fold">${summary}</details>`;
-        const lyrics = frames.filter(s => s.lyric).slice(0, 8).map(s => `${g.diffs.find(d => d.id === s.diff)?.label || ''}｜${s.lyric}`).join('\n');
         const bgIds = g.layer === 'full' || g.stageBackground ? [] : (g.bgs || []).length ? g.bgs.filter(b => frames.some(s => (s.bg || 'B1') === b.id)).map(b => b.id) : ['bg'];
         const bgKeys = g.layer === 'full' || g.stageBackground ? [] : bgIds.length ? bgIds : ['bg'];
         const bgTiles = bgKeys.map(id => `<div>${assetTile(record, `${g.id}:${id}`, (g.bgs || []).find(b => b.id === id)?.label ? '背景·' + g.bgs.find(b => b.id === id).label : '背景')}</div>`).join('');
@@ -2296,30 +2344,20 @@ function renderGroupsBoard(song, record) {
           ${g.stageBackground ? `<small>背景：${mv_stage.usedBackgrounds(record, frames).map(b => esc(b.label)).join('、')} · 共用</small>` : ''}
           <div class="rmt-mv-assets">${bgTiles}${bgTiles ? '<span class="rmt-mv-plus">+</span>' : ''}${usedDiffs.map(d => `<div>${assetTile(record, `${g.id}:${d.id}`, d.label)}</div>`).join('')}</div>
           ${inspectHtml(record, g, usedDiffs)}
-          ${lyrics ? `<div class="rmt-mv-lyric"><p>${esc(lyrics)}</p></div>` : ''}
+          <div class="rmt-mvf-frame-links">${frames.map(frame => btn('open-editor-shot', `<span>${esc(frame.lyric || frame.plain || '器乐')}</span><small>第 ${record.shots.indexOf(frame) + 1} 镜 ›</small>`, { id: frame.id })).join('')}</div>
           <div class="rmt-mv-actions">${missing ? btn('draw-group', `画这一组剩下的 ${missing} 张`, { id: g.id, disabled: view.drawingAll, cls: 'rmt-x-primary' }) : btn('redraw-group', '整组换一版', { id: g.id, disabled: view.drawingAll })}</div>
-          <p class="rmt-x-note">点任意一张缩略图可以单独重画。</p>
+          <p class="rmt-x-note">点图片查看与编辑；生成或重画使用各自按钮。</p>
           ${g.link ? `<div class="rmt-mv-link">↓ 承接：${esc(g.link)}</div>` : ''}</article></details>`;
     }).join('');
-    const motif = record.motif ? `<section class="rmt-x-card"><div class="rmt-x-row-head"><b>意象：${esc(record.motif.name || '装饰')}</b><span>副歌时漂浮</span></div><div class="rmt-mv-assets"><div>${assetTile(record, 'motif', '意象')}</div></div>${motifNotice(record)}</section>` : '';
-    const wd = record.wardrobe || {};
-    const wardrobe = `<details class="rmt-x-card"${wd.char || wd.era ? '' : ' open'}><summary><b>时代与衣着</b>（每一张都用同一套）</summary>
-      <label class="rmt-mv-look"><span>时代 / 场景</span><input type="text" maxlength="200" data-rmt-mv-wardrobe="era" value="${esc(wd.era || '')}"></label>
-      ${record.cast ? '' : `<label class="rmt-mv-look"><span>他的衣着</span><input type="text" maxlength="300" data-rmt-mv-wardrobe="char" value="${esc(wd.char || '')}"></label>
-      ${mv.normalizeSettings(record.settings).appear === 'none' ? '' : `<label class="rmt-mv-look"><span>你的衣着</span><input type="text" maxlength="300" data-rmt-mv-wardrobe="user" value="${esc(wd.user || '')}"></label>`}`}
-      <p class="rmt-x-note">改完之后重画的图才会生效。</p></details>`;
-    const warn = mv.frameNeedsUserLooks(record, ctx()) && record.groups.some(g => g.who === 'both' || g.who === 'user') ? `<div class="rmt-mv-warn">还没有填写你的外貌，画出来的你可能每张不一样。</div>${looksEditor()}` : '';
-    page('构图卡片', '印象曲', `${head(song.title + ' · 手书', '构图卡片', '按歌曲安排关键画面，需要时复用素材或追加差分。')}
-      <section class="rmt-mv-palette"><span class="rmt-mv-cover">${coverUrl(song) ? `<img src="${esc(coverUrl(song))}" alt="">` : ''}</span><div><b>从封面取色</b><span>${palette.map(c => `<i style="background:${c}"></i>`).join('')}</span></div><small>片头片尾<br>用封面</small></section>
-      <section class="rmt-x-card"><b>做哪一段</b>${rangePicker('record', o, sections)}${continueControl(record, song)}</section>
-      ${cast_controls.directionControls(song, record.settings, 'record')}
-      ${record.cast ? cast_controls.castControls(record.cast, record.settings, wd, 'record') : btn('edit-cast', '设置本曲人物／世界书')}
-      <section class="rmt-x-card"><div class="rmt-x-row-head"><b>已画 ${drawn} / ${keys.length} 张</b><span>${esc(mv.playRange(record, song).label)}</span></div>
-        <div class="rmt-x-bar"><i style="width:${keys.length ? Math.round(drawn / keys.length * 100) : 0}%"></i></div>
-        ${remaining ? btn(view.drawingAll ? 'draw-stop' : 'draw-all', view.drawingAll ? '停止连续绘制' : `一次画完剩下的 ${remaining} 张（会用 ${remaining} 次生图）`) : ''}
-        ${btn('go-tegaki', '去剪辑台预览', { cls: 'rmt-x-primary' })}</section>
-      ${wardrobe}${warn}${sharedBackgroundsHtml(record, record.shots.filter(s => inRange.has(s.id)))}${cards || '<p class="rmt-x-note">选中的段落里还没有构图，点上面的“继续分镜”即可补上。</p>'}${motif}
-      <div class="rmt-mv-actions">${btn('rewrite-board', '重新写分镜')}</div>`);
+    const missingSections = mv.missingStoryboardSections(record, song);
+    const running = mv.isMvRunning(`story:${view.scope}:${view.songId}`);
+    const warn = mv.frameNeedsUserLooks(record, ctx()) && record.groups.some(g => g.who === 'both' || g.who === 'user') ? `<details class="rmt-x-card"><summary>补充我的外貌（可选）</summary>${looksEditor()}</details>` : '';
+    page('分镜与画面', '印象曲', `<section class="rmt-mvf-overview"><div class="rmt-x-row-head"><b>分镜与画面</b><span>${inRange.size} 镜</span></div><p class="rmt-x-note">${esc(mv.playRange(record, song).label)} · 图片 ${drawn} / ${keys.length} 张</p>
+      <div class="rmt-mvf-toolbar">${btn('editor-drawer', '制作设置', { id: 'settings' })}${btn('editor-drawer', audioBySong.has(audioKey()) ? '管理音乐' : '导入音乐', { id: 'audio' })}</div>
+      <div class="rmt-mvf-toolbar">${remaining || view.drawingAll ? btn(view.drawingAll ? 'draw-stop' : 'draw-all', view.drawingAll ? '停止连续绘制' : `生成缺少的 ${remaining} 张`, { cls: 'rmt-x-primary' }) : btn('go-tegaki', '进入剪辑台', { cls: 'rmt-x-primary' })}${btn('editor-drawer', '共享素材', { id: 'materials' })}</div>
+      ${missingSections.length ? btn('continue-board', running ? '正在补写分镜…' : `补充分镜 · 还有 ${missingSections.length} 段`, { disabled: running }) : ''}</section>
+      <div class="rmt-mvf-groups">${cards || '<p class="rmt-x-note">当前片段还没有分镜，可在制作设置里调整范围或补充分镜。</p>'}</div>${warn}
+      <details class="rmt-x-card"><summary>封面配色</summary><section class="rmt-mv-palette"><span class="rmt-mv-cover">${coverUrl(song) ? `<img src="${esc(coverUrl(song))}" alt="歌曲封面">` : ''}</span><div><b>从封面取色</b><span>${palette.map(c => `<i style="background:${c}"></i>`).join('')}</span></div><small>片头片尾使用封面</small></section></details>`);
 }
 
 // ---------- 手书 v2：抠图、取色、渲染 ----------

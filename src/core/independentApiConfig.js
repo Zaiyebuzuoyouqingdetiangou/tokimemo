@@ -571,7 +571,7 @@ export function payloadHasProviderError(payload) {
     return visit(payload, 0);
 }
 
-export function assertIndependentResponsePayload(payload) {
+export function assertIndependentResponsePayload(payload, { allowOptionalInboxArt = false } = {}) {
     if (payloadHasProviderError(payload)) {
         throw providerEnvelopeFailure(payload, false);
     }
@@ -583,7 +583,7 @@ export function assertIndependentResponsePayload(payload) {
         throw error;
     }
     const content = finalResponseText(received);
-    if (looksLikeHtmlResponse(content)) {
+    if (looksLikeHtmlResponse(content) && allowOptionalInboxArt !== true) {
         const error = apiError('专用连接返回了 HTML 页面；响应正文已隐藏。', 'RMT_RESPONSE_HTML');
         error.retryable = false;
         throw error;

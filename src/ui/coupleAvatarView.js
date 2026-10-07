@@ -1,0 +1,393 @@
+import * as couple from '../extras/coupleAvatar.js';
+import * as presets from '../extras/coupleAvatarStyles.js';
+import * as crop from '../extras/coupleAvatarCrop.js';
+import * as core_context from '../core/context.js';
+import * as constants from '../core/constants.js';
+import * as text from '../core/text.js';
+import * as runtime from '../core/state.js';
+import * as overlay from './overlay.js';
+import * as routes from './workspaceState.js';
+import * as workspace from './workspace.js';
+import * as room from '../modes/room.js';
+import * as phone from './phoneView.js';
+import * as styles from './coupleAvatarCss.js';
+
+function esc(value) { return text.esc(value); }
+const jobs = new Map();
+let active = null, modal = null, sequence = 0;
+const commonStyles = ['chibi-dumpling', 'anime-clean', 'art-watercolor', 'craft-plush', 'graphic-pixel', 'photo-film'];
+const settingFields = ['interaction', 'clothing', 'background', 'direction', 'customStyle'];
+function styleFor(id) { return presets.COUPLE_STYLES.find(item => item.id === id); }
+function styleLabel(settings) { return settings?.styleId === 'custom' ? '自定义风格' : styleFor(settings?.styleId)?.label || '二头身团子'; }
+function button(action, label, extra = '') { return `<button type="button" data-pair-action="${action}" ${extra}>${label}</button>`; }
+function current(view) {
+    try { return active === view && view.root?.isConnected && !view.host.hidden && runtime.state.activeMode === couple.COUPLE_MODE
+        && !runtime.state.activeArchiveSnapshot && couple.coupleScope(core_context.currentCharacterGuard()) === view.scope; }
+    catch { return false; }
+}
+function report(view, message) { const node = current(view) && view.root.querySelector('[data-pair-status]'); if (node) node.textContent = message || ''; }
+function failure(view, error) { report(view, text.safeErrorSummary(error) || '这次操作没有完成，请重试。'); }
+function ensureStyles() {
+    if (document.getElementById('rmt-couple-styles')) return;
+    const node = document.createElement('style'); node.id = 'rmt-couple-styles'; node.textContent = styles.coupleAvatarCss(); document.head.append(node);
+}
+function recordFor(view) { return view.records.find(row => row.id === view.currentId) || null; }
+function rememberRecord(view, result) {
+    if (!result?.record) return;
+    view.records = [result.record, ...view.records.filter(row => row.id !== result.record.id)]
+        .sort((a, b) => b.createdAt - a.createdAt);
+    if (result.durable === false) view.pending.add(result.record.id); else view.pending.delete(result.record.id);
+}
+function draft(view) {
+    const settings = structuredClone(view.settings);
+    for (const key of settingFields) {
+        const input = view.root.querySelector(`[data-pair-field="${key}"]`); if (input) settings[key] = input.value;
+    }
+    for (let i = 0; i < 2; i++) for (const key of ['name', 'appearance']) {
+        const input = view.root.querySelector(`[data-pair-person="${i}"][data-pair-key="${key}"]`);
+        if (input) settings.people[i][key] = input.value;
+    }
+    view.settings = couple.normalizeCoupleSettings(settings, view.context);
+    return structuredClone(view.settings);
+}
+function queueDraft(view) {
+    const settings = draft(view); clearTimeout(view.draftTimer);
+    view.draftTimer = setTimeout(() => {
+        void couple.saveCoupleSettings(view.scope, settings).then(result => {
+            if (result?.durable === false) report(view, '创作设置暂留本页，暂未写入本机存储。');
+        }).catch(error => failure(view, error));
+    }, 300);
+}
+
+export function closeCoupleDialog({ restoreFocus = true } = {}) {
+    if (!modal) return false;
+    const previous = modal; modal = null; previous.cleanup?.();
+    for (const [node, inert] of previous.siblings) node.inert = inert;
+    previous.host?.removeEventListener('cancel', previous.cancel, true);
+    previous.shade.remove();
+    if (restoreFocus && previous.focus?.isConnected) previous.focus.focus({ preventScroll: true });
+    return true;
+}
+export function disposeCoupleAvatar() {
+    if (routes.workspace.route === couple.COUPLE_MODE && active?.root?.isConnected && current(active)) return;
+    active?.historyObserver?.disconnect();
+    closeCoupleDialog({ restoreFocus: false }); active = null;
+}
+function dialog(view, title, contents) {
+    closeCoupleDialog({ restoreFocus: false });
+    if (!current(view)) return null;
+    const shell = view.root.closest('.rmt-shell') || view.host;
+    const shade = document.createElement('div'); shade.className = 'rmt-pair-shade';
+    shade.innerHTML = `<section class="rmt-pair-sheet" role="dialog" aria-modal="true" aria-labelledby="rmt-pair-dialog-title"><header><h2 id="rmt-pair-dialog-title">${esc(title)}</h2><button type="button" data-pair-close aria-label="关闭${esc(title)}">关闭</button></header><div class="rmt-pair-sheet-body">${contents}</div></section>`;
+    const siblings = [...shell.children].map(node => [node, node.inert]), focus = document.activeElement;
+    const host = shell.closest('dialog');
+    const cancel = event => { event.preventDefault(); event.stopImmediatePropagation(); closeCoupleDialog(); };
+    const m = { shade, body: shade.querySelector('.rmt-pair-sheet-body'), siblings, focus, host, cancel, view, cleanup: null };
+    shell.append(shade); modal = m;
+    for (const [node] of siblings) node.inert = true;
+    host?.addEventListener('cancel', cancel, true);
+    shade.addEventListener('click', event => {
+        if (event.target === shade || event.target.closest('[data-pair-close]')) { event.preventDefault(); event.stopPropagation(); closeCoupleDialog(); }
+    });
+    shade.addEventListener('keydown', event => {
+        if (event.key === 'Escape') return cancel(event);
+        if (event.key !== 'Tab') return;
+        const targets = [...shade.querySelectorAll('button,a[href],input,select,textarea,[tabindex="0"]')]
+            .filter(node => !node.disabled && node.getClientRects().length);
+        if (!targets.length) return;
+        if (event.shiftKey && document.activeElement === targets[0]) { event.preventDefault(); targets[targets.length - 1].focus(); }
+        else if (!event.shiftKey && document.activeElement === targets[targets.length - 1]) { event.preventDefault(); targets[0].focus(); }
+    });
+    shade.querySelector('[data-pair-close]').focus({ preventScroll: true });
+    return m;
+}
+function square(record, display, loaded, className = '') {
+    const box = document.createElement('div'); box.className = `rmt-pair-square ${className}`;
+    const half = record.order?.[display] === 1 ? 1 : 0;
+    const img = document.createElement('img'); img.src = loaded.image.src;
+    img.alt = `${record.settings.people[half]?.name || (display ? '右边' : '左边')}的头像`;
+    img.draggable = false;
+    Object.assign(img.style, crop.cropPreviewStyle(loaded.width, loaded.height, half, record.crops[half]));
+    box.append(img); return box;
+}
+function loadRecord(view, record) {
+    const key = record.original.url;
+    if (!view.images.has(key)) {
+        const promise = crop.loadPairImage(key).catch(error => { view.images.delete(key); throw error; });
+        view.images.set(key, promise);
+    }
+    return view.images.get(key);
+}
+function renderJobs(view) {
+    if (!current(view)) return;
+    const target = view.root.querySelector('[data-pair-jobs]'); if (!target) return;
+    const rows = [...jobs.values()].filter(job => job.scope === view.scope);
+    target.innerHTML = rows.map(job => `<div class="rmt-pair-job" role="status"><span>${esc(job.label)}<small style="display:block">${job.background ? '完成后收进历史，可以继续做别的事。' : '一张原图，一对头像。'}</small></span>${job.background ? '<small>后台等待中</small>' : button('background', '转到后台', `data-pair-id="${job.id}"`)}</div>`).join('');
+}
+async function renderPreview(view) {
+    if (!current(view)) return;
+    const host = view.root.querySelector('[data-pair-preview]'), record = recordFor(view), token = ++view.previewEpoch;
+    if (!host) return;
+    const names = record ? record.order.map(half => record.settings.people[half]?.name || '未命名') : view.settings.people.map(person => person.name || '未命名');
+    host.innerHTML = `<div class="rmt-pair-section-head"><h3>${record ? '这一对头像' : '留两个位置，给你们'}</h3><button type="button" data-pair-action="circle" aria-pressed="${view.circle}">${view.circle ? '方形预览' : '圆形预览'}</button></div><div class="rmt-pair-two ${view.circle ? 'is-circle' : ''}">${[0, 1].map(i => `<div class="rmt-pair-person"><div data-pair-image="${i}" class="rmt-pair-square"><div class="rmt-pair-empty"><b>${i ? '♡' : '♧'}</b><span>${record ? '读取原图…' : i ? '右边的 TA' : '左边的 TA'}</span></div></div><strong>${esc(names[i])}</strong>${button('save', i ? '保存右边' : '保存左边', `data-pair-side="${i}" ${record ? '' : 'disabled'}`)}</div>`).join('')}</div><p class="rmt-pair-note">${record ? '左右头像分别保存为方形 PNG；圆形仅用于预览。' : '选个风格，或导入已有横图。生成后这里并排显示两张头像。'}</p><div class="rmt-pair-preview-tools">${button('crop', '调整裁切', record ? '' : 'disabled')}${button('swap', '交换左右', record ? '' : 'disabled')}${button('seam', '检查当前拼接', record ? '' : 'disabled')}${button('original', '查看原图', record ? '' : 'disabled')}${button('favorite', record?.favorite ? '★ 已收藏' : '☆ 收藏这一对', `${record ? '' : 'disabled'} aria-pressed="${record?.favorite === true}"`)}${button('reuse', '沿用这对的设置', record ? '' : 'disabled')}</div><div data-pair-image-info class="rmt-pair-result-meta"></div>${record && view.pending.has(record.id) ? `<div class="rmt-pair-restore-note">这对头像暂未确认保存到本机，请先保存图片或导出备份。${button('retry', '仅重试保存')}</div>` : ''}`;
+    if (!record) return;
+    try {
+        const loaded = await loadRecord(view, record);
+        if (!current(view) || token !== view.previewEpoch) return;
+        for (let i = 0; i < 2; i++) host.querySelector(`[data-pair-image="${i}"]`).replaceWith(square(record, i, loaded));
+        const meta = host.querySelector('[data-pair-image-info]');
+        meta.textContent = `${styleLabel(record.settings)} · 原图 ${loaded.width} × ${loaded.height}${loaded.croppable ? '' : ' · ' + loaded.error}`;
+    } catch (error) {
+        if (!current(view) || token !== view.previewEpoch) return;
+        for (const node of host.querySelectorAll('.rmt-pair-empty span')) node.textContent = '原图暂未载入';
+        host.querySelector('[data-pair-image-info]').textContent = error.message;
+    }
+}
+function selectTab(view, tab) {
+    view.tab = tab;
+    for (const node of view.root.querySelectorAll('[data-pair-tab]')) node.setAttribute('aria-pressed', String(node.dataset.pairTab === tab));
+    view.root.querySelector('[data-pair-main]').hidden = tab !== 'make';
+    view.root.querySelector('[data-pair-history]').hidden = tab !== 'history';
+    if (tab === 'history') void renderHistory(view);
+}
+async function renderHistory(view) {
+    if (!current(view)) return;
+    const target = view.root.querySelector('[data-pair-history-grid]'), token = ++view.historyEpoch;
+    if (!target) return;
+    const rows = view.records.filter(row => !view.favoritesOnly || row.favorite);
+    view.root.querySelector('[data-pair-history-count]').textContent = `已留下 ${view.records.length} 对`;
+    target.innerHTML = rows.length ? rows.map(record => `<button type="button" class="rmt-pair-history-card" data-pair-action="history-open" data-pair-id="${esc(record.id)}"><div class="rmt-pair-mini" data-pair-thumb="${esc(record.id)}"><div class="rmt-pair-square"></div><div class="rmt-pair-square"></div></div><b>${record.favorite ? '★ ' : ''}${esc(record.order.map(half => record.settings.people[half]?.name || '未命名').join(' · '))}</b><small>${esc(styleLabel(record.settings))} · ${new Date(record.createdAt).toLocaleDateString('zh-CN')}</small></button>`).join('') : '<p class="rmt-pair-muted">这一组还没有头像。做好一对后，会自动收在这里。</p>';
+    const nodes = [...target.querySelectorAll('[data-pair-thumb]')];
+    // Decode visible cards lazily; the record collection itself is never truncated.
+    view.historyObserver?.disconnect();
+    const fill = async node => {
+        const record = rows.find(row => row.id === node.dataset.pairThumb); if (!record) return;
+        try { const loaded = await loadRecord(view, record); if (current(view) && token === view.historyEpoch && node.isConnected) node.replaceChildren(square(record, 0, loaded), square(record, 1, loaded)); }
+        catch { if (node.isConnected) node.title = '原图暂时不可用，点击后可查看记录或导入原图。'; }
+    };
+    if (typeof IntersectionObserver === 'function') {
+        view.historyObserver = new IntersectionObserver(entries => { for (const entry of entries) if (entry.isIntersecting) { view.historyObserver.unobserve(entry.target); void fill(entry.target); } });
+        for (const node of nodes) view.historyObserver.observe(node);
+    } else for (const node of nodes) void fill(node);
+}
+function paintSettings(view) {
+    for (const key of settingFields) { const input = view.root.querySelector(`[data-pair-field="${key}"]`); if (input) input.value = view.settings[key] || ''; }
+    for (let i = 0; i < 2; i++) for (const key of ['name', 'appearance']) view.root.querySelector(`[data-pair-person="${i}"][data-pair-key="${key}"]`).value = view.settings.people[i][key] || '';
+    for (const node of view.root.querySelectorAll('[data-pair-type]')) node.setAttribute('aria-pressed', String(view.settings.pairType === node.dataset.pairType));
+    for (const node of view.root.querySelectorAll('[data-pair-style]')) node.setAttribute('aria-pressed', String(view.settings.styleId === node.dataset.pairStyle));
+    view.root.querySelector('[data-pair-selected-style]').textContent = styleLabel(view.settings);
+    view.root.querySelector('[data-pair-custom]').classList.toggle('is-visible', view.settings.styleId === 'custom');
+}
+function formHtml(view) {
+    return `<form class="rmt-pair-form" data-pair-form><div class="rmt-pair-block"><h3>这次画谁</h3><div class="rmt-pair-fields">${[0, 1].map(i => `<label class="rmt-pair-field"><span>${i ? '右边' : '左边'}</span><input data-pair-person="${i}" data-pair-key="name" aria-label="${i ? '右边' : '左边'}的人物名字" placeholder="可以改成任何人物"></label>`).join('')}</div></div><div class="rmt-pair-block"><div class="rmt-pair-section-head"><h3>画成什么样</h3>${button('styles', '全部 36 种风格')}</div><div class="rmt-pair-style-grid">${commonStyles.map(id => { const item = styleFor(id); return `<button type="button" class="rmt-pair-style" data-pair-style="${id}" aria-pressed="false"><b>${esc(item?.label || id)}</b><small>${esc(presets.STYLE_GROUPS.find(group => group.id === item?.group)?.label || '')}</small></button>`; }).join('')}</div><div class="rmt-pair-section-head"><small>已选：<b data-pair-selected-style></b></small>${button('custom-style', '自己写风格')}</div><label class="rmt-pair-field rmt-pair-custom" data-pair-custom><span>自定义风格</span><textarea data-pair-field="customStyle" placeholder="例如：像旧绘本里的水彩小人，纸张有轻微颗粒。"></textarea></label></div><div class="rmt-pair-block"><h3>两个人的呼应</h3><div class="rmt-pair-choice"><button type="button" data-pair-type="joined" aria-pressed="true">拼接连图</button><button type="button" data-pair-type="echo" aria-pressed="false">独立呼应</button></div><label class="rmt-pair-field"><span>互动</span><select data-pair-field="interaction">${presets.INTERACTIONS.map(value => `<option value="${esc(value)}">${esc(value)}</option>`).join('')}</select></label></div><label class="rmt-pair-field"><span>这一对的小心思 <small>选填</small></span><textarea data-pair-field="direction" placeholder="比如：一个忍着笑，一个假装生气；共用一条围巾。"></textarea></label><details class="rmt-pair-options"><summary>外貌、衣着与背景 <small>选填</small></summary><div>${[0, 1].map(i => `<label class="rmt-pair-field"><span>${i ? '右边' : '左边'}人物外貌</span><textarea data-pair-person="${i}" data-pair-key="appearance" placeholder="沿用已有外貌，也可以修改或留空。"></textarea></label>`).join('')}<label class="rmt-pair-field"><span>衣着</span><input data-pair-field="clothing" placeholder="例如：同款不同色的卫衣"></label><label class="rmt-pair-field"><span>背景</span><input data-pair-field="background" placeholder="例如：左边蓝色，右边粉色"></label></div></details><div><div class="rmt-pair-create"><button type="submit" class="rmt-pair-primary">生成一对头像</button>${button('import', '导入图片')}</div><p class="rmt-pair-note">一张原图生成一对，完成后自动收进历史。导入已有图片也能裁切。</p></div></form>`;
+}
+
+export async function openCoupleAvatar() {
+    active?.historyObserver?.disconnect();
+    closeCoupleDialog({ restoreFocus: false });
+    room.stopRoomClock(); phone.stopPhoneClock(); ensureStyles();
+    overlay.openOverlay();
+    routes.leaveWorkspaceReader(); routes.workspace.route = couple.COUPLE_MODE; routes.workspace.tab = 'content';
+    runtime.state.activeMode = couple.COUPLE_MODE; runtime.state.activeSession = null;
+    overlay.topTitle('情侣头像'); overlay.setBackVisible(true, '内容'); overlay.setManageVisible(false); overlay.setRegenerateVisible(false);
+    const body = overlay.bodyEl(), host = document.getElementById(constants.OVERLAY_ID);
+    if (runtime.state.activeArchiveSnapshot) {
+        body.innerHTML = '<main class="rmt-couple"><h2>情侣头像</h2><p>头像记录保存在制作时的聊天中。回到对应聊天即可查看与制作。</p></main>';
+        active = null; workspace.syncWorkspaceChrome(); return true;
+    }
+    const context = core_context.currentCharacterGuard(), scope = couple.coupleScope(context);
+    body.innerHTML = '<main class="rmt-couple"><p role="status">正在读取头像记录…</p></main>';
+    const view = { root: body.firstElementChild, host, context, scope, settings: couple.defaultCoupleSettings(context), records: [], pending: new Set(), images: new Map(),
+        currentId: '', circle: false, tab: 'make', favoritesOnly: false, previewEpoch: 0, historyEpoch: 0, draftTimer: 0, selectedEpoch: 0 };
+    active = view; workspace.syncWorkspaceChrome();
+    try {
+        const saved = await couple.readCouples(scope);
+        if (!current(view)) return false;
+        const combined = new Map((saved.records || []).map(record => [record.id, record]));
+        for (const record of view.records) if (!combined.has(record.id) || combined.get(record.id).updatedAt < record.updatedAt) combined.set(record.id, record);
+        view.records = [...combined.values()].sort((a, b) => b.createdAt - a.createdAt); view.pending = new Set([...(saved.pendingIds || []), ...view.pending]);
+        view.settings = couple.normalizeCoupleSettings(saved.settings || view.settings, context); view.currentId = view.records[0]?.id || '';
+        view.root.innerHTML = `<header class="rmt-pair-head"><div><h2>情侣头像</h2><p>各自是你们，放在一起刚刚好。</p></div><nav class="rmt-pair-nav" aria-label="头像页面"><button type="button" data-pair-tab="make" aria-pressed="true">制作头像</button><button type="button" data-pair-tab="history" aria-pressed="false">历史与收藏</button></nav></header><p class="rmt-pair-status" data-pair-status role="status" aria-live="polite"></p><div class="rmt-pair-jobs" data-pair-jobs></div><div class="rmt-pair-layout" data-pair-main><section class="rmt-pair-preview"><div class="rmt-pair-stage" data-pair-preview></div></section>${formHtml(view)}</div><section class="rmt-pair-history" data-pair-history hidden><div class="rmt-pair-section-head"><h3 data-pair-history-count></h3><div class="rmt-pair-actions">${button('filter-favorite', '只看收藏', 'aria-pressed="false"')}${button('export', '导出备份')}${button('import-backup', '导入备份')}</div></div><p class="rmt-pair-note">原图、裁切和设置按聊天保存在本设备浏览器中。更换设备前可导出备份。</p><div class="rmt-pair-history-grid" data-pair-history-grid></div></section><input type="file" accept="image/*" data-pair-image-file hidden><input type="file" accept=".json,application/json" data-pair-backup-file hidden>`;
+        bindView(view); paintSettings(view); void renderPreview(view); renderJobs(view);
+        if (saved.durable === false) report(view, '本机存储暂不可用。可以继续制作，完成后请保存图片或导出备份。');
+        body.scrollTop = 0; return true;
+    } catch (error) {
+        if (current(view)) view.root.innerHTML = `<h2>情侣头像</h2><p>${esc(text.safeErrorSummary(error))}</p>`;
+        return false;
+    }
+}
+
+function bindView(view) {
+    view.root.addEventListener('input', event => {
+        if (event.target.matches('[data-pair-field],[data-pair-person]')) queueDraft(view);
+    });
+    view.root.addEventListener('change', event => {
+        if (event.target.matches('select[data-pair-field]')) queueDraft(view);
+    });
+    view.root.querySelector('[data-pair-form]').addEventListener('submit', event => { event.preventDefault(); void startGeneration(view); });
+    view.root.addEventListener('click', event => {
+        const target = event.target.closest('button'); if (!target || !current(view)) return;
+        if (target.dataset.pairTab) return selectTab(view, target.dataset.pairTab);
+        if (target.dataset.pairStyle) { draft(view); view.settings.styleId = target.dataset.pairStyle; paintSettings(view); queueDraft(view); return; }
+        if (target.dataset.pairType) { draft(view); view.settings.pairType = target.dataset.pairType; paintSettings(view); queueDraft(view); return; }
+        const action = target.dataset.pairAction; if (!action) return;
+        void Promise.resolve().then(() => handleAction(view, action, target)).catch(error => failure(view, error));
+    });
+    view.root.querySelector('[data-pair-image-file]').addEventListener('change', event => {
+        const file = event.target.files?.[0]; event.target.value = '';
+        if (file) void importImage(view, file).catch(error => failure(view, error));
+    });
+    view.root.querySelector('[data-pair-backup-file]').addEventListener('change', event => {
+        const file = event.target.files?.[0]; event.target.value = '';
+        if (file) void file.text().then(raw => couple.importCouples(view.scope, raw)).then(async result => {
+            const saved = await couple.readCouples(view.scope); if (!current(view)) return;
+            view.records = saved.records; view.pending = new Set(saved.pendingIds || []); void renderHistory(view);
+            report(view, result.durable ? '备份已合并到当前聊天，已有头像保留。' : '备份已读取，但本机保存未确认。内容暂留本页，请保留备份文件。');
+        }).catch(error => failure(view, error));
+    });
+}
+async function updateRecord(view, record, patch) {
+    const result = await couple.updateCouple(view.scope, record.id, patch); rememberRecord(view, result);
+    if (current(view)) { void renderPreview(view); if (view.tab === 'history') void renderHistory(view); }
+    if (result.durable === false) report(view, '调整已暂留本页，请先保存图片或导出备份，再重试本机保存。');
+    return result;
+}
+async function handleAction(view, action, target) {
+    const record = recordFor(view);
+    if (action === 'styles') return showStyles(view);
+    if (action === 'custom-style') { draft(view); view.settings.styleId = 'custom'; paintSettings(view); queueDraft(view); view.root.querySelector('[data-pair-field="customStyle"]').focus(); return; }
+    if (action === 'circle') { view.circle = !view.circle; return renderPreview(view); }
+    if (action === 'import') return view.root.querySelector('[data-pair-image-file]').click();
+    if (action === 'import-backup') return view.root.querySelector('[data-pair-backup-file]').click();
+    if (action === 'export') return downloadText(await couple.exportCouples(view.scope));
+    if (action === 'background') { const job = jobs.get(target.dataset.pairId); if (job) { job.background = true; job.controller.abort(); renderJobs(view); report(view, '已转到后台等待，出图后会保存在这次聊天的历史中。'); } return; }
+    if (action === 'filter-favorite') { view.favoritesOnly = !view.favoritesOnly; target.setAttribute('aria-pressed', String(view.favoritesOnly)); return renderHistory(view); }
+    if (action === 'history-open') { view.currentId = target.dataset.pairId; view.selectedEpoch++; selectTab(view, 'make'); return renderPreview(view); }
+    if (!record) return;
+    if (action === 'save') return showSave(view, record, Number(target.dataset.pairSide));
+    if (action === 'crop') return showCrop(view, record);
+    if (action === 'swap') return updateRecord(view, record, { order: [record.order[1], record.order[0]] });
+    if (action === 'favorite') return updateRecord(view, record, { favorite: !record.favorite });
+    if (action === 'original') return showOriginal(view, record, false);
+    if (action === 'seam') return showOriginal(view, record, true);
+    if (action === 'reuse') { view.settings = structuredClone(record.settings); paintSettings(view); queueDraft(view); report(view, '已填入这一对的创作设置，可以修改后再生成。'); return; }
+    if (action === 'retry') { const result = await couple.retryCoupleSave(view.scope, record.id); rememberRecord(view, result); void renderPreview(view); report(view, result.durable ? '这对头像已保存。' : '仍未确认保存，请先保存图片或导出备份。'); }
+}
+function downloadText(value) {
+    const url = URL.createObjectURL(new Blob([value], { type: 'application/json;charset=utf-8' }));
+    const link = document.createElement('a'); link.href = url; link.download = '心迹回廊-情侣头像备份.json'; document.body.append(link); link.click(); link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
+}
+async function importImage(view, file) {
+    const settings = draft(view); report(view, '正在读取原图…');
+    const original = await crop.fileToPairOriginal(file);
+    const result = await couple.addCouple(view.scope, { settings, original }); rememberRecord(view, result);
+    if (!current(view)) return;
+    view.currentId = result.record.id; view.selectedEpoch++; selectTab(view, 'make'); void renderPreview(view);
+    report(view, result.durable ? '已导入原图。可以分别调整左右头像。' : '原图已打开，但本机保存未确认。请先保存头像或导出备份。');
+}
+async function startGeneration(view) {
+    if (!current(view)) return;
+    const settings = draft(view), id = `pair-job-${++sequence}`, controller = new AbortController(), epoch = view.selectedEpoch;
+    const job = { id, scope: view.scope, controller, background: false, label: '正在绘制 · ' + styleLabel(settings) };
+    jobs.set(id, job); renderJobs(view); report(view, '');
+    try {
+        const result = await couple.generateCouple(settings, { context: view.context, signal: controller.signal,
+            onProgress: update => { job.label = `${update?.providerLabel || '生图通道'} · 正在绘制`; if (active?.scope === job.scope) renderJobs(active); } });
+        const receiver = active?.scope === job.scope ? active : view; rememberRecord(receiver, result);
+        if (current(receiver)) {
+            if (!job.background && (receiver !== view || receiver.selectedEpoch === epoch)) { receiver.currentId = result.record.id; void renderPreview(receiver); }
+            if (receiver.tab === 'history') void renderHistory(receiver);
+            report(receiver, result.durable ? '新的一对已收进历史。' : '已出图，本机保存未确认。请先保存图片或导出备份。');
+        }
+    } catch (error) { if (active?.scope === job.scope) failure(active, error); }
+    finally { jobs.delete(id); if (active?.scope === job.scope) renderJobs(active); }
+}
+
+function showStyles(view) {
+    const m = dialog(view, '挑一个喜欢的风格', `<input class="rmt-pair-style-search" data-pair-search aria-label="搜索风格" placeholder="搜索：Q版、水彩、毛绒、像素…"><nav class="rmt-pair-groups" aria-label="风格分类">${[{ id: 'all', label: '全部' }, ...presets.STYLE_GROUPS].map(group => `<button type="button" data-pair-group="${group.id}" aria-pressed="${group.id === 'all'}">${esc(group.label)}</button>`).join('')}</nav><div class="rmt-pair-picker-results" data-pair-picker-results></div>`);
+    if (!m) return;
+    let group = 'all';
+    const draw = () => {
+        const query = m.body.querySelector('[data-pair-search]').value.trim().toLowerCase();
+        const rows = presets.COUPLE_STYLES.filter(item => (group === 'all' || item.group === group) && `${item.label} ${item.description} ${presets.STYLE_GROUPS.find(g => g.id === item.group)?.label || ''}`.toLowerCase().includes(query));
+        m.body.querySelector('[data-pair-picker-results]').innerHTML = rows.length ? rows.map(item => `<button type="button" class="rmt-pair-style" data-pair-pick-style="${item.id}" aria-pressed="${view.settings.styleId === item.id}"><b>${esc(item.label)}</b><small>${esc(item.description)}</small></button>`).join('') : '<p>没有找到，可以换个词，或在页面里自己写风格。</p>';
+    };
+    m.body.addEventListener('input', draw);
+    m.body.addEventListener('click', event => {
+        const target = event.target.closest('button'); if (!target) return;
+        if (target.dataset.pairGroup) { group = target.dataset.pairGroup; for (const item of m.body.querySelectorAll('[data-pair-group]')) item.setAttribute('aria-pressed', String(item.dataset.pairGroup === group)); draw(); }
+        if (target.dataset.pairPickStyle) { draft(view); view.settings.styleId = target.dataset.pairPickStyle; paintSettings(view); queueDraft(view); closeCoupleDialog(); }
+    }); draw();
+}
+async function showCrop(view, record) {
+    const m = dialog(view, '分别调整头像', '<p role="status">正在读取原图…</p>'); if (!m) return;
+    let loaded;
+    try { loaded = await loadRecord(view, record); } catch (error) { return imageFailure(view, m, record, error); }
+    if (modal !== m) return;
+    let side = 0; const edited = structuredClone(record.crops);
+    m.body.innerHTML = `<div class="rmt-pair-choice">${[0, 1].map(i => `<button type="button" data-pair-crop-side="${i}" aria-pressed="${i === 0}">${i ? '右边' : '左边'} · ${esc(record.settings.people[record.order[i]]?.name || '')}</button>`).join('')}</div><p class="rmt-pair-note">只调整选中的这一边。保存后仍保留原图，随时可以重置。</p><div class="rmt-pair-crop-layout" style="margin-top:16px"><div data-pair-crop-stage></div><div class="rmt-pair-sliders">${[['zoom', '放大', 1, 3, .01], ['x', '左右移动', -100, 100, 1], ['y', '上下移动', -100, 100, 1]].map(([key, label, min, max, step]) => `<label>${label}<input type="range" data-pair-crop-control="${key}" min="${min}" max="${max}" step="${step}" aria-label="${label}"></label>`).join('')}<small data-pair-crop-pixels></small><button type="button" data-pair-crop-reset>重置这一边</button></div></div><div class="rmt-pair-actions"><button type="button" data-pair-crop-save class="rmt-pair-primary">保存裁切</button><button type="button" data-pair-close>取消</button></div>`;
+    const draw = () => {
+        const half = record.order[side], c = edited[half], preview = { ...record, crops: edited };
+        const stage = m.body.querySelector('[data-pair-crop-stage]'), image = stage.querySelector('img');
+        if (image) {
+            Object.assign(image.style, crop.cropPreviewStyle(loaded.width, loaded.height, half, c));
+            image.alt = `${record.settings.people[half]?.name || (side ? '右边' : '左边')}的头像`;
+        } else {
+            const next = square(preview, side, loaded); next.setAttribute('data-pair-crop-stage', ''); stage.replaceWith(next);
+        }
+        for (const slider of m.body.querySelectorAll('[data-pair-crop-control]')) slider.value = c[slider.dataset.pairCropControl];
+        const size = crop.cropRect(loaded.width, loaded.height, half, c).outputSize;
+        m.body.querySelector('[data-pair-crop-pixels]').textContent = loaded.croppable ? `保存尺寸 ${size} × ${size} 像素` : loaded.error;
+        for (const tab of m.body.querySelectorAll('[data-pair-crop-side]')) tab.setAttribute('aria-pressed', String(Number(tab.dataset.pairCropSide) === side));
+    };
+    m.body.addEventListener('input', event => { const key = event.target.dataset.pairCropControl; if (key) { edited[record.order[side]][key] = Number(event.target.value); draw(); } });
+    m.body.addEventListener('click', event => {
+        const target = event.target.closest('button'); if (!target) return;
+        if (target.hasAttribute('data-pair-crop-side')) { side = Number(target.dataset.pairCropSide); draw(); }
+        if (target.hasAttribute('data-pair-crop-reset')) { edited[record.order[side]] = crop.normalizeCrop(null); draw(); }
+        if (target.hasAttribute('data-pair-crop-save')) {
+            target.disabled = true;
+            void updateRecord(view, record, { crops: edited }).then(() => { if (modal === m) closeCoupleDialog(); }).catch(error => { target.disabled = false; failure(view, error); });
+        }
+    }); draw();
+}
+async function showOriginal(view, record, seam) {
+    const m = dialog(view, seam ? '检查当前拼接' : '保留的原图', '<p role="status">正在读取原图…</p>'); if (!m) return;
+    if (seam) {
+        let loaded;
+        try { loaded = await loadRecord(view, record); } catch (error) { return imageFailure(view, m, record, error); }
+        if (modal !== m) return;
+        m.body.innerHTML = '<div class="rmt-pair-seam" data-pair-seam></div><p>这里展示当前裁切后的拼接。分别移动或放大后，中间的图案可能需要重新对齐。</p><div class="rmt-pair-actions"><button type="button" data-pair-recrop>调整裁切</button></div>';
+        m.body.querySelector('[data-pair-seam]').append(square(record, 0, loaded), square(record, 1, loaded));
+        m.body.querySelector('[data-pair-recrop]').addEventListener('click', () => void showCrop(view, record).catch(error => failure(view, error)));
+    } else {
+        m.body.innerHTML = `<img class="rmt-pair-full-image" src="${esc(record.original.url)}" alt="这一对头像的完整原图"><p>这是未裁切的完整原图。手机和 TT 可长按图片保存。</p><div class="rmt-pair-actions"><a class="rmt-pair-button" href="${esc(record.original.url)}" target="_blank" rel="noopener noreferrer">单独打开原图</a><a class="rmt-pair-button" href="${esc(record.original.url)}" download="情侣头像-原图">下载原图</a></div>`;
+    }
+}
+function imageFailure(view, m, record, error) {
+    if (modal !== m) return;
+    m.body.innerHTML = `<p role="status">${esc(error.message || '原图暂时无法打开。')}</p><p>头像记录与裁切设置仍然保留。可以打开原地址，或导入本地原图继续制作。</p><div class="rmt-pair-actions"><a class="rmt-pair-button" href="${esc(record.original.url)}" target="_blank" rel="noopener noreferrer">打开原地址</a><button type="button" data-pair-reimport>导入本地原图</button></div>`;
+    m.body.querySelector('[data-pair-reimport]').addEventListener('click', () => { closeCoupleDialog(); view.root.querySelector('[data-pair-image-file]').click(); });
+}
+async function showSave(view, record, side) {
+    const m = dialog(view, side ? '保存右边头像' : '保存左边头像', '<p role="status">正在从原图裁出头像…</p>'); if (!m) return;
+    let image;
+    try { const loaded = await loadRecord(view, record); if (modal !== m) return; image = crop.cropPairImage(loaded, record.crops, record.order)[side]; }
+    catch (error) {
+        if (modal !== m) return;
+        m.body.innerHTML = `<img class="rmt-pair-full-image" src="${esc(record.original.url)}" alt="完整原图"><div class="rmt-pair-restore-note"><p>${esc(error.message)}</p><p>这里展示的是完整原图。保存后可自行裁切，也可导入本地原图继续调整。</p></div><div class="rmt-pair-actions"><a class="rmt-pair-button" href="${esc(record.original.url)}" target="_blank" rel="noopener noreferrer">单独打开原图</a><button type="button" data-pair-save-import>导入本地原图</button></div>`;
+        m.body.querySelector('[data-pair-save-import]').addEventListener('click', () => { closeCoupleDialog(); view.root.querySelector('[data-pair-image-file]').click(); }); return;
+    }
+    if (modal !== m) return;
+    const filename = `情侣头像-${side ? '右边' : '左边'}.png`;
+    const file = await crop.pngFile(image.url, filename); if (modal !== m) return;
+    const url = URL.createObjectURL(file); m.cleanup = () => setTimeout(() => URL.revokeObjectURL(url), 30000);
+    let canShare = false; try { canShare = !!navigator.share && typeof File === 'function' && file instanceof File && navigator.canShare?.({ files: [file] }) === true; } catch {}
+    m.body.innerHTML = `<img class="rmt-pair-full-image" src="${esc(image.url)}" alt="${side ? '右边' : '左边'}头像，可长按保存"><p>手机和 TT：长按上方图片保存。电脑：点击下载。</p><small>${image.width} × ${image.height} 像素 · PNG · 从原图裁切</small><div class="rmt-pair-actions"><a class="rmt-pair-button rmt-pair-primary" href="${esc(url)}" download="${filename}">下载头像</a><a class="rmt-pair-button" href="${esc(url)}" target="_blank" rel="noopener noreferrer">单独打开图片</a>${canShare ? '<button type="button" data-pair-share>系统分享 / 存储</button>' : ''}</div><p data-pair-share-status role="status"></p>`;
+    m.body.querySelector('[data-pair-share]')?.addEventListener('click', () => {
+        void navigator.share({ files: [file], title: '情侣头像' }).catch(error => {
+            if (modal === m && error?.name !== 'AbortError') m.body.querySelector('[data-pair-share-status]').textContent = '系统分享暂不可用，可以长按图片，或点击下载。';
+        });
+    });
+}

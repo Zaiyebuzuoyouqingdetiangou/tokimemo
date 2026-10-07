@@ -1,0 +1,51 @@
+// 情侣头像的画风、互动都是可选提示，不作为出图条件。
+export const STYLE_GROUPS = Object.freeze([
+    { id: 'chibi', label: 'Q版萌系' }, { id: 'anime', label: '动漫绘本' },
+    { id: 'art', label: '手绘艺术' }, { id: 'craft', label: '手作材质' },
+    { id: 'graphic', label: '平面设计' }, { id: 'photo', label: '写真氛围' },
+]);
+
+export const COUPLE_STYLES = Object.freeze([
+    ['chibi-dumpling', 'chibi', '二头身团子', '大头小身体，圆润而轻巧。', 'two-head-tall chibi characters, rounded dumpling-like proportions, oversized heads, tiny bodies, soft playful shapes'],
+    ['chibi-three-head', 'chibi', '三头身小人', '保留服装细节，也能看清小动作。', 'three-head-tall chibi figures, expressive small gestures, recognizable clothing details, cute balanced proportions'],
+    ['chibi-headshot', 'chibi', '萌系大头', '脸和表情是主角，缩小也清楚。', 'cute large-head portrait illustration, expressive readable faces, simple supporting shapes'],
+    ['chibi-doodle', 'chibi', '豆豆眼涂鸦', '几笔小表情，松弛又俏皮。', 'playful hand-drawn doodles, dot eyes, loose lively outlines, simple charming expressions'],
+    ['chibi-animal', 'chibi', '圆滚滚兽化', '把两人变成相呼应的小动物。', 'rounded cute animal versions of the two people, preserve signature colors and recognizable accessories, paired animal characters'],
+    ['chibi-meme', 'chibi', '表情包Q版', '一边闹、一边笑，表情更夸张。', 'expressive chibi reaction-sticker illustration, exaggerated playful expressions and complementary poses, no lettering'],
+    ['anime-clean', 'anime', '日系清线', '利落线条，轻盈的平涂色块。', 'Japanese anime illustration, crisp delicate linework, light flat colors'],
+    ['anime-cel', 'anime', '赛璐璐', '清晰明暗面，像动画定格。', 'cel-shaded anime keyframe, defined light and shadow shapes, clear facial features'],
+    ['anime-shojo', 'anime', '少女漫画', '细线、网点和心动的眼神。', 'romantic shoujo manga illustration, fine linework, delicate screen tones, expressive affectionate eyes'],
+    ['anime-retro90', 'anime', '90年代动画', '复古描线与柔和胶片感。', '1990s anime aesthetic, nostalgic ink outlines, soft analog cel texture and restrained film grain'],
+    ['anime-korean', 'anime', '韩系清透插画', '通透肤色，轻柔而精致。', 'airy Korean-style portrait illustration, translucent gentle skin shading, refined soft linework'],
+    ['anime-storybook', 'anime', '童话绘本', '带一点故事感的温柔笔触。', 'fairytale picture-book illustration, gentle tactile brushwork, narrative charm'],
+    ['art-gongbi', 'art', '国风工笔', '细描发丝与衣纹，含蓄耐看。', 'Chinese gongbi painting, meticulous fine hair and fabric lines, refined restrained color washes'],
+    ['art-ink', 'art', '水墨淡彩', '墨色留白，少量颜色点睛。', 'Chinese ink-and-light-color painting, expressive ink washes, negative space, sparse color accents'],
+    ['art-watercolor', 'art', '透明水彩', '水色晕染，轻轻透出纸感。', 'transparent watercolor portrait illustration, luminous layered washes, subtle paper grain'],
+    ['art-pencil', 'art', '彩铅手绘', '颗粒和线条，像手绘小卡。', 'colored-pencil drawing, visible pencil grain and gentle strokes, hand-drawn portrait card'],
+    ['art-oil', 'art', '油画厚涂', '可见笔触与统一的光影。', 'painterly oil portrait, visible impasto brushwork, coherent soft lighting and rich color relationships'],
+    ['art-sketch', 'art', '黑白素描', '不靠配色，也能画出默契。', 'monochrome graphite portrait sketch, sensitive line and tonal shading, expressive individual faces'],
+    ['craft-plush', 'craft', '毛绒玩偶', '绒毛和缝线，软乎乎的一对。', 'a matching pair of soft plush dolls, tactile fuzzy fabric, delicate stitching, recognizable character design'],
+    ['craft-clay', 'craft', '黏土手办', '圆润体块，保留手作质感。', 'handcrafted clay character figurines, rounded forms, slight handmade surface texture'],
+    ['craft-crochet', 'craft', '钩织娃娃', '针织纹路，配对的小衣服。', 'crocheted amigurumi character dolls, visible yarn stitches, coordinated tiny clothing'],
+    ['craft-felt', 'craft', '羊毛毡', '细绒毛与微微不规则的轮廓。', 'needle-felted wool character dolls, fine soft fibers, charming slightly irregular handmade contours'],
+    ['craft-vinyl', 'craft', '搪胶盲盒', '光滑小手办，玩具收藏感。', 'designer vinyl toy figurines, smooth satin material, charming collectible toy proportions'],
+    ['craft-paper', 'craft', '剪纸拼贴', '层叠纸边和轻浅投影。', 'layered cut-paper collage portraits, visible paper edges, subtle cast shadows, tactile colored paper'],
+    ['graphic-pixel', 'graphic', '16位像素', '方块细节，复古游戏头像。', '16-bit pixel art character portraits, deliberate crisp pixel clusters, retro game palette'],
+    ['graphic-line', 'graphic', '极简线描', '用少量线条留住人物特征。', 'minimal line-art portraits, economical expressive contours, keep distinguishing features'],
+    ['graphic-silhouette', 'graphic', '双色剪影', '轮廓和配色相互呼应。', 'two-color silhouette portrait design, recognizable hair and accessory contours, complementary color shapes'],
+    ['graphic-print', 'graphic', '复古版画', '刻线与套色，干净有力度。', 'vintage relief-print portrait illustration, carved hatching, clean limited-color overprints'],
+    ['graphic-sticker', 'graphic', '贴纸描边', '清楚的白边，像成对贴纸。', 'matching die-cut character sticker illustrations, clean white contour outline, expressive poses'],
+    ['graphic-geometric', 'graphic', '几何色块', '形状和色块拼出两人的默契。', 'geometric shape-based portrait illustration, balanced flat color blocks, recognizable character features'],
+    ['photo-film', 'photo', '胶片写真', '真实镜头与细微胶片颗粒。', 'natural photographic character portraits, analog film rendering, fine film grain, coherent lens perspective'],
+    ['photo-daylight', 'photo', '清新日光', '自然光线，像随手拍下的日常。', 'fresh candid daylight portraits, natural soft light, relaxed expressions, clear facial detail'],
+    ['photo-studio', 'photo', '复古影楼', '成套背景与复古肖像光。', 'vintage studio portrait photography, coordinated backdrop, nostalgic controlled portrait lighting'],
+    ['photo-night', 'photo', '电影夜景', '有色夜光，保持五官清晰。', 'cinematic nighttime portraits, colored ambient night light, legible eyes and facial details'],
+    ['photo-backlight', 'photo', '柔焦逆光', '轻柔轮廓光，不抹去面部细节。', 'soft backlit portrait photography, gentle rim light and delicate bloom, retain readable face detail'],
+    ['photo-mono', 'photo', '黑白人像', '简单背景，突出神情与距离。', 'black-and-white portrait photography, simple background, subtle tonal contrast, expressive connection'],
+].map(([id, group, label, description, prompt]) => Object.freeze({ id, group, label, description, prompt })));
+
+export const INTERACTIONS = Object.freeze([
+    '半颗爱心', '隔空对望', '左右眨眼', '一根红线', '举杯碰杯', '隔空击掌',
+    '一人一只小动物', '耳机分你一只', '同款不同色', '一起看烟花', '并肩吹泡泡',
+    '悄悄牵住衣角', '一边闹一边笑', '递出一朵花', '日与月的呼应', '交给灵感',
+]);

@@ -1,4 +1,5 @@
 import * as content_selection from '../core/contentSelection.js';
+import * as letterArt from '../core/letterIllustration.js';
 // Domain-specific recovery schemas. These are not a generic object/array merge:
 // every collection path, identity and parent binding is owned by the extension.
 // Existing mode normalizers and reading projectors remain the authority.
@@ -74,7 +75,8 @@ function inboxSchema({ memoryBank, previousSession, operation = {}, frozenInputs
         const selected = plan.find(item => item.slot === row?.slot);
         return !!selected && m.recoveryCheck(() => inbox.normalizeInboxLetters({ letters: [row] }, memoryBank, [selected], new Date(date),
             { characterEvidence: inbox.frozenInboxCharacterEvidence(frozenInputs) }).letters.length);
-    }) });
+    }), letterIllustrations: m.recoveryList(m.recoveryItemKey('slot'), null, row =>
+        plan.some(item => item.slot === row?.slot) && !!letterArt.normalizeLetterIllustration(row)) });
 }
 
 function itemsSchema({ memoryBank }) {
