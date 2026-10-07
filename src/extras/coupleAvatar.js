@@ -4,6 +4,9 @@ import * as core_context from '../core/context.js';
 import * as core_castLooks from '../core/castLooks.js';
 import * as core_text from '../core/text.js';
 import * as cg_core from '../generation/cgImageCore.js';
+import * as image_patch from '../core/cgImagePatch.js';
+import * as task_trace from '../core/taskTrace.js';
+import * as runtime from '../core/state.js';
 import * as styles from './coupleAvatarStyles.js';
 
 export const COUPLE_MODE = 'coupleAvatar';
@@ -162,8 +165,12 @@ function originalOf(value) {
     const url = text(source?.url);
     if (!url || /[\u0000-\u001f\u007f]/.test(url)) return null;
     try {
-        const parsed = new URL(url, globalThis.location?.href || 'http://localhost/');
-        if (!['http:', 'https:', 'blob:'].includes(parsed.protocol) && !/^data:image\/[a-z0-9.+-]+[;,]/i.test(url)) return null;
+        const base = image_patch.imageResourceBase(), parsed = new URL(url, base);
+        // TT's returned /user/images/... paths resolve to tauri://localhost.
+        // Use the existing image-host contract for that host, as the provider
+        // already does, instead of rejecting a successfully generated image.
+        const ttImage = parsed.protocol === 'tauri:' && image_patch.isSameImageHost(parsed, base);
+        if (!ttImage && !['http:', 'https:', 'blob:'].includes(parsed.protocol) && !/^data:image\/[a-z0-9.+-]+[;,]/i.test(url)) return null;
     } catch { return null; }
     return { url,
         ...(finite(source?.width, 0) > 0 ? { width: Math.floor(Number(source.width)) } : {}),
@@ -355,27 +362,46 @@ export async function generateCouple(value, { context = core_context.currentChar
     if (signal?.aborted) throw core_text.safeUserError('这次绘制尚未开始。', 'RMT_COUPLE_NOT_STARTED');
     const scope = coupleScope(context), settings = normalizeCoupleSettings(value, context);
     const targetKey = `couple-avatar:${scope}:${newId()}`;
+    const trace = task_trace.startTaskTrace(targetKey, COUPLE_MODE);
+    runtime.state.activeCoupleAvatarTasks.set(targetKey, true);
+    task_trace.markStage(trace, 'start');
     const report = progress => { if (!signal?.aborted) { try { onProgress?.(progress); } catch { /* UI progress cannot lose an image. */ } } };
     // Moving to the background stops foreground updates, not an already paid request.
     // Existing provider wrappers drop late results on abort, so do not pass the view's
     // background signal after submission. A returned result always enters its origin scope.
-    let result;
     try {
-        result = await cg_core.invokeImageGeneration(couplePrompt(settings), context, {
+        task_trace.beginStage(trace, 'prompt');
+        const prompt = couplePrompt(settings);
+        task_trace.markStage(trace, 'prompt');
+        task_trace.beginStage(trace, 'request');
+        const result = await cg_core.invokeImageGeneration(prompt, context, {
             orientation: 'landscape', respectOrientation: true, aspectRatio: '2:1',
             characterName: settings.people[0].name || context?.name2 || '',
             targetKey, singlePrompt: true, onProgress: report,
         });
+        task_trace.markStage(trace, 'request');
+        task_trace.markStage(trace, 'response');
+        task_trace.beginStage(trace, 'validate');
+        const raw = typeof result === 'string' ? result : result?.url;
+        const url = cg_core.normalizeCgImageUrl(raw);
+        if (!url) throw core_text.safeUserError('这次没有收到可用图片，已有头像仍然保留。', 'RMT_COUPLE_IMAGE');
+        task_trace.markStage(trace, 'validate');
+        task_trace.beginStage(trace, 'save');
+        report({ phase: 'saving' });
+        const saved = await addCouple(scope, { settings, original: { url,
+            ...(Number(result?.width) > 0 ? { width: Number(result.width) } : {}),
+            ...(Number(result?.height) > 0 ? { height: Number(result.height) } : {}),
+        } });
+        task_trace.markStage(trace, 'save', saved.durable);
+        if (!saved.durable) task_trace.markStage(trace, 'deferred');
+        task_trace.endTaskTrace(trace, saved.durable ? 'ok' : 'deferred', saved.durable ? null : { code: 'RMT_COUPLE_STORAGE' });
+        return { ...saved, scope, cancelled: signal?.aborted === true };
     } catch (error) {
-        if (error?.safeToDisplay || /^(BBI_|CH8_|RMT_)/.test(text(error?.code))) throw error;
-        throw core_text.safeUserError('这次绘制没有完成，已有头像仍然保留，可以稍后再试。', 'RMT_COUPLE_GENERATION');
+        const safe = error?.safeToDisplay || /^(BBI_|CH8_|RMT_)/.test(text(error?.code)) ? error
+            : core_text.safeUserError('这次绘制没有完成，已有头像仍然保留，可以稍后再试。', 'RMT_COUPLE_GENERATION');
+        task_trace.endTaskTrace(trace, 'failed', safe);
+        throw safe;
+    } finally {
+        runtime.state.activeCoupleAvatarTasks.delete(targetKey);
     }
-    const raw = typeof result === 'string' ? result : result?.url;
-    const url = cg_core.normalizeCgImageUrl(raw);
-    if (!url) throw core_text.safeUserError('这次没有收到可用图片，已有头像仍然保留。', 'RMT_COUPLE_IMAGE');
-    const saved = await addCouple(scope, { settings, original: { url,
-        ...(Number(result?.width) > 0 ? { width: Number(result.width) } : {}),
-        ...(Number(result?.height) > 0 ? { height: Number(result.height) } : {}),
-    } });
-    return { ...saved, scope, cancelled: signal?.aborted === true };
 }

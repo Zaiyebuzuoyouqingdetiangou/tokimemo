@@ -56,8 +56,11 @@ export function coupleAvatarCss() {
 .rmt-pair-status{margin:12px 0;overflow-wrap:anywhere}
 .rmt-pair-status:empty{display:none}
 .rmt-pair-jobs{display:flex;flex-direction:column;gap:8px;margin:12px 0}
+.rmt-pair-jobs:empty{display:none}
 .rmt-pair-job{display:flex;gap:10px;align-items:center;justify-content:space-between;border:1px solid var(--rmt-theme-border);background:var(--rmt-theme-soft);border-radius:12px;padding:10px}
 .rmt-pair-job span{min-width:0;overflow-wrap:anywhere}
+.rmt-pair-job span>small{display:block;margin-top:4px}
+.rmt-pair-job.is-failed{border-style:dashed}
 .rmt-pair-job>button{flex-shrink:0}
 .rmt-pair-history-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-top:16px}
 :is(.rmt-couple,.rmt-pair-sheet) .rmt-pair-history-card{display:block;text-align:left;width:100%;padding:12px!important}

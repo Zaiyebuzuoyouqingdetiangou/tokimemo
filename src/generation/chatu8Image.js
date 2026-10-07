@@ -96,7 +96,7 @@ function uploadedPath(value) {
     if (typeof value !== 'string') return '';
     const trimmed = value.trim();
     if (!trimmed || trimmed.startsWith('data:')) return '';
-    return image_patch.savedLocalImagePath(/^https?:\/\//i.test(trimmed) || trimmed.startsWith('/') ? trimmed : `/${trimmed}`);
+    return image_patch.savedLocalImagePath(/^(?:https?|tauri):\/\//i.test(trimmed) || trimmed.startsWith('/') ? trimmed : `/${trimmed}`);
 }
 
 function uploadHeaders(context) {

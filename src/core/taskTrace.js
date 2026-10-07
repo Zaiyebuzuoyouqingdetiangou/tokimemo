@@ -4,7 +4,7 @@
 // failure between them surfaced as one generic sentence. This records which stage a task
 // reached, never what it contained.
 //
-// Hard rule: only code-owned labels, booleans, counts, durations and RMT_* codes are
+// Hard rule: only code-owned labels, booleans, counts, durations and allowlisted error codes are
 // stored. No prompt, no model response, no chat, no persona, no card, no URL, no header,
 // no key, no exception text. The exporter therefore has nothing to redact.
 import * as core_backupDiagnostics from './backupDiagnostics.js';
@@ -18,9 +18,12 @@ const trace = [];
 const stageStarts = new WeakMap();
 const mergedSegments = new WeakMap();
 const traceParents = new WeakMap();
-const MODES = new Set(['archive', 'archive-profile', 'room', 'album', 'image', 'advEvent', 'heart', 'phone', 'butterfly', 'adv', 'items', 'cabinet', 'inbox', 'themeSong', 'songMv', 'pastLives', 'timeEcho', 'travel', 'ending', 'calendar', 'relations', 'achievements', 'character-profile']);
+const MODES = new Set(['archive', 'archive-profile', 'room', 'album', 'image', 'advEvent', 'heart', 'phone', 'butterfly', 'adv', 'items', 'cabinet', 'inbox', 'themeSong', 'songMv', 'coupleAvatar', 'pastLives', 'timeEcho', 'travel', 'ending', 'calendar', 'relations', 'achievements', 'character-profile']);
 const OUTCOMES = new Set(['running', 'ok', 'failed', 'cancelled', 'deferred', 'blocked', 'noop']);
 const CODES = new Set(['RMT_LOCAL_STORAGE','RMT_LOCAL_CAS','RMT_LOCAL_CLONE','RMT_MANUAL_KEY_STORAGE','RMT_MANUAL_KEY_SESSION_ONLY','RMT_MANUAL_KEY_NOT_ON_DEVICE','RMT_ADVANCED_PARAMETERS','RMT_ADVANCED_BACKEND','RMT_RECOVERY_SOURCE_CHANGED','RMT_ARCHIVE_DRAFT_STORAGE','RMT_ARCHIVE_DRAFT_READ','RMT_ARCHIVE_DRAFT_CONFLICT','RMT_ARCHIVE_DRAFT_CAPACITY',
+    'RMT_COUPLE_GENERATION', 'RMT_COUPLE_IMAGE', 'RMT_COUPLE_STORAGE', 'RMT_COUPLE_NOT_STARTED',
+    'BBI_NOT_READY', 'BBI_VERSION', 'BBI_NOT_CONFIGURED', 'BBI_INVALID_ARGS', 'BBI_RATE_LIMITED', 'BBI_BACKEND_ERROR', 'BBI_SAVE_FAILED', 'BBI_ABORTED', 'BBI_TARGET_BUSY',
+    'CH8_NOT_READY', 'CH8_DISABLED', 'CH8_NOT_CONFIGURED', 'CH8_INVALID_ARGS', 'CH8_BACKEND_ERROR', 'CH8_SAVE_FAILED', 'CH8_ABORTED', 'CH8_TARGET_BUSY',
     ...Object.keys(core_backupDiagnostics.BACKUP_FAILURE_MESSAGES),
     'RMT_DEFERRED_QUOTA', 'RMT_DEFERRED_SECURITY', 'RMT_DEFERRED_UNAVAILABLE',
     'RMT_DEFERRED_LIMIT', 'RMT_DEFERRED_SERIALIZE', 'RMT_DEFERRED_UNKNOWN',
@@ -244,7 +247,9 @@ function snapshotEntries(entries, includeRequests = false) {
         ...(Number.isInteger(entry.httpStatus) && entry.httpStatus >= 400 && entry.httpStatus <= 599 ? { httpStatus: entry.httpStatus } : {}),
         field: STAGES.includes(entry.field) ? entry.field : '',
         activeStage: STAGES.includes(entry.activeStage) ? entry.activeStage : '',
-        providerRequests: count(entry.providerRequests),
+        // Avatar traces wrap the provider adapter, not its transport boundary.
+        // Leave the request count absent rather than claiming zero requests.
+        ...(entry.mode === 'coupleAvatar' ? {} : { providerRequests: count(entry.providerRequests) }),
         ...(entry.transport ? { transport: { streamRequested: entry.transport.streamRequested === true,
             receivedChunks: count(entry.transport.receivedChunks), firstChunkMs: entry.transport.firstChunkMs === null ? null : duration(entry.transport.firstChunkMs) } } : {}),
         durations: snapshotDurations(entry),

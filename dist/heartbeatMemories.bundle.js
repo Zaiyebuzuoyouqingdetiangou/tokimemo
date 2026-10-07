@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 336
-// Source SHA-256: 84f1d3ed516705a4aa6151842f76ea994ee629620d4f54216036a8a09e753211
+// Source SHA-256: 3feed14e3f4fc57abfbcb0dd4eb141a40ac29413573e9b54cd079add56bda11a
 // Build: python3 tools/verification/build.py <source-root>
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -502,7 +502,7 @@ function __init_core_releaseNotes_js() {
 // MODULE: core/releaseNotes.js
 
 // GENERATED FROM README.md by tools/verification/build.py. Do not edit by hand.
-const RELEASE_README = "# 心迹回廊 1.0.34\n\n## 更新日志模块\n\n新增了更新日志板块，感谢@nancyindaeyo的更新。\n\n## 本次变动\n\n- 新增独立的“情侣头像”页面，入口在“内容 → 互动”。保留原有配色，电脑左右分栏，手机按预览、设置的顺序向下浏览。\n- 提供 Q 版、动漫绘本、手绘艺术、手作材质、平面设计和写真氛围六类共 36 种风格，也可自定义。人物、互动、衣着、背景和创作描述可以分别修改。\n- 沿用现有生图通道，一张原图制作一对头像。默认并排显示两个方形头像，可分别调整位置与缩放、交换左右、预览圆形效果，并检查当前裁切的拼接。\n- 左右头像可分别按原图像素保存为方形 PNG，支持下载、长按图片保存和可用时的系统分享。外部图片无法裁切时保留原图查看，并可导入本地原图继续制作。\n- 按聊天在本机保存头像历史、收藏、原图、裁切和创作设置，提供独立备份导入导出。转到后台的请求完成后进入原聊天历史，生成失败保留已有作品；本机保存未确认时可只重试保存。\n";
+const RELEASE_README = "# 心迹回廊 1.0.35\n\n## 更新日志模块\n\n新增了更新日志板块，感谢@nancyindaeyo的更新。\n\n## 本次变动\n\n- 修复 TT 中情侣头像收到图片后无法写入历史的问题，正确识别 TT 返回的本机图片地址。\n- 绘制进度放在生成按钮附近；生成失败会保留原因，点击“知道了”才收起。切换到历史页仍可查看任务与提示。\n- 诊断报告增加头像任务状态和处理阶段，便于区分等待出图、图片接收及本机保存问题。\n";
 
 __m_core_releaseNotes_js.RELEASE_README = RELEASE_README;
 }
@@ -513,9 +513,15 @@ const core_context = __m_core_context_js;
 const core_castLooks = __m_core_castLooks_js;
 const core_text = __m_core_text_js;
 const cg_core = __m_generation_cgImageCore_js;
+const image_patch = __m_core_cgImagePatch_js;
+const task_trace = __m_core_taskTrace_js;
+const runtime = __m_core_state_js;
 const styles = __m_extras_coupleAvatarStyles_js;
 // 独立的情侣头像：一次生图得到一对，原图与裁切参数按聊天保存在本机。
 // 这里不读取或修改正式档案，也不为生图增加数量、外貌或比例门槛。
+
+
+
 
 
 
@@ -677,8 +683,12 @@ function originalOf(value) {
     const url = text(source?.url);
     if (!url || /[\u0000-\u001f\u007f]/.test(url)) return null;
     try {
-        const parsed = new URL(url, globalThis.location?.href || 'http://localhost/');
-        if (!['http:', 'https:', 'blob:'].includes(parsed.protocol) && !/^data:image\/[a-z0-9.+-]+[;,]/i.test(url)) return null;
+        const base = image_patch.imageResourceBase(), parsed = new URL(url, base);
+        // TT's returned /user/images/... paths resolve to tauri://localhost.
+        // Use the existing image-host contract for that host, as the provider
+        // already does, instead of rejecting a successfully generated image.
+        const ttImage = parsed.protocol === 'tauri:' && image_patch.isSameImageHost(parsed, base);
+        if (!ttImage && !['http:', 'https:', 'blob:'].includes(parsed.protocol) && !/^data:image\/[a-z0-9.+-]+[;,]/i.test(url)) return null;
     } catch { return null; }
     return { url,
         ...(finite(source?.width, 0) > 0 ? { width: Math.floor(Number(source.width)) } : {}),
@@ -870,29 +880,48 @@ async function generateCouple(value, { context = core_context.currentCharacterGu
     if (signal?.aborted) throw core_text.safeUserError('这次绘制尚未开始。', 'RMT_COUPLE_NOT_STARTED');
     const scope = coupleScope(context), settings = normalizeCoupleSettings(value, context);
     const targetKey = `couple-avatar:${scope}:${newId()}`;
+    const trace = task_trace.startTaskTrace(targetKey, COUPLE_MODE);
+    runtime.state.activeCoupleAvatarTasks.set(targetKey, true);
+    task_trace.markStage(trace, 'start');
     const report = progress => { if (!signal?.aborted) { try { onProgress?.(progress); } catch { /* UI progress cannot lose an image. */ } } };
     // Moving to the background stops foreground updates, not an already paid request.
     // Existing provider wrappers drop late results on abort, so do not pass the view's
     // background signal after submission. A returned result always enters its origin scope.
-    let result;
     try {
-        result = await cg_core.invokeImageGeneration(couplePrompt(settings), context, {
+        task_trace.beginStage(trace, 'prompt');
+        const prompt = couplePrompt(settings);
+        task_trace.markStage(trace, 'prompt');
+        task_trace.beginStage(trace, 'request');
+        const result = await cg_core.invokeImageGeneration(prompt, context, {
             orientation: 'landscape', respectOrientation: true, aspectRatio: '2:1',
             characterName: settings.people[0].name || context?.name2 || '',
             targetKey, singlePrompt: true, onProgress: report,
         });
+        task_trace.markStage(trace, 'request');
+        task_trace.markStage(trace, 'response');
+        task_trace.beginStage(trace, 'validate');
+        const raw = typeof result === 'string' ? result : result?.url;
+        const url = cg_core.normalizeCgImageUrl(raw);
+        if (!url) throw core_text.safeUserError('这次没有收到可用图片，已有头像仍然保留。', 'RMT_COUPLE_IMAGE');
+        task_trace.markStage(trace, 'validate');
+        task_trace.beginStage(trace, 'save');
+        report({ phase: 'saving' });
+        const saved = await addCouple(scope, { settings, original: { url,
+            ...(Number(result?.width) > 0 ? { width: Number(result.width) } : {}),
+            ...(Number(result?.height) > 0 ? { height: Number(result.height) } : {}),
+        } });
+        task_trace.markStage(trace, 'save', saved.durable);
+        if (!saved.durable) task_trace.markStage(trace, 'deferred');
+        task_trace.endTaskTrace(trace, saved.durable ? 'ok' : 'deferred', saved.durable ? null : { code: 'RMT_COUPLE_STORAGE' });
+        return { ...saved, scope, cancelled: signal?.aborted === true };
     } catch (error) {
-        if (error?.safeToDisplay || /^(BBI_|CH8_|RMT_)/.test(text(error?.code))) throw error;
-        throw core_text.safeUserError('这次绘制没有完成，已有头像仍然保留，可以稍后再试。', 'RMT_COUPLE_GENERATION');
+        const safe = error?.safeToDisplay || /^(BBI_|CH8_|RMT_)/.test(text(error?.code)) ? error
+            : core_text.safeUserError('这次绘制没有完成，已有头像仍然保留，可以稍后再试。', 'RMT_COUPLE_GENERATION');
+        task_trace.endTaskTrace(trace, 'failed', safe);
+        throw safe;
+    } finally {
+        runtime.state.activeCoupleAvatarTasks.delete(targetKey);
     }
-    const raw = typeof result === 'string' ? result : result?.url;
-    const url = cg_core.normalizeCgImageUrl(raw);
-    if (!url) throw core_text.safeUserError('这次没有收到可用图片，已有头像仍然保留。', 'RMT_COUPLE_IMAGE');
-    const saved = await addCouple(scope, { settings, original: { url,
-        ...(Number(result?.width) > 0 ? { width: Number(result.width) } : {}),
-        ...(Number(result?.height) > 0 ? { height: Number(result.height) } : {}),
-    } });
-    return { ...saved, scope, cancelled: signal?.aborted === true };
 }
 
 __m_extras_coupleAvatar_js.readCouples = readCouples;
@@ -2413,8 +2442,11 @@ function coupleAvatarCss() {
 .rmt-pair-status{margin:12px 0;overflow-wrap:anywhere}
 .rmt-pair-status:empty{display:none}
 .rmt-pair-jobs{display:flex;flex-direction:column;gap:8px;margin:12px 0}
+.rmt-pair-jobs:empty{display:none}
 .rmt-pair-job{display:flex;gap:10px;align-items:center;justify-content:space-between;border:1px solid var(--rmt-theme-border);background:var(--rmt-theme-soft);border-radius:12px;padding:10px}
 .rmt-pair-job span{min-width:0;overflow-wrap:anywhere}
+.rmt-pair-job span>small{display:block;margin-top:4px}
+.rmt-pair-job.is-failed{border-style:dashed}
 .rmt-pair-job>button{flex-shrink:0}
 .rmt-pair-history-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-top:16px}
 :is(.rmt-couple,.rmt-pair-sheet) .rmt-pair-history-card{display:block;text-align:left;width:100%;padding:12px!important}
@@ -2487,7 +2519,10 @@ function current(view) {
         && !runtime.state.activeArchiveSnapshot && couple.coupleScope(core_context.currentCharacterGuard()) === view.scope; }
     catch { return false; }
 }
-function report(view, message) { const node = current(view) && view.root.querySelector('[data-pair-status]'); if (node) node.textContent = message || ''; }
+function report(view, message) {
+    if (!current(view)) return;
+    for (const node of view.root.querySelectorAll('[data-pair-status], [data-pair-compose-status]')) node.textContent = message || '';
+}
 function failure(view, error) { report(view, text.safeErrorSummary(error) || '这次操作没有完成，请重试。'); }
 function ensureStyles() {
     if (document.getElementById('rmt-couple-styles')) return;
@@ -2584,7 +2619,9 @@ function renderJobs(view) {
     if (!current(view)) return;
     const target = view.root.querySelector('[data-pair-jobs]'); if (!target) return;
     const rows = [...jobs.values()].filter(job => job.scope === view.scope);
-    target.innerHTML = rows.map(job => `<div class="rmt-pair-job" role="status"><span>${esc(job.label)}<small style="display:block">${job.background ? '完成后收进历史，可以继续做别的事。' : '一张原图，一对头像。'}</small></span>${job.background ? '<small>后台等待中</small>' : button('background', '转到后台', `data-pair-id="${job.id}"`)}</div>`).join('');
+    target.innerHTML = rows.map(job => job.status === 'failed'
+        ? `<div class="rmt-pair-job is-failed" role="alert"><span><strong>这一对没有完成</strong><small>${esc(job.message)}</small></span>${button('dismiss-job', '知道了', `data-pair-id="${job.id}"`)}</div>`
+        : `<div class="rmt-pair-job" role="status"><span>${esc(job.label)}<small>${job.background ? '完成后收进历史，可以继续做别的事。' : '一张原图，一对头像。'}</small></span>${job.background ? '<small>后台等待中</small>' : button('background', '转到后台', `data-pair-id="${job.id}"`)}</div>`).join('');
 }
 async function renderPreview(view) {
     if (!current(view)) return;
@@ -2610,6 +2647,9 @@ function selectTab(view, tab) {
     for (const node of view.root.querySelectorAll('[data-pair-tab]')) node.setAttribute('aria-pressed', String(node.dataset.pairTab === tab));
     view.root.querySelector('[data-pair-main]').hidden = tab !== 'make';
     view.root.querySelector('[data-pair-history]').hidden = tab !== 'history';
+    const jobsHost = view.root.querySelector(tab === 'make' ? '[data-pair-compose-jobs]' : '[data-pair-history-jobs]');
+    const jobsNode = view.root.querySelector('[data-pair-jobs]');
+    if (jobsHost && jobsNode) jobsHost.append(jobsNode);
     if (tab === 'history') void renderHistory(view);
 }
 async function renderHistory(view) {
@@ -2641,7 +2681,7 @@ function paintSettings(view) {
     view.root.querySelector('[data-pair-custom]').classList.toggle('is-visible', view.settings.styleId === 'custom');
 }
 function formHtml(view) {
-    return `<form class="rmt-pair-form" data-pair-form><div class="rmt-pair-block"><h3>这次画谁</h3><div class="rmt-pair-fields">${[0, 1].map(i => `<label class="rmt-pair-field"><span>${i ? '右边' : '左边'}</span><input data-pair-person="${i}" data-pair-key="name" aria-label="${i ? '右边' : '左边'}的人物名字" placeholder="可以改成任何人物"></label>`).join('')}</div></div><div class="rmt-pair-block"><div class="rmt-pair-section-head"><h3>画成什么样</h3>${button('styles', '全部 36 种风格')}</div><div class="rmt-pair-style-grid">${commonStyles.map(id => { const item = styleFor(id); return `<button type="button" class="rmt-pair-style" data-pair-style="${id}" aria-pressed="false"><b>${esc(item?.label || id)}</b><small>${esc(presets.STYLE_GROUPS.find(group => group.id === item?.group)?.label || '')}</small></button>`; }).join('')}</div><div class="rmt-pair-section-head"><small>已选：<b data-pair-selected-style></b></small>${button('custom-style', '自己写风格')}</div><label class="rmt-pair-field rmt-pair-custom" data-pair-custom><span>自定义风格</span><textarea data-pair-field="customStyle" placeholder="例如：像旧绘本里的水彩小人，纸张有轻微颗粒。"></textarea></label></div><div class="rmt-pair-block"><h3>两个人的呼应</h3><div class="rmt-pair-choice"><button type="button" data-pair-type="joined" aria-pressed="true">拼接连图</button><button type="button" data-pair-type="echo" aria-pressed="false">独立呼应</button></div><label class="rmt-pair-field"><span>互动</span><select data-pair-field="interaction">${presets.INTERACTIONS.map(value => `<option value="${esc(value)}">${esc(value)}</option>`).join('')}</select></label></div><label class="rmt-pair-field"><span>这一对的小心思 <small>选填</small></span><textarea data-pair-field="direction" placeholder="比如：一个忍着笑，一个假装生气；共用一条围巾。"></textarea></label><details class="rmt-pair-options"><summary>外貌、衣着与背景 <small>选填</small></summary><div>${[0, 1].map(i => `<label class="rmt-pair-field"><span>${i ? '右边' : '左边'}人物外貌</span><textarea data-pair-person="${i}" data-pair-key="appearance" placeholder="沿用已有外貌，也可以修改或留空。"></textarea></label>`).join('')}<label class="rmt-pair-field"><span>衣着</span><input data-pair-field="clothing" placeholder="例如：同款不同色的卫衣"></label><label class="rmt-pair-field"><span>背景</span><input data-pair-field="background" placeholder="例如：左边蓝色，右边粉色"></label></div></details><div><div class="rmt-pair-create"><button type="submit" class="rmt-pair-primary">生成一对头像</button>${button('import', '导入图片')}</div><p class="rmt-pair-note">一张原图生成一对，完成后自动收进历史。导入已有图片也能裁切。</p></div></form>`;
+    return `<form class="rmt-pair-form" data-pair-form><div class="rmt-pair-block"><h3>这次画谁</h3><div class="rmt-pair-fields">${[0, 1].map(i => `<label class="rmt-pair-field"><span>${i ? '右边' : '左边'}</span><input data-pair-person="${i}" data-pair-key="name" aria-label="${i ? '右边' : '左边'}的人物名字" placeholder="可以改成任何人物"></label>`).join('')}</div></div><div class="rmt-pair-block"><div class="rmt-pair-section-head"><h3>画成什么样</h3>${button('styles', '全部 36 种风格')}</div><div class="rmt-pair-style-grid">${commonStyles.map(id => { const item = styleFor(id); return `<button type="button" class="rmt-pair-style" data-pair-style="${id}" aria-pressed="false"><b>${esc(item?.label || id)}</b><small>${esc(presets.STYLE_GROUPS.find(group => group.id === item?.group)?.label || '')}</small></button>`; }).join('')}</div><div class="rmt-pair-section-head"><small>已选：<b data-pair-selected-style></b></small>${button('custom-style', '自己写风格')}</div><label class="rmt-pair-field rmt-pair-custom" data-pair-custom><span>自定义风格</span><textarea data-pair-field="customStyle" placeholder="例如：像旧绘本里的水彩小人，纸张有轻微颗粒。"></textarea></label></div><div class="rmt-pair-block"><h3>两个人的呼应</h3><div class="rmt-pair-choice"><button type="button" data-pair-type="joined" aria-pressed="true">拼接连图</button><button type="button" data-pair-type="echo" aria-pressed="false">独立呼应</button></div><label class="rmt-pair-field"><span>互动</span><select data-pair-field="interaction">${presets.INTERACTIONS.map(value => `<option value="${esc(value)}">${esc(value)}</option>`).join('')}</select></label></div><label class="rmt-pair-field"><span>这一对的小心思 <small>选填</small></span><textarea data-pair-field="direction" placeholder="比如：一个忍着笑，一个假装生气；共用一条围巾。"></textarea></label><details class="rmt-pair-options"><summary>外貌、衣着与背景 <small>选填</small></summary><div>${[0, 1].map(i => `<label class="rmt-pair-field"><span>${i ? '右边' : '左边'}人物外貌</span><textarea data-pair-person="${i}" data-pair-key="appearance" placeholder="沿用已有外貌，也可以修改或留空。"></textarea></label>`).join('')}<label class="rmt-pair-field"><span>衣着</span><input data-pair-field="clothing" placeholder="例如：同款不同色的卫衣"></label><label class="rmt-pair-field"><span>背景</span><input data-pair-field="background" placeholder="例如：左边蓝色，右边粉色"></label></div></details><div><div data-pair-compose-jobs><div class="rmt-pair-jobs" data-pair-jobs></div></div><p class="rmt-pair-status" data-pair-compose-status role="status" aria-live="polite"></p><div class="rmt-pair-create"><button type="submit" class="rmt-pair-primary">生成一对头像</button>${button('import', '导入图片')}</div><p class="rmt-pair-note">一张原图生成一对，完成后自动收进历史。导入已有图片也能裁切。</p></div></form>`;
 }
 
 async function openCoupleAvatar() {
@@ -2669,7 +2709,7 @@ async function openCoupleAvatar() {
         for (const record of view.records) if (!combined.has(record.id) || combined.get(record.id).updatedAt < record.updatedAt) combined.set(record.id, record);
         view.records = [...combined.values()].sort((a, b) => b.createdAt - a.createdAt); view.pending = new Set([...(saved.pendingIds || []), ...view.pending]);
         view.settings = couple.normalizeCoupleSettings(saved.settings || view.settings, context); view.currentId = view.records[0]?.id || '';
-        view.root.innerHTML = `<header class="rmt-pair-head"><div><h2>情侣头像</h2><p>各自是你们，放在一起刚刚好。</p></div><nav class="rmt-pair-nav" aria-label="头像页面"><button type="button" data-pair-tab="make" aria-pressed="true">制作头像</button><button type="button" data-pair-tab="history" aria-pressed="false">历史与收藏</button></nav></header><p class="rmt-pair-status" data-pair-status role="status" aria-live="polite"></p><div class="rmt-pair-jobs" data-pair-jobs></div><div class="rmt-pair-layout" data-pair-main><section class="rmt-pair-preview"><div class="rmt-pair-stage" data-pair-preview></div></section>${formHtml(view)}</div><section class="rmt-pair-history" data-pair-history hidden><div class="rmt-pair-section-head"><h3 data-pair-history-count></h3><div class="rmt-pair-actions">${button('filter-favorite', '只看收藏', 'aria-pressed="false"')}${button('export', '导出备份')}${button('import-backup', '导入备份')}</div></div><p class="rmt-pair-note">原图、裁切和设置按聊天保存在本设备浏览器中。更换设备前可导出备份。</p><div class="rmt-pair-history-grid" data-pair-history-grid></div></section><input type="file" accept="image/*" data-pair-image-file hidden><input type="file" accept=".json,application/json" data-pair-backup-file hidden>`;
+        view.root.innerHTML = `<header class="rmt-pair-head"><div><h2>情侣头像</h2><p>各自是你们，放在一起刚刚好。</p></div><nav class="rmt-pair-nav" aria-label="头像页面"><button type="button" data-pair-tab="make" aria-pressed="true">制作头像</button><button type="button" data-pair-tab="history" aria-pressed="false">历史与收藏</button></nav></header><p class="rmt-pair-status" data-pair-status role="status" aria-live="polite"></p><div class="rmt-pair-layout" data-pair-main><section class="rmt-pair-preview"><div class="rmt-pair-stage" data-pair-preview></div></section>${formHtml(view)}</div><section class="rmt-pair-history" data-pair-history hidden><div class="rmt-pair-section-head"><h3 data-pair-history-count></h3><div class="rmt-pair-actions">${button('filter-favorite', '只看收藏', 'aria-pressed="false"')}${button('export', '导出备份')}${button('import-backup', '导入备份')}</div></div><p class="rmt-pair-note">原图、裁切和设置按聊天保存在本设备浏览器中。更换设备前可导出备份。</p><div data-pair-history-jobs></div><div class="rmt-pair-history-grid" data-pair-history-grid></div></section><input type="file" accept="image/*" data-pair-image-file hidden><input type="file" accept=".json,application/json" data-pair-backup-file hidden>`;
         bindView(view); paintSettings(view); void renderPreview(view); renderJobs(view);
         if (saved.durable === false) report(view, '本机存储暂不可用。可以继续制作，完成后请保存图片或导出备份。');
         body.scrollTop = 0; return true;
@@ -2722,6 +2762,7 @@ async function handleAction(view, action, target) {
     if (action === 'import') return view.root.querySelector('[data-pair-image-file]').click();
     if (action === 'import-backup') return view.root.querySelector('[data-pair-backup-file]').click();
     if (action === 'export') return downloadText(await couple.exportCouples(view.scope));
+    if (action === 'dismiss-job') { const job = jobs.get(target.dataset.pairId); if (job?.scope === view.scope && job.status === 'failed') { jobs.delete(job.id); renderJobs(view); } return; }
     if (action === 'background') { const job = jobs.get(target.dataset.pairId); if (job) { job.background = true; job.controller.abort(); renderJobs(view); report(view, '已转到后台等待，出图后会保存在这次聊天的历史中。'); } return; }
     if (action === 'filter-favorite') { view.favoritesOnly = !view.favoritesOnly; target.setAttribute('aria-pressed', String(view.favoritesOnly)); return renderHistory(view); }
     if (action === 'history-open') { view.currentId = target.dataset.pairId; view.selectedEpoch++; selectTab(view, 'make'); return renderPreview(view); }
@@ -2751,19 +2792,28 @@ async function importImage(view, file) {
 async function startGeneration(view) {
     if (!current(view)) return;
     const settings = draft(view), id = `pair-job-${++sequence}`, controller = new AbortController(), epoch = view.selectedEpoch;
-    const job = { id, scope: view.scope, controller, background: false, label: '正在绘制 · ' + styleLabel(settings) };
+    const job = { id, scope: view.scope, controller, background: false, status: 'running', label: '正在绘制 · ' + styleLabel(settings) };
     jobs.set(id, job); renderJobs(view); report(view, '');
     try {
         const result = await couple.generateCouple(settings, { context: view.context, signal: controller.signal,
-            onProgress: update => { job.label = `${update?.providerLabel || '生图通道'} · 正在绘制`; if (active?.scope === job.scope) renderJobs(active); } });
+            onProgress: update => {
+                const phase = { queued: '等待通道', 'queued-remote': '等待通道', waiting: '等待出图', generating: '正在绘制', saving: '正在保存头像' }[update?.phase] || '正在绘制';
+                job.label = update?.providerLabel ? `${update.providerLabel} · ${phase}` : phase;
+                if (active?.scope === job.scope) renderJobs(active);
+            } });
         const receiver = active?.scope === job.scope ? active : view; rememberRecord(receiver, result);
         if (current(receiver)) {
             if (!job.background && (receiver !== view || receiver.selectedEpoch === epoch)) { receiver.currentId = result.record.id; void renderPreview(receiver); }
             if (receiver.tab === 'history') void renderHistory(receiver);
             report(receiver, result.durable ? '新的一对已收进历史。' : '已出图，本机保存未确认。请先保存图片或导出备份。');
         }
-    } catch (error) { if (active?.scope === job.scope) failure(active, error); }
-    finally { jobs.delete(id); if (active?.scope === job.scope) renderJobs(active); }
+    } catch (error) {
+        job.status = 'failed';
+        job.message = text.safeErrorSummary(error) || '这次绘制没有完成，请重试。';
+    } finally {
+        if (job.status !== 'failed') jobs.delete(id);
+        if (active?.scope === job.scope) renderJobs(active);
+    }
 }
 
 function showStyles(view) {
@@ -17126,10 +17176,11 @@ function buildDiagnosticReport() {
             hasPendingWork: state.busy === true || !!state.activeTaskLabel
                 || count(state.activeGenerationTasks?.size) > 0 || count(state.activeModeBuildScopes?.size) > 0
                 || count(state.activeAdvBulkScopes?.size) > 0 || count(state.activeArchiveTargetReservations?.size) > 0
-                || count(state.activeCgImageTasks?.size) > 0 || count(state.activeProviderRequestCount) > 0
+                || count(state.activeCgImageTasks?.size) > 0 || count(state.activeCoupleAvatarTasks?.size) > 0 || count(state.activeProviderRequestCount) > 0
                 || count(state.providerRequestQueue?.length) > 0 || !!state.roomLifeRefreshPromise,
             generationTasks: count(state.activeGenerationTasks?.size),
             cgImageTasks: count(state.activeCgImageTasks?.size),
+            coupleAvatarTasks: count(state.activeCoupleAvatarTasks?.size),
             providerInFlight: count(state.activeProviderRequestCount),
             providerQueued: count(state.providerRequestQueue?.length),
             rateLimitHits: count(state.rateLimitHits),
@@ -23537,7 +23588,7 @@ function __init_core_selfUpdater_js() {
 const RELEASE_README = __m_core_releaseNotes_js.RELEASE_README;
 
 const UPDATE_STATE = Symbol.for('heartbeatMemories.selfUpdate');
-const INSTALLED_BUILD = '1.0.34';
+const INSTALLED_BUILD = '1.0.35';
 const PROJECT_REMOTE = 'https://github.com/zaiyebuzuoyouqingdetiangou/tokimemo';
 function updateError(message) { const error = new Error(message); error.userMessage = message; return error; }
 
@@ -23998,6 +24049,7 @@ const state = {
   activeAdvBulkScopes: new Set(),
   activeArchiveTargetReservations: new Map(),
   activeCgImageTasks: new Map(),
+  activeCoupleAvatarTasks: new Map(),
   cgImageLifecycleEpoch: 0,
   avatarDialogueRequestEpoch: 0,
   activeAvatarDialogue: null,
@@ -38089,7 +38141,7 @@ const core_backupDiagnostics = __m_core_backupDiagnostics_js;
 // failure between them surfaced as one generic sentence. This records which stage a task
 // reached, never what it contained.
 //
-// Hard rule: only code-owned labels, booleans, counts, durations and RMT_* codes are
+// Hard rule: only code-owned labels, booleans, counts, durations and allowlisted error codes are
 // stored. No prompt, no model response, no chat, no persona, no card, no URL, no header,
 // no key, no exception text. The exporter therefore has nothing to redact.
 
@@ -38103,9 +38155,12 @@ const trace = [];
 const stageStarts = new WeakMap();
 const mergedSegments = new WeakMap();
 const traceParents = new WeakMap();
-const MODES = new Set(['archive', 'archive-profile', 'room', 'album', 'image', 'advEvent', 'heart', 'phone', 'butterfly', 'adv', 'items', 'cabinet', 'inbox', 'themeSong', 'songMv', 'pastLives', 'timeEcho', 'travel', 'ending', 'calendar', 'relations', 'achievements', 'character-profile']);
+const MODES = new Set(['archive', 'archive-profile', 'room', 'album', 'image', 'advEvent', 'heart', 'phone', 'butterfly', 'adv', 'items', 'cabinet', 'inbox', 'themeSong', 'songMv', 'coupleAvatar', 'pastLives', 'timeEcho', 'travel', 'ending', 'calendar', 'relations', 'achievements', 'character-profile']);
 const OUTCOMES = new Set(['running', 'ok', 'failed', 'cancelled', 'deferred', 'blocked', 'noop']);
 const CODES = new Set(['RMT_LOCAL_STORAGE','RMT_LOCAL_CAS','RMT_LOCAL_CLONE','RMT_MANUAL_KEY_STORAGE','RMT_MANUAL_KEY_SESSION_ONLY','RMT_MANUAL_KEY_NOT_ON_DEVICE','RMT_ADVANCED_PARAMETERS','RMT_ADVANCED_BACKEND','RMT_RECOVERY_SOURCE_CHANGED','RMT_ARCHIVE_DRAFT_STORAGE','RMT_ARCHIVE_DRAFT_READ','RMT_ARCHIVE_DRAFT_CONFLICT','RMT_ARCHIVE_DRAFT_CAPACITY',
+    'RMT_COUPLE_GENERATION', 'RMT_COUPLE_IMAGE', 'RMT_COUPLE_STORAGE', 'RMT_COUPLE_NOT_STARTED',
+    'BBI_NOT_READY', 'BBI_VERSION', 'BBI_NOT_CONFIGURED', 'BBI_INVALID_ARGS', 'BBI_RATE_LIMITED', 'BBI_BACKEND_ERROR', 'BBI_SAVE_FAILED', 'BBI_ABORTED', 'BBI_TARGET_BUSY',
+    'CH8_NOT_READY', 'CH8_DISABLED', 'CH8_NOT_CONFIGURED', 'CH8_INVALID_ARGS', 'CH8_BACKEND_ERROR', 'CH8_SAVE_FAILED', 'CH8_ABORTED', 'CH8_TARGET_BUSY',
     ...Object.keys(core_backupDiagnostics.BACKUP_FAILURE_MESSAGES),
     'RMT_DEFERRED_QUOTA', 'RMT_DEFERRED_SECURITY', 'RMT_DEFERRED_UNAVAILABLE',
     'RMT_DEFERRED_LIMIT', 'RMT_DEFERRED_SERIALIZE', 'RMT_DEFERRED_UNKNOWN',
@@ -38329,7 +38384,9 @@ function snapshotEntries(entries, includeRequests = false) {
         ...(Number.isInteger(entry.httpStatus) && entry.httpStatus >= 400 && entry.httpStatus <= 599 ? { httpStatus: entry.httpStatus } : {}),
         field: STAGES.includes(entry.field) ? entry.field : '',
         activeStage: STAGES.includes(entry.activeStage) ? entry.activeStage : '',
-        providerRequests: count(entry.providerRequests),
+        // Avatar traces wrap the provider adapter, not its transport boundary.
+        // Leave the request count absent rather than claiming zero requests.
+        ...(entry.mode === 'coupleAvatar' ? {} : { providerRequests: count(entry.providerRequests) }),
         ...(entry.transport ? { transport: { streamRequested: entry.transport.streamRequested === true,
             receivedChunks: count(entry.transport.receivedChunks), firstChunkMs: entry.transport.firstChunkMs === null ? null : duration(entry.transport.firstChunkMs) } } : {}),
         durations: snapshotDurations(entry),
@@ -41666,7 +41723,7 @@ function uploadedPath(value) {
     if (typeof value !== 'string') return '';
     const trimmed = value.trim();
     if (!trimmed || trimmed.startsWith('data:')) return '';
-    return image_patch.savedLocalImagePath(/^https?:\/\//i.test(trimmed) || trimmed.startsWith('/') ? trimmed : `/${trimmed}`);
+    return image_patch.savedLocalImagePath(/^(?:https?|tauri):\/\//i.test(trimmed) || trimmed.startsWith('/') ? trimmed : `/${trimmed}`);
 }
 
 function uploadHeaders(context) {

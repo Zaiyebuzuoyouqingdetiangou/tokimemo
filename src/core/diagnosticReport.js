@@ -137,10 +137,11 @@ export function buildDiagnosticReport() {
             hasPendingWork: state.busy === true || !!state.activeTaskLabel
                 || count(state.activeGenerationTasks?.size) > 0 || count(state.activeModeBuildScopes?.size) > 0
                 || count(state.activeAdvBulkScopes?.size) > 0 || count(state.activeArchiveTargetReservations?.size) > 0
-                || count(state.activeCgImageTasks?.size) > 0 || count(state.activeProviderRequestCount) > 0
+                || count(state.activeCgImageTasks?.size) > 0 || count(state.activeCoupleAvatarTasks?.size) > 0 || count(state.activeProviderRequestCount) > 0
                 || count(state.providerRequestQueue?.length) > 0 || !!state.roomLifeRefreshPromise,
             generationTasks: count(state.activeGenerationTasks?.size),
             cgImageTasks: count(state.activeCgImageTasks?.size),
+            coupleAvatarTasks: count(state.activeCoupleAvatarTasks?.size),
             providerInFlight: count(state.activeProviderRequestCount),
             providerQueued: count(state.providerRequestQueue?.length),
             rateLimitHits: count(state.rateLimitHits),
