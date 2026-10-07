@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 336
-// Source SHA-256: 3feed14e3f4fc57abfbcb0dd4eb141a40ac29413573e9b54cd079add56bda11a
+// Source SHA-256: 0ad04ddd487d1f933b14da26af5030581165410f253b6ad31cbe121ce74cf441
 // Build: python3 tools/verification/build.py <source-root>
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -502,7 +502,7 @@ function __init_core_releaseNotes_js() {
 // MODULE: core/releaseNotes.js
 
 // GENERATED FROM README.md by tools/verification/build.py. Do not edit by hand.
-const RELEASE_README = "# 心迹回廊 1.0.35\n\n## 更新日志模块\n\n新增了更新日志板块，感谢@nancyindaeyo的更新。\n\n## 本次变动\n\n- 修复 TT 中情侣头像收到图片后无法写入历史的问题，正确识别 TT 返回的本机图片地址。\n- 绘制进度放在生成按钮附近；生成失败会保留原因，点击“知道了”才收起。切换到历史页仍可查看任务与提示。\n- 诊断报告增加头像任务状态和处理阶段，便于区分等待出图、图片接收及本机保存问题。\n";
+const RELEASE_README = "# 心迹回廊 1.0.36\n\n## 更新日志模块\n\n新增了更新日志板块，感谢@nancyindaeyo的更新。\n\n## 本次变动\n\n- 情侣头像按所选画风明确主体形态，动物化身画动物、手作风格画对应材质的角色；完整传递头像提示，避免风格、互动和人物信息被截断。\n- 画风扩充到 8 类 72 种，选择窗口改为分类浏览与搜索，精简卡片说明，并适配手机弹窗顶部安全区。\n- 互动扩充到 48 种，新增本地随机灵感，可换一组、选用并自行编辑。\n- 历史与收藏改为双头像缩略图分页，修复缩略图被按钮布局挤没及延迟加载不触发的问题。每页 6 对，翻页保留原图、裁切和收藏，备份仍包含全部记录。\n";
 
 __m_core_releaseNotes_js.RELEASE_README = RELEASE_README;
 }
@@ -562,7 +562,7 @@ function defaultCoupleSettings(context = optionalContext()) {
             { id: 'user', name: text(context?.name1) || '我', appearance: visible('user', text(card.persona) || text(context?.powerUserSettings?.persona_description)) },
         ],
         styleId: 'chibi-dumpling', pairType: 'joined', interaction: '半颗爱心',
-        clothing: '', background: '', direction: '', customStyle: '',
+        clothing: '', background: '', direction: '', customStyle: '', interactionDetail: '',
     };
 }
 
@@ -583,49 +583,47 @@ function normalizeCoupleSettings(value, context = optionalContext()) {
         pairType: input.pairType === 'echo' ? 'echo' : 'joined',
         interaction: own(input, 'interaction') ? text(input.interaction) : defaults.interaction,
         clothing: text(input.clothing), background: text(input.background),
-        direction: text(input.direction), customStyle: text(input.customStyle),
+        direction: text(input.direction), customStyle: text(input.customStyle), interactionDetail: text(input.interactionDetail),
     };
 }
 
-const INTERACTION_PROMPTS = Object.freeze({
-    '半颗爱心': 'a shared heart motif: each person holds one matching half of a heart toward the inner edge, together the two halves read as one complete heart',
-    '隔空对望': 'the left person looks gently toward the right, the right person returns their gaze toward the left',
-    '左右眨眼': 'complementary playful winks, the two people have their own distinct expressions',
-    '一根红线': 'a fine red thread visually connects the two portraits across the central boundary',
-    '举杯碰杯': 'each person raises their own cup toward the other, a lighthearted shared toast',
-    '隔空击掌': 'the two people reach toward the inner edges with complementary high-five gestures',
-    '一人一只小动物': 'each person holds their own small animal, with coordinated but distinct affectionate gestures',
-    '耳机分你一只': 'one earphone for each person, a shared cable or matching headphones connecting the mood',
-    '同款不同色': 'coordinated clothing or accessories in two complementary colors, individual expressions',
-    '一起看烟花': 'both people enjoy the same fireworks, matching reflected light and different delighted expressions',
-    '并肩吹泡泡': 'both people blow bubbles, light bubbles drifting between their portraits',
-    '悄悄牵住衣角': 'one person gently reaches for the other person\'s clothing edge, the other responds with a small affectionate smile',
-    '一边闹一边笑': 'one person playfully teases, the other laughs in response, distinct complementary expressions',
-    '递出一朵花': 'one person offers a flower toward the inner edge, the other reaches to receive it',
-    '日与月的呼应': 'complementary sun and moon motifs, warm and cool light linking two individual portraits',
-    '交给灵感': 'choose a fresh affectionate interaction with complementary expressions and gestures for these two people',
-});
+const DEFAULT_INTERACTION_PROMPT = 'choose a fresh affectionate interaction with complementary expressions and gestures for these two subjects';
 
 function couplePrompt(value) {
     const settings = normalizeCoupleSettings(value, null);
     const chosen = styles.COUPLE_STYLES.find(style => style.id === settings.styleId);
+    const animal = chosen?.group === 'animal';
+    const object = chosen?.group === 'craft' || ['fantasy-enamel', 'fantasy-shadow'].includes(chosen?.id);
+    const subject = animal ? 'animal' : object ? 'crafted character' : 'character';
+    const interaction = settings.interaction === '自定义互动' ? settings.interactionDetail
+        : styles.INTERACTION_PRESETS.find(item => item.label === settings.interaction)?.prompt || settings.interaction;
+    const form = animal
+        ? 'The TWO main subjects ARE complete animals, with species-appropriate heads, bodies, limbs and tails. No human faces or human bodies, no people wearing animal ears, no people holding animal versions. Adapt actions to paws, wings or flippers. Translate original hair/eye colors and signature accessories into animal identity cues.'
+        : object ? 'The TWO main subjects ARE the crafted objects described by the selected style. Their faces and bodies use that material and construction. Not humans holding toys or wearing material-themed costumes.'
+            : 'Apply the selected rendering medium, proportions, linework and shading to the entire characters and image, not only to background decorations.';
     const people = settings.people.map((person, index) => {
         const side = index === 0 ? 'LEFT' : 'RIGHT';
-        return `${side} HALF person: ${person.name || (index === 0 ? 'the first person' : 'the second person')}${person.appearance ? `; appearance: ${person.appearance}` : ''}.`;
+        // Only transform the outgoing animal reference. Saved/manual appearances
+        // remain intact and human styles continue to receive their original text.
+        const reference = animal ? person.appearance.replace(/\b\d+\s*(?:boys?|girls?|men|women|persons?|people)\b/gi, '')
+            .replace(/\b(?:human|boy|girl|man|woman)\b/gi, 'character').replace(/\bhair\b/gi, 'fur markings')
+            .replace(/\bskin\b/gi, 'coat').replace(/(?:皮肤|肤色|头发|发色)/g, '毛色') : person.appearance;
+        return `${side} HALF ${subject}: ${person.name || (index === 0 ? 'first character' : 'second character')}${reference ? `; ${animal || object ? 'identity reference to reinterpret in the selected form' : 'appearance'}: ${reference}` : ''}.`;
     });
     return [
-        'One matching avatar pair in one horizontal image, preferably 2:1, two equal square halves.',
-        chosen ? `Style: ${chosen.prompt}.` : '',
-        settings.styleId === 'custom' && settings.customStyle ? `Style: ${settings.customStyle}.` : '',
+        chosen ? `Rendering style: ${chosen.prompt}.` : '',
+        settings.styleId === 'custom' && settings.customStyle ? `Rendering style: ${settings.customStyle}.` : '',
+        form,
+        `One matching avatar pair in one horizontal image, preferably 2:1. One ${subject} centered in EACH of two equal square halves.`,
+        `Interaction: ${interaction && interaction !== '交给灵感' ? interaction : DEFAULT_INTERACTION_PROMPT}.`,
         settings.direction ? `Direction: ${settings.direction}.` : '',
         ...people,
-        settings.clothing ? `Clothing: ${settings.clothing}.` : '',
+        settings.clothing ? `${animal ? 'Small wearable accents adapted for animal bodies' : 'Clothing in the selected rendering style'}: ${settings.clothing}.` : '',
         settings.background ? `Background: ${settings.background}.` : '',
-        `Interaction: ${INTERACTION_PROMPTS[settings.interaction] || settings.interaction || INTERACTION_PROMPTS['交给灵感']}.`,
         settings.pairType === 'echo'
             ? 'Independent portraits, coordinated colors and light, complementary poses.'
             : 'Connected background and shared motif across the center, matching scale.',
-        'One person centered in each half; leave space around hair and head for square/circle crops. Clear small faces, distinct poses, no mirrored duplicates. Preserve identity and gender, improvise unspecified details. No text, watermark, frame or divider.',
+        'Leave margin around both heads for square/circle crops. Readable expressions, distinct poses, no mirrored duplicates. Preserve each identity and gender within the chosen form; improvise unspecified details. No text, watermark, frame or divider.',
     ].filter(Boolean).join('\n');
 }
 
@@ -895,7 +893,7 @@ async function generateCouple(value, { context = core_context.currentCharacterGu
         const result = await cg_core.invokeImageGeneration(prompt, context, {
             orientation: 'landscape', respectOrientation: true, aspectRatio: '2:1',
             characterName: settings.people[0].name || context?.name2 || '',
-            targetKey, singlePrompt: true, onProgress: report,
+            targetKey, singlePrompt: true, preservePrompt: true, onProgress: report,
         });
         task_trace.markStage(trace, 'request');
         task_trace.markStage(trace, 'response');
@@ -1122,6 +1120,7 @@ const STYLE_GROUPS = Object.freeze([
     { id: 'chibi', label: 'Q版萌系' }, { id: 'anime', label: '动漫绘本' },
     { id: 'art', label: '手绘艺术' }, { id: 'craft', label: '手作材质' },
     { id: 'graphic', label: '平面设计' }, { id: 'photo', label: '写真氛围' },
+    { id: 'animal', label: '动物化身' }, { id: 'fantasy', label: '幻想装饰' },
 ]);
 
 const COUPLE_STYLES = Object.freeze([
@@ -1129,7 +1128,7 @@ const COUPLE_STYLES = Object.freeze([
     ['chibi-three-head', 'chibi', '三头身小人', '保留服装细节，也能看清小动作。', 'three-head-tall chibi figures, expressive small gestures, recognizable clothing details, cute balanced proportions'],
     ['chibi-headshot', 'chibi', '萌系大头', '脸和表情是主角，缩小也清楚。', 'cute large-head portrait illustration, expressive readable faces, simple supporting shapes'],
     ['chibi-doodle', 'chibi', '豆豆眼涂鸦', '几笔小表情，松弛又俏皮。', 'playful hand-drawn doodles, dot eyes, loose lively outlines, simple charming expressions'],
-    ['chibi-animal', 'chibi', '圆滚滚兽化', '把两人变成相呼应的小动物。', 'rounded cute animal versions of the two people, preserve signature colors and recognizable accessories, paired animal characters'],
+    ['chibi-animal', 'animal', '圆滚滚兽化', '主角本身变成动物，不是人戴兽耳。', 'animal-only chibi illustration, two rounded small animals with muzzles, animal limbs and tails, choose fitting species for their personalities'],
     ['chibi-meme', 'chibi', '表情包Q版', '一边闹、一边笑，表情更夸张。', 'expressive chibi reaction-sticker illustration, exaggerated playful expressions and complementary poses, no lettering'],
     ['anime-clean', 'anime', '日系清线', '利落线条，轻盈的平涂色块。', 'Japanese anime illustration, crisp delicate linework, light flat colors'],
     ['anime-cel', 'anime', '赛璐璐', '清晰明暗面，像动画定格。', 'cel-shaded anime keyframe, defined light and shadow shapes, clear facial features'],
@@ -1161,16 +1160,124 @@ const COUPLE_STYLES = Object.freeze([
     ['photo-night', 'photo', '电影夜景', '有色夜光，保持五官清晰。', 'cinematic nighttime portraits, colored ambient night light, legible eyes and facial details'],
     ['photo-backlight', 'photo', '柔焦逆光', '轻柔轮廓光，不抹去面部细节。', 'soft backlit portrait photography, gentle rim light and delicate bloom, retain readable face detail'],
     ['photo-mono', 'photo', '黑白人像', '简单背景，突出神情与距离。', 'black-and-white portrait photography, simple background, subtle tonal contrast, expressive connection'],
+    ['chibi-mochi', 'chibi', '糯米团子', '软糯小圆团，保留发色与配饰。', 'mochi-like chibi characters, tiny round bodies and miniature limbs, soft squashy silhouettes, simple dot features'],
+    ['chibi-sleepy', 'chibi', '困困小人', '短短手脚，惺忪眼睛和松软线条。', 'sleepy miniature chibi figures, stubby limbs, half-closed eyes, soft rounded loose linework'],
+    ['chibi-crayon', 'chibi', '蜡笔小朋友', '稚拙轮廓，像小朋友认真画的画。', 'childlike crayon chibi drawing, deliberately naive proportions, uneven wax strokes, bold simple shapes'],
+    ['anime-flat', 'anime', '清爽平涂', '省去复杂光影，突出轮廓与色块。', 'flat-color anime illustration, clean silhouettes, minimal shadow, no painterly rendering, restrained palette'],
+    ['anime-manga', 'anime', '黑白漫画', '黑白墨线、网点和夸张小表情。', 'black-and-white manga portrait, expressive ink contours, screentone shadows, no color painting'],
+    ['anime-pastel', 'anime', '粉彩动画', '柔和粉彩、圆润描线与淡淡阴影。', 'pastel animation drawing, rounded colored outlines, delicate flat cel shadows, airy candy-colored palette'],
+    ['anime-webtoon', 'anime', '条漫肖像', '简洁五官，利落的条漫式明暗。', 'modern webtoon portrait illustration, clear graphic facial design, smooth selective cel shading, economical linework'],
+    ['art-gouache', 'art', '不透明水粉', '哑光厚实色块，可见叠色笔触。', 'opaque gouache painting, matte chalky color planes, visible overlapping brush marks, painted rather than anime outlines'],
+    ['art-pastel', 'art', '油画棒', '厚重蜡质笔触，柔软而有颗粒。', 'oil-pastel portrait drawing, thick waxy strokes, visible paper tooth, broken color edges'],
+    ['art-charcoal', 'art', '炭笔速写', '擦痕、炭粉与有呼吸感的粗线。', 'charcoal portrait drawing, velvety black dust, rubbed highlights, energetic rough contours on paper'],
+    ['art-risograph', 'art', '孔版套印', '有限套色与轻微错版，像印刷小卡。', 'risograph portrait print, limited spot colors, grainy ink, visible subtle registration offsets'],
+    ['craft-porcelain', 'craft', '釉彩瓷偶', '圆润瓷面，带一点通透釉光。', 'two small glazed porcelain character dolls as the actual subjects, rounded ceramic forms, painted features, translucent glaze highlights'],
+    ['craft-wood', 'craft', '木雕小偶', '刀痕与木纹，像掌心的小收藏。', 'two hand-carved wooden character dolls, visible wood grain, faceted carving marks, tiny painted faces'],
+    ['craft-origami', 'craft', '折纸小人', '折痕和纸面拼出人物与衣服。', 'folded-paper character figures, visible origami creases, geometric folded heads and clothing, paper forms rather than real skin'],
+    ['craft-bead', 'craft', '拼豆小像', '一颗颗圆形拼豆组成小小人物。', 'fused-bead character portraits, visible individual cylindrical plastic beads on a square grid, flat craft object photography'],
+    ['graphic-8bit', 'graphic', '8位小像素', '更少颜色、更大像素，轮廓清楚。', '8-bit sprite portraits, very low resolution pixel grid, small limited palette, crisp nearest-neighbor edges, no smooth shading'],
+    ['graphic-pop', 'graphic', '波普撞色', '粗轮廓、撞色和醒目的网点。', 'pop-art portrait illustration, bold ink outlines, contrasting flat colors, large halftone dots'],
+    ['graphic-comic', 'graphic', '复古美漫', '粗黑墨线、排线与纸面印刷感。', 'vintage comic-book portraits, bold black ink contours, crosshatching, textured halftone printing, no lettering'],
+    ['graphic-lino', 'graphic', '双色橡皮章', '雕刻感的粗线，像一对印章。', 'two-color linocut stamp portraits, broad carved negative shapes, uneven ink transfer, graphic flat silhouettes'],
+    ['photo-instant', 'photo', '即时成像', '柔和闪光与轻微偏色的日常抓拍。', 'instant-film candid photography, soft direct flash, slight analog color shifts, authentic lens rendering, no printed border'],
+    ['photo-rain', 'photo', '雨窗写真', '雨滴虚化、玻璃反光与柔和侧光。', 'photographic portraits beside a rainy window, defocused raindrops and glass reflections, soft sidelight, realistic skin texture'],
+    ['animal-cat', 'animal', '小猫化身', '猫脸、猫爪和尾巴，映射原有发色。', 'two small cats as the main subjects, round feline faces, whiskers, paws and curved tails, cute animal portrait illustration'],
+    ['animal-dog', 'animal', '小狗化身', '小狗嘴鼻与软耳，神情各不相同。', 'two small dogs as the main subjects, canine muzzles, soft ears, paws and wagging tails, expressive animal portraits'],
+    ['animal-fox', 'animal', '小狐狸化身', '尖耳朵和蓬松大尾巴的一对狐狸。', 'two little foxes, fox muzzles, pointed ears, four animal limbs and large fluffy tails, animal-only storybook illustration'],
+    ['animal-rabbit', 'animal', '垂耳兔化身', '软软兔脸和垂耳，不是人形兔耳。', 'two little lop-eared rabbits, rabbit faces, soft floppy ears, small forepaws and round tails, animal-only illustration'],
+    ['animal-bear', 'animal', '小熊化身', '圆耳、短嘴鼻和肉乎乎的熊爪。', 'two small bears, round ears, short bear muzzles, stout animal bodies and soft paws, rounded animal-only illustration'],
+    ['animal-bird', 'animal', '团子小鸟', '圆滚滚羽毛、鸟喙与小翅膀。', 'two round little birds, visible beaks, feathered bodies, tiny wings and bird feet, soft animal-only illustration'],
+    ['animal-seal', 'animal', '海豹团子', '小鳍肢和圆滚滚身形，靠神情呼应。', 'two plump baby seals, seal muzzles, whiskers and flippers, smooth rounded animal bodies, expressive animal-only illustration'],
+    ['fantasy-glass', 'fantasy', '彩窗玻璃', '彩色玻璃与细细铅条拼出肖像。', 'stained-glass portrait artwork, luminous colored glass pieces separated by lead outlines, faceted transmitted light'],
+    ['fantasy-enamel', 'fantasy', '珐琅徽章', '金属轮廓与亮亮的珐琅色面。', 'matching hard-enamel portrait pins, polished raised metal outlines and glossy flat enamel fills, collectible objects'],
+    ['fantasy-embroidery', 'fantasy', '刺绣肖像', '线迹组成五官、发丝和衣服。', 'embroidered character portraits on fabric, every shape made of visible thread stitches, tactile satin-stitch relief'],
+    ['fantasy-mosaic', 'fantasy', '马赛克拼画', '细小瓷砖拼成有光泽的肖像。', 'portrait mosaics made entirely of tiny colored ceramic tesserae, visible grout and subtle glazed reflections'],
+    ['fantasy-blueprint', 'fantasy', '蓝晒肖像', '靛蓝与纸白，带植物光影的蓝晒。', 'cyanotype portrait print, exclusively Prussian blue and white, photographic contact-print texture, botanical shadow shapes'],
+    ['fantasy-shadow', 'fantasy', '皮影小像', '透光皮革、镂刻纹样和关节细节。', 'Chinese shadow-puppet character portraits, translucent colored leather, intricate cutout ornament and visible puppet joints'],
+    ['fantasy-luminous', 'fantasy', '夜光剪纸', '纸层间透出小夜灯一样的柔光。', 'illuminated layered-paper portrait diorama, actual cut-paper subjects, gentle light between paper layers, visible edge depth'],
+    ['fantasy-fresco', 'fantasy', '壁画矿彩', '矿物色、磨损肌理和壁画式线条。', 'mineral-pigment fresco portraits, matte mineral colors, worn plaster texture, flowing mural contours'],
 ].map(([id, group, label, description, prompt]) => Object.freeze({ id, group, label, description, prompt })));
 
-const INTERACTIONS = Object.freeze([
-    '半颗爱心', '隔空对望', '左右眨眼', '一根红线', '举杯碰杯', '隔空击掌',
-    '一人一只小动物', '耳机分你一只', '同款不同色', '一起看烟花', '并肩吹泡泡',
-    '悄悄牵住衣角', '一边闹一边笑', '递出一朵花', '日与月的呼应', '交给灵感',
-]);
+const INTERACTION_PRESETS = Object.freeze([
+    ['甜甜互动', '半颗爱心', 'each subject holds half a heart at the inner edge; together the halves form one heart'],
+    ['甜甜互动', '隔空对望', 'left subject gazes right; right subject gazes left with an affectionate response'],
+    ['甜甜互动', '左右眨眼', 'complementary playful winks with distinct individual expressions'],
+    ['甜甜互动', '一根红线', 'a fine red thread connects the two subjects across the central boundary'],
+    ['甜甜互动', '隔空击掌', 'the two subjects extend matching hands or forepaws toward the inner edges for a high-five'],
+    ['甜甜互动', '悄悄牵住衣角', 'one gently catches the other\'s clothing edge or small accessory; the other responds shyly'],
+    ['甜甜互动', '递出一朵花', 'one offers a flower inward; the other reaches inward to receive it'],
+    ['甜甜互动', '碰一碰鼻尖', 'two faces turned inward, noses gently meeting across the boundary'],
+    ['甜甜互动', '替你理围巾', 'one straightens the other\'s scarf while the other smiles softly'],
+    ['甜甜互动', '藏在背后的小花', 'one hides a small flower behind their back; the other peeks curiously'],
+    ['俏皮表情', '一边闹一边笑', 'one playfully teases; the other laughs in response'],
+    ['俏皮表情', '假装生气', 'one puffs up in mock annoyance; the other tries not to laugh'],
+    ['俏皮表情', '偷偷模仿你', 'one strikes a serious pose; the other playfully copies it'],
+    ['俏皮表情', '一边偷看一边躲', 'one peeks around a prop toward the other; the other bashfully looks away'],
+    ['俏皮表情', '互相做鬼脸', 'different silly faces directed toward one another'],
+    ['俏皮表情', '一边困一边闹', 'one is drowsy with half-closed eyes; the other playfully seeks attention'],
+    ['俏皮表情', '偷偷戴上同款', 'matching little accessories; one knowingly smiles and the other pretends not to notice'],
+    ['俏皮表情', '被发现的偷笑', 'one is caught suppressing a laugh; the other gives a knowing sidelong look'],
+    ['日常陪伴', '举杯碰杯', 'each raises a cup toward the other for a small shared toast'],
+    ['日常陪伴', '一人一只小动物', 'each subject is accompanied by a small pet with complementary affectionate gestures'],
+    ['日常陪伴', '耳机分你一只', 'each wears one earphone, a shared cable visually joins their portraits'],
+    ['日常陪伴', '同款不同色', 'matching clothing or accessories in two complementary colors'],
+    ['日常陪伴', '一起看烟花', 'both gaze at shared fireworks with different delighted expressions and matching reflected light'],
+    ['日常陪伴', '并肩吹泡泡', 'both blow bubbles with different expressions; bubbles drift across the two portraits'],
+    ['日常陪伴', '共用一条围巾', 'one long scarf wraps loosely around both subjects across the central boundary'],
+    ['日常陪伴', '分享一把伞', 'one holds a shared umbrella tilted toward the other; each remains in their own half'],
+    ['日常陪伴', '一起读一本书', 'a shared open book spans the lower center; each reacts differently to the same page'],
+    ['日常陪伴', '举起同款相机', 'both hold matching small cameras, one takes a photo while the other smiles'],
+    ['分享零食', '一人一半饼干', 'each holds half of the same cookie toward the inner edge'],
+    ['分享零食', '递来最后一口', 'one offers the last bite of a snack; the other looks pleasantly surprised'],
+    ['分享零食', '草莓分给你', 'one offers a strawberry inward; the other eagerly leans toward it'],
+    ['分享零食', '两杯不同口味', 'matching drink cups in different colors and two distinct pleased expressions'],
+    ['分享零食', '偷吃被发现', 'one has snack crumbs near their mouth; the other notices with amused surprise'],
+    ['分享零食', '一串糖葫芦', 'one offers a candied-fruit skewer across the center; the other prepares to take a bite'],
+    ['分享零食', '交换便当', 'two small lunch boxes offered toward the center with warm smiles'],
+    ['分享零食', '融化的冰淇淋', 'one worries over melting ice cream; the other offers a napkin'],
+    ['季节小事', '接住一片落叶', 'one releases a leaf toward the center; the other catches it'],
+    ['季节小事', '一起捧雪花', 'matching snowflakes land near their faces; each shows a different delighted expression'],
+    ['季节小事', '围巾里躲风', 'one nestles into a scarf against the wind; the other leans closer for warmth'],
+    ['季节小事', '花瓣落在头顶', 'a flower petal rests on one subject; the other points it out with a smile'],
+    ['季节小事', '夏夜捕萤', 'each follows a firefly; warm firefly trails connect the two halves'],
+    ['季节小事', '雨后踩水花', 'one splashes a tiny puddle toward the center; the other reacts playfully'],
+    ['季节小事', '同一阵风', 'the same gentle breeze moves both subjects\' hair, fur or accessories in one direction'],
+    ['意象呼应', '日与月的呼应', 'complementary sun and moon motifs with warm and cool light'],
+    ['意象呼应', '星星递给你', 'one offers a small glowing star; the other reaches toward it'],
+    ['意象呼应', '拼成一朵花', 'two complementary flower halves meet across the center'],
+    ['意象呼应', '纸飞机传话', 'one sends a paper airplane toward the center; the other waits to catch it'],
+    ['意象呼应', '两边同一片海', 'matching horizon and sea breeze, each subject holds a different seashell'],
+].map(([group, label, prompt]) => Object.freeze({ group, label, prompt })));
 
+const INTERACTIONS = Object.freeze([...INTERACTION_PRESETS.map(row => row.label), '交给灵感', '自定义互动']);
+
+// Local inspiration only: browsing ideas never sends a paid generation request.
+function randomCoupleIdeas(previous = [], random = Math.random) {
+    const moments = [
+        '左边递出一朵小花，右边伸手接住', '左边偷藏一颗糖，右边假装没发现',
+        '左边举起一半爱心，右边拿着另一半回应', '左边轻轻拉住围巾一端，右边靠过来',
+        '左边捧着小星星，右边试着触碰它的光', '左边吹出一个泡泡，右边追着泡泡看',
+        '左边把小纸船推过来，右边在另一侧接住', '左边藏在叶子后偷看，右边歪头找它',
+        '左边递来热饮，右边把小饼干分过去', '左边举着小相机，右边故意做个鬼脸',
+        '左边把花瓣放到头顶，右边学着戴上另一片', '左边送出纸飞机，右边伸手迎接',
+        '左边指着远处的烟花，右边偷偷看左边', '左边捧着一团雪，右边围着围巾笑',
+        '左边戴着歪歪的小帽子，右边伸手扶正', '左边递出一枚贝壳，右边回赠一颗小石子',
+    ];
+    const moods = ['一个认真、一个忍不住笑', '一个害羞、一个温柔回应', '一个得意、一个假装嫌弃', '一个好奇、一个耐心陪伴', '一个困困的、一个很有精神', '一个有点惊讶、一个偷偷开心'];
+    const scenes = ['背景留白，重点放在动作和表情', '同一束柔光落在两边', '两边用相呼应的淡色背景', '共享一个小小的窗边场景', '点缀几片花瓣，不遮住脸'];
+    const pick = values => values[Math.min(values.length - 1, Math.max(0, Math.floor(random() * values.length)))];
+    const shuffled = moments.filter(moment => !previous.some(idea => idea.startsWith(moment)));
+    for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.min(i, Math.max(0, Math.floor(random() * (i + 1))));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return (shuffled.length ? shuffled : moments).slice(0, 3).map(moment => `${moment}；${pick(moods)}。${pick(scenes)}。`);
+}
+
+__m_extras_coupleAvatarStyles_js.randomCoupleIdeas = randomCoupleIdeas;
 __m_extras_coupleAvatarStyles_js.STYLE_GROUPS = STYLE_GROUPS;
 __m_extras_coupleAvatarStyles_js.COUPLE_STYLES = COUPLE_STYLES;
+__m_extras_coupleAvatarStyles_js.INTERACTION_PRESETS = INTERACTION_PRESETS;
 __m_extras_coupleAvatarStyles_js.INTERACTIONS = INTERACTIONS;
 }
 
@@ -2429,6 +2536,16 @@ function coupleAvatarCss() {
 .rmt-pair-style-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
 :is(.rmt-couple,.rmt-pair-sheet) .rmt-pair-style{flex-direction:column;align-items:flex-start;text-align:left;gap:5px!important;padding:12px!important;min-height:76px}
 .rmt-pair-style b{font-weight:600;line-height:1.5}.rmt-pair-style small{font-size:11px}
+:is(.rmt-couple,.rmt-pair-sheet) .rmt-pair-style-summary{display:flex;justify-content:space-between;text-align:left;width:100%;padding:14px!important;gap:14px}
+.rmt-pair-style-summary>span:first-child{min-width:0}
+.rmt-pair-style-summary>span:last-child{flex:none;font-size:13px}
+.rmt-pair-style-summary b,.rmt-pair-style-summary small{display:block}
+.rmt-pair-style-summary small{margin-top:5px}
+.rmt-pair-style-custom-action{display:flex;justify-content:flex-end}
+.rmt-pair-inspirations{display:grid;gap:8px}
+.rmt-couple .rmt-pair-inspirations>button{justify-content:space-between;gap:12px;text-align:left;padding:12px!important}
+.rmt-pair-inspirations>button>span{min-width:0;font-size:13px;line-height:1.7}
+.rmt-pair-inspirations>button>small{flex:none}
 .rmt-pair-custom{display:none}.rmt-pair-custom.is-visible{display:flex}
 .rmt-pair-choice{display:flex;gap:8px}.rmt-pair-choice>button{flex:1}
 .rmt-pair-options{border-top:1px solid var(--rmt-theme-border);border-bottom:1px solid var(--rmt-theme-border);padding:0 2px}
@@ -2449,12 +2566,15 @@ function coupleAvatarCss() {
 .rmt-pair-job.is-failed{border-style:dashed}
 .rmt-pair-job>button{flex-shrink:0}
 .rmt-pair-history-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-top:16px}
-:is(.rmt-couple,.rmt-pair-sheet) .rmt-pair-history-card{display:block;text-align:left;width:100%;padding:12px!important}
-.rmt-pair-mini{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin-bottom:10px}
+:is(.rmt-couple,.rmt-pair-sheet) button.rmt-pair-history-card{display:flex!important;flex-direction:column!important;align-items:stretch!important;justify-content:flex-start!important;gap:0!important;text-align:left!important;width:100%;min-width:0;padding:12px!important}
+.rmt-pair-mini{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin-bottom:10px;width:100%;min-width:0;flex:none}
 .rmt-pair-mini .rmt-pair-square{border-radius:10px}
 .rmt-pair-history-card b,.rmt-pair-history-card small{display:block;overflow-wrap:anywhere}
-.rmt-pair-shade{position:fixed;inset:0;z-index:10000;background:rgba(15,24,38,.48);display:flex;align-items:center;justify-content:center;padding:16px;pointer-events:auto}
-.rmt-pair-sheet{display:flex;flex-direction:column;width:min(720px,100%);max-height:calc(100vh - 32px);max-height:calc(100dvh - 32px);background:var(--rmt-theme-surface-solid);border:1px solid var(--rmt-theme-border);border-radius:20px;box-shadow:0 12px 40px #0003;overflow:hidden}
+.rmt-pair-thumb-note{position:absolute;inset:0;display:grid;place-items:center;padding:4px;font-size:11px;color:var(--rmt-theme-muted)}
+.rmt-pair-pagination{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:18px}
+.rmt-pair-pagination>span{font-size:12px;white-space:nowrap}
+.rmt-pair-shade{--pair-safe-top:max(16px,env(safe-area-inset-top,0px),var(--rmt-mobile-safe-top,0px));--pair-safe-bottom:max(16px,env(safe-area-inset-bottom,0px));position:fixed;inset:0;z-index:10000;background:rgba(15,24,38,.48);display:flex;align-items:center;justify-content:center;padding:var(--pair-safe-top) max(12px,env(safe-area-inset-right,0px)) var(--pair-safe-bottom) max(12px,env(safe-area-inset-left,0px));pointer-events:auto;box-sizing:border-box}
+.rmt-pair-sheet{display:flex;flex-direction:column;width:min(720px,100%);max-height:calc(100vh - var(--pair-safe-top) - var(--pair-safe-bottom));max-height:calc(100dvh - var(--pair-safe-top) - var(--pair-safe-bottom));background:var(--rmt-theme-surface-solid);border:1px solid var(--rmt-theme-border);border-radius:20px;box-shadow:0 12px 40px #0003;overflow:hidden}
 .rmt-pair-sheet>header{padding:18px 20px 12px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex:none}
 .rmt-pair-sheet>header h2{font-size:20px!important}
 .rmt-pair-sheet>header button{flex:none}
@@ -2463,6 +2583,16 @@ function coupleAvatarCss() {
 .rmt-pair-style-search{margin-bottom:12px}
 .rmt-pair-groups{display:flex;gap:6px;flex-wrap:wrap;margin:12px 0}
 .rmt-pair-picker-results{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.rmt-pair-sheet-body.rmt-pair-style-browser{display:flex;flex-direction:column;overflow:hidden;padding-top:8px}
+.rmt-pair-picker-toolbar{display:grid;gap:10px;padding-bottom:14px;flex:none;border-bottom:1px solid var(--rmt-theme-border)}
+.rmt-pair-picker-filter{display:flex;align-items:center;gap:14px;justify-content:space-between}
+.rmt-pair-picker-filter>label{flex:1;max-width:240px}
+.rmt-pair-picker-filter>small{flex:none}
+.rmt-pair-picker-scroll{overflow:auto;min-height:0;overscroll-behavior:contain;padding:4px 2px 8px}
+.rmt-pair-picker-group{padding:12px 0 6px}
+.rmt-pair-picker-group h3{font-size:13px!important;font-weight:600;margin-bottom:10px!important;color:var(--rmt-theme-muted)}
+.rmt-pair-sheet .rmt-pair-picker-results>button{justify-content:space-between;text-align:left;min-height:46px;font-size:14px!important;padding:10px 12px!important}
+.rmt-pair-visually-hidden{position:absolute!important;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
 .rmt-pair-crop-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:22px;align-items:start}
 .rmt-pair-sliders{display:flex;flex-direction:column;gap:12px}
 .rmt-pair-sliders label{display:block}
@@ -2471,7 +2601,7 @@ function coupleAvatarCss() {
 .rmt-pair-full-image{display:block;width:auto!important;max-width:100%!important;max-height:54vh;height:auto!important;object-fit:contain;margin:0 auto;border-radius:0;user-select:auto!important;-webkit-user-select:auto!important;-webkit-touch-callout:default!important;touch-action:auto}
 .rmt-pair-restore-note{padding:12px;background:var(--rmt-theme-soft);border:1px solid var(--rmt-theme-border);border-radius:12px;margin-top:12px}
 @media(max-width:950px){.rmt-pair-layout{grid-template-columns:minmax(0,1fr);gap:24px}.rmt-pair-preview{width:100%;max-width:580px;justify-self:center}.rmt-pair-history-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media(max-width:500px){.rmt-couple{padding-top:0}.rmt-pair-head{gap:12px}.rmt-pair-head h2{font-size:21px!important}.rmt-pair-head p{font-size:12px}.rmt-pair-stage{padding:12px;border-radius:16px}.rmt-pair-two{gap:10px;margin-top:14px}.rmt-pair-square{border-radius:14px}.rmt-pair-person strong{margin:8px 0}.rmt-pair-style-grid{gap:6px}.rmt-pair-style-grid button{padding:10px 8px!important}.rmt-pair-style-grid b{font-size:13px}.rmt-pair-history-grid{gap:10px}.rmt-pair-shade{padding:8px}.rmt-pair-sheet{max-height:calc(100vh - 16px);max-height:calc(100dvh - 16px);border-radius:16px}.rmt-pair-sheet>header{padding:14px 14px 10px}.rmt-pair-sheet-body{padding:4px 14px 16px}.rmt-pair-picker-results{grid-template-columns:repeat(2,minmax(0,1fr))}.rmt-pair-crop-layout{grid-template-columns:minmax(0,1fr)}.rmt-pair-crop-layout>.rmt-pair-square{max-width:230px;justify-self:center}.rmt-pair-sliders{gap:4px}.rmt-pair-full-image{max-height:48vh}}
+@media(max-width:500px){.rmt-couple{padding-top:0}.rmt-pair-head{gap:12px}.rmt-pair-head h2{font-size:21px!important}.rmt-pair-head p{font-size:12px}.rmt-pair-stage{padding:12px;border-radius:16px}.rmt-pair-two{gap:10px;margin-top:14px}.rmt-pair-square{border-radius:14px}.rmt-pair-person strong{margin:8px 0}.rmt-pair-style-grid{gap:6px}.rmt-pair-style-grid button{padding:10px 8px!important}.rmt-pair-style-grid b{font-size:13px}.rmt-pair-history-grid{gap:10px}.rmt-pair-sheet{border-radius:16px}.rmt-pair-sheet>header{padding:14px 14px 10px}.rmt-pair-sheet-body{padding:4px 14px 16px}.rmt-pair-picker-results{grid-template-columns:repeat(2,minmax(0,1fr))}.rmt-pair-crop-layout{grid-template-columns:minmax(0,1fr)}.rmt-pair-crop-layout>.rmt-pair-square{max-width:230px;justify-self:center}.rmt-pair-sliders{gap:4px}.rmt-pair-full-image{max-height:48vh}}
 `;
 }
 
@@ -2509,8 +2639,8 @@ const styles = __m_ui_coupleAvatarCss_js;
 function esc(value) { return text.esc(value); }
 const jobs = new Map();
 let active = null, modal = null, sequence = 0;
-const commonStyles = ['chibi-dumpling', 'anime-clean', 'art-watercolor', 'craft-plush', 'graphic-pixel', 'photo-film'];
-const settingFields = ['interaction', 'clothing', 'background', 'direction', 'customStyle'];
+const settingFields = ['interaction', 'interactionDetail', 'clothing', 'background', 'direction', 'customStyle'];
+const HISTORY_PAGE_SIZE = 6; // Display page only; stored records are never capped.
 function styleFor(id) { return presets.COUPLE_STYLES.find(item => item.id === id); }
 function styleLabel(settings) { return settings?.styleId === 'custom' ? '自定义风格' : styleFor(settings?.styleId)?.label || '二头身团子'; }
 function button(action, label, extra = '') { return `<button type="button" data-pair-action="${action}" ${extra}>${label}</button>`; }
@@ -2657,31 +2787,66 @@ async function renderHistory(view) {
     const target = view.root.querySelector('[data-pair-history-grid]'), token = ++view.historyEpoch;
     if (!target) return;
     const rows = view.records.filter(row => !view.favoritesOnly || row.favorite);
-    view.root.querySelector('[data-pair-history-count]').textContent = `已留下 ${view.records.length} 对`;
-    target.innerHTML = rows.length ? rows.map(record => `<button type="button" class="rmt-pair-history-card" data-pair-action="history-open" data-pair-id="${esc(record.id)}"><div class="rmt-pair-mini" data-pair-thumb="${esc(record.id)}"><div class="rmt-pair-square"></div><div class="rmt-pair-square"></div></div><b>${record.favorite ? '★ ' : ''}${esc(record.order.map(half => record.settings.people[half]?.name || '未命名').join(' · '))}</b><small>${esc(styleLabel(record.settings))} · ${new Date(record.createdAt).toLocaleDateString('zh-CN')}</small></button>`).join('') : '<p class="rmt-pair-muted">这一组还没有头像。做好一对后，会自动收在这里。</p>';
+    const pages = Math.max(1, Math.ceil(rows.length / HISTORY_PAGE_SIZE));
+    view.historyPage = Math.min(pages, Math.max(1, view.historyPage || 1));
+    const visible = rows.slice((view.historyPage - 1) * HISTORY_PAGE_SIZE, view.historyPage * HISTORY_PAGE_SIZE);
+    view.root.querySelector('[data-pair-history-count]').textContent = `${view.favoritesOnly ? '已收藏' : '已留下'} ${rows.length} 对`;
+    target.innerHTML = visible.length ? visible.map(record => `<button type="button" class="rmt-pair-history-card" data-pair-action="history-open" data-pair-id="${esc(record.id)}"><div class="rmt-pair-mini" data-pair-thumb="${esc(record.id)}" aria-label="头像缩略图"><div class="rmt-pair-square"><span class="rmt-pair-thumb-note">读取中</span></div><div class="rmt-pair-square"></div></div><b>${record.favorite ? '★ ' : ''}${esc(record.order.map(half => record.settings.people[half]?.name || '未命名').join(' · '))}</b><small>${esc(styleLabel(record.settings))} · ${new Date(record.createdAt).toLocaleDateString('zh-CN')}</small></button>`).join('') : `<p class="rmt-pair-muted">${view.favoritesOnly ? '还没有收藏。打开喜欢的头像，点“收藏这一对”即可。' : '还没有头像。做好一对后，会自动收在这里。'}</p>`;
+    let pager = view.root.querySelector('[data-pair-history-pages]');
+    if (!pager) { pager = document.createElement('nav'); pager.className = 'rmt-pair-pagination'; pager.dataset.pairHistoryPages = ''; pager.setAttribute('aria-label', '头像翻页'); target.after(pager); }
+    pager.hidden = !rows.length;
+    pager.innerHTML = `${button('history-prev', '上一页', view.historyPage === 1 ? 'disabled' : '')}<span role="status">第 ${view.historyPage} / ${pages} 页</span>${button('history-next', '下一页', view.historyPage === pages ? 'disabled' : '')}`;
     const nodes = [...target.querySelectorAll('[data-pair-thumb]')];
-    // Decode visible cards lazily; the record collection itself is never truncated.
+    // Current-page thumbnails load immediately. Some TT WebViews never deliver
+    // IntersectionObserver callbacks inside this overlay's nested scroller.
     view.historyObserver?.disconnect();
     const fill = async node => {
-        const record = rows.find(row => row.id === node.dataset.pairThumb); if (!record) return;
+        const record = visible.find(row => row.id === node.dataset.pairThumb); if (!record) return;
         try { const loaded = await loadRecord(view, record); if (current(view) && token === view.historyEpoch && node.isConnected) node.replaceChildren(square(record, 0, loaded), square(record, 1, loaded)); }
-        catch { if (node.isConnected) node.title = '原图暂时不可用，点击后可查看记录或导入原图。'; }
+        catch { if (node.isConnected) { node.title = '原图暂时不可用，点击后可查看记录或导入原图。'; const note = node.querySelector('.rmt-pair-thumb-note'); if (note) note.textContent = '原图暂不可用'; } }
     };
-    if (typeof IntersectionObserver === 'function') {
-        view.historyObserver = new IntersectionObserver(entries => { for (const entry of entries) if (entry.isIntersecting) { view.historyObserver.unobserve(entry.target); void fill(entry.target); } });
-        for (const node of nodes) view.historyObserver.observe(node);
-    } else for (const node of nodes) void fill(node);
+    for (const node of nodes) void fill(node);
 }
 function paintSettings(view) {
-    for (const key of settingFields) { const input = view.root.querySelector(`[data-pair-field="${key}"]`); if (input) input.value = view.settings[key] || ''; }
+    for (const key of settingFields) {
+        const input = view.root.querySelector(`[data-pair-field="${key}"]`); if (!input) continue;
+        const value = view.settings[key] || '';
+        if (key === 'interaction' && value && ![...input.options].some(option => option.value === value)) {
+            const option = document.createElement('option'); option.value = value; option.textContent = value; input.append(option);
+        }
+        input.value = value;
+    }
     for (let i = 0; i < 2; i++) for (const key of ['name', 'appearance']) view.root.querySelector(`[data-pair-person="${i}"][data-pair-key="${key}"]`).value = view.settings.people[i][key] || '';
     for (const node of view.root.querySelectorAll('[data-pair-type]')) node.setAttribute('aria-pressed', String(view.settings.pairType === node.dataset.pairType));
     for (const node of view.root.querySelectorAll('[data-pair-style]')) node.setAttribute('aria-pressed', String(view.settings.styleId === node.dataset.pairStyle));
     view.root.querySelector('[data-pair-selected-style]').textContent = styleLabel(view.settings);
+    view.root.querySelector('[data-pair-style-description]').textContent = styleFor(view.settings.styleId)?.description || '用自己的话描述想要的画风。';
     view.root.querySelector('[data-pair-custom]').classList.toggle('is-visible', view.settings.styleId === 'custom');
+    paintInteraction(view);
+}
+function paintInteraction(view) {
+    const custom = view.root.querySelector('[data-pair-interaction-custom]');
+    if (custom) custom.hidden = view.settings.interaction !== '自定义互动';
 }
 function formHtml(view) {
-    return `<form class="rmt-pair-form" data-pair-form><div class="rmt-pair-block"><h3>这次画谁</h3><div class="rmt-pair-fields">${[0, 1].map(i => `<label class="rmt-pair-field"><span>${i ? '右边' : '左边'}</span><input data-pair-person="${i}" data-pair-key="name" aria-label="${i ? '右边' : '左边'}的人物名字" placeholder="可以改成任何人物"></label>`).join('')}</div></div><div class="rmt-pair-block"><div class="rmt-pair-section-head"><h3>画成什么样</h3>${button('styles', '全部 36 种风格')}</div><div class="rmt-pair-style-grid">${commonStyles.map(id => { const item = styleFor(id); return `<button type="button" class="rmt-pair-style" data-pair-style="${id}" aria-pressed="false"><b>${esc(item?.label || id)}</b><small>${esc(presets.STYLE_GROUPS.find(group => group.id === item?.group)?.label || '')}</small></button>`; }).join('')}</div><div class="rmt-pair-section-head"><small>已选：<b data-pair-selected-style></b></small>${button('custom-style', '自己写风格')}</div><label class="rmt-pair-field rmt-pair-custom" data-pair-custom><span>自定义风格</span><textarea data-pair-field="customStyle" placeholder="例如：像旧绘本里的水彩小人，纸张有轻微颗粒。"></textarea></label></div><div class="rmt-pair-block"><h3>两个人的呼应</h3><div class="rmt-pair-choice"><button type="button" data-pair-type="joined" aria-pressed="true">拼接连图</button><button type="button" data-pair-type="echo" aria-pressed="false">独立呼应</button></div><label class="rmt-pair-field"><span>互动</span><select data-pair-field="interaction">${presets.INTERACTIONS.map(value => `<option value="${esc(value)}">${esc(value)}</option>`).join('')}</select></label></div><label class="rmt-pair-field"><span>这一对的小心思 <small>选填</small></span><textarea data-pair-field="direction" placeholder="比如：一个忍着笑，一个假装生气；共用一条围巾。"></textarea></label><details class="rmt-pair-options"><summary>外貌、衣着与背景 <small>选填</small></summary><div>${[0, 1].map(i => `<label class="rmt-pair-field"><span>${i ? '右边' : '左边'}人物外貌</span><textarea data-pair-person="${i}" data-pair-key="appearance" placeholder="沿用已有外貌，也可以修改或留空。"></textarea></label>`).join('')}<label class="rmt-pair-field"><span>衣着</span><input data-pair-field="clothing" placeholder="例如：同款不同色的卫衣"></label><label class="rmt-pair-field"><span>背景</span><input data-pair-field="background" placeholder="例如：左边蓝色，右边粉色"></label></div></details><div><div data-pair-compose-jobs><div class="rmt-pair-jobs" data-pair-jobs></div></div><p class="rmt-pair-status" data-pair-compose-status role="status" aria-live="polite"></p><div class="rmt-pair-create"><button type="submit" class="rmt-pair-primary">生成一对头像</button>${button('import', '导入图片')}</div><p class="rmt-pair-note">一张原图生成一对，完成后自动收进历史。导入已有图片也能裁切。</p></div></form>`;
+    const groups = [...new Set(presets.INTERACTION_PRESETS.map(item => item.group))];
+    return `<form class="rmt-pair-form" data-pair-form>
+        <div class="rmt-pair-block"><h3>这次画谁</h3><div class="rmt-pair-fields">${[0, 1].map(i => `<label class="rmt-pair-field"><span>${i ? '右边' : '左边'}</span><input data-pair-person="${i}" data-pair-key="name" aria-label="${i ? '右边' : '左边'}的人物名字" placeholder="可以改成任何人物"></label>`).join('')}</div></div>
+        <div class="rmt-pair-block"><div class="rmt-pair-section-head"><h3>画成什么样</h3><small>${presets.COUPLE_STYLES.length} 种画风</small></div>
+            <button type="button" class="rmt-pair-style-summary" data-pair-action="styles"><span><b data-pair-selected-style></b><small data-pair-style-description></small></span><span>更换</span></button>
+            <div class="rmt-pair-style-custom-action">${button('custom-style', '自己写风格')}</div>
+            <label class="rmt-pair-field rmt-pair-custom" data-pair-custom><span>自定义风格</span><textarea data-pair-field="customStyle" placeholder="例如：像旧绘本里的水彩小人，纸张有轻微颗粒。"></textarea></label>
+        </div>
+        <div class="rmt-pair-block"><h3>两个人的呼应</h3><div class="rmt-pair-choice"><button type="button" data-pair-type="joined" aria-pressed="true">拼接连图</button><button type="button" data-pair-type="echo" aria-pressed="false">独立呼应</button></div>
+            <div class="rmt-pair-section-head"><label for="rmt-pair-interaction">互动</label>${button('inspiration', '随机灵感')}</div>
+            <select id="rmt-pair-interaction" data-pair-field="interaction" aria-label="互动">${groups.map(group => `<optgroup label="${esc(group)}">${presets.INTERACTION_PRESETS.filter(item => item.group === group).map(item => `<option value="${esc(item.label)}">${esc(item.label)}</option>`).join('')}</optgroup>`).join('')}<option value="交给灵感">交给灵感</option><option value="自定义互动">自定义互动</option></select>
+            <div class="rmt-pair-inspirations" data-pair-ideas hidden></div>
+            <label class="rmt-pair-field" data-pair-interaction-custom hidden><span>写下你们的互动</span><textarea data-pair-field="interactionDetail" placeholder="可以选一条随机灵感，再改成你喜欢的动作与表情。"></textarea></label>
+        </div>
+        <label class="rmt-pair-field"><span>这一对的小心思 <small>选填</small></span><textarea data-pair-field="direction" placeholder="比如：一个忍着笑，一个假装生气；共用一条围巾。"></textarea></label>
+        <details class="rmt-pair-options"><summary>外貌、衣着与背景 <small>选填</small></summary><div>${[0, 1].map(i => `<label class="rmt-pair-field"><span>${i ? '右边' : '左边'}人物外貌</span><textarea data-pair-person="${i}" data-pair-key="appearance" placeholder="沿用已有外貌，也可以修改或留空。"></textarea></label>`).join('')}<label class="rmt-pair-field"><span>衣着</span><input data-pair-field="clothing" placeholder="例如：同款不同色的卫衣"></label><label class="rmt-pair-field"><span>背景</span><input data-pair-field="background" placeholder="例如：左边蓝色，右边粉色"></label></div></details>
+        <div><div data-pair-compose-jobs><div class="rmt-pair-jobs" data-pair-jobs></div></div><p class="rmt-pair-status" data-pair-compose-status role="status" aria-live="polite"></p><div class="rmt-pair-create"><button type="submit" class="rmt-pair-primary">生成一对头像</button>${button('import', '导入图片')}</div><p class="rmt-pair-note">一张原图生成一对，完成后自动收进历史。导入已有图片也能裁切。</p></div>
+    </form>`;
 }
 
 async function openCoupleAvatar() {
@@ -2700,7 +2865,7 @@ async function openCoupleAvatar() {
     const context = core_context.currentCharacterGuard(), scope = couple.coupleScope(context);
     body.innerHTML = '<main class="rmt-couple"><p role="status">正在读取头像记录…</p></main>';
     const view = { root: body.firstElementChild, host, context, scope, settings: couple.defaultCoupleSettings(context), records: [], pending: new Set(), images: new Map(),
-        currentId: '', circle: false, tab: 'make', favoritesOnly: false, previewEpoch: 0, historyEpoch: 0, draftTimer: 0, selectedEpoch: 0 };
+        currentId: '', circle: false, tab: 'make', favoritesOnly: false, historyPage: 1, ideas: [], previewEpoch: 0, historyEpoch: 0, draftTimer: 0, selectedEpoch: 0 };
     active = view; workspace.syncWorkspaceChrome();
     try {
         const saved = await couple.readCouples(scope);
@@ -2724,7 +2889,7 @@ function bindView(view) {
         if (event.target.matches('[data-pair-field],[data-pair-person]')) queueDraft(view);
     });
     view.root.addEventListener('change', event => {
-        if (event.target.matches('select[data-pair-field]')) queueDraft(view);
+        if (event.target.matches('select[data-pair-field]')) { queueDraft(view); paintInteraction(view); }
     });
     view.root.querySelector('[data-pair-form]').addEventListener('submit', event => { event.preventDefault(); void startGeneration(view); });
     view.root.addEventListener('click', event => {
@@ -2757,6 +2922,17 @@ async function updateRecord(view, record, patch) {
 async function handleAction(view, action, target) {
     const record = recordFor(view);
     if (action === 'styles') return showStyles(view);
+    if (action === 'inspiration') {
+        draft(view); view.ideas = presets.randomCoupleIdeas(view.ideas);
+        const list = view.root.querySelector('[data-pair-ideas]'); list.hidden = false;
+        list.innerHTML = view.ideas.map((idea, index) => button('use-idea', `<span>${esc(idea)}</span><small>选用</small>`, `data-pair-idea="${index}"`)).join('');
+        target.textContent = '换一组灵感'; return;
+    }
+    if (action === 'use-idea') {
+        const idea = view.ideas[Number(target.dataset.pairIdea)]; if (!idea) return;
+        draft(view); view.settings.interaction = '自定义互动'; view.settings.interactionDetail = idea;
+        paintSettings(view); queueDraft(view); view.root.querySelector('[data-pair-ideas]').hidden = true; return;
+    }
     if (action === 'custom-style') { draft(view); view.settings.styleId = 'custom'; paintSettings(view); queueDraft(view); view.root.querySelector('[data-pair-field="customStyle"]').focus(); return; }
     if (action === 'circle') { view.circle = !view.circle; return renderPreview(view); }
     if (action === 'import') return view.root.querySelector('[data-pair-image-file]').click();
@@ -2764,7 +2940,13 @@ async function handleAction(view, action, target) {
     if (action === 'export') return downloadText(await couple.exportCouples(view.scope));
     if (action === 'dismiss-job') { const job = jobs.get(target.dataset.pairId); if (job?.scope === view.scope && job.status === 'failed') { jobs.delete(job.id); renderJobs(view); } return; }
     if (action === 'background') { const job = jobs.get(target.dataset.pairId); if (job) { job.background = true; job.controller.abort(); renderJobs(view); report(view, '已转到后台等待，出图后会保存在这次聊天的历史中。'); } return; }
-    if (action === 'filter-favorite') { view.favoritesOnly = !view.favoritesOnly; target.setAttribute('aria-pressed', String(view.favoritesOnly)); return renderHistory(view); }
+    if (action === 'filter-favorite') { view.favoritesOnly = !view.favoritesOnly; view.historyPage = 1; target.setAttribute('aria-pressed', String(view.favoritesOnly)); return renderHistory(view); }
+    if (action === 'history-prev' || action === 'history-next') {
+        view.historyPage += action === 'history-next' ? 1 : -1;
+        await renderHistory(view);
+        if (current(view)) view.root.querySelector('[data-pair-history-count]').scrollIntoView({ block: 'start' });
+        return;
+    }
     if (action === 'history-open') { view.currentId = target.dataset.pairId; view.selectedEpoch++; selectTab(view, 'make'); return renderPreview(view); }
     if (!record) return;
     if (action === 'save') return showSave(view, record, Number(target.dataset.pairSide));
@@ -2817,20 +2999,32 @@ async function startGeneration(view) {
 }
 
 function showStyles(view) {
-    const m = dialog(view, '挑一个喜欢的风格', `<input class="rmt-pair-style-search" data-pair-search aria-label="搜索风格" placeholder="搜索：Q版、水彩、毛绒、像素…"><nav class="rmt-pair-groups" aria-label="风格分类">${[{ id: 'all', label: '全部' }, ...presets.STYLE_GROUPS].map(group => `<button type="button" data-pair-group="${group.id}" aria-pressed="${group.id === 'all'}">${esc(group.label)}</button>`).join('')}</nav><div class="rmt-pair-picker-results" data-pair-picker-results></div>`);
+    const m = dialog(view, '选择画风', `<div class="rmt-pair-picker-toolbar">
+        <label class="rmt-pair-field"><span class="rmt-pair-visually-hidden">搜索画风</span><input data-pair-search aria-label="搜索风格" placeholder="搜索名称，例如：小猫、水彩、像素"></label>
+        <div class="rmt-pair-picker-filter"><label class="rmt-pair-field"><span class="rmt-pair-visually-hidden">风格分类</span><select data-pair-group-select aria-label="风格分类"><option value="all">全部画风</option>${presets.STYLE_GROUPS.map(group => `<option value="${group.id}">${esc(group.label)}</option>`).join('')}</select></label><small data-pair-style-count role="status"></small></div>
+        </div><div class="rmt-pair-picker-scroll" data-pair-picker-results></div>`);
     if (!m) return;
-    let group = 'all';
+    m.body.classList.add('rmt-pair-style-browser');
+    const filter = m.body.querySelector('[data-pair-group-select]'), search = m.body.querySelector('[data-pair-search]');
+    filter.value = styleFor(view.settings.styleId)?.group || 'all';
     const draw = () => {
-        const query = m.body.querySelector('[data-pair-search]').value.trim().toLowerCase();
-        const rows = presets.COUPLE_STYLES.filter(item => (group === 'all' || item.group === group) && `${item.label} ${item.description} ${presets.STYLE_GROUPS.find(g => g.id === item.group)?.label || ''}`.toLowerCase().includes(query));
-        m.body.querySelector('[data-pair-picker-results]').innerHTML = rows.length ? rows.map(item => `<button type="button" class="rmt-pair-style" data-pair-pick-style="${item.id}" aria-pressed="${view.settings.styleId === item.id}"><b>${esc(item.label)}</b><small>${esc(item.description)}</small></button>`).join('') : '<p>没有找到，可以换个词，或在页面里自己写风格。</p>';
+        const query = search.value.trim().toLowerCase();
+        if (query) filter.value = 'all';
+        const rows = presets.COUPLE_STYLES.filter(item => (query || filter.value === 'all' || item.group === filter.value) && `${item.label} ${item.description} ${presets.STYLE_GROUPS.find(g => g.id === item.group)?.label || ''}`.toLowerCase().includes(query));
+        m.body.querySelector('[data-pair-style-count]').textContent = `${rows.length} 种`;
+        m.body.querySelector('[data-pair-picker-results]').innerHTML = rows.length ? presets.STYLE_GROUPS.map(group => {
+            const items = rows.filter(item => item.group === group.id);
+            return items.length ? `<section class="rmt-pair-picker-group"><h3>${esc(group.label)}</h3><div class="rmt-pair-picker-results">${items.map(item => `<button type="button" data-pair-pick-style="${item.id}" aria-pressed="${view.settings.styleId === item.id}" title="${esc(item.description)}"><span>${esc(item.label)}</span>${view.settings.styleId === item.id ? '<span aria-hidden="true">✓</span>' : ''}</button>`).join('')}</div></section>` : '';
+        }).join('') : '<p class="rmt-pair-note">没有找到，换个词试试，或回到页面自己写风格。</p>';
+        m.body.querySelector('[data-pair-picker-results]').scrollTop = 0;
     };
-    m.body.addEventListener('input', draw);
+    search.addEventListener('input', draw);
+    filter.addEventListener('change', () => { search.value = ''; draw(); });
     m.body.addEventListener('click', event => {
-        const target = event.target.closest('button'); if (!target) return;
-        if (target.dataset.pairGroup) { group = target.dataset.pairGroup; for (const item of m.body.querySelectorAll('[data-pair-group]')) item.setAttribute('aria-pressed', String(item.dataset.pairGroup === group)); draw(); }
-        if (target.dataset.pairPickStyle) { draft(view); view.settings.styleId = target.dataset.pairPickStyle; paintSettings(view); queueDraft(view); closeCoupleDialog(); }
-    }); draw();
+        const target = event.target.closest('[data-pair-pick-style]'); if (!target) return;
+        draft(view); view.settings.styleId = target.dataset.pairPickStyle; paintSettings(view); queueDraft(view); closeCoupleDialog();
+    });
+    draw();
 }
 async function showCrop(view, record) {
     const m = dialog(view, '分别调整头像', '<p role="status">正在读取原图…</p>'); if (!m) return;
@@ -23588,7 +23782,7 @@ function __init_core_selfUpdater_js() {
 const RELEASE_README = __m_core_releaseNotes_js.RELEASE_README;
 
 const UPDATE_STATE = Symbol.for('heartbeatMemories.selfUpdate');
-const INSTALLED_BUILD = '1.0.35';
+const INSTALLED_BUILD = '1.0.36';
 const PROJECT_REMOTE = 'https://github.com/zaiyebuzuoyouqingdetiangou/tokimemo';
 function updateError(message) { const error = new Error(message); error.userMessage = message; return error; }
 
@@ -39843,18 +40037,18 @@ function publicFailure(error) {
 function baiBaiImagePendingCount() { return pendingGenerations.size; }
 function isBaiBaiImageTargetPending(targetKey) { return !!targetKey && pendingGenerations.has(targetKey); }
 
-async function generateBaiBaiImage(prompt, { signal = null, orientation = 'landscape', characterName = '', promptMetadata = null, onProgress = null, onSettled = null, targetKey = '', seed = 0, singlePrompt = false } = {}) {
+async function generateBaiBaiImage(prompt, { signal = null, orientation = 'landscape', characterName = '', promptMetadata = null, onProgress = null, onSettled = null, targetKey = '', seed = 0, singlePrompt = false, preservePrompt = false } = {}) {
     if (signal?.aborted) throw baiBaiImageError('BBI_ABORTED');
     const state = baiBaiImageState();
     if (!state.available) throw baiBaiImageError(state.code);
     const reservation = typeof targetKey === 'string' && targetKey ? targetKey : Symbol('image');
     if (pendingGenerations.has(reservation)) throw baiBaiImageError('BBI_TARGET_BUSY');
     // 柏宝绘负责后端并发与排队；这里只保留同一目标的去重。
-    const visual = core_text.normalizeText(prompt, 1800);
+    const visual = core_text.normalizeText(prompt, preservePrompt ? Infinity : 1800);
     if (!visual) throw baiBaiImageError('BBI_INVALID_ARGS');
     // Freeze grouping before the provider awaits; its default otherwise reads the new chat at save time.
     const metadata = appearance.normalizeCgPromptMetadata(promptMetadata);
-    const fullVisual = appearance.cgPreparedVisualPrompt(visual, metadata);
+    const fullVisual = preservePrompt && !metadata ? visual : appearance.cgPreparedVisualPrompt(visual, metadata);
     let primaryPrompt = !state.supportsCharacters && metadata
         ? metadata.flatPrompt || fullVisual : metadata?.sceneTags || visual;
     if (!state.supportsCharacters) primaryPrompt = appearance.cgFlatPromptWithNaturalLooks(primaryPrompt, metadata);
@@ -40476,7 +40670,7 @@ const IMAGE_FALLBACK_BLOCKED = new Set([
 ]);
 
 function invokeSelectedImageProvider(selectedProvider, prompt, context, options) {
-    const visual = sanitizeCgVisualText(prompt);
+    const visual = sanitizeCgVisualText(prompt, options.preservePrompt === true ? Infinity : undefined);
     if (selectedProvider === chatu8_image.CHATU8_IMAGE_PROVIDER) {
         const { seed: _seed, ...rest } = options;
         return chatu8_image.generateChatu8Image(visual, { ...rest, context });
@@ -40489,12 +40683,12 @@ function invokeSelectedImageProvider(selectedProvider, prompt, context, options)
     throw core_text.safeUserError('请在设置里选择柏宝绘或智绘姬。旧渠道图片仍可查看。', 'RMT_IMAGE_PROVIDER_RETIRED');
 }
 
-async function invokeImageGeneration(prompt, context = core_context.getContext(), { signal = null, provider = null, orientation = 'landscape', respectOrientation = false, aspectRatio = '', characterName = '', promptMetadata = null, onProgress = null, onSettled = null, targetKey = '', seed = 0, singlePrompt = false } = {}) {
+async function invokeImageGeneration(prompt, context = core_context.getContext(), { signal = null, provider = null, orientation = 'landscape', respectOrientation = false, aspectRatio = '', characterName = '', promptMetadata = null, onProgress = null, onSettled = null, targetKey = '', seed = 0, singlePrompt = false, preservePrompt = false } = {}) {
     const settings = core_settings.getPluginSettings(context);
     const selectedProvider = provider === chatu8_image.CHATU8_IMAGE_PROVIDER || provider === baibai_image.BAIBAI_IMAGE_PROVIDER
         ? provider : settings.imageGenerationProvider;
     // seed 只交给柏宝绘（公开 API 支持单次 seed）；智绘姬没有公开的单次 seed 接口，不传。
-    const options = { signal, orientation, respectOrientation, aspectRatio, characterName, promptMetadata, onProgress, onSettled, targetKey, singlePrompt, seed: Number.isInteger(seed) && seed > 0 ? seed : 0 };
+    const options = { signal, orientation, respectOrientation, aspectRatio, characterName, promptMetadata, onProgress, onSettled, targetKey, singlePrompt, preservePrompt: preservePrompt === true, seed: Number.isInteger(seed) && seed > 0 ? seed : 0 };
     try {
         return await invokeSelectedImageProvider(selectedProvider, prompt, context, options);
     } catch (error) {
@@ -41701,10 +41895,11 @@ function unlisten(source, event, handler) {
     try { source.removeListener?.(event, handler); } catch {}
 }
 
-function flatPrompt(prompt, promptMetadata) {
-    const visual = core_text.normalizeText(prompt, 1800);
+function flatPrompt(prompt, promptMetadata, preservePrompt = false) {
+    const visual = core_text.normalizeText(prompt, preservePrompt ? Infinity : 1800);
     if (!visual) throw chatu8ImageError('CH8_INVALID_ARGS');
     const metadata = appearance.normalizeCgPromptMetadata(promptMetadata);
+    if (preservePrompt && !metadata) return visual;
     const fullVisual = appearance.cgPreparedVisualPrompt(visual, metadata);
     let primaryPrompt = metadata ? metadata.flatPrompt || fullVisual : visual;
     primaryPrompt = appearance.cgFlatPromptWithNaturalLooks(primaryPrompt, metadata);
@@ -41800,7 +41995,7 @@ function orientedSize(context, backend, orientation, aspectRatio = '') {
     return orientation === 'portrait' ? { width: short, height: long } : { width: long, height: short };
 }
 
-async function generateChatu8Image(prompt, { signal = null, orientation = 'landscape', respectOrientation = false, aspectRatio = '', promptMetadata = null, onProgress = null, onSettled = null, targetKey = '', context = core_context.getContext() } = {}) {
+async function generateChatu8Image(prompt, { signal = null, orientation = 'landscape', respectOrientation = false, aspectRatio = '', promptMetadata = null, onProgress = null, onSettled = null, targetKey = '', context = core_context.getContext(), preservePrompt = false } = {}) {
     if (signal?.aborted) throw chatu8ImageError('CH8_ABORTED');
     const state = chatu8ImageState(context);
     if (!state.available) throw chatu8ImageError(state.code);
@@ -41808,7 +42003,7 @@ async function generateChatu8Image(prompt, { signal = null, orientation = 'lands
     if (pendingGenerations.has(reservation)) throw chatu8ImageError('CH8_TARGET_BUSY');
     // 智绘姬按自己的后端能力并发或排队；这里只阻止同一目标重复提交。
     let scene;
-    try { scene = flatPrompt(prompt, promptMetadata); }
+    try { scene = flatPrompt(prompt, promptMetadata, preservePrompt); }
     catch (error) {
         if (ownErrors.has(error) || error?.safeToDisplay) throw error;
         throw chatu8ImageError('CH8_INVALID_ARGS');

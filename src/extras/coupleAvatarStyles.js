@@ -3,6 +3,7 @@ export const STYLE_GROUPS = Object.freeze([
     { id: 'chibi', label: 'Q版萌系' }, { id: 'anime', label: '动漫绘本' },
     { id: 'art', label: '手绘艺术' }, { id: 'craft', label: '手作材质' },
     { id: 'graphic', label: '平面设计' }, { id: 'photo', label: '写真氛围' },
+    { id: 'animal', label: '动物化身' }, { id: 'fantasy', label: '幻想装饰' },
 ]);
 
 export const COUPLE_STYLES = Object.freeze([
@@ -10,7 +11,7 @@ export const COUPLE_STYLES = Object.freeze([
     ['chibi-three-head', 'chibi', '三头身小人', '保留服装细节，也能看清小动作。', 'three-head-tall chibi figures, expressive small gestures, recognizable clothing details, cute balanced proportions'],
     ['chibi-headshot', 'chibi', '萌系大头', '脸和表情是主角，缩小也清楚。', 'cute large-head portrait illustration, expressive readable faces, simple supporting shapes'],
     ['chibi-doodle', 'chibi', '豆豆眼涂鸦', '几笔小表情，松弛又俏皮。', 'playful hand-drawn doodles, dot eyes, loose lively outlines, simple charming expressions'],
-    ['chibi-animal', 'chibi', '圆滚滚兽化', '把两人变成相呼应的小动物。', 'rounded cute animal versions of the two people, preserve signature colors and recognizable accessories, paired animal characters'],
+    ['chibi-animal', 'animal', '圆滚滚兽化', '主角本身变成动物，不是人戴兽耳。', 'animal-only chibi illustration, two rounded small animals with muzzles, animal limbs and tails, choose fitting species for their personalities'],
     ['chibi-meme', 'chibi', '表情包Q版', '一边闹、一边笑，表情更夸张。', 'expressive chibi reaction-sticker illustration, exaggerated playful expressions and complementary poses, no lettering'],
     ['anime-clean', 'anime', '日系清线', '利落线条，轻盈的平涂色块。', 'Japanese anime illustration, crisp delicate linework, light flat colors'],
     ['anime-cel', 'anime', '赛璐璐', '清晰明暗面，像动画定格。', 'cel-shaded anime keyframe, defined light and shadow shapes, clear facial features'],
@@ -42,10 +43,116 @@ export const COUPLE_STYLES = Object.freeze([
     ['photo-night', 'photo', '电影夜景', '有色夜光，保持五官清晰。', 'cinematic nighttime portraits, colored ambient night light, legible eyes and facial details'],
     ['photo-backlight', 'photo', '柔焦逆光', '轻柔轮廓光，不抹去面部细节。', 'soft backlit portrait photography, gentle rim light and delicate bloom, retain readable face detail'],
     ['photo-mono', 'photo', '黑白人像', '简单背景，突出神情与距离。', 'black-and-white portrait photography, simple background, subtle tonal contrast, expressive connection'],
+    ['chibi-mochi', 'chibi', '糯米团子', '软糯小圆团，保留发色与配饰。', 'mochi-like chibi characters, tiny round bodies and miniature limbs, soft squashy silhouettes, simple dot features'],
+    ['chibi-sleepy', 'chibi', '困困小人', '短短手脚，惺忪眼睛和松软线条。', 'sleepy miniature chibi figures, stubby limbs, half-closed eyes, soft rounded loose linework'],
+    ['chibi-crayon', 'chibi', '蜡笔小朋友', '稚拙轮廓，像小朋友认真画的画。', 'childlike crayon chibi drawing, deliberately naive proportions, uneven wax strokes, bold simple shapes'],
+    ['anime-flat', 'anime', '清爽平涂', '省去复杂光影，突出轮廓与色块。', 'flat-color anime illustration, clean silhouettes, minimal shadow, no painterly rendering, restrained palette'],
+    ['anime-manga', 'anime', '黑白漫画', '黑白墨线、网点和夸张小表情。', 'black-and-white manga portrait, expressive ink contours, screentone shadows, no color painting'],
+    ['anime-pastel', 'anime', '粉彩动画', '柔和粉彩、圆润描线与淡淡阴影。', 'pastel animation drawing, rounded colored outlines, delicate flat cel shadows, airy candy-colored palette'],
+    ['anime-webtoon', 'anime', '条漫肖像', '简洁五官，利落的条漫式明暗。', 'modern webtoon portrait illustration, clear graphic facial design, smooth selective cel shading, economical linework'],
+    ['art-gouache', 'art', '不透明水粉', '哑光厚实色块，可见叠色笔触。', 'opaque gouache painting, matte chalky color planes, visible overlapping brush marks, painted rather than anime outlines'],
+    ['art-pastel', 'art', '油画棒', '厚重蜡质笔触，柔软而有颗粒。', 'oil-pastel portrait drawing, thick waxy strokes, visible paper tooth, broken color edges'],
+    ['art-charcoal', 'art', '炭笔速写', '擦痕、炭粉与有呼吸感的粗线。', 'charcoal portrait drawing, velvety black dust, rubbed highlights, energetic rough contours on paper'],
+    ['art-risograph', 'art', '孔版套印', '有限套色与轻微错版，像印刷小卡。', 'risograph portrait print, limited spot colors, grainy ink, visible subtle registration offsets'],
+    ['craft-porcelain', 'craft', '釉彩瓷偶', '圆润瓷面，带一点通透釉光。', 'two small glazed porcelain character dolls as the actual subjects, rounded ceramic forms, painted features, translucent glaze highlights'],
+    ['craft-wood', 'craft', '木雕小偶', '刀痕与木纹，像掌心的小收藏。', 'two hand-carved wooden character dolls, visible wood grain, faceted carving marks, tiny painted faces'],
+    ['craft-origami', 'craft', '折纸小人', '折痕和纸面拼出人物与衣服。', 'folded-paper character figures, visible origami creases, geometric folded heads and clothing, paper forms rather than real skin'],
+    ['craft-bead', 'craft', '拼豆小像', '一颗颗圆形拼豆组成小小人物。', 'fused-bead character portraits, visible individual cylindrical plastic beads on a square grid, flat craft object photography'],
+    ['graphic-8bit', 'graphic', '8位小像素', '更少颜色、更大像素，轮廓清楚。', '8-bit sprite portraits, very low resolution pixel grid, small limited palette, crisp nearest-neighbor edges, no smooth shading'],
+    ['graphic-pop', 'graphic', '波普撞色', '粗轮廓、撞色和醒目的网点。', 'pop-art portrait illustration, bold ink outlines, contrasting flat colors, large halftone dots'],
+    ['graphic-comic', 'graphic', '复古美漫', '粗黑墨线、排线与纸面印刷感。', 'vintage comic-book portraits, bold black ink contours, crosshatching, textured halftone printing, no lettering'],
+    ['graphic-lino', 'graphic', '双色橡皮章', '雕刻感的粗线，像一对印章。', 'two-color linocut stamp portraits, broad carved negative shapes, uneven ink transfer, graphic flat silhouettes'],
+    ['photo-instant', 'photo', '即时成像', '柔和闪光与轻微偏色的日常抓拍。', 'instant-film candid photography, soft direct flash, slight analog color shifts, authentic lens rendering, no printed border'],
+    ['photo-rain', 'photo', '雨窗写真', '雨滴虚化、玻璃反光与柔和侧光。', 'photographic portraits beside a rainy window, defocused raindrops and glass reflections, soft sidelight, realistic skin texture'],
+    ['animal-cat', 'animal', '小猫化身', '猫脸、猫爪和尾巴，映射原有发色。', 'two small cats as the main subjects, round feline faces, whiskers, paws and curved tails, cute animal portrait illustration'],
+    ['animal-dog', 'animal', '小狗化身', '小狗嘴鼻与软耳，神情各不相同。', 'two small dogs as the main subjects, canine muzzles, soft ears, paws and wagging tails, expressive animal portraits'],
+    ['animal-fox', 'animal', '小狐狸化身', '尖耳朵和蓬松大尾巴的一对狐狸。', 'two little foxes, fox muzzles, pointed ears, four animal limbs and large fluffy tails, animal-only storybook illustration'],
+    ['animal-rabbit', 'animal', '垂耳兔化身', '软软兔脸和垂耳，不是人形兔耳。', 'two little lop-eared rabbits, rabbit faces, soft floppy ears, small forepaws and round tails, animal-only illustration'],
+    ['animal-bear', 'animal', '小熊化身', '圆耳、短嘴鼻和肉乎乎的熊爪。', 'two small bears, round ears, short bear muzzles, stout animal bodies and soft paws, rounded animal-only illustration'],
+    ['animal-bird', 'animal', '团子小鸟', '圆滚滚羽毛、鸟喙与小翅膀。', 'two round little birds, visible beaks, feathered bodies, tiny wings and bird feet, soft animal-only illustration'],
+    ['animal-seal', 'animal', '海豹团子', '小鳍肢和圆滚滚身形，靠神情呼应。', 'two plump baby seals, seal muzzles, whiskers and flippers, smooth rounded animal bodies, expressive animal-only illustration'],
+    ['fantasy-glass', 'fantasy', '彩窗玻璃', '彩色玻璃与细细铅条拼出肖像。', 'stained-glass portrait artwork, luminous colored glass pieces separated by lead outlines, faceted transmitted light'],
+    ['fantasy-enamel', 'fantasy', '珐琅徽章', '金属轮廓与亮亮的珐琅色面。', 'matching hard-enamel portrait pins, polished raised metal outlines and glossy flat enamel fills, collectible objects'],
+    ['fantasy-embroidery', 'fantasy', '刺绣肖像', '线迹组成五官、发丝和衣服。', 'embroidered character portraits on fabric, every shape made of visible thread stitches, tactile satin-stitch relief'],
+    ['fantasy-mosaic', 'fantasy', '马赛克拼画', '细小瓷砖拼成有光泽的肖像。', 'portrait mosaics made entirely of tiny colored ceramic tesserae, visible grout and subtle glazed reflections'],
+    ['fantasy-blueprint', 'fantasy', '蓝晒肖像', '靛蓝与纸白，带植物光影的蓝晒。', 'cyanotype portrait print, exclusively Prussian blue and white, photographic contact-print texture, botanical shadow shapes'],
+    ['fantasy-shadow', 'fantasy', '皮影小像', '透光皮革、镂刻纹样和关节细节。', 'Chinese shadow-puppet character portraits, translucent colored leather, intricate cutout ornament and visible puppet joints'],
+    ['fantasy-luminous', 'fantasy', '夜光剪纸', '纸层间透出小夜灯一样的柔光。', 'illuminated layered-paper portrait diorama, actual cut-paper subjects, gentle light between paper layers, visible edge depth'],
+    ['fantasy-fresco', 'fantasy', '壁画矿彩', '矿物色、磨损肌理和壁画式线条。', 'mineral-pigment fresco portraits, matte mineral colors, worn plaster texture, flowing mural contours'],
 ].map(([id, group, label, description, prompt]) => Object.freeze({ id, group, label, description, prompt })));
 
-export const INTERACTIONS = Object.freeze([
-    '半颗爱心', '隔空对望', '左右眨眼', '一根红线', '举杯碰杯', '隔空击掌',
-    '一人一只小动物', '耳机分你一只', '同款不同色', '一起看烟花', '并肩吹泡泡',
-    '悄悄牵住衣角', '一边闹一边笑', '递出一朵花', '日与月的呼应', '交给灵感',
-]);
+export const INTERACTION_PRESETS = Object.freeze([
+    ['甜甜互动', '半颗爱心', 'each subject holds half a heart at the inner edge; together the halves form one heart'],
+    ['甜甜互动', '隔空对望', 'left subject gazes right; right subject gazes left with an affectionate response'],
+    ['甜甜互动', '左右眨眼', 'complementary playful winks with distinct individual expressions'],
+    ['甜甜互动', '一根红线', 'a fine red thread connects the two subjects across the central boundary'],
+    ['甜甜互动', '隔空击掌', 'the two subjects extend matching hands or forepaws toward the inner edges for a high-five'],
+    ['甜甜互动', '悄悄牵住衣角', 'one gently catches the other\'s clothing edge or small accessory; the other responds shyly'],
+    ['甜甜互动', '递出一朵花', 'one offers a flower inward; the other reaches inward to receive it'],
+    ['甜甜互动', '碰一碰鼻尖', 'two faces turned inward, noses gently meeting across the boundary'],
+    ['甜甜互动', '替你理围巾', 'one straightens the other\'s scarf while the other smiles softly'],
+    ['甜甜互动', '藏在背后的小花', 'one hides a small flower behind their back; the other peeks curiously'],
+    ['俏皮表情', '一边闹一边笑', 'one playfully teases; the other laughs in response'],
+    ['俏皮表情', '假装生气', 'one puffs up in mock annoyance; the other tries not to laugh'],
+    ['俏皮表情', '偷偷模仿你', 'one strikes a serious pose; the other playfully copies it'],
+    ['俏皮表情', '一边偷看一边躲', 'one peeks around a prop toward the other; the other bashfully looks away'],
+    ['俏皮表情', '互相做鬼脸', 'different silly faces directed toward one another'],
+    ['俏皮表情', '一边困一边闹', 'one is drowsy with half-closed eyes; the other playfully seeks attention'],
+    ['俏皮表情', '偷偷戴上同款', 'matching little accessories; one knowingly smiles and the other pretends not to notice'],
+    ['俏皮表情', '被发现的偷笑', 'one is caught suppressing a laugh; the other gives a knowing sidelong look'],
+    ['日常陪伴', '举杯碰杯', 'each raises a cup toward the other for a small shared toast'],
+    ['日常陪伴', '一人一只小动物', 'each subject is accompanied by a small pet with complementary affectionate gestures'],
+    ['日常陪伴', '耳机分你一只', 'each wears one earphone, a shared cable visually joins their portraits'],
+    ['日常陪伴', '同款不同色', 'matching clothing or accessories in two complementary colors'],
+    ['日常陪伴', '一起看烟花', 'both gaze at shared fireworks with different delighted expressions and matching reflected light'],
+    ['日常陪伴', '并肩吹泡泡', 'both blow bubbles with different expressions; bubbles drift across the two portraits'],
+    ['日常陪伴', '共用一条围巾', 'one long scarf wraps loosely around both subjects across the central boundary'],
+    ['日常陪伴', '分享一把伞', 'one holds a shared umbrella tilted toward the other; each remains in their own half'],
+    ['日常陪伴', '一起读一本书', 'a shared open book spans the lower center; each reacts differently to the same page'],
+    ['日常陪伴', '举起同款相机', 'both hold matching small cameras, one takes a photo while the other smiles'],
+    ['分享零食', '一人一半饼干', 'each holds half of the same cookie toward the inner edge'],
+    ['分享零食', '递来最后一口', 'one offers the last bite of a snack; the other looks pleasantly surprised'],
+    ['分享零食', '草莓分给你', 'one offers a strawberry inward; the other eagerly leans toward it'],
+    ['分享零食', '两杯不同口味', 'matching drink cups in different colors and two distinct pleased expressions'],
+    ['分享零食', '偷吃被发现', 'one has snack crumbs near their mouth; the other notices with amused surprise'],
+    ['分享零食', '一串糖葫芦', 'one offers a candied-fruit skewer across the center; the other prepares to take a bite'],
+    ['分享零食', '交换便当', 'two small lunch boxes offered toward the center with warm smiles'],
+    ['分享零食', '融化的冰淇淋', 'one worries over melting ice cream; the other offers a napkin'],
+    ['季节小事', '接住一片落叶', 'one releases a leaf toward the center; the other catches it'],
+    ['季节小事', '一起捧雪花', 'matching snowflakes land near their faces; each shows a different delighted expression'],
+    ['季节小事', '围巾里躲风', 'one nestles into a scarf against the wind; the other leans closer for warmth'],
+    ['季节小事', '花瓣落在头顶', 'a flower petal rests on one subject; the other points it out with a smile'],
+    ['季节小事', '夏夜捕萤', 'each follows a firefly; warm firefly trails connect the two halves'],
+    ['季节小事', '雨后踩水花', 'one splashes a tiny puddle toward the center; the other reacts playfully'],
+    ['季节小事', '同一阵风', 'the same gentle breeze moves both subjects\' hair, fur or accessories in one direction'],
+    ['意象呼应', '日与月的呼应', 'complementary sun and moon motifs with warm and cool light'],
+    ['意象呼应', '星星递给你', 'one offers a small glowing star; the other reaches toward it'],
+    ['意象呼应', '拼成一朵花', 'two complementary flower halves meet across the center'],
+    ['意象呼应', '纸飞机传话', 'one sends a paper airplane toward the center; the other waits to catch it'],
+    ['意象呼应', '两边同一片海', 'matching horizon and sea breeze, each subject holds a different seashell'],
+].map(([group, label, prompt]) => Object.freeze({ group, label, prompt })));
+
+export const INTERACTIONS = Object.freeze([...INTERACTION_PRESETS.map(row => row.label), '交给灵感', '自定义互动']);
+
+// Local inspiration only: browsing ideas never sends a paid generation request.
+export function randomCoupleIdeas(previous = [], random = Math.random) {
+    const moments = [
+        '左边递出一朵小花，右边伸手接住', '左边偷藏一颗糖，右边假装没发现',
+        '左边举起一半爱心，右边拿着另一半回应', '左边轻轻拉住围巾一端，右边靠过来',
+        '左边捧着小星星，右边试着触碰它的光', '左边吹出一个泡泡，右边追着泡泡看',
+        '左边把小纸船推过来，右边在另一侧接住', '左边藏在叶子后偷看，右边歪头找它',
+        '左边递来热饮，右边把小饼干分过去', '左边举着小相机，右边故意做个鬼脸',
+        '左边把花瓣放到头顶，右边学着戴上另一片', '左边送出纸飞机，右边伸手迎接',
+        '左边指着远处的烟花，右边偷偷看左边', '左边捧着一团雪，右边围着围巾笑',
+        '左边戴着歪歪的小帽子，右边伸手扶正', '左边递出一枚贝壳，右边回赠一颗小石子',
+    ];
+    const moods = ['一个认真、一个忍不住笑', '一个害羞、一个温柔回应', '一个得意、一个假装嫌弃', '一个好奇、一个耐心陪伴', '一个困困的、一个很有精神', '一个有点惊讶、一个偷偷开心'];
+    const scenes = ['背景留白，重点放在动作和表情', '同一束柔光落在两边', '两边用相呼应的淡色背景', '共享一个小小的窗边场景', '点缀几片花瓣，不遮住脸'];
+    const pick = values => values[Math.min(values.length - 1, Math.max(0, Math.floor(random() * values.length)))];
+    const shuffled = moments.filter(moment => !previous.some(idea => idea.startsWith(moment)));
+    for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.min(i, Math.max(0, Math.floor(random() * (i + 1))));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return (shuffled.length ? shuffled : moments).slice(0, 3).map(moment => `${moment}；${pick(moods)}。${pick(scenes)}。`);
+}

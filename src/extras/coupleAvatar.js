@@ -44,7 +44,7 @@ export function defaultCoupleSettings(context = optionalContext()) {
             { id: 'user', name: text(context?.name1) || '我', appearance: visible('user', text(card.persona) || text(context?.powerUserSettings?.persona_description)) },
         ],
         styleId: 'chibi-dumpling', pairType: 'joined', interaction: '半颗爱心',
-        clothing: '', background: '', direction: '', customStyle: '',
+        clothing: '', background: '', direction: '', customStyle: '', interactionDetail: '',
     };
 }
 
@@ -65,49 +65,47 @@ export function normalizeCoupleSettings(value, context = optionalContext()) {
         pairType: input.pairType === 'echo' ? 'echo' : 'joined',
         interaction: own(input, 'interaction') ? text(input.interaction) : defaults.interaction,
         clothing: text(input.clothing), background: text(input.background),
-        direction: text(input.direction), customStyle: text(input.customStyle),
+        direction: text(input.direction), customStyle: text(input.customStyle), interactionDetail: text(input.interactionDetail),
     };
 }
 
-const INTERACTION_PROMPTS = Object.freeze({
-    '半颗爱心': 'a shared heart motif: each person holds one matching half of a heart toward the inner edge, together the two halves read as one complete heart',
-    '隔空对望': 'the left person looks gently toward the right, the right person returns their gaze toward the left',
-    '左右眨眼': 'complementary playful winks, the two people have their own distinct expressions',
-    '一根红线': 'a fine red thread visually connects the two portraits across the central boundary',
-    '举杯碰杯': 'each person raises their own cup toward the other, a lighthearted shared toast',
-    '隔空击掌': 'the two people reach toward the inner edges with complementary high-five gestures',
-    '一人一只小动物': 'each person holds their own small animal, with coordinated but distinct affectionate gestures',
-    '耳机分你一只': 'one earphone for each person, a shared cable or matching headphones connecting the mood',
-    '同款不同色': 'coordinated clothing or accessories in two complementary colors, individual expressions',
-    '一起看烟花': 'both people enjoy the same fireworks, matching reflected light and different delighted expressions',
-    '并肩吹泡泡': 'both people blow bubbles, light bubbles drifting between their portraits',
-    '悄悄牵住衣角': 'one person gently reaches for the other person\'s clothing edge, the other responds with a small affectionate smile',
-    '一边闹一边笑': 'one person playfully teases, the other laughs in response, distinct complementary expressions',
-    '递出一朵花': 'one person offers a flower toward the inner edge, the other reaches to receive it',
-    '日与月的呼应': 'complementary sun and moon motifs, warm and cool light linking two individual portraits',
-    '交给灵感': 'choose a fresh affectionate interaction with complementary expressions and gestures for these two people',
-});
+const DEFAULT_INTERACTION_PROMPT = 'choose a fresh affectionate interaction with complementary expressions and gestures for these two subjects';
 
 export function couplePrompt(value) {
     const settings = normalizeCoupleSettings(value, null);
     const chosen = styles.COUPLE_STYLES.find(style => style.id === settings.styleId);
+    const animal = chosen?.group === 'animal';
+    const object = chosen?.group === 'craft' || ['fantasy-enamel', 'fantasy-shadow'].includes(chosen?.id);
+    const subject = animal ? 'animal' : object ? 'crafted character' : 'character';
+    const interaction = settings.interaction === '自定义互动' ? settings.interactionDetail
+        : styles.INTERACTION_PRESETS.find(item => item.label === settings.interaction)?.prompt || settings.interaction;
+    const form = animal
+        ? 'The TWO main subjects ARE complete animals, with species-appropriate heads, bodies, limbs and tails. No human faces or human bodies, no people wearing animal ears, no people holding animal versions. Adapt actions to paws, wings or flippers. Translate original hair/eye colors and signature accessories into animal identity cues.'
+        : object ? 'The TWO main subjects ARE the crafted objects described by the selected style. Their faces and bodies use that material and construction. Not humans holding toys or wearing material-themed costumes.'
+            : 'Apply the selected rendering medium, proportions, linework and shading to the entire characters and image, not only to background decorations.';
     const people = settings.people.map((person, index) => {
         const side = index === 0 ? 'LEFT' : 'RIGHT';
-        return `${side} HALF person: ${person.name || (index === 0 ? 'the first person' : 'the second person')}${person.appearance ? `; appearance: ${person.appearance}` : ''}.`;
+        // Only transform the outgoing animal reference. Saved/manual appearances
+        // remain intact and human styles continue to receive their original text.
+        const reference = animal ? person.appearance.replace(/\b\d+\s*(?:boys?|girls?|men|women|persons?|people)\b/gi, '')
+            .replace(/\b(?:human|boy|girl|man|woman)\b/gi, 'character').replace(/\bhair\b/gi, 'fur markings')
+            .replace(/\bskin\b/gi, 'coat').replace(/(?:皮肤|肤色|头发|发色)/g, '毛色') : person.appearance;
+        return `${side} HALF ${subject}: ${person.name || (index === 0 ? 'first character' : 'second character')}${reference ? `; ${animal || object ? 'identity reference to reinterpret in the selected form' : 'appearance'}: ${reference}` : ''}.`;
     });
     return [
-        'One matching avatar pair in one horizontal image, preferably 2:1, two equal square halves.',
-        chosen ? `Style: ${chosen.prompt}.` : '',
-        settings.styleId === 'custom' && settings.customStyle ? `Style: ${settings.customStyle}.` : '',
+        chosen ? `Rendering style: ${chosen.prompt}.` : '',
+        settings.styleId === 'custom' && settings.customStyle ? `Rendering style: ${settings.customStyle}.` : '',
+        form,
+        `One matching avatar pair in one horizontal image, preferably 2:1. One ${subject} centered in EACH of two equal square halves.`,
+        `Interaction: ${interaction && interaction !== '交给灵感' ? interaction : DEFAULT_INTERACTION_PROMPT}.`,
         settings.direction ? `Direction: ${settings.direction}.` : '',
         ...people,
-        settings.clothing ? `Clothing: ${settings.clothing}.` : '',
+        settings.clothing ? `${animal ? 'Small wearable accents adapted for animal bodies' : 'Clothing in the selected rendering style'}: ${settings.clothing}.` : '',
         settings.background ? `Background: ${settings.background}.` : '',
-        `Interaction: ${INTERACTION_PROMPTS[settings.interaction] || settings.interaction || INTERACTION_PROMPTS['交给灵感']}.`,
         settings.pairType === 'echo'
             ? 'Independent portraits, coordinated colors and light, complementary poses.'
             : 'Connected background and shared motif across the center, matching scale.',
-        'One person centered in each half; leave space around hair and head for square/circle crops. Clear small faces, distinct poses, no mirrored duplicates. Preserve identity and gender, improvise unspecified details. No text, watermark, frame or divider.',
+        'Leave margin around both heads for square/circle crops. Readable expressions, distinct poses, no mirrored duplicates. Preserve each identity and gender within the chosen form; improvise unspecified details. No text, watermark, frame or divider.',
     ].filter(Boolean).join('\n');
 }
 
@@ -377,7 +375,7 @@ export async function generateCouple(value, { context = core_context.currentChar
         const result = await cg_core.invokeImageGeneration(prompt, context, {
             orientation: 'landscape', respectOrientation: true, aspectRatio: '2:1',
             characterName: settings.people[0].name || context?.name2 || '',
-            targetKey, singlePrompt: true, onProgress: report,
+            targetKey, singlePrompt: true, preservePrompt: true, onProgress: report,
         });
         task_trace.markStage(trace, 'request');
         task_trace.markStage(trace, 'response');

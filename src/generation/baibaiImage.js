@@ -67,18 +67,18 @@ function publicFailure(error) {
 export function baiBaiImagePendingCount() { return pendingGenerations.size; }
 export function isBaiBaiImageTargetPending(targetKey) { return !!targetKey && pendingGenerations.has(targetKey); }
 
-export async function generateBaiBaiImage(prompt, { signal = null, orientation = 'landscape', characterName = '', promptMetadata = null, onProgress = null, onSettled = null, targetKey = '', seed = 0, singlePrompt = false } = {}) {
+export async function generateBaiBaiImage(prompt, { signal = null, orientation = 'landscape', characterName = '', promptMetadata = null, onProgress = null, onSettled = null, targetKey = '', seed = 0, singlePrompt = false, preservePrompt = false } = {}) {
     if (signal?.aborted) throw baiBaiImageError('BBI_ABORTED');
     const state = baiBaiImageState();
     if (!state.available) throw baiBaiImageError(state.code);
     const reservation = typeof targetKey === 'string' && targetKey ? targetKey : Symbol('image');
     if (pendingGenerations.has(reservation)) throw baiBaiImageError('BBI_TARGET_BUSY');
     // 柏宝绘负责后端并发与排队；这里只保留同一目标的去重。
-    const visual = core_text.normalizeText(prompt, 1800);
+    const visual = core_text.normalizeText(prompt, preservePrompt ? Infinity : 1800);
     if (!visual) throw baiBaiImageError('BBI_INVALID_ARGS');
     // Freeze grouping before the provider awaits; its default otherwise reads the new chat at save time.
     const metadata = appearance.normalizeCgPromptMetadata(promptMetadata);
-    const fullVisual = appearance.cgPreparedVisualPrompt(visual, metadata);
+    const fullVisual = preservePrompt && !metadata ? visual : appearance.cgPreparedVisualPrompt(visual, metadata);
     let primaryPrompt = !state.supportsCharacters && metadata
         ? metadata.flatPrompt || fullVisual : metadata?.sceneTags || visual;
     if (!state.supportsCharacters) primaryPrompt = appearance.cgFlatPromptWithNaturalLooks(primaryPrompt, metadata);

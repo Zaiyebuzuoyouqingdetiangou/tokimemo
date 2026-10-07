@@ -74,10 +74,11 @@ function unlisten(source, event, handler) {
     try { source.removeListener?.(event, handler); } catch {}
 }
 
-function flatPrompt(prompt, promptMetadata) {
-    const visual = core_text.normalizeText(prompt, 1800);
+function flatPrompt(prompt, promptMetadata, preservePrompt = false) {
+    const visual = core_text.normalizeText(prompt, preservePrompt ? Infinity : 1800);
     if (!visual) throw chatu8ImageError('CH8_INVALID_ARGS');
     const metadata = appearance.normalizeCgPromptMetadata(promptMetadata);
+    if (preservePrompt && !metadata) return visual;
     const fullVisual = appearance.cgPreparedVisualPrompt(visual, metadata);
     let primaryPrompt = metadata ? metadata.flatPrompt || fullVisual : visual;
     primaryPrompt = appearance.cgFlatPromptWithNaturalLooks(primaryPrompt, metadata);
@@ -173,7 +174,7 @@ function orientedSize(context, backend, orientation, aspectRatio = '') {
     return orientation === 'portrait' ? { width: short, height: long } : { width: long, height: short };
 }
 
-export async function generateChatu8Image(prompt, { signal = null, orientation = 'landscape', respectOrientation = false, aspectRatio = '', promptMetadata = null, onProgress = null, onSettled = null, targetKey = '', context = core_context.getContext() } = {}) {
+export async function generateChatu8Image(prompt, { signal = null, orientation = 'landscape', respectOrientation = false, aspectRatio = '', promptMetadata = null, onProgress = null, onSettled = null, targetKey = '', context = core_context.getContext(), preservePrompt = false } = {}) {
     if (signal?.aborted) throw chatu8ImageError('CH8_ABORTED');
     const state = chatu8ImageState(context);
     if (!state.available) throw chatu8ImageError(state.code);
@@ -181,7 +182,7 @@ export async function generateChatu8Image(prompt, { signal = null, orientation =
     if (pendingGenerations.has(reservation)) throw chatu8ImageError('CH8_TARGET_BUSY');
     // 智绘姬按自己的后端能力并发或排队；这里只阻止同一目标重复提交。
     let scene;
-    try { scene = flatPrompt(prompt, promptMetadata); }
+    try { scene = flatPrompt(prompt, promptMetadata, preservePrompt); }
     catch (error) {
         if (ownErrors.has(error) || error?.safeToDisplay) throw error;
         throw chatu8ImageError('CH8_INVALID_ARGS');

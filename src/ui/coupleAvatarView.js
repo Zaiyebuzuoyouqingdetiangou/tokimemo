@@ -15,8 +15,8 @@ import * as styles from './coupleAvatarCss.js';
 function esc(value) { return text.esc(value); }
 const jobs = new Map();
 let active = null, modal = null, sequence = 0;
-const commonStyles = ['chibi-dumpling', 'anime-clean', 'art-watercolor', 'craft-plush', 'graphic-pixel', 'photo-film'];
-const settingFields = ['interaction', 'clothing', 'background', 'direction', 'customStyle'];
+const settingFields = ['interaction', 'interactionDetail', 'clothing', 'background', 'direction', 'customStyle'];
+const HISTORY_PAGE_SIZE = 6; // Display page only; stored records are never capped.
 function styleFor(id) { return presets.COUPLE_STYLES.find(item => item.id === id); }
 function styleLabel(settings) { return settings?.styleId === 'custom' ? '自定义风格' : styleFor(settings?.styleId)?.label || '二头身团子'; }
 function button(action, label, extra = '') { return `<button type="button" data-pair-action="${action}" ${extra}>${label}</button>`; }
@@ -163,31 +163,66 @@ async function renderHistory(view) {
     const target = view.root.querySelector('[data-pair-history-grid]'), token = ++view.historyEpoch;
     if (!target) return;
     const rows = view.records.filter(row => !view.favoritesOnly || row.favorite);
-    view.root.querySelector('[data-pair-history-count]').textContent = `已留下 ${view.records.length} 对`;
-    target.innerHTML = rows.length ? rows.map(record => `<button type="button" class="rmt-pair-history-card" data-pair-action="history-open" data-pair-id="${esc(record.id)}"><div class="rmt-pair-mini" data-pair-thumb="${esc(record.id)}"><div class="rmt-pair-square"></div><div class="rmt-pair-square"></div></div><b>${record.favorite ? '★ ' : ''}${esc(record.order.map(half => record.settings.people[half]?.name || '未命名').join(' · '))}</b><small>${esc(styleLabel(record.settings))} · ${new Date(record.createdAt).toLocaleDateString('zh-CN')}</small></button>`).join('') : '<p class="rmt-pair-muted">这一组还没有头像。做好一对后，会自动收在这里。</p>';
+    const pages = Math.max(1, Math.ceil(rows.length / HISTORY_PAGE_SIZE));
+    view.historyPage = Math.min(pages, Math.max(1, view.historyPage || 1));
+    const visible = rows.slice((view.historyPage - 1) * HISTORY_PAGE_SIZE, view.historyPage * HISTORY_PAGE_SIZE);
+    view.root.querySelector('[data-pair-history-count]').textContent = `${view.favoritesOnly ? '已收藏' : '已留下'} ${rows.length} 对`;
+    target.innerHTML = visible.length ? visible.map(record => `<button type="button" class="rmt-pair-history-card" data-pair-action="history-open" data-pair-id="${esc(record.id)}"><div class="rmt-pair-mini" data-pair-thumb="${esc(record.id)}" aria-label="头像缩略图"><div class="rmt-pair-square"><span class="rmt-pair-thumb-note">读取中</span></div><div class="rmt-pair-square"></div></div><b>${record.favorite ? '★ ' : ''}${esc(record.order.map(half => record.settings.people[half]?.name || '未命名').join(' · '))}</b><small>${esc(styleLabel(record.settings))} · ${new Date(record.createdAt).toLocaleDateString('zh-CN')}</small></button>`).join('') : `<p class="rmt-pair-muted">${view.favoritesOnly ? '还没有收藏。打开喜欢的头像，点“收藏这一对”即可。' : '还没有头像。做好一对后，会自动收在这里。'}</p>`;
+    let pager = view.root.querySelector('[data-pair-history-pages]');
+    if (!pager) { pager = document.createElement('nav'); pager.className = 'rmt-pair-pagination'; pager.dataset.pairHistoryPages = ''; pager.setAttribute('aria-label', '头像翻页'); target.after(pager); }
+    pager.hidden = !rows.length;
+    pager.innerHTML = `${button('history-prev', '上一页', view.historyPage === 1 ? 'disabled' : '')}<span role="status">第 ${view.historyPage} / ${pages} 页</span>${button('history-next', '下一页', view.historyPage === pages ? 'disabled' : '')}`;
     const nodes = [...target.querySelectorAll('[data-pair-thumb]')];
-    // Decode visible cards lazily; the record collection itself is never truncated.
+    // Current-page thumbnails load immediately. Some TT WebViews never deliver
+    // IntersectionObserver callbacks inside this overlay's nested scroller.
     view.historyObserver?.disconnect();
     const fill = async node => {
-        const record = rows.find(row => row.id === node.dataset.pairThumb); if (!record) return;
+        const record = visible.find(row => row.id === node.dataset.pairThumb); if (!record) return;
         try { const loaded = await loadRecord(view, record); if (current(view) && token === view.historyEpoch && node.isConnected) node.replaceChildren(square(record, 0, loaded), square(record, 1, loaded)); }
-        catch { if (node.isConnected) node.title = '原图暂时不可用，点击后可查看记录或导入原图。'; }
+        catch { if (node.isConnected) { node.title = '原图暂时不可用，点击后可查看记录或导入原图。'; const note = node.querySelector('.rmt-pair-thumb-note'); if (note) note.textContent = '原图暂不可用'; } }
     };
-    if (typeof IntersectionObserver === 'function') {
-        view.historyObserver = new IntersectionObserver(entries => { for (const entry of entries) if (entry.isIntersecting) { view.historyObserver.unobserve(entry.target); void fill(entry.target); } });
-        for (const node of nodes) view.historyObserver.observe(node);
-    } else for (const node of nodes) void fill(node);
+    for (const node of nodes) void fill(node);
 }
 function paintSettings(view) {
-    for (const key of settingFields) { const input = view.root.querySelector(`[data-pair-field="${key}"]`); if (input) input.value = view.settings[key] || ''; }
+    for (const key of settingFields) {
+        const input = view.root.querySelector(`[data-pair-field="${key}"]`); if (!input) continue;
+        const value = view.settings[key] || '';
+        if (key === 'interaction' && value && ![...input.options].some(option => option.value === value)) {
+            const option = document.createElement('option'); option.value = value; option.textContent = value; input.append(option);
+        }
+        input.value = value;
+    }
     for (let i = 0; i < 2; i++) for (const key of ['name', 'appearance']) view.root.querySelector(`[data-pair-person="${i}"][data-pair-key="${key}"]`).value = view.settings.people[i][key] || '';
     for (const node of view.root.querySelectorAll('[data-pair-type]')) node.setAttribute('aria-pressed', String(view.settings.pairType === node.dataset.pairType));
     for (const node of view.root.querySelectorAll('[data-pair-style]')) node.setAttribute('aria-pressed', String(view.settings.styleId === node.dataset.pairStyle));
     view.root.querySelector('[data-pair-selected-style]').textContent = styleLabel(view.settings);
+    view.root.querySelector('[data-pair-style-description]').textContent = styleFor(view.settings.styleId)?.description || '用自己的话描述想要的画风。';
     view.root.querySelector('[data-pair-custom]').classList.toggle('is-visible', view.settings.styleId === 'custom');
+    paintInteraction(view);
+}
+function paintInteraction(view) {
+    const custom = view.root.querySelector('[data-pair-interaction-custom]');
+    if (custom) custom.hidden = view.settings.interaction !== '自定义互动';
 }
 function formHtml(view) {
-    return `<form class="rmt-pair-form" data-pair-form><div class="rmt-pair-block"><h3>这次画谁</h3><div class="rmt-pair-fields">${[0, 1].map(i => `<label class="rmt-pair-field"><span>${i ? '右边' : '左边'}</span><input data-pair-person="${i}" data-pair-key="name" aria-label="${i ? '右边' : '左边'}的人物名字" placeholder="可以改成任何人物"></label>`).join('')}</div></div><div class="rmt-pair-block"><div class="rmt-pair-section-head"><h3>画成什么样</h3>${button('styles', '全部 36 种风格')}</div><div class="rmt-pair-style-grid">${commonStyles.map(id => { const item = styleFor(id); return `<button type="button" class="rmt-pair-style" data-pair-style="${id}" aria-pressed="false"><b>${esc(item?.label || id)}</b><small>${esc(presets.STYLE_GROUPS.find(group => group.id === item?.group)?.label || '')}</small></button>`; }).join('')}</div><div class="rmt-pair-section-head"><small>已选：<b data-pair-selected-style></b></small>${button('custom-style', '自己写风格')}</div><label class="rmt-pair-field rmt-pair-custom" data-pair-custom><span>自定义风格</span><textarea data-pair-field="customStyle" placeholder="例如：像旧绘本里的水彩小人，纸张有轻微颗粒。"></textarea></label></div><div class="rmt-pair-block"><h3>两个人的呼应</h3><div class="rmt-pair-choice"><button type="button" data-pair-type="joined" aria-pressed="true">拼接连图</button><button type="button" data-pair-type="echo" aria-pressed="false">独立呼应</button></div><label class="rmt-pair-field"><span>互动</span><select data-pair-field="interaction">${presets.INTERACTIONS.map(value => `<option value="${esc(value)}">${esc(value)}</option>`).join('')}</select></label></div><label class="rmt-pair-field"><span>这一对的小心思 <small>选填</small></span><textarea data-pair-field="direction" placeholder="比如：一个忍着笑，一个假装生气；共用一条围巾。"></textarea></label><details class="rmt-pair-options"><summary>外貌、衣着与背景 <small>选填</small></summary><div>${[0, 1].map(i => `<label class="rmt-pair-field"><span>${i ? '右边' : '左边'}人物外貌</span><textarea data-pair-person="${i}" data-pair-key="appearance" placeholder="沿用已有外貌，也可以修改或留空。"></textarea></label>`).join('')}<label class="rmt-pair-field"><span>衣着</span><input data-pair-field="clothing" placeholder="例如：同款不同色的卫衣"></label><label class="rmt-pair-field"><span>背景</span><input data-pair-field="background" placeholder="例如：左边蓝色，右边粉色"></label></div></details><div><div data-pair-compose-jobs><div class="rmt-pair-jobs" data-pair-jobs></div></div><p class="rmt-pair-status" data-pair-compose-status role="status" aria-live="polite"></p><div class="rmt-pair-create"><button type="submit" class="rmt-pair-primary">生成一对头像</button>${button('import', '导入图片')}</div><p class="rmt-pair-note">一张原图生成一对，完成后自动收进历史。导入已有图片也能裁切。</p></div></form>`;
+    const groups = [...new Set(presets.INTERACTION_PRESETS.map(item => item.group))];
+    return `<form class="rmt-pair-form" data-pair-form>
+        <div class="rmt-pair-block"><h3>这次画谁</h3><div class="rmt-pair-fields">${[0, 1].map(i => `<label class="rmt-pair-field"><span>${i ? '右边' : '左边'}</span><input data-pair-person="${i}" data-pair-key="name" aria-label="${i ? '右边' : '左边'}的人物名字" placeholder="可以改成任何人物"></label>`).join('')}</div></div>
+        <div class="rmt-pair-block"><div class="rmt-pair-section-head"><h3>画成什么样</h3><small>${presets.COUPLE_STYLES.length} 种画风</small></div>
+            <button type="button" class="rmt-pair-style-summary" data-pair-action="styles"><span><b data-pair-selected-style></b><small data-pair-style-description></small></span><span>更换</span></button>
+            <div class="rmt-pair-style-custom-action">${button('custom-style', '自己写风格')}</div>
+            <label class="rmt-pair-field rmt-pair-custom" data-pair-custom><span>自定义风格</span><textarea data-pair-field="customStyle" placeholder="例如：像旧绘本里的水彩小人，纸张有轻微颗粒。"></textarea></label>
+        </div>
+        <div class="rmt-pair-block"><h3>两个人的呼应</h3><div class="rmt-pair-choice"><button type="button" data-pair-type="joined" aria-pressed="true">拼接连图</button><button type="button" data-pair-type="echo" aria-pressed="false">独立呼应</button></div>
+            <div class="rmt-pair-section-head"><label for="rmt-pair-interaction">互动</label>${button('inspiration', '随机灵感')}</div>
+            <select id="rmt-pair-interaction" data-pair-field="interaction" aria-label="互动">${groups.map(group => `<optgroup label="${esc(group)}">${presets.INTERACTION_PRESETS.filter(item => item.group === group).map(item => `<option value="${esc(item.label)}">${esc(item.label)}</option>`).join('')}</optgroup>`).join('')}<option value="交给灵感">交给灵感</option><option value="自定义互动">自定义互动</option></select>
+            <div class="rmt-pair-inspirations" data-pair-ideas hidden></div>
+            <label class="rmt-pair-field" data-pair-interaction-custom hidden><span>写下你们的互动</span><textarea data-pair-field="interactionDetail" placeholder="可以选一条随机灵感，再改成你喜欢的动作与表情。"></textarea></label>
+        </div>
+        <label class="rmt-pair-field"><span>这一对的小心思 <small>选填</small></span><textarea data-pair-field="direction" placeholder="比如：一个忍着笑，一个假装生气；共用一条围巾。"></textarea></label>
+        <details class="rmt-pair-options"><summary>外貌、衣着与背景 <small>选填</small></summary><div>${[0, 1].map(i => `<label class="rmt-pair-field"><span>${i ? '右边' : '左边'}人物外貌</span><textarea data-pair-person="${i}" data-pair-key="appearance" placeholder="沿用已有外貌，也可以修改或留空。"></textarea></label>`).join('')}<label class="rmt-pair-field"><span>衣着</span><input data-pair-field="clothing" placeholder="例如：同款不同色的卫衣"></label><label class="rmt-pair-field"><span>背景</span><input data-pair-field="background" placeholder="例如：左边蓝色，右边粉色"></label></div></details>
+        <div><div data-pair-compose-jobs><div class="rmt-pair-jobs" data-pair-jobs></div></div><p class="rmt-pair-status" data-pair-compose-status role="status" aria-live="polite"></p><div class="rmt-pair-create"><button type="submit" class="rmt-pair-primary">生成一对头像</button>${button('import', '导入图片')}</div><p class="rmt-pair-note">一张原图生成一对，完成后自动收进历史。导入已有图片也能裁切。</p></div>
+    </form>`;
 }
 
 export async function openCoupleAvatar() {
@@ -206,7 +241,7 @@ export async function openCoupleAvatar() {
     const context = core_context.currentCharacterGuard(), scope = couple.coupleScope(context);
     body.innerHTML = '<main class="rmt-couple"><p role="status">正在读取头像记录…</p></main>';
     const view = { root: body.firstElementChild, host, context, scope, settings: couple.defaultCoupleSettings(context), records: [], pending: new Set(), images: new Map(),
-        currentId: '', circle: false, tab: 'make', favoritesOnly: false, previewEpoch: 0, historyEpoch: 0, draftTimer: 0, selectedEpoch: 0 };
+        currentId: '', circle: false, tab: 'make', favoritesOnly: false, historyPage: 1, ideas: [], previewEpoch: 0, historyEpoch: 0, draftTimer: 0, selectedEpoch: 0 };
     active = view; workspace.syncWorkspaceChrome();
     try {
         const saved = await couple.readCouples(scope);
@@ -230,7 +265,7 @@ function bindView(view) {
         if (event.target.matches('[data-pair-field],[data-pair-person]')) queueDraft(view);
     });
     view.root.addEventListener('change', event => {
-        if (event.target.matches('select[data-pair-field]')) queueDraft(view);
+        if (event.target.matches('select[data-pair-field]')) { queueDraft(view); paintInteraction(view); }
     });
     view.root.querySelector('[data-pair-form]').addEventListener('submit', event => { event.preventDefault(); void startGeneration(view); });
     view.root.addEventListener('click', event => {
@@ -263,6 +298,17 @@ async function updateRecord(view, record, patch) {
 async function handleAction(view, action, target) {
     const record = recordFor(view);
     if (action === 'styles') return showStyles(view);
+    if (action === 'inspiration') {
+        draft(view); view.ideas = presets.randomCoupleIdeas(view.ideas);
+        const list = view.root.querySelector('[data-pair-ideas]'); list.hidden = false;
+        list.innerHTML = view.ideas.map((idea, index) => button('use-idea', `<span>${esc(idea)}</span><small>选用</small>`, `data-pair-idea="${index}"`)).join('');
+        target.textContent = '换一组灵感'; return;
+    }
+    if (action === 'use-idea') {
+        const idea = view.ideas[Number(target.dataset.pairIdea)]; if (!idea) return;
+        draft(view); view.settings.interaction = '自定义互动'; view.settings.interactionDetail = idea;
+        paintSettings(view); queueDraft(view); view.root.querySelector('[data-pair-ideas]').hidden = true; return;
+    }
     if (action === 'custom-style') { draft(view); view.settings.styleId = 'custom'; paintSettings(view); queueDraft(view); view.root.querySelector('[data-pair-field="customStyle"]').focus(); return; }
     if (action === 'circle') { view.circle = !view.circle; return renderPreview(view); }
     if (action === 'import') return view.root.querySelector('[data-pair-image-file]').click();
@@ -270,7 +316,13 @@ async function handleAction(view, action, target) {
     if (action === 'export') return downloadText(await couple.exportCouples(view.scope));
     if (action === 'dismiss-job') { const job = jobs.get(target.dataset.pairId); if (job?.scope === view.scope && job.status === 'failed') { jobs.delete(job.id); renderJobs(view); } return; }
     if (action === 'background') { const job = jobs.get(target.dataset.pairId); if (job) { job.background = true; job.controller.abort(); renderJobs(view); report(view, '已转到后台等待，出图后会保存在这次聊天的历史中。'); } return; }
-    if (action === 'filter-favorite') { view.favoritesOnly = !view.favoritesOnly; target.setAttribute('aria-pressed', String(view.favoritesOnly)); return renderHistory(view); }
+    if (action === 'filter-favorite') { view.favoritesOnly = !view.favoritesOnly; view.historyPage = 1; target.setAttribute('aria-pressed', String(view.favoritesOnly)); return renderHistory(view); }
+    if (action === 'history-prev' || action === 'history-next') {
+        view.historyPage += action === 'history-next' ? 1 : -1;
+        await renderHistory(view);
+        if (current(view)) view.root.querySelector('[data-pair-history-count]').scrollIntoView({ block: 'start' });
+        return;
+    }
     if (action === 'history-open') { view.currentId = target.dataset.pairId; view.selectedEpoch++; selectTab(view, 'make'); return renderPreview(view); }
     if (!record) return;
     if (action === 'save') return showSave(view, record, Number(target.dataset.pairSide));
@@ -323,20 +375,32 @@ async function startGeneration(view) {
 }
 
 function showStyles(view) {
-    const m = dialog(view, '挑一个喜欢的风格', `<input class="rmt-pair-style-search" data-pair-search aria-label="搜索风格" placeholder="搜索：Q版、水彩、毛绒、像素…"><nav class="rmt-pair-groups" aria-label="风格分类">${[{ id: 'all', label: '全部' }, ...presets.STYLE_GROUPS].map(group => `<button type="button" data-pair-group="${group.id}" aria-pressed="${group.id === 'all'}">${esc(group.label)}</button>`).join('')}</nav><div class="rmt-pair-picker-results" data-pair-picker-results></div>`);
+    const m = dialog(view, '选择画风', `<div class="rmt-pair-picker-toolbar">
+        <label class="rmt-pair-field"><span class="rmt-pair-visually-hidden">搜索画风</span><input data-pair-search aria-label="搜索风格" placeholder="搜索名称，例如：小猫、水彩、像素"></label>
+        <div class="rmt-pair-picker-filter"><label class="rmt-pair-field"><span class="rmt-pair-visually-hidden">风格分类</span><select data-pair-group-select aria-label="风格分类"><option value="all">全部画风</option>${presets.STYLE_GROUPS.map(group => `<option value="${group.id}">${esc(group.label)}</option>`).join('')}</select></label><small data-pair-style-count role="status"></small></div>
+        </div><div class="rmt-pair-picker-scroll" data-pair-picker-results></div>`);
     if (!m) return;
-    let group = 'all';
+    m.body.classList.add('rmt-pair-style-browser');
+    const filter = m.body.querySelector('[data-pair-group-select]'), search = m.body.querySelector('[data-pair-search]');
+    filter.value = styleFor(view.settings.styleId)?.group || 'all';
     const draw = () => {
-        const query = m.body.querySelector('[data-pair-search]').value.trim().toLowerCase();
-        const rows = presets.COUPLE_STYLES.filter(item => (group === 'all' || item.group === group) && `${item.label} ${item.description} ${presets.STYLE_GROUPS.find(g => g.id === item.group)?.label || ''}`.toLowerCase().includes(query));
-        m.body.querySelector('[data-pair-picker-results]').innerHTML = rows.length ? rows.map(item => `<button type="button" class="rmt-pair-style" data-pair-pick-style="${item.id}" aria-pressed="${view.settings.styleId === item.id}"><b>${esc(item.label)}</b><small>${esc(item.description)}</small></button>`).join('') : '<p>没有找到，可以换个词，或在页面里自己写风格。</p>';
+        const query = search.value.trim().toLowerCase();
+        if (query) filter.value = 'all';
+        const rows = presets.COUPLE_STYLES.filter(item => (query || filter.value === 'all' || item.group === filter.value) && `${item.label} ${item.description} ${presets.STYLE_GROUPS.find(g => g.id === item.group)?.label || ''}`.toLowerCase().includes(query));
+        m.body.querySelector('[data-pair-style-count]').textContent = `${rows.length} 种`;
+        m.body.querySelector('[data-pair-picker-results]').innerHTML = rows.length ? presets.STYLE_GROUPS.map(group => {
+            const items = rows.filter(item => item.group === group.id);
+            return items.length ? `<section class="rmt-pair-picker-group"><h3>${esc(group.label)}</h3><div class="rmt-pair-picker-results">${items.map(item => `<button type="button" data-pair-pick-style="${item.id}" aria-pressed="${view.settings.styleId === item.id}" title="${esc(item.description)}"><span>${esc(item.label)}</span>${view.settings.styleId === item.id ? '<span aria-hidden="true">✓</span>' : ''}</button>`).join('')}</div></section>` : '';
+        }).join('') : '<p class="rmt-pair-note">没有找到，换个词试试，或回到页面自己写风格。</p>';
+        m.body.querySelector('[data-pair-picker-results]').scrollTop = 0;
     };
-    m.body.addEventListener('input', draw);
+    search.addEventListener('input', draw);
+    filter.addEventListener('change', () => { search.value = ''; draw(); });
     m.body.addEventListener('click', event => {
-        const target = event.target.closest('button'); if (!target) return;
-        if (target.dataset.pairGroup) { group = target.dataset.pairGroup; for (const item of m.body.querySelectorAll('[data-pair-group]')) item.setAttribute('aria-pressed', String(item.dataset.pairGroup === group)); draw(); }
-        if (target.dataset.pairPickStyle) { draft(view); view.settings.styleId = target.dataset.pairPickStyle; paintSettings(view); queueDraft(view); closeCoupleDialog(); }
-    }); draw();
+        const target = event.target.closest('[data-pair-pick-style]'); if (!target) return;
+        draft(view); view.settings.styleId = target.dataset.pairPickStyle; paintSettings(view); queueDraft(view); closeCoupleDialog();
+    });
+    draw();
 }
 async function showCrop(view, record) {
     const m = dialog(view, '分别调整头像', '<p role="status">正在读取原图…</p>'); if (!m) return;
