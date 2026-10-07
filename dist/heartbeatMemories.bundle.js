@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 329
-// Source SHA-256: 337ba1eed4e570897c821ccf717e11697a98429914fea838f830895ba6e56ad2
+// Source SHA-256: 3a0e4744e1dbfe177cc702b3c7b660186dac8f3c823ea1e6383c1471360fb64f
 // Build: python3 tools/verification/build.py <source-root>
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -495,7 +495,7 @@ function __init_core_releaseNotes_js() {
 // MODULE: core/releaseNotes.js
 
 // GENERATED FROM README.md by tools/verification/build.py. Do not edit by hand.
-const RELEASE_README = "# 心迹回廊 1.0.29\n\n## 更新日志模块\n\n新增了更新日志板块，感谢@nancyindaeyo的更新。\n\n## 本次变动\n\n- 图片编辑保留“选单格、自由裁切、抠图修边”原位置，把“导入图片”和“编辑提示词”移出工具滚动区，放到下方独立显示。\n- 共用面板按需展开、相互切换，关闭时保留当前图片、缩放、撤销记录和提示词草稿；撤销与保存仍常驻。\n";
+const RELEASE_README = "# 心迹回廊 1.0.31\n\n## 更新日志模块\n\n新增了更新日志板块，感谢@nancyindaeyo的更新。\n\n## 本次变动\n\n- 取消柏宝绘图片的固定并发数量拦截，由柏宝绘调度；保留同一张图的重复提交保护和独立取消。\n- 柏宝绘等待超过 5 分钟后继续接收结果，避免排队中的任务被提前取消；图片仍按原位置保存。\n";
 
 __m_core_releaseNotes_js.RELEASE_README = RELEASE_README;
 }
@@ -22040,7 +22040,7 @@ function __init_core_selfUpdater_js() {
 const RELEASE_README = __m_core_releaseNotes_js.RELEASE_README;
 
 const UPDATE_STATE = Symbol.for('heartbeatMemories.selfUpdate');
-const INSTALLED_BUILD = '1.0.29';
+const INSTALLED_BUILD = '1.0.31';
 const PROJECT_REMOTE = 'https://github.com/zaiyebuzuoyouqingdetiangou/tokimemo';
 function updateError(message) { const error = new Error(message); error.userMessage = message; return error; }
 
@@ -35041,10 +35041,12 @@ function activeLogicalGenerationCount() {
     return activeLogicalGenerationKeys().size;
 }
 
-function canStartGenerationTask(key) {
+function canStartGenerationTask(key, { ignoreConcurrencyLimit = false } = {}) {
     if (runtimeState.busy) return false;
     const taskKey = String(key || '');
     if (isGenerationTaskRunning(taskKey) || runtimeState.activeModeBuildScopes.has(taskKey)) return false;
+    // 外部生图渠道已有自己的调度；仍保留独占操作与同任务去重。
+    if (ignoreConcurrencyLimit === true) return true;
     const keys = activeLogicalGenerationKeys();
     keys.delete(taskKey);
     const bulkReservation = advBulkReservationKeyForTask(taskKey);
@@ -38225,8 +38227,7 @@ const appearance = __m_generation_cgAppearance_js;
 
 
 const BAIBAI_IMAGE_PROVIDER = 'baibai-image';
-const BAIBAI_IMAGE_TIMEOUT_MS = 300000;
-const BAIBAI_IMAGE_CONCURRENCY = 2;
+const BAIBAI_IMAGE_WAIT_NOTICE_MS = 300000;
 // Keep a cancelled provider call reserved until its promise really settles.
 // Otherwise an uncooperative backend could be charged twice for the same item.
 const pendingGenerations = new Map();
@@ -38240,9 +38241,7 @@ const MESSAGES = Object.freeze({
     BBI_RATE_LIMITED: '柏宝绘生图限流，内置等待已结束；本次不会再自动重试或切换渠道。',
     BBI_BACKEND_ERROR: '柏宝绘出图失败，请检查其渠道配置与请求历史。旧图已保留。',
     BBI_SAVE_FAILED: '图片已生成，但没有取得可保存的本地路径。旧图已保留；请检查柏宝绘的图库保存状态，避免重复出图。',
-    BBI_TIMEOUT: '等待柏宝绘超过 5 分钟，已请求取消。旧图已保留；请先检查柏宝绘任务状态。',
     BBI_ABORTED: '已取消接收本次图片，旧图已保留。',
-    BBI_BUSY: '已有两张图片提交给柏宝绘，请等其中一张结束后再绘制。',
     BBI_TARGET_BUSY: '这张图片的绘制请求还未结束，请先等待，避免重复出图。',
 });
 
@@ -38296,7 +38295,7 @@ async function generateBaiBaiImage(prompt, { signal = null, orientation = 'lands
     if (!state.available) throw baiBaiImageError(state.code);
     const reservation = typeof targetKey === 'string' && targetKey ? targetKey : Symbol('image');
     if (pendingGenerations.has(reservation)) throw baiBaiImageError('BBI_TARGET_BUSY');
-    if (pendingGenerations.size >= BAIBAI_IMAGE_CONCURRENCY) throw baiBaiImageError('BBI_BUSY');
+    // 柏宝绘负责后端并发与排队；这里只保留同一目标的去重。
     const visual = core_text.normalizeText(prompt, 1800);
     if (!visual) throw baiBaiImageError('BBI_INVALID_ARGS');
     // Freeze grouping before the provider awaits; its default otherwise reads the new chat at save time.
@@ -38351,11 +38350,12 @@ async function generateBaiBaiImage(prompt, { signal = null, orientation = 'lands
     const report = progress => {
         if (stopped || controller.signal.aborted || typeof onProgress !== 'function') return;
         const phase = progress?.phase;
-        if (!['queued', 'generating', 'queued-remote', 'retrying', 'saving'].includes(phase)) return;
+        if (!['queued', 'generating', 'queued-remote', 'retrying', 'saving', 'waiting'].includes(phase)) return;
         try { onProgress({ phase }); } catch {}
     };
     signal?.addEventListener('abort', onAbort, { once: true });
-    timer = setTimeout(() => stop('BBI_TIMEOUT'), BAIBAI_IMAGE_TIMEOUT_MS);
+    // 排队中的请求仍可能成功，等待提示不取消后端任务，也不触发重发。
+    timer = setTimeout(() => report({ phase: 'waiting' }), BAIBAI_IMAGE_WAIT_NOTICE_MS);
     pendingGenerations.set(reservation, controller);
     let providerPromise;
     try {
@@ -38389,8 +38389,7 @@ __m_generation_baibaiImage_js.baiBaiImageState = baiBaiImageState;
 __m_generation_baibaiImage_js.baiBaiImagePendingCount = baiBaiImagePendingCount;
 __m_generation_baibaiImage_js.isBaiBaiImageTargetPending = isBaiBaiImageTargetPending;
 __m_generation_baibaiImage_js.BAIBAI_IMAGE_PROVIDER = BAIBAI_IMAGE_PROVIDER;
-__m_generation_baibaiImage_js.BAIBAI_IMAGE_TIMEOUT_MS = BAIBAI_IMAGE_TIMEOUT_MS;
-__m_generation_baibaiImage_js.BAIBAI_IMAGE_CONCURRENCY = BAIBAI_IMAGE_CONCURRENCY;
+__m_generation_baibaiImage_js.BAIBAI_IMAGE_WAIT_NOTICE_MS = BAIBAI_IMAGE_WAIT_NOTICE_MS;
 }
 
 function __init_generation_cgAppearance_js() {
@@ -38918,8 +38917,8 @@ function sanitizeImageGenerationSlashPrompt(value) {
 }
 
 const IMAGE_FALLBACK_BLOCKED = new Set([
-    'BBI_ABORTED', 'BBI_SAVE_FAILED', 'BBI_BUSY', 'BBI_TARGET_BUSY',
-    'CH8_ABORTED', 'CH8_SAVE_FAILED', 'CH8_BUSY', 'CH8_TARGET_BUSY',
+    'BBI_ABORTED', 'BBI_SAVE_FAILED', 'BBI_TARGET_BUSY',
+    'CH8_ABORTED', 'CH8_SAVE_FAILED', 'CH8_TARGET_BUSY',
 ]);
 
 function invokeSelectedImageProvider(selectedProvider, prompt, context, options) {
@@ -39035,10 +39034,6 @@ function cgImageStartBlockedReason(mode, itemId, context = core_context.currentC
     const reservation = cgImageReservationKey(mode, itemId, context);
     if (runtimeState.activeCgImageTasks.has(key) || baibai_image.isBaiBaiImageTargetPending(reservation) || chatu8_image.isChatu8ImageTargetPending(reservation)) {
         return '这张图片的绘制请求还未结束，请先等待，避免重复出图。';
-    }
-    const pending = baibai_image.baiBaiImagePendingCount() + chatu8_image.chatu8ImagePendingCount();
-    if (runtimeState.activeCgImageTasks.size >= baibai_image.BAIBAI_IMAGE_CONCURRENCY || pending >= baibai_image.BAIBAI_IMAGE_CONCURRENCY) {
-        return '已有两张图片正在绘制，请等其中一张完成后再开始。';
     }
     return '';
 }
@@ -39263,7 +39258,7 @@ function updateCgImageProgress(taskKey, progress) {
     if (!task || task.controller.signal.aborted) return;
     if (progress?.providerLabel) task.imageProviderLabel = progress.providerLabel;
     const who = task.imageProviderLabel || '生图';
-    const labels = { queued: `等待${who}出图…`, generating: `${who}正在绘制…`,
+    const labels = { queued: `等待${who}出图…`, generating: `${who}正在绘制…`, waiting: `仍在等待${who}返回图片…`,
         'queued-remote': '在队列中等待…', retrying: `${who}正在限流等待…`, saving: '图片已生成，正在保存…' };
     const label = labels[progress?.phase];
     if (!label) return;
@@ -39566,6 +39561,7 @@ function __init_generation_cgImageActions_js() {
 // MODULE: generation/cgImageActions.js
 const cg_format = __m_core_cgPromptFormat_js;
 const baibai_image = __m_generation_baibaiImage_js;
+const chatu8_image = __m_generation_chatu8Image_js;
 const cg_appearance = __m_generation_cgAppearance_js;
 const backup_diagnostics = __m_core_backupDiagnostics_js;
 const archive_library = __m_archive_library_js;
@@ -39606,6 +39602,7 @@ const renderCurrentCgMode = __m_generation_cgImageCore_js.renderCurrentCgMode;
 const sanitizeCgVisualText = __m_generation_cgImageCore_js.sanitizeCgVisualText;
 const selectedCgTarget = __m_generation_cgImageCore_js.selectedCgTarget;
 const updateCgImageProgress = __m_generation_cgImageCore_js.updateCgImageProgress;
+
 
 
 
@@ -39803,7 +39800,10 @@ async function drawSelectedCgImage({ promptOverride, promptMetadata, promptForma
     const lifecycleEpoch = runtimeState.cgImageLifecycleEpoch;
     const itemId = item.id;
     const taskKey = cgImageTaskKey(mode, itemId, context);
-    if (!core_requestCoordinator.canStartGenerationTask(taskKey)) {
+    if (!core_requestCoordinator.canStartGenerationTask(taskKey, {
+        ignoreConcurrencyLimit: imageState.provider === chatu8_image.CHATU8_IMAGE_PROVIDER
+            || imageState.provider === baibai_image.BAIBAI_IMAGE_PROVIDER,
+    })) {
         globalThis.toastr?.info?.(`当前已有 ${core_constants.MAX_CONCURRENT_GENERATION_TASKS} 项同时生成，请等其中一项完成后再绘制 CG。`, '心迹回廊');
         return;
     }
@@ -40080,8 +40080,7 @@ const appearance = __m_generation_cgAppearance_js;
 
 
 const CHATU8_IMAGE_PROVIDER = 'chatu8-image';
-const CHATU8_IMAGE_TIMEOUT_MS = 300000;
-const CHATU8_IMAGE_CONCURRENCY = 2;
+const CHATU8_IMAGE_WAIT_NOTICE_MS = 300000;
 const EXTENSION_KEY = 'st-chatu8';
 const REQUEST_EVENT = 'generate-image-request';
 const RESPONSE_EVENT = 'generate-image-response';
@@ -40096,9 +40095,7 @@ const MESSAGES = Object.freeze({
     CH8_INVALID_ARGS: '智绘姬未接受这次画面提示，请检查画面描述后重试。',
     CH8_BACKEND_ERROR: '智绘姬出图失败。旧图已保留；请到智绘姬里查看这次任务。',
     CH8_SAVE_FAILED: '图片已生成，但没有取得可保存的本地路径。旧图已保留，避免重复出图。',
-    CH8_TIMEOUT: '等待智绘姬超过 5 分钟，已停止等待。智绘姬里这次出图可能还在继续，不会连带取消它的其他任务。旧图已保留。',
     CH8_ABORTED: '已停止等待本次图片。没有取消智绘姬里的其他出图，旧图已保留。',
-    CH8_BUSY: '已有两张图片提交给智绘姬，请等其中一张结束后再绘制。',
     CH8_TARGET_BUSY: '这张图片的绘制请求还未结束，请先等待，避免重复出图。',
 });
 
@@ -40255,7 +40252,7 @@ async function generateChatu8Image(prompt, { signal = null, orientation = 'lands
     if (!state.available) throw chatu8ImageError(state.code);
     const reservation = typeof targetKey === 'string' && targetKey ? targetKey : Symbol('image');
     if (pendingGenerations.has(reservation)) throw chatu8ImageError('CH8_TARGET_BUSY');
-    if (pendingGenerations.size >= CHATU8_IMAGE_CONCURRENCY) throw chatu8ImageError('CH8_BUSY');
+    // 智绘姬按自己的后端能力并发或排队；这里只阻止同一目标重复提交。
     let scene;
     try { scene = flatPrompt(prompt, promptMetadata); }
     catch (error) {
@@ -40298,7 +40295,8 @@ async function generateChatu8Image(prompt, { signal = null, orientation = 'lands
             try {
                 source.on(RESPONSE_EVENT, onResponse);
                 signal?.addEventListener('abort', onAbort, { once: true });
-                timer = setTimeout(() => stop('CH8_TIMEOUT'), CHATU8_IMAGE_TIMEOUT_MS);
+                // 排队也计入等待时间，不能把仍在智绘姬队列里的任务判成失败。
+                timer = setTimeout(() => report('waiting'), CHATU8_IMAGE_WAIT_NOTICE_MS);
                 source.emit(REQUEST_EVENT, { id, prompt: scene, ...(respectOrientation ? orientedSize(context, state.backend, orientation, aspectRatio) : {}) });
             } catch { stop('CH8_BACKEND_ERROR'); }
         });
@@ -40323,8 +40321,7 @@ __m_generation_chatu8Image_js.chatu8ImageState = chatu8ImageState;
 __m_generation_chatu8Image_js.chatu8ImagePendingCount = chatu8ImagePendingCount;
 __m_generation_chatu8Image_js.isChatu8ImageTargetPending = isChatu8ImageTargetPending;
 __m_generation_chatu8Image_js.CHATU8_IMAGE_PROVIDER = CHATU8_IMAGE_PROVIDER;
-__m_generation_chatu8Image_js.CHATU8_IMAGE_TIMEOUT_MS = CHATU8_IMAGE_TIMEOUT_MS;
-__m_generation_chatu8Image_js.CHATU8_IMAGE_CONCURRENCY = CHATU8_IMAGE_CONCURRENCY;
+__m_generation_chatu8Image_js.CHATU8_IMAGE_WAIT_NOTICE_MS = CHATU8_IMAGE_WAIT_NOTICE_MS;
 }
 
 function __init_generation_contentRegeneration_js() {

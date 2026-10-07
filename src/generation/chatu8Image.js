@@ -7,8 +7,7 @@ import * as core_text from '../core/text.js';
 import * as appearance from './cgAppearance.js';
 
 export const CHATU8_IMAGE_PROVIDER = 'chatu8-image';
-export const CHATU8_IMAGE_TIMEOUT_MS = 300000;
-export const CHATU8_IMAGE_CONCURRENCY = 2;
+export const CHATU8_IMAGE_WAIT_NOTICE_MS = 300000;
 const EXTENSION_KEY = 'st-chatu8';
 const REQUEST_EVENT = 'generate-image-request';
 const RESPONSE_EVENT = 'generate-image-response';
@@ -23,9 +22,7 @@ const MESSAGES = Object.freeze({
     CH8_INVALID_ARGS: '智绘姬未接受这次画面提示，请检查画面描述后重试。',
     CH8_BACKEND_ERROR: '智绘姬出图失败。旧图已保留；请到智绘姬里查看这次任务。',
     CH8_SAVE_FAILED: '图片已生成，但没有取得可保存的本地路径。旧图已保留，避免重复出图。',
-    CH8_TIMEOUT: '等待智绘姬超过 5 分钟，已停止等待。智绘姬里这次出图可能还在继续，不会连带取消它的其他任务。旧图已保留。',
     CH8_ABORTED: '已停止等待本次图片。没有取消智绘姬里的其他出图，旧图已保留。',
-    CH8_BUSY: '已有两张图片提交给智绘姬，请等其中一张结束后再绘制。',
     CH8_TARGET_BUSY: '这张图片的绘制请求还未结束，请先等待，避免重复出图。',
 });
 
@@ -182,7 +179,7 @@ export async function generateChatu8Image(prompt, { signal = null, orientation =
     if (!state.available) throw chatu8ImageError(state.code);
     const reservation = typeof targetKey === 'string' && targetKey ? targetKey : Symbol('image');
     if (pendingGenerations.has(reservation)) throw chatu8ImageError('CH8_TARGET_BUSY');
-    if (pendingGenerations.size >= CHATU8_IMAGE_CONCURRENCY) throw chatu8ImageError('CH8_BUSY');
+    // 智绘姬按自己的后端能力并发或排队；这里只阻止同一目标重复提交。
     let scene;
     try { scene = flatPrompt(prompt, promptMetadata); }
     catch (error) {
@@ -225,7 +222,8 @@ export async function generateChatu8Image(prompt, { signal = null, orientation =
             try {
                 source.on(RESPONSE_EVENT, onResponse);
                 signal?.addEventListener('abort', onAbort, { once: true });
-                timer = setTimeout(() => stop('CH8_TIMEOUT'), CHATU8_IMAGE_TIMEOUT_MS);
+                // 排队也计入等待时间，不能把仍在智绘姬队列里的任务判成失败。
+                timer = setTimeout(() => report('waiting'), CHATU8_IMAGE_WAIT_NOTICE_MS);
                 source.emit(REQUEST_EVENT, { id, prompt: scene, ...(respectOrientation ? orientedSize(context, state.backend, orientation, aspectRatio) : {}) });
             } catch { stop('CH8_BACKEND_ERROR'); }
         });

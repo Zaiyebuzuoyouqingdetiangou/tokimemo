@@ -1,5 +1,6 @@
 import * as cg_format from '../core/cgPromptFormat.js';
 import * as baibai_image from './baibaiImage.js';
+import * as chatu8_image from './chatu8Image.js';
 import * as cg_appearance from './cgAppearance.js';
 import * as backup_diagnostics from '../core/backupDiagnostics.js';
 import * as archive_library from '../archive/library.js';
@@ -197,7 +198,10 @@ export async function drawSelectedCgImage({ promptOverride, promptMetadata, prom
     const lifecycleEpoch = runtimeState.cgImageLifecycleEpoch;
     const itemId = item.id;
     const taskKey = cgImageTaskKey(mode, itemId, context);
-    if (!core_requestCoordinator.canStartGenerationTask(taskKey)) {
+    if (!core_requestCoordinator.canStartGenerationTask(taskKey, {
+        ignoreConcurrencyLimit: imageState.provider === chatu8_image.CHATU8_IMAGE_PROVIDER
+            || imageState.provider === baibai_image.BAIBAI_IMAGE_PROVIDER,
+    })) {
         globalThis.toastr?.info?.(`当前已有 ${core_constants.MAX_CONCURRENT_GENERATION_TASKS} 项同时生成，请等其中一项完成后再绘制 CG。`, '心迹回廊');
         return;
     }
