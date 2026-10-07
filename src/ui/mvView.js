@@ -16,6 +16,8 @@ import * as archive_repository from '../archive/repository.js';
 import * as mv_cast from '../extras/mvCast.js';
 import * as mv_direction from '../extras/mvDirection.js';
 import * as mv_stage from '../extras/mvStage.js';
+import * as mv_illustration from '../extras/mvIllustration.js';
+import * as illustration_canvas from './mvIllustrationCanvas.js';
 import * as stage_canvas from './mvStageCanvas.js';
 import * as cast_controls from './mvCastControls.js';
 import * as participant_picker from './participantPicker.js';
@@ -1026,6 +1028,18 @@ function stageShotControls(record, shot) {
       <label class="rmt-mv-check"><input type="checkbox" data-rmt-mv-stage-cue="shadow" data-shot="${esc(shot.id)}"${cue.shadow ? ' checked' : ''}>人物剪影</label></details>`;
 }
 
+function illustrationControls(record, shot) {
+    if (!shot.illustration) return '';
+    const cue = mv_illustration.normalize(shot.illustration);
+    const select = (field, label, choices) => `<label class="rmt-mv-look"><span>${label}</span><select data-rmt-mv-illustration="${field}" data-shot="${esc(shot.id)}">${Object.entries(choices).map(([id, name]) => `<option value="${id}"${cue[field] === id ? ' selected' : ''}>${name}</option>`).join('')}</select></label>`;
+    return `<details><summary>动态插画</summary>
+      ${select('reveal', '同图显影', mv_illustration.REVEALS)}
+      <label class="rmt-mv-look"><span>显影时长（秒）</span><input type="number" min="0.1" step="0.1" inputmode="decimal" value="${cue.seconds}" data-rmt-mv-illustration="seconds" data-shot="${esc(shot.id)}"></label>
+      ${select('movement', '图层运动', mv_illustration.MOVEMENTS)}${select('light', '光效', mv_illustration.LIGHTS)}${select('particles', '粒子', mv_illustration.PARTICLES)}
+      <label class="rmt-mv-look"><span>光效颜色</span><input type="text" value="${esc(cue.color)}" placeholder="留空跟随背景，或填 #RRGGBB" data-rmt-mv-illustration="color" data-shot="${esc(shot.id)}"></label>
+      </details>`;
+}
+
 function markedTime(value) { return value !== null && value !== undefined && value !== '' && Number.isFinite(Number(value)) && Number(value) >= 0; }
 
 function editorTimingTarget(record, song) {
@@ -1143,7 +1157,7 @@ function editorShotPanel(song, record, sel, selIndex) {
     return sel ? `<div class="rmt-mve-panel-scroll" data-rmt-mv-scroll="shots"><div class="rmt-x-row-head"><b>第 ${selIndex + 1} 镜</b><span>${mv.formatTime(sel.start, true)}–${mv.formatTime(sel.end, true)}</span></div><p class="rmt-x-note rmt-mve-lyric">${esc(sel.shot.lyric || sel.shot.plain || '')}</p>
       <div class="rmt-mve-image-actions">${btn(shared ? 'edit-asset' : 'edit-frame', shared ? '编辑共享图片' : '编辑本镜图片', { id: shared ? assetKey : sel.shot.id, cls: 'rmt-x-primary', extra: ' aria-label="图片编辑 · 选单格 · 修边"' })}${uploadLabel(sel.shot.id, '换图')}</div><small class="rmt-mve-image-note">${shared ? `用于 ${linked} 镜 · 修改会同步关联镜头` : '仅当前镜图片'} · ${mv.shotImage(record, sel.shot)?.editMode === 'cutout' ? '透明图' : '保留原背景'}</small>
       <details><summary>镜头运动与切换</summary><div><b>镜头运动</b><div class="rmt-mv-grid2">${seg('set-motion', mv.MV_MOTIONS, sel.shot.motion)}</div><b>切到下一镜</b><div class="rmt-x-segs">${seg('set-cut', mv.MV_CUTS, sel.shot.cut || 'fade')}</div></div></details>
-      ${stageShotControls(record, sel.shot)}<details><summary>图片与生成</summary><div>${shared ? btn('cutout-asset', '一键抠图', { id: assetKey }) : ''}${asset ? btn('edit-prompt-asset', '构图素材与提示词', { id: assetKey }) : ''}${btn('draw', mv.isFrameDrawing(mv.mvScope(ctx()), view.songId, sel.shot.id) ? '正在画…' : hasImg(sel.shot) ? '重画这一镜' : '画这一镜', { id: sel.shot.id, disabled: mv.isFrameDrawing(mv.mvScope(ctx()), view.songId, sel.shot.id) })}${btn('editor-drawer', '共享背景与装饰', { id: 'materials' })}${btn('go-board', '补充分镜与图片')}</div></details></div>
+      ${illustrationControls(record, sel.shot)}${stageShotControls(record, sel.shot)}<details><summary>图片与生成</summary><div>${shared ? btn('cutout-asset', '一键抠图', { id: assetKey }) : ''}${asset ? btn('edit-prompt-asset', '构图素材与提示词', { id: assetKey }) : ''}${btn('draw', mv.isFrameDrawing(mv.mvScope(ctx()), view.songId, sel.shot.id) ? '正在画…' : hasImg(sel.shot) ? '重画这一镜' : '画这一镜', { id: sel.shot.id, disabled: mv.isFrameDrawing(mv.mvScope(ctx()), view.songId, sel.shot.id) })}${btn('editor-drawer', '共享背景与装饰', { id: 'materials' })}${btn('go-board', '补充分镜与图片')}</div></details></div>
       <footer class="rmt-mve-dock">${btn('editor-step', '上一镜', { id: '-1', disabled: selIndex <= 0 || !!player.exporting })}<small>${selIndex + 1} / ${mv.shotTimeline(record, song).rows.length}</small>${btn('editor-step', '下一镜', { id: '1', disabled: selIndex + 1 >= mv.shotTimeline(record, song).rows.length || !!player.exporting })}</footer>` : '';
 }
 
@@ -1293,10 +1307,10 @@ function currentTime() {
     return player.playing ? (performance.now() - player.clockStart) / 1000 + player.clockOffset : player.clockOffset;
 }
 
-function drawCover(g, img, w, h, scale, dx, dy) {
+function drawCover(g, img, w, h, scale, dx, dy, illustration = null) {
     const r = Math.max(w / img.naturalWidth, h / img.naturalHeight) * scale;
     const iw = img.naturalWidth * r, ih = img.naturalHeight * r;
-    g.drawImage(img, (w - iw) / 2 + dx, (h - ih) / 2 + dy, iw, ih);
+    illustration_canvas.drawPicture(g, img, [(w - iw) / 2 + dx, (h - ih) / 2 + dy, iw, ih], illustration);
 }
 
 let frameCtx = { rhythm: 'line', beat: 1.3 };
@@ -1318,7 +1332,7 @@ function groupSpan(rows, index) {
     return { start: rows[a].start, end: rows[b].end };
 }
 
-function drawShot(g, row, rows, index, t, w, h) {
+function drawShot(g, row, rows, index, t, w, h, illustration = null) {
     let img = null, sourceShot = row.shot;
     for (let i = index; i >= 0 && !img; i -= 1) {
         sourceShot = rows[i].shot; img = imageFor(imgUrl(sourceShot));
@@ -1332,8 +1346,8 @@ function drawShot(g, row, rows, index, t, w, h) {
         if (stage_canvas.isDetailInsert(null, null, sourceShot)) {
             drawFittedInsert(g, img, cropFor(img.src, img, mv.shotImage(view.cache?.record, sourceShot)?.split).rect,
                 w, h, motion === 'push' ? (1 + 0.05 * p) / 1.05 : 1,
-                mv.shotImage(view.cache?.record, sourceShot)?.editMode !== 'cutout');
-        } else drawCover(g, img, w, h, motion === 'push' ? 1 + 0.05 * p : 1, 0, 0);
+                mv.shotImage(view.cache?.record, sourceShot)?.editMode !== 'cutout', illustration);
+        } else drawCover(g, img, w, h, motion === 'push' ? 1 + 0.05 * p : 1, 0, 0, illustration);
     } else {
         g.fillStyle = '#8b95a3'; g.font = `${Math.round(w * 0.04)}px sans-serif`; g.textAlign = 'center';
         wrap(g, row.shot.plain, w / 2, h / 2, w * 0.8, w * 0.055);
@@ -1384,15 +1398,18 @@ function renderFrame(canvas, record, song, t) {
     let index = rows.findIndex(r => t >= r.start && t < r.end);
     if (index < 0) index = t < rows[0].start ? 0 : rows.length - 1;
     const row = rows[index];
-    drawShot(g, row, rows, index, t, w, h);
+    const illustration = mv_illustration.state(record, rows, index, t);
+    drawShot(g, row, rows, index, t, w, h, illustration);
     const prev = rows[index - 1];
     const since = t - row.start;
     const fadeDuration = transitionDuration(row, 0.45), flashDuration = transitionDuration(row, 0.3);
     if (prev && since >= 0 && (prev.shot.cut || 'fade') === 'fade' && since < fadeDuration) {
-        g.save(); g.globalAlpha = 1 - since / fadeDuration; drawShot(g, prev, rows, index - 1, t, w, h); g.restore();
+        g.save(); g.globalAlpha = 1 - since / fadeDuration; drawShot(g, prev, rows, index - 1, t, w, h, mv_illustration.state(record, rows, index - 1, t)); g.restore();
     } else if (prev && since >= 0 && prev.shot.cut === 'flash' && since < flashDuration) {
         g.save(); g.globalAlpha = 1 - since / flashDuration; g.fillStyle = '#fff'; g.fillRect(0, 0, w, h); g.restore();
     }
+    illustration_canvas.drawLight(g, illustration, w, h, coverPalette(song), true);
+    illustration_canvas.drawParticles(g, illustration, w, h, coverPalette(song));
     const beat = beatVariant(row, t);
     if (beat) {
         const pulse = Math.max(0, 1 - beat.since / (frameCtx.beat * 0.6));
@@ -1537,7 +1554,7 @@ export function disposeMv() {
     cancelMusicLink();
     for (const [key, token] of audioLoads) if (token.videoSource) { token.cancel?.(); audioTried.delete(key); }
     assetEditor?.dispose(); assetEditor = null; editSequence++;
-    stageShadows.clear(); characterSprites.clear(); thumbnailPreviews.clear();
+    stageShadows.clear(); characterSprites.clear(); thumbnailPreviews.clear(); illustration_canvas.clear();
     motifSprites.clear(); palettes.clear();
     if (imageRefreshTimer) clearTimeout(imageRefreshTimer);
     imageRefreshTimer = 0; imageLayoutPending = false;
@@ -2102,6 +2119,14 @@ export function handleMvClick(event) {
 
 export function handleMvChange(event) {
     const input = event.target;
+    if (input?.matches?.('[data-rmt-mv-illustration]')) {
+        try {
+            const updated = mv.patchIllustration(view.songId, input.dataset.shot, { [input.dataset.rmtMvIllustration]: input.value });
+            if (view.cache) view.cache.record = updated;
+            drawNow();
+        } catch (error) { toastError(error); }
+        return true;
+    }
     if (input?.matches?.('[data-rmt-mv-music-link]')) { view.musicLinkInput = input.value; return true; }
     if (input?.matches?.('[data-rmt-mv-seek]')) { if (!player.exporting && view.cache?.record) seekEditor(input.value); return true; }
     if (input?.matches?.('[data-rmt-mv-editor-time]')) { try { if (String(input.value).trim() && !player.exporting) saveEditorTime(Number(input.value)); } catch (error) { toastError(error); } return true; }
@@ -2448,11 +2473,11 @@ function cropFor(url, img, override) {
     return { split, rect };
 }
 
-function drawCropCover(g, img, rect, w, h, scale = 1) {
+function drawCropCover(g, img, rect, w, h, scale = 1, illustration = null) {
     const [sx, sy, sw, sh] = rect;
     const r = Math.max(w / sw, h / sh) * scale;
     const dw = sw * r, dh = sh * r;
-    g.drawImage(img, sx, sy, sw, sh, (w - dw) / 2, (h - dh) / 2, dw, dh);
+    illustration_canvas.drawPicture(g, img, [sx, sy, sw, sh, (w - dw) / 2, (h - dh) / 2, dw, dh], illustration);
 }
 
 // All foreground paths use this for an already composed local insert, including
@@ -2480,7 +2505,7 @@ function fittedBackdrop(img, rect) {
     return backdrop;
 }
 
-function drawFittedInsert(g, img, rect, w, h, zoom = 1, useBackdrop = false) {
+function drawFittedInsert(g, img, rect, w, h, zoom = 1, useBackdrop = false, illustration = null) {
     const [sx, sy, sw, sh] = rect;
     const scale = Math.min(w / sw, h / sh) * Math.min(1, Math.max(0.01, zoom));
     const width = sw * scale, height = sh * scale, x = (w - width) / 2, y = (h - height) / 2;
@@ -2491,7 +2516,7 @@ function drawFittedInsert(g, img, rect, w, h, zoom = 1, useBackdrop = false) {
             g.drawImage(backdrop, 0, 0, w, h); g.restore();
         }
     }
-    g.drawImage(img, sx, sy, sw, sh, x, y, width, height);
+    illustration_canvas.drawPicture(g, img, [sx, sy, sw, sh, x, y, width, height], illustration);
     return { x, y, width, height };
 }
 
@@ -2593,12 +2618,14 @@ function drawSceneText(g, info, record, w, h, pass) {
 function drawSceneV2(g, record, song, rows, index, t, w, h, showText = true) {
     const row = rows[index];
     const group = record.groups.find(x => x.id === row.shot.group);
-    const stageRows = record.stage && Array.isArray(record.clipSectionIndexes) ? mv.shotTimeline(record, song).rows : rows;
+    const stageRows = (record.stage || row.shot.illustration) && Array.isArray(record.clipSectionIndexes) ? mv.shotTimeline(record, song).rows : rows;
     const stageIndex = stageRows === rows ? index : stageRows.findIndex(r => r.shot.id === row.shot.id);
     const stage = mv_stage.state(record, stageRows, stageIndex, t);
-    const info = { stage, group, subject: null, opaque: false };
+    const illustration = mv_illustration.state(record, stageRows, stageIndex, t);
+    const palette = stage?.background.colors || coverPalette(song);
+    const info = { stage, group, illustration, subject: null, opaque: false };
     g.fillStyle = coverPalette(song)[0]; g.fillRect(0, 0, w, h);
-    const span = stage ? groupSpan(stageRows, stageIndex) : groupSpan(rows, index);
+    const span = stage || illustration ? groupSpan(stageRows, stageIndex) : groupSpan(rows, index);
     const p = Math.min(1, Math.max(0, (t - span.start) / Math.max(0.1, span.end - span.start)));
     const push = group?.motion === 'push' ? 1 + 0.03 * p : 1;
     const diff = group?.diffs.find(d => d.id === row.shot.diff);
@@ -2607,7 +2634,8 @@ function drawSceneV2(g, record, song, rows, index, t, w, h, showText = true) {
     const ownFull = ownImage && (!stage || ownImage.editMode === 'full' || (group?.layer === 'full' && ownImage.editMode !== 'cutout'));
     if (!detail && ownFull) {
         const own = imageFor(assetImageUrl(ownImage));
-        if (own) drawCover(g, own, w, h, push, 0, 0);
+        if (own) drawCover(g, own, w, h, push, 0, 0, illustration);
+        illustration_canvas.drawLight(g, illustration, w, h, palette, true);
         info.opaque = true; return info;
     }
     const bgRow = (group?.bgs || []).find(b => b.id === (row.shot.bg || 'B1')) || (group?.bgs || [])[0];
@@ -2632,15 +2660,18 @@ function drawSceneV2(g, record, song, rows, index, t, w, h, showText = true) {
         // an opaque saved picture or an unprocessed matte.
         info.opaque = true;
         const useBackdrop = !person && art?.editMode !== 'cutout' && !stage && !mv.hasAssetImage(bgRow?.image || group?.bg);
-        info.subject = drawFittedInsert(g, source, rect, w, h, zoom, useBackdrop);
+        info.subject = drawFittedInsert(g, source, rect, w, h, zoom, useBackdrop, illustration);
+        illustration_canvas.drawLight(g, illustration, w, h, palette, true);
         return info;
     }
     if (raw && !person) {
-        drawCropCover(g, raw, cropFor(url, raw, override).rect, w, h, push);
+        drawCropCover(g, raw, cropFor(url, raw, override).rect, w, h, push, illustration);
+        illustration_canvas.drawLight(g, illustration, w, h, palette, true);
         if (!stage) { g.save(); g.globalCompositeOperation = 'soft-light'; g.globalAlpha = 0.1; g.fillStyle = coverPalette(song)[1]; g.fillRect(0, 0, w, h); g.restore(); }
         info.opaque = true; return info;
     }
     if (person) {
+        illustration_canvas.drawLight(g, illustration, w, h, palette);
         const pw = person.naturalWidth || person.width, ph = person.naturalHeight || person.height;
         const placement = stage_canvas.foregroundPlacement(sprite.bounds, pw, ph, group, w, h);
         const breathe = stage || placement.attached ? 1 : 1 + 0.004 * Math.sin(t * Math.PI * 2 / 3.4);
@@ -2651,6 +2682,8 @@ function drawSceneV2(g, record, song, rows, index, t, w, h, showText = true) {
         info.subject = { ...placement.subject, x: placement.subject.x - reserve - slide, width: placement.subject.width + reserve * 2 + slide };
         if (showText) drawSceneText(g, info, record, w, h, 'back');
         g.save();
+        if (illustration?.movement === 'parallax' && !placement.attachedX)
+            g.translate(Math.sin(illustration.time * .38) * w * .006, 0);
         if (stage?.active) {
             const motion = stage_canvas.poseTransform(stage, w, h);
             g.translate(placement.attachedX ? 0 : motion.x, motion.y); g.translate(placement.anchorX, placement.foot); g.scale(motion.scale, motion.scale); g.translate(-placement.anchorX, -placement.foot);
@@ -2666,7 +2699,7 @@ function drawSceneV2(g, record, song, rows, index, t, w, h, showText = true) {
         } else if (stage?.cue.shadow) {
             g.save(); g.globalAlpha *= .16; g.drawImage(silhouette(sprite.key, person), dx - w * .006, dy, dw, dh); g.restore();
         }
-        g.drawImage(person, dx, dy, dw, dh); g.restore();
+        illustration_canvas.drawPicture(g, person, [dx, dy, dw, dh], illustration); g.restore();
     } else if (showText) drawSceneText(g, info, record, w, h, 'back');
     if (!stage) { g.save(); g.globalCompositeOperation = 'soft-light'; g.globalAlpha = 0.14; g.fillStyle = coverPalette(song)[1]; g.fillRect(0, 0, w, h); g.restore(); }
     return info;
@@ -2757,6 +2790,7 @@ function renderFrameV2(canvas, record, song, t) {
         if (prev.shot.cut === 'fade' && since < fadeDuration) { g.save(); g.globalAlpha = 1 - since / fadeDuration; drawSceneV2(g, record, song, rows, index - 1, t, w, h, false); g.restore(); }
         else if (prev.shot.cut === 'flash' && since < flashDuration) { g.save(); g.globalAlpha = 0.85 * (1 - since / flashDuration); g.fillStyle = '#fff'; g.fillRect(0, 0, w, h); g.restore(); }
     }
+    illustration_canvas.drawParticles(g, stageInfo.illustration, w, h, stageInfo.stage?.background.colors || coverPalette(song));
     drawSceneText(g, stageInfo, record, w, h, 'front');
     if (since >= 0 && topt.showMotif) drawMotif(g, record, song, row, t, w, h);
     const palette = coverPalette(song);

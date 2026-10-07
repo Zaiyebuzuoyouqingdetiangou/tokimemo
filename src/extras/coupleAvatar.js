@@ -71,43 +71,75 @@ export function normalizeCoupleSettings(value, context = optionalContext()) {
 
 const DEFAULT_INTERACTION_PROMPT = 'choose a fresh affectionate interaction with complementary expressions and gestures for these two subjects';
 
-export function couplePrompt(value) {
+function appearanceReference(value, animal, object) {
+    if (!animal && !object) return value;
+    let reference = value.replace(/\b\d+\s*(boys?|men|girls?|women|persons?|people)\b/gi, (_, kind) =>
+        `${/^(?:boy|men)/i.test(kind) ? 'male ' : /^(?:girl|women)/i.test(kind) ? 'female ' : ''}${animal ? 'animal' : 'crafted figure'}`);
+    if (!animal) return reference;
+    // Human skin is not fur color. In particular, "black hair, pale skin"
+    // must not become the conflicting "black fur markings, pale coat".
+    return reference
+        .replace(/\b(?:(?:very\s+)?(?:pale|fair|white|light|dark|tan(?:ned)?|brown|olive|porcelain|ivory|smooth|flawless)\s+)*(?:skin(?:\s+tone)?|complexion)\b/gi, '')
+        .replace(/(?:皮肤|肤色)\s*[:：]?\s*(?:很|十分|非常)?(?:白皙|苍白|雪白|白色|黝黑|古铜色|浅色|深色|健康|细腻|光滑|白|黑)/g, '')
+        .replace(/(?:白皙|苍白|雪白|黝黑|古铜色|细腻|光滑)(?:的)?(?:皮肤|肤色)/g, '')
+        .replace(/\b(?:high |low |long |short |twin )?(?:ponytails?|pigtails?|braids?)\b/gi, 'small distinctive fur tuft')
+        .replace(/(?:高|低|双|单)?马尾(?:辫)?|辫子/g, '标志性小毛簇')
+        .replace(/\b(?:human|boy|girl|man|woman)\b/gi, 'animal')
+        .replace(/\bhair\b/gi, 'fur markings')
+        .replace(/(?:长|短)?(黑|白|银|金|棕|褐|红|蓝|粉|紫|灰)(?:色)?(?:头)?发/g, '$1色毛发')
+        .replace(/头发|发色/g, '毛发配色')
+        .replace(/,\s*,/g, ',').replace(/^[,;，；\s]+|[,;，；\s]+$/g, '');
+}
+
+// Both outputs are composed locally from the same frozen settings. A flat-only
+// provider gets the complete prompt; capable NAI gets scene + two identities.
+export function couplePromptParts(value) {
     const settings = normalizeCoupleSettings(value, null);
     const chosen = styles.COUPLE_STYLES.find(style => style.id === settings.styleId);
     const animal = chosen?.group === 'animal';
     const object = chosen?.group === 'craft' || ['fantasy-enamel', 'fantasy-shadow'].includes(chosen?.id);
     const subject = animal ? 'animal' : object ? 'crafted character' : 'character';
+    const preset = styles.INTERACTION_PRESETS.find(item => item.label === settings.interaction);
     const interaction = settings.interaction === '自定义互动' ? settings.interactionDetail
-        : styles.INTERACTION_PRESETS.find(item => item.label === settings.interaction)?.prompt || settings.interaction;
+        : preset?.prompt || settings.interaction;
+    const rendering = chosen?.prompt || settings.customStyle;
+    const construction = styles.coupleStyleConstruction(chosen);
     const form = animal
         ? 'The TWO main subjects ARE complete animals, with species-appropriate heads, bodies, limbs and tails. No human faces or human bodies, no people wearing animal ears, no people holding animal versions. Adapt actions to paws, wings or flippers. Translate original hair/eye colors and signature accessories into animal identity cues.'
         : object ? 'The TWO main subjects ARE the crafted objects described by the selected style. Their faces and bodies use that material and construction. Not humans holding toys or wearing material-themed costumes.'
             : 'Apply the selected rendering medium, proportions, linework and shading to the entire characters and image, not only to background decorations.';
+    const actions = settings.people.map((_, index) => preset?.roles[index]
+        || `perform only the ${index ? 'RIGHT' : 'LEFT'} subject's role in the chosen interaction, with an individual expression and gesture`);
     const people = settings.people.map((person, index) => {
         const side = index === 0 ? 'LEFT' : 'RIGHT';
-        // Only transform the outgoing animal reference. Saved/manual appearances
-        // remain intact and human styles continue to receive their original text.
-        const reference = animal ? person.appearance.replace(/\b\d+\s*(?:boys?|girls?|men|women|persons?|people)\b/gi, '')
-            .replace(/\b(?:human|boy|girl|man|woman)\b/gi, 'character').replace(/\bhair\b/gi, 'fur markings')
-            .replace(/\bskin\b/gi, 'coat').replace(/(?:皮肤|肤色|头发|发色)/g, '毛色') : person.appearance;
-        return `${side} HALF ${subject}: ${person.name || (index === 0 ? 'first character' : 'second character')}${reference ? `; ${animal || object ? 'identity reference to reinterpret in the selected form' : 'appearance'}: ${reference}` : ''}.`;
+        const reference = appearanceReference(person.appearance, animal, object);
+        return `${side} HALF ${subject}: ${person.name || (index === 0 ? 'first character' : 'second character')}${reference ? `; ${animal || object ? 'identity reference to reinterpret in the selected form' : 'appearance'}: ${reference}` : ''}. Action: ${actions[index]}.`;
     });
-    return [
-        chosen ? `Rendering style: ${chosen.prompt}.` : '',
-        settings.styleId === 'custom' && settings.customStyle ? `Rendering style: ${settings.customStyle}.` : '',
+    const scene = [
+        rendering ? `Rendering style: ${rendering}.` : '',
+        construction ? `Style construction: ${construction}` : '',
         form,
+        'Selected style controls the medium and proportions of BOTH subjects. Identity references supply individual traits, not a competing drawing style. In monochrome or limited-color styles, express original colors through tones and shapes instead of reintroducing full color.',
         `One matching avatar pair in one horizontal image, preferably 2:1. One ${subject} centered in EACH of two equal square halves.`,
+        `Two separate identities: LEFT = ${settings.people[0].name || 'first character'}; RIGHT = ${settings.people[1].name || 'second character'}. Keep each side\'s face or muzzle, eyes, hair or markings, clothing and accessories bound to that identity.`,
         `Interaction: ${interaction && interaction !== '交给灵感' ? interaction : DEFAULT_INTERACTION_PROMPT}.`,
+        `Action roles: LEFT — ${actions[0]}; RIGHT — ${actions[1]}. Adapt gestures to the chosen body form; explicit user directions take precedence.`,
         settings.direction ? `Direction: ${settings.direction}.` : '',
-        ...people,
         settings.clothing ? `${animal ? 'Small wearable accents adapted for animal bodies' : 'Clothing in the selected rendering style'}: ${settings.clothing}.` : '',
         settings.background ? `Background: ${settings.background}.` : '',
         settings.pairType === 'echo'
             ? 'Independent portraits, coordinated colors and light, complementary poses.'
             : 'Connected background and shared motif across the center, matching scale.',
-        'Leave margin around both heads for square/circle crops. Readable expressions, distinct poses, no mirrored duplicates. Preserve each identity and gender within the chosen form; improvise unspecified details. No text, watermark, frame or divider.',
+        'Leave margin for square/circle crops while showing the silhouette and body proportions required by the style. Readable expressions, distinct poses, no mirrored duplicates. Shared medium and lighting do not mean identical faces. Keep genuinely shared traits; distinguish the pair through their own supported features and different reactions, not arbitrary changes of identity or gender. Improvise unspecified details. No text, watermark, frame or divider.',
     ].filter(Boolean).join('\n');
+    return { scene, prompt: [scene, ...people].join('\n'),
+        characters: settings.people.map((person, index) => ({
+            name: `${index ? '右边' : '左边'} · ${person.name || (index ? '人物二' : '人物一')}`,
+            tag: [people[index], rendering ? `Rendering style: ${rendering}.` : '', construction].filter(Boolean).join('\n'),
+        })) };
 }
+
+export function couplePrompt(value) { return couplePromptParts(value).prompt; }
 
 function openDatabase() {
     if (databasePromise) return databasePromise;
@@ -369,13 +401,14 @@ export async function generateCouple(value, { context = core_context.currentChar
     // background signal after submission. A returned result always enters its origin scope.
     try {
         task_trace.beginStage(trace, 'prompt');
-        const prompt = couplePrompt(settings);
+        const parts = couplePromptParts(settings), prompt = parts.prompt;
         task_trace.markStage(trace, 'prompt');
         task_trace.beginStage(trace, 'request');
         const result = await cg_core.invokeImageGeneration(prompt, context, {
             orientation: 'landscape', respectOrientation: true, aspectRatio: '2:1',
             characterName: settings.people[0].name || context?.name2 || '',
             targetKey, singlePrompt: true, preservePrompt: true, onProgress: report,
+            avatarPromptParts: { scene: parts.scene, characters: parts.characters },
         });
         task_trace.markStage(trace, 'request');
         task_trace.markStage(trace, 'response');

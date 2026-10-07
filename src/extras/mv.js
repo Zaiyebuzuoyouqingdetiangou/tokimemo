@@ -15,6 +15,7 @@ import * as mv_cast from './mvCast.js';
 import * as mv_direction from './mvDirection.js';
 import * as mv_still from './mvStillPrompt.js';
 import * as mv_stage from './mvStage.js';
+import * as mv_illustration from './mvIllustration.js';
 
 export const MV_KEY = 'heartbeatMemoriesMvV1';
 const LOCAL_PREFIX = 'heartbeatMemoriesMvV1:';
@@ -615,6 +616,17 @@ function storyboardPrompt(context, memory, song, settings, sectionIndexes = null
             { sectionIndex: sections[1]?.index ?? exampleSection, lyric: sections[1]?.lines?.[1] || exampleLyric, group: 'G1', diff: 'D1', hold: 2, stage: { layout: 'sides', tone: 'accent', entrance: 'pop' } },
         ],
     }) : '';
+    const illustrationExample = settings.output === 'tegaki' && settings.storyType === 'illustration' ? JSON.stringify({
+        wardrobe: JSON.parse(exampleWardrobe),
+        stage: { backgrounds: [{ id: 'S1', label: '主场景', kind: 'image', prompt: 'quiet courtyard, layered foliage and soft light, open space for the subject', colors: ['#263d48', '#ecdfbd', '#b05b49'], motion: 'drift' }] },
+        groups: [{ id: 'G1', composition: '侧身回望的主画面', stageBackground: 'S1', position: 'center', scale: 'medium',
+            characterPrompt: 'three-quarter view, waist-up framing', ...expressionCast('full'), motion: 'push', transition: 'fade',
+            diffs: [{ id: 'D1', label: '回望', imagePrompt: `three-quarter waist-up ${exampleActor}, calm gaze over one shoulder, expressive garment folds, a single full-color still illustration` }] }],
+        frames: [
+            { sectionIndex: exampleSection, lyric: exampleLyric, group: 'G1', diff: 'D1', hold: 1, stage: { layout: 'banner' }, illustration: { reveal: 'ink', seconds: 2.4, light: 'halo', particles: 'dust', movement: 'parallax' } },
+            { sectionIndex: exampleSection, lyric: sections[0]?.lines?.[1] || exampleLyric, group: 'G1', diff: 'D1', hold: 2, stage: { layout: 'banner' }, illustration: { reveal: 'ink', seconds: 2.4, light: 'halo', particles: 'dust', movement: 'parallax' } },
+        ],
+    }) : '';
     return `${generation_prompts.promptSafetyBoundary(context, 'MV 分镜', null, memory)}
 【任务】
 为已写好的角色印象曲「${song.title}」写一张 MV 分镜表。画面风格：${styleOf(settings).name}；比例：${settings.ratio === '9:16' ? '竖屏 9:16' : '横屏 16:9'}。
@@ -646,7 +658,7 @@ ${settings.output === 'video' ? `1. 按段落写镜头：${settings.output === '
 ${cast ? '以下仅为结构示例，实际每镜的 cast 按出场人物填写，不局限于示例中的一个人。顶层可加 appearances:[{"participantId":"原始ID","tag":"有依据的稳定外貌","nl":"可空"}]；wardrobe 使用 era 和 characters，不用 char/user 代替 NPC。' : ''}
 ${settings.output === 'video'
         ? `{"wardrobe":${exampleWardrobe},"shots":[{"sectionIndex":0,"lyric":"","plain":"……",${exampleBinding},"shot":"中景：看到上半身","move":"镜头慢慢推近","motion":"push","imagePrompt":"……","videoZh":"……","videoEn":"……"}]}`
-        : expressionExample || `{"wardrobe":${exampleWardrobe},"keyword":"副歌里最有分量的词","motif":{"name":"竹叶","prompt":"english: one decorative element"},"groups":[{"id":"G1","composition":"低机位 · 蹲下喂猫 · 人物在左","position":"left","scale":"full","characterPrompt":"low angle medium shot, subject on the left, warm afternoon light",${exampleBinding},"motion":"still","transition":"cut","link":"下一组如何承接","bgs":[{"id":"B1","label":"午后","prompt":"english: empty scenery only"}],"diffs":[{"id":"D1","label":"伸手前","change":"伸出的手停在半空","imagePrompt":"low angle medium shot, the named character on the left with one hand extended toward the cat, warm afternoon light"}]}],"frames":[{"sectionIndex":0,"lyric":"原句","group":"G1","diff":"D1","bg":"B1","hold":1,"phase":"prep"}]}`}`;
+        : illustrationExample || expressionExample || `{"wardrobe":${exampleWardrobe},"keyword":"副歌里最有分量的词","motif":{"name":"竹叶","prompt":"english: one decorative element"},"groups":[{"id":"G1","composition":"低机位 · 蹲下喂猫 · 人物在左","position":"left","scale":"full","characterPrompt":"low angle medium shot, subject on the left, warm afternoon light",${exampleBinding},"motion":"still","transition":"cut","link":"下一组如何承接","bgs":[{"id":"B1","label":"午后","prompt":"english: empty scenery only"}],"diffs":[{"id":"D1","label":"伸手前","change":"伸出的手停在半空","imagePrompt":"low angle medium shot, the named character on the left with one hand extended toward the cat, warm afternoon light"}]}],"frames":[{"sectionIndex":0,"lyric":"原句","group":"G1","diff":"D1","bg":"B1","hold":1,"phase":"prep"}]}`}`;
 }
 
 // 手书：少数构图，每个构图里几张连续变化的画（闭眼→睁眼→偏头），摊平成镜头。
@@ -822,7 +834,7 @@ export async function generateStoryboard(songId, settingsInput, castInput = unde
             return { id: songId, createdAt: previous?.createdAt || Date.now(), settings,
                 ...built, stage: built.stage || null,
                 ...(cast ? { cast: mv_cast.generatedMvCast(cast, raw) } : {}),
-                tegaki: { ...(previous?.tegaki || {}), range: settings.range, rangeFrom: settings.rangeFrom, rangeTo: settings.rangeTo, ...(settings.output === 'tegaki' ? { lyric: built.stage ? 'stage' : 'subtitle' } : {}) },
+                tegaki: { ...(previous?.tegaki || {}), range: settings.range, rangeFrom: settings.rangeFrom, rangeTo: settings.rangeTo, ...(settings.output === 'tegaki' ? { lyric: built.stage && settings.storyType !== 'illustration' ? 'stage' : 'subtitle' } : {}) },
                 wardrobe: {
                     era: core_text.normalizeText(raw?.wardrobe?.era, 200) || previous?.wardrobe?.era || '',
                     char: core_text.normalizeText(raw?.wardrobe?.char, 300) || previous?.wardrobe?.char || '',
@@ -1175,14 +1187,14 @@ function tegakiGrammar(sections, keep, charName = '{{char}}', direction = '') {
 - diffs 可以只用一张关键画；只有同机位连续动作、情绪最小差分、明显反差或节奏循环确实需要时才加图，不强求每组闭眼→睁眼。
 - 局部特写写清画面裁切；只拍手就不要为了显示头发、眼睛或服装画出整个人。物件或环境空镜明确不出人，不硬塞主角。
 - bgs 写同一个镜头需要的场景，环境变化确有作用时再增加背景；只描述场景，不混入人物。
-${direction === 'expression' ? '- 主舞台与角色姿势可以跨歌词、跨段落持续使用；主歌与副歌靠表演、文字、明暗与疏密区分，重现的姿势按歌词情绪变奏。' : '- 副歌可以有一个主视觉组，重复的副歌复用它；其余段落尽量用新的构图，尾奏可以回到开头的构图。'}
+${['expression', 'illustration'].includes(direction) ? '- 主舞台与角色姿势可以跨歌词、跨段落持续使用；主歌与副歌靠表演、文字、明暗与疏密区分，重现的姿势按歌词情绪变奏。' : '- 副歌可以有一个主视觉组，重复的副歌复用它；其余段落尽量用新的构图，尾奏可以回到开头的构图。'}
 - link 简写下一镜如何承接，并把对应视线、位置或物件落实在前后两组的画面描述；link 不是可执行动画指令。
 - frames 按实际播放顺序指向 group、diff 和 bg，sectionIndex 是歌曲原段落编号。lyric 使用对应原句（器乐留空）；一句可有多个短镜，也可多句复用一个素材。hold 是段内相对停留权重，短镜可用 0.5，普通用 1，重点停留可更长，不是秒数。已对过的时间由用户打点优先。
 - frame.phase 可写 prep（准备）、action（发生）、settle（收势）或 still（静止）。循环类型可以回到前一个差分；其他类型只在表达需要时重复。不要靠长时间悬停动态姿势代替动作过程。
 - transition 按表达选 cut / fade / flash，motion 用 still / push；不强制混用全部转场或闪白。图像是静态关键姿势，连续动作靠剪辑而非假称视频动画。
 - 多人镜头分别写清每个人的位置、动作与互动对象，人数由出场名单决定。不得为制造差异改人物的设定外貌、衣服、性别或关系。
-${direction === 'expression' ? '- keyword 可以摘取歌词关键词；漂浮 motif 按歌曲需要选用。舞台背景、人物、文字自身已经能形成节奏，不要求每首叠加粒子。' : '- keyword：副歌里一个 2～4 字、最有分量的词。motif：歌词里一个可以漂浮的意象，prompt 用英文只描述这一个小元素。'}
-${direction === 'expression' ? mv_stage.prompt() : ''}
+${['expression', 'illustration'].includes(direction) ? '- keyword 可以摘取歌词关键词；漂浮 motif 按歌曲需要选用。舞台背景、人物、文字自身已经能形成节奏，不要求每首叠加粒子。' : '- keyword：副歌里一个 2～4 字、最有分量的词。motif：歌词里一个可以漂浮的意象，prompt 用英文只描述这一个小元素。'}
+${['expression', 'illustration'].includes(direction) ? mv_stage.prompt() + (direction === 'illustration' ? mv_illustration.prompt() : '') : ''}
 `;
 }
 
@@ -1191,9 +1203,14 @@ export function isV2(record) { return record?.version === 2 && Array.isArray(rec
 export function buildShots(raw, memory, sectionCount, settings, cast = null, opts = {}) {
     if (cast?.existingGroups) { opts = cast; cast = null; }
     const existingGroups = list(opts.existingGroups);
-    const stagePlan = mv_stage.prepare(settings.storyType === 'expression' ? raw?.stage : null, opts.existingStage);
+    const stagePlan = mv_stage.prepare(['expression', 'illustration'].includes(settings.storyType) ? raw?.stage : null, opts.existingStage);
     const reusesExisting = list(raw?.frames).some(f => existingGroups.some(g => g.id === f?.group));
-    if (settings.output === 'video' || (!list(raw?.groups).some(g => list(g?.diffs).length) && !reusesExisting)) return { shots: normalizeShots(raw, memory, sectionCount, settings, cast) };
+    if (settings.output === 'video' || (!list(raw?.groups).some(g => list(g?.diffs).length) && !reusesExisting)) {
+        const shots = normalizeShots(raw, memory, sectionCount, settings, cast);
+        if (settings.output !== 'video' && settings.storyType === 'illustration')
+            for (const shot of shots) shot.illustration = mv_illustration.normalize();
+        return { shots };
+    }
     const defaults = mv_direction.directionDefaults(settings.storyType);
     const idMap = new Map();
     const groups = [];
@@ -1243,6 +1260,7 @@ export function buildShots(raw, memory, sectionCount, settings, cast = null, opt
                 lyric: core_text.normalizeText(f?.lyric, 200), plain: `${old.composition || old.id} · ${diff.label}`,
                 group: old.id, diff: diff.id, bg: diff.bg || 'B1', who: old.who,
                 ...(stage ? { stage } : {}),
+                ...(settings.storyType === 'illustration' ? { illustration: mv_illustration.normalize(f?.illustration) } : {}),
                 ...(old.cast ? { cast: old.cast, ...(old.castUnresolved ? { castUnresolved: true } : {}) } : {}),
                 hold: Math.min(3, Math.max(1, Math.round(Number(f?.hold) || 1))),
                 ...(settings.storyType && Number.isFinite(Number(f?.hold)) && Number(f.hold) > 0 ? { timingWeight: Number(f.hold) } : {}),
@@ -1266,6 +1284,7 @@ export function buildShots(raw, memory, sectionCount, settings, cast = null, opt
             plain: `${group.composition || group.id} · ${diff.label}`,
             group: ref.id, diff: diff.id, bg: bgRow.id, who: group.who,
             ...(stage ? { stage } : {}),
+            ...(settings.storyType === 'illustration' ? { illustration: mv_illustration.normalize(f?.illustration) } : {}),
             ...(group.cast ? { cast: group.cast, ...(group.castUnresolved ? { castUnresolved: true } : {}) } : {}),
             hold: Math.min(3, Math.max(1, Math.round(Number(f?.hold) || 1))),
             ...(settings.storyType && Number.isFinite(Number(f?.hold)) && Number(f.hold) > 0 ? { timingWeight: Number(f.hold) } : {}),
@@ -1510,6 +1529,16 @@ export function patchStageCue(songId, shotId, patch) {
         if (!bg) return current;
         shot.stage = mv_stage.cue({ ...shot.stage, ...patch }, bg.id,
             id => list(current.stage?.backgrounds).some(b => b.id === id) ? id : '');
+        return current;
+    });
+}
+
+export function patchIllustration(songId, shotId, patch) {
+    const context = core_context.currentCharacterGuard();
+    return writeMv(scopeOf(context), songId, current => {
+        const shot = list(current?.shots).find(s => s.id === shotId);
+        if (shot?.illustration)
+            shot.illustration = mv_illustration.normalize({ ...shot.illustration, ...patch });
         return current;
     });
 }
