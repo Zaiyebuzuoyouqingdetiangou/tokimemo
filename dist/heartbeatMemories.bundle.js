@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
-// Source modules: 336
-// Source SHA-256: 0ad04ddd487d1f933b14da26af5030581165410f253b6ad31cbe121ce74cf441
+// Source modules: 338
+// Source SHA-256: f30ccf86e076cf4e47fda684083a3bd137cabbc6a09d11db5b6a621bce7d9d9a
 // Build: python3 tools/verification/build.py <source-root>
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -154,6 +154,7 @@ const __m_extras_mv_js = Object.create(null);
 const __m_extras_mvAudioSource_js = Object.create(null);
 const __m_extras_mvCast_js = Object.create(null);
 const __m_extras_mvDirection_js = Object.create(null);
+const __m_extras_mvIllustration_js = Object.create(null);
 const __m_extras_mvImageTools_js = Object.create(null);
 const __m_extras_mvMedia_js = Object.create(null);
 const __m_extras_mvMusicLink_js = Object.create(null);
@@ -296,6 +297,7 @@ const __m_ui_mvCastControls_js = Object.create(null);
 const __m_ui_mvEditorDialog_js = Object.create(null);
 const __m_ui_mvEditorLayout_js = Object.create(null);
 const __m_ui_mvEditorUi_js = Object.create(null);
+const __m_ui_mvIllustrationCanvas_js = Object.create(null);
 const __m_ui_mvImageEditor_js = Object.create(null);
 const __m_ui_mvImageEditorUi_js = Object.create(null);
 const __m_ui_mvStageCanvas_js = Object.create(null);
@@ -502,7 +504,7 @@ function __init_core_releaseNotes_js() {
 // MODULE: core/releaseNotes.js
 
 // GENERATED FROM README.md by tools/verification/build.py. Do not edit by hand.
-const RELEASE_README = "# 心迹回廊 1.0.36\n\n## 更新日志模块\n\n新增了更新日志板块，感谢@nancyindaeyo的更新。\n\n## 本次变动\n\n- 情侣头像按所选画风明确主体形态，动物化身画动物、手作风格画对应材质的角色；完整传递头像提示，避免风格、互动和人物信息被截断。\n- 画风扩充到 8 类 72 种，选择窗口改为分类浏览与搜索，精简卡片说明，并适配手机弹窗顶部安全区。\n- 互动扩充到 48 种，新增本地随机灵感，可换一组、选用并自行编辑。\n- 历史与收藏改为双头像缩略图分页，修复缩略图被按钮布局挤没及延迟加载不触发的问题。每页 6 对，翻页保留原图、裁切和收藏，备份仍包含全部记录。\n";
+const RELEASE_README = "# 心迹回廊 1.0.38\n\n## 更新日志模块\n\n新增了更新日志板块，感谢@nancyindaeyo的更新。\n\n## 本次变动\n\n- 情侣头像加强左右人物绑定：柏宝绘支持独立人物通道时，分别传递两人的外貌与动作；其他现有渠道保留完整双人描述，减少外貌混用。\n- 72 种画风补充人物比例、线条、明暗与材质要求，让画法作用于人物本身。兽化不再将白皙皮肤误作浅色毛发；黑白画法保留明暗特征，不混入彩色眼睛。\n- 48 种互动分别安排左边的动作与右边的回应，减少同姿势复制。已有原图、裁切、历史与收藏保留，新要求用于之后生成的头像。\n";
 
 __m_core_releaseNotes_js.RELEASE_README = RELEASE_README;
 }
@@ -589,43 +591,75 @@ function normalizeCoupleSettings(value, context = optionalContext()) {
 
 const DEFAULT_INTERACTION_PROMPT = 'choose a fresh affectionate interaction with complementary expressions and gestures for these two subjects';
 
-function couplePrompt(value) {
+function appearanceReference(value, animal, object) {
+    if (!animal && !object) return value;
+    let reference = value.replace(/\b\d+\s*(boys?|men|girls?|women|persons?|people)\b/gi, (_, kind) =>
+        `${/^(?:boy|men)/i.test(kind) ? 'male ' : /^(?:girl|women)/i.test(kind) ? 'female ' : ''}${animal ? 'animal' : 'crafted figure'}`);
+    if (!animal) return reference;
+    // Human skin is not fur color. In particular, "black hair, pale skin"
+    // must not become the conflicting "black fur markings, pale coat".
+    return reference
+        .replace(/\b(?:(?:very\s+)?(?:pale|fair|white|light|dark|tan(?:ned)?|brown|olive|porcelain|ivory|smooth|flawless)\s+)*(?:skin(?:\s+tone)?|complexion)\b/gi, '')
+        .replace(/(?:皮肤|肤色)\s*[:：]?\s*(?:很|十分|非常)?(?:白皙|苍白|雪白|白色|黝黑|古铜色|浅色|深色|健康|细腻|光滑|白|黑)/g, '')
+        .replace(/(?:白皙|苍白|雪白|黝黑|古铜色|细腻|光滑)(?:的)?(?:皮肤|肤色)/g, '')
+        .replace(/\b(?:high |low |long |short |twin )?(?:ponytails?|pigtails?|braids?)\b/gi, 'small distinctive fur tuft')
+        .replace(/(?:高|低|双|单)?马尾(?:辫)?|辫子/g, '标志性小毛簇')
+        .replace(/\b(?:human|boy|girl|man|woman)\b/gi, 'animal')
+        .replace(/\bhair\b/gi, 'fur markings')
+        .replace(/(?:长|短)?(黑|白|银|金|棕|褐|红|蓝|粉|紫|灰)(?:色)?(?:头)?发/g, '$1色毛发')
+        .replace(/头发|发色/g, '毛发配色')
+        .replace(/,\s*,/g, ',').replace(/^[,;，；\s]+|[,;，；\s]+$/g, '');
+}
+
+// Both outputs are composed locally from the same frozen settings. A flat-only
+// provider gets the complete prompt; capable NAI gets scene + two identities.
+function couplePromptParts(value) {
     const settings = normalizeCoupleSettings(value, null);
     const chosen = styles.COUPLE_STYLES.find(style => style.id === settings.styleId);
     const animal = chosen?.group === 'animal';
     const object = chosen?.group === 'craft' || ['fantasy-enamel', 'fantasy-shadow'].includes(chosen?.id);
     const subject = animal ? 'animal' : object ? 'crafted character' : 'character';
+    const preset = styles.INTERACTION_PRESETS.find(item => item.label === settings.interaction);
     const interaction = settings.interaction === '自定义互动' ? settings.interactionDetail
-        : styles.INTERACTION_PRESETS.find(item => item.label === settings.interaction)?.prompt || settings.interaction;
+        : preset?.prompt || settings.interaction;
+    const rendering = chosen?.prompt || settings.customStyle;
+    const construction = styles.coupleStyleConstruction(chosen);
     const form = animal
         ? 'The TWO main subjects ARE complete animals, with species-appropriate heads, bodies, limbs and tails. No human faces or human bodies, no people wearing animal ears, no people holding animal versions. Adapt actions to paws, wings or flippers. Translate original hair/eye colors and signature accessories into animal identity cues.'
         : object ? 'The TWO main subjects ARE the crafted objects described by the selected style. Their faces and bodies use that material and construction. Not humans holding toys or wearing material-themed costumes.'
             : 'Apply the selected rendering medium, proportions, linework and shading to the entire characters and image, not only to background decorations.';
+    const actions = settings.people.map((_, index) => preset?.roles[index]
+        || `perform only the ${index ? 'RIGHT' : 'LEFT'} subject's role in the chosen interaction, with an individual expression and gesture`);
     const people = settings.people.map((person, index) => {
         const side = index === 0 ? 'LEFT' : 'RIGHT';
-        // Only transform the outgoing animal reference. Saved/manual appearances
-        // remain intact and human styles continue to receive their original text.
-        const reference = animal ? person.appearance.replace(/\b\d+\s*(?:boys?|girls?|men|women|persons?|people)\b/gi, '')
-            .replace(/\b(?:human|boy|girl|man|woman)\b/gi, 'character').replace(/\bhair\b/gi, 'fur markings')
-            .replace(/\bskin\b/gi, 'coat').replace(/(?:皮肤|肤色|头发|发色)/g, '毛色') : person.appearance;
-        return `${side} HALF ${subject}: ${person.name || (index === 0 ? 'first character' : 'second character')}${reference ? `; ${animal || object ? 'identity reference to reinterpret in the selected form' : 'appearance'}: ${reference}` : ''}.`;
+        const reference = appearanceReference(person.appearance, animal, object);
+        return `${side} HALF ${subject}: ${person.name || (index === 0 ? 'first character' : 'second character')}${reference ? `; ${animal || object ? 'identity reference to reinterpret in the selected form' : 'appearance'}: ${reference}` : ''}. Action: ${actions[index]}.`;
     });
-    return [
-        chosen ? `Rendering style: ${chosen.prompt}.` : '',
-        settings.styleId === 'custom' && settings.customStyle ? `Rendering style: ${settings.customStyle}.` : '',
+    const scene = [
+        rendering ? `Rendering style: ${rendering}.` : '',
+        construction ? `Style construction: ${construction}` : '',
         form,
+        'Selected style controls the medium and proportions of BOTH subjects. Identity references supply individual traits, not a competing drawing style. In monochrome or limited-color styles, express original colors through tones and shapes instead of reintroducing full color.',
         `One matching avatar pair in one horizontal image, preferably 2:1. One ${subject} centered in EACH of two equal square halves.`,
+        `Two separate identities: LEFT = ${settings.people[0].name || 'first character'}; RIGHT = ${settings.people[1].name || 'second character'}. Keep each side\'s face or muzzle, eyes, hair or markings, clothing and accessories bound to that identity.`,
         `Interaction: ${interaction && interaction !== '交给灵感' ? interaction : DEFAULT_INTERACTION_PROMPT}.`,
+        `Action roles: LEFT — ${actions[0]}; RIGHT — ${actions[1]}. Adapt gestures to the chosen body form; explicit user directions take precedence.`,
         settings.direction ? `Direction: ${settings.direction}.` : '',
-        ...people,
         settings.clothing ? `${animal ? 'Small wearable accents adapted for animal bodies' : 'Clothing in the selected rendering style'}: ${settings.clothing}.` : '',
         settings.background ? `Background: ${settings.background}.` : '',
         settings.pairType === 'echo'
             ? 'Independent portraits, coordinated colors and light, complementary poses.'
             : 'Connected background and shared motif across the center, matching scale.',
-        'Leave margin around both heads for square/circle crops. Readable expressions, distinct poses, no mirrored duplicates. Preserve each identity and gender within the chosen form; improvise unspecified details. No text, watermark, frame or divider.',
+        'Leave margin for square/circle crops while showing the silhouette and body proportions required by the style. Readable expressions, distinct poses, no mirrored duplicates. Shared medium and lighting do not mean identical faces. Keep genuinely shared traits; distinguish the pair through their own supported features and different reactions, not arbitrary changes of identity or gender. Improvise unspecified details. No text, watermark, frame or divider.',
     ].filter(Boolean).join('\n');
+    return { scene, prompt: [scene, ...people].join('\n'),
+        characters: settings.people.map((person, index) => ({
+            name: `${index ? '右边' : '左边'} · ${person.name || (index ? '人物二' : '人物一')}`,
+            tag: [people[index], rendering ? `Rendering style: ${rendering}.` : '', construction].filter(Boolean).join('\n'),
+        })) };
 }
+
+function couplePrompt(value) { return couplePromptParts(value).prompt; }
 
 function openDatabase() {
     if (databasePromise) return databasePromise;
@@ -887,13 +921,14 @@ async function generateCouple(value, { context = core_context.currentCharacterGu
     // background signal after submission. A returned result always enters its origin scope.
     try {
         task_trace.beginStage(trace, 'prompt');
-        const prompt = couplePrompt(settings);
+        const parts = couplePromptParts(settings), prompt = parts.prompt;
         task_trace.markStage(trace, 'prompt');
         task_trace.beginStage(trace, 'request');
         const result = await cg_core.invokeImageGeneration(prompt, context, {
             orientation: 'landscape', respectOrientation: true, aspectRatio: '2:1',
             characterName: settings.people[0].name || context?.name2 || '',
             targetKey, singlePrompt: true, preservePrompt: true, onProgress: report,
+            avatarPromptParts: { scene: parts.scene, characters: parts.characters },
         });
         task_trace.markStage(trace, 'request');
         task_trace.markStage(trace, 'response');
@@ -933,6 +968,7 @@ __m_extras_coupleAvatar_js.generateCouple = generateCouple;
 __m_extras_coupleAvatar_js.coupleScope = coupleScope;
 __m_extras_coupleAvatar_js.defaultCoupleSettings = defaultCoupleSettings;
 __m_extras_coupleAvatar_js.normalizeCoupleSettings = normalizeCoupleSettings;
+__m_extras_coupleAvatar_js.couplePromptParts = couplePromptParts;
 __m_extras_coupleAvatar_js.couplePrompt = couplePrompt;
 __m_extras_coupleAvatar_js.COUPLE_MODE = COUPLE_MODE;
 }
@@ -1198,6 +1234,148 @@ const COUPLE_STYLES = Object.freeze([
     ['fantasy-fresco', 'fantasy', '壁画矿彩', '矿物色、磨损肌理和壁画式线条。', 'mineral-pigment fresco portraits, matte mineral colors, worn plaster texture, flowing mural contours'],
 ].map(([id, group, label, description, prompt]) => Object.freeze({ id, group, label, description, prompt })));
 
+// Construction instructions affect the subjects themselves, not just a texture
+// or a decorative background. They are prompts only, never output validation.
+const MEDIUM_CONSTRUCTION = Object.freeze({
+    chibi: 'Build the selected stylized proportions into each head, face and body; do not turn a tiny-body style into a normal-proportioned portrait.',
+    anime: 'Use the selected drawing language for both faces, hair and clothes: deliberate contours and matching shadow design, not one generic glossy painted face with different backdrops.',
+    art: 'The selected traditional medium must visibly build the face, hair and clothing as well as the background; not a finished anime portrait with a paper-texture overlay.',
+    craft: 'The actual two subjects are handmade objects. Their face, hair, limbs and clothes are constructed from the chosen material, not human skin holding a toy.',
+    graphic: 'Construct faces, hair, clothes and background in the same graphic vocabulary; do not place smooth painted faces inside an otherwise graphic frame.',
+    photo: 'Use photographic facial structure, natural skin texture and coherent camera lighting on both subjects; the photographic treatment is not just a filter over anime faces.',
+    animal: 'Use complete species-appropriate animal anatomy, including animal faces and bodies. Map each identity to its own fur or feather markings, eyes and small accessories, not a human wig or a human face with animal ears.',
+    fantasy: 'Build the portrait itself out of the selected medium. Face, hair and clothes must share its visible construction, not remain a normal painted portrait surrounded by themed decoration.',
+});
+const STYLE_CONSTRUCTION = Object.freeze({
+    'chibi-dumpling': 'Each head occupies about half of the full figure height; show the tiny torso, stubby arms and feet within its square. Broad simple shapes, minimal facial shading.',
+    'chibi-three-head': 'The head occupies about one third of the figure height; include the small clothed body and readable little gestures, not a head-only crop.',
+    'chibi-headshot': 'Oversized rounded face, small nose and mouth, deliberately enlarged expressive eyes; show hair silhouette and a little shoulder, without adult facial proportions.',
+    'chibi-doodle': 'Dot eyes, a few uneven pen strokes for mouth and hair, simplified silhouette and small flat color patches; no detailed painted eyes or face shading.',
+    'chibi-animal': 'Round animal skulls with visible species-specific muzzles or beaks, compact bodies and paws or wings. Distinguish the two through their own markings, accessories and reactions.',
+    'chibi-meme': 'Squashed miniature bodies, exaggerated mouth and eyebrow shapes, a visibly different reaction on each side; simple outlines and flat fills.',
+    'anime-clean': 'Thin clean contours define facial features and separate hair locks; mostly flat colors with small clean shadows, no dense painterly surface.',
+    'anime-cel': 'Crisp linework and hard-edged cel shadow shapes on faces and clothing, flat local colors and a small highlight shape; avoid blended painted shadows.',
+    'anime-shojo': 'Fine expressive ink contours and visible screentone shading on faces, hair and clothes; delicate eye lashes and generous white areas, not a softly painted anime portrait.',
+    'anime-retro90': 'Slightly heavy analog ink contours, flat painted cels, restrained two-step face shadows, subtle color bleed and film softness rather than glossy digital detail.',
+    'anime-korean': 'Refined thin colored outlines, translucent skin tones and soft sparse shadows; clear airy eyes, economical hair detail, no heavy ink masses.',
+    'anime-storybook': 'Simple storybook facial shapes, tactile brush marks, slightly irregular hand-drawn contours and quiet broad color areas; reduce polished anime eye detail.',
+    'art-gongbi': 'Continuous hair-fine ink lines define facial contours, hair and garment folds, with many thin restrained color washes; no thick painterly edges.',
+    'art-ink': 'Wet and dry ink strokes shape the hair and clothes, broken brush edges and large untouched-paper areas; sparse washes also affect the face.',
+    'art-watercolor': 'Wet-on-wet color transitions, visible pigment blooms, translucent overlapping washes and lost edges across the face, hair and clothes; avoid hard cel-shadow fills.',
+    'art-pencil': 'Visible directional colored-pencil strokes across skin, hair and fabric, layered crosshatching and paper tooth; highlights are uncolored paper.',
+    'art-oil': 'Visible directional brushstrokes build the face, hair and clothing; solid paint planes and impasto edges shape the light, without outlining every anime hair strand.',
+    'art-sketch': 'Graphite strokes and crosshatching build face planes, hair and clothing; varied pencil pressure, erased highlights and white paper. All features remain monochrome, not colored eyes or flat manga screentones.',
+    'craft-plush': 'Visible fabric seams shape the face and body; short fuzzy pile, embroidered eyes and mouth, stuffed rounded limbs. Hair is fabric tufts rather than painted strands.',
+    'craft-clay': 'A visibly sculpted rounded face and chunky clay hair locks, small modeled limbs, matte handmade surfaces and gentle physical cast shadows.',
+    'craft-crochet': 'Individual crochet loops build the face and body, yarn strands form hair and tiny clothes; stitched eyes, no smooth illustrated skin.',
+    'craft-felt': 'Needle-felt fibers form the cheeks, hair and little limbs, uneven fuzzy edges and soft wool volume throughout each figure.',
+    'craft-vinyl': 'Large simple molded toy shapes, a smooth satin vinyl face with printed features, sculpted hair masses and small seams; toy proportions, not realistic people.',
+    'craft-paper': 'Separate cut-paper pieces form the face, hair and clothing, sharp or torn paper edges and tiny inter-layer shadows; no painted three-dimensional facial shading.',
+    'graphic-pixel': 'Use one consistent visible pixel grid across faces, eyes, hair and clothes; stepped contours, deliberate pixel clusters and limited colors, never a smooth portrait with pixel decorations.',
+    'graphic-line': 'A few continuous economical contour strokes define the faces and hair, mostly empty interiors; preserve distinctive silhouettes without adding painted shading.',
+    'graphic-silhouette': 'Two flat colors only, identity expressed through profile, hair and accessory contours; use negative shapes instead of fully rendered eyes or skin.',
+    'graphic-print': 'Carved light and dark hatching shapes define cheeks, hair and fabric, limited ink overprints and small uneven ink edges; no continuous-tone painting.',
+    'graphic-sticker': 'Bold simplified character silhouettes with readable expressions, clean flat or cel colors and a die-cut white outline following the subjects, not a rectangular frame.',
+    'graphic-geometric': 'Geometric planes construct the cheeks, eyes, hair and clothing; flat color boundaries replace brushwork, with recognizable individual silhouettes.',
+    'photo-film': 'Candid photographic faces with natural asymmetry, coherent lens depth, fine film grain and restrained analog color response.',
+    'photo-daylight': 'Natural daylight on real facial planes, clear skin texture, relaxed candid posture and soft background defocus; no airbrushed doll faces.',
+    'photo-studio': 'A shared old studio backdrop, controlled key light with visible soft shadow shaping the faces, restrained vintage photographic color.',
+    'photo-night': 'Real faces illuminated by the same colored night lights, natural shadow falloff, background bokeh and readable eyes, not painted neon contours.',
+    'photo-backlight': 'Photographic facial structure with fine rim-lit hair, gentle optical bloom and shallow depth of field while keeping the eyes readable.',
+    'photo-mono': 'Black-and-white photographic tonal gradients and skin texture, coherent lens perspective; no pencil strokes or manga ink shading.',
+    'chibi-mochi': 'A soft near-spherical head-and-body silhouette, tiny feet and dot features, small signature accessories; no normal-length human torso.',
+    'chibi-sleepy': 'Oversized sleepy head with half-closed eyes, a stubby small body and loose soft outlines; let the two have different sleepy responses.',
+    'chibi-crayon': 'Uneven wax crayon marks build the face, hair and body, naive rounded proportions and incomplete fills with visible paper gaps.',
+    'anime-flat': 'Flat local colors, clear economical contours and almost no modeled shadows across faces and clothes; no dense glossy gradients.',
+    'anime-manga': 'Black ink outlines, solid black areas, white paper and patterned screentone; draw expressions as ink shapes rather than grayscale painted portraits.',
+    'anime-pastel': 'Soft colored outlines, round animated facial shapes and pale flat cel shadows; use pastel colors on the characters, not only behind them.',
+    'anime-webtoon': 'Simplify each face into economical contours and one or two shadow shapes; broad clean hair masses and flat skin colors, no detailed painterly rendering.',
+    'art-gouache': 'Opaque chalky paint strokes overlap across the face and hair, matte broad planes with visible bristle marks and slightly irregular painted edges.',
+    'art-pastel': 'Thick wax strokes and broken color cover the face, hair and fabric; visible paper tooth and smudged layered edges.',
+    'art-charcoal': 'Charcoal dust, energetic dark strokes, rubbed midtones and lifted paper highlights construct the face and hair; rough rather than polished.',
+    'art-risograph': 'Limited spot-color layers with visible grain and slightly misregistered contours build the facial features as well as the background.',
+    'craft-porcelain': 'Small sculpted ceramic faces, painted-on features and hair areas, rounded porcelain bodies and translucent glaze reflections.',
+    'craft-wood': 'Faceted carving marks and wood grain run across the face, hair and body, with tiny painted facial features and a real object silhouette.',
+    'craft-origami': 'Folded paper planes construct the head, face and clothes; sharp folds, visible paper thickness and small cast shadows, no organic skin rendering.',
+    'craft-bead': 'Individual round plastic beads on a regular square grid form every facial and hair feature; visible bead holes and material, not merely pixel illustration.',
+    'graphic-8bit': 'Very coarse consistent pixel grid, few colors and large stepped facial features; no smoothing, antialiased outlines or detailed painted eyes.',
+    'graphic-pop': 'Bold graphic facial outlines, large halftone dots and contrasting flat spot colors cover the subjects themselves.',
+    'graphic-comic': 'Heavy expressive ink, crosshatched facial shadows and printed halftone colors, with simplified readable hair masses.',
+    'graphic-lino': 'Broad carved negative spaces and two ink colors define the faces and hair; uneven ink transfer and no smooth tonal gradients.',
+    'photo-instant': 'Real candid faces with soft direct flash, mild analog color shifts, shallow lens depth and informal snapshots, without a printed photo border.',
+    'photo-rain': 'Real facial planes in soft window sidelight, optical reflections and defocused rain behind the subjects, not raindrops painted onto an anime portrait.',
+    'animal-cat': 'Feline skulls, triangular ears, short muzzles, whiskers, paws and tails; no human face underneath cat ears.',
+    'animal-dog': 'Canine muzzles, noses, dog ears, paws and tails; individual fur markings and different expressions distinguish the two dogs.',
+    'animal-fox': 'Long fox muzzles, pointed ears, fluffy cheek fur and bushy tails; both are complete foxes with their own markings.',
+    'animal-rabbit': 'Rabbit noses, round cheeks, long floppy ears, small forepaws and rounded hindquarters; no human hair or fingers.',
+    'animal-bear': 'Bear muzzles, round ears, compact thick bodies and broad paws; express each personality through posture and accessories.',
+    'animal-bird': 'Visible beaks, rounded feathered bodies, folded wings and small bird feet; hair colors become feather markings, not human hair.',
+    'animal-seal': 'Seal whiskers, short muzzles, smooth rounded bodies and flippers; accessories and each face reaction carry the identities.',
+    'fantasy-glass': 'Colored glass pieces and lead seams build the cheeks, eyes, hair and clothing; translucent light passes through the shapes.',
+    'fantasy-enamel': 'Raised metal outlines divide glossy solid enamel fields across the entire little portrait; physical pin edge and thickness.',
+    'fantasy-embroidery': 'Directional visible thread stitches build the face and hair, with stitched clothing and slight thread relief over fabric.',
+    'fantasy-mosaic': 'Small ceramic tesserae and visible grout construct the facial features and hair, with tiny glazed reflections.',
+    'fantasy-blueprint': 'Prussian blue and paper white only, photographic cyanotype silhouettes and uneven contact-print tone; identity colors become tonal differences.',
+    'fantasy-shadow': 'Translucent leather, cutout facial ornament, articulated puppet shapes and backlit color; no smooth painted human portrait.',
+    'fantasy-luminous': 'Layered cut-paper shapes form each face and body, with light shining between physical paper layers and edges.',
+    'fantasy-fresco': 'Matte mineral pigment strokes and worn plaster create facial planes, flowing mural hair contours and broad restrained color areas.',
+});
+
+function coupleStyleConstruction(style) {
+    return style ? [MEDIUM_CONSTRUCTION[style.group], STYLE_CONSTRUCTION[style.id]].filter(Boolean).join(' ') : '';
+}
+
+const INTERACTION_ROLES = Object.freeze({
+    '半颗爱心': ['hold one heart half toward the right inner edge', 'hold the complementary heart half toward the left inner edge'],
+    '隔空对望': ['turn slightly right and look toward the other subject', 'turn slightly left and return the gaze with a different expression'],
+    '左右眨眼': ['give a confident playful wink', 'answer with a bashful wink and a different head tilt'],
+    '一根红线': ['lift one end of the red thread toward the right', 'notice and gently hold the other end toward the left'],
+    '隔空击掌': ['raise the inner hand or forepaw toward the right', 'reach the inner hand or forepaw toward the left to meet it'],
+    '悄悄牵住衣角': ['gently catch the other subject\'s clothing edge or accessory', 'notice the small tug and glance back shyly'],
+    '递出一朵花': ['offer a flower toward the right', 'reach toward the left to receive the flower'],
+    '碰一碰鼻尖': ['lean right with a gentle forward tilt', 'lean left with a different gentle tilt, bringing noses close'],
+    '替你理围巾': ['reach inward to straighten the other subject\'s scarf', 'hold still and smile softly at the caring gesture'],
+    '藏在背后的小花': ['hide a small flower behind the back with an expectant look', 'peek inward curiously, trying to see the hidden flower'],
+    '一边闹一边笑': ['playfully tease with an animated gesture', 'laugh in response with a relaxed different posture'],
+    '假装生气': ['puff up in mock annoyance', 'try to suppress an amused smile'],
+    '偷偷模仿你': ['strike a serious confident pose', 'playfully imitate the pose with a mischievous expression'],
+    '一边偷看一边躲': ['peek inward around a small prop', 'bashfully turn slightly away while noticing the glance'],
+    '互相做鬼脸': ['make one playful silly face toward the right', 'reply with a visibly different silly face toward the left'],
+    '一边困一边闹': ['look drowsy with half-closed eyes and relaxed posture', 'lean inward energetically to seek attention'],
+    '偷偷戴上同款': ['show a matching small accessory with a knowing smile', 'wear the matching accessory and pretend not to notice'],
+    '被发现的偷笑': ['try to suppress a laugh after being noticed', 'give a knowing sidelong look toward the left'],
+    '举杯碰杯': ['raise a cup toward the right inner edge', 'tilt a cup toward the left to answer the toast'],
+    '一人一只小动物': ['gently cuddle a small pet while looking inward', 'let another small pet lean close while responding inward'],
+    '耳机分你一只': ['offer the shared earphone cable inward with a pleased look', 'listen through one earphone with a softer answering expression'],
+    '同款不同色': ['show one version of the coordinated clothing with an open pose', 'show the complementary version with a different relaxed pose'],
+    '一起看烟花': ['point toward the fireworks with delighted surprise', 'watch the same fireworks with a quiet smile and reflected light'],
+    '并肩吹泡泡': ['blow a bubble toward the right', 'watch an incoming bubble and prepare to blow another'],
+    '共用一条围巾': ['hold one end of the shared scarf near the chest', 'nestle into the other end with an answering head tilt'],
+    '分享一把伞': ['hold an umbrella tilted inward toward the other subject', 'lean into the offered shelter with a grateful expression'],
+    '一起读一本书': ['point at a passage in the shared book', 'follow the indicated passage with a different amused reaction'],
+    '举起同款相机': ['raise the small camera to take a picture', 'hold the matching camera lower and smile for the picture'],
+    '一人一半饼干': ['offer one cookie half inward', 'hold the other cookie half and answer with a different pleased expression'],
+    '递来最后一口': ['offer the last bite of a snack toward the right', 'lean toward the offered bite with pleasantly surprised eyes'],
+    '草莓分给你': ['hold out a strawberry toward the right', 'lean toward the strawberry with an eager answering expression'],
+    '两杯不同口味': ['hold one drink flavor and offer a curious glance', 'hold the other flavor and respond with a pleased different expression'],
+    '偷吃被发现': ['look caught with a few snack crumbs near the mouth', 'notice the crumbs with amused surprise'],
+    '一串糖葫芦': ['offer the candied-fruit skewer toward the right', 'lean inward to take a bite'],
+    '交换便当': ['offer one small lunch box inward', 'receive it while offering the other lunch box back'],
+    '融化的冰淇淋': ['worry over a melting ice cream', 'offer a napkin toward the left with a reassuring smile'],
+    '接住一片落叶': ['release a leaf toward the right', 'reach inward to catch the drifting leaf'],
+    '一起捧雪花': ['cup a snowflake and look surprised', 'look at another snowflake with a softer delighted response'],
+    '围巾里躲风': ['nestle down into a scarf against the wind', 'lean inward to share warmth'],
+    '花瓣落在头顶': ['wear an unnoticed flower petal on the head', 'point out the petal with a smile'],
+    '夏夜捕萤': ['follow a nearby firefly with an attentive gaze', 'reach gently toward another firefly with a different curious reaction'],
+    '雨后踩水花': ['make a small playful splash toward the right', 'react to the splash with amused surprise'],
+    '同一阵风': ['face the shared breeze with a lifted gaze', 'brace lightly against the same breeze with a different head angle'],
+    '日与月的呼应': ['relate to the sun motif and its warm light', 'relate to the moon motif and its cool light with a different pose'],
+    '星星递给你': ['offer a small glowing star toward the right', 'reach inward toward the offered star'],
+    '拼成一朵花': ['hold or echo one flower half at the inner edge', 'complete the flower with its complementary half and a different expression'],
+    '纸飞机传话': ['release a paper airplane toward the right', 'wait to catch the incoming paper airplane'],
+    '两边同一片海': ['show one seashell against the shared sea horizon', 'show a different seashell while responding toward the left'],
+});
+
 const INTERACTION_PRESETS = Object.freeze([
     ['甜甜互动', '半颗爱心', 'each subject holds half a heart at the inner edge; together the halves form one heart'],
     ['甜甜互动', '隔空对望', 'left subject gazes right; right subject gazes left with an affectionate response'],
@@ -1247,7 +1425,7 @@ const INTERACTION_PRESETS = Object.freeze([
     ['意象呼应', '拼成一朵花', 'two complementary flower halves meet across the center'],
     ['意象呼应', '纸飞机传话', 'one sends a paper airplane toward the center; the other waits to catch it'],
     ['意象呼应', '两边同一片海', 'matching horizon and sea breeze, each subject holds a different seashell'],
-].map(([group, label, prompt]) => Object.freeze({ group, label, prompt })));
+].map(([group, label, prompt]) => Object.freeze({ group, label, prompt, roles: Object.freeze(INTERACTION_ROLES[label] || []) })));
 
 const INTERACTIONS = Object.freeze([...INTERACTION_PRESETS.map(row => row.label), '交给灵感', '自定义互动']);
 
@@ -1274,6 +1452,7 @@ function randomCoupleIdeas(previous = [], random = Math.random) {
     return (shuffled.length ? shuffled : moments).slice(0, 3).map(moment => `${moment}；${pick(moods)}。${pick(scenes)}。`);
 }
 
+__m_extras_coupleAvatarStyles_js.coupleStyleConstruction = coupleStyleConstruction;
 __m_extras_coupleAvatarStyles_js.randomCoupleIdeas = randomCoupleIdeas;
 __m_extras_coupleAvatarStyles_js.STYLE_GROUPS = STYLE_GROUPS;
 __m_extras_coupleAvatarStyles_js.COUPLE_STYLES = COUPLE_STYLES;
@@ -1589,6 +1768,7 @@ const MV_DIRECTIONS = Object.freeze([
     { id: 'interaction', name: '关系互动', desc: '视线、距离与双方反应', rule: '用视线对应、正反打、动作与接收动作、距离变化表现人物关系；清楚写谁对谁做什么。可以各自单人或同框，不把合唱等同于全员同框，不擅定恋爱关系；只有一人时也可用画外对象与反应。' },
     { id: 'impact', name: '高燃快切', desc: '强弱对比、卡点与关键姿势', rule: '主歌蓄势、副歌集中爆发；用全景与局部反差、关键动作姿势和干脆切换建立节奏。需要时同一句歌词可以有多个短镜头，冲击后留一处停顿；不把挥剑、奔跑等姿势长时间悬停，不强制闪白或战斗。' },
     { id: 'loop', name: '节奏循环', desc: '复用构图、姿势循环与节拍变化', rule: '设计能重复使用的构图和关键姿势，frames 可以回到先前的 group/diff 形成节奏循环；重复时用背景、视线或意象变化推进，不为循环重复生出相同素材。静态关键姿势剪辑不冒充连续舞蹈动画。' },
+    { id: 'illustration', name: '动态插画', desc: '主图复用、同图显影与分层光效', rule: '以值得停留的主画面组织段落：显现、停留、光色变化与人物或意象呼应。同一张彩色图承担黑白、剪影到彩色的显影，不为显示效果反复生图；背景与人物可分层，完整插画也能使用。构图中的发丝、衣褶、视线与留白建立张力，镜头只做轻微运动；按歌曲情绪安排光晕、光束或粒子，不套固定紫色或星光。少量主构图可以跨多句歌词，不强制数量，也不把它写成逐句换肖像或连续肢体动画。' },
     { id: 'expression', name: '表情卡拍', desc: '共享舞台、角色表演与文字卡拍', rule: '围绕可反复返回的主舞台安排角色面向观众的表演。人物以轮廓明确、有性格的半身或全身姿势建立记忆点，手势、视线与表情一起表达；一个姿势可保持数秒，让文字、背景图形继续变化。背景持续跨越多个姿势与歌词，同一素材反复引用，不逐句重新画场景。\n重复乐句沿用主构图与标志姿势，根据歌曲情绪改变表情、光色、文字或道具，形成呼应与变奏。剧情镜头与局部特写用于需要的转折，不套“换脸→特写→返回”的固定流程。主歌与副歌的疏密、明暗和表演强度服务当前歌曲。\n每种姿势或表情各自生成为单张单格静态图；人物、共享背景、文字分开制作并在时间轴上编排，生图不写歌词。保留角色身份、衣着和画风，表情反差来自角色与歌词，不强加假笑、伤口、恐怖或脱衣；为这首歌原创构图与顺序。' },
     { id: 'reveal', name: '悬念反转', desc: '遮蔽信息、伏笔与回收', rule: '先用局部、背影、画外或遮挡保留信息，再以全景、反向视点或意象重现揭示。转折前后重用视觉线索而改变含义；不强加恐怖、死亡、悲剧或设定外事件。' },
 ]);
@@ -1635,7 +1815,7 @@ function directionPrompt(value, song) {
 
 function directionDefaults(value) {
     const id = directionOf(value).id;
-    return id === 'lyrical' ? { motion: 'push', transition: 'fade' } : { motion: 'still', transition: 'cut' };
+    return ['lyrical', 'illustration'].includes(id) ? { motion: 'push', transition: 'fade' } : { motion: 'still', transition: 'cut' };
 }
 
 __m_extras_mvDirection_js.directionOf = directionOf;
@@ -1643,6 +1823,63 @@ __m_extras_mvDirection_js.recommendDirections = recommendDirections;
 __m_extras_mvDirection_js.directionPrompt = directionPrompt;
 __m_extras_mvDirection_js.directionDefaults = directionDefaults;
 __m_extras_mvDirection_js.MV_DIRECTIONS = MV_DIRECTIONS;
+}
+
+function __init_extras_mvIllustration_js() {
+// MODULE: extras/mvIllustration.js
+
+// Optional, local-only illustration cues. No extra generation requests or asset requirements.
+const REVEALS = Object.freeze({ ink: '黑白显影', silhouette: '剪影显影', none: '不显影' });
+const LIGHTS = Object.freeze({ halo: '柔和光晕', rays: '缓慢光束', none: '无光效' });
+const PARTICLES = Object.freeze({ dust: '微尘', spark: '星光', none: '无粒子' });
+const MOVEMENTS = Object.freeze({ parallax: '轻微视差', still: '保持不动' });
+
+function normalize(value) {
+    const pick = (key, choices, fallback) => Object.hasOwn(choices, value?.[key]) ? value[key] : fallback;
+    const seconds = Number(value?.seconds);
+    return { reveal: pick('reveal', REVEALS, 'ink'), light: pick('light', LIGHTS, 'halo'),
+        particles: pick('particles', PARTICLES, 'dust'), movement: pick('movement', MOVEMENTS, 'parallax'),
+        seconds: Number.isFinite(seconds) && seconds > 0 ? seconds : 2.4,
+        color: /^#[0-9a-f]{6}$/iu.test(value?.color || '') ? value.color : '' };
+}
+
+function poseKey(row) {
+    const s = row?.shot || {}, cue = normalize(s.illustration);
+    const art = s.image?.url || s.image?.local ? `shot:${s.id}` : s.group && s.diff ? `${s.group}:${s.diff}` : s.id;
+    return `${art}:${s.illustration ? cue.reveal : 'inactive'}:${cue.seconds}`;
+}
+
+// Song-clock based, so lyric changes, seeking and excerpt export never restart a held illustration.
+function state(record, rows, index, time) {
+    if (!rows[index]?.shot?.illustration) return null;
+    const row = rows[index], key = poseKey(row), cue = normalize(row.shot.illustration);
+    let first = index, last = index;
+    while (first > 0 && poseKey(rows[first - 1]) === key) first--;
+    while (last + 1 < rows.length && poseKey(rows[last + 1]) === key) last++;
+    const start = rows[first].start, end = rows[last].end, elapsed = Math.max(0, time - start);
+    const duration = Math.min(cue.seconds, Math.max(0.001, (end - start) * .8));
+    const p = Math.min(1, elapsed / duration);
+    return { ...cue, start, end, time: elapsed, songTime: Math.max(0, time),
+        progress: cue.reveal === 'none' ? 1 : p * p * (3 - 2 * p) };
+}
+
+function prompt() {
+    return `【动态插画编排】
+- 先为每段建立值得停留的主画面，再安排显现、停留、光色变化与前后呼应；同一构图可以跨多句歌词与段落。按歌曲需要定素材数量，不逐句重画，也不强制固定双人、紫色、星光或固定镜头顺序。
+- 每个 diff 只画一张完整彩色的静态关键图。黑白、剪影与彩色显影由播放器从同一张素材派生，不为它们新建差分，不把前后对比、光效变化过程或拼格画进图片。
+- 可使用 stage.backgrounds 与 groups.stageBackground 分离场景和主体，形成前后层次；完整画面、局部特写同样可用，没有拆层也不影响生成。主体轮廓、发丝与衣褶在静态构图中形成张力，保留用户所选画风和人物身份。
+- frames.illustration 是可选播放设置：reveal 为 ink（黑白显影）/ silhouette（剪影显影）/ none；seconds 是显影秒数；light 为 halo（柔光）/ rays（光束）/ none；particles 为 dust（微尘）/ spark（星光）/ none；movement 为 parallax（轻微视差）/ still；color 可用符合本曲的 #RRGGBB，省略时跟随背景配色。
+- 连续 frames 引用同一 group/diff 时，显影和主体运动延续，不因换歌词重新开始。只需要字幕时 stage.layout 用 banner 或 none。光效与粒子可以关闭，不把装饰铺满画面，不遮脸或关键手势。
+- 这里只能安排同图显影、图层位移和光效，不宣称会自动产生眨眼、发丝形变、口型或连续肢体动作；确需不同姿势时另给静态差分。可选设置缺失时播放器使用默认效果，不重发请求。\n`;
+}
+
+__m_extras_mvIllustration_js.normalize = normalize;
+__m_extras_mvIllustration_js.state = state;
+__m_extras_mvIllustration_js.prompt = prompt;
+__m_extras_mvIllustration_js.REVEALS = REVEALS;
+__m_extras_mvIllustration_js.LIGHTS = LIGHTS;
+__m_extras_mvIllustration_js.PARTICLES = PARTICLES;
+__m_extras_mvIllustration_js.MOVEMENTS = MOVEMENTS;
 }
 
 function __init_extras_mvImageTools_js() {
@@ -3483,6 +3720,111 @@ __m_ui_mvEditorUi_js.editorMarkup = editorMarkup;
 __m_ui_mvEditorUi_js.editorFilmstripMarkup = editorFilmstripMarkup;
 __m_ui_mvEditorUi_js.editorCss = editorCss;
 __m_ui_mvEditorUi_js.EDITOR_PAGE_SIZE = EDITOR_PAGE_SIZE;
+}
+
+function __init_ui_mvIllustrationCanvas_js() {
+// MODULE: ui/mvIllustrationCanvas.js
+
+// Uses ordinary Canvas compositing, not CSS/Canvas filters or generated drawing code.
+// Derived images are display-only. The source art, crop and saved pixels stay untouched.
+// Only current/transition pictures keep a derived buffer; this never limits source assets.
+let tones = new Map();
+let revealSurface = null;
+
+function surface(w, h) {
+    const c = document.createElement('canvas'); c.width = w; c.height = h; return c;
+}
+
+function variant(image, mode) {
+    const row = tones.get(image);
+    if (row?.mode === mode) return row.canvas;
+    const w = image.naturalWidth || image.width, h = image.naturalHeight || image.height;
+    const c = surface(w, h), g = c.getContext('2d');
+    g.drawImage(image, 0, 0, w, h);
+    if (mode === 'silhouette') {
+        g.globalCompositeOperation = 'source-in'; g.fillStyle = '#171b29'; g.fillRect(0, 0, w, h);
+    } else {
+        // Saturation blending removes colour without readback, including cross-origin art.
+        g.globalCompositeOperation = 'saturation'; g.fillStyle = '#808080'; g.fillRect(0, 0, w, h);
+        g.globalCompositeOperation = 'destination-in'; g.drawImage(image, 0, 0, w, h);
+    }
+    tones.delete(image); tones.set(image, { mode, canvas: c });
+    while (tones.size > 2) tones.delete(tones.keys().next().value);
+    return c;
+}
+
+function drawPicture(g, image, args, cue = null) {
+    if (!cue || cue.reveal === 'none' || cue.progress >= 1) { g.drawImage(image, ...args); return; }
+    let mono, overlay;
+    try {
+        mono = variant(image, cue.reveal);
+        const w = image.naturalWidth || image.width, h = image.naturalHeight || image.height;
+        if (!revealSurface || revealSurface.width !== w || revealSurface.height !== h) revealSurface = surface(w, h);
+        const c = revealSurface, paint = c.getContext('2d');
+        paint.globalCompositeOperation = 'source-over'; paint.clearRect(0, 0, w, h); paint.drawImage(image, 0, 0, w, h);
+        const feather = Math.max(1, w * .2), edge = cue.progress * (w + feather * 2) - feather * 2;
+        const mask = paint.createLinearGradient(edge, 0, edge + feather, 0);
+        mask.addColorStop(0, '#fff'); mask.addColorStop(1, 'rgba(255,255,255,0)');
+        paint.globalCompositeOperation = 'destination-in'; paint.fillStyle = mask; paint.fillRect(0, 0, w, h);
+        paint.globalCompositeOperation = 'source-over'; overlay = c;
+    } catch { g.drawImage(image, ...args); return; }
+    g.drawImage(mono, ...args); g.drawImage(overlay, ...args);
+}
+
+function colorOf(cue, palette) {
+    const color = cue.color || palette?.[2] || '#ad96cc';
+    return /^(?:#[0-9a-f]{6}|rgb\(\d{1,3},\d{1,3},\d{1,3}\))$/iu.test(color) ? color : '#ad96cc';
+}
+
+function drawLight(g, cue, w, h, palette, foreground = false) {
+    if (!cue || cue.light === 'none') return;
+    const t = cue.songTime, x = w * (.52 + .07 * Math.sin(t * .28)), y = h * .38;
+    g.save(); g.globalCompositeOperation = 'screen';
+    g.globalAlpha *= (foreground ? .18 : .42) * (.86 + .14 * Math.sin(t * .9));
+    const glow = g.createRadialGradient(x, y, 0, x, y, Math.max(w, h) * .65);
+    glow.addColorStop(0, colorOf(cue, palette)); glow.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = glow; g.fillRect(0, 0, w, h);
+    if (cue.light === 'rays') {
+        g.translate(x, y); g.rotate(Math.sin(t * .18) * .2); g.globalAlpha *= .45;
+        const length = Math.hypot(w, h);
+        for (let i = 0; i < 3; i++) {
+            g.rotate(.38); g.beginPath(); g.moveTo(-w * .025, -length); g.lineTo(w * .025, -length);
+            g.lineTo(w * .13, length); g.lineTo(-w * .13, length); g.closePath(); g.fill();
+        }
+    }
+    g.restore();
+}
+
+function drawParticles(g, cue, w, h, palette) {
+    if (!cue || cue.particles === 'none') return;
+    g.save(); g.fillStyle = colorOf(cue, palette); g.globalCompositeOperation = 'screen';
+    const scale = Math.min(w, h), t = cue.songTime;
+    // A small local decoration pool, not a generation or saved-asset limit.
+    for (let i = 0; i < 16; i++) {
+        const seed = ((i * 73 + 19) % 101) / 101, side = i % 2 ? .7 : .05;
+        const x = w * (side + seed * .23 + .012 * Math.sin(t * .6 + i));
+        const y = (((i * .137 - t * (.017 + seed * .016)) % 1 + 1) % 1) * h;
+        const radius = scale * (cue.particles === 'spark' ? .004 + seed * .006 : .002 + seed * .003);
+        g.save(); g.globalAlpha *= .2 + .36 * (.5 + .5 * Math.sin(t * 1.7 + i * 2)); g.translate(x, y);
+        g.beginPath();
+        if (cue.particles === 'spark') {
+            for (let n = 0; n < 8; n++) {
+                const a = n * Math.PI / 4, r = n % 2 ? radius * .25 : radius;
+                const xx = Math.cos(a) * r, yy = Math.sin(a) * r; if (!n) g.moveTo(xx, yy); else g.lineTo(xx, yy);
+            }
+            g.closePath();
+        } else g.arc(0, 0, radius, 0, Math.PI * 2);
+        g.fill(); g.restore();
+    }
+    g.restore();
+}
+
+function clear() { tones.clear(); revealSurface = null; }
+
+__m_ui_mvIllustrationCanvas_js.drawPicture = drawPicture;
+__m_ui_mvIllustrationCanvas_js.drawLight = drawLight;
+__m_ui_mvIllustrationCanvas_js.drawParticles = drawParticles;
+__m_ui_mvIllustrationCanvas_js.clear = clear;
 }
 
 function __init_ui_mvImageEditor_js() {
@@ -23782,7 +24124,7 @@ function __init_core_selfUpdater_js() {
 const RELEASE_README = __m_core_releaseNotes_js.RELEASE_README;
 
 const UPDATE_STATE = Symbol.for('heartbeatMemories.selfUpdate');
-const INSTALLED_BUILD = '1.0.36';
+const INSTALLED_BUILD = '1.0.38';
 const PROJECT_REMOTE = 'https://github.com/zaiyebuzuoyouqingdetiangou/tokimemo';
 function updateError(message) { const error = new Error(message); error.userMessage = message; return error; }
 
@@ -40037,7 +40379,7 @@ function publicFailure(error) {
 function baiBaiImagePendingCount() { return pendingGenerations.size; }
 function isBaiBaiImageTargetPending(targetKey) { return !!targetKey && pendingGenerations.has(targetKey); }
 
-async function generateBaiBaiImage(prompt, { signal = null, orientation = 'landscape', characterName = '', promptMetadata = null, onProgress = null, onSettled = null, targetKey = '', seed = 0, singlePrompt = false, preservePrompt = false } = {}) {
+async function generateBaiBaiImage(prompt, { signal = null, orientation = 'landscape', characterName = '', promptMetadata = null, onProgress = null, onSettled = null, targetKey = '', seed = 0, singlePrompt = false, preservePrompt = false, avatarPromptParts = null } = {}) {
     if (signal?.aborted) throw baiBaiImageError('BBI_ABORTED');
     const state = baiBaiImageState();
     if (!state.available) throw baiBaiImageError(state.code);
@@ -40079,6 +40421,19 @@ async function generateBaiBaiImage(prompt, { signal = null, orientation = 'lands
         request.prompt = formatted.prompt; request.nl = formatted.nl;
         if (formatted.characters) request.characters = formatted.characters;
         else delete request.characters;
+    }
+    // Avatar-only, local authoring path. Reuse the documented name/tag channels
+    // when NAI supports them; flat-only and ComfyUI retain the complete prompt.
+    // Optional malformed parts fall back to that prompt, never block generation.
+    if (preservePrompt && singlePrompt && !metadata && state.backend === 'nai' && state.supportsCharacters
+        && typeof avatarPromptParts?.scene === 'string' && avatarPromptParts.scene.trim()
+        && Array.isArray(avatarPromptParts.characters) && avatarPromptParts.characters.length === 2
+        && avatarPromptParts.characters.every(row => typeof row?.name === 'string' && row.name.trim()
+            && typeof row.tag === 'string' && row.tag.trim())) {
+        request.prompt = core_text.normalizeText(avatarPromptParts.scene, Infinity);
+        request.characters = avatarPromptParts.characters.map(({ name, tag }) => ({
+            name: core_text.normalizeText(name, Infinity), tag: core_text.normalizeText(tag, Infinity),
+        }));
     }
     // NAI's character-capable path concatenates prompt and nl. MV has one
     // complete scene already; appearance stays in its character channel.
@@ -40683,12 +41038,12 @@ function invokeSelectedImageProvider(selectedProvider, prompt, context, options)
     throw core_text.safeUserError('请在设置里选择柏宝绘或智绘姬。旧渠道图片仍可查看。', 'RMT_IMAGE_PROVIDER_RETIRED');
 }
 
-async function invokeImageGeneration(prompt, context = core_context.getContext(), { signal = null, provider = null, orientation = 'landscape', respectOrientation = false, aspectRatio = '', characterName = '', promptMetadata = null, onProgress = null, onSettled = null, targetKey = '', seed = 0, singlePrompt = false, preservePrompt = false } = {}) {
+async function invokeImageGeneration(prompt, context = core_context.getContext(), { signal = null, provider = null, orientation = 'landscape', respectOrientation = false, aspectRatio = '', characterName = '', promptMetadata = null, onProgress = null, onSettled = null, targetKey = '', seed = 0, singlePrompt = false, preservePrompt = false, avatarPromptParts = null } = {}) {
     const settings = core_settings.getPluginSettings(context);
     const selectedProvider = provider === chatu8_image.CHATU8_IMAGE_PROVIDER || provider === baibai_image.BAIBAI_IMAGE_PROVIDER
         ? provider : settings.imageGenerationProvider;
     // seed 只交给柏宝绘（公开 API 支持单次 seed）；智绘姬没有公开的单次 seed 接口，不传。
-    const options = { signal, orientation, respectOrientation, aspectRatio, characterName, promptMetadata, onProgress, onSettled, targetKey, singlePrompt, preservePrompt: preservePrompt === true, seed: Number.isInteger(seed) && seed > 0 ? seed : 0 };
+    const options = { signal, orientation, respectOrientation, aspectRatio, characterName, promptMetadata, onProgress, onSettled, targetKey, singlePrompt, preservePrompt: preservePrompt === true, seed: Number.isInteger(seed) && seed > 0 ? seed : 0, ...(avatarPromptParts ? { avatarPromptParts } : {}) };
     try {
         return await invokeSelectedImageProvider(selectedProvider, prompt, context, options);
     } catch (error) {
@@ -90891,8 +91246,10 @@ const mv_cast = __m_extras_mvCast_js;
 const mv_direction = __m_extras_mvDirection_js;
 const mv_still = __m_extras_mvStillPrompt_js;
 const mv_stage = __m_extras_mvStage_js;
+const mv_illustration = __m_extras_mvIllustration_js;
 // 印象曲 MV：同一张分镜表可以做成手书（插件内播放与导出）或视频（提示词交给视频工具）。
 // 写分镜是一次文字请求；首帧由用户逐张手动绘制。数据按聊天、按歌保存，不写入正式档案。
+
 
 
 
@@ -91507,6 +91864,17 @@ function storyboardPrompt(context, memory, song, settings, sectionIndexes = null
             { sectionIndex: sections[1]?.index ?? exampleSection, lyric: sections[1]?.lines?.[1] || exampleLyric, group: 'G1', diff: 'D1', hold: 2, stage: { layout: 'sides', tone: 'accent', entrance: 'pop' } },
         ],
     }) : '';
+    const illustrationExample = settings.output === 'tegaki' && settings.storyType === 'illustration' ? JSON.stringify({
+        wardrobe: JSON.parse(exampleWardrobe),
+        stage: { backgrounds: [{ id: 'S1', label: '主场景', kind: 'image', prompt: 'quiet courtyard, layered foliage and soft light, open space for the subject', colors: ['#263d48', '#ecdfbd', '#b05b49'], motion: 'drift' }] },
+        groups: [{ id: 'G1', composition: '侧身回望的主画面', stageBackground: 'S1', position: 'center', scale: 'medium',
+            characterPrompt: 'three-quarter view, waist-up framing', ...expressionCast('full'), motion: 'push', transition: 'fade',
+            diffs: [{ id: 'D1', label: '回望', imagePrompt: `three-quarter waist-up ${exampleActor}, calm gaze over one shoulder, expressive garment folds, a single full-color still illustration` }] }],
+        frames: [
+            { sectionIndex: exampleSection, lyric: exampleLyric, group: 'G1', diff: 'D1', hold: 1, stage: { layout: 'banner' }, illustration: { reveal: 'ink', seconds: 2.4, light: 'halo', particles: 'dust', movement: 'parallax' } },
+            { sectionIndex: exampleSection, lyric: sections[0]?.lines?.[1] || exampleLyric, group: 'G1', diff: 'D1', hold: 2, stage: { layout: 'banner' }, illustration: { reveal: 'ink', seconds: 2.4, light: 'halo', particles: 'dust', movement: 'parallax' } },
+        ],
+    }) : '';
     return `${generation_prompts.promptSafetyBoundary(context, 'MV 分镜', null, memory)}
 【任务】
 为已写好的角色印象曲「${song.title}」写一张 MV 分镜表。画面风格：${styleOf(settings).name}；比例：${settings.ratio === '9:16' ? '竖屏 9:16' : '横屏 16:9'}。
@@ -91538,7 +91906,7 @@ ${settings.output === 'video' ? `1. 按段落写镜头：${settings.output === '
 ${cast ? '以下仅为结构示例，实际每镜的 cast 按出场人物填写，不局限于示例中的一个人。顶层可加 appearances:[{"participantId":"原始ID","tag":"有依据的稳定外貌","nl":"可空"}]；wardrobe 使用 era 和 characters，不用 char/user 代替 NPC。' : ''}
 ${settings.output === 'video'
         ? `{"wardrobe":${exampleWardrobe},"shots":[{"sectionIndex":0,"lyric":"","plain":"……",${exampleBinding},"shot":"中景：看到上半身","move":"镜头慢慢推近","motion":"push","imagePrompt":"……","videoZh":"……","videoEn":"……"}]}`
-        : expressionExample || `{"wardrobe":${exampleWardrobe},"keyword":"副歌里最有分量的词","motif":{"name":"竹叶","prompt":"english: one decorative element"},"groups":[{"id":"G1","composition":"低机位 · 蹲下喂猫 · 人物在左","position":"left","scale":"full","characterPrompt":"low angle medium shot, subject on the left, warm afternoon light",${exampleBinding},"motion":"still","transition":"cut","link":"下一组如何承接","bgs":[{"id":"B1","label":"午后","prompt":"english: empty scenery only"}],"diffs":[{"id":"D1","label":"伸手前","change":"伸出的手停在半空","imagePrompt":"low angle medium shot, the named character on the left with one hand extended toward the cat, warm afternoon light"}]}],"frames":[{"sectionIndex":0,"lyric":"原句","group":"G1","diff":"D1","bg":"B1","hold":1,"phase":"prep"}]}`}`;
+        : illustrationExample || expressionExample || `{"wardrobe":${exampleWardrobe},"keyword":"副歌里最有分量的词","motif":{"name":"竹叶","prompt":"english: one decorative element"},"groups":[{"id":"G1","composition":"低机位 · 蹲下喂猫 · 人物在左","position":"left","scale":"full","characterPrompt":"low angle medium shot, subject on the left, warm afternoon light",${exampleBinding},"motion":"still","transition":"cut","link":"下一组如何承接","bgs":[{"id":"B1","label":"午后","prompt":"english: empty scenery only"}],"diffs":[{"id":"D1","label":"伸手前","change":"伸出的手停在半空","imagePrompt":"low angle medium shot, the named character on the left with one hand extended toward the cat, warm afternoon light"}]}],"frames":[{"sectionIndex":0,"lyric":"原句","group":"G1","diff":"D1","bg":"B1","hold":1,"phase":"prep"}]}`}`;
 }
 
 // 手书：少数构图，每个构图里几张连续变化的画（闭眼→睁眼→偏头），摊平成镜头。
@@ -91714,7 +92082,7 @@ async function generateStoryboard(songId, settingsInput, castInput = undefined) 
             return { id: songId, createdAt: previous?.createdAt || Date.now(), settings,
                 ...built, stage: built.stage || null,
                 ...(cast ? { cast: mv_cast.generatedMvCast(cast, raw) } : {}),
-                tegaki: { ...(previous?.tegaki || {}), range: settings.range, rangeFrom: settings.rangeFrom, rangeTo: settings.rangeTo, ...(settings.output === 'tegaki' ? { lyric: built.stage ? 'stage' : 'subtitle' } : {}) },
+                tegaki: { ...(previous?.tegaki || {}), range: settings.range, rangeFrom: settings.rangeFrom, rangeTo: settings.rangeTo, ...(settings.output === 'tegaki' ? { lyric: built.stage && settings.storyType !== 'illustration' ? 'stage' : 'subtitle' } : {}) },
                 wardrobe: {
                     era: core_text.normalizeText(raw?.wardrobe?.era, 200) || previous?.wardrobe?.era || '',
                     char: core_text.normalizeText(raw?.wardrobe?.char, 300) || previous?.wardrobe?.char || '',
@@ -92067,14 +92435,14 @@ function tegakiGrammar(sections, keep, charName = '{{char}}', direction = '') {
 - diffs 可以只用一张关键画；只有同机位连续动作、情绪最小差分、明显反差或节奏循环确实需要时才加图，不强求每组闭眼→睁眼。
 - 局部特写写清画面裁切；只拍手就不要为了显示头发、眼睛或服装画出整个人。物件或环境空镜明确不出人，不硬塞主角。
 - bgs 写同一个镜头需要的场景，环境变化确有作用时再增加背景；只描述场景，不混入人物。
-${direction === 'expression' ? '- 主舞台与角色姿势可以跨歌词、跨段落持续使用；主歌与副歌靠表演、文字、明暗与疏密区分，重现的姿势按歌词情绪变奏。' : '- 副歌可以有一个主视觉组，重复的副歌复用它；其余段落尽量用新的构图，尾奏可以回到开头的构图。'}
+${['expression', 'illustration'].includes(direction) ? '- 主舞台与角色姿势可以跨歌词、跨段落持续使用；主歌与副歌靠表演、文字、明暗与疏密区分，重现的姿势按歌词情绪变奏。' : '- 副歌可以有一个主视觉组，重复的副歌复用它；其余段落尽量用新的构图，尾奏可以回到开头的构图。'}
 - link 简写下一镜如何承接，并把对应视线、位置或物件落实在前后两组的画面描述；link 不是可执行动画指令。
 - frames 按实际播放顺序指向 group、diff 和 bg，sectionIndex 是歌曲原段落编号。lyric 使用对应原句（器乐留空）；一句可有多个短镜，也可多句复用一个素材。hold 是段内相对停留权重，短镜可用 0.5，普通用 1，重点停留可更长，不是秒数。已对过的时间由用户打点优先。
 - frame.phase 可写 prep（准备）、action（发生）、settle（收势）或 still（静止）。循环类型可以回到前一个差分；其他类型只在表达需要时重复。不要靠长时间悬停动态姿势代替动作过程。
 - transition 按表达选 cut / fade / flash，motion 用 still / push；不强制混用全部转场或闪白。图像是静态关键姿势，连续动作靠剪辑而非假称视频动画。
 - 多人镜头分别写清每个人的位置、动作与互动对象，人数由出场名单决定。不得为制造差异改人物的设定外貌、衣服、性别或关系。
-${direction === 'expression' ? '- keyword 可以摘取歌词关键词；漂浮 motif 按歌曲需要选用。舞台背景、人物、文字自身已经能形成节奏，不要求每首叠加粒子。' : '- keyword：副歌里一个 2～4 字、最有分量的词。motif：歌词里一个可以漂浮的意象，prompt 用英文只描述这一个小元素。'}
-${direction === 'expression' ? mv_stage.prompt() : ''}
+${['expression', 'illustration'].includes(direction) ? '- keyword 可以摘取歌词关键词；漂浮 motif 按歌曲需要选用。舞台背景、人物、文字自身已经能形成节奏，不要求每首叠加粒子。' : '- keyword：副歌里一个 2～4 字、最有分量的词。motif：歌词里一个可以漂浮的意象，prompt 用英文只描述这一个小元素。'}
+${['expression', 'illustration'].includes(direction) ? mv_stage.prompt() + (direction === 'illustration' ? mv_illustration.prompt() : '') : ''}
 `;
 }
 
@@ -92083,9 +92451,14 @@ function isV2(record) { return record?.version === 2 && Array.isArray(record?.gr
 function buildShots(raw, memory, sectionCount, settings, cast = null, opts = {}) {
     if (cast?.existingGroups) { opts = cast; cast = null; }
     const existingGroups = list(opts.existingGroups);
-    const stagePlan = mv_stage.prepare(settings.storyType === 'expression' ? raw?.stage : null, opts.existingStage);
+    const stagePlan = mv_stage.prepare(['expression', 'illustration'].includes(settings.storyType) ? raw?.stage : null, opts.existingStage);
     const reusesExisting = list(raw?.frames).some(f => existingGroups.some(g => g.id === f?.group));
-    if (settings.output === 'video' || (!list(raw?.groups).some(g => list(g?.diffs).length) && !reusesExisting)) return { shots: normalizeShots(raw, memory, sectionCount, settings, cast) };
+    if (settings.output === 'video' || (!list(raw?.groups).some(g => list(g?.diffs).length) && !reusesExisting)) {
+        const shots = normalizeShots(raw, memory, sectionCount, settings, cast);
+        if (settings.output !== 'video' && settings.storyType === 'illustration')
+            for (const shot of shots) shot.illustration = mv_illustration.normalize();
+        return { shots };
+    }
     const defaults = mv_direction.directionDefaults(settings.storyType);
     const idMap = new Map();
     const groups = [];
@@ -92135,6 +92508,7 @@ function buildShots(raw, memory, sectionCount, settings, cast = null, opts = {})
                 lyric: core_text.normalizeText(f?.lyric, 200), plain: `${old.composition || old.id} · ${diff.label}`,
                 group: old.id, diff: diff.id, bg: diff.bg || 'B1', who: old.who,
                 ...(stage ? { stage } : {}),
+                ...(settings.storyType === 'illustration' ? { illustration: mv_illustration.normalize(f?.illustration) } : {}),
                 ...(old.cast ? { cast: old.cast, ...(old.castUnresolved ? { castUnresolved: true } : {}) } : {}),
                 hold: Math.min(3, Math.max(1, Math.round(Number(f?.hold) || 1))),
                 ...(settings.storyType && Number.isFinite(Number(f?.hold)) && Number(f.hold) > 0 ? { timingWeight: Number(f.hold) } : {}),
@@ -92158,6 +92532,7 @@ function buildShots(raw, memory, sectionCount, settings, cast = null, opts = {})
             plain: `${group.composition || group.id} · ${diff.label}`,
             group: ref.id, diff: diff.id, bg: bgRow.id, who: group.who,
             ...(stage ? { stage } : {}),
+            ...(settings.storyType === 'illustration' ? { illustration: mv_illustration.normalize(f?.illustration) } : {}),
             ...(group.cast ? { cast: group.cast, ...(group.castUnresolved ? { castUnresolved: true } : {}) } : {}),
             hold: Math.min(3, Math.max(1, Math.round(Number(f?.hold) || 1))),
             ...(settings.storyType && Number.isFinite(Number(f?.hold)) && Number(f.hold) > 0 ? { timingWeight: Number(f.hold) } : {}),
@@ -92406,6 +92781,16 @@ function patchStageCue(songId, shotId, patch) {
     });
 }
 
+function patchIllustration(songId, shotId, patch) {
+    const context = core_context.currentCharacterGuard();
+    return writeMv(scopeOf(context), songId, current => {
+        const shot = list(current?.shots).find(s => s.id === shotId);
+        if (shot?.illustration)
+            shot.illustration = mv_illustration.normalize({ ...shot.illustration, ...patch });
+        return current;
+    });
+}
+
 
 // 逐句对时间用的歌词清单：按段落顺序列出（只列当前截取范围内的段落）。
 function syncLines(record, song) {
@@ -92506,6 +92891,7 @@ __m_extras_mv_js.captureAssetEdit = captureAssetEdit;
 __m_extras_mv_js.setGroupLayer = setGroupLayer;
 __m_extras_mv_js.patchStageBackground = patchStageBackground;
 __m_extras_mv_js.patchStageCue = patchStageCue;
+__m_extras_mv_js.patchIllustration = patchIllustration;
 __m_extras_mv_js.syncLines = syncLines;
 __m_extras_mv_js.resetGroupSeed = resetGroupSeed;
 __m_extras_mv_js.firstChunk = firstChunk;
@@ -92597,6 +92983,8 @@ const archive_repository = __m_archive_repository_js;
 const mv_cast = __m_extras_mvCast_js;
 const mv_direction = __m_extras_mvDirection_js;
 const mv_stage = __m_extras_mvStage_js;
+const mv_illustration = __m_extras_mvIllustration_js;
+const illustration_canvas = __m_ui_mvIllustrationCanvas_js;
 const stage_canvas = __m_ui_mvStageCanvas_js;
 const cast_controls = __m_ui_mvCastControls_js;
 const participant_picker = __m_ui_participantPicker_js;
@@ -93613,6 +94001,18 @@ function stageShotControls(record, shot) {
       <label class="rmt-mv-check"><input type="checkbox" data-rmt-mv-stage-cue="shadow" data-shot="${esc(shot.id)}"${cue.shadow ? ' checked' : ''}>人物剪影</label></details>`;
 }
 
+function illustrationControls(record, shot) {
+    if (!shot.illustration) return '';
+    const cue = mv_illustration.normalize(shot.illustration);
+    const select = (field, label, choices) => `<label class="rmt-mv-look"><span>${label}</span><select data-rmt-mv-illustration="${field}" data-shot="${esc(shot.id)}">${Object.entries(choices).map(([id, name]) => `<option value="${id}"${cue[field] === id ? ' selected' : ''}>${name}</option>`).join('')}</select></label>`;
+    return `<details><summary>动态插画</summary>
+      ${select('reveal', '同图显影', mv_illustration.REVEALS)}
+      <label class="rmt-mv-look"><span>显影时长（秒）</span><input type="number" min="0.1" step="0.1" inputmode="decimal" value="${cue.seconds}" data-rmt-mv-illustration="seconds" data-shot="${esc(shot.id)}"></label>
+      ${select('movement', '图层运动', mv_illustration.MOVEMENTS)}${select('light', '光效', mv_illustration.LIGHTS)}${select('particles', '粒子', mv_illustration.PARTICLES)}
+      <label class="rmt-mv-look"><span>光效颜色</span><input type="text" value="${esc(cue.color)}" placeholder="留空跟随背景，或填 #RRGGBB" data-rmt-mv-illustration="color" data-shot="${esc(shot.id)}"></label>
+      </details>`;
+}
+
 function markedTime(value) { return value !== null && value !== undefined && value !== '' && Number.isFinite(Number(value)) && Number(value) >= 0; }
 
 function editorTimingTarget(record, song) {
@@ -93730,7 +94130,7 @@ function editorShotPanel(song, record, sel, selIndex) {
     return sel ? `<div class="rmt-mve-panel-scroll" data-rmt-mv-scroll="shots"><div class="rmt-x-row-head"><b>第 ${selIndex + 1} 镜</b><span>${mv.formatTime(sel.start, true)}–${mv.formatTime(sel.end, true)}</span></div><p class="rmt-x-note rmt-mve-lyric">${esc(sel.shot.lyric || sel.shot.plain || '')}</p>
       <div class="rmt-mve-image-actions">${btn(shared ? 'edit-asset' : 'edit-frame', shared ? '编辑共享图片' : '编辑本镜图片', { id: shared ? assetKey : sel.shot.id, cls: 'rmt-x-primary', extra: ' aria-label="图片编辑 · 选单格 · 修边"' })}${uploadLabel(sel.shot.id, '换图')}</div><small class="rmt-mve-image-note">${shared ? `用于 ${linked} 镜 · 修改会同步关联镜头` : '仅当前镜图片'} · ${mv.shotImage(record, sel.shot)?.editMode === 'cutout' ? '透明图' : '保留原背景'}</small>
       <details><summary>镜头运动与切换</summary><div><b>镜头运动</b><div class="rmt-mv-grid2">${seg('set-motion', mv.MV_MOTIONS, sel.shot.motion)}</div><b>切到下一镜</b><div class="rmt-x-segs">${seg('set-cut', mv.MV_CUTS, sel.shot.cut || 'fade')}</div></div></details>
-      ${stageShotControls(record, sel.shot)}<details><summary>图片与生成</summary><div>${shared ? btn('cutout-asset', '一键抠图', { id: assetKey }) : ''}${asset ? btn('edit-prompt-asset', '构图素材与提示词', { id: assetKey }) : ''}${btn('draw', mv.isFrameDrawing(mv.mvScope(ctx()), view.songId, sel.shot.id) ? '正在画…' : hasImg(sel.shot) ? '重画这一镜' : '画这一镜', { id: sel.shot.id, disabled: mv.isFrameDrawing(mv.mvScope(ctx()), view.songId, sel.shot.id) })}${btn('editor-drawer', '共享背景与装饰', { id: 'materials' })}${btn('go-board', '补充分镜与图片')}</div></details></div>
+      ${illustrationControls(record, sel.shot)}${stageShotControls(record, sel.shot)}<details><summary>图片与生成</summary><div>${shared ? btn('cutout-asset', '一键抠图', { id: assetKey }) : ''}${asset ? btn('edit-prompt-asset', '构图素材与提示词', { id: assetKey }) : ''}${btn('draw', mv.isFrameDrawing(mv.mvScope(ctx()), view.songId, sel.shot.id) ? '正在画…' : hasImg(sel.shot) ? '重画这一镜' : '画这一镜', { id: sel.shot.id, disabled: mv.isFrameDrawing(mv.mvScope(ctx()), view.songId, sel.shot.id) })}${btn('editor-drawer', '共享背景与装饰', { id: 'materials' })}${btn('go-board', '补充分镜与图片')}</div></details></div>
       <footer class="rmt-mve-dock">${btn('editor-step', '上一镜', { id: '-1', disabled: selIndex <= 0 || !!player.exporting })}<small>${selIndex + 1} / ${mv.shotTimeline(record, song).rows.length}</small>${btn('editor-step', '下一镜', { id: '1', disabled: selIndex + 1 >= mv.shotTimeline(record, song).rows.length || !!player.exporting })}</footer>` : '';
 }
 
@@ -93880,10 +94280,10 @@ function currentTime() {
     return player.playing ? (performance.now() - player.clockStart) / 1000 + player.clockOffset : player.clockOffset;
 }
 
-function drawCover(g, img, w, h, scale, dx, dy) {
+function drawCover(g, img, w, h, scale, dx, dy, illustration = null) {
     const r = Math.max(w / img.naturalWidth, h / img.naturalHeight) * scale;
     const iw = img.naturalWidth * r, ih = img.naturalHeight * r;
-    g.drawImage(img, (w - iw) / 2 + dx, (h - ih) / 2 + dy, iw, ih);
+    illustration_canvas.drawPicture(g, img, [(w - iw) / 2 + dx, (h - ih) / 2 + dy, iw, ih], illustration);
 }
 
 let frameCtx = { rhythm: 'line', beat: 1.3 };
@@ -93905,7 +94305,7 @@ function groupSpan(rows, index) {
     return { start: rows[a].start, end: rows[b].end };
 }
 
-function drawShot(g, row, rows, index, t, w, h) {
+function drawShot(g, row, rows, index, t, w, h, illustration = null) {
     let img = null, sourceShot = row.shot;
     for (let i = index; i >= 0 && !img; i -= 1) {
         sourceShot = rows[i].shot; img = imageFor(imgUrl(sourceShot));
@@ -93919,8 +94319,8 @@ function drawShot(g, row, rows, index, t, w, h) {
         if (stage_canvas.isDetailInsert(null, null, sourceShot)) {
             drawFittedInsert(g, img, cropFor(img.src, img, mv.shotImage(view.cache?.record, sourceShot)?.split).rect,
                 w, h, motion === 'push' ? (1 + 0.05 * p) / 1.05 : 1,
-                mv.shotImage(view.cache?.record, sourceShot)?.editMode !== 'cutout');
-        } else drawCover(g, img, w, h, motion === 'push' ? 1 + 0.05 * p : 1, 0, 0);
+                mv.shotImage(view.cache?.record, sourceShot)?.editMode !== 'cutout', illustration);
+        } else drawCover(g, img, w, h, motion === 'push' ? 1 + 0.05 * p : 1, 0, 0, illustration);
     } else {
         g.fillStyle = '#8b95a3'; g.font = `${Math.round(w * 0.04)}px sans-serif`; g.textAlign = 'center';
         wrap(g, row.shot.plain, w / 2, h / 2, w * 0.8, w * 0.055);
@@ -93971,15 +94371,18 @@ function renderFrame(canvas, record, song, t) {
     let index = rows.findIndex(r => t >= r.start && t < r.end);
     if (index < 0) index = t < rows[0].start ? 0 : rows.length - 1;
     const row = rows[index];
-    drawShot(g, row, rows, index, t, w, h);
+    const illustration = mv_illustration.state(record, rows, index, t);
+    drawShot(g, row, rows, index, t, w, h, illustration);
     const prev = rows[index - 1];
     const since = t - row.start;
     const fadeDuration = transitionDuration(row, 0.45), flashDuration = transitionDuration(row, 0.3);
     if (prev && since >= 0 && (prev.shot.cut || 'fade') === 'fade' && since < fadeDuration) {
-        g.save(); g.globalAlpha = 1 - since / fadeDuration; drawShot(g, prev, rows, index - 1, t, w, h); g.restore();
+        g.save(); g.globalAlpha = 1 - since / fadeDuration; drawShot(g, prev, rows, index - 1, t, w, h, mv_illustration.state(record, rows, index - 1, t)); g.restore();
     } else if (prev && since >= 0 && prev.shot.cut === 'flash' && since < flashDuration) {
         g.save(); g.globalAlpha = 1 - since / flashDuration; g.fillStyle = '#fff'; g.fillRect(0, 0, w, h); g.restore();
     }
+    illustration_canvas.drawLight(g, illustration, w, h, coverPalette(song), true);
+    illustration_canvas.drawParticles(g, illustration, w, h, coverPalette(song));
     const beat = beatVariant(row, t);
     if (beat) {
         const pulse = Math.max(0, 1 - beat.since / (frameCtx.beat * 0.6));
@@ -94124,7 +94527,7 @@ function disposeMv() {
     cancelMusicLink();
     for (const [key, token] of audioLoads) if (token.videoSource) { token.cancel?.(); audioTried.delete(key); }
     assetEditor?.dispose(); assetEditor = null; editSequence++;
-    stageShadows.clear(); characterSprites.clear(); thumbnailPreviews.clear();
+    stageShadows.clear(); characterSprites.clear(); thumbnailPreviews.clear(); illustration_canvas.clear();
     motifSprites.clear(); palettes.clear();
     if (imageRefreshTimer) clearTimeout(imageRefreshTimer);
     imageRefreshTimer = 0; imageLayoutPending = false;
@@ -94689,6 +95092,14 @@ function handleMvClick(event) {
 
 function handleMvChange(event) {
     const input = event.target;
+    if (input?.matches?.('[data-rmt-mv-illustration]')) {
+        try {
+            const updated = mv.patchIllustration(view.songId, input.dataset.shot, { [input.dataset.rmtMvIllustration]: input.value });
+            if (view.cache) view.cache.record = updated;
+            drawNow();
+        } catch (error) { toastError(error); }
+        return true;
+    }
     if (input?.matches?.('[data-rmt-mv-music-link]')) { view.musicLinkInput = input.value; return true; }
     if (input?.matches?.('[data-rmt-mv-seek]')) { if (!player.exporting && view.cache?.record) seekEditor(input.value); return true; }
     if (input?.matches?.('[data-rmt-mv-editor-time]')) { try { if (String(input.value).trim() && !player.exporting) saveEditorTime(Number(input.value)); } catch (error) { toastError(error); } return true; }
@@ -95035,11 +95446,11 @@ function cropFor(url, img, override) {
     return { split, rect };
 }
 
-function drawCropCover(g, img, rect, w, h, scale = 1) {
+function drawCropCover(g, img, rect, w, h, scale = 1, illustration = null) {
     const [sx, sy, sw, sh] = rect;
     const r = Math.max(w / sw, h / sh) * scale;
     const dw = sw * r, dh = sh * r;
-    g.drawImage(img, sx, sy, sw, sh, (w - dw) / 2, (h - dh) / 2, dw, dh);
+    illustration_canvas.drawPicture(g, img, [sx, sy, sw, sh, (w - dw) / 2, (h - dh) / 2, dw, dh], illustration);
 }
 
 // All foreground paths use this for an already composed local insert, including
@@ -95067,7 +95478,7 @@ function fittedBackdrop(img, rect) {
     return backdrop;
 }
 
-function drawFittedInsert(g, img, rect, w, h, zoom = 1, useBackdrop = false) {
+function drawFittedInsert(g, img, rect, w, h, zoom = 1, useBackdrop = false, illustration = null) {
     const [sx, sy, sw, sh] = rect;
     const scale = Math.min(w / sw, h / sh) * Math.min(1, Math.max(0.01, zoom));
     const width = sw * scale, height = sh * scale, x = (w - width) / 2, y = (h - height) / 2;
@@ -95078,7 +95489,7 @@ function drawFittedInsert(g, img, rect, w, h, zoom = 1, useBackdrop = false) {
             g.drawImage(backdrop, 0, 0, w, h); g.restore();
         }
     }
-    g.drawImage(img, sx, sy, sw, sh, x, y, width, height);
+    illustration_canvas.drawPicture(g, img, [sx, sy, sw, sh, x, y, width, height], illustration);
     return { x, y, width, height };
 }
 
@@ -95180,12 +95591,14 @@ function drawSceneText(g, info, record, w, h, pass) {
 function drawSceneV2(g, record, song, rows, index, t, w, h, showText = true) {
     const row = rows[index];
     const group = record.groups.find(x => x.id === row.shot.group);
-    const stageRows = record.stage && Array.isArray(record.clipSectionIndexes) ? mv.shotTimeline(record, song).rows : rows;
+    const stageRows = (record.stage || row.shot.illustration) && Array.isArray(record.clipSectionIndexes) ? mv.shotTimeline(record, song).rows : rows;
     const stageIndex = stageRows === rows ? index : stageRows.findIndex(r => r.shot.id === row.shot.id);
     const stage = mv_stage.state(record, stageRows, stageIndex, t);
-    const info = { stage, group, subject: null, opaque: false };
+    const illustration = mv_illustration.state(record, stageRows, stageIndex, t);
+    const palette = stage?.background.colors || coverPalette(song);
+    const info = { stage, group, illustration, subject: null, opaque: false };
     g.fillStyle = coverPalette(song)[0]; g.fillRect(0, 0, w, h);
-    const span = stage ? groupSpan(stageRows, stageIndex) : groupSpan(rows, index);
+    const span = stage || illustration ? groupSpan(stageRows, stageIndex) : groupSpan(rows, index);
     const p = Math.min(1, Math.max(0, (t - span.start) / Math.max(0.1, span.end - span.start)));
     const push = group?.motion === 'push' ? 1 + 0.03 * p : 1;
     const diff = group?.diffs.find(d => d.id === row.shot.diff);
@@ -95194,7 +95607,8 @@ function drawSceneV2(g, record, song, rows, index, t, w, h, showText = true) {
     const ownFull = ownImage && (!stage || ownImage.editMode === 'full' || (group?.layer === 'full' && ownImage.editMode !== 'cutout'));
     if (!detail && ownFull) {
         const own = imageFor(assetImageUrl(ownImage));
-        if (own) drawCover(g, own, w, h, push, 0, 0);
+        if (own) drawCover(g, own, w, h, push, 0, 0, illustration);
+        illustration_canvas.drawLight(g, illustration, w, h, palette, true);
         info.opaque = true; return info;
     }
     const bgRow = (group?.bgs || []).find(b => b.id === (row.shot.bg || 'B1')) || (group?.bgs || [])[0];
@@ -95219,15 +95633,18 @@ function drawSceneV2(g, record, song, rows, index, t, w, h, showText = true) {
         // an opaque saved picture or an unprocessed matte.
         info.opaque = true;
         const useBackdrop = !person && art?.editMode !== 'cutout' && !stage && !mv.hasAssetImage(bgRow?.image || group?.bg);
-        info.subject = drawFittedInsert(g, source, rect, w, h, zoom, useBackdrop);
+        info.subject = drawFittedInsert(g, source, rect, w, h, zoom, useBackdrop, illustration);
+        illustration_canvas.drawLight(g, illustration, w, h, palette, true);
         return info;
     }
     if (raw && !person) {
-        drawCropCover(g, raw, cropFor(url, raw, override).rect, w, h, push);
+        drawCropCover(g, raw, cropFor(url, raw, override).rect, w, h, push, illustration);
+        illustration_canvas.drawLight(g, illustration, w, h, palette, true);
         if (!stage) { g.save(); g.globalCompositeOperation = 'soft-light'; g.globalAlpha = 0.1; g.fillStyle = coverPalette(song)[1]; g.fillRect(0, 0, w, h); g.restore(); }
         info.opaque = true; return info;
     }
     if (person) {
+        illustration_canvas.drawLight(g, illustration, w, h, palette);
         const pw = person.naturalWidth || person.width, ph = person.naturalHeight || person.height;
         const placement = stage_canvas.foregroundPlacement(sprite.bounds, pw, ph, group, w, h);
         const breathe = stage || placement.attached ? 1 : 1 + 0.004 * Math.sin(t * Math.PI * 2 / 3.4);
@@ -95238,6 +95655,8 @@ function drawSceneV2(g, record, song, rows, index, t, w, h, showText = true) {
         info.subject = { ...placement.subject, x: placement.subject.x - reserve - slide, width: placement.subject.width + reserve * 2 + slide };
         if (showText) drawSceneText(g, info, record, w, h, 'back');
         g.save();
+        if (illustration?.movement === 'parallax' && !placement.attachedX)
+            g.translate(Math.sin(illustration.time * .38) * w * .006, 0);
         if (stage?.active) {
             const motion = stage_canvas.poseTransform(stage, w, h);
             g.translate(placement.attachedX ? 0 : motion.x, motion.y); g.translate(placement.anchorX, placement.foot); g.scale(motion.scale, motion.scale); g.translate(-placement.anchorX, -placement.foot);
@@ -95253,7 +95672,7 @@ function drawSceneV2(g, record, song, rows, index, t, w, h, showText = true) {
         } else if (stage?.cue.shadow) {
             g.save(); g.globalAlpha *= .16; g.drawImage(silhouette(sprite.key, person), dx - w * .006, dy, dw, dh); g.restore();
         }
-        g.drawImage(person, dx, dy, dw, dh); g.restore();
+        illustration_canvas.drawPicture(g, person, [dx, dy, dw, dh], illustration); g.restore();
     } else if (showText) drawSceneText(g, info, record, w, h, 'back');
     if (!stage) { g.save(); g.globalCompositeOperation = 'soft-light'; g.globalAlpha = 0.14; g.fillStyle = coverPalette(song)[1]; g.fillRect(0, 0, w, h); g.restore(); }
     return info;
@@ -95344,6 +95763,7 @@ function renderFrameV2(canvas, record, song, t) {
         if (prev.shot.cut === 'fade' && since < fadeDuration) { g.save(); g.globalAlpha = 1 - since / fadeDuration; drawSceneV2(g, record, song, rows, index - 1, t, w, h, false); g.restore(); }
         else if (prev.shot.cut === 'flash' && since < flashDuration) { g.save(); g.globalAlpha = 0.85 * (1 - since / flashDuration); g.fillStyle = '#fff'; g.fillRect(0, 0, w, h); g.restore(); }
     }
+    illustration_canvas.drawParticles(g, stageInfo.illustration, w, h, stageInfo.stage?.background.colors || coverPalette(song));
     drawSceneText(g, stageInfo, record, w, h, 'front');
     if (since >= 0 && topt.showMotif) drawMotif(g, record, song, row, t, w, h);
     const palette = coverPalette(song);
@@ -95556,6 +95976,7 @@ __init_extras_coupleAvatarStyles_js();
 __init_extras_mvAudioSource_js();
 __init_extras_mvCast_js();
 __init_extras_mvDirection_js();
+__init_extras_mvIllustration_js();
 __init_extras_mvImageTools_js();
 __init_extras_mvMusicLink_js();
 __init_extras_mvStage_js();
@@ -95567,6 +95988,7 @@ __init_ui_mvCastControls_js();
 __init_ui_mvEditorDialog_js();
 __init_ui_mvEditorLayout_js();
 __init_ui_mvEditorUi_js();
+__init_ui_mvIllustrationCanvas_js();
 __init_ui_mvImageEditor_js();
 __init_ui_mvImageEditorUi_js();
 __init_ui_mvStageCanvas_js();

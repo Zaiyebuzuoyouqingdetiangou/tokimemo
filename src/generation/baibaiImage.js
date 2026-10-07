@@ -67,7 +67,7 @@ function publicFailure(error) {
 export function baiBaiImagePendingCount() { return pendingGenerations.size; }
 export function isBaiBaiImageTargetPending(targetKey) { return !!targetKey && pendingGenerations.has(targetKey); }
 
-export async function generateBaiBaiImage(prompt, { signal = null, orientation = 'landscape', characterName = '', promptMetadata = null, onProgress = null, onSettled = null, targetKey = '', seed = 0, singlePrompt = false, preservePrompt = false } = {}) {
+export async function generateBaiBaiImage(prompt, { signal = null, orientation = 'landscape', characterName = '', promptMetadata = null, onProgress = null, onSettled = null, targetKey = '', seed = 0, singlePrompt = false, preservePrompt = false, avatarPromptParts = null } = {}) {
     if (signal?.aborted) throw baiBaiImageError('BBI_ABORTED');
     const state = baiBaiImageState();
     if (!state.available) throw baiBaiImageError(state.code);
@@ -109,6 +109,19 @@ export async function generateBaiBaiImage(prompt, { signal = null, orientation =
         request.prompt = formatted.prompt; request.nl = formatted.nl;
         if (formatted.characters) request.characters = formatted.characters;
         else delete request.characters;
+    }
+    // Avatar-only, local authoring path. Reuse the documented name/tag channels
+    // when NAI supports them; flat-only and ComfyUI retain the complete prompt.
+    // Optional malformed parts fall back to that prompt, never block generation.
+    if (preservePrompt && singlePrompt && !metadata && state.backend === 'nai' && state.supportsCharacters
+        && typeof avatarPromptParts?.scene === 'string' && avatarPromptParts.scene.trim()
+        && Array.isArray(avatarPromptParts.characters) && avatarPromptParts.characters.length === 2
+        && avatarPromptParts.characters.every(row => typeof row?.name === 'string' && row.name.trim()
+            && typeof row.tag === 'string' && row.tag.trim())) {
+        request.prompt = core_text.normalizeText(avatarPromptParts.scene, Infinity);
+        request.characters = avatarPromptParts.characters.map(({ name, tag }) => ({
+            name: core_text.normalizeText(name, Infinity), tag: core_text.normalizeText(tag, Infinity),
+        }));
     }
     // NAI's character-capable path concatenates prompt and nl. MV has one
     // complete scene already; appearance stays in its character channel.
