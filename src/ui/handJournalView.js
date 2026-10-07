@@ -219,7 +219,7 @@ export async function openHandJournal() {
             if(button.hasAttribute('data-journal-image')){
                 const id=button.getAttribute('data-journal-image');const page=pages.find(item=>item.id===id);if(!page)return;
                 setBusy(true);report('正在画长图…');
-                const made=await journal_image.renderJournalPageImage(page,pages.indexOf(page),{renderIllustration:(value,key)=>letterArt.renderLetterIllustration(value,{idPrefix:`journal-image-${key}`,label:page.title})});
+                const made=await journal_image.renderJournalPageImage(page,pages.indexOf(page),{renderIllustration:(value,key)=>letterArt.renderLetterIllustrationSvg(value,{idPrefix:`journal-image-${key}`,label:page.title})});
                 if(!current())return;closeExport();
                 const name=`手帐-${(page.title||'一页').replace(/[\\/:*?"<>|]/g,'').slice(0,40)||'一页'}.png`;
                 const file=typeof File==='function'?new File([made.blob],name,{type:'image/png'}):null;

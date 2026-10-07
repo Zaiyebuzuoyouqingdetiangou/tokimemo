@@ -374,7 +374,7 @@ async function generateConfiguredJsonOperation(prompt, options = {}) {
             throw error;
         }
     };
-    let result, responsePayload, releaseProviderPermit = null;
+    let result, responsePayload, completeInboxProse = false, releaseProviderPermit = null;
     const lifecycleController = new AbortController();
     const externalSignal = options.signal || null;
     const forwardAbort = () => {
@@ -433,7 +433,9 @@ async function generateConfiguredJsonOperation(prompt, options = {}) {
         core_taskTrace.markStage(taskTrace, 'response');
         core_taskTrace.recordResponse(taskTrace, core_independentApi.responseShapeSummary(result));
         // Observe error envelopes (including HTTP-200 429s) before draining the queue.
-        responsePayload = core_independentApi.assertIndependentResponsePayload(result);
+        completeInboxProse = generation_jsonParser.hasCompleteInboxProseBeforeArt(
+            core_independentApi.extractIndependentResponseContent(result), options);
+        responsePayload = core_independentApi.assertIndependentResponsePayload(result, { allowOptionalInboxArt: completeInboxProse });
     } catch (error) {
         const shape = core_independentApi.transportFailureSummary(error);
         if (shape) core_taskTrace.recordResponse(taskTrace, shape);
@@ -448,10 +450,14 @@ async function generateConfiguredJsonOperation(prompt, options = {}) {
     assertRequestCurrent();
     let parsed;
     core_taskTrace.beginStage(taskTrace, 'parse');
-    try { core_independentApi.assertManualStreamComplete(result);
+    try {
+        // A cut-off optional SVG does not undo already complete mail. Keep the
+        // real transport diagnostics; only consume its independently closed prose.
+        if (!completeInboxProse) core_independentApi.assertManualStreamComplete(result);
         parsed = generation_jsonParser.extractJson(responsePayload, {
         reasoning: result?.reasoning || '',
         mode: options.mode,
+        mergedInboxIllustrations: options.mergedInboxIllustrations === true,
         requestMaxTokens: responseLength,
         configuredMaxTokens: settings.maxTokens,
     }); } catch (error) {

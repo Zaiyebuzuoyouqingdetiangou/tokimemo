@@ -69,12 +69,12 @@ export function sanitizeImageGenerationSlashPrompt(value) {
 }
 
 const IMAGE_FALLBACK_BLOCKED = new Set([
-    'BBI_ABORTED', 'BBI_SAVE_FAILED', 'BBI_BUSY', 'BBI_TARGET_BUSY',
-    'CH8_ABORTED', 'CH8_SAVE_FAILED', 'CH8_BUSY', 'CH8_TARGET_BUSY',
+    'BBI_ABORTED', 'BBI_SAVE_FAILED', 'BBI_TARGET_BUSY',
+    'CH8_ABORTED', 'CH8_SAVE_FAILED', 'CH8_TARGET_BUSY',
 ]);
 
 function invokeSelectedImageProvider(selectedProvider, prompt, context, options) {
-    const visual = sanitizeCgVisualText(prompt);
+    const visual = sanitizeCgVisualText(prompt, options.preservePrompt === true ? Infinity : undefined);
     if (selectedProvider === chatu8_image.CHATU8_IMAGE_PROVIDER) {
         const { seed: _seed, ...rest } = options;
         return chatu8_image.generateChatu8Image(visual, { ...rest, context });
@@ -87,12 +87,12 @@ function invokeSelectedImageProvider(selectedProvider, prompt, context, options)
     throw core_text.safeUserError('请在设置里选择柏宝绘或智绘姬。旧渠道图片仍可查看。', 'RMT_IMAGE_PROVIDER_RETIRED');
 }
 
-export async function invokeImageGeneration(prompt, context = core_context.getContext(), { signal = null, provider = null, orientation = 'landscape', respectOrientation = false, aspectRatio = '', characterName = '', promptMetadata = null, onProgress = null, onSettled = null, targetKey = '', seed = 0, singlePrompt = false } = {}) {
+export async function invokeImageGeneration(prompt, context = core_context.getContext(), { signal = null, provider = null, orientation = 'landscape', respectOrientation = false, aspectRatio = '', characterName = '', promptMetadata = null, onProgress = null, onSettled = null, targetKey = '', seed = 0, singlePrompt = false, preservePrompt = false } = {}) {
     const settings = core_settings.getPluginSettings(context);
     const selectedProvider = provider === chatu8_image.CHATU8_IMAGE_PROVIDER || provider === baibai_image.BAIBAI_IMAGE_PROVIDER
         ? provider : settings.imageGenerationProvider;
     // seed 只交给柏宝绘（公开 API 支持单次 seed）；智绘姬没有公开的单次 seed 接口，不传。
-    const options = { signal, orientation, respectOrientation, aspectRatio, characterName, promptMetadata, onProgress, onSettled, targetKey, singlePrompt, seed: Number.isInteger(seed) && seed > 0 ? seed : 0 };
+    const options = { signal, orientation, respectOrientation, aspectRatio, characterName, promptMetadata, onProgress, onSettled, targetKey, singlePrompt, preservePrompt: preservePrompt === true, seed: Number.isInteger(seed) && seed > 0 ? seed : 0 };
     try {
         return await invokeSelectedImageProvider(selectedProvider, prompt, context, options);
     } catch (error) {
@@ -186,10 +186,6 @@ export function cgImageStartBlockedReason(mode, itemId, context = core_context.c
     const reservation = cgImageReservationKey(mode, itemId, context);
     if (runtimeState.activeCgImageTasks.has(key) || baibai_image.isBaiBaiImageTargetPending(reservation) || chatu8_image.isChatu8ImageTargetPending(reservation)) {
         return '这张图片的绘制请求还未结束，请先等待，避免重复出图。';
-    }
-    const pending = baibai_image.baiBaiImagePendingCount() + chatu8_image.chatu8ImagePendingCount();
-    if (runtimeState.activeCgImageTasks.size >= baibai_image.BAIBAI_IMAGE_CONCURRENCY || pending >= baibai_image.BAIBAI_IMAGE_CONCURRENCY) {
-        return '已有两张图片正在绘制，请等其中一张完成后再开始。';
     }
     return '';
 }
@@ -414,7 +410,7 @@ export function updateCgImageProgress(taskKey, progress) {
     if (!task || task.controller.signal.aborted) return;
     if (progress?.providerLabel) task.imageProviderLabel = progress.providerLabel;
     const who = task.imageProviderLabel || '生图';
-    const labels = { queued: `等待${who}出图…`, generating: `${who}正在绘制…`,
+    const labels = { queued: `等待${who}出图…`, generating: `${who}正在绘制…`, waiting: `仍在等待${who}返回图片…`,
         'queued-remote': '在队列中等待…', retrying: `${who}正在限流等待…`, saving: '图片已生成，正在保存…' };
     const label = labels[progress?.phase];
     if (!label) return;

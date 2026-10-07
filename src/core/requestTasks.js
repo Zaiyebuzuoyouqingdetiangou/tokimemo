@@ -679,10 +679,12 @@ export function activeLogicalGenerationCount() {
     return activeLogicalGenerationKeys().size;
 }
 
-export function canStartGenerationTask(key) {
+export function canStartGenerationTask(key, { ignoreConcurrencyLimit = false } = {}) {
     if (runtimeState.busy) return false;
     const taskKey = String(key || '');
     if (isGenerationTaskRunning(taskKey) || runtimeState.activeModeBuildScopes.has(taskKey)) return false;
+    // 外部生图渠道已有自己的调度；仍保留独占操作与同任务去重。
+    if (ignoreConcurrencyLimit === true) return true;
     const keys = activeLogicalGenerationKeys();
     keys.delete(taskKey);
     const bulkReservation = advBulkReservationKeyForTask(taskKey);

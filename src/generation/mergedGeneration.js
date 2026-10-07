@@ -602,6 +602,7 @@ async function mergedReply(prompt, rows, context, envelope, trace) {
     const body = retained ? JSON.parse(retained.handle.journal.frozenInputs['merged:reply'])
         : await generation_client.requestValidatedSegment(prompt, '一起生成 · 同一次回复交回各页…', {
             context, contextEnvelope: envelope, origin: primary.origin, mode: primary.mode, background: true, taskTrace: trace,
+            mergedInboxIllustrations: rows.some(row => row.mode === core_constants.MODE.INBOX),
             enforceGeneratedPhrasePolicy: true, participantPromptApplied: true,
             taskKey: core_requestCoordinator.generationTaskKeyForMode(primary.mode, context),
         }, value => {

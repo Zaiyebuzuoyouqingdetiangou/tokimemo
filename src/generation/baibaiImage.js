@@ -5,8 +5,7 @@ import * as core_text from '../core/text.js';
 import * as appearance from './cgAppearance.js';
 
 export const BAIBAI_IMAGE_PROVIDER = 'baibai-image';
-export const BAIBAI_IMAGE_TIMEOUT_MS = 300000;
-export const BAIBAI_IMAGE_CONCURRENCY = 2;
+export const BAIBAI_IMAGE_WAIT_NOTICE_MS = 300000;
 // Keep a cancelled provider call reserved until its promise really settles.
 // Otherwise an uncooperative backend could be charged twice for the same item.
 const pendingGenerations = new Map();
@@ -20,9 +19,7 @@ const MESSAGES = Object.freeze({
     BBI_RATE_LIMITED: '柏宝绘生图限流，内置等待已结束；本次不会再自动重试或切换渠道。',
     BBI_BACKEND_ERROR: '柏宝绘出图失败，请检查其渠道配置与请求历史。旧图已保留。',
     BBI_SAVE_FAILED: '图片已生成，但没有取得可保存的本地路径。旧图已保留；请检查柏宝绘的图库保存状态，避免重复出图。',
-    BBI_TIMEOUT: '等待柏宝绘超过 5 分钟，已请求取消。旧图已保留；请先检查柏宝绘任务状态。',
     BBI_ABORTED: '已取消接收本次图片，旧图已保留。',
-    BBI_BUSY: '已有两张图片提交给柏宝绘，请等其中一张结束后再绘制。',
     BBI_TARGET_BUSY: '这张图片的绘制请求还未结束，请先等待，避免重复出图。',
 });
 
@@ -70,18 +67,18 @@ function publicFailure(error) {
 export function baiBaiImagePendingCount() { return pendingGenerations.size; }
 export function isBaiBaiImageTargetPending(targetKey) { return !!targetKey && pendingGenerations.has(targetKey); }
 
-export async function generateBaiBaiImage(prompt, { signal = null, orientation = 'landscape', characterName = '', promptMetadata = null, onProgress = null, onSettled = null, targetKey = '', seed = 0, singlePrompt = false } = {}) {
+export async function generateBaiBaiImage(prompt, { signal = null, orientation = 'landscape', characterName = '', promptMetadata = null, onProgress = null, onSettled = null, targetKey = '', seed = 0, singlePrompt = false, preservePrompt = false } = {}) {
     if (signal?.aborted) throw baiBaiImageError('BBI_ABORTED');
     const state = baiBaiImageState();
     if (!state.available) throw baiBaiImageError(state.code);
     const reservation = typeof targetKey === 'string' && targetKey ? targetKey : Symbol('image');
     if (pendingGenerations.has(reservation)) throw baiBaiImageError('BBI_TARGET_BUSY');
-    if (pendingGenerations.size >= BAIBAI_IMAGE_CONCURRENCY) throw baiBaiImageError('BBI_BUSY');
-    const visual = core_text.normalizeText(prompt, 1800);
+    // 柏宝绘负责后端并发与排队；这里只保留同一目标的去重。
+    const visual = core_text.normalizeText(prompt, preservePrompt ? Infinity : 1800);
     if (!visual) throw baiBaiImageError('BBI_INVALID_ARGS');
     // Freeze grouping before the provider awaits; its default otherwise reads the new chat at save time.
     const metadata = appearance.normalizeCgPromptMetadata(promptMetadata);
-    const fullVisual = appearance.cgPreparedVisualPrompt(visual, metadata);
+    const fullVisual = preservePrompt && !metadata ? visual : appearance.cgPreparedVisualPrompt(visual, metadata);
     let primaryPrompt = !state.supportsCharacters && metadata
         ? metadata.flatPrompt || fullVisual : metadata?.sceneTags || visual;
     if (!state.supportsCharacters) primaryPrompt = appearance.cgFlatPromptWithNaturalLooks(primaryPrompt, metadata);
@@ -131,11 +128,12 @@ export async function generateBaiBaiImage(prompt, { signal = null, orientation =
     const report = progress => {
         if (stopped || controller.signal.aborted || typeof onProgress !== 'function') return;
         const phase = progress?.phase;
-        if (!['queued', 'generating', 'queued-remote', 'retrying', 'saving'].includes(phase)) return;
+        if (!['queued', 'generating', 'queued-remote', 'retrying', 'saving', 'waiting'].includes(phase)) return;
         try { onProgress({ phase }); } catch {}
     };
     signal?.addEventListener('abort', onAbort, { once: true });
-    timer = setTimeout(() => stop('BBI_TIMEOUT'), BAIBAI_IMAGE_TIMEOUT_MS);
+    // 排队中的请求仍可能成功，等待提示不取消后端任务，也不触发重发。
+    timer = setTimeout(() => report({ phase: 'waiting' }), BAIBAI_IMAGE_WAIT_NOTICE_MS);
     pendingGenerations.set(reservation, controller);
     let providerPromise;
     try {

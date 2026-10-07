@@ -44,7 +44,7 @@ ${root} .rmt-mail-gallery>header>p{font-size:12px;color:var(--rmt-theme-muted)}
 ${root} .rmt-mail-gallery-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:clamp(10px,2vw,24px)}
 ${root} .rmt-inbox .rmt-mail-drawing{display:flex;flex-direction:column;align-items:center;gap:6px;width:100%;min-width:0;padding:16px 9px 20px;border:1px solid var(--rmt-letter-line);border-radius:7px 16px 16px 7px;border-left-width:4px;background:var(--rmt-letter-paper)!important;color:var(--rmt-letter-ink)!important;-webkit-text-fill-color:var(--rmt-letter-ink)!important;font:inherit;box-shadow:0 4px 12px #53405d0a;content-visibility:auto;contain-intrinsic-size:auto 240px}
 ${root} .rmt-mail-drawing-art{display:grid;place-items:center;min-width:0;width:100%;aspect-ratio:8/7}
-${root} .rmt-mail-drawing-art svg{width:100%;height:auto;max-height:260px}
+${root} .rmt-mail-drawing-art svg,${root} .rmt-mail-drawing-art img.rmt-letter-illustration{width:100%;height:auto;max-height:260px;object-fit:contain}
 ${root} .rmt-mail-drawing>strong{font-size:14px;line-height:1.6;font-weight:500;overflow-wrap:anywhere}
 ${root} .rmt-mail-drawing>small{font-size:10px;opacity:.75}
 ${root} .rmt-mail-gallery-grid>.rmt-mail-empty{grid-column:1/-1}

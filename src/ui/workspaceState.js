@@ -42,6 +42,7 @@ export const WORKSPACE_ROUTES = Object.freeze({
     waiting: { mode: 'waiting', title: '他在等你', group: 'life', manualOnly: true },
     mirrorVoice: { mode:'mirrorVoice', title:'镜译 · 语音设置', group:'settings', manualOnly:true, deep:true },
     themeSong: { mode: 'themeSong', title: '角色印象曲', group: 'interaction' },
+    coupleAvatar: { mode: 'coupleAvatar', title: '情侣头像', group: 'interaction', manualOnly: true },
     bedtime: { mode: 'bedtime', title: '睡前故事', group: 'stories' },
     heart: { mode: 'heart', title: '角色互动', group: 'interaction', view: 'seasons' },
     language: { mode: 'heart', title: '基础语言', group: 'interaction' },

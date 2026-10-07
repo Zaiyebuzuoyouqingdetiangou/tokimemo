@@ -1,9 +1,10 @@
 import * as v2 from './letterIllustrationV2.js';
+import * as v3 from './letterIllustrationV3.js';
 
 // Local, inert legacy letter-end illustration. Existing v1 mail keeps this exact renderer;
 // SVG structure, geometry, colours and accessibility markup stay in this file.
 export const LETTER_ILLUSTRATION_VERSION = 1;
-export const LETTER_ILLUSTRATION_GENERATION_VERSION = v2.VERSION;
+export const LETTER_ILLUSTRATION_GENERATION_VERSION = v3.VERSION;
 export const LETTER_ILLUSTRATION_SUBJECTS = Object.freeze(['person', 'pony', 'cat', 'rabbit', 'flowers', 'cup', 'book']);
 export const LETTER_ILLUSTRATION_ACTIONS = Object.freeze(['pet', 'hold', 'read', 'shareTea', 'rest', 'bloom']);
 export const LETTER_ILLUSTRATION_PALETTES = Object.freeze(['cream', 'rose', 'sage', 'sky', 'lilac', 'peach']);
@@ -12,7 +13,7 @@ export const MAX_LETTER_ILLUSTRATION_BYTES = 2048;
 export const MAX_LETTER_ILLUSTRATION_ACCESSORIES = 3;
 
 // Kept deliberately short so the parent prompt can include it without describing markup.
-export const LETTER_ILLUSTRATION_CONTRACT = v2.CONTRACT;
+export const LETTER_ILLUSTRATION_CONTRACT = v3.CONTRACT;
 
 const rootKeys = Object.freeze(['version', 'subject', 'companion', 'action', 'palette', 'accessories']);
 const paletteValues = Object.freeze({
@@ -79,15 +80,34 @@ function normalizeLegacyLetterIllustration(value) {
     } catch { return null; }
 }
 
-// Saved v1 and v2 designs are both readable. New provider output must use the
-// evidence-gated function below, which intentionally rejects legacy v1 choices.
+// Saved v1/v2 drawings keep their original renderer. V3 contains inert, locally
+// sanitized SVG made in the same response as the letter.
 export function normalizeLetterIllustration(value) {
+    if (value?.version === v3.VERSION || typeof value?.svg === 'string') return v3.normalize(value);
     if (value?.version === v2.VERSION) return v2.normalize(value);
     return normalizeLegacyLetterIllustration(value);
 }
 
 export function normalizeGeneratedLetterIllustration(value, options = {}) {
-    return v2.normalizeGenerated(value, options);
+    // Art is optional: no appearance/scene/length gate may reject the letter.
+    // Older output and failed SVG still have the original local fallback.
+    try { return v3.normalize(value) || v2.normalizeGenerated(value, options); }
+    catch { return null; }
+}
+
+export function letterIllustrationSummary(value) {
+    const design = normalizeLetterIllustration(value);
+    if (!design) return '';
+    if (design.version === v3.VERSION) return design.summary || '';
+    if (design.version === v2.VERSION) return [design.characterName, design.scene?.evidence,
+        ...(design.visualFacts || []).filter(item => item.kind.startsWith('outfit')).map(item => item.evidence)].filter(Boolean).join('；');
+    return [design.subject, design.action].filter(Boolean).join(' / ');
+}
+
+// Canvas export needs SVG bytes; the reading UI isolates new SVG in an image.
+export function renderLetterIllustrationSvg(value, options = {}) {
+    if (value?.version === v3.VERSION || typeof value?.svg === 'string') return v3.svgSource(value);
+    return renderLetterIllustration(value, options);
 }
 
 function esc(value) {
@@ -150,6 +170,7 @@ function actionDetail(action, hasCompanion, colours, subject, primaryX) {
 }
 
 export function renderLetterIllustration(value, { idPrefix = 'rmt-letter', label = '' } = {}) {
+    if (value?.version === v3.VERSION || typeof value?.svg === 'string') return v3.render(value, { idPrefix, label });
     if (value?.version === v2.VERSION) return v2.render(value, { idPrefix, label });
     const design = normalizeLegacyLetterIllustration(value);
     if (!design) return '';

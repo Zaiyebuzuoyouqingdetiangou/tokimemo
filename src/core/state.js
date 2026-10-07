@@ -36,6 +36,7 @@ export const state = {
   activeAdvBulkScopes: new Set(),
   activeArchiveTargetReservations: new Map(),
   activeCgImageTasks: new Map(),
+  activeCoupleAvatarTasks: new Map(),
   cgImageLifecycleEpoch: 0,
   avatarDialogueRequestEpoch: 0,
   activeAvatarDialogue: null,

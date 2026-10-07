@@ -208,7 +208,7 @@ function collectInboxLetters(value, letters, seen) {
 // An optional drawing before letters can be malformed even though the mail
 // fields after it are intact. Recognize only the selected object's root key;
 // quoted strings and nested examples cannot qualify another response object.
-function hasInboxRootField(text) {
+function hasInboxRootField(text, field = 'letters') {
     let depth = 0, inString = false, escaped = false, stringStart = -1;
     for (let i = 0; i < text.length; i += 1) {
         const char = text[i];
@@ -218,7 +218,7 @@ function hasInboxRootField(text) {
             else if (char === '"') {
                 inString = false;
                 if (depth === 1 && /^\s*:/.test(text.slice(i + 1))) {
-                    try { if (JSON.parse(text.slice(stringStart, i + 1)) === 'letters') return true; } catch {}
+                    try { if (JSON.parse(text.slice(stringStart, i + 1)) === field) return true; } catch {}
                 }
             }
         } else if (char === '"') { inString = true; stringStart = i; }
@@ -231,7 +231,7 @@ function hasInboxRootField(text) {
 // Choose the last actual mailbox, never pool examples with the final answer.
 // Fences have independent boundaries, so unmatched braces in prose do not hide
 // their contents. An unrelated trailing brace cannot displace received letters.
-function inboxResponseCandidate(raw, selection = null) {
+function inboxResponseCandidate(raw, selection = null, rootField = 'letters') {
     const text = response_config.finalResponseText(raw);
     const choices = [];
     const collect = (body, offset) => {
@@ -245,7 +245,7 @@ function inboxResponseCandidate(raw, selection = null) {
             try { const parsed = JSON.parse(candidate); complete = !!parsed && typeof parsed === 'object' && !Array.isArray(parsed); } catch {}
             // A later legal non-mail object is still the provider's final answer.
             // Keep it for the inbox validator to reject, rather than using an example.
-            if (complete || hasInboxRootField(candidate)) choices.push({ text: candidate, position: offset + index, complete });
+            if (complete || hasInboxRootField(candidate, rootField)) choices.push({ text: candidate, position: offset + index, complete });
         }
     };
     collect(text, 0);
@@ -280,19 +280,76 @@ export function salvageInboxLetters(raw) {
         if (!/"letters"\s*:/.test(peek) && !INBOX_SLOT.test(peek)) continue;
         collectInboxLetters(parsePartialJsonObject(text.slice(i)).partialValue, letters, seen);
     }
-    return letters.length ? { letters } : null;
+    if (!letters.length) return null;
+    // Text is emitted before the optional art array. Keep only whole received
+    // art records; an unfinished SVG must not discard earlier drawings or mail.
+    const letterIllustrations = parsePartialJsonObject(text).items('/letterIllustrations');
+    return { letters, ...(letterIllustrations.length ? { letterIllustrations } : {}) };
+}
+
+// Only the explicitly marked merged-mail request may use this recovery path.
+// Its letters array must already be closed, and parsing must have stopped in
+// the optional illustration array. Other modules remain atomic closed values.
+function salvageMergedInboxIllustrations(text) {
+    const parsed = parsePartialJsonObject(text);
+    const artPath = '/modules/inbox/letterIllustrations';
+    if (!parsed.has('/modules/inbox/letters') || !Array.isArray(parsed.at(artPath)) || parsed.has(artPath)) return null;
+    const received = parsed.items('/modules/inbox/letters');
+    const letters = received.map(usableInboxLetter);
+    if (!letters.length || letters.some(letter => !letter)) return null;
+    const letterIllustrations = parsed.items(artPath);
+    const modules = Object.fromEntries(Object.keys(parsed.at('/modules') || {}).filter(key => key !== 'inbox'
+        && parsed.has('/modules/' + key.replace(/~/g, '~0').replace(/\//g, '~1')))
+        .map(key => [key, parsed.at('/modules/' + key.replace(/~/g, '~0').replace(/\//g, '~1'))]));
+    modules.inbox = { letters, ...(letterIllustrations.length ? { letterIllustrations } : {}) };
+    return { modules };
+}
+
+// A transport exception for optional mail art, not a generic HTML/JSON repair.
+// The response itself must start as JSON (or a JSON fence), and complete prose
+// must precede its art array. HTML wrappers, comments and JSON islands fail.
+export function hasCompleteInboxProseBeforeArt(raw, { mode = '', mergedInboxIllustrations = false } = {}) {
+    if (typeof raw !== 'string' || (mode !== 'inbox' && mergedInboxIllustrations !== true)) return false;
+    let source = response_config.finalResponseText(raw).trim();
+    if (/^```(?:json)?[ \t]*(?:\r?\n)/i.test(source)) {
+        source = source.replace(/^```(?:json)?[ \t]*(?:\r?\n)/i, '').replace(/\r?\n```[ \t]*$/u, '').trim();
+    }
+    if (!source.startsWith('{')) return false;
+    const parsed = parsePartialJsonObject(source);
+    // A closed root followed by anything else is not a rooted JSON response.
+    if (parsed.complete) { try { JSON.parse(source); } catch { return false; } }
+    const prefix = mergedInboxIllustrations === true ? '/modules/inbox' : '';
+    const artPath = prefix + '/letterIllustrations';
+    if (!parsed.has(prefix + '/letters') || !Array.isArray(parsed.at(artPath))) return false;
+    if (!parsed.complete && parsed.has(artPath)) return false;
+    const letters = parsed.items(prefix + '/letters');
+    return letters.length > 0 && letters.every(value => !!usableInboxLetter(value));
 }
 
 // Recovery uses the same received letter fields as the live inbox parser. A
 // broken optional drawing must not hide a closed body from merge/preservation.
 // The original response is still incomplete; only its readable letters close.
+function bindInboxRecoveryIllustrations(value) {
+    if (!Array.isArray(value?.letters) || !Array.isArray(value?.letterIllustrations)) return value;
+    const letterIllustrations = value.letterIllustrations.flatMap(art => {
+        if (!art || typeof art !== 'object' || Array.isArray(art)) return [];
+        const matches = value.letters.filter(letter => letter?.slot === art.slot && usableInboxLetter(letter));
+        if (matches.length !== 1) return [];
+        const letter = matches[0];
+        const key = JSON.stringify(['slot', 'title', 'greeting', 'body', 'closing'].map(field => typeof letter[field] === 'string' ? letter[field] : ''));
+        // Always overwrite provider data: this binding is local recovery metadata.
+        return [{ ...art, _rmtLetterTextKey: key }];
+    });
+    return { ...value, letterIllustrations };
+}
 export function parseInboxRecoveryObject(raw) {
     const candidate = inboxResponseCandidate(raw);
     const parsed = parsePartialJsonObject(candidate);
-    if (parsed.complete) return parsed;
+    if (parsed.complete) return parsed.value?.letterIllustrations
+        ? parsePartialJsonObject(JSON.stringify(bindInboxRecoveryIllustrations(parsed.value))) : parsed;
     const salvaged = salvageInboxLetters(candidate);
     if (!salvaged) return parsed;
-    const readable = parsePartialJsonObject(JSON.stringify(salvaged));
+    const readable = parsePartialJsonObject(JSON.stringify(bindInboxRecoveryIllustrations(salvaged)));
     return { ...readable, complete: false,
         has: pointer => pointer === '' || pointer === '/letters' ? false : readable.has(pointer) };
 }
@@ -307,7 +364,7 @@ export function jsonOutputBudgetSummary({ requestMaxTokens = 0, configuredMaxTok
     return `${segmentNote}；当前插件设置 ${configuredMax.toLocaleString()} tokens；实际可用额度由所选模型／渠道决定。`;
 }
 
-export function extractJson(raw, { reasoning = '', requestMaxTokens = 0, configuredMaxTokens = 0, mode = '' } = {}) {
+export function extractJson(raw, { reasoning = '', requestMaxTokens = 0, configuredMaxTokens = 0, mode = '', mergedInboxIllustrations = false } = {}) {
     if (raw != null && typeof raw !== 'string') {
         const error = jsonOutputError('RMT_RESPONSE_FORMAT', '连接返回的正文结构暂不支持，未取得可解析的最终正文；旧内容未改变。');
         error.retryable = false;
@@ -332,6 +389,17 @@ export function extractJson(raw, { reasoning = '', requestMaxTokens = 0, configu
         const parsed = JSON.parse(text);
         if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed;
     } catch {}
+    if (mergedInboxIllustrations === true) {
+        const candidate = inboxResponseCandidate(text, null, 'modules');
+        if (candidate) {
+            try { const parsed = JSON.parse(candidate); if (parsed && typeof parsed === 'object') return parsed; } catch {}
+            const salvaged = salvageMergedInboxIllustrations(candidate);
+            if (salvaged) return salvaged;
+            // Never promote an earlier example when the actual merged reply
+            // has started, even when its damage is outside the optional art.
+            text = candidate;
+        }
+    }
     const inboxSelection = {};
     const inboxCandidate = mode === 'inbox' ? inboxResponseCandidate(text, inboxSelection) : '';
     if (inboxCandidate) {
