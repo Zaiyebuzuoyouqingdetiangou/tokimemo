@@ -30,7 +30,9 @@ export function coupleAvatarCss() {
 .rmt-pair-person>button{width:100%}
 .rmt-pair-square{position:relative;aspect-ratio:1;overflow:hidden;border-radius:18px;background:var(--rmt-theme-soft);border:1px solid var(--rmt-theme-border);width:100%;touch-action:pan-y}
 .rmt-pair-square img{display:block;user-select:none;-webkit-user-select:none}
-.rmt-pair-two.is-circle .rmt-pair-square{border-radius:50%}
+.rmt-pair-square img.rmt-pair-cropped-image{position:absolute!important;inset:0!important;width:100%!important;height:100%!important;max-width:none!important;max-height:none!important;margin:0!important;object-fit:fill!important;transform:none!important;border-radius:0!important;user-select:auto!important;-webkit-user-select:auto!important;-webkit-touch-callout:default!important}
+.rmt-pair-square img.rmt-pair-source-preview{-webkit-touch-callout:none!important}
+.rmt-pair-two.is-circle .rmt-pair-square,.rmt-pair-square.is-circle{border-radius:50%}
 .rmt-pair-empty{height:100%;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:6px;color:var(--rmt-theme-muted);padding:10px}
 .rmt-pair-empty b{font-size:32px;line-height:1.2;font-weight:400;color:var(--rmt-theme-accent-ink)}
 .rmt-pair-preview-tools{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:12px}

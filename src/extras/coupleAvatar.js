@@ -120,7 +120,8 @@ export function couplePromptParts(value) {
         construction ? `Style construction: ${construction}` : '',
         form,
         'Selected style controls the medium and proportions of BOTH subjects. Identity references supply individual traits, not a competing drawing style. In monochrome or limited-color styles, express original colors through tones and shapes instead of reintroducing full color.',
-        `One matching avatar pair in one horizontal image, preferably 2:1. One ${subject} centered in EACH of two equal square halves.`,
+        `One full-bleed horizontal illustration for a matching avatar pair, composed for a 2:1 canvas. One ${subject} centered in EACH half, ready for two square crops. The halves are invisible crop areas, not drawn portrait cards or panels.`,
+        'Paint the background edge-to-edge across the entire canvas and through its center: scenery, color, or paper texture in the selected style. No outer margins, white frame, central gutter, inset rectangles, rounded cards, circular borders, or fading-to-blank edges. Keep faces and key gestures comfortably inside each half for a later circular crop; fill the space around them with the background, not an empty border.',
         `Two separate identities: LEFT = ${settings.people[0].name || 'first character'}; RIGHT = ${settings.people[1].name || 'second character'}. Keep each side\'s face or muzzle, eyes, hair or markings, clothing and accessories bound to that identity.`,
         `Interaction: ${interaction && interaction !== '交给灵感' ? interaction : DEFAULT_INTERACTION_PROMPT}.`,
         `Action roles: LEFT — ${actions[0]}; RIGHT — ${actions[1]}. Adapt gestures to the chosen body form; explicit user directions take precedence.`,
@@ -128,9 +129,9 @@ export function couplePromptParts(value) {
         settings.clothing ? `${animal ? 'Small wearable accents adapted for animal bodies' : 'Clothing in the selected rendering style'}: ${settings.clothing}.` : '',
         settings.background ? `Background: ${settings.background}.` : '',
         settings.pairType === 'echo'
-            ? 'Independent portraits, coordinated colors and light, complementary poses.'
+            ? 'Each subject works as an independent portrait after cropping, with coordinated colors and light, complementary poses, and a full-bleed background on both sides.'
             : 'Connected background and shared motif across the center, matching scale.',
-        'Leave margin for square/circle crops while showing the silhouette and body proportions required by the style. Readable expressions, distinct poses, no mirrored duplicates. Shared medium and lighting do not mean identical faces. Keep genuinely shared traits; distinguish the pair through their own supported features and different reactions, not arbitrary changes of identity or gender. Improvise unspecified details. No text, watermark, frame or divider.',
+        'Show the silhouette and body proportions required by the style within each crop area. Readable expressions, distinct poses, no mirrored duplicates. Shared medium and lighting do not mean identical faces. Keep genuinely shared traits; distinguish the pair through their own supported features and different reactions, not arbitrary changes of identity or gender. Improvise unspecified details. No text, watermark, frame or divider.',
     ].filter(Boolean).join('\n');
     return { scene, prompt: [scene, ...people].join('\n'),
         characters: settings.people.map((person, index) => ({

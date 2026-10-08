@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 338
-// Source SHA-256: f30ccf86e076cf4e47fda684083a3bd137cabbc6a09d11db5b6a621bce7d9d9a
+// Source SHA-256: 4a0ac5ad95646628ab31932efbd48f790b14734d49671880133021e75a39378b
 // Build: python3 tools/verification/build.py <source-root>
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -504,7 +504,7 @@ function __init_core_releaseNotes_js() {
 // MODULE: core/releaseNotes.js
 
 // GENERATED FROM README.md by tools/verification/build.py. Do not edit by hand.
-const RELEASE_README = "# 心迹回廊 1.0.38\n\n## 更新日志模块\n\n新增了更新日志板块，感谢@nancyindaeyo的更新。\n\n## 本次变动\n\n- 情侣头像加强左右人物绑定：柏宝绘支持独立人物通道时，分别传递两人的外貌与动作；其他现有渠道保留完整双人描述，减少外貌混用。\n- 72 种画风补充人物比例、线条、明暗与材质要求，让画法作用于人物本身。兽化不再将白皙皮肤误作浅色毛发；黑白画法保留明暗特征，不混入彩色眼睛。\n- 48 种互动分别安排左边的动作与右边的回应，减少同姿势复制。已有原图、裁切、历史与收藏保留，新要求用于之后生成的头像。\n";
+const RELEASE_README = "# 心迹回廊 1.0.39\n\n## 更新日志模块\n\n新增了更新日志板块，感谢@nancyindaeyo的更新。\n\n## 本次变动\n\n- 情侣头像预览改用按原图分辨率裁出的单人方形 PNG，长按预览图不再保存成双人横图。交换左右、收藏缩略图与保存结果保持一致；无法裁切的外部图片仍可预览，并通过保存入口查看原图或重新导入。\n- 圆形预览时，调整裁切也显示圆形范围，方便避开原图白边。圆形仅用于预览，保存仍是完整方形 PNG；原图、裁切设置、历史与收藏保留。\n- 新生成的情侣头像加强满幅构图：背景铺到四边和中央，人物周围保留背景空间，减少把头像画成带白框、白缝的卡片。已有图片不会自动重画。\n";
 
 __m_core_releaseNotes_js.RELEASE_README = RELEASE_README;
 }
@@ -640,7 +640,8 @@ function couplePromptParts(value) {
         construction ? `Style construction: ${construction}` : '',
         form,
         'Selected style controls the medium and proportions of BOTH subjects. Identity references supply individual traits, not a competing drawing style. In monochrome or limited-color styles, express original colors through tones and shapes instead of reintroducing full color.',
-        `One matching avatar pair in one horizontal image, preferably 2:1. One ${subject} centered in EACH of two equal square halves.`,
+        `One full-bleed horizontal illustration for a matching avatar pair, composed for a 2:1 canvas. One ${subject} centered in EACH half, ready for two square crops. The halves are invisible crop areas, not drawn portrait cards or panels.`,
+        'Paint the background edge-to-edge across the entire canvas and through its center: scenery, color, or paper texture in the selected style. No outer margins, white frame, central gutter, inset rectangles, rounded cards, circular borders, or fading-to-blank edges. Keep faces and key gestures comfortably inside each half for a later circular crop; fill the space around them with the background, not an empty border.',
         `Two separate identities: LEFT = ${settings.people[0].name || 'first character'}; RIGHT = ${settings.people[1].name || 'second character'}. Keep each side\'s face or muzzle, eyes, hair or markings, clothing and accessories bound to that identity.`,
         `Interaction: ${interaction && interaction !== '交给灵感' ? interaction : DEFAULT_INTERACTION_PROMPT}.`,
         `Action roles: LEFT — ${actions[0]}; RIGHT — ${actions[1]}. Adapt gestures to the chosen body form; explicit user directions take precedence.`,
@@ -648,9 +649,9 @@ function couplePromptParts(value) {
         settings.clothing ? `${animal ? 'Small wearable accents adapted for animal bodies' : 'Clothing in the selected rendering style'}: ${settings.clothing}.` : '',
         settings.background ? `Background: ${settings.background}.` : '',
         settings.pairType === 'echo'
-            ? 'Independent portraits, coordinated colors and light, complementary poses.'
+            ? 'Each subject works as an independent portrait after cropping, with coordinated colors and light, complementary poses, and a full-bleed background on both sides.'
             : 'Connected background and shared motif across the center, matching scale.',
-        'Leave margin for square/circle crops while showing the silhouette and body proportions required by the style. Readable expressions, distinct poses, no mirrored duplicates. Shared medium and lighting do not mean identical faces. Keep genuinely shared traits; distinguish the pair through their own supported features and different reactions, not arbitrary changes of identity or gender. Improvise unspecified details. No text, watermark, frame or divider.',
+        'Show the silhouette and body proportions required by the style within each crop area. Readable expressions, distinct poses, no mirrored duplicates. Shared medium and lighting do not mean identical faces. Keep genuinely shared traits; distinguish the pair through their own supported features and different reactions, not arbitrary changes of identity or gender. Improvise unspecified details. No text, watermark, frame or divider.',
     ].filter(Boolean).join('\n');
     return { scene, prompt: [scene, ...people].join('\n'),
         characters: settings.people.map((person, index) => ({
@@ -2760,7 +2761,9 @@ function coupleAvatarCss() {
 .rmt-pair-person>button{width:100%}
 .rmt-pair-square{position:relative;aspect-ratio:1;overflow:hidden;border-radius:18px;background:var(--rmt-theme-soft);border:1px solid var(--rmt-theme-border);width:100%;touch-action:pan-y}
 .rmt-pair-square img{display:block;user-select:none;-webkit-user-select:none}
-.rmt-pair-two.is-circle .rmt-pair-square{border-radius:50%}
+.rmt-pair-square img.rmt-pair-cropped-image{position:absolute!important;inset:0!important;width:100%!important;height:100%!important;max-width:none!important;max-height:none!important;margin:0!important;object-fit:fill!important;transform:none!important;border-radius:0!important;user-select:auto!important;-webkit-user-select:auto!important;-webkit-touch-callout:default!important}
+.rmt-pair-square img.rmt-pair-source-preview{-webkit-touch-callout:none!important}
+.rmt-pair-two.is-circle .rmt-pair-square,.rmt-pair-square.is-circle{border-radius:50%}
 .rmt-pair-empty{height:100%;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:6px;color:var(--rmt-theme-muted);padding:10px}
 .rmt-pair-empty b{font-size:32px;line-height:1.2;font-weight:400;color:var(--rmt-theme-accent-ink)}
 .rmt-pair-preview-tools{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:12px}
@@ -2875,6 +2878,9 @@ const styles = __m_ui_coupleAvatarCss_js;
 
 function esc(value) { return text.esc(value); }
 const jobs = new Map();
+// Derived images stay in memory only. The original and editable crop settings
+// remain the persisted source of truth; weak keys release closed views' images.
+const previewImages = new WeakMap();
 let active = null, modal = null, sequence = 0;
 const settingFields = ['interaction', 'interactionDetail', 'clothing', 'background', 'direction', 'customStyle'];
 const HISTORY_PAGE_SIZE = 6; // Display page only; stored records are never capped.
@@ -2965,13 +2971,38 @@ function dialog(view, title, contents) {
     shade.querySelector('[data-pair-close]').focus({ preventScroll: true });
     return m;
 }
-function square(record, display, loaded, className = '') {
+function pairPreviews(record, loaded) {
+    if (!loaded.croppable) return { images: [], error: loaded.error };
+    const key = JSON.stringify([record.crops, record.order]);
+    const cached = previewImages.get(loaded);
+    if (cached?.key === key) return cached;
+    try {
+        const result = { key, images: crop.cropPairImage(loaded, record.crops, record.order) };
+        previewImages.set(loaded, result);
+        return result;
+    } catch (error) {
+        // A browser export failure must not hide a viewable original or make
+        // generation fail. Save can still explain the failure and offer import.
+        return { images: [], error: error.message };
+    }
+}
+function square(record, display, loaded, className = '', preview = null) {
     const box = document.createElement('div'); box.className = `rmt-pair-square ${className}`;
     const half = record.order?.[display] === 1 ? 1 : 0;
-    const img = document.createElement('img'); img.src = loaded.image.src;
+    const img = document.createElement('img'); img.src = preview?.url || loaded.image.src;
     img.alt = `${record.settings.people[half]?.name || (display ? '右边' : '左边')}的头像`;
     img.draggable = false;
-    Object.assign(img.style, crop.cropPreviewStyle(loaded.width, loaded.height, half, record.crops[half]));
+    if (preview) {
+        // The native image itself is the same square PNG as the save sheet.
+        // Circle preview clips only its wrapper, preserving all four PNG corners.
+        img.className = 'rmt-pair-cropped-image';
+    } else {
+        img.className = 'rmt-pair-source-preview';
+        Object.assign(img.style, crop.cropPreviewStyle(loaded.width, loaded.height, half, record.crops[half]));
+        // CSS-only fallback/editor previews still point at both people. Avoid
+        // presenting that original as a single avatar in the native save menu.
+        img.addEventListener('contextmenu', event => event.preventDefault());
+    }
     box.append(img); return box;
 }
 function loadRecord(view, record) {
@@ -3000,9 +3031,10 @@ async function renderPreview(view) {
     try {
         const loaded = await loadRecord(view, record);
         if (!current(view) || token !== view.previewEpoch) return;
-        for (let i = 0; i < 2; i++) host.querySelector(`[data-pair-image="${i}"]`).replaceWith(square(record, i, loaded));
+        const previews = pairPreviews(record, loaded);
+        for (let i = 0; i < 2; i++) host.querySelector(`[data-pair-image="${i}"]`).replaceWith(square(record, i, loaded, '', previews.images[i]));
         const meta = host.querySelector('[data-pair-image-info]');
-        meta.textContent = `${styleLabel(record.settings)} · 原图 ${loaded.width} × ${loaded.height}${loaded.croppable ? '' : ' · ' + loaded.error}`;
+        meta.textContent = `${styleLabel(record.settings)} · 原图 ${loaded.width} × ${loaded.height}${previews.error ? ' · ' + previews.error : ''}`;
     } catch (error) {
         if (!current(view) || token !== view.previewEpoch) return;
         for (const node of host.querySelectorAll('.rmt-pair-empty span')) node.textContent = '原图暂未载入';
@@ -3039,7 +3071,13 @@ async function renderHistory(view) {
     view.historyObserver?.disconnect();
     const fill = async node => {
         const record = visible.find(row => row.id === node.dataset.pairThumb); if (!record) return;
-        try { const loaded = await loadRecord(view, record); if (current(view) && token === view.historyEpoch && node.isConnected) node.replaceChildren(square(record, 0, loaded), square(record, 1, loaded)); }
+        try {
+            const loaded = await loadRecord(view, record);
+            if (current(view) && token === view.historyEpoch && node.isConnected) {
+                const previews = pairPreviews(record, loaded);
+                node.replaceChildren(square(record, 0, loaded, '', previews.images[0]), square(record, 1, loaded, '', previews.images[1]));
+            }
+        }
         catch { if (node.isConnected) { node.title = '原图暂时不可用，点击后可查看记录或导入原图。'; const note = node.querySelector('.rmt-pair-thumb-note'); if (note) note.textContent = '原图暂不可用'; } }
     };
     for (const node of nodes) void fill(node);
@@ -3277,7 +3315,7 @@ async function showCrop(view, record) {
             Object.assign(image.style, crop.cropPreviewStyle(loaded.width, loaded.height, half, c));
             image.alt = `${record.settings.people[half]?.name || (side ? '右边' : '左边')}的头像`;
         } else {
-            const next = square(preview, side, loaded); next.setAttribute('data-pair-crop-stage', ''); stage.replaceWith(next);
+            const next = square(preview, side, loaded, view.circle ? 'is-circle' : ''); next.setAttribute('data-pair-crop-stage', ''); stage.replaceWith(next);
         }
         for (const slider of m.body.querySelectorAll('[data-pair-crop-control]')) slider.value = c[slider.dataset.pairCropControl];
         const size = crop.cropRect(loaded.width, loaded.height, half, c).outputSize;
@@ -3302,7 +3340,8 @@ async function showOriginal(view, record, seam) {
         try { loaded = await loadRecord(view, record); } catch (error) { return imageFailure(view, m, record, error); }
         if (modal !== m) return;
         m.body.innerHTML = '<div class="rmt-pair-seam" data-pair-seam></div><p>这里展示当前裁切后的拼接。分别移动或放大后，中间的图案可能需要重新对齐。</p><div class="rmt-pair-actions"><button type="button" data-pair-recrop>调整裁切</button></div>';
-        m.body.querySelector('[data-pair-seam]').append(square(record, 0, loaded), square(record, 1, loaded));
+        const previews = pairPreviews(record, loaded);
+        m.body.querySelector('[data-pair-seam]').append(square(record, 0, loaded, '', previews.images[0]), square(record, 1, loaded, '', previews.images[1]));
         m.body.querySelector('[data-pair-recrop]').addEventListener('click', () => void showCrop(view, record).catch(error => failure(view, error)));
     } else {
         m.body.innerHTML = `<img class="rmt-pair-full-image" src="${esc(record.original.url)}" alt="这一对头像的完整原图"><p>这是未裁切的完整原图。手机和 TT 可长按图片保存。</p><div class="rmt-pair-actions"><a class="rmt-pair-button" href="${esc(record.original.url)}" target="_blank" rel="noopener noreferrer">单独打开原图</a><a class="rmt-pair-button" href="${esc(record.original.url)}" download="情侣头像-原图">下载原图</a></div>`;
@@ -24124,7 +24163,7 @@ function __init_core_selfUpdater_js() {
 const RELEASE_README = __m_core_releaseNotes_js.RELEASE_README;
 
 const UPDATE_STATE = Symbol.for('heartbeatMemories.selfUpdate');
-const INSTALLED_BUILD = '1.0.38';
+const INSTALLED_BUILD = '1.0.39';
 const PROJECT_REMOTE = 'https://github.com/zaiyebuzuoyouqingdetiangou/tokimemo';
 function updateError(message) { const error = new Error(message); error.userMessage = message; return error; }
 
