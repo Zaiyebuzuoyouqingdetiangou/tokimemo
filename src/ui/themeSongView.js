@@ -86,17 +86,26 @@ export function songLyricsReadingHtml(lyrics) {
     const lines = text.normalizeText(lyrics, contract.SONG_LIMITS.lyrics).split('\n');
     const sections = [];
     let current = { label: '', lines: [] };
+    let vocalCues = [];
     for (const line of lines) {
         const heading = line.match(/^\[([^\]\n]+)\]\s*$/);
-        if (!heading) { current.lines.push(line); continue; }
+        if (!heading) {
+            if (line.trim()) { current.lines.push(...vocalCues); vocalCues = []; }
+            current.lines.push(line); continue;
+        }
+        if (contract.classifySongLyricTag(heading[1]).kind === 'vocal') { vocalCues.push(line); continue; }
         if (current.label || current.lines.some(value => value.trim())) sections.push(current);
         current = { label: heading[1], lines: [] };
     }
     if (current.label || current.lines.some(value => value.trim())) sections.push(current);
-    const label = value => value.replace(/^Final Chorus$/i, '最后的副歌')
+    const sectionLabel = value => value.replace(/^Final Chorus$/i, '最后的副歌')
         .replace(/^Pre[- ]Chorus/i, '预副歌').replace(/^Chorus/i, '副歌')
         .replace(/^Verse/i, '主歌').replace(/^Bridge/i, '桥段')
         .replace(/^Intro$/i, '前奏').replace(/^Outro$/i, '尾声');
+    const label = value => {
+        const tag = contract.classifySongLyricTag(value);
+        return tag.kind === 'section' ? sectionLabel(tag.section) + (tag.cue ? ` · ${tag.cue}` : '') : sectionLabel(value);
+    };
     return sections.filter(section => section.lines.some(value => value.trim())).map(section =>
         `<section class="rmt-song-stanza">${section.label ? `<h3>${esc(label(section.label))}</h3>` : ''}<p>${esc(section.lines.join('\n').trim())}</p></section>`).join('');
 }

@@ -5,6 +5,7 @@ import * as core_constants from '../core/constants.js';
 import * as core_context from '../core/context.js';
 import * as core_evidence from '../core/evidence.js';
 import * as core_text from '../core/text.js';
+import * as song_contract from '../core/themeSongContract.js';
 import * as core_castLooks from '../core/castLooks.js';
 import * as archive_repository from '../archive/repository.js';
 import * as generation_client from '../generation/client.js';
@@ -359,13 +360,18 @@ export function sectionLabel(tag) {
     return found ? found[1] + (number && !/^(intro|outro)/i.test(tag) ? ` ${number}` : '') : tag;
 }
 
-export function parseSections(lyrics) {
+export function parseSections(lyrics, vocalCues = false) {
     const sections = [];
     let current = null;
     for (const raw of String(lyrics || '').split('\n')) {
         const line = raw.trim();
-        const tag = line.match(/^\[([^\]]+)\]$/)?.[1];
+        let tag = line.match(/^\[([^\]]+)\]$/)?.[1];
         if (tag) {
+            if (vocalCues) {
+                const parsed = song_contract.classifySongLyricTag(tag);
+                if (parsed.kind === 'vocal') continue;
+                tag = parsed.section;
+            }
             if (/^end$/i.test(tag)) break;
             current = { tag, name: sectionLabel(tag), lines: [] };
             sections.push(current);
@@ -376,6 +382,12 @@ export function parseSections(lyrics) {
         if (!/^\(.*\)$/.test(line) && !/^（.*）$/.test(line)) current.lines.push(line);
     }
     return sections;
+}
+
+// Old songs keep their original section indexes and saved timing anchors.
+// Only newly generated, cue-bearing songs opt into the new interpretation.
+export function parseSongSections(song) {
+    return parseSections(song?.lyrics, song?.lyricTagVersion === 2);
 }
 
 // 估计时间：每句约 2 小节（4/4），纯器乐段约 4 小节；有音频时长就整体缩放到实际长度。
@@ -457,7 +469,7 @@ export function sectionTimes(record, sections, bpm) {
 }
 
 export function shotTimeline(record, song) {
-    const sections = parseSections(song.lyrics);
+    const sections = parseSongSections(song);
     const sectionTimeline = sectionTimes(record, sections, songBpm(song));
     const times = sectionTimeline.sections;
     let total = sectionTimeline.total;
@@ -582,7 +594,7 @@ export function selectedSectionIndexes(sections, range, from = 0, to = 0) {
 function storyboardPrompt(context, memory, song, settings, sectionIndexes = null, cast = null) {
     const charName = core_text.normalizeText(memory?.characterName || context?.name2, 120) || '{{char}}';
     const userName = core_text.normalizeText(memory?.userName || context?.name1, 120) || '{{user}}';
-    const parsed = parseSections(song.lyrics);
+    const parsed = parseSongSections(song);
     const keep = sectionIndexes || (settings.output === 'video' ? parsed.map((_, i) => i) : selectedSectionIndexes(parsed, settings.range, settings.rangeFrom, settings.rangeTo));
     const sections = parsed.map((s, i) => ({ index: i, section: s.tag, lines: s.lines })).filter(s => keep.includes(s.index));
     const appear = settings.appear === 'face' ? `${userName} 可以露脸出镜。`
@@ -633,7 +645,7 @@ function storyboardPrompt(context, memory, song, settings, sectionIndexes = null
 歌词、曲风不改。画面跟着歌词的意象、情绪和故事走，可以是意象、想象或象征画面，不需要对应聊天档案，也不要逐条复述聊天里的事件。人物外貌、身份和世界观以角色设定为准。
 ${cast ? mv_cast.castPrompt(cast, settings) : `出镜：${charName} 是主角。${appear}不替 ${userName} 新增台词、承诺或决定。`}
 ${mv_direction.directionPrompt(settings.storyType, song)}
-${settings.output === 'video' ? '' : tegakiGrammar(parseSections(song.lyrics), keep, charName, settings.storyType)}
+${settings.output === 'video' ? '' : tegakiGrammar(parseSongSections(song), keep, charName, settings.storyType)}
 
 【歌曲】
 曲风：${core_text.normalizeText(song.styleDescription || song.stylePrompt, 600)}
@@ -717,7 +729,7 @@ export function normalizeShots(data, memory, sectionCount, settings = {}, cast =
 export function isMvRunning(key) { return running.has(key); }
 
 export function missingStoryboardSections(record, song) {
-    const sections = parseSections(song.lyrics);
+    const sections = parseSongSections(song);
     const o = tegakiOptions(record);
     const indexes = record?.settings?.output === 'video' ? sections.map((_, i) => i)
         : selectedSectionIndexes(sections, o.range, o.rangeFrom, o.rangeTo);
@@ -731,7 +743,7 @@ function alignContinuationSections(raw, song, missing) {
     const frames = list(copy?.frames).length ? copy.frames : list(copy?.groups).length
         ? copy.groups.flatMap(g => list(g?.frames)) : list(copy?.shots);
     const lyricKey = value => core_text.normalizeText(value, 200).normalize('NFKC').replace(/[\s，。！？、,.!?“”"'‘’：:；;]/g, '');
-    const sections = parseSections(song.lyrics);
+    const sections = parseSongSections(song);
     const matches = frames.map(f => {
         const text = lyricKey(f?.lyric);
         return text ? sections.map((s, i) => s.lines.some(line => lyricKey(line) === text) ? i : -1).filter(i => i >= 0) : [];
@@ -753,7 +765,7 @@ function alignContinuationSections(raw, song, missing) {
 
 // Append new work using fresh identifiers; never replace existing drawings or timing.
 function continuationPatch(raw, previous, memory, song, settings, missing) {
-    const built = buildShots(alignContinuationSections(raw, song, missing), memory, parseSections(song.lyrics).length, settings, previous.cast || null, { existingGroups: isV2(previous) ? previous.groups : [], existingStage: previous.stage });
+    const built = buildShots(alignContinuationSections(raw, song, missing), memory, parseSongSections(song).length, settings, previous.cast || null, { existingGroups: isV2(previous) ? previous.groups : [], existingStage: previous.stage });
     let shots = built.shots.filter(s => missing.includes(s.sectionIndex));
     if (!shots.length) throw core_text.safeUserError('返回的分镜没有包含待补段落，原分镜已保留，可导出这次返回内容。', 'RMT_MV_EMPTY');
     let groups = list(built.groups);
@@ -797,7 +809,7 @@ export async function continueStoryboard(songId) {
     const previous = target.base.songs[songId];
     if (!previous) return null;
     const allMissing = missingStoryboardSections(previous, song);
-    const missing = previous.settings?.output === 'video' ? allMissing : firstChunk(parseSections(song.lyrics), allMissing);
+    const missing = previous.settings?.output === 'video' ? allMissing : firstChunk(parseSongSections(song), allMissing);
     if (!missing.length) return { pending: false, scope, record: previous, alreadyComplete: true };
     const key = `story:${scope}:${songId}`;
     if (running.has(key)) throw core_text.safeUserError('分镜正在写，稍等一下。', 'RMT_MV_RUNNING');
@@ -826,11 +838,11 @@ export async function generateStoryboard(songId, settingsInput, castInput = unde
     const cast = castInput === undefined ? mv_cast.initialMvCast(context, previous) : mv_cast.normalizeMvCast(castInput);
     running.add(key);
     try {
-        const data = await generation_client.requestJson(storyboardPrompt(context, memory, song, settings, settings.output === 'tegaki' ? firstChunk(parseSections(song.lyrics), selectedSectionIndexes(parseSections(song.lyrics), settings.range, settings.rangeFrom, settings.rangeTo)) : null, cast), '正在写 MV 分镜…', {
+        const data = await generation_client.requestJson(storyboardPrompt(context, memory, song, settings, settings.output === 'tegaki' ? firstChunk(parseSongSections(song), selectedSectionIndexes(parseSongSections(song), settings.range, settings.rangeFrom, settings.rangeTo)) : null, cast), '正在写 MV 分镜…', {
             mode: 'songMv', preferStream: true, taskKey: `extras:mv:${key}`, context, origin,
         });
         return await holdResult(target, 'story', '', data, raw => {
-            const built = buildShots(raw, memory, parseSections(song.lyrics).length, settings, cast);
+            const built = buildShots(raw, memory, parseSongSections(song).length, settings, cast);
             return { id: songId, createdAt: previous?.createdAt || Date.now(), settings,
                 ...built, stage: built.stage || null,
                 ...(cast ? { cast: mv_cast.generatedMvCast(cast, raw) } : {}),
@@ -1084,14 +1096,14 @@ export function playRange(record, song) {
 
 export function shotsInRange(record, song) {
     const o = tegakiOptions(record);
-    const indexes = selectedSectionIndexes(parseSections(song.lyrics), o.range, o.rangeFrom, o.rangeTo);
+    const indexes = selectedSectionIndexes(parseSongSections(song), o.range, o.rangeFrom, o.rangeTo);
     return list(record?.shots).filter(shot => indexes.includes(shot.sectionIndex));
 }
 
 // Completed clips are contiguous runs of sections with all their scene images ready.
 // Motifs and the cover remain optional; manually chosen ranges may include unfinished shots.
 export function completedMvRanges(record, song) {
-    const sections = parseSections(song.lyrics);
+    const sections = parseSongSections(song);
     const done = sections.map((_, i) => {
         const shots = list(record?.shots).filter(s => s.sectionIndex === i);
         return shots.length > 0 && shots.every(s => {
@@ -1130,7 +1142,7 @@ export function exportRecord(record, song) {
     copy.tegaki = { ...copy.tegaki, ...exportOptions(record, song) };
     // Filter only after calculating the original timeline, preserving lyric taps and beat snapping.
     copy.clipSectionIndexes = [...new Set(shotsInRange(copy, song).map(s => s.sectionIndex))];
-    const sections = parseSections(song.lyrics);
+    const sections = parseSongSections(song);
     if (!copy.clipSectionIndexes.some(i => isChorusTag(sections[i]?.tag))) copy.motif = null;
     return copy;
 }
@@ -1546,7 +1558,7 @@ export function patchIllustration(songId, shotId, patch) {
 
 // 逐句对时间用的歌词清单：按段落顺序列出（只列当前截取范围内的段落）。
 export function syncLines(record, song) {
-    const sections = parseSections(song.lyrics);
+    const sections = parseSongSections(song);
     const o = tegakiOptions(record);
     const keep = new Set(selectedSectionIndexes(sections, o.range, o.rangeFrom, o.rangeTo));
     const out = [];

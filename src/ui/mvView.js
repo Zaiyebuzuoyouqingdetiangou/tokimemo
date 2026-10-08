@@ -843,7 +843,7 @@ function continueControl(record, song) {
 }
 
 function exportControls(record, song) {
-    const sections = mv.parseSections(song.lyrics);
+    const sections = mv.parseSongSections(song);
     const o = mv.exportOptions(record, song);
     const idx = mv.selectedSectionIndexes(sections, o.range, o.rangeFrom, o.rangeTo);
     const options = value => sections.map((s, i) => `<option value="${i}"${i === value ? ' selected' : ''}>${i + 1}. ${esc(s.name)}</option>`).join('');
@@ -859,7 +859,7 @@ function renderSetup(song, record) {
     const running = mv.isMvRunning(`story:${mv.mvScope(ctx())}:${view.songId}`);
     const appearance = view.castDraft?.people.some(person => person.identity === 'user' && view.castDraft.selectedIds.includes(person.id));
     page('分镜与画面', '印象曲', `<section class="rmt-mvf-setup"><h2>${record?.shots?.length ? '重新安排分镜' : '从这首歌开始'}</h2><p class="rmt-x-note">先选要做的片段，再生成分镜。音乐和图片都可以稍后加入。</p></section>
-      <section class="rmt-x-card"><b>制作范围</b>${rangePicker('draft', d, mv.parseSections(song.lyrics))}</section>
+      <section class="rmt-x-card"><b>制作范围</b>${rangePicker('draft', d, mv.parseSongSections(song))}</section>
       ${btn('editor-drawer', audioBySong.has(audioKey()) ? '管理音乐' : '导入音乐（可稍后）', { id: 'audio' })}
       <details class="rmt-x-card"><summary>分镜方向与人物</summary>${cast_controls.directionControls(song, d)}${cast_controls.castControls(view.castDraft, d)}</details>
       <details class="rmt-x-card"><summary>画风、出镜与画幅</summary><h3 class="rmt-x-section-title">画风</h3><div class="rmt-mv-grid2">${styles.map(style => choice('set-style', style.id, d.style === style.id, style.name, style.desc)).join('')}</div>
@@ -889,7 +889,7 @@ function renderBoard(song, record) {
     const shots = record.shots;
     const drawn = shots.filter(hasImg).length;
     const videos = shots.filter(s => s.videoDone).length;
-    const sections = mv.parseSections(song.lyrics);
+    const sections = mv.parseSongSections(song);
     let rangeShots = shots;
     if (tegaki) { try { rangeShots = mv.shotsInRange(record, song); } catch { rangeShots = shots; } }
     const remaining = rangeShots.filter(s => !hasImg(s)).length;
@@ -1010,7 +1010,7 @@ function tegakiControls(record, song) {
       ${mv.isV2(record) ? `<label class="rmt-mv-check"><input type="checkbox" data-rmt-mv-overlay="keyword" ${o.showKeyword ? 'checked' : ''}>副歌关键词（随歌词隐藏）</label><label class="rmt-mv-check"><input type="checkbox" data-rmt-mv-overlay="motif" ${o.showMotif ? 'checked' : ''}>漂浮装饰</label>` : ''}
       ${o.lyric === 'none' ? '' : `<b>字体</b><div class="rmt-x-segs">${seg2('tegaki-font', Object.fromEntries(Object.entries(mv.TEGAKI_FONTS).map(([k, v]) => [k, v.name])), o.font)}</div><p class="rmt-x-note">字体用设备自带的，不同手机效果会略有差异。</p>`}${motifNotice(record)}</div></details>
       <details><summary>节奏模板与切换</summary><div><div class="rmt-mv-presets">${presets}</div><p class="rmt-x-note">模板会统一修改镜头切换、停留和歌词样式；之后仍可逐镜调整。</p><b>切换节奏</b><div class="rmt-mv-grid2">${seg2('tegaki-rhythm', mv.TEGAKI_RHYTHMS, o.rhythm)}</div></div></details>
-      <details><summary>截取范围 · ${mv.formatTime(range.start)}–${mv.formatTime(range.end)}</summary><div>${rangePicker('record', o, mv.parseSections(song.lyrics))}<p class="rmt-x-note">约 ${Math.max(0, Math.round(range.end - range.start))} 秒。只改变预览范围，不删除其他分镜。</p></div></details>`;
+      <details><summary>截取范围 · ${mv.formatTime(range.start)}–${mv.formatTime(range.end)}</summary><div>${rangePicker('record', o, mv.parseSongSections(song))}<p class="rmt-x-note">约 ${Math.max(0, Math.round(range.end - range.start))} 秒。只改变预览范围，不删除其他分镜。</p></div></details>`;
 }
 
 function stageShotControls(record, shot) {
@@ -1121,7 +1121,7 @@ function wardrobeSettings(record) {
 function projectSettings(song, record) {
     if (!record?.shots?.length) return '<p class="rmt-x-note">在分镜页选择制作范围、方向和人物。</p>';
     const o = mv.tegakiOptions(record), wd = record.wardrobe || {};
-    return `<section class="rmt-x-card"><b>制作范围</b>${rangePicker('record', o, mv.parseSections(song.lyrics))}${continueControl(record, song)}</section>${cast_controls.directionControls(song, record.settings, 'record')}
+    return `<section class="rmt-x-card"><b>制作范围</b>${rangePicker('record', o, mv.parseSongSections(song))}${continueControl(record, song)}</section>${cast_controls.directionControls(song, record.settings, 'record')}
       ${record.cast ? cast_controls.castControls(record.cast, record.settings, wd, 'record') : btn('edit-cast', '设置本曲人物／世界书')}${wardrobeSettings(record)}
       <div class="rmt-mv-actions">${['16:9', '9:16'].map(id => btn('editor-ratio', id === '16:9' ? '横屏 16:9' : '竖屏 9:16', { id, extra: ` aria-pressed="${mv.normalizeSettings(record.settings).ratio === id}"` })).join('')}</div>`;
 }
@@ -1897,7 +1897,7 @@ export function handleMvClick(event) {
             (editorDialog?.element || body())?.querySelector?.('.rmt-mve-sheet button')?.focus?.({ preventScroll: true });
         }
         else if (action === 'editor-strip') { const start = Number(id); if (Number.isInteger(start) && start >= 0 && start < record.shots.length) { view.stripStart = start; renderMv(); } }
-        else if (action === 'editor-section') { const index = Number(id); if (Number.isInteger(index) && index >= 0 && index < mv.parseSections(currentSong().lyrics).length) { view.editorSection = view.editorSection === index ? -1 : index; renderMv(); } }
+        else if (action === 'editor-section') { const index = Number(id); if (Number.isInteger(index) && index >= 0 && index < mv.parseSongSections(currentSong()).length) { view.editorSection = view.editorSection === index ? -1 : index; renderMv(); } }
         else if (action === 'editor-line') { if (mv.syncLines(record, currentSong()).some(l => l.key === id)) { view.editorTiming = { kind: 'line', key: id }; view.editorSection = Number(id.split(':')[0]); renderMv(); } }
         else if (action === 'editor-mark') saveEditorTime(currentTime(), true);
         else if (action === 'editor-nudge') { const delta = Number(id); if (Number.isFinite(delta)) saveEditorTime(Math.max(0, editorTimingTarget(record, currentSong()).time + delta)); }
@@ -1993,7 +1993,7 @@ export function handleMvClick(event) {
         else if (action === 'tegaki-rhythm') { mv.patchTegaki(view.songId, { rhythm: id, preset: '' }); renderMv(); }
         else if (action === 'tegaki-font') { mv.patchTegaki(view.songId, { font: id }); renderMv(); }
         else if (action === 'range-pick') {
-            const sections = mv.parseSections(currentSong().lyrics);
+            const sections = mv.parseSongSections(currentSong());
             const source = el.dataset.rmtMvScope === 'draft' ? view.draft : mv.tegakiOptions(currentRecord());
             const extra = {};
             if (id === 'custom') { const idx = mv.selectedSectionIndexes(sections, source.range, source.rangeFrom, source.rangeTo); extra.rangeFrom = idx[0] || 0; extra.rangeTo = idx.at(-1) ?? Math.max(0, sections.length - 1); }
@@ -2065,11 +2065,11 @@ export function handleMvClick(event) {
         else if (action === 'record-mode') recordMode();
         else if (action === 'select-section') {
             const index = Number(id);
-            const sections = mv.parseSections(currentSong().lyrics);
+            const sections = mv.parseSongSections(currentSong());
             if (Number.isInteger(index) && index >= 0 && index < sections.length) { view.tapIndex = index; view.editorTiming = { kind: 'section' }; view.editorSection = index; renderMv(); }
         }
         else if (action === 'tap') {
-            const sections = mv.parseSections(currentSong().lyrics);
+            const sections = mv.parseSongSections(currentSong());
             const taps = record.timing?.taps || {};
             const next = syncTapIndex(sections, taps);
             if (next >= 0) { setTap(next, Math.round(currentTime() * 10) / 10); view.tapIndex = -1; renderMv(); }
@@ -2226,7 +2226,7 @@ export function handleMvChange(event) {
         const record = currentRecord(), song = currentSong();
         if (!record || !song) return true;
         const o = mv.exportOptions(record, song);
-        const idx = mv.selectedSectionIndexes(mv.parseSections(song.lyrics), o.range, o.rangeFrom, o.rangeTo);
+        const idx = mv.selectedSectionIndexes(mv.parseSongSections(song), o.range, o.rangeFrom, o.rangeTo);
         const key = input.dataset.rmtMvExportRange === 'to' ? 'rangeTo' : 'rangeFrom';
         try { mv.patchRecord(view.songId, { exportRange: { range: 'custom', rangeFrom: idx[0] ?? 0, rangeTo: idx.at(-1) ?? 0, [key]: Math.max(0, Number(input.value) || 0) } }); } catch (error) { toastError(error); }
         renderMv();
@@ -2340,7 +2340,7 @@ function sharedBackgroundsHtml(record, shots) {
 }
 
 function renderGroupsBoard(song, record) {
-    const sections = mv.parseSections(song.lyrics);
+    const sections = mv.parseSongSections(song);
     const keys = mv.assetKeys(record, song);
     const drawn = keys.filter(k => mv.hasAssetImage(mv.assetOf(record, k)?.image)).length;
     const remaining = keys.length - drawn;
@@ -2588,7 +2588,7 @@ function coverPalette(song) {
     } catch { palettes.set(url, fallback); return fallback; }
 }
 
-function isChorusSection(song, index) { return /^(final )?chorus|^hook/i.test(mv.parseSections(song.lyrics)[index]?.tag || ''); }
+function isChorusSection(song, index) { return /^(final )?chorus|^hook/i.test(mv.parseSongSections(song)[index]?.tag || ''); }
 
 const stageShadows = new Map();
 function silhouette(url, source) {
