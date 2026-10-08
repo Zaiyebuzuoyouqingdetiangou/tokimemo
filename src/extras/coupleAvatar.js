@@ -105,6 +105,15 @@ export function couplePromptParts(value) {
     const interaction = resolvedInteraction.prompt;
     const rendering = chosen?.prompt || settings.customStyle;
     const construction = styles.coupleStyleConstruction(chosen);
+    // Framing and finish are art direction only. Keep full-figure styles and
+    // simplified media intact; explicit user directions still take precedence.
+    const fullFigure = animal || (chosen?.group === 'chibi' && chosen.id !== 'chibi-headshot')
+        || (chosen?.group === 'craft' && !['craft-paper', 'craft-bead'].includes(chosen.id))
+        || ['fantasy-enamel', 'fantasy-shadow'].includes(chosen?.id);
+    const framing = !chosen ? '' : fullFigure
+        ? 'Each complete stylized figure fills most of its own half, with a readable face and connected limbs; retain the selected body proportions.'
+        : 'Close head-and-shoulder or upper-body portraits fill most of each half, with visible shoulders and clothing supporting the gestures.';
+    const finish = !chosen ? '' : 'Finished artwork in the selected medium: recognizable individual features, intentional contours and gestures connected naturally to the body in the selected form. Keep background detail quieter than the subjects, with clear subject-to-background separation. Preserve deliberate simplicity and the selected medium\'s own texture.';
     const form = animal
         ? 'Two complete animals, species-appropriate animal anatomy, heads, muzzles or beaks, bodies, limbs and tails. Paws, wings or flippers perform the gestures. Each animal has its own eye color, fur markings and small signature accessories derived from its identity.'
         : object ? 'Two crafted figures whose entire faces and bodies are made from the selected material, with its physical texture and construction.'
@@ -118,9 +127,9 @@ export function couplePromptParts(value) {
     const styleLead = rendering ? `Rendering style: ${rendering}.` : '';
     const composition = [
         construction ? `Style construction: ${construction}` : '',
-        form,
-        `One continuous landscape illustration, two distinct ${subject}s side by side, one centered at the left quarter and one at the right quarter, balanced subject scale.`,
-        'A continuous painted background fills the entire image from edge to edge, including the center and all four corners. Faces and gestures sit comfortably within their own half, surrounded by the same fully painted environment.',
+        form, framing, finish,
+        `One continuous horizontal paired portrait, two distinct ${subject}s side by side, one centered at the left quarter and one at the right quarter, balanced subject scale.`,
+        'A continuous background in the selected medium fills the entire image from edge to edge, including the center and all four corners. Faces and gestures sit comfortably within their own half, surrounded by the same continuous background.',
         `Interaction: ${interaction && interaction !== '交给灵感' ? interaction : DEFAULT_INTERACTION_PROMPT}.`,
         `Action roles: LEFT — ${actions[0]}; RIGHT — ${actions[1]}. Adapt gestures to the chosen body form; explicit user directions take precedence.`,
         settings.direction ? `Direction: ${settings.direction}.` : '',
@@ -142,8 +151,8 @@ export function couplePromptParts(value) {
     const nai = {
         prompt: [rendering || 'illustration', `two distinct ${subject}s`, 'side by side'].join(', '),
         nl: [
-            construction,
-            'One continuous landscape illustration, first subject centered at the left quarter, second at the right quarter, matching scale. Background fills the image edge to edge, through the center and all four corners. Faces and gestures stay comfortably inside their own half.',
+            construction, framing, finish,
+            'One continuous horizontal paired portrait, first subject centered at the left quarter, second at the right quarter, matching scale. Background fills the image edge to edge, through the center and all four corners. Faces and gestures stay comfortably inside their own half.',
             animal || object ? form : '',
             `Interaction: ${interaction && interaction !== '交给灵感' ? interaction : DEFAULT_INTERACTION_PROMPT}.`,
             settings.pairType === 'echo' ? 'Coordinated colors and light, complementary individual gestures.' : 'A shared motif connects the two subjects.',
