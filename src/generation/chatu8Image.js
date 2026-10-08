@@ -151,6 +151,13 @@ function orientedSize(context, backend, orientation, aspectRatio = '') {
     const bag = extensionBag(context);
     const keys = { novelai: ['novelai_width', 'novelai_height'], sd: ['sd_cwidth', 'sd_cheight'], comfyui: ['comfyui_width', 'comfyui_height'] }[backend];
     const width = Number(keys && bag?.[keys[0]]), height = Number(keys && bag?.[keys[1]]);
+    if (aspectRatio === '2:1') {
+        // Two square portraits need an actual 2:1 request, not just landscape.
+        // Keep the configured pixel budget; align both dimensions to 64.
+        const area = Number.isSafeInteger(width) && width > 0 && Number.isSafeInteger(height) && height > 0 ? width * height : 1216 * 832;
+        const short = Math.max(64, Math.floor(Math.sqrt(area / 2) / 64) * 64);
+        return { width: short * 2, height: short };
+    }
     if (aspectRatio === '16:9' || aspectRatio === '9:16') {
         // Both dimensions are multiples of 64. Exact 16:9 begins at 1024×576;
         // larger configured budgets can use its integer multiples. Only this
@@ -174,7 +181,26 @@ function orientedSize(context, backend, orientation, aspectRatio = '') {
     return orientation === 'portrait' ? { width: short, height: long } : { width: long, height: short };
 }
 
-export async function generateChatu8Image(prompt, { signal = null, orientation = 'landscape', respectOrientation = false, aspectRatio = '', promptMetadata = null, onProgress = null, onSettled = null, targetKey = '', context = core_context.getContext(), preservePrompt = false } = {}) {
+function avatarCharacterPrompt(parts, context, backend) {
+    // The existing generate-image-request consumer recognizes this grammar
+    // for NAI 4/5, then builds separate native character captions. Older models
+    // and other backends keep the complete flat prompt. No settings are changed.
+    const model = extensionBag(context)?.novelaimode;
+    if (backend !== 'novelai' || typeof model !== 'string' || !/nai-diffusion-[45](?:-|$)/.test(model)
+        || typeof parts?.scene !== 'string' || !parts.scene.trim()
+        || !Array.isArray(parts.characters) || parts.characters.length !== 2
+        || !parts.characters.every(row => typeof row?.tag === 'string' && row.tag.trim())) return '';
+    // Semicolons end upstream fields. Normalize punctuation in the transport
+    // copy so user prose cannot truncate a character or spill into the other.
+    const field = value => value.replace(/[;；]/g, ',').replace(/\|\s*centers\s*:/gi, ', centers ')
+        .replace(/（/g, '(').replace(/）/g, ')').replace(/[\r\n]+/g, ' ').trim();
+    return [
+        `Scene Composition: ${field(parts.scene)};`,
+        ...parts.characters.map((row, index) => `Character ${index + 1} Prompt: ${field(row.tag)} | centers:{${index ? 0.75 : 0.25},0.5};`),
+    ].join('\n');
+}
+
+export async function generateChatu8Image(prompt, { signal = null, orientation = 'landscape', respectOrientation = false, aspectRatio = '', promptMetadata = null, onProgress = null, onSettled = null, targetKey = '', context = core_context.getContext(), preservePrompt = false, singlePrompt = false, avatarPromptParts = null } = {}) {
     if (signal?.aborted) throw chatu8ImageError('CH8_ABORTED');
     const state = chatu8ImageState(context);
     if (!state.available) throw chatu8ImageError(state.code);
@@ -187,6 +213,13 @@ export async function generateChatu8Image(prompt, { signal = null, orientation =
         if (ownErrors.has(error) || error?.safeToDisplay) throw error;
         throw chatu8ImageError('CH8_INVALID_ARGS');
     }
+    const avatar = preservePrompt && singlePrompt && !promptMetadata ? avatarPromptParts : null;
+    const separated = avatarCharacterPrompt(avatar, context, state.backend);
+    if (separated) scene = separated;
+    // This is the consumer's documented extra-negative event field. It appends
+    // to the user's configured negative prompt in these four supported modes.
+    const negative = ['novelai', 'sd', 'comfyui', 'runninghub'].includes(state.backend)
+        && typeof avatar?.negative === 'string' ? avatar.negative.trim() : '';
     const source = state.eventSource;
     const id = requestId();
     let settled = false;
@@ -225,7 +258,9 @@ export async function generateChatu8Image(prompt, { signal = null, orientation =
                 signal?.addEventListener('abort', onAbort, { once: true });
                 // 排队也计入等待时间，不能把仍在智绘姬队列里的任务判成失败。
                 timer = setTimeout(() => report('waiting'), CHATU8_IMAGE_WAIT_NOTICE_MS);
-                source.emit(REQUEST_EVENT, { id, prompt: scene, ...(respectOrientation ? orientedSize(context, state.backend, orientation, aspectRatio) : {}) });
+                source.emit(REQUEST_EVENT, { id, prompt: scene,
+                    ...(negative ? { negative_prompt: negative } : {}),
+                    ...(respectOrientation ? orientedSize(context, state.backend, orientation, aspectRatio) : {}) });
             } catch { stop('CH8_BACKEND_ERROR'); }
         });
         if (signal?.aborted) throw chatu8ImageError('CH8_ABORTED');
