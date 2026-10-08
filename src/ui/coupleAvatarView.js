@@ -14,6 +14,9 @@ import * as styles from './coupleAvatarCss.js';
 
 function esc(value) { return text.esc(value); }
 const jobs = new Map();
+// Derived images stay in memory only. The original and editable crop settings
+// remain the persisted source of truth; weak keys release closed views' images.
+const previewImages = new WeakMap();
 let active = null, modal = null, sequence = 0;
 const settingFields = ['interaction', 'interactionDetail', 'clothing', 'background', 'direction', 'customStyle'];
 const HISTORY_PAGE_SIZE = 6; // Display page only; stored records are never capped.
@@ -104,13 +107,38 @@ function dialog(view, title, contents) {
     shade.querySelector('[data-pair-close]').focus({ preventScroll: true });
     return m;
 }
-function square(record, display, loaded, className = '') {
+function pairPreviews(record, loaded) {
+    if (!loaded.croppable) return { images: [], error: loaded.error };
+    const key = JSON.stringify([record.crops, record.order]);
+    const cached = previewImages.get(loaded);
+    if (cached?.key === key) return cached;
+    try {
+        const result = { key, images: crop.cropPairImage(loaded, record.crops, record.order) };
+        previewImages.set(loaded, result);
+        return result;
+    } catch (error) {
+        // A browser export failure must not hide a viewable original or make
+        // generation fail. Save can still explain the failure and offer import.
+        return { images: [], error: error.message };
+    }
+}
+function square(record, display, loaded, className = '', preview = null) {
     const box = document.createElement('div'); box.className = `rmt-pair-square ${className}`;
     const half = record.order?.[display] === 1 ? 1 : 0;
-    const img = document.createElement('img'); img.src = loaded.image.src;
+    const img = document.createElement('img'); img.src = preview?.url || loaded.image.src;
     img.alt = `${record.settings.people[half]?.name || (display ? '右边' : '左边')}的头像`;
     img.draggable = false;
-    Object.assign(img.style, crop.cropPreviewStyle(loaded.width, loaded.height, half, record.crops[half]));
+    if (preview) {
+        // The native image itself is the same square PNG as the save sheet.
+        // Circle preview clips only its wrapper, preserving all four PNG corners.
+        img.className = 'rmt-pair-cropped-image';
+    } else {
+        img.className = 'rmt-pair-source-preview';
+        Object.assign(img.style, crop.cropPreviewStyle(loaded.width, loaded.height, half, record.crops[half]));
+        // CSS-only fallback/editor previews still point at both people. Avoid
+        // presenting that original as a single avatar in the native save menu.
+        img.addEventListener('contextmenu', event => event.preventDefault());
+    }
     box.append(img); return box;
 }
 function loadRecord(view, record) {
@@ -139,9 +167,10 @@ async function renderPreview(view) {
     try {
         const loaded = await loadRecord(view, record);
         if (!current(view) || token !== view.previewEpoch) return;
-        for (let i = 0; i < 2; i++) host.querySelector(`[data-pair-image="${i}"]`).replaceWith(square(record, i, loaded));
+        const previews = pairPreviews(record, loaded);
+        for (let i = 0; i < 2; i++) host.querySelector(`[data-pair-image="${i}"]`).replaceWith(square(record, i, loaded, '', previews.images[i]));
         const meta = host.querySelector('[data-pair-image-info]');
-        meta.textContent = `${styleLabel(record.settings)} · 原图 ${loaded.width} × ${loaded.height}${loaded.croppable ? '' : ' · ' + loaded.error}`;
+        meta.textContent = `${styleLabel(record.settings)} · 原图 ${loaded.width} × ${loaded.height}${previews.error ? ' · ' + previews.error : ''}`;
     } catch (error) {
         if (!current(view) || token !== view.previewEpoch) return;
         for (const node of host.querySelectorAll('.rmt-pair-empty span')) node.textContent = '原图暂未载入';
@@ -178,7 +207,13 @@ async function renderHistory(view) {
     view.historyObserver?.disconnect();
     const fill = async node => {
         const record = visible.find(row => row.id === node.dataset.pairThumb); if (!record) return;
-        try { const loaded = await loadRecord(view, record); if (current(view) && token === view.historyEpoch && node.isConnected) node.replaceChildren(square(record, 0, loaded), square(record, 1, loaded)); }
+        try {
+            const loaded = await loadRecord(view, record);
+            if (current(view) && token === view.historyEpoch && node.isConnected) {
+                const previews = pairPreviews(record, loaded);
+                node.replaceChildren(square(record, 0, loaded, '', previews.images[0]), square(record, 1, loaded, '', previews.images[1]));
+            }
+        }
         catch { if (node.isConnected) { node.title = '原图暂时不可用，点击后可查看记录或导入原图。'; const note = node.querySelector('.rmt-pair-thumb-note'); if (note) note.textContent = '原图暂不可用'; } }
     };
     for (const node of nodes) void fill(node);
@@ -416,7 +451,7 @@ async function showCrop(view, record) {
             Object.assign(image.style, crop.cropPreviewStyle(loaded.width, loaded.height, half, c));
             image.alt = `${record.settings.people[half]?.name || (side ? '右边' : '左边')}的头像`;
         } else {
-            const next = square(preview, side, loaded); next.setAttribute('data-pair-crop-stage', ''); stage.replaceWith(next);
+            const next = square(preview, side, loaded, view.circle ? 'is-circle' : ''); next.setAttribute('data-pair-crop-stage', ''); stage.replaceWith(next);
         }
         for (const slider of m.body.querySelectorAll('[data-pair-crop-control]')) slider.value = c[slider.dataset.pairCropControl];
         const size = crop.cropRect(loaded.width, loaded.height, half, c).outputSize;
@@ -441,7 +476,8 @@ async function showOriginal(view, record, seam) {
         try { loaded = await loadRecord(view, record); } catch (error) { return imageFailure(view, m, record, error); }
         if (modal !== m) return;
         m.body.innerHTML = '<div class="rmt-pair-seam" data-pair-seam></div><p>这里展示当前裁切后的拼接。分别移动或放大后，中间的图案可能需要重新对齐。</p><div class="rmt-pair-actions"><button type="button" data-pair-recrop>调整裁切</button></div>';
-        m.body.querySelector('[data-pair-seam]').append(square(record, 0, loaded), square(record, 1, loaded));
+        const previews = pairPreviews(record, loaded);
+        m.body.querySelector('[data-pair-seam]').append(square(record, 0, loaded, '', previews.images[0]), square(record, 1, loaded, '', previews.images[1]));
         m.body.querySelector('[data-pair-recrop]').addEventListener('click', () => void showCrop(view, record).catch(error => failure(view, error)));
     } else {
         m.body.innerHTML = `<img class="rmt-pair-full-image" src="${esc(record.original.url)}" alt="这一对头像的完整原图"><p>这是未裁切的完整原图。手机和 TT 可长按图片保存。</p><div class="rmt-pair-actions"><a class="rmt-pair-button" href="${esc(record.original.url)}" target="_blank" rel="noopener noreferrer">单独打开原图</a><a class="rmt-pair-button" href="${esc(record.original.url)}" download="情侣头像-原图">下载原图</a></div>`;

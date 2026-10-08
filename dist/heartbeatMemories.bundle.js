@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 338
-// Source SHA-256: f30ccf86e076cf4e47fda684083a3bd137cabbc6a09d11db5b6a621bce7d9d9a
+// Source SHA-256: 41b25be8505f563005c21a34da8961a0b7a7ccf7a92c6d7783b6cd02dca59ddb
 // Build: python3 tools/verification/build.py <source-root>
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -504,7 +504,7 @@ function __init_core_releaseNotes_js() {
 // MODULE: core/releaseNotes.js
 
 // GENERATED FROM README.md by tools/verification/build.py. Do not edit by hand.
-const RELEASE_README = "# 心迹回廊 1.0.38\n\n## 更新日志模块\n\n新增了更新日志板块，感谢@nancyindaeyo的更新。\n\n## 本次变动\n\n- 情侣头像加强左右人物绑定：柏宝绘支持独立人物通道时，分别传递两人的外貌与动作；其他现有渠道保留完整双人描述，减少外貌混用。\n- 72 种画风补充人物比例、线条、明暗与材质要求，让画法作用于人物本身。兽化不再将白皙皮肤误作浅色毛发；黑白画法保留明暗特征，不混入彩色眼睛。\n- 48 种互动分别安排左边的动作与右边的回应，减少同姿势复制。已有原图、裁切、历史与收藏保留，新要求用于之后生成的头像。\n";
+const RELEASE_README = "# 心迹回廊 1.0.41\n\n## 更新日志模块\n\n新增了更新日志板块，感谢@nancyindaeyo的更新。\n\n## 本次变动\n\n- 调整情侣头像的柏宝绘 NAI 提示：使用公开接口的标签与自然语言字段，外貌放在各自人物栏开头，动作单独传递，减少反复出现的风格长段。\n- 随机互动灵感同时携带左右动作和不同反应，修正人物栏只有笼统动作说明的问题；自定义文字、角色外貌和已有收藏保持原样。\n- 随机灵感的默认背景描述改为铺满画面的纯色背景；工笔与油画的笔触说明改用正向描述。柏宝绘自身的画风配方、负向提示与横屏尺寸仍按用户配置使用。\n";
 
 __m_core_releaseNotes_js.RELEASE_README = RELEASE_README;
 }
@@ -613,49 +613,78 @@ function appearanceReference(value, animal, object) {
 
 // Both outputs are composed locally from the same frozen settings. A flat-only
 // provider gets the complete prompt; capable NAI gets scene + two identities.
+// Describe the drawing itself. Crop masks, cards and prohibited shapes belong
+// to the UI or the provider's negative channel, never the shared positive scene.
 function couplePromptParts(value) {
     const settings = normalizeCoupleSettings(value, null);
     const chosen = styles.COUPLE_STYLES.find(style => style.id === settings.styleId);
     const animal = chosen?.group === 'animal';
     const object = chosen?.group === 'craft' || ['fantasy-enamel', 'fantasy-shadow'].includes(chosen?.id);
     const subject = animal ? 'animal' : object ? 'crafted character' : 'character';
-    const preset = styles.INTERACTION_PRESETS.find(item => item.label === settings.interaction);
-    const interaction = settings.interaction === '自定义互动' ? settings.interactionDetail
-        : preset?.prompt || settings.interaction;
+    const resolvedInteraction = styles.coupleInteraction(settings.interaction, settings.interactionDetail);
+    const interaction = resolvedInteraction.prompt;
     const rendering = chosen?.prompt || settings.customStyle;
     const construction = styles.coupleStyleConstruction(chosen);
     const form = animal
-        ? 'The TWO main subjects ARE complete animals, with species-appropriate heads, bodies, limbs and tails. No human faces or human bodies, no people wearing animal ears, no people holding animal versions. Adapt actions to paws, wings or flippers. Translate original hair/eye colors and signature accessories into animal identity cues.'
-        : object ? 'The TWO main subjects ARE the crafted objects described by the selected style. Their faces and bodies use that material and construction. Not humans holding toys or wearing material-themed costumes.'
-            : 'Apply the selected rendering medium, proportions, linework and shading to the entire characters and image, not only to background decorations.';
-    const actions = settings.people.map((_, index) => preset?.roles[index]
-        || `perform only the ${index ? 'RIGHT' : 'LEFT'} subject's role in the chosen interaction, with an individual expression and gesture`);
+        ? 'Two complete animals, species-appropriate animal anatomy, heads, muzzles or beaks, bodies, limbs and tails. Paws, wings or flippers perform the gestures. Each animal has its own eye color, fur markings and small signature accessories derived from its identity.'
+        : object ? 'Two crafted figures whose entire faces and bodies are made from the selected material, with its physical texture and construction.'
+            : 'The selected medium, proportions, linework and shading define the faces, bodies, clothing and background.';
+    const actions = resolvedInteraction.roles;
     const people = settings.people.map((person, index) => {
         const side = index === 0 ? 'LEFT' : 'RIGHT';
         const reference = appearanceReference(person.appearance, animal, object);
-        return `${side} HALF ${subject}: ${person.name || (index === 0 ? 'first character' : 'second character')}${reference ? `; ${animal || object ? 'identity reference to reinterpret in the selected form' : 'appearance'}: ${reference}` : ''}. Action: ${actions[index]}.`;
+        return `${side} HALF ${subject}: ${person.name || (index === 0 ? 'first character' : 'second character')}${reference ? `; ${animal || object ? 'individual identity in the selected form' : 'appearance'}: ${reference}` : ''}. Action: ${actions[index]}.`;
     });
-    const scene = [
-        rendering ? `Rendering style: ${rendering}.` : '',
+    const styleLead = rendering ? `Rendering style: ${rendering}.` : '';
+    const composition = [
         construction ? `Style construction: ${construction}` : '',
         form,
-        'Selected style controls the medium and proportions of BOTH subjects. Identity references supply individual traits, not a competing drawing style. In monochrome or limited-color styles, express original colors through tones and shapes instead of reintroducing full color.',
-        `One matching avatar pair in one horizontal image, preferably 2:1. One ${subject} centered in EACH of two equal square halves.`,
-        `Two separate identities: LEFT = ${settings.people[0].name || 'first character'}; RIGHT = ${settings.people[1].name || 'second character'}. Keep each side\'s face or muzzle, eyes, hair or markings, clothing and accessories bound to that identity.`,
+        `One continuous landscape illustration, two distinct ${subject}s side by side, one centered at the left quarter and one at the right quarter, balanced subject scale.`,
+        'A continuous painted background fills the entire image from edge to edge, including the center and all four corners. Faces and gestures sit comfortably within their own half, surrounded by the same fully painted environment.',
         `Interaction: ${interaction && interaction !== '交给灵感' ? interaction : DEFAULT_INTERACTION_PROMPT}.`,
         `Action roles: LEFT — ${actions[0]}; RIGHT — ${actions[1]}. Adapt gestures to the chosen body form; explicit user directions take precedence.`,
         settings.direction ? `Direction: ${settings.direction}.` : '',
         settings.clothing ? `${animal ? 'Small wearable accents adapted for animal bodies' : 'Clothing in the selected rendering style'}: ${settings.clothing}.` : '',
         settings.background ? `Background: ${settings.background}.` : '',
         settings.pairType === 'echo'
-            ? 'Independent portraits, coordinated colors and light, complementary poses.'
-            : 'Connected background and shared motif across the center, matching scale.',
-        'Leave margin for square/circle crops while showing the silhouette and body proportions required by the style. Readable expressions, distinct poses, no mirrored duplicates. Shared medium and lighting do not mean identical faces. Keep genuinely shared traits; distinguish the pair through their own supported features and different reactions, not arbitrary changes of identity or gender. Improvise unspecified details. No text, watermark, frame or divider.',
-    ].filter(Boolean).join('\n');
-    return { scene, prompt: [scene, ...people].join('\n'),
+            ? 'Complementary individual gestures, coordinated colors and light, continuous background.'
+            : 'A shared motif connects the two subjects across the center of the continuous scene.',
+        'Preserve each individual\'s own face or muzzle shape, eyes, hair silhouette or markings, clothing and accessories. Shared traits remain shared; expressions and reactions belong to each subject. Express identity colors as tones and shapes when the selected medium is monochrome.',
+    ].filter(Boolean);
+    const negative = [
+        'outer white frame, panel border, central white gutter, split screen, rounded portrait cards, circular picture frames, letterboxing, vignette, fading to blank edges, duplicate character, cloned face, mirrored pose, text, watermark',
+        animal ? 'human face, human body, human hands, person wearing animal ears, person holding an animal' : '',
+    ].filter(Boolean).join(', ');
+    // BaiBai NAI has documented tag + natural-language fields. Keep each
+    // literal appearance at the start of its own tag list (including count
+    // tokens the provider normalizes), and put the action in that subject's
+    // nl. Detailed medium construction is shared once, not repeated per face.
+    const nai = {
+        prompt: [rendering || 'illustration', `two distinct ${subject}s`, 'side by side'].join(', '),
+        nl: [
+            construction,
+            'One continuous landscape illustration, first subject centered at the left quarter, second at the right quarter, matching scale. Background fills the image edge to edge, through the center and all four corners. Faces and gestures stay comfortably inside their own half.',
+            animal || object ? form : '',
+            `Interaction: ${interaction && interaction !== '交给灵感' ? interaction : DEFAULT_INTERACTION_PROMPT}.`,
+            settings.pairType === 'echo' ? 'Coordinated colors and light, complementary individual gestures.' : 'A shared motif connects the two subjects.',
+            'Render both subjects entirely in the selected medium. For a monochrome medium, identity colors become tones. Adapt gestures to the chosen body form.',
+            settings.clothing ? `Clothing or small wearable accents: ${settings.clothing}.` : '',
+            settings.background ? `Background: ${settings.background}.` : '',
+            settings.direction ? `User direction takes precedence: ${settings.direction}.` : '',
+        ].filter(Boolean).join('\n'),
         characters: settings.people.map((person, index) => ({
             name: `${index ? '右边' : '左边'} · ${person.name || (index ? '人物二' : '人物一')}`,
-            tag: [people[index], rendering ? `Rendering style: ${rendering}.` : '', construction].filter(Boolean).join('\n'),
+            tag: [appearanceReference(person.appearance, animal, object), rendering || subject].filter(Boolean).join(', '),
+            nl: `On the ${index ? 'right' : 'left'}, ${actions[index]}.`,
+        })),
+    };
+    return { scene: [styleLead, ...composition].filter(Boolean).join('\n'),
+        // Put the actual two appearances before general art direction on flat
+        // backends, where a long scene used to bury the individual identities.
+        prompt: [styleLead, ...people, ...composition].filter(Boolean).join('\n'), negative, nai,
+        characters: settings.people.map((person, index) => ({
+            name: `${index ? '右边' : '左边'} · ${person.name || (index ? '人物二' : '人物一')}`,
+            tag: [people[index], styleLead, construction].filter(Boolean).join('\n'),
         })) };
 }
 
@@ -928,7 +957,7 @@ async function generateCouple(value, { context = core_context.currentCharacterGu
             orientation: 'landscape', respectOrientation: true, aspectRatio: '2:1',
             characterName: settings.people[0].name || context?.name2 || '',
             targetKey, singlePrompt: true, preservePrompt: true, onProgress: report,
-            avatarPromptParts: { scene: parts.scene, characters: parts.characters },
+            avatarPromptParts: { scene: parts.scene, characters: parts.characters, negative: parts.negative, nai: parts.nai },
         });
         task_trace.markStage(trace, 'request');
         task_trace.markStage(trace, 'response');
@@ -1175,7 +1204,7 @@ const COUPLE_STYLES = Object.freeze([
     ['art-gongbi', 'art', '国风工笔', '细描发丝与衣纹，含蓄耐看。', 'Chinese gongbi painting, meticulous fine hair and fabric lines, refined restrained color washes'],
     ['art-ink', 'art', '水墨淡彩', '墨色留白，少量颜色点睛。', 'Chinese ink-and-light-color painting, expressive ink washes, negative space, sparse color accents'],
     ['art-watercolor', 'art', '透明水彩', '水色晕染，轻轻透出纸感。', 'transparent watercolor portrait illustration, luminous layered washes, subtle paper grain'],
-    ['art-pencil', 'art', '彩铅手绘', '颗粒和线条，像手绘小卡。', 'colored-pencil drawing, visible pencil grain and gentle strokes, hand-drawn portrait card'],
+    ['art-pencil', 'art', '彩铅手绘', '颗粒和线条，像手绘小卡。', 'colored-pencil drawing, visible pencil grain and gentle strokes, hand-drawn portrait illustration'],
     ['art-oil', 'art', '油画厚涂', '可见笔触与统一的光影。', 'painterly oil portrait, visible impasto brushwork, coherent soft lighting and rich color relationships'],
     ['art-sketch', 'art', '黑白素描', '不靠配色，也能画出默契。', 'monochrome graphite portrait sketch, sensitive line and tonal shading, expressive individual faces'],
     ['craft-plush', 'craft', '毛绒玩偶', '绒毛和缝线，软乎乎的一对。', 'a matching pair of soft plush dolls, tactile fuzzy fabric, delicate stitching, recognizable character design'],
@@ -1215,7 +1244,7 @@ const COUPLE_STYLES = Object.freeze([
     ['graphic-pop', 'graphic', '波普撞色', '粗轮廓、撞色和醒目的网点。', 'pop-art portrait illustration, bold ink outlines, contrasting flat colors, large halftone dots'],
     ['graphic-comic', 'graphic', '复古美漫', '粗黑墨线、排线与纸面印刷感。', 'vintage comic-book portraits, bold black ink contours, crosshatching, textured halftone printing, no lettering'],
     ['graphic-lino', 'graphic', '双色橡皮章', '雕刻感的粗线，像一对印章。', 'two-color linocut stamp portraits, broad carved negative shapes, uneven ink transfer, graphic flat silhouettes'],
-    ['photo-instant', 'photo', '即时成像', '柔和闪光与轻微偏色的日常抓拍。', 'instant-film candid photography, soft direct flash, slight analog color shifts, authentic lens rendering, no printed border'],
+    ['photo-instant', 'photo', '即时成像', '柔和闪光与轻微偏色的日常抓拍。', 'instant-film candid photography, soft direct flash, slight analog color shifts, authentic lens rendering, edge-to-edge background'],
     ['photo-rain', 'photo', '雨窗写真', '雨滴虚化、玻璃反光与柔和侧光。', 'photographic portraits beside a rainy window, defocused raindrops and glass reflections, soft sidelight, realistic skin texture'],
     ['animal-cat', 'animal', '小猫化身', '猫脸、猫爪和尾巴，映射原有发色。', 'two small cats as the main subjects, round feline faces, whiskers, paws and curved tails, cute animal portrait illustration'],
     ['animal-dog', 'animal', '小狗化身', '小狗嘴鼻与软耳，神情各不相同。', 'two small dogs as the main subjects, canine muzzles, soft ears, paws and wagging tails, expressive animal portraits'],
@@ -1237,17 +1266,17 @@ const COUPLE_STYLES = Object.freeze([
 // Construction instructions affect the subjects themselves, not just a texture
 // or a decorative background. They are prompts only, never output validation.
 const MEDIUM_CONSTRUCTION = Object.freeze({
-    chibi: 'Build the selected stylized proportions into each head, face and body; do not turn a tiny-body style into a normal-proportioned portrait.',
-    anime: 'Use the selected drawing language for both faces, hair and clothes: deliberate contours and matching shadow design, not one generic glossy painted face with different backdrops.',
-    art: 'The selected traditional medium must visibly build the face, hair and clothing as well as the background; not a finished anime portrait with a paper-texture overlay.',
-    craft: 'The actual two subjects are handmade objects. Their face, hair, limbs and clothes are constructed from the chosen material, not human skin holding a toy.',
-    graphic: 'Construct faces, hair, clothes and background in the same graphic vocabulary; do not place smooth painted faces inside an otherwise graphic frame.',
-    photo: 'Use photographic facial structure, natural skin texture and coherent camera lighting on both subjects; the photographic treatment is not just a filter over anime faces.',
-    animal: 'Use complete species-appropriate animal anatomy, including animal faces and bodies. Map each identity to its own fur or feather markings, eyes and small accessories, not a human wig or a human face with animal ears.',
-    fantasy: 'Build the portrait itself out of the selected medium. Face, hair and clothes must share its visible construction, not remain a normal painted portrait surrounded by themed decoration.',
+    chibi: 'Build the selected stylized proportions into each head, face and body.',
+    anime: 'Use the selected drawing language for both faces, hair and clothes: deliberate contours and matching shadow design.',
+    art: 'The selected traditional medium visibly builds the face, hair, clothing and background.',
+    craft: 'The actual two subjects are handmade objects. Their face, hair, limbs and clothes are constructed from the chosen material.',
+    graphic: 'Construct faces, hair, clothes and background in the same graphic vocabulary.',
+    photo: 'Use photographic facial structure, natural skin texture and coherent camera lighting on both subjects.',
+    animal: 'Use complete species-appropriate animal anatomy, including animal faces and bodies. Map each identity to its own fur or feather markings, eyes and small accessories.',
+    fantasy: 'Build the portrait itself out of the selected medium. Face, hair and clothes share its visible construction.',
 });
 const STYLE_CONSTRUCTION = Object.freeze({
-    'chibi-dumpling': 'Each head occupies about half of the full figure height; show the tiny torso, stubby arms and feet within its square. Broad simple shapes, minimal facial shading.',
+    'chibi-dumpling': 'Each head occupies about half of the full figure height; show the tiny torso, stubby arms and feet. Broad simple shapes, minimal facial shading.',
     'chibi-three-head': 'The head occupies about one third of the figure height; include the small clothed body and readable little gestures, not a head-only crop.',
     'chibi-headshot': 'Oversized rounded face, small nose and mouth, deliberately enlarged expressive eyes; show hair silhouette and a little shoulder, without adult facial proportions.',
     'chibi-doodle': 'Dot eyes, a few uneven pen strokes for mouth and hair, simplified silhouette and small flat color patches; no detailed painted eyes or face shading.',
@@ -1259,11 +1288,11 @@ const STYLE_CONSTRUCTION = Object.freeze({
     'anime-retro90': 'Slightly heavy analog ink contours, flat painted cels, restrained two-step face shadows, subtle color bleed and film softness rather than glossy digital detail.',
     'anime-korean': 'Refined thin colored outlines, translucent skin tones and soft sparse shadows; clear airy eyes, economical hair detail, no heavy ink masses.',
     'anime-storybook': 'Simple storybook facial shapes, tactile brush marks, slightly irregular hand-drawn contours and quiet broad color areas; reduce polished anime eye detail.',
-    'art-gongbi': 'Continuous hair-fine ink lines define facial contours, hair and garment folds, with many thin restrained color washes; no thick painterly edges.',
+    'art-gongbi': 'Continuous hair-fine ink lines define facial contours, hair and garment folds, with many thin restrained color washes and slender ink edges.',
     'art-ink': 'Wet and dry ink strokes shape the hair and clothes, broken brush edges and large untouched-paper areas; sparse washes also affect the face.',
     'art-watercolor': 'Wet-on-wet color transitions, visible pigment blooms, translucent overlapping washes and lost edges across the face, hair and clothes; avoid hard cel-shadow fills.',
     'art-pencil': 'Visible directional colored-pencil strokes across skin, hair and fabric, layered crosshatching and paper tooth; highlights are uncolored paper.',
-    'art-oil': 'Visible directional brushstrokes build the face, hair and clothing; solid paint planes and impasto edges shape the light, without outlining every anime hair strand.',
+    'art-oil': 'Visible directional brushstrokes build the face, hair and clothing; solid paint planes and impasto edges shape the light, with broad individually painted hair masses.',
     'art-sketch': 'Graphite strokes and crosshatching build face planes, hair and clothing; varied pencil pressure, erased highlights and white paper. All features remain monochrome, not colored eyes or flat manga screentones.',
     'craft-plush': 'Visible fabric seams shape the face and body; short fuzzy pile, embroidered eyes and mouth, stuffed rounded limbs. Hair is fabric tufts rather than painted strands.',
     'craft-clay': 'A visibly sculpted rounded face and chunky clay hair locks, small modeled limbs, matte handmade surfaces and gentle physical cast shadows.',
@@ -1275,7 +1304,7 @@ const STYLE_CONSTRUCTION = Object.freeze({
     'graphic-line': 'A few continuous economical contour strokes define the faces and hair, mostly empty interiors; preserve distinctive silhouettes without adding painted shading.',
     'graphic-silhouette': 'Two flat colors only, identity expressed through profile, hair and accessory contours; use negative shapes instead of fully rendered eyes or skin.',
     'graphic-print': 'Carved light and dark hatching shapes define cheeks, hair and fabric, limited ink overprints and small uneven ink edges; no continuous-tone painting.',
-    'graphic-sticker': 'Bold simplified character silhouettes with readable expressions, clean flat or cel colors and a die-cut white outline following the subjects, not a rectangular frame.',
+    'graphic-sticker': 'Bold simplified character silhouettes with readable expressions, clean flat or cel colors and a die-cut white outline following the subjects.',
     'graphic-geometric': 'Geometric planes construct the cheeks, eyes, hair and clothing; flat color boundaries replace brushwork, with recognizable individual silhouettes.',
     'photo-film': 'Candid photographic faces with natural asymmetry, coherent lens depth, fine film grain and restrained analog color response.',
     'photo-daylight': 'Natural daylight on real facial planes, clear skin texture, relaxed candid posture and soft background defocus; no airbrushed doll faces.',
@@ -1302,7 +1331,7 @@ const STYLE_CONSTRUCTION = Object.freeze({
     'graphic-pop': 'Bold graphic facial outlines, large halftone dots and contrasting flat spot colors cover the subjects themselves.',
     'graphic-comic': 'Heavy expressive ink, crosshatched facial shadows and printed halftone colors, with simplified readable hair masses.',
     'graphic-lino': 'Broad carved negative spaces and two ink colors define the faces and hair; uneven ink transfer and no smooth tonal gradients.',
-    'photo-instant': 'Real candid faces with soft direct flash, mild analog color shifts, shallow lens depth and informal snapshots, without a printed photo border.',
+    'photo-instant': 'Real candid faces with soft direct flash, mild analog color shifts, shallow lens depth and informal snapshots, edge-to-edge scenery.',
     'photo-rain': 'Real facial planes in soft window sidelight, optical reflections and defocused rain behind the subjects, not raindrops painted onto an anime portrait.',
     'animal-cat': 'Feline skulls, triangular ears, short muzzles, whiskers, paws and tails; no human face underneath cat ears.',
     'animal-dog': 'Canine muzzles, noses, dog ears, paws and tails; individual fur markings and different expressions distinguish the two dogs.',
@@ -1429,20 +1458,73 @@ const INTERACTION_PRESETS = Object.freeze([
 
 const INTERACTIONS = Object.freeze([...INTERACTION_PRESETS.map(row => row.label), '交给灵感', '自定义互动']);
 
+// Keep a generated idea's wording and its two actions together. These are local
+// authoring templates, not an extra translation/generation request. Existing
+// saved ideas remain plain strings; only an exact known template is expanded.
+const IDEA_MOMENTS = Object.freeze([
+    ['左边递出一朵小花，右边伸手接住', 'offer a small flower toward the right', 'reach left to receive the flower'],
+    ['左边偷藏一颗糖，右边假装没发现', 'secretly hide a piece of candy', 'pretend not to notice the hidden candy'],
+    ['左边举起一半爱心，右边拿着另一半回应', 'raise one heart half toward the right', 'hold the other heart half toward the left in response'],
+    ['左边轻轻拉住围巾一端，右边靠过来', 'gently tug one end of the scarf', 'lean toward the left in response to the tug'],
+    ['左边捧着小星星，右边试着触碰它的光', 'hold a small glowing star toward the right', 'reach toward the left to touch the star light'],
+    ['左边吹出一个泡泡，右边追着泡泡看', 'blow a bubble toward the right', 'follow the drifting bubble with the eyes'],
+    ['左边把小纸船推过来，右边在另一侧接住', 'push a little paper boat toward the right', 'catch the paper boat coming from the left'],
+    ['左边藏在叶子后偷看，右边歪头找它', 'peek from behind a leaf', 'tilt the head and look left to find the hidden subject'],
+    ['左边递来热饮，右边把小饼干分过去', 'offer a warm drink toward the right', 'offer a small cookie toward the left in return'],
+    ['左边举着小相机，右边故意做个鬼脸', 'raise a small camera toward the right', 'make a playful silly face for the camera'],
+    ['左边把花瓣放到头顶，右边学着戴上另一片', 'place a flower petal on top of the head', 'copy the gesture with a different petal'],
+    ['左边送出纸飞机，右边伸手迎接', 'send a paper airplane toward the right', 'reach left to catch the paper airplane'],
+    ['左边指着远处的烟花，右边偷偷看左边', 'point toward the distant fireworks', 'secretly glance toward the subject on the left'],
+    ['左边捧着一团雪，右边围着围巾笑', 'cup a little snowball', 'smile while nestled in a scarf'],
+    ['左边戴着歪歪的小帽子，右边伸手扶正', 'wear a small tilted hat', 'reach left to straighten the tilted hat'],
+    ['左边递出一枚贝壳，右边回赠一颗小石子', 'offer a seashell toward the right', 'give a small pebble toward the left in return'],
+]);
+const IDEA_MOODS = Object.freeze([
+    ['一个认真、一个忍不住笑', 'a serious expression', 'an amused smile'],
+    ['一个害羞、一个温柔回应', 'a shy expression', 'a gentle warm response'],
+    ['一个得意、一个假装嫌弃', 'a proud playful expression', 'a playfully unimpressed reaction'],
+    ['一个好奇、一个耐心陪伴', 'a curious expression', 'a patient caring expression'],
+    ['一个困困的、一个很有精神', 'a sleepy expression', 'an energetic expression'],
+    ['一个有点惊讶、一个偷偷开心', 'a slightly surprised expression', 'a quietly delighted expression'],
+]);
+const IDEA_SCENES = Object.freeze([
+    ['纯色背景铺满画面，重点放在动作和表情', 'A quiet solid-color ground fills the image, focusing attention on gestures and expressions.'],
+    ['同一束柔光落在两边', 'The same soft light falls on both subjects.'],
+    ['两边用相呼应的淡色背景', 'Coordinated pale colors fill the continuous background.'],
+    ['共享一个小小的窗边场景', 'Both share a small scene beside a window.'],
+    ['点缀几片花瓣，不遮住脸', 'A few petals drift around the subjects, keeping their faces clear.'],
+]);
+
+function coupleInteraction(interaction, detail = '') {
+    const preset = INTERACTION_PRESETS.find(item => item.label === interaction);
+    if (preset) return { prompt: preset.prompt, roles: [...preset.roles] };
+    const raw = interaction === '自定义互动' ? detail : interaction;
+    const moment = IDEA_MOMENTS.find(row => raw.startsWith(row[0] + '；'));
+    if (moment) {
+        const rest = raw.slice(moment[0].length + 1);
+        const mood = IDEA_MOODS.find(row => rest.startsWith(row[0] + '。'));
+        const sceneText = mood ? rest.slice(mood[0].length + 1).replace(/。$/, '') : '';
+        const scene = IDEA_SCENES.find(row => row[0] === sceneText);
+        // Recognize the old built-in quiet-background suggestion too; keep
+        // that light ground continuous instead of describing a framing gap.
+        const oldScene = sceneText === '背景留白，重点放在动作和表情';
+        if (mood && (scene || oldScene)) {
+            const roles = [1, 2].map(i => `${moment[i]}, with ${mood[i]}`);
+            return { prompt: `The left subject ${roles[0]}; the right subject ${roles[1]}. ${scene?.[1] || IDEA_SCENES[0][1]}`, roles };
+        }
+    }
+    // Free text is never discarded or guessed at by splitting punctuation.
+    // Each subject receives the actual interaction, not a role placeholder.
+    return { prompt: raw, roles: ['LEFT', 'RIGHT'].map(side => raw && raw !== '交给灵感'
+        ? `follow the ${side} subject's action in this user interaction: ${raw}`
+        : `choose a fresh individual gesture and expression for the ${side} subject, responding to the other subject`) };
+}
+
 // Local inspiration only: browsing ideas never sends a paid generation request.
 function randomCoupleIdeas(previous = [], random = Math.random) {
-    const moments = [
-        '左边递出一朵小花，右边伸手接住', '左边偷藏一颗糖，右边假装没发现',
-        '左边举起一半爱心，右边拿着另一半回应', '左边轻轻拉住围巾一端，右边靠过来',
-        '左边捧着小星星，右边试着触碰它的光', '左边吹出一个泡泡，右边追着泡泡看',
-        '左边把小纸船推过来，右边在另一侧接住', '左边藏在叶子后偷看，右边歪头找它',
-        '左边递来热饮，右边把小饼干分过去', '左边举着小相机，右边故意做个鬼脸',
-        '左边把花瓣放到头顶，右边学着戴上另一片', '左边送出纸飞机，右边伸手迎接',
-        '左边指着远处的烟花，右边偷偷看左边', '左边捧着一团雪，右边围着围巾笑',
-        '左边戴着歪歪的小帽子，右边伸手扶正', '左边递出一枚贝壳，右边回赠一颗小石子',
-    ];
-    const moods = ['一个认真、一个忍不住笑', '一个害羞、一个温柔回应', '一个得意、一个假装嫌弃', '一个好奇、一个耐心陪伴', '一个困困的、一个很有精神', '一个有点惊讶、一个偷偷开心'];
-    const scenes = ['背景留白，重点放在动作和表情', '同一束柔光落在两边', '两边用相呼应的淡色背景', '共享一个小小的窗边场景', '点缀几片花瓣，不遮住脸'];
+    const moments = IDEA_MOMENTS.map(row => row[0]);
+    const moods = IDEA_MOODS.map(row => row[0]);
+    const scenes = IDEA_SCENES.map(row => row[0]);
     const pick = values => values[Math.min(values.length - 1, Math.max(0, Math.floor(random() * values.length)))];
     const shuffled = moments.filter(moment => !previous.some(idea => idea.startsWith(moment)));
     for (let i = shuffled.length - 1; i > 0; i--) {
@@ -1453,6 +1535,7 @@ function randomCoupleIdeas(previous = [], random = Math.random) {
 }
 
 __m_extras_coupleAvatarStyles_js.coupleStyleConstruction = coupleStyleConstruction;
+__m_extras_coupleAvatarStyles_js.coupleInteraction = coupleInteraction;
 __m_extras_coupleAvatarStyles_js.randomCoupleIdeas = randomCoupleIdeas;
 __m_extras_coupleAvatarStyles_js.STYLE_GROUPS = STYLE_GROUPS;
 __m_extras_coupleAvatarStyles_js.COUPLE_STYLES = COUPLE_STYLES;
@@ -2760,7 +2843,9 @@ function coupleAvatarCss() {
 .rmt-pair-person>button{width:100%}
 .rmt-pair-square{position:relative;aspect-ratio:1;overflow:hidden;border-radius:18px;background:var(--rmt-theme-soft);border:1px solid var(--rmt-theme-border);width:100%;touch-action:pan-y}
 .rmt-pair-square img{display:block;user-select:none;-webkit-user-select:none}
-.rmt-pair-two.is-circle .rmt-pair-square{border-radius:50%}
+.rmt-pair-square img.rmt-pair-cropped-image{position:absolute!important;inset:0!important;width:100%!important;height:100%!important;max-width:none!important;max-height:none!important;margin:0!important;object-fit:fill!important;transform:none!important;border-radius:0!important;user-select:auto!important;-webkit-user-select:auto!important;-webkit-touch-callout:default!important}
+.rmt-pair-square img.rmt-pair-source-preview{-webkit-touch-callout:none!important}
+.rmt-pair-two.is-circle .rmt-pair-square,.rmt-pair-square.is-circle{border-radius:50%}
 .rmt-pair-empty{height:100%;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:6px;color:var(--rmt-theme-muted);padding:10px}
 .rmt-pair-empty b{font-size:32px;line-height:1.2;font-weight:400;color:var(--rmt-theme-accent-ink)}
 .rmt-pair-preview-tools{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:12px}
@@ -2875,6 +2960,9 @@ const styles = __m_ui_coupleAvatarCss_js;
 
 function esc(value) { return text.esc(value); }
 const jobs = new Map();
+// Derived images stay in memory only. The original and editable crop settings
+// remain the persisted source of truth; weak keys release closed views' images.
+const previewImages = new WeakMap();
 let active = null, modal = null, sequence = 0;
 const settingFields = ['interaction', 'interactionDetail', 'clothing', 'background', 'direction', 'customStyle'];
 const HISTORY_PAGE_SIZE = 6; // Display page only; stored records are never capped.
@@ -2965,13 +3053,38 @@ function dialog(view, title, contents) {
     shade.querySelector('[data-pair-close]').focus({ preventScroll: true });
     return m;
 }
-function square(record, display, loaded, className = '') {
+function pairPreviews(record, loaded) {
+    if (!loaded.croppable) return { images: [], error: loaded.error };
+    const key = JSON.stringify([record.crops, record.order]);
+    const cached = previewImages.get(loaded);
+    if (cached?.key === key) return cached;
+    try {
+        const result = { key, images: crop.cropPairImage(loaded, record.crops, record.order) };
+        previewImages.set(loaded, result);
+        return result;
+    } catch (error) {
+        // A browser export failure must not hide a viewable original or make
+        // generation fail. Save can still explain the failure and offer import.
+        return { images: [], error: error.message };
+    }
+}
+function square(record, display, loaded, className = '', preview = null) {
     const box = document.createElement('div'); box.className = `rmt-pair-square ${className}`;
     const half = record.order?.[display] === 1 ? 1 : 0;
-    const img = document.createElement('img'); img.src = loaded.image.src;
+    const img = document.createElement('img'); img.src = preview?.url || loaded.image.src;
     img.alt = `${record.settings.people[half]?.name || (display ? '右边' : '左边')}的头像`;
     img.draggable = false;
-    Object.assign(img.style, crop.cropPreviewStyle(loaded.width, loaded.height, half, record.crops[half]));
+    if (preview) {
+        // The native image itself is the same square PNG as the save sheet.
+        // Circle preview clips only its wrapper, preserving all four PNG corners.
+        img.className = 'rmt-pair-cropped-image';
+    } else {
+        img.className = 'rmt-pair-source-preview';
+        Object.assign(img.style, crop.cropPreviewStyle(loaded.width, loaded.height, half, record.crops[half]));
+        // CSS-only fallback/editor previews still point at both people. Avoid
+        // presenting that original as a single avatar in the native save menu.
+        img.addEventListener('contextmenu', event => event.preventDefault());
+    }
     box.append(img); return box;
 }
 function loadRecord(view, record) {
@@ -3000,9 +3113,10 @@ async function renderPreview(view) {
     try {
         const loaded = await loadRecord(view, record);
         if (!current(view) || token !== view.previewEpoch) return;
-        for (let i = 0; i < 2; i++) host.querySelector(`[data-pair-image="${i}"]`).replaceWith(square(record, i, loaded));
+        const previews = pairPreviews(record, loaded);
+        for (let i = 0; i < 2; i++) host.querySelector(`[data-pair-image="${i}"]`).replaceWith(square(record, i, loaded, '', previews.images[i]));
         const meta = host.querySelector('[data-pair-image-info]');
-        meta.textContent = `${styleLabel(record.settings)} · 原图 ${loaded.width} × ${loaded.height}${loaded.croppable ? '' : ' · ' + loaded.error}`;
+        meta.textContent = `${styleLabel(record.settings)} · 原图 ${loaded.width} × ${loaded.height}${previews.error ? ' · ' + previews.error : ''}`;
     } catch (error) {
         if (!current(view) || token !== view.previewEpoch) return;
         for (const node of host.querySelectorAll('.rmt-pair-empty span')) node.textContent = '原图暂未载入';
@@ -3039,7 +3153,13 @@ async function renderHistory(view) {
     view.historyObserver?.disconnect();
     const fill = async node => {
         const record = visible.find(row => row.id === node.dataset.pairThumb); if (!record) return;
-        try { const loaded = await loadRecord(view, record); if (current(view) && token === view.historyEpoch && node.isConnected) node.replaceChildren(square(record, 0, loaded), square(record, 1, loaded)); }
+        try {
+            const loaded = await loadRecord(view, record);
+            if (current(view) && token === view.historyEpoch && node.isConnected) {
+                const previews = pairPreviews(record, loaded);
+                node.replaceChildren(square(record, 0, loaded, '', previews.images[0]), square(record, 1, loaded, '', previews.images[1]));
+            }
+        }
         catch { if (node.isConnected) { node.title = '原图暂时不可用，点击后可查看记录或导入原图。'; const note = node.querySelector('.rmt-pair-thumb-note'); if (note) note.textContent = '原图暂不可用'; } }
     };
     for (const node of nodes) void fill(node);
@@ -3277,7 +3397,7 @@ async function showCrop(view, record) {
             Object.assign(image.style, crop.cropPreviewStyle(loaded.width, loaded.height, half, c));
             image.alt = `${record.settings.people[half]?.name || (side ? '右边' : '左边')}的头像`;
         } else {
-            const next = square(preview, side, loaded); next.setAttribute('data-pair-crop-stage', ''); stage.replaceWith(next);
+            const next = square(preview, side, loaded, view.circle ? 'is-circle' : ''); next.setAttribute('data-pair-crop-stage', ''); stage.replaceWith(next);
         }
         for (const slider of m.body.querySelectorAll('[data-pair-crop-control]')) slider.value = c[slider.dataset.pairCropControl];
         const size = crop.cropRect(loaded.width, loaded.height, half, c).outputSize;
@@ -3302,7 +3422,8 @@ async function showOriginal(view, record, seam) {
         try { loaded = await loadRecord(view, record); } catch (error) { return imageFailure(view, m, record, error); }
         if (modal !== m) return;
         m.body.innerHTML = '<div class="rmt-pair-seam" data-pair-seam></div><p>这里展示当前裁切后的拼接。分别移动或放大后，中间的图案可能需要重新对齐。</p><div class="rmt-pair-actions"><button type="button" data-pair-recrop>调整裁切</button></div>';
-        m.body.querySelector('[data-pair-seam]').append(square(record, 0, loaded), square(record, 1, loaded));
+        const previews = pairPreviews(record, loaded);
+        m.body.querySelector('[data-pair-seam]').append(square(record, 0, loaded, '', previews.images[0]), square(record, 1, loaded, '', previews.images[1]));
         m.body.querySelector('[data-pair-recrop]').addEventListener('click', () => void showCrop(view, record).catch(error => failure(view, error)));
     } else {
         m.body.innerHTML = `<img class="rmt-pair-full-image" src="${esc(record.original.url)}" alt="这一对头像的完整原图"><p>这是未裁切的完整原图。手机和 TT 可长按图片保存。</p><div class="rmt-pair-actions"><a class="rmt-pair-button" href="${esc(record.original.url)}" target="_blank" rel="noopener noreferrer">单独打开原图</a><a class="rmt-pair-button" href="${esc(record.original.url)}" download="情侣头像-原图">下载原图</a></div>`;
@@ -24124,7 +24245,7 @@ function __init_core_selfUpdater_js() {
 const RELEASE_README = __m_core_releaseNotes_js.RELEASE_README;
 
 const UPDATE_STATE = Symbol.for('heartbeatMemories.selfUpdate');
-const INSTALLED_BUILD = '1.0.38';
+const INSTALLED_BUILD = '1.0.41';
 const PROJECT_REMOTE = 'https://github.com/zaiyebuzuoyouqingdetiangou/tokimemo';
 function updateError(message) { const error = new Error(message); error.userMessage = message; return error; }
 
@@ -40422,6 +40543,10 @@ async function generateBaiBaiImage(prompt, { signal = null, orientation = 'lands
         if (formatted.characters) request.characters = formatted.characters;
         else delete request.characters;
     }
+    // NAI concatenates prompt and nl; legacy single-prompt paths (including
+    // MV) already contain their whole scene. Avatar's split brief below has
+    // its own distinct nl and must not be cleared after assignment.
+    if (singlePrompt && state.backend === 'nai' && state.supportsCharacters) request.nl = '';
     // Avatar-only, local authoring path. Reuse the documented name/tag channels
     // when NAI supports them; flat-only and ComfyUI retain the complete prompt.
     // Optional malformed parts fall back to that prompt, never block generation.
@@ -40434,10 +40559,25 @@ async function generateBaiBaiImage(prompt, { signal = null, orientation = 'lands
         request.characters = avatarPromptParts.characters.map(({ name, tag }) => ({
             name: core_text.normalizeText(name, Infinity), tag: core_text.normalizeText(tag, Infinity),
         }));
+        const brief = avatarPromptParts.nai;
+        if (typeof brief?.prompt === 'string' && brief.prompt.trim() && typeof brief.nl === 'string'
+            && Array.isArray(brief.characters) && brief.characters.length === 2
+            && brief.characters.every(row => typeof row?.name === 'string' && row.name.trim()
+                && typeof row.tag === 'string' && row.tag.trim() && typeof row.nl === 'string')) {
+            request.prompt = core_text.normalizeText(brief.prompt, Infinity);
+            request.nl = core_text.normalizeText(brief.nl, Infinity);
+            request.characters = brief.characters.map(({ name, tag, nl }) => ({
+                name: core_text.normalizeText(name, Infinity), tag: core_text.normalizeText(tag, Infinity),
+                nl: core_text.normalizeText(nl, Infinity),
+            }));
+        }
     }
-    // NAI's character-capable path concatenates prompt and nl. MV has one
-    // complete scene already; appearance stays in its character channel.
-    if (singlePrompt && state.backend === 'nai' && state.supportsCharacters) request.nl = '';
+    // Public API v1 exposes a dynamic negative only for ComfyUI. NAI still
+    // uses the user's own negative; size remains the documented orientation.
+    if (preservePrompt && singlePrompt && !metadata && state.backend === 'comfyui'
+        && typeof avatarPromptParts?.negative === 'string' && avatarPromptParts.negative.trim()) {
+        request.negative = avatarPromptParts.negative.trim();
+    }
     const controller = new AbortController();
     let timer;
     let stopped = false;
@@ -42327,6 +42467,13 @@ function orientedSize(context, backend, orientation, aspectRatio = '') {
     const bag = extensionBag(context);
     const keys = { novelai: ['novelai_width', 'novelai_height'], sd: ['sd_cwidth', 'sd_cheight'], comfyui: ['comfyui_width', 'comfyui_height'] }[backend];
     const width = Number(keys && bag?.[keys[0]]), height = Number(keys && bag?.[keys[1]]);
+    if (aspectRatio === '2:1') {
+        // Two square portraits need an actual 2:1 request, not just landscape.
+        // Keep the configured pixel budget; align both dimensions to 64.
+        const area = Number.isSafeInteger(width) && width > 0 && Number.isSafeInteger(height) && height > 0 ? width * height : 1216 * 832;
+        const short = Math.max(64, Math.floor(Math.sqrt(area / 2) / 64) * 64);
+        return { width: short * 2, height: short };
+    }
     if (aspectRatio === '16:9' || aspectRatio === '9:16') {
         // Both dimensions are multiples of 64. Exact 16:9 begins at 1024×576;
         // larger configured budgets can use its integer multiples. Only this
@@ -42350,7 +42497,26 @@ function orientedSize(context, backend, orientation, aspectRatio = '') {
     return orientation === 'portrait' ? { width: short, height: long } : { width: long, height: short };
 }
 
-async function generateChatu8Image(prompt, { signal = null, orientation = 'landscape', respectOrientation = false, aspectRatio = '', promptMetadata = null, onProgress = null, onSettled = null, targetKey = '', context = core_context.getContext(), preservePrompt = false } = {}) {
+function avatarCharacterPrompt(parts, context, backend) {
+    // The existing generate-image-request consumer recognizes this grammar
+    // for NAI 4/5, then builds separate native character captions. Older models
+    // and other backends keep the complete flat prompt. No settings are changed.
+    const model = extensionBag(context)?.novelaimode;
+    if (backend !== 'novelai' || typeof model !== 'string' || !/nai-diffusion-[45](?:-|$)/.test(model)
+        || typeof parts?.scene !== 'string' || !parts.scene.trim()
+        || !Array.isArray(parts.characters) || parts.characters.length !== 2
+        || !parts.characters.every(row => typeof row?.tag === 'string' && row.tag.trim())) return '';
+    // Semicolons end upstream fields. Normalize punctuation in the transport
+    // copy so user prose cannot truncate a character or spill into the other.
+    const field = value => value.replace(/[;；]/g, ',').replace(/\|\s*centers\s*:/gi, ', centers ')
+        .replace(/（/g, '(').replace(/）/g, ')').replace(/[\r\n]+/g, ' ').trim();
+    return [
+        `Scene Composition: ${field(parts.scene)};`,
+        ...parts.characters.map((row, index) => `Character ${index + 1} Prompt: ${field(row.tag)} | centers:{${index ? 0.75 : 0.25},0.5};`),
+    ].join('\n');
+}
+
+async function generateChatu8Image(prompt, { signal = null, orientation = 'landscape', respectOrientation = false, aspectRatio = '', promptMetadata = null, onProgress = null, onSettled = null, targetKey = '', context = core_context.getContext(), preservePrompt = false, singlePrompt = false, avatarPromptParts = null } = {}) {
     if (signal?.aborted) throw chatu8ImageError('CH8_ABORTED');
     const state = chatu8ImageState(context);
     if (!state.available) throw chatu8ImageError(state.code);
@@ -42363,6 +42529,13 @@ async function generateChatu8Image(prompt, { signal = null, orientation = 'lands
         if (ownErrors.has(error) || error?.safeToDisplay) throw error;
         throw chatu8ImageError('CH8_INVALID_ARGS');
     }
+    const avatar = preservePrompt && singlePrompt && !promptMetadata ? avatarPromptParts : null;
+    const separated = avatarCharacterPrompt(avatar, context, state.backend);
+    if (separated) scene = separated;
+    // This is the consumer's documented extra-negative event field. It appends
+    // to the user's configured negative prompt in these four supported modes.
+    const negative = ['novelai', 'sd', 'comfyui', 'runninghub'].includes(state.backend)
+        && typeof avatar?.negative === 'string' ? avatar.negative.trim() : '';
     const source = state.eventSource;
     const id = requestId();
     let settled = false;
@@ -42401,7 +42574,9 @@ async function generateChatu8Image(prompt, { signal = null, orientation = 'lands
                 signal?.addEventListener('abort', onAbort, { once: true });
                 // 排队也计入等待时间，不能把仍在智绘姬队列里的任务判成失败。
                 timer = setTimeout(() => report('waiting'), CHATU8_IMAGE_WAIT_NOTICE_MS);
-                source.emit(REQUEST_EVENT, { id, prompt: scene, ...(respectOrientation ? orientedSize(context, state.backend, orientation, aspectRatio) : {}) });
+                source.emit(REQUEST_EVENT, { id, prompt: scene,
+                    ...(negative ? { negative_prompt: negative } : {}),
+                    ...(respectOrientation ? orientedSize(context, state.backend, orientation, aspectRatio) : {}) });
             } catch { stop('CH8_BACKEND_ERROR'); }
         });
         if (signal?.aborted) throw chatu8ImageError('CH8_ABORTED');

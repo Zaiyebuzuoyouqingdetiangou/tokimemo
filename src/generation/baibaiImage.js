@@ -110,6 +110,10 @@ export async function generateBaiBaiImage(prompt, { signal = null, orientation =
         if (formatted.characters) request.characters = formatted.characters;
         else delete request.characters;
     }
+    // NAI concatenates prompt and nl; legacy single-prompt paths (including
+    // MV) already contain their whole scene. Avatar's split brief below has
+    // its own distinct nl and must not be cleared after assignment.
+    if (singlePrompt && state.backend === 'nai' && state.supportsCharacters) request.nl = '';
     // Avatar-only, local authoring path. Reuse the documented name/tag channels
     // when NAI supports them; flat-only and ComfyUI retain the complete prompt.
     // Optional malformed parts fall back to that prompt, never block generation.
@@ -122,10 +126,25 @@ export async function generateBaiBaiImage(prompt, { signal = null, orientation =
         request.characters = avatarPromptParts.characters.map(({ name, tag }) => ({
             name: core_text.normalizeText(name, Infinity), tag: core_text.normalizeText(tag, Infinity),
         }));
+        const brief = avatarPromptParts.nai;
+        if (typeof brief?.prompt === 'string' && brief.prompt.trim() && typeof brief.nl === 'string'
+            && Array.isArray(brief.characters) && brief.characters.length === 2
+            && brief.characters.every(row => typeof row?.name === 'string' && row.name.trim()
+                && typeof row.tag === 'string' && row.tag.trim() && typeof row.nl === 'string')) {
+            request.prompt = core_text.normalizeText(brief.prompt, Infinity);
+            request.nl = core_text.normalizeText(brief.nl, Infinity);
+            request.characters = brief.characters.map(({ name, tag, nl }) => ({
+                name: core_text.normalizeText(name, Infinity), tag: core_text.normalizeText(tag, Infinity),
+                nl: core_text.normalizeText(nl, Infinity),
+            }));
+        }
     }
-    // NAI's character-capable path concatenates prompt and nl. MV has one
-    // complete scene already; appearance stays in its character channel.
-    if (singlePrompt && state.backend === 'nai' && state.supportsCharacters) request.nl = '';
+    // Public API v1 exposes a dynamic negative only for ComfyUI. NAI still
+    // uses the user's own negative; size remains the documented orientation.
+    if (preservePrompt && singlePrompt && !metadata && state.backend === 'comfyui'
+        && typeof avatarPromptParts?.negative === 'string' && avatarPromptParts.negative.trim()) {
+        request.negative = avatarPromptParts.negative.trim();
+    }
     const controller = new AbortController();
     let timer;
     let stopped = false;

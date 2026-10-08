@@ -93,49 +93,78 @@ function appearanceReference(value, animal, object) {
 
 // Both outputs are composed locally from the same frozen settings. A flat-only
 // provider gets the complete prompt; capable NAI gets scene + two identities.
+// Describe the drawing itself. Crop masks, cards and prohibited shapes belong
+// to the UI or the provider's negative channel, never the shared positive scene.
 export function couplePromptParts(value) {
     const settings = normalizeCoupleSettings(value, null);
     const chosen = styles.COUPLE_STYLES.find(style => style.id === settings.styleId);
     const animal = chosen?.group === 'animal';
     const object = chosen?.group === 'craft' || ['fantasy-enamel', 'fantasy-shadow'].includes(chosen?.id);
     const subject = animal ? 'animal' : object ? 'crafted character' : 'character';
-    const preset = styles.INTERACTION_PRESETS.find(item => item.label === settings.interaction);
-    const interaction = settings.interaction === '自定义互动' ? settings.interactionDetail
-        : preset?.prompt || settings.interaction;
+    const resolvedInteraction = styles.coupleInteraction(settings.interaction, settings.interactionDetail);
+    const interaction = resolvedInteraction.prompt;
     const rendering = chosen?.prompt || settings.customStyle;
     const construction = styles.coupleStyleConstruction(chosen);
     const form = animal
-        ? 'The TWO main subjects ARE complete animals, with species-appropriate heads, bodies, limbs and tails. No human faces or human bodies, no people wearing animal ears, no people holding animal versions. Adapt actions to paws, wings or flippers. Translate original hair/eye colors and signature accessories into animal identity cues.'
-        : object ? 'The TWO main subjects ARE the crafted objects described by the selected style. Their faces and bodies use that material and construction. Not humans holding toys or wearing material-themed costumes.'
-            : 'Apply the selected rendering medium, proportions, linework and shading to the entire characters and image, not only to background decorations.';
-    const actions = settings.people.map((_, index) => preset?.roles[index]
-        || `perform only the ${index ? 'RIGHT' : 'LEFT'} subject's role in the chosen interaction, with an individual expression and gesture`);
+        ? 'Two complete animals, species-appropriate animal anatomy, heads, muzzles or beaks, bodies, limbs and tails. Paws, wings or flippers perform the gestures. Each animal has its own eye color, fur markings and small signature accessories derived from its identity.'
+        : object ? 'Two crafted figures whose entire faces and bodies are made from the selected material, with its physical texture and construction.'
+            : 'The selected medium, proportions, linework and shading define the faces, bodies, clothing and background.';
+    const actions = resolvedInteraction.roles;
     const people = settings.people.map((person, index) => {
         const side = index === 0 ? 'LEFT' : 'RIGHT';
         const reference = appearanceReference(person.appearance, animal, object);
-        return `${side} HALF ${subject}: ${person.name || (index === 0 ? 'first character' : 'second character')}${reference ? `; ${animal || object ? 'identity reference to reinterpret in the selected form' : 'appearance'}: ${reference}` : ''}. Action: ${actions[index]}.`;
+        return `${side} HALF ${subject}: ${person.name || (index === 0 ? 'first character' : 'second character')}${reference ? `; ${animal || object ? 'individual identity in the selected form' : 'appearance'}: ${reference}` : ''}. Action: ${actions[index]}.`;
     });
-    const scene = [
-        rendering ? `Rendering style: ${rendering}.` : '',
+    const styleLead = rendering ? `Rendering style: ${rendering}.` : '';
+    const composition = [
         construction ? `Style construction: ${construction}` : '',
         form,
-        'Selected style controls the medium and proportions of BOTH subjects. Identity references supply individual traits, not a competing drawing style. In monochrome or limited-color styles, express original colors through tones and shapes instead of reintroducing full color.',
-        `One matching avatar pair in one horizontal image, preferably 2:1. One ${subject} centered in EACH of two equal square halves.`,
-        `Two separate identities: LEFT = ${settings.people[0].name || 'first character'}; RIGHT = ${settings.people[1].name || 'second character'}. Keep each side\'s face or muzzle, eyes, hair or markings, clothing and accessories bound to that identity.`,
+        `One continuous landscape illustration, two distinct ${subject}s side by side, one centered at the left quarter and one at the right quarter, balanced subject scale.`,
+        'A continuous painted background fills the entire image from edge to edge, including the center and all four corners. Faces and gestures sit comfortably within their own half, surrounded by the same fully painted environment.',
         `Interaction: ${interaction && interaction !== '交给灵感' ? interaction : DEFAULT_INTERACTION_PROMPT}.`,
         `Action roles: LEFT — ${actions[0]}; RIGHT — ${actions[1]}. Adapt gestures to the chosen body form; explicit user directions take precedence.`,
         settings.direction ? `Direction: ${settings.direction}.` : '',
         settings.clothing ? `${animal ? 'Small wearable accents adapted for animal bodies' : 'Clothing in the selected rendering style'}: ${settings.clothing}.` : '',
         settings.background ? `Background: ${settings.background}.` : '',
         settings.pairType === 'echo'
-            ? 'Independent portraits, coordinated colors and light, complementary poses.'
-            : 'Connected background and shared motif across the center, matching scale.',
-        'Leave margin for square/circle crops while showing the silhouette and body proportions required by the style. Readable expressions, distinct poses, no mirrored duplicates. Shared medium and lighting do not mean identical faces. Keep genuinely shared traits; distinguish the pair through their own supported features and different reactions, not arbitrary changes of identity or gender. Improvise unspecified details. No text, watermark, frame or divider.',
-    ].filter(Boolean).join('\n');
-    return { scene, prompt: [scene, ...people].join('\n'),
+            ? 'Complementary individual gestures, coordinated colors and light, continuous background.'
+            : 'A shared motif connects the two subjects across the center of the continuous scene.',
+        'Preserve each individual\'s own face or muzzle shape, eyes, hair silhouette or markings, clothing and accessories. Shared traits remain shared; expressions and reactions belong to each subject. Express identity colors as tones and shapes when the selected medium is monochrome.',
+    ].filter(Boolean);
+    const negative = [
+        'outer white frame, panel border, central white gutter, split screen, rounded portrait cards, circular picture frames, letterboxing, vignette, fading to blank edges, duplicate character, cloned face, mirrored pose, text, watermark',
+        animal ? 'human face, human body, human hands, person wearing animal ears, person holding an animal' : '',
+    ].filter(Boolean).join(', ');
+    // BaiBai NAI has documented tag + natural-language fields. Keep each
+    // literal appearance at the start of its own tag list (including count
+    // tokens the provider normalizes), and put the action in that subject's
+    // nl. Detailed medium construction is shared once, not repeated per face.
+    const nai = {
+        prompt: [rendering || 'illustration', `two distinct ${subject}s`, 'side by side'].join(', '),
+        nl: [
+            construction,
+            'One continuous landscape illustration, first subject centered at the left quarter, second at the right quarter, matching scale. Background fills the image edge to edge, through the center and all four corners. Faces and gestures stay comfortably inside their own half.',
+            animal || object ? form : '',
+            `Interaction: ${interaction && interaction !== '交给灵感' ? interaction : DEFAULT_INTERACTION_PROMPT}.`,
+            settings.pairType === 'echo' ? 'Coordinated colors and light, complementary individual gestures.' : 'A shared motif connects the two subjects.',
+            'Render both subjects entirely in the selected medium. For a monochrome medium, identity colors become tones. Adapt gestures to the chosen body form.',
+            settings.clothing ? `Clothing or small wearable accents: ${settings.clothing}.` : '',
+            settings.background ? `Background: ${settings.background}.` : '',
+            settings.direction ? `User direction takes precedence: ${settings.direction}.` : '',
+        ].filter(Boolean).join('\n'),
         characters: settings.people.map((person, index) => ({
             name: `${index ? '右边' : '左边'} · ${person.name || (index ? '人物二' : '人物一')}`,
-            tag: [people[index], rendering ? `Rendering style: ${rendering}.` : '', construction].filter(Boolean).join('\n'),
+            tag: [appearanceReference(person.appearance, animal, object), rendering || subject].filter(Boolean).join(', '),
+            nl: `On the ${index ? 'right' : 'left'}, ${actions[index]}.`,
+        })),
+    };
+    return { scene: [styleLead, ...composition].filter(Boolean).join('\n'),
+        // Put the actual two appearances before general art direction on flat
+        // backends, where a long scene used to bury the individual identities.
+        prompt: [styleLead, ...people, ...composition].filter(Boolean).join('\n'), negative, nai,
+        characters: settings.people.map((person, index) => ({
+            name: `${index ? '右边' : '左边'} · ${person.name || (index ? '人物二' : '人物一')}`,
+            tag: [people[index], styleLead, construction].filter(Boolean).join('\n'),
         })) };
 }
 
@@ -408,7 +437,7 @@ export async function generateCouple(value, { context = core_context.currentChar
             orientation: 'landscape', respectOrientation: true, aspectRatio: '2:1',
             characterName: settings.people[0].name || context?.name2 || '',
             targetKey, singlePrompt: true, preservePrompt: true, onProgress: report,
-            avatarPromptParts: { scene: parts.scene, characters: parts.characters },
+            avatarPromptParts: { scene: parts.scene, characters: parts.characters, negative: parts.negative, nai: parts.nai },
         });
         task_trace.markStage(trace, 'request');
         task_trace.markStage(trace, 'response');
