@@ -1,7 +1,11 @@
 import * as couple from '../extras/coupleAvatar.js';
+import * as appearance from '../extras/coupleAvatarAppearance.js';
+import * as avatar_apply from '../extras/coupleAvatarApply.js';
+import * as chat_avatars from '../core/chatAvatarStore.js';
 import * as presets from '../extras/coupleAvatarStyles.js';
 import * as crop from '../extras/coupleAvatarCrop.js';
 import * as core_context from '../core/context.js';
+import * as core_settings from '../core/settings.js';
 import * as constants from '../core/constants.js';
 import * as text from '../core/text.js';
 import * as runtime from '../core/state.js';
@@ -72,6 +76,38 @@ function queueDraft(view) {
             if (result?.durable === false) report(view, '创作设置暂留本页，暂未写入本机存储。');
         }).catch(error => failure(view, error));
     }, 300);
+}
+
+async function refreshAppearance(view, index) {
+    if (!current(view) || ![0, 1].includes(index)) return;
+    const row = () => {
+        const person = { ...view.settings.people[index] };
+        for (const key of ['name', 'appearance']) {
+            const input = view.root.querySelector(`[data-pair-person="${index}"][data-pair-key="${key}"]`);
+            if (input) person[key] = input.value;
+        }
+        return person;
+    };
+    const selected = row(), signature = JSON.stringify(selected);
+    const settings = { ...view.settings, people: view.settings.people.map((person, i) => i === index ? selected : person) };
+    let fresh = appearance.readCoupleAppearance(settings, index, core_context.currentCharacterGuard());
+    if (!fresh) { report(view, '没有找到对应人物的可用外貌，原内容已保留。可以直接修改外貌框。'); return; }
+    if (selected.appearance?.trim() && !await overlay.confirmExplicitAction('重新读取这位人物的外貌？',
+        '会替换这一侧的外貌草稿；另一侧、历史头像和已保存的人设不变。')) return;
+    if (!current(view) || signature !== JSON.stringify(row())) return;
+    // A confirmation may be asynchronous on some hosts. Resolve current
+    // sources and cast collisions again without changing the other person.
+    fresh = appearance.readCoupleAppearance({ ...view.settings,
+        people: view.settings.people.map((person, i) => i === index ? selected : person) }, index, core_context.currentCharacterGuard());
+    if (!fresh) { report(view, '外貌来源已变化，原内容已保留。'); return; }
+    // Apply one row without normalizing against live presets for both people.
+    // saveCoupleSettings uses contextless normalization and preserves history.
+    clearTimeout(view.draftTimer);
+    view.settings = { ...view.settings, people: view.settings.people.map((person, i) => i === index ? fresh.person : person) };
+    const input = view.root.querySelector(`[data-pair-person="${index}"][data-pair-key="appearance"]`);
+    if (input) input.value = fresh.person.appearance;
+    const result = await couple.saveCoupleSettings(view.scope, structuredClone(view.settings));
+    report(view, result?.durable === false ? '外貌已更新，暂留本页；本机保存未确认。' : '已重新读取这一侧的外貌。');
 }
 
 export function closeCoupleDialog({ restoreFocus = true } = {}) {
@@ -172,6 +208,8 @@ async function renderPreview(view) {
     if (!host) return;
     const names = record ? record.order.map(half => record.settings.people[half]?.name || '未命名') : view.settings.people.map(person => person.name || '未命名');
     host.innerHTML = `<div class="rmt-pair-section-head"><h3>${record ? '这一对头像' : '留两个位置，给你们'}</h3><button type="button" data-pair-action="circle" aria-pressed="${view.circle}">${view.circle ? '方形预览' : '圆形预览'}</button></div><div class="rmt-pair-two ${view.circle ? 'is-circle' : ''}">${[0, 1].map(i => `<div class="rmt-pair-person"><div data-pair-image="${i}" class="rmt-pair-square"><div class="rmt-pair-empty"><b>${i ? '♡' : '♧'}</b><span>${record ? '读取原图…' : i ? '右边的 TA' : '左边的 TA'}</span></div></div><strong>${esc(names[i])}</strong>${button('save', i ? '保存右边' : '保存左边', `data-pair-side="${i}" ${record ? '' : 'disabled'}`)}</div>`).join('')}</div><p class="rmt-pair-note">${record ? '左右头像分别保存为方形 PNG；圆形仅用于预览。' : '选个风格，或导入已有横图。生成后这里并排显示两张头像。'}</p><div class="rmt-pair-preview-tools">${button('crop', '调整裁切', record ? '' : 'disabled')}${button('swap', '交换左右', record ? '' : 'disabled')}${button('seam', '检查当前拼接', record ? '' : 'disabled')}${button('original', '查看原图', record ? '' : 'disabled')}${button('favorite', record?.favorite ? '★ 已收藏' : '☆ 收藏这一对', `${record ? '' : 'disabled'} aria-pressed="${record?.favorite === true}"`)}${button('reuse', '沿用这对的设置', record ? '' : 'disabled')}</div><div data-pair-image-info class="rmt-pair-result-meta"></div>${record && view.pending.has(record.id) ? `<div class="rmt-pair-restore-note">这对头像暂未确认保存到本机，请先保存图片或导出备份。${button('retry', '仅重试保存')}</div>` : ''}`;
+    const tools = host.querySelector('.rmt-pair-preview-tools');
+    if (tools) tools.insertAdjacentHTML('beforeend', `${button('apply-chat-avatar', '应用为本聊天头像', record ? '' : 'disabled')}${button('restore-chat-avatar', '恢复原头像')}`);
     if (!record) return;
     try {
         const loaded = await loadRecord(view, record);
@@ -249,6 +287,10 @@ function paintInteraction(view) {
     if (custom) custom.hidden = view.settings.interaction !== '自定义互动';
 }
 function formHtml(view) {
+    let providerNote = '';
+    try {
+        if (core_settings.getPluginSettings(view.context).imageGenerationProvider === 'baibai-image') providerNote = '<p class="rmt-pair-note">使用柏宝绘 NAI 时会沿用其画师串和负面词，本页不能覆盖；豆豆眼／Q版若不符，请检查生图插件预设中是否排除了这些特征。</p>';
+    } catch { /* Optional advice never blocks the form. */ }
     const groups = [...new Set(presets.INTERACTION_PRESETS.map(item => item.group))];
     return `<form class="rmt-pair-form" data-pair-form>
         <div class="rmt-pair-block"><h3>这次画谁</h3><div class="rmt-pair-fields">${[0, 1].map(i => `<label class="rmt-pair-field"><span>${i ? '右边' : '左边'}</span><input data-pair-person="${i}" data-pair-key="name" aria-label="${i ? '右边' : '左边'}的人物名字" placeholder="可以改成任何人物"></label>`).join('')}</div></div>
@@ -264,7 +306,7 @@ function formHtml(view) {
             <label class="rmt-pair-field" data-pair-interaction-custom hidden><span>写下你们的互动</span><textarea data-pair-field="interactionDetail" placeholder="可以选一条随机灵感，再改成你喜欢的动作与表情。"></textarea></label>
         </div>
         <label class="rmt-pair-field"><span>这一对的小心思 <small>选填</small></span><textarea data-pair-field="direction" placeholder="比如：一个忍着笑，一个假装生气；共用一条围巾。"></textarea></label>
-        <details class="rmt-pair-options"><summary>外貌、衣着与背景 <small>选填</small></summary><div>${[0, 1].map(i => `<label class="rmt-pair-field"><span>${i ? '右边' : '左边'}人物外貌</span><textarea data-pair-person="${i}" data-pair-key="appearance" placeholder="沿用已有外貌，也可以修改或留空。"></textarea></label>`).join('')}<label class="rmt-pair-field"><span>衣着</span><input data-pair-field="clothing" placeholder="例如：同款不同色的卫衣"></label><label class="rmt-pair-field"><span>背景</span><input data-pair-field="background" placeholder="例如：左边蓝色，右边粉色"></label></div></details>
+        <details class="rmt-pair-options"><summary>外貌、衣着与背景 <small>选填</small></summary><div>${[0, 1].map(i => `<div><label class="rmt-pair-field"><span>${i ? '右边' : '左边'}人物外貌</span><textarea data-pair-person="${i}" data-pair-key="appearance" placeholder="沿用已有外貌，也可以修改或留空。"></textarea></label>${button('refresh-appearance', '重新读取外貌', `data-pair-side="${i}" aria-label="重新读取${i ? '右边' : '左边'}人物外貌"`)}</div>`).join('')}<label class="rmt-pair-field"><span>衣着</span><input data-pair-field="clothing" placeholder="例如：同款不同色的卫衣"></label><label class="rmt-pair-field"><span>背景</span><input data-pair-field="background" placeholder="例如：左边蓝色，右边粉色"></label>${providerNote}</div></details>
         <div><div data-pair-compose-jobs><div class="rmt-pair-jobs" data-pair-jobs></div></div><p class="rmt-pair-status" data-pair-compose-status role="status" aria-live="polite"></p><div class="rmt-pair-create"><button type="submit" class="rmt-pair-primary">生成一对头像</button>${button('import', '导入图片')}</div><p class="rmt-pair-note">一张原图生成一对，完成后自动收进历史。导入已有图片也能裁切。</p></div>
     </form>`;
 }
@@ -341,6 +383,8 @@ async function updateRecord(view, record, patch) {
 }
 async function handleAction(view, action, target) {
     const record = recordFor(view);
+    if (action === 'restore-chat-avatar') return restoreChatAvatars(view);
+    if (action === 'refresh-appearance') return refreshAppearance(view, Number(target.dataset.pairSide));
     if (action === 'styles') return showStyles(view);
     if (action === 'inspiration') {
         draft(view); view.ideas = presets.randomCoupleIdeas(view.ideas);
@@ -369,6 +413,7 @@ async function handleAction(view, action, target) {
     }
     if (action === 'history-open') { view.currentId = target.dataset.pairId; view.selectedEpoch++; selectTab(view, 'make'); return renderPreview(view); }
     if (!record) return;
+    if (action === 'apply-chat-avatar') return showApplyChatAvatars(view, record);
     if (action === 'save') return showSave(view, record, Number(target.dataset.pairSide));
     if (action === 'crop') return showCrop(view, record);
     if (action === 'swap') return updateRecord(view, record, { order: [record.order[1], record.order[0]] });
@@ -377,6 +422,62 @@ async function handleAction(view, action, target) {
     if (action === 'seam') return showOriginal(view, record, true);
     if (action === 'reuse') { view.settings = structuredClone(record.settings); paintSettings(view); queueDraft(view); report(view, '已填入这一对的创作设置，可以修改后再生成。'); return; }
     if (action === 'retry') { const result = await couple.retryCoupleSave(view.scope, record.id); rememberRecord(view, result); void renderPreview(view); report(view, result.durable ? '这对头像已保存。' : '仍未确认保存，请先保存图片或导出备份。'); }
+}
+async function restoreChatAvatars(view) {
+    if (!current(view)) return;
+    const context = core_context.currentCharacterGuard(), scope = chat_avatars.chatAvatarScope(context), originModal = modal;
+    // A page-level restore starts with null; a dialog restore belongs only to
+    // that dialog. Finishing an old operation must never dismiss a newer one.
+    const isCurrent = () => modal === originModal && current(view) && chat_avatars.chatAvatarScope(core_context.currentCharacterGuard()) === scope;
+    const previous = await chat_avatars.loadChatAvatarSnapshot(context);
+    if (!isCurrent()) return;
+    if (!previous) { report(view, '当前聊天已经使用原头像。'); return; }
+    if (!await overlay.confirmExplicitAction('恢复本聊天的原头像？', '只取消这次头像应用，不删除情侣头像或修改角色卡。')) return;
+    if (!isCurrent()) return;
+    await chat_avatars.clearChatAvatarPair({ context: core_context.currentCharacterGuard(), expectedScope: scope });
+    if (isCurrent()) { closeCoupleDialog(); report(view, '已恢复本聊天的原头像。'); }
+}
+
+async function showApplyChatAvatars(view, record) {
+    if (!current(view)) return;
+    const context = core_context.currentCharacterGuard(), scope = chat_avatars.chatAvatarScope(context);
+    const m = dialog(view, '应用为本聊天头像', '<p role="status">正在准备这对头像…</p>'); if (!m) return;
+    const isCurrent = () => modal === m && current(view) && chat_avatars.chatAvatarScope(core_context.currentCharacterGuard()) === scope;
+    let previous;
+    try { previous = await chat_avatars.loadChatAvatarSnapshot(context); }
+    catch (error) { if (isCurrent()) m.body.innerHTML = `<p role="status">${esc(text.safeErrorSummary(error) || '头像设置暂时无法读取，原头像未改变。')}</p>`; return; }
+    if (!isCurrent()) return;
+    let prepared;
+    try {
+        const loaded = await loadRecord(view, record);
+        if (!isCurrent()) return;
+        prepared = avatar_apply.prepareCoupleAvatarApplication(record, loaded, context);
+    } catch (error) { if (isCurrent()) imageFailure(view, m, record, error); return; }
+    if (!isCurrent()) return;
+    m.body.innerHTML = `<p class="rmt-pair-note">确认两张头像分别用于谁。只影响本聊天，可随时恢复原头像。</p><div class="rmt-pair-two">${prepared.images.map(image => {
+        const role = prepared.mapping.char === image.halfIndex ? 'char' : prepared.mapping.user === image.halfIndex ? 'user' : '';
+        return `<div class="rmt-pair-person"><div class="rmt-pair-square"><img class="rmt-pair-cropped-image" src="${esc(image.url)}" alt="${esc(image.name || '已裁切头像')}"></div><strong>${esc(image.name || '未命名')}</strong><label class="rmt-pair-field"><span>用于</span><select data-pair-avatar-role="${image.halfIndex}" aria-label="${esc(image.name || '这张头像')}用于谁"><option value="">选择人物</option><option value="char" ${role === 'char' ? 'selected' : ''}>角色 · ${esc(prepared.names.char)}</option><option value="user" ${role === 'user' ? 'selected' : ''}>我 · ${esc(prepared.names.user)}</option></select></label></div>`;
+    }).join('')}</div><div class="rmt-pair-actions"><button type="button" data-pair-avatar-swap>交换对应</button><button type="button" data-pair-avatar-apply class="rmt-pair-primary">确认应用</button>${previous ? '<button type="button" data-pair-avatar-restore>恢复原头像</button>' : ''}</div><p data-pair-avatar-status role="status"></p>`;
+    const selectors = [...m.body.querySelectorAll('[data-pair-avatar-role]')];
+    const apply = m.body.querySelector('[data-pair-avatar-apply]');
+    const status = m.body.querySelector('[data-pair-avatar-status]');
+    const mapping = () => Object.fromEntries(selectors.filter(node => node.value).map(node => [node.value, Number(node.dataset.pairAvatarRole)]));
+    const refresh = () => { const value = mapping(); apply.disabled = ![0, 1].includes(value.char) || ![0, 1].includes(value.user) || value.char === value.user; };
+    selectors.forEach(node => node.addEventListener('change', refresh)); refresh();
+    m.body.querySelector('[data-pair-avatar-swap]').addEventListener('click', () => {
+        [selectors[0].value, selectors[1].value] = [selectors[1].value, selectors[0].value]; refresh();
+    });
+    m.body.querySelector('[data-pair-avatar-restore]')?.addEventListener('click', () => void restoreChatAvatars(view).catch(error => failure(view, error)));
+    let saving = false;
+    apply.addEventListener('click', () => {
+        if (saving || apply.disabled || !isCurrent()) return;
+        saving = true; apply.disabled = true;
+        void avatar_apply.applyPreparedCoupleAvatars(prepared, mapping(), { context: core_context.currentCharacterGuard(), expectedScope: scope }).then(() => {
+            if (isCurrent()) { closeCoupleDialog(); report(view, '已应用为本聊天头像。'); }
+        }).catch(error => {
+            if (isCurrent()) status.textContent = text.safeErrorSummary(error) || '头像未能保存，原头像未改变。';
+        }).finally(() => { saving = false; if (isCurrent()) refresh(); });
+    });
 }
 function downloadText(value) {
     const url = URL.createObjectURL(new Blob([value], { type: 'application/json;charset=utf-8' }));
