@@ -5,6 +5,7 @@ import * as image_patch from '../core/cgImagePatch.js';
 import * as core_context from '../core/context.js';
 import * as core_text from '../core/text.js';
 import * as appearance from './cgAppearance.js';
+import * as preset_text from './chatu8Presets.js';
 
 export const CHATU8_IMAGE_PROVIDER = 'chatu8-image';
 export const CHATU8_IMAGE_WAIT_NOTICE_MS = 300000;
@@ -181,22 +182,48 @@ function orientedSize(context, backend, orientation, aspectRatio = '') {
     return orientation === 'portrait' ? { width: short, height: long } : { width: long, height: short };
 }
 
+function nativeCharacterBackend(context, backend) {
+    const bag = extensionBag(context);
+    // The Tavern proxy route flattens positive captions and has no per-person
+    // negative field, even when its selected model is NAI 4/5.
+    return backend === 'novelai' && bag?.client !== 'jiuguan' && typeof bag?.novelaimode === 'string'
+        && /nai-diffusion-[45](?:-|$)/.test(bag.novelaimode);
+}
+
+function characterNegative(row) { return preset_text.literalPresetAppearanceText(row?.negative) || ''; }
+
+function promptField(value) {
+    // Semicolons end upstream fields. Sanitize only the transport copy; leave
+    // saved appearance and valid NAI emphasis weights intact.
+    return String(value).replace(/[;；]/g, ',').replace(/\|\s*centers\s*:/gi, ', centers ')
+        .replace(/（/g, '(').replace(/）/g, ')').replace(/[\r\n]+/g, ' ').trim();
+}
+
+function characterFields(row, index, positive, centers = '') {
+    const negative = characterNegative(row);
+    return [`Character ${index + 1} Prompt: ${promptField(positive)}${centers};`,
+        ...(negative ? [`Character ${index + 1} UC: ${promptField(negative)};`] : [])];
+}
+
+function sendPreview(prompt, backend, negatives = []) {
+    // Flat transports have one global negative, just like the provider's own
+    // flat preset expansion. Never put exclusions into the positive prompt.
+    const negative = ['novelai', 'sd', 'comfyui', 'runninghub'].includes(backend)
+        ? negatives.filter(value => typeof value === 'string' && value.trim()).map(value => value.trim()).join(', ') : '';
+    return { prompt, nl: '', ...(negative ? { negative_prompt: negative } : {}) };
+}
+
 function avatarCharacterPrompt(parts, context, backend) {
     // The existing generate-image-request consumer recognizes this grammar
     // for NAI 4/5, then builds separate native character captions. Older models
     // and other backends keep the complete flat prompt. No settings are changed.
-    const model = extensionBag(context)?.novelaimode;
-    if (backend !== 'novelai' || typeof model !== 'string' || !/nai-diffusion-[45](?:-|$)/.test(model)
+    if (!nativeCharacterBackend(context, backend)
         || typeof parts?.scene !== 'string' || !parts.scene.trim()
         || !Array.isArray(parts.characters) || parts.characters.length !== 2
         || !parts.characters.every(row => typeof row?.tag === 'string' && row.tag.trim())) return '';
-    // Semicolons end upstream fields. Normalize punctuation in the transport
-    // copy so user prose cannot truncate a character or spill into the other.
-    const field = value => value.replace(/[;；]/g, ',').replace(/\|\s*centers\s*:/gi, ', centers ')
-        .replace(/（/g, '(').replace(/）/g, ')').replace(/[\r\n]+/g, ' ').trim();
     return [
-        `Scene Composition: ${field(parts.scene)};`,
-        ...parts.characters.map((row, index) => `Character ${index + 1} Prompt: ${field(row.tag)} | centers:{${index ? 0.75 : 0.25},0.5};`),
+        `Scene Composition: ${promptField(parts.scene)};`,
+        ...parts.characters.flatMap((row, index) => characterFields(row, index, row.tag, ` | centers:{${index ? 0.75 : 0.25},0.5}`)),
     ].join('\n');
 }
 
@@ -208,14 +235,17 @@ export function chatu8SendPreview(prompt, { promptMetadata = null, context = cor
     const metadata = appearance.resolveCgAppearanceMetadata(context, appearance.scopeCgPromptMetadata(visual, promptMetadata), { provider: CHATU8_IMAGE_PROVIDER });
     const backend = extensionBag(context)?.mode;
     const avatar = preservePrompt && singlePrompt && !metadata ? avatarPromptParts : null;
-    if (metadata?.flatPromptOverride) return { prompt: metadata.flatPrompt || visual, nl: '' };
-    if (!metadata || preservePrompt) return { prompt: avatarCharacterPrompt(avatar, context, backend) || flatPrompt(visual, metadata, preservePrompt), nl: '' };
+    if (metadata?.flatPromptOverride) return sendPreview(metadata.flatPrompt || visual, backend);
+    if (!metadata || preservePrompt) {
+        const nativePrompt = avatarCharacterPrompt(avatar, context, backend);
+        return sendPreview(nativePrompt || flatPrompt(visual, metadata, preservePrompt), backend,
+            [avatar?.negative, ...(!nativePrompt && Array.isArray(avatar?.characters) ? avatar.characters.map(characterNegative) : [])]);
+    }
     const characters = metadata.characters;
     const changed = characters.some(row => row.resolvedAppearance === true);
-    const model = extensionBag(context)?.novelaimode;
     const automaticCoordinates = extensionBag(context)?.AI_use_coords;
     const expectedCharacters = metadata.castSnapshot?.people.length ?? metadata.selectedRoles?.length ?? characters.length;
-    const native = backend === 'novelai' && typeof model === 'string' && /nai-diffusion-[45](?:-|$)/.test(model)
+    const native = nativeCharacterBackend(context, backend)
         // Without explicitly enabled automatic placement the upstream builder
         // sends empty manual centers. Keep a complete flat prompt in that mode.
         && (automaticCoordinates === true || automaticCoordinates === 'true')
@@ -226,16 +256,18 @@ export function chatu8SendPreview(prompt, { promptMetadata = null, context = cor
     const sceneInput = metadata.promptFormat === 'nai45-tags' ? metadata.sceneTags || visual : visual;
     const scene = appearance.formattedCgProviderPrompts(sceneInput, sceneMetadata, false, '')?.prompt || sceneInput;
     if (native) {
-        const field = value => String(value).replace(/[;；]/g, ',').replace(/\|\s*centers\s*:/gi, ', centers ')
-            .replace(/（/g, '(').replace(/）/g, ')').replace(/[\r\n]+/g, ' ').trim();
-        return { prompt: [`Scene Composition: ${field(scene)};`, ...characters.map((row, index) =>
-            `Character ${index + 1} Prompt: ${field(`${row.name}: ${row.tag || row.nl}`)};`)].join('\n'), nl: '' };
+        return sendPreview([`Scene Composition: ${promptField(scene)};`, ...characters.flatMap((row, index) =>
+            characterFields(row, index, metadata.promptFormat === 'nai45-tags' ? row.tag || row.nl : `${row.name}: ${row.tag || row.nl}`))].join('\n'), backend);
     }
-    if (!changed) return { prompt: flatPrompt(visual, metadata), nl: '' };
+    const negatives = characters.map(characterNegative);
+    if (metadata.promptFormat === 'nai45-tags' && (changed || !metadata.flatPrompt)) {
+        return sendPreview(appearance.cgPreparedTagPrompt(scene, metadata), backend, negatives);
+    }
+    if (!changed) return sendPreview(flatPrompt(visual, metadata), backend, negatives);
     // No second request is needed for backends without native character slots.
     // Do not re-normalize the resolved tags through the old 400-character field.
     const looks = characters.filter(row => row.tag || row.nl).map(row => `${row.name}：${row.tag || row.nl}`).join('\n');
-    return { prompt: looks ? `${scene}\n\n人物外貌（逐人对应，不互换）：\n${looks}` : scene, nl: '' };
+    return sendPreview(looks ? `${scene}\n\n人物外貌（逐人对应，不互换）：\n${looks}` : scene, backend, negatives);
 }
 
 export async function generateChatu8Image(prompt, { signal = null, orientation = 'landscape', respectOrientation = false, aspectRatio = '', promptMetadata = null, onProgress = null, onSettled = null, targetKey = '', context = core_context.getContext(), preservePrompt = false, singlePrompt = false, avatarPromptParts = null } = {}) {
@@ -245,17 +277,12 @@ export async function generateChatu8Image(prompt, { signal = null, orientation =
     const reservation = typeof targetKey === 'string' && targetKey ? targetKey : Symbol('image');
     if (pendingGenerations.has(reservation)) throw chatu8ImageError('CH8_TARGET_BUSY');
     // 智绘姬按自己的后端能力并发或排队；这里只阻止同一目标重复提交。
-    let scene;
-    try { scene = chatu8SendPreview(prompt, { promptMetadata, context, preservePrompt, singlePrompt, avatarPromptParts }).prompt; }
+    let preview;
+    try { preview = chatu8SendPreview(prompt, { promptMetadata, context, preservePrompt, singlePrompt, avatarPromptParts }); }
     catch (error) {
         if (ownErrors.has(error) || error?.safeToDisplay) throw error;
         throw chatu8ImageError('CH8_INVALID_ARGS');
     }
-    const avatar = preservePrompt && singlePrompt && !promptMetadata ? avatarPromptParts : null;
-    // This is the consumer's documented extra-negative event field. It appends
-    // to the user's configured negative prompt in these four supported modes.
-    const negative = ['novelai', 'sd', 'comfyui', 'runninghub'].includes(state.backend)
-        && typeof avatar?.negative === 'string' ? avatar.negative.trim() : '';
     const source = state.eventSource;
     const id = requestId();
     let settled = false;
@@ -294,8 +321,8 @@ export async function generateChatu8Image(prompt, { signal = null, orientation =
                 signal?.addEventListener('abort', onAbort, { once: true });
                 // 排队也计入等待时间，不能把仍在智绘姬队列里的任务判成失败。
                 timer = setTimeout(() => report('waiting'), CHATU8_IMAGE_WAIT_NOTICE_MS);
-                source.emit(REQUEST_EVENT, { id, prompt: scene,
-                    ...(negative ? { negative_prompt: negative } : {}),
+                source.emit(REQUEST_EVENT, { id, prompt: preview.prompt,
+                    ...(preview.negative_prompt ? { negative_prompt: preview.negative_prompt } : {}),
                     ...(respectOrientation ? orientedSize(context, state.backend, orientation, aspectRatio) : {}) });
             } catch { stop('CH8_BACKEND_ERROR'); }
         });

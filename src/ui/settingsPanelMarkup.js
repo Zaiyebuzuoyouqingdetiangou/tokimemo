@@ -66,7 +66,7 @@ export function renderSettingsPanelMarkup(panel) {
         ${advanced_ui.advancedGenerationHtml()}
         ${chatReadingSettingsHtml()}
         <details class="rmt-settings-card" data-rmt-settings-section="image">
-          <summary class="rmt-settings-card-head"><span>CG</span><div><b>CG 生图</b><small>相簿 · ADV · 日常一格</small></div></summary>
+          <summary class="rmt-settings-card-head"><span>CG</span><div><b>生图设置</b><small>配图 · 手书 · 情侣头像</small></div></summary>
           <div class="rmt-settings-section-body">
             ${cg_format_ui.cgFormatControlHtml()}
             <label class="rmt-settings-field"><span>生图渠道</span><select class="text_pole" data-rmt-image-generation-provider aria-describedby="rmt-image-provider-status"><option value="baibai-image">柏宝绘 · 公开 API v1</option><option value="chatu8-image">智绘姬</option></select></label>

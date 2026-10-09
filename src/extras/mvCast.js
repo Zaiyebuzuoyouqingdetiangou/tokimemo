@@ -5,6 +5,7 @@ import * as cache from '../core/cache.js';
 import * as looks from '../core/castLooks.js';
 import * as core_text from '../core/text.js';
 import * as image_presets from '../generation/imageAppearancePresets.js';
+import * as mv_format from './mvPromptFormat.js';
 
 const list = value => Array.isArray(value) ? value : [];
 const text = value => typeof value === 'string' ? value.trim() : '';
@@ -176,14 +177,19 @@ export function legacyMvLooks(context, visibleRoles = { char: 'full', user: 'ful
     const names = { char: context?.name2 || '', user: context?.name1 || '' };
     const roster = Object.entries(names).map(([id, name]) => ({ id, name, visible: visibleRoles[id] || 'full' }));
     const presets = resolvedAppearances(context, roster, roster);
-    const overrides = {};
+    const overrides = {}, presetNegatives = {};
     for (const role of ['char', 'user']) if (Object.hasOwn(visibleRoles, role)) {
         const preset = presets.get(role);
-        if (preset?.tag || preset?.nl) overrides[role] = preset.tag || preset.nl;
+        if (preset?.tag || preset?.nl) {
+            overrides[role] = preset.tag || preset.nl;
+            if (preset.source === 'chatu8' && typeof preset.negative === 'string' && preset.negative) presetNegatives[role] = preset.negative;
+        }
     }
-    if (!Object.keys(overrides).length) return original;
+    // Negatives belong to this successful preset lookup, never to saved local
+    // fallback tags. Rebuild this transient map so a lost preset leaves none.
+    if (!Object.keys(overrides).length) return original ? { ...original, presetNegatives } : original;
     const tag = role => original?.manual ? original?.[role] || '' : looks.lookFromDescription(original?.[role]);
-    return { ...original, char: tag('char'), user: tag('user'), ...overrides, manual: true, resolvedAppearance: true };
+    return { ...original, char: tag('char'), user: tag('user'), ...overrides, manual: true, resolvedAppearance: true, presetNegatives };
 }
 
 export function legacyMvLooksPromptLine(record, context) {
@@ -215,20 +221,29 @@ function visualName(record, person) {
 export function castVisual(record, shot, { appearance = true, context = null } = {}) {
     const people = shotPeople(record, shot);
     const presets = appearance ? resolvedAppearances(context, record?.cast?.people, people) : null;
-    const rows = people.map(person => {
+    const rows = people.map((person, index) => {
         const clothing = list(record?.wardrobe?.characters).find(row => row.participantId === person.id)?.clothing || '';
         const crop = { hands: 'only hands in frame, face and body outside the crop', face: 'face close-up', back: 'back view, face not visible', silhouette: 'silhouette' }[person.visible] || '';
-        return `${visualName(record, person)}: ${[person.position, person.action, crop, appearance ? visibleAppearance(record, person, context, presets) : '',
-            person.visible !== 'hands' && person.visible !== 'face' && clothing ? `wearing ${clothing}` : ''].filter(Boolean).join('; ')}`;
+        const details = [person.position, person.action, crop, appearance ? visibleAppearance(record, person, context, presets) : '',
+            person.visible !== 'hands' && person.visible !== 'face' && clothing ? `wearing ${clothing}` : ''].filter(Boolean);
+        return mv_format.isTags(record) ? [`person ${index + 1}`, ...details].join(', ')
+            : `${visualName(record, person)}: ${details.join('; ')}`;
     });
     const count = shot.castUnresolved ? '' : people.length === 0 ? 'scenery, no humans' : people.length === 1 ? 'one person' : `${people.length} people in the same scene`;
-    return [count, ...rows].filter(Boolean).join('\n');
+    return mv_format.join(record, [count, ...rows]);
 }
 
 export function castMetadata(record, shot, context = null) {
     if (!record?.cast || !Array.isArray(shot?.cast)) return null;
     const people = shotPeople(record, shot);
     const presets = resolvedAppearances(context, record?.cast?.people, people);
-    return { castSnapshot: { version: 1, people: people.map(person => ({ id: person.id, name: visualName(record, person), sourceRefs: person.sourceRefs, ...(person.identity ? { identity: person.identity } : {}) })) },
-        characters: people.map(person => ({ participantId: person.id, tag: visibleAppearance(record, person, context, presets), nl: '', appearanceOverride: true, resolvedAppearance: true })) };
+    // Tag scenes use these local anchors in castVisual. Keep metadata on the
+    // same anchors after resolving presets by the real, unchanged identities.
+    return mv_format.metadata(record, { castSnapshot: { version: 1, people: people.map((person, index) => ({ id: person.id, name: mv_format.isTags(record) ? `person ${index + 1}` : visualName(record, person), sourceRefs: person.sourceRefs, ...(person.identity ? { identity: person.identity } : {}) })) },
+        characters: people.map(person => {
+            const preset = presets.get(person.id);
+            const negative = preset?.source === 'chatu8' && typeof preset.negative === 'string' ? preset.negative : '';
+            return { participantId: person.id, tag: visibleAppearance(record, person, context, presets), nl: '', appearanceOverride: true, resolvedAppearance: true,
+                ...(negative ? { negative } : {}) };
+        }) });
 }

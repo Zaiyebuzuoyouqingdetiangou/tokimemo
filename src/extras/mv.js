@@ -18,6 +18,7 @@ import * as mv_still from './mvStillPrompt.js';
 import * as mv_stage from './mvStage.js';
 import * as mv_illustration from './mvIllustration.js';
 import * as mv_tegaki_direction from './mvTegakiDirection.js';
+import * as mv_format from './mvPromptFormat.js';
 
 export const MV_KEY = 'heartbeatMemoriesMvV1';
 const LOCAL_PREFIX = 'heartbeatMemoriesMvV1:';
@@ -575,6 +576,7 @@ export function normalizeSettings(value) {
         rangeFrom: Math.max(0, Math.round(Number(value?.rangeFrom) || 0)),
         rangeTo: Math.max(0, Math.round(Number(value?.rangeTo) || 0)),
         storyType: mv_direction.directionOf(value?.storyType).id,
+        ...(mv_format.normalize(value?.promptFormat) ? { promptFormat: mv_format.normalize(value.promptFormat) } : {}),
     };
 }
 
@@ -605,7 +607,7 @@ function storyboardPrompt(context, memory, song, settings, sectionIndexes = null
     const firstPerson = cast && mv_cast.selectedMvPeople(cast, settings)[0];
     const exampleBinding = cast ? `"cast":${JSON.stringify(firstPerson ? [{ participantId: firstPerson.id, position: 'left', action: settings.output === 'video' ? '这一人的动作及互动对象' : '共同站位或互动关系；表情与当下动作写在各 diff.imagePrompt', visible: 'full' }] : [])}` : '"who":"char"';
     const exampleWardrobe = cast ? JSON.stringify({ era: '……', characters: firstPerson ? [{ participantId: firstPerson.id, clothing: '有依据的本曲衣着' }] : [] }) : '{"era":"……","char":"……","user":"……"}';
-    const exampleActor = firstPerson?.name || charName;
+    const exampleActor = settings.promptFormat === 'nai45-tags' ? 'person' : firstPerson?.name || charName;
     const exampleSection = sections[0]?.index || 0, exampleLyric = sections[0]?.lines?.[0] || '原句';
     const expressionCast = visible => cast ? { cast: firstPerson ? [{ participantId: firstPerson.id, position: 'center', action: '', visible }] : [] } : { who: 'char' };
     const expressionExample = settings.output === 'tegaki' && settings.storyType === 'expression' ? JSON.stringify({
@@ -675,7 +677,7 @@ ${settings.output === 'video' ? `1. 按段落写镜头：${settings.output === '
 
 ` : ''}7. wardrobe：按角色设定与世界观定下时代场景与衣着，不擅改既有发色、衣服或身份来区分人物。era 写时代与场所；${cast ? 'characters 数组每项为 {"participantId":"原始ID","clothing":"该人的本曲衣着"}，有依据才写。' : `char 写 ${charName} 的衣着${settings.appear === 'none' ? '' : `，user 写 ${userName} 的衣着`}。`}
 
-【输出】
+${settings.promptFormat ? mv_format.directive(settings.promptFormat) + '\n' : ''}【输出】
 只输出一个 JSON 对象。
 第一个字符必须是 {，最后一个字符必须是 }。
 不要前言，不要解释，不要代码围栏，不要在 JSON 外面写任何字。
@@ -845,7 +847,7 @@ export async function generateStoryboard(songId, settingsInput, castInput = unde
     const { song, memory, scope, origin } = target;
     const key = `story:${scope}:${songId}`;
     if (running.has(key)) throw core_text.safeUserError('分镜正在写，稍等一下。', 'RMT_MV_RUNNING');
-    const settings = normalizeSettings(settingsInput);
+    const settings = normalizeSettings({ ...settingsInput, promptFormat: mv_format.selected(context, settingsInput?.promptFormat) });
     const previous = target.base.songs[songId];
     const cast = castInput === undefined ? mv_cast.initialMvCast(context, previous) : mv_cast.normalizeMvCast(castInput);
     running.add(key);
@@ -926,7 +928,7 @@ export async function rewriteShot(songId, shotId, kind) {
 原镜头：${JSON.stringify({ plain: shot.plain, lyric: shot.lyric, who: shot.who, shot: shot.shot, move: shot.move, motion: shot.motion, imagePrompt: shot.imagePrompt, videoZh: shot.videoZh, videoEn: shot.videoEn })}
 ${record.cast ? `本镜人物及动作：${mv_cast.castVisual(record, shot, { context })}\n${mv_direction.directionPrompt(record.settings?.storyType, song)}` : ''}
 出镜人物不变，不写新的共同经历，不写文字或 Logo。
-【输出】
+${record.settings?.promptFormat ? mv_format.directive(record.settings.promptFormat) + '\n' : ''}【输出】
 只输出一个 JSON 对象。
 第一个字符必须是 {，最后一个字符必须是 }。
 不要前言，不要解释，不要代码围栏，不要在 JSON 外面写任何字。
@@ -958,9 +960,10 @@ export function frameNeedsUserLooks(record, context) {
 export function wardrobeLine(record, hasChar, hasUser) {
     const w = record?.wardrobe || {};
     const parts = [];
-    if (w.era) parts.push(`setting: ${w.era}`);
-    if (hasChar && w.char) parts.push(`${hasUser ? 'the main character' : 'the character'} wears ${w.char}`);
-    if (hasUser && w.user) parts.push(`${hasChar ? 'the second person' : 'the person'} wears ${w.user}`);
+    const tags = mv_format.isTags(record);
+    if (w.era) parts.push(tags ? w.era : `setting: ${w.era}`);
+    if (hasChar && w.char) parts.push(tags ? `${hasUser ? 'main character outfit' : 'outfit'}, ${w.char}` : `${hasUser ? 'the main character' : 'the character'} wears ${w.char}`);
+    if (hasUser && w.user) parts.push(tags ? `${hasChar ? 'second character outfit' : 'outfit'}, ${w.user}` : `${hasChar ? 'the second person' : 'the person'} wears ${w.user}`);
     if (parts.length) parts.push('same outfits in every frame, period-accurate clothing only');
     return parts.join(', ');
 }
@@ -969,21 +972,21 @@ export function framePrompt(record, shot, context, appearance = true) {
     if (isV2(record) && assetOf(record, `${shot?.group}:${shot?.diff}`))
         return assetPrompt(record, `${shot.group}:${shot.diff}`, context, appearance);
     const settings = normalizeSettings(record?.settings);
-    if (record?.cast && Array.isArray(shot?.cast)) return [styleOf(settings).prompt,
+    if (record?.cast && Array.isArray(shot?.cast)) return mv_format.join(record, [styleOf(settings).prompt,
         settings.ratio === '9:16' ? 'vertical 9:16 composition' : 'horizontal 16:9 composition',
-        shot.imagePrompt || shot.plain, record?.wardrobe?.era, mv_cast.castVisual(record, shot, { appearance, context })].filter(Boolean).join('\n');
+        shot.imagePrompt || shot.plain, record?.wardrobe?.era, mv_cast.castVisual(record, shot, { appearance, context })]);
     const hasChar = shot.who === 'char' || shot.who === 'both';
     const hasUser = settings.appear !== 'none' && (shot.who === 'both' || shot.who === 'user');
     const looks = mv_cast.legacyMvLooks(context, { ...(hasChar ? { char: 'full' } : {}), ...(hasUser ? { user: settings.appear === 'back' ? 'back' : 'full' } : {}) });
     const people = { ...(looks || {}), char: hasChar ? looks?.char || '' : '', user: hasUser ? looks?.user || '' : '' };
-    const lookLine = appearance && (hasChar || hasUser) ? mv_cast.legacyMvLooksPromptLine(people, context) : '';
+    const lookLine = appearance && (hasChar || hasUser) ? mv_format.legacyLooks(record, people, () => mv_cast.legacyMvLooksPromptLine(people, context)) : '';
     const userRule = settings.appear === 'back' && hasUser ? `${hasChar ? 'the second person' : 'the person'} is shown only from behind, hands or silhouette, face not visible` : '';
     const noUser = !hasChar && !hasUser ? 'scenery, no humans' : hasChar && hasUser ? 'duo, two people' : 'solo';
     return [
         styleOf(settings).prompt,
         settings.ratio === '9:16' ? 'vertical 9:16 composition' : 'horizontal 16:9 composition',
         shot.imagePrompt || shot.plain,
-        lookLine ? `fixed appearance, keep consistent: ${lookLine}` : '',
+        lookLine ? mv_format.isTags(record) ? lookLine : `fixed appearance, keep consistent: ${lookLine}` : '',
         wardrobeLine(record, hasChar, hasUser),
         userRule, noUser,
 
@@ -1015,8 +1018,8 @@ export async function drawFrame(songId, shotId) {
     try {
         const found = isV2(record) ? assetOf(record, `${shot.group}:${shot.diff}`) : null;
         const custom = found && record.assetPrompts?.[`${shot.group}:${shot.diff}`]?.trim();
-        const metadata = custom ? null : found ? assetMetadata(record, found, context) : record.cast ? mv_cast.castMetadata(record, shot, context)
-            : ['chatu8-image', 'baibai-image'].includes(cg_core.imageGenerationUiState(context).provider) ? assetMetadata(record, { group: shot }, context) : null;
+        const metadata = custom ? null : mv_format.metadata(record, found ? assetMetadata(record, found, context) : record.cast ? mv_cast.castMetadata(record, shot, context)
+            : ['chatu8-image', 'baibai-image'].includes(cg_core.imageGenerationUiState(context).provider) ? assetMetadata(record, { group: shot }, context) : null);
         const result = await cg_core.invokeImageGeneration(framePrompt(record, shot, context, !metadata), context, {
             orientation: normalizeSettings(record.settings).ratio === '9:16' ? 'portrait' : 'landscape',
             respectOrientation: true,
@@ -1407,7 +1410,7 @@ export function defaultAssetPrompt(record, key, context, appearance = true) {
     if (!found) return '';
     const style = styleOf(settings).prompt;
     const ratio = settings.ratio === '9:16' ? 'vertical 9:16 composition' : 'horizontal 16:9 composition';
-    const era = record?.wardrobe?.era ? `setting: ${record.wardrobe.era}` : '';
+    const era = record?.wardrobe?.era ? mv_format.isTags(record) ? record.wardrobe.era : `setting: ${record.wardrobe.era}` : '';
     const illustrationDetail = settings.output === 'tegaki' && settings.storyType === 'illustration'
         ? 'finished key illustration, clearly resolved focal details within the chosen art style, intentional silhouette and flowing contours, selective fine detail balanced with quiet areas, coherent directional lighting and depth'
         : settings.output === 'tegaki' && mv_tegaki_direction.supports(settings.storyType) ? mv_tegaki_direction.finish(settings.style) : '';
@@ -1423,22 +1426,22 @@ export function defaultAssetPrompt(record, key, context, appearance = true) {
         return mv_still.joinStillPrompt([style, ratio, 'single illustration, one captured instant', illustrationDetail, mv_still.stillScene(found.group, found.diff, actors.length === 1), size, place,
         mv_cast.castVisual(record, mv_still.stillCast(found.group, found.diff), { appearance, context }),
         found.group.layer === 'full' ? [era, (list(found.group.bgs).find(b => b.id === found.diff.bg) || list(found.group.bgs)[0])?.prompt || found.group.backgroundPrompt].filter(Boolean).join(', ')
-            : 'isolated subject, flat uniform white background, clear silhouette, margin around the subject']);
+            : 'isolated subject, flat uniform white background, clear silhouette, margin around the subject'], record);
     }
     const who = found.group.who;
     const hasChar = who === 'char' || who === 'both';
     const hasUser = settings.appear !== 'none' && (who === 'both' || who === 'user');
     const looks = mv_cast.legacyMvLooks(context, { ...(hasChar ? { char: 'full' } : {}), ...(hasUser ? { user: settings.appear === 'back' ? 'back' : 'full' } : {}) });
     const people = { ...(looks || {}), char: hasChar ? looks?.char || '' : '', user: hasUser ? looks?.user || '' : '' };
-    const lookLine = appearance && (hasChar || hasUser) ? mv_cast.legacyMvLooksPromptLine(people, context) : '';
+    const lookLine = appearance && (hasChar || hasUser) ? mv_format.legacyLooks(record, people, () => mv_cast.legacyMvLooksPromptLine(people, context)) : '';
     const back = settings.appear === 'back' && hasUser ? `${hasChar ? 'the second person' : 'the person'} is shown only from behind, hands or silhouette, face not visible` : '';
     const place = { left: 'character placed on the left third of the frame', right: 'character placed on the right third of the frame', center: '' }[found.group.position] || '';
     const size = { close: 'close-up shot', medium: 'medium shot, waist up', full: 'full body shot', wide: 'wide shot, small figure' }[found.group.scale] || '';
-    return mv_still.joinStillPrompt([style, ratio, 'single illustration, one captured instant', illustrationDetail, mv_still.stillScene(found.group, found.diff, hasChar !== hasUser), place, size, lookLine ? `fixed appearance, keep consistent: ${lookLine}` : '', wardrobeLine(record, hasChar, hasUser), back,
+    return mv_still.joinStillPrompt([style, ratio, 'single illustration, one captured instant', illustrationDetail, mv_still.stillScene(found.group, found.diff, hasChar !== hasUser), place, size, lookLine ? mv_format.isTags(record) ? lookLine : `fixed appearance, keep consistent: ${lookLine}` : '', wardrobeLine(record, hasChar, hasUser), back,
         hasChar && hasUser ? 'duo, two people' : hasChar || hasUser ? 'solo, single figure' : 'scenery, no humans',
         found.group.layer === 'full'
             ? [era, (list(found.group.bgs).find(b => b.id === found.diff.bg) || list(found.group.bgs)[0])?.prompt || found.group.backgroundPrompt, 'detailed background, full scene'].filter(Boolean).join(', ')
-            : 'isolated subject, flat uniform white background, clear silhouette, margin around the subject']);
+            : 'isolated subject, flat uniform white background, clear silhouette, margin around the subject'], record);
 }
 
 // 双人画面按角色分别给外貌（与 CG 相同的 characters 结构），避免两个人长成同一张脸。
@@ -1452,7 +1455,8 @@ function assetMetadata(record, found, context) {
     const looks = mv_cast.legacyMvLooks(context, Object.fromEntries(roles.map(role => [role, role === 'user' && settings.appear === 'back' ? 'back' : 'full'])));
     const tag = role => looks?.manual === true ? looks?.[role] || '' : core_castLooks.lookFromDescription(looks?.[role]);
     try {
-        return cg_appearance.normalizeCgPromptMetadata({ selectedRoles: roles, characters: roles.map(role => ({ role, name: role === 'char' ? context?.name2 : context?.name1, tag: tag(role), nl: '', appearanceOverride: true, resolvedAppearance: true })) });
+        return cg_appearance.normalizeCgPromptMetadata(mv_format.metadata(record, { selectedRoles: roles, characters: roles.map(role => ({ role, name: role === 'char' ? context?.name2 : context?.name1, tag: tag(role), nl: '', appearanceOverride: true, resolvedAppearance: true,
+            ...(looks?.presetNegatives?.[role] ? { negative: looks.presetNegatives[role] } : {}) })) }));
     } catch { return null; }
 }
 
@@ -1478,7 +1482,7 @@ export async function drawAsset(songId, key, { fresh = false } = {}) {
             characterName: context?.name2 || '', targetKey: runKey, seed, singlePrompt: true,
         };
         // A saved custom prompt is the complete previewed text; do not append hidden cast text.
-        const metadata = found.kind === 'char' && !record.assetPrompts?.[key] ? assetMetadata(record, found, context) : null;
+        const metadata = !record.assetPrompts?.[key] ? mv_format.metadata(record, found.kind === 'char' ? assetMetadata(record, found, context) : null) : null;
         // Adapters flatten unsupported character metadata before sending. A provider
         // error may mean the image was already paid for, so never redraw here.
         const result = await cg_core.invokeImageGeneration(assetPrompt(record, key, context, !metadata), context, { ...base, ...(metadata ? { promptMetadata: metadata } : {}) });

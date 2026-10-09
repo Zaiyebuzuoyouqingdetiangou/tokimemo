@@ -1,5 +1,7 @@
 // Each asset is one still. A complete per-diff description supersedes the
 // group's reference pose; old boards remain readable without a new model call.
+import * as mv_format from './mvPromptFormat.js';
+
 const text = value => typeof value === 'string' ? value.trim() : '';
 export function cleanStillText(value) {
     return text(value).replace(/\benglish\s*:\s*/giu, '').trim();
@@ -33,12 +35,12 @@ export function stillCast(group, diff) {
     })) };
 }
 
-export function joinStillPrompt(parts) {
+export function joinStillPrompt(parts, record = null) {
     const seen = new Set();
     return parts.map(cleanStillText).filter(part => {
         if (!part) return false;
         const key = part.toLocaleLowerCase().replace(/\s+/gu, ' ');
         if (seen.has(key)) return false;
         seen.add(key); return true;
-    }).join('\n');
+    }).join(mv_format.isTags(record) ? ', ' : '\n');
 }

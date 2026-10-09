@@ -15,6 +15,7 @@ import * as core_castLooks from '../core/castLooks.js';
 import * as archive_repository from '../archive/repository.js';
 import * as mv_cast from '../extras/mvCast.js';
 import * as mv_direction from '../extras/mvDirection.js';
+import * as mv_format from '../extras/mvPromptFormat.js';
 import * as mv_stage from '../extras/mvStage.js';
 import * as mv_illustration from '../extras/mvIllustration.js';
 import * as illustration_canvas from './mvIllustrationCanvas.js';
@@ -864,7 +865,8 @@ function renderSetup(song, record) {
       <details class="rmt-x-card"><summary>分镜方向与人物</summary>${cast_controls.directionControls(song, d)}${cast_controls.castControls(view.castDraft, d)}</details>
       <details class="rmt-x-card"><summary>画风、出镜与画幅</summary><h3 class="rmt-x-section-title">画风</h3><div class="rmt-mv-grid2">${styles.map(style => choice('set-style', style.id, d.style === style.id, style.name, style.desc)).join('')}</div>
       ${appearance ? `<h3 class="rmt-x-section-title">你的出镜方式</h3>${choice('set-appear', 'face', d.appear === 'face', '露脸出镜', '按你填写的外貌来画。')}${choice('set-appear', 'back', d.appear === 'back', '只拍背影或手', '有你的存在感，但不画脸。')}${choice('set-appear', 'none', d.appear === 'none', '不出镜', '不画用户，其他已选人物不受影响。')}` : ''}
-      <h3 class="rmt-x-section-title">画幅</h3><div class="rmt-mv-grid2">${choice('set-ratio', '9:16', d.ratio === '9:16', '竖屏 9:16', '手机看')}${choice('set-ratio', '16:9', d.ratio === '16:9', '横屏 16:9', '电脑看')}</div></details>
+      <h3 class="rmt-x-section-title">画幅</h3><div class="rmt-mv-grid2">${choice('set-ratio', '9:16', d.ratio === '9:16', '竖屏 9:16', '手机看')}${choice('set-ratio', '16:9', d.ratio === '16:9', '横屏 16:9', '电脑看')}</div>
+      <label class="rmt-x-field">生图提示写法<select data-rmt-mv-prompt-format>${[['nai45-tags', 'NAI 4.5 · 英文 Tag'], ['nai5-natural', 'NAI 5 · 自然语言']].map(([id, label]) => `<option value="${id}"${mv_format.selected(ctx(), d.promptFormat) === id ? ' selected' : ''}>${label}</option>`).join('')}</select></label><p class="rmt-x-note">用于这次生成的分镜，已有画面描述保持原样。</p></details>
       <details class="rmt-x-card"><summary>制作方式 · ${d.output === 'video' ? '外部视频工具' : '手书'}</summary>${choice('set-output', 'tegaki', d.output === 'tegaki', '手书', '画面随歌词切换，在插件里剪辑并导出。')}${choice('set-output', 'video', d.output === 'video', '外部视频工具', '保留逐镜视频提示词、完成标记与拼接指引。')}
       ${d.output === 'video' ? `<h3 class="rmt-x-section-title">视频提示词语言</h3>${choice('set-lang', 'zh', d.lang === 'zh', '中文', '用于国内视频工具')}${choice('set-lang', 'en', d.lang === 'en', '英文', '用于国外视频工具')}${choice('set-lang', 'both', d.lang === 'both', '中英文', '按需要选择')}` : ''}</details>
       <footer class="rmt-mvf-generate">${record?.shots?.length ? '<p class="rmt-x-note">重新生成会替换现有分镜，已画的图不会保留在新镜头上。</p>' : ''}${btn('setup-generate', running ? '正在写分镜…' : record?.shots?.length ? '重新生成分镜' : '生成分镜', { cls: 'rmt-x-primary', disabled: running })}<small class="rmt-x-note">这里只生成分镜，图片由你另行生成或导入。</small></footer>`);
@@ -2206,6 +2208,10 @@ export function handleMvChange(event) {
         input.value = String(mv.tegakiOptions(currentRecord())[key]);
         renderMv();
         return true;
+    }
+    if (input?.matches?.('[data-rmt-mv-prompt-format]')) {
+        view.draft = mv.normalizeSettings({ ...view.draft, promptFormat: input.value });
+        renderMv(); return true;
     }
     if (input?.matches?.('[data-rmt-mv-story-type]')) {
         const storyType = mv_direction.directionOf(input.value).id;

@@ -3,12 +3,15 @@
 import * as core_context from '../core/context.js';
 import * as core_castLooks from '../core/castLooks.js';
 import * as core_text from '../core/text.js';
+import * as core_settings from '../core/settings.js';
+import * as cg_format from '../core/cgPromptFormat.js';
 import * as appearance_presets from '../generation/imageAppearancePresets.js';
 import * as cg_core from '../generation/cgImageCore.js';
 import * as image_patch from '../core/cgImagePatch.js';
 import * as task_trace from '../core/taskTrace.js';
 import * as runtime from '../core/state.js';
 import * as styles from './coupleAvatarStyles.js';
+import * as prompt_format from './coupleAvatarPromptFormat.js';
 
 export const COUPLE_MODE = 'coupleAvatar';
 const DATABASE = 'heartbeatMemoriesCoupleAvatars';
@@ -31,6 +34,13 @@ function optionalContext() {
     try { return core_context.currentCharacterGuard(); } catch { return null; }
 }
 
+function couplePromptFormat(context, saved = '') {
+    const frozen = cg_format.normalizeCgPromptFormat(saved);
+    if (!context) return frozen;
+    try { return cg_format.normalizeCgPromptFormat(core_settings.getPluginSettings(context).cgPromptFormat, frozen); }
+    catch { return frozen; }
+}
+
 function couplePresetPeople(people, context) {
     // Storage/history normalization passes null: never rewrite the identities
     // that produced an existing pair just because a provider preset changed.
@@ -45,7 +55,8 @@ function couplePresetPeople(people, context) {
             ...(edited ? { appearanceOverride: true } : {}) };
         const preset = !edited ? presets.get(person.id) : null;
         const appearance = text(preset?.tag) || text(preset?.nl);
-        return appearance ? { ...local, appearance, fallbackAppearance: fallback, presetAppearance: appearance } : local;
+        return appearance ? { ...local, appearance, fallbackAppearance: fallback, presetAppearance: appearance,
+            ...(text(preset?.negative) ? { presetNegative: text(preset.negative) } : {}) } : local;
     });
 }
 
@@ -69,13 +80,15 @@ function baseCoupleSettings(context) {
 
 export function defaultCoupleSettings(context = optionalContext()) {
     const settings = baseCoupleSettings(context);
-    return { ...settings, people: couplePresetPeople(settings.people, context) };
+    const promptFormat = couplePromptFormat(context);
+    return { ...settings, people: couplePresetPeople(settings.people, context), ...(promptFormat ? { promptFormat } : {}) };
 }
 
 export function normalizeCoupleSettings(value, context = optionalContext()) {
     const input = value && typeof value === 'object' ? value : {};
     const defaults = baseCoupleSettings(context);
     const styleId = text(input.styleId);
+    const promptFormat = couplePromptFormat(context, input.promptFormat);
     return {
         people: couplePresetPeople(defaults.people.map((person, index) => {
             const source = Array.isArray(input.people) && input.people[index] && typeof input.people[index] === 'object' ? input.people[index] : {};
@@ -85,6 +98,7 @@ export function normalizeCoupleSettings(value, context = optionalContext()) {
                 appearance: own(source, 'appearance') ? text(source.appearance) : person.appearance,
                 ...(own(source, 'fallbackAppearance') ? { fallbackAppearance: text(source.fallbackAppearance) } : {}),
                 ...(text(source.presetAppearance) ? { presetAppearance: text(source.presetAppearance) } : {}),
+                ...(text(source.presetAppearance) && text(source.presetNegative) ? { presetNegative: text(source.presetNegative) } : {}),
                 ...(source.appearanceOverride === true ? { appearanceOverride: true } : {}),
             };
         }), context),
@@ -93,6 +107,7 @@ export function normalizeCoupleSettings(value, context = optionalContext()) {
         interaction: own(input, 'interaction') ? text(input.interaction) : defaults.interaction,
         clothing: text(input.clothing), background: text(input.background),
         direction: text(input.direction), customStyle: text(input.customStyle), interactionDetail: text(input.interactionDetail),
+        ...(promptFormat ? { promptFormat } : {}),
     };
 }
 
@@ -125,6 +140,7 @@ function appearanceReference(value, animal, object) {
 export function couplePromptParts(value, context = optionalContext()) {
     const settings = normalizeCoupleSettings(value, null);
     settings.people = couplePresetPeople(settings.people, context);
+    const promptFormat = couplePromptFormat(context, settings.promptFormat);
     const chosen = styles.COUPLE_STYLES.find(style => style.id === settings.styleId);
     const animal = chosen?.group === 'animal';
     const object = chosen?.group === 'craft' || ['fantasy-enamel', 'fantasy-shadow'].includes(chosen?.id);
@@ -172,6 +188,10 @@ export function couplePromptParts(value, context = optionalContext()) {
         'outer white frame, panel border, central white gutter, split screen, rounded portrait cards, circular picture frames, letterboxing, vignette, fading to blank edges, duplicate character, cloned face, mirrored pose, text, watermark',
         animal ? 'human face, human body, human hands, person wearing animal ears, person holding an animal' : '',
     ].filter(Boolean).join(', ');
+    if (promptFormat === 'nai45-tags') return prompt_format.coupleAvatarTagParts({
+        settings, chosen, animal, object, subject, fullFigure, negative,
+        appearances: settings.people.map(person => appearanceReference(person.appearance, animal, object)),
+    });
     // BaiBai NAI has documented tag + natural-language fields. Keep each
     // literal appearance at the start of its own tag list (including count
     // tokens the provider normalizes), and put the action in that subject's
@@ -193,15 +213,18 @@ export function couplePromptParts(value, context = optionalContext()) {
             name: `${index ? '右边' : '左边'} · ${person.name || (index ? '人物二' : '人物一')}`,
             tag: [appearanceReference(person.appearance, animal, object), rendering || subject].filter(Boolean).join(', '),
             nl: `On the ${index ? 'right' : 'left'}, ${actions[index]}.`,
+            ...(text(person.presetNegative) ? { negative: text(person.presetNegative) } : {}),
         })),
     };
     return { scene: [styleLead, ...composition].filter(Boolean).join('\n'),
         // Put the actual two appearances before general art direction on flat
         // backends, where a long scene used to bury the individual identities.
         prompt: [styleLead, ...people, ...composition].filter(Boolean).join('\n'), negative, nai,
+        ...(promptFormat ? { promptFormat } : {}),
         characters: settings.people.map((person, index) => ({
             name: `${index ? '右边' : '左边'} · ${person.name || (index ? '人物二' : '人物一')}`,
             tag: [people[index], styleLead, construction].filter(Boolean).join('\n'),
+            ...(text(person.presetNegative) ? { negative: text(person.presetNegative) } : {}),
         })) };
 }
 
@@ -474,7 +497,8 @@ export async function generateCouple(value, { context = core_context.currentChar
             orientation: 'landscape', respectOrientation: true, aspectRatio: '2:1',
             characterName: settings.people[0].name || context?.name2 || '',
             targetKey, singlePrompt: true, preservePrompt: true, onProgress: report,
-            avatarPromptParts: { scene: parts.scene, characters: parts.characters, negative: parts.negative, nai: parts.nai },
+            avatarPromptParts: { scene: parts.scene, characters: parts.characters, negative: parts.negative, nai: parts.nai,
+                ...(parts.promptFormat ? { promptFormat: parts.promptFormat } : {}) },
         });
         task_trace.markStage(trace, 'request');
         task_trace.markStage(trace, 'response');
