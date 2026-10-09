@@ -42,7 +42,7 @@ export function initialMvCast(context, record = null) {
     if (result.people.some(person => person.id === 'mv-char')) {
         const legacy = looks.readCastLooks(context);
         for (const [id, role] of [['mv-char', 'char'], ['mv-user', 'user']]) {
-            const tag = legacy?.manual ? text(legacy[role]) : looks.lookFromDescription(legacy?.[role]);
+            const tag = legacy?.manual ? text(legacy[role]) : looks.lookFromRoleDescription(legacy?.[role], role, context);
             if (tag) result.appearances.push({ participantId: id, tag, nl: '', manual: true });
         }
     }
@@ -72,7 +72,7 @@ export function addMvUser(context, value) {
         sourceRefs: content ? [{ world: '当前人设', uid: 'persona', title: text(context?.name1), content }] : [] };
     cast.people.push(person); cast.selectedIds.push(person.id);
     const legacy = looks.readCastLooks(context);
-    if (legacy?.user) cast.appearances.push({ participantId: person.id, tag: legacy.manual ? legacy.user : looks.lookFromDescription(legacy.user), nl: '', manual: true });
+    if (legacy?.user) cast.appearances.push({ participantId: person.id, tag: legacy.manual ? legacy.user : looks.lookFromRoleDescription(legacy.user, 'user', context), nl: '', manual: true });
     return cast;
 }
 
@@ -188,7 +188,7 @@ export function legacyMvLooks(context, visibleRoles = { char: 'full', user: 'ful
     // Negatives belong to this successful preset lookup, never to saved local
     // fallback tags. Rebuild this transient map so a lost preset leaves none.
     if (!Object.keys(overrides).length) return original ? { ...original, presetNegatives } : original;
-    const tag = role => original?.manual ? original?.[role] || '' : looks.lookFromDescription(original?.[role]);
+    const tag = role => original?.manual ? original?.[role] || '' : looks.lookFromRoleDescription(original?.[role], role, context);
     return { ...original, char: tag('char'), user: tag('user'), ...overrides, manual: true, resolvedAppearance: true, presetNegatives };
 }
 

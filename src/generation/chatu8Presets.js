@@ -84,9 +84,10 @@ export function visiblePresetAppearance(value, visible) {
     if (visible !== 'hands' && visible !== 'back') return value;
     return balancedPresetAppearance(value.split(/[,，;；\n。]+/u).map(part => part.trim()).filter(part => {
         if (!part) return false;
-        if (visible === 'back') return !/\b(?:eyes?|irises|pupils?|face|facial|cheeks?|cheekbones?|jaw|chin|brows?|eyebrows?|eyelashes?|lips?|mouth|nose|front(?:al)?(?:[- ]view)?|portrait)\b|眼|瞳|脸|臉|面容|面颊|面頰|颧|顴|下巴|下颌|下頜|眉|睫|嘴|唇|鼻|正面/iu.test(part);
-        return /\b(?:skin|hands?|fingers?|wrists?)\b|肤|手|指|腕/iu.test(part)
-            && !/\b(?:hair|eyes?|irises|pupils?|face|facial|cheeks?|cheekbones?|jaw|chin|brows?|eyebrows?|eyelashes?|lips?|mouth|nose|head|portrait|body|torso|chest|legs?|feet|foot)\b|头|頭|发|髮|眼|瞳|脸|臉|面容|面颊|面頰|颧|顴|下巴|下颌|下頜|眉|睫|嘴|唇|鼻|身体|身體|全身|半身|胸|腿|脚|腳/iu.test(part);
+        const classification = part.replace(/_/g, ' ');
+        if (visible === 'back') return !/\b(?:eyes?|irises|pupils?|face|facial|cheeks?|cheekbones?|dimples?|jaw|chin|brows?|eyebrows?|eyelashes?|lips?|mouth|nose|front(?:al)?(?:[- ]view)?|portrait)\b|眼|瞳|脸|臉|面容|面颊|面頰|酒窝|酒窩|颧|顴|下巴|下颌|下頜|眉|睫|嘴|唇|鼻|正面/iu.test(classification);
+        return /\b(?:skin|hands?|fingers?|wrists?)\b|肤|手|指|腕/iu.test(classification)
+            && !/\b(?:hair|eyes?|irises|pupils?|face|facial|cheeks?|cheekbones?|dimples?|jaw|chin|brows?|eyebrows?|eyelashes?|lips?|mouth|nose|head|portrait|body|torso|chest|legs?|feet|foot)\b|头|頭|发|髮|眼|瞳|脸|臉|面容|面颊|面頰|酒窝|酒窩|颧|顴|下巴|下颌|下頜|眉|睫|嘴|唇|鼻|身体|身體|全身|半身|胸|腿|脚|腳/iu.test(classification);
     }).join(', '));
 }
 

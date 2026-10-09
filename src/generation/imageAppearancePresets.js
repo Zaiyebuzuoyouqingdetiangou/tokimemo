@@ -37,16 +37,17 @@ function publicBaiBaiCharacters(api) {
 // The public tag contains the whole character-library entry, including outfits.
 // Keep only stable appearance clauses. Classification uses an unweighted copy;
 // the emitted clause retains the user's weighting and has no character quota.
-const STABLE_TRAIT = /\b(?:hair|haired|bangs|braids?|ponytails?|pigtails?|bun|bald|eyes?|irises|pupils?|skin|complexion|freckles?|moles?|scars?|birthmarks?|tattoos?|face|facial|jaw|chin|cheekbones?|eyebrows?|eyelashes?|ears?|nose|lips?|beard|mustache|moustache|stubble|height|tall|short|petite|slender|slim|muscular|build|physique|body|breasts?|bust|hips?|waist|shoulders?|hands?|fingers?|wrists?|fur|furry|horns?|antlers?|tail|wings?|scales?|claws?|fangs?)\b|发|髮|眼|瞳|肤|膚|痣|疤|雀斑|胎记|纹身|臉|脸|五官|下巴|颧骨|眉|睫|耳|鼻|唇|胡须|身高|体型|體型|纤细|纖細|高挑|肌肉|手|指|腕|毛|角|尾|翼|鳞|爪|牙/iu;
 const SCENE_OR_ACTION = /\b(?:standing|sitting|walking|running|holding|waving|dancing|kneeling|lying|leaning|looking|gazing|smiling|crying|laughing|embracing|hugging|kissing|gripping|touching|pointing|raised|outstretched|crossed|clasped|clenched|open mouth|closed eyes|closed mouth|full[- ]body|upper[- ]body|lower[- ]body|portrait|close[- ]up|cowboy shot|from behind|front view|back view|dress|shirt|jacket|coat|skirt|pants|trousers|shorts|boots|shoes|gloves|hat|cap|ribbon|necklace|bracelet|earrings?|glasses|mask|armor|armour|cape|sleeves?|uniform|swimsuit|bikini|lingerie)\b|站|坐|走|跑|跪|躺|倚|挥|揮|握|举|舉|抱|亲吻|親吻|牵|牽|抬|垂|转身|轉身|看着|望着|闭眼|閉眼|闭嘴|張嘴|张嘴|全身|半身|特写|特寫|正面|背面|服|衣|裙|裤|褲|鞋|靴|手套|帽|丝带|絲帶|项链|項鏈|手链|手鏈|耳环|耳環|眼镜|眼鏡|面具|铠甲|鎧甲/iu;
 
-function stableAppearance(value, visible) {
+function stableAppearance(value, visible, subject) {
     const literal = chatu8.literalPresetAppearanceText(value);
     if (!literal) return '';
-    const stable = literal.split(/[,，;；\n。]+/u).map(part => part.trim()).filter(part => {
+    const stable = visual.appearanceSourceClauses(literal, subject).filter(part => {
         const classification = part.replace(/[{}\[\]()]/g, '').replace(/[-+]?(?:\d+(?:\.\d+)?|\.\d+)::/g, '')
-            .replace(/::/g, '').replace(/:\s*[-+]?(?:\d+(?:\.\d+)?|\.\d+)/g, '');
-        return !!visual.automaticAppearanceClause(classification) && STABLE_TRAIT.test(classification) && !SCENE_OR_ACTION.test(classification);
+            .replace(/::/g, '').replace(/:\s*[-+]?(?:\d+(?:\.\d+)?|\.\d+)/g, '').replace(/_/g, ' ');
+        return !!visual.automaticAppearanceClause(classification)
+            && (visual.appearanceTraitClause(classification) || visual.explicitAppearanceIdentityClause(classification))
+            && !SCENE_OR_ACTION.test(classification);
     }).join(', ');
     return chatu8.visiblePresetAppearance(chatu8.balancedPresetAppearance(stable), visible);
 }
@@ -92,8 +93,9 @@ export function resolveImageAppearancePresets(context, people, { provider, api }
                 // with its identity; collisions omit both channels for this person.
                 if (appearance?.tag) result.set(person.id, appearance);
             } else {
-                const tag = stableAppearance(field(found.row, 'tag'), visible);
-                const nl = stableAppearance(field(found.row, 'nl'), visible);
+                const subject = { name: person.name, otherNames: roster.filter(row => row.id !== person.id).map(row => row.name) };
+                const tag = stableAppearance(field(found.row, 'tag'), visible, subject);
+                const nl = stableAppearance(field(found.row, 'nl'), visible, subject);
                 if (tag || nl) result.set(person.id, { tag, ...(nl ? { nl } : {}), source: 'baibai', presetKey: found.presetKey });
             }
         }

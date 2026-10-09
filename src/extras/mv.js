@@ -1453,7 +1453,7 @@ function assetMetadata(record, found, context) {
     if (who === 'char' || who === 'both') roles.push('char');
     if (settings.appear !== 'none' && (who === 'both' || who === 'user')) roles.push('user');
     const looks = mv_cast.legacyMvLooks(context, Object.fromEntries(roles.map(role => [role, role === 'user' && settings.appear === 'back' ? 'back' : 'full'])));
-    const tag = role => looks?.manual === true ? looks?.[role] || '' : core_castLooks.lookFromDescription(looks?.[role]);
+    const tag = role => looks?.manual === true ? looks?.[role] || '' : core_castLooks.lookFromRoleDescription(looks?.[role], role, context);
     try {
         return cg_appearance.normalizeCgPromptMetadata(mv_format.metadata(record, { selectedRoles: roles, characters: roles.map(role => ({ role, name: role === 'char' ? context?.name2 : context?.name1, tag: tag(role), nl: '', appearanceOverride: true, resolvedAppearance: true,
             ...(looks?.presetNegatives?.[role] ? { negative: looks.presetNegatives[role] } : {}) })) }));

@@ -111,26 +111,38 @@ export function saveConfirmedParticipantLooks(characters, { origin, expectedSign
 const LOOK_SPLIT = /[\n。；;!?！？，,、]/;
 // Face-framing hair and distinctive accessories are visible identity too. Keep
 // these explicit source facts; never synthesize a different look for a pair.
-const LOOK_KEEP = /(头发|长发|短发|发色|发型|银发|黑发|金发|白发|红发|棕发|卷发|直发|刘海|鬓|发髻|发辫|发饰|中分|偏分|侧分|眼罩|眼睛|眼眸|瞳|肤色|皮肤|身高|身形|体型|身材|穿着|衣|袍|制服|西装|衬衫|外套|裙|眼镜|耳环|疤|痣|胡|角|尾|纹身|帽|耳|鼻|唇|脸|肩|肌肉|hair|bangs?|fringe|hime[ _-]cut|braids?|\bbuns?\b|blindfold|eye[ _-]?patch|eyes?|skin|tall|wears?|outfit|glasses|scar|hat|cap|shirt|jacket|dress|coat|uniform|ears?|horns?|tail|wings?|tattoo|build|muscul|slender|lips?|face|freckles|beard|height)/i;
 // Facts about the person that are not visible in a picture.
 const LOOK_DROP = /(MBTI|INTJ|INTP|ENTJ|ENTP|INFJ|INFP|ENFJ|ENFP|ISTJ|ISFJ|ESTJ|ESFJ|ISTP|ISFP|ESTP|ESFP|星座|生肖|血型|性格|脾气|性子|喜欢|讨厌|爱喝|爱吃|口味|抽烟|喝酒|习惯|擅长|职业|工作|上班|学徒|店|父母|童年|成年后|出生|经历|伪装|面具|想法|情绪|年龄|岁|记得|记性|说话|口头禅|关系|衣柜|\b(?:personality|occupation|childhood|biography|born|parents?|likes?|dislikes?|prefers?|zodiac|blood type|years old)\b)/i;
 
-export function lookFromDescription(description, limit = CAST_LOOKS_FIELD_LIMIT) {
-    const raw = core_text.normalizeText(description, 6000)
-        .replace(/https?:\/\/\S+/gi, ' ').replace(/<[^>]{0,500}>/g, ' ')
-        .replace(/\{\{[^{}]{1,100}\}\}/g, ' ');
+export function lookFromDescription(description, limit = CAST_LOOKS_FIELD_LIMIT, subject = {}) {
+    // The couple editor has no 400-character storage contract. Its explicit
+    // Infinity opt-in scans the complete supplied persona; other callers keep
+    // the established input/output limits. Nothing is read at bootstrap.
+    const complete = limit === Infinity;
+    const raw = core_text.normalizeText(description, complete ? Infinity : 6000)
+        .replace(/https?:\/\/\S+/gi, ' ').replace(/<[^>]{0,500}>/g, ' ');
     if (!raw) return '';
     const picked = [];
+    const seen = new Set();
     let used = 0;
-    for (const part of raw.split(LOOK_SPLIT)) {
-        const clause = cg_visual.automaticAppearanceClause(core_text.normalizeText(part, 160));
-        if (!clause || !LOOK_KEEP.test(clause) || LOOK_DROP.test(clause)) continue;
-        if (picked.includes(clause)) continue;
+    for (const part of cg_visual.appearanceSourceClauses(raw, subject)) {
+        const literal = part.replace(/\{\{[^{}]{1,100}\}\}/g, ' ');
+        const clause = cg_visual.automaticAppearanceClause(core_text.normalizeText(literal, complete ? Infinity : 160));
+        if (!clause || (!cg_visual.appearanceTraitClause(clause) && !cg_visual.explicitAppearanceIdentityClause(clause)) || LOOK_DROP.test(clause)) continue;
+        if (seen.has(clause)) continue;
         if (used + clause.length + 1 > limit) break;
         picked.push(clause);
+        seen.add(clause);
         used += clause.length + 1;
     }
     return picked.join('，');
+}
+
+export function lookFromRoleDescription(description, role, context, limit = CAST_LOOKS_FIELD_LIMIT) {
+    return lookFromDescription(description, limit, {
+        role, name: role === 'char' ? context?.name2 : context?.name1,
+        otherNames: [role === 'char' ? context?.name1 : context?.name2],
+    });
 }
 
 // A user-written short tag is not a biography-extraction input. Preserve unfamiliar
@@ -255,8 +267,8 @@ export function ensureCastLooks(context = null) {
     let card = {};
     try { card = live?.getCharacterCardFields?.() || {}; } catch { return existing; }
     const clean = value => context_tags.filterContextTags(String(value || '').slice(0, 16000), context_tags.tagPolicyForContext(live));
-    const char = lookFromDescription([clean(card.description), clean(card.personality)].filter(Boolean).join('\n'));
-    const user = lookFromDescription(clean(card.persona || live?.powerUserSettings?.persona_description || ''));
+    const char = lookFromRoleDescription([clean(card.description), clean(card.personality)].filter(Boolean).join('\n'), 'char', live);
+    const user = lookFromRoleDescription(clean(card.persona || live?.powerUserSettings?.persona_description || ''), 'user', live);
     if (!char && !user) return existing;
     if (existing && existing.char === char && existing.user === user) return existing;
     try { return writeCastLooks(live, { char, user, manual: false }); } catch { return existing; }
@@ -269,7 +281,7 @@ export function castLooksBasisText(record, context = null) {
     if (!record) return '';
     let live = context;
     if (!live) { try { live = core_context.getContext(); } catch { live = null; } }
-    const looks = record.manual === true ? record : { ...record, char: lookFromDescription(record.char), user: lookFromDescription(record.user) };
+    const looks = record.manual === true ? record : { ...record, char: lookFromRoleDescription(record.char, 'char', live), user: lookFromRoleDescription(record.user, 'user', live) };
     const rows = [];
     if (looks.char) rows.push(`char（${core_text.normalizeText(live?.name2, 60) || '角色'}）：${looks.char}`);
     if (looks.user) rows.push(`user（${core_text.normalizeText(live?.name1, 60) || '用户'}）：${looks.user}`);
@@ -280,7 +292,7 @@ export function castLooksPromptLine(record, context = null) {
     if (!record) return '';
     let live = context;
     if (!live) { try { live = core_context.getContext(); } catch { live = null; } }
-    if (record.manual !== true) record = { ...record, char: lookFromDescription(record.char), user: lookFromDescription(record.user) };
+    if (record.manual !== true) record = { ...record, char: lookFromRoleDescription(record.char, 'char', live), user: lookFromRoleDescription(record.user, 'user', live) };
     const rows = [];
     if (record.char) rows.push(`${core_text.normalizeText(live?.name2, 60) || 'character'}: ${record.char}`);
     if (record.user) rows.push(`${core_text.normalizeText(live?.name1, 60) || 'the other person'}: ${record.user}`);
