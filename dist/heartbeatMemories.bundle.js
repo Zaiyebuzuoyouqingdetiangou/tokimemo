@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
-// Source modules: 344
-// Source SHA-256: ccf6fd26e1e4ed9728d9f6c7356f1509225a460ee74d350e5bf1039ac55a3104
+// Source modules: 347
+// Source SHA-256: c7f6299d68253d74913fed10491522124bfd0c3b88a61b51b3c3d80e7ec4869d
 // Build: python3 tools/verification/build.py <source-root>
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -81,6 +81,7 @@ const __m_core_cgPromptFormat_js = Object.create(null);
 const __m_core_cgTargets_js = Object.create(null);
 const __m_core_cgVisualRules_js = Object.create(null);
 const __m_core_characterDescriptor_js = Object.create(null);
+const __m_core_chatAvatarStore_js = Object.create(null);
 const __m_core_chatReadRange_js = Object.create(null);
 const __m_core_connectionPool_js = Object.create(null);
 const __m_core_constants_js = Object.create(null);
@@ -147,6 +148,8 @@ const __m_core_uiBridge_js = Object.create(null);
 const __m_core_worldPresentation_js = Object.create(null);
 const __m_extras_collection_js = Object.create(null);
 const __m_extras_coupleAvatar_js = Object.create(null);
+const __m_extras_coupleAvatarAppearance_js = Object.create(null);
+const __m_extras_coupleAvatarApply_js = Object.create(null);
 const __m_extras_coupleAvatarCrop_js = Object.create(null);
 const __m_extras_coupleAvatarPromptFormat_js = Object.create(null);
 const __m_extras_coupleAvatarStyles_js = Object.create(null);
@@ -348,6 +351,370 @@ const __m_ui_workspace_js = Object.create(null);
 const __m_ui_workspaceState_js = Object.create(null);
 const __m_ui_workspaceStyles_js = Object.create(null);
 
+function __init_core_chatAvatarStore_js() {
+// MODULE: core/chatAvatarStore.js
+
+// Lightweight, per-chat display overrides. This module deliberately has no runtime imports.
+// The bootstrap and bundled runtime may each load a copy; their state must remain one service.
+const CHAT_AVATAR_SERVICE = Symbol.for('Hearttrace.chatAvatars.v1');
+const CHAT_AVATAR_DB = 'hearttrace-chat-avatars-v1';
+const CHAT_AVATAR_STORE = 'pairs';
+const CHAT_AVATAR_PREFIX = 'hearttrace:chat-avatars:v1:';
+
+function service() {
+    if (!globalThis[CHAT_AVATAR_SERVICE]) {
+        globalThis[CHAT_AVATAR_SERVICE] = { cache: new Map(), loads: new Map(), writes: new Map(),
+            subscribers: new Set(), db: null, api: null, installations: 0, activeScope: '', scopeQueued: false };
+    }
+    // Shared with any already loaded lightweight/bundled copy, never a third durable store.
+    if (!globalThis[CHAT_AVATAR_SERVICE].fallbackRepairs) globalThis[CHAT_AVATAR_SERVICE].fallbackRepairs = new Map();
+    return globalThis[CHAT_AVATAR_SERVICE];
+}
+
+function rawContext() {
+    try { return globalThis.SillyTavern?.getContext?.() || null; } catch { return null; }
+}
+
+function identityText(value) {
+    return typeof value === 'string' || typeof value === 'number' ? String(value).trim() : '';
+}
+
+function personaAvatarFile(value) {
+    if (typeof value !== 'string' || /[\u0000-\u001f\u007f/\\:]/.test(value)) return '';
+    const file = value.trim();
+    return file && file !== '.' && file !== '..' ? file : '';
+}
+
+function currentPersonaAvatar(context, documentLike) {
+    const active = personaAvatarFile(context?.user_avatar) || personaAvatarFile(context?.userAvatar)
+        || personaAvatarFile(context?.personaAvatar);
+    if (active) return active;
+    // Some ST/TT contexts omit the current Persona filename. Read the host's selection,
+    // not a displayed/cropped avatar, and keep this lightweight module independent of UI code.
+    try {
+        const selected = documentLike?.querySelector?.('#user_avatar_block .avatar-container.selected');
+        const file = personaAvatarFile(selected?.getAttribute?.('data-avatar-id'));
+        if (file) return file;
+    } catch { /* Older hosts expose only their chat-locked Persona. */ }
+    return personaAvatarFile(context?.chatMetadata?.persona);
+}
+
+function chatAvatarScope(context = rawContext(), documentLike = globalThis.document) {
+    if (!context || !identityText(context.characterId)) return '';
+    if (context.groupId !== undefined && context.groupId !== null && context.groupId !== '' && context.groupId !== false) return '';
+    let chat = context.chatId;
+    try { chat = context.getCurrentChatId?.() ?? chat; } catch { /* Raw host fallback. */ }
+    chat = identityText(chat);
+    if (!chat) return '';
+    const character = context.characters?.[context.characterId];
+    const avatar = identityText(character?.avatar || character?.data?.avatar);
+    const name = identityText(context.name2 || character?.name || character?.data?.name);
+    if (!avatar && !name) return '';
+    const persona = [context.personaId, context.persona_id, context.currentPersonaId,
+        currentPersonaAvatar(context, documentLike),
+        context.powerUserSettings?.persona_id].map(identityText);
+    return JSON.stringify([1, identityText(context.characterId), avatar, name, chat, identityText(context.name1), persona]);
+}
+
+function currentScopeMatches(context, scope) {
+    return !!scope && chatAvatarScope(context) === scope && chatAvatarScope(rawContext()) === scope;
+}
+
+function assertCurrentScope(context, scope) {
+    if (!currentScopeMatches(context, scope)) throw new Error('聊天或人物身份已切换，请在当前聊天重新操作。');
+}
+
+function pngDataUrl(value) {
+    if (typeof value !== 'string' || !/^data:image\/png;base64,iVBORw0KGgo[A-Za-z0-9+/]*={0,2}$/.test(value)) return '';
+    const encoded = value.slice(22);
+    if (encoded.length % 4 !== 0) return '';
+    try {
+        const bytes = globalThis.atob(encoded);
+        // Require the PNG signature and its mandatory header/end chunks, not an arbitrary data URL.
+        if (bytes.length < 45 || bytes.slice(0, 8) !== '\x89PNG\r\n\x1a\n'
+            || bytes.slice(12, 16) !== 'IHDR' || bytes.slice(-8, -4) !== 'IEND') return '';
+        return value;
+    } catch { return ''; }
+}
+
+function normalizePerson(value) {
+    const url = pngDataUrl(value?.url), name = identityText(value?.name);
+    return url && name ? Object.freeze({ name, url }) : null;
+}
+
+function normalizeRecord(value, scope) {
+    if (!value || value.version !== 1 || value.scope !== scope || !Number.isSafeInteger(value.revision) || value.revision < 1) return null;
+    if (value.deleted === true) return Object.freeze({ version: 1, scope, revision: value.revision, deleted: true });
+    const char = normalizePerson(value.char), user = normalizePerson(value.user);
+    return char && user ? Object.freeze({ version: 1, scope, revision: value.revision, char, user }) : null;
+}
+
+function newestRecord(...records) {
+    return records.filter(Boolean).sort((a, b) => b.revision - a.revision || Number(!!b.deleted) - Number(!!a.deleted))[0] || null;
+}
+
+function visibleRecord(record) { return record && !record.deleted ? record : null; }
+
+function emit(name) {
+    try { globalThis.dispatchEvent?.(new globalThis.CustomEvent(name)); } catch { /* Optional host events. */ }
+}
+
+function notifyChanged() {
+    emit('hearttrace:avatars-changed');
+    for (const listener of [...service().subscribers]) {
+        try { listener(); } catch { /* A consumer cannot break saving or other consumers. */ }
+    }
+}
+
+function observeCurrentScope() {
+    const state = service(), scope = chatAvatarScope(rawContext());
+    if (state.activeScope === scope) return;
+    // Publish identity changes even when the destination pair is already cached. Assign first
+    // and notify in a microtask so a consumer calling getCurrent() cannot recursively notify.
+    state.activeScope = scope;
+    if (state.scopeQueued) return;
+    state.scopeQueued = true;
+    queueMicrotask(() => { state.scopeQueued = false; notifyChanged(); });
+}
+
+function cacheRecord(scope, record) {
+    const state = service(), previous = state.cache.get(scope);
+    const chosen = newestRecord(previous, record);
+    state.cache.set(scope, chosen);
+    if (previous === undefined || JSON.stringify(previous) !== JSON.stringify(chosen)) notifyChanged();
+    return chosen;
+}
+
+function openDatabase() {
+    const state = service();
+    if (state.db) return state.db;
+    const pending = new Promise((resolve, reject) => {
+        const idb = globalThis.indexedDB;
+        if (!idb?.open) { reject(new Error('Avatar database unavailable')); return; }
+        let request;
+        try { request = idb.open(CHAT_AVATAR_DB, 1); } catch (error) { reject(error); return; }
+        let settled = false;
+        request.onupgradeneeded = () => {
+            const db = request.result;
+            if (!db.objectStoreNames.contains(CHAT_AVATAR_STORE)) db.createObjectStore(CHAT_AVATAR_STORE, { keyPath: 'scope' });
+        };
+        request.onerror = request.onblocked = () => { settled = true; reject(new Error('Avatar database unavailable')); };
+        request.onsuccess = () => {
+            if (settled) { try { request.result.close(); } catch { /* Already closed. */ } return; }
+            const db = request.result;
+            db.onversionchange = () => { try { db.close(); } catch { /* Already closed. */ } if (state.db === pending) state.db = null; };
+            resolve(db);
+        };
+    });
+    state.db = pending;
+    pending.catch(() => { if (state.db === pending) state.db = null; });
+    return pending;
+}
+
+async function readDatabase(scope) {
+    const db = await openDatabase();
+    return new Promise((resolve, reject) => {
+        try {
+            const tx = db.transaction(CHAT_AVATAR_STORE, 'readonly');
+            const request = tx.objectStore(CHAT_AVATAR_STORE).get(scope);
+            request.onsuccess = () => resolve(normalizeRecord(request.result, scope));
+            request.onerror = tx.onerror = tx.onabort = () => reject(new Error('Avatar read failed'));
+        } catch (error) { reject(error); }
+    });
+}
+
+function readFallback(scope) {
+    const storage = globalThis.localStorage;
+    if (!storage?.getItem) throw new Error('Avatar storage unavailable');
+    const raw = storage.getItem(CHAT_AVATAR_PREFIX + scope);
+    if (!raw) return null;
+    try { return normalizeRecord(JSON.parse(raw), scope); } catch { return null; }
+}
+
+function writeFallback(record) {
+    try {
+        const storage = globalThis.localStorage;
+        if (!storage?.setItem) return false;
+        storage.setItem(CHAT_AVATAR_PREFIX + record.scope, JSON.stringify(record));
+        return true;
+    } catch { return false; }
+}
+
+function discardStaleFallback(record) {
+    try {
+        const current = readFallback(record.scope);
+        // No stale record, or another writer already persisted a newer one: do not delete it.
+        if (!current || current.revision >= record.revision) return true;
+    } catch { /* An unreadable fallback can still be removed safely. */ }
+    try {
+        const storage = globalThis.localStorage;
+        if (!storage?.removeItem) return false;
+        storage.removeItem(CHAT_AVATAR_PREFIX + record.scope);
+        return true;
+    } catch { return false; }
+}
+
+function trackFallbackResult(record, consistent) {
+    const pending = service().fallbackRepairs;
+    if (consistent) {
+        if (!pending.get(record.scope) || pending.get(record.scope).revision <= record.revision) pending.delete(record.scope);
+    } else pending.set(record.scope, newestRecord(record, pending.get(record.scope)));
+    return consistent;
+}
+
+function reconcileFallback(record) {
+    if (!record) return true;
+    const pending = service().fallbackRepairs.get(record.scope);
+    record = newestRecord(record, pending);
+    try {
+        // Re-read after the asynchronous database read so a newer fallback is never
+        // replaced with the older value captured at the beginning of hydration.
+        const current = readFallback(record.scope);
+        if (!current || current.revision >= record.revision) return trackFallbackResult(record, true);
+    } catch {
+        // A first unknown read is not proof of stale data. It also cannot erase a
+        // conflict already confirmed in this session; only verified cleanup can.
+        return pending ? trackFallbackResult(record, discardStaleFallback(record)) : true;
+    }
+    return trackFallbackResult(record, writeFallback(record) || discardStaleFallback(record));
+}
+
+function incompleteSaveError() { return new Error('头像更改未能完整保存，请检查本地存储后重试。'); }
+
+async function hydrate(scope) {
+    const state = service();
+    if (state.loads.has(scope)) return state.loads.get(scope);
+    const pending = (async () => {
+        let local = null, database = null, available = false;
+        try { local = readFallback(scope); available = true; } catch { /* Try the independent database. */ }
+        try { database = await readDatabase(scope); available = true; } catch { /* Existing cache stays usable. */ }
+        if (!available) {
+            if (state.fallbackRepairs.has(scope)) throw incompleteSaveError();
+            return state.cache.get(scope) || null;
+        }
+        // A later refresh retries an incomplete fallback sync, including after restore
+        // when the UI already sees the committed tombstone and has no pair to clear.
+        const fallbackConsistent = reconcileFallback(database || state.fallbackRepairs.get(scope));
+        const record = cacheRecord(scope, newestRecord(local, database));
+        if (!fallbackConsistent) throw incompleteSaveError();
+        return record;
+    })();
+    state.loads.set(scope, pending);
+    pending.finally(() => { if (state.loads.get(scope) === pending) state.loads.delete(scope); }).catch(() => {});
+    return pending;
+}
+
+function readChatAvatarSnapshot(context = rawContext()) {
+    observeCurrentScope();
+    const scope = chatAvatarScope(context), state = service();
+    if (!scope || !currentScopeMatches(context, scope)) return null;
+    if (!state.cache.has(scope)) { hydrate(scope).catch(() => {}); return null; }
+    return visibleRecord(state.cache.get(scope));
+}
+
+async function loadChatAvatarSnapshot(context = rawContext()) {
+    observeCurrentScope();
+    const scope = chatAvatarScope(context);
+    if (!scope || !currentScopeMatches(context, scope)) return null;
+    const record = await hydrate(scope);
+    observeCurrentScope();
+    return currentScopeMatches(context, scope) ? visibleRecord(record) : null;
+}
+
+async function writeDatabase(record, context) {
+    const db = await openDatabase();
+    assertCurrentScope(context, record.scope);
+    return new Promise((resolve, reject) => {
+        try {
+            const tx = db.transaction(CHAT_AVATAR_STORE, 'readwrite');
+            tx.oncomplete = () => resolve(true);
+            tx.onerror = tx.onabort = () => reject(new Error('Avatar write failed'));
+            // One record / one transaction: either both cropped avatars are stored or neither is.
+            tx.objectStore(CHAT_AVATAR_STORE).put(record);
+        } catch (error) { reject(error); }
+    });
+}
+
+async function commitRecord(record, context) {
+    assertCurrentScope(context, record.scope);
+    let databaseSaved = false, fallbackSaved = false;
+    try { databaseSaved = await writeDatabase(record, context); } catch { /* Same atomic pair may use local storage. */ }
+    assertCurrentScope(context, record.scope);
+    fallbackSaved = writeFallback(record);
+    if (!databaseSaved && !fallbackSaved) throw new Error('头像保存失败，原头像已保留。请检查本地存储空间后再试。');
+    const fallbackConsistent = trackFallbackResult(record, fallbackSaved || discardStaleFallback(record));
+    // Do not roll back a durable primary write or pretend the old pair is still current.
+    cacheRecord(record.scope, record);
+    if (!fallbackConsistent) {
+        // With an inaccessible stale fallback, a later database outage cannot be
+        // distinguished from an older successful save after restart. Report partial
+        // persistence honestly; hydration will reconcile when storage is available.
+        throw incompleteSaveError();
+    }
+    return visibleRecord(record);
+}
+
+function queuedWrite(context, expectedScope, pair) {
+    observeCurrentScope();
+    const scope = chatAvatarScope(context);
+    if (!scope || expectedScope !== scope) return Promise.reject(new Error('聊天或人物身份已切换，请在当前聊天重新操作。'));
+    const state = service(), previous = state.writes.get(scope) || Promise.resolve();
+    const pending = previous.catch(() => {}).then(async () => {
+        assertCurrentScope(context, scope);
+        const old = await hydrate(scope);
+        assertCurrentScope(context, scope);
+        const revision = Math.max(Date.now(), Number(old?.revision || 0) + 1);
+        const record = Object.freeze(pair ? { version: 1, scope, revision, char: pair.char, user: pair.user }
+            : { version: 1, scope, revision, deleted: true });
+        return commitRecord(record, context);
+    });
+    state.writes.set(scope, pending);
+    pending.finally(() => { if (state.writes.get(scope) === pending) state.writes.delete(scope); }).catch(() => {});
+    return pending;
+}
+
+async function saveChatAvatarPair(pair, { context = rawContext(), expectedScope = '' } = {}) {
+    const char = normalizePerson(pair?.char), user = normalizePerson(pair?.user);
+    if (!char || !user) throw new Error('请先准备两张完整的 PNG 头像，再应用到当前聊天。');
+    return queuedWrite(context, expectedScope, { char, user });
+}
+
+async function clearChatAvatarPair({ context = rawContext(), expectedScope = '' } = {}) {
+    return queuedWrite(context, expectedScope, null);
+}
+
+function installChatAvatarBridge() {
+    const state = service();
+    if (!state.api) state.api = Object.freeze({ apiVersion: 1,
+        getCurrent() { return readChatAvatarSnapshot(); },
+        refresh() { return loadChatAvatarSnapshot(); },
+        subscribe(listener) {
+            if (typeof listener !== 'function') return () => {};
+            state.subscribers.add(listener);
+            return () => { state.subscribers.delete(listener); };
+        } });
+    if (globalThis.HearttraceAvatars && globalThis.HearttraceAvatars !== state.api) return () => {};
+    const first = state.installations === 0;
+    globalThis.HearttraceAvatars = state.api; state.installations++;
+    if (first) emit('hearttrace:avatars-ready');
+    let disposed = false;
+    return () => {
+        if (disposed) return;
+        disposed = true; state.installations = Math.max(0, state.installations - 1);
+        if (state.installations === 0 && globalThis.HearttraceAvatars === state.api) {
+            delete globalThis.HearttraceAvatars; state.subscribers.clear(); emit('hearttrace:avatars-changed');
+        }
+    };
+}
+
+__m_core_chatAvatarStore_js.loadChatAvatarSnapshot = loadChatAvatarSnapshot;
+__m_core_chatAvatarStore_js.saveChatAvatarPair = saveChatAvatarPair;
+__m_core_chatAvatarStore_js.clearChatAvatarPair = clearChatAvatarPair;
+__m_core_chatAvatarStore_js.chatAvatarScope = chatAvatarScope;
+__m_core_chatAvatarStore_js.readChatAvatarSnapshot = readChatAvatarSnapshot;
+__m_core_chatAvatarStore_js.installChatAvatarBridge = installChatAvatarBridge;
+}
+
 function __init_core_contentSelection_js() {
 // MODULE: core/contentSelection.js
 const constants = __m_core_constants_js;
@@ -510,7 +877,7 @@ function __init_core_releaseNotes_js() {
 // MODULE: core/releaseNotes.js
 
 // GENERATED FROM README.md by tools/verification/build.py. Do not edit by hand.
-const RELEASE_README = "# 心迹回廊 1.0.49\n\n## 更新日志模块\n\n新增了更新日志板块，感谢@nancyindaeyo的更新。\n\n## 本次变动\n\n- 手书与情侣头像接入生图提示词格式选择：NAI 4.5 使用英文 tag，NAI 5 使用自然语言画面描述。人物外貌仍可使用预设中的英文 tag；格式选择不会替用户切换生图插件的实际模型。\n- 新建手书分镜时保存本次格式，后续补充与改写沿用该记录的格式；制作设置可选择新分镜的格式。情侣头像新生成时读取当前生图设置。切换选项不会自动翻译旧稿或手写提示，也不会额外发起转换请求。\n- 修复柏宝绘不支持独立人物栏时，NAI 4.5 自动拼接中文姓名和“人物外貌”说明的问题；保留已有场景关系、手填内容与完整外貌。\n- 修复平面发送时误删有效 NAI 花括号权重的问题；未解析的动态宏仍不发给模型。\n- 继续保留人物预设优先、专属负面词传递和生成成功后只恢复保存的行为。表情卡拍的制作规则、歌曲与双人对唱、旧素材与剪辑时序保持原样。\n";
+const RELEASE_README = "# 心迹回廊 1.0.52\n\n## 更新日志模块\n\n新增了更新日志板块，感谢@nancyindaeyo的更新。\n\n## 本次变动\n\n- 修复头像恢复的异常反馈：本地存储未能完成同步时明确提示未完成，避免误报恢复成功；正常应用、恢复和离线读取保持原有行为。\n\n- 情侣头像新增独立的“应用为本聊天头像”与“恢复原头像”。使用当前这对已裁切好的图片，先确认哪张用于角色、哪张用于你；交换左右不混淆人物。“沿用这对的设置”仍只填入创作设置。\n- 应用是当前聊天的显示覆盖，不改角色卡原图、Persona 原图、聊天内容或档案身份。不同聊天、角色及可识别的 Persona 分开保存；两张准备成功后一起保存，失败保留原头像。\n- 同一浏览器重新打开聊天会读取保存的头像，不必先打开心迹窗口。取消应用或停用插件时恢复原生显示，不触发生图或模型请求。\n- 配套兔子镜 1.67.41：任何题材或场景原本就有 char／user 头像位置时，读取这一对；NPC 和普通插画不替换。不为场景强加头像框，保留原尺寸、形状和交互。旧内容没有明确身份标记时不猜测替换。\n- 本轮不改头像画风／出词、手书、表情卡拍、印象曲或双人对唱。原历史、裁切与导出保持不变。完成自动化与本地 Chromium 验证；手机、TT／Tauri 和云酒馆实机待确认。\n";
 
 __m_core_releaseNotes_js.RELEASE_README = RELEASE_README;
 }
@@ -679,6 +1046,9 @@ function couplePromptParts(value, context = optionalContext()) {
     const interaction = resolvedInteraction.prompt;
     const rendering = chosen?.prompt || settings.customStyle;
     const construction = styles.coupleStyleConstruction(chosen);
+    // Explicit NAI 5 drafts get source-bound identity guidance in the actual
+    // native actor channels too. Formatless historical prompts stay unchanged.
+    const identityRendering = promptFormat === 'nai5-natural' ? styles.coupleStyleIdentityRendering(chosen) : '';
     // Framing and finish are art direction only. Keep full-figure styles and
     // simplified media intact; explicit user directions still take precedence.
     const fullFigure = animal || (chosen?.group === 'chibi' && chosen.id !== 'chibi-headshot')
@@ -701,6 +1071,7 @@ function couplePromptParts(value, context = optionalContext()) {
     const styleLead = rendering ? `Rendering style: ${rendering}.` : '';
     const composition = [
         construction ? `Style construction: ${construction}` : '',
+        identityRendering,
         form, framing, finish,
         `One continuous horizontal paired portrait, two distinct ${subject}s side by side, one centered at the left quarter and one at the right quarter, balanced subject scale.`,
         'A continuous background in the selected medium fills the entire image from edge to edge, including the center and all four corners. Faces and gestures sit comfortably within their own half, surrounded by the same continuous background.',
@@ -742,7 +1113,7 @@ function couplePromptParts(value, context = optionalContext()) {
         characters: settings.people.map((person, index) => ({
             name: `${index ? '右边' : '左边'} · ${person.name || (index ? '人物二' : '人物一')}`,
             tag: [appearanceReference(person.appearance, animal, object), rendering || subject].filter(Boolean).join(', '),
-            nl: `On the ${index ? 'right' : 'left'}, ${actions[index]}.`,
+            nl: [`On the ${index ? 'right' : 'left'}, ${actions[index]}.`, identityRendering].filter(Boolean).join(' '),
             ...(text(person.presetNegative) ? { negative: text(person.presetNegative) } : {}),
         })),
     };
@@ -1071,6 +1442,105 @@ __m_extras_coupleAvatar_js.normalizeCoupleSettings = normalizeCoupleSettings;
 __m_extras_coupleAvatar_js.couplePromptParts = couplePromptParts;
 __m_extras_coupleAvatar_js.couplePrompt = couplePrompt;
 __m_extras_coupleAvatar_js.COUPLE_MODE = COUPLE_MODE;
+}
+
+function __init_extras_coupleAvatarAppearance_js() {
+// MODULE: extras/coupleAvatarAppearance.js
+const cast_looks = __m_core_castLooks_js;
+const appearance_presets = __m_generation_imageAppearancePresets_js;
+
+
+const text = value => typeof value === 'string' ? value.trim() : '';
+
+// Explicit per-person refresh only. Do not call this while opening the page,
+// changing styles or normalizing history: saved and handwritten drafts stay put.
+function readCoupleAppearance(settings, index, context) {
+    const people = settings?.people;
+    const person = [0, 1].includes(index) && Array.isArray(people) ? people[index] : null;
+    if (!context || !person) return null;
+    const role = person.id === 'char' && text(person.name) && text(person.name) === text(context.name2) ? 'char'
+        : person.id === 'user' && text(person.name) && text(person.name) === text(context.name1) ? 'user' : '';
+    let local = '';
+    if (role) {
+        let saved = null, card = {};
+        try { saved = cast_looks.readCastLooks(context); } catch { /* Current card remains available. */ }
+        if (saved?.manual === true) local = text(saved[role]);
+        if (!local) {
+            try { card = context.getCharacterCardFields?.() || {}; } catch { /* No source is not an error. */ }
+            const description = role === 'char' ? text(card.description)
+                : text(card.persona) || text(context.powerUserSettings?.persona_description);
+            local = cast_looks.lookFromDescription(description);
+        }
+    }
+    // The whole cast is needed for collision checks, but only this result is
+    // returned. A refresh must never update the other subject's saved preset.
+    const preset = appearance_presets.resolveImageAppearancePresets(context, people).get(person.id);
+    const appearance = text(preset?.tag) || text(preset?.nl) || local;
+    if (!appearance) return null;
+    const replacement = { ...person, appearance };
+    delete replacement.appearanceOverride;
+    delete replacement.presetAppearance;
+    delete replacement.presetNegative;
+    delete replacement.fallbackAppearance;
+    if (text(preset?.tag) || text(preset?.nl)) {
+        replacement.presetAppearance = appearance;
+        replacement.fallbackAppearance = local || text(person.fallbackAppearance) || text(person.appearance);
+        if (text(preset.negative)) replacement.presetNegative = text(preset.negative);
+    }
+    return { person: replacement, source: preset ? 'preset' : 'local' };
+}
+
+__m_extras_coupleAvatarAppearance_js.readCoupleAppearance = readCoupleAppearance;
+}
+
+function __init_extras_coupleAvatarApply_js() {
+// MODULE: extras/coupleAvatarApply.js
+const crop = __m_extras_coupleAvatarCrop_js;
+const avatars = __m_core_chatAvatarStore_js;
+const text = __m_core_text_js;
+
+
+
+const label = value => typeof value === 'string' ? value.trim() : '';
+
+// Both PNGs are prepared before any store write. halfIndex belongs to the
+// original image; swapping the display order must not swap people's identity.
+function prepareCoupleAvatarApplication(record, loaded, context) {
+    const images = crop.cropPairImage(loaded, record?.crops, record?.order).map(image => ({
+        ...image, name: label(record?.settings?.people?.[image.halfIndex]?.name),
+    }));
+    const names = { char: label(context?.name2) || '角色', user: label(context?.name1) || '我' };
+    const mapping = { char: null, user: null };
+    for (const role of ['char', 'user']) {
+        const matching = images.filter(image => {
+            const person = record?.settings?.people?.[image.halfIndex];
+            return person?.id === role && label(person.name) === names[role];
+        });
+        if (matching.length === 1) mapping[role] = matching[0].halfIndex;
+    }
+    return { scope: avatars.chatAvatarScope(context), names, images, mapping };
+}
+
+async function applyPreparedCoupleAvatars(prepared, mapping, { context, expectedScope = prepared?.scope } = {}) {
+    if (!prepared?.scope || prepared.scope !== expectedScope || avatars.chatAvatarScope(context) !== expectedScope) {
+        throw text.safeUserError('聊天或人物已切换，请回到对应聊天重新应用。', 'RMT_PAIR_AVATAR_SCOPE');
+    }
+    if (![0, 1].includes(mapping?.char) || ![0, 1].includes(mapping?.user) || mapping.char === mapping.user) {
+        throw text.safeUserError('请分别确认角色与你使用哪一张头像。', 'RMT_PAIR_AVATAR_MAPPING');
+    }
+    const pair = {};
+    for (const role of ['char', 'user']) {
+        const image = prepared.images?.find(row => row.halfIndex === mapping[role]);
+        if (!image?.url?.startsWith('data:image/png;base64,')) {
+            throw text.safeUserError('裁切图片尚未准备好，原头像未改变。', 'RMT_PAIR_AVATAR_IMAGE');
+        }
+        pair[role] = { name: prepared.names[role], url: image.url };
+    }
+    return avatars.saveChatAvatarPair(pair, { context, expectedScope });
+}
+
+__m_extras_coupleAvatarApply_js.applyPreparedCoupleAvatars = applyPreparedCoupleAvatars;
+__m_extras_coupleAvatarApply_js.prepareCoupleAvatarApplication = prepareCoupleAvatarApplication;
 }
 
 function __init_extras_coupleAvatarCrop_js() {
@@ -1874,9 +2344,28 @@ function randomCoupleIdeas(previous = [], random = Math.random) {
     return (shuffled.length ? shuffled : moments).slice(0, 3).map(moment => `${moment}；${pick(moods)}。${pick(scenes)}。`);
 }
 
+// NAI5-only authoring guidance. The caller opts in; the historical style
+// catalog and construction strings stay unchanged for saved legacy prompts.
+function coupleStyleIdentityRendering(chosen) {
+    const style = COUPLE_STYLES.find(row => row.id === chosen?.id);
+    if (!style) return '';
+    const identity = "Use only this subject's supplied identity; shared traits may remain shared. Never transfer the other subject's features or invent differences.";
+    if (style.group === 'animal') return `${identity} Express these through this animal's own markings and small accessories, keeping the selected animal anatomy.`;
+    if (style.group === 'craft' || ['fantasy-enamel', 'fantasy-shadow'].includes(style.id)) {
+        return `${identity} Keep its distinguishing silhouettes and accessories as material-built shapes in the selected crafted form.`;
+    }
+    const form = "Preserve its own hair silhouette and accessories in the selected medium.";
+    const proportions = style.group === 'chibi' ? 'Keep the selected proportions and framing.' : '';
+    const eyes = style.id === 'chibi-doodle'
+        ? 'When visible, the two eyes are tiny solid dots; supplied eye color only tints those dots. Use simple mouth/brow marks, without detailed irises; retain supplied eye coverings.'
+        : '';
+    return [identity, form, proportions, eyes].filter(Boolean).join(' ');
+}
+
 __m_extras_coupleAvatarStyles_js.coupleStyleConstruction = coupleStyleConstruction;
 __m_extras_coupleAvatarStyles_js.coupleInteraction = coupleInteraction;
 __m_extras_coupleAvatarStyles_js.randomCoupleIdeas = randomCoupleIdeas;
+__m_extras_coupleAvatarStyles_js.coupleStyleIdentityRendering = coupleStyleIdentityRendering;
 __m_extras_coupleAvatarStyles_js.STYLE_GROUPS = STYLE_GROUPS;
 __m_extras_coupleAvatarStyles_js.COUPLE_STYLES = COUPLE_STYLES;
 __m_extras_coupleAvatarStyles_js.INTERACTION_PRESETS = INTERACTION_PRESETS;
@@ -3843,9 +4332,13 @@ __m_ui_coupleAvatarCss_js.coupleAvatarCss = coupleAvatarCss;
 function __init_ui_coupleAvatarView_js() {
 // MODULE: ui/coupleAvatarView.js
 const couple = __m_extras_coupleAvatar_js;
+const appearance = __m_extras_coupleAvatarAppearance_js;
+const avatar_apply = __m_extras_coupleAvatarApply_js;
+const chat_avatars = __m_core_chatAvatarStore_js;
 const presets = __m_extras_coupleAvatarStyles_js;
 const crop = __m_extras_coupleAvatarCrop_js;
 const core_context = __m_core_context_js;
+const core_settings = __m_core_settings_js;
 const constants = __m_core_constants_js;
 const text = __m_core_text_js;
 const runtime = __m_core_state_js;
@@ -3855,6 +4348,10 @@ const workspace = __m_ui_workspace_js;
 const room = __m_modes_room_js;
 const phone = __m_ui_phoneView_js;
 const styles = __m_ui_coupleAvatarCss_js;
+
+
+
+
 
 
 
@@ -3928,6 +4425,38 @@ function queueDraft(view) {
             if (result?.durable === false) report(view, '创作设置暂留本页，暂未写入本机存储。');
         }).catch(error => failure(view, error));
     }, 300);
+}
+
+async function refreshAppearance(view, index) {
+    if (!current(view) || ![0, 1].includes(index)) return;
+    const row = () => {
+        const person = { ...view.settings.people[index] };
+        for (const key of ['name', 'appearance']) {
+            const input = view.root.querySelector(`[data-pair-person="${index}"][data-pair-key="${key}"]`);
+            if (input) person[key] = input.value;
+        }
+        return person;
+    };
+    const selected = row(), signature = JSON.stringify(selected);
+    const settings = { ...view.settings, people: view.settings.people.map((person, i) => i === index ? selected : person) };
+    let fresh = appearance.readCoupleAppearance(settings, index, core_context.currentCharacterGuard());
+    if (!fresh) { report(view, '没有找到对应人物的可用外貌，原内容已保留。可以直接修改外貌框。'); return; }
+    if (selected.appearance?.trim() && !await overlay.confirmExplicitAction('重新读取这位人物的外貌？',
+        '会替换这一侧的外貌草稿；另一侧、历史头像和已保存的人设不变。')) return;
+    if (!current(view) || signature !== JSON.stringify(row())) return;
+    // A confirmation may be asynchronous on some hosts. Resolve current
+    // sources and cast collisions again without changing the other person.
+    fresh = appearance.readCoupleAppearance({ ...view.settings,
+        people: view.settings.people.map((person, i) => i === index ? selected : person) }, index, core_context.currentCharacterGuard());
+    if (!fresh) { report(view, '外貌来源已变化，原内容已保留。'); return; }
+    // Apply one row without normalizing against live presets for both people.
+    // saveCoupleSettings uses contextless normalization and preserves history.
+    clearTimeout(view.draftTimer);
+    view.settings = { ...view.settings, people: view.settings.people.map((person, i) => i === index ? fresh.person : person) };
+    const input = view.root.querySelector(`[data-pair-person="${index}"][data-pair-key="appearance"]`);
+    if (input) input.value = fresh.person.appearance;
+    const result = await couple.saveCoupleSettings(view.scope, structuredClone(view.settings));
+    report(view, result?.durable === false ? '外貌已更新，暂留本页；本机保存未确认。' : '已重新读取这一侧的外貌。');
 }
 
 function closeCoupleDialog({ restoreFocus = true } = {}) {
@@ -4028,6 +4557,8 @@ async function renderPreview(view) {
     if (!host) return;
     const names = record ? record.order.map(half => record.settings.people[half]?.name || '未命名') : view.settings.people.map(person => person.name || '未命名');
     host.innerHTML = `<div class="rmt-pair-section-head"><h3>${record ? '这一对头像' : '留两个位置，给你们'}</h3><button type="button" data-pair-action="circle" aria-pressed="${view.circle}">${view.circle ? '方形预览' : '圆形预览'}</button></div><div class="rmt-pair-two ${view.circle ? 'is-circle' : ''}">${[0, 1].map(i => `<div class="rmt-pair-person"><div data-pair-image="${i}" class="rmt-pair-square"><div class="rmt-pair-empty"><b>${i ? '♡' : '♧'}</b><span>${record ? '读取原图…' : i ? '右边的 TA' : '左边的 TA'}</span></div></div><strong>${esc(names[i])}</strong>${button('save', i ? '保存右边' : '保存左边', `data-pair-side="${i}" ${record ? '' : 'disabled'}`)}</div>`).join('')}</div><p class="rmt-pair-note">${record ? '左右头像分别保存为方形 PNG；圆形仅用于预览。' : '选个风格，或导入已有横图。生成后这里并排显示两张头像。'}</p><div class="rmt-pair-preview-tools">${button('crop', '调整裁切', record ? '' : 'disabled')}${button('swap', '交换左右', record ? '' : 'disabled')}${button('seam', '检查当前拼接', record ? '' : 'disabled')}${button('original', '查看原图', record ? '' : 'disabled')}${button('favorite', record?.favorite ? '★ 已收藏' : '☆ 收藏这一对', `${record ? '' : 'disabled'} aria-pressed="${record?.favorite === true}"`)}${button('reuse', '沿用这对的设置', record ? '' : 'disabled')}</div><div data-pair-image-info class="rmt-pair-result-meta"></div>${record && view.pending.has(record.id) ? `<div class="rmt-pair-restore-note">这对头像暂未确认保存到本机，请先保存图片或导出备份。${button('retry', '仅重试保存')}</div>` : ''}`;
+    const tools = host.querySelector('.rmt-pair-preview-tools');
+    if (tools) tools.insertAdjacentHTML('beforeend', `${button('apply-chat-avatar', '应用为本聊天头像', record ? '' : 'disabled')}${button('restore-chat-avatar', '恢复原头像')}`);
     if (!record) return;
     try {
         const loaded = await loadRecord(view, record);
@@ -4105,6 +4636,10 @@ function paintInteraction(view) {
     if (custom) custom.hidden = view.settings.interaction !== '自定义互动';
 }
 function formHtml(view) {
+    let providerNote = '';
+    try {
+        if (core_settings.getPluginSettings(view.context).imageGenerationProvider === 'baibai-image') providerNote = '<p class="rmt-pair-note">使用柏宝绘 NAI 时会沿用其画师串和负面词，本页不能覆盖；豆豆眼／Q版若不符，请检查生图插件预设中是否排除了这些特征。</p>';
+    } catch { /* Optional advice never blocks the form. */ }
     const groups = [...new Set(presets.INTERACTION_PRESETS.map(item => item.group))];
     return `<form class="rmt-pair-form" data-pair-form>
         <div class="rmt-pair-block"><h3>这次画谁</h3><div class="rmt-pair-fields">${[0, 1].map(i => `<label class="rmt-pair-field"><span>${i ? '右边' : '左边'}</span><input data-pair-person="${i}" data-pair-key="name" aria-label="${i ? '右边' : '左边'}的人物名字" placeholder="可以改成任何人物"></label>`).join('')}</div></div>
@@ -4120,7 +4655,7 @@ function formHtml(view) {
             <label class="rmt-pair-field" data-pair-interaction-custom hidden><span>写下你们的互动</span><textarea data-pair-field="interactionDetail" placeholder="可以选一条随机灵感，再改成你喜欢的动作与表情。"></textarea></label>
         </div>
         <label class="rmt-pair-field"><span>这一对的小心思 <small>选填</small></span><textarea data-pair-field="direction" placeholder="比如：一个忍着笑，一个假装生气；共用一条围巾。"></textarea></label>
-        <details class="rmt-pair-options"><summary>外貌、衣着与背景 <small>选填</small></summary><div>${[0, 1].map(i => `<label class="rmt-pair-field"><span>${i ? '右边' : '左边'}人物外貌</span><textarea data-pair-person="${i}" data-pair-key="appearance" placeholder="沿用已有外貌，也可以修改或留空。"></textarea></label>`).join('')}<label class="rmt-pair-field"><span>衣着</span><input data-pair-field="clothing" placeholder="例如：同款不同色的卫衣"></label><label class="rmt-pair-field"><span>背景</span><input data-pair-field="background" placeholder="例如：左边蓝色，右边粉色"></label></div></details>
+        <details class="rmt-pair-options"><summary>外貌、衣着与背景 <small>选填</small></summary><div>${[0, 1].map(i => `<div><label class="rmt-pair-field"><span>${i ? '右边' : '左边'}人物外貌</span><textarea data-pair-person="${i}" data-pair-key="appearance" placeholder="沿用已有外貌，也可以修改或留空。"></textarea></label>${button('refresh-appearance', '重新读取外貌', `data-pair-side="${i}" aria-label="重新读取${i ? '右边' : '左边'}人物外貌"`)}</div>`).join('')}<label class="rmt-pair-field"><span>衣着</span><input data-pair-field="clothing" placeholder="例如：同款不同色的卫衣"></label><label class="rmt-pair-field"><span>背景</span><input data-pair-field="background" placeholder="例如：左边蓝色，右边粉色"></label>${providerNote}</div></details>
         <div><div data-pair-compose-jobs><div class="rmt-pair-jobs" data-pair-jobs></div></div><p class="rmt-pair-status" data-pair-compose-status role="status" aria-live="polite"></p><div class="rmt-pair-create"><button type="submit" class="rmt-pair-primary">生成一对头像</button>${button('import', '导入图片')}</div><p class="rmt-pair-note">一张原图生成一对，完成后自动收进历史。导入已有图片也能裁切。</p></div>
     </form>`;
 }
@@ -4197,6 +4732,8 @@ async function updateRecord(view, record, patch) {
 }
 async function handleAction(view, action, target) {
     const record = recordFor(view);
+    if (action === 'restore-chat-avatar') return restoreChatAvatars(view);
+    if (action === 'refresh-appearance') return refreshAppearance(view, Number(target.dataset.pairSide));
     if (action === 'styles') return showStyles(view);
     if (action === 'inspiration') {
         draft(view); view.ideas = presets.randomCoupleIdeas(view.ideas);
@@ -4225,6 +4762,7 @@ async function handleAction(view, action, target) {
     }
     if (action === 'history-open') { view.currentId = target.dataset.pairId; view.selectedEpoch++; selectTab(view, 'make'); return renderPreview(view); }
     if (!record) return;
+    if (action === 'apply-chat-avatar') return showApplyChatAvatars(view, record);
     if (action === 'save') return showSave(view, record, Number(target.dataset.pairSide));
     if (action === 'crop') return showCrop(view, record);
     if (action === 'swap') return updateRecord(view, record, { order: [record.order[1], record.order[0]] });
@@ -4233,6 +4771,62 @@ async function handleAction(view, action, target) {
     if (action === 'seam') return showOriginal(view, record, true);
     if (action === 'reuse') { view.settings = structuredClone(record.settings); paintSettings(view); queueDraft(view); report(view, '已填入这一对的创作设置，可以修改后再生成。'); return; }
     if (action === 'retry') { const result = await couple.retryCoupleSave(view.scope, record.id); rememberRecord(view, result); void renderPreview(view); report(view, result.durable ? '这对头像已保存。' : '仍未确认保存，请先保存图片或导出备份。'); }
+}
+async function restoreChatAvatars(view) {
+    if (!current(view)) return;
+    const context = core_context.currentCharacterGuard(), scope = chat_avatars.chatAvatarScope(context), originModal = modal;
+    // A page-level restore starts with null; a dialog restore belongs only to
+    // that dialog. Finishing an old operation must never dismiss a newer one.
+    const isCurrent = () => modal === originModal && current(view) && chat_avatars.chatAvatarScope(core_context.currentCharacterGuard()) === scope;
+    const previous = await chat_avatars.loadChatAvatarSnapshot(context);
+    if (!isCurrent()) return;
+    if (!previous) { report(view, '当前聊天已经使用原头像。'); return; }
+    if (!await overlay.confirmExplicitAction('恢复本聊天的原头像？', '只取消这次头像应用，不删除情侣头像或修改角色卡。')) return;
+    if (!isCurrent()) return;
+    await chat_avatars.clearChatAvatarPair({ context: core_context.currentCharacterGuard(), expectedScope: scope });
+    if (isCurrent()) { closeCoupleDialog(); report(view, '已恢复本聊天的原头像。'); }
+}
+
+async function showApplyChatAvatars(view, record) {
+    if (!current(view)) return;
+    const context = core_context.currentCharacterGuard(), scope = chat_avatars.chatAvatarScope(context);
+    const m = dialog(view, '应用为本聊天头像', '<p role="status">正在准备这对头像…</p>'); if (!m) return;
+    const isCurrent = () => modal === m && current(view) && chat_avatars.chatAvatarScope(core_context.currentCharacterGuard()) === scope;
+    let previous;
+    try { previous = await chat_avatars.loadChatAvatarSnapshot(context); }
+    catch (error) { if (isCurrent()) m.body.innerHTML = `<p role="status">${esc(text.safeErrorSummary(error) || '头像设置暂时无法读取，原头像未改变。')}</p>`; return; }
+    if (!isCurrent()) return;
+    let prepared;
+    try {
+        const loaded = await loadRecord(view, record);
+        if (!isCurrent()) return;
+        prepared = avatar_apply.prepareCoupleAvatarApplication(record, loaded, context);
+    } catch (error) { if (isCurrent()) imageFailure(view, m, record, error); return; }
+    if (!isCurrent()) return;
+    m.body.innerHTML = `<p class="rmt-pair-note">确认两张头像分别用于谁。只影响本聊天，可随时恢复原头像。</p><div class="rmt-pair-two">${prepared.images.map(image => {
+        const role = prepared.mapping.char === image.halfIndex ? 'char' : prepared.mapping.user === image.halfIndex ? 'user' : '';
+        return `<div class="rmt-pair-person"><div class="rmt-pair-square"><img class="rmt-pair-cropped-image" src="${esc(image.url)}" alt="${esc(image.name || '已裁切头像')}"></div><strong>${esc(image.name || '未命名')}</strong><label class="rmt-pair-field"><span>用于</span><select data-pair-avatar-role="${image.halfIndex}" aria-label="${esc(image.name || '这张头像')}用于谁"><option value="">选择人物</option><option value="char" ${role === 'char' ? 'selected' : ''}>角色 · ${esc(prepared.names.char)}</option><option value="user" ${role === 'user' ? 'selected' : ''}>我 · ${esc(prepared.names.user)}</option></select></label></div>`;
+    }).join('')}</div><div class="rmt-pair-actions"><button type="button" data-pair-avatar-swap>交换对应</button><button type="button" data-pair-avatar-apply class="rmt-pair-primary">确认应用</button>${previous ? '<button type="button" data-pair-avatar-restore>恢复原头像</button>' : ''}</div><p data-pair-avatar-status role="status"></p>`;
+    const selectors = [...m.body.querySelectorAll('[data-pair-avatar-role]')];
+    const apply = m.body.querySelector('[data-pair-avatar-apply]');
+    const status = m.body.querySelector('[data-pair-avatar-status]');
+    const mapping = () => Object.fromEntries(selectors.filter(node => node.value).map(node => [node.value, Number(node.dataset.pairAvatarRole)]));
+    const refresh = () => { const value = mapping(); apply.disabled = ![0, 1].includes(value.char) || ![0, 1].includes(value.user) || value.char === value.user; };
+    selectors.forEach(node => node.addEventListener('change', refresh)); refresh();
+    m.body.querySelector('[data-pair-avatar-swap]').addEventListener('click', () => {
+        [selectors[0].value, selectors[1].value] = [selectors[1].value, selectors[0].value]; refresh();
+    });
+    m.body.querySelector('[data-pair-avatar-restore]')?.addEventListener('click', () => void restoreChatAvatars(view).catch(error => failure(view, error)));
+    let saving = false;
+    apply.addEventListener('click', () => {
+        if (saving || apply.disabled || !isCurrent()) return;
+        saving = true; apply.disabled = true;
+        void avatar_apply.applyPreparedCoupleAvatars(prepared, mapping(), { context: core_context.currentCharacterGuard(), expectedScope: scope }).then(() => {
+            if (isCurrent()) { closeCoupleDialog(); report(view, '已应用为本聊天头像。'); }
+        }).catch(error => {
+            if (isCurrent()) status.textContent = text.safeErrorSummary(error) || '头像未能保存，原头像未改变。';
+        }).finally(() => { saving = false; if (isCurrent()) refresh(); });
+    });
 }
 function downloadText(value) {
     const url = URL.createObjectURL(new Blob([value], { type: 'application/json;charset=utf-8' }));
@@ -25333,7 +25927,7 @@ function __init_core_selfUpdater_js() {
 const RELEASE_README = __m_core_releaseNotes_js.RELEASE_README;
 
 const UPDATE_STATE = Symbol.for('heartbeatMemories.selfUpdate');
-const INSTALLED_BUILD = '1.0.49';
+const INSTALLED_BUILD = '1.0.52';
 const PROJECT_REMOTE = 'https://github.com/zaiyebuzuoyouqingdetiangou/tokimemo';
 function updateError(message) { const error = new Error(message); error.userMessage = message; return error; }
 
@@ -36980,7 +37574,9 @@ function saveConfirmedParticipantLooks(characters, { origin, expectedSignature }
 // "名字，男，31岁，身高192cm，MBTI：INTJ，太阳星座：天蝎座，…，黑色短发" would otherwise match on
 // 身高 and drag MBTI, star signs, food preferences and backstory into the image request.
 const LOOK_SPLIT = /[\n。；;!?！？，,、]/;
-const LOOK_KEEP = /(头发|长发|短发|发色|发型|银发|黑发|金发|白发|红发|棕发|卷发|直发|眼睛|眼眸|瞳|肤色|皮肤|身高|身形|体型|身材|穿着|衣|袍|制服|西装|衬衫|外套|裙|眼镜|耳环|疤|痣|胡|角|尾|纹身|帽|耳|鼻|唇|脸|肩|肌肉|hair|eyes?|skin|tall|wears?|outfit|glasses|scar|hat|cap|shirt|jacket|dress|coat|uniform|ears?|horns?|tail|wings?|tattoo|build|muscul|slender|lips?|face|freckles|beard|height)/i;
+// Face-framing hair and distinctive accessories are visible identity too. Keep
+// these explicit source facts; never synthesize a different look for a pair.
+const LOOK_KEEP = /(头发|长发|短发|发色|发型|银发|黑发|金发|白发|红发|棕发|卷发|直发|刘海|鬓|发髻|发辫|发饰|中分|偏分|侧分|眼罩|眼睛|眼眸|瞳|肤色|皮肤|身高|身形|体型|身材|穿着|衣|袍|制服|西装|衬衫|外套|裙|眼镜|耳环|疤|痣|胡|角|尾|纹身|帽|耳|鼻|唇|脸|肩|肌肉|hair|bangs?|fringe|hime[ _-]cut|braids?|\bbuns?\b|blindfold|eye[ _-]?patch|eyes?|skin|tall|wears?|outfit|glasses|scar|hat|cap|shirt|jacket|dress|coat|uniform|ears?|horns?|tail|wings?|tattoo|build|muscul|slender|lips?|face|freckles|beard|height)/i;
 // Facts about the person that are not visible in a picture.
 const LOOK_DROP = /(MBTI|INTJ|INTP|ENTJ|ENTP|INFJ|INFP|ENFJ|ENFP|ISTJ|ISFJ|ESTJ|ESFJ|ISTP|ISFP|ESTP|ESFP|星座|生肖|血型|性格|脾气|性子|喜欢|讨厌|爱喝|爱吃|口味|抽烟|喝酒|习惯|擅长|职业|工作|上班|学徒|店|父母|童年|成年后|出生|经历|伪装|面具|想法|情绪|年龄|岁|记得|记性|说话|口头禅|关系|衣柜|\b(?:personality|occupation|childhood|biography|born|parents?|likes?|dislikes?|prefers?|zodiac|blood type|years old)\b)/i;
 
@@ -97679,9 +98275,12 @@ __m_archive_archiveFile_js.foreignArchiveInChat = foreignArchiveInChat;
 __m_archive_archiveFile_js.ARCHIVE_FILE_FORMAT = ARCHIVE_FILE_FORMAT;
 }
 
+__init_core_chatAvatarStore_js();
 __init_core_contentSelection_js();
 __init_core_releaseNotes_js();
 __init_extras_coupleAvatar_js();
+__init_extras_coupleAvatarAppearance_js();
+__init_extras_coupleAvatarApply_js();
 __init_extras_coupleAvatarCrop_js();
 __init_extras_coupleAvatarPromptFormat_js();
 __init_extras_coupleAvatarStyles_js();

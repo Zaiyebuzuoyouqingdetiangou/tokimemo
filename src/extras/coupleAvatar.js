@@ -149,6 +149,9 @@ export function couplePromptParts(value, context = optionalContext()) {
     const interaction = resolvedInteraction.prompt;
     const rendering = chosen?.prompt || settings.customStyle;
     const construction = styles.coupleStyleConstruction(chosen);
+    // Explicit NAI 5 drafts get source-bound identity guidance in the actual
+    // native actor channels too. Formatless historical prompts stay unchanged.
+    const identityRendering = promptFormat === 'nai5-natural' ? styles.coupleStyleIdentityRendering(chosen) : '';
     // Framing and finish are art direction only. Keep full-figure styles and
     // simplified media intact; explicit user directions still take precedence.
     const fullFigure = animal || (chosen?.group === 'chibi' && chosen.id !== 'chibi-headshot')
@@ -171,6 +174,7 @@ export function couplePromptParts(value, context = optionalContext()) {
     const styleLead = rendering ? `Rendering style: ${rendering}.` : '';
     const composition = [
         construction ? `Style construction: ${construction}` : '',
+        identityRendering,
         form, framing, finish,
         `One continuous horizontal paired portrait, two distinct ${subject}s side by side, one centered at the left quarter and one at the right quarter, balanced subject scale.`,
         'A continuous background in the selected medium fills the entire image from edge to edge, including the center and all four corners. Faces and gestures sit comfortably within their own half, surrounded by the same continuous background.',
@@ -212,7 +216,7 @@ export function couplePromptParts(value, context = optionalContext()) {
         characters: settings.people.map((person, index) => ({
             name: `${index ? '右边' : '左边'} · ${person.name || (index ? '人物二' : '人物一')}`,
             tag: [appearanceReference(person.appearance, animal, object), rendering || subject].filter(Boolean).join(', '),
-            nl: `On the ${index ? 'right' : 'left'}, ${actions[index]}.`,
+            nl: [`On the ${index ? 'right' : 'left'}, ${actions[index]}.`, identityRendering].filter(Boolean).join(' '),
             ...(text(person.presetNegative) ? { negative: text(person.presetNegative) } : {}),
         })),
     };

@@ -351,3 +351,21 @@ export function randomCoupleIdeas(previous = [], random = Math.random) {
     }
     return (shuffled.length ? shuffled : moments).slice(0, 3).map(moment => `${moment}；${pick(moods)}。${pick(scenes)}。`);
 }
+
+// NAI5-only authoring guidance. The caller opts in; the historical style
+// catalog and construction strings stay unchanged for saved legacy prompts.
+export function coupleStyleIdentityRendering(chosen) {
+    const style = COUPLE_STYLES.find(row => row.id === chosen?.id);
+    if (!style) return '';
+    const identity = "Use only this subject's supplied identity; shared traits may remain shared. Never transfer the other subject's features or invent differences.";
+    if (style.group === 'animal') return `${identity} Express these through this animal's own markings and small accessories, keeping the selected animal anatomy.`;
+    if (style.group === 'craft' || ['fantasy-enamel', 'fantasy-shadow'].includes(style.id)) {
+        return `${identity} Keep its distinguishing silhouettes and accessories as material-built shapes in the selected crafted form.`;
+    }
+    const form = "Preserve its own hair silhouette and accessories in the selected medium.";
+    const proportions = style.group === 'chibi' ? 'Keep the selected proportions and framing.' : '';
+    const eyes = style.id === 'chibi-doodle'
+        ? 'When visible, the two eyes are tiny solid dots; supplied eye color only tints those dots. Use simple mouth/brow marks, without detailed irises; retain supplied eye coverings.'
+        : '';
+    return [identity, form, proportions, eyes].filter(Boolean).join(' ');
+}

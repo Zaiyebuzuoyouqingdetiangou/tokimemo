@@ -1,5 +1,5 @@
-const VERSION = '1.0.49';
-const BUILD = '1.0.49';
+const VERSION = '1.0.52';
+const BUILD = '1.0.52';
 
 const SETTINGS_ID = 'heartbeat_memories_settings';
 const MENU_ID = 'heartbeat_memories_menu_item';
@@ -24,6 +24,9 @@ let runtimeLoadFailed = false;
 let bootstrapAutoPending = null;
 let bootstrapAutoCleanup = null;
 let bootstrapAutoEpoch = 0;
+let avatarRuntimePending = null;
+let avatarRuntimeCleanup = null;
+let avatarRuntimeEpoch = 0;
 const diagnosticDownloadTimers = new Map();
 
 function safeBootstrapErrorDiagnostic(error) {
@@ -603,8 +606,26 @@ function requestArchiveOpen(source = 'bootstrap') {
     }).catch(showBootError);
 }
 
+function startBootstrapAvatars() {
+    if (disabled || avatarRuntimeCleanup) return Promise.resolve();
+    if (avatarRuntimePending) return avatarRuntimePending;
+    const lifetime = avatarRuntimeEpoch;
+    avatarRuntimePending = import(`./src/chatAvatarRuntime.js?heartbeat=${BUILD}`).then(module => {
+        if (!disabled && lifetime === avatarRuntimeEpoch) avatarRuntimeCleanup = module.startChatAvatarRuntime();
+    }).catch(error => {
+        console.warn('[HeartbeatMemories] chat avatar display unavailable', safeBootstrapErrorDiagnostic(error));
+    }).finally(() => { avatarRuntimePending = null; });
+    return avatarRuntimePending;
+}
+
+function stopBootstrapAvatars() {
+    avatarRuntimeEpoch++;
+    avatarRuntimeCleanup?.(); avatarRuntimeCleanup = null;
+}
+
 function startBootstrap() {
     if (disabled || runtimeModule) return;
+    void startBootstrapAvatars();
     void startBootstrapAutoUpdates();
     mountBootstrapEntrypoints();
     bindBootstrapEarlyOpen();
@@ -628,6 +649,7 @@ else queueMicrotask(startBootstrap);
 
 export function onDisable() {
     disabled = true;
+    stopBootstrapAvatars();
     stopBootstrapMountTimer();
     stopBootstrapAutoUpdates();
     unbindBootstrapEarlyOpen();
@@ -638,6 +660,7 @@ export function onDisable() {
 
 export function onClean() {
     disabled = true;
+    stopBootstrapAvatars();
     stopBootstrapMountTimer();
     stopBootstrapAutoUpdates();
     unbindBootstrapEarlyOpen();
