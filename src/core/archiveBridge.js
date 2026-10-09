@@ -59,3 +59,6 @@ export function isCurrentCharacterDeletedFromLibrary(...args) { return call('isC
 export function rememberCurrentArchiveForOverview(...args) { return call('rememberCurrentArchiveForOverview', args); }
 
 export function syncArchiveOverviewCurrentRow(...args) { return call('syncArchiveOverviewCurrentRow', args); }
+
+export function repairArchiveChatIdentity(...args) { return call('repairArchiveChatIdentity', args); }
+export function needsArchiveChatIdentityRepair(...args) { return call('needsArchiveChatIdentityRepair', args); }

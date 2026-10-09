@@ -477,6 +477,17 @@ export function openCachedOrGenerate(mode, options = {}) {
         return workspace_ui.showEmptyWorkspace(mode, { memory: snapshot.memory, stored: !!stored[mode] });
     }
     let context, memory;
+    try { context = core_context.currentCharacterGuard(); } catch {}
+    if (!options.identityChecked && context && core_cache.needsArchiveChatIdentityRepair(context)) {
+        const origin = core_context.captureTaskOrigin(context, archive_repository.getImportedMemory(context)?.archiveRevision || '');
+        return core_cache.repairArchiveChatIdentity(context).then(() => {
+            if (openRequest !== heartOpenRequest || navigationEpoch !== ui_workspaceState.workspace.epoch
+                || !core_context.isCurrentTaskOrigin(origin) || runtimeState.activeArchiveSnapshot) return;
+            return openCachedOrGenerate(mode, { workspaceRoute: route, identityChecked: true });
+        }).catch(error => {
+            if (openRequest === heartOpenRequest && navigationEpoch === ui_workspaceState.workspace.epoch) globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心迹回廊');
+        });
+    }
     try { context = core_context.currentCharacterGuard(); memory = archive_repository.requireArchive(context); }
     catch {
         return workspace_ui.showEmptyWorkspace(mode, { noChat: !context });

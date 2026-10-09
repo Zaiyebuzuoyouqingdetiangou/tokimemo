@@ -1,3 +1,4 @@
+import * as chat_identity from './chatIdentityMigration.js';
 import * as partial_import from './partialImport.js';
 import * as archive_batches from './importBatches.js';
 import * as core_cache from '../core/cache.js';
@@ -234,17 +235,8 @@ export function mismatchedArchiveInfo(context = core_context.getContext()) {
 
 // Re-binds the existing archive to the chat the user is actually in. Explicit action only:
 // it never runs automatically, and it keeps the previous identity for traceability.
-export function claimMismatchedArchive(context = core_context.getContext()) {
-    const info = mismatchedArchiveInfo(context);
-    if (!info) return null;
-    const memory = migrateArchiveInMemory(context.chatMetadata[core_constants.MEMORY_KEY]);
-    const previousChatId = core_text.normalizeText(memory.chatId, 240);
-    memory.chatId = core_context.getChatId(context);
-    memory.claimedFromChatId = previousChatId;
-    memory.updatedAt = Date.now();
-    context.chatMetadata[core_constants.MEMORY_KEY] = memory;
-    context.saveMetadataDebounced?.();
-    return { memoryCount: info.memoryCount, previousChatId };
+export async function claimMismatchedArchive(context = core_context.getContext()) {
+    return chat_identity.claimArchiveChatIdentity(context);
 }
 
 async function runArchiveImport(context, options = {}, taskTrace = null) {
@@ -300,7 +292,7 @@ async function runArchiveImportPrepared(context, options, taskTrace, admission) 
                 + '\n取消＝保持原样，本次不生成。',
                 { destructive: false });
             if (claim) {
-                claimMismatchedArchive(context);
+                await claimMismatchedArchive(context);
                 existing = getImportedMemory(context);
                 globalThis.toastr?.success?.(`已认领 ${mismatch.memoryCount} 条记忆到当前聊天。`, '心迹回廊');
             }
@@ -449,3 +441,5 @@ async function runArchiveImportPrepared(context, options, taskTrace, admission) 
 
 // 重构清单 C-3c（r84.100）：把 core 层要用的函数登记到 core/archiveBridge.js（core 不再 import 本文件）。
 core_archiveBridge.registerArchiveBridge({ getImportedMemory, importCurrentChatMemory, requireArchive, getMemoryWorldInfoSelection, migrateDerivedCacheRevision, migrateArchiveInMemory, archiveDeletionFenceKey });
+
+core_archiveBridge.registerArchiveBridge({ repairArchiveChatIdentity: chat_identity.repairArchiveChatIdentity, needsArchiveChatIdentityRepair: chat_identity.needsArchiveChatIdentityRepair });

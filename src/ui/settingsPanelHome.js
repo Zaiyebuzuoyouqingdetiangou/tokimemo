@@ -735,7 +735,7 @@ function bindSettingsClick(
   scanTagChoices,
   refreshCreative,
 ) {
-  panel.addEventListener('click', event => {
+  panel.addEventListener('click', async event => {
     if (event.target.closest?.('[data-rmt-scene-picker-root]')) {
       void ui_scenePicker.handleScenePickerEvent(event);
       return;
@@ -1104,7 +1104,8 @@ function bindSettingsClick(
         );
         if (!ok) return;
         try {
-          const claimed = archive_repository.claimMismatchedArchive(core_context.currentCharacterGuard());
+          const claimed = await archive_repository.claimMismatchedArchive(core_context.currentCharacterGuard());
+          if (!claimed) throw new Error('档案已变化，请重新打开后再试。');
           globalThis.toastr?.success?.(`已认领 ${claimed.memoryCount} 条记忆到当前聊天。`, '心迹回廊');
         } catch (error) {
           globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊 · 认领失败');

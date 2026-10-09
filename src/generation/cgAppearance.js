@@ -1,3 +1,4 @@
+import * as character_scene from './cgCharacterScene.js';
 import * as cg_visual from '../core/cgVisualRules.js';
 import * as format from '../core/cgPromptFormat.js';
 // Appearance preparation is explicit and local to one CG editor. Only the host's
@@ -191,6 +192,10 @@ export function captureCgAppearanceEvidence(context, { api = globalThis.STBaiBai
 }
 
 export function buildCgAppearanceInstructions(evidence, promptFormat = '') {
+    return legacyCgAppearanceInstructions(evidence, promptFormat) + character_scene.cgCharacterSceneInstructions(promptFormat);
+}
+
+function legacyCgAppearanceInstructions(evidence, promptFormat = '') {
     if (evidence?.castSnapshot) {
         const snapshot = participants.normalizeParticipantSnapshot(evidence.castSnapshot);
         const sources = evidence.characters || [];
@@ -241,7 +246,8 @@ function initialMetadata(item, context) {
             characters: snapshot.people.map(person => {
                 // A saved empty row is an intentional clear, not missing data.
                 const row = saved.get(person.id) || authored.get(person.id);
-                return { participantId: person.id, tag: row?.tag || '', nl: row?.nl || '' };
+                return { participantId: person.id, tag: row?.tag || '', nl: row?.nl || '',
+                    ...character_scene.cgCharacterSceneFields(authored.get(person.id)) };
             }) });
     }
     const looks = cast_looks.readCastLooks(context);
@@ -261,7 +267,8 @@ function initialMetadata(item, context) {
             row.tag === plain(looks[row.role], CG_APPEARANCE_TAG_LIMIT))) return metadata;
         // A changed or cleared look still invalidates dependent scene fields.
         return normalizeCgPromptMetadata({ characters: ROLES.map(role => ({ role,
-            name: role === 'char' ? context?.name2 : context?.name1, tag: looks[role] || '', nl: '' })) });
+            name: role === 'char' ? context?.name2 : context?.name1, tag: looks[role] || '', nl: '',
+            ...character_scene.cgCharacterSceneFields(generated.characters.find(row => row.role === role)) })) });
     }
     return normalizeCgPromptMetadata({ characters: ROLES.map(role => ({ role,
         name: role === 'char' ? context?.name2 : context?.name1,
@@ -287,9 +294,12 @@ export function scopeCgPromptMetadata(scene, rawMetadata) {
         ? { flatPrompt: '', sceneTags: '' } : {}) };
 }
 
-export function metadataAfterSceneEdit(metadata) {
+export function metadataAfterSceneEdit(metadata, { clearCharacterScene = false } = {}) {
     const normalized = normalizeCgPromptMetadata(metadata);
-    return normalized ? normalizeCgPromptMetadata({ characters: normalized.characters,
+    return normalized ? normalizeCgPromptMetadata({ characters: normalized.characters.map(row => {
+        if (!clearCharacterScene) return row;
+        const { sceneTag, sceneNl, ...appearance } = row; return appearance;
+    }),
         ...(normalized.castSnapshot ? { castSnapshot: normalized.castSnapshot } : {}),
         ...(Array.isArray(normalized.selectedRoles) ? { selectedRoles: normalized.selectedRoles } : {}),
         ...(normalized.flatPromptOverride ? { flatPrompt: normalized.flatPrompt, flatPromptOverride: true } : {}),
@@ -311,7 +321,8 @@ export function normalizeCgPromptMetadata(value) {
             const matching = rows.filter(row => row?.participantId === person.id);
             if (matching.length > 1) throw text.safeUserError('同一个人物出现了重复外貌记录，请核对图片设置。', 'RMT_CG_PROMPT_INVALID');
             const row = matching[0], tag = appearanceText(row?.tag, row), nl = appearanceText(row?.nl, row);
-            return tag || nl || row?.appearanceOverride === true ? [{ participantId: person.id, name: person.name, tag, nl,
+            return tag || nl || character_scene.cgCharacterSceneValue(row, promptFormat) || row?.appearanceOverride === true ? [{ participantId: person.id, name: person.name, tag, nl,
+                ...character_scene.cgCharacterSceneFields(row),
                 ...presetProvenance(row),
                 ...(row?.appearanceOverride === true ? { appearanceOverride: true } : {}) }] : [];
         });
@@ -327,7 +338,8 @@ export function normalizeCgPromptMetadata(value) {
         if (matches.length > 1) throw text.safeUserError('同一个人物出现了重复外貌记录，请核对图片设置。', 'RMT_CG_PROMPT_INVALID');
         if (matches.length !== 1) return [];
         const row = matches[0], name = plain(row.name, 120), tag = appearanceText(row.tag, row);
-        return name && (tag || row.appearanceOverride === true) ? [{ role, name, tag, nl: appearanceText(row.nl, row),
+        return name && (tag || character_scene.cgCharacterSceneValue(row, promptFormat) || row.appearanceOverride === true) ? [{ role, name, tag, nl: appearanceText(row.nl, row),
+            ...character_scene.cgCharacterSceneFields(row),
             ...presetProvenance(row),
             ...(row.appearanceOverride === true ? { appearanceOverride: true } : {}) }] : [];
     });
@@ -363,13 +375,15 @@ export function normalizeCgPreparedPrompt(raw, evidence) {
             seen.add(row.participantId);
         }
         const prepared = castSnapshot.people.flatMap(person => {
-            const source = sources.find(row => row.participantId === person.id);
+            const source = sources.find(row => row.participantId === person.id) || {};
             const row = raw.characters.find(row => row.participantId === person.id);
             if (source?.knownTag && !source.presetAppearance && (!row || plain(row.tag, CG_APPEARANCE_TAG_LIMIT) !== source.knownTag)) {
                 throw text.safeUserError('本次外貌与已保存标签不一致，原草稿已保留；请核对后重试。', 'RMT_CG_PROMPT_INVALID');
             }
-            if ((!row && !source?.presetAppearance) || (!source?.description && !source?.knownTag && !source?.knownNl)) return [];
-            return [{ participantId: person.id, tag: source.knownTag || row?.tag, nl: source.knownTag ? source.knownNl : row?.nl,
+            if ((!row && !source?.presetAppearance) || (!source?.description && !source?.knownTag && !source?.knownNl && !character_scene.cgCharacterSceneValue(row))) return [];
+            const hasAppearance = !!(source.description || source.knownTag || source.knownNl);
+            return [{ participantId: person.id, tag: hasAppearance ? source.knownTag || row?.tag : '', nl: hasAppearance ? source.knownTag ? source.knownNl : row?.nl : '',
+                ...character_scene.cgCharacterSceneFields(row),
                 ...presetProvenance(source),
                 ...(source.appearanceOverride ? { appearanceOverride: true } : {}) }];
         });
@@ -377,24 +391,25 @@ export function normalizeCgPreparedPrompt(raw, evidence) {
         const appearanceStatus = castSnapshot.people.map(person => {
             const source = sources.find(row => row.participantId === person.id);
             return { participantId: person.id, sourceAvailable: !!(source?.description || source?.knownTag || source?.knownNl),
-                hasAppearance: metadata.characters.some(row => row.participantId === person.id) };
+                hasAppearance: metadata.characters.some(row => row.participantId === person.id && (row.tag || row.nl)) };
         });
         return { imagePrompt, ...metadata, appearanceStatus,
-            missingParticipantIds: castSnapshot.people.filter(person => !metadata.characters.some(row => row.participantId === person.id)).map(person => person.id) };
+            missingParticipantIds: castSnapshot.people.filter(person => !metadata.characters.some(row => row.participantId === person.id && (row.tag || row.nl))).map(person => person.id) };
     }
     const rows = raw.characters.slice(0, 8);
     const prepared = ROLES.flatMap(role => {
         const source = sources.find(row => row?.role === role);
         const matching = rows.filter(row => row && typeof row === 'object' && row.role === role);
-        if (!source?.name || (!source.description && !source.knownTag) || (!source.presetAppearance && matching.length !== 1)) return [];
+        if (!source?.name || (!source.description && !source.knownTag && !character_scene.cgCharacterSceneValue(matching[0])) || (!source.presetAppearance && matching.length !== 1)) return [];
         const row = matching[0];
         // Silently replacing just tag would leave the contradictory appearance in
         // imagePrompt/flatPrompt. Reject that whole draft rather than send both.
         if (source.knownTag && !source.presetAppearance && plain(row.tag, CG_APPEARANCE_TAG_LIMIT) !== source.knownTag) {
             throw text.safeUserError('本次外貌与已保存标签不一致，原草稿已保留；请核对后重试。', 'RMT_CG_PROMPT_INVALID');
         }
-        return [{ role, name: source.name, tag: source.knownTag || row?.tag,
-            nl: source.knownTag ? source.knownNl : row?.nl, ...presetProvenance(source),
+        const hasAppearance = !!(source.description || source.knownTag || source.knownNl);
+        return [{ role, name: source.name, tag: hasAppearance ? source.knownTag || row?.tag : '',
+            nl: hasAppearance ? source.knownTag ? source.knownNl : row?.nl : '', ...character_scene.cgCharacterSceneFields(row), ...presetProvenance(source),
             ...(source.appearanceOverride ? { appearanceOverride: true } : {}) }];
     });
     const selectedRoles = Array.isArray(evidence?.selectedRoles) ? ROLES.filter(role => evidence.selectedRoles.includes(role)) : null;
@@ -402,13 +417,15 @@ export function normalizeCgPreparedPrompt(raw, evidence) {
         ...(selectedRoles ? { selectedRoles } : {}) });
     return { imagePrompt, sceneTags: metadata.sceneTags, flatPrompt: metadata.flatPrompt, characters: metadata.characters,
         ...(selectedRoles ? { selectedRoles } : {}),
-        missingRoles: (selectedRoles || ROLES).filter(role => !metadata.characters.some(row => row.role === role)) };
+        missingRoles: (selectedRoles || ROLES).filter(role => !metadata.characters.some(row => row.role === role && (row.tag || row.nl))) };
 }
 
 export function cgPreparedVisualPrompt(scene, metadata) {
     const visual = plain(scene, SCENE_LIMIT);
     const normalized = scopeCgPromptMetadata(scene, metadata);
     if (!normalized?.characters.length) return visual;
+    const withActivity = character_scene.cgFlatCharacterScenePrompt(visual, normalized);
+    if (withActivity) return withActivity;
     const appearance = normalized.characters.map(row => `${row.name}：${row.tag || (normalized.castSnapshot ? row.nl : '')}`).join('\n');
     // These exact, named lines are also shown in the editor's send preview.
     // Edits to tag take precedence; stale generated nl is deliberately not used.
@@ -425,6 +442,8 @@ export function cgPreparedTagPrompt(scene, metadata) {
     // A flat transport has no native person slots: do not invent positions or
     // turn display names and explanatory labels into image tags. Natural-only
     // manual/legacy looks remain usable; selecting a dialect is not conversion.
+    const withActivity = character_scene.cgFlatCharacterScenePrompt(visual, normalized);
+    if (withActivity) return withActivity;
     const rows = normalized?.characters || [];
     const nameKey = name => (name || '').normalize('NFKC').toLowerCase().trim();
     const anchors = rows.flatMap(row => {
@@ -558,8 +577,17 @@ export function formattedCgProviderPrompts(scene, rawMetadata, supportsCharacter
     }
     if (!chars.some(row => row.presetAppearance || row.resolvedAppearance)
         && (prompt.length > CG_PREPARED_NL_LIMIT || nl.length > CG_PREPARED_NL_LIMIT)) throw text.safeUserError('最终生图提示过长，请缩短后再确认。', 'RMT_CG_PROMPT_INVALID');
-    const characters = supportsCharacters && chars.length ? chars.map(({name,tag,nl}) => {
+    const characters = supportsCharacters && chars.length ? chars.map(row => {
+        const { name, tag, nl } = row;
+        const activity = character_scene.cgCharacterSceneValue(row, selected);
         const character = {name,tag};
+        if (activity) {
+            if (selected === 'nai45-tags') {
+                character.tag = character_scene.cgCharacterCaption(row, selected);
+                if (!separateNai) character.nl = character.tag;
+            } else character.nl = [nl && nl !== tag ? nl : '', activity].filter(Boolean).join('\n');
+            return character;
+        }
         if (metadata.castSnapshot && !tag && nl) {
             character.nl = nl;
         } else if (selected === 'nai45-tags') {

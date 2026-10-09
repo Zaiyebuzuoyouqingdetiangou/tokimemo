@@ -65,7 +65,10 @@ export function normalizeGeneratedCgDraft(value) {
         const nlValue = field(row, 'nl');
         const nl = visualText(nlValue === undefined ? '' : nlValue, 400);
         if (tag === null || nl === null) return null;
-        if (tag || schemaVersion === 2) characters.push({ [key]: identity, tag, nl });
+        const sceneTag = visualText(field(row, 'sceneTag'), Infinity) || '';
+        const sceneNl = visualText(field(row, 'sceneNl'), Infinity) || '';
+        if (tag || schemaVersion === 2 || sceneTag || sceneNl) characters.push({ [key]: identity, tag, nl,
+            ...(sceneTag ? { sceneTag } : {}), ...(sceneNl ? { sceneNl } : {}) });
     }
     return { schemaVersion, sceneTags, flatPrompt, characters };
 }

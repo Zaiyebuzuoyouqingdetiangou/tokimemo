@@ -1,3 +1,4 @@
+import * as character_scene from './cgCharacterScene.js';
 // Original adapter for the author's documented STBaiBaiImage API v1.
 // No third-party implementation, settings, credentials or DOM are accessed.
 import * as image_patch from '../core/cgImagePatch.js';
@@ -96,8 +97,13 @@ export function baiBaiSendPreview(prompt, { promptMetadata = null, context = cor
         nl: fullVisual,
     };
     if (state.supportsCharacters && metadata?.characters?.length) {
-        request.characters = metadata.characters.filter(character => character.tag || (metadata.castSnapshot && character.nl))
-            .map(({ name, tag, nl }) => ({ name, tag, ...(nl ? { nl } : {}) }));
+        request.characters = metadata.characters.filter(character => character.tag || (metadata.castSnapshot && character.nl) || character_scene.cgCharacterSceneValue(character, metadata.promptFormat))
+            .map(row => {
+                const { name, tag, nl } = row;
+                const activity = character_scene.cgCharacterSceneValue(row, metadata.promptFormat);
+                const description = [nl || '', activity].filter(Boolean).join('\n');
+                return { name, tag, ...(description ? { nl: description } : {}) };
+            });
     }
     const formatted = appearance.formattedCgProviderPrompts(visual, metadata, state.supportsCharacters, state.backend);
     if (formatted) {

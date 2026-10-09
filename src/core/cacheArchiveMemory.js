@@ -499,6 +499,7 @@ export async function ensureCurrentArchiveBackup(context = null) {
     if (context.groupId || context.characterId === undefined || context.characterId === null
         || !context.chatMetadata || typeof context.chatMetadata !== 'object'
         || !core_context.getChatId(context)) return false;
+    await archive_repository.repairArchiveChatIdentity(context);
     const initialMemory = archive_repository.getImportedMemory(context);
     if (!initialMemory) return recoverMissingCurrentArchiveFromBackup(context);
     if (archive_groups.isCurrentCharacterDeletedFromLibrary(context, initialMemory)) return false;

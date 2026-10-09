@@ -1,5 +1,6 @@
 import * as ui_workspaceState from './workspaceState.js';
 import * as ui_workspace from './workspace.js';
+import * as ui_archiveRename from './archiveRename.js';
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
 import * as archive_library from '../archive/library.js';
@@ -319,6 +320,21 @@ export function bindChatStateEvents() {
         if (overlay && !overlay.hidden && !runtimeState.activeMode && !runtimeState.busy) archive_snapshots.scheduleChooserRefresh(80);
     };
 
+    const renameHandler = async event => {
+        const lifecycle = runtimeState.runtimeLifecycleEpoch;
+        try {
+            const migrated = await ui_archiveRename.handleArchiveChatRename(event);
+            if (migrated && lifecycle === runtimeState.runtimeLifecycleEpoch) {
+                ui_settingsPanel.refreshSettingsMemoryStatus({ lightweight: true });
+            }
+        } catch (error) {
+            if (lifecycle !== runtimeState.runtimeLifecycleEpoch || error?.name === 'AbortError'
+                || error?.code === 'RMT_RECOVERY_ORIGIN_CHANGED') return;
+            console.warn('[HeartbeatMemories] renamed archive migration failed', core_text.safeErrorDiagnostic(error));
+            globalThis.toastr?.warning?.('聊天已改名，档案同步未完成，原内容已保留。请在当前档案重试认领。', '心迹回廊');
+        }
+    };
+    if (types.CHAT_RENAMED) source.on(types.CHAT_RENAMED, renameHandler);
     for (const type of chatEvents) source.on(type, chatHandler);
     for (const type of messageEvents) source.on(type, messageHandler);
     // The full runtime can load after SillyTavern's initial CHAT_LOADED event. Recover
@@ -333,6 +349,9 @@ export function bindChatStateEvents() {
         }
         for (const type of messageEvents) {
             try { source.off?.(type, messageHandler); } catch {}
+        }
+        if (types.CHAT_RENAMED) {
+            try { source.off?.(types.CHAT_RENAMED, renameHandler); } catch {}
         }
     };
 }

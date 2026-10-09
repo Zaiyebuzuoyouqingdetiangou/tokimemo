@@ -1,3 +1,4 @@
+import * as chat_identity from './chatIdentityMigration.js';
 // Explicit, same-character archive inheritance for a brand-new chat.
 // No function in this module runs automatically or calls a provider.
 import * as archive_backupStore from './backupStore.js';
@@ -207,7 +208,7 @@ export function prepareInheritedArchive(snapshot, targetContext, inheritedAt = D
         currentChatEvidenceCount: 0,
     };
 
-    const cache = clone(snapshot.cache || {});
+    const cache = chat_identity.rebindCompletedArchiveCache(snapshot.cache || {}, sourceMemory, memory);
     archive_repository.migrateDerivedCacheRevision(cache, sourceMemory, memory);
     // A copied completed work stays readable, including images and local reading
     // state. Request/recovery journals never cross into the new chat.

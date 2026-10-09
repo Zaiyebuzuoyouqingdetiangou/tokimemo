@@ -1,3 +1,4 @@
+import * as character_scene from './cgCharacterScene.js';
 // Calls 智绘姬 through the event it already listens for. Does not read API keys,
 // prompts, or endpoints, and does not write its settings. Ordinary CG keeps its
 // existing size; an explicit MV orientation overrides only this request's size.
@@ -249,7 +250,7 @@ export function chatu8SendPreview(prompt, { promptMetadata = null, context = cor
         // Without explicitly enabled automatic placement the upstream builder
         // sends empty manual centers. Keep a complete flat prompt in that mode.
         && (automaticCoordinates === true || automaticCoordinates === 'true')
-        && characters.length && characters.length === expectedCharacters && characters.every(row => row.tag || row.nl);
+        && characters.length && characters.length === expectedCharacters && characters.every(row => row.tag || row.nl || character_scene.cgCharacterSceneValue(row, metadata.promptFormat));
     // Use the scene channel without an old, generated appearance-bearing flat
     // prompt. The manually authored complete channel was returned above.
     const sceneMetadata = { ...metadata, characters: [], flatPrompt: '' };
@@ -257,9 +258,11 @@ export function chatu8SendPreview(prompt, { promptMetadata = null, context = cor
     const scene = appearance.formattedCgProviderPrompts(sceneInput, sceneMetadata, false, '')?.prompt || sceneInput;
     if (native) {
         return sendPreview([`Scene Composition: ${promptField(scene)};`, ...characters.flatMap((row, index) =>
-            characterFields(row, index, metadata.promptFormat === 'nai45-tags' ? row.tag || row.nl : `${row.name}: ${row.tag || row.nl}`))].join('\n'), backend);
+            characterFields(row, index, metadata.promptFormat === 'nai45-tags' ? character_scene.cgCharacterCaption(row, metadata.promptFormat) : `${row.name}: ${character_scene.cgCharacterCaption(row, metadata.promptFormat)}`))].join('\n'), backend);
     }
     const negatives = characters.map(characterNegative);
+    const boundFlat = character_scene.cgFlatCharacterScenePrompt(scene, metadata);
+    if (boundFlat) return sendPreview(boundFlat, backend, negatives);
     if (metadata.promptFormat === 'nai45-tags' && (changed || !metadata.flatPrompt)) {
         return sendPreview(appearance.cgPreparedTagPrompt(scene, metadata), backend, negatives);
     }

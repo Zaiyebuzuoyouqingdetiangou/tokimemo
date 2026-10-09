@@ -536,6 +536,7 @@ export function compressedCacheManifest(cache, packed) {
     return {
         format: core_constants.CACHE_STORAGE_FORMAT,
         storageVersion: core_constants.CACHE_STORAGE_VERSION,
+        ...(cache?.chatIdentityMigrationVersion === 1 ? { chatIdentityMigrationVersion: 1 } : {}),
         chatId: core_text.normalizeText(cache?.chatId, 240),
         archiveRevision: core_text.normalizeText(cache?.archiveRevision, 240),
         commitToken: cacheCommitToken(cache),
