@@ -1032,11 +1032,19 @@ function illustrationControls(record, shot) {
     if (!shot.illustration) return '';
     const cue = mv_illustration.normalize(shot.illustration);
     const select = (field, label, choices) => `<label class="rmt-mv-look"><span>${label}</span><select data-rmt-mv-illustration="${field}" data-shot="${esc(shot.id)}">${Object.entries(choices).map(([id, name]) => `<option value="${id}"${cue[field] === id ? ' selected' : ''}>${name}</option>`).join('')}</select></label>`;
+    const positioned = mv_illustration.normalize({ ...cue, version: 2 });
+    const percent = (field, label) => `<label class="rmt-mv-look"><span>${label}（%）</span><input type="number" min="0" max="100" step="1" value="${Math.round(positioned[field] * 100)}" data-rmt-mv-illustration="${field}" data-percent="1" data-shot="${esc(shot.id)}"></label>`;
+    const regionList = (kind, label) => `<div>${positioned[kind].map((r, i) => `<details><summary>${label} ${i + 1}</summary>${Object.entries({ x: '左边距', y: '上边距', w: '宽度', h: '高度', ...(kind === 'motionRegions' ? { amount: '摆动幅度' } : {}) }).map(([key, name]) => `<label class="rmt-mv-look"><span>${name}（%）</span><input type="number" min="0" max="${key === 'amount' ? '1.5' : '100'}" step="${key === 'amount' ? '.1' : '1'}" value="${Math.round(r[key] * 1000) / 10}" data-rmt-mv-region="${kind}" data-index="${i}" data-field="${key}" data-shot="${esc(shot.id)}"></label>`).join('')}${btn('illustration-region-remove', '移除此区域', { id: JSON.stringify([shot.id, kind, i]) })}</details>`).join('')}${btn('illustration-region-add', `添加${label}`, { id: JSON.stringify([shot.id, kind]) })}</div>`;
     return `<details><summary>动态插画</summary>
       ${select('reveal', '同图显影', mv_illustration.REVEALS)}
       <label class="rmt-mv-look"><span>显影时长（秒）</span><input type="number" min="0.1" step="0.1" inputmode="decimal" value="${cue.seconds}" data-rmt-mv-illustration="seconds" data-shot="${esc(shot.id)}"></label>
       ${select('movement', '图层运动', mv_illustration.MOVEMENTS)}${select('light', '光效', mv_illustration.LIGHTS)}${select('particles', '粒子', mv_illustration.PARTICLES)}
       <label class="rmt-mv-look"><span>光效颜色</span><input type="text" value="${esc(cue.color)}" placeholder="留空跟随背景，或填 #RRGGBB" data-rmt-mv-illustration="color" data-shot="${esc(shot.id)}"></label>
+      <details><summary>调整动态位置</summary>
+      ${percent('focusX', '显现焦点 · 横向')}${percent('focusY', '显现焦点 · 纵向')}${percent('lightX', '光效位置 · 横向')}${percent('lightY', '光效位置 · 纵向')}
+      <p>位置按原图比例设置。轻动区选发梢、衣带；保护区覆盖脸、手和固定物件。</p>
+      ${regionList('motionRegions', '轻动区')}${regionList('protect', '保护区')}
+      </details>${btn('illustration-share', '应用到同一张图', { id: shot.id })}
       </details>`;
 }
 
@@ -1862,7 +1870,21 @@ export function handleMvClick(event) {
     const record = currentRecord();
     const opened = viewTarget();
     try {
-        if (action === 'back') navigateMvBack();
+        if (action === 'illustration-share') {
+            const shot = record?.shots.find(s => s.id === id);
+            if (shot?.illustration) { const updated = mv.patchIllustration(view.songId, id, shot.illustration, true); if (view.cache) view.cache.record = updated; drawNow(); }
+        }
+        else if (action === 'illustration-region-add' || action === 'illustration-region-remove') {
+            const [shotId, kind, index] = JSON.parse(id);
+            if (!['motionRegions', 'protect'].includes(kind)) return true;
+            const shot = record?.shots.find(s => s.id === shotId); if (!shot?.illustration) return true;
+            const cue = mv_illustration.normalize({ ...shot.illustration, version: 2 }), regions = [...cue[kind]];
+            if (action === 'illustration-region-add') regions.push(kind === 'motionRegions' ? { x: .05, y: .4, w: .25, h: .5, amount: .006, phase: 0 } : { x: .3, y: .1, w: .4, h: .4 });
+            else if (Number.isInteger(index) && index >= 0 && index < regions.length) regions.splice(index, 1);
+            const updated = mv.patchIllustration(view.songId, shotId, { version: 2, [kind]: regions });
+            if (view.cache) view.cache.record = updated; renderMv();
+        }
+        else if (action === 'back') navigateMvBack();
         else if (action === 'back-song') returnToSong();
         else if (action === 'workspace-tab') {
             view.editorDrawer = '';
@@ -2121,9 +2143,23 @@ export function handleMvChange(event) {
     const input = event.target;
     if (input?.matches?.('[data-rmt-mv-illustration]')) {
         try {
-            const updated = mv.patchIllustration(view.songId, input.dataset.shot, { [input.dataset.rmtMvIllustration]: input.value });
+            const updated = mv.patchIllustration(view.songId, input.dataset.shot, { [input.dataset.rmtMvIllustration]: input.dataset.percent ? Number(input.value) / 100 : input.value, ...(input.dataset.percent ? { version: 2 } : {}) });
             if (view.cache) view.cache.record = updated;
             drawNow();
+        } catch (error) { toastError(error); }
+        return true;
+    }
+    if (input?.matches?.('[data-rmt-mv-region]')) {
+        try {
+            const kind = input.dataset.rmtMvRegion, field = input.dataset.field, index = Number(input.dataset.index);
+            if (!['motionRegions', 'protect'].includes(kind) || !['x', 'y', 'w', 'h', 'amount'].includes(field)) return true;
+            const shot = currentRecord()?.shots.find(s => s.id === input.dataset.shot);
+            if (!shot?.illustration) return true;
+            const cue = mv_illustration.normalize({ ...shot.illustration, version: 2 });
+            if (!cue[kind][index]) return true;
+            cue[kind][index][field] = Number(input.value) / 100;
+            const updated = mv.patchIllustration(view.songId, shot.id, { version: 2, [kind]: cue[kind] });
+            if (view.cache) view.cache.record = updated; drawNow();
         } catch (error) { toastError(error); }
         return true;
     }
@@ -2671,7 +2707,7 @@ function drawSceneV2(g, record, song, rows, index, t, w, h, showText = true) {
         info.opaque = true; return info;
     }
     if (person) {
-        illustration_canvas.drawLight(g, illustration, w, h, palette);
+        if (illustration?.light !== 'focus') illustration_canvas.drawLight(g, illustration, w, h, palette);
         const pw = person.naturalWidth || person.width, ph = person.naturalHeight || person.height;
         const placement = stage_canvas.foregroundPlacement(sprite.bounds, pw, ph, group, w, h);
         const breathe = stage || placement.attached ? 1 : 1 + 0.004 * Math.sin(t * Math.PI * 2 / 3.4);
@@ -2700,6 +2736,7 @@ function drawSceneV2(g, record, song, rows, index, t, w, h, showText = true) {
             g.save(); g.globalAlpha *= .16; g.drawImage(silhouette(sprite.key, person), dx - w * .006, dy, dw, dh); g.restore();
         }
         illustration_canvas.drawPicture(g, person, [dx, dy, dw, dh], illustration); g.restore();
+        if (illustration?.light === 'focus') illustration_canvas.drawLight(g, illustration, w, h, palette, true);
     } else if (showText) drawSceneText(g, info, record, w, h, 'back');
     if (!stage) { g.save(); g.globalCompositeOperation = 'soft-light'; g.globalAlpha = 0.14; g.fillStyle = coverPalette(song)[1]; g.fillRect(0, 0, w, h); g.restore(); }
     return info;

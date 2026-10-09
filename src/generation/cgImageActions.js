@@ -184,8 +184,11 @@ export async function drawSelectedCgImage({ promptOverride, promptMetadata, prom
         : promptOverride === undefined ? cgImagePromptForItem(item, castLooksLine) : sanitizeCgVisualText(promptOverride);
     ({ prompt, metadata } = prepareCgSendParts(mode, item, rawPrompt, savedMetadata, selectedFormat));
     // Validate both prompt channels BEFORE reserving/provider send; no silent Chinese stripping.
-    const providerState = baibai_image.baiBaiImageState();
-    cg_appearance.formattedCgProviderPrompts(prompt, metadata, providerState.supportsCharacters === true, providerState.backend);
+    if (imageState.provider === chatu8_image.CHATU8_IMAGE_PROVIDER) {
+        chatu8_image.chatu8SendPreview(prompt, { promptMetadata: metadata, context });
+    } else {
+        baibai_image.baiBaiSendPreview(prompt, { promptMetadata: metadata, context });
+    }
     } catch (error) {
         globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊');
         return false;
@@ -378,7 +381,7 @@ export function handleOverlayMediaError(event) {
 }
 
 export function prepareCgSendParts(mode, item, scene, rawMetadata, selectedFormat = '') {
-    const metadata = cg_appearance.normalizeCgPromptMetadata(rawMetadata);
+    const metadata = cg_appearance.scopeCgPromptMetadata(scene, rawMetadata);
     const promptFormat = cg_format.normalizeCgPromptFormat(selectedFormat || metadata?.promptFormat);
     if (item?.cgLayout === 'photoshoot-9-grid') {
         const prompt = cg_format.formatPhotoshootPrompt(scene);
@@ -390,8 +393,10 @@ export function prepareCgSendParts(mode, item, scene, rawMetadata, selectedForma
     return {prompt, metadata: cg_appearance.normalizeCgPromptMetadata({...metadata, promptFormat, ...(comicPanels ? {comicPanels} : {})})};
 }
 
-export function cgEditorSendPreview(mode, item, scene, metadata, promptFormat) {
+export function cgEditorSendPreview(mode, item, scene, metadata, promptFormat, context = core_context.getContext()) {
     const parts = prepareCgSendParts(mode, item, scene, metadata, promptFormat);
-    const providerState = baibai_image.baiBaiImageState();
-    return cg_appearance.formattedCgProviderPrompts(parts.prompt, parts.metadata, providerState.supportsCharacters === true, providerState.backend);
+    if (core_settings.getPluginSettings(context).imageGenerationProvider === chatu8_image.CHATU8_IMAGE_PROVIDER) {
+        return chatu8_image.chatu8SendPreview(sanitizeCgVisualText(parts.prompt), { promptMetadata: parts.metadata, context });
+    }
+    return baibai_image.baiBaiSendPreview(sanitizeCgVisualText(parts.prompt), { promptMetadata: parts.metadata, context });
 }

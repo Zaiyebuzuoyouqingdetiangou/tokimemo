@@ -3,6 +3,7 @@
 import * as core_context from '../core/context.js';
 import * as core_castLooks from '../core/castLooks.js';
 import * as core_text from '../core/text.js';
+import * as appearance_presets from '../generation/imageAppearancePresets.js';
 import * as cg_core from '../generation/cgImageCore.js';
 import * as image_patch from '../core/cgImagePatch.js';
 import * as task_trace from '../core/taskTrace.js';
@@ -30,7 +31,25 @@ function optionalContext() {
     try { return core_context.currentCharacterGuard(); } catch { return null; }
 }
 
-export function defaultCoupleSettings(context = optionalContext()) {
+function couplePresetPeople(people, context) {
+    // Storage/history normalization passes null: never rewrite the identities
+    // that produced an existing pair just because a provider preset changed.
+    if (!context) return people;
+    const presets = appearance_presets.resolveImageAppearancePresets(context, people);
+    return people.map(person => {
+        const previousPreset = text(person.presetAppearance);
+        const edited = person.appearanceOverride === true || (previousPreset && person.appearance !== previousPreset);
+        const fallback = previousPreset && !edited && own(person, 'fallbackAppearance')
+            ? text(person.fallbackAppearance) : person.appearance;
+        const local = { id: person.id, name: person.name, appearance: fallback,
+            ...(edited ? { appearanceOverride: true } : {}) };
+        const preset = !edited ? presets.get(person.id) : null;
+        const appearance = text(preset?.tag) || text(preset?.nl);
+        return appearance ? { ...local, appearance, fallbackAppearance: fallback, presetAppearance: appearance } : local;
+    });
+}
+
+function baseCoupleSettings(context) {
     let looks = null, card = {};
     try { if (context) looks = core_castLooks.readCastLooks(context); } catch { /* Optional saved looks. */ }
     try { card = context?.getCharacterCardFields?.() || {}; } catch { /* Manual appearance remains available. */ }
@@ -48,19 +67,27 @@ export function defaultCoupleSettings(context = optionalContext()) {
     };
 }
 
+export function defaultCoupleSettings(context = optionalContext()) {
+    const settings = baseCoupleSettings(context);
+    return { ...settings, people: couplePresetPeople(settings.people, context) };
+}
+
 export function normalizeCoupleSettings(value, context = optionalContext()) {
     const input = value && typeof value === 'object' ? value : {};
-    const defaults = defaultCoupleSettings(context);
+    const defaults = baseCoupleSettings(context);
     const styleId = text(input.styleId);
     return {
-        people: defaults.people.map((person, index) => {
+        people: couplePresetPeople(defaults.people.map((person, index) => {
             const source = Array.isArray(input.people) && input.people[index] && typeof input.people[index] === 'object' ? input.people[index] : {};
             return {
                 id: text(source.id) || person.id,
                 name: own(source, 'name') ? text(source.name) : person.name,
                 appearance: own(source, 'appearance') ? text(source.appearance) : person.appearance,
+                ...(own(source, 'fallbackAppearance') ? { fallbackAppearance: text(source.fallbackAppearance) } : {}),
+                ...(text(source.presetAppearance) ? { presetAppearance: text(source.presetAppearance) } : {}),
+                ...(source.appearanceOverride === true ? { appearanceOverride: true } : {}),
             };
-        }),
+        }), context),
         styleId: styleId === 'custom' || styles.COUPLE_STYLES.some(style => style.id === styleId) ? styleId : defaults.styleId,
         pairType: input.pairType === 'echo' ? 'echo' : 'joined',
         interaction: own(input, 'interaction') ? text(input.interaction) : defaults.interaction,
@@ -95,8 +122,9 @@ function appearanceReference(value, animal, object) {
 // provider gets the complete prompt; capable NAI gets scene + two identities.
 // Describe the drawing itself. Crop masks, cards and prohibited shapes belong
 // to the UI or the provider's negative channel, never the shared positive scene.
-export function couplePromptParts(value) {
+export function couplePromptParts(value, context = optionalContext()) {
     const settings = normalizeCoupleSettings(value, null);
+    settings.people = couplePresetPeople(settings.people, context);
     const chosen = styles.COUPLE_STYLES.find(style => style.id === settings.styleId);
     const animal = chosen?.group === 'animal';
     const object = chosen?.group === 'craft' || ['fantasy-enamel', 'fantasy-shadow'].includes(chosen?.id);
@@ -177,7 +205,7 @@ export function couplePromptParts(value) {
         })) };
 }
 
-export function couplePrompt(value) { return couplePromptParts(value).prompt; }
+export function couplePrompt(value, context = optionalContext()) { return couplePromptParts(value, context).prompt; }
 
 function openDatabase() {
     if (databasePromise) return databasePromise;
@@ -439,7 +467,7 @@ export async function generateCouple(value, { context = core_context.currentChar
     // background signal after submission. A returned result always enters its origin scope.
     try {
         task_trace.beginStage(trace, 'prompt');
-        const parts = couplePromptParts(settings), prompt = parts.prompt;
+        const parts = couplePromptParts(settings, null), prompt = parts.prompt;
         task_trace.markStage(trace, 'prompt');
         task_trace.beginStage(trace, 'request');
         const result = await cg_core.invokeImageGeneration(prompt, context, {

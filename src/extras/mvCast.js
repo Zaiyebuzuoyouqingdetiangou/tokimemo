@@ -3,6 +3,8 @@
 import * as participants from '../core/participants.js';
 import * as cache from '../core/cache.js';
 import * as looks from '../core/castLooks.js';
+import * as core_text from '../core/text.js';
+import * as image_presets from '../generation/imageAppearancePresets.js';
 
 const list = value => Array.isArray(value) ? value : [];
 const text = value => typeof value === 'string' ? value.trim() : '';
@@ -156,10 +158,50 @@ export function castLabel(record, shot) {
     return (names.join(' · ') || (shot.castUnresolved ? '人物待核对' : '空镜')) + (names.length && shot.castUnresolved ? ' · 对应待核对' : '');
 }
 
-export function visibleAppearance(record, person) {
+function resolvedAppearances(context, roster, visiblePeople = []) {
+    try {
+        if (!context) return new Map();
+        const visibility = new Map(visiblePeople.map(person => [person.id, person.visible || 'full']));
+        // Keep off-screen identities in this lookup: two roster people can use
+        // different aliases for one provider preset and must both fall back.
+        const fullRoster = list(roster).map(person => ({ ...person, visible: visibility.get(person.id) || 'full' }));
+        return image_presets.resolveImageAppearancePresets(context, fullRoster);
+    } catch { return new Map(); }
+}
+
+// Legacy records still bind char/user explicitly. Presets are read for visible
+// roles only, and never replace the locally saved fallback appearance record.
+export function legacyMvLooks(context, visibleRoles = { char: 'full', user: 'full' }) {
+    const original = looks.readCastLooks(context);
+    const names = { char: context?.name2 || '', user: context?.name1 || '' };
+    const roster = Object.entries(names).map(([id, name]) => ({ id, name, visible: visibleRoles[id] || 'full' }));
+    const presets = resolvedAppearances(context, roster, roster);
+    const overrides = {};
+    for (const role of ['char', 'user']) if (Object.hasOwn(visibleRoles, role)) {
+        const preset = presets.get(role);
+        if (preset?.tag || preset?.nl) overrides[role] = preset.tag || preset.nl;
+    }
+    if (!Object.keys(overrides).length) return original;
+    const tag = role => original?.manual ? original?.[role] || '' : looks.lookFromDescription(original?.[role]);
+    return { ...original, char: tag('char'), user: tag('user'), ...overrides, manual: true, resolvedAppearance: true };
+}
+
+export function legacyMvLooksPromptLine(record, context) {
+    if (record?.resolvedAppearance !== true) return looks.castLooksPromptLine(record, context);
+    // This transient preset result has already been resolved locally. Do not
+    // clip its tail through the old combined legacy appearance field limit.
+    return [
+        record.char ? `${core_text.normalizeText(context?.name2, 60) || 'character'}: ${record.char}` : '',
+        record.user ? `${core_text.normalizeText(context?.name1, 60) || 'the other person'}: ${record.user}` : '',
+    ].filter(Boolean).join(' | ');
+}
+
+export function visibleAppearance(record, person, context = null, resolved = null) {
     const row = list(record?.cast?.appearances).find(value => value.participantId === person.id);
-    const value = row?.tag || row?.nl || '';
     if (person.visible === 'silhouette') return '';
+    const presets = resolved || resolvedAppearances(context, record?.cast?.people, [person]);
+    const preset = presets.get(person.id);
+    const value = preset?.tag || preset?.nl || row?.tag || row?.nl || '';
     if (person.visible === 'hands') return value.split(/[,，;；\n。]+/u).filter(part => /skin|肤|手|指|腕|hand|finger|wrist/iu.test(part) && !/hair|eye|头发|眼|瞳/iu.test(part)).join(', ');
     if (person.visible === 'back') return value.split(/[,，;；\n。]+/u).filter(part => !/eye|瞳|眼|face|脸/iu.test(part)).join(', ');
     return value;
@@ -170,21 +212,23 @@ function visualName(record, person) {
     return duplicate ? `${person.name} [${person.id}]` : person.name || person.id;
 }
 
-export function castVisual(record, shot, { appearance = true } = {}) {
+export function castVisual(record, shot, { appearance = true, context = null } = {}) {
     const people = shotPeople(record, shot);
+    const presets = appearance ? resolvedAppearances(context, record?.cast?.people, people) : null;
     const rows = people.map(person => {
         const clothing = list(record?.wardrobe?.characters).find(row => row.participantId === person.id)?.clothing || '';
         const crop = { hands: 'only hands in frame, face and body outside the crop', face: 'face close-up', back: 'back view, face not visible', silhouette: 'silhouette' }[person.visible] || '';
-        return `${visualName(record, person)}: ${[person.position, person.action, crop, appearance ? visibleAppearance(record, person) : '',
+        return `${visualName(record, person)}: ${[person.position, person.action, crop, appearance ? visibleAppearance(record, person, context, presets) : '',
             person.visible !== 'hands' && person.visible !== 'face' && clothing ? `wearing ${clothing}` : ''].filter(Boolean).join('; ')}`;
     });
     const count = shot.castUnresolved ? '' : people.length === 0 ? 'scenery, no humans' : people.length === 1 ? 'one person' : `${people.length} people in the same scene`;
     return [count, ...rows].filter(Boolean).join('\n');
 }
 
-export function castMetadata(record, shot) {
+export function castMetadata(record, shot, context = null) {
     if (!record?.cast || !Array.isArray(shot?.cast)) return null;
     const people = shotPeople(record, shot);
+    const presets = resolvedAppearances(context, record?.cast?.people, people);
     return { castSnapshot: { version: 1, people: people.map(person => ({ id: person.id, name: visualName(record, person), sourceRefs: person.sourceRefs, ...(person.identity ? { identity: person.identity } : {}) })) },
-        characters: people.map(person => ({ participantId: person.id, tag: visibleAppearance(record, person), nl: '' })) };
+        characters: people.map(person => ({ participantId: person.id, tag: visibleAppearance(record, person, context, presets), nl: '', appearanceOverride: true, resolvedAppearance: true })) };
 }

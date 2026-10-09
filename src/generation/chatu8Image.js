@@ -200,6 +200,44 @@ function avatarCharacterPrompt(parts, context, backend) {
     ].join('\n');
 }
 
+// The preview and event sender share this pure boundary. Resolve stable looks
+// locally: never hand an unresolved/ambiguous preset macro to the other plugin.
+export function chatu8SendPreview(prompt, { promptMetadata = null, context = core_context.getContext(), preservePrompt = false, singlePrompt = false, avatarPromptParts = null } = {}) {
+    const visual = core_text.normalizeText(prompt, preservePrompt ? Infinity : 1800);
+    if (!visual) throw chatu8ImageError('CH8_INVALID_ARGS');
+    const metadata = appearance.resolveCgAppearanceMetadata(context, appearance.scopeCgPromptMetadata(visual, promptMetadata), { provider: CHATU8_IMAGE_PROVIDER });
+    const backend = extensionBag(context)?.mode;
+    const avatar = preservePrompt && singlePrompt && !metadata ? avatarPromptParts : null;
+    if (metadata?.flatPromptOverride) return { prompt: metadata.flatPrompt || visual, nl: '' };
+    if (!metadata || preservePrompt) return { prompt: avatarCharacterPrompt(avatar, context, backend) || flatPrompt(visual, metadata, preservePrompt), nl: '' };
+    const characters = metadata.characters;
+    const changed = characters.some(row => row.resolvedAppearance === true);
+    const model = extensionBag(context)?.novelaimode;
+    const automaticCoordinates = extensionBag(context)?.AI_use_coords;
+    const expectedCharacters = metadata.castSnapshot?.people.length ?? metadata.selectedRoles?.length ?? characters.length;
+    const native = backend === 'novelai' && typeof model === 'string' && /nai-diffusion-[45](?:-|$)/.test(model)
+        // Without explicitly enabled automatic placement the upstream builder
+        // sends empty manual centers. Keep a complete flat prompt in that mode.
+        && (automaticCoordinates === true || automaticCoordinates === 'true')
+        && characters.length && characters.length === expectedCharacters && characters.every(row => row.tag || row.nl);
+    // Use the scene channel without an old, generated appearance-bearing flat
+    // prompt. The manually authored complete channel was returned above.
+    const sceneMetadata = { ...metadata, characters: [], flatPrompt: '' };
+    const sceneInput = metadata.promptFormat === 'nai45-tags' ? metadata.sceneTags || visual : visual;
+    const scene = appearance.formattedCgProviderPrompts(sceneInput, sceneMetadata, false, '')?.prompt || sceneInput;
+    if (native) {
+        const field = value => String(value).replace(/[;；]/g, ',').replace(/\|\s*centers\s*:/gi, ', centers ')
+            .replace(/（/g, '(').replace(/）/g, ')').replace(/[\r\n]+/g, ' ').trim();
+        return { prompt: [`Scene Composition: ${field(scene)};`, ...characters.map((row, index) =>
+            `Character ${index + 1} Prompt: ${field(`${row.name}: ${row.tag || row.nl}`)};`)].join('\n'), nl: '' };
+    }
+    if (!changed) return { prompt: flatPrompt(visual, metadata), nl: '' };
+    // No second request is needed for backends without native character slots.
+    // Do not re-normalize the resolved tags through the old 400-character field.
+    const looks = characters.filter(row => row.tag || row.nl).map(row => `${row.name}：${row.tag || row.nl}`).join('\n');
+    return { prompt: looks ? `${scene}\n\n人物外貌（逐人对应，不互换）：\n${looks}` : scene, nl: '' };
+}
+
 export async function generateChatu8Image(prompt, { signal = null, orientation = 'landscape', respectOrientation = false, aspectRatio = '', promptMetadata = null, onProgress = null, onSettled = null, targetKey = '', context = core_context.getContext(), preservePrompt = false, singlePrompt = false, avatarPromptParts = null } = {}) {
     if (signal?.aborted) throw chatu8ImageError('CH8_ABORTED');
     const state = chatu8ImageState(context);
@@ -208,14 +246,12 @@ export async function generateChatu8Image(prompt, { signal = null, orientation =
     if (pendingGenerations.has(reservation)) throw chatu8ImageError('CH8_TARGET_BUSY');
     // 智绘姬按自己的后端能力并发或排队；这里只阻止同一目标重复提交。
     let scene;
-    try { scene = flatPrompt(prompt, promptMetadata, preservePrompt); }
+    try { scene = chatu8SendPreview(prompt, { promptMetadata, context, preservePrompt, singlePrompt, avatarPromptParts }).prompt; }
     catch (error) {
         if (ownErrors.has(error) || error?.safeToDisplay) throw error;
         throw chatu8ImageError('CH8_INVALID_ARGS');
     }
     const avatar = preservePrompt && singlePrompt && !promptMetadata ? avatarPromptParts : null;
-    const separated = avatarCharacterPrompt(avatar, context, state.backend);
-    if (separated) scene = separated;
     // This is the consumer's documented extra-negative event field. It appends
     // to the user's configured negative prompt in these four supported modes.
     const negative = ['novelai', 'sd', 'comfyui', 'runninghub'].includes(state.backend)

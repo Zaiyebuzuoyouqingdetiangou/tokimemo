@@ -2,6 +2,7 @@
 // No third-party implementation, settings, credentials or DOM are accessed.
 import * as image_patch from '../core/cgImagePatch.js';
 import * as core_text from '../core/text.js';
+import * as core_context from '../core/context.js';
 import * as appearance from './cgAppearance.js';
 
 export const BAIBAI_IMAGE_PROVIDER = 'baibai-image';
@@ -67,17 +68,15 @@ function publicFailure(error) {
 export function baiBaiImagePendingCount() { return pendingGenerations.size; }
 export function isBaiBaiImageTargetPending(targetKey) { return !!targetKey && pendingGenerations.has(targetKey); }
 
-export async function generateBaiBaiImage(prompt, { signal = null, orientation = 'landscape', characterName = '', promptMetadata = null, onProgress = null, onSettled = null, targetKey = '', seed = 0, singlePrompt = false, preservePrompt = false, avatarPromptParts = null } = {}) {
-    if (signal?.aborted) throw baiBaiImageError('BBI_ABORTED');
-    const state = baiBaiImageState();
-    if (!state.available) throw baiBaiImageError(state.code);
-    const reservation = typeof targetKey === 'string' && targetKey ? targetKey : Symbol('image');
-    if (pendingGenerations.has(reservation)) throw baiBaiImageError('BBI_TARGET_BUSY');
-    // 柏宝绘负责后端并发与排队；这里只保留同一目标的去重。
+// The editor and sender use identical resolved scene/character channels.
+// Reading the selected provider's public character library never generates an image.
+export function baiBaiSendPreview(prompt, { promptMetadata = null, context = core_context.getContext(), state = baiBaiImageState(), singlePrompt = false, preservePrompt = false, avatarPromptParts = null } = {}) {
     const visual = core_text.normalizeText(prompt, preservePrompt ? Infinity : 1800);
     if (!visual) throw baiBaiImageError('BBI_INVALID_ARGS');
     // Freeze grouping before the provider awaits; its default otherwise reads the new chat at save time.
-    const metadata = appearance.normalizeCgPromptMetadata(promptMetadata);
+    const metadata = appearance.resolveCgAppearanceMetadata(context,
+        appearance.scopeCgPromptMetadata(visual, promptMetadata), { provider: BAIBAI_IMAGE_PROVIDER, api: state.api });
+    if (metadata?.flatPromptOverride) return { prompt: metadata.flatPrompt || visual, nl: '' };
     const fullVisual = preservePrompt && !metadata ? visual : appearance.cgPreparedVisualPrompt(visual, metadata);
     let primaryPrompt = !state.supportsCharacters && metadata
         ? metadata.flatPrompt || fullVisual : metadata?.sceneTags || visual;
@@ -95,15 +94,11 @@ export async function generateBaiBaiImage(prompt, { signal = null, orientation =
         // tags or two disconnected single-person tag lists.
         prompt: primaryPrompt,
         nl: fullVisual,
-        size: orientation === 'portrait' ? 'portrait' : 'landscape',
-        save: true, character: core_text.normalizeText(characterName, 120) || '心迹回廊 CG',
     };
     if (state.supportsCharacters && metadata?.characters?.length) {
         request.characters = metadata.characters.filter(character => character.tag || (metadata.castSnapshot && character.nl))
             .map(({ name, tag, nl }) => ({ name, tag, ...(nl ? { nl } : {}) }));
     }
-    // 柏宝绘公开 API v1：seed 为正整数时按它出图，省略时按用户自己的柏宝绘设置。
-    if (Number.isInteger(seed) && seed > 0) request.seed = seed;
     const formatted = appearance.formattedCgProviderPrompts(visual, metadata, state.supportsCharacters, state.backend);
     if (formatted) {
         request.prompt = formatted.prompt; request.nl = formatted.nl;
@@ -145,6 +140,23 @@ export async function generateBaiBaiImage(prompt, { signal = null, orientation =
         && typeof avatarPromptParts?.negative === 'string' && avatarPromptParts.negative.trim()) {
         request.negative = avatarPromptParts.negative.trim();
     }
+    return request;
+}
+
+export async function generateBaiBaiImage(prompt, { signal = null, orientation = 'landscape', characterName = '', promptMetadata = null, onProgress = null, onSettled = null, targetKey = '', seed = 0, singlePrompt = false, preservePrompt = false, avatarPromptParts = null, context = core_context.getContext() } = {}) {
+    if (signal?.aborted) throw baiBaiImageError('BBI_ABORTED');
+    const state = baiBaiImageState();
+    if (!state.available) throw baiBaiImageError(state.code);
+    const reservation = typeof targetKey === 'string' && targetKey ? targetKey : Symbol('image');
+    if (pendingGenerations.has(reservation)) throw baiBaiImageError('BBI_TARGET_BUSY');
+    // 柏宝绘负责后端并发与排队；这里只保留同一目标的去重。
+    const request = {
+        ...baiBaiSendPreview(prompt, { promptMetadata, context, state, singlePrompt, preservePrompt, avatarPromptParts }),
+        size: orientation === 'portrait' ? 'portrait' : 'landscape',
+        save: true, character: core_text.normalizeText(characterName, 120) || '心迹回廊 CG',
+    };
+    // Positive seeds override only this request; otherwise keep the provider's settings.
+    if (Number.isInteger(seed) && seed > 0) request.seed = seed;
     const controller = new AbortController();
     let timer;
     let stopped = false;
