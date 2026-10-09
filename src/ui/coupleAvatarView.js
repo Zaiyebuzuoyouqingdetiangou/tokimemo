@@ -21,6 +21,7 @@ const jobs = new Map();
 // Derived images stay in memory only. The original and editable crop settings
 // remain the persisted source of truth; weak keys release closed views' images.
 const previewImages = new WeakMap();
+const appearanceReads = new WeakMap();
 let active = null, modal = null, sequence = 0;
 const settingFields = ['interaction', 'interactionDetail', 'clothing', 'background', 'direction', 'customStyle'];
 const HISTORY_PAGE_SIZE = 6; // Display page only; stored records are never capped.
@@ -78,36 +79,97 @@ function queueDraft(view) {
     }, 300);
 }
 
+function appearanceStatus(view, index, message) {
+    if (!current(view)) return;
+    report(view, message);
+    const node = view.root.querySelector(`[data-pair-appearance-status="${index}"]`);
+    if (node) node.textContent = message;
+}
+function cancelAppearanceReads(view, index = null, message = '') {
+    const reads = appearanceReads.get(view);
+    if (!reads) return;
+    for (const [side, task] of [...reads]) {
+        if (index !== null && side !== index) continue;
+        task.controller.abort(); task.cleanup();
+        if (message) appearanceStatus(view, side, message);
+    }
+}
 async function refreshAppearance(view, index) {
     if (!current(view) || ![0, 1].includes(index)) return;
-    const row = () => {
-        const person = { ...view.settings.people[index] };
+    let reads = appearanceReads.get(view);
+    if (!reads) { reads = new Map(); appearanceReads.set(view, reads); }
+    if (reads.has(index)) { cancelAppearanceReads(view, index, '已取消读取，原内容已保留。'); return; }
+    const row = side => {
+        const person = { ...view.settings.people[side] };
         for (const key of ['name', 'appearance']) {
-            const input = view.root.querySelector(`[data-pair-person="${index}"][data-pair-key="${key}"]`);
+            const input = view.root.querySelector(`[data-pair-person="${side}"][data-pair-key="${key}"]`);
             if (input) person[key] = input.value;
         }
         return person;
     };
-    const selected = row(), signature = JSON.stringify(selected);
-    const settings = { ...view.settings, people: view.settings.people.map((person, i) => i === index ? selected : person) };
-    let fresh = appearance.readCoupleAppearance(settings, index, core_context.currentCharacterGuard());
-    if (!fresh) { report(view, '没有找到对应人物的可用外貌，原内容已保留。可以直接修改外貌框。'); return; }
-    if (selected.appearance?.trim() && !await overlay.confirmExplicitAction('重新读取这位人物的外貌？',
-        '会替换这一侧的外貌草稿；另一侧、历史头像和已保存的人设不变。')) return;
-    if (!current(view) || signature !== JSON.stringify(row())) return;
-    // A confirmation may be asynchronous on some hosts. Resolve current
-    // sources and cast collisions again without changing the other person.
-    fresh = appearance.readCoupleAppearance({ ...view.settings,
-        people: view.settings.people.map((person, i) => i === index ? selected : person) }, index, core_context.currentCharacterGuard());
-    if (!fresh) { report(view, '外貌来源已变化，原内容已保留。'); return; }
-    // Apply one row without normalizing against live presets for both people.
-    // saveCoupleSettings uses contextless normalization and preserves history.
-    clearTimeout(view.draftTimer);
-    view.settings = { ...view.settings, people: view.settings.people.map((person, i) => i === index ? fresh.person : person) };
-    const input = view.root.querySelector(`[data-pair-person="${index}"][data-pair-key="appearance"]`);
-    if (input) input.value = fresh.person.appearance;
-    const result = await couple.saveCoupleSettings(view.scope, structuredClone(view.settings));
-    report(view, result?.durable === false ? '外貌已更新，暂留本页；本机保存未确认。' : '已重新读取这一侧的外貌。');
+    const sourceSettings = () => ({ ...view.settings, people: view.settings.people.map((_, side) => row(side)) });
+    const context = core_context.currentCharacterGuard();
+    const selected = row(index), signature = JSON.stringify(selected);
+    const scope = chat_avatars.chatAvatarScope(context);
+    const prepared = appearance.prepareCoupleAppearance(sourceSettings(), index, context);
+    if (!prepared || prepared.kind === 'missing') {
+        appearanceStatus(view, index, '没有找到对应人物的人设或可用外貌，原内容已保留。'); return;
+    }
+    const buttonNode = view.root.querySelector(`[data-pair-action="refresh-appearance"][data-pair-side="${index}"]`);
+    const controller = new AbortController();
+    const task = { controller, timer: null, cleanup: () => {
+        clearInterval(task.timer);
+        if (reads.get(index) !== task) return;
+        reads.delete(index);
+        if (buttonNode) { buttonNode.textContent = '重新读取外貌'; buttonNode.removeAttribute('aria-busy'); }
+    } };
+    const stillCurrent = (checkSource = false) => {
+        if (reads.get(index) !== task || controller.signal.aborted || !current(view) || signature !== JSON.stringify(row(index))) return false;
+        try {
+            const live = core_context.currentCharacterGuard();
+            return chat_avatars.chatAvatarScope(live) === scope && (!checkSource
+                || appearance.prepareCoupleAppearance(sourceSettings(), index, live)?.signature === prepared.signature);
+        } catch { return false; }
+    };
+    reads.set(index, task);
+    if (buttonNode) { buttonNode.textContent = '取消读取'; buttonNode.setAttribute('aria-busy', 'true'); }
+    appearanceStatus(view, index, prepared.kind === 'persona' ? '正在通过文本模型整理最新人设…可再次点击取消。' : '正在读取外貌…');
+    // Stop queued/in-flight extraction when the page, persona or edited field
+    // changes. The final source comparison also catches provider/preset edits.
+    task.timer = setInterval(() => {
+        if (!stillCurrent(true)) cancelAppearanceReads(view, index, '人物、来源或外貌已变化，本次读取已取消。');
+    }, 250);
+    try {
+        const fresh = await appearance.refreshCoupleAppearance(prepared, {
+            context, signal: controller.signal, taskKey: `couple-appearance:${view.scope}:${index}`,
+        });
+        if (!stillCurrent(true)) {
+            if (!controller.signal.aborted) appearanceStatus(view, index, '人物、来源或外貌已变化，原内容已保留。');
+            return;
+        }
+        if (!fresh) { appearanceStatus(view, index, '没有找到可用外貌，原内容已保留。'); return; }
+        if (fresh.source === 'saved' && fresh.person.appearance === String(selected.appearance || '').trim()) {
+            appearanceStatus(view, index, '没有读到对应人设，原内容已保留。'); return;
+        }
+        clearTimeout(view.draftTimer);
+        view.settings = { ...view.settings, people: view.settings.people.map((person, side) => side === index ? fresh.person : person) };
+        const input = view.root.querySelector(`[data-pair-person="${index}"][data-pair-key="appearance"]`);
+        if (input) input.value = fresh.person.appearance;
+        // Stop monitoring before applying our own field update. Preserve all
+        // other current draft fields and never write card/persona/castLooks.
+        task.cleanup();
+        const result = await couple.saveCoupleSettings(view.scope, structuredClone(view.settings));
+        if (reads.has(index) || JSON.stringify(row(index)) !== JSON.stringify(fresh.person)) return;
+        const message = fresh.source === 'preset' ? '已读取当前生图渠道的人物预设。'
+            : fresh.source === 'persona' ? '已从最新人设重新整理外貌。'
+                : '没有读到对应人设，已沿用保存的外貌。';
+        appearanceStatus(view, index, result?.durable === false ? `${message} 暂留本页，本机保存未确认。` : message);
+    } catch (error) {
+        if (!controller.signal.aborted) {
+            const summary = text.safeErrorSummary(error) || '读取没有完成。';
+            appearanceStatus(view, index, summary.includes('原内容已保留') ? summary : `${summary} 原内容已保留。`);
+        }
+    } finally { task.cleanup(); }
 }
 
 export function closeCoupleDialog({ restoreFocus = true } = {}) {
@@ -121,6 +183,7 @@ export function closeCoupleDialog({ restoreFocus = true } = {}) {
 }
 export function disposeCoupleAvatar() {
     if (routes.workspace.route === couple.COUPLE_MODE && active?.root?.isConnected && current(active)) return;
+    cancelAppearanceReads(active);
     active?.historyObserver?.disconnect();
     closeCoupleDialog({ restoreFocus: false }); active = null;
 }
@@ -306,12 +369,13 @@ function formHtml(view) {
             <label class="rmt-pair-field" data-pair-interaction-custom hidden><span>写下你们的互动</span><textarea data-pair-field="interactionDetail" placeholder="可以选一条随机灵感，再改成你喜欢的动作与表情。"></textarea></label>
         </div>
         <label class="rmt-pair-field"><span>这一对的小心思 <small>选填</small></span><textarea data-pair-field="direction" placeholder="比如：一个忍着笑，一个假装生气；共用一条围巾。"></textarea></label>
-        <details class="rmt-pair-options"><summary>外貌、衣着与背景 <small>选填</small></summary><div>${[0, 1].map(i => `<div><label class="rmt-pair-field"><span>${i ? '右边' : '左边'}人物外貌</span><textarea data-pair-person="${i}" data-pair-key="appearance" placeholder="沿用已有外貌，也可以修改或留空。"></textarea></label>${button('refresh-appearance', '重新读取外貌', `data-pair-side="${i}" aria-label="重新读取${i ? '右边' : '左边'}人物外貌"`)}</div>`).join('')}<label class="rmt-pair-field"><span>衣着</span><input data-pair-field="clothing" placeholder="例如：同款不同色的卫衣"></label><label class="rmt-pair-field"><span>背景</span><input data-pair-field="background" placeholder="例如：左边蓝色，右边粉色"></label>${providerNote}</div></details>
+        <details class="rmt-pair-options"><summary>外貌、衣着与背景 <small>选填</small></summary><div><p class="rmt-pair-note">无人物预设时，会用文本 API 整理当前人设。</p>${[0, 1].map(i => `<div><label class="rmt-pair-field"><span>${i ? '右边' : '左边'}人物外貌</span><textarea data-pair-person="${i}" data-pair-key="appearance" placeholder="沿用已有外貌，也可以修改或留空。"></textarea></label>${button('refresh-appearance', '重新读取外貌', `data-pair-side="${i}" aria-label="重新读取${i ? '右边' : '左边'}人物外貌"`)}<small data-pair-appearance-status="${i}" role="status" aria-live="polite"></small></div>`).join('')}<label class="rmt-pair-field"><span>衣着</span><input data-pair-field="clothing" placeholder="例如：同款不同色的卫衣"></label><label class="rmt-pair-field"><span>背景</span><input data-pair-field="background" placeholder="例如：左边蓝色，右边粉色"></label>${providerNote}</div></details>
         <div><div data-pair-compose-jobs><div class="rmt-pair-jobs" data-pair-jobs></div></div><p class="rmt-pair-status" data-pair-compose-status role="status" aria-live="polite"></p><div class="rmt-pair-create"><button type="submit" class="rmt-pair-primary">生成一对头像</button>${button('import', '导入图片')}</div><p class="rmt-pair-note">一张原图生成一对，完成后自动收进历史。导入已有图片也能裁切。</p></div>
     </form>`;
 }
 
 export async function openCoupleAvatar() {
+    cancelAppearanceReads(active);
     active?.historyObserver?.disconnect();
     closeCoupleDialog({ restoreFocus: false });
     room.stopRoomClock(); phone.stopPhoneClock(); ensureStyles();
@@ -348,6 +412,7 @@ export async function openCoupleAvatar() {
 
 function bindView(view) {
     view.root.addEventListener('input', event => {
+        if (event.target.matches('[data-pair-person]')) cancelAppearanceReads(view, Number(event.target.dataset.pairPerson), '外貌已编辑，本次读取已取消。');
         if (event.target.matches('[data-pair-field],[data-pair-person]')) queueDraft(view);
     });
     view.root.addEventListener('change', event => {

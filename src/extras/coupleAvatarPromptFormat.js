@@ -1,6 +1,7 @@
 // Locally authored tag recipes. These are a second rendering of the existing
 // choices, not a prose-to-tag translator. User text and identity references are
 // kept intact; no model request, parsing of prose, or preset lookup occurs here.
+import * as subject_details from './coupleAvatarSubjectDetails.js';
 const STYLE_TAGS = Object.freeze({
     'chibi-dumpling': 'chibi, two-head-tall proportions, oversized head, tiny torso, stubby arms and feet, rounded dumpling shapes, simple facial features, minimal facial shading',
     'chibi-three-head': 'chibi, three-head-tall proportions, small clothed body, expressive little gestures, recognizable clothing details, balanced miniature proportions',
@@ -221,9 +222,13 @@ function animalGestureTags(chosen) {
     return 'forepaw gestures, animal muzzle interaction';
 }
 
-export function coupleAvatarTagParts({ settings, chosen, animal, object, subject, fullFigure, appearances, negative }) {
+export function coupleAvatarTagParts({ settings, chosen, animal, object, subject, fullFigure, appearances, negative,
+    covered = [false, false], clothing = { people: ['', ''] }, interactionDirection = null }) {
     const [interaction, leftAction, rightAction] = interactionTags(settings, chosen, animal);
-    const rendering = chosen ? STYLE_TAGS[chosen.id] || chosen.prompt : settings.customStyle;
+    const originalRendering = chosen ? STYLE_TAGS[chosen.id] || chosen.prompt : settings.customStyle;
+    const anyCovered = covered.some(Boolean);
+    const rendering = subject_details.coupleVisibleRecipe(originalRendering, anyCovered && !!chosen);
+    const ownedInteraction = Object.prototype.hasOwnProperty.call(INTERACTION_TAGS, settings.interaction);
     const framing = !chosen ? '' : fullFigure
         ? 'full body, complete stylized figures, selected body proportions, readable faces, connected limbs, large subjects within each half'
         : 'head-and-shoulders or upper-body portraits, large readable faces, visible shoulders and clothing, connected gesture limbs';
@@ -235,7 +240,8 @@ export function coupleAvatarTagParts({ settings, chosen, animal, object, subject
         rendering || 'illustration', form, framing,
         `two distinct ${subject}s, side by side, horizontal paired portrait, first subject at left quarter, second subject at right quarter, balanced subject scale`,
         'continuous edge-to-edge background, continuous center and corners, clear subject separation, quiet background detail, readable individual features, gestures within own half',
-        interaction,
+        subject_details.coupleVisibleRecipe(interaction, anyCovered && ownedInteraction),
+        interactionDirection?.tags?.scene,
         settings.pairType === 'echo' ? 'complementary individual gestures, coordinated colors and light' : 'shared motif connecting subjects across center',
         animal && settings.clothing ? 'small wearable accents, animal-adapted clothing' : '',
         settings.clothing, settings.background, settings.direction,
@@ -244,7 +250,11 @@ export function coupleAvatarTagParts({ settings, chosen, animal, object, subject
         name: `${index ? '右边' : '左边'} · ${person.name || (index ? '人物二' : '人物一')}`,
         tag: tags([
             index ? 'right side, centered at right quarter' : 'left side, centered at left quarter',
-            appearances[index], rendering || subject, index ? rightAction : leftAction,
+            appearances[index], subject_details.coupleVisibleRecipe(originalRendering, covered[index] && !!chosen) || subject,
+            subject_details.coupleVisibleRecipe(index ? rightAction : leftAction, covered[index] && ownedInteraction),
+            interactionDirection?.tags?.roles[index],
+            subject_details.coupleCoveredEyeGuidance(covered[index], true),
+            clothing.people[index],
             animal ? animalGestureTags(chosen) : '',
         ]),
         ...(typeof person.presetNegative === 'string' && person.presetNegative.length ? { negative: person.presetNegative } : {}),

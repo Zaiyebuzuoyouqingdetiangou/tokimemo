@@ -12,6 +12,8 @@ import * as task_trace from '../core/taskTrace.js';
 import * as runtime from '../core/state.js';
 import * as styles from './coupleAvatarStyles.js';
 import * as prompt_format from './coupleAvatarPromptFormat.js';
+import * as subject_details from './coupleAvatarSubjectDetails.js';
+import * as interaction_direction from './coupleAvatarInteractionDirection.js';
 
 export const COUPLE_MODE = 'coupleAvatar';
 const DATABASE = 'heartbeatMemoriesCoupleAvatars';
@@ -146,9 +148,16 @@ export function couplePromptParts(value, context = optionalContext()) {
     const object = chosen?.group === 'craft' || ['fantasy-enamel', 'fantasy-shadow'].includes(chosen?.id);
     const subject = animal ? 'animal' : object ? 'crafted character' : 'character';
     const resolvedInteraction = styles.coupleInteraction(settings.interaction, settings.interactionDetail);
-    const interaction = resolvedInteraction.prompt;
-    const rendering = chosen?.prompt || settings.customStyle;
-    const construction = styles.coupleStyleConstruction(chosen);
+    const detailed = ['nai5-natural', 'nai45-tags'].includes(promptFormat);
+    const covered = settings.people.map(person => detailed && subject_details.coupleEyesCovered(person.appearance));
+    const anyCovered = covered.some(Boolean);
+    const ownedInteraction = styles.INTERACTION_PRESETS.some(row => row.label === settings.interaction);
+    const interaction = subject_details.coupleVisibleRecipe(resolvedInteraction.prompt, anyCovered && ownedInteraction);
+    const originalRendering = chosen?.prompt || settings.customStyle;
+    const rendering = subject_details.coupleVisibleRecipe(originalRendering, anyCovered && !!chosen);
+    const construction = subject_details.coupleVisibleRecipe(styles.coupleStyleConstruction(chosen), anyCovered);
+    const relation = detailed ? interaction_direction.coupleInteractionDirection(settings) : { scene: '', roles: ['', ''] };
+    const clothing = subject_details.coupleClothingParts(settings.clothing, settings.people);
     // Explicit NAI 5 drafts get source-bound identity guidance in the actual
     // native actor channels too. Formatless historical prompts stay unchanged.
     const identityRendering = promptFormat === 'nai5-natural' ? styles.coupleStyleIdentityRendering(chosen) : '';
@@ -165,11 +174,14 @@ export function couplePromptParts(value, context = optionalContext()) {
         ? 'Two complete animals, species-appropriate animal anatomy, heads, muzzles or beaks, bodies, limbs and tails. Paws, wings or flippers perform the gestures. Each animal has its own eye color, fur markings and small signature accessories derived from its identity.'
         : object ? 'Two crafted figures whose entire faces and bodies are made from the selected material, with its physical texture and construction.'
             : 'The selected medium, proportions, linework and shading define the faces, bodies, clothing and background.';
-    const actions = resolvedInteraction.roles;
+    const actions = resolvedInteraction.roles.map((action, index) => subject_details.coupleVisibleRecipe(action, covered[index] && ownedInteraction));
+    const personClothing = index => detailed && clothing.people[index]
+        ? `${animal ? 'Wearable accents adapted to this animal' : 'Clothing for this subject'}: ${clothing.people[index]}. Keep its specified colors, garment shape and accessories visible in the selected medium and proportions.` : '';
+    const personDetails = index => [relation.roles[index], subject_details.coupleCoveredEyeGuidance(covered[index]), personClothing(index)].filter(Boolean).join(' ');
     const people = settings.people.map((person, index) => {
         const side = index === 0 ? 'LEFT' : 'RIGHT';
         const reference = appearanceReference(person.appearance, animal, object);
-        return `${side} HALF ${subject}: ${person.name || (index === 0 ? 'first character' : 'second character')}${reference ? `; ${animal || object ? 'individual identity in the selected form' : 'appearance'}: ${reference}` : ''}. Action: ${actions[index]}.`;
+        return `${side} HALF ${subject}: ${person.name || (index === 0 ? 'first character' : 'second character')}${reference ? `; ${animal || object ? 'individual identity in the selected form' : 'appearance'}: ${reference}` : ''}. Action: ${actions[index]}.${personDetails(index) ? ` ${personDetails(index)}` : ''}`;
     });
     const styleLead = rendering ? `Rendering style: ${rendering}.` : '';
     const composition = [
@@ -180,8 +192,11 @@ export function couplePromptParts(value, context = optionalContext()) {
         'A continuous background in the selected medium fills the entire image from edge to edge, including the center and all four corners. Faces and gestures sit comfortably within their own half, surrounded by the same continuous background.',
         `Interaction: ${interaction && interaction !== '交给灵感' ? interaction : DEFAULT_INTERACTION_PROMPT}.`,
         `Action roles: LEFT — ${actions[0]}; RIGHT — ${actions[1]}. Adapt gestures to the chosen body form; explicit user directions take precedence.`,
+        relation.scene,
+        anyCovered ? 'Render eye details only for the subject whose eyes are visible. Preserve the other subject\'s supplied eye covering; show their emotion through mouth, head angle and gesture.' : '',
         settings.direction ? `Direction: ${settings.direction}.` : '',
         settings.clothing ? `${animal ? 'Small wearable accents adapted for animal bodies' : 'Clothing in the selected rendering style'}: ${settings.clothing}.` : '',
+        detailed && settings.clothing ? 'The supplied clothing takes precedence over default costume suggestions. Bind left/right or named garments only to their owner; carry shared clothing to both subjects.' : '',
         settings.background ? `Background: ${settings.background}.` : '',
         settings.pairType === 'echo'
             ? 'Complementary individual gestures, coordinated colors and light, continuous background.'
@@ -189,12 +204,13 @@ export function couplePromptParts(value, context = optionalContext()) {
         'Preserve each individual\'s own face or muzzle shape, eyes, hair silhouette or markings, clothing and accessories. Shared traits remain shared; expressions and reactions belong to each subject. Express identity colors as tones and shapes when the selected medium is monochrome.',
     ].filter(Boolean);
     const negative = [
-        'outer white frame, panel border, central white gutter, split screen, rounded portrait cards, circular picture frames, letterboxing, vignette, fading to blank edges, duplicate character, cloned face, mirrored pose, text, watermark',
+        `outer white frame, panel border, central white gutter, split screen, rounded portrait cards, circular picture frames, letterboxing, vignette, fading to blank edges, duplicate character, cloned face, ${detailed ? 'identical duplicate pose' : 'mirrored pose'}, text, watermark`,
         animal ? 'human face, human body, human hands, person wearing animal ears, person holding an animal' : '',
     ].filter(Boolean).join(', ');
     if (promptFormat === 'nai45-tags') return prompt_format.coupleAvatarTagParts({
         settings, chosen, animal, object, subject, fullFigure, negative,
         appearances: settings.people.map(person => appearanceReference(person.appearance, animal, object)),
+        covered, clothing, interactionDirection: relation,
     });
     // BaiBai NAI has documented tag + natural-language fields. Keep each
     // literal appearance at the start of its own tag list (including count
@@ -207,16 +223,19 @@ export function couplePromptParts(value, context = optionalContext()) {
             'One continuous horizontal paired portrait, first subject centered at the left quarter, second at the right quarter, matching scale. Background fills the image edge to edge, through the center and all four corners. Faces and gestures stay comfortably inside their own half.',
             animal || object ? form : '',
             `Interaction: ${interaction && interaction !== '交给灵感' ? interaction : DEFAULT_INTERACTION_PROMPT}.`,
+            relation.scene,
+            anyCovered ? 'Eye rendering applies only to visible eyes. Keep each supplied eye covering in place; use the covered subject\'s mouth and head angle for expression.' : '',
             settings.pairType === 'echo' ? 'Coordinated colors and light, complementary individual gestures.' : 'A shared motif connects the two subjects.',
             'Render both subjects entirely in the selected medium. For a monochrome medium, identity colors become tones. Adapt gestures to the chosen body form.',
             settings.clothing ? `Clothing or small wearable accents: ${settings.clothing}.` : '',
+            detailed && settings.clothing ? 'Use the supplied clothing in preference to default costumes, preserving each garment\'s assigned wearer, colors and shape.' : '',
             settings.background ? `Background: ${settings.background}.` : '',
             settings.direction ? `User direction takes precedence: ${settings.direction}.` : '',
         ].filter(Boolean).join('\n'),
         characters: settings.people.map((person, index) => ({
             name: `${index ? '右边' : '左边'} · ${person.name || (index ? '人物二' : '人物一')}`,
-            tag: [appearanceReference(person.appearance, animal, object), rendering || subject].filter(Boolean).join(', '),
-            nl: [`On the ${index ? 'right' : 'left'}, ${actions[index]}.`, identityRendering].filter(Boolean).join(' '),
+            tag: [appearanceReference(person.appearance, animal, object), subject_details.coupleVisibleRecipe(originalRendering, covered[index] && !!chosen) || subject].filter(Boolean).join(', '),
+            nl: [`On the ${index ? 'right' : 'left'}, ${actions[index]}.`, personDetails(index), identityRendering].filter(Boolean).join(' '),
             ...(text(person.presetNegative) ? { negative: text(person.presetNegative) } : {}),
         })),
     };
@@ -227,7 +246,8 @@ export function couplePromptParts(value, context = optionalContext()) {
         ...(promptFormat ? { promptFormat } : {}),
         characters: settings.people.map((person, index) => ({
             name: `${index ? '右边' : '左边'} · ${person.name || (index ? '人物二' : '人物一')}`,
-            tag: [people[index], styleLead, construction].filter(Boolean).join('\n'),
+            tag: [people[index], chosen && anyCovered ? `Rendering style: ${subject_details.coupleVisibleRecipe(originalRendering, covered[index])}.` : styleLead,
+                subject_details.coupleVisibleRecipe(styles.coupleStyleConstruction(chosen), covered[index])].filter(Boolean).join('\n'),
             ...(text(person.presetNegative) ? { negative: text(person.presetNegative) } : {}),
         })) };
 }
