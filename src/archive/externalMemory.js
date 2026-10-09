@@ -132,6 +132,10 @@ export function migrateDerivedCacheRevision(cache, oldMemoryBank, newMemoryBank)
         // Incremental archive updates never rewrite/delete an existing Mxxx record. Therefore
         // every previously validated sourceMemoryIds/sourceMemoryAnchor pair remains valid.
         // Only the revision fence changes; full rebuilds still discard all derived caches.
+        const oldChatId = core_context.comparableChatId(oldMemoryBank?.chatId);
+        const newChatId = core_context.comparableChatId(newMemoryBank?.chatId);
+        if (oldChatId && newChatId && core_context.comparableChatId(session.chatId) === oldChatId
+            && session.archiveRevision === oldRevision && session.readableProgress?.complete !== false) session.chatId = newChatId;
         if (!session.archiveRevision || session.archiveRevision === oldRevision) session.archiveRevision = newRevision;
         if (mode === core_constants.MODE.ROOM && session.lifePlan && (!session.lifePlan.archiveRevision || session.lifePlan.archiveRevision === oldRevision)) {
             session.lifePlan.archiveRevision = newRevision;

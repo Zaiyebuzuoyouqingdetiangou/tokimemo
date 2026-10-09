@@ -1,3 +1,4 @@
+import * as character_scene from '../generation/cgCharacterScene.js';
 import * as cg_format_ui from './cgFormatControl.js';
 import * as cg_format from '../core/cgPromptFormat.js';
 import * as settings from '../core/settings.js';
@@ -66,8 +67,28 @@ function busyEditor(active) {
     if (!editor) return;
     editor.busy = active;
     editor.element.setAttribute('aria-busy', String(active));
-    for (const field of editor.element.querySelectorAll('[data-rmt-cg-prompt-input], [data-rmt-cg-scene-tags], [data-rmt-cg-tag-input], [data-rmt-cg-role-selected], [data-rmt-cg-flat-prompt], [data-rmt-cg-editor-format], [data-rmt-cg-person-selected], [data-rmt-cg-person-name], [data-rmt-cg-person-tag], [data-rmt-cg-person-nl]')) field.disabled = active;
+    for (const field of editor.element.querySelectorAll('[data-rmt-cg-prompt-input], [data-rmt-cg-scene-tags], [data-rmt-cg-tag-input], [data-rmt-cg-role-selected], [data-rmt-cg-flat-prompt], [data-rmt-cg-editor-format], [data-rmt-cg-person-selected], [data-rmt-cg-person-name], [data-rmt-cg-person-tag], [data-rmt-cg-person-nl], [data-rmt-cg-scene-action]')) field.disabled = active;
     for (const button of editor.element.querySelectorAll('[data-rmt-cg-prompt-action="reconceive"], [data-rmt-cg-prompt-action="draw"], [data-rmt-cg-prompt-action="clear"], [data-rmt-cg-prompt-action="retry"], [data-rmt-cg-prompt-action="save-looks"], [data-rmt-cg-prompt-action="restore-draft"], [data-rmt-cg-prompt-action="add-person"], [data-rmt-cg-prompt-action="add-user"], [data-rmt-cg-prompt-action="use-current-cast"], [data-rmt-cg-prompt-action="select-sources"], [data-rmt-cg-history-view], [data-rmt-cg-history-restore]')) button.disabled = active;
+}
+
+function editorCharacterScene(current, key, index = key) {
+    const row = current.characterScenes?.[key] || {};
+    const field = current.element.querySelector(`[data-rmt-cg-scene-action="${index}"]`);
+    const previous = character_scene.cgCharacterSceneValue(row, current.promptFormat);
+    if (!field || field.value === previous) return character_scene.cgCharacterSceneFields(row);
+    const selected = current.promptFormat === 'nai45-tags' ? 'sceneTag' : 'sceneNl';
+    const next = field.value ? { [selected]: field.value } : {};
+    current.characterScenes = { ...current.characterScenes, [key]: next };
+    return next;
+}
+
+function bindCharacterSceneField(current, field, key, index = key) {
+    if (!field) return;
+    field.addEventListener('input', () => {
+        if (current.busy) return;
+        editorCharacterScene(current, key, index);
+        invalidateFlatPrompt(current); updatePreparedPreview(current);
+    });
 }
 
 function readParticipantFields(current) {
@@ -116,6 +137,7 @@ function renderParticipantFields(current) {
       <small>${core_text.esc(person.identity === 'user' && !person.sourceRefs.length ? '当前用户人设' : person.sourceRefs.length ? person.sourceRefs.map(ref => `${ref.world} · ${ref.title || ref.uid}`).join('；') : '手动补充的人物')}</small>
       <label>外貌 tag<textarea data-rmt-cg-person-tag="${index}" rows="2" ${editorAppearanceSource(current, person.id).presetAppearance || editorAppearanceSource(current, person.id).resolvedAppearance ? '' : `maxlength="${appearance.CG_APPEARANCE_TAG_LIMIT}"`} aria-label="人物 ${index + 1} 外貌 tag" placeholder="未知可留空，不会移除已勾选人物"></textarea></label>
       <label>外貌描述<textarea data-rmt-cg-person-nl="${index}" rows="2" ${editorAppearanceSource(current, person.id).presetAppearance || editorAppearanceSource(current, person.id).resolvedAppearance ? '' : `maxlength="${appearance.CG_APPEARANCE_TAG_LIMIT}"`} aria-label="人物 ${index + 1} 外貌描述" placeholder="保留已提取的外貌描述，也可以编辑"></textarea></label>
+      <label>本图动作与位置<textarea data-rmt-cg-scene-action="${index}" rows="2" aria-label="人物 ${index + 1} 本图动作与位置" placeholder="仅用于本图，可包含当前衣着"></textarea></label>
     </div>`).join('');
     for (const [index, person] of current.people.entries()) {
         const selected = list.querySelector(`[data-rmt-cg-person-selected="${index}"]`);
@@ -123,6 +145,9 @@ function renderParticipantFields(current) {
         const tag = list.querySelector(`[data-rmt-cg-person-tag="${index}"]`);
         const nl = list.querySelector(`[data-rmt-cg-person-nl="${index}"]`);
         selected.checked = person.selected; name.value = person.name; tag.value = person.tag || ''; nl.value = person.nl || '';
+        const sceneField = list.querySelector(`[data-rmt-cg-scene-action="${index}"]`);
+        sceneField.value = character_scene.cgCharacterSceneValue(current.characterScenes?.[person.id], current.promptFormat);
+        bindCharacterSceneField(current, sceneField, person.id, index);
         const changed = () => {
             if (current.busy) return;
             readParticipantFields(current);
@@ -143,11 +168,14 @@ function renderParticipantFields(current) {
 }
 
 function appearanceFieldsHtml(multi) {
-    return multi ? '<fieldset data-rmt-cg-cast><legend>本图出镜人物</legend><p>勾选只影响这张图。姓名可改，也可补充档案名单外的人物；同名人物独立保存。</p><div data-rmt-cg-cast-list></div><div class="rmt-cg-cast-actions"><button type="button" class="rmt-btn" data-rmt-cg-prompt-action="add-person">补充人物</button><button type="button" class="rmt-btn" data-rmt-cg-prompt-action="add-user">定位用户候选</button><button type="button" class="rmt-btn" data-rmt-cg-prompt-action="select-sources">重新选择外貌来源</button></div></fieldset>' : `<p><label><input type="checkbox" data-rmt-cg-role-selected="char">本图出镜 · <span data-rmt-cg-tag-name="char">角色</span></label><textarea id="rmt-cg-char-tags" data-rmt-cg-tag-input="char" aria-label="角色外貌 tag" rows="2" maxlength="${appearance.CG_APPEARANCE_TAG_LIMIT}" placeholder="重新构思时提取，或手动填写"></textarea></p>
-            <p><label><input type="checkbox" data-rmt-cg-role-selected="user">本图出镜 · <span data-rmt-cg-tag-name="user">用户</span></label><textarea id="rmt-cg-user-tags" data-rmt-cg-tag-input="user" aria-label="用户外貌 tag" rows="2" maxlength="${appearance.CG_APPEARANCE_TAG_LIMIT}" placeholder="重新构思时提取，或手动填写"></textarea></p><small>仅发送勾选人物的外貌，不删除已保存标签。</small>`;
+    return multi ? '<fieldset data-rmt-cg-cast><legend>本图出镜人物</legend><p>勾选只影响这张图。姓名可改，也可补充档案名单外的人物；同名人物独立保存。</p><div data-rmt-cg-cast-list></div><div class="rmt-cg-cast-actions"><button type="button" class="rmt-btn" data-rmt-cg-prompt-action="add-person">补充人物</button><button type="button" class="rmt-btn" data-rmt-cg-prompt-action="add-user">定位用户候选</button><button type="button" class="rmt-btn" data-rmt-cg-prompt-action="select-sources">重新选择外貌来源</button></div></fieldset>' : `<p><label><input type="checkbox" data-rmt-cg-role-selected="char">本图出镜 · <span data-rmt-cg-tag-name="char">角色</span></label><textarea id="rmt-cg-char-tags" data-rmt-cg-tag-input="char" aria-label="角色外貌 tag" rows="2" maxlength="${appearance.CG_APPEARANCE_TAG_LIMIT}" placeholder="重新构思时提取，或手动填写"></textarea><label>本图动作与位置<textarea data-rmt-cg-scene-action="char" rows="2" placeholder="仅用于本图，可包含当前衣着"></textarea></label></p>
+            <p><label><input type="checkbox" data-rmt-cg-role-selected="user">本图出镜 · <span data-rmt-cg-tag-name="user">用户</span></label><textarea id="rmt-cg-user-tags" data-rmt-cg-tag-input="user" aria-label="用户外貌 tag" rows="2" maxlength="${appearance.CG_APPEARANCE_TAG_LIMIT}" placeholder="重新构思时提取，或手动填写"></textarea><label>本图动作与位置<textarea data-rmt-cg-scene-action="user" rows="2" placeholder="仅用于本图，可包含当前衣着"></textarea></label></p><small>仅发送勾选人物的外貌，不删除已保存标签。</small>`;
 }
 
 function bindLegacyAppearanceFields(current) {
+    if (!current.multi) for (const role of ['char', 'user']) {
+        bindCharacterSceneField(current, current.element.querySelector(`[data-rmt-cg-scene-action="${role}"]`), role);
+    }
     for (const field of current.element.querySelectorAll('[data-rmt-cg-tag-input]')) {
         field.addEventListener('input', () => {
             if (current.busy) return;
@@ -186,6 +214,7 @@ function editorMetadata(current) {
             ...(current.flatPromptEdited ? { flatPromptOverride: true } : {}),
             castSnapshot: { version: 1, people: selected.map(({ id, name, sourceRefs, identity }) => ({ id, name, sourceRefs, ...(identity === 'user' ? { identity } : {}) })) },
             characters: selected.map(person => ({ participantId: person.id, tag: person.tag || '', nl: person.nl || '',
+                ...editorCharacterScene(current, person.id, current.people.indexOf(person)),
                 ...editorAppearanceSource(current, person.id),
                 ...(current.appearanceEdited?.[person.id] ? { appearanceOverride: true } : {}) })) });
     }
@@ -196,6 +225,7 @@ function editorMetadata(current) {
         flatPrompt: current.element.querySelector('[data-rmt-cg-flat-prompt]').value,
         ...(current.flatPromptEdited ? { flatPromptOverride: true } : {}), selectedRoles,
         characters: selectedRoles.map(role => ({ role, name: current.characterNames[role],
+            ...editorCharacterScene(current, role),
             ...editorAppearanceSource(current, role),
             ...(current.appearanceEdited?.[role] ? { appearanceOverride: true } : {}),
             tag: current.element.querySelector(`[data-rmt-cg-tag-input="${role}"]`).value,
@@ -236,7 +266,7 @@ function invalidateFlatPrompt(current) {
 }
 
 function invalidateSceneMetadata(current) {
-    fillEditorMetadata(current, appearance.metadataAfterSceneEdit(editorMetadata(current)));
+    fillEditorMetadata(current, appearance.metadataAfterSceneEdit(editorMetadata(current), { clearCharacterScene: true }));
     const status = current.element.querySelector('[data-rmt-cg-prompt-status]');
     status.setAttribute('role', 'status');
     status.textContent = '画面已修改，旧场景标签与通用提示已清空。';
@@ -244,6 +274,8 @@ function invalidateSceneMetadata(current) {
 
 function fillEditorMetadata(current, raw) {
     const metadata = appearance.normalizeCgPromptMetadata(raw);
+    current.characterScenes = Object.fromEntries((metadata?.characters || []).map(row =>
+        [row.participantId || row.role, character_scene.cgCharacterSceneFields(row)]));
     current.element.querySelector('[data-rmt-cg-scene-tags]').value = metadata?.sceneTags || '';
     current.element.querySelector('[data-rmt-cg-flat-prompt]').value = metadata?.flatPrompt || '';
     current.flatPromptEdited = metadata?.flatPromptOverride === true;
@@ -273,6 +305,8 @@ function fillEditorMetadata(current, raw) {
             `${current.characterNames[role] || (role === 'char' ? '角色' : '用户')} · 外貌 tag`;
         const tagField = current.element.querySelector(`[data-rmt-cg-tag-input="${role}"]`);
         if (character || !Array.isArray(metadata?.selectedRoles)) tagField.value = character?.tag || '';
+        const sceneField = current.element.querySelector(`[data-rmt-cg-scene-action="${role}"]`);
+        if (sceneField) sceneField.value = character_scene.cgCharacterSceneValue(character, current.promptFormat);
         const source = editorAppearanceSource(current, role);
         if (source.presetAppearance || source.resolvedAppearance) tagField.removeAttribute('maxlength');
         else tagField.setAttribute('maxlength', String(appearance.CG_APPEARANCE_TAG_LIMIT));
@@ -365,10 +399,11 @@ export function openCgPromptEditor({ heartStrip = false, targetDescriptor = null
             event.stopPropagation();
             if (current.busy) return;
             rememberEditorDraft(current, snapshotEditorDraft(current));
+            const previousMetadata = editorMetadata(current);
             current.promptFormat = cg_format.normalizeCgPromptFormat(event.target.value, current.promptFormat);
             // A style switch is not a conversion or a draw. Keep visible authored
             // scene/looks and invalidate dependent fields only in this draft.
-            fillEditorMetadata(current, appearance.metadataAfterSceneEdit(editorMetadata(current)));
+            fillEditorMetadata(current, { ...appearance.metadataAfterSceneEdit(previousMetadata), promptFormat: current.promptFormat });
             const status = element.querySelector('[data-rmt-cg-prompt-status]');
             status.textContent = '格式偏好已切换，未发请求；可核对当前提示后直接绘图。';
         });

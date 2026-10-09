@@ -1,3 +1,4 @@
+import * as character_scene from './cgCharacterScene.js';
 import * as visual from '../core/cgVisualRules.js';
 // Request-bound format selection. Legacy recovery journals keep their exact old
 // prompt hashes; new tasks record only the two-value UI choice, never content.
@@ -10,6 +11,14 @@ export function bindCgPromptFormat(origin, value, dialect = 'r8420', looks = '',
 export function cgPromptForSegment(prompt, options) {
     const binding = options?.origin && bindings.get(options.origin);
     if (!binding?.selected || !format.cgFieldSegment(options.mode, options.taskKey)) return prompt;
+    if (binding.dialect === 'r84168-actions' || binding.dialect === 'r84166-actions') {
+        const original = binding.dialect === 'r84168-actions'
+            ? visual.cgParticipantVisualInstructions(binding.selected, options.mode, options.mode === 'heart' && /:(?:strip|strips)$/u.test(options.taskKey), binding.participantLooks || [])
+            : ['album', 'adv'].includes(options.mode) || options.mode === 'heart' && /:(?:strip|strips)$/u.test(options.taskKey)
+                ? visual.cgInitialVisualInstructionsV2(binding.selected, options.mode === 'heart', binding.looks)
+                : visual.cgStoryVisualInstructionsV2(binding.selected, options.mode, binding.looks);
+        return prompt + original + character_scene.cgCharacterSceneInstructions(binding.selected);
+    }
     if (binding.dialect === 'r84168') return prompt + visual.cgParticipantVisualInstructions(binding.selected, options.mode,
         options.mode === 'heart' && /:(?:strip|strips)$/u.test(options.taskKey), binding.participantLooks || []);
     // r84.166：新任务。画面字段必写，并附用户确认的人物外貌（随任务冻结在 operation.cgCastLooks）。
@@ -30,12 +39,12 @@ export function cgRecoveryOperation(mode, operation, existing, selected, castLoo
     const value = existing ? format.normalizeCgPromptFormat(existing.operation?.cgPromptFormat) : format.normalizeCgPromptFormat(selected);
     const { cgPromptFormat: ignored, cgPromptDialect: ignoredDialect, cgCastLooks: ignoredLooks, cgParticipantLooks: ignoredPeople, ...base } = operation;
     // Old journals keep their exact recipe; only new multiplayer tasks use IDs.
-    const dialect = existing ? existing.operation?.cgPromptDialect : Array.isArray(participantLooks) ? 'r84168' : 'r84166';
+    const dialect = existing ? existing.operation?.cgPromptDialect : Array.isArray(participantLooks) ? 'r84168-actions' : 'r84166-actions';
     const looks = existing ? existing.operation?.cgCastLooks : String(castLooks || '').slice(0, 1600);
     const people = existing ? existing.operation?.cgParticipantLooks : participantLooks;
-    return value ? { ...base, cgPromptFormat: value, ...(['r8413', 'r8420', 'r8483', 'r84166', 'r84168'].includes(dialect) ? { cgPromptDialect: dialect } : {}),
-        ...(dialect === 'r84166' && typeof looks === 'string' && looks ? { cgCastLooks: looks } : {}),
-        ...(dialect === 'r84168' && Array.isArray(people) ? { cgParticipantLooks: structuredClone(people) } : {}) } : base;
+    return value ? { ...base, cgPromptFormat: value, ...(['r8413', 'r8420', 'r8483', 'r84166', 'r84168', 'r84166-actions', 'r84168-actions'].includes(dialect) ? { cgPromptDialect: dialect } : {}),
+        ...(['r84166', 'r84166-actions'].includes(dialect) && typeof looks === 'string' && looks ? { cgCastLooks: looks } : {}),
+        ...(['r84168', 'r84168-actions'].includes(dialect) && Array.isArray(people) ? { cgParticipantLooks: structuredClone(people) } : {}) } : base;
 }
 
 export function cgSegmentValidator(validator, options) {

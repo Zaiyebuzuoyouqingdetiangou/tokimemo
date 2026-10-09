@@ -1,3 +1,4 @@
+import * as chat_identity from './chatIdentityMigration.js';
 // 档案文件：把当前聊天的心迹回廊档案（记忆 + 全部生成内容 + 本插件的聊天附加数据）导出成一个文件，
 // 再导入到另一个没有档案的聊天（例如检查点副本、复制出来的聊天）。图片按地址保存，换一台酒馆需要图片仍在原位置。
 import * as core_cache from '../core/cache.js';
@@ -69,7 +70,8 @@ export function foreignArchiveInChat(context = core_context.currentCharacterGuar
     return { memory, memories: Array.isArray(memory.memories) ? memory.memories.length : 0, archiveName: core_text.normalizeText(memory.archiveName, 120) };
 }
 
-async function installArchiveData(data, { sameHistory, context }) {
+async function installArchiveData(data, { sameHistory, context, captured = chat_identity.captureArchiveIdentityChange(context) }) {
+    if (!chat_identity.archiveIdentityChangeCurrent(captured)) throw core_text.safeUserError('聊天或档案已经变化，原内容未修改。', 'RMT_RECOVERY_ORIGIN_CHANGED');
     const chatId = core_context.comparableChatId(core_context.getChatId(context));
     if (!chatId) throw core_text.safeUserError('无法识别当前聊天，请先打开一个具体的聊天。', 'RMT_ARCHIVE_FILE_CHAT');
     const existing = context?.chatMetadata?.[core_constants.MEMORY_KEY];
@@ -79,28 +81,18 @@ async function installArchiveData(data, { sameHistory, context }) {
     const entryId = `file-${core_context.stableArchiveHash(`${data.sourceChatId}\u001f${data.memory.archiveRevision || ''}\u001f${data.exportedAt}`)}`;
     const prepared = archive_inheritance.prepareInheritedArchive({ entryId, memory: data.memory, cache: data.cache || {} }, context);
     if (sameHistory) {
-        const snapshot = await core_context.buildChatSnapshot(context, { completeSource: true, expectedChatId: core_context.getChatId(context) });
+        const snapshot = await core_context.buildChatSnapshot(context, { completeSource: true, expectedChatId: core_context.getChatId(context), stillCurrent: () => chat_identity.archiveIdentityChangeCurrent(captured) });
         prepared.memory.sourceMessageCount = snapshot.totalMessages;
         prepared.memory.sourceFingerprint = `${snapshot.fingerprint}:`;
         if (snapshot.fullFingerprint) prepared.memory.fullSourceFingerprint = snapshot.fullFingerprint;
     }
-    // 复制过来的旧绑定先取下（已读进 prepared），写入失败时原样放回。
-    const backup = { memory: context.chatMetadata[core_constants.MEMORY_KEY], cache: context.chatMetadata[core_constants.CACHE_KEY] };
-    if (backup.memory) { delete context.chatMetadata[core_constants.MEMORY_KEY]; delete context.chatMetadata[core_constants.CACHE_KEY]; }
-    let saved;
-    try {
-        saved = await core_cache.saveImportedMemory(context, prepared.memory, chatId, {
-            expectedPreviousArchiveState: { present: false },
-            explicitCreate: true,
-            expectedTaskOrigin: { ...core_context.captureTaskOrigin(context, ''), startedAt: prepared.memory.createdAt, archivePresent: false },
-            initialCache: prepared.cache,
-        });
-    } catch (error) {
-        if (backup.memory && !context.chatMetadata[core_constants.MEMORY_KEY]) {
-            context.chatMetadata[core_constants.MEMORY_KEY] = backup.memory;
-            if (backup.cache !== undefined) context.chatMetadata[core_constants.CACHE_KEY] = backup.cache;
-        }
-        throw error;
+    // Keep the old metadata visible until the complete target is durably saved.
+    const committed = await chat_identity.commitArchiveIdentityChange(context, prepared, captured);
+    const saved = committed.memory;
+    const live = core_context.currentCharacterGuard();
+    if (core_cache.cacheScopeFromContext(live) !== captured.scope || live.chatMetadata !== captured.metadata
+        || live.chatMetadata[core_constants.MEMORY_KEY]?.archiveRevision !== saved.archiveRevision) {
+        return { memories: saved.memories.length };
     }
     for (const [key, value] of Object.entries(data.metadata || {})) {
         if (!key.startsWith('heartbeatMemories') || EXCLUDED_KEYS.has(key)) continue;
@@ -121,9 +113,10 @@ export async function adoptForeignArchive({ sameHistory = true, context = core_c
     const foreign = foreignArchiveInChat(context);
     if (!foreign) throw core_text.safeUserError('这个聊天里没有可以接管的档案。', 'RMT_ARCHIVE_FILE_FORMAT');
     if (!archive_repository.isCompatibleArchive(foreign.memory)) throw core_text.safeUserError('带过来的档案格式无法在这个版本中读取。', 'RMT_ARCHIVE_FILE_FORMAT');
-    const stored = context.chatMetadata[core_constants.CACHE_KEY];
+    const captured = chat_identity.captureArchiveIdentityChange(context);
+    const stored = captured.stored;
     let cache = {};
     if (core_cache.isCompressedCacheRecord(stored)) cache = await core_cache.gunzipJson(stored.data) || {};
     else if (stored && typeof stored === 'object') cache = clone(stored);
-    return installArchiveData({ memory: clone(foreign.memory), cache, metadata: {}, sourceChatId: foreign.memory.chatId, exportedAt: String(foreign.memory.updatedAt || Date.now()) }, { sameHistory, context });
+    return installArchiveData({ memory: clone(captured.memory), cache, metadata: {}, sourceChatId: captured.memory.chatId, exportedAt: String(captured.memory.updatedAt || captured.memory.createdAt || 0) }, { sameHistory, context, captured });
 }
