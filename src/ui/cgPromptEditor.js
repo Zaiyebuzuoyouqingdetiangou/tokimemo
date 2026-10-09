@@ -25,6 +25,7 @@ export function portraitCgMetadata(item, raw) {
     const value = structuredClone(raw);
     const userIds = new Set((value.castSnapshot?.people || []).filter(person=>person.identity==='user').map(person=>person.id));
     if (value.castSnapshot) value.castSnapshot.people = value.castSnapshot.people.filter(person=>person.identity!=='user');
+    else value.selectedRoles = ['char'];
     value.characters = (value.characters || []).filter(person=>person.role!=='user' && !userIds.has(person.participantId));
     return appearance.normalizeCgPromptMetadata(value);
 }
@@ -65,7 +66,7 @@ function busyEditor(active) {
     if (!editor) return;
     editor.busy = active;
     editor.element.setAttribute('aria-busy', String(active));
-    for (const field of editor.element.querySelectorAll('[data-rmt-cg-prompt-input], [data-rmt-cg-scene-tags], [data-rmt-cg-tag-input], [data-rmt-cg-flat-prompt], [data-rmt-cg-editor-format], [data-rmt-cg-person-selected], [data-rmt-cg-person-name], [data-rmt-cg-person-tag], [data-rmt-cg-person-nl]')) field.disabled = active;
+    for (const field of editor.element.querySelectorAll('[data-rmt-cg-prompt-input], [data-rmt-cg-scene-tags], [data-rmt-cg-tag-input], [data-rmt-cg-role-selected], [data-rmt-cg-flat-prompt], [data-rmt-cg-editor-format], [data-rmt-cg-person-selected], [data-rmt-cg-person-name], [data-rmt-cg-person-tag], [data-rmt-cg-person-nl]')) field.disabled = active;
     for (const button of editor.element.querySelectorAll('[data-rmt-cg-prompt-action="reconceive"], [data-rmt-cg-prompt-action="draw"], [data-rmt-cg-prompt-action="clear"], [data-rmt-cg-prompt-action="retry"], [data-rmt-cg-prompt-action="save-looks"], [data-rmt-cg-prompt-action="restore-draft"], [data-rmt-cg-prompt-action="add-person"], [data-rmt-cg-prompt-action="add-user"], [data-rmt-cg-prompt-action="use-current-cast"], [data-rmt-cg-prompt-action="select-sources"], [data-rmt-cg-history-view], [data-rmt-cg-history-restore]')) button.disabled = active;
 }
 
@@ -91,6 +92,13 @@ function ensureUserCandidate(current) {
     return user;
 }
 
+function editorAppearanceSource(current, key) {
+    const row = current.appearanceSources?.[key];
+    return { ...(row?.presetAppearance ? { presetAppearance: true,
+        fallbackTag: row.fallbackTag || '', fallbackNl: row.fallbackNl || '' } : {}),
+        ...(row?.resolvedAppearance ? { resolvedAppearance: true } : {}) };
+}
+
 function renderParticipantFields(current) {
     const list = current.element.querySelector('[data-rmt-cg-cast-list]');
     if (!list) return;
@@ -98,8 +106,8 @@ function renderParticipantFields(current) {
       <label><input type="checkbox" data-rmt-cg-person-selected="${index}">本图出镜 · 人物 ${index + 1}</label>
       <label>姓名<input type="text" data-rmt-cg-person-name="${index}" aria-label="人物 ${index + 1} 姓名"></label>
       <small>${core_text.esc(person.identity === 'user' && !person.sourceRefs.length ? '当前用户人设' : person.sourceRefs.length ? person.sourceRefs.map(ref => `${ref.world} · ${ref.title || ref.uid}`).join('；') : '手动补充的人物')}</small>
-      <label>外貌 tag<textarea data-rmt-cg-person-tag="${index}" rows="2" maxlength="${appearance.CG_APPEARANCE_TAG_LIMIT}" aria-label="人物 ${index + 1} 外貌 tag" placeholder="未知可留空，不会移除已勾选人物"></textarea></label>
-      <label>外貌描述<textarea data-rmt-cg-person-nl="${index}" rows="2" maxlength="${appearance.CG_APPEARANCE_TAG_LIMIT}" aria-label="人物 ${index + 1} 外貌描述" placeholder="保留已提取的外貌描述，也可以编辑"></textarea></label>
+      <label>外貌 tag<textarea data-rmt-cg-person-tag="${index}" rows="2" ${editorAppearanceSource(current, person.id).presetAppearance || editorAppearanceSource(current, person.id).resolvedAppearance ? '' : `maxlength="${appearance.CG_APPEARANCE_TAG_LIMIT}"`} aria-label="人物 ${index + 1} 外貌 tag" placeholder="未知可留空，不会移除已勾选人物"></textarea></label>
+      <label>外貌描述<textarea data-rmt-cg-person-nl="${index}" rows="2" ${editorAppearanceSource(current, person.id).presetAppearance || editorAppearanceSource(current, person.id).resolvedAppearance ? '' : `maxlength="${appearance.CG_APPEARANCE_TAG_LIMIT}"`} aria-label="人物 ${index + 1} 外貌描述" placeholder="保留已提取的外貌描述，也可以编辑"></textarea></label>
     </div>`).join('');
     for (const [index, person] of current.people.entries()) {
         const selected = list.querySelector(`[data-rmt-cg-person-selected="${index}"]`);
@@ -121,23 +129,40 @@ function renderParticipantFields(current) {
         name.addEventListener('input', changed);
         // Editing either representation invalidates the other generated form;
         // otherwise an older hair/eye colour could silently contradict the edit.
-        tag.addEventListener('input', () => { nl.value = ''; changed(); });
-        nl.addEventListener('input', () => { tag.value = ''; changed(); });
+        tag.addEventListener('input', () => { current.appearanceEdited[person.id] = true; nl.value = ''; changed(); });
+        nl.addEventListener('input', () => { current.appearanceEdited[person.id] = true; tag.value = ''; changed(); });
     }
 }
 
 function appearanceFieldsHtml(multi) {
-    return multi ? '<fieldset data-rmt-cg-cast><legend>本图出镜人物</legend><p>勾选只影响这张图。姓名可改，也可补充档案名单外的人物；同名人物独立保存。</p><div data-rmt-cg-cast-list></div><div class="rmt-cg-cast-actions"><button type="button" class="rmt-btn" data-rmt-cg-prompt-action="add-person">补充人物</button><button type="button" class="rmt-btn" data-rmt-cg-prompt-action="add-user">定位用户候选</button><button type="button" class="rmt-btn" data-rmt-cg-prompt-action="select-sources">重新选择外貌来源</button></div></fieldset>' : `<p><label for="rmt-cg-char-tags" data-rmt-cg-tag-name="char">角色 · 外貌 tag</label><textarea id="rmt-cg-char-tags" data-rmt-cg-tag-input="char" rows="2" maxlength="${appearance.CG_APPEARANCE_TAG_LIMIT}" placeholder="重新构思时提取，或手动填写"></textarea></p>
-            <p><label for="rmt-cg-user-tags" data-rmt-cg-tag-name="user">用户 · 外貌 tag</label><textarea id="rmt-cg-user-tags" data-rmt-cg-tag-input="user" rows="2" maxlength="${appearance.CG_APPEARANCE_TAG_LIMIT}" placeholder="重新构思时提取，或手动填写"></textarea></p>`;
+    return multi ? '<fieldset data-rmt-cg-cast><legend>本图出镜人物</legend><p>勾选只影响这张图。姓名可改，也可补充档案名单外的人物；同名人物独立保存。</p><div data-rmt-cg-cast-list></div><div class="rmt-cg-cast-actions"><button type="button" class="rmt-btn" data-rmt-cg-prompt-action="add-person">补充人物</button><button type="button" class="rmt-btn" data-rmt-cg-prompt-action="add-user">定位用户候选</button><button type="button" class="rmt-btn" data-rmt-cg-prompt-action="select-sources">重新选择外貌来源</button></div></fieldset>' : `<p><label><input type="checkbox" data-rmt-cg-role-selected="char">本图出镜 · <span data-rmt-cg-tag-name="char">角色</span></label><textarea id="rmt-cg-char-tags" data-rmt-cg-tag-input="char" aria-label="角色外貌 tag" rows="2" maxlength="${appearance.CG_APPEARANCE_TAG_LIMIT}" placeholder="重新构思时提取，或手动填写"></textarea></p>
+            <p><label><input type="checkbox" data-rmt-cg-role-selected="user">本图出镜 · <span data-rmt-cg-tag-name="user">用户</span></label><textarea id="rmt-cg-user-tags" data-rmt-cg-tag-input="user" aria-label="用户外貌 tag" rows="2" maxlength="${appearance.CG_APPEARANCE_TAG_LIMIT}" placeholder="重新构思时提取，或手动填写"></textarea></p><small>仅发送勾选人物的外貌，不删除已保存标签。</small>`;
+}
+
+function bindLegacyAppearanceFields(current) {
+    for (const field of current.element.querySelectorAll('[data-rmt-cg-tag-input]')) {
+        field.addEventListener('input', () => {
+            if (current.busy) return;
+            current.appearanceEdited[field.dataset.rmtCgTagInput] = true;
+            current.looksEdited[field.dataset.rmtCgTagInput] = true;
+            invalidateFlatPrompt(current); updatePreparedPreview(current);
+        });
+    }
+    for (const field of current.element.querySelectorAll('[data-rmt-cg-role-selected]')) {
+        field.addEventListener('change', () => {
+            if (current.busy) return;
+            current.element.querySelector('[data-rmt-cg-scene-tags]').value = '';
+            invalidateFlatPrompt(current); updatePreparedPreview(current);
+            current.element.querySelector('[data-rmt-cg-prompt-status]').textContent = '本图出镜已调整；请同步核对画面描述，已保存外貌不变。';
+        });
+    }
 }
 
 function changeEditorCastMode(current, multi) {
     if (current.multi === multi) return;
     current.multi = multi;
     current.element.querySelector('[data-rmt-cg-appearance-fields]').innerHTML = appearanceFieldsHtml(multi);
-    if (!multi) for (const field of current.element.querySelectorAll('[data-rmt-cg-tag-input]')) {
-        field.addEventListener('input', () => { invalidateFlatPrompt(current); updatePreparedPreview(current); });
-    }
+    if (!multi) bindLegacyAppearanceFields(current);
     const context = core_context.currentCharacterGuard();
     current.looksSignature = multi ? cast_looks.participantLooksSignature(cast_looks.readParticipantLooks(context))
         : cast_looks.castLooksSignature(cast_looks.readCastLooks(context));
@@ -150,20 +175,29 @@ function editorMetadata(current) {
         return appearance.normalizeCgPromptMetadata({ promptFormat: current.promptFormat,
             sceneTags: current.element.querySelector('[data-rmt-cg-scene-tags]').value,
             flatPrompt: current.element.querySelector('[data-rmt-cg-flat-prompt]').value,
+            ...(current.flatPromptEdited ? { flatPromptOverride: true } : {}),
             castSnapshot: { version: 1, people: selected.map(({ id, name, sourceRefs, identity }) => ({ id, name, sourceRefs, ...(identity === 'user' ? { identity } : {}) })) },
-            characters: selected.map(person => ({ participantId: person.id, tag: person.tag || '', nl: person.nl || '' })) });
+            characters: selected.map(person => ({ participantId: person.id, tag: person.tag || '', nl: person.nl || '',
+                ...editorAppearanceSource(current, person.id),
+                ...(current.appearanceEdited?.[person.id] ? { appearanceOverride: true } : {}) })) });
     }
+    const selectedRoles = ['char', 'user'].filter(role => current.element.querySelector(`[data-rmt-cg-role-selected="${role}"]`)?.checked !== false);
     return appearance.normalizeCgPromptMetadata({
         promptFormat: current.promptFormat,
         sceneTags: current.element.querySelector('[data-rmt-cg-scene-tags]').value,
         flatPrompt: current.element.querySelector('[data-rmt-cg-flat-prompt]').value,
-        characters: ['char', 'user'].map(role => ({ role, name: current.characterNames[role],
+        ...(current.flatPromptEdited ? { flatPromptOverride: true } : {}), selectedRoles,
+        characters: selectedRoles.map(role => ({ role, name: current.characterNames[role],
+            ...editorAppearanceSource(current, role),
+            ...(current.appearanceEdited?.[role] ? { appearanceOverride: true } : {}),
             tag: current.element.querySelector(`[data-rmt-cg-tag-input="${role}"]`).value,
             // All sendable appearance is visible/editable in tag. A stale model nl
             // must not silently override the user's subsequent tag edits.
             nl: '' })),
     });
 }
+
+export function cgEditorPromptMetadata(current) { return editorMetadata(current); }
 
 function updatePreparedPreview(current) {
     const scene = current.element.querySelector('[data-rmt-cg-prompt-input]').value;
@@ -185,7 +219,7 @@ function updatePreparedPreview(current) {
 
 function invalidateFlatPrompt(current) {
     const flat = current.element.querySelector('[data-rmt-cg-flat-prompt]');
-    if (!flat.value) return;
+    if (!flat.value || current.flatPromptEdited) return;
     flat.value = '';
     const status = current.element.querySelector('[data-rmt-cg-prompt-status]');
     status.setAttribute('role', 'status');
@@ -203,6 +237,11 @@ function fillEditorMetadata(current, raw) {
     const metadata = appearance.normalizeCgPromptMetadata(raw);
     current.element.querySelector('[data-rmt-cg-scene-tags]').value = metadata?.sceneTags || '';
     current.element.querySelector('[data-rmt-cg-flat-prompt]').value = metadata?.flatPrompt || '';
+    current.flatPromptEdited = metadata?.flatPromptOverride === true;
+    current.appearanceEdited = { ...(Array.isArray(metadata?.selectedRoles) ? current.appearanceEdited : {}),
+        ...Object.fromEntries((metadata?.characters || []).map(row => [row.participantId || row.role, row.appearanceOverride === true])) };
+    current.appearanceSources = { ...current.appearanceSources,
+        ...Object.fromEntries((metadata?.characters || []).map(row => [row.participantId || row.role, row])) };
     if (current.multi) {
         const snapshot = metadata?.castSnapshot || { version: 1, people: [] };
         const known = new Map(current.people.map(person => [person.id, person]));
@@ -218,10 +257,16 @@ function fillEditorMetadata(current, raw) {
     }
     for (const role of ['char', 'user']) {
         const character = metadata?.characters.find(row => row.role === role);
+        const selected = current.element.querySelector(`[data-rmt-cg-role-selected="${role}"]`);
+        selected.checked = Array.isArray(metadata?.selectedRoles) ? metadata.selectedRoles.includes(role) : true;
         if (character?.name) current.characterNames[role] = character.name;
         current.element.querySelector(`[data-rmt-cg-tag-name="${role}"]`).textContent =
             `${current.characterNames[role] || (role === 'char' ? '角色' : '用户')} · 外貌 tag`;
-        current.element.querySelector(`[data-rmt-cg-tag-input="${role}"]`).value = character?.tag || '';
+        const tagField = current.element.querySelector(`[data-rmt-cg-tag-input="${role}"]`);
+        if (character || !Array.isArray(metadata?.selectedRoles)) tagField.value = character?.tag || '';
+        const source = editorAppearanceSource(current, role);
+        if (source.presetAppearance || source.resolvedAppearance) tagField.removeAttribute('maxlength');
+        else tagField.setAttribute('maxlength', String(appearance.CG_APPEARANCE_TAG_LIMIT));
     }
     updatePreparedPreview(current);
 }
@@ -291,7 +336,7 @@ export function openCgPromptEditor({ heartStrip = false, targetDescriptor = null
             event.preventDefault(); event.stopImmediatePropagation();
             if (!image_viewer.closeCgImageViewer()) closeCgPromptEditor();
         };
-        editor = { target, element, host, promptFormat, opener: document.activeElement, busy: false, cancel, multi,
+        editor = { target, element, host, promptFormat, opener: document.activeElement, busy: false, cancel, multi, appearanceEdited: {}, looksEdited: {}, appearanceSources: {}, flatPromptEdited: false,
             people: (roster?.people || initialMetadata?.castSnapshot?.people || []).map(person => ({ ...person, selected: false,
                 tag: participantLooks?.characters.find(row => row.participantId === person.id)?.tag || '' })),
             looksSignature: multi ? cast_looks.participantLooksSignature(participantLooks) : cast_looks.castLooksSignature(cast_looks.readCastLooks(context)),
@@ -319,10 +364,11 @@ export function openCgPromptEditor({ heartStrip = false, targetDescriptor = null
             status.textContent = '格式偏好已切换，未发请求；可核对当前提示后直接绘图。';
         });
         textarea.addEventListener('input', () => { invalidateSceneMetadata(current); updateCount(); });
-        for (const field of element.querySelectorAll('[data-rmt-cg-tag-input], [data-rmt-cg-scene-tags]')) {
+        bindLegacyAppearanceFields(current);
+        for (const field of element.querySelectorAll('[data-rmt-cg-scene-tags]')) {
             field.addEventListener('input', () => { invalidateFlatPrompt(current); updatePreparedPreview(current); });
         }
-        element.querySelector('[data-rmt-cg-flat-prompt]').addEventListener('input', () => updatePreparedPreview(current));
+        element.querySelector('[data-rmt-cg-flat-prompt]').addEventListener('input', () => { current.flatPromptEdited = true; updatePreparedPreview(current); });
         fillEditorMetadata(current, initialMetadata);
         if (multi) element.querySelector('[data-rmt-cg-appearance]').open = true;
         element.addEventListener('click', event => {
@@ -466,10 +512,18 @@ export async function handleCgPromptEditorAction(action) {
                 status.setAttribute('role', 'status'); status.textContent = '勾选人物的外貌已保存，未发起生图；本图名单将在确认绘图后随图片保存。';
                 return;
             }
-            const record = cast_looks.saveConfirmedCastLooks({
-                char: current.element.querySelector('[data-rmt-cg-tag-input="char"]').value,
-                user: current.element.querySelector('[data-rmt-cg-tag-input="user"]').value,
-            }, { origin: current.target.origin, expectedSignature: current.looksSignature });
+            const previous = cast_looks.readCastLooks(core_context.currentCharacterGuard());
+            const values = { char: previous?.char || '', user: previous?.user || '' };
+            for (const role of ['char', 'user']) {
+                const value = current.element.querySelector(`[data-rmt-cg-tag-input="${role}"]`).value;
+                const selected = current.element.querySelector(`[data-rmt-cg-role-selected="${role}"]`).checked;
+                // A missing per-picture appearance is not a request to delete
+                // the chat's other look. An actual field edit can still clear it.
+                if (current.looksEdited[role] || selected && value.trim()) values[role] = value;
+            }
+            const record = cast_looks.saveConfirmedCastLooks(values,
+                { origin: current.target.origin, expectedSignature: current.looksSignature });
+            current.looksEdited = {};
             current.looksSignature = cast_looks.castLooksSignature(record);
             const metadata = editorMetadata(current) || { characters: [] };
             // Show the exact sanitized value that was durably saved.
@@ -503,10 +557,12 @@ export async function handleCgPromptEditorAction(action) {
             const status = current.element.querySelector('[data-rmt-cg-prompt-status]');
             status.setAttribute('role', 'status'); status.textContent = '正在重新构思，请稍等…';
             const previousDraft = snapshotEditorDraft(current);
-            const appearanceDraft = current.multi ? Object.fromEntries(current.people.filter(person => person.selected).map(person => [person.id, { tag: person.tag || '', nl: person.nl || '' }]))
-                : Object.fromEntries(['char', 'user'].map(role => [role, current.element.querySelector(`[data-rmt-cg-tag-input="${role}"]`).value]));
+            const appearanceDraft = current.multi ? Object.fromEntries(current.people.filter(person => person.selected).map(person => [person.id,
+                { tag: person.tag || '', nl: person.nl || '', ...editorAppearanceSource(current, person.id), appearanceOverride: current.appearanceEdited[person.id] === true }]))
+                : Object.fromEntries(['char', 'user'].map(role => [role, { tag: current.element.querySelector(`[data-rmt-cg-tag-input="${role}"]`).value,
+                    ...editorAppearanceSource(current, role), appearanceOverride: current.appearanceEdited[role] === true }]));
             const result = await images.reconceiveCgImagePrompt(current.target, {promptFormat: current.promptFormat, appearanceDraft,
-                ...(current.multi ? { castSnapshot: editorMetadata(current).castSnapshot } : {})});
+                ...(current.multi ? { castSnapshot: editorMetadata(current).castSnapshot } : { selectedRoles: editorMetadata(current).selectedRoles })});
             if (editor !== current || !current.element.isConnected) return;
             const textarea = current.element.querySelector('[data-rmt-cg-prompt-input]');
             rememberEditorDraft(current, previousDraft);

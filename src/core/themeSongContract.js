@@ -28,13 +28,31 @@ export function customSongLanguage(value) {
 export function songLanguageLabel(song) {
     return song?.language === 'custom' ? customSongLanguage(song.customLanguage) : SONG_LANGUAGES[song?.language] || SONG_LANGUAGES.zh;
 }
+// These tags describe performance, never executable commands or sung words.
+// Unknown bracket headings keep their previous section behavior.
+export function classifySongLyricTag(value) {
+    const tag = String(value || '').trim();
+    if (/^End$/i.test(tag)) return { kind: 'end', section: tag, cue: '' };
+    const section = tag.match(/^(Intro|Verse(?:\s+\d+)?|(?:Pre[- ]|Post[- ]|Final )?Chorus(?:\s+\d+)?|Bridge(?:\s+\d+)?|Outro|Instrumental|Interlude|Break|Solo|Hook)(?:\s*[-–—:|,]\s*(.+))?$/i);
+    if (section) return { kind: 'section', section: section[1], cue: section[2] || '' };
+    const vocal = /^(?:(?:male|female)(?:\s+(?:vocals?|voice|solo|lead))?|(?:vocal|voice|singer)\s+[a-z0-9]+|duet(?:\s+(?:vocals|harmonies|unison))?|both(?:\s+(?:voices|vocals|singers))?|ensemble(?:\s+(?:vocals|voices|unison|harmonies))?|group\s+(?:chorus|vocals)|all(?:\s+voices)?|(?:soprano|mezzo(?:-soprano)?|alto|tenor|baritone|bass)(?:\s+(?:vocals?|voice|solo|lead))?|男声|女声|合唱|齐唱)(?:\s*[-–—:|,]\s*.+)?$/i.test(tag);
+    return { kind: vocal ? 'vocal' : 'other', section: vocal ? '' : tag, cue: vocal ? tag : '' };
+}
+export function hasSongVocalCues(lyrics) {
+    return [...String(lyrics || '').matchAll(/^\s*\[([^\]\n]+)\][ \t]*$/gm)].some(match => {
+        const tag = classifySongLyricTag(match[1]);
+        return tag.kind === 'vocal' || tag.kind === 'section' && !!tag.cue;
+    });
+}
 export function assertCompleteLyrics(value) {
     const lyrics = songText(value, SONG_LIMITS.lyrics, true);
     // Structure, not a verse/word quota. No silent clipping or filling repeated sections.
     const sections = [...lyrics.matchAll(/^\[([^\]\n]+)\][ \t]*\n?/gm)];
-    const hasWords = name => sections.some((m, i) => name.test(m[1])
-        && !!lyrics.slice(m.index + m[0].length, sections[i + 1]?.index ?? lyrics.length).trim());
-    if (!hasWords(/^Verse(?: \d+)?$/) || !hasWords(/^(?:Final )?Chorus$/)
+    const musical = sections.filter(m => classifySongLyricTag(m[1]).kind !== 'vocal');
+    const hasWords = name => musical.some((m, i) => name.test(classifySongLyricTag(m[1]).section)
+        && !!lyrics.slice(m.index + m[0].length, musical[i + 1]?.index ?? lyrics.length)
+            .split('\n').filter(line => !/^\s*\[[^\]\n]+\]\s*$/.test(line)).join('\n').trim());
+    if (!hasWords(/^Verse(?: \d+)?$/i) || !hasWords(/^(?:Final )?Chorus(?: \d+)?$/i)
         || !/^\[End\]$/m.test(lyrics) || !lyrics.endsWith('[End]')
         || sections.some((m, i) => m[1] === 'End' && i !== sections.length - 1)
         || /(?:歌词待补|副歌同上|重复上文|其余省略|repeat (?:the )?(?:chorus|above)|lyrics here)/iu.test(lyrics))

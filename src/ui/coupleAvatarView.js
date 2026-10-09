@@ -51,9 +51,18 @@ function draft(view) {
     }
     for (let i = 0; i < 2; i++) for (const key of ['name', 'appearance']) {
         const input = view.root.querySelector(`[data-pair-person="${i}"][data-pair-key="${key}"]`);
-        if (input) settings.people[i][key] = input.value;
+        if (!input) continue;
+        if (key === 'appearance' && input.value.trim() !== settings.people[i].appearance) settings.people[i].appearanceOverride = true;
+        settings.people[i][key] = input.value;
     }
     view.settings = couple.normalizeCoupleSettings(settings, view.context);
+    // Resolving a new name or provider may replace the displayed preset. Keep
+    // that display in sync before another input event reads the form again.
+    for (let i = 0; i < 2; i++) {
+        const input = view.root.querySelector(`[data-pair-person="${i}"][data-pair-key="appearance"]`);
+        const appearance = view.settings.people[i].appearance;
+        if (input && input.value.trim() !== appearance) input.value = appearance;
+    }
     return structuredClone(view.settings);
 }
 function queueDraft(view) {

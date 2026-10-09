@@ -3,6 +3,7 @@
 import * as core_context from '../core/context.js';
 import * as core_castLooks from '../core/castLooks.js';
 import * as core_text from '../core/text.js';
+import * as appearance_presets from '../generation/imageAppearancePresets.js';
 import * as cg_core from '../generation/cgImageCore.js';
 import * as image_patch from '../core/cgImagePatch.js';
 import * as task_trace from '../core/taskTrace.js';
@@ -30,7 +31,25 @@ function optionalContext() {
     try { return core_context.currentCharacterGuard(); } catch { return null; }
 }
 
-export function defaultCoupleSettings(context = optionalContext()) {
+function couplePresetPeople(people, context) {
+    // Storage/history normalization passes null: never rewrite the identities
+    // that produced an existing pair just because a provider preset changed.
+    if (!context) return people;
+    const presets = appearance_presets.resolveImageAppearancePresets(context, people);
+    return people.map(person => {
+        const previousPreset = text(person.presetAppearance);
+        const edited = person.appearanceOverride === true || (previousPreset && person.appearance !== previousPreset);
+        const fallback = previousPreset && !edited && own(person, 'fallbackAppearance')
+            ? text(person.fallbackAppearance) : person.appearance;
+        const local = { id: person.id, name: person.name, appearance: fallback,
+            ...(edited ? { appearanceOverride: true } : {}) };
+        const preset = !edited ? presets.get(person.id) : null;
+        const appearance = text(preset?.tag) || text(preset?.nl);
+        return appearance ? { ...local, appearance, fallbackAppearance: fallback, presetAppearance: appearance } : local;
+    });
+}
+
+function baseCoupleSettings(context) {
     let looks = null, card = {};
     try { if (context) looks = core_castLooks.readCastLooks(context); } catch { /* Optional saved looks. */ }
     try { card = context?.getCharacterCardFields?.() || {}; } catch { /* Manual appearance remains available. */ }
@@ -48,19 +67,27 @@ export function defaultCoupleSettings(context = optionalContext()) {
     };
 }
 
+export function defaultCoupleSettings(context = optionalContext()) {
+    const settings = baseCoupleSettings(context);
+    return { ...settings, people: couplePresetPeople(settings.people, context) };
+}
+
 export function normalizeCoupleSettings(value, context = optionalContext()) {
     const input = value && typeof value === 'object' ? value : {};
-    const defaults = defaultCoupleSettings(context);
+    const defaults = baseCoupleSettings(context);
     const styleId = text(input.styleId);
     return {
-        people: defaults.people.map((person, index) => {
+        people: couplePresetPeople(defaults.people.map((person, index) => {
             const source = Array.isArray(input.people) && input.people[index] && typeof input.people[index] === 'object' ? input.people[index] : {};
             return {
                 id: text(source.id) || person.id,
                 name: own(source, 'name') ? text(source.name) : person.name,
                 appearance: own(source, 'appearance') ? text(source.appearance) : person.appearance,
+                ...(own(source, 'fallbackAppearance') ? { fallbackAppearance: text(source.fallbackAppearance) } : {}),
+                ...(text(source.presetAppearance) ? { presetAppearance: text(source.presetAppearance) } : {}),
+                ...(source.appearanceOverride === true ? { appearanceOverride: true } : {}),
             };
-        }),
+        }), context),
         styleId: styleId === 'custom' || styles.COUPLE_STYLES.some(style => style.id === styleId) ? styleId : defaults.styleId,
         pairType: input.pairType === 'echo' ? 'echo' : 'joined',
         interaction: own(input, 'interaction') ? text(input.interaction) : defaults.interaction,
@@ -95,8 +122,9 @@ function appearanceReference(value, animal, object) {
 // provider gets the complete prompt; capable NAI gets scene + two identities.
 // Describe the drawing itself. Crop masks, cards and prohibited shapes belong
 // to the UI or the provider's negative channel, never the shared positive scene.
-export function couplePromptParts(value) {
+export function couplePromptParts(value, context = optionalContext()) {
     const settings = normalizeCoupleSettings(value, null);
+    settings.people = couplePresetPeople(settings.people, context);
     const chosen = styles.COUPLE_STYLES.find(style => style.id === settings.styleId);
     const animal = chosen?.group === 'animal';
     const object = chosen?.group === 'craft' || ['fantasy-enamel', 'fantasy-shadow'].includes(chosen?.id);
@@ -105,6 +133,15 @@ export function couplePromptParts(value) {
     const interaction = resolvedInteraction.prompt;
     const rendering = chosen?.prompt || settings.customStyle;
     const construction = styles.coupleStyleConstruction(chosen);
+    // Framing and finish are art direction only. Keep full-figure styles and
+    // simplified media intact; explicit user directions still take precedence.
+    const fullFigure = animal || (chosen?.group === 'chibi' && chosen.id !== 'chibi-headshot')
+        || (chosen?.group === 'craft' && !['craft-paper', 'craft-bead'].includes(chosen.id))
+        || ['fantasy-enamel', 'fantasy-shadow'].includes(chosen?.id);
+    const framing = !chosen ? '' : fullFigure
+        ? 'Each complete stylized figure fills most of its own half, with a readable face and connected limbs; retain the selected body proportions.'
+        : 'Close head-and-shoulder or upper-body portraits fill most of each half, with visible shoulders and clothing supporting the gestures.';
+    const finish = !chosen ? '' : 'Finished artwork in the selected medium: recognizable individual features, intentional contours and gestures connected naturally to the body in the selected form. Keep background detail quieter than the subjects, with clear subject-to-background separation. Preserve deliberate simplicity and the selected medium\'s own texture.';
     const form = animal
         ? 'Two complete animals, species-appropriate animal anatomy, heads, muzzles or beaks, bodies, limbs and tails. Paws, wings or flippers perform the gestures. Each animal has its own eye color, fur markings and small signature accessories derived from its identity.'
         : object ? 'Two crafted figures whose entire faces and bodies are made from the selected material, with its physical texture and construction.'
@@ -118,9 +155,9 @@ export function couplePromptParts(value) {
     const styleLead = rendering ? `Rendering style: ${rendering}.` : '';
     const composition = [
         construction ? `Style construction: ${construction}` : '',
-        form,
-        `One continuous landscape illustration, two distinct ${subject}s side by side, one centered at the left quarter and one at the right quarter, balanced subject scale.`,
-        'A continuous painted background fills the entire image from edge to edge, including the center and all four corners. Faces and gestures sit comfortably within their own half, surrounded by the same fully painted environment.',
+        form, framing, finish,
+        `One continuous horizontal paired portrait, two distinct ${subject}s side by side, one centered at the left quarter and one at the right quarter, balanced subject scale.`,
+        'A continuous background in the selected medium fills the entire image from edge to edge, including the center and all four corners. Faces and gestures sit comfortably within their own half, surrounded by the same continuous background.',
         `Interaction: ${interaction && interaction !== '交给灵感' ? interaction : DEFAULT_INTERACTION_PROMPT}.`,
         `Action roles: LEFT — ${actions[0]}; RIGHT — ${actions[1]}. Adapt gestures to the chosen body form; explicit user directions take precedence.`,
         settings.direction ? `Direction: ${settings.direction}.` : '',
@@ -142,8 +179,8 @@ export function couplePromptParts(value) {
     const nai = {
         prompt: [rendering || 'illustration', `two distinct ${subject}s`, 'side by side'].join(', '),
         nl: [
-            construction,
-            'One continuous landscape illustration, first subject centered at the left quarter, second at the right quarter, matching scale. Background fills the image edge to edge, through the center and all four corners. Faces and gestures stay comfortably inside their own half.',
+            construction, framing, finish,
+            'One continuous horizontal paired portrait, first subject centered at the left quarter, second at the right quarter, matching scale. Background fills the image edge to edge, through the center and all four corners. Faces and gestures stay comfortably inside their own half.',
             animal || object ? form : '',
             `Interaction: ${interaction && interaction !== '交给灵感' ? interaction : DEFAULT_INTERACTION_PROMPT}.`,
             settings.pairType === 'echo' ? 'Coordinated colors and light, complementary individual gestures.' : 'A shared motif connects the two subjects.',
@@ -168,7 +205,7 @@ export function couplePromptParts(value) {
         })) };
 }
 
-export function couplePrompt(value) { return couplePromptParts(value).prompt; }
+export function couplePrompt(value, context = optionalContext()) { return couplePromptParts(value, context).prompt; }
 
 function openDatabase() {
     if (databasePromise) return databasePromise;
@@ -430,7 +467,7 @@ export async function generateCouple(value, { context = core_context.currentChar
     // background signal after submission. A returned result always enters its origin scope.
     try {
         task_trace.beginStage(trace, 'prompt');
-        const parts = couplePromptParts(settings), prompt = parts.prompt;
+        const parts = couplePromptParts(settings, null), prompt = parts.prompt;
         task_trace.markStage(trace, 'prompt');
         task_trace.beginStage(trace, 'request');
         const result = await cg_core.invokeImageGeneration(prompt, context, {

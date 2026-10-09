@@ -1,3 +1,5 @@
+import * as effects from './mvIllustrationEffects.js';
+
 // Uses ordinary Canvas compositing, not CSS/Canvas filters or generated drawing code.
 // Derived images are display-only. The source art, crop and saved pixels stay untouched.
 // Only current/transition pictures keep a derived buffer; this never limits source assets.
@@ -27,6 +29,12 @@ function variant(image, mode) {
 }
 
 export function drawPicture(g, image, args, cue = null) {
+    effects.placeLight(g, image, args, cue);
+    if (cue?.reveal === 'bloom' || cue?.movement === 'local') { effects.drawPicture(g, image, args, cue, drawLegacyPicture); return; }
+    drawLegacyPicture(g, image, args, cue);
+}
+
+function drawLegacyPicture(g, image, args, cue) {
     if (!cue || cue.reveal === 'none' || cue.progress >= 1) { g.drawImage(image, ...args); return; }
     let mono, overlay;
     try {
@@ -51,6 +59,7 @@ function colorOf(cue, palette) {
 
 export function drawLight(g, cue, w, h, palette, foreground = false) {
     if (!cue || cue.light === 'none') return;
+    if (cue.light === 'focus') { effects.drawLight(g, cue, w, h, palette); return; }
     const t = cue.songTime, x = w * (.52 + .07 * Math.sin(t * .28)), y = h * .38;
     g.save(); g.globalCompositeOperation = 'screen';
     g.globalAlpha *= (foreground ? .18 : .42) * (.86 + .14 * Math.sin(t * .9));
@@ -70,6 +79,7 @@ export function drawLight(g, cue, w, h, palette, foreground = false) {
 
 export function drawParticles(g, cue, w, h, palette) {
     if (!cue || cue.particles === 'none') return;
+    if (cue.particles === 'glints') { effects.drawParticles(g, cue, w, h, palette); return; }
     g.save(); g.fillStyle = colorOf(cue, palette); g.globalCompositeOperation = 'screen';
     const scale = Math.min(w, h), t = cue.songTime;
     // A small local decoration pool, not a generation or saved-asset limit.
@@ -92,4 +102,4 @@ export function drawParticles(g, cue, w, h, palette) {
     g.restore();
 }
 
-export function clear() { tones.clear(); revealSurface = null; }
+export function clear() { tones.clear(); revealSurface = null; effects.clear(); }
