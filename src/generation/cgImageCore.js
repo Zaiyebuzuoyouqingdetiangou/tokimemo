@@ -8,6 +8,7 @@ import * as cg_format from '../core/cgPromptFormat.js';
 import * as baibai_image from './baibaiImage.js';
 import * as chatu8_image from './chatu8Image.js';
 import * as cg_appearance from './cgAppearance.js';
+import * as preset_text from './chatu8Presets.js';
 import * as core_settings from '../core/settings.js';
 import * as archive_library from '../archive/library.js';
 import * as archive_repository from '../archive/repository.js';
@@ -126,7 +127,7 @@ export function sanitizeCgVisualText(value, limit = core_constants.MAX_CG_IMAGE_
     if (!text) return '';
     text = text
         .replace(/https?:\/\/\S+/gi, ' ')
-        .replace(/\{\{[^{}]{1,100}\}\}/g, ' ')
+        .replace(/\{\{+[^{}]*?\}\}+/gu, token => preset_text.literalPresetAppearanceText(token) === null ? ' ' : token)
         .replace(/\b(?:sourceMemoryIds?|sourceMemoryAnchor|WORLD_INFO_TEXT|MEMORY_POOL_JSON|UNTRUSTED_[A-Z0-9_]+)\b/gi, ' ')
         .replace(/<[^>]{0,500}>/g, ' ');
     return core_text.normalizeText(text.replace(/\s{2,}/g, ' '), limit);

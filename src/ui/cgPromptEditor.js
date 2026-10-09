@@ -94,9 +94,17 @@ function ensureUserCandidate(current) {
 
 function editorAppearanceSource(current, key) {
     const row = current.appearanceSources?.[key];
+    let negative = '';
+    if ((row?.presetAppearance || row?.resolvedAppearance) && !current.appearanceEdited?.[key]
+        && typeof row?.negative === 'string') {
+        try {
+            if (settings.getPluginSettings().imageGenerationProvider === 'chatu8-image') negative = row.negative;
+        } catch { /* An unavailable provider cannot lend its old negative tags. */ }
+    }
     return { ...(row?.presetAppearance ? { presetAppearance: true,
         fallbackTag: row.fallbackTag || '', fallbackNl: row.fallbackNl || '' } : {}),
-        ...(row?.resolvedAppearance ? { resolvedAppearance: true } : {}) };
+        ...(row?.resolvedAppearance ? { resolvedAppearance: true } : {}),
+        ...(negative ? { negative } : {}) };
 }
 
 function renderParticipantFields(current) {
@@ -210,6 +218,7 @@ function updatePreparedPreview(current) {
         const channels = sent.nl && sent.nl === sent.prompt
             ? [`prompt / nl（相同，仅显示一次）:\n${sent.prompt}`]
             : [`prompt:\n${sent.prompt}`, ...(sent.nl ? [`nl:\n${sent.nl}`] : [])];
+        if (typeof sent.negative_prompt === 'string' && sent.negative_prompt) channels.push(`negative_prompt:\n${sent.negative_prompt}`);
         if (sent.characters?.length) channels.push(`人物标签：\n${sent.characters.map(row =>
             `${row.name}${row.nl === row.tag ? '（tag / nl 相同，仅显示一次）' : ''}: ${row.tag}`
             + (row.nl && row.nl !== row.tag ? `\nnl: ${row.nl}` : '')).join('\n')}`);

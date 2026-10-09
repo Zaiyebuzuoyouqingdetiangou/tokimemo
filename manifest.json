@@ -1,9 +1,9 @@
 {
     "display_name": "心迹回廊",
     "loading_order": 110,
-    "js": "index.js?heartbeat=1.0.47&layout=8",
+    "js": "index.js?heartbeat=1.0.49&layout=8",
     "author": "Toto",
-    "version": "1.0.47",
+    "version": "1.0.49",
     "auto_update": true,
     "minimum_client_version": "1.13.0",
     "hooks": {

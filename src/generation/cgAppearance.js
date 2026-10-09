@@ -19,9 +19,13 @@ const SCENE_LIMIT = 1800;
 const ROLES = Object.freeze(['char', 'user']);
 
 function presetProvenance(row) {
+    const negative = (row?.presetAppearance === true || row?.resolvedAppearance === true)
+        && (row?.appearanceOverride !== true || row?.resolvedAppearance === true && row?.presetAppearance !== true)
+        ? preset_text.literalPresetAppearanceText(row?.negative) : '';
     return { ...(row?.presetAppearance === true ? { presetAppearance: true,
         fallbackTag: plain(row.fallbackTag, CG_APPEARANCE_TAG_LIMIT),
         fallbackNl: plain(row.fallbackNl, CG_APPEARANCE_TAG_LIMIT) } : {}),
+        ...(negative ? { negative } : {}),
         ...(row?.resolvedAppearance === true ? { resolvedAppearance: true } : {}) };
 }
 
@@ -68,13 +72,15 @@ export function resolveCgAppearanceMetadata(context, rawMetadata, { provider, ap
         if (!preset) {
             if (!row.presetAppearance) return row;
             changed = true;
-            const { presetAppearance, fallbackTag, fallbackNl, ...own } = row;
+            const { presetAppearance, fallbackTag, fallbackNl, negative, ...own } = row;
             return { ...own, tag: fallbackTag || '', nl: fallbackNl || '', resolvedAppearance: true };
         }
         changed = true;
         const tag = appearanceText(preset.tag || preset.nl, { presetAppearance: true });
-        return { ...row, tag, nl: metadata.castSnapshot ? appearanceText(preset.nl, { presetAppearance: true }) : '',
+        const { negative: previousNegative, ...own } = row;
+        return { ...own, tag, nl: metadata.castSnapshot ? appearanceText(preset.nl, { presetAppearance: true }) : '',
             presetAppearance: true, resolvedAppearance: true,
+            ...(preset.negative ? { negative: preset.negative } : {}),
             fallbackTag: row.presetAppearance ? row.fallbackTag : row.tag,
             fallbackNl: row.presetAppearance ? row.fallbackNl : row.nl };
     });
@@ -85,7 +91,7 @@ function plain(value, limit) {
     if (typeof value !== 'string') return '';
     return text.normalizeText(value.slice(0, Math.max(limit, 16000))
         .replace(/https?:\/\/\S+/gi, ' ')
-        .replace(/\{\{[^{}]{1,100}\}\}/g, ' ')
+        .replace(/\{\{+[^{}]*?\}\}+/gu, token => preset_text.literalPresetAppearanceText(token) === null ? ' ' : token)
         .replace(/<[^>]{0,500}>/g, ' ')
         .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, ' '), limit);
 }
@@ -151,6 +157,7 @@ export function captureCgAppearanceEvidence(context, { api = globalThis.STBaiBai
                 description: tag ? '' : participantAppearanceSource(person, context),
                 knownTag: tag, knownNl: preset ? appearanceText(preset.nl, { presetAppearance: true }) : plain(known?.nl, CG_APPEARANCE_TAG_LIMIT),
                 ...(preset ? { presetAppearance: true, fallbackTag: plain(known?.tag, CG_APPEARANCE_TAG_LIMIT),
+                    ...(preset.negative ? { negative: preset.negative } : {}),
                     fallbackNl: plain(known?.nl, CG_APPEARANCE_TAG_LIMIT) } : {}) });
         });
         return Object.freeze({ castSnapshot: snapshot, characters: Object.freeze(characters),
@@ -175,6 +182,7 @@ export function captureCgAppearanceEvidence(context, { api = globalThis.STBaiBai
             knownTag: appearanceText(preset?.tag || preset?.nl || (confirmed?.manual ? manualTag : ''), { presetAppearance: !!preset }),
             knownNl: '',
             ...(preset ? { presetAppearance: true, fallbackTag: plain(confirmed?.manual ? manualTag : cast_looks.lookFromDescription(confirmed?.[role]), CG_APPEARANCE_TAG_LIMIT),
+                ...(preset.negative ? { negative: preset.negative } : {}),
                 fallbackNl: '' } : {}) });
     });
     return Object.freeze({ characters: Object.freeze(characters), missingRoles: Object.freeze(characters
@@ -410,6 +418,37 @@ export function cgPreparedVisualPrompt(scene, metadata) {
     return combined;
 }
 
+export function cgPreparedTagPrompt(scene, metadata) {
+    const visual = plain(scene, SCENE_LIMIT);
+    const normalized = scopeCgPromptMetadata(scene, metadata);
+    // Preserve the scene's existing positions/actions and each literal look.
+    // A flat transport has no native person slots: do not invent positions or
+    // turn display names and explanatory labels into image tags. Natural-only
+    // manual/legacy looks remain usable; selecting a dialect is not conversion.
+    const rows = normalized?.characters || [];
+    const nameKey = name => (name || '').normalize('NFKC').toLowerCase().trim();
+    const anchors = rows.flatMap(row => {
+        if (!row.name) return [];
+        const escaped = row.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        return Array.from(visual.matchAll(new RegExp(escaped, 'giu'))).filter(match =>
+            /[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]/u.test(row.name)
+            || !/[\p{L}\p{N}_]$/u.test(visual.slice(0, match.index))
+                && !/^[\p{L}\p{N}_]/u.test(visual.slice(match.index + match[0].length)))
+            .map(match => ({ row, start: match.index, end: match.index + match[0].length }));
+    });
+    return [visual, ...rows.map(row => {
+        const look = row.tag || row.nl;
+        if (!look || !row.name || rows.filter(other => nameKey(other.name) === nameKey(row.name)).length !== 1) return look;
+        const mentioned = anchors.some(hit => hit.row === row && !anchors.some(other =>
+            other.row !== row && other.start <= hit.start && other.end >= hit.end
+            && other.end - other.start > hit.end - hit.start));
+        // Retain an identity already explicit in the scene without introducing
+        // absent display names, invented positions, or ambiguous namesakes.
+        return mentioned ? `${row.name}: ${look}` : look;
+    })]
+        .filter(Boolean).join(', ');
+}
+
 // A Chinese saved appearance is a translation source, not an English tag to copy
 // verbatim. The original saved looks are never edited; the result stays a draft.
 export function appearanceEvidenceForFormat(evidence, promptFormat) {
@@ -427,19 +466,23 @@ export function appearanceEvidenceWithDraft(evidence, draft, context = null) {
     return { ...evidence, characters: (evidence?.characters || []).map(row => {
         const key = evidence.castSnapshot ? row.participantId : row.role;
         const current = Object.hasOwn(draft, key) ? draft[key] : null;
+        // Current provider evidence owns negative exclusions. A draft may hold
+        // an older preset, or be an explicit positive-appearance replacement.
+        const { negative: draftNegative, ...draftProvenance } = presetProvenance(current);
+        const { negative: previousNegative, ...withoutNegative } = row;
         if (row.presetAppearance && current && typeof current === 'object' && !Array.isArray(current)
             && current.appearanceOverride !== true) {
             // The provider may gain a preset after the editor opened. A
             // prefilled, untouched local tag is a fallback, not a manual veto.
-            return { ...row, ...presetProvenance(current),
+            return { ...row, ...draftProvenance,
                 ...(!current.presetAppearance ? { fallbackTag: plain(current.tag, CG_APPEARANCE_TAG_LIMIT),
                     fallbackNl: plain(current.nl, CG_APPEARANCE_TAG_LIMIT) } : {}) };
         }
         if (current?.presetAppearance && current.appearanceOverride !== true) {
             // The provider may have removed/renamed the preset while this editor
             // stayed open. Do not turn its old rendered value into our fallback.
-            if (row.presetAppearance) return { ...row, ...presetProvenance(current) };
-            return { ...row, knownTag: plain(current.fallbackTag, CG_APPEARANCE_TAG_LIMIT),
+            if (row.presetAppearance) return { ...row, ...draftProvenance };
+            return { ...withoutNegative, knownTag: plain(current.fallbackTag, CG_APPEARANCE_TAG_LIMIT),
                 knownNl: plain(current.fallbackNl, CG_APPEARANCE_TAG_LIMIT) };
         }
         if (evidence.castSnapshot) {
@@ -453,13 +496,13 @@ export function appearanceEvidenceWithDraft(evidence, draft, context = null) {
             const description = !knownTag && row.knownTag && !row.description
                 ? participantAppearanceSource(evidence.castSnapshot.people.find(person => person.id === row.participantId), context)
                 : row.description;
-            return { ...row, description, knownTag, knownNl, ...presetProvenance(value),
+            return { ...withoutNegative, description, knownTag, knownNl, ...presetProvenance(value),
                 ...(value?.appearanceOverride === true ? { appearanceOverride: true } : {}) };
         }
         if (!ROLES.includes(row.role) || !Object.hasOwn(draft, row.role)) return row;
         const value = draft[row.role];
         if (typeof value !== 'string' && (!value || typeof value !== 'object' || Array.isArray(value))) return row;
-        return { ...row, knownTag: appearanceText(typeof value === 'string' ? value : value.tag, value), knownNl: '', ...presetProvenance(value),
+        return { ...withoutNegative, knownTag: appearanceText(typeof value === 'string' ? value : value.tag, value), knownNl: '', ...presetProvenance(value),
             ...(typeof value === 'string' || value.appearanceOverride === true ? { appearanceOverride: true } : {}) };
     }) };
 }
@@ -493,7 +536,7 @@ export function formattedCgProviderPrompts(scene, rawMetadata, supportsCharacter
     let prompt, nl;
     if (selected === 'nai45-tags') {
         prompt = supportsCharacters && chars.length ? metadata.sceneTags || visual
-            : metadata.flatPrompt || cgPreparedVisualPrompt(visual, metadata);
+            : metadata.flatPrompt || cgPreparedTagPrompt(visual, metadata);
         nl = separateNai ? '' : prompt;
     } else {
         // flatPrompt is editable and may contain unique user instructions. Keep

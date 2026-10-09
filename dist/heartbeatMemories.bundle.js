@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
-// Source modules: 342
-// Source SHA-256: 514b3a8e390d5e96be3cfa0976b9708559f6638862774ae70010b8421e8daae7
+// Source modules: 344
+// Source SHA-256: ccf6fd26e1e4ed9728d9f6c7356f1509225a460ee74d350e5bf1039ac55a3104
 // Build: python3 tools/verification/build.py <source-root>
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -148,6 +148,7 @@ const __m_core_worldPresentation_js = Object.create(null);
 const __m_extras_collection_js = Object.create(null);
 const __m_extras_coupleAvatar_js = Object.create(null);
 const __m_extras_coupleAvatarCrop_js = Object.create(null);
+const __m_extras_coupleAvatarPromptFormat_js = Object.create(null);
 const __m_extras_coupleAvatarStyles_js = Object.create(null);
 const __m_extras_intel_js = Object.create(null);
 const __m_extras_mv_js = Object.create(null);
@@ -158,6 +159,7 @@ const __m_extras_mvIllustration_js = Object.create(null);
 const __m_extras_mvImageTools_js = Object.create(null);
 const __m_extras_mvMedia_js = Object.create(null);
 const __m_extras_mvMusicLink_js = Object.create(null);
+const __m_extras_mvPromptFormat_js = Object.create(null);
 const __m_extras_mvStage_js = Object.create(null);
 const __m_extras_mvStillPrompt_js = Object.create(null);
 const __m_extras_mvTegakiDirection_js = Object.create(null);
@@ -508,7 +510,7 @@ function __init_core_releaseNotes_js() {
 // MODULE: core/releaseNotes.js
 
 // GENERATED FROM README.md by tools/verification/build.py. Do not edit by hand.
-const RELEASE_README = "# 心迹回廊 1.0.47\n\n## 更新日志模块\n\n新增了更新日志板块，感谢@nancyindaeyo的更新。\n\n## 本次变动\n\n- 柏宝绘与智绘姬统一按当前所选渠道逐人读取人物预设，覆盖普通 CG、手书素材与旧版帧、情侣头像。缺失、不兼容、重名或不同人物对应同一预设时，仅该人物回退自己的外貌 tag；不发送待猜测的人物标记。\n- 修复“没有外貌就默认不出镜”：本图名单与外貌是否齐全分开处理。明确勾选的单人图只发送该人的外貌；保存外貌时保留未出镜人物的已存 tag，真正手动清空仍有效。\n- 修复旧图缺少外貌行后无法使用新增预设、情侣头像只改名字却误判为手改外貌的问题。两个渠道的发送预览与实际请求共用组装逻辑，手改外貌与完整提示优先保留。\n- 保留有效 NAI 花括号权重，过滤真实的未展开动态标记；手部和背影只采用对应可见外貌，不把面部预设带入裁切镜头。\n- 柏宝绘已耗尽限流等待后不再自动切换渠道发第二次请求。沿用图片生成后保存失败不重画的保护，旧图与已生成结果继续保留。\n\n- 使用说明：智绘姬按姓名、明确别名或预设键精确匹配；柏宝绘通过公开 API v1 的人物库按姓名精确匹配。预设只读取可见外貌，不把人物库的旧服装或动作覆盖到当前场景。预设缺失时继续用原有 tag，无需增加生图步骤。\n- “本图出镜”只管这一张图；不删除角色资料。表情卡拍的制作规则、歌曲和双人对唱、已有素材与剪辑时序保持原样。自动化验证使用本地模拟接口，现场插件与实际模型出图仍需实测。\n";
+const RELEASE_README = "# 心迹回廊 1.0.49\n\n## 更新日志模块\n\n新增了更新日志板块，感谢@nancyindaeyo的更新。\n\n## 本次变动\n\n- 手书与情侣头像接入生图提示词格式选择：NAI 4.5 使用英文 tag，NAI 5 使用自然语言画面描述。人物外貌仍可使用预设中的英文 tag；格式选择不会替用户切换生图插件的实际模型。\n- 新建手书分镜时保存本次格式，后续补充与改写沿用该记录的格式；制作设置可选择新分镜的格式。情侣头像新生成时读取当前生图设置。切换选项不会自动翻译旧稿或手写提示，也不会额外发起转换请求。\n- 修复柏宝绘不支持独立人物栏时，NAI 4.5 自动拼接中文姓名和“人物外貌”说明的问题；保留已有场景关系、手填内容与完整外貌。\n- 修复平面发送时误删有效 NAI 花括号权重的问题；未解析的动态宏仍不发给模型。\n- 继续保留人物预设优先、专属负面词传递和生成成功后只恢复保存的行为。表情卡拍的制作规则、歌曲与双人对唱、旧素材与剪辑时序保持原样。\n";
 
 __m_core_releaseNotes_js.RELEASE_README = RELEASE_README;
 }
@@ -518,14 +520,20 @@ function __init_extras_coupleAvatar_js() {
 const core_context = __m_core_context_js;
 const core_castLooks = __m_core_castLooks_js;
 const core_text = __m_core_text_js;
+const core_settings = __m_core_settings_js;
+const cg_format = __m_core_cgPromptFormat_js;
 const appearance_presets = __m_generation_imageAppearancePresets_js;
 const cg_core = __m_generation_cgImageCore_js;
 const image_patch = __m_core_cgImagePatch_js;
 const task_trace = __m_core_taskTrace_js;
 const runtime = __m_core_state_js;
 const styles = __m_extras_coupleAvatarStyles_js;
+const prompt_format = __m_extras_coupleAvatarPromptFormat_js;
 // 独立的情侣头像：一次生图得到一对，原图与裁切参数按聊天保存在本机。
 // 这里不读取或修改正式档案，也不为生图增加数量、外貌或比例门槛。
+
+
+
 
 
 
@@ -556,6 +564,13 @@ function optionalContext() {
     try { return core_context.currentCharacterGuard(); } catch { return null; }
 }
 
+function couplePromptFormat(context, saved = '') {
+    const frozen = cg_format.normalizeCgPromptFormat(saved);
+    if (!context) return frozen;
+    try { return cg_format.normalizeCgPromptFormat(core_settings.getPluginSettings(context).cgPromptFormat, frozen); }
+    catch { return frozen; }
+}
+
 function couplePresetPeople(people, context) {
     // Storage/history normalization passes null: never rewrite the identities
     // that produced an existing pair just because a provider preset changed.
@@ -570,7 +585,8 @@ function couplePresetPeople(people, context) {
             ...(edited ? { appearanceOverride: true } : {}) };
         const preset = !edited ? presets.get(person.id) : null;
         const appearance = text(preset?.tag) || text(preset?.nl);
-        return appearance ? { ...local, appearance, fallbackAppearance: fallback, presetAppearance: appearance } : local;
+        return appearance ? { ...local, appearance, fallbackAppearance: fallback, presetAppearance: appearance,
+            ...(text(preset?.negative) ? { presetNegative: text(preset.negative) } : {}) } : local;
     });
 }
 
@@ -594,13 +610,15 @@ function baseCoupleSettings(context) {
 
 function defaultCoupleSettings(context = optionalContext()) {
     const settings = baseCoupleSettings(context);
-    return { ...settings, people: couplePresetPeople(settings.people, context) };
+    const promptFormat = couplePromptFormat(context);
+    return { ...settings, people: couplePresetPeople(settings.people, context), ...(promptFormat ? { promptFormat } : {}) };
 }
 
 function normalizeCoupleSettings(value, context = optionalContext()) {
     const input = value && typeof value === 'object' ? value : {};
     const defaults = baseCoupleSettings(context);
     const styleId = text(input.styleId);
+    const promptFormat = couplePromptFormat(context, input.promptFormat);
     return {
         people: couplePresetPeople(defaults.people.map((person, index) => {
             const source = Array.isArray(input.people) && input.people[index] && typeof input.people[index] === 'object' ? input.people[index] : {};
@@ -610,6 +628,7 @@ function normalizeCoupleSettings(value, context = optionalContext()) {
                 appearance: own(source, 'appearance') ? text(source.appearance) : person.appearance,
                 ...(own(source, 'fallbackAppearance') ? { fallbackAppearance: text(source.fallbackAppearance) } : {}),
                 ...(text(source.presetAppearance) ? { presetAppearance: text(source.presetAppearance) } : {}),
+                ...(text(source.presetAppearance) && text(source.presetNegative) ? { presetNegative: text(source.presetNegative) } : {}),
                 ...(source.appearanceOverride === true ? { appearanceOverride: true } : {}),
             };
         }), context),
@@ -618,6 +637,7 @@ function normalizeCoupleSettings(value, context = optionalContext()) {
         interaction: own(input, 'interaction') ? text(input.interaction) : defaults.interaction,
         clothing: text(input.clothing), background: text(input.background),
         direction: text(input.direction), customStyle: text(input.customStyle), interactionDetail: text(input.interactionDetail),
+        ...(promptFormat ? { promptFormat } : {}),
     };
 }
 
@@ -650,6 +670,7 @@ function appearanceReference(value, animal, object) {
 function couplePromptParts(value, context = optionalContext()) {
     const settings = normalizeCoupleSettings(value, null);
     settings.people = couplePresetPeople(settings.people, context);
+    const promptFormat = couplePromptFormat(context, settings.promptFormat);
     const chosen = styles.COUPLE_STYLES.find(style => style.id === settings.styleId);
     const animal = chosen?.group === 'animal';
     const object = chosen?.group === 'craft' || ['fantasy-enamel', 'fantasy-shadow'].includes(chosen?.id);
@@ -697,6 +718,10 @@ function couplePromptParts(value, context = optionalContext()) {
         'outer white frame, panel border, central white gutter, split screen, rounded portrait cards, circular picture frames, letterboxing, vignette, fading to blank edges, duplicate character, cloned face, mirrored pose, text, watermark',
         animal ? 'human face, human body, human hands, person wearing animal ears, person holding an animal' : '',
     ].filter(Boolean).join(', ');
+    if (promptFormat === 'nai45-tags') return prompt_format.coupleAvatarTagParts({
+        settings, chosen, animal, object, subject, fullFigure, negative,
+        appearances: settings.people.map(person => appearanceReference(person.appearance, animal, object)),
+    });
     // BaiBai NAI has documented tag + natural-language fields. Keep each
     // literal appearance at the start of its own tag list (including count
     // tokens the provider normalizes), and put the action in that subject's
@@ -718,15 +743,18 @@ function couplePromptParts(value, context = optionalContext()) {
             name: `${index ? '右边' : '左边'} · ${person.name || (index ? '人物二' : '人物一')}`,
             tag: [appearanceReference(person.appearance, animal, object), rendering || subject].filter(Boolean).join(', '),
             nl: `On the ${index ? 'right' : 'left'}, ${actions[index]}.`,
+            ...(text(person.presetNegative) ? { negative: text(person.presetNegative) } : {}),
         })),
     };
     return { scene: [styleLead, ...composition].filter(Boolean).join('\n'),
         // Put the actual two appearances before general art direction on flat
         // backends, where a long scene used to bury the individual identities.
         prompt: [styleLead, ...people, ...composition].filter(Boolean).join('\n'), negative, nai,
+        ...(promptFormat ? { promptFormat } : {}),
         characters: settings.people.map((person, index) => ({
             name: `${index ? '右边' : '左边'} · ${person.name || (index ? '人物二' : '人物一')}`,
             tag: [people[index], styleLead, construction].filter(Boolean).join('\n'),
+            ...(text(person.presetNegative) ? { negative: text(person.presetNegative) } : {}),
         })) };
 }
 
@@ -999,7 +1027,8 @@ async function generateCouple(value, { context = core_context.currentCharacterGu
             orientation: 'landscape', respectOrientation: true, aspectRatio: '2:1',
             characterName: settings.people[0].name || context?.name2 || '',
             targetKey, singlePrompt: true, preservePrompt: true, onProgress: report,
-            avatarPromptParts: { scene: parts.scene, characters: parts.characters, negative: parts.negative, nai: parts.nai },
+            avatarPromptParts: { scene: parts.scene, characters: parts.characters, negative: parts.negative, nai: parts.nai,
+                ...(parts.promptFormat ? { promptFormat: parts.promptFormat } : {}) },
         });
         task_trace.markStage(trace, 'request');
         task_trace.markStage(trace, 'response');
@@ -1217,6 +1246,275 @@ __m_extras_coupleAvatarCrop_js.normalizeCrop = normalizeCrop;
 __m_extras_coupleAvatarCrop_js.cropRect = cropRect;
 __m_extras_coupleAvatarCrop_js.cropPairImage = cropPairImage;
 __m_extras_coupleAvatarCrop_js.cropPreviewStyle = cropPreviewStyle;
+}
+
+function __init_extras_coupleAvatarPromptFormat_js() {
+// MODULE: extras/coupleAvatarPromptFormat.js
+
+// Locally authored tag recipes. These are a second rendering of the existing
+// choices, not a prose-to-tag translator. User text and identity references are
+// kept intact; no model request, parsing of prose, or preset lookup occurs here.
+const STYLE_TAGS = Object.freeze({
+    'chibi-dumpling': 'chibi, two-head-tall proportions, oversized head, tiny torso, stubby arms and feet, rounded dumpling shapes, simple facial features, minimal facial shading',
+    'chibi-three-head': 'chibi, three-head-tall proportions, small clothed body, expressive little gestures, recognizable clothing details, balanced miniature proportions',
+    'chibi-headshot': 'chibi portrait, oversized rounded face, small nose and mouth, enlarged expressive eyes, distinctive hair silhouette, small visible shoulders',
+    'chibi-doodle': 'hand-drawn doodle, dot eyes, uneven pen-stroke mouth and hair, simplified silhouette, small flat color patches, loose lively outlines',
+    'chibi-animal': 'animal-only chibi illustration, rounded animal skulls, species-specific muzzles or beaks, compact animal bodies, miniature animal limbs, individual markings and accessories',
+    'chibi-meme': 'chibi reaction illustration, squashed miniature bodies, exaggerated mouth and eyebrows, distinct reactions, simple outlines, flat fills',
+    'anime-clean': 'Japanese anime illustration, thin clean facial contours, separate hair locks, light flat colors, small clean shadows, crisp delicate linework',
+    'anime-cel': 'cel-shaded anime keyframe, crisp linework, hard-edged facial and clothing shadows, flat local colors, small highlight shapes',
+    'anime-shojo': 'romantic shoujo manga, fine expressive ink contours, facial and clothing screentones, delicate eyelashes, affectionate eyes, generous white areas',
+    'anime-retro90': '1990s anime, analog ink contours, flat painted cels, two-step face shadows, distinct hair shapes, restrained film grain',
+    'anime-korean': 'airy Korean portrait illustration, thin colored outlines, translucent skin tones, soft sparse shadows, clear airy eyes, economical hair detail',
+    'anime-storybook': 'fairytale picture-book illustration, simple facial shapes, tactile brush marks, irregular hand-drawn contours, quiet broad color areas, narrative charm',
+    'art-gongbi': 'Chinese gongbi painting, hair-fine continuous ink contours, fine hair strands, fine garment folds, layered restrained color washes, slender ink edges',
+    'art-ink': 'Chinese ink-and-light-color painting, wet and dry ink strokes, brush-shaped hair and clothes, broken brush edges, quiet paper areas, fine facial strokes, sparse color washes',
+    'art-watercolor': 'transparent watercolor portrait, overlapping translucent washes, wet-on-wet transitions, pigment blooms, controlled facial strokes, soft hair and clothing edges, subtle paper grain',
+    'art-pencil': 'colored-pencil drawing, directional pencil strokes on face and hair and fabric, layered crosshatching, visible paper tooth, uncolored paper highlights',
+    'art-oil': 'oil portrait painting, directional facial brushstrokes, solid paint planes, impasto edges, individually painted hair masses, coherent soft lighting, rich color relationships',
+    'art-sketch': 'monochrome graphite portrait sketch, pencil-built face planes, crosshatched hair and clothing, varied pencil pressure, erased highlights, white paper, identity colors as tonal differences',
+    'craft-plush': 'soft plush dolls, fabric-seamed faces and bodies, short fuzzy pile, embroidered eyes and mouths, stuffed rounded limbs, fabric hair tufts, tactile stitching',
+    'craft-clay': 'handcrafted clay figurines, sculpted rounded faces, chunky clay hair locks, small modeled limbs, matte handmade surfaces, physical cast shadows',
+    'craft-crochet': 'crocheted amigurumi dolls, crochet-loop faces and bodies, visible yarn stitches, yarn-strand hair, tiny crocheted clothes, stitched eyes',
+    'craft-felt': 'needle-felted wool dolls, fiber-built cheeks and hair and limbs, fine soft fibers, uneven fuzzy edges, soft wool volume, handmade contours',
+    'craft-vinyl': 'designer vinyl toys, large simple molded shapes, satin vinyl faces, printed facial features, sculpted hair masses, small mold seams, collectible toy proportions',
+    'craft-paper': 'layered cut-paper collage portraits, cut-paper faces and hair and clothes, sharp and torn paper edges, tiny inter-layer shadows, tactile colored paper',
+    'graphic-pixel': '16-bit pixel art bust portraits, consistent visible pixel grid, carefully shaped pixel clusters, clear facial color separation, distinct pixel hair and clothing, crisp stepped edges, nuanced retro game palette',
+    'graphic-line': 'minimal line-art portraits, economical continuous facial and hair contours, open unshaded interiors, distinctive silhouettes, expressive linework',
+    'graphic-silhouette': 'two-color silhouette portraits, flat color shapes, distinctive profiles and hair and accessory contours, negative-space facial shapes, identity colors as contrasting shapes',
+    'graphic-print': 'vintage relief-print portraits, carved facial and hair and fabric hatching, limited ink overprints, uneven ink edges, flat printed shapes',
+    'graphic-sticker': 'die-cut character sticker illustrations, bold simplified silhouettes, readable expressions, clean flat and cel colors, subject-following white contour outlines',
+    'graphic-geometric': 'geometric portrait illustration, geometric cheeks and eyes and hair and clothing, balanced flat color blocks, crisp color boundaries, distinctive silhouettes',
+    'photo-film': 'natural portrait photography, candid faces, natural facial asymmetry, coherent lens depth, fine film grain, restrained analog color response',
+    'photo-daylight': 'candid daylight portrait photography, natural facial planes, clear skin texture, relaxed posture, soft natural light, soft background defocus',
+    'photo-studio': 'vintage studio portrait photography, shared studio backdrop, controlled key light, soft facial shadows, restrained vintage photographic color',
+    'photo-night': 'cinematic nighttime portrait photography, natural facial structure, shared colored night lighting, natural shadow falloff, background bokeh, readable eyes',
+    'photo-backlight': 'backlit portrait photography, natural facial structure, fine rim-lit hair, gentle optical bloom, shallow depth of field, readable eyes',
+    'photo-mono': 'black-and-white portrait photography, photographic tonal gradients, natural skin texture, coherent lens perspective, expressive faces, identity colors as tonal differences',
+    'chibi-mochi': 'mochi-like chibi, near-spherical head-and-body silhouette, tiny feet, miniature limbs, dot facial features, soft squashy shapes, small signature accessories',
+    'chibi-sleepy': 'sleepy miniature chibi, oversized sleepy head, half-closed eyes, stubby small body, soft rounded loose outlines, distinct sleepy reactions',
+    'chibi-crayon': 'childlike crayon chibi illustration, wax-stroke faces and hair and bodies, naive rounded proportions, simple expressions, layered wax fills, small paper-grain flecks',
+    'anime-flat': 'flat-color anime illustration, clear economical facial and clothing contours, flat local colors, minimal shadows, clean silhouettes, restrained palette',
+    'anime-manga': 'black-and-white manga portrait, expressive black ink contours, solid black areas, white paper, patterned screentones, ink-shaped expressions, identity colors as tonal differences',
+    'anime-pastel': 'pastel animation drawing, soft colored outlines, round animated faces, pale flat cel shadows, pastel character colors, airy candy-colored palette',
+    'anime-webtoon': 'modern webtoon portrait illustration, economical facial contours, one or two facial shadow shapes, broad clean hair masses, flat skin colors, selective cel shading',
+    'art-gouache': 'opaque gouache painting, overlapping chalky facial and hair brushstrokes, matte broad color planes, visible bristle marks, irregular painted edges',
+    'art-pastel': 'oil-pastel portrait drawing, thick wax strokes on face and hair and fabric, broken color, visible paper tooth, smudged layered edges',
+    'art-charcoal': 'monochrome charcoal portrait drawing, resolved charcoal face planes, energetic hair strokes, controlled rubbed midtones, lifted paper highlights, gestural contours, velvety paper texture, identity colors as tonal differences',
+    'art-risograph': 'risograph portrait print, limited spot-color layers, fine visible ink grain, subtle broad-edge registration shifts, aligned facial contours, distinct individual features',
+    'craft-porcelain': 'glazed porcelain dolls, small sculpted ceramic faces, painted-on facial features and hair, rounded porcelain bodies, translucent glaze reflections',
+    'craft-wood': 'hand-carved wooden dolls, faceted carved faces and hair and bodies, visible wood grain, tiny painted facial features, solid wooden silhouettes',
+    'craft-origami': 'origami character figures, folded-paper heads and faces and clothing, geometric paper planes, sharp creases, visible paper thickness, small cast shadows',
+    'craft-bead': 'fused-bead portraits, individual cylindrical plastic beads, regular square grid, bead-built facial features and hair, visible bead holes, flat craft object photography',
+    'graphic-8bit': '8-bit pixel art bust portraits, consistent square pixel grid, small limited palette, readable pixel facial features, distinctive pixel hair and clothing, crisp stepped edges',
+    'graphic-pop': 'pop-art portraits, bold graphic facial outlines, large halftone dots on subjects, contrasting flat spot colors, graphic hair and clothes',
+    'graphic-comic': 'vintage comic-book portraits, heavy expressive ink contours, crosshatched facial shadows, textured printed halftone colors, simplified readable hair masses',
+    'graphic-lino': 'two-color linocut stamp portraits, broad carved negative spaces, clear printed faces and hair and clothing, controlled ink-transfer texture, coherent facial marks, clean cut silhouettes',
+    'photo-instant': 'instant-film candid portrait photography, natural faces, soft direct flash, mild analog color shifts, shallow lens depth, informal snapshot, edge-to-edge scenery',
+    'photo-rain': 'rainy-window portrait photography, natural facial planes, realistic skin texture, soft window sidelight, optical glass reflections, defocused background raindrops',
+    'animal-cat': 'small cats, feline skulls, round feline faces, triangular ears, short muzzles, whiskers, paws, curved tails, individual fur markings, animal-only illustration',
+    'animal-dog': 'small dogs, canine muzzles and noses, soft dog ears, paws, wagging tails, individual fur markings, distinct animal expressions, animal-only illustration',
+    'animal-fox': 'little foxes, long fox muzzles, pointed ears, fluffy cheek fur, four animal limbs, bushy tails, individual fur markings, animal-only storybook illustration',
+    'animal-rabbit': 'little lop-eared rabbits, rabbit noses, round cheeks, long floppy ears, small forepaws, rounded hindquarters, round tails, animal-only illustration',
+    'animal-bear': 'small bears, short bear muzzles, round ears, compact thick animal bodies, broad soft paws, individual posture and accessories, animal-only illustration',
+    'animal-bird': 'round little birds, visible beaks, feathered bodies, tiny wings, bird feet, individual feather markings, distinct bird expressions, animal-only illustration',
+    'animal-seal': 'plump baby seals, short seal muzzles, whiskers, smooth rounded animal bodies, flippers, individual markings and accessories, distinct seal expressions, animal-only illustration',
+    'fantasy-glass': 'stained-glass portraits, colored-glass cheeks and eyes and hair and clothing, lead seams, translucent glass shapes, faceted transmitted light',
+    'fantasy-enamel': 'hard-enamel portrait pins, raised polished metal outlines, glossy solid enamel faces and hair and clothes, physical pin edges and thickness, collectible objects',
+    'fantasy-embroidery': 'embroidered portraits on fabric, directional thread-stitch faces and hair, stitched clothing, visible satin stitches, tactile thread relief',
+    'fantasy-mosaic': 'ceramic portrait mosaics, tessera-built facial features and hair and clothes, tiny colored ceramic tiles, visible grout, glazed reflections',
+    'fantasy-blueprint': 'cyanotype portrait print, Prussian blue and paper white only, photographic contact-print silhouettes, uneven print tone, botanical shadows, identity colors as tonal differences',
+    'fantasy-shadow': 'Chinese shadow-puppet figures, translucent colored leather faces and bodies, cutout facial ornament, articulated puppet limbs, intricate carved patterns, backlit color',
+    'fantasy-luminous': 'illuminated layered-paper portrait diorama, cut-paper faces and bodies, physical paper layers and edges, visible edge depth, gentle light between layers',
+    'fantasy-fresco': 'mineral-pigment fresco portraits, matte mineral facial planes, flowing mural hair contours, broad restrained colors, fine plaster texture, selective surface wear, clear facial features',
+});
+
+// Each entry is [shared scene, left action, right action]. The role recipes
+// deliberately differ, so switching formats cannot turn an exchange into two
+// mirrored poses or lose which subject offers and which subject receives.
+const INTERACTION_TAGS = Object.freeze({
+    '半颗爱心': ['complementary heart halves, complete heart at center', 'holding left heart half toward right, affectionate expression', 'holding right heart half toward left, answering smile'],
+    '隔空对望': ['mutual gaze, affectionate connection', 'turned slightly right, looking at partner', 'turned slightly left, returning gaze, soft smile'],
+    '左右眨眼': ['complementary playful winks, distinct head tilts', 'confident playful wink, tilted head', 'bashful wink, opposite head tilt'],
+    '一根红线': ['red thread connecting both subjects, continuous thread across center', 'lifting red thread end toward right', 'gently holding other red thread end toward left, attentive gaze'],
+    '隔空击掌': ['high five at center, connected reaching limbs', 'raised inner limb toward right, playful anticipation', 'inner limb reaching left, answering high five'],
+    '悄悄牵住衣角': ['gentle clothing or accessory tug, shy reaction', 'gently catching partner clothing edge or accessory', 'glancing back at clothing tug, shy expression'],
+    '递出一朵花': ['flower exchange at center', 'offering flower toward right', 'reaching left, receiving flower'],
+    '碰一碰鼻尖': ['gentle nose touch, inward-facing faces', 'leaning right, gentle forward head tilt', 'leaning left, answering head tilt, noses touching'],
+    '替你理围巾': ['scarf adjustment, caring gesture', 'reaching inward, straightening partner scarf', 'still posture, soft smile, scarf being adjusted'],
+    '藏在背后的小花': ['hidden flower surprise', 'small flower hidden behind back, expectant expression', 'peeking inward, curious gaze toward hidden flower'],
+    '一边闹一边笑': ['playful teasing, responsive laughter', 'animated teasing gesture, mischievous expression', 'laughing in response, relaxed different posture'],
+    '假装生气': ['mock annoyance, affectionate amusement', 'puffed cheeks, mock annoyed expression', 'suppressed amused smile, sidelong gaze'],
+    '偷偷模仿你': ['playful pose imitation, contrasting expressions', 'serious confident pose', 'imitating partner pose, mischievous expression'],
+    '一边偷看一边躲': ['shy glances, small hiding prop', 'peeking inward from behind small prop', 'bashfully turning slightly away, noticing partner glance'],
+    '互相做鬼脸': ['exchanged silly faces, distinct expressions', 'silly face toward right, puffed cheeks', 'different silly face toward left, tongue out'],
+    '一边困一边闹': ['sleepy and energetic contrast', 'drowsy expression, half-closed eyes, relaxed posture', 'energetic inward lean, playful attention-seeking gesture'],
+    '偷偷戴上同款': ['matching small accessories, shared secret', 'showing matching accessory, knowing smile', 'wearing matching accessory, feigned innocent expression'],
+    '被发现的偷笑': ['caught laughing, knowing glance', 'suppressing laugh, caught expression', 'knowing sidelong look toward left'],
+    '举杯碰杯': ['shared toast, cups meeting at center', 'raising cup toward right inner edge', 'tilting cup toward left, answering toast'],
+    '一人一只小动物': ['one small companion pet per subject, affectionate pet interaction', 'gently cuddling small pet, inward gaze', 'another small pet leaning close, inward answering gaze'],
+    '耳机分你一只': ['shared earphone cable, one earphone per subject', 'offering earphone cable inward, pleased expression, one earphone', 'listening through one earphone, soft answering expression'],
+    '同款不同色': ['coordinated clothing or accessories, complementary colors', 'first coordinated color version, open pose', 'complementary color version, relaxed different pose'],
+    '一起看烟花': ['shared fireworks, matching reflected light, distinct delighted expressions', 'pointing toward fireworks, delighted surprise', 'watching same fireworks, quiet smile, reflected fireworks light'],
+    '并肩吹泡泡': ['blowing bubbles together, bubbles drifting across scene', 'blowing bubble toward right', 'watching incoming bubble, bubble wand ready, answering smile'],
+    '共用一条围巾': ['one long shared scarf across center', 'holding scarf end near chest', 'nestled in other scarf end, answering head tilt'],
+    '分享一把伞': ['one shared umbrella, offered shelter', 'holding umbrella tilted inward toward partner', 'leaning into shared shelter, grateful expression'],
+    '一起读一本书': ['shared open book at lower center', 'pointing at book passage, attentive expression', 'following indicated passage, amused reaction'],
+    '举起同款相机': ['matching small cameras, shared photography moment', 'camera raised, taking picture toward right', 'matching camera held lower, smiling for picture'],
+    '一人一半饼干': ['two halves of same cookie', 'offering cookie half inward', 'holding complementary cookie half, pleased answering expression'],
+    '递来最后一口': ['last snack bite offered at center', 'offering last snack bite toward right', 'leaning toward offered bite, pleasantly surprised eyes'],
+    '草莓分给你': ['shared strawberry snack', 'holding out strawberry toward right', 'eager lean toward strawberry, answering expression'],
+    '两杯不同口味': ['two drink flavors, matching cups in different colors', 'holding first drink flavor, curious glance', 'holding other drink flavor, pleased answering expression'],
+    '偷吃被发现': ['snack crumbs, caught snacking', 'crumbs near mouth, caught expression', 'looking at partner crumbs, amused surprise'],
+    '一串糖葫芦': ['shared candied-fruit skewer', 'offering candied-fruit skewer toward right', 'leaning inward, preparing to bite offered fruit'],
+    '交换便当': ['two small lunch boxes, lunch box exchange', 'offering first lunch box inward, warm smile', 'receiving first lunch box, offering second lunch box back'],
+    '融化的冰淇淋': ['melting ice cream, offered napkin', 'holding melting ice cream, worried expression', 'offering napkin toward left, reassuring smile'],
+    '接住一片落叶': ['drifting autumn leaf across center', 'releasing leaf toward right', 'reaching inward, catching drifting leaf'],
+    '一起捧雪花': ['snowflakes near faces, distinct delighted reactions', 'cupping snowflake, surprised expression', 'watching another snowflake, soft delighted expression'],
+    '围巾里躲风': ['shared warmth, wind shelter', 'nestled low in scarf, braced against wind', 'leaning inward for warmth, gentle expression'],
+    '花瓣落在头顶': ['flower petal on head, affectionate discovery', 'unnoticed flower petal on head', 'pointing out partner head petal, warm smile'],
+    '夏夜捕萤': ['summer-night fireflies, warm connecting light trails', 'following nearby firefly, attentive gaze', 'gently reaching toward another firefly, curious expression'],
+    '雨后踩水花': ['small puddle splash after rain', 'playfully splashing puddle toward right', 'reacting to incoming splash, amused surprise'],
+    '同一阵风': ['shared breeze, same-direction hair or fur or accessory movement', 'facing breeze, lifted gaze', 'lightly braced against same breeze, different head angle'],
+    '日与月的呼应': ['sun and moon motifs, complementary warm and cool light', 'sun motif, warm light, open pose', 'moon motif, cool light, different quiet pose'],
+    '星星递给你': ['small glowing star exchange', 'offering glowing star toward right', 'reaching inward toward offered star'],
+    '拼成一朵花': ['complementary flower halves, completed flower at center', 'holding first flower half at inner edge', 'holding complementary flower half, completing flower, answering expression'],
+    '纸飞机传话': ['paper airplane across center', 'releasing paper airplane toward right', 'ready to catch incoming paper airplane from left'],
+    '两边同一片海': ['shared sea horizon, sea breeze, different seashells', 'showing first seashell, inward gaze', 'showing different seashell, answering gaze toward left'],
+});
+
+// Exact local randomCoupleIdeas templates have known actions, unlike arbitrary
+// user prose. Each moment is [literal wording, shared tags, left tags, right tags].
+const IDEA_TAG_MOMENTS = Object.freeze([
+    ['左边递出一朵小花，右边伸手接住', 'small flower exchange at center', 'offering small flower toward right', 'reaching left, receiving small flower'],
+    ['左边偷藏一颗糖，右边假装没发现', 'secretly hidden candy, affectionate shared secret', 'secretly hiding piece of candy', 'feigned ignorance of hidden candy'],
+    ['左边举起一半爱心，右边拿着另一半回应', 'complementary heart halves, complete heart at center', 'raising first heart half toward right', 'holding complementary heart half toward left, answering gesture'],
+    ['左边轻轻拉住围巾一端，右边靠过来', 'gentle scarf tug, shared closeness', 'gently tugging one scarf end', 'leaning left in response to scarf tug'],
+    ['左边捧着小星星，右边试着触碰它的光', 'small glowing star, shared starlight', 'holding small glowing star toward right', 'reaching left, touching offered starlight'],
+    ['左边吹出一个泡泡，右边追着泡泡看', 'drifting bubble across center', 'blowing bubble toward right', 'eyes following drifting bubble from left'],
+    ['左边把小纸船推过来，右边在另一侧接住', 'little paper boat exchange', 'pushing little paper boat toward right', 'catching paper boat from left'],
+    ['左边藏在叶子后偷看，右边歪头找它', 'playful hiding behind leaf', 'peeking from behind leaf', 'head tilt, looking left for hidden partner'],
+    ['左边递来热饮，右边把小饼干分过去', 'warm drink and small cookie exchange', 'offering warm drink toward right', 'offering small cookie toward left in return'],
+    ['左边举着小相机，右边故意做个鬼脸', 'small camera, playful portrait moment', 'raising small camera toward right', 'playful silly face for partner camera'],
+    ['左边把花瓣放到头顶，右边学着戴上另一片', 'flower petals on heads, playful imitation', 'placing flower petal on own head', 'imitating gesture, wearing another flower petal'],
+    ['左边送出纸飞机，右边伸手迎接', 'paper airplane across center', 'sending paper airplane toward right', 'reaching left, catching incoming paper airplane'],
+    ['左边指着远处的烟花，右边偷偷看左边', 'distant fireworks, secret affectionate glance', 'pointing toward distant fireworks', 'secretly glancing left at partner'],
+    ['左边捧着一团雪，右边围着围巾笑', 'small snowball, cozy scarf', 'cupping little snowball', 'smiling, nestled in scarf'],
+    ['左边戴着歪歪的小帽子，右边伸手扶正', 'small tilted hat, caring adjustment', 'wearing small tilted hat', 'reaching left, straightening partner tilted hat'],
+    ['左边递出一枚贝壳，右边回赠一颗小石子', 'seashell and pebble exchange', 'offering seashell toward right', 'giving small pebble toward left in return'],
+]);
+const IDEA_TAG_MOODS = Object.freeze([
+    ['一个认真、一个忍不住笑', 'serious expression', 'amused smile'],
+    ['一个害羞、一个温柔回应', 'shy expression', 'gentle warm response'],
+    ['一个得意、一个假装嫌弃', 'proud playful expression', 'playfully unimpressed reaction'],
+    ['一个好奇、一个耐心陪伴', 'curious expression', 'patient caring expression'],
+    ['一个困困的、一个很有精神', 'sleepy expression', 'energetic expression'],
+    ['一个有点惊讶、一个偷偷开心', 'slightly surprised expression', 'quietly delighted expression'],
+]);
+const IDEA_TAG_SCENES = Object.freeze([
+    ['纯色背景铺满画面，重点放在动作和表情', 'quiet solid-color background, edge-to-edge color, prominent gestures and expressions'],
+    ['同一束柔光落在两边', 'shared soft light on both subjects'],
+    ['两边用相呼应的淡色背景', 'coordinated pale colors, continuous background'],
+    ['共享一个小小的窗边场景', 'shared small window-side scene'],
+    ['点缀几片花瓣，不遮住脸', 'few drifting petals around subjects, unobscured faces'],
+    // The legacy quiet-ground wording still describes a continuous full image.
+    ['背景留白，重点放在动作和表情', 'quiet solid-color background, edge-to-edge color, prominent gestures and expressions'],
+]);
+
+function tags(parts) {
+    return parts.filter(value => typeof value === 'string' && value.length > 0).join(', ');
+}
+
+function builtInIdeaTags(raw) {
+    if (typeof raw !== 'string' || !raw) return null;
+    for (const moment of IDEA_TAG_MOMENTS) {
+        for (const mood of IDEA_TAG_MOODS) {
+            for (const scene of IDEA_TAG_SCENES) {
+                const exact = `${moment[0]}；${mood[0]}。${scene[0]}`;
+                // Match whole known templates only, with the same optional
+                // final full stop as coupleInteraction. Edited text stays raw.
+                if (raw === exact || raw === `${exact}。`) return [
+                    tags([moment[1], scene[1]]),
+                    tags([moment[2], mood[1]]),
+                    tags([moment[3], mood[2]]),
+                ];
+            }
+        }
+    }
+    return null;
+}
+
+function interactionTags(settings, chosen, animal) {
+    // Only exact catalog labels select a recipe; arbitrary saved user strings
+    // such as "constructor" remain literal text, including in both role blocks.
+    const preset = Object.prototype.hasOwnProperty.call(INTERACTION_TAGS, settings.interaction)
+        ? INTERACTION_TAGS[settings.interaction] : null;
+    if (animal && settings.interaction === '碰一碰鼻尖') {
+        if (chosen?.id === 'animal-bird') return ['gentle beak touch, inward-facing bird faces', 'leaning right, gentle forward head tilt', 'leaning left, answering head tilt, beaks touching'];
+        if (chosen?.id === 'chibi-animal') return ['gentle muzzle or beak touch, inward-facing animal faces', 'leaning right, gentle forward head tilt', 'leaning left, answering head tilt, muzzles or beaks touching'];
+    }
+    if (animal && settings.interaction === '同一阵风') return [
+        chosen?.id === 'animal-bird' ? 'shared breeze, same-direction feather or accessory movement'
+            : chosen?.id === 'chibi-animal' ? 'shared breeze, same-direction fur or feather or accessory movement'
+                : 'shared breeze, same-direction fur or accessory movement',
+        preset[1], preset[2],
+    ];
+    if (preset) return preset;
+    const raw = settings.interaction === '自定义互动' ? settings.interactionDetail : settings.interaction;
+    const idea = builtInIdeaTags(raw);
+    if (idea) return idea;
+    if (raw && raw !== '交给灵感') return [raw, tags(['left role in custom interaction', raw]), tags(['right role in custom interaction', raw])];
+    return ['affectionate interaction, complementary expressions, spontaneous gestures', 'playful individual gesture, attentive expression', 'responsive individual gesture, warm expression'];
+}
+
+function animalGestureTags(chosen) {
+    if (chosen?.id === 'animal-bird') return 'wing gestures, beak interaction, bird feet';
+    if (chosen?.id === 'animal-seal') return 'flipper gestures, seal muzzle interaction';
+    if (chosen?.id === 'chibi-animal') return 'species-appropriate paws or wings or flippers, animal gestures';
+    return 'forepaw gestures, animal muzzle interaction';
+}
+
+function coupleAvatarTagParts({ settings, chosen, animal, object, subject, fullFigure, appearances, negative }) {
+    const [interaction, leftAction, rightAction] = interactionTags(settings, chosen, animal);
+    const rendering = chosen ? STYLE_TAGS[chosen.id] || chosen.prompt : settings.customStyle;
+    const framing = !chosen ? '' : fullFigure
+        ? 'full body, complete stylized figures, selected body proportions, readable faces, connected limbs, large subjects within each half'
+        : 'head-and-shoulders or upper-body portraits, large readable faces, visible shoulders and clothing, connected gesture limbs';
+    const form = animal
+        ? tags(['complete animal bodies, species-appropriate animal anatomy, individual eyes and markings and small accessories', animalGestureTags(chosen)])
+        : object ? 'material-built faces and bodies and hair and clothing, physical material texture, crafted limbs'
+            : 'consistent medium across faces and hair and bodies and clothing';
+    const scene = tags([
+        rendering || 'illustration', form, framing,
+        `two distinct ${subject}s, side by side, horizontal paired portrait, first subject at left quarter, second subject at right quarter, balanced subject scale`,
+        'continuous edge-to-edge background, continuous center and corners, clear subject separation, quiet background detail, readable individual features, gestures within own half',
+        interaction,
+        settings.pairType === 'echo' ? 'complementary individual gestures, coordinated colors and light' : 'shared motif connecting subjects across center',
+        animal && settings.clothing ? 'small wearable accents, animal-adapted clothing' : '',
+        settings.clothing, settings.background, settings.direction,
+    ]);
+    const characters = settings.people.map((person, index) => ({
+        name: `${index ? '右边' : '左边'} · ${person.name || (index ? '人物二' : '人物一')}`,
+        tag: tags([
+            index ? 'right side, centered at right quarter' : 'left side, centered at left quarter',
+            appearances[index], rendering || subject, index ? rightAction : leftAction,
+            animal ? animalGestureTags(chosen) : '',
+        ]),
+        ...(typeof person.presetNegative === 'string' && person.presetNegative.length ? { negative: person.presetNegative } : {}),
+    }));
+    return {
+        scene,
+        // Flat providers retain two explicit positional identity blocks. Names
+        // are metadata only, never token prefixes inside a character tag list.
+        prompt: [`LEFT: ${characters[0].tag}`, `RIGHT: ${characters[1].tag}`, scene].join('\n'),
+        negative,
+        nai: { prompt: scene, nl: '', characters: characters.map(character => ({ ...character, nl: '' })) },
+        characters,
+        promptFormat: 'nai45-tags',
+    };
+}
+
+__m_extras_coupleAvatarPromptFormat_js.coupleAvatarTagParts = coupleAvatarTagParts;
 }
 
 function __init_extras_coupleAvatarStyles_js() {
@@ -1679,8 +1977,10 @@ const cache = __m_core_cache_js;
 const looks = __m_core_castLooks_js;
 const core_text = __m_core_text_js;
 const image_presets = __m_generation_imageAppearancePresets_js;
+const mv_format = __m_extras_mvPromptFormat_js;
 // Song-owned cast snapshots reuse the shared participant identity/source contract.
 // Nothing here writes the archive roster, reads an unselected lorebook, or calls a model.
+
 
 
 
@@ -1856,14 +2156,19 @@ function legacyMvLooks(context, visibleRoles = { char: 'full', user: 'full' }) {
     const names = { char: context?.name2 || '', user: context?.name1 || '' };
     const roster = Object.entries(names).map(([id, name]) => ({ id, name, visible: visibleRoles[id] || 'full' }));
     const presets = resolvedAppearances(context, roster, roster);
-    const overrides = {};
+    const overrides = {}, presetNegatives = {};
     for (const role of ['char', 'user']) if (Object.hasOwn(visibleRoles, role)) {
         const preset = presets.get(role);
-        if (preset?.tag || preset?.nl) overrides[role] = preset.tag || preset.nl;
+        if (preset?.tag || preset?.nl) {
+            overrides[role] = preset.tag || preset.nl;
+            if (preset.source === 'chatu8' && typeof preset.negative === 'string' && preset.negative) presetNegatives[role] = preset.negative;
+        }
     }
-    if (!Object.keys(overrides).length) return original;
+    // Negatives belong to this successful preset lookup, never to saved local
+    // fallback tags. Rebuild this transient map so a lost preset leaves none.
+    if (!Object.keys(overrides).length) return original ? { ...original, presetNegatives } : original;
     const tag = role => original?.manual ? original?.[role] || '' : looks.lookFromDescription(original?.[role]);
-    return { ...original, char: tag('char'), user: tag('user'), ...overrides, manual: true, resolvedAppearance: true };
+    return { ...original, char: tag('char'), user: tag('user'), ...overrides, manual: true, resolvedAppearance: true, presetNegatives };
 }
 
 function legacyMvLooksPromptLine(record, context) {
@@ -1895,22 +2200,31 @@ function visualName(record, person) {
 function castVisual(record, shot, { appearance = true, context = null } = {}) {
     const people = shotPeople(record, shot);
     const presets = appearance ? resolvedAppearances(context, record?.cast?.people, people) : null;
-    const rows = people.map(person => {
+    const rows = people.map((person, index) => {
         const clothing = list(record?.wardrobe?.characters).find(row => row.participantId === person.id)?.clothing || '';
         const crop = { hands: 'only hands in frame, face and body outside the crop', face: 'face close-up', back: 'back view, face not visible', silhouette: 'silhouette' }[person.visible] || '';
-        return `${visualName(record, person)}: ${[person.position, person.action, crop, appearance ? visibleAppearance(record, person, context, presets) : '',
-            person.visible !== 'hands' && person.visible !== 'face' && clothing ? `wearing ${clothing}` : ''].filter(Boolean).join('; ')}`;
+        const details = [person.position, person.action, crop, appearance ? visibleAppearance(record, person, context, presets) : '',
+            person.visible !== 'hands' && person.visible !== 'face' && clothing ? `wearing ${clothing}` : ''].filter(Boolean);
+        return mv_format.isTags(record) ? [`person ${index + 1}`, ...details].join(', ')
+            : `${visualName(record, person)}: ${details.join('; ')}`;
     });
     const count = shot.castUnresolved ? '' : people.length === 0 ? 'scenery, no humans' : people.length === 1 ? 'one person' : `${people.length} people in the same scene`;
-    return [count, ...rows].filter(Boolean).join('\n');
+    return mv_format.join(record, [count, ...rows]);
 }
 
 function castMetadata(record, shot, context = null) {
     if (!record?.cast || !Array.isArray(shot?.cast)) return null;
     const people = shotPeople(record, shot);
     const presets = resolvedAppearances(context, record?.cast?.people, people);
-    return { castSnapshot: { version: 1, people: people.map(person => ({ id: person.id, name: visualName(record, person), sourceRefs: person.sourceRefs, ...(person.identity ? { identity: person.identity } : {}) })) },
-        characters: people.map(person => ({ participantId: person.id, tag: visibleAppearance(record, person, context, presets), nl: '', appearanceOverride: true, resolvedAppearance: true })) };
+    // Tag scenes use these local anchors in castVisual. Keep metadata on the
+    // same anchors after resolving presets by the real, unchanged identities.
+    return mv_format.metadata(record, { castSnapshot: { version: 1, people: people.map((person, index) => ({ id: person.id, name: mv_format.isTags(record) ? `person ${index + 1}` : visualName(record, person), sourceRefs: person.sourceRefs, ...(person.identity ? { identity: person.identity } : {}) })) },
+        characters: people.map(person => {
+            const preset = presets.get(person.id);
+            const negative = preset?.source === 'chatu8' && typeof preset.negative === 'string' ? preset.negative : '';
+            return { participantId: person.id, tag: visibleAppearance(record, person, context, presets), nl: '', appearanceOverride: true, resolvedAppearance: true,
+                ...(negative ? { negative } : {}) };
+        }) });
 }
 
 __m_extras_mvCast_js.normalizeMvCast = normalizeMvCast;
@@ -2647,6 +2961,59 @@ __m_extras_mvMusicLink_js.waitMusicRequest = waitMusicRequest;
 __m_extras_mvMusicLink_js.musicLinkName = musicLinkName;
 }
 
+function __init_extras_mvPromptFormat_js() {
+// MODULE: extras/mvPromptFormat.js
+const formats = __m_core_cgPromptFormat_js;
+const settings = __m_core_settings_js;
+// A writing choice belongs to a newly authored storyboard, not the current
+// provider. Missing snapshots deliberately keep the legacy drawing path.
+
+
+function normalize(value) { return formats.normalizeCgPromptFormat(value); }
+
+function selected(context, value = '') {
+    return normalize(value) || normalize(settings.getPluginSettings(context).cgPromptFormat);
+}
+
+function recordFormat(record) { return normalize(record?.settings?.promptFormat); }
+
+function isTags(record) { return recordFormat(record) === 'nai45-tags'; }
+
+function metadata(record, value = null) {
+    const promptFormat = recordFormat(record);
+    return promptFormat ? { ...(value || { selectedRoles: [], characters: [] }), promptFormat } : value;
+}
+
+function directive(value) {
+    const format = normalize(value);
+    if (!format) return '';
+    const fields = 'shot.imagePrompt、group.characterPrompt / compositionPrompt、diff.imagePrompt、backgroundPrompt、bgs[].prompt、stage.backgrounds[].prompt、motif.prompt，以及新写的 cast[].action、wardrobe.era / char / user / characters[].clothing';
+    const common = `本节覆盖前文同名图像字段的语言与标签写法要求。本次只改变生图字段的写法，不改变已选画风、分镜方向、构图、出镜名单、表情、动作幅度、差分复用、时间与舞台参数。${fields}都遵守下述格式。已有手填外貌与衣着原文保留，不翻译或删掉；participantId、人物姓名、歌词、标签、说明和 videoZh / videoEn 的职责与语言保持原样。图像字段通过 cast 的 participantId 和已有明确方位绑定人物，不从数组顺序臆造左右站位。结构示例仅演示结构，实际图像字段以此格式为准。`;
+    return format === 'nai45-tags'
+        ? `【本次图像提示格式：NAI 4.5 · 英文 Tag】\n${common}\n新写的生图字段用英文逗号分隔的短标签，动作、表情、景别、位置、衣着、背景与光线写成具体可见标签；不写完整叙述句、中文标题、姓名前缀或 english: 前缀。稳定外貌单独按 participantId 写入 appearances[].tag，不混入场景；nl 可空。示例：medium shot, subject on the left, open palm, quiet smile, soft window light。`
+        : `【本次图像提示格式：NAI 5 · 自然语言】\n${common}\n新写的生图字段用连贯的自然语言描述单张静态画面，清楚说明每个人的动作、表情、已有方位、衣着、场景、光线和构图，不用逗号标签串代替主体描述；中英文均可。稳定外貌单独按 participantId 写入 appearances[].nl（tag 可保留有依据的英文标签），不混入场景。`;
+}
+
+// Keep literal text intact. Only automatic separators differ for new tag work.
+function join(record, parts) {
+    return parts.filter(Boolean).join(isTags(record) ? ', ' : '\n');
+}
+
+function legacyLooks(record, value, fallback) {
+    if (!isTags(record)) return fallback();
+    return [value?.char ? `${value.user ? 'main character' : 'character'}, ${value.char}` : '', value?.user ? `${value.char ? 'second character' : 'character'}, ${value.user}` : ''].filter(Boolean).join(', ');
+}
+
+__m_extras_mvPromptFormat_js.normalize = normalize;
+__m_extras_mvPromptFormat_js.selected = selected;
+__m_extras_mvPromptFormat_js.recordFormat = recordFormat;
+__m_extras_mvPromptFormat_js.isTags = isTags;
+__m_extras_mvPromptFormat_js.metadata = metadata;
+__m_extras_mvPromptFormat_js.directive = directive;
+__m_extras_mvPromptFormat_js.join = join;
+__m_extras_mvPromptFormat_js.legacyLooks = legacyLooks;
+}
+
 function __init_extras_mvStage_js() {
 // MODULE: extras/mvStage.js
 
@@ -2755,9 +3122,10 @@ __m_extras_mvStage_js.LAYOUTS = LAYOUTS;
 
 function __init_extras_mvStillPrompt_js() {
 // MODULE: extras/mvStillPrompt.js
-
+const mv_format = __m_extras_mvPromptFormat_js;
 // Each asset is one still. A complete per-diff description supersedes the
 // group's reference pose; old boards remain readable without a new model call.
+
 const text = value => typeof value === 'string' ? value.trim() : '';
 function cleanStillText(value) {
     return text(value).replace(/\benglish\s*:\s*/giu, '').trim();
@@ -2791,14 +3159,14 @@ function stillCast(group, diff) {
     })) };
 }
 
-function joinStillPrompt(parts) {
+function joinStillPrompt(parts, record = null) {
     const seen = new Set();
     return parts.map(cleanStillText).filter(part => {
         if (!part) return false;
         const key = part.toLocaleLowerCase().replace(/\s+/gu, ' ');
         if (seen.has(key)) return false;
         seen.add(key); return true;
-    }).join('\n');
+    }).join(mv_format.isTags(record) ? ', ' : '\n');
 }
 
 __m_extras_mvStillPrompt_js.cleanStillText = cleanStillText;
@@ -3034,6 +3402,13 @@ function visiblePresetAppearance(value, visible) {
     }).join(', '));
 }
 
+function presetNegative(preset) {
+    // This optional field cannot invalidate a usable positive appearance. It
+    // contains exclusions, so positive visibility filters must not reinterpret it.
+    try { return literalPresetAppearanceText(field(preset, 'negative')) || ''; }
+    catch { return ''; }
+}
+
 function chatu8PresetAppearance(context, name, options = {}) {
     try {
         const requested = normalizedName(name);
@@ -3067,7 +3442,9 @@ function chatu8PresetAppearance(context, name, options = {}) {
         const facial = visible === 'hands' ? '' : literalPresetAppearanceText(field(preset, visible === 'back' ? 'facialFeaturesBack' : 'facialFeatures'));
         if (traits === null || facial === null) return null;
         const tag = visiblePresetAppearance([traits, facial].filter(Boolean).join(', '), visible);
-        return tag ? { tag, source: 'chatu8', presetKey: key } : null;
+        if (!tag) return null;
+        const negative = presetNegative(preset);
+        return { tag, source: 'chatu8', presetKey: key, ...(negative ? { negative } : {}) };
     } catch {
         // Unsupported proxies/host versions are an unavailable preset, never a
         // reason to block generation or call another provider automatically.
@@ -3175,6 +3552,8 @@ function resolveImageAppearancePresets(context, people, { provider, api } = {}) 
             if (!['full', 'face', 'hands', 'back'].includes(visible)) continue;
             if (selected === 'chatu8-image') {
                 const appearance = chatu8.chatu8PresetAppearance(context, person.name, { visible });
+                // Preserve the same preset's optional literal negative together
+                // with its identity; collisions omit both channels for this person.
                 if (appearance?.tag) result.set(person.id, appearance);
             } else {
                 const tag = stableAppearance(field(found.row, 'tag'), visible);
@@ -24954,7 +25333,7 @@ function __init_core_selfUpdater_js() {
 const RELEASE_README = __m_core_releaseNotes_js.RELEASE_README;
 
 const UPDATE_STATE = Symbol.for('heartbeatMemories.selfUpdate');
-const INSTALLED_BUILD = '1.0.47';
+const INSTALLED_BUILD = '1.0.49';
 const PROJECT_REMOTE = 'https://github.com/zaiyebuzuoyouqingdetiangou/tokimemo';
 function updateError(message) { const error = new Error(message); error.userMessage = message; return error; }
 
@@ -41410,9 +41789,13 @@ const SCENE_LIMIT = 1800;
 const ROLES = Object.freeze(['char', 'user']);
 
 function presetProvenance(row) {
+    const negative = (row?.presetAppearance === true || row?.resolvedAppearance === true)
+        && (row?.appearanceOverride !== true || row?.resolvedAppearance === true && row?.presetAppearance !== true)
+        ? preset_text.literalPresetAppearanceText(row?.negative) : '';
     return { ...(row?.presetAppearance === true ? { presetAppearance: true,
         fallbackTag: plain(row.fallbackTag, CG_APPEARANCE_TAG_LIMIT),
         fallbackNl: plain(row.fallbackNl, CG_APPEARANCE_TAG_LIMIT) } : {}),
+        ...(negative ? { negative } : {}),
         ...(row?.resolvedAppearance === true ? { resolvedAppearance: true } : {}) };
 }
 
@@ -41459,13 +41842,15 @@ function resolveCgAppearanceMetadata(context, rawMetadata, { provider, api } = {
         if (!preset) {
             if (!row.presetAppearance) return row;
             changed = true;
-            const { presetAppearance, fallbackTag, fallbackNl, ...own } = row;
+            const { presetAppearance, fallbackTag, fallbackNl, negative, ...own } = row;
             return { ...own, tag: fallbackTag || '', nl: fallbackNl || '', resolvedAppearance: true };
         }
         changed = true;
         const tag = appearanceText(preset.tag || preset.nl, { presetAppearance: true });
-        return { ...row, tag, nl: metadata.castSnapshot ? appearanceText(preset.nl, { presetAppearance: true }) : '',
+        const { negative: previousNegative, ...own } = row;
+        return { ...own, tag, nl: metadata.castSnapshot ? appearanceText(preset.nl, { presetAppearance: true }) : '',
             presetAppearance: true, resolvedAppearance: true,
+            ...(preset.negative ? { negative: preset.negative } : {}),
             fallbackTag: row.presetAppearance ? row.fallbackTag : row.tag,
             fallbackNl: row.presetAppearance ? row.fallbackNl : row.nl };
     });
@@ -41476,7 +41861,7 @@ function plain(value, limit) {
     if (typeof value !== 'string') return '';
     return text.normalizeText(value.slice(0, Math.max(limit, 16000))
         .replace(/https?:\/\/\S+/gi, ' ')
-        .replace(/\{\{[^{}]{1,100}\}\}/g, ' ')
+        .replace(/\{\{+[^{}]*?\}\}+/gu, token => preset_text.literalPresetAppearanceText(token) === null ? ' ' : token)
         .replace(/<[^>]{0,500}>/g, ' ')
         .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, ' '), limit);
 }
@@ -41542,6 +41927,7 @@ function captureCgAppearanceEvidence(context, { api = globalThis.STBaiBaiImage, 
                 description: tag ? '' : participantAppearanceSource(person, context),
                 knownTag: tag, knownNl: preset ? appearanceText(preset.nl, { presetAppearance: true }) : plain(known?.nl, CG_APPEARANCE_TAG_LIMIT),
                 ...(preset ? { presetAppearance: true, fallbackTag: plain(known?.tag, CG_APPEARANCE_TAG_LIMIT),
+                    ...(preset.negative ? { negative: preset.negative } : {}),
                     fallbackNl: plain(known?.nl, CG_APPEARANCE_TAG_LIMIT) } : {}) });
         });
         return Object.freeze({ castSnapshot: snapshot, characters: Object.freeze(characters),
@@ -41566,6 +41952,7 @@ function captureCgAppearanceEvidence(context, { api = globalThis.STBaiBaiImage, 
             knownTag: appearanceText(preset?.tag || preset?.nl || (confirmed?.manual ? manualTag : ''), { presetAppearance: !!preset }),
             knownNl: '',
             ...(preset ? { presetAppearance: true, fallbackTag: plain(confirmed?.manual ? manualTag : cast_looks.lookFromDescription(confirmed?.[role]), CG_APPEARANCE_TAG_LIMIT),
+                ...(preset.negative ? { negative: preset.negative } : {}),
                 fallbackNl: '' } : {}) });
     });
     return Object.freeze({ characters: Object.freeze(characters), missingRoles: Object.freeze(characters
@@ -41801,6 +42188,37 @@ function cgPreparedVisualPrompt(scene, metadata) {
     return combined;
 }
 
+function cgPreparedTagPrompt(scene, metadata) {
+    const visual = plain(scene, SCENE_LIMIT);
+    const normalized = scopeCgPromptMetadata(scene, metadata);
+    // Preserve the scene's existing positions/actions and each literal look.
+    // A flat transport has no native person slots: do not invent positions or
+    // turn display names and explanatory labels into image tags. Natural-only
+    // manual/legacy looks remain usable; selecting a dialect is not conversion.
+    const rows = normalized?.characters || [];
+    const nameKey = name => (name || '').normalize('NFKC').toLowerCase().trim();
+    const anchors = rows.flatMap(row => {
+        if (!row.name) return [];
+        const escaped = row.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        return Array.from(visual.matchAll(new RegExp(escaped, 'giu'))).filter(match =>
+            /[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]/u.test(row.name)
+            || !/[\p{L}\p{N}_]$/u.test(visual.slice(0, match.index))
+                && !/^[\p{L}\p{N}_]/u.test(visual.slice(match.index + match[0].length)))
+            .map(match => ({ row, start: match.index, end: match.index + match[0].length }));
+    });
+    return [visual, ...rows.map(row => {
+        const look = row.tag || row.nl;
+        if (!look || !row.name || rows.filter(other => nameKey(other.name) === nameKey(row.name)).length !== 1) return look;
+        const mentioned = anchors.some(hit => hit.row === row && !anchors.some(other =>
+            other.row !== row && other.start <= hit.start && other.end >= hit.end
+            && other.end - other.start > hit.end - hit.start));
+        // Retain an identity already explicit in the scene without introducing
+        // absent display names, invented positions, or ambiguous namesakes.
+        return mentioned ? `${row.name}: ${look}` : look;
+    })]
+        .filter(Boolean).join(', ');
+}
+
 // A Chinese saved appearance is a translation source, not an English tag to copy
 // verbatim. The original saved looks are never edited; the result stays a draft.
 function appearanceEvidenceForFormat(evidence, promptFormat) {
@@ -41818,19 +42236,23 @@ function appearanceEvidenceWithDraft(evidence, draft, context = null) {
     return { ...evidence, characters: (evidence?.characters || []).map(row => {
         const key = evidence.castSnapshot ? row.participantId : row.role;
         const current = Object.hasOwn(draft, key) ? draft[key] : null;
+        // Current provider evidence owns negative exclusions. A draft may hold
+        // an older preset, or be an explicit positive-appearance replacement.
+        const { negative: draftNegative, ...draftProvenance } = presetProvenance(current);
+        const { negative: previousNegative, ...withoutNegative } = row;
         if (row.presetAppearance && current && typeof current === 'object' && !Array.isArray(current)
             && current.appearanceOverride !== true) {
             // The provider may gain a preset after the editor opened. A
             // prefilled, untouched local tag is a fallback, not a manual veto.
-            return { ...row, ...presetProvenance(current),
+            return { ...row, ...draftProvenance,
                 ...(!current.presetAppearance ? { fallbackTag: plain(current.tag, CG_APPEARANCE_TAG_LIMIT),
                     fallbackNl: plain(current.nl, CG_APPEARANCE_TAG_LIMIT) } : {}) };
         }
         if (current?.presetAppearance && current.appearanceOverride !== true) {
             // The provider may have removed/renamed the preset while this editor
             // stayed open. Do not turn its old rendered value into our fallback.
-            if (row.presetAppearance) return { ...row, ...presetProvenance(current) };
-            return { ...row, knownTag: plain(current.fallbackTag, CG_APPEARANCE_TAG_LIMIT),
+            if (row.presetAppearance) return { ...row, ...draftProvenance };
+            return { ...withoutNegative, knownTag: plain(current.fallbackTag, CG_APPEARANCE_TAG_LIMIT),
                 knownNl: plain(current.fallbackNl, CG_APPEARANCE_TAG_LIMIT) };
         }
         if (evidence.castSnapshot) {
@@ -41844,13 +42266,13 @@ function appearanceEvidenceWithDraft(evidence, draft, context = null) {
             const description = !knownTag && row.knownTag && !row.description
                 ? participantAppearanceSource(evidence.castSnapshot.people.find(person => person.id === row.participantId), context)
                 : row.description;
-            return { ...row, description, knownTag, knownNl, ...presetProvenance(value),
+            return { ...withoutNegative, description, knownTag, knownNl, ...presetProvenance(value),
                 ...(value?.appearanceOverride === true ? { appearanceOverride: true } : {}) };
         }
         if (!ROLES.includes(row.role) || !Object.hasOwn(draft, row.role)) return row;
         const value = draft[row.role];
         if (typeof value !== 'string' && (!value || typeof value !== 'object' || Array.isArray(value))) return row;
-        return { ...row, knownTag: appearanceText(typeof value === 'string' ? value : value.tag, value), knownNl: '', ...presetProvenance(value),
+        return { ...withoutNegative, knownTag: appearanceText(typeof value === 'string' ? value : value.tag, value), knownNl: '', ...presetProvenance(value),
             ...(typeof value === 'string' || value.appearanceOverride === true ? { appearanceOverride: true } : {}) };
     }) };
 }
@@ -41884,7 +42306,7 @@ function formattedCgProviderPrompts(scene, rawMetadata, supportsCharacters = fal
     let prompt, nl;
     if (selected === 'nai45-tags') {
         prompt = supportsCharacters && chars.length ? metadata.sceneTags || visual
-            : metadata.flatPrompt || cgPreparedVisualPrompt(visual, metadata);
+            : metadata.flatPrompt || cgPreparedTagPrompt(visual, metadata);
         nl = separateNai ? '' : prompt;
     } else {
         // flatPrompt is editable and may contain unique user instructions. Keep
@@ -41931,6 +42353,7 @@ __m_generation_cgAppearance_js.metadataAfterSceneEdit = metadataAfterSceneEdit;
 __m_generation_cgAppearance_js.normalizeCgPromptMetadata = normalizeCgPromptMetadata;
 __m_generation_cgAppearance_js.normalizeCgPreparedPrompt = normalizeCgPreparedPrompt;
 __m_generation_cgAppearance_js.cgPreparedVisualPrompt = cgPreparedVisualPrompt;
+__m_generation_cgAppearance_js.cgPreparedTagPrompt = cgPreparedTagPrompt;
 __m_generation_cgAppearance_js.appearanceEvidenceForFormat = appearanceEvidenceForFormat;
 __m_generation_cgAppearance_js.appearanceEvidenceWithDraft = appearanceEvidenceWithDraft;
 __m_generation_cgAppearance_js.validateCgPreparedFormat = validateCgPreparedFormat;
@@ -41954,6 +42377,7 @@ const cg_format = __m_core_cgPromptFormat_js;
 const baibai_image = __m_generation_baibaiImage_js;
 const chatu8_image = __m_generation_chatu8Image_js;
 const cg_appearance = __m_generation_cgAppearance_js;
+const preset_text = __m_generation_chatu8Presets_js;
 const core_settings = __m_core_settings_js;
 const archive_library = __m_archive_library_js;
 const archive_repository = __m_archive_repository_js;
@@ -41975,6 +42399,7 @@ const workspace_state = __m_ui_workspaceState_js;
 const ui_overlay = __m_ui_overlay_js;
 const ui_styles = __m_ui_styles_js;
 const runtimeState = __m_core_state_js.state;
+
 
 
 
@@ -42093,7 +42518,7 @@ function sanitizeCgVisualText(value, limit = core_constants.MAX_CG_IMAGE_PROMPT_
     if (!text) return '';
     text = text
         .replace(/https?:\/\/\S+/gi, ' ')
-        .replace(/\{\{[^{}]{1,100}\}\}/g, ' ')
+        .replace(/\{\{+[^{}]*?\}\}+/gu, token => preset_text.literalPresetAppearanceText(token) === null ? ' ' : token)
         .replace(/\b(?:sourceMemoryIds?|sourceMemoryAnchor|WORLD_INFO_TEXT|MEMORY_POOL_JSON|UNTRUSTED_[A-Z0-9_]+)\b/gi, ' ')
         .replace(/<[^>]{0,500}>/g, ' ');
     return core_text.normalizeText(text.replace(/\s{2,}/g, ' '), limit);
@@ -43196,9 +43621,11 @@ const image_patch = __m_core_cgImagePatch_js;
 const core_context = __m_core_context_js;
 const core_text = __m_core_text_js;
 const appearance = __m_generation_cgAppearance_js;
+const preset_text = __m_generation_chatu8Presets_js;
 // Calls 智绘姬 through the event it already listens for. Does not read API keys,
 // prompts, or endpoints, and does not write its settings. Ordinary CG keeps its
 // existing size; an explicit MV orientation overrides only this request's size.
+
 
 
 
@@ -43378,22 +43805,48 @@ function orientedSize(context, backend, orientation, aspectRatio = '') {
     return orientation === 'portrait' ? { width: short, height: long } : { width: long, height: short };
 }
 
+function nativeCharacterBackend(context, backend) {
+    const bag = extensionBag(context);
+    // The Tavern proxy route flattens positive captions and has no per-person
+    // negative field, even when its selected model is NAI 4/5.
+    return backend === 'novelai' && bag?.client !== 'jiuguan' && typeof bag?.novelaimode === 'string'
+        && /nai-diffusion-[45](?:-|$)/.test(bag.novelaimode);
+}
+
+function characterNegative(row) { return preset_text.literalPresetAppearanceText(row?.negative) || ''; }
+
+function promptField(value) {
+    // Semicolons end upstream fields. Sanitize only the transport copy; leave
+    // saved appearance and valid NAI emphasis weights intact.
+    return String(value).replace(/[;；]/g, ',').replace(/\|\s*centers\s*:/gi, ', centers ')
+        .replace(/（/g, '(').replace(/）/g, ')').replace(/[\r\n]+/g, ' ').trim();
+}
+
+function characterFields(row, index, positive, centers = '') {
+    const negative = characterNegative(row);
+    return [`Character ${index + 1} Prompt: ${promptField(positive)}${centers};`,
+        ...(negative ? [`Character ${index + 1} UC: ${promptField(negative)};`] : [])];
+}
+
+function sendPreview(prompt, backend, negatives = []) {
+    // Flat transports have one global negative, just like the provider's own
+    // flat preset expansion. Never put exclusions into the positive prompt.
+    const negative = ['novelai', 'sd', 'comfyui', 'runninghub'].includes(backend)
+        ? negatives.filter(value => typeof value === 'string' && value.trim()).map(value => value.trim()).join(', ') : '';
+    return { prompt, nl: '', ...(negative ? { negative_prompt: negative } : {}) };
+}
+
 function avatarCharacterPrompt(parts, context, backend) {
     // The existing generate-image-request consumer recognizes this grammar
     // for NAI 4/5, then builds separate native character captions. Older models
     // and other backends keep the complete flat prompt. No settings are changed.
-    const model = extensionBag(context)?.novelaimode;
-    if (backend !== 'novelai' || typeof model !== 'string' || !/nai-diffusion-[45](?:-|$)/.test(model)
+    if (!nativeCharacterBackend(context, backend)
         || typeof parts?.scene !== 'string' || !parts.scene.trim()
         || !Array.isArray(parts.characters) || parts.characters.length !== 2
         || !parts.characters.every(row => typeof row?.tag === 'string' && row.tag.trim())) return '';
-    // Semicolons end upstream fields. Normalize punctuation in the transport
-    // copy so user prose cannot truncate a character or spill into the other.
-    const field = value => value.replace(/[;；]/g, ',').replace(/\|\s*centers\s*:/gi, ', centers ')
-        .replace(/（/g, '(').replace(/）/g, ')').replace(/[\r\n]+/g, ' ').trim();
     return [
-        `Scene Composition: ${field(parts.scene)};`,
-        ...parts.characters.map((row, index) => `Character ${index + 1} Prompt: ${field(row.tag)} | centers:{${index ? 0.75 : 0.25},0.5};`),
+        `Scene Composition: ${promptField(parts.scene)};`,
+        ...parts.characters.flatMap((row, index) => characterFields(row, index, row.tag, ` | centers:{${index ? 0.75 : 0.25},0.5}`)),
     ].join('\n');
 }
 
@@ -43405,14 +43858,17 @@ function chatu8SendPreview(prompt, { promptMetadata = null, context = core_conte
     const metadata = appearance.resolveCgAppearanceMetadata(context, appearance.scopeCgPromptMetadata(visual, promptMetadata), { provider: CHATU8_IMAGE_PROVIDER });
     const backend = extensionBag(context)?.mode;
     const avatar = preservePrompt && singlePrompt && !metadata ? avatarPromptParts : null;
-    if (metadata?.flatPromptOverride) return { prompt: metadata.flatPrompt || visual, nl: '' };
-    if (!metadata || preservePrompt) return { prompt: avatarCharacterPrompt(avatar, context, backend) || flatPrompt(visual, metadata, preservePrompt), nl: '' };
+    if (metadata?.flatPromptOverride) return sendPreview(metadata.flatPrompt || visual, backend);
+    if (!metadata || preservePrompt) {
+        const nativePrompt = avatarCharacterPrompt(avatar, context, backend);
+        return sendPreview(nativePrompt || flatPrompt(visual, metadata, preservePrompt), backend,
+            [avatar?.negative, ...(!nativePrompt && Array.isArray(avatar?.characters) ? avatar.characters.map(characterNegative) : [])]);
+    }
     const characters = metadata.characters;
     const changed = characters.some(row => row.resolvedAppearance === true);
-    const model = extensionBag(context)?.novelaimode;
     const automaticCoordinates = extensionBag(context)?.AI_use_coords;
     const expectedCharacters = metadata.castSnapshot?.people.length ?? metadata.selectedRoles?.length ?? characters.length;
-    const native = backend === 'novelai' && typeof model === 'string' && /nai-diffusion-[45](?:-|$)/.test(model)
+    const native = nativeCharacterBackend(context, backend)
         // Without explicitly enabled automatic placement the upstream builder
         // sends empty manual centers. Keep a complete flat prompt in that mode.
         && (automaticCoordinates === true || automaticCoordinates === 'true')
@@ -43423,16 +43879,18 @@ function chatu8SendPreview(prompt, { promptMetadata = null, context = core_conte
     const sceneInput = metadata.promptFormat === 'nai45-tags' ? metadata.sceneTags || visual : visual;
     const scene = appearance.formattedCgProviderPrompts(sceneInput, sceneMetadata, false, '')?.prompt || sceneInput;
     if (native) {
-        const field = value => String(value).replace(/[;；]/g, ',').replace(/\|\s*centers\s*:/gi, ', centers ')
-            .replace(/（/g, '(').replace(/）/g, ')').replace(/[\r\n]+/g, ' ').trim();
-        return { prompt: [`Scene Composition: ${field(scene)};`, ...characters.map((row, index) =>
-            `Character ${index + 1} Prompt: ${field(`${row.name}: ${row.tag || row.nl}`)};`)].join('\n'), nl: '' };
+        return sendPreview([`Scene Composition: ${promptField(scene)};`, ...characters.flatMap((row, index) =>
+            characterFields(row, index, metadata.promptFormat === 'nai45-tags' ? row.tag || row.nl : `${row.name}: ${row.tag || row.nl}`))].join('\n'), backend);
     }
-    if (!changed) return { prompt: flatPrompt(visual, metadata), nl: '' };
+    const negatives = characters.map(characterNegative);
+    if (metadata.promptFormat === 'nai45-tags' && (changed || !metadata.flatPrompt)) {
+        return sendPreview(appearance.cgPreparedTagPrompt(scene, metadata), backend, negatives);
+    }
+    if (!changed) return sendPreview(flatPrompt(visual, metadata), backend, negatives);
     // No second request is needed for backends without native character slots.
     // Do not re-normalize the resolved tags through the old 400-character field.
     const looks = characters.filter(row => row.tag || row.nl).map(row => `${row.name}：${row.tag || row.nl}`).join('\n');
-    return { prompt: looks ? `${scene}\n\n人物外貌（逐人对应，不互换）：\n${looks}` : scene, nl: '' };
+    return sendPreview(looks ? `${scene}\n\n人物外貌（逐人对应，不互换）：\n${looks}` : scene, backend, negatives);
 }
 
 async function generateChatu8Image(prompt, { signal = null, orientation = 'landscape', respectOrientation = false, aspectRatio = '', promptMetadata = null, onProgress = null, onSettled = null, targetKey = '', context = core_context.getContext(), preservePrompt = false, singlePrompt = false, avatarPromptParts = null } = {}) {
@@ -43442,17 +43900,12 @@ async function generateChatu8Image(prompt, { signal = null, orientation = 'lands
     const reservation = typeof targetKey === 'string' && targetKey ? targetKey : Symbol('image');
     if (pendingGenerations.has(reservation)) throw chatu8ImageError('CH8_TARGET_BUSY');
     // 智绘姬按自己的后端能力并发或排队；这里只阻止同一目标重复提交。
-    let scene;
-    try { scene = chatu8SendPreview(prompt, { promptMetadata, context, preservePrompt, singlePrompt, avatarPromptParts }).prompt; }
+    let preview;
+    try { preview = chatu8SendPreview(prompt, { promptMetadata, context, preservePrompt, singlePrompt, avatarPromptParts }); }
     catch (error) {
         if (ownErrors.has(error) || error?.safeToDisplay) throw error;
         throw chatu8ImageError('CH8_INVALID_ARGS');
     }
-    const avatar = preservePrompt && singlePrompt && !promptMetadata ? avatarPromptParts : null;
-    // This is the consumer's documented extra-negative event field. It appends
-    // to the user's configured negative prompt in these four supported modes.
-    const negative = ['novelai', 'sd', 'comfyui', 'runninghub'].includes(state.backend)
-        && typeof avatar?.negative === 'string' ? avatar.negative.trim() : '';
     const source = state.eventSource;
     const id = requestId();
     let settled = false;
@@ -43491,8 +43944,8 @@ async function generateChatu8Image(prompt, { signal = null, orientation = 'lands
                 signal?.addEventListener('abort', onAbort, { once: true });
                 // 排队也计入等待时间，不能把仍在智绘姬队列里的任务判成失败。
                 timer = setTimeout(() => report('waiting'), CHATU8_IMAGE_WAIT_NOTICE_MS);
-                source.emit(REQUEST_EVENT, { id, prompt: scene,
-                    ...(negative ? { negative_prompt: negative } : {}),
+                source.emit(REQUEST_EVENT, { id, prompt: preview.prompt,
+                    ...(preview.negative_prompt ? { negative_prompt: preview.negative_prompt } : {}),
                     ...(respectOrientation ? orientedSize(context, state.backend, orientation, aspectRatio) : {}) });
             } catch { stop('CH8_BACKEND_ERROR'); }
         });
@@ -73080,9 +73533,17 @@ function ensureUserCandidate(current) {
 
 function editorAppearanceSource(current, key) {
     const row = current.appearanceSources?.[key];
+    let negative = '';
+    if ((row?.presetAppearance || row?.resolvedAppearance) && !current.appearanceEdited?.[key]
+        && typeof row?.negative === 'string') {
+        try {
+            if (settings.getPluginSettings().imageGenerationProvider === 'chatu8-image') negative = row.negative;
+        } catch { /* An unavailable provider cannot lend its old negative tags. */ }
+    }
     return { ...(row?.presetAppearance ? { presetAppearance: true,
         fallbackTag: row.fallbackTag || '', fallbackNl: row.fallbackNl || '' } : {}),
-        ...(row?.resolvedAppearance ? { resolvedAppearance: true } : {}) };
+        ...(row?.resolvedAppearance ? { resolvedAppearance: true } : {}),
+        ...(negative ? { negative } : {}) };
 }
 
 function renderParticipantFields(current) {
@@ -73196,6 +73657,7 @@ function updatePreparedPreview(current) {
         const channels = sent.nl && sent.nl === sent.prompt
             ? [`prompt / nl（相同，仅显示一次）:\n${sent.prompt}`]
             : [`prompt:\n${sent.prompt}`, ...(sent.nl ? [`nl:\n${sent.nl}`] : [])];
+        if (typeof sent.negative_prompt === 'string' && sent.negative_prompt) channels.push(`negative_prompt:\n${sent.negative_prompt}`);
         if (sent.characters?.length) channels.push(`人物标签：\n${sent.characters.map(row =>
             `${row.name}${row.nl === row.tag ? '（tag / nl 相同，仅显示一次）' : ''}: ${row.tag}`
             + (row.nl && row.nl !== row.tag ? `\nnl: ${row.nl}` : '')).join('\n')}`);
@@ -86673,7 +87135,7 @@ function renderSettingsPanelMarkup(panel) {
         ${advanced_ui.advancedGenerationHtml()}
         ${chatReadingSettingsHtml()}
         <details class="rmt-settings-card" data-rmt-settings-section="image">
-          <summary class="rmt-settings-card-head"><span>CG</span><div><b>CG 生图</b><small>相簿 · ADV · 日常一格</small></div></summary>
+          <summary class="rmt-settings-card-head"><span>CG</span><div><b>生图设置</b><small>配图 · 手书 · 情侣头像</small></div></summary>
           <div class="rmt-settings-section-body">
             ${cg_format_ui.cgFormatControlHtml()}
             <label class="rmt-settings-field"><span>生图渠道</span><select class="text_pole" data-rmt-image-generation-provider aria-describedby="rmt-image-provider-status"><option value="baibai-image">柏宝绘 · 公开 API v1</option><option value="chatu8-image">智绘姬</option></select></label>
@@ -92420,8 +92882,10 @@ const mv_still = __m_extras_mvStillPrompt_js;
 const mv_stage = __m_extras_mvStage_js;
 const mv_illustration = __m_extras_mvIllustration_js;
 const mv_tegaki_direction = __m_extras_mvTegakiDirection_js;
+const mv_format = __m_extras_mvPromptFormat_js;
 // 印象曲 MV：同一张分镜表可以做成手书（插件内播放与导出）或视频（提示词交给视频工具）。
 // 写分镜是一次文字请求；首帧由用户逐张手动绘制。数据按聊天、按歌保存，不写入正式档案。
+
 
 
 
@@ -92996,6 +93460,7 @@ function normalizeSettings(value) {
         rangeFrom: Math.max(0, Math.round(Number(value?.rangeFrom) || 0)),
         rangeTo: Math.max(0, Math.round(Number(value?.rangeTo) || 0)),
         storyType: mv_direction.directionOf(value?.storyType).id,
+        ...(mv_format.normalize(value?.promptFormat) ? { promptFormat: mv_format.normalize(value.promptFormat) } : {}),
     };
 }
 
@@ -93026,7 +93491,7 @@ function storyboardPrompt(context, memory, song, settings, sectionIndexes = null
     const firstPerson = cast && mv_cast.selectedMvPeople(cast, settings)[0];
     const exampleBinding = cast ? `"cast":${JSON.stringify(firstPerson ? [{ participantId: firstPerson.id, position: 'left', action: settings.output === 'video' ? '这一人的动作及互动对象' : '共同站位或互动关系；表情与当下动作写在各 diff.imagePrompt', visible: 'full' }] : [])}` : '"who":"char"';
     const exampleWardrobe = cast ? JSON.stringify({ era: '……', characters: firstPerson ? [{ participantId: firstPerson.id, clothing: '有依据的本曲衣着' }] : [] }) : '{"era":"……","char":"……","user":"……"}';
-    const exampleActor = firstPerson?.name || charName;
+    const exampleActor = settings.promptFormat === 'nai45-tags' ? 'person' : firstPerson?.name || charName;
     const exampleSection = sections[0]?.index || 0, exampleLyric = sections[0]?.lines?.[0] || '原句';
     const expressionCast = visible => cast ? { cast: firstPerson ? [{ participantId: firstPerson.id, position: 'center', action: '', visible }] : [] } : { who: 'char' };
     const expressionExample = settings.output === 'tegaki' && settings.storyType === 'expression' ? JSON.stringify({
@@ -93096,7 +93561,7 @@ ${settings.output === 'video' ? `1. 按段落写镜头：${settings.output === '
 
 ` : ''}7. wardrobe：按角色设定与世界观定下时代场景与衣着，不擅改既有发色、衣服或身份来区分人物。era 写时代与场所；${cast ? 'characters 数组每项为 {"participantId":"原始ID","clothing":"该人的本曲衣着"}，有依据才写。' : `char 写 ${charName} 的衣着${settings.appear === 'none' ? '' : `，user 写 ${userName} 的衣着`}。`}
 
-【输出】
+${settings.promptFormat ? mv_format.directive(settings.promptFormat) + '\n' : ''}【输出】
 只输出一个 JSON 对象。
 第一个字符必须是 {，最后一个字符必须是 }。
 不要前言，不要解释，不要代码围栏，不要在 JSON 外面写任何字。
@@ -93266,7 +93731,7 @@ async function generateStoryboard(songId, settingsInput, castInput = undefined) 
     const { song, memory, scope, origin } = target;
     const key = `story:${scope}:${songId}`;
     if (running.has(key)) throw core_text.safeUserError('分镜正在写，稍等一下。', 'RMT_MV_RUNNING');
-    const settings = normalizeSettings(settingsInput);
+    const settings = normalizeSettings({ ...settingsInput, promptFormat: mv_format.selected(context, settingsInput?.promptFormat) });
     const previous = target.base.songs[songId];
     const cast = castInput === undefined ? mv_cast.initialMvCast(context, previous) : mv_cast.normalizeMvCast(castInput);
     running.add(key);
@@ -93347,7 +93812,7 @@ async function rewriteShot(songId, shotId, kind) {
 原镜头：${JSON.stringify({ plain: shot.plain, lyric: shot.lyric, who: shot.who, shot: shot.shot, move: shot.move, motion: shot.motion, imagePrompt: shot.imagePrompt, videoZh: shot.videoZh, videoEn: shot.videoEn })}
 ${record.cast ? `本镜人物及动作：${mv_cast.castVisual(record, shot, { context })}\n${mv_direction.directionPrompt(record.settings?.storyType, song)}` : ''}
 出镜人物不变，不写新的共同经历，不写文字或 Logo。
-【输出】
+${record.settings?.promptFormat ? mv_format.directive(record.settings.promptFormat) + '\n' : ''}【输出】
 只输出一个 JSON 对象。
 第一个字符必须是 {，最后一个字符必须是 }。
 不要前言，不要解释，不要代码围栏，不要在 JSON 外面写任何字。
@@ -93379,9 +93844,10 @@ function frameNeedsUserLooks(record, context) {
 function wardrobeLine(record, hasChar, hasUser) {
     const w = record?.wardrobe || {};
     const parts = [];
-    if (w.era) parts.push(`setting: ${w.era}`);
-    if (hasChar && w.char) parts.push(`${hasUser ? 'the main character' : 'the character'} wears ${w.char}`);
-    if (hasUser && w.user) parts.push(`${hasChar ? 'the second person' : 'the person'} wears ${w.user}`);
+    const tags = mv_format.isTags(record);
+    if (w.era) parts.push(tags ? w.era : `setting: ${w.era}`);
+    if (hasChar && w.char) parts.push(tags ? `${hasUser ? 'main character outfit' : 'outfit'}, ${w.char}` : `${hasUser ? 'the main character' : 'the character'} wears ${w.char}`);
+    if (hasUser && w.user) parts.push(tags ? `${hasChar ? 'second character outfit' : 'outfit'}, ${w.user}` : `${hasChar ? 'the second person' : 'the person'} wears ${w.user}`);
     if (parts.length) parts.push('same outfits in every frame, period-accurate clothing only');
     return parts.join(', ');
 }
@@ -93390,21 +93856,21 @@ function framePrompt(record, shot, context, appearance = true) {
     if (isV2(record) && assetOf(record, `${shot?.group}:${shot?.diff}`))
         return assetPrompt(record, `${shot.group}:${shot.diff}`, context, appearance);
     const settings = normalizeSettings(record?.settings);
-    if (record?.cast && Array.isArray(shot?.cast)) return [styleOf(settings).prompt,
+    if (record?.cast && Array.isArray(shot?.cast)) return mv_format.join(record, [styleOf(settings).prompt,
         settings.ratio === '9:16' ? 'vertical 9:16 composition' : 'horizontal 16:9 composition',
-        shot.imagePrompt || shot.plain, record?.wardrobe?.era, mv_cast.castVisual(record, shot, { appearance, context })].filter(Boolean).join('\n');
+        shot.imagePrompt || shot.plain, record?.wardrobe?.era, mv_cast.castVisual(record, shot, { appearance, context })]);
     const hasChar = shot.who === 'char' || shot.who === 'both';
     const hasUser = settings.appear !== 'none' && (shot.who === 'both' || shot.who === 'user');
     const looks = mv_cast.legacyMvLooks(context, { ...(hasChar ? { char: 'full' } : {}), ...(hasUser ? { user: settings.appear === 'back' ? 'back' : 'full' } : {}) });
     const people = { ...(looks || {}), char: hasChar ? looks?.char || '' : '', user: hasUser ? looks?.user || '' : '' };
-    const lookLine = appearance && (hasChar || hasUser) ? mv_cast.legacyMvLooksPromptLine(people, context) : '';
+    const lookLine = appearance && (hasChar || hasUser) ? mv_format.legacyLooks(record, people, () => mv_cast.legacyMvLooksPromptLine(people, context)) : '';
     const userRule = settings.appear === 'back' && hasUser ? `${hasChar ? 'the second person' : 'the person'} is shown only from behind, hands or silhouette, face not visible` : '';
     const noUser = !hasChar && !hasUser ? 'scenery, no humans' : hasChar && hasUser ? 'duo, two people' : 'solo';
     return [
         styleOf(settings).prompt,
         settings.ratio === '9:16' ? 'vertical 9:16 composition' : 'horizontal 16:9 composition',
         shot.imagePrompt || shot.plain,
-        lookLine ? `fixed appearance, keep consistent: ${lookLine}` : '',
+        lookLine ? mv_format.isTags(record) ? lookLine : `fixed appearance, keep consistent: ${lookLine}` : '',
         wardrobeLine(record, hasChar, hasUser),
         userRule, noUser,
 
@@ -93436,8 +93902,8 @@ async function drawFrame(songId, shotId) {
     try {
         const found = isV2(record) ? assetOf(record, `${shot.group}:${shot.diff}`) : null;
         const custom = found && record.assetPrompts?.[`${shot.group}:${shot.diff}`]?.trim();
-        const metadata = custom ? null : found ? assetMetadata(record, found, context) : record.cast ? mv_cast.castMetadata(record, shot, context)
-            : ['chatu8-image', 'baibai-image'].includes(cg_core.imageGenerationUiState(context).provider) ? assetMetadata(record, { group: shot }, context) : null;
+        const metadata = custom ? null : mv_format.metadata(record, found ? assetMetadata(record, found, context) : record.cast ? mv_cast.castMetadata(record, shot, context)
+            : ['chatu8-image', 'baibai-image'].includes(cg_core.imageGenerationUiState(context).provider) ? assetMetadata(record, { group: shot }, context) : null);
         const result = await cg_core.invokeImageGeneration(framePrompt(record, shot, context, !metadata), context, {
             orientation: normalizeSettings(record.settings).ratio === '9:16' ? 'portrait' : 'landscape',
             respectOrientation: true,
@@ -93828,7 +94294,7 @@ function defaultAssetPrompt(record, key, context, appearance = true) {
     if (!found) return '';
     const style = styleOf(settings).prompt;
     const ratio = settings.ratio === '9:16' ? 'vertical 9:16 composition' : 'horizontal 16:9 composition';
-    const era = record?.wardrobe?.era ? `setting: ${record.wardrobe.era}` : '';
+    const era = record?.wardrobe?.era ? mv_format.isTags(record) ? record.wardrobe.era : `setting: ${record.wardrobe.era}` : '';
     const illustrationDetail = settings.output === 'tegaki' && settings.storyType === 'illustration'
         ? 'finished key illustration, clearly resolved focal details within the chosen art style, intentional silhouette and flowing contours, selective fine detail balanced with quiet areas, coherent directional lighting and depth'
         : settings.output === 'tegaki' && mv_tegaki_direction.supports(settings.storyType) ? mv_tegaki_direction.finish(settings.style) : '';
@@ -93844,22 +94310,22 @@ function defaultAssetPrompt(record, key, context, appearance = true) {
         return mv_still.joinStillPrompt([style, ratio, 'single illustration, one captured instant', illustrationDetail, mv_still.stillScene(found.group, found.diff, actors.length === 1), size, place,
         mv_cast.castVisual(record, mv_still.stillCast(found.group, found.diff), { appearance, context }),
         found.group.layer === 'full' ? [era, (list(found.group.bgs).find(b => b.id === found.diff.bg) || list(found.group.bgs)[0])?.prompt || found.group.backgroundPrompt].filter(Boolean).join(', ')
-            : 'isolated subject, flat uniform white background, clear silhouette, margin around the subject']);
+            : 'isolated subject, flat uniform white background, clear silhouette, margin around the subject'], record);
     }
     const who = found.group.who;
     const hasChar = who === 'char' || who === 'both';
     const hasUser = settings.appear !== 'none' && (who === 'both' || who === 'user');
     const looks = mv_cast.legacyMvLooks(context, { ...(hasChar ? { char: 'full' } : {}), ...(hasUser ? { user: settings.appear === 'back' ? 'back' : 'full' } : {}) });
     const people = { ...(looks || {}), char: hasChar ? looks?.char || '' : '', user: hasUser ? looks?.user || '' : '' };
-    const lookLine = appearance && (hasChar || hasUser) ? mv_cast.legacyMvLooksPromptLine(people, context) : '';
+    const lookLine = appearance && (hasChar || hasUser) ? mv_format.legacyLooks(record, people, () => mv_cast.legacyMvLooksPromptLine(people, context)) : '';
     const back = settings.appear === 'back' && hasUser ? `${hasChar ? 'the second person' : 'the person'} is shown only from behind, hands or silhouette, face not visible` : '';
     const place = { left: 'character placed on the left third of the frame', right: 'character placed on the right third of the frame', center: '' }[found.group.position] || '';
     const size = { close: 'close-up shot', medium: 'medium shot, waist up', full: 'full body shot', wide: 'wide shot, small figure' }[found.group.scale] || '';
-    return mv_still.joinStillPrompt([style, ratio, 'single illustration, one captured instant', illustrationDetail, mv_still.stillScene(found.group, found.diff, hasChar !== hasUser), place, size, lookLine ? `fixed appearance, keep consistent: ${lookLine}` : '', wardrobeLine(record, hasChar, hasUser), back,
+    return mv_still.joinStillPrompt([style, ratio, 'single illustration, one captured instant', illustrationDetail, mv_still.stillScene(found.group, found.diff, hasChar !== hasUser), place, size, lookLine ? mv_format.isTags(record) ? lookLine : `fixed appearance, keep consistent: ${lookLine}` : '', wardrobeLine(record, hasChar, hasUser), back,
         hasChar && hasUser ? 'duo, two people' : hasChar || hasUser ? 'solo, single figure' : 'scenery, no humans',
         found.group.layer === 'full'
             ? [era, (list(found.group.bgs).find(b => b.id === found.diff.bg) || list(found.group.bgs)[0])?.prompt || found.group.backgroundPrompt, 'detailed background, full scene'].filter(Boolean).join(', ')
-            : 'isolated subject, flat uniform white background, clear silhouette, margin around the subject']);
+            : 'isolated subject, flat uniform white background, clear silhouette, margin around the subject'], record);
 }
 
 // 双人画面按角色分别给外貌（与 CG 相同的 characters 结构），避免两个人长成同一张脸。
@@ -93873,7 +94339,8 @@ function assetMetadata(record, found, context) {
     const looks = mv_cast.legacyMvLooks(context, Object.fromEntries(roles.map(role => [role, role === 'user' && settings.appear === 'back' ? 'back' : 'full'])));
     const tag = role => looks?.manual === true ? looks?.[role] || '' : core_castLooks.lookFromDescription(looks?.[role]);
     try {
-        return cg_appearance.normalizeCgPromptMetadata({ selectedRoles: roles, characters: roles.map(role => ({ role, name: role === 'char' ? context?.name2 : context?.name1, tag: tag(role), nl: '', appearanceOverride: true, resolvedAppearance: true })) });
+        return cg_appearance.normalizeCgPromptMetadata(mv_format.metadata(record, { selectedRoles: roles, characters: roles.map(role => ({ role, name: role === 'char' ? context?.name2 : context?.name1, tag: tag(role), nl: '', appearanceOverride: true, resolvedAppearance: true,
+            ...(looks?.presetNegatives?.[role] ? { negative: looks.presetNegatives[role] } : {}) })) }));
     } catch { return null; }
 }
 
@@ -93899,7 +94366,7 @@ async function drawAsset(songId, key, { fresh = false } = {}) {
             characterName: context?.name2 || '', targetKey: runKey, seed, singlePrompt: true,
         };
         // A saved custom prompt is the complete previewed text; do not append hidden cast text.
-        const metadata = found.kind === 'char' && !record.assetPrompts?.[key] ? assetMetadata(record, found, context) : null;
+        const metadata = !record.assetPrompts?.[key] ? mv_format.metadata(record, found.kind === 'char' ? assetMetadata(record, found, context) : null) : null;
         // Adapters flatten unsupported character metadata before sending. A provider
         // error may mean the image was already paid for, so never redraw here.
         const result = await cg_core.invokeImageGeneration(assetPrompt(record, key, context, !metadata), context, { ...base, ...(metadata ? { promptMetadata: metadata } : {}) });
@@ -94183,6 +94650,7 @@ const core_castLooks = __m_core_castLooks_js;
 const archive_repository = __m_archive_repository_js;
 const mv_cast = __m_extras_mvCast_js;
 const mv_direction = __m_extras_mvDirection_js;
+const mv_format = __m_extras_mvPromptFormat_js;
 const mv_stage = __m_extras_mvStage_js;
 const mv_illustration = __m_extras_mvIllustration_js;
 const illustration_canvas = __m_ui_mvIllustrationCanvas_js;
@@ -95038,7 +95506,8 @@ function renderSetup(song, record) {
       <details class="rmt-x-card"><summary>分镜方向与人物</summary>${cast_controls.directionControls(song, d)}${cast_controls.castControls(view.castDraft, d)}</details>
       <details class="rmt-x-card"><summary>画风、出镜与画幅</summary><h3 class="rmt-x-section-title">画风</h3><div class="rmt-mv-grid2">${styles.map(style => choice('set-style', style.id, d.style === style.id, style.name, style.desc)).join('')}</div>
       ${appearance ? `<h3 class="rmt-x-section-title">你的出镜方式</h3>${choice('set-appear', 'face', d.appear === 'face', '露脸出镜', '按你填写的外貌来画。')}${choice('set-appear', 'back', d.appear === 'back', '只拍背影或手', '有你的存在感，但不画脸。')}${choice('set-appear', 'none', d.appear === 'none', '不出镜', '不画用户，其他已选人物不受影响。')}` : ''}
-      <h3 class="rmt-x-section-title">画幅</h3><div class="rmt-mv-grid2">${choice('set-ratio', '9:16', d.ratio === '9:16', '竖屏 9:16', '手机看')}${choice('set-ratio', '16:9', d.ratio === '16:9', '横屏 16:9', '电脑看')}</div></details>
+      <h3 class="rmt-x-section-title">画幅</h3><div class="rmt-mv-grid2">${choice('set-ratio', '9:16', d.ratio === '9:16', '竖屏 9:16', '手机看')}${choice('set-ratio', '16:9', d.ratio === '16:9', '横屏 16:9', '电脑看')}</div>
+      <label class="rmt-x-field">生图提示写法<select data-rmt-mv-prompt-format>${[['nai45-tags', 'NAI 4.5 · 英文 Tag'], ['nai5-natural', 'NAI 5 · 自然语言']].map(([id, label]) => `<option value="${id}"${mv_format.selected(ctx(), d.promptFormat) === id ? ' selected' : ''}>${label}</option>`).join('')}</select></label><p class="rmt-x-note">用于这次生成的分镜，已有画面描述保持原样。</p></details>
       <details class="rmt-x-card"><summary>制作方式 · ${d.output === 'video' ? '外部视频工具' : '手书'}</summary>${choice('set-output', 'tegaki', d.output === 'tegaki', '手书', '画面随歌词切换，在插件里剪辑并导出。')}${choice('set-output', 'video', d.output === 'video', '外部视频工具', '保留逐镜视频提示词、完成标记与拼接指引。')}
       ${d.output === 'video' ? `<h3 class="rmt-x-section-title">视频提示词语言</h3>${choice('set-lang', 'zh', d.lang === 'zh', '中文', '用于国内视频工具')}${choice('set-lang', 'en', d.lang === 'en', '英文', '用于国外视频工具')}${choice('set-lang', 'both', d.lang === 'both', '中英文', '按需要选择')}` : ''}</details>
       <footer class="rmt-mvf-generate">${record?.shots?.length ? '<p class="rmt-x-note">重新生成会替换现有分镜，已画的图不会保留在新镜头上。</p>' : ''}${btn('setup-generate', running ? '正在写分镜…' : record?.shots?.length ? '重新生成分镜' : '生成分镜', { cls: 'rmt-x-primary', disabled: running })}<small class="rmt-x-note">这里只生成分镜，图片由你另行生成或导入。</small></footer>`);
@@ -96381,6 +96850,10 @@ function handleMvChange(event) {
         renderMv();
         return true;
     }
+    if (input?.matches?.('[data-rmt-mv-prompt-format]')) {
+        view.draft = mv.normalizeSettings({ ...view.draft, promptFormat: input.value });
+        renderMv(); return true;
+    }
     if (input?.matches?.('[data-rmt-mv-story-type]')) {
         const storyType = mv_direction.directionOf(input.value).id;
         try {
@@ -97210,6 +97683,7 @@ __init_core_contentSelection_js();
 __init_core_releaseNotes_js();
 __init_extras_coupleAvatar_js();
 __init_extras_coupleAvatarCrop_js();
+__init_extras_coupleAvatarPromptFormat_js();
 __init_extras_coupleAvatarStyles_js();
 __init_extras_mvAudioSource_js();
 __init_extras_mvCast_js();
@@ -97217,6 +97691,7 @@ __init_extras_mvDirection_js();
 __init_extras_mvIllustration_js();
 __init_extras_mvImageTools_js();
 __init_extras_mvMusicLink_js();
+__init_extras_mvPromptFormat_js();
 __init_extras_mvStage_js();
 __init_extras_mvStillPrompt_js();
 __init_extras_mvTegakiDirection_js();

@@ -88,6 +88,8 @@ export function resolveImageAppearancePresets(context, people, { provider, api }
             if (!['full', 'face', 'hands', 'back'].includes(visible)) continue;
             if (selected === 'chatu8-image') {
                 const appearance = chatu8.chatu8PresetAppearance(context, person.name, { visible });
+                // Preserve the same preset's optional literal negative together
+                // with its identity; collisions omit both channels for this person.
                 if (appearance?.tag) result.set(person.id, appearance);
             } else {
                 const tag = stableAppearance(field(found.row, 'tag'), visible);

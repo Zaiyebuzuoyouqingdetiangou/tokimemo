@@ -90,6 +90,13 @@ export function visiblePresetAppearance(value, visible) {
     }).join(', '));
 }
 
+function presetNegative(preset) {
+    // This optional field cannot invalidate a usable positive appearance. It
+    // contains exclusions, so positive visibility filters must not reinterpret it.
+    try { return literalPresetAppearanceText(field(preset, 'negative')) || ''; }
+    catch { return ''; }
+}
+
 export function chatu8PresetAppearance(context, name, options = {}) {
     try {
         const requested = normalizedName(name);
@@ -123,7 +130,9 @@ export function chatu8PresetAppearance(context, name, options = {}) {
         const facial = visible === 'hands' ? '' : literalPresetAppearanceText(field(preset, visible === 'back' ? 'facialFeaturesBack' : 'facialFeatures'));
         if (traits === null || facial === null) return null;
         const tag = visiblePresetAppearance([traits, facial].filter(Boolean).join(', '), visible);
-        return tag ? { tag, source: 'chatu8', presetKey: key } : null;
+        if (!tag) return null;
+        const negative = presetNegative(preset);
+        return { tag, source: 'chatu8', presetKey: key, ...(negative ? { negative } : {}) };
     } catch {
         // Unsupported proxies/host versions are an unavailable preset, never a
         // reason to block generation or call another provider automatically.
