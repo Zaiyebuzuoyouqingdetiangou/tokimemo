@@ -182,7 +182,7 @@ export function captureCgAppearanceEvidence(context, { api = globalThis.STBaiBai
         return Object.freeze({ role, name, description: preset || confirmed?.manual ? '' : role === 'char' ? characterDescription : userDescription,
             knownTag: appearanceText(preset?.tag || preset?.nl || (confirmed?.manual ? manualTag : ''), { presetAppearance: !!preset }),
             knownNl: '',
-            ...(preset ? { presetAppearance: true, fallbackTag: plain(confirmed?.manual ? manualTag : cast_looks.lookFromDescription(confirmed?.[role]), CG_APPEARANCE_TAG_LIMIT),
+            ...(preset ? { presetAppearance: true, fallbackTag: plain(confirmed?.manual ? manualTag : cast_looks.lookFromRoleDescription(confirmed?.[role], role, context), CG_APPEARANCE_TAG_LIMIT),
                 ...(preset.negative ? { negative: preset.negative } : {}),
                 fallbackNl: '' } : {}) });
     });
@@ -253,7 +253,7 @@ function initialMetadata(item, context) {
     const looks = cast_looks.readCastLooks(context);
     if (item?.__rmtCgDescriptor?.kind === 'heart-firefly' && looks?.manual !== true) {
         const char = captureCgAppearanceEvidence(context).characters.find(row => row.role === 'char');
-        const tag = char?.knownTag || cast_looks.lookFromDescription(looks?.char || char?.description);
+        const tag = char?.knownTag || cast_looks.lookFromRoleDescription(looks?.char || char?.description, 'char', context);
         return normalizeCgPromptMetadata({ characters: [{role:'char',name:context?.name2,tag:tag || '',nl:''}] });
     }
     if (generated?.schemaVersion === 1) {
@@ -272,7 +272,7 @@ function initialMetadata(item, context) {
     }
     return normalizeCgPromptMetadata({ characters: ROLES.map(role => ({ role,
         name: role === 'char' ? context?.name2 : context?.name1,
-        tag: looks?.manual === true ? looks[role] || '' : cast_looks.lookFromDescription(looks?.[role]), nl: '' })) });
+        tag: looks?.manual === true ? looks[role] || '' : cast_looks.lookFromRoleDescription(looks?.[role], role, context), nl: '' })) });
 }
 
 export function initialCgAppearanceMetadata(item, context) {

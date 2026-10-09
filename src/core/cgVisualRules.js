@@ -80,10 +80,93 @@ export function generatedCgDraftFields(item) {
 // Only used for automatic source excerpts, never for a user-edited scene or
 // confirmed appearance. This is a conservative fallback, not semantic extraction.
 const AUTO_APPEARANCE_DROP = /(?:平时|平常|通常|总是|常常|经常|往往|笑起来|笑时|带着笑|微笑|会红|悄悄红|满脸通红|红着脸|出汗|满头大汗|被调侃|被夸|有人|莫名其妙|可怜什么|本人天生|接受|死皮赖脸|一定要|跑的急|跑得急|穿衣偏好|衣服|服装|穿着|衣着|中衣|长袍|外套|制服|衬衫|裙子|性格|习惯|喜欢|讨厌|口癖|口头禅|情绪|经历|履历|\b(?:always|usually|often|typically|habit|tends? to|when|whenever|smil(?:e|es|ing)|blush(?:es|ing)?|sweat(?:s|ing)?|personality|outfit|wears?|clothes|clothing|robe|jacket|shirt|dress|uniform)\b)/iu;
+// These clauses describe an event, conditional expression or another person,
+// not a stable identity. Only automatic excerpts use this filter; literal
+// editor fields and current scene instructions must never pass through it.
+const AUTO_APPEARANCE_NARRATIVE = /(?:第二天|翌日|次日|每天|每日|清早|每当|一旦|如果|负责|凝视|象征|代表|冲淡|栖居|倔强|冷脸相对|没(?:有)?温度|会(?:立刻|马上|眯|泛红)|(?:脸颊|面颊|耳尖|耳根)(?:微微)?泛红|(?:血|血迹)(?:糊|流|沾|染|遮)|卸下|摘下|脱下|取下|(?:老头|父亲|母亲|同事|朋友|陌生人)(?:的|有|是|拍|长着)|(?:拍|搭|搂|按)着?[^，。；\n]{0,24}(?:肩|脸|头))/u;
+const APPEARANCE_HISTORY = /(?:曾经|后来)/u;
+const LASTING_MARK = /(?:留下|留有|遗留|永久|陈旧|旧)/u;
+const REMOVED_MARK = /(?:消失|消退|去除|祛除|不再|没有|已无)/u;
+
+// One vocabulary for automatic card excerpts and provider presets. Only the
+// classification copy treats underscores as spaces; literal preset weights and
+// spelling are kept. Outfit/scene exclusions remain the caller's responsibility.
+const APPEARANCE_TRAIT = /\b(?:hair|haired|hairline|bangs?|fringe|hime[ -]cut|braids?|ponytails?|pigtails?|buns?|bald|blindfold(?:ed)?|eye[ -]?patch|eyes?|irises|pupils?|skin|complexion|freckles?|moles?|scars?|birthmarks?|tattoos?|face|facial|jaw|chin|cheeks?|cheekbones?|dimples?|eyebrows?|eyelashes?|ears?|nose|lips?|beard|mustache|moustache|stubble|height|tall|short|petite|slender|slim|muscular|musculature|build|physique|body|breasts?|bust|hips?|waist|shoulders?|hands?|fingers?|wrists?|fur|furry|horns?|antlers?|tails?|wings?|scales?|claws?|fangs?|glasses|earrings?|hat|cap|ribbon)\b|头发|長髮|長發|长发|短发|发色|发型|髮|银发|黑发|金发|白发|红发|棕发|卷发|直发|刘海|鬓|发髻|发辫|发饰|马尾|中分|偏分|侧分|眼|瞳|肤|膚|痣|疤|瘢痕|雀斑|胎记|纹身|臉|脸|五官|酒窝|酒窩|下巴|颧骨|眉|睫|耳|鼻|唇|胡须|胡子|胡茬|身高|身形|体型|體型|身材|纤细|纖細|高挑|肌肉|肩|手|指|腕|毛发|毛皮|犄角|兽角|龙角|羊角|鹿角|弯角|双角|尾巴|兽尾|狐尾|猫尾|翅膀|羽翼|鳞片|利爪|獠牙|尖牙|帽|眼镜/iu;
+
+export function appearanceTraitClause(value) {
+    if (typeof value !== 'string') return false;
+    const clean = value.replace(/_/g, ' ');
+    // "short" alone is a stature tag; a short story is not an appearance.
+    return APPEARANCE_TRAIT.test(clean.replace(/\bshort\b/giu, '')) || /^short(?: stature)?$/iu.test(clean.trim());
+}
+
+function unfamiliarAppearanceSubject(label) {
+    const neutral = /^(?:他|她|我|你|本人|角色|天生|生来|外貌|容貌|长相|外表|外貌特征|基本信息|人物信息|性别|性別|生理性别|年龄|名字|姓名|职业|性格|背景|简介|he|she|I|you|they|appearance|looks?|traits?|features|physical appearance|gender|sex|age|name|occupation|personality|background|description)$/iu;
+    const heading = /^([^:：]+)[:：](?!:)/u.exec(label)?.[1]?.trim();
+    if (heading && !neutral.test(heading) && !appearanceTraitClause(heading)) return true;
+    const subject = /^([A-Z][A-Za-z’'-]*(?:\s+[A-Z][A-Za-z’'-]*)*)\s+(?:has|is|wears|possesses)\b/u.exec(label)?.[1]
+        || /^([\p{Script=Han}]+?)(?:留着|长着|拥有|有|是)/u.exec(label)?.[1];
+    return !!subject && !neutral.test(subject) && !appearanceTraitClause(subject)
+        && !/^(?:头|脸|眼|眉|鼻|嘴|唇|肩|脖|颈|胸|腰|腹|背|手|腕|指|臂|腿|足|脚|身|肌肤)/u.test(subject);
+}
+
+function containsAppearanceName(value, name) {
+    if (!name) return false;
+    let offset = value.indexOf(name);
+    while (offset >= 0) {
+        const before = value[offset - 1] || '', after = value[offset + name.length] || '';
+        if (!(/[A-Za-z0-9_]/u.test(name[0]) && /[A-Za-z0-9_]/u.test(before))
+            && !(/[A-Za-z0-9_]/u.test(name.at(-1)) && /[A-Za-z0-9_]/u.test(after))) return true;
+        offset = value.indexOf(name, offset + name.length);
+    }
+    return false;
+}
+
+// Follow explicit source ownership across a comma list or a named paragraph.
+// Ambiguous continuations of somebody else's description are not assigned to
+// the current person. This does not infer gender or edit handwritten fields.
+export function appearanceSourceClauses(value, { name = '', otherNames = [], role = '' } = {}) {
+    if (typeof value !== 'string') return [];
+    const ownName = typeof name === 'string' ? name.trim() : '';
+    const others = otherNames.filter(item => typeof item === 'string' && item.trim() && item.trim() !== ownName).map(item => item.trim());
+    const result = [];
+    let owner = 'self';
+    for (const raw of value.split(/[\n。；;!?！？，,、]|\.(?=\s|$)/u)) {
+        const part = raw.trim(); if (!part) continue;
+        const label = part.replace(/[*#`]/g, '').trim();
+        const marker = /^(?:\{\{\s*(char|user)\s*\}\}|(char|user)\s*[:：])/iu.exec(label);
+        const ownPrefix = ownName && label.startsWith(ownName) && containsAppearanceName(label, ownName);
+        const namedOther = others.some(other => containsAppearanceName(label, other));
+        const relation = /^(?:(?:我|你|他|她|其)(?:们)?的)?(?:朋友|同事|同伴|邻居|父亲|母亲|父母|哥哥|姐姐|弟弟|妹妹|兄长|丈夫|妻子|男友|女友|恋人|爱人|师父|师傅|老师|学生|上司|老头|陌生人|对方|别人|其他人|另一人)|^(?:(?:my|your|his|her|their|the)\s+)?(?:friend|colleague|partner|sister|brother|mother|father|wife|husband|girlfriend|boyfriend|someone else)\b/iu.test(label);
+        const markerRole = marker && (marker[1] || marker[2]).toLowerCase();
+        const ownMarker = marker && role && markerRole === role;
+        const otherMarker = marker && role && markerRole !== role;
+        if (namedOther || otherMarker || (relation || ownName && unfamiliarAppearanceSubject(label)) && !ownPrefix && !ownMarker) { owner = 'other'; continue; }
+        if (ownPrefix || ownMarker) {
+            owner = 'self';
+            const body = label.slice(ownMarker ? marker[0].length : ownName.length)
+                .replace(/^\s*[:：]\s*/u, '').replace(/^\s*(?:(?:is|has|with)\b\s*|(?:留着|长着|拥有|是|有|的))/iu, '').trim();
+            if (body) result.push(body);
+        } else if (owner === 'self') result.push(part);
+    }
+    return result;
+}
+
+// Preserve only an explicit standalone identity label. Never infer one from a
+// name, pronoun, occupation, relationship or the other subject's appearance.
+export function explicitAppearanceIdentityClause(value) {
+    if (typeof value !== 'string') return false;
+    const clean = value.trim().replace(/[.。!！?？]+$/u, '').trim();
+    return /^(?:(?:性别|性別|生理性别|gender|sex)\s*[:：]\s*)?(?:(?:(?:他|她|我|本人|角色)\s*是\s*)?(?:一[位名个])?(?:成年(?:的)?)?(?:男(?:性|生|人)?|女(?:性|生|人)?)|(?:(?:he|she|I|they)\s+(?:is|am|are)\s+)?(?:an?\s+)?(?:adult\s+)?(?:1?\s*(?:boy|girl)|man|woman|male|female|non[ -]?binary|androgynous))$/iu.test(clean);
+}
 export function automaticAppearanceClause(value) {
     if (typeof value !== 'string') return '';
     const clean = value.replace(/[*#`]+/g, '').replace(/^\s*[-•]\s*/u, '').trim();
-    return !clean || AUTO_APPEARANCE_DROP.test(clean) || /[“”「」"()（）]/u.test(clean)
+    const history = APPEARANCE_HISTORY.test(clean);
+    const mark = history ? LASTING_MARK.exec(clean) : null;
+    const lasting = mark && /(?:疤|瘢痕|伤痕|胎记|纹身)/u.test(clean.slice(mark.index));
+    return !clean || AUTO_APPEARANCE_DROP.test(clean) || AUTO_APPEARANCE_NARRATIVE.test(clean)
+        || history && (!lasting || REMOVED_MARK.test(clean)) || /[“”「」"()（）]/u.test(clean)
         || /[:：]\s*$/u.test(clean) ? '' : clean;
 }
 

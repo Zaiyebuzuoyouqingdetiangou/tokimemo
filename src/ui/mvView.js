@@ -461,7 +461,7 @@ function uploadLabel(shotId, label = '换用自己的图') {
 function looksEditor() {
     const context = ctx();
     const looks = context ? core_castLooks.readCastLooks(context) : null;
-    const value = side => looks ? (looks.manual ? looks[side] : core_castLooks.lookFromDescription(looks[side])) : '';
+    const value = side => looks ? (looks.manual ? looks[side] : core_castLooks.lookFromRoleDescription(looks[side], side, context)) : '';
     return `<details class="rmt-x-card"><summary><b>外貌设定</b>（和 CG 共用）</summary>
       <label class="rmt-mv-look"><span>他的外貌</span><textarea data-rmt-mv-look="char" rows="3" maxlength="600" placeholder="例如：黑色短发、灰蓝色眼睛、身形清瘦">${esc(value('char') || '')}</textarea></label>
       <label class="rmt-mv-look"><span>你的外貌</span><textarea data-rmt-mv-look="user" rows="3" maxlength="600" placeholder="例如：栗色长发、圆眼睛、个子不高">${esc(value('user') || '')}</textarea></label>

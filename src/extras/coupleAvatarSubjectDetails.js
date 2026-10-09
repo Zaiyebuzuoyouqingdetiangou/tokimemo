@@ -3,7 +3,7 @@
 const text = value => typeof value === 'string' ? value.trim() : '';
 
 export function coupleEyesCovered(value) {
-    const positive = text(value).split(/[,，;；。\n]/u).filter(part =>
+    const positive = text(value).replace(/_/g, ' ').split(/[,，;；。\n]/u).filter(part =>
         !/(?:\b(?:no|not|without|remove|removed)\b[^,，;；。\n]{0,30}(?:blindfold|eye covering)|\bblindfold(?:ed)?\s+(?:(?:is|was|has been)\s+)?(?:removed|off|absent)\b|\bblindfold\b[^,，;；。\n]{0,30}\b(?:around|on)\s+(?:(?:his|her|the|their)\s+)?(?:neck|forehead|wrist)\b|(?:不要|不戴|没有|去掉|摘下|摘掉|取下|未戴|无)(?:[^,，;；。\n]{0,12})(?:眼罩|蒙眼|遮眼|轻纱|白纱)|(?:眼罩|蒙眼布|轻纱|白纱)(?:已|被|已经)?(?:摘下|摘掉|取下|去掉)|(?:眼罩|蒙眼布|轻纱|白纱)[^,，;；。\n]{0,10}(?:挂|放|系|戴|推)[^,，;；。\n]{0,8}(?:脖|颈|额头|手腕))/iu.test(part)).join(', ');
     return /\bblindfold(?:ed)?\b|\b(?:both\s+)?eyes\s+(?:are\s+)?(?:covered|concealed|hidden|wrapped)\b|\b(?:covering|concealing)\s+(?:both\s+)?eyes\b|(?:蒙|遮)(?:住)?(?:双眼|双目|眼睛|眼部|眼)|(?:双眼|双目|眼睛|眼部)[^,，;；。\n]{0,24}(?:覆|遮|蒙|缠|系)[^,，;；。\n]{0,24}(?:纱|布|带|绸)|(?:纱|布|绸)[^,，;；。\n]{0,24}(?:蒙|覆|遮)[^,，;；。\n]{0,12}(?:双眼|双目|眼睛)/iu.test(positive)
         || /眼罩/u.test(positive) && !/(?:单眼罩|(?:单眼|左眼|右眼)[^,，;；。\n]{0,12}眼罩|眼罩[^,，;；。\n]{0,16}(?:左眼|右眼|单眼))/u.test(positive);

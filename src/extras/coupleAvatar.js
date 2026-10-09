@@ -62,18 +62,24 @@ function couplePresetPeople(people, context) {
     });
 }
 
-function baseCoupleSettings(context) {
+function baseCoupleSettings(context, needed = [true, true]) {
     let looks = null, card = {};
-    try { if (context) looks = core_castLooks.readCastLooks(context); } catch { /* Optional saved looks. */ }
-    try { card = context?.getCharacterCardFields?.() || {}; } catch { /* Manual appearance remains available. */ }
-    const visible = (role, description) => {
-        if (text(looks?.[role])) return looks?.manual === true ? text(looks[role]) : core_castLooks.lookFromDescription(looks[role]);
-        return core_castLooks.lookFromDescription(description);
+    // Draft edits already contain both appearances. Do not repeatedly scan a
+    // long persona just to compute defaults which will immediately be ignored.
+    if (needed.some(Boolean)) {
+        try { if (context) looks = core_castLooks.readCastLooks(context); } catch { /* Optional saved looks. */ }
+        try { card = context?.getCharacterCardFields?.() || {}; } catch { /* Manual appearance remains available. */ }
+    }
+    const visible = (role, description, index) => {
+        if (!needed[index]) return '';
+        if (looks?.manual === true) return text(looks[role]);
+        return core_castLooks.lookFromRoleDescription(description, role, context, Infinity)
+            || core_castLooks.lookFromRoleDescription(looks?.[role], role, context, Infinity);
     };
     return {
         people: [
-            { id: 'char', name: text(context?.name2) || '角色', appearance: visible('char', text(card.description)) },
-            { id: 'user', name: text(context?.name1) || '我', appearance: visible('user', text(card.persona) || text(context?.powerUserSettings?.persona_description)) },
+            { id: 'char', name: text(context?.name2) || '角色', appearance: visible('char', [text(card.description), text(card.personality)].filter(Boolean).join('\n'), 0) },
+            { id: 'user', name: text(context?.name1) || '我', appearance: visible('user', text(card.persona) || text(context?.powerUserSettings?.persona_description), 1) },
         ],
         styleId: 'chibi-dumpling', pairType: 'joined', interaction: '半颗爱心',
         clothing: '', background: '', direction: '', customStyle: '', interactionDetail: '',
@@ -88,7 +94,7 @@ export function defaultCoupleSettings(context = optionalContext()) {
 
 export function normalizeCoupleSettings(value, context = optionalContext()) {
     const input = value && typeof value === 'object' ? value : {};
-    const defaults = baseCoupleSettings(context);
+    const defaults = baseCoupleSettings(context, [0, 1].map(index => !own(input.people?.[index], 'appearance')));
     const styleId = text(input.styleId);
     const promptFormat = couplePromptFormat(context, input.promptFormat);
     return {
