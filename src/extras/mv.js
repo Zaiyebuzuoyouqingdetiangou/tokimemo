@@ -275,7 +275,13 @@ export async function retryMvSave(scope, id) {
     let next = current ? structuredClone(current) : null;
     if (!list(current?.appliedResults).includes(row.id)) {
         if (!resultStillCurrent(current, row, expected)) return held('分镜或图片已有新修改，或旧暂存无法确认现有素材版本');
-        if (row.kind === 'story') next = { timing: { taps: {}, shift: 0 }, duration: 0, ...next, ...row.patch, assetPrompts: {}, storyRevision: row.id };
+        if (row.kind === 'story') {
+            // A regenerated storyboard replaces the old composition set. When the
+            // new one is a flat (e.g. video) storyboard, old v2 groups must not
+            // survive and turn the record back into a v2 asset board.
+            const { version, groups, keyword, motif, ...kept } = next || {};
+            next = { timing: { taps: {}, shift: 0 }, duration: 0, ...kept, ...row.patch, assetPrompts: {}, storyRevision: row.id };
+        }
         else if (row.kind === 'append') {
             next.shots = [...list(next.shots), ...row.patch.shots].sort((a, b) => a.sectionIndex - b.sectionIndex);
             if (isV2(next)) next.groups = [...next.groups, ...row.patch.groups];
@@ -520,7 +526,7 @@ export function shotTimeline(record, song) {
         total = fit.total;
     }
     // Snap only automatically placed cuts. Explicit section and lyric times are exact.
-    if (record?.version === 2 && rows.length > 1) {
+    if (isV2(record) && rows.length > 1) {
         const beat = 60 / (songBpm(song) || 90);
         for (let i = 1; i < rows.length; i += 1) {
             if (marks.has(i)) continue;
@@ -1227,7 +1233,9 @@ ${['expression', 'illustration'].includes(direction) ? mv_stage.prompt() + (dire
 `;
 }
 
-export function isV2(record) { return record?.version === 2 && Array.isArray(record?.groups); }
+// Video storyboards are always flat; a stale version/groups pair left by an
+// older regenerate must not turn one back into a v2 asset board.
+export function isV2(record) { return record?.version === 2 && Array.isArray(record?.groups) && record?.settings?.output !== 'video'; }
 
 export function buildShots(raw, memory, sectionCount, settings, cast = null, opts = {}) {
     if (cast?.existingGroups) { opts = cast; cast = null; }
