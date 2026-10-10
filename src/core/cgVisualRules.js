@@ -100,13 +100,22 @@ export function appearanceTraitClause(value) {
     return APPEARANCE_TRAIT.test(clean.replace(/\bshort\b/giu, '')) || /^short(?: stature)?$/iu.test(clean.trim());
 }
 
+// Profile field labels and prompt-tag syntax are not person names. Treating
+// "种族：人类", "(1girl:1.2)" or "artist:x" as another subject would hide the
+// rest of the current person's description.
+const APPEARANCE_FIELD_LABEL = /^(?:种族|族裔|物种|国籍|出身|身高|体重|体型|体态|身形|身材|三围|生日|星座|血型|外观|外形|特征|特点|身份|地位|阵营|所属|服饰|服装|穿着|衣着|着装|装扮|打扮|配饰|饰品|模样|样貌|相貌|形象|气质|声音|声线|爱好|喜好|兴趣|特长|技能|能力|属性|设定|人设|资料|档案|备注|其他|其它|标签|发型|发色|头发|瞳色|眼睛|眼眸|肤色|皮肤|特殊标记|标志|race|species|nationality|height|weight|build|body(?: type)?|figure|outfit|clothing|clothes|attire|accessories|identity|role|title|status|affiliation|faction|likes|dislikes|hobbies|skills|abilities|notes?|other|tags?|birthday|zodiac|blood type|hair|eyes?|skin)$/iu;
+const PROMPT_TAG_NAMESPACE = /^(?:artist|by|style|quality|score|rating|year|source|series|copyright|character|meta|general|medium|nsfw|sfw|negative|lora|embedding|hypernet)$/iu;
+function fieldOrTagHeading(heading) {
+    return APPEARANCE_FIELD_LABEL.test(heading) || PROMPT_TAG_NAMESPACE.test(heading) || /[()（）[\]{}<>_\d]/u.test(heading);
+}
+
 function unfamiliarAppearanceSubject(label) {
     const neutral = /^(?:他|她|我|你|本人|角色|天生|生来|外貌|容貌|长相|外表|外貌特征|基本信息|人物信息|性别|性別|生理性别|年龄|名字|姓名|职业|性格|背景|简介|he|she|I|you|they|appearance|looks?|traits?|features|physical appearance|gender|sex|age|name|occupation|personality|background|description)$/iu;
     const heading = /^([^:：]+)[:：](?!:)/u.exec(label)?.[1]?.trim();
-    if (heading && !neutral.test(heading) && !appearanceTraitClause(heading)) return true;
+    if (heading && !neutral.test(heading) && !fieldOrTagHeading(heading) && !appearanceTraitClause(heading)) return true;
     const subject = /^([A-Z][A-Za-z’'-]*(?:\s+[A-Z][A-Za-z’'-]*)*)\s+(?:has|is|wears|possesses)\b/u.exec(label)?.[1]
         || /^([\p{Script=Han}]+?)(?:留着|长着|拥有|有|是)/u.exec(label)?.[1];
-    return !!subject && !neutral.test(subject) && !appearanceTraitClause(subject)
+    return !!subject && !neutral.test(subject) && !fieldOrTagHeading(subject) && !appearanceTraitClause(subject)
         && !/^(?:头|脸|眼|眉|鼻|嘴|唇|肩|脖|颈|胸|腰|腹|背|手|腕|指|臂|腿|足|脚|身|肌肤)/u.test(subject);
 }
 

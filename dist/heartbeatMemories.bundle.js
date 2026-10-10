@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 352
-// Source SHA-256: f4cd3efbeddfa79a0619c27a110e63fa312ec72b00f194601219e618db648448
+// Source SHA-256: 27402fd21a4ee915d3793ccac00c3f40330a07a9306c7356e5422985aa5ac433
 // Build: python3 tools/verification/build.py <source-root>
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -4714,7 +4714,7 @@ function publicBaiBaiCharacters(api) {
 // The public tag contains the whole character-library entry, including outfits.
 // Keep only stable appearance clauses. Classification uses an unweighted copy;
 // the emitted clause retains the user's weighting and has no character quota.
-const SCENE_OR_ACTION = /\b(?:standing|sitting|walking|running|holding|waving|dancing|kneeling|lying|leaning|looking|gazing|smiling|crying|laughing|embracing|hugging|kissing|gripping|touching|pointing|raised|outstretched|crossed|clasped|clenched|open mouth|closed eyes|closed mouth|full[- ]body|upper[- ]body|lower[- ]body|portrait|close[- ]up|cowboy shot|from behind|front view|back view|dress|shirt|jacket|coat|skirt|pants|trousers|shorts|boots|shoes|gloves|hat|cap|ribbon|necklace|bracelet|earrings?|glasses|mask|armor|armour|cape|sleeves?|uniform|swimsuit|bikini|lingerie)\b|站|坐|走|跑|跪|躺|倚|挥|揮|握|举|舉|抱|亲吻|親吻|牵|牽|抬|垂|转身|轉身|看着|望着|闭眼|閉眼|闭嘴|張嘴|张嘴|全身|半身|特写|特寫|正面|背面|服|衣|裙|裤|褲|鞋|靴|手套|帽|丝带|絲帶|项链|項鏈|手链|手鏈|耳环|耳環|眼镜|眼鏡|面具|铠甲|鎧甲/iu;
+const SCENE_OR_ACTION = /\b(?:standing|sitting|walking|running|holding|waving|dancing|kneeling|lying|leaning|looking|gazing|smiling|crying|laughing|embracing|hugging|kissing|gripping|touching|pointing|raised|outstretched|crossed|clasped|clenched|open mouth|closed eyes|closed mouth|full[- ]body|upper[- ]body|lower[- ]body|portrait|close[- ]up|cowboy shot|from behind|front view|back view|dress|shirt|jacket|coat|skirt|pants|trousers|shorts|boots|shoes|gloves|hat|cap|ribbon|necklace|bracelet|earrings?|glasses|mask|armor|armour|cape|sleeves?|uniform|swimsuit|bikini|lingerie)\b|站|坐|走|跑|跪|躺|倚|挥|揮|握|举|舉|抱|亲吻|親吻|牵|牽|抬|垂(?:眸|眼|首|头|手|下(?:头|眼|眸|手))|转身|轉身|看着|望着|闭眼|閉眼|闭嘴|張嘴|张嘴|全身|半身|特写|特寫|正面|背面|服|衣|裙|裤|褲|鞋|靴|手套|帽|丝带|絲帶|项链|項鏈|手链|手鏈|耳环|耳環|眼镜|眼鏡|面具|铠甲|鎧甲/iu;
 
 function stableAppearance(value, visible, subject) {
     const literal = chatu8.literalPresetAppearanceText(value);
@@ -18273,13 +18273,22 @@ function appearanceTraitClause(value) {
     return APPEARANCE_TRAIT.test(clean.replace(/\bshort\b/giu, '')) || /^short(?: stature)?$/iu.test(clean.trim());
 }
 
+// Profile field labels and prompt-tag syntax are not person names. Treating
+// "种族：人类", "(1girl:1.2)" or "artist:x" as another subject would hide the
+// rest of the current person's description.
+const APPEARANCE_FIELD_LABEL = /^(?:种族|族裔|物种|国籍|出身|身高|体重|体型|体态|身形|身材|三围|生日|星座|血型|外观|外形|特征|特点|身份|地位|阵营|所属|服饰|服装|穿着|衣着|着装|装扮|打扮|配饰|饰品|模样|样貌|相貌|形象|气质|声音|声线|爱好|喜好|兴趣|特长|技能|能力|属性|设定|人设|资料|档案|备注|其他|其它|标签|发型|发色|头发|瞳色|眼睛|眼眸|肤色|皮肤|特殊标记|标志|race|species|nationality|height|weight|build|body(?: type)?|figure|outfit|clothing|clothes|attire|accessories|identity|role|title|status|affiliation|faction|likes|dislikes|hobbies|skills|abilities|notes?|other|tags?|birthday|zodiac|blood type|hair|eyes?|skin)$/iu;
+const PROMPT_TAG_NAMESPACE = /^(?:artist|by|style|quality|score|rating|year|source|series|copyright|character|meta|general|medium|nsfw|sfw|negative|lora|embedding|hypernet)$/iu;
+function fieldOrTagHeading(heading) {
+    return APPEARANCE_FIELD_LABEL.test(heading) || PROMPT_TAG_NAMESPACE.test(heading) || /[()（）[\]{}<>_\d]/u.test(heading);
+}
+
 function unfamiliarAppearanceSubject(label) {
     const neutral = /^(?:他|她|我|你|本人|角色|天生|生来|外貌|容貌|长相|外表|外貌特征|基本信息|人物信息|性别|性別|生理性别|年龄|名字|姓名|职业|性格|背景|简介|he|she|I|you|they|appearance|looks?|traits?|features|physical appearance|gender|sex|age|name|occupation|personality|background|description)$/iu;
     const heading = /^([^:：]+)[:：](?!:)/u.exec(label)?.[1]?.trim();
-    if (heading && !neutral.test(heading) && !appearanceTraitClause(heading)) return true;
+    if (heading && !neutral.test(heading) && !fieldOrTagHeading(heading) && !appearanceTraitClause(heading)) return true;
     const subject = /^([A-Z][A-Za-z’'-]*(?:\s+[A-Z][A-Za-z’'-]*)*)\s+(?:has|is|wears|possesses)\b/u.exec(label)?.[1]
         || /^([\p{Script=Han}]+?)(?:留着|长着|拥有|有|是)/u.exec(label)?.[1];
-    return !!subject && !neutral.test(subject) && !appearanceTraitClause(subject)
+    return !!subject && !neutral.test(subject) && !fieldOrTagHeading(subject) && !appearanceTraitClause(subject)
         && !/^(?:头|脸|眼|眉|鼻|嘴|唇|肩|脖|颈|胸|腰|腹|背|手|腕|指|臂|腿|足|脚|身|肌肤)/u.test(subject);
 }
 
@@ -94809,7 +94818,13 @@ async function retryMvSave(scope, id) {
     let next = current ? structuredClone(current) : null;
     if (!list(current?.appliedResults).includes(row.id)) {
         if (!resultStillCurrent(current, row, expected)) return held('分镜或图片已有新修改，或旧暂存无法确认现有素材版本');
-        if (row.kind === 'story') next = { timing: { taps: {}, shift: 0 }, duration: 0, ...next, ...row.patch, assetPrompts: {}, storyRevision: row.id };
+        if (row.kind === 'story') {
+            // A regenerated storyboard replaces the old composition set. When the
+            // new one is a flat (e.g. video) storyboard, old v2 groups must not
+            // survive and turn the record back into a v2 asset board.
+            const { version, groups, keyword, motif, ...kept } = next || {};
+            next = { timing: { taps: {}, shift: 0 }, duration: 0, ...kept, ...row.patch, assetPrompts: {}, storyRevision: row.id };
+        }
         else if (row.kind === 'append') {
             next.shots = [...list(next.shots), ...row.patch.shots].sort((a, b) => a.sectionIndex - b.sectionIndex);
             if (isV2(next)) next.groups = [...next.groups, ...row.patch.groups];
@@ -95054,7 +95069,7 @@ function shotTimeline(record, song) {
         total = fit.total;
     }
     // Snap only automatically placed cuts. Explicit section and lyric times are exact.
-    if (record?.version === 2 && rows.length > 1) {
+    if (isV2(record) && rows.length > 1) {
         const beat = 60 / (songBpm(song) || 90);
         for (let i = 1; i < rows.length; i += 1) {
             if (marks.has(i)) continue;
@@ -95761,7 +95776,9 @@ ${['expression', 'illustration'].includes(direction) ? mv_stage.prompt() + (dire
 `;
 }
 
-function isV2(record) { return record?.version === 2 && Array.isArray(record?.groups); }
+// Video storyboards are always flat; a stale version/groups pair left by an
+// older regenerate must not turn one back into a v2 asset board.
+function isV2(record) { return record?.version === 2 && Array.isArray(record?.groups) && record?.settings?.output !== 'video'; }
 
 function buildShots(raw, memory, sectionCount, settings, cast = null, opts = {}) {
     if (cast?.existingGroups) { opts = cast; cast = null; }
