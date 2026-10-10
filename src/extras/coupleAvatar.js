@@ -112,6 +112,8 @@ export function normalizeCoupleSettings(value, context = optionalContext()) {
         }), context),
         styleId: styleId === 'custom' || styles.COUPLE_STYLES.some(style => style.id === styleId) ? styleId : defaults.styleId,
         pairType: input.pairType === 'echo' ? 'echo' : 'joined',
+        // Opt-in only; absent keeps every saved pair byte-identical.
+        ...(input.overlayArtist === true ? { overlayArtist: true } : {}),
         interaction: own(input, 'interaction') ? text(input.interaction) : defaults.interaction,
         clothing: text(input.clothing), background: text(input.background),
         direction: text(input.direction), customStyle: text(input.customStyle), interactionDetail: text(input.interactionDetail),
@@ -161,59 +163,76 @@ export function couplePromptParts(value, context = optionalContext()) {
     const interaction = subject_details.coupleVisibleRecipe(resolvedInteraction.prompt, anyCovered && ownedInteraction);
     const originalRendering = chosen?.prompt || settings.customStyle;
     const rendering = subject_details.coupleVisibleRecipe(originalRendering, anyCovered && !!chosen);
-    const construction = subject_details.coupleVisibleRecipe(styles.coupleStyleConstruction(chosen), anyCovered);
+    // Stack on the image provider's own artist string: form styles keep their
+    // proportion/framing words once, at full strength; mixed styles once, at
+    // reduced weight; medium styles never stack. Off, nothing below changes.
+    const overlay = settings.overlayArtist === true && styles.coupleOverlayAvailable(chosen);
+    const blend = styles.coupleStyleBlend(chosen);
+    const overlayConstruction = !overlay || blend === 'mixed' ? '' : chosen?.group === 'graphic'
+        ? styles.coupleStyleOwnConstruction(chosen) : styles.coupleStyleConstruction(chosen);
+    const construction = subject_details.coupleVisibleRecipe(overlay ? overlayConstruction : styles.coupleStyleConstruction(chosen), anyCovered);
     const relation = detailed ? interaction_direction.coupleInteractionDirection(settings) : { scene: '', roles: ['', ''] };
     const clothing = subject_details.coupleClothingParts(settings.clothing, settings.people);
     // Explicit NAI 5 drafts get source-bound identity guidance in the actual
     // native actor channels too. Formatless historical prompts stay unchanged.
-    const identityRendering = promptFormat === 'nai5-natural' ? styles.coupleStyleIdentityRendering(chosen) : '';
+    const identityRendering = promptFormat === 'nai5-natural'
+        ? overlay ? styles.coupleStyleIdentityRendering(chosen).replace(' in the selected medium', '') : styles.coupleStyleIdentityRendering(chosen) : '';
     // Framing and finish are art direction only. Keep full-figure styles and
     // simplified media intact; explicit user directions still take precedence.
     const fullFigure = animal || (chosen?.group === 'chibi' && chosen.id !== 'chibi-headshot')
         || (chosen?.group === 'craft' && !['craft-paper', 'craft-bead'].includes(chosen.id))
-        || ['fantasy-enamel', 'fantasy-shadow'].includes(chosen?.id);
+        || ['fantasy-enamel', 'fantasy-shadow'].includes(chosen?.id) || styles.FULL_FIGURE_LAYOUTS.includes(chosen?.id);
     const framing = !chosen ? '' : fullFigure
         ? 'Each complete stylized figure fills most of its own half, with a readable face and connected limbs; retain the selected body proportions.'
         : 'Close head-and-shoulder or upper-body portraits fill most of each half, with visible shoulders and clothing supporting the gestures.';
-    const finish = !chosen ? '' : 'Finished artwork in the selected medium: recognizable individual features, intentional contours and gestures connected naturally to the body in the selected form. Keep background detail quieter than the subjects, with clear subject-to-background separation. Preserve deliberate simplicity and the selected medium\'s own texture.';
+    const finish = !chosen ? '' : overlay
+        ? 'Finished artwork: recognizable individual features, intentional contours and gestures connected naturally to the body. Keep background detail quieter than the subjects, with clear subject-to-background separation.'
+        : 'Finished artwork in the selected medium: recognizable individual features, intentional contours and gestures connected naturally to the body in the selected form. Keep background detail quieter than the subjects, with clear subject-to-background separation. Preserve deliberate simplicity and the selected medium\'s own texture.';
     const form = animal
         ? 'Two complete animals, species-appropriate animal anatomy, heads, muzzles or beaks, bodies, limbs and tails. Paws, wings or flippers perform the gestures. Each animal has its own eye color, fur markings and small signature accessories derived from its identity.'
         : object ? 'Two crafted figures whose entire faces and bodies are made from the selected material, with its physical texture and construction.'
-            : 'The selected medium, proportions, linework and shading define the faces, bodies, clothing and background.';
+            : overlay ? 'The selected proportions, framing and light shape the figures; linework, coloring and shading follow the base art style.'
+                : 'The selected medium, proportions, linework and shading define the faces, bodies, clothing and background.';
     const actions = resolvedInteraction.roles.map((action, index) => subject_details.coupleVisibleRecipe(action, covered[index] && ownedInteraction));
     const personClothing = index => detailed && clothing.people[index]
-        ? `${animal ? 'Wearable accents adapted to this animal' : 'Clothing for this subject'}: ${clothing.people[index]}. Keep its specified colors, garment shape and accessories visible in the selected medium and proportions.` : '';
+        ? `${animal ? 'Wearable accents adapted to this animal' : 'Clothing for this subject'}: ${clothing.people[index]}. Keep its specified colors, garment shape and accessories visible in the selected ${overlay ? '' : 'medium and '}proportions.` : '';
     const personDetails = index => [relation.roles[index], subject_details.coupleCoveredEyeGuidance(covered[index]), personClothing(index)].filter(Boolean).join(' ');
     const people = settings.people.map((person, index) => {
         const side = index === 0 ? 'LEFT' : 'RIGHT';
         const reference = appearanceReference(person.appearance, animal, object);
         return `${side} HALF ${subject}: ${person.name || (index === 0 ? 'first character' : 'second character')}${reference ? `; ${animal || object ? 'individual identity in the selected form' : 'appearance'}: ${reference}` : ''}. Action: ${actions[index]}.${personDetails(index) ? ` ${personDetails(index)}` : ''}`;
     });
-    const styleLead = rendering ? `Rendering style: ${rendering}.` : '';
+    const overlayLabel = !overlay ? '' : chosen?.group === 'mood' ? 'Light and atmosphere' : blend === 'mixed'
+        ? 'Light style accent, secondary to the base art style' : chosen ? 'Proportions, framing and pose' : 'Style direction';
+    const styleLead = !rendering ? '' : overlay ? `${overlayLabel}: ${rendering}.` : `Rendering style: ${rendering}.`;
+    // NAI tag weighting; prose channels use the label above instead.
+    const weightedRendering = !rendering ? '' : overlay && blend === 'mixed' ? `${styles.OVERLAY_MIXED_WEIGHT}::${rendering}::` : rendering;
     const composition = [
         construction ? `Style construction: ${construction}` : '',
         identityRendering,
         form, framing, finish,
         `One continuous horizontal paired portrait, two distinct ${subject}s side by side, one centered at the left quarter and one at the right quarter, balanced subject scale.`,
-        'A continuous background in the selected medium fills the entire image from edge to edge, including the center and all four corners. Faces and gestures sit comfortably within their own half, surrounded by the same continuous background.',
+        `A continuous background${overlay ? '' : ' in the selected medium'} fills the entire image from edge to edge, including the center and all four corners. Faces and gestures sit comfortably within their own half, surrounded by the same continuous background.`,
         `Interaction: ${interaction && interaction !== '交给灵感' ? interaction : DEFAULT_INTERACTION_PROMPT}.`,
         `Action roles: LEFT — ${actions[0]}; RIGHT — ${actions[1]}. Adapt gestures to the chosen body form; explicit user directions take precedence.`,
         relation.scene,
         anyCovered ? 'Render eye details only for the subject whose eyes are visible. Preserve the other subject\'s supplied eye covering; show their emotion through mouth, head angle and gesture.' : '',
         settings.direction ? `Direction: ${settings.direction}.` : '',
-        settings.clothing ? `${animal ? 'Small wearable accents adapted for animal bodies' : 'Clothing in the selected rendering style'}: ${settings.clothing}.` : '',
+        settings.clothing ? `${animal ? 'Small wearable accents adapted for animal bodies' : overlay ? 'Clothing' : 'Clothing in the selected rendering style'}: ${settings.clothing}.` : '',
         detailed && settings.clothing ? 'The supplied clothing takes precedence over default costume suggestions. Bind left/right or named garments only to their owner; carry shared clothing to both subjects.' : '',
         settings.background ? `Background: ${settings.background}.` : '',
         settings.pairType === 'echo'
             ? 'Complementary individual gestures, coordinated colors and light, continuous background.'
             : 'A shared motif connects the two subjects across the center of the continuous scene.',
-        'Preserve each individual\'s own face or muzzle shape, eyes, hair silhouette or markings, clothing and accessories. Shared traits remain shared; expressions and reactions belong to each subject. Express identity colors as tones and shapes when the selected medium is monochrome.',
+        overlay ? 'Preserve each individual\'s own face or muzzle shape, eyes, hair silhouette or markings, clothing and accessories. Shared traits remain shared; expressions and reactions belong to each subject.'
+            : 'Preserve each individual\'s own face or muzzle shape, eyes, hair silhouette or markings, clothing and accessories. Shared traits remain shared; expressions and reactions belong to each subject. Express identity colors as tones and shapes when the selected medium is monochrome.',
     ].filter(Boolean);
     const negative = [
         `outer white frame, panel border, central white gutter, split screen, rounded portrait cards, circular picture frames, letterboxing, vignette, fading to blank edges, duplicate character, cloned face, ${detailed ? 'identical duplicate pose' : 'mirrored pose'}, text, watermark`,
         animal ? 'human face, human body, human hands, person wearing animal ears, person holding an animal' : '',
     ].filter(Boolean).join(', ');
     if (promptFormat === 'nai45-tags') return prompt_format.coupleAvatarTagParts({
+        overlay, blend, mixedWeight: styles.OVERLAY_MIXED_WEIGHT,
         settings, chosen, animal, object, subject, fullFigure, negative,
         appearances: settings.people.map(person => appearanceReference(person.appearance, animal, object)),
         covered, clothing, interactionDirection: relation,
@@ -223,7 +242,7 @@ export function couplePromptParts(value, context = optionalContext()) {
     // tokens the provider normalizes), and put the action in that subject's
     // nl. Detailed medium construction is shared once, not repeated per face.
     const nai = {
-        prompt: [rendering || 'illustration', `two distinct ${subject}s`, 'side by side'].join(', '),
+        prompt: (overlay ? [`two distinct ${subject}s`, 'side by side', weightedRendering] : [rendering || 'illustration', `two distinct ${subject}s`, 'side by side']).filter(Boolean).join(', '),
         nl: [
             construction, framing, finish,
             'One continuous horizontal paired portrait, first subject centered at the left quarter, second at the right quarter, matching scale. Background fills the image edge to edge, through the center and all four corners. Faces and gestures stay comfortably inside their own half.',
@@ -232,7 +251,7 @@ export function couplePromptParts(value, context = optionalContext()) {
             relation.scene,
             anyCovered ? 'Eye rendering applies only to visible eyes. Keep each supplied eye covering in place; use the covered subject\'s mouth and head angle for expression.' : '',
             settings.pairType === 'echo' ? 'Coordinated colors and light, complementary individual gestures.' : 'A shared motif connects the two subjects.',
-            'Render both subjects entirely in the selected medium. For a monochrome medium, identity colors become tones. Adapt gestures to the chosen body form.',
+            overlay ? 'Adapt gestures to the chosen body form.' : 'Render both subjects entirely in the selected medium. For a monochrome medium, identity colors become tones. Adapt gestures to the chosen body form.',
             settings.clothing ? `Clothing or small wearable accents: ${settings.clothing}.` : '',
             detailed && settings.clothing ? 'Use the supplied clothing in preference to default costumes, preserving each garment\'s assigned wearer, colors and shape.' : '',
             settings.background ? `Background: ${settings.background}.` : '',
@@ -240,19 +259,20 @@ export function couplePromptParts(value, context = optionalContext()) {
         ].filter(Boolean).join('\n'),
         characters: settings.people.map((person, index) => ({
             name: `${index ? '右边' : '左边'} · ${person.name || (index ? '人物二' : '人物一')}`,
-            tag: [appearanceReference(person.appearance, animal, object), subject_details.coupleVisibleRecipe(originalRendering, covered[index] && !!chosen) || subject].filter(Boolean).join(', '),
+            tag: overlay ? appearanceReference(person.appearance, animal, object) || subject
+                : [appearanceReference(person.appearance, animal, object), subject_details.coupleVisibleRecipe(originalRendering, covered[index] && !!chosen) || subject].filter(Boolean).join(', '),
             nl: [`On the ${index ? 'right' : 'left'}, ${actions[index]}.`, personDetails(index), identityRendering].filter(Boolean).join(' '),
             ...(text(person.presetNegative) ? { negative: text(person.presetNegative) } : {}),
         })),
     };
-    return { scene: [styleLead, ...composition].filter(Boolean).join('\n'),
+    return { scene: (overlay ? [...composition, styleLead] : [styleLead, ...composition]).filter(Boolean).join('\n'),
         // Put the actual two appearances before general art direction on flat
         // backends, where a long scene used to bury the individual identities.
-        prompt: [styleLead, ...people, ...composition].filter(Boolean).join('\n'), negative, nai,
+        prompt: (overlay ? [...people, ...composition, styleLead] : [styleLead, ...people, ...composition]).filter(Boolean).join('\n'), negative, nai,
         ...(promptFormat ? { promptFormat } : {}),
         characters: settings.people.map((person, index) => ({
             name: `${index ? '右边' : '左边'} · ${person.name || (index ? '人物二' : '人物一')}`,
-            tag: [people[index], chosen && anyCovered ? `Rendering style: ${subject_details.coupleVisibleRecipe(originalRendering, covered[index])}.` : styleLead,
+            tag: overlay ? people[index] : [people[index], chosen && anyCovered ? `Rendering style: ${subject_details.coupleVisibleRecipe(originalRendering, covered[index])}.` : styleLead,
                 subject_details.coupleVisibleRecipe(styles.coupleStyleConstruction(chosen), covered[index])].filter(Boolean).join('\n'),
             ...(text(person.presetNegative) ? { negative: text(person.presetNegative) } : {}),
         })) };

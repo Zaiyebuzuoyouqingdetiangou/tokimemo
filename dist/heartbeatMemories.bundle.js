@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 352
-// Source SHA-256: 27402fd21a4ee915d3793ccac00c3f40330a07a9306c7356e5422985aa5ac433
+// Source SHA-256: 085cadd950138329d1414a51c85ccbc85bfefe0fe3d309721e44131fd079ca94
 // Build: python3 tools/verification/build.py <source-root>
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -1307,6 +1307,8 @@ function normalizeCoupleSettings(value, context = optionalContext()) {
         }), context),
         styleId: styleId === 'custom' || styles.COUPLE_STYLES.some(style => style.id === styleId) ? styleId : defaults.styleId,
         pairType: input.pairType === 'echo' ? 'echo' : 'joined',
+        // Opt-in only; absent keeps every saved pair byte-identical.
+        ...(input.overlayArtist === true ? { overlayArtist: true } : {}),
         interaction: own(input, 'interaction') ? text(input.interaction) : defaults.interaction,
         clothing: text(input.clothing), background: text(input.background),
         direction: text(input.direction), customStyle: text(input.customStyle), interactionDetail: text(input.interactionDetail),
@@ -1356,59 +1358,76 @@ function couplePromptParts(value, context = optionalContext()) {
     const interaction = subject_details.coupleVisibleRecipe(resolvedInteraction.prompt, anyCovered && ownedInteraction);
     const originalRendering = chosen?.prompt || settings.customStyle;
     const rendering = subject_details.coupleVisibleRecipe(originalRendering, anyCovered && !!chosen);
-    const construction = subject_details.coupleVisibleRecipe(styles.coupleStyleConstruction(chosen), anyCovered);
+    // Stack on the image provider's own artist string: form styles keep their
+    // proportion/framing words once, at full strength; mixed styles once, at
+    // reduced weight; medium styles never stack. Off, nothing below changes.
+    const overlay = settings.overlayArtist === true && styles.coupleOverlayAvailable(chosen);
+    const blend = styles.coupleStyleBlend(chosen);
+    const overlayConstruction = !overlay || blend === 'mixed' ? '' : chosen?.group === 'graphic'
+        ? styles.coupleStyleOwnConstruction(chosen) : styles.coupleStyleConstruction(chosen);
+    const construction = subject_details.coupleVisibleRecipe(overlay ? overlayConstruction : styles.coupleStyleConstruction(chosen), anyCovered);
     const relation = detailed ? interaction_direction.coupleInteractionDirection(settings) : { scene: '', roles: ['', ''] };
     const clothing = subject_details.coupleClothingParts(settings.clothing, settings.people);
     // Explicit NAI 5 drafts get source-bound identity guidance in the actual
     // native actor channels too. Formatless historical prompts stay unchanged.
-    const identityRendering = promptFormat === 'nai5-natural' ? styles.coupleStyleIdentityRendering(chosen) : '';
+    const identityRendering = promptFormat === 'nai5-natural'
+        ? overlay ? styles.coupleStyleIdentityRendering(chosen).replace(' in the selected medium', '') : styles.coupleStyleIdentityRendering(chosen) : '';
     // Framing and finish are art direction only. Keep full-figure styles and
     // simplified media intact; explicit user directions still take precedence.
     const fullFigure = animal || (chosen?.group === 'chibi' && chosen.id !== 'chibi-headshot')
         || (chosen?.group === 'craft' && !['craft-paper', 'craft-bead'].includes(chosen.id))
-        || ['fantasy-enamel', 'fantasy-shadow'].includes(chosen?.id);
+        || ['fantasy-enamel', 'fantasy-shadow'].includes(chosen?.id) || styles.FULL_FIGURE_LAYOUTS.includes(chosen?.id);
     const framing = !chosen ? '' : fullFigure
         ? 'Each complete stylized figure fills most of its own half, with a readable face and connected limbs; retain the selected body proportions.'
         : 'Close head-and-shoulder or upper-body portraits fill most of each half, with visible shoulders and clothing supporting the gestures.';
-    const finish = !chosen ? '' : 'Finished artwork in the selected medium: recognizable individual features, intentional contours and gestures connected naturally to the body in the selected form. Keep background detail quieter than the subjects, with clear subject-to-background separation. Preserve deliberate simplicity and the selected medium\'s own texture.';
+    const finish = !chosen ? '' : overlay
+        ? 'Finished artwork: recognizable individual features, intentional contours and gestures connected naturally to the body. Keep background detail quieter than the subjects, with clear subject-to-background separation.'
+        : 'Finished artwork in the selected medium: recognizable individual features, intentional contours and gestures connected naturally to the body in the selected form. Keep background detail quieter than the subjects, with clear subject-to-background separation. Preserve deliberate simplicity and the selected medium\'s own texture.';
     const form = animal
         ? 'Two complete animals, species-appropriate animal anatomy, heads, muzzles or beaks, bodies, limbs and tails. Paws, wings or flippers perform the gestures. Each animal has its own eye color, fur markings and small signature accessories derived from its identity.'
         : object ? 'Two crafted figures whose entire faces and bodies are made from the selected material, with its physical texture and construction.'
-            : 'The selected medium, proportions, linework and shading define the faces, bodies, clothing and background.';
+            : overlay ? 'The selected proportions, framing and light shape the figures; linework, coloring and shading follow the base art style.'
+                : 'The selected medium, proportions, linework and shading define the faces, bodies, clothing and background.';
     const actions = resolvedInteraction.roles.map((action, index) => subject_details.coupleVisibleRecipe(action, covered[index] && ownedInteraction));
     const personClothing = index => detailed && clothing.people[index]
-        ? `${animal ? 'Wearable accents adapted to this animal' : 'Clothing for this subject'}: ${clothing.people[index]}. Keep its specified colors, garment shape and accessories visible in the selected medium and proportions.` : '';
+        ? `${animal ? 'Wearable accents adapted to this animal' : 'Clothing for this subject'}: ${clothing.people[index]}. Keep its specified colors, garment shape and accessories visible in the selected ${overlay ? '' : 'medium and '}proportions.` : '';
     const personDetails = index => [relation.roles[index], subject_details.coupleCoveredEyeGuidance(covered[index]), personClothing(index)].filter(Boolean).join(' ');
     const people = settings.people.map((person, index) => {
         const side = index === 0 ? 'LEFT' : 'RIGHT';
         const reference = appearanceReference(person.appearance, animal, object);
         return `${side} HALF ${subject}: ${person.name || (index === 0 ? 'first character' : 'second character')}${reference ? `; ${animal || object ? 'individual identity in the selected form' : 'appearance'}: ${reference}` : ''}. Action: ${actions[index]}.${personDetails(index) ? ` ${personDetails(index)}` : ''}`;
     });
-    const styleLead = rendering ? `Rendering style: ${rendering}.` : '';
+    const overlayLabel = !overlay ? '' : chosen?.group === 'mood' ? 'Light and atmosphere' : blend === 'mixed'
+        ? 'Light style accent, secondary to the base art style' : chosen ? 'Proportions, framing and pose' : 'Style direction';
+    const styleLead = !rendering ? '' : overlay ? `${overlayLabel}: ${rendering}.` : `Rendering style: ${rendering}.`;
+    // NAI tag weighting; prose channels use the label above instead.
+    const weightedRendering = !rendering ? '' : overlay && blend === 'mixed' ? `${styles.OVERLAY_MIXED_WEIGHT}::${rendering}::` : rendering;
     const composition = [
         construction ? `Style construction: ${construction}` : '',
         identityRendering,
         form, framing, finish,
         `One continuous horizontal paired portrait, two distinct ${subject}s side by side, one centered at the left quarter and one at the right quarter, balanced subject scale.`,
-        'A continuous background in the selected medium fills the entire image from edge to edge, including the center and all four corners. Faces and gestures sit comfortably within their own half, surrounded by the same continuous background.',
+        `A continuous background${overlay ? '' : ' in the selected medium'} fills the entire image from edge to edge, including the center and all four corners. Faces and gestures sit comfortably within their own half, surrounded by the same continuous background.`,
         `Interaction: ${interaction && interaction !== '交给灵感' ? interaction : DEFAULT_INTERACTION_PROMPT}.`,
         `Action roles: LEFT — ${actions[0]}; RIGHT — ${actions[1]}. Adapt gestures to the chosen body form; explicit user directions take precedence.`,
         relation.scene,
         anyCovered ? 'Render eye details only for the subject whose eyes are visible. Preserve the other subject\'s supplied eye covering; show their emotion through mouth, head angle and gesture.' : '',
         settings.direction ? `Direction: ${settings.direction}.` : '',
-        settings.clothing ? `${animal ? 'Small wearable accents adapted for animal bodies' : 'Clothing in the selected rendering style'}: ${settings.clothing}.` : '',
+        settings.clothing ? `${animal ? 'Small wearable accents adapted for animal bodies' : overlay ? 'Clothing' : 'Clothing in the selected rendering style'}: ${settings.clothing}.` : '',
         detailed && settings.clothing ? 'The supplied clothing takes precedence over default costume suggestions. Bind left/right or named garments only to their owner; carry shared clothing to both subjects.' : '',
         settings.background ? `Background: ${settings.background}.` : '',
         settings.pairType === 'echo'
             ? 'Complementary individual gestures, coordinated colors and light, continuous background.'
             : 'A shared motif connects the two subjects across the center of the continuous scene.',
-        'Preserve each individual\'s own face or muzzle shape, eyes, hair silhouette or markings, clothing and accessories. Shared traits remain shared; expressions and reactions belong to each subject. Express identity colors as tones and shapes when the selected medium is monochrome.',
+        overlay ? 'Preserve each individual\'s own face or muzzle shape, eyes, hair silhouette or markings, clothing and accessories. Shared traits remain shared; expressions and reactions belong to each subject.'
+            : 'Preserve each individual\'s own face or muzzle shape, eyes, hair silhouette or markings, clothing and accessories. Shared traits remain shared; expressions and reactions belong to each subject. Express identity colors as tones and shapes when the selected medium is monochrome.',
     ].filter(Boolean);
     const negative = [
         `outer white frame, panel border, central white gutter, split screen, rounded portrait cards, circular picture frames, letterboxing, vignette, fading to blank edges, duplicate character, cloned face, ${detailed ? 'identical duplicate pose' : 'mirrored pose'}, text, watermark`,
         animal ? 'human face, human body, human hands, person wearing animal ears, person holding an animal' : '',
     ].filter(Boolean).join(', ');
     if (promptFormat === 'nai45-tags') return prompt_format.coupleAvatarTagParts({
+        overlay, blend, mixedWeight: styles.OVERLAY_MIXED_WEIGHT,
         settings, chosen, animal, object, subject, fullFigure, negative,
         appearances: settings.people.map(person => appearanceReference(person.appearance, animal, object)),
         covered, clothing, interactionDirection: relation,
@@ -1418,7 +1437,7 @@ function couplePromptParts(value, context = optionalContext()) {
     // tokens the provider normalizes), and put the action in that subject's
     // nl. Detailed medium construction is shared once, not repeated per face.
     const nai = {
-        prompt: [rendering || 'illustration', `two distinct ${subject}s`, 'side by side'].join(', '),
+        prompt: (overlay ? [`two distinct ${subject}s`, 'side by side', weightedRendering] : [rendering || 'illustration', `two distinct ${subject}s`, 'side by side']).filter(Boolean).join(', '),
         nl: [
             construction, framing, finish,
             'One continuous horizontal paired portrait, first subject centered at the left quarter, second at the right quarter, matching scale. Background fills the image edge to edge, through the center and all four corners. Faces and gestures stay comfortably inside their own half.',
@@ -1427,7 +1446,7 @@ function couplePromptParts(value, context = optionalContext()) {
             relation.scene,
             anyCovered ? 'Eye rendering applies only to visible eyes. Keep each supplied eye covering in place; use the covered subject\'s mouth and head angle for expression.' : '',
             settings.pairType === 'echo' ? 'Coordinated colors and light, complementary individual gestures.' : 'A shared motif connects the two subjects.',
-            'Render both subjects entirely in the selected medium. For a monochrome medium, identity colors become tones. Adapt gestures to the chosen body form.',
+            overlay ? 'Adapt gestures to the chosen body form.' : 'Render both subjects entirely in the selected medium. For a monochrome medium, identity colors become tones. Adapt gestures to the chosen body form.',
             settings.clothing ? `Clothing or small wearable accents: ${settings.clothing}.` : '',
             detailed && settings.clothing ? 'Use the supplied clothing in preference to default costumes, preserving each garment\'s assigned wearer, colors and shape.' : '',
             settings.background ? `Background: ${settings.background}.` : '',
@@ -1435,19 +1454,20 @@ function couplePromptParts(value, context = optionalContext()) {
         ].filter(Boolean).join('\n'),
         characters: settings.people.map((person, index) => ({
             name: `${index ? '右边' : '左边'} · ${person.name || (index ? '人物二' : '人物一')}`,
-            tag: [appearanceReference(person.appearance, animal, object), subject_details.coupleVisibleRecipe(originalRendering, covered[index] && !!chosen) || subject].filter(Boolean).join(', '),
+            tag: overlay ? appearanceReference(person.appearance, animal, object) || subject
+                : [appearanceReference(person.appearance, animal, object), subject_details.coupleVisibleRecipe(originalRendering, covered[index] && !!chosen) || subject].filter(Boolean).join(', '),
             nl: [`On the ${index ? 'right' : 'left'}, ${actions[index]}.`, personDetails(index), identityRendering].filter(Boolean).join(' '),
             ...(text(person.presetNegative) ? { negative: text(person.presetNegative) } : {}),
         })),
     };
-    return { scene: [styleLead, ...composition].filter(Boolean).join('\n'),
+    return { scene: (overlay ? [...composition, styleLead] : [styleLead, ...composition]).filter(Boolean).join('\n'),
         // Put the actual two appearances before general art direction on flat
         // backends, where a long scene used to bury the individual identities.
-        prompt: [styleLead, ...people, ...composition].filter(Boolean).join('\n'), negative, nai,
+        prompt: (overlay ? [...people, ...composition, styleLead] : [styleLead, ...people, ...composition]).filter(Boolean).join('\n'), negative, nai,
         ...(promptFormat ? { promptFormat } : {}),
         characters: settings.people.map((person, index) => ({
             name: `${index ? '右边' : '左边'} · ${person.name || (index ? '人物二' : '人物一')}`,
-            tag: [people[index], chosen && anyCovered ? `Rendering style: ${subject_details.coupleVisibleRecipe(originalRendering, covered[index])}.` : styleLead,
+            tag: overlay ? people[index] : [people[index], chosen && anyCovered ? `Rendering style: ${subject_details.coupleVisibleRecipe(originalRendering, covered[index])}.` : styleLead,
                 subject_details.coupleVisibleRecipe(styles.coupleStyleConstruction(chosen), covered[index])].filter(Boolean).join('\n'),
             ...(text(person.presetNegative) ? { negative: text(person.presetNegative) } : {}),
         })) };
@@ -2138,13 +2158,13 @@ function __init_extras_coupleAvatarInteractionDirection_js() {
 // Exact built-in keys are intentional; free text may specify back-to-back,
 // averted faces or another composition which must not be guessed or reversed.
 const RULES = [
-    [['半颗爱心', '隔空对望', '一根红线', '隔空击掌', '递出一朵花', '碰一碰鼻尖', '一边闹一边笑', '互相做鬼脸', '举杯碰杯', '一人一只小动物', '耳机分你一只', '一人一半饼干', '递来最后一口', '草莓分给你', '两杯不同口味', '一串糖葫芦', '交换便当', '接住一片落叶', '星星递给你', '拼成一朵花', '纸飞机传话'],
+    [['半颗爱心', '隔空对望', '一根红线', '隔空击掌', '递出一朵花', '碰一碰鼻尖', '一边闹一边笑', '互相做鬼脸', '举杯碰杯', '一人一只小动物', '耳机分你一只', '一人一半饼干', '递来最后一口', '草莓分给你', '两杯不同口味', '一串糖葫芦', '交换便当', '接住一片落叶', '星星递给你', '拼成一朵花', '纸飞机传话', '额头相抵', '比心', '小拇指拉钩', '递情书', '交换小戒指', '偷亲脸颊', '脸颊贴贴', '捏脸', '十指相扣', '抱一抱', '戳脸颊', '吹气球', '掰手腕', '石头剪刀布', '抢最后一块', '一起散步', '一起做饭', '画画给你看', '喂你吃', '夏天分西瓜', '一起堆雪人', '钥匙和锁', '一瓶星光', '一起画魔法阵'],
         'An affectionate exchange reads across the center through complementary inward head angles and an answering gesture.',
         'Angle the head toward the right, toward the partner or the exchanged object; direct this gesture inward.',
         'Angle the head toward the left, toward the partner or the exchanged object; answer the offered gesture warmly.',
         'reciprocal inward head angles, affectionate exchange, complementary response',
         'head angled right toward partner, inward gesture', 'head angled left toward partner, warm answering gesture'],
-    [['左右眨眼', '偷偷模仿你', '偷偷戴上同款', '同款不同色', '日与月的呼应'],
+    [['左右眨眼', '偷偷模仿你', '偷偷戴上同款', '同款不同色', '日与月的呼应', '兔耳手势', '吐舌头', '比剪刀手', '比谁更高', '一起打游戏', '两颗星连线', '系在一起的气球', '许愿流星'],
         'Keep a mostly front-facing paired display, with subtly inward body angles and complementary responses connecting the poses.',
         'Remain mostly front-facing, with a slight body angle toward the right and a gesture for the partner to answer.',
         'Remain mostly front-facing, with a slight body angle toward the left and a distinct answering gesture.',
@@ -2156,7 +2176,7 @@ const RULES = [
         'Turn the head back toward the left in response to the tug, with a shy head tilt.',
         'gentle tug, responsive backward head turn',
         'head tilted right, gentle inward tug', 'head turned back left, shy answering tilt'],
-    [['替你理围巾'],
+    [['替你理围巾', '揉揉头发', '给你扎头发'],
         'A caring inward lean is answered by a still, receptive head tilt.',
         'Angle the head toward the right and the scarf being adjusted.',
         'Angle the head gently toward the left, holding still for the caring gesture.',
@@ -2174,7 +2194,7 @@ const RULES = [
         'Keep the chosen amused or bashfully averted head angle, with the body or gesture still responding toward the left.',
         'deliberately averted reaction, responsive body angles, complementary gestures',
         'chosen head angle retained, body or gesture responding right', 'chosen head angle retained, body or gesture responding left'],
-    [['一边困一边闹'],
+    [['一边困一边闹', '哈欠传染'],
         'Preserve the sleepy-versus-energetic contrast, linked by a gentle inward lean.',
         'Keep the drowsy head droop, tilted slightly toward the partner on the right.',
         'Angle the head and lively attention-seeking gesture toward the left without waking or uncovering the partner by default.',
@@ -2198,13 +2218,13 @@ const RULES = [
         'Angle the head toward the incoming bubble from the left and answer with a playful head tilt.',
         'shared bubble path, responsive head angles',
         'head angled right along bubble path', 'head toward incoming bubble from left, answering head tilt'],
-    [['共用一条围巾', '分享一把伞', '围巾里躲风'],
+    [['共用一条围巾', '分享一把伞', '围巾里躲风', '头靠肩', '抱住手臂', '一起看电影', '同一杯奶茶', '分棉花糖', '一起吹蜡烛', '守护你'],
         'Keep the shared shelter or warmth readable through close inward body leans and softly answering head tilts.',
         'Lean gently toward the right into the shared space, keeping the existing scarf or umbrella action.',
         'Lean gently toward the left into the shared space with an answering head tilt.',
         'shared warmth or shelter, close inward body leans, answering head tilts',
         'gentle rightward body lean, shared shelter gesture', 'gentle leftward body lean, answering head tilt'],
-    [['一起读一本书'],
+    [['一起读一本书', '寻宝地图'],
         'Both heads incline toward the same open page, with the second reaction answering the indicated passage.',
         'Incline the head downward and inward toward the shared page while indicating the passage.',
         'Incline the head downward and inward toward that same passage, answering with a distinct head tilt.',
@@ -2240,13 +2260,13 @@ const RULES = [
         'Orient the head toward the other firefly on that shared trail, with an answering body lean toward the left.',
         'shared firefly trail, distinct firefly focus, companionable body leans',
         'head along nearby firefly trail, rightward body lean', 'head toward other firefly, leftward answering body lean'],
-    [['雨后踩水花'],
+    [['雨后踩水花', '枕头大战', '抛起落叶', '海边踏浪'],
         'Connect the playful splash to the partner\'s reaction while preserving a natural recoil.',
         'Angle the head toward the partner on the right while making the small inward splash.',
         'React toward the splash arriving from the left, with a playful head tilt and natural body recoil.',
         'splash-and-reaction exchange, playful recoil',
         'head angled right toward partner, inward splash', 'head toward splash from left, playful tilt, natural recoil'],
-    [['同一阵风'],
+    [['同一阵风', '一起放风筝'],
         'Keep both oriented into the same breeze; connect the pair through complementary bracing gestures and companionable body angles.',
         'Keep the lifted head oriented into the breeze, with a small body lean toward the partner on the right.',
         'Keep the head oriented into the same breeze at a different tilt, answering with a bracing gesture toward the shared space.',
@@ -2258,6 +2278,12 @@ const RULES = [
         'Keep the head comfortably toward the sea or slightly inward, answering the shell display toward the left.',
         'shared sea setting, reciprocal seashell display, relaxed companionable angles',
         'relaxed sea-facing or inward head angle, shell offered right', 'relaxed sea-facing or inward head angle, answering shell offered left'],
+    [['背靠背依偎'],
+        "Back-to-back pose: bodies face outward while shoulders lean together; heads may turn slightly back toward the partner.",
+        "Face outward to the left while leaning back toward the right, the head turning slightly back toward the partner.",
+        "Face outward to the right while leaning back toward the left, the head turning slightly back toward the partner.",
+        "back-to-back pose, shoulders leaning together, slight backward glances",
+        "body facing left, leaning back right, slight backward glance", "body facing right, leaning back left, slight backward glance"],
 ];
 
 const COVERING_RULE = 'Retain supplied eye coverings and any specified closed-eye expression; convey the response through head angle, body angle or gesture when eyes are hidden.';
@@ -2370,6 +2396,75 @@ const STYLE_TAGS = Object.freeze({
     'fantasy-shadow': 'Chinese shadow-puppet figures, translucent colored leather faces and bodies, cutout facial ornament, articulated puppet limbs, intricate carved patterns, backlit color',
     'fantasy-luminous': 'illuminated layered-paper portrait diorama, cut-paper faces and bodies, physical paper layers and edges, visible edge depth, gentle light between layers',
     'fantasy-fresco': 'mineral-pigment fresco portraits, matte mineral facial planes, flowing mural hair contours, broad restrained colors, fine plaster texture, selective surface wear, clear facial features',
+    "chibi-four-head": "chibi, four-head-tall proportions, slightly longer limbs, readable clothing silhouette, clear full-body gestures",
+    "chibi-kemono": "chibi, human chibi faces, matching animal ears and tail, ears tinted by own hair color, miniature proportions",
+    "chibi-squish": "squishy chibi, puffy cheeks, marshmallow-like rounded bodies, gentle squash and stretch, small soft limbs",
+    "chibi-bean": "bean-shaped chibi bodies, round heads, short simple limbs, identity through hair shape and colors and accessories",
+    "chibi-plump": "chubby chibi, round full cheeks, plump little hands, soft rounded torsos, individual hair silhouettes",
+    "chibi-tiny-arms": "chibi, very short stubby arms, earnest big gestures, oversized heads, compact bodies",
+    "layout-closeup": "tight face close-up, face filling own half, expressive eyes and mouth, cropped hair edges",
+    "layout-bust": "front-facing head-and-shoulders portraits, level eyes, centered shoulders, calm poses, small paired gestures",
+    "layout-waist": "waist-up framing, visible hands, torso gestures, torsos angled slightly inward",
+    "layout-fullbody": "full body, head-to-toe standing figures, feet visible, grounded stance, clear outfit silhouette",
+    "layout-sitting": "seated poses, relaxed sitting, knees and hands visible, matching seat height",
+    "layout-lying": "lying on stomach, chin resting on hands, legs raised behind, faces in upper middle",
+    "layout-high-angle": "high-angle view, looking up at viewer, foreshortened bodies, upturned faces",
+    "layout-profile": "side profiles facing each other, left faces right, right faces left, clean profile silhouettes",
+    "layout-look-back": "over-the-shoulder glance, three-quarter back view, head turned back, visible face",
+    "layout-peek": "peeking from bottom edge, heads and hands visible, fingers resting on edge, large clear faces",
+    "layout-dynamic": "dynamic action poses, strong foreshortening, diagonal composition, hair and clothes in motion",
+    "mood-golden": "golden hour, warm low sunlight, rim light on hair and shoulders, readable soft-lit faces",
+    "mood-blue": "blue hour twilight, cool blue-violet ambient light, small warm face accent light",
+    "mood-neon": "neon night street, pink and cyan light on faces, blurred glowing signs, no readable text",
+    "mood-moon": "moonlit night, pale silver moonlight from above, soft cool shadows, clearly lit faces",
+    "mood-sakura": "cherry blossoms, drifting pink petals, same breeze, petals clear of faces, soft pastel daylight",
+    "mood-snow": "snowy evening, falling snowflakes, warm lamp light on faces, cozy winter mood",
+    "mood-rain": "rainy day, fine rain streaks, wet reflections, soft diffused grey light",
+    "mood-starry": "starry night sky, deep blue gradient, scattered glowing stars, faint milky way behind subjects",
+    "mood-underwater": "underwater light, shimmering caustic patterns, rising small bubbles, cool aqua tones",
+    "mood-festival": "summer festival night, warm paper lanterns, festive glow, bokeh lights",
+    "mood-candle": "warm candlelight, soft orange glow on faces, dark cozy surroundings",
+    "mood-sunny": "bright sunny afternoon, clear blue sky, crisp daylight, gentle shadows",
+    "mood-sparkle": "sparkling dreamy glow, soft bloom, tiny glitter particles, sparkles away from faces",
+    "anime-gacha": "mobile game splash art, detailed costumes, dramatic controlled lighting, polished anime faces",
+    "anime-otome": "otome game event CG, soft romantic lighting, glossy expressive eyes, delicate flower accents",
+    "anime-idol": "anime idol stage, colorful spotlights, confetti, energetic sparkle, bright faces",
+    "anime-thick": "thick uniform outlines, bold clean contours, simple flat colors, simplified details",
+    "anime-lineless": "lineless anime painting, no outlines, edges from color and value, soft painted planes",
+    "art-ukiyoe": "ukiyo-e woodblock print, flowing carved outlines, flat traditional colors, patterned textiles, paper texture",
+    "art-nouveau": "art nouveau poster, flowing ornamental curves, floral background motifs, elegant linework, muted gold palette",
+    "art-impressionist": "impressionist painting, broken color dabs, visible brush marks, dappled sunlight, finer facial strokes",
+    "art-lacquer": "lacquer painting, glossy deep black and red lacquer, gold leaf accents, polished surface",
+    "art-marker": "alcohol marker illustration, layered streaky marker strokes, fine liner outlines, white paper highlights",
+    "craft-acrylic": "acrylic standee figures, printed flat artwork on clear acrylic, glossy cut edges, small clear bases",
+    "craft-cookie": "sugar cookie characters, piped royal icing outlines, flooded icing colors, baked cookie edges",
+    "craft-redpaper": "Chinese red paper-cut, intricate cutout patterns, single red paper, crisp cut edges, silhouette identity",
+    "craft-resin": "epoxy resin charms, glossy domed transparent surface, embedded glitter, tiny keyring loop",
+    "graphic-flat": "flat vector illustration, simple geometric shapes, limited palette, no gradients, clean edges",
+    "graphic-vapor": "vaporwave, pink and purple gradients, retro grid horizon, chrome accents, clean faces",
+    "graphic-lowpoly": "low-poly portraits, faceted triangular planes, flat shaded polygons, recognizable silhouettes",
+    "graphic-neon": "neon sign artwork, glowing tube outlines, faces and hair drawn in neon, dark wall, soft light spill",
+    "photo-purikura": "photo booth sticker photo, bright frontal flash, soft glowing skin, sparkle stickers around faces, playful poses",
+    "photo-street": "candid street photography, natural daylight, blurred city street, coherent lens perspective",
+    "render-toon": "3D animated film render, stylized rounded features, large expressive eyes, soft global illumination",
+    "render-game": "3D game character render, stylized detailed models, PBR materials, crisp rim lighting",
+    "render-cel3d": "cel-shaded 3D anime render, hard toon shading, clean outline shader, anime proportions",
+    "animal-hamster": "two small hamsters, puffy cheek pouches, tiny paws, small ears, individual fur markings",
+    "animal-panda": "two small pandas, black and white fur, round black ears, eye patches, chubby bodies, individual accessories",
+    "animal-penguin": "two little penguins, round bodies, short flippers, orange beaks and feet, individual head tufts",
+    "animal-otter": "two little otters, sleek fur, round ears, whiskers, webbed paws, individual fur shades",
+    "animal-duck": "two little ducklings, fluffy down, small flat bills, tiny webbed feet, individual feather tints",
+    "animal-sheep": "two little lambs, curly wool, small hooves, floppy ears, individual wool tints",
+    "animal-deer": "two little fawns, spotted coats, slender legs, large gentle eyes, small antler nubs",
+    "animal-dragon": "two little dragons, small horns, tiny wings, scaly tails, scale colors from own hair color",
+    "animal-capybara": "two capybaras, blunt square muzzles, small ears, barrel bodies, relaxed expressions, individual accessories",
+    "animal-wolf": "two little wolves, pointed ears, fluffy neck ruffs, bushy tails, individual fur patterns",
+    "animal-tiger": "two tiger cubs, striped fur, round ears, oversized paws, individual stripe tints",
+    "animal-squirrel": "two little squirrels, big curled bushy tails, tufted ears, tiny forepaws, individual fur shades",
+    "fantasy-celestial": "celestial constellation chart, fine gold line art, deep navy ground, star points, readable faces",
+    "fantasy-porcelain": "blue-and-white porcelain painting, cobalt blue brushwork, white glaze, floral scroll ornaments",
+    "fantasy-gold": "illuminated manuscript, burnished gold leaf background, fine ink outlines, jewel-tone colors",
+    "fantasy-sand": "sand art on light table, fine sand, soft grainy edges, warm backlight, amber tones",
 });
 
 // Each entry is [shared scene, left action, right action]. The role recipes
@@ -2424,6 +2519,54 @@ const INTERACTION_TAGS = Object.freeze({
     '拼成一朵花': ['complementary flower halves, completed flower at center', 'holding first flower half at inner edge', 'holding complementary flower half, completing flower, answering expression'],
     '纸飞机传话': ['paper airplane across center', 'releasing paper airplane toward right', 'ready to catch incoming paper airplane from left'],
     '两边同一片海': ['shared sea horizon, sea breeze, different seashells', 'showing first seashell, inward gaze', 'showing different seashell, answering gaze toward left'],
+    "额头相抵": ["gentle forehead touch at center", "leaning right, forehead meeting partner", "leaning left, forehead touch, content expression"],
+    "比心": ["matching finger hearts toward each other", "finger heart toward right, confident smile", "finger heart toward left, shy smile"],
+    "小拇指拉钩": ["pinky promise at center, hooked little fingers", "little finger extended toward right", "hooking little finger from left, sincere expression"],
+    "递情书": ["sealed letter exchange at center", "offering sealed letter toward right, nervous smile", "receiving letter from left, happy surprise"],
+    "交换小戒指": ["tiny ring exchange at center", "holding out tiny ring toward right", "open hand from left, moved expression"],
+    "偷亲脸颊": ["quick cheek peck across center", "leaning right, quick cheek peck", "blushing surprise, cheek peck from left"],
+    "脸颊贴贴": ["cheeks pressed together at center, squished happy faces", "pressing cheek toward right, happy squint", "pressing cheek toward left, joyful expression"],
+    "头靠肩": ["head resting on partner shoulder", "head leaning right onto partner shoulder", "supporting shoulder, head tilted left"],
+    "背靠背依偎": ["back-to-back pose, shoulders leaning together", "body facing left, leaning back right, slight backward glance", "body facing right, leaning back left, slight backward glance"],
+    "揉揉头发": ["hair ruffle across center", "reaching right, ruffling partner hair", "ducking under hand from left, happy pout"],
+    "捏脸": ["gentle cheek pinch", "reaching right, gently pinching partner cheek", "puffed cheek, mock protest"],
+    "十指相扣": ["interlaced fingers at center, held hands", "inner hand reaching right, interlaced fingers", "inner hand from left, interlaced fingers, calm smile"],
+    "抱住手臂": ["arm hug across center", "hugging partner arm toward right", "glancing left at arm hug, warm smile"],
+    "抱一抱": ["warm hug across center", "arms reaching right into hug", "returning hug from left, content expression"],
+    "戳脸颊": ["cheek poke", "finger poking partner cheek toward right", "turning left in surprise at cheek poke"],
+    "兔耳手势": ["bunny ears prank", "two fingers behind partner head as bunny ears", "unaware smile toward viewer"],
+    "吐舌头": ["playful tongues out", "tongue out, playful wink", "tongue out, different head tilt"],
+    "吹气球": ["balloon about to pop", "blowing up balloon toward right, puffed cheeks", "covering ears, bracing for pop"],
+    "比剪刀手": ["matching peace signs", "peace sign beside eye", "peace sign at chin, different grin"],
+    "哈欠传染": ["contagious yawn", "wide yawn, hand over mouth", "catching the yawn, resisting"],
+    "掰手腕": ["arm wrestling at center", "gripping partner hand, determined effort", "pushing back from left, teasing grin"],
+    "石头剪刀布": ["rock paper scissors at center", "rock hand gesture toward center", "paper hand gesture toward center, triumphant look"],
+    "抢最后一块": ["both reaching for last cake piece", "reaching right for last piece", "reaching left for same piece, competitive grin"],
+    "枕头大战": ["playful pillow fight, floating feathers", "swinging pillow toward right", "blocking with pillow, laughing"],
+    "比谁更高": ["height comparison", "standing on tiptoe, hand measuring above head", "hand raised comparing heights, smug smile"],
+    "一起打游戏": ["shared video game, game controllers", "holding controller, cheering", "holding controller, concentrating"],
+    "一起看电影": ["shared popcorn bucket, movie night", "holding popcorn bucket, excited", "reaching left for popcorn, calm watching"],
+    "一起散步": ["walking side by side, matching steps", "walking, glancing right at partner", "walking alongside, matching step"],
+    "一起做饭": ["cooking together, tasting spoon", "offering tasting spoon toward right", "leaning left, tasting from spoon"],
+    "给你扎头发": ["tying hair ribbon", "tying ribbon into partner hair toward right", "sitting still, pleased expression"],
+    "画画给你看": ["sketchbook drawing shown", "showing sketchbook toward right", "admiring drawing from left, amazed smile"],
+    "同一杯奶茶": ["shared milk tea, two straws", "sipping first straw", "sipping second straw, smile"],
+    "喂你吃": ["feeding with chopsticks", "offering bite with chopsticks toward right", "leaning left to take the bite"],
+    "分棉花糖": ["shared cotton candy", "holding cotton candy stick, biting", "biting same cotton candy from left"],
+    "一起吹蜡烛": ["birthday cake candles, blowing together", "leaning toward cake, blowing candles", "blowing same candles, happy face"],
+    "夏天分西瓜": ["watermelon slices, summer day", "offering watermelon slice toward right", "biting watermelon slice, pleased"],
+    "一起堆雪人": ["small snowman between subjects", "placing snowman head", "adding carrot nose from left"],
+    "一起放风筝": ["shared kite in sky", "holding kite string, pointing up", "looking up at kite, cheering"],
+    "抛起落叶": ["autumn leaves tossed in air", "tossing autumn leaves upward", "laughing under falling leaves"],
+    "海边踏浪": ["shallow beach waves", "kicking small wave toward right", "hopping back from wave, laughing"],
+    "钥匙和锁": ["matching key and heart lock", "holding small key toward right", "holding heart-shaped lock toward left"],
+    "一瓶星光": ["glass jar of starlight at center", "holding starlight jar at center", "cupping jar from left"],
+    "两颗星连线": ["constellation line connecting two stars", "pointing to star above own head", "pointing to connected star"],
+    "系在一起的气球": ["two balloons with tied strings", "holding first balloon string", "holding second tied balloon string"],
+    "一起画魔法阵": ["shared glowing magic circle at center", "raising hand, starting magic circle", "raised hand from left, completing magic circle"],
+    "守护你": ["protective stance, raised shield", "raising shield, protective stance", "trusting look close behind shield"],
+    "寻宝地图": ["shared treasure map", "holding map edge, pointing at route", "holding other map edge, following route"],
+    "许愿流星": ["shooting star, making a wish", "clasped hands, making wish", "pointing at shooting star"],
 });
 
 // Exact local randomCoupleIdeas templates have known actions, unlike arbitrary
@@ -2445,6 +2588,30 @@ const IDEA_TAG_MOMENTS = Object.freeze([
     ['左边捧着一团雪，右边围着围巾笑', 'small snowball, cozy scarf', 'cupping little snowball', 'smiling, nestled in scarf'],
     ['左边戴着歪歪的小帽子，右边伸手扶正', 'small tilted hat, caring adjustment', 'wearing small tilted hat', 'reaching left, straightening partner tilted hat'],
     ['左边递出一枚贝壳，右边回赠一颗小石子', 'seashell and pebble exchange', 'offering seashell toward right', 'giving small pebble toward left in return'],
+    ["左边把耳机分一只过去，右边歪头一起听", "shared earphones, music moment", "offering one earphone toward right", "head tilted left, listening to shared earphone"],
+    ["左边在右边手心画了个爱心，右边握紧手藏起来", "heart drawn on palm", "drawing small heart on partner palm", "closing hand around drawn heart, shy"],
+    ["左边撑着伞，右边伸手接雨", "shared umbrella, raindrops", "holding umbrella tilted toward right", "hand out catching raindrops"],
+    ["左边捧着蛋糕，右边偷偷抹了点奶油在左边鼻尖", "small cake, playful cream dab", "holding small cake, cream on nose", "dabbing cream onto partner nose"],
+    ["左边举着仙女棒，右边凑近看火花", "sparkler, sparks between subjects", "holding sparkler toward right", "leaning left, watching sparks"],
+    ["左边给右边戴上花环，右边低头配合", "flower crown gift", "placing flower crown toward right", "bowing head slightly, receiving flower crown"],
+    ["左边用手指比了个取景框，右边对着它摆姿势", "finger frame photo pose", "finger frame toward right", "posing for finger frame"],
+    ["左边抱着一只小猫，右边伸手摸摸", "small kitten between subjects", "holding small kitten", "reaching left, petting kitten"],
+    ["左边打了个喷嚏，右边递上纸巾", "cute sneeze, offered tissue", "cute sneeze", "offering tissue toward left"],
+    ["左边把围巾分一半给右边，右边缩进围巾里", "shared scarf warmth", "offering half of scarf toward right", "tucking into shared scarf"],
+    ["左边举着一大串气球，右边被拉得踮起脚", "bunch of balloons", "holding bunch of balloons", "on tiptoe, pulled by balloon string"],
+    ["左边把便签贴在右边额头，右边抬眼去看", "sticky note prank", "sticking note onto partner forehead", "eyes looking up at note on forehead"],
+    ["左边伸出手掌，右边把下巴放上去", "chin resting on offered palm", "open palm held toward right", "chin resting on partner palm"],
+    ["左边挥着小旗子，右边敬礼回应", "small flag and playful salute", "waving small flag", "playful salute"],
+    ["左边捧着热可可，右边把棉花糖丢进杯里", "hot cocoa with marshmallow", "holding hot cocoa mug", "dropping marshmallow into cocoa"],
+    ["左边躲在书后面，右边轻轻把书压低", "book hiding game", "hiding behind open book", "lowering book, peeking"],
+    ["左边指着天上的云，右边比出兔耳朵", "cloud watching, rabbit-shaped cloud", "pointing at cloud", "rabbit ears hand gesture, looking up"],
+    ["左边伸手替右边挡住阳光，右边眯眼笑", "shading hand from sunlight", "shading partner face with hand", "squinting smile under shade"],
+    ["左边吹起蒲公英，右边伸手去接", "dandelion seeds drifting", "blowing dandelion seeds toward right", "reaching for floating seeds"],
+    ["左边捏着一颗樱桃，右边张嘴等着", "cherry offering", "holding cherry toward right", "waiting for cherry, mouth open"],
+    ["左边戴上右边的帽子，右边伸手想拿回来", "borrowed hat tease", "wearing partner hat, cheeky grin", "reaching for hat"],
+    ["左边用手指轻弹右边额头，右边捂着额头", "playful forehead flick", "flicking partner forehead playfully", "holding forehead, mock pain"],
+    ["左边举着手机自拍，右边从旁边探头进来", "shared selfie moment", "holding phone for selfie", "peeking into selfie"],
+    ["左边折了一只纸鹤，右边双手捧着接过", "paper crane gift", "offering paper crane toward right", "receiving paper crane with both hands"],
 ]);
 const IDEA_TAG_MOODS = Object.freeze([
     ['一个认真、一个忍不住笑', 'serious expression', 'amused smile'],
@@ -2453,6 +2620,12 @@ const IDEA_TAG_MOODS = Object.freeze([
     ['一个好奇、一个耐心陪伴', 'curious expression', 'patient caring expression'],
     ['一个困困的、一个很有精神', 'sleepy expression', 'energetic expression'],
     ['一个有点惊讶、一个偷偷开心', 'slightly surprised expression', 'quietly delighted expression'],
+    ["一个嘴硬、一个看穿一切", "stubborn denying expression", "knowing smile"],
+    ["一个手忙脚乱、一个憋着笑", "flustered expression", "suppressed laugh"],
+    ["一个笑得眯起眼、一个看呆了", "wide squinting smile", "dazed admiring look"],
+    ["一个装酷、一个拆台", "cool composed expression", "teasing grin"],
+    ["一个委屈巴巴、一个连忙安慰", "pouting wronged expression", "hurried comforting expression"],
+    ["两个都在偷偷脸红", "quiet blush", "different quiet blush"],
 ]);
 const IDEA_TAG_SCENES = Object.freeze([
     ['纯色背景铺满画面，重点放在动作和表情', 'quiet solid-color background, edge-to-edge color, prominent gestures and expressions'],
@@ -2462,6 +2635,12 @@ const IDEA_TAG_SCENES = Object.freeze([
     ['点缀几片花瓣，不遮住脸', 'few drifting petals around subjects, unobscured faces'],
     // The legacy quiet-ground wording still describes a continuous full image.
     ['背景留白，重点放在动作和表情', 'quiet solid-color background, edge-to-edge color, prominent gestures and expressions'],
+    ["傍晚的天台，晚霞铺满天空", "evening rooftop, sunset clouds filling sky"],
+    ["便利店门口的暖黄灯光", "outside convenience store at night, warm yellow light, no readable text"],
+    ["图书馆靠窗的位置", "library window seat"],
+    ["游乐园的旋转木马前", "in front of amusement park carousel"],
+    ["下雪的小巷，路灯亮着", "snowy alley, glowing streetlights"],
+    ["开满向日葵的田野", "sunflower field"],
 ]);
 
 function tags(parts) {
@@ -2517,7 +2696,7 @@ function animalGestureTags(chosen) {
     return 'forepaw gestures, animal muzzle interaction';
 }
 
-function coupleAvatarTagParts({ settings, chosen, animal, object, subject, fullFigure, appearances, negative,
+function coupleAvatarTagParts({ overlay = false, blend = '', mixedWeight = 0.7, settings, chosen, animal, object, subject, fullFigure, appearances, negative,
     covered = [false, false], clothing = { people: ['', ''] }, interactionDirection = null }) {
     const [interaction, leftAction, rightAction] = interactionTags(settings, chosen, animal);
     const originalRendering = chosen ? STYLE_TAGS[chosen.id] || chosen.prompt : settings.customStyle;
@@ -2530,9 +2709,11 @@ function coupleAvatarTagParts({ settings, chosen, animal, object, subject, fullF
     const form = animal
         ? tags(['complete animal bodies, species-appropriate animal anatomy, individual eyes and markings and small accessories', animalGestureTags(chosen)])
         : object ? 'material-built faces and bodies and hair and clothing, physical material texture, crafted limbs'
-            : 'consistent medium across faces and hair and bodies and clothing';
+            : overlay ? '' : 'consistent medium across faces and hair and bodies and clothing';
+    // Overlay: the provider's artist tags lead; this style follows once, weighted when mixed.
+    const trailing = overlay && rendering ? (blend === 'mixed' ? `${mixedWeight}::${rendering}::` : rendering) : '';
     const scene = tags([
-        rendering || 'illustration', form, framing,
+        overlay ? '' : rendering || 'illustration', form, framing,
         `two distinct ${subject}s, side by side, horizontal paired portrait, first subject at left quarter, second subject at right quarter, balanced subject scale`,
         'continuous edge-to-edge background, continuous center and corners, clear subject separation, quiet background detail, readable individual features, gestures within own half',
         subject_details.coupleVisibleRecipe(interaction, anyCovered && ownedInteraction),
@@ -2540,12 +2721,13 @@ function coupleAvatarTagParts({ settings, chosen, animal, object, subject, fullF
         settings.pairType === 'echo' ? 'complementary individual gestures, coordinated colors and light' : 'shared motif connecting subjects across center',
         animal && settings.clothing ? 'small wearable accents, animal-adapted clothing' : '',
         settings.clothing, settings.background, settings.direction,
+        trailing,
     ]);
     const characters = settings.people.map((person, index) => ({
         name: `${index ? '右边' : '左边'} · ${person.name || (index ? '人物二' : '人物一')}`,
         tag: tags([
             index ? 'right side, centered at right quarter' : 'left side, centered at left quarter',
-            appearances[index], subject_details.coupleVisibleRecipe(originalRendering, covered[index] && !!chosen) || subject,
+            appearances[index], overlay ? subject : subject_details.coupleVisibleRecipe(originalRendering, covered[index] && !!chosen) || subject,
             subject_details.coupleVisibleRecipe(index ? rightAction : leftAction, covered[index] && ownedInteraction),
             interactionDirection?.tags?.roles[index],
             subject_details.coupleCoveredEyeGuidance(covered[index], true),
@@ -2578,6 +2760,9 @@ const STYLE_GROUPS = Object.freeze([
     { id: 'art', label: '手绘艺术' }, { id: 'craft', label: '手作材质' },
     { id: 'graphic', label: '平面设计' }, { id: 'photo', label: '写真氛围' },
     { id: 'animal', label: '动物化身' }, { id: 'fantasy', label: '幻想装饰' },
+    { id: "layout", label: "构图版式" },
+    { id: "mood", label: "氛围光影" },
+    { id: "render", label: "3D 渲染" },
 ]);
 
 const COUPLE_STYLES = Object.freeze([
@@ -2653,6 +2838,75 @@ const COUPLE_STYLES = Object.freeze([
     ['fantasy-shadow', 'fantasy', '皮影小像', '透光皮革、镂刻纹样和关节细节。', 'Chinese shadow-puppet character portraits, translucent colored leather, intricate cutout ornament and visible puppet joints'],
     ['fantasy-luminous', 'fantasy', '夜光剪纸', '纸层间透出小夜灯一样的柔光。', 'illuminated layered-paper portrait diorama, actual cut-paper subjects, gentle light between paper layers, visible edge depth'],
     ['fantasy-fresco', 'fantasy', '壁画矿彩', '矿物色、磨损肌理和壁画式线条。', 'mineral-pigment fresco portraits, matte mineral colors, worn plaster texture, flowing mural contours'],
+    ["chibi-four-head", "chibi", "四头身少年", "比例更修长，动作和衣服都看得清。", "four-head-tall chibi figures, slightly longer limbs, clear clothing and gestures, cute stylized proportions"],
+    ["chibi-kemono", "chibi", "兽耳Q版", "保留人形，加上和发色相配的兽耳与尾巴。", "chibi characters with animal ears and tails, human faces, ears and tails colored to match each hair color, cute miniature proportions"],
+    ["chibi-squish", "chibi", "捏捏软糖", "软乎乎的脸颊，像能被捏扁。", "squishy soft chibi characters, puffy cheeks, rounded marshmallow-like bodies, gentle squash and stretch"],
+    ["chibi-bean", "chibi", "豆豆人", "豆子一样的小身体，简单的小手小脚。", "bean-shaped tiny chibi people, simple bean bodies, short simple limbs, minimal round heads"],
+    ["chibi-plump", "chibi", "肉嘟嘟", "圆脸蛋和肉乎乎的小手。", "chubby chibi characters, round full cheeks, plump little hands, cozy rounded silhouettes"],
+    ["chibi-tiny-arms", "chibi", "小短手", "手短短的，却拼命比出大动作。", "chibi characters with tiny stubby arms making big earnest gestures, oversized heads, small bodies"],
+    ["layout-closeup", "layout", "脸部特写", "脸占满半边，表情最清楚。", "tight face close-up character portraits, faces filling the frame, expressive eyes and mouths, illustrated portraits"],
+    ["layout-bust", "layout", "证件胸像", "正面头肩像，像一对情侣证件照。", "front-facing head-and-shoulders character portraits, centered symmetrical composition, clean simple backdrop, illustrated portraits"],
+    ["layout-waist", "layout", "半身合影", "腰部以上，手部动作有空间。", "waist-up character portraits, visible hands and torso gestures, relaxed natural poses, illustrated portraits"],
+    ["layout-fullbody", "layout", "全身立绘", "从头到脚的完整站姿。", "full-body standing character illustrations, head-to-toe figures, clear outfit silhouettes, illustrated character art"],
+    ["layout-sitting", "layout", "并排坐着", "两人各自坐着，姿态放松。", "seated character illustrations, relaxed sitting poses, knees and hands visible, cozy composition"],
+    ["layout-lying", "layout", "趴着托腮", "趴着双手托腮，适合可爱头像。", "characters lying on their stomachs with chins resting on hands, playful relaxed pose, illustrated portraits"],
+    ["layout-high-angle", "layout", "俯拍抬头", "镜头从上往下，两人抬头看过来。", "high-angle view looking down at characters looking up toward the viewer, large eyes, foreshortened bodies, illustrated portraits"],
+    ["layout-profile", "layout", "侧脸相对", "两张侧脸隔着中线相望。", "side-profile character portraits facing each other across the center, clean profile silhouettes, illustrated portraits"],
+    ["layout-look-back", "layout", "回眸", "背对镜头，再回头看一眼。", "characters glancing back over the shoulder toward the viewer, three-quarter back view, turned faces, illustrated portraits"],
+    ["layout-peek", "layout", "探头", "从画面下缘探出头和手。", "characters peeking up from the bottom edge of the frame, heads and hands visible, curious playful expressions"],
+    ["layout-dynamic", "layout", "动感大动作", "有透视感的跳跃与伸展。", "dynamic action poses, strong foreshortening, energetic diagonal composition, motion in hair and clothes"],
+    ["mood-golden", "mood", "黄昏暖光", "金色夕阳从侧后方照来。", "golden hour sunset light, warm rim light on hair, long soft shadows, warm atmosphere"],
+    ["mood-blue", "mood", "蓝调时刻", "日落后的蓝紫色天空，很安静。", "blue hour twilight, cool blue and violet ambient light, quiet calm atmosphere, soft sky glow"],
+    ["mood-neon", "mood", "霓虹夜街", "粉蓝霓虹打在脸上。", "neon-lit night street atmosphere, pink and cyan neon light on faces, glowing signs blurred behind"],
+    ["mood-moon", "mood", "月光", "冷白月光和柔和阴影。", "moonlit night, pale silver moonlight, soft cool shadows, calm serene mood"],
+    ["mood-sakura", "mood", "樱花飘落", "花瓣在两人之间飘。", "spring cherry blossoms, drifting pink petals, soft pastel daylight, gentle breeze"],
+    ["mood-snow", "mood", "雪夜暖灯", "雪花和暖黄灯光。", "snowy evening, falling snowflakes, warm lantern or window light, cozy winter mood"],
+    ["mood-rain", "mood", "雨天", "雨丝、湿润反光和安静的灰调。", "rainy day atmosphere, fine rain streaks, wet reflective surfaces, soft diffused grey light"],
+    ["mood-starry", "mood", "星空", "深蓝星空和点点星光。", "starry night sky, deep blue gradient, scattered glowing stars, faint milky way"],
+    ["mood-underwater", "mood", "水下光斑", "波光在身上流动。", "underwater light atmosphere, shimmering caustic light patterns, floating bubbles, cool aqua tones"],
+    ["mood-festival", "mood", "祭典灯笼", "夏日祭的灯笼暖光。", "summer festival night, rows of warm paper lanterns, festive glow, bokeh lights"],
+    ["mood-candle", "mood", "烛光", "一点烛光的温柔夜晚。", "warm candlelight, intimate low light, soft orange glow on faces, dark cozy surroundings"],
+    ["mood-sunny", "mood", "晴天午后", "明亮阳光和清透蓝天。", "bright sunny afternoon, clear blue sky, crisp daylight, fresh summer colors"],
+    ["mood-sparkle", "mood", "闪闪发光", "柔光、高光和小闪片。", "sparkling dreamy glow, soft bloom, tiny glitter particles, shimmering highlights"],
+    ["anime-gacha", "anime", "手游立绘", "精致服装细节与华丽光效。", "mobile game character splash art, detailed costumes, dramatic lighting effects, polished anime rendering"],
+    ["anime-otome", "anime", "乙女游戏CG", "柔光、花朵和心动的氛围。", "otome game event CG illustration, soft romantic lighting, delicate flower accents, glossy eyes"],
+    ["anime-idol", "anime", "偶像打歌", "舞台灯与彩带。", "anime idol stage illustration, colorful stage spotlights, confetti, energetic sparkle"],
+    ["anime-thick", "anime", "粗描边", "粗而均匀的轮廓线，色块干净。", "thick uniform outline anime illustration, bold clean contours, simple flat colors, sticker-like clarity"],
+    ["anime-lineless", "anime", "无线稿厚涂", "不勾线，只用色块塑造。", "lineless anime painting, shapes defined by color and value, soft painterly blending, no outlines"],
+    ["art-ukiyoe", "art", "浮世绘", "木版线条与平面色块。", "ukiyo-e woodblock print portraits, flowing carved outlines, flat traditional colors, patterned textiles, paper texture"],
+    ["art-nouveau", "art", "新艺术海报", "装饰曲线与花卉纹样。", "art nouveau decorative poster portraits, flowing ornamental curves, floral motifs, elegant linework, muted gold and pastel palette"],
+    ["art-impressionist", "art", "印象派", "光斑笔触与明亮色彩。", "impressionist painting portraits, broken dabs of bright color, visible brush marks, dappled sunlight"],
+    ["art-lacquer", "art", "漆画金箔", "深色漆面与金箔点缀。", "lacquer painting portraits, glossy deep black and red lacquer, gold leaf accents, polished surface"],
+    ["art-marker", "art", "马克笔速涂", "马克笔叠色和留白。", "alcohol marker illustration, layered marker strokes, streaky blended color, white paper highlights, fine liner outlines"],
+    ["craft-acrylic", "craft", "亚克力立牌", "透明亚克力和小底座。", "acrylic standee character figures, printed flat artwork on clear acrylic, glossy edges, small acrylic bases"],
+    ["craft-cookie", "craft", "糖霜饼干", "糖霜画出的一对饼干小人。", "decorated sugar cookie characters, smooth royal icing details, baked cookie edges, piped icing outlines"],
+    ["craft-redpaper", "craft", "红纸窗花", "红色剪纸的镂空花纹。", "Chinese red paper-cut portraits, intricate cutout patterns, single red paper on light ground, crisp cut edges"],
+    ["craft-resin", "craft", "滴胶挂件", "晶莹透亮的小挂件。", "epoxy resin charm figures, glossy transparent resin, embedded glitter, small metal keyring loops"],
+    ["graphic-flat", "graphic", "扁平插画", "简洁几何的扁平风。", "flat vector illustration, simple geometric shapes, limited palette, no gradients, clean edges"],
+    ["graphic-vapor", "graphic", "蒸汽波", "粉紫渐变和复古电脑感。", "vaporwave aesthetic portraits, pink and purple gradients, retro grid horizon, chrome accents"],
+    ["graphic-lowpoly", "graphic", "低多边形", "三角面拼出的立体头像。", "low-poly geometric portraits, faceted triangular planes, flat shaded polygons, crisp edges"],
+    ["graphic-neon", "graphic", "霓虹灯管", "发光灯管勾出两人的轮廓。", "neon sign portrait artwork, glowing tube outlines forming faces and hair, dark wall background, soft light spill"],
+    ["photo-purikura", "photo", "大头贴", "闪亮贴纸感的拍贴机合影。", "Japanese photo booth sticker portraits, bright flash, soft skin glow, cute sparkle stickers around, playful poses"],
+    ["photo-street", "photo", "街头抓拍", "街景虚化与自然光。", "candid street photography portraits, natural daylight, blurred city street behind, authentic moment"],
+    ["render-toon", "render", "3D卡通电影", "圆润造型和电影级光照。", "3D animated film character renders, stylized rounded features, soft global illumination, subsurface skin"],
+    ["render-game", "render", "3D游戏角色", "游戏建模质感。", "3D game character renders, detailed stylized models, PBR materials, crisp rim lighting"],
+    ["render-cel3d", "render", "三渲二", "3D 造型，看起来像二次元动画。", "cel-shaded 3D anime renders, toon shading, clean outline shader, anime proportions"],
+    ["animal-hamster", "animal", "仓鼠化身", "圆鼓腮帮和小爪子。", "two small hamsters, round puffy cheeks, tiny paws, short tails, soft fur, cute animal-only illustration"],
+    ["animal-panda", "animal", "熊猫化身", "黑白配色和圆耳朵。", "two small pandas, black and white fur, round black ears and eye patches, chubby bodies"],
+    ["animal-penguin", "animal", "企鹅化身", "小翅膀和摇摇摆摆的身形。", "two little penguins, round bodies, short flippers, orange beaks and feet, waddling poses"],
+    ["animal-otter", "animal", "水獭化身", "爱牵手的小水獭。", "two little otters, sleek fur, small round ears, whiskers, webbed paws, playful poses"],
+    ["animal-duck", "animal", "小鸭化身", "毛茸茸的小鸭和扁扁的嘴。", "two little ducklings, fluffy down feathers, small flat bills, tiny webbed feet"],
+    ["animal-sheep", "animal", "小羊化身", "卷卷羊毛和软软的耳朵。", "two little lambs, curly wool, small hooves, soft floppy ears, gentle faces"],
+    ["animal-deer", "animal", "小鹿化身", "斑点和温柔的大眼睛。", "two little fawns, spotted fur, slender legs, large gentle eyes, small antler nubs"],
+    ["animal-dragon", "animal", "小龙化身", "小角、小翅膀和鳞片尾巴。", "two little dragons, small horns, tiny wings, scaly tails, round cute bodies"],
+    ["animal-capybara", "animal", "水豚化身", "方方的鼻子和淡定的神情。", "two calm capybaras, blunt square muzzles, small ears, brown fur, relaxed expressions"],
+    ["animal-wolf", "animal", "小狼化身", "尖耳朵和蓬松的颈毛。", "two little wolves, pointed ears, fluffy neck ruffs, bushy tails, bright eyes"],
+    ["animal-tiger", "animal", "小老虎化身", "条纹和大大的爪子。", "two little tiger cubs, orange and black stripes, round ears, big paws"],
+    ["animal-squirrel", "animal", "小松鼠化身", "卷卷大尾巴和小爪子。", "two little squirrels, big bushy curled tails, tiny paws holding things, tufted ears"],
+    ["fantasy-celestial", "fantasy", "星座图鉴", "金线星图画出的一对。", "celestial constellation chart portraits, fine gold line art on deep navy, star points at joints, astrological ornaments"],
+    ["fantasy-porcelain", "fantasy", "青花瓷", "钴蓝笔触与缠枝纹。", "blue-and-white porcelain painting portraits, cobalt blue brushwork on white glaze, floral scroll ornaments"],
+    ["fantasy-gold", "fantasy", "金箔手抄本", "金箔底和宝石色。", "illuminated manuscript portraits, burnished gold leaf background, fine ink outlines, jewel-tone colors"],
+    ["fantasy-sand", "fantasy", "沙画", "灯箱上用细沙画出的剪影。", "sand art portraits drawn in fine sand on a light table, soft grainy edges, warm backlight, monochrome amber tones"],
 ].map(([id, group, label, description, prompt]) => Object.freeze({ id, group, label, description, prompt })));
 
 // Construction instructions affect the subjects themselves, not just a texture
@@ -2666,6 +2920,9 @@ const MEDIUM_CONSTRUCTION = Object.freeze({
     photo: 'Use photographic facial structure, natural skin texture and coherent camera lighting on both subjects.',
     animal: 'Use complete species-appropriate animal anatomy, including animal faces and bodies. Map each identity to its own fur or feather markings, eyes and small accessories.',
     fantasy: 'Build the portrait itself out of the selected medium. Face, hair and clothes share its visible construction.',
+    layout: "Apply the selected framing and pose to both subjects consistently.",
+    mood: "The selected light and atmosphere fall on both subjects and the continuous background alike.",
+    render: "Build both subjects as coherent 3D-rendered characters with consistent materials and lighting.",
 });
 const STYLE_CONSTRUCTION = Object.freeze({
     'chibi-dumpling': 'Each head occupies about half of the full figure height; show the tiny torso, stubby arms and feet. Broad simple shapes, minimal facial shading.',
@@ -2740,7 +2997,94 @@ const STYLE_CONSTRUCTION = Object.freeze({
     'fantasy-shadow': 'Translucent leather, cutout facial ornament, articulated puppet shapes and backlit color; no smooth painted human portrait.',
     'fantasy-luminous': 'Layered cut-paper shapes form each face and body, with light shining between physical paper layers and edges.',
     'fantasy-fresco': 'Matte mineral pigment strokes create clear facial planes, flowing mural hair contours and broad restrained color areas. Fine plaster texture and selective surface wear retain the mural character while preserving facial features and key gestures.',
+    "chibi-four-head": "The head occupies about one quarter of the figure height; slim small limbs, readable clothing silhouettes and clear full-body gestures.",
+    "chibi-kemono": "Human chibi faces and bodies keep their own hair; add one pair of fitting animal ears and a tail per subject, tinted from that subject's own hair color.",
+    "chibi-squish": "Puffy rounded cheeks and soft marshmallow-like bodies with gentle squash-and-stretch shapes; small limbs pressed into the soft forms.",
+    "chibi-bean": "Each body is a simple bean shape joined to a round head, with short simple limbs; identity lives in hair shape, colors and accessories.",
+    "chibi-plump": "Full round cheeks, plump little hands and soft rounded torsos; keep hair silhouettes and facial features clearly individual.",
+    "chibi-tiny-arms": "Very short stubby arms stretch earnestly into the gestures; oversized heads and compact bodies keep the effort readable and funny.",
+    "layout-closeup": "Tight face close-ups: each face fills most of its own half, cropped at the hairline and chin area as needed, with expression as the focus.",
+    "layout-bust": "Front-facing head-and-shoulders portraits with level eyes and centered shoulders; poses stay calm so small gestures and expressions carry the pairing.",
+    "layout-waist": "Waist-up framing with both hands available for the interaction; torsos angle slightly toward each other.",
+    "layout-fullbody": "Head-to-toe standing figures with feet visible and grounded; outfit silhouette and stance read clearly at small size.",
+    "layout-sitting": "Each subject sits in a relaxed pose within its half, knees and hands visible; seat height matches across the pair.",
+    "layout-lying": "Each subject lies forward on the stomach, chin resting on hands, legs optionally raised behind; faces sit in the upper middle of each half.",
+    "layout-high-angle": "A high camera looks down; both faces tilt up toward the viewer with gently foreshortened bodies beneath.",
+    "layout-profile": "Clean side profiles: the left subject faces right and the right subject faces left, noses and chins clearly drawn in profile.",
+    "layout-look-back": "Three-quarter back view with the head turned back over the shoulder so each face remains visible and readable.",
+    "layout-peek": "Only heads, shoulders and hands rise from the lower edge of each half, fingers resting on the edge; faces stay large and clear.",
+    "layout-dynamic": "Energetic diagonal poses with confident foreshortening of the reaching limbs; hair and clothing follow the motion.",
+    "mood-golden": "One warm low sun from behind and to the side rims both subjects' hair and shoulders; faces stay softly lit and readable.",
+    "mood-blue": "Cool blue-violet ambient light wraps both subjects evenly, with a small warm accent light on each face.",
+    "mood-neon": "Pink and cyan neon light from opposite sides colors the faces and hair; background signs blur into glowing shapes without readable text.",
+    "mood-moon": "Pale silver moonlight falls from above, cool shadows stay soft and faces remain clearly lit.",
+    "mood-sakura": "Pink cherry petals drift across both halves in the same breeze, never covering eyes or mouths; soft pastel daylight.",
+    "mood-snow": "Snowflakes fall evenly across both halves while a warm lamp or window light keeps the faces cozy and clear.",
+    "mood-rain": "Fine rain streaks and wet reflections surround the subjects; soft diffused light keeps faces readable.",
+    "mood-starry": "A deep blue starry sky spans the whole background; starlight sparkles stay behind the subjects and never cover faces.",
+    "mood-underwater": "Shimmering caustic light patterns ripple over both subjects and small bubbles rise around them; faces stay clear of bubbles.",
+    "mood-festival": "Rows of warm paper lanterns glow behind both subjects and light their faces from the front side.",
+    "mood-candle": "A small warm candle glow lights both faces from below and the front; surroundings fall into soft dark tones.",
+    "mood-sunny": "Bright clear daylight with a blue sky behind; crisp but gentle shadows under chins and hair.",
+    "mood-sparkle": "Soft bloom and tiny glitter particles float around the subjects; sparkles stay off the eyes and mouths.",
+    "anime-gacha": "Detailed costume elements and dramatic but controlled light effects; faces remain clean and anime-polished.",
+    "anime-otome": "Soft romantic key light, glossy expressive eyes and a few delicate flower accents framing, never covering, the faces.",
+    "anime-idol": "Colorful stage spotlights from above, confetti and sparkle in the air; faces bright, readable and performing.",
+    "anime-thick": "Bold even-weight outlines around every shape with clean flat fills; small details simplified for clarity.",
+    "anime-lineless": "No outlines: edges come from color and value contrast; soft painted planes model faces and hair.",
+    "art-ukiyoe": "Flowing carved outline contours, flat traditional color blocks and patterned textiles; faces simplified in woodblock style.",
+    "art-nouveau": "Elegant flowing contour lines, decorative floral ornaments in the background and muted gold-pastel flat color areas.",
+    "art-impressionist": "Broken dabs of bright color and dappled light build the figures; faces resolved with slightly finer strokes.",
+    "art-lacquer": "Glossy deep lacquer grounds, carefully painted faces and gold-leaf accents on hair ornaments and clothing edges.",
+    "art-marker": "Layered streaky marker strokes over fine liner outlines, with white paper left for highlights.",
+    "craft-acrylic": "Each subject is a flat printed acrylic standee with glossy cut edges and a small clear base; the printed figure keeps its own identity.",
+    "craft-cookie": "Each subject is a cookie shaped like the character, with piped icing outlines, flooded icing colors and baked edges.",
+    "craft-redpaper": "One sheet of red paper with intricate cutouts forms each figure; identity carried by silhouette, hairstyle and pattern details.",
+    "craft-resin": "Each subject is a small glossy resin charm with a domed transparent surface, embedded glitter and a tiny keyring loop at the top.",
+    "graphic-flat": "Simple vector shapes with flat fills, no gradients and minimal facial features placed with care.",
+    "graphic-vapor": "Pink-purple gradient lighting on the faces, a retro grid horizon behind and small chrome accents; faces stay clean.",
+    "graphic-lowpoly": "Faceted triangular polygons build faces, hair and clothes with flat shading per facet and recognizable silhouettes.",
+    "graphic-neon": "Continuous glowing neon tubes draw each face, hairstyle and clothing outline on a dark wall, with soft light spill.",
+    "photo-purikura": "Bright frontal flash, soft glowing skin and small sparkle stickers around, not on, the faces; playful photo-booth poses.",
+    "photo-street": "Candid photographic faces in natural daylight with a softly blurred street behind and coherent lens perspective.",
+    "render-toon": "Stylized 3D characters with rounded features, large expressive eyes, soft global illumination and gentle subsurface skin.",
+    "render-game": "Detailed stylized 3D game models with physically based materials and a crisp rim light separating each subject.",
+    "render-cel3d": "3D models with hard toon-shading steps and a clean outline shader, so the result reads like anime keyframes.",
+    "animal-hamster": "Round hamster bodies with puffy cheek pouches, tiny pink paws and small ears; fur markings map each identity.",
+    "animal-panda": "Panda black-and-white patterns stay intact; identities appear through small accessories, head tilt and expression.",
+    "animal-penguin": "Penguin beaks, rounded bodies, short flippers and webbed feet; head feather tufts or scarves carry each identity.",
+    "animal-otter": "Sleek otter bodies, small round ears, whiskers and webbed paws; fur shades and accessories map the identities.",
+    "animal-duck": "Fluffy duckling down, small flat bills and webbed feet; feather tint and tiny accessories distinguish them.",
+    "animal-sheep": "Curly wool coats, lamb faces, small hooves and floppy ears; wool tint and ear accessories carry identity.",
+    "animal-deer": "Fawn faces with large gentle eyes, spotted coats, slender legs and tiny antler nubs or ears; markings map each identity.",
+    "animal-dragon": "Cute little dragons with small horns, tiny wings, scaly tails and round bodies; scale colors map from each hair color.",
+    "animal-capybara": "Blunt square capybara muzzles, small ears and barrel bodies; a small hat or accessory distinguishes each.",
+    "animal-wolf": "Wolf muzzles, pointed ears, fluffy neck ruffs and bushy tails; fur pattern and eye color map each identity.",
+    "animal-tiger": "Tiger cubs with stripes, round ears and oversized paws; stripe tint and accessories distinguish them.",
+    "animal-squirrel": "Squirrels with big curled bushy tails, tufted ears and tiny forepaws; fur shade maps each identity.",
+    "fantasy-celestial": "Fine gold lines on deep navy draw each figure like a constellation chart, with small stars at key points and readable faces.",
+    "fantasy-porcelain": "Cobalt blue brushwork on white glaze paints each figure and its clothing, framed by floral scroll ornaments.",
+    "fantasy-gold": "Burnished gold leaf fills the background; fine ink outlines and jewel-tone colors render the figures.",
+    "fantasy-sand": "Fine sand on a glowing light table forms each figure, with soft grainy edges and amber tonal shading; faces kept readable.",
 });
+
+// How a style combines with the image provider's own artist string (see the
+// overlay plan): form = only proportions, framing, pose or light, so it stacks
+// at full strength; mixed = also line/colour treatment, stacks at reduced
+// weight; medium = replaces the drawing medium and is never stacked.
+const STYLE_BLEND = Object.freeze({"animal-bear": "form", "animal-bird": "form", "animal-capybara": "form", "animal-cat": "form", "animal-deer": "form", "animal-dog": "form", "animal-dragon": "form", "animal-duck": "form", "animal-fox": "form", "animal-hamster": "form", "animal-otter": "form", "animal-panda": "form", "animal-penguin": "form", "animal-rabbit": "form", "animal-seal": "form", "animal-sheep": "form", "animal-squirrel": "form", "animal-tiger": "form", "animal-wolf": "form", "anime-cel": "mixed", "anime-clean": "mixed", "anime-flat": "mixed", "anime-gacha": "mixed", "anime-idol": "mixed", "anime-korean": "mixed", "anime-otome": "mixed", "anime-thick": "mixed", "anime-webtoon": "mixed", "chibi-animal": "form", "chibi-bean": "form", "chibi-crayon": "mixed", "chibi-doodle": "mixed", "chibi-dumpling": "form", "chibi-four-head": "form", "chibi-headshot": "form", "chibi-kemono": "form", "chibi-meme": "form", "chibi-mochi": "form", "chibi-plump": "form", "chibi-sleepy": "form", "chibi-squish": "form", "chibi-three-head": "form", "chibi-tiny-arms": "form", "graphic-flat": "mixed", "graphic-geometric": "mixed", "graphic-line": "form", "graphic-pop": "mixed", "graphic-silhouette": "mixed", "graphic-sticker": "form", "layout-bust": "form", "layout-closeup": "form", "layout-dynamic": "form", "layout-fullbody": "form", "layout-high-angle": "form", "layout-look-back": "form", "layout-lying": "form", "layout-peek": "form", "layout-profile": "form", "layout-sitting": "form", "layout-waist": "form", "mood-blue": "form", "mood-candle": "form", "mood-festival": "form", "mood-golden": "form", "mood-moon": "form", "mood-neon": "form", "mood-rain": "form", "mood-sakura": "form", "mood-snow": "form", "mood-sparkle": "form", "mood-starry": "form", "mood-sunny": "form", "mood-underwater": "form"});
+const OVERLAY_MIXED_WEIGHT = 0.7;
+function coupleStyleBlend(style) {
+    if (!style) return '';
+    return STYLE_BLEND[style.id] || 'medium';
+}
+// Custom text is already the light form (no medium sentences, no repetition).
+function coupleOverlayAvailable(style) { return !style || coupleStyleBlend(style) !== 'medium'; }
+
+// Full-figure framings in the layout group (the others are portraits).
+const FULL_FIGURE_LAYOUTS = Object.freeze(['layout-fullbody', 'layout-sitting', 'layout-lying', 'layout-dynamic']);
+// The style's own proportion/pose sentence, without its group's medium sentence.
+function coupleStyleOwnConstruction(style) { return style ? STYLE_CONSTRUCTION[style.id] || '' : ''; }
 
 function coupleStyleConstruction(style) {
     return style ? [MEDIUM_CONSTRUCTION[style.group], STYLE_CONSTRUCTION[style.id]].filter(Boolean).join(' ') : '';
@@ -2795,6 +3139,54 @@ const INTERACTION_ROLES = Object.freeze({
     '拼成一朵花': ['hold or echo one flower half at the inner edge', 'complete the flower with its complementary half and a different expression'],
     '纸飞机传话': ['release a paper airplane toward the right', 'wait to catch the incoming paper airplane'],
     '两边同一片海': ['show one seashell against the shared sea horizon', 'show a different seashell while responding toward the left'],
+    "额头相抵": ["lean right until the forehead gently meets the partner's", "lean left to meet the forehead with a softly content expression"],
+    "比心": ["make a finger heart toward the right with a confident smile", "answer with a finger heart toward the left and a shy smile"],
+    "小拇指拉钩": ["extend the little finger toward the right for a promise", "hook the little finger from the left with a sincere expression"],
+    "递情书": ["offer a sealed letter toward the right with a nervous smile", "receive the letter from the left with happy surprise"],
+    "交换小戒指": ["hold out a tiny ring toward the right", "offer an open hand from the left with a moved expression"],
+    "偷亲脸颊": ["lean right for a quick peck on the partner's cheek", "blush in surprise as the cheek peck arrives from the left"],
+    "脸颊贴贴": ["press the cheek inward toward the right with a happy squint", "press back from the left with a different joyful expression"],
+    "头靠肩": ["lean the head right onto the partner's shoulder", "stay still and tilt the head left to support the resting head"],
+    "背靠背依偎": ["lean back toward the right with the body facing left and the head turning slightly back", "lean back toward the left with the body facing right and the head turning slightly back"],
+    "揉揉头发": ["reach right to ruffle the partner's hair", "duck slightly under the hand from the left with a happy pout"],
+    "捏脸": ["gently pinch the partner's cheek toward the right", "puff the pinched cheek out with mock protest"],
+    "十指相扣": ["reach the inner hand right to interlace fingers", "meet from the left with fingers interlaced and a calm smile"],
+    "抱住手臂": ["hug the partner's arm closely toward the right", "glance left and down at the arm hug with a warm smile"],
+    "抱一抱": ["open the arms toward the right into a hug", "return the hug from the left with a content expression"],
+    "戳脸颊": ["poke the partner's cheek with one finger toward the right", "turn left in surprise at the cheek poke"],
+    "兔耳手势": ["raise two fingers behind the partner's head as bunny ears", "smile unaware toward the viewer"],
+    "吐舌头": ["stick out the tongue with a playful wink", "answer with the tongue out and a different head tilt"],
+    "吹气球": ["blow up a balloon toward the right with puffed cheeks", "cover the ears from the left, bracing for a pop"],
+    "比剪刀手": ["make a peace sign beside the eye", "make a peace sign at the chin with a different grin"],
+    "哈欠传染": ["yawn widely with a hand over the mouth", "start to yawn too while trying to resist"],
+    "掰手腕": ["grip the partner's hand at the center with determined effort", "push back from the left with a teasing grin"],
+    "石头剪刀布": ["throw rock toward the center", "throw paper toward the center with a triumphant look"],
+    "抢最后一块": ["reach right for the last piece of cake", "reach left for the same piece with a competitive grin"],
+    "枕头大战": ["swing a pillow toward the right", "block with a pillow from the left, laughing"],
+    "比谁更高": ["stand tall on tiptoe with a hand measuring above the head", "raise a hand to compare heights with a smug smile"],
+    "一起打游戏": ["hold a game controller and cheer", "concentrate on the same game with a controller"],
+    "一起看电影": ["hold the shared popcorn bucket and watch with excitement", "reach for popcorn from the left while watching calmly"],
+    "一起散步": ["walk with a step toward the right while glancing at the partner", "walk alongside from the left, matching the step"],
+    "一起做饭": ["offer a tasting spoon toward the right", "lean left to taste from the spoon"],
+    "给你扎头发": ["tie a ribbon into the partner's hair toward the right", "sit still with a pleased expression while the ribbon is tied"],
+    "画画给你看": ["show a small sketchbook drawing toward the right", "admire the drawing from the left with an amazed smile"],
+    "同一杯奶茶": ["sip from one straw of the shared milk tea", "sip from the second straw with a smile"],
+    "喂你吃": ["offer a bite with chopsticks toward the right", "lean left to take the offered bite"],
+    "分棉花糖": ["hold the cotton candy stick and take a bite", "take a bite of the same cotton candy from the left"],
+    "一起吹蜡烛": ["lean toward the birthday cake and blow the candles", "blow the same candles from the left with a happy face"],
+    "夏天分西瓜": ["offer a watermelon slice toward the right", "take a big bite of another slice with a pleased look"],
+    "一起堆雪人": ["place the small snowman's head", "add a carrot nose from the left"],
+    "一起放风筝": ["hold the kite string and point up", "look up at the same kite and cheer"],
+    "抛起落叶": ["toss a handful of autumn leaves upward", "laugh as the leaves fall from the left"],
+    "海边踏浪": ["kick a small wave toward the right", "hop back from the incoming wave with a laugh"],
+    "钥匙和锁": ["hold a small key toward the right", "hold a small heart-shaped lock toward the left"],
+    "一瓶星光": ["hold the glass jar of starlight at the center", "cup the other side of the jar from the left"],
+    "两颗星连线": ["point to a star above the own head", "point to the connected star above the other head"],
+    "系在一起的气球": ["hold one balloon string", "hold the other balloon string tied to the first"],
+    "一起画魔法阵": ["raise a hand to start the glowing magic circle", "complete the circle from the left with a raised hand"],
+    "守护你": ["raise a small shield in a protective stance", "stand close behind the shield with a trusting look"],
+    "寻宝地图": ["hold one edge of the treasure map and point at the route", "hold the other edge from the left and follow the route"],
+    "许愿流星": ["clasp the hands and make a wish", "point at the shooting star from the left"],
 });
 
 const INTERACTION_PRESETS = Object.freeze([
@@ -2846,6 +3238,54 @@ const INTERACTION_PRESETS = Object.freeze([
     ['意象呼应', '拼成一朵花', 'two complementary flower halves meet across the center'],
     ['意象呼应', '纸飞机传话', 'one sends a paper airplane toward the center; the other waits to catch it'],
     ['意象呼应', '两边同一片海', 'matching horizon and sea breeze, each subject holds a different seashell'],
+    ["甜甜互动", "额头相抵", "foreheads gently touching across the center with calm content expressions"],
+    ["甜甜互动", "比心", "each subject forms a finger heart toward the other"],
+    ["甜甜互动", "小拇指拉钩", "a pinky promise: hooked little fingers meet at the center"],
+    ["甜甜互动", "递情书", "one offers a sealed letter; the other receives it with happy surprise"],
+    ["甜甜互动", "交换小戒指", "one holds out a tiny ring; the other offers an open hand to receive it"],
+    ["甜甜互动", "偷亲脸颊", "one leans in for a quick peck on the cheek; the other blushes in surprise"],
+    ["贴贴亲昵", "脸颊贴贴", "cheeks pressed together at the center with happy squished expressions"],
+    ["贴贴亲昵", "头靠肩", "one rests the head on the other's shoulder; the other stays still to support it"],
+    ["贴贴亲昵", "背靠背依偎", "leaning back to back, bodies facing outward, heads turning slightly back toward each other"],
+    ["贴贴亲昵", "揉揉头发", "one ruffles the other's hair; the other ducks under the hand with a happy pout"],
+    ["贴贴亲昵", "捏脸", "one gently pinches the other's cheek; the other puffs it out in mock protest"],
+    ["贴贴亲昵", "十指相扣", "hands with interlaced fingers meet at the center"],
+    ["贴贴亲昵", "抱住手臂", "one hugs the other's arm; the other glances down warmly"],
+    ["贴贴亲昵", "抱一抱", "arms reach across the center into a warm hug"],
+    ["俏皮表情", "戳脸颊", "one pokes the other's cheek; the other turns in surprise"],
+    ["俏皮表情", "兔耳手势", "one makes bunny ears behind the other's head; the other smiles unaware"],
+    ["俏皮表情", "吐舌头", "both stick out their tongues playfully with different head tilts"],
+    ["俏皮表情", "吹气球", "one blows up a balloon; the other covers the ears bracing for a pop"],
+    ["俏皮表情", "比剪刀手", "both make peace signs with different grins"],
+    ["俏皮表情", "哈欠传染", "one yawns widely; the other catches the yawn while trying to resist"],
+    ["小小较劲", "掰手腕", "arm wrestling across the center with determined faces"],
+    ["小小较劲", "石头剪刀布", "rock-paper-scissors, hands thrown at the center"],
+    ["小小较劲", "抢最后一块", "both reach for the last piece of cake"],
+    ["小小较劲", "枕头大战", "a playful pillow fight with feathers floating in the air"],
+    ["小小较劲", "比谁更高", "comparing heights, one on tiptoe and one with a smug hand raised"],
+    ["日常陪伴", "一起打游戏", "both hold game controllers, one cheering and one concentrating"],
+    ["日常陪伴", "一起看电影", "sharing a popcorn bucket during a movie night"],
+    ["日常陪伴", "一起散步", "walking side by side with matching steps"],
+    ["日常陪伴", "一起做饭", "cooking together, one offering a tasting spoon to the other"],
+    ["日常陪伴", "给你扎头发", "one ties a ribbon into the other's hair; the other sits still, pleased"],
+    ["日常陪伴", "画画给你看", "one shows a small sketchbook drawing; the other admires it"],
+    ["分享零食", "同一杯奶茶", "one milk tea with two straws shared between them"],
+    ["分享零食", "喂你吃", "one feeds the other a bite with chopsticks"],
+    ["分享零食", "分棉花糖", "one big cotton candy shared between them"],
+    ["分享零食", "一起吹蜡烛", "blowing out the candles of one birthday cake together"],
+    ["分享零食", "夏天分西瓜", "sharing watermelon slices on a summer day"],
+    ["季节小事", "一起堆雪人", "building a small snowman together between them"],
+    ["季节小事", "一起放风筝", "flying one kite together in the same breeze"],
+    ["季节小事", "抛起落叶", "tossing handfuls of autumn leaves into the air"],
+    ["季节小事", "海边踏浪", "stepping into shallow waves at the beach"],
+    ["意象呼应", "钥匙和锁", "one holds a small key; the other holds a small heart-shaped lock"],
+    ["意象呼应", "一瓶星光", "a glass jar of starlight held between their hands"],
+    ["意象呼应", "两颗星连线", "a constellation line connects two stars above their heads"],
+    ["意象呼应", "系在一起的气球", "two balloons with strings tied together"],
+    ["幻想冒险", "一起画魔法阵", "casting one shared glowing magic circle between their raised hands"],
+    ["幻想冒险", "守护你", "one stands guard with a raised shield; the other stands close with a trusting look"],
+    ["幻想冒险", "寻宝地图", "reading an old treasure map together"],
+    ["幻想冒险", "许愿流星", "wishing on a shooting star, one with clasped hands and one pointing"],
 ].map(([group, label, prompt]) => Object.freeze({ group, label, prompt, roles: Object.freeze(INTERACTION_ROLES[label] || []) })));
 
 const INTERACTIONS = Object.freeze([...INTERACTION_PRESETS.map(row => row.label), '交给灵感', '自定义互动']);
@@ -2870,6 +3310,30 @@ const IDEA_MOMENTS = Object.freeze([
     ['左边捧着一团雪，右边围着围巾笑', 'cup a little snowball', 'smile while nestled in a scarf'],
     ['左边戴着歪歪的小帽子，右边伸手扶正', 'wear a small tilted hat', 'reach left to straighten the tilted hat'],
     ['左边递出一枚贝壳，右边回赠一颗小石子', 'offer a seashell toward the right', 'give a small pebble toward the left in return'],
+    ["左边把耳机分一只过去，右边歪头一起听", "offer one earphone toward the right", "tilt the head left, listening through the shared earphone"],
+    ["左边在右边手心画了个爱心，右边握紧手藏起来", "draw a small heart on the partner's palm", "close the hand around the drawn heart and hide it shyly"],
+    ["左边撑着伞，右边伸手接雨", "hold an umbrella tilted toward the right", "stretch a hand out from under the umbrella to catch raindrops"],
+    ["左边捧着蛋糕，右边偷偷抹了点奶油在左边鼻尖", "hold a small cake carefully", "dab a bit of cream onto the partner's nose"],
+    ["左边举着仙女棒，右边凑近看火花", "hold a sparkler toward the right", "lean in to watch the sparks"],
+    ["左边给右边戴上花环，右边低头配合", "place a flower crown toward the right", "bow the head slightly to receive the flower crown"],
+    ["左边用手指比了个取景框，右边对着它摆姿势", "frame the partner with fingers like a camera", "pose for the finger frame"],
+    ["左边抱着一只小猫，右边伸手摸摸", "hold a small kitten", "reach left to pet the kitten"],
+    ["左边打了个喷嚏，右边递上纸巾", "sneeze cutely", "offer a tissue toward the left"],
+    ["左边把围巾分一半给右边，右边缩进围巾里", "unwrap half of the scarf toward the right", "tuck into the shared scarf end"],
+    ["左边举着一大串气球，右边被拉得踮起脚", "hold a bunch of balloons", "stand on tiptoe, pulled up by a balloon string"],
+    ["左边把便签贴在右边额头，右边抬眼去看", "stick a small note onto the partner's forehead", "look up at the note on the forehead"],
+    ["左边伸出手掌，右边把下巴放上去", "hold out an open palm toward the right", "rest the chin on the offered palm"],
+    ["左边挥着小旗子，右边敬礼回应", "wave a small flag", "salute back playfully"],
+    ["左边捧着热可可，右边把棉花糖丢进杯里", "hold a mug of hot cocoa", "drop a marshmallow into the cocoa"],
+    ["左边躲在书后面，右边轻轻把书压低", "hide behind an open book", "gently lower the book to peek"],
+    ["左边指着天上的云，右边比出兔耳朵", "point at a cloud in the sky", "look up and shape rabbit ears with the hands"],
+    ["左边伸手替右边挡住阳光，右边眯眼笑", "shade the partner's face from the sun with a hand", "squint with a smile under the shading hand"],
+    ["左边吹起蒲公英，右边伸手去接", "blow dandelion seeds toward the right", "reach to catch the floating seeds"],
+    ["左边捏着一颗樱桃，右边张嘴等着", "hold up a cherry toward the right", "wait with the mouth open for the cherry"],
+    ["左边戴上右边的帽子，右边伸手想拿回来", "wear the partner's hat with a cheeky grin", "reach to take the hat back"],
+    ["左边用手指轻弹右边额头，右边捂着额头", "flick the partner's forehead playfully", "hold the forehead with mock pain"],
+    ["左边举着手机自拍，右边从旁边探头进来", "hold up a phone for a selfie", "peek in from the side for the selfie"],
+    ["左边折了一只纸鹤，右边双手捧着接过", "offer a folded paper crane toward the right", "receive the paper crane with both hands"],
 ]);
 const IDEA_MOODS = Object.freeze([
     ['一个认真、一个忍不住笑', 'a serious expression', 'an amused smile'],
@@ -2878,6 +3342,12 @@ const IDEA_MOODS = Object.freeze([
     ['一个好奇、一个耐心陪伴', 'a curious expression', 'a patient caring expression'],
     ['一个困困的、一个很有精神', 'a sleepy expression', 'an energetic expression'],
     ['一个有点惊讶、一个偷偷开心', 'a slightly surprised expression', 'a quietly delighted expression'],
+    ["一个嘴硬、一个看穿一切", "a stubborn denying expression", "a knowing smile"],
+    ["一个手忙脚乱、一个憋着笑", "a flustered expression", "a suppressed laugh"],
+    ["一个笑得眯起眼、一个看呆了", "a wide squinting smile", "a dazed admiring look"],
+    ["一个装酷、一个拆台", "a cool composed expression", "a teasing grin"],
+    ["一个委屈巴巴、一个连忙安慰", "a pouting wronged expression", "a hurried comforting expression"],
+    ["两个都在偷偷脸红", "a quiet blush", "a different quiet blush"],
 ]);
 const IDEA_SCENES = Object.freeze([
     ['纯色背景铺满画面，重点放在动作和表情', 'A quiet solid-color ground fills the image, focusing attention on gestures and expressions.'],
@@ -2885,6 +3355,12 @@ const IDEA_SCENES = Object.freeze([
     ['两边用相呼应的淡色背景', 'Coordinated pale colors fill the continuous background.'],
     ['共享一个小小的窗边场景', 'Both share a small scene beside a window.'],
     ['点缀几片花瓣，不遮住脸', 'A few petals drift around the subjects, keeping their faces clear.'],
+    ["傍晚的天台，晚霞铺满天空", "An evening rooftop under a sky full of sunset clouds."],
+    ["便利店门口的暖黄灯光", "Outside a convenience store at night in warm yellow light, no readable text."],
+    ["图书馆靠窗的位置", "A library seat by the window."],
+    ["游乐园的旋转木马前", "In front of an amusement park carousel."],
+    ["下雪的小巷，路灯亮着", "A snowy alley under glowing streetlights."],
+    ["开满向日葵的田野", "A field full of sunflowers."],
 ]);
 
 function coupleInteraction(interaction, detail = '') {
@@ -2944,12 +3420,17 @@ function coupleStyleIdentityRendering(chosen) {
     return [identity, form, proportions, eyes].filter(Boolean).join(' ');
 }
 
+__m_extras_coupleAvatarStyles_js.coupleStyleBlend = coupleStyleBlend;
+__m_extras_coupleAvatarStyles_js.coupleOverlayAvailable = coupleOverlayAvailable;
+__m_extras_coupleAvatarStyles_js.coupleStyleOwnConstruction = coupleStyleOwnConstruction;
 __m_extras_coupleAvatarStyles_js.coupleStyleConstruction = coupleStyleConstruction;
 __m_extras_coupleAvatarStyles_js.coupleInteraction = coupleInteraction;
 __m_extras_coupleAvatarStyles_js.randomCoupleIdeas = randomCoupleIdeas;
 __m_extras_coupleAvatarStyles_js.coupleStyleIdentityRendering = coupleStyleIdentityRendering;
 __m_extras_coupleAvatarStyles_js.STYLE_GROUPS = STYLE_GROUPS;
 __m_extras_coupleAvatarStyles_js.COUPLE_STYLES = COUPLE_STYLES;
+__m_extras_coupleAvatarStyles_js.OVERLAY_MIXED_WEIGHT = OVERLAY_MIXED_WEIGHT;
+__m_extras_coupleAvatarStyles_js.FULL_FIGURE_LAYOUTS = FULL_FIGURE_LAYOUTS;
 __m_extras_coupleAvatarStyles_js.INTERACTION_PRESETS = INTERACTION_PRESETS;
 __m_extras_coupleAvatarStyles_js.INTERACTIONS = INTERACTIONS;
 }
@@ -5024,6 +5505,9 @@ function coupleAvatarCss() {
 .rmt-pair-inspirations>button>span{min-width:0;font-size:13px;line-height:1.7}
 .rmt-pair-inspirations>button>small{flex:none}
 .rmt-pair-custom{display:none}.rmt-pair-custom.is-visible{display:flex}
+.rmt-pair-overlay{display:flex;align-items:flex-start;gap:10px;margin-top:10px;cursor:pointer}.rmt-pair-overlay input{margin-top:3px;flex:none}.rmt-pair-overlay b,.rmt-pair-overlay small{display:block}.rmt-pair-overlay small{color:var(--rmt-theme-muted);font-size:12px;margin-top:3px}.rmt-pair-overlay.is-disabled{opacity:.6;cursor:default}
+.rmt-pair-actions{display:flex;gap:8px;flex-wrap:wrap}
+.rmt-pair-blend{display:inline-block;margin-left:5px;padding:0 5px;border-radius:999px;font-size:10px;line-height:1.5;border:1px solid currentColor;opacity:.75;vertical-align:1px}.rmt-pair-blend.is-light{opacity:.55}
 .rmt-pair-choice{display:flex;gap:8px}.rmt-pair-choice>button{flex:1}
 .rmt-pair-options{border-top:1px solid var(--rmt-theme-border);border-bottom:1px solid var(--rmt-theme-border);padding:0 2px}
 .rmt-pair-options>summary{cursor:pointer;min-height:48px;display:flex;align-items:center;justify-content:space-between;font-weight:600;list-style:none}
@@ -5132,6 +5616,20 @@ const settingFields = ['interaction', 'interactionDetail', 'clothing', 'backgrou
 const HISTORY_PAGE_SIZE = 6; // Display page only; stored records are never capped.
 function styleFor(id) { return presets.COUPLE_STYLES.find(item => item.id === id); }
 function styleLabel(settings) { return settings?.styleId === 'custom' ? '自定义风格' : styleFor(settings?.styleId)?.label || '二头身团子'; }
+const OVERLAY_NOTES = Object.freeze({
+    form: '只用它的比例、构图或光影；线条和上色交给生图插件里你自己的画师串。',
+    mixed: '它也带一点线条/上色倾向，会以较低权重轻轻叠上去；出图不对味就关掉。',
+    custom: '自定义风格只写一次、放在最后，画师串在前。',
+    medium: '这个画风本身就是换一种画法，和画师串叠在一起两边都不像，所以不能叠。',
+});
+function overlayKind(settings) {
+    if (settings?.styleId === 'custom') return 'custom';
+    return presets.coupleStyleBlend(styleFor(settings?.styleId)) || 'medium';
+}
+function blendBadge(item) {
+    const kind = presets.coupleStyleBlend(item);
+    return kind === 'form' ? '<small class="rmt-pair-blend">可叠</small>' : kind === 'mixed' ? '<small class="rmt-pair-blend is-light">轻叠</small>' : '';
+}
 function button(action, label, extra = '') { return `<button type="button" data-pair-action="${action}" ${extra}>${label}</button>`; }
 function current(view) {
     try { return active === view && view.root?.isConnected && !view.host.hidden && runtime.state.activeMode === couple.COUPLE_MODE
@@ -5165,6 +5663,9 @@ function draft(view) {
         if (key === 'appearance' && input.value.trim() !== settings.people[i].appearance) settings.people[i].appearanceOverride = true;
         settings.people[i][key] = input.value;
     }
+    const overlay = view.root.querySelector('[data-pair-overlay]');
+    // A disabled toggle (medium style) keeps the saved choice for later styles.
+    if (overlay && !overlay.disabled) { if (overlay.checked) settings.overlayArtist = true; else delete settings.overlayArtist; }
     view.settings = couple.normalizeCoupleSettings(settings, view.context);
     // Resolving a new name or provider may replace the displayed preset. Keep
     // that display in sync before another input event reads the form again.
@@ -5448,6 +5949,14 @@ function paintSettings(view) {
     view.root.querySelector('[data-pair-selected-style]').textContent = styleLabel(view.settings);
     view.root.querySelector('[data-pair-style-description]').textContent = styleFor(view.settings.styleId)?.description || '用自己的话描述想要的画风。';
     view.root.querySelector('[data-pair-custom]').classList.toggle('is-visible', view.settings.styleId === 'custom');
+    const overlay = view.root.querySelector('[data-pair-overlay]');
+    if (overlay) {
+        const kind = overlayKind(view.settings), available = kind !== 'medium';
+        overlay.disabled = !available;
+        overlay.checked = available && view.settings.overlayArtist === true;
+        overlay.closest('.rmt-pair-overlay')?.classList.toggle('is-disabled', !available);
+        const note = view.root.querySelector('[data-pair-overlay-note]'); if (note) note.textContent = OVERLAY_NOTES[kind];
+    }
     paintInteraction(view);
 }
 function paintInteraction(view) {
@@ -5457,7 +5966,7 @@ function paintInteraction(view) {
 function formHtml(view) {
     let providerNote = '';
     try {
-        if (core_settings.getPluginSettings(view.context).imageGenerationProvider === 'baibai-image') providerNote = '<p class="rmt-pair-note">使用柏宝绘 NAI 时会沿用其画师串和负面词，本页不能覆盖；豆豆眼／Q版若不符，请检查生图插件预设中是否排除了这些特征。</p>';
+        if (core_settings.getPluginSettings(view.context).imageGenerationProvider === 'baibai-image') providerNote = '<p class="rmt-pair-note">使用柏宝绘 NAI 时会沿用其画师串和负面词，本页不能覆盖；想保留画师味道，可打开下面的“叠在我的画师串上”。豆豆眼／Q版若不符，请检查生图插件预设中是否排除了这些特征。</p>';
     } catch { /* Optional advice never blocks the form. */ }
     const groups = [...new Set(presets.INTERACTION_PRESETS.map(item => item.group))];
     return `<form class="rmt-pair-form" data-pair-form>
@@ -5466,9 +5975,10 @@ function formHtml(view) {
             <button type="button" class="rmt-pair-style-summary" data-pair-action="styles"><span><b data-pair-selected-style></b><small data-pair-style-description></small></span><span>更换</span></button>
             <div class="rmt-pair-style-custom-action">${button('custom-style', '自己写风格')}</div>
             <label class="rmt-pair-field rmt-pair-custom" data-pair-custom><span>自定义风格</span><textarea data-pair-field="customStyle" placeholder="例如：像旧绘本里的水彩小人，纸张有轻微颗粒。"></textarea></label>
+            <label class="rmt-pair-overlay"><input type="checkbox" data-pair-overlay><span><b>叠在我的画师串上</b><small data-pair-overlay-note></small></span></label>
         </div>
         <div class="rmt-pair-block"><h3>两个人的呼应</h3><div class="rmt-pair-choice"><button type="button" data-pair-type="joined" aria-pressed="true">拼接连图</button><button type="button" data-pair-type="echo" aria-pressed="false">独立呼应</button></div>
-            <div class="rmt-pair-section-head"><label for="rmt-pair-interaction">互动</label>${button('inspiration', '随机灵感')}</div>
+            <div class="rmt-pair-section-head"><label for="rmt-pair-interaction">互动 <small>${presets.INTERACTION_PRESETS.length} 种</small></label><span class="rmt-pair-actions">${button('random-interaction', '抽一个')}${button('inspiration', '随机灵感')}</span></div>
             <select id="rmt-pair-interaction" data-pair-field="interaction" aria-label="互动">${groups.map(group => `<optgroup label="${esc(group)}">${presets.INTERACTION_PRESETS.filter(item => item.group === group).map(item => `<option value="${esc(item.label)}">${esc(item.label)}</option>`).join('')}</optgroup>`).join('')}<option value="交给灵感">交给灵感</option><option value="自定义互动">自定义互动</option></select>
             <div class="rmt-pair-inspirations" data-pair-ideas hidden></div>
             <label class="rmt-pair-field" data-pair-interaction-custom hidden><span>写下你们的互动</span><textarea data-pair-field="interactionDetail" placeholder="可以选一条随机灵感，再改成你喜欢的动作与表情。"></textarea></label>
@@ -5522,6 +6032,7 @@ function bindView(view) {
     });
     view.root.addEventListener('change', event => {
         if (event.target.matches('select[data-pair-field]')) { queueDraft(view); paintInteraction(view); }
+        if (event.target.matches('[data-pair-overlay]')) { draft(view); paintSettings(view); queueDraft(view); }
     });
     view.root.querySelector('[data-pair-form]').addEventListener('submit', event => { event.preventDefault(); void startGeneration(view); });
     view.root.addEventListener('click', event => {
@@ -5561,6 +6072,12 @@ async function handleAction(view, action, target) {
         const list = view.root.querySelector('[data-pair-ideas]'); list.hidden = false;
         list.innerHTML = view.ideas.map((idea, index) => button('use-idea', `<span>${esc(idea)}</span><small>选用</small>`, `data-pair-idea="${index}"`)).join('');
         target.textContent = '换一组灵感'; return;
+    }
+    if (action === 'random-interaction') {
+        draft(view);
+        const choices = presets.INTERACTION_PRESETS.filter(item => item.label !== view.settings.interaction);
+        view.settings.interaction = choices[Math.floor(Math.random() * choices.length)]?.label || view.settings.interaction;
+        paintSettings(view); queueDraft(view); return;
     }
     if (action === 'use-idea') {
         const idea = view.ideas[Number(target.dataset.pairIdea)]; if (!idea) return;
@@ -5692,7 +6209,8 @@ async function startGeneration(view) {
 function showStyles(view) {
     const m = dialog(view, '选择画风', `<div class="rmt-pair-picker-toolbar">
         <label class="rmt-pair-field"><span class="rmt-pair-visually-hidden">搜索画风</span><input data-pair-search aria-label="搜索风格" placeholder="搜索名称，例如：小猫、水彩、像素"></label>
-        <div class="rmt-pair-picker-filter"><label class="rmt-pair-field"><span class="rmt-pair-visually-hidden">风格分类</span><select data-pair-group-select aria-label="风格分类"><option value="all">全部画风</option>${presets.STYLE_GROUPS.map(group => `<option value="${group.id}">${esc(group.label)}</option>`).join('')}</select></label><small data-pair-style-count role="status"></small></div>
+        <div class="rmt-pair-picker-filter"><label class="rmt-pair-field"><span class="rmt-pair-visually-hidden">风格分类</span><select data-pair-group-select aria-label="风格分类"><option value="all">全部画风</option>${presets.STYLE_GROUPS.map(group => `<option value="${group.id}">${esc(group.label)}</option>`).join('')}</select></label><small data-pair-style-count role="status"></small><button type="button" data-pair-random-style>随机一个</button></div>
+        <p class="rmt-pair-note">标“可叠”的画风能叠在你的画师串上；“轻叠”会降低权重叠加；没有标记的会换掉画法。</p>
         </div><div class="rmt-pair-picker-scroll" data-pair-picker-results></div>`);
     if (!m) return;
     m.body.classList.add('rmt-pair-style-browser');
@@ -5705,13 +6223,18 @@ function showStyles(view) {
         m.body.querySelector('[data-pair-style-count]').textContent = `${rows.length} 种`;
         m.body.querySelector('[data-pair-picker-results]').innerHTML = rows.length ? presets.STYLE_GROUPS.map(group => {
             const items = rows.filter(item => item.group === group.id);
-            return items.length ? `<section class="rmt-pair-picker-group"><h3>${esc(group.label)}</h3><div class="rmt-pair-picker-results">${items.map(item => `<button type="button" data-pair-pick-style="${item.id}" aria-pressed="${view.settings.styleId === item.id}" title="${esc(item.description)}"><span>${esc(item.label)}</span>${view.settings.styleId === item.id ? '<span aria-hidden="true">✓</span>' : ''}</button>`).join('')}</div></section>` : '';
+            return items.length ? `<section class="rmt-pair-picker-group"><h3>${esc(group.label)}</h3><div class="rmt-pair-picker-results">${items.map(item => `<button type="button" data-pair-pick-style="${item.id}" aria-pressed="${view.settings.styleId === item.id}" title="${esc(item.description)}"><span>${esc(item.label)}${blendBadge(item)}</span>${view.settings.styleId === item.id ? '<span aria-hidden="true">✓</span>' : ''}</button>`).join('')}</div></section>` : '';
         }).join('') : '<p class="rmt-pair-note">没有找到，换个词试试，或回到页面自己写风格。</p>';
         m.body.querySelector('[data-pair-picker-results]').scrollTop = 0;
     };
     search.addEventListener('input', draw);
     filter.addEventListener('change', () => { search.value = ''; draw(); });
     m.body.addEventListener('click', event => {
+        if (event.target.closest('[data-pair-random-style]')) {
+            const options = [...m.body.querySelectorAll('[data-pair-pick-style]')].filter(node => node.dataset.pairPickStyle !== view.settings.styleId);
+            const pick = options[Math.floor(Math.random() * options.length)]; if (!pick) return;
+            draft(view); view.settings.styleId = pick.dataset.pairPickStyle; paintSettings(view); queueDraft(view); closeCoupleDialog(); return;
+        }
         const target = event.target.closest('[data-pair-pick-style]'); if (!target) return;
         draft(view); view.settings.styleId = target.dataset.pairPickStyle; paintSettings(view); queueDraft(view); closeCoupleDialog();
     });
@@ -18289,7 +18812,26 @@ function unfamiliarAppearanceSubject(label) {
     const subject = /^([A-Z][A-Za-z’'-]*(?:\s+[A-Z][A-Za-z’'-]*)*)\s+(?:has|is|wears|possesses)\b/u.exec(label)?.[1]
         || /^([\p{Script=Han}]+?)(?:留着|长着|拥有|有|是)/u.exec(label)?.[1];
     return !!subject && !neutral.test(subject) && !fieldOrTagHeading(subject) && !appearanceTraitClause(subject)
-        && !/^(?:头|脸|眼|眉|鼻|嘴|唇|肩|脖|颈|胸|腰|腹|背|手|腕|指|臂|腿|足|脚|身|肌肤)/u.test(subject);
+        && !BODY_PART_SUBJECT.test(subject);
+}
+
+// "锁骨处有纹身" or "后颈有胎记" describes this person's own body, not someone
+// else; a body part anywhere in the subject keeps ownership unchanged.
+const BODY_PART_SUBJECT = /(?:头|脸|面|额|眼|瞳|眉|睫|鼻|嘴|唇|齿|牙|耳|颊|颧|下巴|下颌|肩|脖|颈|锁骨|胸|腰|腹|背|手|腕|指|臂|肘|腿|膝|足|脚|踝|身|肌|肤|皮|发|尾|翼|翅|犄角|体)/u;
+
+// A bracketed or markdown-style section heading that is not a profile field
+// starts a new named section. Named after someone else, its lines are theirs.
+const SECTION_LABEL_WORD = /(?:背景|故事|设定|简介|信息|资料|说明|备注|经历|关系|能力|技能|喜好|习惯|其他|其它|注意|提示|规则|世界观|剧情|对话|示例|例子|台词|语气|口癖|性格|外貌|外观|容貌|长相|特征|服饰|服装|穿着|衣着|身份|职业|年龄|性别|姓名|名字|\b(?:basic|info|profile|background|story|setting|lore|world|notes?|rules?|examples?|dialogue|speech|personality|appearance|looks?|outfit|clothing|identity|occupation|age|gender|name)\b)/iu;
+function sectionHeading(part) {
+    const text = part.trim();
+    const match = /^(?:[【\[（(「『]\s*([^【】\[\]（）()「」『』]{1,24})\s*[】\]）)」』]|#{1,6}\s+(\S[^#]{0,23})|[◆◇●■★☆▪•·]\s*(\S{1,24}))$/u.exec(text);
+    const heading = (match?.[1] || match?.[2] || match?.[3] || '').trim();
+    if (!heading || /[:：]/u.test(heading)) return null;
+    const neutralHeading = /^(?:他|她|我|你|本人|角色|外貌|容貌|长相|外表|外貌特征|基本信息|人物信息|性别|性別|年龄|名字|姓名|职业|性格|背景|简介|appearance|looks?|traits?|features|physical appearance|gender|sex|age|name|occupation|personality|background|description)$/iu;
+    // "[golden eyes]" is a weighted tag, not a heading; let it through as a clause.
+    if (appearanceTraitClause(heading)) return null;
+    if (neutralHeading.test(heading) || APPEARANCE_FIELD_LABEL.test(heading) || SECTION_LABEL_WORD.test(heading)) return { label: true, heading };
+    return { label: false, heading };
 }
 
 function containsAppearanceName(value, name) {
@@ -18307,6 +18849,7 @@ function containsAppearanceName(value, name) {
 // Follow explicit source ownership across a comma list or a named paragraph.
 // Ambiguous continuations of somebody else's description are not assigned to
 // the current person. This does not infer gender or edit handwritten fields.
+const OWN_RELATION = /^\s*(?:的|'s|’s)\s*(?:朋友|同事|同伴|邻居|父亲|母亲|父母|爸爸|妈妈|哥哥|姐姐|弟弟|妹妹|兄长|兄弟|姐妹|丈夫|妻子|男友|女友|恋人|爱人|师父|师傅|老师|学生|徒弟|上司|下属|手下|儿子|女儿|同学|室友|搭档|助手|仆人|管家|主人|青梅竹马|friend|colleague|partner|sister|brother|mother|father|parents?|wife|husband|girlfriend|boyfriend|son|daughter|student|teacher|master|servant|roommate)(?![a-z])/iu;
 function appearanceSourceClauses(value, { name = '', otherNames = [], role = '' } = {}) {
     if (typeof value !== 'string') return [];
     const ownName = typeof name === 'string' ? name.trim() : '';
@@ -18315,6 +18858,13 @@ function appearanceSourceClauses(value, { name = '', otherNames = [], role = '' 
     let owner = 'self';
     for (const raw of value.split(/[\n。；;!?！？，,、]|\.(?=\s|$)/u)) {
         const part = raw.trim(); if (!part) continue;
+        const section = sectionHeading(part);
+        if (section) {
+            if (section.label) continue;
+            const roleWord = /^(?:\{\{\s*)?(char|user)(?:\s*\}\})?$/iu.exec(section.heading)?.[1]?.toLowerCase();
+            owner = (ownName && containsAppearanceName(section.heading, ownName)) || (role && roleWord === role) ? 'self' : 'other';
+            continue;
+        }
         const label = part.replace(/[*#`]/g, '').trim();
         const marker = /^(?:\{\{\s*(char|user)\s*\}\}|(char|user)\s*[:：])/iu.exec(label);
         const ownPrefix = ownName && label.startsWith(ownName) && containsAppearanceName(label, ownName);
@@ -18323,7 +18873,9 @@ function appearanceSourceClauses(value, { name = '', otherNames = [], role = '' 
         const markerRole = marker && (marker[1] || marker[2]).toLowerCase();
         const ownMarker = marker && role && markerRole === role;
         const otherMarker = marker && role && markerRole !== role;
-        if (namedOther || otherMarker || (relation || ownName && unfamiliarAppearanceSubject(label)) && !ownPrefix && !ownMarker) { owner = 'other'; continue; }
+        // "方祁洛的妹妹，女，栗色短发" opens with the own name but describes a relative.
+        const ownRelation = ownPrefix && OWN_RELATION.test(label.slice(ownName.length));
+        if (namedOther || otherMarker || ownRelation || (relation || ownName && unfamiliarAppearanceSubject(label)) && !ownPrefix && !ownMarker) { owner = 'other'; continue; }
         if (ownPrefix || ownMarker) {
             owner = 'self';
             const body = label.slice(ownMarker ? marker[0].length : ownName.length)
@@ -18341,9 +18893,24 @@ function explicitAppearanceIdentityClause(value) {
     const clean = value.trim().replace(/[.。!！?？]+$/u, '').trim();
     return /^(?:(?:性别|性別|生理性别|gender|sex)\s*[:：]\s*)?(?:(?:(?:他|她|我|本人|角色)\s*是\s*)?(?:一[位名个])?(?:成年(?:的)?)?(?:男(?:性|生|人)?|女(?:性|生|人)?)|(?:(?:he|she|I|they)\s+(?:is|am|are)\s+)?(?:an?\s+)?(?:adult\s+)?(?:1?\s*(?:boy|girl)|man|woman|male|female|non[ -]?binary|androgynous))$/iu.test(clean);
 }
+const HABIT_ADVERB = /(?:平时|平常|通常|总是|常常|经常|往往|一般|\b(?:always|usually|often|typically|generally)\b\s*)/giu;
+const WEIGHTED_TAG = /^(?:\(([^()（）]+?)(?::\s*[-+]?(?:\d+(?:\.\d+)?|\.\d+))?\)|\{+([^{}]+)\}+|\[+([^\[\]]+)\]+|[-+]?(?:\d+(?:\.\d+)?|\.\d+)::(.+?)::)$/u;
 function automaticAppearanceClause(value) {
     if (typeof value !== 'string') return '';
-    const clean = value.replace(/[*#`]+/g, '').replace(/^\s*[-•]\s*/u, '').trim();
+    let clean = value.replace(/[*#`]+/g, '').replace(/^\s*[-•]\s*/u, '').trim();
+    // A prompt weight around one tag is syntax, not a parenthetical remark.
+    // Classify the inner tag; the literal weighted clause is what is kept.
+    const weighted = WEIGHTED_TAG.exec(clean);
+    if (weighted) {
+        const inner = (weighted[1] || weighted[2] || weighted[3] || weighted[4] || '').trim();
+        return inner && !/[()（）[\]{}:：]/u.test(inner) && automaticAppearanceClause(inner) ? clean : '';
+    }
+    // "黑色长发平时束成高马尾" is a hairstyle; drop only the habit adverb when
+    // what remains is still a visible trait, otherwise the old rejection holds.
+    if (AUTO_APPEARANCE_DROP.test(clean)) {
+        const bare = clean.replace(HABIT_ADVERB, '').replace(/\s{2,}/g, ' ').trim();
+        if (bare !== clean && bare && !AUTO_APPEARANCE_DROP.test(bare) && appearanceTraitClause(bare)) clean = bare;
+    }
     const history = APPEARANCE_HISTORY.test(clean);
     const mark = history ? LASTING_MARK.exec(clean) : null;
     const lasting = mark && /(?:疤|瘢痕|伤痕|胎记|纹身)/u.test(clean.slice(mark.index));
@@ -18462,6 +19029,7 @@ __m_core_cgVisualRules_js.cgInitialVisualInstructions = cgInitialVisualInstructi
 __m_core_cgVisualRules_js.normalizeGeneratedCgDraft = normalizeGeneratedCgDraft;
 __m_core_cgVisualRules_js.generatedCgDraftFields = generatedCgDraftFields;
 __m_core_cgVisualRules_js.appearanceTraitClause = appearanceTraitClause;
+__m_core_cgVisualRules_js.sectionHeading = sectionHeading;
 __m_core_cgVisualRules_js.appearanceSourceClauses = appearanceSourceClauses;
 __m_core_cgVisualRules_js.explicitAppearanceIdentityClause = explicitAppearanceIdentityClause;
 __m_core_cgVisualRules_js.automaticAppearanceClause = automaticAppearanceClause;
@@ -38524,7 +39092,9 @@ function lookFromDescription(description, limit = CAST_LOOKS_FIELD_LIMIT, subjec
     let used = 0;
     for (const part of cg_visual.appearanceSourceClauses(raw, subject)) {
         const literal = part.replace(/\{\{[^{}]{1,100}\}\}/g, ' ');
-        const clause = cg_visual.automaticAppearanceClause(core_text.normalizeText(literal, complete ? Infinity : 160));
+        // "外貌：黑色长发" keeps only the look; a generic label is not a tag.
+        const clause = cg_visual.automaticAppearanceClause(core_text.normalizeText(literal, complete ? Infinity : 160))
+            .replace(/^(?:外貌|外观|容貌|长相|外表|相貌|样貌|模样|形象|外貌特征|appearance|looks?|physical appearance|description)\s*[:：]\s*/iu, '');
         if (!clause || (!cg_visual.appearanceTraitClause(clause) && !cg_visual.explicitAppearanceIdentityClause(clause)) || LOOK_DROP.test(clause)) continue;
         if (seen.has(clause)) continue;
         if (used + clause.length + 1 > limit) break;
@@ -94824,6 +95394,13 @@ async function retryMvSave(scope, id) {
             // survive and turn the record back into a v2 asset board.
             const { version, groups, keyword, motif, ...kept } = next || {};
             next = { timing: { taps: {}, shift: 0 }, duration: 0, ...kept, ...row.patch, assetPrompts: {}, storyRevision: row.id };
+            // A rhythm template chosen earlier still shows as selected; apply it to
+            // the new shots instead of leaving every cut at the generated default.
+            if (next.settings?.output === 'tegaki' && TEGAKI_PRESETS[next.tegaki?.preset]) applyPresetTemplate(next, next.tegaki.preset, true);
+            // A custom export range from an older storyboard may now cover no shot
+            // at all; the export drawer would then play an empty clip.
+            if (next.exportRange && (next.settings?.output === 'video' || (next.exportRange.range === 'custom'
+                && !list(next.shots).some(s => s.sectionIndex >= next.exportRange.rangeFrom && s.sectionIndex <= next.exportRange.rangeTo)))) delete next.exportRange;
         }
         else if (row.kind === 'append') {
             next.shots = [...list(next.shots), ...row.patch.shots].sort((a, b) => a.sectionIndex - b.sectionIndex);
@@ -95409,7 +95986,9 @@ async function generateStoryboard(songId, settingsInput, castInput = undefined) 
             return { id: songId, createdAt: previous?.createdAt || Date.now(), settings,
                 ...built, stage: built.stage || null,
                 ...(cast ? { cast: mv_cast.generatedMvCast(cast, raw) } : {}),
-                tegaki: { ...(previous?.tegaki || {}), range: settings.range, rangeFrom: settings.rangeFrom, rangeTo: settings.rangeTo, ...(settings.output === 'tegaki' ? { lyric: built.stage && settings.storyType !== 'illustration' ? 'stage' : 'subtitle' } : {}) },
+                tegaki: { ...(previous?.tegaki || {}), range: settings.range, rangeFrom: settings.rangeFrom, rangeTo: settings.rangeTo, ...(settings.output === 'tegaki' ? { lyric: built.stage && settings.storyType !== 'illustration' ? 'stage'
+                    // A manual lyric style survives regeneration; only the stage layout forces its own.
+                    : Object.hasOwn(TEGAKI_LYRICS, previous?.tegaki?.lyric) && previous.tegaki.lyric !== 'stage' ? previous.tegaki.lyric : 'subtitle' } : {}) },
                 wardrobe: {
                     era: core_text.normalizeText(raw?.wardrobe?.era, 200) || previous?.wardrobe?.era || '',
                     char: core_text.normalizeText(raw?.wardrobe?.char, 300) || previous?.wardrobe?.char || '',
@@ -95723,19 +96302,25 @@ function applyTegakiPreset(songId, presetId, song) {
     const preset = TEGAKI_PRESETS[presetId];
     if (!preset) return null;
     const context = core_context.currentCharacterGuard();
-    return writeMv(scopeOf(context), songId, current => {
-        if (!current) return current;
-        current.tegaki = { ...(current.tegaki || {}), rhythm: preset.rhythm, lyric: preset.lyric, preset: presetId, template: preset.template };
-        const shots = list(current.shots);
-        shots.forEach((shot, i) => {
-            const next = shots[i + 1];
-            const change = !next || !shot.group || next.group !== shot.group;
-            shot.cut = preset.template === 'quick' || !change ? 'cut' : preset.template === 'flash' ? 'flash' : 'fade';
-            shot.motion = preset.template === 'slow' ? 'push' : 'still';
-        });
-        for (const g of list(current.groups)) g.motion = preset.template === 'slow' ? 'push' : 'still';
-        return current;
+    return writeMv(scopeOf(context), songId, current => current ? applyPresetTemplate(current, presetId) : current);
+}
+
+function applyPresetTemplate(current, presetId, keepStageLyric = false) {
+    const preset = TEGAKI_PRESETS[presetId];
+    if (!preset) return current;
+    // On regenerate a stage layout keeps its own lyric rendering; a manual
+    // template click still switches lyrics exactly as before.
+    const lyric = keepStageLyric && current.stage && current.settings?.storyType !== 'illustration' ? 'stage' : preset.lyric;
+    current.tegaki = { ...(current.tegaki || {}), rhythm: preset.rhythm, lyric, preset: presetId, template: preset.template };
+    const shots = list(current.shots);
+    shots.forEach((shot, i) => {
+        const next = shots[i + 1];
+        const change = !next || !shot.group || next.group !== shot.group;
+        shot.cut = preset.template === 'quick' || !change ? 'cut' : preset.template === 'flash' ? 'flash' : 'fade';
+        shot.motion = preset.template === 'slow' ? 'push' : 'still';
     });
+    for (const g of list(current.groups)) g.motion = preset.template === 'slow' ? 'push' : 'still';
+    return current;
 }
 
 function patchWardrobe(songId, patch) {

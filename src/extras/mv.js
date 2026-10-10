@@ -281,6 +281,13 @@ export async function retryMvSave(scope, id) {
             // survive and turn the record back into a v2 asset board.
             const { version, groups, keyword, motif, ...kept } = next || {};
             next = { timing: { taps: {}, shift: 0 }, duration: 0, ...kept, ...row.patch, assetPrompts: {}, storyRevision: row.id };
+            // A rhythm template chosen earlier still shows as selected; apply it to
+            // the new shots instead of leaving every cut at the generated default.
+            if (next.settings?.output === 'tegaki' && TEGAKI_PRESETS[next.tegaki?.preset]) applyPresetTemplate(next, next.tegaki.preset, true);
+            // A custom export range from an older storyboard may now cover no shot
+            // at all; the export drawer would then play an empty clip.
+            if (next.exportRange && (next.settings?.output === 'video' || (next.exportRange.range === 'custom'
+                && !list(next.shots).some(s => s.sectionIndex >= next.exportRange.rangeFrom && s.sectionIndex <= next.exportRange.rangeTo)))) delete next.exportRange;
         }
         else if (row.kind === 'append') {
             next.shots = [...list(next.shots), ...row.patch.shots].sort((a, b) => a.sectionIndex - b.sectionIndex);
@@ -866,7 +873,9 @@ export async function generateStoryboard(songId, settingsInput, castInput = unde
             return { id: songId, createdAt: previous?.createdAt || Date.now(), settings,
                 ...built, stage: built.stage || null,
                 ...(cast ? { cast: mv_cast.generatedMvCast(cast, raw) } : {}),
-                tegaki: { ...(previous?.tegaki || {}), range: settings.range, rangeFrom: settings.rangeFrom, rangeTo: settings.rangeTo, ...(settings.output === 'tegaki' ? { lyric: built.stage && settings.storyType !== 'illustration' ? 'stage' : 'subtitle' } : {}) },
+                tegaki: { ...(previous?.tegaki || {}), range: settings.range, rangeFrom: settings.rangeFrom, rangeTo: settings.rangeTo, ...(settings.output === 'tegaki' ? { lyric: built.stage && settings.storyType !== 'illustration' ? 'stage'
+                    // A manual lyric style survives regeneration; only the stage layout forces its own.
+                    : Object.hasOwn(TEGAKI_LYRICS, previous?.tegaki?.lyric) && previous.tegaki.lyric !== 'stage' ? previous.tegaki.lyric : 'subtitle' } : {}) },
                 wardrobe: {
                     era: core_text.normalizeText(raw?.wardrobe?.era, 200) || previous?.wardrobe?.era || '',
                     char: core_text.normalizeText(raw?.wardrobe?.char, 300) || previous?.wardrobe?.char || '',
@@ -1180,19 +1189,25 @@ export function applyTegakiPreset(songId, presetId, song) {
     const preset = TEGAKI_PRESETS[presetId];
     if (!preset) return null;
     const context = core_context.currentCharacterGuard();
-    return writeMv(scopeOf(context), songId, current => {
-        if (!current) return current;
-        current.tegaki = { ...(current.tegaki || {}), rhythm: preset.rhythm, lyric: preset.lyric, preset: presetId, template: preset.template };
-        const shots = list(current.shots);
-        shots.forEach((shot, i) => {
-            const next = shots[i + 1];
-            const change = !next || !shot.group || next.group !== shot.group;
-            shot.cut = preset.template === 'quick' || !change ? 'cut' : preset.template === 'flash' ? 'flash' : 'fade';
-            shot.motion = preset.template === 'slow' ? 'push' : 'still';
-        });
-        for (const g of list(current.groups)) g.motion = preset.template === 'slow' ? 'push' : 'still';
-        return current;
+    return writeMv(scopeOf(context), songId, current => current ? applyPresetTemplate(current, presetId) : current);
+}
+
+function applyPresetTemplate(current, presetId, keepStageLyric = false) {
+    const preset = TEGAKI_PRESETS[presetId];
+    if (!preset) return current;
+    // On regenerate a stage layout keeps its own lyric rendering; a manual
+    // template click still switches lyrics exactly as before.
+    const lyric = keepStageLyric && current.stage && current.settings?.storyType !== 'illustration' ? 'stage' : preset.lyric;
+    current.tegaki = { ...(current.tegaki || {}), rhythm: preset.rhythm, lyric, preset: presetId, template: preset.template };
+    const shots = list(current.shots);
+    shots.forEach((shot, i) => {
+        const next = shots[i + 1];
+        const change = !next || !shot.group || next.group !== shot.group;
+        shot.cut = preset.template === 'quick' || !change ? 'cut' : preset.template === 'flash' ? 'flash' : 'fade';
+        shot.motion = preset.template === 'slow' ? 'push' : 'still';
     });
+    for (const g of list(current.groups)) g.motion = preset.template === 'slow' ? 'push' : 'still';
+    return current;
 }
 
 export function patchWardrobe(songId, patch) {

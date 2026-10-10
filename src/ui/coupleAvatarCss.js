@@ -56,6 +56,9 @@ export function coupleAvatarCss() {
 .rmt-pair-inspirations>button>span{min-width:0;font-size:13px;line-height:1.7}
 .rmt-pair-inspirations>button>small{flex:none}
 .rmt-pair-custom{display:none}.rmt-pair-custom.is-visible{display:flex}
+.rmt-pair-overlay{display:flex;align-items:flex-start;gap:10px;margin-top:10px;cursor:pointer}.rmt-pair-overlay input{margin-top:3px;flex:none}.rmt-pair-overlay b,.rmt-pair-overlay small{display:block}.rmt-pair-overlay small{color:var(--rmt-theme-muted);font-size:12px;margin-top:3px}.rmt-pair-overlay.is-disabled{opacity:.6;cursor:default}
+.rmt-pair-actions{display:flex;gap:8px;flex-wrap:wrap}
+.rmt-pair-blend{display:inline-block;margin-left:5px;padding:0 5px;border-radius:999px;font-size:10px;line-height:1.5;border:1px solid currentColor;opacity:.75;vertical-align:1px}.rmt-pair-blend.is-light{opacity:.55}
 .rmt-pair-choice{display:flex;gap:8px}.rmt-pair-choice>button{flex:1}
 .rmt-pair-options{border-top:1px solid var(--rmt-theme-border);border-bottom:1px solid var(--rmt-theme-border);padding:0 2px}
 .rmt-pair-options>summary{cursor:pointer;min-height:48px;display:flex;align-items:center;justify-content:space-between;font-weight:600;list-style:none}

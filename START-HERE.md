@@ -119,7 +119,15 @@ MV 数据导出包含分镜、图片引用和待保存结果，本机音频/上�
 
 ## 复现验证
 
-Node.js 24、Python 3；像素测试使用 `@napi-rs/canvas`（可由 CODEX_PRIMARY_RUNTIME_NODE_MODULES 指向已安装目录）。
+Node.js 22+、Python 3；像素测试使用 `@napi-rs/canvas`（在仓库目录 `npm install @napi-rs/canvas` 即可，也可由 CODEX_PRIMARY_RUNTIME_NODE_MODULES 指向已安装目录）。
+
+解压后直接跑全部回归（不需要任何对照目录或额外包）：
+
+```bash
+node tools/verification/run-regressions.mjs
+```
+
+每个测试文件打印 PASS / FAIL / SKIP；跳过的一定写明缺什么（环境变量、上游源码、npm 包、不随包分发的 preview 目录，或"过时测试"）。只有 FAIL 让退出码非零。要跑过时测试加 `RUN_STALE=1`；要跑对照类测试按下面设置 BASELINE_ROOT 等变量。
 
 ```bash
 BASELINE_ROOT=/绝对路径/r84.222/tokimemo-main LEGACY_MV_ROOT=/绝对路径/r84.209/tokimemo-main JOURNAL_BASELINE_ROOT=/绝对路径/r84.215/tokimemo-main python3 tools/verification/verify-tap-clock-round.py . /绝对路径/检查结果

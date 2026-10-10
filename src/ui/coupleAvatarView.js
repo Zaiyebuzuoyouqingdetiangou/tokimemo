@@ -27,6 +27,20 @@ const settingFields = ['interaction', 'interactionDetail', 'clothing', 'backgrou
 const HISTORY_PAGE_SIZE = 6; // Display page only; stored records are never capped.
 function styleFor(id) { return presets.COUPLE_STYLES.find(item => item.id === id); }
 function styleLabel(settings) { return settings?.styleId === 'custom' ? '自定义风格' : styleFor(settings?.styleId)?.label || '二头身团子'; }
+const OVERLAY_NOTES = Object.freeze({
+    form: '只用它的比例、构图或光影；线条和上色交给生图插件里你自己的画师串。',
+    mixed: '它也带一点线条/上色倾向，会以较低权重轻轻叠上去；出图不对味就关掉。',
+    custom: '自定义风格只写一次、放在最后，画师串在前。',
+    medium: '这个画风本身就是换一种画法，和画师串叠在一起两边都不像，所以不能叠。',
+});
+function overlayKind(settings) {
+    if (settings?.styleId === 'custom') return 'custom';
+    return presets.coupleStyleBlend(styleFor(settings?.styleId)) || 'medium';
+}
+function blendBadge(item) {
+    const kind = presets.coupleStyleBlend(item);
+    return kind === 'form' ? '<small class="rmt-pair-blend">可叠</small>' : kind === 'mixed' ? '<small class="rmt-pair-blend is-light">轻叠</small>' : '';
+}
 function button(action, label, extra = '') { return `<button type="button" data-pair-action="${action}" ${extra}>${label}</button>`; }
 function current(view) {
     try { return active === view && view.root?.isConnected && !view.host.hidden && runtime.state.activeMode === couple.COUPLE_MODE
@@ -60,6 +74,9 @@ function draft(view) {
         if (key === 'appearance' && input.value.trim() !== settings.people[i].appearance) settings.people[i].appearanceOverride = true;
         settings.people[i][key] = input.value;
     }
+    const overlay = view.root.querySelector('[data-pair-overlay]');
+    // A disabled toggle (medium style) keeps the saved choice for later styles.
+    if (overlay && !overlay.disabled) { if (overlay.checked) settings.overlayArtist = true; else delete settings.overlayArtist; }
     view.settings = couple.normalizeCoupleSettings(settings, view.context);
     // Resolving a new name or provider may replace the displayed preset. Keep
     // that display in sync before another input event reads the form again.
@@ -343,6 +360,14 @@ function paintSettings(view) {
     view.root.querySelector('[data-pair-selected-style]').textContent = styleLabel(view.settings);
     view.root.querySelector('[data-pair-style-description]').textContent = styleFor(view.settings.styleId)?.description || '用自己的话描述想要的画风。';
     view.root.querySelector('[data-pair-custom]').classList.toggle('is-visible', view.settings.styleId === 'custom');
+    const overlay = view.root.querySelector('[data-pair-overlay]');
+    if (overlay) {
+        const kind = overlayKind(view.settings), available = kind !== 'medium';
+        overlay.disabled = !available;
+        overlay.checked = available && view.settings.overlayArtist === true;
+        overlay.closest('.rmt-pair-overlay')?.classList.toggle('is-disabled', !available);
+        const note = view.root.querySelector('[data-pair-overlay-note]'); if (note) note.textContent = OVERLAY_NOTES[kind];
+    }
     paintInteraction(view);
 }
 function paintInteraction(view) {
@@ -352,7 +377,7 @@ function paintInteraction(view) {
 function formHtml(view) {
     let providerNote = '';
     try {
-        if (core_settings.getPluginSettings(view.context).imageGenerationProvider === 'baibai-image') providerNote = '<p class="rmt-pair-note">使用柏宝绘 NAI 时会沿用其画师串和负面词，本页不能覆盖；豆豆眼／Q版若不符，请检查生图插件预设中是否排除了这些特征。</p>';
+        if (core_settings.getPluginSettings(view.context).imageGenerationProvider === 'baibai-image') providerNote = '<p class="rmt-pair-note">使用柏宝绘 NAI 时会沿用其画师串和负面词，本页不能覆盖；想保留画师味道，可打开下面的“叠在我的画师串上”。豆豆眼／Q版若不符，请检查生图插件预设中是否排除了这些特征。</p>';
     } catch { /* Optional advice never blocks the form. */ }
     const groups = [...new Set(presets.INTERACTION_PRESETS.map(item => item.group))];
     return `<form class="rmt-pair-form" data-pair-form>
@@ -361,9 +386,10 @@ function formHtml(view) {
             <button type="button" class="rmt-pair-style-summary" data-pair-action="styles"><span><b data-pair-selected-style></b><small data-pair-style-description></small></span><span>更换</span></button>
             <div class="rmt-pair-style-custom-action">${button('custom-style', '自己写风格')}</div>
             <label class="rmt-pair-field rmt-pair-custom" data-pair-custom><span>自定义风格</span><textarea data-pair-field="customStyle" placeholder="例如：像旧绘本里的水彩小人，纸张有轻微颗粒。"></textarea></label>
+            <label class="rmt-pair-overlay"><input type="checkbox" data-pair-overlay><span><b>叠在我的画师串上</b><small data-pair-overlay-note></small></span></label>
         </div>
         <div class="rmt-pair-block"><h3>两个人的呼应</h3><div class="rmt-pair-choice"><button type="button" data-pair-type="joined" aria-pressed="true">拼接连图</button><button type="button" data-pair-type="echo" aria-pressed="false">独立呼应</button></div>
-            <div class="rmt-pair-section-head"><label for="rmt-pair-interaction">互动</label>${button('inspiration', '随机灵感')}</div>
+            <div class="rmt-pair-section-head"><label for="rmt-pair-interaction">互动 <small>${presets.INTERACTION_PRESETS.length} 种</small></label><span class="rmt-pair-actions">${button('random-interaction', '抽一个')}${button('inspiration', '随机灵感')}</span></div>
             <select id="rmt-pair-interaction" data-pair-field="interaction" aria-label="互动">${groups.map(group => `<optgroup label="${esc(group)}">${presets.INTERACTION_PRESETS.filter(item => item.group === group).map(item => `<option value="${esc(item.label)}">${esc(item.label)}</option>`).join('')}</optgroup>`).join('')}<option value="交给灵感">交给灵感</option><option value="自定义互动">自定义互动</option></select>
             <div class="rmt-pair-inspirations" data-pair-ideas hidden></div>
             <label class="rmt-pair-field" data-pair-interaction-custom hidden><span>写下你们的互动</span><textarea data-pair-field="interactionDetail" placeholder="可以选一条随机灵感，再改成你喜欢的动作与表情。"></textarea></label>
@@ -417,6 +443,7 @@ function bindView(view) {
     });
     view.root.addEventListener('change', event => {
         if (event.target.matches('select[data-pair-field]')) { queueDraft(view); paintInteraction(view); }
+        if (event.target.matches('[data-pair-overlay]')) { draft(view); paintSettings(view); queueDraft(view); }
     });
     view.root.querySelector('[data-pair-form]').addEventListener('submit', event => { event.preventDefault(); void startGeneration(view); });
     view.root.addEventListener('click', event => {
@@ -456,6 +483,12 @@ async function handleAction(view, action, target) {
         const list = view.root.querySelector('[data-pair-ideas]'); list.hidden = false;
         list.innerHTML = view.ideas.map((idea, index) => button('use-idea', `<span>${esc(idea)}</span><small>选用</small>`, `data-pair-idea="${index}"`)).join('');
         target.textContent = '换一组灵感'; return;
+    }
+    if (action === 'random-interaction') {
+        draft(view);
+        const choices = presets.INTERACTION_PRESETS.filter(item => item.label !== view.settings.interaction);
+        view.settings.interaction = choices[Math.floor(Math.random() * choices.length)]?.label || view.settings.interaction;
+        paintSettings(view); queueDraft(view); return;
     }
     if (action === 'use-idea') {
         const idea = view.ideas[Number(target.dataset.pairIdea)]; if (!idea) return;
@@ -587,7 +620,8 @@ async function startGeneration(view) {
 function showStyles(view) {
     const m = dialog(view, '选择画风', `<div class="rmt-pair-picker-toolbar">
         <label class="rmt-pair-field"><span class="rmt-pair-visually-hidden">搜索画风</span><input data-pair-search aria-label="搜索风格" placeholder="搜索名称，例如：小猫、水彩、像素"></label>
-        <div class="rmt-pair-picker-filter"><label class="rmt-pair-field"><span class="rmt-pair-visually-hidden">风格分类</span><select data-pair-group-select aria-label="风格分类"><option value="all">全部画风</option>${presets.STYLE_GROUPS.map(group => `<option value="${group.id}">${esc(group.label)}</option>`).join('')}</select></label><small data-pair-style-count role="status"></small></div>
+        <div class="rmt-pair-picker-filter"><label class="rmt-pair-field"><span class="rmt-pair-visually-hidden">风格分类</span><select data-pair-group-select aria-label="风格分类"><option value="all">全部画风</option>${presets.STYLE_GROUPS.map(group => `<option value="${group.id}">${esc(group.label)}</option>`).join('')}</select></label><small data-pair-style-count role="status"></small><button type="button" data-pair-random-style>随机一个</button></div>
+        <p class="rmt-pair-note">标“可叠”的画风能叠在你的画师串上；“轻叠”会降低权重叠加；没有标记的会换掉画法。</p>
         </div><div class="rmt-pair-picker-scroll" data-pair-picker-results></div>`);
     if (!m) return;
     m.body.classList.add('rmt-pair-style-browser');
@@ -600,13 +634,18 @@ function showStyles(view) {
         m.body.querySelector('[data-pair-style-count]').textContent = `${rows.length} 种`;
         m.body.querySelector('[data-pair-picker-results]').innerHTML = rows.length ? presets.STYLE_GROUPS.map(group => {
             const items = rows.filter(item => item.group === group.id);
-            return items.length ? `<section class="rmt-pair-picker-group"><h3>${esc(group.label)}</h3><div class="rmt-pair-picker-results">${items.map(item => `<button type="button" data-pair-pick-style="${item.id}" aria-pressed="${view.settings.styleId === item.id}" title="${esc(item.description)}"><span>${esc(item.label)}</span>${view.settings.styleId === item.id ? '<span aria-hidden="true">✓</span>' : ''}</button>`).join('')}</div></section>` : '';
+            return items.length ? `<section class="rmt-pair-picker-group"><h3>${esc(group.label)}</h3><div class="rmt-pair-picker-results">${items.map(item => `<button type="button" data-pair-pick-style="${item.id}" aria-pressed="${view.settings.styleId === item.id}" title="${esc(item.description)}"><span>${esc(item.label)}${blendBadge(item)}</span>${view.settings.styleId === item.id ? '<span aria-hidden="true">✓</span>' : ''}</button>`).join('')}</div></section>` : '';
         }).join('') : '<p class="rmt-pair-note">没有找到，换个词试试，或回到页面自己写风格。</p>';
         m.body.querySelector('[data-pair-picker-results]').scrollTop = 0;
     };
     search.addEventListener('input', draw);
     filter.addEventListener('change', () => { search.value = ''; draw(); });
     m.body.addEventListener('click', event => {
+        if (event.target.closest('[data-pair-random-style]')) {
+            const options = [...m.body.querySelectorAll('[data-pair-pick-style]')].filter(node => node.dataset.pairPickStyle !== view.settings.styleId);
+            const pick = options[Math.floor(Math.random() * options.length)]; if (!pick) return;
+            draft(view); view.settings.styleId = pick.dataset.pairPickStyle; paintSettings(view); queueDraft(view); closeCoupleDialog(); return;
+        }
         const target = event.target.closest('[data-pair-pick-style]'); if (!target) return;
         draft(view); view.settings.styleId = target.dataset.pairPickStyle; paintSettings(view); queueDraft(view); closeCoupleDialog();
     });
