@@ -3,6 +3,7 @@ import * as appearance from '../extras/coupleAvatarAppearance.js';
 import * as avatar_apply from '../extras/coupleAvatarApply.js';
 import * as chat_avatars from '../core/chatAvatarStore.js';
 import * as presets from '../extras/coupleAvatarStyles.js';
+import * as chibi_filter from '../extras/coupleAvatarChibiFilter.js';
 import * as crop from '../extras/coupleAvatarCrop.js';
 import * as core_context from '../core/context.js';
 import * as core_settings from '../core/settings.js';
@@ -23,7 +24,7 @@ const jobs = new Map();
 const previewImages = new WeakMap();
 const appearanceReads = new WeakMap();
 let active = null, modal = null, sequence = 0;
-const settingFields = ['interaction', 'interactionDetail', 'clothing', 'background', 'direction', 'customStyle'];
+const settingFields = ['interaction', 'interactionDetail', 'clothing', 'background', 'direction', 'customStyle', 'chibiFilter', 'composition'];
 const HISTORY_PAGE_SIZE = 6; // Display page only; stored records are never capped.
 function styleFor(id) { return presets.COUPLE_STYLES.find(item => item.id === id); }
 function styleLabel(settings) { return settings?.styleId === 'custom' ? '自定义风格' : styleFor(settings?.styleId)?.label || '二头身团子'; }
@@ -392,10 +393,11 @@ function formHtml(view) {
             <div class="rmt-pair-section-head"><label for="rmt-pair-interaction">互动 <small>${presets.INTERACTION_PRESETS.length} 种</small></label><span class="rmt-pair-actions">${button('random-interaction', '抽一个')}${button('inspiration', '随机灵感')}</span></div>
             <select id="rmt-pair-interaction" data-pair-field="interaction" aria-label="互动">${groups.map(group => `<optgroup label="${esc(group)}">${presets.INTERACTION_PRESETS.filter(item => item.group === group).map(item => `<option value="${esc(item.label)}">${esc(item.label)}</option>`).join('')}</optgroup>`).join('')}<option value="交给灵感">交给灵感</option><option value="自定义互动">自定义互动</option></select>
             <div class="rmt-pair-inspirations" data-pair-ideas hidden></div>
+            <label class="rmt-pair-field"><span>构图 <small>随机时每次换一种镜头，仍保持左右各一人、能裁成两张头像</small></span><select data-pair-field="composition"><option value="">随机（每次不同）</option><option value="classic">固定：正面并排</option>${presets.COMPOSITION_VARIANTS.map(row => `<option value="${row.id}">${esc(row.label)}</option>`).join('')}</select></label>
             <label class="rmt-pair-field" data-pair-interaction-custom hidden><span>写下你们的互动</span><textarea data-pair-field="interactionDetail" placeholder="可以选一条随机灵感，再改成你喜欢的动作与表情。"></textarea></label>
         </div>
         <label class="rmt-pair-field"><span>这一对的小心思 <small>选填</small></span><textarea data-pair-field="direction" placeholder="比如：一个忍着笑，一个假装生气；共用一条围巾。"></textarea></label>
-        <details class="rmt-pair-options"><summary>外貌、衣着与背景 <small>选填</small></summary><div><p class="rmt-pair-note">点击“重新读取外貌”且无人物预设时，会用文本 API 整理当前人设。</p>${[0, 1].map(i => `<div><label class="rmt-pair-field"><span>${i ? '右边' : '左边'}人物外貌</span><textarea data-pair-person="${i}" data-pair-key="appearance" placeholder="沿用已有外貌，也可以修改或留空。"></textarea></label>${button('refresh-appearance', '重新读取外貌', `data-pair-side="${i}" aria-label="重新读取${i ? '右边' : '左边'}人物外貌"`)}<small data-pair-appearance-status="${i}" role="status" aria-live="polite"></small></div>`).join('')}<label class="rmt-pair-field"><span>衣着</span><input data-pair-field="clothing" placeholder="例如：同款不同色的卫衣"></label><label class="rmt-pair-field"><span>背景</span><input data-pair-field="background" placeholder="例如：左边蓝色，右边粉色"></label>${providerNote}</div></details>
+        <details class="rmt-pair-options"><summary>外貌、衣着与背景 <small>选填</small></summary><div><p class="rmt-pair-note">点击“重新读取外貌”且无人物预设时，会用文本 API 整理当前人设。</p>${[0, 1].map(i => `<div><label class="rmt-pair-field"><span>${i ? '右边' : '左边'}人物外貌</span><textarea data-pair-person="${i}" data-pair-key="appearance" placeholder="沿用已有外貌，也可以修改或留空。"></textarea></label>${button('refresh-appearance', '重新读取外貌', `data-pair-side="${i}" aria-label="重新读取${i ? '右边' : '左边'}人物外貌"`)}<small data-pair-appearance-status="${i}" role="status" aria-live="polite"></small></div>`).join('')}<label class="rmt-pair-field"><span>衣着</span><input data-pair-field="clothing" placeholder="例如：同款不同色的卫衣"></label><label class="rmt-pair-field"><span>背景</span><input data-pair-field="background" placeholder="例如：左边蓝色，右边粉色"></label><label class="rmt-pair-field"><span>Q 版外貌过滤 <small>Q 版、动物化身时去掉身高体型等写实描述</small></span><select data-pair-field="chibiFilter"><option value="">每次询问</option><option value="auto">自动过滤</option><option value="off">不过滤</option></select></label>${providerNote}</div></details>
         <div><div data-pair-compose-jobs><div class="rmt-pair-jobs" data-pair-jobs></div></div><p class="rmt-pair-status" data-pair-compose-status role="status" aria-live="polite"></p><div class="rmt-pair-create"><button type="submit" class="rmt-pair-primary">生成一对头像</button>${button('import', '导入图片')}</div><p class="rmt-pair-note">一张原图生成一对，完成后自动收进历史。导入已有图片也能裁切。</p></div>
     </form>`;
 }
@@ -590,10 +592,65 @@ async function importImage(view, file) {
     view.currentId = result.record.id; view.selectedEpoch++; selectTab(view, 'make'); void renderPreview(view);
     report(view, result.durable ? '已导入原图。可以分别调整左右头像。' : '原图已打开，但本机保存未确认。请先保存头像或导出备份。');
 }
+// Q-version / animal styles: offer to drop realistic body detail (height, build,
+// bone structure, nose/lip anatomy) for this one drawing. The form keeps the
+// user's own appearance; only the generation request receives the filtered copy.
+async function chibiFilteredSettings(view, settings) {
+    const style = styleFor(settings.styleId);
+    if (!style || !chibi_filter.CHIBI_FILTER_GROUPS.includes(style.group)) return settings;
+    const mode = chibi_filter.chibiFilterMode(settings.chibiFilter);
+    const result = chibi_filter.chibiFilterPeople(settings.people);
+    if (!result.changed || mode === 'off') return settings;
+    const choice = mode === 'auto' ? { filter: true, texts: result.rows.map(row => row.text) } : await askChibiFilter(view, settings, style, result);
+    if (!choice) return null;
+    if (choice.remember) {
+        view.settings = couple.normalizeCoupleSettings({ ...view.settings, chibiFilter: choice.filter ? 'auto' : 'off' }, view.context);
+        paintSettings(view); queueDraft(view);
+    }
+    if (!choice.filter) return settings;
+    return { ...settings, people: settings.people.map((person, index) => ({ ...person, appearance: choice.texts[index], appearanceOverride: true })) };
+}
+function askChibiFilter(view, settings, style, result) {
+    return new Promise(resolve => {
+        let done = false; const finish = value => { if (done) return; done = true; resolve(value); };
+        const sides = result.rows.map((row, index) => `<section class="rmt-pair-filter-side"><h3>${index ? '右边' : '左边'} · ${esc(settings.people[index].name || (index ? '人物二' : '人物一'))}</h3>
+            ${row.removed.length ? `<p class="rmt-pair-note">会去掉：${row.removed.map(part => `<s>${esc(part)}</s>`).join('、')}</p>` : '<p class="rmt-pair-note">这一边没有需要去掉的内容。</p>'}
+            <label class="rmt-pair-field"><span>这次用来画的外貌（可以再改）</span><textarea data-pair-filter-text="${index}">${esc(row.text)}</textarea></label></section>`).join('');
+        const m = dialog(view, '要不要过滤成更适合 Q 版的外貌？', `<p>这次选的是「${esc(style.label)}」。外貌里有身高、体型、骨相、鼻唇细节这类写实描述，容易把人物拉回正常比例。过滤后只保留发型、眼睛、痣疤、配饰、衣着颜色这些认人的特征；<b>只影响这一张，不会改你填的外貌</b>。</p>
+            ${sides}
+            <label class="rmt-pair-overlay"><input type="checkbox" data-pair-filter-remember><span><b>以后都这样处理，不再询问</b><small>之后可以在“外貌、衣着与背景”里的“Q 版外貌过滤”改回来。</small></span></label>
+            <div class="rmt-pair-create"><button type="button" class="rmt-pair-primary" data-pair-filter="yes">过滤后生成</button><button type="button" data-pair-filter="no">保持原样生成</button></div>`);
+        if (!m) return finish(null);
+        m.cleanup = () => finish(null);
+        m.body.addEventListener('click', event => {
+            const target = event.target.closest('[data-pair-filter]'); if (!target) return;
+            const value = { filter: target.dataset.pairFilter === 'yes', remember: !!m.body.querySelector('[data-pair-filter-remember]')?.checked,
+                texts: result.rows.map((row, index) => m.body.querySelector(`[data-pair-filter-text="${index}"]`)?.value.trim() ?? row.text) };
+            finish(value); closeCoupleDialog();
+        });
+    });
+}
+// Random composition is resolved here, once per drawing, and stored with the
+// record. 'classic' and layout styles keep the fixed side-by-side layout.
+function resolveComposition(view, settings) {
+    if (settings.composition === 'classic') { const { composition, ...rest } = settings; return rest; }
+    const choices = couple.coupleCompositionChoices(settings);
+    // An explicitly chosen variation is kept (layout styles ignore it when building the prompt).
+    if (settings.composition) return settings;
+    if (!choices.length) return settings;
+    const fresh = choices.filter(row => row.id !== view.lastComposition);
+    const pick = (fresh.length ? fresh : choices)[Math.floor(Math.random() * (fresh.length ? fresh : choices).length)];
+    view.lastComposition = pick.id;
+    return { ...settings, composition: pick.id };
+}
 async function startGeneration(view) {
     if (!current(view)) return;
-    const settings = draft(view), id = `pair-job-${++sequence}`, controller = new AbortController(), epoch = view.selectedEpoch;
-    const job = { id, scope: view.scope, controller, background: false, status: 'running', label: '正在绘制 · ' + styleLabel(settings) };
+    let settings = draft(view);
+    const filtered = await chibiFilteredSettings(view, settings);
+    if (!filtered || !current(view)) return;
+    settings = resolveComposition(view, filtered);
+    const id = `pair-job-${++sequence}`, controller = new AbortController(), epoch = view.selectedEpoch;
+    const job = { id, scope: view.scope, controller, background: false, status: 'running', label: '正在绘制 · ' + styleLabel(settings) + (presets.COMPOSITION_VARIANTS.find(row => row.id === settings.composition) ? ' · ' + presets.COMPOSITION_VARIANTS.find(row => row.id === settings.composition).label : '') };
     jobs.set(id, job); renderJobs(view); report(view, '');
     try {
         const result = await couple.generateCouple(settings, { context: view.context, signal: controller.signal,

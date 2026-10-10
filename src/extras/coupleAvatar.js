@@ -114,6 +114,10 @@ export function normalizeCoupleSettings(value, context = optionalContext()) {
         pairType: input.pairType === 'echo' ? 'echo' : 'joined',
         // Opt-in only; absent keeps every saved pair byte-identical.
         ...(input.overlayArtist === true ? { overlayArtist: true } : {}),
+        // Q-version appearance filter: absent = ask each time.
+        ...(['auto', 'off'].includes(input.chibiFilter) ? { chibiFilter: input.chibiFilter } : {}),
+        // Composition: absent = random per drawing (resolved by the UI), 'classic' = the fixed layout.
+        ...(input.composition === 'classic' || styles.COMPOSITION_VARIANTS.some(row => row.id === input.composition) ? { composition: input.composition } : {}),
         interaction: own(input, 'interaction') ? text(input.interaction) : defaults.interaction,
         clothing: text(input.clothing), background: text(input.background),
         direction: text(input.direction), customStyle: text(input.customStyle), interactionDetail: text(input.interactionDetail),
@@ -147,6 +151,27 @@ function appearanceReference(value, animal, object) {
 // provider gets the complete prompt; capable NAI gets scene + two identities.
 // Describe the drawing itself. Crop masks, cards and prohibited shapes belong
 // to the UI or the provider's negative channel, never the shared positive scene.
+export function coupleStyleFullFigure(chosen) {
+    return chosen?.group === 'animal' || (chosen?.group === 'chibi' && chosen.id !== 'chibi-headshot')
+        || (chosen?.group === 'craft' && !['craft-paper', 'craft-bead'].includes(chosen.id))
+        || ['fantasy-enamel', 'fantasy-shadow'].includes(chosen?.id) || styles.FULL_FIGURE_LAYOUTS.includes(chosen?.id);
+}
+// Layout styles are an explicit composition; a user direction may set its own pose.
+function coupleCompositionVariant(settings, chosen) {
+    if (chosen?.group === 'layout') return null;
+    return styles.COMPOSITION_VARIANTS.find(row => row.id === settings.composition) || null;
+}
+// Variations that fit this pair: none for layout styles; no head re-orienting
+// for front-facing interactions; no portrait-only framing for full figures.
+export function coupleCompositionChoices(value) {
+    const settings = normalizeCoupleSettings(value, null);
+    const chosen = styles.COUPLE_STYLES.find(style => style.id === settings.styleId);
+    if (chosen?.group === 'layout') return [];
+    const frontFacing = /^Keep a mostly front-facing/.test(interaction_direction.coupleInteractionDirection({ interaction: settings.interaction }).scene);
+    const full = coupleStyleFullFigure(chosen);
+    return styles.COMPOSITION_VARIANTS.filter(row => !(frontFacing && row.turn) && !(full && row.portrait));
+}
+
 export function couplePromptParts(value, context = optionalContext()) {
     const settings = normalizeCoupleSettings(value, null);
     settings.people = couplePresetPeople(settings.people, context);
@@ -179,9 +204,9 @@ export function couplePromptParts(value, context = optionalContext()) {
         ? overlay ? styles.coupleStyleIdentityRendering(chosen).replace(' in the selected medium', '') : styles.coupleStyleIdentityRendering(chosen) : '';
     // Framing and finish are art direction only. Keep full-figure styles and
     // simplified media intact; explicit user directions still take precedence.
-    const fullFigure = animal || (chosen?.group === 'chibi' && chosen.id !== 'chibi-headshot')
-        || (chosen?.group === 'craft' && !['craft-paper', 'craft-bead'].includes(chosen.id))
-        || ['fantasy-enamel', 'fantasy-shadow'].includes(chosen?.id) || styles.FULL_FIGURE_LAYOUTS.includes(chosen?.id);
+    const fullFigure = coupleStyleFullFigure(chosen);
+    const variant = coupleCompositionVariant(settings, chosen);
+    const variantLines = variant ? [`Camera and pose: ${variant.prompt}`, styles.COMPOSITION_PAIR_CUE] : [];
     const framing = !chosen ? '' : fullFigure
         ? 'Each complete stylized figure fills most of its own half, with a readable face and connected limbs; retain the selected body proportions.'
         : 'Close head-and-shoulder or upper-body portraits fill most of each half, with visible shoulders and clothing supporting the gestures.';
@@ -196,7 +221,11 @@ export function couplePromptParts(value, context = optionalContext()) {
     const actions = resolvedInteraction.roles.map((action, index) => subject_details.coupleVisibleRecipe(action, covered[index] && ownedInteraction));
     const personClothing = index => detailed && clothing.people[index]
         ? `${animal ? 'Wearable accents adapted to this animal' : 'Clothing for this subject'}: ${clothing.people[index]}. Keep its specified colors, garment shape and accessories visible in the selected ${overlay ? '' : 'medium and '}proportions.` : '';
-    const personDetails = index => [relation.roles[index], subject_details.coupleCoveredEyeGuidance(covered[index]), personClothing(index)].filter(Boolean).join(' ');
+    const formTag = overlay ? prompt_format.coupleStyleFormTag(chosen, blend) : '';
+    // Q-version: an adult height/build in the appearance must not win over the
+    // selected proportions. Identity is face, hair, eyes and accessories.
+    const chibiBody = chosen?.group === 'chibi' ? 'Any height, build or adult body-proportion details in this description become the selected chibi proportions; face, hair, eye and accessory traits carry the identity.' : '';
+    const personDetails = index => [relation.roles[index], chibiBody, subject_details.coupleCoveredEyeGuidance(covered[index]), personClothing(index)].filter(Boolean).join(' ');
     const people = settings.people.map((person, index) => {
         const side = index === 0 ? 'LEFT' : 'RIGHT';
         const reference = appearanceReference(person.appearance, animal, object);
@@ -216,6 +245,7 @@ export function couplePromptParts(value, context = optionalContext()) {
         `Interaction: ${interaction && interaction !== '交给灵感' ? interaction : DEFAULT_INTERACTION_PROMPT}.`,
         `Action roles: LEFT — ${actions[0]}; RIGHT — ${actions[1]}. Adapt gestures to the chosen body form; explicit user directions take precedence.`,
         relation.scene,
+        ...variantLines,
         anyCovered ? 'Render eye details only for the subject whose eyes are visible. Preserve the other subject\'s supplied eye covering; show their emotion through mouth, head angle and gesture.' : '',
         settings.direction ? `Direction: ${settings.direction}.` : '',
         settings.clothing ? `${animal ? 'Small wearable accents adapted for animal bodies' : overlay ? 'Clothing' : 'Clothing in the selected rendering style'}: ${settings.clothing}.` : '',
@@ -235,7 +265,7 @@ export function couplePromptParts(value, context = optionalContext()) {
         overlay, blend, mixedWeight: styles.OVERLAY_MIXED_WEIGHT,
         settings, chosen, animal, object, subject, fullFigure, negative,
         appearances: settings.people.map(person => appearanceReference(person.appearance, animal, object)),
-        covered, clothing, interactionDirection: relation,
+        covered, clothing, interactionDirection: relation, compositionTags: variant ? [variant.tags, styles.COMPOSITION_PAIR_TAGS] : [],
     });
     // BaiBai NAI has documented tag + natural-language fields. Keep each
     // literal appearance at the start of its own tag list (including count
@@ -249,6 +279,7 @@ export function couplePromptParts(value, context = optionalContext()) {
             animal || object ? form : '',
             `Interaction: ${interaction && interaction !== '交给灵感' ? interaction : DEFAULT_INTERACTION_PROMPT}.`,
             relation.scene,
+            ...variantLines,
             anyCovered ? 'Eye rendering applies only to visible eyes. Keep each supplied eye covering in place; use the covered subject\'s mouth and head angle for expression.' : '',
             settings.pairType === 'echo' ? 'Coordinated colors and light, complementary individual gestures.' : 'A shared motif connects the two subjects.',
             overlay ? 'Adapt gestures to the chosen body form.' : 'Render both subjects entirely in the selected medium. For a monochrome medium, identity colors become tones. Adapt gestures to the chosen body form.',
@@ -259,7 +290,7 @@ export function couplePromptParts(value, context = optionalContext()) {
         ].filter(Boolean).join('\n'),
         characters: settings.people.map((person, index) => ({
             name: `${index ? '右边' : '左边'} · ${person.name || (index ? '人物二' : '人物一')}`,
-            tag: overlay ? appearanceReference(person.appearance, animal, object) || subject
+            tag: overlay ? [formTag, appearanceReference(person.appearance, animal, object) || subject].filter(Boolean).join(', ')
                 : [appearanceReference(person.appearance, animal, object), subject_details.coupleVisibleRecipe(originalRendering, covered[index] && !!chosen) || subject].filter(Boolean).join(', '),
             nl: [`On the ${index ? 'right' : 'left'}, ${actions[index]}.`, personDetails(index), identityRendering].filter(Boolean).join(' '),
             ...(text(person.presetNegative) ? { negative: text(person.presetNegative) } : {}),
@@ -272,7 +303,7 @@ export function couplePromptParts(value, context = optionalContext()) {
         ...(promptFormat ? { promptFormat } : {}),
         characters: settings.people.map((person, index) => ({
             name: `${index ? '右边' : '左边'} · ${person.name || (index ? '人物二' : '人物一')}`,
-            tag: overlay ? people[index] : [people[index], chosen && anyCovered ? `Rendering style: ${subject_details.coupleVisibleRecipe(originalRendering, covered[index])}.` : styleLead,
+            tag: overlay ? [people[index], formTag ? `Body form: ${formTag}.` : ''].filter(Boolean).join('\n') : [people[index], chosen && anyCovered ? `Rendering style: ${subject_details.coupleVisibleRecipe(originalRendering, covered[index])}.` : styleLead,
                 subject_details.coupleVisibleRecipe(styles.coupleStyleConstruction(chosen), covered[index])].filter(Boolean).join('\n'),
             ...(text(person.presetNegative) ? { negative: text(person.presetNegative) } : {}),
         })) };

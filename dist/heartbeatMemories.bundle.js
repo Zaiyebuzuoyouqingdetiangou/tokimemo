@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
-// Source modules: 352
-// Source SHA-256: 085cadd950138329d1414a51c85ccbc85bfefe0fe3d309721e44131fd079ca94
+// Source modules: 353
+// Source SHA-256: b674f8350771e4cf16374df35ad88ff441b370327656fff86536028783617bd8
 // Build: python3 tools/verification/build.py <source-root>
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -151,6 +151,7 @@ const __m_extras_collection_js = Object.create(null);
 const __m_extras_coupleAvatar_js = Object.create(null);
 const __m_extras_coupleAvatarAppearance_js = Object.create(null);
 const __m_extras_coupleAvatarApply_js = Object.create(null);
+const __m_extras_coupleAvatarChibiFilter_js = Object.create(null);
 const __m_extras_coupleAvatarCrop_js = Object.create(null);
 const __m_extras_coupleAvatarInteractionDirection_js = Object.create(null);
 const __m_extras_coupleAvatarPromptFormat_js = Object.create(null);
@@ -1309,6 +1310,10 @@ function normalizeCoupleSettings(value, context = optionalContext()) {
         pairType: input.pairType === 'echo' ? 'echo' : 'joined',
         // Opt-in only; absent keeps every saved pair byte-identical.
         ...(input.overlayArtist === true ? { overlayArtist: true } : {}),
+        // Q-version appearance filter: absent = ask each time.
+        ...(['auto', 'off'].includes(input.chibiFilter) ? { chibiFilter: input.chibiFilter } : {}),
+        // Composition: absent = random per drawing (resolved by the UI), 'classic' = the fixed layout.
+        ...(input.composition === 'classic' || styles.COMPOSITION_VARIANTS.some(row => row.id === input.composition) ? { composition: input.composition } : {}),
         interaction: own(input, 'interaction') ? text(input.interaction) : defaults.interaction,
         clothing: text(input.clothing), background: text(input.background),
         direction: text(input.direction), customStyle: text(input.customStyle), interactionDetail: text(input.interactionDetail),
@@ -1342,6 +1347,27 @@ function appearanceReference(value, animal, object) {
 // provider gets the complete prompt; capable NAI gets scene + two identities.
 // Describe the drawing itself. Crop masks, cards and prohibited shapes belong
 // to the UI or the provider's negative channel, never the shared positive scene.
+function coupleStyleFullFigure(chosen) {
+    return chosen?.group === 'animal' || (chosen?.group === 'chibi' && chosen.id !== 'chibi-headshot')
+        || (chosen?.group === 'craft' && !['craft-paper', 'craft-bead'].includes(chosen.id))
+        || ['fantasy-enamel', 'fantasy-shadow'].includes(chosen?.id) || styles.FULL_FIGURE_LAYOUTS.includes(chosen?.id);
+}
+// Layout styles are an explicit composition; a user direction may set its own pose.
+function coupleCompositionVariant(settings, chosen) {
+    if (chosen?.group === 'layout') return null;
+    return styles.COMPOSITION_VARIANTS.find(row => row.id === settings.composition) || null;
+}
+// Variations that fit this pair: none for layout styles; no head re-orienting
+// for front-facing interactions; no portrait-only framing for full figures.
+function coupleCompositionChoices(value) {
+    const settings = normalizeCoupleSettings(value, null);
+    const chosen = styles.COUPLE_STYLES.find(style => style.id === settings.styleId);
+    if (chosen?.group === 'layout') return [];
+    const frontFacing = /^Keep a mostly front-facing/.test(interaction_direction.coupleInteractionDirection({ interaction: settings.interaction }).scene);
+    const full = coupleStyleFullFigure(chosen);
+    return styles.COMPOSITION_VARIANTS.filter(row => !(frontFacing && row.turn) && !(full && row.portrait));
+}
+
 function couplePromptParts(value, context = optionalContext()) {
     const settings = normalizeCoupleSettings(value, null);
     settings.people = couplePresetPeople(settings.people, context);
@@ -1374,9 +1400,9 @@ function couplePromptParts(value, context = optionalContext()) {
         ? overlay ? styles.coupleStyleIdentityRendering(chosen).replace(' in the selected medium', '') : styles.coupleStyleIdentityRendering(chosen) : '';
     // Framing and finish are art direction only. Keep full-figure styles and
     // simplified media intact; explicit user directions still take precedence.
-    const fullFigure = animal || (chosen?.group === 'chibi' && chosen.id !== 'chibi-headshot')
-        || (chosen?.group === 'craft' && !['craft-paper', 'craft-bead'].includes(chosen.id))
-        || ['fantasy-enamel', 'fantasy-shadow'].includes(chosen?.id) || styles.FULL_FIGURE_LAYOUTS.includes(chosen?.id);
+    const fullFigure = coupleStyleFullFigure(chosen);
+    const variant = coupleCompositionVariant(settings, chosen);
+    const variantLines = variant ? [`Camera and pose: ${variant.prompt}`, styles.COMPOSITION_PAIR_CUE] : [];
     const framing = !chosen ? '' : fullFigure
         ? 'Each complete stylized figure fills most of its own half, with a readable face and connected limbs; retain the selected body proportions.'
         : 'Close head-and-shoulder or upper-body portraits fill most of each half, with visible shoulders and clothing supporting the gestures.';
@@ -1391,7 +1417,11 @@ function couplePromptParts(value, context = optionalContext()) {
     const actions = resolvedInteraction.roles.map((action, index) => subject_details.coupleVisibleRecipe(action, covered[index] && ownedInteraction));
     const personClothing = index => detailed && clothing.people[index]
         ? `${animal ? 'Wearable accents adapted to this animal' : 'Clothing for this subject'}: ${clothing.people[index]}. Keep its specified colors, garment shape and accessories visible in the selected ${overlay ? '' : 'medium and '}proportions.` : '';
-    const personDetails = index => [relation.roles[index], subject_details.coupleCoveredEyeGuidance(covered[index]), personClothing(index)].filter(Boolean).join(' ');
+    const formTag = overlay ? prompt_format.coupleStyleFormTag(chosen, blend) : '';
+    // Q-version: an adult height/build in the appearance must not win over the
+    // selected proportions. Identity is face, hair, eyes and accessories.
+    const chibiBody = chosen?.group === 'chibi' ? 'Any height, build or adult body-proportion details in this description become the selected chibi proportions; face, hair, eye and accessory traits carry the identity.' : '';
+    const personDetails = index => [relation.roles[index], chibiBody, subject_details.coupleCoveredEyeGuidance(covered[index]), personClothing(index)].filter(Boolean).join(' ');
     const people = settings.people.map((person, index) => {
         const side = index === 0 ? 'LEFT' : 'RIGHT';
         const reference = appearanceReference(person.appearance, animal, object);
@@ -1411,6 +1441,7 @@ function couplePromptParts(value, context = optionalContext()) {
         `Interaction: ${interaction && interaction !== '交给灵感' ? interaction : DEFAULT_INTERACTION_PROMPT}.`,
         `Action roles: LEFT — ${actions[0]}; RIGHT — ${actions[1]}. Adapt gestures to the chosen body form; explicit user directions take precedence.`,
         relation.scene,
+        ...variantLines,
         anyCovered ? 'Render eye details only for the subject whose eyes are visible. Preserve the other subject\'s supplied eye covering; show their emotion through mouth, head angle and gesture.' : '',
         settings.direction ? `Direction: ${settings.direction}.` : '',
         settings.clothing ? `${animal ? 'Small wearable accents adapted for animal bodies' : overlay ? 'Clothing' : 'Clothing in the selected rendering style'}: ${settings.clothing}.` : '',
@@ -1430,7 +1461,7 @@ function couplePromptParts(value, context = optionalContext()) {
         overlay, blend, mixedWeight: styles.OVERLAY_MIXED_WEIGHT,
         settings, chosen, animal, object, subject, fullFigure, negative,
         appearances: settings.people.map(person => appearanceReference(person.appearance, animal, object)),
-        covered, clothing, interactionDirection: relation,
+        covered, clothing, interactionDirection: relation, compositionTags: variant ? [variant.tags, styles.COMPOSITION_PAIR_TAGS] : [],
     });
     // BaiBai NAI has documented tag + natural-language fields. Keep each
     // literal appearance at the start of its own tag list (including count
@@ -1444,6 +1475,7 @@ function couplePromptParts(value, context = optionalContext()) {
             animal || object ? form : '',
             `Interaction: ${interaction && interaction !== '交给灵感' ? interaction : DEFAULT_INTERACTION_PROMPT}.`,
             relation.scene,
+            ...variantLines,
             anyCovered ? 'Eye rendering applies only to visible eyes. Keep each supplied eye covering in place; use the covered subject\'s mouth and head angle for expression.' : '',
             settings.pairType === 'echo' ? 'Coordinated colors and light, complementary individual gestures.' : 'A shared motif connects the two subjects.',
             overlay ? 'Adapt gestures to the chosen body form.' : 'Render both subjects entirely in the selected medium. For a monochrome medium, identity colors become tones. Adapt gestures to the chosen body form.',
@@ -1454,7 +1486,7 @@ function couplePromptParts(value, context = optionalContext()) {
         ].filter(Boolean).join('\n'),
         characters: settings.people.map((person, index) => ({
             name: `${index ? '右边' : '左边'} · ${person.name || (index ? '人物二' : '人物一')}`,
-            tag: overlay ? appearanceReference(person.appearance, animal, object) || subject
+            tag: overlay ? [formTag, appearanceReference(person.appearance, animal, object) || subject].filter(Boolean).join(', ')
                 : [appearanceReference(person.appearance, animal, object), subject_details.coupleVisibleRecipe(originalRendering, covered[index] && !!chosen) || subject].filter(Boolean).join(', '),
             nl: [`On the ${index ? 'right' : 'left'}, ${actions[index]}.`, personDetails(index), identityRendering].filter(Boolean).join(' '),
             ...(text(person.presetNegative) ? { negative: text(person.presetNegative) } : {}),
@@ -1467,7 +1499,7 @@ function couplePromptParts(value, context = optionalContext()) {
         ...(promptFormat ? { promptFormat } : {}),
         characters: settings.people.map((person, index) => ({
             name: `${index ? '右边' : '左边'} · ${person.name || (index ? '人物二' : '人物一')}`,
-            tag: overlay ? people[index] : [people[index], chosen && anyCovered ? `Rendering style: ${subject_details.coupleVisibleRecipe(originalRendering, covered[index])}.` : styleLead,
+            tag: overlay ? [people[index], formTag ? `Body form: ${formTag}.` : ''].filter(Boolean).join('\n') : [people[index], chosen && anyCovered ? `Rendering style: ${subject_details.coupleVisibleRecipe(originalRendering, covered[index])}.` : styleLead,
                 subject_details.coupleVisibleRecipe(styles.coupleStyleConstruction(chosen), covered[index])].filter(Boolean).join('\n'),
             ...(text(person.presetNegative) ? { negative: text(person.presetNegative) } : {}),
         })) };
@@ -1783,6 +1815,8 @@ __m_extras_coupleAvatar_js.generateCouple = generateCouple;
 __m_extras_coupleAvatar_js.coupleScope = coupleScope;
 __m_extras_coupleAvatar_js.defaultCoupleSettings = defaultCoupleSettings;
 __m_extras_coupleAvatar_js.normalizeCoupleSettings = normalizeCoupleSettings;
+__m_extras_coupleAvatar_js.coupleStyleFullFigure = coupleStyleFullFigure;
+__m_extras_coupleAvatar_js.coupleCompositionChoices = coupleCompositionChoices;
 __m_extras_coupleAvatar_js.couplePromptParts = couplePromptParts;
 __m_extras_coupleAvatar_js.couplePrompt = couplePrompt;
 __m_extras_coupleAvatar_js.COUPLE_MODE = COUPLE_MODE;
@@ -1973,6 +2007,120 @@ async function applyPreparedCoupleAvatars(prepared, mapping, { context, expected
 
 __m_extras_coupleAvatarApply_js.applyPreparedCoupleAvatars = applyPreparedCoupleAvatars;
 __m_extras_coupleAvatarApply_js.prepareCoupleAvatarApplication = prepareCoupleAvatarApplication;
+}
+
+function __init_extras_coupleAvatarChibiFilter_js() {
+// MODULE: extras/coupleAvatarChibiFilter.js
+
+// Q-version appearance filter for couple avatars. A long realistic persona
+// (age, height, build, bone structure, nose and lip anatomy, skin pores) pulls
+// NAI back to adult proportions even when a chibi style is selected. This keeps
+// what identifies the person in a tiny figure — hair, eyes, marks, coverings,
+// accessories, clothing colours, gender — and drops only body-structure detail.
+// It is local and deterministic: no model request, and the user's saved
+// appearance is never edited; the caller applies the result to one drawing.
+
+// Groups whose figures are re-proportioned (Q-version and animal avatars).
+const CHIBI_FILTER_GROUPS = Object.freeze(['chibi', 'animal']);
+const CHIBI_FILTER_MODES = Object.freeze({ ask: '每次询问', auto: '自动过滤', off: '不过滤' });
+
+function chibiFilterMode(value) {
+    return Object.hasOwn(CHIBI_FILTER_MODES, value) ? value : 'ask';
+}
+
+// Facts a Q-version figure cannot or should not show.
+const BODY = new RegExp([
+    // age, height, weight
+    String.raw`\b\d{1,3}\s*(?:-|\s)?years?(?:-|\s)?old\b`, String.raw`\b(?:aged?|age of)\s*\d`, String.raw`\b\d{2,3}(?:\.\d)?\s*(?:cm|centimet(?:er|re)s?|kg|kilograms?|lbs?|pounds?)\b`,
+    String.raw`\b(?:height|tall|weight|heavy|short stature)\b`, String.raw`\bmature\b`, String.raw`\badult\b`,
+    // build and body
+    String.raw`\b(?:build|physique|figure|frame|proportion(?:ed|s)?|bone structure|bones?|skeleton|muscles?|muscular|toned|abs|abdomen|torso|shoulders?|waist|hips?|thighs?|legs?|limbs?|neck|collarbones?|clavicles?|chest|breasts?|bust|curv(?:y|es)|slender|slim|lean|lanky|stocky|petite|willowy|broad)\b`,
+    // facial anatomy and skin micro-detail
+    String.raw`\b(?:jaw(?:line)?|chin|cheekbones?|forehead|hairline|temples?|nose|nostrils?|nasal|bridge|lips?|cupid'?s bow|philtrum|mouth corners?|facial (?:features|structure|bones?)|bone|oval face|face shape|v-?line|pores?|poreless|veins?|translucent skin|skin texture)\b`,
+    // Chinese
+    String.raw`\d{1,3}\s*岁`, '岁', '身高', '体重', '厘米', '公分', '公斤', '斤', String.raw`\d{2,3}\s*cm`, '身材', '体型', '身形', '骨架', '骨相', '骨骼', '骨感', '骨节', '肩', '腰', '臀', '腿', '锁骨', '胸', '肌肉', '腹肌', '修长', '高挑', '纤细', '挺拔', '颀长', '魁梧', '健壮',
+    '下颌', '下巴', '颌', '颧骨', '额头', '发际线', '鼻', '唇', '人中', '五官', '脸型', '轮廓', '毛孔', '血管', '成年', '成熟',
+].join('|'), 'iu');
+
+// What still identifies someone in a tiny figure.
+const IDENTITY = new RegExp([
+    String.raw`\bhair(?!line)\w*`, String.raw`\b(?:fringe|bangs|ponytail|pigtails?|twintails?|braids?|bun|curls?|ahoge|strands?|locks?)\b`,
+    String.raw`\b(?:eyes?|iris(?:es)?|pupils?|eyebrows?|lashes|gaze|heterochromia)\b`,
+    String.raw`\b(?:mole|freckles?|scar|tattoo|birthmark|marking|dimples?|fangs?|blush)\b`,
+    String.raw`\b(?:blindfold(?:ed)?|eye ?patch|bandage|gauze|veil|mask|glasses|spectacles|monocle)\b`,
+    String.raw`\b(?:ears?|horns?|tails?|wings?|halo|antlers?)\b`,
+    String.raw`\b(?:wears?|wearing|dressed|clothing|clothes|outfit|robe|coat|jacket|shirt|dress|skirt|uniform|hood(?:ie)?|scarf|cape|kimono|hanfu|color scheme)\b`,
+    String.raw`\b(?:accessor(?:y|ies)|ornaments?|ribbons?|(?<!cupid'?s )bows?|cords?|bracelets?|bangles?|necklaces?|pendant|amulet|lock amulet|earrings?|piercings?|rings?|hat|cap|hairpin|crown|tiara|choker|gloves?|bells?|jewel\w*|gold|silver)\b`,
+    String.raw`\b(?:1boy|1girl|boy|girl|male|female|man|woman|androgynous)\b`, String.raw`\bskin\b`,
+    '发(?!际线)', '刘海', '马尾', '辫', '眼', '瞳', '眉', '睫', '痣', '雀斑', '疤', '纹身', '胎记', '酒窝', '虎牙', '眼罩', '蒙眼', '纱', '眼镜', '耳', '角', '尾', '翅', '光环',
+    '衣', '服', '穿', '戴', '裙', '袍', '围巾', '饰', '链', '镯', '绳', '带', '帽', '簪', '铃', '戒', '男', '女', '肤',
+].join('|'), 'iu');
+const GENDER = /\b(1boy|1girl|male|female|boy|girl|man|woman)\b|(男|女)(?:性|生|孩)?/iu;
+// Skin keeps its tone only; texture, veins and translucency are dropped.
+const SKIN_TONE = /\b(?:fair|pale|porcelain|ivory|light|tan(?:ned)?|dark|brown|olive|white|cold white|snow(?:-| )white|rosy)\b(?:[\s,-]+(?:cold|white|fair|pale))*(?=[^.]*\bskin\b)|(?:白皙|冷白|苍白|小麦色|古铜色|黝黑)(?=.*(?:皮|肤))/iu;
+
+function splitSentences(value) {
+    return value.split(/(?<=[.!?。！？；;])\s*|\n+/u).map(part => part.trim()).filter(Boolean);
+}
+function splitParts(sentence) {
+    // Comma lists only. "black and red" stays together; a leading "and" is trimmed.
+    return sentence.split(/\s*[,，、]\s*/u).map(part => part.replace(/^(?:and|as well as|with)\s+/iu, '').trim()).filter(Boolean);
+}
+const endMark = sentence => (/[.!?。！？；;]$/u.exec(sentence) || [''])[0];
+const strip = value => value.replace(/[\s.!?。！？；;]+$/u, '').trim();
+
+function skinTone(part) {
+    const tone = SKIN_TONE.exec(part)?.[0];
+    if (!tone) return '';
+    return /[一-鿿]/u.test(tone) ? `${tone}皮肤` : `${tone.replace(/\s*,\s*/g, ' ').toLowerCase()} skin`;
+}
+
+// Returns { text, removed: string[] } where text is the filtered appearance.
+function chibiFilterAppearance(value) {
+    const source = typeof value === 'string' ? value.trim() : '';
+    if (!source) return { text: '', removed: [] };
+    const kept = [], removed = [];
+    for (const sentence of splitSentences(source)) {
+        if (!BODY.test(sentence)) { kept.push(sentence); continue; }
+        const parts = splitParts(strip(sentence)), out = [];
+        // A skin-only sentence keeps just its tone ("fair skin"), never pores or veins.
+        if (/\bskin\b|皮肤|肤色/u.test(sentence) && !/\bhair(?!line)|\beyes?\b|发(?!际线)|眼/iu.test(sentence)) {
+            const tone = skinTone(sentence);
+            if (tone) kept.push(tone + (endMark(sentence) || ''));
+            removed.push(...parts); continue;
+        }
+        for (const part of parts) {
+            const body = BODY.test(part), identity = IDENTITY.test(part);
+            if (!body) { if (identity) out.push(part); else removed.push(part); continue; }
+            if (/\bskin\b|皮|肤/u.test(part) && !/\bhair|发|眼|eyes?\b/iu.test(part)) {
+                const tone = skinTone(part); if (tone) out.push(tone); removed.push(part); continue;
+            }
+            // A body clause that still names an identity feature other than
+            // gender keeps that feature; a gender word alone is extracted.
+            const nonGender = new RegExp(IDENTITY.source, 'iu').test(part.replace(new RegExp(GENDER.source, 'giu'), ' '));
+            if (identity && nonGender) { out.push(part); continue; }
+            const gender = GENDER.exec(part);
+            if (gender) out.push(gender[0]);
+            removed.push(part);
+        }
+        if (out.length) kept.push(out.join(/[一-鿿]/u.test(sentence) ? '，' : ', ') + (endMark(sentence) || ''));
+    }
+    const text = kept.join(/[一-鿿]/u.test(source) && !/[a-z]{4}/iu.test(source) ? '' : ' ')
+        .replace(/\s{2,}/g, ' ').replace(/^[,，、\s]+/u, '').trim();
+    return { text, removed };
+}
+
+// Both people at once; `changed` is false when nothing would be removed.
+function chibiFilterPeople(people) {
+    const rows = (Array.isArray(people) ? people : []).map(person => ({ ...chibiFilterAppearance(person?.appearance), original: typeof person?.appearance === 'string' ? person.appearance : '' }));
+    return { rows, changed: rows.some(row => row.removed.length > 0) };
+}
+
+__m_extras_coupleAvatarChibiFilter_js.chibiFilterMode = chibiFilterMode;
+__m_extras_coupleAvatarChibiFilter_js.chibiFilterAppearance = chibiFilterAppearance;
+__m_extras_coupleAvatarChibiFilter_js.chibiFilterPeople = chibiFilterPeople;
+__m_extras_coupleAvatarChibiFilter_js.CHIBI_FILTER_GROUPS = CHIBI_FILTER_GROUPS;
+__m_extras_coupleAvatarChibiFilter_js.CHIBI_FILTER_MODES = CHIBI_FILTER_MODES;
 }
 
 function __init_extras_coupleAvatarCrop_js() {
@@ -2643,6 +2791,15 @@ const IDEA_TAG_SCENES = Object.freeze([
     ["开满向日葵的田野", "sunflower field"],
 ]);
 
+// The first few proportion tags of a Q-version or framing style. On overlay they
+// are the only style words inside each actor channel: a long realistic
+// appearance (height, build, bone structure) otherwise outweighs a single
+// trailing scene mention and the figures come out with adult proportions.
+function coupleStyleFormTag(style, blend = '') {
+    if (!style || blend !== 'form' || !['chibi', 'layout'].includes(style.group)) return '';
+    return (STYLE_TAGS[style.id] || '').split(', ').slice(0, 3).join(', ');
+}
+
 function tags(parts) {
     return parts.filter(value => typeof value === 'string' && value.length > 0).join(', ');
 }
@@ -2697,7 +2854,7 @@ function animalGestureTags(chosen) {
 }
 
 function coupleAvatarTagParts({ overlay = false, blend = '', mixedWeight = 0.7, settings, chosen, animal, object, subject, fullFigure, appearances, negative,
-    covered = [false, false], clothing = { people: ['', ''] }, interactionDirection = null }) {
+    covered = [false, false], clothing = { people: ['', ''] }, interactionDirection = null, compositionTags = [] }) {
     const [interaction, leftAction, rightAction] = interactionTags(settings, chosen, animal);
     const originalRendering = chosen ? STYLE_TAGS[chosen.id] || chosen.prompt : settings.customStyle;
     const anyCovered = covered.some(Boolean);
@@ -2718,6 +2875,7 @@ function coupleAvatarTagParts({ overlay = false, blend = '', mixedWeight = 0.7, 
         'continuous edge-to-edge background, continuous center and corners, clear subject separation, quiet background detail, readable individual features, gestures within own half',
         subject_details.coupleVisibleRecipe(interaction, anyCovered && ownedInteraction),
         interactionDirection?.tags?.scene,
+        ...compositionTags,
         settings.pairType === 'echo' ? 'complementary individual gestures, coordinated colors and light' : 'shared motif connecting subjects across center',
         animal && settings.clothing ? 'small wearable accents, animal-adapted clothing' : '',
         settings.clothing, settings.background, settings.direction,
@@ -2727,6 +2885,7 @@ function coupleAvatarTagParts({ overlay = false, blend = '', mixedWeight = 0.7, 
         name: `${index ? '右边' : '左边'} · ${person.name || (index ? '人物二' : '人物一')}`,
         tag: tags([
             index ? 'right side, centered at right quarter' : 'left side, centered at left quarter',
+            overlay ? coupleStyleFormTag(chosen, blend) : '',
             appearances[index], overlay ? subject : subject_details.coupleVisibleRecipe(originalRendering, covered[index] && !!chosen) || subject,
             subject_details.coupleVisibleRecipe(index ? rightAction : leftAction, covered[index] && ownedInteraction),
             interactionDirection?.tags?.roles[index],
@@ -2748,6 +2907,7 @@ function coupleAvatarTagParts({ overlay = false, blend = '', mixedWeight = 0.7, 
     };
 }
 
+__m_extras_coupleAvatarPromptFormat_js.coupleStyleFormTag = coupleStyleFormTag;
 __m_extras_coupleAvatarPromptFormat_js.coupleAvatarTagParts = coupleAvatarTagParts;
 }
 
@@ -3288,6 +3448,15 @@ const INTERACTION_PRESETS = Object.freeze([
     ["幻想冒险", "许愿流星", "wishing on a shooting star, one with clasped hands and one pointing"],
 ].map(([group, label, prompt]) => Object.freeze({ group, label, prompt, roles: Object.freeze(INTERACTION_ROLES[label] || []) })));
 
+// Camera / pose variations for 构图随机. Chosen per drawing (the UI resolves
+// "random" before the request), so prompts stay deterministic and history
+// records keep the composition they were drawn with. Every variation keeps
+// the two-half avatar contract; `turn` ones re-orient heads and are skipped
+// for front-facing interactions, `portrait` ones need portrait framing.
+const COMPOSITION_VARIANTS = Object.freeze([{"id": "lean-in", "label": "互相靠近", "prompt": "Both lean slightly toward the center line so their heads tilt toward each other and their shoulders nearly meet across the middle.", "tags": "leaning toward center, heads tilted toward each other, shoulders nearly meeting", "turn": false, "portrait": false}, {"id": "three-quarter", "label": "四分之三侧身", "prompt": "Three-quarter views turned toward each other: the left subject turns right, the right subject turns left, each face still clearly visible.", "tags": "three-quarter views facing each other, both faces clearly visible", "turn": true, "portrait": false}, {"id": "height-offset", "label": "一高一低", "prompt": "One head sits a little higher than the other, as if one leans down while the other looks up, gently breaking the symmetry.", "tags": "one head slightly higher, one leaning down, one looking up, asymmetric heights", "turn": false, "portrait": false}, {"id": "high-angle", "label": "微微俯拍", "prompt": "A slightly high camera angle; both look up toward the viewer while the shared interaction stays between them.", "tags": "slight high angle, both looking up at viewer, interaction between them", "turn": false, "portrait": false}, {"id": "close", "label": "拉近特写", "prompt": "Closer framing: the two faces and the interacting hands fill most of the image, with the shared gesture right at the center.", "tags": "close framing, faces and interacting hands filling image, shared gesture at center", "turn": false, "portrait": true}, {"id": "one-turns", "label": "一个看镜头一个看你", "prompt": "One subject faces the viewer while the other turns toward the partner in a three-quarter view, both faces readable.", "tags": "one facing viewer, other turned toward partner, both faces readable", "turn": true, "portrait": false}, {"id": "heads-close", "label": "头靠头", "prompt": "Their heads come close at the center line, nearly touching temple to temple, both smiling softly.", "tags": "heads close at center, nearly touching temple to temple, soft smiles", "turn": false, "portrait": true}, {"id": "seated", "label": "并肩坐着", "prompt": "Both are seated side by side at the same height, relaxed and close, the interaction held between them.", "tags": "seated side by side, same height, relaxed and close", "turn": false, "portrait": false}, {"id": "tilt", "label": "斜一点的镜头", "prompt": "A slight diagonal camera tilt adds movement; the two halves stay balanced and both faces stay upright enough to read.", "tags": "slight dutch angle, dynamic diagonal, balanced halves, readable faces", "turn": false, "portrait": false}, {"id": "over-shoulder", "label": "回眸", "prompt": "Both glance back over the inner shoulder toward the center, bodies angled slightly outward, faces turned to each other.", "tags": "glancing back over inner shoulders, bodies angled slightly outward, faces turned to each other", "turn": true, "portrait": false}, {"id": "low-angle", "label": "微微仰拍", "prompt": "A slightly low camera angle with a little open sky or ceiling behind; both look down toward the viewer with soft expressions.", "tags": "slight low angle, open sky behind, both looking down at viewer", "turn": false, "portrait": false}, {"id": "reach", "label": "伸手向中间", "prompt": "Both reach their inner hands toward the center line, so the interaction becomes the clear focal point between the two portraits.", "tags": "inner hands reaching toward center, interaction as focal point between portraits", "turn": false, "portrait": false}].map(row => Object.freeze(row)));
+const COMPOSITION_PAIR_CUE = "They read clearly as a couple avatar pair: complementary, not mirrored, poses; coordinated color accents shared across both halves; the interaction meets at the center line; each face stays large and fully inside its own half so the image can be cropped into two avatars.";
+const COMPOSITION_PAIR_TAGS = "couple avatar pair, complementary not mirrored poses, coordinated color accents, interaction meeting at center, large faces within own half";
+
 const INTERACTIONS = Object.freeze([...INTERACTION_PRESETS.map(row => row.label), '交给灵感', '自定义互动']);
 
 // Keep a generated idea's wording and its two actions together. These are local
@@ -3432,6 +3601,9 @@ __m_extras_coupleAvatarStyles_js.COUPLE_STYLES = COUPLE_STYLES;
 __m_extras_coupleAvatarStyles_js.OVERLAY_MIXED_WEIGHT = OVERLAY_MIXED_WEIGHT;
 __m_extras_coupleAvatarStyles_js.FULL_FIGURE_LAYOUTS = FULL_FIGURE_LAYOUTS;
 __m_extras_coupleAvatarStyles_js.INTERACTION_PRESETS = INTERACTION_PRESETS;
+__m_extras_coupleAvatarStyles_js.COMPOSITION_VARIANTS = COMPOSITION_VARIANTS;
+__m_extras_coupleAvatarStyles_js.COMPOSITION_PAIR_CUE = COMPOSITION_PAIR_CUE;
+__m_extras_coupleAvatarStyles_js.COMPOSITION_PAIR_TAGS = COMPOSITION_PAIR_TAGS;
 __m_extras_coupleAvatarStyles_js.INTERACTIONS = INTERACTIONS;
 }
 
@@ -5505,6 +5677,7 @@ function coupleAvatarCss() {
 .rmt-pair-inspirations>button>span{min-width:0;font-size:13px;line-height:1.7}
 .rmt-pair-inspirations>button>small{flex:none}
 .rmt-pair-custom{display:none}.rmt-pair-custom.is-visible{display:flex}
+.rmt-pair-filter-side{display:grid;gap:6px;margin:12px 0}.rmt-pair-filter-side h3{margin:0;font-size:14px}.rmt-pair-filter-side s{opacity:.7}.rmt-pair-filter-side textarea{min-height:96px}
 .rmt-pair-overlay{display:flex;align-items:flex-start;gap:10px;margin-top:10px;cursor:pointer}.rmt-pair-overlay input{margin-top:3px;flex:none}.rmt-pair-overlay b,.rmt-pair-overlay small{display:block}.rmt-pair-overlay small{color:var(--rmt-theme-muted);font-size:12px;margin-top:3px}.rmt-pair-overlay.is-disabled{opacity:.6;cursor:default}
 .rmt-pair-actions{display:flex;gap:8px;flex-wrap:wrap}
 .rmt-pair-blend{display:inline-block;margin-left:5px;padding:0 5px;border-radius:999px;font-size:10px;line-height:1.5;border:1px solid currentColor;opacity:.75;vertical-align:1px}.rmt-pair-blend.is-light{opacity:.55}
@@ -5576,6 +5749,7 @@ const appearance = __m_extras_coupleAvatarAppearance_js;
 const avatar_apply = __m_extras_coupleAvatarApply_js;
 const chat_avatars = __m_core_chatAvatarStore_js;
 const presets = __m_extras_coupleAvatarStyles_js;
+const chibi_filter = __m_extras_coupleAvatarChibiFilter_js;
 const crop = __m_extras_coupleAvatarCrop_js;
 const core_context = __m_core_context_js;
 const core_settings = __m_core_settings_js;
@@ -5605,6 +5779,7 @@ const styles = __m_ui_coupleAvatarCss_js;
 
 
 
+
 function esc(value) { return text.esc(value); }
 const jobs = new Map();
 // Derived images stay in memory only. The original and editable crop settings
@@ -5612,7 +5787,7 @@ const jobs = new Map();
 const previewImages = new WeakMap();
 const appearanceReads = new WeakMap();
 let active = null, modal = null, sequence = 0;
-const settingFields = ['interaction', 'interactionDetail', 'clothing', 'background', 'direction', 'customStyle'];
+const settingFields = ['interaction', 'interactionDetail', 'clothing', 'background', 'direction', 'customStyle', 'chibiFilter', 'composition'];
 const HISTORY_PAGE_SIZE = 6; // Display page only; stored records are never capped.
 function styleFor(id) { return presets.COUPLE_STYLES.find(item => item.id === id); }
 function styleLabel(settings) { return settings?.styleId === 'custom' ? '自定义风格' : styleFor(settings?.styleId)?.label || '二头身团子'; }
@@ -5981,10 +6156,11 @@ function formHtml(view) {
             <div class="rmt-pair-section-head"><label for="rmt-pair-interaction">互动 <small>${presets.INTERACTION_PRESETS.length} 种</small></label><span class="rmt-pair-actions">${button('random-interaction', '抽一个')}${button('inspiration', '随机灵感')}</span></div>
             <select id="rmt-pair-interaction" data-pair-field="interaction" aria-label="互动">${groups.map(group => `<optgroup label="${esc(group)}">${presets.INTERACTION_PRESETS.filter(item => item.group === group).map(item => `<option value="${esc(item.label)}">${esc(item.label)}</option>`).join('')}</optgroup>`).join('')}<option value="交给灵感">交给灵感</option><option value="自定义互动">自定义互动</option></select>
             <div class="rmt-pair-inspirations" data-pair-ideas hidden></div>
+            <label class="rmt-pair-field"><span>构图 <small>随机时每次换一种镜头，仍保持左右各一人、能裁成两张头像</small></span><select data-pair-field="composition"><option value="">随机（每次不同）</option><option value="classic">固定：正面并排</option>${presets.COMPOSITION_VARIANTS.map(row => `<option value="${row.id}">${esc(row.label)}</option>`).join('')}</select></label>
             <label class="rmt-pair-field" data-pair-interaction-custom hidden><span>写下你们的互动</span><textarea data-pair-field="interactionDetail" placeholder="可以选一条随机灵感，再改成你喜欢的动作与表情。"></textarea></label>
         </div>
         <label class="rmt-pair-field"><span>这一对的小心思 <small>选填</small></span><textarea data-pair-field="direction" placeholder="比如：一个忍着笑，一个假装生气；共用一条围巾。"></textarea></label>
-        <details class="rmt-pair-options"><summary>外貌、衣着与背景 <small>选填</small></summary><div><p class="rmt-pair-note">点击“重新读取外貌”且无人物预设时，会用文本 API 整理当前人设。</p>${[0, 1].map(i => `<div><label class="rmt-pair-field"><span>${i ? '右边' : '左边'}人物外貌</span><textarea data-pair-person="${i}" data-pair-key="appearance" placeholder="沿用已有外貌，也可以修改或留空。"></textarea></label>${button('refresh-appearance', '重新读取外貌', `data-pair-side="${i}" aria-label="重新读取${i ? '右边' : '左边'}人物外貌"`)}<small data-pair-appearance-status="${i}" role="status" aria-live="polite"></small></div>`).join('')}<label class="rmt-pair-field"><span>衣着</span><input data-pair-field="clothing" placeholder="例如：同款不同色的卫衣"></label><label class="rmt-pair-field"><span>背景</span><input data-pair-field="background" placeholder="例如：左边蓝色，右边粉色"></label>${providerNote}</div></details>
+        <details class="rmt-pair-options"><summary>外貌、衣着与背景 <small>选填</small></summary><div><p class="rmt-pair-note">点击“重新读取外貌”且无人物预设时，会用文本 API 整理当前人设。</p>${[0, 1].map(i => `<div><label class="rmt-pair-field"><span>${i ? '右边' : '左边'}人物外貌</span><textarea data-pair-person="${i}" data-pair-key="appearance" placeholder="沿用已有外貌，也可以修改或留空。"></textarea></label>${button('refresh-appearance', '重新读取外貌', `data-pair-side="${i}" aria-label="重新读取${i ? '右边' : '左边'}人物外貌"`)}<small data-pair-appearance-status="${i}" role="status" aria-live="polite"></small></div>`).join('')}<label class="rmt-pair-field"><span>衣着</span><input data-pair-field="clothing" placeholder="例如：同款不同色的卫衣"></label><label class="rmt-pair-field"><span>背景</span><input data-pair-field="background" placeholder="例如：左边蓝色，右边粉色"></label><label class="rmt-pair-field"><span>Q 版外貌过滤 <small>Q 版、动物化身时去掉身高体型等写实描述</small></span><select data-pair-field="chibiFilter"><option value="">每次询问</option><option value="auto">自动过滤</option><option value="off">不过滤</option></select></label>${providerNote}</div></details>
         <div><div data-pair-compose-jobs><div class="rmt-pair-jobs" data-pair-jobs></div></div><p class="rmt-pair-status" data-pair-compose-status role="status" aria-live="polite"></p><div class="rmt-pair-create"><button type="submit" class="rmt-pair-primary">生成一对头像</button>${button('import', '导入图片')}</div><p class="rmt-pair-note">一张原图生成一对，完成后自动收进历史。导入已有图片也能裁切。</p></div>
     </form>`;
 }
@@ -6179,10 +6355,65 @@ async function importImage(view, file) {
     view.currentId = result.record.id; view.selectedEpoch++; selectTab(view, 'make'); void renderPreview(view);
     report(view, result.durable ? '已导入原图。可以分别调整左右头像。' : '原图已打开，但本机保存未确认。请先保存头像或导出备份。');
 }
+// Q-version / animal styles: offer to drop realistic body detail (height, build,
+// bone structure, nose/lip anatomy) for this one drawing. The form keeps the
+// user's own appearance; only the generation request receives the filtered copy.
+async function chibiFilteredSettings(view, settings) {
+    const style = styleFor(settings.styleId);
+    if (!style || !chibi_filter.CHIBI_FILTER_GROUPS.includes(style.group)) return settings;
+    const mode = chibi_filter.chibiFilterMode(settings.chibiFilter);
+    const result = chibi_filter.chibiFilterPeople(settings.people);
+    if (!result.changed || mode === 'off') return settings;
+    const choice = mode === 'auto' ? { filter: true, texts: result.rows.map(row => row.text) } : await askChibiFilter(view, settings, style, result);
+    if (!choice) return null;
+    if (choice.remember) {
+        view.settings = couple.normalizeCoupleSettings({ ...view.settings, chibiFilter: choice.filter ? 'auto' : 'off' }, view.context);
+        paintSettings(view); queueDraft(view);
+    }
+    if (!choice.filter) return settings;
+    return { ...settings, people: settings.people.map((person, index) => ({ ...person, appearance: choice.texts[index], appearanceOverride: true })) };
+}
+function askChibiFilter(view, settings, style, result) {
+    return new Promise(resolve => {
+        let done = false; const finish = value => { if (done) return; done = true; resolve(value); };
+        const sides = result.rows.map((row, index) => `<section class="rmt-pair-filter-side"><h3>${index ? '右边' : '左边'} · ${esc(settings.people[index].name || (index ? '人物二' : '人物一'))}</h3>
+            ${row.removed.length ? `<p class="rmt-pair-note">会去掉：${row.removed.map(part => `<s>${esc(part)}</s>`).join('、')}</p>` : '<p class="rmt-pair-note">这一边没有需要去掉的内容。</p>'}
+            <label class="rmt-pair-field"><span>这次用来画的外貌（可以再改）</span><textarea data-pair-filter-text="${index}">${esc(row.text)}</textarea></label></section>`).join('');
+        const m = dialog(view, '要不要过滤成更适合 Q 版的外貌？', `<p>这次选的是「${esc(style.label)}」。外貌里有身高、体型、骨相、鼻唇细节这类写实描述，容易把人物拉回正常比例。过滤后只保留发型、眼睛、痣疤、配饰、衣着颜色这些认人的特征；<b>只影响这一张，不会改你填的外貌</b>。</p>
+            ${sides}
+            <label class="rmt-pair-overlay"><input type="checkbox" data-pair-filter-remember><span><b>以后都这样处理，不再询问</b><small>之后可以在“外貌、衣着与背景”里的“Q 版外貌过滤”改回来。</small></span></label>
+            <div class="rmt-pair-create"><button type="button" class="rmt-pair-primary" data-pair-filter="yes">过滤后生成</button><button type="button" data-pair-filter="no">保持原样生成</button></div>`);
+        if (!m) return finish(null);
+        m.cleanup = () => finish(null);
+        m.body.addEventListener('click', event => {
+            const target = event.target.closest('[data-pair-filter]'); if (!target) return;
+            const value = { filter: target.dataset.pairFilter === 'yes', remember: !!m.body.querySelector('[data-pair-filter-remember]')?.checked,
+                texts: result.rows.map((row, index) => m.body.querySelector(`[data-pair-filter-text="${index}"]`)?.value.trim() ?? row.text) };
+            finish(value); closeCoupleDialog();
+        });
+    });
+}
+// Random composition is resolved here, once per drawing, and stored with the
+// record. 'classic' and layout styles keep the fixed side-by-side layout.
+function resolveComposition(view, settings) {
+    if (settings.composition === 'classic') { const { composition, ...rest } = settings; return rest; }
+    const choices = couple.coupleCompositionChoices(settings);
+    // An explicitly chosen variation is kept (layout styles ignore it when building the prompt).
+    if (settings.composition) return settings;
+    if (!choices.length) return settings;
+    const fresh = choices.filter(row => row.id !== view.lastComposition);
+    const pick = (fresh.length ? fresh : choices)[Math.floor(Math.random() * (fresh.length ? fresh : choices).length)];
+    view.lastComposition = pick.id;
+    return { ...settings, composition: pick.id };
+}
 async function startGeneration(view) {
     if (!current(view)) return;
-    const settings = draft(view), id = `pair-job-${++sequence}`, controller = new AbortController(), epoch = view.selectedEpoch;
-    const job = { id, scope: view.scope, controller, background: false, status: 'running', label: '正在绘制 · ' + styleLabel(settings) };
+    let settings = draft(view);
+    const filtered = await chibiFilteredSettings(view, settings);
+    if (!filtered || !current(view)) return;
+    settings = resolveComposition(view, filtered);
+    const id = `pair-job-${++sequence}`, controller = new AbortController(), epoch = view.selectedEpoch;
+    const job = { id, scope: view.scope, controller, background: false, status: 'running', label: '正在绘制 · ' + styleLabel(settings) + (presets.COMPOSITION_VARIANTS.find(row => row.id === settings.composition) ? ' · ' + presets.COMPOSITION_VARIANTS.find(row => row.id === settings.composition).label : '') };
     jobs.set(id, job); renderJobs(view); report(view, '');
     try {
         const result = await couple.generateCouple(settings, { context: view.context, signal: controller.signal,
@@ -99932,6 +100163,7 @@ __init_core_releaseNotes_js();
 __init_extras_coupleAvatar_js();
 __init_extras_coupleAvatarAppearance_js();
 __init_extras_coupleAvatarApply_js();
+__init_extras_coupleAvatarChibiFilter_js();
 __init_extras_coupleAvatarCrop_js();
 __init_extras_coupleAvatarInteractionDirection_js();
 __init_extras_coupleAvatarPromptFormat_js();

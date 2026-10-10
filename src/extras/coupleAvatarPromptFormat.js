@@ -322,6 +322,15 @@ const IDEA_TAG_SCENES = Object.freeze([
     ["开满向日葵的田野", "sunflower field"],
 ]);
 
+// The first few proportion tags of a Q-version or framing style. On overlay they
+// are the only style words inside each actor channel: a long realistic
+// appearance (height, build, bone structure) otherwise outweighs a single
+// trailing scene mention and the figures come out with adult proportions.
+export function coupleStyleFormTag(style, blend = '') {
+    if (!style || blend !== 'form' || !['chibi', 'layout'].includes(style.group)) return '';
+    return (STYLE_TAGS[style.id] || '').split(', ').slice(0, 3).join(', ');
+}
+
 function tags(parts) {
     return parts.filter(value => typeof value === 'string' && value.length > 0).join(', ');
 }
@@ -376,7 +385,7 @@ function animalGestureTags(chosen) {
 }
 
 export function coupleAvatarTagParts({ overlay = false, blend = '', mixedWeight = 0.7, settings, chosen, animal, object, subject, fullFigure, appearances, negative,
-    covered = [false, false], clothing = { people: ['', ''] }, interactionDirection = null }) {
+    covered = [false, false], clothing = { people: ['', ''] }, interactionDirection = null, compositionTags = [] }) {
     const [interaction, leftAction, rightAction] = interactionTags(settings, chosen, animal);
     const originalRendering = chosen ? STYLE_TAGS[chosen.id] || chosen.prompt : settings.customStyle;
     const anyCovered = covered.some(Boolean);
@@ -397,6 +406,7 @@ export function coupleAvatarTagParts({ overlay = false, blend = '', mixedWeight 
         'continuous edge-to-edge background, continuous center and corners, clear subject separation, quiet background detail, readable individual features, gestures within own half',
         subject_details.coupleVisibleRecipe(interaction, anyCovered && ownedInteraction),
         interactionDirection?.tags?.scene,
+        ...compositionTags,
         settings.pairType === 'echo' ? 'complementary individual gestures, coordinated colors and light' : 'shared motif connecting subjects across center',
         animal && settings.clothing ? 'small wearable accents, animal-adapted clothing' : '',
         settings.clothing, settings.background, settings.direction,
@@ -406,6 +416,7 @@ export function coupleAvatarTagParts({ overlay = false, blend = '', mixedWeight 
         name: `${index ? '右边' : '左边'} · ${person.name || (index ? '人物二' : '人物一')}`,
         tag: tags([
             index ? 'right side, centered at right quarter' : 'left side, centered at left quarter',
+            overlay ? coupleStyleFormTag(chosen, blend) : '',
             appearances[index], overlay ? subject : subject_details.coupleVisibleRecipe(originalRendering, covered[index] && !!chosen) || subject,
             subject_details.coupleVisibleRecipe(index ? rightAction : leftAction, covered[index] && ownedInteraction),
             interactionDirection?.tags?.roles[index],

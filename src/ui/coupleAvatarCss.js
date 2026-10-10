@@ -56,6 +56,7 @@ export function coupleAvatarCss() {
 .rmt-pair-inspirations>button>span{min-width:0;font-size:13px;line-height:1.7}
 .rmt-pair-inspirations>button>small{flex:none}
 .rmt-pair-custom{display:none}.rmt-pair-custom.is-visible{display:flex}
+.rmt-pair-filter-side{display:grid;gap:6px;margin:12px 0}.rmt-pair-filter-side h3{margin:0;font-size:14px}.rmt-pair-filter-side s{opacity:.7}.rmt-pair-filter-side textarea{min-height:96px}
 .rmt-pair-overlay{display:flex;align-items:flex-start;gap:10px;margin-top:10px;cursor:pointer}.rmt-pair-overlay input{margin-top:3px;flex:none}.rmt-pair-overlay b,.rmt-pair-overlay small{display:block}.rmt-pair-overlay small{color:var(--rmt-theme-muted);font-size:12px;margin-top:3px}.rmt-pair-overlay.is-disabled{opacity:.6;cursor:default}
 .rmt-pair-actions{display:flex;gap:8px;flex-wrap:wrap}
 .rmt-pair-blend{display:inline-block;margin-left:5px;padding:0 5px;border-radius:999px;font-size:10px;line-height:1.5;border:1px solid currentColor;opacity:.75;vertical-align:1px}.rmt-pair-blend.is-light{opacity:.55}
