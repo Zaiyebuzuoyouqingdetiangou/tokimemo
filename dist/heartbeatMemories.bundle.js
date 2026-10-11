@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 353
-// Source SHA-256: 25c3fe9d61242e3ac6f72c0a87111195bc0c6ee153d8ff1babed9eae553aa685
+// Source SHA-256: 7b2f1b44d74ed32f8786b9cf3127d8cac9e7d6cd0ecba7104c6c8032a63bf522
 // Build: python3 tools/verification/build.py <source-root>
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -1174,7 +1174,7 @@ function __init_core_releaseNotes_js() {
 // MODULE: core/releaseNotes.js
 
 // GENERATED FROM README.md by tools/verification/build.py. Do not edit by hand.
-const RELEASE_README = "# 心迹回廊 1.0.56\n\n## 更新日志模块\n\n新增了更新日志板块，感谢@nancyindaeyo的更新。\n\n## 本次变动\n\n- 修复柏宝绘外貌标签带下划线时丢失发色、眼色等细节的问题；保留原标签权重，补齐眼罩、酒窝、鼻型、泪痣与明确性别描述的识别。\n- 修复“曾经受伤留下的疤痕”等固定特征被误删的问题，覆盖情侣头像、普通配图和手书的自动外貌读取。\n- 自动摘录按明确姓名、人物标签和称谓区分归属，避免将对方或其他人的外貌混入当前人物；手填外貌、旧草稿和历史图片保持原样。\n- 不增加自动文本请求或生成门槛。已有外貌栏若含旧杂句，可左右分别点“重新读取外貌”整理后再绘制；该操作沿用原有文本 API。\n- 情侣头像新增 69 种画风（含构图版式、氛围光影、3D 渲染分组）和 48 种互动（含贴贴亲昵、小小较劲、幻想冒险）；画风和互动都改为可搜索、按分类浏览的选择面板，也可以随机抽一个。\n- Q 版、动物化身会给每个人物单独带上比例标签，外貌写得很长也不容易画成成人比例；生成时可选择过滤掉身高、体型等写实描述，只作用于这一次，原外貌不变，也可以在选项里设为自动过滤或不过滤。\n- 情侣头像新增“构图”：默认每次随机换一种镜头，始终保持左右各一人、能裁成两张头像；会改动所选互动或“小心思”里动作的姿势自动跳过，也可以固定为正面并排或指定一种。\n- 情侣头像的画风在 NAI 中加权放在最前，3D 画风另加 3D 标签，减少被画师串盖过。\n- 插件内的更新日志直接读取安装目录里的 README，修改 README 后不用重新打包也会同步。\n- 画风、互动、衣着、裁切、头像应用及其他已有修复保持。\n";
+const RELEASE_README = "# 心迹回廊 1.0.56\n\n## 更新日志模块\n\n新增了更新日志板块，感谢@nancyindaeyo的更新。\n\n## 本次变动\n\n- 修复柏宝绘外貌标签带下划线时丢失发色、眼色等细节的问题；保留原标签权重，补齐眼罩、酒窝、鼻型、泪痣与明确性别描述的识别。\n- 修复“曾经受伤留下的疤痕”等固定特征被误删的问题，覆盖情侣头像、普通配图和手书的自动外貌读取。\n- 自动摘录按明确姓名、人物标签和称谓区分归属，避免将对方或其他人的外貌混入当前人物；手填外貌、旧草稿和历史图片保持原样。\n- 不增加自动文本请求或生成门槛。已有外貌栏若含旧杂句，可左右分别点“重新读取外貌”整理后再绘制；该操作沿用原有文本 API。\n- 情侣头像新增 69 种画风（含构图版式、氛围光影、3D 渲染分组）和 48 种互动（含贴贴亲昵、小小较劲、幻想冒险）；画风和互动都改为可搜索、按分类浏览的选择面板，也可以随机抽一个。\n- Q 版、动物化身会给每个人物单独带上比例标签，外貌写得很长也不容易画成成人比例；生成时可选择过滤掉身高、体型等写实描述，只作用于这一次，原外貌不变，也可以在选项里设为自动过滤或不过滤。\n- 情侣头像新增“构图”：默认每次随机换一种镜头，始终保持左右各一人、能裁成两张头像；会改动所选互动或“小心思”里动作的姿势自动跳过，也可以固定为正面并排或指定一种。\n- 情侣头像的画风在 NAI 中加权放在最前，3D 画风另加 3D 标签，减少被画师串盖过。\n- 情侣头像的历史与收藏可以删除头像：卡片下方的“删除”、打开后的“删除这一对”，或点“多选”勾选多对后一起删除，删除前会确认一次；已设为聊天头像的图片、已保存的 PNG 和生图插件图库里的原图不受影响。\n- 手书的剧情叙事、抒情意象、关系互动、高燃快切、节奏循环、悬念反转六种分镜类型，各自写明了画面特征和自查要求，示例也按类型重写，生成的分镜更贴近类型名字；表情卡拍和动态插画保持不变。\n- 手书新增五种分镜类型：文字PV（歌词大字卡为主角）、回忆走马灯（一闪而过的回忆，最后回到现在）、动画OP风（冷开场、人物亮相、全员同框、风景收尾）、第一视角（角色对着镜头，“你”只露手）、今昔对照（同一构图的从前与现在）。\n- 插件内的更新日志直接读取安装目录里的 README，修改 README 后不用重新打包也会同步。\n- 画风、互动、衣着、裁切、头像应用及其他已有修复保持。\n";
 
 __m_core_releaseNotes_js.RELEASE_README = RELEASE_README;
 }
@@ -1544,7 +1544,7 @@ function stateFor(scope) {
     const key = String(scope || '');
     if (!states.has(key)) states.set(key, {
         scope: key, records: new Map(), settings: null, settingsAt: 0,
-        pending: new Set(), settingsPending: false, loaded: false, loading: null, tail: Promise.resolve(),
+        pending: new Set(), deleted: new Set(), settingsPending: false, loaded: false, loading: null, tail: Promise.resolve(),
     });
     return states.get(key);
 }
@@ -1602,7 +1602,7 @@ async function loadState(state) {
             const settings = await transact(SETTINGS, 'readonly', store => store.get(state.scope));
             for (const row of records) {
                 const record = recordOf(row, state.scope), current = record && state.records.get(record.id);
-                if (record && !state.pending.has(record.id) && (!current || current.updatedAt <= record.updatedAt)) state.records.set(record.id, record);
+                if (record && !state.deleted.has(record.id) && !state.pending.has(record.id) && (!current || current.updatedAt <= record.updatedAt)) state.records.set(record.id, record);
             }
             if (settings && !state.settingsPending && finite(settings.updatedAt, 0) >= state.settingsAt) {
                 state.settings = normalizeCoupleSettings(settings.value, null);
@@ -1717,6 +1717,19 @@ async function retryCoupleSave(scope, id) {
     return { record: clone(state.records.get(record.id)), durable };
 }
 
+// Removes one pair from this chat's history on this device. The image file a
+// provider saved in its own gallery is not this plugin's to delete.
+async function deleteCouple(scope, id) {
+    const state = await loadState(stateFor(scope)), key = String(id);
+    if (!state.records.has(key)) return { deleted: false, durable: true };
+    state.records.delete(key); state.pending.delete(key); state.deleted.add(key);
+    const durable = await enqueue(state, async () => {
+        try { await transact(RECORDS, 'readwrite', store => store.delete(JSON.stringify([state.scope, key]))); return true; }
+        catch { return false; }
+    });
+    return { deleted: true, durable };
+}
+
 async function exportCouples(scope) {
     const { records, settings } = await readCouples(scope);
     return JSON.stringify({ format: 'hearttrace-couple-avatars', version: 1, exportedAt: Date.now(), records, settings }, null, 2);
@@ -1802,6 +1815,7 @@ __m_extras_coupleAvatar_js.saveCoupleSettings = saveCoupleSettings;
 __m_extras_coupleAvatar_js.addCouple = addCouple;
 __m_extras_coupleAvatar_js.updateCouple = updateCouple;
 __m_extras_coupleAvatar_js.retryCoupleSave = retryCoupleSave;
+__m_extras_coupleAvatar_js.deleteCouple = deleteCouple;
 __m_extras_coupleAvatar_js.exportCouples = exportCouples;
 __m_extras_coupleAvatar_js.importCouples = importCouples;
 __m_extras_coupleAvatar_js.generateCouple = generateCouple;
@@ -4072,14 +4086,19 @@ function __init_extras_mvDirection_js() {
 // Local, explainable suggestions. No provider calls, audio analysis, or quality gates.
 const MV_DIRECTIONS = Object.freeze([
     { id: 'auto', name: '自动混合', desc: '跟随歌曲各段的情绪组合镜头', rule: '按段落的叙事、情绪和节奏自由组合，不强制整首只用一种手法。' },
-    { id: 'narrative', name: '剧情叙事', desc: '动作、反应与前后因果', rule: '以可读的事件推进：建立空间、发生动作、给出反应或结果；换机位服务因果，不把每句歌词机械翻译成一张插画。前后镜头保持人物方位与动作衔接。' },
-    { id: 'lyrical', name: '抒情意象', desc: '留白、环境和意象呼应', rule: '用环境空镜、物件、局部与人物疏密交替承载情绪；歌词的比喻可转译成视觉意象，不必字面演出。让重要画面停留，重复意象在后段有意义地变化，不连续堆相似肖像。' },
-    { id: 'interaction', name: '关系互动', desc: '视线、距离与双方反应', rule: '用视线对应、正反打、动作与接收动作、距离变化表现人物关系；清楚写谁对谁做什么。可以各自单人或同框，不把合唱等同于全员同框，不擅定恋爱关系；只有一人时也可用画外对象与反应。' },
-    { id: 'impact', name: '高燃快切', desc: '强弱对比、卡点与关键姿势', rule: '主歌蓄势、副歌集中爆发；用全景与局部反差、关键动作姿势和干脆切换建立节奏。需要时同一句歌词可以有多个短镜头，冲击后留一处停顿；不把挥剑、奔跑等姿势长时间悬停，不强制闪白或战斗。' },
-    { id: 'loop', name: '节奏循环', desc: '复用构图、姿势循环与节拍变化', rule: '设计能重复使用的构图和关键姿势，frames 可以回到先前的 group/diff 形成节奏循环；重复时用背景、视线或意象变化推进，不为循环重复生出相同素材。静态关键姿势剪辑不冒充连续舞蹈动画。' },
+    { id: 'narrative', name: '剧情叙事', desc: '交代场景、动作与结果，看得出前因后果', rule: '观众看完要能复述“发生了什么”：每个场景先用远景或全景交代地点、时间和人物方位，再接动作的关键姿势，随后给出对方或环境的反应与结果；镜头之间用 link 写清因果（谁的动作引出谁的反应、哪件物件被带进下一镜）。选中的段落里至少推进一次地点、时间或关系状态，后段让前段出现过的物件或位置有结果。景别在远、中、近之间交替，人物正面看观众的肖像只在需要时出现。不逐句翻译歌词，也不把全段写成同一场景里的表情变化。' },
+    { id: 'lyrical', name: '抒情意象', desc: '空镜、意象与留白，画面慢慢呼吸', rule: '情绪由意象承载：选 1～2 个贯穿的核心意象（物件、天气、光或地点），让它在不同段落以不同的距离、明暗或状态重现。大约三分之一以上的画面是空镜、物件特写、局部（手、背影、剪影）或远景里的小人物，人物正脸不是主体。镜头停留长，转场淡入淡出，画面缓慢推近；副歌也不改成快切，而是用更开阔的景或更亮的光抬升情绪。不把每个歌词名词都画成道具，不用满屏漂浮装饰代替意象。' },
+    { id: 'interaction', name: '关系互动', desc: '视线、距离与双方回应', rule: '画面始终回答“谁对谁做了什么，对方怎么回应”。两人都出场时用正反打：一人在左看向右，另一人在右看向左，左右站位与视线方向全段不对调；每个发起动作后紧跟对方的反应镜头，关键处给一张两人同框的关系画面，并让距离或朝向（远→近、背对→相望）随歌曲推进变化。手与物件的近景写清属于谁。只有一人出场时，用画外视线、被递出的物件和空出来的位置表现对方。合唱不等于同框，关系以人设为准，不擅定恋爱。' },
+    { id: 'impact', name: '高燃快切', desc: '蓄势、重拍爆发、短镜连切', rule: '要有看得出的“蓄—爆—停”：进入副歌或重拍前用较长的静止蓄势画面（低头、握拳、背影、压暗的光）；爆发时连续几张短镜，在全身剪影、眼睛或手的极近特写、低机位仰视之间制造强烈反差，用直切或闪白切换；一串短镜之后给一张停留明显更长的定格主画面。光影高对比、轮廓清楚，姿势是动作的关键定格，不悬停在动作中途。闪白只放在重拍或段落开头，不每镜都闪；不加入人设之外的战斗或伤害。' },
+    { id: 'loop', name: '节奏循环', desc: '固定机位、姿势按拍子循环', rule: '要有看得出的“循环单元”：用 1～2 个机位和光线固定的构图，每个构图 2～4 张只改手、头或视线的差分，按 A→B→A→B 或 A→B→C→B 反复引用同一批差分，每张停留相同、对齐拍子，最后一张能自然接回第一张。进入新段落时只改变一处（换一张差分、换背景色或插入一次停顿）再回到单元，不每轮同时换构图和所有元素。重复时引用原差分，不为回到原姿势重新画；静态姿势循环，不冒充连续舞蹈动画。' },
     { id: 'illustration', name: '动态插画', desc: '精细主图、局部显现与轻微风动', rule: '以值得停留的完整主图组织段落：黑白块面从焦点局部显现，彩色主图充分停留，再以光色或下一主图呼应。同图跨多句歌词保持，不写成连续空镜与动作事件，不把长停留当作缺点。脸、手、发束与关键物件细致清晰，疏密和统一光影建立层次，遵循所选画风。默认完整彩色插画，必要时再分层；可按构图标出发梢、衣带的轻动区域和脸手保护区，流光位置对应指尖、物件或人物轮廓。真实表情变化使用静态差分，不靠变形冒充眨眼或连续表演。主图数量、颜色和光效按本曲需要，不套固定紫色星光。' },
     { id: 'expression', name: '表情卡拍', desc: '共享舞台、角色表演与文字卡拍', rule: '围绕可反复返回的主舞台安排角色面向观众的表演。人物以轮廓明确、有性格的半身或全身姿势建立记忆点，手势、视线与表情一起表达；一个姿势可保持数秒，让文字、背景图形继续变化。背景持续跨越多个姿势与歌词，同一素材反复引用，不逐句重新画场景。\n重复乐句沿用主构图与标志姿势，根据歌曲情绪改变表情、光色、文字或道具，形成呼应与变奏。剧情镜头与局部特写用于需要的转折，不套“换脸→特写→返回”的固定流程。主歌与副歌的疏密、明暗和表演强度服务当前歌曲。\n每种姿势或表情各自生成为单张单格静态图；人物、共享背景、文字分开制作并在时间轴上编排，生图不写歌词。保留角色身份、衣着和画风，表情反差来自角色与歌词，不强加假笑、伤口、恐怖或脱衣；为这首歌原创构图与顺序。' },
-    { id: 'reveal', name: '悬念反转', desc: '遮蔽信息、伏笔与回收', rule: '先用局部、背影、画外或遮挡保留信息，再以全景、反向视点或意象重现揭示。转折前后重用视觉线索而改变含义；不强加恐怖、死亡、悲剧或设定外事件。' },
+    { id: 'typography', name: '文字PV', desc: '歌词大字卡是主角，画面陪衬', rule: '文字是主角：歌词或关键词以大字卡出现在共享背景上，用横排、叠字、两侧排布和弹出、滑入、强调色、压暗随节奏变化；同一张背景和人物姿势跨很多句保持，变化主要来自文字。人物与物件只作小而清楚的陪衬（剪影、背影、远处的小人、一件代表物），不逐句换图。主歌字少、疏朗、留白多；副歌关键词更大、更密、用强调色，重复的句子用同一种排布形成记忆点。生图里不画文字。' },
+    { id: 'montage', name: '回忆走马灯', desc: '一闪而过的回忆片段，最后回到现在', rule: '像人生走马灯：一连串彼此不同的回忆瞬间（不同地点、季节或时期，同一段关系），每个片段只停一下，越往后切得越快，用淡入淡出或白闪衔接，画面统一成褪色暖调、柔光和微微过曝的回忆质感；最后回到“现在”的一张清晰画面并长时间停留，与回忆形成对照。回忆内容取自人设和歌词里有依据的经历，不编造人设之外的重大事件；外貌不变，回忆时期的衣着或场景可以不同。' },
+    { id: 'opening', name: '动画OP风', desc: '像动画片头：亮相、并肩、全员同框', rule: '像一部动画的片头：开头是氛围冷开场（背影、远景或天空的光）；每位出场人物各有一张“亮相镜”（回眸、抬头或侧身定格，背景带这个人的代表色）；主歌是并肩行走、奔跑、迎风的定格和天空、街道的空镜；副歌集中爆发：全员同框、低机位仰视、动作定格快速切换；结尾回到开阔的风景或天空。关键词可作片名式的短词出现在副歌。' },
+    { id: 'pov', name: '第一视角', desc: '你就是镜头，角色对着你', rule: '镜头就是“你”的眼睛：角色直视镜头，对你说话、伸手、递东西、靠近，机位在视线高度，距离从中景逐渐推到近景。“你”的手可以出现在画面下缘（只拍手，遵守用户出镜设置；设为不出镜时不画），但从不画“你”的脸。景别多为近景、半身，角色的表情和动作都朝向镜头；空镜也是“你”看到的东西。' },
+    { id: 'contrast', name: '今昔对照', desc: '同一构图，从前与现在对照', rule: '同一个构图画两次：“从前”和“现在”，机位、方位、景别完全一致，只改变时间状态（季节和光线、物件的新旧、两人的距离或表情）；按歌曲结构对照出现，例如主歌放从前、副歌放现在，或一句从前一句现在交替。至少两组对照构图，变化要一眼看得出，但人物外貌与身份不变。' },
+    { id: 'reveal', name: '悬念反转', desc: '先藏后揭，前后呼应', rule: '前段刻意不让观众看全：用局部特写、背影、剪影、遮挡或画外视线，只露出一个线索（形状、颜色或物件一角）。揭示放在后段的关键位置，用更完整的构图或反向视点让这个线索的意思改变，并给它较长停留；之后回到前段的构图，换一张差分让观众对照伏笔。线索的形状、位置与持物者前后一致；不靠突然换脸、闪白或字幕解释冒充反转，不强加恐怖、死亡或背叛。' },
 ]);
 
 function directionOf(value) {
@@ -4099,6 +4118,9 @@ function recommendDirections(song = {}) {
         ['loop', /循环|舞曲|律动|洗脑|loop|dance|groov|funk|disco/iu, '曲风强调循环律动', 7],
         ['expression', /表情|面具|假笑|笑脸|戏谑|黑色幽默|反差|暗黑流行|怪诞|animation meme|dark pop|theatrical pop|happy face/iu, '歌曲适合表情反差与重复卡拍', 9],
         ['reveal', /反转|悬疑|悬念|诡异|不可靠叙述|suspense|mystery|unreliable|twist/iu, '歌曲含悬念或反转倾向', 9],
+        ['typography', /文字|字幕|歌词视频|kinetic|typography|lyric video|ボカロ|vocaloid/iu, '曲风适合歌词字卡', 6],
+        ['montage', /回忆|怀念|走马灯|旧时光|nostalg|memories|flashback|reminisc/iu, '曲风带回忆或怀旧', 6],
+        ['opening', /热血|少年|冒险|出发|动画片头|anison|anime opening|j-?rock|opening theme/iu, '曲风像动画片头', 7],
     ];
     for (const [id, pattern, reason, score] of rules) if (pattern.test(style)) add(id, score, reason);
     if (song.voice === 'duet') add('interaction', 3, '演唱方式为双人合唱');
@@ -4109,6 +4131,9 @@ function recommendDirections(song = {}) {
     if (/月光|风|雨|旧信|花|影|moon|rain|shadow|letter/iu.test(lyrics)) add('lyrical', 1, '歌词有可呼应的视觉意象');
     if (/后来|从前|终于|离开|归来|then|returned|long ago/iu.test(lyrics)) add('narrative', 2, '歌词有时间或事件推进');
     if (/面具|假笑|强颜欢笑|笑脸|笑着.*(?:哭|泪)|put on a happy face|hide.*(?:tears|smile)/iu.test(lyrics)) add('expression', 5, '歌词有外在表情与内心的反差');
+    if (/(?:从前|曾经|那时|那年).*(?:现在|如今|此刻|今天)|(?:used to|back then).*(?:now|today)/isu.test(lyrics)) add('contrast', 5, '歌词有从前与现在的对照');
+    if (/记得|回忆|那年夏天|想起|remember|memories/iu.test(lyrics)) add('montage', 2, '歌词在回想过去');
+    if ((lyrics.match(/你|you\b/giu) || []).length >= 8 && /看着我|对你|给你|look at me|to you/iu.test(lyrics)) add('pov', 3, '歌词一直在对“你”说话');
     const lines = lyrics.split(/\r?\n/u).map(line => line.trim()).filter(line => line && !/^\[.*\]$/u.test(line));
     if (lines.length > 2 && new Set(lines).size < lines.length * 0.75) add('loop', 2, '歌词有明显重复段句');
     const matched = rows.filter(row => row.score > 0).sort((a, b) => b.score - a.score);
@@ -4125,6 +4150,8 @@ function directionPrompt(value, song) {
 function directionDefaults(value) {
     const id = directionOf(value).id;
     if (id === 'illustration') return { motion: 'still', transition: 'fade' };
+    if (id === 'montage') return { motion: 'still', transition: 'fade' };
+    if (id === 'pov') return { motion: 'push', transition: 'cut' };
     return id === 'lyrical' ? { motion: 'push', transition: 'fade' } : { motion: 'still', transition: 'cut' };
 }
 
@@ -5003,12 +5030,16 @@ function __init_extras_mvTegakiDirection_js() {
 // Still-image editing grammar. Expression/stage and illustration have their own contracts.
 const rules = Object.freeze({
     auto: '先按本曲各段的作用选择主要手法，再用辅助手法补足：哪里在讲事、哪里留白、哪里重复、哪里揭示，应能从画面顺序读出。手法变化沿用人物方位、核心物件与色光关系，不为“混合”逐段换世界或轮流展示所有类型。副歌的记忆点可以在主歌埋下、间奏停留、尾声回应；已有主图值得停留时跨句复用，不按歌词行数换图。',
-    narrative: '先明确观众在这一段看懂的事件或关系变化，再选择必要的建立、动作关键点和结果画面；省略无信息的中间动作。用可见的物件状态、人物视线或位置承接因果，反应镜头要接得上它所回应的事。连续空间保持左右方位、视线高度、持物手与光源一致；时间或地点改变时给出可读线索。静态画面抓动作前后的关键姿势，结果值得多停留，不把全曲写成逐句插画或连续动作清单。',
-    lyrical: '先选本曲真正有分量的意象及其情绪联系，再安排人物、局部与空镜的疏密；不把每个歌词名词都做成新道具。让同一意象在不同段落重现时产生可见的变化，例如距离、明暗、朝向或人物回应，原样重现也可表达等待与回忆。同一主图可承载数句，间奏与尾声保留呼吸；景别、留白和光色形成起伏，不用满屏漂浮装饰代替意象表达。',
-    interaction: '以双方对彼此的影响组织镜头：先让观众知道谁在看谁、谁发起动作，再用对方的眼神、手势、距离或沉默接住。正反打维持对应视线和左右空间，手与物件的近景明确所属人物；同框时让站位和动作构成关系，避免两张独立肖像并排。重复姿势可以因对方回应而有细微改变，关键回应适当停留。歌手轮唱不等于画面必须逐句换人，合唱也不强制同框；关系以现有人设为准。',
-    impact: '先找蓄势、重拍落点与释放后的停顿，把短切集中在有作用的局部；快段也要看得清人物、动作方向与焦点。用景别、明暗和轮廓的反差产生冲击，强镜头前可以留空、静止或延迟，冲击后给关键画面停顿，避免全曲同速快闪。用 hold 写出真实长短差别，短插镜可用小数；以可读的静态关键姿势衔接，不让攻击中途或奔跑姿势长时间悬空，不靠每镜闪白或加入无关战斗制造“燃”。',
-    loop: '先建立观众能辨认的循环单元：稳定机位下的关键姿势按节拍重复，结尾能接回起始姿势。frames 按播放顺序再次引用原 group/diff，主歌、间奏、副歌都可循环，不为回到原姿势重新画一份。需要推进时在熟悉节奏里改变一处视线、手势、道具状态或插入一次停顿，再回到核心单元；不要每轮同时换构图和所有元素。hold 表达单元内部的轻重与空拍，静态差分只承担关键拍，不声称能生成连续舞蹈。',
-    reveal: '先想清观众最初看到了什么、尚不知道什么，以及揭示后哪张旧画面会获得新含义；再把可见线索放进局部、画外关系或遮挡中。揭示由更完整的构图、反向视点或物件状态说明真相，随后给观众看懂的停留，并可回到原构图验证伏笔。线索的形状、位置与持物者前后一致，不用突然换脸、闪白、字幕解释或凭空增加秘密冒充反转。不强制恐怖、死亡、背叛或人设之外的重大事件。',
+    narrative: '每个场景按“建立 → 动作 → 结果”排：第一组用 scale wide 或 full 交代地点与人物方位，接着用近景或手部、物件特写抓动作的关键一瞬（phase prep / action），再用反应或结果画面收住（phase settle，停留更长）。地点或时间改变时新建组，并在 bgs 与 link 里写出可读的线索（天色、季节、物件状态）。连续空间保持左右方位、视线高度、持物手与光源一致，反应镜头要接得上它回应的事。\n自查：组的景别是否有远有近；是否至少一处能看出因果或状态推进；有没有把全段写成同一机位的表情差分。',
+    lyrical: '先选 1～2 个核心意象，让它们以空镜或特写单独成组（cast 为空或只拍手、背影），并在后段换距离、明暗或状态重现。frames 的 hold 多用 2～3，一张主图可以跨两三句歌词；group.transition 用 fade，motion 用 push。人物多用背影、侧影、远景小人物或局部，正面半身只在情绪最高处出现一次左右。间奏与尾声留给空镜呼吸。\n自查：空镜、物件或局部是否约占三分之一以上；是否有意象前后重现且有变化；副歌有没有被写成快切。',
+    interaction: '以双方的往来组织镜头：发起者一组、回应者一组，左右站位固定（发起者 position left 看向右，回应者 position right 看向左），frames 按“发起 → 回应 → 发起者的再反应”交替；关键处建一组两人同框（cast 同时含两人），用距离、朝向或手的位置表现关系变化。手与物件的近景在 cast 里只放所属的人。只有一人时，用画外视线、被递出或留下的物件做“回应”。\n自查：反应镜头是否紧跟在对应动作之后；左右与视线方向是否全程一致；是否有一张能看出两人关系的同框。',
+    impact: '用 hold 写出强烈长短差：蓄势画面 hold 2～3，爆发处连续 3～5 个 hold 0.25～0.5 的短镜，随后一张 hold 2 以上的定格。短镜在不同组之间切换（全身剪影、极近特写的眼睛或手、低机位仰视、背光轮廓），制造景别与明暗反差；爆发前最后一组与定格组的 transition 用 flash，其余用 cut。phase 用 prep → action → settle 标出蓄势、爆发与收势。姿势选关键定格（落地、抬眼、握紧），不悬停在挥动或奔跑中途。\n自查：副歌或重拍处是否有一串 hold≤0.5 的短镜；之后是否有明显更长的定格；是否只在重拍处用 flash。',
+    loop: '先建立循环单元：1～2 个固定机位组，每组 2～4 张差分只改手、头或视线；frames 按 A→B→A→B（或 A→B→C→B）反复引用同一组的 diff，单元内 hold 相同（多用 1 或 0.5），对齐拍子，单元最后一张能接回第一张。副歌可以加快（hold 0.5）或在单元里插入一张新差分作为“变奏”，然后回到原单元。不要每轮同时换构图、背景和动作；回到原姿势时直接引用原 diff，不重新画。\n自查：frames 里同一 group:diff 是否被重复引用多次；单元内停留是否一致；每段是否只有一处变化。',
+    montage: '每个回忆片段单独成组、只画一张关键瞬间，片段之间换地点、季节或时期（同一段关系的不同时刻），不要多张相似肖像。每张回忆的 imagePrompt 都写统一的回忆质感（faded warm tones, soft glow, slightly overexposed edges）。frames 的 hold 由慢到快：开头 1～1.5，越往后越短，副歌可到 0.3～0.5；回忆组的 transition 用 fade，节奏最快处可用 flash。最后一组是“现在”：清晰、正常色温的画面，hold 2～3，与回忆形成对照。回忆片段只取人设与歌词有依据的经历，不编造重大事件。\n自查：是否有至少四个彼此不同的回忆片段；hold 是否由慢到快；结尾是否回到现在且停留最长。',
+    opening: '按片头的段落安排：开场一组氛围冷开场（背影、远景或天空，hold 2）；每位出场人物各建一组“亮相镜”（回眸、抬头或侧身定格，背景用这个人的代表色，hold 1～1.5）；主歌用并肩行走或迎风定格、街道与天空的空镜；副歌连续短镜（hold 0.5）后接一组全员同框的低机位定格（hold 2）；最后一组是开阔风景或天空收尾。keyword 填一个片名式的短词，在副歌出现。\n自查：每位出场人物是否都有亮相镜；副歌是否有全员同框；结尾是否是风景或天空。',
+    pov: '每组都从“你”的视线高度拍：characterPrompt 写 first-person view at eye level，角色看向镜头（looking at the viewer），动作朝向镜头（伸手、递东西、靠近、低头看你）。景别按情绪推进：前段中景，后段近景，最动情处可到特写。“你”的手若出现，单独写在画面下缘（hands of the viewer at the bottom edge），只在用户出镜设置允许时出现，且绝不画“你”的脸或全身。空镜写成“你”看到的东西。\n自查：多数画面里角色是否看向镜头；距离是否逐渐拉近；是否没有画出“你”的脸。',
+    contrast: '每组是一对对照：同一机位、同一方位和景别，写两个 diff——D1 “从前”，D2 “现在”，imagePrompt 里分别写清各自的时间状态（季节、光线、物件新旧、两人距离或表情），背景差异也写在各自的 imagePrompt 里。至少两组对照。frames 先让观众记住“从前”，再在对应位置放出“现在”（如主歌从前、副歌现在，或一句从前一句现在交替），切换用 cut 或 fade。人物外貌与身份不变。\n自查：每组是否都有从前与现在两张；两张的机位是否一致；变化是否一眼看得出。',
+    reveal: '先写“藏”的组：手、背影、剪影或被遮挡的局部（cast.visible 用 hands / back / silhouette），只露一个线索；中段可以给一张画外视线或反应。揭示组放在后段，用更完整的构图或反向视点，hold 2～3、transition fade；最后回到最初的“藏”组，换一张差分（同机位，线索此时已能看懂）作对照。线索在每张图里的形状、位置与持物者保持一致。\n自查：前段是否真的看不全；揭示是否在后段且停留够长；是否回到了最初的构图对照。',
 });
 
 function supports(direction) { return Object.hasOwn(rules, direction); }
@@ -5035,10 +5066,13 @@ function example(direction, { wardrobe, actor, people = [], useCast = false, sec
     const binding = (person = first, visible = 'full', position = 'center') => useCast
         ? { cast: person ? [{ participantId: person.id, position, action: '', visible }] : [] }
         : { who: 'char' };
+    const pair = () => useCast
+        ? { cast: [first, second].filter(Boolean).map((person, index) => ({ participantId: person.id, position: index ? 'right' : 'left', action: '', visible: 'full' })) }
+        : { who: 'char' };
     const empty = useCast ? { cast: [] } : { who: 'none' };
     const bg = { id: 'B1', label: '统一场景', prompt: 'quiet interior, soft directional light from frame left, uncluttered background' };
-    const group = (id, composition, camera, diffs, cast = binding(), scale = 'medium') => ({ id, composition, layer: 'full', position: 'center', scale,
-        characterPrompt: camera, ...cast, motion: 'still', transition: 'cut', bgs: [{ ...bg }], diffs });
+    const group = (id, composition, camera, diffs, cast = binding(), scale = 'medium', { transition = 'cut', motion = 'still', scene = bg } = {}) => ({ id, composition, layer: 'full', position: 'center', scale,
+        characterPrompt: camera, ...cast, motion, transition, bgs: [{ ...scene }], diffs });
     const diff = (id, label, imagePrompt) => ({ id, label, imagePrompt });
     const frame = (groupId, diffId, hold, section = 0, line = 0, phase = 'still') => {
         const s = sections[section] || sections[0];
@@ -5046,68 +5080,149 @@ function example(direction, { wardrobe, actor, people = [], useCast = false, sec
     };
     let groups, frames;
     if (direction === 'narrative') {
+        const street = { id: 'B1', label: '傍晚街角', prompt: 'street corner at dusk, shop lights turning on, long shadows toward frame right' };
         groups = [
-            group('G1', '门前停步与门框落手', 'wide eye-level view, doorway on frame right, soft light from frame left', [
-                diff('D1', '停在门前', `wide eye-level view, ${name} standing still on frame left facing a closed door on frame right, hands relaxed`),
-                diff('D2', '手扶门框', `wide eye-level view, ${name} standing on frame left beside the open doorway on frame right, one hand resting on the near door frame`),
-            ], binding(first, 'full', 'left'), 'wide'),
-            group('G2', '回望回应前镜', 'close side view, face on frame right looking left, same light direction', [
-                diff('D1', '回望', `close side view of ${name} on frame right, calm gaze toward frame left, one still expression`),
-            ], binding(first, 'full', 'right'), 'close'),
+            group('G1', '建立：街角远景', 'wide eye-level establishing view, small figure on frame left, street receding to the right', [
+                diff('D1', '到达', `wide establishing view, ${name} small on frame left arriving at the street corner, holding a wrapped parcel, dusk light`),
+                diff('D2', '包裹留在原处', `same wide establishing view, the street corner now empty, the wrapped parcel left on the bench on frame left, dusk light`),
+            ], binding(first, 'full', 'left'), 'wide', { scene: street }),
+            group('G2', '动作：放下包裹', 'close view of hands and a bench, same dusk light from frame right', [
+                diff('D1', '放下', `close view of ${name}'s hands setting the wrapped parcel down on the bench, fingers just letting go`),
+            ], binding(first, 'hands', 'left'), 'close', { scene: street }),
+            group('G3', '结果：回头', 'medium side view, figure on frame right looking back toward frame left', [
+                diff('D1', '回头看', `medium side view of ${name} on frame right, looking back over the shoulder toward the bench on frame left, quiet resolve`),
+            ], binding(first, 'full', 'right'), 'medium', { scene: street }),
         ];
-        frames = [frame('G1', 'D1', 1, 0, 0, 'prep'), frame('G1', 'D2', .6, 0, 1, 'action'), frame('G2', 'D1', 2, 1, 0, 'settle')];
+        frames = [frame('G1', 'D1', 1.5, 0, 0, 'prep'), frame('G2', 'D1', .5, 0, 1, 'action'), frame('G3', 'D1', 1.5, 0, 1, 'settle'), frame('G1', 'D2', 3, 1, 0, 'settle')];
     } else if (direction === 'lyrical') {
+        const rain = { id: 'B1', label: '雨天窗边', prompt: 'rain-streaked window, muted blue daylight, soft reflections, wide quiet space' };
         groups = [
-            group('G1', '人物与窗边留白', 'wide back view, figure on frame left, quiet negative space on the right', [
-                diff('D1', '静望', `wide back view of ${name} at the left edge of a window, still posture, soft light across the empty right half`),
-            ], binding(first, 'back', 'left'), 'wide'),
-            group('G2', '光落在静物上', 'close-up still life, oblique light, restrained background', [
-                diff('D1', '折纸与影', 'close-up of a folded paper shape on a table, one clear diagonal shadow, quiet still life'),
-            ], empty, 'close'),
+            group('G1', '空镜：雨打窗', 'close view of a rain-streaked window, no people, soft blue light', [
+                diff('D1', '雨痕', 'close view of raindrops sliding down a window pane, blurred city lights behind, no people'),
+                diff('D2', '雨停', 'same close view of the window pane, the last drops drying, a thin band of warm light breaking through, no people'),
+            ], empty, 'close', { transition: 'fade', motion: 'push', scene: rain }),
+            group('G2', '远景小人物', 'wide view, small figure seen from behind on frame left, large empty right side', [
+                diff('D1', '背影', `wide view, ${name} small and seen from behind at the left edge of a large window, still posture, empty space on the right`),
+            ], binding(first, 'back', 'left'), 'wide', { transition: 'fade', motion: 'push', scene: rain }),
+            group('G3', '局部：握着杯子的手', 'close view of hands around a cup, side light', [
+                diff('D1', '捧杯', `close view of ${name}'s hands wrapped around a warm cup on the windowsill, steam rising`),
+            ], binding(first, 'hands'), 'close', { transition: 'fade', motion: 'push', scene: rain }),
         ];
-        frames = [frame('G1', 'D1', 3), frame('G1', 'D1', 2, 0, 1), frame('G2', 'D1', 1, 1), frame('G1', 'D1', 4, 1)];
+        frames = [frame('G1', 'D1', 3), frame('G2', 'D1', 2, 0, 1), frame('G3', 'D1', 2, 1), frame('G1', 'D2', 3, 1, 1)];
     } else if (direction === 'interaction') {
         groups = [
-            group('G1', '发起与接到回应', 'eye-level three-quarter medium view, subject on frame left, gaze toward frame right', [
-                diff('D1', '等待回应', `medium view of ${name} on frame left, eyes directed toward frame right, a restrained expectant expression, hands at rest`),
-                diff('D2', '接到回应', `same medium view of ${name} on frame left, gaze toward frame right, a small relieved smile, hands at rest`),
+            group('G1', '发起：左侧递出', 'eye-level three-quarter medium view, subject on frame left, gaze toward frame right', [
+                diff('D1', '递出', `medium view of ${name} on frame left, holding out a small key toward frame right, hopeful expression`),
+                diff('D2', '被接住后', `same medium view of ${name} on frame left, empty hand lowered, a small relieved smile toward frame right`),
             ], binding(first, 'full', 'left')),
-            second ? group('G2', '对方的回应', 'eye-level reverse medium view, subject on frame right looking left, matching eyeline height', [
-                diff('D1', '回视', `medium view of ${second.name} on frame right looking toward frame left, gentle attentive gaze, one open palm resting at waist level`),
-            ], binding(second, 'full', 'right')) : group('G2', '画外回应后的细节', 'close view of hands at waist level, same directional light', [
-                diff('D1', '松开的手', `close cropped view of ${name}'s relaxed hands at waist level, fingers held loosely open in one static pose`),
+            second ? group('G2', '回应：右侧接过', 'eye-level reverse medium view, subject on frame right looking left, matching eyeline height', [
+                diff('D1', '迟疑后接过', `medium view of ${second.name} on frame right looking toward frame left, reaching out to take the small key, hesitant then gentle gaze`),
+            ], binding(second, 'full', 'right')) : group('G2', '回应：画外的手', 'close view of an open palm entering from frame right, same light', [
+                diff('D1', '画外接过', `close view of the small key resting on ${name}'s palm as another hand from off-screen frame right reaches for it`),
             ], binding(first, 'hands'), 'close'),
+            group('G3', '同框：距离拉近', 'two-shot medium view, one subject on each side, closer than before', [
+                diff('D1', '并肩', second ? `two-shot medium view, ${name} on frame left and ${second.name} on frame right standing closer, both looking at the key between them` : `medium view of ${name} on frame left beside the now-empty space on frame right, looking at the key`),
+            ], second ? pair() : binding(first, 'full', 'left')),
         ];
-        frames = [frame('G1', 'D1', 1), frame('G2', 'D1', 1.5, 0, 1), frame('G1', 'D2', 2, 1)];
+        frames = [frame('G1', 'D1', 1), frame('G2', 'D1', 1.5, 0, 1), frame('G1', 'D2', 1, 1), frame('G3', 'D1', 2.5, 1, 1)];
     } else if (direction === 'impact') {
+        const dark = { id: 'B1', label: '逆光夜景', prompt: 'dark rooftop at night, strong backlight from behind, high contrast, wind' };
         groups = [
-            group('G1', '蓄势与定格主画面', 'low-angle full view, strong readable silhouette, light from frame left', [
-                diff('D1', '静止蓄势', `low-angle full view of ${name}, feet firmly planted, head lowered, arms resting at sides, restrained contrast`),
-                diff('D2', '抬眼定格', `same low-angle full view of ${name}, head raised with a decisive gaze, one fist held still at chest level, strong side light`),
-            ], binding(), 'full'),
-            group('G2', '短促视线插镜', 'extreme close-up of eyes, sharp side light', [
-                diff('D1', '视线落点', `extreme close-up of ${name}'s steady eyes, sharply resolved lids and one clear light edge`),
-            ], binding(first, 'face'), 'close'),
+            group('G1', '蓄势与定格', 'low-angle full view, strong backlit silhouette', [
+                diff('D1', '低头蓄势', `low-angle full view of ${name}, head lowered, fists clenched at the sides, backlit silhouette, dim light`),
+                diff('D2', '抬头定格', `same low-angle full view of ${name}, head raised with a decisive gaze, coat edges thrown back by wind, blazing rim light`),
+            ], binding(), 'full', { transition: 'flash', scene: dark }),
+            group('G2', '极近：眼睛', 'extreme close-up of eyes, hard side light', [
+                diff('D1', '睁眼', `extreme close-up of ${name}'s eyes snapping open, sharp highlight, hard side light`),
+            ], binding(first, 'face'), 'close', { scene: dark }),
+            group('G3', '极近：握紧的手', 'extreme close-up of a fist, rim light', [
+                diff('D1', '握紧', `extreme close-up of ${name}'s fist tightening, knuckles caught in hard rim light`),
+            ], binding(first, 'hands'), 'close', { transition: 'flash', scene: dark }),
         ];
-        frames = [frame('G1', 'D1', 2, 0, 0, 'prep'), frame('G2', 'D1', .25, 1, 0, 'action'), frame('G1', 'D1', .25, 1, 0, 'prep'), frame('G1', 'D2', 2, 1, 0, 'settle')];
+        frames = [frame('G1', 'D1', 2.5, 0, 0, 'prep'), frame('G2', 'D1', .3, 1, 0, 'action'), frame('G3', 'D1', .3, 1, 0, 'action'), frame('G2', 'D1', .3, 1, 0, 'action'), frame('G1', 'D2', 2.5, 1, 0, 'settle')];
     } else if (direction === 'loop') {
-        groups = [group('G1', '可返回的固定主构图', 'front medium view, centered subject, fixed framing and lighting', [
-            diff('D1', '手停左侧', `front medium view of ${name}, relaxed face, hands held together at waist level toward frame left`),
-            diff('D2', '手停右侧', `same front medium view of ${name}, relaxed face, hands held together at waist level toward frame right`),
-            diff('D3', '抬眼停顿', `same front medium view of ${name}, hands held still at waist level toward frame right, eyes meeting the viewer`),
+        groups = [group('G1', '固定机位的循环单元', 'front medium view, centered subject, locked framing and lighting', [
+            diff('D1', '手在左', `front medium view of ${name}, relaxed face, both hands raised beside the left cheek`),
+            diff('D2', '手在右', `same front medium view of ${name}, relaxed face, both hands raised beside the right cheek`),
+            diff('D3', '眨眼变奏', `same front medium view of ${name}, both hands beside the right cheek, a playful wink at the viewer`),
         ])];
-        frames = [frame('G1', 'D1', 1), frame('G1', 'D2', 1), frame('G1', 'D1', 1, 0, 1), frame('G1', 'D2', 1, 0, 1), frame('G1', 'D3', 2, 1), frame('G1', 'D1', 1, 1)];
+        frames = [frame('G1', 'D1', 1), frame('G1', 'D2', 1), frame('G1', 'D1', 1, 0, 1), frame('G1', 'D2', 1, 0, 1),
+            frame('G1', 'D1', .5, 1), frame('G1', 'D2', .5, 1), frame('G1', 'D3', 1, 1), frame('G1', 'D2', .5, 1, 1), frame('G1', 'D1', .5, 1, 1)];
+    } else if (direction === 'montage') {
+        const memory = 'faded warm tones, soft glow, slightly overexposed edges';
+        const past = (id, composition, camera, label, prompt, cast = binding(), scale = 'medium') => group(id, composition, camera, [diff('D1', label, `${prompt}, ${memory}`)], cast, scale, { transition: 'fade' });
+        groups = [
+            past('G1', '回忆：夏日河边', 'wide view, riverside in summer, figure on frame left', '河边', `wide view of ${name} on frame left skipping stones at a summer riverside`, binding(first, 'full', 'left'), 'wide'),
+            past('G2', '回忆：雨中屋檐', 'medium view under an eave, rain', '躲雨', `medium view of ${name} sheltering under a shop eave in the rain, laughing`),
+            past('G3', '回忆：雪夜手套', 'close view of gloved hands, snow', '雪夜', `close view of ${name}'s gloved hands holding a small warm drink on a snowy night`, binding(first, 'hands'), 'close'),
+            past('G4', '回忆：樱花道', 'wide view of a cherry blossom path, figure walking away', '樱花道', `wide back view of ${name} walking along a cherry blossom path`, binding(first, 'back'), 'wide'),
+            group('G5', '现在：清晰的此刻', 'medium three-quarter view, clear natural light, present day', [
+                diff('D1', '现在', `medium three-quarter view of ${name} in the present, clear natural daylight, a calm small smile, sharp and fully saturated`),
+            ], binding(first, 'full', 'center'), 'medium', { transition: 'fade' }),
+        ];
+        frames = [frame('G1', 'D1', 1.5), frame('G2', 'D1', 1, 0, 1), frame('G3', 'D1', .5, 1), frame('G4', 'D1', .4, 1), frame('G5', 'D1', 3, 1, 1, 'settle')];
+    } else if (direction === 'opening') {
+        const sky = { id: 'B1', label: '天空', prompt: 'vast morning sky over the city, sunlight breaking through clouds, wind' };
+        groups = [
+            group('G1', '冷开场：远景背影', 'wide view from behind, small figure against a vast sky', [
+                diff('D1', '背影', `wide back view of ${name} standing on a hill, small against a vast morning sky, wind in the hair`),
+            ], binding(first, 'back'), 'wide', { scene: sky }),
+            group('G2', `亮相：${name}`, 'medium three-quarter view, character color backdrop, dramatic side light', [
+                diff('D1', '回眸', `medium three-quarter view of ${name} glancing back over the shoulder at the viewer, confident expression, backdrop washed in this character's signature color`),
+            ], binding(first, 'full', 'center')),
+            ...(second ? [group('G3', `亮相：${second.name}`, 'medium three-quarter view, character color backdrop, dramatic side light', [
+                diff('D1', '抬头', `medium three-quarter view of ${second.name} lifting the head toward the light, determined look, backdrop washed in this character's signature color`),
+            ], binding(second, 'full', 'center'))] : []),
+            group('G4', '副歌：全员同框', 'low-angle full view, everyone side by side facing the wind', [
+                diff('D1', '并肩', second ? `low-angle full view of ${name} and ${second.name} side by side facing into the wind, clothes and hair swept back, bright sky behind` : `low-angle full view of ${name} facing into the wind, clothes and hair swept back, bright sky behind`),
+            ], second ? pair() : binding(), 'full', { transition: 'flash', scene: sky }),
+            group('G5', '收尾：开阔天空', 'wide view of the sky and city, no people', [
+                diff('D1', '天空', 'wide view of a bright sky over the rooftops, birds in the distance, no people'),
+            ], empty, 'wide', { transition: 'fade', scene: sky }),
+        ];
+        frames = [frame('G1', 'D1', 2), frame('G2', 'D1', 1.2, 0, 1), ...(second ? [frame('G3', 'D1', 1.2, 0, 1)] : []),
+            frame('G2', 'D1', .5, 1), ...(second ? [frame('G3', 'D1', .5, 1)] : []), frame('G4', 'D1', 2, 1, 0, 'settle'), frame('G5', 'D1', 2, 1, 1)];
+    } else if (direction === 'pov') {
+        const viewer = people.find(person => person.identity === 'user');
+        groups = [
+            group('G1', '中景：看向你', 'first-person view at eye level, medium distance', [
+                diff('D1', '看向你', `first-person view at eye level, medium shot of ${name} looking at the viewer with a gentle smile, one hand raised in greeting`),
+            ], binding(first, 'full', 'center'), 'medium', { motion: 'push' }),
+            group('G2', '近景：伸手', 'first-person view at eye level, close distance', [
+                diff('D1', '伸手', `first-person view at eye level, close shot of ${name} reaching one hand toward the viewer, warm eye contact`),
+                diff('D2', '低头靠近', `first-person view at eye level, close shot of ${name} leaning closer to the viewer, soft eyes, quiet smile`),
+            ], binding(first, 'full', 'center'), 'close', { motion: 'push' }),
+            ...(viewer && useCast ? [group('G3', '你的手', 'first-person view looking down, the viewer\'s hands at the bottom edge', [
+                diff('D1', '握住', `first-person view looking down, hands of the viewer at the bottom edge holding ${name}'s offered hand, no face of the viewer`),
+            ], { cast: [{ participantId: first?.id, position: 'center', action: '', visible: 'hands' }, { participantId: viewer.id, position: 'center', action: '', visible: 'hands' }] }, 'close')] : []),
+        ];
+        frames = [frame('G1', 'D1', 2), frame('G2', 'D1', 1.5, 0, 1), frame('G2', 'D2', 2, 1), ...(viewer && useCast ? [frame('G3', 'D1', 2, 1, 1)] : [frame('G2', 'D1', 1.5, 1, 1)])];
+    } else if (direction === 'contrast') {
+        groups = [
+            group('G1', '对照：同一张长椅', 'fixed wide eye-level view of a park bench, figure seated on frame left', [
+                diff('D1', '从前', `wide eye-level view of ${name} seated on frame left of a new wooden park bench in bright spring light, young sapling beside it`),
+                diff('D2', '现在', `same wide eye-level view of ${name} seated on frame left of the same bench now weathered, the sapling grown into a tall tree, golden autumn light`),
+            ], binding(first, 'full', 'left'), 'wide'),
+            group('G2', '对照：桌上的杯子', 'fixed close view of a table by a window', [
+                diff('D1', '从前', 'close view of two cups side by side on a table by the window, morning light, no people'),
+                diff('D2', '现在', 'same close view of the same table by the window with one cup left, evening light, no people'),
+            ], empty, 'close'),
+        ];
+        frames = [frame('G1', 'D1', 2), frame('G2', 'D1', 1.5, 0, 1), frame('G1', 'D2', 2, 1), frame('G2', 'D2', 2.5, 1, 1)];
     } else if (direction === 'reveal') {
         groups = [
-            group('G1', '保留与回看线索', 'close cropped view of cupped hands, matching positions and side light', [
-                diff('D1', '只露一角', `close cropped view of ${name}'s cupped hands, a small pointed corner of folded paper visible between the fingers, the rest concealed`),
-                diff('D2', '看懂原线索', `same close cropped view of ${name}'s hands now resting open, a small paper flower clearly visible in the palms, pointed fold aligned with the earlier corner`),
+            group('G1', '藏：只露一角', 'close cropped view of cupped hands, matching positions and side light', [
+                diff('D1', '只露一角', `close cropped view of ${name}'s cupped hands, a small red ribbon end visible between the fingers, the rest concealed`),
+                diff('D2', '看懂原线索', `same close cropped view of ${name}'s hands now open, a small music box with a red ribbon in the palms, ribbon end where it was before`),
             ], binding(first, 'hands'), 'close'),
-            group('G2', '完整信息与回应', 'medium view, hands and their object clearly visible at chest level', [
-                diff('D1', '完整纸花', `medium view of ${name}, open hands held at chest level with a small folded paper flower, quiet warm gaze toward the object`),
-            ]),
+            group('G2', '背影', 'medium back view, face not visible, warm light ahead', [
+                diff('D1', '背影', `medium back view of ${name}, face not visible, hands held together in front, walking toward warm light`),
+            ], binding(first, 'back')),
+            group('G3', '揭示：完整画面', 'medium front view, hands and object clearly visible at chest level', [
+                diff('D1', '打开音乐盒', `medium front view of ${name}, holding an opened small music box with a red ribbon at chest level, soft warm gaze toward it`),
+            ], binding(), 'medium', { transition: 'fade' }),
         ];
-        frames = [frame('G1', 'D1', 1), frame('G1', 'D1', 1, 0, 1), frame('G2', 'D1', 3, 1), frame('G1', 'D2', 2, 1)];
+        frames = [frame('G1', 'D1', 1.5), frame('G2', 'D1', 1.5, 0, 1), frame('G3', 'D1', 3, 1), frame('G1', 'D2', 2, 1, 1)];
     } else {
         groups = [
             group('G1', '跨段落呼应的主画面', 'wide three-quarter view, figure at left, light and negative space to the right', [
@@ -5712,6 +5827,12 @@ function coupleAvatarCss() {
 .rmt-pair-mini{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin-bottom:10px;width:100%;min-width:0;flex:none}
 .rmt-pair-mini .rmt-pair-square{border-radius:10px}
 .rmt-pair-history-card b,.rmt-pair-history-card small{display:block;overflow-wrap:anywhere}
+.rmt-pair-history-item{display:flex;flex-direction:column;gap:6px;min-width:0}
+:is(.rmt-couple,.rmt-pair-sheet) .rmt-pair-history-delete{align-self:flex-end;min-height:30px!important;padding:4px 12px!important;font-size:12px!important}
+:is(.rmt-couple,.rmt-pair-sheet) .rmt-pair-danger{color:#b4233a!important}
+.rmt-pair-select-bar{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-top:12px}.rmt-pair-select-bar>span{margin-right:auto;font-size:13px}
+.rmt-pair-history-card{position:relative}.rmt-pair-check{position:absolute;top:8px;right:8px;z-index:1;width:22px;height:22px;border-radius:50%;border:1.5px solid currentColor;display:flex;align-items:center;justify-content:center;font-size:13px;background:var(--rmt-theme-surface-solid,#fff)}
+.rmt-pair-history-item.is-selected .rmt-pair-history-card{outline:2px solid currentColor;outline-offset:2px}
 .rmt-pair-thumb-note{position:absolute;inset:0;display:grid;place-items:center;padding:4px;font-size:11px;color:var(--rmt-theme-muted)}
 .rmt-pair-pagination{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:18px}
 .rmt-pair-pagination>span{font-size:12px;white-space:nowrap}
@@ -6042,7 +6163,7 @@ async function renderPreview(view) {
     const host = view.root.querySelector('[data-pair-preview]'), record = recordFor(view), token = ++view.previewEpoch;
     if (!host) return;
     const names = record ? record.order.map(half => record.settings.people[half]?.name || '未命名') : view.settings.people.map(person => person.name || '未命名');
-    host.innerHTML = `<div class="rmt-pair-section-head"><h3>${record ? '这一对头像' : '留两个位置，给你们'}</h3><button type="button" data-pair-action="circle" aria-pressed="${view.circle}">${view.circle ? '方形预览' : '圆形预览'}</button></div><div class="rmt-pair-two ${view.circle ? 'is-circle' : ''}">${[0, 1].map(i => `<div class="rmt-pair-person"><div data-pair-image="${i}" class="rmt-pair-square"><div class="rmt-pair-empty"><b>${i ? '♡' : '♧'}</b><span>${record ? '读取原图…' : i ? '右边的 TA' : '左边的 TA'}</span></div></div><strong>${esc(names[i])}</strong>${button('save', i ? '保存右边' : '保存左边', `data-pair-side="${i}" ${record ? '' : 'disabled'}`)}</div>`).join('')}</div><p class="rmt-pair-note">${record ? '左右头像分别保存为方形 PNG；圆形仅用于预览。' : '选个风格，或导入已有横图。生成后这里并排显示两张头像。'}</p><div class="rmt-pair-preview-tools">${button('crop', '调整裁切', record ? '' : 'disabled')}${button('swap', '交换左右', record ? '' : 'disabled')}${button('seam', '检查当前拼接', record ? '' : 'disabled')}${button('original', '查看原图', record ? '' : 'disabled')}${button('favorite', record?.favorite ? '★ 已收藏' : '☆ 收藏这一对', `${record ? '' : 'disabled'} aria-pressed="${record?.favorite === true}"`)}${button('reuse', '沿用这对的设置', record ? '' : 'disabled')}</div><div data-pair-image-info class="rmt-pair-result-meta"></div>${record && view.pending.has(record.id) ? `<div class="rmt-pair-restore-note">这对头像暂未确认保存到本机，请先保存图片或导出备份。${button('retry', '仅重试保存')}</div>` : ''}`;
+    host.innerHTML = `<div class="rmt-pair-section-head"><h3>${record ? '这一对头像' : '留两个位置，给你们'}</h3><button type="button" data-pair-action="circle" aria-pressed="${view.circle}">${view.circle ? '方形预览' : '圆形预览'}</button></div><div class="rmt-pair-two ${view.circle ? 'is-circle' : ''}">${[0, 1].map(i => `<div class="rmt-pair-person"><div data-pair-image="${i}" class="rmt-pair-square"><div class="rmt-pair-empty"><b>${i ? '♡' : '♧'}</b><span>${record ? '读取原图…' : i ? '右边的 TA' : '左边的 TA'}</span></div></div><strong>${esc(names[i])}</strong>${button('save', i ? '保存右边' : '保存左边', `data-pair-side="${i}" ${record ? '' : 'disabled'}`)}</div>`).join('')}</div><p class="rmt-pair-note">${record ? '左右头像分别保存为方形 PNG；圆形仅用于预览。' : '选个风格，或导入已有横图。生成后这里并排显示两张头像。'}</p><div class="rmt-pair-preview-tools">${button('crop', '调整裁切', record ? '' : 'disabled')}${button('swap', '交换左右', record ? '' : 'disabled')}${button('seam', '检查当前拼接', record ? '' : 'disabled')}${button('original', '查看原图', record ? '' : 'disabled')}${button('favorite', record?.favorite ? '★ 已收藏' : '☆ 收藏这一对', `${record ? '' : 'disabled'} aria-pressed="${record?.favorite === true}"`)}${button('reuse', '沿用这对的设置', record ? '' : 'disabled')}${button('delete', '删除这一对', `class="rmt-pair-danger" ${record ? '' : 'disabled'}`)}</div><div data-pair-image-info class="rmt-pair-result-meta"></div>${record && view.pending.has(record.id) ? `<div class="rmt-pair-restore-note">这对头像暂未确认保存到本机，请先保存图片或导出备份。${button('retry', '仅重试保存')}</div>` : ''}`;
     const tools = host.querySelector('.rmt-pair-preview-tools');
     if (tools) tools.insertAdjacentHTML('beforeend', `${button('apply-chat-avatar', '应用为本聊天头像', record ? '' : 'disabled')}${button('restore-chat-avatar', '恢复原头像')}`);
     if (!record) return;
@@ -6078,7 +6199,15 @@ async function renderHistory(view) {
     view.historyPage = Math.min(pages, Math.max(1, view.historyPage || 1));
     const visible = rows.slice((view.historyPage - 1) * HISTORY_PAGE_SIZE, view.historyPage * HISTORY_PAGE_SIZE);
     view.root.querySelector('[data-pair-history-count]').textContent = `${view.favoritesOnly ? '已收藏' : '已留下'} ${rows.length} 对`;
-    target.innerHTML = visible.length ? visible.map(record => `<button type="button" class="rmt-pair-history-card" data-pair-action="history-open" data-pair-id="${esc(record.id)}"><div class="rmt-pair-mini" data-pair-thumb="${esc(record.id)}" aria-label="头像缩略图"><div class="rmt-pair-square"><span class="rmt-pair-thumb-note">读取中</span></div><div class="rmt-pair-square"></div></div><b>${record.favorite ? '★ ' : ''}${esc(record.order.map(half => record.settings.people[half]?.name || '未命名').join(' · '))}</b><small>${esc(styleLabel(record.settings))} · ${new Date(record.createdAt).toLocaleDateString('zh-CN')}</small></button>`).join('') : `<p class="rmt-pair-muted">${view.favoritesOnly ? '还没有收藏。打开喜欢的头像，点“收藏这一对”即可。' : '还没有头像。做好一对后，会自动收在这里。'}</p>`;
+    for (const id of [...view.selected]) if (!view.records.some(row => row.id === id)) view.selected.delete(id);
+    const mode = view.root.querySelector('[data-pair-action="select-mode"]');
+    if (mode) { mode.textContent = view.selecting ? '取消多选' : '多选'; mode.setAttribute('aria-pressed', String(view.selecting)); }
+    const bar = view.root.querySelector('[data-pair-select-bar]');
+    if (bar) {
+        bar.hidden = !view.selecting;
+        bar.innerHTML = view.selecting ? `<span role="status">已选 ${view.selected.size} 对</span>${button('select-page', '全选本页', visible.length ? '' : 'disabled')}${button('select-clear', '清空', view.selected.size ? '' : 'disabled')}${button('delete-selected', `删除所选${view.selected.size ? `（${view.selected.size}）` : ''}`, `class="rmt-pair-danger" ${view.selected.size ? '' : 'disabled'}`)}` : '';
+    }
+    target.innerHTML = visible.length ? visible.map(record => `<div class="rmt-pair-history-item${view.selecting && view.selected.has(record.id) ? ' is-selected' : ''}"><button type="button" class="rmt-pair-history-card" data-pair-action="${view.selecting ? 'history-toggle' : 'history-open'}" data-pair-id="${esc(record.id)}"${view.selecting ? ` aria-pressed="${view.selected.has(record.id)}"` : ''}>${view.selecting ? `<span class="rmt-pair-check" aria-hidden="true">${view.selected.has(record.id) ? '✓' : ''}</span>` : ''}<div class="rmt-pair-mini" data-pair-thumb="${esc(record.id)}" aria-label="头像缩略图"><div class="rmt-pair-square"><span class="rmt-pair-thumb-note">读取中</span></div><div class="rmt-pair-square"></div></div><b>${record.favorite ? '★ ' : ''}${esc(record.order.map(half => record.settings.people[half]?.name || '未命名').join(' · '))}</b><small>${esc(styleLabel(record.settings))} · ${new Date(record.createdAt).toLocaleDateString('zh-CN')}</small></button>${view.selecting ? '' : button('history-delete', '删除', `class="rmt-pair-history-delete" data-pair-id="${esc(record.id)}" aria-label="删除这一对头像"`)}</div>`).join('') : `<p class="rmt-pair-muted">${view.favoritesOnly ? '还没有收藏。打开喜欢的头像，点“收藏这一对”即可。' : '还没有头像。做好一对后，会自动收在这里。'}</p>`;
     let pager = view.root.querySelector('[data-pair-history-pages]');
     if (!pager) { pager = document.createElement('nav'); pager.className = 'rmt-pair-pagination'; pager.dataset.pairHistoryPages = ''; pager.setAttribute('aria-label', '头像翻页'); target.after(pager); }
     pager.hidden = !rows.length;
@@ -6193,7 +6322,7 @@ async function openCoupleAvatar() {
     const context = core_context.currentCharacterGuard(), scope = couple.coupleScope(context);
     body.innerHTML = '<main class="rmt-couple"><p role="status">正在读取头像记录…</p></main>';
     const view = { root: body.firstElementChild, host, context, scope, settings: couple.defaultCoupleSettings(context), records: [], pending: new Set(), images: new Map(),
-        currentId: '', circle: false, tab: 'make', favoritesOnly: false, historyPage: 1, ideas: [], previewEpoch: 0, historyEpoch: 0, draftTimer: 0, selectedEpoch: 0 };
+        currentId: '', circle: false, tab: 'make', favoritesOnly: false, historyPage: 1, selecting: false, selected: new Set(), ideas: [], previewEpoch: 0, historyEpoch: 0, draftTimer: 0, selectedEpoch: 0 };
     active = view; workspace.syncWorkspaceChrome();
     try {
         const saved = await couple.readCouples(scope);
@@ -6202,7 +6331,7 @@ async function openCoupleAvatar() {
         for (const record of view.records) if (!combined.has(record.id) || combined.get(record.id).updatedAt < record.updatedAt) combined.set(record.id, record);
         view.records = [...combined.values()].sort((a, b) => b.createdAt - a.createdAt); view.pending = new Set([...(saved.pendingIds || []), ...view.pending]);
         view.settings = couple.normalizeCoupleSettings(saved.settings || view.settings, context); view.currentId = view.records[0]?.id || '';
-        view.root.innerHTML = `<header class="rmt-pair-head"><div><h2>情侣头像</h2><p>各自是你们，放在一起刚刚好。</p></div><nav class="rmt-pair-nav" aria-label="头像页面"><button type="button" data-pair-tab="make" aria-pressed="true">制作头像</button><button type="button" data-pair-tab="history" aria-pressed="false">历史与收藏</button></nav></header><p class="rmt-pair-status" data-pair-status role="status" aria-live="polite"></p><div class="rmt-pair-layout" data-pair-main><section class="rmt-pair-preview"><div class="rmt-pair-stage" data-pair-preview></div></section>${formHtml(view)}</div><section class="rmt-pair-history" data-pair-history hidden><div class="rmt-pair-section-head"><h3 data-pair-history-count></h3><div class="rmt-pair-actions">${button('filter-favorite', '只看收藏', 'aria-pressed="false"')}${button('export', '导出备份')}${button('import-backup', '导入备份')}</div></div><p class="rmt-pair-note">原图、裁切和设置按聊天保存在本设备浏览器中。更换设备前可导出备份。</p><div data-pair-history-jobs></div><div class="rmt-pair-history-grid" data-pair-history-grid></div></section><input type="file" accept="image/*" data-pair-image-file hidden><input type="file" accept=".json,application/json" data-pair-backup-file hidden>`;
+        view.root.innerHTML = `<header class="rmt-pair-head"><div><h2>情侣头像</h2><p>各自是你们，放在一起刚刚好。</p></div><nav class="rmt-pair-nav" aria-label="头像页面"><button type="button" data-pair-tab="make" aria-pressed="true">制作头像</button><button type="button" data-pair-tab="history" aria-pressed="false">历史与收藏</button></nav></header><p class="rmt-pair-status" data-pair-status role="status" aria-live="polite"></p><div class="rmt-pair-layout" data-pair-main><section class="rmt-pair-preview"><div class="rmt-pair-stage" data-pair-preview></div></section>${formHtml(view)}</div><section class="rmt-pair-history" data-pair-history hidden><div class="rmt-pair-section-head"><h3 data-pair-history-count></h3><div class="rmt-pair-actions">${button('filter-favorite', '只看收藏', 'aria-pressed="false"')}${button('select-mode', '多选', 'aria-pressed="false"')}${button('export', '导出备份')}${button('import-backup', '导入备份')}</div></div><div class="rmt-pair-select-bar" data-pair-select-bar hidden></div><p class="rmt-pair-note">原图、裁切和设置按聊天保存在本设备浏览器中。更换设备前可导出备份。</p><div data-pair-history-jobs></div><div class="rmt-pair-history-grid" data-pair-history-grid></div></section><input type="file" accept="image/*" data-pair-image-file hidden><input type="file" accept=".json,application/json" data-pair-backup-file hidden>`;
         bindView(view); paintSettings(view); void renderPreview(view); renderJobs(view);
         if (saved.durable === false) report(view, '本机存储暂不可用。可以继续制作，完成后请保存图片或导出备份。');
         body.scrollTop = 0; return true;
@@ -6242,6 +6371,24 @@ function bindView(view) {
             report(view, result.durable ? '备份已合并到当前聊天，已有头像保留。' : '备份已读取，但本机保存未确认。内容暂留本页，请保留备份文件。');
         }).catch(error => failure(view, error));
     });
+}
+async function deleteRecords(view, records) {
+    records = records.filter(Boolean);
+    if (!records.length) return;
+    const names = records[0].order.map(half => records[0].settings.people[half]?.name || '未命名').join(' · ');
+    const title = records.length === 1 ? `删除「${names}」这一对头像？` : `删除选中的 ${records.length} 对头像？`;
+    if (!overlay.confirmExplicitAction(title, '会从这个聊天的历史与收藏里移除原图记录、裁切和设置，不能撤销。已经设为聊天头像的图片、已保存到本机的 PNG 和生图插件图库里的原图都不受影响。', { destructive: true })) return;
+    let failed = 0;
+    for (const record of records) {
+        const result = await couple.deleteCouple(view.scope, record.id);
+        if (result.durable === false) failed += 1;
+        view.records = view.records.filter(row => row.id !== record.id); view.pending.delete(record.id); view.selected.delete(record.id);
+        if (!view.records.some(row => row.original.url === record.original.url)) view.images.delete(record.original.url);
+        if (view.currentId === record.id) { view.currentId = view.records[0]?.id || ''; view.selectedEpoch++; }
+    }
+    if (view.selecting && !view.selected.size) view.selecting = false;
+    if (current(view)) { void renderPreview(view); void renderHistory(view); }
+    report(view, failed ? `已从当前页面移除，但有 ${failed} 对的本机记录没有删除成功；刷新后可能还会出现，可以再删一次。` : records.length === 1 ? '这一对头像已删除。' : `已删除 ${records.length} 对头像。`);
 }
 async function updateRecord(view, record, patch) {
     const result = await couple.updateCouple(view.scope, record.id, patch); rememberRecord(view, result);
@@ -6286,6 +6433,12 @@ async function handleAction(view, action, target) {
         if (current(view)) view.root.querySelector('[data-pair-history-count]').scrollIntoView({ block: 'start' });
         return;
     }
+    if (action === 'history-delete') return deleteRecords(view, [view.records.find(row => row.id === target.dataset.pairId)]);
+    if (action === 'select-mode') { view.selecting = !view.selecting; view.selected.clear(); return renderHistory(view); }
+    if (action === 'history-toggle') { const id = target.dataset.pairId; if (view.selected.has(id)) view.selected.delete(id); else view.selected.add(id); return renderHistory(view); }
+    if (action === 'select-page') { for (const node of view.root.querySelectorAll('[data-pair-action="history-toggle"]')) view.selected.add(node.dataset.pairId); return renderHistory(view); }
+    if (action === 'select-clear') { view.selected.clear(); return renderHistory(view); }
+    if (action === 'delete-selected') return deleteRecords(view, view.records.filter(row => view.selected.has(row.id)));
     if (action === 'history-open') { view.currentId = target.dataset.pairId; view.selectedEpoch++; selectTab(view, 'make'); return renderPreview(view); }
     if (!record) return;
     if (action === 'apply-chat-avatar') return showApplyChatAvatars(view, record);
@@ -6293,6 +6446,7 @@ async function handleAction(view, action, target) {
     if (action === 'crop') return showCrop(view, record);
     if (action === 'swap') return updateRecord(view, record, { order: [record.order[1], record.order[0]] });
     if (action === 'favorite') return updateRecord(view, record, { favorite: !record.favorite });
+    if (action === 'delete') return deleteRecords(view, [record]);
     if (action === 'original') return showOriginal(view, record, false);
     if (action === 'seam') return showOriginal(view, record, true);
     if (action === 'reuse') { view.settings = structuredClone(record.settings); paintSettings(view); queueDraft(view); report(view, '已填入这一对的创作设置，可以修改后再生成。'); return; }
@@ -96024,6 +96178,13 @@ function selectedSectionIndexes(sections, range, from = 0, to = 0) {
     return all.filter(i => i >= first && i <= chorus);
 }
 
+// Types that compose characters, shared backgrounds and lyric text as layers.
+const STAGE_TYPES = Object.freeze(['expression', 'illustration', 'typography']);
+const TYPOGRAPHY_GRAMMAR = `【文字PV 的编排重点】
+图少字多：一两张共享背景、一两个小而清楚的人物或物件姿势，跨很多句保持；每句歌词至少一个 frame，并在 stage.text 写原句或摘出的关键词。layout（banner / stack / sides）与 entrance（slide / pop / cut）随节奏轮换，同一句重复时沿用同一种排布；主歌 tone 多用 base、留白多，副歌关键词用 stack 叠字、tone accent，情绪落下时用 dark。人物层放在画面一角，不挡文字，不在生图里画文字。
+自查：frames 数是否明显多于差分数；每个 frame 是否都有 stage.text；副歌是否用了强调色和叠字。
+`;
+
 function storyboardPrompt(context, memory, song, settings, sectionIndexes = null, cast = null) {
     const charName = core_text.normalizeText(memory?.characterName || context?.name2, 120) || '{{char}}';
     const userName = core_text.normalizeText(memory?.userName || context?.name1, 120) || '{{user}}';
@@ -96059,6 +96220,25 @@ function storyboardPrompt(context, memory, song, settings, sectionIndexes = null
             { sectionIndex: exampleSection, lyric: sections[0]?.lines?.[1] || exampleLyric, group: 'G2', diff: 'D1', hold: 2, stage: { layout: 'banner', entrance: 'slide', shadow: true } },
             { sectionIndex: sections[1]?.index ?? exampleSection, lyric: sections[1]?.lines?.[0] || exampleLyric, group: 'G1', diff: 'D2', hold: 2, stage: { layout: 'sides', tone: 'dark' } },
             { sectionIndex: sections[1]?.index ?? exampleSection, lyric: sections[1]?.lines?.[1] || exampleLyric, group: 'G1', diff: 'D1', hold: 2, stage: { layout: 'sides', tone: 'accent', entrance: 'pop' } },
+        ],
+    }) : '';
+    const typographyExample = settings.output === 'tegaki' && settings.storyType === 'typography' ? JSON.stringify({
+        wardrobe: JSON.parse(exampleWardrobe), keyword: '关键词',
+        stage: { backgrounds: [{ id: 'S1', label: '夜色字卡底', kind: 'image', prompt: 'deep blue night city far below, soft bokeh lights at the bottom, wide empty sky for large text', colors: ['#14213d', '#e5e5e5', '#fca311'], motion: 'drift' }] },
+        groups: [
+            { id: 'G1', composition: '右下角的小小身影', stageBackground: 'S1', position: 'right', scale: 'full',
+                characterPrompt: 'small full-body figure, lower right of frame, seen from behind', ...expressionCast('back'),
+                motion: 'still', transition: 'cut', diffs: [
+                    { id: 'D1', label: '背影站立', change: '背对镜头站着', imagePrompt: `small full-body back view of ${exampleActor} standing still, looking up at the sky` },
+                    { id: 'D2', label: '抬手', change: '一只手伸向天空', imagePrompt: `small full-body back view of ${exampleActor} reaching one hand up toward the sky` },
+                ] },
+        ],
+        frames: [
+            { sectionIndex: exampleSection, lyric: exampleLyric, group: 'G1', diff: 'D1', hold: 2, stage: { text: exampleLyric, layout: 'banner', entrance: 'slide', tone: 'base' } },
+            { sectionIndex: exampleSection, lyric: sections[0]?.lines?.[1] || exampleLyric, group: 'G1', diff: 'D1', hold: 2, stage: { text: sections[0]?.lines?.[1] || exampleLyric, layout: 'sides', entrance: 'pop', tone: 'base' } },
+            { sectionIndex: sections[1]?.index ?? exampleSection, lyric: sections[1]?.lines?.[0] || exampleLyric, group: 'G1', diff: 'D2', hold: 1, stage: { text: '关键词', layout: 'stack', entrance: 'pop', tone: 'accent', shadow: true } },
+            { sectionIndex: sections[1]?.index ?? exampleSection, lyric: sections[1]?.lines?.[0] || exampleLyric, group: 'G1', diff: 'D2', hold: 1, stage: { text: sections[1]?.lines?.[0] || exampleLyric, layout: 'banner', entrance: 'cut', tone: 'accent' } },
+            { sectionIndex: sections[1]?.index ?? exampleSection, lyric: sections[1]?.lines?.[1] || exampleLyric, group: 'G1', diff: 'D1', hold: 2, stage: { text: sections[1]?.lines?.[1] || exampleLyric, layout: 'stack', entrance: 'slide', tone: 'dark' } },
         ],
     }) : '';
     const illustrationCue = { reveal: 'bloom', seconds: 2.8, light: 'focus', particles: 'glints', movement: 'local',
@@ -96112,7 +96292,7 @@ ${settings.promptFormat ? mv_format.directive(settings.promptFormat) + '\n' : ''
 ${cast ? '以下仅为结构示例，实际每镜的 cast 按出场人物填写，不局限于示例中的一个人。顶层可加 appearances:[{"participantId":"原始ID","tag":"有依据的稳定外貌","nl":"可空"}]；wardrobe 使用 era 和 characters，不用 char/user 代替 NPC。' : ''}
 ${settings.output === 'video'
         ? `{"wardrobe":${exampleWardrobe},"shots":[{"sectionIndex":0,"lyric":"","plain":"……",${exampleBinding},"shot":"中景：看到上半身","move":"镜头慢慢推近","motion":"push","imagePrompt":"……","videoZh":"……","videoEn":"……"}]}`
-        : illustrationExample || expressionExample || directionExample || `{"wardrobe":${exampleWardrobe},"keyword":"副歌里最有分量的词","motif":{"name":"竹叶","prompt":"english: one decorative element"},"groups":[{"id":"G1","composition":"低机位 · 蹲下喂猫 · 人物在左","position":"left","scale":"full","characterPrompt":"low angle medium shot, subject on the left, warm afternoon light",${exampleBinding},"motion":"still","transition":"cut","link":"下一组如何承接","bgs":[{"id":"B1","label":"午后","prompt":"english: empty scenery only"}],"diffs":[{"id":"D1","label":"伸手前","change":"伸出的手停在半空","imagePrompt":"low angle medium shot, the named character on the left with one hand extended toward the cat, warm afternoon light"}]}],"frames":[{"sectionIndex":0,"lyric":"原句","group":"G1","diff":"D1","bg":"B1","hold":1,"phase":"prep"}]}`}`;
+        : illustrationExample || expressionExample || typographyExample || directionExample || `{"wardrobe":${exampleWardrobe},"keyword":"副歌里最有分量的词","motif":{"name":"竹叶","prompt":"english: one decorative element"},"groups":[{"id":"G1","composition":"低机位 · 蹲下喂猫 · 人物在左","position":"left","scale":"full","characterPrompt":"low angle medium shot, subject on the left, warm afternoon light",${exampleBinding},"motion":"still","transition":"cut","link":"下一组如何承接","bgs":[{"id":"B1","label":"午后","prompt":"english: empty scenery only"}],"diffs":[{"id":"D1","label":"伸手前","change":"伸出的手停在半空","imagePrompt":"low angle medium shot, the named character on the left with one hand extended toward the cat, warm afternoon light"}]}],"frames":[{"sectionIndex":0,"lyric":"原句","group":"G1","diff":"D1","bg":"B1","hold":1,"phase":"prep"}]}`}`;
 }
 
 // 手书：少数构图，每个构图里几张连续变化的画（闭眼→睁眼→偏头），摊平成镜头。
@@ -96652,14 +96832,14 @@ function tegakiGrammar(sections, keep, charName = '{{char}}', direction = '') {
 - diffs 可以只用一张关键画；只有同机位连续动作、情绪最小差分、明显反差或节奏循环确实需要时才加图，不强求每组闭眼→睁眼。
 - 局部特写写清画面裁切；只拍手就不要为了显示头发、眼睛或服装画出整个人。物件或环境空镜明确不出人，不硬塞主角。
 - bgs 写同一个镜头需要的场景，环境变化确有作用时再增加背景；只描述场景，不混入人物。
-${['expression', 'illustration'].includes(direction) ? '- 主舞台与角色姿势可以跨歌词、跨段落持续使用；主歌与副歌靠表演、文字、明暗与疏密区分，重现的姿势按歌词情绪变奏。' : '- 主构图和意象可在任何段落复用、停留或变奏；是否换构图取决于观众需要看到的新信息，不因进入主歌、间奏或下一句就强制换图。'}
+${STAGE_TYPES.includes(direction) ? '- 主舞台与角色姿势可以跨歌词、跨段落持续使用；主歌与副歌靠表演、文字、明暗与疏密区分，重现的姿势按歌词情绪变奏。' : '- 主构图和意象可在任何段落复用、停留或变奏；是否换构图取决于观众需要看到的新信息，不因进入主歌、间奏或下一句就强制换图。'}
 - link 简写下一镜如何承接，并把对应视线、位置或物件落实在前后两组的画面描述；link 不是可执行动画指令。
 - frames 按实际播放顺序指向 group、diff 和 bg，sectionIndex 是歌曲原段落编号。lyric 使用对应原句（器乐留空）；一句可有多个短镜，也可多句复用一个素材。hold 是段内相对停留权重，短镜可用 0.5，普通用 1，重点停留可更长，不是秒数。已对过的时间由用户打点优先。
 - frame.phase 可写 prep（准备）、action（发生）、settle（收势）或 still（静止）。循环类型可以回到前一个差分；其他类型只在表达需要时重复。不要靠长时间悬停动态姿势代替动作过程。
 - transition 按表达选 cut / fade / flash，motion 用 still / push；不强制混用全部转场或闪白。图像是静态关键姿势，连续动作靠剪辑而非假称视频动画。
 - 多人镜头分别写清每个人的位置、动作与互动对象，人数由出场名单决定。不得为制造差异改人物的设定外貌、衣服、性别或关系。
-${['expression', 'illustration'].includes(direction) ? '- keyword 可以摘取歌词关键词；漂浮 motif 按歌曲需要选用。舞台背景、人物、文字自身已经能形成节奏，不要求每首叠加粒子。' : '- keyword 与漂浮 motif 都是可选项，不需要时留空或省略。核心意象应先落实在镜头里；装饰不代替伏笔、叙事和人物互动。若使用 motif，prompt 用英文描述单个小元素；不要让它提前泄露尚未揭示的信息。'}
-${['expression', 'illustration'].includes(direction) ? mv_stage.prompt() + (direction === 'illustration' ? mv_illustration.prompt() : '') : mv_tegaki_direction.grammar(direction)}
+${STAGE_TYPES.includes(direction) ? '- keyword 可以摘取歌词关键词；漂浮 motif 按歌曲需要选用。舞台背景、人物、文字自身已经能形成节奏，不要求每首叠加粒子。' : '- keyword 与漂浮 motif 都是可选项，不需要时留空或省略。核心意象应先落实在镜头里；装饰不代替伏笔、叙事和人物互动。若使用 motif，prompt 用英文描述单个小元素；不要让它提前泄露尚未揭示的信息。'}
+${STAGE_TYPES.includes(direction) ? mv_stage.prompt() + (direction === 'illustration' ? mv_illustration.prompt() : direction === 'typography' ? TYPOGRAPHY_GRAMMAR : '') : mv_tegaki_direction.grammar(direction)}
 `;
 }
 
@@ -96670,7 +96850,7 @@ function isV2(record) { return record?.version === 2 && Array.isArray(record?.gr
 function buildShots(raw, memory, sectionCount, settings, cast = null, opts = {}) {
     if (cast?.existingGroups) { opts = cast; cast = null; }
     const existingGroups = list(opts.existingGroups);
-    const stagePlan = mv_stage.prepare(['expression', 'illustration'].includes(settings.storyType) ? raw?.stage : null, opts.existingStage);
+    const stagePlan = mv_stage.prepare(STAGE_TYPES.includes(settings.storyType) ? raw?.stage : null, opts.existingStage);
     const reusesExisting = list(raw?.frames).some(f => existingGroups.some(g => g.id === f?.group));
     if (settings.output === 'video' || (!list(raw?.groups).some(g => list(g?.diffs).length) && !reusesExisting)) {
         const shots = normalizeShots(raw, memory, sectionCount, settings, cast);

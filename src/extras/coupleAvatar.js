@@ -348,7 +348,7 @@ function stateFor(scope) {
     const key = String(scope || '');
     if (!states.has(key)) states.set(key, {
         scope: key, records: new Map(), settings: null, settingsAt: 0,
-        pending: new Set(), settingsPending: false, loaded: false, loading: null, tail: Promise.resolve(),
+        pending: new Set(), deleted: new Set(), settingsPending: false, loaded: false, loading: null, tail: Promise.resolve(),
     });
     return states.get(key);
 }
@@ -406,7 +406,7 @@ async function loadState(state) {
             const settings = await transact(SETTINGS, 'readonly', store => store.get(state.scope));
             for (const row of records) {
                 const record = recordOf(row, state.scope), current = record && state.records.get(record.id);
-                if (record && !state.pending.has(record.id) && (!current || current.updatedAt <= record.updatedAt)) state.records.set(record.id, record);
+                if (record && !state.deleted.has(record.id) && !state.pending.has(record.id) && (!current || current.updatedAt <= record.updatedAt)) state.records.set(record.id, record);
             }
             if (settings && !state.settingsPending && finite(settings.updatedAt, 0) >= state.settingsAt) {
                 state.settings = normalizeCoupleSettings(settings.value, null);
@@ -519,6 +519,19 @@ export async function retryCoupleSave(scope, id) {
     if (!record) throw core_text.safeUserError('这对头像暂时找不到，请重新打开历史记录。', 'RMT_COUPLE_MISSING');
     const durable = await persistRecord(state, record.id);
     return { record: clone(state.records.get(record.id)), durable };
+}
+
+// Removes one pair from this chat's history on this device. The image file a
+// provider saved in its own gallery is not this plugin's to delete.
+export async function deleteCouple(scope, id) {
+    const state = await loadState(stateFor(scope)), key = String(id);
+    if (!state.records.has(key)) return { deleted: false, durable: true };
+    state.records.delete(key); state.pending.delete(key); state.deleted.add(key);
+    const durable = await enqueue(state, async () => {
+        try { await transact(RECORDS, 'readwrite', store => store.delete(JSON.stringify([state.scope, key]))); return true; }
+        catch { return false; }
+    });
+    return { deleted: true, durable };
 }
 
 export async function exportCouples(scope) {

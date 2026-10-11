@@ -82,6 +82,12 @@ export function coupleAvatarCss() {
 .rmt-pair-mini{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin-bottom:10px;width:100%;min-width:0;flex:none}
 .rmt-pair-mini .rmt-pair-square{border-radius:10px}
 .rmt-pair-history-card b,.rmt-pair-history-card small{display:block;overflow-wrap:anywhere}
+.rmt-pair-history-item{display:flex;flex-direction:column;gap:6px;min-width:0}
+:is(.rmt-couple,.rmt-pair-sheet) .rmt-pair-history-delete{align-self:flex-end;min-height:30px!important;padding:4px 12px!important;font-size:12px!important}
+:is(.rmt-couple,.rmt-pair-sheet) .rmt-pair-danger{color:#b4233a!important}
+.rmt-pair-select-bar{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-top:12px}.rmt-pair-select-bar>span{margin-right:auto;font-size:13px}
+.rmt-pair-history-card{position:relative}.rmt-pair-check{position:absolute;top:8px;right:8px;z-index:1;width:22px;height:22px;border-radius:50%;border:1.5px solid currentColor;display:flex;align-items:center;justify-content:center;font-size:13px;background:var(--rmt-theme-surface-solid,#fff)}
+.rmt-pair-history-item.is-selected .rmt-pair-history-card{outline:2px solid currentColor;outline-offset:2px}
 .rmt-pair-thumb-note{position:absolute;inset:0;display:grid;place-items:center;padding:4px;font-size:11px;color:var(--rmt-theme-muted)}
 .rmt-pair-pagination{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:18px}
 .rmt-pair-pagination>span{font-size:12px;white-space:nowrap}

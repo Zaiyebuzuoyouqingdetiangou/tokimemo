@@ -271,7 +271,7 @@ async function renderPreview(view) {
     const host = view.root.querySelector('[data-pair-preview]'), record = recordFor(view), token = ++view.previewEpoch;
     if (!host) return;
     const names = record ? record.order.map(half => record.settings.people[half]?.name || '未命名') : view.settings.people.map(person => person.name || '未命名');
-    host.innerHTML = `<div class="rmt-pair-section-head"><h3>${record ? '这一对头像' : '留两个位置，给你们'}</h3><button type="button" data-pair-action="circle" aria-pressed="${view.circle}">${view.circle ? '方形预览' : '圆形预览'}</button></div><div class="rmt-pair-two ${view.circle ? 'is-circle' : ''}">${[0, 1].map(i => `<div class="rmt-pair-person"><div data-pair-image="${i}" class="rmt-pair-square"><div class="rmt-pair-empty"><b>${i ? '♡' : '♧'}</b><span>${record ? '读取原图…' : i ? '右边的 TA' : '左边的 TA'}</span></div></div><strong>${esc(names[i])}</strong>${button('save', i ? '保存右边' : '保存左边', `data-pair-side="${i}" ${record ? '' : 'disabled'}`)}</div>`).join('')}</div><p class="rmt-pair-note">${record ? '左右头像分别保存为方形 PNG；圆形仅用于预览。' : '选个风格，或导入已有横图。生成后这里并排显示两张头像。'}</p><div class="rmt-pair-preview-tools">${button('crop', '调整裁切', record ? '' : 'disabled')}${button('swap', '交换左右', record ? '' : 'disabled')}${button('seam', '检查当前拼接', record ? '' : 'disabled')}${button('original', '查看原图', record ? '' : 'disabled')}${button('favorite', record?.favorite ? '★ 已收藏' : '☆ 收藏这一对', `${record ? '' : 'disabled'} aria-pressed="${record?.favorite === true}"`)}${button('reuse', '沿用这对的设置', record ? '' : 'disabled')}</div><div data-pair-image-info class="rmt-pair-result-meta"></div>${record && view.pending.has(record.id) ? `<div class="rmt-pair-restore-note">这对头像暂未确认保存到本机，请先保存图片或导出备份。${button('retry', '仅重试保存')}</div>` : ''}`;
+    host.innerHTML = `<div class="rmt-pair-section-head"><h3>${record ? '这一对头像' : '留两个位置，给你们'}</h3><button type="button" data-pair-action="circle" aria-pressed="${view.circle}">${view.circle ? '方形预览' : '圆形预览'}</button></div><div class="rmt-pair-two ${view.circle ? 'is-circle' : ''}">${[0, 1].map(i => `<div class="rmt-pair-person"><div data-pair-image="${i}" class="rmt-pair-square"><div class="rmt-pair-empty"><b>${i ? '♡' : '♧'}</b><span>${record ? '读取原图…' : i ? '右边的 TA' : '左边的 TA'}</span></div></div><strong>${esc(names[i])}</strong>${button('save', i ? '保存右边' : '保存左边', `data-pair-side="${i}" ${record ? '' : 'disabled'}`)}</div>`).join('')}</div><p class="rmt-pair-note">${record ? '左右头像分别保存为方形 PNG；圆形仅用于预览。' : '选个风格，或导入已有横图。生成后这里并排显示两张头像。'}</p><div class="rmt-pair-preview-tools">${button('crop', '调整裁切', record ? '' : 'disabled')}${button('swap', '交换左右', record ? '' : 'disabled')}${button('seam', '检查当前拼接', record ? '' : 'disabled')}${button('original', '查看原图', record ? '' : 'disabled')}${button('favorite', record?.favorite ? '★ 已收藏' : '☆ 收藏这一对', `${record ? '' : 'disabled'} aria-pressed="${record?.favorite === true}"`)}${button('reuse', '沿用这对的设置', record ? '' : 'disabled')}${button('delete', '删除这一对', `class="rmt-pair-danger" ${record ? '' : 'disabled'}`)}</div><div data-pair-image-info class="rmt-pair-result-meta"></div>${record && view.pending.has(record.id) ? `<div class="rmt-pair-restore-note">这对头像暂未确认保存到本机，请先保存图片或导出备份。${button('retry', '仅重试保存')}</div>` : ''}`;
     const tools = host.querySelector('.rmt-pair-preview-tools');
     if (tools) tools.insertAdjacentHTML('beforeend', `${button('apply-chat-avatar', '应用为本聊天头像', record ? '' : 'disabled')}${button('restore-chat-avatar', '恢复原头像')}`);
     if (!record) return;
@@ -307,7 +307,15 @@ async function renderHistory(view) {
     view.historyPage = Math.min(pages, Math.max(1, view.historyPage || 1));
     const visible = rows.slice((view.historyPage - 1) * HISTORY_PAGE_SIZE, view.historyPage * HISTORY_PAGE_SIZE);
     view.root.querySelector('[data-pair-history-count]').textContent = `${view.favoritesOnly ? '已收藏' : '已留下'} ${rows.length} 对`;
-    target.innerHTML = visible.length ? visible.map(record => `<button type="button" class="rmt-pair-history-card" data-pair-action="history-open" data-pair-id="${esc(record.id)}"><div class="rmt-pair-mini" data-pair-thumb="${esc(record.id)}" aria-label="头像缩略图"><div class="rmt-pair-square"><span class="rmt-pair-thumb-note">读取中</span></div><div class="rmt-pair-square"></div></div><b>${record.favorite ? '★ ' : ''}${esc(record.order.map(half => record.settings.people[half]?.name || '未命名').join(' · '))}</b><small>${esc(styleLabel(record.settings))} · ${new Date(record.createdAt).toLocaleDateString('zh-CN')}</small></button>`).join('') : `<p class="rmt-pair-muted">${view.favoritesOnly ? '还没有收藏。打开喜欢的头像，点“收藏这一对”即可。' : '还没有头像。做好一对后，会自动收在这里。'}</p>`;
+    for (const id of [...view.selected]) if (!view.records.some(row => row.id === id)) view.selected.delete(id);
+    const mode = view.root.querySelector('[data-pair-action="select-mode"]');
+    if (mode) { mode.textContent = view.selecting ? '取消多选' : '多选'; mode.setAttribute('aria-pressed', String(view.selecting)); }
+    const bar = view.root.querySelector('[data-pair-select-bar]');
+    if (bar) {
+        bar.hidden = !view.selecting;
+        bar.innerHTML = view.selecting ? `<span role="status">已选 ${view.selected.size} 对</span>${button('select-page', '全选本页', visible.length ? '' : 'disabled')}${button('select-clear', '清空', view.selected.size ? '' : 'disabled')}${button('delete-selected', `删除所选${view.selected.size ? `（${view.selected.size}）` : ''}`, `class="rmt-pair-danger" ${view.selected.size ? '' : 'disabled'}`)}` : '';
+    }
+    target.innerHTML = visible.length ? visible.map(record => `<div class="rmt-pair-history-item${view.selecting && view.selected.has(record.id) ? ' is-selected' : ''}"><button type="button" class="rmt-pair-history-card" data-pair-action="${view.selecting ? 'history-toggle' : 'history-open'}" data-pair-id="${esc(record.id)}"${view.selecting ? ` aria-pressed="${view.selected.has(record.id)}"` : ''}>${view.selecting ? `<span class="rmt-pair-check" aria-hidden="true">${view.selected.has(record.id) ? '✓' : ''}</span>` : ''}<div class="rmt-pair-mini" data-pair-thumb="${esc(record.id)}" aria-label="头像缩略图"><div class="rmt-pair-square"><span class="rmt-pair-thumb-note">读取中</span></div><div class="rmt-pair-square"></div></div><b>${record.favorite ? '★ ' : ''}${esc(record.order.map(half => record.settings.people[half]?.name || '未命名').join(' · '))}</b><small>${esc(styleLabel(record.settings))} · ${new Date(record.createdAt).toLocaleDateString('zh-CN')}</small></button>${view.selecting ? '' : button('history-delete', '删除', `class="rmt-pair-history-delete" data-pair-id="${esc(record.id)}" aria-label="删除这一对头像"`)}</div>`).join('') : `<p class="rmt-pair-muted">${view.favoritesOnly ? '还没有收藏。打开喜欢的头像，点“收藏这一对”即可。' : '还没有头像。做好一对后，会自动收在这里。'}</p>`;
     let pager = view.root.querySelector('[data-pair-history-pages]');
     if (!pager) { pager = document.createElement('nav'); pager.className = 'rmt-pair-pagination'; pager.dataset.pairHistoryPages = ''; pager.setAttribute('aria-label', '头像翻页'); target.after(pager); }
     pager.hidden = !rows.length;
@@ -422,7 +430,7 @@ export async function openCoupleAvatar() {
     const context = core_context.currentCharacterGuard(), scope = couple.coupleScope(context);
     body.innerHTML = '<main class="rmt-couple"><p role="status">正在读取头像记录…</p></main>';
     const view = { root: body.firstElementChild, host, context, scope, settings: couple.defaultCoupleSettings(context), records: [], pending: new Set(), images: new Map(),
-        currentId: '', circle: false, tab: 'make', favoritesOnly: false, historyPage: 1, ideas: [], previewEpoch: 0, historyEpoch: 0, draftTimer: 0, selectedEpoch: 0 };
+        currentId: '', circle: false, tab: 'make', favoritesOnly: false, historyPage: 1, selecting: false, selected: new Set(), ideas: [], previewEpoch: 0, historyEpoch: 0, draftTimer: 0, selectedEpoch: 0 };
     active = view; workspace.syncWorkspaceChrome();
     try {
         const saved = await couple.readCouples(scope);
@@ -431,7 +439,7 @@ export async function openCoupleAvatar() {
         for (const record of view.records) if (!combined.has(record.id) || combined.get(record.id).updatedAt < record.updatedAt) combined.set(record.id, record);
         view.records = [...combined.values()].sort((a, b) => b.createdAt - a.createdAt); view.pending = new Set([...(saved.pendingIds || []), ...view.pending]);
         view.settings = couple.normalizeCoupleSettings(saved.settings || view.settings, context); view.currentId = view.records[0]?.id || '';
-        view.root.innerHTML = `<header class="rmt-pair-head"><div><h2>情侣头像</h2><p>各自是你们，放在一起刚刚好。</p></div><nav class="rmt-pair-nav" aria-label="头像页面"><button type="button" data-pair-tab="make" aria-pressed="true">制作头像</button><button type="button" data-pair-tab="history" aria-pressed="false">历史与收藏</button></nav></header><p class="rmt-pair-status" data-pair-status role="status" aria-live="polite"></p><div class="rmt-pair-layout" data-pair-main><section class="rmt-pair-preview"><div class="rmt-pair-stage" data-pair-preview></div></section>${formHtml(view)}</div><section class="rmt-pair-history" data-pair-history hidden><div class="rmt-pair-section-head"><h3 data-pair-history-count></h3><div class="rmt-pair-actions">${button('filter-favorite', '只看收藏', 'aria-pressed="false"')}${button('export', '导出备份')}${button('import-backup', '导入备份')}</div></div><p class="rmt-pair-note">原图、裁切和设置按聊天保存在本设备浏览器中。更换设备前可导出备份。</p><div data-pair-history-jobs></div><div class="rmt-pair-history-grid" data-pair-history-grid></div></section><input type="file" accept="image/*" data-pair-image-file hidden><input type="file" accept=".json,application/json" data-pair-backup-file hidden>`;
+        view.root.innerHTML = `<header class="rmt-pair-head"><div><h2>情侣头像</h2><p>各自是你们，放在一起刚刚好。</p></div><nav class="rmt-pair-nav" aria-label="头像页面"><button type="button" data-pair-tab="make" aria-pressed="true">制作头像</button><button type="button" data-pair-tab="history" aria-pressed="false">历史与收藏</button></nav></header><p class="rmt-pair-status" data-pair-status role="status" aria-live="polite"></p><div class="rmt-pair-layout" data-pair-main><section class="rmt-pair-preview"><div class="rmt-pair-stage" data-pair-preview></div></section>${formHtml(view)}</div><section class="rmt-pair-history" data-pair-history hidden><div class="rmt-pair-section-head"><h3 data-pair-history-count></h3><div class="rmt-pair-actions">${button('filter-favorite', '只看收藏', 'aria-pressed="false"')}${button('select-mode', '多选', 'aria-pressed="false"')}${button('export', '导出备份')}${button('import-backup', '导入备份')}</div></div><div class="rmt-pair-select-bar" data-pair-select-bar hidden></div><p class="rmt-pair-note">原图、裁切和设置按聊天保存在本设备浏览器中。更换设备前可导出备份。</p><div data-pair-history-jobs></div><div class="rmt-pair-history-grid" data-pair-history-grid></div></section><input type="file" accept="image/*" data-pair-image-file hidden><input type="file" accept=".json,application/json" data-pair-backup-file hidden>`;
         bindView(view); paintSettings(view); void renderPreview(view); renderJobs(view);
         if (saved.durable === false) report(view, '本机存储暂不可用。可以继续制作，完成后请保存图片或导出备份。');
         body.scrollTop = 0; return true;
@@ -471,6 +479,24 @@ function bindView(view) {
             report(view, result.durable ? '备份已合并到当前聊天，已有头像保留。' : '备份已读取，但本机保存未确认。内容暂留本页，请保留备份文件。');
         }).catch(error => failure(view, error));
     });
+}
+async function deleteRecords(view, records) {
+    records = records.filter(Boolean);
+    if (!records.length) return;
+    const names = records[0].order.map(half => records[0].settings.people[half]?.name || '未命名').join(' · ');
+    const title = records.length === 1 ? `删除「${names}」这一对头像？` : `删除选中的 ${records.length} 对头像？`;
+    if (!overlay.confirmExplicitAction(title, '会从这个聊天的历史与收藏里移除原图记录、裁切和设置，不能撤销。已经设为聊天头像的图片、已保存到本机的 PNG 和生图插件图库里的原图都不受影响。', { destructive: true })) return;
+    let failed = 0;
+    for (const record of records) {
+        const result = await couple.deleteCouple(view.scope, record.id);
+        if (result.durable === false) failed += 1;
+        view.records = view.records.filter(row => row.id !== record.id); view.pending.delete(record.id); view.selected.delete(record.id);
+        if (!view.records.some(row => row.original.url === record.original.url)) view.images.delete(record.original.url);
+        if (view.currentId === record.id) { view.currentId = view.records[0]?.id || ''; view.selectedEpoch++; }
+    }
+    if (view.selecting && !view.selected.size) view.selecting = false;
+    if (current(view)) { void renderPreview(view); void renderHistory(view); }
+    report(view, failed ? `已从当前页面移除，但有 ${failed} 对的本机记录没有删除成功；刷新后可能还会出现，可以再删一次。` : records.length === 1 ? '这一对头像已删除。' : `已删除 ${records.length} 对头像。`);
 }
 async function updateRecord(view, record, patch) {
     const result = await couple.updateCouple(view.scope, record.id, patch); rememberRecord(view, result);
@@ -515,6 +541,12 @@ async function handleAction(view, action, target) {
         if (current(view)) view.root.querySelector('[data-pair-history-count]').scrollIntoView({ block: 'start' });
         return;
     }
+    if (action === 'history-delete') return deleteRecords(view, [view.records.find(row => row.id === target.dataset.pairId)]);
+    if (action === 'select-mode') { view.selecting = !view.selecting; view.selected.clear(); return renderHistory(view); }
+    if (action === 'history-toggle') { const id = target.dataset.pairId; if (view.selected.has(id)) view.selected.delete(id); else view.selected.add(id); return renderHistory(view); }
+    if (action === 'select-page') { for (const node of view.root.querySelectorAll('[data-pair-action="history-toggle"]')) view.selected.add(node.dataset.pairId); return renderHistory(view); }
+    if (action === 'select-clear') { view.selected.clear(); return renderHistory(view); }
+    if (action === 'delete-selected') return deleteRecords(view, view.records.filter(row => view.selected.has(row.id)));
     if (action === 'history-open') { view.currentId = target.dataset.pairId; view.selectedEpoch++; selectTab(view, 'make'); return renderPreview(view); }
     if (!record) return;
     if (action === 'apply-chat-avatar') return showApplyChatAvatars(view, record);
@@ -522,6 +554,7 @@ async function handleAction(view, action, target) {
     if (action === 'crop') return showCrop(view, record);
     if (action === 'swap') return updateRecord(view, record, { order: [record.order[1], record.order[0]] });
     if (action === 'favorite') return updateRecord(view, record, { favorite: !record.favorite });
+    if (action === 'delete') return deleteRecords(view, [record]);
     if (action === 'original') return showOriginal(view, record, false);
     if (action === 'seam') return showOriginal(view, record, true);
     if (action === 'reuse') { view.settings = structuredClone(record.settings); paintSettings(view); queueDraft(view); report(view, '已填入这一对的创作设置，可以修改后再生成。'); return; }
