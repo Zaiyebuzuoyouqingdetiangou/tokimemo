@@ -157,19 +157,29 @@ export function coupleStyleFullFigure(chosen) {
         || ['fantasy-enamel', 'fantasy-shadow'].includes(chosen?.id) || styles.FULL_FIGURE_LAYOUTS.includes(chosen?.id);
 }
 // Layout styles are an explicit composition; a user direction may set its own pose.
-function coupleCompositionVariant(settings, chosen) {
-    if (chosen?.group === 'layout') return null;
-    return styles.COMPOSITION_VARIANTS.find(row => row.id === settings.composition) || null;
+function coupleCompositionVariant(settings) {
+    if (!settings.composition || settings.composition === 'classic') return null;
+    return coupleCompositionChoices(settings).find(row => row.id === settings.composition) || null;
 }
-// Variations that fit this pair: none for layout styles; no head re-orienting
-// for front-facing interactions; no portrait-only framing for full figures.
+// What the interaction and the user's own direction already decide; a pose
+// accent never overrides those. 交给灵感 leaves every pose open.
+export function coupleCompositionClaims(value) {
+    const settings = normalizeCoupleSettings(value, null);
+    const resolved = settings.interaction === '交给灵感' || (settings.interaction === '自定义互动' && !settings.interactionDetail)
+        ? { prompt: '', roles: [] } : styles.coupleInteraction(settings.interaction, settings.interactionDetail);
+    const claims = new Set(styles.compositionClaims([settings.interaction === '交给灵感' ? '' : settings.interaction, resolved.prompt, ...resolved.roles, settings.direction].join(' \n ')));
+    if (/^Keep a mostly front-facing/.test(interaction_direction.coupleInteractionDirection({ interaction: settings.interaction }).scene)) claims.add('orientation');
+    return [...claims];
+}
+// Variations that fit this pair: none for layout styles; no pose accent that
+// touches what the interaction already sets; no portrait-only crops for full figures.
 export function coupleCompositionChoices(value) {
     const settings = normalizeCoupleSettings(value, null);
     const chosen = styles.COUPLE_STYLES.find(style => style.id === settings.styleId);
     if (chosen?.group === 'layout') return [];
-    const frontFacing = /^Keep a mostly front-facing/.test(interaction_direction.coupleInteractionDirection({ interaction: settings.interaction }).scene);
+    const claims = new Set(coupleCompositionClaims(settings));
     const full = coupleStyleFullFigure(chosen);
-    return styles.COMPOSITION_VARIANTS.filter(row => !(frontFacing && row.turn) && !(full && row.portrait));
+    return styles.COMPOSITION_VARIANTS.filter(row => !(full && row.portrait) && !row.sets.some(key => claims.has(key)));
 }
 
 export function couplePromptParts(value, context = optionalContext()) {
@@ -205,8 +215,8 @@ export function couplePromptParts(value, context = optionalContext()) {
     // Framing and finish are art direction only. Keep full-figure styles and
     // simplified media intact; explicit user directions still take precedence.
     const fullFigure = coupleStyleFullFigure(chosen);
-    const variant = coupleCompositionVariant(settings, chosen);
-    const variantLines = variant ? [`Camera and pose: ${variant.prompt}`, styles.COMPOSITION_PAIR_CUE] : [];
+    const variant = coupleCompositionVariant(settings);
+    const variantLines = variant ? [variant.sets.length ? `Pose accent: ${variant.prompt} The interaction's own actions stay exactly as described.` : `Camera: ${variant.prompt}`, styles.COMPOSITION_PAIR_CUE] : [];
     const framing = !chosen ? '' : fullFigure
         ? 'Each complete stylized figure fills most of its own half, with a readable face and connected limbs; retain the selected body proportions.'
         : 'Close head-and-shoulder or upper-body portraits fill most of each half, with visible shoulders and clothing supporting the gestures.';

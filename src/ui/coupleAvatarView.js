@@ -374,6 +374,34 @@ function paintSettings(view) {
 function paintInteraction(view) {
     const custom = view.root.querySelector('[data-pair-interaction-custom]');
     if (custom) custom.hidden = view.settings.interaction !== '自定义互动';
+    const select = view.root.querySelector('[data-pair-field="interaction"]'), value = select?.value || view.settings.interaction;
+    const preset = presets.INTERACTION_PRESETS.find(item => item.label === value);
+    const name = view.root.querySelector('[data-pair-selected-interaction]'), note = view.root.querySelector('[data-pair-interaction-description]');
+    if (name) name.textContent = value || '交给灵感';
+    if (note) note.textContent = preset ? `${preset.group} · 点开按分类挑，或搜索` : value === '自定义互动' ? '在下面写你们的动作' : value === '交给灵感' ? '不指定动作，让画面自己发挥' : '来自灵感的互动';
+    paintComposition(view);
+}
+// Pose accents that would change what the chosen interaction or the user's own
+// direction already sets are greyed out; random only draws from what fits.
+function paintComposition(view) {
+    const select = view.root.querySelector('[data-pair-field="composition"]'); if (!select) return;
+    const field = key => view.root.querySelector(`[data-pair-field="${key}"]`)?.value ?? view.settings[key] ?? '';
+    const settings = { ...view.settings, interaction: field('interaction'), interactionDetail: field('interactionDetail'), direction: field('direction') };
+    const fits = new Set(couple.coupleCompositionChoices(settings).map(row => row.id));
+    const layout = styleFor(settings.styleId)?.group === 'layout';
+    for (const option of select.options) {
+        const row = presets.COMPOSITION_VARIANTS.find(item => item.id === option.value); if (!row) continue;
+        const clash = !fits.has(row.id);
+        const full = row.portrait && couple.coupleStyleFullFigure(styleFor(settings.styleId));
+        option.textContent = row.label + (clash ? (layout ? '（版式画风不用）' : full ? '（全身画风不用）' : '（会和当前互动冲突）') : '');
+        option.disabled = clash && select.value !== row.id;
+    }
+    const note = view.root.querySelector('[data-pair-composition-note]'); if (!note) return;
+    const chosen = presets.COMPOSITION_VARIANTS.find(item => item.id === select.value);
+    note.textContent = layout ? '构图版式画风自带构图，这里不叠加。'
+        : chosen && !fits.has(chosen.id) ? (chosen.portrait && couple.coupleStyleFullFigure(styleFor(settings.styleId)) ? '全身画风不适合这个近景构图，这次会换成合适的随机镜头。' : '所选构图会改动当前互动的动作，这次会换成不冲突的随机镜头。')
+        : select.value === '' ? `随机范围 ${fits.size} 种：互动已经定好的动作（手、视线、头、身体朝向、坐站）不会被改动。`
+        : '';
 }
 function formHtml(view) {
     let providerNote = '';
@@ -390,10 +418,11 @@ function formHtml(view) {
             <label class="rmt-pair-overlay"><input type="checkbox" data-pair-overlay><span><b>叠在我的画师串上</b><small data-pair-overlay-note></small></span></label>
         </div>
         <div class="rmt-pair-block"><h3>两个人的呼应</h3><div class="rmt-pair-choice"><button type="button" data-pair-type="joined" aria-pressed="true">拼接连图</button><button type="button" data-pair-type="echo" aria-pressed="false">独立呼应</button></div>
-            <div class="rmt-pair-section-head"><label for="rmt-pair-interaction">互动 <small>${presets.INTERACTION_PRESETS.length} 种</small></label><span class="rmt-pair-actions">${button('random-interaction', '抽一个')}${button('inspiration', '随机灵感')}</span></div>
-            <select id="rmt-pair-interaction" data-pair-field="interaction" aria-label="互动">${groups.map(group => `<optgroup label="${esc(group)}">${presets.INTERACTION_PRESETS.filter(item => item.group === group).map(item => `<option value="${esc(item.label)}">${esc(item.label)}</option>`).join('')}</optgroup>`).join('')}<option value="交给灵感">交给灵感</option><option value="自定义互动">自定义互动</option></select>
+            <div class="rmt-pair-section-head"><span>互动 <small>${presets.INTERACTION_PRESETS.length} 种</small></span><span class="rmt-pair-actions">${button('random-interaction', '抽一个')}${button('inspiration', '随机灵感')}</span></div>
+            <button type="button" class="rmt-pair-style-summary" data-pair-action="interactions"><span><b data-pair-selected-interaction></b><small data-pair-interaction-description></small></span><span>更换</span></button>
+            <select id="rmt-pair-interaction" data-pair-field="interaction" aria-label="互动" hidden>${groups.map(group => `<optgroup label="${esc(group)}">${presets.INTERACTION_PRESETS.filter(item => item.group === group).map(item => `<option value="${esc(item.label)}">${esc(item.label)}</option>`).join('')}</optgroup>`).join('')}<option value="交给灵感">交给灵感</option><option value="自定义互动">自定义互动</option></select>
             <div class="rmt-pair-inspirations" data-pair-ideas hidden></div>
-            <label class="rmt-pair-field"><span>构图 <small>随机时每次换一种镜头，仍保持左右各一人、能裁成两张头像</small></span><select data-pair-field="composition"><option value="">随机（每次不同）</option><option value="classic">固定：正面并排</option>${presets.COMPOSITION_VARIANTS.map(row => `<option value="${row.id}">${esc(row.label)}</option>`).join('')}</select></label>
+            <label class="rmt-pair-field"><span>构图 <small>随机时每次换一种镜头，仍保持左右各一人、能裁成两张头像</small></span><select data-pair-field="composition"><option value="">随机（每次不同）</option><option value="classic">固定：正面并排</option>${presets.COMPOSITION_VARIANTS.map(row => `<option value="${row.id}">${esc(row.label)}</option>`).join('')}</select><small class="rmt-pair-note" data-pair-composition-note role="status"></small></label>
             <label class="rmt-pair-field" data-pair-interaction-custom hidden><span>写下你们的互动</span><textarea data-pair-field="interactionDetail" placeholder="可以选一条随机灵感，再改成你喜欢的动作与表情。"></textarea></label>
         </div>
         <label class="rmt-pair-field"><span>这一对的小心思 <small>选填</small></span><textarea data-pair-field="direction" placeholder="比如：一个忍着笑，一个假装生气；共用一条围巾。"></textarea></label>
@@ -442,6 +471,7 @@ function bindView(view) {
     view.root.addEventListener('input', event => {
         if (event.target.matches('[data-pair-person]')) cancelAppearanceReads(view, Number(event.target.dataset.pairPerson), '外貌已编辑，本次读取已取消。');
         if (event.target.matches('[data-pair-field],[data-pair-person]')) queueDraft(view);
+        if (event.target.matches('[data-pair-field="interactionDetail"],[data-pair-field="direction"]')) paintComposition(view);
     });
     view.root.addEventListener('change', event => {
         if (event.target.matches('select[data-pair-field]')) { queueDraft(view); paintInteraction(view); }
@@ -480,6 +510,7 @@ async function handleAction(view, action, target) {
     if (action === 'restore-chat-avatar') return restoreChatAvatars(view);
     if (action === 'refresh-appearance') return refreshAppearance(view, Number(target.dataset.pairSide));
     if (action === 'styles') return showStyles(view);
+    if (action === 'interactions') return showInteractions(view);
     if (action === 'inspiration') {
         draft(view); view.ideas = presets.randomCoupleIdeas(view.ideas);
         const list = view.root.querySelector('[data-pair-ideas]'); list.hidden = false;
@@ -635,9 +666,10 @@ function askChibiFilter(view, settings, style, result) {
 function resolveComposition(view, settings) {
     if (settings.composition === 'classic') { const { composition, ...rest } = settings; return rest; }
     const choices = couple.coupleCompositionChoices(settings);
-    // An explicitly chosen variation is kept (layout styles ignore it when building the prompt).
-    if (settings.composition) return settings;
-    if (!choices.length) return settings;
+    // An explicit variation is kept when it fits; one that would change the
+    // interaction's own actions falls back to a fitting random camera.
+    if (settings.composition && choices.some(row => row.id === settings.composition)) return settings;
+    if (!choices.length) { const { composition, ...rest } = settings; return rest; }
     const fresh = choices.filter(row => row.id !== view.lastComposition);
     const pick = (fresh.length ? fresh : choices)[Math.floor(Math.random() * (fresh.length ? fresh : choices).length)];
     view.lastComposition = pick.id;
@@ -706,6 +738,49 @@ function showStyles(view) {
         const target = event.target.closest('[data-pair-pick-style]'); if (!target) return;
         draft(view); view.settings.styleId = target.dataset.pairPickStyle; paintSettings(view); queueDraft(view); closeCoupleDialog();
     });
+    draw();
+}
+// The same browser as the style picker: grouped, searchable, with a random pick.
+const INTERACTION_EXTRA = Object.freeze([{ label: '交给灵感', group: '其他' }, { label: '自定义互动', group: '其他' }]);
+function showInteractions(view) {
+    const groups = [...new Set(presets.INTERACTION_PRESETS.map(item => item.group)), '其他'];
+    const rows = [...presets.INTERACTION_PRESETS, ...INTERACTION_EXTRA];
+    const select = view.root.querySelector('[data-pair-field="interaction"]');
+    const currentValue = () => select?.value || view.settings.interaction;
+    const m = dialog(view, '选择互动', `<div class="rmt-pair-picker-toolbar">
+        <label class="rmt-pair-field"><span class="rmt-pair-visually-hidden">搜索互动</span><input data-pair-search aria-label="搜索互动" placeholder="搜索名称，例如：花、围巾、贴贴"></label>
+        <div class="rmt-pair-picker-filter"><label class="rmt-pair-field"><span class="rmt-pair-visually-hidden">互动分类</span><select data-pair-interaction-group aria-label="互动分类"><option value="all">全部互动</option>${groups.map(group => `<option value="${esc(group)}">${esc(group)}</option>`).join('')}</select></label><small data-pair-interaction-count role="status"></small><button type="button" data-pair-random-interaction>随机一个</button></div>
+        </div><div class="rmt-pair-picker-scroll" data-pair-picker-results></div>`);
+    if (!m) return;
+    m.body.classList.add('rmt-pair-style-browser');
+    const filter = m.body.querySelector('[data-pair-interaction-group]'), search = m.body.querySelector('[data-pair-search]');
+    const draw = () => {
+        const query = search.value.trim().toLowerCase();
+        if (query) filter.value = 'all';
+        const shown = rows.filter(item => (query || filter.value === 'all' || item.group === filter.value || item.group === '其他') && `${item.label} ${item.group}`.toLowerCase().includes(query));
+        m.body.querySelector('[data-pair-interaction-count]').textContent = `${shown.filter(item => item.group !== '其他').length} 种`;
+        const now = currentValue();
+        m.body.querySelector('[data-pair-picker-results]').innerHTML = shown.length ? groups.map(group => {
+            const items = shown.filter(item => item.group === group);
+            return items.length ? `<section class="rmt-pair-picker-group"><h3>${esc(group)}</h3><div class="rmt-pair-picker-results">${items.map(item => `<button type="button" data-pair-pick-interaction="${esc(item.label)}" aria-pressed="${now === item.label}"><span>${esc(item.label)}</span>${now === item.label ? '<span aria-hidden="true">✓</span>' : ''}</button>`).join('')}</div></section>` : '';
+        }).join('') : '<p class="rmt-pair-note">没有找到，换个词试试，或选“自定义互动”自己写。</p>';
+        m.body.querySelector('[data-pair-picker-results]').scrollTop = 0;
+    };
+    const choose = label => {
+        draft(view); view.settings.interaction = label; paintSettings(view); queueDraft(view); closeCoupleDialog();
+        if (label === '自定义互动') view.root.querySelector('[data-pair-field="interactionDetail"]')?.focus();
+    };
+    search.addEventListener('input', draw);
+    filter.addEventListener('change', () => { search.value = ''; draw(); });
+    m.body.addEventListener('click', event => {
+        if (event.target.closest('[data-pair-random-interaction]')) {
+            const options = [...m.body.querySelectorAll('[data-pair-pick-interaction]')].map(node => node.dataset.pairPickInteraction)
+                .filter(label => label !== currentValue() && !INTERACTION_EXTRA.some(item => item.label === label));
+            const pick = options[Math.floor(Math.random() * options.length)]; if (pick) choose(pick); return;
+        }
+        const target = event.target.closest('[data-pair-pick-interaction]'); if (target) choose(target.dataset.pairPickInteraction);
+    });
+    filter.value = presets.INTERACTION_PRESETS.find(item => item.label === currentValue())?.group || 'all';
     draw();
 }
 async function showCrop(view, record) {

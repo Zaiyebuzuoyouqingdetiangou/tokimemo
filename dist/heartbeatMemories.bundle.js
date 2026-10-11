@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 353
-// Source SHA-256: b674f8350771e4cf16374df35ad88ff441b370327656fff86536028783617bd8
+// Source SHA-256: 1d85c4e44a30047ca08f67a3bec15afd36e04ab88bfa9c89180b41c4a0bf4447
 // Build: python3 tools/verification/build.py <source-root>
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -1353,19 +1353,29 @@ function coupleStyleFullFigure(chosen) {
         || ['fantasy-enamel', 'fantasy-shadow'].includes(chosen?.id) || styles.FULL_FIGURE_LAYOUTS.includes(chosen?.id);
 }
 // Layout styles are an explicit composition; a user direction may set its own pose.
-function coupleCompositionVariant(settings, chosen) {
-    if (chosen?.group === 'layout') return null;
-    return styles.COMPOSITION_VARIANTS.find(row => row.id === settings.composition) || null;
+function coupleCompositionVariant(settings) {
+    if (!settings.composition || settings.composition === 'classic') return null;
+    return coupleCompositionChoices(settings).find(row => row.id === settings.composition) || null;
 }
-// Variations that fit this pair: none for layout styles; no head re-orienting
-// for front-facing interactions; no portrait-only framing for full figures.
+// What the interaction and the user's own direction already decide; a pose
+// accent never overrides those. 交给灵感 leaves every pose open.
+function coupleCompositionClaims(value) {
+    const settings = normalizeCoupleSettings(value, null);
+    const resolved = settings.interaction === '交给灵感' || (settings.interaction === '自定义互动' && !settings.interactionDetail)
+        ? { prompt: '', roles: [] } : styles.coupleInteraction(settings.interaction, settings.interactionDetail);
+    const claims = new Set(styles.compositionClaims([settings.interaction === '交给灵感' ? '' : settings.interaction, resolved.prompt, ...resolved.roles, settings.direction].join(' \n ')));
+    if (/^Keep a mostly front-facing/.test(interaction_direction.coupleInteractionDirection({ interaction: settings.interaction }).scene)) claims.add('orientation');
+    return [...claims];
+}
+// Variations that fit this pair: none for layout styles; no pose accent that
+// touches what the interaction already sets; no portrait-only crops for full figures.
 function coupleCompositionChoices(value) {
     const settings = normalizeCoupleSettings(value, null);
     const chosen = styles.COUPLE_STYLES.find(style => style.id === settings.styleId);
     if (chosen?.group === 'layout') return [];
-    const frontFacing = /^Keep a mostly front-facing/.test(interaction_direction.coupleInteractionDirection({ interaction: settings.interaction }).scene);
+    const claims = new Set(coupleCompositionClaims(settings));
     const full = coupleStyleFullFigure(chosen);
-    return styles.COMPOSITION_VARIANTS.filter(row => !(frontFacing && row.turn) && !(full && row.portrait));
+    return styles.COMPOSITION_VARIANTS.filter(row => !(full && row.portrait) && !row.sets.some(key => claims.has(key)));
 }
 
 function couplePromptParts(value, context = optionalContext()) {
@@ -1401,8 +1411,8 @@ function couplePromptParts(value, context = optionalContext()) {
     // Framing and finish are art direction only. Keep full-figure styles and
     // simplified media intact; explicit user directions still take precedence.
     const fullFigure = coupleStyleFullFigure(chosen);
-    const variant = coupleCompositionVariant(settings, chosen);
-    const variantLines = variant ? [`Camera and pose: ${variant.prompt}`, styles.COMPOSITION_PAIR_CUE] : [];
+    const variant = coupleCompositionVariant(settings);
+    const variantLines = variant ? [variant.sets.length ? `Pose accent: ${variant.prompt} The interaction's own actions stay exactly as described.` : `Camera: ${variant.prompt}`, styles.COMPOSITION_PAIR_CUE] : [];
     const framing = !chosen ? '' : fullFigure
         ? 'Each complete stylized figure fills most of its own half, with a readable face and connected limbs; retain the selected body proportions.'
         : 'Close head-and-shoulder or upper-body portraits fill most of each half, with visible shoulders and clothing supporting the gestures.';
@@ -1816,6 +1826,7 @@ __m_extras_coupleAvatar_js.coupleScope = coupleScope;
 __m_extras_coupleAvatar_js.defaultCoupleSettings = defaultCoupleSettings;
 __m_extras_coupleAvatar_js.normalizeCoupleSettings = normalizeCoupleSettings;
 __m_extras_coupleAvatar_js.coupleStyleFullFigure = coupleStyleFullFigure;
+__m_extras_coupleAvatar_js.coupleCompositionClaims = coupleCompositionClaims;
 __m_extras_coupleAvatar_js.coupleCompositionChoices = coupleCompositionChoices;
 __m_extras_coupleAvatar_js.couplePromptParts = couplePromptParts;
 __m_extras_coupleAvatar_js.couplePrompt = couplePrompt;
@@ -3453,9 +3464,32 @@ const INTERACTION_PRESETS = Object.freeze([
 // records keep the composition they were drawn with. Every variation keeps
 // the two-half avatar contract; `turn` ones re-orient heads and are skipped
 // for front-facing interactions, `portrait` ones need portrait framing.
-const COMPOSITION_VARIANTS = Object.freeze([{"id": "lean-in", "label": "互相靠近", "prompt": "Both lean slightly toward the center line so their heads tilt toward each other and their shoulders nearly meet across the middle.", "tags": "leaning toward center, heads tilted toward each other, shoulders nearly meeting", "turn": false, "portrait": false}, {"id": "three-quarter", "label": "四分之三侧身", "prompt": "Three-quarter views turned toward each other: the left subject turns right, the right subject turns left, each face still clearly visible.", "tags": "three-quarter views facing each other, both faces clearly visible", "turn": true, "portrait": false}, {"id": "height-offset", "label": "一高一低", "prompt": "One head sits a little higher than the other, as if one leans down while the other looks up, gently breaking the symmetry.", "tags": "one head slightly higher, one leaning down, one looking up, asymmetric heights", "turn": false, "portrait": false}, {"id": "high-angle", "label": "微微俯拍", "prompt": "A slightly high camera angle; both look up toward the viewer while the shared interaction stays between them.", "tags": "slight high angle, both looking up at viewer, interaction between them", "turn": false, "portrait": false}, {"id": "close", "label": "拉近特写", "prompt": "Closer framing: the two faces and the interacting hands fill most of the image, with the shared gesture right at the center.", "tags": "close framing, faces and interacting hands filling image, shared gesture at center", "turn": false, "portrait": true}, {"id": "one-turns", "label": "一个看镜头一个看你", "prompt": "One subject faces the viewer while the other turns toward the partner in a three-quarter view, both faces readable.", "tags": "one facing viewer, other turned toward partner, both faces readable", "turn": true, "portrait": false}, {"id": "heads-close", "label": "头靠头", "prompt": "Their heads come close at the center line, nearly touching temple to temple, both smiling softly.", "tags": "heads close at center, nearly touching temple to temple, soft smiles", "turn": false, "portrait": true}, {"id": "seated", "label": "并肩坐着", "prompt": "Both are seated side by side at the same height, relaxed and close, the interaction held between them.", "tags": "seated side by side, same height, relaxed and close", "turn": false, "portrait": false}, {"id": "tilt", "label": "斜一点的镜头", "prompt": "A slight diagonal camera tilt adds movement; the two halves stay balanced and both faces stay upright enough to read.", "tags": "slight dutch angle, dynamic diagonal, balanced halves, readable faces", "turn": false, "portrait": false}, {"id": "over-shoulder", "label": "回眸", "prompt": "Both glance back over the inner shoulder toward the center, bodies angled slightly outward, faces turned to each other.", "tags": "glancing back over inner shoulders, bodies angled slightly outward, faces turned to each other", "turn": true, "portrait": false}, {"id": "low-angle", "label": "微微仰拍", "prompt": "A slightly low camera angle with a little open sky or ceiling behind; both look down toward the viewer with soft expressions.", "tags": "slight low angle, open sky behind, both looking down at viewer", "turn": false, "portrait": false}, {"id": "reach", "label": "伸手向中间", "prompt": "Both reach their inner hands toward the center line, so the interaction becomes the clear focal point between the two portraits.", "tags": "inner hands reaching toward center, interaction as focal point between portraits", "turn": false, "portrait": false}].map(row => Object.freeze(row)));
+// Camera variations (empty `sets`) only move the camera. Pose accents name what
+// they change; a variation is skipped when the interaction or the user direction
+// already decides that part, so the chosen actions are never overridden.
+const COMPOSITION_VARIANTS = Object.freeze([{"id": "high-angle", "label": "微微俯拍", "prompt": "A slightly high camera angle looking down at the pair; the shared interaction stays between them.", "tags": "slight high angle, looking down at the pair, interaction between them", "sets": [], "portrait": false}, {"id": "low-angle", "label": "微微仰拍", "prompt": "A slightly low camera angle looking up at the pair.", "tags": "slight low angle, looking up at the pair", "sets": [], "portrait": false}, {"id": "tilt", "label": "斜一点的镜头", "prompt": "A slight diagonal camera tilt adds movement; the two halves stay balanced and both faces stay upright enough to read.", "tags": "slight dutch angle, dynamic diagonal, balanced halves, readable faces", "sets": [], "portrait": false}, {"id": "close", "label": "拉近特写", "prompt": "Closer framing: the two faces and the shared interaction fill most of the image, with the meeting point right at the center.", "tags": "close framing, faces and shared interaction filling image, meeting point at center", "sets": [], "portrait": true}, {"id": "lean-in", "label": "互相靠近", "prompt": "Both lean slightly toward the center line so their heads tilt toward each other and their shoulders nearly meet across the middle.", "tags": "leaning toward center, heads tilted toward each other, shoulders nearly meeting", "sets": ["heads", "distance"], "portrait": false}, {"id": "three-quarter", "label": "四分之三侧身", "prompt": "Three-quarter views turned toward each other: the left subject turns right, the right subject turns left, each face still clearly visible.", "tags": "three-quarter views facing each other, both faces clearly visible", "sets": ["orientation"], "portrait": false}, {"id": "height-offset", "label": "一高一低", "prompt": "One head sits a little higher than the other, as if one leans down while the other looks up, gently breaking the symmetry.", "tags": "one head slightly higher, one leaning down, one looking up, asymmetric heights", "sets": ["heads", "gaze"], "portrait": false}, {"id": "one-turns", "label": "一个看镜头一个看你", "prompt": "One subject faces the viewer while the other turns toward the partner in a three-quarter view, both faces readable.", "tags": "one facing viewer, other turned toward partner, both faces readable", "sets": ["orientation", "gaze"], "portrait": false}, {"id": "heads-close", "label": "头靠头", "prompt": "Their heads come close at the center line, nearly touching temple to temple.", "tags": "heads close at center, nearly touching temple to temple", "sets": ["heads", "distance"], "portrait": true}, {"id": "seated", "label": "并肩坐着", "prompt": "Both are seated side by side at the same height, relaxed and close, the interaction held between them.", "tags": "seated side by side, same height, relaxed and close", "sets": ["posture"], "portrait": false}, {"id": "over-shoulder", "label": "回眸", "prompt": "Both glance back over the inner shoulder toward the center, bodies angled slightly outward, faces turned to each other.", "tags": "glancing back over inner shoulders, bodies angled slightly outward, faces turned to each other", "sets": ["orientation", "gaze", "hands", "heads"], "portrait": false}, {"id": "reach", "label": "伸手向中间", "prompt": "Both reach their inner hands toward the center line, so the interaction becomes the clear focal point between the two portraits.", "tags": "inner hands reaching toward center, interaction as focal point between portraits", "sets": ["hands"], "portrait": false}].map(row => Object.freeze({ ...row, sets: Object.freeze(row.sets) })));
 const COMPOSITION_PAIR_CUE = "They read clearly as a couple avatar pair: complementary, not mirrored, poses; coordinated color accents shared across both halves; the interaction meets at the center line; each face stays large and fully inside its own half so the image can be cropped into two avatars.";
 const COMPOSITION_PAIR_TAGS = "couple avatar pair, complementary not mirrored poses, coordinated color accents, interaction meeting at center, large faces within own half";
+
+// What an interaction text already decides. Broad on purpose: a false match only
+// removes a pose accent, a miss could let a pose fight the chosen action.
+const COMPOSITION_CLAIMS = Object.freeze({
+    hands: [/\b(?:hold|holds|holding|held|offer|offers|offering|reach|reaches|reaching|raise|raises|raising|lift|lifts|hand|hands|forepaws?|paws?|palms?|fingers?|catch|catches|tug|tugs|point|points|pointing|clasp|clasps|clasped|give|gives|place|places|push|pushes|wave|waves|waving|draw|draws|pet|pets|wrap|wraps|carry|carries|hug|hugs|hugging|embrace|embraces|pinch|pinches|feed|feeds|share|shares|sharing|cup|cups|grab|grabs|touch|touches|touching|tap|taps|poke|pokes|pull|pulls|clink|toast|pass|passes|throw|throws|toss|tie|ties|adjust|adjusts|straighten|straightens|shield|umbrella|dab|dabs|stick|sticks|salute|drop|drops|blow|blows|frame|frames|cradle|cradles|pat|pats|wipe|wipes|link|links|interlock|high-five|pinky|show|shows|showing|hide|hides|hiding|sign|signs|gesture|gestures|swing|swings|block|blocks|grip|grips|cover)\b/iu,
+        /手|递|牵|握|举|捧|拿|抱|摸|指|拉|伸|挥|戴|喂|抓|接|扶|揉|戳|捏|拍|勾|撑|送|丢|画|系|披|盖|碰杯|干杯|爪|擦|掐|拽|扯|比心|击掌/u],
+    gaze: [/\b(?:look|looks|looking|gaze|gazes|gazing|glance|glances|glancing|wink|winks|winking|watch|watches|watching|stare|stares|staring|eye contact|eyes|peek|peeks|peeking|notice|notices|see|sees|viewer|camera)\b/iu,
+        /看|望|盯|眨眼|对视|瞥|闭眼|目光|视线|眼神|镜头/u],
+    heads: [/\b(?:lean|leans|leaning|head|heads|forehead|foreheads|temple|temples|cheek|cheeks|nose|noses|nuzzle|nuzzles|chin|shoulder|shoulders|tilt|tilts|tilted|bow|bows|nod|nods|kiss|kisses|whisper|whispers|ear|ears|sip|sips|straw|straws|bite)\b/iu,
+        /靠|贴|头|额|鼻|脸|肩|蹭|歪|亲|吻|耳语|悄悄话|咬耳朵/u],
+    posture: [/\b(?:sit|sits|seated|sitting|lie|lies|lying|kneel|kneels|kneeling|stand|stands|standing|tiptoe|back-to-back|back to back|run|runs|running|dance|dances|dancing|jump|jumps|jumping|carry|carries|piggyback|hug|hugs|hugging|embrace|embraces|crouch|crouches|squat|squats|float|floats|floating|fly|flies|flying|ride|rides|riding|walk|walks|walking|swing|swings|spin|spins|bench|swim|swims|lap|chase|chases|fall|falls|kick|kicks|hop|hops|step|steps|stepping|splash|splashes|pose|poses|guard|cook|cooks|cooking)\b/iu,
+        /坐|躺|站|跪|蹲|跑|跳|背靠背|背对|背着|飞|骑|走|踮脚|趴|依偎|荡|转圈|舞|追|踩|踏|姿势|模仿/u],
+    orientation: [/\b(?:turn|turns|turned|turning|facing|faces|front-facing|back-to-back|back to back|profile|side view|over the shoulder|look back|glance back|away|foreheads?|noses)\b/iu,
+        /转身|侧身|回头|回眸|面对|面朝|正面|背对|背靠背|转向|扭头|额头|鼻尖/u],
+    distance: [/\b(?:across the (?:gap|distance|space)|from afar|apart|at a distance)\b/iu, /隔空|远远|隔着|对望/u],
+});
+function compositionClaims(text) {
+    const value = String(text || '');
+    return Object.keys(COMPOSITION_CLAIMS).filter(key => COMPOSITION_CLAIMS[key].some(pattern => pattern.test(value)));
+}
 
 const INTERACTIONS = Object.freeze([...INTERACTION_PRESETS.map(row => row.label), '交给灵感', '自定义互动']);
 
@@ -3593,6 +3627,7 @@ __m_extras_coupleAvatarStyles_js.coupleStyleBlend = coupleStyleBlend;
 __m_extras_coupleAvatarStyles_js.coupleOverlayAvailable = coupleOverlayAvailable;
 __m_extras_coupleAvatarStyles_js.coupleStyleOwnConstruction = coupleStyleOwnConstruction;
 __m_extras_coupleAvatarStyles_js.coupleStyleConstruction = coupleStyleConstruction;
+__m_extras_coupleAvatarStyles_js.compositionClaims = compositionClaims;
 __m_extras_coupleAvatarStyles_js.coupleInteraction = coupleInteraction;
 __m_extras_coupleAvatarStyles_js.randomCoupleIdeas = randomCoupleIdeas;
 __m_extras_coupleAvatarStyles_js.coupleStyleIdentityRendering = coupleStyleIdentityRendering;
@@ -6137,6 +6172,34 @@ function paintSettings(view) {
 function paintInteraction(view) {
     const custom = view.root.querySelector('[data-pair-interaction-custom]');
     if (custom) custom.hidden = view.settings.interaction !== '自定义互动';
+    const select = view.root.querySelector('[data-pair-field="interaction"]'), value = select?.value || view.settings.interaction;
+    const preset = presets.INTERACTION_PRESETS.find(item => item.label === value);
+    const name = view.root.querySelector('[data-pair-selected-interaction]'), note = view.root.querySelector('[data-pair-interaction-description]');
+    if (name) name.textContent = value || '交给灵感';
+    if (note) note.textContent = preset ? `${preset.group} · 点开按分类挑，或搜索` : value === '自定义互动' ? '在下面写你们的动作' : value === '交给灵感' ? '不指定动作，让画面自己发挥' : '来自灵感的互动';
+    paintComposition(view);
+}
+// Pose accents that would change what the chosen interaction or the user's own
+// direction already sets are greyed out; random only draws from what fits.
+function paintComposition(view) {
+    const select = view.root.querySelector('[data-pair-field="composition"]'); if (!select) return;
+    const field = key => view.root.querySelector(`[data-pair-field="${key}"]`)?.value ?? view.settings[key] ?? '';
+    const settings = { ...view.settings, interaction: field('interaction'), interactionDetail: field('interactionDetail'), direction: field('direction') };
+    const fits = new Set(couple.coupleCompositionChoices(settings).map(row => row.id));
+    const layout = styleFor(settings.styleId)?.group === 'layout';
+    for (const option of select.options) {
+        const row = presets.COMPOSITION_VARIANTS.find(item => item.id === option.value); if (!row) continue;
+        const clash = !fits.has(row.id);
+        const full = row.portrait && couple.coupleStyleFullFigure(styleFor(settings.styleId));
+        option.textContent = row.label + (clash ? (layout ? '（版式画风不用）' : full ? '（全身画风不用）' : '（会和当前互动冲突）') : '');
+        option.disabled = clash && select.value !== row.id;
+    }
+    const note = view.root.querySelector('[data-pair-composition-note]'); if (!note) return;
+    const chosen = presets.COMPOSITION_VARIANTS.find(item => item.id === select.value);
+    note.textContent = layout ? '构图版式画风自带构图，这里不叠加。'
+        : chosen && !fits.has(chosen.id) ? (chosen.portrait && couple.coupleStyleFullFigure(styleFor(settings.styleId)) ? '全身画风不适合这个近景构图，这次会换成合适的随机镜头。' : '所选构图会改动当前互动的动作，这次会换成不冲突的随机镜头。')
+        : select.value === '' ? `随机范围 ${fits.size} 种：互动已经定好的动作（手、视线、头、身体朝向、坐站）不会被改动。`
+        : '';
 }
 function formHtml(view) {
     let providerNote = '';
@@ -6153,10 +6216,11 @@ function formHtml(view) {
             <label class="rmt-pair-overlay"><input type="checkbox" data-pair-overlay><span><b>叠在我的画师串上</b><small data-pair-overlay-note></small></span></label>
         </div>
         <div class="rmt-pair-block"><h3>两个人的呼应</h3><div class="rmt-pair-choice"><button type="button" data-pair-type="joined" aria-pressed="true">拼接连图</button><button type="button" data-pair-type="echo" aria-pressed="false">独立呼应</button></div>
-            <div class="rmt-pair-section-head"><label for="rmt-pair-interaction">互动 <small>${presets.INTERACTION_PRESETS.length} 种</small></label><span class="rmt-pair-actions">${button('random-interaction', '抽一个')}${button('inspiration', '随机灵感')}</span></div>
-            <select id="rmt-pair-interaction" data-pair-field="interaction" aria-label="互动">${groups.map(group => `<optgroup label="${esc(group)}">${presets.INTERACTION_PRESETS.filter(item => item.group === group).map(item => `<option value="${esc(item.label)}">${esc(item.label)}</option>`).join('')}</optgroup>`).join('')}<option value="交给灵感">交给灵感</option><option value="自定义互动">自定义互动</option></select>
+            <div class="rmt-pair-section-head"><span>互动 <small>${presets.INTERACTION_PRESETS.length} 种</small></span><span class="rmt-pair-actions">${button('random-interaction', '抽一个')}${button('inspiration', '随机灵感')}</span></div>
+            <button type="button" class="rmt-pair-style-summary" data-pair-action="interactions"><span><b data-pair-selected-interaction></b><small data-pair-interaction-description></small></span><span>更换</span></button>
+            <select id="rmt-pair-interaction" data-pair-field="interaction" aria-label="互动" hidden>${groups.map(group => `<optgroup label="${esc(group)}">${presets.INTERACTION_PRESETS.filter(item => item.group === group).map(item => `<option value="${esc(item.label)}">${esc(item.label)}</option>`).join('')}</optgroup>`).join('')}<option value="交给灵感">交给灵感</option><option value="自定义互动">自定义互动</option></select>
             <div class="rmt-pair-inspirations" data-pair-ideas hidden></div>
-            <label class="rmt-pair-field"><span>构图 <small>随机时每次换一种镜头，仍保持左右各一人、能裁成两张头像</small></span><select data-pair-field="composition"><option value="">随机（每次不同）</option><option value="classic">固定：正面并排</option>${presets.COMPOSITION_VARIANTS.map(row => `<option value="${row.id}">${esc(row.label)}</option>`).join('')}</select></label>
+            <label class="rmt-pair-field"><span>构图 <small>随机时每次换一种镜头，仍保持左右各一人、能裁成两张头像</small></span><select data-pair-field="composition"><option value="">随机（每次不同）</option><option value="classic">固定：正面并排</option>${presets.COMPOSITION_VARIANTS.map(row => `<option value="${row.id}">${esc(row.label)}</option>`).join('')}</select><small class="rmt-pair-note" data-pair-composition-note role="status"></small></label>
             <label class="rmt-pair-field" data-pair-interaction-custom hidden><span>写下你们的互动</span><textarea data-pair-field="interactionDetail" placeholder="可以选一条随机灵感，再改成你喜欢的动作与表情。"></textarea></label>
         </div>
         <label class="rmt-pair-field"><span>这一对的小心思 <small>选填</small></span><textarea data-pair-field="direction" placeholder="比如：一个忍着笑，一个假装生气；共用一条围巾。"></textarea></label>
@@ -6205,6 +6269,7 @@ function bindView(view) {
     view.root.addEventListener('input', event => {
         if (event.target.matches('[data-pair-person]')) cancelAppearanceReads(view, Number(event.target.dataset.pairPerson), '外貌已编辑，本次读取已取消。');
         if (event.target.matches('[data-pair-field],[data-pair-person]')) queueDraft(view);
+        if (event.target.matches('[data-pair-field="interactionDetail"],[data-pair-field="direction"]')) paintComposition(view);
     });
     view.root.addEventListener('change', event => {
         if (event.target.matches('select[data-pair-field]')) { queueDraft(view); paintInteraction(view); }
@@ -6243,6 +6308,7 @@ async function handleAction(view, action, target) {
     if (action === 'restore-chat-avatar') return restoreChatAvatars(view);
     if (action === 'refresh-appearance') return refreshAppearance(view, Number(target.dataset.pairSide));
     if (action === 'styles') return showStyles(view);
+    if (action === 'interactions') return showInteractions(view);
     if (action === 'inspiration') {
         draft(view); view.ideas = presets.randomCoupleIdeas(view.ideas);
         const list = view.root.querySelector('[data-pair-ideas]'); list.hidden = false;
@@ -6398,9 +6464,10 @@ function askChibiFilter(view, settings, style, result) {
 function resolveComposition(view, settings) {
     if (settings.composition === 'classic') { const { composition, ...rest } = settings; return rest; }
     const choices = couple.coupleCompositionChoices(settings);
-    // An explicitly chosen variation is kept (layout styles ignore it when building the prompt).
-    if (settings.composition) return settings;
-    if (!choices.length) return settings;
+    // An explicit variation is kept when it fits; one that would change the
+    // interaction's own actions falls back to a fitting random camera.
+    if (settings.composition && choices.some(row => row.id === settings.composition)) return settings;
+    if (!choices.length) { const { composition, ...rest } = settings; return rest; }
     const fresh = choices.filter(row => row.id !== view.lastComposition);
     const pick = (fresh.length ? fresh : choices)[Math.floor(Math.random() * (fresh.length ? fresh : choices).length)];
     view.lastComposition = pick.id;
@@ -6469,6 +6536,49 @@ function showStyles(view) {
         const target = event.target.closest('[data-pair-pick-style]'); if (!target) return;
         draft(view); view.settings.styleId = target.dataset.pairPickStyle; paintSettings(view); queueDraft(view); closeCoupleDialog();
     });
+    draw();
+}
+// The same browser as the style picker: grouped, searchable, with a random pick.
+const INTERACTION_EXTRA = Object.freeze([{ label: '交给灵感', group: '其他' }, { label: '自定义互动', group: '其他' }]);
+function showInteractions(view) {
+    const groups = [...new Set(presets.INTERACTION_PRESETS.map(item => item.group)), '其他'];
+    const rows = [...presets.INTERACTION_PRESETS, ...INTERACTION_EXTRA];
+    const select = view.root.querySelector('[data-pair-field="interaction"]');
+    const currentValue = () => select?.value || view.settings.interaction;
+    const m = dialog(view, '选择互动', `<div class="rmt-pair-picker-toolbar">
+        <label class="rmt-pair-field"><span class="rmt-pair-visually-hidden">搜索互动</span><input data-pair-search aria-label="搜索互动" placeholder="搜索名称，例如：花、围巾、贴贴"></label>
+        <div class="rmt-pair-picker-filter"><label class="rmt-pair-field"><span class="rmt-pair-visually-hidden">互动分类</span><select data-pair-interaction-group aria-label="互动分类"><option value="all">全部互动</option>${groups.map(group => `<option value="${esc(group)}">${esc(group)}</option>`).join('')}</select></label><small data-pair-interaction-count role="status"></small><button type="button" data-pair-random-interaction>随机一个</button></div>
+        </div><div class="rmt-pair-picker-scroll" data-pair-picker-results></div>`);
+    if (!m) return;
+    m.body.classList.add('rmt-pair-style-browser');
+    const filter = m.body.querySelector('[data-pair-interaction-group]'), search = m.body.querySelector('[data-pair-search]');
+    const draw = () => {
+        const query = search.value.trim().toLowerCase();
+        if (query) filter.value = 'all';
+        const shown = rows.filter(item => (query || filter.value === 'all' || item.group === filter.value || item.group === '其他') && `${item.label} ${item.group}`.toLowerCase().includes(query));
+        m.body.querySelector('[data-pair-interaction-count]').textContent = `${shown.filter(item => item.group !== '其他').length} 种`;
+        const now = currentValue();
+        m.body.querySelector('[data-pair-picker-results]').innerHTML = shown.length ? groups.map(group => {
+            const items = shown.filter(item => item.group === group);
+            return items.length ? `<section class="rmt-pair-picker-group"><h3>${esc(group)}</h3><div class="rmt-pair-picker-results">${items.map(item => `<button type="button" data-pair-pick-interaction="${esc(item.label)}" aria-pressed="${now === item.label}"><span>${esc(item.label)}</span>${now === item.label ? '<span aria-hidden="true">✓</span>' : ''}</button>`).join('')}</div></section>` : '';
+        }).join('') : '<p class="rmt-pair-note">没有找到，换个词试试，或选“自定义互动”自己写。</p>';
+        m.body.querySelector('[data-pair-picker-results]').scrollTop = 0;
+    };
+    const choose = label => {
+        draft(view); view.settings.interaction = label; paintSettings(view); queueDraft(view); closeCoupleDialog();
+        if (label === '自定义互动') view.root.querySelector('[data-pair-field="interactionDetail"]')?.focus();
+    };
+    search.addEventListener('input', draw);
+    filter.addEventListener('change', () => { search.value = ''; draw(); });
+    m.body.addEventListener('click', event => {
+        if (event.target.closest('[data-pair-random-interaction]')) {
+            const options = [...m.body.querySelectorAll('[data-pair-pick-interaction]')].map(node => node.dataset.pairPickInteraction)
+                .filter(label => label !== currentValue() && !INTERACTION_EXTRA.some(item => item.label === label));
+            const pick = options[Math.floor(Math.random() * options.length)]; if (pick) choose(pick); return;
+        }
+        const target = event.target.closest('[data-pair-pick-interaction]'); if (target) choose(target.dataset.pairPickInteraction);
+    });
+    filter.value = presets.INTERACTION_PRESETS.find(item => item.label === currentValue())?.group || 'all';
     draw();
 }
 async function showCrop(view, record) {
