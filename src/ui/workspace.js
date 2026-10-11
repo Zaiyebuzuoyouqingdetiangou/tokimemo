@@ -1,5 +1,6 @@
 import * as content_selection_ui from './contentSelection.js';
 import * as couple_avatar from './coupleAvatarView.js';
+import * as stickers_view from './stickersView.js';
 import * as routePeople from './routeParticipants.js';
 import * as mirrorReader from './mirrorTtsReader.js';
 import * as mirrorCall from './mirrorCallView.js';
@@ -29,6 +30,7 @@ const esc = text.esc;
 const GROUPS = [['memory', '回忆'], ['life', '生活'], ['interaction', '互动'], ['stories', '番外']];
 const ALIAS_META = {
     coupleAvatar: {icon:'fa-user-group',accent:'heart',subtitle:'一张原图，两张成对的头像'},
+    stickers: {icon:'fa-face-smile',accent:'heart',subtitle:'你们俩的表情包，聊天里点一下就能发'},
     journal: {icon:'fa-book-open',accent:'album',subtitle:'整页收录，或挑选已有内容制作'},
     mirrorCall: {icon:'fa-microphone',accent:'heart',subtitle:'说给 TA 听，也听 TA 回应'},
     mirrorVoice: {icon:'fa-volume-high',accent:'heart',subtitle:'配置朗读音色，在各页播放'},
@@ -42,6 +44,7 @@ const ALIAS_META = {
 };
 export function syncWorkspaceChrome() {
     if (ui_workspaceState.workspace.route !== 'coupleAvatar') couple_avatar.disposeCoupleAvatar();
+    if (ui_workspaceState.workspace.route !== 'stickers') stickers_view.disposeStickers();
     const host = globalThis.document?.getElementById?.(constants.OVERLAY_ID);
     if (!host?.querySelectorAll || !host.classList?.add) return;
     ui_workspaceState.loadWorkspacePreferences();

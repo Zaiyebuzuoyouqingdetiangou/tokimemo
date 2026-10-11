@@ -1,5 +1,6 @@
 import * as handJournal from './handJournalView.js';
 import * as coupleAvatar from './coupleAvatarView.js';
+import * as stickers_view from './stickersView.js';
 import * as expanded_cg_view from './expandedCgView.js';
 import * as archive_inheritance_view from './archiveInheritance.js';
 import * as bedtime_view from './bedtimeView.js';
@@ -130,6 +131,7 @@ export function openOverlay() {
 
 export function navigateBack() {
     if (coupleAvatar.closeCoupleDialog()) return;
+    if (stickers_view.navigateStickersBack()) return;
     if (image_viewer.closeCgImageViewer()) return;
     if (runtimeState.activeMode === 'bedtime' && bedtime_view.closeBedtimeDetail()) return;
     if (runtimeState.activeMode === 'pastLives' && past_lives_view.closePastLivesDetail()) return;
@@ -448,6 +450,7 @@ let heartOpenRequest = 0;
 
 export function openCachedOrGenerate(mode, options = {}) {
     if (mode === 'coupleAvatar') return coupleAvatar.openCoupleAvatar();
+    if (mode === 'stickers') return stickers_view.openStickers();
     if (mode === 'journal') return handJournal.openHandJournal();
     if (['mirrorCall','mirrorVoice'].includes(mode)) return workspace_ui.openVoiceModule(mode);
     if (extras_view.isExtraMode(mode)) return extras_view.openExtra(mode, options);
@@ -526,7 +529,7 @@ export function renderActive() {
         const scope = core_context.chatScopeKey(core_context.currentCharacterGuard());
         if (runtimeState.renderedChatScope && runtimeState.renderedChatScope !== scope) return;
     } catch { return; }
-    if (['mirrorCall', 'mirrorVoice', 'journal', 'coupleAvatar'].includes(runtimeState.activeMode)) return;
+    if (['mirrorCall', 'mirrorVoice', 'journal', 'coupleAvatar', 'stickers'].includes(runtimeState.activeMode)) return;
     if (extras_view.isExtraMode(runtimeState.activeMode)) return void extras_view.renderExtra();
     if (workspace_ui.renderEmptyWorkspace()) return;
     image_viewer.closeCgImageViewer({ restoreFocus: false });

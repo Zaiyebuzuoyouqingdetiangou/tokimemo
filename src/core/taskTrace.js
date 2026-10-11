@@ -18,7 +18,7 @@ const trace = [];
 const stageStarts = new WeakMap();
 const mergedSegments = new WeakMap();
 const traceParents = new WeakMap();
-const MODES = new Set(['archive', 'archive-profile', 'room', 'album', 'image', 'advEvent', 'heart', 'phone', 'butterfly', 'adv', 'items', 'cabinet', 'inbox', 'themeSong', 'songMv', 'coupleAvatar', 'pastLives', 'timeEcho', 'travel', 'ending', 'calendar', 'relations', 'achievements', 'character-profile']);
+const MODES = new Set(['archive', 'archive-profile', 'room', 'album', 'image', 'advEvent', 'heart', 'phone', 'butterfly', 'adv', 'items', 'cabinet', 'inbox', 'themeSong', 'songMv', 'coupleAvatar', 'stickers', 'pastLives', 'timeEcho', 'travel', 'ending', 'calendar', 'relations', 'achievements', 'character-profile']);
 const OUTCOMES = new Set(['running', 'ok', 'failed', 'cancelled', 'deferred', 'blocked', 'noop']);
 const CODES = new Set(['RMT_LOCAL_STORAGE','RMT_LOCAL_CAS','RMT_LOCAL_CLONE','RMT_MANUAL_KEY_STORAGE','RMT_MANUAL_KEY_SESSION_ONLY','RMT_MANUAL_KEY_NOT_ON_DEVICE','RMT_ADVANCED_PARAMETERS','RMT_ADVANCED_BACKEND','RMT_RECOVERY_SOURCE_CHANGED','RMT_ARCHIVE_DRAFT_STORAGE','RMT_ARCHIVE_DRAFT_READ','RMT_ARCHIVE_DRAFT_CONFLICT','RMT_ARCHIVE_DRAFT_CAPACITY',
     'RMT_COUPLE_GENERATION', 'RMT_COUPLE_IMAGE', 'RMT_COUPLE_STORAGE', 'RMT_COUPLE_NOT_STARTED',

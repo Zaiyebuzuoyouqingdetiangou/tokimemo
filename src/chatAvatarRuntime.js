@@ -1,10 +1,14 @@
 import * as avatars from './core/chatAvatarStore.js';
 import { startChatAvatarDisplay } from './ui/chatAvatarDisplay.js';
+import { startStickerRuntime } from './stickerRuntime.js';
 
 // Loaded by the small bootstrap, not the full archive/generation runtime.
 export function startChatAvatarRuntime() {
     const context = () => { try { return globalThis.SillyTavern?.getContext?.() || null; } catch { return null; } };
     const removeBridge = avatars.installChatAvatarBridge();
+    // Stickers ride the same lightweight bootstrap; a failure there never stops avatars.
+    let stopStickers = () => {};
+    try { stopStickers = startStickerRuntime(); } catch (error) { console.warn('[HeartbeatMemories] stickers unavailable', error?.message); }
     const display = startChatAvatarDisplay({ getContext: context, getSnapshot: avatars.readChatAvatarSnapshot, getScope: avatars.chatAvatarScope });
     let stopped = false, source = null, types = [], retries = 0, timer = 0;
     function refresh() {
@@ -36,5 +40,6 @@ export function startChatAvatarRuntime() {
         for (const type of types) source?.off?.(type, refresh);
         globalThis.removeEventListener?.('focus', refresh);
         unsubscribe?.(); display.destroy(); removeBridge();
+        try { stopStickers(); } catch { /* Already stopped. */ }
     };
 }
