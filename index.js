@@ -1,6 +1,6 @@
 const VERSION = '1.0.56';
 // BUILD 只用来做缓存查询串：修小 bug 不升版本号时，改 -r 后缀即可让浏览器重新取 index.js 和 bundle。
-const BUILD = '1.0.56-r8';
+const BUILD = '1.0.56-r12';
 
 const SETTINGS_ID = 'heartbeat_memories_settings';
 const MENU_ID = 'heartbeat_memories_menu_item';

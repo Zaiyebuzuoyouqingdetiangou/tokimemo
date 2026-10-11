@@ -322,15 +322,6 @@ const IDEA_TAG_SCENES = Object.freeze([
     ["开满向日葵的田野", "sunflower field"],
 ]);
 
-// The first few proportion tags of a Q-version or framing style. On overlay they
-// are the only style words inside each actor channel: a long realistic
-// appearance (height, build, bone structure) otherwise outweighs a single
-// trailing scene mention and the figures come out with adult proportions.
-export function coupleStyleFormTag(style, blend = '') {
-    if (!style || blend !== 'form' || !['chibi', 'layout'].includes(style.group)) return '';
-    return (STYLE_TAGS[style.id] || '').split(', ').slice(0, 3).join(', ');
-}
-
 function tags(parts) {
     return parts.filter(value => typeof value === 'string' && value.length > 0).join(', ');
 }
@@ -384,7 +375,7 @@ function animalGestureTags(chosen) {
     return 'forepaw gestures, animal muzzle interaction';
 }
 
-export function coupleAvatarTagParts({ overlay = false, blend = '', mixedWeight = 0.7, settings, chosen, animal, object, subject, fullFigure, appearances, negative,
+export function coupleAvatarTagParts({ mediumLead = '', naiStyle = value => value, mediumActor = '', settings, chosen, animal, object, subject, fullFigure, appearances, negative,
     covered = [false, false], clothing = { people: ['', ''] }, interactionDirection = null, compositionTags = [] }) {
     const [interaction, leftAction, rightAction] = interactionTags(settings, chosen, animal);
     const originalRendering = chosen ? STYLE_TAGS[chosen.id] || chosen.prompt : settings.customStyle;
@@ -397,11 +388,11 @@ export function coupleAvatarTagParts({ overlay = false, blend = '', mixedWeight 
     const form = animal
         ? tags(['complete animal bodies, species-appropriate animal anatomy, individual eyes and markings and small accessories', animalGestureTags(chosen)])
         : object ? 'material-built faces and bodies and hair and clothing, physical material texture, crafted limbs'
-            : overlay ? '' : 'consistent medium across faces and hair and bodies and clothing';
-    // Overlay: the provider's artist tags lead; this style follows once, weighted when mixed.
-    const trailing = overlay && rendering ? (blend === 'mixed' ? `${mixedWeight}::${rendering}::` : rendering) : '';
-    const scene = tags([
-        overlay ? '' : rendering || 'illustration', form, framing,
+            : 'consistent medium across faces and hair and bodies and clothing';
+    // The NAI channel leads with the weighted style (and 3D medium tags); the
+    // flat fallback keeps plain words, since weight syntax is NAI-only.
+    const sceneFor = nai => tags([
+        nai ? mediumLead : '', (nai ? naiStyle(rendering) : rendering) || 'illustration', form, framing,
         `two distinct ${subject}s, side by side, horizontal paired portrait, first subject at left quarter, second subject at right quarter, balanced subject scale`,
         'continuous edge-to-edge background, continuous center and corners, clear subject separation, quiet background detail, readable individual features, gestures within own half',
         subject_details.coupleVisibleRecipe(interaction, anyCovered && ownedInteraction),
@@ -410,14 +401,13 @@ export function coupleAvatarTagParts({ overlay = false, blend = '', mixedWeight 
         settings.pairType === 'echo' ? 'complementary individual gestures, coordinated colors and light' : 'shared motif connecting subjects across center',
         animal && settings.clothing ? 'small wearable accents, animal-adapted clothing' : '',
         settings.clothing, settings.background, settings.direction,
-        trailing,
     ]);
+    const scene = sceneFor(false);
     const characters = settings.people.map((person, index) => ({
         name: `${index ? '右边' : '左边'} · ${person.name || (index ? '人物二' : '人物一')}`,
         tag: tags([
             index ? 'right side, centered at right quarter' : 'left side, centered at left quarter',
-            overlay ? coupleStyleFormTag(chosen, blend) : '',
-            appearances[index], overlay ? subject : subject_details.coupleVisibleRecipe(originalRendering, covered[index] && !!chosen) || subject,
+            appearances[index], mediumActor, subject_details.coupleVisibleRecipe(originalRendering, covered[index] && !!chosen) || subject,
             subject_details.coupleVisibleRecipe(index ? rightAction : leftAction, covered[index] && ownedInteraction),
             interactionDirection?.tags?.roles[index],
             subject_details.coupleCoveredEyeGuidance(covered[index], true),
@@ -432,7 +422,7 @@ export function coupleAvatarTagParts({ overlay = false, blend = '', mixedWeight 
         // are metadata only, never token prefixes inside a character tag list.
         prompt: [`LEFT: ${characters[0].tag}`, `RIGHT: ${characters[1].tag}`, scene].join('\n'),
         negative,
-        nai: { prompt: scene, nl: '', characters: characters.map(character => ({ ...character, nl: '' })) },
+        nai: { prompt: sceneFor(true), nl: '', characters: characters.map(character => ({ ...character, nl: '' })) },
         characters,
         promptFormat: 'nai45-tags',
     };

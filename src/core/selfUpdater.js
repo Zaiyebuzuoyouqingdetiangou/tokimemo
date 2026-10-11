@@ -263,10 +263,25 @@ export function parseHearttraceReadme(text) {
     return items.length ? [{ version: heading[2], title: heading[1], groups, items }] : [];
 }
 
-export async function loadHearttraceChangelog({ source = 'installed', remoteUrl = HOMEPAGE, remoteBranch = FALLBACK_BRANCH, fetcher = globalThis.fetch } = {}) {
-    // The installed README is embedded by build.py. Opening its notes needs
-    // neither a network connection nor an unrelated remote history file.
+// The installed README.md beside index.js, on this same server (never GitHub).
+export function installedReadmeUrl(moduleUrl = import.meta.url, origin = globalThis.location?.origin) {
+    try {
+        const url = new URL(moduleUrl);
+        if (url.origin !== origin) return '';
+        const match = url.pathname.match(/^(.*?\/scripts\/extensions\/third-party\/[^/]+)\//);
+        return match ? `${url.origin}${match[1]}/README.md` : '';
+    } catch { return ''; }
+}
+
+export async function loadHearttraceChangelog({ source = 'installed', remoteUrl = HOMEPAGE, remoteBranch = FALLBACK_BRANCH, fetcher = globalThis.fetch, moduleUrl = import.meta.url, origin = globalThis.location?.origin } = {}) {
+    // Installed notes read the installed README.md file itself, so editing the
+    // README changes them even without a rebuild. The copy build.py embeds is
+    // the offline fallback. Neither path touches the network or old history.
     if (source !== 'remote') {
+        const local = installedReadmeUrl(moduleUrl, origin);
+        const text = local && typeof fetcher === 'function' ? await readRemoteText(local, fetcher, 'installed readme') : '';
+        const fileSections = parseHearttraceReadme(text);
+        if (fileSections.length) return { ok: true, source: 'readme', sections: fileSections };
         const sections = parseHearttraceReadme(RELEASE_README);
         return { ok: sections.length > 0, source: 'readme', sections,
             ...(sections.length ? {} : { message: '当前安装包没有可读取的更新说明。' }) };

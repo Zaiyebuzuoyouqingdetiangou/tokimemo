@@ -312,23 +312,8 @@ const STYLE_CONSTRUCTION = Object.freeze({
     "fantasy-sand": "Fine sand on a glowing light table forms each figure, with soft grainy edges and amber tonal shading; faces kept readable.",
 });
 
-// How a style combines with the image provider's own artist string (see the
-// overlay plan): form = only proportions, framing, pose or light, so it stacks
-// at full strength; mixed = also line/colour treatment, stacks at reduced
-// weight; medium = replaces the drawing medium and is never stacked.
-const STYLE_BLEND = Object.freeze({"animal-bear": "form", "animal-bird": "form", "animal-capybara": "form", "animal-cat": "form", "animal-deer": "form", "animal-dog": "form", "animal-dragon": "form", "animal-duck": "form", "animal-fox": "form", "animal-hamster": "form", "animal-otter": "form", "animal-panda": "form", "animal-penguin": "form", "animal-rabbit": "form", "animal-seal": "form", "animal-sheep": "form", "animal-squirrel": "form", "animal-tiger": "form", "animal-wolf": "form", "anime-cel": "mixed", "anime-clean": "mixed", "anime-flat": "mixed", "anime-gacha": "mixed", "anime-idol": "mixed", "anime-korean": "mixed", "anime-otome": "mixed", "anime-thick": "mixed", "anime-webtoon": "mixed", "chibi-animal": "form", "chibi-bean": "form", "chibi-crayon": "mixed", "chibi-doodle": "mixed", "chibi-dumpling": "form", "chibi-four-head": "form", "chibi-headshot": "form", "chibi-kemono": "form", "chibi-meme": "form", "chibi-mochi": "form", "chibi-plump": "form", "chibi-sleepy": "form", "chibi-squish": "form", "chibi-three-head": "form", "chibi-tiny-arms": "form", "graphic-flat": "mixed", "graphic-geometric": "mixed", "graphic-line": "form", "graphic-pop": "mixed", "graphic-silhouette": "mixed", "graphic-sticker": "form", "layout-bust": "form", "layout-closeup": "form", "layout-dynamic": "form", "layout-fullbody": "form", "layout-high-angle": "form", "layout-look-back": "form", "layout-lying": "form", "layout-peek": "form", "layout-profile": "form", "layout-sitting": "form", "layout-waist": "form", "mood-blue": "form", "mood-candle": "form", "mood-festival": "form", "mood-golden": "form", "mood-moon": "form", "mood-neon": "form", "mood-rain": "form", "mood-sakura": "form", "mood-snow": "form", "mood-sparkle": "form", "mood-starry": "form", "mood-sunny": "form", "mood-underwater": "form"});
-export const OVERLAY_MIXED_WEIGHT = 0.7;
-export function coupleStyleBlend(style) {
-    if (!style) return '';
-    return STYLE_BLEND[style.id] || 'medium';
-}
-// Custom text is already the light form (no medium sentences, no repetition).
-export function coupleOverlayAvailable(style) { return !style || coupleStyleBlend(style) !== 'medium'; }
-
 // Full-figure framings in the layout group (the others are portraits).
 export const FULL_FIGURE_LAYOUTS = Object.freeze(['layout-fullbody', 'layout-sitting', 'layout-lying', 'layout-dynamic']);
-// The style's own proportion/pose sentence, without its group's medium sentence.
-export function coupleStyleOwnConstruction(style) { return style ? STYLE_CONSTRUCTION[style.id] || '' : ''; }
 
 export function coupleStyleConstruction(style) {
     return style ? [MEDIUM_CONSTRUCTION[style.group], STYLE_CONSTRUCTION[style.id]].filter(Boolean).join(' ') : '';
@@ -541,6 +526,23 @@ export const INTERACTION_PRESETS = Object.freeze([
 // they change; a variation is skipped when the interaction or the user direction
 // already decides that part, so the chosen actions are never overridden.
 export const COMPOSITION_VARIANTS = Object.freeze([{"id": "high-angle", "label": "微微俯拍", "prompt": "A slightly high camera angle looking down at the pair; the shared interaction stays between them.", "tags": "slight high angle, looking down at the pair, interaction between them", "sets": [], "portrait": false}, {"id": "low-angle", "label": "微微仰拍", "prompt": "A slightly low camera angle looking up at the pair.", "tags": "slight low angle, looking up at the pair", "sets": [], "portrait": false}, {"id": "tilt", "label": "斜一点的镜头", "prompt": "A slight diagonal camera tilt adds movement; the two halves stay balanced and both faces stay upright enough to read.", "tags": "slight dutch angle, dynamic diagonal, balanced halves, readable faces", "sets": [], "portrait": false}, {"id": "close", "label": "拉近特写", "prompt": "Closer framing: the two faces and the shared interaction fill most of the image, with the meeting point right at the center.", "tags": "close framing, faces and shared interaction filling image, meeting point at center", "sets": [], "portrait": true}, {"id": "lean-in", "label": "互相靠近", "prompt": "Both lean slightly toward the center line so their heads tilt toward each other and their shoulders nearly meet across the middle.", "tags": "leaning toward center, heads tilted toward each other, shoulders nearly meeting", "sets": ["heads", "distance"], "portrait": false}, {"id": "three-quarter", "label": "四分之三侧身", "prompt": "Three-quarter views turned toward each other: the left subject turns right, the right subject turns left, each face still clearly visible.", "tags": "three-quarter views facing each other, both faces clearly visible", "sets": ["orientation"], "portrait": false}, {"id": "height-offset", "label": "一高一低", "prompt": "One head sits a little higher than the other, as if one leans down while the other looks up, gently breaking the symmetry.", "tags": "one head slightly higher, one leaning down, one looking up, asymmetric heights", "sets": ["heads", "gaze"], "portrait": false}, {"id": "one-turns", "label": "一个看镜头一个看你", "prompt": "One subject faces the viewer while the other turns toward the partner in a three-quarter view, both faces readable.", "tags": "one facing viewer, other turned toward partner, both faces readable", "sets": ["orientation", "gaze"], "portrait": false}, {"id": "heads-close", "label": "头靠头", "prompt": "Their heads come close at the center line, nearly touching temple to temple.", "tags": "heads close at center, nearly touching temple to temple", "sets": ["heads", "distance"], "portrait": true}, {"id": "seated", "label": "并肩坐着", "prompt": "Both are seated side by side at the same height, relaxed and close, the interaction held between them.", "tags": "seated side by side, same height, relaxed and close", "sets": ["posture"], "portrait": false}, {"id": "over-shoulder", "label": "回眸", "prompt": "Both glance back over the inner shoulder toward the center, bodies angled slightly outward, faces turned to each other.", "tags": "glancing back over inner shoulders, bodies angled slightly outward, faces turned to each other", "sets": ["orientation", "gaze", "hands", "heads"], "portrait": false}, {"id": "reach", "label": "伸手向中间", "prompt": "Both reach their inner hands toward the center line, so the interaction becomes the clear focal point between the two portraits.", "tags": "inner hands reaching toward center, interaction as focal point between portraits", "sets": ["hands"], "portrait": false}].map(row => Object.freeze({ ...row, sets: Object.freeze(row.sets) })));
+// NAI only: 柏宝绘 always prepends the user's selected artist string, which is
+// usually 2D anime and wins over a plain "3D render" phrase. These media lead
+// with weighted danbooru-style medium tags so the selected 3D look survives.
+export const NAI_MEDIUM_LEAD = Object.freeze({
+    'render-toon': '1.5::3d::, 3d render, blender (medium)',
+    'render-game': '1.5::3d::, 3d render, blender (medium)',
+    'render-cel3d': '1.3::3d::, 3d render, cel shading, toon shading',
+});
+// NAI only: every preset style (and custom text without its own weights) is
+// weighted so it holds against the artist string the provider puts in front.
+export const NAI_STYLE_WEIGHT = 1.3;
+export function naiWeightedStyle(value) {
+    const style = typeof value === 'string' ? value.trim() : '';
+    return style && !style.includes('::') ? `${NAI_STYLE_WEIGHT}::${style}::` : style;
+}
+export const NAI_MEDIUM_ACTOR = Object.freeze({ 'render-toon': '3d', 'render-game': '3d', 'render-cel3d': '3d' });
+
 export const COMPOSITION_PAIR_CUE = "They read clearly as a couple avatar pair: complementary, not mirrored, poses; coordinated color accents shared across both halves; the interaction meets at the center line; each face stays large and fully inside its own half so the image can be cropped into two avatars.";
 export const COMPOSITION_PAIR_TAGS = "couple avatar pair, complementary not mirrored poses, coordinated color accents, interaction meeting at center, large faces within own half";
 

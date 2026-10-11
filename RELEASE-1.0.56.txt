@@ -26,8 +26,8 @@
 - Codex Security 专用扫描未完成：前置资源不可用；本轮仅完成本地改动范围与数据边界检查。
 - 未验证：手机/实际酒馆加载、真实外部服务和随机生成图片效果。自动摘录仍是保守的文本识别，不承诺完整理解任意复杂人设。
 
-最终源码 SHA-256：1d85c4e44a30047ca08f67a3bec15afd36e04ab88bfa9c89180b41c4a0bf4447。
-最终 bundle SHA-256：7ffda1a895e8ff7ee23d7063eb9ca0c300b557cd5be7d1fc8ec86cbae441cbdd。
+最终源码 SHA-256：25c3fe9d61242e3ac6f72c0a87111195bc0c6ee153d8ff1babed9eae553aa685。
+最终 bundle SHA-256：ea931c8ea9fe2481e6a6e0b3ee6449bebc35f867f6f6b762449bd72c24617f3c。
 版本、BUILD 和启动查询串均为 1.0.56；安装 ZIP 使用单根 tokimemo-main/，不包含 .git 或 .github 工作流。
 
 升级后：

@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 353
-// Source SHA-256: 1d85c4e44a30047ca08f67a3bec15afd36e04ab88bfa9c89180b41c4a0bf4447
+// Source SHA-256: 25c3fe9d61242e3ac6f72c0a87111195bc0c6ee153d8ff1babed9eae553aa685
 // Build: python3 tools/verification/build.py <source-root>
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -1174,7 +1174,7 @@ function __init_core_releaseNotes_js() {
 // MODULE: core/releaseNotes.js
 
 // GENERATED FROM README.md by tools/verification/build.py. Do not edit by hand.
-const RELEASE_README = "# 心迹回廊 1.0.56\n\n## 更新日志模块\n\n新增了更新日志板块，感谢@nancyindaeyo的更新。\n\n## 本次变动\n\n- 修复柏宝绘外貌标签带下划线时丢失发色、眼色等细节的问题；保留原标签权重，补齐眼罩、酒窝、鼻型、泪痣与明确性别描述的识别。\n- 修复“曾经受伤留下的疤痕”等固定特征被误删的问题，覆盖情侣头像、普通配图和手书的自动外貌读取。\n- 自动摘录按明确姓名、人物标签和称谓区分归属，避免将对方或其他人的外貌混入当前人物；手填外貌、旧草稿和历史图片保持原样。\n- 不增加自动文本请求或生成门槛。已有外貌栏若含旧杂句，可左右分别点“重新读取外貌”整理后再绘制；该操作沿用原有文本 API。\n- 画风、互动、衣着、裁切、头像应用及其他已有修复保持。\n";
+const RELEASE_README = "# 心迹回廊 1.0.56\n\n## 更新日志模块\n\n新增了更新日志板块，感谢@nancyindaeyo的更新。\n\n## 本次变动\n\n- 修复柏宝绘外貌标签带下划线时丢失发色、眼色等细节的问题；保留原标签权重，补齐眼罩、酒窝、鼻型、泪痣与明确性别描述的识别。\n- 修复“曾经受伤留下的疤痕”等固定特征被误删的问题，覆盖情侣头像、普通配图和手书的自动外貌读取。\n- 自动摘录按明确姓名、人物标签和称谓区分归属，避免将对方或其他人的外貌混入当前人物；手填外貌、旧草稿和历史图片保持原样。\n- 不增加自动文本请求或生成门槛。已有外貌栏若含旧杂句，可左右分别点“重新读取外貌”整理后再绘制；该操作沿用原有文本 API。\n- 情侣头像新增 69 种画风（含构图版式、氛围光影、3D 渲染分组）和 48 种互动（含贴贴亲昵、小小较劲、幻想冒险）；画风和互动都改为可搜索、按分类浏览的选择面板，也可以随机抽一个。\n- Q 版、动物化身会给每个人物单独带上比例标签，外貌写得很长也不容易画成成人比例；生成时可选择过滤掉身高、体型等写实描述，只作用于这一次，原外貌不变，也可以在选项里设为自动过滤或不过滤。\n- 情侣头像新增“构图”：默认每次随机换一种镜头，始终保持左右各一人、能裁成两张头像；会改动所选互动或“小心思”里动作的姿势自动跳过，也可以固定为正面并排或指定一种。\n- 情侣头像的画风在 NAI 中加权放在最前，3D 画风另加 3D 标签，减少被画师串盖过。\n- 插件内的更新日志直接读取安装目录里的 README，修改 README 后不用重新打包也会同步。\n- 画风、互动、衣着、裁切、头像应用及其他已有修复保持。\n";
 
 __m_core_releaseNotes_js.RELEASE_README = RELEASE_README;
 }
@@ -1309,7 +1309,6 @@ function normalizeCoupleSettings(value, context = optionalContext()) {
         styleId: styleId === 'custom' || styles.COUPLE_STYLES.some(style => style.id === styleId) ? styleId : defaults.styleId,
         pairType: input.pairType === 'echo' ? 'echo' : 'joined',
         // Opt-in only; absent keeps every saved pair byte-identical.
-        ...(input.overlayArtist === true ? { overlayArtist: true } : {}),
         // Q-version appearance filter: absent = ask each time.
         ...(['auto', 'off'].includes(input.chibiFilter) ? { chibiFilter: input.chibiFilter } : {}),
         // Composition: absent = random per drawing (resolved by the UI), 'classic' = the fixed layout.
@@ -1394,20 +1393,13 @@ function couplePromptParts(value, context = optionalContext()) {
     const interaction = subject_details.coupleVisibleRecipe(resolvedInteraction.prompt, anyCovered && ownedInteraction);
     const originalRendering = chosen?.prompt || settings.customStyle;
     const rendering = subject_details.coupleVisibleRecipe(originalRendering, anyCovered && !!chosen);
-    // Stack on the image provider's own artist string: form styles keep their
-    // proportion/framing words once, at full strength; mixed styles once, at
-    // reduced weight; medium styles never stack. Off, nothing below changes.
-    const overlay = settings.overlayArtist === true && styles.coupleOverlayAvailable(chosen);
-    const blend = styles.coupleStyleBlend(chosen);
-    const overlayConstruction = !overlay || blend === 'mixed' ? '' : chosen?.group === 'graphic'
-        ? styles.coupleStyleOwnConstruction(chosen) : styles.coupleStyleConstruction(chosen);
-    const construction = subject_details.coupleVisibleRecipe(overlay ? overlayConstruction : styles.coupleStyleConstruction(chosen), anyCovered);
+    const construction = subject_details.coupleVisibleRecipe(styles.coupleStyleConstruction(chosen), anyCovered);
     const relation = detailed ? interaction_direction.coupleInteractionDirection(settings) : { scene: '', roles: ['', ''] };
     const clothing = subject_details.coupleClothingParts(settings.clothing, settings.people);
     // Explicit NAI 5 drafts get source-bound identity guidance in the actual
     // native actor channels too. Formatless historical prompts stay unchanged.
     const identityRendering = promptFormat === 'nai5-natural'
-        ? overlay ? styles.coupleStyleIdentityRendering(chosen).replace(' in the selected medium', '') : styles.coupleStyleIdentityRendering(chosen) : '';
+        ? styles.coupleStyleIdentityRendering(chosen) : '';
     // Framing and finish are art direction only. Keep full-figure styles and
     // simplified media intact; explicit user directions still take precedence.
     const fullFigure = coupleStyleFullFigure(chosen);
@@ -1416,18 +1408,15 @@ function couplePromptParts(value, context = optionalContext()) {
     const framing = !chosen ? '' : fullFigure
         ? 'Each complete stylized figure fills most of its own half, with a readable face and connected limbs; retain the selected body proportions.'
         : 'Close head-and-shoulder or upper-body portraits fill most of each half, with visible shoulders and clothing supporting the gestures.';
-    const finish = !chosen ? '' : overlay
-        ? 'Finished artwork: recognizable individual features, intentional contours and gestures connected naturally to the body. Keep background detail quieter than the subjects, with clear subject-to-background separation.'
+    const finish = !chosen ? ''
         : 'Finished artwork in the selected medium: recognizable individual features, intentional contours and gestures connected naturally to the body in the selected form. Keep background detail quieter than the subjects, with clear subject-to-background separation. Preserve deliberate simplicity and the selected medium\'s own texture.';
     const form = animal
         ? 'Two complete animals, species-appropriate animal anatomy, heads, muzzles or beaks, bodies, limbs and tails. Paws, wings or flippers perform the gestures. Each animal has its own eye color, fur markings and small signature accessories derived from its identity.'
         : object ? 'Two crafted figures whose entire faces and bodies are made from the selected material, with its physical texture and construction.'
-            : overlay ? 'The selected proportions, framing and light shape the figures; linework, coloring and shading follow the base art style.'
-                : 'The selected medium, proportions, linework and shading define the faces, bodies, clothing and background.';
+            : 'The selected medium, proportions, linework and shading define the faces, bodies, clothing and background.';
     const actions = resolvedInteraction.roles.map((action, index) => subject_details.coupleVisibleRecipe(action, covered[index] && ownedInteraction));
     const personClothing = index => detailed && clothing.people[index]
-        ? `${animal ? 'Wearable accents adapted to this animal' : 'Clothing for this subject'}: ${clothing.people[index]}. Keep its specified colors, garment shape and accessories visible in the selected ${overlay ? '' : 'medium and '}proportions.` : '';
-    const formTag = overlay ? prompt_format.coupleStyleFormTag(chosen, blend) : '';
+        ? `${animal ? 'Wearable accents adapted to this animal' : 'Clothing for this subject'}: ${clothing.people[index]}. Keep its specified colors, garment shape and accessories visible in the selected medium and proportions.` : '';
     // Q-version: an adult height/build in the appearance must not win over the
     // selected proportions. Identity is face, hair, eyes and accessories.
     const chibiBody = chosen?.group === 'chibi' ? 'Any height, build or adult body-proportion details in this description become the selected chibi proportions; face, hair, eye and accessory traits carry the identity.' : '';
@@ -1437,38 +1426,33 @@ function couplePromptParts(value, context = optionalContext()) {
         const reference = appearanceReference(person.appearance, animal, object);
         return `${side} HALF ${subject}: ${person.name || (index === 0 ? 'first character' : 'second character')}${reference ? `; ${animal || object ? 'individual identity in the selected form' : 'appearance'}: ${reference}` : ''}. Action: ${actions[index]}.${personDetails(index) ? ` ${personDetails(index)}` : ''}`;
     });
-    const overlayLabel = !overlay ? '' : chosen?.group === 'mood' ? 'Light and atmosphere' : blend === 'mixed'
-        ? 'Light style accent, secondary to the base art style' : chosen ? 'Proportions, framing and pose' : 'Style direction';
-    const styleLead = !rendering ? '' : overlay ? `${overlayLabel}: ${rendering}.` : `Rendering style: ${rendering}.`;
-    // NAI tag weighting; prose channels use the label above instead.
-    const weightedRendering = !rendering ? '' : overlay && blend === 'mixed' ? `${styles.OVERLAY_MIXED_WEIGHT}::${rendering}::` : rendering;
+    const styleLead = !rendering ? '' : `Rendering style: ${rendering}.`;
     const composition = [
         construction ? `Style construction: ${construction}` : '',
         identityRendering,
         form, framing, finish,
         `One continuous horizontal paired portrait, two distinct ${subject}s side by side, one centered at the left quarter and one at the right quarter, balanced subject scale.`,
-        `A continuous background${overlay ? '' : ' in the selected medium'} fills the entire image from edge to edge, including the center and all four corners. Faces and gestures sit comfortably within their own half, surrounded by the same continuous background.`,
+        `A continuous background in the selected medium fills the entire image from edge to edge, including the center and all four corners. Faces and gestures sit comfortably within their own half, surrounded by the same continuous background.`,
         `Interaction: ${interaction && interaction !== '交给灵感' ? interaction : DEFAULT_INTERACTION_PROMPT}.`,
         `Action roles: LEFT — ${actions[0]}; RIGHT — ${actions[1]}. Adapt gestures to the chosen body form; explicit user directions take precedence.`,
         relation.scene,
         ...variantLines,
         anyCovered ? 'Render eye details only for the subject whose eyes are visible. Preserve the other subject\'s supplied eye covering; show their emotion through mouth, head angle and gesture.' : '',
         settings.direction ? `Direction: ${settings.direction}.` : '',
-        settings.clothing ? `${animal ? 'Small wearable accents adapted for animal bodies' : overlay ? 'Clothing' : 'Clothing in the selected rendering style'}: ${settings.clothing}.` : '',
+        settings.clothing ? `${animal ? 'Small wearable accents adapted for animal bodies' : 'Clothing in the selected rendering style'}: ${settings.clothing}.` : '',
         detailed && settings.clothing ? 'The supplied clothing takes precedence over default costume suggestions. Bind left/right or named garments only to their owner; carry shared clothing to both subjects.' : '',
         settings.background ? `Background: ${settings.background}.` : '',
         settings.pairType === 'echo'
             ? 'Complementary individual gestures, coordinated colors and light, continuous background.'
             : 'A shared motif connects the two subjects across the center of the continuous scene.',
-        overlay ? 'Preserve each individual\'s own face or muzzle shape, eyes, hair silhouette or markings, clothing and accessories. Shared traits remain shared; expressions and reactions belong to each subject.'
-            : 'Preserve each individual\'s own face or muzzle shape, eyes, hair silhouette or markings, clothing and accessories. Shared traits remain shared; expressions and reactions belong to each subject. Express identity colors as tones and shapes when the selected medium is monochrome.',
+        'Preserve each individual\'s own face or muzzle shape, eyes, hair silhouette or markings, clothing and accessories. Shared traits remain shared; expressions and reactions belong to each subject. Express identity colors as tones and shapes when the selected medium is monochrome.',
     ].filter(Boolean);
     const negative = [
         `outer white frame, panel border, central white gutter, split screen, rounded portrait cards, circular picture frames, letterboxing, vignette, fading to blank edges, duplicate character, cloned face, ${detailed ? 'identical duplicate pose' : 'mirrored pose'}, text, watermark`,
         animal ? 'human face, human body, human hands, person wearing animal ears, person holding an animal' : '',
     ].filter(Boolean).join(', ');
     if (promptFormat === 'nai45-tags') return prompt_format.coupleAvatarTagParts({
-        overlay, blend, mixedWeight: styles.OVERLAY_MIXED_WEIGHT,
+        mediumLead: styles.NAI_MEDIUM_LEAD[chosen?.id] || '', naiStyle: styles.naiWeightedStyle, mediumActor: styles.NAI_MEDIUM_ACTOR[chosen?.id] || '',
         settings, chosen, animal, object, subject, fullFigure, negative,
         appearances: settings.people.map(person => appearanceReference(person.appearance, animal, object)),
         covered, clothing, interactionDirection: relation, compositionTags: variant ? [variant.tags, styles.COMPOSITION_PAIR_TAGS] : [],
@@ -1478,7 +1462,7 @@ function couplePromptParts(value, context = optionalContext()) {
     // tokens the provider normalizes), and put the action in that subject's
     // nl. Detailed medium construction is shared once, not repeated per face.
     const nai = {
-        prompt: (overlay ? [`two distinct ${subject}s`, 'side by side', weightedRendering] : [rendering || 'illustration', `two distinct ${subject}s`, 'side by side']).filter(Boolean).join(', '),
+        prompt: [styles.NAI_MEDIUM_LEAD[chosen?.id], styles.naiWeightedStyle(rendering) || 'illustration', `two distinct ${subject}s`, 'side by side'].filter(Boolean).join(', '),
         nl: [
             construction, framing, finish,
             'One continuous horizontal paired portrait, first subject centered at the left quarter, second at the right quarter, matching scale. Background fills the image edge to edge, through the center and all four corners. Faces and gestures stay comfortably inside their own half.',
@@ -1488,7 +1472,7 @@ function couplePromptParts(value, context = optionalContext()) {
             ...variantLines,
             anyCovered ? 'Eye rendering applies only to visible eyes. Keep each supplied eye covering in place; use the covered subject\'s mouth and head angle for expression.' : '',
             settings.pairType === 'echo' ? 'Coordinated colors and light, complementary individual gestures.' : 'A shared motif connects the two subjects.',
-            overlay ? 'Adapt gestures to the chosen body form.' : 'Render both subjects entirely in the selected medium. For a monochrome medium, identity colors become tones. Adapt gestures to the chosen body form.',
+            'Render both subjects entirely in the selected medium. For a monochrome medium, identity colors become tones. Adapt gestures to the chosen body form.',
             settings.clothing ? `Clothing or small wearable accents: ${settings.clothing}.` : '',
             detailed && settings.clothing ? 'Use the supplied clothing in preference to default costumes, preserving each garment\'s assigned wearer, colors and shape.' : '',
             settings.background ? `Background: ${settings.background}.` : '',
@@ -1496,20 +1480,19 @@ function couplePromptParts(value, context = optionalContext()) {
         ].filter(Boolean).join('\n'),
         characters: settings.people.map((person, index) => ({
             name: `${index ? '右边' : '左边'} · ${person.name || (index ? '人物二' : '人物一')}`,
-            tag: overlay ? [formTag, appearanceReference(person.appearance, animal, object) || subject].filter(Boolean).join(', ')
-                : [appearanceReference(person.appearance, animal, object), subject_details.coupleVisibleRecipe(originalRendering, covered[index] && !!chosen) || subject].filter(Boolean).join(', '),
+            tag: [appearanceReference(person.appearance, animal, object), styles.NAI_MEDIUM_ACTOR[chosen?.id], subject_details.coupleVisibleRecipe(originalRendering, covered[index] && !!chosen) || subject].filter(Boolean).join(', '),
             nl: [`On the ${index ? 'right' : 'left'}, ${actions[index]}.`, personDetails(index), identityRendering].filter(Boolean).join(' '),
             ...(text(person.presetNegative) ? { negative: text(person.presetNegative) } : {}),
         })),
     };
-    return { scene: (overlay ? [...composition, styleLead] : [styleLead, ...composition]).filter(Boolean).join('\n'),
+    return { scene: [styleLead, ...composition].filter(Boolean).join('\n'),
         // Put the actual two appearances before general art direction on flat
         // backends, where a long scene used to bury the individual identities.
-        prompt: (overlay ? [...people, ...composition, styleLead] : [styleLead, ...people, ...composition]).filter(Boolean).join('\n'), negative, nai,
+        prompt: [styleLead, ...people, ...composition].filter(Boolean).join('\n'), negative, nai,
         ...(promptFormat ? { promptFormat } : {}),
         characters: settings.people.map((person, index) => ({
             name: `${index ? '右边' : '左边'} · ${person.name || (index ? '人物二' : '人物一')}`,
-            tag: overlay ? [people[index], formTag ? `Body form: ${formTag}.` : ''].filter(Boolean).join('\n') : [people[index], chosen && anyCovered ? `Rendering style: ${subject_details.coupleVisibleRecipe(originalRendering, covered[index])}.` : styleLead,
+            tag: [people[index], chosen && anyCovered ? `Rendering style: ${subject_details.coupleVisibleRecipe(originalRendering, covered[index])}.` : styleLead,
                 subject_details.coupleVisibleRecipe(styles.coupleStyleConstruction(chosen), covered[index])].filter(Boolean).join('\n'),
             ...(text(person.presetNegative) ? { negative: text(person.presetNegative) } : {}),
         })) };
@@ -2802,15 +2785,6 @@ const IDEA_TAG_SCENES = Object.freeze([
     ["开满向日葵的田野", "sunflower field"],
 ]);
 
-// The first few proportion tags of a Q-version or framing style. On overlay they
-// are the only style words inside each actor channel: a long realistic
-// appearance (height, build, bone structure) otherwise outweighs a single
-// trailing scene mention and the figures come out with adult proportions.
-function coupleStyleFormTag(style, blend = '') {
-    if (!style || blend !== 'form' || !['chibi', 'layout'].includes(style.group)) return '';
-    return (STYLE_TAGS[style.id] || '').split(', ').slice(0, 3).join(', ');
-}
-
 function tags(parts) {
     return parts.filter(value => typeof value === 'string' && value.length > 0).join(', ');
 }
@@ -2864,7 +2838,7 @@ function animalGestureTags(chosen) {
     return 'forepaw gestures, animal muzzle interaction';
 }
 
-function coupleAvatarTagParts({ overlay = false, blend = '', mixedWeight = 0.7, settings, chosen, animal, object, subject, fullFigure, appearances, negative,
+function coupleAvatarTagParts({ mediumLead = '', naiStyle = value => value, mediumActor = '', settings, chosen, animal, object, subject, fullFigure, appearances, negative,
     covered = [false, false], clothing = { people: ['', ''] }, interactionDirection = null, compositionTags = [] }) {
     const [interaction, leftAction, rightAction] = interactionTags(settings, chosen, animal);
     const originalRendering = chosen ? STYLE_TAGS[chosen.id] || chosen.prompt : settings.customStyle;
@@ -2877,11 +2851,11 @@ function coupleAvatarTagParts({ overlay = false, blend = '', mixedWeight = 0.7, 
     const form = animal
         ? tags(['complete animal bodies, species-appropriate animal anatomy, individual eyes and markings and small accessories', animalGestureTags(chosen)])
         : object ? 'material-built faces and bodies and hair and clothing, physical material texture, crafted limbs'
-            : overlay ? '' : 'consistent medium across faces and hair and bodies and clothing';
-    // Overlay: the provider's artist tags lead; this style follows once, weighted when mixed.
-    const trailing = overlay && rendering ? (blend === 'mixed' ? `${mixedWeight}::${rendering}::` : rendering) : '';
-    const scene = tags([
-        overlay ? '' : rendering || 'illustration', form, framing,
+            : 'consistent medium across faces and hair and bodies and clothing';
+    // The NAI channel leads with the weighted style (and 3D medium tags); the
+    // flat fallback keeps plain words, since weight syntax is NAI-only.
+    const sceneFor = nai => tags([
+        nai ? mediumLead : '', (nai ? naiStyle(rendering) : rendering) || 'illustration', form, framing,
         `two distinct ${subject}s, side by side, horizontal paired portrait, first subject at left quarter, second subject at right quarter, balanced subject scale`,
         'continuous edge-to-edge background, continuous center and corners, clear subject separation, quiet background detail, readable individual features, gestures within own half',
         subject_details.coupleVisibleRecipe(interaction, anyCovered && ownedInteraction),
@@ -2890,14 +2864,13 @@ function coupleAvatarTagParts({ overlay = false, blend = '', mixedWeight = 0.7, 
         settings.pairType === 'echo' ? 'complementary individual gestures, coordinated colors and light' : 'shared motif connecting subjects across center',
         animal && settings.clothing ? 'small wearable accents, animal-adapted clothing' : '',
         settings.clothing, settings.background, settings.direction,
-        trailing,
     ]);
+    const scene = sceneFor(false);
     const characters = settings.people.map((person, index) => ({
         name: `${index ? '右边' : '左边'} · ${person.name || (index ? '人物二' : '人物一')}`,
         tag: tags([
             index ? 'right side, centered at right quarter' : 'left side, centered at left quarter',
-            overlay ? coupleStyleFormTag(chosen, blend) : '',
-            appearances[index], overlay ? subject : subject_details.coupleVisibleRecipe(originalRendering, covered[index] && !!chosen) || subject,
+            appearances[index], mediumActor, subject_details.coupleVisibleRecipe(originalRendering, covered[index] && !!chosen) || subject,
             subject_details.coupleVisibleRecipe(index ? rightAction : leftAction, covered[index] && ownedInteraction),
             interactionDirection?.tags?.roles[index],
             subject_details.coupleCoveredEyeGuidance(covered[index], true),
@@ -2912,13 +2885,12 @@ function coupleAvatarTagParts({ overlay = false, blend = '', mixedWeight = 0.7, 
         // are metadata only, never token prefixes inside a character tag list.
         prompt: [`LEFT: ${characters[0].tag}`, `RIGHT: ${characters[1].tag}`, scene].join('\n'),
         negative,
-        nai: { prompt: scene, nl: '', characters: characters.map(character => ({ ...character, nl: '' })) },
+        nai: { prompt: sceneFor(true), nl: '', characters: characters.map(character => ({ ...character, nl: '' })) },
         characters,
         promptFormat: 'nai45-tags',
     };
 }
 
-__m_extras_coupleAvatarPromptFormat_js.coupleStyleFormTag = coupleStyleFormTag;
 __m_extras_coupleAvatarPromptFormat_js.coupleAvatarTagParts = coupleAvatarTagParts;
 }
 
@@ -3239,23 +3211,8 @@ const STYLE_CONSTRUCTION = Object.freeze({
     "fantasy-sand": "Fine sand on a glowing light table forms each figure, with soft grainy edges and amber tonal shading; faces kept readable.",
 });
 
-// How a style combines with the image provider's own artist string (see the
-// overlay plan): form = only proportions, framing, pose or light, so it stacks
-// at full strength; mixed = also line/colour treatment, stacks at reduced
-// weight; medium = replaces the drawing medium and is never stacked.
-const STYLE_BLEND = Object.freeze({"animal-bear": "form", "animal-bird": "form", "animal-capybara": "form", "animal-cat": "form", "animal-deer": "form", "animal-dog": "form", "animal-dragon": "form", "animal-duck": "form", "animal-fox": "form", "animal-hamster": "form", "animal-otter": "form", "animal-panda": "form", "animal-penguin": "form", "animal-rabbit": "form", "animal-seal": "form", "animal-sheep": "form", "animal-squirrel": "form", "animal-tiger": "form", "animal-wolf": "form", "anime-cel": "mixed", "anime-clean": "mixed", "anime-flat": "mixed", "anime-gacha": "mixed", "anime-idol": "mixed", "anime-korean": "mixed", "anime-otome": "mixed", "anime-thick": "mixed", "anime-webtoon": "mixed", "chibi-animal": "form", "chibi-bean": "form", "chibi-crayon": "mixed", "chibi-doodle": "mixed", "chibi-dumpling": "form", "chibi-four-head": "form", "chibi-headshot": "form", "chibi-kemono": "form", "chibi-meme": "form", "chibi-mochi": "form", "chibi-plump": "form", "chibi-sleepy": "form", "chibi-squish": "form", "chibi-three-head": "form", "chibi-tiny-arms": "form", "graphic-flat": "mixed", "graphic-geometric": "mixed", "graphic-line": "form", "graphic-pop": "mixed", "graphic-silhouette": "mixed", "graphic-sticker": "form", "layout-bust": "form", "layout-closeup": "form", "layout-dynamic": "form", "layout-fullbody": "form", "layout-high-angle": "form", "layout-look-back": "form", "layout-lying": "form", "layout-peek": "form", "layout-profile": "form", "layout-sitting": "form", "layout-waist": "form", "mood-blue": "form", "mood-candle": "form", "mood-festival": "form", "mood-golden": "form", "mood-moon": "form", "mood-neon": "form", "mood-rain": "form", "mood-sakura": "form", "mood-snow": "form", "mood-sparkle": "form", "mood-starry": "form", "mood-sunny": "form", "mood-underwater": "form"});
-const OVERLAY_MIXED_WEIGHT = 0.7;
-function coupleStyleBlend(style) {
-    if (!style) return '';
-    return STYLE_BLEND[style.id] || 'medium';
-}
-// Custom text is already the light form (no medium sentences, no repetition).
-function coupleOverlayAvailable(style) { return !style || coupleStyleBlend(style) !== 'medium'; }
-
 // Full-figure framings in the layout group (the others are portraits).
 const FULL_FIGURE_LAYOUTS = Object.freeze(['layout-fullbody', 'layout-sitting', 'layout-lying', 'layout-dynamic']);
-// The style's own proportion/pose sentence, without its group's medium sentence.
-function coupleStyleOwnConstruction(style) { return style ? STYLE_CONSTRUCTION[style.id] || '' : ''; }
 
 function coupleStyleConstruction(style) {
     return style ? [MEDIUM_CONSTRUCTION[style.group], STYLE_CONSTRUCTION[style.id]].filter(Boolean).join(' ') : '';
@@ -3468,6 +3425,23 @@ const INTERACTION_PRESETS = Object.freeze([
 // they change; a variation is skipped when the interaction or the user direction
 // already decides that part, so the chosen actions are never overridden.
 const COMPOSITION_VARIANTS = Object.freeze([{"id": "high-angle", "label": "微微俯拍", "prompt": "A slightly high camera angle looking down at the pair; the shared interaction stays between them.", "tags": "slight high angle, looking down at the pair, interaction between them", "sets": [], "portrait": false}, {"id": "low-angle", "label": "微微仰拍", "prompt": "A slightly low camera angle looking up at the pair.", "tags": "slight low angle, looking up at the pair", "sets": [], "portrait": false}, {"id": "tilt", "label": "斜一点的镜头", "prompt": "A slight diagonal camera tilt adds movement; the two halves stay balanced and both faces stay upright enough to read.", "tags": "slight dutch angle, dynamic diagonal, balanced halves, readable faces", "sets": [], "portrait": false}, {"id": "close", "label": "拉近特写", "prompt": "Closer framing: the two faces and the shared interaction fill most of the image, with the meeting point right at the center.", "tags": "close framing, faces and shared interaction filling image, meeting point at center", "sets": [], "portrait": true}, {"id": "lean-in", "label": "互相靠近", "prompt": "Both lean slightly toward the center line so their heads tilt toward each other and their shoulders nearly meet across the middle.", "tags": "leaning toward center, heads tilted toward each other, shoulders nearly meeting", "sets": ["heads", "distance"], "portrait": false}, {"id": "three-quarter", "label": "四分之三侧身", "prompt": "Three-quarter views turned toward each other: the left subject turns right, the right subject turns left, each face still clearly visible.", "tags": "three-quarter views facing each other, both faces clearly visible", "sets": ["orientation"], "portrait": false}, {"id": "height-offset", "label": "一高一低", "prompt": "One head sits a little higher than the other, as if one leans down while the other looks up, gently breaking the symmetry.", "tags": "one head slightly higher, one leaning down, one looking up, asymmetric heights", "sets": ["heads", "gaze"], "portrait": false}, {"id": "one-turns", "label": "一个看镜头一个看你", "prompt": "One subject faces the viewer while the other turns toward the partner in a three-quarter view, both faces readable.", "tags": "one facing viewer, other turned toward partner, both faces readable", "sets": ["orientation", "gaze"], "portrait": false}, {"id": "heads-close", "label": "头靠头", "prompt": "Their heads come close at the center line, nearly touching temple to temple.", "tags": "heads close at center, nearly touching temple to temple", "sets": ["heads", "distance"], "portrait": true}, {"id": "seated", "label": "并肩坐着", "prompt": "Both are seated side by side at the same height, relaxed and close, the interaction held between them.", "tags": "seated side by side, same height, relaxed and close", "sets": ["posture"], "portrait": false}, {"id": "over-shoulder", "label": "回眸", "prompt": "Both glance back over the inner shoulder toward the center, bodies angled slightly outward, faces turned to each other.", "tags": "glancing back over inner shoulders, bodies angled slightly outward, faces turned to each other", "sets": ["orientation", "gaze", "hands", "heads"], "portrait": false}, {"id": "reach", "label": "伸手向中间", "prompt": "Both reach their inner hands toward the center line, so the interaction becomes the clear focal point between the two portraits.", "tags": "inner hands reaching toward center, interaction as focal point between portraits", "sets": ["hands"], "portrait": false}].map(row => Object.freeze({ ...row, sets: Object.freeze(row.sets) })));
+// NAI only: 柏宝绘 always prepends the user's selected artist string, which is
+// usually 2D anime and wins over a plain "3D render" phrase. These media lead
+// with weighted danbooru-style medium tags so the selected 3D look survives.
+const NAI_MEDIUM_LEAD = Object.freeze({
+    'render-toon': '1.5::3d::, 3d render, blender (medium)',
+    'render-game': '1.5::3d::, 3d render, blender (medium)',
+    'render-cel3d': '1.3::3d::, 3d render, cel shading, toon shading',
+});
+// NAI only: every preset style (and custom text without its own weights) is
+// weighted so it holds against the artist string the provider puts in front.
+const NAI_STYLE_WEIGHT = 1.3;
+function naiWeightedStyle(value) {
+    const style = typeof value === 'string' ? value.trim() : '';
+    return style && !style.includes('::') ? `${NAI_STYLE_WEIGHT}::${style}::` : style;
+}
+const NAI_MEDIUM_ACTOR = Object.freeze({ 'render-toon': '3d', 'render-game': '3d', 'render-cel3d': '3d' });
+
 const COMPOSITION_PAIR_CUE = "They read clearly as a couple avatar pair: complementary, not mirrored, poses; coordinated color accents shared across both halves; the interaction meets at the center line; each face stays large and fully inside its own half so the image can be cropped into two avatars.";
 const COMPOSITION_PAIR_TAGS = "couple avatar pair, complementary not mirrored poses, coordinated color accents, interaction meeting at center, large faces within own half";
 
@@ -3623,20 +3597,20 @@ function coupleStyleIdentityRendering(chosen) {
     return [identity, form, proportions, eyes].filter(Boolean).join(' ');
 }
 
-__m_extras_coupleAvatarStyles_js.coupleStyleBlend = coupleStyleBlend;
-__m_extras_coupleAvatarStyles_js.coupleOverlayAvailable = coupleOverlayAvailable;
-__m_extras_coupleAvatarStyles_js.coupleStyleOwnConstruction = coupleStyleOwnConstruction;
 __m_extras_coupleAvatarStyles_js.coupleStyleConstruction = coupleStyleConstruction;
+__m_extras_coupleAvatarStyles_js.naiWeightedStyle = naiWeightedStyle;
 __m_extras_coupleAvatarStyles_js.compositionClaims = compositionClaims;
 __m_extras_coupleAvatarStyles_js.coupleInteraction = coupleInteraction;
 __m_extras_coupleAvatarStyles_js.randomCoupleIdeas = randomCoupleIdeas;
 __m_extras_coupleAvatarStyles_js.coupleStyleIdentityRendering = coupleStyleIdentityRendering;
 __m_extras_coupleAvatarStyles_js.STYLE_GROUPS = STYLE_GROUPS;
 __m_extras_coupleAvatarStyles_js.COUPLE_STYLES = COUPLE_STYLES;
-__m_extras_coupleAvatarStyles_js.OVERLAY_MIXED_WEIGHT = OVERLAY_MIXED_WEIGHT;
 __m_extras_coupleAvatarStyles_js.FULL_FIGURE_LAYOUTS = FULL_FIGURE_LAYOUTS;
 __m_extras_coupleAvatarStyles_js.INTERACTION_PRESETS = INTERACTION_PRESETS;
 __m_extras_coupleAvatarStyles_js.COMPOSITION_VARIANTS = COMPOSITION_VARIANTS;
+__m_extras_coupleAvatarStyles_js.NAI_MEDIUM_LEAD = NAI_MEDIUM_LEAD;
+__m_extras_coupleAvatarStyles_js.NAI_STYLE_WEIGHT = NAI_STYLE_WEIGHT;
+__m_extras_coupleAvatarStyles_js.NAI_MEDIUM_ACTOR = NAI_MEDIUM_ACTOR;
 __m_extras_coupleAvatarStyles_js.COMPOSITION_PAIR_CUE = COMPOSITION_PAIR_CUE;
 __m_extras_coupleAvatarStyles_js.COMPOSITION_PAIR_TAGS = COMPOSITION_PAIR_TAGS;
 __m_extras_coupleAvatarStyles_js.INTERACTIONS = INTERACTIONS;
@@ -5715,7 +5689,6 @@ function coupleAvatarCss() {
 .rmt-pair-filter-side{display:grid;gap:6px;margin:12px 0}.rmt-pair-filter-side h3{margin:0;font-size:14px}.rmt-pair-filter-side s{opacity:.7}.rmt-pair-filter-side textarea{min-height:96px}
 .rmt-pair-overlay{display:flex;align-items:flex-start;gap:10px;margin-top:10px;cursor:pointer}.rmt-pair-overlay input{margin-top:3px;flex:none}.rmt-pair-overlay b,.rmt-pair-overlay small{display:block}.rmt-pair-overlay small{color:var(--rmt-theme-muted);font-size:12px;margin-top:3px}.rmt-pair-overlay.is-disabled{opacity:.6;cursor:default}
 .rmt-pair-actions{display:flex;gap:8px;flex-wrap:wrap}
-.rmt-pair-blend{display:inline-block;margin-left:5px;padding:0 5px;border-radius:999px;font-size:10px;line-height:1.5;border:1px solid currentColor;opacity:.75;vertical-align:1px}.rmt-pair-blend.is-light{opacity:.55}
 .rmt-pair-choice{display:flex;gap:8px}.rmt-pair-choice>button{flex:1}
 .rmt-pair-options{border-top:1px solid var(--rmt-theme-border);border-bottom:1px solid var(--rmt-theme-border);padding:0 2px}
 .rmt-pair-options>summary{cursor:pointer;min-height:48px;display:flex;align-items:center;justify-content:space-between;font-weight:600;list-style:none}
@@ -5826,20 +5799,6 @@ const settingFields = ['interaction', 'interactionDetail', 'clothing', 'backgrou
 const HISTORY_PAGE_SIZE = 6; // Display page only; stored records are never capped.
 function styleFor(id) { return presets.COUPLE_STYLES.find(item => item.id === id); }
 function styleLabel(settings) { return settings?.styleId === 'custom' ? '自定义风格' : styleFor(settings?.styleId)?.label || '二头身团子'; }
-const OVERLAY_NOTES = Object.freeze({
-    form: '只用它的比例、构图或光影；线条和上色交给生图插件里你自己的画师串。',
-    mixed: '它也带一点线条/上色倾向，会以较低权重轻轻叠上去；出图不对味就关掉。',
-    custom: '自定义风格只写一次、放在最后，画师串在前。',
-    medium: '这个画风本身就是换一种画法，和画师串叠在一起两边都不像，所以不能叠。',
-});
-function overlayKind(settings) {
-    if (settings?.styleId === 'custom') return 'custom';
-    return presets.coupleStyleBlend(styleFor(settings?.styleId)) || 'medium';
-}
-function blendBadge(item) {
-    const kind = presets.coupleStyleBlend(item);
-    return kind === 'form' ? '<small class="rmt-pair-blend">可叠</small>' : kind === 'mixed' ? '<small class="rmt-pair-blend is-light">轻叠</small>' : '';
-}
 function button(action, label, extra = '') { return `<button type="button" data-pair-action="${action}" ${extra}>${label}</button>`; }
 function current(view) {
     try { return active === view && view.root?.isConnected && !view.host.hidden && runtime.state.activeMode === couple.COUPLE_MODE
@@ -5873,9 +5832,6 @@ function draft(view) {
         if (key === 'appearance' && input.value.trim() !== settings.people[i].appearance) settings.people[i].appearanceOverride = true;
         settings.people[i][key] = input.value;
     }
-    const overlay = view.root.querySelector('[data-pair-overlay]');
-    // A disabled toggle (medium style) keeps the saved choice for later styles.
-    if (overlay && !overlay.disabled) { if (overlay.checked) settings.overlayArtist = true; else delete settings.overlayArtist; }
     view.settings = couple.normalizeCoupleSettings(settings, view.context);
     // Resolving a new name or provider may replace the displayed preset. Keep
     // that display in sync before another input event reads the form again.
@@ -6159,14 +6115,6 @@ function paintSettings(view) {
     view.root.querySelector('[data-pair-selected-style]').textContent = styleLabel(view.settings);
     view.root.querySelector('[data-pair-style-description]').textContent = styleFor(view.settings.styleId)?.description || '用自己的话描述想要的画风。';
     view.root.querySelector('[data-pair-custom]').classList.toggle('is-visible', view.settings.styleId === 'custom');
-    const overlay = view.root.querySelector('[data-pair-overlay]');
-    if (overlay) {
-        const kind = overlayKind(view.settings), available = kind !== 'medium';
-        overlay.disabled = !available;
-        overlay.checked = available && view.settings.overlayArtist === true;
-        overlay.closest('.rmt-pair-overlay')?.classList.toggle('is-disabled', !available);
-        const note = view.root.querySelector('[data-pair-overlay-note]'); if (note) note.textContent = OVERLAY_NOTES[kind];
-    }
     paintInteraction(view);
 }
 function paintInteraction(view) {
@@ -6204,7 +6152,7 @@ function paintComposition(view) {
 function formHtml(view) {
     let providerNote = '';
     try {
-        if (core_settings.getPluginSettings(view.context).imageGenerationProvider === 'baibai-image') providerNote = '<p class="rmt-pair-note">使用柏宝绘 NAI 时会沿用其画师串和负面词，本页不能覆盖；想保留画师味道，可打开下面的“叠在我的画师串上”。豆豆眼／Q版若不符，请检查生图插件预设中是否排除了这些特征。</p>';
+        if (core_settings.getPluginSettings(view.context).imageGenerationProvider === 'baibai-image') providerNote = '<p class="rmt-pair-note">豆豆眼／Q版若不符，请检查生图插件预设中是否排除了这些特征。</p>';
     } catch { /* Optional advice never blocks the form. */ }
     const groups = [...new Set(presets.INTERACTION_PRESETS.map(item => item.group))];
     return `<form class="rmt-pair-form" data-pair-form>
@@ -6213,7 +6161,6 @@ function formHtml(view) {
             <button type="button" class="rmt-pair-style-summary" data-pair-action="styles"><span><b data-pair-selected-style></b><small data-pair-style-description></small></span><span>更换</span></button>
             <div class="rmt-pair-style-custom-action">${button('custom-style', '自己写风格')}</div>
             <label class="rmt-pair-field rmt-pair-custom" data-pair-custom><span>自定义风格</span><textarea data-pair-field="customStyle" placeholder="例如：像旧绘本里的水彩小人，纸张有轻微颗粒。"></textarea></label>
-            <label class="rmt-pair-overlay"><input type="checkbox" data-pair-overlay><span><b>叠在我的画师串上</b><small data-pair-overlay-note></small></span></label>
         </div>
         <div class="rmt-pair-block"><h3>两个人的呼应</h3><div class="rmt-pair-choice"><button type="button" data-pair-type="joined" aria-pressed="true">拼接连图</button><button type="button" data-pair-type="echo" aria-pressed="false">独立呼应</button></div>
             <div class="rmt-pair-section-head"><span>互动 <small>${presets.INTERACTION_PRESETS.length} 种</small></span><span class="rmt-pair-actions">${button('random-interaction', '抽一个')}${button('inspiration', '随机灵感')}</span></div>
@@ -6273,7 +6220,6 @@ function bindView(view) {
     });
     view.root.addEventListener('change', event => {
         if (event.target.matches('select[data-pair-field]')) { queueDraft(view); paintInteraction(view); }
-        if (event.target.matches('[data-pair-overlay]')) { draft(view); paintSettings(view); queueDraft(view); }
     });
     view.root.querySelector('[data-pair-form]').addEventListener('submit', event => { event.preventDefault(); void startGeneration(view); });
     view.root.addEventListener('click', event => {
@@ -6508,7 +6454,6 @@ function showStyles(view) {
     const m = dialog(view, '选择画风', `<div class="rmt-pair-picker-toolbar">
         <label class="rmt-pair-field"><span class="rmt-pair-visually-hidden">搜索画风</span><input data-pair-search aria-label="搜索风格" placeholder="搜索名称，例如：小猫、水彩、像素"></label>
         <div class="rmt-pair-picker-filter"><label class="rmt-pair-field"><span class="rmt-pair-visually-hidden">风格分类</span><select data-pair-group-select aria-label="风格分类"><option value="all">全部画风</option>${presets.STYLE_GROUPS.map(group => `<option value="${group.id}">${esc(group.label)}</option>`).join('')}</select></label><small data-pair-style-count role="status"></small><button type="button" data-pair-random-style>随机一个</button></div>
-        <p class="rmt-pair-note">标“可叠”的画风能叠在你的画师串上；“轻叠”会降低权重叠加；没有标记的会换掉画法。</p>
         </div><div class="rmt-pair-picker-scroll" data-pair-picker-results></div>`);
     if (!m) return;
     m.body.classList.add('rmt-pair-style-browser');
@@ -6521,7 +6466,7 @@ function showStyles(view) {
         m.body.querySelector('[data-pair-style-count]').textContent = `${rows.length} 种`;
         m.body.querySelector('[data-pair-picker-results]').innerHTML = rows.length ? presets.STYLE_GROUPS.map(group => {
             const items = rows.filter(item => item.group === group.id);
-            return items.length ? `<section class="rmt-pair-picker-group"><h3>${esc(group.label)}</h3><div class="rmt-pair-picker-results">${items.map(item => `<button type="button" data-pair-pick-style="${item.id}" aria-pressed="${view.settings.styleId === item.id}" title="${esc(item.description)}"><span>${esc(item.label)}${blendBadge(item)}</span>${view.settings.styleId === item.id ? '<span aria-hidden="true">✓</span>' : ''}</button>`).join('')}</div></section>` : '';
+            return items.length ? `<section class="rmt-pair-picker-group"><h3>${esc(group.label)}</h3><div class="rmt-pair-picker-results">${items.map(item => `<button type="button" data-pair-pick-style="${item.id}" aria-pressed="${view.settings.styleId === item.id}" title="${esc(item.description)}"><span>${esc(item.label)}</span>${view.settings.styleId === item.id ? '<span aria-hidden="true">✓</span>' : ''}</button>`).join('')}</div></section>` : '';
         }).join('') : '<p class="rmt-pair-note">没有找到，换个词试试，或回到页面自己写风格。</p>';
         m.body.querySelector('[data-pair-picker-results]').scrollTop = 0;
     };
@@ -28022,10 +27967,25 @@ function parseHearttraceReadme(text) {
     return items.length ? [{ version: heading[2], title: heading[1], groups, items }] : [];
 }
 
-async function loadHearttraceChangelog({ source = 'installed', remoteUrl = HOMEPAGE, remoteBranch = FALLBACK_BRANCH, fetcher = globalThis.fetch } = {}) {
-    // The installed README is embedded by build.py. Opening its notes needs
-    // neither a network connection nor an unrelated remote history file.
+// The installed README.md beside index.js, on this same server (never GitHub).
+function installedReadmeUrl(moduleUrl = import.meta.url, origin = globalThis.location?.origin) {
+    try {
+        const url = new URL(moduleUrl);
+        if (url.origin !== origin) return '';
+        const match = url.pathname.match(/^(.*?\/scripts\/extensions\/third-party\/[^/]+)\//);
+        return match ? `${url.origin}${match[1]}/README.md` : '';
+    } catch { return ''; }
+}
+
+async function loadHearttraceChangelog({ source = 'installed', remoteUrl = HOMEPAGE, remoteBranch = FALLBACK_BRANCH, fetcher = globalThis.fetch, moduleUrl = import.meta.url, origin = globalThis.location?.origin } = {}) {
+    // Installed notes read the installed README.md file itself, so editing the
+    // README changes them even without a rebuild. The copy build.py embeds is
+    // the offline fallback. Neither path touches the network or old history.
     if (source !== 'remote') {
+        const local = installedReadmeUrl(moduleUrl, origin);
+        const text = local && typeof fetcher === 'function' ? await readRemoteText(local, fetcher, 'installed readme') : '';
+        const fileSections = parseHearttraceReadme(text);
+        if (fileSections.length) return { ok: true, source: 'readme', sections: fileSections };
         const sections = parseHearttraceReadme(RELEASE_README);
         return { ok: sections.length > 0, source: 'readme', sections,
             ...(sections.length ? {} : { message: '当前安装包没有可读取的更新说明。' }) };
@@ -28178,6 +28138,7 @@ __m_core_selfUpdater_js.compareHearttraceVersions = compareHearttraceVersions;
 __m_core_selfUpdater_js.isNewerHearttraceVersion = isNewerHearttraceVersion;
 __m_core_selfUpdater_js.parseHearttraceChangelog = parseHearttraceChangelog;
 __m_core_selfUpdater_js.parseHearttraceReadme = parseHearttraceReadme;
+__m_core_selfUpdater_js.installedReadmeUrl = installedReadmeUrl;
 __m_core_selfUpdater_js.INSTALLED_BUILD = INSTALLED_BUILD;
 }
 
