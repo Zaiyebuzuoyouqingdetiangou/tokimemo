@@ -5,7 +5,10 @@ import * as store from './core/stickerStore.js';
 // native chat, and the sticker button beside ST's input box.
 const SERVICE = Symbol.for('Hearttrace.stickers.v1');
 const SKIP = 'code, pre, script, style, textarea, toto, iframe, svg, .hearttrace-sticker, details[data-rabbit-mirror-external-details]';
-const TABS = [['user', '我的'], ['pair', '双人'], ['other', '其他']];
+const TABS = [['user', '我的'], ['char', '他的'], ['pair', '双人'], ['other', '其他']];
+const POSITION_KEY = 'hearttrace:sticker-float:v1';
+// Same rabbit as the 心迹回廊 entry in ST's magic-wand menu.
+const RABBIT = '<svg viewBox="0 0 32 32" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M10 16C4 2 11 1 14 14M18 14C20 1 27 2 23 16M9 16c-7 11 3 15 9 14s13-8 5-14c-4-3-10-3-14 0Z"/><path d="M12 22h1m6 0h1m-6 4 2 1 2-1"/></svg>';
 
 function context() { try { return globalThis.SillyTavern?.getContext?.() || null; } catch { return null; } }
 function service() {
@@ -24,7 +27,7 @@ export function installStickerBridge() {
         resolve(token) {
             const match = new RegExp(store.STICKER_TOKEN.source, 'u').exec(String(token || ''));
             const row = match ? store.resolveSticker(match[1], match[2], context()) : null;
-            return row ? { name: row.name, owner: row.owner, url: row.url, meaning: row.meaning } : null;
+            return row ? { key: `${store.ownerLabel(row.owner, context())}·${row.name}`, name: row.name, owner: row.owner, url: row.url, meaning: row.meaning } : null;
         },
         subscribe(listener) {
             if (typeof listener !== 'function') return () => {};
@@ -49,12 +52,15 @@ export function installStickerBridge() {
 const CSS = `
 .hearttrace-sticker{display:inline-block;vertical-align:bottom;line-height:0;margin:2px 0}
 .hearttrace-sticker img{width:var(--hearttrace-sticker-size,120px)!important;height:var(--hearttrace-sticker-size,120px)!important;max-width:40vw!important;object-fit:contain!important;border-radius:10px;margin:0!important;cursor:default}
-#hearttrace_sticker_button{display:flex;align-items:center;justify-content:center}
+#hearttrace_sticker_button{position:fixed;z-index:9998;box-sizing:border-box;width:46px;height:46px;margin:0;padding:0;border:2px solid #fff;border-radius:50%;background:#bd708b;color:#fff;box-shadow:0 2px 12px #0003;display:grid;place-items:center;cursor:pointer;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;appearance:none}
+#hearttrace_sticker_button svg{display:block;pointer-events:none}
+#hearttrace_sticker_button[aria-expanded=true]{box-shadow:0 0 0 3px #de8fab88,0 2px 12px #0003}
+#hearttrace_sticker_button:focus-visible{outline:3px solid #de8fab;outline-offset:3px}
 #hearttrace_sticker_button[hidden]{display:none!important}
-#hearttrace-sticker-panel{box-sizing:border-box;width:100%;margin:0 0 6px;padding:10px;border:1px solid var(--SmartThemeBorderColor,rgba(255,255,255,.2));border-radius:14px;background:var(--SmartThemeBlurTintColor,rgba(28,28,30,.92));color:var(--SmartThemeBodyColor,#eee);backdrop-filter:blur(var(--SmartThemeBlurStrength,10px));display:flex;flex-direction:column;gap:8px;font-size:14px}
+#hearttrace-sticker-panel{position:fixed;z-index:9999;box-sizing:border-box;width:min(400px,calc(100vw - 16px));padding:10px;border:1px solid var(--SmartThemeBorderColor,rgba(255,255,255,.2));border-radius:16px;background:var(--SmartThemeBlurTintColor,rgba(28,28,30,.96));color:var(--SmartThemeBodyColor,#eee);backdrop-filter:blur(var(--SmartThemeBlurStrength,10px));-webkit-backdrop-filter:blur(var(--SmartThemeBlurStrength,10px));box-shadow:0 8px 28px #0005;display:flex;flex-direction:column;gap:8px;font-size:14px}
 #hearttrace-sticker-panel[hidden]{display:none!important}
 #hearttrace-sticker-panel *{box-sizing:border-box}
-.hearttrace-sticker-tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;padding:3px;border-radius:999px;border:1px solid var(--SmartThemeBorderColor,rgba(255,255,255,.2))}
+.hearttrace-sticker-tabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;padding:3px;border-radius:999px;border:1px solid var(--SmartThemeBorderColor,rgba(255,255,255,.2))}
 .hearttrace-sticker-tabs button{min-height:34px;border:0;border-radius:999px;background:transparent;color:inherit;font:inherit;cursor:pointer}
 .hearttrace-sticker-tabs button[aria-selected=true]{background:var(--SmartThemeQuoteColor,#e18a9b);color:var(--SmartThemeBlurTintColor,#111);font-weight:600}
 .hearttrace-sticker-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(72px,1fr));gap:6px;max-height:min(38vh,320px);overflow:auto;overscroll-behavior:contain}
@@ -181,53 +187,108 @@ export function startStickerRuntime({ document: doc = globalThis.document } = {}
     function available(current) {
         const ctx = context();
         return !!ctx && !ctx.groupId && ctx.characterId !== undefined && ctx.characterId !== null && ctx.characterId !== ''
-            && current.packs.some(pack => pack.owner !== 'char' && pack.stickers.length);
+            && current.packs.some(pack => pack.stickers.length);
     }
     function syncButton(current = data()) {
         if (!button?.isConnected) mountButton();
         const show = available(current);
-        if (button) button.hidden = !show;
+        if (button) { button.hidden = !show; if (show) layout(); }
         if (!show) closePanel();
-        else if (panel && !panel.hidden) paintPanel(current);
+        else if (panel && !panel.hidden) { paintPanel(current); place(); }
+    }
+
+    // ---- floating button: draggable, remembered per browser ----
+    const unit = (value, fallback) => Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : fallback;
+    let point = { x: 1, y: 0.58 }, held = null, suppressClick = false;
+    try { const saved = JSON.parse(globalThis.localStorage?.getItem(POSITION_KEY) || 'null'); point = { x: unit(saved?.x, 1), y: unit(saved?.y, 0.58) }; } catch { /* Default spot. */ }
+    function bounds() {
+        const view = globalThis.visualViewport, w = view?.width || globalThis.innerWidth || 360, h = view?.height || globalThis.innerHeight || 640;
+        const x = view?.offsetLeft || 0, y = view?.offsetTop || 0;
+        return { minX: x + 10, minY: y + 60, maxX: Math.max(x + 10, x + w - 56), maxY: Math.max(y + 60, y + h - 120) };
+    }
+    function layout() {
+        if (!button || button.hidden) return;
+        const b = bounds();
+        button.style.left = `${b.minX + (b.maxX - b.minX) * point.x}px`;
+        button.style.top = `${b.minY + (b.maxY - b.minY) * point.y}px`;
     }
     function mountButton() {
-        const host = doc.getElementById('leftSendForm') || doc.getElementById('send_form');
-        if (!host) return;
+        if (!doc.body) return;
         button = doc.getElementById('hearttrace_sticker_button');
         if (!button) {
-            button = doc.createElement('div');
-            button.id = 'hearttrace_sticker_button';
-            button.className = 'fa-regular fa-face-smile interactable';
-            button.setAttribute('role', 'button'); button.setAttribute('tabindex', '0');
+            button = doc.createElement('button');
+            button.id = 'hearttrace_sticker_button'; button.type = 'button';
             button.setAttribute('title', '表情包'); button.setAttribute('aria-label', '表情包');
             button.setAttribute('aria-expanded', 'false'); button.hidden = true;
-            if (host.id === 'leftSendForm') host.append(button);
-            else host.insertBefore(button, doc.getElementById('send_textarea'));
+            button.innerHTML = RABBIT;
+            doc.body.append(button);
         }
-        button.onclick = () => togglePanel();
-        button.onkeydown = event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); togglePanel(); } };
+        button.onclick = () => { if (suppressClick) { suppressClick = false; return; } togglePanel(); };
+        button.onpointerdown = event => {
+            if (event.button !== 0 || event.isPrimary === false) return;
+            const rect = button.getBoundingClientRect();
+            held = { id: event.pointerId, x: event.clientX, y: event.clientY, left: rect.left, top: rect.top, dragged: false };
+            try { button.setPointerCapture(event.pointerId); } catch { /* Older WebViews. */ }
+        };
+        button.onpointermove = event => {
+            if (!held || event.pointerId !== held.id) return;
+            const dx = event.clientX - held.x, dy = event.clientY - held.y;
+            if (!held.dragged && Math.hypot(dx, dy) < 6) return;
+            held.dragged = true;
+            const b = bounds();
+            point = { x: unit((held.left + dx - b.minX) / (b.maxX - b.minX || 1), point.x), y: unit((held.top + dy - b.minY) / (b.maxY - b.minY || 1), point.y) };
+            layout(); if (panel && !panel.hidden) place();
+        };
+        const end = event => {
+            if (!held || event.pointerId !== held.id) return;
+            if (held.dragged) {
+                suppressClick = true;
+                // Snap to the nearer side so it never covers the middle of a message.
+                point = { x: point.x < 0.5 ? 0 : 1, y: point.y }; layout(); if (panel && !panel.hidden) place();
+                try { globalThis.localStorage?.setItem(POSITION_KEY, JSON.stringify(point)); } catch { /* Position only. */ }
+            }
+            try { button.releasePointerCapture(event.pointerId); } catch {}
+            held = null;
+        };
+        button.onpointerup = end; button.onpointercancel = end;
     }
+    const relayout = () => { layout(); if (panel && !panel.hidden) place(); };
+    globalThis.addEventListener?.('resize', relayout);
+    globalThis.visualViewport?.addEventListener?.('resize', relayout);
+
     function ensurePanel() {
         if (panel?.isConnected) return panel;
-        const form = doc.getElementById('send_form');
-        if (!form?.parentElement) return null;
+        if (!doc.body) return null;
         panel = doc.getElementById('hearttrace-sticker-panel') || doc.createElement('section');
         panel.id = 'hearttrace-sticker-panel'; panel.hidden = true;
         panel.setAttribute('aria-label', '表情包');
-        form.parentElement.insertBefore(panel, form);
+        doc.body.append(panel);
         panel.addEventListener('click', event => {
             const target = event.target.closest('button');
             if (!target) return;
-            if (target.dataset.stickerTab) { tab = target.dataset.stickerTab; paintPanel(data()); return; }
+            if (target.dataset.stickerTab) { tab = target.dataset.stickerTab; paintPanel(data()); place(); return; }
             if (target.dataset.stickerToken) {
                 const area = doc.getElementById('send_textarea');
                 insertAtCursor(area, target.dataset.stickerToken, area && caret && area.value.length >= (caret.end || 0) ? caret : null);
                 caret = area ? { start: area.selectionStart, end: area.selectionEnd } : null;
-                closePanel(); area?.focus?.();
+                closePanel(); area?.focus?.({ preventScroll: true });
             }
         });
         panel.addEventListener('keydown', event => { if (event.key === 'Escape') { closePanel(); button?.focus?.(); } });
         return panel;
+    }
+    // Beside the rabbit: same side of the screen, above it when there is room.
+    function place() {
+        if (!panel || !button) return;
+        const rect = button.getBoundingClientRect(), view = globalThis.visualViewport;
+        const vw = view?.width || globalThis.innerWidth, vh = view?.height || globalThis.innerHeight, ox = view?.offsetLeft || 0, oy = view?.offsetTop || 0;
+        const width = panel.offsetWidth, height = panel.offsetHeight;
+        let left = rect.left + rect.width / 2 > ox + vw / 2 ? rect.right - width : rect.left;
+        left = Math.min(ox + vw - width - 8, Math.max(ox + 8, left));
+        let top = rect.top - height - 8;
+        if (top < oy + 8) top = rect.bottom + 8;
+        top = Math.min(oy + vh - height - 8, Math.max(oy + 8, top));
+        panel.style.left = `${left}px`; panel.style.top = `${top}px`;
     }
     function paintPanel(current) {
         if (!panel) return;
@@ -236,14 +297,14 @@ export function startStickerRuntime({ document: doc = globalThis.document } = {}
         panel.innerHTML = `<div class="hearttrace-sticker-tabs" role="tablist">${TABS.map(([key, label]) => `<button type="button" role="tab" data-sticker-tab="${key}" aria-selected="${tab === key}">${label}</button>`).join('')}</div>`
             + `<div class="hearttrace-sticker-grid">${rows.length ? rows.map(row => `<button type="button" data-sticker-token="${esc(store.stickerToken(row.owner, row.name, ctx))}" title="${esc(row.meaning || row.name)}"><img src="${esc(row.url)}" alt="" loading="lazy"><span>${esc(row.name)}</span></button>`).join('')
                 : '<p class="hearttrace-sticker-empty">这一栏还没有表情。可以在心迹回廊 · 互动 · 表情包里做一组。</p>'}</div>`
-            + `<div class="hearttrace-sticker-note">点一下放进输入框。发出去的是暗号，${esc(store.ownerLabel('char', ctx))}从世界书知道它的意思。</div>`;
+            + `<div class="hearttrace-sticker-note">点一下放进输入框。发出去的是暗号，${esc(store.ownerLabel('char', ctx))}从世界书知道它的意思。拖动小兔子可以换位置。</div>`;
     }
     function togglePanel() { if (panel && !panel.hidden) closePanel(); else openPanel(); }
     function openPanel() {
         const current = data();
         if (!available(current) || !ensurePanel()) return;
         if (!store.allStickers(current, tab).length) tab = TABS.find(([key]) => store.allStickers(current, key).length)?.[0] || 'user';
-        paintPanel(current); panel.hidden = false; button?.setAttribute('aria-expanded', 'true');
+        paintPanel(current); panel.hidden = false; place(); button?.setAttribute('aria-expanded', 'true');
         panel.querySelector('[aria-selected="true"]')?.focus?.({ preventScroll: true });
     }
     function closePanel() {
@@ -284,6 +345,8 @@ export function startStickerRuntime({ document: doc = globalThis.document } = {}
         for (const type of types) source?.off?.(type, hostEvent);
         globalThis.removeEventListener?.(store.STICKER_EVENTS.changed, changed);
         doc.removeEventListener('pointerdown', outside, true);
+        globalThis.removeEventListener?.('resize', relayout);
+        globalThis.visualViewport?.removeEventListener?.('resize', relayout);
         for (const type of ['keyup', 'mouseup', 'input', 'select', 'touchend']) doc.removeEventListener(type, remember, true);
         button?.remove(); panel?.remove(); style.remove();
         // Leave the original tokens visible once the plugin is off.

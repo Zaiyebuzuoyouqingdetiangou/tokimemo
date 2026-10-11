@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 358
-// Source SHA-256: 33af15ff31a2761036c810a8635442f6f6a834759a997b103874813e0712b47b
+// Source SHA-256: f07cca707e1d20c619359d8fe5abd4aa7dcbd4658b756f7bf265dd2bc2a08c00
 // Build: python3 tools/verification/build.py <source-root>
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -1179,7 +1179,7 @@ function __init_core_releaseNotes_js() {
 // MODULE: core/releaseNotes.js
 
 // GENERATED FROM README.md by tools/verification/build.py. Do not edit by hand.
-const RELEASE_README = "# 心迹回廊 1.0.56\n\n## 更新日志模块\n\n新增了更新日志板块，感谢@nancyindaeyo的更新。\n\n## 本次变动\n\n- 修复柏宝绘外貌标签带下划线时丢失发色、眼色等细节的问题；保留原标签权重，补齐眼罩、酒窝、鼻型、泪痣与明确性别描述的识别。\n- 修复“曾经受伤留下的疤痕”等固定特征被误删的问题，覆盖情侣头像、普通配图和手书的自动外貌读取。\n- 自动摘录按明确姓名、人物标签和称谓区分归属，避免将对方或其他人的外貌混入当前人物；手填外貌、旧草稿和历史图片保持原样。\n- 不增加自动文本请求或生成门槛。已有外貌栏若含旧杂句，可左右分别点“重新读取外貌”整理后再绘制；该操作沿用原有文本 API。\n- 情侣头像新增 69 种画风（含构图版式、氛围光影、3D 渲染分组）和 48 种互动（含贴贴亲昵、小小较劲、幻想冒险）；画风和互动都改为可搜索、按分类浏览的选择面板，也可以随机抽一个。\n- Q 版、动物化身会给每个人物单独带上比例标签，外貌写得很长也不容易画成成人比例；生成时可选择过滤掉身高、体型等写实描述，只作用于这一次，原外貌不变，也可以在选项里设为自动过滤或不过滤。\n- 情侣头像新增“构图”：默认每次随机换一种镜头，始终保持左右各一人、能裁成两张头像；会改动所选互动或“小心思”里动作的姿势自动跳过，也可以固定为正面并排或指定一种。\n- 情侣头像的画风在 NAI 中加权放在最前，3D 画风另加 3D 标签，减少被画师串盖过。\n- 情侣头像的历史与收藏可以删除头像：卡片下方的“删除”，或点“多选”勾选多对后一起删除，删除前会确认一次；已设为聊天头像的图片、已保存的 PNG 和生图插件图库里的原图不受影响。\n- 手书的剧情叙事、抒情意象、关系互动、高燃快切、节奏循环、悬念反转六种分镜类型，各自写明了画面特征和自查要求，示例也按类型重写，生成的分镜更贴近类型名字；表情卡拍和动态插画保持不变。\n- 手书新增五种分镜类型：文字PV（歌词大字卡为主角）、回忆走马灯（一闪而过的回忆，最后回到现在）、动画OP风（冷开场、人物亮相、全员同框、风景收尾）、第一视角（角色对着镜头，“你”只露手）、今昔对照（同一构图的从前与现在）。\n- 插件内的更新日志直接读取安装目录里的 README，修改 README 后不用重新打包也会同步。\n- 新增「互动 · 表情包」：给角色、你、你们俩各做表情包。写一句想法，模型列出表情清单（能联网的模型会先查这类表情包常见的情绪和动作，只学题材，不照抄别人的角色），每项都能改；单人一张竖图切成 6 个，双人一张横图切成 4 个，自动按白底切开并加白边，切不开时按格子切。切好后可以逐个改名、配字、单张重画或去掉，再保存。\n- 表情包首页一组只显示一个封面图标，点进去再看这一组的每个表情；可以改组名、换封面、换成自己的图、复制暗号、保存到本机。自己的图片可以导入到「其他」，两边都能发。\n- 图片存在你自己酒馆的图片文件夹里，不用图床；表情包数据跟着角色卡走，换设备打开同一个酒馆也在。\n- 表情包可以一键写进世界书：角色已有主世界书时只追加一条「心迹回廊 · 表情包」，没有就新建一本并绑定；条目只写表情名和一句意思，不放图片地址，可设发表情的频率（很少／偶尔／常常）和“一条消息最多一个”，改了表情会自动更新，撤掉这一条即恢复原样。\n- 聊天输入框旁多了一个表情按钮（做过表情包后出现），分「我的 / 双人 / 其他」，点一下把暗号放进输入框；聊天里的 `[表情:名字·表情名]` 会显示成对应的表情图，角色从世界书知道每个表情的意思。\n- 装了兔子镜 1.67.86 时，小剧场里本来会发表情的场景也能用这些表情包；两个插件仍各自独立。\n- 情侣头像预览下方去掉了“删除这一对”，删除统一放在历史与收藏里。\n- 画风、互动、衣着、裁切、头像应用及其他已有修复保持。\n";
+const RELEASE_README = "# 心迹回廊 1.0.56\n\n## 更新日志模块\n\n新增了更新日志板块，感谢@nancyindaeyo的更新。\n\n## 本次变动\n\n- 修复柏宝绘外貌标签带下划线时丢失发色、眼色等细节的问题；保留原标签权重，补齐眼罩、酒窝、鼻型、泪痣与明确性别描述的识别。\n- 修复“曾经受伤留下的疤痕”等固定特征被误删的问题，覆盖情侣头像、普通配图和手书的自动外貌读取。\n- 自动摘录按明确姓名、人物标签和称谓区分归属，避免将对方或其他人的外貌混入当前人物；手填外貌、旧草稿和历史图片保持原样。\n- 不增加自动文本请求或生成门槛。已有外貌栏若含旧杂句，可左右分别点“重新读取外貌”整理后再绘制；该操作沿用原有文本 API。\n- 情侣头像新增 69 种画风（含构图版式、氛围光影、3D 渲染分组）和 48 种互动（含贴贴亲昵、小小较劲、幻想冒险）；画风和互动都改为可搜索、按分类浏览的选择面板，也可以随机抽一个。\n- Q 版、动物化身会给每个人物单独带上比例标签，外貌写得很长也不容易画成成人比例；生成时可选择过滤掉身高、体型等写实描述，只作用于这一次，原外貌不变，也可以在选项里设为自动过滤或不过滤。\n- 情侣头像新增“构图”：默认每次随机换一种镜头，始终保持左右各一人、能裁成两张头像；会改动所选互动或“小心思”里动作的姿势自动跳过，也可以固定为正面并排或指定一种。\n- 情侣头像的画风在 NAI 中加权放在最前，3D 画风另加 3D 标签，减少被画师串盖过。\n- 情侣头像的历史与收藏可以删除头像：卡片下方的“删除”，或点“多选”勾选多对后一起删除，删除前会确认一次；已设为聊天头像的图片、已保存的 PNG 和生图插件图库里的原图不受影响。\n- 手书的剧情叙事、抒情意象、关系互动、高燃快切、节奏循环、悬念反转六种分镜类型，各自写明了画面特征和自查要求，示例也按类型重写，生成的分镜更贴近类型名字；表情卡拍和动态插画保持不变。\n- 手书新增五种分镜类型：文字PV（歌词大字卡为主角）、回忆走马灯（一闪而过的回忆，最后回到现在）、动画OP风（冷开场、人物亮相、全员同框、风景收尾）、第一视角（角色对着镜头，“你”只露手）、今昔对照（同一构图的从前与现在）。\n- 插件内的更新日志直接读取安装目录里的 README，修改 README 后不用重新打包也会同步。\n- 新增「互动 · 表情包」：给角色、你、你们俩各做表情包。写一句想法，模型列出表情清单（能联网的模型会先查这类表情包常见的情绪和动作，只学题材，不照抄别人的角色），每项都能改；单人一张竖图切成 6 个，双人一张横图切成 4 个，自动按白底切开并加白边，切不开时按格子切。切好后可以逐个改名、配字、单张重画或去掉，再保存。\n- 表情包首页一组只显示一个封面图标，点进去再看这一组的每个表情；可以改组名、换封面、换成自己的图、复制暗号、保存到本机。自己的图片可以导入到「其他」，两边都能发。\n- 图片存在你自己酒馆的图片文件夹里，不用图床；表情包数据跟着角色卡走，换设备打开同一个酒馆也在。\n- 表情包可以一键写进世界书：角色已有主世界书时只追加一条「心迹回廊 · 表情包」，没有就新建一本并绑定；条目只写表情名和一句意思，不放图片地址，可设发表情的频率（很少／偶尔／常常）和“一条消息最多一个”，改了表情会自动更新，撤掉这一条即恢复原样。\n- 聊天页多了一个可以拖动的小兔子悬浮按钮（和魔法棒菜单里心迹回廊的兔子是同一只，做过表情包后出现，松手会贴到左右边上并记住位置）。点开后分「我的 / 他的 / 双人 / 其他」，你也可以发他的表情；点一下把暗号放进输入框。聊天里的 `[表情:名字·表情名]` 会显示成对应的表情图，角色从世界书知道每个表情的意思，也知道你借用他的表情是在逗他。\n- 表情包出图和情侣头像一样有「Q 版外貌过滤」：外貌里有身高、体型、骨相这类写实描述时，可以只在这次出图里去掉，免得画回正常比例；可选每次询问、自动过滤或不过滤。一组表情实际用的外貌会跟着这一组保存，之后单张重画也保持一致。\n- 兔子镜 1.67.87 直接从心迹回廊读取表情包，和读取头像一样，不经过世界书；聊天、私信、朋友圈、评论区、弹幕这类小剧场会主动用上表情包，小剧场里照写的 `[表情:名字·表情名]` 也会换成图片。两个插件仍各自独立。\n- 情侣头像预览下方去掉了“删除这一对”，删除统一放在历史与收藏里。\n- 画风、互动、衣着、裁切、头像应用及其他已有修复保持。\n";
 
 __m_core_releaseNotes_js.RELEASE_README = RELEASE_README;
 }
@@ -1242,7 +1242,10 @@ function normalizePack(value) {
     }
     const cover = stickers.some(row => row.id === value.cover) ? value.cover : stickers[0]?.id || '';
     return { id: text(value.id).slice(0, 80) || newStickerId('pack'), owner, title: cleanLine(value.title, 20) || '', cover,
-        style: cleanLine(value.style, 40), idea: cleanLine(value.idea, 300), createdAt: Math.max(0, Number(value.createdAt) || 0), stickers };
+        style: cleanLine(value.style, 40), idea: cleanLine(value.idea, 300), createdAt: Math.max(0, Number(value.createdAt) || 0),
+        // The appearance actually drawn (after any Q-version filter), so single redraws match the set.
+        ...(Array.isArray(value.people) && value.people.length ? { people: value.people.slice(0, 2).map(row => ({ name: cleanLine(row?.name, 40), appearance: cleanLine(row?.appearance, 1500) })) } : {}),
+        stickers };
 }
 
 function normalizeStickerData(value) {
@@ -1258,8 +1261,10 @@ function normalizeStickerData(value) {
         }
     }
     const frequency = Object.hasOwn(STICKER_FREQUENCIES, value?.settings?.frequency) ? value.settings.frequency : 'sometimes';
+    // Q-version appearance filter, same choices as the couple avatars; absent = ask.
+    const chibiFilter = ['auto', 'off'].includes(value?.settings?.chibiFilter) ? value.settings.chibiFilter : '';
     return { version: 1, revision: Math.max(0, Number(value?.revision) || 0), packs,
-        settings: { frequency, maxOne: value?.settings?.maxOne !== false },
+        settings: { frequency, maxOne: value?.settings?.maxOne !== false, ...(chibiFilter ? { chibiFilter } : {}) },
         lore: { book: text(value?.lore?.book).slice(0, 200), hash: text(value?.lore?.hash).slice(0, 40) } };
 }
 
@@ -1340,10 +1345,10 @@ function stickerLoreContent(data, context = rawContext()) {
     const own = list('char'), pair = list('pair'), other = list('other'), user = list('user');
     if (!own && !pair && !other && !user) return '';
     lines.push(`【表情包】${charName}想用表情表达情绪时，可以单独一行写 [表情:名字·表情名]，例如 [表情:${charName}·${allStickers(data, 'char')[0]?.name || allStickers(data, 'pair')[0]?.name || '开心'}]。${FREQUENCY_TEXT[data.settings.frequency]}${data.settings.maxOne ? '，一条消息最多一个' : ''}。只能用下面列出的表情，不编新的，不写图片地址。`);
-    if (own) lines.push(`${charName}的表情：${own}。`);
+    if (own) lines.push(`${charName}的表情：${own}。${userName}也可能拿这些表情来发（同样写 [表情:${charName}·表情名]），那是借${charName}的样子逗${charName}或撒娇，照常接住。`);
     if (pair) lines.push(`双人表情（两人都能发，写 [表情:双人·表情名]）：${pair}。`);
     if (other) lines.push(`其他表情（两人都能发，写 [表情:其他·表情名]）：${other}。`);
-    if (user) lines.push(`${userName}发来的 [表情:${userName}·表情名] 代表${userName}此刻的情绪：${user}。看懂并接住这份情绪，不要替${userName}发她的表情。`);
+    if (user) lines.push(`${userName}发来的 [表情:${userName}·表情名] 代表${userName}此刻的情绪：${user}。看懂并接住这份情绪，不要替${userName}发${userName}的表情。`);
     return lines.join('\n');
 }
 
@@ -9068,6 +9073,7 @@ function __init_ui_stickersView_js() {
 const stickers = __m_extras_stickers_js;
 const store = __m_core_stickerStore_js;
 const couple_styles = __m_extras_coupleAvatarStyles_js;
+const chibi_filter = __m_extras_coupleAvatarChibiFilter_js;
 const core_context = __m_core_context_js;
 const constants = __m_core_constants_js;
 const text = __m_core_text_js;
@@ -9076,6 +9082,7 @@ const overlay = __m_ui_overlay_js;
 const routes = __m_ui_workspaceState_js;
 const workspace = __m_ui_workspace_js;
 const styles = __m_ui_stickersCss_js;
+
 
 
 
@@ -9222,7 +9229,8 @@ function ideaHtml(view) {
     return `<main class="rmt-stk">${head('写想法出一组')}`
         + `<div class="rmt-stk-field">给谁画<div class="rmt-stk-seg is-3">${['char', 'user', 'pair'].map(owner => `<button type="button" data-stk-idea-owner="${owner}" aria-pressed="${idea.owner === owner}">${esc(label(owner))}</button>`).join('')}</div><small>${idea.owner === 'pair' ? '一张横图切成 4 个，两个人一起出现。' : '一张竖图切成 6 个。'}多于一张的部分会分几张画。</small></div>`
         + `<div class="rmt-stk-field">画风<div class="rmt-stk-two">${styleButtons}</div></div>`
-        + `<details class="rmt-stk-card"><summary class="rmt-stk-check"><span>外貌（沿用情侣头像里的）</span><small>点开可改，只用于这次</small></summary>${people}</details>`
+        + `<details class="rmt-stk-card"><summary class="rmt-stk-check"><span>外貌（沿用情侣头像里的）</span><small>点开可改，只用于这次</small></summary>${people}`
+        + `<label class="rmt-stk-field">Q 版外貌过滤 <small>去掉身高、体型、骨相这类写实描述，免得画回正常比例；只影响这次出图</small><select data-stk-chibi>${[['', '每次询问'], ['auto', '自动过滤'], ['off', '不过滤']].map(([value, name]) => `<option value="${value}"${(data().settings.chibiFilter || '') === value ? ' selected' : ''}>${name}</option>`).join('')}</select></label></details>`
         + `<label class="rmt-stk-field">想要什么样的表情<textarea data-stk-idea-text rows="3" placeholder="比如：一组绿色外星人主题，发呆、想回家、躺平、委屈巴巴，戴触角发箍。">${esc(idea.text)}</textarea></label>`
         + `<div class="rmt-stk-four">${stickers.IDEA_CHIPS.map(([name], index) => `<button type="button" data-stk-chip="${index}">${esc(name)}</button>`).join('')}</div>`
         + `<p class="rmt-stk-muted">模型能联网时会先查这个题材常见的表情包；不能联网就按它已知的写。只学题材、情绪和动作，不照抄别人的角色造型和名字。</p>`
@@ -9335,11 +9343,40 @@ async function startDraw(view) {
     const previous = drafts.get(view.scope);
     if (previous?.status === 'running') { go(view, 'cut'); return report(view, '上一组还在画，等它画完再开始新的。'); }
     if (previous && !await confirmDialog(view, '还有一组没保存', '开始新的会放弃上一组还没保存的表情。', '放弃并开始')) return;
+    const people = await chibiFilteredPeople(view, idea.owner, idea.people.map(row => ({ ...row })));
+    if (!people) return;
     discardDraft(view.scope);
-    const draft = { scope: view.scope, owner: idea.owner, styleId: idea.styleId, idea: idea.text, items, people: idea.people.map(row => ({ ...row })), sheets: [], status: 'running' };
+    const draft = { scope: view.scope, owner: idea.owner, styleId: idea.styleId, idea: idea.text, items, people, sheets: [], status: 'running' };
     drafts.set(view.scope, draft);
     go(view, 'cut');
     void runDraw(view, draft);
+}
+// Same Q-version filter as the couple avatars: only the people this set draws.
+async function chibiFilteredPeople(view, owner, people) {
+    const mode = chibi_filter.chibiFilterMode(data().settings.chibiFilter);
+    const sides = owner === 'char' ? [0] : owner === 'user' ? [1] : [0, 1];
+    const result = chibi_filter.chibiFilterPeople(people);
+    const changed = sides.some(index => result.rows[index]?.removed.length);
+    if (mode === 'off' || !changed) return people;
+    const apply = texts => people.map((person, index) => sides.includes(index) ? { ...person, appearance: texts[index] ?? person.appearance } : person);
+    if (mode === 'auto') return apply(result.rows.map(row => row.text));
+    return new Promise(resolve => {
+        let done = false; const finish = value => { if (done) return; done = true; resolve(value); };
+        const parts = sides.map(index => { const row = result.rows[index];
+            return `<section class="rmt-stk-field">${esc(people[index].name)}${row.removed.length ? `<small>会去掉：${row.removed.map(part => `<s>${esc(part)}</s>`).join('、')}</small>` : '<small>这一位没有需要去掉的内容。</small>'}<textarea data-stk-filter-text="${index}" rows="3">${esc(row.text)}</textarea></section>`; }).join('');
+        const m = dialog(view, '要不要过滤成更适合 Q 版的外貌？', `<p class="rmt-stk-muted">外貌里有身高、体型、骨相、鼻唇细节这类写实描述，容易把表情包画回正常比例。过滤后只留发型、眼睛、痣疤、配饰、衣着颜色这些认人的特征；只影响这一次，不改你填的外貌。</p>${parts}`
+            + '<label class="rmt-stk-check"><span>以后都这样处理，不再询问<br><small>可以在“外貌”里的“Q 版外貌过滤”改回来</small></span><input type="checkbox" data-stk-filter-remember></label>'
+            + '<div class="rmt-stk-two"><button type="button" data-stk-filter="no">保持原样出图</button><button type="button" class="rmt-stk-primary" data-stk-filter="yes">过滤后出图</button></div>');
+        if (!m) return finish(people);
+        m.cleanup = () => finish(null);
+        m.body.addEventListener('click', event => {
+            const target = event.target.closest('[data-stk-filter]'); if (!target) return;
+            const filter = target.dataset.stkFilter === 'yes', remember = !!m.body.querySelector('[data-stk-filter-remember]')?.checked;
+            const texts = result.rows.map((row, index) => m.body.querySelector(`[data-stk-filter-text="${index}"]`)?.value.trim() ?? row.text);
+            finish(filter ? apply(texts) : people); closeStickerDialog();
+            if (remember) { const current = data(); void stickers.saveStickerData({ ...current, settings: { ...current.settings, chibiFilter: filter ? 'auto' : 'off' } }, hostContext()).catch(() => {}); }
+        });
+    });
 }
 function discardDraft(scope) {
     const draft = drafts.get(scope); if (!draft) return;
@@ -9370,7 +9407,7 @@ async function saveDraft(view) {
     if (!list.length) return report(view, '没有要保存的表情。');
     const current = data();
     const title = store.cleanLine(draft.idea, 10) || `${label(draft.owner)}的一组`;
-    const pack = { id: store.newStickerId('pack'), owner: draft.owner, title, style: draft.styleId, idea: draft.idea, createdAt: Date.now(), cover: list[0].id, stickers: list };
+    const pack = { id: store.newStickerId('pack'), owner: draft.owner, title, style: draft.styleId, idea: draft.idea, createdAt: Date.now(), cover: list[0].id, people: draft.people, stickers: list };
     await stickers.saveStickerData({ ...current, packs: [...current.packs, pack] }, ctx);
     discardDraft(view.scope);
     const saved = data().packs.find(row => row.id === pack.id);
@@ -9447,7 +9484,8 @@ function stickerDialog(view, id) {
             if (action === 'redraw') {
                 status('正在单张重画…');
                 const ctx = core_context.currentCharacterGuard();
-                const people = await stickers.stickerPeople(ctx);
+                // Redraw with the appearance this set was drawn with, so it still matches.
+                const people = now.pack.people?.length === 2 ? now.pack.people : await stickers.stickerPeople(ctx);
                 const piece = await stickers.drawSingleSticker({ owner: now.pack.owner, styleId: now.pack.style || 'chibi-dumpling',
                     item: { name: now.sticker.name, prompt: now.sticker.prompt || now.sticker.meaning || now.sticker.name }, people, context: ctx,
                     onProgress: update => { if (modal === m) status(progressText(update)); } });
@@ -9588,6 +9626,13 @@ function bindView(view) {
         void Promise.resolve().then(() => handleAction(view, d.stkAction, target)).catch(error => failure(view, error));
     });
     view.root.addEventListener('change', event => {
+        if (event.target.matches('[data-stk-chibi]')) {
+            readIdeaForm(view);
+            const current = data(), value = event.target.value;
+            const settings = { ...current.settings }; if (value) settings.chibiFilter = value; else delete settings.chibiFilter;
+            void stickers.saveStickerData({ ...current, settings }, hostContext()).catch(error => failure(view, error));
+            return;
+        }
         if (!event.target.matches('[data-stk-maxone]')) return;
         const current = data();
         void stickers.saveStickerData({ ...current, settings: { ...current.settings, maxOne: event.target.checked } }, hostContext()).then(() => paint(view)).catch(error => failure(view, error));

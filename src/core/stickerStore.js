@@ -53,7 +53,10 @@ function normalizePack(value) {
     }
     const cover = stickers.some(row => row.id === value.cover) ? value.cover : stickers[0]?.id || '';
     return { id: text(value.id).slice(0, 80) || newStickerId('pack'), owner, title: cleanLine(value.title, 20) || '', cover,
-        style: cleanLine(value.style, 40), idea: cleanLine(value.idea, 300), createdAt: Math.max(0, Number(value.createdAt) || 0), stickers };
+        style: cleanLine(value.style, 40), idea: cleanLine(value.idea, 300), createdAt: Math.max(0, Number(value.createdAt) || 0),
+        // The appearance actually drawn (after any Q-version filter), so single redraws match the set.
+        ...(Array.isArray(value.people) && value.people.length ? { people: value.people.slice(0, 2).map(row => ({ name: cleanLine(row?.name, 40), appearance: cleanLine(row?.appearance, 1500) })) } : {}),
+        stickers };
 }
 
 export function normalizeStickerData(value) {
@@ -69,8 +72,10 @@ export function normalizeStickerData(value) {
         }
     }
     const frequency = Object.hasOwn(STICKER_FREQUENCIES, value?.settings?.frequency) ? value.settings.frequency : 'sometimes';
+    // Q-version appearance filter, same choices as the couple avatars; absent = ask.
+    const chibiFilter = ['auto', 'off'].includes(value?.settings?.chibiFilter) ? value.settings.chibiFilter : '';
     return { version: 1, revision: Math.max(0, Number(value?.revision) || 0), packs,
-        settings: { frequency, maxOne: value?.settings?.maxOne !== false },
+        settings: { frequency, maxOne: value?.settings?.maxOne !== false, ...(chibiFilter ? { chibiFilter } : {}) },
         lore: { book: text(value?.lore?.book).slice(0, 200), hash: text(value?.lore?.hash).slice(0, 40) } };
 }
 
@@ -151,10 +156,10 @@ export function stickerLoreContent(data, context = rawContext()) {
     const own = list('char'), pair = list('pair'), other = list('other'), user = list('user');
     if (!own && !pair && !other && !user) return '';
     lines.push(`【表情包】${charName}想用表情表达情绪时，可以单独一行写 [表情:名字·表情名]，例如 [表情:${charName}·${allStickers(data, 'char')[0]?.name || allStickers(data, 'pair')[0]?.name || '开心'}]。${FREQUENCY_TEXT[data.settings.frequency]}${data.settings.maxOne ? '，一条消息最多一个' : ''}。只能用下面列出的表情，不编新的，不写图片地址。`);
-    if (own) lines.push(`${charName}的表情：${own}。`);
+    if (own) lines.push(`${charName}的表情：${own}。${userName}也可能拿这些表情来发（同样写 [表情:${charName}·表情名]），那是借${charName}的样子逗${charName}或撒娇，照常接住。`);
     if (pair) lines.push(`双人表情（两人都能发，写 [表情:双人·表情名]）：${pair}。`);
     if (other) lines.push(`其他表情（两人都能发，写 [表情:其他·表情名]）：${other}。`);
-    if (user) lines.push(`${userName}发来的 [表情:${userName}·表情名] 代表${userName}此刻的情绪：${user}。看懂并接住这份情绪，不要替${userName}发她的表情。`);
+    if (user) lines.push(`${userName}发来的 [表情:${userName}·表情名] 代表${userName}此刻的情绪：${user}。看懂并接住这份情绪，不要替${userName}发${userName}的表情。`);
     return lines.join('\n');
 }
 

@@ -1,6 +1,7 @@
 import * as stickers from '../extras/stickers.js';
 import * as store from '../core/stickerStore.js';
 import * as couple_styles from '../extras/coupleAvatarStyles.js';
+import * as chibi_filter from '../extras/coupleAvatarChibiFilter.js';
 import * as core_context from '../core/context.js';
 import * as constants from '../core/constants.js';
 import * as text from '../core/text.js';
@@ -145,7 +146,8 @@ function ideaHtml(view) {
     return `<main class="rmt-stk">${head('写想法出一组')}`
         + `<div class="rmt-stk-field">给谁画<div class="rmt-stk-seg is-3">${['char', 'user', 'pair'].map(owner => `<button type="button" data-stk-idea-owner="${owner}" aria-pressed="${idea.owner === owner}">${esc(label(owner))}</button>`).join('')}</div><small>${idea.owner === 'pair' ? '一张横图切成 4 个，两个人一起出现。' : '一张竖图切成 6 个。'}多于一张的部分会分几张画。</small></div>`
         + `<div class="rmt-stk-field">画风<div class="rmt-stk-two">${styleButtons}</div></div>`
-        + `<details class="rmt-stk-card"><summary class="rmt-stk-check"><span>外貌（沿用情侣头像里的）</span><small>点开可改，只用于这次</small></summary>${people}</details>`
+        + `<details class="rmt-stk-card"><summary class="rmt-stk-check"><span>外貌（沿用情侣头像里的）</span><small>点开可改，只用于这次</small></summary>${people}`
+        + `<label class="rmt-stk-field">Q 版外貌过滤 <small>去掉身高、体型、骨相这类写实描述，免得画回正常比例；只影响这次出图</small><select data-stk-chibi>${[['', '每次询问'], ['auto', '自动过滤'], ['off', '不过滤']].map(([value, name]) => `<option value="${value}"${(data().settings.chibiFilter || '') === value ? ' selected' : ''}>${name}</option>`).join('')}</select></label></details>`
         + `<label class="rmt-stk-field">想要什么样的表情<textarea data-stk-idea-text rows="3" placeholder="比如：一组绿色外星人主题，发呆、想回家、躺平、委屈巴巴，戴触角发箍。">${esc(idea.text)}</textarea></label>`
         + `<div class="rmt-stk-four">${stickers.IDEA_CHIPS.map(([name], index) => `<button type="button" data-stk-chip="${index}">${esc(name)}</button>`).join('')}</div>`
         + `<p class="rmt-stk-muted">模型能联网时会先查这个题材常见的表情包；不能联网就按它已知的写。只学题材、情绪和动作，不照抄别人的角色造型和名字。</p>`
@@ -258,11 +260,40 @@ async function startDraw(view) {
     const previous = drafts.get(view.scope);
     if (previous?.status === 'running') { go(view, 'cut'); return report(view, '上一组还在画，等它画完再开始新的。'); }
     if (previous && !await confirmDialog(view, '还有一组没保存', '开始新的会放弃上一组还没保存的表情。', '放弃并开始')) return;
+    const people = await chibiFilteredPeople(view, idea.owner, idea.people.map(row => ({ ...row })));
+    if (!people) return;
     discardDraft(view.scope);
-    const draft = { scope: view.scope, owner: idea.owner, styleId: idea.styleId, idea: idea.text, items, people: idea.people.map(row => ({ ...row })), sheets: [], status: 'running' };
+    const draft = { scope: view.scope, owner: idea.owner, styleId: idea.styleId, idea: idea.text, items, people, sheets: [], status: 'running' };
     drafts.set(view.scope, draft);
     go(view, 'cut');
     void runDraw(view, draft);
+}
+// Same Q-version filter as the couple avatars: only the people this set draws.
+async function chibiFilteredPeople(view, owner, people) {
+    const mode = chibi_filter.chibiFilterMode(data().settings.chibiFilter);
+    const sides = owner === 'char' ? [0] : owner === 'user' ? [1] : [0, 1];
+    const result = chibi_filter.chibiFilterPeople(people);
+    const changed = sides.some(index => result.rows[index]?.removed.length);
+    if (mode === 'off' || !changed) return people;
+    const apply = texts => people.map((person, index) => sides.includes(index) ? { ...person, appearance: texts[index] ?? person.appearance } : person);
+    if (mode === 'auto') return apply(result.rows.map(row => row.text));
+    return new Promise(resolve => {
+        let done = false; const finish = value => { if (done) return; done = true; resolve(value); };
+        const parts = sides.map(index => { const row = result.rows[index];
+            return `<section class="rmt-stk-field">${esc(people[index].name)}${row.removed.length ? `<small>会去掉：${row.removed.map(part => `<s>${esc(part)}</s>`).join('、')}</small>` : '<small>这一位没有需要去掉的内容。</small>'}<textarea data-stk-filter-text="${index}" rows="3">${esc(row.text)}</textarea></section>`; }).join('');
+        const m = dialog(view, '要不要过滤成更适合 Q 版的外貌？', `<p class="rmt-stk-muted">外貌里有身高、体型、骨相、鼻唇细节这类写实描述，容易把表情包画回正常比例。过滤后只留发型、眼睛、痣疤、配饰、衣着颜色这些认人的特征；只影响这一次，不改你填的外貌。</p>${parts}`
+            + '<label class="rmt-stk-check"><span>以后都这样处理，不再询问<br><small>可以在“外貌”里的“Q 版外貌过滤”改回来</small></span><input type="checkbox" data-stk-filter-remember></label>'
+            + '<div class="rmt-stk-two"><button type="button" data-stk-filter="no">保持原样出图</button><button type="button" class="rmt-stk-primary" data-stk-filter="yes">过滤后出图</button></div>');
+        if (!m) return finish(people);
+        m.cleanup = () => finish(null);
+        m.body.addEventListener('click', event => {
+            const target = event.target.closest('[data-stk-filter]'); if (!target) return;
+            const filter = target.dataset.stkFilter === 'yes', remember = !!m.body.querySelector('[data-stk-filter-remember]')?.checked;
+            const texts = result.rows.map((row, index) => m.body.querySelector(`[data-stk-filter-text="${index}"]`)?.value.trim() ?? row.text);
+            finish(filter ? apply(texts) : people); closeStickerDialog();
+            if (remember) { const current = data(); void stickers.saveStickerData({ ...current, settings: { ...current.settings, chibiFilter: filter ? 'auto' : 'off' } }, hostContext()).catch(() => {}); }
+        });
+    });
 }
 function discardDraft(scope) {
     const draft = drafts.get(scope); if (!draft) return;
@@ -293,7 +324,7 @@ async function saveDraft(view) {
     if (!list.length) return report(view, '没有要保存的表情。');
     const current = data();
     const title = store.cleanLine(draft.idea, 10) || `${label(draft.owner)}的一组`;
-    const pack = { id: store.newStickerId('pack'), owner: draft.owner, title, style: draft.styleId, idea: draft.idea, createdAt: Date.now(), cover: list[0].id, stickers: list };
+    const pack = { id: store.newStickerId('pack'), owner: draft.owner, title, style: draft.styleId, idea: draft.idea, createdAt: Date.now(), cover: list[0].id, people: draft.people, stickers: list };
     await stickers.saveStickerData({ ...current, packs: [...current.packs, pack] }, ctx);
     discardDraft(view.scope);
     const saved = data().packs.find(row => row.id === pack.id);
@@ -370,7 +401,8 @@ function stickerDialog(view, id) {
             if (action === 'redraw') {
                 status('正在单张重画…');
                 const ctx = core_context.currentCharacterGuard();
-                const people = await stickers.stickerPeople(ctx);
+                // Redraw with the appearance this set was drawn with, so it still matches.
+                const people = now.pack.people?.length === 2 ? now.pack.people : await stickers.stickerPeople(ctx);
                 const piece = await stickers.drawSingleSticker({ owner: now.pack.owner, styleId: now.pack.style || 'chibi-dumpling',
                     item: { name: now.sticker.name, prompt: now.sticker.prompt || now.sticker.meaning || now.sticker.name }, people, context: ctx,
                     onProgress: update => { if (modal === m) status(progressText(update)); } });
@@ -511,6 +543,13 @@ function bindView(view) {
         void Promise.resolve().then(() => handleAction(view, d.stkAction, target)).catch(error => failure(view, error));
     });
     view.root.addEventListener('change', event => {
+        if (event.target.matches('[data-stk-chibi]')) {
+            readIdeaForm(view);
+            const current = data(), value = event.target.value;
+            const settings = { ...current.settings }; if (value) settings.chibiFilter = value; else delete settings.chibiFilter;
+            void stickers.saveStickerData({ ...current, settings }, hostContext()).catch(error => failure(view, error));
+            return;
+        }
         if (!event.target.matches('[data-stk-maxone]')) return;
         const current = data();
         void stickers.saveStickerData({ ...current, settings: { ...current.settings, maxOne: event.target.checked } }, hostContext()).then(() => paint(view)).catch(error => failure(view, error));
