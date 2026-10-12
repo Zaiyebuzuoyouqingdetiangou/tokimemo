@@ -3,11 +3,14 @@ import * as sticker_lore from './core/stickerLore.js';
 
 // Loaded by the small bootstrap together with the chat avatars. Two jobs:
 // turning [表情:名字·表情名] into pictures in the native chat, and the
-// floating sticker button that drops a token into ST's input box.
+// sticker picker that drops a token into ST's input box. The picker opens
+// from a floating rabbit, or from ST's magic-wand menu when the rabbit is off.
 // Other plugins' own rendered blocks are left untouched.
 const SKIP = 'code, pre, script, style, textarea, toto, iframe, svg, .hearttrace-sticker, details[data-rabbit-mirror-external-details]';
 const TABS = [['user', '我的'], ['char', '他的'], ['pair', '双人'], ['other', '其他']];
 const POSITION_KEY = 'hearttrace:sticker-float:v1';
+const MENU_ID = 'hearttrace_sticker_menu';
+const SMILE = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true" focusable="false" style="display:block"><circle cx="12" cy="12" r="9"/><path d="M8.5 14.5c1.8 2 5.2 2 7 0M9 9.5h.01M15 9.5h.01"/></svg>';
 // Same rabbit as the 心迹回廊 entry in ST's magic-wand menu.
 const RABBIT = '<svg viewBox="0 0 32 32" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M10 16C4 2 11 1 14 14M18 14C20 1 27 2 23 16M9 16c-7 11 3 15 9 14s13-8 5-14c-4-3-10-3-14 0Z"/><path d="M12 22h1m6 0h1m-6 4 2 1 2-1"/></svg>';
 
@@ -31,7 +34,9 @@ const CSS = `
 .hearttrace-sticker-grid img{width:56px;height:56px;object-fit:contain}
 .hearttrace-sticker-grid span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .hearttrace-sticker-empty{grid-column:1/-1;margin:8px 0;opacity:.75;font-size:12px;line-height:1.6;text-align:center}
-.hearttrace-sticker-note{font-size:11px;opacity:.7;line-height:1.5}
+.hearttrace-sticker-foot{display:flex;align-items:center;gap:8px}
+.hearttrace-sticker-note{flex:1;min-width:0;font-size:11px;opacity:.7;line-height:1.5}
+.hearttrace-sticker-foot button{flex:0 0 auto;min-height:30px;padding:0 12px;border:1px solid var(--SmartThemeBorderColor,rgba(255,255,255,.2));border-radius:999px;background:transparent;color:inherit;font:inherit;font-size:12px;cursor:pointer}
 `;
 
 export function renderStickerTokens(root, ctx = context(), data = store.readStickerData(ctx)) {
@@ -94,7 +99,7 @@ export function insertAtCursor(textarea, value, caret = null) {
 export function startStickerRuntime({ document: doc = globalThis.document } = {}) {
     if (!doc) return () => {};
     let stopped = false, queued = false, observer = null, chatRoot = null, source = null, types = [], timer = 0, retries = 0;
-    let tab = 'user', button = null, panel = null, caret = null;
+    let tab = 'user', button = null, panel = null, caret = null, menuItem = null;
     const remember = event => {
         if (event.target?.id !== 'send_textarea') return;
         caret = { start: event.target.selectionStart, end: event.target.selectionEnd };
@@ -151,10 +156,12 @@ export function startStickerRuntime({ document: doc = globalThis.document } = {}
         return !!ctx && !ctx.groupId && ctx.characterId !== undefined && ctx.characterId !== null && ctx.characterId !== ''
             && current.packs.some(pack => pack.stickers.length);
     }
+    const floating = () => store.stickerFloatEnabled(context());
     function syncButton(current = data()) {
         if (!button?.isConnected) mountButton();
-        const show = available(current);
-        if (button) { button.hidden = !show; if (show) layout(); }
+        const show = available(current), float = floating();
+        if (button) { button.hidden = !(show && float); if (show && float) layout(); }
+        syncMenu(show && !float);
         if (!show) closePanel();
         else if (panel && !panel.hidden) { paintPanel(current); place(); }
     }
@@ -214,6 +221,23 @@ export function startStickerRuntime({ document: doc = globalThis.document } = {}
         };
         button.onpointerup = end; button.onpointercancel = end;
     }
+    // Rabbit off: one 「表情包」 line in ST's magic-wand menu instead.
+    function syncMenu(show) {
+        if (!show) { if (menuItem) menuItem.style.display = 'none'; return; }
+        if (!menuItem?.isConnected) {
+            const menu = doc.getElementById('extensionsMenu');
+            if (!menu) return;
+            menuItem = doc.getElementById(MENU_ID) || doc.createElement('div');
+            menuItem.id = MENU_ID;
+            menuItem.className = 'list-group-item flex-container flexGap5 interactable';
+            menuItem.tabIndex = 0; menuItem.setAttribute('role', 'button');
+            menuItem.innerHTML = `<span aria-hidden="true" style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;flex:0 0 auto">${SMILE}</span><span>表情包</span>`;
+            menuItem.onclick = () => openPanel();
+            menuItem.onkeydown = event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openPanel(); } };
+            menu.append(menuItem);
+        }
+        menuItem.style.display = '';
+    }
     const relayout = () => { layout(); if (panel && !panel.hidden) place(); };
     globalThis.addEventListener?.('resize', relayout);
     globalThis.visualViewport?.addEventListener?.('resize', relayout);
@@ -229,6 +253,7 @@ export function startStickerRuntime({ document: doc = globalThis.document } = {}
             const target = event.target.closest('button');
             if (!target) return;
             if (target.dataset.stickerTab) { tab = target.dataset.stickerTab; paintPanel(data()); place(); return; }
+            if (target.dataset.stickerClose !== undefined) { closePanel(); doc.getElementById('send_textarea')?.focus?.({ preventScroll: true }); return; }
             if (target.dataset.stickerToken) {
                 const area = doc.getElementById('send_textarea');
                 insertAtCursor(area, target.dataset.stickerToken, area && caret && area.value.length >= (caret.end || 0) ? caret : null);
@@ -236,16 +261,19 @@ export function startStickerRuntime({ document: doc = globalThis.document } = {}
                 closePanel(); area?.focus?.({ preventScroll: true });
             }
         });
-        panel.addEventListener('keydown', event => { if (event.key === 'Escape') { closePanel(); button?.focus?.(); } });
+        panel.addEventListener('keydown', event => { if (event.key === 'Escape') { closePanel(); (floating() ? button : doc.getElementById('send_textarea'))?.focus?.(); } });
         return panel;
     }
-    // Beside the rabbit: same side of the screen, above it when there is room.
+    // Beside the rabbit (same side, above it when there is room); without the
+    // rabbit, just above ST's input bar like an emoji keyboard.
     function place() {
-        if (!panel || !button) return;
-        const rect = button.getBoundingClientRect(), view = globalThis.visualViewport;
+        if (!panel) return;
+        const anchor = floating() && button && !button.hidden ? button : doc.getElementById('send_form') || doc.getElementById('form_sheld');
+        if (!anchor) return;
+        const rect = anchor.getBoundingClientRect(), view = globalThis.visualViewport;
         const vw = view?.width || globalThis.innerWidth, vh = view?.height || globalThis.innerHeight, ox = view?.offsetLeft || 0, oy = view?.offsetTop || 0;
         const width = panel.offsetWidth, height = panel.offsetHeight;
-        let left = rect.left + rect.width / 2 > ox + vw / 2 ? rect.right - width : rect.left;
+        let left = anchor !== button ? rect.left : rect.left + rect.width / 2 > ox + vw / 2 ? rect.right - width : rect.left;
         left = Math.min(ox + vw - width - 8, Math.max(ox + 8, left));
         let top = rect.top - height - 8;
         if (top < oy + 8) top = rect.bottom + 8;
@@ -259,7 +287,7 @@ export function startStickerRuntime({ document: doc = globalThis.document } = {}
         panel.innerHTML = `<div class="hearttrace-sticker-tabs" role="tablist">${TABS.map(([key, label]) => `<button type="button" role="tab" data-sticker-tab="${key}" aria-selected="${tab === key}">${label}</button>`).join('')}</div>`
             + `<div class="hearttrace-sticker-grid">${rows.length ? rows.map(row => `<button type="button" data-sticker-token="${esc(store.stickerToken(row.owner, row.name, ctx))}" title="${esc(row.meaning || row.name)}"><img src="${esc(row.url)}" alt="" loading="lazy"><span>${esc(row.name)}</span></button>`).join('')
                 : '<p class="hearttrace-sticker-empty">这一栏还没有表情。可以在心迹回廊 · 互动 · 表情包里做一组。</p>'}</div>`
-            + `<div class="hearttrace-sticker-note">点一下放进输入框。发出去的是暗号，${esc(store.ownerLabel('char', ctx))}从世界书知道它的意思。拖动小兔子可以换位置。</div>`;
+            + `<div class="hearttrace-sticker-foot"><span class="hearttrace-sticker-note">点一下放进输入框。发出去的是暗号，${esc(store.ownerLabel('char', ctx))}从世界书知道它的意思。${floating() ? '拖动小兔子可以换位置。' : ''}</span>${floating() ? '' : '<button type="button" data-sticker-close aria-label="收起表情包">收起</button>'}</div>`;
     }
     function togglePanel() { if (panel && !panel.hidden) closePanel(); else openPanel(); }
     function openPanel() {
@@ -275,7 +303,7 @@ export function startStickerRuntime({ document: doc = globalThis.document } = {}
     }
     const outside = event => {
         if (!panel || panel.hidden) return;
-        if (panel.contains(event.target) || button?.contains(event.target)) return;
+        if (panel.contains(event.target) || button?.contains(event.target) || menuItem?.contains(event.target)) return;
         closePanel();
     };
     doc.addEventListener('pointerdown', outside, true);
@@ -328,7 +356,7 @@ export function startStickerRuntime({ document: doc = globalThis.document } = {}
         globalThis.removeEventListener?.('resize', relayout);
         globalThis.visualViewport?.removeEventListener?.('resize', relayout);
         for (const type of ['keyup', 'mouseup', 'input', 'select', 'touchend']) doc.removeEventListener(type, remember, true);
-        button?.remove(); panel?.remove(); style.remove();
+        button?.remove(); panel?.remove(); menuItem?.remove(); style.remove();
         // Leave the original tokens visible once the plugin is off.
         for (const span of [...doc.querySelectorAll('.hearttrace-sticker[data-hearttrace-token]')]) span.replaceWith(doc.createTextNode(span.getAttribute('data-hearttrace-token') || ''));
     };

@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 361
-// Source SHA-256: 1b0f8adf16cd832283512ce96ead8412d8f6f4c1ff0cb955426857e94a4c4927
+// Source SHA-256: 89fbdc77efacc4bfcedc6b2a4ee63e1017bffb9c9ccecb431a94572434105f09
 // Build: python3 tools/verification/build.py <source-root>
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -1469,7 +1469,7 @@ function __init_core_releaseNotes_js() {
 // MODULE: core/releaseNotes.js
 
 // GENERATED FROM README.md by tools/verification/build.py. Do not edit by hand.
-const RELEASE_README = "# 心迹回廊 1.0.56\n\n## 更新日志模块\n\n新增了更新日志板块，感谢@nancyindaeyo的更新。\n\n## 本次变动\n\n- 修复柏宝绘外貌标签带下划线时丢失发色、眼色等细节的问题；保留原标签权重，补齐眼罩、酒窝、鼻型、泪痣与明确性别描述的识别。\n- 修复“曾经受伤留下的疤痕”等固定特征被误删的问题，覆盖情侣头像、普通配图和手书的自动外貌读取。\n- 自动摘录按明确姓名、人物标签和称谓区分归属，避免将对方或其他人的外貌混入当前人物；手填外貌、旧草稿和历史图片保持原样。\n- 不增加自动文本请求或生成门槛。已有外貌栏若含旧杂句，可左右分别点“重新读取外貌”整理后再绘制；该操作沿用原有文本 API。\n- 情侣头像新增 69 种画风（含构图版式、氛围光影、3D 渲染分组）和 48 种互动（含贴贴亲昵、小小较劲、幻想冒险）；画风和互动都改为可搜索、按分类浏览的选择面板，也可以随机抽一个。\n- Q 版、动物化身会给每个人物单独带上比例标签，外貌写得很长也不容易画成成人比例；生成时可选择过滤掉身高、体型等写实描述，只作用于这一次，原外貌不变，也可以在选项里设为自动过滤或不过滤。\n- 情侣头像新增“构图”：默认每次随机换一种镜头，始终保持左右各一人、能裁成两张头像；会改动所选互动或“小心思”里动作的姿势自动跳过，也可以固定为正面并排或指定一种。\n- 情侣头像的画风在 NAI 中加权放在最前，3D 画风另加 3D 标签，减少被画师串盖过。\n- 情侣头像的历史与收藏可以删除头像：卡片下方的“删除”，或点“多选”勾选多对后一起删除，删除前会确认一次；已设为聊天头像的图片、已保存的 PNG 和生图插件图库里的原图不受影响。\n- 手书的剧情叙事、抒情意象、关系互动、高燃快切、节奏循环、悬念反转六种分镜类型，各自写明了画面特征和自查要求，示例也按类型重写，生成的分镜更贴近类型名字；表情卡拍和动态插画保持不变。\n- 手书新增五种分镜类型：文字PV（歌词大字卡为主角）、回忆走马灯（一闪而过的回忆，最后回到现在）、动画OP风（冷开场、人物亮相、全员同框、风景收尾）、第一视角（角色对着镜头，“你”只露手）、今昔对照（同一构图的从前与现在）。\n- 插件内的更新日志直接读取安装目录里的 README，修改 README 后不用重新打包也会同步。\n- 新增「互动 · 表情包」：给角色、你、你们俩各做表情包。写一句想法，模型列出表情清单（能联网的模型会先查这类表情包常见的情绪和动作，只学题材，不照抄别人的角色），每项都能改；单人一张竖图切成 6 个，双人一张横图切成 4 个，自动按白底切开并加白边，切不开时按格子切。切好后可以逐个改名、配字、单张重画或去掉，再保存。\n- 表情包首页一组只显示一个封面图标，点进去再看这一组的每个表情；可以改组名、换封面、换成自己的图、复制暗号、保存到本机。自己的图片可以导入到「其他」，两边都能发。\n- 图片存在你自己酒馆的图片文件夹里，不用图床；表情包数据跟着角色卡走，换设备打开同一个酒馆也在。\n- 表情包可以一键写进世界书：角色已有主世界书时只追加一条「心迹回廊 · 表情包」，没有就新建一本并绑定。条目字段和酒馆自己新建的条目一样，在世界书编辑器里能正常展开、修改。\n- 条目内容改成手写设定常见的样子：用 `<表情包>` 标签包住，里面按「发表情规则 / 能发的表情 / 怎么看懂对方的表情」分块写成 YAML 式的键值，只写表情名和一句意思，不放图片地址。\n- 每条回复都会用表情，不靠掷骰子：正文里写到角色用手机等通讯设备发消息时，表情优先发在那些消息里；没有发消息的场景，就挑贴合此刻情绪的表情单独一行穿插在正文里，不堆在末尾。可选每条用 1 个、1～2 个或 2～3 个。\n- 这一条放在最新几条消息之前，不受世界书预算限制（设定很多时也不会被挤掉），只在正常回复、继续、重新生成和换一条时生效，不进其他插件的后台请求。\n- 插件更新后打开聊天，或者打开表情包页面时，已经写进世界书的这一条会自动换成新写法，旧版本留下的「这次发表情」概率条目也会一起删掉；撤掉这一条即恢复原样。\n- 模型把暗号写偏也能显示成图：全角的【表情：…】、写成「表情包:」、或者漏了名字只写表情名，都会按表情名找到对应的图。\n- 聊天页多了一个可以拖动的小兔子悬浮按钮（和魔法棒菜单里心迹回廊的兔子是同一只，做过表情包后出现，松手会贴到左右边上并记住位置）。点开后分「我的 / 他的 / 双人 / 其他」，你也可以发他的表情；点一下把暗号放进输入框。聊天里的 `[表情:名字·表情名]` 会显示成对应的表情图，角色从世界书知道每个表情的意思，也知道你借用他的表情是在逗他。\n- 表情包出图和情侣头像一样有「Q 版外貌过滤」：外貌里有身高、体型、骨相这类写实描述时，可以只在这次出图里去掉，免得画回正常比例；可选每次询问、自动过滤或不过滤。一组表情实际用的外貌会跟着这一组保存，之后单张重画也保持一致。\n- 情侣头像预览下方去掉了“删除这一对”，删除统一放在历史与收藏里。\n- 新增「本地快速建档」：不调用 API，直接把这段聊天的原文按场景切成一段段回忆，几秒钟就能建好，不会因为接口超时、额度不够或返回格式不对而失败。档案还是存在聊天文件里：复制聊天会跟着走，删除聊天就一起没了。\n- 可以在设置里打开「打开聊天就自动本地建档」（默认打开）：单人聊天还没有档案、并且已经聊了两句以上时，心迹回廊会自动建好；之后每多 6 层自动补上新楼层。只自动建一次，你删掉档案后不会再偷偷重建；群聊不会自动建。档案页也能手动点「本地快速建档」或「本地补上新楼层」。\n- 本地建的档案每段只记标题、几句原话和一段 320 字以内的摘录，状态栏、代码块、HTML 和表情暗号都会去掉；进提示词时和普通档案一样最多取 24 段，不会因为聊天很长就占满 token。档案本身存在聊天文件里，不发给模型，不占 token。\n- 本地档案是原文摘录，没有 API 整理过的回忆那么精炼。想要整理过的版本，之后接口可用时点「完全重建」即可替换；点「增量更新」会保留已有摘录，只用 API 整理之后的新楼层，用过 API 更新后就不再自动补本地楼层。\n- 画风、互动、衣着、裁切、头像应用及其他已有修复保持。\n";
+const RELEASE_README = "# 心迹回廊 1.0.56\n\n## 更新日志模块\n\n新增了更新日志板块，感谢@nancyindaeyo的更新。\n\n## 本次变动\n\n- 修复柏宝绘外貌标签带下划线时丢失发色、眼色等细节的问题；保留原标签权重，补齐眼罩、酒窝、鼻型、泪痣与明确性别描述的识别。\n- 修复“曾经受伤留下的疤痕”等固定特征被误删的问题，覆盖情侣头像、普通配图和手书的自动外貌读取。\n- 自动摘录按明确姓名、人物标签和称谓区分归属，避免将对方或其他人的外貌混入当前人物；手填外貌、旧草稿和历史图片保持原样。\n- 不增加自动文本请求或生成门槛。已有外貌栏若含旧杂句，可左右分别点“重新读取外貌”整理后再绘制；该操作沿用原有文本 API。\n- 情侣头像新增 69 种画风（含构图版式、氛围光影、3D 渲染分组）和 48 种互动（含贴贴亲昵、小小较劲、幻想冒险）；画风和互动都改为可搜索、按分类浏览的选择面板，也可以随机抽一个。\n- Q 版、动物化身会给每个人物单独带上比例标签，外貌写得很长也不容易画成成人比例；生成时可选择过滤掉身高、体型等写实描述，只作用于这一次，原外貌不变，也可以在选项里设为自动过滤或不过滤。\n- 情侣头像新增“构图”：默认每次随机换一种镜头，始终保持左右各一人、能裁成两张头像；会改动所选互动或“小心思”里动作的姿势自动跳过，也可以固定为正面并排或指定一种。\n- 情侣头像的画风在 NAI 中加权放在最前，3D 画风另加 3D 标签，减少被画师串盖过。\n- 情侣头像的历史与收藏可以删除头像：卡片下方的“删除”，或点“多选”勾选多对后一起删除，删除前会确认一次；已设为聊天头像的图片、已保存的 PNG 和生图插件图库里的原图不受影响。\n- 手书的剧情叙事、抒情意象、关系互动、高燃快切、节奏循环、悬念反转六种分镜类型，各自写明了画面特征和自查要求，示例也按类型重写，生成的分镜更贴近类型名字；表情卡拍和动态插画保持不变。\n- 手书新增五种分镜类型：文字PV（歌词大字卡为主角）、回忆走马灯（一闪而过的回忆，最后回到现在）、动画OP风（冷开场、人物亮相、全员同框、风景收尾）、第一视角（角色对着镜头，“你”只露手）、今昔对照（同一构图的从前与现在）。\n- 插件内的更新日志直接读取安装目录里的 README，修改 README 后不用重新打包也会同步。\n- 新增「互动 · 表情包」：给角色、你、你们俩各做表情包。写一句想法，模型列出表情清单（能联网的模型会先查这类表情包常见的情绪和动作，只学题材，不照抄别人的角色），每项都能改；单人一张竖图切成 6 个，双人一张横图切成 4 个，自动按白底切开并加白边，切不开时按格子切。切好后可以逐个改名、配字、单张重画或去掉，再保存。\n- 表情包首页一组只显示一个封面图标，点进去再看这一组的每个表情；可以改组名、换封面、换成自己的图、复制暗号、保存到本机。自己的图片可以导入到「其他」，两边都能发。\n- 图片存在你自己酒馆的图片文件夹里，不用图床；表情包数据跟着角色卡走，换设备打开同一个酒馆也在。\n- 表情包可以一键写进世界书：角色已有主世界书时只追加一条「心迹回廊 · 表情包」，没有就新建一本并绑定。条目字段和酒馆自己新建的条目一样，在世界书编辑器里能正常展开、修改。\n- 条目内容改成手写设定常见的样子：用 `<表情包>` 标签包住，里面按「发表情规则 / 能发的表情 / 怎么看懂对方的表情」分块写成 YAML 式的键值，只写表情名和一句意思，不放图片地址。\n- 表情只在剧情里写到角色用手机等通讯设备发消息（聊天软件、短信、私信、评论等）时使用，跟在那条消息后面或者单独作为一条；正文叙述和当面说话时不发，也不要求每条回复都发。去掉了「每条回复用几个表情」的设置，世界书页只剩「加入世界书」和「撤掉这一条」。\n- 这一条放在最新几条消息之前，不受世界书预算限制（设定很多时也不会被挤掉），只在正常回复、继续、重新生成和换一条时生效，不进其他插件的后台请求。\n- 插件更新后打开聊天，或者打开表情包页面时，已经写进世界书的这一条会自动换成新写法，旧版本留下的「这次发表情」概率条目也会一起删掉；撤掉这一条即恢复原样。\n- 模型把暗号写偏也能显示成图：全角的【表情：…】、写成「表情包:」、或者漏了名字只写表情名，都会按表情名找到对应的图。\n- 聊天页多了一个可以拖动的小兔子悬浮按钮（和魔法棒菜单里心迹回廊的兔子是同一只，做过表情包后出现，松手会贴到左右边上并记住位置）。点开后分「我的 / 他的 / 双人 / 其他」，你也可以发他的表情；点一下把暗号放进输入框。聊天里的 `[表情:名字·表情名]` 会显示成对应的表情图，角色从世界书知道每个表情的意思，也知道你借用他的表情是在逗他。\n- 悬浮小兔子可以在表情包页关掉：关掉后聊天页不再显示，改从魔法棒菜单里的「表情包」打开，表情面板贴在输入栏上方，像表情键盘一样，选好一个自动收起，也可以点「收起」。开关记在酒馆设置里，对所有角色都生效。\n- 表情包出图和情侣头像一样有「Q 版外貌过滤」：外貌里有身高、体型、骨相这类写实描述时，可以只在这次出图里去掉，免得画回正常比例；可选每次询问、自动过滤或不过滤。一组表情实际用的外貌会跟着这一组保存，之后单张重画也保持一致。\n- 情侣头像预览下方去掉了“删除这一对”，删除统一放在历史与收藏里。\n- 新增「本地快速建档」：不调用 API，直接把这段聊天的原文按场景切成一段段回忆，几秒钟就能建好，不会因为接口超时、额度不够或返回格式不对而失败。档案还是存在聊天文件里：复制聊天会跟着走，删除聊天就一起没了。\n- 可以在设置里打开「打开聊天就自动本地建档」（默认打开）：单人聊天还没有档案、并且已经聊了两句以上时，心迹回廊会自动建好；之后每多 6 层自动补上新楼层。只自动建一次，你删掉档案后不会再偷偷重建；群聊不会自动建。档案页也能手动点「本地快速建档」或「本地补上新楼层」。\n- 本地建的档案每段只记标题、几句原话和一段 320 字以内的摘录，状态栏、代码块、HTML 和表情暗号都会去掉；进提示词时和普通档案一样最多取 24 段，不会因为聊天很长就占满 token。档案本身存在聊天文件里，不发给模型，不占 token。\n- 本地档案是原文摘录，没有 API 整理过的回忆那么精炼。想要整理过的版本，之后接口可用时点「完全重建」即可替换；点「增量更新」会保留已有摘录，只用 API 整理之后的新楼层，用过 API 更新后就不再自动补本地楼层。\n- 画风、互动、衣着、裁切、头像应用及其他已有修复保持。\n";
 
 __m_core_releaseNotes_js.RELEASE_README = RELEASE_README;
 }
@@ -1619,8 +1619,8 @@ function __init_core_stickerStore_js() {
 // ordinary files the user saved in their own ST image folder.
 const STICKER_FIELD = 'hearttrace_stickers';
 const STICKER_OWNERS = Object.freeze(['char', 'user', 'pair', 'other']);
-// How many stickers one reply weaves in. Keys kept from earlier builds.
-const STICKER_FREQUENCIES = Object.freeze({ rare: '1 个', sometimes: '1～2 个', often: '2～3 个' });
+// Per-browser chat UI choice (not per character): floating rabbit or a wand-menu entry.
+const STICKER_UI_KEY = 'heartbeatMemoriesStickerUiV1';
 const STICKER_EVENTS = Object.freeze({ changed: 'hearttrace:stickers-changed' });
 const LORE_COMMENT = '心迹回廊 · 表情包';
 // [表情:方祁洛·害羞] is what we teach. Models also write 【表情：害羞】,
@@ -1687,11 +1687,10 @@ function normalizeStickerData(value) {
             sticker.name = name; used.add(name);
         }
     }
-    const frequency = Object.hasOwn(STICKER_FREQUENCIES, value?.settings?.frequency) ? value.settings.frequency : 'sometimes';
     // Q-version appearance filter, same choices as the couple avatars; absent = ask.
     const chibiFilter = ['auto', 'off'].includes(value?.settings?.chibiFilter) ? value.settings.chibiFilter : '';
     return { version: 1, revision: Math.max(0, Number(value?.revision) || 0), packs,
-        settings: { frequency, maxOne: value?.settings?.maxOne !== false, ...(chibiFilter ? { chibiFilter } : {}) },
+        settings: { maxOne: value?.settings?.maxOne !== false, ...(chibiFilter ? { chibiFilter } : {}) },
         lore: { book: text(value?.lore?.book).slice(0, 200), hash: text(value?.lore?.hash).slice(0, 40) } };
 }
 
@@ -1747,6 +1746,18 @@ function allStickers(data, owner = '') {
     return data.packs.filter(pack => !owner || pack.owner === owner).flatMap(pack => pack.stickers.map(sticker => ({ ...sticker, owner: pack.owner, pack: pack.id })));
 }
 
+// Floating rabbit on by default; off moves the entry into ST's magic-wand menu.
+function stickerFloatEnabled(context = rawContext()) {
+    return context?.extensionSettings?.[STICKER_UI_KEY]?.float !== false;
+}
+function setStickerFloat(on, context = rawContext()) {
+    if (!context?.extensionSettings) throw new Error('酒馆设置还没准备好，稍后再试。');
+    context.extensionSettings[STICKER_UI_KEY] = { ...(context.extensionSettings[STICKER_UI_KEY] || {}), float: !!on };
+    context.saveSettingsDebounced?.();
+    emit(STICKER_EVENTS.changed);
+    return !!on;
+}
+
 function emit(type) {
     try { globalThis.dispatchEvent?.(new CustomEvent(type)); } catch { /* No DOM events in tests. */ }
 }
@@ -1764,10 +1775,9 @@ async function writeStickerData(value, context = rawContext()) {
 }
 
 // One constant entry in the character's lorebook: what each sticker means,
-// and how to weave them into the reply itself. Earlier builds also wrote a
+// used only in messages sent on a phone or other device inside the story. Earlier builds also wrote a
 // probability "nudge" entry; its comment is kept so it can be cleaned up.
 const LORE_NUDGE_COMMENT = '心迹回廊 · 表情包 · 这次发表情';
-const COUNT_TEXT = { rare: '用 1 个', sometimes: '用 1～2 个', often: '用 2～3 个' };
 function stickerExample(data, context) {
     const row = allStickers(data, 'char')[0] || allStickers(data, 'pair')[0] || allStickers(data, 'other')[0];
     return row ? `[表情:${ownerLabel(row.owner, context)}·${row.name}]` : '';
@@ -1785,14 +1795,12 @@ function stickerLoreContent(data, context = rawContext()) {
     const lines = ['<表情包>', '', 'sticker_rules:'];
     if (sendable) {
         lines.push(`  who_sends: "${loreValue(charName)}"`,
-            `  per_reply: "${loreValue(`每条回复都${COUNT_TEXT[data.settings.frequency] || COUNT_TEXT.sometimes}表情`)}"`,
+            `  when: "${loreValue(`剧情里写到${charName}用手机或其他通讯设备发消息（聊天软件、短信、私信、评论等）时，可以在这些消息里发贴合情绪的表情：跟在那条消息后面，或者单独作为一条消息。不用每条消息都发。`)}"`,
             `  format: "[表情:名字·表情名]"`,
             `  example: "${loreValue(stickerExample(data, context))}"`,
-            '  placement:',
-            `    - "${loreValue(`正文写到${charName}用手机或其他通讯设备发消息（聊天软件、短信、私信等）时，表情优先发在这些消息里：跟在那条消息后面，或者单独作为一条消息。`)}"`,
-            `    - "${loreValue(`没有发消息的场景时，挑最贴合此刻情绪的表情，单独一行穿插在正文里对应的位置，作为${charName}这一刻的表情反应。`)}"`,
-            '    - "不要全部堆在回复末尾，也不要解释为什么发表情。"',
-            '  limits: "只能用下面列出的表情，名字和表情名照抄，不编新的，不写图片地址。"');
+            '  limits:',
+            '    - "正文叙述和当面说话时不发表情，表情只出现在设备上的消息里。"',
+            '    - "只能用下面列出的表情，名字和表情名照抄，不编新的，不写图片地址，也不解释为什么发。"');
     } else lines.push(`  who_sends: "${loreValue(`${charName}自己没有表情包，不发表情。`)}"`);
     if (sendable) {
         lines.push('', 'sendable_stickers:');
@@ -1829,11 +1837,13 @@ __m_core_stickerStore_js.ownerLabel = ownerLabel;
 __m_core_stickerStore_js.stickerToken = stickerToken;
 __m_core_stickerStore_js.resolveSticker = resolveSticker;
 __m_core_stickerStore_js.allStickers = allStickers;
+__m_core_stickerStore_js.stickerFloatEnabled = stickerFloatEnabled;
+__m_core_stickerStore_js.setStickerFloat = setStickerFloat;
 __m_core_stickerStore_js.stickerLoreContent = stickerLoreContent;
 __m_core_stickerStore_js.loreHash = loreHash;
 __m_core_stickerStore_js.STICKER_FIELD = STICKER_FIELD;
 __m_core_stickerStore_js.STICKER_OWNERS = STICKER_OWNERS;
-__m_core_stickerStore_js.STICKER_FREQUENCIES = STICKER_FREQUENCIES;
+__m_core_stickerStore_js.STICKER_UI_KEY = STICKER_UI_KEY;
 __m_core_stickerStore_js.STICKER_EVENTS = STICKER_EVENTS;
 __m_core_stickerStore_js.LORE_COMMENT = LORE_COMMENT;
 __m_core_stickerStore_js.STICKER_TOKEN = STICKER_TOKEN;
@@ -9388,6 +9398,10 @@ function stickersCss() {
 .rmt-stk-status:empty{display:none}
 :is(.rmt-stk,.rmt-stk-sheet) button.rmt-stk-row{justify-content:space-between!important;width:100%;text-align:left;padding:10px 16px!important;min-height:48px}
 .rmt-stk-row>span:first-child{font-weight:600}
+.rmt-stk-switch{position:relative;flex:0 0 auto;width:38px;height:22px;border-radius:999px;background:var(--rmt-theme-border,rgba(127,127,127,.35));transition:background .15s}
+.rmt-stk-switch::after{content:'';position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 3px #0003;transition:transform .15s}
+[aria-checked=true]>.rmt-stk-switch{background:var(--rmt-theme-accent-ink,#bd708b)}
+[aria-checked=true]>.rmt-stk-switch::after{transform:translateX(16px)}
 .rmt-stk-row>span:nth-child(2){flex:1;min-width:0;color:var(--rmt-theme-muted);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right}
 .rmt-stk-seg{display:grid;gap:4px;padding:4px;border:1px solid var(--rmt-theme-border);border-radius:999px;background:var(--rmt-theme-surface-solid)}
 .rmt-stk-seg.is-3{grid-template-columns:repeat(3,minmax(0,1fr))}.rmt-stk-seg.is-4{grid-template-columns:repeat(4,minmax(0,1fr))}
@@ -9564,8 +9578,12 @@ function askText(view, title, value, placeholder) {
 // ---------- 页面 ----------
 function loreSummary(current) {
     const state = stickers.loreState(current, hostContext());
-    if (state.written) return `已写入「${state.book}」· 每条 ${store.STICKER_FREQUENCIES[current.settings.frequency]}`;
-    return state.book ? `未写入 · 主世界书「${state.book}」` : '未写入';
+    if (state.written) return `已加入「${state.book}」`;
+    return state.book ? `未加入 · 主世界书「${state.book}」` : '未加入';
+}
+function floatRow() {
+    const on = store.stickerFloatEnabled(hostContext());
+    return `<button type="button" class="rmt-stk-row" role="switch" aria-checked="${on}" data-stk-action="float"><span>悬浮小兔子</span><span>${on ? '聊天页显示，可以拖动' : '已关 · 从魔法棒菜单「表情包」打开'}</span><span class="rmt-stk-switch" aria-hidden="true"></span></button>`;
 }
 function draftBanner(view) {
     const draft = drafts.get(view.scope);
@@ -9584,9 +9602,10 @@ function homeHtml(view) {
     const add = tab === 'other'
         ? '<button type="button" class="rmt-stk-pack rmt-stk-dashed" data-stk-action="import-new"><span class="rmt-stk-plus">＋</span><b>导入图片</b><small>两边都能发</small></button>'
         : `<button type="button" class="rmt-stk-pack rmt-stk-dashed" data-stk-action="idea" data-stk-owner="${tab}"><span class="rmt-stk-plus">＋</span><b>新的一组</b><small>写想法出图</small></button>`;
-    return `<main class="rmt-stk">${head('表情包', `给${label('char')}和你做几组表情，聊天输入框旁点一下就能发。`, false)}`
+    return `<main class="rmt-stk">${head('表情包', `给${label('char')}和你做几组表情，在聊天页点小兔子就能发。`, false)}`
         + draftBanner(view)
         + `<button type="button" class="rmt-stk-row" data-stk-action="lore"><span>世界书</span><span>${esc(loreSummary(current))}</span><span aria-hidden="true">›</span></button>`
+        + floatRow()
         + `<nav class="rmt-stk-seg is-4" aria-label="表情分组">${OWNER_TABS.map(owner => `<button type="button" data-stk-tab="${owner}" aria-pressed="${tab === owner}">${esc(label(owner))}</button>`).join('')}</nav>`
         + `<section class="rmt-stk-packs">${cards}${add}</section>`
         + `<p class="rmt-stk-muted">${tab === 'other' ? '导入的图片放在「其他」，你和' + esc(label('char')) + '都能发。' : tab === 'pair' ? '双人表情一张图切成 4 个，两个人一起出现。' : '单人表情一张竖图切成 6 个。'}图片存在你自己酒馆的图片文件夹里，不用图床。</p></main>`;
@@ -9649,9 +9668,7 @@ function loreHtml(view) {
             : `${label('char')}还没有主世界书，会新建「${label('char')}的表情包」并绑定为主世界书。`;
     const char = esc(label('char'));
     return `<main class="rmt-stk">${head('世界书')}`
-        + `<section class="rmt-stk-card"><h3>写在哪里</h3><p class="rmt-stk-muted">${esc(where)}</p><div class="rmt-stk-two"><button type="button" class="rmt-stk-primary" data-stk-action="lore-write"${state.empty ? ' disabled' : ''}>${state.written ? '更新世界书' : '写进世界书'}</button><button type="button" class="rmt-stk-danger" data-stk-action="lore-remove"${state.written ? '' : ' disabled'}>撤掉这一条</button></div></section>`
-        + `<section class="rmt-stk-card"><h3>每条回复用几个表情</h3><div class="rmt-stk-seg is-3">${Object.entries(store.STICKER_FREQUENCIES).map(([key, name]) => `<button type="button" data-stk-frequency="${key}" aria-pressed="${current.settings.frequency === key}">${name}</button>`).join('')}</div>`
-        + `<p class="rmt-stk-muted">不掷骰子，每条回复都会用。正文里写到${char}用手机等通讯设备发消息时，表情优先发在那些消息里；没有发消息的场景，就挑贴合此刻情绪的表情，单独一行穿插在正文里，不堆在末尾。</p></section>`
+        + `<section class="rmt-stk-card"><h3>加入世界书</h3><p class="rmt-stk-muted">${esc(where)}</p><p class="rmt-stk-muted">剧情里写到${char}用手机等通讯设备发消息时，${char}会在那些消息里挑合适的表情发；正文叙述里不发。</p><div class="rmt-stk-two"><button type="button" class="rmt-stk-primary" data-stk-action="lore-write"${state.empty ? ' disabled' : ''}>${state.written ? '更新世界书' : '加入世界书'}</button><button type="button" class="rmt-stk-danger" data-stk-action="lore-remove"${state.written ? '' : ' disabled'}>撤掉这一条</button></div></section>`
         + `<section class="rmt-stk-field">条目预览<pre class="rmt-stk-pre">${esc(state.content || '还没有表情。')}</pre><small>只写名字和一句意思，不放图片地址${state.content ? `，约 ${state.content.length} 字` : ''}；放在最新几条消息之前，不受世界书预算限制，只在正常回复、继续、重新生成和换一条时生效，不进其他插件的后台请求。改了表情、或插件更新后打开聊天，都会自动更新已写入的条目。</small></section></main>`;
 }
 
@@ -9983,6 +10000,10 @@ async function handleAction(view, action, target) {
         const result = await stickers.writeStickerLore(hostContext());
         paint(view); return report(view, result.created ? `已新建「${result.book}」并绑定为${label('char')}的主世界书。` : `已写进「${result.book}」。`);
     }
+    if (action === 'float') {
+        const on = store.setStickerFloat(!store.stickerFloatEnabled(hostContext()), hostContext());
+        paint(view); return report(view, on ? '聊天页会显示悬浮小兔子。' : '悬浮小兔子已关，可以从魔法棒菜单里的「表情包」打开。');
+    }
     if (action === 'lore-remove') {
         if (!await confirmDialog(view, '撤掉这一条', `会从世界书里删掉「${store.LORE_COMMENT}」这一条，其他条目不动。`, '撤掉')) return;
         const book = await stickers.removeStickerLore(hostContext());
@@ -10001,10 +10022,6 @@ function bindView(view) {
         if (d.stkIdeaOwner) { readIdeaForm(view); if (view.idea.owner !== d.stkIdeaOwner) { view.idea.owner = d.stkIdeaOwner; view.idea.items = []; } return paint(view); }
         if (d.stkStyle) { readIdeaForm(view); view.idea.styleId = d.stkStyle; return paint(view); }
         if (d.stkChip) { readIdeaForm(view); view.idea.text = stickers.IDEA_CHIPS[Number(d.stkChip)]?.[1] || view.idea.text; return paint(view); }
-        if (d.stkFrequency) {
-            const current = data();
-            return void stickers.saveStickerData({ ...current, settings: { ...current.settings, frequency: d.stkFrequency } }, hostContext()).then(() => paint(view)).catch(error => failure(view, error));
-        }
         if (!d.stkAction) return;
         void Promise.resolve().then(() => handleAction(view, d.stkAction, target)).catch(error => failure(view, error));
     });

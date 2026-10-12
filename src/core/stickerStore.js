@@ -5,8 +5,8 @@
 // ordinary files the user saved in their own ST image folder.
 export const STICKER_FIELD = 'hearttrace_stickers';
 export const STICKER_OWNERS = Object.freeze(['char', 'user', 'pair', 'other']);
-// How many stickers one reply weaves in. Keys kept from earlier builds.
-export const STICKER_FREQUENCIES = Object.freeze({ rare: '1 个', sometimes: '1～2 个', often: '2～3 个' });
+// Per-browser chat UI choice (not per character): floating rabbit or a wand-menu entry.
+export const STICKER_UI_KEY = 'heartbeatMemoriesStickerUiV1';
 export const STICKER_EVENTS = Object.freeze({ changed: 'hearttrace:stickers-changed' });
 export const LORE_COMMENT = '心迹回廊 · 表情包';
 // [表情:方祁洛·害羞] is what we teach. Models also write 【表情：害羞】,
@@ -73,11 +73,10 @@ export function normalizeStickerData(value) {
             sticker.name = name; used.add(name);
         }
     }
-    const frequency = Object.hasOwn(STICKER_FREQUENCIES, value?.settings?.frequency) ? value.settings.frequency : 'sometimes';
     // Q-version appearance filter, same choices as the couple avatars; absent = ask.
     const chibiFilter = ['auto', 'off'].includes(value?.settings?.chibiFilter) ? value.settings.chibiFilter : '';
     return { version: 1, revision: Math.max(0, Number(value?.revision) || 0), packs,
-        settings: { frequency, maxOne: value?.settings?.maxOne !== false, ...(chibiFilter ? { chibiFilter } : {}) },
+        settings: { maxOne: value?.settings?.maxOne !== false, ...(chibiFilter ? { chibiFilter } : {}) },
         lore: { book: text(value?.lore?.book).slice(0, 200), hash: text(value?.lore?.hash).slice(0, 40) } };
 }
 
@@ -133,6 +132,18 @@ export function allStickers(data, owner = '') {
     return data.packs.filter(pack => !owner || pack.owner === owner).flatMap(pack => pack.stickers.map(sticker => ({ ...sticker, owner: pack.owner, pack: pack.id })));
 }
 
+// Floating rabbit on by default; off moves the entry into ST's magic-wand menu.
+export function stickerFloatEnabled(context = rawContext()) {
+    return context?.extensionSettings?.[STICKER_UI_KEY]?.float !== false;
+}
+export function setStickerFloat(on, context = rawContext()) {
+    if (!context?.extensionSettings) throw new Error('酒馆设置还没准备好，稍后再试。');
+    context.extensionSettings[STICKER_UI_KEY] = { ...(context.extensionSettings[STICKER_UI_KEY] || {}), float: !!on };
+    context.saveSettingsDebounced?.();
+    emit(STICKER_EVENTS.changed);
+    return !!on;
+}
+
 function emit(type) {
     try { globalThis.dispatchEvent?.(new CustomEvent(type)); } catch { /* No DOM events in tests. */ }
 }
@@ -150,10 +161,9 @@ export async function writeStickerData(value, context = rawContext()) {
 }
 
 // One constant entry in the character's lorebook: what each sticker means,
-// and how to weave them into the reply itself. Earlier builds also wrote a
+// used only in messages sent on a phone or other device inside the story. Earlier builds also wrote a
 // probability "nudge" entry; its comment is kept so it can be cleaned up.
 export const LORE_NUDGE_COMMENT = '心迹回廊 · 表情包 · 这次发表情';
-const COUNT_TEXT = { rare: '用 1 个', sometimes: '用 1～2 个', often: '用 2～3 个' };
 function stickerExample(data, context) {
     const row = allStickers(data, 'char')[0] || allStickers(data, 'pair')[0] || allStickers(data, 'other')[0];
     return row ? `[表情:${ownerLabel(row.owner, context)}·${row.name}]` : '';
@@ -171,14 +181,12 @@ export function stickerLoreContent(data, context = rawContext()) {
     const lines = ['<表情包>', '', 'sticker_rules:'];
     if (sendable) {
         lines.push(`  who_sends: "${loreValue(charName)}"`,
-            `  per_reply: "${loreValue(`每条回复都${COUNT_TEXT[data.settings.frequency] || COUNT_TEXT.sometimes}表情`)}"`,
+            `  when: "${loreValue(`剧情里写到${charName}用手机或其他通讯设备发消息（聊天软件、短信、私信、评论等）时，可以在这些消息里发贴合情绪的表情：跟在那条消息后面，或者单独作为一条消息。不用每条消息都发。`)}"`,
             `  format: "[表情:名字·表情名]"`,
             `  example: "${loreValue(stickerExample(data, context))}"`,
-            '  placement:',
-            `    - "${loreValue(`正文写到${charName}用手机或其他通讯设备发消息（聊天软件、短信、私信等）时，表情优先发在这些消息里：跟在那条消息后面，或者单独作为一条消息。`)}"`,
-            `    - "${loreValue(`没有发消息的场景时，挑最贴合此刻情绪的表情，单独一行穿插在正文里对应的位置，作为${charName}这一刻的表情反应。`)}"`,
-            '    - "不要全部堆在回复末尾，也不要解释为什么发表情。"',
-            '  limits: "只能用下面列出的表情，名字和表情名照抄，不编新的，不写图片地址。"');
+            '  limits:',
+            '    - "正文叙述和当面说话时不发表情，表情只出现在设备上的消息里。"',
+            '    - "只能用下面列出的表情，名字和表情名照抄，不编新的，不写图片地址，也不解释为什么发。"');
     } else lines.push(`  who_sends: "${loreValue(`${charName}自己没有表情包，不发表情。`)}"`);
     if (sendable) {
         lines.push('', 'sendable_stickers:');

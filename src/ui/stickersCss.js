@@ -30,6 +30,10 @@ export function stickersCss() {
 .rmt-stk-status:empty{display:none}
 :is(.rmt-stk,.rmt-stk-sheet) button.rmt-stk-row{justify-content:space-between!important;width:100%;text-align:left;padding:10px 16px!important;min-height:48px}
 .rmt-stk-row>span:first-child{font-weight:600}
+.rmt-stk-switch{position:relative;flex:0 0 auto;width:38px;height:22px;border-radius:999px;background:var(--rmt-theme-border,rgba(127,127,127,.35));transition:background .15s}
+.rmt-stk-switch::after{content:'';position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 3px #0003;transition:transform .15s}
+[aria-checked=true]>.rmt-stk-switch{background:var(--rmt-theme-accent-ink,#bd708b)}
+[aria-checked=true]>.rmt-stk-switch::after{transform:translateX(16px)}
 .rmt-stk-row>span:nth-child(2){flex:1;min-width:0;color:var(--rmt-theme-muted);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right}
 .rmt-stk-seg{display:grid;gap:4px;padding:4px;border:1px solid var(--rmt-theme-border);border-radius:999px;background:var(--rmt-theme-surface-solid)}
 .rmt-stk-seg.is-3{grid-template-columns:repeat(3,minmax(0,1fr))}.rmt-stk-seg.is-4{grid-template-columns:repeat(4,minmax(0,1fr))}

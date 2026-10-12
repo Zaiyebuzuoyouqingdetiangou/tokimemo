@@ -98,8 +98,12 @@ function askText(view, title, value, placeholder) {
 // ---------- 页面 ----------
 function loreSummary(current) {
     const state = stickers.loreState(current, hostContext());
-    if (state.written) return `已写入「${state.book}」· 每条 ${store.STICKER_FREQUENCIES[current.settings.frequency]}`;
-    return state.book ? `未写入 · 主世界书「${state.book}」` : '未写入';
+    if (state.written) return `已加入「${state.book}」`;
+    return state.book ? `未加入 · 主世界书「${state.book}」` : '未加入';
+}
+function floatRow() {
+    const on = store.stickerFloatEnabled(hostContext());
+    return `<button type="button" class="rmt-stk-row" role="switch" aria-checked="${on}" data-stk-action="float"><span>悬浮小兔子</span><span>${on ? '聊天页显示，可以拖动' : '已关 · 从魔法棒菜单「表情包」打开'}</span><span class="rmt-stk-switch" aria-hidden="true"></span></button>`;
 }
 function draftBanner(view) {
     const draft = drafts.get(view.scope);
@@ -118,9 +122,10 @@ function homeHtml(view) {
     const add = tab === 'other'
         ? '<button type="button" class="rmt-stk-pack rmt-stk-dashed" data-stk-action="import-new"><span class="rmt-stk-plus">＋</span><b>导入图片</b><small>两边都能发</small></button>'
         : `<button type="button" class="rmt-stk-pack rmt-stk-dashed" data-stk-action="idea" data-stk-owner="${tab}"><span class="rmt-stk-plus">＋</span><b>新的一组</b><small>写想法出图</small></button>`;
-    return `<main class="rmt-stk">${head('表情包', `给${label('char')}和你做几组表情，聊天输入框旁点一下就能发。`, false)}`
+    return `<main class="rmt-stk">${head('表情包', `给${label('char')}和你做几组表情，在聊天页点小兔子就能发。`, false)}`
         + draftBanner(view)
         + `<button type="button" class="rmt-stk-row" data-stk-action="lore"><span>世界书</span><span>${esc(loreSummary(current))}</span><span aria-hidden="true">›</span></button>`
+        + floatRow()
         + `<nav class="rmt-stk-seg is-4" aria-label="表情分组">${OWNER_TABS.map(owner => `<button type="button" data-stk-tab="${owner}" aria-pressed="${tab === owner}">${esc(label(owner))}</button>`).join('')}</nav>`
         + `<section class="rmt-stk-packs">${cards}${add}</section>`
         + `<p class="rmt-stk-muted">${tab === 'other' ? '导入的图片放在「其他」，你和' + esc(label('char')) + '都能发。' : tab === 'pair' ? '双人表情一张图切成 4 个，两个人一起出现。' : '单人表情一张竖图切成 6 个。'}图片存在你自己酒馆的图片文件夹里，不用图床。</p></main>`;
@@ -183,9 +188,7 @@ function loreHtml(view) {
             : `${label('char')}还没有主世界书，会新建「${label('char')}的表情包」并绑定为主世界书。`;
     const char = esc(label('char'));
     return `<main class="rmt-stk">${head('世界书')}`
-        + `<section class="rmt-stk-card"><h3>写在哪里</h3><p class="rmt-stk-muted">${esc(where)}</p><div class="rmt-stk-two"><button type="button" class="rmt-stk-primary" data-stk-action="lore-write"${state.empty ? ' disabled' : ''}>${state.written ? '更新世界书' : '写进世界书'}</button><button type="button" class="rmt-stk-danger" data-stk-action="lore-remove"${state.written ? '' : ' disabled'}>撤掉这一条</button></div></section>`
-        + `<section class="rmt-stk-card"><h3>每条回复用几个表情</h3><div class="rmt-stk-seg is-3">${Object.entries(store.STICKER_FREQUENCIES).map(([key, name]) => `<button type="button" data-stk-frequency="${key}" aria-pressed="${current.settings.frequency === key}">${name}</button>`).join('')}</div>`
-        + `<p class="rmt-stk-muted">不掷骰子，每条回复都会用。正文里写到${char}用手机等通讯设备发消息时，表情优先发在那些消息里；没有发消息的场景，就挑贴合此刻情绪的表情，单独一行穿插在正文里，不堆在末尾。</p></section>`
+        + `<section class="rmt-stk-card"><h3>加入世界书</h3><p class="rmt-stk-muted">${esc(where)}</p><p class="rmt-stk-muted">剧情里写到${char}用手机等通讯设备发消息时，${char}会在那些消息里挑合适的表情发；正文叙述里不发。</p><div class="rmt-stk-two"><button type="button" class="rmt-stk-primary" data-stk-action="lore-write"${state.empty ? ' disabled' : ''}>${state.written ? '更新世界书' : '加入世界书'}</button><button type="button" class="rmt-stk-danger" data-stk-action="lore-remove"${state.written ? '' : ' disabled'}>撤掉这一条</button></div></section>`
         + `<section class="rmt-stk-field">条目预览<pre class="rmt-stk-pre">${esc(state.content || '还没有表情。')}</pre><small>只写名字和一句意思，不放图片地址${state.content ? `，约 ${state.content.length} 字` : ''}；放在最新几条消息之前，不受世界书预算限制，只在正常回复、继续、重新生成和换一条时生效，不进其他插件的后台请求。改了表情、或插件更新后打开聊天，都会自动更新已写入的条目。</small></section></main>`;
 }
 
@@ -517,6 +520,10 @@ async function handleAction(view, action, target) {
         const result = await stickers.writeStickerLore(hostContext());
         paint(view); return report(view, result.created ? `已新建「${result.book}」并绑定为${label('char')}的主世界书。` : `已写进「${result.book}」。`);
     }
+    if (action === 'float') {
+        const on = store.setStickerFloat(!store.stickerFloatEnabled(hostContext()), hostContext());
+        paint(view); return report(view, on ? '聊天页会显示悬浮小兔子。' : '悬浮小兔子已关，可以从魔法棒菜单里的「表情包」打开。');
+    }
     if (action === 'lore-remove') {
         if (!await confirmDialog(view, '撤掉这一条', `会从世界书里删掉「${store.LORE_COMMENT}」这一条，其他条目不动。`, '撤掉')) return;
         const book = await stickers.removeStickerLore(hostContext());
@@ -535,10 +542,6 @@ function bindView(view) {
         if (d.stkIdeaOwner) { readIdeaForm(view); if (view.idea.owner !== d.stkIdeaOwner) { view.idea.owner = d.stkIdeaOwner; view.idea.items = []; } return paint(view); }
         if (d.stkStyle) { readIdeaForm(view); view.idea.styleId = d.stkStyle; return paint(view); }
         if (d.stkChip) { readIdeaForm(view); view.idea.text = stickers.IDEA_CHIPS[Number(d.stkChip)]?.[1] || view.idea.text; return paint(view); }
-        if (d.stkFrequency) {
-            const current = data();
-            return void stickers.saveStickerData({ ...current, settings: { ...current.settings, frequency: d.stkFrequency } }, hostContext()).then(() => paint(view)).catch(error => failure(view, error));
-        }
         if (!d.stkAction) return;
         void Promise.resolve().then(() => handleAction(view, d.stkAction, target)).catch(error => failure(view, error));
     });
