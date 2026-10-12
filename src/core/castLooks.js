@@ -127,7 +127,9 @@ export function lookFromDescription(description, limit = CAST_LOOKS_FIELD_LIMIT,
     let used = 0;
     for (const part of cg_visual.appearanceSourceClauses(raw, subject)) {
         const literal = part.replace(/\{\{[^{}]{1,100}\}\}/g, ' ');
-        const clause = cg_visual.automaticAppearanceClause(core_text.normalizeText(literal, complete ? Infinity : 160));
+        // "外貌：黑色长发" keeps only the look; a generic label is not a tag.
+        const clause = cg_visual.automaticAppearanceClause(core_text.normalizeText(literal, complete ? Infinity : 160))
+            .replace(/^(?:外貌|外观|容貌|长相|外表|相貌|样貌|模样|形象|外貌特征|appearance|looks?|physical appearance|description)\s*[:：]\s*/iu, '');
         if (!clause || (!cg_visual.appearanceTraitClause(clause) && !cg_visual.explicitAppearanceIdentityClause(clause)) || LOOK_DROP.test(clause)) continue;
         if (seen.has(clause)) continue;
         if (used + clause.length + 1 > limit) break;

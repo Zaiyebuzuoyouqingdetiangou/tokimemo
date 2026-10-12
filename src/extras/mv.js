@@ -281,6 +281,13 @@ export async function retryMvSave(scope, id) {
             // survive and turn the record back into a v2 asset board.
             const { version, groups, keyword, motif, ...kept } = next || {};
             next = { timing: { taps: {}, shift: 0 }, duration: 0, ...kept, ...row.patch, assetPrompts: {}, storyRevision: row.id };
+            // A rhythm template chosen earlier still shows as selected; apply it to
+            // the new shots instead of leaving every cut at the generated default.
+            if (next.settings?.output === 'tegaki' && TEGAKI_PRESETS[next.tegaki?.preset]) applyPresetTemplate(next, next.tegaki.preset, true);
+            // A custom export range from an older storyboard may now cover no shot
+            // at all; the export drawer would then play an empty clip.
+            if (next.exportRange && (next.settings?.output === 'video' || (next.exportRange.range === 'custom'
+                && !list(next.shots).some(s => s.sectionIndex >= next.exportRange.rangeFrom && s.sectionIndex <= next.exportRange.rangeTo)))) delete next.exportRange;
         }
         else if (row.kind === 'append') {
             next.shots = [...list(next.shots), ...row.patch.shots].sort((a, b) => a.sectionIndex - b.sectionIndex);
@@ -602,6 +609,13 @@ export function selectedSectionIndexes(sections, range, from = 0, to = 0) {
     return all.filter(i => i >= first && i <= chorus);
 }
 
+// Types that compose characters, shared backgrounds and lyric text as layers.
+const STAGE_TYPES = Object.freeze(['expression', 'illustration', 'typography']);
+const TYPOGRAPHY_GRAMMAR = `【文字PV 的编排重点】
+图少字多：一两张共享背景、一两个小而清楚的人物或物件姿势，跨很多句保持；每句歌词至少一个 frame，并在 stage.text 写原句或摘出的关键词。layout（banner / stack / sides）与 entrance（slide / pop / cut）随节奏轮换，同一句重复时沿用同一种排布；主歌 tone 多用 base、留白多，副歌关键词用 stack 叠字、tone accent，情绪落下时用 dark。人物层放在画面一角，不挡文字，不在生图里画文字。
+自查：frames 数是否明显多于差分数；每个 frame 是否都有 stage.text；副歌是否用了强调色和叠字。
+`;
+
 function storyboardPrompt(context, memory, song, settings, sectionIndexes = null, cast = null) {
     const charName = core_text.normalizeText(memory?.characterName || context?.name2, 120) || '{{char}}';
     const userName = core_text.normalizeText(memory?.userName || context?.name1, 120) || '{{user}}';
@@ -637,6 +651,25 @@ function storyboardPrompt(context, memory, song, settings, sectionIndexes = null
             { sectionIndex: exampleSection, lyric: sections[0]?.lines?.[1] || exampleLyric, group: 'G2', diff: 'D1', hold: 2, stage: { layout: 'banner', entrance: 'slide', shadow: true } },
             { sectionIndex: sections[1]?.index ?? exampleSection, lyric: sections[1]?.lines?.[0] || exampleLyric, group: 'G1', diff: 'D2', hold: 2, stage: { layout: 'sides', tone: 'dark' } },
             { sectionIndex: sections[1]?.index ?? exampleSection, lyric: sections[1]?.lines?.[1] || exampleLyric, group: 'G1', diff: 'D1', hold: 2, stage: { layout: 'sides', tone: 'accent', entrance: 'pop' } },
+        ],
+    }) : '';
+    const typographyExample = settings.output === 'tegaki' && settings.storyType === 'typography' ? JSON.stringify({
+        wardrobe: JSON.parse(exampleWardrobe), keyword: '关键词',
+        stage: { backgrounds: [{ id: 'S1', label: '夜色字卡底', kind: 'image', prompt: 'deep blue night city far below, soft bokeh lights at the bottom, wide empty sky for large text', colors: ['#14213d', '#e5e5e5', '#fca311'], motion: 'drift' }] },
+        groups: [
+            { id: 'G1', composition: '右下角的小小身影', stageBackground: 'S1', position: 'right', scale: 'full',
+                characterPrompt: 'small full-body figure, lower right of frame, seen from behind', ...expressionCast('back'),
+                motion: 'still', transition: 'cut', diffs: [
+                    { id: 'D1', label: '背影站立', change: '背对镜头站着', imagePrompt: `small full-body back view of ${exampleActor} standing still, looking up at the sky` },
+                    { id: 'D2', label: '抬手', change: '一只手伸向天空', imagePrompt: `small full-body back view of ${exampleActor} reaching one hand up toward the sky` },
+                ] },
+        ],
+        frames: [
+            { sectionIndex: exampleSection, lyric: exampleLyric, group: 'G1', diff: 'D1', hold: 2, stage: { text: exampleLyric, layout: 'banner', entrance: 'slide', tone: 'base' } },
+            { sectionIndex: exampleSection, lyric: sections[0]?.lines?.[1] || exampleLyric, group: 'G1', diff: 'D1', hold: 2, stage: { text: sections[0]?.lines?.[1] || exampleLyric, layout: 'sides', entrance: 'pop', tone: 'base' } },
+            { sectionIndex: sections[1]?.index ?? exampleSection, lyric: sections[1]?.lines?.[0] || exampleLyric, group: 'G1', diff: 'D2', hold: 1, stage: { text: '关键词', layout: 'stack', entrance: 'pop', tone: 'accent', shadow: true } },
+            { sectionIndex: sections[1]?.index ?? exampleSection, lyric: sections[1]?.lines?.[0] || exampleLyric, group: 'G1', diff: 'D2', hold: 1, stage: { text: sections[1]?.lines?.[0] || exampleLyric, layout: 'banner', entrance: 'cut', tone: 'accent' } },
+            { sectionIndex: sections[1]?.index ?? exampleSection, lyric: sections[1]?.lines?.[1] || exampleLyric, group: 'G1', diff: 'D1', hold: 2, stage: { text: sections[1]?.lines?.[1] || exampleLyric, layout: 'stack', entrance: 'slide', tone: 'dark' } },
         ],
     }) : '';
     const illustrationCue = { reveal: 'bloom', seconds: 2.8, light: 'focus', particles: 'glints', movement: 'local',
@@ -690,7 +723,7 @@ ${settings.promptFormat ? mv_format.directive(settings.promptFormat) + '\n' : ''
 ${cast ? '以下仅为结构示例，实际每镜的 cast 按出场人物填写，不局限于示例中的一个人。顶层可加 appearances:[{"participantId":"原始ID","tag":"有依据的稳定外貌","nl":"可空"}]；wardrobe 使用 era 和 characters，不用 char/user 代替 NPC。' : ''}
 ${settings.output === 'video'
         ? `{"wardrobe":${exampleWardrobe},"shots":[{"sectionIndex":0,"lyric":"","plain":"……",${exampleBinding},"shot":"中景：看到上半身","move":"镜头慢慢推近","motion":"push","imagePrompt":"……","videoZh":"……","videoEn":"……"}]}`
-        : illustrationExample || expressionExample || directionExample || `{"wardrobe":${exampleWardrobe},"keyword":"副歌里最有分量的词","motif":{"name":"竹叶","prompt":"english: one decorative element"},"groups":[{"id":"G1","composition":"低机位 · 蹲下喂猫 · 人物在左","position":"left","scale":"full","characterPrompt":"low angle medium shot, subject on the left, warm afternoon light",${exampleBinding},"motion":"still","transition":"cut","link":"下一组如何承接","bgs":[{"id":"B1","label":"午后","prompt":"english: empty scenery only"}],"diffs":[{"id":"D1","label":"伸手前","change":"伸出的手停在半空","imagePrompt":"low angle medium shot, the named character on the left with one hand extended toward the cat, warm afternoon light"}]}],"frames":[{"sectionIndex":0,"lyric":"原句","group":"G1","diff":"D1","bg":"B1","hold":1,"phase":"prep"}]}`}`;
+        : illustrationExample || expressionExample || typographyExample || directionExample || `{"wardrobe":${exampleWardrobe},"keyword":"副歌里最有分量的词","motif":{"name":"竹叶","prompt":"english: one decorative element"},"groups":[{"id":"G1","composition":"低机位 · 蹲下喂猫 · 人物在左","position":"left","scale":"full","characterPrompt":"low angle medium shot, subject on the left, warm afternoon light",${exampleBinding},"motion":"still","transition":"cut","link":"下一组如何承接","bgs":[{"id":"B1","label":"午后","prompt":"english: empty scenery only"}],"diffs":[{"id":"D1","label":"伸手前","change":"伸出的手停在半空","imagePrompt":"low angle medium shot, the named character on the left with one hand extended toward the cat, warm afternoon light"}]}],"frames":[{"sectionIndex":0,"lyric":"原句","group":"G1","diff":"D1","bg":"B1","hold":1,"phase":"prep"}]}`}`;
 }
 
 // 手书：少数构图，每个构图里几张连续变化的画（闭眼→睁眼→偏头），摊平成镜头。
@@ -866,7 +899,9 @@ export async function generateStoryboard(songId, settingsInput, castInput = unde
             return { id: songId, createdAt: previous?.createdAt || Date.now(), settings,
                 ...built, stage: built.stage || null,
                 ...(cast ? { cast: mv_cast.generatedMvCast(cast, raw) } : {}),
-                tegaki: { ...(previous?.tegaki || {}), range: settings.range, rangeFrom: settings.rangeFrom, rangeTo: settings.rangeTo, ...(settings.output === 'tegaki' ? { lyric: built.stage && settings.storyType !== 'illustration' ? 'stage' : 'subtitle' } : {}) },
+                tegaki: { ...(previous?.tegaki || {}), range: settings.range, rangeFrom: settings.rangeFrom, rangeTo: settings.rangeTo, ...(settings.output === 'tegaki' ? { lyric: built.stage && settings.storyType !== 'illustration' ? 'stage'
+                    // A manual lyric style survives regeneration; only the stage layout forces its own.
+                    : Object.hasOwn(TEGAKI_LYRICS, previous?.tegaki?.lyric) && previous.tegaki.lyric !== 'stage' ? previous.tegaki.lyric : 'subtitle' } : {}) },
                 wardrobe: {
                     era: core_text.normalizeText(raw?.wardrobe?.era, 200) || previous?.wardrobe?.era || '',
                     char: core_text.normalizeText(raw?.wardrobe?.char, 300) || previous?.wardrobe?.char || '',
@@ -1180,19 +1215,25 @@ export function applyTegakiPreset(songId, presetId, song) {
     const preset = TEGAKI_PRESETS[presetId];
     if (!preset) return null;
     const context = core_context.currentCharacterGuard();
-    return writeMv(scopeOf(context), songId, current => {
-        if (!current) return current;
-        current.tegaki = { ...(current.tegaki || {}), rhythm: preset.rhythm, lyric: preset.lyric, preset: presetId, template: preset.template };
-        const shots = list(current.shots);
-        shots.forEach((shot, i) => {
-            const next = shots[i + 1];
-            const change = !next || !shot.group || next.group !== shot.group;
-            shot.cut = preset.template === 'quick' || !change ? 'cut' : preset.template === 'flash' ? 'flash' : 'fade';
-            shot.motion = preset.template === 'slow' ? 'push' : 'still';
-        });
-        for (const g of list(current.groups)) g.motion = preset.template === 'slow' ? 'push' : 'still';
-        return current;
+    return writeMv(scopeOf(context), songId, current => current ? applyPresetTemplate(current, presetId) : current);
+}
+
+function applyPresetTemplate(current, presetId, keepStageLyric = false) {
+    const preset = TEGAKI_PRESETS[presetId];
+    if (!preset) return current;
+    // On regenerate a stage layout keeps its own lyric rendering; a manual
+    // template click still switches lyrics exactly as before.
+    const lyric = keepStageLyric && current.stage && current.settings?.storyType !== 'illustration' ? 'stage' : preset.lyric;
+    current.tegaki = { ...(current.tegaki || {}), rhythm: preset.rhythm, lyric, preset: presetId, template: preset.template };
+    const shots = list(current.shots);
+    shots.forEach((shot, i) => {
+        const next = shots[i + 1];
+        const change = !next || !shot.group || next.group !== shot.group;
+        shot.cut = preset.template === 'quick' || !change ? 'cut' : preset.template === 'flash' ? 'flash' : 'fade';
+        shot.motion = preset.template === 'slow' ? 'push' : 'still';
     });
+    for (const g of list(current.groups)) g.motion = preset.template === 'slow' ? 'push' : 'still';
+    return current;
 }
 
 export function patchWardrobe(songId, patch) {
@@ -1222,14 +1263,14 @@ function tegakiGrammar(sections, keep, charName = '{{char}}', direction = '') {
 - diffs 可以只用一张关键画；只有同机位连续动作、情绪最小差分、明显反差或节奏循环确实需要时才加图，不强求每组闭眼→睁眼。
 - 局部特写写清画面裁切；只拍手就不要为了显示头发、眼睛或服装画出整个人。物件或环境空镜明确不出人，不硬塞主角。
 - bgs 写同一个镜头需要的场景，环境变化确有作用时再增加背景；只描述场景，不混入人物。
-${['expression', 'illustration'].includes(direction) ? '- 主舞台与角色姿势可以跨歌词、跨段落持续使用；主歌与副歌靠表演、文字、明暗与疏密区分，重现的姿势按歌词情绪变奏。' : '- 主构图和意象可在任何段落复用、停留或变奏；是否换构图取决于观众需要看到的新信息，不因进入主歌、间奏或下一句就强制换图。'}
+${STAGE_TYPES.includes(direction) ? '- 主舞台与角色姿势可以跨歌词、跨段落持续使用；主歌与副歌靠表演、文字、明暗与疏密区分，重现的姿势按歌词情绪变奏。' : '- 主构图和意象可在任何段落复用、停留或变奏；是否换构图取决于观众需要看到的新信息，不因进入主歌、间奏或下一句就强制换图。'}
 - link 简写下一镜如何承接，并把对应视线、位置或物件落实在前后两组的画面描述；link 不是可执行动画指令。
 - frames 按实际播放顺序指向 group、diff 和 bg，sectionIndex 是歌曲原段落编号。lyric 使用对应原句（器乐留空）；一句可有多个短镜，也可多句复用一个素材。hold 是段内相对停留权重，短镜可用 0.5，普通用 1，重点停留可更长，不是秒数。已对过的时间由用户打点优先。
 - frame.phase 可写 prep（准备）、action（发生）、settle（收势）或 still（静止）。循环类型可以回到前一个差分；其他类型只在表达需要时重复。不要靠长时间悬停动态姿势代替动作过程。
 - transition 按表达选 cut / fade / flash，motion 用 still / push；不强制混用全部转场或闪白。图像是静态关键姿势，连续动作靠剪辑而非假称视频动画。
 - 多人镜头分别写清每个人的位置、动作与互动对象，人数由出场名单决定。不得为制造差异改人物的设定外貌、衣服、性别或关系。
-${['expression', 'illustration'].includes(direction) ? '- keyword 可以摘取歌词关键词；漂浮 motif 按歌曲需要选用。舞台背景、人物、文字自身已经能形成节奏，不要求每首叠加粒子。' : '- keyword 与漂浮 motif 都是可选项，不需要时留空或省略。核心意象应先落实在镜头里；装饰不代替伏笔、叙事和人物互动。若使用 motif，prompt 用英文描述单个小元素；不要让它提前泄露尚未揭示的信息。'}
-${['expression', 'illustration'].includes(direction) ? mv_stage.prompt() + (direction === 'illustration' ? mv_illustration.prompt() : '') : mv_tegaki_direction.grammar(direction)}
+${STAGE_TYPES.includes(direction) ? '- keyword 可以摘取歌词关键词；漂浮 motif 按歌曲需要选用。舞台背景、人物、文字自身已经能形成节奏，不要求每首叠加粒子。' : '- keyword 与漂浮 motif 都是可选项，不需要时留空或省略。核心意象应先落实在镜头里；装饰不代替伏笔、叙事和人物互动。若使用 motif，prompt 用英文描述单个小元素；不要让它提前泄露尚未揭示的信息。'}
+${STAGE_TYPES.includes(direction) ? mv_stage.prompt() + (direction === 'illustration' ? mv_illustration.prompt() : direction === 'typography' ? TYPOGRAPHY_GRAMMAR : '') : mv_tegaki_direction.grammar(direction)}
 `;
 }
 
@@ -1240,7 +1281,7 @@ export function isV2(record) { return record?.version === 2 && Array.isArray(rec
 export function buildShots(raw, memory, sectionCount, settings, cast = null, opts = {}) {
     if (cast?.existingGroups) { opts = cast; cast = null; }
     const existingGroups = list(opts.existingGroups);
-    const stagePlan = mv_stage.prepare(['expression', 'illustration'].includes(settings.storyType) ? raw?.stage : null, opts.existingStage);
+    const stagePlan = mv_stage.prepare(STAGE_TYPES.includes(settings.storyType) ? raw?.stage : null, opts.existingStage);
     const reusesExisting = list(raw?.frames).some(f => existingGroups.some(g => g.id === f?.group));
     if (settings.output === 'video' || (!list(raw?.groups).some(g => list(g?.diffs).length) && !reusesExisting)) {
         const shots = normalizeShots(raw, memory, sectionCount, settings, cast);

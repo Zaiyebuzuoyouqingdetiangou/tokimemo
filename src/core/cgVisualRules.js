@@ -116,7 +116,26 @@ function unfamiliarAppearanceSubject(label) {
     const subject = /^([A-Z][A-Za-z’'-]*(?:\s+[A-Z][A-Za-z’'-]*)*)\s+(?:has|is|wears|possesses)\b/u.exec(label)?.[1]
         || /^([\p{Script=Han}]+?)(?:留着|长着|拥有|有|是)/u.exec(label)?.[1];
     return !!subject && !neutral.test(subject) && !fieldOrTagHeading(subject) && !appearanceTraitClause(subject)
-        && !/^(?:头|脸|眼|眉|鼻|嘴|唇|肩|脖|颈|胸|腰|腹|背|手|腕|指|臂|腿|足|脚|身|肌肤)/u.test(subject);
+        && !BODY_PART_SUBJECT.test(subject);
+}
+
+// "锁骨处有纹身" or "后颈有胎记" describes this person's own body, not someone
+// else; a body part anywhere in the subject keeps ownership unchanged.
+const BODY_PART_SUBJECT = /(?:头|脸|面|额|眼|瞳|眉|睫|鼻|嘴|唇|齿|牙|耳|颊|颧|下巴|下颌|肩|脖|颈|锁骨|胸|腰|腹|背|手|腕|指|臂|肘|腿|膝|足|脚|踝|身|肌|肤|皮|发|尾|翼|翅|犄角|体)/u;
+
+// A bracketed or markdown-style section heading that is not a profile field
+// starts a new named section. Named after someone else, its lines are theirs.
+const SECTION_LABEL_WORD = /(?:背景|故事|设定|简介|信息|资料|说明|备注|经历|关系|能力|技能|喜好|习惯|其他|其它|注意|提示|规则|世界观|剧情|对话|示例|例子|台词|语气|口癖|性格|外貌|外观|容貌|长相|特征|服饰|服装|穿着|衣着|身份|职业|年龄|性别|姓名|名字|\b(?:basic|info|profile|background|story|setting|lore|world|notes?|rules?|examples?|dialogue|speech|personality|appearance|looks?|outfit|clothing|identity|occupation|age|gender|name)\b)/iu;
+export function sectionHeading(part) {
+    const text = part.trim();
+    const match = /^(?:[【\[（(「『]\s*([^【】\[\]（）()「」『』]{1,24})\s*[】\]）)」』]|#{1,6}\s+(\S[^#]{0,23})|[◆◇●■★☆▪•·]\s*(\S{1,24}))$/u.exec(text);
+    const heading = (match?.[1] || match?.[2] || match?.[3] || '').trim();
+    if (!heading || /[:：]/u.test(heading)) return null;
+    const neutralHeading = /^(?:他|她|我|你|本人|角色|外貌|容貌|长相|外表|外貌特征|基本信息|人物信息|性别|性別|年龄|名字|姓名|职业|性格|背景|简介|appearance|looks?|traits?|features|physical appearance|gender|sex|age|name|occupation|personality|background|description)$/iu;
+    // "[golden eyes]" is a weighted tag, not a heading; let it through as a clause.
+    if (appearanceTraitClause(heading)) return null;
+    if (neutralHeading.test(heading) || APPEARANCE_FIELD_LABEL.test(heading) || SECTION_LABEL_WORD.test(heading)) return { label: true, heading };
+    return { label: false, heading };
 }
 
 function containsAppearanceName(value, name) {
@@ -134,6 +153,7 @@ function containsAppearanceName(value, name) {
 // Follow explicit source ownership across a comma list or a named paragraph.
 // Ambiguous continuations of somebody else's description are not assigned to
 // the current person. This does not infer gender or edit handwritten fields.
+const OWN_RELATION = /^\s*(?:的|'s|’s)\s*(?:朋友|同事|同伴|邻居|父亲|母亲|父母|爸爸|妈妈|哥哥|姐姐|弟弟|妹妹|兄长|兄弟|姐妹|丈夫|妻子|男友|女友|恋人|爱人|师父|师傅|老师|学生|徒弟|上司|下属|手下|儿子|女儿|同学|室友|搭档|助手|仆人|管家|主人|青梅竹马|friend|colleague|partner|sister|brother|mother|father|parents?|wife|husband|girlfriend|boyfriend|son|daughter|student|teacher|master|servant|roommate)(?![a-z])/iu;
 export function appearanceSourceClauses(value, { name = '', otherNames = [], role = '' } = {}) {
     if (typeof value !== 'string') return [];
     const ownName = typeof name === 'string' ? name.trim() : '';
@@ -142,6 +162,13 @@ export function appearanceSourceClauses(value, { name = '', otherNames = [], rol
     let owner = 'self';
     for (const raw of value.split(/[\n。；;!?！？，,、]|\.(?=\s|$)/u)) {
         const part = raw.trim(); if (!part) continue;
+        const section = sectionHeading(part);
+        if (section) {
+            if (section.label) continue;
+            const roleWord = /^(?:\{\{\s*)?(char|user)(?:\s*\}\})?$/iu.exec(section.heading)?.[1]?.toLowerCase();
+            owner = (ownName && containsAppearanceName(section.heading, ownName)) || (role && roleWord === role) ? 'self' : 'other';
+            continue;
+        }
         const label = part.replace(/[*#`]/g, '').trim();
         const marker = /^(?:\{\{\s*(char|user)\s*\}\}|(char|user)\s*[:：])/iu.exec(label);
         const ownPrefix = ownName && label.startsWith(ownName) && containsAppearanceName(label, ownName);
@@ -150,7 +177,9 @@ export function appearanceSourceClauses(value, { name = '', otherNames = [], rol
         const markerRole = marker && (marker[1] || marker[2]).toLowerCase();
         const ownMarker = marker && role && markerRole === role;
         const otherMarker = marker && role && markerRole !== role;
-        if (namedOther || otherMarker || (relation || ownName && unfamiliarAppearanceSubject(label)) && !ownPrefix && !ownMarker) { owner = 'other'; continue; }
+        // "方祁洛的妹妹，女，栗色短发" opens with the own name but describes a relative.
+        const ownRelation = ownPrefix && OWN_RELATION.test(label.slice(ownName.length));
+        if (namedOther || otherMarker || ownRelation || (relation || ownName && unfamiliarAppearanceSubject(label)) && !ownPrefix && !ownMarker) { owner = 'other'; continue; }
         if (ownPrefix || ownMarker) {
             owner = 'self';
             const body = label.slice(ownMarker ? marker[0].length : ownName.length)
@@ -168,9 +197,24 @@ export function explicitAppearanceIdentityClause(value) {
     const clean = value.trim().replace(/[.。!！?？]+$/u, '').trim();
     return /^(?:(?:性别|性別|生理性别|gender|sex)\s*[:：]\s*)?(?:(?:(?:他|她|我|本人|角色)\s*是\s*)?(?:一[位名个])?(?:成年(?:的)?)?(?:男(?:性|生|人)?|女(?:性|生|人)?)|(?:(?:he|she|I|they)\s+(?:is|am|are)\s+)?(?:an?\s+)?(?:adult\s+)?(?:1?\s*(?:boy|girl)|man|woman|male|female|non[ -]?binary|androgynous))$/iu.test(clean);
 }
+const HABIT_ADVERB = /(?:平时|平常|通常|总是|常常|经常|往往|一般|\b(?:always|usually|often|typically|generally)\b\s*)/giu;
+const WEIGHTED_TAG = /^(?:\(([^()（）]+?)(?::\s*[-+]?(?:\d+(?:\.\d+)?|\.\d+))?\)|\{+([^{}]+)\}+|\[+([^\[\]]+)\]+|[-+]?(?:\d+(?:\.\d+)?|\.\d+)::(.+?)::)$/u;
 export function automaticAppearanceClause(value) {
     if (typeof value !== 'string') return '';
-    const clean = value.replace(/[*#`]+/g, '').replace(/^\s*[-•]\s*/u, '').trim();
+    let clean = value.replace(/[*#`]+/g, '').replace(/^\s*[-•]\s*/u, '').trim();
+    // A prompt weight around one tag is syntax, not a parenthetical remark.
+    // Classify the inner tag; the literal weighted clause is what is kept.
+    const weighted = WEIGHTED_TAG.exec(clean);
+    if (weighted) {
+        const inner = (weighted[1] || weighted[2] || weighted[3] || weighted[4] || '').trim();
+        return inner && !/[()（）[\]{}:：]/u.test(inner) && automaticAppearanceClause(inner) ? clean : '';
+    }
+    // "黑色长发平时束成高马尾" is a hairstyle; drop only the habit adverb when
+    // what remains is still a visible trait, otherwise the old rejection holds.
+    if (AUTO_APPEARANCE_DROP.test(clean)) {
+        const bare = clean.replace(HABIT_ADVERB, '').replace(/\s{2,}/g, ' ').trim();
+        if (bare !== clean && bare && !AUTO_APPEARANCE_DROP.test(bare) && appearanceTraitClause(bare)) clean = bare;
+    }
     const history = APPEARANCE_HISTORY.test(clean);
     const mark = history ? LASTING_MARK.exec(clean) : null;
     const lasting = mark && /(?:疤|瘢痕|伤痕|胎记|纹身)/u.test(clean.slice(mark.index));
