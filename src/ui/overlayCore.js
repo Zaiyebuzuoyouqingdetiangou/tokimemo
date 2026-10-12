@@ -1,5 +1,6 @@
 import * as handJournal from './handJournalView.js';
 import * as coupleAvatar from './coupleAvatarView.js';
+import * as stickers_view from './stickersView.js';
 import * as expanded_cg_view from './expandedCgView.js';
 import * as archive_inheritance_view from './archiveInheritance.js';
 import * as bedtime_view from './bedtimeView.js';
@@ -130,6 +131,7 @@ export function openOverlay() {
 
 export function navigateBack() {
     if (coupleAvatar.closeCoupleDialog()) return;
+    if (stickers_view.navigateStickersBack()) return;
     if (image_viewer.closeCgImageViewer()) return;
     if (runtimeState.activeMode === 'bedtime' && bedtime_view.closeBedtimeDetail()) return;
     if (runtimeState.activeMode === 'pastLives' && past_lives_view.closePastLivesDetail()) return;
@@ -282,6 +284,20 @@ export async function applyMemoryPatch(id, patch) {
     }
 }
 
+// Koori：不调用 API 的本地建档。按钮总在第一位，下方一行说明它和 API 整理的区别。
+function localArchiveActionHtml(memory, ready, settings) {
+    const busy = runtimeState.busy || core_requestCoordinator.hasGenerationTasks();
+    const local = ready && memory?.coverageMode === 'local-quick';
+    const button = ready
+        ? `<button type="button" class="rmt-btn" data-rmt-action="local-archive-append" ${busy ? 'disabled' : ''}>本地补上新楼层（不调用 API）</button>`
+        : `<button type="button" class="rmt-btn rmt-archive-update" data-rmt-action="local-archive" ${busy ? 'disabled' : ''}>本地快速建档（不调用 API）</button>`;
+    const note = local
+        ? '这是本地快速档案：按聊天原文分段收录，每 6 楼自动补一次。想要整理过的回忆和档案简介，可以再用 API 增量更新或完全重建。'
+        : ready ? '把上次之后的新楼层按原文分段补进档案，不调用 API。'
+            : '马上就能用：把聊天按原文分段收进档案，几秒完成，不调用 API，也不会失败在一半。之后随时可以再用 API 整理成更好的回忆。';
+    return `${button}<label class="rmt-external-memory-toggle" style="width:100%"><input type="checkbox" data-rmt-local-archive-auto ${settings.localArchiveAuto !== false ? 'checked' : ''}> 打开聊天就自动本地建档</label><small style="width:100%;opacity:.75">${core_text.esc(note)}</small>`;
+}
+
 export function showChooser({ section = null } = {}) {
     const priorTab = ui_workspaceState.workspace.tab;
     ui_workspaceState.leaveWorkspaceReader();
@@ -429,6 +445,7 @@ export function showChooser({ section = null } = {}) {
             ${ready ? memoryLockPanelHtml(memory) : ''}
           </div>
           <div class="rmt-current-archive-actions">
+            ${localArchiveActionHtml(memory, ready, settings)}
             <button type="button" class="rmt-btn" data-rmt-archive-read-drafts>读取已保存草稿（不生成）</button>
             <button type="button" class="rmt-btn" data-rmt-archive-import-draft>导入整理草稿</button>
             <button class="rmt-btn rmt-archive-update" type="button" data-rmt-action="import-memory" ${runtimeState.busy || core_requestCoordinator.hasGenerationTasks() || requirePreflight ? 'disabled' : ''}>${core_text.esc(requirePreflight ? '先扫描记忆 / 摘要' : (ready ? '增量更新当前窗口档案' : importLabel))}</button>
@@ -448,6 +465,7 @@ let heartOpenRequest = 0;
 
 export function openCachedOrGenerate(mode, options = {}) {
     if (mode === 'coupleAvatar') return coupleAvatar.openCoupleAvatar();
+    if (mode === 'stickers') return stickers_view.openStickers();
     if (mode === 'journal') return handJournal.openHandJournal();
     if (['mirrorCall','mirrorVoice'].includes(mode)) return workspace_ui.openVoiceModule(mode);
     if (extras_view.isExtraMode(mode)) return extras_view.openExtra(mode, options);
@@ -526,7 +544,7 @@ export function renderActive() {
         const scope = core_context.chatScopeKey(core_context.currentCharacterGuard());
         if (runtimeState.renderedChatScope && runtimeState.renderedChatScope !== scope) return;
     } catch { return; }
-    if (['mirrorCall', 'mirrorVoice', 'journal', 'coupleAvatar'].includes(runtimeState.activeMode)) return;
+    if (['mirrorCall', 'mirrorVoice', 'journal', 'coupleAvatar', 'stickers'].includes(runtimeState.activeMode)) return;
     if (extras_view.isExtraMode(runtimeState.activeMode)) return void extras_view.renderExtra();
     if (workspace_ui.renderEmptyWorkspace()) return;
     image_viewer.closeCgImageViewer({ restoreFocus: false });
@@ -622,6 +640,8 @@ export function handleOverlayClick(event) {
 }
 
 export async function handleOverlayChange(event) {
+    const localAuto = event.target.closest?.('[data-rmt-local-archive-auto]');
+    if (localAuto) { core_settings.updatePluginSettings({ localArchiveAuto: !!localAuto.checked }); return; }
     const dateInput = event.target.closest?.('[data-rmt-memory-date]');
     if (dateInput) return void applyMemoryPatch(dateInput.dataset.rmtMemoryDate, { date: dateInput.value });
     if (cg_format_ui.handleCgFormatChange(event)) return;

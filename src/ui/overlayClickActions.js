@@ -7,6 +7,7 @@ import * as core_text from '../core/text.js';
 import { state as runtimeState } from '../core/state.js';
 import * as archive_library from '../archive/library.js';
 import * as archive_repository from '../archive/repository.js';
+import * as local_archive from '../archive/localArchive.js';
 import * as ui_inboxView from './inboxView.js';
 import * as ui_travelView from './travelView.js';
 import * as ui_taskCenter from './taskCenter.js';
@@ -261,6 +262,18 @@ export function overlayArchiveActions(actionEl, action) {
     if (action === 'manage-recategorize-target') return void recategorizeManagedTarget(actionEl.dataset.rmtManageId, actionEl.dataset.rmtManageParent);
     if (action === 'manage-delete-target') return void deleteManagedTarget(actionEl.dataset.rmtManageType, actionEl.dataset.rmtManageId, actionEl.dataset.rmtManageParent);
     if (action === 'rebuild-archive-index') return void archive_library.rebuildArchiveIndexFromExisting();
+    if (action === 'local-archive' || action === 'local-archive-append') {
+        actionEl.disabled = true;
+        void local_archive.buildLocalArchive({ mode: action === 'local-archive' ? 'create' : 'append' }).then(result => {
+            const count = Number(result?.added) || 0;
+            globalThis.toastr?.success?.(result?.status === 'unchanged' ? '没有新的楼层需要补。' : `已收进 ${count} 段聊天，没有调用 API。`, '心迹回廊 · 本地建档');
+            showChooser();
+        }).catch(error => {
+            actionEl.disabled = false;
+            globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心迹回廊 · 本地建档');
+        });
+        return;
+    }
     if (action === 'import-memory') return requestCurrentArchiveImport();
     if (action === 'import-memory-rebase') {
         // 按钮上已写清后果，点击即同意；不再依赖可能被宿主拦截的确认框。

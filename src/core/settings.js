@@ -69,6 +69,8 @@ export function getPluginSettings(context = core_context.getContext()) {
         autoUpdates: core_autoUpdatePolicy.normalizeAutoUpdates(settings.autoUpdates),
         useCurrentChatExternalMemory: settings.useCurrentChatExternalMemory !== false,
         useActivatedWorldInfo: settings.useActivatedWorldInfo !== false,
+        // Koori: build a plain local archive (no API) as soon as a chat has one.
+        localArchiveAuto: settings.localArchiveAuto !== false,
         imageGenerationManualEnabled: false,
         imageGenerationProvider: settings.imageGenerationProvider === 'chatu8-image' ? 'chatu8-image' : 'baibai-image',
         imageGenerationFallback: settings.imageGenerationFallback === true,
