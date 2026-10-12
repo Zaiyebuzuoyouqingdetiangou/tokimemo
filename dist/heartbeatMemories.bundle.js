@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 358
-// Source SHA-256: f07cca707e1d20c619359d8fe5abd4aa7dcbd4658b756f7bf265dd2bc2a08c00
+// Source SHA-256: 0988c4e917c5bc728afbde16d69c7b504f6d95e775b95e3b4480a44ecc41caa9
 // Build: python3 tools/verification/build.py <source-root>
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -1179,7 +1179,7 @@ function __init_core_releaseNotes_js() {
 // MODULE: core/releaseNotes.js
 
 // GENERATED FROM README.md by tools/verification/build.py. Do not edit by hand.
-const RELEASE_README = "# 心迹回廊 1.0.56\n\n## 更新日志模块\n\n新增了更新日志板块，感谢@nancyindaeyo的更新。\n\n## 本次变动\n\n- 修复柏宝绘外貌标签带下划线时丢失发色、眼色等细节的问题；保留原标签权重，补齐眼罩、酒窝、鼻型、泪痣与明确性别描述的识别。\n- 修复“曾经受伤留下的疤痕”等固定特征被误删的问题，覆盖情侣头像、普通配图和手书的自动外貌读取。\n- 自动摘录按明确姓名、人物标签和称谓区分归属，避免将对方或其他人的外貌混入当前人物；手填外貌、旧草稿和历史图片保持原样。\n- 不增加自动文本请求或生成门槛。已有外貌栏若含旧杂句，可左右分别点“重新读取外貌”整理后再绘制；该操作沿用原有文本 API。\n- 情侣头像新增 69 种画风（含构图版式、氛围光影、3D 渲染分组）和 48 种互动（含贴贴亲昵、小小较劲、幻想冒险）；画风和互动都改为可搜索、按分类浏览的选择面板，也可以随机抽一个。\n- Q 版、动物化身会给每个人物单独带上比例标签，外貌写得很长也不容易画成成人比例；生成时可选择过滤掉身高、体型等写实描述，只作用于这一次，原外貌不变，也可以在选项里设为自动过滤或不过滤。\n- 情侣头像新增“构图”：默认每次随机换一种镜头，始终保持左右各一人、能裁成两张头像；会改动所选互动或“小心思”里动作的姿势自动跳过，也可以固定为正面并排或指定一种。\n- 情侣头像的画风在 NAI 中加权放在最前，3D 画风另加 3D 标签，减少被画师串盖过。\n- 情侣头像的历史与收藏可以删除头像：卡片下方的“删除”，或点“多选”勾选多对后一起删除，删除前会确认一次；已设为聊天头像的图片、已保存的 PNG 和生图插件图库里的原图不受影响。\n- 手书的剧情叙事、抒情意象、关系互动、高燃快切、节奏循环、悬念反转六种分镜类型，各自写明了画面特征和自查要求，示例也按类型重写，生成的分镜更贴近类型名字；表情卡拍和动态插画保持不变。\n- 手书新增五种分镜类型：文字PV（歌词大字卡为主角）、回忆走马灯（一闪而过的回忆，最后回到现在）、动画OP风（冷开场、人物亮相、全员同框、风景收尾）、第一视角（角色对着镜头，“你”只露手）、今昔对照（同一构图的从前与现在）。\n- 插件内的更新日志直接读取安装目录里的 README，修改 README 后不用重新打包也会同步。\n- 新增「互动 · 表情包」：给角色、你、你们俩各做表情包。写一句想法，模型列出表情清单（能联网的模型会先查这类表情包常见的情绪和动作，只学题材，不照抄别人的角色），每项都能改；单人一张竖图切成 6 个，双人一张横图切成 4 个，自动按白底切开并加白边，切不开时按格子切。切好后可以逐个改名、配字、单张重画或去掉，再保存。\n- 表情包首页一组只显示一个封面图标，点进去再看这一组的每个表情；可以改组名、换封面、换成自己的图、复制暗号、保存到本机。自己的图片可以导入到「其他」，两边都能发。\n- 图片存在你自己酒馆的图片文件夹里，不用图床；表情包数据跟着角色卡走，换设备打开同一个酒馆也在。\n- 表情包可以一键写进世界书：角色已有主世界书时只追加一条「心迹回廊 · 表情包」，没有就新建一本并绑定；条目只写表情名和一句意思，不放图片地址，可设发表情的频率（很少／偶尔／常常）和“一条消息最多一个”，改了表情会自动更新，撤掉这一条即恢复原样。\n- 聊天页多了一个可以拖动的小兔子悬浮按钮（和魔法棒菜单里心迹回廊的兔子是同一只，做过表情包后出现，松手会贴到左右边上并记住位置）。点开后分「我的 / 他的 / 双人 / 其他」，你也可以发他的表情；点一下把暗号放进输入框。聊天里的 `[表情:名字·表情名]` 会显示成对应的表情图，角色从世界书知道每个表情的意思，也知道你借用他的表情是在逗他。\n- 表情包出图和情侣头像一样有「Q 版外貌过滤」：外貌里有身高、体型、骨相这类写实描述时，可以只在这次出图里去掉，免得画回正常比例；可选每次询问、自动过滤或不过滤。一组表情实际用的外貌会跟着这一组保存，之后单张重画也保持一致。\n- 兔子镜 1.67.87 直接从心迹回廊读取表情包，和读取头像一样，不经过世界书；聊天、私信、朋友圈、评论区、弹幕这类小剧场会主动用上表情包，小剧场里照写的 `[表情:名字·表情名]` 也会换成图片。两个插件仍各自独立。\n- 情侣头像预览下方去掉了“删除这一对”，删除统一放在历史与收藏里。\n- 画风、互动、衣着、裁切、头像应用及其他已有修复保持。\n";
+const RELEASE_README = "# 心迹回廊 1.0.56\n\n## 更新日志模块\n\n新增了更新日志板块，感谢@nancyindaeyo的更新。\n\n## 本次变动\n\n- 修复柏宝绘外貌标签带下划线时丢失发色、眼色等细节的问题；保留原标签权重，补齐眼罩、酒窝、鼻型、泪痣与明确性别描述的识别。\n- 修复“曾经受伤留下的疤痕”等固定特征被误删的问题，覆盖情侣头像、普通配图和手书的自动外貌读取。\n- 自动摘录按明确姓名、人物标签和称谓区分归属，避免将对方或其他人的外貌混入当前人物；手填外貌、旧草稿和历史图片保持原样。\n- 不增加自动文本请求或生成门槛。已有外貌栏若含旧杂句，可左右分别点“重新读取外貌”整理后再绘制；该操作沿用原有文本 API。\n- 情侣头像新增 69 种画风（含构图版式、氛围光影、3D 渲染分组）和 48 种互动（含贴贴亲昵、小小较劲、幻想冒险）；画风和互动都改为可搜索、按分类浏览的选择面板，也可以随机抽一个。\n- Q 版、动物化身会给每个人物单独带上比例标签，外貌写得很长也不容易画成成人比例；生成时可选择过滤掉身高、体型等写实描述，只作用于这一次，原外貌不变，也可以在选项里设为自动过滤或不过滤。\n- 情侣头像新增“构图”：默认每次随机换一种镜头，始终保持左右各一人、能裁成两张头像；会改动所选互动或“小心思”里动作的姿势自动跳过，也可以固定为正面并排或指定一种。\n- 情侣头像的画风在 NAI 中加权放在最前，3D 画风另加 3D 标签，减少被画师串盖过。\n- 情侣头像的历史与收藏可以删除头像：卡片下方的“删除”，或点“多选”勾选多对后一起删除，删除前会确认一次；已设为聊天头像的图片、已保存的 PNG 和生图插件图库里的原图不受影响。\n- 手书的剧情叙事、抒情意象、关系互动、高燃快切、节奏循环、悬念反转六种分镜类型，各自写明了画面特征和自查要求，示例也按类型重写，生成的分镜更贴近类型名字；表情卡拍和动态插画保持不变。\n- 手书新增五种分镜类型：文字PV（歌词大字卡为主角）、回忆走马灯（一闪而过的回忆，最后回到现在）、动画OP风（冷开场、人物亮相、全员同框、风景收尾）、第一视角（角色对着镜头，“你”只露手）、今昔对照（同一构图的从前与现在）。\n- 插件内的更新日志直接读取安装目录里的 README，修改 README 后不用重新打包也会同步。\n- 新增「互动 · 表情包」：给角色、你、你们俩各做表情包。写一句想法，模型列出表情清单（能联网的模型会先查这类表情包常见的情绪和动作，只学题材，不照抄别人的角色），每项都能改；单人一张竖图切成 6 个，双人一张横图切成 4 个，自动按白底切开并加白边，切不开时按格子切。切好后可以逐个改名、配字、单张重画或去掉，再保存。\n- 表情包首页一组只显示一个封面图标，点进去再看这一组的每个表情；可以改组名、换封面、换成自己的图、复制暗号、保存到本机。自己的图片可以导入到「其他」，两边都能发。\n- 图片存在你自己酒馆的图片文件夹里，不用图床；表情包数据跟着角色卡走，换设备打开同一个酒馆也在。\n- 表情包可以一键写进世界书：角色已有主世界书时只追加一条「心迹回廊 · 表情包」，没有就新建一本并绑定。条目按酒馆自己新建条目的格式写，在世界书编辑器里能正常展开、修改；只写表情名和一句意思，不放图片地址，让角色看懂每个表情，也看懂你发来的表情。\n- 每条回复都会用表情，不靠掷骰子：正文里写到角色用手机等通讯设备发消息时，表情优先发在那些消息里；没有发消息的场景，就挑贴合此刻情绪的表情单独一行穿插在正文里，不堆在末尾。可选每条用 1 个、1～2 个或 2～3 个。\n- 这一条放在最新几条消息之前，只在正常回复、继续、重新生成和换一条时生效，不进其他插件的后台请求；改了表情会自动更新，撤掉这一条即恢复原样。旧版本写进去的「这次发表情」概率条目会在更新时自动删掉。\n- 聊天页多了一个可以拖动的小兔子悬浮按钮（和魔法棒菜单里心迹回廊的兔子是同一只，做过表情包后出现，松手会贴到左右边上并记住位置）。点开后分「我的 / 他的 / 双人 / 其他」，你也可以发他的表情；点一下把暗号放进输入框。聊天里的 `[表情:名字·表情名]` 会显示成对应的表情图，角色从世界书知道每个表情的意思，也知道你借用他的表情是在逗他。\n- 表情包出图和情侣头像一样有「Q 版外貌过滤」：外貌里有身高、体型、骨相这类写实描述时，可以只在这次出图里去掉，免得画回正常比例；可选每次询问、自动过滤或不过滤。一组表情实际用的外貌会跟着这一组保存，之后单张重画也保持一致。\n- 情侣头像预览下方去掉了“删除这一对”，删除统一放在历史与收藏里。\n- 画风、互动、衣着、裁切、头像应用及其他已有修复保持。\n";
 
 __m_core_releaseNotes_js.RELEASE_README = RELEASE_README;
 }
@@ -1194,8 +1194,9 @@ function __init_core_stickerStore_js() {
 // ordinary files the user saved in their own ST image folder.
 const STICKER_FIELD = 'hearttrace_stickers';
 const STICKER_OWNERS = Object.freeze(['char', 'user', 'pair', 'other']);
-const STICKER_FREQUENCIES = Object.freeze({ rare: '很少', sometimes: '偶尔', often: '常常' });
-const STICKER_EVENTS = Object.freeze({ ready: 'hearttrace:stickers-ready', changed: 'hearttrace:stickers-changed' });
+// How many stickers one reply weaves in. Keys kept from earlier builds.
+const STICKER_FREQUENCIES = Object.freeze({ rare: '1 个', sometimes: '1～2 个', often: '2～3 个' });
+const STICKER_EVENTS = Object.freeze({ changed: 'hearttrace:stickers-changed' });
 const LORE_COMMENT = '心迹回廊 · 表情包';
 // [表情:方祁洛·害羞]. Full-width colon and either middle dot are accepted.
 const STICKER_TOKEN = /\[表情[:：]\s*([^\]\n·・]{1,40}?)\s*[·・]\s*([^\]\n]{1,40}?)\s*\]/gu;
@@ -1310,16 +1311,6 @@ function allStickers(data, owner = '') {
     return data.packs.filter(pack => !owner || pack.owner === owner).flatMap(pack => pack.stickers.map(sticker => ({ ...sticker, owner: pack.owner, pack: pack.id })));
 }
 
-// The public, read-only shape other plugins (兔子镜) consume. No card data.
-function stickerSnapshot(context = rawContext()) {
-    const scope = stickerScope(context);
-    if (!scope) return null;
-    const data = readStickerData(context);
-    const stickers = allStickers(data).map(row => ({ key: `${ownerLabel(row.owner, context)}·${row.name}`, owner: row.owner, name: row.name, meaning: row.meaning, url: row.url }));
-    if (!stickers.length) return null;
-    return { version: 1, scope, revision: String(data.revision), owners: { char: ownerLabel('char', context), user: ownerLabel('user', context) }, stickers };
-}
-
 function emit(type) {
     try { globalThis.dispatchEvent?.(new CustomEvent(type)); } catch { /* No DOM events in tests. */ }
 }
@@ -1336,15 +1327,25 @@ async function writeStickerData(value, context = rawContext()) {
     return data;
 }
 
-const FREQUENCY_TEXT = { rare: '很少发表情，只在情绪特别强烈时偶尔发一个', sometimes: '偶尔才发表情，不是每条都发', often: '可以常常发表情，但不要每句都发' };
-// One lorebook entry: names and one-line meanings only, never image paths.
+// One constant entry in the character's lorebook: what each sticker means,
+// and how to weave them into the reply itself. Earlier builds also wrote a
+// probability "nudge" entry; its comment is kept so it can be cleaned up.
+const LORE_NUDGE_COMMENT = '心迹回廊 · 表情包 · 这次发表情';
+const COUNT_TEXT = { rare: '用 1 个', sometimes: '用 1～2 个', often: '用 2～3 个' };
+function stickerExample(data, context) {
+    const row = allStickers(data, 'char')[0] || allStickers(data, 'pair')[0] || allStickers(data, 'other')[0];
+    return row ? `[表情:${ownerLabel(row.owner, context)}·${row.name}]` : '';
+}
 function stickerLoreContent(data, context = rawContext()) {
     const charName = ownerLabel('char', context), userName = ownerLabel('user', context);
     const list = owner => allStickers(data, owner).map(row => row.meaning ? `${row.name}（${row.meaning}）` : row.name).join('、');
     const lines = [];
     const own = list('char'), pair = list('pair'), other = list('other'), user = list('user');
     if (!own && !pair && !other && !user) return '';
-    lines.push(`【表情包】${charName}想用表情表达情绪时，可以单独一行写 [表情:名字·表情名]，例如 [表情:${charName}·${allStickers(data, 'char')[0]?.name || allStickers(data, 'pair')[0]?.name || '开心'}]。${FREQUENCY_TEXT[data.settings.frequency]}${data.settings.maxOne ? '，一条消息最多一个' : ''}。只能用下面列出的表情，不编新的，不写图片地址。`);
+    if (own || pair || other) {
+        lines.push(`【表情包】每条回复都${COUNT_TEXT[data.settings.frequency] || COUNT_TEXT.sometimes}${charName}的表情，写成 [表情:名字·表情名]，例如 ${stickerExample(data, context)}。只能用下面列出的，名字和表情名照抄，不编新的，不写图片地址。`);
+        lines.push(`怎么用：正文里写到${charName}用手机或其他通讯设备发消息（聊天软件、短信、私信等）时，优先把表情发在这些消息里，跟在那条消息后面，或者单独作为一条消息。没有发消息的场景时，挑最贴合此刻情绪的表情，单独一行穿插在正文里对应的位置，像${charName}此刻的表情反应；不要全部堆在回复末尾，也不要解释为什么发表情。`);
+    } else lines.push(`【表情包】${charName}自己没有表情包，不发表情。`);
     if (own) lines.push(`${charName}的表情：${own}。${userName}也可能拿这些表情来发（同样写 [表情:${charName}·表情名]），那是借${charName}的样子逗${charName}或撒娇，照常接住。`);
     if (pair) lines.push(`双人表情（两人都能发，写 [表情:双人·表情名]）：${pair}。`);
     if (other) lines.push(`其他表情（两人都能发，写 [表情:其他·表情名]）：${other}。`);
@@ -1371,7 +1372,6 @@ __m_core_stickerStore_js.ownerLabel = ownerLabel;
 __m_core_stickerStore_js.stickerToken = stickerToken;
 __m_core_stickerStore_js.resolveSticker = resolveSticker;
 __m_core_stickerStore_js.allStickers = allStickers;
-__m_core_stickerStore_js.stickerSnapshot = stickerSnapshot;
 __m_core_stickerStore_js.stickerLoreContent = stickerLoreContent;
 __m_core_stickerStore_js.loreHash = loreHash;
 __m_core_stickerStore_js.STICKER_FIELD = STICKER_FIELD;
@@ -1381,6 +1381,7 @@ __m_core_stickerStore_js.STICKER_EVENTS = STICKER_EVENTS;
 __m_core_stickerStore_js.LORE_COMMENT = LORE_COMMENT;
 __m_core_stickerStore_js.STICKER_TOKEN = STICKER_TOKEN;
 __m_core_stickerStore_js.cleanLine = cleanLine;
+__m_core_stickerStore_js.LORE_NUDGE_COMMENT = LORE_NUDGE_COMMENT;
 }
 
 function __init_extras_coupleAvatar_js() {
@@ -5974,15 +5975,39 @@ function loreState(data, context = raw()) {
     return { book, written, content, stale: written && data.lore.hash !== store.loreHash(content), empty: !content };
 }
 
-function entryTemplate(uid, content) {
-    return { uid, key: [], keysecondary: [], comment: store.LORE_COMMENT, content, constant: true, vectorized: false,
-        selective: true, selectiveLogic: 0, addMemo: true, order: 100, position: 1, disable: false, excludeRecursion: true,
-        preventRecursion: true, delayUntilRecursion: false, probability: 100, useProbability: true, depth: 4, group: '',
-        groupOverride: false, groupWeight: 100, scanDepth: null, caseSensitive: null, matchWholeWords: null, useGroupScoring: null,
-        automationId: '', role: null, sticky: 0, cooldown: 0, delay: 0, displayIndex: uid };
+// Field-for-field the same as SillyTavern's own new entry (world-info.js
+// newWorldInfoEntryTemplate), so the editor shows and saves it like any other.
+const ST_ENTRY_TEMPLATE = Object.freeze({ key: [], keysecondary: [], comment: '', content: '', constant: false, vectorized: false,
+    selective: true, selectiveLogic: 0, addMemo: false, order: 100, position: 0, disable: false, ignoreBudget: false,
+    excludeRecursion: false, preventRecursion: false, matchPersonaDescription: false, matchCharacterDescription: false,
+    matchCharacterPersonality: false, matchCharacterDepthPrompt: false, matchScenario: false, matchCreatorNotes: false,
+    delayUntilRecursion: 0, probability: 100, useProbability: true, depth: 4, outletName: '', group: '', groupOverride: false,
+    groupWeight: 100, scanDepth: null, caseSensitive: null, matchWholeWords: null, useGroupScoring: null, automationId: '',
+    role: 0, sticky: null, cooldown: null, delay: null, triggers: [] });
+// Only real replies, never quiet/impersonate or other plugins' background requests.
+const REPLY_TRIGGERS = Object.freeze(['normal', 'continue', 'swipe', 'regenerate']);
+let hostTemplate = null;
+async function entryTemplate() {
+    if (hostTemplate) return hostTemplate;
+    try {
+        const module = await import('/scripts/world-info.js');
+        if (module?.newWorldInfoEntryTemplate && typeof module.newWorldInfoEntryTemplate === 'object') hostTemplate = { ...ST_ENTRY_TEMPLATE, ...structuredClone(module.newWorldInfoEntryTemplate) };
+    } catch { /* Older or non-browser hosts: the copy above. */ }
+    return hostTemplate || ST_ENTRY_TEMPLATE;
 }
-function findEntry(book) {
-    return Object.entries(book?.entries || {}).find(([, entry]) => entry?.comment === store.LORE_COMMENT) || null;
+function freeUid(entries) {
+    for (let uid = 0; uid < 1000000; uid++) if (!(uid in entries)) return uid;
+    return Date.now();
+}
+// One constant entry, placed a little before the latest messages so the
+// "weave stickers into this reply" rule is still fresh when the model writes.
+const LORE_PLACEMENT = Object.freeze({ position: 4, depth: 2, role: 0 });
+function loreEntry(data, context) {
+    return { comment: store.LORE_COMMENT, content: store.stickerLoreContent(data, context),
+        fresh: { constant: true, ...LORE_PLACEMENT, order: 100, addMemo: true, excludeRecursion: true, preventRecursion: true, triggers: [...REPLY_TRIGGERS] } };
+}
+function findEntry(book, comment) {
+    return Object.entries(book?.entries || {}).find(([, entry]) => entry?.comment === comment) || null;
 }
 async function saveBook(context, name, book) {
     await context.saveWorldInfo(name, book, true);
@@ -5996,12 +6021,13 @@ async function writeStickerLore(context = raw()) {
     if (typeof context?.loadWorldInfo !== 'function' || typeof context?.saveWorldInfo !== 'function') {
         throw core_text.safeUserError('这个酒馆版本不能从插件写世界书，请更新酒馆后再试。', 'RMT_STICKER_LORE_HOST');
     }
-    const data = store.readStickerData(context), content = store.stickerLoreContent(data, context);
-    if (!content) throw core_text.safeUserError('还没有表情，先做一组再写进世界书。', 'RMT_STICKER_LORE_EMPTY');
+    const data = store.readStickerData(context);
+    if (!store.stickerLoreContent(data, context)) throw core_text.safeUserError('还没有表情，先做一组再写进世界书。', 'RMT_STICKER_LORE_EMPTY');
     let name = primaryBook(context), created = false;
     if (!name) {
         name = `${store.ownerLabel('char', context)}的表情包`.replace(/[\\/:*?"<>|]/gu, '');
-        await context.saveWorldInfo(name, (await context.loadWorldInfo(name).catch(() => null)) || { entries: {} }, true);
+        const existing = await Promise.resolve(context.loadWorldInfo(name)).catch(() => null);
+        await context.saveWorldInfo(name, existing?.entries ? existing : { entries: {} }, true);
         await context.writeExtensionField(context.characterId, 'world', name);
         const card = context.characters[context.characterId];
         card.data = card.data || {}; card.data.extensions = card.data.extensions || {}; card.data.extensions.world = name;
@@ -6009,14 +6035,25 @@ async function writeStickerLore(context = raw()) {
     }
     const book = await context.loadWorldInfo(name) || { entries: {} };
     book.entries = book.entries && typeof book.entries === 'object' ? book.entries : {};
-    const found = findEntry(book);
-    if (found) book.entries[found[0]] = { ...found[1], content };
-    else {
-        const uid = Object.keys(book.entries).reduce((max, key) => Math.max(max, Number(book.entries[key]?.uid ?? key) || 0), -1) + 1;
-        book.entries[uid] = entryTemplate(uid, content);
+    const template = await entryTemplate();
+    const spec = loreEntry(data, context), found = findEntry(book, spec.comment);
+    if (found) {
+        // Fill fields an older 心迹回廊 left out; keep the user's own edits.
+        const current = { ...structuredClone(template), ...found[1] };
+        if (!Array.isArray(found[1].triggers)) current.triggers = [...REPLY_TRIGGERS];
+        // Still where an earlier 心迹回廊 put it (after the character card): move it near the latest messages.
+        if (found[1].position === 1 && (found[1].depth ?? 4) === 4) Object.assign(current, LORE_PLACEMENT);
+        if (current.useProbability && current.probability !== 100 && found[1].comment === store.LORE_COMMENT) current.probability = 100;
+        book.entries[found[0]] = { ...current, content: spec.content };
+    } else {
+        const uid = freeUid(book.entries);
+        book.entries[uid] = { uid, ...structuredClone(template), ...spec.fresh, comment: spec.comment, content: spec.content, displayIndex: uid };
     }
+    // The per-reply dice entry from an earlier build is no longer used.
+    const nudge = findEntry(book, store.LORE_NUDGE_COMMENT);
+    if (nudge) delete book.entries[nudge[0]];
     await saveBook(context, name, book);
-    await store.writeStickerData({ ...data, lore: { book: name, hash: store.loreHash(content) } }, context);
+    await store.writeStickerData({ ...data, lore: { book: name, hash: store.loreHash(store.stickerLoreContent(data, context)) } }, context);
     return { book: name, created };
 }
 
@@ -6024,14 +6061,18 @@ async function removeStickerLore(context = raw()) {
     const data = store.readStickerData(context), name = data.lore.book;
     if (name && typeof context?.loadWorldInfo === 'function') {
         const book = await context.loadWorldInfo(name);
-        const found = findEntry(book);
-        if (found) { delete book.entries[found[0]]; await saveBook(context, name, book); }
+        let changed = false;
+        for (const comment of [store.LORE_COMMENT, store.LORE_NUDGE_COMMENT]) {
+            const found = findEntry(book, comment);
+            if (found) { delete book.entries[found[0]]; changed = true; }
+        }
+        if (changed) await saveBook(context, name, book);
     }
     await store.writeStickerData({ ...data, lore: { book: '', hash: '' } }, context);
     return name;
 }
 
-// After any edit: keep an already written entry current; never create one.
+// After any edit: keep already written entries current; never create them.
 async function refreshStickerLore(context = raw()) {
     const data = store.readStickerData(context), state = loreState(data, context);
     if (!state.written || !state.stale) return false;
@@ -6043,11 +6084,6 @@ async function saveStickerData(data, context = raw()) {
     const saved = await store.writeStickerData(data, context);
     try { await refreshStickerLore(context); } catch (error) { console.warn('[HeartbeatMemories] sticker lorebook refresh failed', error?.message); }
     return store.readStickerData(context) || saved;
-}
-
-function rabbitMirrorPresent() {
-    try { return !!(globalThis.document?.getElementById('rabbit_mirror_theater_settings') || globalThis.RabbitMirror || globalThis.rabbitMirror); }
-    catch { return false; }
 }
 
 __m_extras_stickers_js.stickerPeople = stickerPeople;
@@ -6072,7 +6108,6 @@ __m_extras_stickers_js.chunkItems = chunkItems;
 __m_extras_stickers_js.imageDataToBlob = imageDataToBlob;
 __m_extras_stickers_js.importName = importName;
 __m_extras_stickers_js.loreState = loreState;
-__m_extras_stickers_js.rabbitMirrorPresent = rabbitMirrorPresent;
 __m_extras_stickers_js.STICKER_MODE = STICKER_MODE;
 __m_extras_stickers_js.STICKER_SIZE = STICKER_SIZE;
 __m_extras_stickers_js.STICKER_STYLES = STICKER_STYLES;
@@ -9181,7 +9216,7 @@ function askText(view, title, value, placeholder) {
 // ---------- 页面 ----------
 function loreSummary(current) {
     const state = stickers.loreState(current, hostContext());
-    if (state.written) return `已写入「${state.book}」· ${store.STICKER_FREQUENCIES[current.settings.frequency]}`;
+    if (state.written) return `已写入「${state.book}」· 每条 ${store.STICKER_FREQUENCIES[current.settings.frequency]}`;
     return state.book ? `未写入 · 主世界书「${state.book}」` : '未写入';
 }
 function draftBanner(view) {
@@ -9264,12 +9299,12 @@ function loreHtml(view) {
     const where = state.written ? `已在主世界书「${state.book}」里写了一条「${store.LORE_COMMENT}」。撤掉这一条就完全恢复原样。`
         : state.book ? `${label('char')}已有主世界书「${state.book}」，会在里面追加一条「${store.LORE_COMMENT}」，不动其他条目。`
             : `${label('char')}还没有主世界书，会新建「${label('char')}的表情包」并绑定为主世界书。`;
-    const toto = stickers.rabbitMirrorPresent();
-    return `<main class="rmt-stk">${head('世界书与兔子镜')}`
+    const char = esc(label('char'));
+    return `<main class="rmt-stk">${head('世界书')}`
         + `<section class="rmt-stk-card"><h3>写在哪里</h3><p class="rmt-stk-muted">${esc(where)}</p><div class="rmt-stk-two"><button type="button" class="rmt-stk-primary" data-stk-action="lore-write"${state.empty ? ' disabled' : ''}>${state.written ? '更新世界书' : '写进世界书'}</button><button type="button" class="rmt-stk-danger" data-stk-action="lore-remove"${state.written ? '' : ' disabled'}>撤掉这一条</button></div></section>`
-        + `<section class="rmt-stk-card"><h3>${esc(label('char'))}发表情的频率</h3><div class="rmt-stk-seg is-3">${Object.entries(store.STICKER_FREQUENCIES).map(([key, name]) => `<button type="button" data-stk-frequency="${key}" aria-pressed="${current.settings.frequency === key}">${name}</button>`).join('')}</div><label class="rmt-stk-check"><span>一条消息最多一个</span><input type="checkbox" data-stk-maxone${current.settings.maxOne ? ' checked' : ''}></label></section>`
-        + `<section class="rmt-stk-field">条目预览<pre class="rmt-stk-pre">${esc(state.content || '还没有表情。')}</pre><small>只写名字和一句意思，不放图片地址${state.content ? `，约 ${state.content.length} 字` : ''}。改了表情会自动更新已写入的条目。</small></section>`
-        + `<div class="rmt-stk-row" style="display:flex;border:1px solid var(--rmt-theme-border);border-radius:999px;align-items:center;gap:10px"><span>兔子镜</span><span>${toto ? '已安装 · 小剧场里能用这些表情' : '没检测到 · 不影响这里使用'}</span></div></main>`;
+        + `<section class="rmt-stk-card"><h3>每条回复用几个表情</h3><div class="rmt-stk-seg is-3">${Object.entries(store.STICKER_FREQUENCIES).map(([key, name]) => `<button type="button" data-stk-frequency="${key}" aria-pressed="${current.settings.frequency === key}">${name}</button>`).join('')}</div>`
+        + `<p class="rmt-stk-muted">不掷骰子，每条回复都会用。正文里写到${char}用手机等通讯设备发消息时，表情优先发在那些消息里；没有发消息的场景，就挑贴合此刻情绪的表情，单独一行穿插在正文里，不堆在末尾。</p></section>`
+        + `<section class="rmt-stk-field">条目预览<pre class="rmt-stk-pre">${esc(state.content || '还没有表情。')}</pre><small>只写名字和一句意思，不放图片地址${state.content ? `，约 ${state.content.length} 字` : ''}；放在最新几条消息之前，只在正常回复、继续、重新生成和换一条时生效，不进其他插件的后台请求。改了表情会自动更新已写入的条目。</small></section></main>`;
 }
 
 function paint(view) {
@@ -9631,11 +9666,7 @@ function bindView(view) {
             const current = data(), value = event.target.value;
             const settings = { ...current.settings }; if (value) settings.chibiFilter = value; else delete settings.chibiFilter;
             void stickers.saveStickerData({ ...current, settings }, hostContext()).catch(error => failure(view, error));
-            return;
         }
-        if (!event.target.matches('[data-stk-maxone]')) return;
-        const current = data();
-        void stickers.saveStickerData({ ...current, settings: { ...current.settings, maxOne: event.target.checked } }, hostContext()).then(() => paint(view)).catch(error => failure(view, error));
     });
 }
 

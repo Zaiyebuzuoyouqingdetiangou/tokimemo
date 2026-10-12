@@ -1,9 +1,9 @@
 import * as store from './core/stickerStore.js';
 
-// Loaded by the small bootstrap together with the chat avatars. Three jobs:
-// the public read-only bridge, turning [表情:名字·表情名] into pictures in the
-// native chat, and the sticker button beside ST's input box.
-const SERVICE = Symbol.for('Hearttrace.stickers.v1');
+// Loaded by the small bootstrap together with the chat avatars. Two jobs:
+// turning [表情:名字·表情名] into pictures in the native chat, and the
+// floating sticker button that drops a token into ST's input box.
+// Other plugins' own rendered blocks are left untouched.
 const SKIP = 'code, pre, script, style, textarea, toto, iframe, svg, .hearttrace-sticker, details[data-rabbit-mirror-external-details]';
 const TABS = [['user', '我的'], ['char', '他的'], ['pair', '双人'], ['other', '其他']];
 const POSITION_KEY = 'hearttrace:sticker-float:v1';
@@ -11,44 +11,6 @@ const POSITION_KEY = 'hearttrace:sticker-float:v1';
 const RABBIT = '<svg viewBox="0 0 32 32" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M10 16C4 2 11 1 14 14M18 14C20 1 27 2 23 16M9 16c-7 11 3 15 9 14s13-8 5-14c-4-3-10-3-14 0Z"/><path d="M12 22h1m6 0h1m-6 4 2 1 2-1"/></svg>';
 
 function context() { try { return globalThis.SillyTavern?.getContext?.() || null; } catch { return null; } }
-function service() {
-    if (!globalThis[SERVICE]) globalThis[SERVICE] = { subscribers: new Set(), api: null, installations: 0 };
-    return globalThis[SERVICE];
-}
-function notify() {
-    for (const listener of [...service().subscribers]) { try { listener(); } catch { /* One consumer cannot stop another. */ } }
-}
-
-export function installStickerBridge() {
-    const state = service();
-    if (!state.api) state.api = Object.freeze({ apiVersion: 1,
-        getCurrent() { return store.stickerSnapshot(context()); },
-        refresh() { return Promise.resolve(store.stickerSnapshot(context())); },
-        resolve(token) {
-            const match = new RegExp(store.STICKER_TOKEN.source, 'u').exec(String(token || ''));
-            const row = match ? store.resolveSticker(match[1], match[2], context()) : null;
-            return row ? { key: `${store.ownerLabel(row.owner, context())}·${row.name}`, name: row.name, owner: row.owner, url: row.url, meaning: row.meaning } : null;
-        },
-        subscribe(listener) {
-            if (typeof listener !== 'function') return () => {};
-            state.subscribers.add(listener);
-            return () => { state.subscribers.delete(listener); };
-        } });
-    if (globalThis.HearttraceStickers && globalThis.HearttraceStickers !== state.api) return () => {};
-    const first = state.installations === 0;
-    globalThis.HearttraceStickers = state.api; state.installations++;
-    if (first) { try { globalThis.dispatchEvent?.(new CustomEvent(store.STICKER_EVENTS.ready)); } catch {} }
-    let disposed = false;
-    return () => {
-        if (disposed) return;
-        disposed = true; state.installations = Math.max(0, state.installations - 1);
-        if (state.installations === 0 && globalThis.HearttraceStickers === state.api) {
-            delete globalThis.HearttraceStickers; state.subscribers.clear();
-            try { globalThis.dispatchEvent?.(new CustomEvent(store.STICKER_EVENTS.changed)); } catch {}
-        }
-    };
-}
-
 const CSS = `
 .hearttrace-sticker{display:inline-block;vertical-align:bottom;line-height:0;margin:2px 0}
 .hearttrace-sticker img{width:var(--hearttrace-sticker-size,120px)!important;height:var(--hearttrace-sticker-size,120px)!important;max-width:40vw!important;object-fit:contain!important;border-radius:10px;margin:0!important;cursor:default}
@@ -130,7 +92,6 @@ export function insertAtCursor(textarea, value, caret = null) {
 
 export function startStickerRuntime({ document: doc = globalThis.document } = {}) {
     if (!doc) return () => {};
-    const removeBridge = installStickerBridge();
     let stopped = false, queued = false, observer = null, chatRoot = null, source = null, types = [], timer = 0, retries = 0;
     let tab = 'user', button = null, panel = null, caret = null;
     const remember = event => {
@@ -318,7 +279,7 @@ export function startStickerRuntime({ document: doc = globalThis.document } = {}
     };
     doc.addEventListener('pointerdown', outside, true);
 
-    const changed = () => { notify(); queue(); };
+    const changed = () => queue();
     globalThis.addEventListener?.(store.STICKER_EVENTS.changed, changed);
     function hostEvent() {
         try { globalThis.dispatchEvent?.(new CustomEvent(store.STICKER_EVENTS.changed)); } catch { changed(); }
@@ -351,6 +312,5 @@ export function startStickerRuntime({ document: doc = globalThis.document } = {}
         button?.remove(); panel?.remove(); style.remove();
         // Leave the original tokens visible once the plugin is off.
         for (const span of [...doc.querySelectorAll('.hearttrace-sticker[data-hearttrace-token]')]) span.replaceWith(doc.createTextNode(span.getAttribute('data-hearttrace-token') || ''));
-        removeBridge();
     };
 }

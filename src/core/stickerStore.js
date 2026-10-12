@@ -5,8 +5,9 @@
 // ordinary files the user saved in their own ST image folder.
 export const STICKER_FIELD = 'hearttrace_stickers';
 export const STICKER_OWNERS = Object.freeze(['char', 'user', 'pair', 'other']);
-export const STICKER_FREQUENCIES = Object.freeze({ rare: '很少', sometimes: '偶尔', often: '常常' });
-export const STICKER_EVENTS = Object.freeze({ ready: 'hearttrace:stickers-ready', changed: 'hearttrace:stickers-changed' });
+// How many stickers one reply weaves in. Keys kept from earlier builds.
+export const STICKER_FREQUENCIES = Object.freeze({ rare: '1 个', sometimes: '1～2 个', often: '2～3 个' });
+export const STICKER_EVENTS = Object.freeze({ changed: 'hearttrace:stickers-changed' });
 export const LORE_COMMENT = '心迹回廊 · 表情包';
 // [表情:方祁洛·害羞]. Full-width colon and either middle dot are accepted.
 export const STICKER_TOKEN = /\[表情[:：]\s*([^\]\n·・]{1,40}?)\s*[·・]\s*([^\]\n]{1,40}?)\s*\]/gu;
@@ -121,16 +122,6 @@ export function allStickers(data, owner = '') {
     return data.packs.filter(pack => !owner || pack.owner === owner).flatMap(pack => pack.stickers.map(sticker => ({ ...sticker, owner: pack.owner, pack: pack.id })));
 }
 
-// The public, read-only shape other plugins (兔子镜) consume. No card data.
-export function stickerSnapshot(context = rawContext()) {
-    const scope = stickerScope(context);
-    if (!scope) return null;
-    const data = readStickerData(context);
-    const stickers = allStickers(data).map(row => ({ key: `${ownerLabel(row.owner, context)}·${row.name}`, owner: row.owner, name: row.name, meaning: row.meaning, url: row.url }));
-    if (!stickers.length) return null;
-    return { version: 1, scope, revision: String(data.revision), owners: { char: ownerLabel('char', context), user: ownerLabel('user', context) }, stickers };
-}
-
 function emit(type) {
     try { globalThis.dispatchEvent?.(new CustomEvent(type)); } catch { /* No DOM events in tests. */ }
 }
@@ -147,15 +138,25 @@ export async function writeStickerData(value, context = rawContext()) {
     return data;
 }
 
-const FREQUENCY_TEXT = { rare: '很少发表情，只在情绪特别强烈时偶尔发一个', sometimes: '偶尔才发表情，不是每条都发', often: '可以常常发表情，但不要每句都发' };
-// One lorebook entry: names and one-line meanings only, never image paths.
+// One constant entry in the character's lorebook: what each sticker means,
+// and how to weave them into the reply itself. Earlier builds also wrote a
+// probability "nudge" entry; its comment is kept so it can be cleaned up.
+export const LORE_NUDGE_COMMENT = '心迹回廊 · 表情包 · 这次发表情';
+const COUNT_TEXT = { rare: '用 1 个', sometimes: '用 1～2 个', often: '用 2～3 个' };
+function stickerExample(data, context) {
+    const row = allStickers(data, 'char')[0] || allStickers(data, 'pair')[0] || allStickers(data, 'other')[0];
+    return row ? `[表情:${ownerLabel(row.owner, context)}·${row.name}]` : '';
+}
 export function stickerLoreContent(data, context = rawContext()) {
     const charName = ownerLabel('char', context), userName = ownerLabel('user', context);
     const list = owner => allStickers(data, owner).map(row => row.meaning ? `${row.name}（${row.meaning}）` : row.name).join('、');
     const lines = [];
     const own = list('char'), pair = list('pair'), other = list('other'), user = list('user');
     if (!own && !pair && !other && !user) return '';
-    lines.push(`【表情包】${charName}想用表情表达情绪时，可以单独一行写 [表情:名字·表情名]，例如 [表情:${charName}·${allStickers(data, 'char')[0]?.name || allStickers(data, 'pair')[0]?.name || '开心'}]。${FREQUENCY_TEXT[data.settings.frequency]}${data.settings.maxOne ? '，一条消息最多一个' : ''}。只能用下面列出的表情，不编新的，不写图片地址。`);
+    if (own || pair || other) {
+        lines.push(`【表情包】每条回复都${COUNT_TEXT[data.settings.frequency] || COUNT_TEXT.sometimes}${charName}的表情，写成 [表情:名字·表情名]，例如 ${stickerExample(data, context)}。只能用下面列出的，名字和表情名照抄，不编新的，不写图片地址。`);
+        lines.push(`怎么用：正文里写到${charName}用手机或其他通讯设备发消息（聊天软件、短信、私信等）时，优先把表情发在这些消息里，跟在那条消息后面，或者单独作为一条消息。没有发消息的场景时，挑最贴合此刻情绪的表情，单独一行穿插在正文里对应的位置，像${charName}此刻的表情反应；不要全部堆在回复末尾，也不要解释为什么发表情。`);
+    } else lines.push(`【表情包】${charName}自己没有表情包，不发表情。`);
     if (own) lines.push(`${charName}的表情：${own}。${userName}也可能拿这些表情来发（同样写 [表情:${charName}·表情名]），那是借${charName}的样子逗${charName}或撒娇，照常接住。`);
     if (pair) lines.push(`双人表情（两人都能发，写 [表情:双人·表情名]）：${pair}。`);
     if (other) lines.push(`其他表情（两人都能发，写 [表情:其他·表情名]）：${other}。`);

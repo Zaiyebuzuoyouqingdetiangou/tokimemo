@@ -274,15 +274,39 @@ export function loreState(data, context = raw()) {
     return { book, written, content, stale: written && data.lore.hash !== store.loreHash(content), empty: !content };
 }
 
-function entryTemplate(uid, content) {
-    return { uid, key: [], keysecondary: [], comment: store.LORE_COMMENT, content, constant: true, vectorized: false,
-        selective: true, selectiveLogic: 0, addMemo: true, order: 100, position: 1, disable: false, excludeRecursion: true,
-        preventRecursion: true, delayUntilRecursion: false, probability: 100, useProbability: true, depth: 4, group: '',
-        groupOverride: false, groupWeight: 100, scanDepth: null, caseSensitive: null, matchWholeWords: null, useGroupScoring: null,
-        automationId: '', role: null, sticky: 0, cooldown: 0, delay: 0, displayIndex: uid };
+// Field-for-field the same as SillyTavern's own new entry (world-info.js
+// newWorldInfoEntryTemplate), so the editor shows and saves it like any other.
+const ST_ENTRY_TEMPLATE = Object.freeze({ key: [], keysecondary: [], comment: '', content: '', constant: false, vectorized: false,
+    selective: true, selectiveLogic: 0, addMemo: false, order: 100, position: 0, disable: false, ignoreBudget: false,
+    excludeRecursion: false, preventRecursion: false, matchPersonaDescription: false, matchCharacterDescription: false,
+    matchCharacterPersonality: false, matchCharacterDepthPrompt: false, matchScenario: false, matchCreatorNotes: false,
+    delayUntilRecursion: 0, probability: 100, useProbability: true, depth: 4, outletName: '', group: '', groupOverride: false,
+    groupWeight: 100, scanDepth: null, caseSensitive: null, matchWholeWords: null, useGroupScoring: null, automationId: '',
+    role: 0, sticky: null, cooldown: null, delay: null, triggers: [] });
+// Only real replies, never quiet/impersonate or other plugins' background requests.
+const REPLY_TRIGGERS = Object.freeze(['normal', 'continue', 'swipe', 'regenerate']);
+let hostTemplate = null;
+async function entryTemplate() {
+    if (hostTemplate) return hostTemplate;
+    try {
+        const module = await import('/scripts/world-info.js');
+        if (module?.newWorldInfoEntryTemplate && typeof module.newWorldInfoEntryTemplate === 'object') hostTemplate = { ...ST_ENTRY_TEMPLATE, ...structuredClone(module.newWorldInfoEntryTemplate) };
+    } catch { /* Older or non-browser hosts: the copy above. */ }
+    return hostTemplate || ST_ENTRY_TEMPLATE;
 }
-function findEntry(book) {
-    return Object.entries(book?.entries || {}).find(([, entry]) => entry?.comment === store.LORE_COMMENT) || null;
+function freeUid(entries) {
+    for (let uid = 0; uid < 1000000; uid++) if (!(uid in entries)) return uid;
+    return Date.now();
+}
+// One constant entry, placed a little before the latest messages so the
+// "weave stickers into this reply" rule is still fresh when the model writes.
+const LORE_PLACEMENT = Object.freeze({ position: 4, depth: 2, role: 0 });
+function loreEntry(data, context) {
+    return { comment: store.LORE_COMMENT, content: store.stickerLoreContent(data, context),
+        fresh: { constant: true, ...LORE_PLACEMENT, order: 100, addMemo: true, excludeRecursion: true, preventRecursion: true, triggers: [...REPLY_TRIGGERS] } };
+}
+function findEntry(book, comment) {
+    return Object.entries(book?.entries || {}).find(([, entry]) => entry?.comment === comment) || null;
 }
 async function saveBook(context, name, book) {
     await context.saveWorldInfo(name, book, true);
@@ -296,12 +320,13 @@ export async function writeStickerLore(context = raw()) {
     if (typeof context?.loadWorldInfo !== 'function' || typeof context?.saveWorldInfo !== 'function') {
         throw core_text.safeUserError('这个酒馆版本不能从插件写世界书，请更新酒馆后再试。', 'RMT_STICKER_LORE_HOST');
     }
-    const data = store.readStickerData(context), content = store.stickerLoreContent(data, context);
-    if (!content) throw core_text.safeUserError('还没有表情，先做一组再写进世界书。', 'RMT_STICKER_LORE_EMPTY');
+    const data = store.readStickerData(context);
+    if (!store.stickerLoreContent(data, context)) throw core_text.safeUserError('还没有表情，先做一组再写进世界书。', 'RMT_STICKER_LORE_EMPTY');
     let name = primaryBook(context), created = false;
     if (!name) {
         name = `${store.ownerLabel('char', context)}的表情包`.replace(/[\\/:*?"<>|]/gu, '');
-        await context.saveWorldInfo(name, (await context.loadWorldInfo(name).catch(() => null)) || { entries: {} }, true);
+        const existing = await Promise.resolve(context.loadWorldInfo(name)).catch(() => null);
+        await context.saveWorldInfo(name, existing?.entries ? existing : { entries: {} }, true);
         await context.writeExtensionField(context.characterId, 'world', name);
         const card = context.characters[context.characterId];
         card.data = card.data || {}; card.data.extensions = card.data.extensions || {}; card.data.extensions.world = name;
@@ -309,14 +334,25 @@ export async function writeStickerLore(context = raw()) {
     }
     const book = await context.loadWorldInfo(name) || { entries: {} };
     book.entries = book.entries && typeof book.entries === 'object' ? book.entries : {};
-    const found = findEntry(book);
-    if (found) book.entries[found[0]] = { ...found[1], content };
-    else {
-        const uid = Object.keys(book.entries).reduce((max, key) => Math.max(max, Number(book.entries[key]?.uid ?? key) || 0), -1) + 1;
-        book.entries[uid] = entryTemplate(uid, content);
+    const template = await entryTemplate();
+    const spec = loreEntry(data, context), found = findEntry(book, spec.comment);
+    if (found) {
+        // Fill fields an older 心迹回廊 left out; keep the user's own edits.
+        const current = { ...structuredClone(template), ...found[1] };
+        if (!Array.isArray(found[1].triggers)) current.triggers = [...REPLY_TRIGGERS];
+        // Still where an earlier 心迹回廊 put it (after the character card): move it near the latest messages.
+        if (found[1].position === 1 && (found[1].depth ?? 4) === 4) Object.assign(current, LORE_PLACEMENT);
+        if (current.useProbability && current.probability !== 100 && found[1].comment === store.LORE_COMMENT) current.probability = 100;
+        book.entries[found[0]] = { ...current, content: spec.content };
+    } else {
+        const uid = freeUid(book.entries);
+        book.entries[uid] = { uid, ...structuredClone(template), ...spec.fresh, comment: spec.comment, content: spec.content, displayIndex: uid };
     }
+    // The per-reply dice entry from an earlier build is no longer used.
+    const nudge = findEntry(book, store.LORE_NUDGE_COMMENT);
+    if (nudge) delete book.entries[nudge[0]];
     await saveBook(context, name, book);
-    await store.writeStickerData({ ...data, lore: { book: name, hash: store.loreHash(content) } }, context);
+    await store.writeStickerData({ ...data, lore: { book: name, hash: store.loreHash(store.stickerLoreContent(data, context)) } }, context);
     return { book: name, created };
 }
 
@@ -324,14 +360,18 @@ export async function removeStickerLore(context = raw()) {
     const data = store.readStickerData(context), name = data.lore.book;
     if (name && typeof context?.loadWorldInfo === 'function') {
         const book = await context.loadWorldInfo(name);
-        const found = findEntry(book);
-        if (found) { delete book.entries[found[0]]; await saveBook(context, name, book); }
+        let changed = false;
+        for (const comment of [store.LORE_COMMENT, store.LORE_NUDGE_COMMENT]) {
+            const found = findEntry(book, comment);
+            if (found) { delete book.entries[found[0]]; changed = true; }
+        }
+        if (changed) await saveBook(context, name, book);
     }
     await store.writeStickerData({ ...data, lore: { book: '', hash: '' } }, context);
     return name;
 }
 
-// After any edit: keep an already written entry current; never create one.
+// After any edit: keep already written entries current; never create them.
 export async function refreshStickerLore(context = raw()) {
     const data = store.readStickerData(context), state = loreState(data, context);
     if (!state.written || !state.stale) return false;
@@ -343,9 +383,4 @@ export async function saveStickerData(data, context = raw()) {
     const saved = await store.writeStickerData(data, context);
     try { await refreshStickerLore(context); } catch (error) { console.warn('[HeartbeatMemories] sticker lorebook refresh failed', error?.message); }
     return store.readStickerData(context) || saved;
-}
-
-export function rabbitMirrorPresent() {
-    try { return !!(globalThis.document?.getElementById('rabbit_mirror_theater_settings') || globalThis.RabbitMirror || globalThis.rabbitMirror); }
-    catch { return false; }
 }
