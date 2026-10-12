@@ -9,8 +9,9 @@ export const STICKER_OWNERS = Object.freeze(['char', 'user', 'pair', 'other']);
 export const STICKER_FREQUENCIES = Object.freeze({ rare: '1 个', sometimes: '1～2 个', often: '2～3 个' });
 export const STICKER_EVENTS = Object.freeze({ changed: 'hearttrace:stickers-changed' });
 export const LORE_COMMENT = '心迹回廊 · 表情包';
-// [表情:方祁洛·害羞]. Full-width colon and either middle dot are accepted.
-export const STICKER_TOKEN = /\[表情[:：]\s*([^\]\n·・]{1,40}?)\s*[·・]\s*([^\]\n]{1,40}?)\s*\]/gu;
+// [表情:方祁洛·害羞] is what we teach. Models also write 【表情：害羞】,
+// [表情包:方祁洛·害羞] or leave the name out; all of those still resolve.
+export const STICKER_TOKEN = /[\[【]\s*表情(?:包)?\s*[:：]\s*(?:([^\]】\n·・:：]{1,40}?)\s*[·・]\s*)?([^\]】\n·・]{1,40}?)\s*[\]】]/gu;
 const PAIR_LABEL = '双人', OTHER_LABEL = '其他';
 
 const text = value => typeof value === 'string' ? value.trim() : '';
@@ -110,8 +111,18 @@ function ownerFromLabel(label, context) {
     return '';
 }
 export function resolveSticker(ownerText, nameText, context = rawContext(), data = readStickerData(context)) {
-    const owner = ownerFromLabel(ownerText, context), name = cleanStickerName(nameText);
-    if (!owner || !name) return null;
+    const name = cleanStickerName(nameText);
+    if (!name) return null;
+    // No name before the dot: the character's own first, then shared, then the user's.
+    if (!cleanStickerName(ownerText, 40)) {
+        for (const owner of ['char', 'pair', 'other', 'user']) {
+            const hit = resolveSticker(ownerLabel(owner, context), name, context, data);
+            if (hit) return hit;
+        }
+        return null;
+    }
+    const owner = ownerFromLabel(ownerText, context);
+    if (!owner) return null;
     for (const pack of data.packs) if (pack.owner === owner) {
         const sticker = pack.stickers.find(row => row.name === name);
         if (sticker) return { ...sticker, owner, pack: pack.id };
@@ -147,20 +158,41 @@ function stickerExample(data, context) {
     const row = allStickers(data, 'char')[0] || allStickers(data, 'pair')[0] || allStickers(data, 'other')[0];
     return row ? `[表情:${ownerLabel(row.owner, context)}·${row.name}]` : '';
 }
+// Values sit inside "…" in the entry; keep them on one line and free of quotes.
+const loreValue = value => String(value || '').replace(/[\r\n]+/gu, ' ').replace(/["“”]/gu, "'").replace(/\s+/gu, ' ').trim();
+// Same shape as hand-written lorebook settings: a named tag around YAML-like
+// fields, so the model reads it as one coherent rule set rather than prose.
 export function stickerLoreContent(data, context = rawContext()) {
     const charName = ownerLabel('char', context), userName = ownerLabel('user', context);
-    const list = owner => allStickers(data, owner).map(row => row.meaning ? `${row.name}（${row.meaning}）` : row.name).join('、');
-    const lines = [];
-    const own = list('char'), pair = list('pair'), other = list('other'), user = list('user');
-    if (!own && !pair && !other && !user) return '';
-    if (own || pair || other) {
-        lines.push(`【表情包】每条回复都${COUNT_TEXT[data.settings.frequency] || COUNT_TEXT.sometimes}${charName}的表情，写成 [表情:名字·表情名]，例如 ${stickerExample(data, context)}。只能用下面列出的，名字和表情名照抄，不编新的，不写图片地址。`);
-        lines.push(`怎么用：正文里写到${charName}用手机或其他通讯设备发消息（聊天软件、短信、私信等）时，优先把表情发在这些消息里，跟在那条消息后面，或者单独作为一条消息。没有发消息的场景时，挑最贴合此刻情绪的表情，单独一行穿插在正文里对应的位置，像${charName}此刻的表情反应；不要全部堆在回复末尾，也不要解释为什么发表情。`);
-    } else lines.push(`【表情包】${charName}自己没有表情包，不发表情。`);
-    if (own) lines.push(`${charName}的表情：${own}。${userName}也可能拿这些表情来发（同样写 [表情:${charName}·表情名]），那是借${charName}的样子逗${charName}或撒娇，照常接住。`);
-    if (pair) lines.push(`双人表情（两人都能发，写 [表情:双人·表情名]）：${pair}。`);
-    if (other) lines.push(`其他表情（两人都能发，写 [表情:其他·表情名]）：${other}。`);
-    if (user) lines.push(`${userName}发来的 [表情:${userName}·表情名] 代表${userName}此刻的情绪：${user}。看懂并接住这份情绪，不要替${userName}发${userName}的表情。`);
+    const rows = owner => allStickers(data, owner).map(row => `      - "${loreValue(row.meaning ? `${row.name}：${row.meaning}` : row.name)}"`);
+    const own = rows('char'), pair = rows('pair'), other = rows('other'), user = rows('user');
+    if (!own.length && !pair.length && !other.length && !user.length) return '';
+    const sendable = own.length || pair.length || other.length;
+    const lines = ['<表情包>', '', 'sticker_rules:'];
+    if (sendable) {
+        lines.push(`  who_sends: "${loreValue(charName)}"`,
+            `  per_reply: "${loreValue(`每条回复都${COUNT_TEXT[data.settings.frequency] || COUNT_TEXT.sometimes}表情`)}"`,
+            `  format: "[表情:名字·表情名]"`,
+            `  example: "${loreValue(stickerExample(data, context))}"`,
+            '  placement:',
+            `    - "${loreValue(`正文写到${charName}用手机或其他通讯设备发消息（聊天软件、短信、私信等）时，表情优先发在这些消息里：跟在那条消息后面，或者单独作为一条消息。`)}"`,
+            `    - "${loreValue(`没有发消息的场景时，挑最贴合此刻情绪的表情，单独一行穿插在正文里对应的位置，作为${charName}这一刻的表情反应。`)}"`,
+            '    - "不要全部堆在回复末尾，也不要解释为什么发表情。"',
+            '  limits: "只能用下面列出的表情，名字和表情名照抄，不编新的，不写图片地址。"');
+    } else lines.push(`  who_sends: "${loreValue(`${charName}自己没有表情包，不发表情。`)}"`);
+    if (sendable) {
+        lines.push('', 'sendable_stickers:');
+        if (own.length) lines.push(`  "${loreValue(charName)}":`, `    note: "${loreValue(`${charName}自己的表情，写 [表情:${charName}·表情名]`)}"`, '    list:', ...own);
+        if (pair.length) lines.push('  "双人":', '    note: "两人都能发，写 [表情:双人·表情名]"', '    list:', ...pair);
+        if (other.length) lines.push('  "其他":', '    note: "两人都能发，写 [表情:其他·表情名]"', '    list:', ...other);
+    }
+    if (user.length || own.length) {
+        lines.push('', 'reading_user_stickers:');
+        if (user.length) lines.push(`  "${loreValue(userName)}":`, '    list:', ...user,
+            `    meaning: "${loreValue(`${userName}发来的 [表情:${userName}·表情名] 代表${userName}此刻的情绪，看懂并接住这份情绪；不要替${userName}发${userName}的表情。`)}"`);
+        if (own.length) lines.push(`  borrowed: "${loreValue(`${userName}也可能拿${charName}的表情来发（同样写 [表情:${charName}·表情名]），那是借${charName}的样子逗${charName}或撒娇，照常接住。`)}"`);
+    }
+    lines.push('</表情包>');
     return lines.join('\n');
 }
 

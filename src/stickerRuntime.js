@@ -1,4 +1,5 @@
 import * as store from './core/stickerStore.js';
+import * as sticker_lore from './core/stickerLore.js';
 
 // Loaded by the small bootstrap together with the chat avatars. Two jobs:
 // turning [表情:名字·表情名] into pictures in the native chat, and the
@@ -41,7 +42,7 @@ export function renderStickerTokens(root, ctx = context(), data = store.readStic
     for (const span of [...root.querySelectorAll('.hearttrace-sticker[data-hearttrace-token]')]) {
         const token = span.getAttribute('data-hearttrace-token') || '';
         const match = new RegExp(store.STICKER_TOKEN.source, 'u').exec(token);
-        const row = match && data.packs.length ? store.resolveSticker(match[1], match[2], ctx, data) : null;
+        const row = match && data.packs.length ? store.resolveSticker(match[1] || '', match[2], ctx, data) : null;
         if (!row) { span.replaceWith(doc.createTextNode(token)); changed++; continue; }
         const image = span.querySelector('img');
         if (image && image.getAttribute('src') !== row.url) { image.setAttribute('src', row.url); changed++; }
@@ -50,14 +51,14 @@ export function renderStickerTokens(root, ctx = context(), data = store.readStic
     const walker = doc.createTreeWalker(root, 4 /* NodeFilter.SHOW_TEXT */);
     const nodes = [];
     for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-        if (node.nodeValue.includes('[表情') && !node.parentElement?.closest(SKIP)) nodes.push(node);
+        if (/[\[【]\s*表情/u.test(node.nodeValue) && !node.parentElement?.closest(SKIP)) nodes.push(node);
     }
     for (const node of nodes) {
         const value = node.nodeValue, pattern = new RegExp(store.STICKER_TOKEN.source, 'gu');
         const fragment = doc.createDocumentFragment();
         let last = 0, hits = 0;
         for (let match = pattern.exec(value); match; match = pattern.exec(value)) {
-            const row = store.resolveSticker(match[1], match[2], ctx, data);
+            const row = store.resolveSticker(match[1] || '', match[2], ctx, data);
             if (!row) continue;
             if (match.index > last) fragment.append(doc.createTextNode(value.slice(last, match.index)));
             const span = doc.createElement('span');
@@ -281,7 +282,25 @@ export function startStickerRuntime({ document: doc = globalThis.document } = {}
 
     const changed = () => queue();
     globalThis.addEventListener?.(store.STICKER_EVENTS.changed, changed);
+    // An update can change the lorebook wording; keep an entry the user already
+    // wrote current (only ours, only when it differs), once per chat open.
+    let loreTimer = 0, loreBusy = false;
+    function syncLore() {
+        if (loreTimer) clearTimeout(loreTimer);
+        loreTimer = setTimeout(() => {
+            loreTimer = 0;
+            const ctx = context();
+            if (stopped || loreBusy || !ctx || typeof ctx.saveWorldInfo !== 'function') return;
+            let state;
+            try { state = sticker_lore.loreState(store.readStickerData(ctx), ctx); } catch { return; }
+            if (!state.written || !state.stale) return;
+            loreBusy = true;
+            void sticker_lore.refreshStickerLore(ctx).catch(error => console.warn('[HeartbeatMemories] sticker lorebook sync skipped', error?.message))
+                .finally(() => { loreBusy = false; });
+        }, 1500);
+    }
     function hostEvent() {
+        syncLore();
         try { globalThis.dispatchEvent?.(new CustomEvent(store.STICKER_EVENTS.changed)); } catch { changed(); }
     }
     function bindHost() {
@@ -298,10 +317,10 @@ export function startStickerRuntime({ document: doc = globalThis.document } = {}
         retries++;
         if (bindHost() || retries >= 30) { clearInterval(timer); timer = 0; }
     }, 500);
-    queue();
+    queue(); syncLore();
     return () => {
         if (stopped) return;
-        stopped = true; if (timer) clearInterval(timer);
+        stopped = true; if (timer) clearInterval(timer); if (loreTimer) clearTimeout(loreTimer);
         observer?.disconnect();
         for (const type of types) source?.off?.(type, hostEvent);
         globalThis.removeEventListener?.(store.STICKER_EVENTS.changed, changed);

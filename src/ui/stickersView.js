@@ -186,7 +186,7 @@ function loreHtml(view) {
         + `<section class="rmt-stk-card"><h3>写在哪里</h3><p class="rmt-stk-muted">${esc(where)}</p><div class="rmt-stk-two"><button type="button" class="rmt-stk-primary" data-stk-action="lore-write"${state.empty ? ' disabled' : ''}>${state.written ? '更新世界书' : '写进世界书'}</button><button type="button" class="rmt-stk-danger" data-stk-action="lore-remove"${state.written ? '' : ' disabled'}>撤掉这一条</button></div></section>`
         + `<section class="rmt-stk-card"><h3>每条回复用几个表情</h3><div class="rmt-stk-seg is-3">${Object.entries(store.STICKER_FREQUENCIES).map(([key, name]) => `<button type="button" data-stk-frequency="${key}" aria-pressed="${current.settings.frequency === key}">${name}</button>`).join('')}</div>`
         + `<p class="rmt-stk-muted">不掷骰子，每条回复都会用。正文里写到${char}用手机等通讯设备发消息时，表情优先发在那些消息里；没有发消息的场景，就挑贴合此刻情绪的表情，单独一行穿插在正文里，不堆在末尾。</p></section>`
-        + `<section class="rmt-stk-field">条目预览<pre class="rmt-stk-pre">${esc(state.content || '还没有表情。')}</pre><small>只写名字和一句意思，不放图片地址${state.content ? `，约 ${state.content.length} 字` : ''}；放在最新几条消息之前，只在正常回复、继续、重新生成和换一条时生效，不进其他插件的后台请求。改了表情会自动更新已写入的条目。</small></section></main>`;
+        + `<section class="rmt-stk-field">条目预览<pre class="rmt-stk-pre">${esc(state.content || '还没有表情。')}</pre><small>只写名字和一句意思，不放图片地址${state.content ? `，约 ${state.content.length} 字` : ''}；放在最新几条消息之前，不受世界书预算限制，只在正常回复、继续、重新生成和换一条时生效，不进其他插件的后台请求。改了表情、或插件更新后打开聊天，都会自动更新已写入的条目。</small></section></main>`;
 }
 
 function paint(view) {
@@ -594,5 +594,7 @@ export function openStickers() {
     active?.fileInput?.remove();
     active = view; workspace.syncWorkspaceChrome();
     bindView(view); paint(view); body.scrollTop = 0;
+    // Bring an entry written by an earlier version up to date.
+    void stickers.refreshStickerLore(hostContext()).then(changed => { if (changed && current(view)) paint(view); }).catch(() => {});
     return true;
 }
