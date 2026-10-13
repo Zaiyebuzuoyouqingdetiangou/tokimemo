@@ -375,6 +375,21 @@ function animalGestureTags(chosen) {
     return 'forepaw gestures, animal muzzle interaction';
 }
 
+// NAI 4.5 reads the people count from the base prompt. Only when both
+// appearances state a sex explicitly; never guessed from names.
+export function coupleSexCountTags(appearances, subject = 'character') {
+    if (subject !== 'character' || !Array.isArray(appearances) || appearances.length !== 2) return '';
+    const sexes = appearances.map(value => {
+        const text = String(value || '');
+        const boy = /\b(?:1boy|boy|male|man)\b|男性|男生|男孩|男人|少年/i.test(text);
+        const girl = /\b(?:1girl|girl|female|woman)\b|女性|女生|女孩|女人|少女/i.test(text);
+        return boy && !girl ? 'boy' : girl && !boy ? 'girl' : '';
+    });
+    if (sexes.some(sex => !sex)) return '';
+    const boys = sexes.filter(sex => sex === 'boy').length, girls = sexes.length - boys;
+    return [boys ? `${boys}boy${boys > 1 ? 's' : ''}` : '', girls ? `${girls}girl${girls > 1 ? 's' : ''}` : ''].filter(Boolean).join(', ');
+}
+
 export function coupleAvatarTagParts({ mediumLead = '', naiStyle = value => value, mediumActor = '', settings, chosen, animal, object, subject, fullFigure, appearances, negative,
     covered = [false, false], clothing = { people: ['', ''] }, interactionDirection = null, compositionTags = [] }) {
     const [interaction, leftAction, rightAction] = interactionTags(settings, chosen, animal);
@@ -391,8 +406,9 @@ export function coupleAvatarTagParts({ mediumLead = '', naiStyle = value => valu
             : 'consistent medium across faces and hair and bodies and clothing';
     // The NAI channel leads with the weighted style (and 3D medium tags); the
     // flat fallback keeps plain words, since weight syntax is NAI-only.
+    const sexCount = coupleSexCountTags(appearances, subject);
     const sceneFor = nai => tags([
-        nai ? mediumLead : '', (nai ? naiStyle(rendering) : rendering) || 'illustration', form, framing,
+        nai ? mediumLead : '', (nai ? naiStyle(rendering) : rendering) || 'illustration', sexCount, form, framing,
         `two distinct ${subject}s, side by side, horizontal paired portrait, first subject at left quarter, second subject at right quarter, balanced subject scale`,
         'continuous edge-to-edge background, continuous center and corners, clear subject separation, quiet background detail, readable individual features, gestures within own half',
         subject_details.coupleVisibleRecipe(interaction, anyCovered && ownedInteraction),

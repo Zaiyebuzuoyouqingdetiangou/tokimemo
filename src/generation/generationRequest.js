@@ -283,7 +283,9 @@ async function generateConfiguredJsonOperation(prompt, options = {}) {
     const savedContent = options.recoveryContentSettings || generation_recovery.generationContentSnapshotForOrigin(options.origin)?.contentSettings;
     let contentSettings = { ...settings, ...(savedContent || {}) };
     const advanced = advanced_generation.parseAdvancedGeneration(settings);
-    const streamRequested = advanced_generation.requestStreaming(advanced, settings, options);
+    let hostStream = false;
+    try { hostStream = advanced_generation.hostPrefersStream(context, core_settings.rawConnectionProfile(settings.connectionProfileId, context)); } catch { hostStream = false; }
+    const streamRequested = advanced_generation.requestStreaming(advanced, settings, { ...options, hostPrefersStream: hostStream });
     const configurationFingerprint = core_independentApi.apiConfigurationFingerprint(configuredSettings);
     const contextEnvelope = typeof options.contextEnvelope === 'string'
         ? options.contextEnvelope
@@ -374,7 +376,7 @@ async function generateConfiguredJsonOperation(prompt, options = {}) {
             throw error;
         }
     };
-    let result, responsePayload, completeInboxProse = false, releaseProviderPermit = null;
+    let result, responsePayload, completeInboxProse = false, releaseProviderPermit = null, requestStartedAt = 0;
     const lifecycleController = new AbortController();
     const externalSignal = options.signal || null;
     const forwardAbort = () => {
@@ -401,6 +403,7 @@ async function generateConfiguredJsonOperation(prompt, options = {}) {
         await assertConfigurationCurrent();
         assertRequestCurrent();
         core_taskTrace.beginStage(taskTrace, 'request');
+        requestStartedAt = Date.now();
         core_requestCoordinator.noteChatTaskPhase('request', { taskKey: options.taskKey, origin: options.origin });
         result = await core_requestCoordinator.runGenerationRequestWithTimeout(
             async () => {
@@ -439,7 +442,15 @@ async function generateConfiguredJsonOperation(prompt, options = {}) {
     } catch (error) {
         const shape = core_independentApi.transportFailureSummary(error);
         if (shape) core_taskTrace.recordResponse(taskTrace, shape);
-        throw normalizeConnectionManagerError(error);
+        const normalized = normalizeConnectionManagerError(error);
+        // A complete (non-stream) reply that dies after a long silence with no status
+        // is usually a relay cutting an idle connection, not a broken request.
+        const waited = requestStartedAt ? Date.now() - requestStartedAt : 0;
+        if (normalized?.code === 'RMT_CONNECTION_FAILED' && !streamRequested && waited >= 30000) {
+            normalized.message = normalized.safeUserMessage = `等了 ${Math.round(waited / 1000)} 秒没有收到任何内容，连接就断了，多半是中转站或代理掐断了长时间没有数据的完整响应。请到心迹回廊设置的「高级生成参数」里勾上「启用高级生成参数」，把「本插件流式方式」改成「使用流式」后再试；旧内容仍会保留。`;
+            normalized.idleCutoff = true;
+        }
+        throw normalized;
     } finally {
         try { releaseProviderPermit?.(); } catch {}
         try { externalSignal?.removeEventListener?.('abort', forwardAbort); } catch {}
