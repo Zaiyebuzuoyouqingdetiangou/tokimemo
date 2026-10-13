@@ -10,6 +10,18 @@ import * as core_context from '../core/context.js';
 import * as core_text from '../core/text.js';
 
 export const LOCAL_ARCHIVE_KEY = 'localArchiveV1';
+const AUTO_MARK_KEY = 'heartbeatMemoriesLocalArchiveAutoV1';
+
+// Any sign that this chat already had an archive (a mirror for another chat id
+// after a copy, branch or rename; a content cache; an index entry). A new local
+// archive would replace it and hide its content, so creation stops here.
+export function hasArchiveTraces(context) {
+    const meta = context?.chatMetadata || {};
+    if (Object.keys(meta).some(key => /^heartbeatMemories/u.test(key) && key !== AUTO_MARK_KEY)) return true;
+    const chatId = core_context.comparableChatId(core_context.getChatId(context));
+    const rows = context?.extensionSettings?.[core_constants.ARCHIVE_INDEX_SETTINGS_KEY];
+    return !!chatId && Array.isArray(rows) && rows.some(row => core_context.comparableChatId(row?.chatId) === chatId);
+}
 const MAX_LOCAL_MEMORIES = 200;           // content prompts read at most 24; the rest is for browsing
 const SEGMENT_CHARS = 700;                // story text per memory (about one scene)
 const SEGMENT_FLOORS = 8;                // and never more floors than this
@@ -114,6 +126,7 @@ export function localArchiveState(memory) {
 export async function buildLocalArchive({ context = core_context.currentCharacterGuard(), mode = 'create' } = {}) {
     const existing = archive_repository.getImportedMemory(context);
     if (mode === 'create' && existing) throw core_text.safeUserError('这个聊天已经有档案了。', 'RMT_LOCAL_ARCHIVE_EXISTS');
+    if (mode === 'create' && hasArchiveTraces(context)) throw core_text.safeUserError('这个聊天里还留着之前的档案或已生成的内容（可能是复制、分支或改名后的聊天），为了不覆盖它们，没有新建本地档案。可以先从档案页恢复或选择原来的档案。', 'RMT_LOCAL_ARCHIVE_TRACES');
     if (mode === 'append' && !existing) throw core_text.safeUserError('这个聊天还没有档案，先建档。', 'RMT_LOCAL_ARCHIVE_MISSING');
     const startedAt = Date.now();
     const origin = { ...core_context.captureTaskOrigin(context, existing?.archiveRevision || ''), startedAt, archivePresent: !!existing };

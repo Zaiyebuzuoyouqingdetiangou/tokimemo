@@ -83,9 +83,45 @@ function queueDraft(view) {
 
 // NAI 4.5 needs short English tags; a sentence-style (NAI 5) or Chinese appearance
 // is read poorly and both people tend to come out alike or with the wrong sex.
+function currentPromptFormat(view) {
+    try { return core_settings.getPluginSettings(view.context).cgPromptFormat || ''; } catch { return ''; }
+}
+function sentenceSides(view, settings) {
+    if (currentPromptFormat(view) !== 'nai45-tags') return [];
+    return settings.people.map((person, index) => {
+        const value = String(person?.appearance || '').trim();
+        return value && !cg_format.isEnglishTagPrompt(value) ? index : -1;
+    }).filter(index => index >= 0);
+}
+// Before an NAI 4.5 draw: a sentence-style appearance is offered a one-time
+// conversion through the existing「重新读取外貌」. Nothing is sent without a choice.
+async function nai45ReadySettings(view, settings) {
+    const sides = sentenceSides(view, settings);
+    if (!sides.length) return settings;
+    const choice = await new Promise(resolve => {
+        let done = false; const finish = value => { if (done) return; done = true; resolve(value); };
+        const names = sides.map(index => `${index ? '右边' : '左边'}「${esc(settings.people[index].name || (index ? '人物二' : '人物一'))}」`).join('和');
+        const m = dialog(view, '先把外貌整理成 tag 吗？', `<p>现在是 NAI 4.5，${names}的外貌还是整句或中文写法，4.5 读不好，容易把两人画成一样或认错性别。</p>
+            <p class="rmt-pair-note">整理和点「重新读取外貌」一样：有生图渠道的人物预设就直接用预设，否则用文本 API 读一次人设（每边一次）。整理好的外貌会留在外貌栏里，下次不用再整理。</p>
+            <div class="rmt-pair-create"><button type="button" class="rmt-pair-primary" data-pair-tagify="yes">整理后生成</button><button type="button" data-pair-tagify="no">保持原样生成</button></div>`);
+        if (!m) return finish('keep');
+        m.cleanup = () => finish(null);
+        m.body.addEventListener('click', event => {
+            const target = event.target.closest('[data-pair-tagify]'); if (!target) return;
+            finish(target.dataset.pairTagify === 'yes' ? 'convert' : 'keep'); closeCoupleDialog();
+        });
+    });
+    if (!choice || !current(view)) return null;
+    if (choice === 'keep') return settings;
+    for (const index of sides) {
+        await refreshAppearance(view, index);
+        if (!current(view)) return null;
+    }
+    return draft(view);
+}
+
 function tagFormatHint(view) {
-    let format = '';
-    try { format = core_settings.getPluginSettings(view.context).cgPromptFormat; } catch { format = ''; }
+    const format = currentPromptFormat(view);
     for (let i = 0; i < 2; i++) {
         const node = view.root.querySelector(`[data-pair-appearance-status="${i}"]`);
         const input = view.root.querySelector(`[data-pair-person="${i}"][data-pair-key="appearance"]`);
@@ -702,7 +738,8 @@ function resolveComposition(view, settings) {
 }
 async function startGeneration(view) {
     if (!current(view)) return;
-    let settings = draft(view);
+    let settings = await nai45ReadySettings(view, draft(view));
+    if (!settings || !current(view)) return;
     const filtered = await chibiFilteredSettings(view, settings);
     if (!filtered || !current(view)) return;
     settings = resolveComposition(view, filtered);

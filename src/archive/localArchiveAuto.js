@@ -4,6 +4,9 @@ import * as local_archive from './localArchive.js';
 import * as archive_repository from './repository.js';
 import * as archive_groups from './groups.js';
 import * as archive_snapshots from './snapshots.js';
+import * as archive_backupStore from './backupStore.js';
+import * as core_cacheRecords from '../core/cacheRecords.js';
+import * as core_constants from '../core/constants.js';
 import * as core_context from '../core/context.js';
 import * as core_requestCoordinator from '../core/requestCoordinator.js';
 import * as core_settings from '../core/settings.js';
@@ -23,6 +26,19 @@ function eligible(context) {
     return !!context.chatMetadata && typeof context.chatMetadata === 'object';
 }
 
+// Auto-create only in a chat that has never had an archive. Any sign of one —
+// a mirror for another chat id (copied, branched or renamed chat), a content
+// cache, an index entry or a saved backup — means the user's archive is just
+// not readable from here yet, and writing a new one would hide its content.
+export const hasArchiveTraces = local_archive.hasArchiveTraces;
+async function hasSavedBackup(context) {
+    try {
+        const entry = core_cacheRecords.archiveBackupEntryForContext(context, { chatId: core_context.getChatId(context), characterName: context?.name2 || '' });
+        const state = await archive_backupStore.readArchiveBackupState(entry);
+        return !!(state?.deleted || state?.record);
+    } catch { return true; } // Unreadable storage: do not risk a new archive.
+}
+
 export async function maybeAutoLocalArchive(reason = 'auto') {
     if (running) return null;
     let context;
@@ -35,8 +51,11 @@ export async function maybeAutoLocalArchive(reason = 'auto') {
             if (context.chatMetadata[AUTO_MARK_KEY]) return null;
             if (archive_groups.currentCharacterArchiveDeletionFence(context, null)) return null;
             if (archive_repository.getCurrentArchiveImportRecoverySummary?.(context)) return null;
+            if (hasArchiveTraces(context)) return null;
             const usable = (context.chat || []).filter(message => message?.mes && !message.is_system).length;
             if (usable < 2) return null;
+            if (await hasSavedBackup(context)) return null;
+            if (archive_repository.getImportedMemory(context) || hasArchiveTraces(context)) return null;
             const result = await local_archive.buildLocalArchive({ context, mode: 'create' });
             context.chatMetadata[AUTO_MARK_KEY] = { createdAt: Date.now(), reason };
             context.saveMetadataDebounced?.();
