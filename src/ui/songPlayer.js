@@ -72,7 +72,11 @@ async function commit(context, songId, media) {
     const url = streaming ? music_link.musicUrl(media.url) : URL.createObjectURL(media.blob);
     let probed;
     try { probed = await probeAudio(url); }
-    catch (error) { if (!streaming) { try { URL.revokeObjectURL(url); } catch {} } throw error; }
+    catch (error) {
+        if (!streaming) { try { URL.revokeObjectURL(url); } catch {} }
+        if (media.failText && error?.name !== 'AbortError') throw core_text.safeUserError(media.failText, 'RMT_MV_AUDIO');
+        throw error;
+    }
     try { mv.patchRecord(songId, { duration: probed.duration }, mv.captureMvTarget(context, songId)); } catch { /* No storyboard yet is fine. */ }
     const name = core_text.normalizeText(media.name, 80) || '链接歌曲';
     const saved = await mv_media.putMedia(key, streaming ? null : media.blob, name, { sourceUrl: media.sourceUrl || '', ...(streaming ? { mediaUrl: url } : {}) });
