@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 359
-// Source SHA-256: 1a3082889ac390f747b20fa036909c6a958cdb8f78b5427059264f5b0d286429
+// Source SHA-256: b6b4c6c27439b3fc86353f8c87d23b40abea3b846072d982c16e328e81668a22
 // Build: python3 tools/verification/build.py <source-root>
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -1180,7 +1180,7 @@ function __init_core_releaseNotes_js() {
 // MODULE: core/releaseNotes.js
 
 // GENERATED FROM README.md by tools/verification/build.py. Do not edit by hand.
-const RELEASE_README = "# 心迹回廊 1.0.57\n\n## 更新日志模块\n\n新增了更新日志板块，感谢@nancyindaeyo的更新。\n\n## 本次变动\n\n- 新增「互动 · 表情包」：给角色、你、你们俩各做表情包。写一句想法，模型列出表情清单（能联网的模型会先查这类表情包常见的情绪和动作，只学题材，不照抄别人的角色），每项都能改；单人一张竖图切成 6 个，双人一张横图切成 4 个，自动按白底切开并加白边，切不开时按格子切。切好后可以逐个改名、配字、单张重画或去掉，再保存。\n- 表情包首页一组只显示一个封面图标，点进去再看这一组的每个表情；可以改组名、换封面、换成自己的图、复制暗号、保存到本机。自己的图片可以导入到「其他」，两边都能发。\n- 图片存在你自己酒馆的图片文件夹里，不用图床；表情包数据跟着角色卡走，换设备打开同一个酒馆也在。\n- 表情包出图和情侣头像一样有「Q 版外貌过滤」：外貌里有身高、体型、骨相这类写实描述时，可以只在这次出图里去掉，免得画回正常比例；可选每次询问、自动过滤或不过滤。一组表情实际用的外貌会跟着这一组保存，之后单张重画也保持一致。\n- 表情包可以一键加入世界书：角色已有主世界书时只追加一条「心迹回廊 · 表情包」，没有就新建一本并绑定。条目字段和酒馆自己新建的条目一样，在世界书编辑器里能正常展开、修改；内容用 `<表情包>` 标签包住，写成 YAML 式的键值，只写表情名和一句意思，不放图片地址。\n- 表情只在剧情里写到角色用手机等通讯设备发消息（聊天软件、短信、私信、评论等）时使用，跟在那条消息后面或者单独作为一条；正文叙述和当面说话时不发，也不要求每条回复都发。\n- 这一条放在最新几条消息之前，不受世界书预算限制（设定很多时也不会被挤掉），只在正常回复、继续、重新生成和换一条时生效，不进其他插件的后台请求。改了表情或插件更新后，已加入的条目会自动更新；撤掉这一条即恢复原样。\n- 模型把暗号写偏也能显示成图：全角的【表情：…】、写成「表情包:」、或者漏了名字只写表情名，都会按表情名找到对应的图。\n- 聊天页多了一个可以拖动的小兔子悬浮按钮（和魔法棒菜单里心迹回廊的兔子是同一只，做过表情包后出现，松手会贴到左右边上并记住位置）。点开后分「我的 / 他的 / 双人 / 其他」，你也可以发他的表情；点一下把暗号放进输入框。聊天里的 `[表情:名字·表情名]` 会显示成对应的表情图，角色从世界书知道每个表情的意思，也知道你借用他的表情是在逗他。\n- 悬浮小兔子可以在表情包页关掉：关掉后聊天页不再显示，改从魔法棒菜单里的「表情包」打开，表情面板贴在输入栏上方，像表情键盘一样，选好一个自动收起，也可以点「收起」。开关记在酒馆设置里，对所有角色都生效。\n- 情侣头像新增 69 种画风（含构图版式、氛围光影、3D 渲染分组）和 48 种互动（含贴贴亲昵、小小较劲、幻想冒险）；画风和互动都改为可搜索、按分类浏览的选择面板，也可以随机抽一个。\n- Q 版、动物化身会给每个人物单独带上比例标签，外貌写得很长也不容易画成成人比例；生成时可选择过滤掉身高、体型等写实描述，只作用于这一次，原外貌不变，也可以在选项里设为自动过滤或不过滤。\n- 情侣头像新增“构图”：默认每次随机换一种镜头，始终保持左右各一人、能裁成两张头像；会改动所选互动或“小心思”里动作的姿势自动跳过，也可以固定为正面并排或指定一种。\n- 情侣头像的画风在 NAI 中加权放在最前，3D 画风另加 3D 标签，减少被画师串盖过。\n- 情侣头像的历史与收藏可以删除头像：卡片下方的“删除”，或点“多选”勾选多对后一起删除，删除前会确认一次；已设为聊天头像的图片、已保存的 PNG 和生图插件图库里的原图不受影响。预览下方的“删除这一对”去掉了，删除统一放在历史与收藏里。\n- 手书的剧情叙事、抒情意象、关系互动、高燃快切、节奏循环、悬念反转六种分镜类型，各自写明了画面特征和自查要求，示例也按类型重写，生成的分镜更贴近类型名字；表情卡拍和动态插画保持不变。\n- 手书新增五种分镜类型：文字PV（歌词大字卡为主角）、回忆走马灯（一闪而过的回忆，最后回到现在）、动画OP风（冷开场、人物亮相、全员同框、风景收尾）、第一视角（角色对着镜头，“你”只露手）、今昔对照（同一构图的从前与现在）。\n- 插件内的更新日志直接读取安装目录里的 README，修改 README 后不用重新打包也会同步。\n- 画风、互动、衣着、裁切、头像应用、自动外貌读取及其他已有功能保持。\n";
+const RELEASE_README = "# 心迹回廊 1.0.57\n\n## 更新日志模块\n\n新增了更新日志板块，感谢@nancyindaeyo的更新。\n\n## 本次变动\n\n- 新增「互动 · 表情包」：给角色、你、你们俩各做表情包。写一句想法，模型列出表情清单（能联网的模型会先查这类表情包常见的情绪和动作，只学题材，不照抄别人的角色），每项都能改；单人一张竖图切成 6 个，双人一张横图切成 4 个，自动按白底切开并加白边，切不开时按格子切。切好后可以逐个改名、配字、单张重画或去掉，再保存。\n- 表情包首页一组只显示一个封面图标，点进去再看这一组的每个表情；可以改组名、换封面、换成自己的图、复制暗号、保存到本机。自己的图片可以导入到「其他」，两边都能发。\n- 图片存在你自己酒馆的图片文件夹里，不用图床；表情包数据跟着角色卡走，换设备打开同一个酒馆也在。\n- 表情包出图和情侣头像一样有「Q 版外貌过滤」：外貌里有身高、体型、骨相这类写实描述时，可以只在这次出图里去掉，免得画回正常比例；可选每次询问、自动过滤或不过滤。一组表情实际用的外貌会跟着这一组保存，之后单张重画也保持一致。\n- 表情包可以一键加入世界书：角色已有主世界书时只追加一条「心迹回廊 · 表情包」，没有就新建一本并绑定。条目字段和酒馆自己新建的条目一样，在世界书编辑器里能正常展开、修改；内容用 `<表情包>` 标签包住，写成 YAML 式的键值，只写表情名和一句意思，不放图片地址。\n- 表情只在剧情里写到角色用手机等通讯设备发消息（聊天软件、短信、私信、评论等）时使用，跟在那条消息后面或者单独作为一条；正文叙述和当面说话时不发，也不要求每条回复都发。\n- 这一条放在最新几条消息之前，不受世界书预算限制（设定很多时也不会被挤掉），只在正常回复、继续、重新生成和换一条时生效，不进其他插件的后台请求。改了表情或插件更新后，已加入的条目会自动更新；撤掉这一条即恢复原样。\n- 模型把暗号写偏也能显示成图：全角的【表情：…】、写成「表情包:」、或者漏了名字只写表情名，都会按表情名找到对应的图。\n- 聊天页多了一个可以拖动的小兔子悬浮按钮（和魔法棒菜单里心迹回廊的兔子是同一只，做过表情包后出现，松手会贴到左右边上并记住位置）。点开后分「我的 / 他的 / 双人 / 其他」，你也可以发他的表情；点一下把暗号放进输入框。聊天里的 `[表情:名字·表情名]` 会显示成对应的表情图，角色从世界书知道每个表情的意思，也知道你借用他的表情是在逗他。\n- 悬浮小兔子可以在表情包页关掉：关掉后聊天页不再显示，改从魔法棒菜单里的「表情包」打开，表情面板贴在输入栏上方，像表情键盘一样，选好一个自动收起，也可以点「收起」。开关记在酒馆设置里，对所有角色都生效。\n- 情侣头像新增 69 种画风（含构图版式、氛围光影、3D 渲染分组）和 48 种互动（含贴贴亲昵、小小较劲、幻想冒险）；画风和互动都改为可搜索、按分类浏览的选择面板，也可以随机抽一个。\n- Q 版、动物化身会给每个人物单独带上比例标签，外貌写得很长也不容易画成成人比例；生成时可选择过滤掉身高、体型等写实描述，只作用于这一次，原外貌不变，也可以在选项里设为自动过滤或不过滤。\n- 情侣头像新增“构图”：默认每次随机换一种镜头，始终保持左右各一人、能裁成两张头像；会改动所选互动或“小心思”里动作的姿势自动跳过，也可以固定为正面并排或指定一种。\n- 情侣头像的画风在 NAI 中加权放在最前，3D 画风另加 3D 标签，减少被画师串盖过。\n- 情侣头像的历史与收藏可以删除头像：卡片下方的“删除”，或点“多选”勾选多对后一起删除，删除前会确认一次；已设为聊天头像的图片、已保存的 PNG 和生图插件图库里的原图不受影响。预览下方的“删除这一对”去掉了，删除统一放在历史与收藏里。\n- 手书的剧情叙事、抒情意象、关系互动、高燃快切、节奏循环、悬念反转六种分镜类型，各自写明了画面特征和自查要求，示例也按类型重写，生成的分镜更贴近类型名字；表情卡拍和动态插画保持不变。\n- 手书新增五种分镜类型：文字PV（歌词大字卡为主角）、回忆走马灯（一闪而过的回忆，最后回到现在）、动画OP风（冷开场、人物亮相、全员同框、风景收尾）、第一视角（角色对着镜头，“你”只露手）、今昔对照（同一构图的从前与现在）。\n- 插件内的更新日志直接读取安装目录里的 README，修改 README 后不用重新打包也会同步。\n- 「内容」页的「把勾选的项目排进任务中心」旁边多了「全选」：一次勾上所有能排队的页面，再点一次取消；排进任务中心后会按顺序一项一项生成。\n- 柏宝绘角色库里名字写成 {{user}} 或 {{char}} 的角色，现在也能对上当前的你和角色，读取里面写的外貌（包括性别）；写了真名的条目优先，有两条都能对上时不乱选。\n- 画风、互动、衣着、裁切、头像应用、自动外貌读取及其他已有功能保持。\n";
 
 __m_core_releaseNotes_js.RELEASE_README = RELEASE_README;
 }
@@ -6410,6 +6410,19 @@ function nameKey(name) {
         .replace(/[‘’`´]/g, "'").replace(/\s+/g, ' ').trim() : '';
 }
 
+// 柏宝绘 entries are often named after the ST macro instead of the persona
+// name ({{user}} / {{char}}). Those aliases point at the current user/char only.
+const USER_ALIASES = new Set(['{{user}}', '<user>', 'user']);
+const CHAR_ALIASES = new Set(['{{char}}', '<char>', 'char']);
+// Real names stay exact (case and spacing included); only the macro spellings are loosened.
+function libraryNameMatches(entryName, person, context) {
+    const entry = nameKey(entryName), own = nameKey(person.name);
+    if (!entry || !own) return false;
+    if (USER_ALIASES.has(entry)) return person.id === 'user' || own === nameKey(context?.name1);
+    if (CHAR_ALIASES.has(entry)) return person.id === 'char' || own === nameKey(context?.name2);
+    return false;
+}
+
 function publicBaiBaiCharacters(api) {
     if (field(api, 'apiVersion') !== 1 || field(field(api, 'capabilities'), 'characterLibrary') !== true) return [];
     const read = field(api, 'getCharacters');
@@ -6468,7 +6481,9 @@ function resolveImageAppearancePresets(context, people, { provider, api } = {}) 
                     || chatu8.chatu8PresetAppearance(context, person.name, { visible: 'back' })
                     || chatu8.chatu8PresetAppearance(context, person.name, { visible: 'hands' });
             } else {
-                const matched = library.filter(entry => entry.name === person.name);
+                // An exact name wins over a macro alias; either must be unique.
+                const exact = library.filter(entry => entry.name === person.name);
+                const matched = exact.length ? exact : library.filter(entry => libraryNameMatches(entry.name, person, context));
                 if (matched.length === 1) found = { row: matched[0].row, source: 'baibai', presetKey: matched[0].name };
             }
             if (!found) continue;
@@ -86160,7 +86175,7 @@ function overlayArchiveActions(actionEl, action) {
     if (action === 'travel-dialogue-prev') return ui_travelView.travelDialogueStep(-1);
     if (action === 'travel-dialogue-next') return ui_travelView.travelDialogueStep(1);
     if (action === 'travel-dialogue-replay') return ui_travelView.replayTravelDialogue();
-    if (action === 'tasks' || action === 'task-center-close' || action === 'task-cancel' || action === 'task-cancel-current' || action === 'task-open' || action === 'task-second-step' || action === 'task-queue-remove' || action === 'task-retry-queue' || action === 'task-clear-done' || action === 'task-dismiss' || action === 'task-retry-state' || action === 'task-floor-complete' || action === 'task-floor-retry' || action === 'task-archive-retry' || action === 'task-archive-restart' || action === 'queue-selected' || action === 'generate-together' || action === 'merged-repair' || action === 'merged-resave' || ['merged-discard', 'merged-new', 'merged-export', 'merged-export-legacy', 'merged-discard-legacy'].includes(action)) {
+    if (action === 'tasks' || action === 'task-center-close' || action === 'task-cancel' || action === 'task-cancel-current' || action === 'task-open' || action === 'task-second-step' || action === 'task-queue-remove' || action === 'task-retry-queue' || action === 'task-clear-done' || action === 'task-dismiss' || action === 'task-retry-state' || action === 'task-floor-complete' || action === 'task-floor-retry' || action === 'task-archive-retry' || action === 'task-archive-restart' || action === 'queue-selected' || action === 'queue-select-all' || action === 'generate-together' || action === 'merged-repair' || action === 'merged-resave' || ['merged-discard', 'merged-new', 'merged-export', 'merged-export-legacy', 'merged-discard-legacy'].includes(action)) {
         return ui_taskCenter.handleTaskCenterAction(action, actionEl);
     }
     if (action === 'close') return closeArchiveOverlayFromUser();
@@ -93206,6 +93221,17 @@ function handleTaskCenterAction(action, actionEl) {
         });
         return;
     }
+    if (action === 'queue-select-all') {
+        // Every page that can be queued on this screen; a second press clears them.
+        const root = actionEl?.closest?.('.rmt-workspace-catalogue') || document.getElementById(core_constants.OVERLAY_ID);
+        const boxes = [...(root?.querySelectorAll?.('[data-rmt-queue-route]') || [])].filter(box => !box.disabled);
+        if (!boxes.length) return;
+        const on = boxes.some(box => !box.checked);
+        for (const box of boxes) { box.checked = on; setQueuePick(box.dataset.rmtQueueRoute, on); }
+        actionEl.textContent = on ? '取消全选' : '全选';
+        globalThis.toastr?.info?.(on ? `已勾选 ${boxes.length} 项。点「把勾选的项目排进任务中心」会按顺序一项一项生成。` : '已取消全部勾选。', '心迹回廊');
+        return;
+    }
     if (action === 'queue-selected') {
         syncPickScope();
         const order = Object.keys(ui_workspaceState.WORKSPACE_ROUTES);
@@ -94902,7 +94928,7 @@ function workspaceCatalogueHtml(portals = [], snapshot = null, { ready: archiveR
             if (legacy.length) pendingBar += `<div class="rmt-queue-bar"><small>有 ${legacy.length} 条旧暂存记录缺少所属人物，已保留，不会显示为当前人物内容。</small><button type="button" class="rmt-btn" data-rmt-action="merged-export-legacy">导出旧暂存记录</button></div>`;
         } catch { pendingBar = '<div class="rmt-queue-bar" role="alert">暂存区读取失败，旧数据没有清空。<button type="button" class="rmt-btn" data-rmt-action="merged-export-legacy">导出旧暂存记录</button></div>'; }
     }
-    const queueBar = canQueue ? `<div class="rmt-queue-bar"><button type="button" class="rmt-btn" data-rmt-action="queue-selected">把勾选的项目排进任务中心</button><button type="button" class="rmt-btn" data-rmt-action="generate-together">一起生成</button><details class="rmt-together-help"><summary aria-label="一起生成说明">?</summary><p>同一请求可合并陈列柜、成就库、邮箱、印象曲和睡前故事。其他页面保留各自生成步骤，安排为独立请求。发送前可查看分组和预计请求数。</p></details></div>${pendingBar}` : '';
+    const queueBar = canQueue ? `<div class="rmt-queue-bar"><button type="button" class="rmt-btn" data-rmt-action="queue-select-all">全选</button><button type="button" class="rmt-btn" data-rmt-action="queue-selected">把勾选的项目排进任务中心</button><button type="button" class="rmt-btn" data-rmt-action="generate-together">一起生成</button><details class="rmt-together-help"><summary aria-label="一起生成说明">?</summary><p>同一请求可合并陈列柜、成就库、邮箱、印象曲和睡前故事。其他页面保留各自生成步骤，安排为独立请求。发送前可查看分组和预计请求数。</p></details></div>${pendingBar}` : '';
     return `<section class="rmt-workspace-catalogue"><header class="rmt-workspace-section-head"><div><h2>内容</h2><p>选择你想看的那一页</p></div><div class="rmt-layout-switch" aria-label="目录显示方式">${[['cards','卡片'],['list','列表']].map(([k,t])=>`<button type="button" data-rmt-workspace-layout="${k}" aria-pressed="${ui_workspaceState.workspace.layout === k}" class="${ui_workspaceState.workspace.layout === k ? 'active' : ''}">${t}</button>`).join('')}</div></header><nav class="rmt-workspace-groups" aria-label="内容分组">${GROUPS.map(([k,t])=>`<button type="button" data-rmt-workspace-group="${k}" class="${ui_workspaceState.workspace.group === k ? 'active' : ''}" aria-current="${ui_workspaceState.workspace.group === k ? 'page' : 'false'}">${t}</button>`).join('')}</nav>${queueBar}<div class="rmt-archive-portals rmt-workspace-portals" data-rmt-layout="${ui_workspaceState.workspace.layout}">${cards}</div></section>`;
 }
 // Move existing validated markup, never replace the underlying archive or task objects.
