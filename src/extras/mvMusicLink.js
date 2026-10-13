@@ -121,7 +121,7 @@ export function sunoShareSongLink(songPage, code) {
     const id = String(songPage || '').match(/\/song\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:[/?#]|$)/i)?.[1];
     return id ? `https://suno.com/song/${id.toLowerCase()}${code ? `?sh=${encodeURIComponent(code)}` : ''}` : '';
 }
-const SUNO_SHARE_UNREADABLE = '这台设备读不了 Suno 短链接（suno.com/s/…）。请在浏览器里打开这个短链接，等它跳到 suno.com/song/… 后，复制地址栏里的完整链接再粘贴。原有歌曲未替换。';
+const SUNO_SHARE_UNREADABLE = '没能读出 Suno 短链接（suno.com/s/…）跳到哪首歌。请在浏览器里打开这个短链接，等它跳到 suno.com/song/… 后，复制地址栏里的完整链接再粘贴。原有歌曲未替换。';
 
 export function sunoDirectVideo(value) {
     const audio = sunoDirectAudio(value);
@@ -149,6 +149,13 @@ function sunoPublicHost(url) {
     return parsed.protocol === 'https:' && !parsed.port && /^(?:(?:www\.)?suno\.com|cdn\d*\.suno\.(?:ai|com))$/i.test(parsed.hostname);
 }
 
+function hostRequestHeaders() {
+    let provided = null;
+    try { provided = globalThis.SillyTavern?.getContext?.()?.getRequestHeaders?.() || null; } catch { provided = null; }
+    if (provided && typeof provided.set === 'function') { try { provided.set('Content-Type', 'application/json'); } catch {} return provided; }
+    return { ...(provided && typeof provided === 'object' ? provided : {}), 'Content-Type': 'application/json' };
+}
+
 function hostProxyAvailable() {
     // TT's published API does not promise /proxy or generic native HTTP. Do not
     // guess Rust commands or import private host modules to manufacture it.
@@ -163,26 +170,42 @@ export function musicLinkName(url) {
     return /\.(?:mp3|m4a|mp4|aac|wav|ogg|opus|flac|webm)$/i.test(name) ? name.slice(0, 80) : '链接歌曲';
 }
 
-export async function readMusicLink(value, { signal, fetcher = globalThis.fetch, allowStreaming = true, hostProxy = hostProxyAvailable() } = {}) {
+export async function readMusicLink(value, { signal, fetcher = globalThis.fetch, allowStreaming = true, hostProxy = hostProxyAvailable(), requestHeaders = hostRequestHeaders } = {}) {
     const sourceUrl = musicUrl(value);
-    let proxyUnavailable = false;
+    let proxyUnavailable = false, visitUnavailable = false;
     const get = async url => {
         signal?.throwIfAborted?.();
         let response;
         try { response = await waitMusicRequest(fetcher(url, { method: 'GET', mode: 'cors', credentials: 'omit', referrerPolicy: 'no-referrer', signal }), signal); }
         catch (error) {
             if (signal?.aborted || error?.name === 'AbortError') throw error;
+            let refused = null;
             if (hostProxy && !proxyUnavailable && sunoPublicHost(url)) {
                 try {
                     // ST documents /proxy/:url(*). Omit credentials because the
                     // host forwards request headers; no Basic Auth may escape.
                     response = await waitMusicRequest(fetcher('/proxy/' + encodeURIComponent(url), { method: 'GET', credentials: 'omit', referrerPolicy: 'no-referrer', signal }), signal);
                     if ([401, 404, 405, 501].includes(response.status)) { proxyUnavailable = true; response = null; }
+                    else if (!response.ok) { refused = response; response = null; }
                 } catch (proxyError) {
                     if (signal?.aborted || proxyError?.name === 'AbortError') throw proxyError;
                     proxyUnavailable = true;
                 }
             }
+            if (!response && hostProxy && !visitUnavailable && sunoPublicHost(url)) {
+                // ST's built-in page reader (used by its web search) needs no
+                // config switch, follows redirects, and returns the body with the
+                // original type. Only public Suno addresses are ever sent to it.
+                try {
+                    const visited = await waitMusicRequest(fetcher('/api/search/visit', { method: 'POST', headers: requestHeaders(), body: JSON.stringify({ url, html: false }), signal }), signal);
+                    if (visited.ok) response = visited;
+                    else if ([401, 403, 404, 405].includes(visited.status)) visitUnavailable = true;
+                } catch (visitError) {
+                    if (signal?.aborted || visitError?.name === 'AbortError') throw visitError;
+                    visitUnavailable = true;
+                }
+            }
+            if (!response && refused) response = refused;
             if (response) {
                 if (!response.ok) throw linkError(`音乐网站返回 ${response.status}，本次未导入。原有歌曲未替换。`, 'RMT_MV_LINK_HTTP', response.status);
                 return { response, finalUrl: url };
@@ -212,7 +235,7 @@ export async function readMusicLink(value, { signal, fetcher = globalThis.fetch,
             page = sunoSongPage(await waitMusicRequest(response.text(), signal), sourceUrl);
         }
         const full = sunoShareSongLink(page, shareCode);
-        if (full) return { ...(await readMusicLink(full, { signal, fetcher, allowStreaming, hostProxy })), resolvedFrom: sourceUrl };
+        if (full) return { ...(await readMusicLink(full, { signal, fetcher, allowStreaming, hostProxy, requestHeaders })), resolvedFrom: sourceUrl };
     }
     const direct = sunoDirectAudio(sourceUrl);
     if (direct) {
