@@ -7,6 +7,7 @@ import * as chibi_filter from '../extras/coupleAvatarChibiFilter.js';
 import * as crop from '../extras/coupleAvatarCrop.js';
 import * as core_context from '../core/context.js';
 import * as core_settings from '../core/settings.js';
+import * as cg_format from '../core/cgPromptFormat.js';
 import * as constants from '../core/constants.js';
 import * as text from '../core/text.js';
 import * as runtime from '../core/state.js';
@@ -78,6 +79,23 @@ function queueDraft(view) {
             if (result?.durable === false) report(view, '创作设置暂留本页，暂未写入本机存储。');
         }).catch(error => failure(view, error));
     }, 300);
+}
+
+// NAI 4.5 needs short English tags; a sentence-style (NAI 5) or Chinese appearance
+// is read poorly and both people tend to come out alike or with the wrong sex.
+function tagFormatHint(view) {
+    let format = '';
+    try { format = core_settings.getPluginSettings(view.context).cgPromptFormat; } catch { format = ''; }
+    for (let i = 0; i < 2; i++) {
+        const node = view.root.querySelector(`[data-pair-appearance-status="${i}"]`);
+        const input = view.root.querySelector(`[data-pair-person="${i}"][data-pair-key="appearance"]`);
+        if (!node || !input) continue;
+        const value = input.value.trim();
+        if (format === 'nai45-tags' && value && !cg_format.isEnglishTagPrompt(value)) {
+            node.textContent = '现在是 NAI 4.5，这段外貌是整句或中文写法，4.5 读不好，容易把两人画成一样或认错性别。点「重新读取外貌」整理成英文 tag，或自己改成逗号分隔的 tag。';
+            node.dataset.pairTagHint = '1';
+        } else if (node.dataset.pairTagHint) { node.textContent = ''; delete node.dataset.pairTagHint; }
+    }
 }
 
 function appearanceStatus(view, index, message) {
@@ -347,6 +365,7 @@ function paintSettings(view) {
         input.value = value;
     }
     for (let i = 0; i < 2; i++) for (const key of ['name', 'appearance']) view.root.querySelector(`[data-pair-person="${i}"][data-pair-key="${key}"]`).value = view.settings.people[i][key] || '';
+    tagFormatHint(view);
     for (const node of view.root.querySelectorAll('[data-pair-type]')) node.setAttribute('aria-pressed', String(view.settings.pairType === node.dataset.pairType));
     for (const node of view.root.querySelectorAll('[data-pair-style]')) node.setAttribute('aria-pressed', String(view.settings.styleId === node.dataset.pairStyle));
     view.root.querySelector('[data-pair-selected-style]').textContent = styleLabel(view.settings);
@@ -453,6 +472,7 @@ function bindView(view) {
     view.root.addEventListener('input', event => {
         if (event.target.matches('[data-pair-person]')) cancelAppearanceReads(view, Number(event.target.dataset.pairPerson), '外貌已编辑，本次读取已取消。');
         if (event.target.matches('[data-pair-field],[data-pair-person]')) queueDraft(view);
+        if (event.target.matches('[data-pair-key="appearance"]')) tagFormatHint(view);
         if (event.target.matches('[data-pair-field="interactionDetail"],[data-pair-field="direction"]')) paintComposition(view);
     });
     view.root.addEventListener('change', event => {
