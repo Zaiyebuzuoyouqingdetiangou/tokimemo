@@ -69,13 +69,21 @@ function probeAudio(url, { signal } = {}) {
 async function commit(context, songId, media) {
     const key = songAudioKey(context, songId);
     const streaming = !media.blob;
-    const url = streaming ? music_link.musicUrl(media.url) : URL.createObjectURL(media.blob);
-    let probed;
-    try { probed = await probeAudio(url); }
-    catch (error) {
-        if (!streaming) { try { URL.revokeObjectURL(url); } catch {} }
-        if (media.failText && error?.name !== 'AbortError') throw core_text.safeUserError(media.failText, 'RMT_MV_AUDIO');
-        throw error;
+    // Online play may offer more than one address; keep the first that plays.
+    const candidates = streaming ? [media.url, ...(Array.isArray(media.alternates) ? media.alternates : [])].filter(Boolean) : [null];
+    let url, probed, failure;
+    for (const candidate of candidates) {
+        url = streaming ? music_link.musicUrl(candidate) : URL.createObjectURL(media.blob);
+        try { probed = await probeAudio(url); break; }
+        catch (error) {
+            if (!streaming) { try { URL.revokeObjectURL(url); } catch {} }
+            if (error?.name === 'AbortError') throw error;
+            failure = error;
+        }
+    }
+    if (!probed) {
+        if (media.failText) throw core_text.safeUserError(media.failText, 'RMT_MV_AUDIO');
+        throw failure;
     }
     try { mv.patchRecord(songId, { duration: probed.duration }, mv.captureMvTarget(context, songId)); } catch { /* No storyboard yet is fine. */ }
     const name = core_text.normalizeText(media.name, 80) || '链接歌曲';
