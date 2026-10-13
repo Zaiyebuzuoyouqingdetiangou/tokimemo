@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 362
-// Source SHA-256: 81054d7740bdc20ed8697c05369cce95ae0fc26474fd05327b06cd4f9c2a543d
+// Source SHA-256: 4f2b65695f46c8b188202edb4dc289c4c9e5c2b9c472693ace5921cd17af6977
 // Build: python3 tools/verification/build.py <source-root>
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -1507,7 +1507,7 @@ function __init_core_releaseNotes_js() {
 // MODULE: core/releaseNotes.js
 
 // GENERATED FROM README.md by tools/verification/build.py. Do not edit by hand.
-const RELEASE_README = "# 心迹回廊 1.0.57\n\n## 更新日志模块\n\n新增了更新日志板块，感谢@nancyindaeyo的更新。\n\n## 本次变动\n\n- 新增「互动 · 表情包」：给角色、你、你们俩各做表情包。写一句想法，模型列出表情清单（能联网的模型会先查这类表情包常见的情绪和动作，只学题材，不照抄别人的角色），每项都能改；单人一张竖图切成 6 个，双人一张横图切成 4 个，自动按白底切开并加白边，切不开时按格子切。切好后可以逐个改名、配字、单张重画或去掉，再保存。\n- 表情包首页一组只显示一个封面图标，点进去再看这一组的每个表情；可以改组名、换封面、换成自己的图、复制暗号、保存到本机。自己的图片可以导入到「其他」，两边都能发。\n- 图片存在你自己酒馆的图片文件夹里，不用图床；表情包数据跟着角色卡走，换设备打开同一个酒馆也在。\n- 表情包出图和情侣头像一样有「Q 版外貌过滤」：外貌里有身高、体型、骨相这类写实描述时，可以只在这次出图里去掉，免得画回正常比例；可选每次询问、自动过滤或不过滤。一组表情实际用的外貌会跟着这一组保存，之后单张重画也保持一致。\n- 表情包可以一键加入世界书：角色已有主世界书时只追加一条「心迹回廊 · 表情包」，没有就新建一本并绑定。条目字段和酒馆自己新建的条目一样，在世界书编辑器里能正常展开、修改；内容用 `<表情包>` 标签包住，写成 YAML 式的键值，只写表情名和一句意思，不放图片地址。\n- 表情只在剧情里写到角色用手机等通讯设备发消息（聊天软件、短信、私信、评论等）时使用，跟在那条消息后面或者单独作为一条；正文叙述和当面说话时不发，也不要求每条回复都发。\n- 这一条放在最新几条消息之前，不受世界书预算限制（设定很多时也不会被挤掉），只在正常回复、继续、重新生成和换一条时生效，不进其他插件的后台请求。改了表情或插件更新后，已加入的条目会自动更新；撤掉这一条即恢复原样。\n- 模型把暗号写偏也能显示成图：全角的【表情：…】、写成「表情包:」、或者漏了名字只写表情名，都会按表情名找到对应的图。\n- 聊天页多了一个可以拖动的小兔子悬浮按钮（和魔法棒菜单里心迹回廊的兔子是同一只，做过表情包后出现，松手会贴到左右边上并记住位置）。点开后分「我的 / 他的 / 双人 / 其他」，你也可以发他的表情；点一下把暗号放进输入框。聊天里的 `[表情:名字·表情名]` 会显示成对应的表情图，角色从世界书知道每个表情的意思，也知道你借用他的表情是在逗他。\n- 悬浮小兔子可以在表情包页关掉：关掉后聊天页不再显示，改从魔法棒菜单里的「表情包」打开，表情面板贴在输入栏上方，像表情键盘一样，选好一个自动收起，也可以点「收起」。开关记在酒馆设置里，对所有角色都生效。\n- 情侣头像新增 69 种画风（含构图版式、氛围光影、3D 渲染分组）和 48 种互动（含贴贴亲昵、小小较劲、幻想冒险）；画风和互动都改为可搜索、按分类浏览的选择面板，也可以随机抽一个。\n- Q 版、动物化身会给每个人物单独带上比例标签，外貌写得很长也不容易画成成人比例；生成时可选择过滤掉身高、体型等写实描述，只作用于这一次，原外貌不变，也可以在选项里设为自动过滤或不过滤。\n- 情侣头像新增“构图”：默认每次随机换一种镜头，始终保持左右各一人、能裁成两张头像；会改动所选互动或“小心思”里动作的姿势自动跳过，也可以固定为正面并排或指定一种。\n- 情侣头像的画风在 NAI 中加权放在最前，3D 画风另加 3D 标签，减少被画师串盖过。\n- 情侣头像的历史与收藏可以删除头像：卡片下方的“删除”，或点“多选”勾选多对后一起删除，删除前会确认一次；已设为聊天头像的图片、已保存的 PNG 和生图插件图库里的原图不受影响。预览下方的“删除这一对”去掉了，删除统一放在历史与收藏里。\n- 手书的剧情叙事、抒情意象、关系互动、高燃快切、节奏循环、悬念反转六种分镜类型，各自写明了画面特征和自查要求，示例也按类型重写，生成的分镜更贴近类型名字；表情卡拍和动态插画保持不变。\n- 手书新增五种分镜类型：文字PV（歌词大字卡为主角）、回忆走马灯（一闪而过的回忆，最后回到现在）、动画OP风（冷开场、人物亮相、全员同框、风景收尾）、第一视角（角色对着镜头，“你”只露手）、今昔对照（同一构图的从前与现在）。\n- 插件内的更新日志直接读取安装目录里的 README，修改 README 后不用重新打包也会同步。\n- 新增「本地快速建档」：不调用 API，直接把这段聊天的原文按场景切成一段段回忆，几秒钟就能建好，不会因为接口超时、额度不够或返回格式不对而失败。档案还是存在聊天文件里：复制聊天会跟着走，删除聊天就一起没了。\n- 可以在设置里打开「打开聊天就自动本地建档」（默认打开）：单人聊天还没有档案、并且已经聊了两句以上时，心迹回廊会自动建好；之后每多 6 层自动补上新楼层。只自动建一次，你删掉档案后不会再偷偷重建；群聊不会自动建。档案页也能手动点「本地快速建档」或「本地补上新楼层」。\n- 本地建的档案每段只记标题、几句原话和一段 320 字以内的摘录，状态栏、代码块、HTML 和表情暗号都会去掉；进提示词时和普通档案一样最多取 24 段，不会因为聊天很长就占满 token。档案本身存在聊天文件里，不发给模型，不占 token。\n- 本地档案是原文摘录，没有 API 整理过的回忆那么精炼。想要整理过的版本，之后接口可用时点「完全重建」即可替换；点「增量更新」会保留已有摘录，只用 API 整理之后的新楼层，用过 API 更新后就不再自动补本地楼层。\n- 「内容」页的「把勾选的项目排进任务中心」旁边多了「全选」：一次勾上所有能排队的页面，再点一次取消；排进任务中心后会按顺序一项一项生成。\n- 柏宝绘角色库里名字写成 {{user}} 或 {{char}} 的角色，现在也能对上当前的你和角色，读取里面写的外貌（包括性别）；写了真名的条目优先，有两条都能对上时不乱选。\n- CG 提示词编辑里，画面描述下方会写清每个人的外貌从哪来：对上了显示「外貌来自柏宝绘角色库『某某』」；没对上就说原因，比如库里没有这个名字（并列出库里有哪些）、有两个都能对上、库里只写了衣着动作，或者当前柏宝绘版本不支持读角色库。\n- 柏宝绘角色库的名字匹配放宽了一点：只差全角半角、首尾空格或大小写也能对上；一模一样的名字优先，有两个都能对上时不选，真正不同的名字不会硬配。\n- 印象曲歌词的文笔、意象和用词以角色人设为准；你的人设说话方式（比如说话直白、迷糊）只用在你唱的段落或对唱里你的句子，不再把整首词拉成大白话。\n- 修复用酒馆连接配置生成时，主聊天开着流式、心迹回廊却总用完整响应的问题：「本插件流式方式」选「保持原设置」时，现在跟主聊天的流式开关走。不少中转站会掐断长时间没有数据的完整响应，导致等了几十秒后「生成连接请求失败」；跟着用流式后就不会被掐断。明确选了「使用完整响应」的照旧。\n- 如果仍然是完整响应、并且等了 30 秒以上什么都没收到就断开，失败提示会直接说明多半是中转站掐断了连接，并告诉你去「高级生成参数」里改成「使用流式」。\n- 情侣头像选 NAI 4.5 时，两人外貌里都写明了性别（1boy / 1girl、少年 / 少女等），场景开头会加上人数和性别（如 1boy, 1girl），减少两人画成一样或都画成男生；没写明性别的不猜。\n- 情侣头像选 NAI 4.5 时，如果外貌栏里还是整句或中文写法（比如之前用 NAI 5 读出来的），外貌栏下面会提示：4.5 读不好这种写法，点「重新读取外貌」整理成英文 tag。\n- 情侣头像选 NAI 4.5 时，点生成前如果外貌还是整句或中文写法，会先问要不要整理成英文 tag：选「整理后生成」就和点「重新读取外貌」一样整理一次再画（有人物预设直接用预设，否则读一次人设），整理好的会留在外貌栏；选「保持原样生成」就照原样画。外貌已经是 tag 时不会问。\n- 修复本地快速建档可能盖掉旧档案内容的问题：复制、分支或改名后的聊天里，旧档案一时读不到时，自动建档会以为“没有档案”而新建一份，导致档案还在、已生成的内容不见了。现在只要聊天里留有旧档案、已生成内容、档案索引或本机备份的任何痕迹，自动建档和「本地快速建档」都不会新建。\n- 印象曲页面新增「听这首歌」：把歌词和曲风复制到 Suno 做好后，粘上歌曲链接（或选本机音频文件）就能直接在页面里播放。音源只存在这台设备上，制作手书时直接使用，不用再导一次；也可以移除。\n- Suno 歌曲链接改为直接按歌曲 ID 取音频，不再读取网页，手机端没有代理也能导入和播放。能下载时会存成本机文件，可用于导出手书视频；只能在线播放时会提示，导出视频需要先开酒馆代理或改用「选择文件」。短链接（suno.com/s/…）仍需读网页；旧域名 app.suno.ai 的歌曲链接也认。\n- 修复公开的 Suno 歌曲也导入失败：Suno 现在不让站外直接取这首歌的 MP3，导入时会改用它仍然公开的视频文件里的音轨（能下载就存成本机文件，手书和导出视频都能用；不能下载就在线播放）。下载被拦（包括酒馆代理被 Suno 拒绝）时不再直接判成“没有公开”；真的放不了才提示在 Suno 下载 MP3 后用「选择文件」导入。\n- 画风、互动、衣着、裁切、头像应用、自动外貌读取及其他已有功能保持。\n";
+const RELEASE_README = "# 心迹回廊 1.0.57\n\n## 更新日志模块\n\n新增了更新日志板块，感谢@nancyindaeyo的更新。\n\n## 本次变动\n\n- 新增「互动 · 表情包」：给角色、你、你们俩各做表情包。写一句想法，模型列出表情清单（能联网的模型会先查这类表情包常见的情绪和动作，只学题材，不照抄别人的角色），每项都能改；单人一张竖图切成 6 个，双人一张横图切成 4 个，自动按白底切开并加白边，切不开时按格子切。切好后可以逐个改名、配字、单张重画或去掉，再保存。\n- 表情包首页一组只显示一个封面图标，点进去再看这一组的每个表情；可以改组名、换封面、换成自己的图、复制暗号、保存到本机。自己的图片可以导入到「其他」，两边都能发。\n- 图片存在你自己酒馆的图片文件夹里，不用图床；表情包数据跟着角色卡走，换设备打开同一个酒馆也在。\n- 表情包出图和情侣头像一样有「Q 版外貌过滤」：外貌里有身高、体型、骨相这类写实描述时，可以只在这次出图里去掉，免得画回正常比例；可选每次询问、自动过滤或不过滤。一组表情实际用的外貌会跟着这一组保存，之后单张重画也保持一致。\n- 表情包可以一键加入世界书：角色已有主世界书时只追加一条「心迹回廊 · 表情包」，没有就新建一本并绑定。条目字段和酒馆自己新建的条目一样，在世界书编辑器里能正常展开、修改；内容用 `<表情包>` 标签包住，写成 YAML 式的键值，只写表情名和一句意思，不放图片地址。\n- 表情只在剧情里写到角色用手机等通讯设备发消息（聊天软件、短信、私信、评论等）时使用，跟在那条消息后面或者单独作为一条；正文叙述和当面说话时不发，也不要求每条回复都发。\n- 这一条放在最新几条消息之前，不受世界书预算限制（设定很多时也不会被挤掉），只在正常回复、继续、重新生成和换一条时生效，不进其他插件的后台请求。改了表情或插件更新后，已加入的条目会自动更新；撤掉这一条即恢复原样。\n- 模型把暗号写偏也能显示成图：全角的【表情：…】、写成「表情包:」、或者漏了名字只写表情名，都会按表情名找到对应的图。\n- 聊天页多了一个可以拖动的小兔子悬浮按钮（和魔法棒菜单里心迹回廊的兔子是同一只，做过表情包后出现，松手会贴到左右边上并记住位置）。点开后分「我的 / 他的 / 双人 / 其他」，你也可以发他的表情；点一下把暗号放进输入框。聊天里的 `[表情:名字·表情名]` 会显示成对应的表情图，角色从世界书知道每个表情的意思，也知道你借用他的表情是在逗他。\n- 悬浮小兔子可以在表情包页关掉：关掉后聊天页不再显示，改从魔法棒菜单里的「表情包」打开，表情面板贴在输入栏上方，像表情键盘一样，选好一个自动收起，也可以点「收起」。开关记在酒馆设置里，对所有角色都生效。\n- 情侣头像新增 69 种画风（含构图版式、氛围光影、3D 渲染分组）和 48 种互动（含贴贴亲昵、小小较劲、幻想冒险）；画风和互动都改为可搜索、按分类浏览的选择面板，也可以随机抽一个。\n- Q 版、动物化身会给每个人物单独带上比例标签，外貌写得很长也不容易画成成人比例；生成时可选择过滤掉身高、体型等写实描述，只作用于这一次，原外貌不变，也可以在选项里设为自动过滤或不过滤。\n- 情侣头像新增“构图”：默认每次随机换一种镜头，始终保持左右各一人、能裁成两张头像；会改动所选互动或“小心思”里动作的姿势自动跳过，也可以固定为正面并排或指定一种。\n- 情侣头像的画风在 NAI 中加权放在最前，3D 画风另加 3D 标签，减少被画师串盖过。\n- 情侣头像的历史与收藏可以删除头像：卡片下方的“删除”，或点“多选”勾选多对后一起删除，删除前会确认一次；已设为聊天头像的图片、已保存的 PNG 和生图插件图库里的原图不受影响。预览下方的“删除这一对”去掉了，删除统一放在历史与收藏里。\n- 手书的剧情叙事、抒情意象、关系互动、高燃快切、节奏循环、悬念反转六种分镜类型，各自写明了画面特征和自查要求，示例也按类型重写，生成的分镜更贴近类型名字；表情卡拍和动态插画保持不变。\n- 手书新增五种分镜类型：文字PV（歌词大字卡为主角）、回忆走马灯（一闪而过的回忆，最后回到现在）、动画OP风（冷开场、人物亮相、全员同框、风景收尾）、第一视角（角色对着镜头，“你”只露手）、今昔对照（同一构图的从前与现在）。\n- 插件内的更新日志直接读取安装目录里的 README，修改 README 后不用重新打包也会同步。\n- 新增「本地快速建档」：不调用 API，直接把这段聊天的原文按场景切成一段段回忆，几秒钟就能建好，不会因为接口超时、额度不够或返回格式不对而失败。档案还是存在聊天文件里：复制聊天会跟着走，删除聊天就一起没了。\n- 可以在设置里打开「打开聊天就自动本地建档」（默认打开）：单人聊天还没有档案、并且已经聊了两句以上时，心迹回廊会自动建好；之后每多 6 层自动补上新楼层。只自动建一次，你删掉档案后不会再偷偷重建；群聊不会自动建。档案页也能手动点「本地快速建档」或「本地补上新楼层」。\n- 本地建的档案每段只记标题、几句原话和一段 320 字以内的摘录，状态栏、代码块、HTML 和表情暗号都会去掉；进提示词时和普通档案一样最多取 24 段，不会因为聊天很长就占满 token。档案本身存在聊天文件里，不发给模型，不占 token。\n- 本地档案是原文摘录，没有 API 整理过的回忆那么精炼。想要整理过的版本，之后接口可用时点「完全重建」即可替换；点「增量更新」会保留已有摘录，只用 API 整理之后的新楼层，用过 API 更新后就不再自动补本地楼层。\n- 「内容」页的「把勾选的项目排进任务中心」旁边多了「全选」：一次勾上所有能排队的页面，再点一次取消；排进任务中心后会按顺序一项一项生成。\n- 柏宝绘角色库里名字写成 {{user}} 或 {{char}} 的角色，现在也能对上当前的你和角色，读取里面写的外貌（包括性别）；写了真名的条目优先，有两条都能对上时不乱选。\n- CG 提示词编辑里，画面描述下方会写清每个人的外貌从哪来：对上了显示「外貌来自柏宝绘角色库『某某』」；没对上就说原因，比如库里没有这个名字（并列出库里有哪些）、有两个都能对上、库里只写了衣着动作，或者当前柏宝绘版本不支持读角色库。\n- 柏宝绘角色库的名字匹配放宽了一点：只差全角半角、首尾空格或大小写也能对上；一模一样的名字优先，有两个都能对上时不选，真正不同的名字不会硬配。\n- 印象曲歌词的文笔、意象和用词以角色人设为准；你的人设说话方式（比如说话直白、迷糊）只用在你唱的段落或对唱里你的句子，不再把整首词拉成大白话。\n- 修复用酒馆连接配置生成时，主聊天开着流式、心迹回廊却总用完整响应的问题：「本插件流式方式」选「保持原设置」时，现在跟主聊天的流式开关走。不少中转站会掐断长时间没有数据的完整响应，导致等了几十秒后「生成连接请求失败」；跟着用流式后就不会被掐断。明确选了「使用完整响应」的照旧。\n- 如果仍然是完整响应、并且等了 30 秒以上什么都没收到就断开，失败提示会直接说明多半是中转站掐断了连接，并告诉你去「高级生成参数」里改成「使用流式」。\n- 情侣头像选 NAI 4.5 时，两人外貌里都写明了性别（1boy / 1girl、少年 / 少女等），场景开头会加上人数和性别（如 1boy, 1girl），减少两人画成一样或都画成男生；没写明性别的不猜。\n- 情侣头像选 NAI 4.5 时，如果外貌栏里还是整句或中文写法（比如之前用 NAI 5 读出来的），外貌栏下面会提示：4.5 读不好这种写法，点「重新读取外貌」整理成英文 tag。\n- 情侣头像选 NAI 4.5 时，点生成前如果外貌还是整句或中文写法，会先问要不要整理成英文 tag：选「整理后生成」就和点「重新读取外貌」一样整理一次再画（有人物预设直接用预设，否则读一次人设），整理好的会留在外貌栏；选「保持原样生成」就照原样画。外貌已经是 tag 时不会问。\n- 修复本地快速建档可能盖掉旧档案内容的问题：复制、分支或改名后的聊天里，旧档案一时读不到时，自动建档会以为“没有档案”而新建一份，导致档案还在、已生成的内容不见了。现在只要聊天里留有旧档案、已生成内容、档案索引或本机备份的任何痕迹，自动建档和「本地快速建档」都不会新建。\n- 印象曲页面新增「听这首歌」：把歌词和曲风复制到 Suno 做好后，粘上歌曲链接（或选本机音频文件）就能直接在页面里播放。音源只存在这台设备上，制作手书时直接使用，不用再导一次；也可以移除。\n- Suno 歌曲链接改为直接按歌曲 ID 取音频，不再读取网页，手机端没有代理也能导入和播放。能下载时会存成本机文件，可用于导出手书视频；只能在线播放时会提示，导出视频需要先开酒馆代理或改用「选择文件」。短链接（suno.com/s/…）仍需读网页；旧域名 app.suno.ai 的歌曲链接也认。\n- 修复公开的 Suno 歌曲也导入失败：Suno 现在不让站外直接取这首歌的 MP3，导入时会改用它仍然公开的视频文件里的音轨（能下载就存成本机文件，手书和导出视频都能用；不能下载就在线播放）。下载被拦（包括酒馆代理被 Suno 拒绝）时不再直接判成“没有公开”；真的放不了才提示在 Suno 下载 MP3 后用「选择文件」导入。\n- Suno 分享短链接（suno.com/s/…）也能直接粘：插件会通过酒馆代理把它换成完整歌曲链接（suno.com/song/…?sh=…）再导入，换好的链接会填回输入框。手机等读不了短链接的环境会提示在浏览器里打开短链接、复制跳转后的完整链接。\n- 画风、互动、衣着、裁切、头像应用、自动外貌读取及其他已有功能保持。\n";
 
 __m_core_releaseNotes_js.RELEASE_README = RELEASE_README;
 }
@@ -5441,6 +5441,21 @@ function sunoDirectAudio(value) {
     const match = url.pathname.match(/^\/song\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/?$/i);
     return match ? `https://cdn1.suno.ai/${match[1].toLowerCase()}.mp3` : '';
 }
+// suno.com/s/<code> is a share short link; Suno answers it with a redirect to
+// /song/<uuid>?sh=<code>. The code alone does not contain the song id.
+function sunoShareCode(value) {
+    let url;
+    try { url = new URL(value); } catch { return ''; }
+    if (!/^(?:www\.)?suno\.com$/i.test(url.hostname)) return '';
+    return url.pathname.match(/^\/s\/([A-Za-z0-9_-]{4,40})\/?$/)?.[1] || '';
+}
+// Full song link for a share: https://suno.com/song/<uuid>?sh=<code>.
+function sunoShareSongLink(songPage, code) {
+    const id = String(songPage || '').match(/\/song\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:[/?#]|$)/i)?.[1];
+    return id ? `https://suno.com/song/${id.toLowerCase()}${code ? `?sh=${encodeURIComponent(code)}` : ''}` : '';
+}
+const SUNO_SHARE_UNREADABLE = '这台设备读不了 Suno 短链接（suno.com/s/…）。请在浏览器里打开这个短链接，等它跳到 suno.com/song/… 后，复制地址栏里的完整链接再粘贴。原有歌曲未替换。';
+
 function sunoDirectVideo(value) {
     const audio = sunoDirectAudio(value);
     return audio ? audio.replace(/\.mp3$/, '.mp4') : '';
@@ -5512,6 +5527,26 @@ async function readMusicLink(value, { signal, fetcher = globalThis.fetch, allowS
         return { response, finalUrl };
     };
     let response, finalUrl;
+    const shareCode = sunoShareCode(sourceUrl);
+    if (shareCode) {
+        // Turn the short link into the full song link, then take the song-id path.
+        try { ({ response } = await get(sourceUrl)); }
+        catch (error) {
+            if (signal?.aborted || error?.name === 'AbortError') throw error;
+            if (error?.code === 'RMT_MV_LINK_NETWORK') throw linkError(SUNO_SHARE_UNREADABLE, 'RMT_MV_LINK_SHARE');
+            throw error;
+        }
+        // A browser-followed redirect exposes /song/<uuid> in the response URL
+        // (even when a local proxy resolved the relative Location); a proxy that
+        // followed it itself returns the song page, whose canonical names it.
+        let page = '';
+        try { if (/^\/song\/[0-9a-f-]{36}\/?$/i.test(new URL(response.url || '').pathname)) page = response.url; } catch {}
+        if (!page && /^(?:text\/html|application\/xhtml\+xml)\b/i.test(response.headers.get('content-type') || '')) {
+            page = sunoSongPage(await waitMusicRequest(response.text(), signal), sourceUrl);
+        }
+        const full = sunoShareSongLink(page, shareCode);
+        if (full) return { ...(await readMusicLink(full, { signal, fetcher, allowStreaming, hostProxy })), resolvedFrom: sourceUrl };
+    }
     const direct = sunoDirectAudio(sourceUrl);
     if (direct) {
         // Download when the CDN allows it (needed for video export): the .mp3
@@ -5580,6 +5615,8 @@ __m_extras_mvMusicLink_js.musicUrl = musicUrl;
 __m_extras_mvMusicLink_js.publicMusicSource = publicMusicSource;
 __m_extras_mvMusicLink_js.sunoSongPage = sunoSongPage;
 __m_extras_mvMusicLink_js.sunoDirectAudio = sunoDirectAudio;
+__m_extras_mvMusicLink_js.sunoShareCode = sunoShareCode;
+__m_extras_mvMusicLink_js.sunoShareSongLink = sunoShareSongLink;
 __m_extras_mvMusicLink_js.sunoDirectVideo = sunoDirectVideo;
 __m_extras_mvMusicLink_js.waitMusicRequest = waitMusicRequest;
 __m_extras_mvMusicLink_js.musicLinkName = musicLinkName;
@@ -9615,6 +9652,7 @@ const AUDIO_CHANGED_EVENT = 'hearttrace:mv-audio-changed';
 const loaded = new Map();     // key → { url, name, streaming, sourceUrl }
 const pending = new Map();    // key → AbortController
 const status = new Map();     // key → last status text
+const fill = new Map();       // key → full link to show in the input after a short link resolved
 let repaint = null;
 
 const esc = value => core_text.esc(value);
@@ -9714,8 +9752,10 @@ async function importSongLink(context, songId, value) {
         status.set(key, '正在检查音频…'); repaint?.();
         const result = await commit(context, songId, media);
         if (pending.get(key) !== controller) return false;
-        status.set(key, result.streaming ? '已接入在线播放。导出手书视频时需要能下载这首歌，若导不出可改用「选择文件」。'
-            : result.saved ? '已导入，这台设备会记住；制作手书时直接使用。' : '已导入，但这台设备没能记住，下次打开可能要重新导入。');
+        const done = result.streaming ? '已接入在线播放。导出手书视频时需要能下载这首歌，若导不出可改用「选择文件」。'
+            : result.saved ? '已导入，这台设备会记住；制作手书时直接使用。' : '已导入，但这台设备没能记住，下次打开可能要重新导入。';
+        if (media.resolvedFrom && media.sourceUrl) fill.set(key, media.sourceUrl);
+        status.set(key, media.resolvedFrom ? `短链接已换成完整歌曲链接。${done}` : done);
         return true;
     } catch (error) {
         if (pending.get(key) === controller) {
@@ -9766,13 +9806,14 @@ function setSongPlayerRepaint(fn) { repaint = typeof fn === 'function' ? fn : nu
 function songPlayerHtml(context, songId, { readOnly = false } = {}) {
     const key = songAudioKey(context, songId);
     const entry = loaded.get(key), busy = pending.has(key), note = status.get(key) || '';
+    const value = fill.get(key) || ''; fill.delete(key);
     const id = esc(songId);
     const player = entry
         ? `<div class="rmt-song-track"><span aria-hidden="true">♫</span><div><b>${esc(entry.name)}</b><small>${entry.streaming ? '在线播放' : '本机文件'}${entry.sourceUrl ? ` · <a href="${esc(entry.sourceUrl)}" target="_blank" rel="noopener noreferrer">来源</a>` : ''}</small></div></div>
            <audio controls preload="metadata" src="${esc(entry.url)}" data-rmt-song-player></audio>`
         : `<p class="rmt-song-note">还没有音源。把歌词和曲风复制到 Suno 生成后，粘上歌曲链接，或选本机音频文件。</p>`;
     const controls = readOnly ? '' : `<div class="rmt-song-link-row">
-      <input type="url" inputmode="url" autocomplete="off" spellcheck="false" data-rmt-song-link="${id}" placeholder="粘贴 Suno 歌曲链接（suno.com/song/…）或音频地址" ${busy ? 'disabled' : ''}>
+      <input type="url" inputmode="url" autocomplete="off" spellcheck="false" data-rmt-song-link="${id}"${value ? ` value="${esc(value)}"` : ''} placeholder="粘贴 Suno 歌曲链接或分享短链接，或音频地址" ${busy ? 'disabled' : ''}>
       ${busy ? `<button type="button" class="rmt-btn" data-rmt-song="audio-cancel" data-rmt-song-id="${id}">取消</button>` : `<button type="button" class="rmt-btn" data-rmt-song="audio-link" data-rmt-song-id="${id}">导入链接</button>`}
     </div>
     <div class="rmt-song-toolbar"><label class="rmt-btn rmt-song-file"><input type="file" accept="audio/*,.mp3,.m4a,.wav,.ogg,.flac" data-rmt-song-file="${id}" hidden ${busy ? 'disabled' : ''}>选择文件</label>${entry ? `<button type="button" class="rmt-btn" data-rmt-song="audio-remove" data-rmt-song-id="${id}">移除音源</button>` : ''}</div>`;
@@ -94461,7 +94502,7 @@ function repaintSongPlayer() {
     const next = temp.firstElementChild; if (!next) return;
     host.replaceWith(next);
     const input = next.querySelector(`[data-rmt-song-link="${songId}"]`);
-    if (input && typeof keep === 'string' && !next.querySelector('[data-rmt-song="audio-cancel"]')) input.value = keep;
+    if (input && typeof keep === 'string' && !input.getAttribute('value') && !next.querySelector('[data-rmt-song="audio-cancel"]')) input.value = keep;
     bindSongPlayer(body, { id: songId });
 }
 function bindSongPlayer(body, selected) {
@@ -100357,7 +100398,10 @@ async function importMusicLink(value) {
         if (musicLinkImport !== pending || !isView(opened) || controller.signal.aborted) return;
         view.musicLinkStatus = '正在检查音频…'; renderMv();
         const ok = await acceptAudio(media.blob || media.url, media.name, true, target, token, { sourceUrl: media.sourceUrl });
-        if (musicLinkImport === pending && isView(opened)) view.musicLinkStatus = ok ? (media.streaming ? '已接入在线音轨，与画面共用播放进度。' : '已导入，与画面共用播放进度。') : '音频未能导入，原有歌曲未替换。';
+        if (musicLinkImport === pending && isView(opened)) {
+            view.musicLinkStatus = ok ? `${media.resolvedFrom ? '短链接已换成完整歌曲链接。' : ''}${media.streaming ? '已接入在线音轨，与画面共用播放进度。' : '已导入，与画面共用播放进度。'}` : '音频未能导入，原有歌曲未替换。';
+            if (ok && media.resolvedFrom && media.sourceUrl) view.musicLinkInput = media.sourceUrl;
+        }
     } catch (error) {
         if (musicLinkImport === pending && isView(opened)) view.musicLinkStatus = timedOut ? '音乐读取超时，原有歌曲未替换。' : controller.signal.aborted ? '' : /^RMT_MV_LINK_/.test(error?.code || '') ? String(error.message) : '音乐读取失败，原有歌曲未替换。';
     } finally {

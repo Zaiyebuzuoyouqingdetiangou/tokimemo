@@ -10,6 +10,7 @@ export const AUDIO_CHANGED_EVENT = 'hearttrace:mv-audio-changed';
 const loaded = new Map();     // key → { url, name, streaming, sourceUrl }
 const pending = new Map();    // key → AbortController
 const status = new Map();     // key → last status text
+const fill = new Map();       // key → full link to show in the input after a short link resolved
 let repaint = null;
 
 const esc = value => core_text.esc(value);
@@ -109,8 +110,10 @@ export async function importSongLink(context, songId, value) {
         status.set(key, '正在检查音频…'); repaint?.();
         const result = await commit(context, songId, media);
         if (pending.get(key) !== controller) return false;
-        status.set(key, result.streaming ? '已接入在线播放。导出手书视频时需要能下载这首歌，若导不出可改用「选择文件」。'
-            : result.saved ? '已导入，这台设备会记住；制作手书时直接使用。' : '已导入，但这台设备没能记住，下次打开可能要重新导入。');
+        const done = result.streaming ? '已接入在线播放。导出手书视频时需要能下载这首歌，若导不出可改用「选择文件」。'
+            : result.saved ? '已导入，这台设备会记住；制作手书时直接使用。' : '已导入，但这台设备没能记住，下次打开可能要重新导入。';
+        if (media.resolvedFrom && media.sourceUrl) fill.set(key, media.sourceUrl);
+        status.set(key, media.resolvedFrom ? `短链接已换成完整歌曲链接。${done}` : done);
         return true;
     } catch (error) {
         if (pending.get(key) === controller) {
@@ -161,13 +164,14 @@ export function setSongPlayerRepaint(fn) { repaint = typeof fn === 'function' ? 
 export function songPlayerHtml(context, songId, { readOnly = false } = {}) {
     const key = songAudioKey(context, songId);
     const entry = loaded.get(key), busy = pending.has(key), note = status.get(key) || '';
+    const value = fill.get(key) || ''; fill.delete(key);
     const id = esc(songId);
     const player = entry
         ? `<div class="rmt-song-track"><span aria-hidden="true">♫</span><div><b>${esc(entry.name)}</b><small>${entry.streaming ? '在线播放' : '本机文件'}${entry.sourceUrl ? ` · <a href="${esc(entry.sourceUrl)}" target="_blank" rel="noopener noreferrer">来源</a>` : ''}</small></div></div>
            <audio controls preload="metadata" src="${esc(entry.url)}" data-rmt-song-player></audio>`
         : `<p class="rmt-song-note">还没有音源。把歌词和曲风复制到 Suno 生成后，粘上歌曲链接，或选本机音频文件。</p>`;
     const controls = readOnly ? '' : `<div class="rmt-song-link-row">
-      <input type="url" inputmode="url" autocomplete="off" spellcheck="false" data-rmt-song-link="${id}" placeholder="粘贴 Suno 歌曲链接（suno.com/song/…）或音频地址" ${busy ? 'disabled' : ''}>
+      <input type="url" inputmode="url" autocomplete="off" spellcheck="false" data-rmt-song-link="${id}"${value ? ` value="${esc(value)}"` : ''} placeholder="粘贴 Suno 歌曲链接或分享短链接，或音频地址" ${busy ? 'disabled' : ''}>
       ${busy ? `<button type="button" class="rmt-btn" data-rmt-song="audio-cancel" data-rmt-song-id="${id}">取消</button>` : `<button type="button" class="rmt-btn" data-rmt-song="audio-link" data-rmt-song-id="${id}">导入链接</button>`}
     </div>
     <div class="rmt-song-toolbar"><label class="rmt-btn rmt-song-file"><input type="file" accept="audio/*,.mp3,.m4a,.wav,.ogg,.flac" data-rmt-song-file="${id}" hidden ${busy ? 'disabled' : ''}>选择文件</label>${entry ? `<button type="button" class="rmt-btn" data-rmt-song="audio-remove" data-rmt-song-id="${id}">移除音源</button>` : ''}</div>`;
