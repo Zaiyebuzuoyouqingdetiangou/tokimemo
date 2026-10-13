@@ -65,7 +65,21 @@ export function applyAdvancedExclusions(body, parsed) {
 // saved connection settings. An explicit complete-response choice always wins.
 export function requestStreaming(parsed, settings, options = {}) {
     if (parsed.streamMode !== 'original') return parsed.streamMode === 'on';
-    return options.preferStream === true || (settings.apiConnectionMode === 'manual' && settings.manualApiStreaming === true);
+    if (options.preferStream === true) return true;
+    if (settings.apiConnectionMode === 'manual') return settings.manualApiStreaming === true;
+    // 「保持原设置」for a connection profile follows the host's own streaming switch,
+    // the one the main chat already works with through the same relay.
+    return options.hostPrefersStream === true;
+}
+
+// The host's streaming switch for the API type of this connection profile.
+// Read-only; anything unreadable counts as not streaming (the old behaviour).
+export function hostPrefersStream(context, profile) {
+    try {
+        const mode = typeof profile?.mode === 'string' ? profile.mode : '';
+        if (mode === 'tc') return context?.textCompletionSettings?.streaming === true;
+        return context?.chatCompletionSettings?.stream_openai === true;
+    } catch { return false; }
 }
 export function advancedFingerprint(settings) {
     if (settings?.advancedGenerationEnabled !== true) return '';
