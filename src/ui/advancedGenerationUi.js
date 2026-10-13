@@ -8,7 +8,7 @@ export function advancedGenerationHtml() {
 <label class="rmt-settings-check"><input type="checkbox" data-rmt-advanced-enabled><span>启用高级生成参数</span></label>
 <p>默认关闭，仅作用于心迹回廊。参数排除与附加 JSON 用于手动 API / 自定义 Profile，不改主聊天。</p>
 <label class="rmt-settings-field"><span>推理强度（reasoning_effort）</span><select class="text_pole" data-rmt-advanced-effort><option value="">默认：不覆盖</option>${advanced.REASONING_EFFORTS.map(value => `<option value="${value}">${value}</option>`).join('')}</select></label>
-<label class="rmt-settings-field"><span>本插件流式方式</span><select class="text_pole" data-rmt-advanced-stream><option value="original">保持原设置</option><option value="on">使用流式</option><option value="off">使用完整响应</option></select></label>
+<label class="rmt-settings-field"><span>本插件流式方式</span><select class="text_pole" data-rmt-advanced-stream><option value="original">保持原设置（跟主聊天的流式开关）</option><option value="on">使用流式</option><option value="off">使用完整响应</option></select></label>
 <p>不同模型接受的推理配置不同；不会根据模型名自动替你修改。</p>
 <b>排除参数（勾选＝不发送）</b>
 <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:12px 0">${advanced.EXCLUDABLE_PARAMETERS.map(key => `<label class="rmt-settings-check" style="min-width:0;overflow-wrap:anywhere"><input type="checkbox" data-rmt-advanced-exclude="${key}"><span>${labels[key]}<small style="display:block;overflow-wrap:anywhere">${key}</small></span></label>`).join('')}</div>
