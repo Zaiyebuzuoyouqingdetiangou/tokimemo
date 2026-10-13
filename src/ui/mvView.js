@@ -429,7 +429,10 @@ async function importMusicLink(value) {
         if (musicLinkImport !== pending || !isView(opened) || controller.signal.aborted) return;
         view.musicLinkStatus = '正在检查音频…'; renderMv();
         const ok = await acceptAudio(media.blob || media.url, media.name, true, target, token, { sourceUrl: media.sourceUrl });
-        if (musicLinkImport === pending && isView(opened)) view.musicLinkStatus = ok ? (media.streaming ? '已接入在线音轨，与画面共用播放进度。' : '已导入，与画面共用播放进度。') : '音频未能导入，原有歌曲未替换。';
+        if (musicLinkImport === pending && isView(opened)) {
+            view.musicLinkStatus = ok ? `${media.resolvedFrom ? '短链接已换成完整歌曲链接。' : ''}${media.streaming ? '已接入在线音轨，与画面共用播放进度。' : '已导入，与画面共用播放进度。'}` : '音频未能导入，原有歌曲未替换。';
+            if (ok && media.resolvedFrom && media.sourceUrl) view.musicLinkInput = media.sourceUrl;
+        }
     } catch (error) {
         if (musicLinkImport === pending && isView(opened)) view.musicLinkStatus = timedOut ? '音乐读取超时，原有歌曲未替换。' : controller.signal.aborted ? '' : /^RMT_MV_LINK_/.test(error?.code || '') ? String(error.message) : '音乐读取失败，原有歌曲未替换。';
     } finally {

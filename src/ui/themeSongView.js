@@ -242,7 +242,7 @@ function repaintSongPlayer() {
     const next = temp.firstElementChild; if (!next) return;
     host.replaceWith(next);
     const input = next.querySelector(`[data-rmt-song-link="${songId}"]`);
-    if (input && typeof keep === 'string' && !next.querySelector('[data-rmt-song="audio-cancel"]')) input.value = keep;
+    if (input && typeof keep === 'string' && !input.getAttribute('value') && !next.querySelector('[data-rmt-song="audio-cancel"]')) input.value = keep;
     bindSongPlayer(body, { id: songId });
 }
 function bindSongPlayer(body, selected) {

@@ -108,6 +108,21 @@ export function sunoDirectAudio(value) {
     const match = url.pathname.match(/^\/song\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/?$/i);
     return match ? `https://cdn1.suno.ai/${match[1].toLowerCase()}.mp3` : '';
 }
+// suno.com/s/<code> is a share short link; Suno answers it with a redirect to
+// /song/<uuid>?sh=<code>. The code alone does not contain the song id.
+export function sunoShareCode(value) {
+    let url;
+    try { url = new URL(value); } catch { return ''; }
+    if (!/^(?:www\.)?suno\.com$/i.test(url.hostname)) return '';
+    return url.pathname.match(/^\/s\/([A-Za-z0-9_-]{4,40})\/?$/)?.[1] || '';
+}
+// Full song link for a share: https://suno.com/song/<uuid>?sh=<code>.
+export function sunoShareSongLink(songPage, code) {
+    const id = String(songPage || '').match(/\/song\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:[/?#]|$)/i)?.[1];
+    return id ? `https://suno.com/song/${id.toLowerCase()}${code ? `?sh=${encodeURIComponent(code)}` : ''}` : '';
+}
+const SUNO_SHARE_UNREADABLE = '这台设备读不了 Suno 短链接（suno.com/s/…）。请在浏览器里打开这个短链接，等它跳到 suno.com/song/… 后，复制地址栏里的完整链接再粘贴。原有歌曲未替换。';
+
 export function sunoDirectVideo(value) {
     const audio = sunoDirectAudio(value);
     return audio ? audio.replace(/\.mp3$/, '.mp4') : '';
@@ -179,6 +194,26 @@ export async function readMusicLink(value, { signal, fetcher = globalThis.fetch,
         return { response, finalUrl };
     };
     let response, finalUrl;
+    const shareCode = sunoShareCode(sourceUrl);
+    if (shareCode) {
+        // Turn the short link into the full song link, then take the song-id path.
+        try { ({ response } = await get(sourceUrl)); }
+        catch (error) {
+            if (signal?.aborted || error?.name === 'AbortError') throw error;
+            if (error?.code === 'RMT_MV_LINK_NETWORK') throw linkError(SUNO_SHARE_UNREADABLE, 'RMT_MV_LINK_SHARE');
+            throw error;
+        }
+        // A browser-followed redirect exposes /song/<uuid> in the response URL
+        // (even when a local proxy resolved the relative Location); a proxy that
+        // followed it itself returns the song page, whose canonical names it.
+        let page = '';
+        try { if (/^\/song\/[0-9a-f-]{36}\/?$/i.test(new URL(response.url || '').pathname)) page = response.url; } catch {}
+        if (!page && /^(?:text\/html|application\/xhtml\+xml)\b/i.test(response.headers.get('content-type') || '')) {
+            page = sunoSongPage(await waitMusicRequest(response.text(), signal), sourceUrl);
+        }
+        const full = sunoShareSongLink(page, shareCode);
+        if (full) return { ...(await readMusicLink(full, { signal, fetcher, allowStreaming, hostProxy })), resolvedFrom: sourceUrl };
+    }
     const direct = sunoDirectAudio(sourceUrl);
     if (direct) {
         // Download when the CDN allows it (needed for video export): the .mp3
