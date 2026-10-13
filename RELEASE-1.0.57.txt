@@ -7,6 +7,6 @@
 - 表情包悬浮开关、魔法棒菜单入口、世界书条目写入在浏览器模拟页面中点过。
 - 未验证：手机/实际酒馆加载、真实外部服务和随机生成图片效果。
 
-最终源码 SHA-256：aa6f06ce31b4c0136e714af80b47a5d31d989b0cf2f096270ce29026d82c6794。
-最终 bundle SHA-256：90a9fe19c6f3b6c42d1b1db57892bcca9381fb397fa3a1afed931e6ad4d49436。
+最终源码 SHA-256：2cb510321b9366525b3ada2a443fb1e8a14d735dde3db905516ad1af3cde7a5c。
+最终 bundle SHA-256：e0f7f69177969195e17f87396027f6d9777e6dfedea4b349b1b4bc8ac1d0f682。
 版本为 1.0.57，BUILD 与启动查询串为 1.0.57。
