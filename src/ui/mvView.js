@@ -290,12 +290,13 @@ globalThis.addEventListener?.('hearttrace:mv-audio-changed', event => {
     audioLoads.get(key)?.cancel?.();
     audioLoads.delete(key); audioTried.delete(key);
     const old = audioBySong.get(key);
+    const open = isView() && audioKey() === key;
     if (old) {
         audioBySong.delete(key);
-        if (view?.scope && audioKey() === key) { try { stopPlayback(); } catch {} player.audio = null; }
+        if (open) { try { stopPlayback(); } catch {} player.audio = null; }
         if (!old.streaming) { try { URL.revokeObjectURL(old.url); } catch {} }
     }
-    if (view?.scope && audioKey() === key) { restoreAudio(); try { renderMv(); } catch {} }
+    if (open) { restoreAudio(); try { renderMv(); } catch {} }
 });
 
 function restoreAudio() {

@@ -102,7 +102,7 @@ export function sunoSongPage(html, base) {
 export function sunoDirectAudio(value) {
     let url;
     try { url = new URL(value); } catch { return ''; }
-    if (!/^(?:www\.)?suno\.com$/i.test(url.hostname)) return '';
+    if (!/^(?:(?:www|app)\.)?suno\.(?:com|ai)$/i.test(url.hostname)) return '';
     const match = url.pathname.match(/^\/song\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/?$/i);
     return match ? `https://cdn1.suno.ai/${match[1].toLowerCase()}.mp3` : '';
 }
