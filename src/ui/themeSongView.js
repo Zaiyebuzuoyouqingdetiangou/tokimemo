@@ -10,6 +10,7 @@ import * as repository from '../archive/repository.js';
 import * as library from '../archive/library.js';
 import * as generation from '../generation/client.js';
 import * as mv from '../extras/mv.js';
+import * as song_player from './songPlayer.js';
 import * as recoveryView from './recoveryView.js';
 import * as overlay from './overlay.js';
 import * as text from '../core/text.js';
@@ -204,13 +205,17 @@ export function renderThemeSongs() {
         { kind: 'song-cover', containerId: selected.id }, readonly(),
         { placeholder: '<div class="rmt-song-cover-empty"><span aria-hidden="true">♫</span><b>专辑封面</b></div>' })}</div>` : '';
     const switcher = `<div class="rmt-song-display-switch" role="group" aria-label="歌曲操作"><button type="button" class="rmt-btn" data-rmt-song="view-read" aria-pressed="${displayMode === 'read'}">阅读模式</button><button type="button" class="rmt-btn" data-rmt-song="view-format" aria-pressed="${displayMode === 'format'}">创作格式</button>${mvButton}</div>`;
-    const details = `<div class="rmt-song-detail"${selected ? ` data-rmt-current-song="${esc(selected.id)}"` : ''}>${selected ? switcher : ''}${cover}${displayMode === 'format' ? formatDetails : readDetails}</div>`;
+    let audio = '';
+    if (selected && !runtimeState.activeArchiveSnapshot && !selected.generationIncomplete) {
+        try { audio = song_player.songPlayerHtml(contextApi.getContext(), selected.id, { readOnly: readonly() }); } catch { audio = ''; }
+    }
+    const details = `<div class="rmt-song-detail"${selected ? ` data-rmt-current-song="${esc(selected.id)}"` : ''}>${selected ? switcher : ''}${cover}${audio}${displayMode === 'format' ? formatDetails : readDetails}</div>`;
     const list = session.songs.length ? `<details class="rmt-song-library"><summary><span>歌曲列表 · ${session.songs.length} 首</span><small>${esc(selected?.title || '')}</small></summary><nav class="rmt-song-list" aria-label="已保存的印象曲">${[...session.songs].reverse().map(song => `<button type="button" class="${song.id === selected?.id ? 'active' : ''}" data-rmt-song="select" data-rmt-song-id="${esc(song.id)}" aria-current="${song.id === selected?.id ? 'page' : 'false'}"><span aria-hidden="true">♪</span><span><b>${esc(song.title)}</b><small>${esc(song.singer)}</small></span></button>`).join('')}</nav></details>` : '';
     const allCache = runtimeState.activeArchiveSnapshot?.cache || cache.getCache(contextApi.getContext());
     const recovery = recoveryView.recoveryBannerHtml(allCache, memory, { readOnly: readonly() });
     const partial = selected?.generationIncomplete ? '<p class="rmt-recovery-status" role="status">这首歌尚未写完；已收到的歌名、曲风和歌词分别保留，空白部分仍待生成。</p>' : '';
     const completedCount = session.songs.filter(song => !song.generationIncomplete).length;
-    overlay.bodyEl().innerHTML = `<main class="rmt-theme-song"><header class="rmt-song-heading"><div class="rmt-song-emblem" aria-hidden="true">♫</div><div><h2>角色印象曲</h2><p>${session.songs.length ? `已收录 ${completedCount} 首${completedCount < session.songs.length ? ' · 另有未完成草稿' : ''}` : '歌名 · 曲风 · 完整歌词'}</p></div></header><p class="rmt-song-note">生成歌曲文本与编曲说明，不生成音频。</p>${partial}${recovery}${form}<div class="rmt-song-layout ${list ? 'has-songs' : ''}">${list}${details}</div></main>`;
+    overlay.bodyEl().innerHTML = `<main class="rmt-theme-song"><header class="rmt-song-heading"><div class="rmt-song-emblem" aria-hidden="true">♫</div><div><h2>角色印象曲</h2><p>${session.songs.length ? `已收录 ${completedCount} 首${completedCount < session.songs.length ? ' · 另有未完成草稿' : ''}` : '歌名 · 曲风 · 完整歌词'}</p></div></header><p class="rmt-song-note">生成歌曲文本与编曲说明，不生成音频；到 Suno 做好后，把歌曲链接粘回来就能在这里听、做手书。</p>${partial}${recovery}${form}<div class="rmt-song-layout ${list ? 'has-songs' : ''}">${list}${details}</div></main>`;
     const body = overlay.bodyEl(), draft = composerOptions.readSongOptions(contextApi.getContext(), memory);
     const fields = { subject: draft.subject === 'event' ? `event:${draft.eventId}` : 'character', language: draft.language || 'zh',
         'custom-language': draft.customLanguage || '', voice: draft.voice || 'char', direction: draft.direction || '' };
@@ -222,6 +227,42 @@ export function renderThemeSongs() {
     const composer = body.querySelector('.rmt-song-composer');
     composer?.addEventListener('input', () => captureSongComposer(body, memory));
     composer?.addEventListener('change', () => { captureSongComposer(body, memory); syncSongLanguageInput(body); });
+    bindSongPlayer(body, selected);
+}
+
+// The audio block repaints itself only, so typed composer fields stay put.
+function repaintSongPlayer() {
+    const body = overlay.bodyEl?.(); if (!body) return;
+    const host = body.querySelector('[data-rmt-song-audio]'); if (!host) return;
+    const songId = host.dataset.rmtSongAudio;
+    const keep = body.querySelector(`[data-rmt-song-link="${songId}"]`)?.value;
+    let html = '';
+    try { html = song_player.songPlayerHtml(contextApi.getContext(), songId, { readOnly: readonly() }); } catch { return; }
+    const temp = document.createElement('div'); temp.innerHTML = html;
+    const next = temp.firstElementChild; if (!next) return;
+    host.replaceWith(next);
+    const input = next.querySelector(`[data-rmt-song-link="${songId}"]`);
+    if (input && typeof keep === 'string' && !next.querySelector('[data-rmt-song="audio-cancel"]')) input.value = keep;
+    bindSongPlayer(body, { id: songId });
+}
+function bindSongPlayer(body, selected) {
+    if (!selected || runtimeState.activeArchiveSnapshot) return;
+    song_player.setSongPlayerRepaint(repaintSongPlayer);
+    const file = body.querySelector(`[data-rmt-song-file="${selected.id}"]`);
+    file?.addEventListener('change', () => {
+        const chosen = file.files?.[0]; if (!chosen) return;
+        void song_player.importSongFile(contextApi.getContext(), selected.id, chosen);
+    });
+    const link = body.querySelector(`[data-rmt-song-link="${selected.id}"]`);
+    link?.addEventListener('keydown', event => {
+        if (event.key !== 'Enter') return;
+        event.preventDefault();
+        void song_player.importSongLink(contextApi.getContext(), selected.id, link.value);
+    });
+    // Audio kept from an earlier visit shows up without a click.
+    if (!song_player.currentSongAudio(contextApi.getContext(), selected.id)) {
+        void song_player.loadSongAudio(contextApi.getContext(), selected.id).then(entry => { if (entry) repaintSongPlayer(); }).catch(() => {});
+    }
 }
 export async function deleteThemeSong(id) {
     const shown = assertThemeSongReader();
@@ -294,6 +335,17 @@ export async function handleThemeSongAction(action, id = '') {
             if (nextComposer && typeof wasOpen === 'boolean') nextComposer.open = wasOpen;
             body.scrollTop = scrollTop;
             return;
+        }
+        if (action === 'audio-link' || action === 'audio-cancel' || action === 'audio-remove') {
+            if (readonly() || runtimeState.activeArchiveSnapshot) return;
+            const context = contextApi.getContext();
+            if (action === 'audio-cancel') return void song_player.cancelSongImport(context, id);
+            if (action === 'audio-remove') {
+                if (!overlay.confirmExplicitAction('移除这首歌的音源？', '只移除这台设备上保存的音频；歌词、曲风和手书分镜保留。', { destructive: true })) return;
+                return void song_player.removeSongAudio(context, id);
+            }
+            const input = overlay.bodyEl().querySelector(`[data-rmt-song-link="${CSS.escape(id)}"]`);
+            return void song_player.importSongLink(context, id, input?.value || '');
         }
         if (action === 'select') {
             if (session.songs.some(song => song.id === id)) {

@@ -282,6 +282,22 @@ function isView(target = viewTarget()) {
         && view.songId === target.songId && view.epoch === target.epoch;
 }
 
+// The song page can import or remove the same song's audio. Drop what this
+// editor cached for that key so the next open (or the open editor) re-reads it.
+globalThis.addEventListener?.('hearttrace:mv-audio-changed', event => {
+    const key = event?.detail?.key;
+    if (typeof key !== 'string' || !key) return;
+    audioLoads.get(key)?.cancel?.();
+    audioLoads.delete(key); audioTried.delete(key);
+    const old = audioBySong.get(key);
+    if (old) {
+        audioBySong.delete(key);
+        if (view?.scope && audioKey() === key) { try { stopPlayback(); } catch {} player.audio = null; }
+        if (!old.streaming) { try { URL.revokeObjectURL(old.url); } catch {} }
+    }
+    if (view?.scope && audioKey() === key) { restoreAudio(); try { renderMv(); } catch {} }
+});
+
 function restoreAudio() {
     const context = ctx();
     if (!context || audioBySong.has(audioKey())) return;
@@ -352,7 +368,9 @@ function acceptAudio(blob, name, persist, target = mv.captureMvTarget(ctx(), vie
             if ((details.sourceUrl || fromVideo) && duration <= 0) { finish(false, core_text.safeUserError('这段音频无法取得完整时长，原有歌曲未替换。', 'RMT_MV_AUDIO')); return; }
             try {
                 const updated = mv.patchRecord(target.songId, { duration }, target);
-                if ((details.sourceUrl || fromVideo) && !updated) { finish(false, core_text.safeUserError('当前歌曲已变化，音频未替换。', 'RMT_MV_AUDIO')); return; }
+                // A track kept from the song page may predate any storyboard; only a
+                // fresh import must land on the current record.
+                if ((details.sourceUrl || fromVideo) && !updated && persist) { finish(false, core_text.safeUserError('当前歌曲已变化，音频未替换。', 'RMT_MV_AUDIO')); return; }
             }
             catch (error) { finish(false, error); return; }
             const old = audioBySong.get(key);
