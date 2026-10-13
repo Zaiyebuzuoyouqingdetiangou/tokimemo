@@ -96,6 +96,17 @@ export function sunoSongPage(html, base) {
     return '';
 }
 
+// A Suno song page is https://suno.com/song/<uuid>; its public audio is served
+// from the CDN under the same id. Knowing the id, the page itself need not be
+// read (which needs a cross-site proxy); the audio address is enough to play.
+export function sunoDirectAudio(value) {
+    let url;
+    try { url = new URL(value); } catch { return ''; }
+    if (!/^(?:www\.)?suno\.com$/i.test(url.hostname)) return '';
+    const match = url.pathname.match(/^\/song\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/?$/i);
+    return match ? `https://cdn1.suno.ai/${match[1].toLowerCase()}.mp3` : '';
+}
+
 function abortReason(signal) { return signal?.reason || new DOMException('已取消', 'AbortError'); }
 
 // Some WebView fetch bridges do not settle their promise when aborted. The UI
@@ -160,6 +171,25 @@ export async function readMusicLink(value, { signal, fetcher = globalThis.fetch,
         return { response, finalUrl };
     };
     let response, finalUrl;
+    const direct = sunoDirectAudio(sourceUrl);
+    if (direct) {
+        // Download when the CDN allows it (needed for video export); otherwise
+        // the audio element can still play it without any proxy.
+        try { ({ response, finalUrl } = await get(direct)); }
+        catch (error) {
+            if (signal?.aborted || error?.name === 'AbortError') throw error;
+            if (allowStreaming && error?.code === 'RMT_MV_LINK_NETWORK') return { url: direct, name: 'Suno 歌曲', sourceUrl, streaming: true };
+            if (error?.code === 'RMT_MV_LINK_HTTP' && [403, 404].includes(error.status)) throw linkError('Suno 没有公开这首歌的音频（可能是私密歌曲或已删除）。原有歌曲未替换。', 'RMT_MV_LINK_PAGE', error.status);
+            throw error;
+        }
+        if (/^(?:text\/|application\/(?:json|xml|xhtml))/i.test(response.headers.get('content-type') || '')) {
+            throw linkError('这个 Suno 歌曲没有公开的音频文件（可能未公开或已删除）。原有歌曲未替换。', 'RMT_MV_LINK_PAGE');
+        }
+        const blob = await waitMusicRequest(response.blob(), signal);
+        signal?.throwIfAborted?.();
+        if (!blob.size) throw linkError('链接返回了空文件。原有歌曲未替换。', 'RMT_MV_LINK_EMPTY');
+        return { blob, name: 'Suno 歌曲', sourceUrl };
+    }
     try { ({ response, finalUrl } = await get(sourceUrl)); }
     catch (error) {
         if (allowStreaming && error?.code === 'RMT_MV_LINK_NETWORK' && /\.(?:mp3|m4a|aac|wav|ogg|opus|flac|webm)$/i.test(new URL(sourceUrl).pathname)) {

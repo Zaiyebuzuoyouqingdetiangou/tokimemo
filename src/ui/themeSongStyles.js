@@ -19,6 +19,19 @@ ${root} .rmt-theme-song textarea{min-height:200px;resize:vertical}
 ${root} .rmt-song-layout{display:grid;grid-template-columns:minmax(0,1fr);gap:16px;min-width:0}
 ${root} .rmt-song-detail{min-width:0}
 ${root} .rmt-song-cover{max-width:480px;margin:0 auto 20px;min-width:0}
+${root} .rmt-song-audio{max-width:640px;margin:0 auto 20px;padding:14px 16px;border:1px solid var(--rmt-theme-border);border-radius:16px;background:var(--rmt-theme-soft,var(--rmt-theme-surface-solid));display:flex;flex-direction:column;gap:10px}
+${root} .rmt-song-audio h3{margin:0;font-size:15px}
+${root} .rmt-song-track{display:flex;align-items:center;gap:10px;min-width:0}
+${root} .rmt-song-track>span{font-size:22px;opacity:.7}
+${root} .rmt-song-track b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+${root} .rmt-song-track small{color:var(--rmt-theme-muted)}
+${root} .rmt-song-audio audio{width:100%;max-width:100%;min-height:40px}
+${root} .rmt-song-link-row{display:flex;gap:8px;align-items:stretch}
+${root} .rmt-song-link-row input{flex:1;min-width:0;min-height:44px;padding:0 12px;border:1px solid var(--rmt-theme-border);border-radius:12px;background:var(--rmt-theme-surface-solid);color:var(--rmt-theme-text);font-size:14px}
+${root} .rmt-song-link-row button{flex:0 0 auto;min-height:44px}
+${root} .rmt-song-file{display:inline-flex;align-items:center;cursor:pointer}
+${root} .rmt-song-note{margin:0;font-size:13px;line-height:1.5;color:var(--rmt-theme-muted)}
+${root} .rmt-song-note:empty{display:none}
 ${root} .rmt-song-cover .rmt-thumb{aspect-ratio:auto;min-height:0;overflow:hidden;border-radius:16px}
 ${root} .rmt-song-cover .rmt-thumb img{width:100%;height:auto;display:block;object-fit:contain}
 ${root} .rmt-song-cover-empty{display:grid;place-content:center;gap:8px;text-align:center;min-height:150px;border-radius:16px;background:var(--rmt-theme-soft);color:var(--rmt-theme-accent-ink);border:1px solid var(--rmt-theme-border)}
