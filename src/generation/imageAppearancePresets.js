@@ -17,6 +17,19 @@ function nameKey(name) {
         .replace(/[‘’`´]/g, "'").replace(/\s+/g, ' ').trim() : '';
 }
 
+// 柏宝绘 entries are often named after the ST macro instead of the persona
+// name ({{user}} / {{char}}). Those aliases point at the current user/char only.
+const USER_ALIASES = new Set(['{{user}}', '<user>', 'user']);
+const CHAR_ALIASES = new Set(['{{char}}', '<char>', 'char']);
+// Real names stay exact (case and spacing included); only the macro spellings are loosened.
+function libraryNameMatches(entryName, person, context) {
+    const entry = nameKey(entryName), own = nameKey(person.name);
+    if (!entry || !own) return false;
+    if (USER_ALIASES.has(entry)) return person.id === 'user' || own === nameKey(context?.name1);
+    if (CHAR_ALIASES.has(entry)) return person.id === 'char' || own === nameKey(context?.name2);
+    return false;
+}
+
 function publicBaiBaiCharacters(api) {
     if (field(api, 'apiVersion') !== 1 || field(field(api, 'capabilities'), 'characterLibrary') !== true) return [];
     const read = field(api, 'getCharacters');
@@ -75,7 +88,9 @@ export function resolveImageAppearancePresets(context, people, { provider, api }
                     || chatu8.chatu8PresetAppearance(context, person.name, { visible: 'back' })
                     || chatu8.chatu8PresetAppearance(context, person.name, { visible: 'hands' });
             } else {
-                const matched = library.filter(entry => entry.name === person.name);
+                // An exact name wins over a macro alias; either must be unique.
+                const exact = library.filter(entry => entry.name === person.name);
+                const matched = exact.length ? exact : library.filter(entry => libraryNameMatches(entry.name, person, context));
                 if (matched.length === 1) found = { row: matched[0].row, source: 'baibai', presetKey: matched[0].name };
             }
             if (!found) continue;

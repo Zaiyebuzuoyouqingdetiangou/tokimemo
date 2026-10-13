@@ -1157,6 +1157,17 @@ export function handleTaskCenterAction(action, actionEl) {
         });
         return;
     }
+    if (action === 'queue-select-all') {
+        // Every page that can be queued on this screen; a second press clears them.
+        const root = actionEl?.closest?.('.rmt-workspace-catalogue') || document.getElementById(core_constants.OVERLAY_ID);
+        const boxes = [...(root?.querySelectorAll?.('[data-rmt-queue-route]') || [])].filter(box => !box.disabled);
+        if (!boxes.length) return;
+        const on = boxes.some(box => !box.checked);
+        for (const box of boxes) { box.checked = on; setQueuePick(box.dataset.rmtQueueRoute, on); }
+        actionEl.textContent = on ? '取消全选' : '全选';
+        globalThis.toastr?.info?.(on ? `已勾选 ${boxes.length} 项。点「把勾选的项目排进任务中心」会按顺序一项一项生成。` : '已取消全部勾选。', '心迹回廊');
+        return;
+    }
     if (action === 'queue-selected') {
         syncPickScope();
         const order = Object.keys(ui_workspaceState.WORKSPACE_ROUTES);
