@@ -318,6 +318,9 @@ export function ensureStyles() {
 #${core_constants.OVERLAY_ID} .rmt-cg-prompt-head .rmt-btn{flex:0 0 auto;min-width:64px;min-height:44px}
 #${core_constants.OVERLAY_ID} .rmt-cg-prompt-dialog p{margin:0;white-space:pre-wrap;overflow-wrap:anywhere}
 #${core_constants.OVERLAY_ID} .rmt-cg-prompt-scene{margin:0;padding:0;border:1px solid var(--rmt-theme-border,#cbdce6);border-radius:12px;background:var(--rmt-theme-soft,var(--rmt-theme-surface-solid,#fff))}
+#${core_constants.OVERLAY_ID} .rmt-cg-origin{display:flex;flex-direction:column;gap:4px;margin:0;padding:8px 12px;border-radius:12px;border:1px solid var(--rmt-theme-border,#cbdce6);background:var(--rmt-theme-soft,#f6f8fa);font-size:13px;line-height:1.55;color:var(--rmt-theme-text)}
+#${core_constants.OVERLAY_ID} .rmt-cg-origin[hidden]{display:none!important}
+#${core_constants.OVERLAY_ID} .rmt-cg-origin :is(.rmt-cg-origin-missing,.rmt-cg-origin-ambiguous,.rmt-cg-origin-shared,.rmt-cg-origin-unsupported,.rmt-cg-origin-empty) b{color:#b4542f}
 #${core_constants.OVERLAY_ID} .rmt-cg-prompt-scene summary{min-height:44px;padding:10px 12px;box-sizing:border-box;cursor:pointer;line-height:1.5}
 #${core_constants.OVERLAY_ID} .rmt-cg-prompt-scene p{padding:0 12px 12px}
 #${core_constants.OVERLAY_ID} .rmt-cg-prompt-dialog label{display:block;margin:0;font-size:16px;line-height:1.5}

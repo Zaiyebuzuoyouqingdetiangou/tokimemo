@@ -15,6 +15,7 @@ import * as participants from '../core/participants.js';
 import * as cache from '../core/cache.js';
 import * as images from '../generation/imageGeneration.js';
 import * as appearance from '../generation/cgAppearance.js';
+import * as image_presets from '../generation/imageAppearancePresets.js';
 import * as image_viewer from './cgImageViewer.js';
 import * as heart from './heartView.js';
 import * as overlay from './overlay.js';
@@ -237,7 +238,29 @@ function editorMetadata(current) {
 
 export function cgEditorPromptMetadata(current) { return editorMetadata(current); }
 
+// Where each person's appearance comes from, so a 柏宝绘 name mismatch or an
+// old 柏宝绘 is visible at a glance instead of silently ignored.
+function editorPeople(current) {
+    if (current.multi) return current.people.filter(person => person.selected).map(person => ({ id: person.id, name: person.name }));
+    const context = core_context.getContext();
+    return ['char', 'user'].filter(role => current.element.querySelector(`[data-rmt-cg-role-selected="${role}"]`)?.checked !== false)
+        .map(role => ({ id: role, name: current.characterNames?.[role] || (role === 'char' ? context?.name2 : context?.name1) || '' }));
+}
+export function renderAppearanceOrigin(current) {
+    const box = current.element.querySelector('[data-rmt-cg-appearance-origin]');
+    if (!box) return;
+    let lines = [];
+    try {
+        const people = editorPeople(current);
+        const notes = image_presets.describeBaiBaiAppearanceSources(core_context.getContext(), people);
+        if (notes) lines = people.filter(person => notes.has(person.id)).map(person => ({ name: person.name, ...notes.get(person.id) }));
+    } catch { lines = []; }
+    box.hidden = !lines.length;
+    box.innerHTML = lines.map(line => `<span class="rmt-cg-origin-${core_text.esc(line.status)}"><b>${core_text.esc(line.name)}</b>：${core_text.esc(line.text)}</span>`).join('');
+}
+
 function updatePreparedPreview(current) {
+    renderAppearanceOrigin(current);
     const scene = current.element.querySelector('[data-rmt-cg-prompt-input]').value;
     const metadata = editorMetadata(current);
     const item = images.cgItemInSession(current.target.mode, current.target.session, current.target.itemId);
@@ -359,6 +382,7 @@ export function openCgPromptEditor({ heartStrip = false, targetDescriptor = null
           <label for="rmt-cg-prompt-input">将发送给生图插件的画面描述</label>
           <textarea id="rmt-cg-prompt-input" data-rmt-cg-prompt-input rows="8" maxlength="${core_constants.MAX_CG_IMAGE_PROMPT_CHARS}" aria-describedby="rmt-cg-prompt-help rmt-cg-prompt-count"></textarea>
           <div id="rmt-cg-prompt-count" data-rmt-cg-prompt-count></div>
+          <p class="rmt-cg-origin" data-rmt-cg-appearance-origin role="status" hidden></p>
           <details class="rmt-cg-prompt-scene" data-rmt-cg-appearance>
             <summary>人物外貌与场景标签</summary>
             <div data-rmt-cg-appearance-fields>${appearanceFieldsHtml(multi)}</div>

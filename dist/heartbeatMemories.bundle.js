@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 361
-// Source SHA-256: b31c9357a177c25db38efba16f15d56b6176df555a0698020a6efda8f527740f
+// Source SHA-256: 80729078f90397aa86085023c0233bc44b897a0ccfebe06b6d3579c5741145fa
 // Build: python3 tools/verification/build.py <source-root>
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -1469,7 +1469,7 @@ function __init_core_releaseNotes_js() {
 // MODULE: core/releaseNotes.js
 
 // GENERATED FROM README.md by tools/verification/build.py. Do not edit by hand.
-const RELEASE_README = "# 心迹回廊 1.0.57\n\n## 更新日志模块\n\n新增了更新日志板块，感谢@nancyindaeyo的更新。\n\n## 本次变动\n\n- 新增「互动 · 表情包」：给角色、你、你们俩各做表情包。写一句想法，模型列出表情清单（能联网的模型会先查这类表情包常见的情绪和动作，只学题材，不照抄别人的角色），每项都能改；单人一张竖图切成 6 个，双人一张横图切成 4 个，自动按白底切开并加白边，切不开时按格子切。切好后可以逐个改名、配字、单张重画或去掉，再保存。\n- 表情包首页一组只显示一个封面图标，点进去再看这一组的每个表情；可以改组名、换封面、换成自己的图、复制暗号、保存到本机。自己的图片可以导入到「其他」，两边都能发。\n- 图片存在你自己酒馆的图片文件夹里，不用图床；表情包数据跟着角色卡走，换设备打开同一个酒馆也在。\n- 表情包出图和情侣头像一样有「Q 版外貌过滤」：外貌里有身高、体型、骨相这类写实描述时，可以只在这次出图里去掉，免得画回正常比例；可选每次询问、自动过滤或不过滤。一组表情实际用的外貌会跟着这一组保存，之后单张重画也保持一致。\n- 表情包可以一键加入世界书：角色已有主世界书时只追加一条「心迹回廊 · 表情包」，没有就新建一本并绑定。条目字段和酒馆自己新建的条目一样，在世界书编辑器里能正常展开、修改；内容用 `<表情包>` 标签包住，写成 YAML 式的键值，只写表情名和一句意思，不放图片地址。\n- 表情只在剧情里写到角色用手机等通讯设备发消息（聊天软件、短信、私信、评论等）时使用，跟在那条消息后面或者单独作为一条；正文叙述和当面说话时不发，也不要求每条回复都发。\n- 这一条放在最新几条消息之前，不受世界书预算限制（设定很多时也不会被挤掉），只在正常回复、继续、重新生成和换一条时生效，不进其他插件的后台请求。改了表情或插件更新后，已加入的条目会自动更新；撤掉这一条即恢复原样。\n- 模型把暗号写偏也能显示成图：全角的【表情：…】、写成「表情包:」、或者漏了名字只写表情名，都会按表情名找到对应的图。\n- 聊天页多了一个可以拖动的小兔子悬浮按钮（和魔法棒菜单里心迹回廊的兔子是同一只，做过表情包后出现，松手会贴到左右边上并记住位置）。点开后分「我的 / 他的 / 双人 / 其他」，你也可以发他的表情；点一下把暗号放进输入框。聊天里的 `[表情:名字·表情名]` 会显示成对应的表情图，角色从世界书知道每个表情的意思，也知道你借用他的表情是在逗他。\n- 悬浮小兔子可以在表情包页关掉：关掉后聊天页不再显示，改从魔法棒菜单里的「表情包」打开，表情面板贴在输入栏上方，像表情键盘一样，选好一个自动收起，也可以点「收起」。开关记在酒馆设置里，对所有角色都生效。\n- 情侣头像新增 69 种画风（含构图版式、氛围光影、3D 渲染分组）和 48 种互动（含贴贴亲昵、小小较劲、幻想冒险）；画风和互动都改为可搜索、按分类浏览的选择面板，也可以随机抽一个。\n- Q 版、动物化身会给每个人物单独带上比例标签，外貌写得很长也不容易画成成人比例；生成时可选择过滤掉身高、体型等写实描述，只作用于这一次，原外貌不变，也可以在选项里设为自动过滤或不过滤。\n- 情侣头像新增“构图”：默认每次随机换一种镜头，始终保持左右各一人、能裁成两张头像；会改动所选互动或“小心思”里动作的姿势自动跳过，也可以固定为正面并排或指定一种。\n- 情侣头像的画风在 NAI 中加权放在最前，3D 画风另加 3D 标签，减少被画师串盖过。\n- 情侣头像的历史与收藏可以删除头像：卡片下方的“删除”，或点“多选”勾选多对后一起删除，删除前会确认一次；已设为聊天头像的图片、已保存的 PNG 和生图插件图库里的原图不受影响。预览下方的“删除这一对”去掉了，删除统一放在历史与收藏里。\n- 手书的剧情叙事、抒情意象、关系互动、高燃快切、节奏循环、悬念反转六种分镜类型，各自写明了画面特征和自查要求，示例也按类型重写，生成的分镜更贴近类型名字；表情卡拍和动态插画保持不变。\n- 手书新增五种分镜类型：文字PV（歌词大字卡为主角）、回忆走马灯（一闪而过的回忆，最后回到现在）、动画OP风（冷开场、人物亮相、全员同框、风景收尾）、第一视角（角色对着镜头，“你”只露手）、今昔对照（同一构图的从前与现在）。\n- 插件内的更新日志直接读取安装目录里的 README，修改 README 后不用重新打包也会同步。\n- 新增「本地快速建档」：不调用 API，直接把这段聊天的原文按场景切成一段段回忆，几秒钟就能建好，不会因为接口超时、额度不够或返回格式不对而失败。档案还是存在聊天文件里：复制聊天会跟着走，删除聊天就一起没了。\n- 可以在设置里打开「打开聊天就自动本地建档」（默认打开）：单人聊天还没有档案、并且已经聊了两句以上时，心迹回廊会自动建好；之后每多 6 层自动补上新楼层。只自动建一次，你删掉档案后不会再偷偷重建；群聊不会自动建。档案页也能手动点「本地快速建档」或「本地补上新楼层」。\n- 本地建的档案每段只记标题、几句原话和一段 320 字以内的摘录，状态栏、代码块、HTML 和表情暗号都会去掉；进提示词时和普通档案一样最多取 24 段，不会因为聊天很长就占满 token。档案本身存在聊天文件里，不发给模型，不占 token。\n- 本地档案是原文摘录，没有 API 整理过的回忆那么精炼。想要整理过的版本，之后接口可用时点「完全重建」即可替换；点「增量更新」会保留已有摘录，只用 API 整理之后的新楼层，用过 API 更新后就不再自动补本地楼层。\n- 「内容」页的「把勾选的项目排进任务中心」旁边多了「全选」：一次勾上所有能排队的页面，再点一次取消；排进任务中心后会按顺序一项一项生成。\n- 柏宝绘角色库里名字写成 {{user}} 或 {{char}} 的角色，现在也能对上当前的你和角色，读取里面写的外貌（包括性别）；写了真名的条目优先，有两条都能对上时不乱选。\n- 画风、互动、衣着、裁切、头像应用、自动外貌读取及其他已有功能保持。\n";
+const RELEASE_README = "# 心迹回廊 1.0.57\n\n## 更新日志模块\n\n新增了更新日志板块，感谢@nancyindaeyo的更新。\n\n## 本次变动\n\n- 新增「互动 · 表情包」：给角色、你、你们俩各做表情包。写一句想法，模型列出表情清单（能联网的模型会先查这类表情包常见的情绪和动作，只学题材，不照抄别人的角色），每项都能改；单人一张竖图切成 6 个，双人一张横图切成 4 个，自动按白底切开并加白边，切不开时按格子切。切好后可以逐个改名、配字、单张重画或去掉，再保存。\n- 表情包首页一组只显示一个封面图标，点进去再看这一组的每个表情；可以改组名、换封面、换成自己的图、复制暗号、保存到本机。自己的图片可以导入到「其他」，两边都能发。\n- 图片存在你自己酒馆的图片文件夹里，不用图床；表情包数据跟着角色卡走，换设备打开同一个酒馆也在。\n- 表情包出图和情侣头像一样有「Q 版外貌过滤」：外貌里有身高、体型、骨相这类写实描述时，可以只在这次出图里去掉，免得画回正常比例；可选每次询问、自动过滤或不过滤。一组表情实际用的外貌会跟着这一组保存，之后单张重画也保持一致。\n- 表情包可以一键加入世界书：角色已有主世界书时只追加一条「心迹回廊 · 表情包」，没有就新建一本并绑定。条目字段和酒馆自己新建的条目一样，在世界书编辑器里能正常展开、修改；内容用 `<表情包>` 标签包住，写成 YAML 式的键值，只写表情名和一句意思，不放图片地址。\n- 表情只在剧情里写到角色用手机等通讯设备发消息（聊天软件、短信、私信、评论等）时使用，跟在那条消息后面或者单独作为一条；正文叙述和当面说话时不发，也不要求每条回复都发。\n- 这一条放在最新几条消息之前，不受世界书预算限制（设定很多时也不会被挤掉），只在正常回复、继续、重新生成和换一条时生效，不进其他插件的后台请求。改了表情或插件更新后，已加入的条目会自动更新；撤掉这一条即恢复原样。\n- 模型把暗号写偏也能显示成图：全角的【表情：…】、写成「表情包:」、或者漏了名字只写表情名，都会按表情名找到对应的图。\n- 聊天页多了一个可以拖动的小兔子悬浮按钮（和魔法棒菜单里心迹回廊的兔子是同一只，做过表情包后出现，松手会贴到左右边上并记住位置）。点开后分「我的 / 他的 / 双人 / 其他」，你也可以发他的表情；点一下把暗号放进输入框。聊天里的 `[表情:名字·表情名]` 会显示成对应的表情图，角色从世界书知道每个表情的意思，也知道你借用他的表情是在逗他。\n- 悬浮小兔子可以在表情包页关掉：关掉后聊天页不再显示，改从魔法棒菜单里的「表情包」打开，表情面板贴在输入栏上方，像表情键盘一样，选好一个自动收起，也可以点「收起」。开关记在酒馆设置里，对所有角色都生效。\n- 情侣头像新增 69 种画风（含构图版式、氛围光影、3D 渲染分组）和 48 种互动（含贴贴亲昵、小小较劲、幻想冒险）；画风和互动都改为可搜索、按分类浏览的选择面板，也可以随机抽一个。\n- Q 版、动物化身会给每个人物单独带上比例标签，外貌写得很长也不容易画成成人比例；生成时可选择过滤掉身高、体型等写实描述，只作用于这一次，原外貌不变，也可以在选项里设为自动过滤或不过滤。\n- 情侣头像新增“构图”：默认每次随机换一种镜头，始终保持左右各一人、能裁成两张头像；会改动所选互动或“小心思”里动作的姿势自动跳过，也可以固定为正面并排或指定一种。\n- 情侣头像的画风在 NAI 中加权放在最前，3D 画风另加 3D 标签，减少被画师串盖过。\n- 情侣头像的历史与收藏可以删除头像：卡片下方的“删除”，或点“多选”勾选多对后一起删除，删除前会确认一次；已设为聊天头像的图片、已保存的 PNG 和生图插件图库里的原图不受影响。预览下方的“删除这一对”去掉了，删除统一放在历史与收藏里。\n- 手书的剧情叙事、抒情意象、关系互动、高燃快切、节奏循环、悬念反转六种分镜类型，各自写明了画面特征和自查要求，示例也按类型重写，生成的分镜更贴近类型名字；表情卡拍和动态插画保持不变。\n- 手书新增五种分镜类型：文字PV（歌词大字卡为主角）、回忆走马灯（一闪而过的回忆，最后回到现在）、动画OP风（冷开场、人物亮相、全员同框、风景收尾）、第一视角（角色对着镜头，“你”只露手）、今昔对照（同一构图的从前与现在）。\n- 插件内的更新日志直接读取安装目录里的 README，修改 README 后不用重新打包也会同步。\n- 新增「本地快速建档」：不调用 API，直接把这段聊天的原文按场景切成一段段回忆，几秒钟就能建好，不会因为接口超时、额度不够或返回格式不对而失败。档案还是存在聊天文件里：复制聊天会跟着走，删除聊天就一起没了。\n- 可以在设置里打开「打开聊天就自动本地建档」（默认打开）：单人聊天还没有档案、并且已经聊了两句以上时，心迹回廊会自动建好；之后每多 6 层自动补上新楼层。只自动建一次，你删掉档案后不会再偷偷重建；群聊不会自动建。档案页也能手动点「本地快速建档」或「本地补上新楼层」。\n- 本地建的档案每段只记标题、几句原话和一段 320 字以内的摘录，状态栏、代码块、HTML 和表情暗号都会去掉；进提示词时和普通档案一样最多取 24 段，不会因为聊天很长就占满 token。档案本身存在聊天文件里，不发给模型，不占 token。\n- 本地档案是原文摘录，没有 API 整理过的回忆那么精炼。想要整理过的版本，之后接口可用时点「完全重建」即可替换；点「增量更新」会保留已有摘录，只用 API 整理之后的新楼层，用过 API 更新后就不再自动补本地楼层。\n- 「内容」页的「把勾选的项目排进任务中心」旁边多了「全选」：一次勾上所有能排队的页面，再点一次取消；排进任务中心后会按顺序一项一项生成。\n- 柏宝绘角色库里名字写成 {{user}} 或 {{char}} 的角色，现在也能对上当前的你和角色，读取里面写的外貌（包括性别）；写了真名的条目优先，有两条都能对上时不乱选。\n- CG 提示词编辑里，画面描述下方会写清每个人的外貌从哪来：对上了显示「外貌来自柏宝绘角色库『某某』」；没对上就说原因，比如库里没有这个名字（并列出库里有哪些）、有两个都能对上、库里只写了衣着动作，或者当前柏宝绘版本不支持读角色库。\n- 柏宝绘角色库的名字匹配放宽了一点：只差全角半角、首尾空格或大小写也能对上；一模一样的名字优先，有两个都能对上时不选，真正不同的名字不会硬配。\n- 印象曲歌词的文笔、意象和用词以角色人设为准；你的人设说话方式（比如说话直白、迷糊）只用在你唱的段落或对唱里你的句子，不再把整首词拉成大白话。\n- 画风、互动、衣着、裁切、头像应用、自动外貌读取及其他已有功能保持。\n";
 
 __m_core_releaseNotes_js.RELEASE_README = RELEASE_README;
 }
@@ -6699,12 +6699,18 @@ function nameKey(name) {
         .replace(/[‘’`´]/g, "'").replace(/\s+/g, ' ').trim() : '';
 }
 
+// Same name typed slightly differently: full/half width, outer spaces, letter case.
+// Nothing else is loosened; a different name never matches.
+function looseKey(name) {
+    return typeof name === 'string' ? name.normalize('NFKC').trim().toLowerCase() : '';
+}
+
 // 柏宝绘 entries are often named after the ST macro instead of the persona
 // name ({{user}} / {{char}}). Those aliases point at the current user/char only.
 const USER_ALIASES = new Set(['{{user}}', '<user>', 'user']);
 const CHAR_ALIASES = new Set(['{{char}}', '<char>', 'char']);
-// Real names stay exact (case and spacing included); only the macro spellings are loosened.
-function libraryNameMatches(entryName, person, context) {
+// Macro spellings stand for the current user/char only.
+function libraryAliasMatches(entryName, person, context) {
     const entry = nameKey(entryName), own = nameKey(person.name);
     if (!entry || !own) return false;
     if (USER_ALIASES.has(entry)) return person.id === 'user' || own === nameKey(context?.name1);
@@ -6712,21 +6718,36 @@ function libraryNameMatches(entryName, person, context) {
     return false;
 }
 
-function publicBaiBaiCharacters(api) {
-    if (field(api, 'apiVersion') !== 1 || field(field(api, 'capabilities'), 'characterLibrary') !== true) return [];
+// Exact name first, then the same name typed loosely, then {{user}}/{{char}}.
+// The first step that finds anything decides; it must find exactly one.
+function libraryMatches(library, person, context) {
+    const exact = library.filter(entry => entry.name === person.name);
+    if (exact.length) return exact;
+    const own = looseKey(person.name);
+    const loose = own ? library.filter(entry => looseKey(entry.name) === own) : [];
+    if (loose.length) return loose;
+    return library.filter(entry => libraryAliasMatches(entry.name, person, context));
+}
+
+// null: this 柏宝绘 has no readable character library (missing, old, or malformed).
+function baiBaiLibrary(api) {
+    if (field(api, 'apiVersion') !== 1 || field(field(api, 'capabilities'), 'characterLibrary') !== true) return null;
     const read = field(api, 'getCharacters');
-    if (typeof read !== 'function') return [];
+    if (typeof read !== 'function') return null;
     const snapshot = read.call(api);
     const rows = field(snapshot, 'characters');
-    if (field(snapshot, 'apiVersion') !== 1 || !Array.isArray(rows)) return [];
+    if (field(snapshot, 'apiVersion') !== 1 || !Array.isArray(rows)) return null;
     const result = [];
     for (let index = 0; index < rows.length; index++) {
         const row = field(rows, String(index)), name = field(row, 'name');
         // An unknown name could hide a duplicate; no unique match is provable.
-        if (typeof name !== 'string') return [];
+        if (typeof name !== 'string') return null;
         result.push({ row, name });
     }
     return result;
+}
+function publicBaiBaiCharacters(api) {
+    return baiBaiLibrary(api) || [];
 }
 
 // The public tag contains the whole character-library entry, including outfits.
@@ -6770,9 +6791,7 @@ function resolveImageAppearancePresets(context, people, { provider, api } = {}) 
                     || chatu8.chatu8PresetAppearance(context, person.name, { visible: 'back' })
                     || chatu8.chatu8PresetAppearance(context, person.name, { visible: 'hands' });
             } else {
-                // An exact name wins over a macro alias; either must be unique.
-                const exact = library.filter(entry => entry.name === person.name);
-                const matched = exact.length ? exact : library.filter(entry => libraryNameMatches(entry.name, person, context));
+                const matched = libraryMatches(library, person, context);
                 if (matched.length === 1) found = { row: matched[0].row, source: 'baibai', presetKey: matched[0].name };
             }
             if (!found) continue;
@@ -6804,7 +6823,45 @@ function resolveImageAppearancePresets(context, people, { provider, api } = {}) 
     return result;
 }
 
+// Plain-language reason for each person in this picture: where the appearance
+// came from, or why the 柏宝绘 character library was not used. Read-only.
+// Returns null when the selected provider is not 柏宝绘 or 柏宝绘 is absent.
+function describeBaiBaiAppearanceSources(context, people, { provider, api } = {}) {
+    try {
+        const selected = provider === undefined ? settings.getPluginSettings(context).imageGenerationProvider : provider;
+        const source = api === undefined ? field(globalThis, 'STBaiBaiImage') : api;
+        if (selected !== 'baibai-image' || !source || !Array.isArray(people)) return null;
+        const roster = people.filter(person => person && typeof person.id === 'string' && person.id && nameKey(person.name));
+        let library;
+        try { library = baiBaiLibrary(source); } catch { library = null; }
+        const result = new Map();
+        if (!library) {
+            for (const person of roster) result.set(person.id, { status: 'unsupported', text: '当前柏宝绘版本不支持读角色库，需要更新柏宝绘；现在用的是心迹回廊里的外貌。' });
+            return result;
+        }
+        const resolved = resolveImageAppearancePresets(context, roster, { provider: 'baibai-image', api: source });
+        const names = library.map(entry => entry.name.trim()).filter(Boolean);
+        const listed = names.length ? `，库里有：${names.slice(0, 8).join('、')}${names.length > 8 ? ` 等 ${names.length} 个` : ''}` : '，库里还没有角色';
+        const sameName = new Map();
+        for (const person of roster) sameName.set(looseKey(person.name), (sameName.get(looseKey(person.name)) || 0) + 1);
+        for (const person of roster) {
+            const name = person.name.trim(), found = resolved.get(person.id);
+            if (found) { result.set(person.id, { status: 'matched', text: `外貌来自柏宝绘角色库「${found.presetKey}」。` }); continue; }
+            const matched = libraryMatches(library, person, context);
+            if (!matched.length) result.set(person.id, { status: 'missing', text: `柏宝绘角色库里没有叫「${name}」的角色${listed}。名字要和这里一样（全角半角、空格、大小写可以不同）。` });
+            else if (matched.length > 1) result.set(person.id, { status: 'ambiguous', text: `柏宝绘角色库里有 ${matched.length} 个角色都能对上「${name}」：${matched.map(entry => entry.name).join('、')}，没有选用；改成只有一个就行。` });
+            else if (sameName.get(looseKey(person.name)) > 1 || roster.some(other => other.id !== person.id && libraryMatches(library, other, context).some(entry => entry === matched[0])))
+                result.set(person.id, { status: 'shared', text: `柏宝绘角色库「${matched[0].name}」同时对上了本图不止一个人，没有选用。` });
+            else result.set(person.id, { status: 'empty', text: `对上了柏宝绘角色库「${matched[0].name}」，但里面没有能用的外貌（只写了衣着、动作或镜头这类内容），现在用的是心迹回廊里的外貌。` });
+        }
+        return result;
+    } catch {
+        return null;
+    }
+}
+
 __m_generation_imageAppearancePresets_js.resolveImageAppearancePresets = resolveImageAppearancePresets;
+__m_generation_imageAppearancePresets_js.describeBaiBaiAppearanceSources = describeBaiBaiAppearanceSources;
 }
 
 function __init_ui_archiveRename_js() {
@@ -72672,7 +72729,7 @@ function themeSongPrompt(plan, memory) {
 创作类别：${plan.subject === 'event' ? '事件主题曲' : '角色主题曲'}；歌词语言：${plan.language === 'custom' ? '采用 UNTRUSTED_LYRIC_LANGUAGE_JSON 中的语言名称' : contract.SONG_LANGUAGES[plan.language]}；演唱方式：${contract.SONG_VOICES[plan.voice]}；演唱者设定：${plan.singer}。
 这是歌词与编曲指导，不是音频，不写回主聊天，不创建真实记忆。根据本次受控角色卡、人设与世界观展现角色独有的意象、语气、矛盾与情绪，不套通用情歌模板。
 围绕鲜明的情绪变化和叙述角度写歌，把人物独有的细节融入具体动作、场景与意象，不罗列人设履历。主歌用新细节推进；副歌围绕一句简洁、容易记住且属于这个角色的核心句展开，重复时保留记忆点，末次可用小变化回应前文。需要桥段时再提供转折，不固定段落数量或曲风，不把所有歌都写成悲情独白或高燃大合唱。
-按所选语言和曲风自然断句，朗读顺口，留出换气和延音空间；韵脚服务表达，不为凑韵倒装、堆砌辞藻或硬凑全曲相同字数。每段歌词的口吻与对应演唱者一致。
+按所选语言和曲风自然断句，朗读顺口，留出换气和延音空间；韵脚服务表达，不为凑韵倒装、堆砌辞藻或硬凑全曲相同字数。每段歌词的口吻与对应演唱者一致。整首歌词的文笔、意象和用词以角色人设为准；用户人设的说话方式（比如说话直白、词汇简单、迷糊或口语化）只用在用户演唱的段落或对唱里用户的句子，不影响角色演唱的部分，也不把整首词写成大白话。
 角色主题曲可以只根据人设写，不要求已发生的生日祝福或共同经历；事件主题曲以所选事件为情绪起点，不编造另一个已经发生的共同事件。诗歌的隐喻、想象、愿望不是既成事实。不得增加与第三人的恋爱、婚姻、前任或擅定双方当前关系；不把合唱歌词当作用户的真实承诺。
 声线优先遵循用户明确要求，其次采用资料中明确的声音设定；未说明的部分作为本曲演唱设计，以少量有听感区别的音区、音色、咬字或气息描述，不把创作补充写成人设事实，不凭姓名或性格猜性别。保留用户指定声线的核心特征，避免堆叠互相矛盾的声音形容词。
 ${vocalDirection}
@@ -78053,6 +78110,7 @@ const participants = __m_core_participants_js;
 const cache = __m_core_cache_js;
 const images = __m_generation_imageGeneration_js;
 const appearance = __m_generation_cgAppearance_js;
+const image_presets = __m_generation_imageAppearancePresets_js;
 const image_viewer = __m_ui_cgImageViewer_js;
 const heart = __m_ui_heartView_js;
 const overlay = __m_ui_overlay_js;
@@ -78285,7 +78343,29 @@ function editorMetadata(current) {
 
 function cgEditorPromptMetadata(current) { return editorMetadata(current); }
 
+// Where each person's appearance comes from, so a 柏宝绘 name mismatch or an
+// old 柏宝绘 is visible at a glance instead of silently ignored.
+function editorPeople(current) {
+    if (current.multi) return current.people.filter(person => person.selected).map(person => ({ id: person.id, name: person.name }));
+    const context = core_context.getContext();
+    return ['char', 'user'].filter(role => current.element.querySelector(`[data-rmt-cg-role-selected="${role}"]`)?.checked !== false)
+        .map(role => ({ id: role, name: current.characterNames?.[role] || (role === 'char' ? context?.name2 : context?.name1) || '' }));
+}
+function renderAppearanceOrigin(current) {
+    const box = current.element.querySelector('[data-rmt-cg-appearance-origin]');
+    if (!box) return;
+    let lines = [];
+    try {
+        const people = editorPeople(current);
+        const notes = image_presets.describeBaiBaiAppearanceSources(core_context.getContext(), people);
+        if (notes) lines = people.filter(person => notes.has(person.id)).map(person => ({ name: person.name, ...notes.get(person.id) }));
+    } catch { lines = []; }
+    box.hidden = !lines.length;
+    box.innerHTML = lines.map(line => `<span class="rmt-cg-origin-${core_text.esc(line.status)}"><b>${core_text.esc(line.name)}</b>：${core_text.esc(line.text)}</span>`).join('');
+}
+
 function updatePreparedPreview(current) {
+    renderAppearanceOrigin(current);
     const scene = current.element.querySelector('[data-rmt-cg-prompt-input]').value;
     const metadata = editorMetadata(current);
     const item = images.cgItemInSession(current.target.mode, current.target.session, current.target.itemId);
@@ -78407,6 +78487,7 @@ function openCgPromptEditor({ heartStrip = false, targetDescriptor = null } = {}
           <label for="rmt-cg-prompt-input">将发送给生图插件的画面描述</label>
           <textarea id="rmt-cg-prompt-input" data-rmt-cg-prompt-input rows="8" maxlength="${core_constants.MAX_CG_IMAGE_PROMPT_CHARS}" aria-describedby="rmt-cg-prompt-help rmt-cg-prompt-count"></textarea>
           <div id="rmt-cg-prompt-count" data-rmt-cg-prompt-count></div>
+          <p class="rmt-cg-origin" data-rmt-cg-appearance-origin role="status" hidden></p>
           <details class="rmt-cg-prompt-scene" data-rmt-cg-appearance>
             <summary>人物外貌与场景标签</summary>
             <div data-rmt-cg-appearance-fields>${appearanceFieldsHtml(multi)}</div>
@@ -78703,6 +78784,7 @@ __m_ui_cgPromptEditor_js.portraitCgMetadata = portraitCgMetadata;
 __m_ui_cgPromptEditor_js.hasCgPromptEditor = hasCgPromptEditor;
 __m_ui_cgPromptEditor_js.closeCgPromptEditor = closeCgPromptEditor;
 __m_ui_cgPromptEditor_js.cgEditorPromptMetadata = cgEditorPromptMetadata;
+__m_ui_cgPromptEditor_js.renderAppearanceOrigin = renderAppearanceOrigin;
 __m_ui_cgPromptEditor_js.openCgPromptEditor = openCgPromptEditor;
 }
 
@@ -92287,6 +92369,9 @@ function ensureStyles() {
 #${core_constants.OVERLAY_ID} .rmt-cg-prompt-head .rmt-btn{flex:0 0 auto;min-width:64px;min-height:44px}
 #${core_constants.OVERLAY_ID} .rmt-cg-prompt-dialog p{margin:0;white-space:pre-wrap;overflow-wrap:anywhere}
 #${core_constants.OVERLAY_ID} .rmt-cg-prompt-scene{margin:0;padding:0;border:1px solid var(--rmt-theme-border,#cbdce6);border-radius:12px;background:var(--rmt-theme-soft,var(--rmt-theme-surface-solid,#fff))}
+#${core_constants.OVERLAY_ID} .rmt-cg-origin{display:flex;flex-direction:column;gap:4px;margin:0;padding:8px 12px;border-radius:12px;border:1px solid var(--rmt-theme-border,#cbdce6);background:var(--rmt-theme-soft,#f6f8fa);font-size:13px;line-height:1.55;color:var(--rmt-theme-text)}
+#${core_constants.OVERLAY_ID} .rmt-cg-origin[hidden]{display:none!important}
+#${core_constants.OVERLAY_ID} .rmt-cg-origin :is(.rmt-cg-origin-missing,.rmt-cg-origin-ambiguous,.rmt-cg-origin-shared,.rmt-cg-origin-unsupported,.rmt-cg-origin-empty) b{color:#b4542f}
 #${core_constants.OVERLAY_ID} .rmt-cg-prompt-scene summary{min-height:44px;padding:10px 12px;box-sizing:border-box;cursor:pointer;line-height:1.5}
 #${core_constants.OVERLAY_ID} .rmt-cg-prompt-scene p{padding:0 12px 12px}
 #${core_constants.OVERLAY_ID} .rmt-cg-prompt-dialog label{display:block;margin:0;font-size:16px;line-height:1.5}

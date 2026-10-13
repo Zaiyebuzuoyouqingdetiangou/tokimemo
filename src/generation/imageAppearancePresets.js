@@ -17,12 +17,18 @@ function nameKey(name) {
         .replace(/[‘’`´]/g, "'").replace(/\s+/g, ' ').trim() : '';
 }
 
+// Same name typed slightly differently: full/half width, outer spaces, letter case.
+// Nothing else is loosened; a different name never matches.
+function looseKey(name) {
+    return typeof name === 'string' ? name.normalize('NFKC').trim().toLowerCase() : '';
+}
+
 // 柏宝绘 entries are often named after the ST macro instead of the persona
 // name ({{user}} / {{char}}). Those aliases point at the current user/char only.
 const USER_ALIASES = new Set(['{{user}}', '<user>', 'user']);
 const CHAR_ALIASES = new Set(['{{char}}', '<char>', 'char']);
-// Real names stay exact (case and spacing included); only the macro spellings are loosened.
-function libraryNameMatches(entryName, person, context) {
+// Macro spellings stand for the current user/char only.
+function libraryAliasMatches(entryName, person, context) {
     const entry = nameKey(entryName), own = nameKey(person.name);
     if (!entry || !own) return false;
     if (USER_ALIASES.has(entry)) return person.id === 'user' || own === nameKey(context?.name1);
@@ -30,21 +36,36 @@ function libraryNameMatches(entryName, person, context) {
     return false;
 }
 
-function publicBaiBaiCharacters(api) {
-    if (field(api, 'apiVersion') !== 1 || field(field(api, 'capabilities'), 'characterLibrary') !== true) return [];
+// Exact name first, then the same name typed loosely, then {{user}}/{{char}}.
+// The first step that finds anything decides; it must find exactly one.
+function libraryMatches(library, person, context) {
+    const exact = library.filter(entry => entry.name === person.name);
+    if (exact.length) return exact;
+    const own = looseKey(person.name);
+    const loose = own ? library.filter(entry => looseKey(entry.name) === own) : [];
+    if (loose.length) return loose;
+    return library.filter(entry => libraryAliasMatches(entry.name, person, context));
+}
+
+// null: this 柏宝绘 has no readable character library (missing, old, or malformed).
+function baiBaiLibrary(api) {
+    if (field(api, 'apiVersion') !== 1 || field(field(api, 'capabilities'), 'characterLibrary') !== true) return null;
     const read = field(api, 'getCharacters');
-    if (typeof read !== 'function') return [];
+    if (typeof read !== 'function') return null;
     const snapshot = read.call(api);
     const rows = field(snapshot, 'characters');
-    if (field(snapshot, 'apiVersion') !== 1 || !Array.isArray(rows)) return [];
+    if (field(snapshot, 'apiVersion') !== 1 || !Array.isArray(rows)) return null;
     const result = [];
     for (let index = 0; index < rows.length; index++) {
         const row = field(rows, String(index)), name = field(row, 'name');
         // An unknown name could hide a duplicate; no unique match is provable.
-        if (typeof name !== 'string') return [];
+        if (typeof name !== 'string') return null;
         result.push({ row, name });
     }
     return result;
+}
+function publicBaiBaiCharacters(api) {
+    return baiBaiLibrary(api) || [];
 }
 
 // The public tag contains the whole character-library entry, including outfits.
@@ -88,9 +109,7 @@ export function resolveImageAppearancePresets(context, people, { provider, api }
                     || chatu8.chatu8PresetAppearance(context, person.name, { visible: 'back' })
                     || chatu8.chatu8PresetAppearance(context, person.name, { visible: 'hands' });
             } else {
-                // An exact name wins over a macro alias; either must be unique.
-                const exact = library.filter(entry => entry.name === person.name);
-                const matched = exact.length ? exact : library.filter(entry => libraryNameMatches(entry.name, person, context));
+                const matched = libraryMatches(library, person, context);
                 if (matched.length === 1) found = { row: matched[0].row, source: 'baibai', presetKey: matched[0].name };
             }
             if (!found) continue;
@@ -120,4 +139,41 @@ export function resolveImageAppearancePresets(context, people, { provider, api }
         return new Map();
     }
     return result;
+}
+
+// Plain-language reason for each person in this picture: where the appearance
+// came from, or why the 柏宝绘 character library was not used. Read-only.
+// Returns null when the selected provider is not 柏宝绘 or 柏宝绘 is absent.
+export function describeBaiBaiAppearanceSources(context, people, { provider, api } = {}) {
+    try {
+        const selected = provider === undefined ? settings.getPluginSettings(context).imageGenerationProvider : provider;
+        const source = api === undefined ? field(globalThis, 'STBaiBaiImage') : api;
+        if (selected !== 'baibai-image' || !source || !Array.isArray(people)) return null;
+        const roster = people.filter(person => person && typeof person.id === 'string' && person.id && nameKey(person.name));
+        let library;
+        try { library = baiBaiLibrary(source); } catch { library = null; }
+        const result = new Map();
+        if (!library) {
+            for (const person of roster) result.set(person.id, { status: 'unsupported', text: '当前柏宝绘版本不支持读角色库，需要更新柏宝绘；现在用的是心迹回廊里的外貌。' });
+            return result;
+        }
+        const resolved = resolveImageAppearancePresets(context, roster, { provider: 'baibai-image', api: source });
+        const names = library.map(entry => entry.name.trim()).filter(Boolean);
+        const listed = names.length ? `，库里有：${names.slice(0, 8).join('、')}${names.length > 8 ? ` 等 ${names.length} 个` : ''}` : '，库里还没有角色';
+        const sameName = new Map();
+        for (const person of roster) sameName.set(looseKey(person.name), (sameName.get(looseKey(person.name)) || 0) + 1);
+        for (const person of roster) {
+            const name = person.name.trim(), found = resolved.get(person.id);
+            if (found) { result.set(person.id, { status: 'matched', text: `外貌来自柏宝绘角色库「${found.presetKey}」。` }); continue; }
+            const matched = libraryMatches(library, person, context);
+            if (!matched.length) result.set(person.id, { status: 'missing', text: `柏宝绘角色库里没有叫「${name}」的角色${listed}。名字要和这里一样（全角半角、空格、大小写可以不同）。` });
+            else if (matched.length > 1) result.set(person.id, { status: 'ambiguous', text: `柏宝绘角色库里有 ${matched.length} 个角色都能对上「${name}」：${matched.map(entry => entry.name).join('、')}，没有选用；改成只有一个就行。` });
+            else if (sameName.get(looseKey(person.name)) > 1 || roster.some(other => other.id !== person.id && libraryMatches(library, other, context).some(entry => entry === matched[0])))
+                result.set(person.id, { status: 'shared', text: `柏宝绘角色库「${matched[0].name}」同时对上了本图不止一个人，没有选用。` });
+            else result.set(person.id, { status: 'empty', text: `对上了柏宝绘角色库「${matched[0].name}」，但里面没有能用的外貌（只写了衣着、动作或镜头这类内容），现在用的是心迹回廊里的外貌。` });
+        }
+        return result;
+    } catch {
+        return null;
+    }
 }
