@@ -73,11 +73,34 @@ export function publicMusicSource(html, base) {
     for (const source of sources) {
         try {
             const url = musicUrl(source, base);
-            if (/\/(?:silence\.(?:mp3|wav)|api\/forbidden)\/?(?:\?|$)/i.test(new URL(url).pathname)) continue;
+            if (/\/(?:silence\.(?:mp3|wav)|sil-\d+\.mp3|api\/forbidden)\/?(?:\?|$)/i.test(new URL(url).pathname)) continue;
             if (url !== musicUrl(base)) return { url, title: title.replace(/\s+/g, ' ').trim().slice(0, 120) };
         } catch {} // Invalid published candidates never become requests.
     }
     return null;
+}
+
+// Title, creator and cover a Suno song page publishes for link previews.
+// og:title is the song name; <title> reads "Name by Creator | Suno".
+export function sunoPageMeta(html) {
+    const clean = String(html || '').replace(/<!--[\s\S]*?(?:-->|$)|<(script|style|textarea|template)\b[^>]*>[\s\S]*?(?:<\/\1\s*>|$)/gi, '');
+    const metas = [...clean.matchAll(/<meta\b(?:"[^"]*"|'[^']*'|[^'">])*\/?\s*>/gi)].map(match => attributes(match[0]));
+    const meta = key => metas.find(item => String(item.property || item.name || '').toLowerCase() === key)?.content || '';
+    const tidy = value => String(value || '').replace(/\s+/g, ' ').trim();
+    const pageTitle = tidy(decodeAttribute(clean.match(/<title\b[^>]*>([\s\S]*?)<\/title\s*>/i)?.[1] || '')).replace(/\s*\|\s*Suno\s*$/i, '');
+    let title = tidy(meta('og:title') || meta('twitter:title')).replace(/\s*\|\s*Suno\s*$/i, '');
+    let artist = '';
+    const credit = pageTitle.match(/^(.*\S)\s+by\s+(.+)$/);
+    if (credit && (!title || title === pageTitle || title === credit[1])) { title = credit[1]; artist = credit[2]; }
+    if (!title) title = pageTitle;
+    let image = '';
+    for (const candidate of [meta('og:image'), meta('twitter:image')]) {
+        try {
+            const url = new URL(candidate);
+            if (url.protocol === 'https:' && /^(?:cdn[\w-]*\.suno\.(?:ai|com)|(?:www\.)?suno\.com)$/i.test(url.hostname)) { image = url.href; break; }
+        } catch {}
+    }
+    return { title: title.slice(0, 120), artist: artist.slice(0, 80), image };
 }
 
 export function sunoSongPage(html, base) {
@@ -170,7 +193,7 @@ export function musicLinkName(url) {
     return /\.(?:mp3|m4a|mp4|aac|wav|ogg|opus|flac|webm)$/i.test(name) ? name.slice(0, 80) : '链接歌曲';
 }
 
-export async function readMusicLink(value, { signal, fetcher = globalThis.fetch, allowStreaming = true, hostProxy = hostProxyAvailable(), requestHeaders = hostRequestHeaders } = {}) {
+export async function readMusicLink(value, { signal, fetcher = globalThis.fetch, allowStreaming = true, hostProxy = hostProxyAvailable(), requestHeaders = hostRequestHeaders, pageMeta = null } = {}) {
     const sourceUrl = musicUrl(value);
     let proxyUnavailable = false, visitUnavailable = false;
     const get = async url => {
@@ -229,13 +252,15 @@ export async function readMusicLink(value, { signal, fetcher = globalThis.fetch,
         // A browser-followed redirect exposes /song/<uuid> in the response URL
         // (even when a local proxy resolved the relative Location); a proxy that
         // followed it itself returns the song page, whose canonical names it.
-        let page = '';
+        let page = '', pageMeta = null;
         try { if (/^\/song\/[0-9a-f-]{36}\/?$/i.test(new URL(response.url || '').pathname)) page = response.url; } catch {}
-        if (!page && /^(?:text\/html|application\/xhtml\+xml)\b/i.test(response.headers.get('content-type') || '')) {
-            page = sunoSongPage(await waitMusicRequest(response.text(), signal), sourceUrl);
+        if (/^(?:text\/html|application\/xhtml\+xml)\b/i.test(response.headers.get('content-type') || '')) {
+            const html = await waitMusicRequest(response.text(), signal);
+            if (!page) page = sunoSongPage(html, sourceUrl);
+            pageMeta = sunoPageMeta(html);
         }
         const full = sunoShareSongLink(page, shareCode);
-        if (full) return { ...(await readMusicLink(full, { signal, fetcher, allowStreaming, hostProxy, requestHeaders })), resolvedFrom: sourceUrl };
+        if (full) return { ...(await readMusicLink(full, { signal, fetcher, allowStreaming, hostProxy, requestHeaders, pageMeta })), resolvedFrom: sourceUrl };
     }
     const direct = sunoDirectAudio(sourceUrl);
     if (direct) {
@@ -244,6 +269,16 @@ export async function readMusicLink(value, { signal, fetcher = globalThis.fetch,
         // element, which plays public media without CORS; the caller's playback
         // check decides which one works.
         const video = sunoDirectVideo(sourceUrl);
+        // The page's name and cover, read alongside the audio; optional.
+        const metaRead = pageMeta ? Promise.resolve(pageMeta)
+            : get(sourceUrl).then(async ({ response: page }) => /html/i.test(page.headers.get('content-type') || '') ? sunoPageMeta(await waitMusicRequest(page.text(), signal)) : null).catch(() => null);
+        const described = async media => {
+            // Never let a slow page hold up a song that is already in hand.
+            let timer;
+            const meta = await Promise.race([metaRead, new Promise(resolve => { timer = setTimeout(() => resolve(null), 8000); })]);
+            clearTimeout(timer);
+            return { ...media, name: meta?.title || media.name, ...(meta?.artist ? { artist: meta.artist } : {}), ...(meta?.image ? { coverUrl: meta.image } : {}) };
+        };
         let lastError = null;
         for (const [url, type] of [[direct, 'audio/mpeg'], [video, 'video/mp4']]) {
             try { ({ response, finalUrl } = await get(url)); }
@@ -258,9 +293,9 @@ export async function readMusicLink(value, { signal, fetcher = globalThis.fetch,
             if (!blob.size) { lastError = linkError('链接返回了空文件。原有歌曲未替换。', 'RMT_MV_LINK_EMPTY'); continue; }
             // A proxy may drop the type; the MV needs it to read a video's audio track.
             if (!/^(?:audio|video)\//i.test(blob.type || '')) blob = blob.slice(0, blob.size, type);
-            return { blob, name: 'Suno 歌曲', sourceUrl };
+            return described({ blob, name: 'Suno 歌曲', sourceUrl });
         }
-        if (allowStreaming) return { url: video, alternates: [direct], name: 'Suno 歌曲', sourceUrl, streaming: true, failText: SUNO_PLAY_FAILED };
+        if (allowStreaming) return described({ url: video, alternates: [direct], name: 'Suno 歌曲', sourceUrl, streaming: true, failText: SUNO_PLAY_FAILED });
         if (lastError?.code === 'RMT_MV_LINK_HTTP' && [403, 404].includes(lastError.status)) throw linkError('Suno 没有公开这首歌的音频（可能是私密歌曲或已删除）。原有歌曲未替换。', 'RMT_MV_LINK_PAGE', lastError.status);
         throw lastError;
     }

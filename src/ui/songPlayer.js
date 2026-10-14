@@ -39,7 +39,7 @@ export async function loadSongAudio(context, songId) {
     if (loaded.has(key)) return loaded.get(key);
     const row = await mv_media.getMedia(key);
     if (!row?.blob && !row?.mediaUrl) return null;
-    const entry = { url: row.blob ? URL.createObjectURL(row.blob) : music_link.musicUrl(row.mediaUrl), name: row.name || '已保存的歌曲', streaming: !row.blob, sourceUrl: row.sourceUrl || '' };
+    const entry = { url: row.blob ? URL.createObjectURL(row.blob) : music_link.musicUrl(row.mediaUrl), name: row.name || '已保存的歌曲', streaming: !row.blob, sourceUrl: row.sourceUrl || '', artist: row.artist || '', coverUrl: row.coverUrl || '' };
     remember(key, entry);
     return entry;
 }
@@ -88,8 +88,9 @@ async function commit(context, songId, media) {
     }
     try { mv.patchRecord(songId, { duration: probed.duration }, mv.captureMvTarget(context, songId)); } catch { /* No storyboard yet is fine. */ }
     const name = core_text.normalizeText(media.name, 80) || '链接歌曲';
-    const saved = await mv_media.putMedia(key, streaming ? null : media.blob, name, { sourceUrl: media.sourceUrl || '', ...(streaming ? { mediaUrl: url } : {}) });
-    remember(key, { url, name, streaming, sourceUrl: media.sourceUrl || '' });
+    const artist = core_text.normalizeText(media.artist || '', 80), coverUrl = /^https:\/\//.test(media.coverUrl || '') ? media.coverUrl : '';
+    const saved = await mv_media.putMedia(key, streaming ? null : media.blob, name, { sourceUrl: media.sourceUrl || '', artist, coverUrl, ...(streaming ? { mediaUrl: url } : {}) });
+    remember(key, { url, name, streaming, sourceUrl: media.sourceUrl || '', artist, coverUrl });
     announce(key);
     return { saved, streaming, name };
 }
@@ -159,21 +160,63 @@ export function cancelSongImport(context, songId) {
     status.set(key, ''); repaint?.();
 }
 
+// A short message from the player face itself (e.g. playback refused).
+export function setSongNote(songId, text, context = core_context.getContext?.()) {
+    try { status.set(songAudioKey(context, songId), String(text || '')); repaint?.(); } catch {}
+}
+
 export function setSongPlayerRepaint(fn) { repaint = typeof fn === 'function' ? fn : null; }
 
-export function songPlayerHtml(context, songId, { readOnly = false } = {}) {
+const ICON_PLAY = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z"/></svg>';
+const ICON_PAUSE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h3.6v14H7zM13.4 5H17v14h-3.6z"/></svg>';
+export const SONG_PLAYER_ICONS = { play: ICON_PLAY, pause: ICON_PAUSE };
+
+export function formatSongTime(seconds) {
+    const total = Number.isFinite(seconds) && seconds > 0 ? Math.floor(seconds) : 0;
+    return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
+}
+
+// A generic link name means Suno's page could not be read; the song's own
+// title in 心迹回廊 is the better label then.
+function displayName(entry, songTitle) {
+    const generic = !entry.name || ['Suno 歌曲', '链接歌曲', '已保存的歌曲'].includes(entry.name);
+    return generic && songTitle ? songTitle : entry.name;
+}
+
+export function songPlayerHtml(context, songId, { readOnly = false, songTitle = '' } = {}) {
     const key = songAudioKey(context, songId);
     const entry = loaded.get(key), busy = pending.has(key), note = status.get(key) || '';
     const value = fill.get(key) || ''; fill.delete(key);
     const id = esc(songId);
-    const player = entry
-        ? `<div class="rmt-song-track"><span aria-hidden="true">♫</span><div><b>${esc(entry.name)}</b><small>${entry.streaming ? '在线播放' : '本机文件'}${entry.sourceUrl ? ` · <a href="${esc(entry.sourceUrl)}" target="_blank" rel="noopener noreferrer">来源</a>` : ''}</small></div></div>
-           <audio controls preload="metadata" src="${esc(entry.url)}" data-rmt-song-player></audio>`
-        : `<p class="rmt-song-note">还没有音源。把歌词和曲风复制到 Suno 生成后，粘上歌曲链接，或选本机音频文件。</p>`;
-    const controls = readOnly ? '' : `<div class="rmt-song-link-row">
+    const title = entry ? displayName(entry, core_text.normalizeText(songTitle, 120)) : '';
+    const sleeve = entry?.coverUrl
+        ? `<img src="${esc(entry.coverUrl)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : '';
+    const source = entry ? [entry.artist, entry.streaming ? '在线播放' : '存在这台设备'].filter(Boolean).map(esc).join('<span aria-hidden="true">／</span>') : '';
+    const deck = entry ? `<div class="rmt-song-deck">
+        <div class="rmt-song-record" aria-hidden="true"><div class="rmt-song-sleeve">${sleeve}<span>♫</span></div><div class="rmt-song-disc"><i>${sleeve}</i></div></div>
+        <div class="rmt-song-now">
+          <b class="rmt-song-name" title="${esc(title)}">${esc(title)}</b>
+          <small class="rmt-song-by">${source}${entry.sourceUrl ? `<span aria-hidden="true">／</span><a href="${esc(entry.sourceUrl)}" target="_blank" rel="noopener noreferrer">在 Suno 打开</a>` : ''}</small>
+          <div class="rmt-song-transport">
+            <button type="button" class="rmt-song-play" data-rmt-song-play aria-label="播放">${ICON_PLAY}</button>
+            <div class="rmt-song-progress">
+              <input type="range" min="0" max="1000" step="1" value="0" data-rmt-song-seek aria-label="播放进度">
+              <div class="rmt-song-times"><span data-rmt-song-time>0:00</span><span data-rmt-song-duration>--:--</span></div>
+            </div>
+          </div>
+        </div>
+        <audio preload="metadata" src="${esc(entry.url)}" data-rmt-song-player></audio>
+      </div>` : `<div class="rmt-song-deck is-empty"><div class="rmt-song-record" aria-hidden="true"><div class="rmt-song-sleeve"><span>♫</span></div></div>
+        <div class="rmt-song-now"><b class="rmt-song-name">还没有音源</b><small class="rmt-song-by">在 Suno 做好这首歌后，把链接粘到下面，或选本机的音频文件。</small></div></div>`;
+    const inputs = `<div class="rmt-song-link-row">
       <input type="url" inputmode="url" autocomplete="off" spellcheck="false" data-rmt-song-link="${id}"${value ? ` value="${esc(value)}"` : ''} placeholder="粘贴 Suno 歌曲链接或分享短链接，或音频地址" ${busy ? 'disabled' : ''}>
       ${busy ? `<button type="button" class="rmt-btn" data-rmt-song="audio-cancel" data-rmt-song-id="${id}">取消</button>` : `<button type="button" class="rmt-btn" data-rmt-song="audio-link" data-rmt-song-id="${id}">导入链接</button>`}
     </div>
-    <div class="rmt-song-toolbar"><label class="rmt-btn rmt-song-file"><input type="file" accept="audio/*,.mp3,.m4a,.wav,.ogg,.flac" data-rmt-song-file="${id}" hidden ${busy ? 'disabled' : ''}>选择文件</label>${entry ? `<button type="button" class="rmt-btn" data-rmt-song="audio-remove" data-rmt-song-id="${id}">移除音源</button>` : ''}</div>`;
-    return `<section class="rmt-song-audio" data-rmt-song-audio="${id}"><h3>听这首歌</h3>${player}${controls}<p class="rmt-song-note" role="status" aria-live="polite">${esc(note)}</p></section>`;
+    <div class="rmt-song-toolbar"><label class="rmt-btn rmt-song-file"><input type="file" accept="audio/*,video/mp4,.mp3,.m4a,.wav,.ogg,.flac,.mp4" data-rmt-song-file="${id}" hidden ${busy ? 'disabled' : ''}>选择文件</label>${entry ? `<button type="button" class="rmt-btn" data-rmt-song="audio-remove" data-rmt-song-id="${id}">移除音源</button>` : ''}</div>`;
+    // With a song in place the import tools fold away; they stay open while busy
+    // or right after a message, so the result is never hidden.
+    const controls = readOnly ? '' : entry
+        ? `<details class="rmt-song-source"${busy || note ? ' open' : ''}><summary>更换音源</summary>${inputs}</details>`
+        : inputs;
+    return `<section class="rmt-song-audio" data-rmt-song-audio="${id}" aria-label="听这首歌">${deck}${controls}<p class="rmt-song-note" role="status" aria-live="polite">${esc(note)}</p></section>`;
 }
