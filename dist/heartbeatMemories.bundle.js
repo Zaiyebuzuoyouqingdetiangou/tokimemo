@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 362
-// Source SHA-256: 7c40f57fb15791716c778ef487c39c23aed097ef06b93e800b5fdb2b29956f8e
+// Source SHA-256: 77ee709aa658792b911215caaeee47497adcca6fa08e16e2dd9cb90ce9ad0548
 // Build: python3 tools/verification/build.py <source-root>
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -1507,7 +1507,7 @@ function __init_core_releaseNotes_js() {
 // MODULE: core/releaseNotes.js
 
 // GENERATED FROM README.md by tools/verification/build.py. Do not edit by hand.
-const RELEASE_README = "# 心迹回廊 1.0.57\n\n## 更新日志模块\n\n新增了更新日志板块，感谢@nancyindaeyo的更新。\n\n## 本次变动\n\n- 新增「互动 · 表情包」：给角色、你、你们俩各做表情包。写一句想法，模型列出表情清单（能联网的模型会先查这类表情包常见的情绪和动作，只学题材，不照抄别人的角色），每项都能改；单人一张竖图切成 6 个，双人一张横图切成 4 个，自动按白底切开并加白边，切不开时按格子切。切好后可以逐个改名、配字、单张重画或去掉，再保存。\n- 表情包首页一组只显示一个封面图标，点进去再看这一组的每个表情；可以改组名、换封面、换成自己的图、复制暗号、保存到本机。自己的图片可以导入到「其他」，两边都能发。\n- 图片存在你自己酒馆的图片文件夹里，不用图床；表情包数据跟着角色卡走，换设备打开同一个酒馆也在。\n- 表情包出图和情侣头像一样有「Q 版外貌过滤」：外貌里有身高、体型、骨相这类写实描述时，可以只在这次出图里去掉，免得画回正常比例；可选每次询问、自动过滤或不过滤。一组表情实际用的外貌会跟着这一组保存，之后单张重画也保持一致。\n- 表情包可以一键加入世界书：角色已有主世界书时只追加一条「心迹回廊 · 表情包」，没有就新建一本并绑定。条目字段和酒馆自己新建的条目一样，在世界书编辑器里能正常展开、修改；内容用 `<表情包>` 标签包住，写成 YAML 式的键值，只写表情名和一句意思，不放图片地址。\n- 表情只在剧情里写到角色用手机等通讯设备发消息（聊天软件、短信、私信、评论等）时使用，跟在那条消息后面或者单独作为一条；正文叙述和当面说话时不发，也不要求每条回复都发。\n- 这一条放在最新几条消息之前，不受世界书预算限制（设定很多时也不会被挤掉），只在正常回复、继续、重新生成和换一条时生效，不进其他插件的后台请求。改了表情或插件更新后，已加入的条目会自动更新；撤掉这一条即恢复原样。\n- 模型把暗号写偏也能显示成图：全角的【表情：…】、写成「表情包:」、或者漏了名字只写表情名，都会按表情名找到对应的图。\n- 聊天页多了一个可以拖动的小兔子悬浮按钮（和魔法棒菜单里心迹回廊的兔子是同一只，做过表情包后出现，松手会贴到左右边上并记住位置）。点开后分「我的 / 他的 / 双人 / 其他」，你也可以发他的表情；点一下把暗号放进输入框。聊天里的 `[表情:名字·表情名]` 会显示成对应的表情图，角色从世界书知道每个表情的意思，也知道你借用他的表情是在逗他。\n- 悬浮小兔子可以在表情包页关掉：关掉后聊天页不再显示，改从魔法棒菜单里的「表情包」打开，表情面板贴在输入栏上方，像表情键盘一样，选好一个自动收起，也可以点「收起」。开关记在酒馆设置里，对所有角色都生效。\n- 情侣头像新增 69 种画风（含构图版式、氛围光影、3D 渲染分组）和 48 种互动（含贴贴亲昵、小小较劲、幻想冒险）；画风和互动都改为可搜索、按分类浏览的选择面板，也可以随机抽一个。\n- Q 版、动物化身会给每个人物单独带上比例标签，外貌写得很长也不容易画成成人比例；生成时可选择过滤掉身高、体型等写实描述，只作用于这一次，原外貌不变，也可以在选项里设为自动过滤或不过滤。\n- 情侣头像新增“构图”：默认每次随机换一种镜头，始终保持左右各一人、能裁成两张头像；会改动所选互动或“小心思”里动作的姿势自动跳过，也可以固定为正面并排或指定一种。\n- 情侣头像的画风在 NAI 中加权放在最前，3D 画风另加 3D 标签，减少被画师串盖过。\n- 情侣头像的历史与收藏可以删除头像：卡片下方的“删除”，或点“多选”勾选多对后一起删除，删除前会确认一次；已设为聊天头像的图片、已保存的 PNG 和生图插件图库里的原图不受影响。预览下方的“删除这一对”去掉了，删除统一放在历史与收藏里。\n- 手书的剧情叙事、抒情意象、关系互动、高燃快切、节奏循环、悬念反转六种分镜类型，各自写明了画面特征和自查要求，示例也按类型重写，生成的分镜更贴近类型名字；表情卡拍和动态插画保持不变。\n- 手书新增五种分镜类型：文字PV（歌词大字卡为主角）、回忆走马灯（一闪而过的回忆，最后回到现在）、动画OP风（冷开场、人物亮相、全员同框、风景收尾）、第一视角（角色对着镜头，“你”只露手）、今昔对照（同一构图的从前与现在）。\n- 插件内的更新日志直接读取安装目录里的 README，修改 README 后不用重新打包也会同步。\n- 新增「本地快速建档」：不调用 API，直接把这段聊天的原文按场景切成一段段回忆，几秒钟就能建好，不会因为接口超时、额度不够或返回格式不对而失败。档案还是存在聊天文件里：复制聊天会跟着走，删除聊天就一起没了。\n- 可以在设置里打开「打开聊天就自动本地建档」（默认打开）：单人聊天还没有档案、并且已经聊了两句以上时，心迹回廊会自动建好；之后每多 6 层自动补上新楼层。只自动建一次，你删掉档案后不会再偷偷重建；群聊不会自动建。档案页也能手动点「本地快速建档」或「本地补上新楼层」。\n- 本地建的档案每段只记标题、几句原话和一段 320 字以内的摘录，状态栏、代码块、HTML 和表情暗号都会去掉；进提示词时和普通档案一样最多取 24 段，不会因为聊天很长就占满 token。档案本身存在聊天文件里，不发给模型，不占 token。\n- 本地档案是原文摘录，没有 API 整理过的回忆那么精炼。想要整理过的版本，之后接口可用时点「完全重建」即可替换；点「增量更新」会保留已有摘录，只用 API 整理之后的新楼层，用过 API 更新后就不再自动补本地楼层。\n- 「内容」页的「把勾选的项目排进任务中心」旁边多了「全选」：一次勾上所有能排队的页面，再点一次取消；排进任务中心后会按顺序一项一项生成。\n- 柏宝绘角色库里名字写成 {{user}} 或 {{char}} 的角色，现在也能对上当前的你和角色，读取里面写的外貌（包括性别）；写了真名的条目优先，有两条都能对上时不乱选。\n- CG 提示词编辑里，画面描述下方会写清每个人的外貌从哪来：对上了显示「外貌来自柏宝绘角色库『某某』」；没对上就说原因，比如库里没有这个名字（并列出库里有哪些）、有两个都能对上、库里只写了衣着动作，或者当前柏宝绘版本不支持读角色库。\n- 柏宝绘角色库的名字匹配放宽了一点：只差全角半角、首尾空格或大小写也能对上；一模一样的名字优先，有两个都能对上时不选，真正不同的名字不会硬配。\n- 印象曲歌词的文笔、意象和用词以角色人设为准；你的人设说话方式（比如说话直白、迷糊）只用在你唱的段落或对唱里你的句子，不再把整首词拉成大白话。\n- 修复用酒馆连接配置生成时，主聊天开着流式、心迹回廊却总用完整响应的问题：「本插件流式方式」选「保持原设置」时，现在跟主聊天的流式开关走。不少中转站会掐断长时间没有数据的完整响应，导致等了几十秒后「生成连接请求失败」；跟着用流式后就不会被掐断。明确选了「使用完整响应」的照旧。\n- 如果仍然是完整响应、并且等了 30 秒以上什么都没收到就断开，失败提示会直接说明多半是中转站掐断了连接，并告诉你去「高级生成参数」里改成「使用流式」。\n- 情侣头像选 NAI 4.5 时，两人外貌里都写明了性别（1boy / 1girl、少年 / 少女等），场景开头会加上人数和性别（如 1boy, 1girl），减少两人画成一样或都画成男生；没写明性别的不猜。\n- 情侣头像选 NAI 4.5 时，如果外貌栏里还是整句或中文写法（比如之前用 NAI 5 读出来的），外貌栏下面会提示：4.5 读不好这种写法，点「重新读取外貌」整理成英文 tag。\n- 情侣头像选 NAI 4.5 时，点生成前如果外貌还是整句或中文写法，会先问要不要整理成英文 tag：选「整理后生成」就和点「重新读取外貌」一样整理一次再画（有人物预设直接用预设，否则读一次人设），整理好的会留在外貌栏；选「保持原样生成」就照原样画。外貌已经是 tag 时不会问。\n- 修复本地快速建档可能盖掉旧档案内容的问题：复制、分支或改名后的聊天里，旧档案一时读不到时，自动建档会以为“没有档案”而新建一份，导致档案还在、已生成的内容不见了。现在只要聊天里留有旧档案、已生成内容、档案索引或本机备份的任何痕迹，自动建档和「本地快速建档」都不会新建。\n- 印象曲页面新增「听这首歌」：把歌词和曲风复制到 Suno 做好后，粘上歌曲链接（或选本机音频文件）就能直接在页面里播放。音源只存在这台设备上，制作手书时直接使用，不用再导一次；也可以移除。\n- Suno 歌曲链接改为直接按歌曲 ID 取音频，不再读取网页，手机端没有代理也能导入和播放。能下载时会存成本机文件，可用于导出手书视频；只能在线播放时会提示，导出视频需要先开酒馆代理或改用「选择文件」。短链接（suno.com/s/…）仍需读网页；旧域名 app.suno.ai 的歌曲链接也认。\n- 修复公开的 Suno 歌曲也导入失败：Suno 现在不让站外直接取这首歌的 MP3，导入时会改用它仍然公开的视频文件里的音轨（能下载就存成本机文件，手书和导出视频都能用；不能下载就在线播放）。下载被拦（包括酒馆代理被 Suno 拒绝）时不再直接判成“没有公开”；真的放不了才提示在 Suno 下载 MP3 后用「选择文件」导入。\n- Suno 分享短链接（suno.com/s/…）也能直接粘：插件借酒馆自带的网页读取（酒馆网页搜索用的那个，不用改设置、不调用模型 API）读出它跳到哪首歌，换成完整歌曲链接（suno.com/song/…?sh=…）再导入，换好的链接会填回输入框。酒馆的 CORS 代理没开时，Suno 歌曲也会通过这条路下载成本机文件，手书导出视频不再卡在“需要先开酒馆代理”。TauriTavern 这类没有酒馆后端网页读取的环境，会提示在浏览器里打开短链接、复制跳转后的完整链接。\n- 画风、互动、衣着、裁切、头像应用、自动外貌读取及其他已有功能保持。\n";
+const RELEASE_README = "# 心迹回廊 1.0.57\n\n## 更新日志模块\n\n新增了更新日志板块，感谢@nancyindaeyo的更新。\n\n## 本次变动\n\n- 新增「互动 · 表情包」：给角色、你、你们俩各做表情包。写一句想法，模型列出表情清单（能联网的模型会先查这类表情包常见的情绪和动作，只学题材，不照抄别人的角色），每项都能改；单人一张竖图切成 6 个，双人一张横图切成 4 个，自动按白底切开并加白边，切不开时按格子切。切好后可以逐个改名、配字、单张重画或去掉，再保存。\n- 表情包首页一组只显示一个封面图标，点进去再看这一组的每个表情；可以改组名、换封面、换成自己的图、复制暗号、保存到本机。自己的图片可以导入到「其他」，两边都能发。\n- 图片存在你自己酒馆的图片文件夹里，不用图床；表情包数据跟着角色卡走，换设备打开同一个酒馆也在。\n- 表情包出图和情侣头像一样有「Q 版外貌过滤」：外貌里有身高、体型、骨相这类写实描述时，可以只在这次出图里去掉，免得画回正常比例；可选每次询问、自动过滤或不过滤。一组表情实际用的外貌会跟着这一组保存，之后单张重画也保持一致。\n- 表情包可以一键加入世界书：角色已有主世界书时只追加一条「心迹回廊 · 表情包」，没有就新建一本并绑定。条目字段和酒馆自己新建的条目一样，在世界书编辑器里能正常展开、修改；内容用 `<表情包>` 标签包住，写成 YAML 式的键值，只写表情名和一句意思，不放图片地址。\n- 表情只在剧情里写到角色用手机等通讯设备发消息（聊天软件、短信、私信、评论等）时使用，跟在那条消息后面或者单独作为一条；正文叙述和当面说话时不发，也不要求每条回复都发。\n- 这一条放在最新几条消息之前，不受世界书预算限制（设定很多时也不会被挤掉），只在正常回复、继续、重新生成和换一条时生效，不进其他插件的后台请求。改了表情或插件更新后，已加入的条目会自动更新；撤掉这一条即恢复原样。\n- 模型把暗号写偏也能显示成图：全角的【表情：…】、写成「表情包:」、或者漏了名字只写表情名，都会按表情名找到对应的图。\n- 聊天页多了一个可以拖动的小兔子悬浮按钮（和魔法棒菜单里心迹回廊的兔子是同一只，做过表情包后出现，松手会贴到左右边上并记住位置）。点开后分「我的 / 他的 / 双人 / 其他」，你也可以发他的表情；点一下把暗号放进输入框。聊天里的 `[表情:名字·表情名]` 会显示成对应的表情图，角色从世界书知道每个表情的意思，也知道你借用他的表情是在逗他。\n- 悬浮小兔子可以在表情包页关掉：关掉后聊天页不再显示，改从魔法棒菜单里的「表情包」打开，表情面板贴在输入栏上方，像表情键盘一样，选好一个自动收起，也可以点「收起」。开关记在酒馆设置里，对所有角色都生效。\n- 情侣头像新增 69 种画风（含构图版式、氛围光影、3D 渲染分组）和 48 种互动（含贴贴亲昵、小小较劲、幻想冒险）；画风和互动都改为可搜索、按分类浏览的选择面板，也可以随机抽一个。\n- Q 版、动物化身会给每个人物单独带上比例标签，外貌写得很长也不容易画成成人比例；生成时可选择过滤掉身高、体型等写实描述，只作用于这一次，原外貌不变，也可以在选项里设为自动过滤或不过滤。\n- 情侣头像新增“构图”：默认每次随机换一种镜头，始终保持左右各一人、能裁成两张头像；会改动所选互动或“小心思”里动作的姿势自动跳过，也可以固定为正面并排或指定一种。\n- 情侣头像的画风在 NAI 中加权放在最前，3D 画风另加 3D 标签，减少被画师串盖过。\n- 情侣头像的历史与收藏可以删除头像：卡片下方的“删除”，或点“多选”勾选多对后一起删除，删除前会确认一次；已设为聊天头像的图片、已保存的 PNG 和生图插件图库里的原图不受影响。预览下方的“删除这一对”去掉了，删除统一放在历史与收藏里。\n- 手书的剧情叙事、抒情意象、关系互动、高燃快切、节奏循环、悬念反转六种分镜类型，各自写明了画面特征和自查要求，示例也按类型重写，生成的分镜更贴近类型名字；表情卡拍和动态插画保持不变。\n- 手书新增五种分镜类型：文字PV（歌词大字卡为主角）、回忆走马灯（一闪而过的回忆，最后回到现在）、动画OP风（冷开场、人物亮相、全员同框、风景收尾）、第一视角（角色对着镜头，“你”只露手）、今昔对照（同一构图的从前与现在）。\n- 插件内的更新日志直接读取安装目录里的 README，修改 README 后不用重新打包也会同步。\n- 新增「本地快速建档」：不调用 API，直接把这段聊天的原文按场景切成一段段回忆，几秒钟就能建好，不会因为接口超时、额度不够或返回格式不对而失败。档案还是存在聊天文件里：复制聊天会跟着走，删除聊天就一起没了。\n- 可以在设置里打开「打开聊天就自动本地建档」（默认打开）：单人聊天还没有档案、并且已经聊了两句以上时，心迹回廊会自动建好；之后每多 6 层自动补上新楼层。只自动建一次，你删掉档案后不会再偷偷重建；群聊不会自动建。档案页也能手动点「本地快速建档」或「本地补上新楼层」。\n- 本地建的档案每段只记标题、几句原话和一段 320 字以内的摘录，状态栏、代码块、HTML 和表情暗号都会去掉；进提示词时和普通档案一样最多取 24 段，不会因为聊天很长就占满 token。档案本身存在聊天文件里，不发给模型，不占 token。\n- 本地档案是原文摘录，没有 API 整理过的回忆那么精炼。想要整理过的版本，之后接口可用时点「完全重建」即可替换；点「增量更新」会保留已有摘录，只用 API 整理之后的新楼层，用过 API 更新后就不再自动补本地楼层。\n- 「内容」页的「把勾选的项目排进任务中心」旁边多了「全选」：一次勾上所有能排队的页面，再点一次取消；排进任务中心后会按顺序一项一项生成。\n- 柏宝绘角色库里名字写成 {{user}} 或 {{char}} 的角色，现在也能对上当前的你和角色，读取里面写的外貌（包括性别）；写了真名的条目优先，有两条都能对上时不乱选。\n- CG 提示词编辑里，画面描述下方会写清每个人的外貌从哪来：对上了显示「外貌来自柏宝绘角色库『某某』」；没对上就说原因，比如库里没有这个名字（并列出库里有哪些）、有两个都能对上、库里只写了衣着动作，或者当前柏宝绘版本不支持读角色库。\n- 柏宝绘角色库的名字匹配放宽了一点：只差全角半角、首尾空格或大小写也能对上；一模一样的名字优先，有两个都能对上时不选，真正不同的名字不会硬配。\n- 印象曲歌词的文笔、意象和用词以角色人设为准；你的人设说话方式（比如说话直白、迷糊）只用在你唱的段落或对唱里你的句子，不再把整首词拉成大白话。\n- 修复用酒馆连接配置生成时，主聊天开着流式、心迹回廊却总用完整响应的问题：「本插件流式方式」选「保持原设置」时，现在跟主聊天的流式开关走。不少中转站会掐断长时间没有数据的完整响应，导致等了几十秒后「生成连接请求失败」；跟着用流式后就不会被掐断。明确选了「使用完整响应」的照旧。\n- 如果仍然是完整响应、并且等了 30 秒以上什么都没收到就断开，失败提示会直接说明多半是中转站掐断了连接，并告诉你去「高级生成参数」里改成「使用流式」。\n- 情侣头像选 NAI 4.5 时，两人外貌里都写明了性别（1boy / 1girl、少年 / 少女等），场景开头会加上人数和性别（如 1boy, 1girl），减少两人画成一样或都画成男生；没写明性别的不猜。\n- 情侣头像选 NAI 4.5 时，如果外貌栏里还是整句或中文写法（比如之前用 NAI 5 读出来的），外貌栏下面会提示：4.5 读不好这种写法，点「重新读取外貌」整理成英文 tag。\n- 情侣头像选 NAI 4.5 时，点生成前如果外貌还是整句或中文写法，会先问要不要整理成英文 tag：选「整理后生成」就和点「重新读取外貌」一样整理一次再画（有人物预设直接用预设，否则读一次人设），整理好的会留在外貌栏；选「保持原样生成」就照原样画。外貌已经是 tag 时不会问。\n- 修复本地快速建档可能盖掉旧档案内容的问题：复制、分支或改名后的聊天里，旧档案一时读不到时，自动建档会以为“没有档案”而新建一份，导致档案还在、已生成的内容不见了。现在只要聊天里留有旧档案、已生成内容、档案索引或本机备份的任何痕迹，自动建档和「本地快速建档」都不会新建。\n- 印象曲页面新增「听这首歌」：把歌词和曲风复制到 Suno 做好后，粘上歌曲链接（或选本机音频文件）就能直接在页面里播放。音源只存在这台设备上，制作手书时直接使用，不用再导一次；也可以移除。\n- Suno 歌曲链接改为直接按歌曲 ID 取音频，不再读取网页，手机端没有代理也能导入和播放。能下载时会存成本机文件，可用于导出手书视频；只能在线播放时会提示，导出视频需要先开酒馆代理或改用「选择文件」。短链接（suno.com/s/…）仍需读网页；旧域名 app.suno.ai 的歌曲链接也认。\n- 修复公开的 Suno 歌曲也导入失败：Suno 现在不让站外直接取这首歌的 MP3，导入时会改用它仍然公开的视频文件里的音轨（能下载就存成本机文件，手书和导出视频都能用；不能下载就在线播放）。下载被拦（包括酒馆代理被 Suno 拒绝）时不再直接判成“没有公开”；真的放不了才提示在 Suno 下载 MP3 后用「选择文件」导入。\n- Suno 分享短链接（suno.com/s/…）也能直接粘：插件借酒馆自带的网页读取（酒馆网页搜索用的那个，不用改设置、不调用模型 API）读出它跳到哪首歌，换成完整歌曲链接（suno.com/song/…?sh=…）再导入，换好的链接会填回输入框。酒馆的 CORS 代理没开时，Suno 歌曲也会通过这条路下载成本机文件，手书导出视频不再卡在“需要先开酒馆代理”。TauriTavern 这类没有酒馆后端网页读取的环境，会提示在浏览器里打开短链接、复制跳转后的完整链接。\n- 用链接导入的 Suno 歌曲会显示原本的歌名、作者和封面（读不到 Suno 页面时，用这首印象曲自己的名字和封面），不再一律叫「Suno 歌曲」。\n- 印象曲页的播放器换了样子：左边是唱片封套，播放时黑胶唱片从封套里滑出来转动；右边是歌名、作者、播放键和可拖动的进度条。导入链接、选择文件、移除音源收进「更换音源」，有歌时默认收起。系统设置了减少动态效果时唱片不转。\n- 画风、互动、衣着、裁切、头像应用、自动外貌读取及其他已有功能保持。\n";
 
 __m_core_releaseNotes_js.RELEASE_README = RELEASE_README;
 }
@@ -5406,11 +5406,34 @@ function publicMusicSource(html, base) {
     for (const source of sources) {
         try {
             const url = musicUrl(source, base);
-            if (/\/(?:silence\.(?:mp3|wav)|api\/forbidden)\/?(?:\?|$)/i.test(new URL(url).pathname)) continue;
+            if (/\/(?:silence\.(?:mp3|wav)|sil-\d+\.mp3|api\/forbidden)\/?(?:\?|$)/i.test(new URL(url).pathname)) continue;
             if (url !== musicUrl(base)) return { url, title: title.replace(/\s+/g, ' ').trim().slice(0, 120) };
         } catch {} // Invalid published candidates never become requests.
     }
     return null;
+}
+
+// Title, creator and cover a Suno song page publishes for link previews.
+// og:title is the song name; <title> reads "Name by Creator | Suno".
+function sunoPageMeta(html) {
+    const clean = String(html || '').replace(/<!--[\s\S]*?(?:-->|$)|<(script|style|textarea|template)\b[^>]*>[\s\S]*?(?:<\/\1\s*>|$)/gi, '');
+    const metas = [...clean.matchAll(/<meta\b(?:"[^"]*"|'[^']*'|[^'">])*\/?\s*>/gi)].map(match => attributes(match[0]));
+    const meta = key => metas.find(item => String(item.property || item.name || '').toLowerCase() === key)?.content || '';
+    const tidy = value => String(value || '').replace(/\s+/g, ' ').trim();
+    const pageTitle = tidy(decodeAttribute(clean.match(/<title\b[^>]*>([\s\S]*?)<\/title\s*>/i)?.[1] || '')).replace(/\s*\|\s*Suno\s*$/i, '');
+    let title = tidy(meta('og:title') || meta('twitter:title')).replace(/\s*\|\s*Suno\s*$/i, '');
+    let artist = '';
+    const credit = pageTitle.match(/^(.*\S)\s+by\s+(.+)$/);
+    if (credit && (!title || title === pageTitle || title === credit[1])) { title = credit[1]; artist = credit[2]; }
+    if (!title) title = pageTitle;
+    let image = '';
+    for (const candidate of [meta('og:image'), meta('twitter:image')]) {
+        try {
+            const url = new URL(candidate);
+            if (url.protocol === 'https:' && /^(?:cdn[\w-]*\.suno\.(?:ai|com)|(?:www\.)?suno\.com)$/i.test(url.hostname)) { image = url.href; break; }
+        } catch {}
+    }
+    return { title: title.slice(0, 120), artist: artist.slice(0, 80), image };
 }
 
 function sunoSongPage(html, base) {
@@ -5503,7 +5526,7 @@ function musicLinkName(url) {
     return /\.(?:mp3|m4a|mp4|aac|wav|ogg|opus|flac|webm)$/i.test(name) ? name.slice(0, 80) : '链接歌曲';
 }
 
-async function readMusicLink(value, { signal, fetcher = globalThis.fetch, allowStreaming = true, hostProxy = hostProxyAvailable(), requestHeaders = hostRequestHeaders } = {}) {
+async function readMusicLink(value, { signal, fetcher = globalThis.fetch, allowStreaming = true, hostProxy = hostProxyAvailable(), requestHeaders = hostRequestHeaders, pageMeta = null } = {}) {
     const sourceUrl = musicUrl(value);
     let proxyUnavailable = false, visitUnavailable = false;
     const get = async url => {
@@ -5562,13 +5585,15 @@ async function readMusicLink(value, { signal, fetcher = globalThis.fetch, allowS
         // A browser-followed redirect exposes /song/<uuid> in the response URL
         // (even when a local proxy resolved the relative Location); a proxy that
         // followed it itself returns the song page, whose canonical names it.
-        let page = '';
+        let page = '', pageMeta = null;
         try { if (/^\/song\/[0-9a-f-]{36}\/?$/i.test(new URL(response.url || '').pathname)) page = response.url; } catch {}
-        if (!page && /^(?:text\/html|application\/xhtml\+xml)\b/i.test(response.headers.get('content-type') || '')) {
-            page = sunoSongPage(await waitMusicRequest(response.text(), signal), sourceUrl);
+        if (/^(?:text\/html|application\/xhtml\+xml)\b/i.test(response.headers.get('content-type') || '')) {
+            const html = await waitMusicRequest(response.text(), signal);
+            if (!page) page = sunoSongPage(html, sourceUrl);
+            pageMeta = sunoPageMeta(html);
         }
         const full = sunoShareSongLink(page, shareCode);
-        if (full) return { ...(await readMusicLink(full, { signal, fetcher, allowStreaming, hostProxy, requestHeaders })), resolvedFrom: sourceUrl };
+        if (full) return { ...(await readMusicLink(full, { signal, fetcher, allowStreaming, hostProxy, requestHeaders, pageMeta })), resolvedFrom: sourceUrl };
     }
     const direct = sunoDirectAudio(sourceUrl);
     if (direct) {
@@ -5577,6 +5602,16 @@ async function readMusicLink(value, { signal, fetcher = globalThis.fetch, allowS
         // element, which plays public media without CORS; the caller's playback
         // check decides which one works.
         const video = sunoDirectVideo(sourceUrl);
+        // The page's name and cover, read alongside the audio; optional.
+        const metaRead = pageMeta ? Promise.resolve(pageMeta)
+            : get(sourceUrl).then(async ({ response: page }) => /html/i.test(page.headers.get('content-type') || '') ? sunoPageMeta(await waitMusicRequest(page.text(), signal)) : null).catch(() => null);
+        const described = async media => {
+            // Never let a slow page hold up a song that is already in hand.
+            let timer;
+            const meta = await Promise.race([metaRead, new Promise(resolve => { timer = setTimeout(() => resolve(null), 8000); })]);
+            clearTimeout(timer);
+            return { ...media, name: meta?.title || media.name, ...(meta?.artist ? { artist: meta.artist } : {}), ...(meta?.image ? { coverUrl: meta.image } : {}) };
+        };
         let lastError = null;
         for (const [url, type] of [[direct, 'audio/mpeg'], [video, 'video/mp4']]) {
             try { ({ response, finalUrl } = await get(url)); }
@@ -5591,9 +5626,9 @@ async function readMusicLink(value, { signal, fetcher = globalThis.fetch, allowS
             if (!blob.size) { lastError = linkError('链接返回了空文件。原有歌曲未替换。', 'RMT_MV_LINK_EMPTY'); continue; }
             // A proxy may drop the type; the MV needs it to read a video's audio track.
             if (!/^(?:audio|video)\//i.test(blob.type || '')) blob = blob.slice(0, blob.size, type);
-            return { blob, name: 'Suno 歌曲', sourceUrl };
+            return described({ blob, name: 'Suno 歌曲', sourceUrl });
         }
-        if (allowStreaming) return { url: video, alternates: [direct], name: 'Suno 歌曲', sourceUrl, streaming: true, failText: SUNO_PLAY_FAILED };
+        if (allowStreaming) return described({ url: video, alternates: [direct], name: 'Suno 歌曲', sourceUrl, streaming: true, failText: SUNO_PLAY_FAILED });
         if (lastError?.code === 'RMT_MV_LINK_HTTP' && [403, 404].includes(lastError.status)) throw linkError('Suno 没有公开这首歌的音频（可能是私密歌曲或已删除）。原有歌曲未替换。', 'RMT_MV_LINK_PAGE', lastError.status);
         throw lastError;
     }
@@ -5636,6 +5671,7 @@ async function readMusicLink(value, { signal, fetcher = globalThis.fetch, allowS
 __m_extras_mvMusicLink_js.readMusicLink = readMusicLink;
 __m_extras_mvMusicLink_js.musicUrl = musicUrl;
 __m_extras_mvMusicLink_js.publicMusicSource = publicMusicSource;
+__m_extras_mvMusicLink_js.sunoPageMeta = sunoPageMeta;
 __m_extras_mvMusicLink_js.sunoSongPage = sunoSongPage;
 __m_extras_mvMusicLink_js.sunoDirectAudio = sunoDirectAudio;
 __m_extras_mvMusicLink_js.sunoShareCode = sunoShareCode;
@@ -9704,7 +9740,7 @@ async function loadSongAudio(context, songId) {
     if (loaded.has(key)) return loaded.get(key);
     const row = await mv_media.getMedia(key);
     if (!row?.blob && !row?.mediaUrl) return null;
-    const entry = { url: row.blob ? URL.createObjectURL(row.blob) : music_link.musicUrl(row.mediaUrl), name: row.name || '已保存的歌曲', streaming: !row.blob, sourceUrl: row.sourceUrl || '' };
+    const entry = { url: row.blob ? URL.createObjectURL(row.blob) : music_link.musicUrl(row.mediaUrl), name: row.name || '已保存的歌曲', streaming: !row.blob, sourceUrl: row.sourceUrl || '', artist: row.artist || '', coverUrl: row.coverUrl || '' };
     remember(key, entry);
     return entry;
 }
@@ -9753,8 +9789,9 @@ async function commit(context, songId, media) {
     }
     try { mv.patchRecord(songId, { duration: probed.duration }, mv.captureMvTarget(context, songId)); } catch { /* No storyboard yet is fine. */ }
     const name = core_text.normalizeText(media.name, 80) || '链接歌曲';
-    const saved = await mv_media.putMedia(key, streaming ? null : media.blob, name, { sourceUrl: media.sourceUrl || '', ...(streaming ? { mediaUrl: url } : {}) });
-    remember(key, { url, name, streaming, sourceUrl: media.sourceUrl || '' });
+    const artist = core_text.normalizeText(media.artist || '', 80), coverUrl = /^https:\/\//.test(media.coverUrl || '') ? media.coverUrl : '';
+    const saved = await mv_media.putMedia(key, streaming ? null : media.blob, name, { sourceUrl: media.sourceUrl || '', artist, coverUrl, ...(streaming ? { mediaUrl: url } : {}) });
+    remember(key, { url, name, streaming, sourceUrl: media.sourceUrl || '', artist, coverUrl });
     announce(key);
     return { saved, streaming, name };
 }
@@ -9824,23 +9861,65 @@ function cancelSongImport(context, songId) {
     status.set(key, ''); repaint?.();
 }
 
+// A short message from the player face itself (e.g. playback refused).
+function setSongNote(songId, text, context = core_context.getContext?.()) {
+    try { status.set(songAudioKey(context, songId), String(text || '')); repaint?.(); } catch {}
+}
+
 function setSongPlayerRepaint(fn) { repaint = typeof fn === 'function' ? fn : null; }
 
-function songPlayerHtml(context, songId, { readOnly = false } = {}) {
+const ICON_PLAY = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z"/></svg>';
+const ICON_PAUSE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h3.6v14H7zM13.4 5H17v14h-3.6z"/></svg>';
+const SONG_PLAYER_ICONS = { play: ICON_PLAY, pause: ICON_PAUSE };
+
+function formatSongTime(seconds) {
+    const total = Number.isFinite(seconds) && seconds > 0 ? Math.floor(seconds) : 0;
+    return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
+}
+
+// A generic link name means Suno's page could not be read; the song's own
+// title in 心迹回廊 is the better label then.
+function displayName(entry, songTitle) {
+    const generic = !entry.name || ['Suno 歌曲', '链接歌曲', '已保存的歌曲'].includes(entry.name);
+    return generic && songTitle ? songTitle : entry.name;
+}
+
+function songPlayerHtml(context, songId, { readOnly = false, songTitle = '' } = {}) {
     const key = songAudioKey(context, songId);
     const entry = loaded.get(key), busy = pending.has(key), note = status.get(key) || '';
     const value = fill.get(key) || ''; fill.delete(key);
     const id = esc(songId);
-    const player = entry
-        ? `<div class="rmt-song-track"><span aria-hidden="true">♫</span><div><b>${esc(entry.name)}</b><small>${entry.streaming ? '在线播放' : '本机文件'}${entry.sourceUrl ? ` · <a href="${esc(entry.sourceUrl)}" target="_blank" rel="noopener noreferrer">来源</a>` : ''}</small></div></div>
-           <audio controls preload="metadata" src="${esc(entry.url)}" data-rmt-song-player></audio>`
-        : `<p class="rmt-song-note">还没有音源。把歌词和曲风复制到 Suno 生成后，粘上歌曲链接，或选本机音频文件。</p>`;
-    const controls = readOnly ? '' : `<div class="rmt-song-link-row">
+    const title = entry ? displayName(entry, core_text.normalizeText(songTitle, 120)) : '';
+    const sleeve = entry?.coverUrl
+        ? `<img src="${esc(entry.coverUrl)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : '';
+    const source = entry ? [entry.artist, entry.streaming ? '在线播放' : '存在这台设备'].filter(Boolean).map(esc).join('<span aria-hidden="true">／</span>') : '';
+    const deck = entry ? `<div class="rmt-song-deck">
+        <div class="rmt-song-record" aria-hidden="true"><div class="rmt-song-sleeve">${sleeve}<span>♫</span></div><div class="rmt-song-disc"><i>${sleeve}</i></div></div>
+        <div class="rmt-song-now">
+          <b class="rmt-song-name" title="${esc(title)}">${esc(title)}</b>
+          <small class="rmt-song-by">${source}${entry.sourceUrl ? `<span aria-hidden="true">／</span><a href="${esc(entry.sourceUrl)}" target="_blank" rel="noopener noreferrer">在 Suno 打开</a>` : ''}</small>
+          <div class="rmt-song-transport">
+            <button type="button" class="rmt-song-play" data-rmt-song-play aria-label="播放">${ICON_PLAY}</button>
+            <div class="rmt-song-progress">
+              <input type="range" min="0" max="1000" step="1" value="0" data-rmt-song-seek aria-label="播放进度">
+              <div class="rmt-song-times"><span data-rmt-song-time>0:00</span><span data-rmt-song-duration>--:--</span></div>
+            </div>
+          </div>
+        </div>
+        <audio preload="metadata" src="${esc(entry.url)}" data-rmt-song-player></audio>
+      </div>` : `<div class="rmt-song-deck is-empty"><div class="rmt-song-record" aria-hidden="true"><div class="rmt-song-sleeve"><span>♫</span></div></div>
+        <div class="rmt-song-now"><b class="rmt-song-name">还没有音源</b><small class="rmt-song-by">在 Suno 做好这首歌后，把链接粘到下面，或选本机的音频文件。</small></div></div>`;
+    const inputs = `<div class="rmt-song-link-row">
       <input type="url" inputmode="url" autocomplete="off" spellcheck="false" data-rmt-song-link="${id}"${value ? ` value="${esc(value)}"` : ''} placeholder="粘贴 Suno 歌曲链接或分享短链接，或音频地址" ${busy ? 'disabled' : ''}>
       ${busy ? `<button type="button" class="rmt-btn" data-rmt-song="audio-cancel" data-rmt-song-id="${id}">取消</button>` : `<button type="button" class="rmt-btn" data-rmt-song="audio-link" data-rmt-song-id="${id}">导入链接</button>`}
     </div>
-    <div class="rmt-song-toolbar"><label class="rmt-btn rmt-song-file"><input type="file" accept="audio/*,.mp3,.m4a,.wav,.ogg,.flac" data-rmt-song-file="${id}" hidden ${busy ? 'disabled' : ''}>选择文件</label>${entry ? `<button type="button" class="rmt-btn" data-rmt-song="audio-remove" data-rmt-song-id="${id}">移除音源</button>` : ''}</div>`;
-    return `<section class="rmt-song-audio" data-rmt-song-audio="${id}"><h3>听这首歌</h3>${player}${controls}<p class="rmt-song-note" role="status" aria-live="polite">${esc(note)}</p></section>`;
+    <div class="rmt-song-toolbar"><label class="rmt-btn rmt-song-file"><input type="file" accept="audio/*,video/mp4,.mp3,.m4a,.wav,.ogg,.flac,.mp4" data-rmt-song-file="${id}" hidden ${busy ? 'disabled' : ''}>选择文件</label>${entry ? `<button type="button" class="rmt-btn" data-rmt-song="audio-remove" data-rmt-song-id="${id}">移除音源</button>` : ''}</div>`;
+    // With a song in place the import tools fold away; they stay open while busy
+    // or right after a message, so the result is never hidden.
+    const controls = readOnly ? '' : entry
+        ? `<details class="rmt-song-source"${busy || note ? ' open' : ''}><summary>更换音源</summary>${inputs}</details>`
+        : inputs;
+    return `<section class="rmt-song-audio" data-rmt-song-audio="${id}" aria-label="听这首歌">${deck}${controls}<p class="rmt-song-note" role="status" aria-live="polite">${esc(note)}</p></section>`;
 }
 
 __m_ui_songPlayer_js.loadSongAudio = loadSongAudio;
@@ -9850,9 +9929,12 @@ __m_ui_songPlayer_js.removeSongAudio = removeSongAudio;
 __m_ui_songPlayer_js.songAudioKey = songAudioKey;
 __m_ui_songPlayer_js.currentSongAudio = currentSongAudio;
 __m_ui_songPlayer_js.cancelSongImport = cancelSongImport;
+__m_ui_songPlayer_js.setSongNote = setSongNote;
 __m_ui_songPlayer_js.setSongPlayerRepaint = setSongPlayerRepaint;
+__m_ui_songPlayer_js.formatSongTime = formatSongTime;
 __m_ui_songPlayer_js.songPlayerHtml = songPlayerHtml;
 __m_ui_songPlayer_js.AUDIO_CHANGED_EVENT = AUDIO_CHANGED_EVENT;
+__m_ui_songPlayer_js.SONG_PLAYER_ICONS = SONG_PLAYER_ICONS;
 }
 
 function __init_ui_stickersCss_js() {
@@ -94200,19 +94282,54 @@ ${root} .rmt-theme-song textarea{min-height:200px;resize:vertical}
 ${root} .rmt-song-layout{display:grid;grid-template-columns:minmax(0,1fr);gap:16px;min-width:0}
 ${root} .rmt-song-detail{min-width:0}
 ${root} .rmt-song-cover{max-width:480px;margin:0 auto 20px;min-width:0}
-${root} .rmt-song-audio{max-width:640px;margin:0 auto 20px;padding:14px 16px;border:1px solid var(--rmt-theme-border);border-radius:16px;background:var(--rmt-theme-soft,var(--rmt-theme-surface-solid));display:flex;flex-direction:column;gap:10px}
-${root} .rmt-song-audio h3{margin:0;font-size:15px}
-${root} .rmt-song-track{display:flex;align-items:center;gap:10px;min-width:0}
-${root} .rmt-song-track>span{font-size:22px;opacity:.7}
-${root} .rmt-song-track b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-${root} .rmt-song-track small{color:var(--rmt-theme-muted)}
-${root} .rmt-song-audio audio{width:100%;max-width:100%;min-height:40px}
+${root} .rmt-song-audio{--rmt-song-vinyl:#17151a;max-width:640px;margin:0 auto 20px;padding:16px 18px 14px;border:1px solid var(--rmt-theme-border);border-radius:20px;background:var(--rmt-theme-surface-solid);display:flex;flex-direction:column;gap:12px;min-width:0}
+${root} .rmt-song-deck{display:flex;align-items:center;gap:18px;min-width:0}
+${root} .rmt-song-record{position:relative;flex:none;width:176px;height:112px}
+${root} .rmt-song-sleeve{position:absolute;left:0;top:0;z-index:1;width:112px;height:112px;border-radius:10px;overflow:hidden;display:grid;place-items:center;background:linear-gradient(150deg,var(--rmt-theme-soft),var(--rmt-theme-surface-solid));border:1px solid var(--rmt-theme-border);box-shadow:4px 0 10px -6px rgba(0,0,0,.45)}
+${root} .rmt-song-sleeve>span{font-size:34px;color:var(--rmt-theme-accent-ink);opacity:.75}
+${root} .rmt-song-sleeve>img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+${root} .rmt-song-sleeve>img~span{display:none}
+${root} .rmt-song-disc{position:absolute;left:40px;top:4px;width:104px;height:104px;border-radius:50%;display:grid;place-items:center;background:radial-gradient(circle,transparent 0 19px,rgba(255,255,255,.06) 20px,transparent 21px),repeating-radial-gradient(circle,var(--rmt-song-vinyl) 0 2px,#232026 2px 3px),var(--rmt-song-vinyl);box-shadow:inset 0 0 0 1px rgba(255,255,255,.06);transition:left .45s cubic-bezier(.2,.7,.2,1)}
+${root} .rmt-song-disc:after{content:'';position:absolute;inset:0;border-radius:50%;background:conic-gradient(from 30deg,transparent 0 12%,rgba(255,255,255,.12) 16%,transparent 22% 62%,rgba(255,255,255,.08) 66%,transparent 72%)}
+${root} .rmt-song-disc>i{position:relative;width:38px;height:38px;border-radius:50%;overflow:hidden;background:var(--rmt-theme-accent-ink);display:block}
+${root} .rmt-song-disc>i:after{content:'';position:absolute;left:50%;top:50%;width:5px;height:5px;margin:-2.5px;border-radius:50%;background:var(--rmt-song-vinyl)}
+${root} .rmt-song-disc>i>img{width:100%;height:100%;object-fit:cover;display:block}
+${root} .rmt-song-audio.is-playing .rmt-song-disc{left:72px;animation:rmt-song-spin 2.4s linear infinite}
+@keyframes rmt-song-spin{to{transform:rotate(360deg)}}
+${root} .rmt-song-deck.is-empty .rmt-song-record{width:112px}
+${root} .rmt-song-deck.is-empty .rmt-song-sleeve{border-style:dashed;box-shadow:none;background:var(--rmt-theme-soft)}
+${root} .rmt-song-now{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+${root} .rmt-song-name{font-size:18px;line-height:1.4;font-weight:650;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+${root} .rmt-song-deck.is-empty .rmt-song-name{font-size:16px}
+${root} .rmt-song-by{font-size:13px;line-height:1.5;color:var(--rmt-theme-muted);overflow-wrap:anywhere}
+${root} .rmt-song-by>span{margin:0 6px;opacity:.5}
+${root} .rmt-song-by a{color:inherit;text-decoration:underline;text-underline-offset:3px;white-space:nowrap}
+${root} .rmt-song-transport{display:flex;align-items:center;gap:12px;margin-top:10px;min-width:0}
+${root} .rmt-song-audio .rmt-song-play{flex:none;width:46px;height:46px;min-height:0!important;border-radius:50%;border:0!important;padding:0!important;display:grid;place-items:center;cursor:pointer;background:var(--rmt-theme-accent-ink)!important;color:var(--rmt-theme-surface-solid,#fff)!important;-webkit-text-fill-color:currentColor!important;box-shadow:0 6px 14px -8px var(--rmt-theme-accent-ink);transition:transform .15s}
+${root} .rmt-song-audio .rmt-song-play:active{transform:scale(.94)}
+${root} .rmt-song-play svg{width:22px;height:22px;fill:currentColor}
+${root} .rmt-song-progress{flex:1;min-width:0}
+${root} .rmt-theme-song .rmt-song-progress input[type=range]{--p:0%;-webkit-appearance:none;appearance:none;width:100%;min-height:0;height:20px;margin:0;padding:0;border:0;background:transparent;cursor:pointer}
+${root} .rmt-song-progress input[type=range]::-webkit-slider-runnable-track{height:4px;border-radius:4px;background:linear-gradient(90deg,var(--rmt-theme-accent-ink) var(--p),var(--rmt-theme-border) var(--p))}
+${root} .rmt-song-progress input[type=range]::-moz-range-track{height:4px;border-radius:4px;background:linear-gradient(90deg,var(--rmt-theme-accent-ink) var(--p),var(--rmt-theme-border) var(--p))}
+${root} .rmt-song-progress input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;margin-top:-5px;border-radius:50%;border:0;background:var(--rmt-theme-accent-ink)}
+${root} .rmt-song-progress input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;border:0;background:var(--rmt-theme-accent-ink)}
+${root} .rmt-song-times{display:flex;justify-content:space-between;font-size:12px;color:var(--rmt-theme-muted);font-variant-numeric:tabular-nums}
+${root} .rmt-song-source{border-top:1px solid var(--rmt-theme-border);padding-top:8px}
+${root} .rmt-song-source>summary{cursor:pointer;min-height:36px;display:flex;align-items:center;gap:6px;font-size:13px;color:var(--rmt-theme-muted);list-style:none}
+${root} .rmt-song-source>summary::-webkit-details-marker{display:none}
+${root} .rmt-song-source>summary:before{content:'›'}
+${root} .rmt-song-source[open]>summary:before{content:'⌄'}
+${root} .rmt-song-source[open]>summary{margin-bottom:8px}
+${root} .rmt-song-source>.rmt-song-toolbar{margin-top:8px}
 ${root} .rmt-song-link-row{display:flex;gap:8px;align-items:stretch}
 ${root} .rmt-song-link-row input{flex:1;min-width:0;min-height:44px;padding:0 12px;border:1px solid var(--rmt-theme-border);border-radius:12px;background:var(--rmt-theme-surface-solid);color:var(--rmt-theme-text);font-size:14px}
 ${root} .rmt-song-link-row button{flex:0 0 auto;min-height:44px}
 ${root} .rmt-song-file{display:inline-flex;align-items:center;cursor:pointer}
-${root} .rmt-song-note{margin:0;font-size:13px;line-height:1.5;color:var(--rmt-theme-muted)}
-${root} .rmt-song-note:empty{display:none}
+${root} .rmt-song-audio>.rmt-song-note{margin:0;font-size:13px;line-height:1.5;color:var(--rmt-theme-muted)}
+${root} .rmt-song-audio>.rmt-song-note:empty{display:none}
+@media(prefers-reduced-motion:reduce){${root} .rmt-song-audio.is-playing .rmt-song-disc{animation:none}${root} .rmt-song-disc{transition:none}}
+@media(max-width:480px){${root} .rmt-song-audio{padding:14px}${root} .rmt-song-deck{gap:12px}${root} .rmt-song-record{width:120px;height:76px}${root} .rmt-song-deck.is-empty .rmt-song-record{width:76px}${root} .rmt-song-sleeve{width:76px;height:76px}${root} .rmt-song-disc{left:26px;top:3px;width:70px;height:70px}${root} .rmt-song-disc>i{width:26px;height:26px}${root} .rmt-song-audio.is-playing .rmt-song-disc{left:48px}${root} .rmt-song-name{font-size:16px}${root} .rmt-song-transport{margin-top:6px}${root} .rmt-song-audio .rmt-song-play{width:42px;height:42px}}
 ${root} .rmt-song-cover .rmt-thumb{aspect-ratio:auto;min-height:0;overflow:hidden;border-radius:16px}
 ${root} .rmt-song-cover .rmt-thumb img{width:100%;height:auto;display:block;object-fit:contain}
 ${root} .rmt-song-cover-empty{display:grid;place-content:center;gap:8px;text-align:center;min-height:150px;border-radius:16px;background:var(--rmt-theme-soft);color:var(--rmt-theme-accent-ink);border:1px solid var(--rmt-theme-border)}
@@ -94490,7 +94607,7 @@ function renderThemeSongs() {
     const switcher = `<div class="rmt-song-display-switch" role="group" aria-label="歌曲操作"><button type="button" class="rmt-btn" data-rmt-song="view-read" aria-pressed="${displayMode === 'read'}">阅读模式</button><button type="button" class="rmt-btn" data-rmt-song="view-format" aria-pressed="${displayMode === 'format'}">创作格式</button>${mvButton}</div>`;
     let audio = '';
     if (selected && !runtimeState.activeArchiveSnapshot && !selected.generationIncomplete) {
-        try { audio = song_player.songPlayerHtml(contextApi.getContext(), selected.id, { readOnly: readonly() }); } catch { audio = ''; }
+        try { audio = song_player.songPlayerHtml(contextApi.getContext(), selected.id, { readOnly: readonly(), songTitle: selected.title }); } catch { audio = ''; }
     }
     const details = `<div class="rmt-song-detail"${selected ? ` data-rmt-current-song="${esc(selected.id)}"` : ''}>${selected ? switcher : ''}${cover}${audio}${displayMode === 'format' ? formatDetails : readDetails}</div>`;
     const list = session.songs.length ? `<details class="rmt-song-library"><summary><span>歌曲列表 · ${session.songs.length} 首</span><small>${esc(selected?.title || '')}</small></summary><nav class="rmt-song-list" aria-label="已保存的印象曲">${[...session.songs].reverse().map(song => `<button type="button" class="${song.id === selected?.id ? 'active' : ''}" data-rmt-song="select" data-rmt-song-id="${esc(song.id)}" aria-current="${song.id === selected?.id ? 'page' : 'false'}"><span aria-hidden="true">♪</span><span><b>${esc(song.title)}</b><small>${esc(song.singer)}</small></span></button>`).join('')}</nav></details>` : '';
@@ -94520,7 +94637,8 @@ function repaintSongPlayer() {
     const songId = host.dataset.rmtSongAudio;
     const keep = body.querySelector(`[data-rmt-song-link="${songId}"]`)?.value;
     let html = '';
-    try { html = song_player.songPlayerHtml(contextApi.getContext(), songId, { readOnly: readonly() }); } catch { return; }
+    const songTitle = runtimeState.activeSession?.songs?.find?.(song => song.id === songId)?.title || '';
+    try { html = song_player.songPlayerHtml(contextApi.getContext(), songId, { readOnly: readonly(), songTitle }); } catch { return; }
     const temp = document.createElement('div'); temp.innerHTML = html;
     const next = temp.firstElementChild; if (!next) return;
     host.replaceWith(next);
@@ -94528,9 +94646,63 @@ function repaintSongPlayer() {
     if (input && typeof keep === 'string' && !input.getAttribute('value') && !next.querySelector('[data-rmt-song="audio-cancel"]')) input.value = keep;
     bindSongPlayer(body, { id: songId });
 }
+// The player face: one hidden <audio>, a play button, a seek bar and two times.
+function bindSongTransport(host) {
+    const audio = host?.querySelector('[data-rmt-song-player]'); if (!audio) return;
+    const play = host.querySelector('[data-rmt-song-play]'), seek = host.querySelector('[data-rmt-song-seek]');
+    const now = host.querySelector('[data-rmt-song-time]'), total = host.querySelector('[data-rmt-song-duration]');
+    // Suno's cover when it was read; otherwise this song's own album cover.
+    const own = host.closest('.rmt-song-detail')?.querySelector('.rmt-song-cover img')?.getAttribute('src') || '';
+    const sleeve = host.querySelector('.rmt-song-sleeve'), label = host.querySelector('.rmt-song-disc>i');
+    const fallback = () => {
+        for (const box of [sleeve, label]) {
+            if (!box || box.querySelector('img') || !own) continue;
+            const img = document.createElement('img'); img.alt = ''; img.src = own;
+            img.addEventListener('error', () => img.remove(), { once: true });
+            box.prepend(img);
+        }
+    };
+    for (const img of host.querySelectorAll('.rmt-song-record img')) img.addEventListener('error', () => { img.remove(); fallback(); }, { once: true });
+    fallback();
+    let dragging = false;
+    const paint = () => {
+        const duration = Number.isFinite(audio.duration) ? audio.duration : 0;
+        const ratio = duration > 0 ? Math.min(1, audio.currentTime / duration) : 0;
+        if (!dragging && seek) { seek.value = String(Math.round(ratio * 1000)); seek.style.setProperty('--p', `${ratio * 100}%`); }
+        if (now) now.textContent = song_player.formatSongTime(audio.currentTime);
+        if (total) total.textContent = duration > 0 ? song_player.formatSongTime(duration) : '--:--';
+    };
+    const state = () => {
+        const playing = !audio.paused && !audio.ended;
+        host.classList.toggle('is-playing', playing);
+        if (play) { play.innerHTML = playing ? song_player.SONG_PLAYER_ICONS.pause : song_player.SONG_PLAYER_ICONS.play; play.setAttribute('aria-label', playing ? '暂停' : '播放'); }
+    };
+    play?.addEventListener('click', () => {
+        if (audio.paused || audio.ended) {
+            // Only one song plays at a time on this page.
+            for (const other of document.querySelectorAll('[data-rmt-song-player]')) if (other !== audio) other.pause();
+            void audio.play().catch(() => { song_player.setSongNote?.(host.dataset.rmtSongAudio, '这首歌没能开始播放，可以再点一次，或在「更换音源」里重新导入。'); });
+        } else audio.pause();
+    });
+    seek?.addEventListener('input', () => {
+        dragging = true;
+        seek.style.setProperty('--p', `${Number(seek.value) / 10}%`);
+        if (now && Number.isFinite(audio.duration)) now.textContent = song_player.formatSongTime(audio.duration * Number(seek.value) / 1000);
+    });
+    seek?.addEventListener('change', () => {
+        dragging = false;
+        if (Number.isFinite(audio.duration) && audio.duration > 0) audio.currentTime = audio.duration * Number(seek.value) / 1000;
+        paint();
+    });
+    for (const type of ['timeupdate', 'loadedmetadata', 'durationchange', 'seeked']) audio.addEventListener(type, paint);
+    for (const type of ['play', 'playing', 'pause', 'ended', 'emptied']) audio.addEventListener(type, state);
+    audio.addEventListener('ended', () => { audio.currentTime = 0; paint(); });
+    paint(); state();
+}
 function bindSongPlayer(body, selected) {
     if (!selected || runtimeState.activeArchiveSnapshot) return;
     song_player.setSongPlayerRepaint(repaintSongPlayer);
+    bindSongTransport(body.querySelector(`[data-rmt-song-audio="${selected.id}"]`));
     const file = body.querySelector(`[data-rmt-song-file="${selected.id}"]`);
     file?.addEventListener('change', () => {
         const chosen = file.files?.[0]; if (!chosen) return;
@@ -99965,7 +100137,7 @@ function mediaKey(kind, scope, songId, shotId = '') {
 }
 
 async function putMedia(key, blob, name = '', details = {}) {
-    try { await run('readwrite', store => store.put({ key, blob, name, type: blob?.type || '', at: Date.now(), ...(details.sourceUrl ? { sourceUrl: details.sourceUrl } : {}), ...(!blob && details.mediaUrl ? { mediaUrl: details.mediaUrl } : {}) })); return true; }
+    try { await run('readwrite', store => store.put({ key, blob, name, type: blob?.type || '', at: Date.now(), ...(details.sourceUrl ? { sourceUrl: details.sourceUrl } : {}), ...(!blob && details.mediaUrl ? { mediaUrl: details.mediaUrl } : {}), ...(typeof details.artist === 'string' && details.artist ? { artist: details.artist.slice(0, 80) } : {}), ...(typeof details.coverUrl === 'string' && /^https:\/\//.test(details.coverUrl) ? { coverUrl: details.coverUrl } : {}) })); return true; }
     catch { return false; }
 }
 
