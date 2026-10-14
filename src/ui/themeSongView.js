@@ -207,7 +207,7 @@ export function renderThemeSongs() {
     const switcher = `<div class="rmt-song-display-switch" role="group" aria-label="歌曲操作"><button type="button" class="rmt-btn" data-rmt-song="view-read" aria-pressed="${displayMode === 'read'}">阅读模式</button><button type="button" class="rmt-btn" data-rmt-song="view-format" aria-pressed="${displayMode === 'format'}">创作格式</button>${mvButton}</div>`;
     let audio = '';
     if (selected && !runtimeState.activeArchiveSnapshot && !selected.generationIncomplete) {
-        try { audio = song_player.songPlayerHtml(contextApi.getContext(), selected.id, { readOnly: readonly() }); } catch { audio = ''; }
+        try { audio = song_player.songPlayerHtml(contextApi.getContext(), selected.id, { readOnly: readonly(), songTitle: selected.title }); } catch { audio = ''; }
     }
     const details = `<div class="rmt-song-detail"${selected ? ` data-rmt-current-song="${esc(selected.id)}"` : ''}>${selected ? switcher : ''}${cover}${audio}${displayMode === 'format' ? formatDetails : readDetails}</div>`;
     const list = session.songs.length ? `<details class="rmt-song-library"><summary><span>歌曲列表 · ${session.songs.length} 首</span><small>${esc(selected?.title || '')}</small></summary><nav class="rmt-song-list" aria-label="已保存的印象曲">${[...session.songs].reverse().map(song => `<button type="button" class="${song.id === selected?.id ? 'active' : ''}" data-rmt-song="select" data-rmt-song-id="${esc(song.id)}" aria-current="${song.id === selected?.id ? 'page' : 'false'}"><span aria-hidden="true">♪</span><span><b>${esc(song.title)}</b><small>${esc(song.singer)}</small></span></button>`).join('')}</nav></details>` : '';
@@ -237,7 +237,8 @@ function repaintSongPlayer() {
     const songId = host.dataset.rmtSongAudio;
     const keep = body.querySelector(`[data-rmt-song-link="${songId}"]`)?.value;
     let html = '';
-    try { html = song_player.songPlayerHtml(contextApi.getContext(), songId, { readOnly: readonly() }); } catch { return; }
+    const songTitle = runtimeState.activeSession?.songs?.find?.(song => song.id === songId)?.title || '';
+    try { html = song_player.songPlayerHtml(contextApi.getContext(), songId, { readOnly: readonly(), songTitle }); } catch { return; }
     const temp = document.createElement('div'); temp.innerHTML = html;
     const next = temp.firstElementChild; if (!next) return;
     host.replaceWith(next);
@@ -245,9 +246,63 @@ function repaintSongPlayer() {
     if (input && typeof keep === 'string' && !input.getAttribute('value') && !next.querySelector('[data-rmt-song="audio-cancel"]')) input.value = keep;
     bindSongPlayer(body, { id: songId });
 }
+// The player face: one hidden <audio>, a play button, a seek bar and two times.
+function bindSongTransport(host) {
+    const audio = host?.querySelector('[data-rmt-song-player]'); if (!audio) return;
+    const play = host.querySelector('[data-rmt-song-play]'), seek = host.querySelector('[data-rmt-song-seek]');
+    const now = host.querySelector('[data-rmt-song-time]'), total = host.querySelector('[data-rmt-song-duration]');
+    // Suno's cover when it was read; otherwise this song's own album cover.
+    const own = host.closest('.rmt-song-detail')?.querySelector('.rmt-song-cover img')?.getAttribute('src') || '';
+    const sleeve = host.querySelector('.rmt-song-sleeve'), label = host.querySelector('.rmt-song-disc>i');
+    const fallback = () => {
+        for (const box of [sleeve, label]) {
+            if (!box || box.querySelector('img') || !own) continue;
+            const img = document.createElement('img'); img.alt = ''; img.src = own;
+            img.addEventListener('error', () => img.remove(), { once: true });
+            box.prepend(img);
+        }
+    };
+    for (const img of host.querySelectorAll('.rmt-song-record img')) img.addEventListener('error', () => { img.remove(); fallback(); }, { once: true });
+    fallback();
+    let dragging = false;
+    const paint = () => {
+        const duration = Number.isFinite(audio.duration) ? audio.duration : 0;
+        const ratio = duration > 0 ? Math.min(1, audio.currentTime / duration) : 0;
+        if (!dragging && seek) { seek.value = String(Math.round(ratio * 1000)); seek.style.setProperty('--p', `${ratio * 100}%`); }
+        if (now) now.textContent = song_player.formatSongTime(audio.currentTime);
+        if (total) total.textContent = duration > 0 ? song_player.formatSongTime(duration) : '--:--';
+    };
+    const state = () => {
+        const playing = !audio.paused && !audio.ended;
+        host.classList.toggle('is-playing', playing);
+        if (play) { play.innerHTML = playing ? song_player.SONG_PLAYER_ICONS.pause : song_player.SONG_PLAYER_ICONS.play; play.setAttribute('aria-label', playing ? '暂停' : '播放'); }
+    };
+    play?.addEventListener('click', () => {
+        if (audio.paused || audio.ended) {
+            // Only one song plays at a time on this page.
+            for (const other of document.querySelectorAll('[data-rmt-song-player]')) if (other !== audio) other.pause();
+            void audio.play().catch(() => { song_player.setSongNote?.(host.dataset.rmtSongAudio, '这首歌没能开始播放，可以再点一次，或在「更换音源」里重新导入。'); });
+        } else audio.pause();
+    });
+    seek?.addEventListener('input', () => {
+        dragging = true;
+        seek.style.setProperty('--p', `${Number(seek.value) / 10}%`);
+        if (now && Number.isFinite(audio.duration)) now.textContent = song_player.formatSongTime(audio.duration * Number(seek.value) / 1000);
+    });
+    seek?.addEventListener('change', () => {
+        dragging = false;
+        if (Number.isFinite(audio.duration) && audio.duration > 0) audio.currentTime = audio.duration * Number(seek.value) / 1000;
+        paint();
+    });
+    for (const type of ['timeupdate', 'loadedmetadata', 'durationchange', 'seeked']) audio.addEventListener(type, paint);
+    for (const type of ['play', 'playing', 'pause', 'ended', 'emptied']) audio.addEventListener(type, state);
+    audio.addEventListener('ended', () => { audio.currentTime = 0; paint(); });
+    paint(); state();
+}
 function bindSongPlayer(body, selected) {
     if (!selected || runtimeState.activeArchiveSnapshot) return;
     song_player.setSongPlayerRepaint(repaintSongPlayer);
+    bindSongTransport(body.querySelector(`[data-rmt-song-audio="${selected.id}"]`));
     const file = body.querySelector(`[data-rmt-song-file="${selected.id}"]`);
     file?.addEventListener('change', () => {
         const chosen = file.files?.[0]; if (!chosen) return;
