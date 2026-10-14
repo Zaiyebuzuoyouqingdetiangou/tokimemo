@@ -337,6 +337,44 @@ function fillEditorMetadata(current, raw) {
     updatePreparedPreview(current);
 }
 
+// The looks the user last saved with 「保存外貌」 are what they expect to see
+// when this picture is opened again. The picture's own record is left as it
+// was; only this draft starts from the saved looks (library presets still win).
+function preferSavedLooks(current, context) {
+    const changed = [];
+    const presetBacked = key => !!current.appearanceSources?.[key]?.presetAppearance;
+    if (current.multi) {
+        let saved = null;
+        try { saved = cast_looks.readParticipantLooks(context); } catch { return; }
+        for (const person of current.people) {
+            const row = saved?.characters.find(item => item.participantId === person.id);
+            if (!person.selected || !row?.tag || presetBacked(person.id) || (person.tag === row.tag && (!row.nl || person.nl === row.nl))) continue;
+            person.tag = row.tag; if (row.nl) person.nl = row.nl;
+            current.appearanceEdited[person.id] = true;
+            changed.push(person.name || '人物');
+        }
+        if (changed.length) renderParticipantFields(current);
+    } else {
+        let saved = null;
+        try { saved = cast_looks.readCastLooks(context); } catch { return; }
+        if (!saved?.manual) return;
+        for (const role of ['char', 'user']) {
+            const field = current.element.querySelector(`[data-rmt-cg-tag-input="${role}"]`);
+            const shown = current.element.querySelector(`[data-rmt-cg-role-selected="${role}"]`)?.checked;
+            if (!field || !shown || !saved[role] || presetBacked(role) || field.value === saved[role]) continue;
+            field.value = saved[role];
+            current.appearanceEdited[role] = true;
+            changed.push(current.characterNames[role] || (role === 'char' ? '角色' : '用户'));
+        }
+    }
+    if (!changed.length) return;
+    invalidateFlatPrompt(current);
+    updatePreparedPreview(current);
+    const status = current.element.querySelector('[data-rmt-cg-prompt-status]');
+    status.setAttribute('role', 'status');
+    status.textContent = `${changed.join('、')}的外貌用的是你上次「保存外貌」存下的版本；这张图原来的记录没有改动，确认绘图后才会用新外貌重画。`;
+}
+
 export function openCgPromptEditor({ heartStrip = false, targetDescriptor = null } = {}) {
     try {
         if (!archive_library.requireWritableArchiveAction()) return;
@@ -438,6 +476,7 @@ export function openCgPromptEditor({ heartStrip = false, targetDescriptor = null
         }
         element.querySelector('[data-rmt-cg-flat-prompt]').addEventListener('input', () => { current.flatPromptEdited = true; updatePreparedPreview(current); });
         fillEditorMetadata(current, initialMetadata);
+        preferSavedLooks(current, context);
         if (multi) element.querySelector('[data-rmt-cg-appearance]').open = true;
         element.addEventListener('click', event => {
             event.stopPropagation();

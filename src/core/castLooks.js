@@ -19,7 +19,9 @@ import { state as runtimeState } from './state.js';
 import * as archive_repository from './archiveBridge.js';
 
 export const CAST_LOOKS_KEY = 'heartbeatMemoriesCastLooksV1';
-export const CAST_LOOKS_FIELD_LIMIT = 400;
+// Long enough for a complete, detailed look (the couple-avatar editor has no
+// cap at all); 400 used to cut detailed personas short.
+export const CAST_LOOKS_FIELD_LIMIT = 1200;
 const LOOKS_STORE_PREFIX = 'heartbeat_memories_cast_looks_v1:';
 const LOOKS_STORE_MAX_CHARS = 12000;
 
@@ -108,7 +110,6 @@ export function saveConfirmedParticipantLooks(characters, { origin, expectedSign
 // Clause splitting includes the Chinese comma on purpose: a card written as one run-on
 // "名字，男，31岁，身高192cm，MBTI：INTJ，太阳星座：天蝎座，…，黑色短发" would otherwise match on
 // 身高 and drag MBTI, star signs, food preferences and backstory into the image request.
-const LOOK_SPLIT = /[\n。；;!?！？，,、]/;
 // Face-framing hair and distinctive accessories are visible identity too. Keep
 // these explicit source facts; never synthesize a different look for a pair.
 // Facts about the person that are not visible in a picture.
@@ -153,7 +154,9 @@ export function normalizeManualLook(value) {
     const clean = core_text.normalizeText(value, CAST_LOOKS_FIELD_LIMIT)
         .replace(/https?:\/\/\S+/gi, ' ').replace(/<[^>]{0,500}>/g, ' ')
         .replace(/\{\{[^{}]{1,100}\}\}/g, ' ');
-    return clean.split(LOOK_SPLIT).map(part => part.trim()).filter(part => part && !LOOK_DROP.test(part)).join(', ').slice(0, CAST_LOOKS_FIELD_LIMIT);
+    // What the user typed is kept as typed: the biography filter is for
+    // automatic extraction only and used to drop parts of hand-written looks.
+    return clean.trim();
 }
 
 export function normalizeCastLooks(value, chatId = '') {
