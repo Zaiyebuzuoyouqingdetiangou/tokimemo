@@ -78,6 +78,34 @@ export function stripExcludedTags(value, tags, onRetainedSpan = null) {
     if (!stack.length) retain(cursor, source.length);
     return out;
 }
+// One pass over a text: how many characters each outermost tag block holds
+// (opening tag to its matching close, children included). Used only for a
+// local size preview; reading and filtering still go through stripExcludedTags.
+const VOID_TAGS = new Set(['br', 'img', 'hr', 'input', 'meta', 'link', 'wbr', 'source', 'area', 'col', 'embed', 'param', 'track', 'base']);
+export function tagBlockSizes(value) {
+    const source = String(value || ''), sizes = new Map(), stack = [];
+    let outer = '', start = 0, index = 0;
+    const add = (name, size) => { if (size > 0) sizes.set(name, (sizes.get(name) || 0) + size); };
+    while (index < source.length) {
+        if (source[index] !== '<' && source[index] !== '&') { index++; continue; }
+        const token = tagAt(source, index);
+        if (!token) { index++; continue; }
+        if (token.incomplete) {
+            if (stack.length) { add(outer, source.length - start); stack.length = 0; }
+            break;
+        }
+        const opens = !token.closing && !token.selfClosing && !VOID_TAGS.has(token.name);
+        if (stack.length) {
+            if (token.closing && stack[stack.length - 1] === token.name) {
+                stack.pop();
+                if (!stack.length) add(outer, token.end - start);
+            } else if (opens) stack.push(token.name);
+        } else if (opens) { stack.push(token.name); outer = token.name; start = index; }
+        index = token.end;
+    }
+    if (stack.length) add(outer, source.length - start);
+    return sizes;
+}
 // Only an explicit save enables keep mode. Legacy exclusion settings are not inverted.
 export function savedTagSelection(settings) {
     return settings?.contextTagMode === 'keep'

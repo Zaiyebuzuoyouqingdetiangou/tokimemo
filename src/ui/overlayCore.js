@@ -171,16 +171,23 @@ export function navigateBack() {
 
 // Local preview before a new archive or full rebuild; nothing is sent here.
 function reviewArchiveSource(context, rebuild, proceed) {
-    let estimate;
-    try { estimate = archive_source_estimate.estimateArchiveSource(context); }
-    catch (error) { console.warn('[HeartbeatMemories] archive source estimate skipped', core_text.safeErrorDiagnostic(error)); return proceed(); }
-    if (!estimate.floors) return proceed();
-    void participant_picker.chooseArchiveSourcePlan({ context, estimate, rebuild, format: archive_source_estimate.formatChars }).then(choice => {
+    const scope = core_context.chatScopeKey(context);
+    void archive_source_estimate.estimateArchiveSource(context).catch(error => {
+        console.warn('[HeartbeatMemories] archive source estimate skipped', core_text.safeErrorDiagnostic(error));
+        return null;
+    }).then(estimate => {
+        // The chat changed while counting: do nothing rather than start on another chat.
+        let same = false;
+        try { same = core_context.chatScopeKey(core_context.currentCharacterGuard()) === scope; } catch { same = false; }
+        if (!same) return null;
+        if (!estimate?.floors) return { filterTags: [] };
+        return participant_picker.chooseArchiveSourcePlan({ context, estimate, rebuild, format: archive_source_estimate.formatChars });
+    }).then(choice => {
         if (!choice) return;
         if (choice.filterTags.length && archive_source_estimate.excludeTagsForArchive(choice.filterTags, context)) {
-            globalThis.toastr?.info?.(`已把 ${choice.filterTags.map(name => `<${name}>`).join('、')} 加进过滤标签，这次和以后都不读。`, '心迹回廊');
+            globalThis.toastr?.info?.(`已把${choice.filterTags.map(name => `「${name}」`).join('、')}标签加进过滤标签，这次和以后都不读。`, '心迹回廊');
         }
-        proceed();
+        proceed(choice);
     }).catch(error => globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心迹回廊'));
     return true;
 }
@@ -219,8 +226,9 @@ export function requestCurrentArchiveImport({ cardTypeConfirmed = false, partici
         return false;
     }
     if (!existing && !sourceReviewed && !archive_repository.getCurrentArchiveImportRecoverySummary(context)) {
-        return reviewArchiveSource(context, false, () => requestCurrentArchiveImport({ cardTypeConfirmed: true,
-            ...(participantRoster !== undefined ? { participantRoster } : {}), sourceReviewed: 'dialog' }));
+        // Only a review the user actually saw replaces the usual confirmation.
+        return reviewArchiveSource(context, false, choice => requestCurrentArchiveImport({ cardTypeConfirmed: true,
+            ...(participantRoster !== undefined ? { participantRoster } : {}), sourceReviewed: choice?.reviewed ? 'dialog' : true }));
     }
     const title = existing ? '增量更新当前窗口档案？' : '生成当前窗口档案？';
     const detail = existing

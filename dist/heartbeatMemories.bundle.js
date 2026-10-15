@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 363
-// Source SHA-256: 60199a64572424799370d73ec0d21093127b37edb2cd6a3060e830861779a5dd
+// Source SHA-256: 72c6f7cf0f09e77e2c672dc43906035a72ea4c31803c6823db5d680b2716cee6
 // Build: python3 tools/verification/build.py <source-root>
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -1014,7 +1014,7 @@ function median(values) {
 }
 
 function tagNames(text) {
-    return core_contextTags.scanContextTags([{ mes: text }], 256000).tags.map(tag => tag.name);
+    return [...core_contextTags.tagBlockSizes(text).keys()];
 }
 
 function preview(text) {
@@ -1026,10 +1026,9 @@ function preview(text) {
 // (usually the pasted summary), otherwise the floor's own beginning.
 function bulkOf(text) {
     let best = '', size = 0;
-    for (const name of tagNames(text)) {
-        const without = core_contextTags.stripExcludedTags(text, [name]).length;
-        if (text.length - without <= size) continue;
-        size = text.length - without;
+    for (const [name, chars] of core_contextTags.tagBlockSizes(text)) {
+        if (chars <= size) continue;
+        size = chars;
         const start = text.search(new RegExp(`<\\s*${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[\\s>/]`, 'i'));
         const open = start >= 0 ? text.indexOf('>', start) : -1;
         best = open >= 0 ? text.slice(open + 1, open + 400) : '';
@@ -1037,23 +1036,23 @@ function bulkOf(text) {
     return best || text;
 }
 
-function estimateArchiveSource(context, settings = core_settings.getPluginSettings(context)) {
+// Async only to let the page breathe on very long chats; nothing is awaited from the network.
+async function estimateArchiveSource(context, settings = core_settings.getPluginSettings(context)) {
     const policy = core_contextTags.tagPolicyForContext(context);
     const rows = chat_read_range.selectChatReadRange(context, settings);
     const floors = [];
     const tags = new Map();
     let total = 0;
+    let seen = 0;
     for (const row of rows) {
+        if (++seen % 150 === 0) await new Promise(resolve => setTimeout(resolve, 0));
         const text = core_contextTags.filterContextTags(String(row.message?.mes ?? ''), policy);
         if (!text.trim()) continue;
         floors.push({ index: row.index, chars: text.length, text });
         total += text.length;
         // Only tags still read under the current filter can be suggested.
         if (policy?.mode === 'keep') continue;
-        for (const name of tagNames(text)) {
-            const without = core_contextTags.stripExcludedTags(text, [name]).length;
-            const size = text.length - without;
-            if (size <= 0) continue;
+        for (const [name, size] of core_contextTags.tagBlockSizes(text)) {
             const entry = tags.get(name) || { name, chars: 0, floors: 0 };
             entry.chars += size; entry.floors += 1;
             tags.set(name, entry);
@@ -23451,6 +23450,34 @@ function stripExcludedTags(value, tags, onRetainedSpan = null) {
     if (!stack.length) retain(cursor, source.length);
     return out;
 }
+// One pass over a text: how many characters each outermost tag block holds
+// (opening tag to its matching close, children included). Used only for a
+// local size preview; reading and filtering still go through stripExcludedTags.
+const VOID_TAGS = new Set(['br', 'img', 'hr', 'input', 'meta', 'link', 'wbr', 'source', 'area', 'col', 'embed', 'param', 'track', 'base']);
+function tagBlockSizes(value) {
+    const source = String(value || ''), sizes = new Map(), stack = [];
+    let outer = '', start = 0, index = 0;
+    const add = (name, size) => { if (size > 0) sizes.set(name, (sizes.get(name) || 0) + size); };
+    while (index < source.length) {
+        if (source[index] !== '<' && source[index] !== '&') { index++; continue; }
+        const token = tagAt(source, index);
+        if (!token) { index++; continue; }
+        if (token.incomplete) {
+            if (stack.length) { add(outer, source.length - start); stack.length = 0; }
+            break;
+        }
+        const opens = !token.closing && !token.selfClosing && !VOID_TAGS.has(token.name);
+        if (stack.length) {
+            if (token.closing && stack[stack.length - 1] === token.name) {
+                stack.pop();
+                if (!stack.length) add(outer, token.end - start);
+            } else if (opens) stack.push(token.name);
+        } else if (opens) { stack.push(token.name); outer = token.name; start = index; }
+        index = token.end;
+    }
+    if (stack.length) add(outer, source.length - start);
+    return sizes;
+}
 // Only an explicit save enables keep mode. Legacy exclusion settings are not inverted.
 function savedTagSelection(settings) {
     return settings?.contextTagMode === 'keep'
@@ -23550,6 +23577,7 @@ __m_core_contextTags_js.scanContextTagChoices = scanContextTagChoices;
 __m_core_contextTags_js.normalizeExcludedTags = normalizeExcludedTags;
 __m_core_contextTags_js.excludedTagsForContext = excludedTagsForContext;
 __m_core_contextTags_js.stripExcludedTags = stripExcludedTags;
+__m_core_contextTags_js.tagBlockSizes = tagBlockSizes;
 __m_core_contextTags_js.savedTagSelection = savedTagSelection;
 __m_core_contextTags_js.tagPolicyForSettings = tagPolicyForSettings;
 __m_core_contextTags_js.tagPolicyForContext = tagPolicyForContext;
@@ -86537,16 +86565,23 @@ function navigateBack() {
 
 // Local preview before a new archive or full rebuild; nothing is sent here.
 function reviewArchiveSource(context, rebuild, proceed) {
-    let estimate;
-    try { estimate = archive_source_estimate.estimateArchiveSource(context); }
-    catch (error) { console.warn('[HeartbeatMemories] archive source estimate skipped', core_text.safeErrorDiagnostic(error)); return proceed(); }
-    if (!estimate.floors) return proceed();
-    void participant_picker.chooseArchiveSourcePlan({ context, estimate, rebuild, format: archive_source_estimate.formatChars }).then(choice => {
+    const scope = core_context.chatScopeKey(context);
+    void archive_source_estimate.estimateArchiveSource(context).catch(error => {
+        console.warn('[HeartbeatMemories] archive source estimate skipped', core_text.safeErrorDiagnostic(error));
+        return null;
+    }).then(estimate => {
+        // The chat changed while counting: do nothing rather than start on another chat.
+        let same = false;
+        try { same = core_context.chatScopeKey(core_context.currentCharacterGuard()) === scope; } catch { same = false; }
+        if (!same) return null;
+        if (!estimate?.floors) return { filterTags: [] };
+        return participant_picker.chooseArchiveSourcePlan({ context, estimate, rebuild, format: archive_source_estimate.formatChars });
+    }).then(choice => {
         if (!choice) return;
         if (choice.filterTags.length && archive_source_estimate.excludeTagsForArchive(choice.filterTags, context)) {
-            globalThis.toastr?.info?.(`已把 ${choice.filterTags.map(name => `<${name}>`).join('、')} 加进过滤标签，这次和以后都不读。`, '心迹回廊');
+            globalThis.toastr?.info?.(`已把${choice.filterTags.map(name => `「${name}」`).join('、')}标签加进过滤标签，这次和以后都不读。`, '心迹回廊');
         }
-        proceed();
+        proceed(choice);
     }).catch(error => globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心迹回廊'));
     return true;
 }
@@ -86585,8 +86620,9 @@ function requestCurrentArchiveImport({ cardTypeConfirmed = false, participantRos
         return false;
     }
     if (!existing && !sourceReviewed && !archive_repository.getCurrentArchiveImportRecoverySummary(context)) {
-        return reviewArchiveSource(context, false, () => requestCurrentArchiveImport({ cardTypeConfirmed: true,
-            ...(participantRoster !== undefined ? { participantRoster } : {}), sourceReviewed: 'dialog' }));
+        // Only a review the user actually saw replaces the usual confirmation.
+        return reviewArchiveSource(context, false, choice => requestCurrentArchiveImport({ cardTypeConfirmed: true,
+            ...(participantRoster !== undefined ? { participantRoster } : {}), sourceReviewed: choice?.reviewed ? 'dialog' : true }));
     }
     const title = existing ? '增量更新当前窗口档案？' : '生成当前窗口档案？';
     const detail = existing
@@ -88639,7 +88675,7 @@ function chooseArchiveSourcePlan({ context, estimate, rebuild = false, format = 
             const filterTags = chosen().map(box => box.dataset.rmtSourceTag);
             current.onClose = null;
             closeParticipantPicker();
-            resolve({ filterTags });
+            resolve({ filterTags, reviewed: true });
         });
         refresh();
     });
