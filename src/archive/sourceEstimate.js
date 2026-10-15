@@ -24,7 +24,7 @@ function median(values) {
 }
 
 function tagNames(text) {
-    return core_contextTags.scanContextTags([{ mes: text }], 256000).tags.map(tag => tag.name);
+    return [...core_contextTags.tagBlockSizes(text).keys()];
 }
 
 function preview(text) {
@@ -36,10 +36,9 @@ function preview(text) {
 // (usually the pasted summary), otherwise the floor's own beginning.
 function bulkOf(text) {
     let best = '', size = 0;
-    for (const name of tagNames(text)) {
-        const without = core_contextTags.stripExcludedTags(text, [name]).length;
-        if (text.length - without <= size) continue;
-        size = text.length - without;
+    for (const [name, chars] of core_contextTags.tagBlockSizes(text)) {
+        if (chars <= size) continue;
+        size = chars;
         const start = text.search(new RegExp(`<\\s*${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[\\s>/]`, 'i'));
         const open = start >= 0 ? text.indexOf('>', start) : -1;
         best = open >= 0 ? text.slice(open + 1, open + 400) : '';
@@ -47,23 +46,23 @@ function bulkOf(text) {
     return best || text;
 }
 
-export function estimateArchiveSource(context, settings = core_settings.getPluginSettings(context)) {
+// Async only to let the page breathe on very long chats; nothing is awaited from the network.
+export async function estimateArchiveSource(context, settings = core_settings.getPluginSettings(context)) {
     const policy = core_contextTags.tagPolicyForContext(context);
     const rows = chat_read_range.selectChatReadRange(context, settings);
     const floors = [];
     const tags = new Map();
     let total = 0;
+    let seen = 0;
     for (const row of rows) {
+        if (++seen % 150 === 0) await new Promise(resolve => setTimeout(resolve, 0));
         const text = core_contextTags.filterContextTags(String(row.message?.mes ?? ''), policy);
         if (!text.trim()) continue;
         floors.push({ index: row.index, chars: text.length, text });
         total += text.length;
         // Only tags still read under the current filter can be suggested.
         if (policy?.mode === 'keep') continue;
-        for (const name of tagNames(text)) {
-            const without = core_contextTags.stripExcludedTags(text, [name]).length;
-            const size = text.length - without;
-            if (size <= 0) continue;
+        for (const [name, size] of core_contextTags.tagBlockSizes(text)) {
             const entry = tags.get(name) || { name, chars: 0, floors: 0 };
             entry.chars += size; entry.floors += 1;
             tags.set(name, entry);
