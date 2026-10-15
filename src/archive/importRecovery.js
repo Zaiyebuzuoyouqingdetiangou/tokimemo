@@ -35,6 +35,9 @@ function storageFailure(phase = 'save', cause = null) {
     if (cause?.quota === true || cause?.name === 'QuotaExceededError') {
         return text.safeUserError('本机存储空间不足，整理草稿未能保存；已停止后续模型请求，成功分段仍在当前页面，原记录未修改。请先导出成果，不要清除本站数据；释放设备空间后可重试保存。', 'RMT_ARCHIVE_DRAFT_STORAGE');
     }
+    if (cause?.code === 'RMT_LOCAL_TIMEOUT') {
+        return text.safeUserError('这批草稿比较大，这台设备一直没存完，本次没有确认保存；已停止后续模型请求，成功分段仍在当前页面，原记录未修改。可以关掉其他占内存的应用后再点“保存本页草稿（不生成）”，或先导出成果；保存成功前不要刷新。', 'RMT_ARCHIVE_DRAFT_STORAGE');
+    }
     if (cause?.code === 'RMT_LOCAL_CAS') {
         return text.safeUserError('本机草稿正被另一页面或操作写入，本次没有覆盖任何记录；已停止后续模型请求，成功分段仍在当前页面。请重新打开本页后重试保存。', 'RMT_ARCHIVE_DRAFT_STORAGE');
     }
@@ -63,8 +66,10 @@ async function saveScope(key) {
         if (!state || !local_store.localRecoveryStorageAvailable()) throw storageFailure();
         const rows = scopeRows(key);
         const encoded = JSON.stringify({ version: 1, rows });
-        if (new TextEncoder().encode(encoded).byteLength > constants.MAX_CACHE_SOURCE_BYTES) throw capacityFailure();
-        const revision = await local_store.compareLocalRecoveryRecord(state.id, state.revision, rows.length ? JSON.parse(encoded) : null);
+        const bytes = new TextEncoder().encode(encoded).byteLength;
+        if (bytes > constants.MAX_CACHE_SOURCE_BYTES) throw capacityFailure();
+        const revision = await local_store.compareLocalRecoveryRecord(state.id, state.revision, rows.length ? JSON.parse(encoded) : null,
+            { timeoutMs: local_store.localRecoveryWriteTimeout(bytes) });
         // Only the transaction's exact CAS acknowledgement confirms this write.
         // false/undefined must not be mistaken for a saved checkpoint in a host.
         if (revision !== state.revision + 1) throw ackMismatchFailure();

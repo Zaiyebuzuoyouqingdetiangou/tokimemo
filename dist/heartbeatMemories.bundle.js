@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 363
-// Source SHA-256: 72c6f7cf0f09e77e2c672dc43906035a72ea4c31803c6823db5d680b2716cee6
+// Source SHA-256: 69c7612e154bac070c2b0600566ecaa1ea6df352d36dd5b1d31b56dba7a48bc9
 // Build: python3 tools/verification/build.py <source-root>
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -1634,7 +1634,7 @@ function __init_core_releaseNotes_js() {
 // MODULE: core/releaseNotes.js
 
 // GENERATED FROM README.md by tools/verification/build.py. Do not edit by hand.
-const RELEASE_README = "# 心迹回廊 1.0.58\n\n## 更新日志模块\n\n新增了更新日志板块，感谢@nancyindaeyo的更新。\n\n## 本次变动\n\n- 印象曲页新增「听这首歌」播放器：在 Suno 做好歌后，把歌曲链接粘回来（或选本机音频文件），就能直接在页面里听；制作手书时也直接用这首，不用再导一次。音源只存在这台设备上。\n- 播放器是唱片样式：播放时黑胶唱片从封套里滑出来转动，进度条可以拖动。导入链接、选择文件、移除音源都收在「更换音源」里。\n- 印象曲歌词的文笔、意象和用词以角色人设为准；你的人设说话方式（比如直白、迷糊）只用在你唱的段落或对唱里你的句子，不再把整首词拉成大白话。\n- 情侣头像选 NAI 4.5 时：两人外貌里写明了性别，会自动加上人数和性别（如 1boy, 1girl），减少两人画成一样或都画成男生；外貌还是整句或中文写法时，外貌栏下会提示，点生成前也会问要不要先整理成英文 tag。\n- 柏宝绘角色库：名字写成 {{user}} / {{char}} 的条目也能对上当前的你和角色；名字只差全角半角、首尾空格或大小写也能对上，有两条都能对上时不乱选。\n- CG 提示词编辑里，画面描述下方会写清每个人的外貌来自柏宝绘角色库的哪一条；没对上会说明原因（库里没有这个名字、有两条都对上、只写了衣着动作，或柏宝绘版本太旧）。\n- 修复图片设置里点了「保存外貌」、关掉再打开还是旧外貌的问题：现在会显示你上次保存的外貌，确认绘图后就用新外貌重画；这张图原来的记录不会被改。\n- 图片设置里「重新构思／提取外貌」整理出的外貌更完整：人设里写明的性别、发型、眼色、脸部特征、身高体型、配饰等都会保留，不再压成几个概括词。外貌栏能写的长度从 400 字放宽到 1200 字，自己手写的外貌按原样保存。\n- 修复用酒馆连接配置生成时总用完整响应的问题：「本插件流式方式」选「保持原设置」时，现在跟主聊天的流式开关走，不容易再被中转站掐断而出现「生成连接请求失败」。如果仍是完整响应、30 秒没收到数据就断开，提示会告诉你去「高级生成参数」改成「使用流式」。\n- 「内容」页「把勾选的项目排进任务中心」旁边多了「全选」。\n- 修复本地快速建档可能盖掉旧档案内容的问题：复制、分支或改名后的聊天里，旧档案一时读不到时，自动建档会以为“没有档案”而新建一份。现在只要聊天里留有旧档案、已生成内容、档案索引或本机备份的任何痕迹，自动建档和「本地快速建档」都不会新建。\n- 新建档案和完全重建前，会先显示这次要读多少层、大约多少字、预计几次请求、分几批。如果有标签占了很大一部分字数（比如其他插件写进聊天的旧总结），会列出来让你勾选不读；特别长的楼层也会单独列出来，并显示里面的开头，方便判断是不是旧总结。\n- 其他已有功能保持不变。\n";
+const RELEASE_README = "# 心迹回廊 1.0.58\n\n## 更新日志模块\n\n新增了更新日志板块，感谢@nancyindaeyo的更新。\n\n## 本次变动\n\n- 印象曲页新增「听这首歌」播放器：在 Suno 做好歌后，把歌曲链接粘回来（或选本机音频文件），就能直接在页面里听；制作手书时也直接用这首，不用再导一次。音源只存在这台设备上。\n- 播放器是唱片样式：播放时黑胶唱片从封套里滑出来转动，进度条可以拖动。导入链接、选择文件、移除音源都收在「更换音源」里。\n- 印象曲歌词的文笔、意象和用词以角色人设为准；你的人设说话方式（比如直白、迷糊）只用在你唱的段落或对唱里你的句子，不再把整首词拉成大白话。\n- 情侣头像选 NAI 4.5 时：两人外貌里写明了性别，会自动加上人数和性别（如 1boy, 1girl），减少两人画成一样或都画成男生；外貌还是整句或中文写法时，外貌栏下会提示，点生成前也会问要不要先整理成英文 tag。\n- 柏宝绘角色库：名字写成 {{user}} / {{char}} 的条目也能对上当前的你和角色；名字只差全角半角、首尾空格或大小写也能对上，有两条都能对上时不乱选。\n- CG 提示词编辑里，画面描述下方会写清每个人的外貌来自柏宝绘角色库的哪一条；没对上会说明原因（库里没有这个名字、有两条都对上、只写了衣着动作，或柏宝绘版本太旧）。\n- 修复图片设置里点了「保存外貌」、关掉再打开还是旧外貌的问题：现在会显示你上次保存的外貌，确认绘图后就用新外貌重画；这张图原来的记录不会被改。\n- 图片设置里「重新构思／提取外貌」整理出的外貌更完整：人设里写明的性别、发型、眼色、脸部特征、身高体型、配饰等都会保留，不再压成几个概括词。外貌栏能写的长度从 400 字放宽到 1200 字，自己手写的外貌按原样保存。\n- 修复用酒馆连接配置生成时总用完整响应的问题：「本插件流式方式」选「保持原设置」时，现在跟主聊天的流式开关走，不容易再被中转站掐断而出现「生成连接请求失败」。如果仍是完整响应、30 秒没收到数据就断开，提示会告诉你去「高级生成参数」改成「使用流式」。\n- 「内容」页「把勾选的项目排进任务中心」旁边多了「全选」。\n- 修复本地快速建档可能盖掉旧档案内容的问题：复制、分支或改名后的聊天里，旧档案一时读不到时，自动建档会以为“没有档案”而新建一份。现在只要聊天里留有旧档案、已生成内容、档案索引或本机备份的任何痕迹，自动建档和「本地快速建档」都不会新建。\n- 新建档案和完全重建前，会先显示这次要读多少层、大约多少字、预计几次请求、分几批。如果有标签占了很大一部分字数（比如其他插件写进聊天的旧总结），会列出来让你勾选不读；特别长的楼层也会单独列出来，并显示里面的开头，方便判断是不是旧总结。\n- 修复长聊天建档时反复提示「本批草稿尚未确认保存到本机」、点保存也没用的问题：聊天很长时这批草稿也很大，手机存进本机要好几秒，以前超过 5 秒就当作失败；现在按草稿大小放宽等待时间（最长 2 分钟），真的没存完也会说明是存得太慢。\n- 其他已有功能保持不变。\n";
 
 __m_core_releaseNotes_js.RELEASE_README = RELEASE_README;
 }
@@ -11447,6 +11447,9 @@ function storageFailure(phase = 'save', cause = null) {
     if (cause?.quota === true || cause?.name === 'QuotaExceededError') {
         return text.safeUserError('本机存储空间不足，整理草稿未能保存；已停止后续模型请求，成功分段仍在当前页面，原记录未修改。请先导出成果，不要清除本站数据；释放设备空间后可重试保存。', 'RMT_ARCHIVE_DRAFT_STORAGE');
     }
+    if (cause?.code === 'RMT_LOCAL_TIMEOUT') {
+        return text.safeUserError('这批草稿比较大，这台设备一直没存完，本次没有确认保存；已停止后续模型请求，成功分段仍在当前页面，原记录未修改。可以关掉其他占内存的应用后再点“保存本页草稿（不生成）”，或先导出成果；保存成功前不要刷新。', 'RMT_ARCHIVE_DRAFT_STORAGE');
+    }
     if (cause?.code === 'RMT_LOCAL_CAS') {
         return text.safeUserError('本机草稿正被另一页面或操作写入，本次没有覆盖任何记录；已停止后续模型请求，成功分段仍在当前页面。请重新打开本页后重试保存。', 'RMT_ARCHIVE_DRAFT_STORAGE');
     }
@@ -11475,8 +11478,10 @@ async function saveScope(key) {
         if (!state || !local_store.localRecoveryStorageAvailable()) throw storageFailure();
         const rows = scopeRows(key);
         const encoded = JSON.stringify({ version: 1, rows });
-        if (new TextEncoder().encode(encoded).byteLength > constants.MAX_CACHE_SOURCE_BYTES) throw capacityFailure();
-        const revision = await local_store.compareLocalRecoveryRecord(state.id, state.revision, rows.length ? JSON.parse(encoded) : null);
+        const bytes = new TextEncoder().encode(encoded).byteLength;
+        if (bytes > constants.MAX_CACHE_SOURCE_BYTES) throw capacityFailure();
+        const revision = await local_store.compareLocalRecoveryRecord(state.id, state.revision, rows.length ? JSON.parse(encoded) : null,
+            { timeoutMs: local_store.localRecoveryWriteTimeout(bytes) });
         // Only the transaction's exact CAS acknowledgement confirms this write.
         // false/undefined must not be mistaken for a saved checkpoint in a host.
         if (revision !== state.revision + 1) throw ackMismatchFailure();
@@ -28398,7 +28403,7 @@ function quotaFailureOf(tx, code) {
 async function database() {
     return new Promise((resolve, reject) => {
         let request, settled = false;
-        const timer = setTimeout(() => { settled = true; reject(failure()); }, 5000);
+        const timer = setTimeout(() => { settled = true; reject(failure('RMT_LOCAL_TIMEOUT')); }, 10000);
         const stop = () => { clearTimeout(timer); if (!settled) { settled = true; reject(failure()); } };
         try {
             request = globalThis.indexedDB.open(DATABASE, 1);
@@ -28428,7 +28433,8 @@ async function readLocalRecoveryRecord(key) {
     try {
         return await new Promise((resolve, reject) => {
             const tx = db.transaction(STORE, 'readonly'); let result = null;
-            const timer = setTimeout(() => { try { tx.abort(); } catch {} reject(failure()); }, 5000);
+            // Reading a large saved draft back is slow on phones too.
+            const timer = setTimeout(() => { try { tx.abort(); } catch {} reject(failure('RMT_LOCAL_TIMEOUT')); }, 30000);
             const request = tx.objectStore(STORE).get(key);
             request.onsuccess = () => { result = request.result || null; };
             tx.oncomplete = () => { clearTimeout(timer); resolve(result); };
@@ -28436,14 +28442,21 @@ async function readLocalRecoveryRecord(key) {
         });
     } finally { db.close(); }
 }
-async function compareLocalRecoveryRecord(key, expectedRevision, payload) {
+// A large draft (a long chat's task inputs plus every finished segment) can take
+// a phone well over five seconds to write; a fixed 5s limit aborted it every time.
+function localRecoveryWriteTimeout(bytes = 0) {
+    const size = Math.max(0, Number(bytes) || 0);
+    return Math.min(120000, 5000 + Math.ceil(size / (1024 * 1024)) * 4000);
+}
+async function compareLocalRecoveryRecord(key, expectedRevision, payload, { timeoutMs = 5000 } = {}) {
     if (!validKey(key) || !Number.isSafeInteger(expectedRevision) || expectedRevision < 0) throw failure();
     if (testBackend) return testBackend.compare(key, expectedRevision, payload);
     const db = await database();
     try {
         return await new Promise((resolve, reject) => {
-            const tx = writeTransaction(db, key); let mismatch = false, cloneFailed = false;
-            const timer = setTimeout(() => { try { tx.abort(); } catch {} reject(failure()); }, 5000);
+            const tx = writeTransaction(db, key); let mismatch = false, cloneFailed = false, timedOut = false;
+            const limit = Math.max(5000, Math.min(120000, Number(timeoutMs) || 5000));
+            const timer = setTimeout(() => { timedOut = true; try { tx.abort(); } catch {} reject(failure('RMT_LOCAL_TIMEOUT')); }, limit);
             const store = tx.objectStore(STORE), request = store.get(key);
             request.onsuccess = () => {
                 if ((request.result?.revision || 0) !== expectedRevision) { mismatch = true; tx.abort(); return; }
@@ -28452,7 +28465,7 @@ async function compareLocalRecoveryRecord(key, expectedRevision, payload) {
                 catch (error) { cloneFailed = error?.name === 'DataCloneError'; try { tx.abort(); } catch {} }
             };
             tx.oncomplete = () => { clearTimeout(timer); resolve(expectedRevision + 1); };
-            tx.onabort = tx.onerror = () => { clearTimeout(timer); reject(cloneFailed ? failure('RMT_LOCAL_CLONE') : quotaFailureOf(tx, mismatch ? 'RMT_LOCAL_CAS' : 'RMT_LOCAL_STORAGE')); };
+            tx.onabort = tx.onerror = () => { clearTimeout(timer); if (timedOut) return; reject(cloneFailed ? failure('RMT_LOCAL_CLONE') : quotaFailureOf(tx, mismatch ? 'RMT_LOCAL_CAS' : 'RMT_LOCAL_STORAGE')); };
         });
     } finally { db.close(); }
 }
@@ -28461,6 +28474,7 @@ __m_core_localRecoveryStore_js.readLocalRecoveryRecord = readLocalRecoveryRecord
 __m_core_localRecoveryStore_js.compareLocalRecoveryRecord = compareLocalRecoveryRecord;
 __m_core_localRecoveryStore_js.setLocalRecoveryBackendForTests = setLocalRecoveryBackendForTests;
 __m_core_localRecoveryStore_js.localRecoveryStorageAvailable = localRecoveryStorageAvailable;
+__m_core_localRecoveryStore_js.localRecoveryWriteTimeout = localRecoveryWriteTimeout;
 }
 
 function __init_core_mailGallery_js() {
