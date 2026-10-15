@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
-// Source modules: 362
-// Source SHA-256: e777e12945993ddf565ef26cc15eda4aebe45121007f7e8916f842a878a78041
+// Source modules: 363
+// Source SHA-256: 60199a64572424799370d73ec0d21093127b37edb2cd6a3060e830861779a5dd
 // Build: python3 tools/verification/build.py <source-root>
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -36,6 +36,7 @@ const __m_archive_relayStore_js = Object.create(null);
 const __m_archive_repository_js = Object.create(null);
 const __m_archive_requestBudget_js = Object.create(null);
 const __m_archive_snapshots_js = Object.create(null);
+const __m_archive_sourceEstimate_js = Object.create(null);
 const __m_archive_sourceLedger_js = Object.create(null);
 const __m_archive_sourceReadGuard_js = Object.create(null);
 const __m_archive_storyScenes_js = Object.create(null);
@@ -981,6 +982,133 @@ __m_archive_localArchiveAuto_js.AUTO_MARK_KEY = AUTO_MARK_KEY;
 __m_archive_localArchiveAuto_js.hasArchiveTraces = hasArchiveTraces;
 }
 
+function __init_archive_sourceEstimate_js() {
+// MODULE: archive/sourceEstimate.js
+const core_constants = __m_core_constants_js;
+const core_settings = __m_core_settings_js;
+const core_contextTags = __m_core_contextTags_js;
+const chat_read_range = __m_core_chatReadRange_js;
+const core_text = __m_core_text_js;
+// A local, read-only look at what an archive build is about to read, shown
+// before anything is sent: how much text, roughly how many requests, which
+// tags take up most of it, and which floors are unusually long (often another
+// plugin's old summary pasted into the chat). Nothing here changes the chat,
+// the settings or the archive.
+
+
+
+
+
+// A tag is worth asking about when it holds a real share of the text.
+const TAG_MIN_CHARS = 20000;
+const TAG_MIN_SHARE = 0.15;
+// A floor is "unusually long" against this chat's own typical floor.
+const LONG_FLOOR_MIN_CHARS = 6000;
+const LONG_FLOOR_FACTOR = 10;
+
+function median(values) {
+    if (!values.length) return 0;
+    const sorted = [...values].sort((a, b) => a - b);
+    const middle = Math.floor(sorted.length / 2);
+    return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
+}
+
+function tagNames(text) {
+    return core_contextTags.scanContextTags([{ mes: text }], 256000).tags.map(tag => tag.name);
+}
+
+function preview(text) {
+    const plain = String(text || '').replace(/<[^>]{0,200}>/g, ' ').replace(/\s+/g, ' ').trim();
+    return Array.from(plain).slice(0, 48).join('') + (Array.from(plain).length > 48 ? '…' : '');
+}
+
+// Show the part that makes a floor long: the biggest tag block's opening text
+// (usually the pasted summary), otherwise the floor's own beginning.
+function bulkOf(text) {
+    let best = '', size = 0;
+    for (const name of tagNames(text)) {
+        const without = core_contextTags.stripExcludedTags(text, [name]).length;
+        if (text.length - without <= size) continue;
+        size = text.length - without;
+        const start = text.search(new RegExp(`<\\s*${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[\\s>/]`, 'i'));
+        const open = start >= 0 ? text.indexOf('>', start) : -1;
+        best = open >= 0 ? text.slice(open + 1, open + 400) : '';
+    }
+    return best || text;
+}
+
+function estimateArchiveSource(context, settings = core_settings.getPluginSettings(context)) {
+    const policy = core_contextTags.tagPolicyForContext(context);
+    const rows = chat_read_range.selectChatReadRange(context, settings);
+    const floors = [];
+    const tags = new Map();
+    let total = 0;
+    for (const row of rows) {
+        const text = core_contextTags.filterContextTags(String(row.message?.mes ?? ''), policy);
+        if (!text.trim()) continue;
+        floors.push({ index: row.index, chars: text.length, text });
+        total += text.length;
+        // Only tags still read under the current filter can be suggested.
+        if (policy?.mode === 'keep') continue;
+        for (const name of tagNames(text)) {
+            const without = core_contextTags.stripExcludedTags(text, [name]).length;
+            const size = text.length - without;
+            if (size <= 0) continue;
+            const entry = tags.get(name) || { name, chars: 0, floors: 0 };
+            entry.chars += size; entry.floors += 1;
+            tags.set(name, entry);
+        }
+    }
+    const typical = median(floors.map(floor => floor.chars));
+    const longLimit = Math.max(LONG_FLOOR_MIN_CHARS, typical * LONG_FLOOR_FACTOR);
+    const longFloors = floors.filter(floor => floor.chars >= longLimit)
+        .sort((a, b) => b.chars - a.chars).slice(0, 8)
+        .map(floor => ({ index: floor.index, chars: floor.chars, preview: preview(bulkOf(floor.text)), tags: tagNames(floor.text).slice(0, 4) }))
+        .sort((a, b) => a.index - b.index);
+    const heavyTags = [...tags.values()]
+        .filter(tag => tag.chars >= TAG_MIN_CHARS && total && tag.chars / total >= TAG_MIN_SHARE)
+        .sort((a, b) => b.chars - a.chars).slice(0, 6)
+        .map(tag => {
+            const share = total ? tag.chars / total : 0;
+            const floorShare = floors.length ? tag.floors / floors.length : 0;
+            // Present in most floors: probably the story itself is wrapped in it.
+            const likelyStory = floorShare >= 0.6;
+            // A few floors carrying a large share is the typical pasted-summary shape.
+            const likelySummary = !likelyStory && floorShare <= 0.25 && share >= 0.3;
+            return { ...tag, share, likelyStory, likelySummary };
+        });
+    const requests = total ? Math.ceil(total / core_constants.IMPORT_CHUNK_CHARS) : 0;
+    const batches = total ? Math.ceil(total / core_constants.ARCHIVE_BATCH_CHAT_CHARS) : 0;
+    return { floors: floors.length, chars: total, requests, batches, typicalFloorChars: Math.round(typical),
+        longFloors, longFloorCount: floors.filter(floor => floor.chars >= longLimit).length, heavyTags,
+        tagMode: policy?.mode === 'keep' ? 'keep' : 'exclude' };
+}
+
+function formatChars(value) {
+    const chars = Math.max(0, Math.round(Number(value) || 0));
+    return chars >= 10000 ? `${(chars / 10000).toFixed(chars >= 100000 ? 1 : 2).replace(/\.?0+$/, '')} 万字` : `${chars.toLocaleString()} 字`;
+}
+
+// Adds tags to the saved "don't read" list; keep mode is left to the settings page.
+function excludeTagsForArchive(names, context) {
+    const chosen = core_contextTags.normalizeExcludedTags(names);
+    if (!chosen.length) return false;
+    const settings = core_settings.getPluginSettings(context);
+    if (settings.contextTagMode === 'keep') return false;
+    const current = core_contextTags.excludedTagsForContext(context);
+    core_settings.updatePluginSettings({ excludedContextTags: [...new Set([...current, ...chosen])] });
+    return true;
+}
+
+const estimateText = estimate => core_text.normalizeText(
+    `${estimate.floors} 层 · 约 ${formatChars(estimate.chars)} · 预计 ${estimate.requests} 次请求，分 ${estimate.batches} 批`, 200);
+
+__m_archive_sourceEstimate_js.estimateArchiveSource = estimateArchiveSource;
+__m_archive_sourceEstimate_js.formatChars = formatChars;
+__m_archive_sourceEstimate_js.excludeTagsForArchive = excludeTagsForArchive;
+__m_archive_sourceEstimate_js.estimateText = estimateText;
+}
+
 function __init_core_chatAvatarStore_js() {
 // MODULE: core/chatAvatarStore.js
 
@@ -1507,7 +1635,7 @@ function __init_core_releaseNotes_js() {
 // MODULE: core/releaseNotes.js
 
 // GENERATED FROM README.md by tools/verification/build.py. Do not edit by hand.
-const RELEASE_README = "# 心迹回廊 1.0.58\n\n## 更新日志模块\n\n新增了更新日志板块，感谢@nancyindaeyo的更新。\n\n## 本次变动\n\n- 印象曲页新增「听这首歌」播放器：在 Suno 做好歌后，把歌曲链接粘回来（或选本机音频文件），就能直接在页面里听；制作手书时也直接用这首，不用再导一次。音源只存在这台设备上。\n- 播放器是唱片样式：播放时黑胶唱片从封套里滑出来转动，进度条可以拖动。导入链接、选择文件、移除音源都收在「更换音源」里。\n- 印象曲歌词的文笔、意象和用词以角色人设为准；你的人设说话方式（比如直白、迷糊）只用在你唱的段落或对唱里你的句子，不再把整首词拉成大白话。\n- 情侣头像选 NAI 4.5 时：两人外貌里写明了性别，会自动加上人数和性别（如 1boy, 1girl），减少两人画成一样或都画成男生；外貌还是整句或中文写法时，外貌栏下会提示，点生成前也会问要不要先整理成英文 tag。\n- 柏宝绘角色库：名字写成 {{user}} / {{char}} 的条目也能对上当前的你和角色；名字只差全角半角、首尾空格或大小写也能对上，有两条都能对上时不乱选。\n- CG 提示词编辑里，画面描述下方会写清每个人的外貌来自柏宝绘角色库的哪一条；没对上会说明原因（库里没有这个名字、有两条都对上、只写了衣着动作，或柏宝绘版本太旧）。\n- 修复图片设置里点了「保存外貌」、关掉再打开还是旧外貌的问题：现在会显示你上次保存的外貌，确认绘图后就用新外貌重画；这张图原来的记录不会被改。\n- 图片设置里「重新构思／提取外貌」整理出的外貌更完整：人设里写明的性别、发型、眼色、脸部特征、身高体型、配饰等都会保留，不再压成几个概括词。外貌栏能写的长度从 400 字放宽到 1200 字，自己手写的外貌按原样保存。\n- 修复用酒馆连接配置生成时总用完整响应的问题：「本插件流式方式」选「保持原设置」时，现在跟主聊天的流式开关走，不容易再被中转站掐断而出现「生成连接请求失败」。如果仍是完整响应、30 秒没收到数据就断开，提示会告诉你去「高级生成参数」改成「使用流式」。\n- 「内容」页「把勾选的项目排进任务中心」旁边多了「全选」。\n- 修复本地快速建档可能盖掉旧档案内容的问题：复制、分支或改名后的聊天里，旧档案一时读不到时，自动建档会以为“没有档案”而新建一份。现在只要聊天里留有旧档案、已生成内容、档案索引或本机备份的任何痕迹，自动建档和「本地快速建档」都不会新建。\n- 其他已有功能保持不变。\n";
+const RELEASE_README = "# 心迹回廊 1.0.58\n\n## 更新日志模块\n\n新增了更新日志板块，感谢@nancyindaeyo的更新。\n\n## 本次变动\n\n- 印象曲页新增「听这首歌」播放器：在 Suno 做好歌后，把歌曲链接粘回来（或选本机音频文件），就能直接在页面里听；制作手书时也直接用这首，不用再导一次。音源只存在这台设备上。\n- 播放器是唱片样式：播放时黑胶唱片从封套里滑出来转动，进度条可以拖动。导入链接、选择文件、移除音源都收在「更换音源」里。\n- 印象曲歌词的文笔、意象和用词以角色人设为准；你的人设说话方式（比如直白、迷糊）只用在你唱的段落或对唱里你的句子，不再把整首词拉成大白话。\n- 情侣头像选 NAI 4.5 时：两人外貌里写明了性别，会自动加上人数和性别（如 1boy, 1girl），减少两人画成一样或都画成男生；外貌还是整句或中文写法时，外貌栏下会提示，点生成前也会问要不要先整理成英文 tag。\n- 柏宝绘角色库：名字写成 {{user}} / {{char}} 的条目也能对上当前的你和角色；名字只差全角半角、首尾空格或大小写也能对上，有两条都能对上时不乱选。\n- CG 提示词编辑里，画面描述下方会写清每个人的外貌来自柏宝绘角色库的哪一条；没对上会说明原因（库里没有这个名字、有两条都对上、只写了衣着动作，或柏宝绘版本太旧）。\n- 修复图片设置里点了「保存外貌」、关掉再打开还是旧外貌的问题：现在会显示你上次保存的外貌，确认绘图后就用新外貌重画；这张图原来的记录不会被改。\n- 图片设置里「重新构思／提取外貌」整理出的外貌更完整：人设里写明的性别、发型、眼色、脸部特征、身高体型、配饰等都会保留，不再压成几个概括词。外貌栏能写的长度从 400 字放宽到 1200 字，自己手写的外貌按原样保存。\n- 修复用酒馆连接配置生成时总用完整响应的问题：「本插件流式方式」选「保持原设置」时，现在跟主聊天的流式开关走，不容易再被中转站掐断而出现「生成连接请求失败」。如果仍是完整响应、30 秒没收到数据就断开，提示会告诉你去「高级生成参数」改成「使用流式」。\n- 「内容」页「把勾选的项目排进任务中心」旁边多了「全选」。\n- 修复本地快速建档可能盖掉旧档案内容的问题：复制、分支或改名后的聊天里，旧档案一时读不到时，自动建档会以为“没有档案”而新建一份。现在只要聊天里留有旧档案、已生成内容、档案索引或本机备份的任何痕迹，自动建档和「本地快速建档」都不会新建。\n- 新建档案和完全重建前，会先显示这次要读多少层、大约多少字、预计几次请求、分几批。如果有标签占了很大一部分字数（比如其他插件写进聊天的旧总结），会列出来让你勾选不读；特别长的楼层也会单独列出来，并显示里面的开头，方便判断是不是旧总结。\n- 其他已有功能保持不变。\n";
 
 __m_core_releaseNotes_js.RELEASE_README = RELEASE_README;
 }
@@ -76946,7 +77074,7 @@ async function startChosenWork(context, { enableAuto = false } = {}) {
         });
         archiveNote = '已按新名单开始重新建档，旧档案会在重建完成后被换掉。可以关闭窗口继续聊天。';
     } else if (action === 'create') {
-        archiveStarted = ui_overlay.requestCurrentArchiveImport({ cardTypeConfirmed: true, participantRoster: draft.cardType === 'multiple' ? roster : null }) === true;
+        archiveStarted = ui_overlay.requestCurrentArchiveImport({ cardTypeConfirmed: true, participantRoster: draft.cardType === 'multiple' ? roster : null, sourceReviewed: true }) === true;
         if (!archiveStarted) archiveNote = '建档没有开始。已保存的间隔和偏好还在。';
     } else if (asked === 'ask' && !archiveNote) archiveNote = '继续使用旧档案，这次没有重新建档。';
     const routes = wizard_plan.firstQueueRoutes(draft, queueableIds());
@@ -86209,6 +86337,7 @@ const generation_client = __m_generation_client_js;
 const generation_imageGeneration = __m_generation_imageGeneration_js;
 const cg_editor = __m_ui_cgPromptEditor_js;
 const participant_picker = __m_ui_participantPicker_js;
+const archive_source_estimate = __m_archive_sourceEstimate_js;
 const image_viewer = __m_ui_cgImageViewer_js;
 const floating_archive = __m_ui_floatingArchive_js;
 const recovery_view = __m_ui_recoveryView_js;
@@ -86406,7 +86535,23 @@ function navigateBack() {
     return home_view.showHome();
 }
 
-function requestCurrentArchiveImport({ cardTypeConfirmed = false, participantRoster } = {}) {
+// Local preview before a new archive or full rebuild; nothing is sent here.
+function reviewArchiveSource(context, rebuild, proceed) {
+    let estimate;
+    try { estimate = archive_source_estimate.estimateArchiveSource(context); }
+    catch (error) { console.warn('[HeartbeatMemories] archive source estimate skipped', core_text.safeErrorDiagnostic(error)); return proceed(); }
+    if (!estimate.floors) return proceed();
+    void participant_picker.chooseArchiveSourcePlan({ context, estimate, rebuild, format: archive_source_estimate.formatChars }).then(choice => {
+        if (!choice) return;
+        if (choice.filterTags.length && archive_source_estimate.excludeTagsForArchive(choice.filterTags, context)) {
+            globalThis.toastr?.info?.(`已把 ${choice.filterTags.map(name => `<${name}>`).join('、')} 加进过滤标签，这次和以后都不读。`, '心迹回廊');
+        }
+        proceed();
+    }).catch(error => globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心迹回廊'));
+    return true;
+}
+
+function requestCurrentArchiveImport({ cardTypeConfirmed = false, participantRoster, sourceReviewed = false } = {}) {
     let context;
     try { context = core_context.currentCharacterGuard(); }
     catch (error) {
@@ -86439,11 +86584,16 @@ function requestCurrentArchiveImport({ cardTypeConfirmed = false, participantRos
         globalThis.toastr?.info?.('检测到当前窗口记忆 / 摘要来源。请先点“扫描记忆 / 摘要”，确认读取范围后再生成/更新当前窗口档案。', '心迹回廊');
         return false;
     }
+    if (!existing && !sourceReviewed && !archive_repository.getCurrentArchiveImportRecoverySummary(context)) {
+        return reviewArchiveSource(context, false, () => requestCurrentArchiveImport({ cardTypeConfirmed: true,
+            ...(participantRoster !== undefined ? { participantRoster } : {}), sourceReviewed: 'dialog' }));
+    }
     const title = existing ? '增量更新当前窗口档案？' : '生成当前窗口档案？';
     const detail = existing
         ? '默认只整理“上次档案之后新增的聊天”和发生变化的当前窗口记忆/摘要。已有 Mxxx 记忆 ID 不重排，已生成的回忆相簿、CG、ADV、房间、ENDING、储物、私人终端会继续保留。若检测到旧聊天被编辑/删除，本次会停止并保留成果，说明变更类别，由你选择如何处理。'
         : '这会读取当前聊天窗口并建立一份只属于这个窗口的心迹回廊档案。聊天正文不会被修改；之后也只有你手动更新时档案才会变化。';
-    if (!confirmExplicitAction(title, detail, { destructive: false })) return false;
+    // The review dialog's own start button is the confirmation for a new archive.
+    if (!(sourceReviewed === 'dialog' && !existing) && !confirmExplicitAction(title, detail, { destructive: false })) return false;
     const run = (extra = {}) => archive_repository.importCurrentChatMemory({ fullRebuild: false,
         ...(participantRoster !== undefined ? { participantRoster } : {}), ...extra,
     });
@@ -86481,7 +86631,7 @@ async function presentGenerationTaskResult(draftId, context = core_context.curre
     return result;
 }
 
-function requestCurrentArchiveFullRebuild() {
+function requestCurrentArchiveFullRebuild({ sourceReviewed = false } = {}) {
     let context;
     try { context = core_context.currentCharacterGuard(); }
     catch (error) {
@@ -86496,6 +86646,7 @@ function requestCurrentArchiveFullRebuild() {
         globalThis.toastr?.info?.('完全重建前请先扫描当前窗口记忆 / 摘要，确认读取范围。', '心迹回廊');
         return false;
     }
+    if (!sourceReviewed) return reviewArchiveSource(context, true, () => requestCurrentArchiveFullRebuild({ sourceReviewed: true }));
     if (!confirmExplicitActionTwice(
         '完全重建当前窗口档案？',
         '这会重新读取整个当前聊天并重新编号 Mxxx 记忆，因此旧档案版本对应的回忆相簿、CG、ADV、房间、蝴蝶效应、ENDING、储物、私人终端和邮箱（含来信及收藏的明信片）缓存都会失效，请先备份。只有当你明确需要从头整理（例如旧消息被大量编辑/删除）时才建议使用。',
@@ -88451,6 +88602,56 @@ function chooseGenerationTaskResult({ context, title = '旧任务已生成完成
     });
 }
 
+// Shown before a new archive or a full rebuild: what will be read, roughly how
+// many requests that is, and which tags / floors make it unusually large.
+// Resolves { filterTags } to go ahead, or null when cancelled. No request is sent here.
+function chooseArchiveSourcePlan({ context, estimate, rebuild = false, format = value => `${value}` }) {
+    return new Promise(resolve => {
+        const pct = share => `${Math.max(1, Math.round(share * 100))}%`;
+        const tagRows = estimate.heavyTags.map(tag => `<label class="rmt-source-plan-tag"><input type="checkbox" data-rmt-source-tag="${text.esc(tag.name)}" data-rmt-source-tag-chars="${tag.chars}"${tag.likelySummary ? ' checked' : ''}>
+            <span><b>&lt;${text.esc(tag.name)}&gt;</b> ${text.esc(format(tag.chars))}，占 ${pct(tag.share)}，出现在 ${tag.floors} 层${tag.likelySummary ? '<small>只在少数几层出现，却占了很大一部分字数，很像其他插件写进聊天的旧总结。</small>'
+                : tag.likelyStory ? '<small>大部分楼层都有，可能就是正文本身，一般不要勾。</small>' : ''}</span></label>`).join('');
+        const longRows = estimate.longFloors.map(floor => `<li>第 ${floor.index} 层 · ${text.esc(format(floor.chars))}${floor.tags.length ? ` · 标签 ${floor.tags.map(name => `&lt;${text.esc(name)}&gt;`).join(' ')}` : ''}<br><small>${text.esc(floor.preview)}</small></li>`).join('');
+        const body = `<p data-rmt-source-plan-total>${text.esc(estimateLine(estimate, 0, format))}</p>
+          <p class="rmt-source-plan-note">每批完成后会先停下来，等你点「继续下一批」再发下一批；已完成的部分随时可以看。</p>
+          ${tagRows ? `<fieldset class="rmt-source-plan-tags"><legend>这些标签占的字数很多</legend>
+            <p>勾选的标签整段不读，会存进「设置 → 过滤标签」，以后建档和更新也不读。聊天本身不会被改。</p>${tagRows}</fieldset>` : ''}
+          ${longRows ? `<details class="rmt-source-plan-long" open><summary>有 ${estimate.longFloorCount} 层特别长（这个聊天一般一层约 ${text.esc(format(estimate.typicalFloorChars))}）</summary>
+            <ul>${longRows}</ul>
+            <p>如果这些是其他插件写进聊天的旧总结，心迹回廊会把它们和原对话一起再整理一遍，字数和请求都会多不少。外面包着标签的话，可以在上面勾掉；没有标签的话，可以照常建档，或在「设置 → 读取范围」调整要读的楼层。</p></details>` : ''}
+          <footer><button type="button" class="rmt-btn" data-rmt-source-plan="start">${rebuild ? '继续完全重建' : '开始建档'}</button></footer>`;
+        const current = dialog(context, rebuild ? '完全重建前先看一下' : '建档前先看一下', body);
+        // No overlay to show the review in: keep the previous behaviour.
+        if (!current) { resolve({ filterTags: [], unavailable: true }); return; }
+        current.onClose = () => resolve(null);
+        const chosen = () => [...current.element.querySelectorAll('[data-rmt-source-tag]:checked')];
+        const refresh = () => {
+            const removed = chosen().reduce((sum, box) => sum + (Number(box.dataset.rmtSourceTagChars) || 0), 0);
+            current.element.querySelector('[data-rmt-source-plan-total]').textContent = estimateLine(estimate, removed, format);
+            current.element.querySelector('[data-rmt-source-plan="start"]').textContent = chosen().length
+                ? `过滤勾选的标签并${rebuild ? '继续完全重建' : '开始建档'}` : rebuild ? '继续完全重建' : '开始建档';
+        };
+        current.element.addEventListener('change', event => { if (event.target?.matches?.('[data-rmt-source-tag]')) refresh(); });
+        current.element.addEventListener('click', event => {
+            const button = event.target?.closest?.('[data-rmt-source-plan="start"]');
+            if (!button || !current.isCurrent()) return;
+            event.stopPropagation();
+            const filterTags = chosen().map(box => box.dataset.rmtSourceTag);
+            current.onClose = null;
+            closeParticipantPicker();
+            resolve({ filterTags });
+        });
+        refresh();
+    });
+}
+
+function estimateLine(estimate, removedChars, format) {
+    const chars = Math.max(0, estimate.chars - removedChars);
+    const requests = chars ? Math.ceil(chars / constants.IMPORT_CHUNK_CHARS) : 0;
+    const batches = chars ? Math.ceil(chars / constants.ARCHIVE_BATCH_CHAT_CHARS) : 0;
+    return `${removedChars ? '过滤后' : '这次'}要读 ${estimate.floors} 层，约 ${format(chars)}，预计 ${requests} 次请求，分 ${batches} 批。`;
+}
+
 __m_ui_participantPicker_js.showParticipantPicker = showParticipantPicker;
 __m_ui_participantPicker_js.closeParticipantPicker = closeParticipantPicker;
 __m_ui_participantPicker_js.showArchiveCardTypePicker = showArchiveCardTypePicker;
@@ -88458,6 +88659,7 @@ __m_ui_participantPicker_js.chooseRandomParticipantId = chooseRandomParticipantI
 __m_ui_participantPicker_js.chooseParticipantChange = chooseParticipantChange;
 __m_ui_participantPicker_js.showParticipantVersions = showParticipantVersions;
 __m_ui_participantPicker_js.chooseGenerationTaskResult = chooseGenerationTaskResult;
+__m_ui_participantPicker_js.chooseArchiveSourcePlan = chooseArchiveSourcePlan;
 }
 
 function __init_ui_pastLivesCard_css_js() {
@@ -92650,6 +92852,15 @@ ${root} .rmt-participant-dialog{display:flex;flex-direction:column;gap:14px;widt
 ${root} .rmt-participant-dialog :is(header,footer){display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
 ${root} .rmt-participant-dialog :is(h2,h3,p){margin:0;overflow-wrap:anywhere}
 ${root} .rmt-participant-dialog label{display:flex;flex-direction:column;gap:6px;min-width:0}
+${root} .rmt-participant-dialog .rmt-source-plan-tags{border:1px solid var(--rmt-theme-border);border-radius:12px;padding:10px 12px;margin:12px 0;display:grid;gap:8px}
+${root} .rmt-participant-dialog .rmt-source-plan-tags legend{font-weight:600;padding:0 4px}
+${root} .rmt-participant-dialog .rmt-source-plan-tags>p,${root} .rmt-participant-dialog .rmt-source-plan-note,${root} .rmt-participant-dialog .rmt-source-plan-long p{margin:0;font-size:13px;color:var(--rmt-theme-muted);line-height:1.6}
+${root} .rmt-participant-dialog label.rmt-source-plan-tag{flex-direction:row;align-items:flex-start;gap:10px;cursor:pointer}
+${root} .rmt-participant-dialog .rmt-source-plan-tag input{flex:none;margin-top:4px;width:18px;height:18px}
+${root} .rmt-participant-dialog .rmt-source-plan-tag small,${root} .rmt-participant-dialog .rmt-source-plan-long small{display:block;color:var(--rmt-theme-muted);font-size:12px;line-height:1.5;overflow-wrap:anywhere}
+${root} .rmt-participant-dialog .rmt-source-plan-long{margin:12px 0}
+${root} .rmt-participant-dialog .rmt-source-plan-long summary{cursor:pointer;font-weight:600;min-height:36px}
+${root} .rmt-participant-dialog .rmt-source-plan-long ul{margin:6px 0 8px;padding-left:20px;display:grid;gap:6px;font-size:14px}
 ${root} .rmt-participant-dialog :is(input[type=text],select){box-sizing:border-box;width:100%;min-width:0;min-height:44px;font:inherit;color:inherit;background:var(--rmt-theme-surface-solid,#fff);border:1px solid var(--rmt-theme-border,#cbdce6);border-radius:8px;padding:8px}
 ${root} .rmt-participant-dialog :is(button,summary){min-height:44px;white-space:normal;overflow-wrap:anywhere}
 ${root} .rmt-participant-dialog .rmt-participant-select{flex-direction:row;align-items:center;min-height:44px;gap:10px;cursor:pointer}
@@ -103263,6 +103474,7 @@ __m_archive_archiveFile_js.ARCHIVE_FILE_FORMAT = ARCHIVE_FILE_FORMAT;
 __init_archive_chatIdentityMigration_js();
 __init_archive_localArchive_js();
 __init_archive_localArchiveAuto_js();
+__init_archive_sourceEstimate_js();
 __init_core_chatAvatarStore_js();
 __init_core_contentSelection_js();
 __init_core_releaseNotes_js();

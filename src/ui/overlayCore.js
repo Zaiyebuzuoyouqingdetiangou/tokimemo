@@ -26,6 +26,7 @@ import * as generation_client from '../generation/client.js';
 import * as generation_imageGeneration from '../generation/imageGeneration.js';
 import * as cg_editor from './cgPromptEditor.js';
 import * as participant_picker from './participantPicker.js';
+import * as archive_source_estimate from '../archive/sourceEstimate.js';
 import * as image_viewer from './cgImageViewer.js';
 import * as floating_archive from './floatingArchive.js';
 import * as recovery_view from './recoveryView.js';
@@ -168,7 +169,23 @@ export function navigateBack() {
     return home_view.showHome();
 }
 
-export function requestCurrentArchiveImport({ cardTypeConfirmed = false, participantRoster } = {}) {
+// Local preview before a new archive or full rebuild; nothing is sent here.
+function reviewArchiveSource(context, rebuild, proceed) {
+    let estimate;
+    try { estimate = archive_source_estimate.estimateArchiveSource(context); }
+    catch (error) { console.warn('[HeartbeatMemories] archive source estimate skipped', core_text.safeErrorDiagnostic(error)); return proceed(); }
+    if (!estimate.floors) return proceed();
+    void participant_picker.chooseArchiveSourcePlan({ context, estimate, rebuild, format: archive_source_estimate.formatChars }).then(choice => {
+        if (!choice) return;
+        if (choice.filterTags.length && archive_source_estimate.excludeTagsForArchive(choice.filterTags, context)) {
+            globalThis.toastr?.info?.(`已把 ${choice.filterTags.map(name => `<${name}>`).join('、')} 加进过滤标签，这次和以后都不读。`, '心迹回廊');
+        }
+        proceed();
+    }).catch(error => globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心迹回廊'));
+    return true;
+}
+
+export function requestCurrentArchiveImport({ cardTypeConfirmed = false, participantRoster, sourceReviewed = false } = {}) {
     let context;
     try { context = core_context.currentCharacterGuard(); }
     catch (error) {
@@ -201,11 +218,16 @@ export function requestCurrentArchiveImport({ cardTypeConfirmed = false, partici
         globalThis.toastr?.info?.('检测到当前窗口记忆 / 摘要来源。请先点“扫描记忆 / 摘要”，确认读取范围后再生成/更新当前窗口档案。', '心迹回廊');
         return false;
     }
+    if (!existing && !sourceReviewed && !archive_repository.getCurrentArchiveImportRecoverySummary(context)) {
+        return reviewArchiveSource(context, false, () => requestCurrentArchiveImport({ cardTypeConfirmed: true,
+            ...(participantRoster !== undefined ? { participantRoster } : {}), sourceReviewed: 'dialog' }));
+    }
     const title = existing ? '增量更新当前窗口档案？' : '生成当前窗口档案？';
     const detail = existing
         ? '默认只整理“上次档案之后新增的聊天”和发生变化的当前窗口记忆/摘要。已有 Mxxx 记忆 ID 不重排，已生成的回忆相簿、CG、ADV、房间、ENDING、储物、私人终端会继续保留。若检测到旧聊天被编辑/删除，本次会停止并保留成果，说明变更类别，由你选择如何处理。'
         : '这会读取当前聊天窗口并建立一份只属于这个窗口的心迹回廊档案。聊天正文不会被修改；之后也只有你手动更新时档案才会变化。';
-    if (!confirmExplicitAction(title, detail, { destructive: false })) return false;
+    // The review dialog's own start button is the confirmation for a new archive.
+    if (!(sourceReviewed === 'dialog' && !existing) && !confirmExplicitAction(title, detail, { destructive: false })) return false;
     const run = (extra = {}) => archive_repository.importCurrentChatMemory({ fullRebuild: false,
         ...(participantRoster !== undefined ? { participantRoster } : {}), ...extra,
     });
@@ -243,7 +265,7 @@ export async function presentGenerationTaskResult(draftId, context = core_contex
     return result;
 }
 
-export function requestCurrentArchiveFullRebuild() {
+export function requestCurrentArchiveFullRebuild({ sourceReviewed = false } = {}) {
     let context;
     try { context = core_context.currentCharacterGuard(); }
     catch (error) {
@@ -258,6 +280,7 @@ export function requestCurrentArchiveFullRebuild() {
         globalThis.toastr?.info?.('完全重建前请先扫描当前窗口记忆 / 摘要，确认读取范围。', '心迹回廊');
         return false;
     }
+    if (!sourceReviewed) return reviewArchiveSource(context, true, () => requestCurrentArchiveFullRebuild({ sourceReviewed: true }));
     if (!confirmExplicitActionTwice(
         '完全重建当前窗口档案？',
         '这会重新读取整个当前聊天并重新编号 Mxxx 记忆，因此旧档案版本对应的回忆相簿、CG、ADV、房间、蝴蝶效应、ENDING、储物、私人终端和邮箱（含来信及收藏的明信片）缓存都会失效，请先备份。只有当你明确需要从头整理（例如旧消息被大量编辑/删除）时才建议使用。',
