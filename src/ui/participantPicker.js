@@ -390,7 +390,7 @@ export function chooseArchiveSourcePlan({ context, estimate, rebuild = false, fo
             const filterTags = chosen().map(box => box.dataset.rmtSourceTag);
             current.onClose = null;
             closeParticipantPicker();
-            resolve({ filterTags });
+            resolve({ filterTags, reviewed: true });
         });
         refresh();
     });
