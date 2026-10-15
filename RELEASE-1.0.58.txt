@@ -7,6 +7,6 @@
 - 印象曲播放器在浏览器模拟页面中点过：导入、播放、暂停、拖动进度、更换音源，电脑与手机宽度。
 - 未验证：手机/实际酒馆加载、真实 Suno 网络请求和随机生成图片效果。
 
-最终源码 SHA-256：4bb5bbda700045689b3b4b3fbe6341e209fb3159ea72afdf7c0962754f699259。
-最终 bundle SHA-256：1f36b607fa8c3baeb39d0f34d83a05cdea87d7a3e44575eb9a2a9b2c27308759。
-版本为 1.0.58，BUILD 与启动查询串为 1.0.58-r3。
+最终源码 SHA-256：debca9cb807c9d17cac28dbedc160f6afad247d578d19f0f923045719df5637b。
+最终 bundle SHA-256：701f317473c10cc3fd4f8ab241f6ad49f285e2f4fdd2d514eb8f88fdd11ed09d。
+版本为 1.0.58，BUILD 与启动查询串为 1.0.58-r4。
