@@ -21,7 +21,7 @@ function quotaFailureOf(tx, code) {
 async function database() {
     return new Promise((resolve, reject) => {
         let request, settled = false;
-        const timer = setTimeout(() => { settled = true; reject(failure()); }, 5000);
+        const timer = setTimeout(() => { settled = true; reject(failure('RMT_LOCAL_TIMEOUT')); }, 10000);
         const stop = () => { clearTimeout(timer); if (!settled) { settled = true; reject(failure()); } };
         try {
             request = globalThis.indexedDB.open(DATABASE, 1);
@@ -51,7 +51,8 @@ export async function readLocalRecoveryRecord(key) {
     try {
         return await new Promise((resolve, reject) => {
             const tx = db.transaction(STORE, 'readonly'); let result = null;
-            const timer = setTimeout(() => { try { tx.abort(); } catch {} reject(failure()); }, 5000);
+            // Reading a large saved draft back is slow on phones too.
+            const timer = setTimeout(() => { try { tx.abort(); } catch {} reject(failure('RMT_LOCAL_TIMEOUT')); }, 30000);
             const request = tx.objectStore(STORE).get(key);
             request.onsuccess = () => { result = request.result || null; };
             tx.oncomplete = () => { clearTimeout(timer); resolve(result); };
@@ -59,14 +60,21 @@ export async function readLocalRecoveryRecord(key) {
         });
     } finally { db.close(); }
 }
-export async function compareLocalRecoveryRecord(key, expectedRevision, payload) {
+// A large draft (a long chat's task inputs plus every finished segment) can take
+// a phone well over five seconds to write; a fixed 5s limit aborted it every time.
+export function localRecoveryWriteTimeout(bytes = 0) {
+    const size = Math.max(0, Number(bytes) || 0);
+    return Math.min(120000, 5000 + Math.ceil(size / (1024 * 1024)) * 4000);
+}
+export async function compareLocalRecoveryRecord(key, expectedRevision, payload, { timeoutMs = 5000 } = {}) {
     if (!validKey(key) || !Number.isSafeInteger(expectedRevision) || expectedRevision < 0) throw failure();
     if (testBackend) return testBackend.compare(key, expectedRevision, payload);
     const db = await database();
     try {
         return await new Promise((resolve, reject) => {
-            const tx = writeTransaction(db, key); let mismatch = false, cloneFailed = false;
-            const timer = setTimeout(() => { try { tx.abort(); } catch {} reject(failure()); }, 5000);
+            const tx = writeTransaction(db, key); let mismatch = false, cloneFailed = false, timedOut = false;
+            const limit = Math.max(5000, Math.min(120000, Number(timeoutMs) || 5000));
+            const timer = setTimeout(() => { timedOut = true; try { tx.abort(); } catch {} reject(failure('RMT_LOCAL_TIMEOUT')); }, limit);
             const store = tx.objectStore(STORE), request = store.get(key);
             request.onsuccess = () => {
                 if ((request.result?.revision || 0) !== expectedRevision) { mismatch = true; tx.abort(); return; }
@@ -75,7 +83,7 @@ export async function compareLocalRecoveryRecord(key, expectedRevision, payload)
                 catch (error) { cloneFailed = error?.name === 'DataCloneError'; try { tx.abort(); } catch {} }
             };
             tx.oncomplete = () => { clearTimeout(timer); resolve(expectedRevision + 1); };
-            tx.onabort = tx.onerror = () => { clearTimeout(timer); reject(cloneFailed ? failure('RMT_LOCAL_CLONE') : quotaFailureOf(tx, mismatch ? 'RMT_LOCAL_CAS' : 'RMT_LOCAL_STORAGE')); };
+            tx.onabort = tx.onerror = () => { clearTimeout(timer); if (timedOut) return; reject(cloneFailed ? failure('RMT_LOCAL_CLONE') : quotaFailureOf(tx, mismatch ? 'RMT_LOCAL_CAS' : 'RMT_LOCAL_STORAGE')); };
         });
     } finally { db.close(); }
 }
