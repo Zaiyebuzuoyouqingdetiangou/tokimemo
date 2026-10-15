@@ -30,6 +30,15 @@ ${root} .rmt-participant-dialog{display:flex;flex-direction:column;gap:14px;widt
 ${root} .rmt-participant-dialog :is(header,footer){display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
 ${root} .rmt-participant-dialog :is(h2,h3,p){margin:0;overflow-wrap:anywhere}
 ${root} .rmt-participant-dialog label{display:flex;flex-direction:column;gap:6px;min-width:0}
+${root} .rmt-participant-dialog .rmt-source-plan-tags{border:1px solid var(--rmt-theme-border);border-radius:12px;padding:10px 12px;margin:12px 0;display:grid;gap:8px}
+${root} .rmt-participant-dialog .rmt-source-plan-tags legend{font-weight:600;padding:0 4px}
+${root} .rmt-participant-dialog .rmt-source-plan-tags>p,${root} .rmt-participant-dialog .rmt-source-plan-note,${root} .rmt-participant-dialog .rmt-source-plan-long p{margin:0;font-size:13px;color:var(--rmt-theme-muted);line-height:1.6}
+${root} .rmt-participant-dialog label.rmt-source-plan-tag{flex-direction:row;align-items:flex-start;gap:10px;cursor:pointer}
+${root} .rmt-participant-dialog .rmt-source-plan-tag input{flex:none;margin-top:4px;width:18px;height:18px}
+${root} .rmt-participant-dialog .rmt-source-plan-tag small,${root} .rmt-participant-dialog .rmt-source-plan-long small{display:block;color:var(--rmt-theme-muted);font-size:12px;line-height:1.5;overflow-wrap:anywhere}
+${root} .rmt-participant-dialog .rmt-source-plan-long{margin:12px 0}
+${root} .rmt-participant-dialog .rmt-source-plan-long summary{cursor:pointer;font-weight:600;min-height:36px}
+${root} .rmt-participant-dialog .rmt-source-plan-long ul{margin:6px 0 8px;padding-left:20px;display:grid;gap:6px;font-size:14px}
 ${root} .rmt-participant-dialog :is(input[type=text],select){box-sizing:border-box;width:100%;min-width:0;min-height:44px;font:inherit;color:inherit;background:var(--rmt-theme-surface-solid,#fff);border:1px solid var(--rmt-theme-border,#cbdce6);border-radius:8px;padding:8px}
 ${root} .rmt-participant-dialog :is(button,summary){min-height:44px;white-space:normal;overflow-wrap:anywhere}
 ${root} .rmt-participant-dialog .rmt-participant-select{flex-direction:row;align-items:center;min-height:44px;gap:10px;cursor:pointer}

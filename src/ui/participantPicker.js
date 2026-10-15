@@ -352,3 +352,53 @@ export function chooseGenerationTaskResult({ context, title = '旧任务已生�
         });
     });
 }
+
+// Shown before a new archive or a full rebuild: what will be read, roughly how
+// many requests that is, and which tags / floors make it unusually large.
+// Resolves { filterTags } to go ahead, or null when cancelled. No request is sent here.
+export function chooseArchiveSourcePlan({ context, estimate, rebuild = false, format = value => `${value}` }) {
+    return new Promise(resolve => {
+        const pct = share => `${Math.max(1, Math.round(share * 100))}%`;
+        const tagRows = estimate.heavyTags.map(tag => `<label class="rmt-source-plan-tag"><input type="checkbox" data-rmt-source-tag="${text.esc(tag.name)}" data-rmt-source-tag-chars="${tag.chars}"${tag.likelySummary ? ' checked' : ''}>
+            <span><b>&lt;${text.esc(tag.name)}&gt;</b> ${text.esc(format(tag.chars))}，占 ${pct(tag.share)}，出现在 ${tag.floors} 层${tag.likelySummary ? '<small>只在少数几层出现，却占了很大一部分字数，很像其他插件写进聊天的旧总结。</small>'
+                : tag.likelyStory ? '<small>大部分楼层都有，可能就是正文本身，一般不要勾。</small>' : ''}</span></label>`).join('');
+        const longRows = estimate.longFloors.map(floor => `<li>第 ${floor.index} 层 · ${text.esc(format(floor.chars))}${floor.tags.length ? ` · 标签 ${floor.tags.map(name => `&lt;${text.esc(name)}&gt;`).join(' ')}` : ''}<br><small>${text.esc(floor.preview)}</small></li>`).join('');
+        const body = `<p data-rmt-source-plan-total>${text.esc(estimateLine(estimate, 0, format))}</p>
+          <p class="rmt-source-plan-note">每批完成后会先停下来，等你点「继续下一批」再发下一批；已完成的部分随时可以看。</p>
+          ${tagRows ? `<fieldset class="rmt-source-plan-tags"><legend>这些标签占的字数很多</legend>
+            <p>勾选的标签整段不读，会存进「设置 → 过滤标签」，以后建档和更新也不读。聊天本身不会被改。</p>${tagRows}</fieldset>` : ''}
+          ${longRows ? `<details class="rmt-source-plan-long" open><summary>有 ${estimate.longFloorCount} 层特别长（这个聊天一般一层约 ${text.esc(format(estimate.typicalFloorChars))}）</summary>
+            <ul>${longRows}</ul>
+            <p>如果这些是其他插件写进聊天的旧总结，心迹回廊会把它们和原对话一起再整理一遍，字数和请求都会多不少。外面包着标签的话，可以在上面勾掉；没有标签的话，可以照常建档，或在「设置 → 读取范围」调整要读的楼层。</p></details>` : ''}
+          <footer><button type="button" class="rmt-btn" data-rmt-source-plan="start">${rebuild ? '继续完全重建' : '开始建档'}</button></footer>`;
+        const current = dialog(context, rebuild ? '完全重建前先看一下' : '建档前先看一下', body);
+        // No overlay to show the review in: keep the previous behaviour.
+        if (!current) { resolve({ filterTags: [], unavailable: true }); return; }
+        current.onClose = () => resolve(null);
+        const chosen = () => [...current.element.querySelectorAll('[data-rmt-source-tag]:checked')];
+        const refresh = () => {
+            const removed = chosen().reduce((sum, box) => sum + (Number(box.dataset.rmtSourceTagChars) || 0), 0);
+            current.element.querySelector('[data-rmt-source-plan-total]').textContent = estimateLine(estimate, removed, format);
+            current.element.querySelector('[data-rmt-source-plan="start"]').textContent = chosen().length
+                ? `过滤勾选的标签并${rebuild ? '继续完全重建' : '开始建档'}` : rebuild ? '继续完全重建' : '开始建档';
+        };
+        current.element.addEventListener('change', event => { if (event.target?.matches?.('[data-rmt-source-tag]')) refresh(); });
+        current.element.addEventListener('click', event => {
+            const button = event.target?.closest?.('[data-rmt-source-plan="start"]');
+            if (!button || !current.isCurrent()) return;
+            event.stopPropagation();
+            const filterTags = chosen().map(box => box.dataset.rmtSourceTag);
+            current.onClose = null;
+            closeParticipantPicker();
+            resolve({ filterTags });
+        });
+        refresh();
+    });
+}
+
+function estimateLine(estimate, removedChars, format) {
+    const chars = Math.max(0, estimate.chars - removedChars);
+    const requests = chars ? Math.ceil(chars / constants.IMPORT_CHUNK_CHARS) : 0;
+    const batches = chars ? Math.ceil(chars / constants.ARCHIVE_BATCH_CHAT_CHARS) : 0;
+    return `${removedChars ? '过滤后' : '这次'}要读 ${estimate.floors} 层，约 ${format(chars)}，预计 ${requests} 次请求，分 ${batches} 批。`;
+}

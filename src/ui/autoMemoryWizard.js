@@ -478,7 +478,7 @@ async function startChosenWork(context, { enableAuto = false } = {}) {
         });
         archiveNote = '已按新名单开始重新建档，旧档案会在重建完成后被换掉。可以关闭窗口继续聊天。';
     } else if (action === 'create') {
-        archiveStarted = ui_overlay.requestCurrentArchiveImport({ cardTypeConfirmed: true, participantRoster: draft.cardType === 'multiple' ? roster : null }) === true;
+        archiveStarted = ui_overlay.requestCurrentArchiveImport({ cardTypeConfirmed: true, participantRoster: draft.cardType === 'multiple' ? roster : null, sourceReviewed: true }) === true;
         if (!archiveStarted) archiveNote = '建档没有开始。已保存的间隔和偏好还在。';
     } else if (asked === 'ask' && !archiveNote) archiveNote = '继续使用旧档案，这次没有重新建档。';
     const routes = wizard_plan.firstQueueRoutes(draft, queueableIds());
