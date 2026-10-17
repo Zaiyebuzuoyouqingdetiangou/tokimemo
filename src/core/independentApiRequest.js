@@ -24,6 +24,9 @@ async function readManualApiStream(response, options = {}) {
     const chooseProtocol = kind => { if (protocol && protocol !== kind) throw streamReadError(); protocol = kind; };
     const countReasoning = payload => { reasoningChars = Math.min(core_constants.MAX_GENERATION_OUTPUT_CHARS, reasoningChars + responseShapeSummary(payload).reasoningChars); };
     let previousCR = false, firstCharacter = true, terminal = false, finishReason = '', interrupted = false;
+    // Keepalive/comment lines and empty deltas are bytes, not progress. Report
+    // only when visible text or reasoning actually grew.
+    let reportedChars = 0, reportedReasoning = 0;
     const cancel = () => { try { void reader.cancel().catch(() => {}); } catch {} };
     // reader.cancel settles outstanding read() calls. Avoid adding one reaction per
     // tiny network fragment to a long-lived abort promise.
@@ -174,7 +177,10 @@ async function readManualApiStream(response, options = {}) {
             bytes += value?.byteLength || 0;
             if (bytes > maxBytes) throw apiError('模型服务返回内容过大，已停止读取。', 'RMT_MANUAL_RESPONSE_TOO_LARGE');
             consume(decoder.decode(value, { stream: true }));
-            if (value?.byteLength) options.onProgress?.();
+            if (content.length > reportedChars || reasoningChars > reportedReasoning) {
+                reportedChars = content.length; reportedReasoning = reasoningChars;
+                options.onProgress?.(content, { reasoningChars });
+            }
         }
     } catch (error) {
         if (signal?.aborted || error?.name === 'AbortError') throw streamAbortReason(signal);

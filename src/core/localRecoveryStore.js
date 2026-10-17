@@ -44,19 +44,31 @@ function writeTransaction(db, key) {
     return db.transaction(STORE, 'readwrite');
 }
 function validKey(key) { return typeof key === 'string' && /^(?:draft:[a-f0-9]{64}|credential:[a-f0-9-]{36})$/.test(key); }
-export async function readLocalRecoveryRecord(key) {
+// A timer that fires while the transaction is already committing cannot abort it:
+// abort() throws and the write still lands. Only report a timeout when abort()
+// really stopped the transaction; otherwise wait for its own completion event.
+function settleOnTimeout(tx, timeoutFailure, reject, extraMs = 30000) {
+    try { tx.abort(); } catch {
+        return setTimeout(() => reject(timeoutFailure()), extraMs);
+    }
+    reject(timeoutFailure());
+    return null;
+}
+export async function readLocalRecoveryRecord(key, { timeoutMs = 30000 } = {}) {
     if (!validKey(key)) throw failure();
     if (testBackend) return testBackend.read(key);
     const db = await database();
     try {
         return await new Promise((resolve, reject) => {
-            const tx = db.transaction(STORE, 'readonly'); let result = null;
+            const tx = db.transaction(STORE, 'readonly'); let result = null, timedOut = false, lateTimer = null;
             // Reading a large saved draft back is slow on phones too.
-            const timer = setTimeout(() => { try { tx.abort(); } catch {} reject(failure('RMT_LOCAL_TIMEOUT')); }, 30000);
+            const limit = Math.max(30000, Math.min(120000, Number(timeoutMs) || 30000));
+            const timer = setTimeout(() => { timedOut = true; lateTimer = settleOnTimeout(tx, () => failure('RMT_LOCAL_TIMEOUT'), reject); }, limit);
+            const done = () => { clearTimeout(timer); if (lateTimer) clearTimeout(lateTimer); };
             const request = tx.objectStore(STORE).get(key);
             request.onsuccess = () => { result = request.result || null; };
-            tx.oncomplete = () => { clearTimeout(timer); resolve(result); };
-            tx.onabort = tx.onerror = () => { clearTimeout(timer); reject(failure()); };
+            tx.oncomplete = () => { done(); resolve(result); };
+            tx.onabort = tx.onerror = () => { done(); if (timedOut && !lateTimer) return; reject(failure()); };
         });
     } finally { db.close(); }
 }
@@ -69,21 +81,38 @@ export function localRecoveryWriteTimeout(bytes = 0) {
 export async function compareLocalRecoveryRecord(key, expectedRevision, payload, { timeoutMs = 5000 } = {}) {
     if (!validKey(key) || !Number.isSafeInteger(expectedRevision) || expectedRevision < 0) throw failure();
     if (testBackend) return testBackend.compare(key, expectedRevision, payload);
+    return writeRecord(key, payload, timeoutMs, current => current === expectedRevision);
+}
+// Explicit discard only: a tombstone at the stored revision + 1, whatever that is.
+// It needs no prior read of a possibly huge or unreadable record.
+export async function discardLocalRecoveryRecord(key, { timeoutMs = 5000 } = {}) {
+    if (!validKey(key)) throw failure();
+    if (testBackend) {
+        if (typeof testBackend.discard === 'function') return testBackend.discard(key);
+        const current = await testBackend.read(key);
+        return testBackend.compare(key, Number.isSafeInteger(current?.revision) ? current.revision : 0, null);
+    }
+    return writeRecord(key, null, timeoutMs, () => true);
+}
+async function writeRecord(key, payload, timeoutMs, accepts) {
     const db = await database();
     try {
         return await new Promise((resolve, reject) => {
-            const tx = writeTransaction(db, key); let mismatch = false, cloneFailed = false, timedOut = false;
+            const tx = writeTransaction(db, key); let mismatch = false, cloneFailed = false, timedOut = false, lateTimer = null, written = 0;
             const limit = Math.max(5000, Math.min(120000, Number(timeoutMs) || 5000));
-            const timer = setTimeout(() => { timedOut = true; try { tx.abort(); } catch {} reject(failure('RMT_LOCAL_TIMEOUT')); }, limit);
+            const timer = setTimeout(() => { timedOut = true; lateTimer = settleOnTimeout(tx, () => failure('RMT_LOCAL_TIMEOUT'), reject); }, limit);
+            const done = () => { clearTimeout(timer); if (lateTimer) clearTimeout(lateTimer); };
             const store = tx.objectStore(STORE), request = store.get(key);
             request.onsuccess = () => {
-                if ((request.result?.revision || 0) !== expectedRevision) { mismatch = true; tx.abort(); return; }
+                const current = request.result?.revision || 0;
+                if (!accepts(current)) { mismatch = true; tx.abort(); return; }
+                written = current + 1;
                 // r84.177：内容本身存不进去（例如内嵌浏览器不允许存加密钥匙）时单独标出来，调用处好给出准确提示。
-                try { store.put({ key, revision: expectedRevision + 1, payload }); }
+                try { store.put({ key, revision: written, payload }); }
                 catch (error) { cloneFailed = error?.name === 'DataCloneError'; try { tx.abort(); } catch {} }
             };
-            tx.oncomplete = () => { clearTimeout(timer); resolve(expectedRevision + 1); };
-            tx.onabort = tx.onerror = () => { clearTimeout(timer); if (timedOut) return; reject(cloneFailed ? failure('RMT_LOCAL_CLONE') : quotaFailureOf(tx, mismatch ? 'RMT_LOCAL_CAS' : 'RMT_LOCAL_STORAGE')); };
+            tx.oncomplete = () => { done(); resolve(written); };
+            tx.onabort = tx.onerror = () => { done(); if (timedOut && !lateTimer) return; reject(cloneFailed ? failure('RMT_LOCAL_CLONE') : quotaFailureOf(tx, mismatch ? 'RMT_LOCAL_CAS' : 'RMT_LOCAL_STORAGE')); };
         });
     } finally { db.close(); }
 }

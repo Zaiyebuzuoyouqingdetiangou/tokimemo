@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 361
-// Source SHA-256: debca9cb807c9d17cac28dbedc160f6afad247d578d19f0f923045719df5637b
+// Source SHA-256: 80eea15f36466ac339af86d5ed070a4080b27591f29030404e74967cab4abe96
 // Build: python3 tools/verification/build.py <source-root>
 
 const __m_archive_archiveCore_js = Object.create(null);
@@ -791,6 +791,8 @@ const CHAT_AVATAR_SERVICE = Symbol.for('Hearttrace.chatAvatars.v1');
 const CHAT_AVATAR_DB = 'hearttrace-chat-avatars-v1';
 const CHAT_AVATAR_STORE = 'pairs';
 const CHAT_AVATAR_PREFIX = 'hearttrace:chat-avatars:v1:';
+// Cross-tab "something changed" signal only; never carries avatar data.
+const CHAT_AVATAR_CHANNEL = 'hearttrace-chat-avatars-v1';
 
 function service() {
     if (!globalThis[CHAT_AVATAR_SERVICE]) {
@@ -798,8 +800,14 @@ function service() {
             subscribers: new Set(), db: null, api: null, installations: 0, activeScope: '', scopeQueued: false };
     }
     // Shared with any already loaded lightweight/bundled copy, never a third durable store.
-    if (!globalThis[CHAT_AVATAR_SERVICE].fallbackRepairs) globalThis[CHAT_AVATAR_SERVICE].fallbackRepairs = new Map();
-    return globalThis[CHAT_AVATAR_SERVICE];
+    const state = globalThis[CHAT_AVATAR_SERVICE];
+    if (!state.fallbackRepairs) state.fallbackRepairs = new Map();
+    // Scopes whose cached record was read from durable storage (or written by this tab) since the
+    // last cross-tab change signal. Refreshes serve these from memory instead of re-reading and
+    // re-validating multi-MB PNG data URLs on every host event.
+    if (!state.verified) state.verified = new Set();
+    if (!Number.isSafeInteger(state.epoch)) state.epoch = 0;
+    return state;
 }
 
 function rawContext() {
@@ -908,12 +916,51 @@ function observeCurrentScope() {
     queueMicrotask(() => { state.scopeQueued = false; notifyChanged(); });
 }
 
+function samePerson(a, b) { return a === b || (!!a && !!b && a.name === b.name && a.url === b.url); }
+
+function sameRecord(a, b) {
+    if (a === b) return true;
+    if (!a || !b) return false;
+    return a.revision === b.revision && !!a.deleted === !!b.deleted && a.scope === b.scope
+        && samePerson(a.char, b.char) && samePerson(a.user, b.user);
+}
+
 function cacheRecord(scope, record) {
     const state = service(), previous = state.cache.get(scope);
     const chosen = newestRecord(previous, record);
     state.cache.set(scope, chosen);
-    if (previous === undefined || JSON.stringify(previous) !== JSON.stringify(chosen)) notifyChanged();
+    if (previous === undefined || !sameRecord(previous, chosen)) notifyChanged();
     return chosen;
+}
+
+function invalidateVerified() {
+    const state = service();
+    state.epoch += 1;
+    state.verified.clear();
+    // Re-read the visible scope now so another tab's change shows up without waiting for a host event.
+    if (state.activeScope && state.cache.has(state.activeScope)) hydrate(state.activeScope).catch(() => {});
+}
+
+function announceWrite(scope) {
+    try { service().channel?.postMessage?.({ scope }); } catch { /* Other tabs re-read on their next hydrate. */ }
+}
+
+function watchOtherTabs() {
+    const state = service();
+    if (state.crossTabWatch) return;
+    state.crossTabWatch = true;
+    try {
+        if (typeof globalThis.BroadcastChannel === 'function') {
+            state.channel = new globalThis.BroadcastChannel(CHAT_AVATAR_CHANNEL);
+            state.channel.onmessage = () => invalidateVerified();
+        }
+    } catch { state.channel = null; }
+    // Older tabs still mirror every pair into localStorage; their writes arrive as storage events.
+    try {
+        globalThis.addEventListener?.('storage', event => {
+            if (event?.key == null || String(event.key).startsWith(CHAT_AVATAR_PREFIX)) invalidateVerified();
+        });
+    } catch { /* No cross-tab signal; this tab's own writes still update the cache. */ }
 }
 
 function openDatabase() {
@@ -942,6 +989,18 @@ function openDatabase() {
     return pending;
 }
 
+async function putDatabase(record) {
+    const db = await openDatabase();
+    return new Promise((resolve, reject) => {
+        try {
+            const tx = db.transaction(CHAT_AVATAR_STORE, 'readwrite');
+            tx.oncomplete = () => resolve(true);
+            tx.onerror = tx.onabort = () => reject(new Error('Avatar write failed'));
+            tx.objectStore(CHAT_AVATAR_STORE).put(record);
+        } catch (error) { reject(error); }
+    });
+}
+
 async function readDatabase(scope) {
     const db = await openDatabase();
     return new Promise((resolve, reject) => {
@@ -967,6 +1026,42 @@ function writeFallback(record) {
         const storage = globalThis.localStorage;
         if (!storage?.setItem) return false;
         storage.setItem(CHAT_AVATAR_PREFIX + record.scope, JSON.stringify(record));
+        return true;
+    } catch { return false; }
+}
+
+// Revision of the localStorage mirror without re-validating its PNGs. null = no mirror,
+// 0 = unreadable/corrupt mirror. Throws when localStorage itself cannot be read.
+function fallbackRevision(scope) {
+    const storage = globalThis.localStorage;
+    if (!storage?.getItem) throw new Error('Avatar storage unavailable');
+    const raw = storage.getItem(CHAT_AVATAR_PREFIX + scope);
+    if (!raw) return null;
+    try {
+        const value = JSON.parse(raw);
+        return Number.isSafeInteger(value?.revision) && value.revision > 0 ? value.revision : 0;
+    } catch { return 0; }
+}
+
+// IndexedDB holds `record` (the newest durable copy). Any localStorage mirror that is not newer is
+// redundant: remove it so multi-MB data URLs do not sit in localStorage. A newer mirror (written by
+// a tab whose IndexedDB write failed) is kept for migration. Read + remove run synchronously, so a
+// concurrent fallback write in this tab cannot be lost between them.
+function dropRedundantFallback(record) {
+    try {
+        const revision = fallbackRevision(record.scope);
+        if (revision === null || revision > record.revision) return true;
+    } catch {
+        // localStorage is missing or cannot be read: no mirror can be read back to shadow
+        // IndexedDB, so the stores are consistent. Only a stale mirror this tab already saw
+        // (a pending repair) still needs a verified removal.
+        const known = service().fallbackRepairs.has(record.scope);
+        try { globalThis.localStorage?.removeItem?.(CHAT_AVATAR_PREFIX + record.scope); return true; } catch { return !known; }
+    }
+    try {
+        const storage = globalThis.localStorage;
+        if (!storage?.removeItem) return false;
+        storage.removeItem(CHAT_AVATAR_PREFIX + record.scope);
         return true;
     } catch { return false; }
 }
@@ -1012,27 +1107,56 @@ function reconcileFallback(record) {
 
 function incompleteSaveError() { return new Error('头像更改未能完整保存，请检查本地存储后重试。'); }
 
+// Bring both stores in line once IndexedDB is readable. localStorage is only a fallback for failed
+// IndexedDB writes: a newer fallback copy is migrated into IndexedDB and then removed; an older,
+// equal, tombstoned or corrupt one is removed. Returns whether no known stale fallback remains.
+async function settleStores(scope, local, database) {
+    const pending = service().fallbackRepairs.get(scope);
+    const durable = newestRecord(database, pending);
+    if (local && (!durable || local.revision > durable.revision)) {
+        let migrated = false;
+        try { migrated = await putDatabase(local); } catch { migrated = false; }
+        // Not migrated: the fallback is still the only copy of the newest pair and must stay.
+        return trackFallbackResult(local, migrated ? dropRedundantFallback(local) : true);
+    }
+    if (!durable) return true;
+    return trackFallbackResult(durable, dropRedundantFallback(durable));
+}
+
 async function hydrate(scope) {
     const state = service();
     if (state.loads.has(scope)) return state.loads.get(scope);
+    const epoch = state.epoch;
     const pending = (async () => {
-        let local = null, database = null, available = false;
-        try { local = readFallback(scope); available = true; } catch { /* Try the independent database. */ }
-        try { database = await readDatabase(scope); available = true; } catch { /* Existing cache stays usable. */ }
-        if (!available) {
+        let local = null, database = null, localReadable = false, databaseReadable = false;
+        try { local = readFallback(scope); localReadable = true; } catch { /* Try the independent database. */ }
+        try { database = await readDatabase(scope); databaseReadable = true; } catch { /* Existing cache stays usable. */ }
+        if (!localReadable && !databaseReadable) {
             if (state.fallbackRepairs.has(scope)) throw incompleteSaveError();
             return state.cache.get(scope) || null;
         }
         // A later refresh retries an incomplete fallback sync, including after restore
         // when the UI already sees the committed tombstone and has no pair to clear.
-        const fallbackConsistent = reconcileFallback(database || state.fallbackRepairs.get(scope));
+        const fallbackConsistent = databaseReadable
+            ? await settleStores(scope, local, database)
+            : reconcileFallback(state.fallbackRepairs.get(scope));
         const record = cacheRecord(scope, newestRecord(local, database));
         if (!fallbackConsistent) throw incompleteSaveError();
+        if (state.epoch === epoch) state.verified.add(scope);
         return record;
     })();
     state.loads.set(scope, pending);
     pending.finally(() => { if (state.loads.get(scope) === pending) state.loads.delete(scope); }).catch(() => {});
     return pending;
+}
+
+// The in-memory record is served as long as nothing has signalled a change since it was read.
+function currentRecord(scope) {
+    const state = service();
+    if (state.cache.has(scope) && state.verified.has(scope) && !state.fallbackRepairs.has(scope)) {
+        return Promise.resolve(state.cache.get(scope));
+    }
+    return hydrate(scope);
 }
 
 function readChatAvatarSnapshot(context = rawContext()) {
@@ -1047,7 +1171,7 @@ async function loadChatAvatarSnapshot(context = rawContext()) {
     observeCurrentScope();
     const scope = chatAvatarScope(context);
     if (!scope || !currentScopeMatches(context, scope)) return null;
-    const record = await hydrate(scope);
+    const record = await currentRecord(scope);
     observeCurrentScope();
     return currentScopeMatches(context, scope) ? visibleRecord(record) : null;
 }
@@ -1068,14 +1192,21 @@ async function writeDatabase(record, context) {
 
 async function commitRecord(record, context) {
     assertCurrentScope(context, record.scope);
-    let databaseSaved = false, fallbackSaved = false;
+    let databaseSaved = false;
     try { databaseSaved = await writeDatabase(record, context); } catch { /* Same atomic pair may use local storage. */ }
     assertCurrentScope(context, record.scope);
-    fallbackSaved = writeFallback(record);
-    if (!databaseSaved && !fallbackSaved) throw new Error('头像保存失败，原头像已保留。请检查本地存储空间后再试。');
-    const fallbackConsistent = trackFallbackResult(record, fallbackSaved || discardStaleFallback(record));
+    let fallbackConsistent;
+    if (databaseSaved) {
+        // IndexedDB owns the pair; do not copy multi-MB data URLs into localStorage as well.
+        fallbackConsistent = trackFallbackResult(record, dropRedundantFallback(record));
+    } else {
+        if (!writeFallback(record)) throw new Error('头像保存失败，原头像已保留。请检查本地存储空间后再试。');
+        fallbackConsistent = trackFallbackResult(record, true);
+    }
     // Do not roll back a durable primary write or pretend the old pair is still current.
     cacheRecord(record.scope, record);
+    service().verified.add(record.scope);
+    announceWrite(record.scope);
     if (!fallbackConsistent) {
         // With an inaccessible stale fallback, a later database outage cannot be
         // distinguished from an older successful save after restart. Report partial
@@ -1092,7 +1223,7 @@ function queuedWrite(context, expectedScope, pair) {
     const state = service(), previous = state.writes.get(scope) || Promise.resolve();
     const pending = previous.catch(() => {}).then(async () => {
         assertCurrentScope(context, scope);
-        const old = await hydrate(scope);
+        const old = await currentRecord(scope);
         assertCurrentScope(context, scope);
         const revision = Math.max(Date.now(), Number(old?.revision || 0) + 1);
         const record = Object.freeze(pair ? { version: 1, scope, revision, char: pair.char, user: pair.user }
@@ -1114,8 +1245,46 @@ async function clearChatAvatarPair({ context = rawContext(), expectedScope = '' 
     return queuedWrite(context, expectedScope, null);
 }
 
+// One pass over localStorage mirrors left by older versions (every pair used to be mirrored there):
+// migrate anything newer than IndexedDB, then remove the mirror. Stops untouched when IndexedDB is
+// unavailable, because then the mirror may be the only copy.
+async function pruneChatAvatarFallbacks() {
+    const state = service();
+    if (state.pruning) return state.pruning;
+    state.pruning = (async () => {
+        const storage = globalThis.localStorage;
+        let keys = [];
+        try {
+            if (!storage || typeof storage.key !== 'function') return 0;
+            for (let index = 0; index < storage.length; index += 1) {
+                const key = storage.key(index);
+                if (typeof key === 'string' && key.startsWith(CHAT_AVATAR_PREFIX)) keys.push(key);
+            }
+        } catch { return 0; }
+        let removed = 0;
+        for (const key of keys) {
+            const scope = key.slice(CHAT_AVATAR_PREFIX.length);
+            if (!scope || state.writes.has(scope) || state.loads.has(scope)) continue;
+            let local = null, database = null;
+            try { local = readFallback(scope); } catch { return removed; }
+            try { database = await readDatabase(scope); } catch { return removed; }
+            if (state.writes.has(scope)) continue;
+            const before = fallbackRevision(scope) !== null;
+            await settleStores(scope, local, database);
+            if (before && fallbackRevision(scope) === null) removed += 1;
+        }
+        return removed;
+    })().catch(() => 0).finally(() => { state.pruning = null; });
+    return state.pruning;
+}
+
 function installChatAvatarBridge() {
     const state = service();
+    watchOtherTabs();
+    if (!state.pruneScheduled && typeof globalThis.setTimeout === 'function') {
+        state.pruneScheduled = true;
+        globalThis.setTimeout(() => { void pruneChatAvatarFallbacks(); }, 4000);
+    }
     if (!state.api) state.api = Object.freeze({ apiVersion: 1,
         getCurrent() { return readChatAvatarSnapshot(); },
         refresh() { return loadChatAvatarSnapshot(); },
@@ -1141,6 +1310,7 @@ function installChatAvatarBridge() {
 __m_core_chatAvatarStore_js.loadChatAvatarSnapshot = loadChatAvatarSnapshot;
 __m_core_chatAvatarStore_js.saveChatAvatarPair = saveChatAvatarPair;
 __m_core_chatAvatarStore_js.clearChatAvatarPair = clearChatAvatarPair;
+__m_core_chatAvatarStore_js.pruneChatAvatarFallbacks = pruneChatAvatarFallbacks;
 __m_core_chatAvatarStore_js.chatAvatarScope = chatAvatarScope;
 __m_core_chatAvatarStore_js.readChatAvatarSnapshot = readChatAvatarSnapshot;
 __m_core_chatAvatarStore_js.installChatAvatarBridge = installChatAvatarBridge;
@@ -1308,7 +1478,7 @@ function __init_core_releaseNotes_js() {
 // MODULE: core/releaseNotes.js
 
 // GENERATED FROM README.md by tools/verification/build.py. Do not edit by hand.
-const RELEASE_README = "# 心迹回廊 1.0.58\n\n## 更新日志模块\n\n新增了更新日志板块，感谢@nancyindaeyo的更新。\n\n## 本次变动\n\n- 印象曲页新增「听这首歌」播放器：在 Suno 做好歌后，把歌曲链接粘回来（或选本机音频文件），就能直接在页面里听；制作手书时也直接用这首，不用再导一次。音源只存在这台设备上。\n- 播放器是唱片样式：播放时黑胶唱片从封套里滑出来转动，进度条可以拖动。导入链接、选择文件、移除音源都收在「更换音源」里。\n- 印象曲歌词的文笔、意象和用词以角色人设为准；你的人设说话方式（比如直白、迷糊）只用在你唱的段落或对唱里你的句子，不再把整首词拉成大白话。\n- 情侣头像选 NAI 4.5 时：两人外貌里写明了性别，会自动加上人数和性别（如 1boy, 1girl），减少两人画成一样或都画成男生；外貌还是整句或中文写法时，外貌栏下会提示，点生成前也会问要不要先整理成英文 tag。\n- 柏宝绘角色库：名字写成 {{user}} / {{char}} 的条目也能对上当前的你和角色；名字只差全角半角、首尾空格或大小写也能对上，有两条都能对上时不乱选。\n- CG 提示词编辑里，画面描述下方会写清每个人的外貌来自柏宝绘角色库的哪一条；没对上会说明原因（库里没有这个名字、有两条都对上、只写了衣着动作，或柏宝绘版本太旧）。\n- 修复图片设置里点了「保存外貌」、关掉再打开还是旧外貌的问题：现在会显示你上次保存的外貌，确认绘图后就用新外貌重画；这张图原来的记录不会被改。\n- 图片设置里「重新构思／提取外貌」整理出的外貌更完整：人设里写明的性别、发型、眼色、脸部特征、身高体型、配饰等都会保留，不再压成几个概括词。外貌栏能写的长度从 400 字放宽到 1200 字，自己手写的外貌按原样保存。\n- 修复用酒馆连接配置生成时总用完整响应的问题：「本插件流式方式」选「保持原设置」时，现在跟主聊天的流式开关走，不容易再被中转站掐断而出现「生成连接请求失败」。如果仍是完整响应、30 秒没收到数据就断开，提示会告诉你去「高级生成参数」改成「使用流式」。\n- 「内容」页「把勾选的项目排进任务中心」旁边多了「全选」。\n- 新建档案和完全重建前，会先显示这次要读多少层、大约多少字、预计几次请求、分几批。如果有标签占了很大一部分字数（比如其他插件写进聊天的旧总结），会列出来让你勾选不读；特别长的楼层也会单独列出来，并显示里面的开头，方便判断是不是旧总结。\n- 修复长聊天建档时反复提示「本批草稿尚未确认保存到本机」、点保存也没用的问题：聊天很长时这批草稿也很大，手机存进本机要好几秒，以前超过 5 秒就当作失败；现在按草稿大小放宽等待时间（最长 2 分钟），真的没存完也会说明是存得太慢。\n- 其他已有功能保持不变。\n";
+const RELEASE_README = "# 心迹回廊 1.0.58\n\n## 更新日志模块\n\n新增了更新日志板块，感谢@nancyindaeyo的更新。\n\n## 本次变动\n\n- 印象曲页新增「听这首歌」播放器：在 Suno 做好歌后，把歌曲链接粘回来（或选本机音频文件），就能直接在页面里听；制作手书时也直接用这首，不用再导一次。音源只存在这台设备上。\n- 播放器是唱片样式：播放时黑胶唱片从封套里滑出来转动，进度条可以拖动。导入链接、选择文件、移除音源都收在「更换音源」里。\n- 印象曲歌词的文笔、意象和用词以角色人设为准；你的人设说话方式（比如直白、迷糊）只用在你唱的段落或对唱里你的句子，不再把整首词拉成大白话。\n- 情侣头像选 NAI 4.5 时：两人外貌里写明了性别，会自动加上人数和性别（如 1boy, 1girl），减少两人画成一样或都画成男生；外貌还是整句或中文写法时，外貌栏下会提示，点生成前也会问要不要先整理成英文 tag。\n- 柏宝绘角色库：名字写成 {{user}} / {{char}} 的条目也能对上当前的你和角色；名字只差全角半角、首尾空格或大小写也能对上，有两条都能对上时不乱选。\n- CG 提示词编辑里，画面描述下方会写清每个人的外貌来自柏宝绘角色库的哪一条；没对上会说明原因（库里没有这个名字、有两条都对上、只写了衣着动作，或柏宝绘版本太旧）。\n- 修复图片设置里点了「保存外貌」、关掉再打开还是旧外貌的问题：现在会显示你上次保存的外貌，确认绘图后就用新外貌重画；这张图原来的记录不会被改。\n- 图片设置里「重新构思／提取外貌」整理出的外貌更完整：人设里写明的性别、发型、眼色、脸部特征、身高体型、配饰等都会保留，不再压成几个概括词。外貌栏能写的长度从 400 字放宽到 1200 字，自己手写的外貌按原样保存。\n- 修复用酒馆连接配置生成时总用完整响应的问题：「本插件流式方式」选「保持原设置」时，现在跟主聊天的流式开关走，不容易再被中转站掐断而出现「生成连接请求失败」。如果仍是完整响应、30 秒没收到数据就断开，提示会告诉你去「高级生成参数」改成「使用流式」。\n- 「内容」页「把勾选的项目排进任务中心」旁边多了「全选」。\n- 新建档案和完全重建前，会先显示这次要读多少层、大约多少字、预计几次请求、分几批。如果有标签占了很大一部分字数（比如其他插件写进聊天的旧总结），会列出来让你勾选不读；特别长的楼层也会单独列出来，并显示里面的开头，方便判断是不是旧总结。\n- 修复长聊天建档时反复提示「本批草稿尚未确认保存到本机」、点保存也没用的问题：聊天很长时这批草稿也很大，手机存进本机要好几秒，以前超过 5 秒就当作失败；现在按草稿大小放宽等待时间（最长 2 分钟），真的没存完也会说明是存得太慢。\n- 修复改过角色卡之后，这个聊天的建档、更新、继续、导出、丢弃全部报「本机草稿读取未完成」、什么都点不了的问题。\n- 档案不再在聊天文件里长期留着整份聊天原文的副本：建档完成后和每次「另起任务」都不会再额外占一份，聊天文件不会越用越大；暂停的旧草稿也会自动精简（还有没保存成果的草稿不动）。\n- 长聊天建档时手机卡顿明显减少；本机草稿保存超时但其实已经存进去时，不再导致之后每次保存都失败。\n- 流式生成改成「多久没收到新内容」才算超时，模型慢慢写长回复不会再在 3 分钟被掐断；真卡住时，已收到的内容会留成草稿，可以接着生成。\n- 模型回复的 JSON 有多余逗号、中文引号、注释、字符串里换行这类小毛病时，会先自动修补再读取，不用重新付费生成；回复格式小错不再被当成截断而自动付费续写。\n- 带思考过程标签的正常回复不再被误判成「返回了 HTML 页面」，真正的代理错误页仍会被拦下；推理把额度用完、回复为空时不再自动再付费重试。\n- 任务中心里属于其他聊天的「第二次生成」按钮不再对当前聊天生效。\n- 表情包：一组里有一张没画好，已经画好的会保留，只补画缺的；点「停止等待」后，正在画的那张画完也会留下；保存时切换了角色不会写错卡；保存和单张重画防双击。\n- 智绘姬：取消后，在它真正画完之前不会让你重复提交；画成功但返回的是图片链接时会自动存下来，不会当成失败再用另一个生图插件付费重画。柏宝绘画好但没存进图库时也会自动存下来。\n- CG 发给智绘姬时会明确带上横图或竖图尺寸（按你在智绘姬里设置的尺寸调换方向，正方形尺寸不动），不会沿用上一次请求的尺寸；歌曲封面和多格日常漫画按竖图发。\n- 情侣头像：生成防双击，可以「停止等待」；历史页缩略图更省内存。\n- 手机更流畅：自动记忆的信件不再每 2 秒整个重算，打开的信件不再反复重画（长按复制不会被打断）；聊天头像不再每条消息都从存储重新读取，也不再占用酒馆共用的本地存储（旧数据自动迁移）；没有自动记忆计划时不再往聊天页面塞大段样式；流式输出时头像和表情包不再反复全量扫描；印象曲音频关掉后释放内存。\n- 只用新版自动记忆计划的聊天，切换过去时也会自动唤醒，不用先手动打开一次档案。\n- 其他已有功能保持不变。\n";
 
 __m_core_releaseNotes_js.RELEASE_README = RELEASE_README;
 }
@@ -6303,10 +6473,12 @@ function imageDataToBlob(image) {
     return new Promise((resolve, reject) => canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('图片编码失败。')), 'image/png'));
 }
 
-async function drawSheet(prompt, layout, context, { signal, onProgress, characterName }) {
+async function drawSheet(prompt, layout, context, { signal, onProgress, characterName, targetKey = '' }) {
     const result = await cg_core.invokeImageGeneration(prompt, context, {
         orientation: layout.orientation, respectOrientation: true, characterName,
-        targetKey: `stickers:${store.stickerScope(context)}:${store.newStickerId('sheet')}`,
+        // A stable key per sheet lets the provider refuse a second paid job for
+        // the same sheet while an earlier one (e.g. after 停止等待) still runs.
+        targetKey: `stickers:${store.stickerScope(context)}:${text(targetKey) || store.newStickerId('sheet')}`,
         singlePrompt: true, preservePrompt: true, onProgress, signal,
     });
     const url = cg_core.normalizeCgImageUrl(typeof result === 'string' ? result : result?.url);
@@ -6319,34 +6491,68 @@ async function cutSheet(url, layout, { forceGrid = false } = {}) {
     const image = await loadPixels(url);
     const split = pixels.splitSheet(image.data, image.width, image.height, { ...layout, grid: forceGrid });
     const pieces = [];
-    for (const piece of split.pieces) {
-        const finished = pixels.finishSticker(pixels.cropPiece(image.data, image.width, piece), STICKER_SIZE);
-        const blob = await imageDataToBlob(finished);
-        pieces.push({ blob, preview: URL.createObjectURL(blob) });
+    try {
+        for (const piece of split.pieces) {
+            const finished = pixels.finishSticker(pixels.cropPiece(image.data, image.width, piece), STICKER_SIZE);
+            const blob = await imageDataToBlob(finished);
+            pieces.push({ blob, preview: URL.createObjectURL(blob) });
+        }
+    } catch (error) {
+        for (const piece of pieces) URL.revokeObjectURL(piece.preview);
+        throw error;
     }
     return { mode: split.mode, pieces };
 }
 
-// Draw every sheet for a list. Partial failures keep the finished sheets.
-async function drawStickerSet({ owner, styleId, items, people, context = core_context.currentCharacterGuard(), signal = null, onProgress = null }) {
-    const chunks = chunkItems(owner, items), sheets = [];
-    for (let index = 0; index < chunks.length; index++) {
-        if (signal?.aborted) break;
-        const { prompt, layout } = stickerSheetPrompt({ owner, styleId, items: chunks[index], people });
-        const report = update => { try { onProgress?.({ ...update, sheet: index + 1, sheets: chunks.length }); } catch { /* UI only. */ } };
-        report({ phase: 'generating' });
-        const url = await drawSheet(prompt, layout, context, { signal, onProgress: report, characterName: people[0]?.name || '' });
-        report({ phase: 'cutting' });
-        const cut = await cutSheet(url, layout);
-        sheets.push({ url, layout, mode: cut.mode, items: chunks[index], pieces: cut.pieces });
+const STOPPED_MESSAGE = '已停止等待这一张。';
+// Draw the given chunks one sheet each. A failed sheet never throws away the
+// sheets already drawn (and paid for): each chunk is caught on its own.
+// chunks: [{ index, items, url? }] — a url means the sheet was drawn before
+// but could not be cut, so it is cut again without drawing.
+// Returns { sheets: [{ chunk, url, layout, mode, items, pieces }], failed: [{ chunk, items, url, message }] }.
+// onSheet(sheet) hands over each sheet as soon as it is cut, so a stopped run
+// still delivers the sheet that was drawing or cutting at the time.
+// The signal only stops later sheets and frees the caller; it is not passed to
+// the provider, so a picture already being drawn (and paid for) still arrives.
+async function drawStickerSheets({ owner, styleId, chunks, total = chunks.length, people, context = core_context.currentCharacterGuard(), signal = null, onProgress = null, onSheet = null, setKey = '' }) {
+    const sheets = [], failed = [];
+    for (let n = 0; n < chunks.length; n++) {
+        const { index, items } = chunks[n];
+        let url = text(chunks[n].url);
+        const reused = !!url;
+        if (signal?.aborted) { failed.push({ chunk: index, items, url, message: STOPPED_MESSAGE }); continue; }
+        const { prompt, layout } = stickerSheetPrompt({ owner, styleId, items, people });
+        const report = update => { try { onProgress?.({ ...update, sheet: index + 1, sheets: total }); } catch { /* UI only. */ } };
+        try {
+            if (!url) {
+                report({ phase: 'generating' });
+                url = await drawSheet(prompt, layout, context, { signal: null, onProgress: report, characterName: people[0]?.name || '',
+                    targetKey: text(setKey) ? `${text(setKey)}:${index}` : '' });
+            }
+            report({ phase: 'cutting' });
+            const cut = await cutSheet(url, layout);
+            const sheet = { chunk: index, url, layout, mode: cut.mode, items, pieces: cut.pieces };
+            sheets.push(sheet);
+            try { onSheet?.(sheet); } catch { /* UI only; the sheet is still returned. */ }
+        } catch (error) {
+            const message = signal?.aborted ? STOPPED_MESSAGE : core_text.safeErrorSummary(error) || '这一张没有画好。';
+            // A sheet that was cut once more and still failed is drawn fresh next time.
+            failed.push({ chunk: index, items, url: reused ? '' : url, message });
+        }
     }
-    return sheets;
+    return { sheets, failed };
+}
+
+// Draw every sheet for a list. Partial failures keep the finished sheets.
+async function drawStickerSet({ owner, styleId, items, people, context = core_context.currentCharacterGuard(), signal = null, onProgress = null, onSheet = null, setKey = '' }) {
+    const chunks = chunkItems(owner, items).map((rows, index) => ({ index, items: rows }));
+    return drawStickerSheets({ owner, styleId, chunks, people, context, signal, onProgress, onSheet, setKey });
 }
 
 // One sticker on its own, e.g. "单张重画".
-async function drawSingleSticker({ owner, styleId, item, people, context = core_context.currentCharacterGuard(), signal = null, onProgress = null }) {
+async function drawSingleSticker({ owner, styleId, item, people, context = core_context.currentCharacterGuard(), signal = null, onProgress = null, targetKey = '' }) {
     const { prompt, layout } = stickerSheetPrompt({ owner, styleId, items: [item], people });
-    const url = await drawSheet(prompt, { ...layout, orientation: owner === 'pair' ? 'landscape' : 'portrait' }, context, { signal, onProgress, characterName: people[0]?.name || '' });
+    const url = await drawSheet(prompt, { ...layout, orientation: owner === 'pair' ? 'landscape' : 'portrait' }, context, { signal, onProgress, characterName: people[0]?.name || '', targetKey });
     const cut = await cutSheet(url, layout);
     return { url, ...cut.pieces[0] };
 }
@@ -6447,6 +6653,7 @@ async function saveStickerData(data, context = raw()) {
 __m_extras_stickers_js.stickerPeople = stickerPeople;
 __m_extras_stickers_js.requestStickerList = requestStickerList;
 __m_extras_stickers_js.cutSheet = cutSheet;
+__m_extras_stickers_js.drawStickerSheets = drawStickerSheets;
 __m_extras_stickers_js.drawStickerSet = drawStickerSet;
 __m_extras_stickers_js.drawSingleSticker = drawSingleSticker;
 __m_extras_stickers_js.captionBlob = captionBlob;
@@ -7511,7 +7718,7 @@ function renderJobs(view) {
     const rows = [...jobs.values()].filter(job => job.scope === view.scope);
     target.innerHTML = rows.map(job => job.status === 'failed'
         ? `<div class="rmt-pair-job is-failed" role="alert"><span><strong>这一对没有完成</strong><small>${esc(job.message)}</small></span>${button('dismiss-job', '知道了', `data-pair-id="${job.id}"`)}</div>`
-        : `<div class="rmt-pair-job" role="status"><span>${esc(job.label)}<small>${job.background ? '完成后收进历史，可以继续做别的事。' : '一张原图，一对头像。'}</small></span>${job.background ? '<small>后台等待中</small>' : button('background', '转到后台', `data-pair-id="${job.id}"`)}</div>`).join('');
+        : `<div class="rmt-pair-job" role="status"><span>${esc(job.label)}<small>${job.background ? '完成后收进历史，可以继续做别的事。' : '一张原图，一对头像。'}</small></span>${job.background ? '<small>后台等待中</small>' : button('background', '转到后台', `data-pair-id="${job.id}"`)}${button('stop-job', '停止等待', `data-pair-id="${job.id}"`)}</div>`).join('');
 }
 async function renderPreview(view) {
     if (!current(view)) return;
@@ -7567,6 +7774,9 @@ async function renderHistory(view) {
     if (!pager) { pager = document.createElement('nav'); pager.className = 'rmt-pair-pagination'; pager.dataset.pairHistoryPages = ''; pager.setAttribute('aria-label', '头像翻页'); target.after(pager); }
     pager.hidden = !rows.length;
     pager.innerHTML = `${button('history-prev', '上一页', view.historyPage === 1 ? 'disabled' : '')}<span role="status">第 ${view.historyPage} / ${pages} 页</span>${button('history-next', '下一页', view.historyPage === pages ? 'disabled' : '')}`;
+    // Keep decoded originals only for this page and the pair being previewed.
+    const keep = new Set([...visible.map(row => row.original.url), recordFor(view)?.original.url].filter(Boolean));
+    for (const url of [...view.images.keys()]) if (!keep.has(url)) view.images.delete(url);
     const nodes = [...target.querySelectorAll('[data-pair-thumb]')];
     // Current-page thumbnails load immediately. Some TT WebViews never deliver
     // IntersectionObserver callbacks inside this overlay's nested scroller.
@@ -7576,8 +7786,8 @@ async function renderHistory(view) {
         try {
             const loaded = await loadRecord(view, record);
             if (current(view) && token === view.historyEpoch && node.isConnected) {
-                const previews = pairPreviews(record, loaded);
-                node.replaceChildren(square(record, 0, loaded, '', previews.images[0]), square(record, 1, loaded, '', previews.images[1]));
+                // Thumbnails are CSS crops of the original: no full-size PNG export per card.
+                node.replaceChildren(square(record, 0, loaded), square(record, 1, loaded));
             }
         }
         catch { if (node.isConnected) { node.title = '原图暂时不可用，点击后可查看记录或导入原图。'; const note = node.querySelector('.rmt-pair-thumb-note'); if (note) note.textContent = '原图暂不可用'; } }
@@ -7783,6 +7993,13 @@ async function handleAction(view, action, target) {
     if (action === 'export') return downloadText(await couple.exportCouples(view.scope));
     if (action === 'dismiss-job') { const job = jobs.get(target.dataset.pairId); if (job?.scope === view.scope && job.status === 'failed') { jobs.delete(job.id); renderJobs(view); } return; }
     if (action === 'background') { const job = jobs.get(target.dataset.pairId); if (job) { job.background = true; job.controller.abort(); renderJobs(view); report(view, '已转到后台等待，出图后会保存在这次聊天的历史中。'); } return; }
+    if (action === 'stop-job') {
+        // Only this page stops waiting. The provider keeps its own lock; if the
+        // picture still arrives it is saved to this chat's history, never lost.
+        const job = jobs.get(target.dataset.pairId); if (!job || job.scope !== view.scope || job.status !== 'running') return;
+        job.status = 'stopped'; job.background = true; job.controller.abort(); jobs.delete(job.id);
+        renderJobs(view); report(view, '已停止等待。如果之后出图，仍会收进历史。'); return;
+    }
     if (action === 'filter-favorite') { view.favoritesOnly = !view.favoritesOnly; view.historyPage = 1; target.setAttribute('aria-pressed', String(view.favoritesOnly)); return renderHistory(view); }
     if (action === 'history-prev' || action === 'history-next') {
         view.historyPage += action === 'history-next' ? 1 : -1;
@@ -7929,13 +8146,26 @@ function resolveComposition(view, settings) {
     view.lastComposition = pick.id;
     return { ...settings, composition: pick.id };
 }
+const REPEAT_SUBMIT_MS = 3000;
 async function startGeneration(view) {
     if (!current(view)) return;
-    let settings = await nai45ReadySettings(view, draft(view));
-    if (!settings || !current(view)) return;
-    const filtered = await chibiFilteredSettings(view, settings);
-    if (!filtered || !current(view)) return;
-    settings = resolveComposition(view, filtered);
+    const key = JSON.stringify(draft(view)), now = Date.now();
+    // A double tap on 生成 must not pay twice. A different setup may still run
+    // alongside; the same setup is ignored while being prepared or for ~3 s.
+    if (view.preparingSubmit === key || (view.lastSubmit?.key === key && now - view.lastSubmit.at < REPEAT_SUBMIT_MS)) {
+        report(view, '刚刚已经开始画这一对了，请稍等。'); return;
+    }
+    view.preparingSubmit = key;
+    let chosen = null;
+    try {
+        let settings = await nai45ReadySettings(view, draft(view));
+        if (!settings || !current(view)) return;
+        const filtered = await chibiFilteredSettings(view, settings);
+        if (!filtered || !current(view)) return;
+        chosen = resolveComposition(view, filtered);
+        view.lastSubmit = { key, at: Date.now() };
+    } finally { if (view.preparingSubmit === key) view.preparingSubmit = ''; }
+    const settings = chosen;
     const id = `pair-job-${++sequence}`, controller = new AbortController(), epoch = view.selectedEpoch;
     const job = { id, scope: view.scope, controller, background: false, status: 'running', label: '正在绘制 · ' + styleLabel(settings) + (presets.COMPOSITION_VARIANTS.find(row => row.id === settings.composition) ? ' · ' + presets.COMPOSITION_VARIANTS.find(row => row.id === settings.composition).label : '') };
     jobs.set(id, job); renderJobs(view); report(view, '');
@@ -7953,8 +8183,11 @@ async function startGeneration(view) {
             report(receiver, result.durable ? '新的一对已收进历史。' : '已出图，本机保存未确认。请先保存图片或导出备份。');
         }
     } catch (error) {
-        job.status = 'failed';
-        job.message = text.safeErrorSummary(error) || '这次绘制没有完成，请重试。';
+        // A job the user stopped waiting for leaves no failure card behind.
+        if (job.status !== 'stopped') {
+            job.status = 'failed';
+            job.message = text.safeErrorSummary(error) || '这次绘制没有完成，请重试。';
+        }
     } finally {
         if (job.status !== 'failed') jobs.delete(id);
         if (active?.scope === job.scope) renderJobs(active);
@@ -9509,7 +9742,7 @@ const core_text = __m_core_text_js;
 
 
 const AUDIO_CHANGED_EVENT = 'hearttrace:mv-audio-changed';
-const loaded = new Map();     // key → { url, name, streaming, sourceUrl }
+const loaded = new Map();     // key → { url, name, streaming, sourceUrl, unsaved? }
 const pending = new Map();    // key → AbortController
 const status = new Map();     // key → last status text
 const fill = new Map();       // key → full link to show in the input after a short link resolved
@@ -9592,7 +9825,8 @@ async function commit(context, songId, media) {
     const name = core_text.normalizeText(media.name, 80) || '链接歌曲';
     const artist = core_text.normalizeText(media.artist || '', 80), coverUrl = /^https:\/\//.test(media.coverUrl || '') ? media.coverUrl : '';
     const saved = await mv_media.putMedia(key, streaming ? null : media.blob, name, { sourceUrl: media.sourceUrl || '', artist, coverUrl, ...(streaming ? { mediaUrl: url } : {}) });
-    remember(key, { url, name, streaming, sourceUrl: media.sourceUrl || '', artist, coverUrl });
+    // Not saved on this device: this entry is the only copy, so teardown must not release it.
+    remember(key, { url, name, streaming, sourceUrl: media.sourceUrl || '', artist, coverUrl, ...(saved ? {} : { unsaved: true }) });
     announce(key);
     return { saved, streaming, name };
 }
@@ -9669,6 +9903,36 @@ function setSongNote(songId, text, context = core_context.getContext?.()) {
 
 function setSongPlayerRepaint(fn) { repaint = typeof fn === 'function' ? fn : null; }
 
+// Blob URLs of local song files stay alive until revoked. Teardown (overlay close, chat change,
+// runtime destroy) releases every track that no on-screen player is still using; the song page
+// reloads a released track from this device's media store the next time it renders. A track
+// the store could not keep stays until it is replaced, removed or the page unloads.
+function playerInUse(url) {
+    try {
+        for (const audio of globalThis.document?.querySelectorAll?.('[data-rmt-song-player]') || []) {
+            if (audio.isConnected !== false && audio.getAttribute?.('src') === url) return true;
+        }
+    } catch { /* No DOM: nothing can be playing. */ }
+    return false;
+}
+
+function releaseSongAudio() {
+    for (const [key, entry] of [...loaded]) {
+        if (entry.unsaved || playerInUse(entry.url)) continue;
+        remember(key, null);
+        fill.delete(key);
+    }
+}
+
+let releaseQueued = false;
+// Callers (overlay close) tear the page down synchronously right after this returns, so check
+// on-screen players once that has finished.
+function scheduleSongAudioRelease() {
+    if (releaseQueued) return;
+    releaseQueued = true;
+    queueMicrotask(() => { releaseQueued = false; releaseSongAudio(); });
+}
+
 const ICON_PLAY = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z"/></svg>';
 const ICON_PAUSE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h3.6v14H7zM13.4 5H17v14h-3.6z"/></svg>';
 const SONG_PLAYER_ICONS = { play: ICON_PLAY, pause: ICON_PAUSE };
@@ -9732,6 +9996,8 @@ __m_ui_songPlayer_js.currentSongAudio = currentSongAudio;
 __m_ui_songPlayer_js.cancelSongImport = cancelSongImport;
 __m_ui_songPlayer_js.setSongNote = setSongNote;
 __m_ui_songPlayer_js.setSongPlayerRepaint = setSongPlayerRepaint;
+__m_ui_songPlayer_js.releaseSongAudio = releaseSongAudio;
+__m_ui_songPlayer_js.scheduleSongAudioRelease = scheduleSongAudioRelease;
 __m_ui_songPlayer_js.formatSongTime = formatSongTime;
 __m_ui_songPlayer_js.songPlayerHtml = songPlayerHtml;
 __m_ui_songPlayer_js.AUDIO_CHANGED_EVENT = AUDIO_CHANGED_EVENT;
@@ -9869,6 +10135,7 @@ const styles = __m_ui_stickersCss_js;
 const esc = value => text.esc(value);
 const OWNER_TABS = ['char', 'user', 'pair', 'other'];
 const drafts = new Map(); // scope → unsaved drawing, kept while the page is closed
+const redrawing = new Set(); // saved sticker ids being redrawn one at a time
 let active = null, modal = null;
 
 function ensureStyles() {
@@ -10021,17 +10288,18 @@ function cutHtml(view) {
     const draft = drafts.get(view.scope);
     if (!draft) { view.page = 'home'; return homeHtml(view); }
     let body = '';
-    if (draft.status === 'running') body = `<div class="rmt-stk-progress" role="status"><span>${esc(draft.progress || '准备中…')}</span></div><p class="rmt-stk-muted">可以先离开这一页，画好后回到表情包首页确认。</p>`;
+    const missing = draft.failed?.length || 0;
+    if (draft.status === 'running') body = `<div class="rmt-stk-progress" role="status"><span>${esc(draft.progress || '准备中…')}</span></div><p class="rmt-stk-muted">可以先离开这一页，画好后回到表情包首页确认。</p><button type="button" data-stk-action="stop-draw">停止等待</button>`;
     else if (draft.status === 'failed' && !draft.sheets.length) body = `<div class="rmt-stk-progress" role="alert"><span>${esc(draft.message)}</span></div><div class="rmt-stk-two"><button type="button" data-stk-action="discard">放弃</button><button type="button" class="rmt-stk-primary" data-stk-action="redraw">再画一次</button></div>`;
     else {
-        const notes = draft.sheets.map((sheet, index) => sheet.mode === 'grid' ? `第 ${index + 1} 张没找到清楚的白边，已按 ${sheet.layout.rows}×${sheet.layout.cols} 格子切开。` : '').filter(Boolean);
-        const cells = draft.sheets.flatMap((sheet, s) => sheet.pieces.map((piece, p) => `<button type="button" class="rmt-stk-cell${piece.removed ? ' is-removed' : ''}" data-stk-piece="${s}:${p}"><img src="${esc(piece.preview)}" alt=""><span>${esc(sheet.items[p]?.name || '未命名')}</span>${piece.removed ? '<em>已去掉</em>' : ''}</button>`)).join('');
+        const notes = draft.sheets.map(sheet => sheet.mode === 'grid' ? `第 ${sheet.chunk + 1} 张没找到清楚的白边，已按 ${sheet.layout.rows}×${sheet.layout.cols} 格子切开。` : '').filter(Boolean);
+        const cells = draft.sheets.flatMap(sheet => sheet.pieces.map((piece, p) => `<button type="button" class="rmt-stk-cell${piece.removed ? ' is-removed' : ''}" data-stk-piece="${sheet.chunk}:${p}"><img src="${esc(piece.preview)}" alt=""><span>${esc(sheet.items[p]?.name || '未命名')}</span>${piece.removed ? '<em>已去掉</em>' : ''}</button>`)).join('');
         const kept = draft.sheets.reduce((sum, sheet) => sum + sheet.pieces.filter(piece => !piece.removed).length, 0);
-        body = `<div class="rmt-stk-sheets">${draft.sheets.map((sheet, index) => `<a href="${esc(sheet.url)}" target="_blank" rel="noopener noreferrer" aria-label="查看第 ${index + 1} 张原图"><img src="${esc(sheet.url)}" alt=""></a>`).join('')}</div>`
+        body = `<div class="rmt-stk-sheets">${draft.sheets.map(sheet => `<a href="${esc(sheet.url)}" target="_blank" rel="noopener noreferrer" aria-label="查看第 ${sheet.chunk + 1} 张原图"><img src="${esc(sheet.url)}" alt=""></a>`).join('')}</div>`
             + (notes.length ? `<p class="rmt-stk-muted">${esc(notes.join(' '))}点单个表情可以单张重画。</p>` : '<p class="rmt-stk-muted">点单个表情可以改名、配字、单张重画。</p>')
             + (draft.status === 'failed' ? `<p class="rmt-stk-warn">${esc(draft.message)}</p>` : '')
             + `<section class="rmt-stk-grid">${cells}</section>`
-            + `<div class="rmt-stk-two"><button type="button" data-stk-action="regrid">按格子重切</button><button type="button" data-stk-action="redraw">整张重画</button><button type="button" data-stk-action="discard">放弃这一组</button><button type="button" class="rmt-stk-primary" data-stk-action="save-draft"${kept ? '' : ' disabled'}>保存这 ${kept} 个</button></div>`;
+            + `<div class="rmt-stk-two">${missing ? `<button type="button" class="rmt-stk-primary" data-stk-action="redraw-missing"${draft.saving ? ' disabled' : ''}>只补画没画好的 ${missing} 张</button>` : ''}<button type="button" data-stk-action="regrid"${draft.saving ? ' disabled' : ''}>按格子重切</button><button type="button" data-stk-action="redraw"${draft.saving ? ' disabled' : ''}>整张重画</button><button type="button" data-stk-action="discard"${draft.saving ? ' disabled' : ''}>放弃这一组</button><button type="button" class="rmt-stk-primary" data-stk-action="save-draft"${kept && !draft.saving ? '' : ' disabled'}>${draft.saving ? '正在保存…' : `保存这 ${kept} 个`}</button></div>`;
     }
     return `<main class="rmt-stk">${head('切好的表情', `${label(draft.owner)} · ${stickers.stickerStyleLabel(draft.styleId)}`)}${body}</main>`;
 }
@@ -10091,23 +10359,89 @@ function progressText(update) {
     return `${sheet}${update?.providerLabel ? update.providerLabel + ' · ' : ''}${phase}`;
 }
 function repaintDraft(scope) { if (active?.scope === scope && current(active) && (active.page === 'cut' || active.page === 'home')) paint(active); }
-async function runDraw(view, draft) {
-    draft.status = 'running'; draft.progress = '准备中…'; draft.message = '';
-    for (const sheet of draft.sheets) for (const piece of sheet.pieces) URL.revokeObjectURL(piece.preview);
-    draft.sheets = [];
+function revokeSheets(sheets) { for (const sheet of sheets || []) for (const piece of sheet.pieces) URL.revokeObjectURL(piece.preview); }
+function sheetNumbers(failed) { return failed.map(row => row.chunk + 1).sort((a, b) => a - b).join('、'); }
+const SETTLING_MESSAGE = '上一组还在收尾，画好的会自动留下，稍等几秒再补画。';
+// A provider that never answers must not block 补画 forever.
+const SETTLE_CAP_MS = 10 * 60 * 1000;
+function clearSettling(scope) { if (active?.scope === scope && active.message === SETTLING_MESSAGE) active.message = ''; }
+function sheetChunks(draft) { return new Set(draft.sheets.map(sheet => sheet.chunk)); }
+// A sheet joins the draft the moment it is cut, replacing an older sheet of the same chunk.
+function mergeSheet(draft, sheet) {
+    revokeSheets(draft.sheets.filter(row => row.chunk === sheet.chunk && row !== sheet));
+    draft.sheets = [...draft.sheets.filter(row => row.chunk !== sheet.chunk), sheet].sort((a, b) => a.chunk - b.chunk);
+    draft.failed = (draft.failed || []).filter(row => row.chunk !== sheet.chunk);
+}
+function stoppedMessage(draft) {
+    return draft.sheets.length ? `已停止等待。画好的 ${draft.sheets.length} 张已保留，正在画的那张好了也会留下。` : '已停止等待，这一组还没有画好的。正在画的那张好了会留下。';
+}
+// missingOnly: draw only the sheets that failed last time; finished sheets stay.
+async function runDraw(view, draft, { missingOnly = false } = {}) {
+    if (draft.status === 'running' || draft.saving) return;
+    // A stopped run is still finishing: its sheet may yet arrive, so a new run
+    // now would pay for that sheet twice.
+    if (draft.run && Date.now() - (draft.run.stoppedAt || 0) < SETTLE_CAP_MS) return report(view, SETTLING_MESSAGE);
+    const all = stickers.chunkItems(draft.owner, draft.items).map((items, index) => ({ index, items }));
+    const have = sheetChunks(draft);
+    const retry = missingOnly && draft.failed?.length
+        ? draft.failed.filter(row => !have.has(row.chunk)).map(row => ({ index: row.chunk, items: row.items, url: row.url })) : null;
+    if (!retry) { revokeSheets(draft.sheets); draft.sheets = []; }
+    const chunks = retry || all, controller = new AbortController();
+    draft.status = 'running'; draft.progress = '准备中…'; draft.message = ''; draft.failed = [];
+    const run = { controller, chunks, stopped: false, stoppedAt: 0 };
+    draft.run = run;
+    clearSettling(draft.scope);
     repaintDraft(draft.scope);
+    const kept = () => drafts.get(draft.scope) === draft, live = () => kept() && draft.run === run;
+    let outcome;
     try {
-        draft.sheets = await stickers.drawStickerSet({ owner: draft.owner, styleId: draft.styleId, items: draft.items, people: draft.people,
-            context: core_context.currentCharacterGuard(), onProgress: update => {
+        outcome = await stickers.drawStickerSheets({ owner: draft.owner, styleId: draft.styleId, chunks, total: all.length, people: draft.people,
+            context: core_context.currentCharacterGuard(), signal: controller.signal, setKey: draft.id, onProgress: update => {
+                if (!live() || controller.signal.aborted) return;
                 draft.progress = progressText(update);
                 const node = active?.scope === draft.scope && active.page === 'cut' ? active.root.querySelector('.rmt-stk-progress span') : null;
                 if (node) node.textContent = draft.progress;
+            }, onSheet: sheet => {
+                // Discarded meanwhile: release the previews this run made.
+                if (!kept()) { revokeSheets([sheet]); return; }
+                // Kept even when it arrives after 停止等待: it is already paid for.
+                mergeSheet(draft, sheet);
+                if (run.stopped && live()) draft.message = stoppedMessage(draft);
+                if (run.stopped) repaintDraft(draft.scope);
             } });
-        draft.status = 'done';
     } catch (error) {
-        draft.status = 'failed';
-        draft.message = text.safeErrorSummary(error) || '这次没有画完，可以再试一次。';
+        const message = text.safeErrorSummary(error) || '这次没有画完，可以再试一次。';
+        outcome = { sheets: [], failed: chunks.map(row => ({ chunk: row.index, items: row.items, url: row.url || '', message })) };
     }
+    if (!live()) return;
+    draft.run = null;
+    finishDraw(draft, outcome, all.length, run.stopped);
+    clearSettling(draft.scope);
+    repaintDraft(draft.scope);
+}
+function finishDraw(draft, outcome, total, stopped) {
+    // Sheets already joined the draft as they were cut.
+    for (const sheet of outcome.sheets) if (!draft.sheets.includes(sheet)) mergeSheet(draft, sheet);
+    const have = sheetChunks(draft);
+    draft.failed = outcome.failed.filter(row => !have.has(row.chunk));
+    if (!draft.failed.length) { draft.status = 'done'; draft.message = ''; return; }
+    draft.status = 'failed';
+    const first = draft.failed[0]?.message || '这一张没有画好。';
+    draft.message = !draft.sheets.length ? (stopped ? '已停止等待，这一组还没有画好的。' : first)
+        : `${total} 张里第 ${sheetNumbers(draft.failed)} 张没画好${stopped ? '（已停止等待）' : `：${first}`}。画好的已保留，可以只补画缺的。`;
+}
+// Stop waiting: the page is usable again right away. The sheet being drawn or
+// cut keeps going and joins the draft when it is done; until that run settles,
+// runDraw refuses a new one so the same sheet is never paid for twice.
+function stopDraw(view) {
+    const draft = drafts.get(view.scope), run = draft?.run;
+    if (!draft || draft.status !== 'running' || !run) return;
+    run.stopped = true; run.stoppedAt = Date.now();
+    run.controller.abort();
+    draft.status = 'failed';
+    const have = sheetChunks(draft);
+    draft.failed = run.chunks.filter(row => !have.has(row.index)).map(row => ({ chunk: row.index, items: row.items, url: row.url || '', message: '已停止等待这一张。' }));
+    draft.message = stoppedMessage(draft);
     repaintDraft(draft.scope);
 }
 async function startDraw(view) {
@@ -10120,10 +10454,10 @@ async function startDraw(view) {
     const people = await chibiFilteredPeople(view, idea.owner, idea.people.map(row => ({ ...row })));
     if (!people) return;
     discardDraft(view.scope);
-    const draft = { scope: view.scope, owner: idea.owner, styleId: idea.styleId, idea: idea.text, items, people, sheets: [], status: 'running' };
+    const draft = { id: store.newStickerId('set'), scope: view.scope, owner: idea.owner, styleId: idea.styleId, idea: idea.text, items, people, sheets: [], failed: [], status: 'idle' };
     drafts.set(view.scope, draft);
-    go(view, 'cut');
     void runDraw(view, draft);
+    go(view, 'cut');
 }
 // Same Q-version filter as the couple avatars: only the people this set draws.
 async function chibiFilteredPeople(view, owner, people) {
@@ -10154,11 +10488,12 @@ async function chibiFilteredPeople(view, owner, people) {
 }
 function discardDraft(scope) {
     const draft = drafts.get(scope); if (!draft) return;
-    for (const sheet of draft.sheets) for (const piece of sheet.pieces) URL.revokeObjectURL(piece.preview);
+    draft.run?.controller.abort();
+    revokeSheets(draft.sheets);
     drafts.delete(scope);
 }
 async function regrid(view) {
-    const draft = drafts.get(view.scope); if (!draft || draft.status === 'running') return;
+    const draft = drafts.get(view.scope); if (!draft || draft.status === 'running' || draft.saving) return;
     report(view, '正在按格子重切…');
     for (const sheet of draft.sheets) {
         const cut = await stickers.cutSheet(sheet.url, sheet.layout, { forceGrid: true });
@@ -10168,25 +10503,41 @@ async function regrid(view) {
     paint(view); report(view, '已按格子重新切开。');
 }
 async function saveDraft(view) {
-    const draft = drafts.get(view.scope); if (!draft || draft.status === 'running') return;
+    const draft = drafts.get(view.scope); if (!draft || draft.status === 'running' || draft.saving) return;
     const ctx = core_context.currentCharacterGuard(), list = [];
-    report(view, '正在存进酒馆图片文件夹…');
-    for (const sheet of draft.sheets) for (let i = 0; i < sheet.pieces.length; i++) {
-        const piece = sheet.pieces[i], item = sheet.items[i];
-        if (piece.removed || !item) continue;
-        const saved = await stickers.saveStickerPicture({ blob: piece.blob, caption: item.caption }, ctx);
-        list.push({ id: store.newStickerId(), name: item.name, meaning: item.meaning, caption: item.caption || '', prompt: item.prompt, ...saved });
-        report(view, `正在存进酒馆图片文件夹… ${list.length}`);
+    if (store.stickerScope(ctx) !== draft.scope) return report(view, '现在打开的不是这组表情的角色，没有保存。回到原来的角色再保存。');
+    if (draft.sheets.some(sheet => sheet.pieces.some(piece => piece.redrawing))) return report(view, '还有一张在重画，等它画完再保存。');
+    draft.saving = true; paint(view);
+    try {
+        report(view, '正在存进酒馆图片文件夹…');
+        for (const sheet of draft.sheets) for (let i = 0; i < sheet.pieces.length; i++) {
+            const piece = sheet.pieces[i], item = sheet.items[i];
+            if (piece.removed || !item) continue;
+            // A retry after a failed save reuses pictures already uploaded.
+            const caption = item.caption || '';
+            const saved = piece.saved?.caption === caption ? piece.saved.result
+                : await stickers.saveStickerPicture({ blob: piece.blob, caption }, ctx);
+            piece.saved = { caption, result: saved };
+            list.push({ id: store.newStickerId(), name: item.name, meaning: item.meaning, caption, prompt: item.prompt, ...saved });
+            report(view, `正在存进酒馆图片文件夹… ${list.length}`);
+        }
+        if (!list.length) return report(view, '没有要保存的表情。');
+        if (drafts.get(view.scope) !== draft) return;
+        if (store.stickerScope(hostContext()) !== draft.scope) {
+            return report(view, '保存途中换了角色，这组表情没有写进去。回到原来的角色再点保存，不会重复上传。');
+        }
+        const current = store.readStickerData(ctx);
+        const title = store.cleanLine(draft.idea, 10) || `${label(draft.owner)}的一组`;
+        const pack = { id: store.newStickerId('pack'), owner: draft.owner, title, style: draft.styleId, idea: draft.idea, createdAt: Date.now(), cover: list[0].id, people: draft.people, stickers: list };
+        await stickers.saveStickerData({ ...current, packs: [...current.packs, pack] }, ctx);
+        discardDraft(view.scope);
+        const saved = store.readStickerData(ctx).packs.find(row => row.id === pack.id);
+        go(view, 'pack', { packId: pack.id, tab: draft.owner });
+        report(view, `已保存 ${saved?.stickers.length || list.length} 个。${stickers.loreState(store.readStickerData(ctx), ctx).written ? '世界书已同步。' : '回首页点「世界书」写进去，角色就知道怎么用了。'}`);
+    } finally {
+        draft.saving = false;
+        if (drafts.get(view.scope) === draft && view.page === 'cut') paint(view);
     }
-    if (!list.length) return report(view, '没有要保存的表情。');
-    const current = data();
-    const title = store.cleanLine(draft.idea, 10) || `${label(draft.owner)}的一组`;
-    const pack = { id: store.newStickerId('pack'), owner: draft.owner, title, style: draft.styleId, idea: draft.idea, createdAt: Date.now(), cover: list[0].id, people: draft.people, stickers: list };
-    await stickers.saveStickerData({ ...current, packs: [...current.packs, pack] }, ctx);
-    discardDraft(view.scope);
-    const saved = data().packs.find(row => row.id === pack.id);
-    go(view, 'pack', { packId: pack.id, tab: draft.owner });
-    report(view, `已保存 ${saved?.stickers.length || list.length} 个。${stickers.loreState(data(), ctx).written ? '世界书已同步。' : '回首页点「世界书」写进去，角色就知道怎么用了。'}`);
 }
 
 function findSticker(id) {
@@ -10215,6 +10566,8 @@ function stickerDialog(view, id) {
         + `<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" data-stk-replace-file hidden>`);
     if (!m) return;
     const status = value => { const node = m.body.querySelector('[data-stk-dialog-status]'); if (node) node.textContent = value || ''; };
+    const setRedrawButton = busy => { const node = m.body.querySelector('[data-stk-do="redraw"]'); if (node) { node.disabled = busy; node.textContent = busy ? '正在重画…' : '单张重画'; } };
+    if (redrawing.has(id)) { setRedrawButton(true); status('这一张正在重画…'); }
     const reopen = () => { if (modal === m) { paint(view); stickerDialog(view, id); } };
     const run = work => Promise.resolve().then(work).catch(error => { if (modal === m) status(text.safeErrorSummary(error) || '这次没有完成，请重试。'); });
     m.body.addEventListener('change', event => {
@@ -10256,17 +10609,25 @@ function stickerDialog(view, id) {
                 closeStickerDialog(); paint(view); return report(view, `已删掉「${now.sticker.name}」。`);
             }
             if (action === 'redraw') {
-                status('正在单张重画…');
-                const ctx = core_context.currentCharacterGuard();
-                // Redraw with the appearance this set was drawn with, so it still matches.
-                const people = now.pack.people?.length === 2 ? now.pack.people : await stickers.stickerPeople(ctx);
-                const piece = await stickers.drawSingleSticker({ owner: now.pack.owner, styleId: now.pack.style || 'chibi-dumpling',
-                    item: { name: now.sticker.name, prompt: now.sticker.prompt || now.sticker.meaning || now.sticker.name }, people, context: ctx,
-                    onProgress: update => { if (modal === m) status(progressText(update)); } });
-                status('正在保存…');
-                const saved = await stickers.saveStickerPicture({ blob: piece.blob, caption: now.sticker.caption }, ctx);
-                URL.revokeObjectURL(piece.preview);
-                await updateSticker(view, id, saved);
+                if (redrawing.has(id)) return status('这一张正在重画，请等它画完。');
+                redrawing.add(id); setRedrawButton(true);
+                let piece = null;
+                try {
+                    status('正在单张重画…');
+                    const ctx = core_context.currentCharacterGuard();
+                    // Redraw with the appearance this set was drawn with, so it still matches.
+                    const people = now.pack.people?.length === 2 ? now.pack.people : await stickers.stickerPeople(ctx);
+                    piece = await stickers.drawSingleSticker({ owner: now.pack.owner, styleId: now.pack.style || 'chibi-dumpling',
+                        item: { name: now.sticker.name, prompt: now.sticker.prompt || now.sticker.meaning || now.sticker.name }, people, context: ctx,
+                        targetKey: `single:${id}`, onProgress: update => { if (modal === m) status(progressText(update)); } });
+                    status('正在保存…');
+                    const saved = await stickers.saveStickerPicture({ blob: piece.blob, caption: now.sticker.caption }, ctx);
+                    if (store.stickerScope(hostContext()) !== store.stickerScope(ctx)) throw text.safeUserError('重画途中换了角色，新图没有替换。', 'RMT_STICKER_SCOPE');
+                    await updateSticker(view, id, saved);
+                } finally {
+                    if (piece) URL.revokeObjectURL(piece.preview);
+                    redrawing.delete(id); setRedrawButton(false);
+                }
                 return reopen();
             }
         });
@@ -10286,7 +10647,7 @@ function stickerDialog(view, id) {
 }
 function pieceDialog(view, key) {
     const draft = drafts.get(view.scope); if (!draft || draft.status === 'running') return;
-    const [s, p] = key.split(':').map(Number), sheet = draft.sheets[s], piece = sheet?.pieces[p], item = sheet?.items[p];
+    const [chunk, p] = key.split(':').map(Number), sheet = draft.sheets.find(row => row.chunk === chunk), piece = sheet?.pieces[p], item = sheet?.items[p];
     if (!piece || !item) return;
     const m = dialog(view, item.name || '未命名', `<div class="rmt-stk-preview"><img src="${esc(piece.preview)}" alt=""></div>`
         + `<label class="rmt-stk-field">名字<input data-stk-draft="name" maxlength="8" value="${esc(item.name)}"></label>`
@@ -10301,17 +10662,24 @@ function pieceDialog(view, key) {
         item[field] = field === 'name' ? store.cleanStickerName(event.target.value, 8) || item.name : event.target.value;
     });
     m.cleanup = () => { if (active === view && view.page === 'cut') queueMicrotask(() => paint(view)); };
+    const status = value => { const node = m.body.querySelector('[data-stk-dialog-status]'); if (node) node.textContent = value || ''; };
+    const setBusy = busy => { const node = m.body.querySelector('[data-stk-do="redraw"]'); if (node) { node.disabled = busy; node.textContent = busy ? '正在重画…' : '单张重画'; } };
+    if (piece.redrawing) { setBusy(true); status('这一张正在重画…'); }
     m.body.addEventListener('click', event => {
         const action = event.target.closest('[data-stk-do]')?.dataset.stkDo; if (!action) return;
-        const status = value => { const node = m.body.querySelector('[data-stk-dialog-status]'); if (node) node.textContent = value || ''; };
-        if (action === 'toggle') { piece.removed = !piece.removed; closeStickerDialog(); return; }
+        if (action === 'toggle') { if (!piece.redrawing) { piece.removed = !piece.removed; closeStickerDialog(); } return; }
+        if (piece.redrawing || draft.saving) return status(piece.redrawing ? '这一张正在重画，请等它画完。' : '正在保存，请稍等。');
+        piece.redrawing = true; setBusy(true);
         status('正在单张重画…');
         void stickers.drawSingleSticker({ owner: draft.owner, styleId: draft.styleId, item, people: draft.people, context: core_context.currentCharacterGuard(),
-            onProgress: update => { if (modal === m) status(progressText(update)); } }).then(next => {
+            targetKey: `${draft.id}:piece:${sheet.chunk}:${p}`, onProgress: update => { if (modal === m) status(progressText(update)); } }).then(next => {
+            // The set may have been redrawn, saved or discarded meanwhile.
+            if (drafts.get(draft.scope) !== draft || !draft.sheets.includes(sheet) || sheet.pieces[p] !== piece) { URL.revokeObjectURL(next.preview); return; }
             URL.revokeObjectURL(piece.preview);
-            piece.blob = next.blob; piece.preview = next.preview; piece.removed = false;
-            if (modal === m) { closeStickerDialog({ restoreFocus: false }); pieceDialog(view, key); }
-        }).catch(error => { if (modal === m) status(text.safeErrorSummary(error) || '这次没有画好，请重试。'); });
+            piece.blob = next.blob; piece.preview = next.preview; piece.removed = false; piece.saved = null;
+            if (modal === m) { piece.redrawing = false; closeStickerDialog({ restoreFocus: false }); pieceDialog(view, key); }
+        }).catch(error => { if (modal === m) status(text.safeErrorSummary(error) || '这次没有画好，请重试。'); })
+            .finally(() => { piece.redrawing = false; if (modal === m) setBusy(false); });
     });
 }
 async function importFiles(view, files, packId = '') {
@@ -10326,7 +10694,10 @@ async function importFiles(view, files, packId = '') {
         } catch (error) { report(view, text.safeErrorSummary(error)); }
     }
     if (!added.length) return;
-    const current = data();
+    if (store.stickerScope(hostContext()) !== store.stickerScope(ctx)) {
+        return report(view, `导入途中换了角色，${added.length} 张图片已存进酒馆图片文件夹，但没有加进表情包。回到原来的角色再导入。`);
+    }
+    const current = store.readStickerData(ctx);
     let packs = current.packs, target = packId;
     if (packId && packs.some(pack => pack.id === packId)) packs = packs.map(pack => pack.id === packId ? { ...pack, stickers: [...pack.stickers, ...added] } : pack);
     else { target = store.newStickerId('pack'); packs = [...packs, { id: target, owner: 'other', title: '导入的表情', createdAt: Date.now(), cover: added[0].id, stickers: added }]; }
@@ -10364,7 +10735,12 @@ async function handleAction(view, action, target) {
     if (action === 'remove-item') { readIdeaForm(view); view.idea.items.splice(Number(target.dataset.stkIndex), 1); return paint(view); }
     if (action === 'draw') return startDraw(view);
     if (action === 'regrid') return regrid(view);
-    if (action === 'redraw') { const draft = drafts.get(view.scope); if (draft && draft.status !== 'running') void runDraw(view, draft); return; }
+    if (action === 'redraw' || action === 'redraw-missing') {
+        const draft = drafts.get(view.scope);
+        if (draft && draft.status !== 'running') void runDraw(view, draft, { missingOnly: action === 'redraw-missing' });
+        return;
+    }
+    if (action === 'stop-draw') return stopDraw(view);
     if (action === 'discard') {
         if (!await confirmDialog(view, '放弃这一组', '切好的表情还没保存，放弃后不会留下。', '放弃')) return;
         discardDraft(view.scope); return go(view, 'home');
@@ -10951,44 +11327,98 @@ function inputHash(value) {
     return digest.sha256Bytes(new TextEncoder().encode(JSON.stringify(value)));
 }
 
+// Verified task inputs are remembered per object, so the same in-page object is
+// not re-hashed before every chunk. Data read back from storage or chat metadata
+// is always a fresh object and is always verified in full.
+const verifiedTasks = new WeakMap();
+const compactedInputs = new WeakSet();
+function markVerifiedTaskInput(task) {
+    if (task && typeof task === 'object') verifiedTasks.set(task, { data: task.data, digest: task.digest });
+}
+function taskInputDigestValid(task) {
+    const seen = verifiedTasks.get(task);
+    if (seen && seen.data === task.data && seen.digest === task.digest) return true;
+    if (task.digest !== inputHash(task.data)) return false;
+    markVerifiedTaskInput(task);
+    return true;
+}
+function withoutFields(value, fields) {
+    const copy = { ...value };
+    for (const field of fields) delete copy[field];
+    return copy;
+}
+
 function compactArchiveInputs(inputs) {
     if (!inputs?.batchVersion || !inputs.progress || !inputs.taskInputV1) return inputs;
+    if (compactedInputs.has(inputs)) return inputs;
     const task = inputs.taskInputV1;
-    if (task.version !== 1 || !task.data || task.digest !== inputHash(task.data)) {
+    if (task.version !== 1 || !task.data || !taskInputDigestValid(task)) {
         throw text.safeUserError('原任务资料未通过完整性校验，原草稿保留。', 'RMT_RECOVERY_DATA');
     }
     if (task.data.operation !== 'import') return inputs;
-    const result = structuredClone(inputs), data = result.taskInputV1.data;
+    // Shallow projection: only the stripped paths are new objects. Callers that
+    // keep the result (draft rows) clone it themselves before storing.
+    const data = { ...task.data };
+    let stripped = false;
     // Only identity scalars are consumed from this second snapshot. Requests
     // and evidence continue to use data.snapshot.messages without any editing.
     if (data.snapshotForIdentity) {
-        data.snapshotForIdentity = { ...data.snapshotForIdentity };
-        delete data.snapshotForIdentity.messages;
-        delete data.snapshotForIdentity.incrementalMessages;
+        stripped ||= ['messages', 'incrementalMessages'].some(field => Object.hasOwn(data.snapshotForIdentity, field));
+        data.snapshotForIdentity = withoutFields(data.snapshotForIdentity, ['messages', 'incrementalMessages']);
     }
     // A manifest-driven import resolves its exact ranges from messages.
     if (data.snapshot) {
-        data.snapshot = { ...data.snapshot };
-        delete data.snapshot.incrementalMessages;
+        stripped ||= Object.hasOwn(data.snapshot, 'incrementalMessages');
+        data.snapshot = withoutFields(data.snapshot, ['incrementalMessages']);
     }
+    const result = { ...inputs, taskInputV1: { ...task, data } };
+    let changed = stripped;
     for (const key of ['external', 'contextEnvelope', 'inputOwner', 'identity']) {
         if (Object.hasOwn(data, key) && Object.hasOwn(result, key)
-            && JSON.stringify(result[key]) === JSON.stringify(data[key])) delete result[key];
+            && (result[key] === data[key] || JSON.stringify(result[key]) === JSON.stringify(data[key]))) { delete result[key]; changed = true; }
     }
     // Do not hide a different embedded source by comparing its digest alone.
-    if (JSON.stringify(inputs.progress.taskInputV1) === JSON.stringify(task)) delete result.progress.taskInputV1;
-    result.taskInputV1.digest = inputHash(data);
+    const embedded = inputs.progress.taskInputV1;
+    if (embedded !== undefined && (embedded === task || JSON.stringify(embedded) === JSON.stringify(task))) {
+        result.progress = withoutFields(inputs.progress, ['taskInputV1']);
+        changed = true;
+    }
+    if (!changed) { compactedInputs.add(inputs); return inputs; }
+    // Unchanged data keeps its verified digest; stripped data gets the same
+    // digest the old clone-then-rehash produced.
+    if (stripped) result.taskInputV1.digest = inputHash(data);
+    markVerifiedTaskInput(result.taskInputV1);
+    compactedInputs.add(result);
     return result;
 }
 
-function compactArchiveEntry(entry) {
+// Old progress parked by an explicit restart is a record only; nothing resumes it.
+// Keep its batch list, identity and pending results, never another chat copy.
+const MAX_PAUSED_PROGRESS = 5;
+function compactPausedProgress(progress) {
+    if (!progress || typeof progress !== 'object') return progress;
+    const copy = { ...progress };
+    for (const key of ['taskInputV1', 'taskInputBinding', 'contextEnvelope', 'worldInfo', 'fallbackRecords']) delete copy[key];
+    return copy;
+}
+// The cap only drops plain records. An entry still holding validated results
+// waiting for capacity (capacityPending) is paid content and is always kept.
+function compactPausedProgressList(list) {
+    const rows = Array.isArray(list) ? list : [];
+    const holdsPending = row => Array.isArray(row?.capacityPending) && row.capacityPending.length > 0;
+    let plain = rows.filter(row => !holdsPending(row)).length;
+    return rows.filter(row => holdsPending(row) || plain-- <= MAX_PAUSED_PROGRESS).map(compactPausedProgress);
+}
+
+function compactArchiveEntry(entry, { inputsVerified = false } = {}) {
     if (!entry?.inputs) return entry;
     const expected = entry.journal?.contentSnapshot?.archiveInputsHash;
-    if (expected && expected !== inputHash(entry.inputs)) {
+    // inputsVerified: the caller has just checked this exact hash itself.
+    if (expected && !inputsVerified && expected !== inputHash(entry.inputs)) {
         throw text.safeUserError('原草稿资料与记录不一致，未改动原记录。', 'RMT_RECOVERY_DATA');
     }
     const inputs = compactArchiveInputs(entry.inputs);
-    if (inputs === entry.inputs || JSON.stringify(inputs) === JSON.stringify(entry.inputs)) return entry;
+    if (inputs === entry.inputs) return entry;
     const next = { ...entry, inputs, journal: structuredClone(entry.journal) };
     // A code-owned, checked projection only. Request hashes/raw replies stay exact.
     if (expected) next.journal.contentSnapshot.archiveInputsHash = inputHash(inputs);
@@ -10996,8 +11426,14 @@ function compactArchiveEntry(entry) {
 }
 
 __m_archive_draftInputs_js.inputHash = inputHash;
+__m_archive_draftInputs_js.markVerifiedTaskInput = markVerifiedTaskInput;
+__m_archive_draftInputs_js.taskInputDigestValid = taskInputDigestValid;
+__m_archive_draftInputs_js.withoutFields = withoutFields;
 __m_archive_draftInputs_js.compactArchiveInputs = compactArchiveInputs;
+__m_archive_draftInputs_js.compactPausedProgress = compactPausedProgress;
+__m_archive_draftInputs_js.compactPausedProgressList = compactPausedProgressList;
 __m_archive_draftInputs_js.compactArchiveEntry = compactArchiveEntry;
+__m_archive_draftInputs_js.MAX_PAUSED_PROGRESS = MAX_PAUSED_PROGRESS;
 }
 
 function __init_archive_floorWindowCheck_js() {
@@ -11078,6 +11514,7 @@ function __init_archive_importRecovery_js() {
 // MODULE: archive/importRecovery.js
 const source_read = __m_archive_sourceReadGuard_js;
 const draft_inputs = __m_archive_draftInputs_js;
+const archive_batches = __m_archive_importBatches_js;
 const local_store = __m_core_localRecoveryStore_js;
 const constants = __m_core_constants_js;
 const recovery = __m_generation_recovery_js;
@@ -11085,6 +11522,7 @@ const client = __m_generation_client_js;
 const text = __m_core_text_js;
 const taskTrace = __m_core_taskTrace_js;
 const digest = __m_core_digest_js;
+
 
 
 
@@ -11109,10 +11547,17 @@ const scopes = new Map();
 const lanes = new Map();
 const loaded = new Set();
 const hydrationLanes = new Map();
-function inputsDigest(inputs) { return digest.sha256Bytes(new TextEncoder().encode(JSON.stringify(inputs))); }
-function inputsMatchJournal(entry) {
+// Draft inputs are replaced, never edited in place, so one hash per object is enough.
+const inputDigests = new WeakMap();
+function inputsDigest(inputs, { fresh = false } = {}) {
+    if (!fresh && inputs && typeof inputs === 'object' && inputDigests.has(inputs)) return inputDigests.get(inputs);
+    const value = digest.sha256Bytes(new TextEncoder().encode(JSON.stringify(inputs)));
+    if (inputs && typeof inputs === 'object') inputDigests.set(inputs, value);
+    return value;
+}
+function inputsMatchJournal(entry, fresh = false) {
     const expected = entry?.journal?.contentSnapshot?.archiveInputsHash;
-    return !expected || (!!entry.inputs && expected === inputsDigest(entry.inputs));
+    return !expected || (!!entry.inputs && expected === inputsDigest(entry.inputs, { fresh }));
 }
 function storageFailure(phase = 'save', cause = null) {
     if (phase === 'read') return text.safeUserError('本机草稿读取未完成，不能认定没有记录；原记录未修改，也没有请求模型。请重新读取，不要清除数据。', 'RMT_ARCHIVE_DRAFT_READ');
@@ -11125,7 +11570,7 @@ function storageFailure(phase = 'save', cause = null) {
         return text.safeUserError('这批草稿比较大，这台设备一直没存完，本次没有确认保存；已停止后续模型请求，成功分段仍在当前页面，原记录未修改。可以关掉其他占内存的应用后再点“保存本页草稿（不生成）”，或先导出成果；保存成功前不要刷新。', 'RMT_ARCHIVE_DRAFT_STORAGE');
     }
     if (cause?.code === 'RMT_LOCAL_CAS') {
-        return text.safeUserError('本机草稿正被另一页面或操作写入，本次没有覆盖任何记录；已停止后续模型请求，成功分段仍在当前页面。请重新打开本页后重试保存。', 'RMT_ARCHIVE_DRAFT_STORAGE');
+        return text.safeUserError('本机草稿正被另一页面或操作写入，本次没有覆盖任何记录；已停止后续模型请求，成功分段仍在当前页面。请先导出本页成果，再点“重新读取本机草稿”。', 'RMT_ARCHIVE_DRAFT_STORAGE');
     }
     return text.safeUserError('本批草稿尚未确认保存到本机；请点“保存本页草稿（不生成）”重试。之前已保存的档案仍保留；若仍失败，请先导出，保存成功前不要刷新。', 'RMT_ARCHIVE_DRAFT_STORAGE');
 }
@@ -11143,6 +11588,64 @@ function confirmCounts(state, rows) {
     state.completed = new Map(rows.map(([id, entry]) => [id, recovery.generationRecoverySummary(entry.journal)?.completed || 0]));
     state.confirmedTasks = new Map(rows.map(([id, entry]) => [id, JSON.stringify([entry.sourceHash, entry.journal?.createdAt])]));
 }
+// What the last acknowledged save (or read) holds for each page row, by object
+// identity. A later in-page change replaces the journal/result or moves the stage.
+const SIGNATURE_FIELDS = ['journal', 'stage', 'committedRevision', 'archiveResult', 'profileResult', 'profilePending', 'inputsTrimmed', 'draftId'];
+function rowSignature(entry) { return SIGNATURE_FIELDS.map(field => entry?.[field] ?? null); }
+function confirmRows(state, rows) { state.confirmedRows = new Map(rows.map(([id, entry]) => [id, rowSignature(entry)])); }
+function unchangedSinceConfirmed(state, id, entry) {
+    const saved = state?.confirmedRows?.get(id);
+    return !!saved && !entry?.active && rowSignature(entry).every((value, index) => value === saved[index]);
+}
+function rowStateDiffers(a, b) {
+    return a.stage !== b.stage || (a.committedRevision || '') !== (b.committedRevision || '') || !!a.profilePending !== !!b.profilePending
+        || JSON.stringify(a.archiveResult ?? null) !== JSON.stringify(b.archiveResult ?? null)
+        || JSON.stringify(a.profileResult ?? null) !== JSON.stringify(b.profileResult ?? null);
+}
+// Paused drafts beyond the newest few, and paused drafts nothing can resume,
+// keep their received segments but not the full task input (whole chat copy)
+// or base archive. They stay readable and exportable; only continuing them stops.
+// A draft holding complete chunks not yet in any archive is never trimmed: its
+// task input is what lets the user continue it or save those chunks.
+const MAX_RESUMABLE_PAUSED = 3;
+function holdsUnsavedChunks(entry) {
+    return entry.stage === 'segments' && !!entry.journal?.segments?.some(row => /^(chat|external):\d+$/.test(row.slot) && row.state === 'complete');
+}
+function pausedResumable(entry) {
+    if (entry.inputsTrimmed) return false;
+    if (entry.stage === 'segments' || entry.stage === 'profile-only') return true;
+    return entry.stage === 'archive-result' && (entry.profilePending === true
+        || archive_batches.hasPendingBatches(entry.archiveResult?.memoryBank?.[archive_batches.IMPORT_PROGRESS_KEY]));
+}
+function trimmedEntry(entry) {
+    if (!entry?.inputs || entry.inputsTrimmed) return entry;
+    const inputs = {};
+    for (const field of ['batchVersion', 'identity', 'inputOwner', 'participantRoster']) if (Object.hasOwn(entry.inputs, field)) inputs[field] = entry.inputs[field];
+    if (entry.inputs.progress) inputs.progress = draft_inputs.compactPausedProgress(entry.inputs.progress);
+    const next = { ...entry, inputs, inputsTrimmed: true };
+    const snapshot = entry.journal?.contentSnapshot;
+    // Code-owned projection, like compactArchiveEntry: the journal records the new hash.
+    if (snapshot?.archiveInputsHash) next.journal = { ...entry.journal, contentSnapshot: { ...snapshot, archiveInputsHash: inputsDigest(inputs) } };
+    return next;
+}
+function trimmedInputsShape(inputs) {
+    return !!inputs?.batchVersion && !inputs.taskInputV1 && !['baseMemory', 'external', 'contextEnvelope'].some(field => Object.hasOwn(inputs, field));
+}
+function trimPausedDrafts(key) {
+    const paused = [...drafts].filter(([id, entry]) => id.startsWith(`${key}:paused:`) && entry.inputs && !entry.inputsTrimmed && !entry.active
+        && !holdsUnsavedChunks(entry))
+        .sort(([, a], [, b]) => (b.journal?.updatedAt || b.journal?.createdAt || 0) - (a.journal?.updatedAt || a.journal?.createdAt || 0));
+    let resumable = 0;
+    for (const [id, entry] of paused) {
+        if (pausedResumable(entry) && resumable < MAX_RESUMABLE_PAUSED) { resumable += 1; continue; }
+        const next = trimmedEntry(entry);
+        if (discardedEntries.has(entry)) discardedEntries.add(next);
+        drafts.set(id, next);
+    }
+}
+function archiveDraftReadOnlyFailure() {
+    return text.safeUserError('这份旧草稿只保留了已收到的内容，不能再继续生成；可以查看或导出。', 'RMT_RECOVERY_READ_ONLY');
+}
 function scopeRows(key) {
     return [...drafts].filter(([id]) => id === key || id.startsWith(`${key}:paused:`)).map(([id,entry]) => [id, { ...entry, active: false, durable: true }]);
 }
@@ -11150,18 +11653,40 @@ async function saveScope(key) {
     const run = (lanes.get(key) || Promise.resolve()).catch(() => {}).then(async () => {
         const state = scopes.get(key);
         if (!state || !local_store.localRecoveryStorageAvailable()) throw storageFailure();
+        trimPausedDrafts(key);
         const rows = scopeRows(key);
         const encoded = JSON.stringify({ version: 1, rows });
         const bytes = new TextEncoder().encode(encoded).byteLength;
         if (bytes > constants.MAX_CACHE_SOURCE_BYTES) throw capacityFailure();
-        const revision = await local_store.compareLocalRecoveryRecord(state.id, state.revision, rows.length ? JSON.parse(encoded) : null,
-            { timeoutMs: local_store.localRecoveryWriteTimeout(bytes) });
+        const write = expected => {
+            // Remember what this attempt wrote: a timed-out write may still land.
+            state.unconfirmed = { revision: expected + 1, encoded: rows.length ? encoded : 'null' };
+            return local_store.compareLocalRecoveryRecord(state.id, expected, rows.length ? JSON.parse(encoded) : null,
+                { timeoutMs: local_store.localRecoveryWriteTimeout(bytes) });
+        };
+        let expected = state.revision, revision;
+        const previous = state.unconfirmed;
+        try { revision = await write(expected); }
+        catch (error) {
+            if (error?.code !== 'RMT_LOCAL_CAS') throw error;
+            const adopted = await adoptLandedWrite(state, previous, rows.length ? encoded : 'null');
+            if (adopted === 'current') { revision = state.revision; expected = revision - 1; }
+            else if (adopted === 'previous') {
+                expected = state.revision;
+                try { revision = await write(expected); }
+                catch (retryError) { if (retryError?.code === 'RMT_LOCAL_CAS') state.conflict = true; throw retryError; }
+            }
+            else { state.conflict = true; throw error; }
+        }
         // Only the transaction's exact CAS acknowledgement confirms this write.
         // false/undefined must not be mistaken for a saved checkpoint in a host.
-        if (revision !== state.revision + 1) throw ackMismatchFailure();
+        if (revision !== expected + 1) throw ackMismatchFailure();
         state.revision = revision;
+        state.unconfirmed = null;
+        state.conflict = false;
         state.lastFailureCode = '';
         confirmCounts(state, rows);
+        confirmRows(state, rows);
         for (const [id, saved] of rows) {
             const live = drafts.get(id);
             // An acknowledgement only covers the journal/stage actually written,
@@ -11181,6 +11706,18 @@ async function saveScope(key) {
         throw storageFailure('save', error);
     }
     finally { if (lanes.get(key) === run) lanes.delete(key); }
+}
+// A CAS miss right after a timed-out write is usually that same write having
+// landed after all. Adopt it only when the stored record is exactly one revision
+// ahead and holds exactly what this page wrote; anything else is a real conflict.
+async function adoptLandedWrite(state, previous, current) {
+    let record;
+    try { record = await local_store.readLocalRecoveryRecord(state.id); } catch { return ''; }
+    if (!record || record.key !== state.id || record.revision !== state.revision + 1) return '';
+    const stored = JSON.stringify(record.payload ?? null);
+    if (stored === current) { state.revision = record.revision; return 'current'; }
+    if (previous && previous.revision === record.revision && stored === previous.encoded) { state.revision = record.revision; return 'previous'; }
+    return '';
 }
 function scheduleSave(key) { void saveScope(key).catch(() => {}); }
 // Compatibility seam for older callers. No plugin byte ceiling; only an
@@ -11236,42 +11773,89 @@ async function hydrateArchiveRecoveryScope(key, origin, operation, force, signal
         const state = scopes.get(key);
         if (state?.revision !== readRevision) return true; // Our own write completed during this read.
         if (scopeRows(key).length || lanes.has(key)) {
-            if ((record?.revision || 0) !== state?.revision) throw conflictFailure();
+            if ((record?.revision || 0) === state?.revision) return true;
+            // A save hit a newer stored version. An explicit re-read merges it in
+            // instead of leaving every later save stuck until the page reloads.
+            if (!state?.conflict || lanes.has(key) || (record?.revision || 0) < state.revision) throw conflictFailure();
+            const checked = checkedStoredRows(record?.payload, key, origin, operation);
+            if (signal.aborted) throw new DOMException('Read cancelled', 'AbortError');
+            let pageNewer = false;
+            // The same task may sit in another slot here (e.g. parked on this page).
+            const pageTasks = new Set(scopeRows(key).map(([rowId]) => archiveDraftId(rowId)));
+            const storedIds = new Set(checked.map(([rowId]) => rowId));
+            // A row the stored record no longer has was removed by another page,
+            // unless this page changed it after its last confirmed save.
+            for (const [rowId] of scopeRows(key)) {
+                if (storedIds.has(rowId)) continue;
+                if (unchangedSinceConfirmed(state, rowId, drafts.get(rowId))) drafts.delete(rowId);
+                else pageNewer = true;
+            }
+            const adopted = [];
+            for (const [rowId, stored] of checked) {
+                const live = drafts.get(rowId);
+                if (!live && pageTasks.has(draftIdOf(stored, rowId))) { pageNewer = true; continue; }
+                const liveAt = live?.journal?.updatedAt || 0, storedAt = stored.journal?.updatedAt || 0;
+                // Same journal time: a stage/result/commit change made here after the
+                // last confirmed save is still newer than the stored copy.
+                if (live && (live.active || liveAt > storedAt
+                    || (liveAt === storedAt && rowStateDiffers(live, stored) && !unchangedSinceConfirmed(state, rowId, live)))) { pageNewer = true; continue; }
+                drafts.set(rowId, stored);
+                adopted.push([rowId, stored]);
+            }
+            state.revision = record?.revision || 0; state.conflict = false; state.unconfirmed = null;
+            confirmCounts(state, record?.payload?.rows || []);
+            confirmRows(state, adopted);
+            if (pageNewer) scheduleSave(key);
             return true;
         }
     }
     const payload = record?.payload;
+    const readRows = [];
     if (payload) {
-        if (new TextEncoder().encode(JSON.stringify(payload)).byteLength > constants.MAX_CACHE_SOURCE_BYTES
-            || payload.version !== 1 || !Array.isArray(payload.rows)) throw storageFailure('read');
-        const checked = [];
-        for (const [rowKey, value] of payload.rows) {
-            if (typeof rowKey !== 'string' || (rowKey !== key && !rowKey.startsWith(`${key}:paused:`))
-                || !validStoredEntry(value, key, origin, operation)) throw storageFailure('read');
-            const entry = draft_inputs.compactArchiveEntry(structuredClone(value)); entry.active = false; entry.durable = true;
-            // A saved draft is never a formal commit. If the intended bank wasn't
-            // committed, replay validated pieces and the normal CAS path on click.
-            if (entry.stage === 'awaiting-commit' && entry.committedRevision !== origin.archiveRevision) entry.stage = 'segments';
-            checked.push([rowKey, entry]);
-        }
+        const checked = checkedStoredRows(payload, key, origin, operation);
         if (signal.aborted) throw new DOMException('Read cancelled', 'AbortError');
-        for (const [id,entry] of checked) if (!drafts.has(id)) drafts.set(id,entry);
+        for (const [id,entry] of checked) if (!drafts.has(id)) { drafts.set(id,entry); readRows.push([id, entry]); }
     }
     if (signal.aborted) throw new DOMException('Read cancelled', 'AbortError');
     const state = { id, revision: record?.revision || 0 };
     confirmCounts(state, payload?.rows || []);
+    confirmRows(state, readRows);
     scopes.set(key, state); loaded.add(key);
     acknowledgeArchiveRecoveryCommit(origin);
     return true;
 }
-function validStoredEntry(entry, key, origin, operation) {
+function checkedStoredRows(payload, key, origin, operation) {
+    if (!payload) return [];
+    if (new TextEncoder().encode(JSON.stringify(payload)).byteLength > constants.MAX_CACHE_SOURCE_BYTES
+        || payload.version !== 1 || !Array.isArray(payload.rows)) throw storageFailure('read');
+    const checked = [];
+    for (const [rowKey, value] of payload.rows) {
+        if (typeof rowKey !== 'string' || (rowKey !== key && !rowKey.startsWith(`${key}:paused:`))
+            || !validStoredEntry(value, key, origin, operation, true)) throw storageFailure('read');
+        const entry = draft_inputs.compactArchiveEntry(structuredClone(value), { inputsVerified: true }); entry.active = false; entry.durable = true;
+        // A saved draft is never a formal commit. If the intended bank wasn't
+        // committed, replay validated pieces and the normal CAS path on click.
+        if (entry.stage === 'awaiting-commit' && entry.committedRevision !== origin.archiveRevision) entry.stage = 'segments';
+        checked.push([rowKey, entry]);
+    }
+    return checked;
+}
+function validStoredEntry(entry, key, origin, operation, fresh = false) {
     const identity = entry?.journal?.identity;
     return entry && entry.key === key && entry.operation === operation && /^[a-f0-9]{64}$/.test(entry.sourceHash || '')
         && ['segments','awaiting-commit','profile-only','profile-result','archive-result'].includes(entry.stage)
-        && typeof entry.fullRebuild === 'boolean' && recovery.generationRecoverySummary(entry.journal) && inputsMatchJournal(entry)
+        && typeof entry.fullRebuild === 'boolean' && recovery.generationRecoverySummary(entry.journal) && inputsMatchJournal(entry, fresh)
         && identity.mode === (operation === 'import' ? 'archive-import' : 'archive-profile')
         && identity.archiveRevision === `archive-draft:${entry.sourceHash}`
-        && ['characterKey','characterId','characterAvatar','chatId'].every(field => (identity[field] || '') === (origin[field] || ''));
+        && sameDraftOwner(identity, origin);
+}
+// characterKey embeds a hash of the card text. The slot id, avatar and chat
+// already prove the same character and chat (as in recoverySegments.js), so a
+// card edit must not make every saved draft unreadable. Continuing still checks
+// the frozen task binding. Without an avatar the full key stays the only proof.
+function sameDraftOwner(identity, origin) {
+    if (!['characterId','characterAvatar','chatId'].every(field => (identity?.[field] || '') === (origin?.[field] || ''))) return false;
+    return !!origin?.characterAvatar || (identity?.characterKey || '') === (origin?.characterKey || '');
 }
 async function importArchiveRecoveryData(origin, data) {
     const key = draftKey(origin, 'import');
@@ -11284,9 +11868,12 @@ async function importArchiveRecoveryData(origin, data) {
         const sourceHash = String(row?.journal?.identity?.archiveRevision || '').replace(/^archive-draft:/, '');
         const entry = { key, operation:'import', sourceHash, fullRebuild: row.fullRebuild === true,
             stage:'segments', journal: structuredClone(row.journal), active:false, durable:false, importedUnverified:true,
-            ...(row.inputs ? { inputs: structuredClone(row.inputs) } : {}) };
-        if (!validStoredEntry(entry, key, origin, 'import')) throw incompatible();
-        return draft_inputs.compactArchiveEntry(entry);
+            ...(row.inputs ? { inputs: structuredClone(row.inputs) } : {}),
+            // A trimmed draft stays read-only after a round trip through a file
+            // (older exports dropped the flag; their trimmed shape still shows it).
+            ...(row.inputsTrimmed === true || trimmedInputsShape(row.inputs) ? { inputsTrimmed: true } : {}) };
+        if (!validStoredEntry(entry, key, origin, 'import', true)) throw incompatible();
+        return draft_inputs.compactArchiveEntry(entry, { inputsVerified: true });
     });
     // Imported fragments are data, never new evidence authority. Initial dispatch
     // must rebuild current sources and match exact source/request hashes.
@@ -11309,9 +11896,11 @@ function incompatible() {
 }
 
 function archiveDraftId(key) {
-    const entry = drafts.get(key);
     // Stable when the same task moves to a paused slot, distinct when a later
     // task reuses its operation's active slot.
+    return draftIdOf(drafts.get(key), key);
+}
+function draftIdOf(entry, key) {
     return entry?.draftId || `archive-draft-${inputsDigest([entry?.key || key, entry?.sourceHash || '', entry?.journal?.createdAt || 0])}`;
 }
 
@@ -11321,7 +11910,7 @@ function listArchiveRecoveryDrafts(origin, operation = null) {
         const key = draftKey(origin, kind);
         return [...drafts].filter(([id]) => id === key || id.startsWith(`${key}:paused:`)).map(([id, entry]) => ({
             draftId: archiveDraftId(id), operation: kind, stage: entry.stage, paused: id !== key,
-            active: entry.active === true, durable: entry.durable === true,
+            active: entry.active === true, durable: entry.durable === true, readOnly: entry.inputsTrimmed === true,
             createdAt: entry.journal?.createdAt || 0, updatedAt: entry.journal?.updatedAt || 0,
             completed: recovery.generationRecoverySummary(entry.journal)?.completed || 0,
         }));
@@ -11412,7 +12001,8 @@ function parkArchiveRecovery(origin, operation = 'import', options = {}) {
 function exportArchiveRecovery(origin, operation = 'import') {
     const key = draftKey(origin, operation);
     return [...drafts].filter(([id]) => id === key || id.startsWith(`${key}:paused:`))
-        .map(([, entry]) => ({ stage: entry.stage, fullRebuild: entry.fullRebuild, journal: structuredClone(entry.journal), ...(entry.inputs ? { inputs: structuredClone(entry.inputs) } : {}) }));
+        .map(([, entry]) => ({ stage: entry.stage, fullRebuild: entry.fullRebuild, journal: structuredClone(entry.journal), ...(entry.inputs ? { inputs: structuredClone(entry.inputs) } : {}),
+            ...(entry.inputsTrimmed === true ? { inputsTrimmed: true } : {}) }));
 }
 
 async function beginArchiveRecovery({ origin, operation = 'import', sourceIdentity, sourceFragments = [], settingsIdentity,
@@ -11438,6 +12028,7 @@ async function beginArchiveRecovery({ origin, operation = 'import', sourceIdenti
     const expectedEntry = existing;
     if (priorResult) existing = null;
     if (existing?.active) throw text.safeUserError('这份档案草稿正在处理，请等当前请求结束。', 'RMT_RECOVERY_BUSY');
+    if ((existing || priorResult && expectedEntry) && (existing || expectedEntry).inputsTrimmed) throw archiveDraftReadOnlyFailure();
     if (existing && (!continueApproved || existing.stage !== 'segments')) throw incompatible();
     if (!Array.isArray(sourceFragments)) {
         throw text.safeUserError('档案整理来源分段格式无效，旧草稿仍保留。', 'RMT_RECOVERY_DATA');
@@ -11497,6 +12088,7 @@ async function resumeArchiveImportProfile({ origin, draftId = '', settingsIdenti
         : drafts.has(key) ? [key, drafts.get(key)] : null;
     if (!found || !(found[1].stage === 'profile-only' || found[1].stage === 'archive-result' && found[1].profilePending)
         || !inputsMatchJournal(found[1])) throw incompatible();
+    if (found[1].inputsTrimmed) throw archiveDraftReadOnlyFailure();
     const [recordKey, previousEntry] = found;
     const entry = discardedEntries.has(previousEntry) ? { ...previousEntry, active: false } : previousEntry;
     if (entry.active) throw text.safeUserError('这份简介正在处理，请等当前请求结束。', 'RMT_RECOVERY_BUSY');
@@ -11653,9 +12245,12 @@ function clearArchiveRecovery(origin, operation = null) {
 // Explicit discard awaits the tombstone; failed persistence restores visible data.
 async function clearArchiveRecoveryDurably(origin, operation = null, { explicitDiscard = false } = {}) {
     for (const kind of operation ? [operation] : ['import','profile']) {
-        await hydrateArchiveRecovery(origin, kind);
         const key = draftKey(origin, kind);
         if (!key) continue;
+        // An explicit discard needs no copy of what it deletes. A slow, huge or
+        // unreadable record must never trap the user's way out.
+        if (explicitDiscard && !loaded.has(key)) { await discardUnloadedScope(key); continue; }
+        await hydrateArchiveRecovery(origin, kind);
         if (lanes.has(key)) await lanes.get(key).catch(() => {});
         const previous = [...drafts].filter(([id]) => id === key || id.startsWith(`${key}:paused:`));
         if (!explicitDiscard && previous.some(([,entry]) => entry.active)) throw text.safeUserError('当前请求尚未结束，草稿没有清除。', 'RMT_RECOVERY_BUSY');
@@ -11665,9 +12260,32 @@ async function clearArchiveRecoveryDurably(origin, operation = null, { explicitD
         }
         for (const [id] of previous) drafts.delete(id);
         try { await saveScope(key); }
-        catch (error) { for (const [id,entry] of previous) drafts.set(id,entry); throw error; }
+        catch (error) {
+            // Another writer moved the record on. The user asked to delete it all,
+            // so a revision-free tombstone is the honest result, not a stuck draft.
+            if (explicitDiscard && scopes.get(key)?.conflict) { await discardUnloadedScope(key, previous); continue; }
+            for (const [id,entry] of previous) drafts.set(id,entry); throw error;
+        }
     }
     return true;
+}
+
+async function discardUnloadedScope(key, removed = []) {
+    if (!local_store.localRecoveryStorageAvailable()) throw storageFailure();
+    if (hydrationLanes.has(key)) { hydrationLanes.get(key).controller.abort(); hydrationLanes.delete(key); }
+    if (lanes.has(key)) await lanes.get(key).catch(() => {});
+    const previous = [...removed, ...[...drafts].filter(([id]) => id === key || id.startsWith(`${key}:paused:`))];
+    for (const [, entry] of previous) { discardedEntries.add(entry); entry.active = false; }
+    for (const [id] of previous) drafts.delete(id);
+    const id = `draft:${await recovery.generationRecoveryDigest(key)}`;
+    let revision;
+    try { revision = await local_store.discardLocalRecoveryRecord(id); }
+    catch (error) { for (const [rowId, entry] of previous) drafts.set(rowId, entry); throw storageFailure('save', error); }
+    if (!Number.isSafeInteger(revision) || revision < 1) { for (const [rowId, entry] of previous) drafts.set(rowId, entry); throw ackMismatchFailure(); }
+    const state = { id, revision };
+    confirmCounts(state, []);
+    confirmRows(state, []);
+    scopes.set(key, state); loaded.add(key);
 }
 
 function discardArchiveRecovery(origin, operation = null) {
@@ -11684,6 +12302,7 @@ __m_archive_importRecovery_js.retainCompletedArchiveImport = retainCompletedArch
 __m_archive_importRecovery_js.requestArchiveRecoverySegment = requestArchiveRecoverySegment;
 __m_archive_importRecovery_js.clearArchiveRecoveryDurably = clearArchiveRecoveryDurably;
 __m_archive_importRecovery_js.archiveDraftCapacityFailure = archiveDraftCapacityFailure;
+__m_archive_importRecovery_js.archiveDraftReadOnlyFailure = archiveDraftReadOnlyFailure;
 __m_archive_importRecovery_js.archiveRecoveryDraftPlanExceedsCapacity = archiveRecoveryDraftPlanExceedsCapacity;
 __m_archive_importRecovery_js.resetArchiveRecoveryMemoryForTests = resetArchiveRecoveryMemoryForTests;
 __m_archive_importRecovery_js.listArchiveRecoveryDrafts = listArchiveRecoveryDrafts;
@@ -12884,9 +13503,11 @@ function __init_archive_sourceLedger_js() {
 const core_constants = __m_core_constants_js;
 const core_text = __m_core_text_js;
 const source_read = __m_archive_sourceReadGuard_js;
+const runtimeState = __m_core_state_js.state;
 // Durable, read-only-at-the-provider-boundary source ledger for r46.
 // Provider data is copied only after an explicit current-chat scan/import.  The ledger
 // never writes back to, edits, or deletes data in another extension.
+
 
 
 
@@ -13216,7 +13837,59 @@ function runLedgerMutation(identity, operation) {
     });
 }
 
-function mergeMemorySourceLedgerBatch(previous, identity, batch = {}) {
+// Providers whose old revisions an unfinished archive batch may still resolve
+// by fragment hash (its live bank and any queued archive write). Their history
+// is never pruned. Read-only; nothing here touches another extension's data.
+function pendingBatchProviders(context) {
+    const providers = new Set();
+    const add = progress => {
+        if (!progress || !Array.isArray(progress.batches)) return;
+        const from = Math.max(0, Number(progress.nextBatch) || 0);
+        for (const parts of progress.batches.slice(from)) for (const part of parts || []) for (const ref of part?.refs || []) {
+            if (ref?.kind === 'external') providers.add(normalizeMemorySourceProvider(ref.provider));
+        }
+    };
+    try { add(context?.chatMetadata?.[core_constants.MEMORY_KEY]?.archiveImportProgress); } catch {}
+    try {
+        for (const [, bucket] of runtimeState.deferredChatCommits || []) {
+            for (const item of Array.isArray(bucket) ? bucket : []) if (item?.kind === 'archive') add(item.memoryBank?.archiveImportProgress);
+        }
+    } catch {}
+    return providers;
+}
+
+// Every rescan used to append another full copy of each changed summary. Keep,
+// per source id, the newest row and the newest row the current revision set
+// still projects; older revisions are dropped unless a pending batch's provider
+// may still need them. Called only when the caller supplies that provider set.
+function pruneSupersededRevisions(records, sources, retainProviders) {
+    const live = new Map();
+    for (const source of sources) {
+        const coverage = normalizeMemorySourceCoverage(source?.coverage);
+        const revision = normalizeMemorySourceRevision(source?.revision);
+        const baseline = normalizeMemorySourceRevision(source?.baselineRevision || (coverage.status === 'complete' ? revision : ''));
+        const overlays = new Set(normalizeRevisionList(source?.overlayRevisions));
+        if (coverage.status !== 'complete' && revision) overlays.add(revision);
+        if (baseline || overlays.size) live.set(normalizeMemorySourceProvider(source?.provider), { baseline, overlays });
+    }
+    const newest = new Map(), newestLive = new Map(), counts = new Map();
+    for (const record of records) {
+        const key = `${record.provider}\u001f${record.sourceId}`;
+        counts.set(key, (counts.get(key) || 0) + 1);
+        if (!newest.has(key) || Number(record.importedAt) >= Number(newest.get(key).importedAt)) newest.set(key, record);
+        const set = live.get(record.provider);
+        const recordRevision = normalizeMemorySourceRevision(record.batchRevision || record.revision);
+        if (set && (recordRevision === set.baseline || set.overlays.has(recordRevision))
+            && (!newestLive.has(key) || Number(record.importedAt) >= Number(newestLive.get(key).importedAt))) newestLive.set(key, record);
+    }
+    return records.filter(record => {
+        const key = `${record.provider}\u001f${record.sourceId}`;
+        return counts.get(key) === 1 || retainProviders.has(record.provider)
+            || newest.get(key) === record || newestLive.get(key) === record;
+    });
+}
+
+function mergeMemorySourceLedgerBatch(previous, identity, batch = {}, retainProviders = null) {
     const records = previous?.records ? [...previous.records] : [];
     const provider = normalizeMemorySourceProvider(batch.provider);
     const rawRevision = normalizeMemorySourceRevision(batch.revision);
@@ -13274,17 +13947,17 @@ function mergeMemorySourceLedgerBatch(previous, identity, batch = {}) {
     const ledger = {
         storageVersion: core_constants.MEMORY_SOURCE_LEDGER_STORAGE_VERSION,
         scope: identity,
-        records,
+        records: typeof retainProviders?.has === 'function' ? pruneSupersededRevisions(records, sources, retainProviders) : records,
         sources,
         updatedAt: Date.now(),
     };
     return ledger;
 }
 
-async function upsertMemorySourceLedgerBatchesUnlocked(identity, batches, assertCurrent = () => {}, signal = null) {
+async function upsertMemorySourceLedgerBatchesUnlocked(identity, batches, assertCurrent = () => {}, signal = null, retainProviders = null) {
     assertCurrent();
     let ledger = await readMemorySourceLedger(identity, { signal });
-    for (const batch of batches) ledger = mergeMemorySourceLedgerBatch(ledger, identity, batch);
+    for (const batch of batches) ledger = mergeMemorySourceLedgerBatch(ledger, identity, batch, retainProviders);
     if (!batches.length) return ledger;
     assertCurrent();
     await backend().write(cloneValue(ledger), { signal });
@@ -13292,15 +13965,15 @@ async function upsertMemorySourceLedgerBatchesUnlocked(identity, batches, assert
     return normalizeLedger(ledger, identity);
 }
 
-async function upsertMemorySourceLedger(scope, batch = {}, { assertCurrent = () => {}, signal = null } = {}) {
+async function upsertMemorySourceLedger(scope, batch = {}, { assertCurrent = () => {}, signal = null, retainProviders = null } = {}) {
     const identity = normalizeMemorySourceScope(scope);
-    return runLedgerMutation(identity, () => upsertMemorySourceLedgerBatchesUnlocked(identity, [batch], assertCurrent, signal));
+    return runLedgerMutation(identity, () => upsertMemorySourceLedgerBatchesUnlocked(identity, [batch], assertCurrent, signal, retainProviders));
 }
 
-async function upsertMemorySourceLedgerBatches(scope, batches = [], { assertCurrent = () => {}, signal = null } = {}) {
+async function upsertMemorySourceLedgerBatches(scope, batches = [], { assertCurrent = () => {}, signal = null, retainProviders = null } = {}) {
     const identity = normalizeMemorySourceScope(scope);
     const list = Array.isArray(batches) ? batches.filter(batch => batch && typeof batch === 'object') : [];
-    return runLedgerMutation(identity, () => upsertMemorySourceLedgerBatchesUnlocked(identity, list, assertCurrent, signal));
+    return runLedgerMutation(identity, () => upsertMemorySourceLedgerBatchesUnlocked(identity, list, assertCurrent, signal, retainProviders));
 }
 
 async function deleteMemorySourceLedger(scope) {
@@ -13339,6 +14012,7 @@ __m_archive_sourceLedger_js.normalizeMemorySourceCoverage = normalizeMemorySourc
 __m_archive_sourceLedger_js.normalizeMemorySourceRecord = normalizeMemorySourceRecord;
 __m_archive_sourceLedger_js.ledgerCurrentRecords = ledgerCurrentRecords;
 __m_archive_sourceLedger_js.setMemorySourceLedgerBackendForTests = setMemorySourceLedgerBackendForTests;
+__m_archive_sourceLedger_js.pendingBatchProviders = pendingBatchProviders;
 __m_archive_sourceLedger_js.memorySourceLedgerSummary = memorySourceLedgerSummary;
 }
 
@@ -13761,25 +14435,36 @@ function appendLibraryEntry(previous, entry) {
     };
 }
 
-function autoAchievementForReveal(context, { achievementId = '', moduleId = '', sourceMemoryIds = [] } = {}) {
-    if (!context) return null;
-    let memory = null;
-    try { memory = archive_repository.getImportedMemory(context); } catch { memory = null; }
-    const session = core_cache.loadSession(core_constants.MODE.ACHIEVEMENTS, { context, memoryBank: memory, clone: true });
-    const entries = Array.isArray(session?.entries) ? session.entries : [];
-    const ids = new Set((Array.isArray(sourceMemoryIds) ? sourceMemoryIds : []).filter(id => /^M\d{3,6}$/.test(id)));
-    const usable = item => item?.origin === 'auto' && clip(item.title, 100);
-    const byId = achievementId ? entries.find(item => usable(item) && item.id === achievementId) : null;
-    const byMemory = entries.find(item => usable(item)
-        && (!moduleId || !item.moduleId || item.moduleId === moduleId)
-        && (item.sourceMemoryIds || []).some(id => ids.has(id)));
-    const entry = byId || byMemory;
-    if (!entry) return null;
-    return {
-        title: clip(entry.title, 100),
-        description: clip(entry.description, 900),
-        unlockCondition: clip(entry.unlockCondition, 300),
+// 成就库里自动成就的只读索引：楼层壳一次刷新里所有信共用，不必每封信重扫、重裁一遍整个库。
+function autoAchievementLookup(session) {
+    const entries = (Array.isArray(session?.entries) ? session.entries : []).filter(item => item?.origin === 'auto' && clip(item.title, 100));
+    const byId = new Map();
+    for (const item of entries) if (item.id && !byId.has(item.id)) byId.set(item.id, item);
+    return ({ achievementId = '', moduleId = '', sourceMemoryIds = [] } = {}) => {
+        const ids = new Set((Array.isArray(sourceMemoryIds) ? sourceMemoryIds : []).filter(id => /^M\d{3,6}$/.test(id)));
+        const entry = (achievementId ? byId.get(achievementId) : null)
+            || entries.find(item => (!moduleId || !item.moduleId || item.moduleId === moduleId)
+                && (item.sourceMemoryIds || []).some(id => ids.has(id)));
+        if (!entry) return null;
+        return {
+            title: clip(entry.title, 100),
+            description: clip(entry.description, 900),
+            unlockCondition: clip(entry.unlockCondition, 300),
+        };
     };
+}
+
+// options.session：调用方已经读出的成就库（可以是 null）；options.lookup：已建好的索引。只读查询，不复制整个成就库。
+function autoAchievementForReveal(context, query = {}, options = {}) {
+    if (!context) return null;
+    if (typeof options?.lookup === 'function') return options.lookup(query || {});
+    let session = options && Object.hasOwn(options, 'session') ? options.session : undefined;
+    if (session === undefined) {
+        let memory = null;
+        try { memory = archive_repository.getImportedMemory(context); } catch { memory = null; }
+        session = core_cache.loadSession(core_constants.MODE.ACHIEVEMENTS, { context, memoryBank: memory, clone: false });
+    }
+    return autoAchievementLookup(session)(query || {});
 }
 
 function dropAutoRound(context, { moduleId = '', sourceMemoryIds = [], messageIndex = null } = {}) {
@@ -13829,6 +14514,7 @@ function saveAutoAchievement(context, result, now = Date.now()) {
 
 __m_autoMemory_achievementLibrary_js.libraryEntryFromAutoAchievement = libraryEntryFromAutoAchievement;
 __m_autoMemory_achievementLibrary_js.appendLibraryEntry = appendLibraryEntry;
+__m_autoMemory_achievementLibrary_js.autoAchievementLookup = autoAchievementLookup;
 __m_autoMemory_achievementLibrary_js.autoAchievementForReveal = autoAchievementForReveal;
 __m_autoMemory_achievementLibrary_js.dropAutoRound = dropAutoRound;
 __m_autoMemory_achievementLibrary_js.saveAutoAchievement = saveAutoAchievement;
@@ -14992,7 +15678,9 @@ function fallbackList(key, original, added) {
 function incrementalProjection(session, { sourceMemoryIds = [], createdAt = 0, since = 0 } = {}) {
     if (!session || typeof session !== 'object') return { kept: false, session: null };
     const ids = new Set(Array.isArray(sourceMemoryIds) ? sourceMemoryIds : []);
-    const copy = structuredClone(session);
+    // 投影只读：每个列表都换成新数组（条目本来就引用原会话），其余字段浅拷贝即可，
+    // 不必为每封信深拷贝整个模块会话。调用方不得改写返回的 session。
+    const copy = { ...session };
     const last = lastUpdateOf(session);
     const sinceAt = Number(since) || 0;
     const predates = !!(last && sinceAt > 0 && last.updatedAt > 0 && last.updatedAt < sinceAt);
@@ -22816,7 +23504,8 @@ function resolveBatchParts(progress, chatMessages, externalRecords) {
 }
 
 function advanceProgress(progress, { pending = [], archiveRevision } = {}) {
-    const next = structuredClone(progress);
+    const { taskInputV1, ...rest } = progress || {};
+    const next = structuredClone(rest);
     // This is only a staged candidate. The caller must commit it with the bank by
     // CAS; it must NEVER publish it in state on a failed canonical save.
     delete next.partialParts;
@@ -22828,7 +23517,14 @@ function advanceProgress(progress, { pending = [], archiveRevision } = {}) {
         // Finished sources are still identified by manifest hashes, but large captured
         // background text is not needed by any subsequent request.
         delete next.contextEnvelope; delete next.worldInfo;
-    }
+        // Nor is the full captured chat. Keep only what the save-time identity
+        // check reads from it: the original binding and identity.
+        if (taskInputV1?.data) {
+            const data = taskInputV1.data;
+            next.taskInputBinding = structuredClone({ version: 1, binding: data.binding, identity: data.identity,
+                fullFingerprint: data.snapshotForIdentity?.fullFingerprint || '' });
+        }
+    } else if (taskInputV1 !== undefined) next.taskInputV1 = structuredClone(taskInputV1);
     return checkedProgress(next);
 }
 
@@ -24171,9 +24867,69 @@ async function sha256Text(input) {
     }
     return sha256Bytes(bytes);
 }
+// Same SHA-256, fed in pieces. A caller can hash a long text in slices (and
+// yield between them) or fork the state to finish two texts sharing a prefix.
+// Output is byte-identical to sha256Bytes over the concatenated input.
+function compressBlock(hash, words, bytes, offset) {
+    for (let i = 0; i < 16; i++) {
+        const at = offset + i * 4;
+        words[i] = ((bytes[at] << 24) | (bytes[at + 1] << 16) | (bytes[at + 2] << 8) | bytes[at + 3]) >>> 0;
+    }
+    for (let i = 16; i < 64; i++) {
+        const x = words[i - 15], y = words[i - 2];
+        words[i] = (words[i - 16] + (rotate(x, 7) ^ rotate(x, 18) ^ (x >>> 3)) + words[i - 7]
+            + (rotate(y, 17) ^ rotate(y, 19) ^ (y >>> 10))) >>> 0;
+    }
+    let [a,b,c,d,e,f,g,h] = hash;
+    for (let i = 0; i < 64; i++) {
+        const one = (h + (rotate(e, 6) ^ rotate(e, 11) ^ rotate(e, 25)) + ((e & f) ^ (~e & g)) + roundConstants[i] + words[i]) >>> 0;
+        const two = ((rotate(a, 2) ^ rotate(a, 13) ^ rotate(a, 22)) + ((a & b) ^ (a & c) ^ (b & c))) >>> 0;
+        h=g; g=f; f=e; e=(d+one)>>>0; d=c; c=b; b=a; a=(one+two)>>>0;
+    }
+    hash[0] = (hash[0] + a) >>> 0; hash[1] = (hash[1] + b) >>> 0; hash[2] = (hash[2] + c) >>> 0; hash[3] = (hash[3] + d) >>> 0;
+    hash[4] = (hash[4] + e) >>> 0; hash[5] = (hash[5] + f) >>> 0; hash[6] = (hash[6] + g) >>> 0; hash[7] = (hash[7] + h) >>> 0;
+}
+function createSha256(from = null) {
+    constants();
+    const hash = from ? from.hash.slice() : initialWords.slice();
+    const buffer = new Uint8Array(64);
+    if (from) buffer.set(from.buffer);
+    let used = from ? from.used : 0, length = from ? from.length : 0;
+    const words = new Uint32Array(64);
+    const self = {
+        get hash() { return hash; }, get buffer() { return buffer; }, get used() { return used; }, get length() { return length; },
+        update(bytes) {
+            let offset = 0;
+            length += bytes.length;
+            if (used) {
+                const take = Math.min(64 - used, bytes.length);
+                buffer.set(bytes.subarray(0, take), used); used += take; offset = take;
+                if (used < 64) return self;
+                compressBlock(hash, words, buffer, 0); used = 0;
+            }
+            for (; offset + 64 <= bytes.length; offset += 64) compressBlock(hash, words, bytes, offset);
+            if (offset < bytes.length) { buffer.set(bytes.subarray(offset), 0); used = bytes.length - offset; }
+            return self;
+        },
+        updateText(value) { return self.update(new TextEncoder().encode(value)); },
+        fork() { return createSha256(self); },
+        hex() {
+            const tail = createSha256(self), total = length;
+            const padLength = ((used + 9 + 63) & ~63) - used;
+            const pad = new Uint8Array(padLength); pad[0] = 0x80;
+            const view = new DataView(pad.buffer);
+            view.setUint32(padLength - 8, Math.floor(total / 0x20000000));
+            view.setUint32(padLength - 4, (total * 8) >>> 0);
+            tail.update(pad);
+            return tail.hash.map(value => value.toString(16).padStart(8, '0')).join('');
+        },
+    };
+    return self;
+}
 
 __m_core_digest_js.sha256Text = sha256Text;
 __m_core_digest_js.sha256Bytes = sha256Bytes;
+__m_core_digest_js.createSha256 = createSha256;
 }
 
 function __init_core_evidence_js() {
@@ -25701,34 +26457,78 @@ async function boundedJson(response, maxBytes) {
     }
 }
 
-// Some providers place their reasoning in a leading, exact <think> block.
-// Only that wrapper is transport metadata; quoted tags in JSON remain data and
-// arbitrary markup/attributes are still checked by the HTML response guard.
+// Some providers place their reasoning in a leading, exact <think>, <thinking>
+// or <reasoning> block (no attributes). Only that wrapper is transport metadata;
+// quoted tags in JSON remain data and other markup is checked by the HTML guard.
+const REASONING_WRAPPER_START = /^<(think|thinking|reasoning)>/i;
+
 function finalResponseText(value) {
     let body = String(value ?? '').replace(/^\uFEFF/, '').trimStart();
-    while (/^<think>/i.test(body)) {
-        const end = /<\/think>/i.exec(body);
+    for (let open = REASONING_WRAPPER_START.exec(body); open; open = REASONING_WRAPPER_START.exec(body)) {
+        const end = new RegExp(`</${open[1]}>`, 'i').exec(body);
         if (!end) return ''; // An unfinished reasoning block is never an answer.
         body = body.slice(end.index + end[0].length).trimStart();
     }
     return body;
 }
 
+// True when some JSON object in the reply parses as it stands (whole text,
+// a closed ```json fence, or a balanced {...}). Read-only; nothing is repaired.
+// Also returns the reply with the contents of in-object strings blanked, so
+// markup checks see only text outside JSON string values.
+function scanJsonForHtmlGuard(body) {
+    const parses = text => {
+        try { const parsed = JSON.parse(text); return !!parsed && typeof parsed === 'object'; } catch { return false; }
+    };
+    let parsable = parses(body.trim());
+    if (!parsable) for (const fence of body.matchAll(/```(?:json)?[ \t]*\r?\n([\s\S]*?)\r?\n[ \t]*```/gi)) if (parses(fence[1].trim())) { parsable = true; break; }
+    let outside = '', start = -1, depth = 0, inString = false, escaped = false;
+    for (let i = 0; i < body.length; i += 1) {
+        const char = body[i];
+        if (inString) {
+            if (escaped) escaped = false;
+            else if (char === '\\') escaped = true;
+            else if (char === '"') { inString = false; outside += char; }
+            continue;
+        }
+        outside += char;
+        if (char === '"') { if (depth > 0) inString = true; continue; }
+        if (char === '{') { if (depth === 0) start = i; depth += 1; continue; }
+        if (char === '}' && depth > 0) {
+            depth -= 1;
+            if (!parsable && depth === 0 && start >= 0 && parses(body.slice(start, i + 1))) parsable = true;
+        }
+    }
+    return { parsable, outside };
+}
+
 function looksLikeHtmlResponse(value) {
     const body = String(value ?? '').replace(/^\uFEFF/, '').trimStart();
     // A complete JSON document is data, including any quoted markup in its strings.
-    // Only a whole-document parse grants this exception; never extract a JSON island
-    // from an HTML error page here. No response text is rendered or executed.
+    // No response text is rendered or executed here.
     const jsonBody = body.replace(/^```(?:json)?\s*\n?([\s\S]*?)\n?```\s*$/i, '$1').trim();
     if (jsonBody.startsWith('{') || jsonBody.startsWith('[')) {
         try { const parsed = JSON.parse(jsonBody); if (parsed && typeof parsed === 'object') return false; } catch {}
     }
-    // Proxies commonly prepend comments/meta tags or wrap a JSON-looking fragment in an error
-    // page. Detect markup anywhere near the response head, before JSON extraction can mistake an
-    // embedded object for the provider payload. The body is never included in the public error.
-    return /<!--[\s\S]*?-->/i.test(body)
-        || /<\s*!doctype\b/i.test(body)
-        || /<\s*\/?\s*[a-z][a-z0-9:-]*(?:\s+[^<>]*?)?\s*\/?\s*>/i.test(body);
+    // A reply that opens as an HTML page, or with an HTML comment (proxies often
+    // prepend one), is a proxy/error page even if it wraps a JSON-looking
+    // fragment; never extract a JSON island from it.
+    if (/^<\s*(?:!--|!doctype\b|html\b|head\b|body\b)/i.test(body)) return true;
+    if (!/<!--[\s\S]*?-->|<\s*!doctype\b|<\s*\/?\s*[a-z][a-z0-9:-]*(?:\s+[^<>]*?)?\s*\/?\s*>/i.test(body)) return false;
+    // Ordinary replies may carry prose and inline tags (<b>, <br>, <user>, SVG)
+    // around or inside their JSON. Document-level markup outside JSON strings
+    // still marks a wrapped error page. Other tags count only when no JSON is
+    // usable and none has even started (a cut-off reply stays on the
+    // truncation/recovery path). The body is never included in the public error.
+    const { parsable, outside } = scanJsonForHtmlGuard(body);
+    if (/<\s*!doctype\b|<\s*\/?\s*(?:html|head|body|meta|script|iframe)\b[^<>]*>|\bcf-error\b|\/cdn-cgi\//i.test(outside)) return true;
+    // Error-page headings/blocks (nginx/Apache/IIS bodies without <html>) are not
+    // reply markup either, even when a JSON fragment follows them. An inline SVG's
+    // own <title>/<style> is drawing data, not a page.
+    if (/<\s*\/?\s*(?:title|h[1-6]|center|pre|hr|address|table|form|style|noscript|link)\b[^<>]*>/i
+        .test(outside.replace(/<svg\b[\s\S]*?(?:<\/svg\s*>|$)/gi, ''))) return true;
+    if (parsable) return false;
+    return !/\{\s*"/.test(body);
 }
 
 async function readBoundedJsonResponse(response, maxBytes = core_constants.MAX_MANUAL_API_RESPONSE_BYTES) {
@@ -26086,7 +26886,7 @@ function assertIndependentResponsePayload(payload, { allowOptionalInboxArt = fal
         throw error;
     }
     if (!content.trim()) {
-        const reasoningWrapper = /^<think>/i.test(received.replace(/^\uFEFF/, '').trimStart());
+        const reasoningWrapper = REASONING_WRAPPER_START.test(received.replace(/^\uFEFF/, '').trimStart());
         const error = emptyFinalFailure({ ...responseShapeSummary(payload),
             ...(reasoningWrapper ? { reasoningChars: received.length } : {}) });
         // Recognizing reasoning must not turn the former one-request HTML failure
@@ -26173,12 +26973,15 @@ async function readProfileCompletion(result, { signal = null, onProgress = null 
             const next = responseField(item.value, 'text');
             if (typeof next !== 'string' || !next.startsWith(content)) throw apiError('连接的流式正文结构异常。', 'RMT_RESPONSE_FORMAT');
             const reasoning = responseField(responseField(item.value, 'state'), 'reasoning');
+            const previousReasoning = reasoningChars;
             reasoningChars = Math.max(reasoningChars, typeof reasoning === 'string' ? reasoning.length : 0);
             if (next.length > core_constants.MAX_GENERATION_OUTPUT_CHARS
                 || (Number.isFinite(core_constants.MAX_MANUAL_API_RESPONSE_BYTES) && new TextEncoder().encode(next).byteLength > core_constants.MAX_MANUAL_API_RESPONSE_BYTES)
                 || reasoningChars > core_constants.MAX_MANUAL_API_RESPONSE_BYTES) throw apiError('流式响应超过安全范围。', 'RMT_MANUAL_RESPONSE_TOO_LARGE');
+            // A repeated/empty chunk is not progress; only growth restarts the idle wait.
+            const grew = next.length > content.length || reasoningChars > previousReasoning;
             content = next;
-            onProgress?.();
+            if (grew) onProgress?.(content, { reasoningChars });
         }
     } catch (error) {
         if (signal?.aborted || error?.name === 'AbortError') throw streamAbortReason(signal);
@@ -26241,6 +27044,7 @@ __m_core_independentApiConfig_js.streamAbortReason = streamAbortReason;
 __m_core_independentApiConfig_js.PROFILE_ONE_CLICK_UI_VERSION = PROFILE_ONE_CLICK_UI_VERSION;
 __m_core_independentApiConfig_js.MANUAL_STATUS_ENDPOINT = MANUAL_STATUS_ENDPOINT;
 __m_core_independentApiConfig_js.MANUAL_GENERATE_ENDPOINT = MANUAL_GENERATE_ENDPOINT;
+__m_core_independentApiConfig_js.REASONING_WRAPPER_START = REASONING_WRAPPER_START;
 }
 
 function __init_core_independentApiRequest_js() {
@@ -26297,6 +27101,9 @@ async function readManualApiStream(response, options = {}) {
     const chooseProtocol = kind => { if (protocol && protocol !== kind) throw streamReadError(); protocol = kind; };
     const countReasoning = payload => { reasoningChars = Math.min(core_constants.MAX_GENERATION_OUTPUT_CHARS, reasoningChars + responseShapeSummary(payload).reasoningChars); };
     let previousCR = false, firstCharacter = true, terminal = false, finishReason = '', interrupted = false;
+    // Keepalive/comment lines and empty deltas are bytes, not progress. Report
+    // only when visible text or reasoning actually grew.
+    let reportedChars = 0, reportedReasoning = 0;
     const cancel = () => { try { void reader.cancel().catch(() => {}); } catch {} };
     // reader.cancel settles outstanding read() calls. Avoid adding one reaction per
     // tiny network fragment to a long-lived abort promise.
@@ -26447,7 +27254,10 @@ async function readManualApiStream(response, options = {}) {
             bytes += value?.byteLength || 0;
             if (bytes > maxBytes) throw apiError('模型服务返回内容过大，已停止读取。', 'RMT_MANUAL_RESPONSE_TOO_LARGE');
             consume(decoder.decode(value, { stream: true }));
-            if (value?.byteLength) options.onProgress?.();
+            if (content.length > reportedChars || reasoningChars > reportedReasoning) {
+                reportedChars = content.length; reportedReasoning = reasoningChars;
+                options.onProgress?.(content, { reasoningChars });
+            }
         }
     } catch (error) {
         if (signal?.aborted || error?.name === 'AbortError') throw streamAbortReason(signal);
@@ -28100,19 +28910,31 @@ function writeTransaction(db, key) {
     return db.transaction(STORE, 'readwrite');
 }
 function validKey(key) { return typeof key === 'string' && /^(?:draft:[a-f0-9]{64}|credential:[a-f0-9-]{36})$/.test(key); }
-async function readLocalRecoveryRecord(key) {
+// A timer that fires while the transaction is already committing cannot abort it:
+// abort() throws and the write still lands. Only report a timeout when abort()
+// really stopped the transaction; otherwise wait for its own completion event.
+function settleOnTimeout(tx, timeoutFailure, reject, extraMs = 30000) {
+    try { tx.abort(); } catch {
+        return setTimeout(() => reject(timeoutFailure()), extraMs);
+    }
+    reject(timeoutFailure());
+    return null;
+}
+async function readLocalRecoveryRecord(key, { timeoutMs = 30000 } = {}) {
     if (!validKey(key)) throw failure();
     if (testBackend) return testBackend.read(key);
     const db = await database();
     try {
         return await new Promise((resolve, reject) => {
-            const tx = db.transaction(STORE, 'readonly'); let result = null;
+            const tx = db.transaction(STORE, 'readonly'); let result = null, timedOut = false, lateTimer = null;
             // Reading a large saved draft back is slow on phones too.
-            const timer = setTimeout(() => { try { tx.abort(); } catch {} reject(failure('RMT_LOCAL_TIMEOUT')); }, 30000);
+            const limit = Math.max(30000, Math.min(120000, Number(timeoutMs) || 30000));
+            const timer = setTimeout(() => { timedOut = true; lateTimer = settleOnTimeout(tx, () => failure('RMT_LOCAL_TIMEOUT'), reject); }, limit);
+            const done = () => { clearTimeout(timer); if (lateTimer) clearTimeout(lateTimer); };
             const request = tx.objectStore(STORE).get(key);
             request.onsuccess = () => { result = request.result || null; };
-            tx.oncomplete = () => { clearTimeout(timer); resolve(result); };
-            tx.onabort = tx.onerror = () => { clearTimeout(timer); reject(failure()); };
+            tx.oncomplete = () => { done(); resolve(result); };
+            tx.onabort = tx.onerror = () => { done(); if (timedOut && !lateTimer) return; reject(failure()); };
         });
     } finally { db.close(); }
 }
@@ -28125,27 +28947,45 @@ function localRecoveryWriteTimeout(bytes = 0) {
 async function compareLocalRecoveryRecord(key, expectedRevision, payload, { timeoutMs = 5000 } = {}) {
     if (!validKey(key) || !Number.isSafeInteger(expectedRevision) || expectedRevision < 0) throw failure();
     if (testBackend) return testBackend.compare(key, expectedRevision, payload);
+    return writeRecord(key, payload, timeoutMs, current => current === expectedRevision);
+}
+// Explicit discard only: a tombstone at the stored revision + 1, whatever that is.
+// It needs no prior read of a possibly huge or unreadable record.
+async function discardLocalRecoveryRecord(key, { timeoutMs = 5000 } = {}) {
+    if (!validKey(key)) throw failure();
+    if (testBackend) {
+        if (typeof testBackend.discard === 'function') return testBackend.discard(key);
+        const current = await testBackend.read(key);
+        return testBackend.compare(key, Number.isSafeInteger(current?.revision) ? current.revision : 0, null);
+    }
+    return writeRecord(key, null, timeoutMs, () => true);
+}
+async function writeRecord(key, payload, timeoutMs, accepts) {
     const db = await database();
     try {
         return await new Promise((resolve, reject) => {
-            const tx = writeTransaction(db, key); let mismatch = false, cloneFailed = false, timedOut = false;
+            const tx = writeTransaction(db, key); let mismatch = false, cloneFailed = false, timedOut = false, lateTimer = null, written = 0;
             const limit = Math.max(5000, Math.min(120000, Number(timeoutMs) || 5000));
-            const timer = setTimeout(() => { timedOut = true; try { tx.abort(); } catch {} reject(failure('RMT_LOCAL_TIMEOUT')); }, limit);
+            const timer = setTimeout(() => { timedOut = true; lateTimer = settleOnTimeout(tx, () => failure('RMT_LOCAL_TIMEOUT'), reject); }, limit);
+            const done = () => { clearTimeout(timer); if (lateTimer) clearTimeout(lateTimer); };
             const store = tx.objectStore(STORE), request = store.get(key);
             request.onsuccess = () => {
-                if ((request.result?.revision || 0) !== expectedRevision) { mismatch = true; tx.abort(); return; }
+                const current = request.result?.revision || 0;
+                if (!accepts(current)) { mismatch = true; tx.abort(); return; }
+                written = current + 1;
                 // r84.177：内容本身存不进去（例如内嵌浏览器不允许存加密钥匙）时单独标出来，调用处好给出准确提示。
-                try { store.put({ key, revision: expectedRevision + 1, payload }); }
+                try { store.put({ key, revision: written, payload }); }
                 catch (error) { cloneFailed = error?.name === 'DataCloneError'; try { tx.abort(); } catch {} }
             };
-            tx.oncomplete = () => { clearTimeout(timer); resolve(expectedRevision + 1); };
-            tx.onabort = tx.onerror = () => { clearTimeout(timer); if (timedOut) return; reject(cloneFailed ? failure('RMT_LOCAL_CLONE') : quotaFailureOf(tx, mismatch ? 'RMT_LOCAL_CAS' : 'RMT_LOCAL_STORAGE')); };
+            tx.oncomplete = () => { done(); resolve(written); };
+            tx.onabort = tx.onerror = () => { done(); if (timedOut && !lateTimer) return; reject(cloneFailed ? failure('RMT_LOCAL_CLONE') : quotaFailureOf(tx, mismatch ? 'RMT_LOCAL_CAS' : 'RMT_LOCAL_STORAGE')); };
         });
     } finally { db.close(); }
 }
 
 __m_core_localRecoveryStore_js.readLocalRecoveryRecord = readLocalRecoveryRecord;
 __m_core_localRecoveryStore_js.compareLocalRecoveryRecord = compareLocalRecoveryRecord;
+__m_core_localRecoveryStore_js.discardLocalRecoveryRecord = discardLocalRecoveryRecord;
 __m_core_localRecoveryStore_js.setLocalRecoveryBackendForTests = setLocalRecoveryBackendForTests;
 __m_core_localRecoveryStore_js.localRecoveryStorageAvailable = localRecoveryStorageAvailable;
 __m_core_localRecoveryStore_js.localRecoveryWriteTimeout = localRecoveryWriteTimeout;
@@ -34171,7 +35011,7 @@ async function commitCurrentChatMemoryFilePreview(preview, context = core_contex
     const ledger = await archive_sourceLedger.upsertMemorySourceLedger(scope, {
         ...preview,
         sourceKind: 'file-user-confirmed-history-summary',
-    });
+    }, { retainProviders: archive_sourceLedger.pendingBatchProviders(context) });
     clearMemoryPreflight(context);
     return archive_sourceLedger.memorySourceLedgerSummary(ledger);
 }
@@ -34591,7 +35431,8 @@ async function syncSelectedWorldInfoHistoryLedger(context = core_context.current
     if (core_context.comparableChatId(core_context.getChatId(core_context.currentCharacterGuard())) !== chatId) throw abortSync('Chat changed');
     if (String(core_text.hashString(JSON.stringify(getMemoryWorldInfoSelection(context).books))) !== selectionFingerprint) throw abortSync('World info selection changed');
     const batches = selectedWorldInfoHistoryBatches(worldInfo, selection, previousLedger);
-    if (batches.length) await archive_sourceLedger.upsertMemorySourceLedgerBatches(scope, batches, { assertCurrent, signal });
+    if (batches.length) await archive_sourceLedger.upsertMemorySourceLedgerBatches(scope, batches, { assertCurrent, signal,
+        retainProviders: archive_sourceLedger.pendingBatchProviders(context) });
     assertCurrent();
     runtimeState.memoryPreflightCache.delete(preflightKey);
     if (core_context.comparableChatId(core_context.getChatId(core_context.currentCharacterGuard())) !== chatId) throw abortSync('Chat changed', true);
@@ -35071,7 +35912,8 @@ async function collectCurrentChatExternalMemory(context, expectedChatId, signal)
         if (!batchRecords.length && coverage.status !== 'complete') { excluded.add(batch.provider); return; }
         scannedMemoryRecords.push(...batchRecords.map(record => ({ ...record, provider: batch.provider, revision: batch.revision })));
         try {
-            await archive_sourceLedger.upsertMemorySourceLedger(scope, batch, { assertCurrent: providerGuard, signal });
+            await archive_sourceLedger.upsertMemorySourceLedger(scope, batch, { assertCurrent: providerGuard, signal,
+                retainProviders: archive_sourceLedger.pendingBatchProviders(context) });
             providerGuard();
         } catch (error) {
             if (error?.name === 'AbortError') throw error;
@@ -35337,29 +36179,46 @@ function archiveTaskBinding(context) {
 }
 
 function captureArchiveTaskInput(context, payload) {
-    const data = { ...payload, binding: archiveTaskBinding(context),
-        names: { name1: context.name1, name2: context.name2 }, contentSettings: archiveContentSettings(context) };
-    const taskInputV1 = { version: 1, digest: archive_batches.sourceHash(JSON.stringify(data)), data };
-    return payload.operation === 'import' ? draft_inputs.compactArchiveInputs({ batchVersion: 1, progress: {}, taskInputV1 }).taskInputV1 : taskInputV1;
+    // An import keeps one chat copy only (see compactArchiveInputs). Strip the
+    // duplicates before hashing and cloning, not after: same bytes, same digest.
+    const lean = payload.operation === 'import' ? { ...payload,
+        ...(payload.snapshotForIdentity ? { snapshotForIdentity: draft_inputs.withoutFields(payload.snapshotForIdentity, ['messages', 'incrementalMessages']) } : {}),
+        ...(payload.snapshot ? { snapshot: draft_inputs.withoutFields(payload.snapshot, ['incrementalMessages']) } : {}) } : payload;
+    const data = structuredClone({ ...lean, binding: archiveTaskBinding(context),
+        names: { name1: context.name1, name2: context.name2 }, contentSettings: archiveContentSettings(context) });
+    const taskInputV1 = { version: 1, digest: draft_inputs.inputHash(data), data };
+    draft_inputs.markVerifiedTaskInput(taskInputV1);
+    return taskInputV1;
 }
 
-function checkedArchiveTaskInput(value, context, { completedSaveOnly = false } = {}) {
-    if (!value) return null;
-    if (value.version !== 1 || !value.data || value.digest !== archive_batches.sourceHash(JSON.stringify(value.data))) {
-        throw core_text.safeUserError('原任务资料未通过完整性校验，原草稿保留。', 'RMT_RECOVERY_DATA');
-    }
+// Checks shared by a full captured task input and the small binding a finished
+// batch keeps instead. No copy is made here; callers that hand data on clone it.
+function assertTaskBinding(data, context, completedSaveOnly) {
     const actual = archiveTaskBinding(context);
-    for (const key of Object.keys(actual)) if (value.data.binding?.[key] !== actual[key]) {
+    for (const key of Object.keys(actual)) if (data.binding?.[key] !== actual[key]) {
         // The existing completed-save path permits a display-name change only.
         // Keep the captured payload intact and prove unchanged card facts plus
         // slot/avatar before accepting that one runtime-key difference.
-        if (completedSaveOnly && key === 'characterKey' && value.data.identity?.characterFacts && value.data.identity?.characterLocator) {
-            const current = batchIdentity(context, { fullFingerprint: value.data.snapshotForIdentity?.fullFingerprint || '' });
-            if (current.characterFacts === value.data.identity.characterFacts && current.characterLocator === value.data.identity.characterLocator) continue;
+        if (completedSaveOnly && key === 'characterKey' && data.identity?.characterFacts && data.identity?.characterLocator) {
+            const current = batchIdentity(context, { fullFingerprint: data.snapshotForIdentity?.fullFingerprint ?? data.fullFingerprint ?? '' });
+            if (current.characterFacts === data.identity.characterFacts && current.characterLocator === data.identity.characterLocator) continue;
         }
         throw archive_batches.changedInput(key === 'chatId' ? 'chat' : 'character');
     }
-    return structuredClone(value.data);
+}
+
+function verifiedTaskData(value, context, completedSaveOnly) {
+    if (!value) return null;
+    if (value.version !== 1 || !value.data || !draft_inputs.taskInputDigestValid(value)) {
+        throw core_text.safeUserError('原任务资料未通过完整性校验，原草稿保留。', 'RMT_RECOVERY_DATA');
+    }
+    assertTaskBinding(value.data, context, completedSaveOnly);
+    return value.data;
+}
+
+function checkedArchiveTaskInput(value, context, { completedSaveOnly = false } = {}) {
+    const data = verifiedTaskData(value, context, completedSaveOnly);
+    return data ? structuredClone(data) : null;
 }
 
 function archiveContentContext(context, taskInput) {
@@ -35392,9 +36251,17 @@ function batchIdentity(context, snapshot) {
 function assertBatchCommitIdentity(context, bank, { completedSaveOnly = false } = {}) {
     const progress = bank?.[archive_batches.IMPORT_PROGRESS_KEY];
     if (!progress) return;
-    const captured = checkedArchiveTaskInput(progress.taskInputV1, context, { completedSaveOnly });
+    // Runs before every chunk: verify (memoized) without copying the chat.
+    const captured = verifiedTaskData(progress.taskInputV1, context, completedSaveOnly);
     if (captured) {
         archive_batches.assertIdentity(progress.identity, captured.identity);
+        return;
+    }
+    // A finished batch keeps only the binding of its original task input.
+    const binding = progress.taskInputBinding;
+    if (binding?.version === 1 && binding.binding && binding.identity) {
+        assertTaskBinding(binding, context, completedSaveOnly);
+        archive_batches.assertIdentity(progress.identity, binding.identity);
         return;
     }
     const actual = batchIdentity(context, { fullFingerprint: core_context.completeArchiveChatFingerprint(context) });
@@ -36767,7 +37634,9 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
     let externalChunks = externalChanged ? splitExternalMemoryIntoChunks(external.records) : [];
     let totalChunks = chunks.length + externalChunks.length;
     let batchBudgets = [], capacityPending = [];
-    let pausedProgress = pinnedInputs?.pausedProgress || (restartImport && storedProgress ? [...(existing?.archiveImportPaused || []), storedProgress] : existing?.archiveImportPaused || []);
+    // Parked old progress is a record only: no chat copy, newest few kept.
+    let pausedProgress = draft_inputs.compactPausedProgressList(pinnedInputs?.pausedProgress
+        || (restartImport && storedProgress ? [...(existing?.archiveImportPaused || []), storedProgress] : existing?.archiveImportPaused || []));
     let completedChunks = 0;
     let chunkInFlight = false;
     core_taskTrace.markChunks(taskTrace, { total: totalChunks, pending: totalChunks });
@@ -36864,20 +37733,27 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
                 external, contextEnvelope, inputOwner, identity, userAvatar,
                 participantRoster: archiveRoster });
         }
-        if (progress && taskInputV1) progress.taskInputV1 = structuredClone(taskInputV1);
+        if (progress && taskInputV1) {
+            progress.taskInputV1 = structuredClone(taskInputV1);
+            // An exact copy of an already verified input: no second full hash.
+            if (draft_inputs.taskInputDigestValid(taskInputV1)) draft_inputs.markVerifiedTaskInput(progress.taskInputV1);
+        }
         const livePreparation = assertPreparationCurrent();
         if (progress) assertBatchCommitIdentity(context, { [archive_batches.IMPORT_PROGRESS_KEY]: progress });
         // r84.159：保存前（assertBatchSaveCurrent）会做同一项核对。提前到发请求之前，不先花钱再拒绝保存。
         if ((commitCompletedOnly || receiptBase?.archivePartialDraft) && !floorWindowSync
             && core_context.completeArchiveChatFingerprint(livePreparation) !== snapshotForIdentity.fullFingerprint) throw archive_batches.changedInput('chat');
         if (!automatic && !continueRecovery) {
-            const chatCharacters = chatInput.reduce((sum, item) => sum + item.text.length, 0);
+            // With batches, count only what this batch sends, not the whole chat.
+            const batchRows = progress && !legacyDraft ? chunks.flat() : chatInput;
+            const chatCount = progress && !legacyDraft ? new Set(batchRows.map(item => item.index)).size : chatInput.length;
+            const chatCharacters = batchRows.reduce((sum, item) => sum + item.text.length, 0);
             const externalCharacters = externalChunks.reduce((sum, chunk) => sum + JSON.stringify(chunk).length, 0);
             const rangeLabel = snapshot.readRange?.mode === 'all' ? '全部楼层'
                 : snapshot.readRange?.mode === 'recent' ? `最近 ${snapshot.readRange.recent} 楼`
                     : `第 ${snapshot.readRange?.start}–${snapshot.readRange?.end} 楼`;
             if (!ui_overlay.confirmExplicitAction('确认本次读取范围',
-                `${progress ? `本次为第 ${progress.nextBatch + 1}/${progress.batches.length} 批，完成后停止。` : ''}【${archive_coverage.OPERATION_KIND_LABEL[operationKind]}】${rangeLabel}；已捕获 ${chatInput.length} 条聊天正文，约 ${chatCharacters.toLocaleString()} 字符。${snapshot.readRange?.includeHidden ? '包含隐藏普通对话' : '不含隐藏对话'}。\n外部摘要独立选择：${externalChunks.length} 个分块，约 ${externalCharacters.toLocaleString()} 字符；角色/用户设定与世界书背景每次请求约 ${contextEnvelope.length.toLocaleString()} 字符。\n分块整理后还有档案概述步骤；字符数不是精确 token 或费用。已有 ${existing?.memories?.length || 0} 条档案记忆保留，不会因缩小范围而删除。`,
+                `${progress ? `本次为第 ${progress.nextBatch + 1}/${progress.batches.length} 批，完成后停止。` : ''}【${archive_coverage.OPERATION_KIND_LABEL[operationKind]}】${rangeLabel}；${progress ? '本批' : '已捕获'} ${chatCount} 条聊天正文，约 ${chatCharacters.toLocaleString()} 字符。${snapshot.readRange?.includeHidden ? '包含隐藏普通对话' : '不含隐藏对话'}。\n外部摘要独立选择：${externalChunks.length} 个分块，约 ${externalCharacters.toLocaleString()} 字符；角色/用户设定与世界书背景每次请求约 ${contextEnvelope.length.toLocaleString()} 字符。\n分块整理后还有档案概述步骤；字符数不是精确 token 或费用。已有 ${existing?.memories?.length || 0} 条档案记忆保留，不会因缩小范围而删除。`,
                 { destructive: false })) return { status: 'cancelled' };
             assertPreparationCurrent();
         }
@@ -37400,6 +38276,9 @@ let autoPartialCommitEnabled = true;
 // Test seam only: legacy fixtures exercise the manual button path.
 function setAutoPartialCommitForTests(value) { autoPartialCommitEnabled = value !== false; }
 
+// Leftover drafts already announced by the per-floor sync (page-local, bounded).
+const parkedFloorDraftNotices = new Set();
+
 async function autoCommitCompletedArchiveChunks(options, outcome) {
     if (!autoPartialCommitEnabled || options.commitCompletedOnly || options.automatic || options.restartImport || options.fullRebuild || options.parkPriorDraft) return null;
     if (outcome?.status === 'cancelled' || isArchiveCancellation(outcome?.error)) return null;
@@ -37576,12 +38455,21 @@ async function runArchiveImportPrepared(context, options, taskTrace, admission) 
     }
     const floorWindowSync = archive_batches.isAutomaticFloorWindowSync(options);
     if (floorWindowSync && pending?.awaitingCommit) return { status: 'blocked' };
-    // Park a leftover draft so this window can start. Do not set parkPriorDraft:
-    // that flag swallows later import errors and the due floor is marked empty.
+    // A leftover draft (e.g. one stalled stream) is parked so per-floor sync keeps
+    // going; waiting for the user here could stop automatic sync for good.
+    // Paused copies are kept small (only drafts with unsaved chunks keep inputs).
+    // Each draft is announced once, not on every floor.
+    // Do not set parkPriorDraft: it swallows later import errors.
     if (floorWindowSync && pending && !pending.onlyArchivedDrafts) {
-        if (archive_importRecovery.parkArchiveRecovery(hydrationOrigin, 'import', { ignoreActive: true })
+        const leftover = archive_importRecovery.listArchiveRecoveryDrafts(hydrationOrigin, 'import').find(row => !row.paused);
+        if (leftover && archive_importRecovery.parkArchiveRecovery(hydrationOrigin, 'import', { ignoreActive: true })
             && !await archive_importRecovery.flushArchiveRecovery(hydrationOrigin, 'import')) {
             throw new Error('原整理草稿未确认保存，本次没有重新生成。');
+        }
+        if (leftover && leftover.stage !== 'profile-only' && !parkedFloorDraftNotices.has(leftover.draftId)) {
+            if (parkedFloorDraftNotices.size >= 64) parkedFloorDraftNotices.clear();
+            parkedFloorDraftNotices.add(leftover.draftId);
+            globalThis.toastr?.info?.('未完成的整理草稿已移到旧草稿，自动同步继续。', '心迹回廊');
         }
     }
     let selectedDraft = null, sourceExisting;
@@ -37606,6 +38494,7 @@ async function runArchiveImportPrepared(context, options, taskTrace, admission) 
             await archive_importRecovery.flushArchiveRecovery(hydrationOrigin, 'import');
             return { status: 'independent', draftId: selectedDraft.draftId };
         }
+        if (selectedDraft.inputsTrimmed) throw archive_importRecovery.archiveDraftReadOnlyFailure();
         const captured = checkedArchiveTaskInput(selectedDraft.inputs?.taskInputV1, context);
         const baseRevision = selectedDraft.inputs?.progress?.archiveRevision || '';
         let baseMemoryMissing = selectedDraft.archiveResult?.baseMemoryMissing === true;
@@ -42283,13 +43172,11 @@ async function buildChatSnapshot(context = currentCharacterGuard(), options = {}
     const full = capMessages(selectedUsable);
     const incrementalRaw = prefixCount > 0 && totalMessages >= prefixCount ? usable.slice(prefixCount) : usable;
     const incremental = capMessages(selectedFloors ? incrementalRaw.filter(item => selectedFloors.has(item.index)) : incrementalRaw);
+    const fullHashes = options.completeSource === true ? await signatureFingerprints(chatId, fullSignatures, prefixCount, assertStillCurrent) : null;
     assertStillCurrent();
     return {
         chatId,
-        ...(options.completeSource === true ? {
-            fullFingerprint: core_digest.sha256Bytes(new TextEncoder().encode(JSON.stringify([chatId, fullSignatures]))),
-            fullPrefixFingerprint: core_digest.sha256Bytes(new TextEncoder().encode(JSON.stringify([chatId, fullSignatures.slice(0, prefixCount)]))),
-        } : {}),
+        ...(fullHashes ? { fullFingerprint: fullHashes.full, fullPrefixFingerprint: fullHashes.prefix } : {}),
         totalMessages,
         usedMessages: full.selected.length,
         usedChars: full.selectedChars,
@@ -42305,6 +43192,25 @@ async function buildChatSnapshot(context = currentCharacterGuard(), options = {}
         incrementalUsedChars: incremental.selectedChars,
         incrementalTruncated: incremental.truncated,
     };
+}
+
+// Same values as sha256(JSON.stringify([chatId, signatures])) and the same over
+// signatures.slice(0, prefixCount), in one pass over the shared prefix, yielding
+// to the page between slices instead of hashing a long chat twice in one go.
+async function signatureFingerprints(chatId, signatures, prefixCount, assertStillCurrent) {
+    const encoder = new TextEncoder();
+    const hash = core_digest.createSha256().updateText(`[${JSON.stringify([chatId]).slice(1, -1)},[`);
+    const prefixEnd = Math.min(Math.max(0, prefixCount), signatures.length);
+    let prefix = prefixEnd === 0 ? hash.fork() : null, pendingBytes = 0;
+    for (let index = 0; index < signatures.length; index += 1) {
+        const piece = (index ? ',' : '') + JSON.stringify(signatures[index]);
+        hash.update(encoder.encode(piece));
+        pendingBytes += piece.length;
+        if (index + 1 === prefixEnd) prefix = hash.fork();
+        if (pendingBytes >= 131072) { pendingBytes = 0; await yieldToUi(); assertStillCurrent(); }
+    }
+    const close = encoder.encode(']]');
+    return { full: hash.update(close).hex(), prefix: prefix.update(close).hex() };
 }
 
 // Used only while a batch is explicitly committing (including its deferred save),
@@ -43176,6 +44082,24 @@ function settledChatTaskRecord(id) {
     return row ? { ...row } : null;
 }
 
+// A finished row's follow-up (second step) acts on the chat it came from. It is
+// only offered/run while that exact chat is the open one, and never for a
+// detached archive target.
+function settledChatTaskInCurrentChat(id, context = null) {
+    const row = recentChatTasks.find(item => item.id === String(id || ''));
+    if (!row || row.archiveTarget === true) return false;
+    return sameSettledChat(row, liveTaskContext(context));
+}
+
+// Running whole operations that still own this draft or mode. An automatic
+// continuation waits for these to settle instead of colliding with them.
+function runningLogicalTasksForDraft({ mode = '', draftId = '' } = {}) {
+    const wantedMode = core_text.normalizeText(mode, 80);
+    const wantedDraft = core_text.normalizeText(draftId, 240);
+    return [...logicalGenerationTasks.values()].filter(task => (wantedDraft && task.draftId === wantedDraft)
+        || (wantedMode && (task.mode === wantedMode || (Array.isArray(task.pageIds) && task.pageIds.includes(wantedMode)))));
+}
+
 function currentChatBlockingTasks(context = null) {
     try {
         return listChatTaskSnapshot(context).filter(row => row.running && row.currentChat).map(row => row.label);
@@ -43334,6 +44258,8 @@ __m_core_requestTasks_js.collectChatTaskRows = collectChatTaskRows;
 __m_core_requestTasks_js.listChatTaskSnapshot = listChatTaskSnapshot;
 __m_core_requestTasks_js.noteSecondStepOffer = noteSecondStepOffer;
 __m_core_requestTasks_js.settledChatTaskRecord = settledChatTaskRecord;
+__m_core_requestTasks_js.settledChatTaskInCurrentChat = settledChatTaskInCurrentChat;
+__m_core_requestTasks_js.runningLogicalTasksForDraft = runningLogicalTasksForDraft;
 __m_core_requestTasks_js.currentChatBlockingTasks = currentChatBlockingTasks;
 __m_core_requestTasks_js.originMatchesChatScope = originMatchesChatScope;
 __m_core_requestTasks_js.abortTaskController = abortTaskController;
@@ -43391,6 +44317,8 @@ const recentChatTasks = __m_core_requestTasks_js.recentChatTasks;
 
 let settledTaskSequence = 0;
 
+const MAX_CANCELLED_LOGICAL_ORIGINS = 32;
+
 let refreshTaskCenter = () => {};
 
 function finishLogicalGenerationTask(handle, result = null) {
@@ -43401,7 +44329,17 @@ function finishLogicalGenerationTask(handle, result = null) {
         handle.failureSummary = core_text.safeErrorSummary(result.error);
     }
     handle.releaseParent();
-    if (handle.signal.aborted) cancelledLogicalOrigins.push(handle);
+    if (handle.signal.aborted) {
+        cancelledLogicalOrigins.push(handle);
+        // Bounded: entries from an older runtime lifetime can never match again,
+        // and only recent cancellations still have late segments in flight.
+        for (let index = cancelledLogicalOrigins.length - 1; index >= 0; index -= 1) {
+            if (cancelledLogicalOrigins[index].lifecycleEpoch !== runtimeState.runtimeLifecycleEpoch) cancelledLogicalOrigins.splice(index, 1);
+        }
+        if (cancelledLogicalOrigins.length > MAX_CANCELLED_LOGICAL_ORIGINS) {
+            cancelledLogicalOrigins.splice(0, cancelledLogicalOrigins.length - MAX_CANCELLED_LOGICAL_ORIGINS);
+        }
+    }
     logicalGenerationTasks.delete(handle.id);
     // The refresh inside rememberSettledTask must not see this finished task
     // as still running; otherwise the archive chip remains stuck at “准备”.
@@ -43692,8 +44630,13 @@ function generationRequestTimeoutMs(value) {
     return Math.max(core_constants.MIN_GENERATION_REQUEST_TIMEOUT_MS, Math.min(core_constants.MAX_GENERATION_REQUEST_TIMEOUT_MS, Math.floor(requested)));
 }
 
+// A streamed reply that keeps arriving is not stuck. The configured timeout is an
+// idle limit (no new data); this separate cap only stops a stream that never ends.
+const GENERATION_REQUEST_TOTAL_CAP_MS = 15 * 60 * 1000;
+
 function runGenerationRequestWithTimeout(factory, controller, timeoutMs, statusText = '') {
     const duration = generationRequestTimeoutMs(timeoutMs);
+    const totalCap = Math.max(duration, GENERATION_REQUEST_TOTAL_CAP_MS);
     return new Promise((resolve, reject) => {
         let settled = false;
         let timer = 0;
@@ -43707,10 +44650,21 @@ function runGenerationRequestWithTimeout(factory, controller, timeoutMs, statusT
         const startedAt = Date.now();
         let hiddenAt = 0;
         let hiddenMs = 0;
+        // Visible-time mark of the latest received data. Each progress report
+        // restarts the idle window; the timer callback re-checks by the clock,
+        // so a chunk does not need to re-arm the timer itself.
+        let activityMark = 0;
+        let progressed = false;
         const pageHidden = () => {
             try { return globalThis.document?.visibilityState === 'hidden'; } catch { return false; }
         };
         const visibleElapsedMs = () => Date.now() - startedAt - hiddenMs - (hiddenAt ? Date.now() - hiddenAt : 0);
+        const idleMs = () => visibleElapsedMs() - activityMark;
+        const noteProgress = () => {
+            if (settled) return;
+            progressed = true;
+            activityMark = visibleElapsedMs();
+        };
         const finish = (handler, value) => {
             if (settled) return;
             settled = true;
@@ -43726,7 +44680,7 @@ function runGenerationRequestWithTimeout(factory, controller, timeoutMs, statusT
         const armTimer = () => {
             if (settled) return;
             if (timer) clearTimeout(timer);
-            timer = setTimeout(onTimer, Math.max(1, duration - visibleElapsedMs()));
+            timer = setTimeout(onTimer, Math.max(1, Math.min(duration - idleMs(), totalCap - visibleElapsedMs())));
         };
         const onTimer = () => {
             timer = 0;
@@ -43734,12 +44688,23 @@ function runGenerationRequestWithTimeout(factory, controller, timeoutMs, statusT
             // re-evaluate by the real clock after a resume instead of trusting the
             // parked callback. A request that was already overtime while visible
             // still times out as soon as the page is visible again.
-            if (pageHidden() || visibleElapsedMs() < duration) { armTimer(); return; }
+            const overCap = visibleElapsedMs() >= totalCap;
+            if (pageHidden() || (!overCap && idleMs() < duration)) { armTimer(); return; }
             const seconds = Math.round(duration / 1000);
+            const minutes = Math.round(totalCap / 60000);
             const label = core_text.normalizeText(statusText, 120);
-            const error = new Error(`${label ? `${label}：` : ''}模型请求超过 ${seconds} 秒仍未完成，已停止等待并释放任务位。请稍后重试；若反复发生，请检查代理/模型速度或降低单次输出上限。`);
+            const lead = overCap ? `模型请求超过 ${minutes} 分钟仍未完成，已停止等待。`
+                : progressed ? `模型已连续 ${seconds} 秒没有返回新内容，已停止等待。` : `模型请求超过 ${seconds} 秒仍未完成，已停止等待。`;
+            const error = new Error(overCap
+                ? `${label ? `${label}：` : ''}模型请求超过 ${minutes} 分钟仍未完成，已停止等待并释放任务位。请稍后重试；若反复发生，请降低单次输出上限。`
+                : progressed
+                    ? `${label ? `${label}：` : ''}模型已连续 ${seconds} 秒没有返回新内容，已停止等待并释放任务位。请稍后重试；若反复发生，请检查代理/模型速度。`
+                    : `${label ? `${label}：` : ''}模型请求超过 ${seconds} 秒仍未完成，已停止等待并释放任务位。请稍后重试；若反复发生，请检查代理/模型速度或降低单次输出上限。`);
             error.code = 'RMT_REQUEST_TIMEOUT';
             error.retryable = false;
+            error.timeoutKind = overCap ? 'total' : 'idle';
+            error.timeoutLead = lead;
+            error.receivedProgress = progressed;
             finish(reject, error);
             try { controller.abort(error); } catch {}
         };
@@ -43763,7 +44728,7 @@ function runGenerationRequestWithTimeout(factory, controller, timeoutMs, statusT
         if (pageHidden()) hiddenAt = startedAt;
         armTimer();
         Promise.resolve()
-            .then(factory)
+            .then(() => factory(noteProgress))
             .then(value => finish(resolve, value), error => finish(reject, error));
     });
 }
@@ -43800,7 +44765,7 @@ function shouldRetrySegmentRequest(error, attempt = 0) {
 }
 
 function stopsCompositeGeneration(error) {
-    return error?.name === 'AbortError' || /^(?:RMT_CONNECTION_|RMT_MANUAL_|RMT_PROFILE_|RMT_API_|RMT_RESPONSE_HTML|RMT_REQUEST_TIMEOUT)/.test(String(error?.code || ''));
+    return error?.name === 'AbortError' || error?.requestTimeout === true || /^(?:RMT_CONNECTION_|RMT_MANUAL_|RMT_PROFILE_|RMT_API_|RMT_RESPONSE_HTML|RMT_REQUEST_TIMEOUT)/.test(String(error?.code || ''));
 }
 
 function validateGeneratedSegment(raw, validator) {
@@ -43901,6 +44866,8 @@ __m_core_requestTaskCenter_js.segmentRetryDelayMs = segmentRetryDelayMs;
 __m_core_requestTaskCenter_js.setAutoRetryHandler = setAutoRetryHandler;
 __m_core_requestTaskCenter_js.noteRetryableGeneration = noteRetryableGeneration;
 __m_core_requestTaskCenter_js.refreshConcurrentTaskUi = refreshConcurrentTaskUi;
+__m_core_requestTaskCenter_js.MAX_CANCELLED_LOGICAL_ORIGINS = MAX_CANCELLED_LOGICAL_ORIGINS;
+__m_core_requestTaskCenter_js.GENERATION_REQUEST_TOTAL_CAP_MS = GENERATION_REQUEST_TOTAL_CAP_MS;
 __m_core_requestTaskCenter_js.MAX_SEGMENT_ATTEMPTS = MAX_SEGMENT_ATTEMPTS;
 __m_core_requestTaskCenter_js.MAX_RATE_LIMIT_ATTEMPTS = MAX_RATE_LIMIT_ATTEMPTS;
 }
@@ -43941,6 +44908,8 @@ const listChatTaskSnapshot = split_requestTasks.listChatTaskSnapshot;
 const noteSecondStepOffer = split_requestTasks.noteSecondStepOffer;
 const rememberStandaloneChatTask = split_requestTaskCenter.rememberStandaloneChatTask;
 const settledChatTaskRecord = split_requestTasks.settledChatTaskRecord;
+const settledChatTaskInCurrentChat = split_requestTasks.settledChatTaskInCurrentChat;
+const runningLogicalTasksForDraft = split_requestTasks.runningLogicalTasksForDraft;
 const clearCompletedChatTasks = split_requestTaskCenter.clearCompletedChatTasks;
 const dismissFailedChatTask = split_requestTaskCenter.dismissFailedChatTask;
 const currentChatBlockingTasks = split_requestTasks.currentChatBlockingTasks;
@@ -44015,6 +44984,8 @@ __m_core_requestCoordinator_js.listChatTaskSnapshot = listChatTaskSnapshot;
 __m_core_requestCoordinator_js.noteSecondStepOffer = noteSecondStepOffer;
 __m_core_requestCoordinator_js.rememberStandaloneChatTask = rememberStandaloneChatTask;
 __m_core_requestCoordinator_js.settledChatTaskRecord = settledChatTaskRecord;
+__m_core_requestCoordinator_js.settledChatTaskInCurrentChat = settledChatTaskInCurrentChat;
+__m_core_requestCoordinator_js.runningLogicalTasksForDraft = runningLogicalTasksForDraft;
 __m_core_requestCoordinator_js.clearCompletedChatTasks = clearCompletedChatTasks;
 __m_core_requestCoordinator_js.dismissFailedChatTask = dismissFailedChatTask;
 __m_core_requestCoordinator_js.currentChatBlockingTasks = currentChatBlockingTasks;
@@ -46495,9 +47466,11 @@ const image_patch = __m_core_cgImagePatch_js;
 const core_text = __m_core_text_js;
 const core_context = __m_core_context_js;
 const appearance = __m_generation_cgAppearance_js;
+const chatu8_image = __m_generation_chatu8Image_js;
 
 // Original adapter for the author's documented STBaiBaiImage API v1.
 // No third-party implementation, settings, credentials or DOM are accessed.
+
 
 
 
@@ -46692,7 +47665,17 @@ async function generateBaiBaiImage(prompt, { signal = null, orientation = 'lands
             });
         const result = await Promise.race([providerPromise, stopPromise]);
         if (signal?.aborted || stopped) throw baiBaiImageError('BBI_ABORTED');
-        const path = savedImagePath(result?.path);
+        let path = savedImagePath(result?.path);
+        if (!path && typeof result?.dataUrl === 'string' && result.dataUrl.startsWith('data:image/')) {
+            // The image exists but was not saved to the gallery: keep it in the
+            // user's own ST image folder instead of losing a paid result.
+            try {
+                report({ phase: 'saving' });
+                path = savedImagePath(await chatu8_image.uploadStillDataUrl(result.dataUrl, context, signal));
+            } catch (error) {
+                throw baiBaiImageError(signal?.aborted || error?.code === 'CH8_ABORTED' ? 'BBI_ABORTED' : 'BBI_SAVE_FAILED');
+            }
+        }
         if (!path) throw baiBaiImageError('BBI_SAVE_FAILED');
         // Drop the potentially multi-MB dataUrl; only durable image references enter archive metadata.
         const usedSeed = Number(result?.seed);
@@ -47468,12 +48451,12 @@ function invokeSelectedImageProvider(selectedProvider, prompt, context, options)
     throw core_text.safeUserError('请在设置里选择柏宝绘或智绘姬。旧渠道图片仍可查看。', 'RMT_IMAGE_PROVIDER_RETIRED');
 }
 
-async function invokeImageGeneration(prompt, context = core_context.getContext(), { signal = null, provider = null, orientation = 'landscape', respectOrientation = false, aspectRatio = '', characterName = '', promptMetadata = null, onProgress = null, onSettled = null, targetKey = '', seed = 0, singlePrompt = false, preservePrompt = false, avatarPromptParts = null } = {}) {
+async function invokeImageGeneration(prompt, context = core_context.getContext(), { signal = null, provider = null, orientation = 'landscape', respectOrientation = false, configuredSizeOnly = false, aspectRatio = '', characterName = '', promptMetadata = null, onProgress = null, onSettled = null, targetKey = '', seed = 0, singlePrompt = false, preservePrompt = false, avatarPromptParts = null } = {}) {
     const settings = core_settings.getPluginSettings(context);
     const selectedProvider = provider === chatu8_image.CHATU8_IMAGE_PROVIDER || provider === baibai_image.BAIBAI_IMAGE_PROVIDER
         ? provider : settings.imageGenerationProvider;
     // seed 只交给柏宝绘（公开 API 支持单次 seed）；智绘姬没有公开的单次 seed 接口，不传。
-    const options = { signal, orientation, respectOrientation, aspectRatio, characterName, promptMetadata, onProgress, onSettled, targetKey, singlePrompt, preservePrompt: preservePrompt === true, seed: Number.isInteger(seed) && seed > 0 ? seed : 0, ...(avatarPromptParts ? { avatarPromptParts } : {}) };
+    const options = { signal, orientation, respectOrientation, configuredSizeOnly: configuredSizeOnly === true, aspectRatio, characterName, promptMetadata, onProgress, onSettled, targetKey, singlePrompt, preservePrompt: preservePrompt === true, seed: Number.isInteger(seed) && seed > 0 ? seed : 0, ...(avatarPromptParts ? { avatarPromptParts } : {}) };
     try {
         return await invokeSelectedImageProvider(selectedProvider, prompt, context, options);
     } catch (error) {
@@ -48362,6 +49345,11 @@ async function drawSelectedCgImage({ promptOverride, promptMetadata, promptForma
         const generated = await invokeImageGeneration(prompt, context, {
             provider: imageState.provider, signal: controller.signal,
             orientation: item.cgOrientation === 'portrait' || (dailyStrip && Number(item.panelCount) !== 1) ? 'portrait' : 'landscape', characterName: context.name2,
+            // Send this CG's own size (the user's configured size, turned to this
+            // orientation) so a size left over from another request cannot apply.
+            // Backends without a configured size, or with a square one, keep their
+            // own default: a square preset is never stretched to 16:9.
+            respectOrientation: true, configuredSizeOnly: true,
             promptMetadata: metadata,
             targetKey: cgImageReservationKey(mode, itemId, context),
             onSettled: () => refreshSettledCgImage(taskKey, origin),
@@ -48624,8 +49612,8 @@ const appearance = __m_generation_cgAppearance_js;
 const preset_text = __m_generation_chatu8Presets_js;
 
 // Calls 智绘姬 through the event it already listens for. Does not read API keys,
-// prompts, or endpoints, and does not write its settings. Ordinary CG keeps its
-// existing size; an explicit MV orientation overrides only this request's size.
+// prompts, or endpoints, and does not write its settings. A caller that asks for
+// an orientation (CG, MV, avatars) sends an explicit size for this request only.
 
 
 
@@ -48633,6 +49621,11 @@ const preset_text = __m_generation_chatu8Presets_js;
 
 const CHATU8_IMAGE_PROVIDER = 'chatu8-image';
 const CHATU8_IMAGE_WAIT_NOTICE_MS = 300000;
+// After "停止等待" the caller is released at once, but 智绘姬 keeps drawing. Keep
+// the reservation (and its response listener) until that answer arrives, so the
+// same target cannot start a second paid job. A long cap frees a lost request.
+const CHATU8_IMAGE_ABANDON_CAP_MS = 600000;
+const STILL_UPLOAD_MAX_BYTES = 32 * 1024 * 1024;
 const EXTENSION_KEY = 'st-chatu8';
 const REQUEST_EVENT = 'generate-image-request';
 const RESPONSE_EVENT = 'generate-image-response';
@@ -48744,14 +49737,25 @@ function stillFormat(dataUrl) {
     return '';
 }
 
-async function saveStillImage(imageData, context, signal) {
-    const existing = uploadedPath(imageData);
-    if (existing) return existing;
-    if (typeof imageData !== 'string' || !imageData.startsWith('data:image/')) throw chatu8ImageError('CH8_BACKEND_ERROR');
-    const format = stillFormat(imageData);
-    const comma = imageData.indexOf(',');
-    const payload = comma > 0 ? imageData.slice(comma + 1).replace(/\s/g, '') : '';
-    if (!format || !payload) throw chatu8ImageError('CH8_BACKEND_ERROR');
+function sniffFormat(bytes, type = '') {
+    const at = (offset, ...values) => values.every((value, index) => bytes[offset + index] === value);
+    if (at(0, 0x89, 0x50, 0x4e, 0x47)) return 'png';
+    if (at(0, 0xff, 0xd8, 0xff)) return 'jpeg';
+    if (at(0, 0x47, 0x49, 0x46, 0x38)) return 'gif';
+    if (at(0, 0x52, 0x49, 0x46, 0x46) && at(8, 0x57, 0x45, 0x42, 0x50)) return 'webp';
+    return { 'image/png': 'png', 'image/jpeg': 'jpeg', 'image/jpg': 'jpeg', 'image/webp': 'webp', 'image/gif': 'gif' }[String(type).toLowerCase()] || '';
+}
+
+function bytesBase64(bytes) {
+    let binary = '';
+    for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+    return btoa(binary);
+}
+
+// Shared by both providers: store one finished still in the user's own ST
+// image folder. Any failure here means a paid image exists, so it is a save
+// failure (never a reason to draw again elsewhere).
+async function uploadStill(payload, format, context, signal, failCode) {
     let response;
     try {
         response = await fetch('/api/images/upload', {
@@ -48762,14 +49766,53 @@ async function saveStillImage(imageData, context, signal) {
         });
     } catch (error) {
         if (signal?.aborted || error?.name === 'AbortError') throw chatu8ImageError('CH8_ABORTED');
-        throw chatu8ImageError('CH8_SAVE_FAILED');
+        throw chatu8ImageError(failCode);
     }
-    if (!response?.ok) throw chatu8ImageError('CH8_SAVE_FAILED');
+    if (!response?.ok) throw chatu8ImageError(failCode);
     let body = null;
     try { body = await response.json(); } catch { body = null; }
     const path = uploadedPath(body?.path);
-    if (!path) throw chatu8ImageError('CH8_SAVE_FAILED');
+    if (!path) throw chatu8ImageError(failCode);
     return path;
+}
+
+async function uploadStillDataUrl(dataUrl, context, signal = null) {
+    if (typeof dataUrl !== 'string' || !dataUrl.startsWith('data:image/')) throw chatu8ImageError('CH8_SAVE_FAILED');
+    const format = stillFormat(dataUrl);
+    const comma = dataUrl.indexOf(',');
+    const payload = comma > 0 ? dataUrl.slice(comma + 1).replace(/\s/g, '') : '';
+    if (!format || !payload || !/;base64$/i.test(dataUrl.slice(0, comma))) throw chatu8ImageError('CH8_SAVE_FAILED');
+    return uploadStill(payload, format, context, signal, 'CH8_SAVE_FAILED');
+}
+
+// A finished image that is only reachable by URL (remote host, a same-host
+// path with a query, or a page blob) is copied once into the local folder.
+async function uploadStillFromUrl(value, context, signal) {
+    let url;
+    try { url = new URL(value, image_patch.imageResourceBase()); } catch { throw chatu8ImageError('CH8_SAVE_FAILED'); }
+    if (!['http:', 'https:', 'blob:'].includes(url.protocol)) throw chatu8ImageError('CH8_SAVE_FAILED');
+    let bytes, type = '';
+    try {
+        const response = await fetch(url.href, { signal, credentials: image_patch.isSameImageHost(url, image_patch.imageResourceBase()) ? 'same-origin' : 'omit' });
+        if (!response?.ok) throw chatu8ImageError('CH8_SAVE_FAILED');
+        type = response.headers?.get?.('content-type') || '';
+        bytes = new Uint8Array(await response.arrayBuffer());
+    } catch (error) {
+        if (signal?.aborted || error?.name === 'AbortError') throw chatu8ImageError('CH8_ABORTED');
+        throw chatu8ImageError('CH8_SAVE_FAILED');
+    }
+    const format = bytes.length && bytes.length <= STILL_UPLOAD_MAX_BYTES ? sniffFormat(bytes, type.split(';')[0].trim()) : '';
+    if (!format) throw chatu8ImageError('CH8_SAVE_FAILED');
+    return uploadStill(bytesBase64(bytes), format, context, signal, 'CH8_SAVE_FAILED');
+}
+
+async function saveStillImage(imageData, context, signal) {
+    const existing = uploadedPath(imageData);
+    if (existing) return existing;
+    if (typeof imageData !== 'string' || !imageData.trim()) throw chatu8ImageError('CH8_SAVE_FAILED');
+    const value = imageData.trim();
+    if (value.startsWith('data:')) return uploadStillDataUrl(value, context, signal);
+    return uploadStillFromUrl(value, context, signal);
 }
 
 function orientedSize(context, backend, orientation, aspectRatio = '') {
@@ -48804,6 +49847,22 @@ function orientedSize(context, backend, orientation, aspectRatio = '') {
         }
     }
     return orientation === 'portrait' ? { width: short, height: long } : { width: long, height: short };
+}
+
+// True when the active backend has its own width/height in 智绘姬's settings.
+function hasConfiguredSize(context, backend) {
+    const bag = extensionBag(context);
+    const keys = { novelai: ['novelai_width', 'novelai_height'], sd: ['sd_cwidth', 'sd_cheight'], comfyui: ['comfyui_width', 'comfyui_height'] }[backend];
+    return !!keys && keys.every(key => { const value = Number(bag?.[key]); return Number.isSafeInteger(value) && value > 0; });
+}
+
+// configuredSizeOnly: turn the configured size to this request's orientation.
+// A square preset has no orientation to turn, so the provider keeps its own size.
+function hasOrientableSize(context, backend) {
+    if (!hasConfiguredSize(context, backend)) return false;
+    const bag = extensionBag(context);
+    const keys = { novelai: ['novelai_width', 'novelai_height'], sd: ['sd_cwidth', 'sd_cheight'], comfyui: ['comfyui_width', 'comfyui_height'] }[backend];
+    return Number(bag?.[keys[0]]) !== Number(bag?.[keys[1]]);
 }
 
 function nativeCharacterBackend(context, backend) {
@@ -48896,7 +49955,7 @@ function chatu8SendPreview(prompt, { promptMetadata = null, context = core_conte
     return sendPreview(looks ? `${scene}\n\n人物外貌（逐人对应，不互换）：\n${looks}` : scene, backend, negatives);
 }
 
-async function generateChatu8Image(prompt, { signal = null, orientation = 'landscape', respectOrientation = false, aspectRatio = '', promptMetadata = null, onProgress = null, onSettled = null, targetKey = '', context = core_context.getContext(), preservePrompt = false, singlePrompt = false, avatarPromptParts = null } = {}) {
+async function generateChatu8Image(prompt, { signal = null, orientation = 'landscape', respectOrientation = false, configuredSizeOnly = false, aspectRatio = '', promptMetadata = null, onProgress = null, onSettled = null, targetKey = '', context = core_context.getContext(), preservePrompt = false, singlePrompt = false, avatarPromptParts = null } = {}) {
     if (signal?.aborted) throw chatu8ImageError('CH8_ABORTED');
     const state = chatu8ImageState(context);
     if (!state.available) throw chatu8ImageError(state.code);
@@ -48911,11 +49970,13 @@ async function generateChatu8Image(prompt, { signal = null, orientation = 'lands
     }
     const source = state.eventSource;
     const id = requestId();
-    let settled = false;
-    const finish = () => {
-        if (settled) return;
-        settled = true;
-        pendingGenerations.delete(reservation);
+    let released = false, abandoned = false;
+    // Releases the reservation exactly once: after a normal answer, or, when
+    // the caller stopped waiting, only after 智绘姬 answers (or the long cap).
+    const release = () => {
+        if (released) return;
+        released = true;
+        if (pendingGenerations.get(reservation) === id) pendingGenerations.delete(reservation);
         try { onSettled?.(); } catch {}
     };
     pendingGenerations.set(reservation, id);
@@ -48923,25 +49984,33 @@ async function generateChatu8Image(prompt, { signal = null, orientation = 'lands
         if (signal?.aborted || typeof onProgress !== 'function') return;
         try { onProgress({ phase, providerLabel: '智绘姬' }); } catch {}
     };
+    let result;
     try {
         report('generating');
-        const result = await new Promise((resolve, reject) => {
-            let timer = 0;
-            const stop = code => {
+        result = await new Promise((resolve, reject) => {
+            let timer = 0, cap = 0, answered = false;
+            const detach = () => {
                 unlisten(source, RESPONSE_EVENT, onResponse);
                 signal?.removeEventListener('abort', onAbort);
-                clearTimeout(timer);
-                reject(chatu8ImageError(code));
+                clearTimeout(timer); clearTimeout(cap);
             };
             const onResponse = data => {
                 if (!data || data.id !== id) return;
-                unlisten(source, RESPONSE_EVENT, onResponse);
+                detach();
+                // A late answer after "停止等待" only frees the reservation.
+                if (abandoned) { release(); return; }
+                answered = true; resolve(data);
+            };
+            const onAbort = () => {
+                if (answered || abandoned) return;
+                abandoned = true;
                 signal?.removeEventListener('abort', onAbort);
                 clearTimeout(timer);
-                resolve(data);
+                cap = setTimeout(() => { detach(); release(); }, CHATU8_IMAGE_ABANDON_CAP_MS);
+                try { cap?.unref?.(); } catch {}
+                reject(chatu8ImageError('CH8_ABORTED'));
             };
-            const onAbort = () => stop('CH8_ABORTED');
-            if (signal?.aborted) { stop('CH8_ABORTED'); return; }
+            if (signal?.aborted) { reject(chatu8ImageError('CH8_ABORTED')); return; }
             try {
                 source.on(RESPONSE_EVENT, onResponse);
                 signal?.addEventListener('abort', onAbort, { once: true });
@@ -48949,9 +50018,17 @@ async function generateChatu8Image(prompt, { signal = null, orientation = 'lands
                 timer = setTimeout(() => report('waiting'), CHATU8_IMAGE_WAIT_NOTICE_MS);
                 source.emit(REQUEST_EVENT, { id, prompt: preview.prompt,
                     ...(preview.negative_prompt ? { negative_prompt: preview.negative_prompt } : {}),
-                    ...(respectOrientation ? orientedSize(context, state.backend, orientation, aspectRatio) : {}) });
-            } catch { stop('CH8_BACKEND_ERROR'); }
+                    ...(respectOrientation && (!configuredSizeOnly || hasOrientableSize(context, state.backend))
+                        ? orientedSize(context, state.backend, orientation, aspectRatio) : {}) });
+            } catch { detach(); reject(chatu8ImageError('CH8_BACKEND_ERROR')); }
         });
+    } catch (error) {
+        if (!abandoned) release();
+        if (ownErrors.has(error) || error?.safeToDisplay) throw error;
+        throw chatu8ImageError('CH8_BACKEND_ERROR');
+    }
+    // 智绘姬 has answered: from here the reservation is always released.
+    try {
         if (signal?.aborted) throw chatu8ImageError('CH8_ABORTED');
         if (result?.cancelled) throw chatu8ImageError('CH8_ABORTED');
         if (result?.success !== true || result?.isVideo === true) throw chatu8ImageError('CH8_BACKEND_ERROR');
@@ -48959,14 +50036,15 @@ async function generateChatu8Image(prompt, { signal = null, orientation = 'lands
         const path = await saveStillImage(result.imageData, context, signal);
         return { url: path, provider: CHATU8_IMAGE_PROVIDER };
     } catch (error) {
-        if (ownErrors.has(error)) throw error;
-        if (error?.safeToDisplay) throw error;
-        throw chatu8ImageError('CH8_BACKEND_ERROR');
+        if (ownErrors.has(error) || error?.safeToDisplay) throw error;
+        // success:true already means a finished (possibly paid) image.
+        throw chatu8ImageError(result?.success === true ? 'CH8_SAVE_FAILED' : 'CH8_BACKEND_ERROR');
     } finally {
-        finish();
+        release();
     }
 }
 
+__m_generation_chatu8Image_js.uploadStillDataUrl = uploadStillDataUrl;
 __m_generation_chatu8Image_js.generateChatu8Image = generateChatu8Image;
 __m_generation_chatu8Image_js.chatu8ImageError = chatu8ImageError;
 __m_generation_chatu8Image_js.chatu8ImageState = chatu8ImageState;
@@ -48975,6 +50053,7 @@ __m_generation_chatu8Image_js.isChatu8ImageTargetPending = isChatu8ImageTargetPe
 __m_generation_chatu8Image_js.chatu8SendPreview = chatu8SendPreview;
 __m_generation_chatu8Image_js.CHATU8_IMAGE_PROVIDER = CHATU8_IMAGE_PROVIDER;
 __m_generation_chatu8Image_js.CHATU8_IMAGE_WAIT_NOTICE_MS = CHATU8_IMAGE_WAIT_NOTICE_MS;
+__m_generation_chatu8Image_js.CHATU8_IMAGE_ABANDON_CAP_MS = CHATU8_IMAGE_ABANDON_CAP_MS;
 }
 
 function __init_generation_contentRegeneration_js() {
@@ -50266,6 +51345,7 @@ const core_participants = __m_core_participants_js;
 const core_constants = __m_core_constants_js;
 const core_context = __m_core_context_js;
 const core_independentApi = __m_core_independentApi_js;
+const core_independentApiConfig = __m_core_independentApiConfig_js;
 const core_requestCoordinator = __m_core_requestCoordinator_js;
 const core_settings = __m_core_settings_js;
 const creative_supplement = __m_core_creativeSupplement_js;
@@ -50291,6 +51371,7 @@ const generationContentSettings = __m_generation_generationContext_js.generation
 const generationTrace = __m_generation_generationContext_js.generationTrace;
 const generationWorldInfoScanTerms = __m_generation_generationContext_js.generationWorldInfoScanTerms;
 const notifyInputPackingOnce = __m_generation_generationContext_js.notifyInputPackingOnce;
+
 
 
 
@@ -50376,7 +51457,10 @@ async function requestValidatedSegment(prompt, status, options, validator) {
             if (options.taskTrace?.activeStage === 'validate') core_taskTrace.markStage(options.taskTrace, 'validate', false);
             if (error?.name === 'AbortError' || error?.nonRetryable === true || error?.code === 'RMT_PHONE_NO_CONVERSATION' || error?.code === 'RMT_BANNED_GENERATED_PHRASE' || error?.code === 'RMT_JSON_TRUNCATED') throw error;
             lastError = error;
-            const emptyReroll = attempt === 0 && ['RMT_JSON_EMPTY_FINAL', 'RMT_JSON_EMPTY_FINAL_WITH_REASONING', 'RMT_JSON_NOT_FOUND'].includes(error?.code);
+            // A reasoning-only reply, or any error that already told the user it
+            // will not be retried (retryable === false), is never re-sent here.
+            const emptyReroll = attempt === 0 && ['RMT_JSON_EMPTY_FINAL', 'RMT_JSON_NOT_FOUND'].includes(error?.code)
+                && error?.retryable !== false;
             const configuredRetry = attempt + 1 < configuredAttempts && core_requestCoordinator.shouldRetrySegmentRequest(error, attempt);
             if (attempt + 1 < maxAttempts && (emptyReroll || configuredRetry)) {
                 core_taskTrace.recordRetry(options.taskTrace, error);
@@ -50499,6 +51583,10 @@ async function generateConfiguredJson(prompt, options = {}) {
     const logicalTask = core_requestCoordinator.logicalGenerationTaskForOrigin(options.origin);
     if (!logicalTask) return generateConfiguredJsonOperation(prompt, options);
     core_requestCoordinator.assertLogicalGenerationTaskCurrent(logicalTask);
+    // Checked before any listener is attached, so this early exit leaks nothing.
+    if (core_requestCoordinator.chatScopeCancellationBlocksOrigin(options.origin)) {
+        throw core_requestCoordinator.createGenerationAbortError();
+    }
     const controller = new AbortController();
     const signals = [...new Set([options.signal, logicalTask.signal].filter(Boolean))];
     const abort = () => controller.abort(core_requestCoordinator.createGenerationAbortError());
@@ -50514,9 +51602,6 @@ async function generateConfiguredJson(prompt, options = {}) {
         if (typeof options.recoveryBasePrompt === 'string' && block && !options.recoveryBasePrompt.includes(block)) {
             options = { ...options, recoveryBasePrompt: options.recoveryBasePrompt + block };
         }
-    }
-    if (core_requestCoordinator.chatScopeCancellationBlocksOrigin(options.origin)) {
-        throw core_requestCoordinator.createGenerationAbortError();
     }
     try {
         const result = await generateConfiguredJsonOperation(prompt, { ...options, signal: controller.signal });
@@ -50542,6 +51627,26 @@ function composeOutgoingGenerationPrompt(prompt, context, contentSettings = {}, 
     const phrasePolicy = enforceGeneratedPhrasePolicy === true ? generatedPhrasePolicyText(contentSettings) : '';
     const creativeSupplement = creative_supplement.creativeSupplementBlock(contentSettings);
     return `${contextEnvelope}\n${expanded}${creativeSupplement}${phrasePolicy}`;
+}
+
+// Treat the received part of a stalled stream like an interrupted stream: save
+// it as a truncated segment the user can continue. No automatic request is sent.
+async function timedOutStreamError(options, timeoutError, text) {
+    const truncated = generation_jsonParser.jsonOutputError('RMT_JSON_TRUNCATED', timeoutError.message);
+    truncated.requestTimeout = true;
+    truncated.timeoutKind = timeoutError.timeoutKind || 'idle';
+    let saved = false;
+    try {
+        saved = await generation_recovery.recordRecoveryTruncation(options, text, truncated, { autoContinue: false });
+    } catch (error) {
+        if (error && typeof error === 'object') error.requestTimeout = true;
+        throw error;
+    }
+    // No recovery draft took it: the partial text is dropped, never put on the error.
+    if (!saved) return timeoutError;
+    const lead = core_text.normalizeText(timeoutError.timeoutLead, 120);
+    if (lead) truncated.message = truncated.safeUserMessage = `${lead}${truncated.safeUserMessage}`;
+    return truncated;
 }
 
 async function generateConfiguredJsonOperation(prompt, options = {}) {
@@ -50660,6 +51765,9 @@ async function generateConfiguredJsonOperation(prompt, options = {}) {
         }
     };
     let result, responsePayload, completeInboxProse = false, releaseProviderPermit = null, requestStartedAt = 0;
+    // Latest cumulative streamed text. Local only: used to keep a stalled
+    // stream's received part as a recovery draft, never logged or displayed.
+    let streamedText = '', timedOut = null, progressChars = 0, progressReasoning = 0;
     const lifecycleController = new AbortController();
     const externalSignal = options.signal || null;
     const forwardAbort = () => {
@@ -50689,11 +51797,21 @@ async function generateConfiguredJsonOperation(prompt, options = {}) {
         requestStartedAt = Date.now();
         core_requestCoordinator.noteChatTaskPhase('request', { taskKey: options.taskKey, origin: options.origin });
         result = await core_requestCoordinator.runGenerationRequestWithTimeout(
-            async () => {
+            async noteProgress => {
                 assertRequestCurrent();
                 core_taskTrace.recordProviderRequest(taskTrace);
                 core_taskTrace.recordRequestTransport(taskTrace, streamRequested);
-                const onProgress = () => core_taskTrace.recordStreamProgress(taskTrace);
+                const onProgress = (text, info = null) => {
+                    const chars = typeof text === 'string' ? text.length : 0;
+                    const reasoning = Math.max(0, Number(info?.reasoningChars) || 0);
+                    if (typeof text === 'string') streamedText = text;
+                    // Only real growth (visible text or reasoning) restarts the idle wait.
+                    if (chars <= progressChars && reasoning <= progressReasoning) return;
+                    progressChars = Math.max(progressChars, chars);
+                    progressReasoning = Math.max(progressReasoning, reasoning);
+                    try { noteProgress?.(); } catch {}
+                    core_taskTrace.recordStreamProgress(taskTrace);
+                };
                 const returned = connectionMode === 'manual'
                 ? core_independentApi.requestManualApiCompletion(settings, context, messages, responseLength, {
                     signal: lifecycleController.signal,
@@ -50733,11 +51851,20 @@ async function generateConfiguredJsonOperation(prompt, options = {}) {
             normalized.message = normalized.safeUserMessage = `等了 ${Math.round(waited / 1000)} 秒没有收到任何内容，连接就断了，多半是中转站或代理掐断了长时间没有数据的完整响应。请到心迹回廊设置的「高级生成参数」里勾上「启用高级生成参数」，把「本插件流式方式」改成「使用流式」后再试；旧内容仍会保留。`;
             normalized.idleCutoff = true;
         }
-        throw normalized;
+        // A stalled stream already delivered part of the paid reply. Keep it for
+        // the recovery path below (after the provider permit is released).
+        // Only the final channel counts: a leading think/reasoning block is not
+        // answer text, and a stall inside it leaves nothing to continue.
+        const usablePartial = normalized?.code === 'RMT_REQUEST_TIMEOUT'
+            ? core_independentApiConfig.finalResponseText(streamedText) : '';
+        if (usablePartial.trim() && !externalSignal?.aborted) {
+            timedOut = { error: normalized, text: usablePartial };
+        } else throw normalized;
     } finally {
         try { releaseProviderPermit?.(); } catch {}
         try { externalSignal?.removeEventListener?.('abort', forwardAbort); } catch {}
     }
+    if (timedOut) throw await timedOutStreamError(options, timedOut.error, timedOut.text);
     // A settings edit cannot invalidate a reply that the selected provider has
     // already returned. Keep that paid result; the next request reads the new API.
     if (externalSignal?.aborted) forwardAbort();
@@ -50754,6 +51881,7 @@ async function generateConfiguredJsonOperation(prompt, options = {}) {
         mergedInboxIllustrations: options.mergedInboxIllustrations === true,
         requestMaxTokens: responseLength,
         configuredMaxTokens: settings.maxTokens,
+        finishReason: core_independentApi.responseShapeSummary(result).finishReason,
     }); } catch (error) {
         await generation_recovery.recordRecoveryTruncation(options, responsePayload, error,
             { autoContinue: !(options.mode === 'inbox' && error?.preserveInboxWithoutAutoContinue === true) });
@@ -52041,6 +53169,8 @@ const split_generationRequest = __m_generation_generationRequest_js;
 const split_generationSavedActions = __m_generation_generationSavedActions_js;
 const split_generationModes = __m_generation_generationModes_js;
 const core_generationBridge = __m_core_generationBridge_js;
+const core_context = __m_core_context_js;
+const core_requestCoordinator = __m_core_requestCoordinator_js;
 const autoContinuedDrafts = __m_generation_generationModes_js.autoContinuedDrafts;
 
 
@@ -52080,22 +53210,58 @@ const startAdvScriptSecondStep = split_generationSavedActions.startAdvScriptSeco
 
 // Recovery is a dependency of this module, but the bundle initializes this file first
 // when the import cycle is cut. Register after the current init turn so the export exists.
-queueMicrotask(() => {
-    if (typeof generation_recovery.setTruncationContinueHandler !== 'function') return;
-    generation_recovery.setTruncationContinueHandler(item => {
-        const key = `${item?.mode || ''}:${item?.draftId || ''}`;
-        if (!item?.mode || !item?.draftId || autoContinuedDrafts.has(key)) return;
-        autoContinuedDrafts.add(key);
-        setTimeout(() => {
-            continueSavedGeneration(item.mode, {
+const pendingAutoContinuations = new Set();
+
+const AUTO_CONTINUE_SETTLE_PAUSE_MS = 400;
+
+const AUTO_CONTINUE_MAX_WAITS = 8;
+
+function liveChatScope() {
+    try { return core_context.chatScopeKey(core_context.getContext()); } catch { return ''; }
+}
+
+// The truncated run is still finishing when it reports the draft. Wait until
+// every whole operation that owns this draft/mode has settled, then start the
+// continuation once. The draft counts as auto-continued only when that run
+// really starts; a cancelled owner or a chat switch leaves 继续生成 to the user.
+async function startAutoContinuation(item, key, scope) {
+    try {
+        for (let round = 0; round < AUTO_CONTINUE_MAX_WAITS; round += 1) {
+            const busy = core_requestCoordinator.runningLogicalTasksForDraft({ mode: item.mode, draftId: item.draftId });
+            if (busy.length) {
+                const outcomes = await Promise.all(busy.map(task => task.settled));
+                if (outcomes.some(outcome => outcome?.status === 'cancelled')) return;
+                continue;
+            }
+            await new Promise(resolve => setTimeout(resolve, AUTO_CONTINUE_SETTLE_PAUSE_MS));
+            if (core_requestCoordinator.runningLogicalTasksForDraft({ mode: item.mode, draftId: item.draftId }).length) continue;
+            if (scope && liveChatScope() !== scope) return;
+            // From here to the logical-task registration there is no await, so
+            // nothing else can claim this mode in between.
+            autoContinuedDrafts.add(key);
+            await continueSavedGeneration(item.mode, {
                 draftId: item.draftId,
                 pageId: item.pageId || '',
                 skipConfirm: true,
                 background: true,
-            }).catch(error => {
-                console.warn('[HeartbeatMemories] automatic continuation did not start', error?.code || error?.name || 'failed');
             });
-        }, 400);
+            return;
+        }
+    } catch (error) {
+        if (error?.code === 'RMT_LOGICAL_TASK_BUSY') autoContinuedDrafts.delete(key);
+        console.warn('[HeartbeatMemories] automatic continuation did not start', error?.code || error?.name || 'failed');
+    } finally {
+        pendingAutoContinuations.delete(key);
+    }
+}
+
+queueMicrotask(() => {
+    if (typeof generation_recovery.setTruncationContinueHandler !== 'function') return;
+    generation_recovery.setTruncationContinueHandler(item => {
+        const key = `${item?.mode || ''}:${item?.draftId || ''}`;
+        if (!item?.mode || !item?.draftId || autoContinuedDrafts.has(key) || pendingAutoContinuations.has(key)) return;
+        pendingAutoContinuations.add(key);
+        void startAutoContinuation(item, key, liveChatScope());
     });
 });
 
@@ -52609,6 +53775,103 @@ function parseInboxRecoveryObject(raw) {
         has: pointer => pointer === '' || pointer === '/letters' ? false : readable.has(pointer) };
 }
 
+// One conservative repair pass for a reply that is JSON apart from common
+// slips: trailing commas before } or ], raw control characters/newlines inside
+// strings, Chinese curly quotes used as string delimiters, and // or /* */
+// comments outside strings. Text inside an ASCII-quoted string is copied as is,
+// except that raw control characters are escaped. Nothing is invented: no
+// missing quote, bracket or value is added. Returns '' when nothing changed.
+function repairJsonCandidate(text) {
+    if (typeof text !== 'string' || !text) return '';
+    const CURLY_OPEN = '“', CURLY_CLOSE = '”';
+    const controlEscape = char => char === '\n' ? '\\n' : char === '\r' ? '\\r' : char === '\t' ? '\\t'
+        : `\\u${char.charCodeAt(0).toString(16).padStart(4, '0')}`;
+    const structuralAfter = index => {
+        let cursor = index;
+        while (cursor < text.length && /\s/.test(text[cursor])) cursor += 1;
+        return cursor >= text.length || ':,}]'.includes(text[cursor]);
+    };
+    let out = '';
+    let quote = ''; // '' outside strings, '"' in an ASCII string, '”' in a curly one
+    let escaped = false;
+    for (let i = 0; i < text.length; i += 1) {
+        const char = text[i];
+        if (quote) {
+            if (escaped) { escaped = false; out += char; continue; }
+            if (char === '\\') { escaped = true; out += char; continue; }
+            if (quote === '"' && char === '"') { quote = ''; out += char; continue; }
+            if (quote === CURLY_CLOSE && (char === CURLY_CLOSE || char === CURLY_OPEN) && structuralAfter(i + 1)) {
+                quote = ''; out += '"'; continue;
+            }
+            if (quote === CURLY_CLOSE && char === '"') { out += '\\"'; continue; }
+            out += char.charCodeAt(0) < 0x20 ? controlEscape(char) : char;
+            continue;
+        }
+        if (char === '"') { quote = '"'; out += char; continue; }
+        if (char === CURLY_OPEN || char === CURLY_CLOSE) { quote = CURLY_CLOSE; out += '"'; continue; }
+        if (char === '/' && text[i + 1] === '/') {
+            while (i < text.length && text[i] !== '\n') i += 1;
+            out += '\n';
+            continue;
+        }
+        if (char === '/' && text[i + 1] === '*') {
+            const end = text.indexOf('*/', i + 2);
+            if (end < 0) return '';
+            i = end + 1;
+            out += ' ';
+            continue;
+        }
+        if (char === '}' || char === ']') {
+            let tail = out.length - 1;
+            while (tail >= 0 && /\s/.test(out[tail])) tail -= 1;
+            if (out[tail] === ',') out = out.slice(0, tail) + out.slice(tail + 1);
+        }
+        out += char;
+    }
+    return out !== text ? out : '';
+}
+
+function parseRepairedObject(text) {
+    const repaired = repairJsonCandidate(text);
+    if (!repaired) return null;
+    try {
+        const parsed = JSON.parse(repaired);
+        return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
+    } catch { return null; }
+}
+
+// A reply whose final } balances its first { when string state is ignored has
+// most likely ended; an unescaped quote inside a string only makes the
+// string-aware scan look unclosed. Real cut-offs still have unclosed brackets.
+// A string the scan is still inside at the end only counts as such a stray
+// quote when it did not open where a JSON string may start (after { [ , :).
+// A properly opened string that never closed, e.g. {"a":"x","b":"y}, is a cut-off.
+function unclosedObjectLooksEnded(unclosed, finishReason = '') {
+    if (['length', 'max_tokens', 'incomplete'].includes(String(finishReason || '').toLowerCase())) return false;
+    const body = String(unclosed || '').trim();
+    if (!body.startsWith('{') || !body.endsWith('}')) return false;
+    let inString = false, escaped = false, openedAtValue = false, previous = '';
+    for (const char of body) {
+        if (inString) {
+            if (escaped) escaped = false;
+            else if (char === '\\') escaped = true;
+            else if (char === '"') { inString = false; previous = char; }
+            continue;
+        }
+        if (char === '"') { inString = true; openedAtValue = '{[,:'.includes(previous); continue; }
+        if (!/\s/.test(char)) previous = char;
+    }
+    if (inString && openedAtValue) return false;
+    let braces = 0, brackets = 0;
+    for (const char of body) {
+        if (char === '{') braces += 1;
+        else if (char === '}') braces -= 1;
+        else if (char === '[') brackets += 1;
+        else if (char === ']') brackets -= 1;
+    }
+    return braces === 0 && brackets === 0;
+}
+
 function jsonOutputBudgetSummary({ requestMaxTokens = 0, configuredMaxTokens = 0 } = {}) {
     const requestMax = Math.max(0, Math.floor(Number(requestMaxTokens) || 0));
     const configuredMax = output_budget.normalizeOutputTokens(configuredMaxTokens);
@@ -52619,7 +53882,7 @@ function jsonOutputBudgetSummary({ requestMaxTokens = 0, configuredMaxTokens = 0
     return `${segmentNote}；当前插件设置 ${configuredMax.toLocaleString()} tokens；实际可用额度由所选模型／渠道决定。`;
 }
 
-function extractJson(raw, { reasoning = '', requestMaxTokens = 0, configuredMaxTokens = 0, mode = '', mergedInboxIllustrations = false } = {}) {
+function extractJson(raw, { reasoning = '', requestMaxTokens = 0, configuredMaxTokens = 0, mode = '', mergedInboxIllustrations = false, finishReason = '' } = {}) {
     if (raw != null && typeof raw !== 'string') {
         const error = jsonOutputError('RMT_RESPONSE_FORMAT', '连接返回的正文结构暂不支持，未取得可解析的最终正文；旧内容未改变。');
         error.retryable = false;
@@ -52648,6 +53911,8 @@ function extractJson(raw, { reasoning = '', requestMaxTokens = 0, configuredMaxT
         const candidate = inboxResponseCandidate(text, null, 'modules');
         if (candidate) {
             try { const parsed = JSON.parse(candidate); if (parsed && typeof parsed === 'object') return parsed; } catch {}
+            const repaired = parseRepairedObject(candidate);
+            if (repaired) return repaired;
             const salvaged = salvageMergedInboxIllustrations(candidate);
             if (salvaged) return salvaged;
             // Never promote an earlier example when the actual merged reply
@@ -52659,6 +53924,8 @@ function extractJson(raw, { reasoning = '', requestMaxTokens = 0, configuredMaxT
     const inboxCandidate = mode === 'inbox' ? inboxResponseCandidate(text, inboxSelection) : '';
     if (inboxCandidate) {
         try { const parsed = JSON.parse(inboxCandidate); if (parsed && typeof parsed === 'object') return parsed; } catch {}
+        const repaired = parseRepairedObject(inboxCandidate);
+        if (repaired) return repaired;
         const salvaged = salvageInboxLetters(inboxCandidate);
         if (salvaged) return salvaged;
         // Do not fall back to an earlier example when the answer has started.
@@ -52672,16 +53939,24 @@ function extractJson(raw, { reasoning = '', requestMaxTokens = 0, configuredMaxT
         } catch {}
     }
     text = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
-    const { candidates, hasUnclosedObject } = extractBalancedJsonObjects(text);
+    const { candidates, hasUnclosedObject, unclosedObject } = extractBalancedJsonObjects(text);
     for (let i = candidates.length - 1; i >= 0; i -= 1) {
         try {
             const parsed = JSON.parse(candidates[i]);
             if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed;
         } catch {}
     }
+    // Nothing parsed as it stands: one conservative repair pass on the selected
+    // candidate (the final, possibly unclosed, object), then parse again.
+    const selected = hasUnclosedObject ? unclosedObject : candidates[candidates.length - 1] || '';
+    const repaired = selected ? parseRepairedObject(selected) : null;
+    if (repaired) return repaired;
     const salvaged = salvageInboxLetters(text);
     if (salvaged) return salvaged;
-    if (hasUnclosedObject) {
+    // A reply that visibly ended with its closing } is malformed, not cut off:
+    // report it as invalid so no continuation request is sent for it.
+    const endedMalformed = hasUnclosedObject && unclosedObjectLooksEnded(unclosedObject, finishReason);
+    if (hasUnclosedObject && !endedMalformed) {
         const error = jsonOutputError(
             'RMT_JSON_TRUNCATED',
             `模型返回的 JSON 疑似被截断：已经出现“{”，但没有完整闭合。${budgetSummary} 如果本段实际上限低于当前插件设置，继续提高全局“最大输出”不会突破该功能自己的分段上限；可只重试这一项，或换用输出更稳定的模型。`,
@@ -52692,7 +53967,7 @@ function extractJson(raw, { reasoning = '', requestMaxTokens = 0, configuredMaxT
         if (inboxSelection.suppressedEarlierParsed) error.preserveInboxWithoutAutoContinue = true;
         throw error;
     }
-    if (!candidates.length) {
+    if (!candidates.length && !endedMalformed) {
         throw jsonOutputError(
             'RMT_JSON_NOT_FOUND',
             `模型返回了最终正文（约 ${text.length.toLocaleString()} 字符），但其中没有完整 JSON 对象。插件没有保存或覆盖任何旧数据；可只重试这一项。`,
@@ -52712,6 +53987,7 @@ __m_generation_jsonParser_js.parsePartialJsonObject = parsePartialJsonObject;
 __m_generation_jsonParser_js.salvageInboxLetters = salvageInboxLetters;
 __m_generation_jsonParser_js.hasCompleteInboxProseBeforeArt = hasCompleteInboxProseBeforeArt;
 __m_generation_jsonParser_js.parseInboxRecoveryObject = parseInboxRecoveryObject;
+__m_generation_jsonParser_js.repairJsonCandidate = repairJsonCandidate;
 __m_generation_jsonParser_js.jsonOutputBudgetSummary = jsonOutputBudgetSummary;
 __m_generation_jsonParser_js.extractJson = extractJson;
 }
@@ -75544,6 +76820,13 @@ let autoRepairLatch = '';
 let timer = 0;
 let stallState = { signature: '', since: 0 };
 let stallNoted = false;
+// 每 2 秒的兜底刷新只在楼层壳的输入真的变了时才重画。
+let lastSignature = null;
+let lastLivePhase = '';
+const incrementMemo = new Map();
+const INCREMENT_MEMO_MAX = 256;
+const writtenRound = new WeakMap();
+const achievementLookups = new WeakMap();
 
 function floorShellCss() {
     return shell_state.floorShellCss();
@@ -75558,7 +76841,13 @@ function ensureCss() {
     document.head?.appendChild(style);
 }
 
+function dropModuleCss() {
+    document.getElementById('rmt-floor-module-css')?.remove();
+}
+
+// 模块样式约 1MB，只在真的有楼层壳挂出来时才复制一份，没有自动留忆的聊天不注入。
 function mirrorModuleCss() {
+    if (document.getElementById('rmt-floor-module-css')) return;
     try { ui_styles.ensureStyles(); } catch { /* 样式还没准备好时，楼层壳仍显示摘要。 */ }
     const source = document.getElementById(core_constants.STYLE_ID);
     if (!source || document.getElementById('rmt-floor-module-css')) return;
@@ -75591,10 +76880,17 @@ function latestAssistantIndex(chat) {
 
 function clearShells() {
     document.querySelectorAll('[data-rmt-floor-shell]').forEach(node => node.remove());
+    dropModuleCss();
+}
+
+// 一次刷新里设置只读一次（整理设置不便宜，200 封信每封都读会占掉大半时间）。
+let refreshSettings = null;
+function pluginSettings() {
+    return refreshSettings || core_settings.getPluginSettings();
 }
 
 function latestFloorMode() {
-    return core_settings.getPluginSettings().autoMemoryLatestFloor === true;
+    return pluginSettings().autoMemoryLatestFloor === true;
 }
 
 function ticketForReveal(snapshot, reveal) {
@@ -75612,6 +76908,73 @@ function roundReveal(records, moduleId, ids, steps, ticket) {
     const busy = steps.some(step => step.status !== 'completed') || ticket?.status === 'drawn' || ticket?.status === 'running';
     if (busy || !moduleId) return null;
     return mine[0] || null;
+}
+
+// 一次刷新里共用的输入：自动留忆记录、档案、缓存、成就库只读一遍，楼层位置只扫一遍聊天。
+function tickInputs(context) {
+    const snapshot = readSnapshot(context);
+    let memory = null;
+    try { memory = archive_repository.getImportedMemory(context); } catch { memory = null; }
+    let cache = null;
+    try { cache = cacheRef(core_cache.getCache(context)); } catch { cache = null; }
+    let achievements;
+    let lookup = null;
+    let index = null;
+    return {
+        context, snapshot, memory, cache,
+        achievements() {
+            if (achievements === undefined) {
+                // 只读查询：不复制整个成就库。
+                achievements = core_cache.loadSession(core_constants.MODE.ACHIEVEMENTS, { context, memoryBank: memory, clone: false }) || null;
+            }
+            return achievements;
+        },
+        achievementLookup() {
+            if (lookup) return lookup;
+            const session = this.achievements();
+            lookup = session && typeof session === 'object' ? achievementLookups.get(session) : null;
+            if (!lookup) {
+                lookup = auto_memory_library.autoAchievementLookup(session);
+                if (session && typeof session === 'object') achievementLookups.set(session, lookup);
+            }
+            return lookup;
+        },
+        locate(ticket) {
+            if (!index) index = chatIndex(context.chat);
+            const chat = Array.isArray(context.chat) ? context.chat : [];
+            const pinnedAt = ticket?.id ? index.pins.get(ticket.id) : undefined;
+            if (pinnedAt !== undefined) return { index: pinnedAt, message: chat[pinnedAt] };
+            const floor = Math.floor(Number(ticket?.dueFloor));
+            if (!(floor >= 1)) return null;
+            if (latestFloorMode()) {
+                const at = index.assistants[floor - 1];
+                return at === undefined ? null : { index: at, message: chat[at] };
+            }
+            const message = chat[floor - 1];
+            return message ? { index: floor - 1, message } : null;
+        },
+    };
+}
+
+// 压缩缓存还没解开时 getCache 每次给一个新的空对象；比较引用时把它当成“没有缓存”。
+function cacheRef(cache) {
+    if (!cache || typeof cache !== 'object') return null;
+    for (const _key in cache) return cache;
+    return null;
+}
+
+// 与 redo.findDrawMessage（第一处钉）和 drawFloorMessage（第 N 条角色楼）同义，一次扫完。
+function chatIndex(chat) {
+    const pins = new Map();
+    const assistants = [];
+    const list = Array.isArray(chat) ? chat : [];
+    for (let index = 0; index < list.length; index += 1) {
+        const message = list[index];
+        const pin = message?.extra?.[auto_memory_redo.DRAW_PIN_KEY];
+        if (pin && !pins.has(pin)) pins.set(pin, index);
+        if (message && message.is_user !== true && message.is_system !== true) assistants.push(index);
+    }
+    return { pins, assistants };
 }
 
 function readSnapshot(context) {
@@ -75639,8 +77002,8 @@ function archiveIsReady(context, rows) {
     return !!memory && !importing;
 }
 
-function viewFor(context) {
-    const snapshot = readSnapshot(context);
+function viewFor(context, tick = tickInputs(context)) {
+    const snapshot = tick.snapshot;
     if (!snapshot?.plan.enabled) return shell_state.shellView({ enabled: false });
     const ticket = snapshot.drawTickets.find(item => item.id === snapshot.plan.activeDrawTicketId) || null;
     const moduleId = snapshot.modulePlan?.moduleId || ticket?.selectedModuleId || '';
@@ -75658,12 +77021,12 @@ function viewFor(context) {
         running, partial: failedStep, hasContent: steps.some(step => step.status === 'completed'),
     });
     const moduleComplete = item?.isComplete?.(null, snapshot.modulePlan) === true;
-    const previewKept = moduleId ? incrementFor(moduleId, reveal?.id || '').kept === true : false;
+    const previewKept = moduleId ? incrementFor(moduleId, reveal?.id || '', tick).kept === true : false;
     const stored = auto_memory_library.autoAchievementForReveal(context, {
         achievementId: reveal?.achievementId || '',
         moduleId,
         sourceMemoryIds: [...roundIds],
-    });
+    }, { lookup: tick.achievementLookup() });
     const rememberedTitle = auto_memory_gap.rememberedAchievementTitle(context.chatMetadata, reveal?.achievementId);
     const rememberedCopy = auto_memory_gap.rememberedAchievementCopy(context.chatMetadata, reveal?.achievementId);
     return shell_state.shellView({
@@ -75685,7 +77048,7 @@ function viewFor(context) {
         canOpen: previewKept,
         failureRecoverable: !running && (failedStep || common.state === 'failed' || common.state === 'retry'),
         paused: moduleRow?.phase === 'queue',
-        floor: core_settings.getPluginSettings().autoMemoryLatestFloor === true
+        floor: pluginSettings().autoMemoryLatestFloor === true
             ? auto_memory_floor.assistantFloorCount(context.chat)
             : (Array.isArray(context.chat) ? context.chat.length : 0),
         nextDueFloor: snapshot.plan.nextDueFloor,
@@ -75697,7 +77060,7 @@ function viewFor(context) {
 
 function envelopeSkin() {
     let skin = 'pink';
-    try { skin = core_settings.getPluginSettings().heartEnvelopeSkin; } catch { skin = 'pink'; }
+    try { skin = pluginSettings().heartEnvelopeSkin; } catch { skin = 'pink'; }
     return ui_heartEnvelope.heartEnvelopeId(skin);
 }
 
@@ -75800,16 +77163,15 @@ function watchStall(view, context) {
     return view;
 }
 
-function viewForReveal(context, snapshot, reveal) {
-    const ticket = ticketForReveal(snapshot, reveal);
+function viewForReveal(context, snapshot, reveal, tick, ticket = ticketForReveal(snapshot, reveal)) {
     const moduleId = reveal.moduleId || '';
     const item = auto_memory_registry.autoMemoryModuleById(moduleId);
-    const previewKept = moduleId ? incrementFor(moduleId, reveal.id).kept === true : false;
+    const previewKept = moduleId ? incrementFor(moduleId, reveal.id, tick).kept === true : false;
     const stored = auto_memory_library.autoAchievementForReveal(context, {
         achievementId: reveal.achievementId || '',
         moduleId,
         sourceMemoryIds: [...(reveal.sourceMemoryIds || [])],
-    });
+    }, { lookup: tick.achievementLookup() });
     const rememberedTitle = auto_memory_gap.rememberedAchievementTitle(context.chatMetadata, reveal.achievementId);
     const rememberedCopy = auto_memory_gap.rememberedAchievementCopy(context.chatMetadata, reveal.achievementId);
     return shell_state.shellView({
@@ -75834,23 +77196,23 @@ function viewForReveal(context, snapshot, reveal) {
 }
 
 function letterSlots(context) {
-    const snapshot = readSnapshot(context);
+    const tick = tickInputs(context);
+    const snapshot = tick.snapshot;
     const slots = [];
     const seen = new Set();
     if (snapshot?.plan.enabled) {
         for (const reveal of snapshot.revealRecords || []) {
             if (reveal.status !== 'ready' && reveal.status !== 'opened' && reveal.status !== 'achievement_pending') continue;
             const ticket = ticketForReveal(snapshot, reveal);
-            const pinned = ticket?.id ? auto_memory_redo.findDrawMessage(context.chat, ticket.id) : null;
-            const located = pinned || auto_memory_redo.drawFloorMessage(context.chat, ticket?.dueFloor, latestFloorMode());
+            const located = tick.locate(ticket);
             if (!located) continue;
-            const view = viewForReveal(context, snapshot, reveal);
+            const view = viewForReveal(context, snapshot, reveal, tick, ticket);
             if (view.phase === 'hidden') continue;
             slots.push({ key: reveal.id, drawId: ticket?.id || '', messageIndex: located.index, view: { ...view, opened: reveal.status === 'opened' } });
             seen.add(reveal.id);
         }
     }
-    const live = watchStall(viewFor(context), context);
+    const live = watchStall(viewFor(context, tick), context);
     const latest = latestAssistantIndex(context.chat);
     if (latest >= 0 && live.phase !== 'hidden') {
         const existing = live.revealId ? slots.find(slot => slot.key === live.revealId) : null;
@@ -75890,9 +77252,11 @@ function paintHost(host, view) {
         const achievement = host.querySelector('[data-rmt-letter-achievement]');
         const copy = host.querySelector('[data-rmt-letter-copy]');
         const detail = host.querySelector('[data-rmt-letter-detail]');
-        if (achievement && view.phase === 'reveal') achievement.textContent = view.title;
-        if (copy && view.phase === 'reveal') copy.textContent = view.achievementCopy || '';
-        if (detail && view.phase !== 'reveal') detail.textContent = view.detail || '正在生成中';
+        // 同样的字不重写：textContent 赋值会换掉文字节点，长按选中的字会丢。
+        const setText = (node, text) => { if (node && node.textContent !== text) node.textContent = text; };
+        if (view.phase === 'reveal') setText(achievement, view.title);
+        if (view.phase === 'reveal') setText(copy, view.achievementCopy || '');
+        if (view.phase !== 'reveal') setText(detail, view.detail || '正在生成中');
         if (view.phase !== 'reveal') closeLetter(host);
         host.querySelector('.rmt-heart-letter')?.classList.toggle('is-writing', view.phase === 'generating' || view.phase === 'planning');
         return;
@@ -75923,6 +77287,7 @@ function paint(context) {
     if (!auto_memory_floor.assistantBodyReady(context.chat, { generating: auto_memory_stream.generationOpen(context) })) return;
     if (ui_floor.writesMessageText()) return;
     const { slots, live } = letterSlots(context);
+    lastLivePhase = live.phase;
     const toast = shell_state.toastForTransition(lastPhase, live.phase, { line: live.title }, { initial: !sawPhase });
     sawPhase = true;
     lastPhase = live.phase;
@@ -75937,7 +77302,6 @@ function paint(context) {
         }
     }
     ensureCss();
-    mirrorModuleCss();
     const wanted = new Set();
     let pinsChanged = false;
     for (const slot of slots) {
@@ -75948,7 +77312,10 @@ function paint(context) {
             if (pin === 'changed') pinsChanged = true;
         }
         let host = [...mes.querySelectorAll('[data-rmt-floor-shell="1"]')].find(node => node.dataset.rmtLetterKey === slot.key);
-        if (!host) host = ui_floor.placeAfterMessage(mes);
+        if (!host) {
+            mirrorModuleCss();
+            host = ui_floor.placeAfterMessage(mes);
+        }
         if (!host) continue;
         host.dataset.rmtLetterKey = slot.key;
         wanted.add(host);
@@ -75961,6 +77328,8 @@ function paint(context) {
     document.querySelectorAll('[data-rmt-floor-shell]').forEach(node => {
         if (!wanted.has(node)) node.remove();
     });
+    if (wanted.size) mirrorModuleCss();
+    else dropModuleCss();
     try { ui_taskCenter.syncLiveTaskStrip(); } catch { /* 任务条刷新失败时，楼层下面的状态仍保留。 */ }
     queueAutomaticRepair(live);
 }
@@ -75987,7 +77356,7 @@ function queueAutomaticRepair(view) {
         autoRepairLatch = '';
         return;
     }
-    if (core_settings.getPluginSettings().autoRetryEnabled !== true) return;
+    if (pluginSettings().autoRetryEnabled !== true) return;
     const token = `${view.phase}|${view.revealId}|${view.moduleId}|${view.canRepairAchievement ? 'achievement' : 'module'}`;
     if (autoRepairLatch === token) return;
     autoRepairLatch = token;
@@ -75999,6 +77368,16 @@ function queueAutomaticRepair(view) {
 }
 
 function sync() {
+    try {
+        try { refreshSettings = core_settings.getPluginSettings(); } catch { refreshSettings = null; }
+        syncNow();
+    } finally {
+        lastSignature = shellSignature();
+        refreshSettings = null;
+    }
+}
+
+function syncNow() {
     let context;
     try { context = core_context.getContext(); }
     catch { clearShells(); return; }
@@ -76012,10 +77391,67 @@ function sync() {
     }
 }
 
-function incrementFor(moduleId, revealId) {
+// 楼层壳要读的东西：聊天与楼层、自动留忆四个记录、档案、模块缓存、设置、任务行、流式状态、页面上的壳。
+// 都是引用或短值，逐项 === 比较，不复制、不解析。
+function shellSignature() {
+    let context;
+    try { context = core_context.getContext(); } catch { return null; }
+    if (!context) return null;
+    const metadata = context.chatMetadata && typeof context.chatMetadata === 'object' ? context.chatMetadata : {};
+    const chat = Array.isArray(context.chat) ? context.chat : null;
+    const last = chat?.[chat.length - 1];
+    let cache = null;
+    try { cache = cacheRef(core_cache.getCache(context)); } catch { cache = null; }
+    let settings = {};
+    try { settings = pluginSettings() || {}; } catch { settings = {}; }
+    let rows = '';
     try {
-        const context = core_context.currentCharacterGuard();
-        const snapshot = readSnapshot(context);
+        rows = core_requestCoordinator.listChatTaskSnapshot(context)
+            .filter(row => row.currentChat)
+            .map(row => `${row.id}:${row.kind}:${row.phase}:${row.running ? 1 : 0}:${row.progressText || ''}`)
+            .join('|');
+    } catch { rows = ''; }
+    let story = false, generating = false;
+    try { story = auto_memory_scheduler.storyStillWriting(context); } catch { story = false; }
+    try { generating = auto_memory_stream.generationOpen(context); } catch { generating = false; }
+    let chatNodes = -1, shells = -1;
+    try {
+        chatNodes = document.getElementById('chat')?.childElementCount ?? -1;
+        shells = document.querySelectorAll('[data-rmt-floor-shell]').length;
+    } catch { /* 没有 DOM 时只比数据。 */ }
+    let chatId = '';
+    try { chatId = core_context.getChatId(context); } catch { chatId = ''; }
+    return [
+        chatId, context.characterId, context.groupId, context.name1, context.name2,
+        chat, chat?.length ?? -1, last, last?.mes, last?.swipe_id, last?.extra?.[auto_memory_redo.DRAW_PIN_KEY],
+        metadata[auto_memory_plan.AUTO_MEMORY_PLAN_KEY], metadata[auto_memory_plan.AUTO_MEMORY_PLAN_KEY]?.revision,
+        metadata[auto_memory_plan.AUTO_MEMORY_REVEAL_KEY],
+        metadata[auto_memory_plan.AUTO_MEMORY_DRAW_TICKETS_KEY], metadata[auto_memory_plan.AUTO_MEMORY_MODULE_PLAN_KEY],
+        metadata[auto_memory_gap.GAP_KEY], metadata[auto_memory_redo.DRAW_PIN_LEDGER_KEY],
+        metadata[core_constants.MEMORY_KEY], metadata[core_constants.MEMORY_KEY]?.archiveRevision, metadata[core_constants.CACHE_KEY], cache, core_cache.cacheCommitToken(cache),
+        settings.autoMemoryLatestFloor, settings.heartEnvelopeSkin, settings.autoRetryEnabled,
+        rows, story, generating, chatNodes, shells,
+    ];
+}
+
+function sameSignature(a, b) {
+    if (!a || !b || a.length !== b.length) return false;
+    for (let index = 0; index < a.length; index += 1) if (a[index] !== b[index]) return false;
+    return true;
+}
+
+// 主要靠酒馆事件刷新；定时器只兜底。正在写的时候照常每次都刷（停住检测要看时间），其余时候没变就跳过。
+function fallbackTick() {
+    const active = lastLivePhase === 'generating' || lastLivePhase === 'planning';
+    if (!active && sameSignature(shellSignature(), lastSignature)) return false;
+    sync();
+    return true;
+}
+
+function incrementFor(moduleId, revealId, tick = null) {
+    try {
+        const context = tick?.context || core_context.currentCharacterGuard();
+        const snapshot = tick ? tick.snapshot : readSnapshot(context);
         const reveal = snapshot?.revealRecords?.find(row => row.id === revealId && row.moduleId === moduleId)
             || snapshot?.revealRecords?.find(row => row.id === revealId);
         const ids = Array.isArray(reveal?.sourceMemoryIds) && reveal.sourceMemoryIds.length ? reveal.sourceMemoryIds : null;
@@ -76027,15 +77463,29 @@ function incrementFor(moduleId, revealId) {
             || (ticket?.sourceMemoryIds?.length ? ticket.sourceMemoryIds : null)
             || livePlan?.sourceMemoryIds
             || [];
-        const memory = archive_repository.getImportedMemory(context);
-        const session = core_cache.loadSession(moduleId, { context, memoryBank: memory, clone: true });
-        if (session && typeof session === 'object' && !session.kind && moduleId) session.kind = moduleId;
+        const memory = tick ? tick.memory : archive_repository.getImportedMemory(context);
+        let cache = null;
+        if (tick) cache = tick.cache;
+        else { try { cache = cacheRef(core_cache.getCache(context)); } catch { cache = null; } }
+        // 同一封信、同一份档案、同一份模块缓存，投影结果不会变；缓存对象或提交号一换就重算。
+        const key = JSON.stringify([core_context.getChatId(context), moduleId, revealId, memory?.archiveRevision || '',
+            sourceMemoryIds, reveal?.createdAt || 0]);
+        const raw = cache && typeof cache === 'object' ? cache[moduleId] : undefined;
+        const token = core_cache.cacheCommitToken(cache);
+        const hit = incrementMemo.get(key);
+        if (hit && hit.cache === cache && hit.raw === raw && hit.token === token && hit.memory === memory?.archiveRevision) return hit.value;
+        // 只读：投影只换出新的列表，不改原会话，所以不必先把整个模块会话复制一遍。
+        const loaded = core_cache.loadSession(moduleId, { context, memoryBank: memory, clone: false });
+        const session = loaded && typeof loaded === 'object' && !loaded.kind && moduleId ? { ...loaded, kind: moduleId } : loaded;
         // 只按这封信自己的档案编号收。当前这一轮的 frozenAt 会把旧信的段落判成更早的一轮。
-        return incremental_view.incrementalProjection(session, {
+        const value = incremental_view.incrementalProjection(session, {
             sourceMemoryIds,
             createdAt: reveal?.createdAt || 0,
             since: 0,
         });
+        if (incrementMemo.size >= INCREMENT_MEMO_MAX) incrementMemo.clear();
+        incrementMemo.set(key, { cache, raw, token, memory: memory?.archiveRevision, value });
+        return value;
     } catch {
         return { kept: false, session: null };
     }
@@ -76061,21 +77511,38 @@ function letterIdentity() {
 
 const EMPTY_ROUND = '<p class="rmt-floor-note">这一轮写完了，但是没有新的段落。</p><div class="rmt-heart-letter-actions"><button type="button" class="rmt-btn" data-rmt-floor-complete>补全</button><button type="button" class="rmt-btn" data-rmt-floor-redo>重试</button></div>';
 
+// 内容没变就不重写 innerHTML：重写会清掉正在长按选中的文字。
+function setRoundHtml(body, html) {
+    if (writtenRound.get(body) === html && body.innerHTML) return;
+    body.innerHTML = html;
+    writtenRound.set(body, html);
+}
+
+function roundHtml(increment) {
+    const identity = letterIdentity();
+    const memo = increment.html;
+    const signature = `${identity.characterName}\n${identity.userName}\n${identity.charAvatar}\n${identity.userAvatar}`;
+    if (memo && memo.signature === signature) return memo.html;
+    const html = incremental_view.roundReadingHtml(increment.session, identity);
+    try { Object.defineProperty(increment, 'html', { value: { signature, html }, configurable: true, writable: true, enumerable: false }); } catch { /* 冻结对象就每次重算。 */ }
+    return html;
+}
+
 function writeRound(body, moduleId, revealId) {
     const increment = incrementFor(moduleId, revealId);
     if (!increment.kept) {
         if (body.dataset.rmtLetterRead === '1' && body.innerHTML) return false;
         const phase = body.closest?.('[data-rmt-floor-shell]')?.dataset?.rmtPhase || '';
         const writing = phase === 'generating' || phase === 'planning';
-        body.innerHTML = writing ? '<p class="rmt-floor-note">回忆正在生成中。</p>' : EMPTY_ROUND;
+        setRoundHtml(body, writing ? '<p class="rmt-floor-note">回忆正在生成中。</p>' : EMPTY_ROUND);
         return false;
     }
-    const html = incremental_view.roundReadingHtml(increment.session, letterIdentity());
+    const html = roundHtml(increment);
     if (!html) {
-        body.innerHTML = EMPTY_ROUND;
+        setRoundHtml(body, EMPTY_ROUND);
         return false;
     }
-    body.innerHTML = html;
+    setRoundHtml(body, html);
     const host = body.closest?.('[data-rmt-floor-shell]');
     if (host && revealId) {
         host.dataset.rmtRead = revealId;
@@ -76252,6 +77719,9 @@ function stopAutoMemoryShell() {
     timer = 0;
     lastPhase = '';
     sawPhase = false;
+    lastSignature = null;
+    lastLivePhase = '';
+    incrementMemo.clear();
     clearShells();
 }
 
@@ -76275,13 +77745,20 @@ function startAutoMemoryShell() {
     };
     const previous = cleanup;
     cleanup = () => { previous?.(); removeToggle(); };
-    timer = setInterval(sync, 2000);
+    timer = setInterval(fallbackTick, 2000);
     sync();
 }
+
+// 测试用：读出一次刷新的判断，不改任何状态。
+const __autoMemoryShellTesting = Object.freeze({
+    sync, fallbackTick, shellSignature, sameSignature, incrementFor, writeRound, paintHost, letterSlots, tickInputs, chatIndex,
+    clearIncrementMemo: () => incrementMemo.clear(),
+});
 
 __m_ui_autoMemoryShell_js.floorShellCss = floorShellCss;
 __m_ui_autoMemoryShell_js.stopAutoMemoryShell = stopAutoMemoryShell;
 __m_ui_autoMemoryShell_js.startAutoMemoryShell = startAutoMemoryShell;
+__m_ui_autoMemoryShell_js.__autoMemoryShellTesting = __autoMemoryShellTesting;
 }
 
 function __init_ui_autoMemoryWizard_js() {
@@ -93627,7 +95104,7 @@ function collectTaskCards() {
             draftId: record.draftId || '',
             detail: [row.chatCaption, row.progressText].filter(Boolean).join(' · '),
             at: Number(record.endedAt) || 0,
-            actions: `${retry}${secondStepButton(record, row.id)}${openAction({ ...record, id: row.id, label: row.label, outcome: record.outcome || state, phase: row.phase })}${state === 'failed' ? dismissButton({ taskId: row.id }) : ''}`,
+            actions: `${retry}${row.currentChat === true && row.archiveTarget !== true ? secondStepButton(record, row.id) : ''}${openAction({ ...record, id: row.id, label: row.label, outcome: record.outcome || state, phase: row.phase })}${state === 'failed' ? dismissButton({ taskId: row.id }) : ''}`,
         });
     }
     for (const item of mine) {
@@ -94151,6 +95628,12 @@ function handleTaskCenterAction(action, actionEl) {
         const id = actionEl?.dataset?.rmtTaskId || '';
         const record = core_requestCoordinator.settledChatTaskRecord(id);
         if (!record?.secondStepKind) return;
+        // The second step writes into the open chat; it must be the row's own chat.
+        if (!core_requestCoordinator.settledChatTaskInCurrentChat(id)) {
+            globalThis.toastr?.info?.('这条任务属于其他聊天。请先回到原来的聊天，再点第二次生成。', '心迹回廊');
+            try { refreshTaskCenterView(); } catch { /* The list repaints on its next refresh. */ }
+            return;
+        }
         hideTaskCenter();
         const run = record.secondStepKind === 'heart-scenario'
             ? modes_heart.generateHeartSeasonSection(record.secondStepPageId || record.pageId, { secondStep: true })
@@ -100129,6 +101612,7 @@ const editor_ui = __m_ui_mvEditorUi_js;
 const editor_dialog = __m_ui_mvEditorDialog_js;
 const workspace_ui = __m_ui_mvWorkspaceUi_js;
 const theme_song_view = __m_ui_themeSongView_js;
+const song_player = __m_ui_songPlayer_js;
 const runtimeState = __m_core_state_js.state;
 // 独立印象曲进入手书：分镜与画面、剪辑与导出，兼容视频逐镜制作。
 // 播放由同一音轨驱动画面；可用的音频文件缓存在本机，不写入聊天。
@@ -100784,7 +102268,7 @@ function openMv(options = {}) {
     ui_workspaceState.workspace.route = MV_MODE; ui_workspaceState.workspace.tab = 'content'; ui_workspaceState.workspace.empty = null;
     runtimeState.activeMode = MV_MODE; runtimeState.activeSession = null;
     const songId = core_text.normalizeText(options.songId, 120) || view.songId;
-    disposeMv();
+    disposeMv({ keepAudio: true });
     view.songId = songId; view.scope = mv.mvScope(context);
     view.musicLinkInput = null; view.musicLinkStatus = ''; view.audioStatus = '';
     view.clearPendingIds = null;
@@ -101686,7 +103170,17 @@ function stopPlayback() {
     player.raf = 0;
 }
 
-function disposeMv() {
+// Imported MV tracks are blob URLs; keep them only while the MV page itself is in use.
+function releaseMvAudio() {
+    for (const token of audioLoads.values()) { try { token.cancel?.(); } catch {} }
+    audioLoads.clear(); audioTried.clear();
+    for (const entry of audioBySong.values()) {
+        if (!entry?.streaming) { try { URL.revokeObjectURL(entry.url); } catch {} }
+    }
+    audioBySong.clear();
+}
+
+function disposeMv({ keepAudio = false } = {}) {
     rememberWorkspace();
     editorBody(false);
     cancelMusicLink();
@@ -101705,6 +103199,10 @@ function disposeMv() {
     view.stopAll = true; view.drawingAll = false; view.drawQueue = null;
     stopPlayback(); stopExport();
     player.audio = null; player.clockOffset = 0;
+    if (!keepAudio) {
+        releaseMvAudio();
+        try { song_player.scheduleSongAudioRelease(); } catch { /* Song page keeps its own copy. */ }
+    }
 }
 
 // ---------- 导出与录屏 ----------

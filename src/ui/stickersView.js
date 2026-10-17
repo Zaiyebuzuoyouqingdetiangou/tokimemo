@@ -15,6 +15,7 @@ import * as styles from './stickersCss.js';
 const esc = value => text.esc(value);
 const OWNER_TABS = ['char', 'user', 'pair', 'other'];
 const drafts = new Map(); // scope → unsaved drawing, kept while the page is closed
+const redrawing = new Set(); // saved sticker ids being redrawn one at a time
 let active = null, modal = null;
 
 function ensureStyles() {
@@ -167,17 +168,18 @@ function cutHtml(view) {
     const draft = drafts.get(view.scope);
     if (!draft) { view.page = 'home'; return homeHtml(view); }
     let body = '';
-    if (draft.status === 'running') body = `<div class="rmt-stk-progress" role="status"><span>${esc(draft.progress || '准备中…')}</span></div><p class="rmt-stk-muted">可以先离开这一页，画好后回到表情包首页确认。</p>`;
+    const missing = draft.failed?.length || 0;
+    if (draft.status === 'running') body = `<div class="rmt-stk-progress" role="status"><span>${esc(draft.progress || '准备中…')}</span></div><p class="rmt-stk-muted">可以先离开这一页，画好后回到表情包首页确认。</p><button type="button" data-stk-action="stop-draw">停止等待</button>`;
     else if (draft.status === 'failed' && !draft.sheets.length) body = `<div class="rmt-stk-progress" role="alert"><span>${esc(draft.message)}</span></div><div class="rmt-stk-two"><button type="button" data-stk-action="discard">放弃</button><button type="button" class="rmt-stk-primary" data-stk-action="redraw">再画一次</button></div>`;
     else {
-        const notes = draft.sheets.map((sheet, index) => sheet.mode === 'grid' ? `第 ${index + 1} 张没找到清楚的白边，已按 ${sheet.layout.rows}×${sheet.layout.cols} 格子切开。` : '').filter(Boolean);
-        const cells = draft.sheets.flatMap((sheet, s) => sheet.pieces.map((piece, p) => `<button type="button" class="rmt-stk-cell${piece.removed ? ' is-removed' : ''}" data-stk-piece="${s}:${p}"><img src="${esc(piece.preview)}" alt=""><span>${esc(sheet.items[p]?.name || '未命名')}</span>${piece.removed ? '<em>已去掉</em>' : ''}</button>`)).join('');
+        const notes = draft.sheets.map(sheet => sheet.mode === 'grid' ? `第 ${sheet.chunk + 1} 张没找到清楚的白边，已按 ${sheet.layout.rows}×${sheet.layout.cols} 格子切开。` : '').filter(Boolean);
+        const cells = draft.sheets.flatMap(sheet => sheet.pieces.map((piece, p) => `<button type="button" class="rmt-stk-cell${piece.removed ? ' is-removed' : ''}" data-stk-piece="${sheet.chunk}:${p}"><img src="${esc(piece.preview)}" alt=""><span>${esc(sheet.items[p]?.name || '未命名')}</span>${piece.removed ? '<em>已去掉</em>' : ''}</button>`)).join('');
         const kept = draft.sheets.reduce((sum, sheet) => sum + sheet.pieces.filter(piece => !piece.removed).length, 0);
-        body = `<div class="rmt-stk-sheets">${draft.sheets.map((sheet, index) => `<a href="${esc(sheet.url)}" target="_blank" rel="noopener noreferrer" aria-label="查看第 ${index + 1} 张原图"><img src="${esc(sheet.url)}" alt=""></a>`).join('')}</div>`
+        body = `<div class="rmt-stk-sheets">${draft.sheets.map(sheet => `<a href="${esc(sheet.url)}" target="_blank" rel="noopener noreferrer" aria-label="查看第 ${sheet.chunk + 1} 张原图"><img src="${esc(sheet.url)}" alt=""></a>`).join('')}</div>`
             + (notes.length ? `<p class="rmt-stk-muted">${esc(notes.join(' '))}点单个表情可以单张重画。</p>` : '<p class="rmt-stk-muted">点单个表情可以改名、配字、单张重画。</p>')
             + (draft.status === 'failed' ? `<p class="rmt-stk-warn">${esc(draft.message)}</p>` : '')
             + `<section class="rmt-stk-grid">${cells}</section>`
-            + `<div class="rmt-stk-two"><button type="button" data-stk-action="regrid">按格子重切</button><button type="button" data-stk-action="redraw">整张重画</button><button type="button" data-stk-action="discard">放弃这一组</button><button type="button" class="rmt-stk-primary" data-stk-action="save-draft"${kept ? '' : ' disabled'}>保存这 ${kept} 个</button></div>`;
+            + `<div class="rmt-stk-two">${missing ? `<button type="button" class="rmt-stk-primary" data-stk-action="redraw-missing"${draft.saving ? ' disabled' : ''}>只补画没画好的 ${missing} 张</button>` : ''}<button type="button" data-stk-action="regrid"${draft.saving ? ' disabled' : ''}>按格子重切</button><button type="button" data-stk-action="redraw"${draft.saving ? ' disabled' : ''}>整张重画</button><button type="button" data-stk-action="discard"${draft.saving ? ' disabled' : ''}>放弃这一组</button><button type="button" class="rmt-stk-primary" data-stk-action="save-draft"${kept && !draft.saving ? '' : ' disabled'}>${draft.saving ? '正在保存…' : `保存这 ${kept} 个`}</button></div>`;
     }
     return `<main class="rmt-stk">${head('切好的表情', `${label(draft.owner)} · ${stickers.stickerStyleLabel(draft.styleId)}`)}${body}</main>`;
 }
@@ -237,23 +239,89 @@ function progressText(update) {
     return `${sheet}${update?.providerLabel ? update.providerLabel + ' · ' : ''}${phase}`;
 }
 function repaintDraft(scope) { if (active?.scope === scope && current(active) && (active.page === 'cut' || active.page === 'home')) paint(active); }
-async function runDraw(view, draft) {
-    draft.status = 'running'; draft.progress = '准备中…'; draft.message = '';
-    for (const sheet of draft.sheets) for (const piece of sheet.pieces) URL.revokeObjectURL(piece.preview);
-    draft.sheets = [];
+function revokeSheets(sheets) { for (const sheet of sheets || []) for (const piece of sheet.pieces) URL.revokeObjectURL(piece.preview); }
+function sheetNumbers(failed) { return failed.map(row => row.chunk + 1).sort((a, b) => a - b).join('、'); }
+const SETTLING_MESSAGE = '上一组还在收尾，画好的会自动留下，稍等几秒再补画。';
+// A provider that never answers must not block 补画 forever.
+const SETTLE_CAP_MS = 10 * 60 * 1000;
+function clearSettling(scope) { if (active?.scope === scope && active.message === SETTLING_MESSAGE) active.message = ''; }
+function sheetChunks(draft) { return new Set(draft.sheets.map(sheet => sheet.chunk)); }
+// A sheet joins the draft the moment it is cut, replacing an older sheet of the same chunk.
+function mergeSheet(draft, sheet) {
+    revokeSheets(draft.sheets.filter(row => row.chunk === sheet.chunk && row !== sheet));
+    draft.sheets = [...draft.sheets.filter(row => row.chunk !== sheet.chunk), sheet].sort((a, b) => a.chunk - b.chunk);
+    draft.failed = (draft.failed || []).filter(row => row.chunk !== sheet.chunk);
+}
+function stoppedMessage(draft) {
+    return draft.sheets.length ? `已停止等待。画好的 ${draft.sheets.length} 张已保留，正在画的那张好了也会留下。` : '已停止等待，这一组还没有画好的。正在画的那张好了会留下。';
+}
+// missingOnly: draw only the sheets that failed last time; finished sheets stay.
+async function runDraw(view, draft, { missingOnly = false } = {}) {
+    if (draft.status === 'running' || draft.saving) return;
+    // A stopped run is still finishing: its sheet may yet arrive, so a new run
+    // now would pay for that sheet twice.
+    if (draft.run && Date.now() - (draft.run.stoppedAt || 0) < SETTLE_CAP_MS) return report(view, SETTLING_MESSAGE);
+    const all = stickers.chunkItems(draft.owner, draft.items).map((items, index) => ({ index, items }));
+    const have = sheetChunks(draft);
+    const retry = missingOnly && draft.failed?.length
+        ? draft.failed.filter(row => !have.has(row.chunk)).map(row => ({ index: row.chunk, items: row.items, url: row.url })) : null;
+    if (!retry) { revokeSheets(draft.sheets); draft.sheets = []; }
+    const chunks = retry || all, controller = new AbortController();
+    draft.status = 'running'; draft.progress = '准备中…'; draft.message = ''; draft.failed = [];
+    const run = { controller, chunks, stopped: false, stoppedAt: 0 };
+    draft.run = run;
+    clearSettling(draft.scope);
     repaintDraft(draft.scope);
+    const kept = () => drafts.get(draft.scope) === draft, live = () => kept() && draft.run === run;
+    let outcome;
     try {
-        draft.sheets = await stickers.drawStickerSet({ owner: draft.owner, styleId: draft.styleId, items: draft.items, people: draft.people,
-            context: core_context.currentCharacterGuard(), onProgress: update => {
+        outcome = await stickers.drawStickerSheets({ owner: draft.owner, styleId: draft.styleId, chunks, total: all.length, people: draft.people,
+            context: core_context.currentCharacterGuard(), signal: controller.signal, setKey: draft.id, onProgress: update => {
+                if (!live() || controller.signal.aborted) return;
                 draft.progress = progressText(update);
                 const node = active?.scope === draft.scope && active.page === 'cut' ? active.root.querySelector('.rmt-stk-progress span') : null;
                 if (node) node.textContent = draft.progress;
+            }, onSheet: sheet => {
+                // Discarded meanwhile: release the previews this run made.
+                if (!kept()) { revokeSheets([sheet]); return; }
+                // Kept even when it arrives after 停止等待: it is already paid for.
+                mergeSheet(draft, sheet);
+                if (run.stopped && live()) draft.message = stoppedMessage(draft);
+                if (run.stopped) repaintDraft(draft.scope);
             } });
-        draft.status = 'done';
     } catch (error) {
-        draft.status = 'failed';
-        draft.message = text.safeErrorSummary(error) || '这次没有画完，可以再试一次。';
+        const message = text.safeErrorSummary(error) || '这次没有画完，可以再试一次。';
+        outcome = { sheets: [], failed: chunks.map(row => ({ chunk: row.index, items: row.items, url: row.url || '', message })) };
     }
+    if (!live()) return;
+    draft.run = null;
+    finishDraw(draft, outcome, all.length, run.stopped);
+    clearSettling(draft.scope);
+    repaintDraft(draft.scope);
+}
+function finishDraw(draft, outcome, total, stopped) {
+    // Sheets already joined the draft as they were cut.
+    for (const sheet of outcome.sheets) if (!draft.sheets.includes(sheet)) mergeSheet(draft, sheet);
+    const have = sheetChunks(draft);
+    draft.failed = outcome.failed.filter(row => !have.has(row.chunk));
+    if (!draft.failed.length) { draft.status = 'done'; draft.message = ''; return; }
+    draft.status = 'failed';
+    const first = draft.failed[0]?.message || '这一张没有画好。';
+    draft.message = !draft.sheets.length ? (stopped ? '已停止等待，这一组还没有画好的。' : first)
+        : `${total} 张里第 ${sheetNumbers(draft.failed)} 张没画好${stopped ? '（已停止等待）' : `：${first}`}。画好的已保留，可以只补画缺的。`;
+}
+// Stop waiting: the page is usable again right away. The sheet being drawn or
+// cut keeps going and joins the draft when it is done; until that run settles,
+// runDraw refuses a new one so the same sheet is never paid for twice.
+function stopDraw(view) {
+    const draft = drafts.get(view.scope), run = draft?.run;
+    if (!draft || draft.status !== 'running' || !run) return;
+    run.stopped = true; run.stoppedAt = Date.now();
+    run.controller.abort();
+    draft.status = 'failed';
+    const have = sheetChunks(draft);
+    draft.failed = run.chunks.filter(row => !have.has(row.index)).map(row => ({ chunk: row.index, items: row.items, url: row.url || '', message: '已停止等待这一张。' }));
+    draft.message = stoppedMessage(draft);
     repaintDraft(draft.scope);
 }
 async function startDraw(view) {
@@ -266,10 +334,10 @@ async function startDraw(view) {
     const people = await chibiFilteredPeople(view, idea.owner, idea.people.map(row => ({ ...row })));
     if (!people) return;
     discardDraft(view.scope);
-    const draft = { scope: view.scope, owner: idea.owner, styleId: idea.styleId, idea: idea.text, items, people, sheets: [], status: 'running' };
+    const draft = { id: store.newStickerId('set'), scope: view.scope, owner: idea.owner, styleId: idea.styleId, idea: idea.text, items, people, sheets: [], failed: [], status: 'idle' };
     drafts.set(view.scope, draft);
-    go(view, 'cut');
     void runDraw(view, draft);
+    go(view, 'cut');
 }
 // Same Q-version filter as the couple avatars: only the people this set draws.
 async function chibiFilteredPeople(view, owner, people) {
@@ -300,11 +368,12 @@ async function chibiFilteredPeople(view, owner, people) {
 }
 function discardDraft(scope) {
     const draft = drafts.get(scope); if (!draft) return;
-    for (const sheet of draft.sheets) for (const piece of sheet.pieces) URL.revokeObjectURL(piece.preview);
+    draft.run?.controller.abort();
+    revokeSheets(draft.sheets);
     drafts.delete(scope);
 }
 async function regrid(view) {
-    const draft = drafts.get(view.scope); if (!draft || draft.status === 'running') return;
+    const draft = drafts.get(view.scope); if (!draft || draft.status === 'running' || draft.saving) return;
     report(view, '正在按格子重切…');
     for (const sheet of draft.sheets) {
         const cut = await stickers.cutSheet(sheet.url, sheet.layout, { forceGrid: true });
@@ -314,25 +383,41 @@ async function regrid(view) {
     paint(view); report(view, '已按格子重新切开。');
 }
 async function saveDraft(view) {
-    const draft = drafts.get(view.scope); if (!draft || draft.status === 'running') return;
+    const draft = drafts.get(view.scope); if (!draft || draft.status === 'running' || draft.saving) return;
     const ctx = core_context.currentCharacterGuard(), list = [];
-    report(view, '正在存进酒馆图片文件夹…');
-    for (const sheet of draft.sheets) for (let i = 0; i < sheet.pieces.length; i++) {
-        const piece = sheet.pieces[i], item = sheet.items[i];
-        if (piece.removed || !item) continue;
-        const saved = await stickers.saveStickerPicture({ blob: piece.blob, caption: item.caption }, ctx);
-        list.push({ id: store.newStickerId(), name: item.name, meaning: item.meaning, caption: item.caption || '', prompt: item.prompt, ...saved });
-        report(view, `正在存进酒馆图片文件夹… ${list.length}`);
+    if (store.stickerScope(ctx) !== draft.scope) return report(view, '现在打开的不是这组表情的角色，没有保存。回到原来的角色再保存。');
+    if (draft.sheets.some(sheet => sheet.pieces.some(piece => piece.redrawing))) return report(view, '还有一张在重画，等它画完再保存。');
+    draft.saving = true; paint(view);
+    try {
+        report(view, '正在存进酒馆图片文件夹…');
+        for (const sheet of draft.sheets) for (let i = 0; i < sheet.pieces.length; i++) {
+            const piece = sheet.pieces[i], item = sheet.items[i];
+            if (piece.removed || !item) continue;
+            // A retry after a failed save reuses pictures already uploaded.
+            const caption = item.caption || '';
+            const saved = piece.saved?.caption === caption ? piece.saved.result
+                : await stickers.saveStickerPicture({ blob: piece.blob, caption }, ctx);
+            piece.saved = { caption, result: saved };
+            list.push({ id: store.newStickerId(), name: item.name, meaning: item.meaning, caption, prompt: item.prompt, ...saved });
+            report(view, `正在存进酒馆图片文件夹… ${list.length}`);
+        }
+        if (!list.length) return report(view, '没有要保存的表情。');
+        if (drafts.get(view.scope) !== draft) return;
+        if (store.stickerScope(hostContext()) !== draft.scope) {
+            return report(view, '保存途中换了角色，这组表情没有写进去。回到原来的角色再点保存，不会重复上传。');
+        }
+        const current = store.readStickerData(ctx);
+        const title = store.cleanLine(draft.idea, 10) || `${label(draft.owner)}的一组`;
+        const pack = { id: store.newStickerId('pack'), owner: draft.owner, title, style: draft.styleId, idea: draft.idea, createdAt: Date.now(), cover: list[0].id, people: draft.people, stickers: list };
+        await stickers.saveStickerData({ ...current, packs: [...current.packs, pack] }, ctx);
+        discardDraft(view.scope);
+        const saved = store.readStickerData(ctx).packs.find(row => row.id === pack.id);
+        go(view, 'pack', { packId: pack.id, tab: draft.owner });
+        report(view, `已保存 ${saved?.stickers.length || list.length} 个。${stickers.loreState(store.readStickerData(ctx), ctx).written ? '世界书已同步。' : '回首页点「世界书」写进去，角色就知道怎么用了。'}`);
+    } finally {
+        draft.saving = false;
+        if (drafts.get(view.scope) === draft && view.page === 'cut') paint(view);
     }
-    if (!list.length) return report(view, '没有要保存的表情。');
-    const current = data();
-    const title = store.cleanLine(draft.idea, 10) || `${label(draft.owner)}的一组`;
-    const pack = { id: store.newStickerId('pack'), owner: draft.owner, title, style: draft.styleId, idea: draft.idea, createdAt: Date.now(), cover: list[0].id, people: draft.people, stickers: list };
-    await stickers.saveStickerData({ ...current, packs: [...current.packs, pack] }, ctx);
-    discardDraft(view.scope);
-    const saved = data().packs.find(row => row.id === pack.id);
-    go(view, 'pack', { packId: pack.id, tab: draft.owner });
-    report(view, `已保存 ${saved?.stickers.length || list.length} 个。${stickers.loreState(data(), ctx).written ? '世界书已同步。' : '回首页点「世界书」写进去，角色就知道怎么用了。'}`);
 }
 
 function findSticker(id) {
@@ -361,6 +446,8 @@ function stickerDialog(view, id) {
         + `<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" data-stk-replace-file hidden>`);
     if (!m) return;
     const status = value => { const node = m.body.querySelector('[data-stk-dialog-status]'); if (node) node.textContent = value || ''; };
+    const setRedrawButton = busy => { const node = m.body.querySelector('[data-stk-do="redraw"]'); if (node) { node.disabled = busy; node.textContent = busy ? '正在重画…' : '单张重画'; } };
+    if (redrawing.has(id)) { setRedrawButton(true); status('这一张正在重画…'); }
     const reopen = () => { if (modal === m) { paint(view); stickerDialog(view, id); } };
     const run = work => Promise.resolve().then(work).catch(error => { if (modal === m) status(text.safeErrorSummary(error) || '这次没有完成，请重试。'); });
     m.body.addEventListener('change', event => {
@@ -402,17 +489,25 @@ function stickerDialog(view, id) {
                 closeStickerDialog(); paint(view); return report(view, `已删掉「${now.sticker.name}」。`);
             }
             if (action === 'redraw') {
-                status('正在单张重画…');
-                const ctx = core_context.currentCharacterGuard();
-                // Redraw with the appearance this set was drawn with, so it still matches.
-                const people = now.pack.people?.length === 2 ? now.pack.people : await stickers.stickerPeople(ctx);
-                const piece = await stickers.drawSingleSticker({ owner: now.pack.owner, styleId: now.pack.style || 'chibi-dumpling',
-                    item: { name: now.sticker.name, prompt: now.sticker.prompt || now.sticker.meaning || now.sticker.name }, people, context: ctx,
-                    onProgress: update => { if (modal === m) status(progressText(update)); } });
-                status('正在保存…');
-                const saved = await stickers.saveStickerPicture({ blob: piece.blob, caption: now.sticker.caption }, ctx);
-                URL.revokeObjectURL(piece.preview);
-                await updateSticker(view, id, saved);
+                if (redrawing.has(id)) return status('这一张正在重画，请等它画完。');
+                redrawing.add(id); setRedrawButton(true);
+                let piece = null;
+                try {
+                    status('正在单张重画…');
+                    const ctx = core_context.currentCharacterGuard();
+                    // Redraw with the appearance this set was drawn with, so it still matches.
+                    const people = now.pack.people?.length === 2 ? now.pack.people : await stickers.stickerPeople(ctx);
+                    piece = await stickers.drawSingleSticker({ owner: now.pack.owner, styleId: now.pack.style || 'chibi-dumpling',
+                        item: { name: now.sticker.name, prompt: now.sticker.prompt || now.sticker.meaning || now.sticker.name }, people, context: ctx,
+                        targetKey: `single:${id}`, onProgress: update => { if (modal === m) status(progressText(update)); } });
+                    status('正在保存…');
+                    const saved = await stickers.saveStickerPicture({ blob: piece.blob, caption: now.sticker.caption }, ctx);
+                    if (store.stickerScope(hostContext()) !== store.stickerScope(ctx)) throw text.safeUserError('重画途中换了角色，新图没有替换。', 'RMT_STICKER_SCOPE');
+                    await updateSticker(view, id, saved);
+                } finally {
+                    if (piece) URL.revokeObjectURL(piece.preview);
+                    redrawing.delete(id); setRedrawButton(false);
+                }
                 return reopen();
             }
         });
@@ -432,7 +527,7 @@ function stickerDialog(view, id) {
 }
 function pieceDialog(view, key) {
     const draft = drafts.get(view.scope); if (!draft || draft.status === 'running') return;
-    const [s, p] = key.split(':').map(Number), sheet = draft.sheets[s], piece = sheet?.pieces[p], item = sheet?.items[p];
+    const [chunk, p] = key.split(':').map(Number), sheet = draft.sheets.find(row => row.chunk === chunk), piece = sheet?.pieces[p], item = sheet?.items[p];
     if (!piece || !item) return;
     const m = dialog(view, item.name || '未命名', `<div class="rmt-stk-preview"><img src="${esc(piece.preview)}" alt=""></div>`
         + `<label class="rmt-stk-field">名字<input data-stk-draft="name" maxlength="8" value="${esc(item.name)}"></label>`
@@ -447,17 +542,24 @@ function pieceDialog(view, key) {
         item[field] = field === 'name' ? store.cleanStickerName(event.target.value, 8) || item.name : event.target.value;
     });
     m.cleanup = () => { if (active === view && view.page === 'cut') queueMicrotask(() => paint(view)); };
+    const status = value => { const node = m.body.querySelector('[data-stk-dialog-status]'); if (node) node.textContent = value || ''; };
+    const setBusy = busy => { const node = m.body.querySelector('[data-stk-do="redraw"]'); if (node) { node.disabled = busy; node.textContent = busy ? '正在重画…' : '单张重画'; } };
+    if (piece.redrawing) { setBusy(true); status('这一张正在重画…'); }
     m.body.addEventListener('click', event => {
         const action = event.target.closest('[data-stk-do]')?.dataset.stkDo; if (!action) return;
-        const status = value => { const node = m.body.querySelector('[data-stk-dialog-status]'); if (node) node.textContent = value || ''; };
-        if (action === 'toggle') { piece.removed = !piece.removed; closeStickerDialog(); return; }
+        if (action === 'toggle') { if (!piece.redrawing) { piece.removed = !piece.removed; closeStickerDialog(); } return; }
+        if (piece.redrawing || draft.saving) return status(piece.redrawing ? '这一张正在重画，请等它画完。' : '正在保存，请稍等。');
+        piece.redrawing = true; setBusy(true);
         status('正在单张重画…');
         void stickers.drawSingleSticker({ owner: draft.owner, styleId: draft.styleId, item, people: draft.people, context: core_context.currentCharacterGuard(),
-            onProgress: update => { if (modal === m) status(progressText(update)); } }).then(next => {
+            targetKey: `${draft.id}:piece:${sheet.chunk}:${p}`, onProgress: update => { if (modal === m) status(progressText(update)); } }).then(next => {
+            // The set may have been redrawn, saved or discarded meanwhile.
+            if (drafts.get(draft.scope) !== draft || !draft.sheets.includes(sheet) || sheet.pieces[p] !== piece) { URL.revokeObjectURL(next.preview); return; }
             URL.revokeObjectURL(piece.preview);
-            piece.blob = next.blob; piece.preview = next.preview; piece.removed = false;
-            if (modal === m) { closeStickerDialog({ restoreFocus: false }); pieceDialog(view, key); }
-        }).catch(error => { if (modal === m) status(text.safeErrorSummary(error) || '这次没有画好，请重试。'); });
+            piece.blob = next.blob; piece.preview = next.preview; piece.removed = false; piece.saved = null;
+            if (modal === m) { piece.redrawing = false; closeStickerDialog({ restoreFocus: false }); pieceDialog(view, key); }
+        }).catch(error => { if (modal === m) status(text.safeErrorSummary(error) || '这次没有画好，请重试。'); })
+            .finally(() => { piece.redrawing = false; if (modal === m) setBusy(false); });
     });
 }
 async function importFiles(view, files, packId = '') {
@@ -472,7 +574,10 @@ async function importFiles(view, files, packId = '') {
         } catch (error) { report(view, text.safeErrorSummary(error)); }
     }
     if (!added.length) return;
-    const current = data();
+    if (store.stickerScope(hostContext()) !== store.stickerScope(ctx)) {
+        return report(view, `导入途中换了角色，${added.length} 张图片已存进酒馆图片文件夹，但没有加进表情包。回到原来的角色再导入。`);
+    }
+    const current = store.readStickerData(ctx);
     let packs = current.packs, target = packId;
     if (packId && packs.some(pack => pack.id === packId)) packs = packs.map(pack => pack.id === packId ? { ...pack, stickers: [...pack.stickers, ...added] } : pack);
     else { target = store.newStickerId('pack'); packs = [...packs, { id: target, owner: 'other', title: '导入的表情', createdAt: Date.now(), cover: added[0].id, stickers: added }]; }
@@ -510,7 +615,12 @@ async function handleAction(view, action, target) {
     if (action === 'remove-item') { readIdeaForm(view); view.idea.items.splice(Number(target.dataset.stkIndex), 1); return paint(view); }
     if (action === 'draw') return startDraw(view);
     if (action === 'regrid') return regrid(view);
-    if (action === 'redraw') { const draft = drafts.get(view.scope); if (draft && draft.status !== 'running') void runDraw(view, draft); return; }
+    if (action === 'redraw' || action === 'redraw-missing') {
+        const draft = drafts.get(view.scope);
+        if (draft && draft.status !== 'running') void runDraw(view, draft, { missingOnly: action === 'redraw-missing' });
+        return;
+    }
+    if (action === 'stop-draw') return stopDraw(view);
     if (action === 'discard') {
         if (!await confirmDialog(view, '放弃这一组', '切好的表情还没保存，放弃后不会留下。', '放弃')) return;
         discardDraft(view.scope); return go(view, 'home');

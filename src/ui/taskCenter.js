@@ -685,7 +685,7 @@ function collectTaskCards() {
             draftId: record.draftId || '',
             detail: [row.chatCaption, row.progressText].filter(Boolean).join(' · '),
             at: Number(record.endedAt) || 0,
-            actions: `${retry}${secondStepButton(record, row.id)}${openAction({ ...record, id: row.id, label: row.label, outcome: record.outcome || state, phase: row.phase })}${state === 'failed' ? dismissButton({ taskId: row.id }) : ''}`,
+            actions: `${retry}${row.currentChat === true && row.archiveTarget !== true ? secondStepButton(record, row.id) : ''}${openAction({ ...record, id: row.id, label: row.label, outcome: record.outcome || state, phase: row.phase })}${state === 'failed' ? dismissButton({ taskId: row.id }) : ''}`,
         });
     }
     for (const item of mine) {
@@ -1209,6 +1209,12 @@ export function handleTaskCenterAction(action, actionEl) {
         const id = actionEl?.dataset?.rmtTaskId || '';
         const record = core_requestCoordinator.settledChatTaskRecord(id);
         if (!record?.secondStepKind) return;
+        // The second step writes into the open chat; it must be the row's own chat.
+        if (!core_requestCoordinator.settledChatTaskInCurrentChat(id)) {
+            globalThis.toastr?.info?.('这条任务属于其他聊天。请先回到原来的聊天，再点第二次生成。', '心迹回廊');
+            try { refreshTaskCenterView(); } catch { /* The list repaints on its next refresh. */ }
+            return;
+        }
         hideTaskCenter();
         const run = record.secondStepKind === 'heart-scenario'
             ? modes_heart.generateHeartSeasonSection(record.secondStepPageId || record.pageId, { secondStep: true })

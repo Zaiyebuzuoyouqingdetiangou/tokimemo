@@ -109,25 +109,36 @@ export function appendLibraryEntry(previous, entry) {
     };
 }
 
-export function autoAchievementForReveal(context, { achievementId = '', moduleId = '', sourceMemoryIds = [] } = {}) {
-    if (!context) return null;
-    let memory = null;
-    try { memory = archive_repository.getImportedMemory(context); } catch { memory = null; }
-    const session = core_cache.loadSession(core_constants.MODE.ACHIEVEMENTS, { context, memoryBank: memory, clone: true });
-    const entries = Array.isArray(session?.entries) ? session.entries : [];
-    const ids = new Set((Array.isArray(sourceMemoryIds) ? sourceMemoryIds : []).filter(id => /^M\d{3,6}$/.test(id)));
-    const usable = item => item?.origin === 'auto' && clip(item.title, 100);
-    const byId = achievementId ? entries.find(item => usable(item) && item.id === achievementId) : null;
-    const byMemory = entries.find(item => usable(item)
-        && (!moduleId || !item.moduleId || item.moduleId === moduleId)
-        && (item.sourceMemoryIds || []).some(id => ids.has(id)));
-    const entry = byId || byMemory;
-    if (!entry) return null;
-    return {
-        title: clip(entry.title, 100),
-        description: clip(entry.description, 900),
-        unlockCondition: clip(entry.unlockCondition, 300),
+// 成就库里自动成就的只读索引：楼层壳一次刷新里所有信共用，不必每封信重扫、重裁一遍整个库。
+export function autoAchievementLookup(session) {
+    const entries = (Array.isArray(session?.entries) ? session.entries : []).filter(item => item?.origin === 'auto' && clip(item.title, 100));
+    const byId = new Map();
+    for (const item of entries) if (item.id && !byId.has(item.id)) byId.set(item.id, item);
+    return ({ achievementId = '', moduleId = '', sourceMemoryIds = [] } = {}) => {
+        const ids = new Set((Array.isArray(sourceMemoryIds) ? sourceMemoryIds : []).filter(id => /^M\d{3,6}$/.test(id)));
+        const entry = (achievementId ? byId.get(achievementId) : null)
+            || entries.find(item => (!moduleId || !item.moduleId || item.moduleId === moduleId)
+                && (item.sourceMemoryIds || []).some(id => ids.has(id)));
+        if (!entry) return null;
+        return {
+            title: clip(entry.title, 100),
+            description: clip(entry.description, 900),
+            unlockCondition: clip(entry.unlockCondition, 300),
+        };
     };
+}
+
+// options.session：调用方已经读出的成就库（可以是 null）；options.lookup：已建好的索引。只读查询，不复制整个成就库。
+export function autoAchievementForReveal(context, query = {}, options = {}) {
+    if (!context) return null;
+    if (typeof options?.lookup === 'function') return options.lookup(query || {});
+    let session = options && Object.hasOwn(options, 'session') ? options.session : undefined;
+    if (session === undefined) {
+        let memory = null;
+        try { memory = archive_repository.getImportedMemory(context); } catch { memory = null; }
+        session = core_cache.loadSession(core_constants.MODE.ACHIEVEMENTS, { context, memoryBank: memory, clone: false });
+    }
+    return autoAchievementLookup(session)(query || {});
 }
 
 export function dropAutoRound(context, { moduleId = '', sourceMemoryIds = [], messageIndex = null } = {}) {
