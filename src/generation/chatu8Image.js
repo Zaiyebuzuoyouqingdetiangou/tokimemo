@@ -1,7 +1,7 @@
 import * as character_scene from './cgCharacterScene.js';
 // Calls 智绘姬 through the event it already listens for. Does not read API keys,
-// prompts, or endpoints, and does not write its settings. Ordinary CG keeps its
-// existing size; an explicit MV orientation overrides only this request's size.
+// prompts, or endpoints, and does not write its settings. A caller that asks for
+// an orientation (CG, MV, avatars) sends an explicit size for this request only.
 import * as image_patch from '../core/cgImagePatch.js';
 import * as core_context from '../core/context.js';
 import * as core_text from '../core/text.js';
@@ -10,6 +10,11 @@ import * as preset_text from './chatu8Presets.js';
 
 export const CHATU8_IMAGE_PROVIDER = 'chatu8-image';
 export const CHATU8_IMAGE_WAIT_NOTICE_MS = 300000;
+// After "停止等待" the caller is released at once, but 智绘姬 keeps drawing. Keep
+// the reservation (and its response listener) until that answer arrives, so the
+// same target cannot start a second paid job. A long cap frees a lost request.
+export const CHATU8_IMAGE_ABANDON_CAP_MS = 600000;
+const STILL_UPLOAD_MAX_BYTES = 32 * 1024 * 1024;
 const EXTENSION_KEY = 'st-chatu8';
 const REQUEST_EVENT = 'generate-image-request';
 const RESPONSE_EVENT = 'generate-image-response';
@@ -121,14 +126,25 @@ function stillFormat(dataUrl) {
     return '';
 }
 
-async function saveStillImage(imageData, context, signal) {
-    const existing = uploadedPath(imageData);
-    if (existing) return existing;
-    if (typeof imageData !== 'string' || !imageData.startsWith('data:image/')) throw chatu8ImageError('CH8_BACKEND_ERROR');
-    const format = stillFormat(imageData);
-    const comma = imageData.indexOf(',');
-    const payload = comma > 0 ? imageData.slice(comma + 1).replace(/\s/g, '') : '';
-    if (!format || !payload) throw chatu8ImageError('CH8_BACKEND_ERROR');
+function sniffFormat(bytes, type = '') {
+    const at = (offset, ...values) => values.every((value, index) => bytes[offset + index] === value);
+    if (at(0, 0x89, 0x50, 0x4e, 0x47)) return 'png';
+    if (at(0, 0xff, 0xd8, 0xff)) return 'jpeg';
+    if (at(0, 0x47, 0x49, 0x46, 0x38)) return 'gif';
+    if (at(0, 0x52, 0x49, 0x46, 0x46) && at(8, 0x57, 0x45, 0x42, 0x50)) return 'webp';
+    return { 'image/png': 'png', 'image/jpeg': 'jpeg', 'image/jpg': 'jpeg', 'image/webp': 'webp', 'image/gif': 'gif' }[String(type).toLowerCase()] || '';
+}
+
+function bytesBase64(bytes) {
+    let binary = '';
+    for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+    return btoa(binary);
+}
+
+// Shared by both providers: store one finished still in the user's own ST
+// image folder. Any failure here means a paid image exists, so it is a save
+// failure (never a reason to draw again elsewhere).
+async function uploadStill(payload, format, context, signal, failCode) {
     let response;
     try {
         response = await fetch('/api/images/upload', {
@@ -139,14 +155,53 @@ async function saveStillImage(imageData, context, signal) {
         });
     } catch (error) {
         if (signal?.aborted || error?.name === 'AbortError') throw chatu8ImageError('CH8_ABORTED');
-        throw chatu8ImageError('CH8_SAVE_FAILED');
+        throw chatu8ImageError(failCode);
     }
-    if (!response?.ok) throw chatu8ImageError('CH8_SAVE_FAILED');
+    if (!response?.ok) throw chatu8ImageError(failCode);
     let body = null;
     try { body = await response.json(); } catch { body = null; }
     const path = uploadedPath(body?.path);
-    if (!path) throw chatu8ImageError('CH8_SAVE_FAILED');
+    if (!path) throw chatu8ImageError(failCode);
     return path;
+}
+
+export async function uploadStillDataUrl(dataUrl, context, signal = null) {
+    if (typeof dataUrl !== 'string' || !dataUrl.startsWith('data:image/')) throw chatu8ImageError('CH8_SAVE_FAILED');
+    const format = stillFormat(dataUrl);
+    const comma = dataUrl.indexOf(',');
+    const payload = comma > 0 ? dataUrl.slice(comma + 1).replace(/\s/g, '') : '';
+    if (!format || !payload || !/;base64$/i.test(dataUrl.slice(0, comma))) throw chatu8ImageError('CH8_SAVE_FAILED');
+    return uploadStill(payload, format, context, signal, 'CH8_SAVE_FAILED');
+}
+
+// A finished image that is only reachable by URL (remote host, a same-host
+// path with a query, or a page blob) is copied once into the local folder.
+async function uploadStillFromUrl(value, context, signal) {
+    let url;
+    try { url = new URL(value, image_patch.imageResourceBase()); } catch { throw chatu8ImageError('CH8_SAVE_FAILED'); }
+    if (!['http:', 'https:', 'blob:'].includes(url.protocol)) throw chatu8ImageError('CH8_SAVE_FAILED');
+    let bytes, type = '';
+    try {
+        const response = await fetch(url.href, { signal, credentials: image_patch.isSameImageHost(url, image_patch.imageResourceBase()) ? 'same-origin' : 'omit' });
+        if (!response?.ok) throw chatu8ImageError('CH8_SAVE_FAILED');
+        type = response.headers?.get?.('content-type') || '';
+        bytes = new Uint8Array(await response.arrayBuffer());
+    } catch (error) {
+        if (signal?.aborted || error?.name === 'AbortError') throw chatu8ImageError('CH8_ABORTED');
+        throw chatu8ImageError('CH8_SAVE_FAILED');
+    }
+    const format = bytes.length && bytes.length <= STILL_UPLOAD_MAX_BYTES ? sniffFormat(bytes, type.split(';')[0].trim()) : '';
+    if (!format) throw chatu8ImageError('CH8_SAVE_FAILED');
+    return uploadStill(bytesBase64(bytes), format, context, signal, 'CH8_SAVE_FAILED');
+}
+
+async function saveStillImage(imageData, context, signal) {
+    const existing = uploadedPath(imageData);
+    if (existing) return existing;
+    if (typeof imageData !== 'string' || !imageData.trim()) throw chatu8ImageError('CH8_SAVE_FAILED');
+    const value = imageData.trim();
+    if (value.startsWith('data:')) return uploadStillDataUrl(value, context, signal);
+    return uploadStillFromUrl(value, context, signal);
 }
 
 function orientedSize(context, backend, orientation, aspectRatio = '') {
@@ -181,6 +236,22 @@ function orientedSize(context, backend, orientation, aspectRatio = '') {
         }
     }
     return orientation === 'portrait' ? { width: short, height: long } : { width: long, height: short };
+}
+
+// True when the active backend has its own width/height in 智绘姬's settings.
+function hasConfiguredSize(context, backend) {
+    const bag = extensionBag(context);
+    const keys = { novelai: ['novelai_width', 'novelai_height'], sd: ['sd_cwidth', 'sd_cheight'], comfyui: ['comfyui_width', 'comfyui_height'] }[backend];
+    return !!keys && keys.every(key => { const value = Number(bag?.[key]); return Number.isSafeInteger(value) && value > 0; });
+}
+
+// configuredSizeOnly: turn the configured size to this request's orientation.
+// A square preset has no orientation to turn, so the provider keeps its own size.
+function hasOrientableSize(context, backend) {
+    if (!hasConfiguredSize(context, backend)) return false;
+    const bag = extensionBag(context);
+    const keys = { novelai: ['novelai_width', 'novelai_height'], sd: ['sd_cwidth', 'sd_cheight'], comfyui: ['comfyui_width', 'comfyui_height'] }[backend];
+    return Number(bag?.[keys[0]]) !== Number(bag?.[keys[1]]);
 }
 
 function nativeCharacterBackend(context, backend) {
@@ -273,7 +344,7 @@ export function chatu8SendPreview(prompt, { promptMetadata = null, context = cor
     return sendPreview(looks ? `${scene}\n\n人物外貌（逐人对应，不互换）：\n${looks}` : scene, backend, negatives);
 }
 
-export async function generateChatu8Image(prompt, { signal = null, orientation = 'landscape', respectOrientation = false, aspectRatio = '', promptMetadata = null, onProgress = null, onSettled = null, targetKey = '', context = core_context.getContext(), preservePrompt = false, singlePrompt = false, avatarPromptParts = null } = {}) {
+export async function generateChatu8Image(prompt, { signal = null, orientation = 'landscape', respectOrientation = false, configuredSizeOnly = false, aspectRatio = '', promptMetadata = null, onProgress = null, onSettled = null, targetKey = '', context = core_context.getContext(), preservePrompt = false, singlePrompt = false, avatarPromptParts = null } = {}) {
     if (signal?.aborted) throw chatu8ImageError('CH8_ABORTED');
     const state = chatu8ImageState(context);
     if (!state.available) throw chatu8ImageError(state.code);
@@ -288,11 +359,13 @@ export async function generateChatu8Image(prompt, { signal = null, orientation =
     }
     const source = state.eventSource;
     const id = requestId();
-    let settled = false;
-    const finish = () => {
-        if (settled) return;
-        settled = true;
-        pendingGenerations.delete(reservation);
+    let released = false, abandoned = false;
+    // Releases the reservation exactly once: after a normal answer, or, when
+    // the caller stopped waiting, only after 智绘姬 answers (or the long cap).
+    const release = () => {
+        if (released) return;
+        released = true;
+        if (pendingGenerations.get(reservation) === id) pendingGenerations.delete(reservation);
         try { onSettled?.(); } catch {}
     };
     pendingGenerations.set(reservation, id);
@@ -300,25 +373,33 @@ export async function generateChatu8Image(prompt, { signal = null, orientation =
         if (signal?.aborted || typeof onProgress !== 'function') return;
         try { onProgress({ phase, providerLabel: '智绘姬' }); } catch {}
     };
+    let result;
     try {
         report('generating');
-        const result = await new Promise((resolve, reject) => {
-            let timer = 0;
-            const stop = code => {
+        result = await new Promise((resolve, reject) => {
+            let timer = 0, cap = 0, answered = false;
+            const detach = () => {
                 unlisten(source, RESPONSE_EVENT, onResponse);
                 signal?.removeEventListener('abort', onAbort);
-                clearTimeout(timer);
-                reject(chatu8ImageError(code));
+                clearTimeout(timer); clearTimeout(cap);
             };
             const onResponse = data => {
                 if (!data || data.id !== id) return;
-                unlisten(source, RESPONSE_EVENT, onResponse);
+                detach();
+                // A late answer after "停止等待" only frees the reservation.
+                if (abandoned) { release(); return; }
+                answered = true; resolve(data);
+            };
+            const onAbort = () => {
+                if (answered || abandoned) return;
+                abandoned = true;
                 signal?.removeEventListener('abort', onAbort);
                 clearTimeout(timer);
-                resolve(data);
+                cap = setTimeout(() => { detach(); release(); }, CHATU8_IMAGE_ABANDON_CAP_MS);
+                try { cap?.unref?.(); } catch {}
+                reject(chatu8ImageError('CH8_ABORTED'));
             };
-            const onAbort = () => stop('CH8_ABORTED');
-            if (signal?.aborted) { stop('CH8_ABORTED'); return; }
+            if (signal?.aborted) { reject(chatu8ImageError('CH8_ABORTED')); return; }
             try {
                 source.on(RESPONSE_EVENT, onResponse);
                 signal?.addEventListener('abort', onAbort, { once: true });
@@ -326,9 +407,17 @@ export async function generateChatu8Image(prompt, { signal = null, orientation =
                 timer = setTimeout(() => report('waiting'), CHATU8_IMAGE_WAIT_NOTICE_MS);
                 source.emit(REQUEST_EVENT, { id, prompt: preview.prompt,
                     ...(preview.negative_prompt ? { negative_prompt: preview.negative_prompt } : {}),
-                    ...(respectOrientation ? orientedSize(context, state.backend, orientation, aspectRatio) : {}) });
-            } catch { stop('CH8_BACKEND_ERROR'); }
+                    ...(respectOrientation && (!configuredSizeOnly || hasOrientableSize(context, state.backend))
+                        ? orientedSize(context, state.backend, orientation, aspectRatio) : {}) });
+            } catch { detach(); reject(chatu8ImageError('CH8_BACKEND_ERROR')); }
         });
+    } catch (error) {
+        if (!abandoned) release();
+        if (ownErrors.has(error) || error?.safeToDisplay) throw error;
+        throw chatu8ImageError('CH8_BACKEND_ERROR');
+    }
+    // 智绘姬 has answered: from here the reservation is always released.
+    try {
         if (signal?.aborted) throw chatu8ImageError('CH8_ABORTED');
         if (result?.cancelled) throw chatu8ImageError('CH8_ABORTED');
         if (result?.success !== true || result?.isVideo === true) throw chatu8ImageError('CH8_BACKEND_ERROR');
@@ -336,10 +425,10 @@ export async function generateChatu8Image(prompt, { signal = null, orientation =
         const path = await saveStillImage(result.imageData, context, signal);
         return { url: path, provider: CHATU8_IMAGE_PROVIDER };
     } catch (error) {
-        if (ownErrors.has(error)) throw error;
-        if (error?.safeToDisplay) throw error;
-        throw chatu8ImageError('CH8_BACKEND_ERROR');
+        if (ownErrors.has(error) || error?.safeToDisplay) throw error;
+        // success:true already means a finished (possibly paid) image.
+        throw chatu8ImageError(result?.success === true ? 'CH8_SAVE_FAILED' : 'CH8_BACKEND_ERROR');
     } finally {
-        finish();
+        release();
     }
 }

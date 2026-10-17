@@ -7,7 +7,7 @@ import * as core_context from '../core/context.js';
 import * as core_text from '../core/text.js';
 
 export const AUDIO_CHANGED_EVENT = 'hearttrace:mv-audio-changed';
-const loaded = new Map();     // key → { url, name, streaming, sourceUrl }
+const loaded = new Map();     // key → { url, name, streaming, sourceUrl, unsaved? }
 const pending = new Map();    // key → AbortController
 const status = new Map();     // key → last status text
 const fill = new Map();       // key → full link to show in the input after a short link resolved
@@ -90,7 +90,8 @@ async function commit(context, songId, media) {
     const name = core_text.normalizeText(media.name, 80) || '链接歌曲';
     const artist = core_text.normalizeText(media.artist || '', 80), coverUrl = /^https:\/\//.test(media.coverUrl || '') ? media.coverUrl : '';
     const saved = await mv_media.putMedia(key, streaming ? null : media.blob, name, { sourceUrl: media.sourceUrl || '', artist, coverUrl, ...(streaming ? { mediaUrl: url } : {}) });
-    remember(key, { url, name, streaming, sourceUrl: media.sourceUrl || '', artist, coverUrl });
+    // Not saved on this device: this entry is the only copy, so teardown must not release it.
+    remember(key, { url, name, streaming, sourceUrl: media.sourceUrl || '', artist, coverUrl, ...(saved ? {} : { unsaved: true }) });
     announce(key);
     return { saved, streaming, name };
 }
@@ -166,6 +167,36 @@ export function setSongNote(songId, text, context = core_context.getContext?.())
 }
 
 export function setSongPlayerRepaint(fn) { repaint = typeof fn === 'function' ? fn : null; }
+
+// Blob URLs of local song files stay alive until revoked. Teardown (overlay close, chat change,
+// runtime destroy) releases every track that no on-screen player is still using; the song page
+// reloads a released track from this device's media store the next time it renders. A track
+// the store could not keep stays until it is replaced, removed or the page unloads.
+function playerInUse(url) {
+    try {
+        for (const audio of globalThis.document?.querySelectorAll?.('[data-rmt-song-player]') || []) {
+            if (audio.isConnected !== false && audio.getAttribute?.('src') === url) return true;
+        }
+    } catch { /* No DOM: nothing can be playing. */ }
+    return false;
+}
+
+export function releaseSongAudio() {
+    for (const [key, entry] of [...loaded]) {
+        if (entry.unsaved || playerInUse(entry.url)) continue;
+        remember(key, null);
+        fill.delete(key);
+    }
+}
+
+let releaseQueued = false;
+// Callers (overlay close) tear the page down synchronously right after this returns, so check
+// on-screen players once that has finished.
+export function scheduleSongAudioRelease() {
+    if (releaseQueued) return;
+    releaseQueued = true;
+    queueMicrotask(() => { releaseQueued = false; releaseSongAudio(); });
+}
 
 const ICON_PLAY = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z"/></svg>';
 const ICON_PAUSE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h3.6v14H7zM13.4 5H17v14h-3.6z"/></svg>';

@@ -138,7 +138,7 @@ export async function commitCurrentChatMemoryFilePreview(preview, context = core
     const ledger = await archive_sourceLedger.upsertMemorySourceLedger(scope, {
         ...preview,
         sourceKind: 'file-user-confirmed-history-summary',
-    });
+    }, { retainProviders: archive_sourceLedger.pendingBatchProviders(context) });
     clearMemoryPreflight(context);
     return archive_sourceLedger.memorySourceLedgerSummary(ledger);
 }
@@ -558,7 +558,8 @@ export async function syncSelectedWorldInfoHistoryLedger(context = core_context.
     if (core_context.comparableChatId(core_context.getChatId(core_context.currentCharacterGuard())) !== chatId) throw abortSync('Chat changed');
     if (String(core_text.hashString(JSON.stringify(getMemoryWorldInfoSelection(context).books))) !== selectionFingerprint) throw abortSync('World info selection changed');
     const batches = selectedWorldInfoHistoryBatches(worldInfo, selection, previousLedger);
-    if (batches.length) await archive_sourceLedger.upsertMemorySourceLedgerBatches(scope, batches, { assertCurrent, signal });
+    if (batches.length) await archive_sourceLedger.upsertMemorySourceLedgerBatches(scope, batches, { assertCurrent, signal,
+        retainProviders: archive_sourceLedger.pendingBatchProviders(context) });
     assertCurrent();
     runtimeState.memoryPreflightCache.delete(preflightKey);
     if (core_context.comparableChatId(core_context.getChatId(core_context.currentCharacterGuard())) !== chatId) throw abortSync('Chat changed', true);

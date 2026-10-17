@@ -227,6 +227,11 @@ export async function drawSelectedCgImage({ promptOverride, promptMetadata, prom
         const generated = await invokeImageGeneration(prompt, context, {
             provider: imageState.provider, signal: controller.signal,
             orientation: item.cgOrientation === 'portrait' || (dailyStrip && Number(item.panelCount) !== 1) ? 'portrait' : 'landscape', characterName: context.name2,
+            // Send this CG's own size (the user's configured size, turned to this
+            // orientation) so a size left over from another request cannot apply.
+            // Backends without a configured size, or with a square one, keep their
+            // own default: a square preset is never stretched to 16:9.
+            respectOrientation: true, configuredSizeOnly: true,
             promptMetadata: metadata,
             targetKey: cgImageReservationKey(mode, itemId, context),
             onSettled: () => refreshSettledCgImage(taskKey, origin),

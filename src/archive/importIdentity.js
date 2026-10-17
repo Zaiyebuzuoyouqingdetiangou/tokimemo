@@ -47,29 +47,46 @@ function archiveTaskBinding(context) {
 }
 
 export function captureArchiveTaskInput(context, payload) {
-    const data = { ...payload, binding: archiveTaskBinding(context),
-        names: { name1: context.name1, name2: context.name2 }, contentSettings: archiveContentSettings(context) };
-    const taskInputV1 = { version: 1, digest: archive_batches.sourceHash(JSON.stringify(data)), data };
-    return payload.operation === 'import' ? draft_inputs.compactArchiveInputs({ batchVersion: 1, progress: {}, taskInputV1 }).taskInputV1 : taskInputV1;
+    // An import keeps one chat copy only (see compactArchiveInputs). Strip the
+    // duplicates before hashing and cloning, not after: same bytes, same digest.
+    const lean = payload.operation === 'import' ? { ...payload,
+        ...(payload.snapshotForIdentity ? { snapshotForIdentity: draft_inputs.withoutFields(payload.snapshotForIdentity, ['messages', 'incrementalMessages']) } : {}),
+        ...(payload.snapshot ? { snapshot: draft_inputs.withoutFields(payload.snapshot, ['incrementalMessages']) } : {}) } : payload;
+    const data = structuredClone({ ...lean, binding: archiveTaskBinding(context),
+        names: { name1: context.name1, name2: context.name2 }, contentSettings: archiveContentSettings(context) });
+    const taskInputV1 = { version: 1, digest: draft_inputs.inputHash(data), data };
+    draft_inputs.markVerifiedTaskInput(taskInputV1);
+    return taskInputV1;
 }
 
-export function checkedArchiveTaskInput(value, context, { completedSaveOnly = false } = {}) {
-    if (!value) return null;
-    if (value.version !== 1 || !value.data || value.digest !== archive_batches.sourceHash(JSON.stringify(value.data))) {
-        throw core_text.safeUserError('原任务资料未通过完整性校验，原草稿保留。', 'RMT_RECOVERY_DATA');
-    }
+// Checks shared by a full captured task input and the small binding a finished
+// batch keeps instead. No copy is made here; callers that hand data on clone it.
+function assertTaskBinding(data, context, completedSaveOnly) {
     const actual = archiveTaskBinding(context);
-    for (const key of Object.keys(actual)) if (value.data.binding?.[key] !== actual[key]) {
+    for (const key of Object.keys(actual)) if (data.binding?.[key] !== actual[key]) {
         // The existing completed-save path permits a display-name change only.
         // Keep the captured payload intact and prove unchanged card facts plus
         // slot/avatar before accepting that one runtime-key difference.
-        if (completedSaveOnly && key === 'characterKey' && value.data.identity?.characterFacts && value.data.identity?.characterLocator) {
-            const current = batchIdentity(context, { fullFingerprint: value.data.snapshotForIdentity?.fullFingerprint || '' });
-            if (current.characterFacts === value.data.identity.characterFacts && current.characterLocator === value.data.identity.characterLocator) continue;
+        if (completedSaveOnly && key === 'characterKey' && data.identity?.characterFacts && data.identity?.characterLocator) {
+            const current = batchIdentity(context, { fullFingerprint: data.snapshotForIdentity?.fullFingerprint ?? data.fullFingerprint ?? '' });
+            if (current.characterFacts === data.identity.characterFacts && current.characterLocator === data.identity.characterLocator) continue;
         }
         throw archive_batches.changedInput(key === 'chatId' ? 'chat' : 'character');
     }
-    return structuredClone(value.data);
+}
+
+function verifiedTaskData(value, context, completedSaveOnly) {
+    if (!value) return null;
+    if (value.version !== 1 || !value.data || !draft_inputs.taskInputDigestValid(value)) {
+        throw core_text.safeUserError('原任务资料未通过完整性校验，原草稿保留。', 'RMT_RECOVERY_DATA');
+    }
+    assertTaskBinding(value.data, context, completedSaveOnly);
+    return value.data;
+}
+
+export function checkedArchiveTaskInput(value, context, { completedSaveOnly = false } = {}) {
+    const data = verifiedTaskData(value, context, completedSaveOnly);
+    return data ? structuredClone(data) : null;
 }
 
 export function archiveContentContext(context, taskInput) {
@@ -102,9 +119,17 @@ export function batchIdentity(context, snapshot) {
 export function assertBatchCommitIdentity(context, bank, { completedSaveOnly = false } = {}) {
     const progress = bank?.[archive_batches.IMPORT_PROGRESS_KEY];
     if (!progress) return;
-    const captured = checkedArchiveTaskInput(progress.taskInputV1, context, { completedSaveOnly });
+    // Runs before every chunk: verify (memoized) without copying the chat.
+    const captured = verifiedTaskData(progress.taskInputV1, context, completedSaveOnly);
     if (captured) {
         archive_batches.assertIdentity(progress.identity, captured.identity);
+        return;
+    }
+    // A finished batch keeps only the binding of its original task input.
+    const binding = progress.taskInputBinding;
+    if (binding?.version === 1 && binding.binding && binding.identity) {
+        assertTaskBinding(binding, context, completedSaveOnly);
+        archive_batches.assertIdentity(progress.identity, binding.identity);
         return;
     }
     const actual = batchIdentity(context, { fullFingerprint: core_context.completeArchiveChatFingerprint(context) });

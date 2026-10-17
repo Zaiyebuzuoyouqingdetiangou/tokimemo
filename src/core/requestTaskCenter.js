@@ -16,6 +16,8 @@ import { TASK_PHASE_LABEL, abortTaskController, cancelledLogicalOrigins, collect
 
 let settledTaskSequence = 0;
 
+export const MAX_CANCELLED_LOGICAL_ORIGINS = 32;
+
 let refreshTaskCenter = () => {};
 
 export function finishLogicalGenerationTask(handle, result = null) {
@@ -26,7 +28,17 @@ export function finishLogicalGenerationTask(handle, result = null) {
         handle.failureSummary = core_text.safeErrorSummary(result.error);
     }
     handle.releaseParent();
-    if (handle.signal.aborted) cancelledLogicalOrigins.push(handle);
+    if (handle.signal.aborted) {
+        cancelledLogicalOrigins.push(handle);
+        // Bounded: entries from an older runtime lifetime can never match again,
+        // and only recent cancellations still have late segments in flight.
+        for (let index = cancelledLogicalOrigins.length - 1; index >= 0; index -= 1) {
+            if (cancelledLogicalOrigins[index].lifecycleEpoch !== runtimeState.runtimeLifecycleEpoch) cancelledLogicalOrigins.splice(index, 1);
+        }
+        if (cancelledLogicalOrigins.length > MAX_CANCELLED_LOGICAL_ORIGINS) {
+            cancelledLogicalOrigins.splice(0, cancelledLogicalOrigins.length - MAX_CANCELLED_LOGICAL_ORIGINS);
+        }
+    }
     logicalGenerationTasks.delete(handle.id);
     // The refresh inside rememberSettledTask must not see this finished task
     // as still running; otherwise the archive chip remains stuck at “准备”.
@@ -317,8 +329,13 @@ export function generationRequestTimeoutMs(value) {
     return Math.max(core_constants.MIN_GENERATION_REQUEST_TIMEOUT_MS, Math.min(core_constants.MAX_GENERATION_REQUEST_TIMEOUT_MS, Math.floor(requested)));
 }
 
+// A streamed reply that keeps arriving is not stuck. The configured timeout is an
+// idle limit (no new data); this separate cap only stops a stream that never ends.
+export const GENERATION_REQUEST_TOTAL_CAP_MS = 15 * 60 * 1000;
+
 export function runGenerationRequestWithTimeout(factory, controller, timeoutMs, statusText = '') {
     const duration = generationRequestTimeoutMs(timeoutMs);
+    const totalCap = Math.max(duration, GENERATION_REQUEST_TOTAL_CAP_MS);
     return new Promise((resolve, reject) => {
         let settled = false;
         let timer = 0;
@@ -332,10 +349,21 @@ export function runGenerationRequestWithTimeout(factory, controller, timeoutMs, 
         const startedAt = Date.now();
         let hiddenAt = 0;
         let hiddenMs = 0;
+        // Visible-time mark of the latest received data. Each progress report
+        // restarts the idle window; the timer callback re-checks by the clock,
+        // so a chunk does not need to re-arm the timer itself.
+        let activityMark = 0;
+        let progressed = false;
         const pageHidden = () => {
             try { return globalThis.document?.visibilityState === 'hidden'; } catch { return false; }
         };
         const visibleElapsedMs = () => Date.now() - startedAt - hiddenMs - (hiddenAt ? Date.now() - hiddenAt : 0);
+        const idleMs = () => visibleElapsedMs() - activityMark;
+        const noteProgress = () => {
+            if (settled) return;
+            progressed = true;
+            activityMark = visibleElapsedMs();
+        };
         const finish = (handler, value) => {
             if (settled) return;
             settled = true;
@@ -351,7 +379,7 @@ export function runGenerationRequestWithTimeout(factory, controller, timeoutMs, 
         const armTimer = () => {
             if (settled) return;
             if (timer) clearTimeout(timer);
-            timer = setTimeout(onTimer, Math.max(1, duration - visibleElapsedMs()));
+            timer = setTimeout(onTimer, Math.max(1, Math.min(duration - idleMs(), totalCap - visibleElapsedMs())));
         };
         const onTimer = () => {
             timer = 0;
@@ -359,12 +387,23 @@ export function runGenerationRequestWithTimeout(factory, controller, timeoutMs, 
             // re-evaluate by the real clock after a resume instead of trusting the
             // parked callback. A request that was already overtime while visible
             // still times out as soon as the page is visible again.
-            if (pageHidden() || visibleElapsedMs() < duration) { armTimer(); return; }
+            const overCap = visibleElapsedMs() >= totalCap;
+            if (pageHidden() || (!overCap && idleMs() < duration)) { armTimer(); return; }
             const seconds = Math.round(duration / 1000);
+            const minutes = Math.round(totalCap / 60000);
             const label = core_text.normalizeText(statusText, 120);
-            const error = new Error(`${label ? `${label}：` : ''}模型请求超过 ${seconds} 秒仍未完成，已停止等待并释放任务位。请稍后重试；若反复发生，请检查代理/模型速度或降低单次输出上限。`);
+            const lead = overCap ? `模型请求超过 ${minutes} 分钟仍未完成，已停止等待。`
+                : progressed ? `模型已连续 ${seconds} 秒没有返回新内容，已停止等待。` : `模型请求超过 ${seconds} 秒仍未完成，已停止等待。`;
+            const error = new Error(overCap
+                ? `${label ? `${label}：` : ''}模型请求超过 ${minutes} 分钟仍未完成，已停止等待并释放任务位。请稍后重试；若反复发生，请降低单次输出上限。`
+                : progressed
+                    ? `${label ? `${label}：` : ''}模型已连续 ${seconds} 秒没有返回新内容，已停止等待并释放任务位。请稍后重试；若反复发生，请检查代理/模型速度。`
+                    : `${label ? `${label}：` : ''}模型请求超过 ${seconds} 秒仍未完成，已停止等待并释放任务位。请稍后重试；若反复发生，请检查代理/模型速度或降低单次输出上限。`);
             error.code = 'RMT_REQUEST_TIMEOUT';
             error.retryable = false;
+            error.timeoutKind = overCap ? 'total' : 'idle';
+            error.timeoutLead = lead;
+            error.receivedProgress = progressed;
             finish(reject, error);
             try { controller.abort(error); } catch {}
         };
@@ -388,7 +427,7 @@ export function runGenerationRequestWithTimeout(factory, controller, timeoutMs, 
         if (pageHidden()) hiddenAt = startedAt;
         armTimer();
         Promise.resolve()
-            .then(factory)
+            .then(() => factory(noteProgress))
             .then(value => finish(resolve, value), error => finish(reject, error));
     });
 }
@@ -425,7 +464,7 @@ export function shouldRetrySegmentRequest(error, attempt = 0) {
 }
 
 export function stopsCompositeGeneration(error) {
-    return error?.name === 'AbortError' || /^(?:RMT_CONNECTION_|RMT_MANUAL_|RMT_PROFILE_|RMT_API_|RMT_RESPONSE_HTML|RMT_REQUEST_TIMEOUT)/.test(String(error?.code || ''));
+    return error?.name === 'AbortError' || error?.requestTimeout === true || /^(?:RMT_CONNECTION_|RMT_MANUAL_|RMT_PROFILE_|RMT_API_|RMT_RESPONSE_HTML|RMT_REQUEST_TIMEOUT)/.test(String(error?.code || ''));
 }
 
 export function validateGeneratedSegment(raw, validator) {

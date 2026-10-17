@@ -29,6 +29,7 @@ import * as editor_ui from './mvEditorUi.js';
 import * as editor_dialog from './mvEditorDialog.js';
 import * as workspace_ui from './mvWorkspaceUi.js';
 import * as theme_song_view from './themeSongView.js';
+import * as song_player from './songPlayer.js';
 
 const esc = core_text.esc;
 export const MV_MODE = 'songMv';
@@ -678,7 +679,7 @@ export function openMv(options = {}) {
     ui_workspaceState.workspace.route = MV_MODE; ui_workspaceState.workspace.tab = 'content'; ui_workspaceState.workspace.empty = null;
     runtimeState.activeMode = MV_MODE; runtimeState.activeSession = null;
     const songId = core_text.normalizeText(options.songId, 120) || view.songId;
-    disposeMv();
+    disposeMv({ keepAudio: true });
     view.songId = songId; view.scope = mv.mvScope(context);
     view.musicLinkInput = null; view.musicLinkStatus = ''; view.audioStatus = '';
     view.clearPendingIds = null;
@@ -1580,7 +1581,17 @@ export function stopPlayback() {
     player.raf = 0;
 }
 
-export function disposeMv() {
+// Imported MV tracks are blob URLs; keep them only while the MV page itself is in use.
+function releaseMvAudio() {
+    for (const token of audioLoads.values()) { try { token.cancel?.(); } catch {} }
+    audioLoads.clear(); audioTried.clear();
+    for (const entry of audioBySong.values()) {
+        if (!entry?.streaming) { try { URL.revokeObjectURL(entry.url); } catch {} }
+    }
+    audioBySong.clear();
+}
+
+export function disposeMv({ keepAudio = false } = {}) {
     rememberWorkspace();
     editorBody(false);
     cancelMusicLink();
@@ -1599,6 +1610,10 @@ export function disposeMv() {
     view.stopAll = true; view.drawingAll = false; view.drawQueue = null;
     stopPlayback(); stopExport();
     player.audio = null; player.clockOffset = 0;
+    if (!keepAudio) {
+        releaseMvAudio();
+        try { song_player.scheduleSongAudioRelease(); } catch { /* Song page keeps its own copy. */ }
+    }
 }
 
 // ---------- 导出与录屏 ----------

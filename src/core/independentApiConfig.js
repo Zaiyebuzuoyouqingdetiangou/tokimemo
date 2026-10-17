@@ -212,34 +212,78 @@ export async function boundedJson(response, maxBytes) {
     }
 }
 
-// Some providers place their reasoning in a leading, exact <think> block.
-// Only that wrapper is transport metadata; quoted tags in JSON remain data and
-// arbitrary markup/attributes are still checked by the HTML response guard.
+// Some providers place their reasoning in a leading, exact <think>, <thinking>
+// or <reasoning> block (no attributes). Only that wrapper is transport metadata;
+// quoted tags in JSON remain data and other markup is checked by the HTML guard.
+export const REASONING_WRAPPER_START = /^<(think|thinking|reasoning)>/i;
+
 export function finalResponseText(value) {
     let body = String(value ?? '').replace(/^\uFEFF/, '').trimStart();
-    while (/^<think>/i.test(body)) {
-        const end = /<\/think>/i.exec(body);
+    for (let open = REASONING_WRAPPER_START.exec(body); open; open = REASONING_WRAPPER_START.exec(body)) {
+        const end = new RegExp(`</${open[1]}>`, 'i').exec(body);
         if (!end) return ''; // An unfinished reasoning block is never an answer.
         body = body.slice(end.index + end[0].length).trimStart();
     }
     return body;
 }
 
+// True when some JSON object in the reply parses as it stands (whole text,
+// a closed ```json fence, or a balanced {...}). Read-only; nothing is repaired.
+// Also returns the reply with the contents of in-object strings blanked, so
+// markup checks see only text outside JSON string values.
+function scanJsonForHtmlGuard(body) {
+    const parses = text => {
+        try { const parsed = JSON.parse(text); return !!parsed && typeof parsed === 'object'; } catch { return false; }
+    };
+    let parsable = parses(body.trim());
+    if (!parsable) for (const fence of body.matchAll(/```(?:json)?[ \t]*\r?\n([\s\S]*?)\r?\n[ \t]*```/gi)) if (parses(fence[1].trim())) { parsable = true; break; }
+    let outside = '', start = -1, depth = 0, inString = false, escaped = false;
+    for (let i = 0; i < body.length; i += 1) {
+        const char = body[i];
+        if (inString) {
+            if (escaped) escaped = false;
+            else if (char === '\\') escaped = true;
+            else if (char === '"') { inString = false; outside += char; }
+            continue;
+        }
+        outside += char;
+        if (char === '"') { if (depth > 0) inString = true; continue; }
+        if (char === '{') { if (depth === 0) start = i; depth += 1; continue; }
+        if (char === '}' && depth > 0) {
+            depth -= 1;
+            if (!parsable && depth === 0 && start >= 0 && parses(body.slice(start, i + 1))) parsable = true;
+        }
+    }
+    return { parsable, outside };
+}
+
 export function looksLikeHtmlResponse(value) {
     const body = String(value ?? '').replace(/^\uFEFF/, '').trimStart();
     // A complete JSON document is data, including any quoted markup in its strings.
-    // Only a whole-document parse grants this exception; never extract a JSON island
-    // from an HTML error page here. No response text is rendered or executed.
+    // No response text is rendered or executed here.
     const jsonBody = body.replace(/^```(?:json)?\s*\n?([\s\S]*?)\n?```\s*$/i, '$1').trim();
     if (jsonBody.startsWith('{') || jsonBody.startsWith('[')) {
         try { const parsed = JSON.parse(jsonBody); if (parsed && typeof parsed === 'object') return false; } catch {}
     }
-    // Proxies commonly prepend comments/meta tags or wrap a JSON-looking fragment in an error
-    // page. Detect markup anywhere near the response head, before JSON extraction can mistake an
-    // embedded object for the provider payload. The body is never included in the public error.
-    return /<!--[\s\S]*?-->/i.test(body)
-        || /<\s*!doctype\b/i.test(body)
-        || /<\s*\/?\s*[a-z][a-z0-9:-]*(?:\s+[^<>]*?)?\s*\/?\s*>/i.test(body);
+    // A reply that opens as an HTML page, or with an HTML comment (proxies often
+    // prepend one), is a proxy/error page even if it wraps a JSON-looking
+    // fragment; never extract a JSON island from it.
+    if (/^<\s*(?:!--|!doctype\b|html\b|head\b|body\b)/i.test(body)) return true;
+    if (!/<!--[\s\S]*?-->|<\s*!doctype\b|<\s*\/?\s*[a-z][a-z0-9:-]*(?:\s+[^<>]*?)?\s*\/?\s*>/i.test(body)) return false;
+    // Ordinary replies may carry prose and inline tags (<b>, <br>, <user>, SVG)
+    // around or inside their JSON. Document-level markup outside JSON strings
+    // still marks a wrapped error page. Other tags count only when no JSON is
+    // usable and none has even started (a cut-off reply stays on the
+    // truncation/recovery path). The body is never included in the public error.
+    const { parsable, outside } = scanJsonForHtmlGuard(body);
+    if (/<\s*!doctype\b|<\s*\/?\s*(?:html|head|body|meta|script|iframe)\b[^<>]*>|\bcf-error\b|\/cdn-cgi\//i.test(outside)) return true;
+    // Error-page headings/blocks (nginx/Apache/IIS bodies without <html>) are not
+    // reply markup either, even when a JSON fragment follows them. An inline SVG's
+    // own <title>/<style> is drawing data, not a page.
+    if (/<\s*\/?\s*(?:title|h[1-6]|center|pre|hr|address|table|form|style|noscript|link)\b[^<>]*>/i
+        .test(outside.replace(/<svg\b[\s\S]*?(?:<\/svg\s*>|$)/gi, ''))) return true;
+    if (parsable) return false;
+    return !/\{\s*"/.test(body);
 }
 
 export async function readBoundedJsonResponse(response, maxBytes = core_constants.MAX_MANUAL_API_RESPONSE_BYTES) {
@@ -597,7 +641,7 @@ export function assertIndependentResponsePayload(payload, { allowOptionalInboxAr
         throw error;
     }
     if (!content.trim()) {
-        const reasoningWrapper = /^<think>/i.test(received.replace(/^\uFEFF/, '').trimStart());
+        const reasoningWrapper = REASONING_WRAPPER_START.test(received.replace(/^\uFEFF/, '').trimStart());
         const error = emptyFinalFailure({ ...responseShapeSummary(payload),
             ...(reasoningWrapper ? { reasoningChars: received.length } : {}) });
         // Recognizing reasoning must not turn the former one-request HTML failure
@@ -684,12 +728,15 @@ export async function readProfileCompletion(result, { signal = null, onProgress 
             const next = responseField(item.value, 'text');
             if (typeof next !== 'string' || !next.startsWith(content)) throw apiError('连接的流式正文结构异常。', 'RMT_RESPONSE_FORMAT');
             const reasoning = responseField(responseField(item.value, 'state'), 'reasoning');
+            const previousReasoning = reasoningChars;
             reasoningChars = Math.max(reasoningChars, typeof reasoning === 'string' ? reasoning.length : 0);
             if (next.length > core_constants.MAX_GENERATION_OUTPUT_CHARS
                 || (Number.isFinite(core_constants.MAX_MANUAL_API_RESPONSE_BYTES) && new TextEncoder().encode(next).byteLength > core_constants.MAX_MANUAL_API_RESPONSE_BYTES)
                 || reasoningChars > core_constants.MAX_MANUAL_API_RESPONSE_BYTES) throw apiError('流式响应超过安全范围。', 'RMT_MANUAL_RESPONSE_TOO_LARGE');
+            // A repeated/empty chunk is not progress; only growth restarts the idle wait.
+            const grew = next.length > content.length || reasoningChars > previousReasoning;
             content = next;
-            onProgress?.();
+            if (grew) onProgress?.(content, { reasoningChars });
         }
     } catch (error) {
         if (signal?.aborted || error?.name === 'AbortError') throw streamAbortReason(signal);

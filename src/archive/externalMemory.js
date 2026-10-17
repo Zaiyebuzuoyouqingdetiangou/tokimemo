@@ -273,7 +273,8 @@ export async function collectCurrentChatExternalMemory(context, expectedChatId, 
         if (!batchRecords.length && coverage.status !== 'complete') { excluded.add(batch.provider); return; }
         scannedMemoryRecords.push(...batchRecords.map(record => ({ ...record, provider: batch.provider, revision: batch.revision })));
         try {
-            await archive_sourceLedger.upsertMemorySourceLedger(scope, batch, { assertCurrent: providerGuard, signal });
+            await archive_sourceLedger.upsertMemorySourceLedger(scope, batch, { assertCurrent: providerGuard, signal,
+                retainProviders: archive_sourceLedger.pendingBatchProviders(context) });
             providerGuard();
         } catch (error) {
             if (error?.name === 'AbortError') throw error;

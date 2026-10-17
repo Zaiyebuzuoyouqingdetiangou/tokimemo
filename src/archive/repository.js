@@ -145,6 +145,9 @@ let autoPartialCommitEnabled = true;
 // Test seam only: legacy fixtures exercise the manual button path.
 export function setAutoPartialCommitForTests(value) { autoPartialCommitEnabled = value !== false; }
 
+// Leftover drafts already announced by the per-floor sync (page-local, bounded).
+const parkedFloorDraftNotices = new Set();
+
 async function autoCommitCompletedArchiveChunks(options, outcome) {
     if (!autoPartialCommitEnabled || options.commitCompletedOnly || options.automatic || options.restartImport || options.fullRebuild || options.parkPriorDraft) return null;
     if (outcome?.status === 'cancelled' || isArchiveCancellation(outcome?.error)) return null;
@@ -321,12 +324,21 @@ async function runArchiveImportPrepared(context, options, taskTrace, admission) 
     }
     const floorWindowSync = archive_batches.isAutomaticFloorWindowSync(options);
     if (floorWindowSync && pending?.awaitingCommit) return { status: 'blocked' };
-    // Park a leftover draft so this window can start. Do not set parkPriorDraft:
-    // that flag swallows later import errors and the due floor is marked empty.
+    // A leftover draft (e.g. one stalled stream) is parked so per-floor sync keeps
+    // going; waiting for the user here could stop automatic sync for good.
+    // Paused copies are kept small (only drafts with unsaved chunks keep inputs).
+    // Each draft is announced once, not on every floor.
+    // Do not set parkPriorDraft: it swallows later import errors.
     if (floorWindowSync && pending && !pending.onlyArchivedDrafts) {
-        if (archive_importRecovery.parkArchiveRecovery(hydrationOrigin, 'import', { ignoreActive: true })
+        const leftover = archive_importRecovery.listArchiveRecoveryDrafts(hydrationOrigin, 'import').find(row => !row.paused);
+        if (leftover && archive_importRecovery.parkArchiveRecovery(hydrationOrigin, 'import', { ignoreActive: true })
             && !await archive_importRecovery.flushArchiveRecovery(hydrationOrigin, 'import')) {
             throw new Error('原整理草稿未确认保存，本次没有重新生成。');
+        }
+        if (leftover && leftover.stage !== 'profile-only' && !parkedFloorDraftNotices.has(leftover.draftId)) {
+            if (parkedFloorDraftNotices.size >= 64) parkedFloorDraftNotices.clear();
+            parkedFloorDraftNotices.add(leftover.draftId);
+            globalThis.toastr?.info?.('未完成的整理草稿已移到旧草稿，自动同步继续。', '心迹回廊');
         }
     }
     let selectedDraft = null, sourceExisting;
@@ -351,6 +363,7 @@ async function runArchiveImportPrepared(context, options, taskTrace, admission) 
             await archive_importRecovery.flushArchiveRecovery(hydrationOrigin, 'import');
             return { status: 'independent', draftId: selectedDraft.draftId };
         }
+        if (selectedDraft.inputsTrimmed) throw archive_importRecovery.archiveDraftReadOnlyFailure();
         const captured = checkedArchiveTaskInput(selectedDraft.inputs?.taskInputV1, context);
         const baseRevision = selectedDraft.inputs?.progress?.archiveRevision || '';
         let baseMemoryMissing = selectedDraft.archiveResult?.baseMemoryMissing === true;

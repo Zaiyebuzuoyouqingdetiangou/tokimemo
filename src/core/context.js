@@ -146,13 +146,11 @@ export async function buildChatSnapshot(context = currentCharacterGuard(), optio
     const full = capMessages(selectedUsable);
     const incrementalRaw = prefixCount > 0 && totalMessages >= prefixCount ? usable.slice(prefixCount) : usable;
     const incremental = capMessages(selectedFloors ? incrementalRaw.filter(item => selectedFloors.has(item.index)) : incrementalRaw);
+    const fullHashes = options.completeSource === true ? await signatureFingerprints(chatId, fullSignatures, prefixCount, assertStillCurrent) : null;
     assertStillCurrent();
     return {
         chatId,
-        ...(options.completeSource === true ? {
-            fullFingerprint: core_digest.sha256Bytes(new TextEncoder().encode(JSON.stringify([chatId, fullSignatures]))),
-            fullPrefixFingerprint: core_digest.sha256Bytes(new TextEncoder().encode(JSON.stringify([chatId, fullSignatures.slice(0, prefixCount)]))),
-        } : {}),
+        ...(fullHashes ? { fullFingerprint: fullHashes.full, fullPrefixFingerprint: fullHashes.prefix } : {}),
         totalMessages,
         usedMessages: full.selected.length,
         usedChars: full.selectedChars,
@@ -168,6 +166,25 @@ export async function buildChatSnapshot(context = currentCharacterGuard(), optio
         incrementalUsedChars: incremental.selectedChars,
         incrementalTruncated: incremental.truncated,
     };
+}
+
+// Same values as sha256(JSON.stringify([chatId, signatures])) and the same over
+// signatures.slice(0, prefixCount), in one pass over the shared prefix, yielding
+// to the page between slices instead of hashing a long chat twice in one go.
+async function signatureFingerprints(chatId, signatures, prefixCount, assertStillCurrent) {
+    const encoder = new TextEncoder();
+    const hash = core_digest.createSha256().updateText(`[${JSON.stringify([chatId]).slice(1, -1)},[`);
+    const prefixEnd = Math.min(Math.max(0, prefixCount), signatures.length);
+    let prefix = prefixEnd === 0 ? hash.fork() : null, pendingBytes = 0;
+    for (let index = 0; index < signatures.length; index += 1) {
+        const piece = (index ? ',' : '') + JSON.stringify(signatures[index]);
+        hash.update(encoder.encode(piece));
+        pendingBytes += piece.length;
+        if (index + 1 === prefixEnd) prefix = hash.fork();
+        if (pendingBytes >= 131072) { pendingBytes = 0; await yieldToUi(); assertStillCurrent(); }
+    }
+    const close = encoder.encode(']]');
+    return { full: hash.update(close).hex(), prefix: prefix.update(close).hex() };
 }
 
 // Used only while a batch is explicitly committing (including its deferred save),

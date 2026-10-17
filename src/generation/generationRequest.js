@@ -11,6 +11,7 @@ import * as core_participants from '../core/participants.js';
 import * as core_constants from '../core/constants.js';
 import * as core_context from '../core/context.js';
 import * as core_independentApi from '../core/independentApi.js';
+import * as core_independentApiConfig from '../core/independentApiConfig.js';
 import * as core_requestCoordinator from '../core/requestCoordinator.js';
 import * as core_settings from '../core/settings.js';
 import * as creative_supplement from '../core/creativeSupplement.js';
@@ -93,7 +94,10 @@ export async function requestValidatedSegment(prompt, status, options, validator
             if (options.taskTrace?.activeStage === 'validate') core_taskTrace.markStage(options.taskTrace, 'validate', false);
             if (error?.name === 'AbortError' || error?.nonRetryable === true || error?.code === 'RMT_PHONE_NO_CONVERSATION' || error?.code === 'RMT_BANNED_GENERATED_PHRASE' || error?.code === 'RMT_JSON_TRUNCATED') throw error;
             lastError = error;
-            const emptyReroll = attempt === 0 && ['RMT_JSON_EMPTY_FINAL', 'RMT_JSON_EMPTY_FINAL_WITH_REASONING', 'RMT_JSON_NOT_FOUND'].includes(error?.code);
+            // A reasoning-only reply, or any error that already told the user it
+            // will not be retried (retryable === false), is never re-sent here.
+            const emptyReroll = attempt === 0 && ['RMT_JSON_EMPTY_FINAL', 'RMT_JSON_NOT_FOUND'].includes(error?.code)
+                && error?.retryable !== false;
             const configuredRetry = attempt + 1 < configuredAttempts && core_requestCoordinator.shouldRetrySegmentRequest(error, attempt);
             if (attempt + 1 < maxAttempts && (emptyReroll || configuredRetry)) {
                 core_taskTrace.recordRetry(options.taskTrace, error);
@@ -216,6 +220,10 @@ export async function generateConfiguredJson(prompt, options = {}) {
     const logicalTask = core_requestCoordinator.logicalGenerationTaskForOrigin(options.origin);
     if (!logicalTask) return generateConfiguredJsonOperation(prompt, options);
     core_requestCoordinator.assertLogicalGenerationTaskCurrent(logicalTask);
+    // Checked before any listener is attached, so this early exit leaks nothing.
+    if (core_requestCoordinator.chatScopeCancellationBlocksOrigin(options.origin)) {
+        throw core_requestCoordinator.createGenerationAbortError();
+    }
     const controller = new AbortController();
     const signals = [...new Set([options.signal, logicalTask.signal].filter(Boolean))];
     const abort = () => controller.abort(core_requestCoordinator.createGenerationAbortError());
@@ -231,9 +239,6 @@ export async function generateConfiguredJson(prompt, options = {}) {
         if (typeof options.recoveryBasePrompt === 'string' && block && !options.recoveryBasePrompt.includes(block)) {
             options = { ...options, recoveryBasePrompt: options.recoveryBasePrompt + block };
         }
-    }
-    if (core_requestCoordinator.chatScopeCancellationBlocksOrigin(options.origin)) {
-        throw core_requestCoordinator.createGenerationAbortError();
     }
     try {
         const result = await generateConfiguredJsonOperation(prompt, { ...options, signal: controller.signal });
@@ -259,6 +264,26 @@ export function composeOutgoingGenerationPrompt(prompt, context, contentSettings
     const phrasePolicy = enforceGeneratedPhrasePolicy === true ? generatedPhrasePolicyText(contentSettings) : '';
     const creativeSupplement = creative_supplement.creativeSupplementBlock(contentSettings);
     return `${contextEnvelope}\n${expanded}${creativeSupplement}${phrasePolicy}`;
+}
+
+// Treat the received part of a stalled stream like an interrupted stream: save
+// it as a truncated segment the user can continue. No automatic request is sent.
+async function timedOutStreamError(options, timeoutError, text) {
+    const truncated = generation_jsonParser.jsonOutputError('RMT_JSON_TRUNCATED', timeoutError.message);
+    truncated.requestTimeout = true;
+    truncated.timeoutKind = timeoutError.timeoutKind || 'idle';
+    let saved = false;
+    try {
+        saved = await generation_recovery.recordRecoveryTruncation(options, text, truncated, { autoContinue: false });
+    } catch (error) {
+        if (error && typeof error === 'object') error.requestTimeout = true;
+        throw error;
+    }
+    // No recovery draft took it: the partial text is dropped, never put on the error.
+    if (!saved) return timeoutError;
+    const lead = core_text.normalizeText(timeoutError.timeoutLead, 120);
+    if (lead) truncated.message = truncated.safeUserMessage = `${lead}${truncated.safeUserMessage}`;
+    return truncated;
 }
 
 async function generateConfiguredJsonOperation(prompt, options = {}) {
@@ -377,6 +402,9 @@ async function generateConfiguredJsonOperation(prompt, options = {}) {
         }
     };
     let result, responsePayload, completeInboxProse = false, releaseProviderPermit = null, requestStartedAt = 0;
+    // Latest cumulative streamed text. Local only: used to keep a stalled
+    // stream's received part as a recovery draft, never logged or displayed.
+    let streamedText = '', timedOut = null, progressChars = 0, progressReasoning = 0;
     const lifecycleController = new AbortController();
     const externalSignal = options.signal || null;
     const forwardAbort = () => {
@@ -406,11 +434,21 @@ async function generateConfiguredJsonOperation(prompt, options = {}) {
         requestStartedAt = Date.now();
         core_requestCoordinator.noteChatTaskPhase('request', { taskKey: options.taskKey, origin: options.origin });
         result = await core_requestCoordinator.runGenerationRequestWithTimeout(
-            async () => {
+            async noteProgress => {
                 assertRequestCurrent();
                 core_taskTrace.recordProviderRequest(taskTrace);
                 core_taskTrace.recordRequestTransport(taskTrace, streamRequested);
-                const onProgress = () => core_taskTrace.recordStreamProgress(taskTrace);
+                const onProgress = (text, info = null) => {
+                    const chars = typeof text === 'string' ? text.length : 0;
+                    const reasoning = Math.max(0, Number(info?.reasoningChars) || 0);
+                    if (typeof text === 'string') streamedText = text;
+                    // Only real growth (visible text or reasoning) restarts the idle wait.
+                    if (chars <= progressChars && reasoning <= progressReasoning) return;
+                    progressChars = Math.max(progressChars, chars);
+                    progressReasoning = Math.max(progressReasoning, reasoning);
+                    try { noteProgress?.(); } catch {}
+                    core_taskTrace.recordStreamProgress(taskTrace);
+                };
                 const returned = connectionMode === 'manual'
                 ? core_independentApi.requestManualApiCompletion(settings, context, messages, responseLength, {
                     signal: lifecycleController.signal,
@@ -450,11 +488,20 @@ async function generateConfiguredJsonOperation(prompt, options = {}) {
             normalized.message = normalized.safeUserMessage = `等了 ${Math.round(waited / 1000)} 秒没有收到任何内容，连接就断了，多半是中转站或代理掐断了长时间没有数据的完整响应。请到心迹回廊设置的「高级生成参数」里勾上「启用高级生成参数」，把「本插件流式方式」改成「使用流式」后再试；旧内容仍会保留。`;
             normalized.idleCutoff = true;
         }
-        throw normalized;
+        // A stalled stream already delivered part of the paid reply. Keep it for
+        // the recovery path below (after the provider permit is released).
+        // Only the final channel counts: a leading think/reasoning block is not
+        // answer text, and a stall inside it leaves nothing to continue.
+        const usablePartial = normalized?.code === 'RMT_REQUEST_TIMEOUT'
+            ? core_independentApiConfig.finalResponseText(streamedText) : '';
+        if (usablePartial.trim() && !externalSignal?.aborted) {
+            timedOut = { error: normalized, text: usablePartial };
+        } else throw normalized;
     } finally {
         try { releaseProviderPermit?.(); } catch {}
         try { externalSignal?.removeEventListener?.('abort', forwardAbort); } catch {}
     }
+    if (timedOut) throw await timedOutStreamError(options, timedOut.error, timedOut.text);
     // A settings edit cannot invalidate a reply that the selected provider has
     // already returned. Keep that paid result; the next request reads the new API.
     if (externalSignal?.aborted) forwardAbort();
@@ -471,6 +518,7 @@ async function generateConfiguredJsonOperation(prompt, options = {}) {
         mergedInboxIllustrations: options.mergedInboxIllustrations === true,
         requestMaxTokens: responseLength,
         configuredMaxTokens: settings.maxTokens,
+        finishReason: core_independentApi.responseShapeSummary(result).finishReason,
     }); } catch (error) {
         await generation_recovery.recordRecoveryTruncation(options, responsePayload, error,
             { autoContinue: !(options.mode === 'inbox' && error?.preserveInboxWithoutAutoContinue === true) });

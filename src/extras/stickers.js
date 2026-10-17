@@ -134,10 +134,12 @@ export function imageDataToBlob(image) {
     return new Promise((resolve, reject) => canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('图片编码失败。')), 'image/png'));
 }
 
-async function drawSheet(prompt, layout, context, { signal, onProgress, characterName }) {
+async function drawSheet(prompt, layout, context, { signal, onProgress, characterName, targetKey = '' }) {
     const result = await cg_core.invokeImageGeneration(prompt, context, {
         orientation: layout.orientation, respectOrientation: true, characterName,
-        targetKey: `stickers:${store.stickerScope(context)}:${store.newStickerId('sheet')}`,
+        // A stable key per sheet lets the provider refuse a second paid job for
+        // the same sheet while an earlier one (e.g. after 停止等待) still runs.
+        targetKey: `stickers:${store.stickerScope(context)}:${text(targetKey) || store.newStickerId('sheet')}`,
         singlePrompt: true, preservePrompt: true, onProgress, signal,
     });
     const url = cg_core.normalizeCgImageUrl(typeof result === 'string' ? result : result?.url);
@@ -150,34 +152,68 @@ export async function cutSheet(url, layout, { forceGrid = false } = {}) {
     const image = await loadPixels(url);
     const split = pixels.splitSheet(image.data, image.width, image.height, { ...layout, grid: forceGrid });
     const pieces = [];
-    for (const piece of split.pieces) {
-        const finished = pixels.finishSticker(pixels.cropPiece(image.data, image.width, piece), STICKER_SIZE);
-        const blob = await imageDataToBlob(finished);
-        pieces.push({ blob, preview: URL.createObjectURL(blob) });
+    try {
+        for (const piece of split.pieces) {
+            const finished = pixels.finishSticker(pixels.cropPiece(image.data, image.width, piece), STICKER_SIZE);
+            const blob = await imageDataToBlob(finished);
+            pieces.push({ blob, preview: URL.createObjectURL(blob) });
+        }
+    } catch (error) {
+        for (const piece of pieces) URL.revokeObjectURL(piece.preview);
+        throw error;
     }
     return { mode: split.mode, pieces };
 }
 
-// Draw every sheet for a list. Partial failures keep the finished sheets.
-export async function drawStickerSet({ owner, styleId, items, people, context = core_context.currentCharacterGuard(), signal = null, onProgress = null }) {
-    const chunks = chunkItems(owner, items), sheets = [];
-    for (let index = 0; index < chunks.length; index++) {
-        if (signal?.aborted) break;
-        const { prompt, layout } = stickerSheetPrompt({ owner, styleId, items: chunks[index], people });
-        const report = update => { try { onProgress?.({ ...update, sheet: index + 1, sheets: chunks.length }); } catch { /* UI only. */ } };
-        report({ phase: 'generating' });
-        const url = await drawSheet(prompt, layout, context, { signal, onProgress: report, characterName: people[0]?.name || '' });
-        report({ phase: 'cutting' });
-        const cut = await cutSheet(url, layout);
-        sheets.push({ url, layout, mode: cut.mode, items: chunks[index], pieces: cut.pieces });
+const STOPPED_MESSAGE = '已停止等待这一张。';
+// Draw the given chunks one sheet each. A failed sheet never throws away the
+// sheets already drawn (and paid for): each chunk is caught on its own.
+// chunks: [{ index, items, url? }] — a url means the sheet was drawn before
+// but could not be cut, so it is cut again without drawing.
+// Returns { sheets: [{ chunk, url, layout, mode, items, pieces }], failed: [{ chunk, items, url, message }] }.
+// onSheet(sheet) hands over each sheet as soon as it is cut, so a stopped run
+// still delivers the sheet that was drawing or cutting at the time.
+// The signal only stops later sheets and frees the caller; it is not passed to
+// the provider, so a picture already being drawn (and paid for) still arrives.
+export async function drawStickerSheets({ owner, styleId, chunks, total = chunks.length, people, context = core_context.currentCharacterGuard(), signal = null, onProgress = null, onSheet = null, setKey = '' }) {
+    const sheets = [], failed = [];
+    for (let n = 0; n < chunks.length; n++) {
+        const { index, items } = chunks[n];
+        let url = text(chunks[n].url);
+        const reused = !!url;
+        if (signal?.aborted) { failed.push({ chunk: index, items, url, message: STOPPED_MESSAGE }); continue; }
+        const { prompt, layout } = stickerSheetPrompt({ owner, styleId, items, people });
+        const report = update => { try { onProgress?.({ ...update, sheet: index + 1, sheets: total }); } catch { /* UI only. */ } };
+        try {
+            if (!url) {
+                report({ phase: 'generating' });
+                url = await drawSheet(prompt, layout, context, { signal: null, onProgress: report, characterName: people[0]?.name || '',
+                    targetKey: text(setKey) ? `${text(setKey)}:${index}` : '' });
+            }
+            report({ phase: 'cutting' });
+            const cut = await cutSheet(url, layout);
+            const sheet = { chunk: index, url, layout, mode: cut.mode, items, pieces: cut.pieces };
+            sheets.push(sheet);
+            try { onSheet?.(sheet); } catch { /* UI only; the sheet is still returned. */ }
+        } catch (error) {
+            const message = signal?.aborted ? STOPPED_MESSAGE : core_text.safeErrorSummary(error) || '这一张没有画好。';
+            // A sheet that was cut once more and still failed is drawn fresh next time.
+            failed.push({ chunk: index, items, url: reused ? '' : url, message });
+        }
     }
-    return sheets;
+    return { sheets, failed };
+}
+
+// Draw every sheet for a list. Partial failures keep the finished sheets.
+export async function drawStickerSet({ owner, styleId, items, people, context = core_context.currentCharacterGuard(), signal = null, onProgress = null, onSheet = null, setKey = '' }) {
+    const chunks = chunkItems(owner, items).map((rows, index) => ({ index, items: rows }));
+    return drawStickerSheets({ owner, styleId, chunks, people, context, signal, onProgress, onSheet, setKey });
 }
 
 // One sticker on its own, e.g. "单张重画".
-export async function drawSingleSticker({ owner, styleId, item, people, context = core_context.currentCharacterGuard(), signal = null, onProgress = null }) {
+export async function drawSingleSticker({ owner, styleId, item, people, context = core_context.currentCharacterGuard(), signal = null, onProgress = null, targetKey = '' }) {
     const { prompt, layout } = stickerSheetPrompt({ owner, styleId, items: [item], people });
-    const url = await drawSheet(prompt, { ...layout, orientation: owner === 'pair' ? 'landscape' : 'portrait' }, context, { signal, onProgress, characterName: people[0]?.name || '' });
+    const url = await drawSheet(prompt, { ...layout, orientation: owner === 'pair' ? 'landscape' : 'portrait' }, context, { signal, onProgress, characterName: people[0]?.name || '', targetKey });
     const cut = await cutSheet(url, layout);
     return { url, ...cut.pieces[0] };
 }

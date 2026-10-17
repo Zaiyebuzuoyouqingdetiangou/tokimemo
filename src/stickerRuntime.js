@@ -108,15 +108,34 @@ export function startStickerRuntime({ document: doc = globalThis.document } = {}
     const style = doc.createElement('style'); style.id = 'hearttrace-sticker-styles'; style.textContent = CSS;
     if (!doc.getElementById(style.id)) doc.head.append(style);
 
-    function data() { return store.readStickerData(context()); }
+    // Normalizing every pack on each animation frame of a streamed reply is wasted work: the
+    // card's sticker field only changes through a save (new object / revision) or a host edit.
+    // Keyed by the stored value's identity and revision; a sticker change event clears it.
+    let cached = null;
+    function stickerSource(ctx) {
+        if (!ctx || ctx.groupId) return null;
+        const id = ctx.characterId;
+        if (id === undefined || id === null || id === '') return null;
+        return ctx.characters?.[id]?.data?.extensions?.[store.STICKER_FIELD] ?? null;
+    }
+    function readData(ctx) {
+        const raw = stickerSource(ctx);
+        const revision = raw && typeof raw === 'object' ? raw.revision : undefined;
+        if (cached && cached.raw === raw && cached.revision === revision) return cached.data;
+        const value = store.readStickerData(ctx);
+        cached = { raw, revision, data: value };
+        return value;
+    }
+    function data() { return readData(context()); }
     const dirty = new Set();
     let full = true;
     function scan() {
         queued = false;
         if (stopped) return;
-        const ctx = context(), current = store.readStickerData(ctx);
+        const ctx = context(), current = readData(ctx);
         const root = doc.getElementById('chat');
         if (root !== chatRoot) { connect(root); full = true; }
+        const wasFull = full;
         if (root) {
             const blocks = full ? [...root.querySelectorAll('.mes .mes_text')] : [...dirty].filter(block => block.isConnected && root.contains(block));
             full = false; dirty.clear();
@@ -124,7 +143,8 @@ export function startStickerRuntime({ document: doc = globalThis.document } = {}
             try { for (const block of blocks) renderStickerTokens(block, ctx, current); }
             finally { if (observer && chatRoot) observer.observe(chatRoot, { childList: true, subtree: true, characterData: true }); }
         }
-        syncButton(current);
+        // Message-text-only scans (streamed chunks) cannot change the entry button or panel.
+        if (wasFull || !root) syncButton(current);
     }
     function queue(records = null) {
         if (stopped) return;
@@ -308,7 +328,7 @@ export function startStickerRuntime({ document: doc = globalThis.document } = {}
     };
     doc.addEventListener('pointerdown', outside, true);
 
-    const changed = () => queue();
+    const changed = () => { cached = null; queue(); };
     globalThis.addEventListener?.(store.STICKER_EVENTS.changed, changed);
     // An update can change the lorebook wording; keep an entry the user already
     // wrote current (only ours, only when it differs), once per chat open.

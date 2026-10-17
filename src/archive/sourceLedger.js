@@ -4,6 +4,7 @@
 import * as core_constants from '../core/constants.js';
 import * as core_text from '../core/text.js';
 import * as source_read from './sourceReadGuard.js';
+import { state as runtimeState } from '../core/state.js';
 
 let databasePromise = null;
 let testBackend = null;
@@ -331,7 +332,59 @@ function runLedgerMutation(identity, operation) {
     });
 }
 
-function mergeMemorySourceLedgerBatch(previous, identity, batch = {}) {
+// Providers whose old revisions an unfinished archive batch may still resolve
+// by fragment hash (its live bank and any queued archive write). Their history
+// is never pruned. Read-only; nothing here touches another extension's data.
+export function pendingBatchProviders(context) {
+    const providers = new Set();
+    const add = progress => {
+        if (!progress || !Array.isArray(progress.batches)) return;
+        const from = Math.max(0, Number(progress.nextBatch) || 0);
+        for (const parts of progress.batches.slice(from)) for (const part of parts || []) for (const ref of part?.refs || []) {
+            if (ref?.kind === 'external') providers.add(normalizeMemorySourceProvider(ref.provider));
+        }
+    };
+    try { add(context?.chatMetadata?.[core_constants.MEMORY_KEY]?.archiveImportProgress); } catch {}
+    try {
+        for (const [, bucket] of runtimeState.deferredChatCommits || []) {
+            for (const item of Array.isArray(bucket) ? bucket : []) if (item?.kind === 'archive') add(item.memoryBank?.archiveImportProgress);
+        }
+    } catch {}
+    return providers;
+}
+
+// Every rescan used to append another full copy of each changed summary. Keep,
+// per source id, the newest row and the newest row the current revision set
+// still projects; older revisions are dropped unless a pending batch's provider
+// may still need them. Called only when the caller supplies that provider set.
+function pruneSupersededRevisions(records, sources, retainProviders) {
+    const live = new Map();
+    for (const source of sources) {
+        const coverage = normalizeMemorySourceCoverage(source?.coverage);
+        const revision = normalizeMemorySourceRevision(source?.revision);
+        const baseline = normalizeMemorySourceRevision(source?.baselineRevision || (coverage.status === 'complete' ? revision : ''));
+        const overlays = new Set(normalizeRevisionList(source?.overlayRevisions));
+        if (coverage.status !== 'complete' && revision) overlays.add(revision);
+        if (baseline || overlays.size) live.set(normalizeMemorySourceProvider(source?.provider), { baseline, overlays });
+    }
+    const newest = new Map(), newestLive = new Map(), counts = new Map();
+    for (const record of records) {
+        const key = `${record.provider}\u001f${record.sourceId}`;
+        counts.set(key, (counts.get(key) || 0) + 1);
+        if (!newest.has(key) || Number(record.importedAt) >= Number(newest.get(key).importedAt)) newest.set(key, record);
+        const set = live.get(record.provider);
+        const recordRevision = normalizeMemorySourceRevision(record.batchRevision || record.revision);
+        if (set && (recordRevision === set.baseline || set.overlays.has(recordRevision))
+            && (!newestLive.has(key) || Number(record.importedAt) >= Number(newestLive.get(key).importedAt))) newestLive.set(key, record);
+    }
+    return records.filter(record => {
+        const key = `${record.provider}\u001f${record.sourceId}`;
+        return counts.get(key) === 1 || retainProviders.has(record.provider)
+            || newest.get(key) === record || newestLive.get(key) === record;
+    });
+}
+
+function mergeMemorySourceLedgerBatch(previous, identity, batch = {}, retainProviders = null) {
     const records = previous?.records ? [...previous.records] : [];
     const provider = normalizeMemorySourceProvider(batch.provider);
     const rawRevision = normalizeMemorySourceRevision(batch.revision);
@@ -389,17 +442,17 @@ function mergeMemorySourceLedgerBatch(previous, identity, batch = {}) {
     const ledger = {
         storageVersion: core_constants.MEMORY_SOURCE_LEDGER_STORAGE_VERSION,
         scope: identity,
-        records,
+        records: typeof retainProviders?.has === 'function' ? pruneSupersededRevisions(records, sources, retainProviders) : records,
         sources,
         updatedAt: Date.now(),
     };
     return ledger;
 }
 
-async function upsertMemorySourceLedgerBatchesUnlocked(identity, batches, assertCurrent = () => {}, signal = null) {
+async function upsertMemorySourceLedgerBatchesUnlocked(identity, batches, assertCurrent = () => {}, signal = null, retainProviders = null) {
     assertCurrent();
     let ledger = await readMemorySourceLedger(identity, { signal });
-    for (const batch of batches) ledger = mergeMemorySourceLedgerBatch(ledger, identity, batch);
+    for (const batch of batches) ledger = mergeMemorySourceLedgerBatch(ledger, identity, batch, retainProviders);
     if (!batches.length) return ledger;
     assertCurrent();
     await backend().write(cloneValue(ledger), { signal });
@@ -407,15 +460,15 @@ async function upsertMemorySourceLedgerBatchesUnlocked(identity, batches, assert
     return normalizeLedger(ledger, identity);
 }
 
-export async function upsertMemorySourceLedger(scope, batch = {}, { assertCurrent = () => {}, signal = null } = {}) {
+export async function upsertMemorySourceLedger(scope, batch = {}, { assertCurrent = () => {}, signal = null, retainProviders = null } = {}) {
     const identity = normalizeMemorySourceScope(scope);
-    return runLedgerMutation(identity, () => upsertMemorySourceLedgerBatchesUnlocked(identity, [batch], assertCurrent, signal));
+    return runLedgerMutation(identity, () => upsertMemorySourceLedgerBatchesUnlocked(identity, [batch], assertCurrent, signal, retainProviders));
 }
 
-export async function upsertMemorySourceLedgerBatches(scope, batches = [], { assertCurrent = () => {}, signal = null } = {}) {
+export async function upsertMemorySourceLedgerBatches(scope, batches = [], { assertCurrent = () => {}, signal = null, retainProviders = null } = {}) {
     const identity = normalizeMemorySourceScope(scope);
     const list = Array.isArray(batches) ? batches.filter(batch => batch && typeof batch === 'object') : [];
-    return runLedgerMutation(identity, () => upsertMemorySourceLedgerBatchesUnlocked(identity, list, assertCurrent, signal));
+    return runLedgerMutation(identity, () => upsertMemorySourceLedgerBatchesUnlocked(identity, list, assertCurrent, signal, retainProviders));
 }
 
 export async function deleteMemorySourceLedger(scope) {

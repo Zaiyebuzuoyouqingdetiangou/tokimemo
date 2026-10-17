@@ -1,5 +1,6 @@
 import * as source_read from './sourceReadGuard.js';
 import * as draft_inputs from './draftInputs.js';
+import * as archive_batches from './importBatches.js';
 import * as local_store from '../core/localRecoveryStore.js';
 import * as constants from '../core/constants.js';
 // Draft checkpoints are separate from formal archives and evidence. Lazy local
@@ -23,10 +24,17 @@ const scopes = new Map();
 const lanes = new Map();
 const loaded = new Set();
 const hydrationLanes = new Map();
-function inputsDigest(inputs) { return digest.sha256Bytes(new TextEncoder().encode(JSON.stringify(inputs))); }
-function inputsMatchJournal(entry) {
+// Draft inputs are replaced, never edited in place, so one hash per object is enough.
+const inputDigests = new WeakMap();
+function inputsDigest(inputs, { fresh = false } = {}) {
+    if (!fresh && inputs && typeof inputs === 'object' && inputDigests.has(inputs)) return inputDigests.get(inputs);
+    const value = digest.sha256Bytes(new TextEncoder().encode(JSON.stringify(inputs)));
+    if (inputs && typeof inputs === 'object') inputDigests.set(inputs, value);
+    return value;
+}
+function inputsMatchJournal(entry, fresh = false) {
     const expected = entry?.journal?.contentSnapshot?.archiveInputsHash;
-    return !expected || (!!entry.inputs && expected === inputsDigest(entry.inputs));
+    return !expected || (!!entry.inputs && expected === inputsDigest(entry.inputs, { fresh }));
 }
 function storageFailure(phase = 'save', cause = null) {
     if (phase === 'read') return text.safeUserError('本机草稿读取未完成，不能认定没有记录；原记录未修改，也没有请求模型。请重新读取，不要清除数据。', 'RMT_ARCHIVE_DRAFT_READ');
@@ -39,7 +47,7 @@ function storageFailure(phase = 'save', cause = null) {
         return text.safeUserError('这批草稿比较大，这台设备一直没存完，本次没有确认保存；已停止后续模型请求，成功分段仍在当前页面，原记录未修改。可以关掉其他占内存的应用后再点“保存本页草稿（不生成）”，或先导出成果；保存成功前不要刷新。', 'RMT_ARCHIVE_DRAFT_STORAGE');
     }
     if (cause?.code === 'RMT_LOCAL_CAS') {
-        return text.safeUserError('本机草稿正被另一页面或操作写入，本次没有覆盖任何记录；已停止后续模型请求，成功分段仍在当前页面。请重新打开本页后重试保存。', 'RMT_ARCHIVE_DRAFT_STORAGE');
+        return text.safeUserError('本机草稿正被另一页面或操作写入，本次没有覆盖任何记录；已停止后续模型请求，成功分段仍在当前页面。请先导出本页成果，再点“重新读取本机草稿”。', 'RMT_ARCHIVE_DRAFT_STORAGE');
     }
     return text.safeUserError('本批草稿尚未确认保存到本机；请点“保存本页草稿（不生成）”重试。之前已保存的档案仍保留；若仍失败，请先导出，保存成功前不要刷新。', 'RMT_ARCHIVE_DRAFT_STORAGE');
 }
@@ -57,6 +65,64 @@ function confirmCounts(state, rows) {
     state.completed = new Map(rows.map(([id, entry]) => [id, recovery.generationRecoverySummary(entry.journal)?.completed || 0]));
     state.confirmedTasks = new Map(rows.map(([id, entry]) => [id, JSON.stringify([entry.sourceHash, entry.journal?.createdAt])]));
 }
+// What the last acknowledged save (or read) holds for each page row, by object
+// identity. A later in-page change replaces the journal/result or moves the stage.
+const SIGNATURE_FIELDS = ['journal', 'stage', 'committedRevision', 'archiveResult', 'profileResult', 'profilePending', 'inputsTrimmed', 'draftId'];
+function rowSignature(entry) { return SIGNATURE_FIELDS.map(field => entry?.[field] ?? null); }
+function confirmRows(state, rows) { state.confirmedRows = new Map(rows.map(([id, entry]) => [id, rowSignature(entry)])); }
+function unchangedSinceConfirmed(state, id, entry) {
+    const saved = state?.confirmedRows?.get(id);
+    return !!saved && !entry?.active && rowSignature(entry).every((value, index) => value === saved[index]);
+}
+function rowStateDiffers(a, b) {
+    return a.stage !== b.stage || (a.committedRevision || '') !== (b.committedRevision || '') || !!a.profilePending !== !!b.profilePending
+        || JSON.stringify(a.archiveResult ?? null) !== JSON.stringify(b.archiveResult ?? null)
+        || JSON.stringify(a.profileResult ?? null) !== JSON.stringify(b.profileResult ?? null);
+}
+// Paused drafts beyond the newest few, and paused drafts nothing can resume,
+// keep their received segments but not the full task input (whole chat copy)
+// or base archive. They stay readable and exportable; only continuing them stops.
+// A draft holding complete chunks not yet in any archive is never trimmed: its
+// task input is what lets the user continue it or save those chunks.
+const MAX_RESUMABLE_PAUSED = 3;
+function holdsUnsavedChunks(entry) {
+    return entry.stage === 'segments' && !!entry.journal?.segments?.some(row => /^(chat|external):\d+$/.test(row.slot) && row.state === 'complete');
+}
+function pausedResumable(entry) {
+    if (entry.inputsTrimmed) return false;
+    if (entry.stage === 'segments' || entry.stage === 'profile-only') return true;
+    return entry.stage === 'archive-result' && (entry.profilePending === true
+        || archive_batches.hasPendingBatches(entry.archiveResult?.memoryBank?.[archive_batches.IMPORT_PROGRESS_KEY]));
+}
+function trimmedEntry(entry) {
+    if (!entry?.inputs || entry.inputsTrimmed) return entry;
+    const inputs = {};
+    for (const field of ['batchVersion', 'identity', 'inputOwner', 'participantRoster']) if (Object.hasOwn(entry.inputs, field)) inputs[field] = entry.inputs[field];
+    if (entry.inputs.progress) inputs.progress = draft_inputs.compactPausedProgress(entry.inputs.progress);
+    const next = { ...entry, inputs, inputsTrimmed: true };
+    const snapshot = entry.journal?.contentSnapshot;
+    // Code-owned projection, like compactArchiveEntry: the journal records the new hash.
+    if (snapshot?.archiveInputsHash) next.journal = { ...entry.journal, contentSnapshot: { ...snapshot, archiveInputsHash: inputsDigest(inputs) } };
+    return next;
+}
+function trimmedInputsShape(inputs) {
+    return !!inputs?.batchVersion && !inputs.taskInputV1 && !['baseMemory', 'external', 'contextEnvelope'].some(field => Object.hasOwn(inputs, field));
+}
+function trimPausedDrafts(key) {
+    const paused = [...drafts].filter(([id, entry]) => id.startsWith(`${key}:paused:`) && entry.inputs && !entry.inputsTrimmed && !entry.active
+        && !holdsUnsavedChunks(entry))
+        .sort(([, a], [, b]) => (b.journal?.updatedAt || b.journal?.createdAt || 0) - (a.journal?.updatedAt || a.journal?.createdAt || 0));
+    let resumable = 0;
+    for (const [id, entry] of paused) {
+        if (pausedResumable(entry) && resumable < MAX_RESUMABLE_PAUSED) { resumable += 1; continue; }
+        const next = trimmedEntry(entry);
+        if (discardedEntries.has(entry)) discardedEntries.add(next);
+        drafts.set(id, next);
+    }
+}
+export function archiveDraftReadOnlyFailure() {
+    return text.safeUserError('这份旧草稿只保留了已收到的内容，不能再继续生成；可以查看或导出。', 'RMT_RECOVERY_READ_ONLY');
+}
 function scopeRows(key) {
     return [...drafts].filter(([id]) => id === key || id.startsWith(`${key}:paused:`)).map(([id,entry]) => [id, { ...entry, active: false, durable: true }]);
 }
@@ -64,18 +130,40 @@ async function saveScope(key) {
     const run = (lanes.get(key) || Promise.resolve()).catch(() => {}).then(async () => {
         const state = scopes.get(key);
         if (!state || !local_store.localRecoveryStorageAvailable()) throw storageFailure();
+        trimPausedDrafts(key);
         const rows = scopeRows(key);
         const encoded = JSON.stringify({ version: 1, rows });
         const bytes = new TextEncoder().encode(encoded).byteLength;
         if (bytes > constants.MAX_CACHE_SOURCE_BYTES) throw capacityFailure();
-        const revision = await local_store.compareLocalRecoveryRecord(state.id, state.revision, rows.length ? JSON.parse(encoded) : null,
-            { timeoutMs: local_store.localRecoveryWriteTimeout(bytes) });
+        const write = expected => {
+            // Remember what this attempt wrote: a timed-out write may still land.
+            state.unconfirmed = { revision: expected + 1, encoded: rows.length ? encoded : 'null' };
+            return local_store.compareLocalRecoveryRecord(state.id, expected, rows.length ? JSON.parse(encoded) : null,
+                { timeoutMs: local_store.localRecoveryWriteTimeout(bytes) });
+        };
+        let expected = state.revision, revision;
+        const previous = state.unconfirmed;
+        try { revision = await write(expected); }
+        catch (error) {
+            if (error?.code !== 'RMT_LOCAL_CAS') throw error;
+            const adopted = await adoptLandedWrite(state, previous, rows.length ? encoded : 'null');
+            if (adopted === 'current') { revision = state.revision; expected = revision - 1; }
+            else if (adopted === 'previous') {
+                expected = state.revision;
+                try { revision = await write(expected); }
+                catch (retryError) { if (retryError?.code === 'RMT_LOCAL_CAS') state.conflict = true; throw retryError; }
+            }
+            else { state.conflict = true; throw error; }
+        }
         // Only the transaction's exact CAS acknowledgement confirms this write.
         // false/undefined must not be mistaken for a saved checkpoint in a host.
-        if (revision !== state.revision + 1) throw ackMismatchFailure();
+        if (revision !== expected + 1) throw ackMismatchFailure();
         state.revision = revision;
+        state.unconfirmed = null;
+        state.conflict = false;
         state.lastFailureCode = '';
         confirmCounts(state, rows);
+        confirmRows(state, rows);
         for (const [id, saved] of rows) {
             const live = drafts.get(id);
             // An acknowledgement only covers the journal/stage actually written,
@@ -95,6 +183,18 @@ async function saveScope(key) {
         throw storageFailure('save', error);
     }
     finally { if (lanes.get(key) === run) lanes.delete(key); }
+}
+// A CAS miss right after a timed-out write is usually that same write having
+// landed after all. Adopt it only when the stored record is exactly one revision
+// ahead and holds exactly what this page wrote; anything else is a real conflict.
+async function adoptLandedWrite(state, previous, current) {
+    let record;
+    try { record = await local_store.readLocalRecoveryRecord(state.id); } catch { return ''; }
+    if (!record || record.key !== state.id || record.revision !== state.revision + 1) return '';
+    const stored = JSON.stringify(record.payload ?? null);
+    if (stored === current) { state.revision = record.revision; return 'current'; }
+    if (previous && previous.revision === record.revision && stored === previous.encoded) { state.revision = record.revision; return 'previous'; }
+    return '';
 }
 function scheduleSave(key) { void saveScope(key).catch(() => {}); }
 // Compatibility seam for older callers. No plugin byte ceiling; only an
@@ -150,42 +250,89 @@ async function hydrateArchiveRecoveryScope(key, origin, operation, force, signal
         const state = scopes.get(key);
         if (state?.revision !== readRevision) return true; // Our own write completed during this read.
         if (scopeRows(key).length || lanes.has(key)) {
-            if ((record?.revision || 0) !== state?.revision) throw conflictFailure();
+            if ((record?.revision || 0) === state?.revision) return true;
+            // A save hit a newer stored version. An explicit re-read merges it in
+            // instead of leaving every later save stuck until the page reloads.
+            if (!state?.conflict || lanes.has(key) || (record?.revision || 0) < state.revision) throw conflictFailure();
+            const checked = checkedStoredRows(record?.payload, key, origin, operation);
+            if (signal.aborted) throw new DOMException('Read cancelled', 'AbortError');
+            let pageNewer = false;
+            // The same task may sit in another slot here (e.g. parked on this page).
+            const pageTasks = new Set(scopeRows(key).map(([rowId]) => archiveDraftId(rowId)));
+            const storedIds = new Set(checked.map(([rowId]) => rowId));
+            // A row the stored record no longer has was removed by another page,
+            // unless this page changed it after its last confirmed save.
+            for (const [rowId] of scopeRows(key)) {
+                if (storedIds.has(rowId)) continue;
+                if (unchangedSinceConfirmed(state, rowId, drafts.get(rowId))) drafts.delete(rowId);
+                else pageNewer = true;
+            }
+            const adopted = [];
+            for (const [rowId, stored] of checked) {
+                const live = drafts.get(rowId);
+                if (!live && pageTasks.has(draftIdOf(stored, rowId))) { pageNewer = true; continue; }
+                const liveAt = live?.journal?.updatedAt || 0, storedAt = stored.journal?.updatedAt || 0;
+                // Same journal time: a stage/result/commit change made here after the
+                // last confirmed save is still newer than the stored copy.
+                if (live && (live.active || liveAt > storedAt
+                    || (liveAt === storedAt && rowStateDiffers(live, stored) && !unchangedSinceConfirmed(state, rowId, live)))) { pageNewer = true; continue; }
+                drafts.set(rowId, stored);
+                adopted.push([rowId, stored]);
+            }
+            state.revision = record?.revision || 0; state.conflict = false; state.unconfirmed = null;
+            confirmCounts(state, record?.payload?.rows || []);
+            confirmRows(state, adopted);
+            if (pageNewer) scheduleSave(key);
             return true;
         }
     }
     const payload = record?.payload;
+    const readRows = [];
     if (payload) {
-        if (new TextEncoder().encode(JSON.stringify(payload)).byteLength > constants.MAX_CACHE_SOURCE_BYTES
-            || payload.version !== 1 || !Array.isArray(payload.rows)) throw storageFailure('read');
-        const checked = [];
-        for (const [rowKey, value] of payload.rows) {
-            if (typeof rowKey !== 'string' || (rowKey !== key && !rowKey.startsWith(`${key}:paused:`))
-                || !validStoredEntry(value, key, origin, operation)) throw storageFailure('read');
-            const entry = draft_inputs.compactArchiveEntry(structuredClone(value)); entry.active = false; entry.durable = true;
-            // A saved draft is never a formal commit. If the intended bank wasn't
-            // committed, replay validated pieces and the normal CAS path on click.
-            if (entry.stage === 'awaiting-commit' && entry.committedRevision !== origin.archiveRevision) entry.stage = 'segments';
-            checked.push([rowKey, entry]);
-        }
+        const checked = checkedStoredRows(payload, key, origin, operation);
         if (signal.aborted) throw new DOMException('Read cancelled', 'AbortError');
-        for (const [id,entry] of checked) if (!drafts.has(id)) drafts.set(id,entry);
+        for (const [id,entry] of checked) if (!drafts.has(id)) { drafts.set(id,entry); readRows.push([id, entry]); }
     }
     if (signal.aborted) throw new DOMException('Read cancelled', 'AbortError');
     const state = { id, revision: record?.revision || 0 };
     confirmCounts(state, payload?.rows || []);
+    confirmRows(state, readRows);
     scopes.set(key, state); loaded.add(key);
     acknowledgeArchiveRecoveryCommit(origin);
     return true;
 }
-function validStoredEntry(entry, key, origin, operation) {
+function checkedStoredRows(payload, key, origin, operation) {
+    if (!payload) return [];
+    if (new TextEncoder().encode(JSON.stringify(payload)).byteLength > constants.MAX_CACHE_SOURCE_BYTES
+        || payload.version !== 1 || !Array.isArray(payload.rows)) throw storageFailure('read');
+    const checked = [];
+    for (const [rowKey, value] of payload.rows) {
+        if (typeof rowKey !== 'string' || (rowKey !== key && !rowKey.startsWith(`${key}:paused:`))
+            || !validStoredEntry(value, key, origin, operation, true)) throw storageFailure('read');
+        const entry = draft_inputs.compactArchiveEntry(structuredClone(value), { inputsVerified: true }); entry.active = false; entry.durable = true;
+        // A saved draft is never a formal commit. If the intended bank wasn't
+        // committed, replay validated pieces and the normal CAS path on click.
+        if (entry.stage === 'awaiting-commit' && entry.committedRevision !== origin.archiveRevision) entry.stage = 'segments';
+        checked.push([rowKey, entry]);
+    }
+    return checked;
+}
+function validStoredEntry(entry, key, origin, operation, fresh = false) {
     const identity = entry?.journal?.identity;
     return entry && entry.key === key && entry.operation === operation && /^[a-f0-9]{64}$/.test(entry.sourceHash || '')
         && ['segments','awaiting-commit','profile-only','profile-result','archive-result'].includes(entry.stage)
-        && typeof entry.fullRebuild === 'boolean' && recovery.generationRecoverySummary(entry.journal) && inputsMatchJournal(entry)
+        && typeof entry.fullRebuild === 'boolean' && recovery.generationRecoverySummary(entry.journal) && inputsMatchJournal(entry, fresh)
         && identity.mode === (operation === 'import' ? 'archive-import' : 'archive-profile')
         && identity.archiveRevision === `archive-draft:${entry.sourceHash}`
-        && ['characterKey','characterId','characterAvatar','chatId'].every(field => (identity[field] || '') === (origin[field] || ''));
+        && sameDraftOwner(identity, origin);
+}
+// characterKey embeds a hash of the card text. The slot id, avatar and chat
+// already prove the same character and chat (as in recoverySegments.js), so a
+// card edit must not make every saved draft unreadable. Continuing still checks
+// the frozen task binding. Without an avatar the full key stays the only proof.
+function sameDraftOwner(identity, origin) {
+    if (!['characterId','characterAvatar','chatId'].every(field => (identity?.[field] || '') === (origin?.[field] || ''))) return false;
+    return !!origin?.characterAvatar || (identity?.characterKey || '') === (origin?.characterKey || '');
 }
 export async function importArchiveRecoveryData(origin, data) {
     const key = draftKey(origin, 'import');
@@ -198,9 +345,12 @@ export async function importArchiveRecoveryData(origin, data) {
         const sourceHash = String(row?.journal?.identity?.archiveRevision || '').replace(/^archive-draft:/, '');
         const entry = { key, operation:'import', sourceHash, fullRebuild: row.fullRebuild === true,
             stage:'segments', journal: structuredClone(row.journal), active:false, durable:false, importedUnverified:true,
-            ...(row.inputs ? { inputs: structuredClone(row.inputs) } : {}) };
-        if (!validStoredEntry(entry, key, origin, 'import')) throw incompatible();
-        return draft_inputs.compactArchiveEntry(entry);
+            ...(row.inputs ? { inputs: structuredClone(row.inputs) } : {}),
+            // A trimmed draft stays read-only after a round trip through a file
+            // (older exports dropped the flag; their trimmed shape still shows it).
+            ...(row.inputsTrimmed === true || trimmedInputsShape(row.inputs) ? { inputsTrimmed: true } : {}) };
+        if (!validStoredEntry(entry, key, origin, 'import', true)) throw incompatible();
+        return draft_inputs.compactArchiveEntry(entry, { inputsVerified: true });
     });
     // Imported fragments are data, never new evidence authority. Initial dispatch
     // must rebuild current sources and match exact source/request hashes.
@@ -223,9 +373,11 @@ function incompatible() {
 }
 
 function archiveDraftId(key) {
-    const entry = drafts.get(key);
     // Stable when the same task moves to a paused slot, distinct when a later
     // task reuses its operation's active slot.
+    return draftIdOf(drafts.get(key), key);
+}
+function draftIdOf(entry, key) {
     return entry?.draftId || `archive-draft-${inputsDigest([entry?.key || key, entry?.sourceHash || '', entry?.journal?.createdAt || 0])}`;
 }
 
@@ -235,7 +387,7 @@ export function listArchiveRecoveryDrafts(origin, operation = null) {
         const key = draftKey(origin, kind);
         return [...drafts].filter(([id]) => id === key || id.startsWith(`${key}:paused:`)).map(([id, entry]) => ({
             draftId: archiveDraftId(id), operation: kind, stage: entry.stage, paused: id !== key,
-            active: entry.active === true, durable: entry.durable === true,
+            active: entry.active === true, durable: entry.durable === true, readOnly: entry.inputsTrimmed === true,
             createdAt: entry.journal?.createdAt || 0, updatedAt: entry.journal?.updatedAt || 0,
             completed: recovery.generationRecoverySummary(entry.journal)?.completed || 0,
         }));
@@ -326,7 +478,8 @@ export function parkArchiveRecovery(origin, operation = 'import', options = {}) 
 export function exportArchiveRecovery(origin, operation = 'import') {
     const key = draftKey(origin, operation);
     return [...drafts].filter(([id]) => id === key || id.startsWith(`${key}:paused:`))
-        .map(([, entry]) => ({ stage: entry.stage, fullRebuild: entry.fullRebuild, journal: structuredClone(entry.journal), ...(entry.inputs ? { inputs: structuredClone(entry.inputs) } : {}) }));
+        .map(([, entry]) => ({ stage: entry.stage, fullRebuild: entry.fullRebuild, journal: structuredClone(entry.journal), ...(entry.inputs ? { inputs: structuredClone(entry.inputs) } : {}),
+            ...(entry.inputsTrimmed === true ? { inputsTrimmed: true } : {}) }));
 }
 
 export async function beginArchiveRecovery({ origin, operation = 'import', sourceIdentity, sourceFragments = [], settingsIdentity,
@@ -352,6 +505,7 @@ export async function beginArchiveRecovery({ origin, operation = 'import', sourc
     const expectedEntry = existing;
     if (priorResult) existing = null;
     if (existing?.active) throw text.safeUserError('这份档案草稿正在处理，请等当前请求结束。', 'RMT_RECOVERY_BUSY');
+    if ((existing || priorResult && expectedEntry) && (existing || expectedEntry).inputsTrimmed) throw archiveDraftReadOnlyFailure();
     if (existing && (!continueApproved || existing.stage !== 'segments')) throw incompatible();
     if (!Array.isArray(sourceFragments)) {
         throw text.safeUserError('档案整理来源分段格式无效，旧草稿仍保留。', 'RMT_RECOVERY_DATA');
@@ -411,6 +565,7 @@ export async function resumeArchiveImportProfile({ origin, draftId = '', setting
         : drafts.has(key) ? [key, drafts.get(key)] : null;
     if (!found || !(found[1].stage === 'profile-only' || found[1].stage === 'archive-result' && found[1].profilePending)
         || !inputsMatchJournal(found[1])) throw incompatible();
+    if (found[1].inputsTrimmed) throw archiveDraftReadOnlyFailure();
     const [recordKey, previousEntry] = found;
     const entry = discardedEntries.has(previousEntry) ? { ...previousEntry, active: false } : previousEntry;
     if (entry.active) throw text.safeUserError('这份简介正在处理，请等当前请求结束。', 'RMT_RECOVERY_BUSY');
@@ -567,9 +722,12 @@ export function clearArchiveRecovery(origin, operation = null) {
 // Explicit discard awaits the tombstone; failed persistence restores visible data.
 export async function clearArchiveRecoveryDurably(origin, operation = null, { explicitDiscard = false } = {}) {
     for (const kind of operation ? [operation] : ['import','profile']) {
-        await hydrateArchiveRecovery(origin, kind);
         const key = draftKey(origin, kind);
         if (!key) continue;
+        // An explicit discard needs no copy of what it deletes. A slow, huge or
+        // unreadable record must never trap the user's way out.
+        if (explicitDiscard && !loaded.has(key)) { await discardUnloadedScope(key); continue; }
+        await hydrateArchiveRecovery(origin, kind);
         if (lanes.has(key)) await lanes.get(key).catch(() => {});
         const previous = [...drafts].filter(([id]) => id === key || id.startsWith(`${key}:paused:`));
         if (!explicitDiscard && previous.some(([,entry]) => entry.active)) throw text.safeUserError('当前请求尚未结束，草稿没有清除。', 'RMT_RECOVERY_BUSY');
@@ -579,9 +737,32 @@ export async function clearArchiveRecoveryDurably(origin, operation = null, { ex
         }
         for (const [id] of previous) drafts.delete(id);
         try { await saveScope(key); }
-        catch (error) { for (const [id,entry] of previous) drafts.set(id,entry); throw error; }
+        catch (error) {
+            // Another writer moved the record on. The user asked to delete it all,
+            // so a revision-free tombstone is the honest result, not a stuck draft.
+            if (explicitDiscard && scopes.get(key)?.conflict) { await discardUnloadedScope(key, previous); continue; }
+            for (const [id,entry] of previous) drafts.set(id,entry); throw error;
+        }
     }
     return true;
+}
+
+async function discardUnloadedScope(key, removed = []) {
+    if (!local_store.localRecoveryStorageAvailable()) throw storageFailure();
+    if (hydrationLanes.has(key)) { hydrationLanes.get(key).controller.abort(); hydrationLanes.delete(key); }
+    if (lanes.has(key)) await lanes.get(key).catch(() => {});
+    const previous = [...removed, ...[...drafts].filter(([id]) => id === key || id.startsWith(`${key}:paused:`))];
+    for (const [, entry] of previous) { discardedEntries.add(entry); entry.active = false; }
+    for (const [id] of previous) drafts.delete(id);
+    const id = `draft:${await recovery.generationRecoveryDigest(key)}`;
+    let revision;
+    try { revision = await local_store.discardLocalRecoveryRecord(id); }
+    catch (error) { for (const [rowId, entry] of previous) drafts.set(rowId, entry); throw storageFailure('save', error); }
+    if (!Number.isSafeInteger(revision) || revision < 1) { for (const [rowId, entry] of previous) drafts.set(rowId, entry); throw ackMismatchFailure(); }
+    const state = { id, revision };
+    confirmCounts(state, []);
+    confirmRows(state, []);
+    scopes.set(key, state); loaded.add(key);
 }
 
 export function discardArchiveRecovery(origin, operation = null) {

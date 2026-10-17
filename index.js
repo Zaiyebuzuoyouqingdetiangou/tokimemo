@@ -1,6 +1,6 @@
 const VERSION = '1.0.58';
 // BUILD 只用来做缓存查询串：修小 bug 不升版本号时，改 -r 后缀即可让浏览器重新取 index.js 和 bundle。
-const BUILD = '1.0.58-r4-koori';
+const BUILD = '1.0.58-r5-koori';
 
 const SETTINGS_ID = 'heartbeat_memories_settings';
 const MENU_ID = 'heartbeat_memories_menu_item';
@@ -25,6 +25,8 @@ let runtimeLoadFailed = false;
 let bootstrapAutoPending = null;
 let bootstrapAutoCleanup = null;
 let bootstrapAutoEpoch = 0;
+let bootstrapChatWatchCleanup = null;
+let bootstrapChatWatchTimer = 0;
 let avatarRuntimePending = null;
 let avatarRuntimeCleanup = null;
 let avatarRuntimeEpoch = 0;
@@ -475,6 +477,50 @@ function stopBootstrapAutoUpdates() {
     bootstrapAutoCleanup = null;
 }
 
+// Whether this chat has an auto-memory plan (or legacy auto updates) is only known once a chat is
+// open, and changes with every chat switch. Keep two cheap host listeners for the whole bootstrap
+// lifetime and re-check on each switch; the policy module and the runtime bundle still load only
+// when that check finds something to do.
+function stopBootstrapChatWatch() {
+    if (bootstrapChatWatchTimer) clearInterval(bootstrapChatWatchTimer);
+    bootstrapChatWatchTimer = 0;
+    bootstrapChatWatchCleanup?.();
+    bootstrapChatWatchCleanup = null;
+}
+
+function bindBootstrapChatWatch() {
+    if (disabled || runtimeModule) return true;
+    if (bootstrapChatWatchCleanup) return true;
+    let context;
+    try { context = globalThis.SillyTavern?.getContext?.(); } catch { return false; }
+    const source = context?.eventSource, types = context?.eventTypes || context?.event_types || {};
+    if (!source?.on) return false;
+    const events = [...new Set([types.CHAT_CHANGED, types.CHAT_LOADED].filter(Boolean))];
+    if (!events.length) return false;
+    const recheck = () => {
+        if (disabled || runtimeModule) { stopBootstrapChatWatch(); return; }
+        if (bootPromise) return;
+        void startBootstrapAutoUpdates();
+    };
+    for (const type of events) source.on(type, recheck);
+    bootstrapChatWatchCleanup = () => { for (const type of events) source.off?.(type, recheck); };
+    return true;
+}
+
+function startBootstrapChatWatch() {
+    if (bindBootstrapChatWatch() || bootstrapChatWatchTimer) return;
+    let tries = 0;
+    bootstrapChatWatchTimer = setInterval(() => {
+        tries += 1;
+        if (bindBootstrapChatWatch() || tries >= 30) {
+            clearInterval(bootstrapChatWatchTimer);
+            bootstrapChatWatchTimer = 0;
+            // The host may only expose its event bus now; check the chat that is already open.
+            if (bootstrapChatWatchCleanup) void startBootstrapAutoUpdates();
+        }
+    }, 500);
+}
+
 function startBootstrapAutoUpdates({ wakeRuntime = () => ensureRuntime('auto-update-due') } = {}) {
     if (disabled || runtimeModule || bootstrapAutoCleanup) return Promise.resolve();
     if (bootstrapAutoPending) return bootstrapAutoPending;
@@ -574,6 +620,7 @@ async function ensureRuntime(reason = 'unknown') {
         if (disabled) return module;
         stopBootstrapMountTimer();
         stopBootstrapAutoUpdates();
+        stopBootstrapChatWatch();
         unbindBootstrapEarlyOpen();
         removeBootstrapShells();
         runtimeModule = module;
@@ -627,6 +674,7 @@ function stopBootstrapAvatars() {
 function startBootstrap() {
     if (disabled || runtimeModule) return;
     void startBootstrapAvatars();
+    startBootstrapChatWatch();
     void startBootstrapAutoUpdates();
     mountBootstrapEntrypoints();
     bindBootstrapEarlyOpen();
@@ -653,6 +701,7 @@ export function onDisable() {
     stopBootstrapAvatars();
     stopBootstrapMountTimer();
     stopBootstrapAutoUpdates();
+    stopBootstrapChatWatch();
     unbindBootstrapEarlyOpen();
     try { runtimeModule?.destroyMemoryTheater?.(); } catch (error) { console.warn('[HeartbeatMemories] disable cleanup failed', safeBootstrapErrorDiagnostic(error)); }
     removeBootstrapShells();
@@ -664,6 +713,7 @@ export function onClean() {
     stopBootstrapAvatars();
     stopBootstrapMountTimer();
     stopBootstrapAutoUpdates();
+    stopBootstrapChatWatch();
     unbindBootstrapEarlyOpen();
     try { runtimeModule?.destroyMemoryTheater?.(); } catch (error) { console.warn('[HeartbeatMemories] clean cleanup failed', safeBootstrapErrorDiagnostic(error)); }
     removeBootstrapShells();

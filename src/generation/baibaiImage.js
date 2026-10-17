@@ -5,6 +5,7 @@ import * as image_patch from '../core/cgImagePatch.js';
 import * as core_text from '../core/text.js';
 import * as core_context from '../core/context.js';
 import * as appearance from './cgAppearance.js';
+import * as chatu8_image from './chatu8Image.js';
 
 export const BAIBAI_IMAGE_PROVIDER = 'baibai-image';
 export const BAIBAI_IMAGE_WAIT_NOTICE_MS = 300000;
@@ -196,7 +197,17 @@ export async function generateBaiBaiImage(prompt, { signal = null, orientation =
             });
         const result = await Promise.race([providerPromise, stopPromise]);
         if (signal?.aborted || stopped) throw baiBaiImageError('BBI_ABORTED');
-        const path = savedImagePath(result?.path);
+        let path = savedImagePath(result?.path);
+        if (!path && typeof result?.dataUrl === 'string' && result.dataUrl.startsWith('data:image/')) {
+            // The image exists but was not saved to the gallery: keep it in the
+            // user's own ST image folder instead of losing a paid result.
+            try {
+                report({ phase: 'saving' });
+                path = savedImagePath(await chatu8_image.uploadStillDataUrl(result.dataUrl, context, signal));
+            } catch (error) {
+                throw baiBaiImageError(signal?.aborted || error?.code === 'CH8_ABORTED' ? 'BBI_ABORTED' : 'BBI_SAVE_FAILED');
+            }
+        }
         if (!path) throw baiBaiImageError('BBI_SAVE_FAILED');
         // Drop the potentially multi-MB dataUrl; only durable image references enter archive metadata.
         const usedSeed = Number(result?.seed);
